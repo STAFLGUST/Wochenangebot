@@ -964,15 +964,16 @@
       return `<ul class="plist">${arr.slice(0, max).map(fn).join('')}${arr.length > max ? `<li><span>… und ${arr.length - max} weitere</span><span></span></li>` : ''}</ul>`;
     };
     const sec = (title, html) => `<h3 class="d-h"><span>${title}</span></h3>${html}`;
+    const rv = (kind, id) => `<button type="button" class="btn sm ghost rv-btn" data-rv="${kind}" data-rid="${esc(id)}" title="Diese Änderung zurücknehmen">${icon('undo', 'sm')}Rückgängig</button>`;
     let body = '';
     if (v.errors.length) body += sec('Bitte zuerst korrigieren', `<ul class="plist">${v.errors.map((e) => `<li class="err"><span>${esc(e)}</span><span></span></li>`).join('')}</ul>`);
     if (!published) body += `<p class="notice">Erste Veröffentlichung: ${plural(model.items.length, 'Artikel', 'Artikel')} in ${plural(model.groups.length, 'Gruppe', 'Gruppen')}.</p>`;
     else {
-      if (metaChanged()) body += sec('Kopfdaten', `<ul class="plist"><li><span>KW ${esc(published.meta.week)}/${esc(published.meta.year)} → KW ${esc(model.meta.week)}/${esc(model.meta.year)}</span><span>${esc(model.meta.notice || '')}</span></li></ul>`);
-      if (diff.priceChanged.length) body += sec(`Preisänderungen (${diff.priceChanged.length})`, list(diff.priceChanged, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(before.get(it.id).price))} → <strong>${esc(priceShort(it.price))}</strong></span></li>`));
-      if (diff.added.length) body += sec(`Neu (${diff.added.length})`, list(diff.added, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span></li>`));
-      if (diff.changed.length) body += sec(`Bearbeitet (${diff.changed.length})`, list(diff.changed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(gById(it.groupId)?.name || '')}</span></li>`));
-      if (diff.removed.length) body += sec(`Entfernt (${diff.removed.length})`, list(diff.removed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span></li>`));
+      if (metaChanged()) body += sec('Kopfdaten', `<ul class="plist"><li><span>KW ${esc(published.meta.week)}/${esc(published.meta.year)} → KW ${esc(model.meta.week)}/${esc(model.meta.year)}</span><span>${esc(model.meta.notice || '')}</span>${rv('meta', 'meta')}</li></ul>`);
+      if (diff.priceChanged.length) body += sec(`Preisänderungen (${diff.priceChanged.length})`, list(diff.priceChanged, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(before.get(it.id).price))} → <strong>${esc(priceShort(it.price))}</strong></span>${rv('price', it.id)}</li>`, 50));
+      if (diff.added.length) body += sec(`Neu (${diff.added.length})`, list(diff.added, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span>${rv('added', it.id)}</li>`, 50));
+      if (diff.changed.length) body += sec(`Bearbeitet (${diff.changed.length})`, list(diff.changed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}${changedFields(before.get(it.id), it)}</span><span>${esc(gById(it.groupId)?.name || '')}</span>${rv('changed', it.id)}</li>`, 50));
+      if (diff.removed.length) body += sec(`Entfernt (${diff.removed.length})`, list(diff.removed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span>${rv('removed', it.id)}</li>`, 50));
       if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
@@ -982,8 +983,65 @@
       <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ia="publish"${can ? '' : ' disabled'}>${icon('send')}Jetzt veröffentlichen</button></div>`;
     dlgPublish.showModal();
   }
+  const FIELD_LABEL = { code: 'Art.-Nr.', name: 'Bezeichnung', category: 'Fleischart', origin: 'Herkunft', condition: 'Zustand' };
+  function changedFields(o, it) {
+    if (!o) return '';
+    const f = Object.keys(FIELD_LABEL).filter((k) => (o[k] || '') !== (it[k] || ''));
+    return f.length ? `<span class="rv-f">${f.map((k) => `${esc(FIELD_LABEL[k])}: ${esc(o[k] || '—')} → ${esc(it[k] || '—')}`).join(' · ')}</span>` : '';
+  }
+  /* Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen */
+  function revertChange(kind, id) {
+    if (kind === 'meta') { model.meta = clone(published.meta); return; }
+    const pub = published.items;
+    if (kind === 'added') { const i = model.items.findIndex((x) => x.id === id); if (i >= 0) model.items.splice(i, 1); invalid.delete(id); return; }
+    if (kind === 'price' || kind === 'changed') {
+      const it = model.items.find((x) => x.id === id), o = diff.before[id];
+      if (!it || !o) return;
+      const keep = { id: it.id, groupId: model.groups.some((g) => g.id === o.groupId) ? o.groupId : it.groupId };
+      if (kind === 'price') { it.price = clone(o.price); it.altPrices = clone(o.altPrices || []); if ('priceText' in o) it.priceText = o.priceText; }
+      else Object.assign(it, clone(o), keep);
+      invalid.delete(id);
+      return;
+    }
+    if (kind === 'removed') {
+      const o = pub.find((x) => x.id === id);
+      if (!o) return;
+      if (!model.groups.some((g) => g.id === o.groupId)) {
+        const g = published.groups.find((x) => x.id === o.groupId);
+        if (g) model.groups.push(clone(g));
+      }
+      const copy = clone(o);
+      if (model.items.some((x) => x.id === copy.id)) copy.id = uid('n');
+      // hinter den nächsten veröffentlichten Vorgänger derselben Gruppe einsortieren
+      let at = -1;
+      for (let i = pub.indexOf(o) - 1; i >= 0 && at < 0; i--) if (pub[i].groupId === o.groupId) at = model.items.findIndex((x) => x.id === pub[i].id);
+      if (at >= 0) model.items.splice(at + 1, 0, copy);
+      else { const f = model.items.findIndex((x) => x.groupId === copy.groupId); if (f >= 0) model.items.splice(f, 0, copy); else model.items.push(copy); }
+    }
+  }
+  function revertText(kind, id) {
+    const it = model.items.find((x) => x.id === id) || published.items.find((x) => x.id === id);
+    const nm = it ? `„${esc(it.code ? it.code + ' · ' : '')}${esc(it.name)}“` : '';
+    const o = diff.before[id];
+    if (kind === 'meta') return ['Kopfdaten zurücksetzen?', `Kalenderwoche und Hinweis werden wieder auf den veröffentlichten Stand gesetzt (KW ${esc(published.meta.week)}/${esc(published.meta.year)}).`];
+    if (kind === 'price') return ['Preisänderung zurücknehmen?', `Der Preis von ${nm} wird von <strong>${esc(priceShort(it.price))}</strong> wieder auf <strong>${esc(priceShort(o.price))}</strong> gesetzt.`];
+    if (kind === 'added') return ['Neuen Artikel entfernen?', `${nm} wird wieder aus dem Entwurf entfernt.`];
+    if (kind === 'changed') return ['Bearbeitung zurücknehmen?', `${nm} wird wieder auf den veröffentlichten Stand gesetzt${o && o.name !== it.name ? ` (Bezeichnung „${esc(o.name)}“)` : ''}.`];
+    return ['Artikel wiederherstellen?', `${nm} wird wieder in den Entwurf aufgenommen – mit dem zuletzt veröffentlichten Preis ${esc(priceShort(it.price))}.`];
+  }
   dlgPublish.addEventListener('click', async (e) => {
     if (e.target === dlgPublish || e.target.closest('[data-close]')) { dlgPublish.close(); return; }
+    const r = e.target.closest('[data-rv]');
+    if (r) {
+      const [title, text] = revertText(r.dataset.rv, r.dataset.rid);
+      if (!(await confirmBox(title, `${text}<br><br>Die Änderung ist danach aus dem Entwurf entfernt; veröffentlicht wird sie erst mit „Jetzt veröffentlichen“.`, 'Ja, rückgängig machen', true))) return;
+      pushUndo();
+      revertChange(r.dataset.rv, r.dataset.rid);
+      changed({ render: true });
+      openPublish();
+      toast('Änderung zurückgenommen.');
+      return;
+    }
     const b = e.target.closest('[data-ia="publish"]');
     if (!b) return;
     b.disabled = true;

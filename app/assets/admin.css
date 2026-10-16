@@ -544,3 +544,12 @@ a.btn#btn-site { text-decoration: none; }
 @media (max-width: 700px) { .geo-pick { grid-template-columns: 1fr; } .geo-quick { margin-left: 0; } .geo-scope { width: 100%; } }
 .geo-list .geo-iphit { grid-column: 1 / -1; }
 .geo-iphit .mono-s { font-size: 12.5px; }
+/* Einzelne Änderung zurücknehmen (Veröffentlichen-Dialog) */
+.plist li { align-items: center; }
+.plist li > span:first-child { flex: 1 1 auto; min-width: 0; }
+.plist .rv-btn { flex: none; height: 26px; padding: 0 8px; font-size: 12px; color: var(--text-2); }
+.plist .rv-btn:hover { color: var(--accent); }
+.rv-f { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; white-space: normal; }
+@media (max-width: 560px) { .plist li { flex-wrap: wrap; } .plist .rv-btn { margin-left: auto; } }
+.plist li > span:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.plist li span.rv-f { white-space: normal; color: var(--muted); }
