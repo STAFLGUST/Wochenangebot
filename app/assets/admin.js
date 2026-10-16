@@ -114,40 +114,62 @@
   }
 
   /* ======================= Anmeldung ======================= */
+  const ROLE_RANK = { viewer: 1, editor: 2, admin: 3 };
+  const ROLE_LABEL = { viewer: 'Nur ansehen', editor: 'Bearbeiter', admin: 'Administrator' };
+  let me = null;                                   // angemeldeter Nutzer
+  const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
+  let ro = true;                                   // Nur-Ansicht
   let authMode = 'login';
+  let loginPw = '';                                // nur für den Pflicht-Passwortwechsel direkt nach der Anmeldung
   function showAuth(mode) {
     authMode = mode;
     $('#screen-auth').hidden = false;
     if (mode !== 'expired') $('#screen-editor').hidden = true;
-    const setup = mode === 'setup';
+    const setup = mode === 'setup', newpw = mode === 'newpw';
     $('#auth-intro').textContent = setup
-      ? 'Ersteinrichtung: Legen Sie das Passwort für den Eingabebereich fest (mindestens 10 Zeichen). Bitte sicher aufbewahren.'
-      : mode === 'expired' ? 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden – Ihre Änderungen bleiben erhalten.'
-        : 'Bitte melden Sie sich an, um das Wochenangebot zu bearbeiten.';
-    $('#pw2-wrap').hidden = !setup;
-    $('#pw1').autocomplete = setup ? 'new-password' : 'current-password';
-    $('#auth-submit').textContent = setup ? 'Passwort festlegen' : 'Anmelden';
+      ? 'Ersteinrichtung: Legen Sie den ersten Administrator-Zugang an (Passwort mindestens 10 Zeichen). Weitere Nutzer legen Sie danach unter „Nutzer“ an.'
+      : newpw ? `Hallo ${me ? me.name : ''}, bitte legen Sie jetzt ein eigenes Passwort fest (mindestens 10 Zeichen).`
+        : mode === 'expired' ? 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden – Ihre Änderungen bleiben erhalten.'
+          : 'Bitte melden Sie sich mit Ihrem Benutzernamen an.';
+    $('#au-user-wrap').hidden = newpw;
+    $('#au-user').required = !newpw;
+    $('#au-name-wrap').hidden = !setup;
+    $('#pw2-wrap').hidden = !(setup || newpw);
+    $('#pw1-lbl').textContent = newpw ? 'Neues Passwort' : 'Passwort';
+    $('#pw1').autocomplete = setup || newpw ? 'new-password' : 'current-password';
+    $('#auth-submit').textContent = setup ? 'Zugang anlegen' : newpw ? 'Passwort speichern' : 'Anmelden';
     $('#auth-err').textContent = '';
     $('#pw1').value = ''; $('#pw2').value = '';
-    if (mode === 'expired') { $('#screen-auth').classList.add('overlay'); }
-    setTimeout(() => $('#pw1').focus(), 30);
+    if (mode === 'expired' && me) $('#au-user').value = me.username;
+    $('#screen-auth').classList.toggle('overlay', mode === 'expired');
+    setTimeout(() => ((newpw || $('#au-user').value) ? $('#pw1') : $('#au-user')).focus(), 30);
   }
   $('#auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const pw = $('#pw1').value;
     const err = $('#auth-err');
     err.textContent = '';
-    if (authMode === 'setup') {
+    if (authMode === 'setup' || authMode === 'newpw') {
       if (pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
       if (pw !== $('#pw2').value) { err.textContent = 'Die beiden Passwörter stimmen nicht überein.'; return; }
     }
     $('#auth-submit').disabled = true;
     try {
-      const r = await api(authMode === 'setup' ? 'setup' : 'login', { body: { password: pw } });
+      if (authMode === 'newpw') {
+        const r = await api('change_password', { body: { current: loginPw, password: pw } });
+        loginPw = '';
+        me = r.user;
+        toast('Passwort gespeichert.');
+        await openEditor();
+        return;
+      }
+      const prevUser = me && me.id;
+      const r = await api(authMode === 'setup' ? 'setup' : 'login', { body: { username: $('#au-user').value.trim(), name: $('#au-name').value.trim(), password: pw } });
       csrf = r.csrf;
-      $('#screen-auth').hidden = true;
+      me = r.user;
+      if (me.mustChange) { loginPw = pw; showAuth('newpw'); return; }
       $('#screen-auth').classList.remove('overlay');
-      if (authMode === 'expired' && model) { $('#screen-editor').hidden = false; saveNow(); }
+      if (authMode === 'expired' && model && prevUser === me.id) { $('#screen-auth').hidden = true; $('#screen-editor').hidden = false; applyRole(); if (!ro) saveNow(); }
       else await openEditor();
     } catch (ex) {
       err.textContent = ex.message;
@@ -155,6 +177,25 @@
       $('#auth-submit').disabled = false;
     }
   });
+
+  /* Rolle auf die Oberfläche anwenden */
+  function applyRole() {
+    ro = !can('editor');
+    document.body.classList.toggle('ro', ro);
+    document.body.classList.toggle('is-admin', can('admin'));
+    $('#vt-users').hidden = !can('admin');
+    $('#vt-log').hidden = !can('admin');
+    $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
+    if (!can('admin') && (currentView === 'users' || currentView === 'log')) setView('edit');
+  }
+  /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
+  function lockInputs(root) {
+    if (!ro || !root) return;
+    for (const el of root.querySelectorAll('input, select, textarea')) {
+      if (el.closest('.ed-toolbar') || el.closest('.keep-enabled')) continue;
+      el.disabled = true;
+    }
+  }
 
   /* ======================= Editor laden ======================= */
   function emptyModel() {
@@ -182,8 +223,10 @@
     $('#screen-auth').hidden = true;
     undoStack = [];
     invalid.clear();
+    applyRole();
     renderAll();
     setSaveState(d.draft ? 'saved' : 'clean');
+    if (currentView !== 'edit') setView(currentView);
   }
 
   /* ======================= Speichern ======================= */
@@ -193,7 +236,8 @@
     el.className = 'save-state ' + st;
     const hasChanges = diff && (diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + (metaChanged() ? 1 : 0)) > 0;
     let text;
-    if (st === 'pending' || st === 'saving') text = 'Speichert …';
+    if (ro) text = `${icon('lock', 'sm')} Nur Ansicht – ${hasChanges ? 'Entwurf mit unveröffentlichten Änderungen' : 'keine offenen Änderungen'}`;
+    else if (st === 'pending' || st === 'saving') text = 'Speichert …';
     else if (st === 'error') text = `Nicht gespeichert: ${esc(msg || saveError || '')} <button type="button" class="link-btn" data-act="retry-save">Erneut versuchen</button>`;
     else if (!hasChanges && !published) text = 'Noch nichts veröffentlicht';
     else if (!hasChanges) text = 'Keine Änderungen gegenüber der veröffentlichten Fassung';
@@ -201,6 +245,7 @@
     el.innerHTML = `<span class="dot"></span><span>${text}</span>`;
   }
   function changed(opts = {}) {
+    if (ro) return;
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
     renderChanges();
@@ -210,13 +255,17 @@
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 700);
   }
+  let saveNote = null;       // Hinweis für das Protokoll (Excel-Import, Version geladen)
   async function saveNow() {
     clearTimeout(saveTimer);
+    if (ro || !model) return;
     if (saving) { queued = true; return; }
     saving = true;
     setSaveState('saving');
+    const note = saveNote;
     try {
-      const r = await api('save_draft', { body: { model, revision } });
+      const r = await api('save_draft', { body: { model, revision, note } });
+      if (saveNote === note) saveNote = null;
       revision = r.revision;
       savedAt = r.savedAt;
       saveError = null;
@@ -239,7 +288,7 @@
     $('#btn-undo').disabled = false;
   }
   function undo() {
-    if (!undoStack.length) return;
+    if (ro || !undoStack.length) return;
     model = JSON.parse(undoStack.pop());
     invalid.clear();
     $('#btn-undo').disabled = !undoStack.length;
@@ -270,6 +319,7 @@
     $('#m-week').value = model.meta.week ?? '';
     $('#m-year').value = model.meta.year ?? '';
     $('#m-notice').value = model.meta.notice || '';
+    for (const id of ['#m-week', '#m-year', '#m-notice']) $(id).disabled = ro;
     renderMetaInfo();
   }
   function renderMetaInfo() {
@@ -355,6 +405,7 @@
     tmp.innerHTML = rowHTML(it);
     const nr = tmp.firstElementChild;
     tr.replaceWith(nr);
+    lockInputs(nr);
     if (focusF) nr.querySelector(`[data-f="${focusF}"]`)?.focus();
   }
 
@@ -389,6 +440,7 @@
       </section>`;
     });
     host.innerHTML = out;
+    lockInputs(host);
   }
 
   /* ======================= Bearbeiten ======================= */
@@ -481,6 +533,7 @@
     const g = gcard && gById(gcard.dataset.gid);
     const tr = b.closest('tr[data-id]');
     if (act === 'item' && tr) { openItem(tr.dataset.id); return; }
+    if (ro) return;
     if (act === 'import') { pickFile(); return; }
     if (act === 'add-group') { addGroup(); return; }
     if (!g) return;
@@ -510,6 +563,7 @@
   });
 
   function addGroup() {
+    if (ro) return;
     pushUndo();
     const last = model.groups[model.groups.length - 1];
     const g = { id: uid('g'), name: 'Neue Gruppe', section: last ? last.section : '' };
@@ -573,6 +627,11 @@
         </span>
         <button type="submit" class="btn primary">Fertig</button>
       </div>`;
+    if (ro) {
+      lockInputs($('#item-body'));
+      $('#it-title').textContent = 'Artikel';
+      $('#item-body .dlg-head p').textContent = 'Nur Ansicht – Ihre Rolle erlaubt keine Änderungen.';
+    }
     if (!dlgItem.open) dlgItem.showModal();
     fillItemHistory(it);
   }
@@ -623,6 +682,7 @@
     if (e.target === dlgItem || e.target.closest('[data-close]')) { dlgItem.close(); return; }
     const b = e.target.closest('[data-ia]');
     if (!b) return;
+    if (ro && b.dataset.ia !== 'hist-open') return;
     const it = iById(itemId);
     if (!it) return;
     const a = b.dataset.ia;
@@ -672,10 +732,10 @@
   const dlgImport = $('#dlg-import');
   let pending = null;
   const fileInput = $('#file-input');
-  function pickFile() { fileInput.click(); }
+  function pickFile() { if (!ro) fileInput.click(); }
   fileInput.addEventListener('change', () => { const f = fileInput.files[0]; fileInput.value = ''; if (f) importFile(f); });
   window.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
-  window.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f && model) { e.preventDefault(); importFile(f); } });
+  window.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f && model) { e.preventDefault(); if (!ro && currentView === 'edit') importFile(f); } });
 
   const impHead = (t, s) => `<div class="dlg-head"><div><h2 id="imp-title">${t}</h2>${s ? `<p>${s}</p>` : ''}</div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>`;
   async function importFile(file) {
@@ -730,6 +790,7 @@
       const d = pending;
       pending = null;
       model = { meta: { week: d.meta.week, year: d.meta.year, notice: d.meta.notice || model.meta.notice || '', title: d.meta.title, source: d.meta.source, sheetName: d.meta.sheetName }, sections: d.sections, groups: d.groups, items: d.items };
+      saveNote = { type: 'import', file: d.meta.source || '' };
       invalid.clear(); autoAttr.clear();
       dlgImport.close();
       renderMeta();
@@ -741,6 +802,7 @@
   /* ======================= Veröffentlichen ======================= */
   const dlgPublish = $('#dlg-publish');
   function openPublish() {
+    if (ro) return;
     const v = C.validateModel(model);
     if (invalid.size) v.errors.unshift(`${plural(invalid.size, 'Preis ist', 'Preise sind')} nicht lesbar – bitte korrigieren (rot markiert).`);
     const before = new Map(Object.entries(diff.before));
@@ -803,7 +865,7 @@
       const r = await api('versions');
       const cur = published ? `<li><div><div class="v-t">KW ${esc(published.meta.week)}/${esc(published.meta.year)} · aktuell online</div><div class="v-s">${plural(published.items.length, 'Artikel', 'Artikel')}</div></div><span class="v-s">aktuell</span></li>` : '';
       $('#versions-body .dlg-body').innerHTML = r.versions.length || cur
-        ? `<ul class="vlist">${cur}${r.versions.map((v) => `<li><div><div class="v-t">KW ${esc(v.week ?? '?')}/${esc(v.year ?? '?')}</div><div class="v-s">${plural(v.items, 'Artikel', 'Artikel')} · veröffentlicht ${esc(dateTime(v.publishedAt))} Uhr${v.source ? ' · ' + esc(v.source) : ''}</div></div><button type="button" class="btn sm" data-ver="${esc(v.id)}">Als Entwurf laden</button></li>`).join('')}</ul>`
+        ? `<ul class="vlist">${cur}${r.versions.map((v) => `<li><div><div class="v-t">KW ${esc(v.week ?? '?')}/${esc(v.year ?? '?')}</div><div class="v-s">${plural(v.items, 'Artikel', 'Artikel')} · veröffentlicht ${esc(dateTime(v.publishedAt))} Uhr${v.source ? ' · ' + esc(v.source) : ''}</div></div>${ro ? '' : `<button type="button" class="btn sm" data-ver="${esc(v.id)}">Als Entwurf laden</button>`}</li>`).join('')}</ul>`
         : '<p class="notice">Noch keine früheren Veröffentlichungen.</p>';
     } catch (e) {
       $('#versions-body .dlg-body').innerHTML = `<div class="err-box">${esc(e.message)}</div>`;
@@ -815,8 +877,10 @@
     if (!b) return;
     try {
       const r = await api('version', { query: '&id=' + encodeURIComponent(b.dataset.ver) });
+      if (ro) return;
       pushUndo();
       model = strip(r.model);
+      saveNote = { type: 'version' };
       invalid.clear(); autoAttr.clear();
       dlgVer.close();
       renderMeta();
@@ -850,6 +914,7 @@
       store.set('theme', next);
     }
     if (a === 'discard') {
+      if (ro) return;
       if (!(await confirmBox('Entwurf verwerfen?', published ? 'Alle unveröffentlichten Änderungen werden verworfen. Der Entwurf entspricht danach wieder der veröffentlichten Fassung.' : 'Der gesamte Entwurf wird gelöscht.', 'Verwerfen', true))) return;
       try {
         clearTimeout(saveTimer);
@@ -865,7 +930,8 @@
     if (a === 'logout') {
       if (unsaved()) await saveNow();
       try { await api('logout', { body: {} }); } catch { /* ignore */ }
-      csrf = null; model = null;
+      csrf = null; model = null; me = null; hist = null;
+      $('#au-user').value = '';
       showAuth('login');
     }
   });
@@ -876,7 +942,8 @@
     const err = $('#pw-err');
     if (f.get('password') !== f.get('password2')) { err.textContent = 'Die neuen Passwörter stimmen nicht überein.'; return; }
     try {
-      await api('change_password', { body: { current: f.get('current'), password: f.get('password') } });
+      const r = await api('change_password', { body: { current: f.get('current'), password: f.get('password') } });
+      me = r.user;
       $('#dlg-password').close();
       toast('Passwort geändert.');
     } catch (ex) { err.textContent = ex.message; }
@@ -897,7 +964,7 @@
   document.addEventListener('keydown', (e) => {
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !inField && !$('dialog[open]') && model) { e.preventDefault(); undo(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && model) { e.preventDefault(); if (document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true })); saveNow(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && model && !ro) { e.preventDefault(); if (document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true })); saveNow(); }
   });
 
   const setH = () => document.documentElement.style.setProperty('--header-h', ($('#topbar').offsetHeight || 0) + 'px');
@@ -1017,17 +1084,21 @@
   }
 
   /* Ansicht umschalten */
+  const VIEWS = ['edit', 'hist', 'users', 'log'];
   function setView(v) {
+    if ((v === 'users' || v === 'log') && !can('admin')) v = 'edit';
     currentView = v;
-    $('#vt-edit').setAttribute('aria-selected', v === 'edit');
-    $('#vt-hist').setAttribute('aria-selected', v === 'hist');
-    $('#view-edit').hidden = v !== 'edit';
-    $('#view-hist').hidden = v !== 'hist';
+    for (const k of VIEWS) {
+      $('#vt-' + k).setAttribute('aria-selected', k === v);
+      $('#view-' + k).hidden = k !== v;
+    }
     document.body.classList.toggle('in-hist', v === 'hist');
+    document.body.classList.toggle('in-other', v !== 'edit');
     if (v === 'hist') renderHistView();
+    if (v === 'users') renderUsersView();
+    if (v === 'log') renderLogView();
   }
-  $('#vt-edit').addEventListener('click', () => setView('edit'));
-  $('#vt-hist').addEventListener('click', () => setView('hist'));
+  for (const k of VIEWS) $('#vt-' + k).addEventListener('click', () => setView(k));
 
   async function renderHistView() {
     const host = $('#view-hist');
@@ -1146,7 +1217,7 @@
     if (e.target === dlgHD || e.target.closest('[data-close]')) { dlgHD.close(); return; }
     if (e.target.closest('[data-hd="upload"]')) { dlgHD.close(); $('#hist-file-input').click(); return; }
     const del = e.target.closest('[data-hdel]');
-    if (!del) return;
+    if (!del || ro) return;
     const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
     if (!w || !(await confirmBox('Woche entfernen?', `${esc(wkLong(w))} wird aus dem Preisverlauf entfernt. Die Excel-Datei kann jederzeit erneut hochgeladen werden.`, 'Entfernen', true))) return;
     try { await api('history_delete', { body: { id: w.id } }); await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
@@ -1269,6 +1340,7 @@
   let hiEntries = [];
   $('#hist-file-input').addEventListener('change', (e) => { const files = [...e.target.files]; e.target.value = ''; if (files.length) histImportFiles(files); });
   async function histImportFiles(files) {
+    if (ro) return;
     const base = dlgHI.open ? hiEntries.filter((en) => en.status !== 'gespeichert') : [];
     const added = files.map((f) => ({ file: f, status: 'lesen' }));
     hiEntries = base.concat(added);
@@ -1359,10 +1431,239 @@
     toast(`${plural(done, 'Woche', 'Wochen')} in den Preisverlauf übernommen.`);
   });
   window.addEventListener('drop', (e) => {
-    if (currentView !== 'hist' || !model) return;
+    if (currentView !== 'hist' || !model || ro) return;
     const files = [...(e.dataTransfer?.files || [])];
     if (files.length) { e.preventDefault(); e.stopImmediatePropagation(); histImportFiles(files); }
   }, true);
+
+  /* ======================= Nutzerverwaltung (Administrator) ======================= */
+  let users = null;
+  const ROLE_DESC = {
+    admin: 'Alles, zusätzlich Nutzerverwaltung und Protokoll',
+    editor: 'Angebot bearbeiten, importieren, veröffentlichen, Preisverlauf pflegen',
+    viewer: 'Eingabebereich und Preisverlauf nur ansehen',
+  };
+  const roleBadge = (r) => `<span class="role-b r-${esc(r)}">${esc(ROLE_LABEL[r] || r)}</span>`;
+  async function renderUsersView() {
+    const host = $('#view-users');
+    if (!users) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Nutzer werden geladen …</div>';
+    try { users = (await api('users')).users; } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    const order = { admin: 0, editor: 1, viewer: 2 };
+    const list = users.slice().sort((a, b) => (b.active - a.active) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
+    const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
+        <td class="u-name"><div class="nm">${esc(u.name)}${u.id === me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div></td>
+        <td>${roleBadge(u.role)}</td>
+        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
+        <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
+      </tr>`).join('');
+    host.innerHTML = `
+      <div class="ed-toolbar">
+        <span class="ed-hint">${plural(users.filter((u) => u.active).length, 'aktiver Zugang', 'aktive Zugänge')}${users.some((u) => !u.active) ? ` · ${users.filter((u) => !u.active).length} deaktiviert` : ''}</span>
+        <button type="button" class="btn primary" id="user-add">${icon('plus')}Nutzer anlegen</button>
+      </div>
+      <div class="gcard"><table class="etab utab"><thead><tr><th>Name / Benutzername</th><th>Rolle</th><th class="u-st">Status</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <dl class="role-legend">${['admin', 'editor', 'viewer'].map((r) => `<div><dt>${roleBadge(r)}</dt><dd>${esc(ROLE_DESC[r])}</dd></div>`).join('')}</dl>`;
+  }
+  $('#view-users').addEventListener('click', (e) => {
+    if (e.target.closest('#user-add')) { openUser(null); return; }
+    const tr = e.target.closest('tr[data-uid]');
+    if (tr) openUser(tr.dataset.uid);
+  });
+  $('#view-users').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-uid]')) openUser(e.target.dataset.uid); });
+
+  const dlgUser = $('#dlg-user');
+  let editUid = null;
+  function genPassword() {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const a = new Uint32Array(14);
+    crypto.getRandomValues(a);
+    return [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-').slice(0, 14);
+  }
+  function openUser(id) {
+    const u = id ? users.find((x) => x.id === id) : null;
+    editUid = id;
+    const self = u && u.id === me.id;
+    $('#user-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="us-title">${u ? 'Nutzer bearbeiten' : 'Nutzer anlegen'}</h2><p>${u ? `Angelegt ${esc(dateTime(u.created))}${u.createdBy ? ' von ' + esc(u.createdBy) : ''}` : 'Der Nutzer meldet sich mit Benutzername und Passwort an.'}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body form-grid two">
+        <label class="fld"><span>Name</span><input name="name" value="${esc(u ? u.name : '')}" maxlength="80" required placeholder="z. B. Max Mustermann"></label>
+        <label class="fld"><span>Benutzername</span><input name="username" value="${esc(u ? u.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="z. B. mmustermann"${u ? ' disabled' : ' required'}></label>
+        <div class="fld span2"><span>Rolle</span>
+          <div class="role-pick">${['admin', 'editor', 'viewer'].map((r) => `<label class="role-opt"><input type="radio" name="role" value="${r}"${(u ? u.role : 'editor') === r ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(ROLE_LABEL[r])}</strong><small>${esc(ROLE_DESC[r])}</small></span></label>`).join('')}</div>
+        </div>
+        <label class="check span2"><input type="checkbox" name="active"${!u || u.active ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
+        <div class="fld span2"><span>${u ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
+          <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u ? '' : ' required'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
+        </div>
+        ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
+        <p class="form-err span2" id="user-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot">
+        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Nutzer löschen</button>` : ''}</span>
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button type="submit" class="btn primary">${u ? 'Speichern' : 'Nutzer anlegen'}</button>
+      </div>`;
+    dlgUser.showModal();
+    $('#user-body [name="name"]').focus();
+  }
+  dlgUser.addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-uact]')?.dataset.uact;
+    if (a === 'gen') { const i = $('#user-body [name="password"]'); i.value = genPassword(); i.select(); return; }
+    if (a === 'del') {
+      const u = users.find((x) => x.id === editUid);
+      if (!(await confirmBox('Nutzer löschen?', `Der Zugang „${esc(u.username)}“ (${esc(u.name)}) wird gelöscht. Die Einträge im Protokoll bleiben erhalten. Alternativ können Sie den Zugang nur deaktivieren.`, 'Löschen', true))) return;
+      try { await api('user_delete', { body: { id: u.id } }); dlgUser.close(); toast(`Nutzer „${u.username}“ gelöscht.`); renderUsersView(); } catch (ex) { $('#user-err').textContent = ex.message; }
+    }
+  });
+  $('#user-body').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, err = $('#user-err');
+    err.textContent = '';
+    const pw = f.password.value.trim();
+    if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
+    const u = editUid ? users.find((x) => x.id === editUid) : null;
+    const body = {
+      id: editUid || '', name: f.name.value.trim(), username: u ? u.username : f.username.value.trim(),
+      role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
+      password: pw, mustChange: f.mustChange ? f.mustChange.checked : false,
+    };
+    const btn = f.querySelector('[type="submit"]');
+    btn.disabled = true;
+    try {
+      await api('user_save', { body });
+      dlgUser.close();
+      toast(u ? `Änderungen an „${u.username}“ gespeichert.` : `Nutzer „${body.username.toLowerCase()}“ angelegt.`);
+      if (pw) toast(`${u ? 'Neues Passwort für' : 'Nutzer angelegt –'} „${(u ? u.username : body.username).toLowerCase()}“: Passwort jetzt sicher weitergeben.`, 6000);
+      renderUsersView();
+    } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+  });
+
+  /* ======================= Protokoll (Administrator) ======================= */
+  let logData = null, logMonth = '', logUser = '', logType = '', logQ = '';
+  const logOpen = new Set();
+  const LOG_TYPES = [
+    ['', 'Alle Vorgänge'],
+    ['offer', 'Angebot bearbeitet / importiert'],
+    ['publish', 'Veröffentlichungen'],
+    ['history', 'Preisverlauf'],
+    ['auth', 'Anmeldungen'],
+    ['user', 'Nutzerverwaltung'],
+  ];
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user' }[a] || '');
+  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung' };
+  function draftSummary(d) {
+    let p = 0, n = 0, r = 0, o = 0;
+    for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price') p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
+    const parts = [];
+    if (p) parts.push(`${plural(p, 'Preis', 'Preise')} geändert`);
+    if (n) parts.push(`${plural(n, 'Artikel', 'Artikel')} neu`);
+    if (r) parts.push(`${plural(r, 'Artikel', 'Artikel')} entfernt`);
+    if (o) parts.push(plural(o, 'weitere Änderung', 'weitere Änderungen'));
+    return parts.join(', ');
+  }
+  const entryText = (e) => (e.a === 'draft' ? `Entwurf bearbeitet: ${draftSummary(e.d)}` : e.s);
+  async function loadLog(month) {
+    logData = await api('log', { query: month ? '&month=' + encodeURIComponent(month) : '' });
+    logMonth = logData.month;
+  }
+  const monthLabel = (m) => { const [y, mo] = m.split('-'); return new Date(Date.UTC(+y, +mo - 1, 15)).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }); };
+  async function renderLogView(reload = true) {
+    const host = $('#view-log');
+    if (reload) {
+      if (!logData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Protokoll wird geladen …</div>';
+      try { await loadLog(logMonth); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    }
+    const months = logData.months.includes(logMonth) ? logData.months : [logMonth, ...logData.months];
+    const names = [...new Map(logData.entries.filter((e) => e.u).map((e) => [e.u, e.n || e.u])).entries()].sort((a, b) => a[1].localeCompare(b[1], 'de'));
+    host.innerHTML = `
+      <div class="ed-toolbar">
+        <div class="search">${icon('search')}<input id="log-q" type="search" autocomplete="off" placeholder="Suchen: Artikel, Nummer, Text …" aria-label="Protokoll durchsuchen" value="${esc(logQ)}"></div>
+        <label class="select"><span class="sr-only">Monat</span><select id="log-month">${months.map((m) => `<option value="${m}"${m === logMonth ? ' selected' : ''}>${esc(monthLabel(m))}</option>`).join('')}</select>${icon('chev', 'sm')}</label>
+        <label class="select"><span class="sr-only">Nutzer</span><select id="log-user"><option value="">Alle Nutzer</option>${names.map(([u, n]) => `<option value="${esc(u)}"${u === logUser ? ' selected' : ''}>${esc(n)} (${esc(u)})</option>`).join('')}</select>${icon('chev', 'sm')}</label>
+        <label class="select"><span class="sr-only">Vorgang</span><select id="log-type">${LOG_TYPES.map(([v, l]) => `<option value="${v}"${v === logType ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${icon('chev', 'sm')}</label>
+        <span class="ed-hint" id="log-count"></span>
+        <button type="button" class="btn" id="log-csv">${icon('upload')}CSV</button>
+      </div>
+      <div id="log-list"></div>`;
+    renderLogList();
+  }
+  function logFiltered() {
+    const toks = fold(logQ).split(/\s+/).filter(Boolean);
+    return logData.entries.filter((e) => {
+      if (logUser && e.u !== logUser) return false;
+      if (logType && typeOf(e.a) !== logType) return false;
+      if (!toks.length) return true;
+      const hay = fold([e.u, e.n, entryText(e), ...(e.d || []).map((c) => [c.code, c.name, c.f, c.from, c.to].join(' '))].join(' '));
+      return toks.every((t) => hay.includes(t));
+    });
+  }
+  function changesTable(d) {
+    if (!d || !d.length) return '';
+    return `<table class="ctab"><thead><tr><th>Art.-Nr.</th><th>Artikel / Bereich</th><th>Feld</th><th>Vorher</th><th>Nachher</th></tr></thead><tbody>${d.map((c) => {
+      const f = c.k.split('|')[1];
+      const cls = f === 'price' ? 'ch-price' : f === '+' ? 'ch-new' : f === '-' ? 'ch-del' : '';
+      return `<tr class="${cls}"><td class="ch-code">${esc(c.code || '')}</td><td>${esc(c.name)}</td><td>${esc(c.f)}</td><td class="c-from">${c.from === '' ? '<span class="muted">—</span>' : esc(c.from)}</td><td class="c-to">${c.to === '' ? '<span class="muted">—</span>' : esc(c.to)}</td></tr>`;
+    }).join('')}</tbody></table>`;
+  }
+  function renderLogList() {
+    const list = logFiltered();
+    $('#log-count').textContent = plural(list.length, 'Eintrag', 'Einträge');
+    const host = $('#log-list');
+    if (!list.length) { host.innerHTML = `<div class="ed-empty"><h3>Keine Einträge</h3><p>${logData.entries.length ? 'Filter anpassen oder anderen Monat wählen.' : 'In diesem Monat wurde noch nichts protokolliert.'}</p></div>`; return; }
+    let day = '';
+    const rows = [];
+    for (const e of list) {
+      const d = new Date(e.t);
+      const dl = d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+      if (dl !== day) { day = dl; rows.push(`<tr class="lday"><td colspan="4">${esc(dl)}</td></tr>`); }
+      const key = e.t + '|' + e.u + '|' + e.a;
+      const hasD = e.d && e.d.length;
+      const isOpen = logOpen.has(key);
+      rows.push(`<tr class="lrow t-${esc(typeOf(e.a))}${e.a === 'login_fail' ? ' warn' : ''}${hasD ? ' has-d' : ''}" data-key="${esc(key)}"${hasD ? ' tabindex="0"' : ''}>
+        <td class="l-time">${esc(d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }))}</td>
+        <td class="l-user">${e.u ? `<div class="nm">${esc(e.n || e.u)}</div><div class="sub uname">${esc(e.u)}</div>` : '<span class="muted">—</span>'}</td>
+        <td class="l-act"><span class="l-kind">${esc(ACTION_LABEL[e.a] || e.a)}</span><div>${esc(entryText(e))}</div></td>
+        <td class="l-more">${hasD ? `<button type="button" class="btn sm ghost" data-ltoggle aria-expanded="${isOpen}">${isOpen ? 'Weniger' : `Details (${e.d.length})`}</button>` : `<span class="sub" title="IP-Adresse">${esc(e.ip || '')}</span>`}</td>
+      </tr>`);
+      if (hasD && isOpen) rows.push(`<tr class="ldet"><td></td><td colspan="3">${changesTable(e.d)}<div class="sub">IP-Adresse ${esc(e.ip || '—')}</div></td></tr>`);
+    }
+    host.innerHTML = `<div class="gcard"><table class="etab ltab"><thead><tr><th class="l-time">Zeit</th><th class="l-user">Nutzer</th><th>Vorgang</th><th class="l-more"><span class="sr-only">Details</span></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  }
+  $('#view-log').addEventListener('input', (e) => {
+    if (e.target.id === 'log-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { logQ = e.target.value.trim(); renderLogList(); }, 150); }
+  });
+  $('#view-log').addEventListener('change', async (e) => {
+    if (e.target.id === 'log-month') { logMonth = e.target.value; logUser = ''; await renderLogView(true); }
+    if (e.target.id === 'log-user') { logUser = e.target.value; renderLogList(); }
+    if (e.target.id === 'log-type') { logType = e.target.value; renderLogList(); }
+  });
+  $('#view-log').addEventListener('click', (e) => {
+    if (e.target.closest('#log-csv')) { logCSV(); return; }
+    const tr = e.target.closest('tr.lrow.has-d');
+    if (!tr) return;
+    const k = tr.dataset.key;
+    if (logOpen.has(k)) logOpen.delete(k); else logOpen.add(k);
+    renderLogList();
+  });
+  $('#view-log').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr.lrow.has-d')) e.target.click(); });
+  function logCSV() {
+    const q = (v) => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const lines = [['Datum', 'Uhrzeit', 'Benutzername', 'Name', 'Vorgang', 'Beschreibung', 'Art.-Nr.', 'Artikel', 'Feld', 'Vorher', 'Nachher', 'IP-Adresse'].join(';')];
+    for (const e of logFiltered()) {
+      const d = new Date(e.t);
+      const base = [d.toLocaleDateString('de-DE'), d.toLocaleTimeString('de-DE'), e.u, e.n, ACTION_LABEL[e.a] || e.a, entryText(e)];
+      if (e.d && e.d.length) for (const c of e.d) lines.push([...base, c.code, c.name, c.f, c.from, c.to, e.ip].map(q).join(';'));
+      else lines.push([...base, '', '', '', '', '', e.ip].map(q).join(';'));
+    }
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Protokoll_${logMonth}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
 
   /* ======================= Start ======================= */
   (async function boot() {
@@ -1373,6 +1674,8 @@
       if (s.setupRequired) { showAuth('setup'); return; }
       if (!s.loggedIn) { showAuth('login'); return; }
       csrf = s.csrf;
+      me = s.user;
+      if (me.mustChange) { try { await api('logout', { body: {} }); } catch { /* ignore */ } me = null; showAuth('login'); return; }
       await openEditor();
     } catch (e) {
       document.body.innerHTML = `<main class="auth"><div class="auth-card"><h1 style="margin:0;font-size:18px">Eingabebereich nicht erreichbar</h1><p class="auth-intro">${esc(e.message)}</p><p class="auth-intro">Die Seite muss über den Webserver aufgerufen werden, PHP muss aktiv sein.</p></div></main>`;

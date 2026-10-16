@@ -5,9 +5,10 @@
  * Öffentlich:
  *   GET  ?action=offer            veröffentlichtes Angebot
  * Eingabebereich (Anmeldung nötig, Schreibzugriffe zusätzlich mit CSRF-Token):
+ *   Rollen: viewer (nur ansehen) < editor (bearbeiten/veröffentlichen) < admin (+ Nutzer, Protokoll)
  *   GET  ?action=status           Anmeldestatus / Ersteinrichtung nötig?
- *   POST ?action=setup            erstes Passwort festlegen (nur solange keins existiert)
- *   POST ?action=login | logout
+ *   POST ?action=setup            ersten Administrator anlegen (nur solange es keinen Nutzer gibt)
+ *   POST ?action=login | logout   Anmeldung mit Benutzername + Passwort
  *   GET  ?action=draft            Entwurf + veröffentlichter Stand
  *   POST ?action=save_draft       Entwurf speichern
  *   POST ?action=discard_draft    Entwurf verwerfen
@@ -17,6 +18,8 @@
  *   POST ?action=change_password
  *   GET  ?action=history_list | history_data   Preisverlauf (Wochen-Stände)
  *   POST ?action=history_import | history_delete
+ *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
+ *   POST ?action=user_save | user_delete
  *
  * Alle Daten liegen als .php-Dateien mit Zugriffssperre im Datenordner –
  * sie lassen sich auch ohne .htaccess nicht direkt im Browser abrufen.
@@ -91,6 +94,68 @@ function body(): array
 }
 function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
 
+/* ---------------- Nutzer ---------------- */
+
+const ROLES = ['viewer' => 1, 'editor' => 2, 'admin' => 3];
+const ROLE_LABELS = ['viewer' => 'Nur ansehen', 'editor' => 'Bearbeiter', 'admin' => 'Administrator'];
+
+/* Exklusive Sperre für Lese-Ändere-Schreibe-Vorgänge (Nutzerliste, Protokoll) */
+function with_lock(string $name, callable $fn)
+{
+    global $DATA;
+    if (!is_dir($DATA) && !@mkdir($DATA, 0775, true)) fail('Datenordner kann nicht angelegt werden.', 500);
+    static $held = [];
+    if (!empty($held[$name])) return $fn();             // bereits gesperrt (verschachtelter Aufruf)
+    $fh = @fopen($DATA . '/.' . $name . '.lock', 'c');
+    if ($fh) flock($fh, LOCK_EX);
+    $held[$name] = true;
+    try { return $fn(); } finally { $held[$name] = false; if ($fh) { flock($fh, LOCK_UN); fclose($fh); } }
+}
+/* Nutzerliste; bisherige Einzel-Passwort-Installation wird einmalig zum Nutzer „admin“ */
+function users_load(): array
+{
+    $u = store_read('nutzer');
+    if (is_array($u) && isset($u['users'])) return $u['users'];
+    $old = store_read('admin');
+    if ($old && !empty($old['hash'])) {
+        return with_lock('nutzer', function () use ($old) {
+            $u = store_read('nutzer');
+            if (is_array($u) && isset($u['users'])) return $u['users'];
+            $users = [[
+                'id' => 'u' . bin2hex(random_bytes(6)), 'username' => 'admin', 'name' => 'Administrator', 'role' => 'admin',
+                'active' => true, 'hash' => (string)$old['hash'], 'mustChange' => false, 'sv' => 1,
+                'created' => $old['created'] ?? now(), 'createdBy' => 'Übernahme', 'lastLogin' => null,
+            ]];
+            store_write('nutzer', ['users' => $users]);
+            store_delete('admin');
+            return $users;
+        });
+    }
+    return [];
+}
+function users_save(array $users): void { store_write('nutzer', ['users' => array_values($users)]); }
+function user_find(array $users, string $id): ?int { foreach ($users as $i => $u) if ($u['id'] === $id) return $i; return null; }
+function user_public(array $u): array
+{
+    return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'active' => (bool)$u['active'],
+            'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
+            'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null];
+}
+function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
+function clean_username($v): string
+{
+    $v = is_string($v) ? strtolower(trim($v)) : '';
+    if (!preg_match('/^[a-z0-9][a-z0-9._-]{1,31}$/', $v)) throw new InvalidArgumentException('Benutzername: 2–32 Zeichen, nur Buchstaben a–z, Ziffern, Punkt, Binde- und Unterstrich.');
+    return $v;
+}
+function check_password($pw): string
+{
+    $pw = is_string($pw) ? $pw : '';
+    if (mb_strlen($pw) < 10) throw new InvalidArgumentException('Das Passwort muss mindestens 10 Zeichen lang sein.');
+    if (strlen($pw) > 200) throw new InvalidArgumentException('Das Passwort ist zu lang.');
+    return $pw;
+}
+
 /* ---------------- Sitzung ---------------- */
 
 function start_session(): void
@@ -104,25 +169,185 @@ function start_session(): void
     session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Strict']);
     session_start();
     $max = (int)$CFG['session_hours'] * 3600;
-    if (!empty($_SESSION['auth']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) { $_SESSION = []; session_regenerate_id(true); }
-    if (!empty($_SESSION['auth'])) $_SESSION['seen'] = time();
+    if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) { $_SESSION = []; session_regenerate_id(true); }
+    if (!empty($_SESSION['uid'])) $_SESSION['seen'] = time();
 }
-function logged_in(): bool { start_session(); return !empty($_SESSION['auth']); }
-function require_auth(bool $write = false): void
+/* Angemeldeter Nutzer – Rolle und Status werden bei jeder Anfrage frisch gelesen */
+$ME = null;
+function current_user(): ?array
 {
-    if (!logged_in()) fail('Bitte erneut anmelden.', 401);
+    global $ME;
+    if ($ME !== null) return $ME;
+    start_session();
+    if (empty($_SESSION['uid'])) return null;
+    $users = users_load();
+    $i = user_find($users, (string)$_SESSION['uid']);
+    if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)($_SESSION['sv'] ?? -1)) { $_SESSION = []; return null; }
+    return $ME = $users[$i];
+}
+function require_auth(bool $write = false, string $role = 'viewer'): array
+{
+    $u = current_user();
+    if (!$u) fail('Bitte erneut anmelden.', 401);
     if ($write) {
         $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
     }
+    if (!empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
+    if (ROLES[$u['role']] < ROLES[$role]) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+    return $u;
 }
-function sign_in(): string
+function sign_in(array $u): string
 {
+    global $ME;
     session_regenerate_id(true);
-    $_SESSION['auth'] = true;
+    $_SESSION['uid'] = $u['id'];
+    $_SESSION['sv'] = (int)$u['sv'];
     $_SESSION['seen'] = time();
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    $ME = $u;
     return $_SESSION['csrf'];
+}
+function me_payload(array $u): array { return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false)]; }
+
+/* ---------------- Protokoll ---------------- */
+
+/* Ein Eintrag je Vorgang; fortlaufendes Bearbeiten des Entwurfs durch dieselbe Person wird zusammengefasst */
+function audit(string $a, string $s, array $d = [], ?array $who = null, bool $merge = false): void
+{
+    global $ME;
+    try {
+        $who = $who ?? $ME;
+        $month = gmdate('Y-m');
+        with_lock('protokoll', function () use ($a, $s, $d, $who, $merge, $month) {
+            $log = store_read('protokoll/' . $month) ?? [];
+            $last = $log ? $log[count($log) - 1] : null;
+            $u = $who['username'] ?? '';
+            if ($merge && $last && $last['a'] === $a && $last['u'] === $u && strtotime($last['t']) > time() - 1800) {
+                $last['d'] = changes_merge($last['d'] ?? [], $d);
+                $last['t'] = now();
+                $last['s'] = $s;
+                if (!$last['d']) array_pop($log); else $log[count($log) - 1] = $last;
+            } else {
+                if ($merge && !$d) return;
+                $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => client_ip(), 'a' => $a, 's' => $s];
+                if ($d) $e['d'] = $d;
+                $log[] = $e;
+            }
+            store_write('protokoll/' . $month, $log);
+        });
+    } catch (Throwable $e) {
+        error_log('[wochenangebot] Protokoll: ' . $e->getMessage());
+    }
+}
+function price_text($p): string
+{
+    if (!is_array($p)) return '';
+    $st = $p['status'] ?? 'none';
+    if ($st === 'value') {
+        $v = (float)$p['value'];
+        $t = number_format($v, abs($v * 100 - round($v * 100)) > 1e-6 ? 3 : 2, ',', '.') . ' €/kg';
+    } elseif ($st === 'request') $t = 'auf Anfrage';
+    else $t = 'ohne Preis';
+    return $t;
+}
+function alts_text($alts): string
+{
+    $out = [];
+    foreach ((array)$alts as $p) $out[] = trim(($p['label'] ?? '') . ': ' . price_text($p));
+    return implode(' · ', $out);
+}
+/* Änderungen zwischen zwei Ständen als Liste {k, code, name, f, from, to} */
+function changes_between(?array $a, array $b): array
+{
+    $out = [];
+    $am = $a['meta'] ?? [];
+    $bm = $b['meta'] ?? [];
+    $wa = isset($am['week']) ? ($am['week'] . '/' . ($am['year'] ?? '')) : '';
+    $wb = isset($bm['week']) ? ($bm['week'] . '/' . ($bm['year'] ?? '')) : '';
+    if ($a && $wa !== $wb) $out[] = ['k' => 'm|week', 'code' => '', 'name' => 'Kopfdaten', 'f' => 'Kalenderwoche', 'from' => $wa, 'to' => $wb];
+    if ($a && (string)($am['notice'] ?? '') !== (string)($bm['notice'] ?? '')) $out[] = ['k' => 'm|notice', 'code' => '', 'name' => 'Kopfdaten', 'f' => 'Hinweis', 'from' => (string)($am['notice'] ?? ''), 'to' => (string)($bm['notice'] ?? '')];
+    $ga = []; foreach (($a['groups'] ?? []) as $g) $ga[$g['id']] = $g;
+    $gb = []; foreach (($b['groups'] ?? []) as $g) $gb[$g['id']] = $g;
+    foreach ($gb as $id => $g) {
+        if (!isset($ga[$id])) continue;
+        if ($ga[$id]['name'] !== $g['name']) $out[] = ['k' => "g$id|name", 'code' => '', 'name' => 'Gruppe', 'f' => 'Gruppenname', 'from' => $ga[$id]['name'], 'to' => $g['name']];
+        if (($ga[$id]['section'] ?? '') !== ($g['section'] ?? '')) $out[] = ['k' => "g$id|section", 'code' => '', 'name' => $g['name'], 'f' => 'Bereich', 'from' => $ga[$id]['section'] ?? '', 'to' => $g['section'] ?? ''];
+    }
+    $gname = function ($id) use ($ga, $gb) { return $gb[$id]['name'] ?? $ga[$id]['name'] ?? ''; };
+    $ia = []; foreach (($a['items'] ?? []) as $it) $ia[$it['id']] = $it;
+    $ib = []; foreach (($b['items'] ?? []) as $it) $ib[$it['id']] = $it;
+    $fields = ['code' => 'Art.-Nr.', 'name' => 'Bezeichnung', 'category' => 'Fleischart', 'origin' => 'Herkunft', 'condition' => 'Zustand'];
+    foreach ($ib as $id => $it) {
+        $code = (string)($it['code'] ?? '');
+        if (!isset($ia[$id])) {
+            if ($a) $out[] = ['k' => "$id|+", 'code' => $code, 'name' => $it['name'], 'f' => 'Neuer Artikel', 'from' => '', 'to' => price_text($it['price']) . ' · ' . $gname($it['groupId'])];
+            continue;
+        }
+        $o = $ia[$id];
+        foreach ($fields as $f => $label) {
+            if ((string)($o[$f] ?? '') !== (string)($it[$f] ?? '')) $out[] = ['k' => "$id|$f", 'code' => $code, 'name' => $it['name'], 'f' => $label, 'from' => (string)($o[$f] ?? ''), 'to' => (string)($it[$f] ?? '')];
+        }
+        if (($o['groupId'] ?? '') !== ($it['groupId'] ?? '')) $out[] = ['k' => "$id|groupId", 'code' => $code, 'name' => $it['name'], 'f' => 'Gruppe', 'from' => $gname($o['groupId']), 'to' => $gname($it['groupId'])];
+        if (price_text($o['price'] ?? null) !== price_text($it['price'] ?? null)) $out[] = ['k' => "$id|price", 'code' => $code, 'name' => $it['name'], 'f' => 'Preis', 'from' => price_text($o['price'] ?? null), 'to' => price_text($it['price'] ?? null)];
+        if ((string)($o['price']['label'] ?? '') !== (string)($it['price']['label'] ?? '')) $out[] = ['k' => "$id|plabel", 'code' => $code, 'name' => $it['name'], 'f' => 'Preisbezeichnung', 'from' => (string)($o['price']['label'] ?? ''), 'to' => (string)($it['price']['label'] ?? '')];
+        if (alts_text($o['altPrices'] ?? []) !== alts_text($it['altPrices'] ?? [])) $out[] = ['k' => "$id|alts", 'code' => $code, 'name' => $it['name'], 'f' => 'Zusatzpreise', 'from' => alts_text($o['altPrices'] ?? []), 'to' => alts_text($it['altPrices'] ?? [])];
+    }
+    foreach ($ia as $id => $it) {
+        if (!isset($ib[$id])) $out[] = ['k' => "$id|-", 'code' => (string)($it['code'] ?? ''), 'name' => $it['name'], 'f' => 'Artikel entfernt', 'from' => price_text($it['price']), 'to' => ''];
+    }
+    return $out;
+}
+/* Neue Änderungen in einen bestehenden Eintrag einarbeiten: Ausgangswert bleibt, Endwert wird aktualisiert */
+function changes_merge(array $old, array $new): array
+{
+    $idx = [];
+    foreach ($old as $i => $c) $idx[$c['k']] = $i;
+    foreach ($new as $c) {
+        [$id, $f] = explode('|', $c['k'], 2) + [1 => ''];
+        if ($f === '-' && isset($idx["$id|+"])) {           // neu angelegt und wieder entfernt → nichts übrig
+            foreach ($old as $i => $o) if (strpos($o['k'], "$id|") === 0) unset($old[$i]);
+            $old = array_values($old);
+            $idx = []; foreach ($old as $i => $o) $idx[$o['k']] = $i;
+            continue;
+        }
+        if ($f !== '+' && $f !== '-' && isset($idx["$id|+"])) { // Bearbeitung eines neuen Artikels → Eintrag „neu“ aktualisieren
+            $o = &$old[$idx["$id|+"]];
+            $o['code'] = $c['code']; $o['name'] = $c['name'];
+            if ($f === 'price') $o['to'] = preg_replace('/^[^·]*/u', $c['to'] . ' ', $o['to'], 1);
+            unset($o);
+            continue;
+        }
+        if (isset($idx[$c['k']])) {
+            $o = &$old[$idx[$c['k']]];
+            $o['to'] = $c['to']; $o['code'] = $c['code']; $o['name'] = $c['name'];
+            $same = $o['from'] === $o['to'];
+            unset($o);
+            if ($same) {
+                unset($old[$idx[$c['k']]]);
+                $old = array_values($old);
+                $idx = []; foreach ($old as $i => $o2) $idx[$o2['k']] = $i;
+            }
+        } else {
+            $old[] = $c;
+            $idx[$c['k']] = count($old) - 1;
+        }
+    }
+    return array_slice(array_values($old), 0, 2000);
+}
+function changes_summary(array $d): string
+{
+    $p = $n = $r = $e = 0;
+    foreach ($d as $c) {
+        $f = explode('|', $c['k'], 2)[1] ?? '';
+        if ($f === 'price') $p++; elseif ($f === '+') $n++; elseif ($f === '-') $r++; else $e++;
+    }
+    $parts = [];
+    if ($p) $parts[] = $p . ($p === 1 ? ' Preis' : ' Preise') . ' geändert';
+    if ($n) $parts[] = $n . ' Artikel neu';
+    if ($r) $parts[] = $r . ' Artikel entfernt';
+    if ($e) $parts[] = $e . ($e === 1 ? ' weitere Änderung' : ' weitere Änderungen');
+    return $parts ? implode(', ', $parts) : 'keine Änderungen';
 }
 
 /* Anmeldeversuche begrenzen */
@@ -343,7 +568,7 @@ function clean_history_items($items): array
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete'];
+$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -370,47 +595,186 @@ try {
 
         case 'status': {
             header('Cache-Control: no-store');
-            $in = logged_in();
-            respond(['ok' => true, 'setupRequired' => store_read('admin') === null, 'loggedIn' => $in, 'csrf' => $in ? $_SESSION['csrf'] : null, 'company' => $CFG['company']]);
+            $u = current_user();
+            respond(['ok' => true, 'setupRequired' => !users_load(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
+                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company']]);
         }
 
         case 'setup': {
-            if (store_read('admin') !== null) fail('Das Passwort ist bereits eingerichtet.', 409);
-            $pw = (string)(body()['password'] ?? '');
-            if (mb_strlen($pw) < 10) fail('Das Passwort muss mindestens 10 Zeichen lang sein.');
-            store_write('admin', ['hash' => password_hash($pw, PASSWORD_DEFAULT), 'created' => now()]);
+            $b = body();
+            $u = with_lock('nutzer', function () use ($b) {
+                if (users_load()) fail('Die Ersteinrichtung ist bereits erfolgt.', 409);
+                $name = s($b['name'] ?? '', 80) ?: 'Administrator';
+                $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => clean_username($b['username'] ?? ''), 'name' => $name, 'role' => 'admin',
+                      'active' => true, 'hash' => password_hash(check_password($b['password'] ?? ''), PASSWORD_DEFAULT), 'mustChange' => false,
+                      'sv' => 1, 'created' => now(), 'createdBy' => 'Ersteinrichtung', 'lastLogin' => now()];
+                users_save([$u]);
+                return $u;
+            });
             start_session();
-            respond(['ok' => true, 'csrf' => sign_in()]);
+            $tok = sign_in($u);
+            audit('setup', 'Ersteinrichtung: Administrator „' . $u['username'] . '“ angelegt');
+            respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($u)]);
         }
 
         case 'login': {
             start_session();
             attempts_check();
-            $adm = store_read('admin');
-            if ($adm === null) fail('Bitte zuerst ein Passwort einrichten.', 409);
-            $pw = (string)(body()['password'] ?? '');
-            if (!password_verify($pw, (string)$adm['hash'])) { attempts_record(false); usleep(400000); fail('Passwort ist nicht korrekt.', 401); }
+            if (!users_load()) fail('Bitte zuerst die Ersteinrichtung durchführen.', 409);
+            $b = body();
+            $name = is_string($b['username'] ?? null) ? strtolower(trim($b['username'])) : '';
+            $pw = (string)($b['password'] ?? '');
+            $res = with_lock('nutzer', function () use ($name, $pw) {
+                $users = users_load();
+                foreach ($users as $i => $u) {
+                    if ($u['username'] !== $name) continue;
+                    if (!password_verify($pw, (string)$u['hash'])) return null;
+                    if (!$u['active']) return 'inactive';
+                    if (password_needs_rehash((string)$u['hash'], PASSWORD_DEFAULT)) $users[$i]['hash'] = password_hash($pw, PASSWORD_DEFAULT);
+                    $users[$i]['lastLogin'] = now();
+                    users_save($users);
+                    return $users[$i];
+                }
+                password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit wie bei vorhandenem Nutzer
+                return null;
+            });
+            if (!is_array($res)) {
+                attempts_record(false);
+                audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . ($res === 'inactive' ? ' – Zugang deaktiviert' : ''), [], ['username' => mb_substr($name, 0, 40), 'name' => '', 'role' => '']);
+                usleep(400000);
+                fail($res === 'inactive' ? 'Dieser Zugang ist deaktiviert.' : 'Benutzername oder Passwort ist nicht korrekt.', 401);
+            }
             attempts_record(true);
-            if (password_needs_rehash((string)$adm['hash'], PASSWORD_DEFAULT)) { $adm['hash'] = password_hash($pw, PASSWORD_DEFAULT); store_write('admin', $adm); }
-            respond(['ok' => true, 'csrf' => sign_in()]);
+            $tok = sign_in($res);
+            audit('login', 'Angemeldet');
+            respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($res)]);
         }
 
         case 'logout': {
-            start_session();
+            $u = current_user();
+            if ($u) audit('logout', 'Abgemeldet');
             $_SESSION = [];
             session_destroy();
             respond(['ok' => true]);
         }
 
         case 'change_password': {
-            require_auth(true);
+            $me = current_user();
+            if (!$me) fail('Bitte erneut anmelden.', 401);
+            $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+            if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
             $b = body();
-            $adm = store_read('admin');
-            if (!$adm || !password_verify((string)($b['current'] ?? ''), (string)$adm['hash'])) fail('Das bisherige Passwort ist nicht korrekt.', 401);
-            $new = (string)($b['password'] ?? '');
-            if (mb_strlen($new) < 10) fail('Das neue Passwort muss mindestens 10 Zeichen lang sein.');
-            store_write('admin', ['hash' => password_hash($new, PASSWORD_DEFAULT), 'created' => $adm['created'] ?? now(), 'changed' => now()]);
+            if (!password_verify((string)($b['current'] ?? ''), (string)$me['hash'])) fail('Das bisherige Passwort ist nicht korrekt.', 401);
+            $new = check_password($b['password'] ?? '');
+            if (password_verify($new, (string)$me['hash'])) fail('Bitte ein anderes als das bisherige Passwort wählen.');
+            $u = with_lock('nutzer', function () use ($me, $new) {
+                $users = users_load();
+                $i = user_find($users, $me['id']);
+                if ($i === null) fail('Bitte erneut anmelden.', 401);
+                $users[$i]['hash'] = password_hash($new, PASSWORD_DEFAULT);
+                $users[$i]['mustChange'] = false;
+                $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;   // andere Sitzungen dieses Nutzers abmelden
+                $users[$i]['changed'] = now();
+                users_save($users);
+                return $users[$i];
+            });
+            $_SESSION['sv'] = (int)$u['sv'];
+            $GLOBALS['ME'] = $u;
+            audit('password', 'Eigenes Passwort geändert');
+            respond(['ok' => true, 'user' => me_payload($u)]);
+        }
+
+        case 'users': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            respond(['ok' => true, 'users' => array_map('user_public', users_load())]);
+        }
+
+        case 'user_save': {
+            $me = require_auth(true, 'admin');
+            $b = body();
+            $res = with_lock('nutzer', function () use ($b, $me) {
+                $users = users_load();
+                $id = is_string($b['id'] ?? null) ? $b['id'] : '';
+                $isNew = $id === '';
+                $name = s($b['name'] ?? '', 80, false);
+                if ($name === null) throw new InvalidArgumentException('Bitte einen Namen angeben.');
+                $role = is_string($b['role'] ?? null) && isset(ROLES[$b['role']]) ? $b['role'] : null;
+                if ($role === null) throw new InvalidArgumentException('Ungültige Rolle.');
+                $active = !empty($b['active']);
+                $pw = $b['password'] ?? '';
+                $setPw = is_string($pw) && $pw !== '';
+                if ($isNew) {
+                    $uname = clean_username($b['username'] ?? '');
+                    foreach ($users as $u) if ($u['username'] === $uname) throw new InvalidArgumentException('Der Benutzername „' . $uname . '“ ist bereits vergeben.');
+                    if (!$setPw) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Nutzer festlegen.');
+                    $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => $role, 'active' => $active,
+                          'hash' => password_hash(check_password($pw), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
+                          'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
+                    $users[] = $u;
+                    users_save($users);
+                    $d = [['k' => 'u|role', 'code' => '', 'name' => $uname, 'f' => 'Rolle', 'from' => '', 'to' => ROLE_LABELS[$role]]];
+                    if (!$active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $uname, 'f' => 'Status', 'from' => '', 'to' => 'deaktiviert'];
+                    return [$u, 'Nutzer „' . $uname . '“ (' . $name . ') angelegt', $d];
+                }
+                $i = user_find($users, $id);
+                if ($i === null) fail('Nutzer nicht gefunden.', 404);
+                $old = $users[$i];
+                if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
+                $users[$i]['name'] = $name;
+                $users[$i]['role'] = $role;
+                $users[$i]['active'] = $active;
+                if (active_admins($users) < 1) throw new InvalidArgumentException('Es muss mindestens ein aktiver Administrator bestehen bleiben.');
+                $d = [];
+                if ($old['name'] !== $name) $d[] = ['k' => 'u|name', 'code' => '', 'name' => $old['username'], 'f' => 'Name', 'from' => $old['name'], 'to' => $name];
+                if ($old['role'] !== $role) $d[] = ['k' => 'u|role', 'code' => '', 'name' => $old['username'], 'f' => 'Rolle', 'from' => ROLE_LABELS[$old['role']], 'to' => ROLE_LABELS[$role]];
+                if ((bool)$old['active'] !== $active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $old['username'], 'f' => 'Status', 'from' => $old['active'] ? 'aktiv' : 'deaktiviert', 'to' => $active ? 'aktiv' : 'deaktiviert'];
+                if ($setPw) {
+                    $users[$i]['hash'] = password_hash(check_password($pw), PASSWORD_DEFAULT);
+                    $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
+                    $users[$i]['sv'] = (int)$old['sv'] + 1;      // bestehende Sitzungen des Nutzers beenden
+                    $d[] = ['k' => 'u|pw', 'code' => '', 'name' => $old['username'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . ($users[$i]['mustChange'] ? ' (muss beim Anmelden geändert werden)' : '')];
+                }
+                $users[$i]['changed'] = now();
+                users_save($users);
+                return [$users[$i], 'Nutzer „' . $old['username'] . '“ geändert', $d];
+            });
+            [$u, $msg, $d] = $res;
+            if ($u['id'] === $me['id']) { $_SESSION['sv'] = (int)$u['sv']; }
+            if ($d) audit('user', $msg, $d);
+            respond(['ok' => true, 'user' => user_public($u)]);
+        }
+
+        case 'user_delete': {
+            $me = require_auth(true, 'admin');
+            $id = (string)(body()['id'] ?? '');
+            $gone = with_lock('nutzer', function () use ($id, $me) {
+                $users = users_load();
+                $i = user_find($users, $id);
+                if ($i === null) fail('Nutzer nicht gefunden.', 404);
+                if ($id === $me['id']) throw new InvalidArgumentException('Den eigenen Zugang können Sie nicht löschen.');
+                $u = $users[$i];
+                array_splice($users, $i, 1);
+                if (active_admins($users) < 1) throw new InvalidArgumentException('Es muss mindestens ein aktiver Administrator bestehen bleiben.');
+                users_save($users);
+                return $u;
+            });
+            audit('user', 'Nutzer „' . $gone['username'] . '“ (' . $gone['name'] . ') gelöscht');
             respond(['ok' => true]);
+        }
+
+        case 'log': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            $months = [];
+            foreach (glob(dirname(store_path('protokoll/x')) . '/*.php') ?: [] as $f) {
+                $m = basename($f, '.php');
+                if (preg_match('/^\d{4}-\d{2}$/', $m)) $months[] = $m;
+            }
+            rsort($months);
+            $month = (string)($_GET['month'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}$/', $month)) $month = $months[0] ?? gmdate('Y-m');
+            respond(['ok' => true, 'month' => $month, 'months' => $months, 'entries' => array_reverse(store_read('protokoll/' . $month) ?? [])]);
         }
 
         case 'draft': {
@@ -429,7 +793,7 @@ try {
         }
 
         case 'save_draft': {
-            require_auth(true);
+            require_auth(true, 'editor');
             $b = body();
             $prev = store_read('entwurf');
             $cur = (int)($prev['rev'] ?? 0);
@@ -440,17 +804,30 @@ try {
             $model['savedAt'] = now();
             $model['rev'] = $cur + 1;
             store_write('entwurf', $model);
+            $before = $prev ?? store_read('angebot');
+            $note = is_array($b['note'] ?? null) ? $b['note'] : null;
+            if ($note && ($note['type'] ?? '') === 'import') {
+                $d = changes_between(store_read('angebot'), $model);
+                audit('import', 'Excel importiert: ' . (s($note['file'] ?? '', 120) ?: 'Datei') . ' – KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ', ' . count($model['items']) . ' Artikel (gegenüber veröffentlicht: ' . changes_summary($d) . ')', array_slice($d, 0, 2000));
+            } elseif ($note && ($note['type'] ?? '') === 'version') {
+                audit('import', 'Frühere Veröffentlichung als Entwurf geladen (KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ')', array_slice(changes_between($before, $model), 0, 2000));
+            } else {
+                $d = changes_between($before, $model);
+                if ($d) audit('draft', 'Entwurf bearbeitet', $d, null, true);
+            }
             respond(['ok' => true, 'savedAt' => $model['savedAt'], 'revision' => $model['rev']]);
         }
 
         case 'discard_draft': {
-            require_auth(true);
+            require_auth(true, 'editor');
+            $dr = store_read('entwurf');
             store_delete('entwurf');
+            if ($dr) { $d = changes_between($dr, store_read('angebot') ?? $dr); audit('discard', 'Entwurf verworfen' . ($d ? ' (' . changes_summary($d) . ' zurückgenommen)' : ''), array_slice($d, 0, 2000)); }
             respond(['ok' => true]);
         }
 
         case 'publish': {
-            require_auth(true);
+            require_auth(true, 'editor');
             $model = clean_model(body()['model'] ?? null, true);
             $prev = store_read('angebot');
             if ($prev) {
@@ -465,6 +842,8 @@ try {
             store_delete('entwurf');
             $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
             if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
+            $d = $prev ? changes_between($prev, $model) : [];
+            audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
             respond(['ok' => true, 'publishedAt' => $model['publishedAt']]);
         }
 
@@ -520,7 +899,7 @@ try {
         }
 
         case 'history_import': {
-            require_auth(true);
+            require_auth(true, 'editor');
             $b = body();
             $week = $b['week'] ?? null;
             $year = $b['year'] ?? null;
@@ -530,13 +909,16 @@ try {
             $replaced = store_read('historie/' . $id) !== null;
             store_write('historie/' . $id, ['week' => $week, 'year' => $year, 'origin' => 'Import', 'source' => s($b['source'] ?? '', 200) ?? '', 'savedAt' => now(), 'items' => $items]);
             history_undelete($id);
+            audit('history', 'Preisverlauf: KW ' . $week . '/' . $year . ($replaced ? ' ersetzt' : ' hochgeladen') . ' – ' . (s($b['source'] ?? '', 120) ?: 'ohne Dateiname') . ', ' . count($items) . ' Artikel');
             respond(['ok' => true, 'id' => $id, 'replaced' => $replaced]);
         }
 
         case 'history_delete': {
-            require_auth(true);
+            require_auth(true, 'editor');
             $id = (string)(body()['id'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}$/', $id)) fail('Ungültige Woche.');
+            [$hy, $hw] = array_map('intval', explode('-', $id));
+            audit('history', 'Preisverlauf: KW ' . $hw . '/' . $hy . ' entfernt');
             store_delete('historie/' . $id);
             $del = store_read('historie_geloescht') ?? [];
             if (!in_array($id, $del, true)) { $del[] = $id; store_write('historie_geloescht', $del); }
