@@ -542,3 +542,5 @@ a.btn#btn-site { text-decoration: none; }
 .geo-db { justify-content: space-between; }
 .sec-h-act { float: right; margin-top: -4px; }
 @media (max-width: 700px) { .geo-pick { grid-template-columns: 1fr; } .geo-quick { margin-left: 0; } .geo-scope { width: 100%; } }
+.geo-list .geo-iphit { grid-column: 1 / -1; }
+.geo-iphit .mono-s { font-size: 12.5px; }

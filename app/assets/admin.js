@@ -2603,7 +2603,27 @@
     return list.length ? list.map((c) => `<span class="geo-chip">${esc(ccName(c))} <span class="sub">${esc(c)}</span><button type="button" data-geo-del="${esc(c)}" aria-label="${esc(ccName(c))} entfernen">×</button></span>`).join('')
       : '<span class="sub">Noch kein Land ausgewählt.</span>';
   }
+  const IP_RE = /^(\d{1,3}(\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]+)$/i;
+  let geoIp = null, geoIpTimer;
+  function geoIpHit() {
+    if (!geoIp || geoIp.ip !== geoQ) return IP_RE.test(geoQ) ? '<p class="sec-empty">IP-Adresse wird gesucht …</p>' : '';
+    if (geoIp.error) return `<p class="sec-empty">${esc(geoIp.error)}</p>`;
+    if (!geoIp.country) return `<p class="sec-empty"><span class="mono-s">${esc(geoIp.ip)}</span> – ${geoIp.private ? 'interne Adresse, keinem Land zugeordnet' : 'kein Land bekannt'}.</p>`;
+    const c = geoIp.country;
+    return `<label class="geo-opt geo-iphit"><input type="checkbox" data-geo-cc="${esc(c)}"${geoSel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(geoIp.ip)}</span> → ${esc(ccName(c))}</span><span class="sub">${esc(c)}</span></label>`;
+  }
+  function geoLookup() {
+    clearTimeout(geoIpTimer);
+    if (!IP_RE.test(geoQ)) { geoIp = null; return; }
+    const ip = geoQ;
+    geoIpTimer = setTimeout(async () => {
+      try { const r = await api('geo_lookup', { query: '&ip=' + encodeURIComponent(ip) }); geoIp = { ip, country: r.country, private: r.private }; }
+      catch (ex) { geoIp = { ip, error: ex.message }; }
+      if (geoQ === ip && $('#geo-list')) $('#geo-list').innerHTML = geoList();
+    }, 250);
+  }
   function geoList() {
+    if (IP_RE.test(geoQ)) return geoIpHit();
     const q = geoQ.toLowerCase();
     const all = (secData.geoCountries || []).filter((c) => !q || c.toLowerCase() === q || ccName(c).toLowerCase().includes(q)).sort(ccSort);
     return all.length ? all.map((c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${geoSel.has(c) ? ' checked' : ''}> <span>${esc(ccName(c))}</span><span class="sub">${esc(c)}</span></label>`).join('')
@@ -2689,7 +2709,7 @@
               <div class="geo-selbox"><div class="geo-hd"><strong id="geo-sel-label">Gesperrte Länder</strong><span class="sub" id="geo-count"></span>
                 <span class="geo-quick"><button type="button" class="btn sm ghost" data-sec="geo-eu" title="EU-Länder sowie Schweiz, Großbritannien, Norwegen, Island und Liechtenstein">Europa auswählen</button><button type="button" class="btn sm ghost" data-sec="geo-none">Auswahl leeren</button></span></div>
                 <div class="geo-chips" id="geo-chips"></div></div>
-              <div class="geo-search"><input type="search" id="geo-q" placeholder="Land suchen, z. B. China oder CN" aria-label="Land suchen"><div class="geo-list" id="geo-list">${geoList()}</div></div>
+              <div class="geo-search"><input type="search" id="geo-q" placeholder="Land oder IP-Adresse, z. B. China, CN oder 1.0.1.1" aria-label="Land oder IP-Adresse suchen"><div class="geo-list" id="geo-list">${geoList()}</div></div>
             </div>
             <small>Adressen aus der IP-Freigabeliste oben sind immer erlaubt. Adressen ohne bekannte Länderzuordnung werden nicht gesperrt. Die Zuordnung stimmt in den allermeisten Fällen, kann aber über VPN-Dienste umgangen werden – sie ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</small>
             <div class="sec-inline geo-db"><small>${G ? `Länderdaten: Stand ${esc(new Date(G.date + 'T12:00:00Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }))} · ${fmtInt.format(G.v4 + G.v6)} Adressbereiche` : '<span class="st-err">Länderdaten fehlen</span>'}</small><button type="button" class="btn sm" data-sec="geo-update">${icon('download', 'sm')}Länderdaten aktualisieren</button></div>
@@ -2712,7 +2732,7 @@
     geoRefresh();
   }
   $('#view-sec').addEventListener('input', (e) => {
-    if (e.target.id === 'geo-q') { geoQ = e.target.value.trim(); $('#geo-list').innerHTML = geoList(); }
+    if (e.target.id === 'geo-q') { geoQ = e.target.value.trim(); geoLookup(); $('#geo-list').innerHTML = geoList(); }
   });
   $('#view-sec').addEventListener('change', (e) => {
     const cc = e.target.dataset && e.target.dataset.geoCc;

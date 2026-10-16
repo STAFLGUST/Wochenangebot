@@ -1207,6 +1207,14 @@ try {
             respond(['ok' => true, 'settings' => $new]);
         }
 
+        case 'geo_lookup': {
+            require_auth(false, 'admin');
+            $ip = trim((string)($_GET['ip'] ?? ''));
+            if (filter_var($ip, FILTER_VALIDATE_IP) === false) fail('Keine gültige IP-Adresse.', 422);
+            $priv = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+            respond(['ok' => true, 'ip' => $ip, 'country' => geo_country($ip), 'private' => $priv]);
+        }
+
         case 'geo_clear_stats': {
             require_auth(true, 'admin');
             with_lock('laendersperre', function () { store_write('laendersperre', []); });
