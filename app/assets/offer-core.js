@@ -176,11 +176,17 @@
     if (/argentinien|uruguay|paraguay|brasilien|australien|südamerika/.test(t)) return 'Rind';
     return null;
   }
+  /* Herkunft als Kürzel (Reihenfolge = Vorrang) */
   const ORIGINS = [
-    [/argentinien|\barg\./, 'Argentinien'], [/uruguay/, 'Uruguay'], [/paraguay/, 'Paraguay'], [/brasil/, 'Brasilien'],
-    [/australien/, 'Australien'], [/neus+e+land|\bnzl?\b/, 'Neuseeland'], [/irland/, 'Irland'],
-    [/dänemark|\bdän\./, 'Dänemark'], [/deutschland|europa|\beu\b/, 'Deutschland / EU'], [/südamerika/, 'Südamerika'],
+    [/\b4\s*x\s*d\b/, '4xD'], [/\b3\s*x\s*d\b/, '3xD'],
+    [/argentinien|\barg\b|\bargent\./, 'ARG'], [/uruguay|\burug\.|\buy\b/, 'UY'], [/paraguay|\bparag\.|\bpy\b/, 'PY'],
+    [/brasil/, 'BR'], [/australien/, 'AUS'], [/neus+e+land|\bnzl?\b/, 'NZ'], [/irland|\birl\b/, 'IRL'],
+    [/dänemark|\bdän\./, 'DK'], [/schottland/, 'SCO'], [/kanada/, 'CA'], [/\busa\b|us-beef/, 'USA'], [/iberico|spanien/, 'ES'],
+    [/\beg\b|\beu\b|europa/, 'EG'], [/deutschland/, 'D'], [/südamerika/, 'Südamerika'],
   ];
+  /* frühere ausgeschriebene Herkunftsangaben */
+  const ORIGIN_LONG = { 'Argentinien': 'ARG', 'Uruguay': 'UY', 'Paraguay': 'PY', 'Brasilien': 'BR', 'Australien': 'AUS', 'Neuseeland': 'NZ', 'Irland': 'IRL', 'Dänemark': 'DK', 'Deutschland / EU': 'EG', 'Deutschland': 'D', 'Europa': 'EG' };
+  const ORIGIN_CODES = ['4xD', '3xD', 'D', 'EG', 'NZ', 'ARG', 'UY', 'PY', 'BR', 'AUS', 'IRL', 'DK', 'SCO', 'CA', 'USA', 'ES', 'Südamerika'];
   function originFrom(t) { for (const [re, label] of ORIGINS) if (re.test(t)) return label; return null; }
   function conditionFrom(t) {
     const f = t.search(/frisch/), g = t.search(/gefr|gefrier|tiefgek|\btk\b/);
@@ -552,10 +558,29 @@
     return s || src;
   }
 
+  /* Bezeichnung und Herkunft vereinheitlichen:
+     – „frisch“ nur im Zustand
+     – Eigenmarke „Fleischmeister“ (Gruppe/Bereich) steht in der Bezeichnung
+     – Herkunft als Kürzel; von Hand gesetzte Kürzel bleiben */
+  function normalizeItem(it, group) {
+    const g = group || {};
+    let changed = false;
+    const n0 = it.name;
+    let name = stripFrisch(n0);
+    if (name !== n0 && it.condition === 'unbekannt') { it.condition = 'frisch'; }
+    if (/fleischmeister/i.test(`${g.name || ''} ${g.section || ''}`) && !/fleischmeister/i.test(name)) name = name.replace(/^([^,]+?)(\s*,|$)/, '$1 Fleischmeister$2');
+    if (name !== n0) { it.name = name; changed = true; }
+    if (!it.origin || ORIGIN_LONG[it.origin] !== undefined) {
+      const o = originFrom(low(n0)) || originFrom(low(g.name || '')) || ORIGIN_LONG[it.origin] || it.origin || null;
+      if ((o || null) !== (it.origin || null)) { it.origin = o; changed = true; }
+    }
+    return changed;
+  }
+
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;

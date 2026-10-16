@@ -48,7 +48,17 @@ const CAT_CLASS = { 'Rind': 'cat-rind', 'Kalb': 'cat-kalb', 'Schwein': 'cat-schw
 const CAT_MONO = { 'Rind': 'R', 'Kalb': 'K', 'Schwein': 'S', 'Lamm & Schaf': 'L', 'Geflügel': 'G', 'Knochen': 'Kn', 'Sonstiges': '·' };
 const HIGHLIGHT_FEATURES = ['Dry Aged', 'Grain Fed', 'ex chilled', 'Prime Steer', 'Black Angus'];
 const SYN_CAT = { 'Rind': 'rindfleisch beef', 'Kalb': 'kalbfleisch', 'Schwein': 'schweinefleisch', 'Lamm & Schaf': 'lammfleisch schaf', 'Geflügel': 'huhn', 'Knochen': '' };
-const SYN_ORIGIN = { 'Neuseeland': 'nz nzl', 'Argentinien': 'arg', 'Deutschland / EU': 'deutschland eu europa', 'Brasilien': 'brasil' };
+const SYN_ORIGIN = {
+  'Neuseeland': 'nz nzl', 'Argentinien': 'arg', 'Deutschland / EU': 'deutschland eu europa', 'Brasilien': 'brasil',
+  '4xD': 'deutschland 4 x d', '3xD': 'deutschland 3 x d', 'D': 'deutschland', 'EG': 'eu europa europäische gemeinschaft', 'NZ': 'neuseeland nzl',
+  'ARG': 'argentinien', 'UY': 'uruguay', 'PY': 'paraguay', 'BR': 'brasilien brasil', 'AUS': 'australien', 'IRL': 'irland',
+  'DK': 'dänemark', 'SCO': 'schottland', 'CA': 'kanada', 'USA': 'usa', 'ES': 'spanien iberico',
+};
+/* Kürzel → Klartext für Filter und Detailansicht */
+const ORIGIN_NAME = {
+  '4xD': '4 x Deutschland', '3xD': '3 x Deutschland', 'D': 'Deutschland', 'EG': 'Europäische Gemeinschaft', 'NZ': 'Neuseeland', 'ARG': 'Argentinien',
+  'UY': 'Uruguay', 'PY': 'Paraguay', 'BR': 'Brasilien', 'AUS': 'Australien', 'IRL': 'Irland', 'DK': 'Dänemark', 'SCO': 'Schottland', 'CA': 'Kanada', 'USA': 'USA', 'ES': 'Spanien',
+};
 const SYN_COND = { 'frisch': 'frisch', 'gefroren': 'gefroren gefr tk tiefgekühlt', 'frisch-gefroren': 'frisch gefroren', 'dry-aged': 'dry aged', 'unbekannt': '' };
 
 /* ---------- Daten ---------- */
@@ -110,7 +120,7 @@ let tokens = [];
 let printPrepared = false;
 
 function optionLabel(f, v) {
-  if (f.id === 'origin') return v === NONE ? 'Nicht angegeben' : v;
+  if (f.id === 'origin') return v === NONE ? 'Nicht angegeben' : ORIGIN_NAME[v] ? `${v} · ${ORIGIN_NAME[v]}` : v;
   if (f.id === 'cond') return COND_LABEL[v] || v;
   if (f.id === 'pstat') return PRICE_STATUS_LABELS[v] || v;
   return v;

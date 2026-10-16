@@ -213,16 +213,11 @@
     c.items.forEach((i) => { i.altPrices = i.altPrices || []; });
     return c;
   }
-  /* „frisch“ aus den Bezeichnungen entfernen – steht nur im Zustand */
+  /* Bezeichnungen/Herkunft vereinheitlichen: „frisch“ nur im Zustand, Marke „Fleischmeister“ in der Bezeichnung, Herkunft als Kürzel */
   function normalizeNames(m) {
+    const gb = new Map(m.groups.map((g) => [g.id, g]));
     let n = 0;
-    for (const it of m.items) {
-      const clean = C.stripFrisch(it.name);
-      if (clean === it.name) continue;
-      it.name = clean;
-      if (it.condition === 'unbekannt') it.condition = 'frisch';
-      n++;
-    }
+    for (const it of m.items) if (C.normalizeItem(it, gb.get(it.groupId))) n++;
     return n;
   }
   async function openEditor() {
@@ -239,10 +234,11 @@
     renderAll();
     setSaveState(d.draft ? 'saved' : 'clean');
     loadAux();
-    loadMaster().catch(() => {});
+    if (ro) loadMaster().catch(() => {});
     if (!ro) {
       const n = normalizeNames(model);
-      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`„frisch“ aus ${plural(n, 'Bezeichnung', 'Bezeichnungen')} entfernt – steht jetzt nur im Zustand. Zum Übernehmen veröffentlichen.`, 7000); }
+      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel). Zum Übernehmen veröffentlichen.`, 7000); }
+      loadMaster().then(() => migrateMaster()).catch(() => {});
     }
     if (currentView !== 'edit') setView(currentView);
   }
@@ -353,9 +349,9 @@
     if (published && published.meta.week) txt += ` · Veröffentlicht ist KW ${esc(published.meta.week)}/${esc(published.meta.year)}`;
     $('#m-info').innerHTML = txt;
     // Datalists
-    const origins = new Set(['Deutschland / EU', 'Argentinien', 'Uruguay', 'Paraguay', 'Brasilien', 'Australien', 'Neuseeland', 'Irland', 'Dänemark', 'Südamerika']);
+    const origins = new Set(C.ORIGIN_CODES);
     model.items.forEach((i) => { if (i.origin) origins.add(i.origin); });
-    $('#dl-origins').innerHTML = [...origins].sort((a, b) => a.localeCompare(b, 'de')).map((o) => `<option value="${esc(o)}">`).join('');
+    $('#dl-origins').innerHTML = [...origins].map((o) => `<option value="${esc(o)}">`).join('');
     const secs = [...new Set(model.groups.map((g) => g.section).filter(Boolean))];
     $('#dl-sections').innerHTML = secs.map((s) => `<option value="${esc(s)}">`).join('');
   }
@@ -2023,6 +2019,20 @@
     }
     return n;
   }
+  /* Stammdaten an die Regeln anpassen (einmalig je Änderung der Regeln, danach ohne Wirkung) */
+  function migrateMaster() {
+    if (ro || !master || !master.articles.length || !model) return 0;
+    const by = draftByCode();
+    const gb = new Map(model.groups.map((g) => [g.id, g]));
+    let n = 0;
+    for (const e of master.articles) {
+      const list = by.get(mKey(e.code));
+      const g = list && list.length === 1 ? gb.get(list[0].groupId) : null;
+      if (C.normalizeItem(e, g)) n++;
+    }
+    if (n) { saveMaster(); if (currentView === 'master') renderMasterView(); }
+    return n;
+  }
   function addFromDraft() {
     const by = draftByCode();
     let n = 0;
@@ -2066,6 +2076,7 @@
     const host = $('#view-master');
     if (!master) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Stammdaten werden geladen …</div>';
     try { await loadMaster(); await loadStock().catch(() => {}); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    migrateMaster();
     if (!ro && !master.articles.length && model && model.items.length) {
       const n = addFromDraft();
       if (n) { saveMaster(); toast(`Stammdaten angelegt: ${plural(n, 'Artikel', 'Artikel')} aus dem aktuellen Angebot übernommen.`, 5000); }

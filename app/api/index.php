@@ -943,7 +943,7 @@ try {
                 audit('import', 'Excel importiert: ' . (s($note['file'] ?? '', 120) ?: 'Datei') . ' – KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ', ' . count($model['items']) . ' Artikel (gegenüber veröffentlicht: ' . changes_summary($d) . ')', array_slice($d, 0, 2000));
             } elseif ($note && ($note['type'] ?? '') === 'cleanup') {
                 $d = changes_between($before, $model);
-                if ($d) audit('draft', '„frisch“ aus ' . count($d) . ' Bezeichnungen entfernt (steht im Zustand)', array_slice($d, 0, 2000));
+                if ($d) audit('draft', 'Bezeichnungen und Herkunft vereinheitlicht (' . count($d) . ' Änderungen: ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel)', array_slice($d, 0, 2000));
             } elseif ($note && ($note['type'] ?? '') === 'master') {
                 $d = changes_between($before, $model);
                 if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
