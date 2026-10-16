@@ -6,7 +6,9 @@
 
 Auf dem Server (`/opt/wochenangebot`) liegen zusätzlich, **nicht im Repository**:
 - `.env` – Domain und freigegebene IP-Adressen (Vorlage: `.env.example`)
-- `daten/` – veröffentlichtes Angebot, Entwurf, Versionen, Passwort
+- `daten/` – veröffentlichtes Angebot, Entwurf, Versionen, Preisverlauf (`historie/`), Passwort
+
+**Preisverlauf:** Eingabebereich → „Preisverlauf“. Jede Veröffentlichung wird automatisch als Woche gespeichert; ältere Angebotslisten lassen sich dort gesammelt hochladen.
 
 Neue Versionen in `main` werden vom Server innerhalb von 2 Minuten automatisch übernommen.
 

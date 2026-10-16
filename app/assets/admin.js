@@ -561,6 +561,7 @@
           <div class="altlist" id="altlist">${(it.altPrices || []).map((p, k) => altRow(p, k)).join('')}</div>
           <div><button type="button" class="btn sm ghost" data-ia="alt-add">${icon('plus', 'sm')}Zusatzpreis</button></div>
         </div>
+        <div class="fld span2" id="item-hist"></div>
         <p class="form-err span2" id="item-err" role="alert"></p>
       </div>
       <div class="dlg-foot">
@@ -573,6 +574,7 @@
         <button type="submit" class="btn primary">Fertig</button>
       </div>`;
     if (!dlgItem.open) dlgItem.showModal();
+    fillItemHistory(it);
   }
   const altRow = (p, k) => `<div class="altrow" data-k="${k}"><input data-alt="label" value="${esc(p.label || '')}" placeholder="Bezeichnung, z. B. Flugware" maxlength="40" aria-label="Bezeichnung des Zusatzpreises"><input data-alt="price" value="${esc(priceToInput(p))}" placeholder="Preis" inputmode="decimal" aria-label="Zusatzpreis"><button type="button" class="ibtn danger" data-ia="alt-del" aria-label="Zusatzpreis entfernen">${icon('trash')}</button></div>`;
 
@@ -776,6 +778,7 @@
       clearTimeout(saveTimer);
       const r = await api('publish', { body: { model } });
       published = clone(model);
+      hist = null;
       revision = 0;
       savedAt = null;
       dlgPublish.close();
@@ -899,6 +902,367 @@
 
   const setH = () => document.documentElement.style.setProperty('--header-h', ($('#topbar').offsetHeight || 0) + 'px');
   if ('ResizeObserver' in window) new ResizeObserver(setH).observe($('#topbar'));
+
+  /* ======================= Preisverlauf ======================= */
+  let hist = null;            // { weeks, series, dup }
+  let histLoading = null;
+  let histQ = '', histOnlyChanged = false, histSort = 'offer';
+  let currentView = 'edit';
+
+  const nk = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '');
+  const wkLabel = (w) => `KW ${w.week}/${String(w.year).slice(2)}`;
+  const wkLong = (w) => `KW ${w.week}/${w.year}`;
+  const numVal = (p) => (p && p.price && p.price.status === 'value' ? p.price.value : null);
+  const fmtDelta = (d) => (d > 0 ? '+' : d < 0 ? '−' : '±') + fmtNum.format(Math.abs(d));
+
+  /* Artikel-Schlüssel über alle Wochen: Artikelnummer; bei mehrfach vergebenen Nummern zusätzlich Bezeichnung + Gruppe */
+  function seriesKey(it, dup) {
+    if (it.code && !dup.has(it.code)) return 'c:' + it.code;
+    return 'n:' + (it.code || '') + '|' + nk(it.name) + '|' + nk(it.group);
+  }
+  function buildHistory(weeks) {
+    weeks = weeks.slice().sort((a, b) => a.year * 100 + a.week - (b.year * 100 + b.week));
+    const dup = new Set();
+    for (const w of weeks) {
+      const c = new Map();
+      for (const it of w.items) if (it.code) c.set(it.code, (c.get(it.code) || 0) + 1);
+      for (const [k, n] of c) if (n > 1) dup.add(k);
+    }
+    const map = new Map();
+    weeks.forEach((w, wi) => {
+      w.items.forEach((it, ii) => {
+        const key = seriesKey(it, dup);
+        let s = map.get(key);
+        if (!s) { s = { key, code: it.code, points: new Array(weeks.length).fill(null) }; map.set(key, s); }
+        if (s.points[wi]) return;
+        s.points[wi] = it;
+        s.name = it.name; s.group = it.group; s.category = it.category; s.order = ii; s.lastWi = wi;
+      });
+    });
+    const L = weeks.length - 1;
+    const series = [...map.values()].map((s) => {
+      s.vals = s.points.map(numVal);
+      const nums = s.vals.filter((v) => v != null);
+      s.min = nums.length ? Math.min(...nums) : null;
+      s.max = nums.length ? Math.max(...nums) : null;
+      s.avg = nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null;
+      s.weeksCount = s.points.filter(Boolean).length;
+      s.inLatest = !!s.points[L];
+      s.cur = s.inLatest ? s.points[L] : null;
+      s.delta = L > 0 && s.vals[L] != null && s.vals[L - 1] != null ? Number((s.vals[L] - s.vals[L - 1]).toFixed(4)) : null;
+      let changes = 0, last = null;
+      for (const v of s.vals) { if (v == null) continue; if (last != null && v !== last) changes++; last = v; }
+      s.changes = changes;
+      s.hay = nk([s.code, s.name, s.group, s.category].join(' '));
+      return s;
+    });
+    return { weeks, series, dup };
+  }
+  async function loadHistory(force) {
+    if (hist && !force) return hist;
+    if (!histLoading) histLoading = api('history_data').then((r) => { hist = buildHistory(r.weeks); return hist; }).finally(() => { histLoading = null; });
+    return histLoading;
+  }
+
+  /* Mini-Verlauf */
+  function sparkSVG(vals, w = 132, h = 30) {
+    const nums = vals.filter((v) => v != null);
+    if (!nums.length) return `<svg class="spark" width="${w}" height="${h}" aria-hidden="true"></svg>`;
+    const lo = Math.min(...nums), hi = Math.max(...nums), pad = 4;
+    const n = vals.length;
+    const x = (i) => (n === 1 ? w / 2 : pad + (i * (w - 2 * pad)) / (n - 1));
+    const y = (v) => (hi === lo ? h / 2 : h - pad - ((v - lo) * (h - 2 * pad)) / (hi - lo));
+    let d = '', pen = false;
+    vals.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' '; pen = true; });
+    let li = vals.length - 1; while (li >= 0 && vals[li] == null) li--;
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><path d="${d}"/><circle cx="${x(li).toFixed(1)}" cy="${y(vals[li]).toFixed(1)}" r="2.6"/></svg>`;
+  }
+
+  /* Ansicht umschalten */
+  function setView(v) {
+    currentView = v;
+    $('#vt-edit').setAttribute('aria-selected', v === 'edit');
+    $('#vt-hist').setAttribute('aria-selected', v === 'hist');
+    $('#view-edit').hidden = v !== 'edit';
+    $('#view-hist').hidden = v !== 'hist';
+    document.body.classList.toggle('in-hist', v === 'hist');
+    if (v === 'hist') renderHistView();
+  }
+  $('#vt-edit').addEventListener('click', () => setView('edit'));
+  $('#vt-hist').addEventListener('click', () => setView('hist'));
+
+  async function renderHistView() {
+    const host = $('#view-hist');
+    if (!hist) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Preisverlauf wird geladen …</div>';
+    try { await loadHistory(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    const H = hist;
+    const chips = H.weeks.map((w) => `<span class="wchip" title="${esc((w.origin || '') + (w.source ? ' · ' + w.source : ''))}">${esc(wkLabel(w))}${w.origin === 'Import' ? '' : '<i title="aus Veröffentlichung"></i>'}<button type="button" data-hdel="${esc(w.id)}" aria-label="${esc(wkLong(w))} aus dem Preisverlauf entfernen">${icon('x', 'sm')}</button></span>`).join('');
+    host.innerHTML = `
+      <section class="hist-head">
+        <div class="hist-weeks"><span class="hist-lbl">${plural(H.weeks.length, 'Woche', 'Wochen')} im Verlauf</span>${chips || '<span class="muted">noch keine</span>'}</div>
+        <button type="button" class="btn primary" id="hist-upload">${icon('upload')}Alte Angebote hochladen</button>
+      </section>
+      ${H.weeks.length < 2 ? `<p class="notice" style="margin:14px 0 0">Für einen Verlauf werden mindestens zwei Wochen benötigt. Laden Sie frühere Angebotslisten hoch – mehrere Dateien auf einmal sind möglich. Jede Veröffentlichung wird ab jetzt automatisch übernommen.</p>` : ''}
+      <div class="ed-toolbar">
+        <div class="search">${icon('search')}<input id="hist-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Gruppe …" aria-label="Artikel im Preisverlauf suchen" value="${esc(histQ)}"></div>
+        <label class="check"><input type="checkbox" id="hist-only"${histOnlyChanged ? ' checked' : ''}> Nur mit Änderung zur Vorwoche</label>
+        <label class="select"><span class="sr-only">Sortierung</span><select id="hist-sort">
+          ${[['offer', 'Angebotsreihenfolge'], ['up', 'Größte Erhöhung'], ['down', 'Größte Senkung'], ['changes', 'Häufigste Änderungen'], ['code', 'Artikelnummer'], ['name', 'Bezeichnung']].map(([v, l]) => `<option value="${v}"${histSort === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>${icon('chev', 'sm')}</label>
+        <span class="ed-hint" id="hist-count"></span>
+      </div>
+      <div id="hist-list"></div>`;
+    renderHistList();
+  }
+  function renderHistList() {
+    const H = hist;
+    const host = $('#hist-list');
+    if (!host) return;
+    if (!H.weeks.length) { host.innerHTML = ''; $('#hist-count').textContent = ''; return; }
+    const toks = nk(histQ) ? histQ.toLowerCase().split(/\s+/).map(nk).filter(Boolean) : [];
+    let list = H.series.filter((s) => (!histOnlyChanged || (s.delta != null && s.delta !== 0)) && toks.every((t) => s.hay.includes(t)));
+    const L = H.weeks.length - 1;
+    const by = {
+      offer: (a, b) => (b.inLatest - a.inLatest) || (b.lastWi - a.lastWi) || a.order - b.order,
+      up: (a, b) => (b.delta ?? -Infinity) - (a.delta ?? -Infinity),
+      down: (a, b) => (a.delta ?? Infinity) - (b.delta ?? Infinity),
+      changes: (a, b) => b.changes - a.changes || (b.inLatest - a.inLatest),
+      code: (a, b) => (!a.code) - (!b.code) || String(a.code || '').localeCompare(String(b.code || ''), 'de', { numeric: true }),
+      name: (a, b) => a.name.localeCompare(b.name, 'de'),
+    };
+    list.sort(by[histSort] || by.offer);
+    $('#hist-count').textContent = `${plural(list.length, 'Artikel', 'Artikel')} · ${wkLong(H.weeks[0])} – ${wkLong(H.weeks[L])}`;
+    const rows = list.map((s) => {
+      const cur = s.cur ? priceShort(s.cur.price) : '';
+      const d = s.delta;
+      return `<tr data-skey="${esc(s.key)}" tabindex="0">
+        <td class="h-code">${esc(s.code || '—')}</td>
+        <td class="h-name"><div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.group)}${s.inLatest ? '' : ` · <span class="gone">nicht mehr im Angebot (zuletzt ${esc(wkLabel(H.weeks[s.lastWi]))})</span>`}</div></td>
+        <td class="h-spark">${sparkSVG(s.vals)}</td>
+        <td class="h-cur num">${s.inLatest ? esc(cur) : '<span class="muted">—</span>'}</td>
+        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[L - 1]))}">${fmtDelta(d)}</span>`}</td>
+        <td class="h-range num">${s.min == null ? '<span class="muted">—</span>' : s.min === s.max ? fmtNum.format(s.min) : `${fmtNum.format(s.min)} – ${fmtNum.format(s.max)}`}</td>
+        <td class="h-weeks num">${s.weeksCount}</td>
+      </tr>`;
+    }).join('');
+    host.innerHTML = list.length ? `<div class="gcard"><table class="etab htab"><thead><tr>
+        <th class="h-code">Art.-Nr.</th><th class="h-name">Bezeichnung</th><th class="h-spark">Verlauf</th><th class="h-cur num">Aktuell €/kg</th><th class="h-delta num">Änderung</th><th class="h-range num">Spanne</th><th class="h-weeks num">Wochen</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`
+      : '<div class="ed-empty"><h3>Keine Artikel gefunden</h3><p>Suchbegriff oder Filter anpassen.</p></div>';
+  }
+  $('#view-hist').addEventListener('input', (e) => {
+    if (e.target.id === 'hist-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { histQ = e.target.value.trim(); renderHistList(); }, 120); }
+  });
+  $('#view-hist').addEventListener('change', (e) => {
+    if (e.target.id === 'hist-only') { histOnlyChanged = e.target.checked; renderHistList(); }
+    if (e.target.id === 'hist-sort') { histSort = e.target.value; renderHistList(); }
+  });
+  $('#view-hist').addEventListener('click', async (e) => {
+    if (e.target.closest('#hist-upload')) { $('#hist-file-input').click(); return; }
+    const del = e.target.closest('[data-hdel]');
+    if (del) {
+      const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
+      if (!(await confirmBox('Woche entfernen?', `${esc(wkLong(w))} wird aus dem Preisverlauf entfernt. Die Excel-Datei kann jederzeit erneut hochgeladen werden.`, 'Entfernen', true))) return;
+      try { await api('history_delete', { body: { id: w.id } }); await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
+      return;
+    }
+    const tr = e.target.closest('tr[data-skey]');
+    if (tr) openSeries(tr.dataset.skey);
+  });
+  $('#view-hist').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-skey]')) openSeries(e.target.dataset.skey); });
+
+  /* ---------- Detail: Diagramm + Wochentabelle ---------- */
+  const dlgSeries = $('#dlg-series');
+  function chartSVG(s, weeks) {
+    const W = 680, H = 240, l = 52, r = 34, t = 14, b = 34;
+    const nums = s.vals.filter((v) => v != null);
+    if (!nums.length) return '<p class="notice">In keiner Woche mit Preis.</p>';
+    const vmin = Math.min(...nums), vmax = Math.max(...nums);
+    const span0 = vmax - vmin || Math.max(0.5, vmax * 0.05);
+    const raw = (span0 * 1.3) / 4, mag = 10 ** Math.floor(Math.log10(raw));
+    const stepY = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((x) => x >= raw);
+    let lo = Math.max(0, Math.floor((vmin - span0 * 0.15) / stepY) * stepY);
+    let hi = Math.ceil((vmax + span0 * 0.15) / stepY) * stepY;
+    if (hi === lo) hi = lo + stepY;
+    const n = weeks.length;
+    const x = (i) => (n === 1 ? (l + W - r) / 2 : l + (i * (W - l - r)) / (n - 1));
+    const y = (v) => t + ((hi - v) * (H - t - b)) / (hi - lo);
+    let grid = '';
+    for (let v = lo; v <= hi + stepY / 1e6; v += stepY) {
+      const yy = y(v).toFixed(1);
+      grid += `<line class="gl" x1="${l}" x2="${W - r}" y1="${yy}" y2="${yy}"/><text class="yl" x="${l - 8}" y="${yy}" dy="0.32em" text-anchor="end">${fmtNum.format(Math.round(v * 100) / 100)}</text>`;
+    }
+    const step = Math.max(1, Math.ceil(n / 10));
+    let xl = '';
+    weeks.forEach((w, i) => { if (i % step === 0 || i === n - 1) xl += `<text class="xl" x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle">${esc(wkLabel(w))}</text>`; });
+    let d = '', pen = false, dots = '';
+    s.vals.forEach((v, i) => {
+      if (v == null) { pen = false; return; }
+      d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' ';
+      pen = true;
+      dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.6"><title>${esc(wkLong(weeks[i]))}: ${fmtNum.format(v)} €/kg</title></circle>`;
+    });
+    return `<svg class="hchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Preisverlauf ${esc(s.name)}">${grid}${xl}<path class="ln" d="${d}"/>${dots}</svg>`;
+  }
+  async function openSeries(key) {
+    await loadHistory();
+    const s = hist.series.find((x) => x.key === key);
+    if (!s) return;
+    const W = hist.weeks;
+    const cur = s.inLatest ? s.cur : null;
+    let prev = null;
+    const rows = [];
+    W.forEach((w, i) => {
+      const p = s.points[i];
+      const v = s.vals[i];
+      const ch = v != null && prev != null ? v - prev : null;
+      if (v != null) prev = v;
+      rows.push(`<tr${p ? '' : ' class="muted"'}><td>${esc(wkLong(w))}</td><td class="num">${p ? esc(priceShort(p.price)) : 'nicht im Angebot'}</td>
+        <td class="num">${ch == null || Math.abs(ch) < 1e-9 ? '' : `<span class="delta ${ch > 0 ? 'up' : 'down'}">${fmtDelta(ch)}</span>`}</td>
+        <td>${p && p.name !== s.name ? esc(p.name) : ''}${p && (p.altPrices || []).length ? `<span class="muted"> ${p.altPrices.map((a) => esc((a.label || '') + ': ' + priceShort(a))).join(' · ')}</span>` : ''}</td>
+        <td class="muted">${p && p.group !== s.group ? esc(p.group) : ''}</td></tr>`);
+    });
+    $('#series-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${s.code ? 'Art.-Nr. ' + esc(s.code) + ' · ' : ''}${esc(s.group)}${s.inLatest ? '' : ' · nicht mehr im Angebot'}</p></div>
+        <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <div class="cmp-stats hstats">
+          <div><span>Aktuell</span><strong>${cur ? esc(priceShort(cur.price)) : '—'}</strong></div>
+          <div><span>Tiefster</span><strong>${s.min != null ? fmtNum.format(s.min) + ' €' : '—'}</strong></div>
+          <div><span>Höchster</span><strong>${s.max != null ? fmtNum.format(s.max) + ' €' : '—'}</strong></div>
+          <div><span>Durchschnitt</span><strong>${s.avg != null ? fmtNum.format(Math.round(s.avg * 100) / 100) + ' €' : '—'}</strong></div>
+        </div>
+        ${chartSVG(s, W)}
+        <h3 class="d-h"><span>Wochenwerte</span><span>${plural(s.weeksCount, 'Woche', 'Wochen')} im Angebot · ${plural(s.changes, 'Preisänderung', 'Preisänderungen')}</span></h3>
+        <table class="etab wtab"><thead><tr><th>Woche</th><th class="num">Preis</th><th class="num">Änderung</th><th>Abweichende Bezeichnung / Zusatzpreise</th><th>Gruppe</th></tr></thead>
+        <tbody>${rows.reverse().join('')}</tbody></table>
+      </div>`;
+    if (!dlgSeries.open) dlgSeries.showModal();
+  }
+
+  /* Verlauf im Artikel-Dialog des Editors */
+  async function fillItemHistory(it) {
+    const slot = $('#item-hist');
+    if (!slot) return;
+    slot.innerHTML = '<span>Preisverlauf</span><div class="muted" style="font-size:13px">wird geladen …</div>';
+    let H;
+    try { H = await loadHistory(); } catch { slot.innerHTML = ''; return; }
+    if (!$('#item-hist') || itemId !== it.id) return;
+    const g = gById(it.groupId);
+    const key = seriesKey({ code: it.code, name: it.name, group: g ? g.name : '' }, H.dup);
+    const s = H.series.find((x) => x.key === key);
+    if (!s || s.weeksCount < 1) { slot.innerHTML = '<span>Preisverlauf</span><div class="muted" style="font-size:13px">Noch keine Werte aus früheren Wochen.</div>'; return; }
+    slot.innerHTML = `<span>Preisverlauf</span><div class="item-hist">${sparkSVG(s.vals, 160, 34)}
+      <div class="ih-txt">${plural(s.weeksCount, 'Woche', 'Wochen')}${s.min != null ? ` · ${fmtNum.format(s.min)} – ${fmtNum.format(s.max)} €/kg` : ''}${s.delta ? ` · zuletzt <span class="delta ${s.delta > 0 ? 'up' : 'down'}">${fmtDelta(s.delta)}</span>` : ''}</div>
+      <button type="button" class="btn sm ghost" data-ia="hist-open" data-skey="${esc(s.key)}">${icon('chart', 'sm')}Verlauf öffnen</button></div>`;
+  }
+  dlgItem.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ia="hist-open"]');
+    if (!b) return;
+    dlgItem.close();
+    setView('hist');
+    openSeries(b.dataset.skey);
+  });
+
+  /* ---------- Alte Angebote hochladen (mehrere Dateien) ---------- */
+  const dlgHI = $('#dlg-hist-import');
+  let hiEntries = [];
+  $('#hist-file-input').addEventListener('change', (e) => { const files = [...e.target.files]; e.target.value = ''; if (files.length) histImportFiles(files); });
+  async function histImportFiles(files) {
+    const base = dlgHI.open ? hiEntries.filter((en) => en.status !== 'gespeichert') : [];
+    const added = files.map((f) => ({ file: f, status: 'lesen' }));
+    hiEntries = base.concat(added);
+    renderHistImport();
+    if (!dlgHI.open) dlgHI.showModal();
+    try { await loadHistory(); } catch { /* Liste ggf. leer */ }
+    for (const en of added) {
+      try {
+        if (!/\.(xlsx|xlsm)$/i.test(en.file.name)) throw new Error('keine .xlsx-Datei');
+        const m = C.parseOfferWorkbook(await C.xlsxReadWorkbook(await en.file.arrayBuffer()), en.file.name);
+        if (!m.items.length) throw new Error('keine Artikel gefunden');
+        const gn = new Map(m.groups.map((g) => [g.id, g.name]));
+        en.items = m.items.map((it) => {
+          const row = { code: it.code, name: it.name, group: gn.get(it.groupId) || '', category: it.category, price: it.price };
+          if (it.altPrices && it.altPrices.length) row.altPrices = it.altPrices;
+          return row;
+        });
+        en.week = m.meta.week; en.year = m.meta.year;
+        en.warn = m.issues.filter((x) => x.level === 'warn').length;
+        en.status = 'ok';
+      } catch (ex) { en.status = 'fehler'; en.error = ex.message; }
+      renderHistImport();
+    }
+  }
+  function hiFlags() {
+    const seen = new Map();
+    hiEntries.forEach((en, i) => {
+      en.dupOf = null;
+      if (en.status !== 'ok' || !en.week || !en.year) return;
+      const id = `${en.year}-${String(en.week).padStart(2, '0')}`;
+      en.id = id;
+      if (seen.has(id)) hiEntries[seen.get(id)].dupOf = i;
+      seen.set(id, i);
+      en.exists = !!(hist && hist.weeks.some((w) => w.id === id));
+    });
+  }
+  function renderHistImport() {
+    hiFlags();
+    const ready = hiEntries.filter((en) => en.status === 'ok' && en.week && en.year && en.dupOf == null);
+    const rows = hiEntries.map((en, i) => {
+      let st;
+      if (en.status === 'lesen') st = '<span class="muted">wird gelesen …</span>';
+      else if (en.status === 'fehler') st = `<span class="st-err">${esc(en.error)}</span>`;
+      else if (en.status === 'gespeichert') st = '<span class="st-ok">übernommen</span>';
+      else if (!en.week || !en.year) st = '<span class="st-err">KW/Jahr eintragen</span>';
+      else if (en.dupOf != null) st = '<span class="st-warn">doppelt – spätere Datei zählt</span>';
+      else if (en.exists) st = '<span class="st-warn">ersetzt vorhandene Woche</span>';
+      else st = `<span class="st-ok">neu</span>${en.warn ? ` <span class="muted">· ${en.warn} Hinweis${en.warn === 1 ? '' : 'e'}</span>` : ''}`;
+      const editable = en.status === 'ok';
+      return `<tr data-i="${i}"><td class="hi-file" title="${esc(en.file.name)}">${esc(en.file.name)}</td>
+        <td><input class="in num" data-hf="week" type="number" min="1" max="53" value="${esc(en.week ?? '')}" aria-label="Kalenderwoche"${editable ? '' : ' disabled'}></td>
+        <td><input class="in num" data-hf="year" type="number" min="2000" max="2100" value="${esc(en.year ?? '')}" aria-label="Jahr"${editable ? '' : ' disabled'}></td>
+        <td class="num">${en.items ? fmtInt.format(en.items.length) : ''}</td><td>${st}</td></tr>`;
+    }).join('');
+    const busy = hiEntries.some((en) => en.status === 'lesen' || en.status === 'speichert');
+    $('#hist-import-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="hi-title">Alte Angebote hochladen</h2><p>Jede Datei wird als eine Woche im Preisverlauf gespeichert. Kalenderwoche und Jahr werden aus der Tabelle oder dem Dateinamen erkannt und lassen sich hier korrigieren. Das aktuelle Angebot bleibt unverändert.</p></div>
+        <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body"><table class="etab hitab"><thead><tr><th>Datei</th><th class="num">KW</th><th class="num">Jahr</th><th class="num">Artikel</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="hint" id="hi-progress"></p></div>
+      <div class="dlg-foot"><button type="button" class="btn" data-hi="more">Weitere Dateien</button><span class="spacer"></span><button type="button" class="btn" data-close>Schließen</button>
+        <button type="button" class="btn primary" data-hi="save"${ready.length && !busy ? '' : ' disabled'}>${icon('check')}${ready.length === 1 ? '1 Woche übernehmen' : `${ready.length} Wochen übernehmen`}</button></div>`;
+  }
+  dlgHI.addEventListener('change', (e) => {
+    const tr = e.target.closest('tr[data-i]');
+    if (!tr || !e.target.dataset.hf) return;
+    const n = parseInt(e.target.value, 10);
+    hiEntries[+tr.dataset.i][e.target.dataset.hf] = Number.isInteger(n) ? n : null;
+    renderHistImport();
+  });
+  dlgHI.addEventListener('click', async (e) => {
+    if (e.target === dlgHI || e.target.closest('[data-close]')) { dlgHI.close(); return; }
+    const a = e.target.closest('[data-hi]')?.dataset.hi;
+    if (a === 'more') { $('#hist-file-input').click(); return; }
+    if (a !== 'save') return;
+    const todo = hiEntries.filter((en) => en.status === 'ok' && en.week && en.year && en.dupOf == null && en.week >= 1 && en.week <= 53);
+    let done = 0, failed = 0;
+    for (const en of todo) {
+      en.status = 'speichert';
+      $('#hi-progress').textContent = `Speichere ${done + failed + 1} von ${todo.length} …`;
+      try { await api('history_import', { body: { week: en.week, year: en.year, source: en.file.name, items: en.items } }); en.status = 'gespeichert'; done++; }
+      catch (ex) { en.status = 'fehler'; en.error = ex.message; failed++; }
+    }
+    try { await loadHistory(true); } catch { /* ignore */ }
+    renderHistImport();
+    $('#hi-progress').textContent = `${plural(done, 'Woche', 'Wochen')} übernommen${failed ? `, ${failed} fehlgeschlagen` : ''}.`;
+    if (currentView === 'hist') renderHistView(); else setView('hist');
+    toast(`${plural(done, 'Woche', 'Wochen')} in den Preisverlauf übernommen.`);
+  });
+  window.addEventListener('drop', (e) => {
+    if (currentView !== 'hist' || !model) return;
+    const files = [...(e.dataTransfer?.files || [])];
+    if (files.length) { e.preventDefault(); e.stopImmediatePropagation(); histImportFiles(files); }
+  }, true);
 
   /* ======================= Start ======================= */
   (async function boot() {

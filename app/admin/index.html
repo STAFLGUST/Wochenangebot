@@ -7,8 +7,8 @@
 <meta name="color-scheme" content="light dark">
 <title>Wochenangebot · Eingabebereich</title>
 <script>try{var t=localStorage.getItem("wochenangebot.theme");if(t){t=JSON.parse(t);if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}}catch(e){}</script>
-<link rel="stylesheet" href="../assets/app.css?v=20261016">
-<link rel="stylesheet" href="../assets/admin.css?v=20261016">
+<link rel="stylesheet" href="../assets/app.css?v=20261016c">
+<link rel="stylesheet" href="../assets/admin.css?v=20261016c">
 </head>
 <body class="adm">
 
@@ -57,6 +57,11 @@
   </header>
 
   <main class="page adm-page">
+    <div class="tabs view-tabs" role="tablist" aria-label="Bereich wählen">
+      <button role="tab" type="button" id="vt-edit" aria-selected="true" aria-controls="view-edit">Angebot bearbeiten</button>
+      <button role="tab" type="button" id="vt-hist" aria-selected="false" aria-controls="view-hist">Preisverlauf</button>
+    </div>
+    <div id="view-edit">
     <section class="meta-card" aria-label="Angebotsdaten">
       <label class="fld sm"><span>Kalenderwoche</span><input type="number" id="m-week" min="1" max="53" inputmode="numeric"></label>
       <label class="fld sm"><span>Jahr</span><input type="number" id="m-year" min="2000" max="2100" inputmode="numeric"></label>
@@ -77,6 +82,8 @@
     </div>
 
     <div id="groups"></div>
+    </div>
+    <div id="view-hist" hidden></div>
   </main>
 </div>
 
@@ -101,9 +108,14 @@
     <div class="dlg-foot"><button class="btn" type="button" data-close>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
   </form>
 </dialog>
+<!-- Preisverlauf: Artikel -->
+<dialog class="modal wide" id="dlg-series" aria-labelledby="ser-title"><div class="dlg" id="series-body"></div></dialog>
+<!-- Preisverlauf: alte Angebote hochladen -->
+<dialog class="modal wide" id="dlg-hist-import" aria-labelledby="hi-title"><div class="dlg" id="hist-import-body"></div></dialog>
 <!-- Bestätigung -->
 <dialog class="modal" id="dlg-confirm" aria-labelledby="cf-title"><div class="dlg" id="confirm-body"></div></dialog>
 
+<input type="file" id="hist-file-input" multiple accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 <input type="file" id="file-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 <datalist id="dl-origins"></datalist>
 <datalist id="dl-sections"></datalist>
@@ -130,10 +142,11 @@
   <symbol id="i-history" viewBox="0 0 24 24"><path d="M3.5 12a8.5 8.5 0 1 0 2.5-6"/><path d="M3.5 4.5V9H8M12 7.5V12l3 2"/></symbol>
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 15l4-4.5 3 3L19 7"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
 </svg>
 
-<script src="../assets/offer-core.js?v=20261016"></script>
-<script src="../assets/admin.js?v=20261016"></script>
+<script src="../assets/offer-core.js?v=20261016c"></script>
+<script src="../assets/admin.js?v=20261016c"></script>
 </body>
 </html>

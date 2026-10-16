@@ -15,6 +15,8 @@
  *   GET  ?action=versions         frühere Veröffentlichungen
  *   GET  ?action=version&id=…     eine frühere Veröffentlichung
  *   POST ?action=change_password
+ *   GET  ?action=history_list | history_data   Preisverlauf (Wochen-Stände)
+ *   POST ?action=history_import | history_delete
  *
  * Alle Daten liegen als .php-Dateien mit Zugriffssperre im Datenordner –
  * sie lassen sich auch ohne .htaccess nicht direkt im Browser abrufen.
@@ -261,11 +263,87 @@ function clean_model($m, bool $strict): array
     return ['meta' => $outMeta, 'sections' => $sections, 'groups' => $groups, 'items' => $items];
 }
 
+/* ---------------- Preisverlauf ---------------- */
+
+function history_id(int $week, int $year): string { return sprintf('%04d-%02d', $year, $week); }
+function history_ids(): array
+{
+    $ids = [];
+    foreach (glob(dirname(store_path('historie/x')) . '/*.php') ?: [] as $f) {
+        $id = basename($f, '.php');
+        if (preg_match('/^\d{4}-\d{2}$/', $id)) $ids[] = $id;
+    }
+    sort($ids);
+    return $ids;
+}
+/* Preis-Stand einer Woche aus einem veröffentlichten Angebot */
+function history_from_model(array $m, string $origin, ?string $at): ?array
+{
+    $w = $m['meta']['week'] ?? null;
+    $y = $m['meta']['year'] ?? null;
+    if (!is_int($w) || !is_int($y)) return null;
+    $gn = [];
+    foreach (($m['groups'] ?? []) as $g) $gn[$g['id']] = $g['name'];
+    $items = [];
+    foreach (($m['items'] ?? []) as $it) {
+        $row = ['code' => $it['code'] ?? null, 'name' => (string)($it['name'] ?? ''), 'group' => $gn[$it['groupId'] ?? ''] ?? '',
+                'category' => $it['category'] ?? 'Sonstiges', 'price' => $it['price'] ?? ['status' => 'none']];
+        if (!empty($it['altPrices'])) $row['altPrices'] = $it['altPrices'];
+        $items[] = $row;
+    }
+    return ['week' => $w, 'year' => $y, 'origin' => $origin, 'source' => (string)($m['meta']['source'] ?? ''), 'savedAt' => $at ?: now(), 'items' => $items];
+}
+/* Bisherige Veröffentlichungen einmalig in den Preisverlauf übernehmen (gelöschte Wochen ausgenommen) */
+function history_backfill(): void
+{
+    $have = array_flip(history_ids());
+    $deleted = array_flip(store_read('historie_geloescht') ?? []);
+    $sources = [];
+    foreach (glob(dirname(store_path('versionen/x')) . '/*.php') ?: [] as $f) $sources[] = store_read('versionen/' . basename($f, '.php'));
+    $sources[] = store_read('angebot');
+    $cand = [];
+    foreach ($sources as $m) {
+        if (!$m) continue;
+        $h = history_from_model($m, 'Veröffentlichung', $m['publishedAt'] ?? null);
+        if (!$h) continue;
+        $id = history_id($h['week'], $h['year']);
+        if (isset($have[$id]) || isset($deleted[$id])) continue;
+        if (!isset($cand[$id]) || strcmp((string)$h['savedAt'], (string)$cand[$id]['savedAt']) > 0) $cand[$id] = $h;
+    }
+    foreach ($cand as $id => $h) store_write('historie/' . $id, $h);
+}
+function history_undelete(string $id): void
+{
+    $del = store_read('historie_geloescht') ?? [];
+    if (in_array($id, $del, true)) store_write('historie_geloescht', array_values(array_diff($del, [$id])));
+}
+function clean_history_items($items): array
+{
+    if (!is_array($items) || !$items) throw new InvalidArgumentException('Die Woche enthält keine Artikel.');
+    if (count($items) > 5000) throw new InvalidArgumentException('Zu viele Artikel (max. 5000).');
+    $out = [];
+    foreach ($items as $it) {
+        if (!is_array($it)) continue;
+        $name = s($it['name'] ?? null, 200, false);
+        if ($name === null) continue;
+        $code = s($it['code'] ?? null, 20);
+        if ($code === '' || ($code !== null && !preg_match('#^[0-9A-Za-z./-]+$#', $code))) $code = null;
+        $cat = in_array($it['category'] ?? '', CATEGORIES, true) ? $it['category'] : 'Sonstiges';
+        $row = ['code' => $code, 'name' => $name, 'group' => s($it['group'] ?? '', 200) ?? '', 'category' => $cat, 'price' => clean_price($it['price'] ?? null, $name)];
+        $alts = [];
+        foreach (array_slice(is_array($it['altPrices'] ?? null) ? $it['altPrices'] : [], 0, 5) as $ap) $alts[] = clean_price($ap, $name);
+        if ($alts) $row['altPrices'] = $alts;
+        $out[] = $row;
+    }
+    if (!$out) throw new InvalidArgumentException('Die Woche enthält keine gültigen Artikel.');
+    return $out;
+}
+
 /* ---------------- Aktionen ---------------- */
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password'];
+$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -385,6 +463,8 @@ try {
             $model['publishedAt'] = now();
             store_write('angebot', $model);
             store_delete('entwurf');
+            $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
+            if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
             respond(['ok' => true, 'publishedAt' => $model['publishedAt']]);
         }
 
@@ -411,6 +491,56 @@ try {
             $d = store_read('versionen/' . $id);
             if (!$d) fail('Version nicht gefunden.', 404);
             respond(['ok' => true, 'model' => $d]);
+        }
+
+        case 'history_list': {
+            require_auth();
+            header('Cache-Control: no-store');
+            history_backfill();
+            $out = [];
+            foreach (history_ids() as $id) {
+                $h = store_read('historie/' . $id);
+                if (!$h) continue;
+                $out[] = ['id' => $id, 'week' => $h['week'], 'year' => $h['year'], 'origin' => $h['origin'] ?? '', 'source' => $h['source'] ?? '',
+                          'savedAt' => $h['savedAt'] ?? null, 'items' => count($h['items'] ?? [])];
+            }
+            respond(['ok' => true, 'weeks' => $out]);
+        }
+
+        case 'history_data': {
+            require_auth();
+            header('Cache-Control: no-store');
+            history_backfill();
+            $weeks = [];
+            foreach (history_ids() as $id) {
+                $h = store_read('historie/' . $id);
+                if ($h) { $h['id'] = $id; $weeks[] = $h; }
+            }
+            respond(['ok' => true, 'weeks' => $weeks]);
+        }
+
+        case 'history_import': {
+            require_auth(true);
+            $b = body();
+            $week = $b['week'] ?? null;
+            $year = $b['year'] ?? null;
+            if (!is_int($week) || $week < 1 || $week > 53 || !is_int($year) || $year < 2000 || $year > 2100) fail('Kalenderwoche oder Jahr ungültig.', 422);
+            $items = clean_history_items($b['items'] ?? null);
+            $id = history_id($week, $year);
+            $replaced = store_read('historie/' . $id) !== null;
+            store_write('historie/' . $id, ['week' => $week, 'year' => $year, 'origin' => 'Import', 'source' => s($b['source'] ?? '', 200) ?? '', 'savedAt' => now(), 'items' => $items]);
+            history_undelete($id);
+            respond(['ok' => true, 'id' => $id, 'replaced' => $replaced]);
+        }
+
+        case 'history_delete': {
+            require_auth(true);
+            $id = (string)(body()['id'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}$/', $id)) fail('Ungültige Woche.');
+            store_delete('historie/' . $id);
+            $del = store_read('historie_geloescht') ?? [];
+            if (!in_array($id, $del, true)) { $del[] = $id; store_write('historie_geloescht', $del); }
+            respond(['ok' => true]);
         }
 
         default:

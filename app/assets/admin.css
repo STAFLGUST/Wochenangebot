@@ -152,3 +152,75 @@ select.in { appearance: none; -webkit-appearance: none; cursor: pointer; padding
 }
 .auth.overlay { position: fixed; inset: 0; z-index: 100; background: rgba(20, 18, 16, .5); backdrop-filter: blur(3px); }
 @media (max-width: 640px) { .adm #btn-import { display: inline-flex; } }
+
+/* ==========================================================================
+   Preisverlauf
+   ========================================================================== */
+.view-tabs { margin: 0 0 16px; }
+body.in-hist #btn-undo, body.in-hist #btn-import, body.in-hist #btn-preview { display: none; }
+
+.hist-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px 14px 18px; box-shadow: var(--shadow); }
+.hist-weeks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.hist-lbl { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+.wchip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wchip i { width: 6px; height: 6px; border-radius: 50%; background: var(--c-fresh); display: inline-block; }
+.wchip button { width: 20px; height: 20px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); display: grid; place-items: center; padding: 0; opacity: .55; }
+.wchip:hover button { opacity: 1; }
+.wchip button:hover { background: var(--accent-soft); color: var(--accent); }
+
+.htab td { padding: 8px 10px; }
+.htab th.num, .htab td.num { text-align: right; }
+.htab .h-code { width: 96px; font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+.htab th.h-code { font-family: var(--font); }
+.htab .h-name .nm { font-weight: 550; }
+.htab .h-name .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.htab .h-spark { width: 150px; }
+.htab .h-cur { width: 130px; font-weight: 650; white-space: nowrap; }
+.htab .h-delta { width: 100px; white-space: nowrap; }
+.htab .h-range { width: 140px; white-space: nowrap; color: var(--text-2); }
+.htab .h-weeks { width: 72px; color: var(--text-2); }
+.htab tbody tr { cursor: pointer; }
+.htab tbody tr:focus-visible td { background: var(--accent-soft); outline: none; }
+.gone { color: var(--c-aged); }
+.num { font-variant-numeric: tabular-nums; }
+
+.spark { display: block; overflow: visible; }
+.spark path { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.spark circle { fill: var(--accent); }
+.delta { font-weight: 650; font-variant-numeric: tabular-nums; }
+.delta.up { color: var(--accent); }
+.delta.down { color: var(--c-fresh); }
+
+.hstats { grid-template-columns: repeat(4, 1fr); }
+.hchart { width: 100%; height: auto; display: block; margin: 4px 0 6px; }
+.hchart .gl { stroke: var(--line); stroke-width: 1; }
+.hchart .yl, .hchart .xl { fill: var(--muted); font: 11px var(--font); font-variant-numeric: tabular-nums; }
+.hchart .ln { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.hchart circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.wtab td, .wtab th { padding: 7px 8px; font-size: 13px; }
+.wtab .num { text-align: right; white-space: nowrap; }
+.wtab tr.muted td { color: var(--muted); }
+
+.item-hist { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.item-hist .ih-txt { flex: 1; font-size: 13px; color: var(--text-2); min-width: 160px; }
+
+.hitab td { padding: 6px 8px; }
+.hitab .in.num { width: 76px; border-color: var(--line); }
+.hitab .hi-file { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-ok { color: var(--c-fresh); font-weight: 600; }
+.st-warn { color: var(--c-aged); font-weight: 600; }
+.st-err { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 860px) {
+  .htab .h-range, .htab .h-weeks, .htab .h-code { display: none; }
+  .hstats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .htab td { padding: 7px 6px; }
+  .htab .h-spark { width: 70px; }
+  .htab .h-spark svg { width: 70px; }
+  .htab .h-cur { width: auto; font-size: 13px; }
+  .htab .h-delta { display: none; }
+  .htab .h-name .nm { overflow-wrap: anywhere; }
+  .wtab th:nth-child(4), .wtab td:nth-child(4), .wtab th:nth-child(5), .wtab td:nth-child(5) { display: none; }
+}
