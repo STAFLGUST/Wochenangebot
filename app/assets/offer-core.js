@@ -536,10 +536,26 @@
     return { errors, warnings };
   }
 
+  /* „frisch“ gehört in den Zustand, nicht in die Bezeichnung.
+     „frisch/gefr.“ (frisch-gefroren) bleibt unverändert. */
+  function stripFrisch(name) {
+    const src = String(name ?? '');
+    if (!/frisch/i.test(src)) return src;
+    if (/frisch\s*[/-]\s*(gefr|tk|tief)|gefr\w*\.?\s*[/-]\s*frisch/i.test(src)) return src;
+    const M = '\u0000';
+    let s = src.replace(/(^|[^A-Za-zÄÖÜäöüß])frisch(?![A-Za-zÄÖÜäöüß])\.?/gi, (m, pre) => pre + M);
+    s = s.replace(new RegExp(`[\\s,;]*${M}[\\s,.;]*$`), '')
+      .replace(new RegExp(`^[\\s,;]*${M}[\\s,;]*`), '')
+      .replace(new RegExp(`(,\\s*)${M}\\s*,\\s*`, 'g'), '$1')
+      .replace(new RegExp(`\\s*${M}\\s*`, 'g'), ' ')
+      .replace(/\s{2,}/g, ' ').trim();
+    return s || src;
+  }
+
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;

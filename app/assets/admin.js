@@ -213,6 +213,18 @@
     c.items.forEach((i) => { i.altPrices = i.altPrices || []; });
     return c;
   }
+  /* „frisch“ aus den Bezeichnungen entfernen – steht nur im Zustand */
+  function normalizeNames(m) {
+    let n = 0;
+    for (const it of m.items) {
+      const clean = C.stripFrisch(it.name);
+      if (clean === it.name) continue;
+      it.name = clean;
+      if (it.condition === 'unbekannt') it.condition = 'frisch';
+      n++;
+    }
+    return n;
+  }
   async function openEditor() {
     const d = await api('draft');
     published = d.published ? strip(d.published) : null;
@@ -227,6 +239,11 @@
     renderAll();
     setSaveState(d.draft ? 'saved' : 'clean');
     loadAux();
+    loadMaster().catch(() => {});
+    if (!ro) {
+      const n = normalizeNames(model);
+      if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`„frisch“ aus ${plural(n, 'Bezeichnung', 'Bezeichnungen')} entfernt – steht jetzt nur im Zustand. Zum Übernehmen veröffentlichen.`, 7000); }
+    }
     if (currentView !== 'edit') setView(currentView);
   }
 
@@ -456,8 +473,10 @@
     const v = el.value;
     if (f === 'code') { const c = v.trim(); it.code = c || null; el.value = c; }
     else if (f === 'name') {
-      const n = C.clean(v);
-      if (!n) { el.value = it.name; toast('Die Bezeichnung darf nicht leer sein.'); return false; }
+      const typed = C.clean(v);
+      if (!typed) { el.value = it.name; toast('Die Bezeichnung darf nicht leer sein.'); return false; }
+      const n = C.stripFrisch(typed);
+      if (n !== typed) { el.value = n; if (it.condition !== 'frisch-gefroren') it.condition = 'frisch'; toast('„frisch“ steht im Zustand, nicht in der Bezeichnung.'); }
       it.name = n;
       delete it.nameRaw;
       if (autoAttr.has(it.id)) { const g = gById(it.groupId); Object.assign(it, C.suggestAttributes(n, g ? g.name : '', g ? g.section : '')); }
@@ -633,6 +652,7 @@
           <button type="button" class="btn sm ghost" data-ia="up"${pos <= 0 ? ' disabled' : ''}>${icon('up', 'sm')}Nach oben</button>
           <button type="button" class="btn sm ghost" data-ia="down"${pos >= sameGroup.length - 1 ? ' disabled' : ''}>${icon('down', 'sm')}Nach unten</button>
           <button type="button" class="btn sm ghost" data-ia="dup">${icon('copy', 'sm')}Duplizieren</button>
+          ${it.code ? `<button type="button" class="btn sm ghost" data-ia="to-master" title="Bezeichnung, Fleischart, Herkunft und Zustand als Stammdaten für ${esc(it.code)} speichern">${icon('check', 'sm')}Als Stammdaten speichern</button>` : ''}
           <button type="button" class="btn sm ghost" data-ia="del" style="color:var(--accent)">${icon('trash', 'sm')}Löschen</button>
         </span>
         <button type="submit" class="btn primary">Fertig</button>
@@ -720,6 +740,8 @@
       [model.items[i1], model.items[i2]] = [model.items[i2], model.items[i1]];
       changed({ render: true });
       openItem(it.id);
+    } else if (a === 'to-master') {
+      saveItemToMaster(it);
     } else if (a === 'dup') {
       pushUndo();
       const copy = Object.assign(clone(it), { id: uid('n') });
@@ -809,11 +831,13 @@
       pending = null;
       model = { meta: { week: d.meta.week, year: d.meta.year, notice: d.meta.notice || model.meta.notice || '', title: d.meta.title, source: d.meta.source, sheetName: d.meta.sheetName }, sections: d.sections, groups: d.groups, items: d.items };
       saveNote = { type: 'import', file: d.meta.source || '' };
+      normalizeNames(model);
+      const nm = applyMasterTo(model);
       invalid.clear(); autoAttr.clear();
       dlgImport.close();
       renderMeta();
       changed({ render: true });
-      toast(`Import übernommen: ${plural(d.items.length, 'Position', 'Positionen')}. Prüfen, ggf. anpassen, dann veröffentlichen.`, 5000);
+      toast(`Import übernommen: ${plural(d.items.length, 'Position', 'Positionen')}${nm ? `, ${plural(nm, 'Artikel', 'Artikel')} nach Stammdaten angepasst` : ''}. Prüfen, ggf. anpassen, dann veröffentlichen.`, 6000);
     }
   });
 
@@ -898,6 +922,7 @@
       if (ro) return;
       pushUndo();
       model = strip(r.model);
+      normalizeNames(model);
       saveNote = { type: 'version' };
       invalid.clear(); autoAttr.clear();
       dlgVer.close();
@@ -1006,7 +1031,7 @@
   /* Artikel-Schlüssel über alle Wochen: Artikelnummer; bei mehrfach vergebenen Nummern zusätzlich Bezeichnung + Gruppe */
   function seriesKey(it, dup) {
     if (it.code && !dup.has(it.code)) return 'c:' + it.code;
-    return 'n:' + (it.code || '') + '|' + nk(it.name) + '|' + nk(it.group);
+    return 'n:' + (it.code || '') + '|' + nk(C.stripFrisch(it.name)) + '|' + nk(it.group);
   }
   function buildHistory(weeks) {
     weeks = weeks.slice().sort((a, b) => a.year * 100 + a.week - (b.year * 100 + b.week));
@@ -1102,7 +1127,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['edit', 'hist', 'stock', 'users', 'log'];
+  const VIEWS = ['edit', 'hist', 'stock', 'master', 'users', 'log'];
   function setView(v) {
     if ((v === 'users' || v === 'log') && !can('admin')) v = 'edit';
     currentView = v;
@@ -1115,6 +1140,7 @@
     if (v === 'edit' && model) loadAux();
     if (v === 'hist') renderHistView();
     if (v === 'stock') renderStockView();
+    if (v === 'master') renderMasterView();
     if (v === 'users') renderUsersView();
     if (v === 'log') renderLogView();
   }
@@ -1800,8 +1826,8 @@
   function prevOf(it) {
     const list = it.code ? prevMap.get(S.normCode(it.code)) : null;
     if (!list || !list.length) return null;
-    const n = fold(it.name);
-    return list.find((x) => fold(x.name) === n) || list.find((x) => x.price && x.price.status === 'value') || list[0];
+    const n = fold(C.stripFrisch(it.name));
+    return list.find((x) => fold(C.stripFrisch(x.name)) === n) || list.find((x) => x.price && x.price.status === 'value') || list[0];
   }
   const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${String(prevWeek.year).slice(2)}` : '');
   function auxHeadHTML() {
@@ -1936,7 +1962,7 @@
       <div class="dlg-head"><div><h2 id="as-title">Ins Angebot übernehmen</h2><p>Art.-Nr. ${esc(a.code)} · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span></p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
-        <label class="fld span2"><span>Bezeichnung im Angebot</span><input name="name" value="${esc(a.name)}" maxlength="200" required></label>
+        <label class="fld span2"><span>Bezeichnung im Angebot${masterOf(a.code) ? ' <small class="muted">(aus Stammdaten)</small>' : ''}</span><input name="name" value="${esc(masterOf(a.code) ? masterOf(a.code).name : C.stripFrisch(a.name))}" maxlength="200" required></label>
         <label class="fld"><span>Angebotsgruppe</span><select name="groupId">${model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === gsel ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select></label>
         <label class="fld"><span>Preis €/kg (KW ${esc(model.meta.week || '')})</span><input name="price" inputmode="decimal" placeholder="${p && p.price.status === 'value' ? 'Vorwoche ' + esc(fmtNum.format(p.price.value)) : 'z. B. 12,50'}"></label>
         <p class="form-err span2" id="as-err" role="alert"></p>
@@ -1956,11 +1982,246 @@
     pushUndo();
     const g = gById(f.elements.groupId.value);
     const it = newItem(g.id);
-    Object.assign(it, C.suggestAttributes(name, g.name, g.section), { code: a.code, name, price });
+    const me0 = masterOf(a.code);
+    Object.assign(it, C.suggestAttributes(a.name, g.name, g.section), me0 ? { category: me0.category, origin: me0.origin, condition: me0.condition } : {}, { code: a.code, name: C.stripFrisch(name), price });
+    autoAttr.delete(it.id);
     dlgAS.close();
     changed({ render: true });
     toast(`„${name}“ in „${g.name}“ übernommen${price.status === 'value' ? ' – ' + priceShort(price) : ''}.`, 4500);
   });
+
+  /* ======================= Stammdaten (je Artikelnummer) ======================= */
+  let master = null, masterLoading = null, masterQ = '', masterTimer = null, masterSaving = false, masterQueued = false, masterErr = null;
+  async function loadMaster(force) {
+    if (master && !force) return master;
+    if (!masterLoading) masterLoading = api('master').then((r) => { master = r.master; return master; }).finally(() => { masterLoading = null; });
+    return masterLoading;
+  }
+  const mKey = (c) => S.normCode(c);
+  function masterOf(code) { return master && code ? master.articles.find((a) => mKey(a.code) === mKey(code)) || null : null; }
+  function draftByCode(m = model) {
+    const map = new Map();
+    for (const it of (m ? m.items : [])) if (it.code) { const k = mKey(it.code); if (!map.has(k)) map.set(k, []); map.get(k).push(it); }
+    return map;
+  }
+  const M_FIELDS = ['name', 'category', 'origin', 'condition'];
+  const differs = (e, it) => M_FIELDS.some((f) => (e[f] || '') !== (it[f] || ''));
+  /* Stammdaten auf Artikel anwenden (nur eindeutige Artikelnummern) */
+  function applyMasterTo(m, onlyCode) {
+    if (!master || !master.articles.length) return 0;
+    const by = draftByCode(m);
+    let n = 0;
+    for (const e of master.articles) {
+      if (onlyCode && mKey(e.code) !== mKey(onlyCode)) continue;
+      const list = by.get(mKey(e.code));
+      if (!list || list.length !== 1 || !differs(e, list[0])) continue;
+      const it = list[0];
+      for (const f of M_FIELDS) it[f] = e[f] ?? null;
+      delete it.nameRaw;
+      autoAttr.delete(it.id);
+      n++;
+    }
+    return n;
+  }
+  function addFromDraft() {
+    const by = draftByCode();
+    let n = 0;
+    for (const [k, list] of by) {
+      if (list.length !== 1 || masterOf(k)) continue;
+      const it = list[0];
+      master.articles.push({ code: it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition });
+      n++;
+    }
+    master.articles.sort((a, b) => a.code.localeCompare(b.code, 'de', { numeric: true }));
+    return n;
+  }
+  function setMasterState(st, msg) {
+    const el = $('#ms-state');
+    if (!el) return;
+    el.className = 'ms-state ' + st;
+    el.innerHTML = st === 'saving' ? 'Speichert …' : st === 'error' ? `Nicht gespeichert: ${esc(msg || '')} <button type="button" class="link-btn" data-ma="retry">Erneut</button>` : master && master.updatedAt ? `Gespeichert · ${esc(timeOnly(master.updatedAt))} Uhr` : '';
+  }
+  function masterChanged() { clearTimeout(masterTimer); setMasterState('saving'); masterTimer = setTimeout(saveMaster, 700); }
+  async function saveMaster() {
+    clearTimeout(masterTimer);
+    if (ro || !master) return;
+    if (masterSaving) { masterQueued = true; return; }
+    masterSaving = true;
+    setMasterState('saving');
+    try {
+      const r = await api('master_save', { body: { rev: master.rev, articles: master.articles } });
+      master.rev = r.rev; master.updatedAt = r.updatedAt; masterErr = null;
+      setMasterState('saved');
+    } catch (e) { masterErr = e.message; setMasterState('error', e.message); }
+    finally { masterSaving = false; if (masterQueued) { masterQueued = false; saveMaster(); } }
+  }
+  function offerStatus(e, by) {
+    const list = by.get(mKey(e.code));
+    if (!list) return '<span class="muted" title="Nicht im aktuellen Angebot">—</span>';
+    if (list.length > 1) return `<span class="muted" title="Artikelnummer ${list.length}× im Angebot – wird nicht automatisch abgeglichen">${list.length}× im Angebot</span>`;
+    if (differs(e, list[0])) return ro ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '–')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
+    return `<span class="m-ok" title="Angebot entspricht den Stammdaten">${icon('check', 'sm')}</span>`;
+  }
+  async function renderMasterView() {
+    const host = $('#view-master');
+    if (!master) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Stammdaten werden geladen …</div>';
+    try { await loadMaster(); await loadStock().catch(() => {}); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    if (!ro && !master.articles.length && model && model.items.length) {
+      const n = addFromDraft();
+      if (n) { saveMaster(); toast(`Stammdaten angelegt: ${plural(n, 'Artikel', 'Artikel')} aus dem aktuellen Angebot übernommen.`, 5000); }
+    }
+    const by = draftByCode();
+    const dup = [...by.values()].filter((l) => l.length > 1).length;
+    const missing = [...by.entries()].filter(([k, l]) => l.length === 1 && !masterOf(k)).length;
+    const dev = master.articles.filter((e) => { const l = by.get(mKey(e.code)); return l && l.length === 1 && differs(e, l[0]); }).length;
+    host.innerHTML = `
+      <div class="st-info">
+        <div><strong>Stammdaten</strong><span class="sub">Bezeichnung, Fleischart, Herkunft und Zustand je Artikelnummer – werden beim Excel-Import automatisch übernommen. „frisch“ gehört in den Zustand, nicht in die Bezeichnung.</span></div>
+        <span class="ms-state" id="ms-state"></span>
+      </div>
+      <div class="ed-toolbar">
+        <div class="search">${icon('search')}<input id="ms-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung, Herkunft …" aria-label="Stammdaten durchsuchen" value="${esc(masterQ)}"></div>
+        <span class="ed-hint" id="ms-count"></span>
+        ${ro ? '' : `<span class="st-actions">
+          <button type="button" class="btn" data-ma="from-draft"${missing ? '' : ' disabled'} title="Artikelnummern aus dem Angebot, die noch keine Stammdaten haben">${icon('plus')}Aus Angebot ergänzen${missing ? ` (${missing})` : ''}</button>
+          <button type="button" class="btn" data-ma="apply-all"${dev ? '' : ' disabled'} title="Abweichende Artikel im Entwurf an die Stammdaten anpassen">${icon('check')}Auf Angebot anwenden${dev ? ` (${dev})` : ''}</button>
+          <button type="button" class="btn primary" data-ma="new">${icon('plus')}Artikel anlegen</button>
+        </span>`}
+      </div>
+      ${dup ? `<p class="hint" style="margin:-4px 0 12px">${plural(dup, 'Artikelnummer kommt', 'Artikelnummern kommen')} im Angebot mehrfach vor (verschiedene Artikel unter einer Nummer) und ${dup === 1 ? 'wird' : 'werden'} nicht automatisch abgeglichen.</p>` : ''}
+      <div id="ms-list"></div>`;
+    setMasterState(masterErr ? 'error' : 'saved', masterErr);
+    renderMasterList();
+  }
+  function renderMasterList() {
+    const host = $('#ms-list');
+    if (!host || !master) return;
+    const toks = fold(masterQ).split(/\s+/).filter(Boolean);
+    const list = master.articles.filter((e) => { if (!toks.length) return true; const h = fold([e.code, e.name, e.origin, e.category, C.CONDITION_LABELS[e.condition]].join(' ')); return toks.every((t) => h.includes(t)); });
+    $('#ms-count').textContent = `${fmtInt.format(list.length)} von ${plural(master.articles.length, 'Artikel', 'Artikeln')}`;
+    const by = draftByCode();
+    const rows = list.slice(0, 1500).map((e) => {
+      const st = stockOf(e.code);
+      return `<tr data-mcode="${esc(e.code)}">
+        <td class="m-code">${esc(e.code)}</td>
+        <td class="m-name"><input class="in" data-mf="name" value="${esc(e.name)}" maxlength="200" aria-label="Bezeichnung">${st && fold(st.name) !== fold(e.name) ? `<div class="m-winab" title="Bezeichnung in WinAB / Bestandsliste">WinAB: ${esc(st.name)}</div>` : ''}</td>
+        <td class="m-cat"><select class="in" data-mf="category" aria-label="Fleischart">${CAT_OPTS(e.category)}</select></td>
+        <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
+        <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
+        <td class="m-offer">${offerStatus(e, by)}</td>
+        <td class="m-act">${ro ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
+      </tr>`;
+    }).join('');
+    host.innerHTML = list.length ? `<div class="gcard"><table class="etab mtab"><thead><tr><th class="m-code">Art.-Nr.</th><th class="m-name">Bezeichnung</th><th class="m-cat">Fleischart</th><th class="m-origin">Herkunft</th><th class="m-cond">Zustand</th><th class="m-offer">Angebot</th><th class="m-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="ed-empty"><h3>${master.articles.length ? 'Keine Treffer' : 'Noch keine Stammdaten'}</h3><p>${master.articles.length ? 'Suchbegriff anpassen.' : 'Mit „Aus Angebot ergänzen“ oder „Artikel anlegen“ beginnen.'}</p></div>`;
+    lockInputs(host);
+  }
+  $('#view-master').addEventListener('input', (e) => {
+    if (e.target.id === 'ms-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { masterQ = e.target.value.trim(); renderMasterList(); }, 120); }
+  });
+  $('#view-master').addEventListener('change', (e) => {
+    const el = e.target, tr = el.closest('tr[data-mcode]');
+    if (!tr || !el.dataset.mf || ro) return;
+    const ent = masterOf(tr.dataset.mcode);
+    if (!ent) return;
+    const f = el.dataset.mf;
+    if (f === 'name') {
+      const typed = C.clean(el.value);
+      if (!typed) { el.value = ent.name; toast('Die Bezeichnung darf nicht leer sein.'); return; }
+      const n = C.stripFrisch(typed);
+      if (n !== typed) { if (ent.condition !== 'frisch-gefroren') { ent.condition = 'frisch'; tr.querySelector('[data-mf="condition"]').value = 'frisch'; } toast('„frisch“ steht im Zustand, nicht in der Bezeichnung.'); }
+      ent.name = n; el.value = n;
+    } else if (f === 'origin') { ent.origin = C.clean(el.value) || null; el.value = ent.origin || ''; }
+    else ent[f] = el.value;
+    tr.querySelector('.m-offer').innerHTML = offerStatus(ent, draftByCode());
+    masterChanged();
+  });
+  $('#view-master').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-ma]');
+    if (!b || ro) return;
+    const a = b.dataset.ma, code = b.closest('tr[data-mcode]')?.dataset.mcode;
+    if (a === 'retry') { saveMaster(); return; }
+    if (a === 'from-draft') { const n = addFromDraft(); saveMaster(); toast(`${plural(n, 'Artikel', 'Artikel')} aus dem Angebot ergänzt.`); renderMasterView(); return; }
+    if (a === 'apply-all' || a === 'apply1') {
+      const preview = clone(model);
+      const n = applyMasterTo(preview, a === 'apply1' ? code : null);
+      if (!n) return;
+      if (a === 'apply-all' && !(await confirmBox('Stammdaten auf das Angebot anwenden?', `${plural(n, 'Artikel', 'Artikel')} im Entwurf ${n === 1 ? 'wird' : 'werden'} an die Stammdaten angepasst (Bezeichnung, Fleischart, Herkunft, Zustand). Mit „Rückgängig“ wiederherstellbar.`, 'Anwenden'))) return;
+      pushUndo();
+      applyMasterTo(model, a === 'apply1' ? code : null);
+      saveNote = { type: 'master' };
+      changed({ render: true });
+      toast(`${plural(n, 'Artikel', 'Artikel')} im Entwurf nach Stammdaten angepasst – noch nicht veröffentlicht.`, 5000);
+      renderMasterView();
+      return;
+    }
+    if (a === 'del' && code) {
+      const ent = masterOf(code);
+      if (!(await confirmBox('Stammsatz löschen?', `${esc(ent.code)} · ${esc(ent.name)} wird aus den Stammdaten entfernt. Das Angebot bleibt unverändert.`, 'Löschen', true))) return;
+      master.articles = master.articles.filter((x) => x !== ent);
+      saveMaster();
+      renderMasterView();
+      return;
+    }
+    if (a === 'new') openMasterNew();
+  });
+
+  /* Neuer Stammsatz */
+  const dlgMN = $('#dlg-master-new');
+  function openMasterNew(code = '') {
+    $('#master-new-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="mn-title">Artikel anlegen</h2><p>Stammdaten gelten für alle künftigen Wochen und werden beim Excel-Import übernommen.</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body form-grid two">
+        <label class="fld"><span>Artikelnummer</span><input name="code" value="${esc(code)}" maxlength="20" required autocomplete="off"></label>
+        <label class="fld"><span>Zustand</span><select name="condition">${COND_OPTS('frisch')}</select></label>
+        <label class="fld span2"><span>Bezeichnung</span><input name="name" maxlength="200" required></label>
+        <label class="fld"><span>Fleischart</span><select name="category">${CAT_OPTS('Rind')}</select></label>
+        <label class="fld"><span>Herkunft</span><input name="origin" list="dl-origins" placeholder="nicht angegeben" maxlength="60"></label>
+        <p class="form-err span2" id="mn-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('plus')}Anlegen</button></div>`;
+    dlgMN.showModal();
+    $('#master-new-body [name="code"]').focus();
+  }
+  $('#master-new-body').addEventListener('change', (e) => {
+    if (e.target.name !== 'code') return;
+    const f = e.currentTarget.elements, st = stockOf(e.target.value.trim());
+    if (st && !f.name.value) {
+      const n = C.stripFrisch(st.name);
+      f.name.value = n;
+      const sug = C.suggestAttributes(st.name, '', '');
+      f.category.value = sug.category; f.condition.value = sug.condition; if (sug.origin) f.origin.value = sug.origin;
+    }
+  });
+  $('#master-new-body').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target.elements, err = $('#mn-err');
+    const code = f.code.value.trim();
+    if (!/^[0-9A-Za-z./-]{1,20}$/.test(code)) { err.textContent = 'Ungültige Artikelnummer.'; return; }
+    if (masterOf(code)) { err.textContent = `Für ${code} gibt es bereits Stammdaten.`; return; }
+    const typed = C.clean(f.name.value);
+    if (!typed) { err.textContent = 'Bitte eine Bezeichnung angeben.'; return; }
+    const name = C.stripFrisch(typed);
+    master.articles.push({ code, name, category: f.category.value, origin: C.clean(f.origin.value) || null, condition: name !== typed && f.condition.value !== 'frisch-gefroren' ? 'frisch' : f.condition.value });
+    master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true }));
+    dlgMN.close();
+    saveMaster();
+    masterQ = code;
+    renderMasterView();
+    toast(`Stammdaten für ${code} angelegt.`);
+  });
+
+  /* Artikel-Dialog: aktuellen Artikel als Stammdaten speichern */
+  async function saveItemToMaster(it) {
+    if (ro || !it.code) return;
+    try { await loadMaster(); } catch (e) { toast(e.message); return; }
+    const ent = masterOf(it.code);
+    const rec = { code: ent ? ent.code : it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition };
+    if (ent) Object.assign(ent, rec); else { master.articles.push(rec); master.articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true })); }
+    await saveMaster();
+    toast(masterErr ? `Nicht gespeichert: ${masterErr}` : `Stammdaten für ${it.code} ${ent ? 'aktualisiert' : 'angelegt'}.`);
+  }
 
   /* ======================= Nutzerverwaltung (Administrator) ======================= */
   let users = null;
@@ -2075,11 +2336,12 @@
     ['publish', 'Veröffentlichungen'],
     ['history', 'Preisverlauf'],
     ['stock', 'Bestand'],
+    ['master', 'Stammdaten'],
     ['auth', 'Anmeldungen'],
     ['user', 'Nutzerverwaltung'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', stock: 'stock', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user' }[a] || '');
-  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user' }[a] || '');
+  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price') p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
@@ -2090,7 +2352,7 @@
     if (o) parts.push(plural(o, 'weitere Änderung', 'weitere Änderungen'));
     return parts.join(', ');
   }
-  const entryText = (e) => (e.a === 'draft' ? `Entwurf bearbeitet: ${draftSummary(e.d)}` : e.s);
+  const entryText = (e) => ((e.a === 'draft' && e.s === 'Entwurf bearbeitet') || (e.a === 'master' && e.s === 'Stammdaten bearbeitet') ? `${e.s}: ${draftSummary(e.d)}` : e.s);
   async function loadLog(month) {
     logData = await api('log', { query: month ? '&month=' + encodeURIComponent(month) : '' });
     logMonth = logData.month;

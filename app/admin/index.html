@@ -7,8 +7,8 @@
 <meta name="color-scheme" content="light dark">
 <title>Wochenangebot · Eingabebereich</title>
 <script>try{var t=localStorage.getItem("wochenangebot.theme");if(t){t=JSON.parse(t);if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}}catch(e){}</script>
-<link rel="stylesheet" href="../assets/app.css?v=20261016l">
-<link rel="stylesheet" href="../assets/admin.css?v=20261016l">
+<link rel="stylesheet" href="../assets/app.css?v=20261016m">
+<link rel="stylesheet" href="../assets/admin.css?v=20261016m">
 </head>
 <body class="adm">
 
@@ -66,6 +66,7 @@
         <button role="tab" type="button" id="vt-edit" aria-selected="true" aria-controls="view-edit"><span>Angebot<span class="m-hide"> bearbeiten</span></span></button>
         <button role="tab" type="button" id="vt-hist" aria-selected="false" aria-controls="view-hist">Preisverlauf</button>
         <button role="tab" type="button" id="vt-stock" aria-selected="false" aria-controls="view-stock">Bestand</button>
+        <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master">Stammdaten</button>
         <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden>Nutzer</button>
         <button role="tab" type="button" id="vt-log" aria-selected="false" aria-controls="view-log" hidden>Protokoll</button>
       </div>
@@ -96,6 +97,7 @@
     </div>
     <div id="view-hist" hidden></div>
     <div id="view-stock" hidden></div>
+    <div id="view-master" hidden></div>
     <div id="view-users" hidden></div>
     <div id="view-log" hidden></div>
   </main>
@@ -131,6 +133,7 @@
 <!-- Bestand: Import und Artikel -->
 <dialog class="modal" id="dlg-stock-import" aria-labelledby="si-title"><div class="dlg" id="stock-import-body"></div></dialog>
 <dialog class="modal wide" id="dlg-stock-item" aria-labelledby="sa-title"><div class="dlg" id="stock-item-body"></div></dialog>
+<dialog class="modal" id="dlg-master-new" aria-labelledby="mn-title"><form class="dlg" id="master-new-body" autocomplete="off"></form></dialog>
 <dialog class="modal" id="dlg-add-stock" aria-labelledby="as-title"><form class="dlg" id="add-stock-body" autocomplete="off"></form></dialog>
 <!-- Nutzer anlegen / bearbeiten -->
 <dialog class="modal" id="dlg-user" aria-labelledby="us-title"><form class="dlg" id="user-body" autocomplete="off"></form></dialog>
@@ -174,8 +177,8 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
 </svg>
 
-<script src="../assets/offer-core.js?v=20261016l"></script>
-<script src="../assets/stock-core.js?v=20261016l"></script>
-<script src="../assets/admin.js?v=20261016l"></script>
+<script src="../assets/offer-core.js?v=20261016m"></script>
+<script src="../assets/stock-core.js?v=20261016m"></script>
+<script src="../assets/admin.js?v=20261016m"></script>
 </body>
 </html>

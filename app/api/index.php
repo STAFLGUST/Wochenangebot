@@ -21,6 +21,8 @@
  *   POST ?action=history_import | history_delete
  *   GET  ?action=stock            Bestand (Mengen, MHD) – nur angemeldet, nie öffentlich
  *   POST ?action=stock_import     Bestandsliste übernehmen (Bearbeiter)
+ *   GET  ?action=master           Stammdaten je Artikelnummer (Bezeichnung, Fleischart, Herkunft, Zustand)
+ *   POST ?action=master_save      Stammdaten speichern (Bearbeiter)
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
  *   POST ?action=user_save | user_delete
  *
@@ -612,11 +614,51 @@ function clean_stock($b): array
     return $out;
 }
 
+/* ---------------- Stammdaten ---------------- */
+
+function code_key(string $c): string { return ctype_digit($c) ? (ltrim($c, '0') === '' ? '0' : ltrim($c, '0')) : strtoupper($c); }
+function clean_master($list): array
+{
+    if (!is_array($list)) throw new InvalidArgumentException('Stammdaten fehlen.');
+    if (count($list) > 20000) throw new InvalidArgumentException('Zu viele Stammdatensätze.');
+    $out = [];
+    $seen = [];
+    foreach ($list as $a) {
+        if (!is_array($a)) continue;
+        $code = s($a['code'] ?? null, 20, false);
+        if ($code === null || !preg_match('#^[0-9A-Za-z./-]+$#', $code)) throw new InvalidArgumentException('Ungültige Artikelnummer in den Stammdaten.');
+        $k = code_key($code);
+        if (isset($seen[$k])) throw new InvalidArgumentException("Artikelnummer $code ist in den Stammdaten doppelt.");
+        $seen[$k] = true;
+        $name = s($a['name'] ?? null, 200, false);
+        if ($name === null) throw new InvalidArgumentException("Artikel $code hat keine Bezeichnung.");
+        $cat = in_array($a['category'] ?? '', CATEGORIES, true) ? $a['category'] : 'Sonstiges';
+        $cond = in_array($a['condition'] ?? '', CONDITIONS, true) ? $a['condition'] : 'unbekannt';
+        $origin = s($a['origin'] ?? null, 60);
+        $out[] = ['code' => $code, 'name' => $name, 'category' => $cat, 'origin' => ($origin === '' ? null : $origin), 'condition' => $cond];
+    }
+    usort($out, function ($x, $y) { return strnatcmp($x['code'], $y['code']); });
+    return $out;
+}
+function master_changes(array $old, array $new): array
+{
+    $o = []; foreach ($old as $a) $o[code_key($a['code'])] = $a;
+    $n = []; foreach ($new as $a) $n[code_key($a['code'])] = $a;
+    $L = ['name' => 'Bezeichnung', 'category' => 'Fleischart', 'origin' => 'Herkunft', 'condition' => 'Zustand'];
+    $d = [];
+    foreach ($n as $k => $a) {
+        if (!isset($o[$k])) { $d[] = ['k' => "s$k|+", 'code' => $a['code'], 'name' => $a['name'], 'f' => 'Neuer Stammsatz', 'from' => '', 'to' => $a['category'] . ' · ' . $a['condition']]; continue; }
+        foreach ($L as $f => $label) if ((string)($o[$k][$f] ?? '') !== (string)($a[$f] ?? '')) $d[] = ['k' => "s$k|$f", 'code' => $a['code'], 'name' => $a['name'], 'f' => $label, 'from' => (string)($o[$k][$f] ?? ''), 'to' => (string)($a[$f] ?? '')];
+    }
+    foreach ($o as $k => $a) if (!isset($n[$k])) $d[] = ['k' => "s$k|-", 'code' => $a['code'], 'name' => $a['name'], 'f' => 'Stammsatz gelöscht', 'from' => $a['name'], 'to' => ''];
+    return $d;
+}
+
 /* ---------------- Aktionen ---------------- */
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import'];
+$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -751,6 +793,29 @@ try {
             respond(['ok' => true, 'stock' => $st]);
         }
 
+        case 'master': {
+            require_auth();
+            header('Cache-Control: no-store');
+            $m = store_read('stammdaten');
+            respond(['ok' => true, 'master' => $m ?: ['rev' => 0, 'articles' => [], 'updatedAt' => null]]);
+        }
+
+        case 'master_save': {
+            $me = require_auth(true, 'editor');
+            $b = body();
+            $articles = clean_master($b['articles'] ?? null);
+            $res = with_lock('stammdaten', function () use ($b, $articles, $me) {
+                $cur = store_read('stammdaten') ?: ['rev' => 0, 'articles' => []];
+                if ((int)($b['rev'] ?? -1) !== (int)$cur['rev']) fail('Die Stammdaten wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
+                $m = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'articles' => $articles];
+                store_write('stammdaten', $m);
+                return [$m, master_changes($cur['articles'], $articles)];
+            });
+            [$m, $d] = $res;
+            if ($d) audit('master', 'Stammdaten bearbeitet', array_slice($d, 0, 2000), null, true);
+            respond(['ok' => true, 'rev' => $m['rev'], 'updatedAt' => $m['updatedAt']]);
+        }
+
         case 'users': {
             require_auth(false, 'admin');
             header('Cache-Control: no-store');
@@ -876,6 +941,12 @@ try {
             if ($note && ($note['type'] ?? '') === 'import') {
                 $d = changes_between(store_read('angebot'), $model);
                 audit('import', 'Excel importiert: ' . (s($note['file'] ?? '', 120) ?: 'Datei') . ' – KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ', ' . count($model['items']) . ' Artikel (gegenüber veröffentlicht: ' . changes_summary($d) . ')', array_slice($d, 0, 2000));
+            } elseif ($note && ($note['type'] ?? '') === 'cleanup') {
+                $d = changes_between($before, $model);
+                if ($d) audit('draft', '„frisch“ aus ' . count($d) . ' Bezeichnungen entfernt (steht im Zustand)', array_slice($d, 0, 2000));
+            } elseif ($note && ($note['type'] ?? '') === 'master') {
+                $d = changes_between($before, $model);
+                if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
             } elseif ($note && ($note['type'] ?? '') === 'version') {
                 audit('import', 'Frühere Veröffentlichung als Entwurf geladen (KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ')', array_slice(changes_between($before, $model), 0, 2000));
             } else {

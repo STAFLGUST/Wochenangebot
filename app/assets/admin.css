@@ -442,3 +442,25 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
   .nptab .np-prev, .nptab .np-mhd { display: none; }
   .nptab .np-code { width: auto; }
 }
+
+/* ---------- Stammdaten ---------- */
+#view-master > .st-info:first-child { margin-top: 0; }
+.ms-state { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.ms-state.error { color: var(--accent); white-space: normal; }
+.mtab .m-code { width: 92px; font-family: var(--mono); font-size: 12.5px; color: var(--text-2); padding-left: 12px; }
+.mtab th.m-code { font-family: inherit; font-size: 11.5px; color: var(--muted); }
+.mtab .m-cat { width: 138px; } .mtab .m-origin { width: 170px; } .mtab .m-cond { width: 150px; }
+.mtab .m-offer { width: 120px; text-align: center; white-space: nowrap; font-size: 12.5px; }
+.mtab .m-act { width: 44px; text-align: center; }
+.m-winab { font-size: 11.5px; color: var(--muted); padding: 0 9px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 520px; }
+.m-ok { color: var(--c-fresh); }
+.m-diff { border: 0; background: var(--c-aged-bg); color: var(--c-aged); font-weight: 600; font-size: 12px; border-radius: 6px; padding: 2px 8px; }
+button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95); }
+@media (max-width: 1100px) { .mtab .m-origin { width: 130px; } .mtab .m-cond { width: 128px; } }
+@media (max-width: 860px) { .mtab .m-cat, .mtab .m-origin { display: none; } }
+@media (max-width: 560px) {
+  #view-master .mtab { table-layout: fixed; }
+  .mtab .m-code { width: 62px; padding-left: 8px; } .mtab .m-cond { width: 96px; } .mtab .m-offer { width: 58px; } .mtab .m-act { width: 34px; }
+  .mtab .in { min-width: 0; width: 100%; text-overflow: ellipsis; }
+  .m-winab { display: none; }
+}
