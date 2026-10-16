@@ -16,7 +16,7 @@ Nützlich auf dem Server:
 - Protokoll der Aktualisierung: `journalctl -u wochenangebot-update -n 20`
 - Status: `cd /opt/wochenangebot && docker compose ps`
 - Datensicherung: `tar czf /root/angebot-daten-$(date +%F).tgz -C /opt/wochenangebot daten`
-- IP-Freigabe ändern: `.env` → `ALLOWED_IPS=…`, danach `docker compose up -d --force-recreate caddy`
+- IP-Sperre: derzeit ausgeschaltet. Einschalten im `Caddyfile` (zwei Zeilen `@fremd …` / `respond @fremd …` entkommentieren), erlaubte Adressen in `.env` → `ALLOWED_IPS=…`
 - Bestand: im Eingabebereich unter „Bestand“ die WinAB-Bestandsliste (.xls/.xlsx) hochladen. Mengen und MHD sind nur dort sichtbar, nie auf der öffentlichen Seite. Suche „MHD“ zeigt alle Artikel mit MHD bis heute + 14 Tage.
 - Stammdaten: Bezeichnung, Fleischart, Herkunft und Zustand je Artikelnummer; werden beim Excel-Import automatisch übernommen. „frisch“ steht nur im Zustand, nie in der Bezeichnung.
 - Nutzer, Rollen und Passwörter verwaltet der Administrator im Eingabebereich unter „Nutzer“; wer was geändert hat, steht unter „Protokoll“.
