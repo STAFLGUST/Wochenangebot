@@ -388,3 +388,8 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
   .stab tr.wg-sum td.s-mkg::before, .stab tr.st-total td.s-mkg::before { content: "kürz. MHD "; font-weight: 500; color: var(--muted); }
   .st-actions { margin-left: 0; }
 }
+.stab th .sort-btn { all: unset; cursor: pointer; display: inline-block; text-align: center; line-height: 1.25; border-radius: 6px; padding: 2px 4px; color: inherit; }
+.stab th .sort-btn:hover { color: var(--text); background: var(--surface-3); }
+.stab th .sort-btn:focus-visible { box-shadow: var(--focus); }
+.stab th .sort-btn.on { color: var(--accent); }
+.stab th .sort-ind { display: inline-block; width: 0; margin-left: 2px; font-size: 9px; vertical-align: 1px; overflow: visible; white-space: nowrap; }

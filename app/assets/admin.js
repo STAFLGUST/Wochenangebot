@@ -1499,22 +1499,41 @@
   const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
   const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? a[f] : 0), 0);
   /* Normale Suche: Warengruppen, MHD-markierte zuerst (früheste oben), dann Artikelnummer; MHD-Abfrage: flach bis heute + 14 Tage */
+  /* Sortierung per Klick auf die Spaltenüberschrift (leere Werte immer unten) */
+  let stockSort = store.get('stockSort', null);   // { key, dir } oder null = Standard
+  const byCode = (a, b) => a.code.localeCompare(b.code, 'de', { numeric: true });
+  const vkNum = (a) => (a.price && a.price.status === 'value' ? a.price.value : null);
+  const SORT_GET = { code: null, name: (a) => a.name, vk: vkNum, kg: (a) => a.kg, mhd: (a) => a.mhd, mhdKg: (a) => a.mhdKg };
+  function colCompare(a, b) {
+    if (!stockSort) return 0;
+    const { key, dir } = stockSort;
+    if (key === 'code') return dir * byCode(a, b);
+    const va = SORT_GET[key](a), vb = SORT_GET[key](b);
+    if (va == null || vb == null) return (va == null) - (vb == null);
+    return dir * (typeof va === 'string' ? va.localeCompare(vb, 'de', { numeric: true }) : va - vb);
+  }
   function stockResult(q) {
     const all = stockItems();
     if (isMhdQuery(q)) {
       const lim = isoToday(14);
-      const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => a.mhd.localeCompare(b.mhd) || a.code.localeCompare(b.code, 'de', { numeric: true }));
+      const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => colCompare(a, b) || a.mhd.localeCompare(b.mhd) || byCode(a, b));
       return { flat: true, list, groups: null };
     }
     const toks = fold(q).split(/\s+/).filter(Boolean);
     const list = all.filter((a) => toks.every((t) => a._hay.includes(t)));
     const rank = (a) => (a.cls ? 0 : 1);
-    list.sort((a, b) => a.wg.order - b.wg.order || rank(a) - rank(b) || (rank(a) === 0 ? a.mhd.localeCompare(b.mhd) : 0) || a.code.localeCompare(b.code, 'de', { numeric: true }));
+    // Warengruppe → MHD-markierte zuerst (früheste oben) → gewählte Spalte → Artikelnummer
+    list.sort((a, b) => a.wg.order - b.wg.order || rank(a) - rank(b) || (rank(a) === 0 ? a.mhd.localeCompare(b.mhd) : 0) || colCompare(a, b) || byCode(a, b));
     const groups = [];
     for (const a of list) { const g = groups[groups.length - 1]; if (g && g.label === a.wg.label) g.items.push(a); else groups.push({ label: a.wg.label, items: [a] }); }
     return { flat: false, list, groups };
   }
-  const stockHead = () => `<tr><th class="s-code">Art.<br>Nr</th><th class="s-name">Art.<br>Bez.</th><th class="s-vk">VK<br>KW ${esc(model && model.meta.week || '')}</th><th class="s-kg">Kg<br>verfüg.</th><th class="s-mhd">Kürz.<br>MHD</th><th class="s-mkg">Kg kürz.<br>MHD</th></tr>`;
+  const sortTh = (key, cls, label) => {
+    const on = stockSort && stockSort.key === key;
+    const dir = on ? (stockSort.dir > 0 ? 'ascending' : 'descending') : 'none';
+    return `<th class="${cls}" aria-sort="${dir}"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
+  };
+  const stockHead = () => `<tr>${sortTh('code', 's-code', 'Art.<br>Nr')}${sortTh('name', 's-name', 'Art.<br>Bez.')}${sortTh('vk', 's-vk', `VK<br>KW ${esc(model && model.meta.week || '')}`)}${sortTh('kg', 's-kg', 'Kg<br>verfüg.')}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD')}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD')}</tr>`;
   const stockRow = (a) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
       <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}">${esc(a.name)}</td>
       <td class="s-vk" data-l="VK">${esc(vkText(a.price))}</td><td class="s-kg" data-l="Kg verfüg.">${esc(kgText(a.kg))}</td>
@@ -1570,6 +1589,18 @@
     if (e.target.id === 'st-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { stockQ = e.target.value.trim(); renderStockList(); }, 120); }
   });
   $('#view-stock').addEventListener('click', (e) => {
+    const sb = e.target.closest('[data-ssort]');
+    if (sb) {
+      const key = sb.dataset.ssort;
+      // 1. Klick aufsteigend, 2. absteigend, 3. zurück zur Standardsortierung
+      if (!stockSort || stockSort.key !== key) stockSort = { key, dir: key === 'kg' || key === 'mhdKg' ? -1 : 1 };
+      else if (stockSort.dir === (key === 'kg' || key === 'mhdKg' ? -1 : 1)) stockSort = { key, dir: -stockSort.dir };
+      else stockSort = null;
+      store.set('stockSort', stockSort);
+      renderStockList();
+      $(`#st-list [data-ssort="${key}"]`)?.focus();
+      return;
+    }
     const b = e.target.closest('[data-st]');
     if (b) {
       const a = b.dataset.st;
@@ -1721,7 +1752,7 @@
       .mhd-past { background: #343a40; color: #fff; } .mhd-0-4 { background: #dc2626; color: #111; } .mhd-5-7 { background: #ea580c; color: #111; } .mhd-8-14 { background: #fdba74; color: #111; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
     </style></head><body><h1>${esc(company ? company + ' · ' : '')}${esc(title)}</h1>
       <p class="meta">${fmtInt.format(res.list.length)} Artikel · nur eingelagerte Ware · VK = Entwurf KW ${esc(model.meta.week || '?')}/${esc(model.meta.year || '')} · gedruckt ${esc(dateTime(new Date().toISOString()))} · intern – nicht zur Weitergabe</p>
-      ${stockTableHTML(res).replace(/ tabindex="0"/g, '')}
+      ${stockTableHTML(res).replace(/ tabindex="0"/g, '').replace(/<button[^>]*>/g, '').replace(/<\/button>/g, '')}
       <script>window.onload = function () { setTimeout(function () { window.print(); }, 150); };<\/script></body></html>`);
     w.document.close();
   }
