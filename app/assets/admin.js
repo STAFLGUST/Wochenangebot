@@ -615,6 +615,7 @@
           <div class="altlist" id="altlist">${(it.altPrices || []).map((p, k) => altRow(p, k)).join('')}</div>
           <div><button type="button" class="btn sm ghost" data-ia="alt-add">${icon('plus', 'sm')}Zusatzpreis</button></div>
         </div>
+        <div class="fld span2" id="item-stock"></div>
         <div class="fld span2" id="item-hist"></div>
         <p class="form-err span2" id="item-err" role="alert"></p>
       </div>
@@ -633,6 +634,7 @@
       $('#item-body .dlg-head p').textContent = 'Nur Ansicht – Ihre Rolle erlaubt keine Änderungen.';
     }
     if (!dlgItem.open) dlgItem.showModal();
+    fillItemStock(it);
     fillItemHistory(it);
   }
   const altRow = (p, k) => `<div class="altrow" data-k="${k}"><input data-alt="label" value="${esc(p.label || '')}" placeholder="Bezeichnung, z. B. Flugware" maxlength="40" aria-label="Bezeichnung des Zusatzpreises"><input data-alt="price" value="${esc(priceToInput(p))}" placeholder="Preis" inputmode="decimal" aria-label="Zusatzpreis"><button type="button" class="ibtn danger" data-ia="alt-del" aria-label="Zusatzpreis entfernen">${icon('trash')}</button></div>`;
@@ -735,7 +737,14 @@
   function pickFile() { if (!ro) fileInput.click(); }
   fileInput.addEventListener('change', () => { const f = fileInput.files[0]; fileInput.value = ''; if (f) importFile(f); });
   window.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
-  window.addEventListener('drop', (e) => { const f = e.dataTransfer?.files?.[0]; if (f && model) { e.preventDefault(); if (!ro && currentView === 'edit') importFile(f); } });
+  window.addEventListener('drop', (e) => {
+    const f = e.dataTransfer?.files?.[0];
+    if (!f || !model) return;
+    e.preventDefault();
+    if (ro) return;
+    if (currentView === 'edit') importFile(f);
+    else if (currentView === 'stock') stockImportFile(f);
+  });
 
   const impHead = (t, s) => `<div class="dlg-head"><div><h2 id="imp-title">${t}</h2>${s ? `<p>${s}</p>` : ''}</div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>`;
   async function importFile(file) {
@@ -1084,7 +1093,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['edit', 'hist', 'users', 'log'];
+  const VIEWS = ['edit', 'hist', 'stock', 'users', 'log'];
   function setView(v) {
     if ((v === 'users' || v === 'log') && !can('admin')) v = 'edit';
     currentView = v;
@@ -1095,6 +1104,7 @@
     document.body.classList.toggle('in-hist', v === 'hist');
     document.body.classList.toggle('in-other', v !== 'edit');
     if (v === 'hist') renderHistView();
+    if (v === 'stock') renderStockView();
     if (v === 'users') renderUsersView();
     if (v === 'log') renderLogView();
   }
@@ -1436,6 +1446,286 @@
     if (files.length) { e.preventDefault(); e.stopImmediatePropagation(); histImportFiles(files); }
   }, true);
 
+  /* ======================= Bestand (Mengen, MHD – nur im Eingabebereich) ======================= */
+  const S = window.StockCore;
+  let stock = null, stockLoaded = false, stockLoading = null, stockQ = '';
+  const fmtKg = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const kgText = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtKg.format(v) + ' kg');
+  const mhdShort = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}` : '—');
+  function isoToday(plus = 0) {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + plus);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  /* MHD-Kennzeichnung relativ zum heutigen Datum */
+  function mhdClass(iso) {
+    if (!iso) return '';
+    const days = Math.round((Date.parse(iso + 'T12:00:00Z') - Date.parse(isoToday() + 'T12:00:00Z')) / 864e5);
+    if (days < 0) return 'mhd-past';
+    if (days <= 4) return 'mhd-0-4';
+    if (days <= 7) return 'mhd-5-7';
+    if (days <= 14) return 'mhd-8-14';
+    return '';
+  }
+  const SKULL = '<span class="mhd-skull" title="MHD abgelaufen" aria-label="MHD abgelaufen">&#x2620;&#xFE0E;</span>';
+  const mhdKgHTML = (a) => `${mhdClass(a.mhd) === 'mhd-past' ? SKULL : ''}${esc(kgText(a.mhdKg))}`;
+  const isMhdQuery = (q) => fold(q).replace(/\s+/g, '') === 'mhd';
+
+  async function loadStock(force) {
+    if (stockLoaded && !force) return stock;
+    if (!stockLoading) stockLoading = api('stock').then((r) => { stock = r.stock || null; stockLoaded = true; return stock; }).finally(() => { stockLoading = null; });
+    return stockLoading;
+  }
+  /* Verkaufspreise der Angebotswoche (aktueller Entwurf) je Artikelnummer */
+  function offerPriceMap() {
+    const m = new Map();
+    for (const it of (model ? model.items : [])) {
+      if (!it.code) continue;
+      const k = S.normCode(it.code);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(it);
+    }
+    return m;
+  }
+  function stockItems() {
+    const prices = offerPriceMap();
+    return stock.articles.map((a, i) => {
+      const cand = prices.get(S.normCode(a.code)) || [];
+      const main = cand.find((x) => x.price.status === 'value') || cand.find((x) => x.price.status === 'request') || null;
+      return { ...a, idx: i, wg: S.warengruppe(a.code), offer: cand, price: main ? main.price : null, cls: mhdClass(a.mhd), _hay: fold(a.code + ' ' + a.name) };
+    });
+  }
+  const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
+  const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? a[f] : 0), 0);
+  /* Normale Suche: Warengruppen, MHD-markierte zuerst (früheste oben), dann Artikelnummer; MHD-Abfrage: flach bis heute + 14 Tage */
+  function stockResult(q) {
+    const all = stockItems();
+    if (isMhdQuery(q)) {
+      const lim = isoToday(14);
+      const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => a.mhd.localeCompare(b.mhd) || a.code.localeCompare(b.code, 'de', { numeric: true }));
+      return { flat: true, list, groups: null };
+    }
+    const toks = fold(q).split(/\s+/).filter(Boolean);
+    const list = all.filter((a) => toks.every((t) => a._hay.includes(t)));
+    const rank = (a) => (a.cls ? 0 : 1);
+    list.sort((a, b) => a.wg.order - b.wg.order || rank(a) - rank(b) || (rank(a) === 0 ? a.mhd.localeCompare(b.mhd) : 0) || a.code.localeCompare(b.code, 'de', { numeric: true }));
+    const groups = [];
+    for (const a of list) { const g = groups[groups.length - 1]; if (g && g.label === a.wg.label) g.items.push(a); else groups.push({ label: a.wg.label, items: [a] }); }
+    return { flat: false, list, groups };
+  }
+  const stockHead = () => `<tr><th class="s-code">Art.<br>Nr</th><th class="s-name">Art.<br>Bez.</th><th class="s-vk">VK<br>KW ${esc(model && model.meta.week || '')}</th><th class="s-kg">Kg<br>verfüg.</th><th class="s-mhd">Kürz.<br>MHD</th><th class="s-mkg">Kg kürz.<br>MHD</th></tr>`;
+  const stockRow = (a) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
+      <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}">${esc(a.name)}</td>
+      <td class="s-vk" data-l="VK">${esc(vkText(a.price))}</td><td class="s-kg" data-l="Kg verfüg.">${esc(kgText(a.kg))}</td>
+      <td class="s-mhd ${a.cls}" data-l="Kürz. MHD">${esc(mhdShort(a.mhd))}</td><td class="s-mkg ${a.cls}" data-l="Kg kürz. MHD"><span>${mhdKgHTML(a)}</span></td></tr>`;
+  const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="3">${esc(label)}</td><td class="s-kg">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg">${esc(kgText(sum(list, 'mhdKg')))}</td></tr>`;
+  function stockTableHTML(res) {
+    let body;
+    if (res.flat) body = `<tbody>${res.list.map(stockRow).join('')}</tbody>`;
+    else body = res.groups.map((g, i) => `<tbody class="wg">${i ? '<tr class="wg-gap" aria-hidden="true"><td colspan="6"></td></tr>' : ''}<tr class="wg-h"><td colspan="6">${esc(g.label)}</td></tr>${g.items.map(stockRow).join('')}${totalRow('Summe ' + g.label, g.items, 'wg-sum')}</tbody>`).join('');
+    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead()}</thead>${body}<tfoot>${totalRow('Gesamtsumme Menge verfügbar', res.list, 'st-total')}</tfoot></table>`;
+  }
+  const legendHTML = () => `<div class="mhd-legend" aria-label="MHD-Kennzeichnung"><span class="mhd-past">${SKULL} abgelaufen</span><span class="mhd-0-4">heute – 4 Tage</span><span class="mhd-5-7">5 – 7 Tage</span><span class="mhd-8-14">8 – 14 Tage</span></div>`;
+
+  async function renderStockView() {
+    const host = $('#view-stock');
+    if (!stockLoaded) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Bestand wird geladen …</div>';
+    try { await loadStock(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    if (!stock) {
+      host.innerHTML = `<div class="ed-empty"><h3>Noch kein Bestand übernommen</h3><p>Laden Sie die Bestandsliste aus WinAB hoch (z. B. „Bestand_16.10.26.XLS“). Mengen und MHD erscheinen nur hier im Eingabebereich – nie auf der öffentlichen Angebotsseite.</p>
+        ${ro ? '' : `<div class="row-actions"><button type="button" class="btn primary" data-st="import">${icon('upload')}Bestandsliste hochladen</button></div>`}</div>`;
+      return;
+    }
+    const age = stock.date ? Math.round((Date.parse(isoToday() + 'T12:00:00Z') - Date.parse(stock.date + 'T12:00:00Z')) / 864e5) : null;
+    host.innerHTML = `
+      <div class="st-info${age != null && age > 2 ? ' old' : ''}">
+        <div><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}<span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · nur eingelagerte Ware</span></div>
+        ${legendHTML()}
+      </div>
+      <div class="ed-toolbar">
+        <div class="search">${icon('search')}<input id="st-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung … oder „MHD“" aria-label="Bestand durchsuchen" value="${esc(stockQ)}"></div>
+        <span class="ed-hint" id="st-count"></span>
+        <span class="st-actions">
+          <button type="button" class="btn" data-st="print">${icon('print')}Drucken</button>
+          <button type="button" class="btn" data-st="csv">${icon('download')}CSV</button>
+          ${ro ? '' : `<button type="button" class="btn primary" data-st="import">${icon('upload')}Bestand hochladen</button>`}
+        </span>
+      </div>
+      <div id="st-list"></div>`;
+    renderStockList();
+  }
+  function renderStockList() {
+    const host = $('#st-list');
+    if (!host || !stock) return;
+    const res = stockResult(stockQ);
+    const mq = isMhdQuery(stockQ);
+    $('#st-count').innerHTML = mq
+      ? `<strong>${fmtInt.format(res.list.length)}</strong> Artikel mit MHD bis ${esc(dmy(isoToday(14)))} (früheste zuerst)`
+      : `<strong>${fmtInt.format(res.list.length)}</strong> von ${fmtInt.format(stock.articles.length)} Artikeln${stockQ ? '' : ' · Tipp: „MHD“ eingeben'}`;
+    host.innerHTML = res.list.length ? `<div class="gcard st-card">${stockTableHTML(res)}</div>`
+      : `<div class="ed-empty"><h3>Keine Treffer</h3><p>${mq ? 'Kein Artikel mit MHD in den nächsten 14 Tagen oder bereits abgelaufen.' : 'Kein Artikel, dessen Nummer oder Bezeichnung zum Suchbegriff passt.'}</p></div>`;
+  }
+  $('#view-stock').addEventListener('input', (e) => {
+    if (e.target.id === 'st-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { stockQ = e.target.value.trim(); renderStockList(); }, 120); }
+  });
+  $('#view-stock').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-st]');
+    if (b) {
+      const a = b.dataset.st;
+      if (a === 'import') { if (!ro) $('#stock-file-input').click(); }
+      if (a === 'print') printStock();
+      if (a === 'csv') stockCSV();
+      return;
+    }
+    const tr = e.target.closest('tr.srow');
+    if (tr) openStockItem(+tr.dataset.sidx);
+  });
+  $('#view-stock').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr.srow')) openStockItem(+e.target.dataset.sidx); });
+
+  /* Detail: Partien eines Artikels */
+  const dlgSA = $('#dlg-stock-item');
+  function openStockItem(idx) {
+    const a = stockItems()[idx];
+    if (!a) return;
+    const gname = (id) => (model.groups.find((g) => g.id === id) || {}).name || '';
+    const offerTxt = a.offer.length
+      ? a.offer.map((o) => `${esc(priceShort(o.price))}${o.price.label ? ' (' + esc(o.price.label) + ')' : ''} <span class="muted">· ${esc(gname(o.groupId))}</span>`).join('<br>')
+      : '<span class="muted">nicht im aktuellen Angebot</span>';
+    $('#stock-item-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="sa-title">${esc(a.name)}</h2><p>Art.-Nr. ${esc(a.code)} · ${esc(a.wg.label)} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <div class="cmp-stats hstats">
+          <div><span>Kg verfügbar</span><strong>${esc(kgText(a.kg))}</strong></div>
+          <div><span>Kürzestes MHD</span><strong class="${a.cls}">${esc(mhdShort(a.mhd))}</strong></div>
+          <div><span>Kg kürz. MHD</span><strong class="${a.cls}">${mhdKgHTML(a)}</strong></div>
+          <div><span>VK KW ${esc(model.meta.week || '')}</span><strong>${esc(vkText(a.price))}</strong></div>
+        </div>
+        <h3 class="d-h"><span>Eingelagerte Partien</span><span>${plural(a.lots.length, 'Partie', 'Partien')}</span></h3>
+        <table class="etab lottab"><thead><tr><th>Partie</th><th>Ankunft</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th></tr></thead><tbody>
+          ${a.lots.map((l) => `<tr><td class="ch-code">${esc(l.lot || '—')}</td><td>${l.arrival ? esc(dmy(l.arrival)) : '—'}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : '<span class="muted">ohne MHD</span>'}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td></tr>`).join('')}
+        </tbody></table>
+        <h3 class="d-h"><span>Im Angebot (Entwurf KW ${esc(model.meta.week || '?')})</span></h3>
+        <p style="margin:0">${offerTxt}</p>
+      </div>`;
+    dlgSA.showModal();
+  }
+
+  /* Bestand im Artikel-Dialog des Angebots */
+  async function fillItemStock(it) {
+    const slot = $('#item-stock');
+    if (!slot) return;
+    try { await loadStock(); } catch { return; }
+    if (!stock || !$('#item-stock')) return;
+    const a = it.code && stock.articles.find((x) => S.normCode(x.code) === S.normCode(it.code));
+    const cls = a ? mhdClass(a.mhd) : '';
+    $('#item-stock').innerHTML = `<span>Bestand (Stand ${stock.date ? esc(mhdShort(stock.date)) : '?'}, nur intern)</span>` + (a
+      ? `<div class="item-stock">${esc(kgText(a.kg))} verfügbar · kürz. MHD <strong class="${cls}">${esc(mhdShort(a.mhd))}</strong> · <strong class="${cls}">${mhdKgHTML(a)}</strong></div>`
+      : `<div class="muted" style="font-size:13px">${it.code ? 'Kein eingelagerter Bestand zu dieser Artikelnummer.' : 'Ohne Artikelnummer kein Bestandsabgleich.'}</div>`);
+  }
+
+  /* Bestandsliste hochladen */
+  const dlgSI = $('#dlg-stock-import');
+  let stockPending = null;
+  $('#stock-file-input').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) stockImportFile(f); });
+  async function stockImportFile(file) {
+    if (ro) return;
+    stockPending = null;
+    const head = (t, sub) => `<div class="dlg-head"><div><h2 id="si-title">${t}</h2>${sub ? `<p>${sub}</p>` : ''}</div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>`;
+    $('#stock-import-body').innerHTML = `${head('Bestandsliste', esc(file.name))}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Datei wird gelesen …</div></div>`;
+    if (!dlgSI.open) dlgSI.showModal();
+    try {
+      if (file.size > 30 * 1024 * 1024) throw new Error('Die Datei ist größer als 30 MB.');
+      const r = S.parseStockWorkbook(await S.readStockWorkbook(await file.arrayBuffer()), file.name);
+      if (!r.articles.length) throw new Error('Keine Artikel mit eingelagertem Bestand gefunden.');
+      stockPending = r;
+      try { await loadStock(); } catch { /* ignore */ }
+      const total = sum(r.articles, 'kg');
+      const other = Object.entries(r.stats.other).map(([k, v]) => `${fmtInt.format(v)} × „${esc(k)}“`).join(', ');
+      const soon = r.articles.filter((a) => a.mhd && a.mhd <= isoToday(14)).length;
+      $('#stock-import-body').innerHTML = `${head('Bestandsliste prüfen', esc(file.name))}
+        <div class="dlg-body">
+          <div class="imp-sum">
+            <div><span>Artikel mit Bestand</span><strong>${fmtInt.format(r.articles.length)}</strong></div>
+            <div><span>Kg eingelagert</span><strong>${esc(fmtKg.format(total))}</strong></div>
+            <div><span>MHD ≤ 14 Tage</span><strong>${fmtInt.format(soon)}</strong></div>
+          </div>
+          <label class="fld" style="max-width:220px"><span>Bestandsdatum</span><input type="date" id="si-date" value="${esc(r.date || isoToday())}" required></label>
+          <ul class="issues">
+            <li class="info"><span class="lvl">Info</span><span>Berücksichtigt: ${fmtInt.format(r.stats.stored)} Partien mit Status „eingelagert“.${other ? ` Nicht berücksichtigt: ${other}.` : ''}</span></li>
+            ${r.stats.skipped ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer übersprungen (z. B. „Etiketten“).</span></li>` : ''}
+            ${r.stats.noMhd ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.</span></li>` : ''}
+            ${!r.date ? '<li class="warn"><span class="lvl">Prüfen</span><span>Kein Datum in der Datei gefunden – bitte Bestandsdatum eintragen.</span></li>' : ''}
+            ${stock ? `<li class="info"><span class="lvl">Info</span><span>Ersetzt den bisherigen Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'} (${fmtInt.format(stock.articles.length)} Artikel).</span></li>` : ''}
+          </ul>
+          <p class="hint">Mengen und MHD sind nur im Eingabebereich sichtbar, nicht auf der öffentlichen Angebotsseite.</p>
+        </div>
+        <div class="dlg-foot"><button type="button" class="btn" data-si="again">Andere Datei</button><span class="spacer"></span><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-si="apply">${icon('check')}Bestand übernehmen</button></div>`;
+    } catch (ex) {
+      $('#stock-import-body').innerHTML = `${head('Bestandsliste nicht lesbar', esc(file.name))}<div class="dlg-body"><div class="err-box">${esc(ex.message || String(ex))}</div><p class="hint">Erwartet wird die Bestandsliste aus WinAB (.xls oder .xlsx) mit den Spalten Art.-Nr., Bezeichnung, Status, MHD und netto.</p></div>
+        <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-si="again">Andere Datei wählen</button></div>`;
+    }
+  }
+  dlgSI.addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-si]')?.dataset.si;
+    if (a === 'again') { $('#stock-file-input').click(); return; }
+    if (a !== 'apply' || !stockPending) return;
+    const date = $('#si-date').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { $('#si-date').focus(); return; }
+    const btn = e.target.closest('[data-si]');
+    btn.disabled = true;
+    try {
+      const r = await api('stock_import', { body: { date, source: stockPending.source, articles: stockPending.articles } });
+      stock = r.stock; stockLoaded = true; stockPending = null;
+      dlgSI.close();
+      toast(`Bestand vom ${dmy(date)} übernommen: ${plural(stock.articles.length, 'Artikel', 'Artikel')}.`, 5000);
+      if (currentView === 'stock') renderStockView(); else setView('stock');
+    } catch (ex) {
+      btn.disabled = false;
+      $('#stock-import-body .dlg-body').insertAdjacentHTML('afterbegin', `<p class="err-box" style="margin:0 0 12px">${esc(ex.message)}</p>`);
+    }
+  });
+
+  /* CSV (aktuelle Auswahl) */
+  function stockCSV() {
+    const res = stockResult(stockQ);
+    const q = (v) => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const n2 = (v) => (v == null || !Number.isFinite(v) ? '' : fmtKg.format(v).replace(/\./g, ''));
+    const lines = [['Art.-Nr.', 'Bezeichnung', `VK KW ${model.meta.week || ''}`, 'Kg verfügbar', 'Kürz. MHD', 'Kg kürz. MHD', 'Warengruppe', `Bestand vom`].join(';')];
+    for (const a of res.list) lines.push([a.code, a.name, a.price && a.price.status === 'value' ? fmtNum.format(a.price.value).replace(/\./g, '') : a.price && a.price.status === 'request' ? 'a. Anfr.' : '', n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const el = document.createElement('a');
+    el.href = URL.createObjectURL(blob);
+    el.download = `Bestand_${stock.date || isoToday()}${isMhdQuery(stockQ) ? '_MHD' : stockQ ? '_Auswahl' : ''}.csv`;
+    document.body.appendChild(el); el.click(); el.remove();
+    setTimeout(() => URL.revokeObjectURL(el.href), 2000);
+  }
+  /* Druck / PDF (DIN A4) */
+  function printStock() {
+    const res = stockResult(stockQ);
+    const w = window.open('', '_blank');
+    if (!w) { toast('Druckfenster wurde blockiert – bitte Pop-ups für diese Seite erlauben.'); return; }
+    const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}`;
+    w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+      @page { size: A4; margin: 12mm 10mm; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font: 9.5pt/1.3 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
+      h1 { font-size: 13pt; margin: 0 0 2px; } .meta { color: #666; font-size: 8.5pt; margin: 0 0 8px; }
+      table { width: 100%; border-collapse: collapse; } th, td { padding: 2.5px 5px; border-bottom: .5pt solid #ddd; }
+      th { font-size: 8pt; text-align: center; vertical-align: bottom; border-bottom: 1pt solid #999; }
+      td.s-name { white-space: nowrap; } .s-code { width: 44px; } .s-vk, .s-kg, .s-mkg { text-align: right; white-space: nowrap; } .s-mhd { text-align: center; white-space: nowrap; }
+      .s-mkg { font-weight: 700; } thead { display: table-header-group; } tr { break-inside: avoid; }
+      .wg-h td { font-weight: 700; padding-top: 8px; border-bottom: 1pt solid #999; } .wg-sum td, .st-total td { font-weight: 700; background: #f3f1ee; }
+      .wg-gap td { border: 0; height: 6px; padding: 0; } .st-total td { border-top: 1.5pt solid #333; }
+      .mhd-past { color: #3a3a3a; } .mhd-0-4 { color: #c0161c; } .mhd-5-7 { color: #c25400; } .mhd-8-14 { color: #e08a1e; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
+    </style></head><body><h1>${esc(company ? company + ' · ' : '')}${esc(title)}</h1>
+      <p class="meta">${fmtInt.format(res.list.length)} Artikel · nur eingelagerte Ware · VK = Entwurf KW ${esc(model.meta.week || '?')}/${esc(model.meta.year || '')} · gedruckt ${esc(dateTime(new Date().toISOString()))} · intern – nicht zur Weitergabe</p>
+      ${stockTableHTML(res).replace(/ tabindex="0"/g, '')}
+      <script>window.onload = function () { setTimeout(function () { window.print(); }, 150); };<\/script></body></html>`);
+    w.document.close();
+  }
+
   /* ======================= Nutzerverwaltung (Administrator) ======================= */
   let users = null;
   const ROLE_DESC = {
@@ -1548,11 +1838,12 @@
     ['offer', 'Angebot bearbeitet / importiert'],
     ['publish', 'Veröffentlichungen'],
     ['history', 'Preisverlauf'],
+    ['stock', 'Bestand'],
     ['auth', 'Anmeldungen'],
     ['user', 'Nutzerverwaltung'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user' }[a] || '');
-  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', stock: 'stock', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user' }[a] || '');
+  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price') p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }

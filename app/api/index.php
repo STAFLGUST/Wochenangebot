@@ -18,6 +18,8 @@
  *   POST ?action=change_password
  *   GET  ?action=history_list | history_data   Preisverlauf (Wochen-Stände)
  *   POST ?action=history_import | history_delete
+ *   GET  ?action=stock            Bestand (Mengen, MHD) – nur angemeldet, nie öffentlich
+ *   POST ?action=stock_import     Bestandsliste übernehmen (Bearbeiter)
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
  *   POST ?action=user_save | user_delete
  *
@@ -564,11 +566,56 @@ function clean_history_items($items): array
     return $out;
 }
 
+/* ---------------- Bestand ---------------- */
+
+function clean_date($v): ?string
+{
+    if (!is_string($v) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m)) return null;
+    return checkdate((int)$m[2], (int)$m[3], (int)$m[1]) && (int)$m[1] >= 2000 && (int)$m[1] <= 2100 ? $v : null;
+}
+function clean_kg($v, string $where): float
+{
+    if (!is_int($v) && !is_float($v)) throw new InvalidArgumentException("Menge fehlt ($where).");
+    $v = (float)$v;
+    if (!is_finite($v) || abs($v) > 10000000) throw new InvalidArgumentException("Menge außerhalb des gültigen Bereichs ($where).");
+    return round($v, 3);
+}
+function clean_stock($b): array
+{
+    $src = is_array($b['articles'] ?? null) ? $b['articles'] : [];
+    if (!$src) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
+    if (count($src) > 20000) throw new InvalidArgumentException('Zu viele Artikel in der Bestandsliste.');
+    $out = [];
+    $seen = [];
+    foreach ($src as $a) {
+        if (!is_array($a)) continue;
+        $code = s($a['code'] ?? null, 20, false);
+        if ($code === null || !preg_match('#^[0-9A-Za-z./-]+$#', $code)) throw new InvalidArgumentException('Ungültige Artikelnummer in der Bestandsliste.');
+        $key = ctype_digit($code) ? (ltrim($code, '0') === '' ? '0' : ltrim($code, '0')) : strtoupper($code);
+        if (isset($seen[$key])) throw new InvalidArgumentException("Artikelnummer $code kommt in der Bestandsliste doppelt vor.");
+        $seen[$key] = true;
+        $lots = [];
+        foreach (array_slice(is_array($a['lots'] ?? null) ? $a['lots'] : [], 0, 500) as $l) {
+            if (!is_array($l)) continue;
+            $kolli = $l['kolli'] ?? null;
+            $lots[] = ['lot' => s($l['lot'] ?? '', 20) ?? '', 'arrival' => clean_date($l['arrival'] ?? null), 'mhd' => clean_date($l['mhd'] ?? null),
+                       'kolli' => (is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000 ? round((float)$kolli, 2) : null, 'kg' => clean_kg($l['kg'] ?? null, $code)];
+        }
+        $kg = clean_kg($a['kg'] ?? null, $code);
+        if ($kg <= 0) continue;
+        $mhd = clean_date($a['mhd'] ?? null);
+        $out[] = ['code' => $code, 'name' => s($a['name'] ?? '', 200) ?: '(ohne Bezeichnung)', 'kg' => $kg, 'mhd' => $mhd,
+                  'mhdKg' => $mhd !== null && isset($a['mhdKg']) ? clean_kg($a['mhdKg'], $code) : null, 'lots' => $lots];
+    }
+    if (!$out) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
+    return $out;
+}
+
 /* ---------------- Aktionen ---------------- */
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete'];
+$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -682,6 +729,25 @@ try {
             $GLOBALS['ME'] = $u;
             audit('password', 'Eigenes Passwort geändert');
             respond(['ok' => true, 'user' => me_payload($u)]);
+        }
+
+        case 'stock': {
+            require_auth();
+            header('Cache-Control: no-store');
+            respond(['ok' => true, 'stock' => store_read('bestand')]);
+        }
+
+        case 'stock_import': {
+            $me = require_auth(true, 'editor');
+            $b = body();
+            $articles = clean_stock($b);
+            $date = clean_date($b['date'] ?? null);
+            $total = 0.0;
+            foreach ($articles as $a) $total += $a['kg'];
+            $st = ['date' => $date, 'source' => s($b['source'] ?? '', 200) ?? '', 'importedAt' => now(), 'importedBy' => $me['name'], 'articles' => $articles];
+            store_write('bestand', $st);
+            audit('stock', 'Bestand übernommen: ' . ($st['source'] ?: 'Datei') . ($date ? ' – Stand ' . date('d.m.Y', strtotime($date)) : '') . ', ' . count($articles) . ' Artikel, ' . number_format($total, 2, ',', '.') . ' kg eingelagert');
+            respond(['ok' => true, 'stock' => $st]);
         }
 
         case 'users': {

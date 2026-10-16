@@ -57,11 +57,12 @@ let DATA, PUBLISHED_AT = null;
 function prepare(raw) {
   const items = raw.items.map((it) => {
     const o = { ...it };
-    const groupTerms = String(it.group || '').replace(/auf anfrage|\b(frisch|gefroren|gefr\.?|tk)\b/gi, ' ');
     const p = it.price;
     const priceTerms = [p, ...it.altPrices].map((x) => x.status === 'value' ? fmtNum.format(x.value) : x.status === 'request' ? 'auf anfrage' : 'ohne preis').join(' ');
+    /* Suche nur über Nummer, Bezeichnung und echte Artikelmerkmale – nicht über Gruppennamen,
+       damit z. B. „Roastbeef“ keine anderen Teilstücke aus der Gruppe „Roastbeef am Knochen“ zeigt */
     o._hay = fold([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
-      COND_LABEL[it.condition], SYN_COND[it.condition], it.features.join(' '), it.brand, groupTerms, it.cut, priceTerms]
+      COND_LABEL[it.condition], SYN_COND[it.condition], it.features.join(' '), it.brand, priceTerms]
       .filter(Boolean).join(' ¦ '));
     o._cmp = it.category + '|' + it.cut;
     return o;
