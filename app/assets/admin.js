@@ -1034,13 +1034,8 @@
     if (!hist) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Preisverlauf wird geladen …</div>';
     try { await loadHistory(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const H = hist;
-    const chips = H.weeks.map((w) => `<span class="wchip" title="${esc((w.origin || '') + (w.source ? ' · ' + w.source : ''))}">${esc(wkLabel(w))}${w.origin === 'Import' ? '' : '<i title="aus Veröffentlichung"></i>'}<button type="button" data-hdel="${esc(w.id)}" aria-label="${esc(wkLong(w))} aus dem Preisverlauf entfernen">${icon('x', 'sm')}</button></span>`).join('');
     host.innerHTML = `
-      <section class="hist-head">
-        <div class="hist-weeks"><span class="hist-lbl">${plural(H.weeks.length, 'Woche', 'Wochen')} im Verlauf</span>${chips || '<span class="muted">noch keine</span>'}</div>
-        <button type="button" class="btn primary" id="hist-upload">${icon('upload')}Alte Angebote hochladen</button>
-      </section>
-      ${H.weeks.length < 2 ? `<p class="notice" style="margin:14px 0 0">Für einen Verlauf werden mindestens zwei Wochen benötigt. Laden Sie frühere Angebotslisten hoch – mehrere Dateien auf einmal sind möglich. Jede Veröffentlichung wird ab jetzt automatisch übernommen.</p>` : ''}
+      ${H.weeks.length < 2 ? `<div class="notice hist-empty"><p>Für einen Verlauf werden mindestens zwei Wochen benötigt. Laden Sie frühere Angebotslisten hoch – mehrere Dateien auf einmal sind möglich. Jede Veröffentlichung wird ab jetzt automatisch übernommen.</p><button type="button" class="btn primary" id="hist-upload">${icon('upload')}Alte Angebote hochladen</button></div>` : ''}
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="hist-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Gruppe …" aria-label="Artikel im Preisverlauf suchen" value="${esc(histQ)}"></div>
         ${rangeSeg()}
@@ -1051,6 +1046,8 @@
         <span class="ed-hint" id="hist-count"></span>
       </div>
       <div id="hist-list"></div>`;
+    $('#hist-data span').innerHTML = `Daten<em> · ${esc(plural(H.weeks.length, 'Woche', 'Wochen'))}</em>`;
+    if (dlgHD.open) renderHistData();
     renderHistList();
   }
   function renderHistList() {
@@ -1111,17 +1108,49 @@
       renderHistList();
       return;
     }
-    const del = e.target.closest('[data-hdel]');
-    if (del) {
-      const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
-      if (!(await confirmBox('Woche entfernen?', `${esc(wkLong(w))} wird aus dem Preisverlauf entfernt. Die Excel-Datei kann jederzeit erneut hochgeladen werden.`, 'Entfernen', true))) return;
-      try { await api('history_delete', { body: { id: w.id } }); await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
-      return;
-    }
     const tr = e.target.closest('tr[data-skey]');
     if (tr) openSeries(tr.dataset.skey);
   });
   $('#view-hist').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-skey]')) openSeries(e.target.dataset.skey); });
+
+  /* ---------- Daten: gespeicherte Wochen verwalten ---------- */
+  const dlgHD = $('#dlg-hist-data');
+  const dShort = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
+  const savedShort = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+  function renderHistData() {
+    const H = hist;
+    const rows = H.weeks.slice().reverse().map((w) => {
+      const r = C.isoWeekRange(w.week, w.year);
+      const items = w.items || [];
+      const priced = items.filter((it) => it.price && it.price.status === 'value').length;
+      const pub = w.origin !== 'Import';
+      return `<tr>
+        <td class="hd-wk">${esc(wkLong(w))}</td>
+        <td class="hd-range">${esc(dShort(r.start))}–${esc(dShort(r.end))}</td>
+        <td class="num">${fmtInt.format(items.length)}</td>
+        <td class="num hd-priced">${fmtInt.format(priced)}</td>
+        <td class="hd-src"><span class="hd-orig${pub ? ' pub' : ''}">${pub ? 'Veröffentlichung' : 'Import'}</span>${w.source ? `<div class="sub" title="${esc(w.source)}">${esc(w.source)}</div>` : ''}</td>
+        <td class="hd-saved" title="${esc(dateTime(w.savedAt))}">${esc(savedShort(w.savedAt))}</td>
+        <td class="hd-act"><button type="button" class="btn icon ghost sm" data-hdel="${esc(w.id)}" aria-label="${esc(wkLong(w))} aus dem Preisverlauf entfernen" title="Woche entfernen">${icon('trash')}</button></td>
+      </tr>`;
+    }).join('');
+    const first = H.weeks[0], last = H.weeks[H.weeks.length - 1];
+    $('#hist-data-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="hd-title">Daten im Preisverlauf</h2><p>${H.weeks.length ? `${plural(H.weeks.length, 'Woche', 'Wochen')} · ${esc(wkLong(first))} – ${esc(wkLong(last))}. Jede Veröffentlichung wird automatisch übernommen; eine erneut hochgeladene Woche ersetzt die vorhandene.` : 'Noch keine Wochen gespeichert.'}</p></div>
+        <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">${H.weeks.length ? `<table class="etab hdtab"><thead><tr><th>Woche</th><th class="hd-range">Zeitraum</th><th class="num">Artikel</th><th class="num hd-priced">mit Preis</th><th class="hd-src">Herkunft</th><th class="hd-saved">Gespeichert</th><th class="hd-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table>` : ''}</div>
+      <div class="dlg-foot"><button type="button" class="btn" data-hd="upload">${icon('upload')}Alte Angebote hochladen</button><span class="spacer"></span><button type="button" class="btn" data-close>Schließen</button></div>`;
+  }
+  $('#hist-data').addEventListener('click', () => { if (!hist) return; renderHistData(); dlgHD.showModal(); });
+  dlgHD.addEventListener('click', async (e) => {
+    if (e.target === dlgHD || e.target.closest('[data-close]')) { dlgHD.close(); return; }
+    if (e.target.closest('[data-hd="upload"]')) { dlgHD.close(); $('#hist-file-input').click(); return; }
+    const del = e.target.closest('[data-hdel]');
+    if (!del) return;
+    const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
+    if (!w || !(await confirmBox('Woche entfernen?', `${esc(wkLong(w))} wird aus dem Preisverlauf entfernt. Die Excel-Datei kann jederzeit erneut hochgeladen werden.`, 'Entfernen', true))) return;
+    try { await api('history_delete', { body: { id: w.id } }); await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
+  });
 
   /* ---------- Detail: Diagramm + Wochentabelle ---------- */
   const dlgSeries = $('#dlg-series');
