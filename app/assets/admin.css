@@ -393,3 +393,52 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .stab th .sort-btn:focus-visible { box-shadow: var(--focus); }
 .stab th .sort-btn.on { color: var(--accent); }
 .stab th .sort-ind { display: inline-block; width: 0; margin-left: 2px; font-size: 9px; vertical-align: 1px; overflow: visible; white-space: nowrap; }
+
+/* ---------- Angebot: Vorwoche, Bestand, Bestand ohne Preis ---------- */
+.etab .e-prev { width: 92px; text-align: right; white-space: nowrap; }
+.etab td.e-prev { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 13.5px; padding-right: 10px; }
+.etab td.e-prev.none, .etab td.e-stock.none { color: var(--muted); }
+.etab .e-stock { width: 104px; text-align: right; white-space: nowrap; }
+.etab td.e-stock { font-variant-numeric: tabular-nums; font-size: 13.5px; padding-right: 8px; }
+.etab th.e-prev, .etab th.e-stock, .etab th.e-price { text-align: right; line-height: 1.2; }
+.etab th small { display: block; font-weight: 500; font-size: 10.5px; color: var(--muted); letter-spacing: 0; }
+.pdelta { display: block; font-size: 11px; font-weight: 600; line-height: 1.1; }
+.pdelta.up { color: var(--accent); } .pdelta.down { color: var(--c-fresh); }
+.mhd-dot { display: inline-block !important; width: 9px; height: 9px; padding: 0 !important; border-radius: 50% !important; margin-right: 6px; vertical-align: 0; }
+#groups.no-stock .e-stock, #groups.no-prev .e-prev { display: none; }
+#noprice-panel { margin: 0 0 16px; }
+.np-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
+.np-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 16px; cursor: pointer; }
+.np-head:focus-visible { box-shadow: var(--focus); }
+.np-title { font-weight: 700; display: inline-flex; align-items: center; gap: 8px; }
+.np-badge { background: var(--accent); color: var(--accent-ink); border-radius: 999px; font-size: 12px; padding: 1px 8px; font-weight: 700; }
+.np-sub { color: var(--muted); font-size: 12.5px; flex: 1; }
+.np-chev { transition: transform .15s; color: var(--muted); }
+.np-card.open .np-chev { transform: rotate(180deg); }
+.np-body { max-height: 420px; overflow: auto; border-top: 1px solid var(--line); }
+.nptab th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.nptab td { padding: 6px 8px; font-size: 13.5px; }
+.nptab .np-code { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); width: 80px; }
+.nptab th.np-code { font-family: inherit; font-size: 11.5px; color: var(--muted); }
+.nptab .np-wg { color: var(--text-2); white-space: nowrap; }
+.nptab .np-kg, .nptab .np-prev { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nptab td.np-kg { font-weight: 600; }
+.nptab .np-mhd { text-align: center; white-space: nowrap; }
+.nptab .np-act { text-align: right; white-space: nowrap; width: 1%; }
+.nptab tfoot td { font-size: 12.5px; padding: 8px; }
+.np-empty { margin: 0; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 13.5px; }
+@media (max-width: 1100px) { .nptab .np-wg { display: none; } }
+@media (max-width: 860px) { .etab .e-prev { width: 76px; } .etab .e-stock { width: 88px; } }
+@media (max-width: 560px) {
+  .etab .e-prev { display: none; }
+  #groups .etab { table-layout: fixed; }
+  #groups .etab .e-code { width: 62px; }
+  #groups .etab .e-price { width: 84px; }
+  #groups .etab .e-act { width: 32px; }
+  #groups .etab .in { min-width: 0; width: 100%; text-overflow: ellipsis; }
+  #groups .etab .e-stock { width: 62px; padding-right: 4px; }
+  #groups .etab td.e-stock { font-size: 12px; }
+  #groups .etab .e-stock .mhd-dot { margin-right: 3px; width: 7px; height: 7px; }
+  .nptab .np-prev, .nptab .np-mhd { display: none; }
+  .nptab .np-code { width: auto; }
+}

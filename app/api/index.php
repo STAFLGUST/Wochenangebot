@@ -17,6 +17,7 @@
  *   GET  ?action=version&id=…     eine frühere Veröffentlichung
  *   POST ?action=change_password
  *   GET  ?action=history_list | history_data   Preisverlauf (Wochen-Stände)
+ *   GET  ?action=history_prev&week=&year=      Preise der Vorwoche (jüngste gespeicherte Woche davor)
  *   POST ?action=history_import | history_delete
  *   GET  ?action=stock            Bestand (Mengen, MHD) – nur angemeldet, nie öffentlich
  *   POST ?action=stock_import     Bestandsliste übernehmen (Bearbeiter)
@@ -962,6 +963,25 @@ try {
                 if ($h) { $h['id'] = $id; $weeks[] = $h; }
             }
             respond(['ok' => true, 'weeks' => $weeks]);
+        }
+
+        case 'history_prev': {
+            require_auth();
+            header('Cache-Control: no-store');
+            history_backfill();
+            $w = (int)($_GET['week'] ?? 0);
+            $y = (int)($_GET['year'] ?? 0);
+            if ($w < 1 || $w > 53 || $y < 2000 || $y > 2100) respond(['ok' => true, 'week' => null]);
+            $cur = history_id($w, $y);
+            $prev = null;
+            foreach (history_ids() as $id) if (strcmp($id, $cur) < 0) $prev = $id;   // jüngste Woche vor der Angebotswoche
+            $h = $prev ? store_read('historie/' . $prev) : null;
+            if ($h) {
+                $items = [];
+                foreach (($h['items'] ?? []) as $it) $items[] = ['code' => $it['code'] ?? null, 'name' => $it['name'] ?? '', 'price' => $it['price'] ?? ['status' => 'none']];
+                $h = ['id' => $prev, 'week' => $h['week'], 'year' => $h['year'], 'items' => $items];
+            }
+            respond(['ok' => true, 'week' => $h]);
         }
 
         case 'history_import': {

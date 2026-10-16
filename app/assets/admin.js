@@ -226,6 +226,7 @@
     applyRole();
     renderAll();
     setSaveState(d.draft ? 'saved' : 'clean');
+    loadAux();
     if (currentView !== 'edit') setView(currentView);
   }
 
@@ -248,6 +249,8 @@
     if (ro) return;
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
+    renderNoPrice();
+    if (prevKey !== `${model.meta.year}-${model.meta.week}`) loadPrev().then(refreshAux, () => {});
     renderChanges();
     renderMetaInfo();
     updatePublishBtn();
@@ -311,6 +314,7 @@
     renderMeta();
     diff = C.diffOffers(published, model);
     renderGroups();
+    renderNoPrice();
     renderChanges();
     updatePublishBtn();
   }
@@ -389,7 +393,9 @@
       <td class="e-cat"><select class="in" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select></td>
       <td class="e-origin"><input class="in" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="nicht angegeben" aria-label="Herkunft" maxlength="60"></td>
       <td class="e-cond"><select class="in" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select></td>
+      ${prevCellHTML(it)}
       <td class="e-price">${label}<input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${was}${alts}</td>
+      ${stockCellHTML(it)}
       <td class="e-act"><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, löschen">${icon('dots')}</button></td>
     </tr>`;
   }
@@ -434,12 +440,14 @@
           </span>
         </div>
         <table class="etab"><thead><tr>
-          <th class="e-code">Art.-Nr.</th><th class="e-name">Bezeichnung</th><th class="e-cat">Fleischart</th><th class="e-origin">Herkunft</th><th class="e-cond">Zustand</th><th class="e-price" style="text-align:right">Preis €/kg</th><th class="e-act"><span class="sr-only">Aktionen</span></th>
+          <th class="e-code">Art.-Nr.</th><th class="e-name">Bezeichnung</th><th class="e-cat">Fleischart</th><th class="e-origin">Herkunft</th><th class="e-cond">Zustand</th>${auxHeadHTML()}<th class="e-act"><span class="sr-only">Aktionen</span></th>
         </tr></thead><tbody>${items.map(rowHTML).join('')}</tbody></table>
         <div class="gfoot"><button type="button" class="btn ghost" data-act="add-item">${icon('plus')}Artikel hinzufügen</button></div>
       </section>`;
     });
     host.innerHTML = out;
+    host.classList.toggle('no-stock', !stock);
+    host.classList.toggle('no-prev', !prevWeek);
     lockInputs(host);
   }
 
@@ -588,6 +596,7 @@
   let qTimer;
   $('#ed-q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { filterQ = e.target.value.trim(); renderGroups(); }, 120); });
   $('#only-changes').addEventListener('change', (e) => { onlyChanges = e.target.checked; renderGroups(); });
+  $('#ed-q').addEventListener('input', () => setTimeout(renderNoPrice, 150));
 
   /* ======================= Artikel-Dialog ======================= */
   const dlgItem = $('#dlg-item');
@@ -1103,6 +1112,7 @@
     }
     document.body.classList.toggle('in-hist', v === 'hist');
     document.body.classList.toggle('in-other', v !== 'edit');
+    if (v === 'edit' && model) loadAux();
     if (v === 'hist') renderHistView();
     if (v === 'stock') renderStockView();
     if (v === 'users') renderUsersView();
@@ -1230,7 +1240,7 @@
     if (!del || ro) return;
     const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
     if (!w || !(await confirmBox('Woche entfernen?', `${esc(wkLong(w))} wird aus dem Preisverlauf entfernt. Die Excel-Datei kann jederzeit erneut hochgeladen werden.`, 'Entfernen', true))) return;
-    try { await api('history_delete', { body: { id: w.id } }); await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
+    try { await api('history_delete', { body: { id: w.id } }); prevKey = ''; await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
   });
 
   /* ---------- Detail: Diagramm + Wochentabelle ---------- */
@@ -1434,6 +1444,7 @@
       try { await api('history_import', { body: { week: en.week, year: en.year, source: en.file.name, items: en.items } }); en.status = 'gespeichert'; done++; }
       catch (ex) { en.status = 'fehler'; en.error = ex.message; failed++; }
     }
+    prevKey = '';
     try { await loadHistory(true); } catch { /* ignore */ }
     renderHistImport();
     $('#hi-progress').textContent = `${plural(done, 'Woche', 'Wochen')} übernommen${failed ? `, ${failed} fehlgeschlagen` : ''}.`;
@@ -1708,7 +1719,8 @@
     btn.disabled = true;
     try {
       const r = await api('stock_import', { body: { date, source: stockPending.source, articles: stockPending.articles } });
-      stock = r.stock; stockLoaded = true; stockPending = null;
+      stock = r.stock; stockLoaded = true; stockPending = null; stockIdxFor = null;
+      refreshAux();
       dlgSI.close();
       toast(`Bestand vom ${dmy(date)} übernommen: ${plural(stock.articles.length, 'Artikel', 'Artikel')}.`, 5000);
       if (currentView === 'stock') renderStockView(); else setView('stock');
@@ -1756,6 +1768,199 @@
       <script>window.onload = function () { setTimeout(function () { window.print(); }, 150); };<\/script></body></html>`);
     w.document.close();
   }
+
+  /* ======================= Angebot: Vorwoche, Bestand, Bestand ohne Preis ======================= */
+  let prevWeek = null, prevKey = '', prevMap = new Map();
+  let stockIdx = new Map(), stockIdxFor = null;
+  async function loadPrev() {
+    if (!model) return;
+    const key = `${model.meta.year}-${model.meta.week}`;
+    if (key === prevKey) return;
+    prevKey = key;
+    const r = await api('history_prev', { query: `&week=${encodeURIComponent(model.meta.week || '')}&year=${encodeURIComponent(model.meta.year || '')}` });
+    if (prevKey !== key) return;
+    prevWeek = r.week;
+    prevMap = new Map();
+    for (const it of (prevWeek ? prevWeek.items : [])) {
+      if (!it.code) continue;
+      const k = S.normCode(it.code);
+      if (!prevMap.has(k)) prevMap.set(k, []);
+      prevMap.get(k).push(it);
+    }
+  }
+  async function loadAux() {
+    await Promise.all([loadStock().catch(() => {}), loadPrev().catch(() => {})]);
+    refreshAux();
+  }
+  function stockOf(code) {
+    if (!stock || !code) return null;
+    if (stockIdxFor !== stock) { stockIdx = new Map(stock.articles.map((a) => [S.normCode(a.code), a])); stockIdxFor = stock; }
+    return stockIdx.get(S.normCode(code)) || null;
+  }
+  function prevOf(it) {
+    const list = it.code ? prevMap.get(S.normCode(it.code)) : null;
+    if (!list || !list.length) return null;
+    const n = fold(it.name);
+    return list.find((x) => fold(x.name) === n) || list.find((x) => x.price && x.price.status === 'value') || list[0];
+  }
+  const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${String(prevWeek.year).slice(2)}` : '');
+  function auxHeadHTML() {
+    return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche<small>${esc(prevLabel())}</small></th>`
+      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}</small></th>`
+      + `<th class="e-stock" title="Verfügbarer Bestand (eingelagert)${stock && stock.date ? ' · Stand ' + esc(dmy(stock.date)) : ''}">Bestand kg<small>${stock && stock.date ? 'Stand ' + esc(mhdShort(stock.date)) : ''}</small></th>`;
+  }
+  function prevCellHTML(it) {
+    const p = prevOf(it);
+    const t = !p ? '—' : p.price.status === 'value' ? fmtNum.format(p.price.value) : p.price.status === 'request' ? 'a. Anfr.' : '—';
+    const cur = it.price, pv = p && p.price.status === 'value' ? p.price.value : null;
+    const d = pv != null && cur.status === 'value' ? Math.round((cur.value - pv) * 1000) / 1000 : null;
+    const delta = d ? `<span class="pdelta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : '−'}${fmtNum.format(Math.abs(d))}</span>` : '';
+    return `<td class="e-prev${p ? '' : ' none'}" title="${p ? esc(`Preis ${prevLabel()}: ${priceShort(p.price)}`) : 'In der Vorwoche nicht im Angebot'}">${esc(t)}${delta}</td>`;
+  }
+  function stockCellHTML(it) {
+    const a = stockOf(it.code);
+    if (!a) return `<td class="e-stock none" title="${it.code ? 'Kein eingelagerter Bestand' : 'Ohne Artikelnummer kein Bestandsabgleich'}">—</td>`;
+    const cls = mhdClass(a.mhd);
+    return `<td class="e-stock" title="${esc(`${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`)}">${cls ? `<span class="mhd-dot ${cls}" aria-label="MHD ${esc(mhdShort(a.mhd))}"></span>` : ''}${esc(fmtKg.format(a.kg))}</td>`;
+  }
+  /* Spalten nach dem Laden von Bestand/Vorwoche aktualisieren, ohne Eingabefelder neu zu zeichnen */
+  function refreshAux() {
+    if (!model) return;
+    const host = $('#groups');
+    host.classList.toggle('no-stock', !stock);
+    host.classList.toggle('no-prev', !prevWeek);
+    for (const tr of $$('thead tr', host)) {
+      $$('th.e-prev, th.e-price, th.e-stock', tr).forEach((th) => th.remove());
+      const tmp = document.createElement('tr');
+      tmp.innerHTML = auxHeadHTML();
+      tr.querySelector('th.e-act').before(...tmp.children);
+    }
+    for (const tr of $$('tr[data-id]', host)) {
+      const it = iById(tr.dataset.id);
+      if (!it) continue;
+      const tmp = document.createElement('tr');
+      tmp.innerHTML = prevCellHTML(it) + stockCellHTML(it);
+      const [pc, sc] = [...tmp.children];
+      tr.querySelector('td.e-prev').replaceWith(pc);
+      tr.querySelector('td.e-stock').replaceWith(sc);
+    }
+    renderNoPrice();
+  }
+
+  /* Bestand ohne Preis: eingelagerte Artikel, die im Angebot keinen Preis haben */
+  let npOpen = store.get('npOpen', true);
+  function noPriceList() {
+    if (!stock || !model) return [];
+    const byCode = new Map();
+    for (const it of model.items) if (it.code) { const k = S.normCode(it.code); if (!byCode.has(k)) byCode.set(k, []); byCode.get(k).push(it); }
+    const out = [];
+    for (const a of stock.articles) {
+      const items = byCode.get(S.normCode(a.code)) || [];
+      if (items.some((x) => x.price.status === 'value' || x.price.status === 'request')) continue;
+      out.push({ a, items, wg: S.warengruppe(a.code), cls: mhdClass(a.mhd) });
+    }
+    const rank = (x) => (x.cls ? 0 : 1);
+    return out.sort((x, y) => x.wg.order - y.wg.order || rank(x) - rank(y) || (rank(x) === 0 ? x.a.mhd.localeCompare(y.a.mhd) : 0) || x.a.code.localeCompare(y.a.code, 'de', { numeric: true }));
+  }
+  function renderNoPrice() {
+    const host = $('#noprice-panel');
+    if (!host) return;
+    if (!stock || !model) { host.hidden = true; return; }
+    const all = noPriceList();
+    const toks = fold(filterQ).split(/\s+/).filter(Boolean);
+    const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name); return toks.every((t) => h.includes(t)); }) : all;
+    host.hidden = false;
+    const kg = list.reduce((t, x) => t + x.a.kg, 0);
+    const rows = list.map((x) => {
+      const p = prevOf({ code: x.a.code, name: x.a.name });
+      const inOffer = x.items.length;
+      return `<tr data-npcode="${esc(x.a.code)}">
+        <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(x.a.name)}</td><td class="np-wg">${esc(x.wg.label)}</td>
+        <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
+        <td class="np-prev">${p && p.price.status === 'value' ? esc(fmtNum.format(p.price.value)) : p && p.price.status === 'request' ? 'a. Anfr.' : '—'}</td>
+        <td class="np-act">${ro ? (inOffer ? '<span class="muted">im Angebot ohne Preis</span>' : '') : inOffer
+          ? '<button type="button" class="btn sm" data-np="goto">Preis eintragen</button>'
+          : `<button type="button" class="btn sm" data-np="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
+      </tr>`;
+    }).join('');
+    host.innerHTML = `<div class="np-card${npOpen ? ' open' : ''}">
+      <button type="button" class="np-head" data-np="toggle" aria-expanded="${npOpen}">
+        <span class="np-title">Bestand ohne Preis <span class="np-badge">${fmtInt.format(all.length)}</span></span>
+        <span class="np-sub">Eingelagert, aber im Angebot KW ${esc(model.meta.week || '?')} ohne Preis · ${esc(kgText(all.reduce((t, x) => t + x.a.kg, 0)))} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</span>
+        ${icon('chev', 'np-chev')}
+      </button>
+      ${npOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-wg">Warengruppe</th><th class="np-kg">Kg verfüg.</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev" title="Preis ${esc(prevLabel())}">Vorwoche</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody>
+          ${toks.length ? `<tfoot><tr><td colspan="7" class="muted">${plural(list.length, 'Treffer', 'Treffer')} zur Suche · ${esc(kgText(kg))}</td></tr></tfoot>` : ''}</table></div>`
+        : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Alle Artikel mit eingelagertem Bestand haben einen Preis.'}</p>`) : ''}
+    </div>`;
+  }
+  $('#noprice-panel').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-np]');
+    if (!b) return;
+    const act = b.dataset.np;
+    if (act === 'toggle') { npOpen = !npOpen; store.set('npOpen', npOpen); renderNoPrice(); return; }
+    const code = b.closest('tr[data-npcode]')?.dataset.npcode;
+    if (!code || ro) return;
+    if (act === 'goto') {
+      const it = model.items.find((x) => x.code && S.normCode(x.code) === S.normCode(code));
+      if (!it) return;
+      if (filterQ || onlyChanges) { filterQ = ''; onlyChanges = false; $('#ed-q').value = ''; $('#only-changes').checked = false; renderGroups(); }
+      const inp = $(`tr[data-id="${CSS.escape(it.id)}"] input[data-f="price"]`);
+      if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
+    }
+    if (act === 'add') openAddStock(code);
+  });
+
+  /* Artikel aus dem Bestand ins Angebot übernehmen */
+  const dlgAS = $('#dlg-add-stock');
+  let addCode = null;
+  function suggestGroup(code) {
+    const n = Number(code), wg = S.warengruppe(code).order;
+    let best = null, dist = Infinity;
+    for (const it of model.items) {
+      if (!it.code || !/^\d+$/.test(it.code) || S.warengruppe(it.code).order !== wg) continue;
+      const d = Math.abs(Number(it.code) - n);
+      if (d < dist) { dist = d; best = it.groupId; }
+    }
+    return best || (model.groups[0] && model.groups[0].id);
+  }
+  function openAddStock(code) {
+    const a = stockOf(code);
+    if (!a) return;
+    if (!model.groups.length) { toast('Bitte zuerst eine Angebotsgruppe anlegen.'); return; }
+    addCode = code;
+    const gsel = suggestGroup(code);
+    const p = prevOf({ code: a.code, name: a.name });
+    const cls = mhdClass(a.mhd);
+    $('#add-stock-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="as-title">Ins Angebot übernehmen</h2><p>Art.-Nr. ${esc(a.code)} · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span></p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body form-grid two">
+        <label class="fld span2"><span>Bezeichnung im Angebot</span><input name="name" value="${esc(a.name)}" maxlength="200" required></label>
+        <label class="fld"><span>Angebotsgruppe</span><select name="groupId">${model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === gsel ? ' selected' : ''}>${esc(g.name)}</option>`).join('')}</select></label>
+        <label class="fld"><span>Preis €/kg (KW ${esc(model.meta.week || '')})</span><input name="price" inputmode="decimal" placeholder="${p && p.price.status === 'value' ? 'Vorwoche ' + esc(fmtNum.format(p.price.value)) : 'z. B. 12,50'}"></label>
+        <p class="form-err span2" id="as-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('plus')}Übernehmen</button></div>`;
+    dlgAS.showModal();
+    $('#add-stock-body [name="price"]').focus();
+  }
+  $('#add-stock-body').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target, a = stockOf(addCode);
+    if (!a || ro) return;
+    const name = C.clean(f.elements.name.value);
+    if (!name) { $('#as-err').textContent = 'Bitte eine Bezeichnung angeben.'; return; }
+    const price = inputToPrice(f.elements.price.value.trim());
+    if (!price) { $('#as-err').textContent = 'Preis nicht lesbar – z. B. 12,50, „a. Anfr.“ oder leer.'; return; }
+    pushUndo();
+    const g = gById(f.elements.groupId.value);
+    const it = newItem(g.id);
+    Object.assign(it, C.suggestAttributes(name, g.name, g.section), { code: a.code, name, price });
+    dlgAS.close();
+    changed({ render: true });
+    toast(`„${name}“ in „${g.name}“ übernommen${price.status === 'value' ? ' – ' + priceShort(price) : ''}.`, 4500);
+  });
 
   /* ======================= Nutzerverwaltung (Administrator) ======================= */
   let users = null;
