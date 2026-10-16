@@ -16,6 +16,8 @@ foreach ($data['users'] as &$u) {
     $u['hash'] = password_hash($pw, PASSWORD_DEFAULT);
     $u['mustChange'] = true;
     $u['active'] = true;
+    unset($u['totp'], $u['totpLast'], $u['recovery']);   // Zwei-Faktor neu einrichten
+    $u['lockedUntil'] = 0; $u['failCount'] = 0;
     $u['sv'] = (int)($u['sv'] ?? 0) + 1;
     $u['changed'] = gmdate('Y-m-d\TH:i:s\Z');
     $found = true;
@@ -29,4 +31,4 @@ $tmp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
 file_put_contents($tmp, $guard . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
 @chown($tmp, 33); @chgrp($tmp, 33);
 rename($tmp, $file);
-echo "Passwort für \"$name\" wurde zurückgesetzt.";
+echo "Passwort für \"$name\" wurde zurückgesetzt, Zwei-Faktor-Anmeldung und Sperre aufgehoben.";

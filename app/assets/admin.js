@@ -75,7 +75,7 @@
     }
     let data = null;
     try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
-    if (res.status === 401 && !['login', 'setup', 'change_password'].includes(action)) {
+    if (res.status === 401 && !['login', 'login_2fa', 'setup', 'change_password'].includes(action)) {
       showAuth('expired');
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
@@ -121,31 +121,58 @@
   let ro = true;                                   // Nur-Ansicht
   let authMode = 'login';
   let loginPw = '';                                // nur für den Pflicht-Passwortwechsel direkt nach der Anmeldung
+  let authCtx = null;                              // { prevUser, expired } während einer laufenden Anmeldung
   function showAuth(mode) {
     authMode = mode;
     $('#screen-auth').hidden = false;
-    if (mode !== 'expired') $('#screen-editor').hidden = true;
-    const setup = mode === 'setup', newpw = mode === 'newpw';
+    if (mode !== 'expired' && !(authCtx && authCtx.expired)) $('#screen-editor').hidden = true;
+    const setup = mode === 'setup', newpw = mode === 'newpw', code = mode === 'code', tf = mode === 'twofa';
     $('#auth-intro').textContent = setup
       ? 'Ersteinrichtung: Legen Sie den ersten Administrator-Zugang an (Passwort mindestens 10 Zeichen). Weitere Nutzer legen Sie danach unter „Nutzer“ an.'
-      : newpw ? `Hallo ${me ? me.name : ''}, bitte legen Sie jetzt ein eigenes Passwort fest (mindestens 10 Zeichen).`
-        : mode === 'expired' ? 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden – Ihre Änderungen bleiben erhalten.'
-          : 'Bitte melden Sie sich mit Ihrem Benutzernamen an.';
-    $('#au-user-wrap').hidden = newpw;
-    $('#au-user').required = !newpw;
+      : newpw ? `Hallo ${me ? me.name : ''}, bitte legen Sie jetzt ein eigenes Passwort fest.`
+        : code ? 'Bitte den 6-stelligen Code aus Ihrer Authenticator-App eingeben – oder einen Ihrer Wiederherstellungscodes.'
+          : tf ? `Hallo ${me ? me.name : ''}, für Ihren Zugang ist die Zwei-Faktor-Anmeldung vorgeschrieben. Bitte richten Sie sie jetzt ein.`
+            : mode === 'expired' ? 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden – Ihre Änderungen bleiben erhalten.'
+              : 'Bitte melden Sie sich mit Ihrem Benutzernamen an.';
+    const hideUser = newpw || code || tf;
+    $('#au-user-wrap').hidden = hideUser;
+    $('#au-user').required = !hideUser;
     $('#au-name-wrap').hidden = !setup;
+    $('#pw1').closest('label').hidden = code || tf;
+    $('#pw1').required = !(code || tf);
     $('#pw2-wrap').hidden = !(setup || newpw);
+    $('#au-code-wrap').hidden = !code;
+    $('#au-code').required = code;
+    $('#auth-twofa').hidden = !tf;
+    $('#auth-submit').hidden = tf;
     $('#pw1-lbl').textContent = newpw ? 'Neues Passwort' : 'Passwort';
     $('#pw1').autocomplete = setup || newpw ? 'new-password' : 'current-password';
-    $('#auth-submit').textContent = setup ? 'Zugang anlegen' : newpw ? 'Passwort speichern' : 'Anmelden';
+    $('#auth-submit').textContent = setup ? 'Zugang anlegen' : newpw ? 'Passwort speichern' : code ? 'Bestätigen' : 'Anmelden';
     $('#auth-err').textContent = '';
-    $('#pw1').value = ''; $('#pw2').value = '';
+    $('#pw1').value = ''; $('#pw2').value = ''; $('#au-code').value = '';
     if (mode === 'expired' && me) $('#au-user').value = me.username;
-    $('#screen-auth').classList.toggle('overlay', mode === 'expired');
-    setTimeout(() => ((newpw || $('#au-user').value) ? $('#pw1') : $('#au-user')).focus(), 30);
+    $('#screen-auth').classList.toggle('overlay', mode === 'expired' || !!(authCtx && authCtx.expired));
+    if (tf) renderTwofaSetup($('#auth-twofa'), () => finishLogin());
+    setTimeout(() => (code ? $('#au-code') : (newpw || $('#au-user').value) ? $('#pw1') : $('#au-user')).focus(), 30);
+  }
+  async function afterLogin(r, pw) {
+    csrf = r.csrf;
+    me = r.user;
+    if (r.recoveryLeft != null) toast(`Mit Wiederherstellungscode angemeldet – noch ${r.recoveryLeft} Codes übrig. Bei Bedarf unter „Zwei-Faktor-Anmeldung“ neu einrichten.`, 8000);
+    if (me.mustChange) { loginPw = pw; showAuth('newpw'); return; }
+    if (me.needTwofa) { showAuth('twofa'); return; }
+    await finishLogin();
+  }
+  async function finishLogin() {
+    const ctx = authCtx || {};
+    authCtx = null;
+    $('#screen-auth').classList.remove('overlay');
+    if (ctx.expired && model && ctx.prevUser === me.id) { $('#screen-auth').hidden = true; $('#screen-editor').hidden = false; applyRole(); if (!ro) saveNow(); }
+    else await openEditor();
   }
   $('#auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (authMode === 'twofa') { $('#auth-twofa [data-tf="enable"]')?.click(); return; }
     const pw = $('#pw1').value;
     const err = $('#auth-err');
     err.textContent = '';
@@ -160,21 +187,107 @@
         loginPw = '';
         me = r.user;
         toast('Passwort gespeichert.');
-        await openEditor();
+        if (me.needTwofa) showAuth('twofa'); else await finishLogin();
         return;
       }
-      const prevUser = me && me.id;
+      if (authMode === 'code') {
+        const r = await api('login_2fa', { body: { code: $('#au-code').value.trim() } });
+        await afterLogin(r, loginPw);
+        return;
+      }
+      authCtx = { prevUser: me && me.id, expired: authMode === 'expired' };
       const r = await api(authMode === 'setup' ? 'setup' : 'login', { body: { username: $('#au-user').value.trim(), name: $('#au-name').value.trim(), password: pw } });
-      csrf = r.csrf;
-      me = r.user;
-      if (me.mustChange) { loginPw = pw; showAuth('newpw'); return; }
-      $('#screen-auth').classList.remove('overlay');
-      if (authMode === 'expired' && model && prevUser === me.id) { $('#screen-auth').hidden = true; $('#screen-editor').hidden = false; applyRole(); if (!ro) saveNow(); }
-      else await openEditor();
+      if (r.need2fa) { loginPw = pw; showAuth('code'); return; }
+      await afterLogin(r, pw);
     } catch (ex) {
       err.textContent = ex.message;
+      if (authMode === 'code' && /Anmeldung ist abgelaufen|erneut anmelden/i.test(ex.message)) setTimeout(() => showAuth(authCtx && authCtx.expired ? 'expired' : 'login'), 1800);
     } finally {
       $('#auth-submit').disabled = false;
+    }
+  });
+
+  /* Zwei-Faktor einrichten (Anmeldeschirm und Dialog) */
+  async function renderTwofaSetup(host, onDone) {
+    host.innerHTML = '<div class="loading"><div class="spinner"></div>Wird vorbereitet …</div>';
+    let r;
+    try { r = await api('twofa_begin', { body: {} }); } catch (ex) { host.innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; return; }
+    let svg = '';
+    try { const q = window.qrcode(0, 'M'); q.addData(r.uri); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch { svg = ''; }
+    host.innerHTML = `<div class="tf-setup">
+        <ol class="tf-steps"><li>Authenticator-App auf dem Handy öffnen (z. B. Microsoft Authenticator, Google Authenticator oder 2FAS) und diesen QR-Code scannen.</li><li>Den 6-stelligen Code aus der App hier eingeben.</li></ol>
+        <div class="tf-qr" aria-label="QR-Code für die Authenticator-App">${svg}</div>
+        <details class="tf-manual"><summary>QR-Code lässt sich nicht scannen?</summary><p>In der App „Schlüssel manuell eingeben“ wählen und diesen Schlüssel eintragen:</p><code class="tf-secret">${esc(r.secret.replace(/(.{4})/g, '$1 ').trim())}</code></details>
+        <label class="fld"><span>Code aus der App</span><input data-tf="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456"></label>
+        <p class="form-err" data-tf="err" role="alert"></p>
+        <button type="button" class="btn primary wide" data-tf="enable">Bestätigen und einschalten</button>
+      </div>`;
+    const input = host.querySelector('[data-tf="code"]');
+    setTimeout(() => input.focus(), 30);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); host.querySelector('[data-tf="enable"]').click(); } });
+    host.querySelector('[data-tf="enable"]').addEventListener('click', async (e) => {
+      const btn = e.currentTarget, er = host.querySelector('[data-tf="err"]');
+      er.textContent = '';
+      btn.disabled = true;
+      try {
+        const res = await api('twofa_enable', { body: { code: input.value.trim() } });
+        me = res.user;
+        showRecovery(host, res.recovery, onDone);
+      } catch (ex) { er.textContent = ex.message; btn.disabled = false; input.select(); }
+    });
+  }
+  function showRecovery(host, codes, onDone) {
+    const txt = `Wiederherstellungscodes – Wochenangebot ${company} (${me.username})\nJeder Code funktioniert genau einmal, falls das Handy nicht verfügbar ist.\n\n${codes.join('\n')}\n`;
+    host.innerHTML = `<div class="tf-setup">
+        <p class="tf-ok">${icon('check')} Zwei-Faktor-Anmeldung ist eingeschaltet.</p>
+        <p class="hint" style="margin:0">Bewahren Sie diese <strong>Wiederherstellungscodes</strong> sicher auf (ausdrucken oder im Passwort-Manager). Jeder Code funktioniert einmal, falls Ihr Handy nicht verfügbar ist. Sie werden nur jetzt angezeigt.</p>
+        <div class="tf-codes">${codes.map((c) => `<code>${esc(c)}</code>`).join('')}</div>
+        <div class="row-actions" style="justify-content:flex-start"><button type="button" class="btn sm" data-tf="copy">${icon('copy', 'sm')}Kopieren</button><button type="button" class="btn sm" data-tf="dl">${icon('download', 'sm')}Als Datei speichern</button></div>
+        <label class="check"><input type="checkbox" data-tf="ack"> Ich habe die Codes sicher aufbewahrt.</label>
+        <button type="button" class="btn primary wide" data-tf="done" disabled>Weiter</button>
+      </div>`;
+    host.querySelector('[data-tf="ack"]').addEventListener('change', (e) => { host.querySelector('[data-tf="done"]').disabled = !e.target.checked; });
+    host.querySelector('[data-tf="copy"]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(txt); toast('Codes kopiert.'); } catch { toast('Kopieren nicht möglich – bitte als Datei speichern.'); } });
+    host.querySelector('[data-tf="dl"]').addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([txt], { type: 'text/plain;charset=utf-8' }));
+      a.download = `Wiederherstellungscodes_${me.username}.txt`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    });
+    host.querySelector('[data-tf="done"]').addEventListener('click', () => onDone());
+  }
+  /* Menü: eigene Zwei-Faktor-Anmeldung verwalten */
+  function openTwofaDialog() {
+    const d = $('#dlg-twofa');
+    const head = `<div class="dlg-head"><div><h2 id="tf-title">Zwei-Faktor-Anmeldung</h2><p>Zusätzlich zum Passwort wird bei der Anmeldung ein Code aus einer Authenticator-App abgefragt.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
+    const done = () => { d.close(); toast('Zwei-Faktor-Anmeldung ist eingeschaltet.'); applyRole(); };
+    if (!me.twofa) {
+      $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host"></div>`;
+      d.showModal();
+      renderTwofaSetup($('#tf-host'), done);
+      return;
+    }
+    $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host">
+        <p class="tf-ok">${icon('check')} Eingeschaltet für <strong>${esc(me.username)}</strong>.</p>
+        ${me.twofaRequired ? '<p class="hint">Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben.</p>' : ''}
+        <div class="row-actions" style="justify-content:flex-start">
+          <button type="button" class="btn" data-tfd="renew">Neu einrichten (neues Handy / neue Codes)</button>
+          ${me.twofaRequired ? '' : '<button type="button" class="btn" data-tfd="off" style="color:var(--accent)">Ausschalten</button>'}
+        </div>
+        <div id="tf-off" hidden><label class="fld"><span>Zum Ausschalten Passwort eingeben</span><input type="password" id="tf-pw" autocomplete="current-password"></label><p class="form-err" id="tf-err"></p><button type="button" class="btn primary" data-tfd="off-go">Ausschalten</button></div>
+      </div>`;
+    d.showModal();
+  }
+  $('#dlg-twofa').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-tfd]');
+    if (!b) return;
+    const a = b.dataset.tfd;
+    if (a === 'renew') renderTwofaSetup($('#tf-host'), () => { $('#dlg-twofa').close(); toast('Zwei-Faktor-Anmeldung neu eingerichtet.'); });
+    if (a === 'off') { $('#tf-off').hidden = false; $('#tf-pw').focus(); }
+    if (a === 'off-go') {
+      try { const r = await api('twofa_disable', { body: { password: $('#tf-pw').value } }); me = r.user; $('#dlg-twofa').close(); toast('Zwei-Faktor-Anmeldung ausgeschaltet.'); }
+      catch (ex) { $('#tf-err').textContent = ex.message; }
     }
   });
 
@@ -185,8 +298,9 @@
     document.body.classList.toggle('is-admin', can('admin'));
     $('#vt-users').hidden = !can('admin');
     $('#vt-log').hidden = !can('admin');
+    $('#vt-sec').hidden = !can('admin');
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
-    if (!can('admin') && (currentView === 'users' || currentView === 'log')) setView('edit');
+    if (!can('admin') && (currentView === 'users' || currentView === 'log' || currentView === 'sec')) setView('edit');
   }
   /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
   function lockInputs(root) {
@@ -945,6 +1059,7 @@
     setMenu(false);
     if (a === 'versions') openVersions();
     if (a === 'open-site') window.open('../', '_blank', 'noopener');
+    if (a === 'twofa') openTwofaDialog();
     if (a === 'password') { $('#pw-form').reset(); $('#pw-err').textContent = ''; $('#dlg-password').showModal(); }
     if (a === 'theme') {
       const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -1123,9 +1238,9 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['edit', 'hist', 'stock', 'master', 'users', 'log'];
+  const VIEWS = ['edit', 'hist', 'stock', 'master', 'users', 'log', 'sec'];
   function setView(v) {
-    if ((v === 'users' || v === 'log') && !can('admin')) v = 'edit';
+    if ((v === 'users' || v === 'log' || v === 'sec') && !can('admin')) v = 'edit';
     currentView = v;
     for (const k of VIEWS) {
       $('#vt-' + k).setAttribute('aria-selected', k === v);
@@ -1139,6 +1254,7 @@
     if (v === 'master') renderMasterView();
     if (v === 'users') renderUsersView();
     if (v === 'log') renderLogView();
+    if (v === 'sec') renderSecView();
   }
   for (const k of VIEWS) $('#vt-' + k).addEventListener('click', () => setView(k));
 
@@ -1787,8 +1903,9 @@
     </style></head><body><h1>${esc(company ? company + ' · ' : '')}${esc(title)}</h1>
       <p class="meta">${fmtInt.format(res.list.length)} Artikel · nur eingelagerte Ware · VK = Entwurf KW ${esc(model.meta.week || '?')}/${esc(model.meta.year || '')} · gedruckt ${esc(dateTime(new Date().toISOString()))} · intern – nicht zur Weitergabe</p>
       ${stockTableHTML(res).replace(/ tabindex="0"/g, '').replace(/<button[^>]*>/g, '').replace(/<\/button>/g, '')}
-      <script>window.onload = function () { setTimeout(function () { window.print(); }, 150); };<\/script></body></html>`);
+      </body></html>`);
     w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 300);
   }
 
   /* ======================= Angebot: Vorwoche, Bestand, Bestand ohne Preis ======================= */
@@ -2251,7 +2368,7 @@
     const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div></td>
         <td>${roleBadge(u.role)}</td>
-        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
       </tr>`).join('');
@@ -2296,6 +2413,8 @@
           <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u ? '' : ' required'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
         </div>
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
+        ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
+        ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
         <p class="form-err span2" id="user-err" role="alert"></p>
       </div>
       <div class="dlg-foot">
@@ -2325,7 +2444,7 @@
     const body = {
       id: editUid || '', name: f.name.value.trim(), username: u ? u.username : f.username.value.trim(),
       role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
-      password: pw, mustChange: f.mustChange ? f.mustChange.checked : false,
+      password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
     };
     const btn = f.querySelector('[type="submit"]');
     btn.disabled = true;
@@ -2350,9 +2469,10 @@
     ['master', 'Stammdaten'],
     ['auth', 'Anmeldungen'],
     ['user', 'Nutzerverwaltung'],
+    ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user' }[a] || '');
-  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth' }[a] || '');
+  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price') p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
@@ -2465,6 +2585,110 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
+  /* ======================= Sicherheit (nur Administrator) ======================= */
+  let secData = null;
+  const uaShort = (ua) => {
+    const b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+    const o = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    return o ? `${b} · ${o}` : b;
+  };
+  const IDLE = [[15, '15 Minuten'], [30, '30 Minuten'], [60, '1 Stunde'], [120, '2 Stunden'], [240, '4 Stunden'], [480, '8 Stunden'], [720, '12 Stunden']];
+  function secCards(d) {
+    const S = d.settings, users = d.users.filter((u) => u.active);
+    const with2 = users.filter((u) => u.twofa).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa).length;
+    const locked = d.users.filter((u) => u.lockedUntil).length, blocked = d.blockedIps.filter((x) => x.until).length;
+    const card = (lvl, title, text, hint) => `<div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${esc(title)}</strong><span>${text}</span>${hint ? `<em>${hint}</em>` : ''}</div></div>`;
+    return [
+      card(d.https ? 'ok' : 'bad', 'Verbindung', d.https ? 'Verschlüsselt (HTTPS)' : 'Nicht verschlüsselt', d.https ? '' : 'Seite nur über https:// aufrufen'),
+      card(with2 === users.length ? 'ok' : admNo2 ? 'bad' : 'warn', 'Zwei-Faktor-Anmeldung', `${with2} von ${users.length} aktiven Zugängen`, admNo2 ? `${admNo2} Administrator${admNo2 === 1 ? '' : 'en'} ohne Zwei-Faktor` : S.twofa === 'off' ? 'Pflicht ist ausgeschaltet' : ''),
+      card(S.ipEnabled ? 'ok' : 'warn', 'Zugriff Eingabebereich', S.ipEnabled ? `nur von ${S.adminIps.length} freigegebene${S.adminIps.length === 1 ? 'r Adresse' : 'n Adressen'}` : 'aus dem ganzen Internet erreichbar', S.ipEnabled ? '' : 'Empfehlung: IP-Freigabe einschalten oder Zwei-Faktor-Pflicht'),
+      card(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlgeschlagene Anmeldungen', `${fmtInt.format(d.fails24)} in den letzten 24 Stunden`, d.fails24 >= 20 ? 'Möglicher Angriff – Liste unten prüfen' : ''),
+      card(blocked || locked ? 'warn' : 'ok', 'Gesperrt', `${blocked} IP-Adresse${blocked === 1 ? '' : 'n'} · ${locked} Zugang${locked === 1 ? '' : 'e'}`, ''),
+      card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
+    ].join('');
+  }
+  async function renderSecView() {
+    const host = $('#view-sec');
+    if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Sicherheitsübersicht wird geladen …</div>';
+    try { secData = await api('security_status'); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    const d = secData, S = d.settings;
+    const no2 = d.users.filter((u) => u.active && !u.twofa);
+    const sessRows = d.sessions.map((x) => `<tr><td><div class="nm">${esc(x.name)}</div><div class="sub uname">${esc(x.username)}</div></td><td class="mono-s">${esc(x.ip)}</td><td>${esc(uaShort(x.ua))}</td>
+        <td class="num-s">${esc(dateTime(x.created))}</td><td class="num-s">${esc(dateTime(x.seen))}</td>
+        <td class="act">${x.current ? '<span class="muted">diese Sitzung</span>' : `<button type="button" class="btn sm" data-sec="end" data-sid="${esc(x.sid)}">Beenden</button>`}</td></tr>`).join('');
+    const ipRows = d.blockedIps.map((x) => `<tr><td class="mono-s">${esc(x.ip)}</td><td class="num-s">${x.n ? fmtInt.format(x.n) + ' Fehlversuch' + (x.n === 1 ? '' : 'e') : ''}</td><td>${x.until ? `<span class="st-err">gesperrt bis ${esc(timeOnly(x.until))} Uhr</span>` : '<span class="muted">beobachtet</span>'}</td><td class="act"><button type="button" class="btn sm" data-sec="unblock" data-key="${esc(x.key)}">Aufheben</button></td></tr>`).join('');
+    const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
+    const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
+    host.innerHTML = `
+      <div class="sec-grid">${secCards(d)}</div>
+      <form class="gcard sec-form" id="sec-form" autocomplete="off">
+        <h3 class="sec-h">Einstellungen</h3>
+        <div class="sec-rows">
+          <label class="fld"><span>Zwei-Faktor-Anmeldung verpflichtend</span><select name="twofa">
+            <option value="off"${S.twofa === 'off' ? ' selected' : ''}>freiwillig</option>
+            <option value="admins"${S.twofa === 'admins' ? ' selected' : ''}>für Administratoren</option>
+            <option value="all"${S.twofa === 'all' ? ' selected' : ''}>für alle Zugänge</option></select>
+            <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert.</small></label>
+          <label class="fld"><span>Automatisch abmelden nach Inaktivität</span><select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${S.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+          <div class="fld"><span>Passwörter</span><div class="sec-inline"><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${S.pwMin}"> Zeichen</label>
+            <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label></div>
+            <small>Gilt für neue Passwörter. Allerweltspasswörter und der eigene Benutzername sind immer gesperrt.</small></div>
+          <div class="fld"><span>Kontosperre</span><div class="sec-inline"><label>nach <input type="number" name="lockAfter" min="3" max="20" value="${S.lockAfter}"> Fehlversuchen</label><label>für <input type="number" name="lockMinutes" min="5" max="1440" value="${S.lockMinutes}"> Minuten</label></div>
+            <small>Zusätzlich wird jede IP-Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div>
+          <div class="fld span2"><span>Eingabebereich nur von bestimmten Internetadressen</span>
+            <label class="check"><input type="checkbox" name="ipEnabled"${S.ipEnabled ? ' checked' : ''}> IP-Freigabe einschalten – die öffentliche Angebotsseite bleibt für alle erreichbar</label>
+            <textarea name="adminIps" rows="3" placeholder="eine Adresse oder ein Bereich pro Zeile, z. B. 80.147.24.150 oder 80.147.24.0/24">${esc(S.adminIps.join('\n'))}</textarea>
+            <div class="sec-inline"><small>Ihre aktuelle Adresse: <strong class="mono-s">${esc(d.myIp)}</strong></small><button type="button" class="btn sm" data-sec="addip">${icon('plus', 'sm')}Hinzufügen</button></div></div>
+        </div>
+        <p class="form-err" id="sec-err" role="alert"></p>
+        <div class="sec-foot"><button type="submit" class="btn primary">${icon('check')}Einstellungen speichern</button></div>
+      </form>
+      <section class="gcard sec-block"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
+        <table class="etab sectab"><thead><tr><th>Nutzer</th><th>IP-Adresse</th><th>Gerät</th><th>angemeldet</th><th>zuletzt aktiv</th><th class="act"></th></tr></thead><tbody>${sessRows}</tbody></table></section>
+      <section class="gcard sec-block"><h3 class="sec-h">Sperren</h3>
+        ${ipRows || lockRows ? `<table class="etab sectab"><thead><tr><th>IP-Adresse / Zugang</th><th></th><th>Status</th><th class="act"></th></tr></thead><tbody>${lockRows}${ipRows}</tbody></table>` : '<p class="sec-empty">Keine gesperrten IP-Adressen oder Zugänge.</p>'}</section>
+      <section class="gcard sec-block"><h3 class="sec-h">Zugänge ohne Zwei-Faktor-Anmeldung <span class="muted">(${no2.length})</span></h3>
+        ${no2.length ? `<p class="sec-list">${no2.map((u) => `<span class="role-b r-${esc(u.role)}">${esc(u.name)} · ${esc(u.username)}</span>`).join(' ')}</p>` : '<p class="sec-empty">Alle aktiven Zugänge nutzen die Zwei-Faktor-Anmeldung.</p>'}</section>
+      <section class="gcard sec-block"><h3 class="sec-h">Fehlgeschlagene Anmeldungen <span class="muted">(7 Tage)</span></h3>
+        ${failRows ? `<table class="etab sectab"><thead><tr><th>Zeitpunkt</th><th>Benutzername</th><th>IP-Adresse</th><th>Vorgang</th></tr></thead><tbody>${failRows}</tbody></table>` : '<p class="sec-empty">Keine fehlgeschlagenen Anmeldungen.</p>'}</section>
+      <p class="hint sec-note">Weitere Schutzmaßnahmen sind fest eingebaut: HTTPS mit HSTS, Schutz gegen eingeschleuste Skripte (Content-Security-Policy), Schutz gegen fremde Formulare (CSRF), sichere Sitzungs-Cookies, gesperrte Datenordner und ein lückenloses Protokoll.</p>`;
+  }
+  $('#view-sec').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-sec]');
+    if (!b) return;
+    const a = b.dataset.sec;
+    if (a === 'addip') {
+      const ta = $('#sec-form [name="adminIps"]');
+      const list = ta.value.split(/\s+/).filter(Boolean);
+      if (!list.includes(secData.myIp)) ta.value = [...list, secData.myIp].join('\n');
+      return;
+    }
+    try {
+      if (a === 'end') await api('session_end', { body: { sid: b.dataset.sid } });
+      if (a === 'unblock') await api('ip_unblock', { body: { key: b.dataset.key } });
+      if (a === 'unlock') await api('user_unlock', { body: { id: b.dataset.uid } });
+      toast(a === 'end' ? 'Sitzung beendet.' : a === 'unblock' ? 'IP-Sperre aufgehoben.' : 'Zugang entsperrt.');
+      renderSecView();
+    } catch (ex) { toast(ex.message); }
+  });
+  $('#view-sec').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'sec-form') return;
+    e.preventDefault();
+    const f = e.target.elements;
+    const body = {
+      twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked,
+      lockAfter: +f.lockAfter.value, lockMinutes: +f.lockMinutes.value, ipEnabled: f.ipEnabled.checked,
+      adminIps: f.adminIps.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean),
+    };
+    $('#sec-err').textContent = '';
+    if (body.ipEnabled && !(await confirmBox('IP-Freigabe einschalten?', `Der Eingabebereich ist danach nur noch von ${body.adminIps.map(esc).join(', ')} erreichbar. Die öffentliche Angebotsseite bleibt frei. Im Notfall lässt sich die Freigabe auf dem Server zurücksetzen (siehe LIESMICH).`, 'Einschalten'))) return;
+    try {
+      await api('security_save', { body });
+      toast('Sicherheitseinstellungen gespeichert.');
+      renderSecView();
+    } catch (ex) { $('#sec-err').textContent = ex.message; }
+  });
+
   /* ======================= Start ======================= */
   (async function boot() {
     try {
@@ -2476,6 +2700,7 @@
       csrf = s.csrf;
       me = s.user;
       if (me.mustChange) { try { await api('logout', { body: {} }); } catch { /* ignore */ } me = null; showAuth('login'); return; }
+      if (me.needTwofa) { showAuth('twofa'); return; }
       await openEditor();
     } catch (e) {
       document.body.innerHTML = `<main class="auth"><div class="auth-card"><h1 style="margin:0;font-size:18px">Eingabebereich nicht erreichbar</h1><p class="auth-intro">${esc(e.message)}</p><p class="auth-intro">Die Seite muss über den Webserver aufgerufen werden, PHP muss aktiv sein.</p></div></main>`;

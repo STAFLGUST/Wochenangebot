@@ -24,6 +24,10 @@
  *   GET  ?action=master           Stammdaten je Artikelnummer (Bezeichnung, Fleischart, Herkunft, Zustand)
  *   POST ?action=master_save      Stammdaten speichern (Bearbeiter)
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
+ *   GET  ?action=security_status  Sicherheitsübersicht (nur Administrator)
+ *   POST ?action=security_save | session_end | ip_unblock | user_unlock
+ *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
+ *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
  *   POST ?action=user_save | user_delete
  *
  * Alle Daten liegen als .php-Dateien mit Zugriffssperre im Datenordner –
@@ -144,7 +148,8 @@ function user_public(array $u): array
 {
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'active' => (bool)$u['active'],
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
-            'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null];
+            'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
+            'twofa' => !empty($u['totp']), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null];
 }
 function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
 function clean_username($v): string
@@ -153,12 +158,132 @@ function clean_username($v): string
     if (!preg_match('/^[a-z0-9][a-z0-9._-]{1,31}$/', $v)) throw new InvalidArgumentException('Benutzername: 2–32 Zeichen, nur Buchstaben a–z, Ziffern, Punkt, Binde- und Unterstrich.');
     return $v;
 }
-function check_password($pw): string
+const COMMON_PASSWORDS = ['passwort', 'password', 'passwort1', 'passwort123', 'password1', 'password123', '123456789', '1234567890', '12345678910',
+    'qwertz123', 'qwertzuiop', 'qwertyuiop', 'hallo12345', 'hallohallo', 'sommer2026', 'winter2026', 'herbst2026', 'fruehling2026', 'frühling2026',
+    'sommer2025', 'winter2025', 'willkommen', 'willkommen1', 'willkommen123', 'administrator', 'admin12345', 'adminadmin', 'standardfleisch',
+    'standard-fleisch', 'fleischmeister', 'wochenangebot', 'geheim1234', 'iloveyou12', 'abc1234567', '0000000000', '1111111111', 'letmein123'];
+function check_password($pw, string $username = ''): string
 {
     $pw = is_string($pw) ? $pw : '';
-    if (mb_strlen($pw) < 10) throw new InvalidArgumentException('Das Passwort muss mindestens 10 Zeichen lang sein.');
+    $S = sec();
+    $min = max(10, (int)$S['pwMin']);
+    if (mb_strlen($pw) < $min) throw new InvalidArgumentException("Das Passwort muss mindestens $min Zeichen lang sein.");
     if (strlen($pw) > 200) throw new InvalidArgumentException('Das Passwort ist zu lang.');
+    $low = mb_strtolower($pw);
+    if (in_array($low, COMMON_PASSWORDS, true) || preg_match('/^(.)\1+$/u', $pw)) throw new InvalidArgumentException('Dieses Passwort ist zu leicht zu erraten. Bitte ein anderes wählen.');
+    if ($username !== '' && strlen($username) >= 3 && strpos($low, strtolower($username)) !== false) throw new InvalidArgumentException('Das Passwort darf den Benutzernamen nicht enthalten.');
+    if (!empty($S['pwComplex'])) {
+        $classes = (int)preg_match('/[a-zäöüß]/u', $pw) + (int)preg_match('/[A-ZÄÖÜ]/u', $pw) + (int)preg_match('/\d/', $pw) + (int)preg_match('/[^\p{L}\d]/u', $pw);
+        if ($classes < 3) throw new InvalidArgumentException('Das Passwort braucht mindestens drei der vier Zeichenarten: Kleinbuchstaben, Großbuchstaben, Ziffern, Sonderzeichen.');
+    }
     return $pw;
+}
+
+/* ---------------- Sicherheitseinstellungen ---------------- */
+
+const SEC_DEFAULTS = ['twofa' => 'off', 'pwMin' => 10, 'pwComplex' => false, 'idleMinutes' => 480,
+                      'ipEnabled' => false, 'adminIps' => [], 'lockAfter' => 10, 'lockMinutes' => 15];
+$SEC = null;
+function sec(): array
+{
+    global $SEC;
+    if ($SEC === null) $SEC = array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? []);
+    return $SEC;
+}
+function ip_in(string $ip, string $cidr): bool
+{
+    $parts = explode('/', trim($cidr), 2);
+    $net = @inet_pton($parts[0]);
+    $adr = @inet_pton($ip);
+    if ($net === false || $adr === false || strlen($net) !== strlen($adr)) return false;
+    $bits = isset($parts[1]) ? (int)$parts[1] : strlen($net) * 8;
+    $bytes = intdiv($bits, 8);
+    if (substr($net, 0, $bytes) !== substr($adr, 0, $bytes)) return false;
+    $rest = $bits % 8;
+    if (!$rest) return true;
+    $mask = chr((0xff << (8 - $rest)) & 0xff);
+    return (($net[$bytes] & $mask) === ($adr[$bytes] & $mask));
+}
+function ip_allowed(string $ip, array $list): bool { foreach ($list as $c) if (ip_in($ip, $c)) return true; return false; }
+function valid_cidr(string $c): bool
+{
+    $p = explode('/', trim($c), 2);
+    if (!filter_var($p[0], FILTER_VALIDATE_IP)) return false;
+    if (!isset($p[1])) return true;
+    $max = strpos($p[0], ':') !== false ? 128 : 32;
+    return ctype_digit($p[1]) && (int)$p[1] >= 8 && (int)$p[1] <= $max;
+}
+function twofa_required(array $u): bool { $m = sec()['twofa']; return $m === 'all' || ($m === 'admins' && $u['role'] === 'admin'); }
+function is_https(): bool { return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'); }
+
+/* ---------------- Zwei-Faktor (TOTP, RFC 6238) ---------------- */
+
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function b32_encode(string $bin): string
+{
+    $bits = ''; foreach (str_split($bin) as $c) $bits .= str_pad(decbin(ord($c)), 8, '0', STR_PAD_LEFT);
+    $out = ''; foreach (str_split($bits, 5) as $chunk) $out .= B32[bindec(str_pad($chunk, 5, '0'))];
+    return $out;
+}
+function b32_decode(string $s): string
+{
+    $s = strtoupper(preg_replace('/[^A-Za-z2-7]/', '', $s));
+    $bits = ''; foreach (str_split($s) as $c) { $v = strpos(B32, $c); if ($v === false) return ''; $bits .= str_pad(decbin($v), 5, '0', STR_PAD_LEFT); }
+    $out = ''; foreach (str_split($bits, 8) as $b) if (strlen($b) === 8) $out .= chr(bindec($b));
+    return $out;
+}
+function totp_at(string $secret, int $step): string
+{
+    $h = hash_hmac('sha1', pack('N*', 0, $step), b32_decode($secret), true);
+    $o = ord($h[19]) & 0x0f;
+    $n = ((ord($h[$o]) & 0x7f) << 24) | (ord($h[$o + 1]) << 16) | (ord($h[$o + 2]) << 8) | ord($h[$o + 3]);
+    return str_pad((string)($n % 1000000), 6, '0', STR_PAD_LEFT);
+}
+/* Liefert den verwendeten Zeitschritt oder null; jeder Code gilt nur einmal */
+function totp_check(string $secret, string $code, int $last = 0): ?int
+{
+    $code = preg_replace('/\s+/', '', $code);
+    if (!preg_match('/^\d{6}$/', $code)) return null;
+    $now = intdiv(time(), 30);
+    for ($d = -1; $d <= 1; $d++) { $st = $now + $d; if ($st > $last && hash_equals(totp_at($secret, $st), $code)) return $st; }
+    return null;
+}
+function recovery_codes(): array
+{
+    $abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+    $out = [];
+    for ($i = 0; $i < 10; $i++) { $c = ''; for ($j = 0; $j < 10; $j++) $c .= $abc[random_int(0, strlen($abc) - 1)]; $out[] = substr($c, 0, 5) . '-' . substr($c, 5); }
+    return $out;
+}
+function rc_hash(string $c): string { return hash('sha256', strtolower(preg_replace('/[^A-Za-z0-9]/', '', $c))); }
+
+/* ---------------- Sitzungsregister ---------------- */
+
+function sess_prune(array $list): array
+{
+    $max = (int)sec()['idleMinutes'] * 60;
+    foreach ($list as $k => $v) if ((int)($v['seen'] ?? 0) < time() - $max) unset($list[$k]);
+    return $list;
+}
+function sess_register(array $u): void
+{
+    with_lock('sitzungen', function () use ($u) {
+        $list = sess_prune(store_read('sitzungen') ?? []);
+        $sid = bin2hex(random_bytes(12));
+        $list[$sid] = ['uid' => $u['id'], 'ip' => client_ip(), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 240), 'created' => now(), 'seen' => time()];
+        store_write('sitzungen', $list);
+        $_SESSION['sid'] = $sid;
+    });
+}
+function sess_remove(callable $match): int
+{
+    return with_lock('sitzungen', function () use ($match) {
+        $list = store_read('sitzungen') ?? [];
+        $n = 0;
+        foreach ($list as $k => $v) if ($match($k, $v)) { unset($list[$k]); $n++; }
+        if ($n) store_write('sitzungen', $list);
+        return $n;
+    });
 }
 
 /* ---------------- Sitzung ---------------- */
@@ -167,13 +292,13 @@ function start_session(): void
 {
     global $CFG;
     if (session_status() === PHP_SESSION_ACTIVE) return;
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $https = is_https();
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
     session_name('WA_ADMIN');
     session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Strict']);
     session_start();
-    $max = (int)$CFG['session_hours'] * 3600;
+    $max = (int)sec()['idleMinutes'] * 60;
     if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) { $_SESSION = []; session_regenerate_id(true); }
     if (!empty($_SESSION['uid'])) $_SESSION['seen'] = time();
 }
@@ -188,6 +313,16 @@ function current_user(): ?array
     $users = users_load();
     $i = user_find($users, (string)$_SESSION['uid']);
     if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)($_SESSION['sv'] ?? -1)) { $_SESSION = []; return null; }
+    // Sitzung muss im Register stehen (Administrator kann sie beenden)
+    $sid = (string)($_SESSION['sid'] ?? '');
+    $reg = store_read('sitzungen') ?? [];
+    if ($sid === '' || !isset($reg[$sid]) || $reg[$sid]['uid'] !== $users[$i]['id']) { $_SESSION = []; return null; }
+    if ((int)$reg[$sid]['seen'] < time() - 60 || $reg[$sid]['ip'] !== client_ip()) {
+        with_lock('sitzungen', function () use ($sid) {
+            $l = store_read('sitzungen') ?? [];
+            if (isset($l[$sid])) { $l[$sid]['seen'] = time(); $l[$sid]['ip'] = client_ip(); store_write('sitzungen', sess_prune($l)); }
+        });
+    }
     return $ME = $users[$i];
 }
 function require_auth(bool $write = false, string $role = 'viewer'): array
@@ -199,6 +334,7 @@ function require_auth(bool $write = false, string $role = 'viewer'): array
         if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
     }
     if (!empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
+    if (twofa_required($u) && empty($u['totp'])) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
     if (ROLES[$u['role']] < ROLES[$role]) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
     return $u;
 }
@@ -210,10 +346,33 @@ function sign_in(array $u): string
     $_SESSION['sv'] = (int)$u['sv'];
     $_SESSION['seen'] = time();
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    unset($_SESSION['pend'], $_SESSION['totpPending']);
+    sess_register($u);
     $ME = $u;
     return $_SESSION['csrf'];
 }
-function me_payload(array $u): array { return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false)]; }
+function me_payload(array $u): array
+{
+    return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),
+            'twofa' => !empty($u['totp']), 'needTwofa' => twofa_required($u) && empty($u['totp']), 'twofaRequired' => twofa_required($u)];
+}
+/* Nutzer innerhalb der Sperre ändern und speichern */
+function user_update(string $id, callable $fn): ?array
+{
+    return with_lock('nutzer', function () use ($id, $fn) {
+        $users = users_load();
+        $i = user_find($users, $id);
+        if ($i === null) return null;
+        $fn($users[$i]);
+        users_save($users);
+        return $users[$i];
+    });
+}
+function require_csrf(): void
+{
+    $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
+}
 
 /* ---------------- Protokoll ---------------- */
 
@@ -387,7 +546,7 @@ function attempts_record(bool $ok): void
     if ($ok) unset($a[$k]);
     else {
         $n = (int)($a[$k]['n'] ?? 0) + 1;
-        $a[$k] = ['n' => $n, 't' => time(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : 0];
+        $a[$k] = ['n' => $n, 't' => time(), 'ip' => client_ip(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : 0];
         if ($n >= (int)$CFG['max_attempts']) $a[$k]['n'] = 0;
     }
     store_write('logins', $a);
@@ -658,10 +817,19 @@ function master_changes(array $old, array $new): array
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save'];
+$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
+                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
+}
+
+/* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei) */
+if ($action !== 'offer' || !empty($_GET['draft'])) {
+    $S = sec();
+    if (!empty($S['ipEnabled']) && $S['adminIps'] && !ip_allowed(client_ip(), $S['adminIps'])) {
+        fail('Der Eingabebereich ist von dieser Internetadresse (' . client_ip() . ') aus nicht freigegeben.', 403);
+    }
 }
 
 try {
@@ -695,8 +863,9 @@ try {
             $u = with_lock('nutzer', function () use ($b) {
                 if (users_load()) fail('Die Ersteinrichtung ist bereits erfolgt.', 409);
                 $name = s($b['name'] ?? '', 80) ?: 'Administrator';
-                $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => clean_username($b['username'] ?? ''), 'name' => $name, 'role' => 'admin',
-                      'active' => true, 'hash' => password_hash(check_password($b['password'] ?? ''), PASSWORD_DEFAULT), 'mustChange' => false,
+                $uname = clean_username($b['username'] ?? '');
+                $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => 'admin',
+                      'active' => true, 'hash' => password_hash(check_password($b['password'] ?? '', $uname), PASSWORD_DEFAULT), 'mustChange' => false,
                       'sv' => 1, 'created' => now(), 'createdBy' => 'Ersteinrichtung', 'lastLogin' => now()];
                 users_save([$u]);
                 return $u;
@@ -714,35 +883,137 @@ try {
             $b = body();
             $name = is_string($b['username'] ?? null) ? strtolower(trim($b['username'])) : '';
             $pw = (string)($b['password'] ?? '');
-            $res = with_lock('nutzer', function () use ($name, $pw) {
+            $S = sec();
+            $res = with_lock('nutzer', function () use ($name, $pw, $S) {
                 $users = users_load();
                 foreach ($users as $i => $u) {
                     if ($u['username'] !== $name) continue;
-                    if (!password_verify($pw, (string)$u['hash'])) return null;
-                    if (!$u['active']) return 'inactive';
+                    if ((int)($u['lockedUntil'] ?? 0) > time()) { password_verify($pw, (string)$u['hash']); return ['locked', $u]; }
+                    if (!password_verify($pw, (string)$u['hash'])) {
+                        $n = (int)($u['failCount'] ?? 0) + 1;
+                        $users[$i]['failCount'] = $n;
+                        $lockedNow = $n >= max(3, (int)$S['lockAfter']);
+                        if ($lockedNow) { $users[$i]['lockedUntil'] = time() + 60 * max(1, (int)$S['lockMinutes']); $users[$i]['failCount'] = 0; }
+                        users_save($users);
+                        return [$lockedNow ? 'lockednow' : 'bad', $users[$i]];
+                    }
+                    if (!$u['active']) return ['inactive', $u];
                     if (password_needs_rehash((string)$u['hash'], PASSWORD_DEFAULT)) $users[$i]['hash'] = password_hash($pw, PASSWORD_DEFAULT);
-                    $users[$i]['lastLogin'] = now();
+                    $users[$i]['failCount'] = 0;
+                    $users[$i]['lockedUntil'] = 0;
+                    if (empty($u['totp'])) $users[$i]['lastLogin'] = now();
                     users_save($users);
-                    return $users[$i];
+                    return ['ok', $users[$i]];
                 }
                 password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit wie bei vorhandenem Nutzer
-                return null;
+                return ['bad', null];
             });
-            if (!is_array($res)) {
+            [$st, $u] = $res;
+            $who = ['username' => mb_substr($name, 0, 40), 'name' => $u['name'] ?? '', 'role' => $u['role'] ?? ''];
+            if ($st !== 'ok') {
                 attempts_record(false);
-                audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . ($res === 'inactive' ? ' – Zugang deaktiviert' : ''), [], ['username' => mb_substr($name, 0, 40), 'name' => '', 'role' => '']);
+                $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
+                audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
                 usleep(400000);
-                fail($res === 'inactive' ? 'Dieser Zugang ist deaktiviert.' : 'Benutzername oder Passwort ist nicht korrekt.', 401);
+                if ($st === 'inactive') fail('Dieser Zugang ist deaktiviert.', 401);
+                if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche bis ' . (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i') . ' Uhr gesperrt. Ein Administrator kann ihn vorher entsperren.', 429);
+                fail('Benutzername oder Passwort ist nicht korrekt.', 401);
+            }
+            if (!empty($u['totp'])) {
+                // zweiter Schritt: Code aus der Authenticator-App
+                session_regenerate_id(true);
+                $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0]];
+                respond(['ok' => true, 'need2fa' => true]);
             }
             attempts_record(true);
-            $tok = sign_in($res);
+            $tok = sign_in($u);
             audit('login', 'Angemeldet');
-            respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($res)]);
+            respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($u)]);
+        }
+
+        case 'login_2fa': {
+            start_session();
+            attempts_check();
+            $p = $_SESSION['pend'] ?? null;
+            if (!$p || (int)$p['t'] < time() - 300) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
+            $code = trim((string)(body()['code'] ?? ''));
+            $res = with_lock('nutzer', function () use ($p, $code) {
+                $users = users_load();
+                $i = user_find($users, (string)$p['uid']);
+                if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || empty($users[$i]['totp'])) return ['gone', null];
+                $u = &$users[$i];
+                $how = null;
+                $step = totp_check((string)$u['totp'], $code, (int)($u['totpLast'] ?? 0));
+                if ($step !== null) { $u['totpLast'] = $step; $how = 'app'; }
+                elseif (preg_match('/^[a-z0-9]{5}-?[a-z0-9]{5}$/i', $code)) {
+                    $h = rc_hash($code);
+                    $k = array_search($h, $u['recovery'] ?? [], true);
+                    if ($k !== false) { array_splice($u['recovery'], $k, 1); $how = 'recovery'; }
+                }
+                if (!$how) return ['bad', $u];
+                $u['lastLogin'] = now();
+                $out = $u;
+                unset($u);
+                users_save($users);
+                return [$how, $out];
+            });
+            [$st, $u] = $res;
+            if ($st === 'gone') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
+            if ($st === 'bad') {
+                attempts_record(false);
+                $_SESSION['pend']['n'] = (int)$p['n'] + 1;
+                audit('login_fail', 'Zwei-Faktor-Code falsch', [], ['username' => $u['username'], 'name' => $u['name'], 'role' => $u['role']]);
+                if ($_SESSION['pend']['n'] >= 5) { $_SESSION = []; fail('Zu viele falsche Codes. Bitte erneut anmelden.', 401); }
+                usleep(300000);
+                fail('Der Code ist nicht korrekt oder abgelaufen.', 401);
+            }
+            attempts_record(true);
+            $tok = sign_in($u);
+            audit('login', $st === 'recovery' ? 'Angemeldet (mit Wiederherstellungscode – noch ' . count($u['recovery'] ?? []) . ' übrig)' : 'Angemeldet (mit Zwei-Faktor-Code)');
+            respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($u), 'recoveryLeft' => $st === 'recovery' ? count($u['recovery'] ?? []) : null]);
+        }
+
+        case 'twofa_begin': {
+            $me = current_user();
+            if (!$me) fail('Bitte erneut anmelden.', 401);
+            require_csrf();
+            $secret = b32_encode(random_bytes(20));
+            $_SESSION['totpPending'] = $secret;
+            $issuer = rawurlencode(($CFG['company'] ?: 'Wochenangebot') . ' Wochenangebot');
+            respond(['ok' => true, 'secret' => $secret, 'uri' => "otpauth://totp/{$issuer}:" . rawurlencode($me['username']) . "?secret={$secret}&issuer={$issuer}&algorithm=SHA1&digits=6&period=30"]);
+        }
+
+        case 'twofa_enable': {
+            $me = current_user();
+            if (!$me) fail('Bitte erneut anmelden.', 401);
+            require_csrf();
+            $secret = (string)($_SESSION['totpPending'] ?? '');
+            if ($secret === '') fail('Bitte die Einrichtung neu starten.', 409);
+            $step = totp_check($secret, (string)(body()['code'] ?? ''));
+            if ($step === null) fail('Der Code stimmt nicht. Bitte die Uhrzeit des Handys prüfen und den aktuellen Code eingeben.', 422);
+            $codes = recovery_codes();
+            $u = user_update($me['id'], function (&$x) use ($secret, $step, $codes) {
+                $x['totp'] = $secret; $x['totpLast'] = $step; $x['recovery'] = array_map('rc_hash', $codes); $x['changed'] = now();
+            });
+            unset($_SESSION['totpPending']);
+            $GLOBALS['ME'] = $u;
+            audit('twofa', 'Zwei-Faktor-Anmeldung eingerichtet');
+            respond(['ok' => true, 'recovery' => $codes, 'user' => me_payload($u)]);
+        }
+
+        case 'twofa_disable': {
+            $me = require_auth(true);
+            if (empty($me['totp'])) fail('Die Zwei-Faktor-Anmeldung ist nicht eingerichtet.', 409);
+            if (twofa_required($me)) fail('Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
+            if (!password_verify((string)(body()['password'] ?? ''), (string)$me['hash'])) fail('Das Passwort ist nicht korrekt.', 422);
+            $u = user_update($me['id'], function (&$x) { unset($x['totp'], $x['totpLast'], $x['recovery']); $x['changed'] = now(); });
+            audit('twofa', 'Zwei-Faktor-Anmeldung ausgeschaltet');
+            respond(['ok' => true, 'user' => me_payload($u)]);
         }
 
         case 'logout': {
             $u = current_user();
-            if ($u) audit('logout', 'Abgemeldet');
+            if ($u) { audit('logout', 'Abgemeldet'); $sid = (string)($_SESSION['sid'] ?? ''); sess_remove(function ($k) use ($sid) { return $k === $sid; }); }
             $_SESSION = [];
             session_destroy();
             respond(['ok' => true]);
@@ -751,11 +1022,10 @@ try {
         case 'change_password': {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
-            $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-            if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
+            require_csrf();
             $b = body();
             if (!password_verify((string)($b['current'] ?? ''), (string)$me['hash'])) fail('Das bisherige Passwort ist nicht korrekt.', 401);
-            $new = check_password($b['password'] ?? '');
+            $new = check_password($b['password'] ?? '', $me['username']);
             if (password_verify($new, (string)$me['hash'])) fail('Bitte ein anderes als das bisherige Passwort wählen.');
             $u = with_lock('nutzer', function () use ($me, $new) {
                 $users = users_load();
@@ -770,6 +1040,8 @@ try {
             });
             $_SESSION['sv'] = (int)$u['sv'];
             $GLOBALS['ME'] = $u;
+            $sid = (string)($_SESSION['sid'] ?? '');
+            sess_remove(function ($k, $v) use ($u, $sid) { return $v['uid'] === $u['id'] && $k !== $sid; });
             audit('password', 'Eigenes Passwort geändert');
             respond(['ok' => true, 'user' => me_payload($u)]);
         }
@@ -816,6 +1088,102 @@ try {
             respond(['ok' => true, 'rev' => $m['rev'], 'updatedAt' => $m['updatedAt']]);
         }
 
+        case 'security_status': {
+            $me = require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            $users = users_load();
+            $names = []; foreach ($users as $u) $names[$u['id']] = $u;
+            $sess = [];
+            foreach (sess_prune(store_read('sitzungen') ?? []) as $sid => $v) {
+                $u = $names[$v['uid']] ?? null;
+                $sess[] = ['sid' => $sid, 'uid' => $v['uid'], 'username' => $u['username'] ?? '?', 'name' => $u['name'] ?? '?', 'role' => $u['role'] ?? '',
+                           'ip' => $v['ip'], 'ua' => $v['ua'], 'created' => $v['created'], 'seen' => gmdate('Y-m-d\TH:i:s\Z', (int)$v['seen']), 'current' => $sid === ($_SESSION['sid'] ?? '')];
+            }
+            usort($sess, function ($a, $b) { return strcmp($b['seen'], $a['seen']); });
+            $ips = [];
+            foreach (store_read('logins') ?? [] as $k => $v) {
+                if ((int)($v['until'] ?? 0) <= time() && (int)($v['n'] ?? 0) === 0) continue;
+                $ips[] = ['key' => $k, 'ip' => $v['ip'] ?? 'unbekannt', 'n' => (int)($v['n'] ?? 0), 'until' => (int)($v['until'] ?? 0) > time() ? gmdate('Y-m-d\TH:i:s\Z', (int)$v['until']) : null, 't' => gmdate('Y-m-d\TH:i:s\Z', (int)($v['t'] ?? time()))];
+            }
+            $fails = [];
+            foreach ([gmdate('Y-m'), gmdate('Y-m', strtotime('first day of last month'))] as $m) {
+                foreach (store_read('protokoll/' . $m) ?? [] as $e) if ($e['a'] === 'login_fail' && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
+            }
+            usort($fails, function ($a, $b) { return strcmp($b['t'], $a['t']); });
+            $f24 = count(array_filter($fails, function ($e) { return strtotime($e['t']) > time() - 86400; }));
+            respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
+                     'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,
+                     'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
+        }
+
+        case 'security_save': {
+            $me = require_auth(true, 'admin');
+            $b = body();
+            $old = sec();
+            $twofa = in_array($b['twofa'] ?? '', ['off', 'admins', 'all'], true) ? $b['twofa'] : 'off';
+            $ips = [];
+            foreach (array_slice(is_array($b['adminIps'] ?? null) ? $b['adminIps'] : [], 0, 50) as $c) {
+                $c = trim((string)$c);
+                if ($c === '') continue;
+                if (!valid_cidr($c)) throw new InvalidArgumentException("„{$c}“ ist keine gültige IP-Adresse oder kein gültiger Bereich (z. B. 80.147.24.150 oder 80.147.24.0/24).");
+                $ips[] = $c;
+            }
+            $ipEnabled = !empty($b['ipEnabled']);
+            if ($ipEnabled && !$ips) throw new InvalidArgumentException('Bitte mindestens eine freigegebene IP-Adresse eintragen.');
+            if ($ipEnabled && !ip_allowed(client_ip(), $ips)) throw new InvalidArgumentException('Ihre aktuelle Adresse ' . client_ip() . ' ist nicht in der Liste – Sie würden sich selbst aussperren.');
+            if ($twofa !== 'off' && empty($me['totp']) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
+            $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
+                    'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)$b['idleMinutes'] : 480,
+                    'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
+                    'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15)))];
+            store_write('sicherheit', $new);
+            $GLOBALS['SEC'] = $new;
+            $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
+                  'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)'];
+            $fmt = function ($v) { return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)$v); };
+            $d = [];
+            foreach ($L as $k => $label) if ($fmt($old[$k] ?? null) !== $fmt($new[$k])) $d[] = ['k' => "sec|$k", 'code' => '', 'name' => 'Sicherheit', 'f' => $label, 'from' => $fmt($old[$k] ?? ''), 'to' => $fmt($new[$k])];
+            if ($d) audit('security', 'Sicherheitseinstellungen geändert', $d);
+            respond(['ok' => true, 'settings' => $new]);
+        }
+
+        case 'session_end': {
+            $me = require_auth(true, 'admin');
+            $b = body();
+            $sid = (string)($b['sid'] ?? '');
+            $uid = (string)($b['uid'] ?? '');
+            $mine = (string)($_SESSION['sid'] ?? '');
+            $who = '';
+            $reg = store_read('sitzungen') ?? [];
+            if ($sid !== '' && isset($reg[$sid])) $who = $reg[$sid]['uid'];
+            $n = sess_remove(function ($k, $v) use ($sid, $uid, $mine) { return $k !== $mine && (($sid !== '' && $k === $sid) || ($uid !== '' && $v['uid'] === $uid)); });
+            $users = users_load(); $un = ''; foreach ($users as $u) if ($u['id'] === ($uid ?: $who)) $un = $u['username'];
+            if ($n) audit('security', $n === 1 ? "Sitzung von „{$un}“ beendet" : "{$n} Sitzungen von „{$un}“ beendet");
+            respond(['ok' => true, 'ended' => $n]);
+        }
+
+        case 'ip_unblock': {
+            require_auth(true, 'admin');
+            $key = (string)(body()['key'] ?? '');
+            $ip = with_lock('logins', function () use ($key) {
+                $a = store_read('logins') ?? [];
+                $ip = $a[$key]['ip'] ?? null;
+                unset($a[$key]);
+                store_write('logins', $a);
+                return $ip;
+            });
+            audit('security', 'IP-Sperre aufgehoben' . ($ip ? " ({$ip})" : ''));
+            respond(['ok' => true]);
+        }
+
+        case 'user_unlock': {
+            require_auth(true, 'admin');
+            $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; });
+            if (!$u) fail('Nutzer nicht gefunden.', 404);
+            audit('security', "Zugang „{$u['username']}“ entsperrt");
+            respond(['ok' => true]);
+        }
+
         case 'users': {
             require_auth(false, 'admin');
             header('Cache-Control: no-store');
@@ -841,7 +1209,7 @@ try {
                     foreach ($users as $u) if ($u['username'] === $uname) throw new InvalidArgumentException('Der Benutzername „' . $uname . '“ ist bereits vergeben.');
                     if (!$setPw) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Nutzer festlegen.');
                     $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => $role, 'active' => $active,
-                          'hash' => password_hash(check_password($pw), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
+                          'hash' => password_hash(check_password($pw, $uname), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
                           'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
                     $users[] = $u;
                     users_save($users);
@@ -861,10 +1229,15 @@ try {
                 if ($old['name'] !== $name) $d[] = ['k' => 'u|name', 'code' => '', 'name' => $old['username'], 'f' => 'Name', 'from' => $old['name'], 'to' => $name];
                 if ($old['role'] !== $role) $d[] = ['k' => 'u|role', 'code' => '', 'name' => $old['username'], 'f' => 'Rolle', 'from' => ROLE_LABELS[$old['role']], 'to' => ROLE_LABELS[$role]];
                 if ((bool)$old['active'] !== $active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $old['username'], 'f' => 'Status', 'from' => $old['active'] ? 'aktiv' : 'deaktiviert', 'to' => $active ? 'aktiv' : 'deaktiviert'];
+                if (!empty($b['reset2fa']) && !empty($old['totp'])) {
+                    unset($users[$i]['totp'], $users[$i]['totpLast'], $users[$i]['recovery']);
+                    $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;
+                    $d[] = ['k' => 'u|2fa', 'code' => '', 'name' => $old['username'], 'f' => 'Zwei-Faktor', 'from' => 'eingerichtet', 'to' => 'zurückgesetzt'];
+                }
                 if ($setPw) {
-                    $users[$i]['hash'] = password_hash(check_password($pw), PASSWORD_DEFAULT);
+                    $users[$i]['hash'] = password_hash(check_password($pw, $old['username']), PASSWORD_DEFAULT);
                     $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
-                    $users[$i]['sv'] = (int)$old['sv'] + 1;      // bestehende Sitzungen des Nutzers beenden
+                    $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;      // bestehende Sitzungen des Nutzers beenden
                     $d[] = ['k' => 'u|pw', 'code' => '', 'name' => $old['username'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . ($users[$i]['mustChange'] ? ' (muss beim Anmelden geändert werden)' : '')];
                 }
                 $users[$i]['changed'] = now();
@@ -873,6 +1246,10 @@ try {
             });
             [$u, $msg, $d] = $res;
             if ($u['id'] === $me['id']) { $_SESSION['sv'] = (int)$u['sv']; }
+            elseif ((int)$u['sv'] > 1 || empty($u['active'])) {
+                $uid = $u['id']; $sv = (int)$u['sv'];
+                if (empty($u['active']) || array_filter($d, function ($x) { return in_array($x['k'], ['u|pw', 'u|2fa'], true); })) sess_remove(function ($k, $v) use ($uid) { return $v['uid'] === $uid; });
+            }
             if ($d) audit('user', $msg, $d);
             respond(['ok' => true, 'user' => user_public($u)]);
         }
@@ -891,6 +1268,7 @@ try {
                 users_save($users);
                 return $u;
             });
+            sess_remove(function ($k, $v) use ($gone) { return $v['uid'] === $gone['id']; });
             audit('user', 'Nutzer „' . $gone['username'] . '“ (' . $gone['name'] . ') gelöscht');
             respond(['ok' => true]);
         }

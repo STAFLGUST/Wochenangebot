@@ -994,7 +994,7 @@ function bind() {
     await loadData();
   } catch (e) {
     $('#list').innerHTML = `<div class="empty"><div class="empty-ico">${icon('info')}</div><h3>Angebot nicht verfügbar</h3><p>${esc(e.message)}</p>
-      <div class="row-actions"><button type="button" class="btn" onclick="location.reload()">Erneut versuchen</button></div></div>`;
+      <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button></div></div>`;
     $('#subbar').textContent = '';
     if (location.protocol === 'file:') $('#list .empty p').textContent = 'Die Seite muss über den Webserver geöffnet werden (nicht als lokale Datei), damit das Angebot geladen werden kann.';
     return;
@@ -1006,3 +1006,5 @@ function bind() {
   updateFavCount();
 })();
 })();
+
+document.addEventListener('click', (e) => { if (e.target.closest('[data-reload]')) location.reload(); });

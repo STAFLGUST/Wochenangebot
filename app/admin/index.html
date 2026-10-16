@@ -6,9 +6,9 @@
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="light dark">
 <title>Wochenangebot · Eingabebereich</title>
-<script>try{var t=localStorage.getItem("wochenangebot.theme");if(t){t=JSON.parse(t);if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}}catch(e){}</script>
-<link rel="stylesheet" href="../assets/app.css?v=20261016o">
-<link rel="stylesheet" href="../assets/admin.css?v=20261016o">
+<script src="../assets/theme.js"></script>
+<link rel="stylesheet" href="../assets/app.css?v=20261016p">
+<link rel="stylesheet" href="../assets/admin.css?v=20261016p">
 </head>
 <body class="adm">
 
@@ -21,6 +21,8 @@
     <label class="fld" id="au-name-wrap" hidden><span>Ihr Name</span><input type="text" id="au-name" autocomplete="name" maxlength="80" placeholder="z. B. Lennert Gust"></label>
     <label class="fld"><span id="pw1-lbl">Passwort</span><input type="password" id="pw1" autocomplete="current-password" required minlength="1"></label>
     <label class="fld" id="pw2-wrap" hidden><span>Passwort wiederholen</span><input type="password" id="pw2" autocomplete="new-password"></label>
+    <label class="fld" id="au-code-wrap" hidden><span>Code aus der Authenticator-App</span><input type="text" id="au-code" inputmode="numeric" autocomplete="one-time-code" maxlength="11" placeholder="6-stelliger Code oder Wiederherstellungscode"></label>
+    <div id="auth-twofa" hidden></div>
     <p class="form-err" id="auth-err" role="alert"></p>
     <button class="btn primary wide" type="submit" id="auth-submit">Anmelden</button>
     <a class="auth-back" href="../">Zur öffentlichen Angebotsseite</a>
@@ -51,6 +53,7 @@
             <button role="menuitem" type="button" data-act="discard"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg>Entwurf verwerfen</button>
             <hr>
             <button role="menuitem" type="button" data-act="open-site"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Öffentliche Seite öffnen</button>
+            <button role="menuitem" type="button" data-act="twofa"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>Zwei-Faktor-Anmeldung</button>
             <button role="menuitem" type="button" data-act="password"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg>Passwort ändern</button>
             <button role="menuitem" type="button" data-act="theme"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg>Hell / Dunkel</button>
             <hr>
@@ -70,6 +73,7 @@
         <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master">Stammdaten</button>
         <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden>Nutzer</button>
         <button role="tab" type="button" id="vt-log" aria-selected="false" aria-controls="view-log" hidden>Protokoll</button>
+        <button role="tab" type="button" id="vt-sec" aria-selected="false" aria-controls="view-sec" hidden>Sicherheit</button>
       </div>
       <button type="button" class="btn" id="hist-data"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg><span>Daten</span></button>
     </div>
@@ -101,6 +105,7 @@
     <div id="view-master" hidden></div>
     <div id="view-users" hidden></div>
     <div id="view-log" hidden></div>
+    <div id="view-sec" hidden></div>
   </main>
 </div>
 
@@ -138,6 +143,8 @@
 <dialog class="modal" id="dlg-add-stock" aria-labelledby="as-title"><form class="dlg" id="add-stock-body" autocomplete="off"></form></dialog>
 <!-- Nutzer anlegen / bearbeiten -->
 <dialog class="modal" id="dlg-user" aria-labelledby="us-title"><form class="dlg" id="user-body" autocomplete="off"></form></dialog>
+<!-- Zwei-Faktor-Anmeldung -->
+<dialog class="modal" id="dlg-twofa" aria-labelledby="tf-title"><div class="dlg" id="twofa-body"></div></dialog>
 <!-- Bestätigung -->
 <dialog class="modal" id="dlg-confirm" aria-labelledby="cf-title"><div class="dlg" id="confirm-body"></div></dialog>
 
@@ -170,6 +177,7 @@
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 15l4-4.5 3 3L19 7"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 5 6.5v5c0 4.3 3 7.9 7 9 4-1.1 7-4.7 7-9v-5z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5M6.5 9.5V19h4v-5h3v5h4V9.5"/></symbol>
   <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a1.5 1.5 0 0 1-1.5-1.5v-5A1.5 1.5 0 0 1 5 9h14a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 19 17h-2"/><rect x="7" y="14" width="10" height="6" rx="1"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5 12 15l5-4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
@@ -179,8 +187,9 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
 </svg>
 
-<script src="../assets/offer-core.js?v=20261016o"></script>
-<script src="../assets/stock-core.js?v=20261016o"></script>
-<script src="../assets/admin.js?v=20261016o"></script>
+<script src="../assets/offer-core.js?v=20261016p"></script>
+<script src="../assets/vendor/qrcode.js?v=1.4.4"></script>
+<script src="../assets/stock-core.js?v=20261016p"></script>
+<script src="../assets/admin.js?v=20261016p"></script>
 </body>
 </html>
