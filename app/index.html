@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Digitale Wochenangebotsliste – Fleischgroßhandel">
+<title>Wochenangebot</title>
+<script>try{var t=localStorage.getItem("wochenangebot.theme");if(t){t=JSON.parse(t);if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}}catch(e){}</script>
+<link rel="stylesheet" href="assets/app.css?v=20261016">
+</head>
+<body>
+<a class="skip" href="#list">Zum Angebot springen</a>
+
+<header class="topbar" id="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">W</div>
+      <div>
+        <div class="brand-company" id="company"></div>
+        <h1>Wochenangebot <span class="kw-pill" id="kw-pill"></span></h1>
+      </div>
+    </div>
+
+    <div class="search" role="search">
+      <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
+      <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Suchen: Artikelnr., Produkt, Herkunft, Zustand …" aria-label="Angebot durchsuchen" aria-describedby="hits">
+      <div class="search-aux">
+        <button class="search-clear" id="q-clear" type="button" aria-label="Suche leeren" hidden><svg class="i sm" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <kbd aria-hidden="true" id="q-kbd">/</kbd>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn ghost" id="btn-print" type="button" title="Drucken oder als PDF speichern">
+        <svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken</span>
+      </button>
+      <div class="menu-wrap">
+        <button class="btn icon ghost" id="btn-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-more" title="Exportieren &amp; Teilen" aria-label="Exportieren und Teilen">
+          <svg class="i" aria-hidden="true"><use href="#i-more"/></svg>
+        </button>
+        <div class="menu" id="menu-more" role="menu" hidden>
+          <div class="menu-label">Exportieren (CSV)</div>
+          <button role="menuitem" type="button" data-action="csv-filtered"><svg class="i" aria-hidden="true"><use href="#i-file"/></svg>Aktuelle Ansicht als CSV</button>
+          <button role="menuitem" type="button" data-action="csv-all"><svg class="i" aria-hidden="true"><use href="#i-file"/></svg>Gesamtes Angebot als CSV</button>
+          <button role="menuitem" type="button" data-action="csv-fav"><svg class="i" aria-hidden="true"><use href="#i-star"/></svg>Merkliste als CSV</button>
+          <hr>
+          <div class="menu-label">Teilen</div>
+          <button role="menuitem" type="button" data-action="copy-link"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Link zur Seite kopieren</button>
+          <button role="menuitem" type="button" data-action="copy-link-state"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Link mit Suche &amp; Filtern kopieren</button>
+        </div>
+      </div>
+      <button class="btn icon ghost" id="btn-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel">
+        <svg class="i" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="subbar">
+    <div class="subbar-inner" id="subbar"></div>
+  </div>
+</header>
+
+<div class="banner" id="preview-banner" hidden></div>
+
+<main class="page" id="main">
+  <nav class="quicknav" id="quicknav" aria-label="Schnellnavigation nach Fleischart"></nav>
+
+  <div class="layout">
+    <div class="filter-backdrop" id="filter-backdrop"></div>
+    <aside class="filters" id="filters" aria-label="Filter">
+      <div class="filters-head">
+        <h2>Filter</h2>
+        <div>
+          <button class="btn sm ghost" type="button" id="btn-reset" disabled>Zurücksetzen</button>
+          <button class="btn icon ghost filters-close" type="button" id="btn-filters-close" aria-label="Filter schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        </div>
+      </div>
+      <div class="filters-body" id="filters-body"></div>
+      <div class="filters-foot"><button class="btn primary" type="button" id="btn-filters-apply">Treffer anzeigen</button></div>
+    </aside>
+
+    <section class="results" aria-label="Artikel">
+      <div class="toolbar">
+        <div class="tabs" role="tablist" aria-label="Ansicht wählen">
+          <button role="tab" type="button" id="tab-all" aria-selected="true" aria-controls="list">Alle Artikel</button>
+          <button role="tab" type="button" id="tab-fav" aria-selected="false" aria-controls="list">Merkliste <span class="count" id="fav-count">0</span></button>
+        </div>
+        <div class="toolbar-right">
+          <button class="btn ghost only-mobile" type="button" id="btn-filters-open" aria-controls="filters" aria-expanded="false">
+            <svg class="i" aria-hidden="true"><use href="#i-filter"/></svg>Filter <span class="count" id="filter-count" hidden></span>
+          </button>
+          <button class="btn ghost btn-compare" type="button" id="btn-compare">
+            <svg class="i" aria-hidden="true"><use href="#i-bars"/></svg><span class="lbl">Preisvergleich</span>
+          </button>
+          <label class="select">
+            <span class="sr-only">Sortierung</span>
+            <select id="sort">
+              <option value="offer-asc">Angebotsreihenfolge</option>
+              <option value="price-asc">Preis aufsteigend</option>
+              <option value="price-desc">Preis absteigend</option>
+              <option value="name-asc">Bezeichnung A–Z</option>
+              <option value="name-desc">Bezeichnung Z–A</option>
+              <option value="code-asc">Artikelnummer aufsteigend</option>
+              <option value="code-desc">Artikelnummer absteigend</option>
+              <option value="cat-asc">Fleischart A–Z</option>
+              <option value="cat-desc">Fleischart Z–A</option>
+              <option value="origin-asc">Herkunft A–Z</option>
+              <option value="origin-desc">Herkunft Z–A</option>
+              <option value="cond-asc">Zustand A–Z</option>
+              <option value="cond-desc">Zustand Z–A</option>
+            </select>
+            <svg class="i sm" aria-hidden="true"><use href="#i-chev"/></svg>
+          </label>
+          <div class="seg" role="group" aria-label="Darstellung">
+            <button type="button" data-view="table" aria-pressed="true" title="Tabellenansicht"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span class="sr-only">Tabelle</span></button>
+            <button type="button" data-view="cards" aria-pressed="false" title="Kartenansicht"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg><span class="sr-only">Karten</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="resultbar">
+        <p class="hits" id="hits" aria-live="polite"></p>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="favbar" id="favbar" hidden></div>
+      <div id="list"><div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Angebot wird geladen …</div></div>
+    </section>
+  </div>
+
+  <footer class="foot" id="foot"></footer>
+</main>
+
+<dialog class="sheet" id="dlg-detail" aria-labelledby="d-title"><div class="dlg" id="detail-body"></div></dialog>
+
+<dialog class="modal" id="dlg-print" aria-labelledby="print-title">
+  <form class="dlg" method="dialog" id="print-form">
+    <div class="dlg-head">
+      <div><h2 id="print-title">Drucken / als PDF speichern</h2><p>DIN A4, druckoptimiert. Im Druckdialog „Als PDF speichern“ wählen, um eine PDF zu erzeugen.</p></div>
+      <button class="btn icon ghost" type="button" data-close aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="dlg-body">
+      <fieldset class="choice">
+        <legend>Umfang</legend>
+        <label class="radio"><input type="radio" name="scope" value="all"><span class="r-t">Gesamtes Angebot<span class="r-s">Alle Positionen dieser Woche</span></span><span class="n" data-n="all"></span></label>
+        <label class="radio"><input type="radio" name="scope" value="filtered"><span class="r-t">Aktuelle Ansicht<span class="r-s" id="print-filter-desc">Mit aktiver Suche und Filtern</span></span><span class="n" data-n="filtered"></span></label>
+        <label class="radio"><input type="radio" name="scope" value="fav"><span class="r-t">Merkliste<span class="r-s">Nur Ihre gemerkten Artikel</span></span><span class="n" data-n="fav"></span></label>
+      </fieldset>
+      <fieldset class="choice">
+        <legend>Layout</legend>
+        <label class="radio"><input type="radio" name="layout" value="compact" checked><span class="r-t">Kompakt, zweispaltig<span class="r-s">Art.-Nr., Bezeichnung, Preis – wie ein Angebotsblatt</span></span></label>
+        <label class="radio"><input type="radio" name="layout" value="table"><span class="r-t">Tabelle mit allen Spalten<span class="r-s">Zusätzlich Fleischart, Herkunft und Zustand</span></span></label>
+      </fieldset>
+      <label class="check"><input type="checkbox" name="grouped" checked> Nach Angebotsgruppen gliedern (wie in der Excel-Liste)</label>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" type="button" data-close>Abbrechen</button>
+      <button class="btn primary" type="submit" id="print-go"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg>Drucken</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="modal wide" id="dlg-compare" aria-labelledby="cmp-title"><div class="dlg" id="compare-body"></div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="print-root"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 8.5 12 4l5 4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 4.5 5-4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 8V3.5h10V8"/><rect x="3.5" y="8" width="17" height="8.5" rx="2"/><path d="M7 13.5h10V20.5H7z"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/></g></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3.5H7.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2V8z"/><path d="M14 3.5V8h4.5M9 13h6M9 16.5h6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.1"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 5.5h16M7 12h10M10 18.5h4"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M5 20v-8M12 20V5M19 20v-5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="M12 5v14M7 14l5 5 5-5"/></symbol>
+  <symbol id="i-sort-up" viewBox="0 0 24 24"><path d="M12 19V5M7 10l5-5 5 5"/></symbol>
+  <symbol id="i-rows" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l.9 12.5a1.5 1.5 0 0 0 1.5 1.5h6.2a1.5 1.5 0 0 0 1.5-1.5L17.5 7M9.5 7V4.5h5V7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M4 9h11a5 5 0 0 1 0 10H8"/><path d="M8 5 4 9l4 4"/></symbol>
+</svg>
+
+<script src="assets/offer-core.js?v=20261016"></script>
+<script src="assets/frontend.js?v=20261016"></script>
+</body>
+</html>

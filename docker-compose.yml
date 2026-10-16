@@ -1,0 +1,29 @@
+# Wochenangebot – Start:  docker compose up -d
+services:
+  app:
+    image: php:8.3-apache
+    restart: unless-stopped
+    volumes:
+      - ./app:/var/www/html:ro      # Website (nur lesend)
+      - ./daten:/var/www/html/data  # gespeicherte Angebote, Entwurf, Versionen
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ALLOWED_IPS: ${ALLOWED_IPS:-0.0.0.0/0}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data            # HTTPS-Zertifikate
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

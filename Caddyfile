@@ -1,0 +1,19 @@
+# HTTPS-Zertifikat wird automatisch geholt und verlängert (Let's Encrypt)
+{$DOMAIN}, www.{$DOMAIN} {
+	# Zugriff nur von freigegebenen IP-Adressen (ALLOWED_IPS in .env)
+	@fremd not remote_ip {$ALLOWED_IPS}
+	respond @fremd "Kein Zugriff" 403
+
+	@www host www.{$DOMAIN}
+	redir @www https://{$DOMAIN}{uri} permanent
+
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+	reverse_proxy app:80
+}
