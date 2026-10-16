@@ -464,3 +464,5 @@ button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95)
   .mtab .in { min-width: 0; width: 100%; text-overflow: ellipsis; }
   .m-winab { display: none; }
 }
+a.btn#btn-site { text-decoration: none; }
+@media (max-width: 480px) { #btn-site { display: none; } }
