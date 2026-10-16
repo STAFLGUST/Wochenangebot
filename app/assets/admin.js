@@ -1718,7 +1718,7 @@
       .s-mkg { font-weight: 700; } thead { display: table-header-group; } tr { break-inside: avoid; }
       .wg-h td { font-weight: 700; padding-top: 8px; border-bottom: 1pt solid #999; } .wg-sum td, .st-total td { font-weight: 700; background: #f3f1ee; }
       .wg-gap td { border: 0; height: 6px; padding: 0; } .st-total td { border-top: 1.5pt solid #333; }
-      .mhd-past { color: #3a3a3a; } .mhd-0-4 { color: #c0161c; } .mhd-5-7 { color: #c25400; } .mhd-8-14 { color: #e08a1e; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
+      .mhd-past { background: #343a40; color: #fff; } .mhd-0-4 { background: #dc2626; color: #111; } .mhd-5-7 { background: #ea580c; color: #111; } .mhd-8-14 { background: #fdba74; color: #111; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
     </style></head><body><h1>${esc(company ? company + ' · ' : '')}${esc(title)}</h1>
       <p class="meta">${fmtInt.format(res.list.length)} Artikel · nur eingelagerte Ware · VK = Entwurf KW ${esc(model.meta.week || '?')}/${esc(model.meta.year || '')} · gedruckt ${esc(dateTime(new Date().toISOString()))} · intern – nicht zur Weitergabe</p>
       ${stockTableHTML(res).replace(/ tabindex="0"/g, '')}

@@ -341,12 +341,14 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .st-info .sub { font-size: 12.5px; color: var(--muted); }
 .st-info.old { border-color: var(--c-aged); } .st-info .st-age { color: var(--c-aged); font-weight: 600; }
 .mhd-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; font-weight: 600; }
-.mhd-legend > span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: currentColor; margin-right: 6px; vertical-align: 0; }
-.mhd-legend > .mhd-past::before { display: none; }
+.mhd-legend > span { font-weight: 600; }
 .st-actions { display: inline-flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-.mhd-past { color: #3b3b3b; } .mhd-0-4 { color: #c0161c; } .mhd-5-7 { color: #c25400; } .mhd-8-14 { color: #e0901f; }
-:root[data-theme="dark"] .mhd-past { color: #b9b4ad; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mhd-past { color: #b9b4ad; } }
+/* MHD: farbiger Hintergrund, schwarze Schrift (abgelaufen: Anthrazit mit weißer Schrift) */
+.mhd-past { background-color: #343a40; color: #fff; }
+.mhd-0-4 { background-color: #dc2626; color: #111; }
+.mhd-5-7 { background-color: #ea580c; color: #111; }
+.mhd-8-14 { background-color: #fdba74; color: #111; }
+:not(td).mhd-past, :not(td).mhd-0-4, :not(td).mhd-5-7, :not(td).mhd-8-14 { display: inline-block; padding: 1px 7px; border-radius: 5px; }
 .mhd-skull { font-size: 1.25em; line-height: 1; margin-right: 4px; vertical-align: -1px; }
 .st-card { overflow-x: auto; width: fit-content; max-width: 100%; }
 .stab { width: auto; border-collapse: collapse; font-size: 13.5px; }
@@ -360,7 +362,8 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .stab .s-mhd { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab td.s-mkg { font-weight: 700; }
 .stab td.s-mhd[class*="mhd-"] { font-weight: 600; }
-.stab tr.srow { cursor: pointer; } .stab tr.srow:hover td { background: var(--surface-2); }
+.stab tr.srow { cursor: pointer; } .stab tr.srow:hover td:not([class*="mhd-"]) { background: var(--surface-2); }
+.stab tr.srow:hover td[class*="mhd-"] { filter: brightness(.94); }
 .stab tr.wg-h td { font-weight: 700; font-size: 13px; letter-spacing: .01em; padding-top: 10px; background: var(--surface-2); border-bottom: 1px solid var(--line-strong, var(--line)); }
 .stab tr.wg-sum td { font-weight: 700; background: var(--surface-3); }
 .stab tr.wg-sum td:first-child, .stab tr.st-total td:first-child { text-align: left; }
