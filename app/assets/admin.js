@@ -2592,6 +2592,36 @@
     const o = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
     return o ? `${b} · ${o}` : b;
   };
+  let geoSel = new Set(), geoQ = '';
+  const EUROPE = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'CH', 'GB', 'NO', 'IS', 'LI'];
+  let regionNames = null;
+  try { regionNames = new Intl.DisplayNames(['de'], { type: 'region' }); } catch { /* alter Browser */ }
+  const ccName = (c) => { let n = ''; try { n = regionNames ? regionNames.of(c) : ''; } catch { /* unbekannt */ } return n && n !== c ? n : c; };
+  const ccSort = (a, b) => ccName(a).localeCompare(ccName(b), 'de');
+  function geoChips() {
+    const list = [...geoSel].sort(ccSort);
+    return list.length ? list.map((c) => `<span class="geo-chip">${esc(ccName(c))} <span class="sub">${esc(c)}</span><button type="button" data-geo-del="${esc(c)}" aria-label="${esc(ccName(c))} entfernen">×</button></span>`).join('')
+      : '<span class="sub">Noch kein Land ausgewählt.</span>';
+  }
+  function geoList() {
+    const q = geoQ.toLowerCase();
+    const all = (secData.geoCountries || []).filter((c) => !q || c.toLowerCase() === q || ccName(c).toLowerCase().includes(q)).sort(ccSort);
+    return all.length ? all.map((c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${geoSel.has(c) ? ' checked' : ''}> <span>${esc(ccName(c))}</span><span class="sub">${esc(c)}</span></label>`).join('')
+      : '<p class="sec-empty">Kein Land gefunden.</p>';
+  }
+  function geoRefresh() {
+    const f = $('#sec-form');
+    if (!f) return;
+    $('#geo-chips').innerHTML = geoChips();
+    $('#geo-count').textContent = geoSel.size ? `${geoSel.size} ausgewählt` : '';
+    const allow = f.elements.geoMode.value === 'allow';
+    const mc = secData.myCountry;
+    const blocked = mc && f.elements.geoEnabled.checked && (allow ? !geoSel.has(mc) : geoSel.has(mc));
+    const ok = $('#geo-me');
+    ok.className = 'geo-me' + (blocked ? ' bad' : '');
+    ok.innerHTML = mc ? `Sie greifen gerade aus <strong>${esc(ccName(mc))}</strong> zu${blocked ? ' – mit dieser Auswahl würden Sie sich aussperren.' : '.'}` : 'Ihr Land ist nicht bekannt (interne Adresse) – Sie werden nicht gesperrt.';
+    $('#geo-sel-label').textContent = allow ? 'Erlaubte Länder' : 'Gesperrte Länder';
+  }
   const IDLE = [[15, '15 Minuten'], [30, '30 Minuten'], [60, '1 Stunde'], [120, '2 Stunden'], [240, '4 Stunden'], [480, '8 Stunden'], [720, '12 Stunden']];
   function secCards(d) {
     const S = d.settings, users = d.users.filter((u) => u.active);
@@ -2604,6 +2634,7 @@
       card(S.ipEnabled ? 'ok' : 'warn', 'Zugriff Eingabebereich', S.ipEnabled ? `nur von ${S.adminIps.length} freigegebene${S.adminIps.length === 1 ? 'r Adresse' : 'n Adressen'}` : 'aus dem ganzen Internet erreichbar', S.ipEnabled ? '' : 'Empfehlung: IP-Freigabe einschalten oder Zwei-Faktor-Pflicht'),
       card(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlgeschlagene Anmeldungen', `${fmtInt.format(d.fails24)} in den letzten 24 Stunden`, d.fails24 >= 20 ? 'Möglicher Angriff – Liste unten prüfen' : ''),
       card(blocked || locked ? 'warn' : 'ok', 'Gesperrt', `${blocked} IP-Adresse${blocked === 1 ? '' : 'n'} · ${locked} Zugang${locked === 1 ? '' : 'e'}`, ''),
+      card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
       card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
   }
@@ -2612,6 +2643,9 @@
     if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Sicherheitsübersicht wird geladen …</div>';
     try { secData = await api('security_status'); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const d = secData, S = d.settings;
+    geoSel = new Set(S.geoCountries || []); geoQ = '';
+    const G = d.geo;
+    const geoStatRows = (d.geoStats || []).map((x) => `<tr><td>${esc(ccName(x.cc))} <span class="sub">${esc(x.cc)}</span></td><td class="num-s">${fmtInt.format(x.n)}</td><td class="num-s">${esc(dateTime(x.last))}</td></tr>`).join('');
     const no2 = d.users.filter((u) => u.active && !u.twofa);
     const sessRows = d.sessions.map((x) => `<tr><td><div class="nm">${esc(x.name)}</div><div class="sub uname">${esc(x.username)}</div></td><td class="mono-s">${esc(x.ip)}</td><td>${esc(uaShort(x.ua))}</td>
         <td class="num-s">${esc(dateTime(x.created))}</td><td class="num-s">${esc(dateTime(x.seen))}</td>
@@ -2638,11 +2672,34 @@
           <div class="fld span2"><span>Eingabebereich nur von bestimmten Internetadressen</span>
             <label class="check"><input type="checkbox" name="ipEnabled"${S.ipEnabled ? ' checked' : ''}> IP-Freigabe einschalten – die öffentliche Angebotsseite bleibt für alle erreichbar</label>
             <textarea name="adminIps" rows="3" placeholder="eine Adresse oder ein Bereich pro Zeile, z. B. 80.147.24.150 oder 80.147.24.0/24">${esc(S.adminIps.join('\n'))}</textarea>
-            <div class="sec-inline"><small>Ihre aktuelle Adresse: <strong class="mono-s">${esc(d.myIp)}</strong></small><button type="button" class="btn sm" data-sec="addip">${icon('plus', 'sm')}Hinzufügen</button></div></div>
+            <div class="sec-inline"><small>Ihre aktuelle Adresse: <strong class="mono-s">${esc(d.myIp)}</strong>${d.myCountry ? ` · ${esc(ccName(d.myCountry))}` : ''}</small><button type="button" class="btn sm" data-sec="addip">${icon('plus', 'sm')}Hinzufügen</button></div></div>
+          <div class="fld span2 geo-box" id="geo-box"><span>Länder sperren</span>
+            <label class="check"><input type="checkbox" name="geoEnabled"${S.geoEnabled ? ' checked' : ''}> Ländersperre einschalten</label>
+            <div class="geo-opts">
+              <div class="geo-radio" role="radiogroup" aria-label="Art der Sperre">
+                <label class="check"><input type="radio" name="geoMode" value="block"${S.geoMode !== 'allow' ? ' checked' : ''}> ausgewählte Länder sperren</label>
+                <label class="check"><input type="radio" name="geoMode" value="allow"${S.geoMode === 'allow' ? ' checked' : ''}> nur ausgewählte Länder erlauben</label>
+              </div>
+              <label class="geo-scope">gilt für <select name="geoScope">
+                <option value="admin"${S.geoScope !== 'all' ? ' selected' : ''}>nur den Eingabebereich</option>
+                <option value="all"${S.geoScope === 'all' ? ' selected' : ''}>die ganze Seite (auch öffentliches Angebot)</option></select></label>
+            </div>
+            <div class="geo-me" id="geo-me"></div>
+            <div class="geo-pick">
+              <div class="geo-selbox"><div class="geo-hd"><strong id="geo-sel-label">Gesperrte Länder</strong><span class="sub" id="geo-count"></span>
+                <span class="geo-quick"><button type="button" class="btn sm ghost" data-sec="geo-eu" title="EU-Länder sowie Schweiz, Großbritannien, Norwegen, Island und Liechtenstein">Europa auswählen</button><button type="button" class="btn sm ghost" data-sec="geo-none">Auswahl leeren</button></span></div>
+                <div class="geo-chips" id="geo-chips"></div></div>
+              <div class="geo-search"><input type="search" id="geo-q" placeholder="Land suchen, z. B. China oder CN" aria-label="Land suchen"><div class="geo-list" id="geo-list">${geoList()}</div></div>
+            </div>
+            <small>Adressen aus der IP-Freigabeliste oben sind immer erlaubt. Adressen ohne bekannte Länderzuordnung werden nicht gesperrt. Die Zuordnung stimmt in den allermeisten Fällen, kann aber über VPN-Dienste umgangen werden – sie ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</small>
+            <div class="sec-inline geo-db"><small>${G ? `Länderdaten: Stand ${esc(new Date(G.date + 'T12:00:00Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }))} · ${fmtInt.format(G.v4 + G.v6)} Adressbereiche` : '<span class="st-err">Länderdaten fehlen</span>'}</small><button type="button" class="btn sm" data-sec="geo-update">${icon('download', 'sm')}Länderdaten aktualisieren</button></div>
+          </div>
         </div>
         <p class="form-err" id="sec-err" role="alert"></p>
         <div class="sec-foot"><button type="submit" class="btn primary">${icon('check')}Einstellungen speichern</button></div>
       </form>
+      ${geoStatRows ? `<section class="gcard sec-block"><h3 class="sec-h">Abgewiesene Zugriffe nach Land <span class="muted">(7 Tage: ${fmtInt.format(d.geoBlocked7 || 0)})</span><button type="button" class="btn sm ghost sec-h-act" data-sec="geo-clear">Zurücksetzen</button></h3>
+        <table class="etab sectab"><thead><tr><th>Land</th><th class="num-s">Zugriffe gesamt</th><th class="num-s">zuletzt</th></tr></thead><tbody>${geoStatRows}</tbody></table></section>` : ''}
       <section class="gcard sec-block"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
         <table class="etab sectab"><thead><tr><th>Nutzer</th><th>IP-Adresse</th><th>Gerät</th><th>angemeldet</th><th>zuletzt aktiv</th><th class="act"></th></tr></thead><tbody>${sessRows}</tbody></table></section>
       <section class="gcard sec-block"><h3 class="sec-h">Sperren</h3>
@@ -2652,11 +2709,36 @@
       <section class="gcard sec-block"><h3 class="sec-h">Fehlgeschlagene Anmeldungen <span class="muted">(7 Tage)</span></h3>
         ${failRows ? `<table class="etab sectab"><thead><tr><th>Zeitpunkt</th><th>Benutzername</th><th>IP-Adresse</th><th>Vorgang</th></tr></thead><tbody>${failRows}</tbody></table>` : '<p class="sec-empty">Keine fehlgeschlagenen Anmeldungen.</p>'}</section>
       <p class="hint sec-note">Weitere Schutzmaßnahmen sind fest eingebaut: HTTPS mit HSTS, Schutz gegen eingeschleuste Skripte (Content-Security-Policy), Schutz gegen fremde Formulare (CSRF), sichere Sitzungs-Cookies, gesperrte Datenordner und ein lückenloses Protokoll.</p>`;
+    geoRefresh();
   }
+  $('#view-sec').addEventListener('input', (e) => {
+    if (e.target.id === 'geo-q') { geoQ = e.target.value.trim(); $('#geo-list').innerHTML = geoList(); }
+  });
+  $('#view-sec').addEventListener('change', (e) => {
+    const cc = e.target.dataset && e.target.dataset.geoCc;
+    if (cc) { if (e.target.checked) geoSel.add(cc); else geoSel.delete(cc); $('#sec-err').textContent = ''; geoRefresh(); return; }
+    if (['geoEnabled', 'geoMode'].includes(e.target.name)) geoRefresh();
+  });
   $('#view-sec').addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-geo-del]');
+    if (del) { geoSel.delete(del.dataset.geoDel); geoRefresh(); $('#geo-list').innerHTML = geoList(); return; }
     const b = e.target.closest('[data-sec]');
     if (!b) return;
     const a = b.dataset.sec;
+    if (a === 'geo-eu' || a === 'geo-none') {
+      if (a === 'geo-none') geoSel.clear(); else EUROPE.forEach((c) => geoSel.add(c));
+      geoRefresh(); $('#geo-list').innerHTML = geoList(); return;
+    }
+    if (a === 'geo-update') {
+      b.disabled = true; const t = b.innerHTML; b.innerHTML = '<span class="spinner sm"></span>Wird geladen …';
+      try { const r = await api('geo_update', { body: {} }); toast(`Länderdaten aktualisiert (Stand ${new Date(r.geo.date + 'T12:00:00Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}).`); secData.geo = r.geo; renderSecView(); }
+      catch (ex) { toast(ex.message); b.disabled = false; b.innerHTML = t; }
+      return;
+    }
+    if (a === 'geo-clear') {
+      try { await api('geo_clear_stats', { body: {} }); toast('Zähler zurückgesetzt.'); renderSecView(); } catch (ex) { toast(ex.message); }
+      return;
+    }
     if (a === 'addip') {
       const ta = $('#sec-form [name="adminIps"]');
       const list = ta.value.split(/\s+/).filter(Boolean);
@@ -2679,8 +2761,17 @@
       twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked,
       lockAfter: +f.lockAfter.value, lockMinutes: +f.lockMinutes.value, ipEnabled: f.ipEnabled.checked,
       adminIps: f.adminIps.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean),
+      geoEnabled: f.geoEnabled.checked, geoMode: f.geoMode.value, geoScope: f.geoScope.value, geoCountries: [...geoSel],
     };
     $('#sec-err').textContent = '';
+    const S0 = secData.settings;
+    if (body.geoEnabled && !body.geoCountries.length) { $('#sec-err').textContent = body.geoMode === 'allow' ? 'Bitte mindestens ein erlaubtes Land auswählen.' : 'Bitte mindestens ein Land zum Sperren auswählen.'; return; }
+    if (body.geoEnabled && (!S0.geoEnabled || S0.geoMode !== body.geoMode || S0.geoScope !== body.geoScope || S0.geoCountries.join() !== [...body.geoCountries].sort().join())) {
+      const names = body.geoCountries.sort(ccSort).map(ccName);
+      const what = body.geoMode === 'allow' ? `Zugriffe sind danach nur noch aus ${names.length > 8 ? names.length + ' ausgewählten Ländern' : names.join(', ')} möglich.` : `Zugriffe aus ${names.length > 8 ? names.length + ' Ländern' : names.join(', ')} werden danach abgewiesen.`;
+      const where = body.geoScope === 'all' ? 'Das gilt für die ganze Seite – auch Kunden in diesen Ländern sehen das Angebot dann nicht.' : 'Das gilt nur für den Eingabebereich; das öffentliche Angebot bleibt für alle sichtbar.';
+      if (!(await confirmBox('Ländersperre speichern?', `${esc(what)} ${esc(where)} Im Notfall lässt sich die Sperre auf dem Server zurücksetzen (siehe LIESMICH).`, 'Speichern'))) return;
+    }
     if (body.ipEnabled && !(await confirmBox('IP-Freigabe einschalten?', `Der Eingabebereich ist danach nur noch von ${body.adminIps.map(esc).join(', ')} erreichbar. Die öffentliche Angebotsseite bleibt frei. Im Notfall lässt sich die Freigabe auf dem Server zurücksetzen (siehe LIESMICH).`, 'Einschalten'))) return;
     try {
       await api('security_save', { body });
@@ -2703,7 +2794,7 @@
       if (me.needTwofa) { showAuth('twofa'); return; }
       await openEditor();
     } catch (e) {
-      document.body.innerHTML = `<main class="auth"><div class="auth-card"><h1 style="margin:0;font-size:18px">Eingabebereich nicht erreichbar</h1><p class="auth-intro">${esc(e.message)}</p><p class="auth-intro">Die Seite muss über den Webserver aufgerufen werden, PHP muss aktiv sein.</p></div></main>`;
+      document.body.innerHTML = `<main class="auth"><div class="auth-card"><h1 style="margin:0;font-size:18px">Eingabebereich nicht erreichbar</h1><p class="auth-intro">${esc(e.message)}</p>${e.status === 403 ? '' : '<p class="auth-intro">Die Seite muss über den Webserver aufgerufen werden, PHP muss aktiv sein.</p>'}</div></main>`;
     }
   })();
 })();

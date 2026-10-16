@@ -25,7 +25,7 @@
  *   POST ?action=master_save      Stammdaten speichern (Bearbeiter)
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
  *   GET  ?action=security_status  Sicherheitsübersicht (nur Administrator)
- *   POST ?action=security_save | session_end | ip_unblock | user_unlock
+ *   POST ?action=security_save | session_end | ip_unblock | user_unlock | geo_update
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
  *   POST ?action=user_save | user_delete
@@ -36,6 +36,7 @@
 declare(strict_types=1);
 
 $CFG = require __DIR__ . '/config.php';
+require __DIR__ . '/geo.php';
 $DATA = rtrim((string)$CFG['data_dir'], '/');
 const GUARD = "<?php http_response_code(404); exit; ?>\n";
 const CATEGORIES = ['Rind', 'Kalb', 'Schwein', 'Lamm & Schaf', 'Geflügel', 'Knochen', 'Sonstiges'];
@@ -182,13 +183,40 @@ function check_password($pw, string $username = ''): string
 /* ---------------- Sicherheitseinstellungen ---------------- */
 
 const SEC_DEFAULTS = ['twofa' => 'off', 'pwMin' => 10, 'pwComplex' => false, 'idleMinutes' => 480,
-                      'ipEnabled' => false, 'adminIps' => [], 'lockAfter' => 10, 'lockMinutes' => 15];
+                      'ipEnabled' => false, 'adminIps' => [], 'lockAfter' => 10, 'lockMinutes' => 15,
+                      'geoEnabled' => false, 'geoMode' => 'block', 'geoCountries' => [], 'geoScope' => 'admin'];
 $SEC = null;
 function sec(): array
 {
     global $SEC;
     if ($SEC === null) $SEC = array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? []);
     return $SEC;
+}
+/* Ländersperre: true, wenn diese Adresse nach den Einstellungen $S gesperrt ist.
+   Nie gesperrt: freigegebene Adressen, interne Adressen und Adressen ohne bekanntes Land. */
+function geo_blocked(string $ip, array $S): ?string
+{
+    if (empty($S['geoEnabled']) || !$S['geoCountries']) return null;
+    if ($S['adminIps'] && ip_allowed($ip, $S['adminIps'])) return null;
+    $cc = geo_country($ip);
+    if ($cc === null) return null;
+    $listed = in_array($cc, $S['geoCountries'], true);
+    return ($S['geoMode'] === 'allow' ? !$listed : $listed) ? $cc : null;
+}
+function geo_count(string $cc): void
+{
+    try {
+        with_lock('laendersperre', function () use ($cc) {
+            $a = store_read('laendersperre') ?? [];
+            $day = gmdate('Y-m-d');
+            if (($a['day'] ?? '') !== $day) { $a['days'][$a['day'] ?? $day] = $a['today'] ?? 0; $a['day'] = $day; $a['today'] = 0; }
+            $a['days'] = array_slice($a['days'] ?? [], -30, null, true);
+            $a['today'] = ($a['today'] ?? 0) + 1;
+            $c = $a['cc'][$cc] ?? ['n' => 0];
+            $a['cc'][$cc] = ['n' => $c['n'] + 1, 'last' => now()];
+            store_write('laendersperre', $a);
+        });
+    } catch (Throwable $e) { /* Zählung ist nicht kritisch */ }
 }
 function ip_in(string $ip, string $cidr): bool
 {
@@ -818,15 +846,25 @@ function master_changes(array $old, array $new): array
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
-                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock'];
+                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
 
+/* Ländersperre (ganze Seite oder nur Eingabebereich) */
+$isPublic = $action === 'offer' && empty($_GET['draft']);
+$S = sec();
+if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
+    $cc = geo_blocked(client_ip(), $S);
+    if ($cc !== null) {
+        geo_count($cc);
+        fail('Der Zugriff aus Ihrem Land ist leider nicht möglich.', 403);
+    }
+}
+
 /* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei) */
-if ($action !== 'offer' || !empty($_GET['draft'])) {
-    $S = sec();
+if (!$isPublic) {
     if (!empty($S['ipEnabled']) && $S['adminIps'] && !ip_allowed(client_ip(), $S['adminIps'])) {
         fail('Der Eingabebereich ist von dieser Internetadresse (' . client_ip() . ') aus nicht freigegeben.', 403);
     }
@@ -1111,7 +1149,13 @@ try {
             }
             usort($fails, function ($a, $b) { return strcmp($b['t'], $a['t']); });
             $f24 = count(array_filter($fails, function ($e) { return strtotime($e['t']) > time() - 86400; }));
+            $gs = store_read('laendersperre') ?? [];
+            $gcc = []; foreach ($gs['cc'] ?? [] as $k => $v) $gcc[] = ['cc' => $k, 'n' => $v['n'], 'last' => $v['last']];
+            usort($gcc, function ($a, $b) { return $b['n'] <=> $a['n']; });
+            $g7 = (($gs['day'] ?? '') === gmdate('Y-m-d') ? (int)($gs['today'] ?? 0) : 0);
+            foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
             respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
+                     'myCountry' => geo_country(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
                      'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
         }
@@ -1131,20 +1175,42 @@ try {
             $ipEnabled = !empty($b['ipEnabled']);
             if ($ipEnabled && !$ips) throw new InvalidArgumentException('Bitte mindestens eine freigegebene IP-Adresse eintragen.');
             if ($ipEnabled && !ip_allowed(client_ip(), $ips)) throw new InvalidArgumentException('Ihre aktuelle Adresse ' . client_ip() . ' ist nicht in der Liste – Sie würden sich selbst aussperren.');
+            $geoEnabled = !empty($b['geoEnabled']);
+            $geoMode = ($b['geoMode'] ?? '') === 'allow' ? 'allow' : 'block';
+            $geoScope = ($b['geoScope'] ?? '') === 'all' ? 'all' : 'admin';
+            $gc = [];
+            foreach (array_slice(is_array($b['geoCountries'] ?? null) ? $b['geoCountries'] : [], 0, 300) as $c) {
+                $c = strtoupper(trim((string)$c));
+                if (in_array($c, GEO_COUNTRIES, true) && !in_array($c, $gc, true)) $gc[] = $c;
+            }
+            sort($gc);
+            if ($geoEnabled && !$gc) throw new InvalidArgumentException($geoMode === 'allow' ? 'Bitte mindestens ein erlaubtes Land auswählen.' : 'Bitte mindestens ein Land zum Sperren auswählen.');
+            if ($geoEnabled && !geo_info()) throw new InvalidArgumentException('Die Länderdatenbank fehlt – bitte zuerst „Länderdaten aktualisieren“.');
+            $geoS = ['geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'adminIps' => $ips];
+            if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException("Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
             if ($twofa !== 'off' && empty($me['totp']) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
             $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
                     'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)$b['idleMinutes'] : 480,
                     'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
-                    'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15)))];
+                    'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15))),
+                    'geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'geoScope' => $geoScope];
             store_write('sicherheit', $new);
             $GLOBALS['SEC'] = $new;
             $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
-                  'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)'];
-            $fmt = function ($v) { return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)$v); };
+                  'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)',
+                  'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art', 'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für'];
+            $GV = ['block' => 'ausgewählte Länder sperren', 'allow' => 'nur ausgewählte Länder erlauben', 'admin' => 'nur Eingabebereich', 'all' => 'ganze Seite'];
+            $fmt = function ($v) use ($GV) { return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)($GV[$v] ?? $v)); };
             $d = [];
             foreach ($L as $k => $label) if ($fmt($old[$k] ?? null) !== $fmt($new[$k])) $d[] = ['k' => "sec|$k", 'code' => '', 'name' => 'Sicherheit', 'f' => $label, 'from' => $fmt($old[$k] ?? ''), 'to' => $fmt($new[$k])];
             if ($d) audit('security', 'Sicherheitseinstellungen geändert', $d);
             respond(['ok' => true, 'settings' => $new]);
+        }
+
+        case 'geo_clear_stats': {
+            require_auth(true, 'admin');
+            with_lock('laendersperre', function () { store_write('laendersperre', []); });
+            respond(['ok' => true]);
         }
 
         case 'session_end': {
@@ -1174,6 +1240,15 @@ try {
             });
             audit('security', 'IP-Sperre aufgehoben' . ($ip ? " ({$ip})" : ''));
             respond(['ok' => true]);
+        }
+
+        case 'geo_update': {
+            require_auth(true, 'admin');
+            @set_time_limit(180);
+            try { $r = geo_download($DATA . '/geo/laender.dat.php'); }
+            catch (Throwable $e) { error_log('[wochenangebot] geo: ' . $e->getMessage()); fail('Die Länderdaten konnten nicht aktualisiert werden. Bitte später erneut versuchen.', 502); }
+            audit('security', 'Länderdaten aktualisiert (Stand ' . $r['date'] . ')');
+            respond(['ok' => true, 'geo' => geo_info()]);
         }
 
         case 'user_unlock': {
