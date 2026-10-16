@@ -907,6 +907,9 @@
   let hist = null;            // { weeks, series, dup }
   let histLoading = null;
   let histQ = '', histOnlyChanged = false, histSort = 'offer';
+  /* Zeitraum: Anzahl Kalenderwochen zurück ab der neuesten Woche */
+  const RANGES = [['1W', 1, '1 Woche'], ['1M', 4, '1 Monat'], ['3M', 13, '3 Monate'], ['6M', 26, '6 Monate'], ['12M', 52, '12 Monate'], ['Alle', Infinity, 'gesamter Zeitraum']];
+  let histRange = RANGES.some((r) => r[0] === store.get('histRange', '3M')) ? store.get('histRange', '3M') : '3M';
   let currentView = 'edit';
 
   const nk = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '');
@@ -922,6 +925,7 @@
   }
   function buildHistory(weeks) {
     weeks = weeks.slice().sort((a, b) => a.year * 100 + a.week - (b.year * 100 + b.week));
+    for (const w of weeks) w.ord = Math.round(Date.parse(C.isoWeekRange(w.week, w.year).start) / (7 * 864e5));
     const dup = new Set();
     for (const w of weeks) {
       const c = new Map();
@@ -958,6 +962,40 @@
     });
     return { weeks, series, dup };
   }
+  /* Wochen-Indizes im gewählten Zeitraum */
+  function rangeIdx(H) {
+    const L = H.weeks.length - 1;
+    if (L < 0) return [];
+    const back = (RANGES.find((r) => r[0] === histRange) || RANGES[2])[1];
+    const from = H.weeks[L].ord - back;
+    const idx = [];
+    H.weeks.forEach((w, i) => { if (w.ord >= from) idx.push(i); });
+    return idx;
+  }
+  /* Kennzahlen eines Artikels im Zeitraum */
+  function statsFor(s, idx) {
+    const vals = idx.map((i) => s.vals[i]);
+    const nums = vals.filter((v) => v != null);
+    const L = idx[idx.length - 1];
+    let firstI = null;
+    for (const i of idx) if (s.vals[i] != null) { firstI = i; break; }
+    const last = s.vals[L];
+    let changes = 0, prev = null;
+    for (const v of vals) { if (v == null) continue; if (prev != null && v !== prev) changes++; prev = v; }
+    return {
+      vals,
+      min: nums.length ? Math.min(...nums) : null,
+      max: nums.length ? Math.max(...nums) : null,
+      avg: nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : null,
+      weeksCount: idx.filter((i) => s.points[i]).length,
+      delta: last != null && firstI != null && firstI !== L ? Number((last - s.vals[firstI]).toFixed(4)) : null,
+      deltaFrom: firstI,
+      changes,
+    };
+  }
+  const rangeSeg = () => `<div class="seg txt" role="group" aria-label="Zeitraum">${RANGES.map(([k, , t]) => `<button type="button" data-hrange="${k}" aria-pressed="${histRange === k}" title="${t}">${k}</button>`).join('')}</div>`;
+  function setRange(k) { histRange = k; store.set('histRange', k); }
+
   async function loadHistory(force) {
     if (hist && !force) return hist;
     if (!histLoading) histLoading = api('history_data').then((r) => { hist = buildHistory(r.weeks); return hist; }).finally(() => { histLoading = null; });
@@ -1005,7 +1043,8 @@
       ${H.weeks.length < 2 ? `<p class="notice" style="margin:14px 0 0">Für einen Verlauf werden mindestens zwei Wochen benötigt. Laden Sie frühere Angebotslisten hoch – mehrere Dateien auf einmal sind möglich. Jede Veröffentlichung wird ab jetzt automatisch übernommen.</p>` : ''}
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="hist-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Gruppe …" aria-label="Artikel im Preisverlauf suchen" value="${esc(histQ)}"></div>
-        <label class="check"><input type="checkbox" id="hist-only"${histOnlyChanged ? ' checked' : ''}> Nur mit Änderung zur Vorwoche</label>
+        ${rangeSeg()}
+        <label class="check"><input type="checkbox" id="hist-only"${histOnlyChanged ? ' checked' : ''}> Nur mit Preisänderung im Zeitraum</label>
         <label class="select"><span class="sr-only">Sortierung</span><select id="hist-sort">
           ${[['offer', 'Angebotsreihenfolge'], ['up', 'Größte Erhöhung'], ['down', 'Größte Senkung'], ['changes', 'Häufigste Änderungen'], ['code', 'Artikelnummer'], ['name', 'Bezeichnung']].map(([v, l]) => `<option value="${v}"${histSort === v ? ' selected' : ''}>${l}</option>`).join('')}
         </select>${icon('chev', 'sm')}</label>
@@ -1020,33 +1059,39 @@
     if (!host) return;
     if (!H.weeks.length) { host.innerHTML = ''; $('#hist-count').textContent = ''; return; }
     const toks = nk(histQ) ? histQ.toLowerCase().split(/\s+/).map(nk).filter(Boolean) : [];
-    let list = H.series.filter((s) => (!histOnlyChanged || (s.delta != null && s.delta !== 0)) && toks.every((t) => s.hay.includes(t)));
+    const idx = rangeIdx(H);
+    const st = new Map(H.series.map((s) => [s, statsFor(s, idx)]));
+    let list = H.series.filter((s) => {
+      const x = st.get(s);
+      return x.weeksCount > 0 && (!histOnlyChanged || x.changes > 0) && toks.every((t) => s.hay.includes(t));
+    });
     const L = H.weeks.length - 1;
     const by = {
       offer: (a, b) => (b.inLatest - a.inLatest) || (b.lastWi - a.lastWi) || a.order - b.order,
-      up: (a, b) => (b.delta ?? -Infinity) - (a.delta ?? -Infinity),
-      down: (a, b) => (a.delta ?? Infinity) - (b.delta ?? Infinity),
-      changes: (a, b) => b.changes - a.changes || (b.inLatest - a.inLatest),
+      up: (a, b) => (st.get(b).delta ?? -Infinity) - (st.get(a).delta ?? -Infinity),
+      down: (a, b) => (st.get(a).delta ?? Infinity) - (st.get(b).delta ?? Infinity),
+      changes: (a, b) => st.get(b).changes - st.get(a).changes || (b.inLatest - a.inLatest),
       code: (a, b) => (!a.code) - (!b.code) || String(a.code || '').localeCompare(String(b.code || ''), 'de', { numeric: true }),
       name: (a, b) => a.name.localeCompare(b.name, 'de'),
     };
     list.sort(by[histSort] || by.offer);
-    $('#hist-count').textContent = `${plural(list.length, 'Artikel', 'Artikel')} · ${wkLong(H.weeks[0])} – ${wkLong(H.weeks[L])}`;
+    $('#hist-count').textContent = `${plural(list.length, 'Artikel', 'Artikel')} · ${wkLong(H.weeks[idx[0]])} – ${wkLong(H.weeks[L])}`;
     const rows = list.map((s) => {
+      const x = st.get(s);
       const cur = s.cur ? priceShort(s.cur.price) : '';
-      const d = s.delta;
+      const d = x.delta;
       return `<tr data-skey="${esc(s.key)}" tabindex="0">
         <td class="h-code">${esc(s.code || '—')}</td>
         <td class="h-name"><div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.group)}${s.inLatest ? '' : ` · <span class="gone">nicht mehr im Angebot (zuletzt ${esc(wkLabel(H.weeks[s.lastWi]))})</span>`}</div></td>
-        <td class="h-spark">${sparkSVG(s.vals)}</td>
+        <td class="h-spark">${sparkSVG(x.vals)}</td>
         <td class="h-cur num">${s.inLatest ? esc(cur) : '<span class="muted">—</span>'}</td>
-        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[L - 1]))}">${fmtDelta(d)}</span>`}</td>
-        <td class="h-range num">${s.min == null ? '<span class="muted">—</span>' : s.min === s.max ? fmtNum.format(s.min) : `${fmtNum.format(s.min)} – ${fmtNum.format(s.max)}`}</td>
-        <td class="h-weeks num">${s.weeksCount}</td>
+        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[x.deltaFrom]))}">${fmtDelta(d)}</span>`}</td>
+        <td class="h-range num">${x.min == null ? '<span class="muted">—</span>' : x.min === x.max ? fmtNum.format(x.min) : `${fmtNum.format(x.min)} – ${fmtNum.format(x.max)}`}</td>
+        <td class="h-weeks num">${x.weeksCount}</td>
       </tr>`;
     }).join('');
     host.innerHTML = list.length ? `<div class="gcard"><table class="etab htab"><thead><tr>
-        <th class="h-code">Art.-Nr.</th><th class="h-name">Bezeichnung</th><th class="h-spark">Verlauf</th><th class="h-cur num">Aktuell €/kg</th><th class="h-delta num">Änderung</th><th class="h-range num">Spanne</th><th class="h-weeks num">Wochen</th>
+        <th class="h-code">Art.-Nr.</th><th class="h-name">Bezeichnung</th><th class="h-spark">Verlauf</th><th class="h-cur num">Aktuell €/kg</th><th class="h-delta num" title="Aktueller Preis gegenüber dem ersten Preis im gewählten Zeitraum">Änderung ${esc(histRange === 'Alle' ? '' : histRange)}</th><th class="h-range num">Spanne</th><th class="h-weeks num">Wochen</th>
       </tr></thead><tbody>${rows}</tbody></table></div>`
       : '<div class="ed-empty"><h3>Keine Artikel gefunden</h3><p>Suchbegriff oder Filter anpassen.</p></div>';
   }
@@ -1059,6 +1104,13 @@
   });
   $('#view-hist').addEventListener('click', async (e) => {
     if (e.target.closest('#hist-upload')) { $('#hist-file-input').click(); return; }
+    const rb = e.target.closest('[data-hrange]');
+    if (rb) {
+      setRange(rb.dataset.hrange);
+      for (const b of $$('#view-hist [data-hrange]')) b.setAttribute('aria-pressed', b.dataset.hrange === histRange);
+      renderHistList();
+      return;
+    }
     const del = e.target.closest('[data-hdel]');
     if (del) {
       const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
@@ -1073,9 +1125,9 @@
 
   /* ---------- Detail: Diagramm + Wochentabelle ---------- */
   const dlgSeries = $('#dlg-series');
-  function chartSVG(s, weeks) {
+  function chartSVG(s, weeks, vals) {
     const W = 680, H = 240, l = 52, r = 34, t = 14, b = 34;
-    const nums = s.vals.filter((v) => v != null);
+    const nums = vals.filter((v) => v != null);
     if (!nums.length) return '<p class="notice">In keiner Woche mit Preis.</p>';
     const vmin = Math.min(...nums), vmax = Math.max(...nums);
     const span0 = vmax - vmin || Math.max(0.5, vmax * 0.05);
@@ -1096,7 +1148,7 @@
     let xl = '';
     weeks.forEach((w, i) => { if (i % step === 0 || i === n - 1) xl += `<text class="xl" x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle">${esc(wkLabel(w))}</text>`; });
     let d = '', pen = false, dots = '';
-    s.vals.forEach((v, i) => {
+    vals.forEach((v, i) => {
       if (v == null) { pen = false; return; }
       d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1) + ' ';
       pen = true;
@@ -1108,11 +1160,16 @@
     await loadHistory();
     const s = hist.series.find((x) => x.key === key);
     if (!s) return;
-    const W = hist.weeks;
+    const idx = rangeIdx(hist);
+    const W = idx.map((i) => hist.weeks[i]);
+    const x = statsFor(s, idx);
     const cur = s.inLatest ? s.cur : null;
     let prev = null;
+    for (let i = idx[0] - 1; i >= 0; i--) if (s.vals[i] != null) { prev = s.vals[i]; break; }
     const rows = [];
-    W.forEach((w, i) => {
+    idx.forEach((wi) => {
+      const w = hist.weeks[wi];
+      const i = wi;
       const p = s.points[i];
       const v = s.vals[i];
       const ch = v != null && prev != null ? v - prev : null;
@@ -1126,19 +1183,31 @@
       <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${s.code ? 'Art.-Nr. ' + esc(s.code) + ' · ' : ''}${esc(s.group)}${s.inLatest ? '' : ' · nicht mehr im Angebot'}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
+        <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)} €</span>` : ''}</span></div>
         <div class="cmp-stats hstats">
           <div><span>Aktuell</span><strong>${cur ? esc(priceShort(cur.price)) : '—'}</strong></div>
-          <div><span>Tiefster</span><strong>${s.min != null ? fmtNum.format(s.min) + ' €' : '—'}</strong></div>
-          <div><span>Höchster</span><strong>${s.max != null ? fmtNum.format(s.max) + ' €' : '—'}</strong></div>
-          <div><span>Durchschnitt</span><strong>${s.avg != null ? fmtNum.format(Math.round(s.avg * 100) / 100) + ' €' : '—'}</strong></div>
+          <div><span>Tiefster</span><strong>${x.min != null ? fmtNum.format(x.min) + ' €' : '—'}</strong></div>
+          <div><span>Höchster</span><strong>${x.max != null ? fmtNum.format(x.max) + ' €' : '—'}</strong></div>
+          <div><span>Durchschnitt</span><strong>${x.avg != null ? fmtNum.format(Math.round(x.avg * 100) / 100) + ' €' : '—'}</strong></div>
         </div>
-        ${chartSVG(s, W)}
-        <h3 class="d-h"><span>Wochenwerte</span><span>${plural(s.weeksCount, 'Woche', 'Wochen')} im Angebot · ${plural(s.changes, 'Preisänderung', 'Preisänderungen')}</span></h3>
+        ${chartSVG(s, W, x.vals)}
+        <h3 class="d-h"><span>Wochenwerte</span><span>${plural(x.weeksCount, 'Woche', 'Wochen')} im Angebot · ${plural(x.changes, 'Preisänderung', 'Preisänderungen')}</span></h3>
         <table class="etab wtab"><thead><tr><th>Woche</th><th class="num">Preis</th><th class="num">Änderung</th><th>Abweichende Bezeichnung / Zusatzpreise</th><th>Gruppe</th></tr></thead>
         <tbody>${rows.reverse().join('')}</tbody></table>
       </div>`;
+    dlgSeries.dataset.skey = key;
     if (!dlgSeries.open) dlgSeries.showModal();
   }
+  dlgSeries.addEventListener('click', (e) => {
+    const rb = e.target.closest('[data-hrange]');
+    if (!rb) return;
+    setRange(rb.dataset.hrange);
+    openSeries(dlgSeries.dataset.skey);
+    if (currentView === 'hist' && $('#hist-list')) {
+      for (const b of $$('#view-hist [data-hrange]')) b.setAttribute('aria-pressed', b.dataset.hrange === histRange);
+      renderHistList();
+    }
+  });
 
   /* Verlauf im Artikel-Dialog des Editors */
   async function fillItemHistory(it) {
@@ -1152,8 +1221,10 @@
     const key = seriesKey({ code: it.code, name: it.name, group: g ? g.name : '' }, H.dup);
     const s = H.series.find((x) => x.key === key);
     if (!s || s.weeksCount < 1) { slot.innerHTML = '<span>Preisverlauf</span><div class="muted" style="font-size:13px">Noch keine Werte aus früheren Wochen.</div>'; return; }
-    slot.innerHTML = `<span>Preisverlauf</span><div class="item-hist">${sparkSVG(s.vals, 160, 34)}
-      <div class="ih-txt">${plural(s.weeksCount, 'Woche', 'Wochen')}${s.min != null ? ` · ${fmtNum.format(s.min)} – ${fmtNum.format(s.max)} €/kg` : ''}${s.delta ? ` · zuletzt <span class="delta ${s.delta > 0 ? 'up' : 'down'}">${fmtDelta(s.delta)}</span>` : ''}</div>
+    const x = statsFor(s, rangeIdx(H));
+    const rl = (RANGES.find((r) => r[0] === histRange) || RANGES[2])[2];
+    slot.innerHTML = `<span>Preisverlauf · ${esc(rl)}</span><div class="item-hist">${sparkSVG(x.vals, 160, 34)}
+      <div class="ih-txt">${plural(x.weeksCount, 'Woche', 'Wochen')}${x.min != null ? ` · ${fmtNum.format(x.min)} – ${fmtNum.format(x.max)} €/kg` : ''}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)}</span>` : ''}</div>
       <button type="button" class="btn sm ghost" data-ia="hist-open" data-skey="${esc(s.key)}">${icon('chart', 'sm')}Verlauf öffnen</button></div>`;
   }
   dlgItem.addEventListener('click', (e) => {
