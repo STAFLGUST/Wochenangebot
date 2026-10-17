@@ -20,6 +20,7 @@ Nützlich auf dem Server:
 - Ersteinrichtung im Browser ist auf dem Server gesperrt (Schutz, falls der Datenordner einmal leer oder defekt ist). Neuen Administrator anlegen: `sh deploy/passwort-zuruecksetzen.sh admin --neu`
 - IP-Sperre: derzeit ausgeschaltet. Einschalten im `Caddyfile` (zwei Zeilen `@fremd …` / `respond @fremd …` entkommentieren), erlaubte Adressen in `.env` → `ALLOWED_IPS=…`
 - Bestand: im Eingabebereich unter „Bestand“ die WinAB-Bestandsliste (.xls/.xlsx) hochladen. Mengen und MHD sind nur dort sichtbar, nie auf der öffentlichen Seite. Suche „MHD“ zeigt alle Artikel mit MHD bis heute + 14 Tage.
+- Mehrere Angebote: Neben dem öffentlichen Wochenangebot gibt es Kundenangebote (z. B. Edeka) mit eigenen Preisen je Artikel. Im Editor über „Preise für …“ umschalten; „Angebote verwalten“ legt neue an. Kundenangebote sind nur nach Anmeldung sichtbar (`/?angebot=<kennung>`), nie auf der öffentlichen Seite.
 - Stammdaten: Bezeichnung, Fleischart, Herkunft und Zustand je Artikelnummer; werden beim Excel-Import automatisch übernommen. „frisch“ steht nur im Zustand, nie in der Bezeichnung.
 - Nutzer, Rollen und Passwörter verwaltet der Administrator im Eingabebereich unter „Nutzer“; wer was geändert hat, steht unter „Protokoll“.
 - Sicherheit (nur Administratoren): Zwei-Faktor-Pflicht, Passwortregeln, Inaktivitäts-Abmeldung, Kontosperre, IP-Freigabe für den Eingabebereich, Ländersperre (nur Eingabebereich oder ganze Seite), aktive Sitzungen, Sperren.

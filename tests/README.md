@@ -34,6 +34,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | editor_aux | 21 | Vorwoche, Bestand im Editor |
 | revert | 16 | einzelne Änderung mit Bestätigung zurücknehmen |
 | sidenav | 12 | Navigation, Rechte je Rolle |
+| angebote | 38 | Kundenangebote: eigene Preise, Ausblenden, Übernahme, Verwaltung, Rechte, keine Kundenpreise öffentlich |
 | p0 | 13 | Ersteinrichtung gesperrt, CSV-Formel-Schutz, Sicherungs- und Bereitstellungsanzeige |
 
 Bewertung bei der Übernahme ins Repository: Alle Prüfungen sind ausführbar. Zwei Platzhalter ohne Aussage wurden

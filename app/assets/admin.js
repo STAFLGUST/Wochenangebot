@@ -66,6 +66,29 @@
   const invalid = new Map(); // Artikel-ID → ungültiger Preistext
   const autoAttr = new Set();// neue Artikel: Attribute folgen der Bezeichnung
   let filterQ = '', onlyChanges = false;
+  /* Mehrere Angebote: Standard („Wochenangebot“) + Kundenangebote mit eigenen Preisen je Artikel (it.variants[id]) */
+  const OSTD = 'std';
+  let offers = [], offersRev = 0;
+  let curOffer = store.get('angebot', OSTD);
+  const offerDef = (id) => offers.find((o) => o.id === id) || null;
+  const offerName = (id) => (id === OSTD ? 'Wochenangebot' : (offerDef(id) || {}).name || id);
+  const offerShort = (id) => (id === OSTD ? 'Wochenangebot' : offerName(id).replace(/^Wochenangebot[\s–-]*/i, '') || offerName(id));
+  const knownOffer = (id) => id === OSTD || !!offerDef(id);
+  /* Wirksamer Preis eines Artikels in einem Angebot; null = dort ausgeblendet */
+  function effPrice(it, oid) {
+    if (oid === OSTD) return it.price || { status: 'none' };
+    const v = it.variants && it.variants[oid];
+    if (v) return v.status === 'hidden' ? null : v.status === 'value' ? { status: 'value', value: v.value } : { status: 'request' };
+    const d = offerDef(oid);
+    return d && d.fallback === 'hidden' ? null : (it.price || { status: 'none' });
+  }
+  function variantShort(v, oid) {
+    if (!v) { const d = offerDef(oid); return d && d.fallback === 'hidden' ? 'ausgeblendet (kein eigener Preis)' : 'Standardpreis'; }
+    if (v.status === 'hidden') return 'ausgeblendet';
+    return v.status === 'value' ? fmtNum.format(v.value) + ' €/kg' : 'auf Anfrage';
+  }
+  const ownCount = (oid) => (model ? model.items.filter((i) => i.variants && i.variants[oid] && i.variants[oid].status !== 'hidden').length : 0);
+  const vChanges = () => (diff && diff.variantChanged ? diff.variantChanged.filter((c) => knownOffer(c.offer)) : []);
 
   /* ---------- API ---------- */
   async function api(action, opts = {}) {
@@ -358,6 +381,7 @@
     undoStack = [];
     invalid.clear();
     applyRole();
+    await loadOffers().catch(() => {});
     renderAll();
     setSaveState(d.draft ? 'saved' : 'clean');
     loadAux();
@@ -394,6 +418,7 @@
     renderChanges();
     renderMetaInfo();
     updatePublishBtn();
+    renderOfferBar();
     setSaveState('pending');
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 700);
@@ -453,6 +478,7 @@
     $$('[data-company]').forEach((el) => { el.textContent = company; el.hidden = !company; });
     renderMeta();
     diff = C.diffOffers(published, model);
+    renderOfferBar();
     renderGroups();
     renderNoPrice();
     renderChanges();
@@ -489,7 +515,8 @@
       el.innerHTML = `<div class="chg has">${icon('info')}<span>Noch keine Veröffentlichung vorhanden – nach dem Veröffentlichen erscheint das Angebot auf der öffentlichen Seite.</span></div>`;
       return;
     }
-    const n = diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + (metaChanged() ? 1 : 0);
+    const vc = vChanges();
+    const n = diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vc.length + (metaChanged() ? 1 : 0);
     if (!n) { el.innerHTML = ''; return; }
     const parts = [];
     if (metaChanged()) parts.push(`<span class="chg-pill k-edit"><i></i>Kopfdaten geändert</span>`);
@@ -497,11 +524,15 @@
     if (diff.added.length) parts.push(`<span class="chg-pill k-new"><i></i><b>${diff.added.length}</b> neu</span>`);
     if (diff.changed.length) parts.push(`<span class="chg-pill k-edit"><i></i><b>${diff.changed.length}</b> bearbeitet</span>`);
     if (diff.removed.length) parts.push(`<span class="chg-pill k-del"><i></i><b>${diff.removed.length}</b> entfernt</span>`);
+    if (vc.length) {
+      const per = new Map(); vc.forEach((c) => per.set(c.offer, (per.get(c.offer) || 0) + 1));
+      parts.push(`<span class="chg-pill k-price" title="${esc([...per].map(([o, k]) => `${offerShort(o)}: ${k}`).join(' · '))}"><i></i><b>${vc.length}</b> Angebotspreis${vc.length === 1 ? '' : 'e'} geändert</span>`);
+    }
     el.innerHTML = `<div class="chg has"><strong>Unveröffentlichte Änderungen:</strong>${parts.join('')}</div>`;
   }
   function updatePublishBtn() {
     const b = $('#btn-publish');
-    const n = !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + (metaChanged() ? 1 : 0);
+    const n = !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + (metaChanged() ? 1 : 0);
     b.innerHTML = `${icon('send')}<span class="lbl">Veröffentlichen</span>${n ? `<span class="badge-n">${published ? n : '!'}</span>` : ''}`;
   }
 
@@ -510,6 +541,12 @@
 
   function rowState(it) {
     if (diff.added.includes(it.id)) return 'is-new';
+    if (curOffer !== OSTD) {
+      if (vChanges().some((c) => c.id === it.id && c.offer === curOffer)) return 'is-price';
+      const d = offerDef(curOffer);
+      if (diff.priceChanged.includes(it.id) && !(it.variants && it.variants[curOffer]) && !(d && d.fallback === 'hidden')) return 'is-price';
+      return diff.changed.includes(it.id) ? 'is-edit' : '';
+    }
     if (diff.priceChanged.includes(it.id)) return 'is-price';
     if (diff.changed.includes(it.id)) return 'is-edit';
     return '';
@@ -534,10 +571,24 @@
       <td class="e-origin"><input class="in" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="nicht angegeben" aria-label="Herkunft" maxlength="60"></td>
       <td class="e-cond"><select class="in" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select></td>
       ${prevCellHTML(it)}
-      <td class="e-price">${label}<input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${was}${alts}</td>
+      ${curOffer === OSTD ? `<td class="e-price">${label}<input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${was}${alts}</td>` : variantCellHTML(it, st)}
       ${stockCellHTML(it)}
       <td class="e-act"><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, löschen">${icon('dots')}</button></td>
     </tr>`;
+  }
+  function variantCellHTML(it, st) {
+    const v = it.variants && it.variants[curOffer];
+    const d = offerDef(curOffer);
+    const key = it.id + '|' + curOffer;
+    const bad = invalid.has(key);
+    const hiddenOwn = v && v.status === 'hidden';
+    const hidden = hiddenOwn || (!v && d && d.fallback === 'hidden');
+    const val = bad ? invalid.get(key) : v && !hiddenOwn ? priceToInput(effPrice(it, curOffer)) : '';
+    const ph = hiddenOwn ? 'ausgeblendet' : !v ? (d && d.fallback === 'hidden' ? 'ausgeblendet' : 'Std. ' + (priceToInput(it.price) || 'ohne Preis')) : 'ohne Preis';
+    const ch = st === 'is-price' && vChanges().find((c) => c.id === it.id && c.offer === curOffer);
+    const was = ch ? `<span class="was" title="Veröffentlichter Preis in diesem Angebot">bisher <s>${esc(variantShort(ch.from, curOffer))}</s></span>` : '';
+    return `<td class="e-price e-var${hidden ? ' is-hidden' : ''}${v && !hiddenOwn ? ' own' : ''}"><div class="vrow"><input class="in num${bad ? ' invalid' : ''}" data-f="vprice" value="${esc(val)}" placeholder="${esc(ph)}" aria-label="Preis ${esc(offerShort(curOffer))} in Euro je kg" inputmode="decimal"${hiddenOwn ? ' disabled' : ''}>`
+      + `<button type="button" class="vtog${hiddenOwn ? ' on' : ''}" data-act="v-hide" title="${hiddenOwn ? 'Wieder im Angebot zeigen' : 'In diesem Angebot ausblenden'}" aria-label="${hiddenOwn ? 'Wieder zeigen' : 'Ausblenden'}" aria-pressed="${hiddenOwn ? 'true' : 'false'}">${icon('eye', 'sm')}</button></div>${was}</td>`;
   }
   function updateRow(id) {
     const find = () => $(`tr[data-id="${CSS.escape(id)}"]`);
@@ -606,6 +657,20 @@
     } else if (f === 'category') it.category = v;
     else if (f === 'condition') it.condition = v;
     else if (f === 'origin') it.origin = C.clean(v) || null;
+    else if (f === 'vprice') {
+      const key = it.id + '|' + curOffer, t = v.trim();
+      if (!t) {
+        invalid.delete(key);
+        if (it.variants) delete it.variants[curOffer];
+      } else {
+        const p = inputToPrice(t);
+        if (!p || p.status === 'none') { invalid.set(key, v); el.classList.add('invalid'); toast('Preis nicht lesbar – bitte z. B. 23,30 oder „a. Anfr.“ eingeben; leer = ' + (offerDef(curOffer) && offerDef(curOffer).fallback === 'hidden' ? 'ausgeblendet.' : 'Standardpreis.')); return 'invalid'; }
+        invalid.delete(key);
+        it.variants = it.variants || {};
+        it.variants[curOffer] = p.status === 'value' ? { status: 'value', value: p.value } : { status: 'request' };
+      }
+      if (it.variants && !Object.keys(it.variants).length) delete it.variants;
+    }
     else if (f === 'price') {
       const p = inputToPrice(v, it.price.label);
       if (!p) { invalid.set(it.id, v); el.classList.add('invalid'); toast('Preis nicht lesbar – bitte z. B. 23,30 oder „a. Anfr.“ eingeben.'); return 'invalid'; }
@@ -684,6 +749,17 @@
     const tr = b.closest('tr[data-id]');
     if (act === 'item' && tr) { openItem(tr.dataset.id); return; }
     if (ro) return;
+    if (act === 'v-hide' && tr) {
+      const it = iById(tr.dataset.id);
+      if (!it || curOffer === OSTD) return;
+      pushUndo();
+      const v = it.variants && it.variants[curOffer];
+      if (v && v.status === 'hidden') { delete it.variants[curOffer]; if (!Object.keys(it.variants).length) delete it.variants; }
+      else { it.variants = it.variants || {}; it.variants[curOffer] = { status: 'hidden' }; invalid.delete(it.id + '|' + curOffer); }
+      changed({ row: it.id });
+      renderOfferBar();
+      return;
+    }
     if (act === 'import') { pickFile(); return; }
     if (act === 'add-group') { addGroup(); return; }
     if (!g) return;
@@ -964,6 +1040,166 @@
     }
   });
 
+  /* ======================= Angebote (Standard + Kundenangebote) ======================= */
+  async function loadOffers() {
+    const r = await api('offers');
+    offers = r.offers || [];
+    offersRev = r.rev || 0;
+    if (!knownOffer(curOffer)) curOffer = OSTD;
+  }
+  function renderOfferBar() {
+    const host = $('#offer-bar');
+    if (!host || !model) return;
+    host.hidden = false;
+    const ids = [OSTD, ...offers.map((o) => o.id)];
+    const d = offerDef(curOffer);
+    const hint = curOffer === OSTD
+      ? 'Grundpreise des Wochenangebots (öffentliche Angebotsseite). Kundenangebote oben auswählen.'
+      : `Eigene Preise für <strong>${esc(offerName(curOffer))}</strong>. Feld leer = ${d && d.fallback === 'hidden' ? 'Artikel wird in diesem Angebot <strong>nicht angezeigt</strong>' : '<strong>Standardpreis</strong> gilt'}; ${icon('eye', 'sm')} blendet einen Artikel nur hier aus. Artikel, Bezeichnungen und Gruppen gelten für alle Angebote.`;
+    host.innerHTML = `<div class="ob-row"><span class="ob-l">Preise für</span>
+      <div class="ob-tabs" role="tablist" aria-label="Angebot wählen">${ids.map((id) => { const n = id === OSTD ? 0 : ownCount(id); return `<button role="tab" type="button" data-offer="${esc(id)}" aria-selected="${id === curOffer}"${id === OSTD ? ' class="std"' : ''}>${esc(offerShort(id))}${id !== OSTD ? `<small title="eigene Preise">${n}</small>` : ''}</button>`; }).join('')}</div>
+      <span class="ob-act">${!ro && curOffer !== OSTD ? `<button type="button" class="btn sm ghost" data-ob="copy">${icon('copy', 'sm')}Preise übernehmen</button>` : ''}${!ro ? `<button type="button" class="btn sm ghost" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}</span></div>
+      <p class="ob-hint">${hint}</p>`;
+    const site = $('#btn-site');
+    if (site) site.href = '../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
+  }
+  function setOffer(id) {
+    if (!knownOffer(id) || id === curOffer) return;
+    if (document.activeElement && document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true }));
+    curOffer = id;
+    store.set('angebot', id);
+    renderOfferBar();
+    renderGroups();
+    renderNoPrice();
+  }
+  $('#offer-bar').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-offer]');
+    if (t) { setOffer(t.dataset.offer); return; }
+    const b = e.target.closest('[data-ob]');
+    if (!b) return;
+    if (b.dataset.ob === 'manage') openOffers();
+    if (b.dataset.ob === 'copy') openCopy();
+  });
+  $('#offer-bar').addEventListener('keydown', (e) => {
+    if (!e.target.matches('[data-offer]') || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    const tabs = $$('#offer-bar [data-offer]'), i = tabs.indexOf(e.target);
+    const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    setOffer(n.dataset.offer); $(`#offer-bar [data-offer="${CSS.escape(n.dataset.offer)}"]`).focus();
+  });
+
+  /* Angebote verwalten: anlegen, umbenennen, Regel für Artikel ohne eigenen Preis, löschen (Administrator) */
+  const dlgOffers = $('#dlg-offers');
+  let offerEdit = [];
+  const slug = (t) => fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
+  function openOffers() {
+    offerEdit = offers.map((o) => ({ ...o }));
+    renderOffersDlg();
+    dlgOffers.showModal();
+  }
+  function renderOffersDlg(err = '') {
+    const admin = can('admin');
+    $('#offers-body').innerHTML = `<div class="dlg-head"><div><h2 id="of-title">Angebote verwalten</h2><p>Alle Angebote nutzen dieselbe Artikelliste; Preise werden je Angebot eingetragen. Kundenangebote sind nur nach Anmeldung sichtbar, nie auf der öffentlichen Seite.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <table class="etab oftab"><thead><tr><th>Name</th><th>Artikel ohne eigenen Preis</th><th class="num-s">Eigene Preise</th><th class="act"></th></tr></thead><tbody>
+          <tr class="of-std"><td><strong>Wochenangebot</strong><div class="sub">Standard · öffentliche Angebotsseite</div></td><td class="sub">–</td><td class="num-s">–</td><td></td></tr>
+          ${offerEdit.map((o, i) => `<tr data-oi="${i}"><td><input class="in" data-of="name" value="${esc(o.name)}" maxlength="80" aria-label="Name des Angebots"></td>
+            <td><select class="in" data-of="fallback" aria-label="Artikel ohne eigenen Preis"><option value="standard"${o.fallback !== 'hidden' ? ' selected' : ''}>Standardpreis zeigen</option><option value="hidden"${o.fallback === 'hidden' ? ' selected' : ''}>nicht anzeigen</option></select></td>
+            <td class="num-s">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ownCount(o.id))}</td>
+            <td class="act">${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
+        </tbody></table>
+        <button type="button" class="btn sm" data-ofa="add">${icon('plus', 'sm')}Angebot hinzufügen</button>
+        <p class="form-err" id="of-err" role="alert">${esc(err)}</p>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ofa="save">${icon('check')}Speichern</button></div>`;
+  }
+  $('#offers-body').addEventListener('input', (e) => {
+    const tr = e.target.closest('[data-oi]');
+    if (tr && e.target.dataset.of) offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value;
+  });
+  $('#offers-body').addEventListener('change', (e) => {
+    const tr = e.target.closest('[data-oi]');
+    if (tr && e.target.dataset.of) offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value;
+  });
+  $('#offers-body').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-ofa]');
+    if (!b) return;
+    const a = b.dataset.ofa;
+    if (a === 'add') {
+      offerEdit.push({ id: '', name: 'Wochenangebot ', fallback: 'standard', isNew: true });
+      renderOffersDlg();
+      const inp = $$('#offers-body [data-of="name"]').pop(); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+      return;
+    }
+    if (a === 'del') {
+      const i = +b.closest('[data-oi]').dataset.oi, o = offerEdit[i];
+      if (!o.isNew) {
+        const n = ownCount(o.id);
+        if (!(await confirmBox('Angebot löschen?', `„${esc(o.name)}“ wird beim Speichern gelöscht${n ? ` – mit ${n} eigenen Preis${n === 1 ? '' : 'en'}` : ''}. Das lässt sich nicht rückgängig machen.`, 'Löschen', true))) return;
+      }
+      offerEdit.splice(i, 1);
+      renderOffersDlg();
+      return;
+    }
+    if (a === 'save') {
+      const used = new Set(offers.map((o) => o.id));
+      const list = offerEdit.map((o) => {
+        let id = o.id;
+        if (!id) { const base = slug(o.name); id = base; let k = 2; while (used.has(id) || id === OSTD) id = `${base}-${k++}`; used.add(id); }
+        return { id, name: C.clean(o.name), fallback: o.fallback === 'hidden' ? 'hidden' : 'standard' };
+      });
+      b.disabled = true;
+      try {
+        const r = await api('offers_save', { body: { rev: offersRev, offers: list } });
+        offers = r.offers; offersRev = r.rev;
+        const gone = new Set(list.map((o) => o.id));
+        let dropped = false;
+        for (const it of model.items) if (it.variants) for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; }
+        if (!knownOffer(curOffer)) curOffer = OSTD;
+        dlgOffers.close();
+        toast('Angebote gespeichert.');
+        diff = C.diffOffers(published, model);
+        renderOfferBar(); renderGroups(); renderChanges(); updatePublishBtn();
+        if (dropped) changed({ render: true });
+      } catch (ex) { b.disabled = false; renderOffersDlg(ex.message); }
+    }
+  });
+
+  /* Preise übernehmen: aus dem Standard oder einem anderen Angebot, optional mit Auf-/Abschlag */
+  const dlgCopy = $('#dlg-offer-copy');
+  function openCopy() {
+    const ids = [OSTD, ...offers.map((o) => o.id)].filter((id) => id !== curOffer);
+    $('#offer-copy-body').innerHTML = `<div class="dlg-head"><div><h2 id="oc-title">Preise übernehmen</h2><p>Ziel: <strong>${esc(offerName(curOffer))}</strong>. Übernommene Preise sind danach eigene Preise dieses Angebots und lassen sich einzeln ändern.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body form-grid two">
+        <label class="fld"><span>Aus Angebot</span><select name="src">${ids.map((id) => `<option value="${esc(id)}">${esc(offerName(id))}</option>`).join('')}</select></label>
+        <label class="fld"><span>Auf-/Abschlag in %</span><input name="pct" type="number" step="0.5" value="0" inputmode="decimal"></label>
+        <label class="fld"><span>Runden auf</span><select name="round"><option value="0.01">0,01 €</option><option value="0.05" selected>0,05 €</option><option value="0.1">0,10 €</option></select></label>
+        <label class="fld"><span>Welche Artikel</span><select name="mode"><option value="empty">nur Artikel ohne eigenen Preis</option><option value="all">alle (eigene Preise überschreiben)</option></select></label>
+        <p class="hint span2">„Auf Anfrage“ wird übernommen, Artikel ohne Preis werden übersprungen. Mit „Rückgängig“ lässt sich die Übernahme zurücknehmen.</p>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('copy')}Übernehmen</button></div>`;
+    dlgCopy.showModal();
+  }
+  $('#offer-copy-body').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target.elements, src = f.src.value, pct = Number(String(f.pct.value).replace(',', '.')) || 0, step = Number(f.round.value), all = f.mode.value === 'all';
+    if (Math.abs(pct) > 50) { toast('Auf-/Abschlag bitte zwischen −50 und +50 %.'); return; }
+    pushUndo();
+    let n = 0;
+    for (const it of model.items) {
+      const has = it.variants && it.variants[curOffer];
+      if (has && !all) continue;
+      const p = src === OSTD ? it.price : (it.variants && it.variants[src]) || null;
+      if (!p || (p.status !== 'value' && p.status !== 'request')) continue;
+      it.variants = it.variants || {};
+      it.variants[curOffer] = p.status === 'value' ? { status: 'value', value: Math.round(Math.round(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      invalid.delete(it.id + '|' + curOffer);
+      n++;
+    }
+    dlgCopy.close();
+    changed({ render: true });
+    toast(n ? `${plural(n, 'Preis', 'Preise')} aus „${offerShort(src)}“ übernommen${pct ? ` (${pct > 0 ? '+' : ''}${fmtNum.format(pct)} %)` : ''}.` : 'Keine Preise übernommen.');
+  });
+
   /* ======================= Veröffentlichen ======================= */
   const dlgPublish = $('#dlg-publish');
   function openPublish() {
@@ -987,7 +1223,9 @@
       if (diff.added.length) body += sec(`Neu (${diff.added.length})`, list(diff.added, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span>${rv('added', it.id)}</li>`, 50));
       if (diff.changed.length) body += sec(`Bearbeitet (${diff.changed.length})`, list(diff.changed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}${changedFields(before.get(it.id), it)}</span><span>${esc(gById(it.groupId)?.name || '')}</span>${rv('changed', it.id)}</li>`, 50));
       if (diff.removed.length) body += sec(`Entfernt (${diff.removed.length})`, list(diff.removed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span>${rv('removed', it.id)}</li>`, 50));
-      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
+      const vc = vChanges();
+      if (vc.length) body += sec(`Angebotspreise (${vc.length})`, `<ul class="plist">${vc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span><b class="ob-tag">${esc(offerShort(c.offer))}</b> ${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(variantShort(c.from, c.offer))} → <strong>${esc(variantShort(c.to, c.offer))}</strong></span>${rv('variant', c.id + '|' + c.offer)}</li>` : ''; }).join('')}${vc.length > 80 ? `<li><span>… und ${vc.length - 80} weitere</span><span></span></li>` : ''}</ul>`);
+      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
     const can = !v.errors.length;
@@ -1005,6 +1243,14 @@
   /* Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen */
   function revertChange(kind, id) {
     if (kind === 'meta') { model.meta = clone(published.meta); return; }
+    if (kind === 'variant') {
+      const [iid, oid] = id.split('|');
+      const it = model.items.find((x) => x.id === iid), c = vChanges().find((x) => x.id === iid && x.offer === oid);
+      if (!it || !c) return;
+      if (c.from) { it.variants = it.variants || {}; it.variants[oid] = clone(c.from); } else if (it.variants) { delete it.variants[oid]; if (!Object.keys(it.variants).length) delete it.variants; }
+      invalid.delete(iid + '|' + oid);
+      return;
+    }
     const pub = published.items;
     if (kind === 'added') { const i = model.items.findIndex((x) => x.id === id); if (i >= 0) model.items.splice(i, 1); invalid.delete(id); return; }
     if (kind === 'price' || kind === 'changed') {
@@ -1033,6 +1279,11 @@
     }
   }
   function revertText(kind, id) {
+    if (kind === 'variant') {
+      const [iid, oid] = id.split('|');
+      const it = model.items.find((x) => x.id === iid), c = vChanges().find((x) => x.id === iid && x.offer === oid);
+      return ['Angebotspreis zurücknehmen?', `Der Preis von „${esc(it ? (it.code ? it.code + ' · ' : '') + it.name : iid)}“ im Angebot <strong>${esc(offerName(oid))}</strong> wird von <strong>${esc(variantShort(c && c.to, oid))}</strong> wieder auf <strong>${esc(variantShort(c && c.from, oid))}</strong> gesetzt.`];
+    }
     const it = model.items.find((x) => x.id === id) || published.items.find((x) => x.id === id);
     const nm = it ? `„${esc(it.code ? it.code + ' · ' : '')}${esc(it.name)}“` : '';
     const o = diff.before[id];
@@ -1129,7 +1380,7 @@
     if (!a) return;
     setMenu(false);
     if (a === 'versions') openVersions();
-    if (a === 'open-site') window.open('../', '_blank', 'noopener');
+    if (a === 'open-site') window.open('../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : ''), '_blank', 'noopener');
     if (a === 'twofa') openTwofaDialog();
     if (a === 'password') { $('#pw-form').reset(); $('#pw-err').textContent = ''; $('#dlg-password').showModal(); }
     if (a === 'theme') {
@@ -1181,7 +1432,8 @@
   $('#btn-preview').addEventListener('click', async () => {
     const w = window.open('', '_blank');
     if (unsaved()) await saveNow();
-    if (w) w.location = '../?vorschau=1'; else location.href = '../?vorschau=1';
+    const u = '../?vorschau=1' + (curOffer !== OSTD ? '&angebot=' + encodeURIComponent(curOffer) : '');
+    if (w) w.location = u; else location.href = u;
   });
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
   for (const d of $$('dialog')) d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm') d.close(); } });
@@ -2016,13 +2268,15 @@
   const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${String(prevWeek.year).slice(2)}` : '');
   function auxHeadHTML() {
     return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche<small>${esc(prevLabel())}</small></th>`
-      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}</small></th>`
+      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`
       + `<th class="e-stock" title="Verfügbarer Bestand (eingelagert)${stock && stock.date ? ' · Stand ' + esc(dmy(stock.date)) : ''}">Bestand kg<small>${stock && stock.date ? 'Stand ' + esc(mhdShort(stock.date)) : ''}</small></th>`;
   }
   function prevCellHTML(it) {
-    const p = prevOf(it);
+    const h = prevOf(it);
+    const pp = h ? effPrice(h, curOffer) : null;   // Vorwochenpreis in diesem Angebot (Preisverlauf enthält die Angebotspreise)
+    const p = pp ? { price: pp } : null;
     const t = !p ? '—' : p.price.status === 'value' ? fmtNum.format(p.price.value) : p.price.status === 'request' ? 'a. Anfr.' : '—';
-    const cur = it.price, pv = p && p.price.status === 'value' ? p.price.value : null;
+    const cur = effPrice(it, curOffer) || { status: 'none' }, pv = p && p.price.status === 'value' ? p.price.value : null;
     const d = pv != null && cur.status === 'value' ? Math.round((cur.value - pv) * 1000) / 1000 : null;
     const delta = d ? `<span class="pdelta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : '−'}${fmtNum.format(Math.abs(d))}</span>` : '';
     return `<td class="e-prev${p ? '' : ' none'}" title="${p ? esc(`Preis ${prevLabel()}: ${priceShort(p.price)}`) : 'In der Vorwoche nicht im Angebot'}">${esc(t)}${delta}</td>`;
@@ -2542,11 +2796,11 @@
     ['user', 'Nutzerverwaltung'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth' }[a] || '');
-  const ACTION_LABEL = { draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth' }[a] || '');
+  const ACTION_LABEL = { offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
-    for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price') p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
+    for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
     const parts = [];
     if (p) parts.push(`${plural(p, 'Preis', 'Preise')} geändert`);
     if (n) parts.push(`${plural(n, 'Artikel', 'Artikel')} neu`);
@@ -2594,7 +2848,7 @@
     if (!d || !d.length) return '';
     return `<table class="ctab"><thead><tr><th>Art.-Nr.</th><th>Artikel / Bereich</th><th>Feld</th><th>Vorher</th><th>Nachher</th></tr></thead><tbody>${d.map((c) => {
       const f = c.k.split('|')[1];
-      const cls = f === 'price' ? 'ch-price' : f === '+' ? 'ch-new' : f === '-' ? 'ch-del' : '';
+      const cls = f === 'price' || String(f).startsWith('v:') ? 'ch-price' : f === '+' ? 'ch-new' : f === '-' ? 'ch-del' : '';
       return `<tr class="${cls}"><td class="ch-code">${esc(c.code || '')}</td><td>${esc(c.name)}</td><td>${esc(c.f)}</td><td class="c-from">${c.from === '' ? '<span class="muted">—</span>' : esc(c.from)}</td><td class="c-to">${c.to === '' ? '<span class="muted">—</span>' : esc(c.to)}</td></tr>`;
     }).join('')}</tbody></table>`;
   }
