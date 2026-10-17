@@ -29,6 +29,7 @@ regexes = [
   '''Merk-Kennwort-31''',
   '''Weg-Kennwort-42''',
   '''Neu-Merk-Kennwort-7''',
+  '''Kantine-Kennwort-5''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]
