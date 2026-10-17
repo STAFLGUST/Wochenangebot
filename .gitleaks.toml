@@ -3,7 +3,7 @@
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Feste Test-Passwörter (tests/e2e)"
 regexTarget = "match"
 regexes = [
@@ -32,3 +32,10 @@ regexes = [
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]
+
+[[allowlists]]
+description = "Erfundene Passwörter nur in den zwei Admin-Bestätigungstests"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''^tests/e2e/test_admin_confirmation(_ui)?\.py$''']
+regexes = ['''^(Leser-Geheimnis-123|Weiteres-Geheimnis-123|Replacement-Passwort-123|Falsch-Geheimnis-123)$''']

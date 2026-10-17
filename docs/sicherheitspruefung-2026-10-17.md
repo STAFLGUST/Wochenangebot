@@ -97,3 +97,10 @@ Neue Gruppen `admin_confirmation` und `admin_confirmation_ui`; vorhandene Gruppe
 
 Offen: bekannte Container-Befunde aus dem bisherigen Bericht, betriebliche Protokoll-Löschfristen und
 unabhängige externe Sicherung (auf ausdrücklichen Wunsch verschoben). Keine Änderung am Release-Prozess.
+
+Beim Abgleich mit den parallel hinzugekommenen Kundenfunktionen bleibt zusätzlich offen:
+`kunde_passwort` besitzt noch keine eigene Fehlversuchsbremse für den Nachweis des bisherigen Passworts.
+Die neue Mitarbeiter-Bremse greift dort bewusst nicht in die getrennte Kunden-Anmeldung ein.
+Außerdem sollte dieser Kundenpfad vor dem Schreiben innerhalb der Kundensperre die Sitzungsversion
+nochmals prüfen, damit eine zwischenzeitliche Zugangssperre oder Rücksetzung nicht überholt wird.
+Diese Punkte sind durch Codeprüfung erkannt, in diesem PR jedoch nicht behoben.
