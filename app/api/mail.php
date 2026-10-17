@@ -108,7 +108,7 @@ function mail_addr(string $email, string $name = ''): string
     return $n . ' <' . $email . '>';
 }
 /* Vollständige Nachricht (Text + HTML) */
-function mail_build(array $cfg, string $to, string $toName, string $subject, string $text, string $html): string
+function mail_build(array $cfg, string $to, string $toName, string $subject, string $text, string $html, array $extra = []): string
 {
     $b = 'wa' . bin2hex(random_bytes(12));
     $dom = substr(strrchr($cfg['from'], '@'), 1) ?: 'localhost';
@@ -122,6 +122,7 @@ function mail_build(array $cfg, string $to, string $toName, string $subject, str
         'Content-Type: multipart/alternative; boundary="' . $b . '"',
     ];
     if ($cfg['replyTo'] !== '') $h[] = 'Reply-To: ' . mail_addr($cfg['replyTo']);
+    foreach ($extra as $k => $v) if (preg_match('/^[A-Za-z-]+$/', (string)$k)) $h[] = $k . ': ' . mail_clean_header((string)$v);
     $part = function (string $type, string $body) use ($b) {
         return "--$b\r\nContent-Type: $type; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . rtrim(chunk_split(base64_encode($body), 76, "\r\n")) . "\r\n";
     };
@@ -222,7 +223,7 @@ final class Smtp
 
 /* ---------- Vorlagen ---------- */
 function mail_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
-function mail_layout(string $title, string $bodyHtml, string $signature, string $footer): string
+function mail_layout(string $title, string $bodyHtml, string $signature, string $footer, string $footHtml = ''): string
 {
     $sig = nl2br(mail_h($signature));
     $foot = mail_h($footer);
@@ -234,6 +235,7 @@ function mail_layout(string $title, string $bodyHtml, string $signature, string 
         . '<tr><td style="padding:10px 28px 24px;font-size:15px;line-height:1.55;">' . $bodyHtml
         . ($sig !== '' ? '<p style="margin:22px 0 0;color:#4a443e;">' . $sig . '</p>' : '') . '</td></tr></table>'
         . ($foot !== '' ? '<p style="max-width:560px;margin:14px auto 0;font-size:12px;line-height:1.5;color:#857c72;">' . $foot . '</p>' : '')
+        . $footHtml
         . '</td></tr></table></body></html>';
 }
 function mail_button(string $url, string $label): string

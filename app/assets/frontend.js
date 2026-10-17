@@ -1182,11 +1182,47 @@ async function kundeLinkStart() {
   return true;
 }
 
+/* Abmeldelink aus der Angebotsmail: …/#abmelden=<Code>. Erst nach Klick auf „Abmelden“ wird abgemeldet
+   (Link-Vorschauen von Mailprogrammen lösen so nichts aus). Die E-Mail-Adresse bleibt beim Händler gespeichert. */
+async function abmeldenStart() {
+  const m = location.hash.match(/^#abmelden=(k[a-f0-9]{12}\.[A-Za-z0-9_-]{32})$/);
+  if (!m) return false;
+  const tok = m[1];
+  history.replaceState(null, '', location.pathname + location.search);
+  document.body.classList.add('k-gate');
+  $('#subbar').textContent = '';
+  const host = $('#list');
+  const show = (ico, title, text, actions = '') => {
+    host.innerHTML = `<div class="empty k-locked k-abm"><div class="empty-ico">${icon(ico)}</div><h3>${esc(title)}</h3><p>${text}</p><div class="row-actions">${actions}</div><p class="kerr" id="abm-err" role="alert"></p></div>`;
+  };
+  let info;
+  try { info = await kundeApi('kunde_abmelden_info', { token: tok }); }
+  catch (ex) { show('info', 'Link ungültig', esc(ex.message), '<a class="btn" href="./">Zum Wochenangebot</a>'); return true; }
+  const who = `<strong>${esc(info.firma)}</strong>${info.email ? ` (${esc(info.email)})` : ''}`;
+  const ask = () => show('mail', 'Wochenangebot per E-Mail abbestellen', `Möchten Sie für ${who} das Wochenangebot von ${esc(info.company)} nicht mehr per E-Mail erhalten?`,
+    `<button type="button" class="btn primary" data-abm="ab">Abmelden</button><a class="btn" href="./">Abbrechen</a>`);
+  const done = () => show('check', 'Sie sind abgemeldet', `${who} erhält das Wochenangebot nicht mehr per E-Mail. Ihr Zugang zum Angebotsportal bleibt bestehen – das Angebot finden Sie dort jederzeit.`,
+    `<a class="btn" href="./">Zum Angebotsportal</a><button type="button" class="btn ghost" data-abm="wieder">Versehentlich? Wieder anmelden</button>`);
+  const again = () => show('check', 'Wieder angemeldet', `${who} erhält das Wochenangebot wieder per E-Mail.`, '<a class="btn" href="./">Zum Angebotsportal</a>');
+  if (info.subscribed) ask(); else done();
+  host.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-abm]');
+    if (!b) return;
+    b.disabled = true;
+    try {
+      const r = await kundeApi('kunde_abmelden', { token: tok, wieder: b.dataset.abm === 'wieder' });
+      if (r.subscribed) again(); else done();
+    } catch (ex) { $('#abm-err').textContent = ex.message; b.disabled = false; }
+  });
+  return true;
+}
+
 /* ---------- Start ---------- */
 (async function boot() {
   updateThemeBtn();
   bindKunde();
   if (!PREVIEW && await kundeLinkStart()) return;                    // Passwort über Link aus der E-Mail festlegen
+  if (!PREVIEW && await abmeldenStart()) return;                     // Abmelden vom Wochenangebot (Link aus der E-Mail)
   try {
     if (!PREVIEW) await kundeStart();
     if (KUNDE && KUNDE.mustChange) { renderLocked('Bitte legen Sie zuerst ein eigenes Passwort fest.'); openKundePw(true); return; }

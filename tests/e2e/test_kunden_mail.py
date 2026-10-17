@@ -95,7 +95,7 @@ m = smtp.messages[-1]
 check('offer link mail sent', code == 200 and r['typ'] == 'angebot')
 check('offer mail: KW in subject, link per assigned offer', 'KW 43/2026' in m['subject'] and B + '/?angebot=edeka' in m['text'] and B + '/?angebot=bela' in m['text'] and B + '/?angebot=chefs' not in m['text'], m['subject'])
 check('offer mail: no prices, note escaped', '€' not in m['text'] and '<script>' not in m['html'] and '&lt;script&gt;' in m['html'])
-check('offer mail: objection note + username', 'nicht mehr per E-Mail' in m['text'] and 'gasthaus.muster' in m['text'])
+check('offer mail: unsubscribe note + username', 'abbestellen' in m['text'] and 'Vom Wochenangebot abmelden' in m['text'] and 'gasthaus.muster' in m['text'])
 
 # ---------- Header-Injection, Signatur ----------
 code, r = A.call('kunden')
@@ -139,6 +139,47 @@ check('weekly send recorded per customer', cs[K_ok]['weekly']['week'] == 43 and 
 check('failed delivery recorded', cs[K_bad]['mailLast']['ok'] is False and 'weekly' not in cs[K_bad])
 code, r = A.call('kunden_rundmail', {'ids': [K_ok] * 30, 'week': 43, 'year': 2026})
 check('batch limited to 20 ids per request', code == 200 and len(r['results']) == 20)
+
+# ---------- Abmelden vom Wochenangebot ----------
+import urllib.request, urllib.error
+abm = re.search(r'#abmelden=(k[a-f0-9]{12}\.[A-Za-z0-9_-]{32})', mk2['text'])
+ABM = abm.group(1) if abm else ''
+check('weekly mail has personal unsubscribe link (text + button)', ABM.startswith(K_ok + '.') and (B + '/#abmelden=' + ABM) in mk2['html'] and 'Vom Wochenangebot abmelden' in mk2['html'])
+lu = str(mk2['msg']['list-unsubscribe'] or '')
+check('one-click unsubscribe headers (RFC 8058)', ('/api/?action=abmelden1&t=' + ABM) in lu and str(mk2['msg']['list-unsubscribe-post']) == 'List-Unsubscribe=One-Click', lu)
+check('invitation mail has no unsubscribe link', 'abmelden' not in smtp.messages[0]['text'].lower())
+P = Client('198.51.100.60')
+check('invalid unsubscribe code rejected', P.call('kunde_abmelden_info', {'token': 'k000000000000.' + 'x' * 32})[0] == 404)
+check('tampered code rejected', P.call('kunde_abmelden', {'token': ABM[:-1] + ('A' if ABM[-1] != 'A' else 'B')})[0] == 404)
+code, r = P.call('kunde_abmelden_info', {'token': ABM})
+check('info: firma + masked address, still subscribed', code == 200 and r['firma'] == 'Hotel Seeblick' and r['email'] == 'k•••@example.org' and r['subscribed'] is True, r)
+n0 = len(smtp.messages)
+code, r = P.call('kunde_abmelden', {'token': ABM})
+check('unsubscribe works without login', code == 200 and r['subscribed'] is False)
+code, r = A.call('kunden'); cs = {c['id']: c for c in r['customers']}
+check('customer flagged, email kept in master data', cs[K_ok]['mailAngebot'] is False and cs[K_ok]['abgemeldet']['via'] == 'link' and cs[K_ok]['email'] == 'kueche@example.org')
+note = smtp.messages[-1] if len(smtp.messages) > n0 else None
+check('we get notified (reply-to address)', note and note['to'] == ['verkauf@example.org'] and 'Abmeldung Wochenangebot: Hotel Seeblick' in note['subject'], note and note['subject'])
+code, r = A.call('kunden_rundmail', {'ids': [K_ok], 'week': 43, 'year': 2026})
+check('no more weekly mails', not r['results'][0]['ok'] and 'abgemeldet' in r['results'][0]['error'])
+check('no single offer mails either', A.call('kunde_mail', {'id': K_ok, 'type': 'angebot'})[0] == 422)
+check('password link still possible', A.call('kunde_mail', {'id': K_ok, 'type': 'zugang'})[0] == 200)
+check('second unsubscribe: no duplicate notification', P.call('kunde_abmelden', {'token': ABM})[0] == 200 and not smtp.messages[-1]['subject'].startswith('Abmeldung'))
+code, r = P.call('kunde_abmelden', {'token': ABM, 'wieder': True})
+check('customer can re-subscribe via same link', code == 200 and r['subscribed'] is True and 'Wiederanmeldung' in smtp.messages[-1]['subject'])
+def oneclick(method='POST', tok=ABM):
+    req = urllib.request.Request(B + '/api/?action=abmelden1&t=' + tok, data=b'List-Unsubscribe=One-Click' if method == 'POST' else None, method=method,
+                                 headers={'Content-Type': 'application/x-www-form-urlencoded', 'X-Forwarded-For': '198.51.100.61'})
+    try: return urllib.request.urlopen(req).status
+    except urllib.error.HTTPError as e: return e.code
+check('one-click needs POST (link previews do nothing)', oneclick('GET') == 405)
+check('one-click from mail program', oneclick() == 200)
+code, r = A.call('kunden'); c_ok = next(c for c in r['customers'] if c['id'] == K_ok)
+check('one-click recorded', c_ok['mailAngebot'] is False and c_ok['abgemeldet']['via'] == '1klick')
+code, r = A.call('kunde_save', {**{k: c_ok[k] for k in ['nr', 'firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz', 'angebote', 'active']}, 'id': K_ok, 'rev': r['rev'], 'mailAngebot': True, 'login': {'username': 'hotel.seeblick', 'password': '', 'active': True}})
+check('admin can switch it back on (clears flag)', code == 200 and r['customer']['mailAngebot'] is True and 'abgemeldet' not in r['customer'])
+code, r = A.call('log')
+check('audit: unsubscribe events', sum(1 for e in r['entries'] if e['a'] == 'kunde_abmeldung') >= 3)
 
 # ---------- Testmail, Rechte, Protokoll ----------
 check('test mail needs valid address', A.call('mail_test', {'to': 'kein'})[0] == 422)
@@ -242,7 +283,15 @@ with sync_playwright() as p:
     c.fill('#kk-form [name=password2]', 'Kantine-Eigen-2026'); c.click('#kk-form [type=submit]')
     c.wait_for_url(re.compile(r'angebot=handelshof-efs'), timeout=8000); c.wait_for_selector('tr.row')
     check('after setting password: own offer opens, logged in', 'Kantine Nord' in c.inner_text('#preview-banner'))
-    c.goto(B + '/#zugang=' + tok); c.wait_for_timeout(800)
+    c.goto(B + '/#abmelden=' + ABM); c.wait_for_selector('.k-abm [data-abm=ab]')
+    check('unsubscribe page asks first, code removed from address', 'abbestellen' in c.inner_text('#list') and 'Hotel Seeblick' in c.inner_text('#list') and '#abmelden' not in c.url)
+    c.click('.k-abm [data-abm=ab]'); c.wait_for_selector('.k-abm [data-abm=wieder]')
+    check('confirmation shown to customer', 'Sie sind abgemeldet' in c.inner_text('#list'))
+    c.screenshot(path=SH + '/mail-abgemeldet.png')
+    check('admin sees unsubscribed customer', A.call('kunden')[1]['customers'] and next(x for x in A.call('kunden')[1]['customers'] if x['id'] == K_ok)['mailAngebot'] is False)
+    c.click('.k-abm [data-abm=wieder]'); c.wait_for_selector('.k-abm:has-text("Wieder angemeldet")')
+    check('re-subscribe from confirmation page', next(x for x in A.call('kunden')[1]['customers'] if x['id'] == K_ok)['mailAngebot'] is True)
+    c.goto(B + '/?neu=1#zugang=' + tok); c.wait_for_timeout(800)
     check('used link shows clear message', 'abgelaufen' in c.inner_text('#list'))
     # Wochenversand im Dialog
     a.click('#k-rund'); a.wait_for_selector('#dlg-rund[open]')

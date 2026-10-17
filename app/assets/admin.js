@@ -2797,7 +2797,7 @@
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
   let kunden = null, kundenRev = 0, kundenQ = '', mailSt = null;
-  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail' };
+  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
   const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
@@ -2851,7 +2851,8 @@
   const sentThisWeek = (c) => { const w = wkCur(); return !!(w && c.weekly && c.weekly.week === w.week && c.weekly.year === w.year); };
   function mailLine(c) {
     const parts = [];
-    if (c.mailAngebot === false) parts.push('<span class="muted">kein Wochenangebot per E-Mail</span>');
+    if (c.mailAngebot === false && c.abgemeldet) parts.push(`<span class="st-warn">vom Wochenangebot abgemeldet ${esc(dateTime(c.abgemeldet.t))}</span>`);
+    else if (c.mailAngebot === false) parts.push('<span class="muted">kein Wochenangebot per E-Mail</span>');
     else if (sentThisWeek(c)) parts.push(`<span class="st-ok">${icon('check', 'sm')}KW ${c.weekly.week} gesendet ${esc(dateTime(c.weekly.t))}</span>`);
     if (c.mailLast && !c.mailLast.ok) parts.push(`<span class="st-err">${esc(MAIL_TYP[c.mailLast.typ] || 'E-Mail')} nicht zugestellt</span>`);
     return parts.length ? `<div class="sub k-mail">${parts.join(' · ')}</div>` : '';
@@ -2891,6 +2892,7 @@
           <label class="fld span2"><span>Notiz <small class="muted">(nur intern)</small></span><textarea name="notiz" maxlength="500" rows="2">${esc(c ? c.notiz || '' : '')}</textarea></label>
           <label class="check span2"><input type="checkbox" name="active"${!c || c.active ? ' checked' : ''}> Kunde aktiv <small class="muted">(inaktive Kunden können sich nicht anmelden)</small></label>
           <label class="check span2"><input type="checkbox" name="mailAngebot"${!c || c.mailAngebot !== false ? ' checked' : ''}> Wochenangebot per E-Mail erhalten <small class="muted">(nur mit Einverständnis des Kunden)</small></label>
+          ${c && c.abgemeldet && c.mailAngebot === false ? `<p class="hint span2 st-warn k-abm-note">Der Kunde hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst über den Link in der E-Mail abgemeldet. Die E-Mail-Adresse bleibt gespeichert.</p>` : ''}
         </div></fieldset>
         <fieldset class="k-set"><legend>Freigeschaltete Angebote</legend>
           <div class="k-offers-pick">${[OSTD, ...offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}</label>`).join('')}</div>
@@ -2899,7 +2901,7 @@
         ${c ? `<fieldset class="k-set"><legend>E-Mail an den Kunden</legend>
           <div class="k-mailact">
             <button type="button" class="btn sm" data-kact="m-zugang"${mailOk && c.email && l && l.active ? '' : ' disabled'}>${icon('key', 'sm')}${l && !l.hasPassword ? 'Einladung erneut senden' : 'Link zum Passwort-Zurücksetzen senden'}</button>
-            <button type="button" class="btn sm" data-kact="m-angebot"${mailOk && c.email && c.angebote.length ? '' : ' disabled'}>${icon('link', 'sm')}Angebotslink senden</button>
+            <button type="button" class="btn sm" data-kact="m-angebot"${mailOk && c.email && c.angebote.length && c.mailAngebot !== false ? '' : ' disabled'} title="${c.mailAngebot === false ? 'Kunde erhält keine Angebotsmails' : ''}">${icon('link', 'sm')}Angebotslink senden</button>
           </div>
           <p class="hint">${!mailOk ? 'Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).' : !c.email ? 'Keine E-Mail-Adresse hinterlegt.' : `An ${esc(c.email)}. Ein Passwort-Link ist ${l && !l.hasPassword ? '7 Tage' : '2 Tage'} gültig und nur einmal verwendbar.`}${c.mailLast ? ` Letzte E-Mail: ${esc(MAIL_TYP[c.mailLast.typ] || '')}, ${esc(dateTime(c.mailLast.t))} ${c.mailLast.ok ? '✓' : '– nicht zugestellt'}.` : ''}</p>
         </fieldset>` : ''}
@@ -2968,6 +2970,8 @@
     const c = editKid ? kunden.find((x) => x.id === editKid) : null;
     const body = { id: editKid || '', rev: kundenRev, active: f.active.checked, mailAngebot: f.mailAngebot.checked, angebote: $$('#kunde-body [name="angebot"]:checked').map((x) => x.value) };
     const invite = !!(f.pwmode && [...f.querySelectorAll('[name="pwmode"]')].find((x) => x.checked && x.value === 'invite'));
+    if (c && c.abgemeldet && c.mailAngebot === false && body.mailAngebot
+      && !(await confirmBox('Wochenangebot wieder einschalten?', `„${esc(c.firma)}“ hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst abgemeldet. Bitte nur wieder einschalten, wenn der Kunde ausdrücklich zugestimmt hat.`, 'Kunde hat zugestimmt'))) return;
     for (const k of ['firma', 'nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
     const pw = invite ? '' : f.password.value.trim();
     if (f.hasLogin.checked) {
@@ -3111,7 +3115,7 @@
   /* Wochenangebot an Kunden versenden */
   const dlgRund = $('#dlg-rund');
   let rundSel = new Set(), rundBusy = false;
-  const rundWhy = (c) => (!c.active ? 'Kunde inaktiv' : !c.email ? 'keine E-Mail-Adresse' : !c.login || !c.login.active ? 'kein aktiver Zugang' : !c.angebote.length ? 'kein Angebot freigeschaltet' : c.mailAngebot === false ? 'möchte kein Wochenangebot per E-Mail' : '');
+  const rundWhy = (c) => (!c.active ? 'Kunde inaktiv' : !c.email ? 'keine E-Mail-Adresse' : !c.login || !c.login.active ? 'kein aktiver Zugang' : !c.angebote.length ? 'kein Angebot freigeschaltet' : c.mailAngebot === false ? (c.abgemeldet ? 'hat sich vom Wochenangebot abgemeldet' : 'möchte kein Wochenangebot per E-Mail') : '');
   async function openRund() {
     try { const [m, k] = await Promise.all([api('mail_status'), api('kunden')]); mailSt = m; kunden = k.customers; kundenRev = k.rev; } catch (ex) { toast(ex.message); return; }
     if (!mailSt.configured) { toast('Bitte zuerst das Postfach für den E-Mail-Versand einrichten.', 5000); openMailCfg(); return; }
@@ -3208,8 +3212,8 @@
     ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden' }[a] || '');
-  const ACTION_LABEL = { mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden' }[a] || '');
+  const ACTION_LABEL = { kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
