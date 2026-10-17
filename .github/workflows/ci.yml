@@ -1,0 +1,125 @@
+# Automatische Prüfungen für jeden Pull Request und jeden Commit auf main.
+# Ein Release (release.yml) ist nur für einen Commit möglich, für den dieser Workflow erfolgreich war.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GITLEAKS_VERSION: "8.30.1"
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  ACTIONLINT_VERSION: "1.7.12"
+  ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+  TRIVY_VERSION: "0.76.0"
+  TRIVY_SHA256: "e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7"
+
+jobs:
+  statisch:
+    name: Statische Prüfungen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: PHP-Syntax
+        run: |
+          php --version | head -1
+          find app deploy -name '*.php' ! -path 'app/api/geo/*' -print0 | xargs -0 -n1 php -l
+      - name: JavaScript-Syntax
+        run: for f in app/assets/*.js app/assets/vendor/*.js tests/unit/*.js; do node --check "$f"; done
+      - name: Shell-Skripte (shellcheck)
+        run: shellcheck --severity=warning deploy/*.sh tests/deploy/*.sh
+      - name: Python-Syntax
+        run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py werkzeuge/*.py deploy/*.py
+      - name: Unit-Test Bestands-Parser
+        run: node tests/unit/bestand_parser.test.js
+      - name: Workflows prüfen (actionlint)
+        run: |
+          curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  /tmp/al.tgz" | sha256sum -c -
+          tar xzf /tmp/al.tgz -C /tmp actionlint
+          /tmp/actionlint -color
+
+  sicherheit:
+    name: Sicherheitsprüfungen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Secret-Scan über den gesamten Verlauf (gitleaks)
+        run: |
+          curl -sSLf -o /tmp/gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gl.tgz" | sha256sum -c -
+          tar xzf /tmp/gl.tgz -C /tmp gitleaks
+          /tmp/gitleaks git . --config .gitleaks.toml --redact --no-banner
+      - name: Trivy installieren
+        run: |
+          curl -sSLf -o /tmp/tv.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/tv.tgz" | sha256sum -c -
+          tar xzf /tmp/tv.tgz -C /tmp trivy
+      - name: Python-Testabhängigkeiten auf bekannte Lücken prüfen
+        run: /tmp/trivy fs --scanners vuln --exit-code 1 --severity HIGH,CRITICAL tests/requirements.txt
+      - name: Container-Images auf bekannte Lücken prüfen (Bericht)
+        run: |
+          grep -E '^\s*image:' docker-compose.yml | awk '{print $2}' | while read -r img; do
+            echo "::group::$img"
+            /tmp/trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$img"
+            echo "::endgroup::"
+          done
+
+  betrieb:
+    name: Sicherung und Release-Prozess
+    needs: statisch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Datensicherung (deploy/sichern.sh)
+        run: sh tests/deploy/test_sichern.sh
+      - name: Release-Modus mit Healthcheck und Rückfall (deploy/freigabe-einspielen.sh)
+        run: sh tests/deploy/test_freigabe.sh
+
+  e2e:
+    name: Ende-zu-Ende-Tests
+    needs: statisch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Testumgebung einrichten
+        run: |
+          php --version | head -1
+          python -m pip install -r tests/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Alle Testgruppen gegen frische Testserver
+        run: python tests/run_e2e.py
+      - name: Protokolle und Bildschirmfotos bei Fehler sichern
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-ergebnisse
+          path: |
+            tests/.ergebnisse/
+            tests/.arbeit/*.log
+          retention-days: 7

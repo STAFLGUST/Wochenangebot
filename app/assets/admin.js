@@ -2712,7 +2712,8 @@
     if (!b || !b.t) return card('warn', 'Datensicherung', 'noch keine automatische Sicherung', 'Wird nach dem nächsten Server-Update täglich erstellt');
     const age = (Date.now() - new Date(b.t).getTime()) / 3600000;
     const when = `${dateTime(b.t)} Uhr`;
-    if (!b.ok) return card('bad', 'Datensicherung', `letzter Versuch ${esc(when)} fehlgeschlagen`, b.fehler ? `${b.fehler} Datei(en) fehlerhaft – Server prüfen` : 'Server prüfen (Speicherplatz?)');
+    if (!b.ok) return card('bad', 'Datensicherung', `letzter Versuch ${esc(when)} fehlgeschlagen`, esc(b.meldung || (b.fehler ? `${b.fehler} Datei(en) fehlerhaft` : 'Server prüfen')));
+    if (b.inhalt === false) return card('warn', 'Datensicherung', `${esc(when)} · nur Archiv geprüft`, esc(b.meldung || 'Inhalt nicht geprüft'));
     if (age > 48) return card('bad', 'Datensicherung', `letzte Sicherung ${esc(when)}`, 'Älter als 2 Tage – Server prüfen');
     return card('ok', 'Datensicherung', `${esc(when)} · geprüft`, `${b.anzahl} Stände auf dem Server (${(b.groesse / 1024 / 1024).toFixed(1).replace('.', ',')} MB je Stand)`);
   }
