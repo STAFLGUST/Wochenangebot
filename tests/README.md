@@ -5,7 +5,7 @@ Alle Tests laufen gegen **Testkopien mit anonymisierten Testdaten** – nie gege
 | Ebene | Aufruf | Inhalt |
 | --- | --- | --- |
 | Unit | `node tests/unit/bestand_parser.test.js` | Bestands-Parser der App gegen unabhängige Referenzauswertung |
-| Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | 13 Gruppen, rund 400 Prüfungen im echten Browser gegen frische PHP-Testserver |
+| Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | 13 Gruppen, über 400 Prüfungen im echten Browser gegen frische PHP-Testserver |
 | Betrieb | `sh tests/deploy/test_sichern.sh`, `sh tests/deploy/test_freigabe.sh` | Datensicherung; Release-Modus mit Healthcheck und automatischem Rückfall |
 
 Voraussetzungen lokal: PHP 8.3, Node.js, Python 3.12, `pip install -r tests/requirements.txt`, `python -m playwright install chromium`.
@@ -33,7 +33,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | editor_aux | 21 | Vorwoche, Bestand im Editor |
 | revert | 16 | einzelne Änderung mit Bestätigung zurücknehmen |
 | sidenav | 12 | Navigation, Rechte je Rolle |
-| p0 | 10 | Ersteinrichtung gesperrt, CSV-Formel-Schutz, Sicherungsanzeige |
+| p0 | 13 | Ersteinrichtung gesperrt, CSV-Formel-Schutz, Sicherungs- und Bereitstellungsanzeige |
 
 Bewertung bei der Übernahme ins Repository: Alle Prüfungen sind ausführbar. Zwei Platzhalter ohne Aussage wurden
 entfernt. Neun Prüfungen der Form `check(…, True)` folgen auf ein `wait_for_selector`, das bei Fehlern mit Ausnahme

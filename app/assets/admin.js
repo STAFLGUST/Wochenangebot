@@ -2717,6 +2717,12 @@
     if (age > 48) return card('bad', 'Datensicherung', `letzte Sicherung ${esc(when)}`, 'Älter als 2 Tage – Server prüfen');
     return card('ok', 'Datensicherung', `${esc(when)} · geprüft`, `${b.anzahl} Stände auf dem Server (${(b.groesse / 1024 / 1024).toFixed(1).replace('.', ',')} MB je Stand)`);
   }
+  function deployCard(r, card) {
+    if (!r || !r.t) return card('warn', 'Bereitstellung', 'Änderungen gehen ohne Freigabe live', 'Release-Modus noch nicht eingerichtet');
+    const sha = esc(String(r.sha || '').slice(0, 7));
+    if (!r.ok) return card('bad', 'Bereitstellung', `aktiv: ${sha} · ${esc(dateTime(r.t))} Uhr`, esc(r.meldung || 'Letztes Release fehlgeschlagen'));
+    return card('ok', 'Bereitstellung', `Release ${sha} · ${esc(dateTime(r.t))} Uhr`, 'nur freigegebene, geprüfte Versionen');
+  }
   function secCards(d) {
     const S = d.settings, users = d.users.filter((u) => u.active);
     const with2 = users.filter((u) => u.twofa).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa).length;
@@ -2729,6 +2735,7 @@
       card(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlgeschlagene Anmeldungen', `${fmtInt.format(d.fails24)} in den letzten 24 Stunden`, d.fails24 >= 20 ? 'Möglicher Angriff – Liste unten prüfen' : ''),
       card(blocked || locked ? 'warn' : 'ok', 'Gesperrt', `${blocked} IP-Adresse${blocked === 1 ? '' : 'n'} · ${locked} Zugang${locked === 1 ? '' : 'e'}`, ''),
       backupCard(d.backup, card),
+      deployCard(d.deployment, card),
       card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
       card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
