@@ -8,6 +8,8 @@
 const { CATEGORY_ORDER, CONDITION_LABELS, PRICE_STATUS_LABELS } = window.OfferCore;
 const STORAGE = 'wochenangebot.';
 const PREVIEW = new URLSearchParams(location.search).has('vorschau');
+/* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
+const OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -91,9 +93,10 @@ function prepare(raw) {
 }
 
 async function loadData() {
-  const res = await fetch('api/?action=offer' + (PREVIEW ? '&draft=1' : ''), { credentials: 'same-origin', cache: 'no-cache' });
+  const res = await fetch('api/?action=offer' + (PREVIEW ? '&draft=1' : '') + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
   let body = null;
   try { body = await res.json(); } catch { /* keine JSON-Antwort */ }
+  if (OFFER && res.status === 401) throw new Error('Dieses Angebot ist nur nach Anmeldung sichtbar. Bitte im Eingabebereich anmelden und den Link erneut öffnen.');
   if (!res.ok || !body || !body.ok) {
     throw new Error(body && body.error ? body.error : 'Das Angebot konnte nicht geladen werden (' + res.status + ').');
   }
@@ -220,7 +223,8 @@ function priceHTML(it) {
 function renderStatic() {
   const m = DATA.meta;
   const kw = m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm"> · ${esc(m.year)}</span>` : ''}` : 'KW ?';
-  document.title = `Wochenangebot ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`.trim() + (COMPANY ? ' – ' + COMPANY : '');
+  document.title = `${offerTitle()} ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`.trim() + (COMPANY ? ' – ' + COMPANY : '');
+  if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
   $('#company').hidden = !COMPANY;
   $('#kw-pill').innerHTML = kw;
@@ -248,11 +252,17 @@ function renderStatic() {
   buildFilters();
 }
 
+function offerTitle() { return (DATA && DATA.meta && DATA.meta.offerName) || 'Wochenangebot'; }
 function renderBanner() {
   const b = $('#preview-banner');
+  if (!PREVIEW && OFFER) {
+    b.hidden = false;
+    b.innerHTML = `<div class="banner-inner">${icon('info')}<p><strong>${esc(offerTitle())}</strong> – Kundenangebot, nur für angemeldete Nutzer sichtbar.</p></div>`;
+    return;
+  }
   if (!PREVIEW) { b.hidden = true; return; }
   b.hidden = false;
-  b.innerHTML = `<div class="banner-inner">${icon('info')}<p><strong>Vorschau des Entwurfs</strong> – diese Fassung ist noch nicht veröffentlicht und nur für angemeldete Bearbeiter sichtbar.</p>
+  b.innerHTML = `<div class="banner-inner">${icon('info')}<p><strong>Vorschau des Entwurfs${OFFER ? ' · ' + esc(offerTitle()) : ''}</strong> – diese Fassung ist noch nicht veröffentlicht und nur für angemeldete Bearbeiter sichtbar.</p>
     <div class="banner-actions"><a class="btn sm" href="admin/">Zurück zum Eingabebereich</a></div></div>`;
 }
 
@@ -687,7 +697,7 @@ function exportCSV(list, suffix) {
       m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
     ].map(csvCell).join(';'));
   }
-  download(`Wochenangebot_KW${m.week ?? ''}_${m.year ?? ''}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+  download(`${offerTitle().replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_')}_KW${m.week ?? ''}_${m.year ?? ''}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   toast(`${plural(list.length, 'Artikel', 'Artikel')} als CSV exportiert.`);
 }
 function download(name, content, type) {

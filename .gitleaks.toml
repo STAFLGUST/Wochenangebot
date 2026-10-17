@@ -11,4 +11,5 @@ regexes = [
   '''Uebernahme-Versuch-1''',
   '''Gut-Passwort-2026''',
   '''Sicheres-Passwort-1''',
+  '''Leserin-Zugang-1''',
 ]

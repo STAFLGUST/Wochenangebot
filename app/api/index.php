@@ -26,6 +26,8 @@
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
  *   GET  ?action=security_status  Sicherheitsübersicht (nur Administrator)
  *   POST ?action=security_save | session_end | ip_unblock | user_unlock | geo_update
+ *   GET  ?action=offers            Angebote (Standard + Kundenangebote), angemeldet
+ *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
  *   POST ?action=user_save | user_delete
@@ -469,6 +471,12 @@ function price_text($p): string
     else $t = 'ohne Preis';
     return $t;
 }
+function variant_text($v): string
+{
+    if (!is_array($v)) return 'ohne eigenen Preis';
+    if (($v['status'] ?? '') === 'hidden') return 'ausgeblendet';
+    return price_text($v);
+}
 function alts_text($alts): string
 {
     $out = [];
@@ -510,6 +518,10 @@ function changes_between(?array $a, array $b): array
         if (price_text($o['price'] ?? null) !== price_text($it['price'] ?? null)) $out[] = ['k' => "$id|price", 'code' => $code, 'name' => $it['name'], 'f' => 'Preis', 'from' => price_text($o['price'] ?? null), 'to' => price_text($it['price'] ?? null)];
         if ((string)($o['price']['label'] ?? '') !== (string)($it['price']['label'] ?? '')) $out[] = ['k' => "$id|plabel", 'code' => $code, 'name' => $it['name'], 'f' => 'Preisbezeichnung', 'from' => (string)($o['price']['label'] ?? ''), 'to' => (string)($it['price']['label'] ?? '')];
         if (alts_text($o['altPrices'] ?? []) !== alts_text($it['altPrices'] ?? [])) $out[] = ['k' => "$id|alts", 'code' => $code, 'name' => $it['name'], 'f' => 'Zusatzpreise', 'from' => alts_text($o['altPrices'] ?? []), 'to' => alts_text($it['altPrices'] ?? [])];
+        foreach (array_unique(array_merge(array_keys($o['variants'] ?? []), array_keys($it['variants'] ?? []))) as $oid) {
+            $vf = variant_text($o['variants'][$oid] ?? null); $vt = variant_text($it['variants'][$oid] ?? null);
+            if ($vf !== $vt) { $def = offer_def((string)$oid); $out[] = ['k' => "$id|v:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Preis ' . ($def['name'] ?? $oid), 'from' => $vf, 'to' => $vt]; }
+        }
     }
     foreach ($ia as $id => $it) {
         if (!isset($ib[$id])) $out[] = ['k' => "$id|-", 'code' => (string)($it['code'] ?? ''), 'name' => $it['name'], 'f' => 'Artikel entfernt', 'from' => price_text($it['price']), 'to' => ''];
@@ -558,7 +570,7 @@ function changes_summary(array $d): string
     $p = $n = $r = $e = 0;
     foreach ($d as $c) {
         $f = explode('|', $c['k'], 2)[1] ?? '';
-        if ($f === 'price') $p++; elseif ($f === '+') $n++; elseif ($f === '-') $r++; else $e++;
+        if ($f === 'price' || strpos($f, 'v:') === 0) $p++; elseif ($f === '+') $n++; elseif ($f === '-') $r++; else $e++;
     }
     $parts = [];
     if ($p) $parts[] = $p . ($p === 1 ? ' Preis' : ' Preise') . ' geändert';
@@ -635,6 +647,86 @@ function clean_price($p, string $where): array
     if ($label !== null && $label !== '') $out['label'] = $label;
     return $out;
 }
+/* ---------------- Mehrere Angebote ----------------
+   Das Standardangebot („Wochenangebot“) ist die Grundlage. Kundenangebote (z. B. Edeka) haben je Artikel optional
+   einen eigenen Preis in $item['variants'][<Angebots-ID>] = {status: value|request|hidden, value?, carried?}.
+   Ohne eigenen Preis gilt die Regel des Angebots: 'standard' = Standardpreis zeigen, 'hidden' = Artikel ausblenden.
+   Kundenpreise verlassen den Server nur aufgelöst und nur für berechtigte Nutzer (offer_resolve). */
+const OFFER_STD = 'std';
+const OFFER_DEFAULTS = [
+    ['id' => 'chefs-culinar', 'name' => 'Wochenangebot Chefs Culinar', 'fallback' => 'standard'],
+    ['id' => 'handelshof-efs', 'name' => 'Wochenangebot Handelshof, EFS', 'fallback' => 'standard'],
+    ['id' => 'edeka', 'name' => 'Wochenangebot Edeka', 'fallback' => 'standard'],
+    ['id' => 'bela', 'name' => 'Wochenangebot Bela', 'fallback' => 'standard'],
+];
+const VARIANT_STATUS = ['value', 'request', 'hidden'];
+function offers_load(): array
+{
+    $d = store_read('angebote');
+    return is_array($d) && isset($d['offers']) ? $d : ['rev' => 0, 'offers' => OFFER_DEFAULTS, 'updatedAt' => null];
+}
+function offer_ids(): array { return array_column(offers_load()['offers'], 'id'); }
+function offer_def(string $id): ?array
+{
+    if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'];
+    foreach (offers_load()['offers'] as $o) if ($o['id'] === $id) return $o;
+    return null;
+}
+function clean_variants($v, string $where, array $known): array
+{
+    $out = [];
+    if (!is_array($v)) return $out;
+    foreach ($v as $oid => $p) {
+        if (!is_string($oid) || !in_array($oid, $known, true) || !is_array($p)) continue;   // gelöschte Angebote fallen weg
+        $st = $p['status'] ?? '';
+        if (!in_array($st, VARIANT_STATUS, true)) throw new InvalidArgumentException("Ungültiger Angebotspreis ($where).");
+        $row = ['status' => $st];
+        if ($st === 'value') {
+            $x = $p['value'] ?? null;
+            if (!is_int($x) && !is_float($x)) throw new InvalidArgumentException("Angebotspreis fehlt ($where).");
+            $x = (float)$x;
+            if ($x < 0 || $x >= 100000) throw new InvalidArgumentException("Angebotspreis außerhalb des gültigen Bereichs ($where).");
+            $row['value'] = round($x, 4);
+        }
+        if (!empty($p['carried'])) $row['carried'] = true;
+        $out[$oid] = $row;
+    }
+    return $out;
+}
+/* Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote */
+function offer_resolve(array $m, array $def): array
+{
+    if ($def['id'] === OFFER_STD) {                     // Standard: Aufbau unverändert, nur Kundenpreise entfernen
+        foreach ($m['items'] ?? [] as $k => $it) unset($m['items'][$k]['variants']);
+        $m['meta']['offerId'] = OFFER_STD;
+        $m['meta']['offerName'] = $def['name'];
+        return $m;
+    }
+    $items = [];
+    foreach ($m['items'] ?? [] as $it) {
+        $v = $it['variants'][$def['id']] ?? null;
+        unset($it['variants']);
+        if ($v) {
+            if ($v['status'] === 'hidden') continue;
+            $it['price'] = $v['status'] === 'value' ? ['status' => 'value', 'value' => $v['value']] : ['status' => 'request'];
+            $it['altPrices'] = [];
+        } elseif (($def['fallback'] ?? 'standard') === 'hidden') {
+            continue;
+        }
+        $items[] = $it;
+    }
+    $used = [];
+    foreach ($items as $it) $used[$it['groupId']] = true;
+    $m['groups'] = array_values(array_filter($m['groups'] ?? [], function ($g) use ($used) { return isset($used[$g['id']]); }));
+    $secs = [];
+    foreach ($m['groups'] as $g) if (($g['section'] ?? '') !== '' && !in_array($g['section'], $secs, true)) $secs[] = $g['section'];
+    $m['sections'] = $secs;
+    $m['items'] = $items;
+    $m['meta']['offerId'] = $def['id'];
+    $m['meta']['offerName'] = $def['name'];
+    return $m;
+}
+
 /* Übernimmt nur bekannte Felder in bekannten Formaten */
 function clean_model($m, bool $strict): array
 {
@@ -665,6 +757,7 @@ function clean_model($m, bool $strict): array
 
     $items = [];
     $iids = [];
+    $known = offer_ids();
     $src = is_array($m['items'] ?? null) ? $m['items'] : [];
     if (count($src) > 5000) throw new InvalidArgumentException('Zu viele Artikel (max. 5000).');
     foreach ($src as $it) {
@@ -695,6 +788,8 @@ function clean_model($m, bool $strict): array
         if ($nr !== null && $nr !== '' && $nr !== $name) $row['nameRaw'] = $nr;
         $cell = s($it['cell'] ?? null, 20);
         if ($cell !== null && $cell !== '') $row['cell'] = $cell;
+        $vars = clean_variants($it['variants'] ?? null, $name, $known);
+        if ($vars) $row['variants'] = $vars;
         $items[] = $row;
     }
     if ($strict && !$items) throw new InvalidArgumentException('Das Angebot enthält keine Artikel.');
@@ -732,6 +827,7 @@ function history_from_model(array $m, string $origin, ?string $at): ?array
         $row = ['code' => $it['code'] ?? null, 'name' => (string)($it['name'] ?? ''), 'group' => $gn[$it['groupId'] ?? ''] ?? '',
                 'category' => $it['category'] ?? 'Sonstiges', 'price' => $it['price'] ?? ['status' => 'none']];
         if (!empty($it['altPrices'])) $row['altPrices'] = $it['altPrices'];
+        if (!empty($it['variants'])) $row['variants'] = $it['variants'];
         $items[] = $row;
     }
     return ['week' => $w, 'year' => $y, 'origin' => $origin, 'source' => (string)($m['meta']['source'] ?? ''), 'savedAt' => $at ?: now(), 'items' => $items];
@@ -872,14 +968,14 @@ function master_changes(array $old, array $new): array
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
-                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats'];
+                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
-$isPublic = $action === 'offer' && empty($_GET['draft']);
+$isPublic = $action === 'offer' && empty($_GET['draft']) && in_array((string)($_GET['angebot'] ?? ''), ['', 'std'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -901,18 +997,78 @@ try {
 
         case 'offer': {
             header('Cache-Control: no-cache');
+            $oid = (string)($_GET['angebot'] ?? OFFER_STD);
+            if ($oid === '') $oid = OFFER_STD;
+            if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid)) fail('Unbekanntes Angebot.', 404);
+            if ($oid !== OFFER_STD) {
+                require_auth();                                   // Kundenangebote nur angemeldet (später: Kunden mit Freigabe)
+                header('Cache-Control: private, no-store');
+            }
+            $def = offer_def($oid);
+            if (!$def) fail('Unbekanntes Angebot.', 404);
             if (!empty($_GET['draft'])) {
                 require_auth();
                 $d = store_read('entwurf') ?? store_read('angebot');
                 if (!$d) fail('Kein Entwurf vorhanden.', 404);
-                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => $d]);
+                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def)]);
             }
             $p = store_path('angebot');
             if (!is_file($p)) fail('Es ist noch kein Angebot veröffentlicht.', 404);
-            $etag = '"' . md5((string)filemtime($p) . ':' . filesize($p)) . '"';
-            header('ETag: ' . $etag);
-            if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
-            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => store_read('angebot')]);
+            if ($oid === OFFER_STD) {
+                $etag = '"' . md5((string)filemtime($p) . ':' . filesize($p) . ':std') . '"';
+                header('ETag: ' . $etag);
+                if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
+            }
+            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => offer_resolve(store_read('angebot'), $def)]);
+        }
+
+        case 'offers': {
+            require_auth();
+            header('Cache-Control: no-store');
+            $d = offers_load();
+            respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD)]);
+        }
+
+        case 'offers_save': {
+            $me = require_auth(true, 'editor');
+            $b = body();
+            $list = [];
+            $names = [];
+            foreach (array_slice(is_array($b['offers'] ?? null) ? $b['offers'] : [], 0, 30) as $o) {
+                if (!is_array($o)) continue;
+                $name = s($o['name'] ?? null, 80, false);
+                if ($name === null || mb_strlen($name) < 2) throw new InvalidArgumentException('Jedes Angebot braucht einen Namen (mindestens 2 Zeichen).');
+                $key = mb_strtolower($name);
+                if (isset($names[$key]) || $key === 'wochenangebot') throw new InvalidArgumentException("Der Name „{$name}“ ist bereits vergeben.");
+                $names[$key] = true;
+                $id = (string)($o['id'] ?? '');
+                if ($id === '' || $id === OFFER_STD || !preg_match('/^[a-z0-9-]{1,40}$/', $id)) throw new InvalidArgumentException('Ungültige Angebots-ID.');
+                $fb = ($o['fallback'] ?? '') === 'hidden' ? 'hidden' : 'standard';
+                $list[] = ['id' => $id, 'name' => $name, 'fallback' => $fb];
+            }
+            if (count(array_unique(array_column($list, 'id'))) !== count($list)) throw new InvalidArgumentException('Angebots-IDs sind doppelt.');
+            $res = with_lock('angebote', function () use ($b, $list, $me) {
+                $cur = offers_load();
+                if ((int)($b['rev'] ?? -1) !== (int)$cur['rev']) fail('Die Angebote wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
+                $old = []; foreach ($cur['offers'] as $o) $old[$o['id']] = $o;
+                $new = []; foreach ($list as $o) $new[$o['id']] = $o;
+                $removed = array_diff_key($old, $new);
+                if ($removed && $me['role'] !== 'admin') fail('Angebote löschen dürfen nur Administratoren.', 403);
+                $d = [];
+                $FB = ['standard' => 'Standardpreis zeigen', 'hidden' => 'Artikel ausblenden'];
+                foreach ($new as $id => $o) {
+                    if (!isset($old[$id])) { $d[] = ['k' => "o$id|+", 'code' => '', 'name' => $o['name'], 'f' => 'Neues Angebot', 'from' => '', 'to' => 'ohne eigenen Preis: ' . $FB[$o['fallback']]]; continue; }
+                    if ($old[$id]['name'] !== $o['name']) $d[] = ['k' => "o$id|name", 'code' => '', 'name' => $o['name'], 'f' => 'Name', 'from' => $old[$id]['name'], 'to' => $o['name']];
+                    if (($old[$id]['fallback'] ?? 'standard') !== $o['fallback']) $d[] = ['k' => "o$id|fb", 'code' => '', 'name' => $o['name'], 'f' => 'Ohne eigenen Preis', 'from' => $FB[$old[$id]['fallback'] ?? 'standard'], 'to' => $FB[$o['fallback']]];
+                }
+                foreach ($removed as $id => $o) $d[] = ['k' => "o$id|-", 'code' => '', 'name' => $o['name'], 'f' => 'Angebot gelöscht', 'from' => $o['name'], 'to' => ''];
+                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new)];
+                store_write('angebote', $out);
+                return [$out, $d];
+            });
+            [$out, $d] = $res;
+            if ($d) audit('offers', 'Angebote geändert', $d);
+            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers']]);
         }
 
         case 'status': {
@@ -1570,7 +1726,11 @@ try {
             $h = $prev ? store_read('historie/' . $prev) : null;
             if ($h) {
                 $items = [];
-                foreach (($h['items'] ?? []) as $it) $items[] = ['code' => $it['code'] ?? null, 'name' => $it['name'] ?? '', 'price' => $it['price'] ?? ['status' => 'none']];
+                foreach (($h['items'] ?? []) as $it) {
+                    $row = ['code' => $it['code'] ?? null, 'name' => $it['name'] ?? '', 'price' => $it['price'] ?? ['status' => 'none']];
+                    if (!empty($it['variants'])) $row['variants'] = $it['variants'];
+                    $items[] = $row;
+                }
                 $h = ['id' => $prev, 'week' => $h['week'], 'year' => $h['year'], 'items' => $items];
             }
             respond(['ok' => true, 'week' => $h]);

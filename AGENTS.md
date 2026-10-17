@@ -16,3 +16,5 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
 6. **Datenformate nur erweitern.** Code muss bestehende Daten weiter lesen können, damit ein Rückfall auf die
    Vorversion keine Daten beschädigt. Unverträgliche Änderungen brauchen eine eigene Migration mit Freigabe.
 7. **Öffentliche Seite:** nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern.
+8. **Kundenangebote:** Preise eines Kundenangebots (`variants`) werden nur aufgelöst und nur an angemeldete,
+   berechtigte Nutzer ausgeliefert (`offer_resolve`); das öffentliche Wochenangebot enthält nie Kundenpreise.

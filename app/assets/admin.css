@@ -578,3 +578,34 @@ body:not(.in-hist) .view-bar { display: none; }
   .side-sep { display: none; }
   .adm-shell .adm-page { padding-top: 14px; }
 }
+/* Mehrere Angebote */
+.offer-bar { margin: 14px 0 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
+.ob-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ob-l { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ob-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.ob-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 550; cursor: pointer; }
+.ob-tabs button:hover { color: var(--text); border-color: var(--accent-line); }
+.ob-tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.ob-tabs button small { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 99px; background: rgba(127,127,127,.16); line-height: 18px; }
+.ob-tabs button[aria-selected="true"] small { background: rgba(255,255,255,.22); }
+.ob-act { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+.ob-hint { margin: 8px 0 0; font-size: 12.5px; color: var(--text-2); }
+.ob-hint svg.i { width: 14px; height: 14px; vertical-align: -2px; }
+.ob-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-right: 4px; }
+.e-var .vrow { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.e-var .in.num { min-width: 0; }
+.e-var .in.num::placeholder { color: var(--muted); font-style: italic; }
+.e-var.own .in.num { font-weight: 650; }
+.e-var.is-hidden .in.num { text-decoration: line-through; }
+.vtog { flex: none; width: 26px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; opacity: .55; }
+.vtog:hover { opacity: 1; background: var(--surface-3); color: var(--text); }
+.vtog.on { opacity: 1; color: var(--accent); background: var(--accent-soft); }
+tr:has(.e-var.is-hidden) td:not(.e-price):not(.e-act) { opacity: .5; }
+body.ro .vtog { display: none; }
+.oftab td { vertical-align: middle; padding: 6px 8px; }
+.oftab .in { width: 100%; }
+.oftab tr.of-std td { background: var(--surface-2); }
+.oftab .act { width: 1%; text-align: right; }
+#offers-body .dlg-body > .btn { margin-top: 10px; }
+@media (max-width: 700px) { .ob-act { margin-left: 0; } .oftab th:nth-child(3), .oftab td:nth-child(3) { display: none; } }
+.e-var.is-hidden .in.num::placeholder { font-size: 11.5px; letter-spacing: -.01em; }
