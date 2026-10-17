@@ -625,3 +625,6 @@ body.k-gate .toolbar, body.k-gate .filters, body.k-gate .quicknav { display: non
 body.k-gate .layout { grid-template-columns: minmax(0, 1fr); }
 body.k-gate .k-locked { max-width: 560px; margin: 24px auto 0; }
 .kw-pill:empty { display: none; }
+
+/* Statische Links bleiben auch ohne Angebotsdaten erreichbar. */
+.legal-links{display:flex;justify-content:center;flex-wrap:wrap;gap:1.5rem;padding:1rem}.legal-links a{color:inherit;text-underline-offset:.2em}
