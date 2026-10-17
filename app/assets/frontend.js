@@ -573,7 +573,7 @@ function openDetail(id) {
       ${same.length ? `<div class="notice">Die Artikelnummer ${esc(it.code)} steht ${same.length + 1}× in der Liste: ${same.map((s) => `<button type="button" class="link-btn" data-open="${s.id}">${esc(s.name)} (${esc(s.group)})</button>`).join(', ')}.</div>` : ''}
       ${cmp.length ? `<h3 class="d-h"><span>Preisvergleich · ${esc(it.category)} · ${esc(it.cut)}</span><button type="button" class="link-btn" data-cmp="${esc(it._cmp)}" style="text-transform:none;letter-spacing:0;font-size:12.5px">Vollansicht</button></h3>${cmpListHTML(cmp, it.id)}` : ''}
     </div>
-    <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn" data-fav-detail data-key="${esc(it.key)}"></button></div>`;
+    <div class="dlg-foot">${KORDER ? `<label class="d-qty"><span>Menge kg</span>${qtyHTML(it)}</label>` : ''}<button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn" data-fav-detail data-key="${esc(it.key)}"></button></div>`;
   setDetailFavBtn($('[data-fav-detail]'), favs.has(it.key));
   if (!dlgDetail.open) dlgDetail.showModal();
   $('.dlg-body', dlgDetail).scrollTop = 0;
@@ -954,6 +954,7 @@ function bind() {
       if (a === 'tab-all') { state.tab = 'all'; render(); }
       return;
     }
+    if (e.target.closest('.qty, .c-qty, .card-qty')) return;          // Mengenfeld: nur eingeben, keine Detailansicht
     if (window.getSelection && String(window.getSelection()).length > 2) return;
     const row = e.target.closest('[data-open], tr.row, .card');
     if (row) openDetail(row.dataset.open || row.dataset.id);
@@ -1159,7 +1160,7 @@ function bindOrder() {
     if (final && !Number.isNaN(q)) el.value = q ? fmtQty.format(q) : '';
     if ($('#dlg-order').open) refreshOrderDialog();
   };
-  for (const host of [$('#list'), $('#order-body')]) {
+  for (const host of [$('#list'), $('#order-body'), $('#detail-body')]) {
     host.addEventListener('input', (e) => onQty(e, false));
     host.addEventListener('change', (e) => onQty(e, true));
     host.addEventListener('keydown', (e) => {

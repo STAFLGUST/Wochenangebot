@@ -36,7 +36,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | sidenav | 12 | Navigation, Rechte je Rolle |
 | angebote | 38 | Kundenangebote: eigene Preise, Ausblenden, Übernahme, Verwaltung, Rechte, keine Kundenpreise öffentlich |
 | kunden | 125 | Kundenstammdaten, Freischaltung, Kunden-Login mit Pflicht-Passwortwechsel, Sperre, Sitzungsende, kein Zugriff auf den Eingabebereich, Merkliste je Kunde (geräteübergreifend, Übernahme der Browser-Merkliste), Oberfläche |
-| bestellung | 57 | Bestellwunsch aus dem Portal: Einstellungen, serverseitige Kundenpreise, Prüfungen (Version, Freischaltung, Mengen, Datum), E-Mail an Empfänger + Kopie, Ausfall des Mailservers, Oberfläche (Mengen, Leiste, Dialog, Mobil) |
+| bestellung | 62 | Bestellwunsch aus dem Portal: Einstellungen, serverseitige Kundenpreise, Prüfungen (Version, Freischaltung, Mengen, Datum), E-Mail an Empfänger + Kopie, Ausfall des Mailservers, Oberfläche (Mengen, Leiste, Dialog, Mobil) |
 | kunden_mail | 137 | E-Mail-Versand gegen Test-Mailserver: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail, Rechte, Header-Injection, Ausfall des Mailservers, Postfach im Eingabebereich (verschlüsselt, Vorrang vor .env), Abmelden vom Wochenangebot (Link + Ein-Klick) |
 | p0 | 13 | Ersteinrichtung gesperrt, CSV-Formel-Schutz, Sicherungs- und Bereitstellungsanzeige |
 

@@ -663,3 +663,4 @@ body.has-orderbar { padding-bottom: 76px; }
 /* Mengenspalte: Platz schaffen, Fleischart/Zustand stehen auch in Filtern und Detailansicht */
 @media (max-width: 1520px) { body.can-order .grid .c-cat { display: none; } }
 @media (max-width: 1200px) { body.can-order .grid .c-cond { display: none; } body.can-order .c-price { width: 120px; } }
+.d-qty { display: flex; align-items: center; gap: 8px; margin-right: auto; font-size: 12.5px; color: var(--muted); }
