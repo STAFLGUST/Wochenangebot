@@ -32,6 +32,8 @@
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
+ *   POST ?action=kunde_abmelden_info | kunde_abmelden   Abmeldelink aus der Angebotsmail (öffentlich, Code im Link)
+ *   POST ?action=abmelden1&t=…     Ein-Klick-Abmeldung aus dem E-Mail-Programm (RFC 8058, Formular statt JSON)
  *   POST ?action=mail_konto_save   Postfach/Absender speichern (nur Administrator; Passwort verschlüsselt, nie zurückgegeben)
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
@@ -795,9 +797,83 @@ function mail_footer(string $kind): string
 {
     global $CFG;
     return $kind === 'angebot'
-        ? "Sie erhalten diese E-Mail als Kunde von {$CFG['company']}. Wenn Sie das Wochenangebot nicht mehr per E-Mail erhalten möchten, antworten Sie einfach kurz auf diese Nachricht."
+        ? "Sie erhalten diese E-Mail als Kunde von {$CFG['company']}. Sie können das Wochenangebot per E-Mail jederzeit mit einem Klick abbestellen – Ihr Zugang zum Angebotsportal bleibt davon unberührt."
         : "Diese E-Mail wurde von {$CFG['company']} über das Angebotsportal versendet. Falls Sie keinen Zugang erwartet haben, können Sie sie ignorieren.";
 }
+/* ---------- Abmelden vom Wochenangebot ----------
+   Fester Abmeldecode je Kunde: HMAC über die Kundennummer mit einem geheimen Schlüssel (wird mitgesichert,
+   damit Links in alten E-Mails nach einer Wiederherstellung weiter funktionieren). Kein Login nötig. */
+function abmelde_key(): string
+{
+    $k = store_read('abmelde-schluessel');
+    $raw = is_array($k) ? base64_decode((string)($k['key'] ?? ''), true) : false;
+    if (is_string($raw) && strlen($raw) === 32) return $raw;
+    return with_lock('abmelde-schluessel', function () {
+        $k = store_read('abmelde-schluessel');
+        $raw = is_array($k) ? base64_decode((string)($k['key'] ?? ''), true) : false;
+        if (is_string($raw) && strlen($raw) === 32) return $raw;
+        $raw = random_bytes(32);
+        store_write('abmelde-schluessel', ['key' => base64_encode($raw), 'created' => now()]);
+        return $raw;
+    });
+}
+function abmelde_token(string $kid): string
+{
+    return $kid . '.' . substr(rtrim(strtr(base64_encode(hash_hmac('sha256', 'abmelden|' . $kid, abmelde_key(), true)), '+/', '-_'), '='), 0, 32);
+}
+function abmelde_kunde(string $tok): ?array
+{
+    if (!preg_match('/^(k[a-f0-9]{12})\.[A-Za-z0-9_-]{32}$/', $tok, $m) || !hash_equals(abmelde_token($m[1]), $tok)) return null;
+    foreach (customers_load()['customers'] as $c) if ($c['id'] === $m[1]) return $c;
+    return null;
+}
+function abmelde_url(array $c): string { return mail_base_url() . '/#abmelden=' . (!empty($c['id']) ? abmelde_token($c['id']) : 'BEISPIEL'); }
+/* Abmelden/Wiederanmelden speichern; true, wenn sich der Status geändert hat */
+function abmelde_setzen(array $c, bool $ab, string $via): bool
+{
+    return with_lock('kunden', function () use ($c, $ab, $via) {
+        $d = customers_load();
+        foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) {
+            $was = !array_key_exists('mailAngebot', $x) || !empty($x['mailAngebot']);
+            if ($was === !$ab) return false;
+            $d['customers'][$i]['mailAngebot'] = !$ab;
+            if ($ab) $d['customers'][$i]['abgemeldet'] = ['t' => now(), 'via' => $via];
+            else unset($d['customers'][$i]['abgemeldet']);
+            $d['rev'] = (int)$d['rev'] + 1;
+            store_write('kunden', $d);
+            return true;
+        }
+        return false;
+    });
+}
+function abmelde_melden(array $c, bool $ab, string $via): void
+{
+    global $CFG;
+    $who = ['username' => 'kunde:' . ($c['login']['username'] ?? $c['id']), 'name' => $c['firma'], 'role' => 'kunde'];
+    $txt = $ab ? 'Kunde hat sich vom Wochenangebot per E-Mail abgemeldet' . ($via === '1klick' ? ' (Ein-Klick im E-Mail-Programm)' : '') : 'Kunde hat sich wieder für das Wochenangebot per E-Mail angemeldet';
+    audit('kunde_abmeldung', $txt, [['k' => "c{$c['id']}|mailAngebot", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Wochenangebot per E-Mail', 'from' => $ab ? 'ja' : 'nein', 'to' => $ab ? 'nein' : 'ja']], $who);
+    // Hinweis an uns (Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht
+    $cfg = mail_cfg();
+    if (!$cfg || !mail_base_url()) return;
+    $to = $cfg['replyTo'] ?: $cfg['from'];
+    $sub = ($ab ? 'Abmeldung' : 'Wiederanmeldung') . " Wochenangebot: {$c['firma']}";
+    $body = ($ab ? "{$c['firma']} hat sich vom Wochenangebot per E-Mail abgemeldet und erhält es nicht mehr." : "{$c['firma']} möchte das Wochenangebot wieder per E-Mail erhalten.")
+        . "
+
+Kundennummer: " . (($c['nr'] ?? '') ?: '–') . "
+E-Mail: {$c['email']}
+Zeit: " . date('d.m.Y, H:i') . " Uhr
+
+Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwort-Links können weiterhin gesendet werden.
+";
+    $r = mail_send_many($cfg, [['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $body, 'html' => mail_layout($sub, '<p style="margin:0;">' . nl2br(mail_h($body)) . '</p>', '', '')]])[0];
+    with_lock('mailversand', function () use ($to, $r, $c) {
+        $l = store_read('mailversand') ?? [];
+        $l[] = ['t' => now(), 'typ' => 'hinweis', 'kid' => $c['id'], 'firma' => $c['firma'], 'to' => $to, 'ok' => $r['ok'], 'error' => $r['error'] ?? '', 'by' => 'automatisch'];
+        store_write('mailversand', array_slice($l, -3000));
+    });
+}
+
 /* Wochenangebot / Angebotslink: [Betreff, Text, HTML] */
 function mail_tpl_angebot(array $c, string $note, ?array $wk): array
 {
@@ -811,12 +887,14 @@ function mail_tpl_angebot(array $c, string $note, ?array $wk): array
     $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '');
     foreach ($links as [$n, $u]) $t .= "$n:\n$u\n\n";
     if ($user !== '') $t .= "Anmeldung mit Ihrer Benutzerkennung: $user\nPasswort vergessen? Antworten Sie einfach auf diese E-Mail.\n\n";
-    $t .= $sig . "\n\n-- \n" . mail_footer('angebot') . "\n";
+    $ab = abmelde_url($c);
+    $t .= $sig . "\n\n-- \n" . mail_footer('angebot') . "\nVom Wochenangebot abmelden: $ab\n";
     $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
         . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '');
     foreach ($links as [$n, $u]) $h .= mail_button($u, $n . ' ansehen');
     if ($user !== '') $h .= '<p style="margin:14px 0 0;font-size:13px;color:#4a443e;">Anmeldung mit Ihrer Benutzerkennung <strong>' . mail_h($user) . '</strong>. Passwort vergessen? Antworten Sie einfach auf diese E-Mail.</p>';
-    return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('angebot'))];
+    $abBtn = '<p style="max-width:560px;margin:10px auto 0;text-align:center;"><a href="' . mail_h($ab) . '" style="display:inline-block;padding:7px 14px;border:1px solid #cfc6bb;border-radius:8px;color:#5f574f;font-size:12px;text-decoration:none;">Vom Wochenangebot abmelden</a></p>';
+    return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('angebot'), $abBtn)];
 }
 /* Einladung / Passwort zurücksetzen */
 function mail_tpl_zugang(array $c, string $url, string $purpose, int $exp): array
@@ -872,7 +950,7 @@ function mail_send_many(array $cfg, array $jobs): array
     try {
         foreach ($jobs as $k => $j) {
             try {
-                $smtp->send($j['to'], mail_build($cfg, $j['to'], $j['name'] ?? '', $j['subject'], $j['text'], $j['html']));
+                $smtp->send($j['to'], mail_build($cfg, $j['to'], $j['name'] ?? '', $j['subject'], $j['text'], $j['html'], $j['headers'] ?? []));
                 $res[$k] = ['ok' => true];
             } catch (RuntimeException $e) {
                 $res[$k] = ['ok' => false, 'error' => $e->getMessage()];
@@ -903,12 +981,15 @@ function mail_record(array $entries, ?array $wk = null): void
         store_write('mailversand', array_slice($l, -3000));
     });
 }
-const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail'];
+const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung'];
 function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
 {
     if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");
     [$sub, $txt, $html] = mail_tpl_angebot($c, $note, $wk);
-    return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html];
+    // Ein-Klick-Abmeldung im E-Mail-Programm (RFC 8058) – erwartet u. a. von Gmail/Yahoo bei regelmäßigen Sendungen
+    $one = mail_base_url() . '/api/?action=abmelden1&t=' . rawurlencode(abmelde_token($c['id']));
+    return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
+            'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
 }
 /* Kunde anmelden (nach Passwortprüfung oder Einmal-Link) */
 function kunde_sign_in(array $c): void
@@ -1232,7 +1313,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1240,7 +1321,7 @@ if (in_array($action, $writeActions, true)) {
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set'], true);
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -1481,6 +1562,36 @@ try {
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c2)]);
         }
 
+        /* ---------- Abmelden vom Wochenangebot (Link aus der E-Mail, ohne Anmeldung) ---------- */
+        case 'kunde_abmelden_info': {
+            attempts_check();
+            $c = abmelde_kunde((string)(body()['token'] ?? ''));
+            if (!$c) { attempts_record(false); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            $e = (string)($c['email'] ?? '');
+            $masked = $e !== '' ? preg_replace('/^(.).*?(@.*)$/u', '$1•••$2', $e) : '';
+            respond(['ok' => true, 'firma' => $c['firma'], 'email' => $masked, 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
+        }
+
+        case 'kunde_abmelden': {
+            attempts_check();
+            $b = body();
+            $c = abmelde_kunde((string)($b['token'] ?? ''));
+            if (!$c) { attempts_record(false); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            $ab = empty($b['wieder']);
+            if (abmelde_setzen($c, $ab, 'link')) abmelde_melden($c, $ab, 'link');
+            respond(['ok' => true, 'subscribed' => !$ab]);
+        }
+
+        case 'abmelden1': {
+            // Ein-Klick-Abmeldung (RFC 8058): das E-Mail-Programm sendet POST mit „List-Unsubscribe=One-Click“
+            if ($method !== 'POST') fail('Bitte den Abmeldelink in der E-Mail verwenden.', 405);
+            attempts_check();
+            $c = abmelde_kunde((string)($_GET['t'] ?? ''));
+            if (!$c) { attempts_record(false); fail('Ungültiger Abmeldelink.', 404); }
+            if (abmelde_setzen($c, true, '1klick')) abmelde_melden($c, true, '1klick');
+            respond(['ok' => true]);
+        }
+
         /* ---------- E-Mail-Versand (nur Administrator) ---------- */
         case 'mail_status': {
             require_auth(false, 'admin');
@@ -1603,6 +1714,7 @@ Ausgelöst von: {$me['name']}
                 $typ = $purpose;
             } elseif ($type === 'angebot') {
                 if (!customer_offers($c)) fail('Für diesen Kunden ist kein Angebot freigeschaltet.', 422);
+                if (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot'])) fail(!empty($c['abgemeldet']) ? "„{$c['firma']}“ hat sich vom Wochenangebot per E-Mail abgemeldet – es werden keine Angebotsmails mehr gesendet." : "Für „{$c['firma']}“ ist das Wochenangebot per E-Mail ausgeschaltet.", 422);
                 $job = mail_job_for($c, 'angebot', mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
                 $typ = 'angebot';
             } else fail('Unbekannte E-Mail-Art.', 422);
@@ -1631,7 +1743,7 @@ Ausgelöst von: {$me['name']}
             foreach (customers_load()['customers'] as $c) {
                 if (!in_array($c['id'], $ids, true)) continue;
                 $map[$c['id']] = $c;
-                $why = empty($c['active']) ? 'Kunde inaktiv' : (empty($c['email']) ? 'keine E-Mail-Adresse' : (empty($c['login']['active']) ? 'kein aktiver Zugang' : (!customer_offers($c) ? 'kein Angebot freigeschaltet' : (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot']) ? 'Wochenangebot per E-Mail nicht gewünscht' : ''))));
+                $why = empty($c['active']) ? 'Kunde inaktiv' : (empty($c['email']) ? 'keine E-Mail-Adresse' : (empty($c['login']['active']) ? 'kein aktiver Zugang' : (!customer_offers($c) ? 'kein Angebot freigeschaltet' : (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot']) ? (!empty($c['abgemeldet']) ? 'hat sich vom Wochenangebot abgemeldet' : 'Wochenangebot per E-Mail nicht gewünscht') : ''))));
                 if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
                 $jobs[$c['id']] = mail_job_for($c, 'woche', $note, $wk);
             }
@@ -1684,7 +1796,8 @@ Ausgelöst von: {$me['name']}
                 $row['angebote'] = array_values(array_unique(array_filter(is_array($b['angebote'] ?? null) ? $b['angebote'] : [], function ($o) use ($known) { return is_string($o) && in_array($o, $known, true); })));
                 $row['active'] = !empty($b['active']);
                 $row['mailAngebot'] = !array_key_exists('mailAngebot', $b) || !empty($b['mailAngebot']);
-                foreach (['weekly', 'mailLast'] as $keep) if (isset($old[$keep])) $row[$keep] = $old[$keep];
+                foreach (['weekly', 'mailLast', 'abgemeldet'] as $keep) if (isset($old[$keep])) $row[$keep] = $old[$keep];
+                if ($row['mailAngebot']) unset($row['abgemeldet']);
                 $row['created'] = $old['created'] ?? now();
                 $row['changed'] = now();
                 // Zugang

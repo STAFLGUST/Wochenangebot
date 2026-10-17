@@ -624,3 +624,4 @@ body.k-gate .toolbar, body.k-gate .filters, body.k-gate .quicknav { display: non
 @media (max-width: 640px) { .brand h1 { flex-wrap: wrap; white-space: normal; row-gap: 2px; } }
 body.k-gate .layout { grid-template-columns: minmax(0, 1fr); }
 body.k-gate .k-locked { max-width: 560px; margin: 24px auto 0; }
+.kw-pill:empty { display: none; }
