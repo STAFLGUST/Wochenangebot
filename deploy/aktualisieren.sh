@@ -3,8 +3,16 @@
 # .env und daten/ werden nie verändert (außer der Statusdatei daten/sicherung.php der Datensicherung).
 set -eu
 cd /opt/wochenangebot
-# Tägliche Datensicherung (höchstens 1× pro Tag, blockiert die Aktualisierung nie)
-sh deploy/sichern.sh || true
+# Übergang: Solange die Sicherung keine eigene Zeitsteuerung hat (deploy/sicherung-einrichten.sh),
+# läuft sie hier mit (höchstens 1× pro Tag). Fehler blockieren die Aktualisierung nicht, werden aber vom
+# Sicherungsskript selbst als Status gespeichert und gemeldet.
+if ! systemctl is-enabled --quiet wochenangebot-sicherung.timer 2>/dev/null; then
+  sh deploy/sichern.sh || echo "Hinweis: Datensicherung fehlgeschlagen – Status im Bereich Sicherheit"
+fi
+# Release-Modus (nach deploy/release-modus-einrichten.sh): nur noch von Hand freigegebene Releases einspielen
+if [ -f /opt/wochenangebot/.release-modus ]; then
+  exec sh deploy/freigabe-einspielen.sh
+fi
 git fetch -q origin main
 [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] && exit 0
 CHANGED=$(git diff --name-only HEAD origin/main)

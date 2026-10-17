@@ -1,0 +1,14 @@
+# Secret-Scan (gitleaks): Standardregeln plus Ausnahmen für feste Test-Passwörter der Ende-zu-Ende-Tests.
+# Diese Passwörter gelten nur für die kurzlebigen Testserver der CI, nie für die Produktivseite.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Feste Test-Passwörter (tests/e2e)"
+regexTarget = "match"
+regexes = [
+  '''Bearbeiter-Zugang-1''',
+  '''Uebernahme-Versuch-1''',
+  '''Gut-Passwort-2026''',
+  '''Sicheres-Passwort-1''',
+]

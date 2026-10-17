@@ -2,3 +2,9 @@
 .env
 daten/
 sicherungen/
+tests/.arbeit/
+tests/.ergebnisse/
+__pycache__/
+.release-modus
+.release-abgelehnt
+.release-letzter-stand

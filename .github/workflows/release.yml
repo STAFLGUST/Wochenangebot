@@ -1,0 +1,63 @@
+# Produktive Freigabe: wird ausschließlich von Hand gestartet (GitHub → Actions → „Release“ → „Run workflow“,
+# Branch main). Der Server spielt nur Commits ein, für die dieser Lauf erfolgreich war – und prüft das selbst
+# noch einmal über die GitHub-API.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      grund:
+        description: "Was wird freigegeben? (erscheint im Protokoll)"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # Release-Markierung (Tag) anlegen
+  actions: read     # CI-Ergebnis für diesen Commit lesen
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  freigabe:
+    name: Freigabe prüfen und markieren
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Nur von main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases sind nur vom Branch main möglich (gewählt: ${GITHUB_REF})."
+          exit 1
+      - name: CI für genau diesen Commit erfolgreich?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${SHA}&status=success&per_page=20" \
+                --jq '[.workflow_runs[] | select(.head_branch == "main" and (.event == "push" or .event == "workflow_dispatch"))] | length')
+          if [ "${n}" -lt 1 ]; then
+            echo "::error::Für Commit ${SHA} gibt es keinen erfolgreichen CI-Lauf auf main. Erst CI abwarten bzw. reparieren."
+            exit 1
+          fi
+          echo "CI für ${SHA} erfolgreich (${n} Lauf/Läufe)."
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: true
+      - name: Release markieren
+        env:
+          GRUND: ${{ inputs.grund }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          tag="release-$(date -u +%Y%m%d-%H%M%S)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${tag}" -m "Freigabe durch ${ACTOR}: ${GRUND}" "${SHA}"
+          git push origin "${tag}"
+          {
+            echo "### Freigegeben: \`${SHA:0:7}\`"
+            echo "Markierung: \`${tag}\` · Grund: ${GRUND}"
+            echo "Der Server übernimmt diesen Stand innerhalb von etwa 2 Minuten und prüft danach die Erreichbarkeit."
+          } >> "${GITHUB_STEP_SUMMARY}"

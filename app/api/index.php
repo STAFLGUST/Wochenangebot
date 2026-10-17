@@ -1165,6 +1165,7 @@ try {
             foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
             respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
                      'backup' => store_read('sicherung'),
+                     'deployment' => store_read('deployment'),
                      'myCountry' => geo_country(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
                      'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
