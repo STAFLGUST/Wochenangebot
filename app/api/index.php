@@ -1094,7 +1094,7 @@ try {
         }
 
         case 'stock': {
-            require_auth();
+            // NEGATIVTEST: Anmeldung absichtlich entfernt – CI muss rot werden
             header('Cache-Control: no-store');
             respond(['ok' => true, 'stock' => store_read('bestand')]);
         }
