@@ -388,7 +388,7 @@ function renderTable(list, grouped) {
     rows.push(`<tr class="row" data-id="${it.id}">
       <td class="c-fav">${starHTML(it)}</td>
       <td class="c-code">${it.code ? hl(it.code) : '<span class="muted" title="Ohne Artikelnummer">—</span>'}</td>
-      <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}">${hl(it.name)}</button>
+      <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>
         <div class="m-meta">${esc([it.code, it.category, it.origin, COND_LABEL[it.condition]].filter(Boolean).join(' · '))}</div>${tagHTML(it, !grouped)}</td>
       <td class="c-cat"><span class="cat-cell">${monoHTML(it.category)}${esc(it.category)}</span></td>
       <td class="c-origin">${it.origin ? hl(it.origin) : '<span class="muted" title="In der Liste nicht angegeben">—</span>'}${grouped ? '' : `<div class="sub">${esc(it.group)}</div>`}</td>
@@ -406,7 +406,7 @@ function cardHTML(it, grouped) {
   const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag">${esc(f)}</span>`).join('');
   return `<article class="card" data-id="${it.id}">
     <div class="card-top">${monoHTML(it.category)}<span class="code">${it.code ? 'Art.-Nr. ' + hl(it.code) : 'ohne Art.-Nr.'}</span>${starHTML(it)}</div>
-    <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}">${hl(it.name)}</button></h3>
+    <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button></h3>
     <p class="card-meta">${esc(it.category)}${it.origin ? ' · ' + hl(it.origin) : ''}</p>
     <div class="card-tags">${condBadge(it.condition)}${!grouped && it.brand ? `<span class="tag brand">${esc(it.brand)}</span>` : ''}${feats}</div>
     ${grouped ? '' : `<p class="card-group">${esc(it.group)}</p>`}
@@ -954,10 +954,9 @@ function bind() {
       if (a === 'tab-all') { state.tab = 'all'; render(); }
       return;
     }
-    if (e.target.closest('.qty, .c-qty, .card-qty')) return;          // Mengenfeld: nur eingeben, keine Detailansicht
-    if (window.getSelection && String(window.getSelection()).length > 2) return;
-    const row = e.target.closest('[data-open], tr.row, .card');
-    if (row) openDetail(row.dataset.open || row.dataset.id);
+    // Details nur über die Bezeichnung – ein Klick irgendwo in die Zeile (z. B. ins Mengenfeld) öffnet nichts
+    const open = e.target.closest('[data-open]');
+    if (open) openDetail(open.dataset.open);
   });
 
   $('#favbar').addEventListener('click', (e) => {
