@@ -333,6 +333,7 @@
     document.body.classList.toggle('is-admin', can('admin'));
     $('#vt-users').hidden = !can('admin');
     $('#vt-kunden').hidden = !can('admin');
+    $('#vt-mail').hidden = !can('admin');
     $('#vt-log').hidden = !can('admin');
     $('#vt-sec').hidden = !can('admin');
     $('#side-admin').hidden = !can('admin');
@@ -1568,8 +1569,8 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['edit', 'hist', 'stock', 'master', 'kunden', 'users', 'log', 'sec'];
-  const ADMIN_VIEWS = ['kunden', 'users', 'log', 'sec'];
+  const VIEWS = ['edit', 'hist', 'stock', 'master', 'kunden', 'mail', 'users', 'log', 'sec'];
+  const ADMIN_VIEWS = ['kunden', 'mail', 'users', 'log', 'sec'];
   function setView(v) {
     if (ADMIN_VIEWS.includes(v) && !can('admin')) v = 'edit';
     currentView = v;
@@ -1585,6 +1586,7 @@
     if (v === 'master') renderMasterView();
     if (v === 'users') renderUsersView();
     if (v === 'kunden') renderKundenView();
+    if (v === 'mail') renderMailView();
     if (v === 'log') renderLogView();
     if (v === 'sec') renderSecView();
   }
@@ -2899,7 +2901,7 @@
             <button type="button" class="btn sm" data-kact="m-zugang"${mailOk && c.email && l && l.active ? '' : ' disabled'}>${icon('key', 'sm')}${l && !l.hasPassword ? 'Einladung erneut senden' : 'Link zum Passwort-Zurücksetzen senden'}</button>
             <button type="button" class="btn sm" data-kact="m-angebot"${mailOk && c.email && c.angebote.length ? '' : ' disabled'}>${icon('link', 'sm')}Angebotslink senden</button>
           </div>
-          <p class="hint">${!mailOk ? 'Der E-Mail-Versand ist noch nicht eingerichtet (Schaltfläche „E-Mail“ in der Kundenliste).' : !c.email ? 'Keine E-Mail-Adresse hinterlegt.' : `An ${esc(c.email)}. Ein Passwort-Link ist ${l && !l.hasPassword ? '7 Tage' : '2 Tage'} gültig und nur einmal verwendbar.`}${c.mailLast ? ` Letzte E-Mail: ${esc(MAIL_TYP[c.mailLast.typ] || '')}, ${esc(dateTime(c.mailLast.t))} ${c.mailLast.ok ? '✓' : '– nicht zugestellt'}.` : ''}</p>
+          <p class="hint">${!mailOk ? 'Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).' : !c.email ? 'Keine E-Mail-Adresse hinterlegt.' : `An ${esc(c.email)}. Ein Passwort-Link ist ${l && !l.hasPassword ? '7 Tage' : '2 Tage'} gültig und nur einmal verwendbar.`}${c.mailLast ? ` Letzte E-Mail: ${esc(MAIL_TYP[c.mailLast.typ] || '')}, ${esc(dateTime(c.mailLast.t))} ${c.mailLast.ok ? '✓' : '– nicht zugestellt'}.` : ''}</p>
         </fieldset>` : ''}
         <fieldset class="k-set"><legend>Zugang zur Angebotsseite</legend>
           <label class="check"><input type="checkbox" name="hasLogin"${!c || l ? ' checked' : ''}> Zugang einrichten (Benutzerkennung und Passwort)</label>
@@ -3000,42 +3002,109 @@
     toast(`${MAIL_TYP[r.typ]} an ${c.email} gesendet.`, 4500);
     return r;
   }
-  /* E-Mail-Einstellungen: Status, Signatur, Testmail, Versandprotokoll */
-  const dlgMail = $('#dlg-mail');
-  function openMailCfg() {
-    const m = mailSt, s = m.smtp;
-    const st = m.configured ? `<p class="k-ok">${icon('check', 'sm')}Eingerichtet – Versand über <strong>${esc(s.host)}:${esc(s.port)}</strong> (${esc(s.secure === 'ssl' ? 'SSL' : s.secure === 'starttls' ? 'STARTTLS' : 'unverschlüsselt, nur lokal')}), Absender <strong>${esc(s.fromName)} &lt;${esc(s.from)}&gt;</strong>${s.replyTo ? `, Antworten an ${esc(s.replyTo)}` : ''}. Links führen zu ${esc(m.baseUrl)}.</p>`
-      : `<div class="notice k-setup"><p><strong>Der E-Mail-Versand ist noch nicht eingerichtet.</strong> Die Zugangsdaten eines Postfachs (empfohlen: eigenes IONOS-Postfach, z. B. angebot@standard-fleisch.de) werden nur auf dem Server in der Datei <code>.env</code> eingetragen – nie hier oder im Code:</p>
-        <pre>MAIL_SMTP_HOST=smtp.ionos.de
-MAIL_SMTP_PORT=587
-MAIL_SMTP_SECURE=starttls
-MAIL_SMTP_USER=angebot@standard-fleisch.de
-MAIL_SMTP_PASS='…Passwort des Postfachs…'
-MAIL_FROM=angebot@standard-fleisch.de
-MAIL_FROM_NAME=Standard-Fleisch</pre>
-        <p>Danach auf dem Server <code>docker compose up -d</code> ausführen. ${s ? '' : 'Derzeit fehlt: SMTP-Server oder Absenderadresse.'}${m.baseUrl ? '' : ' Außerdem fehlt die Adresse der Seite (DOMAIN in .env).'}</p></div>`;
-    const log = (m.log || []).slice(0, 25);
-    $('#mail-body').innerHTML = `<div class="dlg-head"><div><h2 id="ml-title">E-Mail-Versand</h2><p>Einladungen, Passwort-Links und das Wochenangebot an Kunden.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body">
-        ${st}
-        <label class="fld"><span>Signatur unter jeder E-Mail</span><textarea id="ml-sig" rows="5" maxlength="600" placeholder="Mit freundlichen Grüßen&#10;Standard-Fleisch …&#10;Anschrift, Telefon">${esc(m.signature)}</textarea></label>
-        <p class="hint">Tipp: Anschrift, Telefon und Geschäftsführung ergänzen – geschäftliche E-Mails sollten den Absender vollständig nennen.</p>
-        <div class="k-test"><label class="fld grow"><span>Testmail senden an</span><input id="ml-to" type="email" autocomplete="email" placeholder="ihre.adresse@standard-fleisch.de"></label><button type="button" class="btn" data-ml="test"${m.configured ? '' : ' disabled'}>${icon('send', 'sm')}Testmail</button></div>
+  /* ======================= E-Mail-Einstellungen (Administrator) =======================
+     Postfach (SMTP) und Absender, Signatur, Testmail, Versandprotokoll. Das Passwort wird nur gesendet,
+     nie angezeigt; der Server speichert es verschlüsselt. */
+  const MAIL_PRESETS = {
+    hostinger: { label: 'Hostinger', host: 'smtp.hostinger.com', port: 465, secure: 'ssl' },
+    ionos: { label: 'IONOS', host: 'smtp.ionos.de', port: 587, secure: 'starttls' },
+  };
+  function openMailCfg() { setView('mail'); }
+  async function renderMailView() {
+    const host = $('#view-mail');
+    if (!mailSt) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>E-Mail-Einstellungen werden geladen …</div>';
+    try { mailSt = await api('mail_status'); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    const m = mailSt, s = m.smtp, a = m.account || {};
+    const secLabel = (x) => (x === 'ssl' ? 'SSL' : x === 'starttls' ? 'STARTTLS' : 'unverschlüsselt (nur lokal)');
+    const status = m.configured && s
+      ? `<div class="sec-card ${s.passError ? 'bad' : 'ok'}"><span class="sec-dot"></span><div><strong>${s.passError ? 'Passwort muss neu eingegeben werden' : 'E-Mail-Versand eingerichtet'}</strong><span>${esc(s.fromName)} &lt;${esc(s.from)}&gt; über ${esc(s.host)}:${esc(s.port)} (${esc(secLabel(s.secure))})${s.replyTo ? ` · Antworten an ${esc(s.replyTo)}` : ''}</span><em>${s.source === 'env' ? 'Werte aus der Server-Datei .env – hier gespeicherte Werte hätten Vorrang.' : `Gespeichert ${a.updatedAt ? esc(dateTime(a.updatedAt)) : ''}${a.updatedBy ? ' von ' + esc(a.updatedBy) : ''}. Links in E-Mails führen zu ${esc(m.baseUrl || '–')}.`}</em></div></div>`
+      : `<div class="sec-card warn"><span class="sec-dot"></span><div><strong>Noch nicht eingerichtet</strong><span>Tragen Sie unten das Postfach ein, über das die E-Mails an Kunden versendet werden.</span>${m.baseUrl ? '' : '<em>Außerdem fehlt die Adresse der Seite für Links (DOMAIN in .env).</em>'}</div></div>`;
+    const log = (m.log || []).slice(0, 50);
+    host.innerHTML = `
+      <div class="sec-grid">${status}</div>
+      <form class="gcard sec-form" id="ml-form" autocomplete="off">
+        <h3 class="sec-h">Postfach für den Versand</h3>
+        <div class="ml-presets"><span class="sub">Vorlage:</span>${Object.entries(MAIL_PRESETS).map(([k, p]) => `<button type="button" class="btn sm" data-ml="preset" data-p="${k}">${esc(p.label)}</button>`).join('')}</div>
+        <div class="sec-rows">
+          <label class="fld"><span>Mailserver (SMTP)</span><input name="host" value="${esc(a.host || '')}" maxlength="253" autocapitalize="none" spellcheck="false" placeholder="z. B. smtp.hostinger.com" required></label>
+          <div class="sec-rows ml-pair">
+            <label class="fld"><span>Verschlüsselung</span><select name="secure">
+              <option value="ssl"${(a.secure || 'ssl') === 'ssl' ? ' selected' : ''}>SSL (Port 465)</option>
+              <option value="starttls"${a.secure === 'starttls' ? ' selected' : ''}>STARTTLS (Port 587)</option></select></label>
+            <label class="fld"><span>Port</span><input name="port" type="number" min="1" max="65535" value="${esc(a.port || 465)}" required></label>
+          </div>
+          <label class="fld"><span>Benutzername</span><input name="user" value="${esc(a.user || '')}" maxlength="160" autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="meist die E-Mail-Adresse des Postfachs"></label>
+          <label class="fld"><span>Passwort</span><input name="password" type="password" autocomplete="new-password" maxlength="500" placeholder="${a.password ? '•••••••• gespeichert – leer lassen = unverändert' : 'Passwort des Postfachs'}">
+            <small>Wird verschlüsselt gespeichert und nie wieder angezeigt. Bei geändertem Server oder Benutzer bitte erneut eingeben.</small></label>
+        </div>
+        <h3 class="sec-h ml-h2">Absender</h3>
+        <div class="sec-rows">
+          <label class="fld"><span>Absenderadresse</span><input name="from" type="email" value="${esc(a.from || '')}" maxlength="160" autocapitalize="none" spellcheck="false" placeholder="z. B. versand@angebot-stafl.de" required>
+            <small>Muss zum Postfach passen, sonst lehnt der Mailserver ab oder die E-Mails landen im Spam.</small></label>
+          <label class="fld"><span>Absendername</span><input name="fromName" value="${esc(a.fromName || '')}" maxlength="80" placeholder="Standard-Fleisch"></label>
+          <label class="fld"><span>Antworten an <small>(optional)</small></span><input name="replyTo" type="email" value="${esc(a.replyTo || '')}" maxlength="160" autocapitalize="none" spellcheck="false" placeholder="z. B. verkauf@standard-fleisch.de">
+            <small>Antworten der Kunden landen dort – z. B. das Postfach, das Sie täglich lesen.</small></label>
+        </div>
         <p class="form-err" id="ml-err" role="alert"></p>
-        ${log.length ? `<details class="k-log"><summary>Zuletzt versendet (${log.length})</summary><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></details>` : ''}
+        <div class="sec-foot ml-foot">${m.account ? `<button type="button" class="btn ghost" data-ml="remove">${icon('trash', 'sm')}Einstellungen entfernen</button>` : ''}<button type="submit" class="btn primary">${icon('check')}Speichern und Verbindung prüfen</button></div>
+      </form>
+      <div class="gcard sec-form">
+        <h3 class="sec-h">Signatur</h3>
+        <label class="fld"><span>Erscheint unter jeder E-Mail</span><textarea id="ml-sig" rows="5" maxlength="600" placeholder="Mit freundlichen Grüßen&#10;Standard-Fleisch …&#10;Anschrift, Telefon">${esc(m.signature)}</textarea>
+          <small>Tipp: Anschrift, Telefon und Geschäftsführung ergänzen – geschäftliche E-Mails sollten den Absender vollständig nennen.</small></label>
+        <div class="sec-foot"><button type="button" class="btn" data-ml="sig">${icon('check', 'sm')}Signatur speichern</button></div>
       </div>
-      <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-ml="save">${icon('check')}Signatur speichern</button></div>`;
-    dlgMail.showModal();
+      <div class="gcard sec-form">
+        <h3 class="sec-h">Testmail</h3>
+        <div class="k-test"><label class="fld grow"><span>Senden an</span><input id="ml-to" type="email" autocomplete="email" placeholder="ihre.adresse@standard-fleisch.de"></label><button type="button" class="btn" data-ml="test"${m.configured ? '' : ' disabled'}>${icon('send', 'sm')}Testmail senden</button></div>
+        <p class="form-err" id="ml-err2" role="alert"></p>
+      </div>
+      <div class="gcard sec-form">
+        <h3 class="sec-h">Zuletzt versendet</h3>
+        ${log.length ? `<div class="ml-logwrap"><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sec-empty">Noch keine E-Mails versendet.</p>'}
+      </div>`;
   }
-  dlgMail.addEventListener('click', async (e) => {
-    const a = e.target.closest('[data-ml]')?.dataset.ml;
-    if (!a) return;
-    const err = $('#ml-err'), b = e.target.closest('[data-ml]');
+  $('#view-mail').addEventListener('change', (e) => {
+    if (e.target.name === 'secure') { const p = $('#ml-form [name="port"]'); if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
+  });
+  $('#view-mail').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'ml-form') return;
+    e.preventDefault();
+    const f = e.target, err = $('#ml-err'), btn = f.querySelector('[type="submit"]');
+    err.textContent = '';
+    const body = { host: f.host.value.trim(), port: +f.port.value, secure: f.secure.value, user: f.user.value.trim(), password: f.password.value, from: f.from.value.trim(), fromName: f.fromName.value.trim(), replyTo: f.replyTo.value.trim() };
+    btn.disabled = true;
+    try {
+      const r = await api('mail_konto_save', { body });
+      f.password.value = '';
+      if (r.connection.ok) toast('Gespeichert – Verbindung und Anmeldung am Mailserver erfolgreich. Jetzt eine Testmail senden.', 6000);
+      else toast('Gespeichert, aber die Verbindung ist fehlgeschlagen – Details unten.', 6000);
+      await renderMailView();
+      if (!r.connection.ok) $('#ml-err').textContent = 'Verbindungsprüfung: ' + r.connection.error;
+    } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+  });
+  $('#view-mail').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-ml]');
+    if (!b) return;
+    const a = b.dataset.ml;
+    if (a === 'preset') {
+      const p = MAIL_PRESETS[b.dataset.p], f = $('#ml-form');
+      f.host.value = p.host; f.port.value = p.port; f.secure.value = p.secure;
+      if (!f.user.value && f.from.value) f.user.value = f.from.value;
+      f.user.focus();
+      return;
+    }
+    if (a === 'remove') {
+      if (!(await confirmBox('Einstellungen entfernen?', 'Postfach, Absender und gespeichertes Passwort werden gelöscht. Danach werden – falls vorhanden – die Werte aus der Server-Datei .env verwendet, sonst ist der Versand ausgeschaltet.', 'Entfernen', true))) return;
+      try { await api('mail_konto_save', { body: { remove: true } }); toast('Postfach-Einstellungen entfernt.'); renderMailView(); } catch (ex) { $('#ml-err').textContent = ex.message; }
+      return;
+    }
+    const err = a === 'test' ? $('#ml-err2') : $('#ml-err');
     err.textContent = '';
     b.disabled = true;
     try {
-      if (a === 'save') { const r = await api('mail_save', { body: { signature: $('#ml-sig').value } }); mailSt.signature = r.signature; toast('Signatur gespeichert.'); dlgMail.close(); }
-      if (a === 'test') { const to = $('#ml-to').value.trim(); await api('mail_test', { body: { to } }); toast(`Testmail an ${to} gesendet – bitte Posteingang (und Spam-Ordner) prüfen.`, 6000); mailSt = await api('mail_status'); }
+      if (a === 'sig') { const r = await api('mail_save', { body: { signature: $('#ml-sig').value } }); mailSt.signature = r.signature; toast('Signatur gespeichert.'); }
+      if (a === 'test') { const to = $('#ml-to').value.trim(); await api('mail_test', { body: { to } }); toast(`Testmail an ${to} gesendet – bitte Posteingang (und Spam-Ordner) prüfen.`, 6000); await renderMailView(); $('#ml-to').value = to; }
     } catch (ex) { err.textContent = ex.message; } finally { b.disabled = false; }
   });
 
@@ -3045,7 +3114,7 @@ MAIL_FROM_NAME=Standard-Fleisch</pre>
   const rundWhy = (c) => (!c.active ? 'Kunde inaktiv' : !c.email ? 'keine E-Mail-Adresse' : !c.login || !c.login.active ? 'kein aktiver Zugang' : !c.angebote.length ? 'kein Angebot freigeschaltet' : c.mailAngebot === false ? 'möchte kein Wochenangebot per E-Mail' : '');
   async function openRund() {
     try { const [m, k] = await Promise.all([api('mail_status'), api('kunden')]); mailSt = m; kunden = k.customers; kundenRev = k.rev; } catch (ex) { toast(ex.message); return; }
-    if (!mailSt.configured) { openMailCfg(); return; }
+    if (!mailSt.configured) { toast('Bitte zuerst das Postfach für den E-Mail-Versand einrichten.', 5000); openMailCfg(); return; }
     const w = wkCur();
     const ok = kunden.filter((c) => !rundWhy(c)), no = kunden.filter((c) => rundWhy(c));
     rundSel = new Set(ok.filter((c) => c.login.hasPassword && !sentThisWeek(c)).map((c) => c.id));

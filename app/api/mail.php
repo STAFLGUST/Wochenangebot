@@ -1,7 +1,9 @@
 <?php
 /*
  * E-Mail-Versand über einen SMTP-Server (z. B. das IONOS-Postfach der Firma).
- * Zugangsdaten nur als Umgebungsvariablen (aus .env auf dem Server, siehe docker-compose.yml) – nie im Code.
+ * Zugangsdaten entweder im Eingabebereich (Verwaltung → E-Mail; Passwort verschlüsselt im Datenordner, der Schlüssel
+ * liegt getrennt davon und wird nicht mitgesichert) oder als Umgebungsvariablen aus .env (docker-compose.yml).
+ * Im Eingabebereich gespeicherte Werte haben Vorrang. Nie im Code.
  *
  *   MAIL_SMTP_HOST     z. B. smtp.ionos.de
  *   MAIL_SMTP_PORT     587 (STARTTLS) oder 465 (SSL)
@@ -23,10 +25,52 @@ function env_str(string $k): string
     if ($v === false) $v = (string)($_SERVER[$k] ?? '');
     return trim((string)$v);
 }
+/* ---------- Verschlüsselung des gespeicherten Postfach-Passworts ---------- */
+const MAIL_KEY_STORE = 'mail-schluessel';     // wird bei der Datensicherung bewusst ausgelassen (deploy/sichern.sh)
+function mail_key(bool $create = false): ?string
+{
+    $k = store_read(MAIL_KEY_STORE);
+    $raw = is_array($k) ? base64_decode((string)($k['key'] ?? ''), true) : false;
+    if (is_string($raw) && strlen($raw) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES) return $raw;
+    if (!$create) return null;
+    $raw = sodium_crypto_secretbox_keygen();
+    store_write(MAIL_KEY_STORE, ['key' => base64_encode($raw), 'created' => gmdate('Y-m-d\TH:i:s\Z')]);
+    return $raw;
+}
+function mail_encrypt(string $plain): string
+{
+    if (!function_exists('sodium_crypto_secretbox')) throw new RuntimeException('Verschlüsselung (sodium) ist auf dem Server nicht verfügbar.');
+    $n = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+    return 'v1:' . base64_encode($n . sodium_crypto_secretbox($plain, $n, mail_key(true)));
+}
+function mail_decrypt(string $enc): ?string
+{
+    $key = function_exists('sodium_crypto_secretbox_open') ? mail_key() : null;
+    $raw = strpos($enc, 'v1:') === 0 ? base64_decode(substr($enc, 3), true) : false;
+    if (!$key || !is_string($raw) || strlen($raw) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) return null;
+    $p = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), $key);
+    return $p === false ? null : $p;
+}
+/* Im Eingabebereich gespeichertes Postfach (oder null) */
+function mail_account(): ?array
+{
+    $a = store_read('mailkonto');
+    return is_array($a) && !empty($a['host']) && !empty($a['from']) ? $a : null;
+}
 /* Mail-Konfiguration oder null, wenn der Versand nicht eingerichtet ist */
 function mail_cfg(): ?array
 {
     global $CFG;
+    $a = mail_account();
+    if ($a) {
+        $pass = isset($a['passEnc']) && $a['passEnc'] !== '' ? mail_decrypt((string)$a['passEnc']) : '';
+        return [
+            'host' => (string)$a['host'], 'port' => (int)$a['port'], 'secure' => (string)$a['secure'],
+            'user' => (string)($a['user'] ?? ''), 'pass' => (string)$pass, 'passError' => $pass === null,
+            'from' => (string)$a['from'], 'fromName' => mail_clean_header((string)($a['fromName'] ?? '') ?: (string)$CFG['company']),
+            'replyTo' => (string)($a['replyTo'] ?? ''), 'cafile' => env_str('MAIL_SMTP_CAFILE'), 'source' => 'admin',
+        ];
+    }
     $host = env_str('MAIL_SMTP_HOST');
     $from = env_str('MAIL_FROM');
     if ($host === '' || $from === '' || filter_var($from, FILTER_VALIDATE_EMAIL) === false) return null;
@@ -39,7 +83,7 @@ function mail_cfg(): ?array
         'user' => env_str('MAIL_SMTP_USER'), 'pass' => (string)(getenv('MAIL_SMTP_PASS') ?: ($_SERVER['MAIL_SMTP_PASS'] ?? '')),
         'from' => $from, 'fromName' => mail_clean_header(env_str('MAIL_FROM_NAME') ?: (string)$CFG['company']),
         'replyTo' => filter_var($reply, FILTER_VALIDATE_EMAIL) ? $reply : '',
-        'cafile' => env_str('MAIL_SMTP_CAFILE'),
+        'cafile' => env_str('MAIL_SMTP_CAFILE'), 'passError' => false, 'source' => 'env',
     ];
 }
 /* Basisadresse der Angebotsseite für Links in E-Mails – nie aus dem Host-Header der Anfrage */
@@ -118,6 +162,7 @@ final class Smtp
     }
     public function open(): void
     {
+        if (!empty($this->cfg['passError'])) $this->err('Das gespeicherte Postfach-Passwort kann nicht entschlüsselt werden (z. B. nach einer Wiederherstellung). Bitte unter Verwaltung → E-Mail neu eingeben.');
         try { $this->connect(); } catch (RuntimeException $e) { if ($this->fh) @fclose($this->fh); $this->fh = null; throw $e; }
     }
     private function connect(): void

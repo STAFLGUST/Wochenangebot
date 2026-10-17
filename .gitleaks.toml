@@ -24,6 +24,8 @@ regexes = [
   '''Neues-Kennwort-66''',
   '''Admin-Gesetzt-77''',
   '''Kantine-Eigen-202[67]''',
+  '''Konto-Passwort-9''',
+  '''Falsches-Passwort-1''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]

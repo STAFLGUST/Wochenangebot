@@ -13,6 +13,8 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
    Keine Erfolgsmeldung ohne tatsächlich ausgeführte Tests.
 5. **Keine echten Daten, keine Geheimnisse** im Repository (Angebote, Bestände, Nutzer, Tokens, Passwörter,
    IP-Adressen). Testdaten nur aus `tests/fixtures/`. Geheimnisse gehören in `.env` auf dem Server.
+   Ausnahme: das Postfach-Passwort für den E-Mail-Versand kann ein Administrator im Eingabebereich hinterlegen; es wird
+   verschlüsselt gespeichert (Schlüssel `mail-schluessel.php`, nicht in Sicherungen) und nie zurückgegeben.
 6. **Datenformate nur erweitern.** Code muss bestehende Daten weiter lesen können, damit ein Rückfall auf die
    Vorversion keine Daten beschädigt. Unverträgliche Änderungen brauchen eine eigene Migration mit Freigabe.
 7. **Öffentliche Seite:** nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern.
