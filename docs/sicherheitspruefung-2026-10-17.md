@@ -71,3 +71,29 @@ korrigiert: 480 Minuten statt einer PHP-Warnung und versehentlich gespeicherter 
 - Externe Datensicherung ist ausdrücklich verschoben.
 
 Produktionsserver, produktive Daten, Zugangsdaten, Branchschutz und Release-Workflow wurden nicht verändert.
+
+## Erweiterung: sensible Verwaltungsaktionen
+
+- Nach vollständiger Anmeldung gilt eine sitzungsgebundene Freigabe von fünf Minuten. Danach verlangen
+  Nutzer-/Kundenverwaltung, Sicherheitsänderungen, Sitzungswiderruf, Entsperren, Mailkonfiguration und
+  Versand erneut das aktuelle Passwort. Auch Angebotslöschung und Änderung der öffentlichen Sichtbarkeit
+  prüfen diese Freigabe serverseitig. Lesen und normale Angebotsbearbeitung bleiben möglich.
+- Ein Dialog erhält die vorbereiteten Eingaben. Erst erfolgreiche Bestätigung wiederholt den ursprünglichen
+  Aufruf einmal. Abbrechen führt die Änderung nicht aus. Das Bestätigungspasswort wird weder gespeichert
+  noch mit dem ursprünglichen Aufruf erneut übertragen.
+- Fünf falsche Passwortbestätigungen sperren diese Bestätigungen kontoweit für zehn Minuten – gemeinsam
+  über Passwortwechsel, Faktorwechsel und Verwaltungsbestätigung, unabhängig von Sitzung oder IP.
+- Echte Schwachstelle: Passwortprüfungen bei Passwort-/Faktoränderungen hatten bisher keine eigene Bremse.
+  Die neue gemeinsame Bremse schließt diesen Rate-Limit-Bypass einer bereits angemeldeten Sitzung.
+- Echte Schwachstelle: Anmeldeversuche wurden ohne dieselbe exklusive Dateisperre wie Entsperrungen
+  gespeichert; parallele Zugriffe konnten Zähler überschreiben. Schreibzugriffe verwenden jetzt die Sperre.
+  Wenn eine Datensperre nicht angelegt/erworben werden kann, bricht die Operation mit HTTP 500 ab.
+- Die Freigabe hängt an der Sitzungsversion. Widerruf oder Passwortzurücksetzung durch andere Administratoren
+  entwertet auch bestehende Freigaben. Erfolg und Fehlversuche werden ohne Passwort protokolliert.
+
+Tests: direkte HTTP-Regressionen einschließlich Sperrdateifehler und konkurrierendem Dateizugriff sowie
+Browserprüfung für Ablauf, Abbruch, Fehlversuch, mobile Darstellung und einmalige Wiederholung.
+Neue Gruppen `admin_confirmation` und `admin_confirmation_ui`; vorhandene Gruppen bleiben aktiv.
+
+Offen: bekannte Container-Befunde aus dem bisherigen Bericht, betriebliche Protokoll-Löschfristen und
+unabhängige externe Sicherung (auf ausdrücklichen Wunsch verschoben). Keine Änderung am Release-Prozess.

@@ -159,6 +159,18 @@
 <dialog class="modal wide" id="dlg-rund" aria-labelledby="rd-title"><div class="dlg" id="rund-body"></div></dialog>
 <!-- Zwei-Faktor-Anmeldung -->
 <dialog class="modal" id="dlg-twofa" aria-labelledby="tf-title"><div class="dlg" id="twofa-body"></div></dialog>
+<!-- Erneute Passwortbestätigung für sensible Verwaltungsaktionen -->
+<dialog class="modal" id="dlg-reauth" aria-labelledby="reauth-title" aria-describedby="reauth-description">
+  <form class="dlg" id="reauth-form">
+    <div class="dlg-head"><h2 id="reauth-title">Verwaltungsaktion bestätigen</h2></div>
+    <div class="dlg-body">
+      <p id="reauth-description">Bitte geben Sie Ihr aktuelles Passwort ein. Damit bestätigen Sie sensible Verwaltungsaktionen für die nächsten fünf Minuten in dieser Sitzung.</p>
+      <label class="fld"><span>Aktuelles Passwort</span><input id="reauth-password" name="current-password" type="password" autocomplete="current-password" required maxlength="200"></label>
+      <p class="form-err" id="reauth-error" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary" id="reauth-submit">Bestätigen</button></div>
+  </form>
+</dialog>
 <!-- Bestätigung -->
 <dialog class="modal wide" id="dlg-offers" aria-labelledby="of-title"><div class="dlg" id="offers-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
@@ -211,6 +223,6 @@
 <script src="../assets/offer-core.js?v=20261017j"></script>
 <script src="../assets/vendor/qrcode.js?v=1.4.4"></script>
 <script src="../assets/stock-core.js?v=20261017j"></script>
-<script src="../assets/admin.js?v=20261017j"></script>
+<script src="../assets/admin.js?v=20261017confirm"></script>
 </body>
 </html>

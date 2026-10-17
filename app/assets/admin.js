@@ -108,11 +108,56 @@
       showAuth('expired');
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
+    if (res.status === 403 && data?.code === 'confirmation_required' && !opts.confirmationRetry) {
+      await confirmAdminAction();
+      return api(action, { ...opts, confirmationRetry: true });
+    }
     if (!res.ok || !data || !data.ok) {
       const msg = data && data.error ? data.error : res.status === 404 && !data ? 'API nicht gefunden – liegt der Ordner „api“ auf dem Server und ist PHP aktiv?' : `Serverfehler (${res.status}).`;
       throw Object.assign(new Error(msg), { status: res.status });
     }
     return data;
+  }
+
+  /* Passwort nur für die Bestätigung übertragen, nicht speichern oder erneut mitsenden. */
+  let adminConfirmation = null;
+  function confirmAdminAction() {
+    if (adminConfirmation) return adminConfirmation;
+    adminConfirmation = new Promise((resolve, reject) => {
+      const d = $('#dlg-reauth'), form = $('#reauth-form'), input = $('#reauth-password');
+      const err = $('#reauth-error'), btn = $('#reauth-submit');
+      let settled = false;
+      form.reset(); err.textContent = ''; btn.disabled = false;
+      const finish = (error = null) => {
+        if (settled) return;
+        settled = true;
+        d.removeEventListener('close', onClose);
+        if (d.open) d.close();
+        form.reset(); form.onsubmit = null;
+        adminConfirmation = null;
+        if (error) reject(error); else resolve();
+      };
+      const onClose = () => finish(new Error('Bestätigung abgebrochen. Die Änderung wurde nicht ausgeführt.'));
+      d.addEventListener('close', onClose);
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        if (btn.disabled) return;
+        btn.disabled = true; err.textContent = '';
+        const password = input.value;
+        input.value = '';
+        try {
+          await api('reauth', { body: { password } });
+          finish();
+        } catch (ex) {
+          if (settled) return;
+          if (ex.status === 401) { finish(ex); return; }
+          err.textContent = ex.message;
+          btn.disabled = false; input.focus();
+        }
+      };
+      d.showModal(); input.focus();
+    });
+    return adminConfirmation;
   }
 
   /* ---------- Toast ---------- */
@@ -3212,8 +3257,8 @@
     ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden' }[a] || '');
-  const ACTION_LABEL = { kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', reauth: 'auth', reauth_fail: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden' }[a] || '');
+  const ACTION_LABEL = { kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
@@ -3433,6 +3478,7 @@
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
       <div class="sec-grid">${secCards(d)}</div>
+      <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens fünf Minuten alte Anmeldung oder Passwortbestätigung. Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
       <form class="gcard sec-form" id="sec-form" autocomplete="off">
         <h3 class="sec-h">Einstellungen</h3>
         <div class="sec-rows">
