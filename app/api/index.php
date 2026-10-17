@@ -159,6 +159,16 @@ function setup_allowed(): bool
     if (getenv('WA_INSTALLED') === '1' || ($_SERVER['WA_INSTALLED'] ?? '') === '1') return false;
     return !is_file(store_path('nutzer')) && !is_file(store_path('admin'));
 }
+/* Unter der Nutzersperre aufrufen: gilt für Passwort UND zweiten Anmeldeschritt. */
+function login_failure(array &$u): bool
+{
+    $S = sec();
+    $u['failCount'] = (int)($u['failCount'] ?? 0) + 1;
+    if ($u['failCount'] < max(3, (int)$S['lockAfter'])) return false;
+    $u['lockedUntil'] = time() + 60 * max(1, (int)$S['lockMinutes']);
+    $u['failCount'] = 0;
+    return true;
+}
 function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
 function clean_username($v): string
 {
@@ -402,6 +412,15 @@ function user_update(string $id, callable $fn): ?array
         users_save($users);
         return $users[$i];
     });
+}
+/* Nach Änderungen am zweiten Faktor nur die bestätigende Sitzung behalten. */
+function keep_current_session(array $u): void
+{
+    $_SESSION['sv'] = (int)$u['sv'];
+    unset($_SESSION['totpPending']);
+    $GLOBALS['ME'] = $u;
+    $sid = (string)($_SESSION['sid'] ?? '');
+    sess_remove(function ($k, $v) use ($u, $sid) { return $v['uid'] === $u['id'] && $k !== $sid; });
 }
 function require_csrf(): void
 {
@@ -937,18 +956,18 @@ try {
                     if ($u['username'] !== $name) continue;
                     if ((int)($u['lockedUntil'] ?? 0) > time()) { password_verify($pw, (string)$u['hash']); return ['locked', $u]; }
                     if (!password_verify($pw, (string)$u['hash'])) {
-                        $n = (int)($u['failCount'] ?? 0) + 1;
-                        $users[$i]['failCount'] = $n;
-                        $lockedNow = $n >= max(3, (int)$S['lockAfter']);
-                        if ($lockedNow) { $users[$i]['lockedUntil'] = time() + 60 * max(1, (int)$S['lockMinutes']); $users[$i]['failCount'] = 0; }
+                        $lockedNow = login_failure($users[$i]);
                         users_save($users);
                         return [$lockedNow ? 'lockednow' : 'bad', $users[$i]];
                     }
                     if (!$u['active']) return ['inactive', $u];
                     if (password_needs_rehash((string)$u['hash'], PASSWORD_DEFAULT)) $users[$i]['hash'] = password_hash($pw, PASSWORD_DEFAULT);
-                    $users[$i]['failCount'] = 0;
-                    $users[$i]['lockedUntil'] = 0;
-                    if (empty($u['totp'])) $users[$i]['lastLogin'] = now();
+                    // Bei 2FA ist das Passwort allein noch keine erfolgreiche Anmeldung.
+                    if (empty($u['totp'])) {
+                        $users[$i]['failCount'] = 0;
+                        $users[$i]['lockedUntil'] = 0;
+                        $users[$i]['lastLogin'] = now();
+                    }
                     users_save($users);
                     return ['ok', $users[$i]];
                 }
@@ -989,6 +1008,7 @@ try {
                 $i = user_find($users, (string)$p['uid']);
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || empty($users[$i]['totp'])) return ['gone', null];
                 $u = &$users[$i];
+                if ((int)($u['lockedUntil'] ?? 0) > time()) return ['locked', $u];
                 $how = null;
                 $step = totp_check((string)$u['totp'], $code, (int)($u['totpLast'] ?? 0));
                 if ($step !== null) { $u['totpLast'] = $step; $how = 'app'; }
@@ -997,7 +1017,13 @@ try {
                     $k = array_search($h, $u['recovery'] ?? [], true);
                     if ($k !== false) { array_splice($u['recovery'], $k, 1); $how = 'recovery'; }
                 }
-                if (!$how) return ['bad', $u];
+                if (!$how) {
+                    $locked = login_failure($u);
+                    users_save($users);
+                    return [$locked ? 'locked' : 'bad', $u];
+                }
+                $u['failCount'] = 0;
+                $u['lockedUntil'] = 0;
                 $u['lastLogin'] = now();
                 $out = $u;
                 unset($u);
@@ -1006,10 +1032,11 @@ try {
             });
             [$st, $u] = $res;
             if ($st === 'gone') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
-            if ($st === 'bad') {
+            if ($st === 'bad' || $st === 'locked') {
                 attempts_record(false);
                 $_SESSION['pend']['n'] = (int)$p['n'] + 1;
                 audit('login_fail', 'Zwei-Faktor-Code falsch', [], ['username' => $u['username'], 'name' => $u['name'], 'role' => $u['role']]);
+                if ($st === 'locked') { $_SESSION = []; fail('Dieser Zugang ist wegen zu vieler Fehlversuche gesperrt. Bitte später erneut versuchen oder einen Administrator kontaktieren.', 429); }
                 if ($_SESSION['pend']['n'] >= 5) { $_SESSION = []; fail('Zu viele falsche Codes. Bitte erneut anmelden.', 401); }
                 usleep(300000);
                 fail('Der Code ist nicht korrekt oder abgelaufen.', 401);
@@ -1024,8 +1051,13 @@ try {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
+            // Auch der Austausch eines vorhandenen Faktors braucht einen erneuten Passwortnachweis.
+            if (!empty($me['totp']) && !password_verify((string)(body()['password'] ?? ''), (string)$me['hash'])) {
+                unset($_SESSION['totpPending']);
+                fail('Bitte zum erneuten Einrichten das aktuelle Passwort eingeben.', 422);
+            }
             $secret = b32_encode(random_bytes(20));
-            $_SESSION['totpPending'] = $secret;
+            $_SESSION['totpPending'] = ['secret' => $secret, 'sv' => (int)$me['sv'], 't' => time()];
             $issuer = rawurlencode(($CFG['company'] ?: 'Wochenangebot') . ' Wochenangebot');
             respond(['ok' => true, 'secret' => $secret, 'uri' => "otpauth://totp/{$issuer}:" . rawurlencode($me['username']) . "?secret={$secret}&issuer={$issuer}&algorithm=SHA1&digits=6&period=30"]);
         }
@@ -1034,16 +1066,22 @@ try {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
-            $secret = (string)($_SESSION['totpPending'] ?? '');
-            if ($secret === '') fail('Bitte die Einrichtung neu starten.', 409);
+            $pending = $_SESSION['totpPending'] ?? null;
+            if (!is_array($pending) || (int)$pending['sv'] !== (int)$me['sv'] || (int)$pending['t'] < time() - 300) {
+                unset($_SESSION['totpPending']);
+                fail('Bitte die Einrichtung neu starten.', 409);
+            }
+            $secret = (string)$pending['secret'];
             $step = totp_check($secret, (string)(body()['code'] ?? ''));
             if ($step === null) fail('Der Code stimmt nicht. Bitte die Uhrzeit des Handys prüfen und den aktuellen Code eingeben.', 422);
             $codes = recovery_codes();
-            $u = user_update($me['id'], function (&$x) use ($secret, $step, $codes) {
+            $u = user_update($me['id'], function (&$x) use ($secret, $step, $codes, $me) {
+                if ((int)$x['sv'] !== (int)$me['sv'] || !$x['active']) fail('Bitte erneut anmelden.', 401);
+                $x['sv'] = (int)$x['sv'] + 1;
                 $x['totp'] = $secret; $x['totpLast'] = $step; $x['recovery'] = array_map('rc_hash', $codes); $x['changed'] = now();
             });
-            unset($_SESSION['totpPending']);
-            $GLOBALS['ME'] = $u;
+            if (!$u) fail('Bitte erneut anmelden.', 401);
+            keep_current_session($u);
             audit('twofa', 'Zwei-Faktor-Anmeldung eingerichtet');
             respond(['ok' => true, 'recovery' => $codes, 'user' => me_payload($u)]);
         }
@@ -1052,8 +1090,16 @@ try {
             $me = require_auth(true);
             if (empty($me['totp'])) fail('Die Zwei-Faktor-Anmeldung ist nicht eingerichtet.', 409);
             if (twofa_required($me)) fail('Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
-            if (!password_verify((string)(body()['password'] ?? ''), (string)$me['hash'])) fail('Das Passwort ist nicht korrekt.', 422);
-            $u = user_update($me['id'], function (&$x) { unset($x['totp'], $x['totpLast'], $x['recovery']); $x['changed'] = now(); });
+            $pw = (string)(body()['password'] ?? '');
+            $u = user_update($me['id'], function (&$x) use ($me, $pw) {
+                if ((int)$x['sv'] !== (int)$me['sv'] || !$x['active']) fail('Bitte erneut anmelden.', 401);
+                if (!password_verify($pw, (string)$x['hash'])) fail('Das Passwort ist nicht korrekt.', 422);
+                unset($x['totp'], $x['totpLast'], $x['recovery']);
+                $x['sv'] = (int)$x['sv'] + 1;
+                $x['changed'] = now();
+            });
+            if (!$u) fail('Bitte erneut anmelden.', 401);
+            keep_current_session($u);
             audit('twofa', 'Zwei-Faktor-Anmeldung ausgeschaltet');
             respond(['ok' => true, 'user' => me_payload($u)]);
         }
@@ -1201,7 +1247,7 @@ try {
             if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException("Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
             if ($twofa !== 'off' && empty($me['totp']) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
             $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
-                    'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)$b['idleMinutes'] : 480,
+                    'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)($b['idleMinutes'] ?? 480) : 480,
                     'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
                     'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15))),
                     'geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'geoScope' => $geoScope];
@@ -1314,6 +1360,9 @@ try {
                 $i = user_find($users, $id);
                 if ($i === null) fail('Nutzer nicht gefunden.', 404);
                 $old = $users[$i];
+                if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']))) {
+                    fail('Für den eigenen Zugang bitte „Passwort ändern“ oder „Zwei-Faktor-Anmeldung“ verwenden.', 403);
+                }
                 if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
                 $users[$i]['name'] = $name;
                 $users[$i]['role'] = $role;
