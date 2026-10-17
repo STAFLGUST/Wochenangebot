@@ -1145,10 +1145,48 @@ function bindKunde() {
   });
 }
 
+/* Link aus Einladung / Passwort zurücksetzen: …/#zugang=<Einmal-Code>. Der Code steht nur im Fragment
+   (wird nicht an den Server übertragen und nicht protokolliert) und wird sofort aus der Adresse entfernt. */
+async function kundeLinkStart() {
+  const m = location.hash.match(/^#zugang=([A-Za-z0-9_-]{40,64})$/);
+  if (!m) return false;
+  const tok = m[1];
+  history.replaceState(null, '', location.pathname + location.search);
+  const d = $('#dlg-kunde-link');
+  let info;
+  try { info = await kundeApi('kunde_token_check', { token: tok }); }
+  catch (ex) {
+    renderLocked(ex.message);
+    return true;
+  }
+  $('#kk-title').textContent = info.purpose === 'invite' ? 'Willkommen – Passwort festlegen' : 'Neues Passwort festlegen';
+  $('#kk-intro').textContent = `${info.firma} · Benutzerkennung: ${info.username}. Bitte wählen Sie ein persönliches Passwort (mindestens 10 Zeichen).`;
+  $('#kk-form [name="username"]').value = info.username;
+  renderLocked('Bitte legen Sie Ihr Passwort fest.', false);
+  d.addEventListener('cancel', (e) => e.preventDefault());
+  $('#kk-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, err = $('#kk-err'), btn = f.querySelector('[type="submit"]');
+    err.textContent = '';
+    if (f.password.value !== f.password2.value) { err.textContent = 'Die beiden Passwörter stimmen nicht überein.'; return; }
+    if (f.password.value.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
+    btn.disabled = true;
+    try {
+      await kundeApi('kunde_token_set', { token: tok, password: f.password.value });
+      d.close();
+      location.replace(location.pathname + location.search);
+    } catch (ex) { err.textContent = ex.message; btn.disabled = false; }
+  });
+  d.showModal();
+  $('#kk-form [name="password"]').focus();
+  return true;
+}
+
 /* ---------- Start ---------- */
 (async function boot() {
   updateThemeBtn();
   bindKunde();
+  if (!PREVIEW && await kundeLinkStart()) return;                    // Passwort über Link aus der E-Mail festlegen
   try {
     if (!PREVIEW) await kundeStart();
     if (KUNDE && KUNDE.mustChange) { renderLocked('Bitte legen Sie zuerst ein eigenes Passwort fest.'); openKundePw(true); return; }

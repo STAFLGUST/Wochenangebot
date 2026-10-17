@@ -531,9 +531,10 @@
     }
     el.innerHTML = `<div class="chg has"><strong>Unveröffentlichte Änderungen:</strong>${parts.join('')}</div>`;
   }
+  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + (metaChanged() ? 1 : 0));
   function updatePublishBtn() {
     const b = $('#btn-publish');
-    const n = !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + (metaChanged() ? 1 : 0);
+    const n = pendingCount();
     b.innerHTML = `${icon('send')}<span class="lbl">Veröffentlichen</span>${n ? `<span class="badge-n">${published ? n : '!'}</span>` : ''}`;
   }
 
@@ -1442,7 +1443,7 @@
     if (w) w.location = u; else location.href = u;
   });
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
-  for (const d of $$('dialog')) d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm') d.close(); } });
+  for (const d of $$('dialog')) d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm' && !d.dataset.busy) d.close(); } });
 
   document.addEventListener('keydown', (e) => {
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
@@ -2793,7 +2794,8 @@
   /* ======================= Kunden (Administrator) =======================
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
-  let kunden = null, kundenRev = 0, kundenQ = '';
+  let kunden = null, kundenRev = 0, kundenQ = '', mailSt = null;
+  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
   const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
@@ -2801,13 +2803,15 @@
     const host = $('#view-kunden');
     if (!kunden) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kunden werden geladen …</div>';
     try {
-      const [r] = await Promise.all([api('kunden'), offers.length ? null : loadOffers()]);
-      kunden = r.customers; kundenRev = r.rev;
+      const [r, m] = await Promise.all([api('kunden'), api('mail_status'), offers.length ? null : loadOffers()]);
+      kunden = r.customers; kundenRev = r.rev; mailSt = m;
     } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     host.innerHTML = `
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="k-q" type="search" autocomplete="off" placeholder="Kunden finden: Firma, Nummer, Ort, Ansprechpartner …" aria-label="Kunden suchen" value="${esc(kundenQ)}"></div>
         <span class="ed-hint" id="k-count"></span>
+        <button type="button" class="btn" id="k-mailcfg" title="E-Mail-Versand: Einstellungen, Signatur, Testmail">${icon('mail')}E-Mail${mailSt.configured ? '' : ' <span class="k-warn">nicht eingerichtet</span>'}</button>
+        <button type="button" class="btn" id="k-rund">${icon('send')}Wochenangebot versenden</button>
         <button type="button" class="btn primary" id="k-add">${icon('plus')}Kunde anlegen</button>
       </div>
       <div id="k-list"></div>
@@ -2826,21 +2830,34 @@
       if (!c.active) return '<span class="st-err">Kunde inaktiv</span>';
       if (!l) return '<span class="muted">kein Zugang</span>';
       if (!l.active) return '<span class="st-err">Zugang deaktiviert</span>';
+      if (!l.hasPassword) return `<span class="st-warn">${l.link ? `Einladung offen bis ${esc(dmyTs(l.link.exp))}` : 'noch kein Passwort'}</span>`;
       return `<span class="st-ok">Zugang aktiv</span>${l.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(l.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${l.mustChange ? '<div class="sub">Startpasswort noch nicht geändert</div>' : ''}`;
     };
     host.innerHTML = `<div class="gcard"><table class="etab utab ktab"><thead><tr><th>Firma / Ansprechpartner</th><th class="k-addr">Ort</th><th>Freigeschaltete Angebote</th><th class="u-st">Zugang</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${list.map((c) => `
       <tr data-kid="${esc(c.id)}" tabindex="0" class="${c.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(c.firma)}${c.nr ? ` <span class="muted">· ${esc(c.nr)}</span>` : ''}</div><div class="sub">${esc(c.ansprechpartner || '')}${c.email ? `${c.ansprechpartner ? ' · ' : ''}${esc(c.email)}` : ''}</div></td>
         <td class="k-addr">${esc([c.plz, c.ort].filter(Boolean).join(' '))}</td>
-        <td class="k-offers">${c.angebote.length ? c.angebote.map(offerChip).join(' ') : '<span class="muted">keines</span>'}</td>
+        <td class="k-offers">${c.angebote.length ? c.angebote.map(offerChip).join(' ') : '<span class="muted">keines</span>'}${mailLine(c)}</td>
         <td class="u-st">${st(c)}${c.login ? `<div class="sub uname">${esc(c.login.username)}</div>` : ''}</td>
         <td class="u-last">${c.login && c.login.lastLogin ? esc(dateTime(c.login.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-kedit="${esc(c.id)}">Bearbeiten</button></td>
       </tr>`).join('')}</tbody></table></div>`;
   }
   $('#view-kunden').addEventListener('input', (e) => { if (e.target.id === 'k-q') { kundenQ = e.target.value; renderKundenList(); } });
+  const dmyTs = (ts) => new Date(ts * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const wkCur = () => (mailSt && mailSt.week) || null;
+  const sentThisWeek = (c) => { const w = wkCur(); return !!(w && c.weekly && c.weekly.week === w.week && c.weekly.year === w.year); };
+  function mailLine(c) {
+    const parts = [];
+    if (c.mailAngebot === false) parts.push('<span class="muted">kein Wochenangebot per E-Mail</span>');
+    else if (sentThisWeek(c)) parts.push(`<span class="st-ok">${icon('check', 'sm')}KW ${c.weekly.week} gesendet ${esc(dateTime(c.weekly.t))}</span>`);
+    if (c.mailLast && !c.mailLast.ok) parts.push(`<span class="st-err">${esc(MAIL_TYP[c.mailLast.typ] || 'E-Mail')} nicht zugestellt</span>`);
+    return parts.length ? `<div class="sub k-mail">${parts.join(' · ')}</div>` : '';
+  }
   $('#view-kunden').addEventListener('click', (e) => {
     if (e.target.closest('#k-add')) { openKunde(null); return; }
+    if (e.target.closest('#k-mailcfg')) { openMailCfg(); return; }
+    if (e.target.closest('#k-rund')) { openRund(); return; }
     const tr = e.target.closest('tr[data-kid]');
     if (tr) openKunde(tr.dataset.kid);
   });
@@ -2852,6 +2869,8 @@
     editKid = id;
     const l = c && c.login;
     const has = (o) => (c ? c.angebote.includes(o) : false);
+    const mailOk = !!(mailSt && mailSt.configured);
+    const pwMode = !!(l && l.hasPassword) || !mailOk;      // true = Passwortfeld zeigen
     const fld = (n, label, max, attrs = '', cls = '') => `<label class="fld${cls ? ' ' + cls : ''}"><span>${label}</span><input name="${n}" value="${esc(c ? c[n] || '' : '')}" maxlength="${max}"${attrs}></label>`;
     $('#kunde-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="kd-title">${c ? esc(c.firma) : 'Kunde anlegen'}</h2><p>${c ? `Angelegt ${esc(dateTime(c.created))}${c.changed && c.changed !== c.created ? ` · geändert ${esc(dateTime(c.changed))}` : ''}` : 'Stammdaten, freigeschaltete Angebote und Zugang zur Angebotsseite.'}</p></div>
@@ -2869,21 +2888,32 @@
           ${fld('land', 'Land', 60, ' placeholder="Deutschland"')}
           <label class="fld span2"><span>Notiz <small class="muted">(nur intern)</small></span><textarea name="notiz" maxlength="500" rows="2">${esc(c ? c.notiz || '' : '')}</textarea></label>
           <label class="check span2"><input type="checkbox" name="active"${!c || c.active ? ' checked' : ''}> Kunde aktiv <small class="muted">(inaktive Kunden können sich nicht anmelden)</small></label>
+          <label class="check span2"><input type="checkbox" name="mailAngebot"${!c || c.mailAngebot !== false ? ' checked' : ''}> Wochenangebot per E-Mail erhalten <small class="muted">(nur mit Einverständnis des Kunden)</small></label>
         </div></fieldset>
         <fieldset class="k-set"><legend>Freigeschaltete Angebote</legend>
           <div class="k-offers-pick">${[OSTD, ...offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}</label>`).join('')}</div>
           <p class="hint">Der Kunde sieht nach der Anmeldung nur diese Angebote. Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
         </fieldset>
+        ${c ? `<fieldset class="k-set"><legend>E-Mail an den Kunden</legend>
+          <div class="k-mailact">
+            <button type="button" class="btn sm" data-kact="m-zugang"${mailOk && c.email && l && l.active ? '' : ' disabled'}>${icon('key', 'sm')}${l && !l.hasPassword ? 'Einladung erneut senden' : 'Link zum Passwort-Zurücksetzen senden'}</button>
+            <button type="button" class="btn sm" data-kact="m-angebot"${mailOk && c.email && c.angebote.length ? '' : ' disabled'}>${icon('link', 'sm')}Angebotslink senden</button>
+          </div>
+          <p class="hint">${!mailOk ? 'Der E-Mail-Versand ist noch nicht eingerichtet (Schaltfläche „E-Mail“ in der Kundenliste).' : !c.email ? 'Keine E-Mail-Adresse hinterlegt.' : `An ${esc(c.email)}. Ein Passwort-Link ist ${l && !l.hasPassword ? '7 Tage' : '2 Tage'} gültig und nur einmal verwendbar.`}${c.mailLast ? ` Letzte E-Mail: ${esc(MAIL_TYP[c.mailLast.typ] || '')}, ${esc(dateTime(c.mailLast.t))} ${c.mailLast.ok ? '✓' : '– nicht zugestellt'}.` : ''}</p>
+        </fieldset>` : ''}
         <fieldset class="k-set"><legend>Zugang zur Angebotsseite</legend>
           <label class="check"><input type="checkbox" name="hasLogin"${!c || l ? ' checked' : ''}> Zugang einrichten (Benutzerkennung und Passwort)</label>
           <div class="form-grid two k-login"${!c || l ? '' : ' hidden'}>
-            <label class="fld"><span>Benutzerkennung</span><input name="username" value="${esc(l ? l.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="z. B. gasthaus.muster"></label>
-            <div class="fld"><span>${l ? 'Neues Passwort <small class="muted">(leer = unverändert)</small>' : 'Startpasswort'}</span>
+            <label class="fld${pwMode ? '' : ' span2'}"><span>Benutzerkennung</span><input name="username" value="${esc(l ? l.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="z. B. gasthaus.muster"></label>
+            ${!l || !l.hasPassword ? `<div class="fld span2"><span>Passwort</span><div class="k-pwmode">
+              <label class="check"><input type="radio" name="pwmode" value="invite"${!pwMode ? ' checked' : ''}${mailOk ? '' : ' disabled'}> Einladung per E-Mail – der Kunde legt sein Passwort über einen Link selbst fest${mailOk ? '' : ' <small class="muted">(E-Mail-Versand noch nicht eingerichtet)</small>'}</label>
+              <label class="check"><input type="radio" name="pwmode" value="manual"${pwMode ? ' checked' : ''}> Startpasswort selbst vergeben und weitergeben</label></div></div>` : ''}
+            <div class="fld k-pwfld"${pwMode ? '' : ' hidden'}><span>${l && l.hasPassword ? 'Neues Passwort <small class="muted">(leer = unverändert)</small>' : 'Startpasswort'}</span>
               <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"><button type="button" class="btn" data-kact="gen">Vorschlag</button></div></div>
-            <label class="check span2"><input type="checkbox" name="mustChange" checked> Kunde muss das Passwort bei der ersten Anmeldung ändern</label>
+            <label class="check span2 k-pwfld"${pwMode ? '' : ' hidden'}><input type="checkbox" name="mustChange" checked> Kunde muss das Passwort bei der ersten Anmeldung ändern</label>
             <label class="check span2"><input type="checkbox" name="loginActive"${!l || l.active ? ' checked' : ''}> Zugang aktiv</label>
             ${l && l.lockedUntil ? `<label class="check span2 st-err"><input type="checkbox" name="unlock" checked> Sperre nach Fehlversuchen aufheben (gesperrt bis ${esc(timeOnly(new Date(l.lockedUntil * 1000).toISOString()))} Uhr)</label>` : ''}
-            ${l ? `<p class="hint span2">Letzte Anmeldung: ${l.lastLogin ? esc(dateTime(l.lastLogin)) : 'noch nie'}${l.pwSet ? ` · Passwort gesetzt ${esc(dateTime(l.pwSet))}` : ''}${c.sessions ? ` · ${plural(c.sessions, 'aktive Sitzung', 'aktive Sitzungen')}` : ''}${l.mustChange ? ' · Startpasswort noch nicht geändert' : ''}</p>` : ''}
+            ${l ? `<p class="hint span2">Letzte Anmeldung: ${l.lastLogin ? esc(dateTime(l.lastLogin)) : 'noch nie'}${l.pwSet ? ` · Passwort gesetzt ${esc(dateTime(l.pwSet))}` : ''}${c.sessions ? ` · ${plural(c.sessions, 'aktive Sitzung', 'aktive Sitzungen')}` : ''}${l.mustChange ? ' · Startpasswort noch nicht geändert' : ''}${l.link ? ` · ${l.link.p === 'invite' ? 'Einladung' : 'Passwort-Link'} gültig bis ${esc(dmyTs(l.link.exp))}` : ''}</p>` : ''}
           </div>
           ${l ? '<p class="hint k-nologin" hidden>Beim Speichern wird der Zugang entfernt und der Kunde abgemeldet.</p>' : ''}
         </fieldset>
@@ -2898,6 +2928,7 @@
     $('#kunde-body [name="firma"]').focus();
   }
   $('#kunde-body').addEventListener('change', (e) => {
+    if (e.target.name === 'pwmode') { for (const el of $$('#kunde-body .k-pwfld')) el.hidden = e.target.value !== 'manual'; return; }
     if (e.target.name === 'hasLogin') {
       $('#kunde-body .k-login').hidden = !e.target.checked;
       const n = $('#kunde-body .k-nologin'); if (n) n.hidden = e.target.checked;
@@ -2912,6 +2943,15 @@
   dlgKunde.addEventListener('click', async (e) => {
     const a = e.target.closest('[data-kact]')?.dataset.kact;
     if (a === 'gen') { const i = $('#kunde-body [name="password"]'); i.value = genPassword(); i.select(); return; }
+    if (a === 'm-zugang' || a === 'm-angebot') {
+      const c = kunden.find((x) => x.id === editKid), btn = e.target.closest('[data-kact]');
+      const what = a === 'm-angebot' ? 'den Link zum Angebot' : c.login && !c.login.hasPassword ? 'eine neue Einladung (ein bisheriger Link wird ungültig)' : 'einen Link zum Festlegen eines neuen Passworts (das bisherige Passwort bleibt gültig, bis der Kunde ein neues festlegt)';
+      if (!(await confirmBox('E-Mail senden?', `„${esc(c.firma)}“ erhält an ${esc(c.email)} ${what}.`, 'Senden'))) return;
+      btn.disabled = true;
+      try { await kundeMail(c, a === 'm-angebot' ? 'angebot' : 'zugang'); dlgKunde.close(); renderKundenView(); }
+      catch (ex) { $('#kunde-err').textContent = ex.message; btn.disabled = false; }
+      return;
+    }
     if (a === 'del') {
       const c = kunden.find((x) => x.id === editKid);
       if (!(await confirmBox('Kunde löschen?', `„${esc(c.firma)}“ wird mit Stammdaten und Zugang gelöscht; eine laufende Anmeldung endet sofort. Die Einträge im Protokoll bleiben erhalten. Alternativ den Kunden nur auf „inaktiv“ setzen.`, 'Löschen', true))) return;
@@ -2924,13 +2964,15 @@
     const f = e.target, err = $('#kunde-err');
     err.textContent = '';
     const c = editKid ? kunden.find((x) => x.id === editKid) : null;
-    const body = { id: editKid || '', rev: kundenRev, active: f.active.checked, angebote: $$('#kunde-body [name="angebot"]:checked').map((x) => x.value) };
+    const body = { id: editKid || '', rev: kundenRev, active: f.active.checked, mailAngebot: f.mailAngebot.checked, angebote: $$('#kunde-body [name="angebot"]:checked').map((x) => x.value) };
+    const invite = !!(f.pwmode && [...f.querySelectorAll('[name="pwmode"]')].find((x) => x.checked && x.value === 'invite'));
     for (const k of ['firma', 'nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
-    const pw = f.password.value.trim();
+    const pw = invite ? '' : f.password.value.trim();
     if (f.hasLogin.checked) {
       if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
-      if (!(c && c.login) && !pw) { err.textContent = 'Bitte ein Startpasswort festlegen (z. B. über „Vorschlag“).'; f.password.focus(); return; }
-      body.login = { username: f.username.value.trim(), password: pw, mustChange: f.mustChange.checked, active: f.loginActive.checked, unlock: !!(f.unlock && f.unlock.checked) };
+      if (!invite && !(c && c.login && c.login.hasPassword) && !pw) { err.textContent = 'Bitte ein Startpasswort festlegen (z. B. über „Vorschlag“).'; f.password.focus(); return; }
+      if (invite && !body.email) { err.textContent = 'Für die Einladung per E-Mail bitte die E-Mail-Adresse angeben.'; f.email.focus(); return; }
+      body.login = { username: f.username.value.trim(), password: pw, mustChange: f.mustChange.checked, active: f.loginActive.checked, unlock: !!(f.unlock && f.unlock.checked), invite };
     } else if (c && c.login) {
       if (!(await confirmBox('Zugang entfernen?', `Der Zugang „${esc(c.login.username)}“ wird entfernt; der Kunde kann sich nicht mehr anmelden. Die Stammdaten bleiben erhalten.`, 'Zugang entfernen', true))) return;
       body.login = { remove: true };
@@ -2941,9 +2983,145 @@
       const r = await api('kunde_save', { body });
       kundenRev = r.rev;
       dlgKunde.close();
+      const sendInvite = invite && r.customer.login && !r.customer.login.hasPassword && (!c || !c.login || !c.login.link || body.email !== c.email || body.login.username !== c.login.username);
+      if (sendInvite) {
+        try { await kundeMail(r.customer, 'zugang'); } catch (ex) { toast(`Kunde gespeichert, aber die Einladung wurde nicht versendet: ${ex.message}`, 9000); }
+        renderKundenView();
+        return;
+      }
       toast(pw && body.login ? `Gespeichert. Zugangsdaten für „${r.customer.login.username}“ jetzt sicher an den Kunden weitergeben – das Passwort wird nicht noch einmal angezeigt.` : c ? `Änderungen an „${r.customer.firma}“ gespeichert.` : `Kunde „${r.customer.firma}“ angelegt.`, pw ? 7000 : 3200);
       renderKundenView();
     } catch (ex) { err.textContent = ex.message; if (ex.status === 409) { kunden = null; } } finally { btn.disabled = false; }
+  });
+
+  /* ---------- E-Mail an Kunden ---------- */
+  async function kundeMail(c, type) {
+    const r = await api('kunde_mail', { body: { id: c.id, type } });
+    toast(`${MAIL_TYP[r.typ]} an ${c.email} gesendet.`, 4500);
+    return r;
+  }
+  /* E-Mail-Einstellungen: Status, Signatur, Testmail, Versandprotokoll */
+  const dlgMail = $('#dlg-mail');
+  function openMailCfg() {
+    const m = mailSt, s = m.smtp;
+    const st = m.configured ? `<p class="k-ok">${icon('check', 'sm')}Eingerichtet – Versand über <strong>${esc(s.host)}:${esc(s.port)}</strong> (${esc(s.secure === 'ssl' ? 'SSL' : s.secure === 'starttls' ? 'STARTTLS' : 'unverschlüsselt, nur lokal')}), Absender <strong>${esc(s.fromName)} &lt;${esc(s.from)}&gt;</strong>${s.replyTo ? `, Antworten an ${esc(s.replyTo)}` : ''}. Links führen zu ${esc(m.baseUrl)}.</p>`
+      : `<div class="notice k-setup"><p><strong>Der E-Mail-Versand ist noch nicht eingerichtet.</strong> Die Zugangsdaten eines Postfachs (empfohlen: eigenes IONOS-Postfach, z. B. angebot@standard-fleisch.de) werden nur auf dem Server in der Datei <code>.env</code> eingetragen – nie hier oder im Code:</p>
+        <pre>MAIL_SMTP_HOST=smtp.ionos.de
+MAIL_SMTP_PORT=587
+MAIL_SMTP_SECURE=starttls
+MAIL_SMTP_USER=angebot@standard-fleisch.de
+MAIL_SMTP_PASS='…Passwort des Postfachs…'
+MAIL_FROM=angebot@standard-fleisch.de
+MAIL_FROM_NAME=Standard-Fleisch</pre>
+        <p>Danach auf dem Server <code>docker compose up -d</code> ausführen. ${s ? '' : 'Derzeit fehlt: SMTP-Server oder Absenderadresse.'}${m.baseUrl ? '' : ' Außerdem fehlt die Adresse der Seite (DOMAIN in .env).'}</p></div>`;
+    const log = (m.log || []).slice(0, 25);
+    $('#mail-body').innerHTML = `<div class="dlg-head"><div><h2 id="ml-title">E-Mail-Versand</h2><p>Einladungen, Passwort-Links und das Wochenangebot an Kunden.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        ${st}
+        <label class="fld"><span>Signatur unter jeder E-Mail</span><textarea id="ml-sig" rows="5" maxlength="600" placeholder="Mit freundlichen Grüßen&#10;Standard-Fleisch …&#10;Anschrift, Telefon">${esc(m.signature)}</textarea></label>
+        <p class="hint">Tipp: Anschrift, Telefon und Geschäftsführung ergänzen – geschäftliche E-Mails sollten den Absender vollständig nennen.</p>
+        <div class="k-test"><label class="fld grow"><span>Testmail senden an</span><input id="ml-to" type="email" autocomplete="email" placeholder="ihre.adresse@standard-fleisch.de"></label><button type="button" class="btn" data-ml="test"${m.configured ? '' : ' disabled'}>${icon('send', 'sm')}Testmail</button></div>
+        <p class="form-err" id="ml-err" role="alert"></p>
+        ${log.length ? `<details class="k-log"><summary>Zuletzt versendet (${log.length})</summary><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></details>` : ''}
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-ml="save">${icon('check')}Signatur speichern</button></div>`;
+    dlgMail.showModal();
+  }
+  dlgMail.addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-ml]')?.dataset.ml;
+    if (!a) return;
+    const err = $('#ml-err'), b = e.target.closest('[data-ml]');
+    err.textContent = '';
+    b.disabled = true;
+    try {
+      if (a === 'save') { const r = await api('mail_save', { body: { signature: $('#ml-sig').value } }); mailSt.signature = r.signature; toast('Signatur gespeichert.'); dlgMail.close(); }
+      if (a === 'test') { const to = $('#ml-to').value.trim(); await api('mail_test', { body: { to } }); toast(`Testmail an ${to} gesendet – bitte Posteingang (und Spam-Ordner) prüfen.`, 6000); mailSt = await api('mail_status'); }
+    } catch (ex) { err.textContent = ex.message; } finally { b.disabled = false; }
+  });
+
+  /* Wochenangebot an Kunden versenden */
+  const dlgRund = $('#dlg-rund');
+  let rundSel = new Set(), rundBusy = false;
+  const rundWhy = (c) => (!c.active ? 'Kunde inaktiv' : !c.email ? 'keine E-Mail-Adresse' : !c.login || !c.login.active ? 'kein aktiver Zugang' : !c.angebote.length ? 'kein Angebot freigeschaltet' : c.mailAngebot === false ? 'möchte kein Wochenangebot per E-Mail' : '');
+  async function openRund() {
+    try { const [m, k] = await Promise.all([api('mail_status'), api('kunden')]); mailSt = m; kunden = k.customers; kundenRev = k.rev; } catch (ex) { toast(ex.message); return; }
+    if (!mailSt.configured) { openMailCfg(); return; }
+    const w = wkCur();
+    const ok = kunden.filter((c) => !rundWhy(c)), no = kunden.filter((c) => rundWhy(c));
+    rundSel = new Set(ok.filter((c) => c.login.hasPassword && !sentThisWeek(c)).map((c) => c.id));
+    const pend = pendingCount();
+    $('#rund-body').innerHTML = `<div class="dlg-head"><div><h2 id="rd-title">${w ? `Wochenangebot KW ${w.week}/${w.year} versenden` : 'Wochenangebot versenden'}</h2><p>${w ? `Angebotswoche ${esc(w.from)} – ${esc(w.to)}. Jeder Kunde erhält eine eigene E-Mail mit Links zu seinen freigeschalteten Angeboten (ohne Preise in der E-Mail).` : ''}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        ${!w ? '<div class="err-box">Es ist noch kein Angebot veröffentlicht.</div>' : ''}
+        ${w && pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Kunden sehen den <strong>veröffentlichten</strong> Stand – bei Bedarf zuerst veröffentlichen.</span></div>` : ''}
+        ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rd-all"> Alle auswählen</label>
+          <table class="etab ktab k-rtab"><tbody>${ok.map((c) => `<tr data-rid="${esc(c.id)}"><td class="k-rchk"><input type="checkbox" data-rsel="${esc(c.id)}"${rundSel.has(c.id) ? ' checked' : ''} aria-label="${esc(c.firma)} auswählen"></td>
+            <td><div class="nm">${esc(c.firma)}</div><div class="sub">${esc(c.email)}</div></td><td class="k-offers">${c.angebote.map(offerChip).join(' ')}</td>
+            <td class="k-rst">${sentThisWeek(c) ? `<span class="st-warn">KW ${w.week} bereits gesendet ${esc(dateTime(c.weekly.t))}</span>` : !c.login.hasPassword ? '<span class="st-warn">noch kein Passwort festgelegt</span>' : ''}<span class="k-res"></span></td></tr>`).join('')}</tbody></table></div>` : '<p class="hint">Keine Kunden mit E-Mail-Adresse, aktivem Zugang und freigeschaltetem Angebot.</p>'}
+        ${no.length ? `<details class="k-no"><summary>${plural(no.length, 'Kunde', 'Kunden')} nicht berücksichtigt</summary><ul>${no.map((c) => `<li>${esc(c.firma)} – ${esc(rundWhy(c))}</li>`).join('')}</ul></details>` : ''}
+        <label class="fld"><span>Zusatztext <small class="muted">(optional, erscheint in jeder E-Mail)</small></span><textarea id="rd-note" rows="3" maxlength="1000" placeholder="z. B. Diese Woche besonders günstig: Roastbeef aus Uruguay."></textarea></label>
+        <div class="k-prevwrap" hidden><iframe id="rd-prev" sandbox="" title="Vorschau der E-Mail"></iframe></div>
+        <p class="form-err" id="rd-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><span class="left"><button type="button" class="btn sm ghost" data-rd="prev"${ok.length ? '' : ' disabled'}>${icon('eye', 'sm')}Vorschau</button></span><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-rd="send"${w ? '' : ' disabled'}>${icon('send')}<span id="rd-n"></span></button></div>`;
+    rundCount();
+    dlgRund.showModal();
+  }
+  function rundCount() {
+    const n = rundSel.size;
+    $('#rd-n').textContent = n ? `An ${plural(n, 'Kunden', 'Kunden')} senden` : 'Kunden auswählen';
+    $('#rund-body [data-rd="send"]').disabled = !n || rundBusy || !wkCur();
+    const all = $('#rd-all'), boxes = $$('#rund-body [data-rsel]');
+    if (all) { all.checked = boxes.length && boxes.every((b) => b.checked); all.indeterminate = !all.checked && boxes.some((b) => b.checked); }
+  }
+  dlgRund.addEventListener('cancel', (e) => { if (rundBusy) e.preventDefault(); });
+  dlgRund.addEventListener('change', (e) => {
+    if (e.target.id === 'rd-all') { for (const b of $$('#rund-body [data-rsel]')) { b.checked = e.target.checked; b.checked ? rundSel.add(b.dataset.rsel) : rundSel.delete(b.dataset.rsel); } }
+    if (e.target.dataset.rsel) e.target.checked ? rundSel.add(e.target.dataset.rsel) : rundSel.delete(e.target.dataset.rsel);
+    rundCount();
+  });
+  dlgRund.addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-rd]')?.dataset.rd;
+    if (a === 'prev') {
+      const id = [...rundSel][0] || ($('#rund-body [data-rsel]') || {}).dataset?.rsel || '';
+      try {
+        const r = await api('kunden_mail_vorschau', { body: { id, type: 'woche', note: $('#rd-note').value } });
+        $('#rund-body .k-prevwrap').hidden = false;
+        $('#rd-prev').srcdoc = r.html;
+        $('#rd-prev').title = `Vorschau: ${r.subject} (an ${r.to})`;
+      } catch (ex) { $('#rd-err').textContent = ex.message; }
+    }
+    if (a === 'send') {
+      const w = wkCur(), ids = [...rundSel];
+      const again = ids.filter((id) => sentThisWeek(kunden.find((c) => c.id === id))).length;
+      if (!(await confirmBox('Wochenangebot versenden?', `Das Wochenangebot KW ${w.week}/${w.year} geht jetzt per E-Mail an ${plural(ids.length, 'Kunden', 'Kunden')}.${again ? ` <strong>${again} davon haben es diese Woche schon erhalten.</strong>` : ''}`, 'Jetzt senden'))) return;
+      rundBusy = true; dlgRund.dataset.busy = '1'; rundCount();
+      const note = $('#rd-note').value;
+      let okN = 0, badN = 0;
+      $('#rd-err').textContent = '';
+      for (let i = 0; i < ids.length; i += 10) {
+        const part = ids.slice(i, i + 10);
+        for (const id of part) $(`#rund-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = '<span class="spinner sm"></span>';
+        $('#rd-n').textContent = `Wird gesendet … ${i}/${ids.length}`;
+        try {
+          const r = await api('kunden_rundmail', { body: { ids: part, note, week: w.week, year: w.year } });
+          for (const x of r.results) {
+            const cell = $(`#rund-body tr[data-rid="${CSS.escape(x.id)}"] .k-res`);
+            if (x.ok) { okN++; rundSel.delete(x.id); const cb = $(`#rund-body [data-rsel="${CSS.escape(x.id)}"]`); if (cb) cb.checked = false; }
+            else badN++;
+            if (cell) cell.innerHTML = x.ok ? `<span class="st-ok">${icon('check', 'sm')}gesendet</span>` : `<span class="st-err">${esc(x.error)}</span>`;
+          }
+        } catch (ex) {
+          badN += part.length;
+          for (const id of part) $(`#rund-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = `<span class="st-err">${esc(ex.message)}</span>`;
+          if (ex.status === 409 || ex.status === 401 || ex.status === 403) { $('#rd-err').textContent = ex.message; break; }
+        }
+      }
+      rundBusy = false; delete dlgRund.dataset.busy;
+      rundCount();
+      toast(badN ? `${okN} gesendet, ${badN} nicht zugestellt – Details in der Liste.` : `Wochenangebot an ${plural(okN, 'Kunden', 'Kunden')} gesendet.`, 6000);
+      try { const r = await api('kunden'); kunden = r.customers; kundenRev = r.rev; renderKundenList(); } catch { /* Liste später */ }
+    }
   });
 
   /* ======================= Protokoll (Administrator) ======================= */
@@ -2958,11 +3136,11 @@
     ['master', 'Stammdaten'],
     ['auth', 'Anmeldungen'],
     ['user', 'Nutzerverwaltung'],
-    ['kunden', 'Kunden (Stammdaten und Anmeldungen)'],
+    ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden' }[a] || '');
-  const ACTION_LABEL = { customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden' }[a] || '');
+  const ACTION_LABEL = { mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }

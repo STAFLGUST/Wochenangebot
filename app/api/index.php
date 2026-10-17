@@ -30,6 +30,8 @@
  *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
  *   GET  ?action=kunden            Kundenstammdaten (nur Administrator); POST kunde_save | kunde_delete
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
+ *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
+ *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
  *   POST ?action=user_save | user_delete
@@ -41,6 +43,7 @@ declare(strict_types=1);
 
 $CFG = require __DIR__ . '/config.php';
 require __DIR__ . '/geo.php';
+require __DIR__ . '/mail.php';
 $DATA = rtrim((string)$CFG['data_dir'], '/');
 const GUARD = "<?php http_response_code(404); exit; ?>\n";
 const CATEGORIES = ['Rind', 'Kalb', 'Schwein', 'Lamm & Schaf', 'Geflügel', 'Knochen', 'Sonstiges'];
@@ -692,7 +695,10 @@ function customer_public(array $c): array
     $out['angebote'] = customer_offers($c);
     $out['login'] = $l ? ['username' => $l['username'], 'active' => !empty($l['active']), 'mustChange' => !empty($l['mustChange']),
                           'lastLogin' => $l['lastLogin'] ?? null, 'pwSet' => $l['pwSet'] ?? null,
-                          'lockedUntil' => (int)($l['lockedUntil'] ?? 0) > time() ? (int)$l['lockedUntil'] : 0] : null;
+                          'lockedUntil' => (int)($l['lockedUntil'] ?? 0) > time() ? (int)$l['lockedUntil'] : 0,
+                          'hasPassword' => !empty($l['hash']),
+                          'link' => !empty($l['token']) && (int)$l['token']['exp'] > time() ? ['p' => $l['token']['p'], 'exp' => (int)$l['token']['exp']] : null] : null;
+    $out['mailAngebot'] = !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']);
     return $out;
 }
 function kunde_clear(): void { foreach (['kid', 'ksv', 'kseen', 'kcsrf', 'ksid'] as $k) unset($_SESSION[$k]); }
@@ -751,8 +757,176 @@ function kunde_payload(array $c): array
             'mustChange' => !empty($c['login']['mustChange']), 'angebote' => $names];
 }
 const CUSTOMER_FIELDS = ['nr' => 30, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
-const CUSTOMER_LABELS = ['nr' => 'Kundennummer', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
+const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
                          'land' => 'Land', 'email' => 'E-Mail', 'telefon' => 'Telefon', 'notiz' => 'Notiz', 'angebote' => 'Angebote', 'active' => 'Kunde aktiv'];
+
+/* ---------------- E-Mail an Kunden ---------------- */
+const TOKEN_DAYS = ['invite' => 7, 'reset' => 2];
+function mail_settings(): array
+{
+    global $CFG;
+    $d = store_read('mailvorlage');
+    return is_array($d) ? $d + ['signature' => ''] : ['signature' => "Mit freundlichen Grüßen\n" . $CFG['company']];
+}
+function require_mail(): array
+{
+    $m = mail_cfg();
+    if (!$m) fail('Der E-Mail-Versand ist noch nicht eingerichtet (Zugangsdaten des Postfachs in .env auf dem Server).', 409);
+    if (!mail_base_url()) fail('Die Adresse der Angebotsseite für Links fehlt (DOMAIN bzw. WA_URL in .env).', 409);
+    return $m;
+}
+function mail_week(): ?array
+{
+    $o = store_read('angebot');
+    $w = (int)($o['meta']['week'] ?? 0); $y = (int)($o['meta']['year'] ?? 0);
+    if (!$o || $w < 1 || $y < 2000) return null;
+    $mo = (new DateTimeImmutable())->setISODate($y, $w);
+    return ['week' => $w, 'year' => $y, 'from' => $mo->format('d.m.'), 'to' => $mo->modify('+6 days')->format('d.m.Y'), 'publishedAt' => $o['publishedAt'] ?? null];
+}
+function mail_offer_links(array $c): array
+{
+    $base = mail_base_url();
+    $out = [];
+    foreach (customer_offers($c) as $id) { $d = offer_def($id); if ($d) $out[] = [$d['name'], $base . '/' . ($id === OFFER_STD ? '' : '?angebot=' . rawurlencode($id))]; }
+    return $out;
+}
+function mail_footer(string $kind): string
+{
+    global $CFG;
+    return $kind === 'angebot'
+        ? "Sie erhalten diese E-Mail als Kunde von {$CFG['company']}. Wenn Sie das Wochenangebot nicht mehr per E-Mail erhalten möchten, antworten Sie einfach kurz auf diese Nachricht."
+        : "Diese E-Mail wurde von {$CFG['company']} über das Angebotsportal versendet. Falls Sie keinen Zugang erwartet haben, können Sie sie ignorieren.";
+}
+/* Wochenangebot / Angebotslink: [Betreff, Text, HTML] */
+function mail_tpl_angebot(array $c, string $note, ?array $wk): array
+{
+    global $CFG;
+    $links = mail_offer_links($c);
+    $kw = $wk ? "KW {$wk['week']}/{$wk['year']}" : '';
+    $subject = ($kw ? "Wochenangebot $kw" : 'Ihr Angebot') . ' – ' . $CFG['company'];
+    $intro = $wk ? "unser Angebot für KW {$wk['week']} ({$wk['from']} – {$wk['to']}) ist online." : 'hier ist der Link zu Ihrem Angebot.';
+    $user = $c['login']['username'] ?? '';
+    $sig = mail_settings()['signature'];
+    $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '');
+    foreach ($links as [$n, $u]) $t .= "$n:\n$u\n\n";
+    if ($user !== '') $t .= "Anmeldung mit Ihrer Benutzerkennung: $user\nPasswort vergessen? Antworten Sie einfach auf diese E-Mail.\n\n";
+    $t .= $sig . "\n\n-- \n" . mail_footer('angebot') . "\n";
+    $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
+        . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '');
+    foreach ($links as [$n, $u]) $h .= mail_button($u, $n . ' ansehen');
+    if ($user !== '') $h .= '<p style="margin:14px 0 0;font-size:13px;color:#4a443e;">Anmeldung mit Ihrer Benutzerkennung <strong>' . mail_h($user) . '</strong>. Passwort vergessen? Antworten Sie einfach auf diese E-Mail.</p>';
+    return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('angebot'))];
+}
+/* Einladung / Passwort zurücksetzen */
+function mail_tpl_zugang(array $c, string $url, string $purpose, int $exp): array
+{
+    global $CFG;
+    $inv = $purpose === 'invite';
+    $subject = $inv ? "Ihr Zugang zum Angebotsportal von {$CFG['company']}" : "Passwort für Ihren Zugang neu festlegen – {$CFG['company']}";
+    $until = date('d.m.Y, H:i', $exp) . ' Uhr';
+    $user = $c['login']['username'];
+    $lines = $inv
+        ? ["für Sie ist ein Zugang zu unserem Angebotsportal eingerichtet. Dort sehen Sie jederzeit Ihr aktuelles Angebot.", "Ihre Benutzerkennung: $user", "Bitte legen Sie über den folgenden Link Ihr persönliches Passwort fest. Der Link ist bis $until gültig und kann nur einmal verwendet werden."]
+        : ["für Ihren Zugang zu unserem Angebotsportal (Benutzerkennung: $user) wurde ein neues Passwort angefordert.", "Bitte legen Sie über den folgenden Link ein neues Passwort fest. Der Link ist bis $until gültig und kann nur einmal verwendet werden."];
+    $sig = mail_settings()['signature'];
+    $t = mail_greeting($c) . "\n\n" . implode("\n\n", $lines) . "\n\n" . $url . "\n\n" . $sig . "\n\n-- \n" . mail_footer('zugang') . "\n";
+    $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p>';
+    foreach ($lines as $l) $h .= '<p style="margin:0 0 14px;">' . mail_h($l) . '</p>';
+    $h .= mail_button($url, $inv ? 'Passwort festlegen' : 'Neues Passwort festlegen')
+        . '<p style="margin:12px 0 0;font-size:12px;color:#857c72;word-break:break-all;">Falls die Schaltfläche nicht funktioniert: ' . mail_h($url) . '</p>';
+    return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('zugang'))];
+}
+/* Einmal-Link erzeugen (gespeichert wird nur der Hash) */
+function kunde_token_new(string $kid, string $purpose): array
+{
+    $tok = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+    $exp = time() + 86400 * TOKEN_DAYS[$purpose];
+    $c = with_lock('kunden', function () use ($kid, $tok, $exp, $purpose) {
+        $d = customers_load();
+        foreach ($d['customers'] as $i => $x) if ($x['id'] === $kid && !empty($x['login'])) {
+            $d['customers'][$i]['login']['token'] = ['h' => hash('sha256', $tok), 'exp' => $exp, 'p' => $purpose, 't' => now()];
+            store_write('kunden', $d);
+            return $d['customers'][$i];
+        }
+        return null;
+    });
+    if (!$c) fail('Kunde oder Zugang nicht gefunden.', 404);
+    return [$tok, $exp, $c];
+}
+function kunde_by_token(string $tok): ?array
+{
+    if (!preg_match('/^[A-Za-z0-9_-]{40,64}$/', $tok)) return null;
+    $h = hash('sha256', $tok);
+    foreach (customers_load()['customers'] as $c) {
+        $t = $c['login']['token'] ?? null;
+        if ($t && hash_equals((string)$t['h'], $h) && (int)$t['exp'] > time() && !empty($c['active']) && !empty($c['login']['active'])) return $c;
+    }
+    return null;
+}
+/* Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag */
+function mail_send_many(array $cfg, array $jobs): array
+{
+    $smtp = new Smtp($cfg);
+    $res = [];
+    try {
+        foreach ($jobs as $k => $j) {
+            try {
+                $smtp->send($j['to'], mail_build($cfg, $j['to'], $j['name'] ?? '', $j['subject'], $j['text'], $j['html']));
+                $res[$k] = ['ok' => true];
+            } catch (RuntimeException $e) {
+                $res[$k] = ['ok' => false, 'error' => $e->getMessage()];
+                if (preg_match('/Verbindung|Anmeldung|Verschlüssel|nicht bereit|Begrüßung|nur an einen Server/', $e->getMessage())) {
+                    foreach ($jobs as $k2 => $x) if (!isset($res[$k2])) $res[$k2] = ['ok' => false, 'error' => $e->getMessage()];
+                    break;
+                }
+            }
+        }
+    } finally { $smtp->close(); }
+    return $res;
+}
+/* Versand an Kunden vermerken (letzte E-Mail, Wochenversand) und ins Versandprotokoll schreiben */
+function mail_record(array $entries, ?array $wk = null): void
+{
+    global $ME;
+    with_lock('kunden', function () use ($entries, $wk) {
+        $d = customers_load();
+        foreach ($d['customers'] as $i => $c) foreach ($entries as $e) if ($e['kid'] === $c['id']) {
+            $d['customers'][$i]['mailLast'] = ['typ' => $e['typ'], 't' => now(), 'ok' => $e['ok'], 'to' => $e['to']];
+            if ($e['ok'] && $e['typ'] === 'woche' && $wk) $d['customers'][$i]['weekly'] = ['week' => $wk['week'], 'year' => $wk['year'], 't' => now()];
+        }
+        store_write('kunden', $d);
+    });
+    with_lock('mailversand', function () use ($entries, $ME) {
+        $l = store_read('mailversand') ?? [];
+        foreach ($entries as $e) $l[] = ['t' => now(), 'typ' => $e['typ'], 'kid' => $e['kid'], 'firma' => $e['firma'], 'to' => $e['to'], 'ok' => $e['ok'], 'error' => $e['error'] ?? '', 'by' => $ME['name'] ?? ''];
+        store_write('mailversand', array_slice($l, -3000));
+    });
+}
+const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail'];
+function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
+{
+    if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");
+    [$sub, $txt, $html] = mail_tpl_angebot($c, $note, $wk);
+    return ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html];
+}
+/* Kunde anmelden (nach Passwortprüfung oder Einmal-Link) */
+function kunde_sign_in(array $c): void
+{
+    session_regenerate_id(true);
+    kunde_clear();
+    $_SESSION['kid'] = $c['id'];
+    $_SESSION['ksv'] = (int)($c['login']['sv'] ?? 0);
+    $_SESSION['kseen'] = time();
+    $_SESSION['kcsrf'] = bin2hex(random_bytes(32));
+    with_lock('kundensitzungen', function () use ($c) {
+        $r = ksess_prune(store_read('kundensitzungen') ?? []);
+        $sid = bin2hex(random_bytes(12));
+        $r[$sid] = ['kid' => $c['id'], 'ip' => client_ip(), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 240), 'created' => now(), 'seen' => time()];
+        store_write('kundensitzungen', $r);
+        $_SESSION['ksid'] = $sid;
+    });
+    $GLOBALS['KUNDE'] = $c;
+}
 function offer_def(string $id): ?array
 {
     if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'];
@@ -1056,7 +1230,8 @@ $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
-                 'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort'];
+                 'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1064,7 +1239,7 @@ if (in_array($action, $writeActions, true)) {
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort'], true);
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -1220,20 +1395,7 @@ try {
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
             attempts_record(true);
-            session_regenerate_id(true);
-            kunde_clear();
-            $_SESSION['kid'] = $c['id'];
-            $_SESSION['ksv'] = (int)($c['login']['sv'] ?? 0);
-            $_SESSION['kseen'] = time();
-            $_SESSION['kcsrf'] = bin2hex(random_bytes(32));
-            with_lock('kundensitzungen', function () use ($c) {
-                $r = ksess_prune(store_read('kundensitzungen') ?? []);
-                $sid = bin2hex(random_bytes(12));
-                $r[$sid] = ['kid' => $c['id'], 'ip' => client_ip(), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 240), 'created' => now(), 'seen' => time()];
-                store_write('kundensitzungen', $r);
-                $_SESSION['ksid'] = $sid;
-            });
-            $GLOBALS['KUNDE'] = $c;
+            kunde_sign_in($c);
             audit('kunde_login', 'Kunde angemeldet', [], $who);
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c)]);
         }
@@ -1264,6 +1426,7 @@ try {
                     $d['customers'][$i]['login']['mustChange'] = false;
                     $d['customers'][$i]['login']['pwSet'] = now();
                     $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
+                    unset($d['customers'][$i]['login']['token']);
                     store_write('kunden', $d);
                     return $d['customers'][$i];
                 }
@@ -1276,6 +1439,167 @@ try {
             $GLOBALS['KUNDE'] = $c2;
             audit('kunde_password', 'Kunde hat eigenes Passwort festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
             respond(['ok' => true, 'kunde' => kunde_payload($c2)]);
+        }
+
+        /* ---------- Passwort über Link aus der E-Mail (Einladung / Zurücksetzen) ---------- */
+        case 'kunde_token_check': {
+            attempts_check();
+            $c = kunde_by_token((string)(body()['token'] ?? ''));
+            if (!$c) { attempts_record(false); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            respond(['ok' => true, 'firma' => $c['firma'], 'username' => $c['login']['username'], 'purpose' => $c['login']['token']['p'], 'exp' => (int)$c['login']['token']['exp']]);
+        }
+
+        case 'kunde_token_set': {
+            start_session();
+            attempts_check();
+            $b = body();
+            $tok = (string)($b['token'] ?? '');
+            $c = kunde_by_token($tok);
+            if (!$c) { attempts_record(false); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            $new = check_password($b['password'] ?? '', $c['login']['username']);
+            $c2 = with_lock('kunden', function () use ($c, $new, $tok) {
+                $d = customers_load();
+                foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) {
+                    $t = $x['login']['token'] ?? null;
+                    if (!$t || !hash_equals((string)$t['h'], hash('sha256', $tok)) || (int)$t['exp'] <= time()) return null;   // inzwischen verbraucht
+                    $l = &$d['customers'][$i]['login'];
+                    $l['hash'] = password_hash($new, PASSWORD_DEFAULT);
+                    $l['mustChange'] = false; $l['pwSet'] = now(); $l['sv'] = (int)($l['sv'] ?? 0) + 1;
+                    $l['failCount'] = 0; $l['lockedUntil'] = 0; $l['lastLogin'] = now();
+                    unset($l['token']);
+                    store_write('kunden', $d);
+                    return $d['customers'][$i];
+                }
+                return null;
+            });
+            if (!$c2) fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410);
+            attempts_record(true);
+            ksess_remove(function ($k, $v) use ($c2) { return $v['kid'] === $c2['id']; });
+            kunde_sign_in($c2);
+            audit('kunde_password', 'Kunde hat Passwort über den Link aus der E-Mail festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
+            respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c2)]);
+        }
+
+        /* ---------- E-Mail-Versand (nur Administrator) ---------- */
+        case 'mail_status': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            $m = mail_cfg();
+            $last = array_slice(store_read('mailversand') ?? [], -200);
+            respond(['ok' => true, 'configured' => (bool)$m && (bool)mail_base_url(), 'baseUrl' => mail_base_url(),
+                     'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== ''] : null,
+                     'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last)]);
+        }
+
+        case 'mail_save': {
+            require_auth(true, 'admin');
+            $sig = (string)(body()['signature'] ?? '');
+            $sig = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', $sig) ?? '')), 0, 600);
+            $old = mail_settings()['signature'];
+            store_write('mailvorlage', ['signature' => $sig, 'updatedAt' => now()]);
+            if ($old !== $sig) audit('mail', 'E-Mail-Signatur geändert', [['k' => 'mail|sig', 'code' => '', 'name' => 'E-Mail', 'f' => 'Signatur', 'from' => $old, 'to' => $sig]]);
+            respond(['ok' => true, 'signature' => $sig]);
+        }
+
+        case 'mail_test': {
+            $me = require_auth(true, 'admin');
+            $cfg = require_mail();
+            $to = trim((string)(body()['to'] ?? ''));
+            if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) fail('Bitte eine gültige E-Mail-Adresse angeben.', 422);
+            $sub = 'Testnachricht aus dem Angebotsportal';
+            $txt = "Diese Testnachricht bestätigt, dass der E-Mail-Versand des Angebotsportals funktioniert.
+
+Ausgelöst von: {$me['name']}
+";
+            $html = mail_layout($sub, '<p style="margin:0 0 14px;">Diese Testnachricht bestätigt, dass der E-Mail-Versand des Angebotsportals funktioniert.</p><p style="margin:0;color:#857c72;font-size:13px;">Ausgelöst von: ' . mail_h($me['name']) . '</p>', mail_settings()['signature'], '');
+            $r = mail_send_many($cfg, [['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $txt, 'html' => $html]])[0];
+            with_lock('mailversand', function () use ($to, $r, $me) {
+                $l = store_read('mailversand') ?? [];
+                $l[] = ['t' => now(), 'typ' => 'test', 'kid' => '', 'firma' => '', 'to' => $to, 'ok' => $r['ok'], 'error' => $r['error'] ?? '', 'by' => $me['name']];
+                store_write('mailversand', array_slice($l, -3000));
+            });
+            if (!$r['ok']) fail('Testmail nicht versendet: ' . $r['error'], 502);
+            respond(['ok' => true]);
+        }
+
+        case 'kunden_mail_vorschau': {
+            require_auth(true, 'admin');
+            $b = body();
+            $typ = in_array($b['type'] ?? '', ['woche', 'angebot', 'invite', 'reset'], true) ? $b['type'] : 'woche';
+            $c = null;
+            foreach (customers_load()['customers'] as $x) if ($x['id'] === ($b['id'] ?? '')) $c = $x;
+            if (!$c) $c = ['firma' => 'Musterkunde GmbH', 'ansprechpartner' => 'Frau Muster', 'email' => 'kunde@example.org', 'angebote' => [OFFER_STD], 'login' => ['username' => 'musterkunde']];
+            if (!mail_base_url()) fail('Die Adresse der Angebotsseite für Links fehlt (DOMAIN bzw. WA_URL in .env).', 409);
+            if ($typ === 'invite' || $typ === 'reset') [$sub, , $html] = mail_tpl_zugang($c, mail_base_url() . '/#zugang=BEISPIEL', $typ, time() + 86400 * TOKEN_DAYS[$typ]);
+            else [$sub, , $html] = mail_tpl_angebot($c, mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
+            respond(['ok' => true, 'subject' => $sub, 'html' => $html, 'to' => $c['email'] ?? '']);
+        }
+
+        case 'kunde_mail': {
+            require_auth(true, 'admin');
+            $cfg = require_mail();
+            $b = body();
+            $c = null;
+            foreach (customers_load()['customers'] as $x) if ($x['id'] === ($b['id'] ?? '')) $c = $x;
+            if (!$c) fail('Kunde nicht gefunden.', 404);
+            if (empty($c['email'])) fail("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.", 422);
+            if (empty($c['active'])) fail('Der Kunde ist inaktiv.', 422);
+            $type = $b['type'] ?? '';
+            if ($type === 'zugang') {
+                if (empty($c['login'])) fail('Für diesen Kunden ist kein Zugang eingerichtet.', 422);
+                if (empty($c['login']['active'])) fail('Der Zugang ist deaktiviert.', 422);
+                $purpose = empty($c['login']['hash']) ? 'invite' : 'reset';
+                [$tok, $exp, $c] = kunde_token_new($c['id'], $purpose);
+                [$sub, $txt, $html] = mail_tpl_zugang($c, mail_base_url() . '/#zugang=' . $tok, $purpose, $exp);
+                $job = ['to' => $c['email'], 'name' => $c['ansprechpartner'] ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html];
+                $typ = $purpose;
+            } elseif ($type === 'angebot') {
+                if (!customer_offers($c)) fail('Für diesen Kunden ist kein Angebot freigeschaltet.', 422);
+                $job = mail_job_for($c, 'angebot', mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
+                $typ = 'angebot';
+            } else fail('Unbekannte E-Mail-Art.', 422);
+            $r = mail_send_many($cfg, [$job])[0];
+            if (!$r['ok'] && isset($tok)) with_lock('kunden', function () use ($c) {   // Link nicht zugestellt → ungültig machen
+                $d = customers_load();
+                foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) unset($d['customers'][$i]['login']['token']);
+                store_write('kunden', $d);
+            });
+            mail_record([['kid' => $c['id'], 'firma' => $c['firma'], 'to' => $c['email'], 'typ' => $typ, 'ok' => $r['ok'], 'error' => $r['error'] ?? '']]);
+            audit('mail', MAIL_TYP[$typ] . " an „{$c['firma']}“ " . ($r['ok'] ? 'gesendet' : 'nicht zugestellt'), [['k' => "c{$c['id']}|mail", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => MAIL_TYP[$typ], 'from' => '', 'to' => $c['email'] . ($r['ok'] ? '' : ' – Fehler: ' . $r['error'])]]);
+            if (!$r['ok']) fail('E-Mail nicht versendet: ' . $r['error'], 502);
+            respond(['ok' => true, 'typ' => $typ, 'customer' => customer_public(array_values(array_filter(customers_load()['customers'], function ($x) use ($c) { return $x['id'] === $c['id']; }))[0])]);
+        }
+
+        case 'kunden_rundmail': {
+            require_auth(true, 'admin');
+            $cfg = require_mail();
+            $b = body();
+            $wk = mail_week();
+            if (!$wk) fail('Es ist noch kein Angebot veröffentlicht.', 409);
+            if ((int)($b['week'] ?? 0) !== $wk['week'] || (int)($b['year'] ?? 0) !== $wk['year']) fail('Inzwischen wurde ein anderes Angebot veröffentlicht. Bitte den Versand neu öffnen.', 409);
+            $ids = array_slice(array_values(array_filter(is_array($b['ids'] ?? null) ? $b['ids'] : [], 'is_string')), 0, 20);
+            $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
+            $jobs = []; $res = []; $map = [];
+            foreach (customers_load()['customers'] as $c) {
+                if (!in_array($c['id'], $ids, true)) continue;
+                $map[$c['id']] = $c;
+                $why = empty($c['active']) ? 'Kunde inaktiv' : (empty($c['email']) ? 'keine E-Mail-Adresse' : (empty($c['login']['active']) ? 'kein aktiver Zugang' : (!customer_offers($c) ? 'kein Angebot freigeschaltet' : (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot']) ? 'Wochenangebot per E-Mail nicht gewünscht' : ''))));
+                if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
+                $jobs[$c['id']] = mail_job_for($c, 'woche', $note, $wk);
+            }
+            @set_time_limit(180);
+            ignore_user_abort(true);
+            $res = $res + ($jobs ? mail_send_many($cfg, $jobs) : []);
+            $entries = [];
+            foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'woche', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
+            if ($entries) mail_record($entries, $wk);
+            $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
+            $bad = array_filter($res, function ($r) { return !$r['ok']; });
+            if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']} an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
+                array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
+            $out = [];
+            foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
+            respond(['ok' => true, 'results' => $out]);
         }
 
         /* ---------- Kundenstammdaten (Eingabebereich, nur Administrator) ---------- */
@@ -1311,6 +1635,8 @@ try {
                 $known = array_merge([OFFER_STD], offer_ids());
                 $row['angebote'] = array_values(array_unique(array_filter(is_array($b['angebote'] ?? null) ? $b['angebote'] : [], function ($o) use ($known) { return is_string($o) && in_array($o, $known, true); })));
                 $row['active'] = !empty($b['active']);
+                $row['mailAngebot'] = !array_key_exists('mailAngebot', $b) || !empty($b['mailAngebot']);
+                foreach (['weekly', 'mailLast'] as $keep) if (isset($old[$keep])) $row[$keep] = $old[$keep];
                 $row['created'] = $old['created'] ?? now();
                 $row['changed'] = now();
                 // Zugang
@@ -1332,12 +1658,17 @@ try {
                         $l['mustChange'] = !empty($lg['mustChange']);
                         $l['pwSet'] = now();
                         $l['sv'] = (int)($l['sv'] ?? 0) + 1;
+                        unset($l['token']);
                         $pwNew = true;
+                    } elseif (empty($l['hash']) && empty($lg['invite'])) {
+                        throw new InvalidArgumentException('Bitte ein Startpasswort festlegen oder eine Einladung per E-Mail senden.');
                     } elseif (empty($l['hash'])) {
-                        throw new InvalidArgumentException('Bitte ein Startpasswort für den Zugang festlegen.');
+                        $l['hash'] = null;
+                        $l['mustChange'] = false;
+                        if (($row['email'] ?? '') === '') throw new InvalidArgumentException('Für eine Einladung per E-Mail bitte die E-Mail-Adresse angeben.');
                     }
                     if (!empty($lg['unlock'])) { $l['lockedUntil'] = 0; $l['failCount'] = 0; }
-                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; }
+                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; unset($l['token']); }
                     if ($ol && !empty($ol['active']) && !$l['active']) $ended = true;
                     $row['login'] = $l;
                 }
@@ -1353,8 +1684,8 @@ try {
             if ($ended || $pwNew) ksess_remove(function ($k, $v) use ($row) { return $v['kid'] === $row['id']; });
             // Protokoll ohne Passwörter
             $ch = [];
-            $fmt = function ($f, $v) { if ($f === 'angebote') return implode(', ', array_map(function ($o) { $x = offer_def($o); return $x['name'] ?? $o; }, $v ?? [])); if ($f === 'active') return $v ? 'ja' : 'nein'; return (string)$v; };
-            foreach (array_merge(array_keys(CUSTOMER_FIELDS), ['angebote', 'active']) as $f) {
+            $fmt = function ($f, $v) { if ($f === 'angebote') return implode(', ', array_map(function ($o) { $x = offer_def($o); return $x['name'] ?? $o; }, $v ?? [])); if ($f === 'active' || $f === 'mailAngebot') return $v === false ? 'nein' : 'ja'; return (string)$v; };
+            foreach (array_merge(array_keys(CUSTOMER_FIELDS), ['angebote', 'active', 'mailAngebot']) as $f) {
                 $from = $old ? $fmt($f, $old[$f] ?? '') : ''; $to = $fmt($f, $row[$f] ?? '');
                 if ($from !== $to) $ch[] = ['k' => "c{$row['id']}|$f", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => CUSTOMER_LABELS[$f], 'from' => $from, 'to' => $to];
             }

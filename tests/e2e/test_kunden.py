@@ -80,7 +80,7 @@ code, r, raw = A.call('kunden', raw=True)
 check('list sorted by firma, no secrets', [c['firma'] for c in r['customers']] == ['Gasthaus Muster GmbH', 'Ohne Zugang KG'] and '$2y$' not in raw and '"hash"' not in raw)
 c1 = r['customers'][0]
 check('stored master data complete', all(c1[k] == base[k] for k in ['nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']))
-check('login status: mustChange, never logged in', c1['login'] == {'username': 'gasthaus.muster', 'active': True, 'mustChange': True, 'lastLogin': None, 'pwSet': c1['login']['pwSet'], 'lockedUntil': 0})
+check('login status: mustChange, never logged in', c1['login'] == {'username': 'gasthaus.muster', 'active': True, 'mustChange': True, 'lastLogin': None, 'pwSet': c1['login']['pwSet'], 'lockedUntil': 0, 'hasPassword': True, 'link': None})
 
 # ---------- Rechte im Eingabebereich ----------
 code, r = A.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
@@ -184,6 +184,9 @@ A.call('security_save', {'lockAfter': 10})
 code, offs = A.call('offers')
 A.call('offers_save', {'rev': offs['rev'], 'offers': offs['offers'], 'stdPublic': True})
 check('Wochenangebot public again', Client('198.51.100.21').call('offer')[0] == 200)
+code, r = A.call('mail_status')
+check('mail not configured without server settings', code == 200 and r['configured'] is False and r['smtp'] is None)
+check('sending without settings is refused clearly', A.call('kunde_mail', {'id': K1, 'type': 'angebot'})[0] == 409)
 
 # ---------- Oberfläche ----------
 with sync_playwright() as p:
@@ -206,6 +209,7 @@ with sync_playwright() as p:
     a.fill('#kunde-body [name=ansprechpartner]', 'Herr Test'); a.fill('#kunde-body [name=email]', 'kueche@example.org')
     a.fill('#kunde-body [name=plz]', '22111'); a.fill('#kunde-body [name=ort]', 'Hamburg')
     a.check('#kunde-body [name=angebot][value=bela]'); a.check('#kunde-body [name=angebot][value=handelshof-efs]')
+    check('invite option disabled while mail is not configured', a.locator('#kunde-body [name=pwmode][value=invite]').is_disabled() and a.is_visible('#kunde-body [name=password]'))
     a.click('#kunde-body [data-kact=gen]')
     start_pw = a.input_value('#kunde-body [name=password]')
     check('password suggestion generated', len(start_pw) >= 12)
