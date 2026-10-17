@@ -7,8 +7,8 @@
 <meta name="color-scheme" content="light dark">
 <title>Wochenangebot · Eingabebereich</title>
 <script src="../assets/theme.js"></script>
-<link rel="stylesheet" href="../assets/app.css?v=20261017e">
-<link rel="stylesheet" href="../assets/admin.css?v=20261017e">
+<link rel="stylesheet" href="../assets/app.css?v=20261017f">
+<link rel="stylesheet" href="../assets/admin.css?v=20261017f">
 </head>
 <body class="adm">
 
@@ -72,6 +72,7 @@
       <button role="tab" type="button" id="vt-stock" aria-selected="false" aria-controls="view-stock"><svg class="i" aria-hidden="true"><use href="#i-box"/></svg><span>Bestand</span></button>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Stammdaten</span></button>
       <div class="side-sep" id="side-admin" aria-hidden="true" hidden>Verwaltung</div>
+      <button role="tab" type="button" id="vt-kunden" aria-selected="false" aria-controls="view-kunden" hidden><svg class="i" aria-hidden="true"><use href="#i-store"/></svg><span>Kunden</span></button>
       <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Nutzer</span></button>
       <button role="tab" type="button" id="vt-log" aria-selected="false" aria-controls="view-log" hidden><svg class="i" aria-hidden="true"><use href="#i-history"/></svg><span>Protokoll</span></button>
       <button role="tab" type="button" id="vt-sec" aria-selected="false" aria-controls="view-sec" hidden><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Sicherheit</span></button>
@@ -109,6 +110,7 @@
     <div id="view-hist" hidden></div>
     <div id="view-stock" hidden></div>
     <div id="view-master" hidden></div>
+    <div id="view-kunden" hidden></div>
     <div id="view-users" hidden></div>
     <div id="view-log" hidden></div>
     <div id="view-sec" hidden></div>
@@ -150,6 +152,8 @@
 <dialog class="modal" id="dlg-add-stock" aria-labelledby="as-title"><form class="dlg" id="add-stock-body" autocomplete="off"></form></dialog>
 <!-- Nutzer anlegen / bearbeiten -->
 <dialog class="modal" id="dlg-user" aria-labelledby="us-title"><form class="dlg" id="user-body" autocomplete="off"></form></dialog>
+<!-- Kunde anlegen / bearbeiten -->
+<dialog class="modal wide" id="dlg-kunde" aria-labelledby="kd-title"><form class="dlg" id="kunde-body" autocomplete="off"></form></dialog>
 <!-- Zwei-Faktor-Anmeldung -->
 <dialog class="modal" id="dlg-twofa" aria-labelledby="tf-title"><div class="dlg" id="twofa-body"></div></dialog>
 <!-- Bestätigung -->
@@ -196,12 +200,13 @@
   <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5 5.5 4.5h13L20 9.5M4 9.5v10h16v-10M4 9.5c0 1.4 1.1 2.5 2.7 2.5S9.3 10.9 9.3 9.5c0 1.4 1.2 2.5 2.7 2.5s2.7-1.1 2.7-2.5c0 1.4 1.1 2.5 2.6 2.5S20 10.9 20 9.5M10 19.5V15h4v4.5"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
 </svg>
 
-<script src="../assets/offer-core.js?v=20261017e"></script>
+<script src="../assets/offer-core.js?v=20261017f"></script>
 <script src="../assets/vendor/qrcode.js?v=1.4.4"></script>
-<script src="../assets/stock-core.js?v=20261017e"></script>
-<script src="../assets/admin.js?v=20261017e"></script>
+<script src="../assets/stock-core.js?v=20261017f"></script>
+<script src="../assets/admin.js?v=20261017f"></script>
 </body>
 </html>

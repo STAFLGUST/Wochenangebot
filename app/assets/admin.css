@@ -609,3 +609,18 @@ body.ro .vtog { display: none; }
 #offers-body .dlg-body > .btn { margin-top: 10px; }
 @media (max-width: 700px) { .ob-act { margin-left: 0; } .oftab th:nth-child(3), .oftab td:nth-child(3) { display: none; } }
 .e-var.is-hidden .in.num::placeholder { font-size: 11.5px; letter-spacing: -.01em; }
+
+/* ---------- Kunden ---------- */
+.fld textarea { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); color: var(--text); font: inherit; resize: vertical; outline: none; }
+.fld textarea:focus { border-color: var(--accent-line); box-shadow: var(--focus); }
+.k-chip { display: inline-block; font-size: 12px; line-height: 1.5; padding: 1px 8px; margin: 1px 0; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); white-space: nowrap; }
+.k-chip.std { border-color: var(--accent-line); background: var(--accent-soft); color: var(--text); }
+.ktab .k-offers { max-width: 340px; }
+.ktab .k-addr { color: var(--text-2); white-space: nowrap; }
+.k-set { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 14px; margin: 0 0 14px; min-width: 0; }
+.k-set legend { padding: 0 6px; font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.k-set .k-login { margin-top: 12px; }
+.k-offers-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
+.k-note { margin-top: 12px; }
+@media (max-width: 860px) { .ktab .k-addr { display: none; } }
+@media (max-width: 560px) { #dlg-kunde .form-grid.two { grid-template-columns: 1fr; } .ktab .k-offers { max-width: none; } }

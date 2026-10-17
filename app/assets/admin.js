@@ -68,7 +68,7 @@
   let filterQ = '', onlyChanges = false;
   /* Mehrere Angebote: Standard („Wochenangebot“) + Kundenangebote mit eigenen Preisen je Artikel (it.variants[id]) */
   const OSTD = 'std';
-  let offers = [], offersRev = 0;
+  let offers = [], offersRev = 0, stdPublic = true;
   let curOffer = store.get('angebot', OSTD);
   const offerDef = (id) => offers.find((o) => o.id === id) || null;
   const offerName = (id) => (id === OSTD ? 'Wochenangebot' : (offerDef(id) || {}).name || id);
@@ -332,11 +332,12 @@
     document.body.classList.toggle('ro', ro);
     document.body.classList.toggle('is-admin', can('admin'));
     $('#vt-users').hidden = !can('admin');
+    $('#vt-kunden').hidden = !can('admin');
     $('#vt-log').hidden = !can('admin');
     $('#vt-sec').hidden = !can('admin');
     $('#side-admin').hidden = !can('admin');
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
-    if (!can('admin') && (currentView === 'users' || currentView === 'log' || currentView === 'sec')) setView('edit');
+    if (!can('admin') && ADMIN_VIEWS.includes(currentView)) setView('edit');
   }
   /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
   function lockInputs(root) {
@@ -1045,6 +1046,7 @@
     const r = await api('offers');
     offers = r.offers || [];
     offersRev = r.rev || 0;
+    stdPublic = r.stdPublic !== false;
     if (!knownOffer(curOffer)) curOffer = OSTD;
   }
   function renderOfferBar() {
@@ -1093,15 +1095,16 @@
   const slug = (t) => fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
   function openOffers() {
     offerEdit = offers.map((o) => ({ ...o }));
+    offerEdit.stdPublic = stdPublic;
     renderOffersDlg();
     dlgOffers.showModal();
   }
   function renderOffersDlg(err = '') {
     const admin = can('admin');
-    $('#offers-body').innerHTML = `<div class="dlg-head"><div><h2 id="of-title">Angebote verwalten</h2><p>Alle Angebote nutzen dieselbe Artikelliste; Preise werden je Angebot eingetragen. Kundenangebote sind nur nach Anmeldung sichtbar, nie auf der öffentlichen Seite.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+    $('#offers-body').innerHTML = `<div class="dlg-head"><div><h2 id="of-title">Angebote verwalten</h2><p>Alle Angebote nutzen dieselbe Artikelliste; Preise werden je Angebot eingetragen. Kundenangebote sind nur nach Anmeldung sichtbar (Mitarbeiter oder freigeschaltete Kunden), nie auf der öffentlichen Seite.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <table class="etab oftab"><thead><tr><th>Name</th><th>Artikel ohne eigenen Preis</th><th class="num-s">Eigene Preise</th><th class="act"></th></tr></thead><tbody>
-          <tr class="of-std"><td><strong>Wochenangebot</strong><div class="sub">Standard · öffentliche Angebotsseite</div></td><td class="sub">–</td><td class="num-s">–</td><td></td></tr>
+          <tr class="of-std"><td><strong>Wochenangebot</strong><div class="sub">Standard · ${offerEdit.stdPublic ? 'öffentlich ohne Anmeldung' : 'nur für angemeldete Kunden'}</div></td><td colspan="3">${admin ? `<label class="check"><input type="checkbox" data-ofa-pub${offerEdit.stdPublic ? ' checked' : ''}> Öffentlich ohne Anmeldung sichtbar</label><div class="sub">Ausgeschaltet sehen das Wochenangebot nur Kunden, denen es unter „Kunden“ freigeschaltet ist.</div>` : `<span class="sub">${offerEdit.stdPublic ? 'öffentlich' : 'nur mit Kunden-Anmeldung'} (ändern: Administrator)</span>`}</td></tr>
           ${offerEdit.map((o, i) => `<tr data-oi="${i}"><td><input class="in" data-of="name" value="${esc(o.name)}" maxlength="80" aria-label="Name des Angebots"></td>
             <td><select class="in" data-of="fallback" aria-label="Artikel ohne eigenen Preis"><option value="standard"${o.fallback !== 'hidden' ? ' selected' : ''}>Standardpreis zeigen</option><option value="hidden"${o.fallback === 'hidden' ? ' selected' : ''}>nicht anzeigen</option></select></td>
             <td class="num-s">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ownCount(o.id))}</td>
@@ -1117,6 +1120,7 @@
     if (tr && e.target.dataset.of) offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value;
   });
   $('#offers-body').addEventListener('change', (e) => {
+    if (e.target.matches('[data-ofa-pub]')) { offerEdit.stdPublic = e.target.checked; renderOffersDlg(); return; }
     const tr = e.target.closest('[data-oi]');
     if (tr && e.target.dataset.of) offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value;
   });
@@ -1149,8 +1153,10 @@
       });
       b.disabled = true;
       try {
-        const r = await api('offers_save', { body: { rev: offersRev, offers: list } });
-        offers = r.offers; offersRev = r.rev;
+        const body = { rev: offersRev, offers: list };
+        if (can('admin')) body.stdPublic = !!offerEdit.stdPublic;
+        const r = await api('offers_save', { body });
+        offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
         const gone = new Set(list.map((o) => o.id));
         let dropped = false;
         for (const it of model.items) if (it.variants) for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; }
@@ -1561,9 +1567,10 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['edit', 'hist', 'stock', 'master', 'users', 'log', 'sec'];
+  const VIEWS = ['edit', 'hist', 'stock', 'master', 'kunden', 'users', 'log', 'sec'];
+  const ADMIN_VIEWS = ['kunden', 'users', 'log', 'sec'];
   function setView(v) {
-    if ((v === 'users' || v === 'log' || v === 'sec') && !can('admin')) v = 'edit';
+    if (ADMIN_VIEWS.includes(v) && !can('admin')) v = 'edit';
     currentView = v;
     for (const k of VIEWS) {
       $('#vt-' + k).setAttribute('aria-selected', k === v);
@@ -1576,6 +1583,7 @@
     if (v === 'stock') renderStockView();
     if (v === 'master') renderMasterView();
     if (v === 'users') renderUsersView();
+    if (v === 'kunden') renderKundenView();
     if (v === 'log') renderLogView();
     if (v === 'sec') renderSecView();
   }
@@ -2782,6 +2790,162 @@
     } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
   });
 
+  /* ======================= Kunden (Administrator) =======================
+     Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
+     Passwörter werden nur als Hash gespeichert und nie angezeigt. */
+  let kunden = null, kundenRev = 0, kundenQ = '';
+  const dlgKunde = $('#dlg-kunde');
+  let editKid = null;
+  const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
+  async function renderKundenView() {
+    const host = $('#view-kunden');
+    if (!kunden) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kunden werden geladen …</div>';
+    try {
+      const [r] = await Promise.all([api('kunden'), offers.length ? null : loadOffers()]);
+      kunden = r.customers; kundenRev = r.rev;
+    } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    host.innerHTML = `
+      <div class="ed-toolbar">
+        <div class="search">${icon('search')}<input id="k-q" type="search" autocomplete="off" placeholder="Kunden finden: Firma, Nummer, Ort, Ansprechpartner …" aria-label="Kunden suchen" value="${esc(kundenQ)}"></div>
+        <span class="ed-hint" id="k-count"></span>
+        <button type="button" class="btn primary" id="k-add">${icon('plus')}Kunde anlegen</button>
+      </div>
+      <div id="k-list"></div>
+      <p class="hint k-note">Kunden melden sich auf der Angebotsseite über „Kunden-Login“ an und sehen nur die hier freigeschalteten Angebote. ${stdPublic ? 'Das Wochenangebot ist derzeit zusätzlich öffentlich ohne Anmeldung sichtbar (umstellbar unter Angebot bearbeiten → Angebote verwalten).' : 'Das Wochenangebot ist derzeit nicht öffentlich – nur freigeschaltete Kunden sehen es.'}</p>`;
+    renderKundenList();
+  }
+  function renderKundenList() {
+    const toks = fold(kundenQ).split(/\s+/).filter(Boolean);
+    const list = kunden.filter((c) => { const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username].join(' ')); return toks.every((t) => hay.includes(t)); });
+    $('#k-count').textContent = plural(list.length, 'Kunde', 'Kunden') + (list.length !== kunden.length ? ` von ${kunden.length}` : '');
+    const host = $('#k-list');
+    if (!kunden.length) { host.innerHTML = '<div class="ed-empty"><h3>Noch keine Kunden</h3><p>Legen Sie Kunden mit Ansprechpartner, Adresse und Zugang an und schalten Sie die passenden Angebote frei.</p></div>'; return; }
+    if (!list.length) { host.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
+    const st = (c) => {
+      const l = c.login;
+      if (!c.active) return '<span class="st-err">Kunde inaktiv</span>';
+      if (!l) return '<span class="muted">kein Zugang</span>';
+      if (!l.active) return '<span class="st-err">Zugang deaktiviert</span>';
+      return `<span class="st-ok">Zugang aktiv</span>${l.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(l.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${l.mustChange ? '<div class="sub">Startpasswort noch nicht geändert</div>' : ''}`;
+    };
+    host.innerHTML = `<div class="gcard"><table class="etab utab ktab"><thead><tr><th>Firma / Ansprechpartner</th><th class="k-addr">Ort</th><th>Freigeschaltete Angebote</th><th class="u-st">Zugang</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${list.map((c) => `
+      <tr data-kid="${esc(c.id)}" tabindex="0" class="${c.active ? '' : 'inactive'}">
+        <td class="u-name"><div class="nm">${esc(c.firma)}${c.nr ? ` <span class="muted">· ${esc(c.nr)}</span>` : ''}</div><div class="sub">${esc(c.ansprechpartner || '')}${c.email ? `${c.ansprechpartner ? ' · ' : ''}${esc(c.email)}` : ''}</div></td>
+        <td class="k-addr">${esc([c.plz, c.ort].filter(Boolean).join(' '))}</td>
+        <td class="k-offers">${c.angebote.length ? c.angebote.map(offerChip).join(' ') : '<span class="muted">keines</span>'}</td>
+        <td class="u-st">${st(c)}${c.login ? `<div class="sub uname">${esc(c.login.username)}</div>` : ''}</td>
+        <td class="u-last">${c.login && c.login.lastLogin ? esc(dateTime(c.login.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
+        <td class="u-act"><button type="button" class="btn sm" data-kedit="${esc(c.id)}">Bearbeiten</button></td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }
+  $('#view-kunden').addEventListener('input', (e) => { if (e.target.id === 'k-q') { kundenQ = e.target.value; renderKundenList(); } });
+  $('#view-kunden').addEventListener('click', (e) => {
+    if (e.target.closest('#k-add')) { openKunde(null); return; }
+    const tr = e.target.closest('tr[data-kid]');
+    if (tr) openKunde(tr.dataset.kid);
+  });
+  $('#view-kunden').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kid]')) openKunde(e.target.dataset.kid); });
+  /* Vorschlag für den Benutzernamen aus der Firma */
+  const unameFrom = (t) => fold(t).replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/\b(gmbh|co|kg|ag|ug|ohg|e\.?k|mbh|und|&)\b/g, ' ').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 32);
+  function openKunde(id) {
+    const c = id ? kunden.find((x) => x.id === id) : null;
+    editKid = id;
+    const l = c && c.login;
+    const has = (o) => (c ? c.angebote.includes(o) : false);
+    const fld = (n, label, max, attrs = '', cls = '') => `<label class="fld${cls ? ' ' + cls : ''}"><span>${label}</span><input name="${n}" value="${esc(c ? c[n] || '' : '')}" maxlength="${max}"${attrs}></label>`;
+    $('#kunde-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="kd-title">${c ? esc(c.firma) : 'Kunde anlegen'}</h2><p>${c ? `Angelegt ${esc(dateTime(c.created))}${c.changed && c.changed !== c.created ? ` · geändert ${esc(dateTime(c.changed))}` : ''}` : 'Stammdaten, freigeschaltete Angebote und Zugang zur Angebotsseite.'}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <fieldset class="k-set"><legend>Stammdaten</legend><div class="form-grid two">
+          ${fld('firma', 'Firma / Name', 120, ' required placeholder="z. B. Gasthaus Muster GmbH"', 'span2')}
+          ${fld('nr', 'Kundennummer', 30, ' placeholder="optional"')}
+          ${fld('ansprechpartner', 'Ansprechpartner', 120, ' placeholder="z. B. Frau Beispiel"')}
+          ${fld('strasse', 'Straße und Hausnummer', 120, '', 'span2')}
+          ${fld('plz', 'PLZ', 10, ' inputmode="numeric"')}
+          ${fld('ort', 'Ort', 80)}
+          ${fld('email', 'E-Mail', 160, ' type="email" autocapitalize="none" spellcheck="false"')}
+          ${fld('telefon', 'Telefon', 40, ' type="tel"')}
+          ${fld('land', 'Land', 60, ' placeholder="Deutschland"')}
+          <label class="fld span2"><span>Notiz <small class="muted">(nur intern)</small></span><textarea name="notiz" maxlength="500" rows="2">${esc(c ? c.notiz || '' : '')}</textarea></label>
+          <label class="check span2"><input type="checkbox" name="active"${!c || c.active ? ' checked' : ''}> Kunde aktiv <small class="muted">(inaktive Kunden können sich nicht anmelden)</small></label>
+        </div></fieldset>
+        <fieldset class="k-set"><legend>Freigeschaltete Angebote</legend>
+          <div class="k-offers-pick">${[OSTD, ...offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}</label>`).join('')}</div>
+          <p class="hint">Der Kunde sieht nach der Anmeldung nur diese Angebote. Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
+        </fieldset>
+        <fieldset class="k-set"><legend>Zugang zur Angebotsseite</legend>
+          <label class="check"><input type="checkbox" name="hasLogin"${!c || l ? ' checked' : ''}> Zugang einrichten (Benutzerkennung und Passwort)</label>
+          <div class="form-grid two k-login"${!c || l ? '' : ' hidden'}>
+            <label class="fld"><span>Benutzerkennung</span><input name="username" value="${esc(l ? l.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="z. B. gasthaus.muster"></label>
+            <div class="fld"><span>${l ? 'Neues Passwort <small class="muted">(leer = unverändert)</small>' : 'Startpasswort'}</span>
+              <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"><button type="button" class="btn" data-kact="gen">Vorschlag</button></div></div>
+            <label class="check span2"><input type="checkbox" name="mustChange" checked> Kunde muss das Passwort bei der ersten Anmeldung ändern</label>
+            <label class="check span2"><input type="checkbox" name="loginActive"${!l || l.active ? ' checked' : ''}> Zugang aktiv</label>
+            ${l && l.lockedUntil ? `<label class="check span2 st-err"><input type="checkbox" name="unlock" checked> Sperre nach Fehlversuchen aufheben (gesperrt bis ${esc(timeOnly(new Date(l.lockedUntil * 1000).toISOString()))} Uhr)</label>` : ''}
+            ${l ? `<p class="hint span2">Letzte Anmeldung: ${l.lastLogin ? esc(dateTime(l.lastLogin)) : 'noch nie'}${l.pwSet ? ` · Passwort gesetzt ${esc(dateTime(l.pwSet))}` : ''}${c.sessions ? ` · ${plural(c.sessions, 'aktive Sitzung', 'aktive Sitzungen')}` : ''}${l.mustChange ? ' · Startpasswort noch nicht geändert' : ''}</p>` : ''}
+          </div>
+          ${l ? '<p class="hint k-nologin" hidden>Beim Speichern wird der Zugang entfernt und der Kunde abgemeldet.</p>' : ''}
+        </fieldset>
+        <p class="form-err" id="kunde-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot">
+        <span class="left">${c ? `<button type="button" class="btn sm ghost" data-kact="del" style="color:var(--accent)">${icon('trash', 'sm')}Kunde löschen</button>` : ''}</span>
+        <button type="button" class="btn" data-close>Abbrechen</button>
+        <button type="submit" class="btn primary">${c ? 'Speichern' : 'Kunde anlegen'}</button>
+      </div>`;
+    dlgKunde.showModal();
+    $('#kunde-body [name="firma"]').focus();
+  }
+  $('#kunde-body').addEventListener('change', (e) => {
+    if (e.target.name === 'hasLogin') {
+      $('#kunde-body .k-login').hidden = !e.target.checked;
+      const n = $('#kunde-body .k-nologin'); if (n) n.hidden = e.target.checked;
+    }
+  });
+  $('#kunde-body').addEventListener('input', (e) => {
+    if (e.target.name !== 'firma' || editKid) return;
+    const u = $('#kunde-body [name="username"]');
+    if (!u.dataset.touched) u.value = unameFrom(e.target.value);
+  });
+  $('#kunde-body').addEventListener('keydown', (e) => { if (e.target.name === 'username') e.target.dataset.touched = '1'; });
+  dlgKunde.addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-kact]')?.dataset.kact;
+    if (a === 'gen') { const i = $('#kunde-body [name="password"]'); i.value = genPassword(); i.select(); return; }
+    if (a === 'del') {
+      const c = kunden.find((x) => x.id === editKid);
+      if (!(await confirmBox('Kunde löschen?', `„${esc(c.firma)}“ wird mit Stammdaten und Zugang gelöscht; eine laufende Anmeldung endet sofort. Die Einträge im Protokoll bleiben erhalten. Alternativ den Kunden nur auf „inaktiv“ setzen.`, 'Löschen', true))) return;
+      try { const r = await api('kunde_delete', { body: { id: c.id, rev: kundenRev } }); kundenRev = r.rev; dlgKunde.close(); toast(`Kunde „${c.firma}“ gelöscht.`); renderKundenView(); }
+      catch (ex) { $('#kunde-err').textContent = ex.message; }
+    }
+  });
+  $('#kunde-body').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, err = $('#kunde-err');
+    err.textContent = '';
+    const c = editKid ? kunden.find((x) => x.id === editKid) : null;
+    const body = { id: editKid || '', rev: kundenRev, active: f.active.checked, angebote: $$('#kunde-body [name="angebot"]:checked').map((x) => x.value) };
+    for (const k of ['firma', 'nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
+    const pw = f.password.value.trim();
+    if (f.hasLogin.checked) {
+      if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
+      if (!(c && c.login) && !pw) { err.textContent = 'Bitte ein Startpasswort festlegen (z. B. über „Vorschlag“).'; f.password.focus(); return; }
+      body.login = { username: f.username.value.trim(), password: pw, mustChange: f.mustChange.checked, active: f.loginActive.checked, unlock: !!(f.unlock && f.unlock.checked) };
+    } else if (c && c.login) {
+      if (!(await confirmBox('Zugang entfernen?', `Der Zugang „${esc(c.login.username)}“ wird entfernt; der Kunde kann sich nicht mehr anmelden. Die Stammdaten bleiben erhalten.`, 'Zugang entfernen', true))) return;
+      body.login = { remove: true };
+    } else body.login = null;
+    const btn = f.querySelector('[type="submit"]');
+    btn.disabled = true;
+    try {
+      const r = await api('kunde_save', { body });
+      kundenRev = r.rev;
+      dlgKunde.close();
+      toast(pw && body.login ? `Gespeichert. Zugangsdaten für „${r.customer.login.username}“ jetzt sicher an den Kunden weitergeben – das Passwort wird nicht noch einmal angezeigt.` : c ? `Änderungen an „${r.customer.firma}“ gespeichert.` : `Kunde „${r.customer.firma}“ angelegt.`, pw ? 7000 : 3200);
+      renderKundenView();
+    } catch (ex) { err.textContent = ex.message; if (ex.status === 409) { kunden = null; } } finally { btn.disabled = false; }
+  });
+
   /* ======================= Protokoll (Administrator) ======================= */
   let logData = null, logMonth = '', logUser = '', logType = '', logQ = '';
   const logOpen = new Set();
@@ -2794,10 +2958,11 @@
     ['master', 'Stammdaten'],
     ['auth', 'Anmeldungen'],
     ['user', 'Nutzerverwaltung'],
+    ['kunden', 'Kunden (Stammdaten und Anmeldungen)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth' }[a] || '');
-  const ACTION_LABEL = { offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden' }[a] || '');
+  const ACTION_LABEL = { customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
