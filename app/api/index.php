@@ -32,6 +32,7 @@
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
+ *   POST ?action=mail_konto_save   Postfach/Absender speichern (nur Administrator; Passwort verschlüsselt, nie zurückgegeben)
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
  *   POST ?action=user_save | user_delete
@@ -875,7 +876,7 @@ function mail_send_many(array $cfg, array $jobs): array
                 $res[$k] = ['ok' => true];
             } catch (RuntimeException $e) {
                 $res[$k] = ['ok' => false, 'error' => $e->getMessage()];
-                if (preg_match('/Verbindung|Anmeldung|Verschlüssel|nicht bereit|Begrüßung|nur an einen Server/', $e->getMessage())) {
+                if (preg_match('/Verbindung|Anmeldung|Verschlüssel|nicht bereit|Begrüßung|nur an einen Server|entschlüsselt/', $e->getMessage())) {
                     foreach ($jobs as $k2 => $x) if (!isset($res[$k2])) $res[$k2] = ['ok' => false, 'error' => $e->getMessage()];
                     break;
                 }
@@ -1231,7 +1232,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1487,8 +1488,55 @@ try {
             $m = mail_cfg();
             $last = array_slice(store_read('mailversand') ?? [], -200);
             respond(['ok' => true, 'configured' => (bool)$m && (bool)mail_base_url(), 'baseUrl' => mail_base_url(),
-                     'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== ''] : null,
+                     'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== '', 'passError' => $m['passError'], 'source' => $m['source']] : null,
+                     'account' => ($a = mail_account()) ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '', 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null,
+                     'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'sodium' => function_exists('sodium_crypto_secretbox'),
                      'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last)]);
+        }
+
+        case 'mail_konto_save': {
+            $me = require_auth(true, 'admin');
+            $b = body();
+            $old = mail_account();
+            if (!empty($b['remove'])) {
+                if ($old) { store_write('mailkonto', ['removed' => now()]); audit('mail', 'Postfach-Einstellungen entfernt', [['k' => 'mail|konto', 'code' => '', 'name' => 'E-Mail', 'f' => 'Postfach', 'from' => $old['user'] . ' @ ' . $old['host'], 'to' => 'entfernt']]); }
+                respond(['ok' => true]);
+            }
+            $host = strtolower(trim((string)($b['host'] ?? '')));
+            if (!preg_match('/^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/', $host)) fail('Bitte einen gültigen Mailserver angeben (z. B. smtp.hostinger.com).', 422);
+            $secure = in_array($b['secure'] ?? '', ['ssl', 'starttls', 'none'], true) ? $b['secure'] : 'ssl';
+            if ($secure === 'none' && !in_array($host, ['127.0.0.1', 'localhost'], true)) fail('Unverschlüsselter Versand ist nur an einen Server auf demselben Rechner erlaubt. Bitte SSL oder STARTTLS wählen.', 422);
+            $port = (int)($b['port'] ?? 0);
+            if ($port < 1 || $port > 65535) fail('Bitte einen gültigen Port angeben (meist 465 für SSL oder 587 für STARTTLS).', 422);
+            $user = mail_clean_header(mb_substr((string)($b['user'] ?? ''), 0, 160));
+            $from = trim((string)($b['from'] ?? ''));
+            if (filter_var($from, FILTER_VALIDATE_EMAIL) === false) fail('Bitte eine gültige Absenderadresse angeben.', 422);
+            $reply = trim((string)($b['replyTo'] ?? ''));
+            if ($reply !== '' && filter_var($reply, FILTER_VALIDATE_EMAIL) === false) fail('Die Antwortadresse ist ungültig.', 422);
+            $name = mb_substr(mail_clean_header((string)($b['fromName'] ?? '')), 0, 80);
+            $pw = (string)($b['password'] ?? '');
+            if (strlen($pw) > 500) fail('Das Passwort ist zu lang.', 422);
+            $same = $old && $old['host'] === $host && (int)$old['port'] === $port && ($old['user'] ?? '') === $user && $old['secure'] === $secure;
+            if ($pw === '') {
+                // Das gespeicherte Passwort wird nur an denselben Server/Benutzer weiterverwendet – nie an einen geänderten Server
+                if (!$same && $user !== '') fail('Bei neuem oder geändertem Server, Port, Verschlüsselung oder Benutzer bitte das Passwort des Postfachs (erneut) eingeben.', 422);
+                $enc = $same ? (string)($old['passEnc'] ?? '') : '';
+            } else {
+                try { $enc = mail_encrypt($pw); } catch (RuntimeException $e) { fail($e->getMessage(), 500); }
+            }
+            $new = ['host' => $host, 'port' => $port, 'secure' => $secure, 'user' => $user, 'passEnc' => $enc, 'from' => $from, 'fromName' => $name, 'replyTo' => $reply, 'updatedAt' => now(), 'updatedBy' => $me['name']];
+            store_write('mailkonto', $new);
+            $ch = [];
+            foreach (['host' => 'Mailserver', 'port' => 'Port', 'secure' => 'Verschlüsselung', 'user' => 'Benutzer', 'from' => 'Absenderadresse', 'fromName' => 'Absendername', 'replyTo' => 'Antwortadresse'] as $f => $lab) {
+                $from0 = $old ? (string)($old[$f] ?? '') : ''; $to0 = (string)$new[$f];
+                if ($from0 !== $to0) $ch[] = ['k' => "mail|$f", 'code' => '', 'name' => 'E-Mail', 'f' => $lab, 'from' => $from0, 'to' => $to0];
+            }
+            if ($pw !== '') $ch[] = ['k' => 'mail|pw', 'code' => '', 'name' => 'E-Mail', 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt'];
+            if ($ch) audit('mail', $old ? 'Postfach-Einstellungen geändert' : 'Postfach für den E-Mail-Versand eingerichtet', $ch);
+            // Verbindung und Anmeldung gleich prüfen (ohne E-Mail zu senden)
+            $conn = ['ok' => true];
+            try { $t = new Smtp(mail_cfg()); $t->open(); $t->close(); } catch (RuntimeException $e) { $conn = ['ok' => false, 'error' => $e->getMessage()]; }
+            respond(['ok' => true, 'connection' => $conn]);
         }
 
         case 'mail_save': {

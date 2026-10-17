@@ -5,6 +5,9 @@
 # Sofort sichern:   sh /opt/wochenangebot/deploy/sichern.sh --jetzt
 #
 # Jede Sicherung wird direkt nach dem Erstellen probeweise entpackt und geprüft (alle Datendateien lesbar).
+# Nicht gesichert wird der Schlüssel für das im Eingabebereich hinterlegte Postfach-Passwort (mail-schluessel.php):
+# Sicherungen enthalten das Passwort damit nur verschlüsselt; nach einer Wiederherstellung auf neuem Server muss es
+# unter Verwaltung → E-Mail neu eingegeben werden.
 # Ablage: /opt/wochenangebot/sicherungen (nur für root lesbar, nicht über das Web erreichbar), die letzten 30 Stände.
 # Status: daten/sicherung.php (Anzeige im Eingabebereich unter „Sicherheit“). Jeder Abbruch – auch ein
 # unerwarteter – hinterlässt dort einen Fehlerstatus. Optional meldet das Skript Erfolg/Fehler an einen
@@ -60,12 +63,12 @@ FREI=$(df -Pk "$ZIEL" | awk 'NR==2 {print $4}')
 
 STAMP=$(date -u +%Y-%m-%d_%H%M%S)
 DATEI="$ZIEL/daten-$STAMP.tar.gz"
-tar czf "$DATEI.tmp" -C "$BASIS/daten" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' . || { rm -f "$DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden"; }
+tar czf "$DATEI.tmp" -C "$BASIS/daten" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden"; }
 
 # Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
 PRUEF=$(mktemp -d)
 tar xzf "$DATEI.tmp" -C "$PRUEF" || { rm -f "$DATEI.tmp"; fehler "Archiv nicht lesbar"; }
-QUELLE=$(cd "$BASIS/daten" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' | wc -l)
+QUELLE=$(cd "$BASIS/daten" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
 DATEIEN=$(find "$PRUEF" -name '*.php' | wc -l)
 FEHLER=0
 INHALT=true
