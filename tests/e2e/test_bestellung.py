@@ -167,6 +167,13 @@ with sync_playwright() as p:
     a.wait_for_function("document.querySelector('#toast').textContent.includes('Gespeichert')", timeout=8000)
     check('recipients saved from UI', A.call('mail_status')[1]['orders']['to'] == ['bestellung@example.org', 'chef@example.org'])
     a.locator('#ml-orders').screenshot(path=SH + '/bestellung-einstellungen.png')
+    # Mitarbeiter und Kunde im selben Browser: Startseite führt trotzdem zum Kundenangebot mit Mengen
+    a.goto(B + '/'); a.wait_for_selector('tr.row')
+    a.click('#btn-kunde-login'); a.fill('#kl-form [name=username]', 'kantine.sued'); a.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); a.click('#kl-form [type=submit]')
+    a.wait_for_url(re.compile(r'angebot=edeka')); a.wait_for_selector('tr.row .qty')
+    check('staff + customer in one browser: own offer with quantities', a.locator('tr.row .qty').count() > 10)
+    a.goto(B + '/?angebot=bela'); a.wait_for_selector('tr.row')
+    check('staff + customer: explicitly linked foreign offer stays, hint + switch, no quantities', 'nicht für Sie freigeschaltet' in a.inner_text('#preview-banner') and a.locator('.qty').count() == 0 and a.locator('#preview-banner [data-kswitch=edeka]').count() == 1)
     check('no JS errors', not errs, errs[:3])
     br.close()
 

@@ -258,7 +258,9 @@ function renderBanner() {
   if (!PREVIEW && KUNDE) {
     const list = KUNDE.angebote;
     b.hidden = false;
-    b.innerHTML = `<div class="banner-inner k-banner">${icon('user')}<p>Angemeldet als <strong>${esc(KUNDE.firma)}</strong>${KUNDE.ansprechpartner ? ' · ' + esc(KUNDE.ansprechpartner) : ''}</p>
+    const own = list.some((o) => o.id === (OFFER || 'std'));
+    b.innerHTML = `<div class="banner-inner k-banner">${icon('user')}<p>Angemeldet als <strong>${esc(KUNDE.firma)}</strong>${KUNDE.ansprechpartner ? ' · ' + esc(KUNDE.ansprechpartner) : ''}${!own && list.length ? ' – dieses Angebot ist nicht für Sie freigeschaltet; Bestellen ist nur in Ihren Angeboten möglich.' : ''}</p>
+      ${!own && list.length === 1 ? `<div class="k-switch"><button type="button" class="btn sm on" data-kswitch="${esc(list[0].id)}">Zu ${esc(list[0].name)}</button></div>` : ''}
       ${list.length > 1 ? `<div class="k-switch" role="tablist" aria-label="Angebot wählen">${list.map((o) => `<button type="button" role="tab" class="btn sm${o.id === (OFFER || 'std') ? ' on' : ''}" aria-selected="${o.id === (OFFER || 'std')}" data-kswitch="${esc(o.id)}">${esc(o.name)}</button>`).join('')}</div>` : ''}</div>`;
     return;
   }
@@ -1209,10 +1211,12 @@ async function kundeStart() {
   KUNDE = st.kunde || null; KCSRF = st.csrf || '';
   KORDER = !!(KUNDE && st.bestellung && !KUNDE.mustChange && !PREVIEW);
   renderKundeBtn();
-  if (!KUNDE || KSTAFF || KUNDE.mustChange) return;
+  if (!KUNDE || KUNDE.mustChange) return;
   const ids = KUNDE.angebote.map((o) => o.id);
   if (!ids.length) return;
-  if (!ids.includes(OFFER || 'std')) {                              // nicht freigeschaltet → erstes eigenes Angebot
+  // nicht freigeschaltet → erstes eigenes Angebot. Ist im selben Browser zusätzlich ein Mitarbeiter angemeldet,
+  // gilt das nur für die Startseite; ein ausdrücklich verlinktes Angebot (?angebot=…) bleibt dann sichtbar.
+  if (!ids.includes(OFFER || 'std') && (!KSTAFF || !OFFER)) {
     OFFER = ids[0] === 'std' ? '' : ids[0];
     history.replaceState(null, '', setOfferParam(OFFER).toString());
   }
