@@ -23,6 +23,7 @@ SUITES = {
     'master':     (8790, 'data-seed', True),
     'stock':      (8790, 'data-seed', True),
     'editor_aux': (8790, 'data-seed', True),
+    'auth_hardening': (8790, 'data-seed', True),
     'security':   (8790, 'data-seed', True),
     'geo':        (8790, 'data-seed', True),
     'geo_ip':     (8790, 'data-seed', True),

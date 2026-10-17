@@ -5,7 +5,7 @@ Alle Tests laufen gegen **Testkopien mit anonymisierten Testdaten** – nie gege
 | Ebene | Aufruf | Inhalt |
 | --- | --- | --- |
 | Unit | `node tests/unit/bestand_parser.test.js` | Bestands-Parser der App gegen unabhängige Referenzauswertung |
-| Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | 13 Gruppen, über 400 Prüfungen im echten Browser gegen frische PHP-Testserver |
+| Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | 14 Gruppen, über 400 Prüfungen im echten Browser gegen frische PHP-Testserver |
 | Betrieb | `sh tests/deploy/test_sichern.sh`, `sh tests/deploy/test_freigabe.sh` | Datensicherung; Release-Modus mit Healthcheck und automatischem Rückfall |
 
 Voraussetzungen lokal: PHP 8.3, Node.js, Python 3.12, `pip install -r tests/requirements.txt`, `python -m playwright install chromium`.
@@ -26,7 +26,8 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | frontend | 55 | öffentliche Seite: Filter, Suche, Sortierung, CSV, Druck, keine internen Daten |
 | hist | 35 | Preisverlauf, Import alter Listen, Datendialog |
 | users | 48 | Rollen, Rechte serverseitig, Protokoll, Sperren |
-| security | 38 | 2FA, Wiederherstellungscodes, Sitzungen, IP-Freigabe, CSP |
+| auth_hardening | 38 | direkte HTTP-Regressionen für Faktorwechsel, Sitzungswiderruf und Kontosperre |
+| security | 41 | 2FA, Wiederherstellungscodes, Sitzungen, IP-Freigabe, CSP |
 | geo, geo_ip | 42 + 8 | Ländersperre, Selbstaussperr-Schutz, IP-Suche |
 | stock | 37 | Bestandsimport, MHD-Regeln, keine Mengen öffentlich |
 | master | 29 | Stammdaten, Bezeichnungsregeln |

@@ -214,10 +214,10 @@
   });
 
   /* Zwei-Faktor einrichten (Anmeldeschirm und Dialog) */
-  async function renderTwofaSetup(host, onDone) {
+  async function renderTwofaSetup(host, onDone, password = '') {
     host.innerHTML = '<div class="loading"><div class="spinner"></div>Wird vorbereitet …</div>';
     let r;
-    try { r = await api('twofa_begin', { body: {} }); } catch (ex) { host.innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; return; }
+    try { r = await api('twofa_begin', { body: { password } }); } catch (ex) { host.innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; return; }
     let svg = '';
     try { const q = window.qrcode(0, 'M'); q.addData(r.uri); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch { svg = ''; }
     host.innerHTML = `<div class="tf-setup">
@@ -281,7 +281,7 @@
           <button type="button" class="btn" data-tfd="renew">Neu einrichten (neues Handy / neue Codes)</button>
           ${me.twofaRequired ? '' : '<button type="button" class="btn" data-tfd="off" style="color:var(--accent)">Ausschalten</button>'}
         </div>
-        <div id="tf-off" hidden><label class="fld"><span>Zum Ausschalten Passwort eingeben</span><input type="password" id="tf-pw" autocomplete="current-password"></label><p class="form-err" id="tf-err"></p><button type="button" class="btn primary" data-tfd="off-go">Ausschalten</button></div>
+        <div id="tf-off" hidden><label class="fld"><span>Aktuelles Passwort eingeben</span><input type="password" id="tf-pw" autocomplete="current-password"></label><p class="form-err" id="tf-err"></p><button type="button" class="btn primary" data-tfd="off-go">Ausschalten</button></div>
       </div>`;
     d.showModal();
   }
@@ -289,8 +289,14 @@
     const b = e.target.closest('[data-tfd]');
     if (!b) return;
     const a = b.dataset.tfd;
-    if (a === 'renew') renderTwofaSetup($('#tf-host'), () => { $('#dlg-twofa').close(); toast('Zwei-Faktor-Anmeldung neu eingerichtet.'); });
-    if (a === 'off') { $('#tf-off').hidden = false; $('#tf-pw').focus(); }
+    if (a === 'renew' || a === 'off') {
+      $('#tf-off').hidden = false;
+      const go = $('#tf-off button');
+      go.dataset.tfd = a === 'renew' ? 'renew-go' : 'off-go';
+      go.textContent = a === 'renew' ? 'Neu einrichten' : 'Ausschalten';
+      $('#tf-pw').focus();
+    }
+    if (a === 'renew-go') renderTwofaSetup($('#tf-host'), () => { $('#dlg-twofa').close(); toast('Zwei-Faktor-Anmeldung neu eingerichtet.'); }, $('#tf-pw').value);
     if (a === 'off-go') {
       try { const r = await api('twofa_disable', { body: { password: $('#tf-pw').value } }); me = r.user; $('#dlg-twofa').close(); toast('Zwei-Faktor-Anmeldung ausgeschaltet.'); }
       catch (ex) { $('#tf-err').textContent = ex.message; }
@@ -2474,9 +2480,9 @@
           <div class="role-pick">${['admin', 'editor', 'viewer'].map((r) => `<label class="role-opt"><input type="radio" name="role" value="${r}"${(u ? u.role : 'editor') === r ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(ROLE_LABEL[r])}</strong><small>${esc(ROLE_DESC[r])}</small></span></label>`).join('')}</div>
         </div>
         <label class="check span2"><input type="checkbox" name="active"${!u || u.active ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
-        <div class="fld span2"><span>${u ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
+        ${self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2"><span>${u ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
           <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u ? '' : ' required'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
-        </div>
+        </div>`}
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
         ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
@@ -2503,7 +2509,7 @@
     e.preventDefault();
     const f = e.target, err = $('#user-err');
     err.textContent = '';
-    const pw = f.password.value.trim();
+    const pw = f.password ? f.password.value.trim() : '';
     if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
     const u = editUid ? users.find((x) => x.id === editUid) : null;
     const body = {
