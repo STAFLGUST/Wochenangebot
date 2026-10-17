@@ -188,6 +188,33 @@ code, r = A.call('mail_status')
 check('mail not configured without server settings', code == 200 and r['configured'] is False and r['smtp'] is None)
 check('sending without settings is refused clearly', A.call('kunde_mail', {'id': K1, 'type': 'angebot'})[0] == 409)
 
+# ---------- Merkliste je Kunde ----------
+import os
+M = Client('198.51.100.50'); M.call('kunde_login', {'username': 'gasthaus.muster', 'password': 'Neu-Gesetzt-Kennwort-9'})
+code, r = M.call('kunde_merkliste')
+check('merkliste: empty at first', code == 200 and r['keys'] == [] and r['exists'] is False)
+check('merkliste: anonymous gets 401', Client('198.51.100.52').call('kunde_merkliste')[0] == 401)
+check('merkliste: staff session is no customer', A.call('kunde_merkliste')[0] == 401 and A.call('kunde_merkliste_save', {'keys': ['x']})[0] == 401)
+tok = M.csrf; M.csrf = 'falsch'
+check('merkliste: save needs customer csrf', M.call('kunde_merkliste_save', {'keys': ['a']})[0] == 403)
+M.csrf = tok
+code, r = M.call('kunde_merkliste_save', {'keys': ['10601|roastbeef|x', '10601|roastbeef|x', '', 5, 'a' * 300, 'Kalb|ä|ü#2', 'x\ny']})
+check('merkliste: saved, duplicates + invalid entries dropped', code == 200 and r['count'] == 2, r)
+M2 = Client('198.51.100.51'); M2.call('kunde_login', {'username': 'gasthaus.muster', 'password': 'Neu-Gesetzt-Kennwort-9'})
+check('merkliste: same list on another device', M2.call('kunde_merkliste')[1]['keys'] == ['10601|roastbeef|x', 'Kalb|ä|ü#2'])
+check('merkliste: limited to 1000 entries', M.call('kunde_merkliste_save', {'keys': [f'k{i}' for i in range(1500)]})[1]['count'] == 1000)
+code, r = A.call('kunden')
+code, r = A.call('kunde_save', {**base, 'rev': r['rev'], 'firma': 'Merk Test', 'nr': 'K-MT', 'email': '', 'angebote': ['std', 'bela'], 'login': {'username': 'merk.test', 'password': 'Merk-Kennwort-31', 'mustChange': False, 'active': True}})
+KMT = r['customer']['id']
+MT = Client('198.51.100.53'); MT.call('kunde_login', {'username': 'merk.test', 'password': 'Merk-Kennwort-31'})
+check('merkliste: separate per customer', MT.call('kunde_merkliste')[1]['keys'] == [])
+MT.call('kunde_merkliste_save', {'keys': ['nur-merk-test']})
+code, r = A.call('kunden')
+TMP = A.call('kunde_save', {**base, 'rev': r['rev'], 'firma': 'Wegwerf KG', 'nr': 'K-WW', 'email': '', 'angebote': ['std'], 'login': {'username': 'weg.werf', 'password': 'Weg-Kennwort-42', 'mustChange': False, 'active': True}})[1]
+W = Client('198.51.100.54'); W.call('kunde_login', {'username': 'weg.werf', 'password': 'Weg-Kennwort-42'}); W.call('kunde_merkliste_save', {'keys': ['weg']})
+A.call('kunde_delete', {'id': TMP['customer']['id'], 'rev': TMP['rev']})
+check('merkliste: deleted with the customer', TMP['customer']['id'] not in open(os.path.join(os.environ['UDATA'], 'merklisten.php'), encoding='utf-8').read())
+
 # ---------- Oberfläche ----------
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -198,7 +225,7 @@ with sync_playwright() as p:
     check('nav: Kunden visible for admin', a.is_visible('#vt-kunden'))
     a.click('#vt-kunden'); a.wait_for_selector('#view-kunden tr[data-kid]')
     rows = a.locator('#view-kunden tr[data-kid]')
-    check('list shows customers', rows.count() == 2 and 'Gasthaus Muster GmbH' in rows.first.inner_text(), rows.count())
+    check('list shows customers', rows.count() == 3 and 'Gasthaus Muster GmbH' in rows.first.inner_text(), rows.count())
     check('list shows offer chips', 'Edeka' in rows.first.inner_text() and 'Wochenangebot' in rows.first.inner_text())
     a.fill('#k-q', 'ohne'); a.wait_for_timeout(100)
     check('search filters list', a.locator('#view-kunden tr[data-kid]').count() == 1)
@@ -271,6 +298,33 @@ with sync_playwright() as p:
     c.fill('#kl-form [name=username]', 'hotel.seeblick'); c.fill('#kl-form [name=password]', 'Seeblick-Eigen-2026'); c.click('#kl-form [type=submit]')
     c.wait_for_selector('tr.row')
     check('login from locked page opens requested assigned offer', 'angebot=bela' in c.url and 'Bela' in c.inner_text('#topbar h1'), c.url)
+    # Merkliste im Kundenkonto
+    star = c.locator('tr.row .star').first; fkey = star.get_attribute('data-fav')
+    star.click(); c.wait_for_timeout(700)
+    check('star on customer offer', c.inner_text('#fav-count') == '1')
+    c.click('#tab-fav'); c.wait_for_selector('#favbar:not([hidden])')
+    check('favbar says stored in customer account', 'Kundenkonto' in c.inner_text('#favbar'), c.inner_text('#favbar'))
+    c2ctx = br.new_context(viewport={'width': 1280, 'height': 900}); c2 = c2ctx.new_page(); c2.on('pageerror', lambda e: cerr.append(str(e)))
+    c2.goto(B + '/'); c2.wait_for_selector('#btn-kunde-login')
+    c2.click('#btn-kunde-login'); c2.fill('#kl-form [name=username]', 'hotel.seeblick'); c2.fill('#kl-form [name=password]', 'Seeblick-Eigen-2026'); c2.click('#kl-form [type=submit]')
+    c2.wait_for_url(re.compile(r'angebot=handelshof-efs')); c2.wait_for_selector('tr.row')
+    check('merkliste follows the customer to another device', c2.inner_text('#fav-count') == '1' and c2.get_attribute(f'tr.row .star[data-fav="{fkey}"]', 'aria-pressed') == 'true')
+    c2.click('#btn-kunde'); c2.click('#menu-kunde [data-kact=logout]'); c2.wait_for_selector('#btn-kunde-login'); c2.wait_for_selector('tr.row')
+    check('after logout the customer list is not left in the browser', c2.inner_text('#fav-count') == '0')
+    # Browser-Merkliste wird beim ersten Anmelden übernommen
+    c3 = c2ctx.new_page(); c3.goto(B + '/'); c3.wait_for_selector('tr.row')
+    k3 = c3.locator('tr.row .star').nth(2).get_attribute('data-fav'); c3.locator('tr.row .star').nth(2).click(); c3.wait_for_timeout(100)
+    r0 = A.call('kunden')[1]
+    A.call('kunde_save', {**base, 'rev': r0['rev'], 'firma': 'Neu Merk', 'nr': 'K-NM', 'email': '', 'angebote': ['std'], 'login': {'username': 'neu.merk', 'password': 'Neu-Merk-Kennwort-7', 'mustChange': False, 'active': True}})
+    c3.click('#btn-kunde-login'); c3.fill('#kl-form [name=username]', 'neu.merk'); c3.fill('#kl-form [name=password]', 'Neu-Merk-Kennwort-7'); c3.click('#kl-form [type=submit]')
+    c3.wait_for_function("document.querySelector('#btn-kunde')"); c3.wait_for_selector('tr.row'); c3.wait_for_timeout(900)
+    NM = Client('198.51.100.55'); NM.call('kunde_login', {'username': 'neu.merk', 'password': 'Neu-Merk-Kennwort-7'})
+    check('first login takes over the browser list into the account', NM.call('kunde_merkliste')[1]['keys'] == [k3] and c3.inner_text('#fav-count') == '1')
+    c3.click('#btn-kunde'); c3.click('#menu-kunde [data-kact=logout]'); c3.wait_for_selector('#btn-kunde-login')
+    c3.goto(B + '/'); c3.wait_for_selector('#btn-kunde-login')
+    c3.click('#btn-kunde-login'); c3.fill('#kl-form [name=username]', 'merk.test'); c3.fill('#kl-form [name=password]', 'Merk-Kennwort-31'); c3.click('#kl-form [type=submit]')
+    c3.wait_for_function("document.querySelector('#btn-kunde')"); c3.wait_for_selector('tr.row'); c3.wait_for_timeout(900)
+    check('existing account list wins over browser list', MT.call('kunde_merkliste')[1]['keys'] == ['nur-merk-test'] and c3.inner_text('#fav-count') == '0')
     # Mobil
     m = cctx.new_page(); m.set_viewport_size({'width': 390, 'height': 800}); m.goto(B + '/?angebot=bela'); m.wait_for_selector('tr.row, .card')
     check('mobile: no horizontal scroll', m.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
