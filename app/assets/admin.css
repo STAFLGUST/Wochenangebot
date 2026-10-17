@@ -667,3 +667,4 @@ body.ro .vtog { display: none; }
 #view-mail .fld textarea { width: 100%; }
 @media (max-width: 760px) { #view-mail .sec-rows { grid-template-columns: 1fr; } }
 #view-mail .sec-grid { grid-template-columns: 1fr; }
+.ml-orows { margin-top: 12px; } .ml-ohint { margin: 8px 0 0; font-size: 13px; }

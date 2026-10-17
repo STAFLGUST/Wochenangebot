@@ -380,8 +380,8 @@ function renderTable(list, grouped) {
   let sec = null, grp = null;
   for (const it of list) {
     if (grouped) {
-      if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="s-row"><th colspan="7" scope="colgroup"><div class="s-in">${esc(sec)}</div></th></tr>`); }
-      if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="7" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span><span class="g-meta">${info(grp)}</span></div></th></tr>`); }
+      if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="s-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="s-in">${esc(sec)}</div></th></tr>`); }
+      if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span><span class="g-meta">${info(grp)}</span></div></th></tr>`); }
     }
     rows.push(`<tr class="row" data-id="${it.id}">
       <td class="c-fav">${starHTML(it)}</td>
@@ -391,12 +391,12 @@ function renderTable(list, grouped) {
       <td class="c-cat"><span class="cat-cell">${monoHTML(it.category)}${esc(it.category)}</span></td>
       <td class="c-origin">${it.origin ? hl(it.origin) : '<span class="muted" title="In der Liste nicht angegeben">—</span>'}${grouped ? '' : `<div class="sub">${esc(it.group)}</div>`}</td>
       <td class="c-cond">${condBadge(it.condition)}</td>
-      <td class="c-price">${priceHTML(it)}</td></tr>`);
+      <td class="c-price">${priceHTML(it)}</td>${KORDER ? `<td class="c-qty">${qtyHTML(it)}</td>` : ''}</tr>`);
   }
   return `<table class="grid"><caption class="sr-only">Artikel der Angebotsliste</caption><thead><tr>
     <th class="c-fav" scope="col"><span class="sr-only">Merken</span></th>
     ${thHTML('code', 'Art.-Nr.', 'c-code')}${thHTML('name', 'Bezeichnung', 'c-name')}${thHTML('cat', 'Fleischart', 'c-cat')}
-    ${thHTML('origin', grouped ? 'Herkunft' : 'Herkunft / Gruppe', 'c-origin')}${thHTML('cond', 'Zustand', 'c-cond')}${thHTML('price', 'Preis €/kg', 'c-price')}
+    ${thHTML('origin', grouped ? 'Herkunft' : 'Herkunft / Gruppe', 'c-origin')}${thHTML('cond', 'Zustand', 'c-cond')}${thHTML('price', 'Preis €/kg', 'c-price')}${KORDER ? '<th class="c-qty" scope="col"><span class="qty-h">Menge kg</span></th>' : ''}
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
@@ -409,6 +409,7 @@ function cardHTML(it, grouped) {
     <div class="card-tags">${condBadge(it.condition)}${!grouped && it.brand ? `<span class="tag brand">${esc(it.brand)}</span>` : ''}${feats}</div>
     ${grouped ? '' : `<p class="card-group">${esc(it.group)}</p>`}
     <div class="card-price">${priceHTML(it)}</div>
+    ${KORDER ? `<label class="card-qty"><span>Menge kg</span>${qtyHTML(it)}</label>` : ''}
   </article>`;
 }
 
@@ -445,6 +446,7 @@ function renderList() {
 
 function render() {
   compute();
+  renderOrderbar();
   renderHits();
   renderChips();
   updateFacetUI();
@@ -1000,7 +1002,7 @@ function bind() {
 
   /* Dialoge */
   for (const d of $$('dialog')) {
-    if (d.id.startsWith('dlg-kunde')) continue;                    // eigene Behandlung in bindKunde()
+    if (d.id.startsWith('dlg-kunde') || d.id === 'dlg-order') continue;   // eigene Behandlung in bindKunde()/bindOrder()
     d.addEventListener('click', (e) => {
       if (e.target === d) d.close();
       if (e.target.closest('[data-close]')) d.close();
@@ -1034,6 +1036,153 @@ function bind() {
   setH();
 }
 
+/* ---------- Bestellwunsch (nur angemeldete Kunden, wenn freigeschaltet) ----------
+   Mengen werden je Kunde und Angebot im Browser gemerkt, bis der Bestellwunsch gesendet ist.
+   Preise berechnet der Server beim Senden selbst aus dem veröffentlichten Angebot. */
+let KORDER = false;
+let cart = new Map();
+const fmtQty = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
+const fmtEur = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const cartKey = () => `bestellung.${KUNDE ? KUNDE.username : '-'}.${OFFER || 'std'}`;
+function parseQty(v) {
+  const t = String(v ?? '').trim().replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+  if (t === '') return 0;
+  return /^\d{1,5}(\.\d{1,2})?$/.test(t) && +t <= 99999 ? +t : NaN;
+}
+function qtyHTML(it) {
+  const q = cart.get(it.id);
+  return `<input class="qty" type="text" inputmode="decimal" autocomplete="off" data-qty="${esc(it.id)}" value="${q ? fmtQty.format(q) : ''}" placeholder="–" aria-label="Menge in kg: ${esc(it.name)}">`;
+}
+function loadCart() {
+  const raw = store.get(cartKey(), {});
+  cart = new Map();
+  let gone = 0;
+  for (const [id, q] of Object.entries(raw || {})) { if (DATA.byId.has(id) && q > 0) cart.set(id, q); else gone++; }
+  if (gone) { saveCart(); toast(`${plural(gone, 'Position wurde', 'Positionen wurden')} aus Ihrem Bestellwunsch entfernt, weil sie nicht mehr im Angebot ${gone === 1 ? 'ist' : 'sind'}.`, 5000); }
+}
+function saveCart() { if (KUNDE) store.set(cartKey(), Object.fromEntries(cart)); }
+const lineSum = (it, q) => Math.round(Math.round(it.price.value * 100) * q) / 100;   // in Cent, wie der Server
+function cartTotals() {
+  let sum = 0, kg = 0, req = 0;
+  for (const [id, q] of cart) {
+    const it = DATA.byId.get(id); if (!it) continue;
+    kg += q;
+    if (it.price.status === 'value') sum += lineSum(it, q); else req++;
+  }
+  return { n: cart.size, sum, kg, req };
+}
+function renderOrderbar() {
+  const bar = $('#orderbar');
+  if (!bar) return;
+  if (!KORDER || !cart.size) { bar.hidden = true; document.body.classList.remove('has-orderbar'); return; }
+  const t = cartTotals();
+  bar.hidden = false; document.body.classList.add('has-orderbar');
+  bar.innerHTML = `<div class="orderbar-in"><span class="ob-sum"><strong>${plural(t.n, 'Position', 'Positionen')}</strong> · ${fmtQty.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}</span>
+    <span class="ob-act"><button type="button" class="btn ghost sm" data-order="clear">Leeren</button><button type="button" class="btn primary" data-order="open">${icon('send')}Bestellwunsch prüfen</button></span></div>`;
+}
+function setQty(id, q, input) {
+  if (Number.isNaN(q)) { if (input) { input.classList.add('invalid'); input.title = 'Bitte eine Menge in kg eingeben, z. B. 12,5'; } return; }
+  if (input) { input.classList.remove('invalid'); input.title = ''; }
+  if (q > 0) cart.set(id, q); else cart.delete(id);
+  saveCart();
+  for (const el of $$(`.qty[data-qty="${CSS.escape(id)}"]`)) if (el !== input) el.value = q ? fmtQty.format(q) : '';
+  renderOrderbar();
+}
+function orderLines() {
+  return [...cart].map(([id, q]) => ({ it: DATA.byId.get(id), q })).filter((x) => x.it).sort((a, b) => a.it.order - b.it.order);
+}
+function openOrder() {
+  const d = $('#dlg-order'), t = cartTotals(), m = DATA.meta;
+  const min = new Date().toISOString().slice(0, 10);
+  $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Bestellwunsch prüfen</h2><p>${esc(offerTitle())}${m.week ? ` · KW ${esc(m.week)}/${esc(m.year || '')}` : ''} · ${esc(KUNDE.firma)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+    <div class="dlg-body">
+      <table class="otab"><thead><tr><th>Artikel</th><th class="r">Menge kg</th><th class="r">Preis €/kg</th><th class="r">Summe</th><th></th></tr></thead><tbody>
+      ${orderLines().map(({ it, q }) => `<tr><td><div class="o-name">${esc(it.name)}</div><div class="sub">${esc([it.code, it.group].filter(Boolean).join(' · '))}</div></td>
+        <td class="r"><input class="qty" type="text" inputmode="decimal" data-qty="${esc(it.id)}" value="${fmtQty.format(q)}" aria-label="Menge in kg: ${esc(it.name)}"></td>
+        <td class="r">${it.price.status === 'value' ? fmtEur.format(it.price.value) : '<span class="muted">auf Anfrage</span>'}</td>
+        <td class="r o-sum" data-sum="${esc(it.id)}">${it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'}</td>
+        <td class="r"><button type="button" class="ibtn" data-order="rm" data-id="${esc(it.id)}" aria-label="Position entfernen: ${esc(it.name)}">${icon('x', 'sm')}</button></td></tr>`).join('')}
+      </tbody><tfoot><tr><td><strong>Summe (ca.)</strong></td><td class="r" id="or-kg"><strong>${fmtQty.format(t.kg)}</strong></td><td></td><td class="r" id="or-sum"><strong>${fmtEur.format(t.sum)} €</strong></td><td></td></tr></tfoot></table>
+      <p class="o-note" id="or-req"${t.req ? '' : ' hidden'}>Zzgl. Positionen mit Preis auf Anfrage.</p>
+      <div class="o-fields">
+        <label class="kfld"><span>Wunschtermin (optional)</span><input type="date" id="or-termin" min="${min}"></label>
+        <label class="kfld"><span>Ihre Bestellnummer / Referenz (optional)</span><input type="text" id="or-ref" maxlength="60"></label>
+        <label class="kfld o-wide"><span>Bemerkung (optional)</span><textarea id="or-bem" rows="3" maxlength="1000" placeholder="z. B. Zuschnitt, Verpackung, Lieferhinweise"></textarea></label>
+      </div>
+      <p class="o-note">Unverbindlicher Bestellwunsch – verbindlich wird die Bestellung erst mit unserer Bestätigung. Preise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.</p>
+      <p class="kerr" id="or-err" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button class="btn" type="button" data-close>Weiter auswählen</button><button class="btn primary" type="button" data-order="send">${icon('send')}Bestellwunsch senden</button></div>`;
+  if (!d.open) d.showModal();
+}
+function refreshOrderDialog() {
+  const t = cartTotals();
+  if (!t.n) { $('#dlg-order').close(); return; }
+  for (const { it, q } of orderLines()) { const c = $(`#order-body [data-sum="${CSS.escape(it.id)}"]`); if (c) c.textContent = it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'; }
+  $('#or-kg').innerHTML = `<strong>${fmtQty.format(t.kg)}</strong>`;
+  $('#or-sum').innerHTML = `<strong>${fmtEur.format(t.sum)} €</strong>`;
+  $('#or-req').hidden = !t.req;
+}
+async function sendOrder(btn) {
+  const err = $('#or-err');
+  err.textContent = '';
+  if ($('#order-body .qty.invalid')) { err.textContent = 'Bitte die markierten Mengen korrigieren.'; return; }
+  btn.disabled = true;
+  try {
+    const r = await kundeApi('kunde_bestellung', {
+      angebot: OFFER || 'std', publishedAt: PUBLISHED_AT || '', termin: $('#or-termin').value, referenz: $('#or-ref').value, bemerkung: $('#or-bem').value,
+      positions: [...cart].map(([id, qty]) => ({ id, qty })),
+    });
+    cart.clear(); saveCart(); renderOrderbar();
+    for (const el of $$('#list .qty')) el.value = '';
+    $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Vielen Dank!</h2><p>Bestellwunsch ${esc(r.nr)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtQty.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €) wurde an uns übermittelt. Wir melden uns mit der Bestätigung.</p>
+        ${r.copy ? `<p class="muted">Eine Kopie haben wir an ${esc(r.copy)} gesendet.</p>` : ''}</div>
+      <div class="dlg-foot"><button class="btn primary" type="button" data-close>Fertig</button></div>`;
+  } catch (ex) {
+    err.textContent = ex.message;
+    btn.disabled = false;
+    if (ex.status === 409 && /aktualisiert|nicht mehr enthalten/.test(ex.message)) {
+      err.textContent = ex.message + ' Die Seite wird gleich neu geladen; Ihre Mengen bleiben erhalten.';
+      setTimeout(() => location.reload(), 2500);
+    }
+  }
+}
+function bindOrder() {
+  const onQty = (e, final) => {
+    const el = e.target.closest('.qty');
+    if (!el) return;
+    const q = parseQty(el.value);
+    if (final || !Number.isNaN(q)) setQty(el.dataset.qty, q, el);
+    if (final && !Number.isNaN(q)) el.value = q ? fmtQty.format(q) : '';
+    if ($('#dlg-order').open) refreshOrderDialog();
+  };
+  for (const host of [$('#list'), $('#order-body')]) {
+    host.addEventListener('input', (e) => onQty(e, false));
+    host.addEventListener('change', (e) => onQty(e, true));
+    host.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || !e.target.matches('.qty')) return;
+      e.preventDefault();
+      const all = $$('.qty', host), i = all.indexOf(e.target);
+      (all[i + 1] || e.target).focus();
+      if (all[i + 1]) all[i + 1].select(); else e.target.blur();
+    });
+  }
+  $('#orderbar').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-order]')?.dataset.order;
+    if (a === 'open') openOrder();
+    if (a === 'clear' && confirm('Alle Mengen aus dem Bestellwunsch entfernen?')) { cart.clear(); saveCart(); render(); }
+  });
+  const d = $('#dlg-order');
+  d.addEventListener('click', (e) => {
+    if (e.target === d || e.target.closest('[data-close]')) { d.close(); return; }
+    const b = e.target.closest('[data-order]');
+    if (!b) return;
+    if (b.dataset.order === 'rm') { setQty(b.dataset.id, 0); for (const el of $$(`#list .qty[data-qty="${CSS.escape(b.dataset.id)}"]`)) el.value = ''; b.closest('tr').remove(); refreshOrderDialog(); }
+    if (b.dataset.order === 'send') sendOrder(b);
+  });
+}
+
 /* ---------- Kunden-Anmeldung ----------
    Kunden melden sich mit Benutzerkennung und Passwort an und sehen nur die für sie freigeschalteten Angebote.
    Die Prüfung erfolgt auf dem Server; hier wird nur die Oberfläche gesteuert. */
@@ -1058,6 +1207,7 @@ async function kundeStart() {
   try { st = await kundeApi('kunde_status'); } catch { return; }   // ohne Antwort: wie bisher öffentlich laden
   KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false;
   KUNDE = st.kunde || null; KCSRF = st.csrf || '';
+  KORDER = !!(KUNDE && st.bestellung && !KUNDE.mustChange && !PREVIEW);
   renderKundeBtn();
   if (!KUNDE || KSTAFF || KUNDE.mustChange) return;
   const ids = KUNDE.angebote.map((o) => o.id);
@@ -1269,6 +1419,7 @@ async function abmeldenStart() {
     return;
   }
   readUrl();
+  if (KORDER) { if (!KUNDE.angebote.some((o) => o.id === (OFFER || 'std')) && !(KSTDPUB && !OFFER)) KORDER = false; else { loadCart(); bindOrder(); document.body.classList.add('can-order'); } }
   renderStatic();
   bind();
   render();

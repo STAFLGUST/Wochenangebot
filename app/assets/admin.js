@@ -2797,7 +2797,7 @@
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
   let kunden = null, kundenRev = 0, kundenQ = '', mailSt = null;
-  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung' };
+  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
   const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
@@ -3052,6 +3052,18 @@
         <p class="form-err" id="ml-err" role="alert"></p>
         <div class="sec-foot ml-foot">${m.account ? `<button type="button" class="btn ghost" data-ml="remove">${icon('trash', 'sm')}Einstellungen entfernen</button>` : ''}<button type="submit" class="btn primary">${icon('check')}Speichern und Verbindung prüfen</button></div>
       </form>
+      <form class="gcard sec-form" id="ml-orders" autocomplete="off">
+        <h3 class="sec-h">Bestellwünsche aus dem Portal</h3>
+        <label class="check"><input type="checkbox" name="enabled"${m.orders.enabled ? ' checked' : ''}> Angemeldete Kunden können im Portal Mengen eingeben und einen Bestellwunsch senden</label>
+        <div class="sec-rows ml-orows">
+          <label class="fld span2"><span>Bestellwünsche senden an</span><input name="to" value="${esc(m.orders.to.join(', '))}" maxlength="500" autocapitalize="none" spellcheck="false" placeholder="z. B. bestellung@standard-fleisch.de, verkauf@standard-fleisch.de">
+            <small>Eine oder mehrere Adressen (mit Komma getrennt, höchstens 5). Die E-Mail enthält Kundendaten, Positionen mit den Preisen des Kunden und die Summe; „Antworten“ geht direkt an den Kunden.</small></label>
+          <label class="check span2"><input type="checkbox" name="copy"${m.orders.copy ? ' checked' : ''}> Kunde erhält eine Eingangsbestätigung mit allen Positionen an seine E-Mail-Adresse</label>
+        </div>
+        ${m.orders.enabled && !m.configured ? '<p class="st-warn ml-ohint">Aktiv wird die Bestellfunktion erst, wenn oben das Postfach für den Versand eingerichtet ist.</p>' : ''}
+        <p class="form-err" id="ml-oerr" role="alert"></p>
+        <div class="sec-foot"><button type="submit" class="btn">${icon('check', 'sm')}Speichern</button></div>
+      </form>
       <div class="gcard sec-form">
         <h3 class="sec-h">Signatur</h3>
         <label class="fld"><span>Erscheint unter jeder E-Mail</span><textarea id="ml-sig" rows="5" maxlength="600" placeholder="Mit freundlichen Grüßen&#10;Standard-Fleisch …&#10;Anschrift, Telefon">${esc(m.signature)}</textarea>
@@ -3072,6 +3084,18 @@
     if (e.target.name === 'secure') { const p = $('#ml-form [name="port"]'); if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
   });
   $('#view-mail').addEventListener('submit', async (e) => {
+    if (e.target.id === 'ml-orders') {
+      e.preventDefault();
+      const f = e.target, err = $('#ml-oerr'), btn = f.querySelector('[type="submit"]');
+      err.textContent = ''; btn.disabled = true;
+      try {
+        const r = await api('bestell_settings_save', { body: { enabled: f.enabled.checked, to: f.to.value, copy: f.copy.checked } });
+        mailSt.orders = r.orders;
+        toast(r.orders.enabled ? (r.active ? 'Gespeichert – Kunden können jetzt Bestellwünsche senden.' : 'Gespeichert – aktiv, sobald das Postfach eingerichtet ist.') : 'Gespeichert – Bestellfunktion ist ausgeschaltet.', 5000);
+        renderMailView();
+      } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+      return;
+    }
     if (e.target.id !== 'ml-form') return;
     e.preventDefault();
     const f = e.target, err = $('#ml-err'), btn = f.querySelector('[type="submit"]');
@@ -3209,11 +3233,11 @@
     ['master', 'Stammdaten'],
     ['auth', 'Anmeldungen'],
     ['user', 'Nutzerverwaltung'],
-    ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails)'],
+    ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails, Bestellwünsche)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden' }[a] || '');
-  const ACTION_LABEL = { kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden', bestellung: 'kunden' }[a] || '');
+  const ACTION_LABEL = { bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
