@@ -354,7 +354,7 @@ function renderFavbar() {
   const present = DATA.items.filter((i) => favs.has(i.key)).length;
   const missing = [...favs].filter((k) => !DATA.items.some((i) => i.key === k)).length;
   bar.hidden = false;
-  bar.innerHTML = `<span>${plural(present, 'Artikel', 'Artikel')} auf Ihrer Merkliste – gespeichert in diesem Browser.${missing ? ` ${plural(missing, 'gemerkter Artikel ist', 'gemerkte Artikel sind')} in dieser Woche nicht im Angebot. <button type="button" class="link-btn" data-act="fav-prune">Entfernen</button>` : ''}</span>
+  bar.innerHTML = `<span>${plural(present, 'Artikel', 'Artikel')} auf Ihrer Merkliste – ${favRemote ? 'gespeichert in Ihrem Kundenkonto (auf allen Geräten)' : 'gespeichert in diesem Browser'}.${missing ? ` ${plural(missing, 'gemerkter Artikel ist', 'gemerkte Artikel sind')} in dieser Woche nicht im Angebot. <button type="button" class="link-btn" data-act="fav-prune">Entfernen</button>` : ''}</span>
     <span class="favbar-actions">
       <button type="button" class="btn sm" data-act="fav-print"${present ? '' : ' disabled'}>${icon('print', 'sm')}Drucken</button>
       <button type="button" class="btn sm" data-act="fav-csv"${present ? '' : ' disabled'}>${icon('file', 'sm')}CSV</button>
@@ -461,7 +461,36 @@ function render() {
 
 /* ---------- Merkliste ---------- */
 function updateFavCount() { $('#fav-count').textContent = DATA.items.filter((i) => favs.has(i.key)).length; }
-function saveFavs() { if (!store.set('merkliste', [...favs])) toast('Merkliste konnte im Browser nicht gespeichert werden (Speicher gesperrt).'); }
+/* Ohne Anmeldung: Merkliste im Browser. Angemeldete Kunden: im Kundenkonto auf dem Server (auf allen Geräten gleich). */
+let favRemote = false, favTimer = null, favBusy = Promise.resolve();
+function saveFavs() {
+  if (favRemote) {
+    clearTimeout(favTimer);
+    favTimer = setTimeout(() => {
+      const keys = [...favs];
+      favBusy = favBusy.then(() => kundeApi('kunde_merkliste_save', { keys })).catch((ex) => {
+        toast(ex.status === 401 ? 'Sitzung abgelaufen – bitte neu anmelden, damit die Merkliste gespeichert wird.' : 'Merkliste konnte nicht gespeichert werden: ' + ex.message, 5000);
+      });
+    }, 350);
+    return;
+  }
+  if (!store.set('merkliste', [...favs])) toast('Merkliste konnte im Browser nicht gespeichert werden (Speicher gesperrt).');
+}
+/* Beim ersten Anmelden wird eine im Browser angelegte Merkliste ins Kundenkonto übernommen */
+async function kundeMerklisteLaden() {
+  try {
+    const r = await kundeApi('kunde_merkliste');
+    favRemote = true;
+    const local = store.get('merkliste', []);
+    if (!r.exists && local.length) { favs = new Set(local); saveFavs(); }
+    else favs = new Set(r.keys);
+  } catch { /* Server nicht erreichbar: Browser-Merkliste weiter nutzen */ }
+}
+window.addEventListener('pagehide', () => {
+  if (!favRemote || !favTimer) return;
+  clearTimeout(favTimer); favTimer = null;
+  try { fetch('api/?action=kunde_merkliste_save', { method: 'POST', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': KCSRF }, body: JSON.stringify({ keys: [...favs] }) }); } catch { /* ignorieren */ }
+});
 function toggleFav(key) {
   if (favs.has(key)) favs.delete(key); else favs.add(key);
   saveFavs();
@@ -1080,6 +1109,8 @@ function openKundePw(forced) {
   $('#kp-form [name="current"]').focus();
 }
 async function kundeLogout() {
+  if (favRemote && favTimer) { clearTimeout(favTimer); favTimer = null; try { await kundeApi('kunde_merkliste_save', { keys: [...favs] }); } catch { /* weiter abmelden */ } }
+  await favBusy;
   try { await kundeApi('kunde_logout', {}); } catch { /* trotzdem neu laden */ }
   location.href = setOfferParam('').pathname;
 }
@@ -1226,6 +1257,7 @@ async function abmeldenStart() {
   try {
     if (!PREVIEW) await kundeStart();
     if (KUNDE && KUNDE.mustChange) { renderLocked('Bitte legen Sie zuerst ein eigenes Passwort fest.'); openKundePw(true); return; }
+    if (KUNDE && !KUNDE.mustChange) await kundeMerklisteLaden();
     if (KUNDE && !KUNDE.angebote.length && !KSTAFF) { renderLocked('Für Ihren Zugang ist derzeit kein Angebot freigeschaltet. Bitte wenden Sie sich an Ihren Ansprechpartner.', false); return; }
     await loadData();
   } catch (e) {

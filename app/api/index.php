@@ -32,6 +32,7 @@
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
+ *   GET  ?action=kunde_merkliste   Merkliste des angemeldeten Kunden; POST kunde_merkliste_save (Kunden-CSRF)
  *   POST ?action=kunde_abmelden_info | kunde_abmelden   Abmeldelink aus der Angebotsmail (öffentlich, Code im Link)
  *   POST ?action=abmelden1&t=…     Ein-Klick-Abmeldung aus dem E-Mail-Programm (RFC 8058, Formular statt JSON)
  *   POST ?action=mail_konto_save   Postfach/Absender speichern (nur Administrator; Passwort verschlüsselt, nie zurückgegeben)
@@ -1313,7 +1314,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1321,7 +1322,7 @@ if (in_array($action, $writeActions, true)) {
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1'], true);
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -1560,6 +1561,36 @@ try {
             kunde_sign_in($c2);
             audit('kunde_password', 'Kunde hat Passwort über den Link aus der E-Mail festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c2)]);
+        }
+
+        /* ---------- Merkliste je Kunde (geräteübergreifend) ---------- */
+        case 'kunde_merkliste': {
+            header('Cache-Control: private, no-store');
+            $c = current_customer();
+            if (!$c) fail('Bitte anmelden.', 401);
+            $m = (store_read('merklisten') ?? [])[$c['id']] ?? null;
+            respond(['ok' => true, 'keys' => $m['keys'] ?? [], 'savedAt' => $m['t'] ?? null, 'exists' => $m !== null]);
+        }
+
+        case 'kunde_merkliste_save': {
+            $c = current_customer();
+            if (!$c) fail('Bitte erneut anmelden.', 401);
+            require_customer_csrf();
+            $in = body()['keys'] ?? null;
+            if (!is_array($in)) fail('Ungültige Merkliste.', 422);
+            $keys = [];
+            foreach ($in as $k) {
+                if (!is_string($k) || $k === '' || mb_strlen($k) > 200 || preg_match('/[\x00-\x1f]/', $k)) continue;
+                $keys[$k] = true;
+                if (count($keys) >= 1000) break;
+            }
+            $keys = array_keys($keys);
+            with_lock('merklisten', function () use ($c, $keys) {
+                $all = store_read('merklisten') ?? [];
+                $all[$c['id']] = ['keys' => $keys, 't' => now()];
+                store_write('merklisten', $all);
+            });
+            respond(['ok' => true, 'count' => count($keys)]);
         }
 
         /* ---------- Abmelden vom Wochenangebot (Link aus der E-Mail, ohne Anmeldung) ---------- */
@@ -1876,6 +1907,7 @@ Ausgelöst von: {$me['name']}
             });
             [$d, $c] = $res;
             ksess_remove(function ($k, $v) use ($id) { return $v['kid'] === $id; });
+            with_lock('merklisten', function () use ($id) { $all = store_read('merklisten') ?? []; if (isset($all[$id])) { unset($all[$id]); store_write('merklisten', $all); } });
             audit('customers', "Kunde „{$c['firma']}“ gelöscht", [['k' => "c$id|-", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Kunde gelöscht', 'from' => $c['firma'], 'to' => '']]);
             respond(['ok' => true, 'rev' => $d['rev']]);
         }
