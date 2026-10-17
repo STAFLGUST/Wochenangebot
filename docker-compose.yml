@@ -8,6 +8,16 @@ services:
       - ./daten:/var/www/html/data  # gespeicherte Angebote, Entwurf, Versionen
     environment:
       WA_INSTALLED: "1"             # Ersteinrichtung im Browser gesperrt (Schutz bei leerem/defektem Datenordner)
+      DOMAIN: ${DOMAIN}             # Adresse der Seite für Links in E-Mails
+      # E-Mail-Versand (Werte nur in .env auf dem Server; leer = Versand ausgeschaltet)
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_SECURE: ${MAIL_SMTP_SECURE:-starttls}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASS: ${MAIL_SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
 
   caddy:
     image: caddy:2

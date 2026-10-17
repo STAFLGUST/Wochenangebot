@@ -19,4 +19,11 @@ regexes = [
   '''Editor-Zugang-77''',
   '''Seeblick-Eigen-202[67]''',
   '''x-gasthaus\.muster-1''',
+  # E-Mail-Versand (tests/e2e/test_kunden_mail.py, Test-Mailserver)
+  '''Test-Postfach-1''',
+  '''Neues-Kennwort-66''',
+  '''Admin-Gesetzt-77''',
+  '''Kantine-Eigen-202[67]''',
+  # Platzhalter in .env.example
+  '''hier-das-Postfach-Passwort''',
 ]

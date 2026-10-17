@@ -32,7 +32,12 @@ SUITES = {
     'p0':         (8790, 'data-seed', True),
     'angebote':   (8790, 'data-seed', True),
     'kunden':     (8790, 'data-seed', True),
+    'kunden_mail': (8790, 'data-seed', True, {
+        'MAIL_SMTP_HOST': '127.0.0.1', 'MAIL_SMTP_PORT': '2526', 'MAIL_SMTP_SECURE': 'none', 'MAIL_SMTP_USER': 'portal@example.org',
+        'MAIL_SMTP_PASS': 'Test-Postfach-1', 'MAIL_FROM': 'angebot@example.org', 'MAIL_FROM_NAME': 'Standard-Fleisch',
+        'MAIL_REPLY_TO': 'verkauf@example.org', 'WA_URL': 'http://127.0.0.1:8790'}),
 }
+# Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 
 def wait_port(port, up=True, timeout=10):
@@ -53,7 +58,9 @@ def admin_file(data):
 
 
 def run(name):
-    port, seed, admin = SUITES[name]
+    port, seed, admin, *extra = SUITES[name]
+    php_env = {k: v for k, v in os.environ.items() if not k.startswith('MAIL_') and k not in ('WA_URL', 'DOMAIN')}
+    php_env.update(extra[0] if extra else {})
     app = os.path.join(WORK, f'app-{name}')
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(os.path.join(REPO, 'app'), app)
@@ -65,7 +72,7 @@ def run(name):
     if not wait_port(port, up=False, timeout=5):
         print(f'[{name}] Port {port} ist belegt'); return name, 0, 1, False
     log = open(os.path.join(WORK, f'php-{name}.log'), 'w')
-    srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=php_env)
     try:
         wait_port(port)
         env = {**os.environ, 'UDATA': data, 'WA_WORK': WORK}

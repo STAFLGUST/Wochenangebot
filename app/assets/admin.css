@@ -624,3 +624,35 @@ body.ro .vtog { display: none; }
 .k-note { margin-top: 12px; }
 @media (max-width: 860px) { .ktab .k-addr { display: none; } }
 @media (max-width: 560px) { #dlg-kunde .form-grid.two { grid-template-columns: 1fr; } .ktab .k-offers { max-width: none; } }
+
+/* ---------- E-Mail-Versand ---------- */
+.k-warn { font-size: 11px; font-weight: 600; color: var(--accent); margin-left: 4px; }
+.ktab .k-mail { margin-top: 4px; }
+.ktab .k-mail .i { width: 13px; height: 13px; vertical-align: -2px; margin-right: 2px; }
+.k-pwmode { display: grid; gap: 8px; }
+.k-mailact { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.k-ok { margin: 0 0 14px; font-size: 13.5px; color: var(--text-2); }
+.k-ok .i { color: var(--c-ok, #2e7d4f); vertical-align: -2px; margin-right: 4px; }
+.k-setup { margin-bottom: 14px; }
+.k-setup p { margin: 0 0 8px; }
+.k-setup pre { margin: 0 0 8px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px; overflow-x: auto; }
+.k-setup code { font-size: 12.5px; }
+.k-test { display: flex; align-items: flex-end; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap; }
+.k-test .fld { flex: 1 1 240px; }
+.k-log { margin-top: 14px; font-size: 13px; }
+.k-log summary, .k-no summary { cursor: pointer; color: var(--text-2); }
+.k-log .ctab { margin-top: 8px; }
+.k-rlist { border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 12px; max-height: 46vh; overflow: auto; }
+.k-rall { padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); position: sticky; top: 0; z-index: 1; }
+.k-rtab td { padding: 8px 10px; }
+.k-rtab .k-rchk { width: 1%; }
+.k-rtab .k-rst { font-size: 12.5px; text-align: right; }
+.k-rtab .k-rst > span { display: block; }
+.k-rtab .k-res .i { width: 13px; height: 13px; vertical-align: -2px; }
+.k-no { margin: 0 0 12px; font-size: 13px; }
+.k-no ul { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
+.k-pend { margin-bottom: 12px; display: flex; gap: 8px; align-items: flex-start; }
+.k-prevwrap { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: #f4f1ec; }
+.k-prevwrap iframe { width: 100%; height: 460px; border: 0; display: block; }
+.spinner.sm { width: 14px; height: 14px; border-width: 2px; display: inline-block; vertical-align: -2px; }
+@media (max-width: 560px) { .k-rtab .k-offers { display: none; } }
