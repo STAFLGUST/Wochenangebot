@@ -299,6 +299,7 @@
     $('#vt-users').hidden = !can('admin');
     $('#vt-log').hidden = !can('admin');
     $('#vt-sec').hidden = !can('admin');
+    $('#side-admin').hidden = !can('admin');
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!can('admin') && (currentView === 'users' || currentView === 'log' || currentView === 'sec')) setView('edit');
   }
@@ -2857,6 +2858,13 @@
       renderSecView();
     } catch (ex) { $('#sec-err').textContent = ex.message; }
   });
+
+  /* Höhe der Kopfleiste für die links angeheftete Navigation */
+  try {
+    const tb = $('#topbar');
+    const setH = () => document.documentElement.style.setProperty('--topbar-h', tb.offsetHeight + 'px');
+    new ResizeObserver(setH).observe(tb); setH();
+  } catch { /* ältere Browser: fester Wert aus CSS */ }
 
   /* ======================= Start ======================= */
   (async function boot() {
