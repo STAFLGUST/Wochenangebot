@@ -1,3 +1,4 @@
 # Nur auf dem Server – nie ins Repository
 .env
 daten/
+sicherungen/

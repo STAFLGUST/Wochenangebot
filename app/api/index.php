@@ -152,6 +152,13 @@ function user_public(array $u): array
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
             'twofa' => !empty($u['totp']), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null];
 }
+/* Ersteinrichtung im Browser nur auf einem wirklich leeren System – nie, wenn Nutzerdaten
+   vorhanden, aber nicht lesbar sind, und nie auf dem Produktivserver (WA_INSTALLED=1). */
+function setup_allowed(): bool
+{
+    if (getenv('WA_INSTALLED') === '1' || ($_SERVER['WA_INSTALLED'] ?? '') === '1') return false;
+    return !is_file(store_path('nutzer')) && !is_file(store_path('admin'));
+}
 function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
 function clean_username($v): string
 {
@@ -892,7 +899,8 @@ try {
         case 'status': {
             header('Cache-Control: no-store');
             $u = current_user();
-            respond(['ok' => true, 'setupRequired' => !users_load(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
+            $noUsers = !users_load();
+            respond(['ok' => true, 'setupRequired' => $noUsers && setup_allowed(), 'setupLocked' => $noUsers && !setup_allowed(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
                      'user' => $u ? me_payload($u) : null, 'company' => $CFG['company']]);
         }
 
@@ -900,6 +908,7 @@ try {
             $b = body();
             $u = with_lock('nutzer', function () use ($b) {
                 if (users_load()) fail('Die Ersteinrichtung ist bereits erfolgt.', 409);
+                if (!setup_allowed()) fail('Die Ersteinrichtung im Browser ist auf diesem Server gesperrt. Zugang auf dem Server wiederherstellen (siehe LIESMICH).', 403);
                 $name = s($b['name'] ?? '', 80) ?: 'Administrator';
                 $uname = clean_username($b['username'] ?? '');
                 $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => 'admin',
@@ -917,7 +926,7 @@ try {
         case 'login': {
             start_session();
             attempts_check();
-            if (!users_load()) fail('Bitte zuerst die Ersteinrichtung durchführen.', 409);
+            if (!users_load()) fail(setup_allowed() ? 'Bitte zuerst die Ersteinrichtung durchführen.' : 'Es ist kein Zugang vorhanden oder die Nutzerdaten sind nicht lesbar. Bitte den Zugang auf dem Server wiederherstellen (siehe LIESMICH).', 409);
             $b = body();
             $name = is_string($b['username'] ?? null) ? strtolower(trim($b['username'])) : '';
             $pw = (string)($b['password'] ?? '');
@@ -1155,6 +1164,7 @@ try {
             $g7 = (($gs['day'] ?? '') === gmdate('Y-m-d') ? (int)($gs['today'] ?? 0) : 0);
             foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
             respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
+                     'backup' => store_read('sicherung'),
                      'myCountry' => geo_country(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
                      'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);

@@ -15,7 +15,9 @@ Neue Versionen in `main` werden vom Server innerhalb von 2 Minuten automatisch �
 Nützlich auf dem Server:
 - Protokoll der Aktualisierung: `journalctl -u wochenangebot-update -n 20`
 - Status: `cd /opt/wochenangebot && docker compose ps`
-- Datensicherung: `tar czf /root/angebot-daten-$(date +%F).tgz -C /opt/wochenangebot daten`
+- Datensicherung: läuft automatisch täglich (über die Aktualisierung) nach `/opt/wochenangebot/sicherungen/`, die letzten 30 Stände; jede Sicherung wird nach dem Erstellen probeweise entpackt und geprüft. Status im Eingabebereich unter „Sicherheit“. Sofort sichern: `sh deploy/sichern.sh --jetzt`. Wichtig: Die Sicherungen liegen auf demselben Server – zusätzlich die VPS-Sicherung bei Hostinger aktivieren oder die Dateien regelmäßig woanders ablegen.
+- Wiederherstellen (Beispiel): `cd /opt/wochenangebot && docker compose stop app && mv daten daten-alt && mkdir daten && tar xzf sicherungen/daten-JJJJ-MM-TT_HHMMSS.tar.gz -C daten && chown -R 33:33 daten && docker compose start app`
+- Ersteinrichtung im Browser ist auf dem Server gesperrt (Schutz, falls der Datenordner einmal leer oder defekt ist). Neuen Administrator anlegen: `sh deploy/passwort-zuruecksetzen.sh admin --neu`
 - IP-Sperre: derzeit ausgeschaltet. Einschalten im `Caddyfile` (zwei Zeilen `@fremd …` / `respond @fremd …` entkommentieren), erlaubte Adressen in `.env` → `ALLOWED_IPS=…`
 - Bestand: im Eingabebereich unter „Bestand“ die WinAB-Bestandsliste (.xls/.xlsx) hochladen. Mengen und MHD sind nur dort sichtbar, nie auf der öffentlichen Seite. Suche „MHD“ zeigt alle Artikel mit MHD bis heute + 14 Tage.
 - Stammdaten: Bezeichnung, Fleischart, Herkunft und Zustand je Artikelnummer; werden beim Excel-Import automatisch übernommen. „frisch“ steht nur im Zustand, nie in der Bezeichnung.

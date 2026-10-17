@@ -19,6 +19,12 @@
   const fmtInt = new Intl.NumberFormat('de-DE');
   const plural = (n, one, many) => `${fmtInt.format(n)} ${n === 1 ? one : many}`;
   const clone = (o) => JSON.parse(JSON.stringify(o));
+  /* CSV-Zelle: Trennzeichen maskieren und Formel-Injection verhindern (=, +, -, @ am Anfang) */
+  const csvCell = (v) => {
+    let t = String(v ?? '');
+    if (/^[=+\-@\t\r]/.test(t) && !/^-?\d[\d.,]*$/.test(t)) t = "'" + t;
+    return /[;"\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  };
   const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const dmy = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
   const dm = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
@@ -1930,7 +1936,7 @@
   /* CSV (aktuelle Auswahl) */
   function stockCSV() {
     const res = stockResult(stockQ);
-    const q = (v) => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const q = csvCell;
     const n2 = (v) => (v == null || !Number.isFinite(v) ? '' : fmtKg.format(v).replace(/\./g, ''));
     const lines = [['Art.-Nr.', 'Bezeichnung', `VK KW ${model.meta.week || ''}`, 'Kg verfügbar', 'Kürz. MHD', 'Kg kürz. MHD', 'Warengruppe', `Bestand vom`].join(';')];
     for (const a of res.list) lines.push([a.code, a.name, a.price && a.price.status === 'value' ? fmtNum.format(a.price.value).replace(/\./g, '') : a.price && a.price.status === 'request' ? 'a. Anfr.' : '', n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
@@ -2628,7 +2634,7 @@
   });
   $('#view-log').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr.lrow.has-d')) e.target.click(); });
   function logCSV() {
-    const q = (v) => { const t = String(v ?? ''); return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+    const q = csvCell;
     const lines = [['Datum', 'Uhrzeit', 'Benutzername', 'Name', 'Vorgang', 'Beschreibung', 'Art.-Nr.', 'Artikel', 'Feld', 'Vorher', 'Nachher', 'IP-Adresse'].join(';')];
     for (const e of logFiltered()) {
       const d = new Date(e.t);
@@ -2702,6 +2708,14 @@
     $('#geo-sel-label').textContent = allow ? 'Erlaubte Länder' : 'Gesperrte Länder';
   }
   const IDLE = [[15, '15 Minuten'], [30, '30 Minuten'], [60, '1 Stunde'], [120, '2 Stunden'], [240, '4 Stunden'], [480, '8 Stunden'], [720, '12 Stunden']];
+  function backupCard(b, card) {
+    if (!b || !b.t) return card('warn', 'Datensicherung', 'noch keine automatische Sicherung', 'Wird nach dem nächsten Server-Update täglich erstellt');
+    const age = (Date.now() - new Date(b.t).getTime()) / 3600000;
+    const when = `${dateTime(b.t)} Uhr`;
+    if (!b.ok) return card('bad', 'Datensicherung', `letzter Versuch ${esc(when)} fehlgeschlagen`, b.fehler ? `${b.fehler} Datei(en) fehlerhaft – Server prüfen` : 'Server prüfen (Speicherplatz?)');
+    if (age > 48) return card('bad', 'Datensicherung', `letzte Sicherung ${esc(when)}`, 'Älter als 2 Tage – Server prüfen');
+    return card('ok', 'Datensicherung', `${esc(when)} · geprüft`, `${b.anzahl} Stände auf dem Server (${(b.groesse / 1024 / 1024).toFixed(1).replace('.', ',')} MB je Stand)`);
+  }
   function secCards(d) {
     const S = d.settings, users = d.users.filter((u) => u.active);
     const with2 = users.filter((u) => u.twofa).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa).length;
@@ -2713,6 +2727,7 @@
       card(S.ipEnabled ? 'ok' : 'warn', 'Zugriff Eingabebereich', S.ipEnabled ? `nur von ${S.adminIps.length} freigegebene${S.adminIps.length === 1 ? 'r Adresse' : 'n Adressen'}` : 'aus dem ganzen Internet erreichbar', S.ipEnabled ? '' : 'Empfehlung: IP-Freigabe einschalten oder Zwei-Faktor-Pflicht'),
       card(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlgeschlagene Anmeldungen', `${fmtInt.format(d.fails24)} in den letzten 24 Stunden`, d.fails24 >= 20 ? 'Möglicher Angriff – Liste unten prüfen' : ''),
       card(blocked || locked ? 'warn' : 'ok', 'Gesperrt', `${blocked} IP-Adresse${blocked === 1 ? '' : 'n'} · ${locked} Zugang${locked === 1 ? '' : 'e'}`, ''),
+      backupCard(d.backup, card),
       card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
       card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
@@ -2873,6 +2888,7 @@
       company = s.company || '';
       $$('[data-company]').forEach((el) => { el.textContent = company; el.hidden = !company; });
       if (s.setupRequired) { showAuth('setup'); return; }
+      if (s.setupLocked) throw Object.assign(new Error('Es ist kein Zugang vorhanden oder die Nutzerdaten sind nicht lesbar. Eine Ersteinrichtung im Browser ist aus Sicherheitsgründen gesperrt – bitte den Zugang auf dem Server wiederherstellen (deploy/passwort-zuruecksetzen.sh).'), { status: 403 });
       if (!s.loggedIn) { showAuth('login'); return; }
       csrf = s.csrf;
       me = s.user;

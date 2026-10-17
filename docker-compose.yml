@@ -6,6 +6,8 @@ services:
     volumes:
       - ./app:/var/www/html:ro      # Website (nur lesend)
       - ./daten:/var/www/html/data  # gespeicherte Angebote, Entwurf, Versionen
+    environment:
+      WA_INSTALLED: "1"             # Ersteinrichtung im Browser gesperrt (Schutz bei leerem/defektem Datenordner)
 
   caddy:
     image: caddy:2
