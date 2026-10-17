@@ -54,6 +54,7 @@ lauf; ok "freigegebener Commit geht live" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st o
 ok "vor dem Release gesichert" '[ -n "$(ls "$B"/sicherungen/daten-*.tar.gz 2>/dev/null)" ]'
 lauf; ok "erneuter Lauf: keine Änderung" '[ "$(kopf)" = "$G_SHA" ]'
 
+
 printf '{"release":"%s","ci_ok":["%s","%s"]}' "$X_SHA" "$G_SHA" "$X_SHA" > "$T/state.json"
 lauf || true
 ok "defekter Release: automatisch zurück auf Vorversion" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php"'
@@ -69,6 +70,14 @@ lauf || true; ok "Commit außerhalb von main abgelehnt" '[ "$(kopf)" = "$G_SHA" 
 
 printf '{"release":"%s","release_branch":"neben","ci_ok":["%s"]}' "$N_SHA" "$N_SHA" > "$T/state.json"
 lauf || true; ok "Release-Lauf von einem Nebenzweig ignoriert" '[ "$(kopf)" = "$G_SHA" ]'
+
+# Wochenangebot nur für angemeldete Kunden (Angebots-API antwortet 401) – Release muss trotzdem durchgehen
+H_SHA=$(commit repariert x "sed -i 's/ kaputt(//' '$T/src/app/api/index.php'")
+printf '%s\n{"rev":1,"offers":[],"stdPublic":false}' '<?php http_response_code(404); exit; ?>' > "$B/daten/angebote.php"
+ok "Testvoraussetzung: Angebot verlangt Anmeldung" '[ "$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$WEB_PORT/api/?action=offer")" = 401 ]'
+printf '{"release":"%s","ci_ok":["%s"]}' "$H_SHA" "$H_SHA" > "$T/state.json"
+lauf || true; ok "nicht öffentliches Wochenangebot: Release geht live" '[ "$(kopf)" = "$H_SHA" ] && [ "$(st ok)" = True ]'
+rm -f "$B/daten/angebote.php"
 
 echo "$PASS/$((PASS + FAIL)) passed"
 [ "$FAIL" -eq 0 ]
