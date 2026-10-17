@@ -28,6 +28,8 @@
  *   POST ?action=security_save | session_end | ip_unblock | user_unlock | geo_update
  *   GET  ?action=offers            Angebote (Standard + Kundenangebote), angemeldet
  *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
+ *   GET  ?action=kunden            Kundenstammdaten (nur Administrator); POST kunde_save | kunde_delete
+ *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
  *   POST ?action=user_save | user_delete
@@ -666,6 +668,91 @@ function offers_load(): array
     return is_array($d) && isset($d['offers']) ? $d : ['rev' => 0, 'offers' => OFFER_DEFAULTS, 'updatedAt' => null];
 }
 function offer_ids(): array { return array_column(offers_load()['offers'], 'id'); }
+/* Ist das Standard-Wochenangebot ohne Anmeldung sichtbar? (Voreinstellung: ja) */
+function std_public(): bool { $d = offers_load(); return !array_key_exists('stdPublic', $d) || !empty($d['stdPublic']); }
+
+/* ---------------- Kunden ----------------
+   Kunden melden sich auf der Angebotsseite an (eigene Anmeldung, getrennt vom Eingabebereich) und sehen nur
+   die Angebote, für die sie freigeschaltet sind. Kunden erhalten nie Zugriff auf Aktionen des Eingabebereichs:
+   dort zählt nur die Mitarbeiter-Anmeldung ($_SESSION['uid']), Kunden haben $_SESSION['kid']. */
+function customers_load(): array
+{
+    $d = store_read('kunden');
+    return is_array($d) && isset($d['customers']) ? $d : ['rev' => 0, 'customers' => [], 'updatedAt' => null];
+}
+function customer_offers(array $c): array
+{
+    $known = array_merge([OFFER_STD], offer_ids());
+    return array_values(array_filter($c['angebote'] ?? [], function ($o) use ($known) { return in_array($o, $known, true); }));
+}
+function customer_public(array $c): array
+{
+    $out = $c;
+    $l = $c['login'] ?? null;
+    $out['angebote'] = customer_offers($c);
+    $out['login'] = $l ? ['username' => $l['username'], 'active' => !empty($l['active']), 'mustChange' => !empty($l['mustChange']),
+                          'lastLogin' => $l['lastLogin'] ?? null, 'pwSet' => $l['pwSet'] ?? null,
+                          'lockedUntil' => (int)($l['lockedUntil'] ?? 0) > time() ? (int)$l['lockedUntil'] : 0] : null;
+    return $out;
+}
+function kunde_clear(): void { foreach (['kid', 'ksv', 'kseen', 'kcsrf', 'ksid'] as $k) unset($_SESSION[$k]); }
+function ksess_prune(array $list): array
+{
+    $max = (int)sec()['idleMinutes'] * 60;
+    foreach ($list as $k => $v) if ((int)($v['seen'] ?? 0) < time() - $max) unset($list[$k]);
+    return $list;
+}
+function ksess_remove(callable $match): int
+{
+    return with_lock('kundensitzungen', function () use ($match) {
+        $list = store_read('kundensitzungen') ?? [];
+        $n = 0;
+        foreach ($list as $k => $v) if ($match($k, $v)) { unset($list[$k]); $n++; }
+        if ($n) store_write('kundensitzungen', $list);
+        return $n;
+    });
+}
+/* Angemeldeter Kunde – Stammdaten, Freigabe und Zugang werden bei jeder Anfrage frisch gelesen */
+$KUNDE = null;
+function current_customer(): ?array
+{
+    global $KUNDE;
+    if ($KUNDE !== null) return $KUNDE ?: null;
+    start_session();
+    $KUNDE = false;
+    if (empty($_SESSION['kid'])) return null;
+    if (time() - (int)($_SESSION['kseen'] ?? 0) > (int)sec()['idleMinutes'] * 60) { kunde_clear(); return null; }
+    $c = null;
+    foreach (customers_load()['customers'] as $x) if ($x['id'] === $_SESSION['kid']) { $c = $x; break; }
+    $l = $c['login'] ?? null;
+    if (!$c || empty($c['active']) || !$l || empty($l['active']) || (int)($l['sv'] ?? 0) !== (int)($_SESSION['ksv'] ?? -1)) { kunde_clear(); return null; }
+    $sid = (string)($_SESSION['ksid'] ?? '');
+    $reg = store_read('kundensitzungen') ?? [];
+    if ($sid === '' || !isset($reg[$sid]) || $reg[$sid]['kid'] !== $c['id']) { kunde_clear(); return null; }
+    if ((int)$reg[$sid]['seen'] < time() - 60) {
+        with_lock('kundensitzungen', function () use ($sid) {
+            $r = store_read('kundensitzungen') ?? [];
+            if (isset($r[$sid])) { $r[$sid]['seen'] = time(); $r[$sid]['ip'] = client_ip(); store_write('kundensitzungen', ksess_prune($r)); }
+        });
+    }
+    $_SESSION['kseen'] = time();
+    return $KUNDE = $c;
+}
+function require_customer_csrf(): void
+{
+    $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if (!is_string($tok) || !hash_equals((string)($_SESSION['kcsrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
+}
+function kunde_payload(array $c): array
+{
+    $names = [];
+    foreach (customer_offers($c) as $id) { $d = offer_def($id); if ($d) $names[] = ['id' => $id, 'name' => $d['name']]; }
+    return ['firma' => $c['firma'], 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'username' => $c['login']['username'],
+            'mustChange' => !empty($c['login']['mustChange']), 'angebote' => $names];
+}
+const CUSTOMER_FIELDS = ['nr' => 30, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
+const CUSTOMER_LABELS = ['nr' => 'Kundennummer', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
+                         'land' => 'Land', 'email' => 'E-Mail', 'telefon' => 'Telefon', 'notiz' => 'Notiz', 'angebote' => 'Angebote', 'active' => 'Kunde aktiv'];
 function offer_def(string $id): ?array
 {
     if ($id === OFFER_STD) return ['id' => OFFER_STD, 'name' => 'Wochenangebot', 'fallback' => 'standard'];
@@ -968,14 +1055,16 @@ function master_changes(array $old, array $new): array
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
-                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save'];
+                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
+                 'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
-$isPublic = $action === 'offer' && empty($_GET['draft']) && in_array((string)($_GET['angebot'] ?? ''), ['', 'std'], true);
+/* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -1000,8 +1089,13 @@ try {
             $oid = (string)($_GET['angebot'] ?? OFFER_STD);
             if ($oid === '') $oid = OFFER_STD;
             if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid)) fail('Unbekanntes Angebot.', 404);
-            if ($oid !== OFFER_STD) {
-                require_auth();                                   // Kundenangebote nur angemeldet (später: Kunden mit Freigabe)
+            if ($oid !== OFFER_STD || !std_public()) {
+                // Mitarbeiter sehen alle Angebote; Kunden nur freigeschaltete; sonst Anmeldung nötig
+                if (current_user()) require_auth();
+                elseif ($k = current_customer()) {
+                    if (!empty($k['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
+                    if (!in_array($oid, customer_offers($k), true)) fail('Dieses Angebot ist für Ihren Zugang nicht freigeschaltet.', 403);
+                } else fail('Bitte anmelden.', 401);
                 header('Cache-Control: private, no-store');
             }
             $def = offer_def($oid);
@@ -1014,7 +1108,7 @@ try {
             }
             $p = store_path('angebot');
             if (!is_file($p)) fail('Es ist noch kein Angebot veröffentlicht.', 404);
-            if ($oid === OFFER_STD) {
+            if ($oid === OFFER_STD && std_public()) {
                 $etag = '"' . md5((string)filemtime($p) . ':' . filesize($p) . ':std') . '"';
                 header('ETag: ' . $etag);
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
@@ -1026,7 +1120,7 @@ try {
             require_auth();
             header('Cache-Control: no-store');
             $d = offers_load();
-            respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD)]);
+            respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD), 'stdPublic' => std_public()]);
         }
 
         case 'offers_save': {
@@ -1062,13 +1156,236 @@ try {
                     if (($old[$id]['fallback'] ?? 'standard') !== $o['fallback']) $d[] = ['k' => "o$id|fb", 'code' => '', 'name' => $o['name'], 'f' => 'Ohne eigenen Preis', 'from' => $FB[$old[$id]['fallback'] ?? 'standard'], 'to' => $FB[$o['fallback']]];
                 }
                 foreach ($removed as $id => $o) $d[] = ['k' => "o$id|-", 'code' => '', 'name' => $o['name'], 'f' => 'Angebot gelöscht', 'from' => $o['name'], 'to' => ''];
-                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new)];
+                $oldPub = !array_key_exists('stdPublic', $cur) || !empty($cur['stdPublic']);
+                $pub = array_key_exists('stdPublic', $b) ? !empty($b['stdPublic']) : $oldPub;
+                if ($pub !== $oldPub) {
+                    if ($me['role'] !== 'admin') fail('Ob das Wochenangebot öffentlich ist, dürfen nur Administratoren ändern.', 403);
+                    $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
+                }
+                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub];
                 store_write('angebote', $out);
                 return [$out, $d];
             });
             [$out, $d] = $res;
             if ($d) audit('offers', 'Angebote geändert', $d);
-            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers']]);
+            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => $out['stdPublic']]);
+        }
+
+        /* ---------- Kunden-Anmeldung (Angebotsseite) ---------- */
+        case 'kunde_status': {
+            header('Cache-Control: no-store');
+            start_session();
+            $k = current_customer();
+            $staff = current_user() !== null;
+            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
+        }
+
+        case 'kunde_login': {
+            start_session();
+            attempts_check();
+            $b = body();
+            $name = is_string($b['username'] ?? null) ? strtolower(trim($b['username'])) : '';
+            $pw = (string)($b['password'] ?? '');
+            $res = with_lock('kunden', function () use ($name, $pw) {
+                $d = customers_load();
+                foreach ($d['customers'] as $i => $c) {
+                    $l = $c['login'] ?? null;
+                    if (!$l || $name === '' || $l['username'] !== $name) continue;
+                    if ((int)($l['lockedUntil'] ?? 0) > time()) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
+                    if (!password_verify($pw, (string)$l['hash'])) {
+                        $lockedNow = login_failure($d['customers'][$i]['login']);
+                        store_write('kunden', $d);
+                        return [$lockedNow ? 'lockednow' : 'bad', $d['customers'][$i]];
+                    }
+                    if (empty($c['active']) || empty($l['active'])) return ['inactive', $c];
+                    if (password_needs_rehash((string)$l['hash'], PASSWORD_DEFAULT)) $d['customers'][$i]['login']['hash'] = password_hash($pw, PASSWORD_DEFAULT);
+                    $d['customers'][$i]['login']['failCount'] = 0;
+                    $d['customers'][$i]['login']['lockedUntil'] = 0;
+                    $d['customers'][$i]['login']['lastLogin'] = now();
+                    store_write('kunden', $d);
+                    return ['ok', $d['customers'][$i]];
+                }
+                password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit
+                return ['bad', null];
+            });
+            [$st, $c] = $res;
+            $who = ['username' => 'kunde:' . mb_substr($name, 0, 40), 'name' => $c['firma'] ?? '', 'role' => 'kunde'];
+            if ($st !== 'ok') {
+                attempts_record(false);
+                $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
+                audit('kunde_login_fail', 'Kunden-Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
+                usleep(400000);
+                if ($st === 'inactive') fail('Dieser Zugang ist deaktiviert. Bitte wenden Sie sich an Ihren Ansprechpartner.', 401);
+                if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche vorübergehend gesperrt. Bitte später erneut versuchen.', 429);
+                fail('Benutzername oder Passwort ist nicht korrekt.', 401);
+            }
+            attempts_record(true);
+            session_regenerate_id(true);
+            kunde_clear();
+            $_SESSION['kid'] = $c['id'];
+            $_SESSION['ksv'] = (int)($c['login']['sv'] ?? 0);
+            $_SESSION['kseen'] = time();
+            $_SESSION['kcsrf'] = bin2hex(random_bytes(32));
+            with_lock('kundensitzungen', function () use ($c) {
+                $r = ksess_prune(store_read('kundensitzungen') ?? []);
+                $sid = bin2hex(random_bytes(12));
+                $r[$sid] = ['kid' => $c['id'], 'ip' => client_ip(), 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 240), 'created' => now(), 'seen' => time()];
+                store_write('kundensitzungen', $r);
+                $_SESSION['ksid'] = $sid;
+            });
+            $GLOBALS['KUNDE'] = $c;
+            audit('kunde_login', 'Kunde angemeldet', [], $who);
+            respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c)]);
+        }
+
+        case 'kunde_logout': {
+            start_session();
+            if (current_customer()) {
+                require_customer_csrf();
+                $sid = (string)($_SESSION['ksid'] ?? '');
+                ksess_remove(function ($k) use ($sid) { return $k === $sid; });
+            }
+            kunde_clear();
+            respond(['ok' => true]);
+        }
+
+        case 'kunde_passwort': {
+            $c = current_customer();
+            if (!$c) fail('Bitte erneut anmelden.', 401);
+            require_customer_csrf();
+            $b = body();
+            if (!password_verify((string)($b['current'] ?? ''), (string)$c['login']['hash'])) fail('Das bisherige Passwort ist nicht korrekt.', 422);
+            $new = check_password($b['password'] ?? '', $c['login']['username']);
+            if (password_verify($new, (string)$c['login']['hash'])) fail('Bitte ein anderes als das bisherige Passwort wählen.', 422);
+            $c2 = with_lock('kunden', function () use ($c, $new) {
+                $d = customers_load();
+                foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) {
+                    $d['customers'][$i]['login']['hash'] = password_hash($new, PASSWORD_DEFAULT);
+                    $d['customers'][$i]['login']['mustChange'] = false;
+                    $d['customers'][$i]['login']['pwSet'] = now();
+                    $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
+                    store_write('kunden', $d);
+                    return $d['customers'][$i];
+                }
+                return null;
+            });
+            if (!$c2) fail('Zugang nicht gefunden.', 404);
+            $_SESSION['ksv'] = (int)$c2['login']['sv'];
+            $sid = (string)($_SESSION['ksid'] ?? '');
+            ksess_remove(function ($k, $v) use ($c2, $sid) { return $v['kid'] === $c2['id'] && $k !== $sid; });   // andere Geräte abmelden
+            $GLOBALS['KUNDE'] = $c2;
+            audit('kunde_password', 'Kunde hat eigenes Passwort festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
+            respond(['ok' => true, 'kunde' => kunde_payload($c2)]);
+        }
+
+        /* ---------- Kundenstammdaten (Eingabebereich, nur Administrator) ---------- */
+        case 'kunden': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            $d = customers_load();
+            $act = [];
+            foreach (ksess_prune(store_read('kundensitzungen') ?? []) as $v) $act[$v['kid']] = ($act[$v['kid']] ?? 0) + 1;
+            $list = array_map(function ($c) use ($act) { $p = customer_public($c); $p['sessions'] = $act[$c['id']] ?? 0; return $p; }, $d['customers']);
+            respond(['ok' => true, 'rev' => $d['rev'], 'customers' => $list]);
+        }
+
+        case 'kunde_save': {
+            $me = require_auth(true, 'admin');
+            $b = body();
+            $res = with_lock('kunden', function () use ($b) {
+                $d = customers_load();
+                if ((int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte neu laden.', 409);
+                $id = is_string($b['id'] ?? null) ? $b['id'] : '';
+                $idx = null;
+                foreach ($d['customers'] as $i => $c) if ($c['id'] === $id) $idx = $i;
+                if ($id !== '' && $idx === null) fail('Kunde nicht gefunden.', 404);
+                $old = $idx !== null ? $d['customers'][$idx] : null;
+                $row = ['id' => $old['id'] ?? ('k' . bin2hex(random_bytes(6)))];
+                foreach (CUSTOMER_FIELDS as $f => $max) {
+                    $v = s($b[$f] ?? '', $max) ?? '';
+                    $row[$f] = $v;
+                }
+                if (mb_strlen($row['firma']) < 2) throw new InvalidArgumentException('Bitte den Namen der Firma angeben.');
+                if ($row['email'] !== '' && filter_var($row['email'], FILTER_VALIDATE_EMAIL) === false) throw new InvalidArgumentException('Die E-Mail-Adresse ist ungültig.');
+                foreach ($d['customers'] as $c) if ($c['id'] !== $row['id'] && $row['nr'] !== '' && ($c['nr'] ?? '') === $row['nr']) throw new InvalidArgumentException("Die Kundennummer {$row['nr']} ist bereits vergeben.");
+                $known = array_merge([OFFER_STD], offer_ids());
+                $row['angebote'] = array_values(array_unique(array_filter(is_array($b['angebote'] ?? null) ? $b['angebote'] : [], function ($o) use ($known) { return is_string($o) && in_array($o, $known, true); })));
+                $row['active'] = !empty($b['active']);
+                $row['created'] = $old['created'] ?? now();
+                $row['changed'] = now();
+                // Zugang
+                $lg = is_array($b['login'] ?? null) ? $b['login'] : null;
+                $ol = $old['login'] ?? null;
+                $pwNew = false; $ended = false;
+                if (!$lg || !empty($lg['remove'])) {
+                    $row['login'] = null;
+                    $ended = (bool)$ol;
+                } else {
+                    $uname = clean_username($lg['username'] ?? '');
+                    foreach ($d['customers'] as $c) if ($c['id'] !== $row['id'] && (($c['login']['username'] ?? '') === $uname)) throw new InvalidArgumentException("Der Benutzername „{$uname}“ ist bereits vergeben.");
+                    $l = $ol ?: ['sv' => 1, 'created' => now(), 'lastLogin' => null, 'failCount' => 0, 'lockedUntil' => 0];
+                    $l['username'] = $uname;
+                    $l['active'] = !empty($lg['active']);
+                    $pw = (string)($lg['password'] ?? '');
+                    if ($pw !== '') {
+                        $l['hash'] = password_hash(check_password($pw, $uname), PASSWORD_DEFAULT);
+                        $l['mustChange'] = !empty($lg['mustChange']);
+                        $l['pwSet'] = now();
+                        $l['sv'] = (int)($l['sv'] ?? 0) + 1;
+                        $pwNew = true;
+                    } elseif (empty($l['hash'])) {
+                        throw new InvalidArgumentException('Bitte ein Startpasswort für den Zugang festlegen.');
+                    }
+                    if (!empty($lg['unlock'])) { $l['lockedUntil'] = 0; $l['failCount'] = 0; }
+                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; }
+                    if ($ol && !empty($ol['active']) && !$l['active']) $ended = true;
+                    $row['login'] = $l;
+                }
+                if (!$row['active']) $ended = $ended || ($old && !empty($old['active']));
+                if ($idx === null) $d['customers'][] = $row; else $d['customers'][$idx] = $row;
+                usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
+                $d['rev'] = (int)$d['rev'] + 1;
+                $d['updatedAt'] = now();
+                store_write('kunden', $d);
+                return [$d, $row, $old, $pwNew, $ended];
+            });
+            [$d, $row, $old, $pwNew, $ended] = $res;
+            if ($ended || $pwNew) ksess_remove(function ($k, $v) use ($row) { return $v['kid'] === $row['id']; });
+            // Protokoll ohne Passwörter
+            $ch = [];
+            $fmt = function ($f, $v) { if ($f === 'angebote') return implode(', ', array_map(function ($o) { $x = offer_def($o); return $x['name'] ?? $o; }, $v ?? [])); if ($f === 'active') return $v ? 'ja' : 'nein'; return (string)$v; };
+            foreach (array_merge(array_keys(CUSTOMER_FIELDS), ['angebote', 'active']) as $f) {
+                $from = $old ? $fmt($f, $old[$f] ?? '') : ''; $to = $fmt($f, $row[$f] ?? '');
+                if ($from !== $to) $ch[] = ['k' => "c{$row['id']}|$f", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => CUSTOMER_LABELS[$f], 'from' => $from, 'to' => $to];
+            }
+            $ou = $old['login']['username'] ?? ''; $nu = $row['login']['username'] ?? '';
+            if ($ou !== $nu) $ch[] = ['k' => "c{$row['id']}|user", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => 'Zugang (Benutzername)', 'from' => $ou, 'to' => $nu ?: 'entfernt'];
+            if ((bool)($old['login']['active'] ?? false) !== (bool)($row['login']['active'] ?? false)) $ch[] = ['k' => "c{$row['id']}|lact", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => 'Zugang aktiv', 'from' => !empty($old['login']['active']) ? 'ja' : 'nein', 'to' => !empty($row['login']['active']) ? 'ja' : 'nein'];
+            if ($pwNew) $ch[] = ['k' => "c{$row['id']}|pw", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . (!empty($row['login']['mustChange']) ? ' (muss bei der ersten Anmeldung geändert werden)' : '')];
+            if ($ch) audit('customers', $old ? "Kunde „{$row['firma']}“ bearbeitet" : "Kunde „{$row['firma']}“ angelegt", $ch);
+            respond(['ok' => true, 'rev' => $d['rev'], 'customer' => customer_public($row)]);
+        }
+
+        case 'kunde_delete': {
+            require_auth(true, 'admin');
+            $b = body();
+            $id = (string)($b['id'] ?? '');
+            $res = with_lock('kunden', function () use ($id, $b) {
+                $d = customers_load();
+                if ((int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte neu laden.', 409);
+                foreach ($d['customers'] as $i => $c) if ($c['id'] === $id) {
+                    array_splice($d['customers'], $i, 1);
+                    $d['rev'] = (int)$d['rev'] + 1;
+                    $d['updatedAt'] = now();
+                    store_write('kunden', $d);
+                    return [$d, $c];
+                }
+                fail('Kunde nicht gefunden.', 404);
+            });
+            [$d, $c] = $res;
+            ksess_remove(function ($k, $v) use ($id) { return $v['kid'] === $id; });
+            audit('customers', "Kunde „{$c['firma']}“ gelöscht", [['k' => "c$id|-", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Kunde gelöscht', 'from' => $c['firma'], 'to' => '']]);
+            respond(['ok' => true, 'rev' => $d['rev']]);
         }
 
         case 'status': {
@@ -1356,7 +1673,7 @@ try {
             }
             $fails = [];
             foreach ([gmdate('Y-m'), gmdate('Y-m', strtotime('first day of last month'))] as $m) {
-                foreach (store_read('protokoll/' . $m) ?? [] as $e) if ($e['a'] === 'login_fail' && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
+                foreach (store_read('protokoll/' . $m) ?? [] as $e) if (in_array($e['a'], ['login_fail', 'kunde_login_fail'], true) && strtotime($e['t']) > time() - 7 * 86400) $fails[] = ['t' => $e['t'], 'u' => $e['u'], 'ip' => $e['ip'] ?? '', 's' => $e['s']];
             }
             usort($fails, function ($a, $b) { return strcmp($b['t'], $a['t']); });
             $f24 = count(array_filter($fails, function ($e) { return strtotime($e['t']) > time() - 86400; }));

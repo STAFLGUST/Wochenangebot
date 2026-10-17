@@ -9,7 +9,7 @@ const { CATEGORY_ORDER, CONDITION_LABELS, PRICE_STATUS_LABELS } = window.OfferCo
 const STORAGE = 'wochenangebot.';
 const PREVIEW = new URLSearchParams(location.search).has('vorschau');
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
-const OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
+let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -96,9 +96,9 @@ async function loadData() {
   const res = await fetch('api/?action=offer' + (PREVIEW ? '&draft=1' : '') + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
   let body = null;
   try { body = await res.json(); } catch { /* keine JSON-Antwort */ }
-  if (OFFER && res.status === 401) throw new Error('Dieses Angebot ist nur nach Anmeldung sichtbar. Bitte im Eingabebereich anmelden und den Link erneut öffnen.');
+  if (res.status === 401 && !PREVIEW) throw Object.assign(new Error('Dieses Angebot ist nur nach Anmeldung sichtbar.'), { needLogin: true });
   if (!res.ok || !body || !body.ok) {
-    throw new Error(body && body.error ? body.error : 'Das Angebot konnte nicht geladen werden (' + res.status + ').');
+    throw Object.assign(new Error(body && body.error ? body.error : 'Das Angebot konnte nicht geladen werden (' + res.status + ').'), { status: res.status });
   }
   COMPANY = body.company || '';
   PUBLISHED_AT = body.offer.publishedAt || body.offer.savedAt || null;
@@ -255,6 +255,13 @@ function renderStatic() {
 function offerTitle() { return (DATA && DATA.meta && DATA.meta.offerName) || 'Wochenangebot'; }
 function renderBanner() {
   const b = $('#preview-banner');
+  if (!PREVIEW && KUNDE) {
+    const list = KUNDE.angebote;
+    b.hidden = false;
+    b.innerHTML = `<div class="banner-inner k-banner">${icon('user')}<p>Angemeldet als <strong>${esc(KUNDE.firma)}</strong>${KUNDE.ansprechpartner ? ' · ' + esc(KUNDE.ansprechpartner) : ''}</p>
+      ${list.length > 1 ? `<div class="k-switch" role="tablist" aria-label="Angebot wählen">${list.map((o) => `<button type="button" role="tab" class="btn sm${o.id === (OFFER || 'std') ? ' on' : ''}" aria-selected="${o.id === (OFFER || 'std')}" data-kswitch="${esc(o.id)}">${esc(o.name)}</button>`).join('')}</div>` : ''}</div>`;
+    return;
+  }
   if (!PREVIEW && OFFER) {
     b.hidden = false;
     b.innerHTML = `<div class="banner-inner">${icon('info')}<p><strong>${esc(offerTitle())}</strong> – Kundenangebot, nur für angemeldete Nutzer sichtbar.</p></div>`;
@@ -964,6 +971,7 @@ function bind() {
 
   /* Dialoge */
   for (const d of $$('dialog')) {
+    if (d.id.startsWith('dlg-kunde')) continue;                    // eigene Behandlung in bindKunde()
     d.addEventListener('click', (e) => {
       if (e.target === d) d.close();
       if (e.target.closest('[data-close]')) d.close();
@@ -997,12 +1005,157 @@ function bind() {
   setH();
 }
 
+/* ---------- Kunden-Anmeldung ----------
+   Kunden melden sich mit Benutzerkennung und Passwort an und sehen nur die für sie freigeschalteten Angebote.
+   Die Prüfung erfolgt auf dem Server; hier wird nur die Oberfläche gesteuert. */
+let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true;
+async function kundeApi(action, body) {
+  let res, data = null;
+  try {
+    res = await fetch('api/?action=' + action, { method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': KCSRF } : {}, body: body ? JSON.stringify(body) : undefined });
+  } catch { throw new Error('Keine Verbindung zum Server.'); }
+  try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
+  if (!res.ok || !data || !data.ok) throw Object.assign(new Error(data && data.error ? data.error : 'Serverfehler (' + res.status + ').'), { status: res.status });
+  return data;
+}
+function setOfferParam(id) {
+  const u = new URL(location.href);
+  if (id && id !== 'std') u.searchParams.set('angebot', id); else u.searchParams.delete('angebot');
+  return u;
+}
+async function kundeStart() {
+  let st;
+  try { st = await kundeApi('kunde_status'); } catch { return; }   // ohne Antwort: wie bisher öffentlich laden
+  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false;
+  KUNDE = st.kunde || null; KCSRF = st.csrf || '';
+  renderKundeBtn();
+  if (!KUNDE || KSTAFF || KUNDE.mustChange) return;
+  const ids = KUNDE.angebote.map((o) => o.id);
+  if (!ids.length) return;
+  if (!ids.includes(OFFER || 'std')) {                              // nicht freigeschaltet → erstes eigenes Angebot
+    OFFER = ids[0] === 'std' ? '' : ids[0];
+    history.replaceState(null, '', setOfferParam(OFFER).toString());
+  }
+}
+function renderKundeBtn() {
+  const host = $('#kunde-slot');
+  if (!host || PREVIEW) return;
+  if (!KUNDE) {
+    host.innerHTML = `<button class="btn ghost" type="button" id="btn-kunde-login" title="Anmeldung für Kunden">${icon('user')}<span class="lbl">Kunden-Login</span></button>`;
+    return;
+  }
+  host.innerHTML = `<div class="menu-wrap"><button class="btn ghost" type="button" id="btn-kunde" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-kunde" title="Angemeldet als ${esc(KUNDE.firma)}">${icon('user')}<span class="lbl k-firma">${esc(KUNDE.firma)}</span></button>
+    <div class="menu" id="menu-kunde" role="menu" hidden>
+      <div class="menu-label">${esc(KUNDE.username)}</div>
+      ${KUNDE.angebote.length > 1 ? KUNDE.angebote.map((o) => `<button role="menuitem" type="button" data-kswitch="${esc(o.id)}">${icon(o.id === (OFFER || 'std') ? 'check' : 'file')}${esc(o.name)}</button>`).join('') + '<hr>' : ''}
+      <button role="menuitem" type="button" data-kact="pw">${icon('key')}Passwort ändern</button>
+      <button role="menuitem" type="button" data-kact="logout">${icon('logout')}Abmelden</button>
+    </div></div>`;
+}
+function renderLocked(msg, withLogin = true) {
+  $('#list').innerHTML = `<div class="empty k-locked"><div class="empty-ico">${icon('lock')}</div><h3>${KUNDE ? 'Kundenbereich' : 'Anmeldung erforderlich'}</h3><p>${esc(msg)}</p>
+    <div class="row-actions">${!KUNDE && withLogin ? `<button type="button" class="btn primary" data-kact="login">${icon('user')}Kunden-Login</button>` : ''}${KUNDE && KUNDE.mustChange ? `<button type="button" class="btn primary" data-kact="pwforce">${icon('key')}Passwort festlegen</button>` : ''}${KUNDE ? `<button type="button" class="btn" data-kact="logout">${icon('logout')}Abmelden</button>` : ''}${!KUNDE && OFFER && KSTDPUB ? '<a class="btn" href="./">Zum öffentlichen Wochenangebot</a>' : ''}</div></div>`;
+  $('#subbar').textContent = '';
+  for (const id of ['quicknav', 'hits', 'chips']) { const el = $('#' + id); if (el) el.textContent = ''; }
+  document.body.classList.add('k-gate');
+}
+function openKundeLogin() {
+  const d = $('#dlg-kunde-login');
+  $('#kl-err').textContent = '';
+  $('#kl-form').reset();
+  if (!d.open) d.showModal();
+  $('#kl-form [name="username"]').focus();
+}
+function openKundePw(forced) {
+  const d = $('#dlg-kunde-pw');
+  $('#kp-form').reset();
+  $('#kp-err').textContent = '';
+  d.dataset.forced = forced ? '1' : '';
+  $('#kp-title').textContent = forced ? 'Eigenes Passwort festlegen' : 'Passwort ändern';
+  $('#kp-intro').textContent = forced ? 'Sie melden sich zum ersten Mal mit dem Startpasswort an. Bitte legen Sie jetzt ein eigenes Passwort fest (mindestens 10 Zeichen).' : 'Mindestens 10 Zeichen. Andere angemeldete Geräte werden danach abgemeldet.';
+  $('#kp-close').hidden = !!forced;
+  $('#kp-cancel').textContent = forced ? 'Abmelden' : 'Abbrechen';
+  if (!d.open) d.showModal();
+  $('#kp-form [name="current"]').focus();
+}
+async function kundeLogout() {
+  try { await kundeApi('kunde_logout', {}); } catch { /* trotzdem neu laden */ }
+  location.href = setOfferParam('').pathname;
+}
+function bindKunde() {
+  if (PREVIEW) return;
+  const dl = $('#dlg-kunde-login'), dp = $('#dlg-kunde-pw');
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-kunde-login, [data-kact="login"]')) { openKundeLogin(); return; }
+    const kb = e.target.closest('#btn-kunde');
+    const km = $('#menu-kunde');
+    if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) km.querySelector('button').focus(); return; }
+    if (km && !km.hidden && !e.target.closest('#kunde-slot')) { km.hidden = true; $('#btn-kunde').setAttribute('aria-expanded', 'false'); }
+    const sw = e.target.closest('[data-kswitch]');
+    if (sw) { location.href = setOfferParam(sw.dataset.kswitch).toString(); return; }
+    const a = e.target.closest('[data-kact]')?.dataset.kact;
+    if (a === 'pw') { if (km) km.hidden = true; openKundePw(!!(KUNDE && KUNDE.mustChange)); }
+    if (a === 'pwforce') openKundePw(true);
+    if (a === 'logout') kundeLogout();
+  });
+  document.addEventListener('keydown', (e) => {
+    const km = $('#menu-kunde');
+    if (e.key === 'Escape' && km && !km.hidden) { km.hidden = true; $('#btn-kunde').focus(); }
+  });
+  $('#kl-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, btn = f.querySelector('[type="submit"]');
+    $('#kl-err').textContent = '';
+    btn.disabled = true;
+    try {
+      const r = await kundeApi('kunde_login', { username: f.username.value.trim(), password: f.password.value });
+      KCSRF = r.csrf; KUNDE = r.kunde;
+      dl.close();
+      if (KUNDE.mustChange) { renderKundeBtn(); renderLocked('Bitte legen Sie zuerst ein eigenes Passwort fest.'); openKundePw(true); return; }
+      location.reload();
+    } catch (ex) { $('#kl-err').textContent = ex.message; f.password.value = ''; f.password.focus(); }
+    finally { btn.disabled = false; }
+  });
+  dl.addEventListener('click', (e) => { if (e.target === dl || e.target.closest('[data-close]')) dl.close(); });
+  dp.addEventListener('cancel', (e) => { if (dp.dataset.forced) e.preventDefault(); });
+  dp.addEventListener('click', (e) => {
+    if (e.target.closest('#kp-cancel')) { if (dp.dataset.forced) kundeLogout(); else dp.close(); return; }
+    if (!dp.dataset.forced && (e.target === dp || e.target.closest('[data-close]'))) dp.close();
+  });
+  $('#kp-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, err = $('#kp-err'), btn = f.querySelector('[type="submit"]');
+    err.textContent = '';
+    if (f.password.value !== f.password2.value) { err.textContent = 'Die beiden neuen Passwörter stimmen nicht überein.'; return; }
+    if (f.password.value.length < 10) { err.textContent = 'Das neue Passwort muss mindestens 10 Zeichen lang sein.'; return; }
+    btn.disabled = true;
+    try {
+      const r = await kundeApi('kunde_passwort', { current: f.current.value, password: f.password.value });
+      KUNDE = r.kunde;
+      const forced = dp.dataset.forced;
+      dp.dataset.forced = '';
+      dp.close();
+      if (forced) { location.reload(); return; }
+      toast('Neues Passwort gespeichert.');
+    } catch (ex) {
+      err.textContent = ex.message;
+      if (ex.status === 401) setTimeout(() => location.reload(), 1500);
+    } finally { btn.disabled = false; }
+  });
+}
+
 /* ---------- Start ---------- */
 (async function boot() {
   updateThemeBtn();
+  bindKunde();
   try {
+    if (!PREVIEW) await kundeStart();
+    if (KUNDE && KUNDE.mustChange) { renderLocked('Bitte legen Sie zuerst ein eigenes Passwort fest.'); openKundePw(true); return; }
+    if (KUNDE && !KUNDE.angebote.length && !KSTAFF) { renderLocked('Für Ihren Zugang ist derzeit kein Angebot freigeschaltet. Bitte wenden Sie sich an Ihren Ansprechpartner.', false); return; }
     await loadData();
   } catch (e) {
+    if (e.needLogin) { renderLocked((OFFER ? 'Dieses Angebot' : 'Das Wochenangebot') + ' ist nur nach Anmeldung sichtbar. Bitte melden Sie sich mit Ihrer Benutzerkennung und Ihrem Passwort an.'); openKundeLogin(); return; }
     $('#list').innerHTML = `<div class="empty"><div class="empty-ico">${icon('info')}</div><h3>Angebot nicht verfügbar</h3><p>${esc(e.message)}</p>
       <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button></div></div>`;
     $('#subbar').textContent = '';

@@ -7,7 +7,7 @@
 <meta name="description" content="Digitale Wochenangebotsliste – Fleischgroßhandel">
 <title>Wochenangebot</title>
 <script src="assets/theme.js"></script>
-<link rel="stylesheet" href="assets/app.css?v=20261017e">
+<link rel="stylesheet" href="assets/app.css?v=20261017f">
 </head>
 <body>
 <a class="skip" href="#list">Zum Angebot springen</a>
@@ -32,6 +32,7 @@
     </div>
 
     <div class="actions">
+      <div id="kunde-slot" class="kunde-slot"></div>
       <button class="btn ghost" id="btn-print" type="button" title="Drucken oder als PDF speichern">
         <svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken</span>
       </button>
@@ -159,6 +160,31 @@
   </form>
 </dialog>
 
+<dialog class="modal" id="dlg-kunde-login" aria-labelledby="kl-title">
+  <form class="dlg" id="kl-form" autocomplete="on">
+    <div class="dlg-head"><div><h2 id="kl-title">Kunden-Login</h2><p>Mit Ihrer Benutzerkennung und Ihrem Passwort sehen Sie die für Sie freigeschalteten Angebote.</p></div>
+      <button class="btn icon ghost" type="button" data-close aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body kform">
+      <label class="kfld"><span>Benutzerkennung</span><input name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32" required></label>
+      <label class="kfld"><span>Passwort</span><input name="password" type="password" autocomplete="current-password" maxlength="200" required></label>
+      <p class="kerr" id="kl-err" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button class="btn" type="button" data-close>Abbrechen</button><button class="btn primary" type="submit">Anmelden</button></div>
+  </form>
+</dialog>
+<dialog class="modal" id="dlg-kunde-pw" aria-labelledby="kp-title">
+  <form class="dlg" id="kp-form" autocomplete="off">
+    <div class="dlg-head"><div><h2 id="kp-title">Passwort ändern</h2><p id="kp-intro"></p></div>
+      <button class="btn icon ghost" type="button" id="kp-close" data-close aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+    <div class="dlg-body kform">
+      <label class="kfld"><span>Bisheriges Passwort</span><input name="current" type="password" autocomplete="current-password" maxlength="200" required></label>
+      <label class="kfld"><span>Neues Passwort</span><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="200" required></label>
+      <label class="kfld"><span>Neues Passwort wiederholen</span><input name="password2" type="password" autocomplete="new-password" minlength="10" maxlength="200" required></label>
+      <p class="kerr" id="kp-err" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button class="btn" type="button" id="kp-cancel">Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
 <dialog class="modal wide" id="dlg-compare" aria-labelledby="cmp-title"><div class="dlg" id="compare-body"></div></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="print-root"></div>
@@ -185,10 +211,14 @@
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l.9 12.5a1.5 1.5 0 0 0 1.5 1.5h6.2a1.5 1.5 0 0 0 1.5-1.5L17.5 7M9.5 7V4.5h5V7"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M4 9h11a5 5 0 0 1 0 10H8"/><path d="M8 5 4 9l4 4"/></symbol>
 </svg>
 
-<script src="assets/offer-core.js?v=20261017e"></script>
-<script src="assets/frontend.js?v=20261017e"></script>
+<script src="assets/offer-core.js?v=20261017f"></script>
+<script src="assets/frontend.js?v=20261017f"></script>
 </body>
 </html>

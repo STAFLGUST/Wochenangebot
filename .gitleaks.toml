@@ -12,4 +12,11 @@ regexes = [
   '''Gut-Passwort-2026''',
   '''Sicheres-Passwort-1''',
   '''Leserin-Zugang-1''',
+  # Kunden-Zugänge (tests/e2e/test_kunden.py)
+  '''Start-Kennwort-42''',
+  '''Eigenes-Kennwort-55''',
+  '''Neu-Gesetzt-Kennwort-9''',
+  '''Editor-Zugang-77''',
+  '''Seeblick-Eigen-202[67]''',
+  '''x-gasthaus\.muster-1''',
 ]

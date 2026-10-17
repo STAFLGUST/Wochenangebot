@@ -31,6 +31,7 @@ SUITES = {
     'sidenav':    (8790, 'data-seed', True),
     'p0':         (8790, 'data-seed', True),
     'angebote':   (8790, 'data-seed', True),
+    'kunden':     (8790, 'data-seed', True),
 }
 
 

@@ -18,3 +18,6 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
 7. **Öffentliche Seite:** nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern.
 8. **Kundenangebote:** Preise eines Kundenangebots (`variants`) werden nur aufgelöst und nur an angemeldete,
    berechtigte Nutzer ausgeliefert (`offer_resolve`); das öffentliche Wochenangebot enthält nie Kundenpreise.
+9. **Kundenzugänge** sind vom Eingabebereich getrennt: Aktionen des Eingabebereichs prüfen nur die Mitarbeiter-Anmeldung
+   (`require_auth`), Kunden (`current_customer`) sehen ausschließlich freigeschaltete Angebote. Passwörter nur als Hash,
+   nie in Antworten oder im Protokoll.
