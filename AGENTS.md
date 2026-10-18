@@ -51,4 +51,7 @@ erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern f
   Sitzung jederzeit die Anmeldemaske – Tests dürfen nicht annehmen, dass eine Seite danach bedienbar bleibt.
 - Adressen/Ports in Tests nur über `umgebung.py` (`BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`), nie fest eintragen.
 - Volle Ausgabe jeder Gruppe steht in `tests/.arbeit/test-<gruppe>.log` (in der CI als Artefakt bei Fehlern).
+- Scheitert eine Gruppe, wiederholt der Testlauf sie einmal allein. Besteht sie dann, bleibt der Lauf grün, aber es
+  erscheint die Warnung „wackelig“ (Fehlversuch in `tests/.arbeit/test-<gruppe>-fehlversuch.log`). Solche Gruppen
+  zeitnah stabilisieren; zum Aufspüren `WA_RETRY=0 WA_JOBS=5 python3 tests/run_e2e.py` (mehr Last, keine Wiederholung).
 

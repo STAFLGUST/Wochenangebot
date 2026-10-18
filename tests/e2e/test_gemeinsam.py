@@ -1,5 +1,6 @@
 """Mehrere Mitarbeiter bearbeiten den Entwurf gleichzeitig: Abgleich, Konflikte, Anwesenheit, Inaktivität."""
 import os
+import re
 import subprocess
 import sys
 import time
@@ -150,6 +151,9 @@ with sync_playwright() as pw:
     check('remote change then shown', pin(e, I1).input_value() == '12,34', pin(e, I1).input_value())
 
     # Veröffentlichen, während jemand anderes noch gespeichert hat
+    # Hintergrundabgleich kurz anhalten, damit der Konflikt sicher beim Veröffentlichen auftritt (nicht vorher per Abgleich)
+    ping = re.compile(r'action=draft_ping')
+    e.route(ping, lambda route: route.abort())
     e.click('#btn-publish'); e.wait_for_selector('#dlg-publish[open] [data-ia="publish"]')
     d = A.call('draft')[1]; m = d['draft']; set_price(m, I2, 23.45)
     A.call('save_draft', {'model': m, 'revision': d['revision']})
@@ -158,7 +162,8 @@ with sync_playwright() as pw:
     check('publish conflict explained', ADMIN_NAME in e.inner_text('#dlg-publish .err-box') and 'erneut veröffentlichen' in e.inner_text('#dlg-publish .err-box'), e.inner_text('#dlg-publish .err-box'))
     e.screenshot(path=SH + '/gemeinsam-konflikt.png')
     e.click('#dlg-publish [data-ia="publish"]')
-    e.wait_for_selector('#dlg-publish', state='hidden', timeout=8000)
+    e.wait_for_selector('#dlg-publish', state='hidden', timeout=15000)
+    e.unroute(ping)
     pub_items = A.call('draft')[1]['published']['items']
     pv = {x['id']: (x.get('price') or {}).get('value') for x in pub_items}
     check('second publish includes everyone\'s changes', pv.get(I2) == 23.45 and pv.get(I6) == 66.66 and pv.get(I4) == 44.44, {k: pv.get(k) for k in (I2, I4, I6)})

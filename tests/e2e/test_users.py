@@ -4,7 +4,7 @@ import sys
 import json, os, re
 from playwright.sync_api import sync_playwright
 B = BASE
-from umgebung import SH, FIX, REPO, WORK, XL44, wait_text
+from umgebung import SH, FIX, REPO, WORK, XL44, wait_text, until
 from testdaten import de, preis, preise, artikel, bestand_kg
 DATA = os.environ['UDATA']
 res = []
@@ -152,7 +152,8 @@ with sync_playwright() as p:
     check('cannot delete self', r[0] == 422, r)
     # Ben löschen
     b.locator('.utab tbody tr:has-text("Ben Leser")').click(); b.wait_for_selector('#dlg-user[open]')
-    b.click('#user-body [data-uact=del]'); b.click('#dlg-confirm [data-v="1"]'); b.wait_for_timeout(500)
+    b.click('#user-body [data-uact=del]'); b.click('#dlg-confirm [data-v="1"]')
+    until(lambda: b.locator('.utab tbody tr').count() == 2)
     check('ben deleted', b.locator('.utab tbody tr').count() == 2)
 
     # ---- Protokoll vollständig

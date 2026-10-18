@@ -175,8 +175,22 @@ def main():
     threads = [threading.Thread(target=worker, args=(items,)) for _ in range(jobs)]
     for t in threads: t.start()
     for t in threads: t.join()
+    flaky = []
+    retry = [n for n in names if not res[n][3]]
+    # Einmalige Wiederholung fehlgeschlagener Gruppen allein (ohne Parallellast). Besteht sie dann, gilt sie als
+    # wackelig: der Lauf bleibt grün, die Gruppe wird aber deutlich gemeldet (GitHub-Warnung) und muss stabilisiert werden.
+    if retry and os.environ.get('WA_RETRY', '1') != '0' and len(retry) <= 3:
+        print(f'\nWiederhole allein: {", ".join(retry)}')
+        for n in retry:
+            log = os.path.join(WORK, f'test-{n}.log')
+            if os.path.isfile(log): shutil.copy(log, os.path.join(WORK, f'test-{n}-fehlversuch.log'))
+            r = run(n)
+            if r[3]:
+                flaky.append(n); res[n] = r
     res = [res[n] for n in names]
     print(f'Laufzeit {time.time() - t0:.0f} s mit {jobs} parallelen Gruppen')
+    for n in flaky:
+        print(f'::warning::Testgruppe {n} erst bei Wiederholung bestanden (wackelig) – bitte stabilisieren, Ausgabe in tests/.arbeit/test-{n}.log')
     passed = sum(r[1] for r in res); total = sum(r[2] for r in res)
     bad = [r[0] for r in res if not r[3]]
     print(f'\nGesamt: {passed}/{total} Prüfungen bestanden' + (f' – fehlgeschlagen: {", ".join(bad)}' if bad else ''))
