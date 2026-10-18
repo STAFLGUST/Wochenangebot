@@ -48,7 +48,7 @@ const COND_LABEL = CONDITION_LABELS;
 const COND_ORDER = ['frisch', 'gefroren', 'frisch-gefroren', 'dry-aged', 'unbekannt'];
 const CAT_CLASS = { 'Rind': 'cat-rind', 'Kalb': 'cat-kalb', 'Schwein': 'cat-schwein', 'Lamm & Schaf': 'cat-lamm', 'Geflügel': 'cat-gefluegel', 'Knochen': 'cat-knochen', 'Sonstiges': 'cat-sonst' };
 const CAT_MONO = { 'Rind': 'R', 'Kalb': 'K', 'Schwein': 'S', 'Lamm & Schaf': 'L', 'Geflügel': 'G', 'Knochen': 'Kn', 'Sonstiges': '·' };
-const HIGHLIGHT_FEATURES = ['Dry Aged', 'Grain Fed', 'ex chilled', 'Prime Steer', 'Black Angus'];
+const HIGHLIGHT_FEATURES = ['Sonderposten', 'Dry Aged', 'Grain Fed', 'ex chilled', 'Prime Steer', 'Black Angus'];
 const SYN_CAT = { 'Rind': 'rindfleisch beef', 'Kalb': 'kalbfleisch', 'Schwein': 'schweinefleisch', 'Lamm & Schaf': 'lammfleisch schaf', 'Geflügel': 'huhn', 'Knochen': '' };
 const SYN_ORIGIN = {
   'Neuseeland': 'nz nzl', 'Argentinien': 'arg', 'Deutschland / EU': 'deutschland eu europa', 'Brasilien': 'brasil',
@@ -69,12 +69,13 @@ let DATA, PUBLISHED_AT = null;
 function prepare(raw) {
   const items = raw.items.map((it) => {
     const o = { ...it };
+    if (it.sale) o.features = [...it.features, 'Sonderposten'];   // Sonderpreis „solange der Vorrat reicht“ (filterbar)
     const p = it.price;
     const priceTerms = [p, ...it.altPrices].map((x) => x.status === 'value' ? fmtNum.format(x.value) : x.status === 'request' ? 'auf anfrage' : 'ohne preis').join(' ');
     /* Suche nur über Nummer, Bezeichnung und echte Artikelmerkmale – nicht über Gruppennamen,
        damit z. B. „Roastbeef“ keine anderen Teilstücke aus der Gruppe „Roastbeef am Knochen“ zeigt */
     o._hay = fold([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
-      COND_LABEL[it.condition], SYN_COND[it.condition], it.features.join(' '), it.brand, priceTerms]
+      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten' : '', it.brand, priceTerms]
       .filter(Boolean).join(' ¦ '));
     o._cmp = it.category + '|' + it.cut;
     return o;
@@ -204,7 +205,7 @@ function starHTML(it) {
   return `<button type="button" class="star" data-fav="${esc(it.key)}" aria-pressed="${on}" aria-label="${on ? 'Von der Merkliste entfernen' : 'Auf die Merkliste setzen'}: ${esc(it.name)}" title="${on ? 'Von der Merkliste entfernen' : 'Merken'}">${icon('star')}</button>`;
 }
 function tagHTML(it, withBrand) {
-  const t = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag">${esc(f)}</span>`);
+  const t = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`);
   if (withBrand && it.brand) t.unshift(`<span class="tag brand">${esc(it.brand)}</span>`);
   return t.length ? `<div class="tags">${t.join('')}</div>` : '';
 }
@@ -215,6 +216,9 @@ function priceMain(p) {
 }
 const priceShort = (p) => (p.status === 'value' ? fmtNum.format(p.value) + ' €/kg' : p.status === 'request' ? 'auf Anfrage' : 'ohne Preis');
 function priceHTML(it) {
+  if (it.sale) {
+    return `<span class="price sale" title="Sonderposten – solange der Vorrat reicht">${it.regular != null ? `<s class="p-was">${fmtNum.format(it.regular)} €/kg</s>` : ''}<span>${priceMain(it.price)}</span><span class="sale-note">solange der Vorrat reicht</span></span>`;
+  }
   const main = `<span>${it.price.label ? `<span class="pl">${esc(it.price.label)}</span>` : ''}${priceMain(it.price)}</span>`;
   const alts = it.altPrices.map((p) => `<span class="p-alt"><span class="pl">${esc(p.label)}</span>${esc(priceShort(p))}</span>`).join('');
   return `<span class="price">${main}${alts}</span>`;
@@ -404,7 +408,7 @@ function renderTable(list, grouped) {
 }
 
 function cardHTML(it, grouped) {
-  const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag">${esc(f)}</span>`).join('');
+  const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`).join('');
   return `<article class="card" data-id="${it.id}">
     <div class="card-top">${monoHTML(it.category)}<span class="code">${it.code ? 'Art.-Nr. ' + hl(it.code) : 'ohne Art.-Nr.'}</span>${starHTML(it)}</div>
     <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button></h3>
@@ -548,7 +552,9 @@ function openDetail(id) {
   if (!it) return;
   for (const d of [$('#dlg-compare')]) if (d.open) d.close();
   const m = DATA.meta;
-  const prices = [it.price, ...it.altPrices].map((p) => `<div class="row"><span>${p.label ? `<span class="pl">${esc(p.label)}</span>` : '<span class="pl">Preis je kg</span>'}</span><span>${priceMain(p)}</span></div>`).join('');
+  const prices = it.sale
+    ? `<div class="row sale"><span><span class="pl">Sonderpreis je kg – solange der Vorrat reicht</span>${it.regular != null ? `<s class="p-was">statt ${fmtNum.format(it.regular)} €/kg</s>` : ''}</span><span>${priceMain(it.price)}</span></div>`
+    : [it.price, ...it.altPrices].map((p) => `<div class="row"><span>${p.label ? `<span class="pl">${esc(p.label)}</span>` : '<span class="pl">Preis je kg</span>'}</span><span>${priceMain(p)}</span></div>`).join('');
   const same = (it.sameCode || []).map((x) => DATA.byId.get(x)).filter(Boolean);
   const cmp = comparables(it);
   const dd = (label, val) => `<dt>${esc(label)}</dt><dd>${val}</dd>`;

@@ -49,16 +49,16 @@ with sync_playwright() as p:
     order = row.locator('td').evaluate_all("tds => tds.map(t => t.className.split(' ')[0])")
     check('column order prev → price → stock', order.index('e-prev') + 1 == order.index('e-price') and order.index('e-price') + 1 == order.index('e-stock'), order)
     nost = a.locator('tr[data-id] td.e-stock.none').count(); check('articles without stock show —', nost > 0, nost)
-    badge = a.inner_text('.np-badge'); check('panel count = stock without price', badge == str(len(exp_np)), (badge, len(exp_np)))
-    check('panel rows', a.locator('.nptab tbody tr').count() == len(exp_np))
+    badge = a.inner_text('#noprice-panel .np-badge'); check('panel count = stock without price', badge == str(len(exp_np)), (badge, len(exp_np)))
+    check('panel rows', a.locator('#noprice-panel .nptab tbody tr').count() == len(exp_np))
     a.screenshot(path=SH + '/editor-aux.png')
     # Suche filtert Panel mit
     a.fill('#ed-q', 'Roastbeef'); a.wait_for_timeout(500)
-    names = a.locator('.nptab tbody td.np-name').all_inner_texts()
+    names = a.locator('#noprice-panel .nptab tbody td.np-name').all_inner_texts()
     check('editor search filters panel', all('roastbeef' in n.lower() for n in names), names[:5])
     a.fill('#ed-q', ''); a.wait_for_timeout(500)
     # Ins Angebot übernehmen
-    first = a.locator('.nptab tbody tr:has([data-np=add])').first
+    first = a.locator('#noprice-panel .nptab tbody tr:has([data-np=add])').first
     code = first.get_attribute('data-npcode'); name = first.locator('td.np-name').inner_text()
     first.locator('[data-np=add]').click(); a.wait_for_selector('#dlg-add-stock[open]')
     a.fill('#add-stock-body [name=price]', '9,99x'); a.click('#add-stock-body [type=submit]'); a.wait_for_timeout(200)
@@ -66,11 +66,11 @@ with sync_playwright() as p:
     a.fill('#add-stock-body [name=price]', '9,99'); a.click('#add-stock-body [type=submit]'); a.wait_for_timeout(1500)
     new = a.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])')
     check('article added with price + stock', new.count() == 1 and new.locator('input[data-f=price]').input_value() == '9,99' and new.locator('td.e-stock').inner_text().strip() != '—', code)
-    check('panel count decreased', a.inner_text('.np-badge') == str(len(exp_np) - 1))
+    check('panel count decreased', a.inner_text('#noprice-panel .np-badge') == str(len(exp_np) - 1))
     exp = re.sub(r'[\s,]*\bfrisch\b\.?[\s,.]*$', '', name, flags=re.I).strip() or name
     check('name taken from stock list (without frisch)', new.locator('input[data-f=name]').input_value() == exp, (new.locator('input[data-f=name]').input_value(), exp))
     # Preis für Artikel im Angebot ohne Preis
-    goto = a.locator('.nptab [data-np=goto]')
+    goto = a.locator('#noprice-panel .nptab [data-np=goto]')
     if goto.count():
         goto.first.click(); a.wait_for_timeout(600)
         check('"Preis eintragen" focuses price field', a.evaluate("document.activeElement && document.activeElement.dataset.f === 'price'"))
