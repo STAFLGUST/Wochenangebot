@@ -15,7 +15,17 @@ switch ($action) {
                      'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== '', 'passError' => $m['passError'], 'source' => $m['source']] : null,
                      'account' => ($a = mail_account()) ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '', 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null,
                      'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'orders' => order_settings(), 'sodium' => function_exists('sodium_crypto_secretbox'),
-                     'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last)]);
+                     'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last), 'testumgebung' => testumgebung()]);
+        }
+
+        /* Testumgebung: abgelegte E-Mails ansehen (Administrator) */
+        case 'testpostfach': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            if (!testumgebung()) fail('Nur in der Testumgebung verfügbar.', 404);
+            $l = array_reverse(store_read('testpostfach') ?? []);
+            if (isset($_GET['i'])) { $m = $l[(int)$_GET['i']] ?? null; if (!$m) fail('Nachricht nicht gefunden.', 404); respond(['ok' => true, 'mail' => $m]); }
+            respond(['ok' => true, 'mails' => array_map(function ($m) { return ['t' => $m['t'], 'to' => $m['to'], 'subject' => $m['subject']]; }, $l)]);
         }
 
         case 'mail_konto_save': {

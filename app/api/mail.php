@@ -61,6 +61,10 @@ function mail_account(): ?array
 function mail_cfg(): ?array
 {
     global $CFG;
+    if (function_exists('testumgebung') && testumgebung() && !mail_account() && env_str('MAIL_SMTP_HOST') === '') {
+        return ['host' => 'testpostfach', 'port' => 0, 'secure' => 'none', 'user' => '', 'pass' => '', 'passError' => false, 'from' => 'test@example.invalid',
+                'fromName' => (string)$CFG['company'], 'replyTo' => '', 'cafile' => '', 'source' => 'test'];
+    }
     $a = mail_account();
     if ($a) {
         $pass = isset($a['passEnc']) && $a['passEnc'] !== '' ? mail_decrypt((string)$a['passEnc']) : '';
@@ -134,7 +138,11 @@ final class Smtp
 {
     private $fh = null;
     private array $cfg;
-    public function __construct(array $cfg) { $this->cfg = $cfg; }
+    public function __construct(array $cfg)
+    {
+        if (function_exists('testumgebung') && testumgebung()) throw new RuntimeException('In der Testumgebung wird kein Mailserver verwendet – E-Mails landen im Testpostfach.');
+        $this->cfg = $cfg;
+    }
 
     private function err(string $m): void { throw new RuntimeException($m); }
     private function read(): array

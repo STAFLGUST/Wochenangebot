@@ -23,6 +23,7 @@ code, st = A.call('security_status')
 check('dashboard: maintenance off, storage + disk + mail + orders + customers', code == 200 and st['wartung'] is None and st['storage']['documents'] >= 1
       and st['disk']['free'] and 'sent7' in st['mail'] and 'n7' in st['orders'] and 'active' in st['customers'] and st['php'], {k: st.get(k) for k in ['storage', 'disk']})
 check('public offer reachable before', P.call('offer')[0] == 200)
+check('no test mailbox outside the test environment', A.call('testpostfach')[0] == 404 and A.call('status')[1].get('testumgebung') is False)
 check('editor cannot switch maintenance', E.call('wartung_save', {'active': True})[0] == 403)
 check('anonymous cannot switch maintenance', P.call('wartung_save', {'active': True})[0] == 401)
 check('invalid end time rejected', A.call('wartung_save', {'active': True, 'until': 'morgen'})[0] == 422)

@@ -28,3 +28,26 @@
 	respond @private 404
 	reverse_proxy app:80
 }
+
+# Testumgebung: test.<Domain> → Container „app-test“ (Ordner /opt/wochenangebot-test, deploy/testumgebung.sh).
+# Nur Testdaten, Zugang zusätzlich per Passwort (Apache im Test-Container), keine Suchmaschinen.
+# Läuft der Test-Container nicht, antwortet nur diese Adresse mit einem Fehler – der Echtbetrieb ist unberührt.
+test.{$DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Robots-Tag "noindex, nofollow"
+		?Cache-Control "no-cache"
+		-Server
+		-X-Powered-By
+	}
+	@private path /data /data/*
+	respond @private 404
+	reverse_proxy app-test:80
+}

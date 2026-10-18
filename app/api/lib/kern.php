@@ -5,6 +5,8 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* ---------------- Hilfsfunktionen ---------------- */
 
+/* Testumgebung (test.<Domain>): nur Testdaten; E-Mails gehen in das Testpostfach statt an echte Empfänger */
+function testumgebung(): bool { return getenv('WA_TESTUMGEBUNG') === '1'; }
 function respond(array $data, int $status = 200): void
 {
     store_commit(); // Intentional API errors may persist login-attempt counters.

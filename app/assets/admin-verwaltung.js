@@ -456,6 +456,7 @@
     const log = (m.log || []).slice(0, 50);
     host.innerHTML = `
       <div class="sec-grid">${status}</div>
+      ${m.testumgebung ? '<div class="gcard sec-form" id="ml-testpost"><h3 class="sec-h">Testpostfach</h3><p class="hint">Testumgebung: Es werden keine E-Mails versendet. Alles, was sonst verschickt würde (Wochenangebot, Sonderposten, Bestellwünsche, Einladungen …), landet hier.</p><div id="ml-tp-list"><div class="loading"><div class="spinner"></div>wird geladen …</div></div><iframe id="ml-tp-prev" sandbox="" title="Vorschau der E-Mail" hidden></iframe></div>' : ''}
       <form class="gcard sec-form" id="ml-form" autocomplete="off">
         <h3 class="sec-h">Postfach für den Versand</h3>
         <div class="ml-presets"><span class="sub">Vorlage:</span>${Object.entries(MAIL_PRESETS).map(([k, p]) => `<button type="button" class="btn sm" data-ml="preset" data-p="${k}">${esc(p.label)}</button>`).join('')}</div>
@@ -509,7 +510,24 @@
         <h3 class="sec-h">Zuletzt versendet</h3>
         ${log.length ? `<div class="ml-logwrap"><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sec-empty">Noch keine E-Mails versendet.</p>'}
       </div>`;
+    if (m.testumgebung) renderTestpost();
   }
+  async function renderTestpost() {
+    const host = $('#ml-tp-list');
+    if (!host) return;
+    try {
+      const r = await api('testpostfach');
+      host.innerHTML = r.mails.length ? `<div class="ml-logwrap"><table class="ctab"><thead><tr><th>Zeit</th><th>An</th><th>Betreff</th></tr></thead><tbody>${r.mails.map((x, i) => `<tr data-tp="${i}" tabindex="0" style="cursor:pointer"><td>${esc(dateTime(x.t))}</td><td>${esc(x.to)}</td><td>${esc(x.subject)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sec-empty">Noch keine E-Mails im Testpostfach.</p>';
+    } catch (ex) { host.innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; }
+  }
+  $('#view-mail').addEventListener('click', async (e) => {
+    const tr = e.target.closest('tr[data-tp]');
+    if (!tr) return;
+    try {
+      const r = await api('testpostfach', { query: '&i=' + encodeURIComponent(tr.dataset.tp) });
+      const f = $('#ml-tp-prev'); f.hidden = false; f.srcdoc = r.mail.html || `<pre>${esc(r.mail.text)}</pre>`; f.scrollIntoView({ block: 'nearest' });
+    } catch (ex) { toast(ex.message); }
+  });
   $('#view-mail').addEventListener('change', (e) => {
     if (e.target.name === 'secure') { const p = $('#ml-form [name="port"]'); if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
   });
