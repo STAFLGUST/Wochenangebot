@@ -12,6 +12,7 @@ st() { python3 -c "import json; t=open('$T/daten/sicherung.php').read(); print(j
 
 sh "$T/deploy/sichern.sh" >/dev/null
 ok "Sicherung erstellt und geprüft" '[ "$(st ok)" = True ] && [ "$(st inhalt)" = True ] && [ "$(ls "$T"/sicherungen/daten-*.tar.gz | wc -l)" -eq 1 ]'
+ok "Status nennt Datensätze und Speicherart (Dateien)" '[ "$(st speicher)" = dateien ] && [ "$(st datensaetze)" -ge 1 ]'
 ok "Archiv nur für root lesbar" '[ "$(stat -c %a "$T/sicherungen")" = 700 ] && [ "$(stat -c %a "$T"/sicherungen/daten-*.tar.gz)" = 600 ]'
 ok "Archiv enthält die Daten" 'tar tzf "$T"/sicherungen/daten-*.tar.gz | grep -q angebot.php'
 ok "Schlüssel für das Postfach-Passwort wird nicht gesichert" '! tar tzf "$T"/sicherungen/daten-*.tar.gz | grep -q mail-schluessel'
@@ -30,6 +31,7 @@ python3 "$T/deploy/datenbank.py" migrate "$T/daten" --offline >/dev/null
 sleep 1
 sh "$T/deploy/sichern.sh" --jetzt >/dev/null
 ok "SQLite-Sicherung erstellt und geprüft" '[ "$(st ok)" = True ] && [ "$(st inhalt)" = True ]'
+ok "Status nennt Datensätze und Speicherart (Datenbank)" '[ "$(st speicher)" = sqlite ] && [ "$(st datensaetze)" -ge 1 ]'
 LATEST=$(ls -1t "$T"/sicherungen/daten-*.tar.gz | head -1)
 mkdir "$T/restore"
 tar xzf "$LATEST" -C "$T/restore"

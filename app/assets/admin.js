@@ -417,7 +417,20 @@
     for (const it of m.items) if (C.normalizeItem(it, gb.get(it.groupId))) n++;
     return n;
   }
+  /* Wartungsmodus: Hinweis für alle Mitarbeiter oben im Eingabebereich */
+  let wartungSt = null;
+  const wartungBis = (w) => (w && w.until ? ` · voraussichtlich bis ${new Date(w.until).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr` : '');
+  function renderWartungBanner() {
+    const b = $('#adm-wartung');
+    if (!b) return;
+    b.hidden = !wartungSt;
+    if (wartungSt) b.innerHTML = `${icon('info', 'sm')}<span><strong>Wartungsmodus aktiv</strong> – Kunden sehen auf der Angebotsseite nur einen Wartungshinweis${esc(wartungBis(wartungSt))}.</span>${can('admin') ? '<button type="button" class="btn sm" data-wartung="goto">Verwalten</button>' : ''}`;
+  }
+  async function refreshWartung() { try { wartungSt = (await api('status')).wartung || null; } catch { /* Hinweis später */ } renderWartungBanner(); }
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-wartung="goto"]')) setView('sec'); });
+
   async function openEditor() {
+    refreshWartung();
     const d = await api('draft');
     published = d.published ? strip(d.published) : null;
     model = d.draft ? strip(d.draft) : published ? clone(published) : emptyModel();
@@ -3281,8 +3294,8 @@
     ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails, Bestellwünsche)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', twofa: 'auth', reauth: 'auth', reauth_fail: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden', bestellung: 'kunden' }[a] || '');
-  const ACTION_LABEL = { bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', wartung: 'security', twofa: 'auth', reauth: 'auth', reauth_fail: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden', bestellung: 'kunden' }[a] || '');
+  const ACTION_LABEL = { wartung: 'Wartungsmodus', bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
@@ -3460,7 +3473,37 @@
     if (!b.ok) return card('bad', 'Datensicherung', `letzter Versuch ${esc(when)} fehlgeschlagen`, esc(b.meldung || (b.fehler ? `${b.fehler} Datei(en) fehlerhaft` : 'Server prüfen')));
     if (b.inhalt === false) return card('warn', 'Datensicherung', `${esc(when)} · nur Archiv geprüft`, esc(b.meldung || 'Inhalt nicht geprüft'));
     if (age > 48) return card('bad', 'Datensicherung', `letzte Sicherung ${esc(when)}`, 'Älter als 2 Tage – Server prüfen');
-    return card('ok', 'Datensicherung', `${esc(when)} · geprüft`, `${b.anzahl} Stände auf dem Server (${(b.groesse / 1024 / 1024).toFixed(1).replace('.', ',')} MB je Stand)`);
+    const ds = b.datensaetze ? `${fmtInt.format(b.datensaetze)} Datensätze${b.speicher === 'sqlite' ? ' (Datenbank)' : ''} · ` : '';
+    return card('ok', 'Datensicherung', `${esc(when)} · geprüft`, `${ds}${b.anzahl} Stände auf dem Server (${(b.groesse / 1024 / 1024).toFixed(1).replace('.', ',')} MB je Stand)`);
+  }
+  const mb = (n) => (n / 1024 / 1024).toFixed(1).replace('.', ',');
+  const gb = (n) => (n / 1024 / 1024 / 1024).toFixed(1).replace('.', ',');
+  function wartungCard(w, card) {
+    return w ? card('warn', 'Wartungsmodus', 'aktiv – Kunden sehen einen Wartungshinweis', `seit ${esc(dateTime(w.since))} Uhr${esc(wartungBis(w))}`)
+      : card('ok', 'Wartungsmodus', 'aus – Angebotsseite normal erreichbar', '');
+  }
+  function storageCard(d, card) {
+    const st = d.storage || {};
+    return card('ok', 'Datenablage', st.mode === 'sqlite' ? `SQLite-Datenbank · ${fmtInt.format(st.documents || 0)} Datensätze` : `Dateien · ${fmtInt.format(st.documents || 0)} Datensätze`,
+      `${mb(st.bytes || 0)} MB${d.php ? ` · PHP ${esc(d.php)}` : ''}`);
+  }
+  function diskCard(k, card) {
+    if (!k || !k.free || !k.total) return card('warn', 'Speicherplatz', 'unbekannt', '');
+    const lvl = k.free < 1024 ** 3 ? 'bad' : k.free < 5 * 1024 ** 3 ? 'warn' : 'ok';
+    return card(lvl, 'Speicherplatz', `${gb(k.free)} GB frei von ${gb(k.total)} GB`, lvl === 'ok' ? '' : 'Bald aufräumen oder Speicher erweitern');
+  }
+  function mailCard(m, card) {
+    if (!m || !m.configured) return card('warn', 'E-Mail-Versand', 'nicht eingerichtet', 'Verwaltung → E-Mail');
+    return card(m.failed7 ? 'warn' : 'ok', 'E-Mail-Versand', `${fmtInt.format(m.sent7)} zugestellt in 7 Tagen`, m.failed7 ? `${fmtInt.format(m.failed7)} nicht zugestellt – Versandliste unter E-Mail prüfen` : '');
+  }
+  function ordersCard(o, card) {
+    if (!o) return '';
+    if (!o.enabled) return card('warn', 'Bestellwünsche', 'Bestellfunktion aus', 'Verwaltung → E-Mail → Bestellwünsche');
+    return card(o.failed7 ? 'warn' : 'ok', 'Bestellwünsche', `${fmtInt.format(o.n7)} in den letzten 7 Tagen`, o.failed7 ? `${o.failed7} nicht per E-Mail zugestellt` : o.last ? `zuletzt ${esc(o.lastNr || '')} am ${esc(dateTime(o.last))} Uhr` : 'noch keine');
+  }
+  function customersCard(c, card) {
+    if (!c) return '';
+    return card('ok', 'Kunden', `${fmtInt.format(c.active)} aktiv · ${fmtInt.format(c.withLogin)} mit Zugang`, c.online ? `${fmtInt.format(c.online)} gerade angemeldet` : 'niemand angemeldet');
   }
   function deployCard(r, card) {
     if (!r || !r.t) return card('warn', 'Bereitstellung', 'Änderungen gehen ohne Freigabe live', 'Release-Modus noch nicht eingerichtet');
@@ -3479,8 +3522,14 @@
       card(S.ipEnabled ? 'ok' : 'warn', 'Zugriff Eingabebereich', S.ipEnabled ? `nur von ${S.adminIps.length} freigegebene${S.adminIps.length === 1 ? 'r Adresse' : 'n Adressen'}` : 'aus dem ganzen Internet erreichbar', S.ipEnabled ? '' : 'Empfehlung: IP-Freigabe einschalten oder Zwei-Faktor-Pflicht'),
       card(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlgeschlagene Anmeldungen', `${fmtInt.format(d.fails24)} in den letzten 24 Stunden`, d.fails24 >= 20 ? 'Möglicher Angriff – Liste unten prüfen' : ''),
       card(blocked || locked ? 'warn' : 'ok', 'Gesperrt', `${blocked} IP-Adresse${blocked === 1 ? '' : 'n'} · ${locked} Zugang${locked === 1 ? '' : 'e'}`, ''),
+      wartungCard(d.wartung, card),
       backupCard(d.backup, card),
       deployCard(d.deployment, card),
+      storageCard(d, card),
+      diskCard(d.disk, card),
+      mailCard(d.mail, card),
+      ordersCard(d.orders, card),
+      customersCard(d.customers, card),
       card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
       card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
@@ -3502,6 +3551,17 @@
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
       <div class="sec-grid">${secCards(d)}</div>
+      <form class="gcard sec-form wartung-form${d.wartung ? ' on' : ''}" id="wartung-form" autocomplete="off">
+        <h3 class="sec-h">Wartungsmodus</h3>
+        <p class="hint" style="margin-top:0">Pausiert die Angebotsseite für Kunden (Angebot, Anmeldung, Merkliste, Bestellwünsche). Sie und alle Mitarbeiter arbeiten im Eingabebereich und auf der Angebotsseite normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>
+        <div class="sec-rows">
+          <label class="fld span2"><span>Hinweis für Kunden</span><textarea name="message" rows="2" maxlength="500" placeholder="Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.">${esc(d.wartung ? d.wartung.message : '')}</textarea></label>
+          <label class="fld"><span>Voraussichtlich bis <small>(optional)</small></span><input type="datetime-local" name="until" value="${esc(d.wartung && d.wartung.until ? d.wartung.until : '')}"></label>
+        </div>
+        <div class="sec-foot wartung-foot">${d.wartung ? `<span class="st-warn">Aktiv seit ${esc(dateTime(d.wartung.since))} Uhr</span><button type="button" class="btn" data-wartung="save">Hinweis speichern</button><button type="button" class="btn primary" data-wartung="off">Wartungsmodus beenden</button>`
+          : '<button type="button" class="btn primary" data-wartung="on">Wartungsmodus einschalten</button>'}</div>
+        <p class="form-err" id="wartung-err" role="alert"></p>
+      </form>
       <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens fünf Minuten alte Anmeldung oder Passwortbestätigung. Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
       <form class="gcard sec-form" id="sec-form" autocomplete="off">
         <h3 class="sec-h">Einstellungen</h3>
@@ -3568,6 +3628,20 @@
     if (['geoEnabled', 'geoMode'].includes(e.target.name)) geoRefresh();
   });
   $('#view-sec').addEventListener('click', async (e) => {
+    const wb = e.target.closest('#wartung-form [data-wartung]');
+    if (wb) {
+      const f = $('#wartung-form'), a = wb.dataset.wartung, err = $('#wartung-err');
+      err.textContent = '';
+      if (a === 'on' && !(await confirmBox('Wartungsmodus einschalten?', 'Kunden sehen auf der Angebotsseite dann nur noch den Wartungshinweis und können sich nicht anmelden oder bestellen, bis Sie den Wartungsmodus wieder beenden.', 'Einschalten'))) return;
+      wb.disabled = true;
+      try {
+        const r = await api('wartung_save', { body: { active: a !== 'off', message: f.message.value, until: f.until.value } });
+        wartungSt = r.wartung; renderWartungBanner();
+        toast(a === 'on' ? 'Wartungsmodus eingeschaltet.' : a === 'off' ? 'Wartungsmodus beendet – die Angebotsseite ist wieder erreichbar.' : 'Hinweis gespeichert.', 4500);
+        renderSecView();
+      } catch (ex) { err.textContent = ex.message; wb.disabled = false; }
+      return;
+    }
     const del = e.target.closest('[data-geo-del]');
     if (del) { geoSel.delete(del.dataset.geoDel); geoRefresh(); $('#geo-list').innerHTML = geoList(); return; }
     const b = e.target.closest('[data-sec]');

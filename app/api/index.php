@@ -34,6 +34,7 @@
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
  *   POST ?action=kunde_bestellung  Bestellwunsch eines Kunden (Preise serverseitig aus dem Angebot) → E-Mail an uns (+ Kopie)
  *   POST ?action=bestell_settings_save   Empfänger für Bestellwünsche (nur Administrator)
+ *   POST ?action=wartung_save      Wartungsmodus ein/aus (Administrator, mit Passwortbestätigung)
  *   GET  ?action=kunde_merkliste   Merkliste des angemeldeten Kunden; POST kunde_merkliste_save (Kunden-CSRF)
  *   POST ?action=kunde_abmelden_info | kunde_abmelden   Abmeldelink aus der Angebotsmail (öffentlich, Code im Link)
  *   POST ?action=abmelden1&t=…     Ein-Klick-Abmeldung aus dem E-Mail-Programm (RFC 8058, Formular statt JSON)
@@ -900,6 +901,15 @@ Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwor
     });
 }
 
+/* ---------- Wartungsmodus ---------- */
+const WARTUNG_TEXT = 'Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.';
+function wartung(): ?array
+{
+    $w = store_read('wartung');
+    if (!is_array($w) || empty($w['active'])) return null;
+    return ['active' => true, 'message' => (string)($w['message'] ?? '') ?: WARTUNG_TEXT, 'until' => $w['until'] ?? null, 'since' => $w['since'] ?? null, 'by' => $w['by'] ?? ''];
+}
+
 /* ---------- Bestellwünsche ---------- */
 function order_settings(): array
 {
@@ -1397,7 +1407,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1413,6 +1423,14 @@ if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
         geo_count($cc);
         fail('Der Zugriff aus Ihrem Land ist leider nicht möglich.', 403);
     }
+}
+
+/* Wartungsmodus: Angebotsseite und Kundenfunktionen pausieren; Mitarbeiter arbeiten normal weiter.
+   Abmelden vom Wochenangebot und Kunden-Abmelden bleiben immer möglich. */
+const WARTUNG_GESPERRT = ['offer', 'kunde_login', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung'];
+if (in_array($action, WARTUNG_GESPERRT, true) && ($W = wartung()) && !current_user()) {
+    header('Retry-After: 600');
+    respond(['ok' => false, 'wartung' => true, 'error' => $W['message'], 'until' => $W['until']], 503);
 }
 
 /* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei) */
@@ -1518,7 +1536,7 @@ try {
             start_session();
             $k = current_customer();
             $staff = current_user() !== null;
-            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
+            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'wartung' => wartung(), 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
         }
 
         case 'kunde_login': {
@@ -2117,7 +2135,23 @@ Ausgelöst von: {$me['name']}
             $u = current_user();
             $noUsers = !users_load();
             respond(['ok' => true, 'setupRequired' => $noUsers && setup_allowed(), 'setupLocked' => $noUsers && !setup_allowed(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
-                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company']]);
+                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null]);
+        }
+
+        case 'wartung_save': {
+            $me = require_admin_confirmation();
+            $b = body();
+            $on = !empty($b['active']);
+            $msg = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['message'] ?? '')) ?? '')), 0, 500);
+            $until = (string)($b['until'] ?? '');
+            if ($until !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $until)) fail('Bitte eine gültige Uhrzeit für das voraussichtliche Ende angeben.', 422);
+            $old = wartung();
+            $new = ['active' => $on, 'message' => $msg, 'until' => $until !== '' ? $until : null, 'since' => $on ? ($old['since'] ?? now()) : null, 'by' => $me['name'], 'changed' => now()];
+            store_write('wartung', $new);
+            if ((bool)$old !== $on) audit('wartung', $on ? 'Wartungsmodus eingeschaltet – Angebotsseite für Kunden pausiert' : 'Wartungsmodus ausgeschaltet – Angebotsseite wieder erreichbar',
+                [['k' => 'wartung', 'code' => '', 'name' => 'Wartungsmodus', 'f' => 'Status', 'from' => $old ? 'an' : 'aus', 'to' => $on ? 'an' : 'aus']]);
+            elseif ($on) audit('wartung', 'Hinweis zum Wartungsmodus geändert');
+            respond(['ok' => true, 'wartung' => wartung()]);
         }
 
         case 'reauth': {
@@ -2416,6 +2450,24 @@ Ausgelöst von: {$me['name']}
             foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
             respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
                      'backup' => store_read('sicherung'),
+                     'wartung' => wartung(), 'storage' => store_stats(), 'php' => PHP_VERSION,
+                     'disk' => ['free' => @disk_free_space($DATA) ?: null, 'total' => @disk_total_space($DATA) ?: null],
+                     'mail' => (function () {
+                         $l = array_filter(store_read('mailversand') ?? [], function ($x) { return strtotime($x['t']) > time() - 7 * 86400; });
+                         return ['configured' => (bool)mail_cfg() && (bool)mail_base_url(), 'sent7' => count(array_filter($l, function ($x) { return $x['ok']; })), 'failed7' => count(array_filter($l, function ($x) { return !$x['ok']; }))];
+                     })(),
+                     'orders' => (function () {
+                         $all = store_read('bestellungen') ?? [];
+                         $l = array_filter($all, function ($x) { return strtotime($x['t']) > time() - 7 * 86400; });
+                         $last = $all ? end($all) : null;
+                         return ['enabled' => order_enabled(), 'n7' => count($l), 'failed7' => count(array_filter($l, function ($x) { return ($x['status'] ?? '') === 'fehler'; })), 'last' => $last['t'] ?? null, 'lastNr' => $last['nr'] ?? null];
+                     })(),
+                     'customers' => (function () {
+                         $c = customers_load()['customers'];
+                         $act = array_filter($c, function ($x) { return !empty($x['active']); });
+                         return ['active' => count($act), 'withLogin' => count(array_filter($act, function ($x) { return !empty($x['login']['active']); })),
+                                 'online' => count(array_unique(array_column(ksess_prune(store_read('kundensitzungen') ?? []), 'kid')))];
+                     })(),
                      'deployment' => store_read('deployment'),
                      'myCountry' => geo_country(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
                      'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,

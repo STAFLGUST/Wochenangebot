@@ -668,3 +668,13 @@ body.ro .vtog { display: none; }
 @media (max-width: 760px) { #view-mail .sec-rows { grid-template-columns: 1fr; } }
 #view-mail .sec-grid { grid-template-columns: 1fr; }
 .ml-orows { margin-top: 12px; } .ml-ohint { margin: 8px 0 0; font-size: 13px; }
+
+/* Wartungsmodus */
+.adm-wartung { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 14px; border-radius: var(--r); background: #fff4e0; border: 1px solid #f0c27a; color: #6b4300; font-size: 13.5px; }
+.adm-wartung span { flex: 1 1 260px; }
+.adm-wartung .i { color: #b06d00; }
+.wartung-form.on { border-color: #f0c27a; box-shadow: inset 4px 0 0 #e0901f, var(--shadow); }
+.wartung-form textarea { font-family: inherit !important; }
+.wartung-foot { gap: 10px; align-items: center; flex-wrap: wrap; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
+:root[data-theme="dark"] .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; }

@@ -17,6 +17,7 @@ ADMIN_PW = 'Sicheres-Passwort-1'
 # Gruppe → (Port, Testdaten, Administrator vorab anlegen)
 SUITES = {
     'storage': (8790, 'data-seed', True),
+    'wartung':    (8790, 'data-seed', True),
     'legal_pages': (8790, 'data-seed', True),
     'sys':        (8765, 'data-seed-clean', False),
     'frontend':   (8765, 'data-seed', False),

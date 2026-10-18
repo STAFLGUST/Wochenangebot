@@ -114,3 +114,20 @@ function with_lock(string $name, callable $fn)
     $held[$name] = true;
     try { return $fn(); } finally { unset($held[$name]); flock($fh, LOCK_UN); fclose($fh); }
 }
+
+/* Kennzahlen für die Übersicht im Eingabebereich */
+function store_stats(): array
+{
+    global $DATA;
+    if (store_mode() === 'sqlite') {
+        $path = $DATA . '/.sqlite/store.sqlite';
+        return ['mode' => 'sqlite', 'documents' => (int)store_db()->query('SELECT COUNT(*) FROM documents')->fetchColumn(), 'bytes' => is_file($path) ? (int)filesize($path) : 0];
+    }
+    $n = 0; $bytes = 0;
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($DATA, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $rel = substr($f->getPathname(), strlen($DATA) + 1);
+        if ($f->isFile() && substr($rel, -4) === '.php' && $rel !== 'index.php' && strpos($rel, 'geo/') !== 0 && $rel[0] !== '.') { $n++; $bytes += $f->getSize(); }
+    }
+    return ['mode' => 'files', 'documents' => $n, 'bytes' => $bytes];
+}
