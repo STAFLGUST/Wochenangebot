@@ -35,11 +35,12 @@ status() { # ok sha vorher lauf meldung
   printf '%s\n{"t":"%s","ok":%s,"sha":"%s","vorher":"%s","lauf":"%s","meldung":"%s"}' "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" > "$STATUS.tmp"
   chown 33:33 "$STATUS.tmp" 2>/dev/null || true; chmod 644 "$STATUS.tmp"; mv "$STATUS.tmp" "$STATUS"
 }
-angebot_ok() { # Angebots-API antwortet: öffentlich (200, ok:true) oder – wenn das Wochenangebot nur für
-  # angemeldete Kunden sichtbar ist – mit der Aufforderung zur Anmeldung (401, gültige JSON-Antwort der API)
+angebot_ok() { # Angebots-API antwortet: öffentlich (200, ok:true), mit der Aufforderung zur Anmeldung, wenn das
+  # Wochenangebot nur für Kunden sichtbar ist (401), oder mit dem Hinweis auf den Wartungsmodus (503, wartung:true)
   ANT=$(curl -sS -m 5 --resolve "$HEALTH_HOST" -w '\n%{http_code}' "$HEALTH_URL/api/?action=offer" 2>/dev/null) || return 1
   CODE=$(printf '%s' "$ANT" | tail -n 1)
-  { [ "$CODE" = 200 ] && printf '%s' "$ANT" | grep -q '"ok":true'; } || { [ "$CODE" = 401 ] && printf '%s' "$ANT" | grep -q '"ok":false'; }
+  { [ "$CODE" = 200 ] && printf '%s' "$ANT" | grep -q '"ok":true'; } || { [ "$CODE" = 401 ] && printf '%s' "$ANT" | grep -q '"ok":false'; } \
+    || { [ "$CODE" = 503 ] && printf '%s' "$ANT" | grep -q '"wartung":true'; }   # Wartungsmodus eingeschaltet
 }
 gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher über Caddy;
   # erst nach 3 s (Caches von PHP/Webserver), dann zwei erfolgreiche Prüfungen hintereinander, insgesamt bis zu 40 s

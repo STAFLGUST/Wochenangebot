@@ -23,11 +23,13 @@ HC_URL=$(sed -n 's/^HC_SICHERUNG_URL=//p' "$BASIS/.env" 2>/dev/null | head -1 | 
 FERTIG=0
 PRUEF=""
 SNAP=""
+DATENSAETZE=0
+SPEICHER=dateien
 
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
-  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s"}' \
-    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" > "$STATUS.tmp" || return 0
+  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s"}' \
+    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" > "$STATUS.tmp" || return 0
   chown 33:33 "$STATUS.tmp" 2>/dev/null || true
   chmod 644 "$STATUS.tmp"
   mv "$STATUS.tmp" "$STATUS"
@@ -88,6 +90,14 @@ else
   INHALT=false
 fi
 case "$FEHLER" in ''|*[!0-9]*) FEHLER=1 ;; esac
+# Anzahl gesicherter Datensätze: Dokumente in der Datenbank bzw. Datendateien
+if [ -f "$PRUEF/.sqlite-active" ]; then
+  SPEICHER=sqlite
+  DATENSAETZE=$(python3 -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute('SELECT COUNT(*) FROM documents').fetchone()[0])" "$PRUEF/.sqlite/store.sqlite" 2>/dev/null || echo 0)
+else
+  DATENSAETZE=$(find "$PRUEF" -name '*.php' ! -name 'index.php' ! -name 'deployment.php' | wc -l)
+fi
+case "$DATENSAETZE" in ''|*[!0-9]*) DATENSAETZE=0 ;; esac
 [ "$DATEIEN" -ge "$QUELLE" ] || FEHLER=$((FEHLER + QUELLE - DATEIEN))
 
 mv "$DATEI.tmp" "$DATEI"
@@ -103,7 +113,7 @@ if [ "$FEHLER" -eq 0 ]; then
     status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 false "Inhalt nicht geprüft (kein Python/PHP verfügbar)"
   fi
   melden ok
-  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI") ($DATEIEN Dateien)"
+  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI") ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))"
 else
   touch "$ZIEL/.letzter-fehler"
   status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" "$FEHLER" "$INHALT" "$FEHLER Datei(en) fehlerhaft"

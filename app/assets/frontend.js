@@ -96,6 +96,7 @@ async function loadData() {
   const res = await fetch('api/?action=offer' + (PREVIEW ? '&draft=1' : '') + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
   let body = null;
   try { body = await res.json(); } catch { /* keine JSON-Antwort */ }
+  if (res.status === 503 && body && body.wartung) throw Object.assign(new Error(body.error), { wartung: { message: body.error, until: body.until } });
   if (res.status === 401 && !PREVIEW) throw Object.assign(new Error('Dieses Angebot ist nur nach Anmeldung sichtbar.'), { needLogin: true });
   if (!res.ok || !body || !body.ok) {
     throw Object.assign(new Error(body && body.error ? body.error : 'Das Angebot konnte nicht geladen werden (' + res.status + ').'), { status: res.status });
@@ -1188,7 +1189,7 @@ function bindOrder() {
 /* ---------- Kunden-Anmeldung ----------
    Kunden melden sich mit Benutzerkennung und Passwort an und sehen nur die für sie freigeschalteten Angebote.
    Die Prüfung erfolgt auf dem Server; hier wird nur die Oberfläche gesteuert. */
-let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true;
+let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true, KWARTUNG = null;
 async function kundeApi(action, body) {
   let res, data = null;
   try {
@@ -1207,7 +1208,7 @@ function setOfferParam(id) {
 async function kundeStart() {
   let st;
   try { st = await kundeApi('kunde_status'); } catch { return; }   // ohne Antwort: wie bisher öffentlich laden
-  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false;
+  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false; KWARTUNG = st.wartung || null;
   KUNDE = st.kunde || null; KCSRF = st.csrf || '';
   KORDER = !!(KUNDE && st.bestellung && !KUNDE.mustChange && !PREVIEW);
   renderKundeBtn();
@@ -1402,6 +1403,17 @@ async function abmeldenStart() {
   return true;
 }
 
+/* Wartungsseite für Kunden und Besucher */
+function renderWartung(w) {
+  const bis = w.until ? new Date(w.until).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  document.body.classList.add('k-gate', 'in-wartung');
+  $('#subbar').textContent = '';
+  for (const id of ['quicknav', 'hits', 'chips']) { const el = $('#' + id); if (el) el.textContent = ''; }
+  const slot = $('#kunde-slot'); if (slot) slot.innerHTML = '';
+  $('#list').innerHTML = `<div class="empty k-locked k-wartung"><div class="empty-ico">${icon('info')}</div><h3>Wartungsarbeiten</h3><p>${esc(w.message || '')}</p>${bis ? `<p class="muted">Voraussichtlich wieder erreichbar ab ${esc(bis)} Uhr.</p>` : ''}
+    <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button></div></div>`;
+}
+
 /* ---------- Start ---------- */
 (async function boot() {
   updateThemeBtn();
@@ -1410,11 +1422,14 @@ async function abmeldenStart() {
   if (!PREVIEW && await abmeldenStart()) return;                     // Abmelden vom Wochenangebot (Link aus der E-Mail)
   try {
     if (!PREVIEW) await kundeStart();
+    if (KWARTUNG && !KSTAFF) { renderWartung(KWARTUNG); return; }
+    if (KWARTUNG && KSTAFF) { const wb = $('#wartung-banner'); wb.hidden = false; wb.innerHTML = `<div class="banner-inner wb-inner">${icon('info')}<p><strong>Wartungsmodus aktiv</strong> – Kunden sehen gerade nur den Wartungshinweis. Sie sehen die Seite, weil Sie im Eingabebereich angemeldet sind.</p></div>`; }
     if (KUNDE && KUNDE.mustChange) { renderLocked('Bitte legen Sie zuerst ein eigenes Passwort fest.'); openKundePw(true); return; }
     if (KUNDE && !KUNDE.mustChange) await kundeMerklisteLaden();
     if (KUNDE && !KUNDE.angebote.length && !KSTAFF) { renderLocked('Für Ihren Zugang ist derzeit kein Angebot freigeschaltet. Bitte wenden Sie sich an Ihren Ansprechpartner.', false); return; }
     await loadData();
   } catch (e) {
+    if (e.wartung) { renderWartung(e.wartung); return; }
     if (e.needLogin) { renderLocked((OFFER ? 'Dieses Angebot' : 'Das Wochenangebot') + ' ist nur nach Anmeldung sichtbar. Bitte melden Sie sich mit Ihrer Benutzerkennung und Ihrem Passwort an.'); openKundeLogin(); return; }
     $('#list').innerHTML = `<div class="empty"><div class="empty-ico">${icon('info')}</div><h3>Angebot nicht verfügbar</h3><p>${esc(e.message)}</p>
       <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button></div></div>`;

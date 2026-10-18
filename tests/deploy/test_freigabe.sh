@@ -79,6 +79,15 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$H_SHA" "$H_SHA" > "$T/state.json"
 lauf || true; ok "nicht öffentliches Wochenangebot: Release geht live" '[ "$(kopf)" = "$H_SHA" ] && [ "$(st ok)" = True ]'
 rm -f "$B/daten/angebote.php"
 
+# Wartungsmodus eingeschaltet (Angebots-API antwortet 503 mit wartung:true) – Release muss trotzdem durchgehen
+W_SHA=$(commit gut3 x "echo '<!-- gut3 -->' >> '$T/src/app/index.html'")
+printf '%s\n{"active":true,"message":"Test"}' '<?php http_response_code(404); exit; ?>' > "$B/daten/wartung.php"
+ok "Testvoraussetzung: Wartungsmodus aktiv" '[ "$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$WEB_PORT/api/?action=offer")" = 503 ]'
+printf '{"release":"%s","ci_ok":["%s"]}' "$W_SHA" "$W_SHA" > "$T/state.json"
+lauf || true; ok "Wartungsmodus: Release geht live" '[ "$(kopf)" = "$W_SHA" ] && [ "$(st ok)" = True ]'
+rm -f "$B/daten/wartung.php"
+H_SHA=$W_SHA   # aktueller Stand für die folgenden Prüfungen
+
 # Active SQLite must never be silently opened by an old file-only release.
 L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")
 kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
