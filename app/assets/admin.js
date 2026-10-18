@@ -3250,9 +3250,9 @@
   /* Bestellverwaltung: Versandzustand und Bearbeitung bleiben getrennt. */
   const ORDER_LABELS = { neu: 'Neu', in_bearbeitung: 'In Bearbeitung', bestaetigt: 'Bestätigt', erledigt: 'Erledigt', storniert: 'Storniert' };
   const ORDER_NEXT = { neu: ['in_bearbeitung', 'storniert'], in_bearbeitung: ['neu', 'bestaetigt', 'storniert'], bestaetigt: ['in_bearbeitung', 'erledigt', 'storniert'], erledigt: [], storniert: [] };
-  const ORDER_MAIL = { neu: ['st-warn', 'Zustellung ungeklärt'], gesendet: ['st-ok', 'E-Mail zugestellt'], fehler: ['st-err', 'E-Mail nicht zugestellt'] };
+  const ORDER_MAIL = { neu: ['st-warn', 'Zustellung ungeklärt'], gesendet: ['st-ok', 'Vom Mailserver angenommen'], fehler: ['st-err', 'Versand nicht bestätigt'] };
   const orderBadge = (w) => `<span class="ord-st ord-${esc(w)}">${esc(ORDER_LABELS[w] || w)}</span>`;
-  const orderMail = (d) => { const m = ORDER_MAIL[d] || ['', d || '']; return `<span class="${m[0]}">${esc(m[1])}</span>`; };
+  const orderMail = (d, pending = 0) => { const m = pending ? ['st-warn', 'Versandaufträge offen'] : ORDER_MAIL[d] || ['', d || '']; return `<span class="${m[0]}">${esc(m[1])}</span>`; };
   const dmyIso = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '');
   let orderOffset = 0, orderQuery = '', orderFilter = '', orderStaff = [], orderEdit = null;
   async function renderOrdersView() {
@@ -3268,7 +3268,7 @@
           <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
           <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}</div></td>
           <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
-          <td class="ord-mail">${orderMail(o.delivery)}${o.mailPending ? `<br><span class="form-err">${esc(o.mailPending)} Versandauftrag/-aufträge offen</span>` : ''}</td>
+          <td class="ord-mail">${orderMail(o.delivery, o.mailPending)}${o.mailPending ? `<br><span class="form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</span>` : ''}</td>
         </tr>`).join('');
       host.innerHTML = `<form id="orders-filter" class="ed-toolbar ord-filter">
           <label class="search">${icon('search')}<input name="q" type="search" value="${esc(orderQuery)}" placeholder="Nummer, Firma oder Referenz" aria-label="Bestellwunsch suchen"></label>
@@ -3290,7 +3290,7 @@
     const k = o.kunde;
     const staffName = (id) => (orderStaff.find((u) => u.id === id) || {}).name || '';
     d.innerHTML = `<form class="dlg" id="order-edit-form">
-      <div class="dlg-head"><div><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><p>${esc(o.angebotName || '')}${o.week ? ` · KW ${esc(o.week)}/${esc(o.year)}` : ''} · Eingang ${esc(dateTime(o.t))} · ${orderMail(o.delivery)}${o.deliveryError ? ` <span class="muted">(${esc(o.deliveryError)})</span>` : ''}</p></div>
+      <div class="dlg-head"><div><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><p>${esc(o.angebotName || '')}${o.week ? ` · KW ${esc(o.week)}/${esc(o.year)}` : ''} · Eingang ${esc(dateTime(o.t))} · ${orderMail(o.delivery, o.mailPending)}${o.deliveryError ? ` <span class="muted">(${esc(o.deliveryError)})</span>` : ''}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="ord-meta">
