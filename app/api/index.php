@@ -21,6 +21,8 @@
  *   POST ?action=history_import | history_delete
  *   GET  ?action=stock            Bestand (Mengen, MHD) – nur angemeldet, nie öffentlich
  *   POST ?action=stock_import     Bestandsliste übernehmen (Bearbeiter)
+ *   GET  ?action=einkauf          Fehlmengen offener Bestellwünsche gegenüber dem Bestand (angemeldet; Kundennamen ab Bearbeiter)
+ *   POST ?action=einkauf_melden   Einkauf per E-Mail benachrichtigen (Bearbeiter; Empfänger unter Benachrichtigungen)
  *   GET  ?action=master           Stammdaten je Artikelnummer (Bezeichnung, Fleischart, Herkunft, Zustand)
  *   POST ?action=master_save      Stammdaten speichern (Bearbeiter)
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
@@ -84,6 +86,7 @@ require __DIR__ . '/lib/angebote.php';
 require __DIR__ . '/lib/kunden.php';
 require __DIR__ . '/lib/kundenmail.php';
 require __DIR__ . '/lib/benachrichtigung.php';
+require __DIR__ . '/lib/einkauf.php';
 require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
 
@@ -95,7 +98,7 @@ $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_dr
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
-                 'benachrichtigung_save', 'benachrichtigung_test'];
+                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -137,6 +140,7 @@ try {
     require __DIR__ . '/aktionen/kundenverwaltung.php';
     require __DIR__ . '/aktionen/zugang.php';
     require __DIR__ . '/aktionen/bestand.php';
+    require __DIR__ . '/aktionen/einkauf.php';
     require __DIR__ . '/aktionen/verwaltung.php';
     require __DIR__ . '/aktionen/entwurf.php';
     require __DIR__ . '/aktionen/preisverlauf.php';

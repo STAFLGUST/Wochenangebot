@@ -29,9 +29,10 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/kundenmail.php` | E-Mails an Kunden (Vorlagen, Abmelden, Einmal-Links, Versand, Protokoll), Bestellwunsch-Vorlage |
 | `lib/benachrichtigung.php` | Benachrichtigungen an Mitarbeiter: Ereignisse (`NOTIFY_EVENTS`), Einstellungen, Vormerken (`notify`, aus `audit()`), Versand nach der Antwort mit Bündelung |
 | `lib/preisverlauf.php`, `lib/bestand.php` | Preisverlauf; Bestandsliste und Stammdaten |
+| `lib/einkauf.php` | Fehlmengen offener Bestellwünsche gegenüber dem Bestand (`einkauf_bedarf`), E-Mail an den Einkauf |
 | `orders.php`, `order_outbox.php` | Bestellverwaltung (API v1) und Versandaufträge |
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |
-| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `verwaltung`, `entwurf`, `preisverlauf` |
+| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf` |
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden (`$action`, `$CFG`, … stehen zur Verfügung); jede Aktion
 endet mit `respond()`/`fail()`. Bibliotheks- und Aktionsdateien sind nur über `index.php` nutzbar (Konstante `WA_API`).
@@ -46,7 +47,7 @@ und ggf. `WARTUNG_GESPERRT`.
 | `stock-core.js` | Bestandsliste lesen (WinAB .xls/.xlsx) |
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite |
 | `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten |
-| `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Kunden, E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
+| `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden, E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
 
 Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
 
