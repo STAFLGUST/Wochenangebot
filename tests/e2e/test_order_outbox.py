@@ -24,6 +24,13 @@ check('sent job cannot be resent',retry(nr,j)[0]==409 and len(smtp.messages)==co
 check('customer does not receive outbox', 'outbox' not in k.call('kunde_bestellung_detail&nr='+nr)[1]['order'])
 check('staff list excludes outbox payload', 'outbox' not in a.call('bestellungen')[1]['orders'][0])
 check('staff detail excludes mail body', 'html' not in j and 'text' not in j)
+def stored_jobs(n):
+    box={}
+    def grab(data):
+        for o in data:
+            if o['nr']==n: box['jobs']=o.get('outbox',[])
+    mutate(grab); return box.get('jobs',[])
+check('accepted job no longer stores the message body', all('html' not in x and 'text' not in x for x in stored_jobs(nr) if x['state']=='sent'))
 check('retry requires POST',a.call('bestellung_mail_retry')[0]==405)
 check('retry requires explicit confirmation',retry(nr,j,confirm=False)[0]==422)
 check('retry requires integer attempt',retry(nr,j,attempts='1')[0]==422)

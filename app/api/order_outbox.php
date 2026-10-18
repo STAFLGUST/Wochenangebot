@@ -26,14 +26,24 @@ function order_outbox_view(array $o): array
 {
     return array_map(fn($j) => array_intersect_key($j, array_flip(['id','kind','to','state','attempts','updatedAt','error','history'])), $o['outbox'] ?? []);
 }
+/* Sperrdateien abgeschlossener Vorgänge gelegentlich entfernen (älter als 2 Tage, nicht die eigene). */
+function order_outbox_cleanup_locks(string $own): void
+{
+    global $DATA;
+    if (random_int(1, 20) !== 1) return;
+    foreach (glob($DATA . '/.order-mail-*.lock') ?: [] as $f) if ($f !== $own && @filemtime($f) < time() - 172800) @unlink($f);
+}
 /* No SQLite transaction spans SMTP. A separate nonblocking process lock protects a retry
    even if the previous HTTP request is still running. Process death releases it. */
 function order_outbox_send(string $nr, ?string $jobId = null, ?int $expected = null, string $by = 'Kunde'): array
 {
     global $DATA;
-    $lock = fopen($DATA . '/.order-mail-' . hash('sha256', $nr) . '.lock', 'c');
+    $lp = $DATA . '/.order-mail-' . hash('sha256', $nr) . '.lock';
+    $lock = @fopen($lp, 'c') ?: (is_file($lp) ? @fopen($lp, 'r') : false);
     if (!$lock) throw new RuntimeException('Versandsperre nicht verfügbar.');
     if (!flock($lock, LOCK_EX | LOCK_NB)) { fclose($lock); fail('Für diesen Bestellwunsch läuft bereits ein Versand. Bitte später neu laden.', 409); }
+    @touch($lp);              // aktiv genutzte Sperren werden nicht aufgeräumt
+    order_outbox_cleanup_locks($lp);
     try {
         $found = false;
         foreach (store_read('bestellungen') ?? [] as $order) if ($order['nr'] === $nr) { $found = true; break; }
@@ -73,6 +83,8 @@ function order_outbox_send(string $nr, ?string $jobId = null, ?int $expected = n
                     foreach ($o['outbox'] as &$saved) if ($saved['id'] === $j['id']) {
                         $saved['state'] = $result['ok'] ? 'sent' : 'failed'; $saved['updatedAt'] = now();
                         $saved['error'] = $result['ok'] ? '' : mb_substr($result['error'] ?? 'Unbekannter Versandfehler', 0, 500);
+                        // Angenommene Nachrichten werden nie erneut gesendet: Inhalt nicht weiter mitschleppen (Dokumentgröße)
+                        if ($result['ok']) unset($saved['subject'], $saved['text'], $saved['html']);
                         $saved['history'][] = ['t'=>now(), 'by'=>$by, 'attempt'=>$j['attempts'], 'state'=>$saved['state']];
                     }
                     unset($saved); order_outbox_summary($o);

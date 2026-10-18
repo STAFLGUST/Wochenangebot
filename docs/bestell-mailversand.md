@@ -2,6 +2,8 @@
 
 Neue Bestellungen speichern die Empfänger und den gerenderten Nachrichteninhalt in `bestellungen.outbox`, atomar mit dem Bestellwunsch. SMTP-Zugangsdaten werden dort nicht gespeichert. Der erste Versand erfolgt weiterhin unmittelbar im Kundenaufruf; es wird kein neuer Serverdienst benötigt. Offene Aufträge bleiben bis zu einem ausdrücklich bestätigten Versandversuch erhalten. Es gibt keinen automatischen periodischen Neuversand.
 
+Nach der Annahme durch den Mailserver wird der gespeicherte Nachrichteninhalt eines Auftrags entfernt (angenommene Aufträge werden nie erneut gesendet); so wächst das Bestelldokument nicht unnötig. Sperrdateien abgeschlossener Vorgänge werden nach zwei Tagen aufgeräumt.
+
 Je internem Empfänger und optionaler Kundenkopie gibt es einen Auftrag mit Kennung, Zustand, Versuchszähler, Zeit, Fehlerhinweis und Verlauf. Zustände: `queued`, `sending`, `sent`, `failed`. Eine Kundenkopie wird erst versendet, wenn mindestens ein interner Empfänger vom Mailserver bestätigt wurde. Teilfehler sind in der Bestellliste und im Detail sichtbar. `sent` bedeutet SMTP-Annahme, nicht garantierte Zustellung ins Postfach.
 
 Bearbeiter und Administratoren können unter Bestellungen → Detail jeden offenen Auftrag einzeln starten oder nachsenden. Empfänger und Inhalt sind der gespeicherte Originalstand; spätere Einstellungen ändern diese Aufträge nicht. Der aktuelle SMTP-Zugang/Absender wird verwendet. Erfolgreiche Empfänger werden nie über diese Funktion erneut angeschrieben. Eine Wiederholung des Kundenaufrufs erzeugt bei gleicher `requestId` weder neue Aufträge noch E-Mails.
