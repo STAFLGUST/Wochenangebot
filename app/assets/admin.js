@@ -3264,7 +3264,7 @@
       const staffName = (id) => (orderStaff.find((u) => u.id === id) || {}).name || '';
       const rows = r.orders.map((o) => `<tr data-order-nr="${esc(o.nr)}" tabindex="0">
           <td class="ord-nr"><div class="nm">${esc(o.nr)}</div><div class="sub">${esc(dateTime(o.t))}</div></td>
-          <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div></td>
+          <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div>${o.mailPending ? `<div class="ord-mobile-mail form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</div>` : ''}</td>
           <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
           <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}</div></td>
           <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
