@@ -133,3 +133,15 @@ jobs:
             tests/.ergebnisse/
             tests/.arbeit/*.log
           retention-days: 7
+
+  e2e_required:
+    # Stable required-check name: preserve existing branch protection with the new matrix.
+    name: Ende-zu-Ende-Tests
+    needs: e2e
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Beide Speicherarten erfolgreich
+        env:
+          RESULT: ${{ needs.e2e.result }}
+        run: test "$RESULT" = success
