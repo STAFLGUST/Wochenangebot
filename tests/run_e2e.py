@@ -24,6 +24,8 @@ SUITES = {
     'master':     (8790, 'data-seed', True),
     'stock':      (8790, 'data-seed', True),
     'editor_aux': (8790, 'data-seed', True),
+    'admin_confirmation': (8790, 'data-seed', True),
+    'admin_confirmation_ui': (8790, 'data-seed', True),
     'auth_hardening': (8790, 'data-seed', True),
     'security':   (8790, 'data-seed', True),
     'geo':        (8790, 'data-seed', True),
@@ -76,11 +78,14 @@ def run(name):
         admin_file(data)
     if not wait_port(port, up=False, timeout=5):
         print(f'[{name}] Port {port} ist belegt'); return name, 0, 1, False
+    sessions = os.path.join(WORK, f'sessions-{name}')
+    shutil.rmtree(sessions, ignore_errors=True)
+    os.makedirs(sessions)
     log = open(os.path.join(WORK, f'php-{name}.log'), 'w')
-    srv = subprocess.Popen(['php', '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=php_env)
+    srv = subprocess.Popen(['php', '-d', 'session.save_path=' + sessions, '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=php_env)
     try:
         wait_port(port)
-        env = {**os.environ, 'UDATA': data, 'WA_WORK': WORK}
+        env = {**os.environ, 'UDATA': data, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions}
         t0 = time.time()
         p = subprocess.run([sys.executable, os.path.join(REPO, 'tests', 'e2e', f'test_{name}.py')], cwd=os.path.join(REPO, 'tests', 'e2e'),
                            env=env, capture_output=True, text=True, timeout=900)
