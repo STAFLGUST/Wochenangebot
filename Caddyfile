@@ -18,6 +18,9 @@
 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "same-origin"
+		# Browser fragen bei jeder Datei kurz nach, ob es eine neue Fassung gibt (Antwort meist „unverändert“).
+		# Verhindert veraltete Skripte nach einem Release. Eigene Angaben der Anwendung bleiben unberührt.
+		?Cache-Control "no-cache"
 		-Server
 		-X-Powered-By
 	}
