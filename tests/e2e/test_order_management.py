@@ -60,4 +60,10 @@ check('old order keeps original prices',k.call('kunde_bestellung_detail&nr='+nr)
 check('replay survives changed publication',k.call('kunde_bestellung',payload)[1].get('nr')==nr)
 check('no duplicate after publication change',a.call('bestellungen')[1]['total']==1 and len(smtp.messages)==count)
 smtp.close()
+newpub=a.call('draft')[1]['published']
+failed={**payload,'publishedAt':newpub.get('publishedAt',newpub.get('savedAt','')),'requestId':'failed-request-123456789'}
+check('mail outage still retains order',k.call('kunde_bestellung',failed)[0]==502)
+r=k.call('kunde_bestellung',failed)
+check('retry after mail outage returns stored failed delivery',r[0]==200 and r[1]['replayed'] and r[1]['delivery']=='fehler')
+check('mail outage retry adds no second order',a.call('bestellungen')[1]['total']==2)
 print(f'{sum(res)}/{len(res)} passed');sys.exit(0 if all(res) else 1)

@@ -387,6 +387,7 @@
     $('#side-admin').hidden = !can('admin');
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!can('admin') && ADMIN_VIEWS.includes(currentView)) setView('edit');
+    if (!can('editor') && currentView === 'orders') setView('edit');
   }
   /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
   function lockInputs(root) {
