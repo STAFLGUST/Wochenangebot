@@ -89,6 +89,8 @@ class TestSmtp:
                                           'subject': str(msg['subject']),
                                           'text': msg.get_body(('plain',)).get_content(),
                                           'html': msg.get_body(('html',)).get_content()})
+                    if getattr(self, 'drop_after_data', False):
+                        return  # Message accepted locally, acknowledgement lost.
                     send('250 queued')
                 elif up == 'RSET':
                     mail_from, rcpts = None, []; send('250 ok')

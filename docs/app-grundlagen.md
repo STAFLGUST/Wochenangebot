@@ -39,9 +39,9 @@ auf 5.000 Bestellungen entfällt, damit offene Vorgänge und Wiederholungskennun
    keine bereits vollständige REST-/OAuth-Plattform.
 3. Offline zunächst nur Entwürfe lokal halten; verbindliche Preise und Berechtigungen beim Absenden
    erneut serverseitig prüfen. Keine Preisgarantie für offline gespeicherte Angebote.
-4. E-Mail-Outbox mit Empfängerzuständen und gezielter Wiederholung ergänzen. Bei einem SMTP-Abbruch ist
-   eine exakt einmalige Zustellung nicht garantiert. Wiederholung einer Bestellung sendet bewusst keine
-   zweite Mail. Fehler sind für Mitarbeiter sichtbar; automatischer Neuversand ist nicht enthalten.
+4. Die [Bestell-Outbox](bestell-mailversand.md) speichert jetzt einzelne Empfängerzustände und erlaubt
+   ausdrücklich bestätigten Neuversand. Eine exakt einmalige SMTP-Zustellung bleibt unmöglich.
+   Ein Hintergrunddienst und die Ausweitung auf andere Mailtypen sind separate Schritte.
 5. Bei wachsender Bestellmenge auf Einzeldatensätze/SQL-Indizes umstellen. Der aktuelle SQLite-Adapter
    speichert weiterhin JSON-Dokumente; Pagination begrenzt Antworten, nicht die intern eingelesene Liste.
    Aufbewahrung und Archivierung fachlich festlegen, statt alte Bestellungen still zu löschen.
