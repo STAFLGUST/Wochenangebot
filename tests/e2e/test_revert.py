@@ -1,7 +1,8 @@
 import sys
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import re
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8790'; from umgebung import SH, FIX, REPO, WORK, XL44; res = []
+B = BASE; from umgebung import SH, FIX, REPO, WORK, XL44; res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
 def row(pg, code): return pg.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])').first

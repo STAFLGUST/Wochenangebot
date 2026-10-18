@@ -1,7 +1,8 @@
 import sys
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import glob, re
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8780'
+B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 res = []
 def check(n, c, i=''):

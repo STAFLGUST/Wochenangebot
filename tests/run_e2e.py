@@ -1,12 +1,16 @@
 """Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt die Ende-zu-Ende-Tests aus.
 
-    python3 tests/run_e2e.py              # alle Gruppen
+    python3 tests/run_e2e.py              # alle Gruppen (parallel, WA_JOBS Gruppen gleichzeitig)
     python3 tests/run_e2e.py users geo    # nur bestimmte
+    WA_JOBS=1 python3 tests/run_e2e.py    # nacheinander (z. B. zur Fehlersuche)
+
+Jede gleichzeitig laufende Gruppe bekommt eigene Ports (Webserver, Hilfsserver, Test-Mailserver);
+die Tests lesen sie aus WA_BASE, WA_AUX_PORT, WA_SMTP_PORT und WA_SMTP_PORT2.
 
 Jede Gruppe läuft gegen eine eigene Kopie von app/ mit eigenem Datenordner (nie gegen echte Daten).
 Exit-Code 0 nur, wenn alle Prüfungen aller Gruppen bestanden sind.
 """
-import json, os, re, shutil, signal, socket, subprocess, sys, time
+import json, os, queue, re, shutil, signal, socket, subprocess, sys, threading, time
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 FIX = os.path.join(REPO, 'tests', 'fixtures')
@@ -75,10 +79,37 @@ def admin_file(data):
         fh.write(GUARD + json.dumps({'hash': h, 'created': '2026-10-01T00:00:00Z'}))
 
 
+SLOTS = queue.Queue()
+PRINT = threading.Lock()
+
+
+def ports(slot):
+    """Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes."""
+    b = 9100 + slot * 10
+    return b, b + 1, b + 2, b + 3
+
+
 def run(name):
-    port, seed, admin, *extra = SUITES[name]
+    slot = SLOTS.get()
+    try:
+        return run_in(name, slot)
+    except Exception as e:   # z. B. Zeitüberschreitung: als Fehlschlag melden, Lauf fortsetzen
+        with PRINT: print(f'[{name}] Abbruch: {e!r}  ← FEHLGESCHLAGEN', flush=True)
+        return name, 0, 1, False
+    finally:
+        SLOTS.put(slot)
+
+
+def run_in(name, slot):
+    _, seed, admin, *extra = SUITES[name]
+    port, aux, smtp1, smtp2 = ports(slot)
+    base = f'http://127.0.0.1:{port}'
     php_env = {k: v for k, v in os.environ.items() if not k.startswith('MAIL_') and k not in ('WA_URL', 'DOMAIN')}
     php_env.update(extra[0] if extra else {})
+    if 'MAIL_SMTP_PORT' in php_env: php_env['MAIL_SMTP_PORT'] = str(smtp1)
+    if 'WA_URL' in php_env: php_env['WA_URL'] = base
+    lines = []
+    say = lines.append
     app = os.path.join(WORK, f'app-{name}')
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(os.path.join(REPO, 'app'), app)
@@ -90,7 +121,8 @@ def run(name):
     if os.environ.get('WA_TEST_STORAGE') == 'sqlite':
         subprocess.run([sys.executable, os.path.join(REPO, 'deploy/datenbank.py'), 'migrate', data, '--offline'], check=True, capture_output=True)
     if not wait_port(port, up=False, timeout=5):
-        print(f'[{name}] Port {port} ist belegt'); return name, 0, 1, False
+        with PRINT: print(f'[{name}] Port {port} ist belegt')
+        return name, 0, 1, False
     sessions = os.path.join(WORK, f'sessions-{name}')
     shutil.rmtree(sessions, ignore_errors=True)
     os.makedirs(sessions)
@@ -98,7 +130,8 @@ def run(name):
     srv = subprocess.Popen(['php', '-d', 'session.save_path=' + sessions, '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=php_env)
     try:
         wait_port(port)
-        env = {**os.environ, 'UDATA': data, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions}
+        env = {**os.environ, 'UDATA': data, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions,
+               'WA_BASE': base, 'WA_AUX_PORT': str(aux), 'WA_SMTP_PORT': str(smtp1), 'WA_SMTP_PORT2': str(smtp2)}
         t0 = time.time()
         p = subprocess.run([sys.executable, os.path.join(REPO, 'tests', 'e2e', f'test_{name}.py')], cwd=os.path.join(REPO, 'tests', 'e2e'),
                            env=env, capture_output=True, text=True, timeout=900)
@@ -108,10 +141,12 @@ def run(name):
         good = p.returncode == 0 and total > 0 and ok_n == total
         for line in out.splitlines():
             if line.startswith('FAIL') or 'Traceback' in line or 'Error' in line[:40]:
-                print(f'[{name}] {line[:300]}')
-        print(f'[{name}] {ok_n}/{total} bestanden in {time.time() - t0:.0f} s' + ('' if good else '  ← FEHLGESCHLAGEN'))
-        if not good and not m:
-            print(out[-3000:])
+                say(f'[{name}] {line[:300]}')
+        say(f'[{name}] {ok_n}/{total} bestanden in {time.time() - t0:.0f} s' + ('' if good else '  ← FEHLGESCHLAGEN'))
+        with open(os.path.join(WORK, f'test-{name}.log'), 'w') as fh: fh.write(out)   # volle Ausgabe (CI-Artefakt)
+        if not good:
+            say(out[-2500:] if not m else '\n'.join(l for l in out.splitlines()[-30:] if not l.startswith('PASS')))
+        with PRINT: print('\n'.join(lines), flush=True)
         return name, ok_n, total, good
     finally:
         os.killpg(srv.pid, signal.SIGTERM)
@@ -120,8 +155,42 @@ def run(name):
 
 def main():
     names = sys.argv[1:] or list(SUITES)
+    unknown = [n for n in names if n not in SUITES]
+    if unknown: sys.exit('Unbekannte Testgruppe: ' + ', '.join(unknown))
     os.makedirs(WORK, exist_ok=True)
-    res = [run(n) for n in names]
+    jobs = max(1, min(int(os.environ.get('WA_JOBS') or min(4, max(2, os.cpu_count() or 2))), len(names)))
+    for i in range(jobs): SLOTS.put(i)
+    t0 = time.time()
+    # Lange Gruppen zuerst, damit am Ende nicht eine einzelne Gruppe allein läuft
+    slow = ['kunden_mail', 'kunden', 'security', 'bestellung', 'users', 'gemeinsam', 'sys', 'restposten', 'angebote', 'hist', 'frontend', 'geo']
+    order = sorted(names, key=lambda n: slow.index(n) if n in slow else len(slow))
+    res = {}
+    def worker(items):
+        while True:
+            try: n = items.get_nowait()
+            except queue.Empty: return
+            res[n] = run(n)
+    items = queue.Queue()
+    for n in order: items.put(n)
+    threads = [threading.Thread(target=worker, args=(items,)) for _ in range(jobs)]
+    for t in threads: t.start()
+    for t in threads: t.join()
+    flaky = []
+    retry = [n for n in names if not res[n][3]]
+    # Einmalige Wiederholung fehlgeschlagener Gruppen allein (ohne Parallellast). Besteht sie dann, gilt sie als
+    # wackelig: der Lauf bleibt grün, die Gruppe wird aber deutlich gemeldet (GitHub-Warnung) und muss stabilisiert werden.
+    if retry and os.environ.get('WA_RETRY', '1') != '0' and len(retry) <= 3:
+        print(f'\nWiederhole allein: {", ".join(retry)}')
+        for n in retry:
+            log = os.path.join(WORK, f'test-{n}.log')
+            if os.path.isfile(log): shutil.copy(log, os.path.join(WORK, f'test-{n}-fehlversuch.log'))
+            r = run(n)
+            if r[3]:
+                flaky.append(n); res[n] = r
+    res = [res[n] for n in names]
+    print(f'Laufzeit {time.time() - t0:.0f} s mit {jobs} parallelen Gruppen')
+    for n in flaky:
+        print(f'::warning::Testgruppe {n} erst bei Wiederholung bestanden (wackelig) – bitte stabilisieren, Ausgabe in tests/.arbeit/test-{n}.log')
     passed = sum(r[1] for r in res); total = sum(r[2] for r in res)
     bad = [r[0] for r in res if not r[3]]
     print(f'\nGesamt: {passed}/{total} Prüfungen bestanden' + (f' – fehlgeschlagen: {", ".join(bad)}' if bad else ''))

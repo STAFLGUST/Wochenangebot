@@ -1,4 +1,5 @@
 import fcntl, hashlib, json, os, sqlite3, sys
+from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 from pathlib import Path
 from kunden_hilfe import Client
 from order_setup import setup
@@ -59,7 +60,7 @@ newnr=k.call('kunde_bestellung',failedpayload)[1]['nr'];jobs=detail(newnr)['outb
 check('outage preserves failed internal and queued copy',[j['state'] for j in jobs]==['failed','queued'])
 check('copy waits for internal acceptance',retry(newnr,jobs[1])[0]==409)
 a.call('bestell_settings_save',dict(enabled=True,to='changed@example.org',copy=False))
-smtp=TestSmtp(2526,password='Test-Postfach-1')
+smtp=TestSmtp(SMTP_PORT,password='Test-Postfach-1')
 lockpath=root/('.order-mail-'+hashlib.sha256(newnr.encode()).hexdigest()+'.lock')
 with lockpath.open('w') as lock:
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)

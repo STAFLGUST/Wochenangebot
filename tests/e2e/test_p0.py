@@ -1,9 +1,10 @@
 import sys
+from umgebung import BASE, AUX_PORT  # Testserver je Gruppe (parallel)
 import os, re, subprocess, time, json, shutil, glob
 from playwright.sync_api import sync_playwright
 from umgebung import SH, FIX, REPO, WORK
 S = WORK
-B = 'http://127.0.0.1:8790'; DATA = os.environ['UDATA']; res = []
+B = BASE; DATA = os.environ['UDATA']; res = []
 GUARD = "<?php http_response_code(404); exit; ?>\n"
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
@@ -21,22 +22,22 @@ with sync_playwright() as p:
         r = pg.evaluate("async () => { const r = await fetch('/api/?action=setup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'boss', password:'Uebernahme-Versuch-1'})}); return [r.status, await r.json()]; }")
         return pg, j, r
     # 1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt
-    srv(8791, None)
-    pg, j, r = st('http://127.0.0.1:8791')
+    srv(AUX_PORT, None)
+    pg, j, r = st(f'http://127.0.0.1:{AUX_PORT}')
     check('empty system: setup allowed', j['setupRequired'] and not j['setupLocked'] and r[0] == 200, (j, r[0]))
     # 2) leeres System mit WA_INSTALLED=1 → gesperrt
-    srv(8791, None, {'WA_INSTALLED': '1'})
-    pg, j, r = st('http://127.0.0.1:8791')
+    srv(AUX_PORT, None, {'WA_INSTALLED': '1'})
+    pg, j, r = st(f'http://127.0.0.1:{AUX_PORT}')
     check('WA_INSTALLED: setup locked', not j['setupRequired'] and j['setupLocked'] and r[0] == 403, (j, r))
     check('WA_INSTALLED: UI shows locked message, no setup form', 'gesperrt' in pg.inner_text('body') and pg.locator('#pw2-wrap:visible').count() == 0, pg.inner_text('body')[:200])
     # 3) kaputte Nutzerdatei → gesperrt (kein Übernehmen möglich)
-    app = srv(8791, FIX + '/data-seed')
+    app = srv(AUX_PORT, FIX + '/data-seed')
     open(app + '/data/nutzer.php', 'w').write(GUARD + '{kaputt')
-    pg, j, r = st('http://127.0.0.1:8791')
+    pg, j, r = st(f'http://127.0.0.1:{AUX_PORT}')
     check('corrupt users file: setup locked', j['setupLocked'] and r[0] == 403 and not os.path.getsize(app + '/data/nutzer.php') > 100, (j, r[0]))
     lr = pg.evaluate("async () => { const r = await fetch('/api/?action=login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:'admin', password:'x'})}); return [r.status, await r.json()]; }")
     check('corrupt users file: login explains', lr[0] == 409 and 'Server' in lr[1]['error'], lr)
-    subprocess.run("pkill -f 'php -S 127.0.0.1:8791$'", shell=True)
+    subprocess.run(f"pkill -f 'php -S 127.0.0.1:{AUX_PORT}$'", shell=True)
     # 4) CSV-Formel-Injection über Benutzername im Protokoll
     a = br.new_page(viewport={'width': 1440, 'height': 950}, accept_downloads=True); a.on('pageerror', lambda e: errs.append(str(e)))
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')

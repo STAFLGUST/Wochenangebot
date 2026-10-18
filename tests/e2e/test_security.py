@@ -1,7 +1,8 @@
 import sys
+from umgebung import BASE, wait_text, until
 import base64, hmac, hashlib, struct, time, json, os, re, subprocess
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8790'
+B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 DATA = os.environ['UDATA']
 res = []
@@ -77,9 +78,12 @@ with sync_playwright() as p:
     c2.context.close()
     # --- Sitzungen
     a.click('#vt-edit'); a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
+    until(lambda: a.locator('[data-sec=end]').count() == 2)
     n = a.locator('[data-sec=end]').count(); check('other sessions listed', n == 2, n)
-    a.locator('[data-sec=end]').first.click(); a.wait_for_timeout(600)
-    a.locator('[data-sec=end]').first.click(); a.wait_for_timeout(600)
+    a.locator('[data-sec=end]').first.click()
+    until(lambda: a.locator('[data-sec=end]').count() == 1)
+    a.locator('[data-sec=end]').first.click()
+    until(lambda: a.locator('[data-sec=end]').count() == 0)
     st_b = b.evaluate("fetch('../api/?action=draft').then(r => r.status)"); st_c = c.evaluate("fetch('../api/?action=draft').then(r => r.status)")
     check('ended sessions are logged out (401)', st_b == 401 and st_c == 401, (st_b, st_c))
     # --- Passwortregeln + Pflicht
@@ -109,15 +113,16 @@ with sync_playwright() as p:
     x = br.new_context().new_page(); login(x, 'vic', 'Gut-Passwort-2026', wait=False); x.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
     check('locked account rejects correct password', 'gesperrt' in x.inner_text('#auth-err')); x.context.close()
     a.click('#vt-edit'); a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
+    until(lambda: a.locator('[data-sec=unlock]').count() == 1)   # Ansicht lädt neu
     check('locked user shown', a.locator('[data-sec=unlock]').count() == 1)
     a.click('[data-sec=unlock]'); a.wait_for_timeout(600)
     x = br.new_context().new_page(); login(x, 'vic', 'Gut-Passwort-2026', wait=False); x.wait_for_selector('#au-code-wrap:not([hidden])')
     check('unlocked user can log in again (code step)', True); x.context.close()
     # --- IP-Freigabe
     a.check('#sec-form [name=ipEnabled]'); a.fill('#sec-form [name=adminIps]', '10.9.9.9')
-    a.click('#sec-form [type=submit]'); a.click('#dlg-confirm [data-v="1"]'); a.wait_for_timeout(600)
+    a.click('#sec-form [type=submit]'); a.click('#dlg-confirm [data-v="1"]'); wait_text(a, '#sec-err', 'aussperren')
     check('self-lockout prevented', 'aussperren' in a.inner_text('#sec-err'), a.inner_text('#sec-err'))
-    a.click('[data-sec=addip]'); a.click('#sec-form [type=submit]'); a.click('#dlg-confirm [data-v="1"]'); a.wait_for_timeout(800)
+    a.click('[data-sec=addip]'); a.click('#sec-form [type=submit]'); a.click('#dlg-confirm [data-v="1"]'); wait_text(a, '#toast', 'gespeichert')
     check('IP allowlist saved', 'gespeichert' in a.inner_text('#toast'))
     other = br.new_context(extra_http_headers={'X-Forwarded-For': '203.0.113.7'}); op = other.new_page()
     r1 = op.request.get(B + '/api/?action=status'); r2 = op.request.get(B + '/api/?action=offer')

@@ -1,4 +1,5 @@
 import sys
+from umgebung import shot
 from playwright.sync_api import sync_playwright
 from order_setup import setup, PW
 from kunden_hilfe import B
@@ -27,7 +28,7 @@ with sync_playwright() as p:
     check('failed retry visible','Versand nicht bestätigt' in page.locator('.ord-outbox').inner_text())
     check('successful recipient not duplicated',len(smtp.messages)==count)
     check('mobile no horizontal overflow',page.evaluate('document.documentElement.scrollWidth')<=390)
-    page.locator('.ord-outbox').screenshot(path=SH+'/bestellung-versandauftraege.png')
+    shot(page.locator('.ord-outbox'), SH+'/bestellung-versandauftraege.png')
     check('no JavaScript errors',not errors)
     browser.close()
 smtp.close();print(f'{sum(results)}/{len(results)} passed');sys.exit(0 if all(results) else 1)

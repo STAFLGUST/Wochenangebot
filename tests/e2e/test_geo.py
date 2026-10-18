@@ -1,7 +1,9 @@
 import sys
+from umgebung import shot
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, os, re, subprocess, time
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8790'
+B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 DATA = os.environ['UDATA']
 CN, AU, DE, RU = '1.0.1.1', '1.0.0.1', '46.114.0.1', '77.88.8.8'
@@ -127,7 +129,7 @@ with sync_playwright() as p:
     # Mobil
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page(); m.on('pageerror', lambda e: errs.append('m: ' + str(e)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.click('#vt-sec'); m.wait_for_selector('#geo-box'); m.wait_for_timeout(200)
-    m.locator('#geo-box').screenshot(path=SH + '/geo-mobile.png')
+    shot(m.locator('#geo-box'), SH + '/geo-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
     check('no JS errors', not errs, errs)
     br.close()

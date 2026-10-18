@@ -1,5 +1,6 @@
 """Abgelaufene Admin-Freigabe: Abbruch, Fehlversuch und einmalige Wiederholung im Browser."""
 import sys
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 from playwright.sync_api import sync_playwright
 from auth_helpers import expire_session, PW
 results=[]
@@ -11,7 +12,7 @@ with sync_playwright() as p:
     errors=[]; saves=[]
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.on('response',lambda r:saves.append(r.status) if 'action=security_save' in r.url else None)
-    page.goto('http://127.0.0.1:8790/admin/')
+    page.goto(BASE + '/admin/')
     page.fill('#au-user','admin');page.fill('#pw1',PW);page.click('#auth-submit')
     page.wait_for_selector('tr[data-id]');page.click('#vt-sec');page.wait_for_selector('#sec-form')
     sid=next(c['value'] for c in page.context.cookies() if c['name']=='WA_ADMIN')

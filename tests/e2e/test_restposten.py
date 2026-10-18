@@ -1,6 +1,7 @@
 """Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, Kein-Bestand-Zeichen und
 Sonderposten-Mail je Angebot. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
 import json
+from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 import re
 import sys
 from playwright.sync_api import sync_playwright
@@ -21,7 +22,7 @@ master = [a for a in json.load(open(FIX + '/bestand/master_stock.json')) if a[2]
 articles = [{'code': a[0].lstrip('0') or '0', 'name': a[1], 'kg': a[2], 'mhd': a[3], 'mhdKg': a[4], 'lots': []} for a in master]
 in_stock = {norm(a[0]) for a in master}
 
-smtp = TestSmtp(2526, password='Test-Postfach-1')
+smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
 A = Client('198.51.100.2')
 check('admin login', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 check('stock stored', A.call('stock_import', {'date': '2026-10-16', 'source': 'Bestand.xls', 'articles': articles})[0] == 200)

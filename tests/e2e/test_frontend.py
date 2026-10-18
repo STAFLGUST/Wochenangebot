@@ -1,7 +1,8 @@
 import sys
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import re, json, os, sys
 from playwright.sync_api import sync_playwright, expect
-URL = 'http://127.0.0.1:8765/'
+URL = BASE + '/'
 from umgebung import SH as OUT, FIX, REPO
 from testdaten import de, preis, preise, artikel, bestand_kg
 results = []

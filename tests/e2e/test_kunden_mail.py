@@ -1,6 +1,7 @@
 """E-Mail an Kunden: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail.
 Läuft gegen einen Test-Mailserver (smtp_test.py) – es werden nie echte E-Mails versendet."""
 from umgebung import storage_raw
+from umgebung import SMTP_PORT, SMTP_PORT2  # Testserver je Gruppe (parallel)
 import json
 import re
 import sys
@@ -24,7 +25,7 @@ def link_of(m):
     return t.group(1) if t else None
 
 
-smtp = TestSmtp(2526, password=SMTP_PW)
+smtp = TestSmtp(SMTP_PORT, password=SMTP_PW)
 A = Client('198.51.100.2')
 check('admin login', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 
@@ -206,14 +207,14 @@ check('server down: clear error', code == 502 and 'Verbindung' in r.get('error',
 code, r = A.call('kunden')
 c1 = next(c for c in r['customers'] if c['id'] == K1)
 check('undelivered link is not left valid', c1['login']['link'] is None and c1['mailLast']['ok'] is False)
-smtp = TestSmtp(2526, password=SMTP_PW)
+smtp = TestSmtp(SMTP_PORT, password=SMTP_PW)
 
 # ---------- Postfach im Eingabebereich hinterlegen (Vorrang vor .env) ----------
 import os
 UDATA = os.environ['UDATA']
 KONTO_PW = 'Konto-Passwort-9'
-smtp2 = TestSmtp(2527, user='konto@example.org', password=KONTO_PW)
-konto = {'host': '127.0.0.1', 'port': 2527, 'secure': 'none', 'user': 'konto@example.org', 'password': KONTO_PW, 'from': 'konto@example.org', 'fromName': 'STAFL Versand', 'replyTo': ''}
+smtp2 = TestSmtp(SMTP_PORT2, user='konto@example.org', password=KONTO_PW)
+konto = {'host': '127.0.0.1', 'port': SMTP_PORT2, 'secure': 'none', 'user': 'konto@example.org', 'password': KONTO_PW, 'from': 'konto@example.org', 'fromName': 'STAFL Versand', 'replyTo': ''}
 check('editor cannot change mail account', E.call('mail_konto_save', konto)[0] == 403)
 check('unencrypted only to local server', A.call('mail_konto_save', {**konto, 'host': 'smtp.example.org'})[0] == 422)
 check('invalid sender rejected', A.call('mail_konto_save', {**konto, 'from': 'kein'})[0] == 422)
@@ -228,7 +229,7 @@ check('password stored encrypted only', KONTO_PW not in stored and '"passEnc": "
 check('separate key file exists', os.path.exists(os.path.join(UDATA, 'mail-schluessel.php')))
 n0 = len(smtp2.messages)
 check('mails go via saved account', A.call('mail_test', {'to': 'ich@example.org'})[0] == 200 and len(smtp2.messages) == n0 + 1 and 'STAFL Versand' in str(smtp2.messages[-1]['msg']['from']))
-code, r = A.call('mail_konto_save', {**konto, 'port': 2526, 'password': ''})
+code, r = A.call('mail_konto_save', {**konto, 'port': SMTP_PORT, 'password': ''})
 check('changed server requires password again (never reused elsewhere)', code == 422 and 'Passwort' in r.get('error', ''))
 code, r = A.call('mail_konto_save', {**konto, 'password': '', 'fromName': 'STAFL Verkauf'})
 check('same server: stored password kept', code == 200 and r['connection']['ok'] is True)

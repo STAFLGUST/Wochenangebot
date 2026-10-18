@@ -1,7 +1,8 @@
 import sys
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, os, re, datetime
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8790'
+B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 from testdaten import de, preis, preise, artikel, bestand_kg
 SC = FIX + '/bestand'
