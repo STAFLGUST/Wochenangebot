@@ -367,6 +367,7 @@ function sign_in(array $u): string
     $_SESSION['seen'] = time();
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
     unset($_SESSION['pend'], $_SESSION['totpPending']);
+    mark_admin_confirmed($u);
     sess_register($u);
     $ME = $u;
     return $_SESSION['csrf'];
@@ -388,10 +389,67 @@ function user_update(string $id, callable $fn): ?array
         return $users[$i];
     });
 }
+/* Kurze, sitzungsgebundene Freigabe sensibler Verwaltungsaktionen. */
+const ADMIN_CONFIRM_SECONDS = 300;
+const CONFIRM_MAX_FAILURES = 5;
+const CONFIRM_LOCK_SECONDS = 600;
+function mark_admin_confirmed(array $u): void
+{
+    $_SESSION['adminConfirmedAt'] = time();
+    $_SESSION['adminConfirmedSv'] = (int)$u['sv'];
+}
+function confirmation_locked(array $u): void
+{
+    $remaining = (int)($u['confirmUntil'] ?? 0) - time();
+    if ($remaining > 0) {
+        header('Retry-After: ' . $remaining);
+        respond(['ok' => false, 'code' => 'confirmation_locked', 'error' => 'Zu viele falsche Passwortbestätigungen. Bitte in ' . (int)ceil($remaining / 60) . ' Minuten erneut versuchen.'], 429);
+    }
+}
+function require_admin_confirmation(): array
+{
+    $u = require_auth(true, 'admin');
+    confirmation_locked($u);
+    $at = (int)($_SESSION['adminConfirmedAt'] ?? 0);
+    if ($at <= time() && $at > time() - ADMIN_CONFIRM_SECONDS && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
+    respond(['ok' => false, 'code' => 'confirmation_required', 'error' => 'Bitte bestätigen Sie diese Verwaltungsaktion mit Ihrem aktuellen Passwort.'], 403);
+}
+/* Gemeinsame, kontoweite Bremse für Passwortbestätigungen; nie durch neue Sitzungen zurücksetzen. */
+function confirm_password(array $me, string $password, int $invalidStatus = 422): array
+{
+    $result = with_lock('nutzer', function () use ($me, $password) {
+        $users = users_load();
+        $i = user_find($users, $me['id']);
+        if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$me['sv']) fail('Bitte erneut anmelden.', 401);
+        $u = &$users[$i];
+        confirmation_locked($u);
+        $ok = password_verify($password, (string)$u['hash']);
+        if ($ok) {
+            unset($u['confirmFailures'], $u['confirmSeen'], $u['confirmUntil']);
+        } else {
+            $n = (int)($u['confirmSeen'] ?? 0) <= time() - CONFIRM_LOCK_SECONDS || !empty($u['confirmUntil']) ? 0 : (int)($u['confirmFailures'] ?? 0);
+            $u['confirmFailures'] = $n + 1;
+            $u['confirmSeen'] = time();
+            $u['confirmUntil'] = $n + 1 >= CONFIRM_MAX_FAILURES ? time() + CONFIRM_LOCK_SECONDS : 0;
+        }
+        users_save($users);
+        return [$ok, $u];
+    });
+    [$ok, $u] = $result;
+    $GLOBALS['ME'] = $u;
+    if (!$ok) {
+        audit('reauth_fail', 'Passwortbestätigung fehlgeschlagen', [], $u);
+        confirmation_locked($u);
+        respond(['ok' => false, 'code' => 'confirmation_invalid', 'error' => 'Das aktuelle Passwort ist nicht korrekt.'], $invalidStatus);
+    }
+    return $u;
+}
 /* Nach Änderungen am zweiten Faktor nur die bestätigende Sitzung behalten. */
 function keep_current_session(array $u): void
 {
     $_SESSION['sv'] = (int)$u['sv'];
+    // Eine vorhandene Freigabe nicht verlängern, nur an die neue Sitzungsversion binden.
+    $_SESSION['adminConfirmedSv'] = (int)$u['sv'];
     unset($_SESSION['totpPending']);
     $GLOBALS['ME'] = $u;
     $sid = (string)($_SESSION['sid'] ?? '');
@@ -579,17 +637,19 @@ function attempts_check(): void
 }
 function attempts_record(bool $ok): void
 {
-    global $CFG;
-    $a = store_read('logins') ?? [];
-    $k = client_key();
-    foreach ($a as $kk => $v) if (($v['until'] ?? 0) < time() && ($v['t'] ?? 0) < time() - 86400) unset($a[$kk]);
-    if ($ok) unset($a[$k]);
-    else {
-        $n = (int)($a[$k]['n'] ?? 0) + 1;
-        $a[$k] = ['n' => $n, 't' => time(), 'ip' => client_ip(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : 0];
-        if ($n >= (int)$CFG['max_attempts']) $a[$k]['n'] = 0;
-    }
-    store_write('logins', $a);
+    with_lock('logins', function () use ($ok) {
+        global $CFG;
+        $a = store_read('logins') ?? [];
+        $k = client_key();
+        foreach ($a as $kk => $v) if (($v['until'] ?? 0) < time() && ($v['t'] ?? 0) < time() - 86400) unset($a[$kk]);
+        if ($ok) unset($a[$k]);
+        else {
+            $n = (int)($a[$k]['n'] ?? 0) + 1;
+            $a[$k] = ['n' => $n, 't' => time(), 'ip' => client_ip(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : 0];
+            if ($n >= (int)$CFG['max_attempts']) $a[$k]['n'] = 0;
+        }
+        store_write('logins', $a);
+    });
 }
 
 /* ---------------- Datenprüfung ---------------- */
@@ -1334,7 +1394,7 @@ function master_changes(array $old, array $new): array
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
+$writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save'];
@@ -1428,7 +1488,7 @@ try {
                 $old = []; foreach ($cur['offers'] as $o) $old[$o['id']] = $o;
                 $new = []; foreach ($list as $o) $new[$o['id']] = $o;
                 $removed = array_diff_key($old, $new);
-                if ($removed && $me['role'] !== 'admin') fail('Angebote löschen dürfen nur Administratoren.', 403);
+                if ($removed) require_admin_confirmation();
                 $d = [];
                 $FB = ['standard' => 'Standardpreis zeigen', 'hidden' => 'Artikel ausblenden'];
                 foreach ($new as $id => $o) {
@@ -1440,7 +1500,7 @@ try {
                 $oldPub = !array_key_exists('stdPublic', $cur) || !empty($cur['stdPublic']);
                 $pub = array_key_exists('stdPublic', $b) ? !empty($b['stdPublic']) : $oldPub;
                 if ($pub !== $oldPub) {
-                    if ($me['role'] !== 'admin') fail('Ob das Wochenangebot öffentlich ist, dürfen nur Administratoren ändern.', 403);
+                    require_admin_confirmation();
                     $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
                 }
                 $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub];
@@ -1679,7 +1739,7 @@ try {
         }
 
         case 'bestell_settings_save': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $b = body();
             $raw = is_array($b['to'] ?? null) ? implode(',', $b['to']) : (string)($b['to'] ?? '');
             $to = [];
@@ -1777,7 +1837,7 @@ try {
         }
 
         case 'mail_konto_save': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $b = body();
             $old = mail_account();
             if (!empty($b['remove'])) {
@@ -1822,7 +1882,7 @@ try {
         }
 
         case 'mail_save': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             $sig = (string)(body()['signature'] ?? '');
             $sig = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', $sig) ?? '')), 0, 600);
             $old = mail_settings()['signature'];
@@ -1832,7 +1892,7 @@ try {
         }
 
         case 'mail_test': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $cfg = require_mail();
             $to = trim((string)(body()['to'] ?? ''));
             if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) fail('Bitte eine gültige E-Mail-Adresse angeben.', 422);
@@ -1866,7 +1926,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunde_mail': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             $cfg = require_mail();
             $b = body();
             $c = null;
@@ -1902,7 +1962,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunden_rundmail': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             $cfg = require_mail();
             $b = body();
             $wk = mail_week();
@@ -1945,7 +2005,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunde_save': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $b = body();
             $res = with_lock('kunden', function () use ($b) {
                 $d = customers_load();
@@ -2030,7 +2090,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunde_delete': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             $b = body();
             $id = (string)($b['id'] ?? '');
             $res = with_lock('kunden', function () use ($id, $b) {
@@ -2058,6 +2118,14 @@ Ausgelöst von: {$me['name']}
             $noUsers = !users_load();
             respond(['ok' => true, 'setupRequired' => $noUsers && setup_allowed(), 'setupLocked' => $noUsers && !setup_allowed(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
                      'user' => $u ? me_payload($u) : null, 'company' => $CFG['company']]);
+        }
+
+        case 'reauth': {
+            $me = require_auth(true, 'admin');
+            $u = confirm_password($me, (string)(body()['password'] ?? ''));
+            mark_admin_confirmed($u);
+            audit('reauth', 'Sensible Verwaltungsaktionen für fünf Minuten bestätigt');
+            respond(['ok' => true, 'confirmedUntil' => time() + ADMIN_CONFIRM_SECONDS]);
         }
 
         case 'setup': {
@@ -2189,9 +2257,9 @@ Ausgelöst von: {$me['name']}
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
             // Auch der Austausch eines vorhandenen Faktors braucht einen erneuten Passwortnachweis.
-            if (!empty($me['totp']) && !password_verify((string)(body()['password'] ?? ''), (string)$me['hash'])) {
+            if (!empty($me['totp'])) {
                 unset($_SESSION['totpPending']);
-                fail('Bitte zum erneuten Einrichten das aktuelle Passwort eingeben.', 422);
+                $me = confirm_password($me, (string)(body()['password'] ?? ''));
             }
             $secret = b32_encode(random_bytes(20));
             $_SESSION['totpPending'] = ['secret' => $secret, 'sv' => (int)$me['sv'], 't' => time()];
@@ -2227,10 +2295,9 @@ Ausgelöst von: {$me['name']}
             $me = require_auth(true);
             if (empty($me['totp'])) fail('Die Zwei-Faktor-Anmeldung ist nicht eingerichtet.', 409);
             if (twofa_required($me)) fail('Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
-            $pw = (string)(body()['password'] ?? '');
-            $u = user_update($me['id'], function (&$x) use ($me, $pw) {
+            $me = confirm_password($me, (string)(body()['password'] ?? ''));
+            $u = user_update($me['id'], function (&$x) use ($me) {
                 if ((int)$x['sv'] !== (int)$me['sv'] || !$x['active']) fail('Bitte erneut anmelden.', 401);
-                if (!password_verify($pw, (string)$x['hash'])) fail('Das Passwort ist nicht korrekt.', 422);
                 unset($x['totp'], $x['totpLast'], $x['recovery']);
                 $x['sv'] = (int)$x['sv'] + 1;
                 $x['changed'] = now();
@@ -2254,13 +2321,13 @@ Ausgelöst von: {$me['name']}
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
             $b = body();
-            if (!password_verify((string)($b['current'] ?? ''), (string)$me['hash'])) fail('Das bisherige Passwort ist nicht korrekt.', 401);
+            $me = confirm_password($me, (string)($b['current'] ?? ''), 401);
             $new = check_password($b['password'] ?? '', $me['username']);
             if (password_verify($new, (string)$me['hash'])) fail('Bitte ein anderes als das bisherige Passwort wählen.');
             $u = with_lock('nutzer', function () use ($me, $new) {
                 $users = users_load();
                 $i = user_find($users, $me['id']);
-                if ($i === null) fail('Bitte erneut anmelden.', 401);
+                if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$me['sv']) fail('Bitte erneut anmelden.', 401);
                 $users[$i]['hash'] = password_hash($new, PASSWORD_DEFAULT);
                 $users[$i]['mustChange'] = false;
                 $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;   // andere Sitzungen dieses Nutzers abmelden
@@ -2269,6 +2336,7 @@ Ausgelöst von: {$me['name']}
                 return $users[$i];
             });
             $_SESSION['sv'] = (int)$u['sv'];
+            mark_admin_confirmed($u);
             $GLOBALS['ME'] = $u;
             $sid = (string)($_SESSION['sid'] ?? '');
             sess_remove(function ($k, $v) use ($u, $sid) { return $v['uid'] === $u['id'] && $k !== $sid; });
@@ -2355,7 +2423,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'security_save': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $b = body();
             $old = sec();
             $twofa = in_array($b['twofa'] ?? '', ['off', 'admins', 'all'], true) ? $b['twofa'] : 'off';
@@ -2410,13 +2478,13 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'geo_clear_stats': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             with_lock('laendersperre', function () { store_write('laendersperre', []); });
             respond(['ok' => true]);
         }
 
         case 'session_end': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $b = body();
             $sid = (string)($b['sid'] ?? '');
             $uid = (string)($b['uid'] ?? '');
@@ -2431,7 +2499,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'ip_unblock': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             $key = (string)(body()['key'] ?? '');
             $ip = with_lock('logins', function () use ($key) {
                 $a = store_read('logins') ?? [];
@@ -2445,7 +2513,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'geo_update': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             @set_time_limit(180);
             try { $r = geo_download($DATA . '/geo/laender.dat.php'); }
             catch (Throwable $e) { error_log('[wochenangebot] geo: ' . $e->getMessage()); fail('Die Länderdaten konnten nicht aktualisiert werden. Bitte später erneut versuchen.', 502); }
@@ -2454,7 +2522,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'user_unlock': {
-            require_auth(true, 'admin');
+            require_admin_confirmation();
             $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; });
             if (!$u) fail('Nutzer nicht gefunden.', 404);
             audit('security', "Zugang „{$u['username']}“ entsperrt");
@@ -2468,7 +2536,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'user_save': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $b = body();
             $res = with_lock('nutzer', function () use ($b, $me) {
                 $users = users_load();
@@ -2535,7 +2603,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'user_delete': {
-            $me = require_auth(true, 'admin');
+            $me = require_admin_confirmation();
             $id = (string)(body()['id'] ?? '');
             $gone = with_lock('nutzer', function () use ($id, $me) {
                 $users = users_load();
