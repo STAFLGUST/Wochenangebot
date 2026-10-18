@@ -4,8 +4,9 @@ Diese Datei ist eine Arbeitsanweisung, keine Sicherheitsgrenze. Durchgesetzt wer
 CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/workflows/release.yml`).
 
 1. **Nie direkt nach `main`.** Jede Änderung in einem eigenen Branch und als Pull Request. Zusammenführen und
-   Releases starten ausschließlich die Verantwortlichen (derzeit: Inhaber des Kontos STAFLGUST).
-2. **Produktion nur über Release.** Der Server spielt nur von Hand freigegebene Commits mit grüner CI ein.
+   Releases freigeben ausschließlich die Verantwortlichen (derzeit: Inhaber des Kontos STAFLGUST).
+2. **Produktion nur über Release.** Der Server spielt nur vom Inhaber freigegebene Commits mit grüner CI ein
+   (Freigabe in der GitHub-Umgebung `produktion`, `docs/release-freigabe.md`).
    Server, Zugänge, Daten und Deploymentprozess werden nur mit ausdrücklicher Freigabe verändert.
 3. **Vor jeder Änderung:** betroffene Geschäftsregeln (künftig `regeln/katalog.yaml`) und Tests lesen; einen
    begrenzten Plan machen.
