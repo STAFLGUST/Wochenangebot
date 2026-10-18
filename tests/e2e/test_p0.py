@@ -67,6 +67,9 @@ with sync_playwright() as p:
     a.click('#vt-edit'); a.click('#vt-sec'); a.wait_for_timeout(600)
     check('deploy card: rollback shown red', a.locator('.sec-card.bad:has-text("Vorversion")').count() == 1)
     a.screenshot(path=SH + '/p0-sec.png')
+    for path in ['/api/lib/kern.php', '/api/lib/kunden.php', '/api/aktionen/mail.php', '/api/aktionen/zugang.php']:
+        r = a.request.get(B + path)
+        check('module not directly reachable: ' + path, r.status == 404 and 'function' not in r.text(), r.status)
     check('no JS errors', not errs, errs)
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

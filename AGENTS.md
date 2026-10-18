@@ -30,6 +30,8 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
 12. **Sichtbarkeit und Sonderpreise** (`variants.std` = im Wochenangebot ausgeblendet, `sale`) löst nur der Server in `offer_resolve` auf;
    ausgeliefert wird nie die Sonderpreis-Struktur anderer Angebote. Sonderposten-Mails gehen nur an Kunden des jeweiligen Angebots.
 
+Überblick über Aufbau und Dateien: `docs/architektur.md` (vor Änderungen lesen, nach Umbauten aktualisieren).
+
 ## Definition of Done (jeder Pull Request)
 
 Ein PR ist erst fertig, wenn alle Punkte erfüllt sind – unabhängig davon, welches Werkzeug oder welche Sitzung ihn
