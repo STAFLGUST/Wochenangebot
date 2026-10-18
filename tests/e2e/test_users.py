@@ -96,7 +96,13 @@ with sync_playwright() as p:
     # ---- Bearbeiter mit Pflicht-Passwortwechsel
     login(a, 'anna', 'Start-Kennwort-123', wait=False); a.wait_for_selector('#pw2-wrap:not([hidden])')
     check('must-change screen shown', 'eigenes Passwort' in a.inner_text('#auth-intro') and not a.locator('#au-user-wrap').is_visible())
-    a.fill('#pw1', 'Neu-Kennwort-4567'); a.fill('#pw2', 'Neu-Kennwort-4567'); a.click('#auth-submit'); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    a.fill('#pw1', 'Neu-Kennwort-4567'); a.fill('#pw2', 'Neu-Kennwort-4567'); a.click('#auth-submit')
+    try:
+        a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    except Exception:   # Diagnose für seltene CI-Ausreißer: Meldung und Bild festhalten
+        print('FAIL must-change: editor not shown  ' + repr(a.inner_text('#auth-err')) + ' auth hidden=' + str(a.locator('#screen-auth').is_hidden()))
+        a.screenshot(path=SH + '/users-mustchange-fehler.png')
+        raise
     check('editor: no admin tabs', not a.locator('#vt-users').is_visible() and not a.locator('#vt-log').is_visible())
     check('editor: publish visible', a.locator('#btn-publish').is_visible())
     r = api_from_page(a, 'user_save', {'name': 'Hack', 'username': 'hack', 'role': 'admin', 'active': True, 'password': 'Hack-Hack-123'})

@@ -27,3 +27,5 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
    vom Browser gesendete Preise werden ignoriert.
 11. **Skripte und Stylesheets:** nach jeder Änderung an `app/assets/` die Versionsnummern mit
    `python3 werkzeuge/asset_versionen.py --setzen` aktualisieren (die CI prüft das), sonst laden Browser alte Kopien.
+12. **Sichtbarkeit und Sonderpreise** (`variants.std` = im Wochenangebot ausgeblendet, `sale`) löst nur der Server in `offer_resolve` auf;
+   ausgeliefert wird nie die Sonderpreis-Struktur anderer Angebote. Sonderposten-Mails gehen nur an Kunden des jeweiligen Angebots.

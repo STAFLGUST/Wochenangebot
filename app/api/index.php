@@ -512,8 +512,19 @@ function price_text($p): string
     else $t = 'ohne Preis';
     return $t;
 }
-function variant_text($v): string
+function sale_text($sale): string
 {
+    if (!is_array($sale) || !isset($sale['value'])) return '';
+    $t = 'Sonderpreis ' . price_text(['status' => 'value', 'value' => $sale['value']]);
+    foreach ($sale['offers'] ?? [] as $oid => $o) {
+        $def = offer_def((string)$oid);
+        $t .= '; ' . ($def['name'] ?? $oid) . ': ' . (($o['status'] ?? '') === 'none' ? 'kein Sonderpreis' : price_text(['status' => 'value', 'value' => $o['value']]));
+    }
+    return $t;
+}
+function variant_text($v, string $oid = ''): string
+{
+    if ($oid === OFFER_STD) return is_array($v) && ($v['status'] ?? '') === 'hidden' ? 'ausgeblendet' : 'sichtbar';
     if (!is_array($v)) return 'ohne eigenen Preis';
     if (($v['status'] ?? '') === 'hidden') return 'ausgeblendet';
     return price_text($v);
@@ -560,9 +571,10 @@ function changes_between(?array $a, array $b): array
         if ((string)($o['price']['label'] ?? '') !== (string)($it['price']['label'] ?? '')) $out[] = ['k' => "$id|plabel", 'code' => $code, 'name' => $it['name'], 'f' => 'Preisbezeichnung', 'from' => (string)($o['price']['label'] ?? ''), 'to' => (string)($it['price']['label'] ?? '')];
         if (alts_text($o['altPrices'] ?? []) !== alts_text($it['altPrices'] ?? [])) $out[] = ['k' => "$id|alts", 'code' => $code, 'name' => $it['name'], 'f' => 'Zusatzpreise', 'from' => alts_text($o['altPrices'] ?? []), 'to' => alts_text($it['altPrices'] ?? [])];
         foreach (array_unique(array_merge(array_keys($o['variants'] ?? []), array_keys($it['variants'] ?? []))) as $oid) {
-            $vf = variant_text($o['variants'][$oid] ?? null); $vt = variant_text($it['variants'][$oid] ?? null);
-            if ($vf !== $vt) { $def = offer_def((string)$oid); $out[] = ['k' => "$id|v:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Preis ' . ($def['name'] ?? $oid), 'from' => $vf, 'to' => $vt]; }
+            $vf = variant_text($o['variants'][$oid] ?? null, (string)$oid); $vt = variant_text($it['variants'][$oid] ?? null, (string)$oid);
+            if ($vf !== $vt) { $def = offer_def((string)$oid); $out[] = ['k' => "$id|v:$oid", 'code' => $code, 'name' => $it['name'], 'f' => ($oid === OFFER_STD ? 'Sichtbar im ' : 'Preis ') . ($def['name'] ?? $oid), 'from' => $vf, 'to' => $vt]; }
         }
+        if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Sonderpreis (solange der Vorrat reicht)', 'from' => sale_text($o['sale'] ?? null) ?: 'kein Sonderpreis', 'to' => sale_text($it['sale'] ?? null) ?: 'kein Sonderpreis'];
     }
     foreach ($ia as $id => $it) {
         if (!isset($ib[$id])) $out[] = ['k' => "$id|-", 'code' => (string)($it['code'] ?? ''), 'name' => $it['name'], 'f' => 'Artikel entfernt', 'from' => price_text($it['price']), 'to' => ''];
@@ -998,6 +1010,53 @@ function mail_tpl_angebot(array $c, string $note, ?array $wk): array
     $abBtn = '<p style="max-width:560px;margin:10px auto 0;text-align:center;"><a href="' . mail_h($ab) . '" style="display:inline-block;padding:7px 14px;border:1px solid #cfc6bb;border-radius:8px;color:#5f574f;font-size:12px;text-decoration:none;">Vom Wochenangebot abmelden</a></p>';
     return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('angebot'), $abBtn)];
 }
+/* Sonderposten eines Angebots – nur dessen Artikel und Preise: [Betreff, Text, HTML] */
+function restposten_items(array $def): array
+{
+    $pub = store_read('angebot');
+    if (!$pub) return [];
+    $off = offer_resolve($pub, $def);
+    return array_values(array_filter($off['items'], function ($it) { return !empty($it['sale']); }));
+}
+function mail_tpl_restposten(array $c, array $def, array $items, string $note): array
+{
+    global $CFG;
+    $subject = 'Sonderposten – solange der Vorrat reicht – ' . $CFG['company'];
+    $intro = 'folgende Artikel bieten wir Ihnen zum Sonderpreis an – nur solange der Vorrat reicht:';
+    $url = mail_base_url() . '/' . ($def['id'] === OFFER_STD ? '' : '?angebot=' . rawurlencode($def['id']));
+    $login = !empty($c['login']['active']) ? ($c['login']['username'] ?? '') : '';
+    $sig = mail_settings()['signature'];
+    $pr = function ($it) { return de_num((float)$it['price']['value']) . ' €/kg' . (isset($it['regular']) ? ' (statt ' . de_num((float)$it['regular']) . ' €/kg)' : ''); };
+    $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '');
+    foreach ($items as $it) $t .= '- ' . (($it['code'] ?? '') !== '' ? $it['code'] . ' ' : '') . $it['name'] . ': ' . $pr($it) . "\n";
+    $t .= "\nPreise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.\n";
+    if ($login !== '') $t .= "\nZum Angebot (Anmeldung mit Ihrer Benutzerkennung $login):\n$url\n";
+    $ab = abmelde_url($c);
+    $t .= "\n" . $sig . "\n\n-- \n" . mail_footer('angebot') . "\nVom Wochenangebot abmelden: $ab\n";
+    $td = 'style="padding:7px 6px;border-bottom:1px solid #eee8e1;vertical-align:top;"';
+    $tdr = 'style="padding:7px 6px;border-bottom:1px solid #eee8e1;text-align:right;white-space:nowrap;vertical-align:top;"';
+    $th = 'style="text-align:left;padding:6px;border-bottom:2px solid #e6e0d8;font-size:12px;color:#857c72;"';
+    $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
+        . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '')
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border-collapse:collapse;margin:0 0 12px;"><tr><th ' . $th . '>Art.-Nr.</th><th ' . $th . '>Artikel</th><th style="text-align:right;padding:6px;border-bottom:2px solid #e6e0d8;font-size:12px;color:#857c72;">Sonderpreis</th></tr>';
+    foreach ($items as $it) {
+        $h .= '<tr><td ' . $td . '>' . mail_h((string)($it['code'] ?? '')) . '</td><td ' . $td . '>' . mail_h($it['name']) . '</td><td ' . $tdr . '><strong style="color:#b42318;">' . de_num((float)$it['price']['value']) . ' €/kg</strong>'
+            . (isset($it['regular']) ? '<br><span style="font-size:12px;color:#857c72;text-decoration:line-through;">' . de_num((float)$it['regular']) . ' €/kg</span>' : '') . '</td></tr>';
+    }
+    $h .= '</table><p style="margin:0 0 14px;font-size:12.5px;color:#857c72;">Solange der Vorrat reicht. Preise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.</p>';
+    if ($login !== '') $h .= mail_button($url, 'Zum Angebot') . '<p style="margin:8px 0 0;font-size:13px;color:#4a443e;">Anmeldung mit Ihrer Benutzerkennung <strong>' . mail_h($login) . '</strong>.</p>';
+    $abBtn = '<p style="max-width:560px;margin:10px auto 0;text-align:center;"><a href="' . mail_h($ab) . '" style="display:inline-block;padding:7px 14px;border:1px solid #cfc6bb;border-radius:8px;color:#5f574f;font-size:12px;text-decoration:none;">Vom Wochenangebot abmelden</a></p>';
+    return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('angebot'), $abBtn)];
+}
+/* Wer bekommt die Sonderposten eines Angebots? Nur Kunden, denen genau dieses Angebot freigeschaltet ist. */
+function restposten_reason(array $c, string $oid): string
+{
+    if (!in_array($oid, customer_offers($c), true)) return 'Angebot nicht freigeschaltet';
+    if (empty($c['active'])) return 'Kunde inaktiv';
+    if (empty($c['email'])) return 'keine E-Mail-Adresse';
+    if (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot'])) return !empty($c['abgemeldet']) ? 'hat sich vom Wochenangebot abgemeldet' : 'Angebote per E-Mail nicht gewünscht';
+    return '';
+}
 /* Einladung / Passwort zurücksetzen */
 function mail_tpl_zugang(array $c, string $url, string $purpose, int $exp): array
 {
@@ -1083,7 +1142,7 @@ function mail_record(array $entries, ?array $wk = null): void
         store_write('mailversand', array_slice($l, -3000));
     });
 }
-const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch'];
+const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch', 'restposten' => 'Sonderposten'];
 function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
 {
     if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");
@@ -1122,8 +1181,13 @@ function clean_variants($v, string $where, array $known): array
     $out = [];
     if (!is_array($v)) return $out;
     foreach ($v as $oid => $p) {
-        if (!is_string($oid) || !in_array($oid, $known, true) || !is_array($p)) continue;   // gelöschte Angebote fallen weg
+        if (!is_string($oid) || !is_array($p)) continue;
         $st = $p['status'] ?? '';
+        if ($oid === OFFER_STD) {                       // Wochenangebot: nur „ausgeblendet“ (Preis steht in price)
+            if ($st === 'hidden') $out[$oid] = ['status' => 'hidden'];
+            continue;
+        }
+        if (!in_array($oid, $known, true)) continue;   // gelöschte Angebote fallen weg
         if (!in_array($st, VARIANT_STATUS, true)) throw new InvalidArgumentException("Ungültiger Angebotspreis ($where).");
         $row = ['status' => $st];
         if ($st === 'value') {
@@ -1138,25 +1202,84 @@ function clean_variants($v, string $where, array $known): array
     }
     return $out;
 }
-/* Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote */
+/* Sonderpreis „solange der Vorrat reicht“ (Artikel mit kurzem oder überschrittenem MHD):
+   $item['sale'] = {value: Grundsonderpreis für alle Angebote, offers?: {<Angebots-ID>: {value} | {status: 'none'}}}.
+   Ein Sonderposten ohne Bestand (laut letzter Bestandsliste) wird in allen Angeboten automatisch ausgeblendet. */
+function clean_money($x, string $what): float
+{
+    if (!is_int($x) && !is_float($x)) throw new InvalidArgumentException("$what fehlt.");
+    $x = (float)$x;
+    if ($x < 0 || $x >= 100000) throw new InvalidArgumentException("$what außerhalb des gültigen Bereichs.");
+    return round($x, 4);
+}
+function clean_sale($v, string $where, array $known): ?array
+{
+    if (!is_array($v) || !array_key_exists('value', $v)) return null;
+    $out = ['value' => clean_money($v['value'], "Sonderpreis ($where)")];
+    $offers = [];
+    foreach (is_array($v['offers'] ?? null) ? $v['offers'] : [] as $oid => $o) {
+        if (!is_string($oid) || !is_array($o) || ($oid !== OFFER_STD && !in_array($oid, $known, true))) continue;
+        if (($o['status'] ?? '') === 'none') $offers[$oid] = ['status' => 'none'];
+        elseif (array_key_exists('value', $o)) $offers[$oid] = ['value' => clean_money($o['value'], "Sonderpreis ($where)")];
+    }
+    if ($offers) $out['offers'] = $offers;
+    $since = s($v['since'] ?? null, 30);
+    if ($since) $out['since'] = $since;
+    return $out;
+}
+function sale_for(array $it, string $oid): ?float
+{
+    $s = $it['sale'] ?? null;
+    if (!is_array($s) || !isset($s['value'])) return null;
+    $o = $s['offers'][$oid] ?? null;
+    if (is_array($o)) return ($o['status'] ?? '') === 'none' ? null : (float)$o['value'];
+    return (float)$s['value'];
+}
+/* Artikelnummern mit eingelagertem Bestand (null = keine Bestandsliste vorhanden) */
+function stock_codes(): ?array
+{
+    static $codes = false;
+    if ($codes !== false) return $codes;
+    $st = store_read('bestand');
+    if (!is_array($st) || empty($st['articles'])) return $codes = null;
+    $codes = [];
+    foreach ($st['articles'] as $a) if ((float)($a['kg'] ?? 0) > 0) $codes[code_key((string)$a['code'])] = true;
+    return $codes;
+}
+function sold_out(array $it): bool
+{
+    $codes = stock_codes();
+    $c = (string)($it['code'] ?? '');
+    return $codes !== null && $c !== '' && !isset($codes[code_key($c)]);
+}
+/* Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote,
+   keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne Angaben zu anderen Angeboten) */
 function offer_resolve(array $m, array $def): array
 {
-    if ($def['id'] === OFFER_STD) {                     // Standard: Aufbau unverändert, nur Kundenpreise entfernen
-        foreach ($m['items'] ?? [] as $k => $it) unset($m['items'][$k]['variants']);
-        $m['meta']['offerId'] = OFFER_STD;
-        $m['meta']['offerName'] = $def['name'];
-        return $m;
-    }
+    $std = $def['id'] === OFFER_STD;
     $items = [];
     foreach ($m['items'] ?? [] as $it) {
         $v = $it['variants'][$def['id']] ?? null;
-        unset($it['variants']);
-        if ($v) {
-            if ($v['status'] === 'hidden') continue;
-            $it['price'] = $v['status'] === 'value' ? ['status' => 'value', 'value' => $v['value']] : ['status' => 'request'];
+        $sale = sale_for($it, $def['id']);
+        unset($it['variants'], $it['sale']);
+        if ($v && $v['status'] === 'hidden') continue;
+        if ($sale !== null && sold_out($it)) continue;   // Sonderposten ausverkauft
+        $regular = $it['price'];
+        if ($std) {
+            // Wochenangebot: Grundpreis und Zusatzpreise bleiben
+        } elseif ($v) {
+            $regular = $v['status'] === 'value' ? ['status' => 'value', 'value' => $v['value']] : ['status' => 'request'];
+            $it['price'] = $regular;
             $it['altPrices'] = [];
         } elseif (($def['fallback'] ?? 'standard') === 'hidden') {
-            continue;
+            if ($sale === null) continue;
+            $regular = null;
+        }
+        if ($sale !== null) {
+            $it['price'] = ['status' => 'value', 'value' => $sale];
+            $it['altPrices'] = [];
+            $it['sale'] = true;
+            if ($regular && ($regular['status'] ?? '') === 'value' && (float)$regular['value'] > $sale) $it['regular'] = (float)$regular['value'];
         }
         $items[] = $it;
     }
@@ -1235,6 +1358,8 @@ function clean_model($m, bool $strict): array
         if ($cell !== null && $cell !== '') $row['cell'] = $cell;
         $vars = clean_variants($it['variants'] ?? null, $name, $known);
         if ($vars) $row['variants'] = $vars;
+        $sale = clean_sale($it['sale'] ?? null, $name, $known);
+        if ($sale) $row['sale'] = $sale;
         $items[] = $row;
     }
     if ($strict && !$items) throw new InvalidArgumentException('Das Angebot enthält keine Artikel.');
@@ -1440,7 +1565,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'kunden_restposten'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1736,7 +1861,7 @@ try {
                 $sum = $price !== null ? round(round($price * 100) * $q) / 100 : null;   // in Cent rechnen (wie die Anzeige im Portal)
                 if ($sum !== null) $total += $sum; else $req++;
                 $qtyT += $q;
-                $pos[] = ['id' => $id, 'code' => (string)($it['code'] ?? ''), 'name' => (string)$it['name'], 'group' => $gName[$it['groupId'] ?? ''] ?? '', 'qty' => $q, 'price' => $price, 'sum' => $sum];
+                $pos[] = ['id' => $id, 'code' => (string)($it['code'] ?? ''), 'name' => (string)$it['name'] . (!empty($it['sale']) ? ' (Sonderposten)' : ''), 'group' => $gName[$it['groupId'] ?? ''] ?? '', 'qty' => $q, 'price' => $price, 'sum' => $sum];
             }
             if (!$pos) fail('Bitte mindestens eine Menge eingeben.', 422);
             $termin = (string)($b['termin'] ?? '');
@@ -1976,12 +2101,16 @@ Ausgelöst von: {$me['name']}
         case 'kunden_mail_vorschau': {
             require_auth(true, 'admin');
             $b = body();
-            $typ = in_array($b['type'] ?? '', ['woche', 'angebot', 'invite', 'reset'], true) ? $b['type'] : 'woche';
+            $typ = in_array($b['type'] ?? '', ['woche', 'angebot', 'invite', 'reset', 'restposten'], true) ? $b['type'] : 'woche';
             $c = null;
             foreach (customers_load()['customers'] as $x) if ($x['id'] === ($b['id'] ?? '')) $c = $x;
             if (!$c) $c = ['firma' => 'Musterkunde GmbH', 'ansprechpartner' => 'Frau Muster', 'email' => 'kunde@example.org', 'angebote' => [OFFER_STD], 'login' => ['username' => 'musterkunde']];
             if (!mail_base_url()) fail('Die Adresse der Angebotsseite für Links fehlt (DOMAIN bzw. WA_URL in .env).', 409);
-            if ($typ === 'invite' || $typ === 'reset') [$sub, , $html] = mail_tpl_zugang($c, mail_base_url() . '/#zugang=BEISPIEL', $typ, time() + 86400 * TOKEN_DAYS[$typ]);
+            if ($typ === 'restposten') {
+                $def = offer_def((string)($b['offer'] ?? ''));
+                if (!$def) fail('Angebot nicht gefunden.', 404);
+                [$sub, , $html] = mail_tpl_restposten($c, $def, restposten_items($def), mb_substr(trim((string)($b['note'] ?? '')), 0, 1000));
+            } elseif ($typ === 'invite' || $typ === 'reset') [$sub, , $html] = mail_tpl_zugang($c, mail_base_url() . '/#zugang=BEISPIEL', $typ, time() + 86400 * TOKEN_DAYS[$typ]);
             else [$sub, , $html] = mail_tpl_angebot($c, mb_substr(trim((string)($b['note'] ?? '')), 0, 1000), mail_week());
             respond(['ok' => true, 'subject' => $sub, 'html' => $html, 'to' => $c['email'] ?? '']);
         }
@@ -2049,6 +2178,61 @@ Ausgelöst von: {$me['name']}
             $bad = array_filter($res, function ($r) { return !$r['ok']; });
             if ($res) audit('mail', "Wochenangebot KW {$wk['week']}/{$wk['year']} an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
                 array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|woche", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Wochenangebot', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
+            $out = [];
+            foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
+            respond(['ok' => true, 'results' => $out]);
+        }
+
+        /* ---------- Sonderposten eines Angebots per E-Mail (nur an die Kunden dieses Angebots) ---------- */
+        case 'restposten_info': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            $def = offer_def((string)($_GET['offer'] ?? ''));
+            if (!$def) fail('Angebot nicht gefunden.', 404);
+            $pub = store_read('angebot');
+            $items = array_map(function ($it) { return ['id' => $it['id'], 'code' => $it['code'] ?? '', 'name' => $it['name'], 'price' => (float)$it['price']['value'], 'regular' => $it['regular'] ?? null]; }, restposten_items($def));
+            $rec = [];
+            foreach (customers_load()['customers'] as $c) {
+                if (!in_array($def['id'], customer_offers($c), true)) continue;
+                $rec[] = ['id' => $c['id'], 'firma' => $c['firma'], 'nr' => $c['nr'] ?? '', 'email' => $c['email'] ?? '', 'reason' => restposten_reason($c, $def['id'])];
+            }
+            usort($rec, function ($a, $b) { return strcasecmp($a['firma'], $b['firma']); });
+            respond(['ok' => true, 'offer' => ['id' => $def['id'], 'name' => $def['name']], 'publishedAt' => $pub['publishedAt'] ?? null, 'items' => $items, 'recipients' => $rec, 'mailReady' => (bool)mail_cfg() && (bool)mail_base_url()]);
+        }
+
+        case 'kunden_restposten': {
+            require_admin_confirmation();
+            $cfg = require_mail();
+            $b = body();
+            $def = offer_def((string)($b['offer'] ?? ''));
+            if (!$def) fail('Angebot nicht gefunden.', 404);
+            $pub = store_read('angebot');
+            if (!$pub || (string)($b['publishedAt'] ?? '') !== (string)($pub['publishedAt'] ?? '')) fail('Inzwischen wurde neu veröffentlicht. Bitte den Versand neu öffnen und die Sonderposten prüfen.', 409);
+            $items = restposten_items($def);
+            if (!$items) fail('In diesem Angebot sind keine Sonderposten veröffentlicht (oder alle ohne Bestand).', 409);
+            $ids = array_slice(array_values(array_filter(is_array($b['ids'] ?? null) ? $b['ids'] : [], 'is_string')), 0, 200);
+            $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
+            $jobs = []; $res = []; $map = [];
+            foreach (customers_load()['customers'] as $c) {
+                if (!in_array($c['id'], $ids, true)) continue;
+                $map[$c['id']] = $c;
+                $why = restposten_reason($c, $def['id']);
+                if ($why !== '') { $res[$c['id']] = ['ok' => false, 'error' => $why, 'skipped' => true]; continue; }
+                [$sub, $txt, $html] = mail_tpl_restposten($c, $def, $items, $note);
+                $one = mail_base_url() . '/api/?action=abmelden1&t=' . rawurlencode(abmelde_token($c['id']));
+                $jobs[$c['id']] = ['to' => $c['email'], 'name' => ($c['ansprechpartner'] ?? '') ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html,
+                                   'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
+            }
+            @set_time_limit(300);
+            ignore_user_abort(true);
+            $res = $res + ($jobs ? mail_send_many($cfg, $jobs) : []);
+            $entries = [];
+            foreach ($res as $id => $r) if (empty($r['skipped'])) $entries[] = ['kid' => $id, 'firma' => $map[$id]['firma'], 'to' => $map[$id]['email'], 'typ' => 'restposten', 'ok' => $r['ok'], 'error' => $r['error'] ?? ''];
+            if ($entries) mail_record($entries);
+            $okN = count(array_filter($res, function ($r) { return $r['ok']; }));
+            $bad = array_filter($res, function ($r) { return !$r['ok'] && empty($r['skipped']); });
+            if ($res) audit('mail', "Sonderposten {$def['name']} (" . count($items) . " Artikel) an $okN Kunden versendet" . ($bad ? ' (' . count($bad) . ' nicht zugestellt)' : ''),
+                array_map(function ($id) use ($res, $map) { $r = $res[$id]; return ['k' => "c$id|restposten", 'code' => $map[$id]['nr'] ?? '', 'name' => $map[$id]['firma'], 'f' => 'Sonderposten', 'from' => '', 'to' => ($map[$id]['email'] ?? '') . ($r['ok'] ? '' : ' – ' . $r['error'])]; }, array_keys($res)));
             $out = [];
             foreach ($ids as $id) $out[] = ['id' => $id] + ($res[$id] ?? ['ok' => false, 'error' => 'Kunde nicht gefunden']);
             respond(['ok' => true, 'results' => $out]);

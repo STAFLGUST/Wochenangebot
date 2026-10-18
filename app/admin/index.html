@@ -7,8 +7,8 @@
 <meta name="color-scheme" content="light dark">
 <title>Wochenangebot · Eingabebereich</title>
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
-<link rel="stylesheet" href="../assets/app.css?v=525994b292">
-<link rel="stylesheet" href="../assets/admin.css?v=c5db12e5df">
+<link rel="stylesheet" href="../assets/app.css?v=9c81d64f18">
+<link rel="stylesheet" href="../assets/admin.css?v=330937305b">
 </head>
 <body class="adm">
 
@@ -107,6 +107,7 @@
       <button class="btn" type="button" id="btn-add-group"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Gruppe</button>
     </div>
 
+    <section id="mhd-panel" hidden></section>
     <section id="noprice-panel" hidden></section>
     <div id="groups"></div>
     </div>
@@ -154,6 +155,8 @@
 <dialog class="modal" id="dlg-stock-import" aria-labelledby="si-title"><div class="dlg" id="stock-import-body"></div></dialog>
 <dialog class="modal wide" id="dlg-stock-item" aria-labelledby="sa-title"><div class="dlg" id="stock-item-body"></div></dialog>
 <dialog class="modal" id="dlg-master-new" aria-labelledby="mn-title"><form class="dlg" id="master-new-body" autocomplete="off"></form></dialog>
+<dialog class="modal wide" id="dlg-sale" aria-labelledby="sp-title"><form class="dlg" id="sale-body" autocomplete="off"></form></dialog>
+<dialog class="modal wide" id="dlg-rest" aria-labelledby="rp-title"><div class="dlg" id="rest-body"></div></dialog>
 <dialog class="modal" id="dlg-add-stock" aria-labelledby="as-title"><form class="dlg" id="add-stock-body" autocomplete="off"></form></dialog>
 <!-- Nutzer anlegen / bearbeiten -->
 <dialog class="modal" id="dlg-user" aria-labelledby="us-title"><form class="dlg" id="user-body" autocomplete="off"></form></dialog>
@@ -224,9 +227,9 @@
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-2a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
 </svg>
 
-<script src="../assets/offer-core.js?v=1d285eeceb"></script>
+<script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=7b3e5ace81"></script>
-<script src="../assets/admin.js?v=ddc8352847"></script>
+<script src="../assets/admin.js?v=d92f9f29fa"></script>
 </body>
 </html>

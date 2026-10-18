@@ -77,20 +77,31 @@
   const offerShort = (id) => (id === OSTD ? 'Wochenangebot' : offerName(id).replace(/^Wochenangebot[\s–-]*/i, '') || offerName(id));
   const knownOffer = (id) => id === OSTD || !!offerDef(id);
   /* Wirksamer Preis eines Artikels in einem Angebot; null = dort ausgeblendet */
+  /* Ausgeblendet in einem Angebot (Auge) – auch im Wochenangebot (variants.std = {status: 'hidden'}) */
+  const isHid = (it, oid) => !!(it && it.variants && it.variants[oid] && it.variants[oid].status === 'hidden');
+  /* Sonderposten ohne Bestand werden in allen Angeboten automatisch ausgeblendet (wie auf dem Server) */
+  const soldOut = (it) => !!(stock && it.code && !stockOf(it.code));
   function effPrice(it, oid) {
-    if (oid === OSTD) return it.price || { status: 'none' };
+    if (oid === OSTD) return isHid(it, OSTD) ? null : it.price || { status: 'none' };
     const v = it.variants && it.variants[oid];
     if (v) return v.status === 'hidden' ? null : v.status === 'value' ? { status: 'value', value: v.value } : { status: 'request' };
     const d = offerDef(oid);
     return d && d.fallback === 'hidden' ? null : (it.price || { status: 'none' });
   }
   function variantShort(v, oid) {
+    if (oid === OSTD) return v && v.status === 'hidden' ? 'ausgeblendet' : 'sichtbar';
     if (!v) { const d = offerDef(oid); return d && d.fallback === 'hidden' ? 'ausgeblendet (kein eigener Preis)' : 'Standardpreis'; }
     if (v.status === 'hidden') return 'ausgeblendet';
     return v.status === 'value' ? fmtNum.format(v.value) + ' €/kg' : 'auf Anfrage';
   }
   const ownCount = (oid) => (model ? model.items.filter((i) => i.variants && i.variants[oid] && i.variants[oid].status !== 'hidden').length : 0);
   const vChanges = () => (diff && diff.variantChanged ? diff.variantChanged.filter((c) => knownOffer(c.offer)) : []);
+  const sChanges = () => (diff && diff.saleChanged ? diff.saleChanged : []);
+  const saleText = (sl) => {
+    if (!sl) return 'kein Sonderpreis';
+    const ex = Object.entries(sl.offers || {}).map(([o, x]) => `${offerShort(o)}: ${x.status === 'none' ? 'keiner' : fmtNum.format(x.value)}`);
+    return `${fmtNum.format(sl.value)} €/kg${ex.length ? ' (' + ex.join(', ') + ')' : ''}`;
+  };
 
   /* ---------- API ---------- */
   async function api(action, opts = {}) {
@@ -687,8 +698,9 @@
       el.innerHTML = `<div class="chg has">${icon('info')}<span>Noch keine Veröffentlichung vorhanden – nach dem Veröffentlichen erscheint das Angebot auf der öffentlichen Seite.</span></div>`;
       return;
     }
-    const vc = vChanges();
-    const n = diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vc.length + (metaChanged() ? 1 : 0);
+    const vAll = vChanges(), sc = sChanges();
+    const vh = vAll.filter((c) => c.offer === OSTD), vc = vAll.filter((c) => c.offer !== OSTD);
+    const n = diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vAll.length + sc.length + (metaChanged() ? 1 : 0);
     if (!n) { el.innerHTML = ''; return; }
     const parts = [];
     if (metaChanged()) parts.push(`<span class="chg-pill k-edit"><i></i>Kopfdaten geändert</span>`);
@@ -700,9 +712,11 @@
       const per = new Map(); vc.forEach((c) => per.set(c.offer, (per.get(c.offer) || 0) + 1));
       parts.push(`<span class="chg-pill k-price" title="${esc([...per].map(([o, k]) => `${offerShort(o)}: ${k}`).join(' · '))}"><i></i><b>${vc.length}</b> Angebotspreis${vc.length === 1 ? '' : 'e'} geändert</span>`);
     }
+    if (vh.length) parts.push(`<span class="chg-pill k-edit"><i></i><b>${vh.length}</b> im Wochenangebot aus-/eingeblendet</span>`);
+    if (sc.length) parts.push(`<span class="chg-pill k-price"><i></i><b>${sc.length}</b> Sonderpreis${sc.length === 1 ? '' : 'e'} geändert</span>`);
     el.innerHTML = `<div class="chg has"><strong>Unveröffentlichte Änderungen:</strong>${parts.join('')}</div>`;
   }
-  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + (metaChanged() ? 1 : 0));
+  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + (metaChanged() ? 1 : 0));
   function updatePublishBtn() {
     const b = $('#btn-publish');
     const n = pendingCount();
@@ -714,6 +728,7 @@
 
   function rowState(it) {
     if (diff.added.includes(it.id)) return 'is-new';
+    if (sChanges().some((c) => c.id === it.id)) return 'is-price';
     if (curOffer !== OSTD) {
       if (vChanges().some((c) => c.id === it.id && c.offer === curOffer)) return 'is-price';
       const d = offerDef(curOffer);
@@ -721,7 +736,7 @@
       return diff.changed.includes(it.id) ? 'is-edit' : '';
     }
     if (diff.priceChanged.includes(it.id)) return 'is-price';
-    if (diff.changed.includes(it.id)) return 'is-edit';
+    if (diff.changed.includes(it.id) || vChanges().some((c) => c.id === it.id && c.offer === OSTD)) return 'is-edit';
     return '';
   }
   function matchesFilter(it) {
@@ -744,10 +759,28 @@
       <td class="e-origin"><input class="in" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="nicht angegeben" aria-label="Herkunft" maxlength="60"></td>
       <td class="e-cond"><select class="in" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select></td>
       ${prevCellHTML(it)}
-      ${curOffer === OSTD ? `<td class="e-price">${label}<input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${was}${alts}</td>` : variantCellHTML(it, st)}
+      ${curOffer === OSTD ? stdCellHTML(it, bad, label, was, alts) : variantCellHTML(it, st)}
       ${stockCellHTML(it)}
       <td class="e-act"><button type="button" class="ibtn" data-act="item" aria-label="Details zu ${esc(it.name)}" title="Details, Zusatzpreise, verschieben, löschen">${icon('dots')}</button></td>
     </tr>`;
+  }
+  function eyeHTML(hid) {
+    return `<button type="button" class="vtog${hid ? ' on' : ''}" data-act="v-hide" title="${hid ? 'Wieder im Angebot zeigen' : 'In diesem Angebot ausblenden'}" aria-label="${hid ? 'Wieder zeigen' : 'Ausblenden'}" aria-pressed="${hid ? 'true' : 'false'}">${icon('eye', 'sm')}</button>`;
+  }
+  function saleBtnHTML(it) {
+    const a = stockOf(it.code), hot = !it.sale && a && mhdClass(a.mhd);
+    return `<button type="button" class="vtog sale${it.sale ? ' on' : hot ? ' hot' : ''}" data-act="sale" title="${it.sale ? 'Sonderpreis bearbeiten' : hot ? `Kurzes MHD (${esc(mhdShort(a.mhd))}) – Sonderpreis festlegen` : 'Sonderpreis festlegen (solange der Vorrat reicht)'}" aria-label="Sonderpreis">${icon('tag', 'sm')}</button>`;
+  }
+  function saleTagHTML(it) {
+    if (!it.sale) return '';
+    const v = C.saleFor(it, curOffer);
+    if (v == null) return '<span class="sale-tag off">kein Sonderpreis in diesem Angebot</span>';
+    const out = soldOut(it);
+    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Sonderpreis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Sonderpreis ' + esc(fmtNum.format(v))}</button>`;
+  }
+  function stdCellHTML(it, bad, label, was, alts) {
+    const hid = isHid(it, OSTD);
+    return `<td class="e-price e-var std${hid ? ' is-hidden' : ''}">${label}<div class="vrow"><input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="${hid ? 'ausgeblendet' : 'ohne Preis'}" aria-label="Preis in Euro je kg" inputmode="decimal"${hid ? ' disabled' : ''}>${saleBtnHTML(it)}${eyeHTML(hid)}</div>${saleTagHTML(it)}${was}${alts}</td>`;
   }
   function variantCellHTML(it, st) {
     const v = it.variants && it.variants[curOffer];
@@ -761,7 +794,7 @@
     const ch = st === 'is-price' && vChanges().find((c) => c.id === it.id && c.offer === curOffer);
     const was = ch ? `<span class="was" title="Veröffentlichter Preis in diesem Angebot">bisher <s>${esc(variantShort(ch.from, curOffer))}</s></span>` : '';
     return `<td class="e-price e-var${hidden ? ' is-hidden' : ''}${v && !hiddenOwn ? ' own' : ''}"><div class="vrow"><input class="in num${bad ? ' invalid' : ''}" data-f="vprice" value="${esc(val)}" placeholder="${esc(ph)}" aria-label="Preis ${esc(offerShort(curOffer))} in Euro je kg" inputmode="decimal"${hiddenOwn ? ' disabled' : ''}>`
-      + `<button type="button" class="vtog${hiddenOwn ? ' on' : ''}" data-act="v-hide" title="${hiddenOwn ? 'Wieder im Angebot zeigen' : 'In diesem Angebot ausblenden'}" aria-label="${hiddenOwn ? 'Wieder zeigen' : 'Ausblenden'}" aria-pressed="${hiddenOwn ? 'true' : 'false'}">${icon('eye', 'sm')}</button></div>${was}</td>`;
+      + `${saleBtnHTML(it)}${eyeHTML(hiddenOwn)}</div>${saleTagHTML(it)}${was}</td>`;
   }
   function updateRow(id) {
     const find = () => $(`tr[data-id="${CSS.escape(id)}"]`);
@@ -922,9 +955,10 @@
     const tr = b.closest('tr[data-id]');
     if (act === 'item' && tr) { openItem(tr.dataset.id); return; }
     if (ro) return;
+    if (act === 'sale' && tr) { openSale(tr.dataset.id); return; }
     if (act === 'v-hide' && tr) {
       const it = iById(tr.dataset.id);
-      if (!it || curOffer === OSTD) return;
+      if (!it) return;
       pushUndo();
       const v = it.variants && it.variants[curOffer];
       if (v && v.status === 'hidden') { delete it.variants[curOffer]; if (!Object.keys(it.variants).length) delete it.variants; }
@@ -1228,11 +1262,11 @@
     const ids = [OSTD, ...offers.map((o) => o.id)];
     const d = offerDef(curOffer);
     const hint = curOffer === OSTD
-      ? 'Grundpreise des Wochenangebots (öffentliche Angebotsseite). Kundenangebote oben auswählen.'
-      : `Eigene Preise für <strong>${esc(offerName(curOffer))}</strong>. Feld leer = ${d && d.fallback === 'hidden' ? 'Artikel wird in diesem Angebot <strong>nicht angezeigt</strong>' : '<strong>Standardpreis</strong> gilt'}; ${icon('eye', 'sm')} blendet einen Artikel nur hier aus. Artikel, Bezeichnungen und Gruppen gelten für alle Angebote.`;
+      ? `Grundpreise des Wochenangebots (öffentliche Angebotsseite). ${icon('eye', 'sm')} blendet einen Artikel nur hier aus, ${icon('tag', 'sm')} setzt einen Sonderpreis (solange der Vorrat reicht). Kundenangebote oben auswählen.`
+      : `Eigene Preise für <strong>${esc(offerName(curOffer))}</strong>. Feld leer = ${d && d.fallback === 'hidden' ? 'Artikel wird in diesem Angebot <strong>nicht angezeigt</strong>' : '<strong>Standardpreis</strong> gilt'}; ${icon('eye', 'sm')} blendet einen Artikel nur hier aus, ${icon('tag', 'sm')} setzt einen Sonderpreis. Artikel, Bezeichnungen und Gruppen gelten für alle Angebote.`;
     host.innerHTML = `<div class="ob-row"><span class="ob-l">Preise für</span>
       <div class="ob-tabs" role="tablist" aria-label="Angebot wählen">${ids.map((id) => { const n = id === OSTD ? 0 : ownCount(id); return `<button role="tab" type="button" data-offer="${esc(id)}" aria-selected="${id === curOffer}"${id === OSTD ? ' class="std"' : ''}>${esc(offerShort(id))}${id !== OSTD ? `<small title="eigene Preise">${n}</small>` : ''}</button>`; }).join('')}</div>
-      <span class="ob-act">${!ro && curOffer !== OSTD ? `<button type="button" class="btn sm ghost" data-ob="copy">${icon('copy', 'sm')}Preise übernehmen</button>` : ''}${!ro ? `<button type="button" class="btn sm ghost" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}</span></div>
+      <span class="ob-act">${!ro && can('admin') ? `<button type="button" class="btn sm ghost" data-ob="restposten" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden">${icon('mail', 'sm')}Sonderposten senden</button>` : ''}${!ro && curOffer !== OSTD ? `<button type="button" class="btn sm ghost" data-ob="copy">${icon('copy', 'sm')}Preise übernehmen</button>` : ''}${!ro ? `<button type="button" class="btn sm ghost" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}</span></div>
       <p class="ob-hint">${hint}</p>`;
     const site = $('#btn-site');
     if (site) site.href = '../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
@@ -1253,6 +1287,7 @@
     if (!b) return;
     if (b.dataset.ob === 'manage') openOffers();
     if (b.dataset.ob === 'copy') openCopy();
+    if (b.dataset.ob === 'restposten') openRestposten(curOffer);
   });
   $('#offer-bar').addEventListener('keydown', (e) => {
     if (!e.target.matches('[data-offer]') || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return;
@@ -1329,9 +1364,12 @@
         if (can('admin')) body.stdPublic = !!offerEdit.stdPublic;
         const r = await api('offers_save', { body });
         offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
-        const gone = new Set(list.map((o) => o.id));
+        const gone = new Set([OSTD, ...list.map((o) => o.id)]);
         let dropped = false;
-        for (const it of model.items) if (it.variants) for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; }
+        for (const it of model.items) {
+          if (it.variants) for (const k of Object.keys(it.variants)) if (!gone.has(k)) { delete it.variants[k]; dropped = true; }
+          if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
+        }
         if (!knownOffer(curOffer)) curOffer = OSTD;
         dlgOffers.close();
         toast('Angebote gespeichert.');
@@ -1403,7 +1441,9 @@
       if (diff.removed.length) body += sec(`Entfernt (${diff.removed.length})`, list(diff.removed, (it) => `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(priceShort(it.price))}</span>${rv('removed', it.id)}</li>`, 50));
       const vc = vChanges();
       if (vc.length) body += sec(`Angebotspreise (${vc.length})`, `<ul class="plist">${vc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span><b class="ob-tag">${esc(offerShort(c.offer))}</b> ${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(variantShort(c.from, c.offer))} → <strong>${esc(variantShort(c.to, c.offer))}</strong></span>${rv('variant', c.id + '|' + c.offer)}</li>` : ''; }).join('')}${vc.length > 80 ? `<li><span>… und ${vc.length - 80} weitere</span><span></span></li>` : ''}</ul>`);
-      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
+      const sc = sChanges();
+      if (sc.length) body += sec(`Sonderpreise – solange der Vorrat reicht (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
+      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
     const can = !v.errors.length;
@@ -1421,6 +1461,12 @@
   /* Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen */
   function revertChange(kind, id) {
     if (kind === 'meta') { model.meta = clone(published.meta); return; }
+    if (kind === 'sale') {
+      const it = model.items.find((x) => x.id === id), c = sChanges().find((x) => x.id === id);
+      if (!it || !c) return;
+      if (c.from) it.sale = clone(c.from); else delete it.sale;
+      return;
+    }
     if (kind === 'variant') {
       const [iid, oid] = id.split('|');
       const it = model.items.find((x) => x.id === iid), c = vChanges().find((x) => x.id === iid && x.offer === oid);
@@ -1457,6 +1503,10 @@
     }
   }
   function revertText(kind, id) {
+    if (kind === 'sale') {
+      const it = model.items.find((x) => x.id === id), c = sChanges().find((x) => x.id === id);
+      return ['Sonderpreis zurücknehmen?', `Der Sonderpreis von „${esc(it ? (it.code ? it.code + ' · ' : '') + it.name : id)}“ wird von <strong>${esc(saleText(c && c.to))}</strong> wieder auf <strong>${esc(saleText(c && c.from))}</strong> gesetzt.`];
+    }
     if (kind === 'variant') {
       const [iid, oid] = id.split('|');
       const it = model.items.find((x) => x.id === iid), c = vChanges().find((x) => x.id === iid && x.offer === oid);
@@ -2483,7 +2533,9 @@
   }
   function stockCellHTML(it) {
     const a = stockOf(it.code);
-    if (!a) return `<td class="e-stock none" title="${it.code ? 'Kein eingelagerter Bestand' : 'Ohne Artikelnummer kein Bestandsabgleich'}">—</td>`;
+    if (!a) return it.code
+      ? `<td class="e-stock none"><span class="nostock" title="Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + esc(dmy(stock.date)) + ')' : ''}" aria-label="Kein verfügbarer Bestand">0</span></td>`
+      : '<td class="e-stock none" title="Ohne Artikelnummer kein Bestandsabgleich">—</td>';
     const cls = mhdClass(a.mhd);
     return `<td class="e-stock" title="${esc(`${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`)}">${cls ? `<span class="mhd-dot ${cls}" aria-label="MHD ${esc(mhdShort(a.mhd))}"></span>` : ''}${esc(fmtKg.format(a.kg))}</td>`;
   }
@@ -2507,6 +2559,8 @@
       const [pc, sc] = [...tmp.children];
       tr.querySelector('td.e-prev').replaceWith(pc);
       tr.querySelector('td.e-stock').replaceWith(sc);
+      const sb = tr.querySelector('.vtog.sale');
+      if (sb) { const t2 = document.createElement('div'); t2.innerHTML = saleBtnHTML(it) + saleTagHTML(it); sb.replaceWith(t2.firstElementChild); const tag = tr.querySelector('.sale-tag'); if (tag && t2.firstElementChild) tag.replaceWith(t2.firstElementChild); }
     }
     renderNoPrice();
   }
@@ -2527,6 +2581,7 @@
     return out.sort((x, y) => x.wg.order - y.wg.order || rank(x) - rank(y) || (rank(x) === 0 ? x.a.mhd.localeCompare(y.a.mhd) : 0) || x.a.code.localeCompare(y.a.code, 'de', { numeric: true }));
   }
   function renderNoPrice() {
+    renderMhd();
     const host = $('#noprice-panel');
     if (!host) return;
     if (!stock || !model) { host.hidden = true; return; }
@@ -2626,6 +2681,216 @@
     dlgAS.close();
     changed({ render: true });
     toast(`„${name}“ in „${g.name}“ übernommen${price.status === 'value' ? ' – ' + priceShort(price) : ''}.`, 4500);
+  });
+
+  /* ======================= Sonderposten (kurzes MHD, solange der Vorrat reicht) ======================= */
+  /* Sonderpreis je Artikel: Grundpreis für alle Angebote, je Angebot änderbar (eigener Sonderpreis / keiner) */
+  const dlgSale = $('#dlg-sale');
+  let saleId = null;
+  function openSale(id) {
+    const it = iById(id);
+    if (!it) return;
+    saleId = id;
+    const sl = it.sale || null, a = stockOf(it.code), cls = a ? mhdClass(a.mhd) : '';
+    const ids = [OSTD, ...offers.map((o) => o.id)];
+    const rows = ids.map((oid) => {
+      const o = sl && sl.offers && sl.offers[oid];
+      const mode = !o ? 'base' : o.status === 'none' ? 'none' : 'own';
+      const hid = isHid(it, oid), norm = effPrice(it, oid);
+      const normTxt = hid ? `<span class="muted" title="Mit dem Auge in diesem Angebot ausgeblendet – auch der Sonderpreis erscheint dort nicht">${icon('eye', 'sm')} ausgeblendet</span>` : norm ? esc(priceShort(norm)) : '<span class="muted" title="Dieses Angebot zeigt nur Artikel mit eigenem Preis – mit Sonderpreis erscheint der Artikel trotzdem">nicht im Sortiment</span>';
+      return `<tr data-soid="${esc(oid)}"><td>${esc(offerShort(oid))}</td><td class="sp-norm">${normTxt}</td>
+        <td><select class="in" data-sm aria-label="Sonderpreis ${esc(offerShort(oid))}"><option value="base"${mode === 'base' ? ' selected' : ''}>wie oben</option><option value="own"${mode === 'own' ? ' selected' : ''}>eigener Sonderpreis</option><option value="none"${mode === 'none' ? ' selected' : ''}>kein Sonderpreis</option></select></td>
+        <td class="sp-own"><input class="in num" data-sv inputmode="decimal" value="${mode === 'own' ? esc(fmtNum.format(o.value)) : ''}" placeholder="€/kg" aria-label="Eigener Sonderpreis ${esc(offerShort(oid))}"${mode === 'own' ? '' : ' hidden'}></td></tr>`;
+    }).join('');
+    const stockLine = !it.code ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Ohne Artikelnummer ist kein Bestandsabgleich möglich – der Sonderposten wird dann nicht automatisch ausgeblendet.</span></p>`
+      : !stock ? '' : !a ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Laut Bestand vom ${esc(dmy(stock.date || ''))} ist <strong>kein Bestand</strong> vorhanden – der Sonderposten wird in allen Angeboten automatisch ausgeblendet.</span></p>` : '';
+    $('#sale-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="sp-title">Sonderpreis – solange der Vorrat reicht</h2><p>${esc(it.code || '—')} · ${esc(it.name)}${a ? ` · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span>` : ''}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        ${stockLine}
+        <label class="fld sp-base"><span>Sonderpreis €/kg <small class="muted">(gilt für alle Angebote)</small></span><input name="value" inputmode="decimal" value="${sl ? esc(fmtNum.format(sl.value)) : ''}" placeholder="z. B. 9,90" required></label>
+        <table class="etab sptab"><thead><tr><th>Angebot</th><th class="sp-norm">Normalpreis</th><th>Sonderpreis</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="hint">Kunden sehen „Sonderposten – solange der Vorrat reicht“ und den bisherigen Preis durchgestrichen. Ist laut Bestandsliste kein Bestand mehr da, wird der Artikel in allen Angeboten automatisch ausgeblendet. Wirksam nach dem Veröffentlichen.</p>
+        <p class="form-err" id="sp-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot">${sl ? `<span class="left"><button type="button" class="btn ghost danger" data-sp="remove">${icon('trash', 'sm')}Sonderpreis entfernen</button></span>` : ''}<button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Übernehmen</button></div>`;
+    dlgSale.showModal();
+    $('#sale-body [name="value"]').focus();
+  }
+  $('#sale-body').addEventListener('change', (e) => {
+    if (!e.target.matches('[data-sm]')) return;
+    const inp = e.target.closest('tr').querySelector('[data-sv]');
+    inp.hidden = e.target.value !== 'own';
+    if (!inp.hidden) inp.focus();
+  });
+  $('#sale-body').addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { dlgSale.close(); return; }
+    if (!e.target.closest('[data-sp="remove"]') || ro) return;
+    const it = iById(saleId);
+    if (!it) return;
+    pushUndo();
+    delete it.sale;
+    dlgSale.close();
+    changed({ row: it.id });
+    toast('Sonderpreis entfernt (wirksam nach dem Veröffentlichen).');
+  });
+  $('#sale-body').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const it = iById(saleId);
+    if (!it || ro) return;
+    const err = (m) => { $('#sp-err').textContent = m; };
+    const base = C.parsePrice(e.target.elements.value.value);
+    if (base.status !== 'value' || base.invalid) { err('Bitte einen Sonderpreis in €/kg angeben, z. B. 9,90.'); return; }
+    const offersOut = {};
+    for (const tr of $$('#sale-body tr[data-soid]')) {
+      const oid = tr.dataset.soid, mode = tr.querySelector('[data-sm]').value;
+      if (mode === 'none') offersOut[oid] = { status: 'none' };
+      if (mode === 'own') {
+        const p = C.parsePrice(tr.querySelector('[data-sv]').value);
+        if (p.status !== 'value' || p.invalid) { err(`Eigener Sonderpreis für „${offerShort(oid)}“ fehlt oder ist nicht lesbar.`); return; }
+        offersOut[oid] = { value: p.value };
+      }
+    }
+    pushUndo();
+    it.sale = { value: base.value, ...(Object.keys(offersOut).length ? { offers: offersOut } : {}), since: (it.sale && it.sale.since) || isoToday() };
+    dlgSale.close();
+    changed({ row: it.id });
+    toast(`Sonderpreis ${fmtNum.format(base.value)} €/kg für „${it.name}“ gesetzt – wirksam nach dem Veröffentlichen.`, 5000);
+  });
+
+  /* Liste: Artikel mit kurzem oder überschrittenem MHD (Farbskala der Bestandsliste) */
+  let mhdOpen = store.get('mhdOpen', true);
+  function mhdList() {
+    if (!stock || !model) return [];
+    const byCode = new Map();
+    for (const it of model.items) if (it.code) { const k = S.normCode(it.code); if (!byCode.has(k)) byCode.set(k, []); byCode.get(k).push(it); }
+    return stock.articles.filter((a) => mhdClass(a.mhd)).map((a) => ({ a, items: byCode.get(S.normCode(a.code)) || [], cls: mhdClass(a.mhd) }))
+      .sort((x, y) => x.a.mhd.localeCompare(y.a.mhd) || x.a.code.localeCompare(y.a.code, 'de', { numeric: true }));
+  }
+  function renderMhd() {
+    const host = $('#mhd-panel');
+    if (!host) return;
+    if (!stock || !model) { host.hidden = true; return; }
+    const all = mhdList();
+    const toks = fold(filterQ).split(/\s+/).filter(Boolean);
+    const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name + ' ' + x.items.map((i) => i.name).join(' ')); return toks.every((t) => h.includes(t)); }) : all;
+    const withSale = all.filter((x) => x.items.some((i) => i.sale)).length;
+    host.hidden = false;
+    const rows = list.map((x) => {
+      const it = x.items[0];
+      const cur = it ? effPrice(it, curOffer) : null, sp = it ? C.saleFor(it, curOffer) : null;
+      return `<tr data-mcode="${esc(x.a.code)}"${it ? ` data-mid="${esc(it.id)}"` : ''}>
+        <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(it ? it.name : x.a.name)}${!it ? ' <span class="muted">(nicht im Angebot)</span>' : ''}</td>
+        <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
+        <td class="np-prev">${it ? (cur ? esc(priceShort(cur)) : '<span class="muted">ausgeblendet</span>') : '—'}</td>
+        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(fmtNum.format(sp))}</strong>` : '—'}</td>
+        <td class="np-act">${ro ? '' : it
+          ? `<button type="button" class="btn sm${it.sale ? '' : ' primary'}" data-mp="sale">${icon('tag', 'sm')}${it.sale ? 'Sonderpreis ändern' : 'Sonderpreis'}</button>`
+          : `<button type="button" class="btn sm" data-mp="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
+      </tr>`;
+    }).join('');
+    host.innerHTML = `<div class="np-card mhd-card${mhdOpen ? ' open' : ''}">
+      <button type="button" class="np-head" data-mp="toggle" aria-expanded="${mhdOpen}">
+        <span class="np-title">Kurzes MHD – Sonderposten <span class="np-badge">${fmtInt.format(all.length)}</span></span>
+        <span class="np-sub">MHD überschritten oder in höchstens 14 Tagen (Farbskala) · ${plural(withSale, 'Artikel', 'Artikel')} mit Sonderpreis · Preise für ${esc(offerShort(curOffer))} · ohne Bestand automatisch ausgeblendet</span>
+        ${icon('chev', 'np-chev')}
+      </button>
+      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Kg verfüg.</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Keine Artikel mit kurzem oder überschrittenem MHD im Bestand.'}</p>`) : ''}
+    </div>`;
+  }
+  $('#mhd-panel').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mp]');
+    if (!b) return;
+    if (b.dataset.mp === 'toggle') { mhdOpen = !mhdOpen; store.set('mhdOpen', mhdOpen); renderMhd(); return; }
+    const tr = b.closest('tr[data-mcode]');
+    if (!tr || ro) return;
+    if (b.dataset.mp === 'sale' && tr.dataset.mid) openSale(tr.dataset.mid);
+    if (b.dataset.mp === 'add') openAddStock(tr.dataset.mcode);
+  });
+
+  /* Sonderposten eines Angebots per E-Mail – nur an Kunden, denen genau dieses Angebot freigeschaltet ist */
+  const dlgRest = $('#dlg-rest');
+  let restInfo = null, restSel = new Set(), restBusy = false;
+  async function openRestposten(oid) {
+    let info;
+    try { info = await api('restposten_info', { query: '&offer=' + encodeURIComponent(oid) }); } catch (ex) { toast(ex.message); return; }
+    restInfo = info;
+    const ok = info.recipients.filter((c) => !c.reason), no = info.recipients.filter((c) => c.reason);
+    restSel = new Set(ok.map((c) => c.id));
+    const pend = pendingCount();
+    const items = info.items;
+    $('#rest-body').innerHTML = `<div class="dlg-head"><div><h2 id="rp-title">Sonderposten „${esc(info.offer.name)}“ versenden</h2><p>Nur Kunden mit dem Angebot <strong>${esc(info.offer.name)}</strong> erhalten diese E-Mail – jeder einzeln, mit den Sonderpreisen dieses Angebots. Andere Angebote und Kunden bleiben unsichtbar.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        ${!info.mailReady ? '<div class="err-box">Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).</div>' : ''}
+        ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Sonderpreise bitte zuerst veröffentlichen.</span></div>` : ''}
+        ${items.length ? `<h3 class="d-h"><span>${plural(items.length, 'Sonderposten', 'Sonderposten')}</span></h3><ul class="plist">${items.map((x) => `<li><span>${esc(x.code || '—')} · ${esc(x.name)}</span><span><strong>${esc(fmtNum.format(x.price))} €/kg</strong>${x.regular != null ? ` <s class="muted">${esc(fmtNum.format(x.regular))}</s>` : ''}</span></li>`).join('')}</ul>`
+          : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Sonderpreise festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
+        <h3 class="d-h"><span>Empfänger</span></h3>
+        ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rp-all"> Alle auswählen</label>
+          <table class="etab ktab k-rtab"><tbody>${ok.map((c) => `<tr data-rid="${esc(c.id)}"><td class="k-rchk"><input type="checkbox" data-psel="${esc(c.id)}" checked aria-label="${esc(c.firma)} auswählen"></td>
+            <td><div class="nm">${esc(c.firma)}</div><div class="sub">${esc(c.email)}</div></td><td class="k-rst"><span class="k-res"></span></td></tr>`).join('')}</tbody></table></div>`
+          : `<p class="hint">Kein Kunde mit E-Mail-Adresse hat das Angebot „${esc(info.offer.name)}“ freigeschaltet.</p>`}
+        ${no.length ? `<details class="k-no"><summary>${plural(no.length, 'Kunde', 'Kunden')} dieses Angebots nicht berücksichtigt</summary><ul>${no.map((c) => `<li>${esc(c.firma)} – ${esc(c.reason)}</li>`).join('')}</ul></details>` : ''}
+        <label class="fld"><span>Zusatztext <small class="muted">(optional)</small></span><textarea id="rp-note" rows="2" maxlength="1000" placeholder="z. B. Abholung oder Lieferung bis Freitag möglich."></textarea></label>
+        <div class="k-prevwrap" hidden><iframe id="rp-prev" sandbox="" title="Vorschau der E-Mail"></iframe></div>
+        <p class="form-err" id="rp-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><span class="left"><button type="button" class="btn sm ghost" data-rp="prev"${items.length ? '' : ' disabled'}>${icon('eye', 'sm')}Vorschau</button></span><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-rp="send">${icon('send')}<span id="rp-n"></span></button></div>`;
+    restCount();
+    dlgRest.showModal();
+  }
+  function restCount() {
+    const n = restSel.size;
+    $('#rp-n').textContent = n ? `An ${plural(n, 'Kunden', 'Kunden')} senden` : 'Kunden auswählen';
+    $('#rest-body [data-rp="send"]').disabled = !n || restBusy || !restInfo.items.length || !restInfo.mailReady;
+    const all = $('#rp-all'), boxes = $$('#rest-body [data-psel]');
+    if (all) { all.checked = boxes.length && boxes.every((b) => b.checked); all.indeterminate = !all.checked && boxes.some((b) => b.checked); }
+  }
+  dlgRest.addEventListener('cancel', (e) => { if (restBusy) e.preventDefault(); });
+  dlgRest.addEventListener('change', (e) => {
+    if (e.target.id === 'rp-all') for (const b of $$('#rest-body [data-psel]')) { b.checked = e.target.checked; b.checked ? restSel.add(b.dataset.psel) : restSel.delete(b.dataset.psel); }
+    if (e.target.dataset.psel) e.target.checked ? restSel.add(e.target.dataset.psel) : restSel.delete(e.target.dataset.psel);
+    restCount();
+  });
+  dlgRest.addEventListener('click', async (e) => {
+    if (e.target.closest('[data-close]') && !restBusy) { dlgRest.close(); return; }
+    const a = e.target.closest('[data-rp]')?.dataset.rp;
+    if (a === 'prev') {
+      try {
+        const r = await api('kunden_mail_vorschau', { body: { id: [...restSel][0] || '', type: 'restposten', offer: restInfo.offer.id, note: $('#rp-note').value } });
+        $('#rest-body .k-prevwrap').hidden = false;
+        $('#rp-prev').srcdoc = r.html;
+      } catch (ex) { $('#rp-err').textContent = ex.message; }
+    }
+    if (a === 'send') {
+      const ids = [...restSel];
+      if (!(await confirmBox('Sonderposten versenden?', `${plural(restInfo.items.length, 'Sonderposten', 'Sonderposten')} aus „${esc(restInfo.offer.name)}“ gehen jetzt per E-Mail an ${plural(ids.length, 'Kunden', 'Kunden')} dieses Angebots.`, 'Jetzt senden'))) return;
+      restBusy = true; restCount();
+      const note = $('#rp-note').value;
+      let okN = 0, badN = 0;
+      $('#rp-err').textContent = '';
+      for (let i = 0; i < ids.length; i += 10) {
+        const part = ids.slice(i, i + 10);
+        for (const id of part) $(`#rest-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = '<span class="spinner sm"></span>';
+        $('#rp-n').textContent = `Wird gesendet … ${i}/${ids.length}`;
+        try {
+          const r = await api('kunden_restposten', { body: { offer: restInfo.offer.id, ids: part, note, publishedAt: restInfo.publishedAt } });
+          for (const x of r.results) {
+            const cell = $(`#rest-body tr[data-rid="${CSS.escape(x.id)}"] .k-res`);
+            if (x.ok) { okN++; restSel.delete(x.id); const cb = $(`#rest-body [data-psel="${CSS.escape(x.id)}"]`); if (cb) cb.checked = false; } else badN++;
+            if (cell) cell.innerHTML = x.ok ? `<span class="st-ok">${icon('check', 'sm')}gesendet</span>` : `<span class="st-err">${esc(x.error)}</span>`;
+          }
+        } catch (ex) {
+          badN += part.length;
+          for (const id of part) $(`#rest-body tr[data-rid="${CSS.escape(id)}"] .k-res`).innerHTML = `<span class="st-err">${esc(ex.message)}</span>`;
+          if (ex.status === 409 || ex.status === 401 || ex.status === 403) { $('#rp-err').textContent = ex.message; break; }
+        }
+      }
+      restBusy = false; restCount();
+      toast(badN ? `${okN} gesendet, ${badN} nicht zugestellt.` : `Sonderposten an ${plural(okN, 'Kunden', 'Kunden')} gesendet.`, 6000);
+    }
   });
 
   /* ======================= Stammdaten (je Artikelnummer) ======================= */
