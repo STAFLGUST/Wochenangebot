@@ -1,6 +1,6 @@
-from umgebung import storage_raw
 """E-Mail an Kunden: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail.
 Läuft gegen einen Test-Mailserver (smtp_test.py) – es werden nie echte E-Mails versendet."""
+from umgebung import storage_raw
 import json
 import re
 import sys

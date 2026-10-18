@@ -8,7 +8,7 @@ set -e
 cd "$(dirname "$0")/.."
 NUTZER="${1:-admin}"
 PW=$(LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' </dev/urandom | head -c 14)
-docker compose exec -T app php -- "$NUTZER" "$PW" ${2:-} < deploy/passwort-zuruecksetzen.php
+docker compose exec -T -u www-data app php -- "$NUTZER" "$PW" ${2:-} < deploy/passwort-zuruecksetzen.php
 echo
 echo "Neues Passwort für \"$NUTZER\": $PW"
 echo "Bitte anmelden und dann ein eigenes Passwort festlegen."

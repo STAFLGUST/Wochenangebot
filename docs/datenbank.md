@@ -42,6 +42,9 @@ löschen oder alte Dateien über die Datenbank kopieren.
 5. `sh deploy/sichern.sh --jetzt`: Neue Sicherung mit SQLite erzeugen und Status kontrollieren.
 
 Die Werkzeuge verändern keine Daten auf einem entfernten Server und starten keinen Release.
+Notfallwerkzeuge (`passwort-zuruecksetzen.sh`, `ip-freigabe-aus.sh`) laufen im Container als `www-data`,
+damit weder Datenbank-Journal noch Sperrdateien root gehören. Eine dennoch von root angelegte Sperrdatei
+blockiert die Anwendung nicht (Sperre wird dann lesend gesetzt).
 `python3 deploy/datenbank.py check daten` prüft Integrität und Schema. Die internen Befehle `migrate`
 und `rollback` verlangen `--offline`; nur verwenden, wenn die Anwendung tatsächlich gestoppt ist.
 

@@ -1,6 +1,7 @@
 """HTTP-Client und Zeitsteuerung ausschließlich für isolierte Testdaten/Sitzungen."""
 import http.cookiejar
 import json
+from umgebung import storage_raw, storage_write
 import os
 from pathlib import Path
 import subprocess
@@ -22,7 +23,7 @@ class Client:
         headers = {'X-Forwarded-For': self.ip, 'Content-Type': 'application/json', 'X-CSRF-Token': self.csrf if csrf is None else csrf}
         req = urllib.request.Request(BASE + action, data=None if data is None else json.dumps(data).encode(), headers=headers)
         try:
-            response = self.http.open(req, timeout=10)
+            response = self.http.open(req, timeout=30)   # länger als die Wartezeit der Datenbank (10 s)
         except urllib.error.HTTPError as error:
             response = error
         result = json.loads(response.read())
@@ -45,13 +46,12 @@ def expire_session(sid):
 
 
 def read_users():
-    return json.loads((Path(os.environ['UDATA']) / 'nutzer.php').read_text().split('\n', 1)[1])
+    raw = storage_raw('nutzer')
+    return json.loads(raw.split('\n', 1)[1] if raw.startswith('<?php') else raw)
 
 
 def expire_confirmation_lock():
-    path = Path(os.environ['UDATA']) / 'nutzer.php'
-    guard = path.read_text().split('\n', 1)[0] + '\n'
     data = read_users()
     for u in data['users']:
         u['confirmUntil'] = 1
-    path.write_text(guard + json.dumps(data))
+    storage_write('nutzer', data)

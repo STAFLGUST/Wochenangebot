@@ -1,6 +1,6 @@
-from umgebung import storage_raw
 """Bestellwunsch aus dem Portal: Mengen eingeben, Preise des Kunden (serverseitig), E-Mail an die eingestellten
 Empfänger + Kopie an den Kunden. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
+from umgebung import storage_raw
 import json
 import os
 import re

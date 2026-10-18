@@ -15,7 +15,8 @@ function store_mode(): string
     static $lock = null, $mode = null;
     if ($mode !== null) return $mode;
     if (!is_dir($DATA) && !mkdir($DATA, 0775, true)) throw new RuntimeException('Cannot create data directory');
-    $lock = fopen($DATA . '/.storage.lock', 'c');
+    // Lesend öffnen genügt für flock – so stört auch eine von root (Wartungsskript) angelegte Sperrdatei nicht.
+    $lock = @fopen($DATA . '/.storage.lock', 'c') ?: (is_file($DATA . '/.storage.lock') ? @fopen($DATA . '/.storage.lock', 'r') : false);
     if (!$lock || !flock($lock, LOCK_SH)) throw new RuntimeException('Cannot lock storage');
     // Held until the end of the process: migration cannot switch a live request's backend.
     return $mode = is_file($DATA . '/.sqlite-active') ? 'sqlite' : 'files';
@@ -107,7 +108,8 @@ function with_lock(string $name, callable $fn)
     }
     static $held = [];
     if (!empty($held[$name])) return $fn();
-    $fh = fopen($DATA . '/.' . $name . '.lock', 'c');
+    $lp = $DATA . '/.' . $name . '.lock';
+    $fh = @fopen($lp, 'c') ?: (is_file($lp) ? @fopen($lp, 'r') : false);   // nur echte Sperrdatei, nie z. B. ein Verzeichnis
     if (!$fh || !flock($fh, LOCK_EX)) throw new RuntimeException('Cannot lock data');
     $held[$name] = true;
     try { return $fn(); } finally { unset($held[$name]); flock($fh, LOCK_UN); fclose($fh); }

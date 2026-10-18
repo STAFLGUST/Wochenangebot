@@ -1,6 +1,6 @@
-from umgebung import storage_raw
 """Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite.
 Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen."""
+from umgebung import storage_raw
 import http.cookiejar
 import json
 import re
