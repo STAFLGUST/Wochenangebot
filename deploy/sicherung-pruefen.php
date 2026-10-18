@@ -2,7 +2,7 @@
 /* Prüft eine entpackte Datensicherung (Ersatz für sicherung-pruefen.py, falls kein Python vorhanden ist):
    jede Datendatei muss gültiges JSON enthalten. Gibt die Anzahl fehlerhafter Dateien aus. */
 $guard = "<?php http_response_code(404); exit; ?>\n";
-$bad = 0;
+$bad = is_file(($argv[1] ?? '.') . '/.sqlite-active') ? 1 : 0;
 $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($argv[1] ?? '.', FilesystemIterator::SKIP_DOTS));
 foreach ($it as $f) {
     $p = (string)$f;

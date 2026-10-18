@@ -1,3 +1,4 @@
+from umgebung import storage_raw
 """Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite.
 Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen."""
 import http.cookiejar
@@ -213,7 +214,7 @@ code, r = A.call('kunden')
 TMP = A.call('kunde_save', {**base, 'rev': r['rev'], 'firma': 'Wegwerf KG', 'nr': 'K-WW', 'email': '', 'angebote': ['std'], 'login': {'username': 'weg.werf', 'password': 'Weg-Kennwort-42', 'mustChange': False, 'active': True}})[1]
 W = Client('198.51.100.54'); W.call('kunde_login', {'username': 'weg.werf', 'password': 'Weg-Kennwort-42'}); W.call('kunde_merkliste_save', {'keys': ['weg']})
 A.call('kunde_delete', {'id': TMP['customer']['id'], 'rev': TMP['rev']})
-check('merkliste: deleted with the customer', TMP['customer']['id'] not in open(os.path.join(os.environ['UDATA'], 'merklisten.php'), encoding='utf-8').read())
+check('merkliste: deleted with the customer', TMP['customer']['id'] not in storage_raw('merklisten'))
 
 # ---------- Oberfläche ----------
 with sync_playwright() as p:

@@ -21,5 +21,7 @@
 		-Server
 		-X-Powered-By
 	}
+	@private path /data /data/*
+	respond @private 404
 	reverse_proxy app:80
 }

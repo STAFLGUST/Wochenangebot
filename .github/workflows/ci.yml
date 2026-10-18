@@ -90,13 +90,23 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
+      - name: Datenbankmigration, Parallelzugriffe und Wiederherstellung
+        run: python3 tests/deploy/test_datenbank.py
+      - name: Datenbankschutz im PHP-Container
+        run: sh tests/deploy/test_sqlite_http.sh
       - name: Datensicherung (deploy/sichern.sh)
         run: sh tests/deploy/test_sichern.sh
       - name: Release-Modus mit Healthcheck und Rückfall (deploy/freigabe-einspielen.sh)
         run: sh tests/deploy/test_freigabe.sh
 
   e2e:
-    name: Ende-zu-Ende-Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        storage: [files, sqlite]
+    name: Ende-zu-Ende-Tests (${{ matrix.storage }})
+    env:
+      WA_TEST_STORAGE: ${{ matrix.storage }}
     needs: statisch
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -118,7 +128,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-ergebnisse
+          name: e2e-ergebnisse-${{ matrix.storage }}
           path: |
             tests/.ergebnisse/
             tests/.arbeit/*.log

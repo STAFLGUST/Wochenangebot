@@ -1,3 +1,4 @@
+from umgebung import storage_raw
 import sys
 import json, os, re
 from playwright.sync_api import sync_playwright
@@ -35,7 +36,7 @@ with sync_playwright() as p:
     # ---- Migration bisheriges Passwort → Nutzer „admin“
     login(a, 'admin', 'Sicheres-Passwort-1')
     check('migration: old password works as user admin', True)
-    check('admin.php migrated away, nutzer.php exists', not os.path.exists(DATA + '/admin.php') and os.path.exists(DATA + '/nutzer.php'))
+    check('admin.php migrated away, nutzer.php exists', storage_raw('admin') is None and storage_raw('nutzer') is not None)
     check('admin sees Nutzer + Protokoll tabs', a.locator('#vt-users').is_visible() and a.locator('#vt-log').is_visible())
     a.click('#btn-more'); check('menu shows user + role', 'Administrator' in a.inner_text('#menu-user') and 'admin' in a.inner_text('#menu-user')); a.keyboard.press('Escape')
 

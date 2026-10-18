@@ -51,7 +51,7 @@ $CFG = require __DIR__ . '/config.php';
 require __DIR__ . '/geo.php';
 require __DIR__ . '/mail.php';
 $DATA = rtrim((string)$CFG['data_dir'], '/');
-const GUARD = "<?php http_response_code(404); exit; ?>\n";
+require __DIR__ . '/storage.php';
 const CATEGORIES = ['Rind', 'Kalb', 'Schwein', 'Lamm & Schaf', 'Geflügel', 'Knochen', 'Sonstiges'];
 const CONDITIONS = ['frisch', 'gefroren', 'frisch-gefroren', 'dry-aged', 'unbekannt'];
 const PRICE_STATUS = ['value', 'request', 'none'];
@@ -64,6 +64,7 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: same-origin');
 
 set_exception_handler(function (Throwable $e) {
+    store_rollback();
     error_log('[wochenangebot] ' . $e->getMessage());
     respond(['ok' => false, 'error' => 'Interner Fehler auf dem Server.'], 500);
 });
@@ -72,40 +73,12 @@ set_exception_handler(function (Throwable $e) {
 
 function respond(array $data, int $status = 200): void
 {
+    store_commit(); // Intentional API errors may persist login-attempt counters.
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 function fail(string $msg, int $status = 400): void { respond(['ok' => false, 'error' => $msg], $status); }
-
-function store_path(string $name): string
-{
-    global $DATA;
-    return $DATA . '/' . $name . '.php';
-}
-function store_read(string $name)
-{
-    $p = store_path($name);
-    if (!is_file($p)) return null;
-    $raw = (string)file_get_contents($p);
-    if (strncmp($raw, GUARD, strlen(GUARD)) === 0) $raw = substr($raw, strlen(GUARD));
-    $data = json_decode($raw, true);
-    return is_array($data) ? $data : null;
-}
-function store_write(string $name, array $data): void
-{
-    global $DATA;
-    $dir = dirname(store_path($name));
-    if (!is_dir($dir) && !@mkdir($dir, 0775, true)) fail('Datenordner kann nicht angelegt werden. Bitte Schreibrechte für „data/“ prüfen.', 500);
-    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) fail('Daten konnten nicht gespeichert werden.', 500);
-    $tmp = store_path($name) . '.' . bin2hex(random_bytes(4)) . '.tmp';
-    if (@file_put_contents($tmp, GUARD . $json, LOCK_EX) === false) fail('Speichern fehlgeschlagen. Bitte Schreibrechte für „data/“ prüfen.', 500);
-    if (!@rename($tmp, store_path($name))) { @unlink($tmp); fail('Speichern fehlgeschlagen.', 500); }
-    if (!is_file($DATA . '/index.php')) @file_put_contents($DATA . '/index.php', GUARD);
-}
-function store_delete(string $name): void { $p = store_path($name); if (is_file($p)) @unlink($p); }
-function store_mtime(string $name): ?int { $p = store_path($name); return is_file($p) ? (int)filemtime($p) : null; }
 
 function body(): array
 {
@@ -123,17 +96,6 @@ const ROLES = ['viewer' => 1, 'editor' => 2, 'admin' => 3];
 const ROLE_LABELS = ['viewer' => 'Nur ansehen', 'editor' => 'Bearbeiter', 'admin' => 'Administrator'];
 
 /* Exklusive Sperre für Lese-Ändere-Schreibe-Vorgänge (Nutzerliste, Protokoll) */
-function with_lock(string $name, callable $fn)
-{
-    global $DATA;
-    if (!is_dir($DATA) && !@mkdir($DATA, 0775, true)) fail('Datenordner kann nicht angelegt werden.', 500);
-    static $held = [];
-    if (!empty($held[$name])) return $fn();             // bereits gesperrt (verschachtelter Aufruf)
-    $fh = @fopen($DATA . '/.' . $name . '.lock', 'c');
-    if ($fh) flock($fh, LOCK_EX);
-    $held[$name] = true;
-    try { return $fn(); } finally { $held[$name] = false; if ($fh) { flock($fh, LOCK_UN); fclose($fh); } }
-}
 /* Nutzerliste; bisherige Einzel-Passwort-Installation wird einmalig zum Nutzer „admin“ */
 function users_load(): array
 {
@@ -170,7 +132,7 @@ function user_public(array $u): array
 function setup_allowed(): bool
 {
     if (getenv('WA_INSTALLED') === '1' || ($_SERVER['WA_INSTALLED'] ?? '') === '1') return false;
-    return !is_file(store_path('nutzer')) && !is_file(store_path('admin'));
+    return store_mtime('nutzer') === null && store_mtime('admin') === null;
 }
 /* Unter der Nutzersperre aufrufen: gilt für Passwort UND zweiten Anmeldeschritt. */
 function login_failure(array &$u): bool
@@ -468,6 +430,7 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
             store_write('protokoll/' . $month, $log);
         });
     } catch (Throwable $e) {
+        if (!empty($GLOBALS['store_tx'])) throw $e;
         error_log('[wochenangebot] Protokoll: ' . $e->getMessage());
     }
 }
@@ -1211,8 +1174,8 @@ function history_id(int $week, int $year): string { return sprintf('%04d-%02d', 
 function history_ids(): array
 {
     $ids = [];
-    foreach (glob(dirname(store_path('historie/x')) . '/*.php') ?: [] as $f) {
-        $id = basename($f, '.php');
+    foreach (store_names('historie') as $f) {
+        $id = basename($f);
         if (preg_match('/^\d{4}-\d{2}$/', $id)) $ids[] = $id;
     }
     sort($ids);
@@ -1242,7 +1205,7 @@ function history_backfill(): void
     $have = array_flip(history_ids());
     $deleted = array_flip(store_read('historie_geloescht') ?? []);
     $sources = [];
-    foreach (glob(dirname(store_path('versionen/x')) . '/*.php') ?: [] as $f) $sources[] = store_read('versionen/' . basename($f, '.php'));
+    foreach (store_names('versionen') as $f) $sources[] = store_read('versionen/' . basename($f));
     $sources[] = store_read('angebot');
     $cand = [];
     foreach ($sources as $m) {
@@ -1424,14 +1387,14 @@ try {
                 if (!$d) fail('Kein Entwurf vorhanden.', 404);
                 respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def)]);
             }
-            $p = store_path('angebot');
-            if (!is_file($p)) fail('Es ist noch kein Angebot veröffentlicht.', 404);
+            $published = store_read('angebot');
+            if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
             if ($oid === OFFER_STD && std_public()) {
-                $etag = '"' . md5((string)filemtime($p) . ':' . filesize($p) . ':std') . '"';
+                $etag = '"' . hash('sha256', json_encode($published) . ':std') . '"';
                 header('ETag: ' . $etag);
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
             }
-            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => offer_resolve(store_read('angebot'), $def)]);
+            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => offer_resolve($published, $def)]);
         }
 
         case 'offers': {
@@ -2594,8 +2557,8 @@ Ausgelöst von: {$me['name']}
             require_auth(false, 'admin');
             header('Cache-Control: no-store');
             $months = [];
-            foreach (glob(dirname(store_path('protokoll/x')) . '/*.php') ?: [] as $f) {
-                $m = basename($f, '.php');
+            foreach (store_names('protokoll') as $f) {
+                $m = basename($f);
                 if (preg_match('/^\d{4}-\d{2}$/', $m)) $months[] = $m;
             }
             rsort($months);
@@ -2621,72 +2584,78 @@ Ausgelöst von: {$me['name']}
 
         case 'save_draft': {
             require_auth(true, 'editor');
-            $b = body();
-            $prev = store_read('entwurf');
-            $cur = (int)($prev['rev'] ?? 0);
-            if ($prev !== null && (int)($b['revision'] ?? -1) !== $cur) {
-                fail('Der Entwurf wurde inzwischen in einem anderen Fenster geändert. Bitte die Seite neu laden.', 409);
-            }
-            $model = clean_model($b['model'] ?? null, false);
-            $model['savedAt'] = now();
-            $model['rev'] = $cur + 1;
-            store_write('entwurf', $model);
-            $before = $prev ?? store_read('angebot');
-            $note = is_array($b['note'] ?? null) ? $b['note'] : null;
-            if ($note && ($note['type'] ?? '') === 'import') {
-                $d = changes_between(store_read('angebot'), $model);
-                audit('import', 'Excel importiert: ' . (s($note['file'] ?? '', 120) ?: 'Datei') . ' – KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ', ' . count($model['items']) . ' Artikel (gegenüber veröffentlicht: ' . changes_summary($d) . ')', array_slice($d, 0, 2000));
-            } elseif ($note && ($note['type'] ?? '') === 'cleanup') {
-                $d = changes_between($before, $model);
-                if ($d) audit('draft', 'Bezeichnungen und Herkunft vereinheitlicht (' . count($d) . ' Änderungen: ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel)', array_slice($d, 0, 2000));
-            } elseif ($note && ($note['type'] ?? '') === 'master') {
-                $d = changes_between($before, $model);
-                if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
-            } elseif ($note && ($note['type'] ?? '') === 'version') {
-                audit('import', 'Frühere Veröffentlichung als Entwurf geladen (KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ')', array_slice(changes_between($before, $model), 0, 2000));
-            } else {
-                $d = changes_between($before, $model);
-                if ($d) audit('draft', 'Entwurf bearbeitet', $d, null, true);
-            }
-            respond(['ok' => true, 'savedAt' => $model['savedAt'], 'revision' => $model['rev']]);
+            with_lock('entwurf', function () use ($CFG) {
+                $b = body();
+                $prev = store_read('entwurf');
+                $cur = (int)($prev['rev'] ?? 0);
+                if ($prev !== null && (int)($b['revision'] ?? -1) !== $cur) {
+                    fail('Der Entwurf wurde inzwischen in einem anderen Fenster geändert. Bitte die Seite neu laden.', 409);
+                }
+                $model = clean_model($b['model'] ?? null, false);
+                $model['savedAt'] = now();
+                $model['rev'] = $cur + 1;
+                store_write('entwurf', $model);
+                $before = $prev ?? store_read('angebot');
+                $note = is_array($b['note'] ?? null) ? $b['note'] : null;
+                if ($note && ($note['type'] ?? '') === 'import') {
+                    $d = changes_between(store_read('angebot'), $model);
+                    audit('import', 'Excel importiert: ' . (s($note['file'] ?? '', 120) ?: 'Datei') . ' – KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ', ' . count($model['items']) . ' Artikel (gegenüber veröffentlicht: ' . changes_summary($d) . ')', array_slice($d, 0, 2000));
+                } elseif ($note && ($note['type'] ?? '') === 'cleanup') {
+                    $d = changes_between($before, $model);
+                    if ($d) audit('draft', 'Bezeichnungen und Herkunft vereinheitlicht (' . count($d) . ' Änderungen: ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel)', array_slice($d, 0, 2000));
+                } elseif ($note && ($note['type'] ?? '') === 'master') {
+                    $d = changes_between($before, $model);
+                    if ($d) audit('draft', 'Stammdaten auf den Entwurf angewendet', array_slice($d, 0, 2000));
+                } elseif ($note && ($note['type'] ?? '') === 'version') {
+                    audit('import', 'Frühere Veröffentlichung als Entwurf geladen (KW ' . ($model['meta']['week'] ?? '?') . '/' . ($model['meta']['year'] ?? '?') . ')', array_slice(changes_between($before, $model), 0, 2000));
+                } else {
+                    $d = changes_between($before, $model);
+                    if ($d) audit('draft', 'Entwurf bearbeitet', $d, null, true);
+                }
+                respond(['ok' => true, 'savedAt' => $model['savedAt'], 'revision' => $model['rev']]);
+            });
         }
 
         case 'discard_draft': {
             require_auth(true, 'editor');
-            $dr = store_read('entwurf');
-            store_delete('entwurf');
-            if ($dr) { $d = changes_between($dr, store_read('angebot') ?? $dr); audit('discard', 'Entwurf verworfen' . ($d ? ' (' . changes_summary($d) . ' zurückgenommen)' : ''), array_slice($d, 0, 2000)); }
-            respond(['ok' => true]);
+            with_lock('entwurf', function () use ($CFG) {
+                $dr = store_read('entwurf');
+                store_delete('entwurf');
+                if ($dr) { $d = changes_between($dr, store_read('angebot') ?? $dr); audit('discard', 'Entwurf verworfen' . ($d ? ' (' . changes_summary($d) . ' zurückgenommen)' : ''), array_slice($d, 0, 2000)); }
+                respond(['ok' => true]);
+            });
         }
 
         case 'publish': {
             require_auth(true, 'editor');
-            $model = clean_model(body()['model'] ?? null, true);
-            $prev = store_read('angebot');
-            if ($prev) {
-                $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
-                store_write('versionen/' . $id, $prev);
-                $list = glob(dirname(store_path('versionen/x')) . '/*.php') ?: [];
-                rsort($list);
-                foreach (array_slice($list, (int)$CFG['keep_versions']) as $old) @unlink($old);
-            }
-            $model['publishedAt'] = now();
-            store_write('angebot', $model);
-            store_delete('entwurf');
-            $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
-            if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
-            $d = $prev ? changes_between($prev, $model) : [];
-            audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
-            respond(['ok' => true, 'publishedAt' => $model['publishedAt']]);
+            with_lock('entwurf', function () use ($CFG) {
+                $model = clean_model(body()['model'] ?? null, true);
+                $prev = store_read('angebot');
+                if ($prev) {
+                    $id = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(3));
+                    store_write('versionen/' . $id, $prev);
+                    $list = store_names('versionen');
+                    rsort($list);
+                    foreach (array_slice($list, (int)$CFG['keep_versions']) as $old) store_delete($old);
+                }
+                $model['publishedAt'] = now();
+                store_write('angebot', $model);
+                store_delete('entwurf');
+                $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
+                if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
+                $d = $prev ? changes_between($prev, $model) : [];
+                audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
+                respond(['ok' => true, 'publishedAt' => $model['publishedAt']]);
+            });
         }
 
         case 'versions': {
             require_auth();
-            $list = glob(dirname(store_path('versionen/x')) . '/*.php') ?: [];
+            $list = store_names('versionen');
             rsort($list);
             $out = [];
             foreach ($list as $f) {
-                $id = basename($f, '.php');
+                $id = basename($f);
                 if (!preg_match('/^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$/', $id)) continue;
                 $d = store_read('versionen/' . $id);
                 if (!$d) continue;
@@ -2785,5 +2754,6 @@ Ausgelöst von: {$me['name']}
             fail('Unbekannte Aktion.', 404);
     }
 } catch (InvalidArgumentException $e) {
+    store_rollback();
     fail($e->getMessage(), 422);
 }

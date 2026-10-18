@@ -1,3 +1,4 @@
+from umgebung import storage_raw
 """Bestellwunsch aus dem Portal: Mengen eingeben, Preise des Kunden (serverseitig), E-Mail an die eingestellten
 Empfänger + Kopie an den Kunden. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
 import json
@@ -99,7 +100,7 @@ check('without copy setting: only internal mail', code == 200 and r['copy'] is N
 smtp.close(); time.sleep(0.2)
 code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'qty': 2}]})
 check('mail server down: clear error for customer', code == 502 and 'nicht übermittelt' in r.get('error', ''), r)
-stored = open(os.path.join(os.environ['UDATA'], 'bestellungen.php'), encoding='utf-8').read()
+stored = storage_raw('bestellungen')
 check('failed order kept on the server', '"status":"fehler"' in stored.replace(' ', ''))
 smtp = TestSmtp(2526, password='Test-Postfach-1')
 A.call('bestell_settings_save', {'enabled': False, 'to': 'bestellung@example.org', 'copy': True})
