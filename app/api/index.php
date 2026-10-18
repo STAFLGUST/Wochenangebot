@@ -32,6 +32,8 @@
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
+ *   POST ?action=kunde_bestellung  Bestellwunsch eines Kunden (Preise serverseitig aus dem Angebot) → E-Mail an uns (+ Kopie)
+ *   POST ?action=bestell_settings_save   Empfänger für Bestellwünsche (nur Administrator)
  *   GET  ?action=kunde_merkliste   Merkliste des angemeldeten Kunden; POST kunde_merkliste_save (Kunden-CSRF)
  *   POST ?action=kunde_abmelden_info | kunde_abmelden   Abmeldelink aus der Angebotsmail (öffentlich, Code im Link)
  *   POST ?action=abmelden1&t=…     Ein-Klick-Abmeldung aus dem E-Mail-Programm (RFC 8058, Formular statt JSON)
@@ -875,6 +877,64 @@ Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwor
     });
 }
 
+/* ---------- Bestellwünsche ---------- */
+function order_settings(): array
+{
+    $d = store_read('bestellung');
+    return ['enabled' => !empty($d['enabled']), 'to' => array_values(array_filter((array)($d['to'] ?? []), 'is_string')), 'copy' => !is_array($d) || !array_key_exists('copy', $d) || !empty($d['copy']),
+            'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? ''];
+}
+function order_enabled(): bool { $o = order_settings(); return $o['enabled'] && $o['to'] && mail_cfg() && mail_base_url(); }
+function de_num(float $v, int $dec = 2): string { return number_format($v, $dec, ',', '.'); }
+function de_qty(float $v): string { $s = number_format($v, 2, ',', '.'); return preg_replace('/,?0+$/', '', $s) ?: '0'; }
+/* Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML] */
+function mail_tpl_bestellung(array $o, bool $copy): array
+{
+    global $CFG;
+    $c = $o['kunde'];
+    $subject = $copy ? "Ihr Bestellwunsch {$o['nr']} – {$CFG['company']}" : "Bestellwunsch {$o['nr']} – {$c['firma']}" . ($o['week'] ? " (KW {$o['week']})" : '');
+    $intro = $copy
+        ? "vielen Dank für Ihren Bestellwunsch. Wir haben ihn erhalten und melden uns mit der Bestätigung bei Ihnen. Bitte beachten Sie: Erst mit unserer Bestätigung ist die Bestellung verbindlich."
+        : "über das Angebotsportal ist ein neuer Bestellwunsch eingegangen.";
+    $kopf = [['Bestellwunsch', $o['nr']], ['Eingang', date('d.m.Y, H:i', strtotime($o['t'])) . ' Uhr'], ['Angebot', $o['angebotName'] . ($o['week'] ? " · KW {$o['week']}/{$o['year']}" : '')]];
+    if (!$copy) {
+        $kopf[] = ['Kunde', $c['firma'] . ($c['nr'] ? " (Kd.-Nr. {$c['nr']})" : '')];
+        if ($c['ansprechpartner']) $kopf[] = ['Ansprechpartner', $c['ansprechpartner']];
+        $adr = trim(implode(', ', array_filter([$c['strasse'], trim($c['plz'] . ' ' . $c['ort'])])));
+        if ($adr !== '') $kopf[] = ['Anschrift', $adr];
+        if ($c['email']) $kopf[] = ['E-Mail', $c['email']];
+        if ($c['telefon']) $kopf[] = ['Telefon', $c['telefon']];
+        $kopf[] = ['Benutzerkennung', $c['username']];
+    }
+    if ($o['termin']) $kopf[] = ['Wunschtermin', date('d.m.Y', strtotime($o['termin']))];
+    if ($o['referenz'] !== '') $kopf[] = ['Ihre Referenz', $o['referenz']];
+    $pr = function ($p) { return $p['price'] !== null ? de_num($p['price']) . ' €/kg' : 'auf Anfrage'; };
+    $sum = function ($p) { return $p['sum'] !== null ? de_num($p['sum']) . ' €' : '–'; };
+    $t = ($copy ? mail_greeting($c) : 'Hallo,') . "\n\n" . $intro . "\n\n";
+    foreach ($kopf as [$k, $v]) $t .= str_pad($k . ':', 18) . $v . "\n";
+    $t .= "\nPositionen:\n";
+    foreach ($o['positions'] as $i => $p) $t .= sprintf("%2d. %s%s – %s kg × %s = %s\n", $i + 1, $p['code'] ? $p['code'] . ' ' : '', $p['name'], de_qty($p['qty']), $pr($p), $sum($p));
+    $t .= "\nGesamtmenge: " . de_qty($o['totalQty']) . " kg\nWarenwert (ca.): " . de_num($o['total']) . " €" . ($o['onRequest'] ? " zzgl. {$o['onRequest']} Position(en) mit Preis auf Anfrage" : '') . "\n";
+    if ($o['bemerkung'] !== '') $t .= "\nBemerkung:\n{$o['bemerkung']}\n";
+    $t .= "\nPreise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.\n";
+    if ($copy) $t .= "\n" . mail_settings()['signature'] . "\n";
+    $row = function ($k, $v) { return '<tr><td style="padding:3px 12px 3px 0;color:#857c72;white-space:nowrap;vertical-align:top;">' . mail_h($k) . '</td><td style="padding:3px 0;">' . mail_h($v) . '</td></tr>'; };
+    $h = '<p style="margin:0 0 14px;">' . mail_h($copy ? mail_greeting($c) : 'Hallo,') . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
+        . '<table role="presentation" cellpadding="0" cellspacing="0" style="font-size:14px;margin:0 0 16px;">' . implode('', array_map(function ($r) use ($row) { return $row($r[0], $r[1]); }, $kopf)) . '</table>';
+    $th = 'style="text-align:left;padding:6px 6px;border-bottom:2px solid #e6e0d8;font-size:12px;color:#857c72;"';
+    $thr = 'style="text-align:right;padding:6px 6px;border-bottom:2px solid #e6e0d8;font-size:12px;color:#857c72;"';
+    $h .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13.5px;border-collapse:collapse;"><tr><th ' . $th . '>Art.-Nr.</th><th ' . $th . '>Artikel</th><th ' . $thr . '>Menge</th><th ' . $thr . '>Preis</th><th ' . $thr . '>Summe</th></tr>';
+    foreach ($o['positions'] as $p) {
+        $td = 'style="padding:6px 6px;border-bottom:1px solid #eee8e1;vertical-align:top;"'; $tdr = 'style="padding:6px 6px;border-bottom:1px solid #eee8e1;text-align:right;white-space:nowrap;vertical-align:top;"';
+        $h .= '<tr><td ' . $td . '>' . mail_h($p['code']) . '</td><td ' . $td . '>' . mail_h($p['name']) . ($p['group'] ? '<br><span style="font-size:11.5px;color:#857c72;">' . mail_h($p['group']) . '</span>' : '') . '</td><td ' . $tdr . '>' . de_qty($p['qty']) . ' kg</td><td ' . $tdr . '>' . mail_h($pr($p)) . '</td><td ' . $tdr . '>' . mail_h($sum($p)) . '</td></tr>';
+    }
+    $h .= '<tr><td colspan="2" style="padding:8px 6px;font-weight:bold;">Summe (ca.)</td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_qty($o['totalQty']) . ' kg</td><td></td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total']) . ' €</td></tr></table>'
+        . ($o['onRequest'] ? '<p style="margin:6px 0 0;font-size:12.5px;color:#857c72;">Zzgl. ' . $o['onRequest'] . ' Position(en) mit Preis auf Anfrage.</p>' : '')
+        . ($o['bemerkung'] !== '' ? '<p style="margin:14px 0 0;padding:10px 12px;background:#f7efe9;border-radius:8px;"><strong>Bemerkung:</strong><br>' . nl2br(mail_h($o['bemerkung'])) . '</p>' : '')
+        . '<p style="margin:14px 0 0;font-size:12.5px;color:#857c72;">Preise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.</p>';
+    return [$subject, $t, mail_layout($subject, $h, $copy ? mail_settings()['signature'] : '', $copy ? "Diese E-Mail bestätigt den Eingang Ihres Bestellwunsches bei {$CFG['company']}." : 'Automatisch erzeugt vom Angebotsportal. Antworten gehen direkt an den Kunden.')];
+}
+
 /* Wochenangebot / Angebotslink: [Betreff, Text, HTML] */
 function mail_tpl_angebot(array $c, string $note, ?array $wk): array
 {
@@ -982,7 +1042,7 @@ function mail_record(array $entries, ?array $wk = null): void
         store_write('mailversand', array_slice($l, -3000));
     });
 }
-const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung'];
+const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch'];
 function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
 {
     if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");
@@ -1314,7 +1374,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1322,7 +1382,7 @@ if (in_array($action, $writeActions, true)) {
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save'], true);
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -1435,7 +1495,7 @@ try {
             start_session();
             $k = current_customer();
             $staff = current_user() !== null;
-            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
+            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
         }
 
         case 'kunde_login': {
@@ -1563,6 +1623,123 @@ try {
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c2)]);
         }
 
+        /* ---------- Bestellwunsch aus dem Portal ---------- */
+        case 'kunde_bestellung': {
+            $c = current_customer();
+            if (!$c) fail('Bitte erneut anmelden.', 401);
+            require_customer_csrf();
+            if (!empty($c['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
+            if (!order_enabled()) fail('Bestellungen über das Portal sind derzeit nicht möglich. Bitte wenden Sie sich direkt an uns.', 409);
+            $b = body();
+            $oid = (string)($b['angebot'] ?? OFFER_STD);
+            if ($oid === '') $oid = OFFER_STD;
+            $def = offer_def($oid);
+            if (!$def || !(in_array($oid, customer_offers($c), true) || ($oid === OFFER_STD && std_public()))) fail('Für dieses Angebot ist Ihr Zugang nicht freigeschaltet.', 403);
+            $pub = store_read('angebot');
+            if (!$pub) fail('Es ist kein Angebot veröffentlicht.', 409);
+            if ((string)($b['publishedAt'] ?? '') !== (string)($pub['publishedAt'] ?? $pub['savedAt'] ?? '')) fail('Das Angebot wurde inzwischen aktualisiert. Bitte prüfen Sie Ihren Bestellwunsch mit den aktuellen Preisen und senden Sie ihn erneut.', 409);
+            $off = offer_resolve($pub, $def);
+            $byId = []; foreach ($off['items'] as $it) $byId[$it['id']] = $it;
+            $gName = []; foreach ($off['groups'] ?? [] as $g) $gName[$g['id']] = $g['name'];
+            $in = is_array($b['positions'] ?? null) ? $b['positions'] : [];
+            if (!$in) fail('Bitte mindestens eine Menge eingeben.', 422);
+            if (count($in) > 300) fail('Zu viele Positionen in einem Bestellwunsch (höchstens 300).', 422);
+            $pos = []; $seen = []; $total = 0.0; $qtyT = 0.0; $req = 0;
+            foreach ($in as $p) {
+                $id = is_array($p) ? (string)($p['id'] ?? '') : '';
+                $q = is_array($p) && is_numeric($p['qty'] ?? null) ? round((float)$p['qty'], 2) : 0.0;
+                if ($id === '' || isset($seen[$id])) continue;
+                if (!isset($byId[$id])) fail('Ein Artikel Ihres Bestellwunsches ist im aktuellen Angebot nicht mehr enthalten. Bitte Seite neu laden und prüfen.', 409);
+                if ($q <= 0 || $q > 99999) fail('Bitte nur Mengen zwischen 0,01 und 99.999 kg eingeben.', 422);
+                $seen[$id] = true;
+                $it = $byId[$id];
+                $price = ($it['price']['status'] ?? '') === 'value' ? (float)$it['price']['value'] : null;
+                $sum = $price !== null ? round(round($price * 100) * $q) / 100 : null;   // in Cent rechnen (wie die Anzeige im Portal)
+                if ($sum !== null) $total += $sum; else $req++;
+                $qtyT += $q;
+                $pos[] = ['id' => $id, 'code' => (string)($it['code'] ?? ''), 'name' => (string)$it['name'], 'group' => $gName[$it['groupId'] ?? ''] ?? '', 'qty' => $q, 'price' => $price, 'sum' => $sum];
+            }
+            if (!$pos) fail('Bitte mindestens eine Menge eingeben.', 422);
+            $termin = (string)($b['termin'] ?? '');
+            if ($termin !== '') {
+                $d = DateTimeImmutable::createFromFormat('!Y-m-d', $termin);
+                if (!$d || $d->format('Y-m-d') !== $termin || $termin < date('Y-m-d') || $termin > date('Y-m-d', strtotime('+120 days'))) fail('Bitte ein gültiges Wunschdatum (heute bis in 4 Monaten) wählen.', 422);
+            }
+            $ref = s($b['referenz'] ?? '', 60) ?? '';
+            $bem = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['bemerkung'] ?? '')) ?? '')), 0, 1000);
+            // Missbrauchsschutz: höchstens 30 Bestellwünsche je Kunde und Tag
+            $recent = array_filter(store_read('bestellungen') ?? [], function ($x) use ($c) { return ($x['kid'] ?? '') === $c['id'] && strtotime($x['t']) > time() - 86400; });
+            if (count($recent) >= 30) fail('Heute wurden bereits sehr viele Bestellwünsche gesendet. Bitte wenden Sie sich direkt an uns.', 429);
+            $o = with_lock('bestellungen', function () use ($c, $def, $off, $pos, $total, $qtyT, $req, $termin, $ref, $bem) {
+                $all = store_read('bestellungen') ?? [];
+                $y = date('Y'); $n = 0;
+                foreach ($all as $x) if (strpos($x['nr'], "B-$y-") === 0) $n = max($n, (int)substr($x['nr'], 7));
+                $o = ['nr' => sprintf('B-%s-%04d', $y, $n + 1), 't' => now(), 'kid' => $c['id'], 'firma' => $c['firma'], 'angebot' => $def['id'], 'angebotName' => $def['name'],
+                      'week' => (int)($off['meta']['week'] ?? 0), 'year' => (int)($off['meta']['year'] ?? 0), 'positions' => $pos, 'total' => round($total, 2), 'totalQty' => round($qtyT, 2),
+                      'onRequest' => $req, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu'];
+                $all[] = $o;
+                store_write('bestellungen', array_slice($all, -5000));
+                return $o;
+            });
+            $o['kunde'] = ['firma' => $c['firma'], 'nr' => $c['nr'] ?? '', 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'strasse' => $c['strasse'] ?? '', 'plz' => $c['plz'] ?? '', 'ort' => $c['ort'] ?? '',
+                           'email' => $c['email'] ?? '', 'telefon' => $c['telefon'] ?? '', 'username' => $c['login']['username']];
+            $cfg = mail_cfg();
+            $st = order_settings();
+            [$sub, $txt, $html] = mail_tpl_bestellung($o, false);
+            $cfgIn = $cfg; if (filter_var($o['kunde']['email'], FILTER_VALIDATE_EMAIL)) $cfgIn['replyTo'] = $o['kunde']['email'];
+            $jobs = [];
+            foreach ($st['to'] as $to) $jobs[] = ['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $txt, 'html' => $html];
+            $res = mail_send_many($cfgIn, $jobs);
+            $okIn = count(array_filter($res, function ($r) { return $r['ok']; }));
+            $copied = false;
+            if ($okIn && $st['copy'] && filter_var($o['kunde']['email'], FILTER_VALIDATE_EMAIL)) {
+                [$sub2, $txt2, $html2] = mail_tpl_bestellung($o, true);
+                $copied = mail_send_many($cfg, [['to' => $o['kunde']['email'], 'name' => $o['kunde']['ansprechpartner'] ?: $o['kunde']['firma'], 'subject' => $sub2, 'text' => $txt2, 'html' => $html2]])[0]['ok'];
+            }
+            $err = $okIn ? '' : (array_values($res)[0]['error'] ?? 'unbekannter Fehler');
+            with_lock('bestellungen', function () use ($o, $okIn, $copied, $err) {
+                $all = store_read('bestellungen') ?? [];
+                foreach ($all as $i => $x) if ($x['nr'] === $o['nr']) { $all[$i]['status'] = $okIn ? 'gesendet' : 'fehler'; $all[$i]['kopie'] = $copied; if ($err) $all[$i]['error'] = $err; }
+                store_write('bestellungen', $all);
+            });
+            with_lock('mailversand', function () use ($res, $st, $o, $copied, $okIn) {
+                $l = store_read('mailversand') ?? [];
+                foreach ($st['to'] as $i => $to) $l[] = ['t' => now(), 'typ' => 'bestellung', 'kid' => $o['kid'], 'firma' => $o['firma'], 'to' => $to, 'ok' => $res[$i]['ok'] ?? false, 'error' => $res[$i]['error'] ?? '', 'by' => 'Kunde'];
+                if ($okIn && $copied !== null) if ($copied) $l[] = ['t' => now(), 'typ' => 'bestellkopie', 'kid' => $o['kid'], 'firma' => $o['firma'], 'to' => $o['kunde']['email'], 'ok' => true, 'error' => '', 'by' => 'Kunde'];
+                store_write('mailversand', array_slice($l, -3000));
+            });
+            $who = ['username' => 'kunde:' . $c['login']['username'], 'name' => $c['firma'], 'role' => 'kunde'];
+            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg)' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
+                array_map(function ($p) { return ['k' => 'b|' . $p['id'], 'code' => $p['code'], 'name' => $p['name'], 'f' => 'Menge', 'from' => '', 'to' => de_qty($p['qty']) . ' kg' . ($p['price'] !== null ? ' × ' . de_num($p['price']) . ' €' : ' (Preis auf Anfrage)')]; }, $pos), $who);
+            if (!$okIn) fail('Ihr Bestellwunsch konnte gerade nicht übermittelt werden. Bitte versuchen Sie es in einigen Minuten erneut oder rufen Sie uns an.', 502);
+            respond(['ok' => true, 'nr' => $o['nr'], 'total' => $o['total'], 'totalQty' => $o['totalQty'], 'positions' => count($pos), 'onRequest' => $req, 'copy' => $copied ? $o['kunde']['email'] : null]);
+        }
+
+        case 'bestell_settings_save': {
+            $me = require_auth(true, 'admin');
+            $b = body();
+            $raw = is_array($b['to'] ?? null) ? implode(',', $b['to']) : (string)($b['to'] ?? '');
+            $to = [];
+            foreach (preg_split('/[\s,;]+/', $raw) as $a) {
+                if ($a === '') continue;
+                if (filter_var($a, FILTER_VALIDATE_EMAIL) === false) fail("„" . mb_substr($a, 0, 80) . "“ ist keine gültige E-Mail-Adresse.", 422);
+                $to[strtolower($a)] = $a;
+            }
+            $to = array_values($to);
+            if (count($to) > 5) fail('Höchstens 5 Empfänger für Bestellwünsche.', 422);
+            $en = !empty($b['enabled']);
+            if ($en && !$to) fail('Bitte mindestens eine Adresse angeben, an die Bestellwünsche gehen.', 422);
+            $old = order_settings();
+            $new = ['enabled' => $en, 'to' => $to, 'copy' => !empty($b['copy']), 'updatedAt' => now(), 'updatedBy' => $me['name']];
+            store_write('bestellung', $new);
+            $ch = [];
+            if ($old['enabled'] !== $en) $ch[] = ['k' => 'best|en', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Bestellfunktion', 'from' => $old['enabled'] ? 'an' : 'aus', 'to' => $en ? 'an' : 'aus'];
+            if (implode(', ', $old['to']) !== implode(', ', $to)) $ch[] = ['k' => 'best|to', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Empfänger', 'from' => implode(', ', $old['to']), 'to' => implode(', ', $to)];
+            if ($old['copy'] !== $new['copy']) $ch[] = ['k' => 'best|copy', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Kopie an Kunden', 'from' => $old['copy'] ? 'ja' : 'nein', 'to' => $new['copy'] ? 'ja' : 'nein'];
+            if ($ch) audit('mail', 'Einstellungen für Bestellwünsche geändert', $ch);
+            respond(['ok' => true, 'orders' => order_settings(), 'active' => order_enabled()]);
+        }
+
         /* ---------- Merkliste je Kunde (geräteübergreifend) ---------- */
         case 'kunde_merkliste': {
             header('Cache-Control: private, no-store');
@@ -1632,7 +1809,7 @@ try {
             respond(['ok' => true, 'configured' => (bool)$m && (bool)mail_base_url(), 'baseUrl' => mail_base_url(),
                      'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== '', 'passError' => $m['passError'], 'source' => $m['source']] : null,
                      'account' => ($a = mail_account()) ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '', 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null,
-                     'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'sodium' => function_exists('sodium_crypto_secretbox'),
+                     'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'orders' => order_settings(), 'sodium' => function_exists('sodium_crypto_secretbox'),
                      'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last)]);
         }
 
