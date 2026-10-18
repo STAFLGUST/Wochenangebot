@@ -23,3 +23,5 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
 9. **Kundenzugänge** sind vom Eingabebereich getrennt: Aktionen des Eingabebereichs prüfen nur die Mitarbeiter-Anmeldung
    (`require_auth`), Kunden (`current_customer`) sehen ausschließlich freigeschaltete Angebote. Passwörter nur als Hash,
    nie in Antworten oder im Protokoll.
+10. **Bestellwünsche:** Preise und Summen berechnet ausschließlich der Server aus dem veröffentlichten Angebot des Kunden;
+   vom Browser gesendete Preise werden ignoriert.

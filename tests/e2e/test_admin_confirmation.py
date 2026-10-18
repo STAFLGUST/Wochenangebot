@@ -29,7 +29,7 @@ data_dir = Path(os.environ['UDATA'])
 def snapshot():
     return {str(p.relative_to(data_dir)): p.read_bytes() for p in data_dir.rglob('*.php') if p.name != 'sitzungen.php'}
 before = snapshot()
-for action in ['user_save', 'user_delete', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'kunde_save', 'kunde_delete', 'mail_konto_save', 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail']:
+for action in ['user_save', 'user_delete', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'kunde_save', 'kunde_delete', 'mail_konto_save', 'mail_save', 'bestell_settings_save', 'mail_test', 'kunde_mail', 'kunden_rundmail']:
     status, response = a.call(action, {})
     check(action + ' requires recent confirmation', status == 403 and response.get('code') == 'confirmation_required')
 check('blocked requests have no business-data side effects', snapshot() == before)
