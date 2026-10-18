@@ -6,7 +6,8 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 
 - **Server:** Hostinger-VPS, Docker Compose: `php:8.3-apache` (Ordner `app/` nur lesend, Daten in `daten/` →
   `/var/www/html/data`) und Caddy davor (HTTPS, Sicherheits- und Cache-Header, `Caddyfile`).
-- **Auslieferung:** nur über Release (GitHub → Actions → Release), der Server spielt per Timer ein
+- **Auslieferung:** nur über Release: nach grüner CI auf `main` wartet der Release-Lauf auf die Freigabe des
+  Inhabers (Umgebung `produktion`, `docs/release-freigabe.md`); der Server spielt per Timer ein
   (`deploy/freigabe-einspielen.sh`: Prüfung, Healthcheck, automatischer Rückfall).
 - **Testumgebung:** `test.<Domain>` → Container `app-test` in `/opt/wochenangebot-test` (`deploy/testumgebung.sh`,
   `docs/testumgebung.md`); `WA_TESTUMGEBUNG=1` leitet E-Mails ins Testpostfach.
@@ -53,5 +54,5 @@ Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen
 - `tests/run_e2e.py` startet je Testgruppe einen frischen PHP-Server mit Testdaten (`tests/fixtures/`), parallel mit
   eigenen Ports (`WA_JOBS`). Tests holen Adressen aus `tests/e2e/umgebung.py`; Hilfen: `kunden_hilfe.Client`,
   `auth_helpers`, `wait_text()`, `until()`, `shot()`, Test-Mailserver `smtp_test.TestSmtp`.
-- `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release, Datenbank).
+- `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank, Testumgebung).
 - CI (`.github/workflows/ci.yml`): Syntax, Versionsnummern, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten.

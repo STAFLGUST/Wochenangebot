@@ -109,6 +109,8 @@ jobs:
         run: sh tests/deploy/test_freigabe.sh
       - name: Testumgebung verwalten (mit Platzhaltern für docker/git)
         run: sh tests/deploy/test_testumgebung.sh
+      - name: Prüfungen des Release-Laufs (mit Platzhalter für gh)
+        run: sh tests/deploy/test_release_pruefen.sh
 
   e2e:
     strategy:
@@ -158,3 +160,34 @@ jobs:
         env:
           RESULT: ${{ needs.e2e.result }}
         run: test "$RESULT" = success
+
+  release_vorlegen:
+    # Nach erfolgreicher CI auf main: Release-Lauf starten. Er wartet auf die Freigabe in der Umgebung
+    # „produktion“ (release.yml); ohne Freigabe geht nichts live.
+    name: Release zur Freigabe vorlegen
+    needs: [statisch, sicherheit, betrieb, e2e_required]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write   # Release-Lauf starten
+    steps:
+      - name: Release-Lauf starten (wartet auf Freigabe)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          NACHRICHT: ${{ github.event.head_commit.message }}
+        run: |
+          zeile1=$(printf '%s\n' "${NACHRICHT}" | sed -n 1p)
+          titel=$(printf '%s\n' "${NACHRICHT}" | sed -n '3,$p' | sed '/^$/d' | head -1)
+          case "${zeile1}" in
+            "Merge pull request #"*) nr=$(printf '%s' "${zeile1}" | sed -E 's/^Merge pull request (#[0-9]+).*/\1/'); grund="PR ${nr}: ${titel:-${zeile1}}" ;;
+            *) grund="${zeile1}" ;;
+          esac
+          grund=$(printf '%.200s' "${grund}")
+          gh workflow run release.yml --repo "${GITHUB_REPOSITORY}" --ref main -f grund="${grund}" -f sha="${SHA}"
+          {
+            echo "### Release zur Freigabe vorgelegt: \`${SHA:0:7}\`"
+            echo "Grund: ${grund}"
+            echo "Freigeben: Actions → Release → wartender Lauf → Review deployments → Approve and deploy."
+          } >> "${GITHUB_STEP_SUMMARY}"
