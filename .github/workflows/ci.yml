@@ -44,6 +44,11 @@ jobs:
         run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py werkzeuge/*.py deploy/*.py
       - name: Versionsnummern der Skripte und Stylesheets
         run: python3 werkzeuge/asset_versionen.py
+      - name: Tests ohne fest eingetragene Ports (parallele Testläufe)
+        run: |
+          if grep -rnE "127\.0\.0\.1:[0-9]{4}" tests/e2e --include=*.py | grep -v "tests/e2e/umgebung.py"; then
+            echo "::error::Ports/Adressen in Tests bitte über tests/e2e/umgebung.py (BASE, SMTP_PORT, …) beziehen."; exit 1
+          fi
       - name: Unit-Test Bestands-Parser
         run: node tests/unit/bestand_parser.test.js
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
@@ -126,7 +131,9 @@ jobs:
           php --version | head -1
           python -m pip install -r tests/requirements.txt
           python -m playwright install --with-deps chromium
-      - name: Alle Testgruppen gegen frische Testserver
+      - name: Alle Testgruppen gegen frische Testserver (4 Gruppen parallel)
+        env:
+          WA_JOBS: "4"
         run: python tests/run_e2e.py
       - name: Protokolle und Bildschirmfotos bei Fehler sichern
         if: failure()

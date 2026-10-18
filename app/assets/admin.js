@@ -547,7 +547,7 @@
   /* ======================= Gemeinsames Bearbeiten =======================
      Alle paar Sekunden: Stand des Entwurfs abfragen. Haben andere gespeichert, werden deren Änderungen
      übernommen und mit den eigenen zusammengeführt (je Feld, je Artikel, je Kundenpreis). */
-  let syncTimer = null, pendingRemote = null, pulling = false;
+  let syncTimer = null, pendingRemote = null, pulling = false, pullPromise = null;
   const savePending = () => saving || queued || $('#save-state').classList.contains('pending');
   function startSync() {
     clearInterval(syncTimer);
@@ -562,12 +562,18 @@
     const ed = d.editors || [];
     if (JSON.stringify(ed) !== JSON.stringify(editors)) { editors = ed; setSaveState(...lastSaveState); }
     if ((d.offersRev || 0) !== offersRev) { try { await loadOffers(); renderOfferBar(); renderRemote([]); } catch { /* später */ } }
-    if (d.revision !== revision && !savePending()) pullRemote().catch(() => {});
+    if (d.revision !== revision && !savePending() && !pulling) pullRemote().catch(() => {});
   }
+  /* Laufenden Abgleich abwarten und danach frisch holen – wer gerade einen Konflikt auflöst,
+     braucht den Stand nach der fremden Speicherung, nicht den eines älteren Abrufs. */
   async function pullRemote() {
-    if (pulling) return null;
+    while (pullPromise) { try { await pullPromise; } catch { /* weiter mit frischem Abruf */ } }
     pulling = true;
-    try {
+    pullPromise = pullOnce();
+    try { return await pullPromise; } finally { pullPromise = null; pulling = false; }
+  }
+  async function pullOnce() {
+    {
       const d = await api('draft', { query: '&bg=1' });
       const theirs = d.draft ? strip(d.draft) : d.published ? strip(d.published) : emptyModel();
       published = d.published ? strip(d.published) : null;
@@ -596,7 +602,7 @@
         saveTimer = setTimeout(saveNow, 700);
       } else if (!saving) setSaveState(d.draft ? 'saved' : 'clean');
       return r;
-    } finally { pulling = false; }
+    }
   }
   /* Neu zeichnen, ohne eine angefangene Eingabe zu zerstören */
   function editingNow() {

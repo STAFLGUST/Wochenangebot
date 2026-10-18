@@ -1,9 +1,10 @@
 from kunden_hilfe import Client
+from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 from smtp_test import TestSmtp
 
 PW = 'Sicheres-Passwort-1'
 def setup():
-    smtp = TestSmtp(2526, password='Test-Postfach-1')
+    smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
     a = Client('198.51.100.2'); assert a.call('login', {'username':'admin','password':PW})[0] == 200
     def customer(username, firma):
         rev=a.call('kunden')[1]['rev']

@@ -1,5 +1,6 @@
 """Direkte HTTP-Regressionen: Faktorwechsel, Sitzungswiderruf und eigene Zugangsdaten."""
 import base64
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import hashlib
 import hmac
 import http.cookiejar
@@ -10,7 +11,7 @@ import time
 import urllib.error
 import urllib.request
 
-BASE = 'http://127.0.0.1:8790/api/?action='
+BASE = BASE + '/api/?action='
 PW = 'Sicheres-Passwort-1'
 results = []
 

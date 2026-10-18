@@ -1,10 +1,11 @@
 """HTTP-Client mit eigener Sitzung für API-Tests (IP über X-Forwarded-For, wie hinter dem eigenen Proxy)."""
 import http.cookiejar
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json
 import urllib.error
 import urllib.request
 
-B = 'http://127.0.0.1:8790'
+B = BASE
 API = B + '/api/?action='
 
 

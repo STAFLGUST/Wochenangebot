@@ -1,6 +1,7 @@
 """Bestellwunsch aus dem Portal: Mengen eingeben, Preise des Kunden (serverseitig), E-Mail an die eingestellten
 Empfänger + Kopie an den Kunden. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
 from umgebung import storage_raw
+from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 import json
 import os
 import re
@@ -8,7 +9,7 @@ import sys
 import time
 from playwright.sync_api import sync_playwright
 from smtp_test import TestSmtp
-from umgebung import SH
+from umgebung import SH, shot
 from kunden_hilfe import Client, B
 
 PW = 'Sicheres-Passwort-1'
@@ -19,7 +20,7 @@ def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
 
 
-smtp = TestSmtp(2526, password='Test-Postfach-1')
+smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
 A = Client('198.51.100.2')
 check('admin login', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 
@@ -102,7 +103,7 @@ code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'q
 check('mail server down: clear error for customer', code == 502 and 'gespeichert' in r.get('error', '') and 'nicht bestätigt' in r.get('error', ''), r)
 stored = storage_raw('bestellungen')
 check('failed order kept on the server', '"status":"fehler"' in stored.replace(' ', ''))
-smtp = TestSmtp(2526, password='Test-Postfach-1')
+smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
 A.call('bestell_settings_save', {'enabled': False, 'to': 'bestellung@example.org', 'copy': True})
 check('disabled: orders refused', K.call('kunde_bestellung', order)[0] == 409 and K.call('kunde_status')[1]['bestellung'] is False)
 A.call('bestell_settings_save', {'enabled': True, 'to': 'bestellung@example.org', 'copy': True})
@@ -184,7 +185,7 @@ with sync_playwright() as p:
     a.fill('#ml-orders [name=to]', 'bestellung@example.org, chef@example.org'); a.click('#ml-orders [type=submit]')
     a.wait_for_function("document.querySelector('#toast').textContent.includes('Gespeichert')", timeout=8000)
     check('recipients saved from UI', A.call('mail_status')[1]['orders']['to'] == ['bestellung@example.org', 'chef@example.org'])
-    a.locator('#ml-orders').screenshot(path=SH + '/bestellung-einstellungen.png')
+    shot(a.locator('#ml-orders'), SH + '/bestellung-einstellungen.png')
     # Mitarbeiter und Kunde im selben Browser: Startseite führt trotzdem zum Kundenangebot mit Mengen
     a.goto(B + '/'); a.wait_for_selector('tr.row')
     a.click('#btn-kunde-login'); a.fill('#kl-form [name=username]', 'kantine.sued'); a.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); a.click('#kl-form [type=submit]')

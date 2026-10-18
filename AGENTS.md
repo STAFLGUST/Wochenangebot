@@ -29,3 +29,26 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
    `python3 werkzeuge/asset_versionen.py --setzen` aktualisieren (die CI prüft das), sonst laden Browser alte Kopien.
 12. **Sichtbarkeit und Sonderpreise** (`variants.std` = im Wochenangebot ausgeblendet, `sale`) löst nur der Server in `offer_resolve` auf;
    ausgeliefert wird nie die Sonderpreis-Struktur anderer Angebote. Sonderposten-Mails gehen nur an Kunden des jeweiligen Angebots.
+
+## Definition of Done (jeder Pull Request)
+
+Ein PR ist erst fertig, wenn alle Punkte erfüllt sind – unabhängig davon, welches Werkzeug oder welche Sitzung ihn
+erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern fertiggestellt oder klar als offen beschrieben.
+
+1. Volle E2E-Suite in **beiden** Speicherarten lokal grün (Dateien und `WA_TEST_STORAGE=sqlite`); Ergebnis im PR.
+2. Neues Verhalten hat Tests (auch Rechte, Fehler- und Grenzfälle); `tests/README.md` nennt neue Gruppen.
+3. Oberfläche per Bildschirmfoto angesehen (Desktop und 390 px Mobil); keine JavaScript-Fehler.
+4. Versionsnummern der Assets aktuell (`werkzeuge/asset_versionen.py`), gitleaks ohne Funde.
+5. `LIESMICH.md` bzw. `docs/` aktualisiert; PR-Text in Alltagssprache (Vorlage `.github/pull_request_template.md`).
+6. PR als „bereit zum Mergen“ markiert; Merge und Release macht ausschließlich der Inhaber.
+
+## Schnell arbeiten, ohne Qualität zu verlieren
+
+- Während der Entwicklung nur betroffene Testgruppen laufen lassen (`python3 tests/run_e2e.py gruppe1 gruppe2`), vor dem
+  PR die volle Suite. Gruppen laufen parallel (`WA_JOBS`, Standard 4); zur Fehlersuche `WA_JOBS=1`.
+- Tests nie mit festen Wartezeiten prüfen (`wait_for_timeout` vor einem `check`), sondern auf den erwarteten Zustand
+  warten (`wait_for_selector`, `wait_for_function`). Der Hintergrundabgleich im Eingabebereich zeigt bei beendeter
+  Sitzung jederzeit die Anmeldemaske – Tests dürfen nicht annehmen, dass eine Seite danach bedienbar bleibt.
+- Adressen/Ports in Tests nur über `umgebung.py` (`BASE`, `SMTP_PORT`, `SMTP_PORT2`, `AUX_PORT`), nie fest eintragen.
+- Volle Ausgabe jeder Gruppe steht in `tests/.arbeit/test-<gruppe>.log` (in der CI als Artefakt bei Fehlern).
+

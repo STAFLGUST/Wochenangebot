@@ -1,6 +1,7 @@
 """Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite.
 Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen."""
 from umgebung import storage_raw
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import http.cookiejar
 import json
 import re
@@ -10,7 +11,7 @@ import urllib.request
 from playwright.sync_api import sync_playwright
 from umgebung import SH
 
-B = 'http://127.0.0.1:8790'
+B = BASE
 API = B + '/api/?action='
 PW = 'Sicheres-Passwort-1'
 res = []

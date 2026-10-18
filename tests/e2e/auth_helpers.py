@@ -1,5 +1,6 @@
 """HTTP-Client und Zeitsteuerung ausschließlich für isolierte Testdaten/Sitzungen."""
 import http.cookiejar
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json
 from umgebung import storage_raw, storage_write
 import os
@@ -8,7 +9,7 @@ import subprocess
 import urllib.error
 import urllib.request
 
-BASE = 'http://127.0.0.1:8790/api/?action='
+BASE = BASE + '/api/?action='
 PW = 'Sicheres-Passwort-1'
 
 

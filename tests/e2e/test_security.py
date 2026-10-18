@@ -1,7 +1,8 @@
 import sys
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import base64, hmac, hashlib, struct, time, json, os, re, subprocess
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8790'
+B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 DATA = os.environ['UDATA']
 res = []
@@ -77,6 +78,8 @@ with sync_playwright() as p:
     c2.context.close()
     # --- Sitzungen
     a.click('#vt-edit'); a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
+    try: a.wait_for_function("document.querySelectorAll('[data-sec=end]').length === 2", timeout=10000)
+    except Exception: pass
     n = a.locator('[data-sec=end]').count(); check('other sessions listed', n == 2, n)
     a.locator('[data-sec=end]').first.click(); a.wait_for_timeout(600)
     a.locator('[data-sec=end]').first.click(); a.wait_for_timeout(600)

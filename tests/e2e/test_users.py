@@ -1,9 +1,10 @@
 from umgebung import storage_raw
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import sys
 import json, os, re
 from playwright.sync_api import sync_playwright
-B = 'http://127.0.0.1:8790'
-from umgebung import SH, FIX, REPO, WORK, XL44
+B = BASE
+from umgebung import SH, FIX, REPO, WORK, XL44, wait_text
 from testdaten import de, preis, preise, artikel, bestand_kg
 DATA = os.environ['UDATA']
 res = []
@@ -57,8 +58,8 @@ with sync_playwright() as p:
     check('3 users listed', a.locator('.utab tbody tr').count() == 3, a.locator('.utab tbody tr').count())
     check('role badges', 'Bearbeiter' in a.inner_text('.utab') and 'Nur ansehen' in a.inner_text('.utab'))
     add_user('Anna', 'Doppelt', 'viewer', 'Irgendwas-123')
-    a.wait_for_timeout(400); check('duplicate username rejected', 'bereits vergeben' in a.inner_text('#user-err'), a.inner_text('#user-err'))
-    a.fill('#user-body [name=username]', 'x'); a.click('#user-body [type=submit]'); a.wait_for_timeout(300)
+    wait_text(a, '#user-err', 'bereits vergeben'); check('duplicate username rejected', 'bereits vergeben' in a.inner_text('#user-err'), a.inner_text('#user-err'))
+    a.fill('#user-body [name=username]', 'x'); a.click('#user-body [type=submit]'); wait_text(a, '#user-err', 'Benutzername')
     check('invalid username rejected', 'Benutzername' in a.inner_text('#user-err'))
     a.click('#user-body [data-uact="gen"]'); gp = a.input_value('#user-body [name=password]'); check('password suggestion', len(gp) >= 12, gp)
     a.keyboard.press('Escape')
@@ -134,7 +135,8 @@ with sync_playwright() as p:
     b.click('#vt-users'); b.wait_for_selector('.utab'); b.locator('.utab tbody tr:has-text("Ben Leser")').click(); b.wait_for_selector('#dlg-user[open]')
     b.uncheck('#user-body [name=active]'); b.click('#user-body [type=submit]'); b.wait_for_function("!document.querySelector('#dlg-user').open"); b.wait_for_timeout(300)
     check('ben shown deactivated', 'deaktiviert' in b.locator('.utab tbody tr:has-text("Ben Leser")').inner_text(), b.inner_text('.utab'))
-    a.click('#vt-edit'); st = a.evaluate("fetch('../api/?action=draft',{credentials:'same-origin'}).then(r=>r.status)")
+    # Kein Klick nötig: der Hintergrundabgleich kann die Anmeldemaske schon gezeigt haben (gewollt)
+    st = a.evaluate("fetch('../api/?action=draft',{credentials:'same-origin'}).then(r=>r.status)")
     check('deactivated user session ends (401)', st == 401, st)
     logout_ok = True
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')

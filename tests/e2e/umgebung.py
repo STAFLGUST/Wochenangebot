@@ -8,6 +8,11 @@ os.makedirs(SH, exist_ok=True)
 WORK = os.environ.get('WA_WORK') or os.path.join(REPO, 'tests', '.arbeit')
 os.makedirs(WORK, exist_ok=True)
 XL44 = os.path.join(FIX, 'angebote', 'Wochenangebot KW 44 2026.xlsx')
+# Adressen des Testservers – vom Testlauf je Gruppe vergeben, damit Gruppen parallel laufen können
+BASE = os.environ.get('WA_BASE', 'http://127.0.0.1:8790')
+SMTP_PORT = int(os.environ.get('WA_SMTP_PORT', '2526'))
+SMTP_PORT2 = int(os.environ.get('WA_SMTP_PORT2', '2527'))
+AUX_PORT = int(os.environ.get('WA_AUX_PORT', '8791'))
 
 
 def storage_raw(name):
@@ -89,3 +94,24 @@ class storage_lock:
             self.db.execute('ROLLBACK'); self.db.close()
         else:
             fcntl.flock(self.fh, fcntl.LOCK_UN); self.fh.close()
+
+
+def wait_text(page, selector, text, timeout=10000):
+    """Wartet, bis ein Element den Text enthält (statt fester Wartezeit); wirft nicht – die Prüfung danach meldet den Fehler."""
+    import json
+    try:
+        page.wait_for_function(f"(() => {{ const e = document.querySelector({json.dumps(selector)}); return !!e && e.textContent.includes({json.dumps(text)}); }})()", timeout=timeout)
+    except Exception:
+        pass
+    return page
+
+
+def shot(target, path, tries=3):
+    """Bildschirmfoto für die Sichtprüfung; ein gerade neu gezeichnetes Element wird erneut versucht (kein Testfehler)."""
+    import time
+    for i in range(tries):
+        try:
+            return target.screenshot(path=path)
+        except Exception as e:
+            if i == tries - 1: print('Hinweis: Bildschirmfoto nicht möglich: ' + str(e).splitlines()[0])
+            time.sleep(0.3)

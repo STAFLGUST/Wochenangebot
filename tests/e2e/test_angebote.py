@@ -1,11 +1,13 @@
 """Mehrere Angebote: Kundenangebote mit eigenen Preisen, Verwaltung, Übernahme, Veröffentlichen,
 Auslieferung nur an Berechtigte (Regel: Kundenpreise nie öffentlich)."""
 import sys
+from umgebung import shot
+from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
 from umgebung import SH
 from testdaten import de, preis
-B = 'http://127.0.0.1:8790'
+B = BASE
 res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
@@ -136,7 +138,7 @@ with sync_playwright() as p:
     m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); m.on('pageerror', lambda x: errs.append('m: ' + str(x)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
-    m.locator('#offer-bar').screenshot(path=SH + '/angebote-mobil.png')
+    shot(m.locator('#offer-bar'), SH + '/angebote-mobil.png')
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')
