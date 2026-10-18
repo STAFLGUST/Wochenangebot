@@ -685,6 +685,36 @@ body.ro .vtog { display: none; }
 @keyframes remote-hit { 0%, 35% { background: rgba(214, 160, 40, .22); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .etab tr.remote-hit > td { animation: none; outline: 2px solid rgba(214, 160, 40, .5); } }
 
+/* Bestellverwaltung */
+.ord-filter .search { flex: 1 1 260px; max-width: 420px; }
+.ord-filter select.in { width: auto; min-width: 160px; border: 1px solid var(--line); background-color: var(--surface); }
+.ordtab tr[data-order-nr] { cursor: pointer; }
+.ordtab tr[data-order-nr]:hover td { background: var(--surface-2); }
+.ordtab td { padding: 9px 10px; vertical-align: top; }
+.ordtab .nm { font-weight: 600; overflow-wrap: anywhere; }
+.ordtab .sub { font-size: 12.5px; color: var(--text-2); }
+.ordtab .ord-nr .nm { font-family: var(--mono); font-size: 13px; }
+.ordtab .ord-sum, .ordtab .ord-wish { white-space: nowrap; }
+.ord-st { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.ord-st.ord-neu { background: var(--accent-soft); color: var(--accent); }
+.ord-st.ord-in_bearbeitung { background: var(--c-aged-bg); color: var(--c-aged); }
+.ord-st.ord-bestaetigt, .ord-st.ord-erledigt { background: var(--c-fresh-bg); color: var(--c-fresh); }
+.ord-st.ord-storniert { text-decoration: line-through; }
+.ord-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; margin: 0 0 12px; font-size: 13.5px; line-height: 1.5; }
+.ord-meta span { display: block; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.ord-meta strong { display: block; }
+.ord-note { margin: 0 0 12px; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-size: 13.5px; }
+.ordpos { margin: 0 0 8px; }
+.ordpos td, .ordpos th { padding: 6px 8px; font-size: 13.5px; }
+.ordpos .r { text-align: right; white-space: nowrap; }
+.ordpos .mono { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+.ordpos tfoot td { border-top: 2px solid var(--line); }
+.ord-hist ul { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
+.ord-hist li { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.ord-hist li > span:first-child { color: var(--muted); }
+.ord-pager { position: static; justify-content: center; }
+@media (max-width: 860px) { .ordtab .ord-wish, .ordtab .ord-mail { display: none; } }
+@media (max-width: 560px) { .ordtab .ord-sum { display: none; } .ord-meta { grid-template-columns: 1fr; } .ordpos th:first-child, .ordpos td:first-child { display: none; } }
 /* Sonderposten (kurzes MHD, solange der Vorrat reicht) und Kein-Bestand-Zeichen */
 :root { --sale: #c2410c; --sale-bg: #fff1e6; --nostock: #dc2626; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; } }

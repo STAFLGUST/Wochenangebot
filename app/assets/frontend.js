@@ -1132,20 +1132,31 @@ function refreshOrderDialog() {
   $('#or-sum').innerHTML = `<strong>${fmtEur.format(t.sum)} €</strong>`;
   $('#or-req').hidden = !t.req;
 }
+let lastOrderAttempt = null;
 async function sendOrder(btn) {
   const err = $('#or-err');
   err.textContent = '';
   if ($('#order-body .qty.invalid')) { err.textContent = 'Bitte die markierten Mengen korrigieren.'; return; }
   btn.disabled = true;
   try {
-    const r = await kundeApi('kunde_bestellung', {
+    const payload = {
       angebot: OFFER || 'std', publishedAt: PUBLISHED_AT || '', termin: $('#or-termin').value, referenz: $('#or-ref').value, bemerkung: $('#or-bem').value,
       positions: [...cart].map(([id, qty]) => ({ id, qty })),
-    });
+    };
+    const fingerprint = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload))))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    const attemptStore = 'wochenangebot.orderAttempt.' + KUNDE.username;
+    try { lastOrderAttempt = JSON.parse(sessionStorage.getItem(attemptStore)) || lastOrderAttempt; } catch { /* session memory still protects immediate retries */ }
+    if (!lastOrderAttempt || lastOrderAttempt.fingerprint !== fingerprint) lastOrderAttempt = { fingerprint, key: crypto.randomUUID() };
+    try { sessionStorage.setItem(attemptStore, JSON.stringify(lastOrderAttempt)); } catch { /* private browser */ }
+    const r = await kundeApi('kunde_bestellung', { ...payload, requestId: lastOrderAttempt.key });
+    // Only a received success clears the attempt; errors keep the key for retries.
+    lastOrderAttempt = null;
+    try { sessionStorage.removeItem(attemptStore); } catch { /* private browser */ }
+
     cart.clear(); saveCart(); renderOrderbar();
     for (const el of $$('#list .qty')) el.value = '';
     $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Vielen Dank!</h2><p>Bestellwunsch ${esc(r.nr)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtQty.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €) wurde an uns übermittelt. Wir melden uns mit der Bestätigung.</p>
+      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtQty.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €) ${r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
         ${r.copy ? `<p class="muted">Eine Kopie haben wir an ${esc(r.copy)} gesendet.</p>` : ''}</div>
       <div class="dlg-foot"><button class="btn primary" type="button" data-close>Fertig</button></div>`;
   } catch (ex) {
@@ -1191,6 +1202,43 @@ function bindOrder() {
     if (b.dataset.order === 'send') sendOrder(b);
   });
 }
+
+const CUSTOMER_ORDER_LABELS = { neu: 'Eingegangen', in_bearbeitung: 'In Bearbeitung', bestaetigt: 'In Bearbeitung', erledigt: 'Erledigt', storniert: 'Storniert' };
+const custState = (w) => `<span class="co-st co-${esc(w)}">${esc(CUSTOMER_ORDER_LABELS[w] || w)}</span>`;
+const custDate = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '');
+async function openCustomerOrders(offset = 0, nr = '') {
+  const d = $('#dlg-customer-orders');
+  const head = (sub) => `<div class="dlg-head"><div><h2 id="customer-orders-title">Meine Bestellwünsche</h2>${sub ? `<p>${sub}</p>` : ''}</div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
+  d.innerHTML = `<div class="dlg">${head('')}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Bestellwünsche werden geladen …</div></div></div>`;
+  if (!d.open) d.showModal();
+  try {
+    const r = await kundeApi(nr ? 'kunde_bestellung_detail&nr=' + encodeURIComponent(nr) : 'kunde_bestellungen&offset=' + offset);
+    let body, foot;
+    if (nr) {
+      const o = r.order;
+      body = `<div class="co-head"><strong>${esc(o.nr)}</strong>${custState(o.workflow)}</div>
+        <p class="muted">${esc(o.angebotName || '')} · eingegangen am ${esc(custDate(o.t))}${o.termin ? ' · Wunschtermin ' + esc(dmy(o.termin)) : ''}${o.referenz ? ' · Ihre Referenz ' + esc(o.referenz) : ''}</p>
+        ${o.bemerkung ? `<p class="co-note">${esc(o.bemerkung)}</p>` : ''}
+        <table class="co-tab"><thead><tr><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
+        ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtQty.format(p.qty)} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : fmtEur.format(p.price) + ' €'}</td><td class="r">${p.sum == null ? '–' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="3"><strong>Summe (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr></tfoot></table>
+        ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
+        <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;
+      foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn primary" type="button" data-close>Schließen</button>`;
+    } else {
+      body = r.orders.length ? `<ul class="co-list">${r.orders.map((o) => `<li><button type="button" data-customer-order="${esc(o.nr)}"><span><strong>${esc(o.nr)}</strong><span class="muted">${esc(custDate(o.t))} · ${plural(o.positionCount, 'Position', 'Positionen')} · ${fmtEur.format(o.total)} €</span></span>${custState(o.workflow)}</button></li>`).join('')}</ul>`
+        : '<p class="muted">Sie haben noch keine Bestellwünsche über das Portal gesendet.</p>';
+      foot = (r.total > r.limit ? `<span class="left"><button class="btn sm" type="button" data-customer-orders-page="${Math.max(0, offset - r.limit)}"${offset === 0 ? ' disabled' : ''}>Zurück</button><button class="btn sm" type="button" data-customer-orders-page="${offset + r.limit}"${offset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></span>` : '') + '<button class="btn primary" type="button" data-close>Schließen</button>';
+    }
+    d.innerHTML = `<div class="dlg">${head(nr ? '' : `${plural(r.total, 'Vorgang', 'Vorgänge')}`)}<div class="dlg-body">${body}</div><div class="dlg-foot">${foot}</div></div>`;
+  } catch (e) { d.innerHTML = `<div class="dlg">${head('')}<div class="dlg-body"><div class="err-box" role="alert">${esc(e.message)}</div></div><div class="dlg-foot"><button class="btn" type="button" data-close>Schließen</button></div></div>`; }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-customer-order],[data-customer-orders-page]');
+  if (b) openCustomerOrders(Number(b.dataset.customerOrdersPage || 0), b.dataset.customerOrder || '');
+  const d = $('#dlg-customer-orders');
+  if (d && (e.target === d || e.target.closest('#dlg-customer-orders [data-close]'))) d.close();
+});
 
 /* ---------- Kunden-Anmeldung ----------
    Kunden melden sich mit Benutzerkennung und Passwort an und sehen nur die für sie freigeschalteten Angebote.
@@ -1239,6 +1287,7 @@ function renderKundeBtn() {
     <div class="menu" id="menu-kunde" role="menu" hidden>
       <div class="menu-label">${esc(KUNDE.username)}</div>
       ${KUNDE.angebote.length > 1 ? KUNDE.angebote.map((o) => `<button role="menuitem" type="button" data-kswitch="${esc(o.id)}">${icon(o.id === (OFFER || 'std') ? 'check' : 'file')}${esc(o.name)}</button>`).join('') + '<hr>' : ''}
+      <button role="menuitem" type="button" data-kact="orders">${icon('file')}Meine Bestellwünsche</button>
       <button role="menuitem" type="button" data-kact="pw">${icon('key')}Passwort ändern</button>
       <button role="menuitem" type="button" data-kact="logout">${icon('logout')}Abmelden</button>
     </div></div>`;
@@ -1287,6 +1336,7 @@ function bindKunde() {
     const sw = e.target.closest('[data-kswitch]');
     if (sw) { location.href = setOfferParam(sw.dataset.kswitch).toString(); return; }
     const a = e.target.closest('[data-kact]')?.dataset.kact;
+    if (a === 'orders') { if(km)km.hidden=true;openCustomerOrders(); }
     if (a === 'pw') { if (km) km.hidden = true; openKundePw(!!(KUNDE && KUNDE.mustChange)); }
     if (a === 'pwforce') openKundePw(true);
     if (a === 'logout') kundeLogout();

@@ -53,6 +53,7 @@ require __DIR__ . '/geo.php';
 require __DIR__ . '/mail.php';
 $DATA = rtrim((string)$CFG['data_dir'], '/');
 require __DIR__ . '/storage.php';
+require __DIR__ . '/orders.php';
 const CATEGORIES = ['Rind', 'Kalb', 'Schwein', 'Lamm & Schaf', 'Geflügel', 'Knochen', 'Sonstiges'];
 const CONDITIONS = ['frisch', 'gefroren', 'frisch-gefroren', 'dry-aged', 'unbekannt'];
 const PRICE_STATUS = ['value', 'request', 'none'];
@@ -1564,7 +1565,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'kunden_restposten'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'kunden_restposten'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1572,7 +1573,7 @@ if (in_array($action, $writeActions, true)) {
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung'], true);
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'], true);
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);
@@ -1584,7 +1585,7 @@ if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
 
 /* Wartungsmodus: Angebotsseite und Kundenfunktionen pausieren; Mitarbeiter arbeiten normal weiter.
    Abmelden vom Wochenangebot und Kunden-Abmelden bleiben immer möglich. */
-const WARTUNG_GESPERRT = ['offer', 'kunde_login', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung'];
+const WARTUNG_GESPERRT = ['offer', 'kunde_login', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'];
 if (in_array($action, WARTUNG_GESPERRT, true) && ($W = wartung()) && !current_user()) {
     header('Retry-After: 600');
     respond(['ok' => false, 'wartung' => true, 'error' => $W['message'], 'until' => $W['until']], 503);
@@ -1598,6 +1599,7 @@ if (!$isPublic) {
 }
 
 try {
+    orders_action($action);
     switch ($action) {
 
         case 'offer': {
@@ -1829,6 +1831,10 @@ try {
             if (!empty($c['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
             if (!order_enabled()) fail('Bestellungen über das Portal sind derzeit nicht möglich. Bitte wenden Sie sich direkt an uns.', 409);
             $b = body();
+            $key = (string)($b['requestId'] ?? '');
+            if ($key !== '' && !preg_match('/^[A-Za-z0-9_-]{16,80}$/D', $key)) fail('Ungültige Übermittlungskennung.', 422);
+            $hash = order_request_hash($b);
+            with_lock('bestellungen', function () use ($c, $key, $hash) { order_replay(store_read('bestellungen') ?? [], $c['id'], $key, $hash); });
             $oid = (string)($b['angebot'] ?? OFFER_STD);
             if ($oid === '') $oid = OFFER_STD;
             $def = offer_def($oid);
@@ -1868,15 +1874,19 @@ try {
             // Missbrauchsschutz: höchstens 30 Bestellwünsche je Kunde und Tag
             $recent = array_filter(store_read('bestellungen') ?? [], function ($x) use ($c) { return ($x['kid'] ?? '') === $c['id'] && strtotime($x['t']) > time() - 86400; });
             if (count($recent) >= 30) fail('Heute wurden bereits sehr viele Bestellwünsche gesendet. Bitte wenden Sie sich direkt an uns.', 429);
-            $o = with_lock('bestellungen', function () use ($c, $def, $off, $pos, $total, $qtyT, $req, $termin, $ref, $bem) {
+            $o = with_lock('bestellungen', function () use ($c, $def, $off, $pos, $total, $qtyT, $req, $termin, $ref, $bem, $key, $hash) {
                 $all = store_read('bestellungen') ?? [];
+                order_replay($all, $c['id'], $key, $hash);
+                if (count(array_filter($all, fn($x) => ($x['kid'] ?? '') === $c['id'] && strtotime($x['t']) > time() - 86400)) >= 30) fail('Heute wurden bereits sehr viele Bestellwünsche gesendet.', 429);
                 $y = date('Y'); $n = 0;
                 foreach ($all as $x) if (strpos($x['nr'], "B-$y-") === 0) $n = max($n, (int)substr($x['nr'], 7));
                 $o = ['nr' => sprintf('B-%s-%04d', $y, $n + 1), 't' => now(), 'kid' => $c['id'], 'firma' => $c['firma'], 'angebot' => $def['id'], 'angebotName' => $def['name'],
                       'week' => (int)($off['meta']['week'] ?? 0), 'year' => (int)($off['meta']['year'] ?? 0), 'positions' => $pos, 'total' => round($total, 2), 'totalQty' => round($qtyT, 2),
-                      'onRequest' => $req, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu'];
+                      'onRequest' => $req, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu', 'workflow' => 'neu', 'revision' => 1, 'requestId' => $key, 'requestHash' => $hash];
+                $o['kunde'] = array_intersect_key($c, array_flip(['firma','nr','ansprechpartner','strasse','plz','ort','email','telefon']));
+                $o['kunde']['username'] = $c['login']['username'];
                 $all[] = $o;
-                store_write('bestellungen', array_slice($all, -5000));
+                store_write('bestellungen', $all);
                 return $o;
             });
             $o['kunde'] = ['firma' => $c['firma'], 'nr' => $c['nr'] ?? '', 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'strasse' => $c['strasse'] ?? '', 'plz' => $c['plz'] ?? '', 'ort' => $c['ort'] ?? '',
@@ -1910,7 +1920,8 @@ try {
             audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg)' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
                 array_map(function ($p) { return ['k' => 'b|' . $p['id'], 'code' => $p['code'], 'name' => $p['name'], 'f' => 'Menge', 'from' => '', 'to' => de_qty($p['qty']) . ' kg' . ($p['price'] !== null ? ' × ' . de_num($p['price']) . ' €' : ' (Preis auf Anfrage)')]; }, $pos), $who);
             if (!$okIn) fail('Ihr Bestellwunsch konnte gerade nicht übermittelt werden. Bitte versuchen Sie es in einigen Minuten erneut oder rufen Sie uns an.', 502);
-            respond(['ok' => true, 'nr' => $o['nr'], 'total' => $o['total'], 'totalQty' => $o['totalQty'], 'positions' => count($pos), 'onRequest' => $req, 'copy' => $copied ? $o['kunde']['email'] : null]);
+            $o['status'] = 'gesendet'; $o['kopie'] = $copied;
+            order_receipt($o);
         }
 
         case 'bestell_settings_save': {

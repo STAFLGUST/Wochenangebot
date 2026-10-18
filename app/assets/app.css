@@ -682,3 +682,25 @@ body.in-wartung .topbar .search { visibility: hidden; }
 .sale-note { font-size: 11px; color: var(--sale); font-weight: 600; white-space: nowrap; }
 .d-price .row.sale .pv { color: var(--sale); }
 .d-price .row.sale .p-was { display: block; margin-top: 2px; }
+
+/* Meine Bestellwünsche (Kunden) */
+.co-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.co-list button { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.co-list button:hover { background: var(--surface-2); }
+.co-list button:focus-visible { box-shadow: var(--focus); }
+.co-list button > span:first-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.co-list .muted { font-size: 12.5px; }
+.co-st { flex: none; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.co-st.co-neu { background: var(--accent-soft); color: var(--accent); }
+.co-st.co-in_bearbeitung { background: var(--c-aged-bg); color: var(--c-aged); }
+.co-st.co-erledigt { background: var(--c-fresh-bg); color: var(--c-fresh); }
+.co-st.co-storniert { text-decoration: line-through; }
+.co-head { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.co-note { padding: 10px 12px; background: var(--surface-2); border-radius: 8px; }
+.co-tab { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0; }
+.co-tab th, .co-tab td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.co-tab th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.co-tab .r { text-align: right; white-space: nowrap; }
+.co-tab tfoot td { border-bottom: 0; }
+.dlg-foot .left { display: flex; gap: 6px; margin-right: auto; }
+svg.i.back { transform: rotate(90deg); }
