@@ -33,7 +33,9 @@ switch ($action) {
             usort($gcc, function ($a, $b) { return $b['n'] <=> $a['n']; });
             $g7 = (($gs['day'] ?? '') === gmdate('Y-m-d') ? (int)($gs['today'] ?? 0) : 0);
             foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
+            $secLog = sec_log_entries(14);
             respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
+                     'timeline' => sec_timeline($secLog), 'topIps' => sec_top_ips($secLog), 'config' => sec_config_checks($users),
                      'backup' => store_read('sicherung'),
                      'wartung' => wartung(), 'storage' => store_stats(), 'php' => PHP_VERSION,
                      'disk' => ['free' => @disk_free_space($DATA) ?: null, 'total' => @disk_total_space($DATA) ?: null],
@@ -59,6 +61,21 @@ switch ($action) {
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
         }
 
+        /* Nur lesende Diagnosen (keine Befehle auf dem Server) */
+        case 'security_diag': {
+            require_auth(true, 'admin');
+            header('Cache-Control: no-store');
+            respond(['ok' => true, 'result' => sec_diag((string)(body()['check'] ?? ''))]);
+        }
+        /* Sicherheitsprotokoll exportieren (enthält IP-Adressen und Namen → Passwortbestätigung) */
+        case 'security_export': {
+            $me = require_admin_confirmation();
+            $days = (int)(body()['days'] ?? 90);
+            if (!in_array($days, [7, 30, 90, 365], true)) fail('Ungültiger Zeitraum.', 422);
+            $r = sec_export_csv($days);
+            audit('security', "Sicherheitsprotokoll exportiert ({$days} Tage, {$r['count']} Einträge)");
+            respond(['ok' => true, 'csv' => $r['csv'], 'count' => $r['count'], 'filename' => 'Sicherheitsprotokoll_' . gmdate('Y-m-d') . '_' . $days . 'T.csv']);
+        }
         case 'security_save': {
             $me = require_admin_confirmation();
             $b = body();
