@@ -97,13 +97,25 @@ class storage_lock:
 
 
 def wait_text(page, selector, text, timeout=10000):
-    """Wartet, bis ein Element den Text enthält (statt fester Wartezeit); wirft nicht – die Prüfung danach meldet den Fehler."""
+    """Wartet, bis ein Element den Text enthält (statt fester Wartezeit); wirft nicht – die Prüfung danach meldet den Fehler.
+    Ohne JavaScript-Auswertung, funktioniert also auch unter strenger Content-Security-Policy."""
     import json
     try:
-        page.wait_for_function(f"(() => {{ const e = document.querySelector({json.dumps(selector)}); return !!e && e.textContent.includes({json.dumps(text)}); }})()", timeout=timeout)
+        page.wait_for_selector(f'{selector}:has-text({json.dumps(text)})', timeout=timeout)
     except Exception:
         pass
     return page
+
+
+def until(cond, timeout=10.0, step=0.1):
+    """Wartet, bis cond() wahr ist (Python-seitig, z. B. Anzahl von Elementen); gibt das letzte Ergebnis zurück."""
+    import time
+    end = time.time() + timeout
+    while True:
+        r = cond()
+        if r or time.time() > end:
+            return r
+        time.sleep(step)
 
 
 def shot(target, path, tries=3):
