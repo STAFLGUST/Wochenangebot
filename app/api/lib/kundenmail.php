@@ -287,9 +287,23 @@ function kunde_by_token(string $tok): ?array
     }
     return null;
 }
+/* Testumgebung: Nachrichten nur speichern (Testpostfach, die letzten 100) – nie an echte Empfänger */
+function testpost_ablegen(array $cfg, array $jobs): array
+{
+    with_lock('testpostfach', function () use ($cfg, $jobs) {
+        $l = store_read('testpostfach') ?? [];
+        foreach ($jobs as $j) $l[] = ['t' => now(), 'to' => (string)($j['to'] ?? ''), 'from' => (string)($cfg['from'] ?? ''), 'subject' => (string)($j['subject'] ?? ''),
+                                      'text' => (string)($j['text'] ?? ''), 'html' => (string)($j['html'] ?? '')];
+        store_write('testpostfach', array_slice($l, -100));
+    });
+    $res = [];
+    foreach ($jobs as $k => $j) $res[$k] = ['ok' => true];
+    return $res;
+}
 /* Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag */
 function mail_send_many(array $cfg, array $jobs): array
 {
+    if (testumgebung()) return testpost_ablegen($cfg, $jobs);
     $smtp = new Smtp($cfg);
     $res = [];
     try {

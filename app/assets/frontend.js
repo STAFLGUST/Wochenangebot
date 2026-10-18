@@ -1263,6 +1263,7 @@ async function kundeStart() {
   let st;
   try { st = await kundeApi('kunde_status'); } catch { return; }   // ohne Antwort: wie bisher öffentlich laden
   KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false; KWARTUNG = st.wartung || null;
+  document.body.classList.toggle('is-test', !!st.testumgebung);   // Kennzeichen „Testumgebung“
   KUNDE = st.kunde || null; KCSRF = st.csrf || '';
   KORDER = !!(KUNDE && st.bestellung && !KUNDE.mustChange && !PREVIEW);
   renderKundeBtn();

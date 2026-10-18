@@ -1,0 +1,20 @@
+# Testumgebung (test.<Domain>) – wird von deploy/testumgebung.sh nach /opt/wochenangebot-test kopiert und dort
+# gestartet. Getrennt vom Echtbetrieb: eigener Code-Stand (src/), eigene Testdaten (daten/), kein E-Mail-Versand.
+name: wochenangebot-test
+services:
+  app-test:
+    image: php:8.3-apache
+    restart: unless-stopped
+    volumes:
+      - ./src/app:/var/www/html:ro                                              # Code des eingespielten Zweigs (nur lesend)
+      - ./daten:/var/www/html/data                                              # nur Testdaten
+      - ./apache-schutz.conf:/etc/apache2/conf-enabled/zz-testumgebung.conf:ro  # Passwortschutz der ganzen Seite
+      - ./zugang.htpasswd:/etc/apache2/testumgebung.htpasswd:ro
+    environment:
+      WA_TESTUMGEBUNG: "1"        # Kennzeichen, E-Mails nur ins Testpostfach
+      DOMAIN: ${TEST_DOMAIN}      # Links in (Test-)E-Mails
+    networks: [web]
+networks:
+  web:                            # Netz des Echtbetriebs, damit dessen Caddy test.<Domain> hierher weiterleiten kann
+    name: ${PROD_NETWORK}
+    external: true

@@ -3168,6 +3168,7 @@
     try {
       const s = await api('status');
       company = s.company || '';
+      document.body.classList.toggle('is-test', !!s.testumgebung);   // Kennzeichen „Testumgebung“
       $$('[data-company]').forEach((el) => { el.textContent = company; el.hidden = !company; });
       if (s.setupRequired) { showAuth('setup'); return; }
       if (s.setupLocked) throw Object.assign(new Error('Es ist kein Zugang vorhanden oder die Nutzerdaten sind nicht lesbar. Eine Ersteinrichtung im Browser ist aus Sicherheitsgründen gesperrt – bitte den Zugang auf dem Server wiederherstellen (deploy/passwort-zuruecksetzen.sh).'), { status: 403 });

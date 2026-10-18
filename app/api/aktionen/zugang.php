@@ -10,7 +10,7 @@ switch ($action) {
             $u = current_user();
             $noUsers = !users_load();
             respond(['ok' => true, 'setupRequired' => $noUsers && setup_allowed(), 'setupLocked' => $noUsers && !setup_allowed(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
-                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null]);
+                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null, 'testumgebung' => testumgebung()]);
         }
 
         case 'wartung_save': {

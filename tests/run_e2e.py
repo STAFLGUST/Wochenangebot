@@ -56,6 +56,7 @@ SUITES = {
         'MAIL_REPLY_TO': 'verkauf@example.org', 'WA_URL': 'http://127.0.0.1:8790'}),
 }
 SUITES['order_outbox_ui'] = SUITES['bestellung']
+SUITES['testumgebung'] = (8790, 'data-seed', True, {'WA_TESTUMGEBUNG': '1', 'WA_URL': 'http://127.0.0.1:8790'})
 SUITES['order_outbox'] = SUITES['bestellung']
 SUITES['order_management'] = SUITES['bestellung']
 SUITES['order_management_ui'] = SUITES['bestellung']

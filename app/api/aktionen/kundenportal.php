@@ -11,7 +11,7 @@ switch ($action) {
             start_session();
             $k = current_customer();
             $staff = current_user() !== null;
-            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'wartung' => wartung(), 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
+            respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'wartung' => wartung(), 'testumgebung' => testumgebung(), 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
         }
 
         case 'kunde_login': {
