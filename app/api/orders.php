@@ -1,6 +1,15 @@
 <?php
 /* Shared order operations for the website and future app clients. */
 const ORDER_STATES = ['neu', 'in_bearbeitung', 'bestaetigt', 'erledigt', 'storniert'];
+function order_request_hash(array $body): string
+{
+    $canonical = function ($value) use (&$canonical) {
+        if (!is_array($value)) return $value;
+        if (!array_is_list($value)) ksort($value);
+        return array_map($canonical, $value);
+    };
+    return hash('sha256', json_encode($canonical(array_intersect_key($body, array_flip(['angebot','publishedAt','termin','referenz','bemerkung','positions'])))));
+}
 function order_view(array $o, bool $staff): array
 {
     $out = array_intersect_key($o, array_flip(['nr','t','firma','angebot','angebotName','week','year','positions','total','totalQty','onRequest','termin','referenz','bemerkung']));

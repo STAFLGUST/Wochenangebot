@@ -1708,7 +1708,7 @@ try {
             $b = body();
             $key = (string)($b['requestId'] ?? '');
             if ($key !== '' && !preg_match('/^[A-Za-z0-9_-]{16,80}$/D', $key)) fail('Ungültige Übermittlungskennung.', 422);
-            $hash = hash('sha256', json_encode(array_intersect_key($b, array_flip(['angebot','publishedAt','termin','referenz','bemerkung','positions']))));
+            $hash = order_request_hash($b);
             with_lock('bestellungen', function () use ($c, $key, $hash) { order_replay(store_read('bestellungen') ?? [], $c['id'], $key, $hash); });
             $oid = (string)($b['angebot'] ?? OFFER_STD);
             if ($oid === '') $oid = OFFER_STD;

@@ -15,6 +15,7 @@ check('customer detail visible',k.call('kunde_bestellung_detail&nr='+nr)[0]==200
 original=k.call('kunde_bestellung_detail&nr='+nr)[1]['order']['positions']
 count=len(smtp.messages); replay=k.call('kunde_bestellung',payload)
 check('same key returns original order',replay[0]==200 and replay[1]['nr']==nr and replay[1]['replayed'])
+check('JSON field order does not change retry identity',k.call('kunde_bestellung',dict(reversed(list(payload.items()))))[1].get('nr')==nr)
 check('retry creates no email or order',len(smtp.messages)==count and a.call('bestellungen')[1]['total']==1)
 check('key reuse with other data rejected',k.call('kunde_bestellung',{**payload,'referenz':'different'})[0]==409)
 a.call('user_save',{'username':'editor.test','name':'Editor Test','role':'editor','active':True,'password':'Editor-Zugang-77','mustChange':False})
