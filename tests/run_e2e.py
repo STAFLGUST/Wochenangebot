@@ -26,6 +26,7 @@ SUITES = {
     'legal_pages': (8790, 'data-seed', True),
     'sys':        (8765, 'data-seed-clean', False),
     'frontend':   (8765, 'data-seed', False),
+    'design':     (8765, 'data-seed', False),
     'hist':       (8780, 'data-seed', False),
     'users':      (8790, 'data-seed', True),
     'master':     (8790, 'data-seed', True),

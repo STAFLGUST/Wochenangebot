@@ -42,20 +42,30 @@ with sync_playwright() as p:
     check('empty state', pg.locator('.empty h3').inner_text() == 'Keine Artikel gefunden')
     pg.click('[data-act="clear-q"]'); check('clear search from empty state', rows() == 276)
 
-    # filters
+    # filters (Desktop: Aufklappmenüs in der Filterleiste)
+    def drop(fd):
+        if not pg.locator(f'.fdrop[data-fd="{fd}"]').evaluate('d => d.open'): pg.click(f'.fdrop[data-fd="{fd}"] summary')
+    check('filter groups closed by default (desktop)', pg.locator('.fdrop[open]').count() == 0 and pg.locator('.fdrop').count() == 6)
+    drop('cat')
     pg.click('#filters-body label.opt:has-text("Kalb")'); pg.wait_for_timeout(80)
     check('filter Kalb = 24', rows() == 24, rows())
+    check('dropdown label shows choice', pg.inner_text('.fdrop[data-fd="cat"] .fd-val') == 'Kalb' and 'on' in pg.get_attribute('.fdrop[data-fd="cat"]', 'class'))
+    drop('cond')
+    check('only one dropdown open', pg.locator('.fdrop[open]').count() == 1)
     pg.click('#filters-body fieldset[data-facet="cond"] label.opt:has-text("Frisch / gefroren")')
     check('Kalb + frisch/gefroren = 1', rows() == 1, rows())
+    pg.keyboard.press('Escape'); check('Escape closes dropdown', pg.locator('.fdrop[open]').count() == 0)
     check('chips shown', pg.locator('#chips .chip').count() == 2)
     pg.click('#btn-reset'); check('reset', rows() == 276)
-    pg.click('#filters-body fieldset[data-facet="pstat"] label.opt:has-text("Auf Anfrage")'); check('Preisangabe auf Anfrage = 4', rows() == 4, rows())
+    drop('pstat'); pg.click('#filters-body fieldset[data-facet="pstat"] label.opt:has-text("Auf Anfrage")'); check('Preisangabe auf Anfrage = 4', rows() == 4, rows())
     pg.click('#btn-reset')
-    pg.fill('#pmin', '10'); pg.fill('#pmax', '12,5'); pg.wait_for_timeout(400)
+    drop('price'); pg.fill('#pmin', '10'); pg.fill('#pmax', '12,5'); pg.wait_for_timeout(400)
     vals = [float(x.replace('.', '').replace(',', '.')) for x in pg.locator('tr.row .pv').all_inner_texts()]
     check('price range 10–12,5', rows() > 0 and all(10 <= v <= 12.5 for v in vals[:rows()]), (rows(), min(vals), max(vals)))
+    check('price dropdown shows range', '10' in pg.inner_text('.fdrop[data-fd="price"] .fd-val'), pg.inner_text('.fdrop[data-fd="price"] summary'))
     pg.click('#btn-reset')
-    pg.click('#filters-body .pill:has-text("Grain Fed")'); check('Merkmal Grain Fed = 19 (17 + 2 ex chilled)', rows() == 19, rows())
+    check('click outside closes dropdown', pg.locator('.fdrop[open]').count() == 0)
+    drop('feat'); pg.click('#filters-body .pill:has-text("Grain Fed")'); check('Merkmal Grain Fed = 19 (17 + 2 ex chilled)', rows() == 19, rows())
     pg.click('#btn-reset')
     pg.click('.qn[data-cat="Geflügel"]'); check('quicknav Geflügel', rows() == 10, rows())
     pg.click('.qn[data-cat="Geflügel"]'); check('quicknav toggle off', rows() == 276)
@@ -81,6 +91,7 @@ with sync_playwright() as p:
     # favourites
     for i in range(3): pg.locator('tr.row .star').nth(i * 5).click()
     check('fav count 3', pg.inner_text('#fav-count') == '3')
+    check('Merkliste column lists favourites', pg.locator('#merk li').count() == 3 and '3 Artikel' in pg.inner_text('#merk .merk-h'))
     pg.reload(); pg.wait_for_selector('tr.row')
     check('favs persisted after reload', pg.inner_text('#fav-count') == '3')
     pg.click('#tab-fav'); check('fav tab rows', rows() == 3, rows())
@@ -119,7 +130,7 @@ with sync_playwright() as p:
     pg.keyboard.press('Escape'); pg.fill('#q', '')
 
     # url state
-    pg.fill('#q', 'roastbeef'); pg.click('#filters-body label.opt:has-text("Uruguay")'); pg.select_option('#sort', 'price-desc'); pg.wait_for_timeout(100)
+    pg.fill('#q', 'roastbeef'); drop('origin'); pg.click('#filters-body label.opt:has-text("Uruguay")'); pg.select_option('#sort', 'price-desc'); pg.wait_for_timeout(100)
     h = pg.evaluate('location.hash'); n = rows()
     p2 = ctx.new_page(); p2.goto(URL + h); p2.wait_for_selector('tr.row')
     check('shared link restores state', p2.locator('tr.row').count() == n and p2.input_value('#q') == 'roastbeef' and p2.input_value('#sort') == 'price-desc', (h, n))
