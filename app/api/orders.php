@@ -10,10 +10,16 @@ function order_request_hash(array $body): string
     };
     return hash('sha256', json_encode($canonical(array_intersect_key($body, array_flip(['angebot','publishedAt','termin','referenz','bemerkung','positions'])))));
 }
+/* „Bestätigt“ ist eine interne Kennzeichnung und keine Auftragsbestätigung – Kunden sehen dort weiter „In Bearbeitung“. */
+function order_state(array $o, bool $staff): string
+{
+    $w = $o['workflow'] ?? 'neu';
+    return !$staff && $w === 'bestaetigt' ? 'in_bearbeitung' : $w;
+}
 function order_view(array $o, bool $staff): array
 {
     $out = array_intersect_key($o, array_flip(['nr','t','firma','angebot','angebotName','week','year','positions','total','totalQty','onRequest','termin','referenz','bemerkung']));
-    $out['workflow'] = $o['workflow'] ?? 'neu';
+    $out['workflow'] = order_state($o, $staff);
     $out['revision'] = (int)($o['revision'] ?? 1);
     if ($staff) {
         $out['delivery'] = $o['status'] ?? 'neu';
@@ -88,7 +94,7 @@ function orders_action(string $action): bool
     $q = mb_strtolower(mb_substr(trim((string)($_GET['q'] ?? '')), 0, 100));
     $state = (string)($_GET['workflow'] ?? '');
     if ($state !== '' && !in_array($state, ORDER_STATES, true)) fail('Ungültiger Status.', 422);
-    $all = array_values(array_filter(array_reverse($all), fn($o) => ($state === '' || ($o['workflow'] ?? 'neu') === $state) && ($q === '' || mb_strpos(mb_strtolower($o['nr'] . ' ' . $o['firma'] . ' ' . ($o['referenz'] ?? '')), $q) !== false)));
+    $all = array_values(array_filter(array_reverse($all), fn($o) => ($state === '' || order_state($o, !$customer) === $state) && ($q === '' || mb_strpos(mb_strtolower($o['nr'] . ' ' . $o['firma'] . ' ' . ($o['referenz'] ?? '')), $q) !== false)));
     $offset = max(0, min(1000000, (int)($_GET['offset'] ?? 0))); $limit = max(1, min(100, (int)($_GET['limit'] ?? 25)));
     $rows = array_map(fn($o) => order_view($o, !$customer), array_slice($all, $offset, $limit));
     // List responses omit position arrays; detail endpoint delivers the immutable snapshot.

@@ -3249,43 +3249,94 @@
 
   /* Bestellverwaltung: Versandzustand und Bearbeitung bleiben getrennt. */
   const ORDER_LABELS = { neu: 'Neu', in_bearbeitung: 'In Bearbeitung', bestaetigt: 'Bestätigt', erledigt: 'Erledigt', storniert: 'Storniert' };
+  const ORDER_NEXT = { neu: ['in_bearbeitung', 'storniert'], in_bearbeitung: ['neu', 'bestaetigt', 'storniert'], bestaetigt: ['in_bearbeitung', 'erledigt', 'storniert'], erledigt: [], storniert: [] };
+  const ORDER_MAIL = { neu: ['st-warn', 'Zustellung ungeklärt'], gesendet: ['st-ok', 'E-Mail zugestellt'], fehler: ['st-err', 'E-Mail nicht zugestellt'] };
+  const orderBadge = (w) => `<span class="ord-st ord-${esc(w)}">${esc(ORDER_LABELS[w] || w)}</span>`;
+  const orderMail = (d) => { const m = ORDER_MAIL[d] || ['', d || '']; return `<span class="${m[0]}">${esc(m[1])}</span>`; };
+  const dmyIso = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '');
   let orderOffset = 0, orderQuery = '', orderFilter = '', orderStaff = [], orderEdit = null;
   async function renderOrdersView() {
     const host = $('#view-orders');
+    if (!host.innerHTML) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Bestellwünsche werden geladen …</div>';
     try {
-      const r = await api('bestellungen&offset=' + orderOffset + '&q=' + encodeURIComponent(orderQuery) + '&workflow=' + encodeURIComponent(orderFilter));
-      orderStaff = r.assignees;
-      host.innerHTML = `<form id="orders-filter" class="ed-toolbar"><label class="fld"><span>Bestellwunsch suchen</span><input name="q" value="${esc(orderQuery)}" placeholder="Nummer, Firma oder Referenz"></label><label class="fld"><span>Status</span><select name="workflow"><option value="">Alle</option>${Object.entries(ORDER_LABELS).map(([k,v])=>`<option value="${k}"${orderFilter===k?' selected':''}>${v}</option>`).join('')}</select></label><button class="btn" type="submit">Anzeigen</button></form>
-        <p>${r.total} Bestellwünsche · Versandstatus ist keine Auftragsbestätigung.</p>
-        <div class="orders-list">${r.orders.map(o=>`<button type="button" class="btn order-card" data-order-nr="${esc(o.nr)}"><strong>${esc(o.nr)} · ${esc(o.firma)}</strong><span>${ORDER_LABELS[o.workflow]} · Eingang ${esc(o.t.slice(0,10))} · Wunschdatum ${esc(o.termin || 'offen')}</span><span>${o.positionCount} Positionen · ${fmtNum.format(o.total)} € · E-Mail: ${esc(o.delivery)}</span></button>`).join('') || '<p>Keine Bestellwünsche gefunden.</p>'}</div>
-        <div class="ed-toolbar"><button class="btn" data-orders-page="-1" ${orderOffset===0?'disabled':''}>Zurück</button><span>${Math.min(orderOffset+1,r.total)}–${Math.min(orderOffset+r.limit,r.total)} von ${r.total}</span><button class="btn" data-orders-page="1" ${orderOffset+r.limit>=r.total?'disabled':''}>Weiter</button></div>`;
-    } catch(e) { host.innerHTML = `<p role="alert">${esc(e.message)}</p><button class="btn" data-orders-reload>Erneut laden</button>`; }
+      const r = await api('bestellungen', { query: '&offset=' + orderOffset + '&q=' + encodeURIComponent(orderQuery) + '&workflow=' + encodeURIComponent(orderFilter) });
+      orderStaff = r.assignees || [];
+      const staffName = (id) => (orderStaff.find((u) => u.id === id) || {}).name || '';
+      const rows = r.orders.map((o) => `<tr data-order-nr="${esc(o.nr)}" tabindex="0">
+          <td class="ord-nr"><div class="nm">${esc(o.nr)}</div><div class="sub">${esc(dateTime(o.t))}</div></td>
+          <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div></td>
+          <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
+          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}</div></td>
+          <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
+          <td class="ord-mail">${orderMail(o.delivery)}</td>
+        </tr>`).join('');
+      host.innerHTML = `<form id="orders-filter" class="ed-toolbar ord-filter">
+          <label class="search">${icon('search')}<input name="q" type="search" value="${esc(orderQuery)}" placeholder="Nummer, Firma oder Referenz" aria-label="Bestellwunsch suchen"></label>
+          <select name="workflow" class="in" aria-label="Status"><option value="">Alle Status</option>${Object.entries(ORDER_LABELS).map(([k, v]) => `<option value="${k}"${orderFilter === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
+          <button class="btn" type="submit">Anzeigen</button>
+          <span class="ed-hint">${plural(r.total, 'Bestellwunsch', 'Bestellwünsche')} · Bearbeitungsstatus ist intern und keine Auftragsbestätigung</span>
+        </form>
+        ${r.orders.length ? `<div class="gcard"><table class="etab ordtab"><thead><tr><th>Nummer / Eingang</th><th>Kunde</th><th class="ord-wish">Wunschtermin</th><th class="ord-sum">Umfang</th><th>Status</th><th class="ord-mail">E-Mail</th></tr></thead><tbody>${rows}</tbody></table></div>`
+          : `<p class="hint">${orderQuery || orderFilter ? 'Keine Bestellwünsche zu dieser Auswahl.' : 'Noch keine Bestellwünsche eingegangen.'}</p>`}
+        ${r.total > r.limit ? `<div class="ed-toolbar ord-pager"><button type="button" class="btn sm" data-orders-page="-1"${orderOffset === 0 ? ' disabled' : ''}>Zurück</button><span class="ed-hint">${Math.min(orderOffset + 1, r.total)}–${Math.min(orderOffset + r.limit, r.total)} von ${r.total}</span><button type="button" class="btn sm" data-orders-page="1"${orderOffset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></div>` : ''}`;
+    } catch (e) { host.innerHTML = `<div class="err-box" role="alert">${esc(e.message)}</div><button type="button" class="btn" data-orders-reload>Erneut laden</button>`; }
   }
   async function openOrder(nr) {
-    try {
-      const r = await api('bestellung&nr=' + encodeURIComponent(nr)); const o = orderEdit = r.order;
-      const d = $('#dlg-order-admin');
-      d.innerHTML = `<form class="dlg" id="order-edit-form"><div class="dlg-head"><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><button type="button" class="btn" data-close>Schließen</button></div><div class="dlg-body">
-        <p>${esc(o.angebotName)} · Wunschdatum: ${esc(o.termin || 'offen')} · Referenz: ${esc(o.referenz || '–')}</p><p>${esc(o.bemerkung || '')}</p>
-        <p>${o.kunde ? esc([o.kunde.ansprechpartner, o.kunde.email, o.kunde.telefon].filter(Boolean).join(' · ')) : 'Für diesen älteren Vorgang wurde kein Kontaktschnappschuss gespeichert.'}</p>
-        <ul>${o.positions.map(p=>`<li>${esc(p.name)}: ${fmtNum.format(p.qty)} kg · ${p.price==null?'Preis auf Anfrage':fmtNum.format(p.price)+' €/kg'} · ${p.sum==null?'–':fmtNum.format(p.sum)+' €'}</li>`).join('')}</ul><p><strong>Summe: ${fmtNum.format(o.total)} €${o.onRequest?' zuzüglich Positionen auf Anfrage':''}</strong></p>
-        <p>E-Mail: ${esc(o.delivery)} ${esc(o.deliveryError || '')}</p>
-        <label class="fld"><span>Bearbeitungsstatus</span><select name="workflow">${Object.entries(ORDER_LABELS).map(([k,v])=>`<option value="${k}"${o.workflow===k?' selected':''}>${v}</option>`).join('')}</select></label>
-        <label class="fld"><span>Verantwortlich</span><select name="assignee"><option value="">Nicht zugeordnet</option>${orderStaff.map(u=>`<option value="${esc(u.id)}"${o.assignee===u.id?' selected':''}>${esc(u.name)}</option>`).join('')}</select></label>
-        <label class="fld"><span>Interne Notiz (für Kunden nicht sichtbar)</span><textarea name="note" rows="3" maxlength="2000">${esc(o.note)}</textarea></label>
-        <p class="hint">Statusänderungen sind intern. Es wird keine verbindliche Bestätigung versendet. Erledigte oder stornierte Vorgänge bleiben abgeschlossen.</p>
-        <details><summary>Änderungsverlauf (${o.history.length})</summary><ul>${o.history.map(h=>`<li>${esc(h.t)} · ${esc(h.by)} · ${esc(ORDER_LABELS[h.to])} · ${esc(h.note)}</li>`).join('')}</ul></details>
-        <p id="order-edit-error" role="alert"></p></div><div class="dlg-foot"><button type="button" class="btn" data-order-refresh>Neu laden</button><button type="submit" class="btn primary">Speichern</button></div></form>`;
-      if (!d.open) d.showModal();
-    } catch(e) { toast(e.message); }
+    let o;
+    try { o = orderEdit = (await api('bestellung', { query: '&nr=' + encodeURIComponent(nr) })).order; } catch (e) { toast(e.message); return; }
+    const d = $('#dlg-order-admin');
+    const states = [o.workflow, ...(ORDER_NEXT[o.workflow] || [])];
+    const closed = !(ORDER_NEXT[o.workflow] || []).length;
+    const k = o.kunde;
+    const staffName = (id) => (orderStaff.find((u) => u.id === id) || {}).name || '';
+    d.innerHTML = `<form class="dlg" id="order-edit-form">
+      <div class="dlg-head"><div><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><p>${esc(o.angebotName || '')}${o.week ? ` · KW ${esc(o.week)}/${esc(o.year)}` : ''} · Eingang ${esc(dateTime(o.t))} · ${orderMail(o.delivery)}${o.deliveryError ? ` <span class="muted">(${esc(o.deliveryError)})</span>` : ''}</p></div>
+        <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <div class="ord-meta">
+          <div><span>Kunde</span>${k ? `<strong>${esc(k.firma || o.firma)}</strong>${esc([k.nr ? 'Kd.-Nr. ' + k.nr : '', k.ansprechpartner].filter(Boolean).join(' · '))}<br>${esc([k.email, k.telefon].filter(Boolean).join(' · '))}` : '<span class="muted">Kein Kontaktschnappschuss (älterer Vorgang)</span>'}</div>
+          <div><span>Wunschtermin</span>${o.termin ? esc(dmyIso(o.termin)) : 'offen'}${o.referenz ? `<br><span>Referenz</span>${esc(o.referenz)}` : ''}</div>
+        </div>
+        ${o.bemerkung ? `<p class="ord-note"><strong>Bemerkung des Kunden:</strong> ${esc(o.bemerkung)}</p>` : ''}
+        <table class="etab ordpos"><thead><tr><th>Art.-Nr.</th><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
+          ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(fmtNum.format(p.qty))} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : esc(fmtNum.format(p.price)) + ' €'}</td><td class="r">${p.sum == null ? '–' : esc(fmtNum.format(p.sum)) + ' €'}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="2"><strong>Summe (ca.)</strong></td><td class="r">${esc(fmtNum.format(o.totalQty || 0))} kg</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr></tfoot></table>
+        ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
+        <div class="form-grid two">
+          <label class="fld"><span>Bearbeitungsstatus</span><select name="workflow"${closed ? ' disabled' : ''}>${states.map((s) => `<option value="${s}"${o.workflow === s ? ' selected' : ''}>${ORDER_LABELS[s]}</option>`).join('')}</select></label>
+          <label class="fld"><span>Verantwortlich</span><select name="assignee"><option value="">Nicht zugeordnet</option>${orderStaff.map((u) => `<option value="${esc(u.id)}"${o.assignee === u.id ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>
+          <label class="fld span2"><span>Interne Notiz <small class="muted">(für Kunden nicht sichtbar)</small></span><textarea name="note" rows="3" maxlength="2000">${esc(o.note || '')}</textarea></label>
+        </div>
+        <p class="hint">Statusänderungen sind intern – es wird keine Bestätigung an den Kunden gesendet. Kunden sehen „Eingegangen“, „In Bearbeitung“, „Erledigt“ oder „Storniert“. Erledigte oder stornierte Vorgänge bleiben abgeschlossen.</p>
+        ${o.history.length ? `<details class="ord-hist"><summary>Änderungsverlauf (${o.history.length})</summary><ul>${o.history.slice().reverse().map((h) => `<li><span>${esc(dateTime(h.t))} · ${esc(h.by)}</span><span>${h.from !== h.to ? `${esc(ORDER_LABELS[h.from] || h.from)} → ` : ''}<strong>${esc(ORDER_LABELS[h.to] || h.to)}</strong>${h.assignee ? ' · ' + esc(staffName(h.assignee) || 'zugeordnet') : ''}${h.note ? ' · „' + esc(h.note) + '“' : ''}</span></li>`).join('')}</ul></details>` : ''}
+        <p class="form-err" id="order-edit-error" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><span class="left"><button type="button" class="btn ghost" data-order-refresh>Neu laden</button></span><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button></div></form>`;
+    if (!d.open) d.showModal();
   }
-  $('#view-orders').addEventListener('submit', e => { if(e.target.id!=='orders-filter')return; e.preventDefault(); orderQuery=e.target.q.value;orderFilter=e.target.workflow.value;orderOffset=0;renderOrdersView(); });
-  $('#view-orders').addEventListener('click', e => { const b=e.target.closest('button');if(!b)return;if(b.dataset.orderNr)openOrder(b.dataset.orderNr);if(b.hasAttribute('data-orders-page')){orderOffset=Math.max(0,orderOffset+Number(b.dataset.ordersPage)*25);renderOrdersView();}if(b.hasAttribute('data-orders-reload'))renderOrdersView(); });
-  $('#dlg-order-admin').addEventListener('click', e => { if(e.target.closest('[data-order-refresh]'))openOrder(orderEdit.nr); });
-  $('#dlg-order-admin').addEventListener('submit', async e => {
-    e.preventDefault();const f=e.target, btn=f.querySelector('[type=submit]');btn.disabled=true;
-    try { await api('bestellung_save',{body:{nr:orderEdit.nr,revision:orderEdit.revision,workflow:f.workflow.value,assignee:f.assignee.value,note:f.note.value}});$('#dlg-order-admin').close();renderOrdersView(); }
-    catch(ex){$('#order-edit-error').textContent=ex.message;}finally{btn.disabled=false;}
+  $('#view-orders').addEventListener('submit', (e) => { if (e.target.id !== 'orders-filter') return; e.preventDefault(); orderQuery = e.target.q.value; orderFilter = e.target.workflow.value; orderOffset = 0; renderOrdersView(); });
+  $('#view-orders').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b && b.hasAttribute('data-orders-page')) { orderOffset = Math.max(0, orderOffset + Number(b.dataset.ordersPage) * 25); renderOrdersView(); return; }
+    if (b && b.hasAttribute('data-orders-reload')) { renderOrdersView(); return; }
+    const tr = e.target.closest('tr[data-order-nr]');
+    if (tr) openOrder(tr.dataset.orderNr);
+  });
+  $('#view-orders').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-order-nr]')) openOrder(e.target.dataset.orderNr); });
+  $('#dlg-order-admin').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget || e.target.closest('[data-close]')) { e.currentTarget.close(); return; }
+    if (e.target.closest('[data-order-refresh]')) openOrder(orderEdit.nr);
+  });
+  $('#dlg-order-admin').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, btn = f.querySelector('[type=submit]');
+    btn.disabled = true;
+    try {
+      await api('bestellung_save', { body: { nr: orderEdit.nr, revision: orderEdit.revision, workflow: f.workflow.value, assignee: f.assignee.value, note: f.note.value } });
+      $('#dlg-order-admin').close();
+      toast(`${orderEdit.nr} gespeichert.`);
+      renderOrdersView();
+    } catch (ex) { $('#order-edit-error').textContent = ex.message; } finally { btn.disabled = false; }
   });
 
   /* ======================= Kunden (Administrator) =======================

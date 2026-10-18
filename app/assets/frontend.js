@@ -1203,26 +1203,41 @@ function bindOrder() {
   });
 }
 
-const CUSTOMER_ORDER_LABELS = { neu:'Eingegangen', in_bearbeitung:'In Bearbeitung', bestaetigt:'Bestätigt', erledigt:'Erledigt', storniert:'Storniert' };
+const CUSTOMER_ORDER_LABELS = { neu: 'Eingegangen', in_bearbeitung: 'In Bearbeitung', bestaetigt: 'In Bearbeitung', erledigt: 'Erledigt', storniert: 'Storniert' };
+const custState = (w) => `<span class="co-st co-${esc(w)}">${esc(CUSTOMER_ORDER_LABELS[w] || w)}</span>`;
+const custDate = (iso) => (iso ? new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '');
 async function openCustomerOrders(offset = 0, nr = '') {
   const d = $('#dlg-customer-orders');
+  const head = (sub) => `<div class="dlg-head"><div><h2 id="customer-orders-title">Meine Bestellwünsche</h2>${sub ? `<p>${sub}</p>` : ''}</div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
+  d.innerHTML = `<div class="dlg">${head('')}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Bestellwünsche werden geladen …</div></div></div>`;
   if (!d.open) d.showModal();
-  d.innerHTML = '<div class="dlg"><p>Bestellwünsche werden geladen …</p><button class="btn" data-close>Schließen</button></div>';
   try {
     const r = await kundeApi(nr ? 'kunde_bestellung_detail&nr=' + encodeURIComponent(nr) : 'kunde_bestellungen&offset=' + offset);
-    let content;
+    let body, foot;
     if (nr) {
       const o = r.order;
-      content = `<h3>${esc(o.nr)} · ${CUSTOMER_ORDER_LABELS[o.workflow]}</h3><p>Wunschdatum: ${esc(o.termin || 'offen')} · Referenz: ${esc(o.referenz || '–')}</p><p>${esc(o.bemerkung || '')}</p><ul>${o.positions.map(p=>`<li>${esc(p.name)}: ${fmtQty.format(p.qty)} kg · ${p.price==null?'Preis auf Anfrage':fmtEur.format(p.price)+' €/kg'} · ${p.sum==null?'–':fmtEur.format(p.sum)+' €'}</li>`).join('')}</ul><p>Summe: ${fmtEur.format(o.total)} €${o.onRequest?' zuzüglich Positionen auf Anfrage':''}</p><button class="btn" data-customer-orders-page="0">Zur Übersicht</button>`;
-    } else content = `${r.orders.map(o=>`<p><button class="btn" data-customer-order="${esc(o.nr)}">${esc(o.nr)} · ${CUSTOMER_ORDER_LABELS[o.workflow]}</button> ${esc(o.t.slice(0,10))} · ${fmtEur.format(o.total)} €</p>`).join('') || '<p>Noch keine Bestellwünsche vorhanden.</p>'}<p>${r.total} Vorgänge</p><button class="btn" data-customer-orders-page="${Math.max(0,offset-25)}" ${offset===0?'disabled':''}>Zurück</button> <button class="btn" data-customer-orders-page="${offset+25}" ${offset+25>=r.total?'disabled':''}>Weiter</button>`;
-    d.innerHTML = `<div class="dlg"><div class="dlg-head"><h2 id="customer-orders-title">Meine Bestellwünsche</h2><button class="btn" data-close>Schließen</button></div><div class="dlg-body">${content}</div></div>`;
-  } catch(e) { d.innerHTML=`<div class="dlg"><h2 id="customer-orders-title">Meine Bestellwünsche</h2><p role="alert">${esc(e.message)}</p><button class="btn" data-close>Schließen</button></div>`; }
+      body = `<div class="co-head"><strong>${esc(o.nr)}</strong>${custState(o.workflow)}</div>
+        <p class="muted">${esc(o.angebotName || '')} · eingegangen am ${esc(custDate(o.t))}${o.termin ? ' · Wunschtermin ' + esc(dmy(o.termin)) : ''}${o.referenz ? ' · Ihre Referenz ' + esc(o.referenz) : ''}</p>
+        ${o.bemerkung ? `<p class="co-note">${esc(o.bemerkung)}</p>` : ''}
+        <table class="co-tab"><thead><tr><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
+        ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtQty.format(p.qty)} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : fmtEur.format(p.price) + ' €'}</td><td class="r">${p.sum == null ? '–' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="3"><strong>Summe (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr></tfoot></table>
+        ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
+        <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;
+      foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn primary" type="button" data-close>Schließen</button>`;
+    } else {
+      body = r.orders.length ? `<ul class="co-list">${r.orders.map((o) => `<li><button type="button" data-customer-order="${esc(o.nr)}"><span><strong>${esc(o.nr)}</strong><span class="muted">${esc(custDate(o.t))} · ${plural(o.positionCount, 'Position', 'Positionen')} · ${fmtEur.format(o.total)} €</span></span>${custState(o.workflow)}</button></li>`).join('')}</ul>`
+        : '<p class="muted">Sie haben noch keine Bestellwünsche über das Portal gesendet.</p>';
+      foot = (r.total > r.limit ? `<span class="left"><button class="btn sm" type="button" data-customer-orders-page="${Math.max(0, offset - r.limit)}"${offset === 0 ? ' disabled' : ''}>Zurück</button><button class="btn sm" type="button" data-customer-orders-page="${offset + r.limit}"${offset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></span>` : '') + '<button class="btn primary" type="button" data-close>Schließen</button>';
+    }
+    d.innerHTML = `<div class="dlg">${head(nr ? '' : `${plural(r.total, 'Vorgang', 'Vorgänge')}`)}<div class="dlg-body">${body}</div><div class="dlg-foot">${foot}</div></div>`;
+  } catch (e) { d.innerHTML = `<div class="dlg">${head('')}<div class="dlg-body"><div class="err-box" role="alert">${esc(e.message)}</div></div><div class="dlg-foot"><button class="btn" type="button" data-close>Schließen</button></div></div>`; }
 }
-document.addEventListener('click', e => {
-  const b=e.target.closest('[data-customer-order],[data-customer-orders-page]');
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-customer-order],[data-customer-orders-page]');
   if (b) openCustomerOrders(Number(b.dataset.customerOrdersPage || 0), b.dataset.customerOrder || '');
-  const d=$('#dlg-customer-orders');
-  if (d && (e.target===d || e.target.closest('#dlg-customer-orders [data-close]')))d.close();
+  const d = $('#dlg-customer-orders');
+  if (d && (e.target === d || e.target.closest('#dlg-customer-orders [data-close]'))) d.close();
 });
 
 /* ---------- Kunden-Anmeldung ----------

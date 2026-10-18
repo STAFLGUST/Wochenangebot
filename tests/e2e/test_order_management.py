@@ -46,6 +46,7 @@ body['assignee']=assignee;body['note']='x'*2001
 check('note length limited',e.call('bestellung_save',body)[0]==422)
 body['note']='Confirmed internally';r=e.call('bestellung_save',body)
 check('confirmation transition works',r[0]==200)
+check('customer sees internal confirmation as in progress',k.call('kunde_bestellung_detail&nr='+nr)[1]['order']['workflow']=='in_bearbeitung' and k.call('kunde_bestellungen&workflow=in_bearbeitung')[1]['total']==1)
 body['revision']=r[1]['order']['revision'];body['workflow']='erledigt';r=e.call('bestellung_save',body)
 check('completion works',r[0]==200)
 body['revision']=r[1]['order']['revision'];body['workflow']='neu'

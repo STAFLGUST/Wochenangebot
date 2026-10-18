@@ -20,6 +20,7 @@ Listen enthalten `positionCount`, Details enthalten `positions` mit damaliger Be
 Summe. Preis auf Anfrage ist `null`. `nr` ist die stabile Vorgangskennung; `revision` steigt bei Änderungen.
 Mitarbeiterdetails enthalten zusätzlich `note`, `assignee`, `history`, `kunde`, `delivery`, `deliveryError`.
 Kunden erhalten diese internen Felder nie. Unberechtigte Kunden-Detailabrufe ergeben 404.
+In Kundenantworten erscheint der interne Status `bestaetigt` als `in_bearbeitung` (keine Auftragsbestätigung).
 
 Statusübergänge: neu → in_bearbeitung oder storniert; in_bearbeitung → neu, bestaetigt oder storniert;
 bestaetigt → in_bearbeitung, erledigt oder storniert. Erledigt/storniert bleiben abgeschlossen.
