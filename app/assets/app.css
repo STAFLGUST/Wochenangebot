@@ -626,6 +626,8 @@ body.k-gate .layout { grid-template-columns: minmax(0, 1fr); }
 body.k-gate .k-locked { max-width: 560px; margin: 24px auto 0; }
 .kw-pill:empty { display: none; }
 
+/* Statische Links bleiben auch ohne Angebotsdaten erreichbar. */
+.legal-links{display:flex;justify-content:center;flex-wrap:wrap;gap:1.5rem;padding:1rem}.legal-links a{color:inherit;text-underline-offset:.2em}
 /* ---------- Bestellwunsch ---------- */
 .c-qty { width: 96px; text-align: right; }
 .qty-h { display: block; padding: 12px 12px; text-align: right; }
