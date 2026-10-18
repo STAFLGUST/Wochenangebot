@@ -25,3 +25,5 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
    nie in Antworten oder im Protokoll.
 10. **Bestellwünsche:** Preise und Summen berechnet ausschließlich der Server aus dem veröffentlichten Angebot des Kunden;
    vom Browser gesendete Preise werden ignoriert.
+11. **Skripte und Stylesheets:** nach jeder Änderung an `app/assets/` die Versionsnummern mit
+   `python3 werkzeuge/asset_versionen.py --setzen` aktualisieren (die CI prüft das), sonst laden Browser alte Kopien.
