@@ -583,10 +583,101 @@
     return changed;
   }
 
+  /* ======================= Gemeinsames Bearbeiten =======================
+     Drei-Wege-Abgleich: base = Stand, auf dem die eigenen Änderungen beruhen; mine = eigener Stand;
+     theirs = inzwischen gespeicherter Stand anderer. Ergebnis enthält beide Änderungen – je Feld,
+     je Artikel und je Kundenangebotspreis. Ändern beide dasselbe Feld unterschiedlich, gilt die eigene
+     Eingabe (conflicts nennt diese Fälle). Gelöschte Artikel/Gruppen bleiben gelöscht. */
+  function canon(v) {
+    if (v === undefined) return 'u';
+    if (v === null || typeof v !== 'object') return JSON.stringify(v);
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    return '{' + Object.keys(v).filter((k) => v[k] !== undefined).sort().map((k) => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  }
+  const same = (a, b) => canon(a) === canon(b);
+  const cloneJ = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+  function merge3(b, m, t, onConflict) {
+    if (same(m, b)) return cloneJ(t);
+    if (same(t, b) || same(m, t)) return cloneJ(m);
+    onConflict(m, t);
+    return cloneJ(m);
+  }
+  function mergeFields(b, m, t, skip, onConflict) {
+    const out = {};
+    const keys = new Set([...Object.keys(b || {}), ...Object.keys(m || {}), ...Object.keys(t || {})]);
+    for (const k of keys) {
+      if (skip.includes(k)) continue;
+      const v = merge3((b || {})[k], (m || {})[k], (t || {})[k], (mv, tv) => onConflict(k, mv, tv));
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  function mergeOrder(baseIds, mineIds, theirIds, keep) {
+    const common = (arr, other) => arr.filter((id) => other.includes(id));
+    const theirsReordered = !same(common(theirIds, baseIds), common(baseIds, theirIds));
+    const [prim, sec] = theirsReordered ? [theirIds, mineIds] : [mineIds, theirIds];
+    const out = prim.filter((id) => keep.has(id));
+    for (let i = 0; i < sec.length; i++) {
+      const id = sec[i];
+      if (!keep.has(id) || out.includes(id)) continue;
+      let at = 0;
+      for (let j = i - 1; j >= 0; j--) { const k = out.indexOf(sec[j]); if (k >= 0) { at = k + 1; break; } }
+      out.splice(at, 0, id);
+    }
+    for (const id of keep) if (!out.includes(id)) out.push(id);
+    return out;
+  }
+  function mergeList(bl, ml, tl, label, conflicts, mergeOne) {
+    const bm = new Map((bl || []).map((x) => [x.id, x]));
+    const mm = new Map((ml || []).map((x) => [x.id, x]));
+    const tm = new Map((tl || []).map((x) => [x.id, x]));
+    const res = new Map();
+    for (const id of new Set([...bm.keys(), ...mm.keys(), ...tm.keys()])) {
+      const b = bm.get(id), m = mm.get(id), t = tm.get(id);
+      if (!b) { res.set(id, cloneJ(m && t ? mergeOne(undefined, m, t) : m || t)); continue; }
+      if (!m || !t) {
+        const left = m || t;
+        if (left && !same(left, b)) conflicts.push({ kind: label, id, name: left.name || b.name || id, field: 'deleted', by: m ? 'theirs' : 'mine' });
+        continue; // gelöscht bleibt gelöscht
+      }
+      res.set(id, mergeOne(b, m, t));
+    }
+    const ids = mergeOrder((bl || []).map((x) => x.id), (ml || []).map((x) => x.id), (tl || []).map((x) => x.id), new Set(res.keys()));
+    return ids.map((id) => res.get(id));
+  }
+  function mergeModels(base, mine, theirs) {
+    const E = { meta: {}, groups: [], items: [] };
+    base = base || E; theirs = theirs || E;
+    const conflicts = [];
+    const meta = mergeFields(base.meta, mine.meta, theirs.meta, [], (f, mv, tv) => conflicts.push({ kind: 'meta', id: f, name: 'Kopfdaten', field: f, mine: mv, theirs: tv }));
+    const groups = mergeList(base.groups, mine.groups, theirs.groups, 'group', conflicts, (b, m, t) => ({ id: m.id, ...mergeFields(b, m, t, ['id'], (f, mv, tv) => conflicts.push({ kind: 'group', id: m.id, name: m.name, field: f, mine: mv, theirs: tv })) }));
+    const items = mergeList(base.items, mine.items, theirs.items, 'item', conflicts, (b, m, t) => {
+      const c = (f, mv, tv) => conflicts.push({ kind: 'item', id: m.id, name: (m.code ? m.code + ' · ' : '') + m.name, field: f, mine: mv, theirs: tv });
+      const it = { id: m.id, ...mergeFields(b, m, t, ['id', 'variants'], c) };
+      const v = mergeFields((b || {}).variants, m.variants, t.variants, [], (oid, mv, tv) => c('variant:' + oid, mv, tv));
+      if (Object.keys(v).length) it.variants = v;
+      return it;
+    });
+    // Artikel brauchen eine vorhandene Gruppe – eine inzwischen gelöschte Gruppe bleibt dann erhalten
+    const gids = new Set(groups.map((g) => g.id));
+    for (const it of items) {
+      if (gids.has(it.groupId)) continue;
+      const g = [mine, theirs, base].map((x) => (x.groups || []).find((y) => y.id === it.groupId)).find(Boolean);
+      if (g) { groups.push(cloneJ(g)); gids.add(g.id); }
+    }
+    const sections = [];
+    for (const g of groups) if (g.section && !sections.includes(g.section)) sections.push(g.section);
+    const out = { ...cloneJ(mine), meta, sections, groups, items };
+    const before = new Map((mine.items || []).map((x) => [x.id, canon(x)]));
+    const remoteItems = items.filter((x) => before.get(x.id) !== canon(x)).map((x) => x.id);
+    const removed = (mine.items || []).filter((x) => !items.some((y) => y.id === x.id)).map((x) => x.id);
+    return { model: out, conflicts, remoteItems, removed, changed: !same(out, mine) };
+  }
+
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;
