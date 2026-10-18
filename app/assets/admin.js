@@ -379,6 +379,7 @@
     document.body.classList.toggle('ro', ro);
     document.body.classList.toggle('is-admin', can('admin'));
     $('#vt-users').hidden = !can('admin');
+    $('#vt-orders').hidden = !can('editor');
     $('#vt-kunden').hidden = !can('admin');
     $('#vt-mail').hidden = !can('admin');
     $('#vt-log').hidden = !can('admin');
@@ -1754,9 +1755,10 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['edit', 'hist', 'stock', 'master', 'kunden', 'mail', 'users', 'log', 'sec'];
+  const VIEWS = ['orders', 'edit', 'hist', 'stock', 'master', 'kunden', 'mail', 'users', 'log', 'sec'];
   const ADMIN_VIEWS = ['kunden', 'mail', 'users', 'log', 'sec'];
   function setView(v) {
+    if (v === 'orders' && !can('editor')) v = 'edit';
     if (ADMIN_VIEWS.includes(v) && !can('admin')) v = 'edit';
     currentView = v;
     for (const k of VIEWS) {
@@ -1770,6 +1772,7 @@
     if (v === 'stock') renderStockView();
     if (v === 'master') renderMasterView();
     if (v === 'users') renderUsersView();
+    if (v === 'orders') renderOrdersView();
     if (v === 'kunden') renderKundenView();
     if (v === 'mail') renderMailView();
     if (v === 'log') renderLogView();
@@ -2976,6 +2979,47 @@
       if (pw) toast(`${u ? 'Neues Passwort für' : 'Nutzer angelegt –'} „${(u ? u.username : body.username).toLowerCase()}“: Passwort jetzt sicher weitergeben.`, 6000);
       renderUsersView();
     } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+  });
+
+  /* Bestellverwaltung: Versandzustand und Bearbeitung bleiben getrennt. */
+  const ORDER_LABELS = { neu: 'Neu', in_bearbeitung: 'In Bearbeitung', bestaetigt: 'Bestätigt', erledigt: 'Erledigt', storniert: 'Storniert' };
+  let orderOffset = 0, orderQuery = '', orderFilter = '', orderStaff = [], orderEdit = null;
+  async function renderOrdersView() {
+    const host = $('#view-orders');
+    try {
+      const r = await api('bestellungen&offset=' + orderOffset + '&q=' + encodeURIComponent(orderQuery) + '&workflow=' + encodeURIComponent(orderFilter));
+      orderStaff = r.assignees;
+      host.innerHTML = `<form id="orders-filter" class="ed-toolbar"><label class="fld"><span>Bestellwunsch suchen</span><input name="q" value="${esc(orderQuery)}" placeholder="Nummer, Firma oder Referenz"></label><label class="fld"><span>Status</span><select name="workflow"><option value="">Alle</option>${Object.entries(ORDER_LABELS).map(([k,v])=>`<option value="${k}"${orderFilter===k?' selected':''}>${v}</option>`).join('')}</select></label><button class="btn" type="submit">Anzeigen</button></form>
+        <p>${r.total} Bestellwünsche · Versandstatus ist keine Auftragsbestätigung.</p>
+        <div class="orders-list">${r.orders.map(o=>`<button type="button" class="btn order-card" data-order-nr="${esc(o.nr)}"><strong>${esc(o.nr)} · ${esc(o.firma)}</strong><span>${ORDER_LABELS[o.workflow]} · Eingang ${esc(o.t.slice(0,10))} · Wunschdatum ${esc(o.termin || 'offen')}</span><span>${o.positionCount} Positionen · ${fmtNum.format(o.total)} € · E-Mail: ${esc(o.delivery)}</span></button>`).join('') || '<p>Keine Bestellwünsche gefunden.</p>'}</div>
+        <div class="ed-toolbar"><button class="btn" data-orders-page="-1" ${orderOffset===0?'disabled':''}>Zurück</button><span>${Math.min(orderOffset+1,r.total)}–${Math.min(orderOffset+r.limit,r.total)} von ${r.total}</span><button class="btn" data-orders-page="1" ${orderOffset+r.limit>=r.total?'disabled':''}>Weiter</button></div>`;
+    } catch(e) { host.innerHTML = `<p role="alert">${esc(e.message)}</p><button class="btn" data-orders-reload>Erneut laden</button>`; }
+  }
+  async function openOrder(nr) {
+    try {
+      const r = await api('bestellung&nr=' + encodeURIComponent(nr)); const o = orderEdit = r.order;
+      const d = $('#dlg-order-admin');
+      d.innerHTML = `<form class="dlg" id="order-edit-form"><div class="dlg-head"><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><button type="button" class="btn" data-close>Schließen</button></div><div class="dlg-body">
+        <p>${esc(o.angebotName)} · Wunschdatum: ${esc(o.termin || 'offen')} · Referenz: ${esc(o.referenz || '–')}</p><p>${esc(o.bemerkung || '')}</p>
+        <p>${o.kunde ? esc([o.kunde.ansprechpartner, o.kunde.email, o.kunde.telefon].filter(Boolean).join(' · ')) : 'Für diesen älteren Vorgang wurde kein Kontaktschnappschuss gespeichert.'}</p>
+        <ul>${o.positions.map(p=>`<li>${esc(p.name)}: ${fmtNum.format(p.qty)} kg · ${p.price==null?'Preis auf Anfrage':fmtNum.format(p.price)+' €/kg'} · ${p.sum==null?'–':fmtNum.format(p.sum)+' €'}</li>`).join('')}</ul><p><strong>Summe: ${fmtNum.format(o.total)} €${o.onRequest?' zuzüglich Positionen auf Anfrage':''}</strong></p>
+        <p>E-Mail: ${esc(o.delivery)} ${esc(o.deliveryError || '')}</p>
+        <label class="fld"><span>Bearbeitungsstatus</span><select name="workflow">${Object.entries(ORDER_LABELS).map(([k,v])=>`<option value="${k}"${o.workflow===k?' selected':''}>${v}</option>`).join('')}</select></label>
+        <label class="fld"><span>Verantwortlich</span><select name="assignee"><option value="">Nicht zugeordnet</option>${orderStaff.map(u=>`<option value="${esc(u.id)}"${o.assignee===u.id?' selected':''}>${esc(u.name)}</option>`).join('')}</select></label>
+        <label class="fld"><span>Interne Notiz (für Kunden nicht sichtbar)</span><textarea name="note" rows="3" maxlength="2000">${esc(o.note)}</textarea></label>
+        <p class="hint">Statusänderungen sind intern. Es wird keine verbindliche Bestätigung versendet. Erledigte oder stornierte Vorgänge bleiben abgeschlossen.</p>
+        <details><summary>Änderungsverlauf (${o.history.length})</summary><ul>${o.history.map(h=>`<li>${esc(h.t)} · ${esc(h.by)} · ${esc(ORDER_LABELS[h.to])} · ${esc(h.note)}</li>`).join('')}</ul></details>
+        <p id="order-edit-error" role="alert"></p></div><div class="dlg-foot"><button type="button" class="btn" data-order-refresh>Neu laden</button><button type="submit" class="btn primary">Speichern</button></div></form>`;
+      if (!d.open) d.showModal();
+    } catch(e) { toast(e.message); }
+  }
+  $('#view-orders').addEventListener('submit', e => { if(e.target.id!=='orders-filter')return; e.preventDefault(); orderQuery=e.target.q.value;orderFilter=e.target.workflow.value;orderOffset=0;renderOrdersView(); });
+  $('#view-orders').addEventListener('click', e => { const b=e.target.closest('button');if(!b)return;if(b.dataset.orderNr)openOrder(b.dataset.orderNr);if(b.hasAttribute('data-orders-page')){orderOffset=Math.max(0,orderOffset+Number(b.dataset.ordersPage)*25);renderOrdersView();}if(b.hasAttribute('data-orders-reload'))renderOrdersView(); });
+  $('#dlg-order-admin').addEventListener('click', e => { if(e.target.closest('[data-order-refresh]'))openOrder(orderEdit.nr); });
+  $('#dlg-order-admin').addEventListener('submit', async e => {
+    e.preventDefault();const f=e.target, btn=f.querySelector('[type=submit]');btn.disabled=true;
+    try { await api('bestellung_save',{body:{nr:orderEdit.nr,revision:orderEdit.revision,workflow:f.workflow.value,assignee:f.assignee.value,note:f.note.value}});$('#dlg-order-admin').close();renderOrdersView(); }
+    catch(ex){$('#order-edit-error').textContent=ex.message;}finally{btn.disabled=false;}
   });
 
   /* ======================= Kunden (Administrator) =======================

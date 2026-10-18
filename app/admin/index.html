@@ -8,7 +8,7 @@
 <title>Wochenangebot · Eingabebereich</title>
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=525994b292">
-<link rel="stylesheet" href="../assets/admin.css?v=c7dce0965d">
+<link rel="stylesheet" href="../assets/admin.css?v=c5db12e5df">
 </head>
 <body class="adm">
 
@@ -72,6 +72,7 @@
       <button role="tab" type="button" id="vt-stock" aria-selected="false" aria-controls="view-stock"><svg class="i" aria-hidden="true"><use href="#i-box"/></svg><span>Bestand</span></button>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Stammdaten</span></button>
       <div class="side-sep" id="side-admin" aria-hidden="true" hidden>Verwaltung</div>
+      <button role="tab" type="button" id="vt-orders" aria-selected="false" aria-controls="view-orders" hidden><svg class="i" aria-hidden="true"><use href="#i-file"/></svg><span>Bestellungen</span></button>
       <button role="tab" type="button" id="vt-kunden" aria-selected="false" aria-controls="view-kunden" hidden><svg class="i" aria-hidden="true"><use href="#i-store"/></svg><span>Kunden</span></button>
       <button role="tab" type="button" id="vt-mail" aria-selected="false" aria-controls="view-mail" hidden><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span>E-Mail</span></button>
       <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Nutzer</span></button>
@@ -112,6 +113,7 @@
     <div id="view-hist" hidden></div>
     <div id="view-stock" hidden></div>
     <div id="view-master" hidden></div>
+    <div id="view-orders" hidden></div>
     <div id="view-kunden" hidden></div>
     <div id="view-mail" hidden></div>
     <div id="view-users" hidden></div>
@@ -172,6 +174,7 @@
     <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary" id="reauth-submit">Bestätigen</button></div>
   </form>
 </dialog>
+<dialog class="modal wide" id="dlg-order-admin" aria-labelledby="order-admin-title"></dialog>
 <!-- Bestätigung -->
 <dialog class="modal wide" id="dlg-offers" aria-labelledby="of-title"><div class="dlg" id="offers-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
@@ -224,6 +227,6 @@
 <script src="../assets/offer-core.js?v=1d285eeceb"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=7b3e5ace81"></script>
-<script src="../assets/admin.js?v=4ff9de4a51"></script>
+<script src="../assets/admin.js?v=cf94bdc0be"></script>
 </body>
 </html>
