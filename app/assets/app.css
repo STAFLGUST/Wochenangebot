@@ -671,3 +671,14 @@ body.in-wartung .actions .btn:not(#btn-theme) { display: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wartung-banner .banner-inner { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 :root[data-theme="dark"] .wartung-banner .banner-inner { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; }
 body.in-wartung .topbar .search { visibility: hidden; }
+
+/* Sonderposten (Sonderpreis, solange der Vorrat reicht) */
+:root { --sale: #c2410c; --sale-bg: #fff1e6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); } }
+:root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); }
+.tag.sale { background: var(--sale-bg); color: var(--sale); }
+.price.sale .pv, .price.sale .pu { color: var(--sale); }
+.p-was { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sale-note { font-size: 11px; color: var(--sale); font-weight: 600; white-space: nowrap; }
+.d-price .row.sale .pv { color: var(--sale); }
+.d-price .row.sale .p-was { display: block; margin-top: 2px; }

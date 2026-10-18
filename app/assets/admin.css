@@ -684,3 +684,25 @@ body.ro .vtog { display: none; }
 .etab tr.remote-hit > td { animation: remote-hit 2.6s ease-out; }
 @keyframes remote-hit { 0%, 35% { background: rgba(214, 160, 40, .22); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .etab tr.remote-hit > td { animation: none; outline: 2px solid rgba(214, 160, 40, .5); } }
+
+/* Sonderposten (kurzes MHD, solange der Vorrat reicht) und Kein-Bestand-Zeichen */
+:root { --sale: #c2410c; --sale-bg: #fff1e6; --nostock: #dc2626; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; } }
+:root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; }
+.vtog.sale.hot { opacity: 1; color: var(--sale); }
+.vtog.sale.on { opacity: 1; color: #fff; background: var(--sale); }
+.sale-tag { display: inline-block; margin-top: 3px; border: 0; border-radius: 99px; padding: 1px 8px; font: 600 11px var(--font); background: var(--sale-bg); color: var(--sale); cursor: pointer; white-space: nowrap; }
+.sale-tag.out { background: var(--surface-3); color: var(--muted); text-decoration: line-through; }
+.sale-tag.off { cursor: default; background: none; color: var(--muted); font-weight: 500; padding: 0; }
+body.ro .sale-tag { cursor: default; }
+.nostock { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--nostock); color: #fff; font-size: 11.5px; font-weight: 700; cursor: help; }
+#mhd-panel { margin: 0 0 16px; }
+.mhd-card .np-badge { background: var(--sale); color: #fff; }
+.mhd-card .sp-val { color: var(--sale); }
+.sptab { margin: 10px 0 6px; }
+.sptab td, .sptab th { padding: 6px 8px; vertical-align: middle; }
+.sptab .sp-norm { white-space: nowrap; color: var(--text-2); }
+.sptab .sp-own { width: 120px; }
+.sptab .in { width: 100%; border: 1px solid var(--line); background: var(--surface); }
+.sp-base { max-width: 260px; }
+@media (max-width: 700px) { .etab .vtog.sale { display: none; } .sptab .sp-norm { display: none; } }

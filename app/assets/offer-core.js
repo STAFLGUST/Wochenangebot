@@ -496,8 +496,17 @@
   /* Unterschiede zwischen zwei Modellen (z. B. Entwurf ↔ veröffentlicht) */
   /* Kundenpreis eines Artikels als Vergleichswert (ohne Kennzeichen „aus Vorwoche“) */
   const variantSig = (v) => (!v ? '' : v.status === 'value' ? 'v' + v.value : v.status);
+  /* Sonderpreis „solange der Vorrat reicht“: Grundpreis für alle Angebote, je Angebot änderbar */
+  function saleFor(it, oid) {
+    const s = it && it.sale;
+    if (!s || typeof s.value !== 'number') return null;
+    const o = s.offers && s.offers[oid];
+    if (o) return o.status === 'none' ? null : o.value;
+    return s.value;
+  }
+  const saleSig = (s) => (!s || typeof s.value !== 'number' ? '' : 'v' + s.value + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' ? 'none' : s.offers[k].value)).join(','));
   function diffOffers(oldM, newM) {
-    const res = { added: [], removed: [], priceChanged: [], changed: [], before: {}, variantChanged: [] };
+    const res = { added: [], removed: [], priceChanged: [], changed: [], before: {}, variantChanged: [], saleChanged: [] };
     if (!oldM) { res.added = newM.items.map((i) => i.id); return res; }
     const take = (m) => {
       const map = new Map();
@@ -515,6 +524,7 @@
       for (const k of new Set([...Object.keys(ov), ...Object.keys(nv)])) {
         if (variantSig(ov[k]) !== variantSig(nv[k])) { res.variantChanged.push({ id: it.id, offer: k, from: ov[k] || null, to: nv[k] || null }); res.before[it.id] = res.before[it.id] || o; }
       }
+      if (saleSig(o.sale) !== saleSig(it.sale)) { res.saleChanged.push({ id: it.id, from: o.sale || null, to: it.sale || null }); res.before[it.id] = res.before[it.id] || o; }
     }
     const newIds = new Set(newM.items.map((i) => i.id));
     const matched = new Set(Object.values(res.before).map((o) => o.id));
@@ -677,7 +687,7 @@
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;
