@@ -60,6 +60,8 @@
   let model = null;          // Entwurf (wird bearbeitet)
   let published = null;      // veröffentlichter Stand
   let revision = 0;
+  let base = null;           // zuletzt mit dem Server abgeglichener Stand (Grundlage für den Abgleich)
+  let editors = [];          // andere Mitarbeiter, die gerade im Eingabebereich sind
   let savedAt = null;
   let diff = null;
   let undoStack = [];
@@ -406,7 +408,7 @@
   }
   function strip(m) {
     const c = clone(m);
-    delete c.savedAt; delete c.publishedAt; delete c.rev; delete c.issues;
+    delete c.savedAt; delete c.savedBy; delete c.publishedAt; delete c.rev; delete c.issues;
     c.items.forEach((i) => { i.altPrices = i.altPrices || []; });
     return c;
   }
@@ -434,6 +436,7 @@
     const d = await api('draft');
     published = d.published ? strip(d.published) : null;
     model = d.draft ? strip(d.draft) : published ? clone(published) : emptyModel();
+    base = clone(model);
     revision = d.revision || 0;
     savedAt = d.draftSavedAt;
     $('#screen-editor').hidden = false;
@@ -452,6 +455,7 @@
       loadMaster().then(() => migrateMaster()).catch(() => {});
     }
     if (currentView !== 'edit') setView(currentView);
+    startSync();
   }
 
   /* ======================= Speichern ======================= */
@@ -467,7 +471,15 @@
     else if (!hasChanges && !published) text = 'Noch nichts veröffentlicht';
     else if (!hasChanges) text = 'Keine Änderungen gegenüber der veröffentlichten Fassung';
     else text = `Entwurf gespeichert${savedAt ? ' · ' + timeOnly(savedAt) + ' Uhr' : ''} · <strong>noch nicht veröffentlicht</strong>`;
-    el.innerHTML = `<span class="dot"></span><span>${text}</span>`;
+    lastSaveState = [st, msg];
+    el.innerHTML = `<span class="dot"></span><span>${text}</span>${editorsHTML()}`;
+  }
+  let lastSaveState = ['clean'];
+  function editorsHTML() {
+    if (!editors.length) return '';
+    const names = editors.map((e) => e.name).filter(Boolean);
+    const shown = names.slice(0, 3).join(', ') + (names.length > 3 ? ` und ${names.length - 3} weitere` : '');
+    return `<span class="editors" title="Ebenfalls gerade im Eingabebereich: ${esc(names.join(', '))}">${icon('users', 'sm')}Auch hier: ${esc(shown)}</span>`;
   }
   function changed(opts = {}) {
     if (ro) return;
@@ -491,22 +503,120 @@
     saving = true;
     setSaveState('saving');
     const note = saveNote;
+    const sent = clone(model);
     try {
-      const r = await api('save_draft', { body: { model, revision, note } });
+      const r = await api('save_draft', { body: { model: sent, revision, note } });
       if (saveNote === note) saveNote = null;
       revision = r.revision;
+      base = sent;
       savedAt = r.savedAt;
       saveError = null;
-      setSaveState('saved');
+      conflictTries = 0;
+      setSaveState(C.sameModel(base, model) ? 'saved' : 'pending');
+      if (pendingRemote) renderRemote();
     } catch (e) {
-      saveError = e.message;
-      if (e.status !== 401) setSaveState('error', e.message);
+      if (e.status === 409 && conflictTries < 3) {
+        // Jemand anderes hat inzwischen gespeichert: dessen Stand übernehmen, eigene Änderungen darauf anwenden, erneut speichern
+        conflictTries++;
+        try { await pullRemote(); queued = true; } catch (e2) { saveError = e2.message; setSaveState('error', e2.message); }
+      } else {
+        saveError = e.message;
+        if (e.status !== 401) setSaveState('error', e.message);
+      }
     } finally {
       saving = false;
       if (queued) { queued = false; saveNow(); }
     }
   }
   const unsaved = () => saving || saveTimer && $('#save-state').classList.contains('pending') || !!saveError;
+  let conflictTries = 0;
+
+  /* ======================= Gemeinsames Bearbeiten =======================
+     Alle paar Sekunden: Stand des Entwurfs abfragen. Haben andere gespeichert, werden deren Änderungen
+     übernommen und mit den eigenen zusammengeführt (je Feld, je Artikel, je Kundenpreis). */
+  let syncTimer = null, pendingRemote = null, pulling = false;
+  const savePending = () => saving || queued || $('#save-state').classList.contains('pending');
+  function startSync() {
+    clearInterval(syncTimer);
+    syncTimer = setInterval(syncTick, 8000);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncTick(); });
+  async function syncTick() {
+    if (!model || !csrf || document.hidden || $('#screen-editor').hidden || !$('#screen-auth').hidden) return;
+    if (pendingRemote) renderRemote();
+    let d;
+    try { d = await api('draft_ping', { body: {} }); } catch { return; }
+    const ed = d.editors || [];
+    if (JSON.stringify(ed) !== JSON.stringify(editors)) { editors = ed; setSaveState(...lastSaveState); }
+    if ((d.offersRev || 0) !== offersRev) { try { await loadOffers(); renderOfferBar(); renderRemote([]); } catch { /* später */ } }
+    if (d.revision !== revision && !savePending()) pullRemote().catch(() => {});
+  }
+  async function pullRemote() {
+    if (pulling) return null;
+    pulling = true;
+    try {
+      const d = await api('draft', { query: '&bg=1' });
+      const theirs = d.draft ? strip(d.draft) : d.published ? strip(d.published) : emptyModel();
+      published = d.published ? strip(d.published) : null;
+      const r = C.mergeModels(base, model, theirs);
+      base = theirs;
+      revision = d.revision || 0;
+      savedAt = d.draftSavedAt;
+      if (r.changed) {
+        model = r.model;
+        for (const id of r.removed) invalid.delete(id);
+        undoStack = []; $('#btn-undo').disabled = true;
+      }
+      renderRemote(r.remoteItems);
+      const who = d.draftSavedBy || 'Jemand anderes';
+      if (r.conflicts.length) {
+        const c = r.conflicts[0];
+        toast(c.field === 'deleted'
+          ? `„${c.name}“ wurde ${c.by === 'mine' ? 'von Ihnen' : 'von ' + who} gelöscht – die Änderung daran entfällt.`
+          : `${who} hat „${c.name}“ ebenfalls geändert – Ihre Eingabe gilt${r.conflicts.length > 1 ? ` (${r.conflicts.length} Felder)` : ''}.`, 7000);
+      } else if (r.changed) {
+        toast(`Änderungen von ${who} übernommen.`);
+      }
+      if (!ro && !C.sameModel(base, model)) {
+        setSaveState('pending');
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveNow, 700);
+      } else if (!saving) setSaveState(d.draft ? 'saved' : 'clean');
+      return r;
+    } finally { pulling = false; }
+  }
+  /* Neu zeichnen, ohne eine angefangene Eingabe zu zerstören */
+  function editingNow() {
+    const a = document.activeElement;
+    if ($('dialog[open]')) return true;
+    return !!(a && a.closest && a.closest('#screen-editor') && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.value !== a.defaultValue);
+  }
+  function renderRemote(ids) {
+    if (ids) pendingRemote = [...new Set([...(pendingRemote || []), ...ids])];
+    if (!pendingRemote || editingNow()) return;
+    const hit = pendingRemote;
+    pendingRemote = null;
+    const a = document.activeElement;
+    const tr = a && a.closest ? a.closest('tr[data-id]') : null;
+    const f = a && a.dataset ? a.dataset.f : null;
+    const metaId = a && /^m-/.test(a.id || '') ? a.id : null;
+    let sel = null; try { sel = [a.selectionStart, a.selectionEnd]; } catch { /* kein Textfeld */ }
+    renderMeta();
+    diff = C.diffOffers(published, model);
+    renderOfferBar();
+    renderGroups();
+    renderNoPrice();
+    renderChanges();
+    updatePublishBtn();
+    const n = tr && f ? $(`tr[data-id="${CSS.escape(tr.dataset.id)}"] [data-f="${f}"]`) : metaId ? $('#' + metaId) : null;
+    if (n) { n.focus(); try { if (sel && sel[0] != null) n.setSelectionRange(sel[0], sel[1]); } catch { /* kein Textfeld */ } }
+    for (const id of hit) {
+      const row = $(`tr[data-id="${CSS.escape(id)}"]`);
+      if (row) { row.classList.add('remote-hit'); setTimeout(() => row.classList.remove('remote-hit'), 2600); }
+    }
+  }
+  document.addEventListener('focusout', () => setTimeout(() => { if (pendingRemote) renderRemote(); }, 60));
+  document.addEventListener('close', () => setTimeout(() => { if (pendingRemote) renderRemote(); }, 0), true);
   window.addEventListener('beforeunload', (e) => { if (model && unsaved()) { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---------- Rückgängig ---------- */
@@ -1378,10 +1488,13 @@
     b.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px"></div>Wird veröffentlicht …';
     try {
       clearTimeout(saveTimer);
-      const r = await api('publish', { body: { model } });
+      while (saving || pulling) await new Promise((res) => setTimeout(res, 100));
+      queued = false;
+      const r = await api('publish', { body: { model, revision } });
       published = clone(model);
+      base = clone(model);
       hist = null;
-      revision = 0;
+      revision = r.revision ?? 0;
       savedAt = null;
       dlgPublish.close();
       diff = C.diffOffers(published, model);
@@ -1389,9 +1502,14 @@
       setSaveState('clean');
       toast(`Veröffentlicht: KW ${model.meta.week}/${model.meta.year} ist jetzt online (${dateTime(r.publishedAt)} Uhr).`, 6000);
     } catch (ex) {
-      b.disabled = false;
-      b.innerHTML = `${icon('send')}Erneut versuchen`;
-      $('#publish-body .dlg-body').insertAdjacentHTML('afterbegin', `<p class="err-box" style="margin:0 0 12px">${esc(ex.message)}</p>`);
+      let msg = ex.message;
+      if (ex.status === 409) {
+        // andere haben inzwischen gespeichert: übernehmen und die Zusammenfassung neu zeigen
+        try { await pullRemote(); openPublish(); msg += ' Die Änderungen sind jetzt übernommen – bitte prüfen und erneut veröffentlichen.'; } catch { /* Meldung bleibt */ }
+      }
+      const pb = $('[data-ia="publish"]');
+      if (pb) { pb.disabled = false; pb.innerHTML = `${icon('send')}${ex.status === 409 ? 'Jetzt veröffentlichen' : 'Erneut versuchen'}`; }
+      $('#publish-body .dlg-body').insertAdjacentHTML('afterbegin', `<p class="err-box" style="margin:0 0 12px">${esc(msg)}</p>`);
     }
   });
 
@@ -1460,10 +1578,19 @@
       if (!(await confirmBox('Entwurf verwerfen?', published ? 'Alle unveröffentlichten Änderungen werden verworfen. Der Entwurf entspricht danach wieder der veröffentlichten Fassung.' : 'Der gesamte Entwurf wird gelöscht.', 'Verwerfen', true))) return;
       try {
         clearTimeout(saveTimer);
-        await api('discard_draft', { body: {} });
+        while (saving || pulling) await new Promise((res) => setTimeout(res, 100));
+        queued = false;
+        let r;
+        try { r = await api('discard_draft', { body: { revision } }); } catch (ex) {
+          if (ex.status !== 409) throw ex;
+          await pullRemote().catch(() => {});
+          toast(ex.message + ' Die Änderungen sind übernommen – bitte prüfen und bei Bedarf erneut verwerfen.', 8000);
+          return;
+        }
         pushUndo();
         model = published ? clone(published) : emptyModel();
-        revision = 0; savedAt = null; invalid.clear(); autoAttr.clear();
+        base = clone(model);
+        revision = r.revision ?? 0; savedAt = null; invalid.clear(); autoAttr.clear();
         renderAll();
         setSaveState('clean');
         toast('Entwurf verworfen.');

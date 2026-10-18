@@ -168,7 +168,10 @@ with sync_playwright() as p:
     # change password, logout, login
     a.click('#btn-more'); a.click('[data-act="password"]')
     a.fill('#pw-form [name=current]', 'Sicheres-Passwort-1'); a.fill('#pw-form [name=password]', 'Neues-Passwort-22'); a.fill('#pw-form [name=password2]', 'Neues-Passwort-22')
-    a.click('#pw-form button[type=submit]'); a.wait_for_timeout(300); check('password changed', 'Passwort geändert' in a.inner_text('#toast'))
+    a.click('#pw-form button[type=submit]')
+    try: a.wait_for_function("document.querySelector('#toast').textContent.includes('Passwort geändert')", timeout=10000)
+    except Exception: pass
+    check('password changed', 'Passwort geändert' in a.inner_text('#toast'))
     a.click('#btn-more'); a.click('[data-act="logout"]'); a.wait_for_selector('#screen-auth:not([hidden])')
     a.fill('#au-user', 'admin'); a.fill('#pw1', 'Sicheres-Passwort-1'); a.click('#auth-submit'); a.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
     check('old password rejected', 'nicht korrekt' in a.inner_text('#auth-err'))

@@ -46,6 +46,8 @@ jobs:
         run: python3 werkzeuge/asset_versionen.py
       - name: Unit-Test Bestands-Parser
         run: node tests/unit/bestand_parser.test.js
+      - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
+        run: node tests/unit/merge.test.js
       - name: Workflows prüfen (actionlint)
         run: |
           curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"

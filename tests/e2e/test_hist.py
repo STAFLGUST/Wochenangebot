@@ -13,6 +13,8 @@ with sync_playwright() as p:
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
     a.fill('#au-user', 'admin'); a.fill('#pw1', 'Sicheres-Passwort-1'); a.fill('#pw2', 'Sicheres-Passwort-1'); a.click('#auth-submit'); a.wait_for_selector('tr[data-id]')
     a.click('#vt-hist'); a.wait_for_selector('#hist-data')
+    try: a.wait_for_function("/Woche/.test(document.querySelector('#hist-data').textContent)", timeout=10000)  # Daten werden nachgeladen
+    except Exception: pass
     check('no week chips in view', a.locator('.wchip').count() == 0 and '1 Woche' in a.text_content('#hist-data'), a.inner_text('#hist-data'))
     a.click('#hist-data'); a.wait_for_selector('#dlg-hist-data[open]')
     check('data dialog: KW43 from publication', a.locator('.hdtab tbody tr').count() == 1 and 'KW 43/2026' in a.inner_text('.hdtab') and 'Veröffentlichung' in a.inner_text('.hdtab'), a.inner_text('#dlg-hist-data'))

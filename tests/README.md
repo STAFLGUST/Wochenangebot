@@ -5,6 +5,8 @@ Alle Tests laufen gegen **Testkopien mit anonymisierten Testdaten** – nie gege
 | Ebene | Aufruf | Inhalt |
 | --- | --- | --- |
 | Unit | `node tests/unit/bestand_parser.test.js` | Bestands-Parser der App gegen unabhängige Referenzauswertung |
+| Unit | `node tests/unit/merge.test.js` | Abgleich beim gemeinsamen Bearbeiten des Entwurfs (feldweise, Kundenpreise, neue/gelöschte Artikel) |
+| Versionsnummern | `python3 werkzeuge/asset_versionen.py` | Skripte/Stylesheets tragen die Prüfsumme ihres Inhalts (sonst laden Browser alte Kopien) |
 | Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | 14 Gruppen, über 400 Prüfungen im echten Browser gegen frische PHP-Testserver |
 | Betrieb | `sh tests/deploy/test_sichern.sh`, `sh tests/deploy/test_freigabe.sh` | Datensicherung; Release-Modus mit Healthcheck und automatischem Rückfall |
 
@@ -36,6 +38,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | sidenav | 12 | Navigation, Rechte je Rolle |
 | angebote | 38 | Kundenangebote: eigene Preise, Ausblenden, Übernahme, Verwaltung, Rechte, keine Kundenpreise öffentlich |
 | kunden | 125 | Kundenstammdaten, Freischaltung, Kunden-Login mit Pflicht-Passwortwechsel, Sperre, Sitzungsende, kein Zugriff auf den Eingabebereich, Merkliste je Kunde (geräteübergreifend, Übernahme der Browser-Merkliste), Oberfläche |
+| gemeinsam | 34 | Mehrere Bearbeiter gleichzeitig: Revisionen, 409 mit Namen, Anwesenheit, Hintergrundabfragen verlängern keine Sitzung, Abgleich in der Oberfläche, angefangene Eingaben bleiben, Veröffentlichen mit Konflikt |
 | wartung | 25 | Wartungsmodus (Rechte, Sperre der Kundenfunktionen, Mitarbeiter arbeiten weiter, Abmeldelinks frei, Protokoll, Oberfläche) und erweiterte Übersicht |
 | bestellung | 64 | Bestellwunsch aus dem Portal: Einstellungen, serverseitige Kundenpreise, Prüfungen (Version, Freischaltung, Mengen, Datum), E-Mail an Empfänger + Kopie, Ausfall des Mailservers, Oberfläche (Mengen, Leiste, Dialog, Mobil) |
 | kunden_mail | 137 | E-Mail-Versand gegen Test-Mailserver: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail, Rechte, Header-Injection, Ausfall des Mailservers, Postfach im Eingabebereich (verschlüsselt, Vorrang vor .env), Abmelden vom Wochenangebot (Link + Ein-Klick) |

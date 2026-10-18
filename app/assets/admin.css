@@ -678,3 +678,9 @@ body.ro .vtog { display: none; }
 .wartung-foot { gap: 10px; align-items: center; flex-wrap: wrap; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 :root[data-theme="dark"] .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; }
+
+/* Gemeinsames Bearbeiten: wer ist noch im Eingabebereich, von anderen geänderte Zeilen */
+.save-state .editors { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; flex: none; }
+.etab tr.remote-hit > td { animation: remote-hit 2.6s ease-out; }
+@keyframes remote-hit { 0%, 35% { background: rgba(214, 160, 40, .22); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .etab tr.remote-hit > td { animation: none; outline: 2px solid rgba(214, 160, 40, .5); } }

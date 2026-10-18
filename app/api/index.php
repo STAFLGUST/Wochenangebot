@@ -321,7 +321,14 @@ function start_session(): void
     session_start();
     $max = (int)sec()['idleMinutes'] * 60;
     if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) { $_SESSION = []; session_regenerate_id(true); }
-    if (!empty($_SESSION['uid'])) $_SESSION['seen'] = time();
+    if (!empty($_SESSION['uid']) && !bg_request()) $_SESSION['seen'] = time();
+}
+/* Automatische Abfragen im Hintergrund (Abgleich mit anderen Bearbeitern) zählen nicht als Aktivität –
+   die Abmeldung nach Inaktivität bleibt wirksam. */
+function bg_request(): bool
+{
+    global $action;
+    return ($action ?? '') === 'draft_ping' || (($action ?? '') === 'draft' && ($_GET['bg'] ?? '') === '1');
 }
 /* Angemeldeter Nutzer – Rolle und Status werden bei jeder Anfrage frisch gelesen */
 $ME = null;
@@ -338,7 +345,7 @@ function current_user(): ?array
     $sid = (string)($_SESSION['sid'] ?? '');
     $reg = store_read('sitzungen') ?? [];
     if ($sid === '' || !isset($reg[$sid]) || $reg[$sid]['uid'] !== $users[$i]['id']) { $_SESSION = []; return null; }
-    if ((int)$reg[$sid]['seen'] < time() - 60 || $reg[$sid]['ip'] !== client_ip()) {
+    if (!bg_request() && ((int)$reg[$sid]['seen'] < time() - 60 || $reg[$sid]['ip'] !== client_ip())) {
         with_lock('sitzungen', function () use ($sid) {
             $l = store_read('sitzungen') ?? [];
             if (isset($l[$sid])) { $l[$sid]['seen'] = time(); $l[$sid]['ip'] = client_ip(); store_write('sitzungen', sess_prune($l)); }
@@ -1400,6 +1407,31 @@ function master_changes(array $old, array $new): array
     return $d;
 }
 
+/* ---------------- Gemeinsames Bearbeiten des Entwurfs ----------------
+   Jede Speicherung erhöht die Revision. Nach Veröffentlichen/Verwerfen bleibt die Revision in
+   „entwurf-stand“ erhalten, damit veraltete Fenster den Entwurf nicht mit altem Stand neu anlegen. */
+function draft_rev(?array $draft): int
+{
+    if ($draft !== null) return (int)($draft['rev'] ?? 0);
+    $st = store_read('entwurf-stand');
+    return is_array($st) ? (int)($st['rev'] ?? 0) : 0;
+}
+function draft_end(?array $draft, string $why): int
+{
+    $rev = draft_rev($draft) + 1;
+    store_write('entwurf-stand', ['rev' => $rev, 'reason' => $why, 'by' => current_user()['name'] ?? '', 'at' => now()]);
+    store_delete('entwurf');
+    return $rev;
+}
+function draft_conflict(?array $draft): void
+{
+    $st = $draft === null ? store_read('entwurf-stand') : null;
+    $by = (string)($draft['savedBy'] ?? ($st['by'] ?? ''));
+    $what = $draft === null && is_array($st) ? 'den Entwurf ' . ($st['reason'] ?? 'geändert') : 'den Entwurf geändert';
+    respond(['ok' => false, 'conflict' => true, 'revision' => draft_rev($draft), 'by' => $by,
+             'error' => ($by !== '' ? $by : 'Jemand anderes') . ' hat inzwischen ' . $what . '.'], 409);
+}
+
 /* ---------------- Aktionen ---------------- */
 
 $action = (string)($_GET['action'] ?? '');
@@ -1407,7 +1439,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -2698,8 +2730,33 @@ Ausgelöst von: {$me['name']}
                 'publishedAt' => $pub['publishedAt'] ?? null,
                 'draft' => $draft,
                 'draftSavedAt' => $draft['savedAt'] ?? null,
-                'revision' => (int)($draft['rev'] ?? 0),
+                'draftSavedBy' => $draft['savedBy'] ?? null,
+                'revision' => draft_rev($draft),
             ]);
+        }
+
+        /* Abgleich: Stand des Entwurfs und wer gerade im Eingabebereich ist (alle paar Sekunden) */
+        case 'draft_ping': {
+            $me = require_auth(true);
+            $now = time();
+            $pres = store_read('anwesenheit') ?? [];
+            $mine = $pres[$me['id']] ?? null;
+            if (!is_array($mine) || (int)($mine['at'] ?? 0) < $now - 20 || ($mine['name'] ?? '') !== $me['name']) {
+                $pres = with_lock('anwesenheit', function () use ($me, $now) {
+                    $l = store_read('anwesenheit') ?? [];
+                    foreach ($l as $k => $v) if (!is_array($v) || (int)($v['at'] ?? 0) < $now - 90) unset($l[$k]);
+                    $l[$me['id']] = ['name' => $me['name'], 'role' => $me['role'], 'at' => $now];
+                    store_write('anwesenheit', $l);
+                    return $l;
+                });
+            }
+            $others = [];
+            foreach ($pres as $id => $v) if ($id !== $me['id'] && is_array($v) && (int)($v['at'] ?? 0) >= $now - 45) $others[] = ['name' => (string)($v['name'] ?? ''), 'role' => (string)($v['role'] ?? '')];
+            usort($others, fn($a, $b) => strcmp($a['name'], $b['name']));
+            $draft = store_read('entwurf');
+            $pub = store_read('angebot');
+            respond(['ok' => true, 'revision' => draft_rev($draft), 'savedBy' => $draft['savedBy'] ?? null, 'savedAt' => $draft['savedAt'] ?? null,
+                     'publishedAt' => $pub['publishedAt'] ?? null, 'offersRev' => (int)offers_load()['rev'], 'editors' => $others]);
         }
 
         case 'save_draft': {
@@ -2707,12 +2764,11 @@ Ausgelöst von: {$me['name']}
             with_lock('entwurf', function () use ($CFG) {
                 $b = body();
                 $prev = store_read('entwurf');
-                $cur = (int)($prev['rev'] ?? 0);
-                if ($prev !== null && (int)($b['revision'] ?? -1) !== $cur) {
-                    fail('Der Entwurf wurde inzwischen in einem anderen Fenster geändert. Bitte die Seite neu laden.', 409);
-                }
+                $cur = draft_rev($prev);
+                if ((int)($b['revision'] ?? -1) !== $cur) draft_conflict($prev);
                 $model = clean_model($b['model'] ?? null, false);
                 $model['savedAt'] = now();
+                $model['savedBy'] = current_user()['name'];
                 $model['rev'] = $cur + 1;
                 store_write('entwurf', $model);
                 $before = $prev ?? store_read('angebot');
@@ -2740,15 +2796,18 @@ Ausgelöst von: {$me['name']}
             require_auth(true, 'editor');
             with_lock('entwurf', function () use ($CFG) {
                 $dr = store_read('entwurf');
-                store_delete('entwurf');
+                if (array_key_exists('revision', body()) && (int)body()['revision'] !== draft_rev($dr)) draft_conflict($dr);
+                $rev = draft_end($dr, 'verworfen');
                 if ($dr) { $d = changes_between($dr, store_read('angebot') ?? $dr); audit('discard', 'Entwurf verworfen' . ($d ? ' (' . changes_summary($d) . ' zurückgenommen)' : ''), array_slice($d, 0, 2000)); }
-                respond(['ok' => true]);
+                respond(['ok' => true, 'revision' => $rev]);
             });
         }
 
         case 'publish': {
             require_auth(true, 'editor');
             with_lock('entwurf', function () use ($CFG) {
+                $dr = store_read('entwurf');
+                if (array_key_exists('revision', body()) && (int)body()['revision'] !== draft_rev($dr)) draft_conflict($dr);
                 $model = clean_model(body()['model'] ?? null, true);
                 $prev = store_read('angebot');
                 if ($prev) {
@@ -2760,12 +2819,12 @@ Ausgelöst von: {$me['name']}
                 }
                 $model['publishedAt'] = now();
                 store_write('angebot', $model);
-                store_delete('entwurf');
+                $rev = draft_end($dr, 'veröffentlicht');
                 $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
                 if ($h) { $hid = history_id($h['week'], $h['year']); store_write('historie/' . $hid, $h); history_undelete($hid); }
                 $d = $prev ? changes_between($prev, $model) : [];
                 audit('publish', 'KW ' . $model['meta']['week'] . '/' . $model['meta']['year'] . ' veröffentlicht – ' . count($model['items']) . ' Artikel' . ($prev ? ' (' . changes_summary($d) . ')' : ' (erste Veröffentlichung)'), array_slice($d, 0, 2000));
-                respond(['ok' => true, 'publishedAt' => $model['publishedAt']]);
+                respond(['ok' => true, 'publishedAt' => $model['publishedAt'], 'revision' => $rev]);
             });
         }
 
