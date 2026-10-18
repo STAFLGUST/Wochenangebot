@@ -92,10 +92,11 @@ function abmelde_melden(array $c, bool $ab, string $via): void
     $who = ['username' => 'kunde:' . ($c['login']['username'] ?? $c['id']), 'name' => $c['firma'], 'role' => 'kunde'];
     $txt = $ab ? 'Kunde hat sich vom Wochenangebot per E-Mail abgemeldet' . ($via === '1klick' ? ' (Ein-Klick im E-Mail-Programm)' : '') : 'Kunde hat sich wieder für das Wochenangebot per E-Mail angemeldet';
     audit('kunde_abmeldung', $txt, [['k' => "c{$c['id']}|mailAngebot", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Wochenangebot per E-Mail', 'from' => $ab ? 'ja' : 'nein', 'to' => $ab ? 'nein' : 'ja']], $who);
-    // Hinweis an uns (Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht
+    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht
     $cfg = mail_cfg();
     if (!$cfg || !mail_base_url()) return;
-    $to = $cfg['replyTo'] ?: $cfg['from'];
+    $targets = notify_targets('abmeldung');
+    if (!$targets) return;
     $sub = ($ab ? 'Abmeldung' : 'Wiederanmeldung') . " Wochenangebot: {$c['firma']}";
     $body = ($ab ? "{$c['firma']} hat sich vom Wochenangebot per E-Mail abgemeldet und erhält es nicht mehr." : "{$c['firma']} möchte das Wochenangebot wieder per E-Mail erhalten.")
         . "
@@ -106,10 +107,12 @@ Zeit: " . date('d.m.Y, H:i') . " Uhr
 
 Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwort-Links können weiterhin gesendet werden.
 ";
-    $r = mail_send_many($cfg, [['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $body, 'html' => mail_layout($sub, '<p style="margin:0;">' . nl2br(mail_h($body)) . '</p>', '', '')]])[0];
-    with_lock('mailversand', function () use ($to, $r, $c) {
+    $html = mail_layout($sub, '<p style="margin:0;">' . nl2br(mail_h($body)) . '</p>', '', '');
+    $jobs = array_map(function ($to) use ($sub, $body, $html) { return ['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $body, 'html' => $html]; }, $targets);
+    $rs = mail_send_many($cfg, $jobs);
+    with_lock('mailversand', function () use ($jobs, $rs, $c) {
         $l = store_read('mailversand') ?? [];
-        $l[] = ['t' => now(), 'typ' => 'hinweis', 'kid' => $c['id'], 'firma' => $c['firma'], 'to' => $to, 'ok' => $r['ok'], 'error' => $r['error'] ?? '', 'by' => 'automatisch'];
+        foreach ($jobs as $k => $j) $l[] = ['t' => now(), 'typ' => 'hinweis', 'kid' => $c['id'], 'firma' => $c['firma'], 'to' => $j['to'], 'ok' => !empty($rs[$k]['ok']), 'error' => $rs[$k]['error'] ?? '', 'by' => 'automatisch'];
         store_write('mailversand', array_slice($l, -3000));
     });
 }
@@ -340,7 +343,7 @@ function mail_record(array $entries, ?array $wk = null): void
         store_write('mailversand', array_slice($l, -3000));
     });
 }
-const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch', 'restposten' => 'Sonderposten'];
+const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch', 'restposten' => 'Sonderposten', 'benachrichtigung' => 'Benachrichtigung'];
 function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
 {
     if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");

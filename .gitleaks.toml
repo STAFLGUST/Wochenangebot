@@ -30,6 +30,10 @@ regexes = [
   '''Weg-Kennwort-42''',
   '''Neu-Merk-Kennwort-7''',
   '''Kantine-Kennwort-5''',
+  # Benachrichtigungen (tests/e2e/test_benachrichtigung.py)
+  '''Max-Zugang-12345''',
+  '''Zweiter-Zugang-4711''',
+  '''Dritter-Zugang-4712''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]

@@ -96,6 +96,7 @@ function store_commit(): void
 function store_rollback(): void
 {
     if (!empty($GLOBALS['store_tx'])) { store_db()->exec('ROLLBACK'); $GLOBALS['store_tx'] = false; }
+    $GLOBALS['notify_queue'] = [];   // vorgemerkte Benachrichtigungen gehören zu verworfenen Änderungen
 }
 function with_lock(string $name, callable $fn)
 {

@@ -218,18 +218,11 @@ switch ($action) {
         case 'bestell_settings_save': {
             $me = require_admin_confirmation();
             $b = body();
-            $raw = is_array($b['to'] ?? null) ? implode(',', $b['to']) : (string)($b['to'] ?? '');
-            $to = [];
-            foreach (preg_split('/[\s,;]+/', $raw) as $a) {
-                if ($a === '') continue;
-                if (filter_var($a, FILTER_VALIDATE_EMAIL) === false) fail("„" . mb_substr($a, 0, 80) . "“ ist keine gültige E-Mail-Adresse.", 422);
-                $to[strtolower($a)] = $a;
-            }
-            $to = array_values($to);
-            if (count($to) > 5) fail('Höchstens 5 Empfänger für Bestellwünsche.', 422);
-            $en = !empty($b['enabled']);
-            if ($en && !$to) fail('Bitte mindestens eine Adresse angeben, an die Bestellwünsche gehen.', 422);
             $old = order_settings();
+            // Empfänger: werden unter „Benachrichtigungen“ gepflegt; ohne Angabe bleiben sie unverändert
+            $to = array_key_exists('to', $b) ? notify_parse_to($b['to'], 'Bestellwünsche') : $old['to'];
+            $en = !empty($b['enabled']);
+            if ($en && !$to) fail('Bitte zuerst unter „Benachrichtigungen“ mindestens eine Adresse für neue Bestellwünsche eintragen.', 422);
             $new = ['enabled' => $en, 'to' => $to, 'copy' => !empty($b['copy']), 'updatedAt' => now(), 'updatedBy' => $me['name']];
             store_write('bestellung', $new);
             $ch = [];

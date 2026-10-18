@@ -60,6 +60,7 @@ SUITES['testumgebung'] = (8790, 'data-seed', True, {'WA_TESTUMGEBUNG': '1', 'WA_
 SUITES['order_outbox'] = SUITES['bestellung']
 SUITES['order_management'] = SUITES['bestellung']
 SUITES['order_management_ui'] = SUITES['bestellung']
+SUITES['benachrichtigung'] = SUITES['bestellung']
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 
