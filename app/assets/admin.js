@@ -3250,9 +3250,9 @@
   /* Bestellverwaltung: Versandzustand und Bearbeitung bleiben getrennt. */
   const ORDER_LABELS = { neu: 'Neu', in_bearbeitung: 'In Bearbeitung', bestaetigt: 'Bestätigt', erledigt: 'Erledigt', storniert: 'Storniert' };
   const ORDER_NEXT = { neu: ['in_bearbeitung', 'storniert'], in_bearbeitung: ['neu', 'bestaetigt', 'storniert'], bestaetigt: ['in_bearbeitung', 'erledigt', 'storniert'], erledigt: [], storniert: [] };
-  const ORDER_MAIL = { neu: ['st-warn', 'Zustellung ungeklärt'], gesendet: ['st-ok', 'E-Mail zugestellt'], fehler: ['st-err', 'E-Mail nicht zugestellt'] };
+  const ORDER_MAIL = { neu: ['st-warn', 'Zustellung ungeklärt'], gesendet: ['st-ok', 'Vom Mailserver angenommen'], fehler: ['st-err', 'Versand nicht bestätigt'] };
   const orderBadge = (w) => `<span class="ord-st ord-${esc(w)}">${esc(ORDER_LABELS[w] || w)}</span>`;
-  const orderMail = (d) => { const m = ORDER_MAIL[d] || ['', d || '']; return `<span class="${m[0]}">${esc(m[1])}</span>`; };
+  const orderMail = (d, pending = 0) => { const m = pending ? ['st-warn', 'Versandaufträge offen'] : ORDER_MAIL[d] || ['', d || '']; return `<span class="${m[0]}">${esc(m[1])}</span>`; };
   const dmyIso = (s) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '');
   let orderOffset = 0, orderQuery = '', orderFilter = '', orderStaff = [], orderEdit = null;
   async function renderOrdersView() {
@@ -3264,11 +3264,11 @@
       const staffName = (id) => (orderStaff.find((u) => u.id === id) || {}).name || '';
       const rows = r.orders.map((o) => `<tr data-order-nr="${esc(o.nr)}" tabindex="0">
           <td class="ord-nr"><div class="nm">${esc(o.nr)}</div><div class="sub">${esc(dateTime(o.t))}</div></td>
-          <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div></td>
+          <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div>${o.mailPending ? `<div class="ord-mobile-mail form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</div>` : ''}</td>
           <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
           <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}</div></td>
           <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
-          <td class="ord-mail">${orderMail(o.delivery)}</td>
+          <td class="ord-mail">${orderMail(o.delivery, o.mailPending)}${o.mailPending ? `<br><span class="form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</span>` : ''}</td>
         </tr>`).join('');
       host.innerHTML = `<form id="orders-filter" class="ed-toolbar ord-filter">
           <label class="search">${icon('search')}<input name="q" type="search" value="${esc(orderQuery)}" placeholder="Nummer, Firma oder Referenz" aria-label="Bestellwunsch suchen"></label>
@@ -3290,7 +3290,7 @@
     const k = o.kunde;
     const staffName = (id) => (orderStaff.find((u) => u.id === id) || {}).name || '';
     d.innerHTML = `<form class="dlg" id="order-edit-form">
-      <div class="dlg-head"><div><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><p>${esc(o.angebotName || '')}${o.week ? ` · KW ${esc(o.week)}/${esc(o.year)}` : ''} · Eingang ${esc(dateTime(o.t))} · ${orderMail(o.delivery)}${o.deliveryError ? ` <span class="muted">(${esc(o.deliveryError)})</span>` : ''}</p></div>
+      <div class="dlg-head"><div><h2 id="order-admin-title">${esc(o.nr)} · ${esc(o.firma)}</h2><p>${esc(o.angebotName || '')}${o.week ? ` · KW ${esc(o.week)}/${esc(o.year)}` : ''} · Eingang ${esc(dateTime(o.t))} · ${orderMail(o.delivery, o.mailPending)}${o.deliveryError ? ` <span class="muted">(${esc(o.deliveryError)})</span>` : ''}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="ord-meta">
@@ -3302,6 +3302,10 @@
           ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(fmtNum.format(p.qty))} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : esc(fmtNum.format(p.price)) + ' €'}</td><td class="r">${p.sum == null ? '–' : esc(fmtNum.format(p.sum)) + ' €'}</td></tr>`).join('')}
         </tbody><tfoot><tr><td colspan="2"><strong>Summe (ca.)</strong></td><td class="r">${esc(fmtNum.format(o.totalQty || 0))} kg</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr></tfoot></table>
         ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
+        <section class="ord-outbox"><h3>E-Mail-Versand</h3>
+          <p class="hint">Erfolgreich bedeutet: vom Mailserver angenommen. Bei einem Verbindungsabbruch kann eine E-Mail trotz fehlender Bestätigung angekommen sein. Vor erneutem Versand bitte prüfen.</p>
+          ${(o.outbox || []).length ? o.outbox.map((j) => `<div class="ord-mailjob"><strong>${j.kind === 'bestellkopie' ? 'Kundenkopie' : 'Interner Empfänger'} · ${esc(j.to)}</strong><p>${esc(({queued:'Wartet auf Versand',sending:'Versand läuft oder wurde unterbrochen – Status prüfen',sent:'Vom Mailserver angenommen',failed:'Versand nicht bestätigt'})[j.state] || j.state)} · Versuche: ${esc(j.attempts)} · ${esc(dateTime(j.updatedAt))}</p>${j.error ? `<p class="form-err">${esc(j.error)}</p>` : ''}${j.state !== 'sent' ? `<button type="button" class="btn sm" data-order-mail="${esc(j.id)}">${j.attempts ? 'Erneuten Versand prüfen' : 'Versand starten'}</button>` : ''}${j.history.length ? `<details><summary>Versandverlauf</summary><ul>${j.history.map((h) => `<li>${esc(dateTime(h.t))} · ${esc(h.by)} · Versuch ${esc(h.attempt)} · ${esc(({sending:'Gestartet',sent:'Angenommen',failed:'Nicht bestätigt'})[h.state] || h.state)}</li>`).join('')}</ul></details>` : ''}</div>`).join('') : '<p class="hint">Für diesen älteren Vorgang liegen keine einzelnen Versandaufträge vor. Ein gezielter Neuversand ist hier nicht möglich.</p>'}
+        </section>
         <div class="form-grid two">
           <label class="fld"><span>Bearbeitungsstatus</span><select name="workflow"${closed ? ' disabled' : ''}>${states.map((s) => `<option value="${s}"${o.workflow === s ? ' selected' : ''}>${ORDER_LABELS[s]}</option>`).join('')}</select></label>
           <label class="fld"><span>Verantwortlich</span><select name="assignee"><option value="">Nicht zugeordnet</option>${orderStaff.map((u) => `<option value="${esc(u.id)}"${o.assignee === u.id ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label>
@@ -3323,9 +3327,20 @@
     if (tr) openOrder(tr.dataset.orderNr);
   });
   $('#view-orders').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-order-nr]')) openOrder(e.target.dataset.orderNr); });
-  $('#dlg-order-admin').addEventListener('click', (e) => {
+  $('#dlg-order-admin').addEventListener('click', async (e) => {
     if (e.target === e.currentTarget || e.target.closest('[data-close]')) { e.currentTarget.close(); return; }
     if (e.target.closest('[data-order-refresh]')) openOrder(orderEdit.nr);
+    const retry = e.target.closest('[data-order-mail]');
+    if (retry) {
+      const o = orderEdit, j = o.outbox.find((x) => x.id === retry.dataset.orderMail);
+      if (!j || !(await confirmBox('E-Mail versenden?', `Bestellwunsch ${esc(o.nr)} an ${esc(j.to)}. Bei einem früheren Verbindungsabbruch kann die Nachricht bereits angekommen sein. Bitte prüfen. Nur diese Nachricht wird gesendet; es entsteht keine neue Bestellung. Ungespeicherte Änderungen im Dialog werden verworfen.`, 'Versand bestätigen', true))) return;
+      retry.disabled = true;
+      try {
+        const r = await api('bestellung_mail_retry', { body: {nr:o.nr, jobId:j.id, attempts:j.attempts, confirm:true} });
+        const sent = r.order.outbox.find((x) => x.id === j.id).state === 'sent';
+        await openOrder(o.nr); renderOrdersView(); toast(sent ? 'Mailserver hat die Nachricht angenommen.' : 'Versand weiterhin nicht bestätigt. Bitte Fehlerhinweis prüfen.', 6000);
+      } catch (ex) { $('#order-edit-error').textContent = ex.message; retry.disabled = false; }
+    }
   });
   $('#dlg-order-admin').addEventListener('submit', async (e) => {
     e.preventDefault();

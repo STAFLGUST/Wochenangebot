@@ -22,6 +22,8 @@ function order_view(array $o, bool $staff): array
     $out['workflow'] = order_state($o, $staff);
     $out['revision'] = (int)($o['revision'] ?? 1);
     if ($staff) {
+        $out['mailPending'] = count(array_filter($o['outbox'] ?? [], fn($j) => $j['state'] !== 'sent'));
+        $out['outbox'] = order_outbox_view($o);
         $out['delivery'] = $o['status'] ?? 'neu';
         $out['deliveryError'] = $o['error'] ?? '';
         $out['assignee'] = $o['assignee'] ?? '';
@@ -49,13 +51,20 @@ function orders_action(string $action): bool
 {
     $c = null;
     $customer = in_array($action, ['kunde_bestellungen', 'kunde_bestellung_detail'], true);
-    if (!$customer && !in_array($action, ['bestellungen', 'bestellung', 'bestellung_save'], true)) return false;
+    if (!$customer && !in_array($action, ['bestellungen', 'bestellung', 'bestellung_save', 'bestellung_mail_retry'], true)) return false;
     header('Cache-Control: private, no-store');
     if ($customer) {
         $c = current_customer();
         if (!$c) fail('Bitte anmelden.', 401);
         if (!empty($c['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
-    } else $me = require_auth($action === 'bestellung_save', 'editor');
+    } else $me = require_auth(in_array($action, ['bestellung_save','bestellung_mail_retry'], true), 'editor');
+    if ($action === 'bestellung_mail_retry') {
+        $b = body();
+        if (!is_string($b['nr'] ?? null) || !is_string($b['jobId'] ?? null) || !is_int($b['attempts'] ?? null) || ($b['confirm'] ?? false) !== true) fail('Versandauftrag und ausdrückliche Bestätigung erforderlich.', 422);
+        $o = order_outbox_send($b['nr'], $b['jobId'], $b['attempts'], $me['name']);
+        audit('bestellung', 'E-Mail-Versand geprüft/erneut versucht: ' . $o['nr']);
+        respond(['ok'=>true, 'order'=>order_view($o, true)]);
+    }
     if ($action === 'bestellung_save') {
         $b = body();
         foreach (['nr','workflow','assignee','note'] as $field) if (!is_string($b[$field] ?? null)) fail('Ungültiges Feld: ' . $field, 422);
@@ -98,7 +107,7 @@ function orders_action(string $action): bool
     $offset = max(0, min(1000000, (int)($_GET['offset'] ?? 0))); $limit = max(1, min(100, (int)($_GET['limit'] ?? 25)));
     $rows = array_map(fn($o) => order_view($o, !$customer), array_slice($all, $offset, $limit));
     // List responses omit position arrays; detail endpoint delivers the immutable snapshot.
-    foreach ($rows as &$row) { $row['positionCount'] = count($row['positions'] ?? []); unset($row['positions'], $row['history'], $row['note'], $row['kunde']); } unset($row);
+    foreach ($rows as &$row) { $row['positionCount'] = count($row['positions'] ?? []); unset($row['positions'], $row['history'], $row['note'], $row['kunde'], $row['outbox']); } unset($row);
     $out = ['ok'=>true,'apiVersion'=>1,'orders'=>$rows,'total'=>count($all),'offset'=>$offset,'limit'=>$limit];
     if (!$customer) $out['assignees'] = array_values(array_map(fn($u) => ['id'=>$u['id'],'name'=>$u['name']], array_filter(users_load(), fn($u) => !empty($u['active']) && in_array($u['role'], ['editor','admin'], true))));
     respond($out);

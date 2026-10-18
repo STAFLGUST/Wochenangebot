@@ -99,7 +99,7 @@ code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'q
 check('without copy setting: only internal mail', code == 200 and r['copy'] is None and len(smtp.messages) == n0 + 1)
 smtp.close(); time.sleep(0.2)
 code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'qty': 2}]})
-check('mail server down: clear error for customer', code == 502 and 'nicht übermittelt' in r.get('error', ''), r)
+check('mail server down: clear error for customer', code == 502 and 'gespeichert' in r.get('error', '') and 'nicht bestätigt' in r.get('error', ''), r)
 stored = storage_raw('bestellungen')
 check('failed order kept on the server', '"status":"fehler"' in stored.replace(' ', ''))
 smtp = TestSmtp(2526, password='Test-Postfach-1')

@@ -54,6 +54,7 @@ require __DIR__ . '/mail.php';
 $DATA = rtrim((string)$CFG['data_dir'], '/');
 require __DIR__ . '/storage.php';
 require __DIR__ . '/orders.php';
+require __DIR__ . '/order_outbox.php';
 const CATEGORIES = ['Rind', 'Kalb', 'Schwein', 'Lamm & Schaf', 'Geflügel', 'Knochen', 'Sonstiges'];
 const CONDITIONS = ['frisch', 'gefroren', 'frisch-gefroren', 'dry-aged', 'unbekannt'];
 const PRICE_STATUS = ['value', 'request', 'none'];
@@ -1565,7 +1566,7 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'kunden_restposten'];
+                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -1885,42 +1886,17 @@ try {
                       'onRequest' => $req, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu', 'workflow' => 'neu', 'revision' => 1, 'requestId' => $key, 'requestHash' => $hash];
                 $o['kunde'] = array_intersect_key($c, array_flip(['firma','nr','ansprechpartner','strasse','plz','ort','email','telefon']));
                 $o['kunde']['username'] = $c['login']['username'];
+                $o['outbox'] = order_outbox_create($o);
                 $all[] = $o;
                 store_write('bestellungen', $all);
                 return $o;
             });
-            $o['kunde'] = ['firma' => $c['firma'], 'nr' => $c['nr'] ?? '', 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'strasse' => $c['strasse'] ?? '', 'plz' => $c['plz'] ?? '', 'ort' => $c['ort'] ?? '',
-                           'email' => $c['email'] ?? '', 'telefon' => $c['telefon'] ?? '', 'username' => $c['login']['username']];
-            $cfg = mail_cfg();
-            $st = order_settings();
-            [$sub, $txt, $html] = mail_tpl_bestellung($o, false);
-            $cfgIn = $cfg; if (filter_var($o['kunde']['email'], FILTER_VALIDATE_EMAIL)) $cfgIn['replyTo'] = $o['kunde']['email'];
-            $jobs = [];
-            foreach ($st['to'] as $to) $jobs[] = ['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $txt, 'html' => $html];
-            $res = mail_send_many($cfgIn, $jobs);
-            $okIn = count(array_filter($res, function ($r) { return $r['ok']; }));
-            $copied = false;
-            if ($okIn && $st['copy'] && filter_var($o['kunde']['email'], FILTER_VALIDATE_EMAIL)) {
-                [$sub2, $txt2, $html2] = mail_tpl_bestellung($o, true);
-                $copied = mail_send_many($cfg, [['to' => $o['kunde']['email'], 'name' => $o['kunde']['ansprechpartner'] ?: $o['kunde']['firma'], 'subject' => $sub2, 'text' => $txt2, 'html' => $html2]])[0]['ok'];
-            }
-            $err = $okIn ? '' : (array_values($res)[0]['error'] ?? 'unbekannter Fehler');
-            with_lock('bestellungen', function () use ($o, $okIn, $copied, $err) {
-                $all = store_read('bestellungen') ?? [];
-                foreach ($all as $i => $x) if ($x['nr'] === $o['nr']) { $all[$i]['status'] = $okIn ? 'gesendet' : 'fehler'; $all[$i]['kopie'] = $copied; if ($err) $all[$i]['error'] = $err; }
-                store_write('bestellungen', $all);
-            });
-            with_lock('mailversand', function () use ($res, $st, $o, $copied, $okIn) {
-                $l = store_read('mailversand') ?? [];
-                foreach ($st['to'] as $i => $to) $l[] = ['t' => now(), 'typ' => 'bestellung', 'kid' => $o['kid'], 'firma' => $o['firma'], 'to' => $to, 'ok' => $res[$i]['ok'] ?? false, 'error' => $res[$i]['error'] ?? '', 'by' => 'Kunde'];
-                if ($okIn && $copied !== null) if ($copied) $l[] = ['t' => now(), 'typ' => 'bestellkopie', 'kid' => $o['kid'], 'firma' => $o['firma'], 'to' => $o['kunde']['email'], 'ok' => true, 'error' => '', 'by' => 'Kunde'];
-                store_write('mailversand', array_slice($l, -3000));
-            });
+            try { $o = order_outbox_send($o['nr']); } catch (RuntimeException $e) { $o['status'] = 'fehler'; }   // Bestellung ist gespeichert; Versand bleibt als offener Auftrag sichtbar
+            $okIn = ($o['status'] ?? '') === 'gesendet';
             $who = ['username' => 'kunde:' . $c['login']['username'], 'name' => $c['firma'], 'role' => 'kunde'];
             audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg)' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
                 array_map(function ($p) { return ['k' => 'b|' . $p['id'], 'code' => $p['code'], 'name' => $p['name'], 'f' => 'Menge', 'from' => '', 'to' => de_qty($p['qty']) . ' kg' . ($p['price'] !== null ? ' × ' . de_num($p['price']) . ' €' : ' (Preis auf Anfrage)')]; }, $pos), $who);
-            if (!$okIn) fail('Ihr Bestellwunsch konnte gerade nicht übermittelt werden. Bitte versuchen Sie es in einigen Minuten erneut oder rufen Sie uns an.', 502);
-            $o['status'] = 'gesendet'; $o['kopie'] = $copied;
+            if (!$okIn) fail('Ihr Bestellwunsch wurde gespeichert, die E-Mail konnte aber nicht bestätigt werden. Bitte nicht als neuen Bestellwunsch erneut eingeben. Unser Team kann den Versand prüfen.', 502);
             order_receipt($o);
         }
 

@@ -736,3 +736,11 @@ body.ro .sale-tag { cursor: default; }
 .sptab .in { width: 100%; border: 1px solid var(--line); background: var(--surface); }
 .sp-base { max-width: 260px; }
 @media (max-width: 700px) { .etab .vtog.sale { display: none; } .sptab .sp-norm { display: none; } }
+
+.ord-outbox { margin: 20px 0; }
+.ord-mailjob { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+.ord-mailjob p { margin: 8px 0; }
+.ord-mailjob details { margin-top: 8px; }
+
+.ord-mobile-mail { display: none; font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 860px) { .ord-mobile-mail { display: block; } }
