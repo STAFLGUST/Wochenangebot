@@ -1,5 +1,6 @@
 """E-Mail an Kunden: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail.
 Läuft gegen einen Test-Mailserver (smtp_test.py) – es werden nie echte E-Mails versendet."""
+from umgebung import storage_raw
 import json
 import re
 import sys
@@ -222,7 +223,7 @@ check('account saved, connection + login verified', code == 200 and r['connectio
 code, st, raw = A.call('mail_status', raw=True)
 check('saved account takes precedence over .env', st['smtp']['source'] == 'admin' and st['smtp']['from'] == 'konto@example.org' and st['account']['password'] is True and st['envConfigured'] is True)
 check('password never returned', KONTO_PW not in raw)
-stored = open(os.path.join(UDATA, 'mailkonto.php'), encoding='utf-8').read()
+stored = storage_raw('mailkonto')
 check('password stored encrypted only', KONTO_PW not in stored and '"passEnc": "v1:' in stored.replace('":"', '": "'))
 check('separate key file exists', os.path.exists(os.path.join(UDATA, 'mail-schluessel.php')))
 n0 = len(smtp2.messages)

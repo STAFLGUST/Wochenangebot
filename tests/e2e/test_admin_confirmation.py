@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import time
 from auth_helpers import Client, PW, read_users, expire_confirmation_lock
+from umgebung import storage_docs, storage_lock, storage_sqlite
 
 results = []
 def check(name, condition):
@@ -27,7 +28,7 @@ check('viewer cannot reauthenticate as admin', v.call('reauth', {'password': 'Le
 a.expire(); b.expire()
 data_dir = Path(os.environ['UDATA'])
 def snapshot():
-    return {str(p.relative_to(data_dir)): p.read_bytes() for p in data_dir.rglob('*.php') if p.name != 'sitzungen.php'}
+    return {k: v for k, v in storage_docs().items() if k != 'sitzungen'}
 before = snapshot()
 for action in ['user_save', 'user_delete', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'kunde_save', 'kunde_delete', 'mail_konto_save', 'mail_save', 'bestell_settings_save', 'mail_test', 'kunde_mail', 'kunden_rundmail']:
     status, response = a.call(action, {})
@@ -65,23 +66,24 @@ check('other admin password reset succeeds', other_admin.call('user_save', reset
 check('password reset invalidates confirmed session', a.call('geo_clear_stats', {})[0] == 401)
 check('revoked session cannot reauthenticate', a.call('reauth', {'password': 'Replacement-Passwort-123'})[0] == 401)
 # Never continue an authentication write when the file lock cannot be acquired.
-lock = data_dir / '.nutzer.lock'
-lock.unlink(); lock.mkdir()
-check('user lock failure fails closed', other_admin.call('reauth', {'password': 'Weiteres-Geheimnis-123'})[0] == 500)
-lock.rmdir()
+if storage_sqlite():
+    # SQLite: dauerhaft gehaltene Schreibtransaktion → nach Wartezeit Fehler statt Weiterschreiben
+    with storage_lock('nutzer'):
+        check('user lock failure fails closed', other_admin.call('reauth', {'password': 'Weiteres-Geheimnis-123'})[0] == 500)
+else:
+    lock = data_dir / '.nutzer.lock'
+    lock.unlink(); lock.mkdir()
+    check('user lock failure fails closed', other_admin.call('reauth', {'password': 'Weiteres-Geheimnis-123'})[0] == 500)
+    lock.rmdir()
 check('confirmation recovers when lock available', other_admin.call('reauth', {'password': 'Weiteres-Geheimnis-123'})[0] == 200)
 # attempts_record must participate in the existing logins lock (ip_unblock uses it too).
-with open(data_dir / '.logins.lock', 'a') as held:
-    fcntl.flock(held, fcntl.LOCK_EX)
-    with concurrent.futures.ThreadPoolExecutor() as pool:
+with concurrent.futures.ThreadPoolExecutor() as pool:
+    with storage_lock('logins'):
         task = pool.submit(Client('192.0.2.99').login, 'unknown', 'Wrong-Confirmation-123')
-        try:
-            time.sleep(1)
-            check('IP attempt waits for exclusive lock', not task.done())
-        finally:
-            fcntl.flock(held, fcntl.LOCK_UN)
-        check('IP attempt resumes after unlock', task.result()[0] == 401)
-logs = '\n'.join(p.read_text() for p in (data_dir / 'protokoll').glob('*.php'))
+        time.sleep(1)
+        check('IP attempt waits for exclusive lock', not task.done())
+    check('IP attempt resumes after unlock', task.result()[0] == 401)
+logs = '\n'.join(storage_docs('protokoll').values())
 check('confirmation success and failure audited', 'reauth_fail' in logs and 'Sensible Verwaltungsaktionen' in logs)
 check('audit contains no submitted passwords', all(pw not in logs for pw in [PW, 'Wrong-Confirmation-123', 'Weiteres-Geheimnis-123', 'Replacement-Passwort-123']))
 print(f'{sum(results)}/{len(results)} passed')

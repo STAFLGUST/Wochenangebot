@@ -79,5 +79,17 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$H_SHA" "$H_SHA" > "$T/state.json"
 lauf || true; ok "nicht öffentliches Wochenangebot: Release geht live" '[ "$(kopf)" = "$H_SHA" ] && [ "$(st ok)" = True ]'
 rm -f "$B/daten/angebote.php"
 
+# Active SQLite must never be silently opened by an old file-only release.
+L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")
+kill "$WEB_PID"; wait "$WEB_PID" 2>/dev/null || true
+python3 "$B/deploy/datenbank.py" migrate "$B/daten" --offline >/dev/null
+(cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
+printf '{"release":"%s","ci_ok":["%s"]}' "$L_SHA" "$L_SHA" > "$T/state.json"
+lauf || true
+ok "SQLite: inkompatiblen Release vor Codewechsel abweisen" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
+printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$L_SHA" > "$B/daten/deployment.php"
+sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1 || true
+ok "SQLite: auch manueller Code-Rückfall ist gesperrt" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
+
 echo "$PASS/$((PASS + FAIL)) passed"
 [ "$FAIL" -eq 0 ]

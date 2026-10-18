@@ -1,15 +1,11 @@
 <?php
-/* Wird von ip-freigabe-aus.sh im App-Container ausgeführt (nicht über das Web erreichbar). */
-$guard = "<?php http_response_code(404); exit; ?>\n";
-$file = (getenv('DATA_DIR') ?: '/var/www/html/data') . '/sicherheit.php';
-if (!is_file($file)) { echo "Keine Sicherheitseinstellungen vorhanden – IP-Freigabe und Ländersperre sind aus."; exit(0); }
-$raw = (string)file_get_contents($file);
-if (strncmp($raw, $guard, strlen($guard)) === 0) $raw = substr($raw, strlen($guard));
-$s = json_decode($raw, true) ?: [];
-$s['ipEnabled'] = false;
-$s['geoEnabled'] = false;
-$tmp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
-file_put_contents($tmp, $guard . json_encode($s, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
-@chown($tmp, 33); @chgrp($tmp, 33);
-rename($tmp, $file);
-echo "IP-Freigabe und Ländersperre ausgeschaltet – die Seite ist wieder von überall erreichbar.";
+/* Offline emergency tool, also supports SQLite. */
+$DATA = getenv('DATA_DIR') ?: '/var/www/html/data';
+require is_file(__DIR__ . '/../app/api/storage.php') ? __DIR__ . '/../app/api/storage.php' : '/var/www/html/api/storage.php';
+with_lock('sicherheit', function () {
+    $s = store_read('sicherheit') ?? [];
+    $s['ipEnabled'] = false;
+    $s['geoEnabled'] = false;
+    store_write('sicherheit', $s);
+});
+echo "IP-Freigabe und Ländersperre ausgeschaltet.";

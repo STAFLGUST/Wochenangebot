@@ -10,3 +10,9 @@ DirectoryIndex index.html index.php
     Header set Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>
+
+# Data files, including SQLite journals, must never be served directly.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^data(?:/|$) - [F,L,NC]
+</IfModule>

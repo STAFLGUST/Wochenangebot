@@ -16,6 +16,7 @@ ADMIN_PW = 'Sicheres-Passwort-1'
 
 # Gruppe → (Port, Testdaten, Administrator vorab anlegen)
 SUITES = {
+    'storage': (8790, 'data-seed', True),
     'legal_pages': (8790, 'data-seed', True),
     'sys':        (8765, 'data-seed-clean', False),
     'frontend':   (8765, 'data-seed', False),
@@ -76,6 +77,8 @@ def run(name):
     shutil.copytree(os.path.join(FIX, seed), data)
     if admin:
         admin_file(data)
+    if os.environ.get('WA_TEST_STORAGE') == 'sqlite':
+        subprocess.run([sys.executable, os.path.join(REPO, 'deploy/datenbank.py'), 'migrate', data, '--offline'], check=True, capture_output=True)
     if not wait_port(port, up=False, timeout=5):
         print(f'[{name}] Port {port} ist belegt'); return name, 0, 1, False
     sessions = os.path.join(WORK, f'sessions-{name}')

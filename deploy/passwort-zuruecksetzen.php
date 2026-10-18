@@ -1,22 +1,15 @@
 <?php
 /* Wird von passwort-zuruecksetzen.sh im App-Container ausgeführt (nicht über das Web erreichbar). */
-$guard = "<?php http_response_code(404); exit; ?>\n";
-$dir = getenv('DATA_DIR') ?: '/var/www/html/data';
-$file = $dir . '/nutzer.php';
+$DATA = getenv('DATA_DIR') ?: '/var/www/html/data';
+require is_file(__DIR__ . '/../app/api/storage.php') ? __DIR__ . '/../app/api/storage.php' : '/var/www/html/api/storage.php';
 [$name, $pw] = [strtolower((string)($argv[1] ?? '')), (string)($argv[2] ?? '')];
 if (strlen($pw) < 10) { fwrite(STDERR, "Passwort zu kurz.\n"); exit(1); }
 $neu = in_array('--neu', $argv, true);
 if (!preg_match('/^[a-z0-9][a-z0-9._-]{1,31}$/', $name)) { fwrite(STDERR, "Ungültiger Benutzername.\n"); exit(1); }
-if (is_file($file)) {
-    $raw = (string)file_get_contents($file);
-    if (strncmp($raw, $guard, strlen($guard)) === 0) $raw = substr($raw, strlen($guard));
-    $data = json_decode($raw, true);
-    if (!is_array($data) || !isset($data['users'])) { fwrite(STDERR, "Nutzerdatei ist nicht lesbar – bitte aus der Datensicherung wiederherstellen (siehe LIESMICH).\n"); exit(1); }
-} elseif ($neu) {
-    $data = ['users' => []];
-} else {
-    fwrite(STDERR, "Keine Nutzerdatei gefunden. Neuen Administrator anlegen mit:  sh deploy/passwort-zuruecksetzen.sh $name --neu\n"); exit(1);
-}
+with_lock('nutzer', function () use ($name, $pw, $neu) {
+$data = store_read('nutzer');
+if ($data === null && $neu) $data = ['users' => []];
+if (!is_array($data) || !isset($data['users'])) throw new RuntimeException('Nutzerdaten fehlen oder sind beschädigt.');
 $found = false;
 foreach ($data['users'] as &$u) {
     if ($u['username'] !== $name) continue;
@@ -40,8 +33,6 @@ if (!$found) {
     fwrite(STDERR, "Nutzer \"$name\" nicht gefunden (neu anlegen mit --neu). Vorhanden: " . implode(', ', array_map(function ($u) { return $u['username'] . ' (' . $u['role'] . ')'; }, $data['users'])) . "\n");
     exit(1);
 }
-$tmp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
-file_put_contents($tmp, $guard . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), LOCK_EX);
-@chown($tmp, 33); @chgrp($tmp, 33);
-rename($tmp, $file);
+store_write('nutzer', $data);
+});
 echo "Passwort für \"$name\" wurde zurückgesetzt, Zwei-Faktor-Anmeldung und Sperre aufgehoben.";

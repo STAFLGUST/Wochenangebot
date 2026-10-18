@@ -59,6 +59,10 @@ gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher
   return 1
 }
 einspielen() { # sha vorher: Code wechseln; Container nur neu erstellen, wenn sich ihre Konfiguration ändert
+  if [ -f daten/.sqlite-active ] && ! git cat-file -e "$1:app/api/storage.php" 2>/dev/null; then
+    echo "SQLite aktiv: Vor einem Rückfall auf Dateispeicherung erst deploy/datenbank-umschalten.sh rollback ausführen."
+    return 1
+  fi
   git reset -q --hard "$1"
   if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml)$'; then $COMPOSE up -d --force-recreate; fi
 }

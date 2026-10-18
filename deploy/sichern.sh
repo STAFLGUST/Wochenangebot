@@ -22,6 +22,7 @@ GUARD='<?php http_response_code(404); exit; ?>'
 HC_URL=$(sed -n 's/^HC_SICHERUNG_URL=//p' "$BASIS/.env" 2>/dev/null | head -1 | tr -d '"'"'"' ')
 FERTIG=0
 PRUEF=""
+SNAP=""
 
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
@@ -38,6 +39,7 @@ melden() { # ok|fail
 }
 aufraeumen() {
   RC=$?
+  [ -n "$SNAP" ] && rm -rf "$SNAP"
   [ -n "$PRUEF" ] && rm -rf "$PRUEF"
   if [ "$FERTIG" -eq 0 ] && [ "$RC" -ne 0 ]; then   # unerwarteter Abbruch: Fehler sichtbar machen
     touch "$ZIEL/.letzter-fehler" 2>/dev/null || true
@@ -63,12 +65,18 @@ FREI=$(df -Pk "$ZIEL" | awk 'NR==2 {print $4}')
 
 STAMP=$(date -u +%Y-%m-%d_%H%M%S)
 DATEI="$ZIEL/daten-$STAMP.tar.gz"
-tar czf "$DATEI.tmp" -C "$BASIS/daten" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden"; }
+QUELLORDNER="$BASIS/daten"
+if [ -f "$BASIS/daten/.sqlite-active" ]; then
+  SNAP=$(mktemp -d)
+  python3 "$BASIS/deploy/datenbank.py" snapshot "$BASIS/daten" --output "$SNAP/data" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen"
+  QUELLORDNER="$SNAP/data"
+fi
+tar czf "$DATEI.tmp" -C "$QUELLORDNER" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden"; }
 
 # Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
 PRUEF=$(mktemp -d)
 tar xzf "$DATEI.tmp" -C "$PRUEF" || { rm -f "$DATEI.tmp"; fehler "Archiv nicht lesbar"; }
-QUELLE=$(cd "$BASIS/daten" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
+QUELLE=$(cd "$QUELLORDNER" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
 DATEIEN=$(find "$PRUEF" -name '*.php' | wc -l)
 FEHLER=0
 INHALT=true
