@@ -16,7 +16,7 @@ with sync_playwright() as p:
     page.click('[data-order-nr]');page.wait_for_selector('#order-edit-form')
     check('snapshot positions shown',page.locator('#order-edit-form li').count()>0)
     page.select_option('#order-edit-form [name=workflow]','in_bearbeitung');page.fill('#order-edit-form [name=note]','Internal <script>window.orderXss=true</script>')
-    page.click('#order-edit-form [type=submit]');page.wait_for_selector('#dlg-order-admin:not([open])')
+    page.click('#order-edit-form [type=submit]');page.wait_for_function("!document.querySelector('#dlg-order-admin').open")
     page.click('[data-order-nr]');page.wait_for_selector('#order-edit-form')
     check('workflow persisted',page.input_value('#order-edit-form [name=workflow]')=='in_bearbeitung')
     check('note rendered safely',page.evaluate('window.orderXss') is None)
