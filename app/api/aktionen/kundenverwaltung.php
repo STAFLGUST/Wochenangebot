@@ -7,7 +7,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 switch ($action) {
         /* ---------- Kundenstammdaten (Eingabebereich, nur Administrator) ---------- */
         case 'kunden': {
-            require_auth(false, 'admin');
+            require_perm('kunden.sehen');
             header('Cache-Control: no-store');
             $d = customers_load();
             $act = [];
@@ -17,7 +17,7 @@ switch ($action) {
         }
 
         case 'kunde_save': {
-            $me = require_admin_confirmation();
+            $me = require_perm_confirmed('kunden.bearbeiten');
             $b = body();
             $res = with_lock('kunden', function () use ($b) {
                 $d = customers_load();
@@ -102,7 +102,7 @@ switch ($action) {
         }
 
         case 'kunde_delete': {
-            require_admin_confirmation();
+            require_perm_confirmed('kunden.bearbeiten');
             $b = body();
             $id = (string)($b['id'] ?? '');
             $res = with_lock('kunden', function () use ($id, $b) {

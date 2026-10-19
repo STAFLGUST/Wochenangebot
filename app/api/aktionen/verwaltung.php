@@ -189,6 +189,33 @@ switch ($action) {
             respond(['ok' => true, 'users' => array_map('user_public', users_load())]);
         }
 
+        /* Nutzerrechte: Rechte je Rolle und Übersicht je Nutzer (Administrator) */
+        case 'rechte': {
+            require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            $roles = rights_roles();
+            respond(['ok' => true, 'catalog' => rights_catalog(), 'roles' => $roles, 'adminOnly' => PERMS_ADMIN_ONLY, 'roleLabels' => ROLE_LABELS,
+                     'custom' => store_read('rechte') !== null, 'updatedAt' => store_read('rechte')['updatedAt'] ?? null, 'updatedBy' => store_read('rechte')['updatedBy'] ?? '',
+                     'users' => array_map(function ($u) use ($roles) { return ['id' => $u['id'], 'name' => $u['name'], 'username' => $u['username'], 'role' => $u['role'], 'active' => (bool)$u['active'],
+                         'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])), 'perms' => user_perms($u, $roles)]; }, users_load())]);
+        }
+        case 'rechte_save': {
+            $me = require_admin_confirmation();
+            $in = body()['roles'] ?? null;
+            if (!is_array($in)) fail('Ungültige Anfrage.', 422);
+            $old = rights_roles();
+            $new = []; $d = [];
+            foreach (PERM_ROLES as $r) {
+                $new[$r] = is_array($in[$r] ?? null) ? rights_close(rights_clean($in[$r])) : $old[$r];
+                $add = array_diff($new[$r], $old[$r]); $rem = array_diff($old[$r], $new[$r]);
+                foreach ($add as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => ROLE_LABELS[$r], 'f' => PERMS[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
+                foreach ($rem as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => ROLE_LABELS[$r], 'f' => PERMS[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
+            }
+            store_write('rechte', ['roles' => $new, 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+            if ($d) audit('user', 'Rechte der Rollen geändert', $d);
+            respond(['ok' => true, 'roles' => $new]);
+        }
+
         case 'user_save': {
             $me = require_admin_confirmation();
             $b = body();
@@ -203,6 +230,11 @@ switch ($action) {
                 $active = !empty($b['active']);
                 $pw = $b['password'] ?? '';
                 $setPw = is_string($pw) && $pw !== '';
+                // Abweichende Rechte (nur wenn mitgeschickt); verboten hat Vorrang
+                $hasRights = array_key_exists('grant', $b) || array_key_exists('deny', $b);
+                $deny = rights_clean(is_array($b['deny'] ?? null) ? $b['deny'] : []);
+                $grant = array_values(array_diff(rights_clean(is_array($b['grant'] ?? null) ? $b['grant'] : []), $deny));
+                $lbl = function (array $ks) { return implode(', ', array_map(function ($k) { return PERMS[$k]['l']; }, $ks)); };
                 if ($isNew) {
                     $uname = clean_username($b['username'] ?? '');
                     foreach ($users as $u) if ($u['username'] === $uname) throw new InvalidArgumentException('Der Benutzername „' . $uname . '“ ist bereits vergeben.');
@@ -210,10 +242,13 @@ switch ($action) {
                     $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => $role, 'active' => $active,
                           'hash' => password_hash(check_password($pw, $uname), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
                           'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
+                    if ($hasRights && $role !== 'admin') { if ($grant) $u['grant'] = $grant; if ($deny) $u['deny'] = $deny; }
                     $users[] = $u;
                     users_save($users);
                     $d = [['k' => 'u|role', 'code' => '', 'name' => $uname, 'f' => 'Rolle', 'from' => '', 'to' => ROLE_LABELS[$role]]];
                     if (!$active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $uname, 'f' => 'Status', 'from' => '', 'to' => 'deaktiviert'];
+                    if (!empty($u['grant'])) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $uname, 'f' => 'Zusätzlich erlaubt', 'from' => '', 'to' => $lbl($u['grant'])];
+                    if (!empty($u['deny'])) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $uname, 'f' => 'Verboten', 'from' => '', 'to' => $lbl($u['deny'])];
                     return [$u, 'Nutzer „' . $uname . '“ (' . $name . ') angelegt', $d];
                 }
                 $i = user_find($users, $id);
@@ -230,6 +265,15 @@ switch ($action) {
                 $d = [];
                 if ($old['name'] !== $name) $d[] = ['k' => 'u|name', 'code' => '', 'name' => $old['username'], 'f' => 'Name', 'from' => $old['name'], 'to' => $name];
                 if ($old['role'] !== $role) $d[] = ['k' => 'u|role', 'code' => '', 'name' => $old['username'], 'f' => 'Rolle', 'from' => ROLE_LABELS[$old['role']], 'to' => ROLE_LABELS[$role]];
+                if ($hasRights || $role === 'admin') {
+                    $og = array_values((array)($old['grant'] ?? [])); $od = array_values((array)($old['deny'] ?? []));
+                    if ($role === 'admin') { $grant = []; $deny = []; }
+                    unset($users[$i]['grant'], $users[$i]['deny']);
+                    if ($grant) $users[$i]['grant'] = $grant;
+                    if ($deny) $users[$i]['deny'] = $deny;
+                    if ($og != $grant) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $old['username'], 'f' => 'Zusätzlich erlaubt', 'from' => $lbl($og), 'to' => $lbl($grant)];
+                    if ($od != $deny) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $old['username'], 'f' => 'Verboten', 'from' => $lbl($od), 'to' => $lbl($deny)];
+                }
                 if ((bool)$old['active'] !== $active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $old['username'], 'f' => 'Status', 'from' => $old['active'] ? 'aktiv' : 'deaktiviert', 'to' => $active ? 'aktiv' : 'deaktiviert'];
                 if (!empty($b['reset2fa']) && !empty($old['totp'])) {
                     unset($users[$i]['totp'], $users[$i]['totpLast'], $users[$i]['recovery']);
@@ -276,7 +320,7 @@ switch ($action) {
         }
 
         case 'log': {
-            require_auth(false, 'admin');
+            require_perm('protokoll.sehen');
             header('Cache-Control: no-store');
             $months = [];
             foreach (store_names('protokoll') as $f) {

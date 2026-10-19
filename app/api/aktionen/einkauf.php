@@ -7,19 +7,20 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 switch ($action) {
         /* Ansehen: alle Mitarbeiter; Kundennamen nur für Bearbeiter und Administratoren */
         case 'einkauf': {
-            $me = require_auth();
+            $me = require_perm('einkauf.sehen');
             header('Cache-Control: no-store');
-            $mit = ROLES[$me['role']] >= ROLES['editor'];
-            respond(['ok' => true, 'canSend' => $mit, 'recipients' => $mit ? count(notify_targets('einkauf')) : null, 'mail' => (bool)mail_cfg() && (bool)mail_base_url()] + einkauf_bedarf($mit));
+            $mit = may($me, 'bestellungen.sehen');
+            $send = may($me, 'einkauf.melden');
+            respond(['ok' => true, 'canSend' => $send, 'recipients' => $send ? count(notify_targets('einkauf')) : null, 'mail' => (bool)mail_cfg() && (bool)mail_base_url()] + einkauf_bedarf($mit));
         }
 
         /* Einkauf per E-Mail benachrichtigen (Bearbeiter): ausgewählte oder alle Fehlmengen */
         case 'einkauf_melden': {
-            $me = require_auth(true, 'editor');
+            $me = require_perm('einkauf.melden', true);
             $b = body();
             $note = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['note'] ?? '')) ?? '')), 0, 1000);
             $codes = is_array($b['codes'] ?? null) ? array_map(function ($c) { return code_key((string)$c); }, array_slice($b['codes'], 0, 2000)) : null;
-            $bed = einkauf_bedarf(true);
+            $bed = einkauf_bedarf(may($me, 'bestellungen.sehen'));
             if (!$bed['stock']) fail('Es ist keine Bestandsliste vorhanden – Fehlmengen lassen sich nicht berechnen.', 409);
             $items = $codes === null ? $bed['items'] : array_values(array_filter($bed['items'], function ($it) use ($codes) { return in_array(code_key($it['code']), $codes, true); }));
             if (!$items) fail($codes === null ? 'Derzeit gibt es keine Fehlmengen.' : 'Bitte mindestens einen Artikel mit Fehlmenge auswählen.', 422);
@@ -46,6 +47,6 @@ switch ($action) {
                 audit('einkauf', 'Einkauf benachrichtigt: ' . count($items) . ' Artikel, ' . de_qty(array_sum(array_column($items, 'short'))) . ' kg Fehlmenge',
                     array_map(function ($it) { return ['k' => 'ek|' . $it['code'], 'code' => $it['code'], 'name' => $it['name'], 'f' => 'Fehlmenge', 'from' => '', 'to' => de_qty($it['short']) . ' kg']; }, array_slice($items, 0, 200)));
             }
-            respond(['ok' => $okAny, 'results' => $results, 'error' => $okAny ? null : 'Die E-Mail konnte nicht zugestellt werden.', 'canSend' => true, 'recipients' => count($to), 'mail' => true] + einkauf_bedarf(true), $okAny ? 200 : 502);
+            respond(['ok' => $okAny, 'results' => $results, 'error' => $okAny ? null : 'Die E-Mail konnte nicht zugestellt werden.', 'canSend' => true, 'recipients' => count($to), 'mail' => true] + einkauf_bedarf(may($me, 'bestellungen.sehen')), $okAny ? 200 : 502);
         }
 }

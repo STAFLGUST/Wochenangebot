@@ -6,7 +6,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 switch ($action) {
         case 'history_list': {
-            require_auth();
+            require_perm('preisverlauf.sehen');
             header('Cache-Control: no-store');
             history_backfill();
             $out = [];
@@ -20,7 +20,7 @@ switch ($action) {
         }
 
         case 'history_data': {
-            require_auth();
+            require_perm('preisverlauf.sehen');
             header('Cache-Control: no-store');
             history_backfill();
             $weeks = [];
@@ -55,7 +55,7 @@ switch ($action) {
         }
 
         case 'history_import': {
-            require_auth(true, 'editor');
+            require_perm('preisverlauf.bearbeiten', true);
             $b = body();
             $week = $b['week'] ?? null;
             $year = $b['year'] ?? null;
@@ -70,7 +70,7 @@ switch ($action) {
         }
 
         case 'history_delete': {
-            require_auth(true, 'editor');
+            require_perm('preisverlauf.bearbeiten', true);
             $id = (string)(body()['id'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}$/', $id)) fail('Ungültige Woche.');
             [$hy, $hw] = array_map('intval', explode('-', $id));

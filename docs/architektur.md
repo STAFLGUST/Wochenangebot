@@ -21,6 +21,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `index.php` | Einstieg: Konfiguration, Bibliotheken laden, Schreibschutz (POST/JSON), Länder-/IP-Sperre, Wartungsmodus, Aktionen einbinden |
 | `lib/kern.php` | `respond()`, `fail()`, `body()`, `now()`, Eingabeprüfung `s()`, `clean_price()` |
 | `lib/nutzer.php` | Mitarbeiter-Zugänge, Passwortregeln |
+| `lib/rechte.php` | Nutzerrechte: Katalog `PERMS`, Rechte je Rolle (Dokument `rechte`), Ausnahmen je Nutzer (`grant`/`deny`), `user_perms`, `require_perm`, `require_perm_confirmed` |
 | `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth`), Passwortbestätigung, CSRF |
 | `lib/sicherheit.php` | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus |
 | `lib/protokoll.php` | Protokoll (`audit`), Änderungstexte, Anmeldeversuche |

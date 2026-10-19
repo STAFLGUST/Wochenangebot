@@ -79,7 +79,8 @@ function sign_in(array $u): string
 function me_payload(array $u): array
 {
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),
-            'twofa' => !empty($u['totp']), 'needTwofa' => twofa_required($u) && empty($u['totp']), 'twofaRequired' => twofa_required($u)];
+            'twofa' => !empty($u['totp']), 'needTwofa' => twofa_required($u) && empty($u['totp']), 'twofaRequired' => twofa_required($u),
+            'perms' => function_exists('user_perms') ? user_perms($u) : []];
 }
 /* Nutzer innerhalb der Sperre ändern und speichern */
 function user_update(string $id, callable $fn): ?array

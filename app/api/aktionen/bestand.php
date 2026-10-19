@@ -6,13 +6,13 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 switch ($action) {
         case 'stock': {
-            require_auth();
+            require_perm('bestand.sehen');
             header('Cache-Control: no-store');
             respond(['ok' => true, 'stock' => store_read('bestand')]);
         }
 
         case 'stock_import': {
-            $me = require_auth(true, 'editor');
+            $me = require_perm('bestand.importieren', true);
             $b = body();
             $articles = clean_stock($b);
             $date = clean_date($b['date'] ?? null);
@@ -25,14 +25,14 @@ switch ($action) {
         }
 
         case 'master': {
-            require_auth();
+            require_perm('stammdaten.sehen');
             header('Cache-Control: no-store');
             $m = store_read('stammdaten');
             respond(['ok' => true, 'master' => $m ?: ['rev' => 0, 'articles' => [], 'updatedAt' => null]]);
         }
 
         case 'master_save': {
-            $me = require_auth(true, 'editor');
+            $me = require_perm('stammdaten.bearbeiten', true);
             $b = body();
             $articles = clean_master($b['articles'] ?? null);
             $res = with_lock('stammdaten', function () use ($b, $articles, $me) {
