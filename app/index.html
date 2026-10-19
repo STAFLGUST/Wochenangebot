@@ -7,7 +7,7 @@
 <meta name="description" content="Digitale Wochenangebotsliste – Fleischgroßhandel">
 <title>Wochenangebot</title>
 <script src="assets/theme.js?v=4e171a7cc8"></script>
-<link rel="stylesheet" href="assets/app.css?v=4c06be08ed">
+<link rel="stylesheet" href="assets/app.css?v=79f1b87476">
 </head>
 <body>
 <a class="skip" href="#list">Zum Angebot springen</a>
@@ -114,7 +114,8 @@
             <svg class="i sm" aria-hidden="true"><use href="#i-chev"/></svg>
           </label>
           <div class="seg" role="group" aria-label="Darstellung">
-            <button type="button" data-view="table" aria-pressed="true" title="Tabellenansicht"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span class="sr-only">Tabelle</span></button>
+            <button type="button" data-view="liste" aria-pressed="true" title="Angebotsliste (wie gedruckt)"><svg class="i" aria-hidden="true"><use href="#i-cols"/></svg><span class="sr-only">Angebotsliste</span></button>
+            <button type="button" data-view="table" aria-pressed="false" title="Tabellenansicht mit Filterspalten"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span class="sr-only">Tabelle</span></button>
             <button type="button" data-view="cards" aria-pressed="false" title="Kartenansicht"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg><span class="sr-only">Karten</span></button>
           </div>
         </div>
@@ -225,6 +226,7 @@
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></symbol>
   <symbol id="i-sort" viewBox="0 0 24 24"><path d="M12 5v14M7 14l5 5 5-5"/></symbol>
   <symbol id="i-sort-up" viewBox="0 0 24 24"><path d="M12 19V5M7 10l5-5 5 5"/></symbol>
+  <symbol id="i-cols" viewBox="0 0 24 24"><path d="M4 5h4.5M4 9h4.5M4 13h4.5M4 17h4.5M10.75 5h4.5M10.75 9h4.5M10.75 13h4.5M17.5 5H20M17.5 9H20M17.5 13H20"/></symbol>
   <symbol id="i-rows" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M10 11v6M14 11v6M6.5 7l.9 12.5a1.5 1.5 0 0 0 1.5 1.5h6.2a1.5 1.5 0 0 0 1.5-1.5L17.5 7M9.5 7V4.5h5V7"/></symbol>
@@ -238,6 +240,6 @@
 </svg>
 
 <script src="assets/offer-core.js?v=06678349ba"></script>
-<script src="assets/frontend.js?v=b3b5318600"></script>
+<script src="assets/frontend.js?v=292b5d167e"></script>
 </body>
 </html>

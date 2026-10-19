@@ -18,7 +18,7 @@ with sync_playwright() as p:
     pub = ctx.new_page(); pub.on('pageerror', lambda e: errs.append('pub: ' + str(e)))
 
     def pub_price(code):
-        pub.goto(B + '/?r=' + str(time.time()) + '#suche=' + code); pub.wait_for_selector('tr.row, .empty')
+        pub.goto(B + '/?r=' + str(time.time()) + '#ansicht=tabelle&suche=' + code); pub.wait_for_selector('tr.row, .empty')
         return pub.locator('tr.row td.c-price').first.inner_text().replace('\n', ' ') if pub.locator('tr.row').count() else None
     def wait_saved():
         a.wait_for_function("document.querySelector('#save-state').className.includes('saved') || document.querySelector('#save-state').className.includes('clean')", timeout=8000)

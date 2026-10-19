@@ -117,7 +117,7 @@ const FACETS = [
 ];
 const state = {
   q: '', cats: new Set(), origins: new Set(), conds: new Set(), feats: new Set(), pstat: new Set(),
-  min: null, max: null, sortKey: 'offer', sortDir: 'asc', view: 'table', tab: 'all',
+  min: null, max: null, sortKey: 'offer', sortDir: 'asc', view: 'liste', tab: 'all',
 };
 let favs = new Set(store.get('merkliste', []));
 let current = [];
@@ -426,6 +426,59 @@ function renderTable(list, grouped) {
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
+/* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ---------- */
+const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '–');
+/* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
+const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
+/* Preisspalten einer Gruppe: Beschriftungen in Reihenfolge des Auftretens (z. B. Flugware, Schiffsware) */
+function plLabels(items) {
+  const labels = [];
+  // Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware)
+  for (const it of items) for (const p of it.altPrices) if (p.label && !labels.includes(p.label)) labels.push(p.label);
+  for (const it of items) if (it.price.label && !labels.includes(it.price.label)) labels.push(it.price.label);
+  const cols = Math.max(1, labels.length, ...items.map((i) => 1 + i.altPrices.length));
+  while (labels.length < cols) labels.push('');
+  return labels;
+}
+function plRow(it, labels) {
+  const cells = labels.map(() => null);
+  const free = [];
+  for (const p of [it.price, ...it.altPrices]) { const k = p.label ? labels.indexOf(p.label) : -1; if (k >= 0 && !cells[k]) cells[k] = p; else free.push(p); }
+  for (const p of free) { const k = p === it.price ? cells.lastIndexOf(null) : cells.indexOf(null); if (k >= 0) cells[k] = p; }   // ohne Beschriftung: Hauptpreis rechts
+  const td = cells.map((p, i) => `<td class="c-price al-p${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`);
+  return `<tr class="row" data-id="${it.id}">
+    <td class="c-fav">${starHTML(it)}</td>
+    <td class="c-code">${it.code ? hl(it.code) : ''}</td>
+    <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    ${td.join('')}${KORDER ? `<td class="c-qty">${qtyHTML(it)}</td>` : ''}</tr>`;
+}
+function plBlock(title, items) {
+  const labels = plLabels(items), cols = labels.length;
+  return `<div class="al-grp"><table class="al-tab"><thead><tr class="al-h"><th colspan="3" scope="colgroup">${title}</th><th class="al-eh"${cols > 1 ? ` colspan="${cols}"` : ''}>€ / Kg</th>${KORDER ? '<th class="al-qh"><span class="sr-only">Menge </span>kg</th>' : ''}</tr>
+    ${cols > 1 ? `<tr class="al-sub"><th colspan="3"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${KORDER ? '<th></th>' : ''}</tr>` : ''}</thead>
+    <tbody>${items.map((i) => plRow(i, labels)).join('')}</tbody></table></div>`;
+}
+function renderListe(list, grouped) {
+  const m = DATA.meta || {};
+  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const head = `<div class="al-head"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? ' - ' + m.year : ''}` : 'Angebot'))}</h2>${stand ? `<span>${esc(stand)}</span>` : ''}</div>`;
+  if (!grouped) {
+    const lbl = { price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey] || '';
+    return `<div class="al">${head}<section class="al-sec"><div class="al-cols al-flow">${plBlock(`Alle Artikel, sortiert nach ${esc(lbl)}`, list)}</div></section></div>`;
+  }
+  const out = [];
+  let sec, buf = [], grp = null, items = [];
+  const flushGrp = () => { if (items.length) buf.push(plBlock(plGroupName(items[0].group), items)); items = []; };
+  const flushSec = () => { flushGrp(); if (buf.length) out.push(`<section class="al-sec">${sec ? `<h3 class="al-st">${esc(sec)}</h3>` : ''}<div class="al-cols">${buf.join('')}</div></section>`); buf = []; };
+  for (const it of list) {
+    if (it.section !== sec) { flushSec(); sec = it.section; grp = null; }
+    if (it.groupId !== grp) { flushGrp(); grp = it.groupId; }
+    items.push(it);
+  }
+  flushSec();
+  return `<div class="al">${head}${out.join('')}</div>`;
+}
+
 function cardHTML(it, grouped) {
   const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`).join('');
   return `<article class="card" data-id="${it.id}">
@@ -467,7 +520,7 @@ function renderEmpty() {
 
 function renderList() {
   const grouped = state.sortKey === 'offer';
-  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? renderCards(current, grouped) : renderTable(current, grouped);
+  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? renderCards(current, grouped) : state.view === 'table' ? renderTable(current, grouped) : renderListe(current, grouped);
 }
 
 function render() {
@@ -819,7 +872,7 @@ function syncUrl() {
   if (state.min != null) p.set('von', String(state.min));
   if (state.max != null) p.set('bis', String(state.max));
   if (state.sortKey !== 'offer') p.set('sortierung', `${state.sortKey}-${state.sortDir}`);
-  if (state.view !== 'table') p.set('ansicht', 'karten');
+  if (state.view !== 'liste') p.set('ansicht', state.view === 'cards' ? 'karten' : 'tabelle');
   const h = p.toString();
   const url = location.pathname + location.search + (h ? '#' + h : '');
   if (url !== location.pathname + location.search + location.hash) { try { history.replaceState(null, '', url); } catch { /* ignore */ } }
@@ -832,7 +885,7 @@ function readUrl() {
   state.min = num(p.get('von')); state.max = num(p.get('bis'));
   const [k, d] = (p.get('sortierung') || 'offer-asc').split('-');
   if (['offer', 'price', 'name', 'code', 'cat', 'origin', 'cond'].includes(k)) { state.sortKey = k; state.sortDir = d === 'desc' ? 'desc' : 'asc'; }
-  state.view = p.get('ansicht') === 'karten' ? 'cards' : 'table';
+  state.view = { karten: 'cards', tabelle: 'table' }[p.get('ansicht')] || 'liste';   // Standard: Angebotsliste wie gedruckt
   $('#q').value = state.q;
 }
 

@@ -122,7 +122,7 @@ with sync_playwright() as p:
     c.goto(B + '/'); c.wait_for_selector('#btn-kunde-login'); c.click('#btn-kunde-login')
     c.fill('#kl-form [name=username]', 'kantine.sued'); c.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); c.click('#kl-form [type=submit]')
     c.wait_for_url(re.compile(r'angebot=edeka')); c.wait_for_selector('tr.row .qty')
-    check('customer: quantity column', 'Menge kg' in c.inner_text('thead') and c.locator('tr.row .qty').count() > 10)
+    check('customer: quantity column', c.locator('.al-qh').count() > 10 and c.locator('tr.row .qty').count() > 10)
     q1 = c.locator(f'#list .qty[data-qty="{I1["id"]}"]')
     q1.click(); c.wait_for_timeout(250)
     check('clicking the quantity field does not open the article details', c.locator('#dlg-detail[open]').count() == 0)
