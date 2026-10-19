@@ -1042,6 +1042,74 @@
       card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
   }
+  /* ---------- IT-Lagebild: Verlauf, auffällige Adressen, Konfigurationsprüfung, Diagnose ---------- */
+  const LVL = { ok: 'in Ordnung', warn: 'Hinweis', bad: 'kritisch', info: 'Info' };
+  const lvlDot = (l) => `<span class="lv lv-${esc(l)}" title="${esc(LVL[l] || l)}"><span class="sr-only">${esc(LVL[l] || l)}</span></span>`;
+  function secTimeline(tl) {
+    if (!tl || !tl.length) return '';
+    const max = Math.max(1, ...tl.map((d) => d.staff + d.kunde + d.reauth));
+    const W = 28, H = 90;
+    const bars = tl.map((d, i) => {
+      const seg = [['staff', d.staff], ['kunde', d.kunde], ['reauth', d.reauth]];
+      let y = H;
+      const r = seg.map(([k, n]) => { const h = Math.round((n / max) * (H - 4)); y -= h; return n ? `<rect class="tl-${k}" x="${i * W + 4}" y="${y}" width="${W - 8}" height="${h}" rx="2"></rect>` : ''; }).join('');
+      const lab = `${d.d.slice(8, 10)}.${d.d.slice(5, 7)}.: ${d.staff} Mitarbeiter, ${d.kunde} Kunden, ${d.reauth} Passwortbestätigung fehlgeschlagen · ${d.ok} erfolgreiche Anmeldungen · ${d.geo} per Ländersperre abgewiesen`;
+      return `<g><title>${esc(lab)}</title><rect class="tl-hit" x="${i * W}" y="0" width="${W}" height="${H}"></rect>${r}<text x="${i * W + W / 2}" y="${H + 14}" text-anchor="middle">${esc(d.d.slice(8, 10))}</text></g>`;
+    }).join('');
+    const sum = (k) => tl.reduce((a, d) => a + d[k], 0);
+    return `<div class="tl-wrap"><svg class="tl" viewBox="0 0 ${tl.length * W} ${H + 18}" role="img" aria-label="Fehlgeschlagene Anmeldungen der letzten 14 Tage">${bars}</svg></div>
+      <p class="tl-legend"><span><i class="tl-staff"></i>Mitarbeiter ${fmtInt.format(sum('staff'))}</span><span><i class="tl-kunde"></i>Kunden ${fmtInt.format(sum('kunde'))}</span><span><i class="tl-reauth"></i>Passwortbestätigung ${fmtInt.format(sum('reauth'))}</span><span>Erfolgreiche Anmeldungen ${fmtInt.format(sum('ok'))}</span><span>Ländersperre ${fmtInt.format(sum('geo'))}</span></p>`;
+  }
+  function secTopIps(list) {
+    if (!list || !list.length) return '<p class="sec-empty">Keine fehlgeschlagenen Anmeldungen in den letzten 7 Tagen.</p>';
+    return `<table class="etab sectab"><thead><tr><th>IP-Adresse</th><th class="num-s">Fehlversuche</th><th>Land</th><th>versuchte Benutzernamen</th><th class="num-s">zuletzt</th></tr></thead><tbody>${list.map((x) => `<tr>
+      <td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="st-err">gesperrt</span>' : ''}</td><td class="num-s">${fmtInt.format(x.n)}${x.kunde ? ` <span class="sub">(${x.kunde} Kunden)</span>` : ''}</td>
+      <td>${x.cc ? `${esc(ccName(x.cc))} <span class="sub">${esc(x.cc)}</span>` : '<span class="muted">unbekannt</span>'}</td><td>${esc(x.users.join(', ') || '—')}</td><td class="num-s">${esc(dateTime(x.last))}</td></tr>`).join('')}</tbody></table>`;
+  }
+  function secConfigRows(list) {
+    return list.map((c) => `<tr class="cf-${esc(c.level)}"><td>${lvlDot(c.level)}</td><td><div class="nm">${esc(c.title)}</div><div class="sub">${esc(c.area)}</div></td><td>${esc(c.text)}</td><td class="sub">${esc(c.hint || '')}</td></tr>`).join('');
+  }
+  /* Prüfungen aus Sicht des Browsers: Sicherheits-Header, gesperrte Ordner, Uhrzeit */
+  async function secBrowserChecks() {
+    const host = $('#sec-bchecks');
+    if (!host) return;
+    const rows = [];
+    const add = (level, title, text, hint) => rows.push({ level, area: 'Browser', title, text, hint });
+    try {
+      const r = await fetch('/', { cache: 'no-store', credentials: 'same-origin' });
+      const h = (n) => r.headers.get(n) || '';
+      const csp = h('content-security-policy');
+      add(csp ? (/script-src[^;]*'self'/.test(csp) && !/unsafe-eval/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp) ? 'ok' : 'warn') : 'bad', 'Schutz gegen eingeschleuste Skripte (CSP)', csp ? 'gesetzt' : 'fehlt', csp ? '' : 'Content-Security-Policy im Webserver (Caddyfile) setzen.');
+      const https = location.protocol === 'https:';
+      add(!https ? 'info' : h('strict-transport-security') ? 'ok' : 'bad', 'HTTPS erzwingen (HSTS)', !https ? 'nur über HTTPS prüfbar' : h('strict-transport-security') || 'fehlt', https && !h('strict-transport-security') ? 'Strict-Transport-Security setzen.' : '');
+      add(/nosniff/i.test(h('x-content-type-options')) ? 'ok' : 'warn', 'MIME-Typ-Schutz', h('x-content-type-options') || 'fehlt', /nosniff/i.test(h('x-content-type-options')) ? '' : 'X-Content-Type-Options: nosniff setzen.');
+      const frame = h('x-frame-options') || (/frame-ancestors/.test(csp) ? 'frame-ancestors (CSP)' : '');
+      add(frame ? 'ok' : 'warn', 'Schutz gegen Einbetten (Clickjacking)', frame || 'fehlt', frame ? '' : 'frame-ancestors bzw. X-Frame-Options setzen.');
+      add(h('referrer-policy') ? 'ok' : 'warn', 'Referrer-Policy', h('referrer-policy') || 'fehlt');
+      const sd = Date.parse(h('date'));
+      if (!Number.isNaN(sd)) { const drift = Math.round((Date.now() - sd) / 1000); add(Math.abs(drift) > 120 ? 'warn' : 'ok', 'Uhrzeit Server/Browser', Math.abs(drift) <= 2 ? 'stimmt überein' : `Abweichung ${drift} s`, Math.abs(drift) > 120 ? 'Uhrzeit von Server oder Gerät prüfen (Zwei-Faktor-Codes hängen davon ab).' : ''); }
+    } catch (e) { add('warn', 'Sicherheits-Header', 'nicht prüfbar: ' + e.message); }
+    for (const [path, title] of [['/data/nutzer.php', 'Datenordner'], ['/api/lib/kern.php', 'Programmdateien']]) {
+      try {
+        const r = await fetch(path, { cache: 'no-store', credentials: 'omit' });
+        const t = r.status === 200 ? await r.text() : '';
+        const leak = r.status === 200 && /"(hash|username|password)"/.test(t);
+        add(leak ? 'bad' : 'ok', `${title} von außen gesperrt`, leak ? `lesbar (${path})` : `gesperrt (Status ${r.status})`, leak ? 'Sofort Webserver-Regeln prüfen!' : '');
+      } catch (e) { add('info', `${title} von außen gesperrt`, 'nicht prüfbar'); }
+    }
+    host.innerHTML = secConfigRows(rows);
+    secScore();
+  }
+  function secScore() {
+    const el = $('#sec-score');
+    if (!el) return;
+    const lv = $$('#view-sec .sec-card, #view-sec tr[class^="cf-"]').map((x) => (x.classList.contains('bad') || x.classList.contains('cf-bad') ? 'bad' : x.classList.contains('warn') || x.classList.contains('cf-warn') ? 'warn' : x.classList.contains('ok') || x.classList.contains('cf-ok') ? 'ok' : 'info'));
+    const n = (k) => lv.filter((x) => x === k).length;
+    const worst = n('bad') ? 'bad' : n('warn') ? 'warn' : 'ok';
+    el.className = 'sec-score ' + worst;
+    el.innerHTML = `${lvlDot(worst)}<div><strong>${worst === 'bad' ? 'Handlungsbedarf' : worst === 'warn' ? 'Insgesamt in Ordnung, mit Hinweisen' : 'Alles in Ordnung'}</strong><span>${n('ok')} in Ordnung · ${n('warn')} ${n('warn') === 1 ? 'Hinweis' : 'Hinweise'} · ${n('bad')} kritisch</span></div>`;
+  }
+  const DIAG = [['storage', 'Datenablage prüfen', 'Lesbarkeit und Unversehrtheit aller Datensätze'], ['mail', 'E-Mail-Verbindung prüfen', 'Verbindung und Anmeldung am Mailserver, ohne E-Mail'], ['files', 'Dateien und Speicher', 'Schreibrechte, Schreibschutz, freier Speicher'], ['php', 'PHP-Umgebung', 'Version, Erweiterungen, Grenzwerte, Serverzeit']];
   async function renderSecView() {
     const host = $('#view-sec');
     if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Sicherheitsübersicht wird geladen …</div>';
@@ -1058,7 +1126,27 @@
     const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
-      <div class="sec-grid">${secCards(d)}</div>
+      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-einst">Einstellungen</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
+      <section id="sec-lage" class="sec-sect">
+        <div class="sec-score" id="sec-score"></div>
+        <div class="sec-grid">${secCards(d)}</div>
+        <div class="sec-two">
+          <section class="gcard sec-block"><h3 class="sec-h">Fehlgeschlagene Anmeldungen <span class="muted">(14 Tage)</span></h3>${secTimeline(d.timeline)}</section>
+          <section class="gcard sec-block"><h3 class="sec-h">Auffällige Adressen <span class="muted">(7 Tage)</span></h3>${secTopIps(d.topIps)}</section>
+        </div>
+      </section>
+      <section id="sec-konfig" class="gcard sec-block sec-sect"><h3 class="sec-h">Konfigurationsprüfung</h3>
+        <table class="etab sectab cftab"><thead><tr><th class="lv-h"><span class="sr-only">Status</span></th><th>Prüfung</th><th>Befund</th><th>Empfehlung</th></tr></thead>
+          <tbody>${secConfigRows(d.config || [])}</tbody><tbody id="sec-bchecks"><tr><td></td><td colspan="3" class="sub">Browser-Prüfungen laufen …</td></tr></tbody></table>
+        <p class="hint">Der Server selbst (Betriebssystem, SSH, Firewall, Updates) ist aus der Anwendung nicht einsehbar und wird separat geprüft.</p>
+      </section>
+      <section id="sec-diag" class="gcard sec-block sec-sect"><h3 class="sec-h">Diagnose</h3>
+        <p class="hint" style="margin-top:0">Alle Prüfungen lesen nur – es werden keine Daten verändert und keine Befehle auf dem Server ausgeführt.</p>
+        <div class="dg-btns">${DIAG.map(([k, l, t]) => `<button type="button" class="btn" data-diag="${k}" title="${esc(t)}">${esc(l)}</button>`).join('')}</div>
+        <div id="dg-out" class="dg-out" aria-live="polite"></div>
+        <div class="dg-export"><label class="fld"><span>Sicherheitsprotokoll exportieren (CSV)</span><select id="dg-days"><option value="7">7 Tage</option><option value="30">30 Tage</option><option value="90" selected>90 Tage</option><option value="365">365 Tage</option></select></label><button type="button" class="btn" data-diag="export">${icon('download', 'sm')}Exportieren</button></div>
+        <p class="form-err" id="dg-err" role="alert"></p>
+      </section>
       <form class="gcard sec-form wartung-form${d.wartung ? ' on' : ''}" id="wartung-form" autocomplete="off">
         <h3 class="sec-h">Wartungsmodus</h3>
         <p class="hint" style="margin-top:0">Pausiert die Angebotsseite für Kunden (Angebot, Anmeldung, Merkliste, Bestellwünsche). Sie und alle Mitarbeiter arbeiten im Eingabebereich und auf der Angebotsseite normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>
@@ -1071,8 +1159,8 @@
         <p class="form-err" id="wartung-err" role="alert"></p>
       </form>
       <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens fünf Minuten alte Anmeldung oder Passwortbestätigung. Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
-      <form class="gcard sec-form" id="sec-form" autocomplete="off">
-        <h3 class="sec-h">Einstellungen</h3>
+      <form class="gcard sec-form sec-sect" id="sec-form" autocomplete="off">
+        <h3 class="sec-h" id="sec-einst">Einstellungen</h3>
         <div class="sec-rows">
           <label class="fld"><span>Zwei-Faktor-Anmeldung verpflichtend</span><select name="twofa">
             <option value="off"${S.twofa === 'off' ? ' selected' : ''}>freiwillig</option>
@@ -1116,7 +1204,7 @@
       </form>
       ${geoStatRows ? `<section class="gcard sec-block"><h3 class="sec-h">Abgewiesene Zugriffe nach Land <span class="muted">(7 Tage: ${fmtInt.format(d.geoBlocked7 || 0)})</span><button type="button" class="btn sm ghost sec-h-act" data-sec="geo-clear">Zurücksetzen</button></h3>
         <table class="etab sectab"><thead><tr><th>Land</th><th class="num-s">Zugriffe gesamt</th><th class="num-s">zuletzt</th></tr></thead><tbody>${geoStatRows}</tbody></table></section>` : ''}
-      <section class="gcard sec-block"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
+      <section class="gcard sec-block sec-sect" id="sec-zugang"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
         <table class="etab sectab"><thead><tr><th>Nutzer</th><th>IP-Adresse</th><th>Gerät</th><th>angemeldet</th><th>zuletzt aktiv</th><th class="act"></th></tr></thead><tbody>${sessRows}</tbody></table></section>
       <section class="gcard sec-block"><h3 class="sec-h">Sperren</h3>
         ${ipRows || lockRows ? `<table class="etab sectab"><thead><tr><th>IP-Adresse / Zugang</th><th></th><th>Status</th><th class="act"></th></tr></thead><tbody>${lockRows}${ipRows}</tbody></table>` : '<p class="sec-empty">Keine gesperrten IP-Adressen oder Zugänge.</p>'}</section>
@@ -1126,7 +1214,34 @@
         ${failRows ? `<table class="etab sectab"><thead><tr><th>Zeitpunkt</th><th>Benutzername</th><th>IP-Adresse</th><th>Vorgang</th></tr></thead><tbody>${failRows}</tbody></table>` : '<p class="sec-empty">Keine fehlgeschlagenen Anmeldungen.</p>'}</section>
       <p class="hint sec-note">Weitere Schutzmaßnahmen sind fest eingebaut: HTTPS mit HSTS, Schutz gegen eingeschleuste Skripte (Content-Security-Policy), Schutz gegen fremde Formulare (CSRF), sichere Sitzungs-Cookies, gesperrte Datenordner und ein lückenloses Protokoll.</p>`;
     geoRefresh();
+    secScore();
+    secBrowserChecks();
   }
+  async function runDiag(k, btn) {
+    const out = $('#dg-out'), err = $('#dg-err');
+    err.textContent = ''; btn.disabled = true;
+    try {
+      if (k === 'export') {
+        const r = await api('security_export', { body: { days: +$('#dg-days').value } });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv;charset=utf-8' })); a.download = r.filename;
+        document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        toast(`${fmtInt.format(r.count)} Einträge exportiert.`);
+        return;
+      }
+      const r = (await api('security_diag', { body: { check: k } })).result;
+      const label = (DIAG.find((x) => x[0] === k) || [k, k])[1];
+      out.insertAdjacentHTML('afterbegin', `<div class="dg-res ${r.ok ? 'ok' : 'bad'}" data-res="${esc(k)}"><div class="dg-hd">${lvlDot(r.ok ? 'ok' : 'bad')}<strong>${esc(label)}</strong><span class="sub">${esc(timeOnly(new Date().toISOString()))} Uhr · ${r.ms} ms</span></div>
+        <table class="etab sectab"><tbody>${r.items.map((x) => `<tr><td>${lvlDot(x.level)}</td><td>${esc(x.label)}</td><td class="mono-s">${esc(x.value)}</td></tr>`).join('')}</tbody></table></div>`);
+      $$('#dg-out .dg-res').slice(6).forEach((x) => x.remove());
+    } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+  }
+  $('#view-sec').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-diag]');
+    if (b) runDiag(b.dataset.diag, b);
+    const a = e.target.closest('.sec-nav a');
+    if (a) { e.preventDefault(); const t = document.getElementById(a.getAttribute('href').slice(1)); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
   $('#view-sec').addEventListener('input', (e) => {
     if (e.target.id === 'geo-q') { geoQ = e.target.value.trim(); geoLookup(); $('#geo-list').innerHTML = geoList(); }
   });

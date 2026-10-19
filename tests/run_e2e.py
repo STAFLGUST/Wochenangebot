@@ -63,6 +63,7 @@ SUITES['order_management'] = SUITES['bestellung']
 SUITES['order_management_ui'] = SUITES['bestellung']
 SUITES['benachrichtigung'] = SUITES['bestellung']
 SUITES['einkauf'] = SUITES['bestellung']
+SUITES['sicherheit_it'] = SUITES['bestellung']
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 
