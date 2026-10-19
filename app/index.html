@@ -6,9 +6,18 @@
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="Digitale Wochenangebotsliste – Fleischgroßhandel">
 <title>Wochenangebot</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Wochenangebot">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0e0d" media="(prefers-color-scheme: dark)">
 <script src="assets/theme.js?v=4e171a7cc8"></script>
 <link rel="preload" href="assets/logo-standard-fleisch.png" as="image">
-<link rel="stylesheet" href="assets/app.css?v=4413b837cc">
+<link rel="stylesheet" href="assets/app.css?v=4acd7a00d0">
 </head>
 <body>
 <a class="skip" href="#list">Zum Angebot springen</a>
@@ -66,6 +75,8 @@
 <div class="banner" id="preview-banner" hidden></div>
 
 <main class="page" id="main">
+  <div class="webapp-hint" id="offline-hint" role="status" hidden></div>
+  <div class="webapp-hint" id="webapp-hint" role="note" hidden></div>
   <div class="modebar" id="modebar" role="radiogroup" aria-label="Ansicht wählen">
     <button type="button" role="radio" data-mode="angebot" aria-checked="true"><svg class="i" aria-hidden="true"><use href="#i-cols"/></svg><span><strong>Angebotsansicht</strong><small>Übersicht wie die gedruckte Liste</small></span></button>
     <button type="button" role="radio" data-mode="liste" aria-checked="false"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span><strong>Bestellansicht</strong><small id="mode-liste-sub">Tabelle mit Mengen zum Bestellen</small></span></button>
@@ -246,6 +257,7 @@
 </svg>
 
 <script src="assets/offer-core.js?v=06678349ba"></script>
-<script src="assets/frontend.js?v=2a70e14287"></script>
+<script src="assets/frontend.js?v=5d8259921e"></script>
+<script src="assets/webapp.js?v=21a6af0421"></script>
 </body>
 </html>

@@ -28,6 +28,13 @@ interne Kennzeichnung, keine automatisch versandte verbindliche Auftragsbestäti
 nachträglich erfunden. Neue Vorgänge speichern die damaligen Kontaktdaten. Die bisherige stille Kürzung
 auf 5.000 Bestellungen entfällt, damit offene Vorgänge und Wiederholungskennungen nicht verloren gehen.
 
+## Web-App (zuerst im Einsatz)
+
+Weil ein Store-Konto Kosten und Freigaben braucht, gehen Kunden zuerst über die **Web-App**: das Angebotsportal mit
+Symbol, Vollbild und Offline-Kopie des öffentlichen Angebots, zum Home-Bildschirm hinzugefügt (siehe `LIESMICH.md`).
+Kein Store, keine eigene Update-Pipeline – sie aktualisiert sich mit jedem Release. Die native App (unten) bleibt
+bereit für einen späteren Store-Start.
+
 ## Stand Oktober 2026: native App begonnen
 
 Entscheidung des Inhabers: **native App für iOS und Android, für Kunden und Mitarbeiter** (Ordner `mobile/`,
