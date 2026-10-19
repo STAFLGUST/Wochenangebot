@@ -7,7 +7,7 @@
 <meta name="description" content="Digitale Wochenangebotsliste – Fleischgroßhandel">
 <title>Wochenangebot</title>
 <script src="assets/theme.js?v=4e171a7cc8"></script>
-<link rel="stylesheet" href="assets/app.css?v=79f1b87476">
+<link rel="stylesheet" href="assets/app.css?v=d0f8df96f9">
 </head>
 <body>
 <a class="skip" href="#list">Zum Angebot springen</a>
@@ -140,7 +140,7 @@
 <dialog class="modal" id="dlg-print" aria-labelledby="print-title">
   <form class="dlg" method="dialog" id="print-form">
     <div class="dlg-head">
-      <div><h2 id="print-title">Drucken / als PDF speichern</h2><p>DIN A4, druckoptimiert. Im Druckdialog „Als PDF speichern“ wählen, um eine PDF zu erzeugen.</p></div>
+      <div><h2 id="print-title">Drucken / als PDF speichern</h2><p>DIN A4, druckoptimiert. Im Druckdialog „Als PDF speichern“ wählen, um eine PDF zu erzeugen. Hoch- oder Querformat ergibt sich aus dem Layout.</p></div>
       <button class="btn icon ghost" type="button" data-close aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
     </div>
     <div class="dlg-body">
@@ -152,7 +152,8 @@
       </fieldset>
       <fieldset class="choice">
         <legend>Layout</legend>
-        <label class="radio"><input type="radio" name="layout" value="compact" checked><span class="r-t">Kompakt, zweispaltig<span class="r-s">Art.-Nr., Bezeichnung, Preis – wie ein Angebotsblatt</span></span></label>
+        <label class="radio"><input type="radio" name="layout" value="liste" checked><span class="r-t">Angebotsliste, A4 quer<span class="r-s">Drei Blöcke nebeneinander wie die Excel-Liste, jeder Abschnitt auf neuer Seite</span></span></label>
+        <label class="radio"><input type="radio" name="layout" value="compact"><span class="r-t">Kompakt, A4 hoch<span class="r-s">Art.-Nr., Bezeichnung, Preis – zweispaltig</span></span></label>
         <label class="radio"><input type="radio" name="layout" value="table"><span class="r-t">Tabelle mit allen Spalten<span class="r-s">Zusätzlich Fleischart, Herkunft und Zustand</span></span></label>
       </fieldset>
       <label class="check"><input type="checkbox" name="grouped" checked> Nach Angebotsgruppen gliedern (wie in der Excel-Liste)</label>
@@ -240,6 +241,6 @@
 </svg>
 
 <script src="assets/offer-core.js?v=06678349ba"></script>
-<script src="assets/frontend.js?v=292b5d167e"></script>
+<script src="assets/frontend.js?v=78909d4485"></script>
 </body>
 </html>

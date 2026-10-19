@@ -426,57 +426,140 @@ function renderTable(list, grouped) {
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
-/* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ---------- */
+/* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ----------
+   Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
+   sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '–');
+const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? ' – ' + m.year : ''}` : 'Angebot'); };
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
 const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
-/* Preisspalten einer Gruppe: Beschriftungen in Reihenfolge des Auftretens (z. B. Flugware, Schiffsware) */
+/* Preisspalten einer Gruppe: Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware) */
 function plLabels(items) {
   const labels = [];
-  // Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware)
   for (const it of items) for (const p of it.altPrices) if (p.label && !labels.includes(p.label)) labels.push(p.label);
   for (const it of items) if (it.price.label && !labels.includes(it.price.label)) labels.push(it.price.label);
   const cols = Math.max(1, labels.length, ...items.map((i) => 1 + i.altPrices.length));
   while (labels.length < cols) labels.push('');
   return labels;
 }
-function plRow(it, labels) {
+function plCells(it, labels) {
   const cells = labels.map(() => null);
   const free = [];
   for (const p of [it.price, ...it.altPrices]) { const k = p.label ? labels.indexOf(p.label) : -1; if (k >= 0 && !cells[k]) cells[k] = p; else free.push(p); }
   for (const p of free) { const k = p === it.price ? cells.lastIndexOf(null) : cells.indexOf(null); if (k >= 0) cells[k] = p; }   // ohne Beschriftung: Hauptpreis rechts
-  const td = cells.map((p, i) => `<td class="c-price al-p${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`);
-  return `<tr class="row" data-id="${it.id}">
-    <td class="c-fav">${starHTML(it)}</td>
-    <td class="c-code">${it.code ? hl(it.code) : ''}</td>
-    <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
-    ${td.join('')}${KORDER ? `<td class="c-qty">${qtyHTML(it)}</td>` : ''}</tr>`;
+  return cells;
 }
-function plBlock(title, items) {
-  const labels = plLabels(items), cols = labels.length;
-  return `<div class="al-grp"><table class="al-tab"><thead><tr class="al-h"><th colspan="3" scope="colgroup">${title}</th><th class="al-eh"${cols > 1 ? ` colspan="${cols}"` : ''}>€ / Kg</th>${KORDER ? '<th class="al-qh"><span class="sr-only">Menge </span>kg</th>' : ''}</tr>
-    ${cols > 1 ? `<tr class="al-sub"><th colspan="3"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${KORDER ? '<th></th>' : ''}</tr>` : ''}</thead>
-    <tbody>${items.map((i) => plRow(i, labels)).join('')}</tbody></table></div>`;
-}
-function renderListe(list, grouped) {
-  const m = DATA.meta || {};
-  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-  const head = `<div class="al-head"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? ' - ' + m.year : ''}` : 'Angebot'))}</h2>${stand ? `<span>${esc(stand)}</span>` : ''}</div>`;
-  if (!grouped) {
-    const lbl = { price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey] || '';
-    return `<div class="al">${head}<section class="al-sec"><div class="al-cols al-flow">${plBlock(`Alle Artikel, sortiert nach ${esc(lbl)}`, list)}</div></section></div>`;
+/* Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen) */
+function plFill(units, k, H) {
+  const cols = [[]]; let load = 0;
+  const next = () => { cols.push([]); load = 0; };
+  for (const u of units) {
+    let rest = u.items.slice(), cont = false;
+    while (rest.length) {
+      const w = (xs) => u.head + xs.reduce((a, i) => a + u.weight(i), 0);
+      const W = w(rest), R = H - load;
+      if (W <= R + 1e-6) { cols[cols.length - 1].push({ u, items: rest, cont }); load += W; break; }
+      if (load > 0 && W <= H && R < H * 0.35) { next(); continue; }   // passt in die nächste Spalte und der Rest hier ist klein: nicht teilen
+      let n = 0, acc = u.head;
+      while (n < rest.length && acc + u.weight(rest[n]) <= R + 1e-6) acc += u.weight(rest[n++]);
+      if (n >= 3 && rest.length - n >= 2) { cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next(); continue; }
+      if (load > 0) { next(); continue; }
+      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();   // zu groß für eine Spalte
+    }
   }
-  const out = [];
-  let sec, buf = [], grp = null, items = [];
-  const flushGrp = () => { if (items.length) buf.push(plBlock(plGroupName(items[0].group), items)); items = []; };
-  const flushSec = () => { flushGrp(); if (buf.length) out.push(`<section class="al-sec">${sec ? `<h3 class="al-st">${esc(sec)}</h3>` : ''}<div class="al-cols">${buf.join('')}</div></section>`); buf = []; };
+  if (!cols[cols.length - 1].length) cols.pop();
+  return cols;
+}
+function plBalance(units, k) {
+  const total = units.reduce((a, u) => a + u.head + u.items.reduce((b, i) => b + u.weight(i), 0), 0);
+  let lo = Math.max(total / k, ...units.map((u) => u.head + Math.max(...u.items.map(u.weight)))), hi = total + 1, best = plFill(units, k, hi);
+  for (let n = 0; n < 24 && hi - lo > 0.25; n++) {
+    const mid = (lo + hi) / 2, c = plFill(units, k, mid);
+    if (c.length <= k) { best = c; hi = mid; } else lo = mid;
+  }
+  while (best.length < k) best.push([]);
+  return best;
+}
+function plUnits(list, grouped, charsPerLine) {
+  const weight = (i) => 1 + (i.name.length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0);
+  if (!grouped) return [{ key: 'all', title: `Alle Artikel, sortiert nach ${esc({ price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey] || '')}`, items: list, labels: plLabels(list), head: 1.8, weight, section: '' }];
+  const units = [];
   for (const it of list) {
-    if (it.section !== sec) { flushSec(); sec = it.section; grp = null; }
-    if (it.groupId !== grp) { flushGrp(); grp = it.groupId; }
-    items.push(it);
+    const u = units[units.length - 1];
+    if (u && u.key === it.groupId && u.section === it.section) u.items.push(it);
+    else units.push({ key: it.groupId, section: it.section, title: plGroupName(it.group), items: [it], weight });
   }
-  flushSec();
-  return `<div class="al">${head}${out.join('')}</div>`;
+  for (const u of units) { u.labels = plLabels(u.items); u.head = 1.8 + (u.labels.length > 1 ? 0.9 : 0); }
+  return units;
+}
+function plSections(units) {
+  const out = [];
+  for (const u of units) { if (!out.length || out[out.length - 1].name !== u.section) out.push({ name: u.section, units: [] }); out[out.length - 1].units.push(u); }
+  return out;
+}
+function plBlockHTML(b, withQty) {
+  const { u, items, cont } = b, labels = u.labels, cols = labels.length;
+  const row = (it) => `<tr class="row" data-id="${it.id}">
+    <td class="c-fav">${withQty !== 'print' ? starHTML(it) : ''}</td>
+    <td class="c-code">${it.code ? hl(it.code) : ''}</td>
+    <td class="c-name">${withQty !== 'print' ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>` : esc(it.name)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${withQty === true ? `<td class="c-qty">${qtyHTML(it)}</td>` : ''}</tr>`;
+  const cg = `<colgroup><col class="w-fav"><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${withQty === true ? '<col class="w-qty">' : ''}</colgroup>`;
+  return `<div class="al-grp"><table class="al-tab${withQty === true ? ' has-qty' : ''}">${cg}<thead><tr class="al-h"><th colspan="3" scope="colgroup">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</th>${labels.map((l, n) => `<th class="al-eh">${n === cols - 1 ? '€ / kg' : ''}</th>`).join('')}${withQty === true ? '<th class="al-qh" title="Menge in kg">kg</th>' : ''}</tr>
+    ${cols > 1 ? `<tr class="al-sub"><th colspan="3"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${withQty === true ? '<th></th>' : ''}</tr>` : ''}</thead>
+    <tbody>${items.map(row).join('')}</tbody></table></div>`;
+}
+let plK = 3;
+const plColsFor = (w) => (w >= 720 ? 3 : w >= 500 ? 2 : 1);   // drei Blöcke nebeneinander, sobald es lesbar passt
+function renderListe(list, grouped) {
+  const host = $('#list');
+  plK = plColsFor((host && host.clientWidth) || 1200);
+  const colW = ((host && host.clientWidth) || 1200) / plK;
+  const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150 - (KORDER ? 62 : 0)) / 6.6)));
+  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const m = DATA.meta || {};
+  const head = `<div class="al-head"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div>`;
+  const secs = plSections(units).map((sec) => {
+    const n = sec.units.reduce((a, u) => a + u.items.length, 0);
+    const cols = plBalance(sec.units, plK);
+    return `<section class="al-sec">${sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>` : ''}
+      <div class="al-cols" style="--k:${plK}">${cols.map((c) => `<div class="al-col">${c.map((b) => plBlockHTML(b, !!KORDER)).join('')}</div>`).join('')}</div></section>`;
+  });
+  return `<div class="al" data-k="${plK}">${head}${secs.join('')}</div>`;
+}
+/* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
+if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
+
+/* Druck/PDF: A4 quer, drei Blöcke je Seite, jeder Abschnitt beginnt auf einer neuen Seite (wie die Excel-Liste) */
+/* Seitenhöhe in Zeilen: A4 quer 210 mm − Ränder 20 mm, Zeile 4,5 mm; Kopf der ersten Seite 15 mm, Abschnittsband 8,5 mm, 1 Zeile Reserve */
+const plCap = (first, withSec) => (190 - (first ? 15 : 0) - (withSec ? 8.5 : 0)) / 4.5 - 1;
+function buildPrintListe(list, grouped, scopeText) {
+  const units = plUnits(list, grouped, 36);
+  const pages = [];
+  for (const sec of plSections(units)) {
+    const cap = plCap(!pages.length, !!sec.name);
+    const colW = (c) => c.reduce((a, bl) => a + bl.u.head + bl.items.reduce((x, i) => x + bl.u.weight(i), 0), 0);
+    const one = plBalance(sec.units, 3);
+    if (Math.max(...one.map(colW)) <= cap) { pages.push({ sec: sec.name, cont: false, cols: one }); continue; }   // Abschnitt passt auf eine Seite
+    let cols = plFill(sec.units, Infinity, cap);
+    const per = [];
+    while (cols.length > 3) { per.push(cols.slice(0, 3)); cols = cols.slice(3); }
+    // letzte Seite des Abschnitts gleichmäßig auf drei Spalten verteilen
+    const earlier = new Set(per.flat(2).map((b) => b.u.key));
+    const byKey = new Map();
+    for (const b of cols.flat()) { if (!byKey.has(b.u.key)) byKey.set(b.u.key, { ...b.u, items: [] }); byKey.get(b.u.key).items.push(...b.items); }
+    const firstSeen = new Set();
+    per.push(plBalance([...byKey.values()], 3).map((c) => c.map((b) => {
+      const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
+      return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
+    })));
+    per.forEach((cols3, n) => pages.push({ sec: sec.name, cont: n > 0, cols: cols3 }));
+  }
+  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
+  const m = DATA.meta || {};
+  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph"><div>${COMPANY ? `<span class="pl-co">${esc(COMPANY)}</span>` : ''}<h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1></div><span>${scopeText ? esc(scopeText) + '<br>' : ''}Stand ${esc(stand)} · Preise in € je kg</span></header>` : ''}
+    ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
+    <div class="al-cols" style="--k:3">${pg.cols.map((c) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}</div>`).join('')}</div></section>`).join('');
 }
 
 function cardHTML(it, grouped) {
@@ -763,7 +846,9 @@ function buildPrint({ scope, layout, grouped }) {
       <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${today()}</div>
     </header>`;
   let body = '';
-  if (layout === 'table') {
+  if (layout === 'liste') {
+    body = `<div class="al al-print">${buildPrintListe(list, grouped, scope === 'all' ? '' : scopeText)}</div>`;
+  } else if (layout === 'table') {
     const rows = [];
     let sec = null, grp = null;
     for (const it of list) {
@@ -788,12 +873,12 @@ function buildPrint({ scope, layout, grouped }) {
       body = `<div class="p-cols"><div class="p-group"><div class="p-gh">Artikel<span>€/kg</span></div>${list.map(row).join('')}</div></div>`;
     }
   }
-  $('#print-root').innerHTML = `<div class="p-doc">${head}${body}</div>`;
+  $('#print-root').innerHTML = layout === 'liste' ? body : `<div class="p-doc">${head}${body}</div>`;
 
   let ps = $('#page-style');
   if (!ps) { ps = document.createElement('style'); ps.id = 'page-style'; document.head.appendChild(ps); }
   const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} KW ${m.week ?? '?'}/${m.year ?? '?'} · Preise in € je kg`.replace(/["\\]/g, '');
-  ps.textContent = `@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
+  ps.textContent = `@page { size: A4 ${layout === 'liste' ? 'landscape' : 'portrait'}; margin: ${layout === 'liste' ? '9mm 10mm 11mm 10mm' : '14mm 12mm 16mm 12mm'}; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
   document.title = `Wochenangebot KW ${m.week ?? ''} ${m.year ?? ''}${scope === 'fav' ? ' – Merkliste' : ''}`;
 }
 function doPrint(opts) {
@@ -803,7 +888,7 @@ function doPrint(opts) {
   setTimeout(() => window.print(), 60);
 }
 window.addEventListener('beforeprint', () => {
-  if (!printPrepared) buildPrint({ scope: hasFilters() || state.tab === 'fav' ? 'filtered' : 'all', layout: 'compact', grouped: state.sortKey === 'offer' });
+  if (!printPrepared) buildPrint({ scope: hasFilters() || state.tab === 'fav' ? 'filtered' : 'all', layout: 'liste', grouped: state.sortKey === 'offer' });
 });
 window.addEventListener('afterprint', () => {
   printPrepared = false;
