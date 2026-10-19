@@ -15,7 +15,8 @@ switch ($action) {
                      'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== '', 'passError' => $m['passError'], 'source' => $m['source']] : null,
                      'account' => ($a = mail_account()) ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '', 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null,
                      'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'orders' => order_settings(), 'notify' => notify_view(), 'sodium' => function_exists('sodium_crypto_secretbox'),
-                     'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last), 'testumgebung' => testumgebung()]);
+                     'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last), 'testumgebung' => testumgebung(),
+                     'fracht' => fracht_settings(), 'frachtHinweis' => fracht_hinweis()]);
         }
 
         /* Benachrichtigungen an Mitarbeiter: je Ereignis an/aus und Empfänger (Administrator, mit Passwortbestätigung) */

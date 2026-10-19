@@ -64,7 +64,16 @@ const ORIGIN_NAME = {
 const SYN_COND = { 'frisch': 'frisch', 'gefroren': 'gefroren gefr tk tiefgekühlt', 'frisch-gefroren': 'frisch gefroren', 'dry-aged': 'dry aged', 'unbekannt': '' };
 
 /* ---------- Daten ---------- */
-let DATA, PUBLISHED_AT = null;
+let DATA, PUBLISHED_AT = null, FRACHT = null;
+/* Frachtanteil wie auf dem Server (lib/fracht.php) – nur zur Anzeige, berechnet wird beim Absenden auf dem Server */
+function frachtFuer(kg) {
+  const f = FRACHT;
+  if (!f || !f.aktiv || !f.frei || !(kg > 0)) return { kosten: 0, unter: null, frei: f && f.aktiv ? f.frei : null };
+  let hit = null;
+  for (const st of f.staffeln) if (kg < st.unter) hit = st;
+  return { kosten: hit ? hit.kosten : 0, unter: hit ? hit.unter : null, frei: f.frei };
+}
+const hinweisHTML = (cls) => (FRACHT && FRACHT.hinweis && FRACHT.hinweis.length ? `<aside class="${cls}" aria-label="Hinweis zum Angebot">${FRACHT.hinweis.map((l, i) => `<p${i === 0 ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}</aside>` : '');
 
 function prepare(raw) {
   const items = raw.items.map((it) => {
@@ -104,6 +113,7 @@ async function loadData() {
   }
   COMPANY = body.company || '';
   PUBLISHED_AT = body.offer.publishedAt || body.offer.savedAt || null;
+  FRACHT = body.fracht || null;
   DATA = prepare(window.OfferCore.enrichOffer(body.offer));
 }
 
@@ -117,7 +127,7 @@ const FACETS = [
 ];
 const state = {
   q: '', cats: new Set(), origins: new Set(), conds: new Set(), feats: new Set(), pstat: new Set(),
-  min: null, max: null, sortKey: 'offer', sortDir: 'asc', view: 'table', tab: 'all',
+  min: null, max: null, sortKey: 'offer', sortDir: 'asc', view: 'liste', tab: 'all',
 };
 let favs = new Set(store.get('merkliste', []));
 let current = [];
@@ -426,6 +436,164 @@ function renderTable(list, grouped) {
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
+/* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ----------
+   Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
+   sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
+const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '–');
+const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? ' – ' + m.year : ''}` : 'Angebot'); };
+/* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
+const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
+/* Preisspalten einer Gruppe: Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware) */
+/* „Fleischmeister“ in der Bezeichnung weglassen, wenn Gruppe oder Abschnitt die Marke schon nennen (dort ist sie Überschrift) */
+function plName(it) {
+  if (!/fleischmeister/i.test((it.group || '') + ' ' + (it.section || ''))) return it.name;
+  const n = it.name.replace(/(\s*,\s*|\s+)?[„"“]?fleischmeister[“"”]?/gi, '').replace(/\s+,/g, ',').replace(/,\s*,/g, ',').replace(/^[\s,]+|[\s,]+$/g, '').replace(/\s{2,}/g, ' ');
+  return n || it.name;
+}
+function plLabels(items) {
+  const labels = [];
+  for (const it of items) for (const p of it.altPrices) if (p.label && !labels.includes(p.label)) labels.push(p.label);
+  for (const it of items) if (it.price.label && !labels.includes(it.price.label)) labels.push(it.price.label);
+  const cols = Math.max(1, labels.length, ...items.map((i) => 1 + i.altPrices.length));
+  while (labels.length < cols) labels.push('');
+  return labels;
+}
+function plCells(it, labels) {
+  const cells = labels.map(() => null);
+  const free = [];
+  for (const p of [it.price, ...it.altPrices]) { const k = p.label ? labels.indexOf(p.label) : -1; if (k >= 0 && !cells[k]) cells[k] = p; else free.push(p); }
+  for (const p of free) { const k = p === it.price ? cells.lastIndexOf(null) : cells.indexOf(null); if (k >= 0) cells[k] = p; }   // ohne Beschriftung: Hauptpreis rechts
+  return cells;
+}
+/* Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen) */
+function plFill(units, k, H) {
+  const cols = [[]]; let load = 0;
+  const next = () => { cols.push([]); load = 0; };
+  for (const u of units) {
+    let rest = u.items.slice(), cont = false;
+    while (rest.length) {
+      const w = (xs) => u.head + xs.reduce((a, i) => a + u.weight(i), 0);
+      const W = w(rest), R = H - load;
+      if (W <= R + 1e-6) { cols[cols.length - 1].push({ u, items: rest, cont }); load += W; break; }
+      if (load > 0 && W <= H && R < H * 0.35) { next(); continue; }   // passt in die nächste Spalte und der Rest hier ist klein: nicht teilen
+      let n = 0, acc = u.head;
+      while (n < rest.length && acc + u.weight(rest[n]) <= R + 1e-6) acc += u.weight(rest[n++]);
+      if (n >= 3 && rest.length - n >= 2) { cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next(); continue; }
+      if (load > 0) { next(); continue; }
+      n = Math.max(1, n); cols[cols.length - 1].push({ u, items: rest.slice(0, n), cont }); rest = rest.slice(n); cont = true; next();   // zu groß für eine Spalte
+    }
+  }
+  if (!cols[cols.length - 1].length) cols.pop();
+  return cols;
+}
+function plBalance(units, k) {
+  const total = units.reduce((a, u) => a + u.head + u.items.reduce((b, i) => b + u.weight(i), 0), 0);
+  let lo = Math.max(total / k, ...units.map((u) => u.head + Math.max(...u.items.map(u.weight)))), hi = total + 1, best = plFill(units, k, hi);
+  for (let n = 0; n < 24 && hi - lo > 0.25; n++) {
+    const mid = (lo + hi) / 2, c = plFill(units, k, mid);
+    if (c.length <= k) { best = c; hi = mid; } else lo = mid;
+  }
+  while (best.length < k) best.push([]);
+  return best;
+}
+function plUnits(list, grouped, charsPerLine) {
+  const weight = (i) => 1 + (plName(i).length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0);
+  if (!grouped) return [{ key: 'all', title: `Alle Artikel, sortiert nach ${esc({ price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey] || '')}`, items: list, labels: plLabels(list), head: 1.8, weight, section: '' }];
+  const units = [];
+  for (const it of list) {
+    const u = units[units.length - 1];
+    if (u && u.key === it.groupId && u.section === it.section) u.items.push(it);
+    else units.push({ key: it.groupId, section: it.section, title: plGroupName(it.group), items: [it], weight });
+  }
+  for (const u of units) { u.labels = plLabels(u.items); u.head = 1.8 + (u.labels.length > 1 ? 0.9 : 0); }
+  return units;
+}
+function plSections(units) {
+  const out = [];
+  for (const u of units) { if (!out.length || out[out.length - 1].name !== u.section) out.push({ name: u.section, units: [] }); out[out.length - 1].units.push(u); }
+  return out;
+}
+const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
+/* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€ / kg“ steht über der Preisspalte. */
+function plBlockHTML(b, mode) {
+  const { u, items, cont } = b, labels = u.labels, cols = labels.length;
+  const screen = mode !== 'print';
+  const span = 2 + cols + (screen ? 1 : 0);
+  const row = (it) => `<tr class="row" data-id="${it.id}">
+    <td class="c-code">${it.code ? hl(it.code) : ''}</td>
+    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
+  const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
+  return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€ / kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
+    ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${screen ? '<th></th>' : ''}</tr>` : ''}</thead>
+    <tbody>${items.map(row).join('')}</tbody></table></div>`;
+}
+let plK = 3;
+const plColsFor = (w) => (w >= 720 ? 3 : w >= 500 ? 2 : 1);   // drei Blöcke nebeneinander, sobald es lesbar passt
+function renderListe(list, grouped) {
+  const host = $('#list');
+  plK = plColsFor((host && host.clientWidth) || 1200);
+  const colW = ((host && host.clientWidth) || 1200) / plK;
+  const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150) / 6.6)));
+  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  const m = DATA.meta || {};
+  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>`;
+  const secs = plSections(units).map((sec) => {
+    const n = sec.units.reduce((a, u) => a + u.items.length, 0);
+    const cols = plBalance(sec.units, plK);
+    return `<section class="al-sec">${sec.name ? `<div class="al-st"><h3>${plGroupName(sec.name)}</h3><span>${plural(n, 'Artikel', 'Artikel')}</span></div>` : ''}
+      <div class="al-cols" style="--k:${plK}">${cols.map((c) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'screen')).join('')}</div>`).join('')}</div></section>`;
+  });
+  return `<div class="al" data-k="${plK}">${head}${secs.join('')}${hinweisHTML('al-note')}</div>`;
+}
+/* Spaltenzahl folgt der Breite: bei Wechsel neu verteilen */
+if (window.ResizeObserver) new ResizeObserver(() => { const h = $('#list'); if (state.view === 'liste' && h && h.querySelector('.al') && plColsFor(h.clientWidth) !== plK) renderList(); }).observe(document.documentElement);
+
+/* Druck/PDF: A4 quer, drei Blöcke je Seite, jeder Abschnitt beginnt auf einer neuen Seite (wie die Excel-Liste) */
+/* Seitenhöhe in Zeilen: A4 quer 210 mm − Ränder 20 mm, Zeile 4,5 mm; Kopf der ersten Seite 15 mm, Abschnittsband 8,5 mm, 1 Zeile Reserve */
+const plCap = (first, withSec) => (190 - (first ? 15 : 0) - (withSec ? 8.5 : 0)) / 4.5 - 1;
+function buildPrintListe(list, grouped, scopeText) {
+  const units = plUnits(list, grouped, 36);
+  const pages = [];
+  const secs = plSections(units);
+  const colW = (c) => c.reduce((a, bl) => a + bl.u.head + bl.items.reduce((x, i) => x + bl.u.weight(i), 0), 0);
+  for (const sec of secs) {
+    const cap = plCap(!pages.length, !!sec.name);
+    const one = plBalance(sec.units, 3);
+    if (Math.max(...one.map(colW)) <= cap) { pages.push({ sec: sec.name, cont: false, cols: one, cap }); continue; }   // Abschnitt passt auf eine Seite
+    let cols = plFill(sec.units, Infinity, cap);
+    const per = [];
+    while (cols.length > 3) { per.push(cols.slice(0, 3)); cols = cols.slice(3); }
+    // letzte Seite des Abschnitts gleichmäßig auf drei Spalten verteilen
+    const earlier = new Set(per.flat(2).map((b) => b.u.key));
+    const byKey = new Map();
+    for (const b of cols.flat()) { if (!byKey.has(b.u.key)) byKey.set(b.u.key, { ...b.u, items: [] }); byKey.get(b.u.key).items.push(...b.items); }
+    const firstSeen = new Set();
+    per.push(plBalance([...byKey.values()], 3).map((c) => c.map((b) => {
+      const isFirst = !firstSeen.has(b.u.key); firstSeen.add(b.u.key);
+      return isFirst && earlier.has(b.u.key) ? { ...b, cont: true } : b;
+    })));
+    per.forEach((cols3, n) => pages.push({ sec: sec.name, cont: n > 0, cols: cols3, cap: plCap(false, !!sec.name) }));
+  }
+  /* Hinweis wie in der Excel-Liste: in die Spalte mit dem meisten Platz, sonst unter die Spalten, sonst auf eine eigene Seite */
+  const lines = (FRACHT && FRACHT.hinweis) || [];
+  let notePos = null;
+  if (lines.length && pages.length) {
+    const last = pages[pages.length - 1], used = last.cols.map(colW);
+    const inCol = 1.6 + lines.reduce((a, l) => a + Math.ceil(l.length / 50), 0) * 0.95;    // schmal: Zeilen brechen um
+    const wide = 1.6 + lines.reduce((a, l) => a + Math.ceil(l.length / 150), 0) * 0.95;
+    const k = used.indexOf(Math.min(...used));
+    if (last.cap - used[k] >= inCol) notePos = { page: pages.length - 1, col: k };
+    else if (last.cap - Math.max(...used) >= wide) notePos = { page: pages.length - 1, col: -1 };
+    else { pages.push({ sec: '', cont: false, cols: [[], [], []], cap: plCap(false, false) }); notePos = { page: pages.length - 1, col: -1 }; }
+  }
+  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
+  const m = DATA.meta || {};
+  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
+    ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
+    <div class="al-cols" style="--k:3">${pg.cols.map((c, ci) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}${notePos && notePos.page === n && notePos.col === ci ? hinweisHTML('al-note in-col') : ''}</div>`).join('')}</div>${notePos && notePos.page === n && notePos.col === -1 ? hinweisHTML('al-note') : ''}</section>`).join('');
+}
+
 function cardHTML(it, grouped) {
   const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`).join('');
   return `<article class="card" data-id="${it.id}">
@@ -467,7 +635,7 @@ function renderEmpty() {
 
 function renderList() {
   const grouped = state.sortKey === 'offer';
-  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? renderCards(current, grouped) : renderTable(current, grouped);
+  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
 }
 
 function render() {
@@ -480,11 +648,31 @@ function render() {
   renderList();
   $('#sort').value = `${state.sortKey}-${state.sortDir}`;
   for (const b of $$('.seg button')) b.setAttribute('aria-pressed', b.dataset.view === state.view);
+  for (const b of $$('#modebar [data-mode]')) b.setAttribute('aria-checked', String((b.dataset.mode === 'angebot') === (state.view === 'liste')));
+  $('#view-seg').hidden = state.view === 'liste';
+  renderOrderHint();
+  document.body.classList.toggle('mode-angebot', state.view === 'liste');
   $('#tab-all').setAttribute('aria-selected', state.tab === 'all');
   $('#tab-fav').setAttribute('aria-selected', state.tab === 'fav');
   $('#q-clear').hidden = !state.q;
   $('#q-kbd').hidden = !!state.q;
   syncUrl();
+}
+
+/* Bestellansicht ohne Mengen-Spalte: sagen, warum und wie es geht */
+function renderOrderHint() {
+  const h = $('#order-hint');
+  if (!h) return;
+  let msg = '';
+  if (state.view !== 'liste' && !KORDER && !PREVIEW) {
+    if (KUNDE && KUNDE.mustChange) msg = 'Bitte legen Sie zuerst ein eigenes Passwort fest – danach können Sie hier Mengen eintragen und Bestellwünsche senden.';
+    else if (KUNDE && !KBESTELLFKT) msg = 'Bestellwünsche über das Portal sind derzeit nicht möglich. Bitte wenden Sie sich direkt an uns.';
+    else if (KUNDE) msg = 'Für dieses Angebot können Sie keinen Bestellwunsch senden. Bitte wechseln Sie zu Ihrem Angebot.';
+    else if (KSTAFF) msg = `Mitarbeiter-Ansicht: Mengen eintragen und Bestellwünsche senden können nur angemeldete Kunden.${KBESTELLFKT ? '' : ' Die Bestellfunktion ist ausgeschaltet oder noch nicht eingerichtet (Eingabebereich → Verwaltung → E-Mail → „Bestellwünsche aus dem Portal“).'}`;
+    else msg = KBESTELLFKT ? 'Zum Bestellen bitte als Kunde anmelden – danach tragen Sie hier die Mengen ein und senden Ihren Bestellwunsch.' : 'Diese Liste zeigt alle Artikel mit Filterspalten. Bestellwünsche nehmen wir telefonisch oder per E-Mail entgegen.';
+  }
+  h.hidden = !msg;
+  h.innerHTML = msg ? `${icon('info')}<span>${esc(msg)}</span>${!KUNDE && !KSTAFF && KBESTELLFKT ? '<button type="button" class="btn primary sm" data-kact="login">Kunden-Login</button>' : ''}` : '';
 }
 
 /* ---------- Merkliste ---------- */
@@ -710,7 +898,9 @@ function buildPrint({ scope, layout, grouped }) {
       <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${today()}</div>
     </header>`;
   let body = '';
-  if (layout === 'table') {
+  if (layout === 'liste') {
+    body = `<div class="al al-print">${buildPrintListe(list, grouped, scope === 'all' ? '' : scopeText)}</div>`;
+  } else if (layout === 'table') {
     const rows = [];
     let sec = null, grp = null;
     for (const it of list) {
@@ -735,12 +925,12 @@ function buildPrint({ scope, layout, grouped }) {
       body = `<div class="p-cols"><div class="p-group"><div class="p-gh">Artikel<span>€/kg</span></div>${list.map(row).join('')}</div></div>`;
     }
   }
-  $('#print-root').innerHTML = `<div class="p-doc">${head}${body}</div>`;
+  $('#print-root').innerHTML = layout === 'liste' ? body : `<div class="p-doc">${head}${body}${hinweisHTML('al-note p-note')}</div>`;
 
   let ps = $('#page-style');
   if (!ps) { ps = document.createElement('style'); ps.id = 'page-style'; document.head.appendChild(ps); }
   const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} KW ${m.week ?? '?'}/${m.year ?? '?'} · Preise in € je kg`.replace(/["\\]/g, '');
-  ps.textContent = `@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
+  ps.textContent = `@page { size: A4 ${layout === 'liste' ? 'landscape' : 'portrait'}; margin: ${layout === 'liste' ? '9mm 10mm 11mm 10mm' : '14mm 12mm 16mm 12mm'}; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
   document.title = `Wochenangebot KW ${m.week ?? ''} ${m.year ?? ''}${scope === 'fav' ? ' – Merkliste' : ''}`;
 }
 function doPrint(opts) {
@@ -750,7 +940,7 @@ function doPrint(opts) {
   setTimeout(() => window.print(), 60);
 }
 window.addEventListener('beforeprint', () => {
-  if (!printPrepared) buildPrint({ scope: hasFilters() || state.tab === 'fav' ? 'filtered' : 'all', layout: 'compact', grouped: state.sortKey === 'offer' });
+  if (!printPrepared) buildPrint({ scope: hasFilters() || state.tab === 'fav' ? 'filtered' : 'all', layout: 'liste', grouped: state.sortKey === 'offer' });
 });
 window.addEventListener('afterprint', () => {
   printPrepared = false;
@@ -819,7 +1009,7 @@ function syncUrl() {
   if (state.min != null) p.set('von', String(state.min));
   if (state.max != null) p.set('bis', String(state.max));
   if (state.sortKey !== 'offer') p.set('sortierung', `${state.sortKey}-${state.sortDir}`);
-  if (state.view !== 'table') p.set('ansicht', 'karten');
+  if (state.view !== 'liste') p.set('ansicht', state.view === 'cards' ? 'karten' : 'tabelle');
   const h = p.toString();
   const url = location.pathname + location.search + (h ? '#' + h : '');
   if (url !== location.pathname + location.search + location.hash) { try { history.replaceState(null, '', url); } catch { /* ignore */ } }
@@ -832,7 +1022,7 @@ function readUrl() {
   state.min = num(p.get('von')); state.max = num(p.get('bis'));
   const [k, d] = (p.get('sortierung') || 'offer-asc').split('-');
   if (['offer', 'price', 'name', 'code', 'cat', 'origin', 'cond'].includes(k)) { state.sortKey = k; state.sortDir = d === 'desc' ? 'desc' : 'asc'; }
-  state.view = p.get('ansicht') === 'karten' ? 'cards' : 'table';
+  state.view = { karten: 'cards', tabelle: 'table' }[p.get('ansicht')] || 'liste';   // Standard: Angebotsliste wie gedruckt
   $('#q').value = state.q;
 }
 
@@ -970,6 +1160,7 @@ function bind() {
   /* Toolbar */
   $('#sort').addEventListener('change', (e) => { const [k, d] = e.target.value.split('-'); state.sortKey = k; state.sortDir = d; render(); });
   for (const b of $$('.seg button')) b.addEventListener('click', () => { state.view = b.dataset.view; render(); });
+  for (const b of $$('#modebar [data-mode]')) b.addEventListener('click', () => { state.view = b.dataset.mode === 'angebot' ? 'liste' : (state.view === 'cards' ? 'cards' : 'table'); render(); scrollToResults(); });
   /* Filter-Aufklappmenüs: nur eines offen, schließen bei Klick daneben oder Escape (nicht in der Seitenleiste) */
   $('#filters-body').addEventListener('toggle', (e) => {
     if (mqDrawer.matches || !e.target.open) return;
@@ -1152,7 +1343,9 @@ function renderOrderbar() {
   if (!KORDER || !cart.size) { bar.hidden = true; document.body.classList.remove('has-orderbar'); return; }
   const t = cartTotals();
   bar.hidden = false; document.body.classList.add('has-orderbar');
-  bar.innerHTML = `<div class="orderbar-in"><span class="ob-sum"><strong>${plural(t.n, 'Position', 'Positionen')}</strong> · ${fmtQty.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}</span>
+  const fr = frachtFuer(t.kg);
+  const frTxt = fr.frei ? (fr.kosten ? ` <span class="ob-fr warn">+ ${fmtEur.format(fr.kosten)} € Fracht · noch ${fmtQty.format(fr.frei - t.kg)} kg bis frachtfrei</span>` : ' <span class="ob-fr ok">frachtfrei</span>') : '';
+  bar.innerHTML = `<div class="orderbar-in"><span class="ob-sum"><strong>${plural(t.n, 'Position', 'Positionen')}</strong> · ${fmtQty.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}${frTxt}</span>
     <span class="ob-act"><button type="button" class="btn ghost sm" data-order="clear">Leeren</button><button type="button" class="btn primary" data-order="open">${icon('send')}Bestellwunsch prüfen</button></span></div>`;
 }
 function setQty(id, q, input) {
@@ -1177,8 +1370,9 @@ function openOrder() {
         <td class="r">${it.price.status === 'value' ? fmtEur.format(it.price.value) : '<span class="muted">auf Anfrage</span>'}</td>
         <td class="r o-sum" data-sum="${esc(it.id)}">${it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'}</td>
         <td class="r"><button type="button" class="ibtn" data-order="rm" data-id="${esc(it.id)}" aria-label="Position entfernen: ${esc(it.name)}">${icon('x', 'sm')}</button></td></tr>`).join('')}
-      </tbody><tfoot><tr><td><strong>Summe (ca.)</strong></td><td class="r" id="or-kg"><strong>${fmtQty.format(t.kg)}</strong></td><td></td><td class="r" id="or-sum"><strong>${fmtEur.format(t.sum)} €</strong></td><td></td></tr></tfoot></table>
+      </tbody><tfoot id="or-foot">${orderFootHTML(t)}</tfoot></table>
       <p class="o-note" id="or-req"${t.req ? '' : ' hidden'}>Zzgl. Positionen mit Preis auf Anfrage.</p>
+      <div id="or-fracht">${frachtMsgHTML(t)}</div>
       <div class="o-fields">
         <label class="kfld"><span>Wunschtermin (optional)</span><input type="date" id="or-termin" min="${min}"></label>
         <label class="kfld"><span>Ihre Bestellnummer / Referenz (optional)</span><input type="text" id="or-ref" maxlength="60"></label>
@@ -1190,12 +1384,26 @@ function openOrder() {
     <div class="dlg-foot"><button class="btn" type="button" data-close>Weiter auswählen</button><button class="btn primary" type="button" data-order="send">${icon('send')}Bestellwunsch senden</button></div>`;
   if (!d.open) d.showModal();
 }
+function orderFootHTML(t) {
+  const fr = frachtFuer(t.kg);
+  return `<tr><td><strong>${fr.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r" id="or-kg"><strong>${fmtQty.format(t.kg)}</strong></td><td></td><td class="r" id="or-sum"><strong>${fmtEur.format(t.sum)} €</strong></td><td></td></tr>`
+    + (fr.kosten ? `<tr class="or-fr"><td>Frachtanteil (unter ${fmtQty.format(fr.unter)} kg)</td><td></td><td></td><td class="r" id="or-frk">${fmtEur.format(fr.kosten)} €</td><td></td></tr>
+      <tr><td><strong>Gesamt (ca.)</strong></td><td></td><td></td><td class="r" id="or-total"><strong>${fmtEur.format(t.sum + fr.kosten)} €</strong></td><td></td></tr>` : '');
+}
+/* Meldung zum Gewicht: unter der Frachtfreigrenze wird der Frachtanteil automatisch aufgeschlagen */
+function frachtMsgHTML(t) {
+  const fr = frachtFuer(t.kg);
+  if (!fr.frei) return '';
+  return fr.kosten
+    ? `<p class="o-fr warn" role="status"><strong>Mindestmenge nicht erreicht:</strong> Ihr Bestellwunsch hat ${fmtQty.format(t.kg)} kg. Unter ${fmtQty.format(fr.unter)} kg berechnen wir einen Frachtanteil von ${fmtEur.format(fr.kosten)} € pro Sendung – er ist oben bereits aufgeschlagen. Ab ${fmtQty.format(fr.frei)} kg liefern wir frachtfrei (noch ${fmtQty.format(fr.frei - t.kg)} kg).</p>`
+    : `<p class="o-fr ok" role="status">Ab ${fmtQty.format(fr.frei)} kg frachtfrei – Ihr Bestellwunsch erfüllt die Mindestmenge.</p>`;
+}
 function refreshOrderDialog() {
   const t = cartTotals();
   if (!t.n) { $('#dlg-order').close(); return; }
   for (const { it, q } of orderLines()) { const c = $(`#order-body [data-sum="${CSS.escape(it.id)}"]`); if (c) c.textContent = it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'; }
-  $('#or-kg').innerHTML = `<strong>${fmtQty.format(t.kg)}</strong>`;
-  $('#or-sum').innerHTML = `<strong>${fmtEur.format(t.sum)} €</strong>`;
+  $('#or-foot').innerHTML = orderFootHTML(t);
+  $('#or-fracht').innerHTML = frachtMsgHTML(t);
   $('#or-req').hidden = !t.req;
 }
 let lastOrderAttempt = null;
@@ -1222,7 +1430,7 @@ async function sendOrder(btn) {
     cart.clear(); saveCart(); renderOrderbar();
     for (const el of $$('#list .qty')) el.value = '';
     $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Vielen Dank!</h2><p>Bestellwunsch ${esc(r.nr)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtQty.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €) ${r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
+      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtQty.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €${r.fracht && r.fracht.kosten ? ` zzgl. ${fmtEur.format(r.fracht.kosten)} € Frachtanteil` : ''}) ${r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
         ${r.copy ? `<p class="muted">Eine Kopie haben wir an ${esc(r.copy)} gesendet.</p>` : ''}</div>
       <div class="dlg-foot"><button class="btn primary" type="button" data-close>Fertig</button></div>`;
   } catch (ex) {
@@ -1287,7 +1495,7 @@ async function openCustomerOrders(offset = 0, nr = '') {
         ${o.bemerkung ? `<p class="co-note">${esc(o.bemerkung)}</p>` : ''}
         <table class="co-tab"><thead><tr><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
         ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtQty.format(p.qty)} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : fmtEur.format(p.price) + ' €'}</td><td class="r">${p.sum == null ? '–' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="3"><strong>Summe (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr></tfoot></table>
+        </tbody><tfoot><tr><td colspan="3"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr><td colspan="3">Frachtanteil (unter ${fmtQty.format(o.fracht.unter)} kg)</td><td class="r">${fmtEur.format(o.fracht.kosten)} €</td></tr><tr><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total + o.fracht.kosten)} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;
       foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn primary" type="button" data-close>Schließen</button>`;
@@ -1309,7 +1517,7 @@ document.addEventListener('click', (e) => {
 /* ---------- Kunden-Anmeldung ----------
    Kunden melden sich mit Benutzerkennung und Passwort an und sehen nur die für sie freigeschalteten Angebote.
    Die Prüfung erfolgt auf dem Server; hier wird nur die Oberfläche gesteuert. */
-let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true, KWARTUNG = null;
+let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true, KWARTUNG = null, KBESTELLFKT = false;
 async function kundeApi(action, body) {
   let res, data = null;
   try {
@@ -1328,7 +1536,7 @@ function setOfferParam(id) {
 async function kundeStart() {
   let st;
   try { st = await kundeApi('kunde_status'); } catch { return; }   // ohne Antwort: wie bisher öffentlich laden
-  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false; KWARTUNG = st.wartung || null;
+  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false; KWARTUNG = st.wartung || null; KBESTELLFKT = !!st.bestellfunktion;
   document.body.classList.toggle('is-test', !!st.testumgebung);   // Kennzeichen „Testumgebung“
   KUNDE = st.kunde || null; KCSRF = st.csrf || '';
   KORDER = !!(KUNDE && st.bestellung && !KUNDE.mustChange && !PREVIEW);
@@ -1561,7 +1769,7 @@ function renderWartung(w) {
     return;
   }
   readUrl();
-  if (KORDER) { if (!KUNDE.angebote.some((o) => o.id === (OFFER || 'std')) && !(KSTDPUB && !OFFER)) KORDER = false; else { loadCart(); bindOrder(); document.body.classList.add('can-order'); } }
+  if (KORDER) { if (!KUNDE.angebote.some((o) => o.id === (OFFER || 'std')) && !(KSTDPUB && !OFFER)) KORDER = false; else { loadCart(); bindOrder(); document.body.classList.add('can-order'); $('#mode-liste-sub').textContent = 'Mengen eintragen und Bestellwunsch senden'; } }
   renderStatic();
   bind();
   render();

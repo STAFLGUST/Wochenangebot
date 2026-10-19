@@ -18,7 +18,7 @@ function order_state(array $o, bool $staff): string
 }
 function order_view(array $o, bool $staff): array
 {
-    $out = array_intersect_key($o, array_flip(['nr','t','firma','angebot','angebotName','week','year','positions','total','totalQty','onRequest','termin','referenz','bemerkung']));
+    $out = array_intersect_key($o, array_flip(['nr','t','firma','angebot','angebotName','week','year','positions','total','totalQty','onRequest','fracht','termin','referenz','bemerkung']));
     $out['workflow'] = order_state($o, $staff);
     $out['revision'] = (int)($o['revision'] ?? 1);
     if ($staff) {
@@ -36,7 +36,7 @@ function order_view(array $o, bool $staff): array
 function order_receipt(array $o, bool $replayed = false): void
 {
     respond(['ok' => true, 'apiVersion' => 1, 'nr' => $o['nr'], 'total' => $o['total'], 'totalQty' => $o['totalQty'],
-        'positions' => count($o['positions']), 'onRequest' => $o['onRequest'], 'copy' => !empty($o['kopie']) ? ($o['kunde']['email'] ?? null) : null,
+        'positions' => count($o['positions']), 'onRequest' => $o['onRequest'], 'fracht' => $o['fracht'] ?? null, 'copy' => !empty($o['kopie']) ? ($o['kunde']['email'] ?? null) : null,
         'delivery' => $o['status'] ?? 'neu', 'replayed' => $replayed]);
 }
 function order_replay(array $all, string $kid, string $key, string $hash): void

@@ -25,16 +25,16 @@ switch ($action) {
                 require_auth();
                 $d = store_read('entwurf') ?? store_read('angebot');
                 if (!$d) fail('Kein Entwurf vorhanden.', 404);
-                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def)]);
+                respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def), 'fracht' => fracht_public()]);
             }
             $published = store_read('angebot');
             if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
             if ($oid === OFFER_STD && std_public()) {
-                $etag = '"' . hash('sha256', json_encode($published) . ':std') . '"';
+                $etag = '"' . hash('sha256', json_encode($published) . json_encode(fracht_public()) . ':std:2') . '"';   // Hinweis/Fracht gehören zur Antwort
                 header('ETag: ' . $etag);
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
             }
-            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => offer_resolve($published, $def)]);
+            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => offer_resolve($published, $def), 'fracht' => fracht_public()]);
         }
 
         case 'offers': {

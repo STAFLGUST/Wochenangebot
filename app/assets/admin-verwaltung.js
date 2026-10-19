@@ -194,7 +194,7 @@
           <td class="ord-nr"><div class="nm">${esc(o.nr)}</div><div class="sub">${esc(dateTime(o.t))}</div></td>
           <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div>${o.mailPending ? `<div class="ord-mobile-mail form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</div>` : ''}</td>
           <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
-          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}</div></td>
+          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}${o.fracht && o.fracht.kosten ? ' + Fracht' : ''}</div></td>
           <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
           <td class="ord-mail">${orderMail(o.delivery, o.mailPending)}${o.mailPending ? `<br><span class="form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</span>` : ''}</td>
         </tr>`).join('');
@@ -302,7 +302,7 @@
         ${o.bemerkung ? `<p class="ord-note"><strong>Bemerkung des Kunden:</strong> ${esc(o.bemerkung)}</p>` : ''}
         <table class="etab ordpos"><thead><tr><th>Art.-Nr.</th><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
           ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(fmtNum.format(p.qty))} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : esc(fmtNum.format(p.price)) + ' €'}</td><td class="r">${p.sum == null ? '–' : esc(fmtNum.format(p.sum)) + ' €'}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="2"><strong>Summe (ca.)</strong></td><td class="r">${esc(fmtNum.format(o.totalQty || 0))} kg</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr></tfoot></table>
+        </tbody><tfoot><tr><td colspan="2"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(fmtNum.format(o.totalQty || 0))} kg</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td colspan="4">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(fmtNum.format(o.fracht.kosten))} €</td></tr><tr><td colspan="4"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(fmtNum.format(o.total + o.fracht.kosten))} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <section class="ord-outbox"><h3>E-Mail-Versand</h3>
           <p class="hint">Erfolgreich bedeutet: vom Mailserver angenommen. Bei einem Verbindungsabbruch kann eine E-Mail trotz fehlender Bestätigung angekommen sein. Vor erneutem Versand bitte prüfen.</p>
@@ -635,6 +635,7 @@
         <p class="form-err" id="ml-oerr" role="alert"></p>
         <div class="sec-foot"><button type="submit" class="btn">${icon('check', 'sm')}Speichern</button></div>
       </form>
+      ${frachtCard(m)}
       ${notifyCard(m)}
       <div class="gcard sec-form">
         <h3 class="sec-h">Signatur</h3>
@@ -652,6 +653,25 @@
         ${log.length ? `<div class="ml-logwrap"><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sec-empty">Noch keine E-Mails versendet.</p>'}
       </div>`;
     if (m.testumgebung) renderTestpost();
+  }
+  /* Fracht: frachtfrei ab … kg, Frachtanteil je Staffel; daraus entsteht der Hinweis unter dem Angebot (Bildschirm und Druck) */
+  const frRow = (st) => `<div class="fr-row"><label class="fld"><span>Unter</span><span class="fr-in"><input name="fr-unter" type="number" min="1" max="100000" step="1" inputmode="numeric" value="${st ? esc(st.unter) : ''}" aria-label="Gewichtsgrenze in kg"> kg</span></label>
+      <label class="fld"><span>Frachtanteil</span><span class="fr-in"><input name="fr-kosten" type="number" min="0" max="10000" step="0.01" inputmode="decimal" value="${st ? esc(st.kosten) : ''}" aria-label="Frachtanteil in Euro"> € pro Sendung</span></label>
+      <button type="button" class="btn icon ghost" data-fr="rm" aria-label="Staffel entfernen">${icon('trash', 'sm')}</button></div>`;
+  function frachtCard(m) {
+    const f = m.fracht;
+    if (!f) return '';
+    return `<form class="gcard sec-form" id="ml-fracht" autocomplete="off">
+        <h3 class="sec-h">Fracht und Hinweis im Angebot</h3>
+        <p class="hint">Liegt ein Bestellwunsch unter der Gewichtsgrenze, wird der Frachtanteil automatisch aufgeschlagen und der Kunde sieht vor dem Absenden einen Hinweis. Die größte Grenze ist die Mindestmenge für frachtfreie Lieferung.</p>
+        <label class="check"><input type="checkbox" name="aktiv"${f.aktiv ? ' checked' : ''}> Frachtregel anwenden</label>
+        <div class="fr-list" id="fr-list">${(f.staffeln.length ? f.staffeln : [null]).map(frRow).join('')}</div>
+        <button type="button" class="btn sm" data-fr="add">${icon('plus', 'sm')}Staffel hinzufügen</button>
+        <label class="fld fr-zus"><span>Zusatz im Hinweis <small>(z. B. Telefonnummern, je Zeile)</small></span><textarea name="zusatz" rows="3" maxlength="600">${esc(f.zusatz)}</textarea></label>
+        <div class="fr-prev"><span class="sub">So steht der Hinweis unter dem Angebot und im Druck:</span><div class="al-note">${(m.frachtHinweis || []).map((l, i) => `<p${i === 0 ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}</div></div>
+        <p class="form-err" id="ml-frerr" role="alert"></p>
+        <div class="sec-foot"><span class="sub">${f.updatedAt ? `Geändert ${esc(dateTime(f.updatedAt))}${f.updatedBy ? ' von ' + esc(f.updatedBy) : ''}` : 'Voreinstellung – noch nicht gespeichert'}</span><button type="submit" class="btn">${icon('check', 'sm')}Speichern</button></div>
+      </form>`;
   }
   /* Benachrichtigungen an Mitarbeiter: je Ereignis an/aus und Empfänger */
   function notifyCard(m) {
@@ -692,7 +712,25 @@
     if (e.target.name && e.target.name.startsWith('on-')) { const s = e.target.nextElementSibling; if (s) s.textContent = e.target.checked ? 'an' : 'aus'; }
     if (e.target.name === 'secure') { const p = $('#ml-form [name="port"]'); if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
   });
+  $('#view-mail').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-fr]')?.dataset.fr;
+    if (a === 'add') { if ($$('#fr-list .fr-row').length < 5) $('#fr-list').insertAdjacentHTML('beforeend', frRow(null)); }
+    else if (a === 'rm') e.target.closest('.fr-row').remove();
+  });
   $('#view-mail').addEventListener('submit', async (e) => {
+    if (e.target.id === 'ml-fracht') {
+      e.preventDefault();
+      const f = e.target, err = $('#ml-frerr'), btn = f.querySelector('[type="submit"]');
+      err.textContent = ''; btn.disabled = true;
+      const staffeln = $$('#fr-list .fr-row').map((r) => ({ unter: r.querySelector('[name="fr-unter"]').value, kosten: r.querySelector('[name="fr-kosten"]').value.replace(',', '.') })).filter((x) => x.unter !== '' || x.kosten !== '');
+      try {
+        const r = await api('fracht_save', { body: { aktiv: f.aktiv.checked, staffeln, zusatz: f.zusatz.value } });
+        mailSt.fracht = r.fracht; mailSt.frachtHinweis = r.hinweis;
+        toast('Fracht und Hinweis gespeichert. Gilt ab sofort für neue Bestellwünsche und das Angebot.', 5000);
+        renderMailView();
+      } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+      return;
+    }
     if (e.target.id === 'ml-orders') {
       e.preventDefault();
       const f = e.target, err = $('#ml-oerr'), btn = f.querySelector('[type="submit"]');

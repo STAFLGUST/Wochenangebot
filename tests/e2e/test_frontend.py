@@ -2,7 +2,7 @@ import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import re, json, os, sys
 from playwright.sync_api import sync_playwright, expect
-URL = BASE + '/'
+URL = BASE + '/#ansicht=tabelle'   # prüft die Tabellenansicht (Standard ist die Angebotsliste, eigener Test)
 from umgebung import SH as OUT, FIX, REPO
 from testdaten import de, preis, preise, artikel, bestand_kg
 results = []
@@ -132,19 +132,19 @@ with sync_playwright() as p:
     # url state
     pg.fill('#q', 'roastbeef'); drop('origin'); pg.click('#filters-body label.opt:has-text("Uruguay")'); pg.select_option('#sort', 'price-desc'); pg.wait_for_timeout(100)
     h = pg.evaluate('location.hash'); n = rows()
-    p2 = ctx.new_page(); p2.goto(URL + h); p2.wait_for_selector('tr.row')
+    p2 = ctx.new_page(); p2.goto(BASE + '/' + h); p2.wait_for_selector('tr.row')
     check('shared link restores state', p2.locator('tr.row').count() == n and p2.input_value('#q') == 'roastbeef' and p2.input_value('#sort') == 'price-desc', (h, n))
     p2.close()
     pg.click('#btn-more'); pg.click('[data-action="copy-link-state"]'); pg.wait_for_timeout(200)
     check('copy link toast', 'kopiert' in pg.inner_text('#toast') or 'Kopieren nicht' in pg.inner_text('#toast'), pg.inner_text('#toast'))
-    pg.evaluate("location.hash=''"); pg.wait_for_timeout(150)
+    pg.evaluate("location.hash='ansicht=tabelle'"); pg.wait_for_timeout(150)
     check('hash cleared → full list', rows() == 276, rows())
 
     # print
     pg.evaluate('() => { window.print = () => { window.__printed = (window.__printed||0) + 1; }; }')
     pg.click('#btn-print'); expect(pg.locator('#dlg-print')).to_be_visible()
     pg.screenshot(path=f'{OUT}/print-dialog.png')
-    pg.check('input[name="scope"][value="all"]'); pg.click('#print-go'); pg.wait_for_timeout(200)
+    pg.check('input[name="scope"][value="all"]'); pg.check('input[name="layout"][value="compact"]'); pg.click('#print-go'); pg.wait_for_timeout(200)   # Standard „Angebotsliste“: eigener Test
     check('print called', pg.evaluate('window.__printed') == 1)
     check('print root: 276 rows', pg.locator('#print-root .p-row').count() == 276, pg.locator('#print-root .p-row').count())
     check('print root: 32 groups, 4 sections', pg.locator('#print-root .p-group').count() == 32 and pg.locator('#print-root .p-section').count() == 4)

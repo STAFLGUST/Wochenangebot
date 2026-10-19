@@ -770,3 +770,132 @@ svg.i.back { transform: rotate(90deg); }
 body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im Testpostfach"; position: fixed; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 9999;
   padding: 5px 14px; border-radius: 99px; background: repeating-linear-gradient(45deg, #b45309, #b45309 10px, #92400e 10px, #92400e 20px); color: #fff;
   font: 700 12px/1.3 system-ui, sans-serif; letter-spacing: .04em; box-shadow: 0 2px 10px rgba(0,0,0,.25); pointer-events: none; white-space: nowrap; max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Angebotsliste (Standardansicht): Aufbau wie die gedruckte Angebotsliste ----------
+   Drei gleich hohe Blöcke nebeneinander (JS verteilt die Gruppen), feste Spaltenbreiten für Nummer und Preis,
+   Preise rechtsbündig mit Ziffern gleicher Breite, Zebrastreifen für die Zeilenführung. */
+.al { --al-zebra: #f6f6f4; --al-rule: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px 6px; font-variant-numeric: tabular-nums; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al { --al-zebra: rgba(255,255,255,.035); } }
+:root[data-theme="dark"] .al { --al-zebra: rgba(255,255,255,.035); }
+.al-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 16px; }
+.al-logo { display: block; height: 58px; width: auto; flex: none; }
+.al-ht { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; } }
+:root[data-theme="dark"] .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; }
+.al h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; text-transform: none; }
+.al-ht > span { font-size: 13px; color: var(--text-2); }
+.al-sec { margin: 0 0 18px; }
+.al-st { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 7px 12px; background: var(--surface-3); border-radius: 7px; }
+.al-st h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.005em; text-transform: none; }
+.al-st > span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.al-cols { display: grid; grid-template-columns: repeat(var(--k, 3), minmax(0, 1fr)); }
+.al-col { min-width: 0; padding: 0 16px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+.al-col + .al-col { border-left: 1px solid var(--line); }
+.al-col:first-child { padding-left: 0; }
+.al-col:last-child { padding-right: 0; }
+.al-tab { --w-code: 46px; --w-price: 62px; --w-fav: 20px; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
+.al-tab .w-fav { width: var(--w-fav); }
+.al-tab .w-code { width: var(--w-code); }
+.al-tab .w-price { width: var(--w-price); }
+.al-tab th { text-transform: none; letter-spacing: normal; }
+.al-h th { padding: 0 0 4px 5px; border-bottom: 1.5px solid var(--al-rule); font-size: 12.5px; font-weight: 650; text-align: left; vertical-align: bottom; }
+.al-hin { display: flex; align-items: flex-end; }
+.al-gt { flex: 1; min-width: 0; padding-right: 8px; }
+.al-hin .al-eh { flex: none; box-sizing: border-box; width: var(--w-price); padding-right: 6px; text-align: right; white-space: nowrap; }
+.al-hin .al-fh { flex: none; width: var(--w-fav); }
+.al-sub th { padding: 3px 6px 2px; font-size: 11px; font-weight: 600; font-style: italic; color: var(--text-2); text-align: right; }
+.al-brand { color: var(--accent); font-style: italic; }
+.al-cont { font-size: 11px; font-weight: 500; color: var(--muted); }
+.al-tab tbody tr:nth-child(odd) td { background: var(--al-zebra); }
+.al-tab td { padding: 2px 6px; height: 25px; vertical-align: middle; }
+.al-tab td.c-fav { padding: 0; text-align: center; }
+.al-tab .star { width: 20px; height: 22px; border-radius: 5px; color: transparent; }
+.al-tab .star svg.i { width: 13px; height: 13px; }
+.al-tab tr:hover .star, .al-tab .star:focus-visible { color: var(--line-strong); }
+.al-tab .star:hover, .al-tab .star[aria-pressed="true"] { color: var(--accent); }
+.al-tab td.c-code { padding: 2px 4px 2px 5px; font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.al-tab td.c-name { overflow-wrap: anywhere; }
+.al-tab .name-btn { font-weight: 400; line-height: 1.3; padding: 2px 0; text-align: left; }
+.al-tab td.c-price { text-align: right; font-weight: 650; white-space: nowrap; width: auto; }
+.al-tab td.c-price.al-np { font-weight: 500; color: var(--muted); font-size: 12px; }
+.al-sale { color: var(--sale); }
+.al-tab .al-was { display: block; font-weight: 400; color: var(--muted); font-size: 11px; line-height: 1.1; }
+.al-tab .al-tag { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10.5px; vertical-align: 1px; }
+@media (max-width: 640px) {
+  .al { padding: 14px 12px 4px; border-radius: var(--r); }
+  .al-st h3 { font-size: 14px; }
+  .al-logo { height: 44px; }
+  .al-ht { align-items: flex-start; text-align: left; }
+  .al-tab { font-size: 14px; }
+  .al-tab td { height: 34px; }
+  .al-tab .star { color: var(--line-strong); }
+  .al-tab td.c-code { display: table-cell; font-size: 13px; }
+  .al-tab { --w-code: 50px; --w-fav: 26px; --w-price: 66px; }
+  .al-tab .qty { height: 28px; }
+}
+
+/* Druck: A4 quer, drei Blöcke je Seite */
+#print-root .al { border: 0; border-radius: 0; box-shadow: none; padding: 0; background: #fff; color: #111; --al-zebra: #f2f2ef; --al-rule: #111; }
+#print-root .pl-page { break-after: page; }
+#print-root .pl-page:last-child { break-after: auto; }
+#print-root .pl-ph { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 2mm; margin-bottom: 3mm; border-bottom: .8mm solid #8c1d2c; }
+#print-root .pl-ph h1 { margin: 0; font-size: 13pt; font-weight: 650; }
+#print-root .pl-ph .al-logo { height: 15mm; background: none; padding: 0; }
+#print-root .pl-pt { text-align: right; display: flex; flex-direction: column; gap: 1mm; }
+#print-root .pl-ph .pl-co { display: block; font-size: 7.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8c1d2c; margin-bottom: .6mm; }
+#print-root .pl-pt > span { font-size: 8pt; color: #444; }
+#print-root .al-st { background: #ececea; border-radius: 0; padding: 1.2mm 2.5mm; margin: 0 0 2.4mm; }
+#print-root .al-st h3 { font-size: 10pt; }
+#print-root .al-col { padding: 0 3.2mm; gap: 2.6mm; }
+#print-root .al-col:first-child { padding-left: 0; }
+#print-root .al-col:last-child { padding-right: 0; }
+#print-root .al-col + .al-col { border-left: .25mm solid #d6d6d2; }
+#print-root .al-tab { font-size: 9pt; line-height: 1.22; }
+#print-root .al-tab { --w-code: 11mm; --w-price: 14mm; --w-fav: 0mm; }
+#print-root .al-tab td { height: 4.5mm; padding: 0 1.2mm; }
+#print-root .al-tab td.c-code { font-size: 8.4pt; color: #111; padding-left: 1mm; }
+#print-root .al-h th { font-size: 8.6pt; padding: 0 0 .8mm 1mm; border-bottom-width: .35mm; }
+#print-root .al-hin .al-eh { padding-right: 1.2mm; }
+#print-root .al-sub th { font-size: 6.8pt; white-space: nowrap; }
+#print-root .al-tab .al-tag { font-size: 6.8pt; padding: 0 1mm; }
+#print-root .al-tab td.c-price.al-np { font-size: 8pt; }
+#print-root .al-tab .al-was { font-size: 7pt; display: inline; margin-right: 1mm; }
+#print-root .al-grp, #print-root .al-tab tr { break-inside: avoid; }
+
+/* Umschalter Angebotsansicht / Bestellansicht – gut sichtbar ganz oben */
+.modebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 16px; }
+.modebar button { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 18px; border: 1.5px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; transition: border-color .12s, background .12s; }
+.modebar button span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.modebar button strong { font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: inherit; }
+.modebar button small { font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modebar button svg.i { width: 24px; height: 24px; flex: none; color: var(--accent); }
+.modebar button:hover { border-color: var(--accent); }
+.modebar button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 2px 10px rgba(140, 29, 44, .22); }
+.modebar button[aria-checked="true"] small { color: inherit; opacity: .85; }
+.modebar button[aria-checked="true"] svg.i { color: inherit; }
+.modebar button:focus-visible { box-shadow: var(--focus); outline: none; }
+@media (max-width: 640px) { .modebar button { min-height: 52px; padding: 8px 12px; gap: 8px; } .modebar button strong { font-size: 14.5px; } .modebar button small { display: none; } .modebar button svg.i { width: 20px; height: 20px; } }
+.order-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--accent-line); border-radius: 10px; background: var(--accent-soft); font-size: 13.5px; color: var(--text); }
+.order-hint > svg.i { color: var(--accent); flex: none; }
+.order-hint > span { flex: 1 1 260px; }
+
+/* Hinweis unter dem Angebot (Preise, Mindestmenge, Fracht, Kontakt) – Bildschirm und Druck */
+.al-note { margin: 4px 0 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.al-note p { margin: 0; }
+.al-note p + p { margin-top: 2px; }
+.al-note .lead { color: var(--text); font-weight: 600; }
+.list-note { margin-top: 16px; }
+#print-root .al-note { margin: 3mm 0 0; padding: 2mm 3mm; border: .3mm solid #bbb; border-radius: 0; background: #fff; font-size: 8.4pt; line-height: 1.4; color: #222; break-inside: avoid; }
+#print-root .al-note .lead { color: #111; }
+/* Gewicht und Fracht in der Bestellung */
+.ob-fr { font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.ob-fr.warn { color: var(--sale); }
+.ob-fr.ok { color: var(--c-fresh); }
+.o-fr { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.45; }
+.o-fr.warn { background: var(--sale-bg); color: var(--text); border: 1px solid color-mix(in srgb, var(--sale) 35%, transparent); }
+.o-fr.ok { background: var(--c-fresh-bg); color: var(--c-fresh); }
+.otab tr.or-fr td { color: var(--sale); }
+/* Angebotsansicht: volle Breite für die drei Blöcke (Merkliste über den Reiter, Bestellen in der Bestellansicht) */
+@media (min-width: 1280px) { body.mode-angebot .layout { grid-template-columns: minmax(0, 1fr); } body.mode-angebot .merk { display: none; } }
+@container (max-width: 330px) { .al-h th { font-size: 12px; } .al-hin .al-eh { font-size: 11.5px; } }
+#print-root .al-note.in-col { margin-top: 1mm; }

@@ -37,7 +37,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | Gruppe | Prüfungen | Schwerpunkt |
 | --- | --- | --- |
 | sys | 52 | Ersteinrichtung, Editor, Import, Veröffentlichen, Versionen, Passwort |
-| frontend | 62 | öffentliche Seite: Filter (Aufklappmenüs: nur eines offen, Escape, Klick daneben), Suche, Sortierung, CSV, Druck, keine internen Daten |
+| frontend | 62 | öffentliche Seite (Tabellenansicht): Filter (Aufklappmenüs: nur eines offen, Escape, Klick daneben), Suche, Sortierung, CSV, Druck, keine internen Daten |
 | design | 21 | Gestaltung „Klar“: Schriften lokal (keine fremden Server), Kopf mit Kürzel, Filterleiste/Seitenleiste je Breite, Merkliste-Spalte ab 1280 px, dunkles Design, kein seitliches Scrollen |
 | hist | 35 | Preisverlauf, Import alter Listen, Datendialog |
 | users | 48 | Rollen, Rechte serverseitig, Protokoll, Sperren |
@@ -52,11 +52,12 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | angebote | 38 | Kundenangebote: eigene Preise, Ausblenden, Übernahme, Verwaltung, Rechte, keine Kundenpreise öffentlich |
 | kunden | 125 | Kundenstammdaten, Freischaltung, Kunden-Login mit Pflicht-Passwortwechsel, Sperre, Sitzungsende, kein Zugriff auf den Eingabebereich, Merkliste je Kunde (geräteübergreifend, Übernahme der Browser-Merkliste), Oberfläche |
 | testumgebung | 17 | Testumgebung (`WA_TESTUMGEBUNG=1`): Kennzeichen, E-Mails und Bestellwünsche nur ins Testpostfach, Rechte, Oberfläche |
-| restposten | 52 | Sonderposten (Sonderpreis je Angebot, statt-Preis, automatisch ausgeblendet ohne Bestand), Ausblenden im Wochenangebot, rotes Kein-Bestand-Zeichen, Kurzes-MHD-Liste, Sonderposten-Mail nur an Kunden des jeweiligen Angebots, Angebotsseite |
+| restposten | 53 | Sonderposten (Sonderpreis je Angebot, statt-Preis, automatisch ausgeblendet ohne Bestand), Ausblenden im Wochenangebot, rotes Kein-Bestand-Zeichen, Kurzes-MHD-Liste, Sonderposten-Mail nur an Kunden des jeweiligen Angebots, Angebotsseite |
 | gemeinsam | 34 | Mehrere Bearbeiter gleichzeitig: Revisionen, 409 mit Namen, Anwesenheit, Hintergrundabfragen verlängern keine Sitzung, Abgleich in der Oberfläche, angefangene Eingaben bleiben, Veröffentlichen mit Konflikt |
 | wartung | 25 | Wartungsmodus (Rechte, Sperre der Kundenfunktionen, Mitarbeiter arbeiten weiter, Abmeldelinks frei, Protokoll, Oberfläche) und erweiterte Übersicht |
 | auswertung | 44 | Auswertung: Ortsdaten laden (Test-Quelle, nur Administrator, Fehlerfall), Anmeldeort je Kunden-Anmeldung (IPv4, IPv6, privat, Gerätetyp), keine IP gespeichert, Zeitraum, Löschen nach 90 Tagen und mit dem Kunden, Rechte, Karte/Punkte/Hinweisfeld/Filter/Liste/Ziehen/Zoom, 390 px |
 | rechte | 47 | Nutzerrechte: Standards wie bisher, Ausnahmen je Nutzer (erlauben/verbieten, verboten hat Vorrang), Voraussetzungen, Durchsetzung auf dem Server, Passwortbestätigung nur für Berechtigte, Administratorrechte nicht vergebbar, Protokoll, Rechte-Tabelle und Nutzer-Dialog, Sichtbarkeit für Leser und Bearbeiter, 390 px |
+| angebotsliste | 49 | Angebotsansicht wie die Druckliste: Umschalter Angebots-/Listenansicht, Abschnitte, immer drei gleich hohe Blöcke über die volle Breite (auch 1024 px; Handy 1), Gruppenköpfe einzeilig, Nummern schwarz und bündig, Preise rechtsbündig, „Fleischmeister“ nicht doppelt, Hinweis (Bildschirm, Liste, Druck), Logo, Details, Merkliste, Suche, Sortierung, Tabelle/Karten per Link; Export A4 quer (PDF quer, Seitenzahl = geplante Seiten), großes Angebot ohne Überlauf, 390 px, dunkel |
 | versand | 11 | Wochenangebot senden: Knopf „An Kunden senden“ (nur Berechtigte), Hinweis direkt nach dem Veröffentlichen, Versand der neuen Woche |
 | sicherheit_it | 52 | Sicherheit für IT-Administratoren: Verlauf und auffällige Adressen, Konfigurationsprüfung, Diagnosen (beschädigter Datensatz erkannt, Mailanmeldung ohne Versand, nur lesend), CSV-Export (Formeln entschärft, keine Hashes, protokolliert), Rechte, Browser-Prüfungen, Oberfläche |
 | einkauf | 49 | Einkauf: Fehlmenge = offene Bestellmengen − Bestand (stornierte zählen nicht), ohne Bestandsliste kein Ergebnis, Ansehen für alle / Kundennamen und Melden ab Bearbeiter, E-Mail an „Einkaufsbedarf“ mit Hinweis (escaped), Status gemeldet / mehr als gemeldet, Oberfläche Desktop und Mobil |
@@ -65,7 +66,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | order_management_ui | 10 | Bestellverwaltung im Eingabebereich und „Meine Bestellwünsche“ für Kunden (inkl. Mobil, sichere Darstellung) |
 | order_outbox | 40 | Dauerhafte Versandaufträge, Teilfehler, SMTP-Ausfall, verlorene Bestätigung, Sperren, Rechte und gezielter Neuversand |
 | order_outbox_ui | 9 | Mobile Empfängeranzeige, Bestätigungsdialog, Abbrechen und Neuversand ohne Duplikate erfolgreicher Nachrichten |
-| bestellung | 68 | Bestellwunsch aus dem Portal: Einstellungen, serverseitige Kundenpreise, Prüfungen (Version, Freischaltung, Mengen, Datum), E-Mail an Empfänger + Kopie, Ausfall des Mailservers, Oberfläche (Mengen, Leiste, Dialog, Mobil) |
+| bestellung | 91 | Bestellwunsch aus dem Portal: Angebots-/Bestellansicht, Frachtanteil unter der Mindestmenge (Server, E-Mail, Dialog, Leiste, Einstellungen in der Verwaltung), Einstellungen, serverseitige Kundenpreise, Prüfungen (Version, Freischaltung, Mengen, Datum), E-Mail an Empfänger + Kopie, Ausfall des Mailservers, Oberfläche (Mengen, Leiste, Dialog, Mobil) |
 | kunden_mail | 137 | E-Mail-Versand gegen Test-Mailserver: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail, Rechte, Header-Injection, Ausfall des Mailservers, Postfach im Eingabebereich (verschlüsselt, Vorrang vor .env), Abmelden vom Wochenangebot (Link + Ein-Klick) |
 | p0 | 17 | Ersteinrichtung gesperrt, CSV-Formel-Schutz, Sicherungs- und Bereitstellungsanzeige, Server-Module nicht direkt abrufbar |
 

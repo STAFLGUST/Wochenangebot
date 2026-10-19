@@ -66,6 +66,7 @@ SUITES['benachrichtigung'] = SUITES['bestellung']
 SUITES['einkauf'] = SUITES['bestellung']
 SUITES['sicherheit_it'] = SUITES['bestellung']
 SUITES['versand'] = SUITES['kunden_mail']
+SUITES['angebotsliste'] = (8790, 'data-seed', True)
 SUITES['rechte'] = SUITES['kunden_mail']
 SUITES['auswertung'] = (8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
