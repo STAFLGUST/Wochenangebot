@@ -29,6 +29,15 @@
 - Standardpreise sind keine Kunden-, Sonder- oder Einkaufspreise. Abweichende Preislabels werden
   angezeigt. Die Entwurfsangaben im Artikeldialog bleiben ausdrücklich als Entwurf gekennzeichnet.
 
+## Darstellung
+
+Die fette Kopfzeile folgt der Reihenfolge Artikelnummer, Bezeichnung, aktueller Preis,
+Vorwochenpreis, Preisänderung, kürzestes MHD, kg am kürzesten MHD, erfasster Bestand,
+erwartete Zugänge. Fehlende Preise erscheinen als „—“; fehlende Vergleichsdaten bleiben
+in der Änderungsspalte ausdrücklich gekennzeichnet. Zugänge werden in der Übersicht nur
+als Button mit Anzahl gezeigt. Er öffnet einen Dialog mit den einzelnen Mengen und ETAs;
+Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lieferdetails.
+
 ## Schnittstelle und Rechte
 
 `GET stock` bleibt nur mit `bestand.sehen` verfügbar. Das zusätzliche Antwortfeld `prices` enthält
