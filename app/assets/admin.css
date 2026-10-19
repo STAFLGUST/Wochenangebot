@@ -925,3 +925,15 @@ body.ro .sale-tag { cursor: default; }
   .aw-map { height: 360px; }
   .aw-tab .aw-via, .aw-tab .aw-dev { display: none; }
 }
+
+/* Fracht und Hinweis im Angebot */
+.fr-list { display: grid; gap: 8px; margin: 10px 0 8px; }
+.fr-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; }
+.fr-in { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.fr-in input { width: 110px; }
+.fr-zus { margin-top: 12px; }
+.fr-zus textarea { width: 100%; }
+.fr-prev { margin-top: 12px; display: grid; gap: 6px; }
+.fr-prev .al-note { margin: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.fr-prev .al-note p { margin: 0; }
+.fr-prev .al-note .lead { color: var(--text); font-weight: 600; }

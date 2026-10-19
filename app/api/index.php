@@ -37,6 +37,7 @@
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
  *   POST ?action=kunde_bestellung  Bestellwunsch eines Kunden (Preise serverseitig aus dem Angebot) → E-Mail an uns (+ Kopie)
  *   POST ?action=bestell_settings_save   Bestellfunktion ein/aus, Kopie an Kunden (nur Administrator)
+ *   POST ?action=fracht_save             Frachtfreigrenze, Frachtanteil je Staffel, Zusatz im Hinweis (nur Administrator)
  *   POST ?action=benachrichtigung_save | benachrichtigung_test   Benachrichtigungen an Mitarbeiter (nur Administrator)
  *   POST ?action=wartung_save      Wartungsmodus ein/aus (Administrator, mit Passwortbestätigung)
  *   GET  ?action=kunde_merkliste   Merkliste des angemeldeten Kunden; POST kunde_merkliste_save (Kunden-CSRF)
@@ -95,6 +96,7 @@ require __DIR__ . '/lib/protokoll.php';
 require __DIR__ . '/lib/angebote.php';
 require __DIR__ . '/lib/kunden.php';
 require __DIR__ . '/lib/kundenmail.php';
+require __DIR__ . '/lib/fracht.php';
 require __DIR__ . '/lib/benachrichtigung.php';
 require __DIR__ . '/lib/einkauf.php';
 require __DIR__ . '/lib/diagnose.php';
@@ -110,7 +112,7 @@ $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_dr
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
-                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'ort_update'];
+                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);

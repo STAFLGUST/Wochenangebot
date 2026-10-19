@@ -188,7 +188,7 @@ with sync_playwright() as p:
     pg.goto(B + '/'); pg.wait_for_selector('tr.row')
     r1 = pg.locator(f'tr.row[data-id="{IA["id"]}"]')
     check('offer list: sale price, crossed-out price, tag', '5,55' in r1.inner_text() and r1.locator('s.p-was').count() == 1 and r1.locator('.tag.sale').count() == 1, r1.inner_text())
-    pg.click('.seg [data-view=table]'); pg.wait_for_selector('table.grid tr.row')
+    pg.click('#modebar [data-mode=liste]'); pg.wait_for_selector('table.grid tr.row')
     r1 = pg.locator(f'tr.row[data-id="{IA["id"]}"]')
     check('table view: sale price, crossed-out price, note', '5,55' in r1.inner_text() and 'solange der Vorrat reicht' in r1.inner_text() and r1.locator('s.p-was').count() == 1, r1.inner_text())
     check('table view: tag Sonderposten', r1.locator('.tag.sale').count() == 1)

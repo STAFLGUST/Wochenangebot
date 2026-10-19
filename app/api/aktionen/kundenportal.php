@@ -190,7 +190,8 @@ switch ($action) {
             // Missbrauchsschutz: höchstens 30 Bestellwünsche je Kunde und Tag
             $recent = array_filter(store_read('bestellungen') ?? [], function ($x) use ($c) { return ($x['kid'] ?? '') === $c['id'] && strtotime($x['t']) > time() - 86400; });
             if (count($recent) >= 30) fail('Heute wurden bereits sehr viele Bestellwünsche gesendet. Bitte wenden Sie sich direkt an uns.', 429);
-            $o = with_lock('bestellungen', function () use ($c, $def, $off, $pos, $total, $qtyT, $req, $termin, $ref, $bem, $key, $hash) {
+            $fr = fracht_kosten($qtyT);   // Frachtanteil nach Gesamtgewicht, nur hier berechnet
+            $o = with_lock('bestellungen', function () use ($c, $def, $off, $pos, $total, $qtyT, $req, $termin, $ref, $bem, $key, $hash, $fr) {
                 $all = store_read('bestellungen') ?? [];
                 order_replay($all, $c['id'], $key, $hash);
                 if (count(array_filter($all, fn($x) => ($x['kid'] ?? '') === $c['id'] && strtotime($x['t']) > time() - 86400)) >= 30) fail('Heute wurden bereits sehr viele Bestellwünsche gesendet.', 429);
@@ -198,7 +199,7 @@ switch ($action) {
                 foreach ($all as $x) if (strpos($x['nr'], "B-$y-") === 0) $n = max($n, (int)substr($x['nr'], 7));
                 $o = ['nr' => sprintf('B-%s-%04d', $y, $n + 1), 't' => now(), 'kid' => $c['id'], 'firma' => $c['firma'], 'angebot' => $def['id'], 'angebotName' => $def['name'],
                       'week' => (int)($off['meta']['week'] ?? 0), 'year' => (int)($off['meta']['year'] ?? 0), 'positions' => $pos, 'total' => round($total, 2), 'totalQty' => round($qtyT, 2),
-                      'onRequest' => $req, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu', 'workflow' => 'neu', 'revision' => 1, 'requestId' => $key, 'requestHash' => $hash];
+                      'onRequest' => $req, 'fracht' => $fr, 'termin' => $termin, 'referenz' => $ref, 'bemerkung' => $bem, 'status' => 'neu', 'workflow' => 'neu', 'revision' => 1, 'requestId' => $key, 'requestHash' => $hash];
                 $o['kunde'] = array_intersect_key($c, array_flip(['firma','nr','ansprechpartner','strasse','plz','ort','email','telefon']));
                 $o['kunde']['username'] = $c['login']['username'];
                 $o['outbox'] = order_outbox_create($o);
@@ -209,7 +210,7 @@ switch ($action) {
             try { $o = order_outbox_send($o['nr']); } catch (RuntimeException $e) { $o['status'] = 'fehler'; }   // Bestellung ist gespeichert; Versand bleibt als offener Auftrag sichtbar
             $okIn = ($o['status'] ?? '') === 'gesendet';
             $who = ['username' => 'kunde:' . $c['login']['username'], 'name' => $c['firma'], 'role' => 'kunde'];
-            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg)' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
+            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg' . ($fr['kosten'] > 0 ? ', Frachtanteil ' . de_num($fr['kosten']) . ' €' : '') . ')' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
                 array_map(function ($p) { return ['k' => 'b|' . $p['id'], 'code' => $p['code'], 'name' => $p['name'], 'f' => 'Menge', 'from' => '', 'to' => de_qty($p['qty']) . ' kg' . ($p['price'] !== null ? ' × ' . de_num($p['price']) . ' €' : ' (Preis auf Anfrage)')]; }, $pos), $who);
             if (!$okIn) fail('Ihr Bestellwunsch wurde gespeichert, die E-Mail konnte aber nicht bestätigt werden. Bitte nicht als neuen Bestellwunsch erneut eingeben. Unser Team kann den Versand prüfen.', 502);
             order_receipt($o);
@@ -231,6 +232,27 @@ switch ($action) {
             if ($old['copy'] !== $new['copy']) $ch[] = ['k' => 'best|copy', 'code' => '', 'name' => 'Bestellungen', 'f' => 'Kopie an Kunden', 'from' => $old['copy'] ? 'ja' : 'nein', 'to' => $new['copy'] ? 'ja' : 'nein'];
             if ($ch) audit('mail', 'Einstellungen für Bestellwünsche geändert', $ch);
             respond(['ok' => true, 'orders' => order_settings(), 'active' => order_enabled()]);
+        }
+
+        case 'fracht_save': {
+            $me = require_admin_confirmation();
+            $b = body();
+            $old = fracht_settings();
+            $st = fracht_clean_staffeln($b['staffeln'] ?? []);
+            $in = is_array($b['staffeln'] ?? null) ? count(array_filter($b['staffeln'], fn($x) => is_array($x) && (($x['unter'] ?? '') !== '' || ($x['kosten'] ?? '') !== ''))) : 0;
+            if (count($st) !== $in) fail('Bitte je Staffel eine Gewichtsgrenze (1–100.000 kg, jede nur einmal) und einen Frachtanteil (0–10.000 €) angeben.', 422);
+            $aktiv = !empty($b['aktiv']);
+            if ($aktiv && !$st) fail('Bitte mindestens eine Staffel angeben oder die Frachtregel ausschalten.', 422);
+            $zus = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['zusatz'] ?? '')) ?? '')), 0, 600);
+            $new = ['aktiv' => $aktiv, 'staffeln' => $st, 'zusatz' => $zus, 'updatedAt' => now(), 'updatedBy' => $me['name']];
+            store_write('fracht', $new);
+            $fmt = fn($s) => implode('; ', array_map(fn($x) => 'unter ' . $x['unter'] . ' kg: ' . de_num($x['kosten']) . ' €', $s['staffeln'])) ?: '–';
+            $ch = [];
+            if ($old['aktiv'] !== $aktiv) $ch[] = ['k' => 'fr|aktiv', 'code' => '', 'name' => 'Fracht', 'f' => 'Frachtregel', 'from' => $old['aktiv'] ? 'an' : 'aus', 'to' => $aktiv ? 'an' : 'aus'];
+            if ($fmt($old) !== $fmt($new)) $ch[] = ['k' => 'fr|st', 'code' => '', 'name' => 'Fracht', 'f' => 'Staffeln', 'from' => $fmt($old), 'to' => $fmt($new)];
+            if ($old['zusatz'] !== $zus) $ch[] = ['k' => 'fr|zus', 'code' => '', 'name' => 'Fracht', 'f' => 'Zusatz im Hinweis', 'from' => $old['zusatz'], 'to' => $zus];
+            if ($ch) audit('mail', 'Fracht und Hinweis im Angebot geändert', $ch);
+            respond(['ok' => true, 'fracht' => fracht_settings(), 'hinweis' => fracht_hinweis()]);
         }
 
         /* ---------- Merkliste je Kunde (geräteübergreifend) ---------- */

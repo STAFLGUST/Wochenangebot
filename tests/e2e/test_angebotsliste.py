@@ -17,7 +17,7 @@ with sync_playwright() as pw:
     errs = []
     pg = br.new_page(viewport={'width': 1440, 'height': 1000}); pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.goto(B + '/'); pg.wait_for_selector('.al tr.row')
-    check('default view is the offer list', pg.is_visible('.al') and pg.get_attribute('.seg [data-view=liste]', 'aria-pressed') == 'true' and not pg.is_visible('table.grid'))
+    check('default view is the offer list', pg.is_visible('.al') and pg.get_attribute('#modebar [data-mode=angebot]', 'aria-checked') == 'true' and pg.is_hidden('#view-seg') and not pg.is_visible('table.grid'))
     check('title like the printed list', 'Freibleibendes Angebot für die KW 43 - 2026' in pg.inner_text('.al-head'))
     check('sections as headings', pg.locator('.al-st').count() == 4 and 'Eigene Zerlegung' in pg.locator('.al-st').first.inner_text(), pg.locator('.al-st').count())
     check('one block per group, every article exactly once', pg.locator('.al-grp').count() >= 30 and pg.locator('.al tr.row').count() == 276
@@ -45,6 +45,12 @@ with sync_playwright() as pw:
       const hl = h.getBoundingClientRect().left + parseFloat(getComputedStyle(h).paddingLeft), cl = c.getBoundingClientRect().left + parseFloat(getComputedStyle(c).paddingLeft);
       return Math.abs(hl - cl) < 1.5 && Math.abs(g.getBoundingClientRect().left - c.getBoundingClientRect().left) < 1.5; })""")
     check('article numbers flush left under the group heading', all(flush), flush)
+    hh = pg.evaluate("[...document.querySelectorAll('.al-sec')[0].querySelectorAll('.al-gt')].map(e => e.getBoundingClientRect().height)")
+    check('group headings on one line at 1440 px', max(hh) < 21, [round(h) for h in hh])
+    check('article numbers in black', pg.evaluate("getComputedStyle(document.querySelector('.al td.c-code')).color") in ('rgb(11, 11, 11)', 'rgb(0, 0, 0)'))
+    check('offer view uses the full width (no side panel)', pg.is_hidden('.merk') and pg.locator('.al').bounding_box()['width'] > 1300)
+    note = pg.inner_text('.al .al-note')
+    check('note under the offer: price terms, minimum weight, freight, contact', 'netto' in note and '300 kg' in note and '30 €' in note and '35 €' in note and 'Telefon' in note, note)
     check('logo in the list header', pg.locator('.al-head img.al-logo').count() == 1 and pg.evaluate("document.querySelector('.al-logo').naturalWidth") > 0)
     pg.screenshot(path=SH + '/angebotsliste.png')
     pg.screenshot(path=SH + '/angebotsliste-ganz.png', full_page=True)
@@ -63,13 +69,14 @@ with sync_playwright() as pw:
     check('other sort order: one sorted list over three blocks', pg.locator('.al-grp').count() == 3 and pg.locator('.al-cont').count() == 2 and pg.locator('.al tr.row').count() == 276)
     pg.select_option('#sort', 'offer-asc'); pg.wait_for_selector('.al-st')
     # Tabelle und Karten über die Auswahl, per Link wiederherstellbar
-    pg.click('.seg [data-view=table]'); pg.wait_for_selector('table.grid')
+    pg.click('#modebar [data-mode=liste]'); pg.wait_for_selector('table.grid')
+    check('note also in the order/list view', pg.locator('#list .list-note').count() == 1)
     check('table view still available', pg.is_visible('table.grid thead') and not pg.is_visible('.al') and 'ansicht=tabelle' in pg.url)
     p2 = br.new_page(viewport={'width': 1440, 'height': 900}); p2.goto(pg.url); p2.wait_for_selector('table.grid tr.row')
     check('link keeps the table view', p2.get_attribute('.seg [data-view=table]', 'aria-pressed') == 'true'); p2.close()
     pg.click('.seg [data-view=cards]'); pg.wait_for_selector('.card')
     check('card view still available', 'ansicht=karten' in pg.url)
-    pg.click('.seg [data-view=liste]'); pg.wait_for_selector('.al')
+    pg.click('#modebar [data-mode=angebot]'); pg.wait_for_selector('.al')
     check('back to the offer list, no view parameter', 'ansicht' not in pg.url)
     p3 = br.new_page(viewport={'width': 1440, 'height': 900}); p3.goto(B + '/#ansicht=karten'); p3.wait_for_selector('.card')
     check('old card links keep working', p3.is_visible('.card')); p3.close()
@@ -94,6 +101,7 @@ with sync_playwright() as pw:
     pages = e.locator('#print-root .pl-page').count()
     check('export: a page per section at least, three blocks per page', pages >= 4 and all(n == 3 for n in e.eval_on_selector_all('#print-root .al-cols', 'cs => cs.map(c => c.children.length)')), pages)
     check('export: logo on the first page', e.locator('#print-root .pl-page').first.locator('img.al-logo').count() == 1 and e.locator('#print-root img.al-logo').count() == 1)
+    check('export: note on the last page', e.locator('#print-root .pl-page').last.locator('.al-note').count() == 1 and e.locator('#print-root .al-note').count() == 1)
     check('export: every article once', e.locator('#print-root tr.row').count() == 276 and e.locator('#print-root .star, #print-root .qty').count() == 0)
     e.emulate_media(media='print')
     pdf = e.pdf(prefer_css_page_size=True, print_background=True)
@@ -108,19 +116,24 @@ with sync_playwright() as pw:
     extra = []
     for n in range(1, 7):
         for it in [i for i in doc['items'] if i['groupId'] == 'g1']:
-            extra.append(dict(it, id=f"{it['id']}x{n}", code=str(int(it['code']) + 1000 * n) if it.get('code') else None, name=it['name'] + f' Zuschnitt {n}'))
+            extra.append(dict(it, id=f"{it['id']}x{n}", code=str(int(it['code']) + 1000 * n) if it.get('code') else None, name=it['name'].replace(', frisch', '') + f' Fleischmeister, Zuschnitt {n}'))
     pos = max(k for k, i in enumerate(doc['items']) if i['groupId'] == 'g1') + 1
     doc['items'][pos:pos] = extra
     storage_write('angebot', doc)
     total = 276 + len(extra)
     x = br.new_page(viewport={'width': 1440, 'height': 900}); x.on('pageerror', lambda q: errs.append(str(q)))
     x.goto(B + '/?r=gross'); x.wait_for_selector('.al tr.row')
+    names = x.eval_on_selector_all('.al-sec:first-of-type td.c-name', 'cs => cs.map(c => c.innerText)')
+    check('brand left out of article names under a "Fleischmeister" heading', not any('Fleischmeister' in n for n in names) and any('Zuschnitt 1' in n for n in names), [n for n in names if 'Fleischmeister' in n][:3])
+    x.fill('#q', 'Fleischmeister Zuschnitt'); x.wait_for_function(f"document.querySelectorAll('.al tr.row').length >= {len(extra)} && document.querySelectorAll('.al tr.row').length < {total}")
+    check('search still finds the full name', x.locator('.al tr.row').count() >= len(extra))
+    x.fill('#q', ''); x.wait_for_function(f"document.querySelectorAll('.al tr.row').length === {total}")
     check('large offer on screen: every article once, three blocks', x.locator('.al tr.row').count() == total and x.locator('.al-sec').first.locator('.al-col').count() == 3, x.locator('.al tr.row').count())
     hs = x.evaluate("[...document.querySelectorAll('.al-sec')[0].querySelectorAll('.al-col')].map(c => c.getBoundingClientRect().height)")
     check('large offer: big group split, columns balanced', x.locator('.al-sec').first.locator('.al-cont').count() >= 1 and max(hs) - min(hs) <= max(hs) * 0.15, [round(h) for h in hs])
     x.evaluate("window.dispatchEvent(new Event('beforeprint'))")
     pages = x.locator('#print-root .pl-page').count()
-    check('large offer export: section continues on further pages', pages >= 6 and x.locator('#print-root tr.row').count() == total and x.locator('#print-root .al-st .al-cont').count() >= 1, pages)
+    check('large offer export: section continues on further pages', pages >= 5 and x.locator('#print-root tr.row').count() == total and x.locator('#print-root .al-st .al-cont').count() >= 1, pages)
     x.emulate_media(media='print')
     pdf = x.pdf(prefer_css_page_size=True, print_background=True)
     n_pdf = len(_re.findall(rb'/Type\s*/Page[^s]', pdf))

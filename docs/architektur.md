@@ -31,6 +31,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/benachrichtigung.php` | Benachrichtigungen an Mitarbeiter: Ereignisse (`NOTIFY_EVENTS`), Einstellungen, Vormerken (`notify`, aus `audit()`), Versand nach der Antwort mit Bündelung |
 | `lib/preisverlauf.php`, `lib/bestand.php` | Preisverlauf; Bestandsliste und Stammdaten |
 | `lib/diagnose.php` | Sicherheit für IT-Administratoren: Verlauf, auffällige Adressen, Konfigurationsprüfung, nur lesende Diagnosen, CSV-Export |
+| `lib/fracht.php` | Frachtregel (Dokument `fracht`): Staffeln, `fracht_kosten` (Bestellwunsch), `fracht_hinweis` (Hinweis unter dem Angebot) |
 | `lib/einkauf.php` | Fehlmengen offener Bestellwünsche gegenüber dem Bestand (`einkauf_bedarf`), E-Mail an den Einkauf |
 | `orders.php`, `order_outbox.php` | Bestellverwaltung (API v1) und Versandaufträge |
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |

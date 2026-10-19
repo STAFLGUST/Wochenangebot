@@ -8,7 +8,7 @@
 <title>Wochenangebot</title>
 <script src="assets/theme.js?v=4e171a7cc8"></script>
 <link rel="preload" href="assets/logo-standard-fleisch.png" as="image">
-<link rel="stylesheet" href="assets/app.css?v=bb18a000af">
+<link rel="stylesheet" href="assets/app.css?v=49342eac50">
 </head>
 <body>
 <a class="skip" href="#list">Zum Angebot springen</a>
@@ -83,6 +83,10 @@
     </aside>
 
     <section class="results" aria-label="Artikel">
+      <div class="modebar" id="modebar" role="radiogroup" aria-label="Ansicht">
+        <button type="button" role="radio" data-mode="angebot" aria-checked="true"><svg class="i" aria-hidden="true"><use href="#i-cols"/></svg><span><strong>Angebotsansicht</strong><small>Übersicht wie die gedruckte Liste</small></span></button>
+        <button type="button" role="radio" data-mode="liste" aria-checked="false"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span><strong id="mode-liste-lbl">Listenansicht</strong><small id="mode-liste-sub">Tabelle mit Filterspalten</small></span></button>
+      </div>
       <div class="toolbar">
         <div class="tabs" role="tablist" aria-label="Ansicht wählen">
           <button role="tab" type="button" id="tab-all" aria-selected="true" aria-controls="list">Alle Artikel</button>
@@ -114,9 +118,8 @@
             </select>
             <svg class="i sm" aria-hidden="true"><use href="#i-chev"/></svg>
           </label>
-          <div class="seg" role="group" aria-label="Darstellung">
-            <button type="button" data-view="liste" aria-pressed="true" title="Angebotsliste (wie gedruckt)"><svg class="i" aria-hidden="true"><use href="#i-cols"/></svg><span class="sr-only">Angebotsliste</span></button>
-            <button type="button" data-view="table" aria-pressed="false" title="Tabellenansicht mit Filterspalten"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span class="sr-only">Tabelle</span></button>
+          <div class="seg" role="group" aria-label="Darstellung" id="view-seg" hidden>
+            <button type="button" data-view="table" aria-pressed="false" title="Tabellenansicht"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span class="sr-only">Tabelle</span></button>
             <button type="button" data-view="cards" aria-pressed="false" title="Kartenansicht"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg><span class="sr-only">Karten</span></button>
           </div>
         </div>
@@ -242,6 +245,6 @@
 </svg>
 
 <script src="assets/offer-core.js?v=06678349ba"></script>
-<script src="assets/frontend.js?v=c029ff5093"></script>
+<script src="assets/frontend.js?v=eca2dfd52f"></script>
 </body>
 </html>
