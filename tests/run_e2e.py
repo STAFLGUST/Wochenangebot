@@ -31,6 +31,7 @@ SUITES = {
     'users':      (8790, 'data-seed', True),
     'master':     (8790, 'data-seed', True),
     'stock':      (8790, 'data-seed', True),
+    'stock_overview': (8790, 'data-seed', True),
     'editor_aux': (8790, 'data-seed', True),
     'admin_confirmation': (8790, 'data-seed', True),
     'admin_confirmation_ui': (8790, 'data-seed', True),
@@ -84,8 +85,37 @@ def wait_port(port, up=True, timeout=10):
 
 def admin_file(data):
     h = subprocess.run(['php', '-r', f'echo password_hash("{ADMIN_PW}", PASSWORD_DEFAULT);'], capture_output=True, text=True, check=True).stdout
-    with open(os.path.join(data, 'admin.php'), 'w') as fh:
+    with open(os.path.join(data, 'admin.php'), 'w', encoding='utf-8', newline='\n') as fh:
         fh.write(GUARD + json.dumps({'hash': h, 'created': '2026-10-01T00:00:00Z'}))
+
+
+def sqlite_test_seed(data):
+    """Windows-only fresh test fixture; production migration still runs on Linux/CI.
+
+    No live data, locks or migration tooling are changed. Read the schema constant without
+    importing the Linux deployment module (fcntl is unavailable on Windows).
+    """
+    import ast
+    import sqlite3
+    from pathlib import Path
+    root = Path(data).resolve()
+    if root.parent.parent != Path(WORK).resolve() or root.name != 'data':
+        raise ValueError('SQLite seed must stay inside a fresh test app')
+    source = Path(REPO, 'deploy', 'datenbank.py').read_text(encoding='utf-8')
+    tree = ast.parse(source)
+    schema = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'SCHEMA' for t in n.targets))
+    (root / '.sqlite').mkdir()
+    with sqlite3.connect(root / '.sqlite/store.sqlite') as db:
+        db.executescript(schema)
+        for p in root.rglob('*.php'):
+            if p.name == 'index.php':
+                continue
+            raw = p.read_text(encoding='utf-8')
+            if not raw.startswith(GUARD):
+                raise ValueError('Test fixture missing file guard')
+            value = json.loads(raw[len(GUARD):])
+            db.execute('INSERT INTO documents VALUES(?,?,?)', (p.relative_to(root).with_suffix('').as_posix(), json.dumps(value), int(p.stat().st_mtime)))
+    (root / '.sqlite-active').write_text('1\n', encoding='utf-8')
 
 
 SLOTS = queue.Queue()
@@ -129,7 +159,10 @@ def run_in(name, slot):
     if admin:
         admin_file(data)
     if os.environ.get('WA_TEST_STORAGE') == 'sqlite':
-        subprocess.run([sys.executable, os.path.join(REPO, 'deploy/datenbank.py'), 'migrate', data, '--offline'], check=True, capture_output=True)
+        if os.name == 'nt':
+            sqlite_test_seed(data)
+        else:
+            subprocess.run([sys.executable, os.path.join(REPO, 'deploy/datenbank.py'), 'migrate', data, '--offline'], check=True, capture_output=True)
     if not wait_port(port, up=False, timeout=5):
         with PRINT: print(f'[{name}] Port {port} ist belegt')
         return name, 0, 1, False
@@ -159,7 +192,11 @@ def run_in(name, slot):
         with PRINT: print('\n'.join(lines), flush=True)
         return name, ok_n, total, good
     finally:
-        os.killpg(srv.pid, signal.SIGTERM)
+        if os.name == 'nt':
+            srv.terminate()
+        else:
+            os.killpg(srv.pid, signal.SIGTERM)
+        srv.wait(timeout=10)
         wait_port(port, up=False)
 
 

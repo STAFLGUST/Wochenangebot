@@ -5,6 +5,40 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* ---------------- Bestand ---------------- */
 
+/* Nur lesend: exakte ISO-Wochen, keine Entwurfspreise und kein Rückgriff auf ältere Wochen.
+   Historie hat Vorrang; alte Veröffentlichungen ergänzen nur noch nicht archivierte Wochen. */
+function stock_week_prices(?DateTimeImmutable $today = null): array
+{
+    $today = ($today ?? new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->setTimezone(new DateTimeZone('Europe/Berlin'));
+    $dates = [$today, $today->modify('-7 days')];
+    $deleted = store_read('historie_geloescht') ?? [];
+    $weeks = [];
+    foreach ($dates as $date) {
+        $week = (int)$date->format('W'); $year = (int)$date->format('o');
+        $id = history_id($week, $year);
+        $h = store_read('historie/' . $id);
+        if (!$h && !in_array($id, $deleted, true)) {
+            $sources = ['angebot'];
+            foreach (store_names('versionen') as $f) $sources[] = 'versionen/' . basename($f);
+            foreach ($sources as $source) {
+                $m = store_read($source);
+                if (!$m || ($m['meta']['week'] ?? null) !== $week || ($m['meta']['year'] ?? null) !== $year) continue;
+                $candidate = history_from_model($m, 'Veröffentlichung', $m['publishedAt'] ?? null);
+                if (!$h || strcmp((string)$candidate['savedAt'], (string)$h['savedAt']) > 0) $h = $candidate;
+            }
+        }
+        // Keine Kundenpreise, Einkaufspreise oder sonstigen internen Angebotsfelder ergänzen.
+        $items = [];
+        foreach ($h['items'] ?? [] as $it) {
+            if (empty($it['code'])) continue;
+            $items[] = ['code' => $it['code'], 'price' => $it['price'] ?? ['status' => 'none']];
+        }
+        $weeks[] = ['week' => $week, 'year' => $year, 'available' => $h !== null,
+                    'source' => $h['source'] ?? null, 'origin' => $h['origin'] ?? null, 'items' => $items];
+    }
+    return ['allowed' => true, 'current' => $weeks[0], 'previous' => $weeks[1]];
+}
+
 function clean_date($v): ?string
 {
     if (!is_string($v) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m)) return null;
@@ -17,10 +51,27 @@ function clean_kg($v, string $where): float
     if (!is_finite($v) || abs($v) > 10000000) throw new InvalidArgumentException("Menge außerhalb des gültigen Bereichs ($where).");
     return round($v, 3);
 }
-function clean_stock($b): array
+function clean_incoming($rows): array
+{
+    if (!is_array($rows) || !array_is_list($rows) || count($rows) > 20000) throw new InvalidArgumentException('Ungültige Liste erwarteter Zugänge (max. 20000).');
+    $out = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) throw new InvalidArgumentException('Ungültiger erwarteter Zugang.');
+        $code = s($row['code'] ?? null, 20, false);
+        if ($code === null || !preg_match('#^[0-9A-Za-z./-]+$#', $code)) throw new InvalidArgumentException('Ungültige Artikelnummer im Zugang.');
+        $kg = clean_kg($row['kg'] ?? null, $code);
+        if ($kg <= 0) throw new InvalidArgumentException('Zugangsmenge muss größer als null sein.');
+        $arrival = clean_date($row['arrival'] ?? null);
+        if (isset($row['arrival']) && $arrival === null) throw new InvalidArgumentException('Ungültiges Ankunftsdatum im Zugang.');
+        $out[] = ['code' => $code, 'name' => s($row['name'] ?? '', 200) ?: '(ohne Bezeichnung)',
+                  'lot' => s($row['lot'] ?? '', 20) ?? '', 'arrival' => $arrival, 'kg' => $kg];
+    }
+    return $out;
+}
+function clean_stock($b, bool $allowEmpty = false): array
 {
     $src = is_array($b['articles'] ?? null) ? $b['articles'] : [];
-    if (!$src) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
+    if (!$src && !$allowEmpty) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
     if (count($src) > 20000) throw new InvalidArgumentException('Zu viele Artikel in der Bestandsliste.');
     $out = [];
     $seen = [];
@@ -44,7 +95,7 @@ function clean_stock($b): array
         $out[] = ['code' => $code, 'name' => s($a['name'] ?? '', 200) ?: '(ohne Bezeichnung)', 'kg' => $kg, 'mhd' => $mhd,
                   'mhdKg' => $mhd !== null && isset($a['mhdKg']) ? clean_kg($a['mhdKg'], $code) : null, 'lots' => $lots];
     }
-    if (!$out) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
+    if (!$out && !$allowEmpty) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
     return $out;
 }
 

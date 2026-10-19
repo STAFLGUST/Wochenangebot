@@ -1,0 +1,17 @@
+{
+  "date": "2026-10-19",
+  "source": "Synthetische Testdaten",
+  "articles": [
+    {"code":"900001","name":"Test Erhöhung","kg":12.5,"lots":[]},
+    {"code":"900002","name":"Test Senkung","kg":8,"lots":[]},
+    {"code":"900003","name":"Test Unverändert","kg":3,"lots":[]},
+    {"code":"900004","name":"Test Ohne Historie","kg":5,"lots":[]}
+  ],
+  "incoming": [
+    {"code":"900001","name":"Test Erhöhung","kg":20,"arrival":"2026-10-22","lot":"TEST-A"},
+    {"code":"900001","name":"Test Erhöhung","kg":30,"arrival":"2026-10-24","lot":"TEST-B"},
+    {"code":"900005","name":"Test Nur Zugang <b>Text</b>","kg":7,"arrival":null,"lot":"<img src=x>"}
+  ],
+  "current": [12,8,10,11],
+  "previous": [10,10,10]
+}

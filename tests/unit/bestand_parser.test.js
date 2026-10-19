@@ -15,6 +15,13 @@ const check = (name, ok, info = '') => { console.log((ok ? 'PASS ' : 'FAIL ') + 
   const buf = fs.readFileSync(path.join(fix, 'bestand.xls'));
   const sheets = await StockCore.readStockWorkbook(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
   const r = StockCore.parseStockWorkbook(sheets, 'Bestand_16.10.26.XLS');
+  const expected = sheets[0].grid.filter(row => row[9] === 'erfasst' && Number.isFinite(row[21]) && row[21] > 0 && /^[0-9]+$/.test(String(row[1])));
+  check('erfasst: jede Lieferung separat, keine eingelagerten Partien', r.incoming.length === expected.length);
+  check('erfasst: Artikel, kg und Ankunft aus J/M unverändert', r.incoming.every((d, i) => d.code === String(expected[i][1]) && Math.abs(d.kg - expected[i][21]) < .00001 && d.arrival === StockCore.toDate(expected[i][12], true)));
+  check('mehrere Lieferungen pro Artikel bleiben einzeln', new Set(r.incoming.map(d => d.code)).size < r.incoming.length);
+  const onlyIncoming = sheets.map(s => ({...s, grid: s.grid.filter(row => !row.includes('eingelagert'))}));
+  const only = StockCore.parseStockWorkbook(onlyIncoming, 'nur-zugaenge.xls');
+  check('Datei nur mit erfasst importierbar, Bestand leer', only.articles.length === 0 && only.incoming.length === expected.length);
   const by = new Map(r.articles.map((a) => [StockCore.normCode(a.code), a]));
   let bad = 0;
   for (const [code, name, kg, mhd, mhdKg] of master) {
@@ -27,6 +34,6 @@ const check = (name, ok, info = '') => { console.log((ok ? 'PASS ' : 'FAIL ') + 
   check('alle Referenzartikel mit gleicher Menge und MHD', bad === 0, `${bad} Abweichungen bei ${master.length} Artikeln`);
   const extra = r.articles.filter((a) => a.kg > 0 && !master.some((m) => StockCore.normCode(m[0]) === StockCore.normCode(a.code)) && /^\d+$/.test(a.code));
   check('keine zusätzlichen Artikel mit Bestand', extra.length === 0, extra.slice(0, 3).map((a) => a.code).join(', '));
-  console.log(`${3 - failed}/3 passed`);
+  console.log(`${7 - failed}/7 passed`);
   process.exit(failed ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

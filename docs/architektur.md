@@ -49,7 +49,7 @@ und ggf. `WARTUNG_GESPERRT`.
 | Datei | Inhalt |
 | --- | --- |
 | `offer-core.js` | Gemeinsamer Kern: Excel-Leser, Angebotsparser, Vergleich (`diffOffers`), Abgleich (`mergeModels`), Sonderpreise |
-| `stock-core.js` | Bestandsliste lesen (WinAB .xls/.xlsx) |
+| `stock-core.js` | Bestandsliste lesen (WinAB .xls/.xlsx), eingelagerte Partien und erfasste Zugänge trennen, Wochenpreise vergleichen |
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite |
 | `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten |
 | `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden, E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
@@ -57,6 +57,9 @@ und ggf. `WARTUNG_GESPERRT`.
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
 
 ## Tests
+
+Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
+[Bestand: Wochenpreise und Zugänge](bestand-wochenpreise.md).
 
 - `tests/run_e2e.py` startet je Testgruppe einen frischen PHP-Server mit Testdaten (`tests/fixtures/`), parallel mit
   eigenen Ports (`WA_JOBS`). Tests holen Adressen aus `tests/e2e/umgebung.py`; Hilfen: `kunden_hilfe.Client`,
