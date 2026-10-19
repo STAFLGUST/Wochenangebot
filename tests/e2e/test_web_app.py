@@ -1,16 +1,15 @@
 """Web-App (zum Home-Bildschirm): Manifest, Symbole, Offline-Speicher (sw.js) nur für Startseite, Dateien und das
 öffentliche Wochenangebot, Offline-Hinweis, Hinweis „Zum Home-Bildschirm“ (iPhone, Android, nicht am Computer,
 nicht in der installierten Web-App)."""
-import io
 import json
 import os
 import socket
 import subprocess
+import struct
 import sys
 import time
 import urllib.request
 
-from PIL import Image
 from playwright.sync_api import sync_playwright
 
 from umgebung import AUX_PORT, BASE, SH
@@ -21,6 +20,13 @@ res = []
 def check(n, c):
     res.append(bool(c))
     print(('PASS ' if c else 'FAIL ') + n)
+
+
+def png_groesse(daten):
+    """Breite und Höhe aus dem PNG-Kopf (ohne Bildbibliothek, wie in der CI verfügbar)."""
+    if daten[:8] != b'\x89PNG\r\n\x1a\n' or daten[12:16] != b'IHDR':
+        return None
+    return struct.unpack('>II', daten[16:24])
 
 
 def get(path):
@@ -34,10 +40,9 @@ m = json.loads(raw)
 check('Manifest: Name, Vollbild, Start und Geltungsbereich', m['short_name'] == 'Wochenangebot' and m['display'] == 'standalone' and m['start_url'] == './' and m['scope'] == './')
 groessen = {}
 for ic in m['icons']:
-    img = Image.open(io.BytesIO(get('/' + ic['src'])[0]))
-    groessen[ic['sizes'] + ic['purpose']] = img.size == tuple(int(x) for x in ic['sizes'].split('x'))
+    groessen[ic['sizes'] + ic['purpose']] = png_groesse(get('/' + ic['src'])[0]) == tuple(int(x) for x in ic['sizes'].split('x'))
 check('Manifest-Symbole vorhanden und in angegebener Größe (inkl. maskable)', all(groessen.values()) and '512x512maskable' in groessen)
-check('iPhone-Symbol 180 × 180', Image.open(io.BytesIO(get('/assets/icons/apple-touch-icon.png')[0])).size == (180, 180))
+check('iPhone-Symbol 180 × 180', png_groesse(get('/assets/icons/apple-touch-icon.png')[0]) == (180, 180))
 html = get('/')[0].decode()
 check('Startseite verweist auf Manifest, Symbole und Web-App-Angaben',
       'rel="manifest" href="manifest.json"' in html and 'rel="apple-touch-icon"' in html and 'apple-mobile-web-app-capable' in html and 'assets/webapp.js?v=' in html)
