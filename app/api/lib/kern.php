@@ -10,6 +10,7 @@ function testumgebung(): bool { return getenv('WA_TESTUMGEBUNG') === '1'; }
 function respond(array $data, int $status = 200): void
 {
     store_commit(); // Intentional API errors may persist login-attempt counters.
+    if (function_exists('app_session_header')) app_session_header();   // App: aktuelle Sitzungskennung (lib/sitzung.php)
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;

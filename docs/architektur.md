@@ -22,7 +22,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/kern.php` | `respond()`, `fail()`, `body()`, `now()`, Eingabeprüfung `s()`, `clean_price()` |
 | `lib/nutzer.php` | Mitarbeiter-Zugänge, Passwortregeln |
 | `lib/rechte.php` | Nutzerrechte: Katalog `PERMS`, Rechte je Rolle (Dokument `rechte`), Ausnahmen je Nutzer (`grant`/`deny`), `user_perms`, `require_perm`, `require_perm_confirmed` |
-| `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth`), Passwortbestätigung, CSRF |
+| `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth`), Passwortbestätigung, CSRF; App-Betriebsart (`X-WA-Client: app`, Kennung in `X-WA-Sitzung`) |
 | `lib/sicherheit.php` | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus |
 | `lib/protokoll.php` | Protokoll (`audit`), Änderungstexte, Anmeldeversuche |
 | `lib/angebote.php` | Angebote, Kundenpreise (`variants`), Sonderpreise (`sale`), `offer_resolve`, Datenmodell `clean_model`, Entwurfsrevisionen |
@@ -37,7 +37,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |
 | `ort.php` | Ortsdatenbank (DB-IP City Lite): Laden/Umwandeln (`ort_download`, `ort_build`), Suche `ort_lookup` |
 | `lib/auswertung.php`, `aktionen/auswertung.php` | Anmeldeorte der Kunden (Dokument `anmeldeorte`, 90 Tage, ohne IP), Aktionen `auswertung`, `ort_update` |
-| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf` |
+| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf`, `auswertung`, `app` (`app_info`, Mindestversion der App) |
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden (`$action`, `$CFG`, … stehen zur Verfügung); jede Aktion
 endet mit `respond()`/`fail()`. Bibliotheks- und Aktionsdateien sind nur über `index.php` nutzbar (Konstante `WA_API`).
@@ -56,6 +56,13 @@ und ggf. `WARTUNG_GESPERRT`.
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
 
+## App (`mobile/`)
+
+Expo/React Native (TypeScript) für iOS und Android, eigener Build (`npm ci`), wird nicht auf den Server ausgeliefert
+(der Container bindet nur `app/` ein). Nutzt die Schnittstelle wie die Website, Sitzung über die Kopfzeile
+`X-WA-Sitzung` ([app-api.md](app-api.md)). `offer-core.js` wird mitgebündelt (Metro `watchFolders`), damit
+Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIESMICH.md](../mobile/LIESMICH.md).
+
 ## Tests
 
 Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
@@ -64,5 +71,6 @@ Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
 - `tests/run_e2e.py` startet je Testgruppe einen frischen PHP-Server mit Testdaten (`tests/fixtures/`), parallel mit
   eigenen Ports (`WA_JOBS`). Tests holen Adressen aus `tests/e2e/umgebung.py`; Hilfen: `kunden_hilfe.Client`,
   `auth_helpers`, `wait_text()`, `until()`, `shot()`, Test-Mailserver `smtp_test.TestSmtp`.
+- App: `cd mobile && npm test` (Jest), `npm run typecheck`, `npm run export:native`; Gruppe `app_web` testet den Web-Build der App gegen den Testserver (nur wenn `mobile/dist-web` gebaut ist).
 - `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank, Testumgebung).
 - CI (`.github/workflows/ci.yml`): Syntax, Versionsnummern, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten.

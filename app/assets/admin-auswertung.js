@@ -9,7 +9,7 @@
   const { $, $$, api, esc, icon, toast, dateTime, plural } = W;
 
   const RANGES = [[1, 'Heute'], [7, '7 Tage'], [30, '30 Tage'], [90, '90 Tage']];
-  const DEV = { mobil: 'Handy', tablet: 'Tablet', desktop: 'Computer' };
+  const DEV = { mobil: 'Handy', tablet: 'Tablet', desktop: 'Computer', app: 'App' };
   const VIA = { passwort: 'Anmeldung', link: 'Link aus E-Mail' };
   /* Orientierung auf der Karte (nur bei näherer Ansicht) */
   const STAEDTE = [['Hamburg', 53.55, 10.0], ['Berlin', 52.52, 13.405], ['München', 48.137, 11.575], ['Köln', 50.937, 6.96], ['Frankfurt', 50.11, 8.682],

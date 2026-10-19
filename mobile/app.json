@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Standard-Fleisch",
+    "slug": "standard-fleisch-angebot",
+    "version": "1.0.0",
+    "scheme": "standardfleisch",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "de.standardfleisch.angebot",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "config": { "usesNonExemptEncryption": false }
+    },
+    "android": {
+      "package": "de.standardfleisch.angebot",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "allowBackup": false,
+      "permissions": [],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        { "image": "./assets/splash-icon.png", "imageWidth": 140, "backgroundColor": "#FFFFFF",
+          "dark": { "image": "./assets/splash-icon.png", "backgroundColor": "#121211" } }
+      ]
+    ],
+    "experiments": { "typedRoutes": false }
+  }
+}

@@ -68,6 +68,10 @@ SUITES['sicherheit_it'] = SUITES['bestellung']
 SUITES['versand'] = SUITES['kunden_mail']
 SUITES['angebotsliste'] = (8790, 'data-seed', True)
 SUITES['rechte'] = SUITES['kunden_mail']
+SUITES['app_api'] = SUITES['bestellung']
+SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
+# Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
+OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
 SUITES['auswertung'] = (8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
@@ -201,7 +205,10 @@ def run_in(name, slot):
 
 
 def main():
-    names = sys.argv[1:] or list(SUITES)
+    names = sys.argv[1:] or [n for n in SUITES if n not in OPTIONAL or os.path.isfile(OPTIONAL[n])]
+    for n, f in OPTIONAL.items():
+        if not sys.argv[1:] and not os.path.isfile(f):
+            print(f'Hinweis: Gruppe {n} übersprungen – Build fehlt ({os.path.relpath(f, REPO)}; siehe tests/README.md)')
     unknown = [n for n in names if n not in SUITES]
     if unknown: sys.exit('Unbekannte Testgruppe: ' + ', '.join(unknown))
     os.makedirs(WORK, exist_ok=True)

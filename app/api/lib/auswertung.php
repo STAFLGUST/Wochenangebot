@@ -20,6 +20,7 @@ function anmeldeorte_load(): array
 }
 function geraet_typ(string $ua): string
 {
+    if (function_exists('app_client') && app_client()) return 'app';
     if (preg_match('/iPad|Tablet|Kindle|Silk|PlayBook|Android(?!.*Mobile)/i', $ua)) return 'tablet';
     if (preg_match('/Mobi|iPhone|iPod|Android|Windows Phone/i', $ua)) return 'mobil';
     return 'desktop';
