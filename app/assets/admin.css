@@ -361,6 +361,19 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .stab .s-vk, .stab .s-kg, .stab .s-mkg { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab .s-mhd { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab td.s-mkg { font-weight: 700; }
+.stab .s-prev, .stab .s-change { text-align: right; font-variant-numeric: tabular-nums; }
+.st-price-change { font-size: 12px; }
+.st-price-change.up { color: #b91c1c; font-weight: 700; }
+.st-price-change.down { color: #15803d; font-weight: 700; }
+[data-theme="dark"] .st-price-change.up { color: #fca5a5; }
+[data-theme="dark"] .st-price-change.down { color: #86efac; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .st-price-change.up { color: #fca5a5; }
+  :root:not([data-theme="light"]) .st-price-change.down { color: #86efac; }
+}
+.st-incoming { margin: 0; padding: 0 0 0 16px; font-size: 12px; min-width: 150px; }
+.st-incoming li + li { margin-top: 5px; }
+.st-incoming small { display: block; color: var(--muted); }
 .stab td.s-mhd[class*="mhd-"] { font-weight: 600; }
 .stab tr.srow { cursor: pointer; } .stab tr.srow:hover td:not([class*="mhd-"]) { background: var(--surface-2); }
 .stab tr.srow:hover td[class*="mhd-"] { filter: brightness(.94); }
@@ -379,6 +392,10 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
   .st-card { width: auto; }
   .stab { width: 100%; }
   .stab tr.srow td.s-vk, .stab tr.srow td.s-kg, .stab tr.srow td.s-mhd, .stab tr.srow td.s-mkg { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; }
+  .stab tr.srow td.s-prev, .stab tr.srow td.s-change, .stab tr.srow td.s-incoming { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+  .stab tr.srow td.s-incoming { display: block; padding: 5px 0; }
+  .stab tr.srow td.s-kg { white-space: normal; gap: 12px; }
+  .stab tr.wg-sum td.s-incoming, .stab tr.st-total td.s-incoming { display: none; }
   .stab tr.srow td[data-l]::before { content: attr(data-l); color: var(--muted); font-weight: 500; }
   .stab tr.wg-sum, .stab tr.st-total { display: grid; grid-template-columns: 1fr auto; padding: 8px 12px; gap: 2px 10px; }
   .stab tr.wg-sum td, .stab tr.st-total td { border: 0; padding: 0; }

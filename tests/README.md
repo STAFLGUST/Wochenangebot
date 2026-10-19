@@ -15,6 +15,18 @@ In GitHub laufen alle Ebenen automatisch bei jedem Pull Request und jedem Commit
 
 ## Testdaten
 
+Neue Gruppe `stock_overview`: exakte aktuelle KW/Vorwoche, Erhöhung/Senkung/unverändert/fehlende
+Historie, Bestand und mehrere erwartete Lieferungen, fehlendes ETA, Rechte, Validierung,
+CSV/Druck, Desktop und 390 px in hell/dunkel. Synthetische Daten: `fixtures/bestand/overview.json`.
+Zusätzliche Unit-Tests: `node tests/unit/stock_prices.test.js` und `php tests/unit/stock_prices.php`
+(ISO-Jahreswechsel, Berlin-Zeit, fehlende/gelöschte Wochen, Preisbasis/Mehrdeutigkeit).
+Der Parser-Test prüft auch „erfasst“ in J und Ankunft in M sowie reine Zugangsdateien.
+
+Windows: Der Teststarter beendet PHP-Prozesse plattformgerecht und erzeugt frische SQLite-Testdaten
+direkt mit dem vorhandenen Schema. Dies prüft **nicht** die Linux-Produktionsmigration (weiterhin
+unverändert in Linux/CI). Einige ältere Gruppen benötigen `fcntl`, Unix-Prozessbefehle oder
+Linux-Dateirechte; deshalb ist die vollständige CI unter Linux weiterhin erforderlich.
+
 `tests/fixtures/` enthält nur anonymisierte Daten (Erzeugung: `werkzeuge/testdaten_erzeugen.py`):
 Verkaufspreise je Artikel mit festem Faktor verändert, Bestandsmengen und Einkaufspreise erfunden, Partie- und
 Gruppennummern ersetzt. Erwartungswerte in den Tests werden aus diesen Daten berechnet (`tests/e2e/testdaten.py`),
