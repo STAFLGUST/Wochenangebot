@@ -242,8 +242,6 @@ function renderStatic() {
   if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
   $('#company').hidden = !COMPANY;
-  const ini = COMPANY.split(/[\s-]+/).filter((w) => /^[A-Za-zÄÖÜäöü]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
-  $('.brand-mark').textContent = ini || 'W';
   $('#kw-pill').innerHTML = kw;
 
   const sub = [];

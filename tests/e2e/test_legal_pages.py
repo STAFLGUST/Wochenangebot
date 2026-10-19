@@ -1,6 +1,6 @@
 """Öffentlich erreichbar, Navigation ohne JavaScript und mobile Darstellung."""
 import sys
-from umgebung import BASE  # Testserver je Gruppe (parallel)
+from umgebung import BASE, SH  # Testserver je Gruppe (parallel)
 from playwright.sync_api import sync_playwright
 results=[]
 def check(name, value):
@@ -16,6 +16,8 @@ with sync_playwright() as p:
             check(f'{slug} public {width}',response.status==200 and page.get_by_role('heading',level=1).inner_text()==title)
             check(f'{slug} no overflow {width}',page.evaluate('document.documentElement.scrollWidth <= innerWidth'))
             check(f'{slug} navigation {width}',page.locator('footer nav a').count()==3)
+            check(f'{slug} logo {width}',page.evaluate("(() => { const i = document.querySelector('.legal-header img.legal-logo'); return !!i && i.complete && i.naturalWidth > 0; })()"))
+            if slug == 'kontakt': page.screenshot(path=SH + f'/rechtliches-logo-{width}.png')
     page.goto(BASE + '/')
     page.get_by_role('navigation',name='Kontakt und Rechtliches').get_by_role('link',name='Impressum').click()
     check('public footer works without JavaScript',page.url.endswith('/impressum/'))
