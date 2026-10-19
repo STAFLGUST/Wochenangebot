@@ -33,7 +33,7 @@ with sync_playwright() as pw:
     d = page(1440, 950)
     check('Geist font used', 'Geist' in d.evaluate("getComputedStyle(document.body).fontFamily"))
     check('Geist actually loaded', until(lambda: d.evaluate("document.fonts.check('14px Geist')"), 5))
-    check('brand mark shows company initials', d.inner_text('.brand-mark') == 'SF', d.inner_text('.brand-mark'))
+    check('logo in the header (loaded, links home)', d.evaluate("(() => { const i = document.querySelector('#topbar .brand-logo'); return !!i && i.complete && i.naturalWidth > 0 && i.closest('a').getAttribute('href') === './'; })()") and d.get_attribute('#topbar .brand-logo', 'alt') == 'Standard-Fleisch')
     check('filter bar: six closed dropdowns, no side column', d.locator('.fdrop').count() == 6 and d.locator('.fdrop[open]').count() == 0 and d.locator('#filters').evaluate("e => getComputedStyle(e).position") == 'static')
     check('offer view: full width, no side column', not d.is_visible('#merk'))
     d.click('#modebar [data-mode=liste]'); d.wait_for_selector('table.grid tr.row')

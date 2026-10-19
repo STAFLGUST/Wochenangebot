@@ -161,6 +161,14 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .brand > div:not(.brand-mark) { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .brand-company { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.25; white-space: nowrap; }
 .brand-company::after { content: "/"; margin-left: 10px; color: var(--line-strong); font-weight: 400; }
+/* Logo im Kopf (ersetzt das Kürzel); der Firmenname steht im Logo */
+.brand-logo { display: block; height: 34px; width: auto; flex: none; }
+.brand-home { display: block; flex: none; border-radius: 6px; }
+.brand-home:focus-visible { box-shadow: var(--focus); outline: none; }
+.topbar .brand-company, .brand-logo + div .brand-company { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 28px; } }
+:root[data-theme="dark"] .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 28px; }
+@media (max-width: 640px) { .brand-logo { height: 28px; } }
 .brand h1 { margin: 0; font-size: 15px; line-height: 1.25; font-weight: 500; letter-spacing: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .kw-pill { font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-line); padding: 1px 8px; border-radius: 6px; letter-spacing: 0; }
 #btn-kunde-login { background: var(--ink); border-color: var(--ink); color: var(--ink-text); }
@@ -899,3 +907,5 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 @media (min-width: 1280px) { body.mode-angebot .layout { grid-template-columns: minmax(0, 1fr); } body.mode-angebot .merk { display: none; } }
 @container (max-width: 330px) { .al-h th { font-size: 12px; } .al-hin .al-eh { font-size: 11.5px; } }
 #print-root .al-note.in-col { margin-top: 1mm; }
+/* Handy: im Kopf nur das Bildzeichen (die vier Felder), damit Titel und Knöpfe Platz haben – das ganze Logo steht über der Angebotsliste */
+@media (max-width: 480px) { .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
