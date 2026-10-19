@@ -44,7 +44,7 @@ with sync_playwright() as p:
     check('groups in range order, first Rind frisch, last Weitere', heads[0] == 'Rindfleisch, frisch' and 'Weitere Artikel' in heads and 'Rindfleisch, gefroren' in heads, heads)
     check('subtotal per group + gaps', a.locator('.stab tr.wg-sum').count() == len(heads) and a.locator('.stab tr.wg-gap').count() == len(heads) - 1)
     tot = a.inner_text('.stab tfoot .s-kg'); check('grand total kg', tot == fmt(exp_total) + ' kg', (tot, fmt(exp_total)))
-    check('headers', 'Preisänderung' in a.locator('.stab thead').inner_text() and 'Erwartete Zugänge' in a.locator('.stab thead').inner_text())
+    check('headers', 'Eingelagerter' in a.locator('.stab thead').inner_text() and 'Erwartete Zugänge' in a.locator('.stab thead').inner_text())
     # Sortierung im ersten Block: markierte zuerst, früheste oben
     first = a.locator('.stab tbody.wg').first
     cls = first.locator('tr.srow td.s-mhd').evaluate_all("els => els.map(e => [e.className.includes('mhd-'), e.textContent])")

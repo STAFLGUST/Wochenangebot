@@ -2253,13 +2253,12 @@
       const key = S.normCode(a.code), price = prices.get(key), prevPrice = previous.get(key);
       a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
       return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice,
-        comparison: S.priceComparison(price, prevPrice), cls: mhdClass(a.mhd), _hay: fold(a.code + ' ' + a.name) };
+        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(a.code + ' ' + a.name) };
     });
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const stockWeekLabel = (which) => stockPrices?.[which] ? `KW ${stockPrices[which].week}/${stockPrices[which].year}` : 'KW unbekannt';
   const stockPriceText = (p) => !stockPrices?.allowed ? 'keine Berechtigung' : p?.status === 'ambiguous' ? 'mehrere Preisangaben' : p?.status === 'value' ? `${stockPriceNumber.format(p.value)} €${p.label ? ' · ' + p.label : '/kg'}` : p?.status === 'request' ? 'auf Anfrage' : '—';
-  const comparisonText = (a) => !stockPrices?.allowed ? 'keine Berechtigung' : a.comparison.delta ? `${a.comparison.delta > 0 ? '+' : '−'}${stockPriceNumber.format(Math.abs(a.comparison.delta))} €` : a.comparison.text;
   const incomingHTML = (a) => a.incoming.length ? `<ul class="st-incoming">${a.incoming.map((d) => `<li><strong>${esc(kgText(d.kg))}</strong> · ${d.arrival ? 'ETA ' + esc(dmy(d.arrival)) : 'ETA unbekannt'}${d.lot ? ` <small>Partie ${esc(d.lot)}</small>` : ''}</li>`).join('')}</ul>` : '<span class="muted">keine Zugangsdaten</span>';
   const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
   const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? a[f] : 0), 0);
@@ -2268,7 +2267,7 @@
   let stockSort = store.get('stockSort', null);   // { key, dir } oder null = Standard
   const byCode = (a, b) => a.code.localeCompare(b.code, 'de', { numeric: true });
   const vkNum = (a) => (a.price && a.price.status === 'value' ? a.price.value : null);
-  const SORT_GET = { code: null, name: (a) => a.name, vk: vkNum, kg: (a) => a.kg, mhd: (a) => a.mhd, mhdKg: (a) => a.mhdKg };
+  const SORT_GET = { code: null, name: (a) => a.name, vk: vkNum, kg: (a) => a.kg, incomingKg: (a) => a.incomingKg, totalKg: (a) => a.totalKg, mhd: (a) => a.mhd, mhdKg: (a) => a.mhdKg };
   function colCompare(a, b) {
     if (!stockSort) return 0;
     const { key, dir } = stockSort;
@@ -2298,22 +2297,22 @@
     const dir = on ? (stockSort.dir > 0 ? 'ascending' : 'descending') : 'none';
     return `<th class="${cls}" aria-sort="${dir}"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
   };
-  const stockHead = () => `<tr>${sortTh('code', 's-code', 'Art.-Nr.')}${sortTh('name', 's-name', 'Art. Bezeichnung')}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`)}<th>Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}</th><th>Preisänderung</th>${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD')}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD')}${sortTh('kg', 's-kg', 'Erfasster<br>Bestand')}<th>Erwartete Zugänge</th></tr>`;
+  const stockHead = () => `<tr>${sortTh('code', 's-code', 'Art.-Nr.')}${sortTh('name', 's-name', 'Art. Bezeichnung')}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`)}<th>Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}</th>${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand')}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD')}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD')}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand')}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar')}<th>Erwartete Zugänge</th></tr>`;
   const stockRow = (a, print = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
       <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}">${esc(a.name)}</td>
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
-      <td class="s-change" data-l="Änderung"><span class="st-price-change ${a.comparison.kind}">${esc(comparisonText(a))}</span></td>
+      <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
       <td class="s-mhd ${a.cls}" data-l="Kürz. MHD">${esc(mhdShort(a.mhd))}</td><td class="s-mkg ${a.cls}" data-l="Kg kürz. MHD"><span>${mhdKgHTML(a)}</span></td>
-      <td class="s-kg" data-l="Erfasster Bestand">${a.kg == null ? 'kein eingelagerter Bestand erfasst' : esc(kgText(a.kg))}</td>
+      <td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(a.incomingKg))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(a.totalKg))}</td>
       <td class="s-incoming" data-l="Erwartete Zugänge">${print ? incomingHTML(a) : a.incoming.length ? `<button type="button" class="btn sm" data-incoming="${a.idx}" aria-haspopup="dialog" aria-label="Erwartete Zugänge für ${esc(a.name)} anzeigen">Zugänge (${a.incoming.length})</button>` : '—'}</td></tr>`;
-  const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="5">${esc(label)}</td><td class="s-mhd"></td><td class="s-mkg">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-kg">${esc(kgText(sum(list, 'kg')))}</td><td class="s-incoming"></td></tr>`;
+  const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="4">${esc(label)}</td><td class="s-kg" data-l="Eingelagerter Bestand">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg" data-l="Kg kürz. MHD">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(sum(list, 'incomingKg')))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(sum(list, 'totalKg')))}</td><td class="s-incoming"></td></tr>`;
   function stockTableHTML(res, print = false) {
     const rows = (list) => list.map((a) => stockRow(a, print)).join('');
     let body;
     if (res.flat) body = `<tbody>${rows(res.list)}</tbody>`;
-    else body = res.groups.map((g, i) => `<tbody class="wg">${i ? '<tr class="wg-gap" aria-hidden="true"><td colspan="9"></td></tr>' : ''}<tr class="wg-h"><td colspan="9">${esc(g.label)}</td></tr>${rows(g.items)}${totalRow('Summe ' + g.label, g.items, 'wg-sum')}</tbody>`).join('');
-    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead()}</thead>${body}<tfoot>${totalRow('Gesamtsumme Menge verfügbar', res.list, 'st-total')}</tfoot></table>`;
+    else body = res.groups.map((g, i) => `<tbody class="wg">${i ? '<tr class="wg-gap" aria-hidden="true"><td colspan="10"></td></tr>' : ''}<tr class="wg-h"><td colspan="10">${esc(g.label)}</td></tr>${rows(g.items)}${totalRow('Summe ' + g.label, g.items, 'wg-sum')}</tbody>`).join('');
+    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead()}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
   }
   const legendHTML = () => `<div class="mhd-legend" aria-label="MHD-Kennzeichnung"><span class="mhd-past">${SKULL} abgelaufen</span><span class="mhd-0-4">heute – 4 Tage</span><span class="mhd-5-7">5 – 7 Tage</span><span class="mhd-8-14">8 – 14 Tage</span></div>`;
 
@@ -2329,7 +2328,7 @@
     const age = stock.date ? Math.round((Date.parse(isoToday() + 'T12:00:00Z') - Date.parse(stock.date + 'T12:00:00Z')) / 864e5) : null;
     host.innerHTML = `
       <div class="st-info${age != null && age > 2 ? ' old' : ''}">
-        <div><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}<span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · Mengenstand aus dem letzten Import</span><span class="sub">Preise: gespeicherte Wochenstände des Standardangebots, €/kg (abweichende Preisbasis ausdrücklich angegeben). Rot/+ = erhöht, Grün/− = gesenkt. Zugänge mit Status „erfasst“ zählen nicht zum Bestand.</span></div>
+        <div><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}<span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · Mengenstand aus dem letzten Import</span><span class="sub">Preise: gespeicherte Wochenstände des Standardangebots, €/kg (abweichende Preisbasis ausdrücklich angegeben). Eingelagert = im Lager. Erfasst = noch nicht eingetroffen. Gesamt verfügbar = eingelagerter + erfasster Bestand.</span></div>
         ${legendHTML()}
       </div>
       <div class="ed-toolbar">
@@ -2408,12 +2407,12 @@
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="cmp-stats hstats">
-          <div><span>Kg verfügbar</span><strong>${esc(kgText(a.kg))}</strong></div>
+          <div><span>Eingelagerter Bestand</span><strong>${a.kg == null ? '—' : esc(kgText(a.kg))}</strong></div>
           <div><span>Kürzestes MHD</span><strong class="${a.cls}">${esc(mhdShort(a.mhd))}</strong></div>
           <div><span>Kg kürz. MHD</span><strong class="${a.cls}">${mhdKgHTML(a)}</strong></div>
           <div><span>Aktuell ${esc(stockWeekLabel('current'))}</span><strong>${esc(stockPriceText(a.price))}</strong></div>
           <div><span>Vorwoche ${esc(stockWeekLabel('previous'))}</span><strong>${esc(stockPriceText(a.prevPrice))}</strong></div>
-          <div><span>Preisänderung</span><strong class="st-price-change ${a.comparison.kind}">${esc(comparisonText(a))}</strong></div>
+          <div><span>Erfasster Bestand</span><strong>${esc(kgText(a.incomingKg))}</strong></div><div><span>Gesamt verfügbar</span><strong>${esc(kgText(a.totalKg))}</strong></div>
         </div>
         <h3 class="d-h"><span>Erwartete Zugänge (Status „erfasst“)</span></h3>${incomingHTML(a)}
         <h3 class="d-h"><span>Eingelagerte Partien</span><span>${plural(a.lots.length, 'Partie', 'Partien')}</span></h3>
@@ -2507,8 +2506,8 @@
     const res = stockResult(stockQ);
     const q = csvCell;
     const n2 = (v) => (v == null || !Number.isFinite(v) ? '' : fmtKg.format(v).replace(/\./g, ''));
-    const lines = [['Art.-Nr.', 'Bezeichnung', `Aktuell ${stockWeekLabel('current')}`, `Vorwoche ${stockWeekLabel('previous')}`, 'Preisänderung', 'Bestand erfasst kg', 'Erwartete Zugänge (Menge kg / ETA / Partie)', 'Kürz. MHD', 'Kg kürz. MHD', 'Warengruppe', 'Bestand vom'].map(q).join(';')];
-    for (const a of res.list) lines.push([a.code, a.name, stockPriceText(a.price), stockPriceText(a.prevPrice), comparisonText(a), n2(a.kg), a.incoming.map((d) => `${n2(d.kg)} kg / ${d.arrival ? dmy(d.arrival) : 'ETA unbekannt'} / ${d.lot || '—'}`).join(' | '), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
+    const lines = [['Art.-Nr.', 'Bezeichnung', `Aktuell ${stockWeekLabel('current')}`, `Vorwoche ${stockWeekLabel('previous')}`, 'Eingelagerter Bestand kg', 'Kürz. MHD', 'Kg kürz. MHD', 'Erfasster Bestand kg', 'Gesamt verfügbar kg', 'Erwartete Zugänge (Menge kg / ETA / Partie)', 'Warengruppe', 'Bestand vom'].map(q).join(';')];
+    for (const a of res.list) lines.push([a.code, a.name, stockPriceText(a.price), stockPriceText(a.prevPrice), n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), n2(a.incomingKg), n2(a.totalKg), a.incoming.map((d) => `${n2(d.kg)} kg / ${d.arrival ? dmy(d.arrival) : 'ETA unbekannt'} / ${d.lot || '—'}`).join(' | '), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const el = document.createElement('a');
     el.href = URL.createObjectURL(blob);

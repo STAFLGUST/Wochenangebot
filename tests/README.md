@@ -15,7 +15,7 @@ In GitHub laufen alle Ebenen automatisch bei jedem Pull Request und jedem Commit
 
 ## Testdaten
 
-Neue Gruppe `stock_overview`: exakte aktuelle KW/Vorwoche, Erhöhung/Senkung/unverändert/fehlende
+Neue Gruppe `stock_overview`: exakte aktuelle KW/Vorwoche, Bestands- und Zugangssummen/fehlende
 Historie, Bestand und mehrere erwartete Lieferungen, fehlendes ETA, Rechte, Validierung,
 CSV/Druck, Desktop und 390 px in hell/dunkel. Synthetische Daten: `fixtures/bestand/overview.json`.
 Zusätzliche Unit-Tests: `node tests/unit/stock_prices.test.js` und `php tests/unit/stock_prices.php`

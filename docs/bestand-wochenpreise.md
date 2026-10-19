@@ -8,13 +8,13 @@
   Spalten wie bisher über Überschriften und Datenprofile; er verwirft unbekannte Statuswerte.
 - Nur eingelagerte Partien bilden `articles`, verfügbare kg und MHD-Summen. Erwartete Lieferungen
   stehen einzeln in `incoming`: `code`, `name`, `lot`, `arrival` (ISO-Datum oder null), `kg`.
-  Ihre Menge wird nie dem Bestand zugeschlagen. Einkauf, Sonderposten und öffentliche Angebote
+  Ihre Menge wird nicht in `articles` gespeichert. Die Anzeige „Gesamt verfügbar“ summiert ausschließlich für die Übersicht eingelagerte und erfasste Mengen. Einkauf, Sonderposten und öffentliche Angebote
   verwenden unverändert ausschließlich `articles`.
 - Mehrere erfasste Zeilen bleiben mehrere Lieferungen, auch bei gleichem Datum/gleicher Partie.
   Fehlende Ankunft erscheint als „ETA unbekannt“. Ein überschrittenes ETA ist kein Beleg für
   Wareneingang: Erst ein neuer Import mit Status „eingelagert“ ändert den verfügbaren Bestand.
 - Artikel mit ausschließlich erwarteten Zugängen erscheinen ebenfalls. Ohne eingelagerten
-  Datensatz lautet die Anzeige „kein eingelagerter Bestand erfasst“, nicht eine erfundene Menge.
+  Datensatz zeigt „Eingelagerter Bestand“ einen Strich. Die Gesamtsumme umfasst dann nur die vorhandenen Zugangsdatensätze.
   Bestandsdatum und Importzeit bleiben sichtbar; dies ist kein Live-Abgleich mit WinAB.
 - „Aktuell“ ist die tatsächliche ISO-Kalenderwoche in Europe/Berlin. „Vorwoche“ ist genau sieben
   Tage davor, inklusive ISO-Jahreswechsel. Ein Entwurf für eine andere Woche zählt nicht.
@@ -24,17 +24,20 @@
 - Preisangaben werden über normalisierte Artikelnummern zugeordnet. Unterschiedliche Preise oder
   Preisbasen unter derselben Nummer werden als „mehrere Preisangaben“ angezeigt, nicht willkürlich
   ausgewählt. Nur numerische Preise mit gleicher Preisbasis werden verglichen (Genauigkeit 4 Stellen).
-  Rot/+ = Erhöhung, Grün/− = Senkung, neutral = unverändert; ohne numerischen Vorwochenpreis
-  „keine Vergleichsdaten“. Anfragepreise und fehlende aktuelle Preise werden nicht als null Euro gewertet.
+  Die separate Preisänderungsspalte entfällt. Anfragepreise und fehlende Preise werden nicht als null Euro gewertet.
 - Standardpreise sind keine Kunden-, Sonder- oder Einkaufspreise. Abweichende Preislabels werden
   angezeigt. Die Entwurfsangaben im Artikeldialog bleiben ausdrücklich als Entwurf gekennzeichnet.
 
 ## Darstellung
 
 Die fette Kopfzeile folgt der Reihenfolge Artikelnummer, Bezeichnung, aktueller Preis,
-Vorwochenpreis, Preisänderung, kürzestes MHD, kg am kürzesten MHD, erfasster Bestand,
-erwartete Zugänge. Fehlende Preise erscheinen als „—“; fehlende Vergleichsdaten bleiben
-in der Änderungsspalte ausdrücklich gekennzeichnet. Zugänge werden in der Übersicht nur
+Vorwochenpreis, eingelagerter Bestand, kürzestes MHD, kg am kürzesten MHD, erfasster Bestand,
+Gesamt verfügbar, erwartete Zugänge. Fehlende Preise erscheinen als „—“.
+Erfasster Bestand summiert die vorhandenen Zugangszeilen; ohne Zeilen sind 0 kg erfasst.
+Gesamt verfügbar ist die Summe beider Mengenarten, einschließlich noch nicht eingetroffener Ware.
+Diese Anzeigen beschreiben ausschließlich den letzten Import, keine garantierte Lieferbarkeit.
+Gruppen- und Gesamtsummen, Detaildialog, CSV und Druck verwenden dieselbe Berechnung.
+Zugänge werden in der Übersicht nur
 als Button mit Anzahl gezeigt. Er öffnet einen Dialog mit den einzelnen Mengen und ETAs;
 Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lieferdetails.
 
@@ -66,6 +69,6 @@ durch diesen PR. Merge/Release nur über den bestehenden Freigabeprozess.
 ## Prüfung
 
 `stock` prüft den echten XLS-Import und unveränderte eingelagerte Summen. `stock_overview` prüft
-Preisänderungen, fehlende Historie, mehrere Lieferungen, unbekannte ETA, reine Zugänge, Validierung,
+Wochenpreise, fehlende Historie, getrennte Mengen und Gesamtsummen, mehrere Lieferungen, unbekannte ETA, reine Zugänge, Validierung,
 Rechte, keine öffentliche Auslieferung, CSV, Druck und Desktop/Mobil in hell/dunkel.
 Unit-Tests prüfen außerdem J/M-Zuordnung, Kalendergrenzen, Historienlücken und mehrdeutige Preise.
