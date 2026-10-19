@@ -885,3 +885,43 @@ body.ro .sale-tag { cursor: default; }
   .rmtab .rm-ls { display: inline; }
   .urtab select { max-width: 132px; }
 }
+
+/* Auswertung: Karte der Kunden-Anmeldungen */
+.aw-bar .aw-sum { color: var(--text-2); font-size: 13px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.aw-note { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 14px; }
+.aw-note p { margin: 0; flex: 1 1 280px; }
+.aw-map { position: relative; overflow: hidden; height: clamp(360px, 62vh, 620px); padding: 0; background: var(--c-frozen-bg); }
+#aw-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+#aw-svg:active { cursor: grabbing; }
+#aw-land path { fill: var(--surface); stroke: var(--line-strong, var(--line)); stroke-width: .8; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+#aw-ref circle { fill: var(--muted); }
+#aw-ref text { fill: var(--text-2); font-family: inherit; pointer-events: none; }
+.aw-pt { cursor: pointer; outline: none; }
+.aw-pt circle { fill: var(--accent); fill-opacity: .82; stroke: var(--surface); stroke-width: 2; vector-effect: non-scaling-stroke; transition: fill-opacity .15s; }
+.aw-pt:hover circle, .aw-pt:focus-visible circle { fill-opacity: 1; }
+.aw-pt:focus-visible circle, .aw-pt.sel circle { stroke: var(--text); stroke-width: 2.5; }
+.aw-pt text { fill: var(--accent-ink, #fff); font-weight: 650; text-anchor: middle; dominant-baseline: central; pointer-events: none; font-variant-numeric: tabular-nums; }
+.aw-pt text.aw-lbl { fill: var(--text); font-weight: 600; text-anchor: start; dominant-baseline: auto; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.aw-zoom { position: absolute; right: 12px; top: 12px; display: grid; gap: 6px; }
+.aw-zoom .btn { background: var(--surface); box-shadow: var(--shadow-sm); }
+.aw-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: var(--text-2); box-shadow: var(--shadow-sm); text-align: center; max-width: calc(100% - 32px); }
+.aw-pop { position: absolute; z-index: 2; width: min(300px, calc(100% - 16px)); max-height: 60%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 13px; }
+.aw-pop-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.aw-pop-h strong { font-size: 14px; }
+.aw-pop-h .btn { margin-left: auto; align-self: center; }
+.aw-pop ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.aw-pop li { display: grid; gap: 1px; }
+.aw-pop .nm, .aw-tab .nm { font-weight: 600; }
+.aw-pop .sub, .aw-tab .sub { color: var(--text-2); font-size: 12px; }
+.aw-list { padding: 14px 16px; }
+.aw-tw { overflow-x: auto; }
+.aw-tab td, .aw-tab th { padding: 8px; font-size: 13px; }
+.aw-tab tr[data-aw-pt] { cursor: pointer; }
+.aw-tab tr[data-aw-pt]:hover td { background: var(--surface-2); }
+.aw-tab .aw-t { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.aw-foot { margin: 4px 2px 24px; line-height: 1.55; }
+@media (max-width: 640px) {
+  .aw-bar .aw-sum { margin-left: 0; width: 100%; }
+  .aw-map { height: 360px; }
+  .aw-tab .aw-via, .aw-tab .aw-dev { display: none; }
+}

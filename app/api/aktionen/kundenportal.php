@@ -134,7 +134,7 @@ switch ($action) {
             if (!$c2) fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410);
             attempts_record(true);
             ksess_remove(function ($k, $v) use ($c2) { return $v['kid'] === $c2['id']; });
-            kunde_sign_in($c2);
+            kunde_sign_in($c2, 'link');
             audit('kunde_password', 'Kunde hat Passwort über den Link aus der E-Mail festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c2)]);
         }

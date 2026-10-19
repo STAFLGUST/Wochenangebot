@@ -62,6 +62,7 @@ header_remove('X-Powered-By');
 
 $CFG = require __DIR__ . '/config.php';
 require __DIR__ . '/geo.php';
+require __DIR__ . '/ort.php';
 require __DIR__ . '/mail.php';
 $DATA = rtrim((string)$CFG['data_dir'], '/');
 require __DIR__ . '/storage.php';
@@ -97,6 +98,7 @@ require __DIR__ . '/lib/kundenmail.php';
 require __DIR__ . '/lib/benachrichtigung.php';
 require __DIR__ . '/lib/einkauf.php';
 require __DIR__ . '/lib/diagnose.php';
+require __DIR__ . '/lib/auswertung.php';
 require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
 
@@ -108,7 +110,7 @@ $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_dr
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
-                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save'];
+                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'ort_update'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -154,6 +156,7 @@ try {
     require __DIR__ . '/aktionen/verwaltung.php';
     require __DIR__ . '/aktionen/entwurf.php';
     require __DIR__ . '/aktionen/preisverlauf.php';
+    require __DIR__ . '/aktionen/auswertung.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

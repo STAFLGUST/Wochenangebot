@@ -8,7 +8,7 @@
 <title>Wochenangebot · Eingabebereich</title>
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=4c06be08ed">
-<link rel="stylesheet" href="../assets/admin.css?v=c1f8330684">
+<link rel="stylesheet" href="../assets/admin.css?v=c6145a859f">
 </head>
 <body class="adm">
 
@@ -76,6 +76,7 @@
       <div class="side-sep" id="side-admin" aria-hidden="true" hidden>Verwaltung</div>
       <button role="tab" type="button" id="vt-orders" aria-selected="false" aria-controls="view-orders" hidden><svg class="i" aria-hidden="true"><use href="#i-file"/></svg><span>Bestellungen</span></button>
       <button role="tab" type="button" id="vt-kunden" aria-selected="false" aria-controls="view-kunden" hidden><svg class="i" aria-hidden="true"><use href="#i-store"/></svg><span>Kunden</span></button>
+      <button role="tab" type="button" id="vt-auswertung" aria-selected="false" aria-controls="view-auswertung" hidden><svg class="i" aria-hidden="true"><use href="#i-map"/></svg><span>Auswertung</span></button>
       <button role="tab" type="button" id="vt-mail" aria-selected="false" aria-controls="view-mail" hidden><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span>E-Mail</span></button>
       <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Nutzer</span></button>
       <button role="tab" type="button" id="vt-log" aria-selected="false" aria-controls="view-log" hidden><svg class="i" aria-hidden="true"><use href="#i-history"/></svg><span>Protokoll</span></button>
@@ -122,6 +123,7 @@
     <div id="view-kunden" hidden></div>
     <div id="view-mail" hidden></div>
     <div id="view-users" hidden></div>
+    <div id="view-auswertung" hidden></div>
     <div id="view-log" hidden></div>
     <div id="view-sec" hidden></div>
   </main>
@@ -216,6 +218,7 @@
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8.5-8.5M16 7l2.5 2.5M14 9l2 2"/></symbol>
   <symbol id="i-logout" viewBox="0 0 24 24"><path d="M14 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2H14M10 12h10M16.5 8.5 20 12l-3.5 3.5"/></symbol>
   <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.5h16M6.5 15l4-4.5 3 3L19 7"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></symbol>
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 5 6.5v5c0 4.3 3 7.9 7 9 4-1.1 7-4.7 7-9v-5z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5M6.5 9.5V19h4v-5h3v5h4V9.5"/></symbol>
   <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a1.5 1.5 0 0 1-1.5-1.5v-5A1.5 1.5 0 0 1 5 9h14a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 19 17h-2"/><rect x="7" y="14" width="10" height="6" rx="1"/></symbol>
@@ -236,7 +239,8 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=7b3e5ace81"></script>
-<script src="../assets/admin.js?v=bb0d9252ea"></script>
+<script src="../assets/admin.js?v=1d90c0ffda"></script>
 <script src="../assets/admin-verwaltung.js?v=be7c97a3a6"></script>
+<script src="../assets/admin-auswertung.js?v=348724ec65"></script>
 </body>
 </html>

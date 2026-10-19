@@ -354,7 +354,7 @@ function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = nul
             'headers' => ['List-Unsubscribe' => '<' . $one . '>', 'List-Unsubscribe-Post' => 'List-Unsubscribe=One-Click']];
 }
 /* Kunde anmelden (nach Passwortprüfung oder Einmal-Link) */
-function kunde_sign_in(array $c): void
+function kunde_sign_in(array $c, string $via = 'passwort'): void
 {
     session_regenerate_id(true);
     kunde_clear();
@@ -370,4 +370,5 @@ function kunde_sign_in(array $c): void
         $_SESSION['ksid'] = $sid;
     });
     $GLOBALS['KUNDE'] = $c;
+    anmeldeort_record($c, $via);
 }
