@@ -36,10 +36,16 @@ with sync_playwright() as pw:
     check('three blocks side by side in every section', all(n == 3 for n in pg.eval_on_selector_all('.al-cols', 'cs => cs.map(c => c.querySelectorAll(":scope > .al-col").length)')))
     hs = pg.evaluate("[...document.querySelectorAll('.al-sec')[1].querySelectorAll('.al-col')].map(c => c.getBoundingClientRect().height)")
     check('columns balanced (similar height)', max(hs) - min(hs) <= max(hs) * 0.25, [round(h) for h in hs])
-    xs = pg.evaluate("[...document.querySelectorAll('.al-sec:first-of-type tr.row td.c-price:last-of-type')].map(td => Math.round(td.getBoundingClientRect().right))")
+    xs = pg.evaluate("[...document.querySelectorAll('.al-sec:first-of-type tr.row')].map(r => { const p = r.querySelectorAll('td.c-price'); return Math.round(p[p.length - 1].getBoundingClientRect().right); })")
     check('prices right-aligned on one edge per block', len(set(xs)) == 3, sorted(set(xs)))
     codes = pg.evaluate("[...document.querySelectorAll('.al-sec:first-of-type tr.row td.c-code')].map(td => Math.round(td.getBoundingClientRect().left))")
     check('numbers left-aligned on one edge per block', len(set(codes)) == 3, sorted(set(codes)))
+    flush = pg.evaluate("""[...document.querySelectorAll('.al-grp')].slice(0, 6).map(g => {
+      const h = g.querySelector('.al-h th'), c = g.querySelector('tr.row td.c-code');
+      const hl = h.getBoundingClientRect().left + parseFloat(getComputedStyle(h).paddingLeft), cl = c.getBoundingClientRect().left + parseFloat(getComputedStyle(c).paddingLeft);
+      return Math.abs(hl - cl) < 1.5 && Math.abs(g.getBoundingClientRect().left - c.getBoundingClientRect().left) < 1.5; })""")
+    check('article numbers flush left under the group heading', all(flush), flush)
+    check('logo in the list header', pg.locator('.al-head img.al-logo').count() == 1 and pg.evaluate("document.querySelector('.al-logo').naturalWidth") > 0)
     pg.screenshot(path=SH + '/angebotsliste.png')
     pg.screenshot(path=SH + '/angebotsliste-ganz.png', full_page=True)
     # Bedienung bleibt: Details, Merkliste
@@ -87,6 +93,7 @@ with sync_playwright() as pw:
     e.evaluate("window.dispatchEvent(new Event('beforeprint'))")   # wie Strg+P: Standard-Layout
     pages = e.locator('#print-root .pl-page').count()
     check('export: a page per section at least, three blocks per page', pages >= 4 and all(n == 3 for n in e.eval_on_selector_all('#print-root .al-cols', 'cs => cs.map(c => c.children.length)')), pages)
+    check('export: logo on the first page', e.locator('#print-root .pl-page').first.locator('img.al-logo').count() == 1 and e.locator('#print-root img.al-logo').count() == 1)
     check('export: every article once', e.locator('#print-root tr.row').count() == 276 and e.locator('#print-root .star, #print-root .qty').count() == 0)
     e.emulate_media(media='print')
     pdf = e.pdf(prefer_css_page_size=True, print_background=True)

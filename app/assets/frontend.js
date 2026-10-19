@@ -497,16 +497,19 @@ function plSections(units) {
   for (const u of units) { if (!out.length || out[out.length - 1].name !== u.section) out.push({ name: u.section, units: [] }); out[out.length - 1].units.push(u); }
   return out;
 }
-function plBlockHTML(b, withQty) {
+const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
+/* Ein Block: Nummer | Bezeichnung | Preis(e) | [Menge] | [Merken] – Nummer bündig links unter dem Gruppenkopf */
+function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
+  const screen = mode !== 'print', qty = mode === true;
+  const tail = (cell) => `${qty ? cell('qty') : ''}${screen ? cell('fav') : ''}`;
   const row = (it) => `<tr class="row" data-id="${it.id}">
-    <td class="c-fav">${withQty !== 'print' ? starHTML(it) : ''}</td>
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
-    <td class="c-name">${withQty !== 'print' ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>` : esc(it.name)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
-    ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${withQty === true ? `<td class="c-qty">${qtyHTML(it)}</td>` : ''}</tr>`;
-  const cg = `<colgroup><col class="w-fav"><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${withQty === true ? '<col class="w-qty">' : ''}</colgroup>`;
-  return `<div class="al-grp"><table class="al-tab${withQty === true ? ' has-qty' : ''}">${cg}<thead><tr class="al-h"><th colspan="3" scope="colgroup">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</th>${labels.map((l, n) => `<th class="al-eh">${n === cols - 1 ? '€ / kg' : ''}</th>`).join('')}${withQty === true ? '<th class="al-qh" title="Menge in kg">kg</th>' : ''}</tr>
-    ${cols > 1 ? `<tr class="al-sub"><th colspan="3"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${withQty === true ? '<th></th>' : ''}</tr>` : ''}</thead>
+    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>` : esc(it.name)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${tail((k) => (k === 'qty' ? `<td class="c-qty">${qtyHTML(it)}</td>` : `<td class="c-fav">${starHTML(it)}</td>`))}</tr>`;
+  const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${tail((k) => `<col class="w-${k}">`)}</colgroup>`;
+  return `<div class="al-grp"><table class="al-tab${qty ? ' has-qty' : ''}">${cg}<thead><tr class="al-h"><th colspan="2" scope="colgroup">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</th>${labels.map((l, n) => `<th class="al-eh">${n === cols - 1 ? '€ / kg' : ''}</th>`).join('')}${tail((k) => (k === 'qty' ? '<th class="al-qh" title="Menge in kg">kg</th>' : '<th class="al-fh"><span class="sr-only">Merken</span></th>'))}</tr>
+    ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${tail(() => '<th></th>')}</tr>` : ''}</thead>
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
 let plK = 3;
@@ -518,7 +521,7 @@ function renderListe(list, grouped) {
   const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150 - (KORDER ? 62 : 0)) / 6.6)));
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
-  const head = `<div class="al-head"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div>`;
+  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>`;
   const secs = plSections(units).map((sec) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
     const cols = plBalance(sec.units, plK);
@@ -557,7 +560,7 @@ function buildPrintListe(list, grouped, scopeText) {
   }
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
   const m = DATA.meta || {};
-  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph"><div>${COMPANY ? `<span class="pl-co">${esc(COMPANY)}</span>` : ''}<h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1></div><span>${scopeText ? esc(scopeText) + '<br>' : ''}Stand ${esc(stand)} · Preise in € je kg</span></header>` : ''}
+  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
     ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
     <div class="al-cols" style="--k:3">${pg.cols.map((c) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}</div>`).join('')}</div></section>`).join('');
 }

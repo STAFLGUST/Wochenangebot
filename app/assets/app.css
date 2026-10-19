@@ -777,9 +777,13 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .al { --al-zebra: #f6f6f4; --al-rule: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px 6px; font-variant-numeric: tabular-nums; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al { --al-zebra: rgba(255,255,255,.035); } }
 :root[data-theme="dark"] .al { --al-zebra: rgba(255,255,255,.035); }
-.al-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin: 0 0 14px; }
+.al-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 16px; }
+.al-logo { display: block; height: 58px; width: auto; flex: none; }
+.al-ht { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; } }
+:root[data-theme="dark"] .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; }
 .al h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; text-transform: none; }
-.al-head > span { font-size: 13px; color: var(--text-2); }
+.al-ht > span { font-size: 13px; color: var(--text-2); }
 .al-sec { margin: 0 0 18px; }
 .al-st { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 7px 12px; background: var(--surface-3); border-radius: 7px; }
 .al-st h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.005em; text-transform: none; }
@@ -790,25 +794,25 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .al-col:first-child { padding-left: 0; }
 .al-col:last-child { padding-right: 0; }
 .al-tab { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
-.al-tab .w-fav { width: 20px; }
+.al-tab .w-fav { width: 22px; }
 .al-tab .w-code { width: 46px; }
 .al-tab .w-price { width: 62px; }
 .al-tab .w-qty { width: 60px; }
 .al-tab th { text-transform: none; letter-spacing: normal; }
 .al-h th { padding: 0 6px 4px; border-bottom: 1.5px solid var(--al-rule); font-size: 12.5px; font-weight: 650; text-align: left; vertical-align: bottom; }
-.al-h th:first-child { padding-left: 0; }
+.al-h th:first-child { padding-left: 5px; }
 .al-h .al-eh, .al-h .al-qh { text-align: right; white-space: nowrap; }
 .al-sub th { padding: 3px 6px 2px; font-size: 11px; font-weight: 600; font-style: italic; color: var(--text-2); text-align: right; }
 .al-brand { color: var(--accent); font-style: italic; }
 .al-cont { font-size: 11px; font-weight: 500; color: var(--muted); }
 .al-tab tbody tr:nth-child(odd) td { background: var(--al-zebra); }
 .al-tab td { padding: 2px 6px; height: 25px; vertical-align: middle; }
-.al-tab td.c-fav { padding: 0; text-align: center; }
+.al-tab td.c-fav, .al-h .al-fh { padding: 0; text-align: center; }
 .al-tab .star { width: 20px; height: 22px; border-radius: 5px; color: transparent; }
 .al-tab .star svg.i { width: 13px; height: 13px; }
 .al-tab tr:hover .star, .al-tab .star:focus-visible { color: var(--line-strong); }
 .al-tab .star:hover, .al-tab .star[aria-pressed="true"] { color: var(--accent); }
-.al-tab td.c-code { padding: 2px 4px 2px 2px; font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.al-tab td.c-code { padding: 2px 4px 2px 5px; font-family: inherit; font-size: 12.5px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .al-tab td.c-name { overflow-wrap: anywhere; }
 .al-tab .name-btn { font-weight: 400; line-height: 1.3; padding: 2px 0; text-align: left; }
 .al-tab td.c-price { text-align: right; font-weight: 650; white-space: nowrap; width: auto; }
@@ -830,6 +834,8 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 @media (max-width: 640px) {
   .al { padding: 14px 12px 4px; border-radius: var(--r); }
   .al-st h3 { font-size: 14px; }
+  .al-logo { height: 44px; }
+  .al-ht { align-items: flex-start; text-align: left; }
   .al-tab { font-size: 14px; }
   .al-tab td { height: 34px; }
   .al-tab .star { color: var(--line-strong); }
@@ -846,8 +852,10 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 #print-root .pl-page:last-child { break-after: auto; }
 #print-root .pl-ph { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 2mm; margin-bottom: 3mm; border-bottom: .8mm solid #8c1d2c; }
 #print-root .pl-ph h1 { margin: 0; font-size: 13pt; font-weight: 650; }
+#print-root .pl-ph .al-logo { height: 15mm; background: none; padding: 0; }
+#print-root .pl-pt { text-align: right; display: flex; flex-direction: column; gap: 1mm; }
 #print-root .pl-ph .pl-co { display: block; font-size: 7.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #8c1d2c; margin-bottom: .6mm; }
-#print-root .pl-ph > span { font-size: 8pt; color: #444; text-align: right; }
+#print-root .pl-pt > span { font-size: 8pt; color: #444; }
 #print-root .al-st { background: #ececea; border-radius: 0; padding: 1.2mm 2.5mm; margin: 0 0 2.4mm; }
 #print-root .al-st h3 { font-size: 10pt; }
 #print-root .al-col { padding: 0 3.2mm; gap: 2.6mm; }
@@ -855,14 +863,12 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 #print-root .al-col:last-child { padding-right: 0; }
 #print-root .al-col + .al-col { border-left: .25mm solid #d6d6d2; }
 #print-root .al-tab { font-size: 9pt; line-height: 1.22; }
-#print-root .al-tab .w-fav { width: 0; }
 #print-root .al-tab .w-code { width: 11mm; }
 #print-root .al-tab .w-price { width: 14mm; }
 #print-root .al-tab td { height: 4.5mm; padding: 0 1.2mm; }
-#print-root .al-tab td.c-fav { padding: 0; }
-#print-root .al-tab td.c-code { font-size: 8.4pt; color: #555; padding-left: .8mm; }
+#print-root .al-tab td.c-code { font-size: 8.4pt; color: #555; padding-left: 1mm; }
 #print-root .al-h th { font-size: 8.6pt; padding: 0 1.2mm .8mm; border-bottom-width: .35mm; }
-#print-root .al-h th:first-child { padding-left: 0; }
+#print-root .al-h th:first-child { padding-left: 1mm; }
 #print-root .al-sub th { font-size: 6.8pt; white-space: nowrap; }
 #print-root .al-tab .al-tag { font-size: 6.8pt; padding: 0 1mm; }
 #print-root .al-tab td.c-price.al-np { font-size: 8pt; }
