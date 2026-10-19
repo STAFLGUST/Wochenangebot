@@ -120,6 +120,7 @@ switch ($action) {
             [$d, $c] = $res;
             ksess_remove(function ($k, $v) use ($id) { return $v['kid'] === $id; });
             with_lock('merklisten', function () use ($id) { $all = store_read('merklisten') ?? []; if (isset($all[$id])) { unset($all[$id]); store_write('merklisten', $all); } });
+            anmeldeorte_remove_customer($id);
             audit('customers', "Kunde „{$c['firma']}“ gelöscht", [['k' => "c$id|-", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Kunde gelöscht', 'from' => $c['firma'], 'to' => '']]);
             respond(['ok' => true, 'rev' => $d['rev']]);
         }

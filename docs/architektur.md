@@ -34,6 +34,8 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/einkauf.php` | Fehlmengen offener Bestellwünsche gegenüber dem Bestand (`einkauf_bedarf`), E-Mail an den Einkauf |
 | `orders.php`, `order_outbox.php` | Bestellverwaltung (API v1) und Versandaufträge |
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |
+| `ort.php` | Ortsdatenbank (DB-IP City Lite): Laden/Umwandeln (`ort_download`, `ort_build`), Suche `ort_lookup` |
+| `lib/auswertung.php`, `aktionen/auswertung.php` | Anmeldeorte der Kunden (Dokument `anmeldeorte`, 90 Tage, ohne IP), Aktionen `auswertung`, `ort_update` |
 | `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf` |
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden (`$action`, `$CFG`, … stehen zur Verfügung); jede Aktion

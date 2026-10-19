@@ -28,6 +28,7 @@ const PERMS = [
     'wochenangebot.senden'     => ['g' => 'Kunden', 'l' => 'Wochenangebot per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
     'sonderposten.senden'      => ['g' => 'Kunden', 'l' => 'Sonderposten per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
     'protokoll.sehen'          => ['g' => 'Verwaltung', 'l' => 'Protokoll ansehen', 'k' => 'sehen', 'd' => [], 'r' => []],
+    'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */
 const PERMS_ADMIN_ONLY = ['Nutzer und Rechte verwalten', 'Sicherheit und Wartungsmodus', 'E-Mail-Postfach, Signatur und Benachrichtigungen'];

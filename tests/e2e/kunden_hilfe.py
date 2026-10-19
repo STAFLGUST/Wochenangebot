@@ -14,9 +14,10 @@ class Client:
         self.http = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         self.csrf = ''
         self.ip = ip
+        self.headers = {}   # zusätzliche Kopfzeilen, z. B. User-Agent
 
     def call(self, action, data=None, raw=False):
-        headers = {'X-Forwarded-For': self.ip, 'Content-Type': 'application/json', 'X-CSRF-Token': self.csrf}
+        headers = {'X-Forwarded-For': self.ip, 'Content-Type': 'application/json', 'X-CSRF-Token': self.csrf, **self.headers}
         req = urllib.request.Request(API + action, data=None if data is None else json.dumps(data).encode(), headers=headers)
         try:
             r = self.http.open(req)
