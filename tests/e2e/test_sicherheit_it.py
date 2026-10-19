@@ -55,6 +55,11 @@ A.call('benachrichtigung_save', {'events': {'sicherheit': {'on': True, 'to': 'it
 titles = {c['title']: c for c in A.call('security_status')[1]['config']}
 check('alarm on → ok', titles['Alarm bei Sicherheitsereignissen']['level'] == 'ok' and 'it@example.org' in titles['Alarm bei Sicherheitsereignissen']['text'])
 check('editor cannot read security status', E.call('security_status')[0] == 403)
+check('error messages not shown in the browser', titles['Fehlermeldungen']['level'] == 'ok', titles['Fehlermeldungen'])
+check('PHP version not revealed (config)', titles['PHP-Version im Header']['level'] == 'ok', titles['PHP-Version im Header'])
+import urllib.request
+hdr = urllib.request.urlopen(B + '/api/?action=offer').headers
+check('API responses carry no X-Powered-By', hdr.get('X-Powered-By') is None, hdr.get('X-Powered-By'))
 
 # ---------- Diagnosen ----------
 check('editor cannot run diagnostics', E.call('security_diag', {'check': 'storage'})[0] == 403)
@@ -114,6 +119,7 @@ with sync_playwright() as pw:
     bt = a.inner_text('#sec-bchecks')
     check('browser checks: data folder and program files locked', 'Datenordner von außen gesperrt' in bt and 'Programmdateien von außen gesperrt' in bt and bt.count('gesperrt (Status') == 2, bt)
     check('browser checks: headers and clock', 'Content-Security-Policy' in bt or 'CSP' in bt)
+    check('browser check: server software hidden', 'Server-Software verborgen' in bt and 'keine Versionsangabe' in bt, bt)
     check('config table lists server checks', a.locator('#sec-konfig tbody tr').count() >= 12)
     a.click('.sec-nav a[href="#sec-diag"]')
     a.click('#sec-diag [data-diag=storage]'); a.wait_for_selector('#dg-out .dg-res[data-res=storage]')
