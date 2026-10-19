@@ -205,7 +205,16 @@
   const ROLE_LABEL = { viewer: 'Nur ansehen', editor: 'Bearbeiter', admin: 'Administrator' };
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
-  let ro = true;                                   // Nur-Ansicht
+  /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
+  const VIEW_PERM = { hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
+  function viewAllowed(v) {
+    if (['mail', 'users', 'sec'].includes(v)) return can('admin');
+    return !VIEW_PERM[v] || may(VIEW_PERM[v]);
+  }
+  /* Einzelrecht (Administrator: alle) – die verbindliche Prüfung macht der Server */
+  const may = (p) => !!me && (me.role === 'admin' || (me.perms || []).includes(p));
+  let ro = true;                                   // Nur-Ansicht (Entwurf bearbeiten)
+  let roHist = true, roStock = true, roMaster = true; // Nur-Ansicht je Bereich
   let authMode = 'login';
   let loginPw = '';                                // nur für den Pflicht-Passwortwechsel direkt nach der Anmeldung
   let authCtx = null;                              // { prevUser, expired } während einer laufenden Anmeldung
@@ -386,21 +395,17 @@
 
   /* Rolle auf die Oberfläche anwenden */
   function applyRole() {
-    ro = !can('editor');
+    ro = !may('angebot.bearbeiten');
+    roHist = !may('preisverlauf.bearbeiten'); roStock = !may('bestand.importieren'); roMaster = !may('stammdaten.bearbeiten');
     document.body.classList.toggle('ro', ro);
     document.body.classList.toggle('is-admin', can('admin'));
-    $('#vt-users').hidden = !can('admin');
-    $('#vt-orders').hidden = !can('editor');
-    $('#vt-kunden').hidden = !can('admin');
-    $('#vt-mail').hidden = !can('admin');
-    $('#vt-log').hidden = !can('admin');
-    $('#vt-sec').hidden = !can('admin');
-    $('#btn-send').hidden = !can('admin');
-    if (!can('admin')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !can('admin');
+    for (const [v, p] of Object.entries(VIEW_PERM)) $('#vt-' + v).hidden = !viewAllowed(v);
+    $('#btn-send').hidden = !may('wochenangebot.senden');
+    $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
+    if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
+    $('#side-admin').hidden = !['orders', 'kunden', 'mail', 'users', 'log', 'sec'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
-    if (!can('admin') && ADMIN_VIEWS.includes(currentView)) setView('edit');
-    if (!can('editor') && currentView === 'orders') setView('edit');
+    if (!viewAllowed(currentView)) setView('edit');
   }
   /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
   function lockInputs(root) {
@@ -1274,7 +1279,7 @@
       : `Eigene Preise für <strong>${esc(offerName(curOffer))}</strong>. Feld leer = ${d && d.fallback === 'hidden' ? 'Artikel wird in diesem Angebot <strong>nicht angezeigt</strong>' : '<strong>Standardpreis</strong> gilt'}; ${icon('eye', 'sm')} blendet einen Artikel nur hier aus, ${icon('tag', 'sm')} setzt einen Sonderpreis. Artikel, Bezeichnungen und Gruppen gelten für alle Angebote.`;
     host.innerHTML = `<div class="ob-row"><span class="ob-l">Preise für</span>
       <div class="ob-tabs" role="tablist" aria-label="Angebot wählen">${ids.map((id) => { const n = id === OSTD ? 0 : ownCount(id); return `<button role="tab" type="button" data-offer="${esc(id)}" aria-selected="${id === curOffer}"${id === OSTD ? ' class="std"' : ''}>${esc(offerShort(id))}${id !== OSTD ? `<small title="eigene Preise">${n}</small>` : ''}</button>`; }).join('')}</div>
-      <span class="ob-act">${!ro && can('admin') ? `<button type="button" class="btn sm ghost" data-ob="restposten" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden">${icon('mail', 'sm')}Sonderposten senden</button>` : ''}${!ro && curOffer !== OSTD ? `<button type="button" class="btn sm ghost" data-ob="copy">${icon('copy', 'sm')}Preise übernehmen</button>` : ''}${!ro ? `<button type="button" class="btn sm ghost" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}</span></div>
+      <span class="ob-act">${may('sonderposten.senden') ? `<button type="button" class="btn sm ghost" data-ob="restposten" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden">${icon('mail', 'sm')}Sonderposten senden</button>` : ''}${!ro && curOffer !== OSTD ? `<button type="button" class="btn sm ghost" data-ob="copy">${icon('copy', 'sm')}Preise übernehmen</button>` : ''}${may('angebote.verwalten') ? `<button type="button" class="btn sm ghost" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}</span></div>
       <p class="ob-hint">${hint}</p>`;
     const site = $('#btn-site');
     if (site) site.href = '../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
@@ -1315,7 +1320,7 @@
     dlgOffers.showModal();
   }
   function renderOffersDlg(err = '') {
-    const admin = can('admin');
+    const admin = may('angebote.loeschen');
     $('#offers-body').innerHTML = `<div class="dlg-head"><div><h2 id="of-title">Angebote verwalten</h2><p>Alle Angebote nutzen dieselbe Artikelliste; Preise werden je Angebot eingetragen. Kundenangebote sind nur nach Anmeldung sichtbar (Mitarbeiter oder freigeschaltete Kunden), nie auf der öffentlichen Seite.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <table class="etab oftab"><thead><tr><th>Name</th><th>Artikel ohne eigenen Preis</th><th class="num-s">Eigene Preise</th><th class="act"></th></tr></thead><tbody>
@@ -1369,7 +1374,7 @@
       b.disabled = true;
       try {
         const body = { rev: offersRev, offers: list };
-        if (can('admin')) body.stdPublic = !!offerEdit.stdPublic;
+        if (may('angebote.loeschen')) body.stdPublic = !!offerEdit.stdPublic;
         const r = await api('offers_save', { body });
         offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
         const gone = new Set([OSTD, ...list.map((o) => o.id)]);
@@ -1427,7 +1432,7 @@
   /* ======================= Veröffentlichen ======================= */
   const dlgPublish = $('#dlg-publish');
   function openPublish() {
-    if (ro) return;
+    if (!may('angebot.veroeffentlichen')) return;
     const v = C.validateModel(model);
     if (invalid.size) v.errors.unshift(`${plural(invalid.size, 'Preis ist', 'Preise sind')} nicht lesbar – bitte korrigieren (rot markiert).`);
     const before = new Map(Object.entries(diff.before));
@@ -1830,10 +1835,9 @@
 
   /* Ansicht umschalten */
   const VIEWS = ['orders', 'edit', 'hist', 'stock', 'einkauf', 'master', 'kunden', 'mail', 'users', 'log', 'sec'];
-  const ADMIN_VIEWS = ['kunden', 'mail', 'users', 'log', 'sec'];
+  const ADMIN_VIEWS = ['mail', 'users', 'sec'];
   function setView(v) {
-    if (v === 'orders' && !can('editor')) v = 'edit';
-    if (ADMIN_VIEWS.includes(v) && !can('admin')) v = 'edit';
+    if (!viewAllowed(v)) v = 'edit';
     currentView = v;
     for (const k of VIEWS) {
       $('#vt-' + k).setAttribute('aria-selected', k === v);
@@ -1972,7 +1976,7 @@
     if (e.target === dlgHD || e.target.closest('[data-close]')) { dlgHD.close(); return; }
     if (e.target.closest('[data-hd="upload"]')) { dlgHD.close(); $('#hist-file-input').click(); return; }
     const del = e.target.closest('[data-hdel]');
-    if (!del || ro) return;
+    if (!del || roHist) return;
     const w = hist.weeks.find((x) => x.id === del.dataset.hdel);
     if (!w || !(await confirmBox('Woche entfernen?', `${esc(wkLong(w))} wird aus dem Preisverlauf entfernt. Die Excel-Datei kann jederzeit erneut hochgeladen werden.`, 'Entfernen', true))) return;
     try { await api('history_delete', { body: { id: w.id } }); prevKey = ''; await loadHistory(true); renderHistView(); toast(`${wkLong(w)} entfernt.`); } catch (ex) { toast(ex.message); }
@@ -2095,7 +2099,7 @@
   let hiEntries = [];
   $('#hist-file-input').addEventListener('change', (e) => { const files = [...e.target.files]; e.target.value = ''; if (files.length) histImportFiles(files); });
   async function histImportFiles(files) {
-    if (ro) return;
+    if (roHist) return;
     const base = dlgHI.open ? hiEntries.filter((en) => en.status !== 'gespeichert') : [];
     const added = files.map((f) => ({ file: f, status: 'lesen' }));
     hiEntries = base.concat(added);
@@ -2187,7 +2191,7 @@
     toast(`${plural(done, 'Woche', 'Wochen')} in den Preisverlauf übernommen.`);
   });
   window.addEventListener('drop', (e) => {
-    if (currentView !== 'hist' || !model || ro) return;
+    if (currentView !== 'hist' || !model || roHist) return;
     const files = [...(e.dataTransfer?.files || [])];
     if (files.length) { e.preventDefault(); e.stopImmediatePropagation(); histImportFiles(files); }
   }, true);
@@ -2299,7 +2303,7 @@
     try { await loadStock(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     if (!stock) {
       host.innerHTML = `<div class="ed-empty"><h3>Noch kein Bestand übernommen</h3><p>Laden Sie die Bestandsliste aus WinAB hoch (z. B. „Bestand_16.10.26.XLS“). Mengen und MHD erscheinen nur hier im Eingabebereich – nie auf der öffentlichen Angebotsseite.</p>
-        ${ro ? '' : `<div class="row-actions"><button type="button" class="btn primary" data-st="import">${icon('upload')}Bestandsliste hochladen</button></div>`}</div>`;
+        ${roStock ? '' : `<div class="row-actions"><button type="button" class="btn primary" data-st="import">${icon('upload')}Bestandsliste hochladen</button></div>`}</div>`;
       return;
     }
     const age = stock.date ? Math.round((Date.parse(isoToday() + 'T12:00:00Z') - Date.parse(stock.date + 'T12:00:00Z')) / 864e5) : null;
@@ -2314,7 +2318,7 @@
         <span class="st-actions">
           <button type="button" class="btn" data-st="print">${icon('print')}Drucken</button>
           <button type="button" class="btn" data-st="csv">${icon('download')}CSV</button>
-          ${ro ? '' : `<button type="button" class="btn primary" data-st="import">${icon('upload')}Bestand hochladen</button>`}
+          ${roStock ? '' : `<button type="button" class="btn primary" data-st="import">${icon('upload')}Bestand hochladen</button>`}
         </span>
       </div>
       <div id="st-list"></div>`;
@@ -2350,7 +2354,7 @@
     const b = e.target.closest('[data-st]');
     if (b) {
       const a = b.dataset.st;
-      if (a === 'import') { if (!ro) $('#stock-file-input').click(); }
+      if (a === 'import') { if (!roStock) $('#stock-file-input').click(); }
       if (a === 'print') printStock();
       if (a === 'csv') stockCSV();
       return;
@@ -2407,7 +2411,7 @@
   let stockPending = null;
   $('#stock-file-input').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) stockImportFile(f); });
   async function stockImportFile(file) {
-    if (ro) return;
+    if (roStock) return;
     stockPending = null;
     const head = (t, sub) => `<div class="dlg-head"><div><h2 id="si-title">${t}</h2>${sub ? `<p>${sub}</p>` : ''}</div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>`;
     $('#stock-import-body').innerHTML = `${head('Bestandsliste', esc(file.name))}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Datei wird gelesen …</div></div>`;
@@ -2525,7 +2529,7 @@
     }
   }
   async function loadAux() {
-    await Promise.all([loadStock().catch(() => {}), loadPrev().catch(() => {})]);
+    await Promise.all([may('bestand.sehen') ? loadStock().catch(() => {}) : Promise.resolve(), loadPrev().catch(() => {})]);
     refreshAux();
   }
   function stockOf(code) {
@@ -2952,7 +2956,7 @@
   }
   /* Stammdaten an die Regeln anpassen (einmalig je Änderung der Regeln, danach ohne Wirkung) */
   function migrateMaster() {
-    if (ro || !master || !master.articles.length || !model) return 0;
+    if (roMaster || !master || !master.articles.length || !model) return 0;
     const by = draftByCode();
     const gb = new Map(model.groups.map((g) => [g.id, g]));
     let n = 0;
@@ -2985,7 +2989,7 @@
   function masterChanged() { clearTimeout(masterTimer); setMasterState('saving'); masterTimer = setTimeout(saveMaster, 700); }
   async function saveMaster() {
     clearTimeout(masterTimer);
-    if (ro || !master) return;
+    if (roMaster || !master) return;
     if (masterSaving) { masterQueued = true; return; }
     masterSaving = true;
     setMasterState('saving');
@@ -3000,7 +3004,7 @@
     const list = by.get(mKey(e.code));
     if (!list) return '<span class="muted" title="Nicht im aktuellen Angebot">—</span>';
     if (list.length > 1) return `<span class="muted" title="Artikelnummer ${list.length}× im Angebot – wird nicht automatisch abgeglichen">${list.length}× im Angebot</span>`;
-    if (differs(e, list[0])) return ro ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '–')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
+    if (differs(e, list[0])) return (ro || roMaster) ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '–')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
     return `<span class="m-ok" title="Angebot entspricht den Stammdaten">${icon('check', 'sm')}</span>`;
   }
   async function renderMasterView() {
@@ -3008,7 +3012,7 @@
     if (!master) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Stammdaten werden geladen …</div>';
     try { await loadMaster(); await loadStock().catch(() => {}); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     migrateMaster();
-    if (!ro && !master.articles.length && model && model.items.length) {
+    if (!roMaster && !master.articles.length && model && model.items.length) {
       const n = addFromDraft();
       if (n) { saveMaster(); toast(`Stammdaten angelegt: ${plural(n, 'Artikel', 'Artikel')} aus dem aktuellen Angebot übernommen.`, 5000); }
     }
@@ -3024,7 +3028,7 @@
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="ms-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung, Herkunft …" aria-label="Stammdaten durchsuchen" value="${esc(masterQ)}"></div>
         <span class="ed-hint" id="ms-count"></span>
-        ${ro ? '' : `<span class="st-actions">
+        ${roMaster ? '' : `<span class="st-actions">
           <button type="button" class="btn" data-ma="from-draft"${missing ? '' : ' disabled'} title="Artikelnummern aus dem Angebot, die noch keine Stammdaten haben">${icon('plus')}Aus Angebot ergänzen${missing ? ` (${missing})` : ''}</button>
           <button type="button" class="btn" data-ma="apply-all"${dev ? '' : ' disabled'} title="Abweichende Artikel im Entwurf an die Stammdaten anpassen">${icon('check')}Auf Angebot anwenden${dev ? ` (${dev})` : ''}</button>
           <button type="button" class="btn primary" data-ma="new">${icon('plus')}Artikel anlegen</button>
@@ -3051,7 +3055,7 @@
         <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
         <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
         <td class="m-offer">${offerStatus(e, by)}</td>
-        <td class="m-act">${ro ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
+        <td class="m-act">${roMaster ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
       </tr>`;
     }).join('');
     host.innerHTML = list.length ? `<div class="gcard"><table class="etab mtab"><thead><tr><th class="m-code">Art.-Nr.</th><th class="m-name">Bezeichnung</th><th class="m-cat">Fleischart</th><th class="m-origin">Herkunft</th><th class="m-cond">Zustand</th><th class="m-offer">Angebot</th><th class="m-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
@@ -3063,7 +3067,7 @@
   });
   $('#view-master').addEventListener('change', (e) => {
     const el = e.target, tr = el.closest('tr[data-mcode]');
-    if (!tr || !el.dataset.mf || ro) return;
+    if (!tr || !el.dataset.mf || roMaster) return;
     const ent = masterOf(tr.dataset.mcode);
     if (!ent) return;
     const f = el.dataset.mf;
@@ -3080,7 +3084,7 @@
   });
   $('#view-master').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-ma]');
-    if (!b || ro) return;
+    if (!b || roMaster) return;
     const a = b.dataset.ma, code = b.closest('tr[data-mcode]')?.dataset.mcode;
     if (a === 'retry') { saveMaster(); return; }
     if (a === 'from-draft') { const n = addFromDraft(); saveMaster(); toast(`${plural(n, 'Artikel', 'Artikel')} aus dem Angebot ergänzt.`); renderMasterView(); return; }
@@ -3156,7 +3160,7 @@
 
   /* Artikel-Dialog: aktuellen Artikel als Stammdaten speichern */
   async function saveItemToMaster(it) {
-    if (ro || !it.code) return;
+    if (roMaster || !it.code) return;
     try { await loadMaster(); } catch (e) { toast(e.message); return; }
     const ent = masterOf(it.code);
     const rec = { code: ent ? ent.code : it.code, name: C.stripFrisch(it.name), category: it.category, origin: it.origin || null, condition: it.condition };
@@ -3168,7 +3172,7 @@
   /* ======================= Schnittstelle für admin-verwaltung.js ======================= */
   window.WA = {
     $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort,
-    loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD,
+    loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
     get me() { return me; }, get offers() { return offers; }, get stdPublic() { return stdPublic; },
     get wartungSt() { return wartungSt; }, set wartungSt(v) { wartungSt = v; },
     views: {},

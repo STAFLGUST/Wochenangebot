@@ -146,7 +146,8 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunden_mail_vorschau': {
-            require_auth(true, 'admin');
+            $vme = require_auth(true);
+            if (!may($vme, 'kunden.bearbeiten') && !may($vme, 'wochenangebot.senden')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             $b = body();
             $typ = in_array($b['type'] ?? '', ['woche', 'angebot', 'invite', 'reset', 'restposten'], true) ? $b['type'] : 'woche';
             $c = null;
@@ -163,7 +164,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunde_mail': {
-            require_admin_confirmation();
+            require_perm_confirmed('kunden.bearbeiten');
             $cfg = require_mail();
             $b = body();
             $c = null;
@@ -199,7 +200,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunden_rundmail': {
-            require_admin_confirmation();
+            require_perm_confirmed('wochenangebot.senden');
             $cfg = require_mail();
             $b = body();
             $wk = mail_week();
@@ -232,7 +233,7 @@ Ausgelöst von: {$me['name']}
 
         /* ---------- Sonderposten eines Angebots per E-Mail (nur an die Kunden dieses Angebots) ---------- */
         case 'restposten_info': {
-            require_auth(false, 'admin');
+            require_perm('sonderposten.senden');
             header('Cache-Control: no-store');
             $def = offer_def((string)($_GET['offer'] ?? ''));
             if (!$def) fail('Angebot nicht gefunden.', 404);
@@ -248,7 +249,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunden_restposten': {
-            require_admin_confirmation();
+            require_perm_confirmed('sonderposten.senden');
             $cfg = require_mail();
             $b = body();
             $def = offer_def((string)($b['offer'] ?? ''));

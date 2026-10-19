@@ -45,7 +45,7 @@ switch ($action) {
         }
 
         case 'offers_save': {
-            $me = require_auth(true, 'editor');
+            $me = require_perm('angebote.verwalten', true);
             $b = body();
             $list = [];
             $names = [];
@@ -68,7 +68,7 @@ switch ($action) {
                 $old = []; foreach ($cur['offers'] as $o) $old[$o['id']] = $o;
                 $new = []; foreach ($list as $o) $new[$o['id']] = $o;
                 $removed = array_diff_key($old, $new);
-                if ($removed) require_admin_confirmation();
+                if ($removed) require_perm_confirmed('angebote.loeschen');
                 $d = [];
                 $FB = ['standard' => 'Standardpreis zeigen', 'hidden' => 'Artikel ausblenden'];
                 foreach ($new as $id => $o) {
@@ -80,7 +80,7 @@ switch ($action) {
                 $oldPub = !array_key_exists('stdPublic', $cur) || !empty($cur['stdPublic']);
                 $pub = array_key_exists('stdPublic', $b) ? !empty($b['stdPublic']) : $oldPub;
                 if ($pub !== $oldPub) {
-                    require_admin_confirmation();
+                    require_perm_confirmed('angebote.loeschen');
                     $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
                 }
                 $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub];

@@ -7,26 +7,47 @@
 (function () {
   'use strict';
   const W = window.WA;
-  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD } = W;
+  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may } = W;
+  const isAdmin = () => W.me && W.me.role === 'admin';
+  const mailInfo = () => (isAdmin() ? api('mail_status') : Promise.resolve({ configured: true }));   // Postfach-Details nur für Administratoren
   let qTimer = null;
 
   /* ======================= Nutzerverwaltung (Administrator) ======================= */
-  let users = null;
+  let users = null, rights = null;
   const ROLE_DESC = {
-    admin: 'Alles, zusätzlich Nutzerverwaltung und Protokoll',
-    editor: 'Angebot bearbeiten, importieren, veröffentlichen, Preisverlauf pflegen',
-    viewer: 'Eingabebereich und Preisverlauf nur ansehen',
+    admin: 'Alle Rechte, dazu Nutzer und Rechte, Sicherheit und E-Mail-Einstellungen',
+    editor: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: Angebot bearbeiten und veröffentlichen, Bestellungen, Bestand)',
+    viewer: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: nur ansehen)',
   };
+  /* Rechte: Voraussetzungen (bearbeiten setzt sehen voraus) */
+  const reqOf = (k) => ((rights && rights.catalog.find((p) => p.key === k)) || { requires: [] }).requires;
+  const withReq = (set) => { let added = true; while (added) { added = false; for (const k of [...set]) for (const r of reqOf(k)) if (!set.has(r)) { set.add(r); added = true; } } return set; };
+  const dependents = (k) => rights.catalog.filter((p) => p.requires.includes(k)).map((p) => p.key);
+  function rightsMatrix() {
+    if (!rights) return '';
+    const groups = [...new Set(rights.catalog.map((p) => p.group))];
+    const cell = (r, k) => `<td class="rm-c"><input type="checkbox" data-rm-role="${r}" data-rm-key="${esc(k)}"${rights.roles[r].includes(k) ? ' checked' : ''} aria-label="${esc(ROLE_LABEL[r])}: ${esc(rights.catalog.find((p) => p.key === k).label)}"></td>`;
+    const lock = '<td class="rm-c"><span class="rm-lock" title="Administratoren haben immer alle Rechte">✓</span></td>';
+    return `<section class="gcard rm-card" id="rm-card"><div class="rm-head"><div><h3 class="sec-h">Rollen und Rechte</h3><p class="hint">Was jede Rolle sehen und tun darf. Einzelnen Nutzern geben oder entziehen Sie Rechte zusätzlich in „Bearbeiten“. Wer etwas bearbeiten darf, darf es auch sehen.</p></div>
+        ${rights.updatedAt ? `<span class="sub">Geändert ${esc(dateTime(rights.updatedAt))}${rights.updatedBy ? ' von ' + esc(rights.updatedBy) : ''}</span>` : ''}</div>
+      <div class="rm-wrap"><table class="etab rmtab"><thead><tr><th>Recht</th>${[['viewer', 'Lesen'], ['editor', 'Bearb.'], ['admin', 'Admin']].map(([r, k]) => `<th class="rm-c"><span class="rm-ll">${esc(ROLE_LABEL[r])}</span><abbr class="rm-ls" title="${esc(ROLE_LABEL[r])}">${k}</abbr></th>`).join('')}</tr></thead><tbody>
+        ${groups.map((g) => `<tr class="rm-g"><th colspan="4">${esc(g)}</th></tr>${rights.catalog.filter((p) => p.group === g).map((p) => `<tr><td><span class="rm-k rm-${esc(p.kind)}">${p.kind === 'sehen' ? 'sehen' : 'tun'}</span>${esc(p.label)}</td>${cell('viewer', p.key)}${cell('editor', p.key)}${lock}</tr>`).join('')}`).join('')}
+        <tr class="rm-g"><th colspan="4">Nur Administratoren</th></tr>${rights.adminOnly.map((l) => `<tr class="rm-fixed"><td><span class="rm-k rm-machen">tun</span>${esc(l)}</td><td class="rm-c">–</td><td class="rm-c">–</td>${lock}</tr>`).join('')}
+      </tbody></table></div>
+      <p class="form-err" id="rm-err" role="alert"></p>
+      <div class="sec-foot"><button type="button" class="btn ghost" data-rm="default">Standard wiederherstellen</button><button type="button" class="btn primary" data-rm="save">${icon('check', 'sm')}Rechte speichern</button></div></section>`;
+  }
+  const exceptions = (u) => (u.role === 'admin' ? '' : [u.grant.length ? `+${u.grant.length}` : '', u.deny.length ? `−${u.deny.length}` : ''].filter(Boolean).join(' / '));
   const roleBadge = (r) => `<span class="role-b r-${esc(r)}">${esc(ROLE_LABEL[r] || r)}</span>`;
   async function renderUsersView() {
     const host = $('#view-users');
     if (!users) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Nutzer werden geladen …</div>';
-    try { users = (await api('users')).users; } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    try { [users, rights] = await Promise.all([api('users').then((r) => r.users), api('rechte')]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const order = { admin: 0, editor: 1, viewer: 2 };
     const list = users.slice().sort((a, b) => (b.active - a.active) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
     const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div></td>
-        <td>${roleBadge(u.role)}</td>
+        <td>${roleBadge(u.role)}${exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
         <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
@@ -37,8 +58,25 @@
         <button type="button" class="btn primary" id="user-add">${icon('plus')}Nutzer anlegen</button>
       </div>
       <div class="gcard"><table class="etab utab"><thead><tr><th>Name / Benutzername</th><th>Rolle</th><th class="u-st">Status</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>
-      <dl class="role-legend">${['admin', 'editor', 'viewer'].map((r) => `<div><dt>${roleBadge(r)}</dt><dd>${esc(ROLE_DESC[r])}</dd></div>`).join('')}</dl>`;
+      ${rightsMatrix()}`;
   }
+  $('#view-users').addEventListener('change', (e) => {
+    const k = e.target.dataset.rmKey, r = e.target.dataset.rmRole;
+    if (!k) return;
+    const box = (key) => $(`#rm-card [data-rm-role="${r}"][data-rm-key="${CSS.escape(key)}"]`);
+    if (e.target.checked) for (const q of withReq(new Set([k]))) { const b = box(q); if (b) b.checked = true; }
+    else { const stack = [k]; while (stack.length) for (const d of dependents(stack.pop())) { const b = box(d); if (b && b.checked) { b.checked = false; stack.push(d); } } }
+  });
+  $('#view-users').addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-rm]')?.dataset.rm;
+    if (!a) return;
+    if (a === 'default') { for (const b of $$('#rm-card [data-rm-key]')) b.checked = rights.catalog.find((p) => p.key === b.dataset.rmKey).default.includes(b.dataset.rmRole); toast('Standard eingetragen – zum Übernehmen „Rechte speichern“.'); return; }
+    const roles = { viewer: [], editor: [] };
+    for (const b of $$('#rm-card [data-rm-key]:checked')) roles[b.dataset.rmRole].push(b.dataset.rmKey);
+    e.target.closest('button').disabled = true;
+    try { await api('rechte_save', { body: { roles } }); toast('Rechte gespeichert. Sie gelten ab der nächsten Aktion der Nutzer.'); renderUsersView(); }
+    catch (ex) { $('#rm-err').textContent = ex.message; e.target.closest('button').disabled = false; }
+  });
   $('#view-users').addEventListener('click', (e) => {
     if (e.target.closest('#user-add')) { openUser(null); return; }
     const tr = e.target.closest('tr[data-uid]');
@@ -54,6 +92,23 @@
     crypto.getRandomValues(a);
     return [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-').slice(0, 14);
   }
+  function userRightsRows(u, role) {
+    if (!rights || role === 'admin') return '';
+    const base = rights.roles[role] || [];
+    const val = (k) => (u && u.grant.includes(k) ? 'grant' : u && u.deny.includes(k) ? 'deny' : '');
+    return `<table class="etab urtab"><tbody>${rights.catalog.map((p) => `<tr><td>${esc(p.label)}<div class="sub">${esc(p.group)}</div></td><td><select data-ur="${esc(p.key)}" aria-label="${esc(p.label)}">
+      <option value=""${val(p.key) === '' ? ' selected' : ''}>wie Rolle (${base.includes(p.key) ? 'ja' : 'nein'})</option><option value="grant"${val(p.key) === 'grant' ? ' selected' : ''}>erlauben</option><option value="deny"${val(p.key) === 'deny' ? ' selected' : ''}>verbieten</option></select></td></tr>`).join('')}</tbody></table>`;
+  }
+  dlgUser.addEventListener('change', (e) => {
+    if (e.target.name !== 'role') return;
+    const box = $('#ur-box'); if (!box) return;
+    const u = editUid ? users.find((x) => x.id === editUid) : null;
+    box.hidden = e.target.value === 'admin';
+    if (box.hidden) return;   // Auswahl bleibt erhalten, falls wieder eine andere Rolle gewählt wird
+    const keep = {}; for (const s2 of $$('#ur-list [data-ur]')) keep[s2.dataset.ur] = s2.value;
+    $('#ur-list').innerHTML = userRightsRows(u, e.target.value);
+    for (const s2 of $$('#ur-list [data-ur]')) if (keep[s2.dataset.ur] !== undefined) s2.value = keep[s2.dataset.ur];
+  });
   function openUser(id) {
     const u = id ? users.find((x) => x.id === id) : null;
     editUid = id;
@@ -73,6 +128,9 @@
         </div>`}
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
+        <details class="span2 ur-box" id="ur-box"${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Nutzer${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
+          <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
+          <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
         ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
         <p class="form-err span2" id="user-err" role="alert"></p>
       </div>
@@ -105,6 +163,7 @@
       role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
     };
+    if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');
     btn.disabled = true;
     try {
@@ -259,6 +318,10 @@
         <p class="form-err" id="order-edit-error" role="alert"></p>
       </div>
       <div class="dlg-foot"><span class="left"><button type="button" class="btn ghost" data-order-refresh>Neu laden</button></span><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button></div></form>`;
+    if (!may('bestellungen.bearbeiten')) {   // nur ansehen
+      for (const el of $$('#order-edit-form select, #order-edit-form input, #order-edit-form textarea')) el.disabled = true;
+      for (const el of $$('#order-edit-form [type="submit"], #order-edit-form [data-order-mail]')) el.hidden = true;
+    }
     if (!d.open) d.showModal();
   }
   $('#view-orders').addEventListener('submit', (e) => { if (e.target.id !== 'orders-filter') return; e.preventDefault(); orderQuery = e.target.q.value; orderFilter = e.target.workflow.value; orderOffset = 0; renderOrdersView(); });
@@ -309,16 +372,16 @@
     const host = $('#view-kunden');
     if (!kunden) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kunden werden geladen …</div>';
     try {
-      const [r, m] = await Promise.all([api('kunden'), api('mail_status'), W.offers.length ? null : loadOffers()]);
+      const [r, m] = await Promise.all([api('kunden'), mailInfo(), W.offers.length ? null : loadOffers()]);
       kunden = r.customers; kundenRev = r.rev; mailSt = m;
     } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     host.innerHTML = `
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="k-q" type="search" autocomplete="off" placeholder="Kunden finden: Firma, Nummer, Ort, Ansprechpartner …" aria-label="Kunden suchen" value="${esc(kundenQ)}"></div>
         <span class="ed-hint" id="k-count"></span>
-        <button type="button" class="btn" id="k-mailcfg" title="E-Mail-Versand: Einstellungen, Signatur, Testmail">${icon('mail')}E-Mail${mailSt.configured ? '' : ' <span class="k-warn">nicht eingerichtet</span>'}</button>
-        <button type="button" class="btn" id="k-rund">${icon('send')}Wochenangebot versenden</button>
-        <button type="button" class="btn primary" id="k-add">${icon('plus')}Kunde anlegen</button>
+        <button type="button" class="btn" id="k-mailcfg"${isAdmin() ? '' : ' hidden'} title="E-Mail-Versand: Einstellungen, Signatur, Testmail">${icon('mail')}E-Mail${mailSt.configured ? '' : ' <span class="k-warn">nicht eingerichtet</span>'}</button>
+        ${may('wochenangebot.senden') ? `<button type="button" class="btn" id="k-rund">${icon('send')}Wochenangebot versenden</button>` : ''}
+        ${may('kunden.bearbeiten') ? `<button type="button" class="btn primary" id="k-add">${icon('plus')}Kunde anlegen</button>` : ''}
       </div>
       <div id="k-list"></div>
       <p class="hint k-note">Kunden melden sich auf der Angebotsseite über „Kunden-Login“ an und sehen nur die hier freigeschalteten Angebote. ${W.stdPublic ? 'Das Wochenangebot ist derzeit zusätzlich öffentlich ohne Anmeldung sichtbar (umstellbar unter Angebot bearbeiten → Angebote verwalten).' : 'Das Wochenangebot ist derzeit nicht öffentlich – nur freigeschaltete Kunden sehen es.'}</p>`;
@@ -432,6 +495,10 @@
         <button type="button" class="btn" data-close>Abbrechen</button>
         <button type="submit" class="btn primary">${c ? 'Speichern' : 'Kunde anlegen'}</button>
       </div>`;
+    if (!may('kunden.bearbeiten')) {   // nur ansehen
+      for (const el of $$('#kunde-body input, #kunde-body select, #kunde-body textarea')) el.disabled = true;
+      for (const el of $$('#kunde-body [type="submit"], #kunde-body [data-kact]')) el.hidden = true;
+    }
     dlgKunde.showModal();
     $('#kunde-body [name="firma"]').focus();
   }
@@ -707,7 +774,7 @@
   let rundSel = new Set(), rundBusy = false;
   const rundWhy = (c) => (!c.active ? 'Kunde inaktiv' : !c.email ? 'keine E-Mail-Adresse' : !c.login || !c.login.active ? 'kein aktiver Zugang' : !c.angebote.length ? 'kein Angebot freigeschaltet' : c.mailAngebot === false ? (c.abgemeldet ? 'hat sich vom Wochenangebot abgemeldet' : 'möchte kein Wochenangebot per E-Mail') : '');
   async function openRund() {
-    try { const [m, k] = await Promise.all([api('mail_status'), api('kunden')]); mailSt = m; kunden = k.customers; kundenRev = k.rev; } catch (ex) { toast(ex.message); return; }
+    try { const [m, k] = await Promise.all([mailInfo(), api('kunden')]); mailSt = m; kunden = k.customers; kundenRev = k.rev; } catch (ex) { toast(ex.message); return; }
     if (!mailSt.configured) { toast('Bitte zuerst das Postfach für den E-Mail-Versand einrichten.', 5000); openMailCfg(); return; }
     const w = wkCur();
     const ok = kunden.filter((c) => !rundWhy(c)), no = kunden.filter((c) => rundWhy(c));

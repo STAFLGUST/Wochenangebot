@@ -65,6 +65,7 @@ SUITES['benachrichtigung'] = SUITES['bestellung']
 SUITES['einkauf'] = SUITES['bestellung']
 SUITES['sicherheit_it'] = SUITES['bestellung']
 SUITES['versand'] = SUITES['kunden_mail']
+SUITES['rechte'] = SUITES['kunden_mail']
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 

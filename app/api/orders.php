@@ -57,7 +57,7 @@ function orders_action(string $action): bool
         $c = current_customer();
         if (!$c) fail('Bitte anmelden.', 401);
         if (!empty($c['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
-    } else $me = require_auth(in_array($action, ['bestellung_save','bestellung_mail_retry'], true), 'editor');
+    } else $me = in_array($action, ['bestellung_save', 'bestellung_mail_retry'], true) ? require_perm('bestellungen.bearbeiten', true) : require_perm('bestellungen.sehen');
     if ($action === 'bestellung_mail_retry') {
         $b = body();
         if (!is_string($b['nr'] ?? null) || !is_string($b['jobId'] ?? null) || !is_int($b['attempts'] ?? null) || ($b['confirm'] ?? false) !== true) fail('Versandauftrag und ausdrückliche Bestätigung erforderlich.', 422);

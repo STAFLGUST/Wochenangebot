@@ -46,7 +46,7 @@ switch ($action) {
         }
 
         case 'save_draft': {
-            require_auth(true, 'editor');
+            require_perm('angebot.bearbeiten', true);
             with_lock('entwurf', function () use ($CFG) {
                 $b = body();
                 $prev = store_read('entwurf');
@@ -79,7 +79,7 @@ switch ($action) {
         }
 
         case 'discard_draft': {
-            require_auth(true, 'editor');
+            require_perm('angebot.bearbeiten', true);
             with_lock('entwurf', function () use ($CFG) {
                 $dr = store_read('entwurf');
                 if (array_key_exists('revision', body()) && (int)body()['revision'] !== draft_rev($dr)) draft_conflict($dr);
@@ -90,7 +90,7 @@ switch ($action) {
         }
 
         case 'publish': {
-            require_auth(true, 'editor');
+            require_perm('angebot.veroeffentlichen', true);
             with_lock('entwurf', function () use ($CFG) {
                 $dr = store_read('entwurf');
                 if (array_key_exists('revision', body()) && (int)body()['revision'] !== draft_rev($dr)) draft_conflict($dr);
