@@ -28,9 +28,25 @@ interne Kennzeichnung, keine automatisch versandte verbindliche Auftragsbestäti
 nachträglich erfunden. Neue Vorgänge speichern die damaligen Kontaktdaten. Die bisherige stille Kürzung
 auf 5.000 Bestellungen entfällt, damit offene Vorgänge und Wiederholungskennungen nicht verloren gehen.
 
+## Stand Oktober 2026: native App begonnen
+
+Entscheidung des Inhabers: **native App für iOS und Android, für Kunden und Mitarbeiter** (Ordner `mobile/`,
+Expo/React Native, [mobile/LIESMICH.md](../mobile/LIESMICH.md)). Umgesetzt in der ersten Version:
+
+- Anmeldung über die **vorhandenen Sitzungen**; die Kennung steht in der Kopfzeile `X-WA-Sitzung` statt im Cookie
+  ([Schnittstelle für die App](app-api.md)). Damit gelten Sperren, Zwei-Faktor, Inaktivitätsfrist, Sitzungsregister und
+  Widerruf unverändert; es gibt keine neuen langlebigen Zugangsschlüssel und keine CORS-Freigabe.
+- `app_info` mit Mindestversion (Zwang zum Aktualisieren), Bestellfunktion, Wartung, Links.
+- Kunden: Angebot, Merkliste (abgeglichen), Bestellwunsch mit Fracht und `requestId`, eigene Bestellwünsche,
+  Angebot offline lesbar mit Hinweis „ohne Gewähr“, Entwurf lokal; Senden nur online, Prüfung auf dem Server.
+- Mitarbeiter: Bestellwünsche suchen und bearbeiten (Status, Zuständigkeit, Notiz, Revision).
+- Kein Over-the-Air-Update: App-Versionen nur über die Stores, Server nur über den bestehenden Release
+  (keine zweite Update-Pipeline). Store-Veröffentlichung macht der Inhaber (Konten, Signierung über EAS).
+
 ## Bewusste Grenzen und nächste App-Schritte
 
-1. PWA oder native iOS/Android-App entscheiden. Eine native App benötigt ein eigenes, geprüftes
+1. ~~PWA oder native iOS/Android-App entscheiden.~~ Entschieden: native App (siehe oben). Offen bleibt, ob Kunden
+   länger angemeldet bleiben dürfen als die Inaktivitätsfrist erlaubt. Das bräuchte ein eigenes, geprüftes
    Anmeldekonzept; vorzugsweise Authorization Code mit PKCE über den Systembrowser, einen geeigneten
    Identity-Provider und widerrufbare Gerätesitzungen. Dieser PR führt keine selbstgebauten langlebigen
    Zugriffstokens ein und öffnet CORS nicht pauschal. Die vorhandene Cookie-/CSRF-Anmeldung bleibt erhalten.
@@ -45,7 +61,7 @@ auf 5.000 Bestellungen entfällt, damit offene Vorgänge und Wiederholungskennun
 5. Bei wachsender Bestellmenge auf Einzeldatensätze/SQL-Indizes umstellen. Der aktuelle SQLite-Adapter
    speichert weiterhin JSON-Dokumente; Pagination begrenzt Antworten, nicht die intern eingelesene Liste.
    Aufbewahrung und Archivierung fachlich festlegen, statt alte Bestellungen still zu löschen.
-6. Push-Mitteilungen, App-Store-Veröffentlichung, gerätesichere Zugangsspeicherung, Barrierefreiheit und
+6. Push-Mitteilungen (z. B. „neues Wochenangebot“, „Bestellwunsch eingegangen“), App-Store-Veröffentlichung, gerätesichere Zugangsspeicherung, Barrierefreiheit und
    Betriebsüberwachung separat planen. Kein App-Deployment oder Produktionsumbau in diesem PR.
 
 Orientierung: [OWASP – Zugriff auf einzelne API-Objekte](https://api-security.owasp.org/editions/2023/en/0xa1-broken-object-level-authorization/)

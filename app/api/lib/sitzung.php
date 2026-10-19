@@ -5,13 +5,35 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* ---------------- Sitzung ---------------- */
 
+/* App-Zugriff (docs/app-api.md): Die App sendet „X-WA-Client: app“ und trägt die Sitzungskennung in der Kopfzeile
+   „X-WA-Sitzung“ statt in einem Cookie; jede Antwort nennt die aktuelle Kennung (nach der Anmeldung neu vergeben,
+   nach dem Abmelden leer). Es sind dieselben Sitzungen wie im Browser: gleiche Anmeldung, Zwei-Faktor, Sperren,
+   CSRF-Prüfung, Abmeldung nach Inaktivität und Widerruf durch Administratoren – kein zusätzlicher Zugangsschlüssel.
+   Fremde Webseiten können diese Kopfzeilen nicht setzen (keine CORS-Freigabe). */
+function app_client(): bool { return strtolower(trim((string)($_SERVER['HTTP_X_WA_CLIENT'] ?? ''))) === 'app'; }
+$APP_SITZUNG = false;
+function app_session_header(): void
+{
+    global $APP_SITZUNG;
+    if (!$APP_SITZUNG || headers_sent()) return;
+    header('X-WA-Sitzung: ' . (session_status() === PHP_SESSION_ACTIVE ? session_id() : ''));
+    header('Cache-Control: no-store');
+}
+
 function start_session(): void
 {
-    global $CFG;
+    global $CFG, $APP_SITZUNG;
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $https = is_https();
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
+    if (app_client()) {
+        // Kennung nur aus der Kopfzeile; unbekannte Kennungen verwirft PHP (strict mode) und vergibt eine neue
+        ini_set('session.use_cookies', '0');
+        $sid = (string)($_SERVER['HTTP_X_WA_SITZUNG'] ?? '');
+        if (preg_match('/^[A-Za-z0-9,-]{22,256}$/D', $sid)) session_id($sid);
+        $APP_SITZUNG = true;
+    }
     session_name('WA_ADMIN');
     session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Strict']);
     session_start();

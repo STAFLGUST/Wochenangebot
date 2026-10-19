@@ -1,6 +1,7 @@
 # Wochenangebot – angebot-stafl.de
 
 - `app/` – Website, Eingabebereich (`/admin/`) und PHP-API
+- `mobile/` – App für iOS und Android (Kunden und Mitarbeiter), siehe `mobile/LIESMICH.md`; Schnittstelle: `docs/app-api.md`
 - `Caddyfile`, `docker-compose.yml` – Webserver mit automatischem HTTPS und IP-Freigabe
 - `deploy/` – automatische Aktualisierung auf dem Server
 
