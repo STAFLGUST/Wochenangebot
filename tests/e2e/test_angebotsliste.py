@@ -70,7 +70,9 @@ with sync_playwright() as pw:
     pg.select_option('#sort', 'offer-asc'); pg.wait_for_selector('.al-st')
     # Tabelle und Karten über die Auswahl, per Link wiederherstellbar
     pg.click('#modebar [data-mode=liste]'); pg.wait_for_selector('table.grid')
-    check('note also in the order/list view', pg.locator('#list .list-note').count() == 1)
+    check('note also in the order view', pg.locator('#list .list-note').count() == 1)
+    check('switch: "Bestellansicht", prominent and active state filled', 'Bestellansicht' in pg.inner_text('#modebar') and pg.evaluate("getComputedStyle(document.querySelector('#modebar [aria-checked=true]')).backgroundColor") not in ('rgba(0, 0, 0, 0)', 'rgb(255, 255, 255)'))
+    check('order view without ordering explains why', pg.is_visible('#order-hint') and len(pg.inner_text('#order-hint')) > 20)
     check('table view still available', pg.is_visible('table.grid thead') and not pg.is_visible('.al') and 'ansicht=tabelle' in pg.url)
     p2 = br.new_page(viewport={'width': 1440, 'height': 900}); p2.goto(pg.url); p2.wait_for_selector('table.grid tr.row')
     check('link keeps the table view', p2.get_attribute('.seg [data-view=table]', 'aria-pressed') == 'true'); p2.close()

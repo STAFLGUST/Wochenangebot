@@ -30,7 +30,7 @@ switch ($action) {
             $published = store_read('angebot');
             if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
             if ($oid === OFFER_STD && std_public()) {
-                $etag = '"' . hash('sha256', json_encode($published) . ':std') . '"';
+                $etag = '"' . hash('sha256', json_encode($published) . json_encode(fracht_public()) . ':std:2') . '"';   // Hinweis/Fracht gehören zur Antwort
                 header('ETag: ' . $etag);
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
             }

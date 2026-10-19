@@ -112,7 +112,18 @@ A.call('fracht_save', {'aktiv': False, 'staffeln': [{'unter': 100, 'kosten': 20.
 code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'qty': 1}]})
 check('freight rule off: nothing added, note without minimum', code == 200 and r['fracht']['kosten'] == 0 and r['fracht']['frei'] is None and 'Mindestbestellmenge' not in str(K.call('offer&angebot=edeka')[1]['fracht']['hinweis']))
 check('freight change logged', 'Fracht und Hinweis im Angebot geändert' in str(A.call('log')[1].get('entries')))
+import urllib.request as _ur
+def _pub_offer(etag=None):
+    rq = _ur.Request(B + '/api/?action=offer', headers={'If-None-Match': etag} if etag else {})
+    try:
+        r = _ur.urlopen(rq); return r.status, r.headers.get('ETag'), json.loads(r.read())
+    except Exception as ex:
+        return getattr(ex, 'code', 0), None, None
+st0, et0, _ = _pub_offer()
+check('public offer cached via ETag (unchanged → 304)', st0 == 200 and et0 and _pub_offer(et0)[0] == 304)
 A.call('fracht_save', {'aktiv': True, 'staffeln': [{'unter': 300, 'kosten': 30}, {'unter': 200, 'kosten': 35}], 'zusatz': ''})
+st1, et1, body1 = _pub_offer(et0)
+check('changing freight/note invalidates the cached offer (browser gets the new note)', st1 == 200 and et1 != et0 and any('35 €' in l for l in body1['fracht']['hinweis']), (st1, et0, et1))
 A.call('bestell_settings_save', {'enabled': True, 'to': 'bestellung@example.org', 'copy': False})
 n0 = len(smtp.messages)
 code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'qty': 2}]})
@@ -136,15 +147,18 @@ with sync_playwright() as p:
     # öffentlich: keine Mengen
     pub = br.new_page(); pub.goto(B + '/'); pub.wait_for_selector('tr.row')
     check('public page: no quantity column', pub.locator('.qty').count() == 0 and pub.locator('#orderbar').is_hidden())
+    check('public page: note under the offer', 'Mindestbestellmenge' in pub.inner_text('.al-note'))
+    pub.click('#modebar [data-mode=liste]'); pub.wait_for_selector('table.grid tr.row')
+    check('public order view: explains login, offers login button', 'als Kunde anmelden' in pub.inner_text('#order-hint') and pub.locator('#order-hint [data-kact=login]').count() == 1 and 'Mindestbestellmenge' in pub.inner_text('.list-note'))
     ctx = br.new_context(viewport={'width': 1360, 'height': 900}); c = ctx.new_page(); errs = []
     c.on('pageerror', lambda e: errs.append(str(e))); c.on('dialog', lambda dlg: dlg.accept())
     c.goto(B + '/'); c.wait_for_selector('#btn-kunde-login'); c.click('#btn-kunde-login')
     c.fill('#kl-form [name=username]', 'kantine.sued'); c.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); c.click('#kl-form [type=submit]')
     c.wait_for_url(re.compile(r'angebot=edeka')); c.wait_for_selector('.al tr.row')
     check('customer: offer view first, without quantity inputs', c.locator('.al').count() == 1 and c.locator('#list .qty').count() == 0 and c.get_attribute('#modebar [data-mode=angebot]', 'aria-checked') == 'true')
-    check('switch names the order view', 'Bestellansicht' in c.inner_text('#modebar'))
+    check('switch names the order view', 'Bestellansicht' in c.inner_text('#modebar') and 'Mengen eintragen' in c.inner_text('#modebar'))
     c.click('#modebar [data-mode=liste]'); c.wait_for_selector('tr.row .qty')
-    check('customer: order view with quantity column', 'Menge kg' in c.inner_text('thead') and c.locator('tr.row .qty').count() > 10)
+    check('customer: order view with quantity column, no hint', 'Menge kg' in c.inner_text('thead') and c.locator('tr.row .qty').count() > 10 and c.locator('#order-hint').is_hidden())
     q1 = c.locator(f'#list .qty[data-qty="{I1["id"]}"]')
     q1.click(); c.wait_for_timeout(250)
     check('clicking the quantity field does not open the article details', c.locator('#dlg-detail[open]').count() == 0)
@@ -233,9 +247,10 @@ with sync_playwright() as p:
     a.click('#ml-fracht [type=submit]'); a.wait_for_selector('#ml-fracht .fr-prev:not(:has-text("unter 100 kg"))')
     check('freight card: tier removed', [x['unter'] for x in A.call('mail_status')[1]['fracht']['staffeln']] == [300, 200])
     # Mitarbeiter und Kunde im selben Browser: Startseite führt trotzdem zum Kundenangebot mit Mengen
-    a.goto(B + '/'); a.wait_for_selector('tr.row')
+    a.goto(B + '/#ansicht=tabelle'); a.wait_for_selector('table.grid tr.row')
+    check('staff order view: says only customers can order', 'Mitarbeiter-Ansicht' in a.inner_text('#order-hint'))
     a.click('#btn-kunde-login'); a.fill('#kl-form [name=username]', 'kantine.sued'); a.fill('#kl-form [name=password]', 'Kantine-Kennwort-5'); a.click('#kl-form [type=submit]')
-    a.wait_for_url(re.compile(r'angebot=edeka')); a.wait_for_selector('.al tr.row'); a.click('#modebar [data-mode=liste]'); a.wait_for_selector('tr.row .qty')
+    a.wait_for_url(re.compile(r'angebot=edeka')); a.wait_for_selector('tr.row .qty')   # Ansicht (Bestellansicht) bleibt beim Wechsel erhalten
     check('staff + customer in one browser: own offer with quantities', a.locator('tr.row .qty').count() > 10)
     a.goto(B + '/?angebot=bela'); a.wait_for_selector('tr.row')
     check('staff + customer: explicitly linked foreign offer stays, hint + switch, no quantities', 'nicht für Sie freigeschaltet' in a.inner_text('#preview-banner') and a.locator('.qty').count() == 0 and a.locator('#preview-banner [data-kswitch=edeka]').count() == 1)

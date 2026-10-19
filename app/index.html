@@ -8,7 +8,7 @@
 <title>Wochenangebot</title>
 <script src="assets/theme.js?v=4e171a7cc8"></script>
 <link rel="preload" href="assets/logo-standard-fleisch.png" as="image">
-<link rel="stylesheet" href="assets/app.css?v=49342eac50">
+<link rel="stylesheet" href="assets/app.css?v=e35fe09608">
 </head>
 <body>
 <a class="skip" href="#list">Zum Angebot springen</a>
@@ -66,6 +66,10 @@
 <div class="banner" id="preview-banner" hidden></div>
 
 <main class="page" id="main">
+  <div class="modebar" id="modebar" role="radiogroup" aria-label="Ansicht wählen">
+    <button type="button" role="radio" data-mode="angebot" aria-checked="true"><svg class="i" aria-hidden="true"><use href="#i-cols"/></svg><span><strong>Angebotsansicht</strong><small>Übersicht wie die gedruckte Liste</small></span></button>
+    <button type="button" role="radio" data-mode="liste" aria-checked="false"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span><strong>Bestellansicht</strong><small id="mode-liste-sub">Tabelle mit Mengen zum Bestellen</small></span></button>
+  </div>
   <nav class="quicknav" id="quicknav" aria-label="Schnellnavigation nach Fleischart"></nav>
 
   <div class="layout">
@@ -83,10 +87,7 @@
     </aside>
 
     <section class="results" aria-label="Artikel">
-      <div class="modebar" id="modebar" role="radiogroup" aria-label="Ansicht">
-        <button type="button" role="radio" data-mode="angebot" aria-checked="true"><svg class="i" aria-hidden="true"><use href="#i-cols"/></svg><span><strong>Angebotsansicht</strong><small>Übersicht wie die gedruckte Liste</small></span></button>
-        <button type="button" role="radio" data-mode="liste" aria-checked="false"><svg class="i" aria-hidden="true"><use href="#i-rows"/></svg><span><strong id="mode-liste-lbl">Listenansicht</strong><small id="mode-liste-sub">Tabelle mit Filterspalten</small></span></button>
-      </div>
+      <div class="order-hint" id="order-hint" role="status" hidden></div>
       <div class="toolbar">
         <div class="tabs" role="tablist" aria-label="Ansicht wählen">
           <button role="tab" type="button" id="tab-all" aria-selected="true" aria-controls="list">Alle Artikel</button>
@@ -245,6 +246,6 @@
 </svg>
 
 <script src="assets/offer-core.js?v=06678349ba"></script>
-<script src="assets/frontend.js?v=eca2dfd52f"></script>
+<script src="assets/frontend.js?v=6fb058225e"></script>
 </body>
 </html>

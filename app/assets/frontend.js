@@ -650,12 +650,29 @@ function render() {
   for (const b of $$('.seg button')) b.setAttribute('aria-pressed', b.dataset.view === state.view);
   for (const b of $$('#modebar [data-mode]')) b.setAttribute('aria-checked', String((b.dataset.mode === 'angebot') === (state.view === 'liste')));
   $('#view-seg').hidden = state.view === 'liste';
+  renderOrderHint();
   document.body.classList.toggle('mode-angebot', state.view === 'liste');
   $('#tab-all').setAttribute('aria-selected', state.tab === 'all');
   $('#tab-fav').setAttribute('aria-selected', state.tab === 'fav');
   $('#q-clear').hidden = !state.q;
   $('#q-kbd').hidden = !!state.q;
   syncUrl();
+}
+
+/* Bestellansicht ohne Mengen-Spalte: sagen, warum und wie es geht */
+function renderOrderHint() {
+  const h = $('#order-hint');
+  if (!h) return;
+  let msg = '';
+  if (state.view !== 'liste' && !KORDER && !PREVIEW) {
+    if (KUNDE && KUNDE.mustChange) msg = 'Bitte legen Sie zuerst ein eigenes Passwort fest – danach können Sie hier Mengen eintragen und Bestellwünsche senden.';
+    else if (KUNDE && !KBESTELLFKT) msg = 'Bestellwünsche über das Portal sind derzeit nicht möglich. Bitte wenden Sie sich direkt an uns.';
+    else if (KUNDE) msg = 'Für dieses Angebot können Sie keinen Bestellwunsch senden. Bitte wechseln Sie zu Ihrem Angebot.';
+    else if (KSTAFF) msg = `Mitarbeiter-Ansicht: Mengen eintragen und Bestellwünsche senden können nur angemeldete Kunden.${KBESTELLFKT ? '' : ' Die Bestellfunktion ist ausgeschaltet oder noch nicht eingerichtet (Eingabebereich → Verwaltung → E-Mail → „Bestellwünsche aus dem Portal“).'}`;
+    else msg = KBESTELLFKT ? 'Zum Bestellen bitte als Kunde anmelden – danach tragen Sie hier die Mengen ein und senden Ihren Bestellwunsch.' : 'Diese Liste zeigt alle Artikel mit Filterspalten. Bestellwünsche nehmen wir telefonisch oder per E-Mail entgegen.';
+  }
+  h.hidden = !msg;
+  h.innerHTML = msg ? `${icon('info')}<span>${esc(msg)}</span>${!KUNDE && !KSTAFF && KBESTELLFKT ? '<button type="button" class="btn primary sm" data-kact="login">Kunden-Login</button>' : ''}` : '';
 }
 
 /* ---------- Merkliste ---------- */
@@ -1500,7 +1517,7 @@ document.addEventListener('click', (e) => {
 /* ---------- Kunden-Anmeldung ----------
    Kunden melden sich mit Benutzerkennung und Passwort an und sehen nur die für sie freigeschalteten Angebote.
    Die Prüfung erfolgt auf dem Server; hier wird nur die Oberfläche gesteuert. */
-let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true, KWARTUNG = null;
+let KUNDE = null, KCSRF = '', KSTAFF = false, KSTDPUB = true, KWARTUNG = null, KBESTELLFKT = false;
 async function kundeApi(action, body) {
   let res, data = null;
   try {
@@ -1519,7 +1536,7 @@ function setOfferParam(id) {
 async function kundeStart() {
   let st;
   try { st = await kundeApi('kunde_status'); } catch { return; }   // ohne Antwort: wie bisher öffentlich laden
-  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false; KWARTUNG = st.wartung || null;
+  KSTAFF = !!st.staff; KSTDPUB = st.stdPublic !== false; KWARTUNG = st.wartung || null; KBESTELLFKT = !!st.bestellfunktion;
   document.body.classList.toggle('is-test', !!st.testumgebung);   // Kennzeichen „Testumgebung“
   KUNDE = st.kunde || null; KCSRF = st.csrf || '';
   KORDER = !!(KUNDE && st.bestellung && !KUNDE.mustChange && !PREVIEW);
@@ -1752,7 +1769,7 @@ function renderWartung(w) {
     return;
   }
   readUrl();
-  if (KORDER) { if (!KUNDE.angebote.some((o) => o.id === (OFFER || 'std')) && !(KSTDPUB && !OFFER)) KORDER = false; else { loadCart(); bindOrder(); document.body.classList.add('can-order'); $('#mode-liste-lbl').textContent = 'Bestellansicht'; $('#mode-liste-sub').textContent = 'Mengen eintragen und Bestellwunsch senden'; } }
+  if (KORDER) { if (!KUNDE.angebote.some((o) => o.id === (OFFER || 'std')) && !(KSTDPUB && !OFFER)) KORDER = false; else { loadCart(); bindOrder(); document.body.classList.add('can-order'); $('#mode-liste-sub').textContent = 'Mengen eintragen und Bestellwunsch senden'; } }
   renderStatic();
   bind();
   render();
