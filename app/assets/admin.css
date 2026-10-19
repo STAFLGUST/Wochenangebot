@@ -842,4 +842,4 @@ body.ro .sale-tag { cursor: default; }
 .send-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px 10px 14px; border: 1px solid var(--c-fresh); background: var(--c-fresh-bg); border-radius: var(--r-lg); font-size: 13.5px; }
 .send-in > svg.i { color: var(--c-fresh); }
 .send-in > span { flex: 1 1 260px; }
-@media (max-width: 860px) { #btn-send .lbl { display: none; } }
+@media (max-width: 1180px) { #btn-send .lbl { display: none; } }
