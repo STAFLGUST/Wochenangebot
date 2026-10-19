@@ -403,7 +403,7 @@
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !['orders', 'kunden', 'mail', 'users', 'log', 'sec'].some(viewAllowed);
+    $('#side-admin').hidden = !['kunden', 'mail', 'users', 'log', 'sec'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!viewAllowed(currentView)) setView('edit');
   }
