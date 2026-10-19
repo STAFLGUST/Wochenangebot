@@ -395,6 +395,8 @@
     $('#vt-mail').hidden = !can('admin');
     $('#vt-log').hidden = !can('admin');
     $('#vt-sec').hidden = !can('admin');
+    $('#btn-send').hidden = !can('admin');
+    if (!can('admin')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !can('admin');
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!can('admin') && ADMIN_VIEWS.includes(currentView)) setView('edit');
@@ -1559,6 +1561,7 @@
       renderAll();
       setSaveState('clean');
       toast(`Veröffentlicht: KW ${model.meta.week}/${model.meta.year} ist jetzt online (${dateTime(r.publishedAt)} Uhr).`, 6000);
+      showSendHint(model.meta.week, model.meta.year);
     } catch (ex) {
       let msg = ex.message;
       if (ex.status === 409) {
@@ -1678,6 +1681,20 @@
 
   $('#btn-undo').addEventListener('click', undo);
   $('#btn-import').addEventListener('click', pickFile);
+  /* Versand an Kunden: Knopf oben und Hinweis direkt nach dem Veröffentlichen (an jedem Tag möglich) */
+  function showSendHint(week, year) {
+    const h = $('#send-hint');
+    if (!can('admin')) { h.hidden = true; return; }
+    h.innerHTML = `<div class="send-in">${icon('check', 'sm')}<span><strong>KW ${esc(week)}/${esc(year)} ist online.</strong> Jetzt per E-Mail an Ihre Kunden senden?</span><button type="button" class="btn sm primary" data-send="open">${icon('mail', 'sm')}An Kunden senden</button><button type="button" class="btn sm ghost icon" data-send="close" aria-label="Hinweis schließen">${icon('x', 'sm')}</button></div>`;
+    h.hidden = false;
+  }
+  const openSend = () => { if (window.WA.openRund) window.WA.openRund(); };
+  $('#btn-send').addEventListener('click', openSend);
+  $('#send-hint').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-send]')?.dataset.send;
+    if (a === 'close') $('#send-hint').hidden = true;
+    if (a === 'open') { $('#send-hint').hidden = true; openSend(); }
+  });
   $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
   $('#btn-add-group').addEventListener('click', addGroup);
   $('#btn-preview').addEventListener('click', async () => {

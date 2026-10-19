@@ -1330,5 +1330,6 @@
     } catch (ex) { $('#sec-err').textContent = ex.message; }
   });
 
+  W.openRund = openRund;
   W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, mail: renderMailView, log: renderLogView, sec: renderSecView };
 })();

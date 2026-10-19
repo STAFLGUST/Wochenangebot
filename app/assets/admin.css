@@ -836,3 +836,10 @@ body.ro .sale-tag { cursor: default; }
 @media (max-width: 960px) { .sec-two { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 560px) { .cftab th:nth-child(4), .cftab td:nth-child(4) { display: none; } .sec-nav { position: static; } }
 @media (max-width: 860px) { .cftab th:nth-child(3), .cftab td:nth-child(3), .dg-res .sectab td:nth-child(3) { display: table-cell; } }
+
+/* Hinweis nach dem Veröffentlichen: an Kunden senden */
+.send-hint { margin: 0 0 12px; }
+.send-in { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px 10px 14px; border: 1px solid var(--c-fresh); background: var(--c-fresh-bg); border-radius: var(--r-lg); font-size: 13.5px; }
+.send-in > svg.i { color: var(--c-fresh); }
+.send-in > span { flex: 1 1 260px; }
+@media (max-width: 860px) { #btn-send .lbl { display: none; } }

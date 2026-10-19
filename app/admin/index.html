@@ -8,7 +8,7 @@
 <title>Wochenangebot · Eingabebereich</title>
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=4c06be08ed">
-<link rel="stylesheet" href="../assets/admin.css?v=3060995fb4">
+<link rel="stylesheet" href="../assets/admin.css?v=e4ffeeae75">
 </head>
 <body class="adm">
 
@@ -43,6 +43,7 @@
         <button class="btn ghost" type="button" id="btn-import"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="lbl">Excel importieren</span></button>
         <a class="btn ghost" id="btn-site" href="../" target="_blank" rel="noopener" title="Öffentliche Angebotsseite in neuem Tab öffnen (veröffentlichter Stand)"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="lbl">Angebotsseite</span></a>
         <button class="btn ghost" type="button" id="btn-preview" title="Entwurf so ansehen, wie er nach dem Veröffentlichen aussieht"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
+        <button class="btn" type="button" id="btn-send" hidden title="Veröffentlichtes Wochenangebot per E-Mail an Kunden senden – an jedem Tag möglich"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">An Kunden senden</span></button>
         <button class="btn primary" type="button" id="btn-publish"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg><span class="lbl">Veröffentlichen</span></button>
         <div class="menu-wrap">
           <button class="btn icon ghost" id="btn-more" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Weitere Aktionen"><svg class="i" aria-hidden="true"><use href="#i-more"/></svg></button>
@@ -94,6 +95,7 @@
       <div class="meta-info" id="m-info"></div>
     </section>
 
+    <section class="send-hint" id="send-hint" role="status" hidden></section>
     <section class="changes" id="changes" aria-live="polite"></section>
 
     <section class="offer-bar" id="offer-bar" aria-label="Angebot für die Preiseingabe" hidden></section>
@@ -234,7 +236,7 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=7b3e5ace81"></script>
-<script src="../assets/admin.js?v=fe818078b7"></script>
-<script src="../assets/admin-verwaltung.js?v=53bc5db625"></script>
+<script src="../assets/admin.js?v=0c8e1365f2"></script>
+<script src="../assets/admin-verwaltung.js?v=60824e39f7"></script>
 </body>
 </html>
