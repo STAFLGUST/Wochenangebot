@@ -14,8 +14,49 @@ switch ($action) {
             respond(['ok' => true, 'configured' => (bool)$m && (bool)mail_base_url(), 'baseUrl' => mail_base_url(),
                      'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== '', 'passError' => $m['passError'], 'source' => $m['source']] : null,
                      'account' => ($a = mail_account()) ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '', 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null,
-                     'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'orders' => order_settings(), 'sodium' => function_exists('sodium_crypto_secretbox'),
+                     'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'orders' => order_settings(), 'notify' => notify_view(), 'sodium' => function_exists('sodium_crypto_secretbox'),
                      'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last), 'testumgebung' => testumgebung()]);
+        }
+
+        /* Benachrichtigungen an Mitarbeiter: je Ereignis an/aus und Empfänger (Administrator, mit Passwortbestätigung) */
+        case 'benachrichtigung_save': {
+            $me = require_admin_confirmation();
+            $in = body()['events'] ?? null;
+            if (!is_array($in)) fail('Ungültige Anfrage.', 422);
+            $old = notify_settings()['events'];
+            $new = []; $ch = [];
+            foreach (NOTIFY_EVENTS as $k => $def) {
+                $e = $in[$k] ?? null;
+                if (!is_array($e)) { $new[$k] = $old[$k]; continue; }
+                $to = notify_parse_to($e['to'] ?? '', $def['label']);
+                $on = $def['fest'] ? $old[$k]['on'] : !empty($e['on']);
+                if ($def['fest'] && $on && !$to) fail('Die Bestellfunktion ist eingeschaltet – für neue Bestellwünsche wird mindestens eine Adresse gebraucht.', 422);
+                if (!$def['fest'] && empty($def['ersatz']) && $on && !$to) fail("„{$def['label']}“: Bitte mindestens eine Adresse angeben oder die Benachrichtigung ausschalten.", 422);
+                $new[$k] = ['on' => $on, 'to' => $to];
+                if ($old[$k]['on'] !== $on) $ch[] = ['k' => "notify|{$k}|on", 'code' => '', 'name' => $def['label'], 'f' => 'Benachrichtigung', 'from' => $old[$k]['on'] ? 'an' : 'aus', 'to' => $on ? 'an' : 'aus'];
+                if (implode(', ', $old[$k]['to']) !== implode(', ', $to)) $ch[] = ['k' => "notify|{$k}|to", 'code' => '', 'name' => $def['label'], 'f' => 'Empfänger', 'from' => implode(', ', $old[$k]['to']), 'to' => implode(', ', $to)];
+            }
+            if ($new['bestellung']['to'] !== $old['bestellung']['to']) {   // Empfänger der Bestellwünsche liegen bei der Bestellfunktion
+                $o = store_read('bestellung');
+                $o = is_array($o) ? $o : [];
+                $o['to'] = $new['bestellung']['to']; $o['updatedAt'] = now(); $o['updatedBy'] = $me['name'];
+                store_write('bestellung', $o);
+            }
+            $ev = [];
+            foreach ($new as $k => $e) if (!NOTIFY_EVENTS[$k]['fest']) $ev[$k] = $e;
+            store_write('benachrichtigungen', ['events' => $ev, 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+            if ($ch) audit('mail', 'Benachrichtigungen geändert', $ch);
+            respond(['ok' => true, 'notify' => notify_view(), 'orders' => order_settings(), 'active' => order_enabled()]);
+        }
+        case 'benachrichtigung_test': {
+            $me = require_auth(true, 'admin');
+            $ev = (string)(body()['event'] ?? '');
+            if (!isset(NOTIFY_EVENTS[$ev])) fail('Unbekanntes Ereignis.', 422);
+            require_mail();
+            $to = notify_targets($ev, true);
+            if (!$to) fail('Für dieses Ereignis sind noch keine Empfänger gespeichert.', 422);
+            $items = [['ev' => $ev, 'title' => 'Test: ' . NOTIFY_EVENTS[$ev]['label'], 'facts' => [['Ausgelöst von', $me['name']]], 't' => now()]];
+            respond(['ok' => true, 'results' => notify_send($ev, $to, $items, 0, true, $me['name'])]);
         }
 
         /* Testumgebung: abgelegte E-Mails ansehen (Administrator) */

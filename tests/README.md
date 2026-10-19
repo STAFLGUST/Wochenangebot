@@ -42,6 +42,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | restposten | 52 | Sonderposten (Sonderpreis je Angebot, statt-Preis, automatisch ausgeblendet ohne Bestand), Ausblenden im Wochenangebot, rotes Kein-Bestand-Zeichen, Kurzes-MHD-Liste, Sonderposten-Mail nur an Kunden des jeweiligen Angebots, Angebotsseite |
 | gemeinsam | 34 | Mehrere Bearbeiter gleichzeitig: Revisionen, 409 mit Namen, Anwesenheit, Hintergrundabfragen verlängern keine Sitzung, Abgleich in der Oberfläche, angefangene Eingaben bleiben, Veröffentlichen mit Konflikt |
 | wartung | 25 | Wartungsmodus (Rechte, Sperre der Kundenfunktionen, Mitarbeiter arbeiten weiter, Abmeldelinks frei, Protokoll, Oberfläche) und erweiterte Übersicht |
+| benachrichtigung | 54 | Benachrichtigungen: nur Administrator, Prüfung der Adressen, Sicherheitsereignis mit Wer/IP, Bündelung mit Zähler, Anmeldesperre, Abmeldehinweis an eingestellte bzw. Antwortadresse, ausgeschaltet = keine E-Mail, Test-Knopf, Oberfläche |
 | order_management | 41 | Bestellverwaltung (API): Rechte, Statusübergänge, Revision, Kundenansicht ohne interne Felder („Bestätigt“ erscheint Kunden als „In Bearbeitung“), Wiederholungsschutz per requestId, Mailausfall |
 | order_management_ui | 10 | Bestellverwaltung im Eingabebereich und „Meine Bestellwünsche“ für Kunden (inkl. Mobil, sichere Darstellung) |
 | order_outbox | 40 | Dauerhafte Versandaufträge, Teilfehler, SMTP-Ausfall, verlorene Bestätigung, Sperren, Rechte und gezielter Neuversand |

@@ -227,7 +227,7 @@
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
   let kunden = null, kundenRev = 0, kundenQ = '', mailSt = null;
-  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch' };
+  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
   const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
@@ -487,14 +487,14 @@
         <h3 class="sec-h">Bestellwünsche aus dem Portal</h3>
         <label class="check"><input type="checkbox" name="enabled"${m.orders.enabled ? ' checked' : ''}> Angemeldete Kunden können im Portal Mengen eingeben und einen Bestellwunsch senden</label>
         <div class="sec-rows ml-orows">
-          <label class="fld span2"><span>Bestellwünsche senden an</span><input name="to" value="${esc(m.orders.to.join(', '))}" maxlength="500" autocapitalize="none" spellcheck="false" placeholder="z. B. bestellung@standard-fleisch.de, verkauf@standard-fleisch.de">
-            <small>Eine oder mehrere Adressen (mit Komma getrennt, höchstens 5). Die E-Mail enthält Kundendaten, Positionen mit den Preisen des Kunden und die Summe; „Antworten“ geht direkt an den Kunden.</small></label>
+          <p class="span2 ml-oto">Bestellwünsche gehen an: <strong>${m.orders.to.length ? esc(m.orders.to.join(', ')) : 'noch keine Adresse'}</strong> <span class="sub">– einstellbar unten unter „Benachrichtigungen“.</span></p>
           <label class="check span2"><input type="checkbox" name="copy"${m.orders.copy ? ' checked' : ''}> Kunde erhält eine Eingangsbestätigung mit allen Positionen an seine E-Mail-Adresse</label>
         </div>
         ${m.orders.enabled && !m.configured ? '<p class="st-warn ml-ohint">Aktiv wird die Bestellfunktion erst, wenn oben das Postfach für den Versand eingerichtet ist.</p>' : ''}
         <p class="form-err" id="ml-oerr" role="alert"></p>
         <div class="sec-foot"><button type="submit" class="btn">${icon('check', 'sm')}Speichern</button></div>
       </form>
+      ${notifyCard(m)}
       <div class="gcard sec-form">
         <h3 class="sec-h">Signatur</h3>
         <label class="fld"><span>Erscheint unter jeder E-Mail</span><textarea id="ml-sig" rows="5" maxlength="600" placeholder="Mit freundlichen Grüßen&#10;Standard-Fleisch …&#10;Anschrift, Telefon">${esc(m.signature)}</textarea>
@@ -511,6 +511,25 @@
         ${log.length ? `<div class="ml-logwrap"><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sec-empty">Noch keine E-Mails versendet.</p>'}
       </div>`;
     if (m.testumgebung) renderTestpost();
+  }
+  /* Benachrichtigungen an Mitarbeiter: je Ereignis an/aus und Empfänger */
+  function notifyCard(m) {
+    const n = m.notify;
+    if (!n) return '';
+    return `<form class="gcard sec-form" id="ml-notify" autocomplete="off">
+        <h3 class="sec-h">Benachrichtigungen</h3>
+        <p class="hint">Wer bekommt bei welchem Ereignis eine E-Mail? Je Ereignis höchstens ${n.max} Adressen, mit Komma getrennt.</p>
+        <div class="nt-list">${n.events.map((e) => `<div class="nt-row" data-ev="${esc(e.key)}">
+          <div class="nt-what">
+            ${e.fest ? `<span class="nt-fix${e.on ? ' on' : ''}">${e.on ? 'an' : 'aus'}</span>` : `<label class="nt-sw"><input type="checkbox" name="on-${esc(e.key)}"${e.on ? ' checked' : ''} aria-label="${esc(e.label)} an"><span>${e.on ? 'an' : 'aus'}</span></label>`}
+            <div><strong>${esc(e.label)}</strong><small>${esc(e.text)}${e.fest ? ' An, solange die Bestellfunktion oben eingeschaltet ist.' : ''}</small></div>
+          </div>
+          <label class="fld nt-to"><span>Empfänger</span><input name="to-${esc(e.key)}" value="${esc(e.to.join(', '))}" maxlength="500" autocapitalize="none" spellcheck="false" placeholder="${e.ersatz !== null ? (e.ersatz ? 'leer = ' + esc(e.ersatz) + ' (Antwortadresse)' : 'leer = Antwortadresse des Postfachs') : 'z. B. it@standard-fleisch.de'}"></label>
+          <button type="button" class="btn sm" data-ml="ntest" data-ev="${esc(e.key)}"${m.configured && (e.to.length || e.ersatz) ? '' : ' disabled'} title="${m.configured ? (e.to.length || e.ersatz ? 'Test-E-Mail an die gespeicherten Empfänger' : 'Erst Empfänger speichern') : 'Erst das Postfach einrichten'}">${icon('send', 'sm')}Test</button>
+        </div>`).join('')}</div>
+        <p class="form-err" id="ml-nerr" role="alert"></p>
+        <div class="sec-foot"><span class="sub">${n.updatedAt ? `Geändert ${esc(dateTime(n.updatedAt))}${n.updatedBy ? ' von ' + esc(n.updatedBy) : ''}` : ''}</span><button type="submit" class="btn">${icon('check', 'sm')}Speichern</button></div>
+      </form>`;
   }
   async function renderTestpost() {
     const host = $('#ml-tp-list');
@@ -529,6 +548,7 @@
     } catch (ex) { toast(ex.message); }
   });
   $('#view-mail').addEventListener('change', (e) => {
+    if (e.target.name && e.target.name.startsWith('on-')) { const s = e.target.nextElementSibling; if (s) s.textContent = e.target.checked ? 'an' : 'aus'; }
     if (e.target.name === 'secure') { const p = $('#ml-form [name="port"]'); if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
   });
   $('#view-mail').addEventListener('submit', async (e) => {
@@ -537,9 +557,23 @@
       const f = e.target, err = $('#ml-oerr'), btn = f.querySelector('[type="submit"]');
       err.textContent = ''; btn.disabled = true;
       try {
-        const r = await api('bestell_settings_save', { body: { enabled: f.enabled.checked, to: f.to.value, copy: f.copy.checked } });
+        const r = await api('bestell_settings_save', { body: { enabled: f.enabled.checked, copy: f.copy.checked } });
         mailSt.orders = r.orders;
         toast(r.orders.enabled ? (r.active ? 'Gespeichert – Kunden können jetzt Bestellwünsche senden.' : 'Gespeichert – aktiv, sobald das Postfach eingerichtet ist.') : 'Gespeichert – Bestellfunktion ist ausgeschaltet.', 5000);
+        renderMailView();
+      } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
+      return;
+    }
+    if (e.target.id === 'ml-notify') {
+      e.preventDefault();
+      const f = e.target, err = $('#ml-nerr'), btn = f.querySelector('[type="submit"]');
+      err.textContent = ''; btn.disabled = true;
+      const events = {};
+      mailSt.notify.events.forEach((x) => { events[x.key] = { to: f.elements['to-' + x.key].value, on: x.fest ? x.on : f.elements['on-' + x.key].checked }; });
+      try {
+        const r = await api('benachrichtigung_save', { body: { events } });
+        mailSt.notify = r.notify; mailSt.orders = r.orders;
+        toast('Benachrichtigungen gespeichert.');
         renderMailView();
       } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
       return;
@@ -573,6 +607,16 @@
     if (a === 'remove') {
       if (!(await confirmBox('Einstellungen entfernen?', 'Postfach, Absender und gespeichertes Passwort werden gelöscht. Danach werden – falls vorhanden – die Werte aus der Server-Datei .env verwendet, sonst ist der Versand ausgeschaltet.', 'Entfernen', true))) return;
       try { await api('mail_konto_save', { body: { remove: true } }); toast('Postfach-Einstellungen entfernt.'); renderMailView(); } catch (ex) { $('#ml-err').textContent = ex.message; }
+      return;
+    }
+    if (a === 'ntest') {
+      const err = $('#ml-nerr'); err.textContent = ''; b.disabled = true;
+      try {
+        const r = await api('benachrichtigung_test', { body: { event: b.dataset.ev } });
+        const bad = r.results.filter((x) => !x.ok);
+        if (bad.length) err.textContent = 'Nicht zugestellt: ' + bad.map((x) => `${x.to} (${x.error})`).join(', ');
+        else toast(`Test-Benachrichtigung an ${r.results.map((x) => x.to).join(', ')} gesendet.`, 5000);
+      } catch (ex) { err.textContent = ex.message; } finally { b.disabled = false; }
       return;
     }
     const err = a === 'test' ? $('#ml-err2') : $('#ml-err');

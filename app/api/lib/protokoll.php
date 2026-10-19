@@ -29,6 +29,7 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
             }
             store_write('protokoll/' . $month, $log);
         });
+        if (function_exists('notify_from_audit')) notify_from_audit($a, $s, $d, $who);
     } catch (Throwable $e) {
         if (!empty($GLOBALS['store_tx'])) throw $e;
         error_log('[wochenangebot] Protokoll: ' . $e->getMessage());
@@ -200,7 +201,10 @@ function attempts_record(bool $ok): void
         else {
             $n = (int)($a[$k]['n'] ?? 0) + 1;
             $a[$k] = ['n' => $n, 't' => time(), 'ip' => client_ip(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : 0];
-            if ($n >= (int)$CFG['max_attempts']) $a[$k]['n'] = 0;
+            if ($n >= (int)$CFG['max_attempts']) {
+                $a[$k]['n'] = 0;
+                if (function_exists('notify')) notify('sicherheit', 'Anmeldesperre nach ' . $n . ' Fehlversuchen', [['IP-Adresse', client_ip()], ['Gesperrt für', (int)$CFG['lock_minutes'] . ' Minuten']]);
+            }
         }
         store_write('logins', $a);
     });
