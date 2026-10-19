@@ -144,7 +144,7 @@ with sync_playwright() as p:
     pg.evaluate('() => { window.print = () => { window.__printed = (window.__printed||0) + 1; }; }')
     pg.click('#btn-print'); expect(pg.locator('#dlg-print')).to_be_visible()
     pg.screenshot(path=f'{OUT}/print-dialog.png')
-    pg.check('input[name="scope"][value="all"]'); pg.click('#print-go'); pg.wait_for_timeout(200)
+    pg.check('input[name="scope"][value="all"]'); pg.check('input[name="layout"][value="compact"]'); pg.click('#print-go'); pg.wait_for_timeout(200)   # Standard „Angebotsliste“: eigener Test
     check('print called', pg.evaluate('window.__printed') == 1)
     check('print root: 276 rows', pg.locator('#print-root .p-row').count() == 276, pg.locator('#print-root .p-row').count())
     check('print root: 32 groups, 4 sections', pg.locator('#print-root .p-group').count() == 32 and pg.locator('#print-root .p-section').count() == 4)
