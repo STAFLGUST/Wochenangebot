@@ -30,11 +30,16 @@ with sync_playwright() as p:
     a.evaluate("async () => { const s = await (await fetch('/api/?action=status')).json(); await fetch('/api/?action=user_save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({name:'Eddi', username:'eddi', role:'editor', active:true, password:'Bearbeiter-Zugang-1', mustChange:false})}); }")
     e = br.new_page(viewport={'width': 1440, 'height': 900}); login(e, 'eddi', 'Bearbeiter-Zugang-1')
     check('editor: no admin heading/tabs', not e.locator('#side-admin').is_visible() and not e.locator('#vt-users').is_visible())
-    for w in [1024, 768, 390]:
+    overlap_js = '''() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+      const hit = (a, b) => a.width && b.width && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+      const brand = r('#topbar .brand'), st = r('#save-state'), act = r('#topbar .actions');
+      return hit(brand, st) || hit(brand, act) || hit(st, act); }'''
+    for w in [1440, 1280, 1180, 1024, 768, 390]:
         m = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); m.on('pageerror', lambda x: errs.append(str(x)))
         login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)
         m.screenshot(path=SH + f'/sidenav-{w}.png')
         sw = m.evaluate('document.documentElement.scrollWidth'); check(f'{w}px no h-scroll', sw <= w, sw)
+        check(f'{w}px top bar: name, save state and buttons do not overlap', not m.evaluate(overlap_js))
     check('no JS errors', not errs, errs)
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
