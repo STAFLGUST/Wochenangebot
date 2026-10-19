@@ -29,9 +29,9 @@ switch ($action) {
                 $e = $in[$k] ?? null;
                 if (!is_array($e)) { $new[$k] = $old[$k]; continue; }
                 $to = notify_parse_to($e['to'] ?? '', $def['label']);
-                $on = $def['fest'] ? $old[$k]['on'] : !empty($e['on']);
+                $on = $def['fest'] ? $old[$k]['on'] : (!empty($def['manuell']) || !empty($e['on']));
                 if ($def['fest'] && $on && !$to) fail('Die Bestellfunktion ist eingeschaltet – für neue Bestellwünsche wird mindestens eine Adresse gebraucht.', 422);
-                if (!$def['fest'] && empty($def['ersatz']) && $on && !$to) fail("„{$def['label']}“: Bitte mindestens eine Adresse angeben oder die Benachrichtigung ausschalten.", 422);
+                if (!$def['fest'] && empty($def['ersatz']) && empty($def['manuell']) && $on && !$to) fail("„{$def['label']}“: Bitte mindestens eine Adresse angeben oder die Benachrichtigung ausschalten.", 422);
                 $new[$k] = ['on' => $on, 'to' => $to];
                 if ($old[$k]['on'] !== $on) $ch[] = ['k' => "notify|{$k}|on", 'code' => '', 'name' => $def['label'], 'f' => 'Benachrichtigung', 'from' => $old[$k]['on'] ? 'an' : 'aus', 'to' => $on ? 'an' : 'aus'];
                 if (implode(', ', $old[$k]['to']) !== implode(', ', $to)) $ch[] = ['k' => "notify|{$k}|to", 'code' => '', 'name' => $def['label'], 'f' => 'Empfänger', 'from' => implode(', ', $old[$k]['to']), 'to' => implode(', ', $to)];

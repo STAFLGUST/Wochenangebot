@@ -1812,7 +1812,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'hist', 'stock', 'master', 'kunden', 'mail', 'users', 'log', 'sec'];
+  const VIEWS = ['orders', 'edit', 'hist', 'stock', 'einkauf', 'master', 'kunden', 'mail', 'users', 'log', 'sec'];
   const ADMIN_VIEWS = ['kunden', 'mail', 'users', 'log', 'sec'];
   function setView(v) {
     if (v === 'orders' && !can('editor')) v = 'edit';
@@ -1830,6 +1830,7 @@
     if (v === 'master') renderMasterView();
     if (v === 'users' && window.WA.views.users) window.WA.views.users();
     if (v === 'orders' && window.WA.views.orders) window.WA.views.orders();
+    if (v === 'einkauf' && window.WA.views.einkauf) window.WA.views.einkauf();
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
     if (v === 'log' && window.WA.views.log) window.WA.views.log();

@@ -757,3 +757,39 @@ body.ro .sale-tag { cursor: default; }
 .ord-mobile-mail { display: none; font-size: 12px; overflow-wrap: anywhere; }
 @media (max-width: 860px) { .ord-mobile-mail { display: block; } }
 #ml-tp-prev { width: 100%; height: 520px; border: 1px solid var(--line); border-radius: 10px; margin-top: 12px; background: #fff; }
+
+/* Einkauf: Fehlmengen */
+.ek-head { padding: 18px 20px; margin-bottom: 14px; }
+.ek-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ek-kpis div { display: flex; flex-direction: column; gap: 2px; }
+.ek-kpis strong { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.ek-kpis span { font-size: 12.5px; color: var(--muted); }
+.ek-head .hint { margin: 12px 0 0; }
+.ek-warn { margin: 12px 0 0; font-size: 13.5px; }
+.ek-wrap { overflow-x: auto; margin-bottom: 14px; }
+.ektab { min-width: 760px; }
+.ektab .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ektab .ek-short { font-weight: 650; color: var(--accent); }
+.ektab .ek-code { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.ektab .ek-sel { width: 36px; }
+.ektab .ek-sel input { width: 17px; height: 17px; accent-color: var(--accent); }
+.ektab .ek-termin { white-space: nowrap; }
+.ektab td { vertical-align: top; }
+.ek-new { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; }
+.ek-empty { padding: 22px 20px; } .ek-empty p { margin: 0; }
+.ek-send textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: var(--surface); color: var(--text); resize: vertical; }
+.ek-send .hint, .ek-send .st-warn { margin: 0 0 12px; }
+@media (max-width: 640px) {
+  .ek-kpis strong { font-size: 19px; } .ek-head { padding: 14px; }
+  .ektab { min-width: 0; } .ektab thead { display: none; }
+  .ektab, .ektab tbody { display: block; }
+  .ektab tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .ektab td { display: block; padding: 0; border: 0; }
+  .ektab .ek-sel { width: auto; order: 0; }
+  .ektab .ek-code { order: 1; flex: 1 1 auto; }
+  .ektab .ek-short { order: 2; font-size: 15px; }
+  .ektab .ek-art { order: 3; flex: 1 1 100%; }
+  .ektab td[data-l]:not(.ek-short) { order: 4; font-size: 12.5px; color: var(--text-2); }
+  .ektab td[data-l]::before { content: attr(data-l) ' '; color: var(--muted); font-weight: 400; }
+  .ektab .ek-st { order: 5; flex: 1 1 100%; }
+}

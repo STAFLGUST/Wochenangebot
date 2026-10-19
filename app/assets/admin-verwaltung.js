@@ -150,6 +150,80 @@
         ${r.total > r.limit ? `<div class="ed-toolbar ord-pager"><button type="button" class="btn sm" data-orders-page="-1"${orderOffset === 0 ? ' disabled' : ''}>Zurück</button><span class="ed-hint">${Math.min(orderOffset + 1, r.total)}–${Math.min(orderOffset + r.limit, r.total)} von ${r.total}</span><button type="button" class="btn sm" data-orders-page="1"${orderOffset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></div>` : ''}`;
     } catch (e) { host.innerHTML = `<div class="err-box" role="alert">${esc(e.message)}</div><button type="button" class="btn" data-orders-reload>Erneut laden</button>`; }
   }
+  /* ======================= Einkauf: Fehlmengen offener Bestellwünsche (alle Mitarbeiter; Melden ab Bearbeiter) ======================= */
+  const fmtQty = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 });
+  const qty = (v) => fmtQty.format(v) + ' kg';
+  let ekSel = null, ekData = null;
+  async function renderEinkaufView() {
+    const host = $('#view-einkauf');
+    if (!host.innerHTML) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Einkauf wird geladen …</div>';
+    let r;
+    try { r = ekData = await api('einkauf'); } catch (e) { host.innerHTML = `<div class="err-box" role="alert">${esc(e.message)}</div>`; return; }
+    const st = r.stock;
+    const ref = st ? (st.importedAt || st.date) : null;
+    const age = ref ? Math.floor((Date.now() - new Date(ref).getTime()) / 86400000) : null;
+    const stand = st ? `${st.date ? dmyIso(st.date) : 'unbekanntem Datum'}${st.importedAt ? ` (übernommen ${dateTime(st.importedAt)})` : ''}` : '';
+    const codes = r.items.map((i) => i.code);
+    ekSel = ekSel === null ? new Set(r.items.filter((i) => i.neu).map((i) => i.code)) : new Set([...ekSel].filter((c) => codes.includes(c)));
+    const rows = r.items.map((it) => `<tr data-ek="${esc(it.code)}">
+        ${r.canSend ? `<td class="ek-sel"><input type="checkbox" data-eksel="${esc(it.code)}"${ekSel.has(it.code) ? ' checked' : ''} aria-label="${esc(it.code)} ${esc(it.name)} auswählen"></td>` : ''}
+        <td class="ek-code">${esc(it.code)}</td>
+        <td class="ek-art"><div class="nm">${esc(it.name)}</div><div class="sub">${it.orders.map((o) => `${esc(o.nr)}${o.firma ? ' · ' + esc(o.firma) : ''}: ${esc(qty(o.qty))}${o.termin ? ' · ' + esc(dmyIso(o.termin)) : ''}`).join('<br>')}</div></td>
+        <td class="num" data-l="Bestellt">${esc(qty(it.ordered))}</td>
+        <td class="num" data-l="Bestand">${esc(qty(it.available))}</td>
+        <td class="num ek-short" data-l="Fehlmenge">${esc(qty(it.short))}</td>
+        <td class="ek-termin" data-l="Termin">${it.termin ? esc(dmyIso(it.termin)) : '<span class="muted">offen</span>'}</td>
+        <td class="ek-st">${it.gemeldet ? `<span class="${it.neu ? 'st-warn' : 'st-ok'}">${it.neu ? 'mehr als gemeldet' : 'gemeldet'}</span><div class="sub">${esc(dateTime(it.gemeldet.t))}${it.gemeldet.by ? ' · ' + esc(it.gemeldet.by) : ''}${it.neu ? ' · damals ' + esc(qty(it.gemeldet.kg)) : ''}</div>` : '<span class="ek-new">neu</span>'}</td>
+      </tr>`).join('');
+    host.innerHTML = `
+      <div class="gcard ek-head">
+        <div class="ek-kpis">
+          <div><strong>${r.items.length}</strong><span>Artikel mit Fehlmenge</span></div>
+          <div><strong>${esc(qty(r.shortTotal))}</strong><span>Fehlmenge gesamt</span></div>
+          <div><strong>${r.openOrders}</strong><span>offene Bestellwünsche</span></div>
+        </div>
+        ${st ? `<p class="hint">Bestellte Mengen aus offenen Bestellwünschen (Neu, In Bearbeitung, Bestätigt) gegenüber dem Bestand vom ${esc(stand)}.</p>` : ''}
+        ${!st ? '<p class="st-warn ek-warn">Es ist keine Bestandsliste vorhanden. Bitte unter „Bestand“ eine aktuelle Liste übernehmen – erst dann lassen sich Fehlmengen berechnen.</p>'
+          : age >= 3 ? `<p class="st-warn ek-warn">Der Bestand ist ${age} Tage alt. Für verlässliche Fehlmengen bitte unter „Bestand“ eine aktuelle Liste übernehmen.</p>` : ''}
+        ${r.ohneNr ? `<p class="hint">${esc(plural(r.ohneNr, 'Position', 'Positionen'))} ohne Artikelnummer ${r.ohneNr === 1 ? 'ist' : 'sind'} nicht berücksichtigt.</p>` : ''}
+      </div>
+      ${r.items.length ? `<div class="gcard ek-wrap"><table class="etab ektab"><thead><tr>${r.canSend ? `<th class="ek-sel"><input type="checkbox" id="ek-all" aria-label="Alle auswählen"${ekSel.size === r.items.length ? ' checked' : ''}></th>` : ''}<th>Art.-Nr.</th><th>Artikel / Bestellwünsche</th><th class="num">Bestellt</th><th class="num">Bestand</th><th class="num">Fehlmenge</th><th>Termin</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : st ? '<div class="gcard ek-empty"><p>Keine Fehlmengen – alle offenen Bestellwünsche sind durch den Bestand gedeckt.</p></div>' : ''}
+      ${r.canSend && r.items.length ? `<form class="gcard sec-form ek-send" id="ek-form" autocomplete="off">
+        <h3 class="sec-h">Einkauf benachrichtigen</h3>
+        ${!r.recipients ? '<p class="st-warn">Noch keine Empfänger für „Einkaufsbedarf“. Ein Administrator legt sie unter Verwaltung → E-Mail → Benachrichtigungen fest.</p>' : !r.mail ? '<p class="st-warn">Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).</p>' : `<p class="hint">Die E-Mail enthält die ausgewählten Artikel mit Fehlmenge, Bestellwünschen und Terminen (an ${esc(plural(r.recipients, 'Empfänger', 'Empfänger'))}).</p>`}
+        <label class="fld"><span>Hinweis an den Einkauf <small>(optional)</small></span><textarea name="note" rows="2" maxlength="1000" placeholder="z. B. Termin für Kunde X ist fest zugesagt"></textarea></label>
+        <p class="form-err" id="ek-err" role="alert"></p>
+        <div class="sec-foot"><button type="submit" class="btn primary" id="ek-send">${icon('send', 'sm')}<span id="ek-btn-l"></span></button></div>
+      </form>` : ''}`;
+    ekCount();
+  }
+  function ekCount() {
+    const l = $('#ek-btn-l');
+    if (!l || !ekData) return;
+    const n = ekSel.size;
+    l.textContent = n ? `${n} Artikel melden` : 'Bitte Artikel auswählen';
+    $('#ek-send').disabled = !n || !ekData.recipients || !ekData.mail;
+    const all = $('#ek-all'); if (all) { all.checked = n === ekData.items.length; all.indeterminate = n > 0 && n < ekData.items.length; }
+  }
+  $('#view-einkauf').addEventListener('change', (e) => {
+    if (e.target.id === 'ek-all') { ekSel = new Set(e.target.checked ? ekData.items.map((i) => i.code) : []); $$('#view-einkauf [data-eksel]').forEach((c) => { c.checked = e.target.checked; }); ekCount(); return; }
+    const c = e.target.dataset.eksel;
+    if (c) { if (e.target.checked) ekSel.add(c); else ekSel.delete(c); ekCount(); }
+  });
+  $('#view-einkauf').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'ek-form') return;
+    e.preventDefault();
+    const err = $('#ek-err'), btn = $('#ek-send');
+    err.textContent = ''; btn.disabled = true;
+    try {
+      const r = await api('einkauf_melden', { body: { codes: [...ekSel], note: e.target.note.value } });
+      const bad = r.results.filter((x) => !x.ok);
+      toast(`Einkauf benachrichtigt (${r.results.filter((x) => x.ok).map((x) => x.to).join(', ')}).${bad.length ? ' Nicht zugestellt: ' + bad.map((x) => x.to).join(', ') : ''}`, 6000);
+      ekSel = null;
+      renderEinkaufView();
+    } catch (ex) { err.textContent = ex.message; ekCount(); }
+  });
   async function openOrder(nr) {
     let o;
     try { o = orderEdit = (await api('bestellung', { query: '&nr=' + encodeURIComponent(nr) })).order; } catch (e) { toast(e.message); return; }
@@ -227,7 +301,7 @@
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
   let kunden = null, kundenRev = 0, kundenQ = '', mailSt = null;
-  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung' };
+  const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung', einkauf: 'Einkaufsbedarf' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
   const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
@@ -521,7 +595,7 @@
         <p class="hint">Wer bekommt bei welchem Ereignis eine E-Mail? Je Ereignis höchstens ${n.max} Adressen, mit Komma getrennt.</p>
         <div class="nt-list">${n.events.map((e) => `<div class="nt-row" data-ev="${esc(e.key)}">
           <div class="nt-what">
-            ${e.fest ? `<span class="nt-fix${e.on ? ' on' : ''}">${e.on ? 'an' : 'aus'}</span>` : `<label class="nt-sw"><input type="checkbox" name="on-${esc(e.key)}"${e.on ? ' checked' : ''} aria-label="${esc(e.label)} an"><span>${e.on ? 'an' : 'aus'}</span></label>`}
+            ${e.manuell ? '<span class="nt-fix on" title="Versand auf Knopfdruck">Knopf</span>' : e.fest ? `<span class="nt-fix${e.on ? ' on' : ''}">${e.on ? 'an' : 'aus'}</span>` : `<label class="nt-sw"><input type="checkbox" name="on-${esc(e.key)}"${e.on ? ' checked' : ''} aria-label="${esc(e.label)} an"><span>${e.on ? 'an' : 'aus'}</span></label>`}
             <div><strong>${esc(e.label)}</strong><small>${esc(e.text)}${e.fest ? ' An, solange die Bestellfunktion oben eingeschaltet ist.' : ''}</small></div>
           </div>
           <label class="fld nt-to"><span>Empfänger</span><input name="to-${esc(e.key)}" value="${esc(e.to.join(', '))}" maxlength="500" autocapitalize="none" spellcheck="false" placeholder="${e.ersatz !== null ? (e.ersatz ? 'leer = ' + esc(e.ersatz) + ' (Antwortadresse)' : 'leer = Antwortadresse des Postfachs') : 'z. B. it@standard-fleisch.de'}"></label>
@@ -569,7 +643,7 @@
       const f = e.target, err = $('#ml-nerr'), btn = f.querySelector('[type="submit"]');
       err.textContent = ''; btn.disabled = true;
       const events = {};
-      mailSt.notify.events.forEach((x) => { events[x.key] = { to: f.elements['to-' + x.key].value, on: x.fest ? x.on : f.elements['on-' + x.key].checked }; });
+      mailSt.notify.events.forEach((x) => { events[x.key] = { to: f.elements['to-' + x.key].value, on: x.fest || x.manuell ? x.on : f.elements['on-' + x.key].checked }; });
       try {
         const r = await api('benachrichtigung_save', { body: { events } });
         mailSt.notify = r.notify; mailSt.orders = r.orders;
@@ -728,8 +802,8 @@
     ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails, Bestellwünsche)'],
     ['security', 'Sicherheit'],
   ];
-  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', wartung: 'security', twofa: 'auth', reauth: 'auth', reauth_fail: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden', bestellung: 'kunden' }[a] || '');
-  const ACTION_LABEL = { wartung: 'Wartungsmodus', bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
+  const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', einkauf: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', wartung: 'security', twofa: 'auth', reauth: 'auth', reauth_fail: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden', bestellung: 'kunden' }[a] || '');
+  const ACTION_LABEL = { einkauf: 'Einkauf', wartung: 'Wartungsmodus', bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
@@ -1136,5 +1210,5 @@
     } catch (ex) { $('#sec-err').textContent = ex.message; }
   });
 
-  W.views = { users: renderUsersView, orders: renderOrdersView, kunden: renderKundenView, mail: renderMailView, log: renderLogView, sec: renderSecView };
+  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, mail: renderMailView, log: renderLogView, sec: renderSecView };
 })();

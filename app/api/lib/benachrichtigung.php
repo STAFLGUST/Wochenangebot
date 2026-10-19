@@ -8,10 +8,12 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 /* Reihenfolge = Anzeige. 'fest': Empfänger gehören zur Bestellfunktion (an, solange sie eingeschaltet ist).
    'pause': Mindestabstand zwischen zwei E-Mails in Sekunden; dazwischen wird nur gezählt.
    'ersatz': ohne eigene Empfänger geht die E-Mail an die Antwortadresse des Postfachs (sonst den Absender);
-   ohne gespeicherte Einstellung ist das Ereignis dann an (bisheriges Verhalten). */
+   ohne gespeicherte Einstellung ist das Ereignis dann an (bisheriges Verhalten).
+   'manuell': nur auf Knopfdruck (immer bereit, kein Schalter; versendet von der jeweiligen Aktion). */
 const NOTIFY_EVENTS = [
     'bestellung' => ['label' => 'Neuer Bestellwunsch', 'text' => 'Ein angemeldeter Kunde sendet einen Bestellwunsch über das Portal (mit allen Positionen).', 'fest' => true, 'pause' => 0],
     'sicherheit' => ['label' => 'Sicherheitsereignisse', 'text' => 'Anmeldesperre nach Fehlversuchen, Änderungen an Nutzern und Rollen, Zwei-Faktor, Sicherheitseinstellungen, Wartungsmodus.', 'fest' => false, 'pause' => 600],
+    'einkauf' => ['label' => 'Einkaufsbedarf', 'text' => 'Fehlmengen aus offenen Bestellwünschen – auf Knopfdruck im Bereich „Einkauf“ (Bearbeiter und Administratoren).', 'fest' => false, 'pause' => 0, 'manuell' => true],
     'abmeldung' => ['label' => 'Abmeldung vom Wochenangebot', 'text' => 'Ein Kunde bestellt das Wochenangebot per E-Mail ab oder wieder an.', 'fest' => false, 'pause' => 0, 'ersatz' => true],
 ];
 const NOTIFY_MAX_TO = 5;
@@ -29,8 +31,8 @@ function notify_settings(): array
     foreach (NOTIFY_EVENTS as $k => $def) {
         if ($def['fest']) { $ev[$k] = ['on' => $ord['enabled'], 'to' => $ord['to']]; continue; }
         $e = is_array($d['events'][$k] ?? null) ? $d['events'][$k] : null;
-        if ($e === null) { $ev[$k] = ['on' => !empty($def['ersatz']), 'to' => []]; continue; }
-        $ev[$k] = ['on' => !empty($e['on']), 'to' => array_values(array_filter((array)($e['to'] ?? []), 'is_string'))];
+        if ($e === null) { $ev[$k] = ['on' => !empty($def['ersatz']) || !empty($def['manuell']), 'to' => []]; continue; }
+        $ev[$k] = ['on' => !empty($e['on']) || !empty($def['manuell']), 'to' => array_values(array_filter((array)($e['to'] ?? []), 'is_string'))];
     }
     return ['events' => $ev, 'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? ''];
 }
@@ -40,7 +42,7 @@ function notify_view(): array
     $out = [];
     $cfg = mail_cfg();
     $fallback = $cfg ? ($cfg['replyTo'] ?: $cfg['from']) : '';
-    foreach (NOTIFY_EVENTS as $k => $def) $out[] = ['key' => $k, 'label' => $def['label'], 'text' => $def['text'], 'fest' => $def['fest'], 'ersatz' => !empty($def['ersatz']) ? $fallback : null] + $s['events'][$k];
+    foreach (NOTIFY_EVENTS as $k => $def) $out[] = ['key' => $k, 'label' => $def['label'], 'text' => $def['text'], 'fest' => $def['fest'], 'manuell' => !empty($def['manuell']), 'ersatz' => !empty($def['ersatz']) ? $fallback : null] + $s['events'][$k];
     return ['events' => $out, 'updatedAt' => $s['updatedAt'], 'updatedBy' => $s['updatedBy'], 'max' => NOTIFY_MAX_TO];
 }
 /* Empfänger eines Ereignisses (leer = keine E-Mail); berücksichtigt den Ersatz (Antwortadresse) */
@@ -71,7 +73,7 @@ function notify_parse_to($raw, string $what): array
 /* Ereignis vormerken; versendet wird nach der Antwort (notify_flush) */
 function notify(string $ev, string $title, array $facts = []): void
 {
-    if (!isset(NOTIFY_EVENTS[$ev]) || NOTIFY_EVENTS[$ev]['fest']) return;
+    if (!isset(NOTIFY_EVENTS[$ev]) || NOTIFY_EVENTS[$ev]['fest'] || !empty(NOTIFY_EVENTS[$ev]['manuell'])) return;
     if (empty($GLOBALS['notify_queue'])) {
         $GLOBALS['notify_queue'] = [];
         if (empty($GLOBALS['notify_registered'])) { $GLOBALS['notify_registered'] = true; register_shutdown_function('notify_flush'); }

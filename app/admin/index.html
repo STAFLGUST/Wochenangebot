@@ -8,7 +8,7 @@
 <title>Wochenangebot · Eingabebereich</title>
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=0d3d12ed09">
-<link rel="stylesheet" href="../assets/admin.css?v=d57153fdc5">
+<link rel="stylesheet" href="../assets/admin.css?v=e76c57cca8">
 </head>
 <body class="adm">
 
@@ -70,6 +70,7 @@
       <button role="tab" type="button" id="vt-edit" aria-selected="true" aria-controls="view-edit"><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebot<span class="m-hide"> bearbeiten</span></span></button>
       <button role="tab" type="button" id="vt-hist" aria-selected="false" aria-controls="view-hist"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg><span>Preisverlauf</span></button>
       <button role="tab" type="button" id="vt-stock" aria-selected="false" aria-controls="view-stock"><svg class="i" aria-hidden="true"><use href="#i-box"/></svg><span>Bestand</span></button>
+      <button role="tab" type="button" id="vt-einkauf" aria-selected="false" aria-controls="view-einkauf"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg><span>Einkauf</span></button>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Stammdaten</span></button>
       <div class="side-sep" id="side-admin" aria-hidden="true" hidden>Verwaltung</div>
       <button role="tab" type="button" id="vt-orders" aria-selected="false" aria-controls="view-orders" hidden><svg class="i" aria-hidden="true"><use href="#i-file"/></svg><span>Bestellungen</span></button>
@@ -113,6 +114,7 @@
     </div>
     <div id="view-hist" hidden></div>
     <div id="view-stock" hidden></div>
+    <div id="view-einkauf" hidden></div>
     <div id="view-master" hidden></div>
     <div id="view-orders" hidden></div>
     <div id="view-kunden" hidden></div>
@@ -218,6 +220,7 @@
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5 12 15l5-4.5M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.2a6.5 6.5 0 0 1 3.5 5.3"/></symbol>
   <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1 1 0 0 1 0 1.4l-7.3 7.3a1 1 0 0 1-1.4 0z"/><circle cx="8" cy="8" r="1.3"/></symbol>
+  <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3.5 4.5h2.2l2 10.5h10.3l1.8-7.5H6.6"/><circle cx="9.5" cy="19" r="1.4"/><circle cx="16.5" cy="19" r="1.4"/></symbol>
   <symbol id="i-box" viewBox="0 0 24 24"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></symbol>
   <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/></symbol>
@@ -231,7 +234,7 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=7b3e5ace81"></script>
-<script src="../assets/admin.js?v=fdfe28dda0"></script>
-<script src="../assets/admin-verwaltung.js?v=99dce81a32"></script>
+<script src="../assets/admin.js?v=fe818078b7"></script>
+<script src="../assets/admin-verwaltung.js?v=ff65cd2940"></script>
 </body>
 </html>
