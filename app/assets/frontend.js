@@ -232,6 +232,8 @@ function renderStatic() {
   if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
   $('#company').hidden = !COMPANY;
+  const ini = COMPANY.split(/[\s-]+/).filter((w) => /^[A-Za-zÄÖÜäöü]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  $('.brand-mark').textContent = ini || 'W';
   $('#kw-pill').innerHTML = kw;
 
   const sub = [];
@@ -281,25 +283,30 @@ function renderBanner() {
 }
 
 /* ---------- Filter-Panel ---------- */
+/* Desktop: jede Filtergruppe als Aufklappmenü in der Leiste über der Liste; schmale Fenster: alle offen in der Seitenleiste */
+const mqDrawer = window.matchMedia('(max-width: 1024px)');
+const fdrop = (id, label, inner) => `<details class="fdrop" data-fd="${id}"><summary><span class="fd-l">${esc(label)}</span><span class="fd-val"></span>${icon('chev', 'sm')}</summary><div class="fd-pop">${inner}</div></details>`;
+function syncDrops() { for (const d of $$('.fdrop')) d.open = mqDrawer.matches; }
 function buildFilters() {
   const parts = FACETS.map((f) => {
     const vals = facetOptions(f);
     for (const v of [...state[f.set]]) if (!vals.includes(v)) state[f.set].delete(v);
     if (f.pills) {
-      return `<fieldset class="facet" data-facet="${f.id}"><legend>${esc(f.label)}</legend><div class="pills">${vals.map((v) =>
-        `<button type="button" class="pill" data-facet="${f.id}" data-value="${esc(v)}" aria-pressed="${state[f.set].has(v)}">${esc(optionLabel(f, v))} <span class="n" data-n></span></button>`).join('')}</div></fieldset>`;
+      return fdrop(f.id, f.label, `<fieldset class="facet" data-facet="${f.id}"><legend>${esc(f.label)}</legend><div class="pills">${vals.map((v) =>
+        `<button type="button" class="pill" data-facet="${f.id}" data-value="${esc(v)}" aria-pressed="${state[f.set].has(v)}">${esc(optionLabel(f, v))} <span class="n" data-n></span></button>`).join('')}</div></fieldset>`);
     }
-    return `<fieldset class="facet" data-facet="${f.id}"><legend>${esc(f.label)}</legend>${vals.map((v) =>
-      `<label class="opt"><input type="checkbox" data-facet="${f.id}" value="${esc(v)}"${state[f.set].has(v) ? ' checked' : ''}><span class="lbl">${esc(optionLabel(f, v))}</span><span class="n" data-n></span></label>`).join('')}</fieldset>`;
+    return fdrop(f.id, f.label, `<fieldset class="facet" data-facet="${f.id}"><legend>${esc(f.label)}</legend>${vals.map((v) =>
+      `<label class="opt"><input type="checkbox" data-facet="${f.id}" value="${esc(v)}"${state[f.set].has(v) ? ' checked' : ''}><span class="lbl">${esc(optionLabel(f, v))}</span><span class="n" data-n></span></label>`).join('')}</fieldset>`);
   });
   const span = DATA.minPrice != null ? `Spanne im Angebot: ${fmtNum.format(DATA.minPrice)} – ${fmtNum.format(DATA.maxPrice)} €/kg` : '';
-  parts.splice(4, 0, `<fieldset class="facet"><legend>Preis je kg</legend>
+  parts.splice(4, 0, fdrop('price', 'Preis je kg', `<fieldset class="facet"><legend>Preis je kg</legend>
     <div class="range">
       <div class="field"><input id="pmin" inputmode="decimal" autocomplete="off" placeholder="von" aria-label="Mindestpreis in Euro je Kilogramm" value="${state.min != null ? fmtNum.format(state.min) : ''}"><span class="unit">€</span></div>
       <span aria-hidden="true">–</span>
       <div class="field"><input id="pmax" inputmode="decimal" autocomplete="off" placeholder="bis" aria-label="Höchstpreis in Euro je Kilogramm" value="${state.max != null ? fmtNum.format(state.max) : ''}"><span class="unit">€</span></div>
-    </div><p class="hint" id="price-hint" data-default="${esc(span)}">${esc(span)}</p></fieldset>`);
+    </div><p class="hint" id="price-hint" data-default="${esc(span)}">${esc(span)}</p></fieldset>`));
   $('#filters-body').innerHTML = parts.join('');
+  syncDrops();
 }
 
 function updateFacetUI() {
@@ -316,6 +323,18 @@ function updateFacetUI() {
       wrap.classList.toggle('zero', !n && !sel);
       if (el.tagName === 'INPUT') el.checked = sel; else el.setAttribute('aria-pressed', sel);
     }
+  }
+  for (const f of FACETS) {
+    const d = $(`.fdrop[data-fd="${f.id}"]`);
+    if (!d) continue;
+    const sel = [...state[f.set]];
+    d.classList.toggle('on', sel.length > 0);
+    d.querySelector('.fd-val').textContent = sel.length === 1 ? optionLabel(f, sel[0]) : sel.length ? String(sel.length) : '';
+  }
+  const dp = $('.fdrop[data-fd="price"]');
+  if (dp) {
+    dp.classList.toggle('on', state.min != null || state.max != null);
+    dp.querySelector('.fd-val').textContent = state.min != null || state.max != null ? `${state.min != null ? fmtNum.format(state.min) : '…'}–${state.max != null ? fmtNum.format(state.max) : '…'} €` : '';
   }
   const n = activeFilterCount();
   $('#btn-reset').disabled = !n;
@@ -469,7 +488,27 @@ function render() {
 }
 
 /* ---------- Merkliste ---------- */
-function updateFavCount() { $('#fav-count').textContent = DATA.items.filter((i) => favs.has(i.key)).length; }
+function updateFavCount() { $('#fav-count').textContent = DATA.items.filter((i) => favs.has(i.key)).length; renderMerk(); }
+/* Merkliste als Spalte neben der Liste (breite Fenster) */
+function renderMerk() {
+  const host = $('#merk');
+  if (!host || !DATA) return;
+  const list = DATA.items.filter((i) => favs.has(i.key));
+  const shown = list.slice(0, 8);
+  const pr = (it) => (it.price.status === 'value' ? fmtNum.format(it.price.value) : it.price.status === 'request' ? 'a. Anfr.' : '–');
+  let order = '';
+  if (KORDER) {
+    const t = cart.size ? cartTotals() : null;
+    order = `<div class="merk-order"><div class="merk-h"><h2>Bestellwunsch</h2>${t ? `<span>${plural(t.n, 'Position', 'Positionen')}</span>` : ''}</div>
+      ${t ? `<p class="merk-sum">${fmtQty.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}</p><button type="button" class="btn primary" data-merk="order">${icon('send', 'sm')}Bestellwunsch prüfen</button>`
+        : '<p class="merk-hint">Mengen in der Spalte „Menge kg“ eintragen – hier erscheint dann Ihr Bestellwunsch.</p>'}</div>`;
+  }
+  host.innerHTML = `${order}<div class="merk-h"><h2>Merkliste</h2><span>${plural(list.length, 'Artikel', 'Artikel')}</span></div>
+    ${list.length ? `<ul>${shown.map((it) => `<li><button type="button" class="merk-n" data-merk-open="${esc(it.id)}"><span>${esc(it.name)}</span><span class="m-c">${esc(it.code || '')}</span></button><span class="m-p${it.sale ? ' sale' : ''}">${esc(pr(it))}</span></li>`).join('')}</ul>
+      ${list.length > shown.length ? `<p class="merk-more">+ ${plural(list.length - shown.length, 'weiterer Artikel', 'weitere Artikel')}</p>` : ''}`
+      : '<p class="merk-empty">Noch nichts gemerkt. Mit dem Stern neben einem Artikel kommt er hierher.</p>'}
+    <button type="button" class="btn" data-merk="show"${list.length ? '' : ' disabled'}>Merkliste anzeigen</button>`;
+}
 /* Ohne Anmeldung: Merkliste im Browser. Angemeldete Kunden: im Kundenkonto auf dem Server (auf allen Geräten gleich). */
 let favRemote = false, favTimer = null, favBusy = Promise.resolve();
 function saveFavs() {
@@ -931,6 +970,32 @@ function bind() {
   /* Toolbar */
   $('#sort').addEventListener('change', (e) => { const [k, d] = e.target.value.split('-'); state.sortKey = k; state.sortDir = d; render(); });
   for (const b of $$('.seg button')) b.addEventListener('click', () => { state.view = b.dataset.view; render(); });
+  /* Filter-Aufklappmenüs: nur eines offen, schließen bei Klick daneben oder Escape (nicht in der Seitenleiste) */
+  $('#filters-body').addEventListener('toggle', (e) => {
+    if (mqDrawer.matches || !e.target.open) return;
+    for (const d of $$('.fdrop[open]')) if (d !== e.target) d.open = false;
+  }, true);
+  $('#filters-body').addEventListener('click', (e) => {
+    const sm = e.target.closest('summary');
+    if (!sm) return;
+    if (mqDrawer.matches) { e.preventDefault(); return; }
+    for (const d of $$('.fdrop[open]')) if (d !== sm.parentElement) d.open = false;
+  });
+  document.addEventListener('click', (e) => { if (!mqDrawer.matches && !e.target.closest('.fdrop')) for (const d of $$('.fdrop[open]')) d.open = false; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || mqDrawer.matches) return;
+    const d = $('.fdrop[open]'); if (d) { d.open = false; d.querySelector('summary').focus(); }
+  });
+  mqDrawer.addEventListener('change', syncDrops);
+  $('#merk').addEventListener('click', (e) => {
+    const o = e.target.closest('[data-merk-open]');
+    if (o) { openDetail(o.dataset.merkOpen); return; }
+    const a = e.target.closest('[data-merk]');
+    if (!a) return;
+    if (a.dataset.merk === 'order') { openOrder(); return; }
+    state.tab = 'fav'; render();
+    $('#main').scrollIntoView({ block: 'start' });
+  });
   $('#tab-all').addEventListener('click', () => { state.tab = 'all'; render(); });
   $('#tab-fav').addEventListener('click', () => { state.tab = 'fav'; render(); });
   $('.tabs').addEventListener('keydown', (e) => {
@@ -1081,6 +1146,7 @@ function cartTotals() {
   return { n: cart.size, sum, kg, req };
 }
 function renderOrderbar() {
+  renderMerk();
   const bar = $('#orderbar');
   if (!bar) return;
   if (!KORDER || !cart.size) { bar.hidden = true; document.body.classList.remove('has-orderbar'); return; }
