@@ -52,6 +52,12 @@
  */
 declare(strict_types=1);
 const WA_API = true;
+// Fehler nie im Browser anzeigen (nur ins Server-Protokoll) und die PHP-Version nicht verraten –
+// unabhängig von der php.ini des Containers (das offizielle Image zeigt Fehler sonst an)
+ini_set('display_errors', '0');
+ini_set('display_startup_errors', '0');
+ini_set('log_errors', '1');
+header_remove('X-Powered-By');
 
 $CFG = require __DIR__ . '/config.php';
 require __DIR__ . '/geo.php';

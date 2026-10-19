@@ -82,7 +82,8 @@ function sec_config_checks(array $users): array
     $cookieOk = !empty($cp['httponly']) && (!$https || !empty($cp['secure'])) && in_array(strtolower((string)($cp['samesite'] ?? '')), ['lax', 'strict'], true);
     $add('Server', $cookieOk ? 'ok' : 'bad', 'Sitzungs-Cookies', 'HttpOnly ' . (!empty($cp['httponly']) ? 'ja' : 'nein') . ' · Secure ' . (!empty($cp['secure']) ? 'ja' : 'nein') . ' · SameSite ' . ((string)($cp['samesite'] ?? '') ?: 'nicht gesetzt'), $cookieOk ? '' : 'Cookies müssen HttpOnly, über HTTPS Secure und SameSite=Lax/Strict sein.');
     $add('Server', !$on('display_errors') ? 'ok' : 'bad', 'Fehlermeldungen', $on('display_errors') ? 'werden im Browser angezeigt' : 'nicht öffentlich (nur im Server-Protokoll)', $on('display_errors') ? 'display_errors ausschalten – Fehlermeldungen verraten Interna.' : '');
-    $add('Server', !$on('expose_php') ? 'ok' : 'warn', 'PHP-Version im Header', $on('expose_php') ? 'wird mitgesendet (X-Powered-By)' : 'nicht sichtbar', $on('expose_php') ? 'expose_php ausschalten.' : '');
+    $sent = in_array('x-powered-by', array_map(function ($h) { return strtolower(trim(explode(':', $h, 2)[0])); }, headers_list()), true);
+    $add('Server', !$sent ? 'ok' : 'warn', 'PHP-Version im Header', $sent ? 'wird mitgesendet (X-Powered-By)' : ($on('expose_php') ? 'nicht sichtbar (von der Anwendung entfernt)' : 'nicht sichtbar'), $sent ? 'expose_php ausschalten.' : '');
     $add('Server', !$on('allow_url_include') ? 'ok' : 'bad', 'Fremde Dateien einbinden', $on('allow_url_include') ? 'erlaubt (allow_url_include)' : 'gesperrt');
     $ver = PHP_VERSION;
     $add('Server', version_compare($ver, '8.2.0', '>=') ? 'ok' : 'warn', 'PHP-Version', $ver . ' (' . PHP_SAPI . ')', version_compare($ver, '8.2.0', '>=') ? '' : 'Auf eine unterstützte PHP-Version aktualisieren.');
