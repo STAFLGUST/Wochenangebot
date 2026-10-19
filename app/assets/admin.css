@@ -352,15 +352,28 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .mhd-skull { font-size: 1.25em; line-height: 1; margin-right: 4px; vertical-align: -1px; }
 .st-card { overflow-x: auto; width: fit-content; max-width: 100%; }
 .stab { width: auto; border-collapse: collapse; font-size: 13.5px; }
-.stab th { font-size: 11.5px; font-weight: 600; color: var(--muted); text-align: center; vertical-align: bottom; line-height: 1.25; padding: 9px 8px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.stab th { font-size: 11.5px; font-weight: 700; color: var(--text); text-align: center; vertical-align: bottom; line-height: 1.25; padding: 9px 8px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .stab td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 .stab .s-code { padding-right: 4px; font-family: var(--mono); font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
 .stab .s-name { white-space: nowrap; padding-left: 4px; }
-.stab th.s-code { font-family: inherit; font-size: 11.5px; color: var(--muted); }
+.stab th.s-code { font-family: inherit; font-size: 11.5px; color: var(--text); }
 .stab td.s-name { padding-right: 18px; }
-.stab .s-vk, .stab .s-kg, .stab .s-mkg { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stab .s-vk, .stab .s-kg, .stab .s-mkg, .stab .s-registered, .stab .s-total-kg { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab .s-mhd { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab td.s-mkg { font-weight: 700; }
+.stab .s-prev, .stab .s-change { text-align: right; font-variant-numeric: tabular-nums; }
+.st-price-change { font-size: 12px; }
+.st-price-change.up { color: #b91c1c; font-weight: 700; }
+.st-price-change.down { color: #15803d; font-weight: 700; }
+[data-theme="dark"] .st-price-change.up { color: #fca5a5; }
+[data-theme="dark"] .st-price-change.down { color: #86efac; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .st-price-change.up { color: #fca5a5; }
+  :root:not([data-theme="light"]) .st-price-change.down { color: #86efac; }
+}
+.st-incoming { margin: 0; padding: 0 0 0 16px; font-size: 12px; min-width: 150px; }
+.st-incoming li + li { margin-top: 5px; }
+.st-incoming small { display: block; color: var(--muted); }
 .stab td.s-mhd[class*="mhd-"] { font-weight: 600; }
 .stab tr.srow { cursor: pointer; } .stab tr.srow:hover td:not([class*="mhd-"]) { background: var(--surface-2); }
 .stab tr.srow:hover td[class*="mhd-"] { filter: brightness(.94); }
@@ -379,13 +392,17 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
   .st-card { width: auto; }
   .stab { width: 100%; }
   .stab tr.srow td.s-vk, .stab tr.srow td.s-kg, .stab tr.srow td.s-mhd, .stab tr.srow td.s-mkg { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; }
+  .stab tr.srow td.s-prev, .stab tr.srow td.s-registered, .stab tr.srow td.s-total-kg, .stab tr.srow td.s-incoming { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+  .stab tr.srow td.s-incoming { padding: 5px 0; align-items: center; }
+  .stab tr.srow td.s-kg { white-space: normal; gap: 12px; }
+  .stab tr.wg-sum td.s-incoming, .stab tr.st-total td.s-incoming { display: none; }
   .stab tr.srow td[data-l]::before { content: attr(data-l); color: var(--muted); font-weight: 500; }
   .stab tr.wg-sum, .stab tr.st-total { display: grid; grid-template-columns: 1fr auto; padding: 8px 12px; gap: 2px 10px; }
   .stab tr.wg-sum td, .stab tr.st-total td { border: 0; padding: 0; }
   .stab tr.wg-sum td:first-child, .stab tr.st-total td:first-child { grid-column: 1 / -1; }
   .stab tr.wg-sum td.s-mhd, .stab tr.st-total td.s-mhd { display: none; }
-  .stab tr.wg-sum td.s-kg::before, .stab tr.st-total td.s-kg::before { content: "verfüg. "; font-weight: 500; color: var(--muted); }
-  .stab tr.wg-sum td.s-mkg::before, .stab tr.st-total td.s-mkg::before { content: "kürz. MHD "; font-weight: 500; color: var(--muted); }
+  .stab tr.wg-sum td[data-l], .stab tr.st-total td[data-l] { grid-column: 1 / -1; display: flex; justify-content: space-between; gap: 12px; }
+  .stab tr.wg-sum td[data-l]::before, .stab tr.st-total td[data-l]::before { content: attr(data-l); font-weight: 500; color: var(--muted); }
   .st-actions { margin-left: 0; }
 }
 .stab th .sort-btn { all: unset; cursor: pointer; display: inline-block; text-align: center; line-height: 1.25; border-radius: 6px; padding: 2px 4px; color: inherit; }

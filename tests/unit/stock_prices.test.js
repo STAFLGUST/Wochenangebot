@@ -1,0 +1,15 @@
+const assert = require('node:assert/strict');
+require('../../app/assets/stock-core.js');
+const S = globalThis.StockCore;
+const value = (v, label) => ({status:'value', value:v, ...(label ? {label} : {})});
+assert.equal(S.priceComparison(value(12),value(10)).kind,'up');
+assert.equal(S.priceComparison(value(8),value(10)).delta,-2);
+assert.equal(S.priceComparison(value(10),value(10)).kind,'same');
+assert.equal(S.priceComparison(value(10),null).text,'keine Vergleichsdaten');
+assert.equal(S.priceComparison(value(0),value(0)).kind,'same');
+assert.equal(S.priceComparison(value(1.0001),value(1)).delta,.0001);
+assert.equal(S.priceComparison({status:'request'},value(10)).kind,'missing');
+assert.equal(S.priceComparison(value(10,'Stück'),value(10)).text,'abweichende Preisbasis');
+assert.equal(S.weekPriceMap({items:[{code:'001',price:value(10)},{code:'1',price:value(12)}]}).get('1').status,'ambiguous');
+assert.equal(S.weekPriceMap({items:[{code:'001',price:value(10)},{code:'1',price:value(10)}]}).get('1').value,10);
+console.log('10/10 passed');

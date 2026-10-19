@@ -49,7 +49,7 @@ def storage_write(name, value):
             db.execute('INSERT INTO documents(name,payload,mtime) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET payload=excluded.payload,mtime=excluded.mtime',
                        (name, raw, int(time.time())))
         return
-    with open(data + '/' + name + '.php', 'w', encoding='utf-8') as f:
+    with open(data + '/' + name + '.php', 'w', encoding='utf-8', newline='\n') as f:
         f.write(GUARD + raw)
 
 

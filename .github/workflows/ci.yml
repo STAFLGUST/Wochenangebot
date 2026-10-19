@@ -51,6 +51,10 @@ jobs:
           fi
       - name: Unit-Test Bestands-Parser
         run: node tests/unit/bestand_parser.test.js
+      - name: Unit-Tests exakte Bestandswochen und Preisvergleich
+        run: |
+          php tests/unit/stock_prices.php
+          node tests/unit/stock_prices.test.js
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
       - name: Workflows prüfen (actionlint)

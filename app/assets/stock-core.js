@@ -268,7 +268,7 @@
     }
     // Statusspalte: die Spalte mit den meisten „eingelagert“-Einträgen
     const cnt = new Map();
-    grid.forEach((row) => (row || []).forEach((v, c) => { if (typeof v === 'string' && v.trim().toLowerCase() === 'eingelagert') cnt.set(c, (cnt.get(c) || 0) + 1); }));
+    grid.forEach((row) => (row || []).forEach((v, c) => { if (typeof v === 'string' && ['eingelagert', 'erfasst'].includes(v.trim().toLowerCase())) cnt.set(c, (cnt.get(c) || 0) + 1); }));
     if (!cnt.size) return null;
     const stCol = [...cnt.entries()].sort((a, b) => b[1] - a[1])[0][0];
     const rows = [];
@@ -328,16 +328,26 @@
     for (const s of sheets) { res = parseSheet(s.grid); if (res) break; }
     if (!res) throw new Error('Keine Bestandszeilen mit Status „eingelagert“ gefunden – ist das die Bestandsliste aus WinAB?');
     const { cols, rows } = res;
-    const stats = { rows: rows.length, stored: 0, other: {}, skipped: 0, noMhd: 0 };
+    const stats = { rows: rows.length, stored: 0, expected: 0, other: {}, skipped: 0, noMhd: 0 };
     const by = new Map();
+    const incoming = [];
     for (const { row } of rows) {
       const st = String(row[cols.status]).trim();
-      if (st.toLowerCase() !== 'eingelagert') { stats.other[st] = (stats.other[st] || 0) + 1; continue; }
+      if (!['eingelagert', 'erfasst'].includes(st.toLowerCase())) { stats.other[st] = (stats.other[st] || 0) + 1; continue; }
       const rawCode = row[cols.code];
       const kg = toNum(row[cols.kg]);
       if (!isCode(rawCode) || kg == null) { stats.skipped++; continue; }
-      stats.stored++;
       const code = typeof rawCode === 'number' ? String(rawCode) : String(rawCode).trim();
+      if (st.toLowerCase() === 'erfasst') {
+        if (kg <= 0) { stats.skipped++; continue; }
+        incoming.push({ code, name: String(row[cols.name] ?? '').trim(),
+          lot: cols.lot != null && row[cols.lot] != null ? String(row[cols.lot]).trim().slice(0, 20) : '',
+          arrival: cols.arrival != null ? toDate(row[cols.arrival], true) : null,
+          kg: Math.round(kg * 1000) / 1000 });
+        stats.expected++;
+        continue;
+      }
+      stats.stored++;
       const key = normCode(code);
       const mhd = cols.mhd != null ? toDate(row[cols.mhd], true) : null;
       if (!mhd) stats.noMhd++;
@@ -363,8 +373,28 @@
       articles.push({ code: a.code, name: a.name || '(ohne Bezeichnung)', kg, mhd, mhdKg, lots: a.lots });
     }
     articles.sort((x, y) => x.code.localeCompare(y.code, 'de', { numeric: true }));
-    return { date: findDate(sheets, fileName), source: fileName || '', articles, stats, columns: cols };
+    return { date: findDate(sheets, fileName), source: fileName || '', articles, incoming, stats, columns: cols };
   }
 
-  root.StockCore = { WARENGRUPPEN, warengruppe, normCode, readStockWorkbook, parseStockWorkbook, toDate };
+  // Mehrdeutige Artikelnummern nie mit einem zufällig gewählten Preis vergleichen.
+  function weekPriceMap(week) {
+    const map = new Map();
+    for (const it of (week?.items || [])) {
+      if (!it.code) continue;
+      const k = normCode(it.code), p = it.price || { status: 'none' };
+      const signature = (v) => JSON.stringify([v.status, v.value ?? null, v.label || '']);
+      if (!map.has(k)) map.set(k, p);
+      else if (signature(map.get(k)) !== signature(p)) map.set(k, { status: 'ambiguous' });
+    }
+    return map;
+  }
+  function priceComparison(current, previous) {
+    if (previous?.status !== 'value' || !Number.isFinite(previous.value)) return { kind: 'missing', text: 'keine Vergleichsdaten' };
+    if (current?.status !== 'value' || !Number.isFinite(current.value)) return { kind: 'missing', text: 'kein aktueller Vergleichspreis' };
+    if ((current.label || '') !== (previous.label || '')) return { kind: 'missing', text: 'abweichende Preisbasis' };
+    const delta = Math.round((current.value - previous.value) * 10000) / 10000;
+    return { kind: delta > 0 ? 'up' : delta < 0 ? 'down' : 'same', delta, text: delta === 0 ? 'unverändert' : '' };
+  }
+
+  root.StockCore = { WARENGRUPPEN, warengruppe, normCode, readStockWorkbook, parseStockWorkbook, toDate, weekPriceMap, priceComparison };
 })(typeof window !== 'undefined' ? window : globalThis);
