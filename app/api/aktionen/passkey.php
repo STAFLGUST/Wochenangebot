@@ -153,7 +153,8 @@ switch ($action) {
                 $name = (string)($pk['name'] ?? '');
                 if ($uh !== null && !hash_equals((string)$u['id'], $uh)) return ['unknown', null, ''];
                 if ($pend && ((string)$pend['uid'] !== $u['id'] || (int)$pend['sv'] !== (int)$u['sv'])) return ['wrong', $u, $name];
-                if ((int)($u['lockedUntil'] ?? 0) > time()) return ['locked', $u, $name];
+                // Keine Sperrprüfung: ein Passkey (Gerät + Bestätigung) lässt sich nicht erraten – eine durch fremde Fehlversuche
+                // ausgelöste Kontosperre soll den Inhaber nicht aussperren (wie Passwort + Code, siehe login)
                 if (!passkey_signature_ok($pk, $ad, $cdRaw, $sig)) {
                     $lockedNow = login_failure($u);
                     $out = $u; unset($u);

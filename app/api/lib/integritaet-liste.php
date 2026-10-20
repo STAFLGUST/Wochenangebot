@@ -17,7 +17,7 @@ return [
     'api/aktionen/kundenportal.php' => '10e56d95f4ce979d39394f579f06117b6b55afac6c8bb3bac4675a26c768e575',
     'api/aktionen/kundenverwaltung.php' => '09ea8e2f88a26454fa2f84f1b7f8c9223137ac9d002127e397107cfb72e96857',
     'api/aktionen/mail.php' => '9ac550c1e5c3dd4aa99fc9669541fe7edb25054425f6b4e8aa7e62f1046450a4',
-    'api/aktionen/passkey.php' => '613a3ae199a54bbb51d03c91554646e3a5f13516fa61f30c2a94d99a6d061d08',
+    'api/aktionen/passkey.php' => 'ff9fa85a51f7e9ec5b4ed4c8a5008236b1947c5ab08d42aa933a2b71a98f5670',
     'api/aktionen/preisverlauf.php' => '9ada53bdc5a1c99641110e5136103c4f89a0b597cff9f0c78297791e6b9c99ca',
     'api/aktionen/schutz.php' => '3325cd6cc291be956907d0b0d58d89001d9d9d5aa89236c600f4b82db4e64a4f',
     'api/aktionen/verwaltung.php' => 'a6b8d9c0850cec49f96440ffb19ea1cf31179ae554f5d8c6c978924420968f5e',

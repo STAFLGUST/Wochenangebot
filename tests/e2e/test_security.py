@@ -44,7 +44,7 @@ with sync_playwright() as p:
     login(a, 'admin', 'Sicheres-Passwort-1')
     check('security tab visible for admin', a.locator('#vt-sec').is_visible())
     a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
-    check('status cards', a.locator('.sec-card').count() == 15, a.locator('.sec-card').count())
+    check('status cards', a.locator('#sec-lage .sec-card').count() == 15, a.locator('#sec-lage .sec-card').count())
     check('own session listed', 'diese Sitzung' in a.inner_text('#view-sec'))
     a.screenshot(path=SH + '/security.png', full_page=True)
     # --- 2FA einrichten

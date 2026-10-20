@@ -410,7 +410,7 @@ with sync_playwright() as p:
     post(a, 'user_save', {'id': tom_id, 'name': 'Tom Muster', 'role': 'editor', 'active': True})
     set_user('tom', lockedUntil=int(time.time()) + 600)
     st, r = PkClient('192.0.2.51').pk_login(k1)
-    check('locked user rejected', st == 429 and 'gesperrt' in r['error'], r)
+    check('locked account (fremde Fehlversuche): Passkey kommt trotzdem durch und hebt die Sperre auf', st == 200 and r.get('user', {}).get('username') == 'tom', r)
     set_user('tom', lockedUntil=0, mustChange=True)
     st, r = PkClient('192.0.2.52').pk_login(k1)
     check('password change pending → passkey login refused', st == 403 and 'neues Passwort' in r['error'], r)
