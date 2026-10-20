@@ -1,6 +1,7 @@
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, os, re, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from playwright.sync_api import sync_playwright
 B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
@@ -15,8 +16,10 @@ master = [a for a in json.load(open(SC + '/master_stock.json')) if a[2] and a[2]
 today = datetime.date.today()
 lim = (today + datetime.timedelta(days=14)).isoformat()
 exp_mhd = [a for a in master if a[3] and a[3] <= lim]
-exp_total = sum(a[2] for a in master)
-fmt = lambda v: f'{v:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
+# Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomma-Summen kippen sonst bei ,xx5 je nach Datum
+dsum = lambda xs: sum((Decimal(str(x)) for x in xs), Decimal(0))
+exp_total = dsum(a[2] for a in master)
+fmt = lambda v: f'{Decimal(str(v)).quantize(Decimal("0.01"), ROUND_HALF_UP):,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
 past = [a for a in master if a[3] and a[3] < today.isoformat()]
 
 def login(pg, user, pw):
@@ -86,7 +89,8 @@ with sync_playwright() as p:
     check('MHD query flat (no group rows)', a.locator('.stab tr.wg-h').count() == 0 and a.locator('.stab tr.wg-sum').count() == 0 and a.locator('.stab.flat').count() == 1)
     dates = [iso(x) for x in a.locator('.stab tr.srow td.s-mhd').all_inner_texts()]
     check('MHD query sorted ascending', dates == sorted(dates))
-    check('MHD query totals', fmt(sum(x[2] for x in exp_mhd)) + ' kg' == a.inner_text('.stab tfoot .s-kg') and fmt(sum(x[4] for x in exp_mhd)) + ' kg' == a.inner_text('.stab tfoot .s-mkg'))
+    tot = (a.inner_text('.stab tfoot .s-kg'), a.inner_text('.stab tfoot .s-mkg'))
+    check('MHD query totals', tot == (fmt(dsum(x[2] for x in exp_mhd)) + ' kg', fmt(dsum(x[4] for x in exp_mhd)) + ' kg'), tot)
     if past:
         check('past MHD: skull + anthracite', a.locator('.stab td.s-mkg.mhd-past .mhd-skull').count() == len(past))
     else:

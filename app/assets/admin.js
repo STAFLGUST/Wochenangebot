@@ -2202,7 +2202,9 @@
   let stockPrices = null;
   let stock = null, stockLoaded = false, stockLoading = null, stockQ = '';
   const fmtKg = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const kgText = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtKg.format(v) + ' kg');
+  /* kaufmännisch auf 0,01 kg runden – über ganze Gramm, damit ,xx5 nicht durch Gleitkomma-Reste nach unten kippt */
+  const kg2 = (v) => { const g = Math.round(v * 1000); return (g < 0 ? -Math.round(-g / 10) : Math.round(g / 10)) / 100; };
+  const kgText = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtKg.format(kg2(v)) + ' kg');
   const mhdShort = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}` : '—');
   function isoToday(plus = 0) {
     const d = new Date();
@@ -2261,7 +2263,8 @@
   const stockPriceText = (p) => !stockPrices?.allowed ? 'keine Berechtigung' : p?.status === 'ambiguous' ? 'mehrere Preisangaben' : p?.status === 'value' ? `${stockPriceNumber.format(p.value)} €${p.label ? ' · ' + p.label : '/kg'}` : p?.status === 'request' ? 'auf Anfrage' : '—';
   const incomingHTML = (a) => a.incoming.length ? `<ul class="st-incoming">${a.incoming.map((d) => `<li><strong>${esc(kgText(d.kg))}</strong> · ${d.arrival ? 'ETA ' + esc(dmy(d.arrival)) : 'ETA unbekannt'}${d.lot ? ` <small>Partie ${esc(d.lot)}</small>` : ''}</li>`).join('')}</ul>` : '<span class="muted">keine Zugangsdaten</span>';
   const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
-  const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? a[f] : 0), 0);
+  /* Summe in ganzen Gramm (exakt, unabhängig von der Reihenfolge) */
+  const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? Math.round(a[f] * 1000) : 0), 0) / 1000;
   /* Normale Suche: Warengruppen, MHD-markierte zuerst (früheste oben), dann Artikelnummer; MHD-Abfrage: flach bis heute + 14 Tage */
   /* Sortierung per Klick auf die Spaltenüberschrift (leere Werte immer unten) */
   let stockSort = store.get('stockSort', null);   // { key, dir } oder null = Standard
