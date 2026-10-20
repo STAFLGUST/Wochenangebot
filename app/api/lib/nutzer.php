@@ -59,6 +59,29 @@ function login_failure(array &$u): bool
     $u['failCount'] = 0;
     return true;
 }
+/* Fehlversuche für unbekannte Benutzernamen wie bei echten Zugängen zählen: gleiche Sperrmeldung nach gleich vielen
+   Versuchen, damit die Antwort nicht verrät, ob es einen Benutzernamen gibt. Gibt das Sperrende zurück (0 = nicht gesperrt). */
+function ghost_lock(string $scope, string $name, bool $fail): int
+{
+    if ($name === '') return 0;
+    return (int)with_lock('anmeldenamen', function () use ($scope, $name, $fail) {
+        $S = sec();
+        $now = time();
+        $a = store_read('anmeldenamen') ?? [];
+        foreach ($a as $k => $v) if ((int)($v['until'] ?? 0) < $now && (int)($v['t'] ?? 0) < $now - 86400) unset($a[$k]);
+        $k = $scope . ':' . hash('sha256', $name);
+        $g = $a[$k] ?? ['n' => 0, 'until' => 0, 't' => 0];
+        if ((int)$g['until'] > $now) return (int)$g['until'];
+        if (!$fail) return 0;
+        $g['n'] = (int)$g['n'] + 1;
+        $g['t'] = $now;
+        $g['until'] = 0;
+        if ($g['n'] >= max(3, (int)$S['lockAfter'])) { $g['until'] = $now + 60 * max(1, (int)$S['lockMinutes']); $g['n'] = 0; }
+        $a[$k] = $g;
+        store_write('anmeldenamen', $a);
+        return (int)$g['until'];
+    });
+}
 function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
 function clean_username($v): string
 {

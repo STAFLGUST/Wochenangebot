@@ -76,6 +76,7 @@ SUITES['einzelangebote'] = SUITES['bestellung']
 SUITES['vkgruppen'] = (8790, 'data-seed', True)
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
+SUITES['sicherheit_freigaben'] = SUITES['bestellung']
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web

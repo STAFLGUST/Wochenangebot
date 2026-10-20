@@ -13,8 +13,9 @@ services:
     environment:
       WA_TESTUMGEBUNG: "1"        # Kennzeichen, E-Mails nur ins Testpostfach
       DOMAIN: ${TEST_DOMAIN}      # Links in (Test-)E-Mails
-    networks: [web]
+      WA_TRUSTED_PROXIES: wa-caddy  # Besucher-IP nur vom Caddy des Echtbetriebs übernehmen
+    networks: [edge]
 networks:
-  web:                            # Netz des Echtbetriebs, damit dessen Caddy test.<Domain> hierher weiterleiten kann
-    name: ${PROD_NETWORK}
+  edge:                           # eigenes Netz nur mit dem Caddy des Echtbetriebs – nicht das Netz der Produktiv-App
+    name: wochenangebot-edge
     external: true
