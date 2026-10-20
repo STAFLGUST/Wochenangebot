@@ -58,6 +58,8 @@ self.addEventListener('fetch', (e) => {
           cache.put(key, kopie).catch(() => {});
           if (a === 'datei') aufraeumen(cache, key);
         }
+      } else if (a === 'angebot' && [401, 403, 404].includes(res.status)) {
+        cache.delete(key).catch(() => {});   // nicht mehr öffentlich/kein Angebot: alte Offline-Kopie nicht weiter anzeigen
       }
       return res;
     } catch (err) {

@@ -5,6 +5,14 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 switch ($action) {
+        /* Kurzinfo für alle, die Kunden-E-Mails senden dürfen: eingerichtet ja/nein und aktuelle Angebotswoche (ohne Postfachdaten) */
+        case 'mail_info': {
+            $me = require_auth();
+            if (!may($me, 'kunden.sehen') && !may($me, 'wochenangebot.senden') && !may($me, 'einzelangebote.bearbeiten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            header('Cache-Control: no-store');
+            respond(['ok' => true, 'configured' => (bool)mail_cfg() && (bool)mail_base_url(), 'week' => mail_week(), 'testumgebung' => testumgebung()]);
+        }
+
         /* ---------- E-Mail-Versand (nur Administrator) ---------- */
         case 'mail_status': {
             require_auth(false, 'admin');

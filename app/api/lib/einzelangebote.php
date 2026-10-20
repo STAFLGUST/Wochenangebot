@@ -60,8 +60,9 @@ function einzel_clean(array $b): array
         } else $price = null;   // Preis auf Anfrage
         $qty = $p['qty'] ?? null;
         if ($qty !== null && $qty !== '') {
-            if (!is_numeric($qty) || (float)$qty <= 0 || (float)$qty > 99999) throw new InvalidArgumentException("Ungültige Menge bei „{$name}“ (0,01 bis 99.999 kg).");
-            $qty = round((float)$qty, 2);
+            if (!is_numeric($qty)) throw new InvalidArgumentException("Ungültige Menge bei „{$name}“ (0,01 bis 99.999 kg).");
+            $qty = round((float)$qty, 2);   // erst runden, dann prüfen – sonst würde 0,004 als „0 kg“ gespeichert
+            if ($qty <= 0 || $qty > 99999) throw new InvalidArgumentException("Ungültige Menge bei „{$name}“ (0,01 bis 99.999 kg).");
         } else $qty = null;
         $pos[] = ['code' => $code, 'name' => $name, 'qty' => $qty, 'price' => $price, 'notiz' => s($p['notiz'] ?? '', 200) ?? ''];
     }
@@ -126,7 +127,7 @@ function einzel_model(array $e): array
     $titel = einzel_titel($e);
     return ['meta' => ['title' => $titel . (!empty($e['gueltigBis']) ? ' – gültig bis ' . date('d.m.Y', strtotime($e['gueltigBis'])) : ''), 'notice' => 'Einzelangebot',
                        'offerId' => 'e-' . $e['id'], 'offerName' => $titel, 'einzel' => true, 'nr' => $e['nr'], 'gueltigBis' => $e['gueltigBis'] ?? null,
-                       'kunde' => einzel_kunden_map()[$e['kid']]['firma'] ?? ''],
+                       'kunde' => einzel_kunden_map()[$e['kid']]['firma'] ?? '', 'hinweis' => (string)($e['hinweis'] ?? '')],   // Hinweis an den Kunden (Bildschirm und Druck)
             'sections' => [], 'groups' => [['id' => $gid, 'name' => $titel, 'section' => '']], 'items' => $items,
             'publishedAt' => (string)($e['freigegebenAt'] ?? $e['changed'] ?? '')];
 }

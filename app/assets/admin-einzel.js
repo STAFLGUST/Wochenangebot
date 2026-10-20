@@ -20,12 +20,21 @@
   const fmtKg = (v) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(v);
   const dmy = (iso) => { if (!iso) return ''; const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}.${m}.${y}`; };
   const key = (c) => { const s = String(c || '').trim(); return /^\d+$/.test(s) ? (s.replace(/^0+/, '') || '0') : s.toUpperCase(); };
-  const zahl = (v) => { const t = String(v ?? '').trim().replace(/\s/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'); if (t === '') return null; const n = Number(t); return Number.isFinite(n) ? n : NaN; };
+  /* Zahl aus deutscher Eingabe: „1.234,5“ (Tausenderpunkte) oder „12,5“. Ohne Komma gilt ein Punkt als Dezimalzeichen
+     („0.125“ = 0,125; Preis „12.345“ = 12,345 wie im Wochenangebot) – nur bei Mengen ist „1.200“ = 1200 kg. */
+  const zahl = (v, art) => {
+    let t = String(v ?? '').trim().replace(/\s/g, '');
+    if (t === '') return null;
+    const tausend = t.includes(',') ? /^[1-9]\d{0,2}(\.\d{3})+,\d+$/.test(t) : art === 'qty' && /^[1-9]\d{0,2}(\.\d{3})+$/.test(t);
+    t = tausend ? t.replace(/\./g, '').replace(',', '.') : t.replace(',', '.');
+    const n = /^\d+(\.\d+)?$/.test(t) ? Number(t) : NaN;
+    return Number.isFinite(n) ? n : NaN;
+  };
   const pText = (v) => (v == null || Number.isNaN(v) ? '' : v.toFixed(2).replace('.', ','));
   const zText = (v) => (v == null ? '' : String(Math.round(v * 100) / 100).replace('.', ','));
   const nat = (x, y) => String(x).localeCompare(String(y), 'de', { numeric: true });
   const STATUS = { entwurf: 'Entwurf', freigegeben: 'Im Portal freigegeben', zurueckgezogen: 'Zurückgezogen' };
-  const isoPlus = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
+  const isoPlus = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toLocaleDateString('sv-SE'); };   // Ortszeit (toISOString wäre UTC)
   const COND = { frisch: 'frisch', gefroren: 'gefroren', unbekannt: '' };
   const OHNE_VK = '–';         // Gruppe „ohne VK-Gruppe“
   const ALLE = '*';            // alle Gruppen
@@ -91,14 +100,14 @@
       </div>
       ${!liste.length ? `<div class="ed-empty"><h3>Noch keine Einzelangebote</h3><p>Ein Einzelangebot gilt für genau einen Kunden: Artikel auswählen, Preise und Mengen eintragen, dann im Portal freigeben, drucken oder per E-Mail senden.</p></div>`
         : !l.length ? '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'
-        : `<div class="gcard"><table class="etab eztab"><thead><tr><th>Nummer</th><th>Kunde</th><th class="ez-m">Titel</th><th class="num">Pos.</th><th class="num ez-m">Warenwert</th><th>Gültig bis</th><th>Status</th><th class="ez-m">Geändert</th></tr></thead><tbody>
-          ${l.map((e) => `<tr data-ez="${esc(e.id)}" tabindex="0"><td class="ez-nr">${esc(e.nr)}</td><td>${esc(e.firma)}${e.kundeNr ? ` <span class="muted">· ${esc(e.kundeNr)}</span>` : ''}</td><td class="ez-m">${esc(e.titel || '')}</td><td class="num">${e.positionCount}</td>
-            <td class="num ez-m">${e.summen.summe ? esc(fmt2.format(e.summen.summe)) + ' €' : '<span class="muted">–</span>'}</td><td>${e.gueltigBis ? esc(dmy(e.gueltigBis)) : '<span class="muted">offen</span>'}</td>
-            <td>${statusChip(e)}</td><td class="ez-m">${esc(dateTime(e.changed))}<div class="sub">${esc(e.changedBy || '')}</div></td></tr>`).join('')}
+        : `<div class="gcard"><table class="etab eztab"><thead><tr><th>Nummer</th><th>Kunde</th><th class="ez-m">Titel</th><th class="num ez-s">Pos.</th><th class="num ez-m">Warenwert</th><th class="ez-s">Gültig bis</th><th>Status</th><th class="ez-m">Geändert</th></tr></thead><tbody>
+          ${l.map((e) => `<tr data-ez="${esc(e.id)}" tabindex="0"><td class="ez-nr">${esc(e.nr)}</td><td>${esc(e.firma)}${e.kundeNr ? ` <span class="muted">· ${esc(e.kundeNr)}</span>` : ''}</td><td class="ez-m">${esc(e.titel || '')}</td><td class="num ez-s">${e.positionCount}</td>
+            <td class="num ez-m">${e.summen.summe ? esc(fmt2.format(e.summen.summe)) + ' €' : '<span class="muted">–</span>'}</td><td class="ez-s">${e.gueltigBis ? esc(dmy(e.gueltigBis)) : '<span class="muted">offen</span>'}</td>
+            <td>${statusChip(e)}${e.gueltigBis ? `<div class="sub ez-bis-m">bis ${esc(dmy(e.gueltigBis))}</div>` : ''}</td><td class="ez-m">${esc(dateTime(e.changed))}<div class="sub">${esc(e.changedBy || '')}</div></td></tr>`).join('')}
         </tbody></table></div>`}`;
   }
   function statusChip(e) {
-    const abgelaufen = e.gueltigBis && e.gueltigBis < new Date().toISOString().slice(0, 10);
+    const abgelaufen = e.gueltigBis && e.gueltigBis < new Date().toLocaleDateString('sv-SE');
     if (e.status === 'freigegeben' && abgelaufen) return '<span class="ez-st ab">abgelaufen</span>';
     return `<span class="ez-st ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span>`;
   }
@@ -412,10 +421,13 @@
     if (!$('#ez-titel')) return;
     ed.titel = $('#ez-titel').value.trim(); ed.gueltigBis = $('#ez-bis').value; ed.hinweis = $('#ez-hinweis').value;
   }
+  let busy = false;   // Doppelklick auf Speichern/Freigeben: nur eine Anfrage (sonst zwei neue Einzelangebote)
   async function speichern() {
+    if (busy) return false;
     kopfLesen();
     const bad = ed.positions.find((p) => Number.isNaN(p.price) || Number.isNaN(p.qty));
     if (bad) { toast(`Bitte Preis bzw. Menge bei „${bad.name}“ prüfen.`); return false; }
+    busy = true;
     try {
       const r = await api('einzel_save', { body: { id: ed.id, revision: ed.revision, kid: ed.kid, titel: ed.titel, gueltigBis: ed.gueltigBis, hinweis: ed.hinweis,
         positions: ed.positions.map((p) => ({ code: p.code, name: p.name, qty: p.qty, price: p.price, notiz: p.notiz || '' })) } });
@@ -425,12 +437,14 @@
       toast(`Einzelangebot ${ed.nr} gespeichert.`);
       renderEditor();
       return true;
-    } catch (e) { toast(e.message, 6000); return false; }
+    } catch (e) { toast(e.message, 6000); return false; } finally { busy = false; }
   }
   async function status(s) {
+    if (busy) return;
     if (dirty && !(await speichern())) return;
+    busy = true;
     try { const r = await api('einzel_status', { body: { id: ed.id, revision: ed.revision, status: s } }); const fr = ed.fracht; ed = r.angebot; ed.fracht = fr; toast(s === 'freigegeben' ? 'Im Portal freigegeben – der Kunde sieht das Angebot nach der Anmeldung.' : 'Freigabe beendet.'); renderEditor(); }
-    catch (e) { toast(e.message, 6000); }
+    catch (e) { toast(e.message, 6000); } finally { busy = false; }
   }
 
   /* ---------- Drucken / PDF: wie auf der Angebotsseite (deren Druckdialog, z. B. Angebotsliste A4 quer) ---------- */
@@ -489,13 +503,13 @@
     const t = e.target;
     if (t.id === 'ez-lq') { listQ = t.value; renderListe(); $('#ez-lq').focus(); $('#ez-lq').setSelectionRange(listQ.length, listQ.length); return; }
     if (t.id === 'ez-kunde') { kq = t.value; kAkt = 0; renderKundenListe(); return; }
-    if (['ez-titel', 'ez-bis', 'ez-hinweis'].includes(t.id)) { markDirty(); return; }
+    if (['ez-titel', 'ez-bis', 'ez-hinweis'].includes(t.id)) { kopfLesen(); markDirty(); return; }   // sofort übernehmen, sonst gehen Eingaben beim Neuzeichnen verloren
     const tr = t.closest('tr[data-i]');
     if (tr && t.dataset.f) {
       const p = ed.positions[+tr.dataset.i];
       if (t.dataset.f === 'name' || t.dataset.f === 'notiz') p[t.dataset.f] = t.value;
       else {
-        const v = zahl(t.value);
+        const v = zahl(t.value, t.dataset.f);
         p[t.dataset.f] = v;
         t.classList.toggle('invalid', Number.isNaN(v) || (v != null && (v < 0 || (t.dataset.f === 'qty' && (v === 0 || v > 99999)))));
         if (t.dataset.f === 'price') { const a = p.code ? idx && idx.get(key(p.code)) : null; tr.querySelector('[data-abw-cell]').innerHTML = abw(v, a && a.stdPrice); }
@@ -554,5 +568,6 @@
   });
   host.addEventListener('mousedown', (e) => { if (e.target.closest('#ez-kunde-list')) e.preventDefault(); });   // Fokus bleibt im Suchfeld
 
-  W.views.einzel = () => { idx = null; render(); };
+  W.views.einzel = () => { idx = null; kunden = null; render(); };   // Kunden neu laden (neue Kunden, geänderte E-Mail-Adressen)
+  window.addEventListener('beforeunload', (e) => { if (ed && dirty) { e.preventDefault(); e.returnValue = ''; } });
 })();

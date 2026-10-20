@@ -336,7 +336,7 @@ kbd { font: 600 11px var(--font); color: var(--muted); border: 1px solid var(--l
 .tabs button[aria-selected="true"] .count { background: var(--accent); color: var(--accent-ink); }
 .toolbar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .select { position: relative; display: inline-flex; }
-.select select { appearance: none; -webkit-appearance: none; height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-sm); font-weight: 500; outline: none; max-width: 230px; }
+.select select { appearance: none; -webkit-appearance: none; height: 36px; padding: 0 34px 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-sm); font-weight: 500; outline: none; max-width: 230px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .select select:focus-visible { box-shadow: var(--focus); }
 .select svg.i { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 2px; box-shadow: var(--shadow-sm); }

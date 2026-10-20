@@ -66,6 +66,7 @@ switch ($action) {
                     $e = $d['list'][$i];
                     if (!is_int($b['revision'] ?? null) || $b['revision'] !== (int)$e['revision']) fail('Das Einzelangebot wurde inzwischen geändert. Bitte neu laden.', 409);
                     $e = array_merge($e, $data, ['revision' => (int)$e['revision'] + 1, 'changed' => now(), 'changedBy' => $me['name']]);
+                    if ($e['status'] === 'freigegeben' && !$e['positions']) fail('Ein im Portal freigegebenes Einzelangebot braucht mindestens eine Position. Bitte zuerst die Freigabe beenden.', 422);
                     if ($e['status'] === 'freigegeben') $e['freigegebenAt'] = einzel_stand($e['freigegebenAt'] ?? null);   // Kunde sieht die Änderung sofort; alte Bestellstände werden abgewiesen
                     $d['list'][$i] = $e;
                 }
@@ -127,6 +128,8 @@ switch ($action) {
             if ($i === null) fail('Einzelangebot nicht gefunden.', 404);
             $e = $d['list'][$i];
             if (!$e['positions']) fail('Das Einzelangebot hat noch keine Positionen.', 422);
+            if (($e['status'] ?? '') === 'zurueckgezogen') fail('Das Einzelangebot ist zurückgezogen und wird nicht mehr versendet.', 422);
+            if (!einzel_gueltig($e)) fail('Das Einzelangebot ist abgelaufen. Bitte zuerst „gültig bis“ anpassen.', 422);
             $c = einzel_kunden_map()[$e['kid']] ?? null;
             if (!$c) fail('Der Kunde existiert nicht mehr.', 404);
             if (empty($c['email'])) fail("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.", 422);

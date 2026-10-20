@@ -9,7 +9,7 @@
   const W = window.WA;
   const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
-  const mailInfo = () => (isAdmin() ? api('mail_status') : Promise.resolve({ configured: true }));   // Postfach-Details nur für Administratoren
+  const mailInfo = () => (isAdmin() ? api('mail_status') : api('mail_info').catch(() => ({ configured: false })));   // Postfach-Details nur für Administratoren; sonst Kurzinfo (eingerichtet, Woche)
   let qTimer = null;
 
   /* ======================= Nutzerverwaltung (Administrator) ======================= */

@@ -147,8 +147,10 @@ switch ($action) {
             $res = with_lock('kunden', function () use ($b, $rows, $anlegen, $pruefen, $FELDER) {
                 $d = customers_load();
                 if (!$pruefen && (int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte die Vorschau neu laden.', 409);
-                $gruppen = array_flip(array_column(kundengruppen_load()['groups'], 'nr'));
-                $vertreter = array_flip(array_column(vertreter_load()['groups'], 'nr'));
+                // Nummern wie in der Liste schreiben („7“ in der Datei passt zu „07“ in den Kundengruppen)
+                $nk = function (string $nr): string { return ctype_digit($nr) ? (ltrim($nr, '0') === '' ? '0' : ltrim($nr, '0')) : strtoupper($nr); };
+                $gruppen = []; foreach (kundengruppen_load()['groups'] as $g) $gruppen[$nk($g['nr'])] = $g['nr'];
+                $vertreter = []; foreach (vertreter_load()['groups'] as $g) $vertreter[$nk($g['nr'])] = $g['nr'];
                 $byNr = []; $byName = [];
                 foreach ($d['customers'] as $i => $c) {
                     if (($c['nr'] ?? '') !== '') $byNr[$c['nr']] = $i;
@@ -163,8 +165,8 @@ switch ($action) {
                     if (mb_strlen($x['firma']) < 2) { $st['ohneFirma']++; continue; }
                     if ($x['nr'] !== '') { if (isset($seen[$x['nr']])) { $st['doppelt']++; continue; } $seen[$x['nr']] = true; }
                     if ($x['email'] !== '' && filter_var($x['email'], FILTER_VALIDATE_EMAIL) === false) { $x['email'] = ''; $st['mailUngueltig']++; }
-                    if ($x['gruppe'] !== '' && !isset($gruppen[$x['gruppe']])) { $fremd[$x['gruppe']] = ($fremd[$x['gruppe']] ?? 0) + 1; $x['gruppe'] = ''; }
-                    foreach (['vertreter', 'vertreter2'] as $f) if ($x[$f] !== '' && !isset($vertreter[$x[$f]])) { $fremdV[$x[$f]] = ($fremdV[$x[$f]] ?? 0) + 1; $x[$f] = ''; }
+                    if ($x['gruppe'] !== '') { if (isset($gruppen[$nk($x['gruppe'])])) $x['gruppe'] = $gruppen[$nk($x['gruppe'])]; else { $fremd[$x['gruppe']] = ($fremd[$x['gruppe']] ?? 0) + 1; $x['gruppe'] = ''; } }
+                    foreach (['vertreter', 'vertreter2'] as $f) if ($x[$f] !== '') { if (isset($vertreter[$nk($x[$f])])) $x[$f] = $vertreter[$nk($x[$f])]; else { $fremdV[$x[$f]] = ($fremdV[$x[$f]] ?? 0) + 1; $x[$f] = ''; } }
                     $idx = $x['nr'] !== '' && isset($byNr[$x['nr']]) ? $byNr[$x['nr']] : ($byName[mb_strtolower($x['firma']) . '|' . $x['plz']] ?? null);
                     if ($idx === null) {
                         if (!$anlegen) { $st['nichtAngelegt']++; continue; }
@@ -173,6 +175,7 @@ switch ($action) {
                         $row += ['angebote' => [], 'active' => true, 'mailAngebot' => false, 'login' => null, 'created' => now(), 'changed' => now()];
                         $d['customers'][] = $row;
                         if ($x['nr'] !== '') $byNr[$x['nr']] = count($d['customers']) - 1;
+                        else $byName[mb_strtolower($x['firma']) . '|' . $x['plz']] = count($d['customers']) - 1;   // gleiche Zeile ohne Nummer nicht doppelt anlegen
                         $st['neu']++;
                         if (count($bspNeu) < 8) $bspNeu[] = ['nr' => $x['nr'], 'firma' => $x['firma'], 'ort' => $x['ort'], 'gruppe' => $x['gruppe']];
                         if (count($ch) < 2000) $ch[] = ['k' => "c{$row['id']}|+", 'code' => $x['nr'], 'name' => $x['firma'], 'f' => 'Neuer Kunde (Import)', 'from' => '', 'to' => trim($x['plz'] . ' ' . $x['ort'])];
@@ -192,7 +195,7 @@ switch ($action) {
                 }
                 if (count($d['customers']) > 20000) fail('Zu viele Kunden (höchstens 20.000).', 422);
                 arsort($fremd); arsort($fremdV);
-                $out = ['stat' => $st, 'gruppenUnbekannt' => array_slice($fremd, 0, 20, true), 'vertreterUnbekannt' => array_slice($fremdV, 0, 20, true), 'beispiele' => ['neu' => $bspNeu, 'aktualisiert' => $bspAkt]];
+                $out = ['stat' => $st, 'gruppenUnbekannt' => (object)array_slice($fremd, 0, 20, true), 'vertreterUnbekannt' => (object)array_slice($fremdV, 0, 20, true), 'beispiele' => ['neu' => $bspNeu, 'aktualisiert' => $bspAkt]];
                 if (!$pruefen && ($st['neu'] || $st['aktualisiert'])) {
                     usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
                     $d['rev'] = (int)$d['rev'] + 1;

@@ -265,6 +265,7 @@
     authCtx = null;
     $('#screen-auth').classList.remove('overlay');
     if (ctx.expired && model && ctx.prevUser === me.id) { $('#screen-auth').hidden = true; $('#screen-editor').hidden = false; applyRole(); if (!ro) saveNow(); }
+    else if (ctx.prevUser && ctx.prevUser !== me.id) location.replace(location.pathname);   // anderer Nutzer: ohne Daten des vorigen neu starten
     else await openEditor();
   }
   $('#auth-form').addEventListener('submit', async (e) => {
@@ -399,6 +400,7 @@
     ro = !may('angebot.bearbeiten');
     roHist = !may('preisverlauf.bearbeiten'); roStock = !may('bestand.importieren'); roMaster = !may('stammdaten.bearbeiten');
     document.body.classList.toggle('ro', ro);
+    document.body.classList.toggle('ro-hist', roHist);   // Preisverlauf hochladen/löschen hängt am eigenen Recht, nicht am Entwurfsrecht
     document.body.classList.toggle('is-admin', can('admin'));
     for (const [v, p] of Object.entries(VIEW_PERM)) $('#vt-' + v).hidden = !viewAllowed(v);
     $('#btn-send').hidden = !may('wochenangebot.senden');
@@ -1193,9 +1195,8 @@
     const f = e.dataTransfer?.files?.[0];
     if (!f || !model) return;
     e.preventDefault();
-    if (ro) return;
-    if (currentView === 'edit') importFile(f);
-    else if (currentView === 'stock') stockImportFile(f);
+    if (currentView === 'edit' && !ro) importFile(f);
+    else if (currentView === 'stock' && !roStock) stockImportFile(f);
   });
 
   const impHead = (t, s) => `<div class="dlg-head"><div><h2 id="imp-title">${t}</h2>${s ? `<p>${s}</p>` : ''}</div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>`;
@@ -1314,11 +1315,15 @@
   /* Stammdaten → Angebote: anlegen, umbenennen, Regel für Artikel ohne eigenen Preis, Kundengruppen, löschen (Administrator).
      Kunden einer zugeordneten Kundengruppe sehen das Angebot ohne eigene Freischaltung (Server: customer_offers). */
   let offerEdit = null, ofDirty = false, ofKg = [], ofKunden = null, ofPick = null;
-  const slug = (t) => fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
+  const slug = (t) => {
+    const x = fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
+    return /^e-/.test(x) || /^\d+$/.test(x) ? `angebot-${x}`.slice(0, 40) : x;   // „e-…“ gehört Einzelangeboten, reine Zahlen gehen in JSON-Schlüsseln kaputt
+  };
   function openOffers() { setView('angebote'); }
   function ofReset() {
     offerEdit = offers.map((o) => ({ ...o, gruppen: [...(o.gruppen || [])] }));
     offerEdit.stdPublic = stdPublic;
+    offerEdit.rev = offersRev;   // Stand beim Beginn der Bearbeitung – sonst würde ein zwischendurch geladener Stand fremde Änderungen überschreiben
     ofDirty = false;
   }
   async function renderOffersView() {
@@ -1354,12 +1359,12 @@
       <div class="gcard of-card"><table class="etab oftab"><thead><tr><th>Angebot</th><th>Kundengruppen</th><th class="of-fb">Artikel ohne eigenen Preis</th><th class="num-s">Eigene Preise</th><th class="num-s">Kunden</th><th class="act"></th></tr></thead><tbody>
         <tr class="of-std" data-ofk="std"><td><strong>Wochenangebot</strong><div class="sub">Standard · ${offerEdit.stdPublic ? 'öffentlich ohne Anmeldung' : 'nur für angemeldete Kunden'}</div>
           ${admin ? `<label class="check of-pub"><input type="checkbox" data-ofa-pub${offerEdit.stdPublic ? ' checked' : ''}> Öffentlich ohne Anmeldung sichtbar</label>` : ''}</td>
-          <td><span class="sub of-auto">${ofKg.length ? `alle übrigen Kundengruppen (${fmtInt.format(ofKg.filter((g) => !ofGruppeBei(g.nr, -1)).length)} von ${fmtInt.format(ofKg.length)})` : 'Kundengruppen ohne eigenes Angebot'}</span></td><td class="of-fb"><span class="sub">–</span></td><td class="num-s">–</td><td class="num-s">${kz(OSTD, [])}</td><td class="act"></td></tr>
+          <td><span class="sub of-auto">${ofKg.length ? `alle übrigen Kundengruppen (${fmtInt.format(ofKg.filter((g) => !ofGruppeBei(g.nr, -1)).length)} von ${fmtInt.format(ofKg.length)})` : 'Kundengruppen ohne eigenes Angebot'}</span></td><td class="of-fb"><span class="sub">–</span></td><td class="num-s" data-l="Eigene Preise">–</td><td class="num-s" data-l="Kunden">${kz(OSTD, [])}</td><td class="act"></td></tr>
         ${offerEdit.map((o, i) => `<tr data-oi="${i}" data-ofk="${i}"><td><input class="in" data-of="name" value="${esc(o.name)}" maxlength="80" aria-label="Name des Angebots"${edit ? '' : ' disabled'}></td>
           <td>${ofChips(o.gruppen, String(i))}</td>
           <td class="of-fb"><select class="in" data-of="fallback" aria-label="Artikel ohne eigenen Preis"${edit ? '' : ' disabled'}><option value="standard"${o.fallback !== 'hidden' ? ' selected' : ''}>Standardpreis zeigen</option><option value="hidden"${o.fallback === 'hidden' ? ' selected' : ''}>nicht anzeigen</option></select></td>
-          <td class="num-s">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ownCount(o.id))}</td>
-          <td class="num-s">${o.isNew ? kz('', o.gruppen) : kz(o.id, o.gruppen)}</td>
+          <td class="num-s" data-l="Eigene Preise">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ownCount(o.id))}</td>
+          <td class="num-s" data-l="Kunden">${o.isNew ? kz('', o.gruppen) : kz(o.id, o.gruppen)}</td>
           <td class="act">${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div>
       ${edit ? `<div class="of-actions"><button type="button" class="btn" data-ofa="add">${icon('plus')}Angebot hinzufügen</button>${ro ? '' : `<button type="button" class="btn" data-ofa="preise" title="Artikelpreise der Warenwirtschaft (CSV) in den Entwurf übernehmen: ohne Kundengruppe = Wochenangebot, mit Kundengruppe = Angebot der Gruppe">${icon('upload')}Preise importieren</button><input type="file" id="of-file" accept=".csv,text/csv,text/plain" hidden>`}<span class="sp"></span>
@@ -1454,7 +1459,7 @@
       });
       b.disabled = true;
       try {
-        const body = { rev: offersRev, offers: list };
+        const body = { rev: offerEdit.rev, offers: list };
         if (may('angebote.loeschen')) body.stdPublic = !!offerEdit.stdPublic;
         const r = await api('offers_save', { body });
         offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
@@ -1882,9 +1887,8 @@
     if (a === 'logout') {
       if (unsaved()) await saveNow();
       try { await api('logout', { body: {} }); } catch { /* ignore */ }
-      csrf = null; model = null; me = null; hist = null;
-      $('#au-user').value = '';
-      showAuth('login');
+      // Seite neu laden: zwischengespeicherte Daten (Bestand, Kunden, Stammdaten …) gehören nicht dem nächsten Nutzer
+      location.replace(location.pathname);
     }
   });
 
@@ -3166,7 +3170,7 @@
     if (a === 'send') {
       const ids = [...restSel];
       if (!(await confirmBox('Sonderposten versenden?', `${plural(restInfo.items.length, 'Sonderposten', 'Sonderposten')} aus „${esc(restInfo.offer.name)}“ gehen jetzt per E-Mail an ${plural(ids.length, 'Kunden', 'Kunden')} dieses Angebots.`, 'Jetzt senden'))) return;
-      restBusy = true; restCount();
+      restBusy = true; dlgRest.dataset.busy = '1'; restCount();
       const note = $('#rp-note').value;
       let okN = 0, badN = 0;
       $('#rp-err').textContent = '';
@@ -3187,7 +3191,7 @@
           if (ex.status === 409 || ex.status === 401 || ex.status === 403) { $('#rp-err').textContent = ex.message; break; }
         }
       }
-      restBusy = false; restCount();
+      restBusy = false; delete dlgRest.dataset.busy; restCount();
       toast(badN ? `${okN} gesendet, ${badN} nicht zugestellt.` : `Sonderposten an ${plural(okN, 'Kunden', 'Kunden')} gesendet.`, 6000);
     }
   });
@@ -3276,7 +3280,13 @@
       const r = await api('master_save', { body: { rev: master.rev, articles: master.articles } });
       master.rev = r.rev; master.updatedAt = r.updatedAt; masterErr = null;
       setMasterState('saved');
-    } catch (e) { masterErr = e.message; setMasterState('error', e.message); }
+    } catch (e) {
+      masterErr = e.message; setMasterState('error', e.message);
+      if (e.status === 409) {   // jemand anderes hat gespeichert: aktuellen Stand laden statt endlos mit altem Stand zu scheitern
+        masterErr = null;
+        try { await loadMaster(true); toast('Die Stammdaten wurden inzwischen an anderer Stelle geändert – der aktuelle Stand wurde geladen. Bitte die letzte Änderung prüfen.', 8000); if (currentView === 'master') renderMasterView(); } catch { /* bleibt beim Fehlerhinweis */ }
+      }
+    }
     finally { masterSaving = false; if (masterQueued) { masterQueued = false; saveMaster(); } }
   }
   function offerStatus(e, by) {
@@ -3311,7 +3321,7 @@
         ${roMaster ? '' : `<span class="st-actions">
           <button type="button" class="btn" data-ma="import" title="Artikelstammdaten-Export der Warenwirtschaft (CSV) einlesen: neue Artikel, VK-Gruppe und GTIN">${icon('upload')}CSV importieren</button><input type="file" id="ms-file" accept=".csv,text/csv,text/plain" hidden>
           <button type="button" class="btn" data-ma="from-draft"${missing ? '' : ' disabled'} title="Artikelnummern aus dem Angebot, die noch keine Stammdaten haben">${icon('plus')}Aus Angebot ergänzen${missing ? ` (${missing})` : ''}</button>
-          <button type="button" class="btn" data-ma="apply-all"${dev ? '' : ' disabled'} title="Abweichende Artikel im Entwurf an die Stammdaten anpassen">${icon('check')}Auf Angebot anwenden${dev ? ` (${dev})` : ''}</button>
+          ${ro ? '' : `<button type="button" class="btn" data-ma="apply-all"${dev ? '' : ' disabled'} title="Abweichende Artikel im Entwurf an die Stammdaten anpassen">${icon('check')}Auf Angebot anwenden${dev ? ` (${dev})` : ''}</button>`}
           <button type="button" class="btn primary" data-ma="new">${icon('plus')}Artikel anlegen</button>
         </span>`}
       </div>
@@ -3394,6 +3404,7 @@
     if (a === 'retry') { saveMaster(); return; }
     if (a === 'import') { $('#ms-file').click(); return; }
     if (a === 'from-draft') { const n = addFromDraft(); saveMaster(); toast(`${plural(n, 'Artikel', 'Artikel')} aus dem Angebot ergänzt.`); renderMasterView(); return; }
+    if ((a === 'apply-all' || a === 'apply1') && ro) return;   // Entwurf darf nicht bearbeitet werden
     if (a === 'apply-all' || a === 'apply1') {
       const preview = clone(model);
       const n = applyMasterTo(preview, a === 'apply1' ? code : null);
