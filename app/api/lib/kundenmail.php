@@ -132,7 +132,7 @@ function mail_tpl_bestellung(array $o, bool $copy): array
 {
     global $CFG;
     $c = $o['kunde'];
-    $subject = $copy ? "Ihr Bestellwunsch {$o['nr']} – {$CFG['company']}" : "Bestellwunsch {$o['nr']} – {$c['firma']}" . ($o['week'] ? " (KW {$o['week']})" : '');
+    $subject = $copy ? "Ihr Bestellwunsch {$o['nr']} – {$CFG['company']}" : "Bestellwunsch {$o['nr']} – {$c['firma']}" . ($o['week'] ? " (KW {$o['week']}/{$o['year']})" : '');
     $intro = $copy
         ? "vielen Dank für Ihren Bestellwunsch. Wir haben ihn erhalten und melden uns mit der Bestätigung bei Ihnen. Bitte beachten Sie: Erst mit unserer Bestätigung ist die Bestellung verbindlich."
         : "über das Angebotsportal ist ein neuer Bestellwunsch eingegangen.";
@@ -171,7 +171,7 @@ function mail_tpl_bestellung(array $o, bool $copy): array
         $td = 'style="padding:6px 6px;border-bottom:1px solid #eee8e1;vertical-align:top;"'; $tdr = 'style="padding:6px 6px;border-bottom:1px solid #eee8e1;text-align:right;white-space:nowrap;vertical-align:top;"';
         $h .= '<tr><td ' . $td . '>' . mail_h($p['code']) . '</td><td ' . $td . '>' . mail_h($p['name']) . ($p['group'] ? '<br><span style="font-size:11.5px;color:#857c72;">' . mail_h($p['group']) . '</span>' : '') . '</td><td ' . $tdr . '>' . de_qty($p['qty']) . ' kg</td><td ' . $tdr . '>' . mail_h($pr($p)) . '</td><td ' . $tdr . '>' . mail_h($sum($p)) . '</td></tr>';
     }
-    $h .= '<tr><td colspan="2" style="padding:8px 6px;font-weight:bold;">Summe (ca.)</td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_qty($o['totalQty']) . ' kg</td><td></td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total']) . ' €</td></tr></table>'
+    $h .= '<tr><td colspan="2" style="padding:8px 6px;font-weight:bold;">Warenwert (ca.)</td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_qty($o['totalQty']) . ' kg</td><td></td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total']) . ' €</td></tr></table>'
         . ($fk > 0 ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13.5px;border-collapse:collapse;"><tr><td style="padding:4px 6px;">' . mail_h($frT) . '</td><td style="padding:4px 6px;text-align:right;white-space:nowrap;">' . de_num($fk) . ' €</td></tr><tr><td style="padding:4px 6px;font-weight:bold;">Gesamt (ca.)</td><td style="padding:4px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total'] + $fk) . ' €</td></tr></table>' : '')
         . ($o['onRequest'] ? '<p style="margin:6px 0 0;font-size:12.5px;color:#857c72;">Zzgl. ' . $o['onRequest'] . ' Position(en) mit Preis auf Anfrage.</p>' : '')
         . ($o['bemerkung'] !== '' ? '<p style="margin:14px 0 0;padding:10px 12px;background:#f7efe9;border-radius:8px;"><strong>Bemerkung:</strong><br>' . nl2br(mail_h($o['bemerkung'])) . '</p>' : '')

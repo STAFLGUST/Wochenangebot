@@ -150,7 +150,8 @@ select.in { appearance: none; -webkit-appearance: none; cursor: pointer; padding
   .etab .e-price { width: 96px; }
   .form-grid.two { grid-template-columns: 1fr; }
 }
-.auth.overlay { position: fixed; inset: 0; z-index: 100; background: rgba(20, 18, 16, .5); backdrop-filter: blur(3px); }
+.auth.overlay { position: fixed; inset: 0; z-index: 100; background: var(--bg); }   /* deckend: nach Ablauf der Sitzung keine Daten (Bestand, EK, Kunden) mehr hinter dem Anmeldefenster */
+body:has(.auth.overlay:not([hidden])) #screen-editor { visibility: hidden; }
 @media (max-width: 640px) { .adm #btn-import { display: inline-flex; } }
 
 /* ==========================================================================
@@ -369,9 +370,9 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .st-price-change { font-size: 12px; }
 .st-price-change.up { color: #b91c1c; font-weight: 700; }
 .st-price-change.down { color: #15803d; font-weight: 700; }
-[data-theme="dark"] .st-price-change.up { color: #fca5a5; }
-[data-theme="dark"] .st-price-change.down { color: #86efac; }
-@media (prefers-color-scheme: dark) {
+@media screen { [data-theme="dark"] .st-price-change.up { color: #fca5a5; } }
+@media screen { [data-theme="dark"] .st-price-change.down { color: #86efac; } }
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .st-price-change.up { color: #fca5a5; }
   :root:not([data-theme="light"]) .st-price-change.down { color: #86efac; }
 }
@@ -713,8 +714,8 @@ body.ro .vtog { display: none; }
 .wartung-form.on { border-color: #f0c27a; box-shadow: inset 4px 0 0 #e0901f, var(--shadow); }
 .wartung-form textarea { font-family: inherit !important; }
 .wartung-foot { gap: 10px; align-items: center; flex-wrap: wrap; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
-:root[data-theme="dark"] .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
+@media screen { :root[data-theme="dark"] .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 
 /* Gemeinsames Bearbeiten: wer ist noch im Eingabebereich, von anderen geänderte Zeilen */
 .save-state .editors { display: inline-flex; align-items: center; gap: 5px; margin-left: 4px; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; flex: none; }
@@ -754,8 +755,8 @@ body.ro .vtog { display: none; }
 @media (max-width: 560px) { .ordtab .ord-sum { display: none; } .ord-meta { grid-template-columns: 1fr; } .ordpos th:first-child, .ordpos td:first-child { display: none; } }
 /* Sonderposten (kurzes MHD, solange der Vorrat reicht) und Kein-Bestand-Zeichen */
 :root { --sale: #c2410c; --sale-bg: #fff1e6; --nostock: #dc2626; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; } }
-:root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; } }
+@media screen { :root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; } }
 .vtog.sale.hot { opacity: 1; color: var(--sale); }
 .vtog.sale.on { opacity: 1; color: #fff; background: var(--sale); }
 .sale-tag { display: inline-block; margin-top: 3px; border: 0; border-radius: 99px; padding: 1px 8px; font: 600 11px var(--font); background: var(--sale-bg); color: var(--sale); cursor: pointer; white-space: nowrap; }
@@ -1268,3 +1269,30 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   .oftab td.of-fb select.in { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
   .of-chip { max-width: 100%; }
 }
+
+/* Druck aus dem Eingabebereich (Strg+P): die geöffnete Ansicht ohne Navigation, Kopfleisten-Knöpfe und Bedienelemente,
+   Tabellen in voller Breite statt mit Scrollbereich (vorher kam ein leeres Blatt heraus) */
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body.adm > :where(:not(#screen-editor)) { display: none !important; }   /* :where – damit ein offenes Fenster (unten) gewinnt */
+  body.adm #screen-editor[hidden] { display: none !important; }
+  .adm .topbar { position: static !important; border-bottom: .6pt solid #999; background: #fff !important; backdrop-filter: none; }
+  .adm .topbar .actions, .adm .save-state, .adm .side-nav, .adm .menu, .adm .toast, .adm .adm-wartung { display: none !important; }
+  .adm .adm-shell { display: block; }
+  .adm .adm-shell .adm-page { max-width: none; padding: 0; }
+  .adm .adm-page .btn, .adm .adm-page .ibtn, .adm .adm-page input[type="file"], .adm .adm-page input[type="search"], .adm .adm-page .search { display: none !important; }
+  .adm .adm-page thead, .adm .adm-page th, .adm .adm-page .view-bar { position: static !important; }   /* klebende Köpfe */
+  .adm .adm-page * { box-shadow: none !important; }
+  .adm .adm-page [style*="overflow"], .adm .adm-page .st-card, .adm .adm-page .lot-scroll, .adm .adm-page .sec-block, .adm .adm-page .ek-wrap, .adm .adm-page .tl-wrap, .adm .adm-page .rm-wrap, .adm .adm-page .aw-tw, .adm .adm-page .ez-pos, .adm .adm-page .ez-dtw, .adm .adm-page .of-card { overflow: visible !important; max-height: none !important; width: auto; max-width: none; }
+  .adm .adm-page table { min-width: 0 !important; width: 100% !important; }
+  .adm .adm-page tr { break-inside: avoid; }
+  .adm .adm-page .card, .adm .adm-page .panel { border-color: #bbb; }
+  /* Offenes Fenster (z. B. Bestellwunsch, Kunde): nur das Fenster drucken, nicht die Liste dahinter */
+  body.adm:has(dialog[open]) > #screen-editor { display: none !important; }
+  body.adm:has(dialog[open]) > dialog[open] { display: block !important; position: static; inset: auto; margin: 0; width: auto !important; max-width: none !important; max-height: none; border: 0; box-shadow: none; overflow: visible; animation: none; }
+  body.adm dialog[open]::backdrop { display: none; }
+  body.adm dialog[open] .dlg { max-height: none; }
+  body.adm dialog[open] .dlg-body { overflow: visible; }
+  body.adm dialog[open] .dlg-foot, body.adm dialog[open] .dlg-head .btn, body.adm dialog[open] .ibtn { display: none !important; }
+}
+

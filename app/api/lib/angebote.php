@@ -134,7 +134,7 @@ function offer_resolve(array $m, array $def): array
     foreach ($m['items'] ?? [] as $it) {
         $v = $it['variants'][$def['id']] ?? null;
         $sale = sale_for($it, $def['id']);
-        unset($it['variants'], $it['sale']);
+        unset($it['variants'], $it['sale'], $it['cell']);   // Zelladresse der Excel-Datei ist intern
         if ($v && $v['status'] === 'hidden') continue;
         if ($sale !== null && sold_out($it)) continue;   // Sonderposten ausverkauft
         $regular = $it['price'];
@@ -163,6 +163,7 @@ function offer_resolve(array $m, array $def): array
     foreach ($m['groups'] as $g) if (($g['section'] ?? '') !== '' && !in_array($g['section'], $secs, true)) $secs[] = $g['section'];
     $m['sections'] = $secs;
     $m['items'] = $items;
+    unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
     $m['meta']['offerId'] = $def['id'];
     $m['meta']['offerName'] = $def['name'];
     return $m;

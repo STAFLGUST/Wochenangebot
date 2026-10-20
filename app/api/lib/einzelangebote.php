@@ -220,14 +220,22 @@ function einzel_pdf(array $e, ?array $c): string
     $titel = einzel_titel($e);
     $bis = !empty($e['gueltigBis']) ? date('d.m.Y', strtotime($e['gueltigBis'])) : '';
     $firma = $c['firma'] ?? '';
+    $stand = date('d.m.Y', strtotime((string)($e['freigegebenAt'] ?? $e['changed'] ?? 'now')) ?: time());   // wie die Angebotsseite: Stand des Angebots, nicht Druckdatum
+    // Text auf eine Breite kürzen (mit „…“) – lange Titel, Firmen oder Artikelnummern laufen sonst über Spalten und Seitenrand
+    $fit = function (string $t, float $size, float $max, bool $bold = false): string {
+        if (Pdf::width($t, $size, $bold) <= $max) return $t;
+        while ($t !== '' && Pdf::width($t . '…', $size, $bold) > $max) $t = mb_substr($t, 0, -1);
+        return rtrim($t) . '…';
+    };
 
     // Bausteine: Kopf eines Blocks, Zeilen, Abschlusstexte
     $rows = [];
     foreach ($e['positions'] as $i => $p) {
         $name = $p['name'] . ($p['notiz'] !== '' ? ' – ' . $p['notiz'] : '');
         $lines = Pdf::wrap($name, $FS, $wName);
-        $h = 4.6 + count($lines) * $LH + ($p['qty'] !== null ? 9 : 0);
-        $rows[] = ['t' => 'row', 'p' => $p, 'lines' => $lines, 'h' => $h, 'z' => $i % 2 === 0];
+        $eigen = Pdf::width($p['code'], $FS) > $wCode - 6;   // lange (freie) Artikelnummer: eigene Zeile über der Bezeichnung statt Überlappung
+        $h = 4.6 + (count($lines) + ($eigen ? 1 : 0)) * $LH + ($p['qty'] !== null ? 9 : 0);
+        $rows[] = ['t' => 'row', 'p' => $p, 'lines' => $lines, 'h' => $h, 'z' => $i % 2 === 0, 'eigen' => $eigen];
     }
     $tail = [];
     $su = einzel_summe($e);
@@ -265,9 +273,9 @@ function einzel_pdf(array $e, ?array $c): string
         if ($pi === 0) {
             $lh = $pdf->jpeg(__DIR__ . '/druck-logo.jpg', $ML, $MT, 135);
             $tx = $ML + 135 + 16;
-            $pdf->text($tx, $MT + 19, $titel, 15, true);
-            $sub = 'Angebot ' . $e['nr'] . ($firma !== '' ? ' für ' . $firma : '') . ($bis !== '' ? ' · gültig bis ' . $bis : '') . ' · Stand ' . date('d.m.Y') . ' · Preise in € je kg';
-            $pdf->text($tx, $MT + 34, $sub, 8.6, false, '#555555');
+            $pdf->text($tx, $MT + 19, $fit($titel, 15, $W - $ML - $tx, true), 15, true);
+            $sub = 'Angebot ' . $e['nr'] . ($firma !== '' ? ' für ' . $firma : '') . ($bis !== '' ? ' · gültig bis ' . $bis : '') . ' · Stand ' . $stand . ' · Preise in € je kg';
+            $pdf->text($tx, $MT + 34, $fit($sub, 8.6, $W - $ML - $tx), 8.6, false, '#555555');
             $pdf->line($ML, $MT + max($lh, 40) + 8, $W - $ML, $MT + max($lh, 40) + 8, 1.4, '#8c1d2c');
         }
         foreach ($cols as $ci => $items) {
@@ -277,7 +285,7 @@ function einzel_pdf(array $e, ?array $c): string
             if ($hasRows) {
                 $hy = $top($pi) + 11;
                 $cont = $pi > 0 || $ci > 0;
-                $pdf->text($x + 3, $hy, $titel . ($cont ? ' (Forts.)' : ''), 9.2, true);
+                $pdf->text($x + 3, $hy, $fit($titel, 9.2, $colW - 60 - ($cont ? Pdf::width(' (Forts.)', 9.2, true) : 0), true) . ($cont ? ' (Forts.)' : ''), 9.2, true);
                 $pdf->text($x + $colW - 4, $hy, '€ / kg', 8, true, '#111111', 'r');
                 $pdf->line($x, $hy + 4.5, $x + $colW, $hy + 4.5, 1.1);
             }
@@ -290,7 +298,8 @@ function einzel_pdf(array $e, ?array $c): string
                 $p = $it['p']; $ry = $it['y'];
                 if ($it['z']) $pdf->rect($x, $ry, $colW, $it['h'], '#f1f1ee');
                 $by = $ry + 3 + $LH - 2.2;
-                $pdf->text($x + 3, $by, $p['code'], $FS);
+                $pdf->text($x + 3, $by, $it['eigen'] ? $fit($p['code'], $FS, $colW - $wPrice - 8) : $p['code'], $FS);
+                if ($it['eigen']) $by += $LH;
                 foreach ($it['lines'] as $li => $l) $pdf->text($x + $wCode, $by + $li * $LH, $l, $FS);
                 if ($p['qty'] !== null) $pdf->text($x + $wCode, $by + count($it['lines']) * $LH - 1, 'Menge ' . de_qty($p['qty']) . ' kg', 7.4, false, '#555555');
                 if ($p['price'] !== null) $pdf->text($x + $colW - 4, $by, de_num((float)$p['price']), $FS + .2, true, '#111111', 'r');
@@ -298,7 +307,7 @@ function einzel_pdf(array $e, ?array $c): string
             }
         }
         $fy = $H - 16;
-        $pdf->text($ML, $fy, ($CFG['company'] ?? '') . ' · Angebot ' . $e['nr'] . ' · ' . $titel . ' · Preise in € je kg', 7, false, '#777777');
+        $pdf->text($ML, $fy, $fit(($CFG['company'] ?? '') . ' · Angebot ' . $e['nr'] . ' · ' . $titel . ' · Preise in € je kg', 7, $W - 2 * $ML - 70), 7, false, '#777777');
         $pdf->text($W - $ML, $fy, 'Seite ' . ($pi + 1) . ' von ' . $n, 7, false, '#777777', 'r');
     }
     return $pdf->output('Angebot ' . $e['nr'] . ' – ' . $titel);

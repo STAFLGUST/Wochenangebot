@@ -48,7 +48,9 @@ with sync_playwright() as p:
     check('own session listed', 'diese Sitzung' in a.inner_text('#view-sec'))
     a.screenshot(path=SH + '/security.png', full_page=True)
     # --- 2FA einrichten
-    a.click('#btn-more'); a.click('[data-act="twofa"]'); a.wait_for_selector('#dlg-twofa .tf-qr svg')
+    a.click('#btn-more'); a.click('[data-act="twofa"]'); a.wait_for_selector('#dlg-twofa #tf-pw0')
+    check('setup starts with password confirmation', a.locator('#dlg-twofa .tf-qr').count() == 0)
+    a.fill('#tf-pw0', 'Sicheres-Passwort-1'); a.click('#tf-start [type=submit]'); a.wait_for_selector('#dlg-twofa .tf-qr svg')
     check('QR code rendered', a.locator('#dlg-twofa .tf-qr svg').count() == 1)
     secret = a.text_content('#dlg-twofa .tf-secret').replace(' ', '')
     a.fill('#dlg-twofa [data-tf=code]', '000000'); a.click('#dlg-twofa [data-tf=enable]'); a.wait_for_timeout(300)

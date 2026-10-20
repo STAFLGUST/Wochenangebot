@@ -257,6 +257,7 @@
     me = r.user;
     if (r.recoveryLeft != null) toast(`Mit Wiederherstellungscode angemeldet – noch ${r.recoveryLeft} Codes übrig. Bei Bedarf unter „Zwei-Faktor-Anmeldung“ neu einrichten.`, 8000);
     if (me.mustChange) { loginPw = pw; showAuth('newpw'); return; }
+    loginPw = '';   // nach erfolgreicher Anmeldung nicht im Speicher behalten
     if (me.needTwofa) { showAuth('twofa'); return; }
     await finishLogin();
   }
@@ -361,9 +362,11 @@
     const head = `<div class="dlg-head"><div><h2 id="tf-title">Zwei-Faktor-Anmeldung</h2><p>Zusätzlich zum Passwort wird bei der Anmeldung ein Code aus einer Authenticator-App abgefragt.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
     const done = () => { d.close(); toast('Zwei-Faktor-Anmeldung ist eingeschaltet.'); applyRole(); };
     if (!me.twofa) {
-      $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host"></div>`;
+      $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host"><form id="tf-start"><label class="fld"><span>Aktuelles Passwort eingeben</span><input type="password" id="tf-pw0" autocomplete="current-password" required></label>
+        <button type="submit" class="btn primary">Weiter</button></form></div>`;
       d.showModal();
-      renderTwofaSetup($('#tf-host'), done);
+      $('#tf-start').addEventListener('submit', (e) => { e.preventDefault(); renderTwofaSetup($('#tf-host'), done, $('#tf-pw0').value); });
+      setTimeout(() => $('#tf-pw0').focus(), 30);
       return;
     }
     $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host">
@@ -2765,13 +2768,13 @@
     if (!w) { toast('Druckfenster wurde blockiert – bitte Pop-ups für diese Seite erlauben.'); return; }
     const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}`;
     w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
-      @page { size: A4; margin: 12mm 10mm; }
+      @page { size: A4 landscape; margin: 10mm; }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font: 9.5pt/1.3 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1b1a18; margin: 0; }
       h1 { font-size: 13pt; margin: 0 0 2px; } .meta { color: #666; font-size: 8.5pt; margin: 0 0 8px; }
       table { width: 100%; border-collapse: collapse; } th, td { padding: 2.5px 5px; border-bottom: .5pt solid #ddd; }
       th { font-size: 8pt; text-align: center; vertical-align: bottom; border-bottom: 1pt solid #999; }
-      td.s-name { white-space: normal; } .st-incoming { margin:0; padding-left:12px; } .st-price-change.up { color:#b91c1c; } .st-price-change.down { color:#15803d; } .s-code { width: 44px; } .s-vk, .s-kg, .s-mkg { text-align: right; white-space: nowrap; } .s-mhd { text-align: center; white-space: nowrap; }
+      td.s-name { white-space: normal; } .st-incoming { margin:0; padding-left:12px; } .st-price-change.up { color:#b91c1c; } .st-price-change.down { color:#15803d; } .s-code { width: 44px; } .s-vk, .s-prev, .s-kg, .s-mkg, .s-registered, .s-total-kg { text-align: right; white-space: nowrap; } .s-mhd { text-align: center; white-space: nowrap; }
       .s-mkg { font-weight: 700; } thead { display: table-header-group; } tr { break-inside: avoid; }
       .wg-h td { font-weight: 700; padding-top: 8px; border-bottom: 1pt solid #999; } .wg-sum td, .st-total td { font-weight: 700; background: #f3f1ee; }
       .wg-gap td { border: 0; height: 6px; padding: 0; } .st-total td { border-top: 1.5pt solid #333; }

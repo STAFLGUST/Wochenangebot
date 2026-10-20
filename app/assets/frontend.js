@@ -27,7 +27,7 @@ const store = {
   del(k) { try { localStorage.removeItem(STORAGE + k); } catch { /* ignore */ } },
 };
 
-const fmtNum = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+const fmtNum = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });   // wie Bestellwunsch, E-Mail und Abrechnung (Cent)
 const fmtInt = new Intl.NumberFormat('de-DE');
 const fmtPct = new Intl.NumberFormat('de-DE', { style: 'percent', maximumFractionDigits: 0 });
 const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
@@ -74,8 +74,9 @@ function frachtFuer(kg) {
   for (const st of f.staffeln) if (kg < st.unter) hit = st;
   return { kosten: hit ? hit.kosten : 0, unter: hit ? hit.unter : null, frei: f.frei };
 }
+const eigenerHinweis = () => (DATA && DATA.meta && DATA.meta.einzel && DATA.meta.hinweis ? String(DATA.meta.hinweis).split('\n').filter((l) => l.trim()) : []);   // Hinweis des Einzelangebots
 const hinweisHTML = (cls) => {
-  const eigen = DATA && DATA.meta && DATA.meta.einzel && DATA.meta.hinweis ? String(DATA.meta.hinweis).split('\n').filter((l) => l.trim()) : [];   // Hinweis des Einzelangebots
+  const eigen = eigenerHinweis();
   const fr = FRACHT && FRACHT.hinweis && FRACHT.hinweis.length ? FRACHT.hinweis : [];
   if (!eigen.length && !fr.length) return '';
   return `<aside class="${cls}" aria-label="Hinweis zum Angebot">${eigen.map((l, i) => `<p${i === 0 ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}${fr.map((l, i) => `<p${i === 0 && !eigen.length ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}</aside>`;
@@ -510,7 +511,10 @@ function plFill(units, k, H) {
 }
 function plBalance(units, k) {
   const total = units.reduce((a, u) => a + u.head + u.items.reduce((b, i) => b + u.weight(i), 0), 0);
-  let lo = Math.max(total / k, ...units.map((u) => u.head + Math.max(...u.items.map(u.weight)))), hi = total + 1, best = plFill(units, k, hi);
+  /* Untergrenze der Spaltenhöhe: kleine Gruppen (bis 5 Positionen) werden nie geteilt, größere frühestens nach 3 Positionen –
+     sonst verteilt der Ausgleich z. B. ein Einzelangebot mit zwei Positionen auf zwei Spalten („Forts.“) */
+  const minH = (u) => u.head + u.items.slice(0, u.items.length <= 5 ? u.items.length : 3).reduce((a, i) => a + u.weight(i), 0);
+  let lo = Math.max(total / k, ...units.map(minH)), hi = total + 1, best = plFill(units, k, hi);
   for (let n = 0; n < 24 && hi - lo > 0.25; n++) {
     const mid = (lo + hi) / 2, c = plFill(units, k, mid);
     if (c.length <= k) { best = c; hi = mid; } else lo = mid;
@@ -520,7 +524,8 @@ function plBalance(units, k) {
 }
 function plUnits(list, grouped, charsPerLine) {
   const weight = (i) => 1 + (plName(i).length + (i.sale ? 14 : 0) > charsPerLine ? 0.85 : 0);
-  if (!grouped) return [{ key: 'all', title: `Alle Artikel, sortiert nach ${esc({ price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey] || '')}`, items: list, labels: plLabels(list), head: 1.8, weight, section: '' }];
+  const nach = { price: 'Preis', name: 'Bezeichnung', code: 'Artikelnummer', cat: 'Fleischart', origin: 'Herkunft', cond: 'Zustand' }[state.sortKey];
+  if (!grouped) return [{ key: 'all', title: nach ? `Alle Artikel, sortiert nach ${esc(nach)}` : 'Alle Artikel', items: list, labels: plLabels(list), head: 1.8, weight, section: '' }];
   const units = [];
   for (const it of list) {
     const u = units[units.length - 1];
@@ -598,7 +603,7 @@ function buildPrintListe(list, grouped, scopeText) {
     per.forEach((cols3, n) => pages.push({ sec: sec.name, cont: n > 0, cols: cols3, cap: plCap(false, !!sec.name) }));
   }
   /* Hinweis wie in der Excel-Liste: in die Spalte mit dem meisten Platz, sonst unter die Spalten, sonst auf eine eigene Seite */
-  const lines = (FRACHT && FRACHT.hinweis) || [];
+  const lines = [...eigenerHinweis(), ...((FRACHT && FRACHT.hinweis) || [])];   // wie hinweisHTML
   let notePos = null;
   if (lines.length && pages.length) {
     const last = pages[pages.length - 1], used = last.cols.map(colW);
@@ -611,7 +616,7 @@ function buildPrintListe(list, grouped, scopeText) {
   }
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
   const m = DATA.meta || {};
-  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}${m.einzel && m.kunde ? 'für ' + esc(m.kunde) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
+  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}${m.einzel && (m.nr || m.kunde) ? [m.nr ? 'Angebot ' + esc(m.nr) : '', m.kunde ? 'für ' + esc(m.kunde) : ''].filter(Boolean).join(' ') + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
     ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
     <div class="al-cols" style="--k:3">${pg.cols.map((c, ci) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}${notePos && notePos.page === n && notePos.col === ci ? hinweisHTML('al-note in-col') : ''}</div>`).join('')}</div>${notePos && notePos.page === n && notePos.col === -1 ? hinweisHTML('al-note') : ''}</section>`).join('');
 }
@@ -892,6 +897,7 @@ function openPrint(scope) {
   for (const el of $$('[data-n]', dlgPrint)) el.textContent = fmtInt.format(counts[el.dataset.n]);
   for (const r of $$('input[name="scope"]', dlgPrint)) r.disabled = !counts[r.value];
   $('#print-filter-desc').textContent = describeFilters() || 'Entspricht derzeit dem gesamten Angebot';
+  $('#print-all-desc').textContent = DATA.meta && DATA.meta.einzel ? 'Alle Positionen dieses Angebots' : 'Alle Positionen dieser Woche';
   const pick = scope || (hasFilters() || state.tab === 'fav' ? 'filtered' : 'all');
   const radio = $(`input[name="scope"][value="${pick}"]`, dlgPrint);
   (radio && !radio.disabled ? radio : $('input[name="scope"][value="all"]', dlgPrint)).checked = true;
@@ -911,13 +917,13 @@ function printAltNote(it) {
 function buildPrint({ scope, layout, grouped }) {
   const m = DATA.meta;
   let list = scope === 'all' ? DATA.items.slice() : scope === 'fav' ? favItems() : current.slice();
-  if (grouped) list = sortItems(list, 'offer', 'asc');
+  list = grouped ? sortItems(list, 'offer', 'asc') : sortItems(list);   // ungegliedert: Reihenfolge wie die Überschrift („sortiert nach …“)
   const scopeText = scope === 'all' ? 'Gesamtes Angebot' : scope === 'fav' ? 'Merkliste' : (describeFilters() || 'Gesamtes Angebot');
-  const head = `<header class="p-head">
-      <div>${COMPANY ? `<div class="p-company">${esc(COMPANY)}</div>` : ''}
-        <h1 class="p-title">${m.einzel ? `${esc(offerTitle())} <span>${esc(bisText(m))}</span>` : `Wochenangebot <span>KW ${esc(m.week ?? '?')} / ${esc(m.year ?? '?')}</span>`}</h1>
+  const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();   // wie in der Angebotsliste: Stand der Veröffentlichung
+  const head = `<header class="p-head">${PL_LOGO.replace('class="al-logo"', 'class="al-logo p-logo"')}
+      <div class="p-ht"><h1 class="p-title">${esc(offerTitle())} <span>${m.einzel ? esc(bisText(m)) : `KW ${esc(m.week ?? '?')} / ${esc(m.year ?? '?')}`}</span></h1>
         <div class="p-sub">${esc(m.notice || 'Angebot')}${m.einzel && m.nr ? ' ' + esc(m.nr) : ''}${m.einzel && m.kunde ? ' für ' + esc(m.kunde) : ''}${m.weekStart ? ` · Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : ''} · Preise in € je kg · „–“ = ohne Preisangabe</div></div>
-      <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${today()}</div>
+      <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${esc(stand)}</div>
     </header>`;
   let body = '';
   if (layout === 'liste') {
@@ -927,10 +933,10 @@ function buildPrint({ scope, layout, grouped }) {
     let sec = null, grp = null;
     for (const it of list) {
       if (grouped) {
-        if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="sr"><td colspan="6">${esc(sec)}</td></tr>`); }
-        if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="gr"><td colspan="6">${esc(it.group)}</td></tr>`); }
+        if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="sr"><td colspan="6">${plGroupName(sec)}</td></tr>`); }
+        if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="gr"><td colspan="6">${plGroupName(it.group)}</td></tr>`); }
       }
-      rows.push(`<tr><td class="p-c">${esc(it.code || '—')}</td><td>${esc(it.name)}${printAltNote(it)}${grouped ? '' : `<small style="display:block;color:#777">${esc(it.group)}</small>`}</td><td>${esc(it.category)}</td><td>${esc(it.origin || '—')}</td><td>${esc(COND_LABEL[it.condition])}</td><td class="r">${printPriceCell(it.price)}</td></tr>`);
+      rows.push(`<tr><td class="p-c">${esc(it.code || '—')}</td><td>${esc(it.name)}${printAltNote(it)}${grouped ? '' : `<small style="display:block;color:#777">${plGroupName(it.group)}</small>`}</td><td>${esc(it.category)}</td><td>${esc(it.origin || '—')}</td><td>${esc(COND_LABEL[it.condition])}</td><td class="r">${printPriceCell(it.price)}</td></tr>`);
     }
     body = `<table class="p-table"><thead><tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Fleischart</th><th>Herkunft</th><th>Zustand</th><th class="r">€/kg</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
   } else {
@@ -938,8 +944,8 @@ function buildPrint({ scope, layout, grouped }) {
     if (grouped) {
       let sec = null, grp = null, out = '';
       for (const it of list) {
-        if (it.section !== sec) { if (grp !== null) out += '</div>'; grp = null; sec = it.section; if (sec) out += `<div class="p-section">${esc(sec)}</div>`; }
-        if (it.groupId !== grp) { if (grp !== null) out += '</div>'; grp = it.groupId; out += `<div class="p-group"><div class="p-gh">${esc(it.group)}<span>€/kg</span></div>`; }
+        if (it.section !== sec) { if (grp !== null) out += '</div>'; grp = null; sec = it.section; if (sec) out += `<div class="p-section">${plGroupName(sec)}</div>`; }
+        if (it.groupId !== grp) { if (grp !== null) out += '</div>'; grp = it.groupId; out += `<div class="p-group"><div class="p-gh"><span class="p-gt">${plGroupName(it.group)}</span><span>€/kg</span></div>`; }
         out += row(it);
       }
       body = `<div class="p-cols">${out}${grp !== null ? '</div>' : ''}</div>`;
@@ -962,7 +968,7 @@ function doPrint(opts) {
   setTimeout(() => window.print(), 60);
 }
 window.addEventListener('beforeprint', () => {
-  if (!printPrepared) buildPrint({ scope: hasFilters() || state.tab === 'fav' ? 'filtered' : 'all', layout: 'liste', grouped: state.sortKey === 'offer' });
+  if (!printPrepared) buildPrint({ scope: (hasFilters() || state.tab === 'fav') && current.length ? 'filtered' : 'all', layout: 'liste', grouped: state.sortKey === 'offer' });   // leere Auswahl: ganzes Angebot statt leerer Seiten
 });
 window.addEventListener('afterprint', () => {
   printPrepared = false;
@@ -1645,6 +1651,8 @@ async function kundeLogout() {
   if (favRemote && favTimer) { clearTimeout(favTimer); favTimer = null; try { await kundeApi('kunde_merkliste_save', { keys: [...favs] }); } catch { /* weiter abmelden */ } }
   await favBusy;
   try { await kundeApi('kunde_logout', {}); } catch { /* trotzdem neu laden */ }
+  // Angefangene Bestellwünsche dieses Zugangs nicht auf dem (evtl. gemeinsam genutzten) Rechner zurücklassen
+  try { const pre = STORAGE + 'bestellung.' + (KUNDE ? KUNDE.username : '-') + '.'; Object.keys(localStorage).filter((k) => k.startsWith(pre)).forEach((k) => localStorage.removeItem(k)); } catch { /* Speicher gesperrt */ }
   location.href = setOfferParam('').pathname;
 }
 function bindKunde() {

@@ -75,7 +75,20 @@ switch ($action) {
             if (!$c) fail('Bitte erneut anmelden.', 401);
             require_customer_csrf();
             $b = body();
-            if (!password_verify((string)($b['current'] ?? ''), (string)$c['login']['hash'])) fail('Das bisherige Passwort ist nicht korrekt.', 422);
+            if (!password_verify((string)($b['current'] ?? ''), (string)$c['login']['hash'])) {
+                // Raten des bisherigen Passworts mit einer übernommenen Sitzung begrenzen: nach 5 Fehlversuchen abmelden
+                $n = (int)($_SESSION['kpwFail'] ?? 0) + 1;
+                if ($n >= 5) {
+                    unset($_SESSION['kpwFail']);
+                    $sid = (string)($_SESSION['ksid'] ?? '');
+                    ksess_remove(function ($k) use ($sid) { return $k === $sid; });
+                    kunde_clear();
+                    fail('Zu viele Fehlversuche. Bitte erneut anmelden.', 401);
+                }
+                $_SESSION['kpwFail'] = $n;
+                fail('Das bisherige Passwort ist nicht korrekt.', 422);
+            }
+            unset($_SESSION['kpwFail']);
             $new = check_password($b['password'] ?? '', $c['login']['username']);
             if (password_verify($new, (string)$c['login']['hash'])) fail('Bitte ein anderes als das bisherige Passwort wählen.', 422);
             $c2 = with_lock('kunden', function () use ($c, $new) {
