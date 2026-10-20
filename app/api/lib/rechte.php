@@ -25,6 +25,8 @@ const PERMS = [
     'bestellungen.sehen'       => ['g' => 'Bestellungen', 'l' => 'Bestellwünsche mit Kundendaten ansehen', 'k' => 'sehen', 'd' => ['editor'], 'r' => []],
     'bestellungen.bearbeiten'  => ['g' => 'Bestellungen', 'l' => 'Bestellwünsche bearbeiten (Status, Notiz, E-Mail erneut senden)', 'k' => 'machen', 'd' => ['editor'], 'r' => ['bestellungen.sehen']],
     'kunden.sehen'             => ['g' => 'Kunden', 'l' => 'Kundenstammdaten ansehen', 'k' => 'sehen', 'd' => [], 'r' => []],
+    'einzelangebote.sehen'     => ['g' => 'Kunden', 'l' => 'Einzelangebote für Kunden ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
+    'einzelangebote.bearbeiten' => ['g' => 'Kunden', 'l' => 'Einzelangebote erstellen, im Portal freigeben und per E-Mail senden', 'k' => 'machen', 'd' => [], 'r' => ['einzelangebote.sehen']],
     'kunden.bearbeiten'        => ['g' => 'Kunden', 'l' => 'Kunden anlegen, ändern, löschen, Zugänge und Einladungen', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
     'wochenangebot.senden'     => ['g' => 'Kunden', 'l' => 'Wochenangebot per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
     'sonderposten.senden'      => ['g' => 'Kunden', 'l' => 'Sonderposten per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],

@@ -153,12 +153,20 @@ switch ($action) {
             with_lock('bestellungen', function () use ($c, $key, $hash) { order_replay(store_read('bestellungen') ?? [], $c['id'], $key, $hash); });
             $oid = (string)($b['angebot'] ?? OFFER_STD);
             if ($oid === '') $oid = OFFER_STD;
-            $def = offer_def($oid);
-            if (!$def || !(in_array($oid, customer_offers($c), true) || ($oid === OFFER_STD && std_public()))) fail('Für dieses Angebot ist Ihr Zugang nicht freigeschaltet.', 403);
-            $pub = store_read('angebot');
-            if (!$pub) fail('Es ist kein Angebot veröffentlicht.', 409);
-            if ((string)($b['publishedAt'] ?? '') !== (string)($pub['publishedAt'] ?? $pub['savedAt'] ?? '')) fail('Das Angebot wurde inzwischen aktualisiert. Bitte prüfen Sie Ihren Bestellwunsch mit den aktuellen Preisen und senden Sie ihn erneut.', 409);
-            $off = offer_resolve($pub, $def);
+            if (strncmp($oid, 'e-', 2) === 0) {   // Einzelangebot des Kunden: Preise aus dem Einzelangebot
+                $e = einzel_von_kennung($oid);
+                if (!$e || $e['kid'] !== $c['id'] || !einzel_sichtbar($e)) fail('Dieses Angebot ist für Ihren Zugang nicht (mehr) verfügbar.', 403);
+                $def = ['id' => $oid, 'name' => einzel_titel($e)];
+                $off = einzel_model($e);
+                if ((string)($b['publishedAt'] ?? '') !== $off['publishedAt']) fail('Das Angebot wurde inzwischen aktualisiert. Bitte prüfen Sie Ihren Bestellwunsch mit den aktuellen Preisen und senden Sie ihn erneut.', 409);
+            } else {
+                $def = offer_def($oid);
+                if (!$def || !(in_array($oid, customer_offers($c), true) || ($oid === OFFER_STD && std_public()))) fail('Für dieses Angebot ist Ihr Zugang nicht freigeschaltet.', 403);
+                $pub = store_read('angebot');
+                if (!$pub) fail('Es ist kein Angebot veröffentlicht.', 409);
+                if ((string)($b['publishedAt'] ?? '') !== (string)($pub['publishedAt'] ?? $pub['savedAt'] ?? '')) fail('Das Angebot wurde inzwischen aktualisiert. Bitte prüfen Sie Ihren Bestellwunsch mit den aktuellen Preisen und senden Sie ihn erneut.', 409);
+                $off = offer_resolve($pub, $def);
+            }
             $byId = []; foreach ($off['items'] as $it) $byId[$it['id']] = $it;
             $gName = []; foreach ($off['groups'] ?? [] as $g) $gName[$g['id']] = $g['name'];
             $in = is_array($b['positions'] ?? null) ? $b['positions'] : [];

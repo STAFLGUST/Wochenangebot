@@ -32,6 +32,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/preisverlauf.php`, `lib/bestand.php` | Preisverlauf; Bestandsliste und Stammdaten |
 | `lib/diagnose.php` | Sicherheit für IT-Administratoren: Verlauf, auffällige Adressen, Konfigurationsprüfung, nur lesende Diagnosen, CSV-Export |
 | `lib/fracht.php` | Frachtregel (Dokument `fracht`): Staffeln, `fracht_kosten` (Bestellwunsch), `fracht_hinweis` (Hinweis unter dem Angebot) |
+| `lib/einzelangebote.php`, `aktionen/einzelangebote.php` | Einzelangebote für genau einen Kunden (Dokument `einzelangebote`): Prüfung, Nummern `E-JJJJ-0001`, Artikelsuche mit Bestand und Wochenpreis (`einzel_artikel`), Angebotsmodell fürs Portal (`einzel_model`, Kennung `e-<id>`, ohne Bestand), E-Mail-Vorlage; Aktionen `einzel_liste`, `einzel_detail`, `einzel_artikel`, `einzel_save`, `einzel_status`, `einzel_loeschen`, `einzel_senden` |
 | `lib/einkauf.php` | Fehlmengen offener Bestellwünsche gegenüber dem Bestand (`einkauf_bedarf`), E-Mail an den Einkauf |
 | `orders.php`, `order_outbox.php` | Bestellverwaltung (API v1) und Versandaufträge |
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |
@@ -53,6 +54,7 @@ und ggf. `WARTUNG_GESPERRT`.
 | `webapp.js`, `../sw.js`, `../manifest.json`, `icons/` | Web-App: Hinweis „Zum Home-Bildschirm“, Offline-Speicher (nur Startseite, `/assets/`, öffentliches Wochenangebot; zuerst Netz), Manifest und Symbole |
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite |
 | `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten |
+| `admin-einzel.js` | Eingabebereich, Angebot bearbeiten → Einzelangebote erstellen: Übersicht, Bearbeiten, Artikelsuche (eingelagert/erfasst/gesamt verfügbar, Wochenpreis, Abweichungspunkt), Freigabe, Drucken/PDF, E-Mail (nutzt `window.WA`) |
 | `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden, E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.

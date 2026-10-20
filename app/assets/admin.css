@@ -969,3 +969,90 @@ body.ro .sale-tag { cursor: default; }
 .ktab .k-gruppe { display: flex; align-items: center; gap: 4px; color: var(--text-2); }
 @media (max-width: 640px) { .kgtab .kg-k { display: none; } .kgtab .kg-nr { width: 56px; } }
 .kgtab th.kg-n { text-align: right; }
+
+/* Angebot bearbeiten → Einzelangebote (Angebot je Kunde) */
+.eztab td { padding: 10px 8px; }
+.eztab tbody tr[tabindex] { cursor: pointer; }
+.eztab .ez-nr { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.eztab td.num, .eztab th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.eztab .sub { font-size: 12px; color: var(--muted); }
+.ez-st { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--surface-3); color: var(--text-2); vertical-align: middle; }
+.ez-st.freigegeben { background: var(--c-fresh-bg); color: var(--c-fresh); }
+.ez-st.zurueckgezogen, .ez-st.ab { background: var(--c-aged-bg); color: var(--c-aged); }
+.ez-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 18px 0 14px; }
+.ez-top h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ez-back { transform: rotate(90deg); }
+.ez-dirty { font-size: 12.5px; color: var(--c-aged); font-weight: 600; }
+.ez-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.ez-main { min-width: 0; }
+.ez-kopf { padding: 16px 18px; }
+.ez-kopf .fld textarea { width: 100%; box-sizing: border-box; }
+.ez-kinfo { margin-top: 12px; }
+.ez-pos { overflow-x: auto; }
+.ezpos { min-width: 720px; }
+.ezpos th.num, .ezpos td.num { text-align: right; }
+.ezpos td { padding: 6px 6px; }
+.ezpos .ez-code { width: 76px; font-variant-numeric: tabular-nums; color: var(--text-2); white-space: nowrap; }
+.ezpos .ez-name input { width: 100%; box-sizing: border-box; border: 1px solid transparent; border-radius: 8px; padding: 5px 8px; background: transparent; }
+.ezpos .ez-name input:hover { border-color: var(--line); }
+.ezpos .ez-name input:focus, .ezpos .ez-in-num:focus { border-color: var(--accent-line); box-shadow: var(--focus); outline: none; background: var(--surface); }
+.ezpos .ez-in-notiz { font-size: 12.5px; color: var(--text-2); }
+.ezpos .ez-in-num { width: 86px; text-align: right; border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; background: var(--surface); font-variant-numeric: tabular-nums; }
+.ezpos .ez-in-num.invalid { border-color: var(--accent); background: var(--accent-soft); }
+.ezpos .ez-b { width: 96px; text-align: right; white-space: nowrap; }
+.ezpos td.ez-b { font-size: 13px; }
+.ezpos .ez-std { width: 92px; white-space: nowrap; font-size: 13px; color: var(--text-2); }
+.ezpos .ez-a { width: 74px; white-space: nowrap; }
+.ezpos tfoot td { border-top: 1px solid var(--line-strong); border-bottom: 0; padding: 10px 6px; font-size: 13px; color: var(--text-2); }
+.ez-leer { display: grid; place-items: center; gap: 4px; padding: 34px 16px; color: var(--muted); text-align: center; }
+.ez-leer .i { width: 28px; height: 28px; }
+.ez-leer p { margin: 0; }
+.ez-abw { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.ez-abw i { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.ez-abw.ab-gleich i { background: var(--c-unknown); }
+.ez-abw.ab-unter i { background: var(--c-aged); }
+.ez-abw.ab-stark i { background: var(--accent); }
+.ez-abw.ab-stark { color: var(--accent); font-weight: 600; }
+.ez-abw.ab-ueber i { background: var(--c-fresh); }
+.ez-kein { font-size: 12px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.ez-bst { font-variant-numeric: tabular-nums; }
+.ez-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
+.ez-actions .sp { flex: 1; }
+.ez-verlauf { margin: 4px 0 18px; }
+.ez-suche { padding: 14px 14px 12px; position: sticky; top: calc(var(--header-h) + 12px); max-height: calc(100vh - var(--header-h) - 28px); display: flex; flex-direction: column; }
+.ez-suche .d-h { margin: 0 0 10px; }
+.ez-suche .search { max-width: none; }
+.ez-suche .search input { height: 38px; }
+.ez-filter { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.ez-filter .check { font-size: 12.5px; gap: 6px; }
+#ez-treffer { overflow-y: auto; margin: 8px -14px 0; padding: 0 14px; min-height: 0; }
+.ez-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.ez-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.ez-list li .ez-li-t { grid-column: 1; font-size: 13.5px; }
+.ez-list li .ez-li-d { grid-column: 1; font-size: 12px; color: var(--text-2); }
+.ez-list li .btn { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+.ez-list .ez-code { font-variant-numeric: tabular-nums; color: var(--muted); }
+.ez-li-n { font-weight: 600; }
+@media (max-width: 1100px) { .ez-grid { grid-template-columns: minmax(0, 1fr); } .ez-suche { position: static; max-height: none; } #ez-treffer { max-height: 340px; } }
+@media (max-width: 640px) {
+  .eztab .ez-m { display: none; }
+  .ezpos { min-width: 0; display: block; }
+  .ezpos thead { display: none; }
+  .ezpos tbody, .ezpos tfoot { display: block; }
+  .ezpos tbody tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); position: relative; }
+  .ezpos tbody td { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: auto !important; border: 0; padding: 0; text-align: left; }
+  .ezpos tbody td.ez-code { grid-column: 1 / -1; font-size: 12px; padding-right: 36px; }
+  .ezpos tbody td.ez-name { grid-column: 1 / -1; display: block; }
+  .ezpos tbody td[data-l]::before { content: attr(data-l); font-size: 11.5px; color: var(--muted); }
+  .ezpos tbody td.ez-x { position: absolute; top: 4px; right: 4px; }
+  .ezpos tbody tr:hover td { background: transparent; }
+  .ezpos tfoot tr { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 0 12px; }
+  .ezpos tfoot td { border: 0; padding: 10px 0; }
+  .ezpos tfoot td:empty { display: none; }
+  .ez-pos { overflow: visible; }
+  .ez-kopf .form-grid.two { grid-template-columns: 1fr; }
+  .ez-top h2 { font-size: 17px; }
+}
+.ez-bst3 { display: flex; flex-wrap: wrap; gap: 0 10px; }
+.ez-bst3 b { color: var(--text); font-weight: 600; }
+.ez-bst3 span:last-child b { color: var(--c-fresh); }

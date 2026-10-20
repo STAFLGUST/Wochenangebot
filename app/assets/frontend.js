@@ -249,9 +249,12 @@ function priceHTML(it) {
 }
 
 /* ---------- Kopf, Kennzahlen, Navigation ---------- */
+/* Einzelangebot (Angebot nur für diesen Kunden): Gültigkeit statt Kalenderwoche */
+const bisText = (m) => (m.gueltigBis ? 'gültig bis ' + String(m.gueltigBis).split('-').reverse().join('.') : 'Einzelangebot');
+const kwKurz = (m) => (m.einzel ? bisText(m) : `KW ${m.week ?? '?'}/${m.year ?? '?'}`);
 function renderStatic() {
   const m = DATA.meta;
-  const kw = m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm"> · ${esc(m.year)}</span>` : ''}` : 'KW ?';
+  const kw = m.einzel ? esc(bisText(m)) : m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm"> · ${esc(m.year)}</span>` : ''}` : 'KW ?';
   document.title = `${offerTitle()} ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`.trim() + (COMPANY ? ' – ' + COMPANY : '');
   if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
@@ -806,7 +809,7 @@ function openDetail(id) {
       <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button>
     </div>
     <div class="dlg-body">
-      <div class="d-price">${prices}<p class="note">${esc(m.notice || 'Angebot')} · KW ${esc(m.week ?? '?')}/${esc(m.year ?? '?')} · Preis in € je kg</p></div>
+      <div class="d-price">${prices}<p class="note">${esc(m.notice || 'Angebot')} · ${esc(kwKurz(m))} · Preis in € je kg</p></div>
       <dl class="d-list">
         ${dd('Fleischart', esc(it.category))}
         ${dd('Herkunft', it.origin ? esc(it.origin) : '<span class="muted">In der Liste nicht angegeben</span>')}
@@ -905,7 +908,7 @@ function buildPrint({ scope, layout, grouped }) {
   const scopeText = scope === 'all' ? 'Gesamtes Angebot' : scope === 'fav' ? 'Merkliste' : (describeFilters() || 'Gesamtes Angebot');
   const head = `<header class="p-head">
       <div>${COMPANY ? `<div class="p-company">${esc(COMPANY)}</div>` : ''}
-        <h1 class="p-title">Wochenangebot <span>KW ${esc(m.week ?? '?')} / ${esc(m.year ?? '?')}</span></h1>
+        <h1 class="p-title">${m.einzel ? `${esc(offerTitle())} <span>${esc(bisText(m))}</span>` : `Wochenangebot <span>KW ${esc(m.week ?? '?')} / ${esc(m.year ?? '?')}</span>`}</h1>
         <div class="p-sub">${esc(m.notice || 'Angebot')}${m.weekStart ? ` · Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : ''} · Preise in € je kg · „–“ = ohne Preisangabe</div></div>
       <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${today()}</div>
     </header>`;
@@ -941,9 +944,9 @@ function buildPrint({ scope, layout, grouped }) {
 
   let ps = $('#page-style');
   if (!ps) { ps = document.createElement('style'); ps.id = 'page-style'; document.head.appendChild(ps); }
-  const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} KW ${m.week ?? '?'}/${m.year ?? '?'} · Preise in € je kg`.replace(/["\\]/g, '');
+  const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} ${kwKurz(m)} · Preise in € je kg`.replace(/["\\]/g, '');
   ps.textContent = `@page { size: A4 ${layout === 'liste' ? 'landscape' : 'portrait'}; margin: ${layout === 'liste' ? '9mm 10mm 11mm 10mm' : '14mm 12mm 16mm 12mm'}; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
-  document.title = `Wochenangebot KW ${m.week ?? ''} ${m.year ?? ''}${scope === 'fav' ? ' – Merkliste' : ''}`;
+  document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `Wochenangebot KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
 }
 function doPrint(opts) {
   for (const d of $$('dialog[open]')) d.close();
