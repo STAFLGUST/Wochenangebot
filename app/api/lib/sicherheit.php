@@ -30,6 +30,7 @@ const BESTAETIGUNG = [
     'ort_update'            => ['Einstellungen', 'Ortsdatenbank (Auswertung) aktualisieren', false],
     'geo_update'            => ['Einstellungen', 'Länderdaten aktualisieren', false],
     'geo_clear_stats'       => ['Einstellungen', 'Statistik abgewiesener Zugriffe zurücksetzen', false],
+    'fw_feed'               => ['Einstellungen', 'Bedrohungsliste (Spamhaus) aktualisieren', false],
     'user_save'             => ['Immer mit Bestätigung', 'Nutzer anlegen oder ändern', true],
     'user_delete'           => ['Immer mit Bestätigung', 'Nutzer löschen', true],
     'user_unlock'           => ['Immer mit Bestätigung', 'Gesperrten Zugang entsperren', true],
@@ -38,6 +39,8 @@ const BESTAETIGUNG = [
     'ip_unblock'            => ['Immer mit Bestätigung', 'IP-Sperre aufheben', true],
     'security_save'         => ['Immer mit Bestätigung', 'Sicherheitseinstellungen ändern (auch diese Liste)', true],
     'security_export'       => ['Immer mit Bestätigung', 'Sicherheitsprotokoll exportieren', true],
+    'fw_save'               => ['Immer mit Bestätigung', 'Firewall-Einstellungen und Vorlagen anwenden', true],
+    'fw_sperren'            => ['Immer mit Bestätigung', 'Adresse sperren oder freigeben (Schutz)', true],
     'mail_konto_save'       => ['Immer mit Bestätigung', 'Postfach für den E-Mail-Versand (Zugangsdaten) ändern', true],
 ];
 const BESTAETIGUNG_MINUTEN = [5, 15, 30, 60];
@@ -195,4 +198,54 @@ function wartung(): ?array
     $w = store_read('wartung');
     if (!is_array($w) || empty($w['active'])) return null;
     return ['active' => true, 'message' => (string)($w['message'] ?? '') ?: WARTUNG_TEXT, 'until' => $w['until'] ?? null, 'since' => $w['since'] ?? null, 'by' => $w['by'] ?? ''];
+}
+
+/* Sicherheitseinstellungen prüfen und vollständig zurückgeben (Speichern, Vorlagen, Import) – $me = handelnder Administrator */
+function sec_clean(array $b, array $old, array $me): array
+{
+    $twofa = in_array($b['twofa'] ?? '', ['off', 'admins', 'all'], true) ? $b['twofa'] : 'off';
+    $ips = [];
+    foreach (array_slice(is_array($b['adminIps'] ?? null) ? $b['adminIps'] : [], 0, 50) as $c) {
+        $c = trim((string)$c);
+        if ($c === '') continue;
+        if (!valid_cidr($c)) throw new InvalidArgumentException("„{$c}“ ist keine gültige IP-Adresse oder kein gültiger Bereich (z. B. 80.147.24.150 oder 80.147.24.0/24).");
+        $ips[] = $c;
+    }
+    $ipEnabled = !empty($b['ipEnabled']);
+    if ($ipEnabled && !$ips) throw new InvalidArgumentException('Bitte mindestens eine freigegebene IP-Adresse eintragen.');
+    if ($ipEnabled && !ip_allowed(client_ip(), $ips)) throw new InvalidArgumentException('Ihre aktuelle Adresse ' . client_ip() . ' ist nicht in der Liste – Sie würden sich selbst aussperren.');
+    $geoEnabled = !empty($b['geoEnabled']);
+    $geoMode = ($b['geoMode'] ?? '') === 'allow' ? 'allow' : 'block';
+    $geoScope = ($b['geoScope'] ?? '') === 'all' ? 'all' : 'admin';
+    $gc = [];
+    foreach (array_slice(is_array($b['geoCountries'] ?? null) ? $b['geoCountries'] : [], 0, 300) as $c) {
+        $c = strtoupper(trim((string)$c));
+        if (in_array($c, GEO_COUNTRIES, true) && !in_array($c, $gc, true)) $gc[] = $c;
+    }
+    sort($gc);
+    if ($geoEnabled && !$gc) throw new InvalidArgumentException($geoMode === 'allow' ? 'Bitte mindestens ein erlaubtes Land auswählen.' : 'Bitte mindestens ein Land zum Sperren auswählen.');
+    if ($geoEnabled && !geo_info()) throw new InvalidArgumentException('Die Länderdatenbank fehlt – bitte zuerst „Länderdaten aktualisieren“.');
+    $geoS = ['geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'adminIps' => $ips];
+    if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException("Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
+    if ($twofa !== 'off' && empty($me['totp']) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
+    $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
+            'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)($b['idleMinutes'] ?? 480) : 480,
+            'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
+            'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15))),
+            'geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'geoScope' => $geoScope];
+    // Passwortbestätigung: nur abschaltbare Aktionen; ohne Angabe (ältere Oberfläche) bleibt der bisherige Stand
+    if (array_key_exists('bestaetigungAus', $b)) {
+        $aus = [];
+        foreach ((array)$b['bestaetigungAus'] as $k) {
+            $k = (string)$k;
+            if (!isset(BESTAETIGUNG[$k])) throw new InvalidArgumentException('Unbekannte Aktion bei der Passwortbestätigung.');
+            if (BESTAETIGUNG[$k][2]) throw new InvalidArgumentException('„' . BESTAETIGUNG[$k][1] . '“ verlangt immer eine Passwortbestätigung.');
+            if (!in_array($k, $aus, true)) $aus[] = $k;
+        }
+        $new['bestaetigungAus'] = array_values(array_filter(array_keys(BESTAETIGUNG), fn($k) => in_array($k, $aus, true)));
+    } else $new['bestaetigungAus'] = array_values((array)($old['bestaetigungAus'] ?? []));
+    $min = (int)($b['bestaetigungMinuten'] ?? ($old['bestaetigungMinuten'] ?? 5));
+    if (!in_array($min, BESTAETIGUNG_MINUTEN, true)) throw new InvalidArgumentException('Ungültige Gültigkeitsdauer der Passwortbestätigung.');
+    $new['bestaetigungMinuten'] = $min;
+    return $new;
 }

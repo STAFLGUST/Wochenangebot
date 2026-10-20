@@ -1296,3 +1296,45 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm dialog[open] .dlg-foot, body.adm dialog[open] .dlg-head .btn, body.adm dialog[open] .ibtn { display: none !important; }
 }
 
+
+/* ---------- Schutz (Firewall, Sperrliste, Live-Verkehr) ---------- */
+#view-schutz > * + * { margin-top: 14px; }
+#view-schutz .sec-grid { margin-bottom: 0; }
+#fw-verkehr, #view-schutz .sec-block { overflow-x: auto; max-width: 100%; position: relative; }   /* relative: unsichtbare Beschriftungen bleiben im Scrollbereich */
+.fwtab { width: 100%; }
+.fw-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 10px; }
+.fw-head .sec-h { margin: 0; }
+.fw-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.fw-filter { display: flex; flex-wrap: wrap; gap: 4px; }
+.fw-filter .btn.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.fw-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.fwtab td { padding: 7px 8px; font-size: 13px; vertical-align: middle; }
+.fwtab .act { text-align: right; white-space: nowrap; width: 1%; }
+.fwtab tr.fw-row td:first-child { border-left: 3px solid transparent; }
+.fwtab tr.fw-row.bad td:first-child { border-left-color: #dc2626; }
+.fwtab tr.fw-row.warn td:first-child { border-left-color: #e0901f; }
+.fwtab tr.fw-row.ok td:first-child { border-left-color: #2e9e5e; }
+.fwtab .fw-st { display: inline-block; min-width: 30px; font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.fwtab .fw-q { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fwtab .fw-ua { font-size: 12.5px; color: var(--text-2); }
+.fw-add { display: grid; grid-template-columns: minmax(180px, 1.2fr) minmax(120px, .6fr) minmax(140px, 1fr) auto; gap: 10px; align-items: end; margin-top: 12px; }
+.fw-add input, .fw-add select { width: 100%; }
+.fw-vorlagen { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.fw-vorlage { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+.fw-vorlage p { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.fw-vorlage .btn { justify-self: start; }
+.fw-io { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 700px) {
+  .fw-add { grid-template-columns: 1fr 1fr; }
+  .fw-add .fw-grund { grid-column: 1 / -1; }
+  .fw-verkehr th:nth-child(4), .fw-verkehr td:nth-child(4) { display: none; }
+  .fwtab .mono-s { overflow-wrap: anywhere; }
+  .fwtab td.mono-s { min-width: 108px; }
+  .fw-verkehr td:first-child .sub { display: none; }
+  .fwtab td.num-s { white-space: normal; }
+  .fwtab .act .btn { padding: 0 8px; font-size: 0; gap: 0; }   /* nur Symbol */
+  .fwtab .act .btn svg { margin: 0; }
+  .fwtab td { padding: 6px 5px; }
+  .fwtab .fw-q { max-width: 150px; }
+}
+@media (max-width: 560px) { .fw-add { grid-template-columns: 1fr; } }

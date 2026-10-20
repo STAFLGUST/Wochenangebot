@@ -22,4 +22,6 @@ DirectoryIndex index.html index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^data(?:/|$) - [F,L,NC]
+  # Falle für Angriffswerkzeuge (wie im Caddyfile): Firewall zählt Treffer und sperrt automatisch
+  RewriteRule ^(wp-login\.php|xmlrpc\.php|wp-admin|wp-content|wp-includes|\.env|\.git|phpmyadmin|pma|myadmin|vendor/phpunit|cgi-bin|\.aws|server-status|actuator|administrator|admin\.php|boaform)(?:[/.].*)?$ api/index.php?action=waf_probe&p=$1 [L,NC]
 </IfModule>
