@@ -33,6 +33,8 @@ switch ($action) {
                     $row[$f] = $v;
                 }
                 if (mb_strlen($row['firma']) < 2) throw new InvalidArgumentException('Bitte den Namen der Firma angeben.');
+                // Kundengruppe muss es geben – eine inzwischen entfernte Gruppe darf unverändert bleiben
+                if ($row['gruppe'] !== '' && $row['gruppe'] !== (string)($old['gruppe'] ?? '') && !in_array($row['gruppe'], array_column(kundengruppen_load()['groups'], 'nr'), true)) throw new InvalidArgumentException('Diese Kundengruppe gibt es nicht. Bitte unter Stammdaten → Kundengruppen anlegen.');
                 if ($row['email'] !== '' && filter_var($row['email'], FILTER_VALIDATE_EMAIL) === false) throw new InvalidArgumentException('Die E-Mail-Adresse ist ungültig.');
                 foreach ($d['customers'] as $c) if ($c['id'] !== $row['id'] && $row['nr'] !== '' && ($c['nr'] ?? '') === $row['nr']) throw new InvalidArgumentException("Die Kundennummer {$row['nr']} ist bereits vergeben.");
                 $known = array_merge([OFFER_STD], offer_ids());
