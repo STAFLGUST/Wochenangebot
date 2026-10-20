@@ -143,6 +143,7 @@ st, r = Z2.call('login_2fa', {'code': totp(secret, step + 1)})
 check('… richtiger Code meldet an und hebt die Sperre auf', st == 200 and r.get('user', {}).get('username') == 'zara', (st, r))
 E = Client('198.18.6.3')
 st, r = E.call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})
+eddi_login = r
 check('Zugang ohne zweiten Faktor, gesperrt, richtiges Passwort: gleiche Antwort wie jedes andere Passwort', st == 200 and r.get('need2fa') and r.get('gesperrtBis'), (st, r))
 st, r = E.call('login_2fa', {'code': '123456'})
 eddi_code = r
@@ -150,7 +151,7 @@ check('… aber keine Anmeldung möglich (bleibt bis zum Ablauf gesperrt)', st =
 G = Client('198.18.6.4')
 st, r = G.call('login', {'username': 'gibt.es.nicht', 'password': 'Falsches-Passwort-1'})
 st2, r2 = G.call('login_2fa', {'code': '123456'})
-check('unbekannter gesperrter Name: gleicher Code-Schritt, gleiche Ablehnung', st == 200 and set(r) == {'ok', 'need2fa', 'gesperrtBis'} and st2 == 401 and r2 == eddi_code, (st, r, st2, r2, eddi_code))
+check('unbekannter gesperrter Name: gleicher Code-Schritt, gleiche Ablehnung', st == 200 and set(r) == set(eddi_login) and r.get('need2fa') and st2 == 401 and r2 == eddi_code, (st, r, st2, r2, eddi_code))
 storage_write('logins', {})
 
 
