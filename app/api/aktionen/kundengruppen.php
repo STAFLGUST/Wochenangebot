@@ -1,14 +1,16 @@
 <?php
 declare(strict_types=1);
-/* Aktionen: Gruppenlisten der Stammdaten – Kundengruppen und VK-Gruppen (Beschreibung: lib/kunden.php).
-   Kundengruppen ansehen mit „stammdaten.sehen“ oder „kunden.sehen“, VK-Gruppen mit „stammdaten.sehen“;
-   Ändern und CSV-Import mit „stammdaten.bearbeiten“. Kunden verweisen über „gruppe“, Artikel über „vkGruppe“ auf die Nummer.
+/* Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen und Vertreter (Beschreibung: lib/kunden.php).
+   Kundengruppen und Vertreter ansehen mit „stammdaten.sehen“ oder „kunden.sehen“, VK-Gruppen mit „stammdaten.sehen“;
+   Ändern und CSV-Import mit „stammdaten.bearbeiten“. Kunden verweisen über „gruppe“ und „vertreter“/„vertreter2“,
+   Artikel über „vkGruppe“ auf die Nummer.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 switch ($action) {
         case 'kundengruppen':
-        case 'vkgruppen': {
+        case 'vkgruppen':
+        case 'vertreter': {
             $me = require_auth();
             $vk = $action === 'vkgruppen';
             if (!may($me, 'stammdaten.sehen') && ($vk || !may($me, 'kunden.sehen'))) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
@@ -20,16 +22,20 @@ switch ($action) {
                 foreach ((store_read('stammdaten')['articles'] ?? []) as $a) if (($a['vkGruppe'] ?? '') !== '') $n[$a['vkGruppe']] = ($n[$a['vkGruppe']] ?? 0) + 1;
                 $out['artikel'] = (object)$n;
             } elseif (may($me, 'kunden.sehen')) {   // Anzahl zugeordneter Kunden nur für Berechtigte
-                foreach (customers_load()['customers'] as $c) if (($c['gruppe'] ?? '') !== '') $n[$c['gruppe']] = ($n[$c['gruppe']] ?? 0) + 1;
+                foreach (customers_load()['customers'] as $c) {
+                    $nrs = $action === 'vertreter' ? array_unique(array_filter([(string)($c['vertreter'] ?? ''), (string)($c['vertreter2'] ?? '')], 'strlen')) : array_filter([(string)($c['gruppe'] ?? '')], 'strlen');
+                    foreach ($nrs as $x) $n[$x] = ($n[$x] ?? 0) + 1;
+                }
                 $out['kunden'] = (object)$n;
             }
             respond($out);
         }
 
         case 'kundengruppen_save':
-        case 'vkgruppen_save': {
+        case 'vkgruppen_save':
+        case 'vertreter_save': {
             $me = require_perm('stammdaten.bearbeiten', true);
-            $liste = $action === 'vkgruppen_save' ? 'vkgruppen' : 'kundengruppen';
+            $liste = substr($action, 0, -5);
             $L = GRUPPEN_LISTEN[$liste];
             $b = body();
             $groups = gruppen_clean($liste, $b['groups'] ?? null);

@@ -5,7 +5,7 @@ import gzip, http.server, os, sys, threading, time, urllib.error, urllib.request
 from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
-from umgebung import SH, AUX_PORT, storage_raw, storage_write
+from umgebung import SH, AUX_PORT, storage_raw, storage_write, until
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -104,8 +104,9 @@ check('mobile login placed in München, device recognised', any(e.get('city') ==
 check('IPv6 login placed', any(e.get('city') == 'Berlin' and e['dev'] == 'desktop' for e in h), h)
 check('private address: login recorded, no place', any('lat' not in e and 'cc' not in e for e in k), k)
 check('newest first, customer names included', es[0]['t'] >= es[-1]['t'] and {c['firma'] for c in r['kunden']} == {'Kantine Nord', 'Hotel Süd', 'Bistro West'})
-raw = storage_raw('anmeldeorte') or ''
-check('no IP addresses stored', raw and '20.0.0.17' not in raw and '2a10' not in raw and '10.20.30.40' not in raw and '"ip"' not in raw)
+raw = until(lambda: (storage_raw('anmeldeorte') or '').count('"t"') >= 3 and storage_raw('anmeldeorte')) or ''   # Schreiben kann nach der Antwort erfolgen
+# „2a10:“ mit Doppelpunkt – zufällige Kennungen (Hex) können „2a10“ enthalten
+check('no IP addresses stored', raw and '20.0.0.17' not in raw and '2a10:' not in raw and '10.20.30.40' not in raw and '"ip"' not in raw)
 check('failed login is not recorded', Client('20.0.2.1').call('kunde_login', {'username': 'kantine.nord', 'password': 'falsch-falsch-1'})[0] == 401 and len(A.call('auswertung')[1]['entries']) == len(es))
 
 # Zeitraum und Aufbewahrung (90 Tage)

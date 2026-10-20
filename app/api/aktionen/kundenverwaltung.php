@@ -35,6 +35,8 @@ switch ($action) {
                 if (mb_strlen($row['firma']) < 2) throw new InvalidArgumentException('Bitte den Namen der Firma angeben.');
                 // Kundengruppe muss es geben – eine inzwischen entfernte Gruppe darf unverändert bleiben
                 if ($row['gruppe'] !== '' && $row['gruppe'] !== (string)($old['gruppe'] ?? '') && !in_array($row['gruppe'], array_column(kundengruppen_load()['groups'], 'nr'), true)) throw new InvalidArgumentException('Diese Kundengruppe gibt es nicht. Bitte unter Stammdaten → Kundengruppen anlegen.');
+                $vt = array_column(vertreter_load()['groups'], 'nr');
+                foreach (['vertreter', 'vertreter2'] as $f) if ($row[$f] !== '' && $row[$f] !== (string)($old[$f] ?? '') && !in_array($row[$f], $vt, true)) throw new InvalidArgumentException('Diesen Vertreter gibt es nicht. Bitte unter Stammdaten → Vertreter anlegen.');
                 if ($row['email'] !== '' && filter_var($row['email'], FILTER_VALIDATE_EMAIL) === false) throw new InvalidArgumentException('Die E-Mail-Adresse ist ungültig.');
                 foreach ($d['customers'] as $c) if ($c['id'] !== $row['id'] && $row['nr'] !== '' && ($c['nr'] ?? '') === $row['nr']) throw new InvalidArgumentException("Die Kundennummer {$row['nr']} ist bereits vergeben.");
                 $known = array_merge([OFFER_STD], offer_ids());
@@ -130,7 +132,7 @@ switch ($action) {
         case 'kunden_import': {
             /* Kundenstammdaten aus der Warenwirtschaft (CSV im Browser gelesen): Abgleich über die Kundennummer, sonst über
                Firma + PLZ bei Kunden ohne Nummer. Übernommen werden Nummer, Firma, Adresse, Land, Telefon, E-Mail und
-               Kundengruppe; bestehende Kunden behalten Firma, E-Mail, Zugang und Freischaltungen (leere Felder werden ergänzt).
+               Kundengruppe sowie Vertreter/Vertreter 2; bestehende Kunden behalten Firma, E-Mail, Zugang und Freischaltungen (leere Felder werden ergänzt).
                Neue Kunden: aktiv, ohne Zugang, ohne Wochenangebot per E-Mail (Einverständnis fehlt), Angebote über die Kundengruppe.
                „pruefen“ liefert nur die Vorschau; Übernehmen braucht die Passwortbestätigung. */
             $b = body();
@@ -141,18 +143,19 @@ switch ($action) {
             if (count($rows) > 10000) fail('Zu viele Zeilen (höchstens 10.000).', 422);
             $anlegen = !array_key_exists('anlegen', $b) || !empty($b['anlegen']);
             $quelle = s($b['quelle'] ?? '', 120) ?? '';
-            $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe'];
+            $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe', 'vertreter', 'vertreter2'];
             $res = with_lock('kunden', function () use ($b, $rows, $anlegen, $pruefen, $FELDER) {
                 $d = customers_load();
                 if (!$pruefen && (int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte die Vorschau neu laden.', 409);
                 $gruppen = array_flip(array_column(kundengruppen_load()['groups'], 'nr'));
+                $vertreter = array_flip(array_column(vertreter_load()['groups'], 'nr'));
                 $byNr = []; $byName = [];
                 foreach ($d['customers'] as $i => $c) {
                     if (($c['nr'] ?? '') !== '') $byNr[$c['nr']] = $i;
                     else $byName[mb_strtolower(trim($c['firma'])) . '|' . ($c['plz'] ?? '')] = $i;
                 }
                 $st = ['neu' => 0, 'aktualisiert' => 0, 'unveraendert' => 0, 'ohneFirma' => 0, 'doppelt' => 0, 'mailUngueltig' => 0, 'nichtAngelegt' => 0];
-                $fremd = []; $bspNeu = []; $bspAkt = []; $ch = []; $seen = [];
+                $fremd = []; $fremdV = []; $bspNeu = []; $bspAkt = []; $ch = []; $seen = [];
                 foreach ($rows as $r) {
                     if (!is_array($r)) continue;
                     $x = [];
@@ -161,6 +164,7 @@ switch ($action) {
                     if ($x['nr'] !== '') { if (isset($seen[$x['nr']])) { $st['doppelt']++; continue; } $seen[$x['nr']] = true; }
                     if ($x['email'] !== '' && filter_var($x['email'], FILTER_VALIDATE_EMAIL) === false) { $x['email'] = ''; $st['mailUngueltig']++; }
                     if ($x['gruppe'] !== '' && !isset($gruppen[$x['gruppe']])) { $fremd[$x['gruppe']] = ($fremd[$x['gruppe']] ?? 0) + 1; $x['gruppe'] = ''; }
+                    foreach (['vertreter', 'vertreter2'] as $f) if ($x[$f] !== '' && !isset($vertreter[$x[$f]])) { $fremdV[$x[$f]] = ($fremdV[$x[$f]] ?? 0) + 1; $x[$f] = ''; }
                     $idx = $x['nr'] !== '' && isset($byNr[$x['nr']]) ? $byNr[$x['nr']] : ($byName[mb_strtolower($x['firma']) . '|' . $x['plz']] ?? null);
                     if ($idx === null) {
                         if (!$anlegen) { $st['nichtAngelegt']++; continue; }
@@ -176,9 +180,9 @@ switch ($action) {
                     }
                     $c = $d['customers'][$idx];
                     $neu = $c; $diff = [];
-                    foreach (['nr', 'gruppe', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse und Gruppe
+                    foreach (['nr', 'gruppe', 'vertreter', 'vertreter2', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse, Gruppe, Vertreter
                     foreach (['firma', 'email'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') === '') $neu[$f] = $x[$f];                                     // nur ergänzen
-                    foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
+                    foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'vertreter', 'vertreter2', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
                     if (!$diff) { $st['unveraendert']++; continue; }
                     $neu['changed'] = now();
                     $d['customers'][$idx] = $neu;
@@ -187,8 +191,8 @@ switch ($action) {
                     foreach ($diff as $f => [$from, $to]) if (count($ch) < 2000) $ch[] = ['k' => "c{$neu['id']}|$f", 'code' => $neu['nr'] ?? '', 'name' => $neu['firma'], 'f' => CUSTOMER_LABELS[$f], 'from' => $from, 'to' => $to];
                 }
                 if (count($d['customers']) > 20000) fail('Zu viele Kunden (höchstens 20.000).', 422);
-                arsort($fremd);
-                $out = ['stat' => $st, 'gruppenUnbekannt' => array_slice($fremd, 0, 20, true), 'beispiele' => ['neu' => $bspNeu, 'aktualisiert' => $bspAkt]];
+                arsort($fremd); arsort($fremdV);
+                $out = ['stat' => $st, 'gruppenUnbekannt' => array_slice($fremd, 0, 20, true), 'vertreterUnbekannt' => array_slice($fremdV, 0, 20, true), 'beispiele' => ['neu' => $bspNeu, 'aktualisiert' => $bspAkt]];
                 if (!$pruefen && ($st['neu'] || $st['aktualisiert'])) {
                     usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
                     $d['rev'] = (int)$d['rev'] + 1;

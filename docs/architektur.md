@@ -38,7 +38,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |
 | `ort.php` | Ortsdatenbank (DB-IP City Lite): Laden/Umwandeln (`ort_download`, `ort_build`), Suche `ort_lookup` |
 | `lib/auswertung.php`, `aktionen/auswertung.php` | Anmeldeorte der Kunden (Dokument `anmeldeorte`, 90 Tage, ohne IP), Aktionen `auswertung`, `ort_update` |
-| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf`, `auswertung`, `app` (`app_info`, Mindestversion der App), `kundengruppen` (Gruppenlisten der Stammdaten: Kundengruppen und VK-Gruppen, Dokumente `kundengruppen`/`vkgruppen`, gemeinsame Prüfung `gruppen_clean` in `lib/kunden.php`; Kunden verweisen über `gruppe`, Artikel der Stammdaten über `vkGruppe`) |
+| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf`, `auswertung`, `app` (`app_info`, Mindestversion der App), `kundengruppen` (Listen der Stammdaten: Kundengruppen, VK-Gruppen und Vertreter, Dokumente `kundengruppen`/`vkgruppen`/`vertreter`, Felder je Liste in `GRUPPEN_LISTEN`, gemeinsame Prüfung `gruppen_clean` in `lib/kunden.php`; Kunden verweisen über `gruppe` und `vertreter`/`vertreter2`, Artikel der Stammdaten über `vkGruppe`) |
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden (`$action`, `$CFG`, … stehen zur Verfügung); jede Aktion
 endet mit `respond()`/`fail()`. Bibliotheks- und Aktionsdateien sind nur über `index.php` nutzbar (Konstante `WA_API`).
@@ -55,7 +55,7 @@ und ggf. `WARTUNG_GESPERRT`.
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite |
 | `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten (mit Artikelimport aus der Warenwirtschaft und Filter nach VK-Gruppe; Angebote mit Kundengruppen, `renderOffersView`) |
 | `admin-einzel.js` | Eingabebereich, Angebot bearbeiten → Einzelangebote erstellen: Übersicht, Bearbeiten, Kundenauswahl mit Suche, Artikelsuche als Tabelle (Filter nach mehreren VK-Gruppen, Sortierung, alle Treffer übernehmen, Details mit Partien und Ankünften), Abweichungspunkt, Freigabe, Drucken/PDF (Logo eingebettet, Druck erst nach dem Laden), E-Mail (nutzt `window.WA`) |
-| `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden (mit CSV-Import aus der Warenwirtschaft, `kunden_import`), Gruppenlisten (`gruppenListe`: Kundengruppen, VK-Gruppen; CSV-Leser `W.csvZeilen`/`W.csvText`), E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
+| `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden (mit CSV-Import aus der Warenwirtschaft, `kunden_import`), Listen der Stammdaten (`gruppenListe` mit Feldern je Liste: Kundengruppen, VK-Gruppen, Vertreter; CSV-Leser `W.csvZeilen`/`W.csvText`), E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
 
