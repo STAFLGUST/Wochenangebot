@@ -111,8 +111,8 @@ function mail_addr(string $email, string $name = ''): string
     $n = preg_match('/^[A-Za-z0-9 .\'-]*$/', $n) ? '"' . $n . '"' : mail_enc_header($n);
     return $n . ' <' . $email . '>';
 }
-/* Vollständige Nachricht (Text + HTML) */
-function mail_build(array $cfg, string $to, string $toName, string $subject, string $text, string $html, array $extra = []): string
+/* Vollständige Nachricht (Text + HTML), optional mit Anhängen [{name, type, data}] (dann multipart/mixed) */
+function mail_build(array $cfg, string $to, string $toName, string $subject, string $text, string $html, array $extra = [], array $anhaenge = []): string
 {
     $b = 'wa' . bin2hex(random_bytes(12));
     $dom = substr(strrchr($cfg['from'], '@'), 1) ?: 'localhost';
@@ -123,14 +123,24 @@ function mail_build(array $cfg, string $to, string $toName, string $subject, str
         'Subject: ' . mail_enc_header($subject),
         'Message-ID: <' . bin2hex(random_bytes(16)) . '@' . $dom . '>',
         'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="' . $b . '"',
     ];
+    $m = 'wm' . bin2hex(random_bytes(12));
+    $h[] = $anhaenge ? 'Content-Type: multipart/mixed; boundary="' . $m . '"' : 'Content-Type: multipart/alternative; boundary="' . $b . '"';
     if ($cfg['replyTo'] !== '') $h[] = 'Reply-To: ' . mail_addr($cfg['replyTo']);
     foreach ($extra as $k => $v) if (preg_match('/^[A-Za-z-]+$/', (string)$k)) $h[] = $k . ': ' . mail_clean_header((string)$v);
     $part = function (string $type, string $body) use ($b) {
         return "--$b\r\nContent-Type: $type; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . rtrim(chunk_split(base64_encode($body), 76, "\r\n")) . "\r\n";
     };
-    return implode("\r\n", $h) . "\r\n\r\n" . $part('text/plain', $text) . $part('text/html', $html) . "--$b--\r\n";
+    $alt = $part('text/plain', $text) . $part('text/html', $html) . "--$b--\r\n";
+    if (!$anhaenge) return implode("\r\n", $h) . "\r\n\r\n" . $alt;
+    $body = "--$m\r\nContent-Type: multipart/alternative; boundary=\"$b\"\r\n\r\n" . $alt;
+    foreach ($anhaenge as $a) {
+        $name = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)$a['name']) ?: 'anhang';
+        $type = preg_match('#^[a-z]+/[a-z0-9.+-]+$#', (string)$a['type']) ? $a['type'] : 'application/octet-stream';
+        $body .= "--$m\r\nContent-Type: $type; name=\"$name\"\r\nContent-Disposition: attachment; filename=\"$name\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+               . rtrim(chunk_split(base64_encode((string)$a['data']), 76, "\r\n")) . "\r\n";
+    }
+    return implode("\r\n", $h) . "\r\n\r\n" . $body . "--$m--\r\n";
 }
 
 /* Schlanker SMTP-Client: eine Verbindung für mehrere Nachrichten */

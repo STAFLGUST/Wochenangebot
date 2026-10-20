@@ -3,7 +3,10 @@ Bestand (eingelagert, erfasst, gesamt verfügbar) und Wochenangebotspreis, Freig
 vom Server, Zurückziehen, Ablauf, E-Mail (Test-Mailserver), Oberfläche mit Abweichungspunkt, Druck und Portalansicht.
 Nur synthetische Testdaten; es werden keine echten E-Mails versendet."""
 import json
+import re
 import sys
+import urllib.error
+import zlib
 from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
@@ -207,6 +210,49 @@ check('E-Mail an den Kunden mit Positionen, Preis, Nachricht und Portal-Link', m
 check('E-Mail enthält keinen Bestand und keinen Wochenpreis', '25,54' not in body and '50 kg' not in body)
 log = doc('mailversand') or []
 check('E-Mail im Versandprotokoll (Typ Einzelangebot)', 'einzelangebot' in json.dumps(log), str(log)[:200])
+check('ohne Wahl: Format „Liste“ vermerkt, kein Anhang', r['angebot']['gesendet'][-1].get('format') == 'liste' and not list(m['msg'].iter_attachments()))
+
+
+def pdf_inhalt(data):
+    """Text der Seiteninhalte (FlateDecode) eines PDF, als Windows-1252 gelesen."""
+    out = b''
+    for mm in re.finditer(rb'/Filter /FlateDecode >>\nstream\n', data):
+        n = int(re.search(rb'/Length (\d+)', data[max(0, mm.start() - 60):mm.start()]).group(1))
+        out += zlib.decompress(data[mm.end():mm.end() + n])
+    return out.decode('cp1252', 'replace')
+
+
+def hole(cl, action):
+    req = urllib.request.Request(BASE + '/api/?action=' + action, headers={'X-Forwarded-For': cl.ip})
+    try:
+        r = cl.http.open(req)
+    except urllib.error.HTTPError as ex:
+        r = ex
+    return r.code, r.headers.get('Content-Type', ''), r.read()
+
+
+check('unbekanntes Format → 422', E.call('einzel_senden', {'id': e1['id'], 'format': 'docx'})[0] == 422)
+n0 = len(smtp.messages)
+st, r = E.call('einzel_senden', {'id': e1['id'], 'note': 'Als PDF, wie gewünscht.', 'format': 'pdf'})
+check('E-Mail mit PDF-Anhang gesendet, Format vermerkt', st == 200 and r['angebot']['gesendet'][-1]['format'] == 'pdf' and r['angebot']['gesendet'][-1]['ok'], r.get('angebot', {}).get('gesendet'))
+until(lambda: len(smtp.messages) > n0)
+m = smtp.messages[-1] if len(smtp.messages) > n0 else {}
+att = list(m['msg'].iter_attachments()) if m else []
+pdf = att[0].get_content() if att else b''
+check('Anhang: ein PDF mit Dateiname der Angebotsnummer', len(att) == 1 and att[0].get_content_type() == 'application/pdf' and att[0].get_filename() == f'Angebot_{e1["nr"]}.pdf'
+      and pdf.startswith(b'%PDF-1.4') and pdf.rstrip().endswith(b'%%EOF'), [a.get_filename() for a in att])
+inhalt = pdf_inhalt(pdf)
+check('PDF im Design der Angebotsansicht: A4 quer, Logo, Titel, Kunde, Positionen, Preise, Seitenzahl', b'/MediaBox [0 0 841.89 595.28]' in pdf and b'/DCTDecode' in pdf
+      and 'Grillsaison <Spezial>' in inhalt and 'Kantine <Einzel>' in inhalt and 'Roastbeef, frisch' in inhalt and '24,50' in inhalt and 'auf Anfrage' in inhalt
+      and 'Seite 1 von 1' in inhalt and '€ / kg' in inhalt, inhalt[:300])
+check('PDF ohne Bestand, Partien und Wochenpreis', '25,54' not in inhalt and 'P-0001' not in inhalt and 'TEST-A' not in inhalt and 'Eingelagert' not in inhalt)
+body = (m.get('text') or '') + (m.get('html') or '')
+check('E-Mail-Text bei PDF: Hinweis auf den Anhang, keine Positionsliste, Nachricht', f'Angebot_{e1["nr"]}.pdf' in body and '24,50 €/kg' not in body and 'Als PDF, wie gewünscht.' in body, (m.get('text') or '')[:300])
+check('Protokoll: „als PDF versendet“', 'als PDF versendet' in json.dumps(A.call('log')[1], ensure_ascii=False))
+code, typ, data = hole(E, 'einzel_pdf&id=' + e1['id'])
+check('PDF-Vorschau im Eingabebereich (gleiches PDF)', code == 200 and typ == 'application/pdf' and data.startswith(b'%PDF') and 'Grillsaison <Spezial>' in pdf_inhalt(data))
+check('PDF-Vorschau: ohne Recht bzw. Anmeldung gesperrt, unbekannt → 404', hole(Client('198.51.100.9'), 'einzel_pdf&id=' + e1['id'])[0] == 401
+      and hole(K, 'einzel_pdf&id=' + e1['id'])[0] == 401 and hole(E, 'einzel_pdf&id=0000000000')[0] == 404)
 st, r = A.call('einzel_save', {'kid': kid3, 'positions': POS})
 e3 = r['angebot']
 assert A.call('reauth', {'password': PW})[0] == 200
@@ -237,10 +283,15 @@ check('Protokoll: Freigabe, Rückzug, Löschen', all(s in json.dumps(A.call('log
 
 # ---------- Oberfläche ----------
 errors = []
+
+
+def ed_count(pg):
+    return pg.locator('#ez-pos tr[data-i]').count()
+
 with sync_playwright() as p:
     br = p.chromium.launch()
     ctx = br.new_context(viewport={'width': 1440, 'height': 950})
-    ctx.add_init_script("window.print = () => { const i = document.querySelector('.kopf img'); window.__logo = i ? [i.naturalWidth, i.getAttribute('src').slice(0, 22)] : null; window.__gedruckt = true; };")
+    ctx.add_init_script('window.print = () => { window.__gedruckt = true; };')
     a = ctx.new_page()
     a.on('pageerror', lambda e: errors.append(str(e)))
     a.goto(BASE + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
@@ -264,10 +315,6 @@ with sync_playwright() as p:
     a.fill('#ez-kunde', 'hamburg kantine'); a.wait_for_function("document.querySelectorAll('#ez-kunde-list li[data-kid]').length === 2")
     check('Kundensuche: mehrere Wörter (Ort + Firma)', 'Andere Kantine' in a.inner_text('#ez-kunde-list') and 'Kantine <Einzel>' in a.inner_text('#ez-kunde-list'))
     a.screenshot(path=SH + '/einzelangebot-kundensuche.png')
-    breit = a.evaluate('''() => { const t = document.querySelector('#ez-treffer'), r = t.getBoundingClientRect();
-        const b = [...t.querySelectorAll('[data-add]')].slice(0, 30).map((x) => x.getBoundingClientRect().right);
-        return [t.scrollWidth - t.clientWidth, Math.max(...b) - r.right, b.length]; }''')
-    check('Treffertabelle passt ins Suchfeld (alle Knöpfe sichtbar)', breit[0] <= 1 and breit[1] <= 0 and breit[2] == 30, breit)
     a.press('#ez-kunde', 'Escape')
     check('Escape schließt die Liste, kein Kunde gewählt', a.locator('#ez-kunde-list').is_hidden() and a.input_value('#ez-kunde') == '')
     a.fill('#ez-kunde', 'KANTINE.AN'); a.wait_for_selector('#ez-kunde-list li.akt[data-kid]')
@@ -276,38 +323,59 @@ with sync_playwright() as p:
     check('Enter wählt den Kunden, Angaben darunter', a.input_value('#ez-kunde').startswith('Andere Kantine') and 'Testweg 1' in a.inner_text('.ez-kinfo') and a.locator('#ez-dirty').is_visible(), a.input_value('#ez-kunde'))
     a.click('#ez-kunde'); a.fill('#ez-kunde', 'einzel'); a.wait_for_selector('#ez-kunde-list li[data-kid]'); a.keyboard.press('Tab')
     check('Verlassen ohne Auswahl behält den gewählten Kunden', a.input_value('#ez-kunde').startswith('Andere Kantine') and a.locator('#ez-kunde-list').is_hidden())
-    # Artikelsuche als Tabelle mit Details
-    a.fill('#ez-q', '10601'); a.wait_for_selector('#ez-treffer tr[data-code="10601"]')
-    t = a.inner_text('#ez-treffer tr[data-code="10601"]')
-    check('Treffertabelle: gesamt verfügbar, davon erwartet, Wochenpreis', '50 kg' in t and 'davon 10 kg erwartet' in t and '25,54 €' in t, t)
-    check('VK-Gruppe als Zwischenzeile', 'Rindfleisch, Argentinien, frisch' in a.inner_text('#ez-treffer tr.ez-grp'))
-    a.click('#ez-treffer [data-info="10601"]'); a.wait_for_selector('#ez-treffer tr[data-det="10601"]')
-    d = a.inner_text('#ez-treffer tr[data-det="10601"]')
+    # Kopfleiste: im Einzelangebot Drucken/E-Mail statt Versand des Wochenangebots
+    kl = [a.locator('#btn-send').is_hidden(), a.locator('#btn-ez-druck').is_visible(), a.locator('#btn-ez-mail').is_hidden()]
+    check('Kopfleiste im Einzelangebot: kein „An Kunden senden“, oben Drucken', all(kl), kl)   # E-Mail erst nach dem Speichern
+    check('kein Suchfeld mehr neben dem Angebot, dafür „Artikel hinzufügen“', a.locator('#ez-q').count() == 0 and a.locator('#ez-add').is_visible())
+
+    # Fenster „Artikel hinzufügen“: zuerst VK-Gruppe, dann Artikel; Suche über alle Gruppen
+    a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-grp [data-grp]')
+    pk = '#dlg-ez-pick'
+    check('Fenster: Kunde im Kopf, Startansicht „zuerst eine VK-Gruppe wählen“, Suchfeld hat den Fokus', 'Andere Kantine' in a.inner_text(pk + ' .ezp-head')
+          and 'Zuerst eine VK-Gruppe wählen' in a.inner_text('#ezp-list') and a.evaluate("document.activeElement.id") == 'ezp-q')
+    grp = lambda: {b['nr']: b for b in a.eval_on_selector_all('#ezp-grp [data-grp]', 'e => e.map(x => ({nr: x.dataset.grp, t: x.innerText, n: +x.querySelector(".ezp-g-z").textContent, on: x.getAttribute("aria-pressed")}))')}   # noqa: E731
+    g = grp()
+    check('Gruppenleiste: Alle, vorkommende VK-Gruppen mit Anzahl (nur mit Bestand), „ohne VK-Gruppe“', list(g)[:4] == ['*', '1600', '1610', '6150'] and '–' in g and '7000' not in g
+          and g['1600']['n'] == 1 and g['1610']['n'] == 1 and g['6150']['n'] == 1 and 'Rindfleisch, Argentinien, frisch' in g['1600']['t'], {k: v['n'] for k, v in g.items()})
+    a.uncheck('#ezp-bestand'); a.wait_for_function("+document.querySelector('#ezp-grp [data-grp=\"1600\"] .ezp-g-z').textContent === 2")
+    check('ohne „nur mit Bestand“: alle Artikel der Gruppe zählen', grp()['1600']['n'] == 2)
+    a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10701"]')
+    codes = a.eval_on_selector_all('#ezp-list tr[data-code]', 'e => e.map(x => x.dataset.code)')
+    check('Gruppe gewählt: nur deren Artikel, Gruppe markiert', codes == ['10601', '10701'] and grp()['1600']['on'] == 'true' and 'Rindfleisch, Argentinien, frisch' in a.inner_text('.ezp-lkopf'), codes)
+    t = a.inner_text('#ezp-list tr[data-code="10601"]')
+    check('Zeile: eingelagert, erwartet, kürzestes MHD, Wochenpreis, Herkunft', '40 kg' in t and '10 kg' in t and '20.11.2026' in t and '25,54 €' in t and 'AR' in t, t)
+    check('ohne Bestand: „kein Bestand“', 'kein Bestand' in a.inner_text('#ezp-list tr[data-code="10701"]'))
+    a.click('#ezp-list [data-info="10601"]'); a.wait_for_selector('#ezp-list tr[data-det="10601"]')
+    d = a.inner_text('#ezp-list tr[data-det="10601"]')
     check('Details: Bestand eingelagert/erfasst/gesamt, kürzestes MHD', 'Eingelagert 40 kg' in d and 'Erfasst 10 kg' in d and 'Gesamt verfügbar 50 kg' in d and '20.11.2026' in d, d)
     check('Details: Partien mit Eingang, MHD, Kolli, kg und EK', 'P-0001' in d and 'P-0002' in d and '04.12.2026' in d and '19,25' in d and 'EK' in d, d)
-    check('Details: erwartete Ankunft mit ETA', 'TEST-A' in d and '22.10.2026' in d, d)
-    check('Details: VK-Gruppe, Herkunft, Zustand', '1600 · Rindfleisch, Argentinien, frisch' in d and 'AR' in d and 'frisch' in d, d)
-    a.screenshot(path=SH + '/einzelangebot-artikeldetails.png')
-    check('Detailknopf zeigt Zustand an', a.get_attribute('#ez-treffer [data-info="10601"]', 'aria-expanded') == 'true')
-    a.click('#ez-treffer [data-info="10601"]'); a.wait_for_selector('#ez-treffer tr[data-det="10601"]', state='detached')
-    a.fill('#ez-q', 'steakhüfte'); a.wait_for_selector('#ez-treffer tr[data-code="10823"]'); a.click('#ez-treffer [data-info="10823"]')
-    a.wait_for_selector('#ez-treffer tr[data-det="10823"]')
-    d = a.inner_text('#ez-treffer tr[data-det="10823"]')
+    check('Details: erwartete Ankunft mit ETA, VK-Gruppe, Merkmale', 'TEST-A' in d and '22.10.2026' in d and '1600 · Rindfleisch, Argentinien, frisch' in d and 'frisch' in d, d)
+    check('Detailknopf zeigt Zustand an', a.get_attribute('#ezp-list [data-info="10601"]', 'aria-expanded') == 'true')
+    a.screenshot(path=SH + '/einzelangebot-auswahl.png')
+    box = a.evaluate("(() => { const r = document.querySelector('#dlg-ez-pick').getBoundingClientRect(), l = document.querySelector('#ezp-list'); return [r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, l.scrollWidth - l.clientWidth]; })()")
+    check('Fenster passt ins Bild, Tabelle ohne seitliches Scrollen', box[0] and box[1] <= 1, box)
+    a.click('#ezp-list [data-info="10601"]'); a.wait_for_selector('#ezp-list tr[data-det="10601"]', state='detached')
+    a.fill('#ezp-q', 'steakhüfte'); a.wait_for_selector('#ezp-list tr[data-code="10823"]')   # Suche startet in allen Gruppen, obwohl 1600 gewählt war
+    sx = [a.eval_on_selector_all('#ezp-list tr.ezp-gr', 'e => e.map(x => x.innerText)'), grp()['*']['on'], a.eval_on_selector_all('#ezp-list tr[data-code]', 'e => e.map(x => x.dataset.code)')]
+    check('Suche über alle Gruppen mit Gruppen-Zwischenzeile, Leiste zeigt „Alle“', any('Rindfleisch, Uruguay, frisch' in x for x in sx[0]) and sx[1] == 'true' and '10823' in sx[2], sx)
+    a.click('#ezp-list [data-info="10823"]'); a.wait_for_selector('#ezp-list tr[data-det="10823"]')
+    d = a.inner_text('#ezp-list tr[data-det="10823"]')
     check('Details: nur erwartet, ETA unbekannt', 'ETA unbekannt' in d and 'TEST-B' in d and 'Kein eingelagerter Bestand' in d, d)
-    a.fill('#ez-q', 'entrecote'); a.wait_for_selector('#ez-treffer tr[data-code="10701"]')
-    check('Suche: „kein Bestand“ sichtbar', 'kein Bestand' in a.inner_text('#ez-treffer tr[data-code="10701"]'))
-    a.check('#ez-f-bestand'); a.wait_for_function("!document.querySelector('#ez-treffer tr[data-code=\"10701\"]')")
-    check('Filter „nur mit Bestand“', a.locator('#ez-treffer tr[data-code]').count() == 0)
-    a.uncheck('#ez-f-bestand'); a.fill('#ez-q', '900001'); a.wait_for_selector('#ez-treffer tr[data-code="900001"]')
-    a.click('#ez-treffer [data-info="900001"]'); a.wait_for_selector('#ez-treffer tr[data-det="900001"]')
-    check('Artikel nur im Bestand: „nicht im Angebot“', 'nicht im Angebot' in a.inner_text('#ez-treffer tr[data-det="900001"]') and a.get_attribute('#ez-treffer tr[data-code="900001"] .ez-tt-p span', 'title') == 'nicht im Wochenangebot' and '5,5 kg' in a.inner_text('#ez-treffer tr[data-code="900001"]'))
-    a.fill('#ez-q', 'irland'); a.wait_for_selector('#ez-treffer tr[data-code="900001"]')   # „Irland“ steht nur in der VK-Gruppe (Herkunft „IRL“)
-    check('Textsuche findet auch die Bezeichnung der VK-Gruppe', '900001' in a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)'))
-    a.fill('#ez-q', '10601'); a.wait_for_selector('#ez-treffer tr[data-code="10601"]'); a.click('#ez-treffer [data-add="10601"]'); a.wait_for_selector('#ez-pos tr[data-i="0"]')
+    a.fill('#ezp-q', 'irland'); a.wait_for_selector('#ezp-list tr[data-code="900001"]')   # „Irland“ steht nur in der VK-Gruppe (Herkunft „IRL“)
+    check('Suche findet auch die Bezeichnung der VK-Gruppe; „nicht im Wochenangebot“', a.get_attribute('#ezp-list tr[data-code="900001"] .ezp-p span', 'title') == 'nicht im Wochenangebot')
+    a.fill('#ezp-q', ''); a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    a.click('#ezp-list tr[data-code="10601"] .ezp-n')   # Klick auf die Zeile markiert
+    check('Zeile markiert, Fuß zeigt Anzahl', a.is_checked('#ezp-list [data-sel="10601"]') and '1 Artikel ausgewählt' in a.inner_text('#ezp-anz') and '1 Artikel hinzufügen' in a.inner_text('#ezp-ok'))
+    a.click('#ezp-grp [data-grp="6150"]'); a.wait_for_selector('#ezp-list tr[data-code="900001"]'); a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    check('Auswahl bleibt beim Gruppenwechsel erhalten', a.is_checked('#ezp-list [data-sel="10601"]'))
+    a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden'); a.wait_for_selector('#ez-pos tr[data-i="0"]')
     row = '#ez-pos tr[data-i="0"]'
     check('Position übernommen: Wochenpreis vorbelegt, Abweichung ±0 %', a.input_value(row + ' [data-f="price"]') == '25,54' and '±0 %' in a.inner_text(row + ' .ez-a')
-          and '50 kg' in a.inner_text(row + ' .ez-b'), a.inner_text(row))
-    check('bereits übernommener Artikel nicht doppelt hinzufügbar', a.locator('#ez-treffer [data-add="10601"]').is_disabled())
+          and '50 kg' in a.inner_text(row + ' .ez-b') and ed_count(a) == 1, a.inner_text(row))
+    a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open]'); a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    check('bereits übernommener Artikel nicht doppelt wählbar („im Angebot“)', a.is_disabled('#ezp-list [data-sel="10601"]') and 'im Angebot' in a.inner_text('#ezp-list tr[data-code="10601"]'))
+    a.keyboard.press('Escape'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    check('Escape schließt das Fenster ohne Änderung', ed_count(a) == 1)
     a.fill(row + ' [data-f="price"]', '23,50')
     check('Abweichung unter Wochenpreis: Punkt und −8 %', a.get_attribute(row + ' .ez-abw', 'class').endswith('ab-unter') and '−8 %' in a.inner_text(row + ' .ez-a'), a.inner_text(row + ' .ez-a'))
     a.fill(row + ' [data-f="price"]', '20')
@@ -320,8 +388,9 @@ with sync_playwright() as p:
     a.fill(row + ' [data-f="qty"]', 'abc')
     check('ungültige Menge markiert', 'invalid' in a.get_attribute(row + ' [data-f="qty"]', 'class'))
     a.fill(row + ' [data-f="qty"]', '12'); a.press(row + ' [data-f="qty"]', 'Tab')
-    a.fill('#ez-q', 'Sonderschnitt'); a.click('#ez-frei'); a.wait_for_selector('#ez-pos tr[data-i="1"]')
-    check('freie Position mit Suchbegriff als Bezeichnung', a.input_value('#ez-pos tr[data-i="1"] [data-f="name"]') == 'Sonderschnitt')
+    a.click('#ez-frei'); a.wait_for_selector('#ez-pos tr[data-i="1"]')
+    check('freie Position: Bezeichnung markiert zum Überschreiben', a.input_value('#ez-pos tr[data-i="1"] [data-f="name"]') == 'Freie Position' and a.evaluate("document.activeElement.dataset.f") == 'name')
+    a.keyboard.type('Sonderschnitt')
     check('ungespeichert-Hinweis', a.locator('#ez-dirty').is_visible())
     a.screenshot(path=SH + '/einzelangebot-bearbeiten.png', full_page=True)
     a.click('#ez-save'); a.wait_for_selector('#ez-freigeben')
@@ -329,66 +398,72 @@ with sync_playwright() as p:
     check('gespeichert: Nummer vergeben, Freigabe möglich', f'E-{date.today().year}-000' in nr2 and not a.locator('#ez-dirty').is_visible(), nr2)
     saved = [x for x in doc('einzelangebote')['list'] if x['kid'] == kid2 and len(x['positions']) == 2]
     check('gespeichert wie eingegeben', saved and saved[0]['positions'][0] == {'code': '10601', 'name': 'Roastbeef, frisch', 'qty': 12.0, 'price': 27.5, 'notiz': ''}
-          and saved[0]['positions'][1]['price'] is None, saved[0]['positions'] if saved else None)
+          and saved[0]['positions'][1] == {'code': '', 'name': 'Sonderschnitt', 'qty': None, 'price': None, 'notiz': ''}, saved[0]['positions'] if saved else None)
+    check('nach dem Speichern oben auch „Per E-Mail senden“', a.locator('#btn-ez-mail').is_visible() and a.locator('#btn-ez-druck').is_visible())
     a.click('#ez-freigeben'); a.wait_for_selector('#ez-entfreigeben')
-    check('im Portal freigegeben (Oberfläche)', 'Im Portal freigegeben' in a.inner_text('.ez-top'))
+    check('im Portal freigegeben (Oberfläche)', 'Im Portal freigegeben' in a.inner_text('.ez-top'), a.inner_text('.ez-top'))
+
+    # Drucken / PDF: Angebotsseite mit deren Druckdialog (wie in der Kundenansicht)
+    with ctx.expect_page() as pi:
+        a.click('#btn-ez-druck')
+    w = pi.value; w.on('pageerror', lambda e: errors.append(str(e)))
+    w.wait_for_selector('#dlg-print[open]')
+    check('Drucken öffnet die Angebotsseite des Einzelangebots mit dem Druckdialog', '?angebot=e-' in w.url and 'drucken' not in w.url and w.is_checked('#dlg-print input[name="layout"][value="liste"]'), w.url)
+    w.click('#print-go'); w.wait_for_function('window.__gedruckt === true')
+    w.wait_for_function("(() => { const i = document.querySelector('#print-root .pl-ph img'); return i && i.complete && i.naturalWidth > 0; })()")
+    wt = w.inner_text('#print-root')
+    check('Ausdruck „Angebotsliste“: Logo, Kunde, Positionen, eigene Preise', 'für Andere Kantine' in wt and 'Roastbeef' in wt and '27,50' in wt and 'Sonderschnitt' in wt, wt[:300])
+    check('Ausdruck ohne Bestand, Partien und Wochenpreis', '25,54' not in wt and 'P-0001' not in wt and 'TEST-A' not in wt and 'Eingelagert' not in wt)
+    w.close()
     with ctx.expect_page() as pi:
         a.click('#ez-druck')
-    w = pi.value; w.wait_for_load_state(); w.wait_for_function('window.__gedruckt === true')
-    wt = w.inner_text('body')
-    check('Drucken/PDF: Kunde, Nummer, Positionen, Summe, kein Bestand', 'Andere Kantine' in wt and nr2.split()[1] in wt and '27,50' in wt and '330,00 €' in wt and 'Sonderschnitt' in wt
-          and 'auf Anfrage' in wt and 'Eingelagert' not in wt and '25,54' not in wt and 'P-0001' not in wt and 'TEST-A' not in wt, wt[:300])
-    lg = w.evaluate('window.__logo')
-    check('Drucken/PDF: Logo geladen, bevor gedruckt wird (eingebettet)', lg and lg[0] == 630 and lg[1].startswith('data:image/png'), lg)
+    w = pi.value; w.wait_for_selector('#dlg-print[open]')
+    check('auch der Knopf unten öffnet den Druckdialog der Angebotsseite', '?angebot=e-' in w.url)
     w.close()
+
+    # E-Mail-Dialog: Format wählbar, PDF-Vorschau
+    a.click('#btn-ez-mail'); a.wait_for_selector('#dlg-einzel-mail[open]')
+    check('E-Mail-Dialog: Liste oder PDF-Anhang, Liste vorgewählt, PDF-Vorschau', a.is_checked('#dlg-einzel-mail input[value="liste"]') and a.locator('#dlg-einzel-mail input[value="pdf"]').count() == 1
+          and 'einzel_pdf' in a.get_attribute('#dlg-einzel-mail .ez-pdf-vorschau a', 'href'))
+    a.screenshot(path=SH + '/einzelangebot-mail.png')
+    a.click('#dlg-einzel-mail [data-close]'); a.wait_for_selector('#dlg-einzel-mail', state='hidden')
     a.click('#ez-zurueck'); a.wait_for_selector('#view-einzel tr[data-ez]')
+    kl = [a.locator('#btn-ez-druck').is_hidden(), a.locator('#btn-send').is_hidden()]
+    check('Übersicht: oben weder Drucken noch Versand des Wochenangebots', all(kl), kl)
     check('zurück zur Übersicht: neues Angebot gelistet', a.locator('#view-einzel tr[data-ez]').count() >= 3)
     a.screenshot(path=SH + '/einzelangebote-liste.png')
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])')
+    kl = [a.locator('#btn-send').is_visible(), a.locator('#btn-ez-druck').is_hidden()]
+    check('außerhalb der Einzelangebote wieder „An Kunden senden“', all(kl), kl)
+    a.click('#vt-einzel'); a.wait_for_selector('#view-einzel tr[data-ez]')
 
-    # VK-Gruppen: mehrere wählen, sortieren, alle Treffer übernehmen
-    a.click('#ez-neu'); a.wait_for_selector('#ez-vk')
-    check('VK-Gruppen: zunächst alle', 'VK-Gruppen: alle' in a.inner_text('#ez-vk') and a.locator('#ez-vk-chips .ez-chip').count() == 0)
-    a.click('#ez-vk'); a.wait_for_selector('#ez-vk-pop:not([hidden]) [data-vk="1600"]')
-    pt = a.inner_text('#ez-vk-pop')
-    check('Auswahlfenster: vorkommende Gruppen mit Anzahl, „ohne VK-Gruppe“', '1600' in pt and 'Uruguay' in pt and 'Irland' in pt and 'ungenutzt' not in pt and 'ohne VK-Gruppe' in pt, pt)
-    a.fill('#ez-vk-q', 'rind frisch'); a.wait_for_function("document.querySelectorAll('#ez-vk-pop [data-vk]').length === 2")
-    check('Gruppensuche (mehrere Wörter)', 'Irland' not in a.inner_text('#ez-vk-pop'))
-    a.screenshot(path=SH + '/einzelangebot-vk-auswahl.png')
-    check('Auswahlfenster bleibt im Bild', a.evaluate("document.querySelector('#ez-vk-pop').getBoundingClientRect().right <= document.documentElement.clientWidth"))
-    a.click('#ez-vk-alle'); a.wait_for_function("document.querySelectorAll('#ez-vk-chips .ez-chip').length === 2")
-    a.press('#ez-vk-q', 'Escape'); a.wait_for_selector('#ez-vk-pop', state='hidden')
-    codes = a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)')
-    check('Filter: nur Artikel der gewählten Gruppen, nach VK-Gruppe sortiert', codes == ['10601', '10701', '10823'], codes)
-    check('Knopf zeigt die Auswahl, Zwischenzeilen je Gruppe', '2 gewählt' in a.inner_text('#ez-vk') and a.locator('#ez-treffer tr.ez-grp').count() == 2)
-    a.select_option('#ez-sort', 'bestand')
-    codes = a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)')
-    check('Sortierung nach Verfügbar, ohne Zwischenzeilen', codes == ['10601', '10823', '10701'] and a.locator('#ez-treffer tr.ez-grp').count() == 0, codes)
-    a.select_option('#ez-sort', 'vk')
-    a.click('#ez-vk-chips [data-vk-weg="1610"]'); a.wait_for_function("document.querySelectorAll('#ez-vk-chips .ez-chip').length === 1")
-    check('Chip entfernt eine Gruppe', a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)') == ['10601', '10701'])
-    check('„Alle hinzufügen“ mit Anzahl', 'Alle 2 hinzufügen' in a.inner_text('#ez-alle'))
-    a.click('#ez-alle'); a.wait_for_selector('#ez-pos tr[data-i="1"]')
-    check('alle Treffer der Gruppe übernommen, Wochenpreis vorbelegt', [a.inner_text(f'#ez-pos tr[data-i="{i}"] .ez-code') for i in (0, 1)] == ['10601', '10701']
-          and a.input_value('#ez-pos tr[data-i="1"] [data-f="price"]') == '27,21' and a.locator('#ez-alle').count() == 0)
-    a.click('#ez-vk'); a.wait_for_selector('#ez-vk-pop:not([hidden])')
-    a.click('#ez-vk-pop [data-vk="–"]'); a.click('#ez-vk-pop [data-vk="1600"]')
-    a.click('#ez-titel'); a.wait_for_selector('#ez-vk-pop', state='hidden')
-    check('Klick daneben schließt das Auswahlfenster; „ohne VK-Gruppe“ filterbar', all(c not in VK for c in a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)'))
-          and a.locator('#ez-treffer tr[data-code]').count() > 0)
-    a.click('#ez-vk'); a.click('#ez-vk-keine'); a.press('#ez-vk-q', 'Escape')
-    a.screenshot(path=SH + '/einzelangebot-vkgruppen.png', full_page=True)
+    # Alle Artikel einer Gruppe markieren und auf einmal übernehmen
+    a.click('#ez-neu'); a.wait_for_selector('#ez-add')
+    a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open]')
+    a.click('#ezp-grp [data-grp="1600"]'); a.wait_for_selector('#ezp-list tr[data-code="10701"]')
+    a.click('#ezp-alle')
+    check('„Alle dieser Gruppe markieren“', '2 Artikel ausgewählt' in a.inner_text('#ezp-anz') and 'Markierung aufheben' in a.inner_text('#ezp-alle'))
+    a.click('#ezp-alle')
+    check('Markierung aufheben', a.is_disabled('#ezp-ok') and 'Alle dieser Gruppe markieren' in a.inner_text('#ezp-alle'))
+    a.click('#ezp-alle'); a.click('#ezp-grp [data-grp="1610"]'); a.wait_for_selector('#ezp-list tr[data-code="10823"]'); a.check('#ezp-list [data-sel="10823"]')
+    a.click('#ezp-ok'); a.wait_for_selector('#ez-pos tr[data-i="2"]')
+    codes = a.eval_on_selector_all('#ez-pos tr[data-i] .ez-code', 'e => e.map(x => x.textContent)')
+    check('drei Artikel aus zwei Gruppen übernommen (nach Gruppe sortiert), Wochenpreise vorbelegt', codes == ['10601', '10701', '10823'] and a.input_value('#ez-pos tr[data-i="1"] [data-f="price"]') == '27,21', codes)
     a.click('#ez-zurueck'); a.click('#dlg-confirm .btn.primary'); a.wait_for_selector('#view-einzel tr[data-ez]')
+
     a.set_viewport_size({'width': 390, 'height': 820}); a.emulate_media(color_scheme='dark')   # mobil im dunklen Modus
     a.locator('#view-einzel tr[data-ez]').first.click(); a.wait_for_selector('#ez-pos')
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     check('Mobil 390 px: kein seitliches Scrollen', over <= 1, over)
-    a.fill('#ez-q', '10601'); a.click('#ez-treffer [data-info="10601"]'); a.wait_for_selector('#ez-treffer tr[data-det="10601"]')
-    a.click('#ez-vk'); a.wait_for_selector('#ez-vk-pop:not([hidden])')
-    over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
-    check('Mobil 390 px: Details und VK-Auswahl ohne seitliches Scrollen', over <= 1, over)
-    a.screenshot(path=SH + '/einzelangebot-mobil-vk.png')
-    a.press('#ez-vk-q', 'Escape')
     a.screenshot(path=SH + '/einzelangebot-mobil.png', full_page=True)
+    a.click('#ez-add'); a.wait_for_selector('#dlg-ez-pick[open]')
+    check('Mobil: Gruppenwahl als Auswahlliste', a.locator('#ezp-grp-sel').is_visible() and a.locator('.ezp-nav').is_hidden())
+    a.select_option('#ezp-grp-sel', '1600'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    a.click('#ezp-list [data-info="10601"]'); a.wait_for_selector('#ezp-list tr[data-det="10601"]')
+    m = a.evaluate("(() => { const l = document.querySelector('#ezp-list'), r = document.querySelector('#dlg-ez-pick').getBoundingClientRect(); return [l.scrollWidth - l.clientWidth, r.width <= innerWidth]; })()")
+    check('Mobil 390 px: Fenster füllt den Bildschirm, kein seitliches Scrollen', m[0] <= 1 and m[1], m)
+    a.screenshot(path=SH + '/einzelangebot-auswahl-mobil.png')
+    a.keyboard.press('Escape')
 
     # Leser: nur ansehen
     lp = br.new_page(viewport={'width': 1280, 'height': 900})
@@ -398,7 +473,8 @@ with sync_playwright() as p:
     lp.click('#vt-einzel'); lp.wait_for_selector('#view-einzel tr[data-ez]')
     check('Leser: kein „Neues Einzelangebot“', lp.locator('#ez-neu').count() == 0)
     lp.locator('#view-einzel tr[data-ez]').first.click(); lp.wait_for_selector('#ez-pos')
-    check('Leser: nur lesend, keine Suche', lp.locator('#ez-save').count() == 0 and lp.locator('#ez-q').count() == 0 and lp.locator('#ez-kunde').is_disabled())
+    check('Leser: nur lesend, kein „Artikel hinzufügen“', lp.locator('#ez-save').count() == 0 and lp.locator('#ez-add').count() == 0 and lp.locator('#ez-kunde').is_disabled())
+    check('Leser: oben nur Drucken, kein E-Mail-Versand', lp.locator('#btn-ez-druck').is_visible() and lp.locator('#btn-ez-mail').is_hidden() and lp.locator('#ez-mail').count() == 0)
     lp.close()
 
     # Portal: Kunde sieht sein Einzelangebot und kann bestellen
