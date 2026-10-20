@@ -44,3 +44,9 @@ condition = "AND"
 regexTarget = "secret"
 paths = ['''^tests/e2e/test_admin_confirmation(_ui)?\.py$''']
 regexes = ['''^(Leser-Geheimnis-123|Weiteres-Geheimnis-123|Replacement-Passwort-123|Falsch-Geheimnis-123)$''']
+
+[[allowlists]]
+description = "Prüfliste der Dateiprüfung: SHA-256-Prüfsummen der ausgelieferten Dateien (keine Geheimnisse; erzeugt von werkzeuge/integritaet.py)"
+paths = [
+  '''^app/api/lib/integritaet-liste\.php$''',
+]
