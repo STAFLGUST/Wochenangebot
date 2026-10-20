@@ -983,7 +983,7 @@ body.ro .sale-tag { cursor: default; }
 .ez-top h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ez-back { transform: rotate(90deg); }
 .ez-dirty { font-size: 12.5px; color: var(--c-aged); font-weight: 600; }
-.ez-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.ez-grid { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 34%, 500px); gap: 16px; align-items: start; }
 .ez-main { min-width: 0; }
 .ez-kopf { padding: 16px 18px; }
 .ez-kopf .fld textarea { width: 100%; box-sizing: border-box; }
@@ -1026,13 +1026,78 @@ body.ro .sale-tag { cursor: default; }
 .ez-filter { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
 .ez-filter .check { font-size: 12.5px; gap: 6px; }
 #ez-treffer { overflow-y: auto; margin: 8px -14px 0; padding: 0 14px; min-height: 0; }
-.ez-list { list-style: none; margin: 0 0 8px; padding: 0; }
-.ez-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
-.ez-list li .ez-li-t { grid-column: 1; font-size: 13.5px; }
-.ez-list li .ez-li-d { grid-column: 1; font-size: 12px; color: var(--text-2); }
-.ez-list li .btn { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
-.ez-list .ez-code { font-variant-numeric: tabular-nums; color: var(--muted); }
+.ez-list .ez-code, .ez-tt .ez-code { font-variant-numeric: tabular-nums; color: var(--muted); }
 .ez-li-n { font-weight: 600; }
+/* Kundenauswahl mit Suche */
+.ez-kwahl { position: relative; }
+.ez-kbox { position: relative; }
+.ez-kbox .i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
+.ez-kbox input { width: 100%; box-sizing: border-box; padding-left: 34px; }
+.ez-klist { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 320px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line-strong, var(--line)); border-radius: 10px; box-shadow: var(--shadow-lg); }
+.ez-klist li { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border-radius: 7px; cursor: pointer; }
+.ez-klist li.akt, .ez-klist li[data-kid]:hover { background: var(--surface-3); }
+.ez-klist li[aria-selected="true"] .ez-ko-f { color: var(--accent); }
+.ez-klist .ez-ko-f { font-weight: 600; font-size: 14px; }
+.ez-klist .ez-ko-d { font-size: 12px; color: var(--muted); }
+.ez-klist .ez-ko-mehr { cursor: default; font-size: 12.5px; color: var(--muted); }
+.ez-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--surface-3); color: var(--text-2); vertical-align: 1px; }
+/* Artikelsuche: VK-Gruppen, Sortierung, Tabelle */
+.ez-tools { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ez-vk { position: static; }
+.ez-vk-btn { gap: 6px; }
+.ez-vk-btn .i:last-child { transform: rotate(0deg); opacity: .7; }
+.ez-vk-btn[aria-expanded="true"] .i:last-child { transform: rotate(180deg); }
+.ez-sort { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-2); }
+.ez-sort select { height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 12.5px; }
+.ez-vk-pop { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); padding: 10px; background: var(--surface);
+  border: 1px solid var(--line-strong, var(--line)); border-radius: 12px; box-shadow: var(--shadow-lg); }
+.ez-vk-pop .search { max-width: none; }
+.ez-vk-akt { display: flex; justify-content: flex-end; gap: 4px; margin: 6px 0 4px; }
+.ez-vk-liste { max-height: 300px; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+.ez-vk-z { display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 6px; border-radius: 7px; font-size: 13px; }
+.ez-vk-z:hover { background: var(--surface-3); }
+.ez-vk-z.leer { color: var(--muted); }
+.ez-vk-t b { font-variant-numeric: tabular-nums; margin-right: 4px; }
+.ez-vk-n { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ez-vk-fuss { margin: 6px 0 0; font-size: 11.5px; }
+.ez-vk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ez-vk-chips[hidden] { display: none; }
+.ez-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 2px 2px 2px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600; }
+.ez-chip button { border: 0; background: transparent; color: inherit; width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%; cursor: pointer; }
+.ez-chip button:hover { background: rgba(0, 0, 0, .08); }
+.ez-chip .i { width: 12px; height: 12px; }
+.ez-tr-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; margin: 2px 0 4px; font-size: 12.5px; color: var(--text-2); position: sticky; top: 0; background: var(--surface); z-index: 2; }
+.ez-tt { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+.ez-tt col.c-v { width: 90px; } .ez-tt col.c-p { width: 68px; } .ez-tt col.c-b { width: 66px; }
+.ez-tt > thead > tr > th { position: sticky; top: 32px; z-index: 1; background: var(--surface); text-align: left; font-size: 11.5px; font-weight: 600; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line-strong, var(--line)); }
+.ez-tt > thead > tr > th.num, .ez-tt > tbody > tr > td.num { text-align: right; }
+.ez-tt > tbody > tr > td { padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ez-tt > tbody > tr.ez-grp > td { padding: 9px 6px 5px; font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--surface-2); border-bottom: 1px solid var(--line-strong, var(--line)); }
+.ez-tt .ez-tt-a { min-width: 0; overflow-wrap: anywhere; }
+.ez-tt .ez-tt-a .ez-code { display: block; font-size: 11.5px; }
+.ez-tt .ez-tt-a .ez-li-n { display: block; line-height: 1.3; }
+.ez-tt .ez-tt-v, .ez-tt .ez-tt-p { font-variant-numeric: tabular-nums; }
+.ez-tt .ez-tt-v .ez-bst, .ez-tt .ez-tt-p { white-space: nowrap; }
+.ez-tt .ez-tt-v .ez-kein { white-space: normal; }
+.ez-tt .ez-erw { display: block; font-size: 11px; line-height: 1.25; color: var(--muted); font-weight: 400; }
+.ez-tt > tbody > tr > td.ez-tt-b { white-space: nowrap; text-align: right; padding-left: 0; padding-right: 0; }
+.ez-tt .ez-tt-b .ibtn { width: 28px; height: 28px; vertical-align: middle; }
+.ez-tt .ez-tt-b .ibtn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.ez-tt .ez-tt-b .btn { min-width: 32px; padding: 0 8px; justify-content: center; vertical-align: middle; }
+.ez-tt > tbody > tr.ez-art.auf > td { border-bottom-color: transparent; background: var(--surface-2); }
+.ez-tt > tbody > tr.ez-det > td { background: var(--surface-2); padding: 2px 10px 12px; font-size: 12.5px; }
+.ez-det-m, .ez-det-s { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--text-2); margin: 2px 0 6px; min-width: 0; }
+.ez-det-m > span, .ez-det-s > span { min-width: 0; overflow-wrap: anywhere; }
+.ez-det-s .ez-bst3 { display: contents; }
+.ez-det h4, .ez-tt tr.ez-det h4 { margin: 10px 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.ez-dtw { overflow-x: auto; }
+.ez-dt { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ez-dt th, .ez-dt td { white-space: nowrap; }
+.ez-dt th { text-align: left; font-weight: 600; color: var(--muted); padding: 3px 5px; border-bottom: 1px solid var(--line); }
+.ez-dt td { padding: 3px 5px; border-bottom: 1px solid var(--line); }
+.ez-dt .num { text-align: right; }
+.ez-tt tr.ez-det .hint { margin: 2px 0; }
 @media (max-width: 1100px) { .ez-grid { grid-template-columns: minmax(0, 1fr); } .ez-suche { position: static; max-height: none; } #ez-treffer { max-height: 340px; } }
 @media (max-width: 640px) {
   .eztab .ez-m { display: none; }

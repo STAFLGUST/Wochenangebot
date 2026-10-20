@@ -1,8 +1,10 @@
 /* ==========================================================================
    Wochenangebot – Eingabebereich, Einzelangebote (Angebot je Kunde)
-   Artikel frei suchen (Stammdaten, Bestand, Wochenangebot) mit eingelagertem, erfasstem und gesamt verfügbarem
-   Bestand sowie dem Wochenangebotspreis zum Vergleich; Abweichung des eigenen Preises als farbiger Punkt.
-   Speichern, im Portal freigeben, drucken (PDF) und per E-Mail senden. Server: app/api/aktionen/einzelangebote.php
+   Kunde über eine Suche wählen (Firma, Kundennummer, Ort, Ansprechpartner …). Artikel frei suchen (Stammdaten, Bestand,
+   Wochenangebot), nach VK-Gruppen filtern (mehrere wählbar) und sortieren; Treffer als Tabelle mit gesamt verfügbarem
+   Bestand und Wochenpreis, Details je Artikel (Merkmale, Partien mit MHD, erwartete Ankünfte mit ETA). Alle Treffer der
+   gewählten VK-Gruppen auf einmal übernehmen. Abweichung des eigenen Preises als farbiger Punkt.
+   Speichern, im Portal freigeben, drucken (PDF, mit Logo) und per E-Mail senden. Server: app/api/aktionen/einzelangebote.php
    ========================================================================== */
 (function () {
   'use strict';
@@ -20,7 +22,12 @@
   const STATUS = { entwurf: 'Entwurf', freigegeben: 'Im Portal freigegeben', zurueckgezogen: 'Zurückgezogen' };
   const isoPlus = (days) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
 
+  const COND = { frisch: 'frisch', gefroren: 'gefroren', unbekannt: '' };
+  const OHNE_VK = '–';   // Auswahl „ohne VK-Gruppe“
+  const MAX_TREFFER = 200;
+
   let liste = null, kunden = null, idx = null, idxMeta = null, ed = null, dirty = false, q = '', listQ = '', nurBestand = false, nurAngebot = false;
+  let vkSel = new Set(), vkQ = '', sortBy = 'vk', offen = new Set(), kq = null, kAkt = 0, logoUrl = null;
   const darf = () => may('einzelangebote.bearbeiten');
 
   /* Abweichung vom Wochenangebotspreis: Punkt + Prozent */
@@ -50,11 +57,13 @@
     if (idx || !darf()) return;
     const r = await api('einzel_artikel');
     idx = new Map(r.articles.map((a) => [key(a.code), a]));
-    idxMeta = { bestand: r.bestand, angebot: r.angebot };
+    idxMeta = { bestand: r.bestand, angebot: r.angebot, ek: !!r.ek, vk: new Map((r.vkGruppen || []).map((g) => [g.nr, g])) };
+    for (const v of [...vkSel]) if (v !== OHNE_VK && !idxMeta.vk.has(v)) vkSel.delete(v);
   }
 
   async function render() {
     if (!liste) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Einzelangebote werden geladen …</div>';
+    ladeLogo();
     try { await laden(); await ladeIndex(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     if (ed) renderEditor(); else renderListe();
   }
@@ -93,9 +102,45 @@
     try { const r = await api('einzel_detail&id=' + encodeURIComponent(id)); ed = r.angebot; ed.fracht = r.fracht; dirty = false; q = ''; renderEditor(); }
     catch (e) { toast(e.message); }
   }
-  function kundenOptionen() {
-    const l = [...kunden.values()].sort((a, b) => a.firma.localeCompare(b.firma, 'de'));
-    return `<option value="">– Kunde wählen –</option>` + l.map((c) => `<option value="${esc(c.id)}"${c.id === ed.kid ? ' selected' : ''}>${esc(c.firma)}${c.nr ? ' · ' + esc(c.nr) : ''}${c.ort ? ' · ' + esc(c.ort) : ''}</option>`).join('');
+  /* ---------- Kundenauswahl mit Suche ---------- */
+  const kLabel = (c) => (c ? c.firma + (c.nr ? ' · ' + c.nr : '') + (c.ort ? ' · ' + c.ort : '') : '');
+  /* Treffer: alle Suchwörter in Firma, Nummer, Ort, PLZ, Ansprechpartner, E-Mail, Straße; Nummer genau > Firma beginnt > Wortanfang > enthalten */
+  function kundenTreffer(text) {
+    const toks = fold(text).split(/\s+/).filter(Boolean);
+    const l = [];
+    for (const c of kunden.values()) {
+      const hay = fold([c.firma, c.nr, c.plz, c.ort, c.ansprechpartner, c.email, c.strasse, c.gruppe].join(' '));
+      if (!toks.every((t) => hay.includes(t))) continue;
+      const f = fold(c.firma), t0 = toks[0] || '';
+      const rang = !t0 ? 3 : fold(c.nr) === t0 ? 0 : f.startsWith(t0) ? 1 : (' ' + f).includes(' ' + t0) ? 2 : 3;
+      l.push({ c, rang });
+    }
+    return l.sort((a, b) => a.rang - b.rang || (a.c.active === false) - (b.c.active === false) || a.c.firma.localeCompare(b.c.firma, 'de')).map((x) => x.c);
+  }
+  function renderKundenListe() {
+    const ul = $('#ez-kunde-list'), inp = $('#ez-kunde');
+    if (!ul || kq === null) { if (ul) { ul.hidden = true; inp.setAttribute('aria-expanded', 'false'); } return; }
+    const alle = kundenTreffer(kq), l = alle.slice(0, 50);
+    kAkt = Math.min(kAkt, Math.max(l.length - 1, 0));
+    ul.innerHTML = l.length ? l.map((c, i) => `<li role="option" id="ez-ko-${i}" data-kid="${esc(c.id)}" class="${i === kAkt ? 'akt' : ''}" aria-selected="${c.id === ed.kid}">
+        <span class="ez-ko-f">${esc(c.firma)}${c.active === false ? ' <span class="ez-tag">inaktiv</span>' : ''}${c.login && c.login.active ? '' : ' <span class="ez-tag">kein Portal</span>'}</span>
+        <span class="ez-ko-d">${esc([c.nr ? 'Nr. ' + c.nr : '', [c.plz, c.ort].filter(Boolean).join(' '), c.ansprechpartner].filter(Boolean).join(' · '))}</span></li>`).join('')
+        + (alle.length > l.length ? `<li class="ez-ko-mehr" aria-disabled="true">… ${alle.length - l.length} weitere – Suche eingrenzen</li>` : '')
+      : '<li class="ez-ko-mehr" aria-disabled="true">Kein Kunde gefunden</li>';
+    ul.hidden = false;
+    inp.setAttribute('aria-expanded', 'true');
+    if (l.length) inp.setAttribute('aria-activedescendant', 'ez-ko-' + kAkt); else inp.removeAttribute('aria-activedescendant');
+    const akt = ul.querySelector('li.akt'); if (akt) akt.scrollIntoView({ block: 'nearest' });
+  }
+  function kundeSchliessen() {
+    kq = null; renderKundenListe();
+    const inp = $('#ez-kunde'); if (inp) { inp.value = kLabel(kunden.get(ed.kid)); inp.removeAttribute('aria-activedescendant'); }
+  }
+  function kundeWaehlen(id) {
+    kq = null;
+    if (id !== ed.kid) { kopfLesen(); ed.kid = id; markDirty(); }
+    renderEditor();
+    const t = $('#ez-titel'); if (t) t.focus();
   }
   function renderEditor() {
     const ro = !darf();
@@ -109,7 +154,7 @@
       <div class="ez-grid">
         <section class="ez-main">
           <div class="gcard ez-kopf"><div class="form-grid two">
-            <label class="fld span2"><span>Kunde</span><select id="ez-kunde"${ro ? ' disabled' : ''}>${kundenOptionen()}</select></label>
+            <div class="fld span2 ez-kwahl"><span id="ez-kunde-l">Kunde</span><div class="ez-kbox">${icon('search')}<input id="ez-kunde" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ez-kunde-list" aria-labelledby="ez-kunde-l" autocomplete="off" spellcheck="false" placeholder="Kunde suchen: Firma, Kundennummer, Ort, Ansprechpartner …" value="${esc(kLabel(k))}"${ro ? ' disabled' : ''}></div><ul id="ez-kunde-list" class="ez-klist" role="listbox" aria-label="Kunden" hidden></ul></div>
             <label class="fld"><span>Titel <small class="muted">(optional)</small></span><input id="ez-titel" maxlength="120" value="${esc(ed.titel || '')}" placeholder="${esc(k ? 'Angebot für ' + k.firma : 'z. B. Angebot Grillsaison')}"${ro ? ' disabled' : ''}></label>
             <label class="fld"><span>Gültig bis</span><input id="ez-bis" type="date" value="${esc(ed.gueltigBis || '')}"${ro ? ' disabled' : ''}></label>
             <label class="fld span2"><span>Hinweis an den Kunden <small class="muted">(optional, erscheint im Angebot)</small></span><textarea id="ez-hinweis" rows="2" maxlength="1000"${ro ? ' disabled' : ''}>${esc(ed.hinweis || '')}</textarea></label>
@@ -126,14 +171,20 @@
         </section>
         ${ro ? '' : `<aside class="ez-suche gcard">
           <h3 class="d-h"><span>Artikel suchen</span></h3>
-          <div class="search">${icon('search')}<input id="ez-q" type="search" autocomplete="off" placeholder="Nummer oder Bezeichnung …" aria-label="Artikel suchen" value="${esc(q)}"></div>
+          <div class="search">${icon('search')}<input id="ez-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung oder Herkunft …" aria-label="Artikel suchen" value="${esc(q)}"></div>
+          <div class="ez-tools">
+            <div class="ez-vk"><button type="button" class="btn sm ez-vk-btn" id="ez-vk" aria-haspopup="dialog" aria-expanded="false" aria-controls="ez-vk-pop"></button>
+              <div class="ez-vk-pop" id="ez-vk-pop" role="dialog" aria-label="VK-Gruppen wählen" hidden></div></div>
+            <label class="ez-sort"><span>Sortierung</span><select id="ez-sort" aria-label="Sortierung">${[['vk', 'VK-Gruppe'], ['code', 'Art.-Nr.'], ['name', 'Bezeichnung'], ['bestand', 'Verfügbar']].map(([v, t]) => `<option value="${v}"${sortBy === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          </div>
+          <div class="ez-vk-chips" id="ez-vk-chips"></div>
           <div class="ez-filter"><label class="check"><input type="checkbox" id="ez-f-bestand"${nurBestand ? ' checked' : ''}> nur mit Bestand</label><label class="check"><input type="checkbox" id="ez-f-angebot"${nurAngebot ? ' checked' : ''}> nur im Wochenangebot</label></div>
           <p class="hint">${idxMeta && idxMeta.bestand ? `Bestand vom ${esc(dmy(idxMeta.bestand.date))}` : 'Kein Bestand geladen'}${idxMeta && idxMeta.angebot ? ` · Wochenpreis KW ${esc(idxMeta.angebot.week)}/${esc(idxMeta.angebot.year)}` : ''}</p>
           <div id="ez-treffer"></div>
         </aside>`}
       </div>`;
     renderPos();
-    if (!ro) renderTreffer();
+    if (!ro) { renderVk(); renderTreffer(); }
   }
   function renderPos() {
     const ro = !darf();
@@ -157,25 +208,122 @@
     return { kg, sum };
   }
   function summeHTML() { const { kg, sum } = summen(); return kg ? `${esc(fmtKg(kg))} kg · Warenwert ca. <strong>${esc(fmt2.format(sum))} €</strong>` : '<span class="muted">Mengen optional</span>'; }
+  /* ---------- Artikelsuche: VK-Gruppen, Tabelle, Details ---------- */
+  const vkName = (nr) => { const g = nr && idxMeta && idxMeta.vk.get(nr); return g && g.name ? g.name : ''; };
+  const vkText = (nr) => (nr === OHNE_VK || !nr ? 'ohne VK-Gruppe' : nr + (vkName(nr) ? ' · ' + vkName(nr) : ''));
+  /* Treffer ohne VK-Filter (für die Anzahl je Gruppe) bzw. mit */
+  function passt(a, toks) {
+    if (nurBestand && !(a.totalKg > 0)) return false;
+    if (nurAngebot && !a.inOffer) return false;
+    if (!toks.length) return true;
+    const hay = fold([a.code, a.name, a.origin, a.vk, vkName(a.vk)].join(' '));
+    return toks.every((t) => hay.includes(t));
+  }
+  const vkPasst = (a) => !vkSel.size || vkSel.has(a.vk || OHNE_VK);
+  function treffer() {
+    const toks = fold(q).split(/\s+/).filter(Boolean);
+    const l = [...idx.values()].filter((a) => vkPasst(a) && passt(a, toks));
+    const nat = (x, y) => String(x).localeCompare(String(y), 'de', { numeric: true });
+    const cmp = {
+      code: (a, b) => nat(a.code, b.code),
+      name: (a, b) => (a.name || '').localeCompare(b.name || '', 'de') || nat(a.code, b.code),
+      bestand: (a, b) => (b.totalKg || 0) - (a.totalKg || 0) || nat(a.code, b.code),
+      vk: (a, b) => (!a.vk) - (!b.vk) || nat(a.vk || '', b.vk || '') || nat(a.code, b.code),
+    }[sortBy] || ((a, b) => nat(a.code, b.code));
+    return l.sort(cmp);
+  }
+  /* Knopf, Auswahlfenster und Chips der VK-Gruppen */
+  function renderVk() {
+    const btn = $('#ez-vk'), chips = $('#ez-vk-chips');
+    if (!btn || !idx) return;
+    btn.innerHTML = `${icon('tag', 'sm')}VK-Gruppen: ${vkSel.size ? `<b>${vkSel.size} gewählt</b>` : 'alle'}${icon('chev', 'sm')}`;
+    chips.innerHTML = [...vkSel].map((v) => `<span class="ez-chip">${esc(vkText(v))}<button type="button" data-vk-weg="${esc(v)}" aria-label="${esc(vkText(v))} entfernen" title="Entfernen">${icon('x', 'sm')}</button></span>`).join('');
+    chips.hidden = !vkSel.size;
+    const pop = $('#ez-vk-pop');
+    if (!pop.hidden) renderVkPop();
+  }
+  function renderVkPop() {
+    const pop = $('#ez-vk-pop');
+    const toks = fold(q).split(/\s+/).filter(Boolean);
+    const n = new Map();
+    for (const a of idx.values()) if (passt(a, toks)) n.set(a.vk || OHNE_VK, (n.get(a.vk || OHNE_VK) || 0) + 1);
+    const gt = fold(vkQ).split(/\s+/).filter(Boolean);
+    const gruppen = [...idxMeta.vk.values()].filter((g) => gt.every((t) => fold(g.nr + ' ' + (g.name || '')).includes(t)));
+    const ohne = [...idx.values()].some((a) => !a.vk) && gt.every((t) => fold('ohne vk-gruppe').includes(t));
+    const zeile = (nr, label) => { const k = n.get(nr) || 0; return `<label class="check ez-vk-z${k ? '' : ' leer'}"><input type="checkbox" data-vk="${esc(nr)}"${vkSel.has(nr) ? ' checked' : ''}><span class="ez-vk-t">${label}</span><span class="ez-vk-n">${k}</span></label>`; };
+    const ae = document.activeElement, hatFokus = ae && ae.id === 'ez-vk-q', fokVk = ae && ae.dataset && ae.dataset.vk;
+    pop.innerHTML = `<div class="ez-vk-kopf"><div class="search">${icon('search')}<input id="ez-vk-q" type="search" autocomplete="off" placeholder="VK-Gruppe suchen, z. B. Rind Argentinien" aria-label="VK-Gruppe suchen" value="${esc(vkQ)}"></div>
+        <div class="ez-vk-akt">${gruppen.length > 1 ? `<button type="button" class="btn sm ghost" id="ez-vk-alle">Gefundene wählen</button>` : ''}<button type="button" class="btn sm ghost" id="ez-vk-keine"${vkSel.size ? '' : ' disabled'}>Auswahl aufheben</button></div></div>
+      <div class="ez-vk-liste">${gruppen.map((g) => zeile(g.nr, `<b>${esc(g.nr)}</b> ${esc(g.name || '(ohne Bezeichnung)')}`)).join('')}${ohne ? zeile(OHNE_VK, '<i>ohne VK-Gruppe</i>') : ''}
+        ${!gruppen.length && !ohne ? `<p class="hint">${idxMeta.vk.size ? 'Keine VK-Gruppe gefunden.' : 'Den Artikeln sind noch keine VK-Gruppen zugeordnet (Stammdaten → Artikelstammdaten).'}</p>` : ''}</div>
+      <p class="hint ez-vk-fuss">Zahl = Treffer mit den übrigen Filtern.</p>`;
+    if (hatFokus) { const i = $('#ez-vk-q'); i.focus(); i.setSelectionRange(vkQ.length, vkQ.length); }
+    else if (fokVk !== undefined) { const c = pop.querySelector(`[data-vk="${CSS.escape(fokVk)}"]`); if (c) c.focus(); }
+  }
+  function vkPopAuf(auf) {
+    const pop = $('#ez-vk-pop'), btn = $('#ez-vk');
+    if (!pop) return;
+    pop.hidden = !auf; btn.setAttribute('aria-expanded', String(auf));
+    if (!auf) vkQ = '';   // Gruppensuche beim nächsten Öffnen leer
+    if (auf) { renderVkPop(); $('#ez-vk-q').focus(); }
+  }
+  function verfuegbarHTML(a) {
+    if (!a || a.totalKg === undefined) return '<span class="muted">—</span>';
+    if (!(a.totalKg > 0)) return '<span class="ez-kein">kein Bestand</span>';
+    return `<b class="ez-bst">${esc(fmtKg(a.totalKg))} kg</b>${a.incomingKg > 0 ? `<span class="ez-erw">davon ${esc(fmtKg(a.incomingKg))} kg erwartet</span>` : ''}`;
+  }
+  function detailHTML(a) {
+    const merk = [a.category, a.origin, COND[a.condition] || ''].filter((x) => x && x !== 'Sonstiges');
+    const kopf = `<div class="ez-det-m"><span>VK-Gruppe <b>${esc(a.vk ? vkText(a.vk) : '—')}</b></span>${merk.length ? `<span>${esc(merk.join(' · '))}</span>` : ''}
+      <span>Wochenpreis <b>${a.inOffer ? stdText(a.stdPrice) : 'nicht im Angebot'}</b></span></div>`;
+    if (a.totalKg === undefined) return kopf + '<p class="hint">Bestand nur mit dem Recht „Bestand ansehen“.</p>';
+    const ek = idxMeta && idxMeta.ek;
+    const lots = a.lots || [], inc = a.incoming || [];
+    const lotsHTML = lots.length ? `<div class="ez-dtw"><table class="ez-dt"><thead><tr><th>Partie</th><th>Eingang</th><th>MHD</th><th class="num">Kolli</th><th class="num">kg</th>${ek ? '<th class="num">EK €/kg</th>' : ''}</tr></thead><tbody>
+        ${lots.map((l) => `<tr><td>${esc(l.lot || '—')}</td><td>${esc(dmy(l.arrival)) || '—'}</td><td>${esc(dmy(l.mhd)) || '—'}</td><td class="num">${l.kolli != null ? esc(fmtKg(l.kolli)) : '—'}</td><td class="num">${esc(fmtKg(l.kg))}</td>${ek ? `<td class="num">${l.ek != null ? esc(fmt2.format(l.ek)) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
+      : `<p class="hint">${a.kg > 0 ? 'Keine Partiedaten in der Bestandsliste.' : 'Kein eingelagerter Bestand.'}</p>`;
+    const incHTML = inc.length ? `<div class="ez-dtw"><table class="ez-dt"><thead><tr><th>Partie</th><th>Ankunft (ETA)</th><th class="num">kg</th></tr></thead><tbody>
+        ${inc.map((z) => `<tr><td>${esc(z.lot || '—')}</td><td>${z.arrival ? esc(dmy(z.arrival)) : '<span class="muted">ETA unbekannt</span>'}</td><td class="num">${esc(fmtKg(z.kg))}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="hint">Keine erwarteten Ankünfte.</p>';
+    return kopf + `<div class="ez-det-s">${bestandHTML(a)}${a.mhd ? `<span>kürzestes MHD <b>${esc(dmy(a.mhd))}</b></span>` : ''}</div>
+      <h4>Eingelagerte Partien</h4>${lotsHTML}<h4>Erwartete Ankünfte</h4>${incHTML}`;
+  }
   function renderTreffer() {
     const el = $('#ez-treffer');
     if (!idx) { el.innerHTML = ''; return; }
-    const toks = fold(q).split(/\s+/).filter(Boolean);
     const drin = new Set(ed.positions.map((p) => key(p.code)));
-    const alle = [...idx.values()].filter((a) => (!nurBestand || a.totalKg > 0) && (!nurAngebot || a.inOffer) && toks.every((t) => fold(a.code + ' ' + a.name).includes(t)));
-    const l = alle.slice(0, 60);
-    el.innerHTML = (l.length ? `<ul class="ez-list">${l.map((a) => `<li data-code="${esc(a.code)}">
-        <div class="ez-li-t"><span class="ez-code">${esc(a.code)}</span> <span class="ez-li-n">${esc(a.name || '(ohne Bezeichnung)')}</span></div>
-        <div class="ez-li-d">${bestandHTML(a)}</div>
-        <div class="ez-li-d">Wochenpreis: ${stdText(a.stdPrice)}</div>
-        <button type="button" class="btn sm" data-add="${esc(a.code)}"${drin.has(key(a.code)) ? ' disabled' : ''}>${drin.has(key(a.code)) ? 'im Angebot' : icon('plus', 'sm') + 'Hinzufügen'}</button></li>`).join('')}</ul>` : '<p class="hint">Kein Artikel gefunden.</p>')
+    const alle = treffer();
+    const l = alle.slice(0, MAX_TREFFER);
+    const neu = alle.filter((a) => !drin.has(key(a.code)));
+    let grp = null;
+    const zeilen = l.map((a) => {
+      const k = key(a.code), auf = offen.has(k), ist = drin.has(k);
+      let h = '';
+      if (sortBy === 'vk' && (a.vk || OHNE_VK) !== grp) {
+        grp = a.vk || OHNE_VK;
+        const anz = alle.filter((x) => (x.vk || OHNE_VK) === grp).length;
+        h += `<tr class="ez-grp"><td colspan="4">${esc(vkText(grp))} <span class="muted">· ${anz}</span></td></tr>`;
+      }
+      h += `<tr class="ez-art${auf ? ' auf' : ''}" data-code="${esc(a.code)}">
+        <td class="ez-tt-a"><span class="ez-code">${esc(a.code)}</span><span class="ez-li-n">${esc(a.name || '(ohne Bezeichnung)')}</span></td>
+        <td class="num ez-tt-v">${verfuegbarHTML(a)}</td>
+        <td class="num ez-tt-p">${a.stdPrice ? stdText(a.stdPrice) : '<span class="muted" title="nicht im Wochenangebot">–</span>'}</td>
+        <td class="ez-tt-b"><button type="button" class="ibtn" data-info="${esc(a.code)}" aria-expanded="${auf}" aria-label="Details zu ${esc(a.code)}" title="Partien, Bestand, Ankünfte">${icon('info', 'sm')}</button><button type="button" class="btn sm" data-add="${esc(a.code)}"${ist ? ' disabled' : ''} aria-label="${ist ? 'bereits im Angebot' : esc(a.code) + ' hinzufügen'}" title="${ist ? 'bereits im Angebot' : 'Hinzufügen'}">${ist ? icon('check', 'sm') : icon('plus', 'sm')}</button></td></tr>`;
+      if (auf) h += `<tr class="ez-det" data-det="${esc(a.code)}"><td colspan="4">${detailHTML(a)}</td></tr>`;
+      return h;
+    }).join('');
+    el.innerHTML = `<div class="ez-tr-kopf"><span>${plural(alle.length, 'Artikel', 'Artikel')}</span>${vkSel.size && neu.length ? `<button type="button" class="btn sm" id="ez-alle">${icon('plus', 'sm')}Alle ${neu.length} hinzufügen</button>` : ''}</div>`
+      + (l.length ? `<table class="ez-tt"><colgroup><col><col class="c-v"><col class="c-p"><col class="c-b"></colgroup><thead><tr><th>Artikel</th><th class="num">Verfügbar</th><th class="num">Wochen&shy;preis</th><th aria-label="Aktionen"></th></tr></thead><tbody>${zeilen}</tbody></table>` : '<p class="hint">Kein Artikel gefunden.</p>')
       + (alle.length > l.length ? `<p class="hint">… ${alle.length - l.length} weitere – Suche eingrenzen.</p>` : '')
       + `<button type="button" class="btn sm ghost" id="ez-frei">${icon('plus', 'sm')}Freie Position${q.trim() ? ` „${esc(q.trim().slice(0, 40))}“` : ''}</button>`;
   }
+  function hinzufuegen(a) {
+    ed.positions.push({ code: a.code, name: a.name, qty: null, price: a.stdPrice && a.stdPrice.status === 'value' ? a.stdPrice.value : null, notiz: '' });
+  }
   function markDirty() { dirty = true; const d = $('#ez-dirty'); if (d) d.hidden = false; }
   function kopfLesen() {
-    if (!$('#ez-kunde')) return;
-    ed.kid = $('#ez-kunde').value; ed.titel = $('#ez-titel').value.trim(); ed.gueltigBis = $('#ez-bis').value; ed.hinweis = $('#ez-hinweis').value;
+    if (!$('#ez-titel')) return;
+    ed.titel = $('#ez-titel').value.trim(); ed.gueltigBis = $('#ez-bis').value; ed.hinweis = $('#ez-hinweis').value;
   }
   async function speichern() {
     kopfLesen();
@@ -199,23 +347,37 @@
   }
 
   /* ---------- Drucken / PDF ---------- */
+  /* Logo als data:-Adresse vorladen: das Druckfenster (about:blank) zeigt es dann sofort, gedruckt wird erst nach dem Laden */
+  function ladeLogo() {
+    if (logoUrl) return Promise.resolve(logoUrl);
+    return fetch(new URL('../assets/logo-standard-fleisch.png', location.href), { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(String(r.status)))))
+      .then((b) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res((logoUrl = String(fr.result))); fr.onerror = () => res(null); fr.readAsDataURL(b); }))
+      .catch(() => null);
+  }
+  const bilderGeladen = (doc) => Promise.all([...doc.images].map((i) => (i.complete && i.naturalWidth ? null
+    : new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); setTimeout(r, 4000); }))));
   async function drucken() {
-    if (dirty && !(await speichern())) return;
+    // Fenster sofort im Klick öffnen (sonst blockiert der Browser es nach dem Speichern), Inhalt folgt
+    const w = window.open('', '_blank');
+    if (!w) { toast('Das Druckfenster wurde vom Browser blockiert. Bitte Pop-ups für diese Seite erlauben.'); return; }
+    try { w.document.write('<!doctype html><meta charset="utf-8"><title>Angebot wird vorbereitet …</title><p style="font:14px sans-serif;padding:24px">Angebot wird vorbereitet …</p>'); } catch { /* geschlossen */ }
+    if (dirty && !(await speichern())) { w.close(); return; }
     const k = kunden.get(ed.kid) || {};
+    const logo = (await ladeLogo()) || new URL('../assets/logo-standard-fleisch.png', location.href).href;
     if (!ed.fracht) { try { ed.fracht = (await api('einzel_detail&id=' + encodeURIComponent(ed.id))).fracht; } catch { ed.fracht = []; } }
     const { kg: kgS, sum } = summen();
-    const base = location.href.replace(/admin\/.*$/, '');
     const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(ed.nr)} – ${esc(k.firma || '')}</title><style>
       @page { size: A4; margin: 16mm 16mm 18mm; } body { font: 10.5pt/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; color: #111; margin: 0; }
       .kopf { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #8c1d2c; padding-bottom: 10px; margin-bottom: 18px; }
-      .kopf img { height: 54px; } .abs { font-size: 9pt; color: #555; text-align: right; }
+      .kopf img { height: 54px; width: auto; display: block; } .abs { font-size: 9pt; color: #555; text-align: right; }
       .adr { min-height: 30mm; margin-bottom: 14px; } .adr .k { font-size: 8pt; color: #777; margin-bottom: 4px; }
       h1 { font-size: 15pt; margin: 0 0 2px; } .meta { color: #555; margin-bottom: 14px; }
       table { width: 100%; border-collapse: collapse; } th { text-align: left; font-size: 8.5pt; color: #555; border-bottom: 1.5px solid #111; padding: 5px 6px; }
       td { padding: 6px; border-bottom: 1px solid #e3e3e0; vertical-align: top; } .r { text-align: right; white-space: nowrap; } .n { font-size: 8.5pt; color: #666; }
       tfoot td { border-bottom: 0; border-top: 1.5px solid #111; font-weight: 600; } .hinweis { margin: 14px 0; white-space: pre-wrap; } .klein { font-size: 8.5pt; color: #555; margin-top: 14px; }
     </style></head><body>
-      <div class="kopf"><img src="${esc(base)}assets/logo-standard-fleisch.png" alt="Standard-Fleisch"><div class="abs">Standard-Fleisch<br>Angebot ${esc(ed.nr)}<br>${esc(new Date().toLocaleDateString('de-DE'))}</div></div>
+      <div class="kopf"><img src="${esc(logo)}" alt="Standard-Fleisch" width="170" height="54"><div class="abs">Standard-Fleisch<br>Angebot ${esc(ed.nr)}<br>${esc(new Date().toLocaleDateString('de-DE'))}</div></div>
       <div class="adr"><div class="k">Angebot für</div><strong>${esc(k.firma || '')}</strong>${k.ansprechpartner ? '<br>' + esc(k.ansprechpartner) : ''}${k.strasse ? '<br>' + esc(k.strasse) : ''}${k.plz || k.ort ? '<br>' + esc([k.plz, k.ort].filter(Boolean).join(' ')) : ''}${k.nr ? `<br><span class="n">Kundennummer ${esc(k.nr)}</span>` : ''}</div>
       <h1>${esc(ed.titel || 'Angebot ' + ed.nr)}</h1>
       <div class="meta">Angebot ${esc(ed.nr)}${ed.gueltigBis ? ' · gültig bis ' + esc(dmy(ed.gueltigBis)) : ''}</div>
@@ -225,10 +387,10 @@
       ${ed.hinweis ? `<div class="hinweis">${esc(ed.hinweis)}</div>` : ''}
       <div class="klein">Preise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.${(ed.fracht || []).length ? '<br>' + ed.fracht.map(esc).join('<br>') : ''}</div>
     </body></html>`;
-    const w = window.open('', '_blank');
-    if (!w) { toast('Das Druckfenster wurde vom Browser blockiert. Bitte Pop-ups für diese Seite erlauben.'); return; }
+    if (w.closed) return;
     w.document.open(); w.document.write(html); w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 400);
+    await bilderGeladen(w.document);
+    setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 50);
   }
 
   /* ---------- E-Mail ---------- */
@@ -260,7 +422,9 @@
   host.addEventListener('input', (e) => {
     const t = e.target;
     if (t.id === 'ez-lq') { listQ = t.value; renderListe(); $('#ez-lq').focus(); $('#ez-lq').setSelectionRange(listQ.length, listQ.length); return; }
-    if (t.id === 'ez-q') { q = t.value; renderTreffer(); return; }
+    if (t.id === 'ez-q') { q = t.value; renderTreffer(); if (!$('#ez-vk-pop').hidden) renderVkPop(); return; }
+    if (t.id === 'ez-kunde') { kq = t.value; kAkt = 0; renderKundenListe(); return; }
+    if (t.id === 'ez-vk-q') { vkQ = t.value; renderVkPop(); return; }
     if (['ez-titel', 'ez-bis', 'ez-hinweis'].includes(t.id)) { markDirty(); return; }
     const tr = t.closest('tr[data-i]');
     if (tr && t.dataset.f) {
@@ -278,9 +442,10 @@
   });
   host.addEventListener('change', (e) => {
     const t = e.target;
-    if (t.id === 'ez-kunde') { kopfLesen(); markDirty(); renderEditor(); return; }
-    if (t.id === 'ez-f-bestand') { nurBestand = t.checked; renderTreffer(); return; }
-    if (t.id === 'ez-f-angebot') { nurAngebot = t.checked; renderTreffer(); return; }
+    if (t.id === 'ez-f-bestand') { nurBestand = t.checked; renderVk(); renderTreffer(); return; }
+    if (t.id === 'ez-f-angebot') { nurAngebot = t.checked; renderVk(); renderTreffer(); return; }
+    if (t.id === 'ez-sort') { sortBy = t.value; renderTreffer(); return; }
+    if (t.dataset.vk !== undefined) { if (t.checked) vkSel.add(t.dataset.vk); else vkSel.delete(t.dataset.vk); renderVk(); renderTreffer(); return; }
   });
   host.addEventListener('click', async (e) => {
     const t = e.target;
@@ -291,11 +456,37 @@
       if (dirty && !(await confirmBox('Änderungen verwerfen?', 'Das Einzelangebot hat ungespeicherte Änderungen.', 'Verwerfen', true))) return;
       ed = null; dirty = false; render(); return;
     }
+    const ko = t.closest('#ez-kunde-list li[data-kid]');
+    if (ko) { kundeWaehlen(ko.dataset.kid); return; }
+    if (t.closest('#ez-vk')) { vkPopAuf($('#ez-vk-pop').hidden); return; }
+    if (t.closest('#ez-vk-keine')) { vkSel.clear(); renderVk(); renderTreffer(); return; }
+    if (t.closest('#ez-vk-alle')) { $$('#ez-vk-pop [data-vk]').forEach((c) => vkSel.add(c.dataset.vk)); renderVk(); renderTreffer(); return; }
+    const weg = t.closest('[data-vk-weg]');
+    if (weg) { vkSel.delete(weg.dataset.vkWeg); renderVk(); renderTreffer(); return; }
+    const info = t.closest('[data-info]');
+    if (info) {
+      const k = key(info.dataset.info);
+      if (offen.has(k)) offen.delete(k); else offen.add(k);
+      renderTreffer();
+      const b = $(`#ez-treffer [data-info="${CSS.escape(info.dataset.info)}"]`); if (b) b.focus();
+      return;
+    }
+    if (t.closest('#ez-alle')) {
+      const drin = new Set(ed.positions.map((p) => key(p.code)));
+      const neu = treffer().filter((a) => !drin.has(key(a.code)));
+      if (!neu.length) return;
+      if (ed.positions.length + neu.length > 300) { toast(`Zu viele Positionen: höchstens 300 je Einzelangebot (jetzt ${ed.positions.length}, dazu ${neu.length}).`, 6000); return; }
+      if (neu.length > 25 && !(await confirmBox(`${neu.length} Artikel hinzufügen?`, 'Alle Treffer der gewählten VK-Gruppen werden mit dem Wochenpreis (sonst „auf Anfrage“) übernommen.', 'Hinzufügen'))) return;
+      kopfLesen();
+      neu.forEach(hinzufuegen);
+      markDirty(); renderPos(); renderTreffer();
+      toast(`${plural(neu.length, 'Artikel', 'Artikel')} hinzugefügt.`);
+      return;
+    }
     const add = t.closest('[data-add]');
     if (add) {
       kopfLesen();
-      const a = idx.get(key(add.dataset.add));
-      ed.positions.push({ code: a.code, name: a.name, qty: null, price: a.stdPrice && a.stdPrice.status === 'value' ? a.stdPrice.value : null, notiz: '' });
+      hinzufuegen(idx.get(key(add.dataset.add)));
       markDirty(); renderPos(); renderTreffer();
       const last = $$('#ez-pos tr[data-i] [data-f="price"]').pop(); if (last) last.focus();
       return;
@@ -313,7 +504,31 @@
       try { await api('einzel_loeschen', { body: { id: ed.id } }); toast(`Einzelangebot ${ed.nr} gelöscht.`); ed = null; dirty = false; render(); } catch (ex) { toast(ex.message); }
     }
   });
-  host.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-ez]')) oeffnen(e.target.dataset.ez); });
+  host.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.matches('tr[data-ez]')) { oeffnen(e.target.dataset.ez); return; }
+    if (e.target.id === 'ez-kunde') {
+      const n = $$('#ez-kunde-list li[data-kid]').length;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (kq === null) { kq = ''; kAkt = 0; } else if (n) kAkt = (kAkt + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+        renderKundenListe(); return;
+      }
+      if (e.key === 'Enter') { e.preventDefault(); const li = $$('#ez-kunde-list li[data-kid]')[kAkt]; if (kq !== null && li) kundeWaehlen(li.dataset.kid); return; }
+      if (e.key === 'Escape' && kq !== null) { e.preventDefault(); e.stopPropagation(); kundeSchliessen(); return; }
+    }
+    if (e.key === 'Escape' && e.target.closest('#ez-vk-pop')) { e.stopPropagation(); vkPopAuf(false); $('#ez-vk').focus(); }
+  });
+  host.addEventListener('focusin', (e) => {
+    if (e.target.id === 'ez-kunde' && kq === null) { kq = ''; kAkt = 0; renderKundenListe(); e.target.select(); }
+  });
+  host.addEventListener('focusout', (e) => {
+    if (e.target.id === 'ez-kunde' && !(e.relatedTarget && e.relatedTarget.closest('.ez-kwahl'))) kundeSchliessen();
+  });
+  host.addEventListener('mousedown', (e) => { if (e.target.closest('#ez-kunde-list')) e.preventDefault(); });   // Fokus bleibt im Suchfeld
+  document.addEventListener('click', (e) => {
+    const pop = $('#ez-vk-pop');
+    if (pop && !pop.hidden && !e.target.closest('.ez-vk') && document.contains(e.target)) vkPopAuf(false);
+  });
 
   W.views.einzel = () => { idx = null; render(); };
 })();

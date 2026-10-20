@@ -27,7 +27,7 @@ switch ($action) {
         case 'einzel_artikel': {
             $me = require_perm('einzelangebote.bearbeiten');
             header('Cache-Control: no-store');
-            respond(['ok' => true] + einzel_artikel(may($me, 'bestand.sehen')));
+            respond(['ok' => true] + einzel_artikel(may($me, 'bestand.sehen'), may($me, 'bestand.einkaufspreise')));
         }
 
         case 'einzel_save': {

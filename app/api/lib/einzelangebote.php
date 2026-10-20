@@ -131,20 +131,23 @@ function einzel_model(array $e): array
 }
 
 /* ---------- Artikelsuche im Eingabebereich ---------- */
-/* Alle bekannten Artikel: Stammdaten, Bestand (eingelagert, erfasst, gesamt) und Preis im Wochenangebot */
-function einzel_artikel(bool $mitBestand): array
+/* Alle bekannten Artikel: Stammdaten (mit Merkmalen und VK-Gruppe), Bestand (eingelagert, erfasst, gesamt; je Partie und
+   je erwarteter Lieferung) und Preis im Wochenangebot. Einkaufspreise je Partie nur mit $mitEk („bestand.einkaufspreise“).
+   VK-Gruppen: Nummer, Bezeichnung (Stammdaten → VK-Gruppen) und Anzahl Artikel – nur Gruppen, die vorkommen. */
+function einzel_artikel(bool $mitBestand, bool $mitEk = false): array
 {
     $by = [];
     $put = function (string $code, string $name) use (&$by) {
         $k = code_key($code);
-        if (!isset($by[$k])) $by[$k] = ['code' => $code, 'name' => $name, 'category' => null, 'condition' => null, 'stdPrice' => null, 'inOffer' => false];
+        if (!isset($by[$k])) $by[$k] = ['code' => $code, 'name' => $name, 'category' => null, 'origin' => null, 'condition' => null, 'vk' => null, 'stdPrice' => null, 'inOffer' => false];
         elseif ($by[$k]['name'] === '' && $name !== '') $by[$k]['name'] = $name;
         return $k;
     };
     foreach ((store_read('stammdaten')['articles'] ?? []) as $a) {
         if (($a['code'] ?? '') === '') continue;
         $k = $put((string)$a['code'], (string)($a['name'] ?? ''));
-        $by[$k]['category'] = $a['category'] ?? null; $by[$k]['condition'] = $a['condition'] ?? null;
+        $by[$k]['category'] = $a['category'] ?? null; $by[$k]['condition'] = $a['condition'] ?? null; $by[$k]['origin'] = $a['origin'] ?? null;
+        $by[$k]['vk'] = ($a['vkGruppe'] ?? '') !== '' ? (string)$a['vkGruppe'] : null;
     }
     $pub = store_read('angebot');
     if ($pub) {
@@ -154,31 +157,49 @@ function einzel_artikel(bool $mitBestand): array
             $by[$k]['name'] = (string)$it['name'];   // Bezeichnung wie im Angebot
             $by[$k]['inOffer'] = true;
             if ($by[$k]['stdPrice'] === null) $by[$k]['stdPrice'] = $it['price'];
-            $by[$k]['category'] = $by[$k]['category'] ?? ($it['category'] ?? null);
-            $by[$k]['condition'] = $by[$k]['condition'] ?? ($it['condition'] ?? null);
+            foreach (['category', 'origin', 'condition'] as $f) $by[$k][$f] = $by[$k][$f] ?? ($it[$f] ?? null);
         }
     }
     $st = store_read('bestand');
     if ($mitBestand && $st) {
         $inc = [];
-        foreach ($st['incoming'] ?? [] as $z) $inc[code_key((string)$z['code'])] = ($inc[code_key((string)$z['code'])] ?? 0) + (float)$z['kg'];
+        foreach ($st['incoming'] ?? [] as $z) {
+            $k = $put((string)$z['code'], (string)($z['name'] ?? ''));
+            $inc[$k][] = ['lot' => (string)($z['lot'] ?? ''), 'arrival' => $z['arrival'] ?? null, 'kg' => round((float)$z['kg'], 3)];
+        }
+        $lots = [];
         foreach ($st['articles'] ?? [] as $a) {
             $k = $put((string)$a['code'], (string)$a['name']);
             $by[$k]['kg'] = (float)$a['kg']; $by[$k]['mhd'] = $a['mhd'] ?? null;
-        }
-        foreach ($inc as $k => $kg) if (!isset($by[$k])) {
-            foreach ($st['incoming'] as $z) if (code_key((string)$z['code']) === $k) { $put((string)$z['code'], (string)$z['name']); break; }
+            foreach ($a['lots'] ?? [] as $l) {
+                $e = ['lot' => (string)($l['lot'] ?? ''), 'arrival' => $l['arrival'] ?? null, 'mhd' => $l['mhd'] ?? null, 'kolli' => $l['kolli'] ?? null, 'kg' => round((float)($l['kg'] ?? 0), 3)];
+                if ($mitEk) $e['ek'] = $l['ek'] ?? null;
+                $lots[$k][] = $e;
+            }
         }
         foreach ($by as $k => $a) {
             $by[$k]['kg'] = round($a['kg'] ?? 0.0, 3);
-            $by[$k]['incomingKg'] = round($inc[$k] ?? 0.0, 3);
+            $by[$k]['incomingKg'] = round(array_sum(array_column($inc[$k] ?? [], 'kg')), 3);
             $by[$k]['totalKg'] = round($by[$k]['kg'] + $by[$k]['incomingKg'], 3);
             $by[$k]['mhd'] = $a['mhd'] ?? null;
+            $by[$k]['lots'] = $lots[$k] ?? [];
+            $by[$k]['incoming'] = $inc[$k] ?? [];
         }
     }
     $out = array_values($by);
     usort($out, function ($a, $b) { return strnatcasecmp($a['code'], $b['code']); });
-    return ['articles' => $out, 'bestand' => $mitBestand && $st ? ['date' => $st['date'] ?? null] : null, 'angebot' => $pub ? ['publishedAt' => $pub['publishedAt'] ?? null, 'week' => $pub['meta']['week'] ?? null, 'year' => $pub['meta']['year'] ?? null] : null];
+    $namen = [];
+    foreach (gruppen_load('vkgruppen')['groups'] as $g) $namen[code_key($g['nr'])] = $g['name'];
+    $vk = [];
+    foreach ($out as $a) if ($a['vk'] !== null) {
+        $vk[$a['vk']] = $vk[$a['vk']] ?? ['nr' => $a['vk'], 'name' => $namen[code_key($a['vk'])] ?? null, 'anzahl' => 0];
+        $vk[$a['vk']]['anzahl']++;
+    }
+    $vk = array_values($vk);
+    usort($vk, function ($a, $b) { return strnatcasecmp($a['nr'], $b['nr']); });
+    return ['articles' => $out, 'vkGruppen' => $vk, 'ek' => $mitBestand && $mitEk,
+            'bestand' => $mitBestand && $st ? ['date' => $st['date'] ?? null] : null,
+            'angebot' => $pub ? ['publishedAt' => $pub['publishedAt'] ?? null, 'week' => $pub['meta']['week'] ?? null, 'year' => $pub['meta']['year'] ?? null] : null];
 }
 
 /* ---------- E-Mail an den Kunden ---------- */

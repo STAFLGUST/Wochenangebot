@@ -65,10 +65,22 @@ assert A.call('bestell_settings_save', {'enabled': True, 'to': 'orders@example.o
 
 # synthetischer Bestand: 10601 eingelagert + erfasst, 10823 nur erfasst, 900001 nur Bestand (nicht im Wochenangebot)
 STOCK = {'date': '2026-10-19', 'source': 'Synthetische Testdaten',
-         'articles': [{'code': '10601', 'name': 'Roastbeef, frisch', 'kg': 40, 'lots': []}, {'code': '900001', 'name': 'Test Nur Bestand', 'kg': 5.5, 'lots': []}],
+         'articles': [{'code': '10601', 'name': 'Roastbeef, frisch', 'kg': 40, 'mhd': '2026-11-20', 'mhdKg': 15,
+                       'lots': [{'lot': 'P-0001', 'arrival': '2026-10-02', 'mhd': '2026-11-20', 'kolli': 3, 'kg': 15, 'ek': 18.5},
+                                {'lot': 'P-0002', 'arrival': '2026-10-09', 'mhd': '2026-12-04', 'kolli': 5, 'kg': 25, 'ek': 19.25}]},
+                      {'code': '900001', 'name': 'Test Nur Bestand', 'kg': 5.5, 'lots': []}],
          'incoming': [{'code': '10601', 'name': 'Roastbeef, frisch', 'kg': 10, 'arrival': '2026-10-22', 'lot': 'TEST-A'},
                       {'code': '10823', 'name': 'Steakhüfte, frisch', 'kg': 12, 'arrival': None, 'lot': 'TEST-B'}]}
 assert A.call('stock_import', STOCK)[0] == 200
+# synthetische VK-Gruppen und Zuordnung in den Artikelstammdaten
+assert A.call('vkgruppen_save', {'rev': A.call('vkgruppen')[1]['rev'], 'groups': [{'nr': '1600', 'name': 'Rindfleisch, Argentinien, frisch'},
+              {'nr': '1610', 'name': 'Rindfleisch, Uruguay, frisch'}, {'nr': '6150', 'name': 'Rindfleisch, Irland, gefroren'}, {'nr': '7000', 'name': 'Geflügel, ungenutzt'}]})[0] == 200
+VK = {'10601': '1600', '10701': '1600', '10823': '1610', '900001': '6150'}
+assert A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [
+    {'code': '10601', 'name': 'Roastbeef, frisch', 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch', 'vkGruppe': '1600'},
+    {'code': '10701', 'name': 'Entrecote, frisch', 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch', 'vkGruppe': '1600'},
+    {'code': '10823', 'name': 'Steakhüfte, frisch', 'category': 'Rind', 'origin': 'UY', 'condition': 'frisch', 'vkGruppe': '1610'},
+    {'code': '900001', 'name': 'Test Nur Bestand', 'category': 'Rind', 'origin': 'IRL', 'condition': 'gefroren', 'vkGruppe': '6150'}]})[0] == 200
 
 # ---------- Rechte ----------
 check('ohne Anmeldung gesperrt', Client().call('einzel_liste')[0] == 401)
@@ -94,12 +106,31 @@ a = art.get('10701', {})
 check('Artikel ohne Bestand: gesamt 0', a.get('totalKg') == 0 and a.get('stdPrice', {}).get('value') == 27.21, a)
 a = art.get('900001', {})
 check('Artikel nur im Bestand (nicht im Wochenangebot)', a.get('totalKg') == 5.5 and not a.get('inOffer') and a.get('stdPrice') is None, a)
+check('VK-Gruppe und Merkmale je Artikel aus den Stammdaten', all(art[c].get('vk') == v for c, v in VK.items()) and art['10823'].get('origin') == 'UY' and art['10701'].get('condition') == 'frisch',
+      {c: art[c].get('vk') for c in VK})
+check('ohne VK-Gruppe: vk leer', all(x.get('vk') is None for c, x in art.items() if c not in VK))
+st, r = A.call('einzel_artikel')
+check('VK-Gruppen mit Bezeichnung und Anzahl, nur vorkommende', r['vkGruppen'] == [{'nr': '1600', 'name': 'Rindfleisch, Argentinien, frisch', 'anzahl': 2},
+      {'nr': '1610', 'name': 'Rindfleisch, Uruguay, frisch', 'anzahl': 1}, {'nr': '6150', 'name': 'Rindfleisch, Irland, gefroren', 'anzahl': 1}], r['vkGruppen'])
+a = art['10601']
+check('Partien je Artikel mit Eingang, MHD, Kolli, kg und EK (Administrator)', r['ek'] is True and a.get('lots') == [
+      {'lot': 'P-0001', 'arrival': '2026-10-02', 'mhd': '2026-11-20', 'kolli': 3, 'kg': 15, 'ek': 18.5}, {'lot': 'P-0002', 'arrival': '2026-10-09', 'mhd': '2026-12-04', 'kolli': 5, 'kg': 25, 'ek': 19.25}], a.get('lots'))
+check('erwartete Ankünfte je Artikel mit Partie und ETA', a.get('incoming') == [{'lot': 'TEST-A', 'arrival': '2026-10-22', 'kg': 10}]
+      and art['10823'].get('incoming') == [{'lot': 'TEST-B', 'arrival': None, 'kg': 12}] and art['10701'].get('lots') == [] and art['10701'].get('incoming') == [], a.get('incoming'))
+st, r = A.call('user_save', {'id': uid['eddi'], 'name': 'Eddi Editor', 'role': 'editor', 'active': True,
+                              'grant': ['kunden.sehen', 'einzelangebote.sehen', 'einzelangebote.bearbeiten'], 'deny': ['bestand.einkaufspreise']})
+st, r = E.call('einzel_artikel')
+e10601 = next((x for x in r.get('articles', []) if x['code'] == '10601'), {})
+check('ohne Recht „Einkaufspreise“: Partien ohne EK', st == 200 and r['ek'] is False and len(e10601.get('lots', [])) == 2 and all('ek' not in l for l in e10601['lots'])
+      and '18.5' not in json.dumps(r), e10601.get('lots'))
 st, r = A.call('user_save', {'id': uid['eddi'], 'name': 'Eddi Editor', 'role': 'editor', 'active': True,
                               'grant': ['kunden.sehen', 'einzelangebote.sehen', 'einzelangebote.bearbeiten'], 'deny': ['bestand.sehen']})
 check('Bearbeiter bekommt Einzelangebote, aber keinen Bestand', st == 200, r)
 st, r = E.call('einzel_artikel')
 e10601 = next((x for x in r.get('articles', []) if x['code'] == '10601'), {})
 check('ohne Bestandsrecht: Artikelsuche ohne Mengen', st == 200 and r['bestand'] is None and 'kg' not in e10601 and 'totalKg' not in e10601 and e10601.get('stdPrice', {}).get('value') == 25.54, e10601)
+check('ohne Bestandsrecht: keine Partien, Ankünfte oder EK', 'lots' not in e10601 and 'incoming' not in e10601 and not r['ek'] and 'P-0001' not in json.dumps(r) and 'TEST-A' not in json.dumps(r)
+      and e10601.get('vk') == '1600', e10601)
 
 # ---------- Prüfung ----------
 bis = (date.today() + timedelta(days=10)).isoformat()
@@ -209,7 +240,7 @@ errors = []
 with sync_playwright() as p:
     br = p.chromium.launch()
     ctx = br.new_context(viewport={'width': 1440, 'height': 950})
-    ctx.add_init_script('window.print = () => { window.__gedruckt = true; };')
+    ctx.add_init_script("window.print = () => { const i = document.querySelector('.kopf img'); window.__logo = i ? [i.naturalWidth, i.getAttribute('src').slice(0, 22)] : null; window.__gedruckt = true; };")
     a = ctx.new_page()
     a.on('pageerror', lambda e: errors.append(str(e)))
     a.goto(BASE + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
@@ -223,17 +254,56 @@ with sync_playwright() as p:
     check('Übersicht durchsuchbar', 'Andere Kantine' in a.inner_text('#view-einzel .eztab'))
     a.fill('#ez-lq', '')
     a.click('#ez-neu'); a.wait_for_selector('#ez-kunde')
-    a.select_option('#ez-kunde', kid2)
-    a.fill('#ez-q', '10601'); a.wait_for_selector('#ez-treffer li[data-code="10601"]')
-    t = a.inner_text('#ez-treffer li[data-code="10601"]')
-    check('Suche: eingelagert, erfasst, gesamt verfügbar, Wochenpreis', 'Eingelagert 40 kg' in t and 'Erfasst 10 kg' in t and 'Gesamt verfügbar 50 kg' in t and '25,54 €' in t, t)
-    a.fill('#ez-q', 'entrecote'); a.wait_for_selector('#ez-treffer li[data-code="10701"]')
-    check('Suche: „kein Bestand“ sichtbar', 'kein Bestand' in a.inner_text('#ez-treffer li[data-code="10701"]'))
-    a.check('#ez-f-bestand'); a.wait_for_function("!document.querySelector('#ez-treffer li[data-code=\"10701\"]')")
-    check('Filter „nur mit Bestand“', a.locator('#ez-treffer li').count() == 0)
-    a.uncheck('#ez-f-bestand'); a.fill('#ez-q', '900001'); a.wait_for_selector('#ez-treffer li[data-code="900001"]')
-    check('Artikel nur im Bestand: „nicht im Angebot“', 'nicht im Angebot' in a.inner_text('#ez-treffer li[data-code="900001"]') and 'Gesamt verfügbar 5,5 kg' in a.inner_text('#ez-treffer li[data-code="900001"]'))
-    a.fill('#ez-q', '10601'); a.click('#ez-treffer [data-add="10601"]'); a.wait_for_selector('#ez-pos tr[data-i="0"]')
+    # Kundenauswahl mit Suche
+    a.click('#ez-kunde'); a.wait_for_selector('#ez-kunde-list li[data-kid]')
+    check('Kundensuche: beim Öffnen alle Kunden', a.locator('#ez-kunde-list li[data-kid]').count() == 3 and a.get_attribute('#ez-kunde', 'aria-expanded') == 'true')
+    a.fill('#ez-kunde', 'ohne'); a.wait_for_function("document.querySelectorAll('#ez-kunde-list li[data-kid]').length === 1")
+    check('Kundensuche: Firma, Hinweis „kein Portal“', 'Ohne Mail GmbH' in a.inner_text('#ez-kunde-list') and 'kein Portal' in a.inner_text('#ez-kunde-list'))
+    a.fill('#ez-kunde', 'zzz-gibt-es-nicht'); a.wait_for_selector('#ez-kunde-list .ez-ko-mehr')
+    check('Kundensuche: kein Treffer', 'Kein Kunde gefunden' in a.inner_text('#ez-kunde-list'))
+    a.fill('#ez-kunde', 'hamburg kantine'); a.wait_for_function("document.querySelectorAll('#ez-kunde-list li[data-kid]').length === 2")
+    check('Kundensuche: mehrere Wörter (Ort + Firma)', 'Andere Kantine' in a.inner_text('#ez-kunde-list') and 'Kantine <Einzel>' in a.inner_text('#ez-kunde-list'))
+    a.screenshot(path=SH + '/einzelangebot-kundensuche.png')
+    breit = a.evaluate('''() => { const t = document.querySelector('#ez-treffer'), r = t.getBoundingClientRect();
+        const b = [...t.querySelectorAll('[data-add]')].slice(0, 30).map((x) => x.getBoundingClientRect().right);
+        return [t.scrollWidth - t.clientWidth, Math.max(...b) - r.right, b.length]; }''')
+    check('Treffertabelle passt ins Suchfeld (alle Knöpfe sichtbar)', breit[0] <= 1 and breit[1] <= 0 and breit[2] == 30, breit)
+    a.press('#ez-kunde', 'Escape')
+    check('Escape schließt die Liste, kein Kunde gewählt', a.locator('#ez-kunde-list').is_hidden() and a.input_value('#ez-kunde') == '')
+    a.fill('#ez-kunde', 'KANTINE.AN'); a.wait_for_selector('#ez-kunde-list li.akt[data-kid]')
+    check('Kundensuche: Kundennummer, bester Treffer zuerst', a.get_attribute('#ez-kunde-list li.akt', 'data-kid') == kid2)
+    a.press('#ez-kunde', 'Enter'); a.wait_for_selector('#ez-kunde-list', state='hidden')
+    check('Enter wählt den Kunden, Angaben darunter', a.input_value('#ez-kunde').startswith('Andere Kantine') and 'Testweg 1' in a.inner_text('.ez-kinfo') and a.locator('#ez-dirty').is_visible(), a.input_value('#ez-kunde'))
+    a.click('#ez-kunde'); a.fill('#ez-kunde', 'einzel'); a.wait_for_selector('#ez-kunde-list li[data-kid]'); a.keyboard.press('Tab')
+    check('Verlassen ohne Auswahl behält den gewählten Kunden', a.input_value('#ez-kunde').startswith('Andere Kantine') and a.locator('#ez-kunde-list').is_hidden())
+    # Artikelsuche als Tabelle mit Details
+    a.fill('#ez-q', '10601'); a.wait_for_selector('#ez-treffer tr[data-code="10601"]')
+    t = a.inner_text('#ez-treffer tr[data-code="10601"]')
+    check('Treffertabelle: gesamt verfügbar, davon erwartet, Wochenpreis', '50 kg' in t and 'davon 10 kg erwartet' in t and '25,54 €' in t, t)
+    check('VK-Gruppe als Zwischenzeile', 'Rindfleisch, Argentinien, frisch' in a.inner_text('#ez-treffer tr.ez-grp'))
+    a.click('#ez-treffer [data-info="10601"]'); a.wait_for_selector('#ez-treffer tr[data-det="10601"]')
+    d = a.inner_text('#ez-treffer tr[data-det="10601"]')
+    check('Details: Bestand eingelagert/erfasst/gesamt, kürzestes MHD', 'Eingelagert 40 kg' in d and 'Erfasst 10 kg' in d and 'Gesamt verfügbar 50 kg' in d and '20.11.2026' in d, d)
+    check('Details: Partien mit Eingang, MHD, Kolli, kg und EK', 'P-0001' in d and 'P-0002' in d and '04.12.2026' in d and '19,25' in d and 'EK' in d, d)
+    check('Details: erwartete Ankunft mit ETA', 'TEST-A' in d and '22.10.2026' in d, d)
+    check('Details: VK-Gruppe, Herkunft, Zustand', '1600 · Rindfleisch, Argentinien, frisch' in d and 'AR' in d and 'frisch' in d, d)
+    a.screenshot(path=SH + '/einzelangebot-artikeldetails.png')
+    check('Detailknopf zeigt Zustand an', a.get_attribute('#ez-treffer [data-info="10601"]', 'aria-expanded') == 'true')
+    a.click('#ez-treffer [data-info="10601"]'); a.wait_for_selector('#ez-treffer tr[data-det="10601"]', state='detached')
+    a.fill('#ez-q', 'steakhüfte'); a.wait_for_selector('#ez-treffer tr[data-code="10823"]'); a.click('#ez-treffer [data-info="10823"]')
+    a.wait_for_selector('#ez-treffer tr[data-det="10823"]')
+    d = a.inner_text('#ez-treffer tr[data-det="10823"]')
+    check('Details: nur erwartet, ETA unbekannt', 'ETA unbekannt' in d and 'TEST-B' in d and 'Kein eingelagerter Bestand' in d, d)
+    a.fill('#ez-q', 'entrecote'); a.wait_for_selector('#ez-treffer tr[data-code="10701"]')
+    check('Suche: „kein Bestand“ sichtbar', 'kein Bestand' in a.inner_text('#ez-treffer tr[data-code="10701"]'))
+    a.check('#ez-f-bestand'); a.wait_for_function("!document.querySelector('#ez-treffer tr[data-code=\"10701\"]')")
+    check('Filter „nur mit Bestand“', a.locator('#ez-treffer tr[data-code]').count() == 0)
+    a.uncheck('#ez-f-bestand'); a.fill('#ez-q', '900001'); a.wait_for_selector('#ez-treffer tr[data-code="900001"]')
+    a.click('#ez-treffer [data-info="900001"]'); a.wait_for_selector('#ez-treffer tr[data-det="900001"]')
+    check('Artikel nur im Bestand: „nicht im Angebot“', 'nicht im Angebot' in a.inner_text('#ez-treffer tr[data-det="900001"]') and a.get_attribute('#ez-treffer tr[data-code="900001"] .ez-tt-p span', 'title') == 'nicht im Wochenangebot' and '5,5 kg' in a.inner_text('#ez-treffer tr[data-code="900001"]'))
+    a.fill('#ez-q', 'irland'); a.wait_for_selector('#ez-treffer tr[data-code="900001"]')   # „Irland“ steht nur in der VK-Gruppe (Herkunft „IRL“)
+    check('Textsuche findet auch die Bezeichnung der VK-Gruppe', '900001' in a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)'))
+    a.fill('#ez-q', '10601'); a.wait_for_selector('#ez-treffer tr[data-code="10601"]'); a.click('#ez-treffer [data-add="10601"]'); a.wait_for_selector('#ez-pos tr[data-i="0"]')
     row = '#ez-pos tr[data-i="0"]'
     check('Position übernommen: Wochenpreis vorbelegt, Abweichung ±0 %', a.input_value(row + ' [data-f="price"]') == '25,54' and '±0 %' in a.inner_text(row + ' .ez-a')
           and '50 kg' in a.inner_text(row + ' .ez-b'), a.inner_text(row))
@@ -267,15 +337,57 @@ with sync_playwright() as p:
     w = pi.value; w.wait_for_load_state(); w.wait_for_function('window.__gedruckt === true')
     wt = w.inner_text('body')
     check('Drucken/PDF: Kunde, Nummer, Positionen, Summe, kein Bestand', 'Andere Kantine' in wt and nr2.split()[1] in wt and '27,50' in wt and '330,00 €' in wt and 'Sonderschnitt' in wt
-          and 'auf Anfrage' in wt and 'Eingelagert' not in wt and '25,54' not in wt, wt[:300])
+          and 'auf Anfrage' in wt and 'Eingelagert' not in wt and '25,54' not in wt and 'P-0001' not in wt and 'TEST-A' not in wt, wt[:300])
+    lg = w.evaluate('window.__logo')
+    check('Drucken/PDF: Logo geladen, bevor gedruckt wird (eingebettet)', lg and lg[0] == 630 and lg[1].startswith('data:image/png'), lg)
     w.close()
     a.click('#ez-zurueck'); a.wait_for_selector('#view-einzel tr[data-ez]')
     check('zurück zur Übersicht: neues Angebot gelistet', a.locator('#view-einzel tr[data-ez]').count() >= 3)
     a.screenshot(path=SH + '/einzelangebote-liste.png')
+
+    # VK-Gruppen: mehrere wählen, sortieren, alle Treffer übernehmen
+    a.click('#ez-neu'); a.wait_for_selector('#ez-vk')
+    check('VK-Gruppen: zunächst alle', 'VK-Gruppen: alle' in a.inner_text('#ez-vk') and a.locator('#ez-vk-chips .ez-chip').count() == 0)
+    a.click('#ez-vk'); a.wait_for_selector('#ez-vk-pop:not([hidden]) [data-vk="1600"]')
+    pt = a.inner_text('#ez-vk-pop')
+    check('Auswahlfenster: vorkommende Gruppen mit Anzahl, „ohne VK-Gruppe“', '1600' in pt and 'Uruguay' in pt and 'Irland' in pt and 'ungenutzt' not in pt and 'ohne VK-Gruppe' in pt, pt)
+    a.fill('#ez-vk-q', 'rind frisch'); a.wait_for_function("document.querySelectorAll('#ez-vk-pop [data-vk]').length === 2")
+    check('Gruppensuche (mehrere Wörter)', 'Irland' not in a.inner_text('#ez-vk-pop'))
+    a.screenshot(path=SH + '/einzelangebot-vk-auswahl.png')
+    check('Auswahlfenster bleibt im Bild', a.evaluate("document.querySelector('#ez-vk-pop').getBoundingClientRect().right <= document.documentElement.clientWidth"))
+    a.click('#ez-vk-alle'); a.wait_for_function("document.querySelectorAll('#ez-vk-chips .ez-chip').length === 2")
+    a.press('#ez-vk-q', 'Escape'); a.wait_for_selector('#ez-vk-pop', state='hidden')
+    codes = a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)')
+    check('Filter: nur Artikel der gewählten Gruppen, nach VK-Gruppe sortiert', codes == ['10601', '10701', '10823'], codes)
+    check('Knopf zeigt die Auswahl, Zwischenzeilen je Gruppe', '2 gewählt' in a.inner_text('#ez-vk') and a.locator('#ez-treffer tr.ez-grp').count() == 2)
+    a.select_option('#ez-sort', 'bestand')
+    codes = a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)')
+    check('Sortierung nach Verfügbar, ohne Zwischenzeilen', codes == ['10601', '10823', '10701'] and a.locator('#ez-treffer tr.ez-grp').count() == 0, codes)
+    a.select_option('#ez-sort', 'vk')
+    a.click('#ez-vk-chips [data-vk-weg="1610"]'); a.wait_for_function("document.querySelectorAll('#ez-vk-chips .ez-chip').length === 1")
+    check('Chip entfernt eine Gruppe', a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)') == ['10601', '10701'])
+    check('„Alle hinzufügen“ mit Anzahl', 'Alle 2 hinzufügen' in a.inner_text('#ez-alle'))
+    a.click('#ez-alle'); a.wait_for_selector('#ez-pos tr[data-i="1"]')
+    check('alle Treffer der Gruppe übernommen, Wochenpreis vorbelegt', [a.inner_text(f'#ez-pos tr[data-i="{i}"] .ez-code') for i in (0, 1)] == ['10601', '10701']
+          and a.input_value('#ez-pos tr[data-i="1"] [data-f="price"]') == '27,21' and a.locator('#ez-alle').count() == 0)
+    a.click('#ez-vk'); a.wait_for_selector('#ez-vk-pop:not([hidden])')
+    a.click('#ez-vk-pop [data-vk="–"]'); a.click('#ez-vk-pop [data-vk="1600"]')
+    a.click('#ez-titel'); a.wait_for_selector('#ez-vk-pop', state='hidden')
+    check('Klick daneben schließt das Auswahlfenster; „ohne VK-Gruppe“ filterbar', all(c not in VK for c in a.eval_on_selector_all('#ez-treffer tr[data-code]', 'e => e.map(x => x.dataset.code)'))
+          and a.locator('#ez-treffer tr[data-code]').count() > 0)
+    a.click('#ez-vk'); a.click('#ez-vk-keine'); a.press('#ez-vk-q', 'Escape')
+    a.screenshot(path=SH + '/einzelangebot-vkgruppen.png', full_page=True)
+    a.click('#ez-zurueck'); a.click('#dlg-confirm .btn.primary'); a.wait_for_selector('#view-einzel tr[data-ez]')
     a.set_viewport_size({'width': 390, 'height': 820}); a.emulate_media(color_scheme='dark')   # mobil im dunklen Modus
     a.locator('#view-einzel tr[data-ez]').first.click(); a.wait_for_selector('#ez-pos')
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     check('Mobil 390 px: kein seitliches Scrollen', over <= 1, over)
+    a.fill('#ez-q', '10601'); a.click('#ez-treffer [data-info="10601"]'); a.wait_for_selector('#ez-treffer tr[data-det="10601"]')
+    a.click('#ez-vk'); a.wait_for_selector('#ez-vk-pop:not([hidden])')
+    over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
+    check('Mobil 390 px: Details und VK-Auswahl ohne seitliches Scrollen', over <= 1, over)
+    a.screenshot(path=SH + '/einzelangebot-mobil-vk.png')
+    a.press('#ez-vk-q', 'Escape')
     a.screenshot(path=SH + '/einzelangebot-mobil.png', full_page=True)
 
     # Leser: nur ansehen
