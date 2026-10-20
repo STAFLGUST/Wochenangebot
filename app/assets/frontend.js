@@ -8,6 +8,7 @@
 const { CATEGORY_ORDER, CONDITION_LABELS, PRICE_STATUS_LABELS } = window.OfferCore;
 const STORAGE = 'wochenangebot.';
 const PREVIEW = new URLSearchParams(location.search).has('vorschau');
+const DRUCKEN = new URLSearchParams(location.search).has('drucken');   // aus dem Eingabebereich: gleich den Druckdialog öffnen (Einzelangebote)
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
 let COMPANY = '';
@@ -604,7 +605,7 @@ function buildPrintListe(list, grouped, scopeText) {
   }
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
   const m = DATA.meta || {};
-  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
+  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}${m.einzel && m.kunde ? 'für ' + esc(m.kunde) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
     ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
     <div class="al-cols" style="--k:3">${pg.cols.map((c, ci) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}${notePos && notePos.page === n && notePos.col === ci ? hinweisHTML('al-note in-col') : ''}</div>`).join('')}</div>${notePos && notePos.page === n && notePos.col === -1 ? hinweisHTML('al-note') : ''}</section>`).join('');
 }
@@ -909,7 +910,7 @@ function buildPrint({ scope, layout, grouped }) {
   const head = `<header class="p-head">
       <div>${COMPANY ? `<div class="p-company">${esc(COMPANY)}</div>` : ''}
         <h1 class="p-title">${m.einzel ? `${esc(offerTitle())} <span>${esc(bisText(m))}</span>` : `Wochenangebot <span>KW ${esc(m.week ?? '?')} / ${esc(m.year ?? '?')}</span>`}</h1>
-        <div class="p-sub">${esc(m.notice || 'Angebot')}${m.weekStart ? ` · Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : ''} · Preise in € je kg · „–“ = ohne Preisangabe</div></div>
+        <div class="p-sub">${esc(m.notice || 'Angebot')}${m.einzel && m.nr ? ' ' + esc(m.nr) : ''}${m.einzel && m.kunde ? ' für ' + esc(m.kunde) : ''}${m.weekStart ? ` · Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : ''} · Preise in € je kg · „–“ = ohne Preisangabe</div></div>
       <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${today()}</div>
     </header>`;
   let body = '';
@@ -1789,6 +1790,10 @@ function renderWartung(w) {
   bind();
   render();
   updateFavCount();
+  if (DRUCKEN) {   // Parameter entfernen, damit ein Neuladen nicht erneut druckt
+    const u = new URL(location.href); u.searchParams.delete('drucken'); history.replaceState(history.state, '', u);
+    openPrint();
+  }
 })();
 })();
 

@@ -1924,6 +1924,7 @@
     }
     document.body.classList.toggle('in-hist', v === 'hist');
     document.body.classList.toggle('in-other', v !== 'edit');
+    document.body.classList.toggle('in-einzel', v === 'einzel');
     if (v === 'edit' && model) loadAux();
     if (v === 'hist') renderHistView();
     if (v === 'stock') renderStockView();

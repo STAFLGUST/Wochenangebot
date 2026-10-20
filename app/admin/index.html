@@ -9,7 +9,7 @@
 <link rel="icon" href="../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=4acd7a00d0">
-<link rel="stylesheet" href="../assets/admin.css?v=b969041e53">
+<link rel="stylesheet" href="../assets/admin.css?v=bf4df9681b">
 </head>
 <body class="adm">
 
@@ -44,6 +44,8 @@
         <button class="btn ghost" type="button" id="btn-import" title="Excel-Datei mit Preisen importieren"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="lbl">Excel importieren</span></button>
         <a class="btn ghost" id="btn-site" href="../" target="_blank" rel="noopener" title="Öffentliche Angebotsseite in neuem Tab öffnen (veröffentlichter Stand)"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="lbl">Angebotsseite</span></a>
         <button class="btn ghost" type="button" id="btn-preview" title="Entwurf so ansehen, wie er nach dem Veröffentlichen aussieht"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
+        <button class="btn" type="button" id="btn-ez-druck" title="Einzelangebot drucken oder als PDF speichern – mit dem Druckdialog der Angebotsseite"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken / PDF</span></button>
+        <button class="btn" type="button" id="btn-ez-mail" title="Einzelangebot per E-Mail an den Kunden senden"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">Per E-Mail senden</span></button>
         <button class="btn" type="button" id="btn-send" hidden title="Veröffentlichtes Wochenangebot per E-Mail an Kunden senden – an jedem Tag möglich"><svg class="i" aria-hidden="true"><use href="#i-mail"/></svg><span class="lbl">An Kunden senden</span></button>
         <button class="btn primary" type="button" id="btn-publish" title="Entwurf veröffentlichen"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg><span class="lbl">Veröffentlichen</span></button>
         <div class="menu-wrap">
@@ -187,6 +189,7 @@
 <dialog class="modal" id="dlg-vgruppe" aria-labelledby="vg-title"><form class="dlg" id="vgruppe-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-vg-import" aria-labelledby="vgi-title"><div class="dlg" id="vg-import-body"></div></dialog>
 <dialog class="modal wide" id="dlg-ms-import" aria-labelledby="msi-title"><div class="dlg" id="ms-import-body"></div></dialog>
+<dialog class="modal ez-pick" id="dlg-ez-pick" aria-labelledby="ezp-title"><div class="dlg" id="ez-pick-body"></div></dialog>
 <dialog class="modal" id="dlg-einzel-mail" aria-labelledby="em-title"><form class="dlg" id="einzel-mail-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-rund" aria-labelledby="rd-title"><div class="dlg" id="rund-body"></div></dialog>
 <!-- Zwei-Faktor-Anmeldung -->
@@ -262,9 +265,9 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=59eb27542c"></script>
-<script src="../assets/admin.js?v=21586b4f94"></script>
+<script src="../assets/admin.js?v=914e874f49"></script>
 <script src="../assets/admin-verwaltung.js?v=c673258eb7"></script>
-<script src="../assets/admin-einzel.js?v=09903eb1d0"></script>
+<script src="../assets/admin-einzel.js?v=677f97c41f"></script>
 <script src="../assets/admin-auswertung.js?v=f28d8770e4"></script>
 </body>
 </html>

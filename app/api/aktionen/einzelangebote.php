@@ -24,6 +24,22 @@ switch ($action) {
             respond(['ok' => true, 'angebot' => einzel_view($d['list'][$i], einzel_kunden_map()), 'fracht' => fracht_hinweis()]);
         }
 
+        case 'einzel_pdf': {   // PDF im Design der Angebotsansicht (Vorschau des E-Mail-Anhangs)
+            require_perm('einzelangebote.sehen');
+            $d = einzel_load();
+            $i = einzel_find($d, (string)($_GET['id'] ?? ''));
+            if ($i === null) fail('Einzelangebot nicht gefunden.', 404);
+            $e = $d['list'][$i];
+            $pdf = einzel_pdf($e, einzel_kunden_map()[$e['kid']] ?? null);
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: inline; filename="' . einzel_pdf_name($e) . '"');
+            header('Cache-Control: private, no-store');
+            header('X-Content-Type-Options: nosniff');
+            header('Content-Length: ' . strlen($pdf));
+            echo $pdf;
+            exit;
+        }
+
         case 'einzel_artikel': {
             $me = require_perm('einzelangebote.bearbeiten');
             header('Cache-Control: no-store');
@@ -115,20 +131,24 @@ switch ($action) {
             if (!$c) fail('Der Kunde existiert nicht mehr.', 404);
             if (empty($c['email'])) fail("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.", 422);
             $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 1000);
-            [$sub, $txt, $html] = mail_tpl_einzel($c, $e, $note);
+            $format = (string)($b['format'] ?? 'liste');
+            if (!in_array($format, ['liste', 'pdf'], true)) fail('Unbekanntes Format.', 422);
+            [$sub, $txt, $html] = mail_tpl_einzel($c, $e, $note, $format);
             @set_time_limit(120);
-            $r = mail_send_many($cfg, ['x' => ['to' => $c['email'], 'name' => ($c['ansprechpartner'] ?? '') ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html]])['x'];
+            $job = ['to' => $c['email'], 'name' => ($c['ansprechpartner'] ?? '') ?: $c['firma'], 'subject' => $sub, 'text' => $txt, 'html' => $html];
+            if ($format === 'pdf') $job['anhaenge'] = [['name' => einzel_pdf_name($e), 'type' => 'application/pdf', 'data' => einzel_pdf($e, $c)]];
+            $r = mail_send_many($cfg, ['x' => $job])['x'];
             mail_record([['kid' => $c['id'], 'firma' => $c['firma'], 'to' => $c['email'], 'typ' => 'einzelangebot', 'ok' => $r['ok'], 'error' => $r['error'] ?? '']]);
-            $e = with_lock('einzelangebote', function () use ($e, $c, $r, $me) {
+            $e = with_lock('einzelangebote', function () use ($e, $c, $r, $me, $format) {
                 $d = einzel_load();
                 $i = einzel_find($d, $e['id']);
                 if ($i === null) return $e;
-                $d['list'][$i]['gesendet'][] = ['t' => now(), 'to' => $c['email'], 'by' => $me['name'], 'ok' => $r['ok']];
+                $d['list'][$i]['gesendet'][] = ['t' => now(), 'to' => $c['email'], 'by' => $me['name'], 'ok' => $r['ok'], 'format' => $format];
                 $d['list'][$i]['gesendet'] = array_slice($d['list'][$i]['gesendet'], -50);
                 store_write('einzelangebote', $d);
                 return $d['list'][$i];
             });
-            audit('mail', "Einzelangebot {$e['nr']} an „{$c['firma']}“ ({$c['email']}) " . ($r['ok'] ? 'versendet' : 'nicht zugestellt: ' . ($r['error'] ?? '')));
+            audit('mail', "Einzelangebot {$e['nr']} an „{$c['firma']}“ ({$c['email']}) " . ($format === 'pdf' ? 'als PDF ' : '') . ($r['ok'] ? 'versendet' : 'nicht zugestellt: ' . ($r['error'] ?? '')));
             if (!$r['ok']) fail('Die E-Mail konnte nicht zugestellt werden: ' . ($r['error'] ?? 'unbekannter Fehler'), 502);
             respond(['ok' => true, 'angebot' => einzel_view($e, einzel_kunden_map())]);
         }

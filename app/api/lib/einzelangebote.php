@@ -125,7 +125,8 @@ function einzel_model(array $e): array
     }
     $titel = einzel_titel($e);
     return ['meta' => ['title' => $titel . (!empty($e['gueltigBis']) ? ' – gültig bis ' . date('d.m.Y', strtotime($e['gueltigBis'])) : ''), 'notice' => 'Einzelangebot',
-                       'offerId' => 'e-' . $e['id'], 'offerName' => $titel, 'einzel' => true, 'nr' => $e['nr'], 'gueltigBis' => $e['gueltigBis'] ?? null],
+                       'offerId' => 'e-' . $e['id'], 'offerName' => $titel, 'einzel' => true, 'nr' => $e['nr'], 'gueltigBis' => $e['gueltigBis'] ?? null,
+                       'kunde' => einzel_kunden_map()[$e['kid']]['firma'] ?? ''],
             'sections' => [], 'groups' => [['id' => $gid, 'name' => $titel, 'section' => '']], 'items' => $items,
             'publishedAt' => (string)($e['freigegebenAt'] ?? $e['changed'] ?? '')];
 }
@@ -202,22 +203,128 @@ function einzel_artikel(bool $mitBestand, bool $mitEk = false): array
             'angebot' => $pub ? ['publishedAt' => $pub['publishedAt'] ?? null, 'week' => $pub['meta']['week'] ?? null, 'year' => $pub['meta']['year'] ?? null] : null];
 }
 
-/* ---------- E-Mail an den Kunden ---------- */
-function mail_tpl_einzel(array $c, array $e, string $note): array
+/* ---------- PDF im Design der Angebotsansicht (A4 quer, drei Spalten) ---------- */
+/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€ / kg“, Zebrastreifen, Seitenzahlen.
+   Nur Positionen, Preise, Mengen und Hinweise – nie Bestand, Partien oder Einkaufspreise (Regel 7). */
+function einzel_pdf(array $e, ?array $c): string
 {
+    global $CFG;
+    require_once __DIR__ . '/pdf.php';
+    $pdf = new Pdf();
+    $W = $pdf->w; $H = $pdf->h;
+    $ML = 28.35; $MT = 25.5; $MB = 34; $GAP = 16; $K = 3;
+    $colW = ($W - 2 * $ML - ($K - 1) * $GAP) / $K;
+    $wCode = 38; $wPrice = 52; $wName = $colW - $wCode - $wPrice - 8;
+    $LH = 10.4; $FS = 8.6;
+    $titel = einzel_titel($e);
+    $bis = !empty($e['gueltigBis']) ? date('d.m.Y', strtotime($e['gueltigBis'])) : '';
+    $firma = $c['firma'] ?? '';
+
+    // Bausteine: Kopf eines Blocks, Zeilen, Abschlusstexte
+    $rows = [];
+    foreach ($e['positions'] as $i => $p) {
+        $name = $p['name'] . ($p['notiz'] !== '' ? ' – ' . $p['notiz'] : '');
+        $lines = Pdf::wrap($name, $FS, $wName);
+        $h = 4.6 + count($lines) * $LH + ($p['qty'] !== null ? 9 : 0);
+        $rows[] = ['t' => 'row', 'p' => $p, 'lines' => $lines, 'h' => $h, 'z' => $i % 2 === 0];
+    }
+    $tail = [];
+    $su = einzel_summe($e);
+    if ($su['summe'] > 0) $tail[] = ['Warenwert (ca.): ' . de_num($su['summe']) . ' € bei ' . de_qty($su['kg']) . ' kg', true];
+    if (($e['hinweis'] ?? '') !== '') foreach (explode("\n", $e['hinweis']) as $l) $tail[] = [$l, false];
+    $tail[] = ['Preise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.', false];
+    foreach (fracht_hinweis() as $l) $tail[] = [$l, false];
+    $tailLines = [];
+    foreach ($tail as [$t, $b]) foreach (Pdf::wrap($t, 8, $colW, $b) as $l) $tailLines[] = [$l, $b];
+    $tailH = 10 + count($tailLines) * 10.5;
+
+    // Spalten füllen: Seite 1 mit Kopf, kurze Angebote nicht künstlich auf drei Spalten verteilen
+    $headH = 58;
+    $top = fn(int $page) => $MT + ($page === 0 ? $headH : 0);
+    $bottom = $H - $MB;
+    $total = array_sum(array_column($rows, 'h'));
+    $ziel = max(170, $total / $K + 30);
+    $pages = [[[]]]; $pg = 0; $col = 0; $y = $top(0) + 18;
+    $neueSpalte = function () use (&$pages, &$pg, &$col, &$y, $K, $top) {
+        $col++;
+        if ($col >= $K) { $pages[] = [[]]; $pg++; $col = 0; } else $pages[$pg][$col] = [];
+        $y = $top($pg) + 18;   // Platz für den Blockkopf
+    };
+    foreach ($rows as $r) {
+        if ($pages[$pg][$col] && $y + $r['h'] > ($pg === 0 && count($pages) === 1 ? min($bottom, $top(0) + 18 + $ziel) : $bottom)) $neueSpalte();
+        $pages[$pg][$col][] = $r + ['y' => $y];
+        $y += $r['h'];
+    }
+    if ($y + $tailH > $bottom) $neueSpalte();
+    $pages[$pg][$col][] = ['t' => 'tail', 'y' => $y + 8];
+
+    $n = count($pages);
+    foreach ($pages as $pi => $cols) {
+        if ($pi > 0) $pdf->addPage();
+        if ($pi === 0) {
+            $lh = $pdf->jpeg(__DIR__ . '/druck-logo.jpg', $ML, $MT, 135);
+            $tx = $ML + 135 + 16;
+            $pdf->text($tx, $MT + 19, $titel, 15, true);
+            $sub = 'Angebot ' . $e['nr'] . ($firma !== '' ? ' für ' . $firma : '') . ($bis !== '' ? ' · gültig bis ' . $bis : '') . ' · Stand ' . date('d.m.Y') . ' · Preise in € je kg';
+            $pdf->text($tx, $MT + 34, $sub, 8.6, false, '#555555');
+            $pdf->line($ML, $MT + max($lh, 40) + 8, $W - $ML, $MT + max($lh, 40) + 8, 1.4, '#8c1d2c');
+        }
+        foreach ($cols as $ci => $items) {
+            if (!$items) continue;
+            $x = $ML + $ci * ($colW + $GAP);
+            $hasRows = (bool)array_filter($items, fn($i) => $i['t'] === 'row');
+            if ($hasRows) {
+                $hy = $top($pi) + 11;
+                $cont = $pi > 0 || $ci > 0;
+                $pdf->text($x + 3, $hy, $titel . ($cont ? ' (Forts.)' : ''), 9.2, true);
+                $pdf->text($x + $colW - 4, $hy, '€ / kg', 8, true, '#111111', 'r');
+                $pdf->line($x, $hy + 4.5, $x + $colW, $hy + 4.5, 1.1);
+            }
+            foreach ($items as $it) {
+                if ($it['t'] === 'tail') {
+                    $ty = $it['y'];
+                    foreach ($tailLines as [$l, $b]) { $ty += 10.5; $pdf->text($x + 3, $ty, $l, 8, $b, $b ? '#111111' : '#444444'); }
+                    continue;
+                }
+                $p = $it['p']; $ry = $it['y'];
+                if ($it['z']) $pdf->rect($x, $ry, $colW, $it['h'], '#f1f1ee');
+                $by = $ry + 3 + $LH - 2.2;
+                $pdf->text($x + 3, $by, $p['code'], $FS);
+                foreach ($it['lines'] as $li => $l) $pdf->text($x + $wCode, $by + $li * $LH, $l, $FS);
+                if ($p['qty'] !== null) $pdf->text($x + $wCode, $by + count($it['lines']) * $LH - 1, 'Menge ' . de_qty($p['qty']) . ' kg', 7.4, false, '#555555');
+                if ($p['price'] !== null) $pdf->text($x + $colW - 4, $by, de_num((float)$p['price']), $FS + .2, true, '#111111', 'r');
+                else $pdf->text($x + $colW - 4, $by, 'auf Anfrage', 7.4, false, '#666666', 'r');
+            }
+        }
+        $fy = $H - 16;
+        $pdf->text($ML, $fy, ($CFG['company'] ?? '') . ' · Angebot ' . $e['nr'] . ' · ' . $titel . ' · Preise in € je kg', 7, false, '#777777');
+        $pdf->text($W - $ML, $fy, 'Seite ' . ($pi + 1) . ' von ' . $n, 7, false, '#777777', 'r');
+    }
+    return $pdf->output('Angebot ' . $e['nr'] . ' – ' . $titel);
+}
+function plural_de(int $n, string $eins, string $viele): string { return $n . ' ' . ($n === 1 ? $eins : $viele); }
+function einzel_pdf_name(array $e): string { return 'Angebot_' . preg_replace('/[^A-Za-z0-9-]/', '', $e['nr']) . '.pdf'; }
+
+/* ---------- E-Mail an den Kunden ---------- */
+/* $format: „liste“ = Positionen als Tabelle in der E-Mail (bisher), „pdf“ = kurze Nachricht, Angebot als PDF im Anhang */
+function mail_tpl_einzel(array $c, array $e, string $note, string $format = 'liste'): array
+{
+    $pdf = $format === 'pdf';
     global $CFG;
     $titel = einzel_titel($e);
     $subject = "Ihr Angebot {$e['nr']} – {$CFG['company']}";
     $bis = !empty($e['gueltigBis']) ? date('d.m.Y', strtotime($e['gueltigBis'])) : '';
-    $intro = 'gerne bieten wir Ihnen an' . ($bis !== '' ? " (gültig bis $bis)" : '') . ':';
+    $intro = $pdf ? 'anbei erhalten Sie unser Angebot ' . $e['nr'] . ' als PDF' . ($bis !== '' ? " (gültig bis $bis)" : '') . '.'
+                  : 'gerne bieten wir Ihnen an' . ($bis !== '' ? " (gültig bis $bis)" : '') . ':';
     $sig = mail_settings()['signature'];
     $login = !empty($c['login']['active']) ? ($c['login']['username'] ?? '') : '';
     $url = mail_base_url() . '/?angebot=e-' . $e['id'];
     $pr = function ($p) { return $p['price'] !== null ? de_num((float)$p['price']) . ' €/kg' : 'Preis auf Anfrage'; };
     $su = einzel_summe($e);
     $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '') . "$titel ({$e['nr']})\n";
-    foreach ($e['positions'] as $p) $t .= '- ' . ($p['code'] !== '' ? $p['code'] . ' ' : '') . $p['name'] . ($p['notiz'] !== '' ? ' (' . $p['notiz'] . ')' : '') . ': ' . $pr($p) . ($p['qty'] !== null ? ', ' . de_qty($p['qty']) . ' kg' : '') . "\n";
-    if ($su['summe'] > 0) $t .= "\nWarenwert (ca.): " . de_num($su['summe']) . " €\n";
+    if ($pdf) $t .= 'Anhang: ' . einzel_pdf_name($e) . ' (' . plural_de(count($e['positions']), 'Position', 'Positionen') . ")\n";
+    else foreach ($e['positions'] as $p) $t .= '- ' . ($p['code'] !== '' ? $p['code'] . ' ' : '') . $p['name'] . ($p['notiz'] !== '' ? ' (' . $p['notiz'] . ')' : '') . ': ' . $pr($p) . ($p['qty'] !== null ? ', ' . de_qty($p['qty']) . ' kg' : '') . "\n";
+    if ($su['summe'] > 0 && !$pdf) $t .= "\nWarenwert (ca.): " . de_num($su['summe']) . " €\n";
     if ($e['hinweis'] !== '') $t .= "\n" . $e['hinweis'] . "\n";
     $t .= "\nPreise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.\n";
     if ($login !== '' && einzel_sichtbar($e)) $t .= "\nIm Angebotsportal (Anmeldung mit Ihrer Benutzerkennung $login):\n$url\n";
@@ -228,14 +335,18 @@ function mail_tpl_einzel(array $c, array $e, string $note): array
     $thr = 'style="text-align:right;padding:6px;border-bottom:2px solid #e6e0d8;font-size:12px;color:#857c72;"';
     $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
         . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '')
-        . '<p style="margin:0 0 8px;font-weight:600;">' . mail_h($titel) . ' <span style="color:#857c72;font-weight:400;">(' . mail_h($e['nr']) . ')</span></p>'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border-collapse:collapse;margin:0 0 12px;"><tr><th ' . $th . '>Art.-Nr.</th><th ' . $th . '>Artikel</th><th ' . $thr . '>Menge</th><th ' . $thr . '>Preis</th></tr>';
+        . '<p style="margin:0 0 8px;font-weight:600;">' . mail_h($titel) . ' <span style="color:#857c72;font-weight:400;">(' . mail_h($e['nr']) . ')</span></p>';
+    if ($pdf) $h .= '<p style="margin:0 0 14px;padding:10px 14px;border:1px solid #e6e0d8;border-radius:8px;">Anhang: <strong>' . mail_h(einzel_pdf_name($e)) . '</strong>' . ' <span style="color:#857c72;">· '
+        . mail_h(plural_de(count($e['positions']), 'Position', 'Positionen')) . '</span></p>';
+    else {
+    $h .= '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;border-collapse:collapse;margin:0 0 12px;"><tr><th ' . $th . '>Art.-Nr.</th><th ' . $th . '>Artikel</th><th ' . $thr . '>Menge</th><th ' . $thr . '>Preis</th></tr>';
     foreach ($e['positions'] as $p) {
         $h .= '<tr><td ' . $td . '>' . mail_h($p['code']) . '</td><td ' . $td . '>' . mail_h($p['name']) . ($p['notiz'] !== '' ? '<br><span style="font-size:12px;color:#857c72;">' . mail_h($p['notiz']) . '</span>' : '') . '</td><td ' . $tdr . '>'
             . ($p['qty'] !== null ? mail_h(de_qty($p['qty'])) . ' kg' : '') . '</td><td ' . $tdr . '><strong>' . mail_h($pr($p)) . '</strong></td></tr>';
     }
-    $h .= '</table>' . ($su['summe'] > 0 ? '<p style="margin:0 0 12px;text-align:right;">Warenwert (ca.): <strong>' . mail_h(de_num($su['summe'])) . ' €</strong></p>' : '')
-        . ($e['hinweis'] !== '' ? '<p style="margin:0 0 14px;">' . nl2br(mail_h($e['hinweis'])) . '</p>' : '')
+    $h .= '</table>' . ($su['summe'] > 0 ? '<p style="margin:0 0 12px;text-align:right;">Warenwert (ca.): <strong>' . mail_h(de_num($su['summe'])) . ' €</strong></p>' : '');
+    }
+    $h .= ($e['hinweis'] !== '' ? '<p style="margin:0 0 14px;">' . nl2br(mail_h($e['hinweis'])) . '</p>' : '')
         . '<p style="margin:0 0 14px;font-size:12.5px;color:#857c72;">Preise freibleibend, netto; abgerechnet wird nach tatsächlichem Gewicht.</p>';
     if ($login !== '' && einzel_sichtbar($e)) $h .= mail_button($url, 'Angebot im Portal ansehen') . '<p style="margin:8px 0 0;font-size:13px;color:#4a443e;">Anmeldung mit Ihrer Benutzerkennung <strong>' . mail_h($login) . '</strong>.</p>';
     return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('zugang'))];

@@ -300,7 +300,8 @@ function testpost_ablegen(array $cfg, array $jobs): array
     with_lock('testpostfach', function () use ($cfg, $jobs) {
         $l = store_read('testpostfach') ?? [];
         foreach ($jobs as $j) $l[] = ['t' => now(), 'to' => (string)($j['to'] ?? ''), 'from' => (string)($cfg['from'] ?? ''), 'subject' => (string)($j['subject'] ?? ''),
-                                      'text' => (string)($j['text'] ?? ''), 'html' => (string)($j['html'] ?? '')];
+                                      'text' => (string)($j['text'] ?? ''), 'html' => (string)($j['html'] ?? ''),
+                                      'anhaenge' => array_map(fn($a) => ['name' => (string)$a['name'], 'bytes' => strlen((string)$a['data'])], $j['anhaenge'] ?? [])];
         store_write('testpostfach', array_slice($l, -100));
     });
     $res = [];
@@ -316,7 +317,7 @@ function mail_send_many(array $cfg, array $jobs): array
     try {
         foreach ($jobs as $k => $j) {
             try {
-                $smtp->send($j['to'], mail_build($cfg, $j['to'], $j['name'] ?? '', $j['subject'], $j['text'], $j['html'], $j['headers'] ?? []));
+                $smtp->send($j['to'], mail_build($cfg, $j['to'], $j['name'] ?? '', $j['subject'], $j['text'], $j['html'], $j['headers'] ?? [], $j['anhaenge'] ?? []));
                 $res[$k] = ['ok' => true];
             } catch (RuntimeException $e) {
                 $res[$k] = ['ok' => false, 'error' => $e->getMessage()];
