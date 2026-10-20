@@ -1371,7 +1371,7 @@
     const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
-      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
+      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-datei">Dateiprüfung</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
       <section id="sec-lage" class="sec-sect">
         <div class="sec-score" id="sec-score"></div>
         <div class="sec-grid">${secCards(d)}</div>
@@ -1392,6 +1392,8 @@
         <div class="dg-export"><label class="fld"><span>Sicherheitsprotokoll exportieren (CSV)</span><select id="dg-days"><option value="7">7 Tage</option><option value="30">30 Tage</option><option value="90" selected>90 Tage</option><option value="365">365 Tage</option></select></label><button type="button" class="btn" data-diag="export">${icon('download', 'sm')}Exportieren</button></div>
         <p class="form-err" id="dg-err" role="alert"></p>
       </section>
+      <section id="sec-datei" class="gcard sec-block sec-sect"><h3 class="sec-h">Dateiprüfung</h3>
+        <div id="ip-out" aria-live="polite"><p class="sub">Wird geladen …</p></div></section>
       <form class="gcard sec-form wartung-form${d.wartung ? ' on' : ''}" id="wartung-form" autocomplete="off">
         <h3 class="sec-h">Wartungsmodus</h3>
         <p class="hint" style="margin-top:0">Pausiert die Angebotsseite für Kunden (Angebot, Anmeldung, Merkliste, Bestellwünsche). Sie und alle Mitarbeiter arbeiten im Eingabebereich und auf der Angebotsseite normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>
@@ -1462,6 +1464,46 @@
     geoRefresh();
     secScore();
     secBrowserChecks();
+    secIntegrity();
+  }
+  /* ---------- Dateiprüfung: Programmdateien gegen die Prüfliste, Datenordner, auffällige Muster, Komponenten ---------- */
+  const IP_LVL = { kritisch: 'bad', warnung: 'warn', hinweis: 'info', ok: 'ok' };
+  const IP_ART = { geaendert: 'verändert', fehlt: 'fehlt', unbekannt: 'unbekannt', verdaechtig: 'verdächtig', daten: 'Datenordner' };
+  function ipHTML(d) {
+    const r = d.result;
+    const btn = `<div class="dg-btns"><button type="button" class="btn" data-ip="run">${icon('check', 'sm')}Jetzt prüfen</button></div>`;
+    if (!r) return `<p class="sec-empty">Noch keine Dateiprüfung durchgeführt.</p>${btn}<p class="form-err" id="ip-err" role="alert"></p>`;
+    const c = r.counts, lvl = c.critical ? 'bad' : c.warnings ? 'warn' : 'ok';
+    const row = (l, main, sub) => `<tr><td>${lvlDot(l)}</td><td>${main}${sub ? `<div class="sub">${sub}</div>` : ''}</td></tr>`;
+    const items = r.items.slice(0, 100).map((x) => row(IP_LVL[x.stufe] || 'info', `<span class="mono-s" style="word-break:break-all">${esc(x.path)}</span>`,
+      `${esc(IP_ART[x.art] || x.art)} · ${esc(x.text)}${x.signatur ? ` · <strong>Muster: ${esc(x.signatur)}</strong>` : ''}`)).join('');
+    const more = r.items.length - 100 + (r.truncated || 0);
+    const comp = (r.components || []).map((x) => row(IP_LVL[x.stufe] || 'info', `<span class="nm">${esc(x.name)}</span> <span class="mono-s" style="word-break:break-all">${esc(x.version)}</span>`, esc(x.text))).join('');
+    return `<div class="sec-grid"><div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${lvl === 'ok' ? 'Keine Auffälligkeiten' : `${c.critical} kritisch · ${c.warnings} ${c.warnings === 1 ? 'Warnung' : 'Warnungen'}`}</strong>
+        <span>${fmtInt.format(c.checked)} Dateien und Datensätze geprüft · ${c.modified} verändert · ${c.missing} fehlen · ${c.unknown} unbekannt · ${c.suspicious} verdächtig</span>
+        <em>zuletzt ${esc(dateTime(r.ranAt))} Uhr${r.auto ? ' (automatisch)' : r.by ? ` (${esc(r.by)})` : ''} · ${fmtInt.format(r.ms)} ms</em></div></div></div>
+      ${r.partial ? `<p class="st-warn">Unvollständig: ${esc(r.partialText)}.</p>` : ''}
+      ${items ? `<table class="etab sectab cftab ip-tab"><thead><tr><th class="lv-h"><span class="sr-only">Stufe</span></th><th>Befund</th></tr></thead><tbody>${items}</tbody></table>${more > 0 ? `<p class="sub">… und ${fmtInt.format(more)} weitere.</p>` : ''}` : ''}
+      ${btn}<p class="form-err" id="ip-err" role="alert"></p>
+      <h4 class="sec-h" style="margin-top:18px">Komponenten</h4>
+      <table class="etab sectab cftab ip-comp"><tbody>${comp}</tbody></table>
+      <p class="hint">Vergleicht alle Programmdateien mit der freigegebenen Fassung, prüft den Datenordner und sucht nach typischen Mustern von Schadcode. Läuft automatisch einmal am Tag beim Öffnen dieser Ansicht; neue Befunde gehen als Sicherheitsereignis per E-Mail raus.</p>`;
+  }
+  async function secIntegrity(run) {
+    const host = $('#ip-out');
+    if (!host) return;
+    const b = host.querySelector('[data-ip="run"]');
+    if (b) { b.disabled = true; b.innerHTML = '<span class="spinner sm"></span>Wird geprüft …'; }
+    try {
+      const d = await api('security_integrity', run ? { body: { run: true } } : {});
+      if (!$('#ip-out')) return;
+      $('#ip-out').innerHTML = ipHTML(d);
+      if (run) toast(d.result && d.result.ok ? 'Dateiprüfung: keine Auffälligkeiten.' : 'Dateiprüfung abgeschlossen – bitte Befunde ansehen.');
+    } catch (ex) {
+      if (b) { b.disabled = false; b.innerHTML = `${icon('check', 'sm')}Jetzt prüfen`; const e = $('#ip-err'); if (e) e.textContent = ex.message; }
+      else host.innerHTML = `<p class="form-err" role="alert">${esc(ex.message)}</p>`;
+    }
+    secScore();
   }
   async function runDiag(k, btn) {
     const out = $('#dg-out'), err = $('#dg-err');
@@ -1485,6 +1527,7 @@
   $('#view-sec').addEventListener('click', (e) => {
     const b = e.target.closest('[data-diag]');
     if (b) runDiag(b.dataset.diag, b);
+    if (e.target.closest('[data-ip="run"]')) secIntegrity(true);
     const a = e.target.closest('.sec-nav a');
     if (a) { e.preventDefault(); const t = document.getElementById(a.getAttribute('href').slice(1)); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });

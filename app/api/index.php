@@ -28,6 +28,7 @@
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
  *   GET  ?action=security_status  Sicherheitsübersicht (nur Administrator)
  *   POST ?action=security_diag | security_export   nur lesende Diagnosen; Sicherheitsprotokoll als CSV (Administrator)
+ *   GET  ?action=security_integrity  letzte Dateiprüfung; POST {run:true} jetzt prüfen (Administrator)
  *   POST ?action=security_save | session_end | ip_unblock | user_unlock | geo_update
  *   GET  ?action=offers            Angebote (Standard + Kundenangebote), angemeldet
  *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
@@ -111,6 +112,7 @@ require __DIR__ . '/lib/diagnose.php';
 require __DIR__ . '/lib/auswertung.php';
 require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
+require __DIR__ . '/lib/integritaet.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -121,6 +123,7 @@ $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_dr
                  'kunde_save', 'kunde_delete', 'kunden_import', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
                  'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'vertreter_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden'];
+if ($method === 'POST') $writeActions[] = 'security_integrity';   // Dateiprüfung: GET liefert den letzten Lauf, POST prüft
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -170,6 +173,7 @@ try {
     require __DIR__ . '/aktionen/app.php';
     require __DIR__ . '/aktionen/kundengruppen.php';
     require __DIR__ . '/aktionen/einzelangebote.php';
+    require __DIR__ . '/aktionen/integritaet.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

@@ -31,6 +31,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/benachrichtigung.php` | Benachrichtigungen an Mitarbeiter: Ereignisse (`NOTIFY_EVENTS`), Einstellungen, Vormerken (`notify`, aus `audit()`), Versand nach der Antwort mit Bündelung |
 | `lib/preisverlauf.php`, `lib/bestand.php` | Preisverlauf; Bestandsliste und Stammdaten (`clean_master`: Bezeichnung, Fleischart, Herkunft, Zustand, optional `vkGruppe` und `gtin`) |
 | `lib/diagnose.php` | Sicherheit für IT-Administratoren: Verlauf, auffällige Adressen, Konfigurationsprüfung, nur lesende Diagnosen, CSV-Export |
+| `lib/integritaet.php`, `aktionen/integritaet.php` | Dateiprüfung (Aktion `security_integrity`, nur Administrator; GET = letzter Lauf, älter als 24 h → einmal am Tag automatisch; POST `{run: true}` = jetzt): Programmdateien gegen die Prüfliste `lib/integritaet-liste.php` (Pfad → SHA-256, erzeugt von `werkzeuge/integritaet.py`, ohne `data/`), unbekannte Dateien, Datenordner (Sperrzeile, ausführbare Dateien, `.sqlite/.htaccess`), Muster in unbekannten/veränderten Dateien und gespeicherten Daten (`INTEGRITAET_MUSTER`), Komponenten (`PHP_SUPPORT_ENDE`); Ergebnis im Dokument `integritaet` (letzter Lauf + Verlauf der letzten 20), neue Befunde → `notify('sicherheit')` |
 | `lib/fracht.php` | Frachtregel (Dokument `fracht`): Staffeln, `fracht_kosten` (Bestellwunsch), `fracht_hinweis` (Hinweis unter dem Angebot) |
 | `lib/einzelangebote.php`, `aktionen/einzelangebote.php` | Einzelangebote für genau einen Kunden (Dokument `einzelangebote`): Prüfung, Nummern `E-JJJJ-0001`, Artikelsuche mit Bestand, Partien, erwarteten Ankünften (EK nur mit `bestand.einkaufspreise`), Merkmalen, VK-Gruppe und Wochenpreis sowie Liste der vorkommenden VK-Gruppen (`einzel_artikel`), Angebotsmodell fürs Portal (`einzel_model`, Kennung `e-<id>`, ohne Bestand, mit Kundenname und Hinweis), PDF im Design der Angebotsansicht (`einzel_pdf`, A4 quer, Logo `lib/druck-logo.jpg`), E-Mail-Vorlage als Liste oder mit PDF-Anhang; Aktionen `einzel_liste`, `einzel_detail`, `einzel_artikel`, `einzel_pdf` (Vorschau), `einzel_save`, `einzel_status`, `einzel_loeschen`, `einzel_senden` (`format`: `liste`/`pdf`; nicht für zurückgezogene oder abgelaufene Angebote) |
 | `lib/pdf.php`, `lib/pdf-breiten.php` | Schlanker PDF-Erzeuger ohne Fremdbibliothek (Helvetica/WinAnsi, Text, Linien, Flächen, JPEG), Zeichenbreiten für Umbruch; nur bei Bedarf geladen |
@@ -60,7 +61,7 @@ und ggf. `WARTUNG_GESPERRT`.
 
 Dunkle Farben (`prefers-color-scheme: dark`, `data-theme="dark"`) gelten nur für `@media screen` – der Druck ist immer hell. Druckregeln: Angebotsseite in `app.css` (`#print-root`), Eingabebereich in `admin.css` (geöffnete Ansicht bzw. offenes Fenster).
 
-Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
+Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`. Danach (nach jeder Änderung unter `app/`) die Prüfliste der Dateiprüfung erneuern: `python3 werkzeuge/integritaet.py --setzen` (die CI prüft beides).
 
 ## App (`mobile/`)
 
@@ -79,4 +80,4 @@ Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
   `auth_helpers`, `wait_text()`, `until()`, `shot()`, Test-Mailserver `smtp_test.TestSmtp`.
 - App: `cd mobile && npm test` (Jest), `npm run typecheck`, `npm run export:native`; Gruppe `app_web` testet den Web-Build der App gegen den Testserver (nur wenn `mobile/dist-web` gebaut ist).
 - `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank, Testumgebung).
-- CI (`.github/workflows/ci.yml`): Syntax, Versionsnummern, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten.
+- CI (`.github/workflows/ci.yml`): Syntax, Versionsnummern, Prüfliste der Dateiprüfung, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten.

@@ -78,6 +78,7 @@ SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
+SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
@@ -137,7 +138,7 @@ PRINT = threading.Lock()
 
 def ports(slot):
     """Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes."""
-    b = 9100 + slot * 10
+    b = int(os.environ.get('WA_PORT_BASE') or 9100) + slot * 10   # WA_PORT_BASE: eigener Bereich für parallele Testläufe
     return b, b + 1, b + 2, b + 3
 
 
