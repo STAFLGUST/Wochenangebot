@@ -167,8 +167,9 @@ switch ($action) {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
-            // Auch der Austausch eines vorhandenen Faktors braucht einen erneuten Passwortnachweis.
-            if (!empty($me['totp'])) {
+            // Austausch eines vorhandenen Faktors – und Ersteinrichtung später als 5 Minuten nach der Anmeldung – nur mit erneutem
+            // Passwortnachweis (sonst könnte eine übernommene Sitzung einen eigenen Faktor hinterlegen und den Inhaber aussperren)
+            if (!empty($me['totp']) || (int)($_SESSION['authAt'] ?? 0) < time() - 300) {
                 unset($_SESSION['totpPending']);
                 $me = confirm_password($me, (string)(body()['password'] ?? ''));
             }

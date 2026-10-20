@@ -55,7 +55,7 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e0e0d; --surface: #161615; --surface-2: #1b1b1a; --surface-3: #242422;
     --line: #2a2a28; --line-strong: #3a3a37;
@@ -81,6 +81,7 @@
     color-scheme: dark;
   }
 }
+@media screen {
 :root[data-theme="dark"] {
   --bg: #0e0e0d; --surface: #161615; --surface-2: #1b1b1a; --surface-3: #242422;
   --line: #2a2a28; --line-strong: #3a3a37;
@@ -104,6 +105,7 @@
   --cat-knochen: #b5aea5; --cat-knochen-bg: rgba(181,174,165,.13);
   --cat-sonst: #b5aea5; --cat-sonst-bg: rgba(181,174,165,.13);
   color-scheme: dark;
+}
 }
 
 /* ==========================================================================
@@ -166,8 +168,8 @@ mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1
 .brand-home { display: block; flex: none; border-radius: 6px; }
 .brand-home:focus-visible { box-shadow: var(--focus); outline: none; }
 .topbar .brand-company, .brand-logo + div .brand-company { display: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 28px; } }
-:root[data-theme="dark"] .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 28px; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 28px; } }
+@media screen { :root[data-theme="dark"] .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 28px; } }
 @media (max-width: 640px) { .brand-logo { height: 28px; } }
 .brand h1 { margin: 0; font-size: 15px; line-height: 1.25; font-weight: 500; letter-spacing: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .kw-pill { font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-line); padding: 1px 8px; border-radius: 6px; letter-spacing: 0; }
@@ -542,7 +544,7 @@ dialog.sheet .dlg { height: 100%; max-height: 100dvh; }
 .issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .issues li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 13px; }
 .issues li.warn { border-color: rgba(154, 106, 18, .35); background: rgba(246, 237, 223, .6); }
-:root[data-theme="dark"] .issues li.warn { background: rgba(217,168,101,.08); }
+@media screen { :root[data-theme="dark"] .issues li.warn { background: rgba(217,168,101,.08); } }
 .issues .lvl { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding-top: 2px; }
 .issues li.warn .lvl { color: var(--c-aged); }
 .issues .cell { font-family: var(--mono); font-size: 11.5px; color: var(--muted); grid-column: 2; }
@@ -640,15 +642,16 @@ dialog.sheet .dlg { height: 100%; max-height: 100dvh; }
 @media print {
   @page { size: A4 portrait; margin: 14mm 12mm 16mm 12mm; }
   html, body { background: #fff !important; color: #111 !important; }
-  body > *:not(#print-root) { display: none !important; }
+  body:not(.adm) > *:not(#print-root) { display: none !important; }   /* Eingabebereich: eigene Druckregeln in admin.css */
   #print-root { display: block !important; }
   :root { color-scheme: light; }
 }
 .p-doc { font: 8.6pt/1.35 var(--font); color: #111; }
-.p-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12mm; padding-bottom: 4mm; border-bottom: 1.4pt solid #7b1e2b; margin-bottom: 5mm; }
-.p-company { font-size: 8pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #7b1e2b; }
-.p-title { font-size: 20pt; font-weight: 700; letter-spacing: -.01em; margin: 1mm 0 0; line-height: 1.15; }
-.p-title span { color: #7b1e2b; }
+.p-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 8mm; padding-bottom: 4mm; border-bottom: 1.4pt solid #7b1e2b; margin-bottom: 5mm; }
+.p-head .p-logo { height: 14mm; width: auto; flex: none; background: none; padding: 0; }
+.p-ht { flex: 1; min-width: 0; }
+.p-title { font-size: 16pt; font-weight: 700; letter-spacing: -.01em; margin: 1mm 0 0; line-height: 1.15; }
+.p-title span { color: #7b1e2b; white-space: nowrap; }
 .p-sub { font-size: 9pt; color: #444; margin-top: 1.2mm; }
 .p-meta { text-align: right; font-size: 8pt; color: #555; line-height: 1.5; white-space: nowrap; }
 .p-meta strong { color: #111; }
@@ -658,7 +661,7 @@ dialog.sheet .dlg { height: 100%; max-height: 100dvh; }
 .p-section:first-child { margin-top: 0; padding-top: 0; }
 .p-group { margin: 0 0 3.2mm; }
 .p-gh { display: flex; justify-content: space-between; gap: 4mm; font-weight: 700; font-size: 8.8pt; padding: 1mm 1.5mm; background: #f3efed; border-radius: 1mm; break-after: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.p-gh span { font-weight: 600; color: #666; font-size: 7.6pt; white-space: nowrap; }
+.p-gh > span:last-child { font-weight: 600; color: #666; font-size: 7.6pt; white-space: nowrap; }
 .p-row { display: grid; grid-template-columns: 11mm minmax(0, 1fr) auto; gap: 2mm; padding: .75mm 1.5mm; border-bottom: .3pt solid #e1dcd7; break-inside: avoid; align-items: baseline; }
 .p-c { font-family: var(--mono); font-size: 7.6pt; color: #555; }
 .p-n small { display: block; color: #666; font-size: 7.4pt; }
@@ -737,14 +740,14 @@ body.has-orderbar { padding-bottom: 76px; }
 .d-qty { display: flex; align-items: center; gap: 8px; margin-right: auto; font-size: 12.5px; color: var(--muted); }
 .wartung-banner .banner-inner { background: #fff4e0; border-color: #f0c27a; color: #6b4300; }
 body.in-wartung .actions .btn:not(#btn-theme) { display: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wartung-banner .banner-inner { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
-:root[data-theme="dark"] .wartung-banner .banner-inner { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wartung-banner .banner-inner { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
+@media screen { :root[data-theme="dark"] .wartung-banner .banner-inner { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 body.in-wartung .topbar .search { visibility: hidden; }
 
 /* Sonderposten (Sonderpreis, solange der Vorrat reicht) */
 :root { --sale: #c2410c; --sale-bg: #fff1e6; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); } }
-:root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); } }
+@media screen { :root[data-theme="dark"] { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); } }
 .tag.sale { background: var(--sale-bg); color: var(--sale); }
 .price.sale .pv, .price.sale .pu { color: var(--sale); }
 .p-was { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -783,13 +786,13 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
    Drei gleich hohe Blöcke nebeneinander (JS verteilt die Gruppen), feste Spaltenbreiten für Nummer und Preis,
    Preise rechtsbündig mit Ziffern gleicher Breite, Zebrastreifen für die Zeilenführung. */
 .al { --al-zebra: #f6f6f4; --al-rule: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px 20px 6px; font-variant-numeric: tabular-nums; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al { --al-zebra: rgba(255,255,255,.035); } }
-:root[data-theme="dark"] .al { --al-zebra: rgba(255,255,255,.035); }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al { --al-zebra: rgba(255,255,255,.035); } }
+@media screen { :root[data-theme="dark"] .al { --al-zebra: rgba(255,255,255,.035); } }
 .al-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 24px; margin: 0 0 16px; }
 .al-logo { display: block; height: 58px; width: auto; flex: none; }
 .al-ht { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 0; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; } }
-:root[data-theme="dark"] .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; } }
+@media screen { :root[data-theme="dark"] .al-logo { background: #fff; border-radius: 8px; padding: 6px 10px; } }
 .al h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; text-transform: none; }
 .al-ht > span { font-size: 13px; color: var(--text-2); }
 .al-sec { margin: 0 0 18px; }
@@ -869,6 +872,7 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 #print-root .al-tab td.c-price.al-np { font-size: 8pt; }
 #print-root .al-tab .al-was { font-size: 7pt; display: inline; margin-right: 1mm; }
 #print-root .al-grp, #print-root .al-tab tr { break-inside: avoid; }
+#print-root .al, #print-root .al-st, #print-root .al-tab td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }   /* Zebrastreifen und Abschnittsbänder auch auf Papier */
 
 /* Umschalter Angebotsansicht / Bestellansicht – gut sichtbar ganz oben */
 .modebar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 16px; }
@@ -894,8 +898,8 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .webapp-hint .wh-text .btn { margin-left: 6px; vertical-align: middle; }
 .webapp-hint.offline { border-color: #e7cf9f; background: #fbf3e2; color: #5c3d0e; }
 .webapp-hint.offline > svg.i { color: #8a5a1c; flex: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .webapp-hint.offline { border-color: rgba(217,168,101,.35); background: rgba(217,168,101,.12); color: var(--text); } }
-:root[data-theme="dark"] .webapp-hint.offline { border-color: rgba(217,168,101,.35); background: rgba(217,168,101,.12); color: var(--text); }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .webapp-hint.offline { border-color: rgba(217,168,101,.35); background: rgba(217,168,101,.12); color: var(--text); } }
+@media screen { :root[data-theme="dark"] .webapp-hint.offline { border-color: rgba(217,168,101,.35); background: rgba(217,168,101,.12); color: var(--text); } }
 
 /* Hinweis unter dem Angebot (Preise, Mindestmenge, Fracht, Kontakt) – Bildschirm und Druck */
 .al-note { margin: 4px 0 16px; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }

@@ -77,6 +77,7 @@ SUITES['vkgruppen'] = (8790, 'data-seed', True)
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['fehlerpruefung'] = SUITES['bestellung']
+SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}

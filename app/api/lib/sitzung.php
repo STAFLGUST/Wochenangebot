@@ -75,6 +75,7 @@ function require_auth(bool $write = false, string $role = 'viewer'): array
 {
     $u = current_user();
     if (!$u) fail('Bitte erneut anmelden.', 401);
+    header('Cache-Control: private, no-store');   // Daten nach Anmeldung nie im Browser-Cache ablegen (gemeinsam genutzte Rechner)
     if ($write) {
         $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
@@ -91,6 +92,7 @@ function sign_in(array $u): string
     $_SESSION['uid'] = $u['id'];
     $_SESSION['sv'] = (int)$u['sv'];
     $_SESSION['seen'] = time();
+    $_SESSION['authAt'] = time();   // Zeitpunkt der Passwort-Anmeldung (z. B. für die Ersteinrichtung der Zwei-Faktor-Anmeldung)
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
     unset($_SESSION['pend'], $_SESSION['totpPending']);
     mark_admin_confirmed($u);

@@ -22,7 +22,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/kern.php` | `respond()`, `fail()`, `body()`, `now()`, Eingabeprüfung `s()`, `clean_price()` |
 | `lib/nutzer.php` | Mitarbeiter-Zugänge, Passwortregeln |
 | `lib/rechte.php` | Nutzerrechte: Katalog `PERMS`, Rechte je Rolle (Dokument `rechte`), Ausnahmen je Nutzer (`grant`/`deny`), `user_perms`, `require_perm`, `require_perm_confirmed` |
-| `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth`), Passwortbestätigung, CSRF; App-Betriebsart (`X-WA-Client: app`, Kennung in `X-WA-Sitzung`) |
+| `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth` – setzt `Cache-Control: private, no-store`), Anmeldezeitpunkt `authAt` (Zwei-Faktor-Ersteinrichtung ohne Passwort nur bis 5 Minuten danach), Passwortbestätigung, CSRF; App-Betriebsart (`X-WA-Client: app`, Kennung in `X-WA-Sitzung`) |
 | `lib/sicherheit.php` | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus; Katalog der Passwortbestätigungen `BESTAETIGUNG` (je Aktion abschaltbar oder fest, `bestaetigung_noetig`, Gültigkeit `bestaetigung_sekunden`). Jede Bestätigungsstelle ruft `require_admin_confirmation('<aktion>')` bzw. `require_perm_confirmed('<recht>', '<aktion>')` mit ihrem Katalogschlüssel auf (der Test `bestaetigung` prüft das) |
 | `lib/protokoll.php` | Protokoll (`audit`), Änderungstexte, Anmeldeversuche |
 | `lib/angebote.php` | Angebote, Kundenpreise (`variants`, Schlüssel immer als Text – auch ältere Angebote mit Zahlen-ID), Sonderpreise (`sale`), `offer_resolve`, Datenmodell `clean_model`, Entwurfsrevisionen; neue Angebots-IDs dürfen nicht mit `e-` beginnen (Einzelangebote) und nicht nur aus Ziffern bestehen |
@@ -57,6 +57,8 @@ und ggf. `WARTUNG_GESPERRT`.
 | `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten (mit Artikelimport aus der Warenwirtschaft und Filter nach VK-Gruppe; Angebote mit Kundengruppen, `renderOffersView`, Preisimport `ofPreiseDatei`) |
 | `admin-einzel.js` | Eingabebereich, Angebot bearbeiten → Einzelangebote erstellen: Übersicht, Bearbeiten, Kundenauswahl mit Suche, Fenster „Artikel hinzufügen“ (VK-Gruppen links, Artikeltabelle mit Häkchen rechts, Suche über alle Gruppen, Details mit Partien und Ankünften), Abweichungspunkt, Freigabe, Drucken/PDF (öffnet die Angebotsseite `?angebot=e-<id>&drucken=1` mit deren Druckdialog), E-Mail als Liste oder PDF-Anhang, Knöpfe in der Kopfleiste (nutzt `window.WA`) |
 | `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden (mit CSV-Import aus der Warenwirtschaft, `kunden_import`), Listen der Stammdaten (`gruppenListe` mit Feldern je Liste: Kundengruppen, VK-Gruppen, Vertreter; CSV-Leser `W.csvZeilen`/`W.csvText`), E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
+
+Dunkle Farben (`prefers-color-scheme: dark`, `data-theme="dark"`) gelten nur für `@media screen` – der Druck ist immer hell. Druckregeln: Angebotsseite in `app.css` (`#print-root`), Eingabebereich in `admin.css` (geöffnete Ansicht bzw. offenes Fenster).
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
 

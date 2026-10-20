@@ -171,7 +171,7 @@ function sec_diag(string $check): array
 function sec_export_csv(int $days): array
 {
     $rows = array_filter(sec_log_entries($days), function ($e) { return in_array($e['a'], SEC_LOG_TYPES, true); });
-    $cell = function ($v) { $v = (string)$v; if ($v !== '' && strpbrk($v[0], '=+-@') !== false) $v = "'" . $v; return '"' . str_replace('"', '""', $v) . '"'; };
+    $cell = function ($v) { $v = (string)$v; if ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) $v = "'" . $v; return '"' . str_replace('"', '""', $v) . '"'; };
     $out = ["\xEF\xBB\xBF" . 'Zeit (UTC);Vorgang;Benutzer;Name;Rolle;IP-Adresse;Beschreibung;Details'];
     foreach ($rows as $e) {
         $det = implode(' | ', array_map(function ($c) { return trim(($c['name'] ?? '') . ' ' . ($c['f'] ?? '') . ': ' . ($c['from'] ?? '') . ' → ' . ($c['to'] ?? '')); }, array_slice((array)($e['d'] ?? []), 0, 20)));
