@@ -16,6 +16,7 @@ const OFFER_DEFAULTS = [
     ['id' => 'bela', 'name' => 'Wochenangebot Bela', 'fallback' => 'standard'],
 ];
 const VARIANT_STATUS = ['value', 'request', 'hidden'];
+const OFFER_MAX = 100;   // Kundenangebote (je Kundengruppe höchstens eines)
 function offers_load(): array
 {
     $d = store_read('angebote');

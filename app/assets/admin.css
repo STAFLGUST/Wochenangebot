@@ -1216,3 +1216,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .bst-z input { margin-top: 2px; flex: none; }
 .bst-z.fest { color: var(--text-2); }
 .bst-z.fest .i { width: 14px; height: 14px; flex: none; margin-top: 2px; color: var(--muted); }
+.of-auto { font-style: italic; }
+.ofg-list li.belegt { opacity: .6; }
+.ofg-bei { color: var(--c-aged); }
+.ofp-fehlt { margin-bottom: 12px; display: grid; gap: 6px; }
+.ofptab { margin-bottom: 8px; }
+.ofptab td, .ofptab th { padding: 6px 8px; }

@@ -51,7 +51,7 @@ switch ($action) {
             require_auth();
             header('Cache-Control: no-store');
             $d = offers_load();
-            respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD), 'stdPublic' => std_public(), 'stdGruppen' => $d['stdGruppen'] ?? []]);
+            respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD), 'stdPublic' => std_public()]);
         }
 
         case 'offers_save': {
@@ -59,7 +59,9 @@ switch ($action) {
             $b = body();
             $list = [];
             $names = [];
-            foreach (array_slice(is_array($b['offers'] ?? null) ? $b['offers'] : [], 0, 30) as $o) {
+            $in = is_array($b['offers'] ?? null) ? $b['offers'] : [];
+            if (count($in) > OFFER_MAX) throw new InvalidArgumentException('Höchstens ' . OFFER_MAX . ' Kundenangebote.');
+            foreach ($in as $o) {
                 if (!is_array($o)) continue;
                 $name = s($o['name'] ?? null, 80, false);
                 if ($name === null || mb_strlen($name) < 2) throw new InvalidArgumentException('Jedes Angebot braucht einen Namen (mindestens 2 Zeichen).');
@@ -73,9 +75,8 @@ switch ($action) {
                 if (array_key_exists('gruppen', $o)) $row['gruppen'] = offer_gruppen_clean($o['gruppen'], $name);
                 $list[] = $row;
             }
-            $stdG = array_key_exists('stdGruppen', $b) ? offer_gruppen_clean($b['stdGruppen'], 'Wochenangebot') : null;
             if (count(array_unique(array_column($list, 'id'))) !== count($list)) throw new InvalidArgumentException('Angebots-IDs sind doppelt.');
-            $res = with_lock('angebote', function () use ($b, $list, $me, $stdG) {
+            $res = with_lock('angebote', function () use ($b, $list, $me) {
                 $cur = offers_load();
                 if ((int)($b['rev'] ?? -1) !== (int)$cur['rev']) fail('Die Angebote wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
                 $old = []; foreach ($cur['offers'] as $o) $old[$o['id']] = $o;
@@ -90,9 +91,14 @@ switch ($action) {
                     $chk($o['gruppen'], $alt, $o['name']);
                     if (!$o['gruppen']) unset($list[$i]['gruppen']);
                 }
-                $stdAlt = $cur['stdGruppen'] ?? [];
-                if ($stdG !== null) $chk($stdG, $stdAlt, 'Wochenangebot');
-                $stdNeu = $stdG ?? $stdAlt;
+                // Jede Kundengruppe gehört zu höchstens einem Angebot; Gruppen ohne Angebot bekommen das Wochenangebot
+                $bei = [];
+                foreach ($list as $o) foreach ($o['gruppen'] ?? [] as $g) {
+                    if (isset($bei[$g])) throw new InvalidArgumentException("Die Kundengruppe $g ist bereits dem Angebot „{$bei[$g]}“ zugeordnet – jede Kundengruppe kann nur ein Angebot haben.");
+                    $bei[$g] = $o['name'];
+                }
+                $stdAlt = $cur['stdGruppen'] ?? [];   // frühere Zuordnung zum Wochenangebot entfällt (gilt jetzt automatisch)
+                $stdNeu = [];
                 $new = []; foreach ($list as $o) $new[$o['id']] = $o;
                 $removed = array_diff_key($old, $new);
                 if ($removed) require_perm_confirmed('angebote.loeschen', 'angebote_loeschen');
@@ -104,7 +110,7 @@ switch ($action) {
                     if (($old[$id]['fallback'] ?? 'standard') !== $o['fallback']) $d[] = ['k' => "o$id|fb", 'code' => '', 'name' => $o['name'], 'f' => 'Ohne eigenen Preis', 'from' => $FB[$old[$id]['fallback'] ?? 'standard'], 'to' => $FB[$o['fallback']]];
                 }
                 foreach ($new as $id => $o) if (($old[$id]['gruppen'] ?? []) !== ($o['gruppen'] ?? []) && (isset($old[$id]) || !empty($o['gruppen']))) $d[] = ['k' => "o$id|grp", 'code' => '', 'name' => $o['name'], 'f' => 'Kundengruppen', 'from' => implode(', ', $old[$id]['gruppen'] ?? []), 'to' => implode(', ', $o['gruppen'] ?? [])];
-                if ($stdNeu !== $stdAlt) $d[] = ['k' => 'ostd|grp', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Kundengruppen', 'from' => implode(', ', $stdAlt), 'to' => implode(', ', $stdNeu)];
+                if ($stdNeu !== $stdAlt) $d[] = ['k' => 'ostd|grp', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Kundengruppen', 'from' => implode(', ', $stdAlt), 'to' => 'alle ohne eigenes Angebot'];
                 foreach ($removed as $id => $o) $d[] = ['k' => "o$id|-", 'code' => '', 'name' => $o['name'], 'f' => 'Angebot gelöscht', 'from' => $o['name'], 'to' => ''];
                 $oldPub = !array_key_exists('stdPublic', $cur) || !empty($cur['stdPublic']);
                 $pub = array_key_exists('stdPublic', $b) ? !empty($b['stdPublic']) : $oldPub;
@@ -113,12 +119,11 @@ switch ($action) {
                     $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
                 }
                 $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub];
-                if ($stdNeu) $out['stdGruppen'] = $stdNeu;
                 store_write('angebote', $out);
                 return [$out, $d];
             });
             [$out, $d] = $res;
             if ($d) audit('offers', 'Angebote geändert', $d);
-            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => $out['stdPublic'], 'stdGruppen' => $out['stdGruppen'] ?? []]);
+            respond(['ok' => true, 'rev' => $out['rev'], 'offers' => $out['offers'], 'stdPublic' => $out['stdPublic']]);
         }
 }

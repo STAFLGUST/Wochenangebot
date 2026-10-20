@@ -14,6 +14,7 @@ from umgebung import BASE, FIX, SH, SMTP_PORT, storage_raw
 PW = 'Sicheres-Passwort-1'
 KPW = 'Kantine-Kennwort-5'
 CSV = FIX + '/kunden/kundendaten.csv'
+PREISE = FIX + '/angebote/artikelpreise.csv'
 res = []
 
 
@@ -59,7 +60,8 @@ ids = lambda cl: [o['id'] for o in cl.call('kunde_status')[1]['kunde']['angebote
 
 # ---------- Angebote ↔ Kundengruppen ----------
 o = A.call('offers')[1]
-check('Angebote ohne Kundengruppen (Ausgangslage)', all('gruppen' not in x for x in o['offers']) and o['stdGruppen'] == [])
+check('Angebote ohne Kundengruppen (Ausgangslage)', all('gruppen' not in x for x in o['offers']) and 'stdGruppen' not in o)
+check('Ausgangslage: Gruppe ohne Angebot bekommt das Wochenangebot, Kunde ohne Gruppe nicht', ids(K5) == ['std'] and ids(K7) == ['std', 'bela'], (ids(K5), ids(K7)))
 offers = [{**x} for x in o['offers']]
 edeka = next(x for x in offers if x['id'] == 'edeka')
 check('Leser darf Angebote nicht ändern', L.call('offers_save', {'rev': o['rev'], 'offers': offers})[0] == 403)
@@ -68,10 +70,16 @@ check('unbekannte Kundengruppe abgewiesen', E.call('offers_save', {'rev': o['rev
 edeka['gruppen'] = ['x y']
 check('ungültige Kundengruppe abgewiesen', E.call('offers_save', {'rev': o['rev'], 'offers': offers})[0] == 422)
 edeka['gruppen'] = ['5', '5']
+bela = next(x for x in offers if x['id'] == 'bela')
+bela['gruppen'] = ['5']
+st, r = E.call('offers_save', {'rev': o['rev'], 'offers': offers})
+check('Kundengruppe nur einem Angebot zuordenbar', st == 422 and 'bereits dem Angebot' in r.get('error', ''), r)
+del bela['gruppen']
 st, r = E.call('offers_save', {'rev': o['rev'], 'offers': offers, 'stdGruppen': ['1']})
-check('Bearbeiter ordnet Kundengruppen zu (doppelte entfallen)', st == 200 and next(x for x in r['offers'] if x['id'] == 'edeka')['gruppen'] == ['5'] and r['stdGruppen'] == ['1'], r)
+check('Bearbeiter ordnet Kundengruppen zu (doppelte entfallen, Wochenangebot nicht zuordenbar)', st == 200 and next(x for x in r['offers'] if x['id'] == 'edeka')['gruppen'] == ['5'] and 'stdGruppen' not in r and 'stdGruppen' not in doc('angebote'), r)
 check('Kunde der Gruppe sieht das Angebot ohne eigene Freischaltung', ids(K5) == ['edeka'] and K5.call('offer&angebot=edeka')[0] == 200, ids(K5))
-check('Kunde anderer Gruppe nicht', 'edeka' not in ids(K7) and K7.call('offer&angebot=edeka')[0] == 403 and ids(K7) == ['bela'], ids(K7))
+check('Gruppe mit Angebot: kein automatisches Wochenangebot mehr', 'std' not in ids(K5))
+check('Kunde anderer Gruppe nicht', 'edeka' not in ids(K7) and K7.call('offer&angebot=edeka')[0] == 403 and ids(K7) == ['std', 'bela'], ids(K7))
 kl = {c['id']: c for c in A.call('kunden')[1]['customers']}
 check('Kundenliste: wirksam, direkt und über Gruppe getrennt', kl[k5['id']]['angebote'] == ['edeka'] and kl[k5['id']]['angeboteDirekt'] == [] and kl[k5['id']]['angeboteGruppe'] == ['edeka']
       and kl[k7['id']]['angeboteDirekt'] == ['bela'], {k: kl[k5['id']][k] for k in ('angebote', 'angeboteDirekt', 'angeboteGruppe')})
@@ -136,7 +144,7 @@ with sync_playwright() as p:
     a.click('#vt-angebote'); a.wait_for_selector('#view-angebote tr[data-oi]')
     row = '#view-angebote tr[data-oi]:has(input[value="Wochenangebot Bela"])'
     check('Angebote-Ansicht mit Kundengruppen und Kundenanzahl', '5 · Kantinen' in a.inner_text('#view-angebote tr[data-oi]:has(input[value="Wochenangebot Edeka"])')
-          and '1 · Gastronomie' in a.inner_text('#view-angebote tr.of-std'), a.inner_text('#view-angebote tbody')[:300])
+          and 'alle übrigen Kundengruppen' in a.inner_text('#view-angebote tr.of-std') and a.locator('#view-angebote tr.of-std [data-ofa="gruppen"]').count() == 0, a.inner_text('#view-angebote tbody')[:300])
     a.click(row + ' [data-ofa="gruppen"]'); a.wait_for_selector('#dlg-of-gruppen[open]')
     a.fill('#ofg-q', 'handel'); a.wait_for_function("[...document.querySelectorAll('#of-gruppen-body .ofg-list li')].filter(l => !l.hidden).length === 1")
     check('Gruppenauswahl durchsuchbar', 'Handel' in a.inner_text('#of-gruppen-body .ofg-list li:not([hidden])'))
@@ -149,6 +157,41 @@ with sync_playwright() as p:
     a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])')
     a.click('[data-ob=manage]'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
     check('„Angebote verwalten“ im Angebot öffnet Stammdaten → Angebote', a.get_attribute('#vt-angebote', 'aria-selected') == 'true')
+
+    # ---------- Kundengruppe nur einmal zuordenbar ----------
+    a.click('#view-angebote tr[data-oi]:has(input[value="Wochenangebot Edeka"]) [data-ofa="gruppen"]'); a.wait_for_selector('#dlg-of-gruppen[open]')
+    g7 = '#of-gruppen-body .ofg-list li:has(input[value="7"])'
+    check('Gruppenauswahl: Gruppe eines anderen Angebots gesperrt', a.locator(g7 + ' input').is_disabled() and 'bei „Wochenangebot Bela“' in a.inner_text(g7), a.inner_text(g7))
+    a.click('#of-gruppen-body [data-close]')
+
+    # ---------- Preise importieren ----------
+    a.set_input_files('#of-file', PREISE); a.wait_for_selector('#dlg-of-preise[open]')
+    t = a.inner_text('#of-preise-body')
+    zeile = lambda z: a.inner_text(f'#of-preise-body tr[data-ofp-ziel="{z}"]').split('\t')   # noqa: E731
+    check('Preis-Vorschau: Wochenangebot 2 Preise, 1 geändert', zeile('std')[2:5] == ['2', '1', '0'], zeile('std'))
+    check('Preis-Vorschau: Gruppenpreise beim Angebot der Gruppe', zeile('edeka')[2:5] == ['1', '0', '1'] and zeile('bela')[2:5] == ['1', '0', '1'], (zeile('edeka'), zeile('bela')))
+    check('Preis-Vorschau: Gruppe ohne Angebot, neues Angebot vorgeschlagen', '1 Gastronomie (2)' in t and a.locator('#of-preise-body [data-ofp="anlegen"]').is_checked() and zeile('neu:1')[0] == 'Wochenangebot Gastronomie (neu)', t)
+    check('Preis-Vorschau: übersprungen (nicht im Angebot, ohne Preis)', '1 Artikelnummer steht nicht im Angebot' in t and '1 Zeilen ohne Preis' in t, t)
+    a.uncheck('#of-preise-body [data-ofp="anlegen"]'); a.wait_for_function("!document.querySelector('#of-preise-body tr[data-ofp-ziel=\"neu:1\"]')")
+    check('ohne Anlegen: Gruppe 1 entfällt', a.locator('#of-preise-body tr[data-ofp-ziel]').count() == 3)
+    a.check('#of-preise-body [data-ofp="anlegen"]'); a.wait_for_selector('#of-preise-body tr[data-ofp-ziel="neu:1"]')
+    a.screenshot(path=SH + '/angebote-preisimport.png')
+    a.click('#of-preise-body [data-ofp="ok"]'); a.wait_for_selector('#toast.show:has-text("Preise im Entwurf eingetragen")', timeout=15000)
+    neu = next((x for x in doc('angebote')['offers'] if x.get('gruppen') == ['1']), {})
+    check('neues Angebot für Kundengruppe 1 angelegt', neu.get('name') == 'Wochenangebot Gastronomie', neu)
+    def entwurf_ok():
+        d = A.call('draft')[1].get('draft') or {}
+        it = next((i for i in d.get('items', []) if i.get('code') == '10601'), {})
+        return it if it.get('price', {}).get('value') == 26.1 else None
+    import time
+    it = None
+    for _ in range(80):
+        it = entwurf_ok()
+        if it: break
+        time.sleep(0.25)
+    v = (it or {}).get('variants', {})
+    check('Entwurf: Wochenpreis und Gruppenpreise eingetragen', it and v.get('edeka', {}).get('value') == 22.0 and v.get('bela', {}).get('value') == 24.0 and v.get(neu.get('id'), {}).get('value') == 23.0, it)
+    check('veröffentlichtes Angebot noch unverändert', next(i for i in A.call('draft')[1]['published']['items'] if i.get('code') == '10601')['price']['value'] == 25.54)
 
     # ---------- Kunden importieren ----------
     a.click('#vt-kunden'); a.wait_for_selector('#k-list tr[data-kid]')

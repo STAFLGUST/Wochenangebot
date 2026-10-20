@@ -367,7 +367,7 @@
   const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung', einkauf: 'Einkaufsbedarf', einzelangebot: 'Einzelangebot' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
-  const offerChip = (id, perGruppe) => `<span class="k-chip${id === OSTD ? ' std' : ''}${perGruppe ? ' grp' : ''}"${perGruppe ? ' title="über die Kundengruppe freigeschaltet"' : ''}>${esc(offerShort(id))}</span>`;
+  const offerChip = (id, perGruppe) => `<span class="k-chip${id === OSTD ? ' std' : ''}${perGruppe ? ' grp' : ''}"${perGruppe ? ` title="${id === OSTD ? 'automatisch: Kundengruppe ohne eigenes Angebot' : 'über die Kundengruppe freigeschaltet'}"` : ''}>${esc(offerShort(id))}</span>`;
   const K_MAX = 500;   // Zeilen in der Kundenliste (Suche/Filter grenzt ein)
   function kVertreterOpts() {
     const n = new Map(); let ohne = 0;
@@ -495,8 +495,8 @@
           ${c && c.abgemeldet && c.mailAngebot === false ? `<p class="hint span2 st-warn k-abm-note">Der Kunde hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst über den Link in der E-Mail abgemeldet. Die E-Mail-Adresse bleibt gespeichert.</p>` : ''}
         </div></fieldset>
         <fieldset class="k-set"><legend>Freigeschaltete Angebote</legend>
-          <div class="k-offers-pick">${[OSTD, ...W.offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && W.stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}${perGruppe(o) ? ` <small class="k-viagr">${icon('users', 'sm')}über Kundengruppe</small>` : ''}</label>`).join('')}</div>
-          <p class="hint">Der Kunde sieht nach der Anmeldung diese Angebote und zusätzlich alle, die seiner Kundengruppe zugeordnet sind (Stammdaten → Angebote). Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
+          <div class="k-offers-pick">${[OSTD, ...W.offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && W.stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}${perGruppe(o) ? ` <small class="k-viagr">${icon('users', 'sm')}${o === OSTD ? 'automatisch' : 'über Kundengruppe'}</small>` : ''}</label>`).join('')}</div>
+          <p class="hint">Der Kunde sieht nach der Anmeldung diese Angebote und zusätzlich das Angebot seiner Kundengruppe (Stammdaten → Angebote); hat die Gruppe kein eigenes Angebot, automatisch das Wochenangebot. Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
         </fieldset>
         ${c ? `<fieldset class="k-set"><legend>E-Mail an den Kunden</legend>
           <div class="k-mailact">

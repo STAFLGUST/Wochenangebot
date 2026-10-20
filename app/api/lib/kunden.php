@@ -18,14 +18,15 @@ function customer_offers_direct(array $c): array
     $known = array_merge([OFFER_STD], offer_ids());
     return array_values(array_filter($c['angebote'] ?? [], function ($o) use ($known) { return in_array($o, $known, true); }));
 }
+/* Über die Kundengruppe: das Angebot, dem die Gruppe zugeordnet ist (Stammdaten → Angebote). Hat die Gruppe kein
+   Angebot, gilt automatisch das Wochenangebot. Kunden ohne Gruppe sehen nur ihre direkten Freischaltungen. */
 function customer_offers_gruppe(array $c): array
 {
     $g = (string)($c['gruppe'] ?? '');
     if ($g === '') return [];
-    $d = offers_load();
-    $out = in_array($g, $d['stdGruppen'] ?? [], true) ? [OFFER_STD] : [];
-    foreach ($d['offers'] as $o) if (in_array($g, $o['gruppen'] ?? [], true)) $out[] = $o['id'];
-    return $out;
+    $out = [];
+    foreach (offers_load()['offers'] as $o) if (in_array($g, $o['gruppen'] ?? [], true)) $out[] = $o['id'];
+    return $out ?: [OFFER_STD];
 }
 function customer_offers(array $c): array
 {
