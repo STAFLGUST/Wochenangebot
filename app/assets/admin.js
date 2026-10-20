@@ -2398,6 +2398,21 @@
       <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`;
     dlgSA.showModal();
   }
+  /* Partien eines Artikels mit Summe (Kolli, Kg netto) und – mit Recht „bestand.einkaufspreise“ – EK-Preis je Partie.
+     In der Summenzeile steht beim EK der nach kg gewichtete Durchschnitt der Partien mit Preis. */
+  const eur = (v) => fmtKg.format(Math.round(v * 100) / 100) + ' €';
+  function lotTableHTML(lots) {
+    const mitEk = may('bestand.einkaufspreise');
+    const kolli = lots.filter((l) => Number.isFinite(l.kolli));
+    const ekLots = lots.filter((l) => Number.isFinite(l.ek) && Number.isFinite(l.kg) && l.kg > 0);
+    const ekKg = ekLots.reduce((t, l) => t + Math.round(l.kg * 1000), 0);
+    const ekAvg = ekKg ? ekLots.reduce((t, l) => t + l.ek * Math.round(l.kg * 1000), 0) / ekKg : null;
+    const row = (l) => `<tr><td class="ch-code">${esc(l.lot || '—')}</td><td class="lot-ank">${l.arrival ? esc(dmy(l.arrival)) : '—'}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : '<span class="muted">ohne MHD</span>'}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
+    return `<div class="lot-scroll"><table class="etab lottab"><thead><tr><th>Partie</th><th class="lot-ank">Ankunft</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
+          ${lots.map(row).join('')}
+        </tbody>${lots.length ? `<tfoot><tr class="lot-sum"><td>Summe</td><td class="lot-ank"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
+        ${mitEk && lots.length && !ekLots.length ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}`;
+  }
   function openStockItem(idx) {
     const a = stockItems()[idx];
     if (!a) return;
@@ -2419,9 +2434,7 @@
         </div>
         <h3 class="d-h"><span>Erwartete Zugänge (Status „erfasst“)</span></h3>${incomingHTML(a)}
         <h3 class="d-h"><span>Eingelagerte Partien</span><span>${plural(a.lots.length, 'Partie', 'Partien')}</span></h3>
-        <table class="etab lottab"><thead><tr><th>Partie</th><th>Ankunft</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th></tr></thead><tbody>
-          ${a.lots.map((l) => `<tr><td class="ch-code">${esc(l.lot || '—')}</td><td>${l.arrival ? esc(dmy(l.arrival)) : '—'}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : '<span class="muted">ohne MHD</span>'}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td></tr>`).join('')}
-        </tbody></table>
+        ${lotTableHTML(a.lots)}
         <h3 class="d-h"><span>Im Angebot (Entwurf KW ${esc(model.meta.week || '?')})</span></h3>
         <p style="margin:0">${offerTxt}</p>
       </div>`;

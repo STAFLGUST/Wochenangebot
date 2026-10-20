@@ -224,7 +224,7 @@
     mhd: ['mhd', 'mindesthaltbarkeit'],
     kolli: ['kolli', 'karton', 'kartons'],
     kg: ['netto', 'nettokg', 'kgnetto', 'menge', 'kg'],
-    ek: ['ekpreis', 'ek'],
+    ek: ['ekpreis', 'ek', 'preis', 'einkaufspreis'],
   };
   const pad = (n) => String(n).padStart(2, '0');
   function toDate(v, allowSerial) {
@@ -254,6 +254,7 @@
     const n = Number(/,\d{1,3}$/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, ''));
     return Number.isFinite(n) ? n : null;
   }
+  const ekWert = (v) => { const n = toNum(v); return n != null && n >= 0 && n < 100000 ? Math.round(n * 1000) / 1000 : null; };
   const isCode = (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 0) || /^\d{1,12}$/.test(String(v ?? '').trim());
 
   function parseSheet(grid) {
@@ -360,6 +361,7 @@
         mhd,
         kolli: cols.kolli != null ? toNum(row[cols.kolli]) : null,
         kg: Math.round(kg * 1000) / 1000,
+        ek: ekWert(cols.ek != null ? row[cols.ek] : null),   // Einkaufspreis € je kg (nur intern)
       });
     }
     const articles = [];

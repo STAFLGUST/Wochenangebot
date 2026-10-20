@@ -108,7 +108,23 @@ with sync_playwright() as p:
     # Detail
     a.locator('.stab tr.srow:has(td.s-code:text-is("10022"))').click(); a.wait_for_selector('#dlg-stock-item[open]')
     check('detail: 7 lots for 10022', a.locator('#dlg-stock-item .lottab tbody tr').count() == 7, a.locator('#dlg-stock-item .lottab tbody tr').count())
+    # Summe der Partien und EK-Preis (Administrator hat das Recht „bestand.einkaufspreise“)
+    lots = a.evaluate("fetch('../api/?action=stock').then(r => r.json()).then(j => j.stock.articles.find(x => x.code === '10022').lots)")
+    check('EK-Preis je Partie aus der Bestandsliste übernommen', len(lots) == 7 and all(isinstance(l.get('ek'), (int, float)) and l['ek'] > 0 for l in lots), lots[:2])
+    foot = a.locator('#dlg-stock-item .lottab tfoot td').all_inner_texts()
+    kg_sum = fmt(dsum(l['kg'] for l in lots)) + ' kg'
+    gew = sum(Decimal(str(l['ek'])) * Decimal(str(l['kg'])) for l in lots) / dsum(l['kg'] for l in lots)
+    check('Summenzeile: Kolli, Kg netto, Ø EK gewichtet', len(foot) == 6 and foot[0] == 'Summe' and foot[3] == str(int(sum(l['kolli'] for l in lots))) and foot[4] == kg_sum
+          and foot[5] == 'Ø ' + fmt(gew) + ' €', (foot, kg_sum, fmt(gew)))
+    ek1 = a.locator('#dlg-stock-item .lottab tbody tr').first.locator('td.lot-ek').inner_text()
+    check('EK-Preis in der Partiezeile', ek1 == fmt(lots[0]['ek']) + ' €' and a.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 1, ek1)
     a.screenshot(path=SH + '/stock-detail.png')
+    a.set_viewport_size({'width': 390, 'height': 844})
+    a.wait_for_function("getComputedStyle(document.querySelector('#dlg-stock-item .lottab th.lot-ank')).display === 'none'")
+    a.screenshot(path=SH + '/stock-detail-mobil.png')
+    passt = a.evaluate("(() => { const w = document.querySelector('#dlg-stock-item .lot-scroll'); const d = document.querySelector('#dlg-stock-item'); return [w.scrollWidth <= w.clientWidth + 1, d.scrollWidth <= d.clientWidth + 1]; })()")
+    check('Handy: Partien mit EK passen in den Dialog (Ankunft ausgeblendet)', a.evaluate('document.documentElement.scrollWidth') <= 390 and all(passt), passt)
+    a.set_viewport_size({'width': 1440, 'height': 950})
     a.keyboard.press('Escape')
     # Artikel-Dialog im Angebot
     a.click('#vt-edit'); a.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) [data-act="item"]').first.click()
@@ -136,6 +152,11 @@ with sync_playwright() as p:
     v = br.new_context(viewport={'width': 1440, 'height': 950}).new_page(); v.on('pageerror', lambda e: errs.append('v: ' + str(e)))
     login(v, 'lea', 'Leserin-Zugang-2'); v.click('#vt-stock'); v.wait_for_selector('.stab')
     check('viewer sees stock, no import', v.locator('.stab tr.srow').count() >= 283 and v.locator('[data-st=import]').count() == 0)
+    vst = v.evaluate("fetch('../api/?action=stock').then(r => r.text())")
+    check('Leser: keine Einkaufspreise in der Antwort', '"ek"' not in vst and '"lots"' in vst)
+    v.locator('.stab tr.srow:has(td.s-code:text-is("10022"))').click(); v.wait_for_selector('#dlg-stock-item[open]')
+    check('Leser: Partien mit Summe, ohne EK-Spalte', v.locator('#dlg-stock-item .lottab tfoot td').count() == 5 and v.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 0)
+    v.keyboard.press('Escape')
     rr = v.evaluate("""async () => { const s = await (await fetch('../api/?action=status')).json();
       const r = await fetch('../api/?action=stock_import', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({date:'2026-10-16', articles:[{code:'1',name:'x',kg:1,lots:[]}]})}); return r.status; }""")
     check('viewer cannot import stock (403)', rr == 403, rr)

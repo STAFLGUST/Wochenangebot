@@ -72,3 +72,10 @@ durch diesen PR. Merge/Release nur über den bestehenden Freigabeprozess.
 Wochenpreise, fehlende Historie, getrennte Mengen und Gesamtsummen, mehrere Lieferungen, unbekannte ETA, reine Zugänge, Validierung,
 Rechte, keine öffentliche Auslieferung, CSV, Druck und Desktop/Mobil in hell/dunkel.
 Unit-Tests prüfen außerdem J/M-Zuordnung, Kalendergrenzen, Historienlücken und mehrdeutige Preise.
+
+## EK-Preis je Partie
+
+Die Bestandsliste liefert je eingelagerter Partie den Einkaufspreis (Spalte „EKPreis“ bzw. „Preis“, € je kg). Er wird je
+Partie als `ek` gespeichert (Erweiterung, ältere Stände haben ihn nicht). `?action=stock` liefert `ek` nur mit dem Recht
+`bestand.einkaufspreise` (Standard: Bearbeiter; Administratoren immer) – sonst entfernt `stock_ohne_ek()` den Wert vor der
+Antwort. Auf der öffentlichen Seite erscheint er nie.

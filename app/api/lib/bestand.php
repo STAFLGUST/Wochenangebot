@@ -86,8 +86,10 @@ function clean_stock($b, bool $allowEmpty = false): array
         foreach (array_slice(is_array($a['lots'] ?? null) ? $a['lots'] : [], 0, 500) as $l) {
             if (!is_array($l)) continue;
             $kolli = $l['kolli'] ?? null;
+            $ek = $l['ek'] ?? null;   // Einkaufspreis € je kg – nur für Berechtigte ausgeliefert (stock_ohne_ek)
             $lots[] = ['lot' => s($l['lot'] ?? '', 20) ?? '', 'arrival' => clean_date($l['arrival'] ?? null), 'mhd' => clean_date($l['mhd'] ?? null),
-                       'kolli' => (is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000 ? round((float)$kolli, 2) : null, 'kg' => clean_kg($l['kg'] ?? null, $code)];
+                       'kolli' => (is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000 ? round((float)$kolli, 2) : null, 'kg' => clean_kg($l['kg'] ?? null, $code),
+                       'ek' => (is_int($ek) || is_float($ek)) && $ek >= 0 && $ek < 100000 ? round((float)$ek, 3) : null];
         }
         $kg = clean_kg($a['kg'] ?? null, $code);
         if ($kg <= 0) continue;
@@ -97,6 +99,14 @@ function clean_stock($b, bool $allowEmpty = false): array
     }
     if (!$out && !$allowEmpty) throw new InvalidArgumentException('Die Bestandsliste enthält keine Artikel mit eingelagertem Bestand.');
     return $out;
+}
+
+/* Einkaufspreise aus einem Bestand entfernen (für Nutzer ohne Recht „bestand.einkaufspreise“) */
+function stock_ohne_ek(?array $st): ?array
+{
+    if (!$st) return $st;
+    foreach ($st['articles'] ?? [] as $i => $a) foreach ($a['lots'] ?? [] as $j => $l) unset($st['articles'][$i]['lots'][$j]['ek']);
+    return $st;
 }
 
 /* ---------------- Stammdaten ---------------- */

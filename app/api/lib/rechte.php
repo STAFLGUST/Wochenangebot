@@ -16,6 +16,7 @@ const PERMS = [
     'preisverlauf.sehen'       => ['g' => 'Preisverlauf', 'l' => 'Preisverlauf ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],
     'preisverlauf.bearbeiten'  => ['g' => 'Preisverlauf', 'l' => 'Alte Angebotslisten hochladen und löschen', 'k' => 'machen', 'd' => ['editor'], 'r' => ['preisverlauf.sehen']],
     'bestand.sehen'            => ['g' => 'Bestand', 'l' => 'Bestand mit Mengen und MHD ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],
+    'bestand.einkaufspreise'   => ['g' => 'Bestand', 'l' => 'Einkaufspreise (EK) der Partien im Bestand ansehen', 'k' => 'sehen', 'd' => ['editor'], 'r' => ['bestand.sehen']],
     'bestand.importieren'      => ['g' => 'Bestand', 'l' => 'Bestandsliste hochladen', 'k' => 'machen', 'd' => ['editor'], 'r' => ['bestand.sehen']],
     'stammdaten.sehen'         => ['g' => 'Stammdaten', 'l' => 'Stammdaten ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],
     'stammdaten.bearbeiten'    => ['g' => 'Stammdaten', 'l' => 'Stammdaten bearbeiten', 'k' => 'machen', 'd' => ['editor'], 'r' => ['stammdaten.sehen']],
