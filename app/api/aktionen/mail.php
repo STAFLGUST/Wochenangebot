@@ -21,7 +21,7 @@ switch ($action) {
 
         /* Benachrichtigungen an Mitarbeiter: je Ereignis an/aus und Empfänger (Administrator, mit Passwortbestätigung) */
         case 'benachrichtigung_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('benachrichtigung_save');
             $in = body()['events'] ?? null;
             if (!is_array($in)) fail('Ungültige Anfrage.', 422);
             $old = notify_settings()['events'];
@@ -71,7 +71,7 @@ switch ($action) {
         }
 
         case 'mail_konto_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('mail_konto_save');
             $b = body();
             $old = mail_account();
             if (!empty($b['remove'])) {
@@ -116,7 +116,7 @@ switch ($action) {
         }
 
         case 'mail_save': {
-            require_admin_confirmation();
+            require_admin_confirmation('mail_save');
             $sig = (string)(body()['signature'] ?? '');
             $sig = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', $sig) ?? '')), 0, 600);
             $old = mail_settings()['signature'];
@@ -126,7 +126,7 @@ switch ($action) {
         }
 
         case 'mail_test': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('mail_test');
             $cfg = require_mail();
             $to = trim((string)(body()['to'] ?? ''));
             if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) fail('Bitte eine gültige E-Mail-Adresse angeben.', 422);
@@ -165,7 +165,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunde_mail': {
-            require_perm_confirmed('kunden.bearbeiten');
+            require_perm_confirmed('kunden.bearbeiten', 'kunde_mail');
             $cfg = require_mail();
             $b = body();
             $c = null;
@@ -201,7 +201,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunden_rundmail': {
-            require_perm_confirmed('wochenangebot.senden');
+            require_perm_confirmed('wochenangebot.senden', 'kunden_rundmail');
             $cfg = require_mail();
             $b = body();
             $wk = mail_week();
@@ -250,7 +250,7 @@ Ausgelöst von: {$me['name']}
         }
 
         case 'kunden_restposten': {
-            require_perm_confirmed('sonderposten.senden');
+            require_perm_confirmed('sonderposten.senden', 'kunden_restposten');
             $cfg = require_mail();
             $b = body();
             $def = offer_def((string)($b['offer'] ?? ''));

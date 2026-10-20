@@ -83,13 +83,15 @@ function require_perm(string $perm, bool $write = false): array
     if (!may($u, $perm)) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
     return $u;
 }
-/* Wie require_admin_confirmation, aber für ein Recht statt der Administratorrolle */
-function require_perm_confirmed(string $perm): array
+/* Wie require_admin_confirmation, aber für ein Recht statt der Administratorrolle.
+   $key: Aktion im Katalog BESTAETIGUNG – ist die Bestätigung dort abgeschaltet, genügen Anmeldung und Recht. */
+function require_perm_confirmed(string $perm, string $key = ''): array
 {
+    if ($key !== '' && !bestaetigung_noetig($key)) return require_perm($perm, true);
     $u = require_perm($perm, true);
     confirmation_locked($u);
     $at = (int)($_SESSION['adminConfirmedAt'] ?? 0);
-    if ($at <= time() && $at > time() - ADMIN_CONFIRM_SECONDS && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
+    if ($at <= time() && $at > time() - bestaetigung_sekunden() && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
     respond(['ok' => false, 'code' => 'confirmation_required', 'error' => 'Bitte bestätigen Sie diese Aktion mit Ihrem aktuellen Passwort.'], 403);
 }
 function rights_catalog(): array

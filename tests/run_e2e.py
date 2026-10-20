@@ -35,6 +35,7 @@ SUITES = {
     'editor_aux': (8790, 'data-seed', True),
     'admin_confirmation': (8790, 'data-seed', True),
     'admin_confirmation_ui': (8790, 'data-seed', True),
+    'bestaetigung': (8790, 'data-seed', True),
     'auth_hardening': (8790, 'data-seed', True),
     'security':   (8790, 'data-seed', True),
     'geo':        (8790, 'data-seed', True),

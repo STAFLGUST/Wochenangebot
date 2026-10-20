@@ -34,7 +34,7 @@ switch ($action) {
             $g7 = (($gs['day'] ?? '') === gmdate('Y-m-d') ? (int)($gs['today'] ?? 0) : 0);
             foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
             $secLog = sec_log_entries(14);
-            respond(['ok' => true, 'settings' => sec(), 'myIp' => client_ip(), 'https' => is_https(),
+            respond(['ok' => true, 'settings' => sec(), 'bestaetigung' => bestaetigung_katalog(), 'bestaetigungMinuten' => BESTAETIGUNG_MINUTEN, 'myIp' => client_ip(), 'https' => is_https(),
                      'timeline' => sec_timeline($secLog), 'topIps' => sec_top_ips($secLog), 'config' => sec_config_checks($users),
                      'backup' => store_read('sicherung'),
                      'wartung' => wartung(), 'storage' => store_stats(), 'php' => PHP_VERSION,
@@ -69,7 +69,7 @@ switch ($action) {
         }
         /* Sicherheitsprotokoll exportieren (enthält IP-Adressen und Namen → Passwortbestätigung) */
         case 'security_export': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('security_export');
             $days = (int)(body()['days'] ?? 90);
             if (!in_array($days, [7, 30, 90, 365], true)) fail('Ungültiger Zeitraum.', 422);
             $r = sec_export_csv($days);
@@ -77,7 +77,7 @@ switch ($action) {
             respond(['ok' => true, 'csv' => $r['csv'], 'count' => $r['count'], 'filename' => 'Sicherheitsprotokoll_' . gmdate('Y-m-d') . '_' . $days . 'T.csv']);
         }
         case 'security_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('security_save');
             $b = body();
             $old = sec();
             $twofa = in_array($b['twofa'] ?? '', ['off', 'admins', 'all'], true) ? $b['twofa'] : 'off';
@@ -110,15 +110,35 @@ switch ($action) {
                     'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
                     'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15))),
                     'geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'geoScope' => $geoScope];
+            // Passwortbestätigung: nur abschaltbare Aktionen; ohne Angabe (ältere Oberfläche) bleibt der bisherige Stand
+            if (array_key_exists('bestaetigungAus', $b)) {
+                $aus = [];
+                foreach ((array)$b['bestaetigungAus'] as $k) {
+                    $k = (string)$k;
+                    if (!isset(BESTAETIGUNG[$k])) throw new InvalidArgumentException('Unbekannte Aktion bei der Passwortbestätigung.');
+                    if (BESTAETIGUNG[$k][2]) throw new InvalidArgumentException('„' . BESTAETIGUNG[$k][1] . '“ verlangt immer eine Passwortbestätigung.');
+                    if (!in_array($k, $aus, true)) $aus[] = $k;
+                }
+                $new['bestaetigungAus'] = array_values(array_filter(array_keys(BESTAETIGUNG), fn($k) => in_array($k, $aus, true)));
+            } else $new['bestaetigungAus'] = array_values((array)($old['bestaetigungAus'] ?? []));
+            $min = (int)($b['bestaetigungMinuten'] ?? ($old['bestaetigungMinuten'] ?? 5));
+            if (!in_array($min, BESTAETIGUNG_MINUTEN, true)) throw new InvalidArgumentException('Ungültige Gültigkeitsdauer der Passwortbestätigung.');
+            $new['bestaetigungMinuten'] = $min;
             store_write('sicherheit', $new);
             $GLOBALS['SEC'] = $new;
             $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
                   'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)',
-                  'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art', 'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für'];
+                  'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art', 'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für',
+                  'bestaetigungMinuten' => 'Passwortbestätigung gilt (Min.)'];
             $GV = ['block' => 'ausgewählte Länder sperren', 'allow' => 'nur ausgewählte Länder erlauben', 'admin' => 'nur Eingabebereich', 'all' => 'ganze Seite'];
             $fmt = function ($v) use ($GV) { return is_bool($v) ? ($v ? 'an' : 'aus') : (is_array($v) ? implode(', ', $v) : (string)($GV[$v] ?? $v)); };
             $d = [];
             foreach ($L as $k => $label) if ($fmt($old[$k] ?? null) !== $fmt($new[$k])) $d[] = ['k' => "sec|$k", 'code' => '', 'name' => 'Sicherheit', 'f' => $label, 'from' => $fmt($old[$k] ?? ''), 'to' => $fmt($new[$k])];
+            $oldAus = (array)($old['bestaetigungAus'] ?? []);
+            foreach (BESTAETIGUNG as $k => [, $label, $fest]) {
+                $a = !in_array($k, $oldAus, true); $n = !in_array($k, $new['bestaetigungAus'], true);
+                if (!$fest && $a !== $n) $d[] = ['k' => "sec|bst|$k", 'code' => '', 'name' => 'Sicherheit', 'f' => 'Passwortbestätigung: ' . $label, 'from' => $a ? 'verlangt' : 'nicht verlangt', 'to' => $n ? 'verlangt' : 'nicht verlangt'];
+            }
             if ($d) audit('security', 'Sicherheitseinstellungen geändert', $d);
             respond(['ok' => true, 'settings' => $new]);
         }
@@ -132,13 +152,13 @@ switch ($action) {
         }
 
         case 'geo_clear_stats': {
-            require_admin_confirmation();
+            require_admin_confirmation('geo_clear_stats');
             with_lock('laendersperre', function () { store_write('laendersperre', []); });
             respond(['ok' => true]);
         }
 
         case 'session_end': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('session_end');
             $b = body();
             $sid = (string)($b['sid'] ?? '');
             $uid = (string)($b['uid'] ?? '');
@@ -153,7 +173,7 @@ switch ($action) {
         }
 
         case 'ip_unblock': {
-            require_admin_confirmation();
+            require_admin_confirmation('ip_unblock');
             $key = (string)(body()['key'] ?? '');
             $ip = with_lock('logins', function () use ($key) {
                 $a = store_read('logins') ?? [];
@@ -167,7 +187,7 @@ switch ($action) {
         }
 
         case 'geo_update': {
-            require_admin_confirmation();
+            require_admin_confirmation('geo_update');
             @set_time_limit(180);
             try { $r = geo_download($DATA . '/geo/laender.dat.php'); }
             catch (Throwable $e) { error_log('[wochenangebot] geo: ' . $e->getMessage()); fail('Die Länderdaten konnten nicht aktualisiert werden. Bitte später erneut versuchen.', 502); }
@@ -176,7 +196,7 @@ switch ($action) {
         }
 
         case 'user_unlock': {
-            require_admin_confirmation();
+            require_admin_confirmation('user_unlock');
             $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; });
             if (!$u) fail('Nutzer nicht gefunden.', 404);
             audit('security', "Zugang „{$u['username']}“ entsperrt");
@@ -200,7 +220,7 @@ switch ($action) {
                          'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])), 'perms' => user_perms($u, $roles)]; }, users_load())]);
         }
         case 'rechte_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('rechte_save');
             $in = body()['roles'] ?? null;
             if (!is_array($in)) fail('Ungültige Anfrage.', 422);
             $old = rights_roles();
@@ -217,7 +237,7 @@ switch ($action) {
         }
 
         case 'user_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('user_save');
             $b = body();
             $res = with_lock('nutzer', function () use ($b, $me) {
                 $users = users_load();
@@ -301,7 +321,7 @@ switch ($action) {
         }
 
         case 'user_delete': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('user_delete');
             $id = (string)(body()['id'] ?? '');
             $gone = with_lock('nutzer', function () use ($id, $me) {
                 $users = users_load();

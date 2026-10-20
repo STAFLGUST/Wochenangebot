@@ -23,7 +23,7 @@ switch ($action) {
         }
 
         case 'ort_update': {
-            require_admin_confirmation();
+            require_admin_confirmation('ort_update');
             @set_time_limit(900);
             @ini_set('memory_limit', '256M');
             ignore_user_abort(true);

@@ -23,7 +23,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/nutzer.php` | Mitarbeiter-Zugänge, Passwortregeln |
 | `lib/rechte.php` | Nutzerrechte: Katalog `PERMS`, Rechte je Rolle (Dokument `rechte`), Ausnahmen je Nutzer (`grant`/`deny`), `user_perms`, `require_perm`, `require_perm_confirmed` |
 | `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth`), Passwortbestätigung, CSRF; App-Betriebsart (`X-WA-Client: app`, Kennung in `X-WA-Sitzung`) |
-| `lib/sicherheit.php` | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus |
+| `lib/sicherheit.php` | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus; Katalog der Passwortbestätigungen `BESTAETIGUNG` (je Aktion abschaltbar oder fest, `bestaetigung_noetig`, Gültigkeit `bestaetigung_sekunden`). Jede Bestätigungsstelle ruft `require_admin_confirmation('<aktion>')` bzw. `require_perm_confirmed('<recht>', '<aktion>')` mit ihrem Katalogschlüssel auf (der Test `bestaetigung` prüft das) |
 | `lib/protokoll.php` | Protokoll (`audit`), Änderungstexte, Anmeldeversuche |
 | `lib/angebote.php` | Angebote, Kundenpreise (`variants`), Sonderpreise (`sale`), `offer_resolve`, Datenmodell `clean_model`, Entwurfsrevisionen |
 | `lib/kunden.php` | Kundenstammdaten, Kunden-Sitzung; freigeschaltete Angebote `customer_offers` = direkt (`customer_offers_direct`) + über die Kundengruppe (`customer_offers_gruppe`, Angebote mit `gruppen`, Wochenangebot `stdGruppen` im Dokument `angebote`) |

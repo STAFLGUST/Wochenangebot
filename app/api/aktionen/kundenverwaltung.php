@@ -17,7 +17,7 @@ switch ($action) {
         }
 
         case 'kunde_save': {
-            $me = require_perm_confirmed('kunden.bearbeiten');
+            $me = require_perm_confirmed('kunden.bearbeiten', 'kunde_save');
             $b = body();
             $res = with_lock('kunden', function () use ($b) {
                 $d = customers_load();
@@ -106,7 +106,7 @@ switch ($action) {
         }
 
         case 'kunde_delete': {
-            require_perm_confirmed('kunden.bearbeiten');
+            require_perm_confirmed('kunden.bearbeiten', 'kunde_delete');
             $b = body();
             $id = (string)($b['id'] ?? '');
             $res = with_lock('kunden', function () use ($id, $b) {
@@ -137,7 +137,7 @@ switch ($action) {
                „pruefen“ liefert nur die Vorschau; Übernehmen braucht die Passwortbestätigung. */
             $b = body();
             $pruefen = !empty($b['pruefen']);
-            $me = $pruefen ? require_perm('kunden.bearbeiten', true) : require_perm_confirmed('kunden.bearbeiten');
+            $me = $pruefen ? require_perm('kunden.bearbeiten', true) : require_perm_confirmed('kunden.bearbeiten', 'kunden_import');
             $rows = is_array($b['rows'] ?? null) ? $b['rows'] : [];
             if (!$rows) fail('Keine Kunden in der Datei gefunden.', 422);
             if (count($rows) > 10000) fail('Zu viele Zeilen (höchstens 10.000).', 422);

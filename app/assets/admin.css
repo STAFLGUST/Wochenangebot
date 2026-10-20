@@ -1205,3 +1205,14 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 @media (max-width: 700px) { .oftab { min-width: 0; } .oftab .of-fb { display: none; } }
 @media (max-width: 560px) { .k-gfilter, .k-gfilter select { width: 100%; max-width: none; } }
 @media (max-width: 560px) { .ktab .k-chip { white-space: normal; } .ktab td { overflow-wrap: anywhere; } .ktab .u-act .btn { padding: 0 8px; } }
+
+/* Sicherheit → Passwortbestätigung je Aktion */
+.bst-dauer { max-width: 220px; margin-bottom: 12px; }
+.bst-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 20px; }
+.bst-g { border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px 10px; margin: 0; min-width: 0; }
+.bst-g legend { padding: 0 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.bst-g.fest { background: var(--surface-2); }
+.bst-z { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 13.5px; line-height: 1.35; }
+.bst-z input { margin-top: 2px; flex: none; }
+.bst-z.fest { color: var(--text-2); }
+.bst-z.fest .i { width: 14px; height: 14px; flex: none; margin-top: 2px; color: var(--muted); }

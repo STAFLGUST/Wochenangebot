@@ -117,7 +117,7 @@ function user_update(string $id, callable $fn): ?array
     });
 }
 /* Kurze, sitzungsgebundene Freigabe sensibler Verwaltungsaktionen. */
-const ADMIN_CONFIRM_SECONDS = 300;
+// Gültigkeit einer Passwortbestätigung: bestaetigung_sekunden() (Sicherheit → Passwortbestätigung, Standard 5 Minuten)
 const CONFIRM_MAX_FAILURES = 5;
 const CONFIRM_LOCK_SECONDS = 600;
 function mark_admin_confirmed(array $u): void
@@ -133,12 +133,14 @@ function confirmation_locked(array $u): void
         respond(['ok' => false, 'code' => 'confirmation_locked', 'error' => 'Zu viele falsche Passwortbestätigungen. Bitte in ' . (int)ceil($remaining / 60) . ' Minuten erneut versuchen.'], 429);
     }
 }
-function require_admin_confirmation(): array
+/* $key: Aktion im Katalog BESTAETIGUNG (lib/sicherheit.php) – ist die Bestätigung abgeschaltet, genügt die Administrator-Anmeldung */
+function require_admin_confirmation(string $key = ''): array
 {
+    if ($key !== '' && !bestaetigung_noetig($key)) return require_auth(true, 'admin');
     $u = require_auth(true, 'admin');
     confirmation_locked($u);
     $at = (int)($_SESSION['adminConfirmedAt'] ?? 0);
-    if ($at <= time() && $at > time() - ADMIN_CONFIRM_SECONDS && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
+    if ($at <= time() && $at > time() - bestaetigung_sekunden() && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
     respond(['ok' => false, 'code' => 'confirmation_required', 'error' => 'Bitte bestätigen Sie diese Verwaltungsaktion mit Ihrem aktuellen Passwort.'], 403);
 }
 /* Gemeinsame, kontoweite Bremse für Passwortbestätigungen; nie durch neue Sitzungen zurücksetzen. */
