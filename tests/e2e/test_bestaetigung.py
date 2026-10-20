@@ -11,7 +11,7 @@ import time
 from playwright.sync_api import sync_playwright
 
 from auth_helpers import Client, PW
-from umgebung import BASE, REPO, SH, storage_raw
+from umgebung import BASE, REPO, SH, storage_raw, until
 
 res = []
 
@@ -130,6 +130,7 @@ with sync_playwright() as p:
     pg.locator(f).scroll_into_view_if_needed()
     pg.uncheck(f + ' input[value="einzel_senden"]'); pg.check(f + ' input[value="kunde_save"]')
     pg.select_option(f + ' select[name="bestaetigungMinuten"]', '30')
+    pg.evaluate("document.querySelector('#bst-form').dataset.alt = '1'")   # nach dem Speichern wird die Karte neu aufgebaut
     pg.click(f + ' button[type="submit"]')
     pg.wait_for_selector('#dlg-confirm[open]')
     check('Abschalten fragt nach und nennt die Aktion', 'Einzelangebot per E-Mail senden' in pg.inner_text('#dlg-confirm'))
@@ -137,6 +138,9 @@ with sync_playwright() as p:
     pg.wait_for_function("() => document.querySelector('#dlg-pw[open], #dlg-reauth[open], dialog[open] input[type=password]') || (document.querySelector('#bst-form input[value=\"einzel_senden\"]') && !document.querySelector('#bst-form input[value=\"einzel_senden\"]').checked && document.querySelector('#bst-form select').value === '30' && !document.querySelector('#dlg-confirm[open]'))")
     if pg.locator('dialog[open] input[type=password]').count():   # Passwortbestätigung abgelaufen → Dialog
         pg.fill('dialog[open] input[type=password]', PW); pg.keyboard.press('Enter')
+    pg.wait_for_selector('text=Passwortbestätigung gespeichert.')   # Server hat gespeichert, die Ansicht wird neu geladen
+    until(lambda: sec_doc().get('bestaetigungMinuten') == 30)
+    pg.wait_for_selector('#bst-form:not([data-alt])')
     pg.wait_for_function("() => { const s = document.querySelector('#bst-form select'); return s && s.value === '30' && document.querySelector('#bst-form input[value=\"kunde_save\"]').checked; }")
     d = sec_doc()
     check('gespeichert: Einzelangebot-Mail ohne, Kunde mit Bestätigung, 30 Min.', d.get('bestaetigungAus') == ['einzel_senden', 'mail_save', 'geo_clear_stats'] and d.get('bestaetigungMinuten') == 30, d.get('bestaetigungAus'))
