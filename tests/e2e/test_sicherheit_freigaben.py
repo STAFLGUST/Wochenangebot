@@ -53,7 +53,9 @@ FAELLE = [[None, '172.18.0.3', '203.0.113.7'],            # ohne Angabe: private
           ['10.0.0.5', '10.0.0.5', '203.0.113.8'],        # eigener Proxy (IP)
           ['10.1.0.0/24', '10.1.0.9', '203.0.113.9'],     # eigener Proxy (Netz)
           ['localhost', '127.0.0.1', '203.0.113.10'],     # eigener Proxy (Name)
-          ['gibt-es-nicht.invalid', '127.0.0.2', '203.0.113.11']]
+          ['gibt-es-nicht.invalid', '127.0.0.2', '203.0.113.11'],  # Name nicht auflösbar (DNS-Störung): wie ohne Angabe
+          ['localhost', '172.18.0.3', '203.0.113.12'],              # Name auflösbar, andere Gegenstelle: nicht vertraut
+          ['2001:db8::1', '2001:db8:0:0:0:0:0:1', '203.0.113.14']]  # IPv6 in anderer Schreibweise: gleiche Adresse
 env = {k: v for k, v in os.environ.items() if k != 'WA_TRUSTED_PROXIES'}
 outs = [subprocess.run(['php', '-r', PHP, REPO, json.dumps(f)], capture_output=True, text=True, env=env).stdout.strip() or 'Fehler' for f in FAELLE]
 check('ohne WA_TRUSTED_PROXIES: wie bisher (private Gegenstelle)', outs[0] == '203.0.113.7', outs[0])
@@ -61,7 +63,9 @@ check('fremder Container darf keine Besucher-IP vorgeben', outs[1] == '172.18.0.
 check('eigener Proxy per IP', outs[2] == '203.0.113.8', outs[2])
 check('eigener Proxy per Netz', outs[3] == '203.0.113.9', outs[3])
 check('eigener Proxy per Name (Docker-Dienst)', outs[4] == '203.0.113.10', outs[4])
-check('unbekannter Name: nichts vertraut', outs[5] == '127.0.0.2', outs[5])
+check('Name nicht auflösbar: wie ohne Angabe – Besucher fallen nicht auf die Proxy-Adresse zusammen', outs[5] == '203.0.113.11', outs[5])
+check('Name auflösbar, andere Gegenstelle: X-Forwarded-For ignoriert', outs[6] == '172.18.0.3', outs[6])
+check('IPv6-Proxy in anderer Schreibweise wird erkannt', outs[7] == '203.0.113.14', outs[7])
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
 test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()
 check('Echtbetrieb vertraut nur Caddy, Testumgebung nicht im Produktivnetz', 'WA_TRUSTED_PROXIES: caddy' in compose and 'PROD_NETWORK' not in test_compose
@@ -128,6 +132,52 @@ st, r = Client('198.18.6.3').call('login', {'username': 'eddi', 'password': 'Edi
 check('Zugang ohne zweiten Faktor bleibt bei Sperre gesperrt', st == 429, (st, r))
 storage_write('logins', {})
 
+
+def zweifaktor(name, ip):
+    A.call('user_save', {'username': name, 'name': name.title() + ' Test', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
+    c = Client(ip); assert c.call('login', {'username': name, 'password': 'Bearbeiter-Zugang-1'})[0] == 200
+    sek = c.call('twofa_begin', {})[1]['secret']
+    stp = int(time.time() // 30)
+    assert c.call('twofa_enable', {'code': totp(sek, stp)})[0] == 200
+    return sek, stp
+
+
+# Höchstens 3 Code-Versuche je Sperre – auch mit mehreren parallel geöffneten Anmeldevorgängen
+ysek, ystep = zweifaktor('yara', '198.51.100.42')
+versuche('yara', 3, 7)
+offen = []
+for i in range(4):
+    c = Client(f'198.18.8.{i + 1}')
+    st, r = c.call('login', {'username': 'yara', 'password': 'Bearbeiter-Zugang-1'})
+    offen.append((c, st, r.get('need2fa')))
+check('gesperrt: mehrere Anmeldevorgänge gleichzeitig geöffnet (je Code-Schritt)', all(st == 200 and n for _, st, n in offen), [(st, n) for _, st, n in offen])
+codes = [c.call('login_2fa', {'code': '000000'})[0] for c, _, _ in offen[:3]]
+st4, r4 = offen[3][0].call('login_2fa', {'code': totp(ysek, ystep + 1)})
+yu = next(x for x in (doc('nutzer')['users'] if isinstance(doc('nutzer'), dict) else doc('nutzer')) if x.get('username') == 'yara')
+check('nach 3 falschen Codes (verteilt auf Vorgänge) hilft auch der richtige Code nicht mehr', codes[:2] == [401, 401] and codes[2] in (401, 429) and st4 == 429 and yu.get('lockTries') == 3, (codes, st4, r4, yu.get('lockTries')))
+check('… und der Passwort-Schritt bleibt gesperrt', Client('198.18.8.9').call('login', {'username': 'yara', 'password': 'Bearbeiter-Zugang-1'})[0] == 429)
+storage_write('logins', {})
+
+# Falsche Passwörter während der Sperre zählen: danach hilft auch das richtige Passwort nicht mehr
+xsek, xstep = zweifaktor('xena', '198.51.100.43')
+versuche('xena', 3, 9)
+st, r = Client('198.18.10.1').call('login', {'username': 'xena', 'password': 'Bearbeiter-Zugang-1'})
+check('gesperrt + richtiges Passwort: zunächst Code-Schritt', st == 200 and r.get('need2fa'), (st, r))
+versuche('xena', 3, 11)
+st, r = Client('198.18.12.1').call('login', {'username': 'xena', 'password': 'Bearbeiter-Zugang-1'})
+check('nach weiteren falschen Passwörtern während der Sperre: auch das richtige Passwort gesperrt (kein Raten trotz Sperre)', st == 429, (st, r))
+storage_write('logins', {})
+
+# Fehlversuche verfallen nach 24 Stunden – bei echten und unbekannten Namen gleich
+nu = doc('nutzer')
+lst = nu['users'] if isinstance(nu, dict) and 'users' in nu else nu
+for x in lst:
+    if x.get('username') == 'eddi': x.update({'failCount': 2, 'failAt': int(time.time()) - 90000, 'lockedUntil': 0})
+storage_write('nutzer', nu)
+st, r = Client('198.18.13.1').call('login', {'username': 'eddi', 'password': 'Falsches-Passwort-1'})
+check('alte Fehlversuche (älter als 24 h) zählen nicht mehr: nur 1 Fehlversuch, keine Sperre', st == 401 and next(x for x in (doc('nutzer')['users'] if isinstance(doc('nutzer'), dict) else doc('nutzer')) if x.get('username') == 'eddi')['failCount'] == 1, (st, r))
+storage_write('logins', {})
+
 # ---------- Kundenangebote nur aus freigegebenen Netzen ----------
 storage_write('sicherheit', {**sec, 'ipEnabled': True, 'adminIps': ['198.51.100.0/24']})
 F = Client('203.0.113.77')
@@ -168,6 +218,7 @@ check('mit Kundenrecht (Administrator) vollständig', 'Kantine Freigabe' in al)
 ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()
 check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=31536000" env=HTTPS' in ht
       and 'Permissions-Policy' in ht)
+check('.htaccess: X-Powered-By (PHP-Version) wird entfernt', 'Header unset X-Powered-By' in ht)
 
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

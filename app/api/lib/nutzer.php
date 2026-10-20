@@ -53,6 +53,10 @@ function setup_allowed(): bool
 function login_failure(array &$u): bool
 {
     $S = sec();
+    // Fehlversuche verfallen nach 24 Stunden ohne weiteren Fehlversuch – wie bei unbekannten Namen (ghost_lock), damit beide
+    // gleich reagieren und vereinzelte Vertipper nicht monatelang mitzählen
+    if ((int)($u['failAt'] ?? 0) < time() - 86400) $u['failCount'] = 0;
+    $u['failAt'] = time();
     $u['failCount'] = (int)($u['failCount'] ?? 0) + 1;
     if ($u['failCount'] < max(3, (int)$S['lockAfter'])) return false;
     $u['lockedUntil'] = time() + 60 * max(1, (int)$S['lockMinutes']);
@@ -69,6 +73,7 @@ function ghost_lock(string $scope, string $name, bool $fail): int
         $now = time();
         $a = store_read('anmeldenamen') ?? [];
         foreach ($a as $k => $v) if ((int)($v['until'] ?? 0) < $now && (int)($v['t'] ?? 0) < $now - 86400) unset($a[$k]);
+        if (count($a) > 5000) { uasort($a, fn($x, $y) => (int)($y['t'] ?? 0) <=> (int)($x['t'] ?? 0)); $a = array_slice($a, 0, 4000, true); }   // Größe begrenzen
         $k = $scope . ':' . hash('sha256', $name);
         $g = $a[$k] ?? ['n' => 0, 'until' => 0, 't' => 0];
         if ((int)$g['until'] > $now) return (int)$g['until'];

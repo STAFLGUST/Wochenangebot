@@ -184,12 +184,20 @@ function trusted_proxy(string $ip): bool
     if (isset($cache[$ip])) return $cache[$ip];
     $cfg = trim((string)(getenv('WA_TRUSTED_PROXIES') ?: ($_SERVER['WA_TRUSTED_PROXIES'] ?? '')));
     if ($cfg === '') return $cache[$ip] = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    $aufgeloest = false;
     foreach (preg_split('/[\s,]+/', $cfg) as $t) {
         if ($t === '') continue;
-        if (strpos($t, '/') !== false) { if (function_exists('ip_in') && ip_in($ip, $t)) return $cache[$ip] = true; continue; }
-        if (filter_var($t, FILTER_VALIDATE_IP)) { if ($t === $ip) return $cache[$ip] = true; continue; }
-        if (preg_match('/^[a-z0-9.-]{1,253}$/i', $t) && in_array($ip, gethostbynamel($t) ?: [], true)) return $cache[$ip] = true;   // Docker-Dienstname
+        if (strpos($t, '/') !== false) { $aufgeloest = true; if (function_exists('ip_in') && ip_in($ip, $t)) return $cache[$ip] = true; continue; }
+        if (filter_var($t, FILTER_VALIDATE_IP)) { $aufgeloest = true; if (@inet_pton($t) === @inet_pton($ip)) return $cache[$ip] = true; continue; }
+        if (!preg_match('/^[a-z0-9.-]{1,253}$/i', $t)) continue;
+        $adr = gethostbynamel($t) ?: [];   // Docker-Dienstname (IPv4)
+        if (strpos($ip, ':') !== false && function_exists('dns_get_record')) $adr = array_merge($adr, array_column(@dns_get_record($t, DNS_AAAA) ?: [], 'ipv6'));   // IPv6-Netz
+        if ($adr) $aufgeloest = true;
+        $bin = @inet_pton($ip);
+        foreach ($adr as $a) if ($bin !== false && @inet_pton($a) === $bin) return $cache[$ip] = true;   // binär vergleichen (IPv6-Schreibweisen)
     }
+    // Kein Name auflösbar (DNS-Störung): wie ohne Angabe, sonst hätten alle Besucher die Adresse des Proxys
+    if (!$aufgeloest) return $cache[$ip] = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
     return $cache[$ip] = false;
 }
 function client_ip(): string

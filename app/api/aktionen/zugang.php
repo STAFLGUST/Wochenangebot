@@ -72,12 +72,19 @@ switch ($action) {
                     if ($u['username'] !== $name) continue;
                     if ((int)($u['lockedUntil'] ?? 0) > time()) {
                         // Gesperrt: richtiges Passwort + zweiter Faktor kommt trotzdem durch (sonst könnte jeder durch Fehlversuche
-                        // den Inhaber aussperren); ohne zweiten Faktor bleibt die Sperre bestehen
-                        // – aber höchstens 3 Code-Versuche je Sperre, damit niemand mit bekanntem Passwort unbegrenzt Codes raten kann
-                        if (password_verify($pw, (string)$u['hash']) && $u['active'] && !empty($u['totp']) && (int)($u['lockTries'] ?? 0) < 3) return ['ok_locked', $u];
+                        // den Inhaber aussperren); ohne zweiten Faktor bleibt die Sperre bestehen. Grenzen je Sperre:
+                        // – höchstens 3 Code-Versuche (über alle Anmeldevorgänge, siehe login_2fa),
+                        // – falsche Passwörter während der Sperre werden gezählt; ab „Kontosperre nach …“ hilft auch das richtige nicht mehr
+                        //   (sonst ließe sich das Passwort trotz Sperre über viele Adressen weiter raten)
+                        if (!password_verify($pw, (string)$u['hash'])) {
+                            $users[$i]['lockPw'] = (int)($u['lockPw'] ?? 0) + 1;
+                            users_save($users);
+                            return ['locked', $users[$i]];
+                        }
+                        if ($u['active'] && !empty($u['totp']) && (int)($u['lockTries'] ?? 0) < 3 && (int)($u['lockPw'] ?? 0) < max(3, (int)$S['lockAfter'])) return ['ok_locked', $u];
                         return ['locked', $u];
                     }
-                    if (!empty($u['lockTries'])) { unset($users[$i]['lockTries']); $u = $users[$i]; users_save($users); }   // Sperre abgelaufen
+                    if (!empty($u['lockTries']) || !empty($u['lockPw'])) { unset($users[$i]['lockTries'], $users[$i]['lockPw']); $u = $users[$i]; users_save($users); }   // Sperre abgelaufen
                     if (!password_verify($pw, (string)$u['hash'])) {
                         $lockedNow = login_failure($users[$i]);
                         users_save($users);
@@ -132,7 +139,9 @@ switch ($action) {
                 $i = user_find($users, (string)$p['uid']);
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || empty($users[$i]['totp'])) return ['gone', null];
                 $u = &$users[$i];
-                if ((int)($u['lockedUntil'] ?? 0) > time() && empty($p['lk'])) return ['locked', $u];
+                $gesperrt = (int)($u['lockedUntil'] ?? 0) > time();
+                if ($gesperrt && empty($p['lk'])) return ['locked', $u];
+                if ($gesperrt && (int)($u['lockTries'] ?? 0) >= 3) return ['locked', $u];   // höchstens 3 Code-Versuche je Sperre – auch bei parallelen Anmeldevorgängen
                 $how = null;
                 $step = totp_check((string)$u['totp'], $code, (int)($u['totpLast'] ?? 0));
                 if ($step !== null) { $u['totpLast'] = $step; $how = 'app'; }
@@ -142,14 +151,14 @@ switch ($action) {
                     if ($k !== false) { array_splice($u['recovery'], $k, 1); $how = 'recovery'; }
                 }
                 if (!$how) {
-                    if (!empty($p['lk'])) $u['lockTries'] = (int)($u['lockTries'] ?? 0) + 1;   // Code-Versuch während der Sperre
+                    if ($gesperrt) $u['lockTries'] = (int)($u['lockTries'] ?? 0) + 1;   // Code-Versuch während der Sperre (nicht mehr nach ihrem Ablauf)
                     $locked = login_failure($u);
                     users_save($users);
                     return [$locked ? 'locked' : 'bad', $u];
                 }
                 $u['failCount'] = 0;
                 $u['lockedUntil'] = 0;
-                unset($u['lockTries']);
+                unset($u['lockTries'], $u['lockPw']);
                 $u['lastLogin'] = now();
                 $out = $u;
                 unset($u);
