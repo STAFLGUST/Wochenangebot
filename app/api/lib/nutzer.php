@@ -61,19 +61,27 @@ function login_failure(array &$u): bool
     if ($u['failCount'] < max(3, (int)$S['lockAfter'])) return false;
     $u['lockedUntil'] = time() + 60 * max(1, (int)$S['lockMinutes']);
     $u['failCount'] = 0;
+    unset($u['lockTries']);   // neue Sperre: Code-Versuche neu zählen (keine Reste einer früheren Sperre)
     return true;
 }
 /* Fehlversuche für unbekannte Benutzernamen wie bei echten Zugängen zählen: gleiche Sperrmeldung nach gleich vielen
-   Versuchen, damit die Antwort nicht verrät, ob es einen Benutzernamen gibt. Gibt das Sperrende zurück (0 = nicht gesperrt). */
-function ghost_lock(string $scope, string $name, bool $fail): int
+   Versuchen, damit die Antwort nicht verrät, ob es einen Benutzernamen gibt. Gibt das Sperrende zurück (0 = nicht gesperrt);
+   $neu ist true, wenn die Sperre gerade durch diesen Fehlversuch begonnen hat. */
+function ghost_lock(string $scope, string $name, bool $fail, ?bool &$neu = null): int
 {
+    $neu = false;
     if ($name === '') return 0;
-    return (int)with_lock('anmeldenamen', function () use ($scope, $name, $fail) {
+    return (int)with_lock('anmeldenamen', function () use ($scope, $name, $fail, &$neu) {
         $S = sec();
         $now = time();
         $a = store_read('anmeldenamen') ?? [];
         foreach ($a as $k => $v) if ((int)($v['until'] ?? 0) < $now && (int)($v['t'] ?? 0) < $now - 86400) unset($a[$k]);
-        if (count($a) > 5000) { uasort($a, fn($x, $y) => (int)($y['t'] ?? 0) <=> (int)($x['t'] ?? 0)); $a = array_slice($a, 0, 4000, true); }   // Größe begrenzen
+        if (count($a) > 5000) {   // Größe begrenzen: laufende Sperren nie vorzeitig entfernen (sonst verriete ihr Ende den Namen), sonst die ältesten
+            $aktiv = array_filter($a, fn($v) => (int)($v['until'] ?? 0) >= $now);
+            $rest = array_diff_key($a, $aktiv);
+            uasort($rest, fn($x, $y) => (int)($y['t'] ?? 0) <=> (int)($x['t'] ?? 0));
+            $a = $aktiv + array_slice($rest, 0, max(0, 4000 - count($aktiv)), true);
+        }
         $k = $scope . ':' . hash('sha256', $name);
         $g = $a[$k] ?? ['n' => 0, 'until' => 0, 't' => 0];
         if ((int)$g['until'] > $now) return (int)$g['until'];
@@ -81,7 +89,7 @@ function ghost_lock(string $scope, string $name, bool $fail): int
         $g['n'] = (int)$g['n'] + 1;
         $g['t'] = $now;
         $g['until'] = 0;
-        if ($g['n'] >= max(3, (int)$S['lockAfter'])) { $g['until'] = $now + 60 * max(1, (int)$S['lockMinutes']); $g['n'] = 0; }
+        if ($g['n'] >= max(3, (int)$S['lockAfter'])) { $g['until'] = $now + 60 * max(1, (int)$S['lockMinutes']); $g['n'] = 0; $neu = true; }
         $a[$k] = $g;
         store_write('anmeldenamen', $a);
         return (int)$g['until'];

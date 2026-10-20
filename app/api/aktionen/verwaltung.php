@@ -197,7 +197,7 @@ switch ($action) {
 
         case 'user_unlock': {
             require_admin_confirmation('user_unlock');
-            $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; unset($x['lockTries'], $x['lockPw']); });
+            $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; unset($x['lockTries']); });
             if (!$u) fail('Nutzer nicht gefunden.', 404);
             audit('security', "Zugang „{$u['username']}“ entsperrt");
             respond(['ok' => true]);

@@ -296,7 +296,12 @@
       }
       authCtx = { prevUser: me && me.id, expired: authMode === 'expired' };
       const r = await api(authMode === 'setup' ? 'setup' : 'login', { body: { username: $('#au-user').value.trim(), name: $('#au-name').value.trim(), password: pw } });
-      if (r.need2fa) { loginPw = pw; showAuth('code'); return; }
+      if (r.need2fa) {
+        loginPw = pw; showAuth('code');
+        // Zugang gesperrt (z. B. nach fremden Fehlversuchen): mit Authenticator-App geht es trotzdem weiter
+        if (r.gesperrtBis) $('#auth-intro').textContent = `Dieser Zugang ist wegen zu vieler Fehlversuche bis ${r.gesperrtBis} Uhr gesperrt. Mit dem Code aus Ihrer Authenticator-App (oder einem Wiederherstellungscode) können Sie sich trotzdem anmelden. Ohne Authenticator-App: bitte bis dahin warten oder einen Administrator bitten, den Zugang zu entsperren.`;
+        return;
+      }
       await afterLogin(r, pw);
     } catch (ex) {
       err.textContent = ex.message;
