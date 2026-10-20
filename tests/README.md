@@ -44,7 +44,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | hist | 35 | Preisverlauf, Import alter Listen, Datendialog |
 | users | 48 | Rollen, Rechte serverseitig, Protokoll, Sperren |
 | auth_hardening | 41 | direkte HTTP-Regressionen für Faktorwechsel, Sitzungswiderruf und Kontosperre |
-| security | 42 | 2FA, Wiederherstellungscodes, Sitzungen, IP-Freigabe, CSP |
+| security | 44 | 2FA, Wiederherstellungscodes, Sitzungen, IP-Freigabe, CSP |
 | auth_hardening | 38 | direkte HTTP-Regressionen für Faktorwechsel, Sitzungswiderruf und Kontosperre |
 | security | 41 | 2FA, Wiederherstellungscodes, Sitzungen, IP-Freigabe, CSP |
 | passkeys | 108 | Passkeys (WebAuthn) im echten Browser mit virtuellem Authenticator über `http://localhost` und mit eigenem Software-Authenticator (ES256/RS256): Einrichtung nur mit Passwort (direkt nach der Anmeldung ohne Faktor wie bei der App), Liste/Umbenennen/Entfernen, keine Schlüssel in Antworten, andere Sitzungen beendet, Anmeldung ohne Benutzername und ohne Code, Passkey statt Code, nur Passkey → Passkey-Schritt nach dem Passwort, Zwei-Faktor-Pflicht durch Passkey erfüllt (Einrichtung auf der Anmeldeseite, letzter Faktor nicht entfernbar), App: klare Meldung, Administrator entfernt Passkeys eines Nutzers, abgewiesen: falsche Herkunft/Challenge/Art/rpId, ohne UP/UV, falsche Signatur, fremder/unbekannter Passkey, Wiederholung, abgelaufene Challenge, Zähler zu niedrig (möglicherweise kopiert), deaktiviert, gesperrt, Passwortwechsel offen; IP-Limit, Höchstzahl 10, Protokoll, 390 px und dunkel |

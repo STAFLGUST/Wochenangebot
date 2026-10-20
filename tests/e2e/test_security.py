@@ -102,6 +102,11 @@ with sync_playwright() as p:
     login(v, 'vic', 'Gut-Passwort-2026', wait=False); v.wait_for_selector('#auth-twofa .tf-qr svg')
     check('2FA required → setup on login', 'vorgeschrieben' in v.inner_text('#auth-intro'))
     rs = v.evaluate("fetch('../api/?action=draft').then(r => r.status)"); check('API blocked until 2FA set up (403)', rs == 403, rs)
+    v.reload(); v.wait_for_selector('#tf-pw-login')   # nach dem Neuladen ist das Passwort unbekannt → erst abfragen
+    v.fill('#tf-pw-login', 'Falsches-Passwort-1'); v.click('#tf-pw-weiter'); v.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
+    check('2FA setup after reload: wrong password → asked again', v.locator('#tf-pw-login').count() == 1 and 'nicht korrekt' in v.inner_text('#auth-err'))
+    v.fill('#tf-pw-login', 'Gut-Passwort-2026'); v.click('#tf-pw-weiter'); v.wait_for_selector('#auth-twofa .tf-qr svg')
+    check('2FA setup after reload: password asked, then QR', True)
     vsec = v.text_content('#auth-twofa .tf-secret').replace(' ', '')
     v.fill('#auth-twofa [data-tf=code]', totp(vsec)); v.click('#auth-twofa [data-tf=enable]'); v.wait_for_selector('#auth-twofa .tf-codes')
     v.check('#auth-twofa [data-tf=ack]'); v.click('#auth-twofa [data-tf=done]'); v.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')

@@ -21,7 +21,7 @@ return [
     'api/aktionen/preisverlauf.php' => '9ada53bdc5a1c99641110e5136103c4f89a0b597cff9f0c78297791e6b9c99ca',
     'api/aktionen/schutz.php' => '533ec3f069c95551cc0d4f306f3bae66e97c54647d6b21fc251bdaefe6c81335',
     'api/aktionen/verwaltung.php' => 'a6b8d9c0850cec49f96440ffb19ea1cf31179ae554f5d8c6c978924420968f5e',
-    'api/aktionen/zugang.php' => '7627128403727a5f581cb919cce2773e0f6b82a39a6d9d9531f3143a35734003',
+    'api/aktionen/zugang.php' => '2d29c4a9fd92d2cfc8190d7d97b39aec0929812a0628ae1c2043f73c11591617',
     'api/config.php' => '5083905099b55664efca0f9bf18d66d049711f8104cd13c4a75361d7a6259999',
     'api/geo.php' => '99637576e28966a5dd7acebf6c1f4e22f3b1c0e3ff78d55875a13782ed48bcec',
     'api/geo/laender.dat.php' => 'ea2f91dd09319e4adca9b45bd87f50faf734067dfcbdc5db1d2d585d27f82c51',

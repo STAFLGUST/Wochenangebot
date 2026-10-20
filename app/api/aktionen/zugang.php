@@ -185,7 +185,7 @@ switch ($action) {
             require_csrf();
             // Austausch eines vorhandenen Faktors – und Ersteinrichtung später als 5 Minuten nach der Anmeldung – nur mit erneutem
             // Passwortnachweis (sonst könnte eine übernommene Sitzung einen eigenen Faktor hinterlegen und den Inhaber aussperren)
-            if (has_second_factor($me) || (int)($_SESSION['authAt'] ?? 0) < time() - 300) {
+            if ((string)(body()['password'] ?? '') !== '' || has_second_factor($me) || (int)($_SESSION['authAt'] ?? 0) < time() - 300) {   // mitgesendetes Passwort immer prüfen
                 unset($_SESSION['totpPending']);
                 $me = confirm_password($me, (string)(body()['password'] ?? ''));
             }
