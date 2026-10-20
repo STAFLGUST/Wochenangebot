@@ -53,7 +53,8 @@ FAELLE = [[None, '172.18.0.3', '203.0.113.7'],            # ohne Angabe: private
           ['10.0.0.5', '10.0.0.5', '203.0.113.8'],        # eigener Proxy (IP)
           ['10.1.0.0/24', '10.1.0.9', '203.0.113.9'],     # eigener Proxy (Netz)
           ['localhost', '127.0.0.1', '203.0.113.10'],     # eigener Proxy (Name)
-          ['gibt-es-nicht.invalid', '127.0.0.2', '203.0.113.11']]
+          ['gibt-es-nicht.invalid', '127.0.0.2', '203.0.113.11'],  # Name nicht auflösbar (DNS-Störung): wie ohne Angabe
+          ['localhost', '172.18.0.3', '203.0.113.12']]          # Name auflösbar, andere Gegenstelle: nicht vertraut
 env = {k: v for k, v in os.environ.items() if k != 'WA_TRUSTED_PROXIES'}
 outs = [subprocess.run(['php', '-r', PHP, REPO, json.dumps(f)], capture_output=True, text=True, env=env).stdout.strip() or 'Fehler' for f in FAELLE]
 check('ohne WA_TRUSTED_PROXIES: wie bisher (private Gegenstelle)', outs[0] == '203.0.113.7', outs[0])
@@ -61,7 +62,8 @@ check('fremder Container darf keine Besucher-IP vorgeben', outs[1] == '172.18.0.
 check('eigener Proxy per IP', outs[2] == '203.0.113.8', outs[2])
 check('eigener Proxy per Netz', outs[3] == '203.0.113.9', outs[3])
 check('eigener Proxy per Name (Docker-Dienst)', outs[4] == '203.0.113.10', outs[4])
-check('unbekannter Name: nichts vertraut', outs[5] == '127.0.0.2', outs[5])
+check('Name nicht auflösbar: wie ohne Angabe – Besucher fallen nicht auf die Proxy-Adresse zusammen', outs[5] == '203.0.113.11', outs[5])
+check('Name auflösbar, andere Gegenstelle: X-Forwarded-For ignoriert', outs[6] == '172.18.0.3', outs[6])
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
 test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()
 check('Echtbetrieb vertraut nur Caddy, Testumgebung nicht im Produktivnetz', 'WA_TRUSTED_PROXIES: caddy' in compose and 'PROD_NETWORK' not in test_compose

@@ -115,15 +115,16 @@ switch ($action) {
             require_auth(false, 'admin');
             $S = sec();
             respond(['ok' => true, 'export' => ['art' => 'wochenangebot-sicherheit', 'version' => 1, 'stand' => now(),
-                'sicherheit' => array_intersect_key($S, SEC_DEFAULTS), 'firewall' => array_diff_key(fw(), ['mitschnittBis' => 1])]]);
+                'sicherheit' => array_diff_key(array_intersect_key($S, SEC_DEFAULTS), FW_NICHT_UEBERTRAGEN), 'firewall' => array_diff_key(fw(), ['mitschnittBis' => 1, 'erlaubt' => 1])]]);
         }
         case 'fw_import': {
             $me = require_admin_confirmation('fw_save');
             $x = body()['export'] ?? null;
             if (!is_array($x) || ($x['art'] ?? '') !== 'wochenangebot-sicherheit' || (int)($x['version'] ?? 0) !== 1) throw new InvalidArgumentException('Das ist keine Datei mit Sicherheitseinstellungen dieses Portals.');
             $oldS = sec();
-            $newS = sec_clean(array_merge($oldS, array_intersect_key((array)($x['sicherheit'] ?? []), SEC_DEFAULTS)), $oldS, $me);
-            $newF = fw_clean(array_intersect_key((array)($x['firewall'] ?? []), FW_DEFAULTS), fw());
+            // Adress- und Länderlisten bleiben wie sie sind (eine Datei von einem anderen Server könnte sonst alle aussperren)
+            $newS = sec_clean(array_merge($oldS, array_diff_key(array_intersect_key((array)($x['sicherheit'] ?? []), SEC_DEFAULTS), FW_NICHT_UEBERTRAGEN)), $oldS, $me);
+            $newF = fw_clean(array_diff_key(array_intersect_key((array)($x['firewall'] ?? []), FW_DEFAULTS), ['erlaubt' => 1, 'mitschnittBis' => 1]), fw());
             if ($newF['feed'] && !fw_feed_info()) { try { fw_feed_laden(); } catch (Throwable $e) { $newF['feed'] = false; } }
             store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
             store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;

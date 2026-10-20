@@ -254,7 +254,17 @@
     $('#pw1').value = ''; $('#pw2').value = ''; $('#au-code').value = '';
     if (mode === 'expired' && me) $('#au-user').value = me.username;
     $('#screen-auth').classList.toggle('overlay', mode === 'expired' || !!(authCtx && authCtx.expired));
-    if (tf) renderTwofaSetup($('#auth-twofa'), () => finishLogin());
+    if (tf) {
+      // Einrichtung braucht das aktuelle Passwort (direkt nach der Anmeldung bekannt, nach dem Neuladen erneut abfragen)
+      if (loginPw) renderTwofaSetup($('#auth-twofa'), () => finishLogin(), loginPw);
+      else {
+        $('#auth-twofa').innerHTML = `<div class="fld"><span>Aktuelles Passwort</span><input type="password" id="tf-pw-login" autocomplete="current-password"></div>
+          <button type="button" class="btn primary wide" id="tf-pw-weiter">Weiter</button>`;
+        const weiter = () => { const v = $('#tf-pw-login').value; if (!v) return; loginPw = v; renderTwofaSetup($('#auth-twofa'), () => finishLogin(), v); };
+        $('#tf-pw-weiter').addEventListener('click', weiter);
+        $('#tf-pw-login').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); weiter(); } });
+      }
+    }
     setTimeout(() => (code ? $('#au-code') : pk ? $('#auth-submit') : (newpw || $('#au-user').value) ? $('#pw1') : $('#au-user')).focus(), 30);
   }
   async function afterLogin(r, pw) {
@@ -262,11 +272,12 @@
     me = r.user;
     if (r.recoveryLeft != null) toast(`Mit Wiederherstellungscode angemeldet – noch ${r.recoveryLeft} Codes übrig. Bei Bedarf unter „Zwei-Faktor-Anmeldung“ neu einrichten.`, 8000);
     if (me.mustChange) { loginPw = pw; showAuth('newpw'); return; }
+    if (me.needTwofa) { loginPw = pw; showAuth('twofa'); return; }   // nur bis zur Einrichtung des zweiten Faktors
     loginPw = '';   // nach erfolgreicher Anmeldung nicht im Speicher behalten
-    if (me.needTwofa) { showAuth('twofa'); return; }
     await finishLogin();
   }
   async function finishLogin() {
+    loginPw = '';
     const ctx = authCtx || {};
     authCtx = null;
     $('#screen-auth').classList.remove('overlay');
@@ -316,7 +327,10 @@
   async function renderTwofaSetup(host, onDone, password = '') {
     host.innerHTML = '<div class="loading"><div class="spinner"></div>Wird vorbereitet …</div>';
     let r;
-    try { r = await api('twofa_begin', { body: { password } }); } catch (ex) { host.innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; return; }
+    try { r = await api('twofa_begin', { body: { password } }); } catch (ex) {
+      if (ex.status === 422 && host.id === 'auth-twofa') { loginPw = ''; showAuth('twofa'); $('#auth-err').textContent = ex.message; return; }   // falsches Passwort: erneut fragen
+      host.innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; return;
+    }
     let svg = '';
     try { const q = window.qrcode(0, 'M'); q.addData(r.uri); q.make(); svg = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch { svg = ''; }
     host.innerHTML = `<div class="tf-setup">
@@ -416,7 +430,7 @@
     if (ex && ex.status !== undefined) return ex.message;
     return 'Der Passkey konnte nicht verwendet werden.';
   }
-  /* Neuen Passkey einrichten; Passwort leer nur direkt nach der Anmeldung ohne zweiten Faktor */
+  /* Neuen Passkey einrichten (immer mit aktuellem Passwort) */
   async function passkeyRegister(password, name) {
     const o = (await api('passkey_begin', { body: { password } })).options;
     const cred = await navigator.credentials.create({ publicKey: { ...o, challenge: unb64u(o.challenge), user: { ...o.user, id: unb64u(o.user.id) }, excludeCredentials: pkIds(o.excludeCredentials) } });
@@ -449,7 +463,8 @@
     if (authMode !== 'twofa') { passkeyLogin(authMode === 'code'); return; }
     const err = $('#auth-err'), b = $('#auth-passkey');
     err.textContent = ''; b.disabled = true;
-    try { await passkeyRegister('', ''); toast('Passkey eingerichtet.'); await finishLogin(); } catch (ex) { err.textContent = pkError(ex); } finally { b.disabled = false; }
+    if (!loginPw) { err.textContent = 'Bitte zuerst oben das aktuelle Passwort eingeben und „Weiter“ wählen.'; b.disabled = false; return; }
+    try { await passkeyRegister(loginPw, ''); toast('Passkey eingerichtet.'); await finishLogin(); } catch (ex) { err.textContent = pkError(ex); } finally { b.disabled = false; }
   });
   /* Menü: eigene Passkeys verwalten */
   let pkList = [], pkMax = 10, pkDel = null;

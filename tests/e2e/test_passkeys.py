@@ -314,10 +314,10 @@ with sync_playwright() as p:
     t = PkClient('192.0.2.10')
     st, r = t.login('tom', 'Bearbeiter-Zugang-1'); tom_id = r['user']['id']
     st, r = t.call('passkey_begin', {})
-    check('right after login without factor: no password (like TOTP)', st == 200, r)
+    check('passkey setup always needs the password (also right after login)', st == 422 and r.get('code') == 'confirmation_invalid', r)
     session_set(t.cookie(), '$_SESSION["authAt"] = time() - 301;')
-    st, r = t.call('passkey_begin', {})
-    check('later: password required', st == 422 and r.get('code') == 'confirmation_invalid', r)
+    st, r = t.call('passkey_begin', {'password': 'Falsches-Passwort-1'})
+    check('wrong password rejected', st == 422 and r.get('code') == 'confirmation_invalid', r)
     st, r = t.call('passkey_begin', {'password': 'Bearbeiter-Zugang-1'}); o = r['options']
     check('options: rp, user, algorithms, resident key, UV, none',
           o['rp']['id'] == 'localhost' and unb64u(o['user']['id']).decode() == tom_id and o['user']['name'] == 'tom' and [x['alg'] for x in o['pubKeyCredParams']] == [-7, -257]
@@ -365,7 +365,7 @@ with sync_playwright() as p:
     for i, (why, kw, msg) in enumerate(bad):
         st, r = PkClient(f'192.0.2.{20 + i}').pk_login(k1, **kw)
         check('login rejected: ' + why, st == 401 and msg in r.get('error', ''), (st, r))
-    check('bad signature counts as account failure', int(user('tom').get('failCount', 0)) >= 1, user('tom').get('failCount'))
+    check('bad signature does not count for the account lock (only per-IP brake)', int(user('tom').get('failCount', 0)) == 0, user('tom').get('failCount'))
     st, r = PkClient('192.0.2.30').pk_login(SoftKey(-7))
     check('unknown passkey rejected', st == 401 and 'nicht bekannt' in r['error'], r)
     check('audit: unknown passkey', logged('login_fail', 'unbekanntem Passkey'))
@@ -374,7 +374,7 @@ with sync_playwright() as p:
     check('sign counter not increased → rejected (possible clone)', st == 401 and 'Zähler' in r['error'], (stored, r))
     check('audit: possible clone', logged('login_fail', 'möglicherweise kopiert', 'tom'))
     st, r = PkClient('192.0.2.32').pk_login(k1, count=0)
-    check('counter 0 (device without counter) accepted', st == 200, r)
+    check('counter falls back to 0 after a counter > 0 → rejected (possible clone)', st == 401 and 'Zähler' in r['error'], r)
     check('stored counter not reset', user('tom')['passkeys'][0]['signCount'] == stored, user('tom')['passkeys'][0]['signCount'])
     x = PkClient('192.0.2.33')
     st, r = x.call('passkey_login_begin', {})

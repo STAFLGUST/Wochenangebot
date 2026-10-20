@@ -12,6 +12,8 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 const FW_DEFAULTS = ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 5, 'sperrMinuten' => 60, 'fehlerLimit' => 30,
                      'feed' => false, 'mitschnittBis' => 0, 'erlaubt' => []];
+/* Nicht exportiert/importiert: Listen und Schalter, die vom einzelnen Server abhängen (Adressen, Länder) */
+const FW_NICHT_UEBERTRAGEN = ['ipEnabled' => 1, 'adminIps' => 1, 'geoEnabled' => 1, 'geoMode' => 1, 'geoCountries' => 1, 'geoScope' => 1];
 const FW_WAF_MODI = ['aus' => 'aus', 'protokoll' => 'nur protokollieren', 'sperren' => 'Anfrage abweisen'];
 const FW_SPERR_MINUTEN = [10, 60, 360, 1440, 10080];
 const FW_VERKEHR_MAX = 500;
@@ -57,6 +59,23 @@ function fw_erlaubt(string $ip): bool
     $S = sec();
     return !empty($S['adminIps']) && ip_allowed($ip, $S['adminIps']);
 }
+/* Angemeldeter Mitarbeiter? Nur nachsehen, wenn eine Sitzung mitkommt – sonst würde für jeden anonymen Besucher eine
+   Sitzung (Cookie, Datei) angelegt */
+function fw_mitarbeiter(): bool
+{
+    global $ME;
+    if ($ME) return true;
+    if (empty($_COOKIE['WA_ADMIN']) && empty($_SERVER['HTTP_X_WA_SITZUNG'])) return false;
+    return (bool)current_user();
+}
+/* Von einer fremden Seite ausgelöst (z. B. <img src="…/wp-login.php"> oder ein Link)? Browser senden Sec-Fetch-Site;
+   solche Anfragen werden abgewiesen, zählen aber nicht als Treffer – sonst könnte jede Webseite die Adresse ihrer
+   Besucher (z. B. das Büro) sperren lassen. Angriffswerkzeuge senden diese Kopfzeile nicht. */
+function fw_fremd(): bool
+{
+    $site = strtolower((string)($_SERVER['HTTP_SEC_FETCH_SITE'] ?? ''));
+    return $site !== '' && $site !== 'same-origin' && $site !== 'none';
+}
 /* Schlüssel einer Adresse: IPv4 einzeln, IPv6 je /64 (wie bei den Anmeldeversuchen) */
 function fw_key(string $ip): string
 {
@@ -67,7 +86,7 @@ function fw_key(string $ip): string
 function fw_sperrliste(): array
 {
     $d = store_read('sperrliste') ?? [];
-    return ['manuell' => array_values((array)($d['manuell'] ?? [])), 'auto' => (array)($d['auto'] ?? [])];
+    return ['manuell' => array_values((array)($d['manuell'] ?? [])), 'auto' => (array)($d['auto'] ?? []), 'meldung' => (array)($d['meldung'] ?? [])];
 }
 /* Gesperrt? Liefert den Grund oder null */
 function fw_gesperrt(string $ip): ?string
@@ -85,16 +104,24 @@ function fw_gesperrt(string $ip): ?string
 }
 
 /* Prüftext einer Anfrage: Abfrage (dekodiert) und – ohne Mitarbeiter-Anmeldung – alle Zeichenketten im JSON-Inhalt */
+const FW_GEHEIM = ['password', 'current', 'password2', 'pw', 'code', 'token'];   // Passwörter/Codes nie prüfen (beliebige Zeichen erlaubt)
 function fw_werte($v, array &$out, int $tiefe = 0): void
 {
     if ($tiefe > 8 || count($out) > 2000) return;
     if (is_string($v)) { $out[] = $v; return; }
-    if (is_array($v)) foreach ($v as $k => $x) { if (is_string($k)) $out[] = $k; fw_werte($x, $out, $tiefe + 1); }
+    if (is_array($v)) foreach ($v as $k => $x) {
+        if (is_string($k)) { if (in_array(strtolower($k), FW_GEHEIM, true)) continue; $out[] = $k; }
+        fw_werte($x, $out, $tiefe + 1);
+    }
 }
 function fw_pruefen(string $text): ?string
 {
     if ($text === '') return null;
-    foreach (FW_MUSTER as [$gruppe, $re]) if (preg_match($re, $text)) return $gruppe;
+    foreach (FW_MUSTER as [$gruppe, $re]) {
+        $r = preg_match($re, $text);
+        if ($r === 1) return $gruppe;
+        if ($r === false) return $gruppe . ' (Prüfung überlastet)';   // nicht prüfbar (z. B. extrem verschachtelt) = verdächtig
+    }
     return null;
 }
 function fw_angriff(): ?string
@@ -103,7 +130,7 @@ function fw_angriff(): ?string
     if ($ua !== '' && preg_match(FW_WERKZEUGE, $ua)) return 'Angriffswerkzeug';
     $q = (string)($_SERVER['QUERY_STRING'] ?? '');
     $teile = [$q, rawurldecode($q), rawurldecode(rawurldecode($q))];
-    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !current_user()) {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !fw_mitarbeiter()) {
         $raw = (string)file_get_contents('php://input', false, null, 0, 262144);
         $j = json_decode($raw, true);
         if (is_array($j)) { $w = []; fw_werte($j, $w); $teile[] = implode("\n", $w); }
@@ -118,13 +145,14 @@ function fw_zaehlen(string $ip, string $art, int $fenster): int
     return (int)with_lock('fw_zaehler', function () use ($ip, $art, $fenster) {
         $now = time();
         $z = store_read('fw_zaehler') ?? [];
-        if (count($z) > 5000) $z = array_slice($z, -2500, null, true);
         foreach ($z as $k => $v) if ((int)($v['t'] ?? 0) < $now - 3600) unset($z[$k]);
+        if (count($z) > 5000) { uasort($z, fn($a, $b) => (int)($b['t'] ?? 0) <=> (int)($a['t'] ?? 0)); $z = array_slice($z, 0, 4000, true); }   // älteste zuerst weg
         $k = fw_key($ip);
         $e = $z[$k] ?? ['t' => $now];
         $l = array_values(array_filter((array)($e[$art] ?? []), fn($t) => (int)$t > $now - $fenster));
         $l[] = $now;
-        $e[$art] = array_slice($l, -200);
+        $F = fw();
+        $e[$art] = array_slice($l, -(max((int)$F['treffer'], (int)$F['fehlerLimit']) + 5));
         $e['t'] = $now;
         $z[$k] = $e;
         store_write('fw_zaehler', $z);
@@ -137,23 +165,29 @@ function fw_auto_sperren(string $ip, string $grund): void
     $F = fw();
     if (!$F['autoSperre'] || fw_erlaubt($ip)) return;
     $min = (int)$F['sperrMinuten'];
-    $neu = (bool)with_lock('sperrliste', function () use ($ip, $grund, $min) {
+    $melden = with_lock('sperrliste', function () use ($ip, $grund, $min) {
         $L = fw_sperrliste();
         $now = time();
-        foreach ($L['auto'] as $k => $a) if ((int)($a['bis'] ?? 0) < $now - 86400) unset($L['auto'][$k]);
         $k = fw_key($ip);
-        $war = isset($L['auto'][$k]) && (int)$L['auto'][$k]['bis'] > $now;
+        if (isset($L['auto'][$k]) && (int)$L['auto'][$k]['bis'] > $now) return null;   // schon gesperrt: nichts schreiben
+        foreach ($L['auto'] as $kk => $a) if ((int)($a['bis'] ?? 0) < $now - 86400) unset($L['auto'][$kk]);
         $L['auto'][$k] = ['ip' => $k, 'grund' => mb_substr($grund, 0, 80), 'bis' => $now + 60 * $min, 'n' => (int)($L['auto'][$k]['n'] ?? 0) + 1, 't' => now()];
         if (count($L['auto']) > 5000) $L['auto'] = array_slice($L['auto'], -5000, null, true);
+        // Protokoll/Benachrichtigung höchstens einmal je Minute (bei vielen Adressen gesammelt)
+        $m = $L['meldung'];
+        $mehr = (int)($m['n'] ?? 0);
+        if ((int)($m['t'] ?? 0) > $now - 60) { $L['meldung'] = ['t' => (int)$m['t'], 'n' => $mehr + 1]; $mehr = -1; }
+        else $L['meldung'] = ['t' => $now, 'n' => 0];
         store_write('sperrliste', $L);
-        return !$war;
+        return $mehr;
     });
-    if ($neu) audit('security', 'Adresse ' . fw_key($ip) . ' automatisch gesperrt (' . $grund . ', ' . ($min >= 1440 ? intdiv($min, 1440) . ' Tag(e)' : $min . ' Minuten') . ')', [], ['username' => 'firewall', 'name' => 'Firewall', 'role' => '']);
+    if ($melden !== null && $melden >= 0) audit('security', 'Adresse ' . fw_key($ip) . ' automatisch gesperrt (' . $grund . ', ' . ($min >= 1440 ? intdiv($min, 1440) . ' Tag(e)' : $min . ' Minuten') . ')'
+        . ($melden ? " – seit der letzten Meldung {$melden} weitere Adresse(n) gesperrt" : ''), [], ['username' => 'firewall', 'name' => 'Firewall', 'role' => '']);
 }
 function fw_treffer(string $ip, string $grund): void
 {
     $F = fw();
-    if (fw_erlaubt($ip)) return;
+    if (fw_erlaubt($ip) || fw_fremd() || fw_mitarbeiter()) return;   // fremde Seite oder angemeldeter Mitarbeiter: nicht zählen
     if (fw_zaehlen($ip, 'h', FW_FENSTER) >= max(1, (int)$F['treffer'])) fw_auto_sperren($ip, $grund);
 }
 
@@ -164,7 +198,7 @@ function fw_verkehr(array $e): void
         $q = (string)($_SERVER['QUERY_STRING'] ?? '');
         $q = preg_replace('/(^|&)(t|token|k|key|code|sig|z)=[^&]*/i', '$1$2=…', $q);
         $ip = client_ip();
-        $u = current_user();
+        $u = fw_mitarbeiter() ? current_user() : null;
         $row = ['t' => time(), 'ip' => $ip, 'm' => substr((string)($_SERVER['REQUEST_METHOD'] ?? ''), 0, 7), 'q' => mb_substr((string)$q, 0, 160),
                 'st' => (int)($e['st'] ?? http_response_code()), 'why' => mb_substr((string)($e['why'] ?? ''), 0, 120),
                 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 120), 'u' => $u ? $u['username'] : ''];
@@ -172,11 +206,13 @@ function fw_verkehr(array $e): void
         with_lock('verkehr', function () use ($row) {
             $v = store_read('verkehr') ?? [];
             // gleiche gesperrte Adresse innerhalb einer Minute: nur zählen statt jede Anfrage einzeln speichern
-            $last = $v ? $v[count($v) - 1] : null;
-            if ($last && $row['why'] !== '' && $last['ip'] === $row['ip'] && $last['why'] === $row['why'] && $last['t'] > $row['t'] - 60) {
-                $v[count($v) - 1]['n'] = (int)($last['n'] ?? 1) + 1;
-                $v[count($v) - 1]['t'] = $row['t'];
-            } else $v[] = $row;
+            $hit = null;
+            if ($row['why'] !== '') for ($i = count($v) - 1; $i >= max(0, count($v) - 30); $i--) {
+                if ($v[$i]['t'] < $row['t'] - 60) break;
+                if ($v[$i]['ip'] === $row['ip'] && $v[$i]['why'] === $row['why']) { $hit = $i; break; }
+            }
+            if ($hit !== null) { $v[$hit]['n'] = (int)($v[$hit]['n'] ?? 1) + 1; $v[$hit]['t'] = $row['t']; }
+            else $v[] = $row;
             if (count($v) > FW_VERKEHR_MAX) $v = array_slice($v, -FW_VERKEHR_MAX);
             store_write('verkehr', $v);
         });
@@ -188,7 +224,9 @@ function fw_guard(string $action): void
 {
     $ip = client_ip();
     if ($action === 'waf_probe') return;   // Falle: eigene Aktion
-    if (!fw_erlaubt($ip) && ($grund = fw_gesperrt($ip)) !== null) {
+    // Angemeldete Mitarbeiter kommen trotz Sperre der Adresse durch (z. B. Büro über eine fremde Seite gesperrt) – sie können
+    // die Sperre so selbst aufheben; ihre Anmeldung prüft Passwort, Zwei-Faktor und ggf. die IP-Freigabe weiterhin
+    if (!fw_erlaubt($ip) && !fw_mitarbeiter() && ($grund = fw_gesperrt($ip)) !== null) {
         fw_verkehr(['st' => 403, 'why' => 'Gesperrt: ' . $grund]);
         header('Retry-After: 600');
         fail('Der Zugriff von Ihrer Internetadresse ist vorübergehend gesperrt.', 403);
@@ -210,8 +248,8 @@ function fw_nachher(string $action): void
         $st = (int)http_response_code();
         $F = fw();
         $ip = client_ip();
-        $fehler = in_array($st, [400, 404, 405, 415], true) && !current_user();
-        if ($fehler && (int)$F['fehlerLimit'] > 0 && !fw_erlaubt($ip) && fw_zaehlen($ip, 'e', FW_FEHLER_FENSTER) >= (int)$F['fehlerLimit']) {
+        $fehler = in_array($st, [400, 404, 405, 415], true) && !fw_mitarbeiter();
+        if ($fehler && (int)$F['fehlerLimit'] > 0 && !fw_erlaubt($ip) && !fw_fremd() && fw_zaehlen($ip, 'e', FW_FEHLER_FENSTER) >= (int)$F['fehlerLimit']) {
             fw_auto_sperren($ip, 'zu viele fehlerhafte Anfragen');
         }
         if (in_array($action, FW_ANMELDUNG, true)) fw_verkehr(['st' => $st, 'why' => $st === 200 ? 'Anmeldung' : 'Anmeldung fehlgeschlagen']);
@@ -224,7 +262,7 @@ function fw_falle(): void
 {
     $ip = client_ip();
     $p = mb_substr(preg_replace('/[^\x20-\x7e]/', '', (string)($_GET['p'] ?? '')), 0, 80);
-    if (!fw_erlaubt($ip)) {
+    if (!fw_erlaubt($ip) && fw_gesperrt($ip) === null) {   // schon gesperrt: nur antworten, nichts schreiben
         fw_verkehr(['st' => 404, 'why' => 'Falle: ' . ($p !== '' ? $p : 'unbekannter Pfad')]);
         fw_treffer($ip, 'Suche nach Schwachstellen (' . ($p !== '' ? $p : 'Pfad') . ')');
     }
@@ -309,7 +347,7 @@ const FW_VORLAGEN = [
     'streng' => ['label' => 'Streng', 'text' => 'Mehr Schutz: Zwei-Faktor für alle, längere Passwörter, kürzere Sitzungen, Sperre nach 3 Treffern für einen Tag, Bedrohungsliste an.',
         'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'idleMinutes' => 60, 'lockAfter' => 5, 'lockMinutes' => 60],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 3, 'sperrMinuten' => 1440, 'fehlerLimit' => 20, 'feed' => true]],
-    'notfall' => ['label' => 'Notfall (laufender Angriff)', 'text' => 'Für akute Angriffe: Sperre schon nach dem ersten Treffer für 7 Tage, sehr kurze Sitzungen, Mitschnitt aller Anfragen für 60 Minuten.',
+    'notfall' => ['label' => 'Notfall (laufender Angriff)', 'text' => 'Für akute Angriffe: Sperre schon nach dem ersten Treffer für 7 Tage, sehr kurze Sitzungen, Mitschnitt aller Anfragen für 60 Minuten. Tipp: vorher die Büro-Adresse unter „nie sperren“ eintragen.',
         'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'idleMinutes' => 30, 'lockAfter' => 3, 'lockMinutes' => 240],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 1, 'sperrMinuten' => 10080, 'fehlerLimit' => 10, 'feed' => true, 'mitschnittMinuten' => 60]],
 ];

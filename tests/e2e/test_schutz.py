@@ -58,6 +58,10 @@ check('Speichern nur per POST', A.call('fw_save')[0] == 405)
 st, r = A.call('fw_status')
 check('Administrator: Übersicht mit Standard-Einstellungen', st == 200 and r['fw']['waf'] == 'sperren' and r['fw']['treffer'] == 5 and set(r['vorlagen']) == {'standard', 'streng', 'notfall'}, r.get('fw'))
 
+req = urllib.request.Request(BASE + '/api/?action=offer', headers={'X-Forwarded-For': '203.0.113.201'})
+r0 = urllib.request.urlopen(req, timeout=20)
+check('anonyme Anfragen bekommen durch die Firewall keine Sitzung (kein Cookie)', r0.code == 200 and not r0.headers.get('Set-Cookie'), r0.headers.get('Set-Cookie'))
+
 # ---------- Falle → automatische Sperre ----------
 X = '203.0.113.10'
 codes = [roh(X, 'waf_probe&p=/wp-login.php')[0] for _ in range(4)]
@@ -76,6 +80,16 @@ check('Benachrichtigung „Sicherheitsereignisse“ verschickt', any('Sicherheit
 for i in range(5): roh(f'3fff:0:5:6::{i + 1}', 'waf_probe&p=/xmlrpc.php')   # 3fff::/20: Dokumentationsnetz (RFC 9637)
 check('IPv6: Sperre gilt für das ganze /64', roh('3fff:0:5:6:abcd::1', 'offer')[0] == 403 and roh('3fff:0:5:7::1', 'offer')[0] == 200)
 
+# ---------- von fremden Seiten ausgelöst: abweisen, aber nicht zählen ----------
+def fremd(ip, query):
+    req = urllib.request.Request(BASE + '/api/?action=' + query, headers={'X-Forwarded-For': ip, 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Dest': 'image'})
+    try: return urllib.request.urlopen(req, timeout=20).code
+    except urllib.error.HTTPError as ex: return ex.code
+codes = [fremd('203.0.113.12', 'waf_probe&p=/wp-login.php') for _ in range(8)]
+check('Bild auf fremder Seite (Sec-Fetch-Site: cross-site): 404, aber keine Sperre des Besuchers', codes == [404] * 8 and roh('203.0.113.12', 'offer')[0] == 200, codes)
+codes = [fremd('203.0.113.13', 'offer&x=%3Cscript%3E') for _ in range(8)]
+check('… Firewall-Treffer von fremder Seite: abgewiesen, nicht gezählt', codes == [403] * 8 and roh('203.0.113.13', 'offer')[0] == 200, codes)
+
 # ---------- Firewall-Muster ----------
 Y = '203.0.113.20'
 st, body = roh(Y, "offer&angebot=x%27%20union%20select%201,2--")
@@ -88,6 +102,8 @@ st, _ = roh('203.0.113.24', 'kunde_login', data=b'{"username":"\\u003cscript\\u0
 check('… auch versteckt als \\u003cscript', st == 403)
 st, _ = roh('203.0.113.25', 'kunde_login', data=json.dumps({'username': 'kantine.nord', 'password': 'Bitte <b>vakuumiert</b>, 10 % Rabatt; Lieferung 2x'}).encode())
 check('normale Eingaben (mit <b>, Prozent, Semikolon) kommen durch', st == 401, st)
+st, _ = roh('203.0.113.26', 'kunde_login', data=json.dumps({'username': 'kantine.nord', 'password': "Passwort-mit-<script>-und-' or 1=1"}).encode())
+check('Passwörter werden nicht auf Muster geprüft (beliebige Zeichen erlaubt)', st == 401, st)
 rev = A.call('kunden')[1]['rev']
 st, r = A.call('kunde_save', {'rev': rev, 'firma': 'Test <script>alert(1)</script> GmbH', 'nr': 'FW-1', 'email': 'fw@example.org', 'active': True, 'angebote': []})
 check('angemeldete Mitarbeiter: Inhalt nicht geprüft (Speichern möglich, Ausgabe wird ohnehin maskiert)', st == 200, r)
@@ -127,6 +143,12 @@ st, r = A.call('fw_sperren', {'ip': '203.0.113.64/30', 'minuten': 1440, 'grund':
 check('Bereich gesperrt (bis morgen)', st == 200 and any(e['ip'] == '203.0.113.64/30' and e['grund'] == 'Test <Bereich>' and e['bis'] > time.time() + 86000 for e in r['manuell']), r.get('manuell'))
 check('… gilt für Adressen im Bereich', roh('203.0.113.66', 'offer')[0] == 403 and roh('203.0.113.70', 'offer')[0] == 200)
 check('Protokoll: von Hand gesperrt', 'Adresse 203.0.113.64/30 von Hand gesperrt' in json.dumps(A.call('log')[1], ensure_ascii=False))
+check('gesperrte Adresse: Anmeldung von dort abgewiesen', Client('203.0.113.65').call('login', {'username': 'admin', 'password': PW})[0] == 403)
+Mi = Client('203.0.113.65')
+storage_write('sperrliste', {**doc('sperrliste'), 'manuell': []})
+assert Mi.call('login', {'username': 'admin', 'password': PW})[0] == 200
+assert A.call('fw_sperren', {'ip': '203.0.113.64/30', 'minuten': 1440, 'grund': 'Test <Bereich>'})[0] == 200
+check('bestehende Mitarbeiter-Sitzung kommt trotz Sperre durch (kann selbst freigeben)', Mi.call('fw_status')[0] == 200 and roh('203.0.113.65', 'offer')[0] == 403)
 st, r = A.call('fw_freigeben', {'ip': '203.0.113.64/30'})
 check('freigeben hebt die Sperre auf', st == 200 and roh('203.0.113.66', 'offer')[0] == 200)
 st, r = A.call('fw_freigeben', {'ip': X})
@@ -187,6 +209,10 @@ check('Export: Sicherheit + Firewall, ohne Mitschnitt', st == 200 and x.get('art
 x['sicherheit']['pwMin'] = 14; x['firewall']['treffer'] = 7
 st, r = A.call('fw_import', {'export': x})
 check('Import übernimmt die Werte', st == 200 and doc('sicherheit')['pwMin'] == 14 and doc('firewall')['treffer'] == 7, r.get('error'))
+check('Export enthält keine Adress- und Länderlisten', 'adminIps' not in x['sicherheit'] and 'geoCountries' not in x['sicherheit'] and 'erlaubt' not in x['firewall'])
+x2 = {**x, 'sicherheit': {**x['sicherheit'], 'adminIps': ['192.0.2.1'], 'ipEnabled': True}}
+st, r = A.call('fw_import', {'export': x2})
+check('Import übernimmt keine Adresslisten (Schutz vor Aussperren)', st == 200 and not doc('sicherheit').get('ipEnabled') and doc('sicherheit').get('adminIps', []) == [], r.get('error'))
 check('fremde Datei abgewiesen', A.call('fw_import', {'export': {'art': 'etwas', 'version': 1}})[0] == 422)
 check('Protokoll: Import und Vorlage', 'Sicherheitseinstellungen aus Datei übernommen' in json.dumps(A.call('log')[1], ensure_ascii=False))
 A.call('fw_save', {'treffer': 5})

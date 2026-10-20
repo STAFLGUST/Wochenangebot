@@ -13,16 +13,16 @@ switch ($action) {
             respond(['ok' => true, 'passkeys' => passkey_public($me), 'max' => PASSKEY_MAX]);
         }
 
-        /* Einrichtung starten – wie bei der Authenticator-App nur mit Passwort, außer direkt nach der Anmeldung ohne zweiten Faktor */
+        /* Einrichtung starten – immer mit Passwort: ein Passkey ist ein vollwertiger Zugang (auch ohne Passwort und trotz Sperre),
+           darf also nicht mit einer übernommenen frischen Sitzung oder einem Startpasswort hinterlegt werden */
         case 'passkey_begin': {
             $me = current_user();
             if (!$me) fail('Bitte erneut anmelden.', 401);
             require_csrf();
             if (app_client()) fail(PASSKEY_APP_FEHLER, 403);
             unset($_SESSION['pkReg']);
-            // ein mitgesendetes Passwort wird immer geprüft (Dialog im Menü)
-            $pw = (string)(body()['password'] ?? '');
-            if ($pw !== '' || has_second_factor($me) || (int)($_SESSION['authAt'] ?? 0) < time() - 300) $me = confirm_password($me, $pw);
+            if (!empty($me['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
+            $me = confirm_password($me, (string)(body()['password'] ?? ''));
             if (count((array)($me['passkeys'] ?? [])) >= PASSKEY_MAX) fail('Es sind höchstens ' . PASSKEY_MAX . ' Passkeys je Zugang möglich. Bitte zuerst einen entfernen.', 422);
             $c = passkey_challenge('pkReg', ['uid' => $me['id'], 'sv' => (int)$me['sv']]);
             respond(['ok' => true, 'options' => passkey_create_options($me, $c)]);
@@ -155,15 +155,12 @@ switch ($action) {
                 if ($pend && ((string)$pend['uid'] !== $u['id'] || (int)$pend['sv'] !== (int)$u['sv'])) return ['wrong', $u, $name];
                 // Keine Sperrprüfung: ein Passkey (Gerät + Bestätigung) lässt sich nicht erraten – eine durch fremde Fehlversuche
                 // ausgelöste Kontosperre soll den Inhaber nicht aussperren (wie Passwort + Code, siehe login)
-                if (!passkey_signature_ok($pk, $ad, $cdRaw, $sig)) {
-                    $lockedNow = login_failure($u);
-                    $out = $u; unset($u);
-                    users_save($users);
-                    return [$lockedNow ? 'lockednow' : 'bad', $out, $name];
-                }
+                // Ungültige Signatur zählt nicht für die Kontosperre (sonst könnte jeder mit einer bekannten Kennung den Zugang
+                // sperren); die Bremse je Adresse (attempts_record) greift weiterhin
+                if (!passkey_signature_ok($pk, $ad, $cdRaw, $sig)) { $out = $u; unset($u); return ['bad', $out, $name]; }
                 // Signaturzähler: kleiner oder gleich dem gespeicherten → möglicherweise kopierter Schlüssel
                 $old = (int)($pk['signCount'] ?? 0); $new = (int)$info['signCount'];
-                if ($new > 0 && $old > 0 && $new <= $old) return ['clone', $u, $name];
+                if (($new > 0 || $old > 0) && $new <= $old) return ['clone', $u, $name];   // auch Rückfall auf 0 nach einem Zähler > 0
                 if (!$u['active']) return ['inactive', $u, $name];
                 $u['passkeys'][$k]['signCount'] = max($old, $new);   // Zähler nie zurücksetzen (manche Geräte melden immer 0)
                 $u['passkeys'][$k]['lastUsed'] = now();
