@@ -32,7 +32,7 @@ switch ($action) {
         case 'reauth': {
             $me = require_auth(true);
             // Passwortbestätigung nur für Nutzer, die bestätigungspflichtige Aktionen ausführen dürfen
-            if ($me['role'] !== 'admin' && !array_intersect(user_perms($me), ['kunden.bearbeiten', 'wochenangebot.senden', 'sonderposten.senden', 'angebote.loeschen'])) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            if ($me['role'] !== 'admin' && !array_intersect(user_perms($me), ['kunden.bearbeiten', 'wochenangebot.senden', 'sonderposten.senden', 'angebote.loeschen', 'einzelangebote.bearbeiten'])) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             $u = confirm_password($me, (string)(body()['password'] ?? ''));
             mark_admin_confirmed($u);
             audit('reauth', 'Sensible Verwaltungsaktionen für fünf Minuten bestätigt');

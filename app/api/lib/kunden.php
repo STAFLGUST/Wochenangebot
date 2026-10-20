@@ -82,6 +82,7 @@ function kunde_payload(array $c): array
 {
     $names = [];
     foreach (customer_offers($c) as $id) { $d = offer_def($id); if ($d) $names[] = ['id' => $id, 'name' => $d['name']]; }
+    foreach (einzel_fuer_kunde($c) as $e) $names[] = ['id' => 'e-' . $e['id'], 'name' => einzel_titel($e), 'einzel' => true, 'gueltigBis' => $e['gueltigBis'] ?? null];
     return ['firma' => $c['firma'], 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'username' => $c['login']['username'],
             'mustChange' => !empty($c['login']['mustChange']), 'angebote' => $names];
 }

@@ -206,7 +206,7 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
   function viewAllowed(v) {
     if (['mail', 'users', 'sec'].includes(v)) return can('admin');
     if (v === 'gruppen') return may('stammdaten.sehen') || may('kunden.sehen');
@@ -1836,7 +1836,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'hist', 'stock', 'einkauf', 'master', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec'];
   function setView(v) {
     if (!viewAllowed(v)) v = 'edit';
@@ -1856,6 +1856,7 @@
     if (v === 'einkauf' && window.WA.views.einkauf) window.WA.views.einkauf();
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();
     if (v === 'gruppen' && window.WA.views.gruppen) window.WA.views.gruppen();
+    if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
     if (v === 'log' && window.WA.views.log) window.WA.views.log();

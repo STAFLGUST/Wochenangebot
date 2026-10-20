@@ -9,7 +9,7 @@
 <link rel="icon" href="../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=4acd7a00d0">
-<link rel="stylesheet" href="../assets/admin.css?v=463b1d9cba">
+<link rel="stylesheet" href="../assets/admin.css?v=58f54796e0">
 </head>
 <body class="adm">
 
@@ -70,6 +70,7 @@
   <nav class="side-nav" aria-label="Bereiche">
     <div class="view-tabs side-tabs" role="tablist" aria-orientation="vertical" aria-label="Bereich wählen">
       <button role="tab" type="button" id="vt-edit" aria-selected="true" aria-controls="view-edit"><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebot<span class="m-hide"> bearbeiten</span></span></button>
+      <button role="tab" type="button" id="vt-einzel" aria-selected="false" aria-controls="view-einzel" hidden><svg class="i" aria-hidden="true"><use href="#i-file"/></svg><span>Einzelangebote<span class="m-hide"> erstellen</span></span></button>
       <button role="tab" type="button" id="vt-hist" aria-selected="false" aria-controls="view-hist"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg><span>Preisverlauf</span></button>
       <button role="tab" type="button" id="vt-stock" aria-selected="false" aria-controls="view-stock"><svg class="i" aria-hidden="true"><use href="#i-box"/></svg><span>Bestand</span></button>
       <button role="tab" type="button" id="vt-einkauf" aria-selected="false" aria-controls="view-einkauf"><svg class="i" aria-hidden="true"><use href="#i-cart"/></svg><span>Einkauf</span></button>
@@ -121,6 +122,7 @@
     <div id="view-hist" hidden></div>
     <div id="view-stock" hidden></div>
     <div id="view-einkauf" hidden></div>
+    <div id="view-einzel" hidden></div>
     <div id="view-master" hidden></div>
     <div id="view-orders" hidden></div>
     <div id="view-kunden" hidden></div>
@@ -174,6 +176,7 @@
 <dialog class="modal wide" id="dlg-kunde" aria-labelledby="kd-title"><form class="dlg" id="kunde-body" autocomplete="off"></form></dialog>
 <dialog class="modal" id="dlg-kgruppe" aria-labelledby="kg-title"><form class="dlg" id="kgruppe-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-kg-import" aria-labelledby="kgi-title"><div class="dlg" id="kg-import-body"></div></dialog>
+<dialog class="modal" id="dlg-einzel-mail" aria-labelledby="em-title"><form class="dlg" id="einzel-mail-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-rund" aria-labelledby="rd-title"><div class="dlg" id="rund-body"></div></dialog>
 <!-- Zwei-Faktor-Anmeldung -->
 <dialog class="modal" id="dlg-twofa" aria-labelledby="tf-title"><div class="dlg" id="twofa-body"></div></dialog>
@@ -245,8 +248,9 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=59eb27542c"></script>
-<script src="../assets/admin.js?v=e245bfa28e"></script>
-<script src="../assets/admin-verwaltung.js?v=4ad7ca9368"></script>
+<script src="../assets/admin.js?v=39f980ce6f"></script>
+<script src="../assets/admin-verwaltung.js?v=fb6f7a9ae2"></script>
+<script src="../assets/admin-einzel.js?v=0d244ef196"></script>
 <script src="../assets/admin-auswertung.js?v=f28d8770e4"></script>
 </body>
 </html>

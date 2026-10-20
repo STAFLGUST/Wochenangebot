@@ -10,6 +10,16 @@ switch ($action) {
             $oid = (string)($_GET['angebot'] ?? OFFER_STD);
             if ($oid === '') $oid = OFFER_STD;
             if (!preg_match('/^[a-z0-9-]{1,40}$/', $oid)) fail('Unbekanntes Angebot.', 404);
+            if (strncmp($oid, 'e-', 2) === 0) {   // Einzelangebot: nur der Kunde selbst (freigegeben, gültig) oder Mitarbeiter mit Recht
+                $e = einzel_von_kennung($oid);
+                if (current_user()) { require_perm('einzelangebote.sehen'); if (!$e) fail('Unbekanntes Angebot.', 404); }
+                elseif ($k = current_customer()) {
+                    if (!empty($k['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
+                    if (!$e || $e['kid'] !== $k['id'] || !einzel_sichtbar($e)) fail('Dieses Angebot ist für Ihren Zugang nicht (mehr) verfügbar.', 403);
+                } else fail('Bitte anmelden.', 401);
+                header('Cache-Control: private, no-store');
+                respond(['ok' => true, 'company' => $CFG['company'], 'offer' => einzel_model($e), 'fracht' => fracht_public()]);
+            }
             if ($oid !== OFFER_STD || !std_public()) {
                 // Mitarbeiter sehen alle Angebote; Kunden nur freigeschaltete; sonst Anmeldung nötig
                 if (current_user()) require_auth();
