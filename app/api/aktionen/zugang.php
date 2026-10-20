@@ -72,10 +72,13 @@ switch ($action) {
                     if ($u['username'] !== $name) continue;
                     if ((int)($u['lockedUntil'] ?? 0) > time()) {
                         // Gesperrt: richtiges Passwort + zweiter Faktor kommt trotzdem durch (sonst könnte jeder durch Fehlversuche
-                        // den Inhaber aussperren); ohne zweiten Faktor bleibt die Sperre bestehen
-                        // – aber höchstens 3 Code-Versuche je Sperre, damit niemand mit bekanntem Passwort unbegrenzt Codes raten kann
-                        if (password_verify($pw, (string)$u['hash']) && $u['active'] && !empty($u['totp']) && (int)($u['lockTries'] ?? 0) < 3) return ['ok_locked', $u];
-                        return ['locked', $u];
+                        // den Inhaber aussperren). Damit die Antwort nichts verrät, bekommt während der Sperre JEDES Passwort den
+                        // Code-Schritt (auch bei Zugängen ohne zweiten Faktor und bei unbekannten Namen, siehe unten); wirksam ist er nur
+                        // bei richtigem Passwort, aktivem Zugang mit Authenticator-App und solange von den 3 Code-Versuchen je Sperre
+                        // (über alle Anmeldevorgänge, siehe login_2fa) noch welche übrig sind. Hier wird nichts gespeichert.
+                        $ok = password_verify($pw, (string)$u['hash']);
+                        if ($ok && $u['active'] && !empty($u['totp']) && (int)($u['lockTries'] ?? 0) < 3) return ['ok_locked', $u];
+                        return ['locked_code', $u];
                     }
                     if (!empty($u['lockTries'])) { unset($users[$i]['lockTries']); $u = $users[$i]; users_save($users); }   // Sperre abgelaufen
                     if (!password_verify($pw, (string)$u['hash'])) {
@@ -98,9 +101,24 @@ switch ($action) {
                 return ['bad', null];
             });
             [$st, $u] = $res;
-            if ($st === 'bad' && $u === null && ($until = ghost_lock('u', $name, true))) { $st = 'locked'; $u = ['lockedUntil' => $until]; }   // unbekannter Name: gleiche Sperre
+            if ($st === 'bad' && $u === null && ($until = ghost_lock('u', $name, true, $neu))) {   // unbekannter Name: gleiche Sperre
+                $st = $neu ? 'lockednow' : 'locked_code';
+                $u = ['lockedUntil' => $until];
+            }
             $who = ['username' => mb_substr($name, 0, 40), 'name' => $u['name'] ?? '', 'role' => $u['role'] ?? ''];
-            if ($st !== 'ok' && $st !== 'ok_locked') {
+            if ($st === 'ok_locked' || $st === 'locked_code') {
+                // Während einer Sperre: für jedes Passwort dieselbe Antwort (Code-Schritt mit Hinweis auf die Sperre)
+                attempts_record(false);
+                audit('login_fail', 'Anmeldung während der Sperre' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '')
+                    . ($st === 'ok_locked' ? ' – Passwort richtig, Code-Schritt' : ''), [], $who);
+                usleep(400000);
+                session_regenerate_id(true);
+                $_SESSION = ['pend' => $st === 'ok_locked'
+                    ? ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => true, 'bis' => (int)$u['lockedUntil']]
+                    : ['uid' => '', 'sv' => 0, 't' => time(), 'n' => 0, 'lk' => true, 'bis' => (int)$u['lockedUntil'], 'fake' => true, 'name' => mb_substr($name, 0, 40)]];
+                respond(['ok' => true, 'need2fa' => true, 'methods' => ['totp'], 'gesperrtBis' => (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i')]);
+            }
+            if ($st !== 'ok') {
                 attempts_record(false);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
@@ -109,16 +127,16 @@ switch ($action) {
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche bis ' . (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i') . ' Uhr gesperrt. Ein Administrator kann ihn vorher entsperren.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
-            if ($st === 'ok_locked' || has_second_factor($u)) {
+            if (has_second_factor($u)) {
                 // Die App kennt nur den Code aus der Authenticator-App (keine Passkeys)
                 if (app_client() && empty($u['totp'])) {
                     audit('login_fail', 'Anmeldung in der App nicht möglich – nur Passkey eingerichtet', [], $who);
                     respond(['ok' => false, 'code' => 'app_totp_required', 'error' => 'Für die Anmeldung in der App ist die Authenticator-App nötig. Bitte im Eingabebereich im Browser unter „Zwei-Faktor-Anmeldung“ einrichten.'], 403);
                 }
-                // zweiter Schritt: Code aus der Authenticator-App oder Passkey (lk: Zugang ist gesperrt – nur mit Code weiter, höchstens 3 Versuche)
+                // zweiter Schritt: Code aus der Authenticator-App oder Passkey (gesperrte Zugänge: siehe oben)
                 session_regenerate_id(true);
-                $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => $st === 'ok_locked']];
-                $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) && !app_client() && $st !== 'ok_locked' ? 'passkey' : null]));
+                $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => false]];
+                $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) && !app_client() ? 'passkey' : null]));
                 respond(['ok' => true, 'need2fa' => true, 'methods' => $methods]);
             }
             attempts_record(true);
@@ -131,14 +149,23 @@ switch ($action) {
             start_session();
             attempts_check();
             $p = $_SESSION['pend'] ?? null;
-            if (!$p || (int)$p['t'] < time() - 300) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
+            // Code-Schritt aus einer Sperre endet mit der Sperre – echte und wirkungslose Vorgänge gleich (sonst verriete das
+            // Verhalten nach Ablauf, welcher Vorgang das richtige Passwort hatte)
+            if (!$p || (int)$p['t'] < time() - 300 || (!empty($p['lk']) && time() >= (int)($p['bis'] ?? 0))) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             $code = trim((string)(body()['code'] ?? ''));
             $res = with_lock('nutzer', function () use ($p, $code) {
                 $users = users_load();
+                // Code-Schritt ohne wirksame Anmeldung (während einer Sperre mit falschem Passwort, ohne App, unbekannter Name):
+                // immer abweisen – mit derselben Antwort und demselben Aufwand wie ein falscher Code
+                if (!empty($p['fake'])) { users_save($users); return ['bad', ['username' => (string)($p['name'] ?? ''), 'name' => '', 'role' => '']]; }
                 $i = user_find($users, (string)$p['uid']);
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || empty($users[$i]['totp'])) return ['gone', null];
                 $u = &$users[$i];
-                if ((int)($u['lockedUntil'] ?? 0) > time() && empty($p['lk'])) return ['locked', $u];
+                $gesperrt = (int)($u['lockedUntil'] ?? 0) > time();
+                if (!empty($p['lk']) && !$gesperrt) return ['abgelaufen', null];   // Sperre vorzeitig aufgehoben (Administrator): neu anmelden
+                if ($gesperrt && empty($p['lk'])) return ['locked', $u];
+                // höchstens 3 Code-Versuche je Sperre – über alle parallelen Anmeldevorgänge; danach wie ein falscher Code
+                if ($gesperrt && (int)($u['lockTries'] ?? 0) >= 3) { $out = $u; unset($u); users_save($users); return ['bad', $out]; }
                 $how = null;
                 $step = totp_check((string)$u['totp'], $code, (int)($u['totpLast'] ?? 0));
                 if ($step !== null) { $u['totpLast'] = $step; $how = 'app'; }
@@ -148,7 +175,11 @@ switch ($action) {
                     if ($k !== false) { array_splice($u['recovery'], $k, 1); $how = 'recovery'; }
                 }
                 if (!$how) {
-                    if (!empty($p['lk'])) $u['lockTries'] = (int)($u['lockTries'] ?? 0) + 1;   // Code-Versuch während der Sperre
+                    if ($gesperrt) {   // Code-Versuch während der Sperre: zählt nur gegen die 3 Versuche (Antwort wie sonst)
+                        $u['lockTries'] = (int)($u['lockTries'] ?? 0) + 1;
+                        users_save($users);
+                        return ['bad', $u];
+                    }
                     $locked = login_failure($u);
                     users_save($users);
                     return [$locked ? 'locked' : 'bad', $u];
@@ -164,6 +195,7 @@ switch ($action) {
             });
             [$st, $u] = $res;
             if ($st === 'gone') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
+            if ($st === 'abgelaufen') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             if ($st === 'bad' || $st === 'locked') {
                 attempts_record(false);
                 $_SESSION['pend']['n'] = (int)$p['n'] + 1;

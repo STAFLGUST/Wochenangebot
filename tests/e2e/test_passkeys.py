@@ -408,9 +408,22 @@ with sync_playwright() as p:
     check('inactive user rejected', st == 401 and 'deaktiviert' in r['error'], r)
     check('audit: inactive', logged('login_fail', 'Zugang deaktiviert', 'tom'))
     post(a, 'user_save', {'id': tom_id, 'name': 'Tom Muster', 'role': 'editor', 'active': True})
-    set_user('tom', lockedUntil=int(time.time()) + 600)
+    # Während einer Sperre: Code-Schritt (echt bei richtigem Passwort, sonst wirkungslos) bietet keinen Passkey als zweiten
+    # Schritt – beide Vorgänge antworten gleich, damit sich das richtige Passwort nicht erkennen lässt
+    set_user('tom', lockedUntil=int(time.time()) + 600, totp='JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', totpLast=0)
+    echt, wirkungslos = PkClient('192.0.2.54'), PkClient('192.0.2.55')
+    e1, w1 = echt.login('tom', 'Bearbeiter-Zugang-1'), wirkungslos.login('tom', 'Falsches-Passwort-1')
+    check('gesperrt: richtiges und falsches Passwort → gleicher Code-Schritt (nur Code)', e1 == w1 and e1[1].get('methods') == ['totp'] and e1[1].get('gesperrtBis'), (e1, w1))
+    e2, w2 = echt.call('passkey_login_begin', {'second': True}), wirkungslos.call('passkey_login_begin', {'second': True})
+    check('… Passkey als zweiter Schritt in beiden Fällen gleich abgewiesen', e2 == w2 and e2[0] == 401, (e2, w2))
+    d = read_users()
+    for x in d['users']:
+        if x['username'] == 'tom': x.pop('totp', None); x.pop('totpLast', None)
+    storage_write('nutzer', d)
+    set_user('tom', lockedUntil=int(time.time()) + 600, lockTries=3)
     st, r = PkClient('192.0.2.51').pk_login(k1)
     check('locked account (fremde Fehlversuche): Passkey kommt trotzdem durch und hebt die Sperre auf', st == 200 and r.get('user', {}).get('username') == 'tom', r)
+    check('… und setzt die Code-Versuche der Sperre zurück', 'lockTries' not in user('tom') and not user('tom').get('lockedUntil'), user('tom'))
     set_user('tom', lockedUntil=0, mustChange=True)
     st, r = PkClient('192.0.2.52').pk_login(k1)
     check('password change pending → passkey login refused', st == 403 and 'neues Passwort' in r['error'], r)

@@ -178,6 +178,19 @@ function changes_summary(array $d): string
 /* Darf diese Gegenstelle die Besucher-IP weiterreichen (X-Forwarded-For)?
    WA_TRUSTED_PROXIES (Docker: „caddy“) = Liste aus Namen, IP-Adressen oder Netzen; nur diese gelten als eigener Proxy.
    Ohne Angabe (Hostinger, lokale Tests) wie bisher: jede private Adresse. */
+/* Zuletzt aufgelöste Adressen eines Proxy-Namens (im Datenordner, sonst im Temp-Ordner; nur vom Server selbst geschrieben,
+   getrennt nach IPv4/IPv6). Aufgelöst: merken, wenn neu; nicht aufgelöst: die gemerkten zurückgeben (leer = nie aufgelöst). */
+function proxy_adressen_merken(string $name, array $adr, string $familie = '4'): array
+{
+    $dir = !empty($GLOBALS['DATA']) && is_dir($GLOBALS['DATA']) && is_writable($GLOBALS['DATA']) ? $GLOBALS['DATA'] : sys_get_temp_dir();
+    $f = rtrim($dir, '/') . '/wa-proxy-' . $familie . '-' . hash('sha256', $name) . '.json';
+    $alt = is_file($f) ? json_decode((string)@file_get_contents($f), true) : null;
+    $alt = is_array($alt) ? array_values(array_filter($alt, fn($x) => is_string($x) && filter_var($x, FILTER_VALIDATE_IP))) : [];
+    if (!$adr) return $alt;
+    sort($adr);
+    if ($adr !== $alt) { $tmp = $f . '.' . bin2hex(random_bytes(4)); if (@file_put_contents($tmp, json_encode($adr)) !== false) @rename($tmp, $f); }
+    return $adr;
+}
 function trusted_proxy(string $ip): bool
 {
     static $cache = [];
@@ -188,13 +201,17 @@ function trusted_proxy(string $ip): bool
     foreach (preg_split('/[\s,]+/', $cfg) as $t) {
         if ($t === '') continue;
         if (strpos($t, '/') !== false) { $aufgeloest = true; if (function_exists('ip_in') && ip_in($ip, $t)) return $cache[$ip] = true; continue; }
-        if (filter_var($t, FILTER_VALIDATE_IP)) { $aufgeloest = true; if ($t === $ip) return $cache[$ip] = true; continue; }
+        if (filter_var($t, FILTER_VALIDATE_IP)) { $aufgeloest = true; if (@inet_pton($t) === @inet_pton($ip)) return $cache[$ip] = true; continue; }
         if (!preg_match('/^[a-z0-9.-]{1,253}$/i', $t)) continue;
-        $adr = gethostbynamel($t) ?: [];   // Docker-Dienstname
+        $adr = gethostbynamel($t) ?: [];   // Docker-Dienstname (IPv4)
+        if (strpos($ip, ':') !== false && function_exists('dns_get_record')) $adr = array_merge($adr, array_column(@dns_get_record($t, DNS_AAAA) ?: [], 'ipv6'));   // IPv6-Netz
+        $adr = proxy_adressen_merken($t, $adr, strpos($ip, ':') !== false ? '6' : '4');   // kurze DNS-Störung: zuletzt aufgelöste Adressen weiterverwenden
         if ($adr) $aufgeloest = true;
-        if (in_array($ip, $adr, true)) return $cache[$ip] = true;
+        $bin = @inet_pton($ip);
+        foreach ($adr as $a) if ($bin !== false && @inet_pton($a) === $bin) return $cache[$ip] = true;   // binär vergleichen (IPv6-Schreibweisen)
     }
-    // Kein Name auflösbar (DNS-Störung): wie ohne Angabe, sonst hätten alle Besucher die Adresse des Proxys
+    // Kein Name auflösbar und noch nie aufgelöst (z. B. DNS-Störung direkt nach dem Start): wie ohne Angabe, sonst hätten alle
+    // Besucher die Adresse des Proxys (Sperren und Grenzen träfen alle gemeinsam). Im Produktivnetz sind nur Caddy und die App.
     if (!$aufgeloest) return $cache[$ip] = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
     return $cache[$ip] = false;
 }

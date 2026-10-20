@@ -101,6 +101,9 @@ switch ($action) {
             if ($second) {
                 $p = $_SESSION['pend'] ?? null;
                 if (!is_array($p) || (int)$p['t'] < time() - 300) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
+                // Code-Schritt einer Sperre (echt oder wirkungslos): kein Passkey als zweiter Schritt – gleiche Antwort für beide,
+                // damit sie sich nicht unterscheiden lassen (Passkey-Anmeldung direkt auf der Anmeldeseite geht weiterhin)
+                if (!empty($p['lk'])) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
                 $users = users_load();
                 $i = user_find($users, (string)$p['uid']);
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || !has_passkeys($users[$i])) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
@@ -167,6 +170,7 @@ switch ($action) {
                 if (!empty($u['mustChange'])) { $out = $u; unset($u); users_save($users); return ['mustchange', $out, $name]; }
                 $u['failCount'] = 0;
                 $u['lockedUntil'] = 0;
+                unset($u['lockTries']);   // Zähler der Sperre zurücksetzen (wie nach Passwort + Code)
                 $u['lastLogin'] = now();
                 $out = $u; unset($u);
                 users_save($users);
