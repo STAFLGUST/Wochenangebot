@@ -12,7 +12,8 @@ import subprocess
 import sys
 import urllib.request
 import zlib
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
@@ -24,6 +25,11 @@ PW = 'Sicheres-Passwort-1'
 KPW = 'Kantine-Kennwort-5'
 res = []
 
+
+
+def de_datum(iso):
+    """Datum eines gespeicherten UTC-Zeitstempels in deutscher Zeit (wie Server und Browser es anzeigen)."""
+    return datetime.fromisoformat(iso.replace('Z', '+00:00')).astimezone(ZoneInfo('Europe/Berlin')).strftime('%d.%m.%Y')
 
 def check(n, c, i=''):
     res.append(bool(c))
@@ -131,7 +137,7 @@ st, h, pdf = headers(A, 'einzel_pdf&id=' + e['id'])
 inh = pdf_inhalt(pdf) if st == 200 else ''
 check('PDF: langer Titel gekürzt (…) statt über den Rand', st == 200 and '…' in inh and TITEL not in inh, st)
 check('PDF: lange Artikelnummer vollständig', 'ABCDEFGHIJ-1234567' in inh)
-stand = date.fromisoformat(e['freigegebenAt'][:10]).strftime('%d.%m.%Y')
+stand = de_datum(e['freigegebenAt'])
 check('PDF: Stand = Freigabe des Angebots', 'Stand ' + stand in inh, stand)
 
 # kleines Einzelangebot (2 Positionen) für den Portal-Druck
@@ -145,7 +151,7 @@ pub = A.call('draft')[1]['published']
 pub['items'][0]['price'] = {'status': 'value', 'value': 4.125}
 PCODE = pub['items'][0]['code']
 assert A.call('publish', {'model': pub})[0] == 200
-PUB_DATE = date.fromisoformat(A.call('draft')[1]['published']['publishedAt'][:10]).strftime('%d.%m.%Y')
+PUB_DATE = de_datum(A.call('draft')[1]['published']['publishedAt'])
 
 errors = []
 INIT = 'window.print = () => { window.__printed = (window.__printed || 0) + 1; };'
