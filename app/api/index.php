@@ -32,6 +32,7 @@
  *   GET  ?action=offers            Angebote (Standard + Kundenangebote), angemeldet
  *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
  *   GET  ?action=kunden            Kundenstammdaten (nur Administrator); POST kunde_save | kunde_delete
+ *   POST ?action=kunden_import     Kundenstammdaten aus der Warenwirtschaft (CSV im Browser gelesen; pruefen = Vorschau)
  *   GET  ?action=einzel_liste | einzel_detail | einzel_artikel   Einzelangebote je Kunde; POST einzel_save | einzel_status | einzel_loeschen | einzel_senden
  *   GET  ?action=kundengruppen     Kundengruppen (Stammdaten); POST kundengruppen_save (ganze Liste, Revision)
  *   GET  ?action=vkgruppen         VK-Gruppen (Stammdaten, Artikel über vkGruppe); POST vkgruppen_save
@@ -115,7 +116,7 @@ $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'stock_import', 'master_save',
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
-                 'kunde_save', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
+                 'kunde_save', 'kunde_delete', 'kunden_import', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
                  'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden'];
 if (in_array($action, $writeActions, true)) {

@@ -126,4 +126,79 @@ switch ($action) {
             audit('customers', "Kunde „{$c['firma']}“ gelöscht", [['k' => "c$id|-", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Kunde gelöscht', 'from' => $c['firma'], 'to' => '']]);
             respond(['ok' => true, 'rev' => $d['rev']]);
         }
+
+        case 'kunden_import': {
+            /* Kundenstammdaten aus der Warenwirtschaft (CSV im Browser gelesen): Abgleich über die Kundennummer, sonst über
+               Firma + PLZ bei Kunden ohne Nummer. Übernommen werden Nummer, Firma, Adresse, Land, Telefon, E-Mail und
+               Kundengruppe; bestehende Kunden behalten Firma, E-Mail, Zugang und Freischaltungen (leere Felder werden ergänzt).
+               Neue Kunden: aktiv, ohne Zugang, ohne Wochenangebot per E-Mail (Einverständnis fehlt), Angebote über die Kundengruppe.
+               „pruefen“ liefert nur die Vorschau; Übernehmen braucht die Passwortbestätigung. */
+            $b = body();
+            $pruefen = !empty($b['pruefen']);
+            $me = $pruefen ? require_perm('kunden.bearbeiten', true) : require_perm_confirmed('kunden.bearbeiten');
+            $rows = is_array($b['rows'] ?? null) ? $b['rows'] : [];
+            if (!$rows) fail('Keine Kunden in der Datei gefunden.', 422);
+            if (count($rows) > 10000) fail('Zu viele Zeilen (höchstens 10.000).', 422);
+            $anlegen = !array_key_exists('anlegen', $b) || !empty($b['anlegen']);
+            $quelle = s($b['quelle'] ?? '', 120) ?? '';
+            $FELDER = ['nr', 'firma', 'strasse', 'plz', 'ort', 'land', 'telefon', 'email', 'gruppe'];
+            $res = with_lock('kunden', function () use ($b, $rows, $anlegen, $pruefen, $FELDER) {
+                $d = customers_load();
+                if (!$pruefen && (int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte die Vorschau neu laden.', 409);
+                $gruppen = array_flip(array_column(kundengruppen_load()['groups'], 'nr'));
+                $byNr = []; $byName = [];
+                foreach ($d['customers'] as $i => $c) {
+                    if (($c['nr'] ?? '') !== '') $byNr[$c['nr']] = $i;
+                    else $byName[mb_strtolower(trim($c['firma'])) . '|' . ($c['plz'] ?? '')] = $i;
+                }
+                $st = ['neu' => 0, 'aktualisiert' => 0, 'unveraendert' => 0, 'ohneFirma' => 0, 'doppelt' => 0, 'mailUngueltig' => 0, 'nichtAngelegt' => 0];
+                $fremd = []; $bspNeu = []; $bspAkt = []; $ch = []; $seen = [];
+                foreach ($rows as $r) {
+                    if (!is_array($r)) continue;
+                    $x = [];
+                    foreach ($FELDER as $f) $x[$f] = s(is_scalar($r[$f] ?? null) ? (string)$r[$f] : '', CUSTOMER_FIELDS[$f]) ?? '';
+                    if (mb_strlen($x['firma']) < 2) { $st['ohneFirma']++; continue; }
+                    if ($x['nr'] !== '') { if (isset($seen[$x['nr']])) { $st['doppelt']++; continue; } $seen[$x['nr']] = true; }
+                    if ($x['email'] !== '' && filter_var($x['email'], FILTER_VALIDATE_EMAIL) === false) { $x['email'] = ''; $st['mailUngueltig']++; }
+                    if ($x['gruppe'] !== '' && !isset($gruppen[$x['gruppe']])) { $fremd[$x['gruppe']] = ($fremd[$x['gruppe']] ?? 0) + 1; $x['gruppe'] = ''; }
+                    $idx = $x['nr'] !== '' && isset($byNr[$x['nr']]) ? $byNr[$x['nr']] : ($byName[mb_strtolower($x['firma']) . '|' . $x['plz']] ?? null);
+                    if ($idx === null) {
+                        if (!$anlegen) { $st['nichtAngelegt']++; continue; }
+                        $row = ['id' => 'k' . bin2hex(random_bytes(6))];
+                        foreach (CUSTOMER_FIELDS as $f => $max) $row[$f] = $x[$f] ?? '';
+                        $row += ['angebote' => [], 'active' => true, 'mailAngebot' => false, 'login' => null, 'created' => now(), 'changed' => now()];
+                        $d['customers'][] = $row;
+                        if ($x['nr'] !== '') $byNr[$x['nr']] = count($d['customers']) - 1;
+                        $st['neu']++;
+                        if (count($bspNeu) < 8) $bspNeu[] = ['nr' => $x['nr'], 'firma' => $x['firma'], 'ort' => $x['ort'], 'gruppe' => $x['gruppe']];
+                        if (count($ch) < 2000) $ch[] = ['k' => "c{$row['id']}|+", 'code' => $x['nr'], 'name' => $x['firma'], 'f' => 'Neuer Kunde (Import)', 'from' => '', 'to' => trim($x['plz'] . ' ' . $x['ort'])];
+                        continue;
+                    }
+                    $c = $d['customers'][$idx];
+                    $neu = $c; $diff = [];
+                    foreach (['nr', 'gruppe', 'strasse', 'plz', 'ort', 'land', 'telefon'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') !== $x[$f]) $neu[$f] = $x[$f];   // Warenwirtschaft führt Adresse und Gruppe
+                    foreach (['firma', 'email'] as $f) if ($x[$f] !== '' && (string)($c[$f] ?? '') === '') $neu[$f] = $x[$f];                                     // nur ergänzen
+                    foreach (array_merge(['firma', 'email'], ['nr', 'gruppe', 'strasse', 'plz', 'ort', 'land', 'telefon']) as $f) if ((string)($c[$f] ?? '') !== (string)($neu[$f] ?? '')) $diff[$f] = [(string)($c[$f] ?? ''), (string)$neu[$f]];
+                    if (!$diff) { $st['unveraendert']++; continue; }
+                    $neu['changed'] = now();
+                    $d['customers'][$idx] = $neu;
+                    $st['aktualisiert']++;
+                    if (count($bspAkt) < 8) $bspAkt[] = ['nr' => $neu['nr'] ?? '', 'firma' => $neu['firma'], 'felder' => array_map(function ($f) { return CUSTOMER_LABELS[$f]; }, array_keys($diff))];
+                    foreach ($diff as $f => [$from, $to]) if (count($ch) < 2000) $ch[] = ['k' => "c{$neu['id']}|$f", 'code' => $neu['nr'] ?? '', 'name' => $neu['firma'], 'f' => CUSTOMER_LABELS[$f], 'from' => $from, 'to' => $to];
+                }
+                if (count($d['customers']) > 20000) fail('Zu viele Kunden (höchstens 20.000).', 422);
+                arsort($fremd);
+                $out = ['stat' => $st, 'gruppenUnbekannt' => array_slice($fremd, 0, 20, true), 'beispiele' => ['neu' => $bspNeu, 'aktualisiert' => $bspAkt]];
+                if (!$pruefen && ($st['neu'] || $st['aktualisiert'])) {
+                    usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
+                    $d['rev'] = (int)$d['rev'] + 1;
+                    $d['updatedAt'] = now();
+                    store_write('kunden', $d);
+                }
+                return [$out, $d['rev'], $ch];
+            });
+            [$out, $rev, $ch] = $res;
+            if (!$pruefen && $ch) audit('customers', 'Kunden ' . ($quelle !== '' ? "aus „{$quelle}“ " : '') . "importiert: {$out['stat']['neu']} neu, {$out['stat']['aktualisiert']} aktualisiert", $ch);
+            respond(['ok' => true, 'rev' => $rev, 'pruefen' => $pruefen] + $out);
+        }
 }

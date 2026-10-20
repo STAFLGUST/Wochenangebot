@@ -22,6 +22,21 @@ function offers_load(): array
     return is_array($d) && isset($d['offers']) ? $d : ['rev' => 0, 'offers' => OFFER_DEFAULTS, 'updatedAt' => null];
 }
 function offer_ids(): array { return array_column(offers_load()['offers'], 'id'); }
+/* Kundengruppen eines Angebots (Stammdaten → Angebote): Kunden dieser Gruppen sehen das Angebot ohne eigene Freischaltung */
+function offer_gruppen_clean($v, string $name): array
+{
+    if (!is_array($v)) throw new InvalidArgumentException("Ungültige Kundengruppen ($name).");
+    $out = [];
+    foreach (array_slice($v, 0, 500) as $g) {
+        $g = is_string($g) || is_int($g) ? trim((string)$g) : '';
+        if (!preg_match('/^[0-9A-Za-z._-]{1,10}$/', $g)) throw new InvalidArgumentException("Ungültige Kundengruppe ($name).");
+        $out[$g] = true;
+    }
+    $out = array_keys($out);
+    $out = array_map('strval', $out);
+    usort($out, 'strnatcasecmp');
+    return $out;
+}
 /* Ist das Standard-Wochenangebot ohne Anmeldung sichtbar? (Voreinstellung: ja) */
 function std_public(): bool { $d = offers_load(); return !array_key_exists('stdPublic', $d) || !empty($d['stdPublic']); }
 

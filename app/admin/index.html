@@ -9,7 +9,7 @@
 <link rel="icon" href="../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=4acd7a00d0">
-<link rel="stylesheet" href="../assets/admin.css?v=026d1e7e18">
+<link rel="stylesheet" href="../assets/admin.css?v=1514686447">
 </head>
 <body class="adm">
 
@@ -77,6 +77,7 @@
       <div class="side-sep" id="side-stamm" aria-hidden="true">Stammdaten</div>
       <button role="tab" type="button" id="vt-master" aria-selected="false" aria-controls="view-master"><svg class="i" aria-hidden="true"><use href="#i-db"/></svg><span>Artikel<span class="m-hide">stammdaten</span></span></button>
       <button role="tab" type="button" id="vt-vkgruppen" aria-selected="false" aria-controls="view-vkgruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span>VK-Gruppen</span></button>
+      <button role="tab" type="button" id="vt-angebote" aria-selected="false" aria-controls="view-angebote" hidden><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span>Angebote</span></button>
       <button role="tab" type="button" id="vt-kunden" aria-selected="false" aria-controls="view-kunden" hidden><svg class="i" aria-hidden="true"><use href="#i-store"/></svg><span>Kunden</span></button>
       <button role="tab" type="button" id="vt-gruppen" aria-selected="false" aria-controls="view-gruppen" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Kundengruppen</span></button>
       <div class="side-sep" id="side-admin" aria-hidden="true" hidden>Verwaltung</div>
@@ -129,6 +130,7 @@
     <div id="view-kunden" hidden></div>
     <div id="view-gruppen" hidden></div>
     <div id="view-vkgruppen" hidden></div>
+    <div id="view-angebote" hidden></div>
     <div id="view-mail" hidden></div>
     <div id="view-users" hidden></div>
     <div id="view-auswertung" hidden></div>
@@ -199,7 +201,8 @@
 </dialog>
 <dialog class="modal wide" id="dlg-order-admin" aria-labelledby="order-admin-title"></dialog>
 <!-- Bestätigung -->
-<dialog class="modal wide" id="dlg-offers" aria-labelledby="of-title"><div class="dlg" id="offers-body"></div></dialog>
+<dialog class="modal" id="dlg-of-gruppen" aria-labelledby="ofg-title"><div class="dlg" id="of-gruppen-body"></div></dialog>
+<dialog class="modal wide" id="dlg-k-import" aria-labelledby="ki-title"><div class="dlg" id="k-import-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
 <dialog class="modal" id="dlg-confirm" aria-labelledby="cf-title"><div class="dlg" id="confirm-body"></div></dialog>
 
@@ -254,8 +257,8 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=59eb27542c"></script>
-<script src="../assets/admin.js?v=b4a269639b"></script>
-<script src="../assets/admin-verwaltung.js?v=e791949022"></script>
+<script src="../assets/admin.js?v=2f44dbe73a"></script>
+<script src="../assets/admin-verwaltung.js?v=be33d196a6"></script>
 <script src="../assets/admin-einzel.js?v=0d244ef196"></script>
 <script src="../assets/admin-auswertung.js?v=f28d8770e4"></script>
 </body>

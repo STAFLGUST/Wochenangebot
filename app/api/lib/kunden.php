@@ -12,16 +12,34 @@ function customers_load(): array
     $d = store_read('kunden');
     return is_array($d) && isset($d['customers']) ? $d : ['rev' => 0, 'customers' => [], 'updatedAt' => null];
 }
-function customer_offers(array $c): array
+/* Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote) */
+function customer_offers_direct(array $c): array
 {
     $known = array_merge([OFFER_STD], offer_ids());
     return array_values(array_filter($c['angebote'] ?? [], function ($o) use ($known) { return in_array($o, $known, true); }));
+}
+function customer_offers_gruppe(array $c): array
+{
+    $g = (string)($c['gruppe'] ?? '');
+    if ($g === '') return [];
+    $d = offers_load();
+    $out = in_array($g, $d['stdGruppen'] ?? [], true) ? [OFFER_STD] : [];
+    foreach ($d['offers'] as $o) if (in_array($g, $o['gruppen'] ?? [], true)) $out[] = $o['id'];
+    return $out;
+}
+function customer_offers(array $c): array
+{
+    $all = array_unique(array_merge(customer_offers_direct($c), customer_offers_gruppe($c)));
+    $order = array_merge([OFFER_STD], offer_ids());   // Reihenfolge wie in der Angebotsverwaltung
+    return array_values(array_filter($order, function ($o) use ($all) { return in_array($o, $all, true); }));
 }
 function customer_public(array $c): array
 {
     $out = $c;
     $l = $c['login'] ?? null;
-    $out['angebote'] = customer_offers($c);
+    $out['angebote'] = customer_offers($c);                 // wirksam (direkt + über Kundengruppe)
+    $out['angeboteDirekt'] = customer_offers_direct($c);
+    $out['angeboteGruppe'] = customer_offers_gruppe($c);
     $out['login'] = $l ? ['username' => $l['username'], 'active' => !empty($l['active']), 'mustChange' => !empty($l['mustChange']),
                           'lastLogin' => $l['lastLogin'] ?? null, 'pwSet' => $l['pwSet'] ?? null,
                           'lockedUntil' => (int)($l['lockedUntil'] ?? 0) > time() ? (int)$l['lockedUntil'] : 0,
