@@ -117,7 +117,7 @@
     }
     let data = null;
     try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
-    if (res.status === 401 && !['login', 'login_2fa', 'setup', 'change_password'].includes(action)) {
+    if (res.status === 401 && !['login', 'login_2fa', 'setup', 'change_password', 'passkey_login_begin', 'passkey_login'].includes(action)) {
       showAuth('expired');
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
@@ -219,24 +219,26 @@
   let authMode = 'login';
   let loginPw = '';                                // nur für den Pflicht-Passwortwechsel direkt nach der Anmeldung
   let authCtx = null;                              // { prevUser, expired } während einer laufenden Anmeldung
+  let authMethods = [];                            // zweiter Schritt: 'totp' und/oder 'passkey'
   function showAuth(mode) {
     authMode = mode;
     $('#screen-auth').hidden = false;
     if (mode !== 'expired' && !(authCtx && authCtx.expired)) $('#screen-editor').hidden = true;
-    const setup = mode === 'setup', newpw = mode === 'newpw', code = mode === 'code', tf = mode === 'twofa';
+    const setup = mode === 'setup', newpw = mode === 'newpw', code = mode === 'code', tf = mode === 'twofa', pk = mode === 'passkey';
     $('#auth-intro').textContent = setup
       ? 'Ersteinrichtung: Legen Sie den ersten Administrator-Zugang an (Passwort mindestens 10 Zeichen). Weitere Nutzer legen Sie danach unter „Nutzer“ an.'
       : newpw ? `Hallo ${me ? me.name : ''}, bitte legen Sie jetzt ein eigenes Passwort fest.`
         : code ? 'Bitte den 6-stelligen Code aus Ihrer Authenticator-App eingeben – oder einen Ihrer Wiederherstellungscodes.'
+          : pk ? 'Bitte bestätigen Sie die Anmeldung mit Ihrem Passkey – per Fingerabdruck, Gesicht oder PIN Ihres Geräts.'
           : tf ? `Hallo ${me ? me.name : ''}, für Ihren Zugang ist die Zwei-Faktor-Anmeldung vorgeschrieben. Bitte richten Sie sie jetzt ein.`
             : mode === 'expired' ? 'Ihre Sitzung ist abgelaufen. Bitte erneut anmelden – Ihre Änderungen bleiben erhalten.'
               : 'Bitte melden Sie sich mit Ihrem Benutzernamen an.';
-    const hideUser = newpw || code || tf;
+    const hideUser = newpw || code || tf || pk;
     $('#au-user-wrap').hidden = hideUser;
     $('#au-user').required = !hideUser;
     $('#au-name-wrap').hidden = !setup;
-    $('#pw1').closest('label').hidden = code || tf;
-    $('#pw1').required = !(code || tf);
+    $('#pw1').closest('label').hidden = code || tf || pk;
+    $('#pw1').required = !(code || tf || pk);
     $('#pw2-wrap').hidden = !(setup || newpw);
     $('#au-code-wrap').hidden = !code;
     $('#au-code').required = code;
@@ -244,13 +246,16 @@
     $('#auth-submit').hidden = tf;
     $('#pw1-lbl').textContent = newpw ? 'Neues Passwort' : 'Passwort';
     $('#pw1').autocomplete = setup || newpw ? 'new-password' : 'current-password';
-    $('#auth-submit').textContent = setup ? 'Zugang anlegen' : newpw ? 'Passwort speichern' : code ? 'Bestätigen' : 'Anmelden';
+    $('#auth-submit').textContent = setup ? 'Zugang anlegen' : newpw ? 'Passwort speichern' : code ? 'Bestätigen' : pk ? 'Mit Passkey bestätigen' : 'Anmelden';
+    // Passkey: Anmeldung ohne Benutzername, statt des Codes oder statt der Authenticator-App einrichten
+    $('#auth-passkey').hidden = !(PK_OK && (mode === 'login' || mode === 'expired' || tf || (code && authMethods.includes('passkey'))));
+    $('#auth-passkey span').textContent = code ? 'Stattdessen Passkey verwenden' : tf ? 'Stattdessen Passkey einrichten' : 'Mit Passkey anmelden';
     $('#auth-err').textContent = '';
     $('#pw1').value = ''; $('#pw2').value = ''; $('#au-code').value = '';
     if (mode === 'expired' && me) $('#au-user').value = me.username;
     $('#screen-auth').classList.toggle('overlay', mode === 'expired' || !!(authCtx && authCtx.expired));
     if (tf) renderTwofaSetup($('#auth-twofa'), () => finishLogin());
-    setTimeout(() => (code ? $('#au-code') : (newpw || $('#au-user').value) ? $('#pw1') : $('#au-user')).focus(), 30);
+    setTimeout(() => (code ? $('#au-code') : pk ? $('#auth-submit') : (newpw || $('#au-user').value) ? $('#pw1') : $('#au-user')).focus(), 30);
   }
   async function afterLogin(r, pw) {
     csrf = r.csrf;
@@ -272,6 +277,7 @@
   $('#auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (authMode === 'twofa') { $('#auth-twofa [data-tf="enable"]')?.click(); return; }
+    if (authMode === 'passkey') { passkeyLogin(true); return; }
     const pw = $('#pw1').value;
     const err = $('#auth-err');
     err.textContent = '';
@@ -296,7 +302,7 @@
       }
       authCtx = { prevUser: me && me.id, expired: authMode === 'expired' };
       const r = await api(authMode === 'setup' ? 'setup' : 'login', { body: { username: $('#au-user').value.trim(), name: $('#au-name').value.trim(), password: pw } });
-      if (r.need2fa) { loginPw = pw; showAuth('code'); return; }
+      if (r.need2fa) { loginPw = pw; authMethods = r.methods || ['totp']; showAuth(authMethods.includes('totp') ? 'code' : 'passkey'); return; }
       await afterLogin(r, pw);
     } catch (ex) {
       err.textContent = ex.message;
@@ -371,10 +377,10 @@
     }
     $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host">
         <p class="tf-ok">${icon('check')} Eingeschaltet für <strong>${esc(me.username)}</strong>.</p>
-        ${me.twofaRequired ? '<p class="hint">Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben.</p>' : ''}
+        ${me.twofaRequired ? `<p class="hint">Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben${me.passkeys ? ' – Ihre Passkeys erfüllen sie auch ohne Authenticator-App' : ''}.</p>` : ''}
         <div class="row-actions" style="justify-content:flex-start">
           <button type="button" class="btn" data-tfd="renew">Neu einrichten (neues Handy / neue Codes)</button>
-          ${me.twofaRequired ? '' : '<button type="button" class="btn" data-tfd="off" style="color:var(--accent)">Ausschalten</button>'}
+          ${me.twofaRequired && !me.passkeys ? '' : '<button type="button" class="btn" data-tfd="off" style="color:var(--accent)">Ausschalten</button>'}
         </div>
         <div id="tf-off" hidden><label class="fld"><span>Aktuelles Passwort eingeben</span><input type="password" id="tf-pw" autocomplete="current-password"></label><p class="form-err" id="tf-err"></p><button type="button" class="btn primary" data-tfd="off-go">Ausschalten</button></div>
       </div>`;
@@ -396,6 +402,121 @@
       try { const r = await api('twofa_disable', { body: { password: $('#tf-pw').value } }); me = r.user; $('#dlg-twofa').close(); toast('Zwei-Faktor-Anmeldung ausgeschaltet.'); }
       catch (ex) { $('#tf-err').textContent = ex.message; }
     }
+  });
+
+  /* ======================= Passkeys (WebAuthn) ======================= */
+  const PK_OK = !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+  const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64u = (t) => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4)), (c) => c.charCodeAt(0));
+  const pkIds = (l) => (l || []).map((c) => ({ ...c, id: unb64u(c.id) }));
+  function pkError(ex) {
+    if (ex && (ex.name === 'NotAllowedError' || ex.name === 'AbortError')) return 'Abgebrochen.';
+    if (ex && ex.name === 'InvalidStateError') return 'Dieser Passkey ist auf diesem Gerät bereits eingerichtet.';
+    if (ex && ex.name === 'SecurityError') return 'Passkeys sind unter dieser Adresse nicht möglich.';
+    if (ex && ex.status !== undefined) return ex.message;
+    return 'Der Passkey konnte nicht verwendet werden.';
+  }
+  /* Neuen Passkey einrichten; Passwort leer nur direkt nach der Anmeldung ohne zweiten Faktor */
+  async function passkeyRegister(password, name) {
+    const o = (await api('passkey_begin', { body: { password } })).options;
+    const cred = await navigator.credentials.create({ publicKey: { ...o, challenge: unb64u(o.challenge), user: { ...o.user, id: unb64u(o.user.id) }, excludeCredentials: pkIds(o.excludeCredentials) } });
+    const r = cred.response;
+    const res = await api('passkey_register', { body: { id: cred.id, clientDataJSON: b64u(r.clientDataJSON), attestationObject: b64u(r.attestationObject), transports: r.getTransports ? r.getTransports() : [], name } });
+    me = res.user;
+    return res;
+  }
+  /* Anmelden mit Passkey: ohne Benutzername oder (second) als zweiter Schritt nach dem Passwort */
+  async function passkeyLogin(second) {
+    const err = $('#auth-err'), btns = [$('#auth-submit'), $('#auth-passkey')];
+    err.textContent = '';
+    if (!PK_OK) { err.textContent = 'Dieser Browser unterstützt keine Passkeys.'; return; }
+    btns.forEach((b) => { b.disabled = true; });
+    try {
+      if (!second) authCtx = { prevUser: me && me.id, expired: authMode === 'expired' };
+      const o = (await api('passkey_login_begin', { body: { second } })).options;
+      const cred = await navigator.credentials.get({ publicKey: { ...o, challenge: unb64u(o.challenge), allowCredentials: pkIds(o.allowCredentials) } });
+      const r = cred.response;
+      const res = await api('passkey_login', { body: { id: cred.id, clientDataJSON: b64u(r.clientDataJSON), authenticatorData: b64u(r.authenticatorData), signature: b64u(r.signature), userHandle: r.userHandle ? b64u(r.userHandle) : null } });
+      await afterLogin(res, '');
+    } catch (ex) {
+      err.textContent = pkError(ex);
+      if (second && /Anmeldung ist abgelaufen|erneut anmelden/i.test(ex.message || '')) setTimeout(() => showAuth(authCtx && authCtx.expired ? 'expired' : 'login'), 1800);
+    } finally {
+      btns.forEach((b) => { b.disabled = false; });
+    }
+  }
+  $('#auth-passkey').addEventListener('click', async () => {
+    if (authMode !== 'twofa') { passkeyLogin(authMode === 'code'); return; }
+    const err = $('#auth-err'), b = $('#auth-passkey');
+    err.textContent = ''; b.disabled = true;
+    try { await passkeyRegister('', ''); toast('Passkey eingerichtet.'); await finishLogin(); } catch (ex) { err.textContent = pkError(ex); } finally { b.disabled = false; }
+  });
+  /* Menü: eigene Passkeys verwalten */
+  let pkList = [], pkMax = 10, pkDel = null;
+  const pkHead = `<div class="dlg-head"><div><h2 id="pk-title">Passkeys</h2><p>Anmelden ohne Passwort – mit Fingerabdruck, Gesichtserkennung oder der PIN Ihres Geräts. Ein Passkey gilt auch als zweiter Faktor.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
+  async function openPasskeyDialog() {
+    $('#passkeys-body').innerHTML = `${pkHead}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Wird geladen …</div></div>`;
+    $('#dlg-passkeys').showModal();
+    try { const r = await api('passkey_list'); pkList = r.passkeys; pkMax = r.max; pkDel = null; renderPasskeys(); }
+    catch (ex) { $('#passkeys-body .dlg-body').innerHTML = `<div class="err-box">${esc(ex.message)}</div>`; }
+  }
+  function renderPasskeys() {
+    const del = pkDel && pkList.find((p) => p.ref === pkDel);
+    const full = pkList.length >= pkMax;
+    const rows = pkList.map((p) => `<li class="pk-item${p.ref === pkDel ? ' sel' : ''}">
+        <div class="pk-main"><input class="pk-name" data-pkname="${esc(p.ref)}" value="${esc(p.name)}" maxlength="60" aria-label="Name des Passkeys">
+          <span class="sub">Hinzugefügt ${esc(dateTime(p.created))} · ${p.lastUsed ? 'zuletzt verwendet ' + esc(dateTime(p.lastUsed)) : 'noch nicht verwendet'}</span></div>
+        <button type="button" class="btn sm ghost pk-del" data-pkdel="${esc(p.ref)}" aria-label="Passkey „${esc(p.name)}“ entfernen">${icon('trash', 'sm')}<span>Entfernen</span></button></li>`).join('');
+    const addOff = !del && (full || !PK_OK);
+    $('#passkeys-body').innerHTML = `${pkHead}<div class="dlg-body">
+        ${pkList.length ? `<ul class="pk-list">${rows}</ul>` : '<p class="hint" style="margin:0">Noch kein Passkey eingerichtet.</p>'}
+        <form class="pk-form" id="pk-form">
+          <h3 class="pk-h">${del ? `Passkey „${esc(del.name)}“ entfernen` : 'Passkey hinzufügen'}</h3>
+          ${del ? '' : !PK_OK ? '<p class="hint" style="margin:0">Dieser Browser unterstützt keine Passkeys.</p>' : full ? `<p class="hint" style="margin:0">Es sind höchstens ${pkMax} Passkeys möglich. Bitte zuerst einen entfernen.</p>`
+            : '<label class="fld"><span>Name <small class="muted">(optional)</small></span><input name="name" maxlength="60" placeholder="z. B. Laptop Büro" autocomplete="off"></label>'}
+          ${addOff ? '' : '<label class="fld"><span>Aktuelles Passwort</span><input name="password" type="password" autocomplete="current-password" required></label>'}
+          <p class="form-err" id="pk-err" role="alert"></p>
+          ${addOff ? '' : `<div class="pk-actions">${del ? '<button type="button" class="btn" data-pkcancel>Abbrechen</button>' : ''}<button type="submit" class="btn primary" id="pk-submit">${del ? 'Entfernen' : 'Passkey hinzufügen'}</button></div>`}
+        </form></div>`;
+  }
+  $('#dlg-passkeys').addEventListener('click', (e) => {
+    const d = e.target.closest('[data-pkdel]');
+    if (d) { pkDel = d.dataset.pkdel; renderPasskeys(); $('#pk-form [name="password"]').focus(); return; }
+    if (e.target.closest('[data-pkcancel]')) { pkDel = null; renderPasskeys(); }
+  });
+  $('#dlg-passkeys').addEventListener('change', async (e) => {
+    const ref = e.target.dataset.pkname;
+    if (!ref) return;
+    const name = e.target.value.trim();
+    const old = pkList.find((p) => p.ref === ref);
+    if (!name) { e.target.value = old ? old.name : ''; return; }
+    try { pkList = (await api('passkey_rename', { body: { ref, name } })).passkeys; toast('Name gespeichert.'); }
+    catch (ex) { $('#pk-err').textContent = ex.message; }
+  });
+  $('#dlg-passkeys').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset.pkname) { e.preventDefault(); e.target.blur(); } });
+  $('#dlg-passkeys').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, err = $('#pk-err'), btn = $('#pk-submit'), d = $('#dlg-passkeys');
+    const pwIn = $('[name="password"]', f), nameIn = $('[name="name"]', f);
+    const password = pwIn ? pwIn.value : '';
+    err.textContent = ''; btn.disabled = true; d.dataset.busy = '1';
+    try {
+      if (pkDel) {
+        const name = (pkList.find((p) => p.ref === pkDel) || {}).name || '';
+        const r = await api('passkey_delete', { body: { ref: pkDel, password } });
+        me = r.user; pkList = r.passkeys; pkDel = null;
+        toast(`Passkey „${name}“ entfernt.`);
+      } else {
+        const r = await passkeyRegister(password, nameIn ? nameIn.value.trim() : '');
+        pkList = r.passkeys;
+        toast('Passkey hinzugefügt.');
+      }
+      renderPasskeys();
+    } catch (ex) {
+      err.textContent = pkError(ex);
+      btn.disabled = false;
+      if (pwIn) { pwIn.value = ''; pwIn.focus(); }
+    } finally { delete d.dataset.busy; }
   });
 
   /* Rolle auf die Oberfläche anwenden */
@@ -1857,6 +1978,7 @@
     if (a === 'versions') openVersions();
     if (a === 'open-site') window.open('../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : ''), '_blank', 'noopener');
     if (a === 'twofa') openTwofaDialog();
+    if (a === 'passkeys') openPasskeyDialog();
     if (a === 'password') { $('#pw-form').reset(); $('#pw-err').textContent = ''; $('#dlg-password').showModal(); }
     if (a === 'theme') {
       const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');

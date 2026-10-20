@@ -16,7 +16,7 @@ foreach ($data['users'] as &$u) {
     $u['hash'] = password_hash($pw, PASSWORD_DEFAULT);
     $u['mustChange'] = true;
     $u['active'] = true;
-    unset($u['totp'], $u['totpLast'], $u['recovery']);   // Zwei-Faktor neu einrichten
+    unset($u['totp'], $u['totpLast'], $u['recovery'], $u['passkeys']);   // Zwei-Faktor (App und Passkeys) neu einrichten
     $u['lockedUntil'] = 0; $u['failCount'] = 0;
     $u['sv'] = (int)($u['sv'] ?? 0) + 1;
     $u['changed'] = gmdate('Y-m-d\TH:i:s\Z');
@@ -35,4 +35,4 @@ if (!$found) {
 }
 store_write('nutzer', $data);
 });
-echo "Passwort für \"$name\" wurde zurückgesetzt, Zwei-Faktor-Anmeldung und Sperre aufgehoben.";
+echo "Passwort für \"$name\" wurde zurückgesetzt, Zwei-Faktor-Anmeldung (auch Passkeys) und Sperre aufgehoben.";

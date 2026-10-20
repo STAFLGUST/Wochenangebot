@@ -81,7 +81,8 @@ SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
-SUITES['auswertung'] = (8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
+SUITES['passkeys'] = (8790, 'data-seed', True)
+SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 
@@ -136,8 +137,8 @@ PRINT = threading.Lock()
 
 
 def ports(slot):
-    """Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes."""
-    b = 9100 + slot * 10
+    """Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes (WA_PORT_BASE: anderer Bereich für parallele Läufe)."""
+    b = int(os.environ.get('WA_PORT_BASE') or 9100) + slot * 10
     return b, b + 1, b + 2, b + 3
 
 

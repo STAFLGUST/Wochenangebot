@@ -53,6 +53,8 @@
  *   POST ?action=mail_konto_save   Postfach/Absender speichern (nur Administrator; Passwort verschlüsselt, nie zurückgegeben)
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
+ *   GET  ?action=passkey_list · POST passkey_begin | passkey_register | passkey_rename | passkey_delete   eigene Passkeys
+ *   POST ?action=passkey_login_begin | passkey_login   Anmeldung mit Passkey (ohne Benutzername oder als zweiter Schritt)
  *   POST ?action=user_save | user_delete   (inkl. abweichender Rechte je Nutzer: grant/deny)
  *   GET  ?action=rechte · POST ?action=rechte_save   Rechte je Rolle (Administrator)
  *
@@ -99,6 +101,7 @@ require __DIR__ . '/lib/nutzer.php';
 require __DIR__ . '/lib/rechte.php';
 require __DIR__ . '/lib/sicherheit.php';
 require __DIR__ . '/lib/sitzung.php';
+require __DIR__ . '/lib/passkey.php';
 require __DIR__ . '/lib/protokoll.php';
 require __DIR__ . '/lib/angebote.php';
 require __DIR__ . '/lib/kunden.php';
@@ -120,7 +123,8 @@ $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_dr
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunden_import', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
-                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'vertreter_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden'];
+                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'vertreter_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden',
+                 'passkey_begin', 'passkey_register', 'passkey_rename', 'passkey_delete', 'passkey_login_begin', 'passkey_login'];
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
@@ -161,6 +165,7 @@ try {
     require __DIR__ . '/aktionen/mail.php';
     require __DIR__ . '/aktionen/kundenverwaltung.php';
     require __DIR__ . '/aktionen/zugang.php';
+    require __DIR__ . '/aktionen/passkey.php';
     require __DIR__ . '/aktionen/bestand.php';
     require __DIR__ . '/aktionen/einkauf.php';
     require __DIR__ . '/aktionen/verwaltung.php';

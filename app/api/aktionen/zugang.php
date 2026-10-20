@@ -78,8 +78,8 @@ switch ($action) {
                     }
                     if (!$u['active']) return ['inactive', $u];
                     if (password_needs_rehash((string)$u['hash'], PASSWORD_DEFAULT)) $users[$i]['hash'] = password_hash($pw, PASSWORD_DEFAULT);
-                    // Bei 2FA ist das Passwort allein noch keine erfolgreiche Anmeldung.
-                    if (empty($u['totp'])) {
+                    // Mit zweitem Faktor (Authenticator-App oder Passkey) ist das Passwort allein noch keine erfolgreiche Anmeldung.
+                    if (!has_second_factor($u)) {
                         $users[$i]['failCount'] = 0;
                         $users[$i]['lockedUntil'] = 0;
                         $users[$i]['lastLogin'] = now();
@@ -101,11 +101,17 @@ switch ($action) {
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche bis ' . (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i') . ' Uhr gesperrt. Ein Administrator kann ihn vorher entsperren.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
-            if (!empty($u['totp'])) {
-                // zweiter Schritt: Code aus der Authenticator-App
+            if (has_second_factor($u)) {
+                // Die App kennt nur den Code aus der Authenticator-App (keine Passkeys)
+                if (app_client() && empty($u['totp'])) {
+                    audit('login_fail', 'Anmeldung in der App nicht möglich – nur Passkey eingerichtet', [], $who);
+                    respond(['ok' => false, 'code' => 'app_totp_required', 'error' => 'Für die Anmeldung in der App ist die Authenticator-App nötig. Bitte im Eingabebereich im Browser unter „Zwei-Faktor-Anmeldung“ einrichten.'], 403);
+                }
+                // zweiter Schritt: Code aus der Authenticator-App oder Passkey
                 session_regenerate_id(true);
                 $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0]];
-                respond(['ok' => true, 'need2fa' => true]);
+                $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) && !app_client() ? 'passkey' : null]));
+                respond(['ok' => true, 'need2fa' => true, 'methods' => $methods]);
             }
             attempts_record(true);
             $tok = sign_in($u);
@@ -169,7 +175,7 @@ switch ($action) {
             require_csrf();
             // Austausch eines vorhandenen Faktors – und Ersteinrichtung später als 5 Minuten nach der Anmeldung – nur mit erneutem
             // Passwortnachweis (sonst könnte eine übernommene Sitzung einen eigenen Faktor hinterlegen und den Inhaber aussperren)
-            if (!empty($me['totp']) || (int)($_SESSION['authAt'] ?? 0) < time() - 300) {
+            if (has_second_factor($me) || (int)($_SESSION['authAt'] ?? 0) < time() - 300) {
                 unset($_SESSION['totpPending']);
                 $me = confirm_password($me, (string)(body()['password'] ?? ''));
             }
@@ -206,7 +212,7 @@ switch ($action) {
         case 'twofa_disable': {
             $me = require_auth(true);
             if (empty($me['totp'])) fail('Die Zwei-Faktor-Anmeldung ist nicht eingerichtet.', 409);
-            if (twofa_required($me)) fail('Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
+            if (twofa_required($me) && !has_passkeys($me)) fail('Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
             $me = confirm_password($me, (string)(body()['password'] ?? ''));
             $u = user_update($me['id'], function (&$x) use ($me) {
                 if ((int)$x['sv'] !== (int)$me['sv'] || !$x['active']) fail('Bitte erneut anmelden.', 401);
