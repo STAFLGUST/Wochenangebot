@@ -72,6 +72,9 @@ ini_set('display_errors', '0');
 ini_set('display_startup_errors', '0');
 ini_set('log_errors', '1');
 header_remove('X-Powered-By');
+// Datum und Uhrzeit (E-Mails, Ausdrucke, „gültig bis“, Wunschtermine) in deutscher Zeit – das PHP-Image rechnet sonst in UTC
+// und zeigt nachts bzw. in Mails 1–2 Stunden falsch an. Gespeichert wird weiter in UTC (now(), gmdate).
+date_default_timezone_set('Europe/Berlin');
 
 $CFG = require __DIR__ . '/config.php';
 require __DIR__ . '/geo.php';

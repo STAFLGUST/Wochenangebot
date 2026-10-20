@@ -224,5 +224,16 @@ with sync_playwright() as p:
     br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
+# ---------- Zeitzone: Server rechnet in deutscher Zeit (Mails, Ausdrucke, Gültigkeit) ----------
+from datetime import datetime  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+st, r = A.call('security_diag', {'check': 'php'})
+zeile = next((x['value'] for x in (r.get('result') or {}).get('items', []) if x['label'] == 'Serverzeit'), '')
+try:
+    abw = abs((datetime.strptime(zeile[:19], '%d.%m.%Y %H:%M:%S').replace(tzinfo=ZoneInfo('Europe/Berlin')) - datetime.now(ZoneInfo('Europe/Berlin'))).total_seconds())
+except ValueError:
+    abw = 9999
+check('Serverzeit in deutscher Zeit (Europe/Berlin), nicht UTC', st == 200 and 'Europe/Berlin' in zeile and abw < 120, (st, zeile, abw))
+
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

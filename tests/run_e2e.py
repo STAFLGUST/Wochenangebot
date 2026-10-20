@@ -190,7 +190,7 @@ def run_in(name, slot):
     srv = subprocess.Popen(['php', '-d', 'session.save_path=' + sessions, '-S', f'127.0.0.1:{port}'], cwd=app, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=php_env)
     try:
         wait_port(port)
-        env = {**os.environ, 'UDATA': data, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions,
+        env = {**os.environ, 'TZ': 'Europe/Berlin', 'UDATA': data, 'WA_WORK': WORK, 'WA_SESSION_DIR': sessions,   # Tests rechnen wie der Server in deutscher Zeit
                'WA_BASE': base, 'WA_AUX_PORT': str(aux), 'WA_SMTP_PORT': str(smtp1), 'WA_SMTP_PORT2': str(smtp2)}
         t0 = time.time()
         p = subprocess.run([sys.executable, os.path.join(REPO, 'tests', 'e2e', f'test_{name}.py')], cwd=os.path.join(REPO, 'tests', 'e2e'),
