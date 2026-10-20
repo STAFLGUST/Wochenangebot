@@ -178,11 +178,12 @@ function changes_summary(array $d): string
 /* Darf diese Gegenstelle die Besucher-IP weiterreichen (X-Forwarded-For)?
    WA_TRUSTED_PROXIES (Docker: „caddy“) = Liste aus Namen, IP-Adressen oder Netzen; nur diese gelten als eigener Proxy.
    Ohne Angabe (Hostinger, lokale Tests) wie bisher: jede private Adresse. */
-/* Zuletzt aufgelöste Adressen eines Proxy-Namens (Datei im Temp-Ordner des Containers, nur vom Server selbst geschrieben).
-   Aufgelöst: merken, wenn neu; nicht aufgelöst: die gemerkten zurückgeben (leer, wenn noch nie aufgelöst). */
-function proxy_adressen_merken(string $name, array $adr): array
+/* Zuletzt aufgelöste Adressen eines Proxy-Namens (im Datenordner, sonst im Temp-Ordner; nur vom Server selbst geschrieben,
+   getrennt nach IPv4/IPv6). Aufgelöst: merken, wenn neu; nicht aufgelöst: die gemerkten zurückgeben (leer = nie aufgelöst). */
+function proxy_adressen_merken(string $name, array $adr, string $familie = '4'): array
 {
-    $f = rtrim(sys_get_temp_dir(), '/') . '/wa-proxy-' . hash('sha256', $name) . '.json';
+    $dir = !empty($GLOBALS['DATA']) && is_dir($GLOBALS['DATA']) && is_writable($GLOBALS['DATA']) ? $GLOBALS['DATA'] : sys_get_temp_dir();
+    $f = rtrim($dir, '/') . '/wa-proxy-' . $familie . '-' . hash('sha256', $name) . '.json';
     $alt = is_file($f) ? json_decode((string)@file_get_contents($f), true) : null;
     $alt = is_array($alt) ? array_values(array_filter($alt, fn($x) => is_string($x) && filter_var($x, FILTER_VALIDATE_IP))) : [];
     if (!$adr) return $alt;
@@ -204,7 +205,7 @@ function trusted_proxy(string $ip): bool
         if (!preg_match('/^[a-z0-9.-]{1,253}$/i', $t)) continue;
         $adr = gethostbynamel($t) ?: [];   // Docker-Dienstname (IPv4)
         if (strpos($ip, ':') !== false && function_exists('dns_get_record')) $adr = array_merge($adr, array_column(@dns_get_record($t, DNS_AAAA) ?: [], 'ipv6'));   // IPv6-Netz
-        $adr = proxy_adressen_merken($t, $adr);   // kurze DNS-Störung: zuletzt aufgelöste Adressen weiterverwenden
+        $adr = proxy_adressen_merken($t, $adr, strpos($ip, ':') !== false ? '6' : '4');   // kurze DNS-Störung: zuletzt aufgelöste Adressen weiterverwenden
         if ($adr) $aufgeloest = true;
         $bin = @inet_pton($ip);
         foreach ($adr as $a) if ($bin !== false && @inet_pton($a) === $bin) return $cache[$ip] = true;   // binär vergleichen (IPv6-Schreibweisen)

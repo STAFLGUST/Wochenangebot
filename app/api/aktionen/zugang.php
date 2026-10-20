@@ -114,8 +114,8 @@ switch ($action) {
                 usleep(400000);
                 session_regenerate_id(true);
                 $_SESSION = ['pend' => $st === 'ok_locked'
-                    ? ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => true]
-                    : ['uid' => '', 'sv' => 0, 't' => time(), 'n' => 0, 'lk' => true, 'fake' => true, 'name' => mb_substr($name, 0, 40)]];
+                    ? ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => true, 'bis' => (int)$u['lockedUntil']]
+                    : ['uid' => '', 'sv' => 0, 't' => time(), 'n' => 0, 'lk' => true, 'bis' => (int)$u['lockedUntil'], 'fake' => true, 'name' => mb_substr($name, 0, 40)]];
                 respond(['ok' => true, 'need2fa' => true, 'gesperrtBis' => (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i')]);
             }
             if ($st !== 'ok') {
@@ -143,7 +143,9 @@ switch ($action) {
             start_session();
             attempts_check();
             $p = $_SESSION['pend'] ?? null;
-            if (!$p || (int)$p['t'] < time() - 300) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
+            // Code-Schritt aus einer Sperre endet mit der Sperre – echte und wirkungslose Vorgänge gleich (sonst verriete das
+            // Verhalten nach Ablauf, welcher Vorgang das richtige Passwort hatte)
+            if (!$p || (int)$p['t'] < time() - 300 || (!empty($p['lk']) && time() >= (int)($p['bis'] ?? 0))) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             $code = trim((string)(body()['code'] ?? ''));
             $res = with_lock('nutzer', function () use ($p, $code) {
                 $users = users_load();
@@ -154,6 +156,7 @@ switch ($action) {
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || empty($users[$i]['totp'])) return ['gone', null];
                 $u = &$users[$i];
                 $gesperrt = (int)($u['lockedUntil'] ?? 0) > time();
+                if (!empty($p['lk']) && !$gesperrt) return ['abgelaufen', null];   // Sperre vorzeitig aufgehoben (Administrator): neu anmelden
                 if ($gesperrt && empty($p['lk'])) return ['locked', $u];
                 // höchstens 3 Code-Versuche je Sperre – über alle parallelen Anmeldevorgänge; danach wie ein falscher Code
                 if ($gesperrt && (int)($u['lockTries'] ?? 0) >= 3) { $out = $u; unset($u); users_save($users); return ['bad', $out]; }
@@ -186,6 +189,7 @@ switch ($action) {
             });
             [$st, $u] = $res;
             if ($st === 'gone') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
+            if ($st === 'abgelaufen') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             if ($st === 'bad' || $st === 'locked') {
                 attempts_record(false);
                 $_SESSION['pend']['n'] = (int)$p['n'] + 1;

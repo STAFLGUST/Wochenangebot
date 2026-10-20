@@ -78,6 +78,7 @@ function ghost_lock(string $scope, string $name, bool $fail, ?bool &$neu = null)
         foreach ($a as $k => $v) if ((int)($v['until'] ?? 0) < $now && (int)($v['t'] ?? 0) < $now - 86400) unset($a[$k]);
         if (count($a) > 5000) {   // Größe begrenzen: laufende Sperren nie vorzeitig entfernen (sonst verriete ihr Ende den Namen), sonst die ältesten
             $aktiv = array_filter($a, fn($v) => (int)($v['until'] ?? 0) >= $now);
+            if (count($aktiv) > 20000) { uasort($aktiv, fn($x, $y) => (int)$y['until'] <=> (int)$x['until']); $aktiv = array_slice($aktiv, 0, 20000, true); }   // Obergrenze auch für laufende Sperren
             $rest = array_diff_key($a, $aktiv);
             uasort($rest, fn($x, $y) => (int)($y['t'] ?? 0) <=> (int)($x['t'] ?? 0));
             $a = $aktiv + array_slice($rest, 0, max(0, 4000 - count($aktiv)), true);

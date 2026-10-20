@@ -60,7 +60,7 @@ FAELLE = [[None, '172.18.0.3', '203.0.113.7'],            # ohne Angabe: private
           ['schon-mal-aufgeloest.invalid', '127.0.0.5', '203.0.113.15'],  # DNS-Störung, früher aufgelöst: gemerkte Adresse gilt
           ['schon-mal-aufgeloest.invalid', '172.18.0.3', '203.0.113.16']]  # … andere Container bleiben ausgeschlossen
 TMP = tempfile.mkdtemp(prefix='wa-proxy-')
-with open(os.path.join(TMP, 'wa-proxy-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json'), 'w') as fh:
+with open(os.path.join(TMP, 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json'), 'w') as fh:
     json.dump(['127.0.0.5'], fh)
 env = {k: v for k, v in os.environ.items() if k != 'WA_TRUSTED_PROXIES'}
 env['TMPDIR'] = TMP
@@ -74,7 +74,7 @@ check('Name nicht auflösbar: wie ohne Angabe – Besucher fallen nicht auf die 
 check('Name auflösbar, andere Gegenstelle: X-Forwarded-For ignoriert', outs[6] == '172.18.0.3', outs[6])
 check('IPv6-Proxy in anderer Schreibweise wird erkannt', outs[7] == '203.0.113.14', outs[7])
 check('Name gerade nicht auflösbar: zuletzt aufgelöste Adresse gilt weiter (kein Rückfall auf alle privaten Adressen)', outs[8] == '203.0.113.15' and outs[9] == '172.18.0.3', outs[8:10])
-check('aufgelöste Proxy-Adresse wird gemerkt', any(f.startswith('wa-proxy-') and f.endswith('.json') and f != 'wa-proxy-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json' for f in os.listdir(TMP)), os.listdir(TMP))
+check('aufgelöste Proxy-Adresse wird gemerkt', any(f.startswith('wa-proxy-') and f.endswith('.json') and f != 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json' for f in os.listdir(TMP)), os.listdir(TMP))
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
 test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()
 check('Echtbetrieb vertraut nur Caddy, Testumgebung nicht im Produktivnetz', 'WA_TRUSTED_PROXIES: caddy' in compose and 'PROD_NETWORK' not in test_compose
@@ -210,6 +210,24 @@ while int(time.time() // 30) + 1 <= xstep + 1: time.sleep(1)   # noch nicht benu
 check('neue Sperre beginnt ohne alte Code-Versuche', nutzer('xena').get('lockedUntil', 0) > time.time() and 'lockTries' not in nutzer('xena'), nutzer('xena'))
 st2, r2 = X2.call('login_2fa', {'code': totp(xsek, int(time.time() // 30) + 1)})
 check('neue Sperre: alte Code-Versuche zählen nicht mit', st == 200 and st2 == 200 and r2.get('user', {}).get('username') == 'xena', (st, r, st2, r2))
+storage_write('logins', {})
+
+# Code-Schritte aus einer Sperre enden mit ihr – echte und wirkungslose gleich, ohne Folgen für die Zähler
+storage_write('sicherheit', {**sec, 'lockAfter': 3, 'lockMinutes': 1})
+vsek, vstep = zweifaktor('vera', '198.51.100.45')
+versuche('vera', 3, 18)
+V1, V2 = Client('198.18.19.1'), Client('198.18.19.2')
+a1 = V1.call('login', {'username': 'vera', 'password': 'Bearbeiter-Zugang-1'})
+a2 = V2.call('login', {'username': 'vera', 'password': 'Falsches-Passwort-1'})
+check('Sperre (1 Min.): echter und wirkungsloser Code-Schritt gleich', a1 == a2 and a1[0] == 200, (a1, a2))
+bis = nutzer('vera')['lockedUntil']
+while time.time() <= bis + 1: time.sleep(1)
+vor = {k: nutzer('vera').get(k) for k in ('failCount', 'lockedUntil', 'lockTries')}
+b1 = V1.call('login_2fa', {'code': '000000'})
+b2 = V2.call('login_2fa', {'code': '000000'})
+nach_v = {k: nutzer('vera').get(k) for k in ('failCount', 'lockedUntil', 'lockTries')}
+check('nach Ablauf der Sperre: beide Vorgänge gleich beendet („abgelaufen“), Zähler unverändert', b1 == b2 and b1[0] == 401 and 'abgelaufen' in b1[1].get('error', '') and vor == nach_v, (b1, b2, vor, nach_v))
+storage_write('sicherheit', {**sec, 'lockAfter': 3, 'lockMinutes': 5})
 storage_write('logins', {})
 
 # Liste unbekannter Namen: laufende Sperren werden beim Kürzen nie entfernt
