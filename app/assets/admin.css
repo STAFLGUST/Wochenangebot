@@ -958,3 +958,14 @@ body.ro .sale-tag { cursor: default; }
 .fr-prev .al-note { margin: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .fr-prev .al-note p { margin: 0; }
 .fr-prev .al-note .lead { color: var(--text); font-weight: 600; }
+
+/* Stammdaten → Kundengruppen */
+.kgtab .kg-nr { width: 90px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kgtab .kg-k { width: 90px; color: var(--text-2); white-space: nowrap; }
+.kgtab .kg-n { width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
+.kgtab tbody tr[tabindex] { cursor: pointer; }
+.kg-prev { margin: 0 0 6px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+.kg-prev .muted { display: inline-block; min-width: 36px; }
+.ktab .k-gruppe { display: flex; align-items: center; gap: 4px; color: var(--text-2); }
+@media (max-width: 640px) { .kgtab .kg-k { display: none; } .kgtab .kg-nr { width: 56px; } }
+.kgtab th.kg-n { text-align: right; }

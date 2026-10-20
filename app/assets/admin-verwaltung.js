@@ -372,7 +372,7 @@
     const host = $('#view-kunden');
     if (!kunden) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kunden werden geladen …</div>';
     try {
-      const [r, m] = await Promise.all([api('kunden'), mailInfo(), W.offers.length ? null : loadOffers()]);
+      const [r, m] = await Promise.all([api('kunden'), mailInfo(), W.offers.length ? null : loadOffers(), loadKGruppen().catch(() => null)]);
       kunden = r.customers; kundenRev = r.rev; mailSt = m;
     } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     host.innerHTML = `
@@ -389,7 +389,7 @@
   }
   function renderKundenList() {
     const toks = fold(kundenQ).split(/\s+/).filter(Boolean);
-    const list = kunden.filter((c) => { const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username].join(' ')); return toks.every((t) => hay.includes(t)); });
+    const list = kunden.filter((c) => { const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username, c.gruppe ? kgName(c.gruppe) : ''].join(' ')); return toks.every((t) => hay.includes(t)); });
     $('#k-count').textContent = plural(list.length, 'Kunde', 'Kunden') + (list.length !== kunden.length ? ` von ${kunden.length}` : '');
     const host = $('#k-list');
     if (!kunden.length) { host.innerHTML = '<div class="ed-empty"><h3>Noch keine Kunden</h3><p>Legen Sie Kunden mit Ansprechpartner, Adresse und Zugang an und schalten Sie die passenden Angebote frei.</p></div>'; return; }
@@ -404,7 +404,7 @@
     };
     host.innerHTML = `<div class="gcard"><table class="etab utab ktab"><thead><tr><th>Firma / Ansprechpartner</th><th class="k-addr">Ort</th><th>Freigeschaltete Angebote</th><th class="u-st">Zugang</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${list.map((c) => `
       <tr data-kid="${esc(c.id)}" tabindex="0" class="${c.active ? '' : 'inactive'}">
-        <td class="u-name"><div class="nm">${esc(c.firma)}${c.nr ? ` <span class="muted">· ${esc(c.nr)}</span>` : ''}</div><div class="sub">${esc(c.ansprechpartner || '')}${c.email ? `${c.ansprechpartner ? ' · ' : ''}${esc(c.email)}` : ''}</div></td>
+        <td class="u-name"><div class="nm">${esc(c.firma)}${c.nr ? ` <span class="muted">· ${esc(c.nr)}</span>` : ''}</div><div class="sub">${esc(c.ansprechpartner || '')}${c.email ? `${c.ansprechpartner ? ' · ' : ''}${esc(c.email)}` : ''}</div>${c.gruppe ? `<div class="sub k-gruppe" title="Kundengruppe">${icon('users', 'sm')}${esc(kgName(c.gruppe) || 'Gruppe ' + c.gruppe + ' (nicht mehr vorhanden)')}</div>` : ''}</td>
         <td class="k-addr">${esc([c.plz, c.ort].filter(Boolean).join(' '))}</td>
         <td class="k-offers">${c.angebote.length ? c.angebote.map(offerChip).join(' ') : '<span class="muted">keines</span>'}${mailLine(c)}</td>
         <td class="u-st">${st(c)}${c.login ? `<div class="sub uname">${esc(c.login.username)}</div>` : ''}</td>
@@ -449,7 +449,8 @@
         <fieldset class="k-set"><legend>Stammdaten</legend><div class="form-grid two">
           ${fld('firma', 'Firma / Name', 120, ' required placeholder="z. B. Gasthaus Muster GmbH"', 'span2')}
           ${fld('nr', 'Kundennummer', 30, ' placeholder="optional"')}
-          ${fld('ansprechpartner', 'Ansprechpartner', 120, ' placeholder="z. B. Frau Beispiel"')}
+          <label class="fld"><span>Kundengruppe</span><select name="gruppe"><option value="">– keine –</option>${(kgruppen || []).map((g) => `<option value="${esc(g.nr)}"${c && c.gruppe === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)}</option>`).join('')}${c && c.gruppe && !(kgruppen || []).some((g) => g.nr === c.gruppe) ? `<option value="${esc(c.gruppe)}" selected>${esc(c.gruppe)} (nicht mehr vorhanden)</option>` : ''}</select></label>
+          ${fld('ansprechpartner', 'Ansprechpartner', 120, ' placeholder="z. B. Frau Beispiel"', 'span2')}
           ${fld('strasse', 'Straße und Hausnummer', 120, '', 'span2')}
           ${fld('plz', 'PLZ', 10, ' inputmode="numeric"')}
           ${fld('ort', 'Ort', 80)}
@@ -543,7 +544,7 @@
     const invite = !!(f.pwmode && [...f.querySelectorAll('[name="pwmode"]')].find((x) => x.checked && x.value === 'invite'));
     if (c && c.abgemeldet && c.mailAngebot === false && body.mailAngebot
       && !(await confirmBox('Wochenangebot wieder einschalten?', `„${esc(c.firma)}“ hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst abgemeldet. Bitte nur wieder einschalten, wenn der Kunde ausdrücklich zugestimmt hat.`, 'Kunde hat zugestimmt'))) return;
-    for (const k of ['firma', 'nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
+    for (const k of ['firma', 'nr', 'gruppe', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']) body[k] = f[k].value.trim();
     const pw = invite ? '' : f.password.value.trim();
     if (f.hasLogin.checked) {
       if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
@@ -1436,5 +1437,162 @@
   });
 
   W.openRund = openRund;
-  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, mail: renderMailView, log: renderLogView, sec: renderSecView };
+
+  /* ======================= Stammdaten → Kundengruppen ======================= */
+  /* Liste der Kundengruppen aus der Warenwirtschaft (Nummer, Bezeichnung, Klasse, Kategorie). CSV-Import im Browser
+     (Semikolon, Windows-1252 oder UTF-8), Vorschau mit neu/geändert/entfallen; gespeichert wird die ganze Liste. */
+  let kgruppen = null, kgRev = 0, kgKunden = null, kgQ = '', kgMeta = null;
+  const dlgKG = $('#dlg-kgruppe'), dlgKGI = $('#dlg-kg-import');
+  async function loadKGruppen() {
+    const r = await api('kundengruppen');
+    kgruppen = r.groups; kgRev = r.rev; kgKunden = r.kunden || null; kgMeta = { at: r.updatedAt, by: r.updatedBy };
+    return kgruppen;
+  }
+  const kgName = (nr) => { const g = (kgruppen || []).find((x) => x.nr === nr); return g ? g.name : ''; };
+  async function renderKGruppenView() {
+    const host = $('#view-gruppen');
+    if (!kgruppen) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kundengruppen werden geladen …</div>';
+    try { await loadKGruppen(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    const edit = may('stammdaten.bearbeiten');
+    host.innerHTML = `
+      <div class="ed-toolbar">
+        <div class="search">${icon('search')}<input id="kg-q" type="search" autocomplete="off" placeholder="Kundengruppe finden: Nummer, Bezeichnung …" aria-label="Kundengruppen suchen" value="${esc(kgQ)}"></div>
+        <span class="ed-hint" id="kg-count"></span>
+        ${edit ? `<button type="button" class="btn" id="kg-import">${icon('upload')}CSV importieren</button><input type="file" id="kg-file" accept=".csv,text/csv,text/plain" hidden>
+        <button type="button" class="btn primary" id="kg-add">${icon('plus')}Gruppe anlegen</button>` : ''}
+      </div>
+      <div id="kg-list"></div>
+      <p class="hint">Kundengruppen ordnen Kunden zu (Kunde bearbeiten → Kundengruppe). ${kgMeta && kgMeta.at ? `Zuletzt geändert ${esc(dateTime(kgMeta.at))}${kgMeta.by ? ' von ' + esc(kgMeta.by) : ''}.` : ''}</p>`;
+    renderKGruppenList();
+  }
+  function renderKGruppenList() {
+    const toks = fold(kgQ).split(/\s+/).filter(Boolean);
+    const list = kgruppen.filter((g) => { const hay = fold([g.nr, g.name, g.klasse, g.kategorie].join(' ')); return toks.every((t) => hay.includes(t)); });
+    $('#kg-count').textContent = plural(list.length, 'Kundengruppe', 'Kundengruppen') + (list.length !== kgruppen.length ? ` von ${kgruppen.length}` : '');
+    const host = $('#kg-list');
+    if (!kgruppen.length) { host.innerHTML = `<div class="ed-empty"><h3>Noch keine Kundengruppen</h3><p>${may('stammdaten.bearbeiten') ? 'Importieren Sie die Liste als CSV aus der Warenwirtschaft (Spalten Nummer; Bezeichnung; Klasse; Kategorie) oder legen Sie Gruppen einzeln an.' : 'Ein Bearbeiter kann die Liste importieren.'}</p></div>`; return; }
+    if (!list.length) { host.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
+    const edit = may('stammdaten.bearbeiten');
+    host.innerHTML = `<div class="gcard"><table class="etab kgtab"><thead><tr><th class="kg-nr">Nummer</th><th>Bezeichnung</th><th class="kg-k">Klasse</th><th class="kg-k">Kategorie</th>${kgKunden ? '<th class="kg-n">Kunden</th>' : ''}${edit ? '<th class="u-act"><span class="sr-only">Aktion</span></th>' : ''}</tr></thead><tbody>${list.map((g) => `
+      <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td><td>${esc(g.name)}</td><td class="kg-k">${esc(g.klasse || '')}</td><td class="kg-k">${esc(g.kategorie || '')}</td>${kgKunden ? `<td class="kg-n">${kgKunden[g.nr] ? esc(String(kgKunden[g.nr])) : '<span class="muted">–</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+  }
+  async function saveKGruppen(groups, quelle) {
+    const r = await api('kundengruppen_save', { body: { rev: kgRev, groups, quelle: quelle || '' } });
+    kgruppen = r.groups; kgRev = r.rev;
+    return r;
+  }
+  function openKGruppe(nr) {
+    const g = nr ? kgruppen.find((x) => x.nr === nr) : null;
+    const n = g && kgKunden ? kgKunden[g.nr] || 0 : 0;
+    $('#kgruppe-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="kg-title">${g ? esc(g.name) : 'Kundengruppe anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, 'Kunde', 'Kunden')} zugeordnet` : ''}` : 'Nummer wie in der Warenwirtschaft.'}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body"><div class="form-grid two">
+        <label class="fld"><span>Nummer</span><input name="nr" value="${esc(g ? g.nr : '')}" maxlength="10" required${g ? ' readonly' : ''} inputmode="numeric"></label>
+        <label class="fld"><span>Klasse</span><input name="klasse" value="${esc(g ? g.klasse : '')}" maxlength="20" placeholder="optional"></label>
+        <label class="fld span2"><span>Bezeichnung</span><input name="name" value="${esc(g ? g.name : '')}" maxlength="120" required></label>
+        <label class="fld"><span>Kategorie</span><input name="kategorie" value="${esc(g ? g.kategorie : '')}" maxlength="20" placeholder="optional"></label>
+      </div><p class="kerr" id="kg-err" role="alert"></p></div>
+      <div class="dlg-foot"><span class="left">${g ? `<button type="button" class="btn sm ghost" data-kg-del style="color:var(--accent)">${icon('trash', 'sm')}Gruppe löschen</button>` : ''}</span><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button></div>`;
+    $('#kgruppe-body').dataset.nr = nr || '';
+    dlgKG.showModal();
+    $('#kgruppe-body [name="' + (g ? 'name' : 'nr') + '"]').focus();
+  }
+  $('#kgruppe-body').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target, nr = f.dataset.nr;
+    const row = { nr: f.nr.value.trim(), name: f.name.value.trim(), klasse: f.klasse.value.trim(), kategorie: f.kategorie.value.trim() };
+    if (!nr && kgruppen.some((x) => x.nr === row.nr)) { $('#kg-err').textContent = `Die Nummer ${row.nr} ist bereits vergeben.`; return; }
+    const list = nr ? kgruppen.map((x) => (x.nr === nr ? row : x)) : [...kgruppen, row];
+    try { await saveKGruppen(list); dlgKG.close(); toast(nr ? `Kundengruppe „${row.name}“ gespeichert.` : `Kundengruppe „${row.name}“ angelegt.`); renderKGruppenView(); }
+    catch (ex) { $('#kg-err').textContent = ex.message; }
+  });
+  $('#kgruppe-body').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-close]')) { dlgKG.close(); return; }
+    if (!e.target.closest('[data-kg-del]')) return;
+    const nr = $('#kgruppe-body').dataset.nr, g = kgruppen.find((x) => x.nr === nr);
+    const n = kgKunden ? kgKunden[nr] || 0 : 0;
+    if (!(await confirmBox('Kundengruppe löschen?', `„${esc(g.name)}“ (${esc(nr)}) wird gelöscht.${n ? ` ${plural(n, 'Kunde behält', 'Kunden behalten')} die Nummer, bis eine andere Gruppe gewählt wird.` : ''}`, 'Löschen', true))) return;
+    try { await saveKGruppen(kgruppen.filter((x) => x.nr !== nr)); dlgKG.close(); toast(`Kundengruppe „${g.name}“ gelöscht.`); renderKGruppenView(); }
+    catch (ex) { $('#kg-err').textContent = ex.message; }
+  });
+  /* CSV lesen: UTF-8, sonst Windows-1252 (Export der Warenwirtschaft); Semikolon, Anführungszeichen */
+  function csvZeilen(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+      if (ch === '"') q = true;
+      else if (ch === ';') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((c) => c.trim() !== ''));
+  }
+  function kgAusCsv(buf) {
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { text = new TextDecoder('windows-1252').decode(buf); }
+    text = text.replace(/^﻿/, '');
+    const rows = csvZeilen(text);
+    if (!rows.length) throw new Error('Die Datei ist leer.');
+    const kopf = rows[0].map((c) => fold(c).replace(/[^a-z]/g, ''));
+    const sp = (...n) => kopf.findIndex((k) => n.includes(k));
+    const iNr = sp('nummer', 'nr', 'gruppe', 'kundengruppe'), iName = sp('bezeichnung', 'name'), iKl = sp('klasse'), iKat = sp('kategorie');
+    if (iNr < 0 || iName < 0) throw new Error('Spalten „Nummer“ und „Bezeichnung“ nicht gefunden. Erwartet wird die Kundengruppen-Liste aus der Warenwirtschaft (Nummer; Bezeichnung; Klasse; Kategorie).');
+    const out = [], fehler = [];
+    rows.slice(1).forEach((r, i) => {
+      const g = { nr: (r[iNr] || '').trim(), name: (r[iName] || '').trim().replace(/\s{2,}/g, ' '), klasse: iKl >= 0 ? (r[iKl] || '').trim() : '', kategorie: iKat >= 0 ? (r[iKat] || '').trim() : '' };
+      if (!g.nr && !g.name) return;
+      if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || !g.name) { fehler.push(`Zeile ${i + 2}`); return; }
+      out.push(g);
+    });
+    const doppelt = out.filter((g, i) => out.findIndex((x) => x.nr === g.nr) !== i).map((g) => g.nr);
+    if (doppelt.length) throw new Error(`Nummer doppelt in der Datei: ${[...new Set(doppelt)].join(', ')}`);
+    if (!out.length) throw new Error('Keine Kundengruppen in der Datei gefunden.');
+    return { groups: out, fehler };
+  }
+  async function kgImportDatei(file) {
+    let res;
+    try { res = kgAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+    const alt = new Map(kgruppen.map((g) => [g.nr, g]));
+    const neu = res.groups.filter((g) => !alt.has(g.nr));
+    const geaendert = res.groups.filter((g) => alt.has(g.nr) && JSON.stringify([g.name, g.klasse, g.kategorie]) !== JSON.stringify([alt.get(g.nr).name, alt.get(g.nr).klasse, alt.get(g.nr).kategorie]));
+    const nrs = new Set(res.groups.map((g) => g.nr));
+    const weg = kgruppen.filter((g) => !nrs.has(g.nr));
+    const wegMitKunden = weg.filter((g) => kgKunden && kgKunden[g.nr]);
+    const liste = (l) => l.slice(0, 8).map((g) => `<li><span class="muted">${esc(g.nr)}</span> ${esc(g.name)}</li>`).join('') + (l.length > 8 ? `<li class="muted">… und ${l.length - 8} weitere</li>` : '');
+    $('#kg-import-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="kgi-title">Kundengruppen importieren</h2><p>${esc(file.name)} · ${plural(res.groups.length, 'Kundengruppe', 'Kundengruppen')}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <div class="cmp-stats"><div><span>Neu</span><strong id="kgi-neu">${neu.length}</strong></div><div><span>Geändert</span><strong id="kgi-geaendert">${geaendert.length}</strong></div><div><span>Entfallen</span><strong id="kgi-weg">${weg.length}</strong></div></div>
+        ${neu.length ? `<h3 class="d-h"><span>Neu</span></h3><ul class="kg-prev">${liste(neu)}</ul>` : ''}
+        ${geaendert.length ? `<h3 class="d-h"><span>Geändert</span></h3><ul class="kg-prev">${liste(geaendert)}</ul>` : ''}
+        ${weg.length ? `<h3 class="d-h"><span>Nicht mehr in der Datei – werden entfernt</span></h3><ul class="kg-prev">${liste(weg)}</ul>` : ''}
+        ${wegMitKunden.length ? `<p class="hint st-warn">${plural(wegMitKunden.length, 'entfallende Gruppe hat', 'entfallende Gruppen haben')} zugeordnete Kunden; diese behalten die Nummer, bis eine andere Gruppe gewählt wird.</p>` : ''}
+        ${res.fehler.length ? `<p class="hint st-warn">Übersprungen (Nummer oder Bezeichnung fehlt/ungültig): ${esc(res.fehler.slice(0, 10).join(', '))}${res.fehler.length > 10 ? ' …' : ''}</p>` : ''}
+        ${!neu.length && !geaendert.length && !weg.length ? '<p class="hint">Keine Änderungen – die Liste ist bereits aktuell.</p>' : ''}
+        <p class="kerr" id="kgi-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" id="kgi-ok"${!neu.length && !geaendert.length && !weg.length ? ' disabled' : ''}>${icon('check')}Übernehmen</button></div>`;
+    dlgKGI.showModal();
+    $('#kgi-ok').onclick = async () => {
+      $('#kgi-ok').disabled = true;
+      try { const r = await saveKGruppen(res.groups, file.name); dlgKGI.close(); toast(`Kundengruppen übernommen: ${r.neu} neu, ${r.geaendert} geändert, ${r.entfernt} entfernt.`, 5000); renderKGruppenView(); }
+      catch (ex) { $('#kgi-err').textContent = ex.message; $('#kgi-ok').disabled = false; }
+    };
+  }
+  $('#kg-import-body').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlgKGI.close(); });
+  $('#view-gruppen').addEventListener('input', (e) => { if (e.target.id === 'kg-q') { kgQ = e.target.value; renderKGruppenList(); } });
+  $('#view-gruppen').addEventListener('change', (e) => { if (e.target.id === 'kg-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; kgImportDatei(f); } });
+  $('#view-gruppen').addEventListener('click', (e) => {
+    if (e.target.closest('#kg-import')) { $('#kg-file').click(); return; }
+    if (e.target.closest('#kg-add')) { openKGruppe(null); return; }
+    const tr = e.target.closest('tr[data-kg]');
+    if (tr && may('stammdaten.bearbeiten')) openKGruppe(tr.dataset.kg);
+  });
+  $('#view-gruppen').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kg]') && may('stammdaten.bearbeiten')) openKGruppe(e.target.dataset.kg); });
+
+  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: renderKGruppenView, mail: renderMailView, log: renderLogView, sec: renderSecView };
 })();
