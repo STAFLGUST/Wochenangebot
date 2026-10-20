@@ -1,7 +1,7 @@
 #!/bin/sh
 # Notfall: Passwort eines Nutzers zurücksetzen (z. B. wenn der Administrator sein Passwort vergessen hat).
 # Aufruf auf dem Server:   sh /opt/wochenangebot/deploy/passwort-zuruecksetzen.sh admin
-# Der Zugang wird wieder aktiviert und entsperrt, die Zwei-Faktor-Anmeldung zurückgesetzt;
+# Der Zugang wird wieder aktiviert und entsperrt, die Zwei-Faktor-Anmeldung (auch Passkeys) zurückgesetzt;
 # das neue Passwort muss bei der nächsten Anmeldung geändert werden.
 # Neuen Administrator anlegen (z. B. nach Datenverlust):  sh deploy/passwort-zuruecksetzen.sh admin --neu
 set -e

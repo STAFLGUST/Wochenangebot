@@ -38,7 +38,7 @@ function user_public(array $u): array
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'active' => (bool)$u['active'],
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
-            'twofa' => !empty($u['totp']), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
+            'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
             'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])),
             'perms' => function_exists('user_perms') ? user_perms($u) : []];
 }

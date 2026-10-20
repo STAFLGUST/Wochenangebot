@@ -48,7 +48,7 @@
     const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div></td>
         <td>${roleBadge(u.role)}${exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
-        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
       </tr>`).join('');
@@ -128,6 +128,7 @@
         </div>`}
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
+        ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
         <details class="span2 ur-box" id="ur-box"${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Nutzer${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
@@ -162,6 +163,7 @@
       id: editUid || '', name: f.name.value.trim(), username: u ? u.username : f.username.value.trim(),
       role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
+      resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false,
     };
     if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');
@@ -1242,7 +1244,7 @@
   }
   function secCards(d) {
     const S = d.settings, users = d.users.filter((u) => u.active);
-    const with2 = users.filter((u) => u.twofa).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa).length;
+    const with2 = users.filter((u) => u.twofa || u.passkeys).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa && !u.passkeys).length;
     const locked = d.users.filter((u) => u.lockedUntil).length, blocked = d.blockedIps.filter((x) => x.until).length;
     const card = (lvl, title, text, hint) => `<div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${esc(title)}</strong><span>${text}</span>${hint ? `<em>${hint}</em>` : ''}</div></div>`;
     return [
@@ -1363,7 +1365,7 @@
     geoSel = new Set(S.geoCountries || []); geoQ = '';
     const G = d.geo;
     const geoStatRows = (d.geoStats || []).map((x) => `<tr><td>${esc(ccName(x.cc))} <span class="sub">${esc(x.cc)}</span></td><td class="num-s">${fmtInt.format(x.n)}</td><td class="num-s">${esc(dateTime(x.last))}</td></tr>`).join('');
-    const no2 = d.users.filter((u) => u.active && !u.twofa);
+    const no2 = d.users.filter((u) => u.active && !u.twofa && !u.passkeys);
     const sessRows = d.sessions.map((x) => `<tr><td><div class="nm">${esc(x.name)}</div><div class="sub uname">${esc(x.username)}</div></td><td class="mono-s">${esc(x.ip)}</td><td>${esc(uaShort(x.ua))}</td>
         <td class="num-s">${esc(dateTime(x.created))}</td><td class="num-s">${esc(dateTime(x.seen))}</td>
         <td class="act">${x.current ? '<span class="muted">diese Sitzung</span>' : `<button type="button" class="btn sm" data-sec="end" data-sid="${esc(x.sid)}">Beenden</button>`}</td></tr>`).join('');

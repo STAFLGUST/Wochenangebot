@@ -231,8 +231,8 @@ switch ($action) {
                 $i = user_find($users, $id);
                 if ($i === null) fail('Nutzer nicht gefunden.', 404);
                 $old = $users[$i];
-                if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']))) {
-                    fail('Für den eigenen Zugang bitte „Passwort ändern“ oder „Zwei-Faktor-Anmeldung“ verwenden.', 403);
+                if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']) || !empty($b['resetPasskeys']))) {
+                    fail('Für den eigenen Zugang bitte „Passwort ändern“, „Zwei-Faktor-Anmeldung“ oder „Passkeys“ verwenden.', 403);
                 }
                 if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
                 $users[$i]['name'] = $name;
@@ -257,6 +257,12 @@ switch ($action) {
                     $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;
                     $d[] = ['k' => 'u|2fa', 'code' => '', 'name' => $old['username'], 'f' => 'Zwei-Faktor', 'from' => 'eingerichtet', 'to' => 'zurückgesetzt'];
                 }
+                if (!empty($b['resetPasskeys']) && has_passkeys($old)) {
+                    unset($users[$i]['passkeys']);
+                    $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;
+                    $n = count($old['passkeys']);
+                    $d[] = ['k' => 'u|passkey', 'code' => '', 'name' => $old['username'], 'f' => 'Passkeys', 'from' => $n === 1 ? '1 Passkey' : "$n Passkeys", 'to' => 'alle entfernt'];
+                }
                 if ($setPw) {
                     $users[$i]['hash'] = password_hash(check_password($pw, $old['username']), PASSWORD_DEFAULT);
                     $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
@@ -271,7 +277,7 @@ switch ($action) {
             if ($u['id'] === $me['id']) { $_SESSION['sv'] = (int)$u['sv']; }
             elseif ((int)$u['sv'] > 1 || empty($u['active'])) {
                 $uid = $u['id']; $sv = (int)$u['sv'];
-                if (empty($u['active']) || array_filter($d, function ($x) { return in_array($x['k'], ['u|pw', 'u|2fa'], true); })) sess_remove(function ($k, $v) use ($uid) { return $v['uid'] === $uid; });
+                if (empty($u['active']) || array_filter($d, function ($x) { return in_array($x['k'], ['u|pw', 'u|2fa', 'u|passkey'], true); })) sess_remove(function ($k, $v) use ($uid) { return $v['uid'] === $uid; });
             }
             if ($d) audit('user', $msg, $d);
             respond(['ok' => true, 'user' => user_public($u)]);
