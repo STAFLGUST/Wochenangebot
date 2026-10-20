@@ -137,7 +137,7 @@ PRINT = threading.Lock()
 
 def ports(slot):
     """Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes."""
-    b = 9100 + slot * 10
+    b = int(os.environ.get("WA_PORT_BASE", "9100")) + slot * 10   # WA_PORT_BASE: getrennte Ports für parallele Läufe
     return b, b + 1, b + 2, b + 3
 
 
