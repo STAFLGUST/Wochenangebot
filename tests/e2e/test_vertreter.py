@@ -119,7 +119,7 @@ with sync_playwright() as p:
     a.select_option('#kunde-body [name="vertreter2"]', '26'); a.click('#kunde-body [type=submit]')
     a.wait_for_function("!document.querySelector('#dlg-kunde').open", timeout=10000)
     check('Vertreter 2 im Kunden gespeichert', next(c for c in doc('kunden')['customers'] if c['id'] == kid)['vertreter2'] == '26')
-    a.wait_for_selector('#k-list tr[data-kid]:has-text("Vertretertest") .k-vt')
+    a.wait_for_selector('#k-list tr[data-kid]:has-text("Vertretertest") .k-vt:has-text("Großhandel Test GmbH")')   # Liste nach dem Speichern neu geladen
     check('Kundenliste zeigt die Vertreter-Namen', 'Tom Testmann · Großhandel Test GmbH' in a.inner_text('#k-list tr[data-kid]:has-text("Vertretertest") .k-vt'))
     a.select_option('#k-v', '26'); a.wait_for_function("document.querySelector('#k-count').textContent.startsWith('1 Kunde')")
     check('Filter nach Vertreter', a.locator('#k-list tr[data-kid]').count() == 1)
