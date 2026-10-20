@@ -45,7 +45,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | auth_hardening | 38 | direkte HTTP-Regressionen für Faktorwechsel, Sitzungswiderruf und Kontosperre |
 | security | 41 | 2FA, Wiederherstellungscodes, Sitzungen, IP-Freigabe, CSP |
 | geo, geo_ip | 42 + 8 | Ländersperre, Selbstaussperr-Schutz, IP-Suche |
-| stock | 37 | Bestandsimport, MHD-Regeln, keine Mengen öffentlich |
+| stock | 43 | Bestandsimport, MHD-Regeln, keine Mengen öffentlich, Partien mit Summenzeile und EK-Preis (gewichteter Durchschnitt), EK nur mit Recht (Leser: weder in der Antwort noch in der Tabelle), 390 px |
 | master | 29 | Stammdaten, Bezeichnungsregeln |
 | editor_aux | 21 | Vorwoche, Bestand im Editor |
 | revert | 16 | einzelne Änderung mit Bestätigung zurücknehmen |

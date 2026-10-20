@@ -8,7 +8,8 @@ switch ($action) {
         case 'stock': {
             $me = require_perm('bestand.sehen');
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'stock' => store_read('bestand'),
+            $st = store_read('bestand');
+            respond(['ok' => true, 'stock' => may($me, 'bestand.einkaufspreise') ? $st : stock_ohne_ek($st),
                      'prices' => may($me, 'preisverlauf.sehen') ? stock_week_prices() : ['allowed' => false]]);
         }
 
@@ -23,7 +24,7 @@ switch ($action) {
             $st = ['date' => $date, 'source' => s($b['source'] ?? '', 200) ?? '', 'importedAt' => now(), 'importedBy' => $me['name'], 'articles' => $articles, 'incoming' => $incoming];
             store_write('bestand', $st);
             audit('stock', 'Bestand übernommen: ' . ($st['source'] ?: 'Datei') . ($date ? ' – Stand ' . date('d.m.Y', strtotime($date)) : '') . ', ' . count($articles) . ' Artikel, ' . number_format($total, 2, ',', '.') . ' kg eingelagert, ' . count($incoming) . ' erwartete Zugänge');
-            respond(['ok' => true, 'stock' => $st]);
+            respond(['ok' => true, 'stock' => may($me, 'bestand.einkaufspreise') ? $st : stock_ohne_ek($st)]);
         }
 
         case 'master': {

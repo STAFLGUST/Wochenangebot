@@ -383,6 +383,10 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .stab tr.wg-gap td { height: 14px; padding: 0; border: 0; background: var(--bg); }
 .stab tr.st-total td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--text-2); border-bottom: 0; background: var(--surface-3); }
 .lottab td { padding: 6px 8px; } .lottab th { padding: 8px; }
+.lottab tfoot td { padding: 8px; border-top: 1.5px solid var(--text); font-weight: 650; white-space: nowrap; }
+.lottab .lot-ek { white-space: nowrap; }
+.lot-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; min-width: 0; }
+@media (max-width: 560px) { .lottab td, .lottab th, .lottab tfoot td { padding: 6px 4px; font-size: 13px; } .lottab td { white-space: nowrap; } .lottab .lot-ank { display: none; } }
 .item-stock { font-size: 13.5px; }
 @media (max-width: 700px) {
   .stab thead { display: none; }
