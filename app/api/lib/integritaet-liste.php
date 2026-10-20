@@ -25,7 +25,7 @@ return [
     'api/config.php' => '5083905099b55664efca0f9bf18d66d049711f8104cd13c4a75361d7a6259999',
     'api/geo.php' => '99637576e28966a5dd7acebf6c1f4e22f3b1c0e3ff78d55875a13782ed48bcec',
     'api/geo/laender.dat.php' => 'ea2f91dd09319e4adca9b45bd87f50faf734067dfcbdc5db1d2d585d27f82c51',
-    'api/index.php' => '0693b89329403ce6566d8af58c0732cc8efe3b24ba6b294b7f51dc1d8a1db8f9',
+    'api/index.php' => 'd213504a96227869789d8a30b2dbd79c4d2fac4cc39ba7ce95bd15160b07a727',
     'api/lib/angebote.php' => '1e59854c1e90498b0f52f27c284804454c182bd01b15555bb661f4286b8ceba6',
     'api/lib/auswertung.php' => 'de4d716cfac4da029e5b950e667d4fb6342c1f0fe5abfc02ae1b773b620a9d65',
     'api/lib/benachrichtigung.php' => '8f3cc96cc914572ed3345bc7cf4988b3f9d011659447c66b96d04f06bf4b3aea',
