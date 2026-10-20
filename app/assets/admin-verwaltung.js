@@ -1335,6 +1335,25 @@
     el.innerHTML = `${lvlDot(worst)}<div><strong>${worst === 'bad' ? 'Handlungsbedarf' : worst === 'warn' ? 'Insgesamt in Ordnung, mit Hinweisen' : 'Alles in Ordnung'}</strong><span>${n('ok')} in Ordnung · ${n('warn')} ${n('warn') === 1 ? 'Hinweis' : 'Hinweise'} · ${n('bad')} kritisch</span></div>`;
   }
   const DIAG = [['storage', 'Datenablage prüfen', 'Lesbarkeit und Unversehrtheit aller Datensätze'], ['mail', 'E-Mail-Verbindung prüfen', 'Verbindung und Anmeldung am Mailserver, ohne E-Mail'], ['files', 'Dateien und Speicher', 'Schreibrechte, Schreibschutz, freier Speicher'], ['php', 'PHP-Umgebung', 'Version, Erweiterungen, Grenzwerte, Serverzeit']];
+  /* Passwortbestätigung je Aktion: Häkchen = Passwort wird verlangt; feste Aktionen (Zugänge, Rechte, Sicherheit) nicht abschaltbar */
+  function bstHTML(d) {
+    const kat = d.bestaetigung || [];
+    if (!kat.length) return '';
+    const S = d.settings, gruppen = [];
+    for (const b of kat) { let g = gruppen.find((x) => x.name === b.group); if (!g) gruppen.push((g = { name: b.group, l: [] })); g.l.push(b); }
+    const aus = kat.filter((b) => !b.fest && !b.noetig).length;
+    return `<form class="gcard sec-form sec-sect bst-form" id="bst-form" autocomplete="off">
+        <h3 class="sec-h" id="sec-bst">Passwortbestätigung</h3>
+        <p class="hint" style="margin-top:0">Bei angehakten Aktionen fragt der Eingabebereich nach Ihrem Passwort (einmal je Sitzung für die eingestellte Dauer). Ohne Haken genügen Anmeldung und Berechtigung. Aktionen an Zugängen, Rechten und Sicherheit verlangen immer eine Bestätigung.${aus ? ` <strong>${aus} ${aus === 1 ? 'Aktion' : 'Aktionen'} ohne Bestätigung.</strong>` : ''}</p>
+        <label class="fld bst-dauer"><span>Bestätigung gilt</span><select name="bestaetigungMinuten">${(d.bestaetigungMinuten || [5]).map((m) => `<option value="${m}"${(S.bestaetigungMinuten || 5) === m ? ' selected' : ''}>${m} Minuten</option>`).join('')}</select></label>
+        <div class="bst-grid">${gruppen.map((g) => `<fieldset class="bst-g${g.l.every((b) => b.fest) ? ' fest' : ''}"><legend>${esc(g.name)}</legend>
+          ${g.l.map((b) => b.fest
+            ? `<label class="check bst-z fest" title="Immer mit Passwortbestätigung"><input type="checkbox" checked disabled>${icon('lock', 'sm')}<span>${esc(b.label)}</span></label>`
+            : `<label class="check bst-z"><input type="checkbox" name="bst" value="${esc(b.key)}"${b.noetig ? ' checked' : ''}><span>${esc(b.label)}</span></label>`).join('')}</fieldset>`).join('')}</div>
+        <p class="form-err" id="bst-err" role="alert"></p>
+        <div class="sec-foot"><button type="submit" class="btn primary">${icon('check')}Passwortbestätigung speichern</button></div>
+      </form>`;
+  }
   async function renderSecView() {
     const host = $('#view-sec');
     if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Sicherheitsübersicht wird geladen …</div>';
@@ -1351,7 +1370,7 @@
     const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
-      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-einst">Einstellungen</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
+      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
       <section id="sec-lage" class="sec-sect">
         <div class="sec-score" id="sec-score"></div>
         <div class="sec-grid">${secCards(d)}</div>
@@ -1383,7 +1402,7 @@
           : '<button type="button" class="btn primary" data-wartung="on">Wartungsmodus einschalten</button>'}</div>
         <p class="form-err" id="wartung-err" role="alert"></p>
       </form>
-      <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens fünf Minuten alte Anmeldung oder Passwortbestätigung. Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
+      <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens ${S.bestaetigungMinuten || 5} Minuten alte Anmeldung oder Passwortbestätigung (einstellbar unter „Passwortbestätigung“). Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
       <form class="gcard sec-form sec-sect" id="sec-form" autocomplete="off">
         <h3 class="sec-h" id="sec-einst">Einstellungen</h3>
         <div class="sec-rows">
@@ -1427,6 +1446,7 @@
         <p class="form-err" id="sec-err" role="alert"></p>
         <div class="sec-foot"><button type="submit" class="btn primary">${icon('check')}Einstellungen speichern</button></div>
       </form>
+      ${bstHTML(d)}
       ${geoStatRows ? `<section class="gcard sec-block"><h3 class="sec-h">Abgewiesene Zugriffe nach Land <span class="muted">(7 Tage: ${fmtInt.format(d.geoBlocked7 || 0)})</span><button type="button" class="btn sm ghost sec-h-act" data-sec="geo-clear">Zurücksetzen</button></h3>
         <table class="etab sectab"><thead><tr><th>Land</th><th class="num-s">Zugriffe gesamt</th><th class="num-s">zuletzt</th></tr></thead><tbody>${geoStatRows}</tbody></table></section>` : ''}
       <section class="gcard sec-block sec-sect" id="sec-zugang"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
@@ -1524,6 +1544,20 @@
     } catch (ex) { toast(ex.message); }
   });
   $('#view-sec').addEventListener('submit', async (e) => {
+    if (e.target.id === 'bst-form') {
+      e.preventDefault();
+      const f = e.target, S0 = secData.settings;
+      const aus = [...f.querySelectorAll('input[name="bst"]')].filter((c) => !c.checked).map((c) => c.value);
+      const neuAus = aus.filter((k) => !(S0.bestaetigungAus || []).includes(k));
+      $('#bst-err').textContent = '';
+      if (neuAus.length && !(await confirmBox('Passwortbestätigung abschalten?', `Für ${neuAus.length === 1 ? 'diese Aktion' : `diese ${neuAus.length} Aktionen`} genügen danach Anmeldung und Berechtigung: ${(secData.bestaetigung || []).filter((b) => neuAus.includes(b.key)).map((b) => esc(b.label)).join(', ')}. Wer eine offene Sitzung nutzt, kann sie dann ohne Passwort ausführen.`, 'Abschalten'))) return;
+      try {
+        await api('security_save', { body: { ...S0, bestaetigungAus: aus, bestaetigungMinuten: +f.bestaetigungMinuten.value } });
+        toast('Passwortbestätigung gespeichert.');
+        renderSecView();
+      } catch (ex) { $('#bst-err').textContent = ex.message; }
+      return;
+    }
     if (e.target.id !== 'sec-form') return;
     e.preventDefault();
     const f = e.target.elements;

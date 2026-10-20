@@ -225,7 +225,7 @@ switch ($action) {
         }
 
         case 'bestell_settings_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('bestell_settings_save');
             $b = body();
             $old = order_settings();
             // Empfänger: werden unter „Benachrichtigungen“ gepflegt; ohne Angabe bleiben sie unverändert
@@ -243,7 +243,7 @@ switch ($action) {
         }
 
         case 'fracht_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('fracht_save');
             $b = body();
             $old = fracht_settings();
             $st = fracht_clean_staffeln($b['staffeln'] ?? []);

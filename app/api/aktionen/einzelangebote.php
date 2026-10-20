@@ -119,7 +119,7 @@ switch ($action) {
         }
 
         case 'einzel_senden': {
-            $me = require_perm_confirmed('einzelangebote.bearbeiten');
+            $me = require_perm_confirmed('einzelangebote.bearbeiten', 'einzel_senden');
             $cfg = require_mail();
             $b = body();
             $d = einzel_load();

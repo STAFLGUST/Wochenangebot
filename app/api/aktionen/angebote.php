@@ -95,7 +95,7 @@ switch ($action) {
                 $stdNeu = $stdG ?? $stdAlt;
                 $new = []; foreach ($list as $o) $new[$o['id']] = $o;
                 $removed = array_diff_key($old, $new);
-                if ($removed) require_perm_confirmed('angebote.loeschen');
+                if ($removed) require_perm_confirmed('angebote.loeschen', 'angebote_loeschen');
                 $d = [];
                 $FB = ['standard' => 'Standardpreis zeigen', 'hidden' => 'Artikel ausblenden'];
                 foreach ($new as $id => $o) {
@@ -109,7 +109,7 @@ switch ($action) {
                 $oldPub = !array_key_exists('stdPublic', $cur) || !empty($cur['stdPublic']);
                 $pub = array_key_exists('stdPublic', $b) ? !empty($b['stdPublic']) : $oldPub;
                 if ($pub !== $oldPub) {
-                    require_perm_confirmed('angebote.loeschen');
+                    require_perm_confirmed('angebote.loeschen', 'angebote_loeschen');
                     $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
                 }
                 $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub];

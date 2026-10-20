@@ -14,7 +14,7 @@ switch ($action) {
         }
 
         case 'wartung_save': {
-            $me = require_admin_confirmation();
+            $me = require_admin_confirmation('wartung_save');
             $b = body();
             $on = !empty($b['active']);
             $msg = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['message'] ?? '')) ?? '')), 0, 500);
@@ -36,7 +36,7 @@ switch ($action) {
             $u = confirm_password($me, (string)(body()['password'] ?? ''));
             mark_admin_confirmed($u);
             audit('reauth', 'Sensible Verwaltungsaktionen für fünf Minuten bestätigt');
-            respond(['ok' => true, 'confirmedUntil' => time() + ADMIN_CONFIRM_SECONDS]);
+            respond(['ok' => true, 'confirmedUntil' => time() + bestaetigung_sekunden()]);
         }
 
         case 'setup': {

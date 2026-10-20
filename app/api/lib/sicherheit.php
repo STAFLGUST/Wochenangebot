@@ -7,7 +7,58 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 const SEC_DEFAULTS = ['twofa' => 'off', 'pwMin' => 10, 'pwComplex' => false, 'idleMinutes' => 480,
                       'ipEnabled' => false, 'adminIps' => [], 'lockAfter' => 10, 'lockMinutes' => 15,
-                      'geoEnabled' => false, 'geoMode' => 'block', 'geoCountries' => [], 'geoScope' => 'admin'];
+                      'geoEnabled' => false, 'geoMode' => 'block', 'geoCountries' => [], 'geoScope' => 'admin',
+                      'bestaetigungAus' => [], 'bestaetigungMinuten' => 5];
+/* Passwortbestätigung je Aktion (Sicherheit → Passwortbestätigung). Schlüssel = Aktion; [Bereich, Bezeichnung, fest].
+   „fest“ = immer Pflicht (Zugänge, Rechte, Sitzungen, Sperren, Sicherheit, Postfach-Zugangsdaten) – nicht abschaltbar.
+   Gespeichert werden nur die abgeschalteten Schlüssel (`bestaetigungAus`); unbekannte Schlüssel verlangen immer die Bestätigung. */
+const BESTAETIGUNG = [
+    'einzel_senden'         => ['Kunden', 'Einzelangebot per E-Mail senden', false],
+    'kunden_rundmail'       => ['Kunden', 'Wochenangebot an Kunden senden', false],
+    'kunden_restposten'     => ['Kunden', 'Sonderposten an Kunden senden', false],
+    'kunde_mail'            => ['Kunden', 'E-Mail an einen Kunden (Einladung, Passwort-Link, Angebotslink)', false],
+    'kunde_save'            => ['Kunden', 'Kunde anlegen oder ändern (auch Portal-Zugang)', false],
+    'kunde_delete'          => ['Kunden', 'Kunde löschen', false],
+    'kunden_import'         => ['Kunden', 'Kundenimport übernehmen', false],
+    'angebote_loeschen'     => ['Angebote', 'Kundenangebot löschen', false],
+    'bestell_settings_save' => ['Einstellungen', 'Bestellwünsche: Empfänger und Einstellungen ändern', false],
+    'fracht_save'           => ['Einstellungen', 'Frachtregel ändern', false],
+    'mail_save'             => ['Einstellungen', 'E-Mail-Signatur ändern', false],
+    'mail_test'             => ['Einstellungen', 'Testmail senden', false],
+    'benachrichtigung_save' => ['Einstellungen', 'Benachrichtigungen ändern', false],
+    'wartung_save'          => ['Einstellungen', 'Wartungsmodus ein- oder ausschalten', false],
+    'ort_update'            => ['Einstellungen', 'Ortsdatenbank (Auswertung) aktualisieren', false],
+    'geo_update'            => ['Einstellungen', 'Länderdaten aktualisieren', false],
+    'geo_clear_stats'       => ['Einstellungen', 'Statistik abgewiesener Zugriffe zurücksetzen', false],
+    'user_save'             => ['Immer mit Bestätigung', 'Nutzer anlegen oder ändern', true],
+    'user_delete'           => ['Immer mit Bestätigung', 'Nutzer löschen', true],
+    'user_unlock'           => ['Immer mit Bestätigung', 'Gesperrten Zugang entsperren', true],
+    'rechte_save'           => ['Immer mit Bestätigung', 'Rechte der Rollen ändern', true],
+    'session_end'           => ['Immer mit Bestätigung', 'Sitzung beenden', true],
+    'ip_unblock'            => ['Immer mit Bestätigung', 'IP-Sperre aufheben', true],
+    'security_save'         => ['Immer mit Bestätigung', 'Sicherheitseinstellungen ändern (auch diese Liste)', true],
+    'security_export'       => ['Immer mit Bestätigung', 'Sicherheitsprotokoll exportieren', true],
+    'mail_konto_save'       => ['Immer mit Bestätigung', 'Postfach für den E-Mail-Versand (Zugangsdaten) ändern', true],
+];
+const BESTAETIGUNG_MINUTEN = [5, 15, 30, 60];
+function bestaetigung_noetig(string $key): bool
+{
+    $b = BESTAETIGUNG[$key] ?? null;
+    if (!$b || $b[2]) return true;
+    return !in_array($key, (array)(sec()['bestaetigungAus'] ?? []), true);
+}
+/* Wie lange eine Passwortbestätigung gilt (Sekunden) */
+function bestaetigung_sekunden(): int
+{
+    $m = (int)(sec()['bestaetigungMinuten'] ?? 5);
+    return 60 * (in_array($m, BESTAETIGUNG_MINUTEN, true) ? $m : 5);
+}
+function bestaetigung_katalog(): array
+{
+    $out = [];
+    foreach (BESTAETIGUNG as $k => [$g, $l, $fest]) $out[] = ['key' => $k, 'group' => $g, 'label' => $l, 'fest' => $fest, 'noetig' => bestaetigung_noetig($k)];
+    return $out;
+}
 $SEC = null;
 function sec(): array
 {
