@@ -52,7 +52,8 @@ function clean_variants($v, string $where, array $known): array
     $out = [];
     if (!is_array($v)) return $out;
     foreach ($v as $oid => $p) {
-        if (!is_string($oid) || !is_array($p)) continue;
+        $oid = (string)$oid;   // JSON-Schlüssel wie "24" kommen als Zahl an – sonst gingen Kundenpreise beim Speichern verloren
+        if (!is_array($p)) continue;
         $st = $p['status'] ?? '';
         if ($oid === OFFER_STD) {                       // Wochenangebot: nur „ausgeblendet“ (Preis steht in price)
             if ($st === 'hidden') $out[$oid] = ['status' => 'hidden'];
@@ -89,7 +90,8 @@ function clean_sale($v, string $where, array $known): ?array
     $out = ['value' => clean_money($v['value'], "Sonderpreis ($where)")];
     $offers = [];
     foreach (is_array($v['offers'] ?? null) ? $v['offers'] : [] as $oid => $o) {
-        if (!is_string($oid) || !is_array($o) || ($oid !== OFFER_STD && !in_array($oid, $known, true))) continue;
+        $oid = (string)$oid;
+        if (!is_array($o) || ($oid !== OFFER_STD && !in_array($oid, $known, true))) continue;
         if (($o['status'] ?? '') === 'none') $offers[$oid] = ['status' => 'none'];
         elseif (array_key_exists('value', $o)) $offers[$oid] = ['value' => clean_money($o['value'], "Sonderpreis ($where)")];
     }

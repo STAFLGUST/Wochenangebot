@@ -248,8 +248,8 @@ body.in-hist #hist-data { display: inline-flex; }
 
 /* ---------- Rollen: Nur-Ansicht ---------- */
 body.ro #btn-undo, body.ro #btn-import, body.ro #btn-publish, body.ro #btn-add-group, body.ro .ed-toolbar .ed-hint,
-body.ro .g-actions, body.ro .gfoot, body.ro [data-act="discard"], body.ro #hist-upload, body.ro .hist-empty .btn,
-body.ro [data-hdel], body.ro [data-hd="upload"], body.ro #item-body .dlg-foot .left, body.ro [data-ia="alt-add"], body.ro [data-ia="alt-del"],
+body.ro .g-actions, body.ro .gfoot, body.ro [data-act="discard"], body.ro-hist #hist-upload, body.ro-hist .hist-empty .btn,
+body.ro-hist [data-hdel], body.ro-hist [data-hd="upload"], body.ro #item-body .dlg-foot .left, body.ro [data-ia="alt-add"], body.ro [data-ia="alt-del"],
 body.ro .ed-empty .row-actions { display: none !important; }
 body.ro .etab .in:disabled, body.ro .ghead .in:disabled, body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #item-body select:disabled {
   opacity: 1; color: var(--text); -webkit-text-fill-color: var(--text); background: transparent; border-color: transparent; cursor: default; appearance: none; -webkit-appearance: none; box-shadow: none; }
@@ -1202,9 +1202,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .ofg-list li { padding: 7px 12px; border-bottom: 1px solid var(--line); }
 .ofg-list li:last-child { border-bottom: 0; }
 .ofg-list .check { font-size: 13.5px; }
-@media (max-width: 700px) { .oftab { min-width: 0; } .oftab .of-fb { display: none; } }
 @media (max-width: 560px) { .k-gfilter, .k-gfilter select { width: 100%; max-width: none; } }
-@media (max-width: 560px) { .ktab .k-chip { white-space: normal; } .ktab td { overflow-wrap: anywhere; } .ktab .u-act .btn { padding: 0 8px; } }
 
 /* Sicherheit → Passwortbestätigung je Aktion */
 .bst-dauer { max-width: 220px; margin-bottom: 12px; }
@@ -1222,3 +1220,51 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .ofp-fehlt { margin-bottom: 12px; display: grid; gap: 6px; }
 .ofptab { margin-bottom: 8px; }
 .ofptab td, .ofptab th { padding: 6px 8px; }
+
+/* Prüfung Design: Einzelangebote-Übersicht mobil ohne seitliches Scrollen */
+.eztab .ez-bis-m { display: none; }
+@media (max-width: 560px) {
+  .eztab .ez-s { display: none; }
+  .eztab .ez-bis-m { display: block; margin-top: 3px; }
+  .eztab td { padding: 9px 6px; }
+  .eztab .ez-st { white-space: normal; }
+}
+
+/* Prüfung Design, mobil: Kundenliste, Angebote, Artikelstammdaten, Auswertung als gestapelte Zeilen statt gequetschter Tabellen */
+@media (max-width: 560px) {
+  .ktab thead { display: none; }
+  .ktab, .ktab tbody { display: block; }
+  .ktab tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 12px; border-bottom: 1px solid var(--line); }
+  .ktab tbody tr:last-child { border-bottom: 0; }
+  .ktab td { display: block; padding: 0; border: 0; min-width: 0; }
+  .ktab td.u-name { grid-column: 1; grid-row: 1; }
+  .ktab td.u-act { grid-column: 2; grid-row: 1; align-self: start; width: auto; }
+  .ktab td.k-offers { grid-column: 1 / -1; max-width: none; }
+  .ktab td.u-st { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; font-size: 13px; }
+  .ktab td.u-st .sub { margin: 0; }
+  .ktab td.k-addr, .ktab td.u-last { display: none; }
+  .ktab tbody tr:hover { background: transparent; }
+  #view-master .mtab .m-offer { display: none; }
+  .mtab .m-cond { width: 84px; }
+  .aw-tab .aw-t { white-space: normal; }
+}
+@media (max-width: 700px) {
+  .of-card { overflow: visible; }
+  .oftab, .oftab tbody { display: block; min-width: 0; }
+  .oftab thead { display: none; }
+  .oftab tbody tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; padding: 12px; border-bottom: 1px solid var(--line); }
+  .oftab tbody tr:last-child { border-bottom: 0; }
+  .oftab td { display: block; padding: 0 !important; border: 0; min-width: 0; }
+  .oftab td:first-child { grid-column: 1; grid-row: 1; }
+  .oftab td.act { grid-column: 2; grid-row: 1; width: auto; }
+  .oftab td:nth-child(2) { grid-column: 1 / -1; display: block !important; }
+  .oftab td.of-fb { grid-column: 1 / -1; display: block !important; width: auto; }
+  .oftab tr.of-std td.of-fb { display: none !important; }
+  .oftab td.num-s { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 13px; }
+  .oftab td.num-s[data-l]::before { content: attr(data-l); color: var(--muted); }
+  .oftab tr.of-std td[data-l="Eigene Preise"] { display: none; }
+  .oftab td .in { border-color: var(--line); background-color: var(--surface); }   /* ohne Hover ist sonst nicht erkennbar, dass das Feld editierbar ist */
+  .oftab td.of-fb::before { content: "Artikel ohne eigenen Preis"; display: block; margin-bottom: 4px; font-size: 12px; color: var(--muted); }
+  .oftab td.of-fb select.in { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+  .of-chip { max-width: 100%; }
+}

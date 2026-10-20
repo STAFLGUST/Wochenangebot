@@ -74,7 +74,12 @@ function frachtFuer(kg) {
   for (const st of f.staffeln) if (kg < st.unter) hit = st;
   return { kosten: hit ? hit.kosten : 0, unter: hit ? hit.unter : null, frei: f.frei };
 }
-const hinweisHTML = (cls) => (FRACHT && FRACHT.hinweis && FRACHT.hinweis.length ? `<aside class="${cls}" aria-label="Hinweis zum Angebot">${FRACHT.hinweis.map((l, i) => `<p${i === 0 ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}</aside>` : '');
+const hinweisHTML = (cls) => {
+  const eigen = DATA && DATA.meta && DATA.meta.einzel && DATA.meta.hinweis ? String(DATA.meta.hinweis).split('\n').filter((l) => l.trim()) : [];   // Hinweis des Einzelangebots
+  const fr = FRACHT && FRACHT.hinweis && FRACHT.hinweis.length ? FRACHT.hinweis : [];
+  if (!eigen.length && !fr.length) return '';
+  return `<aside class="${cls}" aria-label="Hinweis zum Angebot">${eigen.map((l, i) => `<p${i === 0 ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}${fr.map((l, i) => `<p${i === 0 && !eigen.length ? ' class="lead"' : ''}>${esc(l)}</p>`).join('')}</aside>`;
+};
 
 function prepare(raw) {
   const items = raw.items.map((it) => {
@@ -256,7 +261,7 @@ const kwKurz = (m) => (m.einzel ? bisText(m) : `KW ${m.week ?? '?'}/${m.year ?? 
 function renderStatic() {
   const m = DATA.meta;
   const kw = m.einzel ? esc(bisText(m)) : m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm"> · ${esc(m.year)}</span>` : ''}` : 'KW ?';
-  document.title = `${offerTitle()} ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`.trim() + (COMPANY ? ' – ' + COMPANY : '');
+  renderStaticTitle();   // Fenstertitel (bei Einzelangeboten „gültig bis …“ statt Kalenderwoche)
   if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
   $('#company').hidden = !COMPANY;
@@ -404,7 +409,8 @@ function renderFavbar() {
   const bar = $('#favbar');
   if (state.tab !== 'fav') { bar.hidden = true; return; }
   const present = DATA.items.filter((i) => favs.has(i.key)).length;
-  const missing = [...favs].filter((k) => !DATA.items.some((i) => i.key === k)).length;
+  // Einzelangebote haben eigene Artikelschlüssel – dort nichts als „nicht im Angebot“ anbieten (sonst gingen Merklisten-Einträge verloren)
+  const missing = DATA.meta && DATA.meta.einzel ? 0 : [...favs].filter((k) => !DATA.items.some((i) => i.key === k)).length;
   bar.hidden = false;
   bar.innerHTML = `<span>${plural(present, 'Artikel', 'Artikel')} auf Ihrer Merkliste – ${favRemote ? 'gespeichert in Ihrem Kundenkonto (auf allen Geräten)' : 'gespeichert in diesem Browser'}.${missing ? ` ${plural(missing, 'gemerkter Artikel ist', 'gemerkte Artikel sind')} in dieser Woche nicht im Angebot. <button type="button" class="link-btn" data-act="fav-prune">Entfernen</button>` : ''}</span>
     <span class="favbar-actions">
@@ -553,7 +559,7 @@ function renderListe(list, grouped) {
   const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150) / 6.6)));
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
-  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>`;
+  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>`;
   const secs = plSections(units).map((sec) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
     const cols = plBalance(sec.units, plK);
@@ -605,7 +611,7 @@ function buildPrintListe(list, grouped, scopeText) {
   }
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();
   const m = DATA.meta || {};
-  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}${m.einzel && m.kunde ? 'für ' + esc(m.kunde) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
+  return pages.map((pg, n) => `<section class="pl-page">${n === 0 ? `<header class="pl-ph">${PL_LOGO}<div class="pl-pt"><h1>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h1><span>${scopeText ? esc(scopeText) + ' · ' : ''}${m.einzel && m.kunde ? 'für ' + esc(m.kunde) + ' · ' : ''}Stand ${esc(stand)} · Preise in € je kg</span></div></header>` : ''}
     ${pg.sec ? `<div class="al-st"><h3>${plGroupName(pg.sec)}${pg.cont ? ' <span class="al-cont">Forts.</span>' : ''}</h3></div>` : ''}
     <div class="al-cols" style="--k:3">${pg.cols.map((c, ci) => `<div class="al-col">${c.map((b) => plBlockHTML(b, 'print')).join('')}${notePos && notePos.page === n && notePos.col === ci ? hinweisHTML('al-note in-col') : ''}</div>`).join('')}</div>${notePos && notePos.page === n && notePos.col === -1 ? hinweisHTML('al-note') : ''}</section>`).join('');
 }
@@ -947,7 +953,7 @@ function buildPrint({ scope, layout, grouped }) {
   if (!ps) { ps = document.createElement('style'); ps.id = 'page-style'; document.head.appendChild(ps); }
   const label = `${COMPANY ? COMPANY + ' · ' : ''}${m.notice || 'Angebot'} ${kwKurz(m)} · Preise in € je kg`.replace(/["\\]/g, '');
   ps.textContent = `@page { size: A4 ${layout === 'liste' ? 'landscape' : 'portrait'}; margin: ${layout === 'liste' ? '9mm 10mm 11mm 10mm' : '14mm 12mm 16mm 12mm'}; }\n@page { @bottom-left { content: "${label}"; font: 7.5pt ${getComputedStyle(document.body).fontFamily.replace(/"/g, "'")}; color: #777; } @bottom-right { content: "Seite " counter(page) " von " counter(pages); font: 7.5pt sans-serif; color: #777; } }`;
-  document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `Wochenangebot KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
+  document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} KW ${m.week ?? ''} ${m.year ?? ''}`) + (scope === 'fav' ? ' – Merkliste' : '');
 }
 function doPrint(opts) {
   for (const d of $$('dialog[open]')) d.close();
@@ -965,7 +971,7 @@ window.addEventListener('afterprint', () => {
 });
 function renderStaticTitle() {
   const m = DATA.meta;
-  document.title = `Wochenangebot ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`.trim() + (COMPANY ? ' – ' + COMPANY : '');
+  document.title = (m.einzel ? `${offerTitle()} ${bisText(m)}` : `${offerTitle()} ${m.week ? 'KW ' + m.week + ' ' + (m.year || '') : ''}`).trim() + (COMPANY ? ' – ' + COMPANY : '');
 }
 
 /* ---------- CSV ---------- */
@@ -977,7 +983,7 @@ function csvCell(v) {
 function exportCSV(list, suffix) {
   if (!list.length) { toast('Keine Artikel zum Exportieren.'); return; }
   const m = DATA.meta;
-  const head = ['Artikelnummer', 'Bezeichnung', 'Fleischart', 'Herkunft', 'Angebotsgruppe', 'Bereich', 'Zustand', 'Merkmale', 'Preis €/kg', 'Preisangabe', 'Weitere Preise', 'Kalenderwoche'];
+  const head = ['Artikelnummer', 'Bezeichnung', 'Fleischart', 'Herkunft', 'Angebotsgruppe', 'Bereich', 'Zustand', 'Merkmale', 'Preis €/kg', 'Preisangabe', 'Weitere Preise', m.einzel ? 'Gültig bis' : 'Kalenderwoche'];
   const lines = [head.map(csvCell).join(';')];
   for (const it of list) {
     const p = it.price;
@@ -986,10 +992,10 @@ function exportCSV(list, suffix) {
       p.status === 'value' ? fmtNum.format(p.value) : '',
       (p.label ? p.label + ': ' : '') + PRICE_STATUS_LABELS[p.status],
       it.altPrices.map((a) => `${a.label}: ${priceShort(a)}`).join(' | '),
-      m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
+      m.einzel ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
     ].map(csvCell).join(';'));
   }
-  download(`${offerTitle().replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_')}_KW${m.week ?? ''}_${m.year ?? ''}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
+  download(`${offerTitle().replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g, '_')}_${m.einzel ? (m.nr || 'Einzelangebot').replace(/[^A-Za-z0-9-]+/g, '_') : `KW${m.week ?? ''}_${m.year ?? ''}`}_${suffix}.csv`, '\ufeff' + lines.join('\r\n'), 'text/csv;charset=utf-8');
   toast(`${plural(list.length, 'Artikel', 'Artikel')} als CSV exportiert.`);
 }
 function download(name, content, type) {
@@ -1066,11 +1072,16 @@ function updateThemeBtn() {
 
 /* ---------- Mobile Filter ---------- */
 function setFiltersOpen(open) {
+  const war = $('#filters').classList.contains('open');
   $('#filters').classList.toggle('open', open);
   $('#filter-backdrop').classList.toggle('open', open);
   $('#btn-filters-open').setAttribute('aria-expanded', open);
+  syncFilterInert();
   if (open) setTimeout(() => $('#filters-body input, #filters-body button')?.focus(), 220);
+  else if (war && mqDrawer.matches) $('#btn-filters-open').focus();
 }
+/* Geschlossene Filterleiste (Schublade auf Tablet/Handy) aus der Tab-Reihenfolge nehmen */
+function syncFilterInert() { $('#filters').inert = mqDrawer.matches && !$('#filters').classList.contains('open'); }
 
 /* ---------- Ereignisse ---------- */
 function resetFilters(alsoSearch) {
@@ -1193,7 +1204,8 @@ function bind() {
     if (e.key !== 'Escape' || mqDrawer.matches) return;
     const d = $('.fdrop[open]'); if (d) { d.open = false; d.querySelector('summary').focus(); }
   });
-  mqDrawer.addEventListener('change', syncDrops);
+  mqDrawer.addEventListener('change', () => { syncDrops(); syncFilterInert(); });
+  syncFilterInert();
   $('#merk').addEventListener('click', (e) => {
     const o = e.target.closest('[data-merk-open]');
     if (o) { openDetail(o.dataset.merkOpen); return; }
@@ -1243,7 +1255,7 @@ function bind() {
     if (a === 'fav-print') openPrint('fav');
     if (a === 'fav-csv') exportCSV(favItems(), 'Merkliste');
     if (a === 'fav-clear' && confirm('Alle Artikel von der Merkliste entfernen?')) { favs.clear(); saveFavs(); updateFavCount(); render(); }
-    if (a === 'fav-prune') { favs = new Set([...favs].filter((k) => DATA.items.some((i) => i.key === k))); saveFavs(); updateFavCount(); render(); }
+    if (a === 'fav-prune' && !(DATA.meta && DATA.meta.einzel)) { favs = new Set([...favs].filter((k) => DATA.items.some((i) => i.key === k))); saveFavs(); updateFavCount(); render(); }
   });
 
   /* Kopf */
@@ -1334,14 +1346,33 @@ function qtyHTML(it) {
   const q = cart.get(it.id);
   return `<input class="qty" type="text" inputmode="decimal" autocomplete="off" data-qty="${esc(it.id)}" value="${q ? fmtQty.format(q) : ''}" placeholder="–" aria-label="Menge in kg: ${esc(it.name)}">`;
 }
+/* Kennung und Fingerabdruck des Bestellwunsches (Schutz vor Doppelversand). crypto.subtle/randomUUID gibt es nur über
+   HTTPS – ohne sie ein einfacher Ersatz, damit Bestellen nicht scheitert. */
+function orderKey() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  const b = new Uint8Array(16); (window.crypto || {}).getRandomValues ? crypto.getRandomValues(b) : b.forEach((_, i) => { b[i] = Math.random() * 256; });
+  return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+async function orderFingerprint(text) {
+  if (window.crypto && crypto.subtle) return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((x) => x.toString(16).padStart(2, '0')).join('');
+  let h = 2166136261; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return 'f' + (h >>> 0).toString(16) + text.length;
+}
+/* Gemerkt wird je Position die Menge und der Artikelschlüssel: verschiebt sich eine Position (neue Woche, geändertes
+   Einzelangebot), wird die Menge dem richtigen Artikel zugeordnet statt der neuen Position mit derselben Kennung. */
 function loadCart() {
   const raw = store.get(cartKey(), {});
   cart = new Map();
   let gone = 0;
-  for (const [id, q] of Object.entries(raw || {})) { if (DATA.byId.has(id) && q > 0) cart.set(id, q); else gone++; }
+  const byKey = new Map(DATA.items.filter((i) => i.key).map((i) => [i.key, i.id]));
+  for (const [id, v] of Object.entries(raw || {})) {
+    const q = typeof v === 'number' ? v : v && v.q, k = v && typeof v === 'object' ? v.k : null;
+    const ziel = k ? byKey.get(k) : (DATA.byId.has(id) ? id : null);
+    if (ziel && q > 0) cart.set(ziel, (cart.get(ziel) || 0) + q); else gone++;
+  }
   if (gone) { saveCart(); toast(`${plural(gone, 'Position wurde', 'Positionen wurden')} aus Ihrem Bestellwunsch entfernt, weil sie nicht mehr im Angebot ${gone === 1 ? 'ist' : 'sind'}.`, 5000); }
 }
-function saveCart() { if (KUNDE) store.set(cartKey(), Object.fromEntries(cart)); }
+function saveCart() { if (KUNDE) store.set(cartKey(), Object.fromEntries([...cart].map(([id, q]) => { const it = DATA.byId.get(id); return [id, it && it.key ? { q, k: it.key } : q]; }))); }
 const lineSum = (it, q) => Math.round(Math.round(it.price.value * 100) * q) / 100;   // in Cent, wie der Server
 function cartTotals() {
   let sum = 0, kg = 0, req = 0;
@@ -1377,8 +1408,8 @@ function orderLines() {
 }
 function openOrder() {
   const d = $('#dlg-order'), t = cartTotals(), m = DATA.meta;
-  const min = new Date().toISOString().slice(0, 10);
-  $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Bestellwunsch prüfen</h2><p>${esc(offerTitle())}${m.week ? ` · KW ${esc(m.week)}/${esc(m.year || '')}` : ''} · ${esc(KUNDE.firma)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+  const min = new Date().toLocaleDateString('sv-SE');   // heutiges Datum in Ortszeit (toISOString wäre UTC – kurz nach Mitternacht „gestern“)
+  $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Bestellwunsch prüfen</h2><p>${esc(offerTitle())}${m.einzel ? ` · ${esc(bisText(m))}` : m.week ? ` · KW ${esc(m.week)}/${esc(m.year || '')}` : ''} · ${esc(KUNDE.firma)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
     <div class="dlg-body">
       <table class="otab"><thead><tr><th>Artikel</th><th class="r">Menge kg</th><th class="r">Preis €/kg</th><th class="r">Summe</th><th></th></tr></thead><tbody>
       ${orderLines().map(({ it, q }) => `<tr><td><div class="o-name">${esc(it.name)}</div><div class="sub">${esc([it.code, it.group].filter(Boolean).join(' · '))}</div></td>
@@ -1433,10 +1464,10 @@ async function sendOrder(btn) {
       angebot: OFFER || 'std', publishedAt: PUBLISHED_AT || '', termin: $('#or-termin').value, referenz: $('#or-ref').value, bemerkung: $('#or-bem').value,
       positions: [...cart].map(([id, qty]) => ({ id, qty })),
     };
-    const fingerprint = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload))))].map(x=>x.toString(16).padStart(2,'0')).join('');
+    const fingerprint = await orderFingerprint(JSON.stringify(payload));
     const attemptStore = 'wochenangebot.orderAttempt.' + KUNDE.username;
     try { lastOrderAttempt = JSON.parse(sessionStorage.getItem(attemptStore)) || lastOrderAttempt; } catch { /* session memory still protects immediate retries */ }
-    if (!lastOrderAttempt || lastOrderAttempt.fingerprint !== fingerprint) lastOrderAttempt = { fingerprint, key: crypto.randomUUID() };
+    if (!lastOrderAttempt || lastOrderAttempt.fingerprint !== fingerprint) lastOrderAttempt = { fingerprint, key: orderKey() };
     try { sessionStorage.setItem(attemptStore, JSON.stringify(lastOrderAttempt)); } catch { /* private browser */ }
     const r = await kundeApi('kunde_bestellung', { ...payload, requestId: lastOrderAttempt.key });
     // Only a received success clears the attempt; errors keep the key for retries.
@@ -1563,6 +1594,7 @@ async function kundeStart() {
   // nicht freigeschaltet → erstes eigenes Angebot. Ist im selben Browser zusätzlich ein Mitarbeiter angemeldet,
   // gilt das nur für die Startseite; ein ausdrücklich verlinktes Angebot (?angebot=…) bleibt dann sichtbar.
   if (!ids.includes(OFFER || 'std') && (!KSTAFF || !OFFER)) {
+    if (/^e-/.test(OFFER)) setTimeout(() => toast('Dieses Einzelangebot ist nicht mehr verfügbar (abgelaufen oder zurückgezogen). Angezeigt wird Ihr aktuelles Angebot.', 8000), 600);
     OFFER = ids[0] === 'std' ? '' : ids[0];
     history.replaceState(null, '', setOfferParam(OFFER).toString());
   }

@@ -70,6 +70,8 @@ switch ($action) {
                 $names[$key] = true;
                 $id = (string)($o['id'] ?? '');
                 if ($id === '' || $id === OFFER_STD || !preg_match('/^[a-z0-9-]{1,40}$/', $id)) throw new InvalidArgumentException('Ungültige Angebots-ID.');
+                // „e-…“ ist Einzelangeboten vorbehalten; reine Zahlen werden in JSON zu Zahlenschlüsseln – beides nur für neue Angebote sperren
+                if ((preg_match('/^e-/', $id) || ctype_digit($id)) && !in_array($id, offer_ids(), true)) throw new InvalidArgumentException("Die Angebots-ID „{$id}“ ist nicht erlaubt (beginnt mit „e-“ oder besteht nur aus Ziffern).");
                 $fb = ($o['fallback'] ?? '') === 'hidden' ? 'hidden' : 'standard';
                 $row = ['id' => $id, 'name' => $name, 'fallback' => $fb];
                 if (array_key_exists('gruppen', $o)) $row['gruppen'] = offer_gruppen_clean($o['gruppen'], $name);

@@ -32,7 +32,8 @@ switch ($action) {
         }
 
         case 'history_prev': {
-            require_auth();
+            $me = require_auth();
+            if (!may($me, 'preisverlauf.sehen') && !may($me, 'angebot.bearbeiten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             header('Cache-Control: no-store');
             history_backfill();
             $w = (int)($_GET['week'] ?? 0);

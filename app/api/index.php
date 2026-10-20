@@ -40,6 +40,7 @@
  *   GET  ?action=app_info          Grunddaten für die App (Mindestversion, Bestellfunktion, Wartung); docs/app-api.md
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
+ *   GET  ?action=mail_info         Kurzinfo E-Mail-Versand (eingerichtet, Angebotswoche) für Nutzer mit Kundenrechten
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
  *   POST ?action=kunde_bestellung  Bestellwunsch eines Kunden (Preise serverseitig aus dem Angebot) → E-Mail an uns (+ Kopie)
  *   POST ?action=bestell_settings_save   Bestellfunktion ein/aus, Kopie an Kunden (nur Administrator)
