@@ -1056,3 +1056,11 @@ body.ro .sale-tag { cursor: default; }
 .ez-bst3 { display: flex; flex-wrap: wrap; gap: 0 10px; }
 .ez-bst3 b { color: var(--text); font-weight: 600; }
 .ez-bst3 span:last-child b { color: var(--c-fresh); }
+
+/* Stammdaten → Artikelstammdaten: VK-Gruppe (Stammdaten → VK-Gruppen), Filter und CSV-Import */
+.mtab .m-vk { width: 150px; }
+.m-vkname { font-size: 11.5px; color: var(--muted); padding: 0 9px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.m-vkname:empty { display: none; }
+.ms-vk select { max-width: 280px; }
+@media (max-width: 1100px) { .mtab .m-vk { width: 110px; } .m-vkname { max-width: 110px; } }
+@media (max-width: 560px) { .mtab .m-vk { display: none; } .ms-vk, .ms-vk select { width: 100%; max-width: none; } }

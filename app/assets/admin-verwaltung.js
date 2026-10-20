@@ -449,7 +449,7 @@
         <fieldset class="k-set"><legend>Stammdaten</legend><div class="form-grid two">
           ${fld('firma', 'Firma / Name', 120, ' required placeholder="z. B. Gasthaus Muster GmbH"', 'span2')}
           ${fld('nr', 'Kundennummer', 30, ' placeholder="optional"')}
-          <label class="fld"><span>Kundengruppe</span><select name="gruppe"><option value="">– keine –</option>${(kgruppen || []).map((g) => `<option value="${esc(g.nr)}"${c && c.gruppe === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)}</option>`).join('')}${c && c.gruppe && !(kgruppen || []).some((g) => g.nr === c.gruppe) ? `<option value="${esc(c.gruppe)}" selected>${esc(c.gruppe)} (nicht mehr vorhanden)</option>` : ''}</select></label>
+          <label class="fld"><span>Kundengruppe</span><select name="gruppe"><option value="">– keine –</option>${(KG.groups() || []).map((g) => `<option value="${esc(g.nr)}"${c && c.gruppe === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)}</option>`).join('')}${c && c.gruppe && !(KG.groups() || []).some((g) => g.nr === c.gruppe) ? `<option value="${esc(c.gruppe)}" selected>${esc(c.gruppe)} (nicht mehr vorhanden)</option>` : ''}</select></label>
           ${fld('ansprechpartner', 'Ansprechpartner', 120, ' placeholder="z. B. Frau Beispiel"', 'span2')}
           ${fld('strasse', 'Straße und Hausnummer', 120, '', 'span2')}
           ${fld('plz', 'PLZ', 10, ' inputmode="numeric"')}
@@ -1438,84 +1438,10 @@
 
   W.openRund = openRund;
 
-  /* ======================= Stammdaten → Kundengruppen ======================= */
-  /* Liste der Kundengruppen aus der Warenwirtschaft (Nummer, Bezeichnung, Klasse, Kategorie). CSV-Import im Browser
-     (Semikolon, Windows-1252 oder UTF-8), Vorschau mit neu/geändert/entfallen; gespeichert wird die ganze Liste. */
-  let kgruppen = null, kgRev = 0, kgKunden = null, kgQ = '', kgMeta = null;
-  const dlgKG = $('#dlg-kgruppe'), dlgKGI = $('#dlg-kg-import');
-  async function loadKGruppen() {
-    const r = await api('kundengruppen');
-    kgruppen = r.groups; kgRev = r.rev; kgKunden = r.kunden || null; kgMeta = { at: r.updatedAt, by: r.updatedBy };
-    return kgruppen;
-  }
-  const kgName = (nr) => { const g = (kgruppen || []).find((x) => x.nr === nr); return g ? g.name : ''; };
-  async function renderKGruppenView() {
-    const host = $('#view-gruppen');
-    if (!kgruppen) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kundengruppen werden geladen …</div>';
-    try { await loadKGruppen(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
-    const edit = may('stammdaten.bearbeiten');
-    host.innerHTML = `
-      <div class="ed-toolbar">
-        <div class="search">${icon('search')}<input id="kg-q" type="search" autocomplete="off" placeholder="Kundengruppe finden: Nummer, Bezeichnung …" aria-label="Kundengruppen suchen" value="${esc(kgQ)}"></div>
-        <span class="ed-hint" id="kg-count"></span>
-        ${edit ? `<button type="button" class="btn" id="kg-import">${icon('upload')}CSV importieren</button><input type="file" id="kg-file" accept=".csv,text/csv,text/plain" hidden>
-        <button type="button" class="btn primary" id="kg-add">${icon('plus')}Gruppe anlegen</button>` : ''}
-      </div>
-      <div id="kg-list"></div>
-      <p class="hint">Kundengruppen ordnen Kunden zu (Kunde bearbeiten → Kundengruppe). ${kgMeta && kgMeta.at ? `Zuletzt geändert ${esc(dateTime(kgMeta.at))}${kgMeta.by ? ' von ' + esc(kgMeta.by) : ''}.` : ''}</p>`;
-    renderKGruppenList();
-  }
-  function renderKGruppenList() {
-    const toks = fold(kgQ).split(/\s+/).filter(Boolean);
-    const list = kgruppen.filter((g) => { const hay = fold([g.nr, g.name, g.klasse, g.kategorie].join(' ')); return toks.every((t) => hay.includes(t)); });
-    $('#kg-count').textContent = plural(list.length, 'Kundengruppe', 'Kundengruppen') + (list.length !== kgruppen.length ? ` von ${kgruppen.length}` : '');
-    const host = $('#kg-list');
-    if (!kgruppen.length) { host.innerHTML = `<div class="ed-empty"><h3>Noch keine Kundengruppen</h3><p>${may('stammdaten.bearbeiten') ? 'Importieren Sie die Liste als CSV aus der Warenwirtschaft (Spalten Nummer; Bezeichnung; Klasse; Kategorie) oder legen Sie Gruppen einzeln an.' : 'Ein Bearbeiter kann die Liste importieren.'}</p></div>`; return; }
-    if (!list.length) { host.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
-    const edit = may('stammdaten.bearbeiten');
-    host.innerHTML = `<div class="gcard"><table class="etab kgtab"><thead><tr><th class="kg-nr">Nummer</th><th>Bezeichnung</th><th class="kg-k">Klasse</th><th class="kg-k">Kategorie</th>${kgKunden ? '<th class="kg-n">Kunden</th>' : ''}${edit ? '<th class="u-act"><span class="sr-only">Aktion</span></th>' : ''}</tr></thead><tbody>${list.map((g) => `
-      <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td><td>${esc(g.name)}</td><td class="kg-k">${esc(g.klasse || '')}</td><td class="kg-k">${esc(g.kategorie || '')}</td>${kgKunden ? `<td class="kg-n">${kgKunden[g.nr] ? esc(String(kgKunden[g.nr])) : '<span class="muted">–</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
-  }
-  async function saveKGruppen(groups, quelle) {
-    const r = await api('kundengruppen_save', { body: { rev: kgRev, groups, quelle: quelle || '' } });
-    kgruppen = r.groups; kgRev = r.rev;
-    return r;
-  }
-  function openKGruppe(nr) {
-    const g = nr ? kgruppen.find((x) => x.nr === nr) : null;
-    const n = g && kgKunden ? kgKunden[g.nr] || 0 : 0;
-    $('#kgruppe-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="kg-title">${g ? esc(g.name) : 'Kundengruppe anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, 'Kunde', 'Kunden')} zugeordnet` : ''}` : 'Nummer wie in der Warenwirtschaft.'}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body"><div class="form-grid two">
-        <label class="fld"><span>Nummer</span><input name="nr" value="${esc(g ? g.nr : '')}" maxlength="10" required${g ? ' readonly' : ''} inputmode="numeric"></label>
-        <label class="fld"><span>Klasse</span><input name="klasse" value="${esc(g ? g.klasse : '')}" maxlength="20" placeholder="optional"></label>
-        <label class="fld span2"><span>Bezeichnung</span><input name="name" value="${esc(g ? g.name : '')}" maxlength="120" required></label>
-        <label class="fld"><span>Kategorie</span><input name="kategorie" value="${esc(g ? g.kategorie : '')}" maxlength="20" placeholder="optional"></label>
-      </div><p class="kerr" id="kg-err" role="alert"></p></div>
-      <div class="dlg-foot"><span class="left">${g ? `<button type="button" class="btn sm ghost" data-kg-del style="color:var(--accent)">${icon('trash', 'sm')}Gruppe löschen</button>` : ''}</span><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button></div>`;
-    $('#kgruppe-body').dataset.nr = nr || '';
-    dlgKG.showModal();
-    $('#kgruppe-body [name="' + (g ? 'name' : 'nr') + '"]').focus();
-  }
-  $('#kgruppe-body').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const f = e.target, nr = f.dataset.nr;
-    const row = { nr: f.nr.value.trim(), name: f.name.value.trim(), klasse: f.klasse.value.trim(), kategorie: f.kategorie.value.trim() };
-    if (!nr && kgruppen.some((x) => x.nr === row.nr)) { $('#kg-err').textContent = `Die Nummer ${row.nr} ist bereits vergeben.`; return; }
-    const list = nr ? kgruppen.map((x) => (x.nr === nr ? row : x)) : [...kgruppen, row];
-    try { await saveKGruppen(list); dlgKG.close(); toast(nr ? `Kundengruppe „${row.name}“ gespeichert.` : `Kundengruppe „${row.name}“ angelegt.`); renderKGruppenView(); }
-    catch (ex) { $('#kg-err').textContent = ex.message; }
-  });
-  $('#kgruppe-body').addEventListener('click', async (e) => {
-    if (e.target.closest('[data-close]')) { dlgKG.close(); return; }
-    if (!e.target.closest('[data-kg-del]')) return;
-    const nr = $('#kgruppe-body').dataset.nr, g = kgruppen.find((x) => x.nr === nr);
-    const n = kgKunden ? kgKunden[nr] || 0 : 0;
-    if (!(await confirmBox('Kundengruppe löschen?', `„${esc(g.name)}“ (${esc(nr)}) wird gelöscht.${n ? ` ${plural(n, 'Kunde behält', 'Kunden behalten')} die Nummer, bis eine andere Gruppe gewählt wird.` : ''}`, 'Löschen', true))) return;
-    try { await saveKGruppen(kgruppen.filter((x) => x.nr !== nr)); dlgKG.close(); toast(`Kundengruppe „${g.name}“ gelöscht.`); renderKGruppenView(); }
-    catch (ex) { $('#kg-err').textContent = ex.message; }
-  });
+  /* ======================= Stammdaten → Gruppenlisten (Kundengruppen, VK-Gruppen) ======================= */
+  /* Liste aus der Warenwirtschaft (Nummer, Bezeichnung, Klasse, Kategorie). CSV-Import im Browser (Semikolon, Windows-1252
+     oder UTF-8), Vorschau mit neu/geändert/entfallen; gespeichert wird die ganze Liste. Kunden verweisen über „gruppe“ auf
+     eine Kundengruppe, Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe. */
   /* CSV lesen: UTF-8, sonst Windows-1252 (Export der Warenwirtschaft); Semikolon, Anführungszeichen */
   function csvZeilen(text) {
     const rows = []; let row = [], cell = '', q = false;
@@ -1530,69 +1456,159 @@
     if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
     return rows.filter((r) => r.some((c) => c.trim() !== ''));
   }
-  function kgAusCsv(buf) {
+  function csvText(buf) {
     let text;
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch { text = new TextDecoder('windows-1252').decode(buf); }
-    text = text.replace(/^﻿/, '');
-    const rows = csvZeilen(text);
-    if (!rows.length) throw new Error('Die Datei ist leer.');
-    const kopf = rows[0].map((c) => fold(c).replace(/[^a-z]/g, ''));
-    const sp = (...n) => kopf.findIndex((k) => n.includes(k));
-    const iNr = sp('nummer', 'nr', 'gruppe', 'kundengruppe'), iName = sp('bezeichnung', 'name'), iKl = sp('klasse'), iKat = sp('kategorie');
-    if (iNr < 0 || iName < 0) throw new Error('Spalten „Nummer“ und „Bezeichnung“ nicht gefunden. Erwartet wird die Kundengruppen-Liste aus der Warenwirtschaft (Nummer; Bezeichnung; Klasse; Kategorie).');
-    const out = [], fehler = [];
-    rows.slice(1).forEach((r, i) => {
-      const g = { nr: (r[iNr] || '').trim(), name: (r[iName] || '').trim().replace(/\s{2,}/g, ' '), klasse: iKl >= 0 ? (r[iKl] || '').trim() : '', kategorie: iKat >= 0 ? (r[iKat] || '').trim() : '' };
-      if (!g.nr && !g.name) return;
-      if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || !g.name) { fehler.push(`Zeile ${i + 2}`); return; }
-      out.push(g);
-    });
-    const doppelt = out.filter((g, i) => out.findIndex((x) => x.nr === g.nr) !== i).map((g) => g.nr);
-    if (doppelt.length) throw new Error(`Nummer doppelt in der Datei: ${[...new Set(doppelt)].join(', ')}`);
-    if (!out.length) throw new Error('Keine Kundengruppen in der Datei gefunden.');
-    return { groups: out, fehler };
+    return text.replace(/^﻿/, '');
   }
-  async function kgImportDatei(file) {
-    let res;
-    try { res = kgAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
-    const alt = new Map(kgruppen.map((g) => [g.nr, g]));
-    const neu = res.groups.filter((g) => !alt.has(g.nr));
-    const geaendert = res.groups.filter((g) => alt.has(g.nr) && JSON.stringify([g.name, g.klasse, g.kategorie]) !== JSON.stringify([alt.get(g.nr).name, alt.get(g.nr).klasse, alt.get(g.nr).kategorie]));
-    const nrs = new Set(res.groups.map((g) => g.nr));
-    const weg = kgruppen.filter((g) => !nrs.has(g.nr));
-    const wegMitKunden = weg.filter((g) => kgKunden && kgKunden[g.nr]);
-    const liste = (l) => l.slice(0, 8).map((g) => `<li><span class="muted">${esc(g.nr)}</span> ${esc(g.name)}</li>`).join('') + (l.length > 8 ? `<li class="muted">… und ${l.length - 8} weitere</li>` : '');
-    $('#kg-import-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="kgi-title">Kundengruppen importieren</h2><p>${esc(file.name)} · ${plural(res.groups.length, 'Kundengruppe', 'Kundengruppen')}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body">
-        <div class="cmp-stats"><div><span>Neu</span><strong id="kgi-neu">${neu.length}</strong></div><div><span>Geändert</span><strong id="kgi-geaendert">${geaendert.length}</strong></div><div><span>Entfallen</span><strong id="kgi-weg">${weg.length}</strong></div></div>
-        ${neu.length ? `<h3 class="d-h"><span>Neu</span></h3><ul class="kg-prev">${liste(neu)}</ul>` : ''}
-        ${geaendert.length ? `<h3 class="d-h"><span>Geändert</span></h3><ul class="kg-prev">${liste(geaendert)}</ul>` : ''}
-        ${weg.length ? `<h3 class="d-h"><span>Nicht mehr in der Datei – werden entfernt</span></h3><ul class="kg-prev">${liste(weg)}</ul>` : ''}
-        ${wegMitKunden.length ? `<p class="hint st-warn">${plural(wegMitKunden.length, 'entfallende Gruppe hat', 'entfallende Gruppen haben')} zugeordnete Kunden; diese behalten die Nummer, bis eine andere Gruppe gewählt wird.</p>` : ''}
-        ${res.fehler.length ? `<p class="hint st-warn">Übersprungen (Nummer oder Bezeichnung fehlt/ungültig): ${esc(res.fehler.slice(0, 10).join(', '))}${res.fehler.length > 10 ? ' …' : ''}</p>` : ''}
-        ${!neu.length && !geaendert.length && !weg.length ? '<p class="hint">Keine Änderungen – die Liste ist bereits aktuell.</p>' : ''}
-        <p class="kerr" id="kgi-err" role="alert"></p>
-      </div>
-      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" id="kgi-ok"${!neu.length && !geaendert.length && !weg.length ? ' disabled' : ''}>${icon('check')}Übernehmen</button></div>`;
-    dlgKGI.showModal();
-    $('#kgi-ok').onclick = async () => {
-      $('#kgi-ok').disabled = true;
-      try { const r = await saveKGruppen(res.groups, file.name); dlgKGI.close(); toast(`Kundengruppen übernommen: ${r.neu} neu, ${r.geaendert} geändert, ${r.entfernt} entfernt.`, 5000); renderKGruppenView(); }
-      catch (ex) { $('#kgi-err').textContent = ex.message; $('#kgi-ok').disabled = false; }
-    };
-  }
-  $('#kg-import-body').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlgKGI.close(); });
-  $('#view-gruppen').addEventListener('input', (e) => { if (e.target.id === 'kg-q') { kgQ = e.target.value; renderKGruppenList(); } });
-  $('#view-gruppen').addEventListener('change', (e) => { if (e.target.id === 'kg-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; kgImportDatei(f); } });
-  $('#view-gruppen').addEventListener('click', (e) => {
-    if (e.target.closest('#kg-import')) { $('#kg-file').click(); return; }
-    if (e.target.closest('#kg-add')) { openKGruppe(null); return; }
-    const tr = e.target.closest('tr[data-kg]');
-    if (tr && may('stammdaten.bearbeiten')) openKGruppe(tr.dataset.kg);
-  });
-  $('#view-gruppen').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kg]') && may('stammdaten.bearbeiten')) openKGruppe(e.target.dataset.kg); });
+  W.csvZeilen = csvZeilen; W.csvText = csvText;
 
-  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: renderKGruppenView, mail: renderMailView, log: renderLogView, sec: renderSecView };
+  function gruppenListe(cfg) {
+    const { liste, p, eine, viele } = cfg;
+    let groups = null, rev = 0, zahl = null, q = '', meta = null;
+    const host = $(cfg.view), dlg = $(`#dlg-${p}ruppe`), dlgI = $(`#dlg-${p}-import`), body = $(`#${p}ruppe-body`), bodyI = $(`#${p}-import-body`);
+    async function load() {
+      const r = await api(liste);
+      groups = r.groups; rev = r.rev; zahl = r[cfg.zaehler] || null; meta = { at: r.updatedAt, by: r.updatedBy };
+      return groups;
+    }
+    const name = (nr) => { const g = (groups || []).find((x) => x.nr === nr); return g ? g.name : ''; };
+    const anzahl = (nr) => (zahl ? zahl[nr] || 0 : 0);
+    async function render() {
+      if (!groups) host.innerHTML = `<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>${esc(viele)} werden geladen …</div>`;
+      try { await load(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+      const edit = may('stammdaten.bearbeiten');
+      host.innerHTML = `
+        <div class="ed-toolbar">
+          <div class="search">${icon('search')}<input id="${p}-q" type="search" autocomplete="off" placeholder="${esc(eine)} finden: Nummer, Bezeichnung …" aria-label="${esc(viele)} suchen" value="${esc(q)}"></div>
+          <span class="ed-hint" id="${p}-count"></span>
+          ${edit ? `<button type="button" class="btn" id="${p}-import">${icon('upload')}CSV importieren</button><input type="file" id="${p}-file" accept=".csv,text/csv,text/plain" hidden>
+          <button type="button" class="btn primary" id="${p}-add">${icon('plus')}Gruppe anlegen</button>` : ''}
+        </div>
+        <div id="${p}-list"></div>
+        <p class="hint">${esc(cfg.hinweis)} ${meta && meta.at ? `Zuletzt geändert ${esc(dateTime(meta.at))}${meta.by ? ' von ' + esc(meta.by) : ''}.` : ''}</p>`;
+      renderList();
+    }
+    function renderList() {
+      const toks = fold(q).split(/\s+/).filter(Boolean);
+      const list = groups.filter((g) => { const hay = fold([g.nr, g.name, g.klasse, g.kategorie].join(' ')); return toks.every((t) => hay.includes(t)); });
+      $(`#${p}-count`).textContent = plural(list.length, eine, viele) + (list.length !== groups.length ? ` von ${groups.length}` : '');
+      const el = $(`#${p}-list`);
+      if (!groups.length) { el.innerHTML = `<div class="ed-empty"><h3>Noch keine ${esc(viele)}</h3><p>${may('stammdaten.bearbeiten') ? `Importieren Sie die Liste als CSV aus der Warenwirtschaft (Spalten Nummer; Bezeichnung; Klasse; Kategorie) oder legen Sie Gruppen einzeln an.` : 'Ein Bearbeiter kann die Liste importieren.'}</p></div>`; return; }
+      if (!list.length) { el.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
+      const edit = may('stammdaten.bearbeiten');
+      el.innerHTML = `<div class="gcard"><table class="etab kgtab"><thead><tr><th class="kg-nr">Nummer</th><th>Bezeichnung</th><th class="kg-k">Klasse</th><th class="kg-k">Kategorie</th>${zahl ? `<th class="kg-n">${esc(cfg.zaehlerSpalte)}</th>` : ''}${edit ? '<th class="u-act"><span class="sr-only">Aktion</span></th>' : ''}</tr></thead><tbody>${list.map((g) => `
+        <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td><td>${esc(g.name)}</td><td class="kg-k">${esc(g.klasse || '')}</td><td class="kg-k">${esc(g.kategorie || '')}</td>${zahl ? `<td class="kg-n">${zahl[g.nr] ? esc(String(zahl[g.nr])) : '<span class="muted">–</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+    }
+    async function save(list, quelle) {
+      const r = await api(liste + '_save', { body: { rev, groups: list, quelle: quelle || '' } });
+      groups = r.groups; rev = r.rev;
+      return r;
+    }
+    function open(nr) {
+      const g = nr ? groups.find((x) => x.nr === nr) : null;
+      const n = g ? anzahl(g.nr) : 0;
+      body.innerHTML = `
+        <div class="dlg-head"><div><h2 id="${p}-title">${g ? esc(g.name) : esc(eine) + ' anlegen'}</h2><p>${g ? `Nummer ${esc(g.nr)}${n ? ` · ${plural(n, cfg.zEine, cfg.zViele)} zugeordnet` : ''}` : 'Nummer wie in der Warenwirtschaft.'}</p></div>
+          <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+        <div class="dlg-body"><div class="form-grid two">
+          <label class="fld"><span>Nummer</span><input name="nr" value="${esc(g ? g.nr : '')}" maxlength="10" required${g ? ' readonly' : ''} inputmode="numeric"></label>
+          <label class="fld"><span>Klasse</span><input name="klasse" value="${esc(g ? g.klasse : '')}" maxlength="20" placeholder="optional"></label>
+          <label class="fld span2"><span>Bezeichnung</span><input name="name" value="${esc(g ? g.name : '')}" maxlength="120" required></label>
+          <label class="fld"><span>Kategorie</span><input name="kategorie" value="${esc(g ? g.kategorie : '')}" maxlength="20" placeholder="optional"></label>
+        </div><p class="kerr" id="${p}-err" role="alert"></p></div>
+        <div class="dlg-foot"><span class="left">${g ? `<button type="button" class="btn sm ghost" data-kg-del style="color:var(--accent)">${icon('trash', 'sm')}Gruppe löschen</button>` : ''}</span><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button></div>`;
+      body.dataset.nr = nr || '';
+      dlg.showModal();
+      body.querySelector('[name="' + (g ? 'name' : 'nr') + '"]').focus();
+    }
+    body.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target, nr = f.dataset.nr;
+      const row = { nr: f.nr.value.trim(), name: f.name.value.trim(), klasse: f.klasse.value.trim(), kategorie: f.kategorie.value.trim() };
+      if (!nr && groups.some((x) => x.nr === row.nr)) { $(`#${p}-err`).textContent = `Die Nummer ${row.nr} ist bereits vergeben.`; return; }
+      const list = nr ? groups.map((x) => (x.nr === nr ? row : x)) : [...groups, row];
+      try { await save(list); dlg.close(); toast(nr ? `${eine} „${row.name}“ gespeichert.` : `${eine} „${row.name}“ angelegt.`); render(); }
+      catch (ex) { $(`#${p}-err`).textContent = ex.message; }
+    });
+    body.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-close]')) { dlg.close(); return; }
+      if (!e.target.closest('[data-kg-del]')) return;
+      const nr = body.dataset.nr, g = groups.find((x) => x.nr === nr);
+      const n = anzahl(nr);
+      if (!(await confirmBox(`${eine} löschen?`, `„${esc(g.name)}“ (${esc(nr)}) wird gelöscht.${n ? ` ${plural(n, cfg.zEine, cfg.zViele)} ${n === 1 ? 'behält' : 'behalten'} die Nummer, bis eine andere Gruppe gewählt wird.` : ''}`, 'Löschen', true))) return;
+      try { await save(groups.filter((x) => x.nr !== nr)); dlg.close(); toast(`${eine} „${g.name}“ gelöscht.`); render(); }
+      catch (ex) { $(`#${p}-err`).textContent = ex.message; }
+    });
+    function ausCsv(buf) {
+      const rows = csvZeilen(csvText(buf));
+      if (!rows.length) throw new Error('Die Datei ist leer.');
+      const kopf = rows[0].map((c) => fold(c).replace(/[^a-z]/g, ''));
+      const sp = (...n) => kopf.findIndex((k) => n.includes(k));
+      const iNr = sp('nummer', 'nr', 'gruppe', ...cfg.nrSpalten), iName = sp('bezeichnung', 'name'), iKl = sp('klasse'), iKat = sp('kategorie');
+      if (iNr < 0 || iName < 0) throw new Error(`Spalten „Nummer“ und „Bezeichnung“ nicht gefunden. Erwartet wird die ${eine}n-Liste aus der Warenwirtschaft (Nummer; Bezeichnung; Klasse; Kategorie).`);
+      if (kopf.includes('bezeichnung1') || kopf.includes('gtin')) throw new Error(`Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren; hier wird die ${eine}n-Liste erwartet.`);
+      const out = [], fehler = [];
+      rows.slice(1).forEach((r, i) => {
+        const g = { nr: (r[iNr] || '').trim(), name: (r[iName] || '').trim().replace(/\s{2,}/g, ' '), klasse: iKl >= 0 ? (r[iKl] || '').trim() : '', kategorie: iKat >= 0 ? (r[iKat] || '').trim() : '' };
+        if (!g.nr && !g.name) return;
+        if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || !g.name) { fehler.push(`Zeile ${i + 2}`); return; }
+        out.push(g);
+      });
+      const doppelt = out.filter((g, i) => out.findIndex((x) => x.nr === g.nr) !== i).map((g) => g.nr);
+      if (doppelt.length) throw new Error(`Nummer doppelt in der Datei: ${[...new Set(doppelt)].join(', ')}`);
+      if (!out.length) throw new Error(`Keine ${viele} in der Datei gefunden.`);
+      return { groups: out, fehler };
+    }
+    async function importDatei(file) {
+      let res;
+      try { res = ausCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+      const alt = new Map(groups.map((g) => [g.nr, g]));
+      const neu = res.groups.filter((g) => !alt.has(g.nr));
+      const geaendert = res.groups.filter((g) => alt.has(g.nr) && JSON.stringify([g.name, g.klasse, g.kategorie]) !== JSON.stringify([alt.get(g.nr).name, alt.get(g.nr).klasse, alt.get(g.nr).kategorie]));
+      const nrs = new Set(res.groups.map((g) => g.nr));
+      const weg = groups.filter((g) => !nrs.has(g.nr));
+      const wegMit = weg.filter((g) => anzahl(g.nr));
+      const liste = (l) => l.slice(0, 8).map((g) => `<li><span class="muted">${esc(g.nr)}</span> ${esc(g.name)}</li>`).join('') + (l.length > 8 ? `<li class="muted">… und ${l.length - 8} weitere</li>` : '');
+      const nix = !neu.length && !geaendert.length && !weg.length;
+      bodyI.innerHTML = `
+        <div class="dlg-head"><div><h2 id="${p}i-title">${esc(viele)} importieren</h2><p>${esc(file.name)} · ${plural(res.groups.length, eine, viele)}</p></div>
+          <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+        <div class="dlg-body">
+          <div class="cmp-stats"><div><span>Neu</span><strong id="${p}i-neu">${neu.length}</strong></div><div><span>Geändert</span><strong id="${p}i-geaendert">${geaendert.length}</strong></div><div><span>Entfallen</span><strong id="${p}i-weg">${weg.length}</strong></div></div>
+          ${neu.length ? `<h3 class="d-h"><span>Neu</span></h3><ul class="kg-prev">${liste(neu)}</ul>` : ''}
+          ${geaendert.length ? `<h3 class="d-h"><span>Geändert</span></h3><ul class="kg-prev">${liste(geaendert)}</ul>` : ''}
+          ${weg.length ? `<h3 class="d-h"><span>Nicht mehr in der Datei – werden entfernt</span></h3><ul class="kg-prev">${liste(weg)}</ul>` : ''}
+          ${wegMit.length ? `<p class="hint st-warn">${plural(wegMit.length, 'entfallende Gruppe hat', 'entfallende Gruppen haben')} zugeordnete ${esc(cfg.zViele)}; diese behalten die Nummer, bis eine andere Gruppe gewählt wird.</p>` : ''}
+          ${res.fehler.length ? `<p class="hint st-warn">Übersprungen (Nummer oder Bezeichnung fehlt/ungültig): ${esc(res.fehler.slice(0, 10).join(', '))}${res.fehler.length > 10 ? ' …' : ''}</p>` : ''}
+          ${nix ? '<p class="hint">Keine Änderungen – die Liste ist bereits aktuell.</p>' : ''}
+          <p class="kerr" id="${p}i-err" role="alert"></p>
+        </div>
+        <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" id="${p}i-ok"${nix ? ' disabled' : ''}>${icon('check')}Übernehmen</button></div>`;
+      dlgI.showModal();
+      $(`#${p}i-ok`).onclick = async () => {
+        $(`#${p}i-ok`).disabled = true;
+        try { const r = await save(res.groups, file.name); dlgI.close(); toast(`${viele} übernommen: ${r.neu} neu, ${r.geaendert} geändert, ${r.entfernt} entfernt.`, 5000); render(); }
+        catch (ex) { $(`#${p}i-err`).textContent = ex.message; $(`#${p}i-ok`).disabled = false; }
+      };
+    }
+    bodyI.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlgI.close(); });
+    host.addEventListener('input', (e) => { if (e.target.id === `${p}-q`) { q = e.target.value; renderList(); } });
+    host.addEventListener('change', (e) => { if (e.target.id === `${p}-file` && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; importDatei(f); } });
+    host.addEventListener('click', (e) => {
+      if (e.target.closest(`#${p}-import`)) { $(`#${p}-file`).click(); return; }
+      if (e.target.closest(`#${p}-add`)) { open(null); return; }
+      const tr = e.target.closest('tr[data-kg]');
+      if (tr && may('stammdaten.bearbeiten')) open(tr.dataset.kg);
+    });
+    host.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kg]') && may('stammdaten.bearbeiten')) open(e.target.dataset.kg); });
+    return { load, render, name, groups: () => groups };
+  }
+  const KG = gruppenListe({ liste: 'kundengruppen', p: 'kg', view: '#view-gruppen', eine: 'Kundengruppe', viele: 'Kundengruppen', nrSpalten: ['kundengruppe'],
+    zaehler: 'kunden', zaehlerSpalte: 'Kunden', zEine: 'Kunde', zViele: 'Kunden', hinweis: 'Kundengruppen ordnen Kunden zu (Kunde bearbeiten → Kundengruppe).' });
+  const VG = gruppenListe({ liste: 'vkgruppen', p: 'vg', view: '#view-vkgruppen', eine: 'VK-Gruppe', viele: 'VK-Gruppen', nrSpalten: ['vkgruppe', 'vgrp'],
+    zaehler: 'artikel', zaehlerSpalte: 'Artikel', zEine: 'Artikel', zViele: 'Artikel', hinweis: 'VK-Gruppen ordnen Artikel zu (Stammdaten → Artikelstammdaten, Spalte VK-Gruppe; beim Import der Artikelstammdaten aus der Spalte „VGrp“).' });
+  const loadKGruppen = KG.load, kgName = KG.name;
+
+  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, mail: renderMailView, log: renderLogView, sec: renderSecView };
 })();

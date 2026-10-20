@@ -130,7 +130,15 @@ function clean_master($list): array
         $cat = in_array($a['category'] ?? '', CATEGORIES, true) ? $a['category'] : 'Sonstiges';
         $cond = in_array($a['condition'] ?? '', CONDITIONS, true) ? $a['condition'] : 'unbekannt';
         $origin = s($a['origin'] ?? null, 60);
-        $out[] = ['code' => $code, 'name' => $name, 'category' => $cat, 'origin' => ($origin === '' ? null : $origin), 'condition' => $cond];
+        $e = ['code' => $code, 'name' => $name, 'category' => $cat, 'origin' => ($origin === '' ? null : $origin), 'condition' => $cond];
+        // Felder aus der Warenwirtschaft (Artikelstammdaten-Export): VK-Gruppe (Stammdaten → VK-Gruppen) und GTIN
+        $vk = s($a['vkGruppe'] ?? '', 10) ?? '';
+        if ($vk !== '' && !preg_match('/^[0-9A-Za-z._-]{1,10}$/', $vk)) throw new InvalidArgumentException("Artikel $code: ungültige VK-Gruppe.");
+        $gtin = preg_replace('/\s+/', '', (string)($a['gtin'] ?? ''));
+        if ($gtin !== '' && !preg_match('/^\d{8,14}$/', $gtin)) throw new InvalidArgumentException("Artikel $code: ungültige GTIN (8 bis 14 Ziffern).");
+        if ($vk !== '') $e['vkGruppe'] = $vk;
+        if ($gtin !== '') $e['gtin'] = $gtin;
+        $out[] = $e;
     }
     usort($out, function ($x, $y) { return strnatcmp($x['code'], $y['code']); });
     return $out;
@@ -139,7 +147,7 @@ function master_changes(array $old, array $new): array
 {
     $o = []; foreach ($old as $a) $o[code_key($a['code'])] = $a;
     $n = []; foreach ($new as $a) $n[code_key($a['code'])] = $a;
-    $L = ['name' => 'Bezeichnung', 'category' => 'Fleischart', 'origin' => 'Herkunft', 'condition' => 'Zustand'];
+    $L = ['name' => 'Bezeichnung', 'category' => 'Fleischart', 'origin' => 'Herkunft', 'condition' => 'Zustand', 'vkGruppe' => 'VK-Gruppe', 'gtin' => 'GTIN'];
     $d = [];
     foreach ($n as $k => $a) {
         if (!isset($o[$k])) { $d[] = ['k' => "s$k|+", 'code' => $a['code'], 'name' => $a['name'], 'f' => 'Neuer Stammsatz', 'from' => '', 'to' => $a['category'] . ' · ' . $a['condition']]; continue; }

@@ -206,7 +206,7 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
   function viewAllowed(v) {
     if (['mail', 'users', 'sec'].includes(v)) return can('admin');
     if (v === 'gruppen') return may('stammdaten.sehen') || may('kunden.sehen');
@@ -405,7 +405,7 @@
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['auswertung', 'mail', 'users', 'log', 'sec'].some(viewAllowed);
-    $('#side-stamm').hidden = !['master', 'kunden', 'gruppen'].some(viewAllowed);
+    $('#side-stamm').hidden = !['master', 'vkgruppen', 'kunden', 'gruppen'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!viewAllowed(currentView)) setView('edit');
   }
@@ -1836,7 +1836,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec'];
   function setView(v) {
     if (!viewAllowed(v)) v = 'edit';
@@ -1856,6 +1856,7 @@
     if (v === 'einkauf' && window.WA.views.einkauf) window.WA.views.einkauf();
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();
     if (v === 'gruppen' && window.WA.views.gruppen) window.WA.views.gruppen();
+    if (v === 'vkgruppen' && window.WA.views.vkgruppen) window.WA.views.vkgruppen();
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
@@ -2975,6 +2976,14 @@
 
   /* ======================= Stammdaten (je Artikelnummer) ======================= */
   let master = null, masterLoading = null, masterQ = '', masterTimer = null, masterSaving = false, masterQueued = false, masterErr = null;
+  let vkg = [], vkgMap = new Map(), masterVk = '';   // VK-Gruppen (Stammdaten → VK-Gruppen), Filter in der Artikelliste
+  async function loadVkGruppen() {
+    try { vkg = (await api('vkgruppen')).groups || []; } catch { vkg = []; }
+    vkgMap = new Map(vkg.map((g) => [g.nr, g]));
+    const dl = $('#dl-vkgruppen');
+    if (dl) dl.innerHTML = vkg.map((g) => `<option value="${esc(g.nr)}">${esc(g.name)}</option>`).join('');
+  }
+  const vkName = (nr) => (nr && vkgMap.get(nr) ? vkgMap.get(nr).name : '');
   async function loadMaster(force) {
     if (master && !force) return master;
     if (!masterLoading) masterLoading = api('master').then((r) => { master = r.master; return master; }).finally(() => { masterLoading = null; });
@@ -3062,7 +3071,7 @@
   async function renderMasterView() {
     const host = $('#view-master');
     if (!master) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Stammdaten werden geladen …</div>';
-    try { await loadMaster(); await loadStock().catch(() => {}); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    try { await loadMaster(); await Promise.all([loadStock().catch(() => {}), loadVkGruppen()]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     migrateMaster();
     if (!roMaster && !master.articles.length && model && model.items.length) {
       const n = addFromDraft();
@@ -3074,13 +3083,15 @@
     const dev = master.articles.filter((e) => { const l = by.get(mKey(e.code)); return l && l.length === 1 && differs(e, l[0]); }).length;
     host.innerHTML = `
       <div class="st-info">
-        <div><strong>Stammdaten</strong><span class="sub">Bezeichnung, Fleischart, Herkunft und Zustand je Artikelnummer – werden beim Excel-Import automatisch übernommen. „frisch“ gehört in den Zustand, nicht in die Bezeichnung.</span></div>
+        <div><strong>Stammdaten</strong><span class="sub">Bezeichnung, Fleischart, Herkunft, Zustand und VK-Gruppe je Artikelnummer – werden beim Excel-Import automatisch übernommen. „frisch“ gehört in den Zustand, nicht in die Bezeichnung.</span></div>
         <span class="ms-state" id="ms-state"></span>
       </div>
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="ms-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung, Herkunft …" aria-label="Stammdaten durchsuchen" value="${esc(masterQ)}"></div>
+        <label class="select ms-vk"><span class="sr-only">VK-Gruppe</span><select id="ms-vk" aria-label="Nach VK-Gruppe filtern">${vkFilterOpts()}</select>${icon('chev', 'sm')}</label>
         <span class="ed-hint" id="ms-count"></span>
         ${roMaster ? '' : `<span class="st-actions">
+          <button type="button" class="btn" data-ma="import" title="Artikelstammdaten-Export der Warenwirtschaft (CSV) einlesen: neue Artikel, VK-Gruppe und GTIN">${icon('upload')}CSV importieren</button><input type="file" id="ms-file" accept=".csv,text/csv,text/plain" hidden>
           <button type="button" class="btn" data-ma="from-draft"${missing ? '' : ' disabled'} title="Artikelnummern aus dem Angebot, die noch keine Stammdaten haben">${icon('plus')}Aus Angebot ergänzen${missing ? ` (${missing})` : ''}</button>
           <button type="button" class="btn" data-ma="apply-all"${dev ? '' : ' disabled'} title="Abweichende Artikel im Entwurf an die Stammdaten anpassen">${icon('check')}Auf Angebot anwenden${dev ? ` (${dev})` : ''}</button>
           <button type="button" class="btn primary" data-ma="new">${icon('plus')}Artikel anlegen</button>
@@ -3091,12 +3102,26 @@
     setMasterState(masterErr ? 'error' : 'saved', masterErr);
     renderMasterList();
   }
+  function vkFilterOpts() {
+    const n = new Map();
+    let ohne = 0;
+    for (const e of master.articles) { if (e.vkGruppe) n.set(e.vkGruppe, (n.get(e.vkGruppe) || 0) + 1); else ohne++; }
+    const fremd = [...n.keys()].filter((nr) => !vkgMap.has(nr));
+    return `<option value="">Alle VK-Gruppen</option><option value="-"${masterVk === '-' ? ' selected' : ''}>Ohne VK-Gruppe (${fmtInt.format(ohne)})</option>`
+      + vkg.map((g) => `<option value="${esc(g.nr)}"${masterVk === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)} (${fmtInt.format(n.get(g.nr) || 0)})</option>`).join('')
+      + fremd.map((nr) => `<option value="${esc(nr)}"${masterVk === nr ? ' selected' : ''}>${esc(nr)} · nicht in der Liste (${fmtInt.format(n.get(nr))})</option>`).join('');
+  }
   function renderMasterList() {
     const host = $('#ms-list');
     if (!host || !master) return;
     const toks = fold(masterQ).split(/\s+/).filter(Boolean);
-    const list = master.articles.filter((e) => { if (!toks.length) return true; const h = fold([e.code, e.name, e.origin, e.category, C.CONDITION_LABELS[e.condition]].join(' ')); return toks.every((t) => h.includes(t)); });
-    $('#ms-count').textContent = `${fmtInt.format(list.length)} von ${plural(master.articles.length, 'Artikel', 'Artikeln')}`;
+    const list = master.articles.filter((e) => {
+      if (masterVk && (masterVk === '-' ? e.vkGruppe : e.vkGruppe !== masterVk)) return false;
+      if (!toks.length) return true;
+      const h = fold([e.code, e.name, e.origin, e.category, C.CONDITION_LABELS[e.condition], e.vkGruppe, vkName(e.vkGruppe), e.gtin].join(' '));
+      return toks.every((t) => h.includes(t));
+    });
+    $('#ms-count').textContent = `${fmtInt.format(list.length)} von ${plural(master.articles.length, 'Artikel', 'Artikeln')}${list.length > 1500 ? ' – die ersten 1.500 angezeigt, Suche oder VK-Gruppe eingrenzen' : ''}`;
     const by = draftByCode();
     const rows = list.slice(0, 1500).map((e) => {
       const st = stockOf(e.code);
@@ -3106,11 +3131,12 @@
         <td class="m-cat"><select class="in" data-mf="category" aria-label="Fleischart">${CAT_OPTS(e.category)}</select></td>
         <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
         <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
+        <td class="m-vk"><input class="in" data-mf="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" aria-label="VK-Gruppe"><div class="m-vkname${e.vkGruppe && !vkName(e.vkGruppe) ? ' st-warn' : ''}">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</div></td>
         <td class="m-offer">${offerStatus(e, by)}</td>
         <td class="m-act">${roMaster ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
       </tr>`;
     }).join('');
-    host.innerHTML = list.length ? `<div class="gcard"><table class="etab mtab"><thead><tr><th class="m-code">Art.-Nr.</th><th class="m-name">Bezeichnung</th><th class="m-cat">Fleischart</th><th class="m-origin">Herkunft</th><th class="m-cond">Zustand</th><th class="m-offer">Angebot</th><th class="m-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    host.innerHTML = list.length ? `<div class="gcard"><table class="etab mtab"><thead><tr><th class="m-code">Art.-Nr.</th><th class="m-name">Bezeichnung</th><th class="m-cat">Fleischart</th><th class="m-origin">Herkunft</th><th class="m-cond">Zustand</th><th class="m-vk">VK-Gruppe</th><th class="m-offer">Angebot</th><th class="m-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="ed-empty"><h3>${master.articles.length ? 'Keine Treffer' : 'Noch keine Stammdaten'}</h3><p>${master.articles.length ? 'Suchbegriff anpassen.' : 'Mit „Aus Angebot ergänzen“ oder „Artikel anlegen“ beginnen.'}</p></div>`;
     lockInputs(host);
   }
@@ -3118,6 +3144,8 @@
     if (e.target.id === 'ms-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { masterQ = e.target.value.trim(); renderMasterList(); }, 120); }
   });
   $('#view-master').addEventListener('change', (e) => {
+    if (e.target.id === 'ms-vk') { masterVk = e.target.value; renderMasterList(); return; }
+    if (e.target.id === 'ms-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; masterImportDatei(f); return; }
     const el = e.target, tr = el.closest('tr[data-mcode]');
     if (!tr || !el.dataset.mf || roMaster) return;
     const ent = masterOf(tr.dataset.mcode);
@@ -3130,6 +3158,13 @@
       if (n !== typed) { if (ent.condition !== 'frisch-gefroren') { ent.condition = 'frisch'; tr.querySelector('[data-mf="condition"]').value = 'frisch'; } toast('„frisch“ steht im Zustand, nicht in der Bezeichnung.'); }
       ent.name = n; el.value = n;
     } else if (f === 'origin') { ent.origin = C.clean(el.value) || null; el.value = ent.origin || ''; }
+    else if (f === 'vkGruppe') {
+      const nr = el.value.trim();
+      if (nr && (!/^[0-9A-Za-z._-]{1,10}$/.test(nr) || (vkg.length && !vkgMap.has(nr)))) { el.value = ent.vkGruppe || ''; toast(`Die VK-Gruppe „${nr}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`, 6000); return; }
+      if (nr) ent.vkGruppe = nr; else delete ent.vkGruppe;
+      el.value = nr;
+      const nm = tr.querySelector('.m-vkname'); nm.textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; nm.classList.toggle('st-warn', !!nr && !vkName(nr));
+    }
     else ent[f] = el.value;
     tr.querySelector('.m-offer').innerHTML = offerStatus(ent, draftByCode());
     masterChanged();
@@ -3139,6 +3174,7 @@
     if (!b || roMaster) return;
     const a = b.dataset.ma, code = b.closest('tr[data-mcode]')?.dataset.mcode;
     if (a === 'retry') { saveMaster(); return; }
+    if (a === 'import') { $('#ms-file').click(); return; }
     if (a === 'from-draft') { const n = addFromDraft(); saveMaster(); toast(`${plural(n, 'Artikel', 'Artikel')} aus dem Angebot ergänzt.`); renderMasterView(); return; }
     if (a === 'apply-all' || a === 'apply1') {
       const preview = clone(model);
@@ -3163,6 +3199,98 @@
     }
     if (a === 'new') openMasterNew();
   });
+
+  /* Artikelstammdaten-Export der Warenwirtschaft (CSV) einlesen. Übernommen werden Nummer, Bezeichnung1 (neue Artikel;
+     Fleischart, Zustand und Herkunft werden aus Bezeichnung, Bezeichnung2 und VK-Gruppe vorgeschlagen), VK-Gruppe (Spalte
+     „VGrp“) und GTIN. Gepflegte Bezeichnungen und Merkmale bestehender Artikel bleiben unverändert; Artikel, die nicht in der
+     Datei stehen, bleiben erhalten. EK, Bestand, Umsatz und Lieferant werden bewusst nicht übernommen (keine Stammdaten). */
+  const dlgMI = $('#dlg-ms-import');
+  function masterAusCsv(buf) {
+    const rows = window.WA.csvZeilen(window.WA.csvText(buf));
+    if (!rows.length) throw new Error('Die Datei ist leer.');
+    const kopf = rows[0].map((c) => fold(c).replace(/[^a-z0-9]/g, ''));
+    const sp = (...n) => kopf.findIndex((k) => n.includes(k));
+    const iNr = sp('nummer', 'artikelnummer', 'artnr'), iName = sp('bezeichnung1', 'bezeichnung'), iName2 = sp('bezeichnung2'), iVk = sp('vgrp', 'vkgruppe', 'vkgrp'), iGtin = sp('gtin', 'ean');
+    if (iNr < 0 || iName < 0) throw new Error('Spalten „Nummer“ und „Bezeichnung1“ nicht gefunden. Erwartet wird der Artikelstammdaten-Export der Warenwirtschaft (Semikolon getrennt).');
+    if (iVk < 0 && kopf.includes('klasse')) throw new Error('Das ist eine Gruppenliste. VK-Gruppen bitte unter Stammdaten → VK-Gruppen importieren.');
+    const out = [], fehler = [], seen = new Set();
+    let ohneName = 0, doppelt = 0;
+    rows.slice(1).forEach((r, i) => {
+      const code = (r[iNr] || '').trim();
+      const name = C.clean(r[iName] || '');
+      if (!code) return;
+      if (!/^[0-9A-Za-z./-]{1,20}$/.test(code)) { fehler.push(code); return; }   // z. B. Kostenkonten („wek 19%“)
+      if (!name || !/[A-Za-zÄÖÜäöüß]/.test(name)) { ohneName++; return; }
+      const k = mKey(code);
+      if (seen.has(k)) { doppelt++; return; }
+      seen.add(k);
+      const vk = iVk >= 0 ? (r[iVk] || '').trim() : '', gtin = iGtin >= 0 ? (r[iGtin] || '').replace(/\s+/g, '') : '';
+      out.push({ code, name, name2: iName2 >= 0 ? C.clean(r[iName2] || '') : '', vkGruppe: /^[0-9A-Za-z._-]{1,10}$/.test(vk) ? vk : '', gtin: /^\d{8,14}$/.test(gtin) ? gtin : '' });
+    });
+    if (!out.length) throw new Error('Keine Artikel mit Nummer und Bezeichnung in der Datei gefunden.');
+    return { rows: out, fehler, ohneName, doppelt };
+  }
+  function masterNeuAus(r) {
+    const sug = C.suggestAttributes(r.name, [vkName(r.vkGruppe), r.name2].filter(Boolean).join(' '), '');
+    const e = { code: r.code, name: r.name, category: sug.category, origin: sug.origin || null, condition: sug.condition };
+    C.normalizeItem(e);   // „frisch“ aus der Bezeichnung in den Zustand, Herkunft vereinheitlichen
+    const kurz = e.name.replace(/[\s,]+(?:fri|fr)\.?$/, '');   // abgekürztes „frisch“ der Warenwirtschaft („…,Hac.Horiz.,fri“)
+    if (kurz !== e.name && kurz.length > 2) { e.name = kurz; if (e.condition === 'unbekannt') e.condition = 'frisch'; }
+    if (r.vkGruppe) e.vkGruppe = r.vkGruppe;
+    if (r.gtin) e.gtin = r.gtin;
+    return e;
+  }
+  async function masterImportDatei(file) {
+    let res;
+    try { await loadVkGruppen(); res = masterAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+    const neu = [], ergaenzt = [];
+    let gleich = 0;
+    for (const r of res.rows) {
+      const ent = masterOf(r.code);
+      if (!ent) { neu.push(masterNeuAus(r)); continue; }
+      const vk = r.vkGruppe || ent.vkGruppe || '', gtin = r.gtin || ent.gtin || '';   // leere Felder in der Datei löschen nichts
+      if (vk !== (ent.vkGruppe || '') || gtin !== (ent.gtin || '')) ergaenzt.push({ ent, vk, gtin }); else gleich++;
+    }
+    const inDatei = new Set(res.rows.map((r) => mKey(r.code)));
+    const nichtInDatei = master.articles.filter((e) => !inDatei.has(mKey(e.code))).length;
+    const fremd = new Map();
+    if (vkg.length) for (const r of res.rows) if (r.vkGruppe && !vkgMap.has(r.vkGruppe)) fremd.set(r.vkGruppe, (fremd.get(r.vkGruppe) || 0) + 1);
+    const mitVk = res.rows.filter((r) => r.vkGruppe).length;
+    const nix = !neu.length && !ergaenzt.length;
+    const li = (l, f) => l.slice(0, 8).map(f).join('') + (l.length > 8 ? `<li class="muted">… und ${fmtInt.format(l.length - 8)} weitere</li>` : '');
+    $('#ms-import-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="msi-title">Artikelstammdaten importieren</h2><p>${esc(file.name)} · ${plural(res.rows.length, 'Artikel', 'Artikel')} · ${fmtInt.format(mitVk)} mit VK-Gruppe</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        <div class="cmp-stats"><div><span>Neu</span><strong id="msi-neu">${fmtInt.format(neu.length)}</strong></div><div><span>VK-Gruppe/GTIN ergänzt</span><strong id="msi-erg">${fmtInt.format(ergaenzt.length)}</strong></div><div><span>Unverändert</span><strong id="msi-gleich">${fmtInt.format(gleich)}</strong></div></div>
+        ${!vkg.length ? '<p class="hint st-warn">Die VK-Gruppen-Liste ist noch leer. Am besten zuerst unter Stammdaten → VK-Gruppen die Liste importieren – dann helfen die Gruppennamen beim Vorschlag von Fleischart, Herkunft und Zustand.</p>' : ''}
+        ${neu.length ? `<h3 class="d-h"><span>Neu – Merkmale vorgeschlagen, danach in der Liste prüfbar</span></h3><ul class="kg-prev">${li(neu, (e) => `<li><span class="muted">${esc(e.code)}</span> ${esc(e.name)} <span class="muted">· ${esc(e.category)} · ${esc(C.CONDITION_LABELS[e.condition] || e.condition)}${e.origin ? ' · ' + esc(e.origin) : ''}${e.vkGruppe ? ' · ' + esc(vkName(e.vkGruppe) || 'VK ' + e.vkGruppe) : ''}</span></li>`)}</ul>` : ''}
+        ${ergaenzt.length ? `<h3 class="d-h"><span>Bestehende Artikel – VK-Gruppe/GTIN</span></h3><ul class="kg-prev">${li(ergaenzt, (x) => `<li><span class="muted">${esc(x.ent.code)}</span> ${esc(x.ent.name)} <span class="muted">· ${esc(vkName(x.vk) || (x.vk ? 'VK ' + x.vk : ''))}</span></li>`)}</ul>` : ''}
+        <p class="hint">Bezeichnung, Fleischart, Herkunft und Zustand bestehender Artikel bleiben unverändert.${nichtInDatei ? ` ${plural(nichtInDatei, 'Artikel steht', 'Artikel stehen')} nicht in der Datei und ${nichtInDatei === 1 ? 'bleibt' : 'bleiben'} erhalten.` : ''} EK, Bestand, Umsatz und Lieferant werden nicht übernommen.</p>
+        ${fremd.size ? `<p class="hint st-warn">VK-Gruppe nicht in der Liste: ${esc([...fremd].slice(0, 8).map(([nr, n]) => `${nr} (${n})`).join(', '))}${fremd.size > 8 ? ' …' : ''} – wird trotzdem eingetragen; bitte unter Stammdaten → VK-Gruppen ergänzen.</p>` : ''}
+        ${res.ohneName || res.doppelt || res.fehler.length ? `<p class="hint" id="msi-skip">Übersprungen: ${[res.ohneName ? plural(res.ohneName, 'Zeile', 'Zeilen') + ' ohne Bezeichnung' : '', res.doppelt ? `${res.doppelt}× doppelte Nummer` : '', res.fehler.length ? `${res.fehler.length}× keine gültige Artikelnummer (${esc(res.fehler.slice(0, 5).join(', '))}${res.fehler.length > 5 ? ' …' : ''})` : ''].filter(Boolean).join(' · ')}</p>` : ''}
+        ${nix ? '<p class="hint">Keine Änderungen – die Stammdaten sind bereits aktuell.</p>' : ''}
+        <p class="kerr" id="msi-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" id="msi-ok"${nix ? ' disabled' : ''}>${icon('check')}Übernehmen</button></div>`;
+    dlgMI.showModal();
+    $('#msi-ok').onclick = async () => {
+      $('#msi-ok').disabled = true;
+      const vorher = clone(master.articles);
+      const byCode = new Map(master.articles.map((e) => [mKey(e.code), e]));
+      for (const x of ergaenzt) { const e = byCode.get(mKey(x.ent.code)); if (!e) continue; if (x.vk) e.vkGruppe = x.vk; if (x.gtin) e.gtin = x.gtin; }
+      master.articles.push(...neu.filter((e) => !byCode.has(mKey(e.code))));
+      master.articles.sort((a, b) => a.code.localeCompare(b.code, 'de', { numeric: true }));
+      clearTimeout(masterTimer);
+      while (masterSaving) await new Promise((r) => setTimeout(r, 100));
+      await saveMaster();
+      if (masterErr) { const msg = masterErr; master.articles = vorher; masterErr = null; setMasterState('saved'); $('#msi-err').textContent = msg; $('#msi-ok').disabled = false; return; }
+      dlgMI.close();
+      toast(`Artikelstammdaten übernommen: ${fmtInt.format(neu.length)} neu, ${fmtInt.format(ergaenzt.length)} ergänzt.`, 5000);
+      renderMasterView();
+    };
+  }
+  $('#ms-import-body').addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dlgMI.close(); });
 
   /* Neuer Stammsatz */
   const dlgMN = $('#dlg-master-new');
