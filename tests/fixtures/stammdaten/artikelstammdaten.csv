@@ -1,0 +1,13 @@
+"Nummer";"GTIN";"Bezeichnung1";"Bezeichnung2";"Lieferant";"Hersteller";"KolliVerfügbar";"Verfügbar";"EK";"EKVormonat";"Partien.Status";"UmsatzmengeLfdJahr";"UmsatzLfdJahr";"VGrp"
+"00004";"4260000000046";;;;;;;;;"erfasst";;;
+"10601";"4260000106010";"Roastbeef, Argentinien, frisch";;"1111111";;"180,000";"3.051,190";"18,68";"18,68";"erfasst";"   10.758";"205.367,15 €";"1600"
+"10823";"4260000108236";"Steakhüfte, Argentinien, frisch";;"1111111";;;;"12,10";"12,10";"erfasst";;;"1600"
+"180613";;"18,50";;;;;;;;"erfasst";;;
+"90001";"4260000900010";"Testkeule, Neuseeland, frisch";;"2222222";;;;"9,99";"9,99";"erfasst";;;"3050"
+"90002";;"Testbrust, gefr.";"Herkunft: Irland";;;;;"7,77";;"erfasst";;;"6150"
+"90003";"123";"Test Ohne Gruppe";;;;;;;;"erfasst";;;
+"90001";"4260000900010";"Testkeule doppelt";;;;;;;;"erfasst";;;"3050"
+"wek 19%";;"Wareneinkauf 19%";;;;;;;;"erfasst";;;"1000"
+"90004";;"Testwurst <b>fett</b>";;;;;;"3,33";;"erfasst";;;"7777"
+"90005";;"Färsen-Test, Hüfte, frisch";;;;;;;;"erfasst";;;"1050"
+"90006";;"Testfilet,Parag.,fri";;;;;;;;"erfasst";;;"1600"

@@ -29,7 +29,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `lib/kunden.php` | Kundenstammdaten, Kunden-Sitzung |
 | `lib/kundenmail.php` | E-Mails an Kunden (Vorlagen, Abmelden, Einmal-Links, Versand, Protokoll), Bestellwunsch-Vorlage |
 | `lib/benachrichtigung.php` | Benachrichtigungen an Mitarbeiter: Ereignisse (`NOTIFY_EVENTS`), Einstellungen, Vormerken (`notify`, aus `audit()`), Versand nach der Antwort mit Bündelung |
-| `lib/preisverlauf.php`, `lib/bestand.php` | Preisverlauf; Bestandsliste und Stammdaten |
+| `lib/preisverlauf.php`, `lib/bestand.php` | Preisverlauf; Bestandsliste und Stammdaten (`clean_master`: Bezeichnung, Fleischart, Herkunft, Zustand, optional `vkGruppe` und `gtin`) |
 | `lib/diagnose.php` | Sicherheit für IT-Administratoren: Verlauf, auffällige Adressen, Konfigurationsprüfung, nur lesende Diagnosen, CSV-Export |
 | `lib/fracht.php` | Frachtregel (Dokument `fracht`): Staffeln, `fracht_kosten` (Bestellwunsch), `fracht_hinweis` (Hinweis unter dem Angebot) |
 | `lib/einzelangebote.php`, `aktionen/einzelangebote.php` | Einzelangebote für genau einen Kunden (Dokument `einzelangebote`): Prüfung, Nummern `E-JJJJ-0001`, Artikelsuche mit Bestand und Wochenpreis (`einzel_artikel`), Angebotsmodell fürs Portal (`einzel_model`, Kennung `e-<id>`, ohne Bestand), E-Mail-Vorlage; Aktionen `einzel_liste`, `einzel_detail`, `einzel_artikel`, `einzel_save`, `einzel_status`, `einzel_loeschen`, `einzel_senden` |
@@ -38,7 +38,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | `mail.php`, `geo.php`, `storage.php` | SMTP-Client, Länderdatenbank, Speicherschicht |
 | `ort.php` | Ortsdatenbank (DB-IP City Lite): Laden/Umwandeln (`ort_download`, `ort_build`), Suche `ort_lookup` |
 | `lib/auswertung.php`, `aktionen/auswertung.php` | Anmeldeorte der Kunden (Dokument `anmeldeorte`, 90 Tage, ohne IP), Aktionen `auswertung`, `ort_update` |
-| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf`, `auswertung`, `app` (`app_info`, Mindestversion der App), `kundengruppen` (Stammdaten → Kundengruppen, Dokument `kundengruppen`; Kunden verweisen über `gruppe`) |
+| `aktionen/*.php` | Die Aktionen (`?action=…`) nach Fachbereich: `angebote`, `kundenportal`, `mail`, `kundenverwaltung`, `zugang`, `bestand`, `einkauf`, `verwaltung`, `entwurf`, `preisverlauf`, `auswertung`, `app` (`app_info`, Mindestversion der App), `kundengruppen` (Gruppenlisten der Stammdaten: Kundengruppen und VK-Gruppen, Dokumente `kundengruppen`/`vkgruppen`, gemeinsame Prüfung `gruppen_clean` in `lib/kunden.php`; Kunden verweisen über `gruppe`, Artikel der Stammdaten über `vkGruppe`) |
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden (`$action`, `$CFG`, … stehen zur Verfügung); jede Aktion
 endet mit `respond()`/`fail()`. Bibliotheks- und Aktionsdateien sind nur über `index.php` nutzbar (Konstante `WA_API`).
@@ -53,9 +53,9 @@ und ggf. `WARTUNG_GESPERRT`.
 | `stock-core.js` | Bestandsliste lesen (WinAB .xls/.xlsx), eingelagerte Partien und erfasste Zugänge trennen, Wochenpreise vergleichen |
 | `webapp.js`, `../sw.js`, `../manifest.json`, `icons/` | Web-App: Hinweis „Zum Home-Bildschirm“, Offline-Speicher (nur Startseite, `/assets/`, öffentliches Wochenangebot; zuerst Netz), Manifest und Symbole |
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite |
-| `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten |
+| `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten (mit Artikelimport aus der Warenwirtschaft und Filter nach VK-Gruppe) |
 | `admin-einzel.js` | Eingabebereich, Angebot bearbeiten → Einzelangebote erstellen: Übersicht, Bearbeiten, Artikelsuche (eingelagert/erfasst/gesamt verfügbar, Wochenpreis, Abweichungspunkt), Freigabe, Drucken/PDF, E-Mail (nutzt `window.WA`) |
-| `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden, E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
+| `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden, Gruppenlisten (`gruppenListe`: Kundengruppen, VK-Gruppen; CSV-Leser `W.csvZeilen`/`W.csvText`), E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Nach Änderungen an `app/assets/` die Versionsnummern setzen: `python3 werkzeuge/asset_versionen.py --setzen`.
 

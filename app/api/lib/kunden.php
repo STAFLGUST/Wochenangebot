@@ -90,31 +90,35 @@ const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'firma' => 120, 'ansprechpa
 const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
                          'land' => 'Land', 'email' => 'E-Mail', 'telefon' => 'Telefon', 'notiz' => 'Notiz', 'angebote' => 'Angebote', 'active' => 'Kunde aktiv'];
 
-/* ---------------- Kundengruppen (Stammdaten → Kundengruppen) ----------------
-   Dokument „kundengruppen“: { rev, groups: [{ nr, name, klasse, kategorie }], updatedAt, updatedBy }.
-   Kunden verweisen über das Feld „gruppe“ auf die Nummer. */
-const KUNDENGRUPPEN_MAX = 2000;
-function kundengruppen_load(): array
+/* ---------------- Gruppenlisten der Stammdaten (Kundengruppen, VK-Gruppen) ----------------
+   Dokument je Liste (Name wie die Liste): { rev, groups: [{ nr, name, klasse, kategorie }], updatedAt, updatedBy }.
+   Kunden verweisen über „gruppe“ auf eine Kundengruppe, Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe. */
+const GRUPPEN_MAX = 2000;
+const GRUPPEN_LISTEN = ['kundengruppen' => ['eine' => 'Kundengruppe', 'viele' => 'Kundengruppen'], 'vkgruppen' => ['eine' => 'VK-Gruppe', 'viele' => 'VK-Gruppen']];
+function gruppen_load(string $liste): array
 {
-    $d = store_read('kundengruppen');
+    $d = store_read($liste);
     return ['rev' => (int)($d['rev'] ?? 0), 'groups' => is_array($d['groups'] ?? null) ? $d['groups'] : [], 'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => (string)($d['updatedBy'] ?? '')];
 }
-function kundengruppen_clean($list): array
+function gruppen_clean(string $liste, $list): array
 {
-    if (!is_array($list)) throw new InvalidArgumentException('Kundengruppen fehlen.');
-    if (count($list) > KUNDENGRUPPEN_MAX) throw new InvalidArgumentException('Zu viele Kundengruppen (höchstens ' . KUNDENGRUPPEN_MAX . ').');
+    $L = GRUPPEN_LISTEN[$liste];
+    if (!is_array($list)) throw new InvalidArgumentException("{$L['viele']} fehlen.");
+    if (count($list) > GRUPPEN_MAX) throw new InvalidArgumentException("Zu viele {$L['viele']} (höchstens " . GRUPPEN_MAX . ').');
     $out = []; $seen = [];
     foreach ($list as $g) {
         if (!is_array($g)) continue;
         $nr = s($g['nr'] ?? null, 10, false);
-        if ($nr === null || !preg_match('/^[0-9A-Za-z._-]{1,10}$/', $nr)) throw new InvalidArgumentException('Jede Kundengruppe braucht eine Nummer (bis 10 Zeichen, Buchstaben/Ziffern).');
+        if ($nr === null || !preg_match('/^[0-9A-Za-z._-]{1,10}$/', $nr)) throw new InvalidArgumentException("Jede {$L['eine']} braucht eine Nummer (bis 10 Zeichen, Buchstaben/Ziffern).");
         $key = ctype_digit($nr) ? (ltrim($nr, '0') === '' ? '0' : ltrim($nr, '0')) : strtoupper($nr);
-        if (isset($seen[$key])) throw new InvalidArgumentException("Die Kundengruppe $nr kommt doppelt vor.");
+        if (isset($seen[$key])) throw new InvalidArgumentException("Die {$L['eine']} $nr kommt doppelt vor.");
         $seen[$key] = true;
         $name = s($g['name'] ?? null, 120, false);
-        if ($name === null || mb_strlen($name) < 1) throw new InvalidArgumentException("Kundengruppe $nr: Bezeichnung fehlt.");
+        if ($name === null || mb_strlen($name) < 1) throw new InvalidArgumentException("{$L['eine']} $nr: Bezeichnung fehlt.");
         $out[] = ['nr' => $nr, 'name' => $name, 'klasse' => s($g['klasse'] ?? '', 20) ?? '', 'kategorie' => s($g['kategorie'] ?? '', 20) ?? ''];
     }
     usort($out, function ($a, $b) { return strnatcasecmp($a['nr'], $b['nr']); });
     return $out;
 }
+function kundengruppen_load(): array { return gruppen_load('kundengruppen'); }
+function kundengruppen_clean($list): array { return gruppen_clean('kundengruppen', $list); }
