@@ -206,10 +206,10 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
   function viewAllowed(v) {
     if (['mail', 'users', 'sec'].includes(v)) return can('admin');
-    if (v === 'gruppen') return may('stammdaten.sehen') || may('kunden.sehen');
+    if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
     return !VIEW_PERM[v] || may(VIEW_PERM[v]);
   }
   /* Einzelrecht (Administrator: alle) – die verbindliche Prüfung macht der Server */
@@ -405,7 +405,7 @@
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['auswertung', 'mail', 'users', 'log', 'sec'].some(viewAllowed);
-    $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen'].some(viewAllowed);
+    $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!viewAllowed(currentView)) setView('edit');
   }
@@ -1913,7 +1913,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'auswertung', 'mail', 'users', 'log', 'sec'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec'];
   function setView(v) {
     if (!viewAllowed(v)) v = 'edit';
@@ -1935,6 +1935,7 @@
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();
     if (v === 'gruppen' && window.WA.views.gruppen) window.WA.views.gruppen();
     if (v === 'vkgruppen' && window.WA.views.vkgruppen) window.WA.views.vkgruppen();
+    if (v === 'vertreter' && window.WA.views.vertreter) window.WA.views.vertreter();
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();

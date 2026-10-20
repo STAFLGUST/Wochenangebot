@@ -104,15 +104,21 @@ function kunde_payload(array $c): array
     return ['firma' => $c['firma'], 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'username' => $c['login']['username'],
             'mustChange' => !empty($c['login']['mustChange']), 'angebote' => $names];
 }
-const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
-const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
+const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'vertreter' => 10, 'vertreter2' => 10, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
+const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'vertreter' => 'Vertreter', 'vertreter2' => 'Vertreter 2', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
                          'land' => 'Land', 'email' => 'E-Mail', 'telefon' => 'Telefon', 'notiz' => 'Notiz', 'angebote' => 'Angebote', 'active' => 'Kunde aktiv'];
 
-/* ---------------- Gruppenlisten der Stammdaten (Kundengruppen, VK-Gruppen) ----------------
-   Dokument je Liste (Name wie die Liste): { rev, groups: [{ nr, name, klasse, kategorie }], updatedAt, updatedBy }.
-   Kunden verweisen über „gruppe“ auf eine Kundengruppe, Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe. */
+/* ---------------- Listen der Stammdaten (Kundengruppen, VK-Gruppen, Vertreter) ----------------
+   Dokument je Liste (Name wie die Liste): { rev, groups: [{ nr, name, …Felder der Liste }], updatedAt, updatedBy }.
+   Kunden verweisen über „gruppe“ auf eine Kundengruppe und über „vertreter“/„vertreter2“ auf Vertreter,
+   Artikel (Stammdaten) über „vkGruppe“ auf eine VK-Gruppe. Felder: Name => [Länge, Pflicht]. */
 const GRUPPEN_MAX = 2000;
-const GRUPPEN_LISTEN = ['kundengruppen' => ['eine' => 'Kundengruppe', 'viele' => 'Kundengruppen'], 'vkgruppen' => ['eine' => 'VK-Gruppe', 'viele' => 'VK-Gruppen']];
+const GRUPPEN_FELDER = ['name' => [120, true], 'klasse' => [20, false], 'kategorie' => [20, false]];
+const GRUPPEN_LISTEN = [
+    'kundengruppen' => ['eine' => 'Kundengruppe', 'viele' => 'Kundengruppen', 'felder' => GRUPPEN_FELDER],
+    'vkgruppen' => ['eine' => 'VK-Gruppe', 'viele' => 'VK-Gruppen', 'felder' => GRUPPEN_FELDER],
+    'vertreter' => ['eine' => 'Vertreter', 'viele' => 'Vertreter', 'felder' => ['name' => [120, true], 'kurz' => [40, false], 'telefon' => [40, false], 'plz' => [10, false], 'ort' => [80, false], 'land' => [60, false]]],
+];
 function gruppen_load(string $liste): array
 {
     $d = store_read($liste);
@@ -129,14 +135,19 @@ function gruppen_clean(string $liste, $list): array
         $nr = s($g['nr'] ?? null, 10, false);
         if ($nr === null || !preg_match('/^[0-9A-Za-z._-]{1,10}$/', $nr)) throw new InvalidArgumentException("Jede {$L['eine']} braucht eine Nummer (bis 10 Zeichen, Buchstaben/Ziffern).");
         $key = ctype_digit($nr) ? (ltrim($nr, '0') === '' ? '0' : ltrim($nr, '0')) : strtoupper($nr);
-        if (isset($seen[$key])) throw new InvalidArgumentException("Die {$L['eine']} $nr kommt doppelt vor.");
+        if (isset($seen[$key])) throw new InvalidArgumentException("{$L['eine']} $nr kommt doppelt vor.");
         $seen[$key] = true;
-        $name = s($g['name'] ?? null, 120, false);
-        if ($name === null || mb_strlen($name) < 1) throw new InvalidArgumentException("{$L['eine']} $nr: Bezeichnung fehlt.");
-        $out[] = ['nr' => $nr, 'name' => $name, 'klasse' => s($g['klasse'] ?? '', 20) ?? '', 'kategorie' => s($g['kategorie'] ?? '', 20) ?? ''];
+        $row = ['nr' => $nr];
+        foreach ($L['felder'] as $f => [$max, $pflicht]) {
+            $v = s($g[$f] ?? '', $max) ?? '';
+            if ($pflicht && $v === '') throw new InvalidArgumentException("{$L['eine']} $nr: " . ($f === 'name' ? ($liste === 'vertreter' ? 'Name' : 'Bezeichnung') : $f) . ' fehlt.');
+            $row[$f] = $v;
+        }
+        $out[] = $row;
     }
     usort($out, function ($a, $b) { return strnatcasecmp($a['nr'], $b['nr']); });
     return $out;
 }
 function kundengruppen_load(): array { return gruppen_load('kundengruppen'); }
 function kundengruppen_clean($list): array { return gruppen_clean('kundengruppen', $list); }
+function vertreter_load(): array { return gruppen_load('vertreter'); }
