@@ -50,6 +50,7 @@ und ggf. `WARTUNG_GESPERRT`.
 | --- | --- |
 | `offer-core.js` | Gemeinsamer Kern: Excel-Leser, Angebotsparser, Vergleich (`diffOffers`), Abgleich (`mergeModels`), Sonderpreise |
 | `stock-core.js` | Bestandsliste lesen (WinAB .xls/.xlsx), eingelagerte Partien und erfasste Zugänge trennen, Wochenpreise vergleichen |
+| `webapp.js`, `../sw.js`, `../manifest.json`, `icons/` | Web-App: Hinweis „Zum Home-Bildschirm“, Offline-Speicher (nur Startseite, `/assets/`, öffentliches Wochenangebot; zuerst Netz), Manifest und Symbole |
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite |
 | `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten |
 | `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden, E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |

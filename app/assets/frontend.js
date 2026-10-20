@@ -102,6 +102,19 @@ function prepare(raw) {
   };
 }
 
+/* Web-App ohne Verbindung: sw.js liefert das zuletzt geladene öffentliche Angebot mit „X-WA-Offline: <Zeitpunkt>“ */
+function offlineHinweis(stand) {
+  const box = document.getElementById('offline-hint');
+  if (!box) return;
+  if (stand === null) { box.hidden = true; return; }
+  const d = new Date(stand);
+  const wann = isNaN(d) ? '' : ` vom ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}, ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`;
+  box.className = 'webapp-hint offline';
+  box.innerHTML = `<svg class="i" aria-hidden="true"><use href="#i-info"/></svg><div class="wh-text"><strong>Keine Verbindung.</strong> Sie sehen das gespeicherte Angebot${esc(wann)} – Preise ohne Gewähr. Anmelden und Bestellwünsche gehen erst wieder mit Verbindung. <button type="button" class="btn sm" id="offline-reload">Neu laden</button></div>`;
+  box.hidden = false;
+  document.getElementById('offline-reload').addEventListener('click', () => location.reload());
+}
+
 async function loadData() {
   const res = await fetch('api/?action=offer' + (PREVIEW ? '&draft=1' : '') + (OFFER ? '&angebot=' + encodeURIComponent(OFFER) : ''), { credentials: 'same-origin', cache: 'no-cache' });
   let body = null;
@@ -111,6 +124,7 @@ async function loadData() {
   if (!res.ok || !body || !body.ok) {
     throw Object.assign(new Error(body && body.error ? body.error : 'Das Angebot konnte nicht geladen werden (' + res.status + ').'), { status: res.status });
   }
+  offlineHinweis(res.headers.get('X-WA-Offline'));
   COMPANY = body.company || '';
   PUBLISHED_AT = body.offer.publishedAt || body.offer.savedAt || null;
   FRACHT = body.fracht || null;
