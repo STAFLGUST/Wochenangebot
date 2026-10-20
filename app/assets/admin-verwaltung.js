@@ -363,11 +363,20 @@
   /* ======================= Kunden (Administrator) =======================
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
-  let kunden = null, kundenRev = 0, kundenQ = '', mailSt = null;
+  let kunden = null, kundenRev = 0, kundenQ = '', kundenG = '', mailSt = null;
   const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung', einkauf: 'Einkaufsbedarf', einzelangebot: 'Einzelangebot' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
-  const offerChip = (id) => `<span class="k-chip${id === OSTD ? ' std' : ''}">${esc(offerShort(id))}</span>`;
+  const offerChip = (id, perGruppe) => `<span class="k-chip${id === OSTD ? ' std' : ''}${perGruppe ? ' grp' : ''}"${perGruppe ? ' title="über die Kundengruppe freigeschaltet"' : ''}>${esc(offerShort(id))}</span>`;
+  const K_MAX = 500;   // Zeilen in der Kundenliste (Suche/Filter grenzt ein)
+  function kGruppenOpts() {
+    const n = new Map(); let ohne = 0;
+    for (const c of kunden) { if (c.gruppe) n.set(c.gruppe, (n.get(c.gruppe) || 0) + 1); else ohne++; }
+    const gs = KG.groups() || [];
+    return `<option value="">Alle Kundengruppen</option><option value="-"${kundenG === '-' ? ' selected' : ''}>Ohne Kundengruppe (${fmtInt.format(ohne)})</option>`
+      + gs.filter((g) => n.has(g.nr) || kundenG === g.nr).map((g) => `<option value="${esc(g.nr)}"${kundenG === g.nr ? ' selected' : ''}>${esc(g.nr)} · ${esc(g.name)} (${fmtInt.format(n.get(g.nr) || 0)})</option>`).join('')
+      + [...n.keys()].filter((nr) => !gs.some((g) => g.nr === nr)).map((nr) => `<option value="${esc(nr)}"${kundenG === nr ? ' selected' : ''}>${esc(nr)} · nicht mehr vorhanden (${n.get(nr)})</option>`).join('');
+  }
   async function renderKundenView() {
     const host = $('#view-kunden');
     if (!kunden) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Kunden werden geladen …</div>';
@@ -378,19 +387,24 @@
     host.innerHTML = `
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="k-q" type="search" autocomplete="off" placeholder="Kunden finden: Firma, Nummer, Ort, Ansprechpartner …" aria-label="Kunden suchen" value="${esc(kundenQ)}"></div>
+        <label class="select k-gfilter"><span class="sr-only">Kundengruppe</span><select id="k-g" aria-label="Nach Kundengruppe filtern">${kGruppenOpts()}</select>${icon('chev', 'sm')}</label>
         <span class="ed-hint" id="k-count"></span>
+        ${may('kunden.bearbeiten') ? `<button type="button" class="btn" id="k-import" title="Kundenstammdaten-Export der Warenwirtschaft (CSV) einlesen">${icon('upload')}CSV importieren</button><input type="file" id="k-file" accept=".csv,text/csv,text/plain" hidden>` : ''}
         <button type="button" class="btn" id="k-mailcfg"${isAdmin() ? '' : ' hidden'} title="E-Mail-Versand: Einstellungen, Signatur, Testmail">${icon('mail')}E-Mail${mailSt.configured ? '' : ' <span class="k-warn">nicht eingerichtet</span>'}</button>
         ${may('wochenangebot.senden') ? `<button type="button" class="btn" id="k-rund">${icon('send')}Wochenangebot versenden</button>` : ''}
         ${may('kunden.bearbeiten') ? `<button type="button" class="btn primary" id="k-add">${icon('plus')}Kunde anlegen</button>` : ''}
       </div>
       <div id="k-list"></div>
-      <p class="hint k-note">Kunden melden sich auf der Angebotsseite über „Kunden-Login“ an und sehen nur die hier freigeschalteten Angebote. ${W.stdPublic ? 'Das Wochenangebot ist derzeit zusätzlich öffentlich ohne Anmeldung sichtbar (umstellbar unter Angebot bearbeiten → Angebote verwalten).' : 'Das Wochenangebot ist derzeit nicht öffentlich – nur freigeschaltete Kunden sehen es.'}</p>`;
+      <p class="hint k-note">Kunden melden sich auf der Angebotsseite über „Kunden-Login“ an und sehen nur ihre freigeschalteten Angebote – direkt beim Kunden oder über seine Kundengruppe (Stammdaten → Angebote). ${W.stdPublic ? 'Das Wochenangebot ist derzeit zusätzlich öffentlich ohne Anmeldung sichtbar (umstellbar unter Stammdaten → Angebote).' : 'Das Wochenangebot ist derzeit nicht öffentlich – nur freigeschaltete Kunden sehen es.'}</p>`;
     renderKundenList();
   }
   function renderKundenList() {
     const toks = fold(kundenQ).split(/\s+/).filter(Boolean);
-    const list = kunden.filter((c) => { const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username, c.gruppe ? kgName(c.gruppe) : ''].join(' ')); return toks.every((t) => hay.includes(t)); });
-    $('#k-count').textContent = plural(list.length, 'Kunde', 'Kunden') + (list.length !== kunden.length ? ` von ${kunden.length}` : '');
+    const list = kunden.filter((c) => {
+      if (kundenG && (kundenG === '-' ? c.gruppe : c.gruppe !== kundenG)) return false;
+      const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username, c.gruppe ? kgName(c.gruppe) : ''].join(' ')); return toks.every((t) => hay.includes(t));
+    });
+    $('#k-count').textContent = plural(list.length, 'Kunde', 'Kunden') + (list.length !== kunden.length ? ` von ${fmtInt.format(kunden.length)}` : '') + (list.length > K_MAX ? ` – die ersten ${fmtInt.format(K_MAX)} angezeigt, Suche oder Gruppe eingrenzen` : '');
     const host = $('#k-list');
     if (!kunden.length) { host.innerHTML = '<div class="ed-empty"><h3>Noch keine Kunden</h3><p>Legen Sie Kunden mit Ansprechpartner, Adresse und Zugang an und schalten Sie die passenden Angebote frei.</p></div>'; return; }
     if (!list.length) { host.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
@@ -402,17 +416,21 @@
       if (!l.hasPassword) return `<span class="st-warn">${l.link ? `Einladung offen bis ${esc(dmyTs(l.link.exp))}` : 'noch kein Passwort'}</span>`;
       return `<span class="st-ok">Zugang aktiv</span>${l.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(l.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${l.mustChange ? '<div class="sub">Startpasswort noch nicht geändert</div>' : ''}`;
     };
-    host.innerHTML = `<div class="gcard"><table class="etab utab ktab"><thead><tr><th>Firma / Ansprechpartner</th><th class="k-addr">Ort</th><th>Freigeschaltete Angebote</th><th class="u-st">Zugang</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${list.map((c) => `
+    host.innerHTML = `<div class="gcard"><table class="etab utab ktab"><thead><tr><th>Firma / Ansprechpartner</th><th class="k-addr">Ort</th><th>Freigeschaltete Angebote</th><th class="u-st">Zugang</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${list.slice(0, K_MAX).map((c) => `
       <tr data-kid="${esc(c.id)}" tabindex="0" class="${c.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(c.firma)}${c.nr ? ` <span class="muted">· ${esc(c.nr)}</span>` : ''}</div><div class="sub">${esc(c.ansprechpartner || '')}${c.email ? `${c.ansprechpartner ? ' · ' : ''}${esc(c.email)}` : ''}</div>${c.gruppe ? `<div class="sub k-gruppe" title="Kundengruppe">${icon('users', 'sm')}${esc(kgName(c.gruppe) || 'Gruppe ' + c.gruppe + ' (nicht mehr vorhanden)')}</div>` : ''}</td>
         <td class="k-addr">${esc([c.plz, c.ort].filter(Boolean).join(' '))}</td>
-        <td class="k-offers">${c.angebote.length ? c.angebote.map(offerChip).join(' ') : '<span class="muted">keines</span>'}${mailLine(c)}</td>
+        <td class="k-offers">${c.angebote.length ? c.angebote.map((o) => offerChip(o, !(c.angeboteDirekt || c.angebote).includes(o))).join(' ') : '<span class="muted">keines</span>'}${mailLine(c)}</td>
         <td class="u-st">${st(c)}${c.login ? `<div class="sub uname">${esc(c.login.username)}</div>` : ''}</td>
         <td class="u-last">${c.login && c.login.lastLogin ? esc(dateTime(c.login.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-kedit="${esc(c.id)}">Bearbeiten</button></td>
       </tr>`).join('')}</tbody></table></div>`;
   }
   $('#view-kunden').addEventListener('input', (e) => { if (e.target.id === 'k-q') { kundenQ = e.target.value; renderKundenList(); } });
+  $('#view-kunden').addEventListener('change', (e) => {
+    if (e.target.id === 'k-g') { kundenG = e.target.value; renderKundenList(); return; }
+    if (e.target.id === 'k-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; kImportDatei(f); }
+  });
   const dmyTs = (ts) => new Date(ts * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const wkCur = () => (mailSt && mailSt.week) || null;
   const sentThisWeek = (c) => { const w = wkCur(); return !!(w && c.weekly && c.weekly.week === w.week && c.weekly.year === w.year); };
@@ -426,6 +444,7 @@
   }
   $('#view-kunden').addEventListener('click', (e) => {
     if (e.target.closest('#k-add')) { openKunde(null); return; }
+    if (e.target.closest('#k-import')) { $('#k-file').click(); return; }
     if (e.target.closest('#k-mailcfg')) { openMailCfg(); return; }
     if (e.target.closest('#k-rund')) { openRund(); return; }
     const tr = e.target.closest('tr[data-kid]');
@@ -438,7 +457,8 @@
     const c = id ? kunden.find((x) => x.id === id) : null;
     editKid = id;
     const l = c && c.login;
-    const has = (o) => (c ? c.angebote.includes(o) : false);
+    const has = (o) => (c ? (c.angeboteDirekt || c.angebote).includes(o) : false);
+    const perGruppe = (o) => !!(c && (c.angeboteGruppe || []).includes(o));
     const mailOk = !!(mailSt && mailSt.configured);
     const pwMode = !!(l && l.hasPassword) || !mailOk;      // true = Passwortfeld zeigen
     const fld = (n, label, max, attrs = '', cls = '') => `<label class="fld${cls ? ' ' + cls : ''}"><span>${label}</span><input name="${n}" value="${esc(c ? c[n] || '' : '')}" maxlength="${max}"${attrs}></label>`;
@@ -463,8 +483,8 @@
           ${c && c.abgemeldet && c.mailAngebot === false ? `<p class="hint span2 st-warn k-abm-note">Der Kunde hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst über den Link in der E-Mail abgemeldet. Die E-Mail-Adresse bleibt gespeichert.</p>` : ''}
         </div></fieldset>
         <fieldset class="k-set"><legend>Freigeschaltete Angebote</legend>
-          <div class="k-offers-pick">${[OSTD, ...W.offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && W.stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}</label>`).join('')}</div>
-          <p class="hint">Der Kunde sieht nach der Anmeldung nur diese Angebote. Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
+          <div class="k-offers-pick">${[OSTD, ...W.offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && W.stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}${perGruppe(o) ? ` <small class="k-viagr">${icon('users', 'sm')}über Kundengruppe</small>` : ''}</label>`).join('')}</div>
+          <p class="hint">Der Kunde sieht nach der Anmeldung diese Angebote und zusätzlich alle, die seiner Kundengruppe zugeordnet sind (Stammdaten → Angebote). Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
         </fieldset>
         ${c ? `<fieldset class="k-set"><legend>E-Mail an den Kunden</legend>
           <div class="k-mailact">
@@ -477,9 +497,9 @@
           <label class="check"><input type="checkbox" name="hasLogin"${!c || l ? ' checked' : ''}> Zugang einrichten (Benutzerkennung und Passwort)</label>
           <div class="form-grid two k-login"${!c || l ? '' : ' hidden'}>
             <label class="fld${pwMode ? '' : ' span2'}"><span>Benutzerkennung</span><input name="username" value="${esc(l ? l.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="z. B. gasthaus.muster"></label>
-            ${!l || !l.hasPassword ? `<div class="fld span2"><span>Passwort</span><div class="k-pwmode">
-              <label class="check"><input type="radio" name="pwmode" value="invite"${!pwMode ? ' checked' : ''}${mailOk ? '' : ' disabled'}> Einladung per E-Mail – der Kunde legt sein Passwort über einen Link selbst fest${mailOk ? '' : ' <small class="muted">(E-Mail-Versand noch nicht eingerichtet)</small>'}</label>
-              <label class="check"><input type="radio" name="pwmode" value="manual"${pwMode ? ' checked' : ''}> Startpasswort selbst vergeben und weitergeben</label></div></div>` : ''}
+            ${!l || !l.hasPassword ? `<div class="span2 k-pwwahl" role="radiogroup" aria-label="Passwort"><span class="k-pwlbl">Passwort</span><div class="k-pwmode">
+              <label class="k-pwopt${mailOk ? '' : ' off'}"><input type="radio" name="pwmode" value="invite"${!pwMode ? ' checked' : ''}${mailOk ? '' : ' disabled'}><span class="k-pwic">${icon('mail')}</span><span class="k-pwtx"><strong>Einladung per E-Mail</strong><small>${mailOk ? 'Der Kunde bekommt einen Link (7 Tage gültig) und legt sein Passwort selbst fest.' : 'Erst möglich, wenn der E-Mail-Versand eingerichtet ist (Verwaltung → E-Mail).'}</small></span></label>
+              <label class="k-pwopt"><input type="radio" name="pwmode" value="manual"${pwMode ? ' checked' : ''}><span class="k-pwic">${icon('key')}</span><span class="k-pwtx"><strong>Startpasswort vergeben</strong><small>Sie legen ein Passwort fest und geben es dem Kunden weiter; er ändert es bei der ersten Anmeldung.</small></span></label></div></div>` : ''}
             <div class="fld k-pwfld"${pwMode ? '' : ' hidden'}><span>${l && l.hasPassword ? 'Neues Passwort <small class="muted">(leer = unverändert)</small>' : 'Startpasswort'}</span>
               <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"><button type="button" class="btn" data-kact="gen">Vorschlag</button></div></div>
             <label class="check span2 k-pwfld"${pwMode ? '' : ' hidden'}><input type="checkbox" name="mustChange" checked> Kunde muss das Passwort bei der ersten Anmeldung ändern</label>
@@ -570,6 +590,86 @@
       toast(pw && body.login ? `Gespeichert. Zugangsdaten für „${r.customer.login.username}“ jetzt sicher an den Kunden weitergeben – das Passwort wird nicht noch einmal angezeigt.` : c ? `Änderungen an „${r.customer.firma}“ gespeichert.` : `Kunde „${r.customer.firma}“ angelegt.`, pw ? 7000 : 3200);
       renderKundenView();
     } catch (ex) { err.textContent = ex.message; if (ex.status === 409) { kunden = null; } } finally { btn.disabled = false; }
+  });
+
+  /* ---------- Kundenstammdaten aus der Warenwirtschaft importieren (CSV) ----------
+     Gelesen werden Nummer, Name1 (sonst Alpha), Strasse, PLZ, Ort, Land, Telefon, EMail und Gruppe; Umsätze, Kreditlimit,
+     Konditionen, Vertreter usw. bleiben in der Warenwirtschaft. Abgleich und Prüfung macht der Server (kunden_import). */
+  const dlgKI = $('#dlg-k-import');
+  let kImp = null;
+  const landName = (() => { let dn = null; try { dn = new Intl.DisplayNames(['de'], { type: 'region' }); } catch { /* alter Browser */ } return (c) => { const v = (c || '').trim(); if (!/^[A-Za-z]{2}$/.test(v) || !dn) return v; try { return dn.of(v.toUpperCase()) || v; } catch { return v; } }; })();
+  function kAusCsv(buf) {
+    const rows = csvZeilen(csvText(buf));
+    if (!rows.length) throw new Error('Die Datei ist leer.');
+    const kopf = rows[0].map((c) => fold(c).replace(/[^a-z0-9]/g, ''));
+    const sp = (...n) => kopf.findIndex((k) => n.includes(k));
+    const i = { nr: sp('nummer', 'kundennummer', 'kdnr'), alpha: sp('alpha', 'suchname', 'kurzname'), firma: sp('name1', 'firma', 'name'), strasse: sp('strasse'), plz: sp('plz'), ort: sp('ort'),
+      land: sp('land'), telefon: sp('telefon', 'tel'), email: sp('email', 'mail'), gruppe: sp('gruppe', 'kundengruppe') };
+    if (i.nr < 0 || (i.firma < 0 && i.alpha < 0)) throw new Error('Spalten „Nummer“ und „Name1“ nicht gefunden. Erwartet wird der Kundendaten-Export der Warenwirtschaft (Semikolon getrennt).');
+    if (kopf.includes('bezeichnung1') || kopf.includes('vgrp')) throw new Error('Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren.');
+    const v = (r, k) => (i[k] >= 0 ? (r[i[k]] || '').trim().replace(/\s{2,}/g, ' ') : '');
+    const out = [];
+    for (const r of rows.slice(1)) {
+      const alpha = v(r, 'alpha');
+      const mails = v(r, 'email').split(/[;,\s]+/).filter((m) => /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(m));
+      const x = { nr: v(r, 'nr'), firma: v(r, 'firma') || alpha.replace(/^\*\s*/, ''), strasse: v(r, 'strasse'), plz: v(r, 'plz'), ort: v(r, 'ort'), land: landName(v(r, 'land')),
+        telefon: v(r, 'telefon'), email: mails[0] || (v(r, 'email') && !v(r, 'email').includes('@') ? '' : v(r, 'email')), gruppe: v(r, 'gruppe'), stern: alpha.startsWith('*') || v(r, 'firma').startsWith('*') };
+      if (!x.nr && !x.firma) continue;
+      out.push(x);
+    }
+    if (!out.length) throw new Error('Keine Kunden in der Datei gefunden.');
+    return out;
+  }
+  async function kImportDatei(file) {
+    let rows;
+    try { rows = kAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+    kImp = { file, rows, ohneStern: true, anlegen: true, res: null };
+    dlgKI.showModal();
+    await kImportPruefen();
+  }
+  const kImpRows = () => kImp.rows.filter((r) => !(kImp.ohneStern && r.stern)).map(({ stern, ...r }) => r);
+  async function kImportPruefen() {
+    const body = $('#k-import-body');
+    const stern = kImp.rows.filter((r) => r.stern).length;
+    const head = `<div class="dlg-head"><div><h2 id="ki-title">Kunden importieren</h2><p>${esc(kImp.file.name)} · ${plural(kImp.rows.length, 'Zeile', 'Zeilen')}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
+    const opts = `<div class="ki-opts">
+        <label class="check"><input type="checkbox" data-ki="stern"${kImp.ohneStern ? ' checked' : ''}> Mit „*“ markierte Kunden überspringen <small class="muted">(${fmtInt.format(stern)} in der Datei – in der Warenwirtschaft als nicht mehr aktiv gekennzeichnet)</small></label>
+        <label class="check"><input type="checkbox" data-ki="anlegen"${kImp.anlegen ? ' checked' : ''}> Neue Kunden anlegen <small class="muted">(aus: nur bestehende Kunden aktualisieren)</small></label></div>`;
+    body.innerHTML = head + `<div class="dlg-body">${opts}<div class="loading"><div class="spinner"></div>Abgleich mit den vorhandenen Kunden …</div></div>`;
+    try { kImp.res = await api('kunden_import', { body: { pruefen: true, rows: kImpRows(), anlegen: kImp.anlegen } }); }
+    catch (ex) { body.innerHTML = head + `<div class="dlg-body">${opts}<div class="err-box">${esc(ex.message)}</div></div><div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`; return; }
+    const r = kImp.res, s = r.stat;
+    const nix = !s.neu && !s.aktualisiert;
+    const gname = (nr) => kgName(nr) || '';
+    const fremd = Object.entries(r.gruppenUnbekannt || {});
+    body.innerHTML = head + `<div class="dlg-body">${opts}
+        <div class="cmp-stats"><div><span>Neu</span><strong id="ki-neu">${fmtInt.format(s.neu)}</strong></div><div><span>Aktualisiert</span><strong id="ki-akt">${fmtInt.format(s.aktualisiert)}</strong></div><div><span>Unverändert</span><strong id="ki-gleich">${fmtInt.format(s.unveraendert)}</strong></div></div>
+        ${r.beispiele.neu.length ? `<h3 class="d-h"><span>Neu</span></h3><ul class="kg-prev">${r.beispiele.neu.map((x) => `<li><span class="muted">${esc(x.nr)}</span> ${esc(x.firma)}${x.ort ? ` <span class="muted">· ${esc(x.ort)}</span>` : ''}${x.gruppe ? ` <span class="muted">· ${esc(gname(x.gruppe) || 'Gruppe ' + x.gruppe)}</span>` : ''}</li>`).join('')}${s.neu > r.beispiele.neu.length ? `<li class="muted">… und ${fmtInt.format(s.neu - r.beispiele.neu.length)} weitere</li>` : ''}</ul>` : ''}
+        ${r.beispiele.aktualisiert.length ? `<h3 class="d-h"><span>Aktualisiert</span></h3><ul class="kg-prev">${r.beispiele.aktualisiert.map((x) => `<li><span class="muted">${esc(x.nr)}</span> ${esc(x.firma)} <span class="muted">· ${esc(x.felder.join(', '))}</span></li>`).join('')}${s.aktualisiert > r.beispiele.aktualisiert.length ? `<li class="muted">… und ${fmtInt.format(s.aktualisiert - r.beispiele.aktualisiert.length)} weitere</li>` : ''}</ul>` : ''}
+        <p class="hint">Abgleich über die Kundennummer (bei Kunden ohne Nummer über Firma und PLZ). Bei bestehenden Kunden werden Kundengruppe, Adresse, Land und Telefon übernommen; Firma und E-Mail nur, wenn sie noch leer sind. Zugang, Freischaltungen und Notizen bleiben unverändert. Neue Kunden bekommen keinen Zugang und kein Wochenangebot per E-Mail (dafür ist ihr Einverständnis nötig); ihre Angebote ergeben sich aus der Kundengruppe. Umsätze, Kreditlimit, Konditionen und Vertreter werden nicht übernommen.</p>
+        ${fremd.length ? `<p class="hint st-warn">Kundengruppe nicht in der Liste (Stammdaten → Kundengruppen), Gruppe bleibt leer: ${esc(fremd.map(([nr, n]) => `${nr} (${n})`).join(', '))}</p>` : ''}
+        ${s.ohneFirma || s.doppelt || s.mailUngueltig || s.nichtAngelegt ? `<p class="hint" id="ki-skip">${[s.ohneFirma ? `${fmtInt.format(s.ohneFirma)} ohne Firma übersprungen` : '', s.doppelt ? `${s.doppelt}× doppelte Kundennummer übersprungen` : '', s.mailUngueltig ? `${s.mailUngueltig}× ungültige E-Mail-Adresse leer gelassen` : '', s.nichtAngelegt ? `${fmtInt.format(s.nichtAngelegt)} neue Kunden nicht angelegt` : ''].filter(Boolean).join(' · ')}</p>` : ''}
+        ${nix ? '<p class="hint">Keine Änderungen – die Kundendaten sind bereits aktuell.</p>' : ''}
+        <p class="kerr" id="ki-err" role="alert"></p></div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ki="ok"${nix ? ' disabled' : ''}>${icon('check')}Übernehmen</button></div>`;
+  }
+  $('#k-import-body').addEventListener('change', (e) => {
+    const a = e.target.dataset.ki;
+    if (a === 'stern') { kImp.ohneStern = e.target.checked; kImportPruefen(); }
+    if (a === 'anlegen') { kImp.anlegen = e.target.checked; kImportPruefen(); }
+  });
+  $('#k-import-body').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-close]')) { dlgKI.close(); return; }
+    const b = e.target.closest('[data-ki="ok"]');
+    if (!b) return;
+    b.disabled = true;
+    try {
+      const r = await api('kunden_import', { body: { rev: kImp.res.rev, rows: kImpRows(), anlegen: kImp.anlegen, quelle: kImp.file.name } });
+      dlgKI.close();
+      toast(`Kunden übernommen: ${fmtInt.format(r.stat.neu)} neu, ${fmtInt.format(r.stat.aktualisiert)} aktualisiert.`, 5000);
+      kunden = null; renderKundenView();
+    } catch (ex) { $('#ki-err').textContent = ex.message; b.disabled = false; if (ex.status === 409) kImportPruefen(); }
   });
 
   /* ---------- E-Mail an Kunden ---------- */

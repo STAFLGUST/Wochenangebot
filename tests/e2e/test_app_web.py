@@ -198,6 +198,8 @@ with sync_playwright() as p:
     orders = doc('bestellungen')
     check('erneutes Senden ergibt keinen zweiten Bestellwunsch', len(orders) == 2 and len(smtp.messages) == 2)
     page.click('text=Weiter im Angebot')
+    page.wait_for_selector(T('angebot-titel'), timeout=30000)   # Wechsel abwarten, sonst bricht das Neuladen ab (ERR_ABORTED)
+    page.wait_for_load_state('networkidle')
 
     # ---------- offline: gespeichertes Angebot mit Hinweis ----------
     page.route('**/api/?action=offer*', lambda route: route.abort())

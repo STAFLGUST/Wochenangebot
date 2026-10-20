@@ -206,7 +206,7 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '' };
   function viewAllowed(v) {
     if (['mail', 'users', 'sec'].includes(v)) return can('admin');
     if (v === 'gruppen') return may('stammdaten.sehen') || may('kunden.sehen');
@@ -405,7 +405,7 @@
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['auswertung', 'mail', 'users', 'log', 'sec'].some(viewAllowed);
-    $('#side-stamm').hidden = !['master', 'vkgruppen', 'kunden', 'gruppen'].some(viewAllowed);
+    $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!viewAllowed(currentView)) setView('edit');
   }
@@ -1268,6 +1268,7 @@
     offers = r.offers || [];
     offersRev = r.rev || 0;
     stdPublic = r.stdPublic !== false;
+    stdGruppen = r.stdGruppen || [];
     if (!knownOffer(curOffer)) curOffer = OSTD;
   }
   function renderOfferBar() {
@@ -1311,49 +1312,124 @@
     setOffer(n.dataset.offer); $(`#offer-bar [data-offer="${CSS.escape(n.dataset.offer)}"]`).focus();
   });
 
-  /* Angebote verwalten: anlegen, umbenennen, Regel für Artikel ohne eigenen Preis, löschen (Administrator) */
-  const dlgOffers = $('#dlg-offers');
-  let offerEdit = [];
+  /* Stammdaten → Angebote: anlegen, umbenennen, Regel für Artikel ohne eigenen Preis, Kundengruppen, löschen (Administrator).
+     Kunden einer zugeordneten Kundengruppe sehen das Angebot ohne eigene Freischaltung (Server: customer_offers). */
+  let stdGruppen = [];
+  let offerEdit = null, ofDirty = false, ofKg = [], ofKunden = null, ofPick = null;
   const slug = (t) => fold(t).replace(/^wochenangebot\s*/, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'angebot';
-  function openOffers() {
-    offerEdit = offers.map((o) => ({ ...o }));
+  function openOffers() { setView('angebote'); }
+  function ofReset() {
+    offerEdit = offers.map((o) => ({ ...o, gruppen: [...(o.gruppen || [])] }));
     offerEdit.stdPublic = stdPublic;
-    renderOffersDlg();
-    dlgOffers.showModal();
+    offerEdit.stdGruppen = [...stdGruppen];
+    ofDirty = false;
   }
-  function renderOffersDlg(err = '') {
-    const admin = may('angebote.loeschen');
-    $('#offers-body').innerHTML = `<div class="dlg-head"><div><h2 id="of-title">Angebote verwalten</h2><p>Alle Angebote nutzen dieselbe Artikelliste; Preise werden je Angebot eingetragen. Kundenangebote sind nur nach Anmeldung sichtbar (Mitarbeiter oder freigeschaltete Kunden), nie auf der öffentlichen Seite.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+  async function renderOffersView() {
+    const host = $('#view-angebote');
+    if (!offerEdit) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Angebote werden geladen …</div>';
+    try {
+      const [, g, k] = await Promise.all([ofDirty ? null : loadOffers(), api('kundengruppen').catch(() => ({ groups: [] })), may('kunden.sehen') ? api('kunden').catch(() => null) : null]);
+      ofKg = g.groups || []; ofKunden = k ? k.customers : null;
+    } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    if (!ofDirty) ofReset();
+    renderOffersBody();
+  }
+  const kgName = (nr) => (ofKg.find((g) => g.nr === nr) || {}).name || '';
+  function ofKundenZahl(id, gruppen) {
+    if (!ofKunden) return null;
+    return ofKunden.filter((c) => (c.angeboteDirekt || c.angebote || []).includes(id) || (c.gruppe && gruppen.includes(c.gruppe))).length;
+  }
+  function ofChips(gruppen, key) {
+    const edit = may('angebote.verwalten');
+    return `<div class="of-chips">${gruppen.length ? gruppen.map((nr) => `<span class="of-chip${kgName(nr) ? '' : ' fremd'}" title="${esc(kgName(nr) || 'Kundengruppe nicht mehr vorhanden')}">${esc(nr)} · ${esc(kgName(nr) || 'nicht vorhanden')}</span>`).join('') : '<span class="muted">keine</span>'}
+      ${edit ? `<button type="button" class="btn sm ghost" data-ofa="gruppen" data-ofk="${esc(key)}">${icon('users', 'sm')}${gruppen.length ? 'Ändern' : 'Zuordnen'}</button>` : ''}</div>`;
+  }
+  function renderOffersBody(err = '') {
+    const host = $('#view-angebote');
+    const admin = may('angebote.loeschen'), edit = may('angebote.verwalten');
+    const kz = (id, gr) => { const n = ofKundenZahl(id, gr); return n === null ? '<span class="muted">–</span>' : fmtInt.format(n); };
+    host.innerHTML = `
+      <div class="st-info"><div><strong>Angebote</strong><span class="sub">Alle Angebote nutzen dieselbe Artikelliste; Preise werden je Angebot unter „Angebot bearbeiten“ eingetragen. Kundenangebote sind nur nach Anmeldung sichtbar, nie auf der öffentlichen Seite. Kunden der zugeordneten Kundengruppen sehen das Angebot automatisch – zusätzlich zu den Angeboten, die beim Kunden selbst freigeschaltet sind.</span></div>
+        <span class="ms-state${ofDirty ? ' saving' : ''}" id="of-state">${ofDirty ? 'Nicht gespeichert' : ''}</span></div>
+      <div class="gcard of-card"><table class="etab oftab"><thead><tr><th>Angebot</th><th>Kundengruppen</th><th class="of-fb">Artikel ohne eigenen Preis</th><th class="num-s">Eigene Preise</th><th class="num-s">Kunden</th><th class="act"></th></tr></thead><tbody>
+        <tr class="of-std" data-ofk="std"><td><strong>Wochenangebot</strong><div class="sub">Standard · ${offerEdit.stdPublic ? 'öffentlich ohne Anmeldung' : 'nur für angemeldete Kunden'}</div>
+          ${admin ? `<label class="check of-pub"><input type="checkbox" data-ofa-pub${offerEdit.stdPublic ? ' checked' : ''}> Öffentlich ohne Anmeldung sichtbar</label>` : ''}</td>
+          <td>${ofChips(offerEdit.stdGruppen, 'std')}</td><td class="of-fb"><span class="sub">–</span></td><td class="num-s">–</td><td class="num-s">${kz(OSTD, offerEdit.stdGruppen)}</td><td class="act"></td></tr>
+        ${offerEdit.map((o, i) => `<tr data-oi="${i}" data-ofk="${i}"><td><input class="in" data-of="name" value="${esc(o.name)}" maxlength="80" aria-label="Name des Angebots"${edit ? '' : ' disabled'}></td>
+          <td>${ofChips(o.gruppen, String(i))}</td>
+          <td class="of-fb"><select class="in" data-of="fallback" aria-label="Artikel ohne eigenen Preis"${edit ? '' : ' disabled'}><option value="standard"${o.fallback !== 'hidden' ? ' selected' : ''}>Standardpreis zeigen</option><option value="hidden"${o.fallback === 'hidden' ? ' selected' : ''}>nicht anzeigen</option></select></td>
+          <td class="num-s">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ownCount(o.id))}</td>
+          <td class="num-s">${o.isNew ? kz('', o.gruppen) : kz(o.id, o.gruppen)}</td>
+          <td class="act">${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${edit ? `<div class="of-actions"><button type="button" class="btn" data-ofa="add">${icon('plus')}Angebot hinzufügen</button><span class="sp"></span>
+        <button type="button" class="btn" data-ofa="reset"${ofDirty ? '' : ' disabled'}>Verwerfen</button><button type="button" class="btn primary" data-ofa="save"${ofDirty ? '' : ' disabled'}>${icon('check')}Speichern</button></div>` : ''}
+      <p class="form-err" id="of-err" role="alert">${esc(err)}</p>
+      <p class="hint">${ofKunden ? 'Kunden = direkt freigeschaltet oder über eine zugeordnete Kundengruppe (Stand der Eingabe, vor dem Speichern).' : ''} Kundengruppen pflegen: Stammdaten → Kundengruppen; Gruppe eines Kunden: Stammdaten → Kunden.</p>`;
+  }
+  function ofMark() { ofDirty = true; const s = $('#of-state'); if (s) { s.textContent = 'Nicht gespeichert'; s.className = 'ms-state saving'; } for (const b of $$('#view-angebote [data-ofa="save"], #view-angebote [data-ofa="reset"]')) b.disabled = false; }
+  const ofGruppenVon = (key) => (key === 'std' ? offerEdit.stdGruppen : offerEdit[+key].gruppen);
+  /* Kundengruppen wählen */
+  const dlgOfG = $('#dlg-of-gruppen');
+  function openOfGruppen(key) {
+    const name = key === 'std' ? 'Wochenangebot' : offerEdit[+key].name;
+    ofPick = { key, sel: new Set(ofGruppenVon(key)), q: '' };
+    const nKunden = (nr) => (ofKunden ? ofKunden.filter((c) => c.gruppe === nr).length : null);
+    const fremd = [...ofPick.sel].filter((nr) => !ofKg.some((g) => g.nr === nr));
+    $('#of-gruppen-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="ofg-title">Kundengruppen für „${esc(name)}“</h2><p>Kunden dieser Gruppen sehen das Angebot nach der Anmeldung automatisch.</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
-        <table class="etab oftab"><thead><tr><th>Name</th><th>Artikel ohne eigenen Preis</th><th class="num-s">Eigene Preise</th><th class="act"></th></tr></thead><tbody>
-          <tr class="of-std"><td><strong>Wochenangebot</strong><div class="sub">Standard · ${offerEdit.stdPublic ? 'öffentlich ohne Anmeldung' : 'nur für angemeldete Kunden'}</div></td><td colspan="3">${admin ? `<label class="check"><input type="checkbox" data-ofa-pub${offerEdit.stdPublic ? ' checked' : ''}> Öffentlich ohne Anmeldung sichtbar</label><div class="sub">Ausgeschaltet sehen das Wochenangebot nur Kunden, denen es unter „Kunden“ freigeschaltet ist.</div>` : `<span class="sub">${offerEdit.stdPublic ? 'öffentlich' : 'nur mit Kunden-Anmeldung'} (ändern: Administrator)</span>`}</td></tr>
-          ${offerEdit.map((o, i) => `<tr data-oi="${i}"><td><input class="in" data-of="name" value="${esc(o.name)}" maxlength="80" aria-label="Name des Angebots"></td>
-            <td><select class="in" data-of="fallback" aria-label="Artikel ohne eigenen Preis"><option value="standard"${o.fallback !== 'hidden' ? ' selected' : ''}>Standardpreis zeigen</option><option value="hidden"${o.fallback === 'hidden' ? ' selected' : ''}>nicht anzeigen</option></select></td>
-            <td class="num-s">${o.isNew ? '<span class="sub">neu</span>' : fmtInt.format(ownCount(o.id))}</td>
-            <td class="act">${admin || o.isNew ? `<button type="button" class="ibtn danger" data-ofa="del" aria-label="Angebot ${esc(o.name)} löschen" title="${o.isNew ? 'Entfernen' : 'Löschen'}">${icon('trash')}</button>` : ''}</td></tr>`).join('')}
-        </tbody></table>
-        <button type="button" class="btn sm" data-ofa="add">${icon('plus', 'sm')}Angebot hinzufügen</button>
-        <p class="form-err" id="of-err" role="alert">${esc(err)}</p>
+        ${ofKg.length ? `<div class="search">${icon('search')}<input id="ofg-q" type="search" autocomplete="off" placeholder="Gruppe finden: Nummer, Bezeichnung …" aria-label="Kundengruppen suchen"></div>
+        <div class="ofg-bar"><span class="sub" id="ofg-n"></span><button type="button" class="link-btn" data-ofg="none">Keine</button></div>
+        <ul class="ofg-list">${[...ofKg, ...fremd.map((nr) => ({ nr, name: 'nicht mehr vorhanden', fremd: true }))].map((g) => `<li data-hay="${esc(fold(g.nr + ' ' + g.name))}"><label class="check"><input type="checkbox" value="${esc(g.nr)}"${ofPick.sel.has(g.nr) ? ' checked' : ''}> <span class="muted">${esc(g.nr)}</span> ${esc(g.name)}${nKunden(g.nr) ? ` <small class="muted">· ${plural(nKunden(g.nr), 'Kunde', 'Kunden')}</small>` : ''}</label></li>`).join('')}</ul>`
+          : '<p class="hint">Noch keine Kundengruppen angelegt – bitte zuerst unter Stammdaten → Kundengruppen importieren.</p>'}
       </div>
-      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ofa="save">${icon('check')}Speichern</button></div>`;
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ofg="ok"${ofKg.length ? '' : ' disabled'}>${icon('check')}Übernehmen</button></div>`;
+    ofgCount();
+    dlgOfG.showModal();
+    const q = $('#ofg-q'); if (q) q.focus();
   }
-  $('#offers-body').addEventListener('input', (e) => {
-    const tr = e.target.closest('[data-oi]');
-    if (tr && e.target.dataset.of) offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value;
+  function ofgCount() { const n = $('#ofg-n'); if (n) n.textContent = `${plural(ofPick.sel.size, 'Gruppe', 'Gruppen')} gewählt`; }
+  $('#of-gruppen-body').addEventListener('input', (e) => {
+    if (e.target.id !== 'ofg-q') return;
+    const toks = fold(e.target.value).split(/\s+/).filter(Boolean);
+    for (const li of $$('#of-gruppen-body .ofg-list li')) li.hidden = !toks.every((t) => li.dataset.hay.includes(t));
   });
-  $('#offers-body').addEventListener('change', (e) => {
-    if (e.target.matches('[data-ofa-pub]')) { offerEdit.stdPublic = e.target.checked; renderOffersDlg(); return; }
-    const tr = e.target.closest('[data-oi]');
-    if (tr && e.target.dataset.of) offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value;
+  $('#of-gruppen-body').addEventListener('change', (e) => {
+    if (e.target.type !== 'checkbox') return;
+    if (e.target.checked) ofPick.sel.add(e.target.value); else ofPick.sel.delete(e.target.value);
+    ofgCount();
   });
-  $('#offers-body').addEventListener('click', async (e) => {
+  $('#of-gruppen-body').addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { dlgOfG.close(); return; }
+    const a = e.target.closest('[data-ofg]')?.dataset.ofg;
+    if (a === 'none') { ofPick.sel.clear(); for (const x of $$('#of-gruppen-body .ofg-list input')) x.checked = false; ofgCount(); return; }
+    if (a === 'ok') {
+      const list = [...ofPick.sel].sort((x, y) => x.localeCompare(y, 'de', { numeric: true }));
+      if (ofPick.key === 'std') offerEdit.stdGruppen = list; else offerEdit[+ofPick.key].gruppen = list;
+      dlgOfG.close(); ofMark(); renderOffersBody();
+    }
+  });
+  $('#view-angebote').addEventListener('input', (e) => {
+    const tr = e.target.closest('[data-oi]');
+    if (tr && e.target.dataset.of) { offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value; ofMark(); }
+  });
+  $('#view-angebote').addEventListener('change', (e) => {
+    if (e.target.matches('[data-ofa-pub]')) { offerEdit.stdPublic = e.target.checked; ofMark(); renderOffersBody(); return; }
+    const tr = e.target.closest('[data-oi]');
+    if (tr && e.target.dataset.of) { offerEdit[+tr.dataset.oi][e.target.dataset.of] = e.target.value; ofMark(); }
+  });
+  $('#view-angebote').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-ofa]');
     if (!b) return;
     const a = b.dataset.ofa;
+    if (a === 'gruppen') { openOfGruppen(b.dataset.ofk); return; }
+    if (a === 'reset') { ofReset(); renderOffersBody(); return; }
     if (a === 'add') {
-      offerEdit.push({ id: '', name: 'Wochenangebot ', fallback: 'standard', isNew: true });
-      renderOffersDlg();
-      const inp = $$('#offers-body [data-of="name"]').pop(); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+      offerEdit.push({ id: '', name: 'Wochenangebot ', fallback: 'standard', gruppen: [], isNew: true });
+      ofMark(); renderOffersBody();
+      const inp = $$('#view-angebote [data-of="name"]').pop(); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
       return;
     }
     if (a === 'del') {
@@ -1363,7 +1439,7 @@
         if (!(await confirmBox('Angebot löschen?', `„${esc(o.name)}“ wird beim Speichern gelöscht${n ? ` – mit ${n} eigenen Preis${n === 1 ? '' : 'en'}` : ''}. Das lässt sich nicht rückgängig machen.`, 'Löschen', true))) return;
       }
       offerEdit.splice(i, 1);
-      renderOffersDlg();
+      ofMark(); renderOffersBody();
       return;
     }
     if (a === 'save') {
@@ -1371,14 +1447,14 @@
       const list = offerEdit.map((o) => {
         let id = o.id;
         if (!id) { const base = slug(o.name); id = base; let k = 2; while (used.has(id) || id === OSTD) id = `${base}-${k++}`; used.add(id); }
-        return { id, name: C.clean(o.name), fallback: o.fallback === 'hidden' ? 'hidden' : 'standard' };
+        return { id, name: C.clean(o.name), fallback: o.fallback === 'hidden' ? 'hidden' : 'standard', gruppen: o.gruppen || [] };
       });
       b.disabled = true;
       try {
-        const body = { rev: offersRev, offers: list };
+        const body = { rev: offersRev, offers: list, stdGruppen: offerEdit.stdGruppen };
         if (may('angebote.loeschen')) body.stdPublic = !!offerEdit.stdPublic;
         const r = await api('offers_save', { body });
-        offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
+        offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false; stdGruppen = r.stdGruppen || [];
         const gone = new Set([OSTD, ...list.map((o) => o.id)]);
         let dropped = false;
         for (const it of model.items) {
@@ -1386,12 +1462,13 @@
           if (it.sale && it.sale.offers) { for (const k of Object.keys(it.sale.offers)) if (!gone.has(k)) { delete it.sale.offers[k]; dropped = true; } if (!Object.keys(it.sale.offers).length) delete it.sale.offers; }
         }
         if (!knownOffer(curOffer)) curOffer = OSTD;
-        dlgOffers.close();
+        ofReset();
         toast('Angebote gespeichert.');
         diff = C.diffOffers(published, model);
         renderOfferBar(); renderGroups(); renderChanges(); updatePublishBtn();
         if (dropped) changed({ render: true });
-      } catch (ex) { b.disabled = false; renderOffersDlg(ex.message); }
+        renderOffersBody();
+      } catch (ex) { b.disabled = false; renderOffersBody(ex.message); }
     }
   });
 
@@ -1836,7 +1913,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'auswertung', 'mail', 'users', 'log', 'sec'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec'];
   function setView(v) {
     if (!viewAllowed(v)) v = 'edit';
@@ -1851,6 +1928,7 @@
     if (v === 'hist') renderHistView();
     if (v === 'stock') renderStockView();
     if (v === 'master') renderMasterView();
+    if (v === 'angebote') renderOffersView();
     if (v === 'users' && window.WA.views.users) window.WA.views.users();
     if (v === 'orders' && window.WA.views.orders) window.WA.views.orders();
     if (v === 'einkauf' && window.WA.views.einkauf) window.WA.views.einkauf();
