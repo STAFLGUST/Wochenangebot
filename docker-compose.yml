@@ -8,6 +8,7 @@ services:
       - ./daten:/var/www/html/data  # gespeicherte Angebote, Entwurf, Versionen
     environment:
       WA_INSTALLED: "1"             # Ersteinrichtung im Browser gesperrt (Schutz bei leerem/defektem Datenordner)
+      WA_TRUSTED_PROXIES: caddy     # Besucher-IP (X-Forwarded-For) nur vom eigenen Caddy übernehmen
       DOMAIN: ${DOMAIN}             # Adresse der Seite für Links in E-Mails
       # E-Mail-Versand (Werte nur in .env auf dem Server; leer = Versand ausgeschaltet)
       MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
@@ -35,6 +36,14 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data            # HTTPS-Zertifikate
       - caddy_config:/config
+    networks:
+      default:
+      edge:                         # nur Caddy ↔ Testumgebung (test.<Domain>); die App des Echtbetriebs ist dort nicht erreichbar
+        aliases: [wa-caddy]
+
+networks:
+  edge:
+    name: wochenangebot-edge
 
 volumes:
   caddy_data:

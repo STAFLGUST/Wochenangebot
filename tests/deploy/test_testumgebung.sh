@@ -14,6 +14,7 @@ cat > "$T/bin/docker" <<'S'
 echo "docker $*" >> "$LOG"
 case "$*" in
   "compose ps -q caddy") echo caddy123 ;;
+  "network inspect wochenangebot-edge") [ -z "${EDGE_FEHLT:-}" ] || exit 1 ;;
   inspect*) echo wochenangebot_default ;;
   run*) cat >/dev/null; printf '%s' '$2y$10$abcdefghijklmnopqrstuv' ;;
 esac
@@ -30,8 +31,11 @@ chmod +x "$T/bin/docker" "$T/bin/git"
 export PATH="$T/bin:$PATH" WA_TEST_DIR="$T/test"
 run() { sh "$T/prod/deploy/testumgebung.sh" "$@"; }
 
+ok "Einrichten ohne Netz wochenangebot-edge abgelehnt (Echtbetrieb zu alt)" '! (printf "test\nSicheres-Testpw-1\nSicheres-Testpw-1\n" | EDGE_FEHLT=1 run einrichten > "$T/out" 2>&1) && grep -q "wochenangebot-edge" "$T/out"'
 printf 'test\nSicheres-Testpw-1\nSicheres-Testpw-1\n' | run einrichten > "$T/out" 2>&1
-ok "Einrichten: Netz und Testadresse aus dem Echtbetrieb" 'grep -qx "PROD_NETWORK=wochenangebot_default" "$T/test/.env" && grep -qx "TEST_DOMAIN=test.angebot.example.org" "$T/test/.env"'
+ok "Einrichten: Testadresse aus dem Echtbetrieb, kein Produktivnetz mehr" 'grep -qx "TEST_DOMAIN=test.angebot.example.org" "$T/test/.env" && ! grep -q PROD_NETWORK "$T/test/.env"'
+ok "Testumgebung nur im Netz wochenangebot-edge, Proxy nur Caddy" 'grep -q "name: wochenangebot-edge" "$T/test/docker-compose.yml" && grep -q "networks: \[edge\]" "$T/test/docker-compose.yml" && ! grep -q PROD_NETWORK "$T/test/docker-compose.yml" && grep -q "WA_TRUSTED_PROXIES: wa-caddy" "$T/test/docker-compose.yml"'
+ok "Echtbetrieb: App nicht im Netz edge, Caddy schon" 'sed -n "/^  app:/,/^  caddy:/p" "$REPO/docker-compose.yml" > "$T/app.yml"; sed -n "/^  caddy:/,/^volumes:/p" "$REPO/docker-compose.yml" > "$T/caddy.yml"; ! grep -q "networks" "$T/app.yml" && grep -q "WA_TRUSTED_PROXIES: caddy" "$T/app.yml" && grep -q "edge:" "$T/caddy.yml"'
 ok "Einrichten: keine Geheimnisse des Echtbetriebs übernommen" '! grep -q geheim "$T/test/.env"'
 ok "Einrichten: Passwortschutz als Hash" 'grep -qx "test:\$2y\$10\$abcdefghijklmnopqrstuv" "$T/test/zugang.htpasswd"'
 ok "Einrichten: Passwort nicht in Aufrufparametern" '! grep -q Sicheres-Testpw "$LOG"'
@@ -45,6 +49,7 @@ ok "Unbekannter Zweig abgelehnt" '! run einspielen gibtsnicht >/dev/null 2>&1'
 : > "$LOG"; run einspielen feature/neu > "$T/out" 2>&1
 ok "Einspielen: nur Zweig des eigenen Repositorys" 'grep -q "fetch -q origin +refs/heads/feature/neu:refs/remotes/origin/feature/neu" "$LOG" && grep -q "checkout -q --detach origin/feature/neu" "$LOG"'
 ok "Einspielen: Testdaten bleiben" '[ -f "$T/test/daten/angebot.php" ]'
+ok "Einspielen: Container neu erstellt (übernimmt Netzwechsel)" 'grep -q "up -d --force-recreate" "$LOG"'
 echo extra > "$T/test/daten/notiz.php"
 echo nein | run zuruecksetzen >/dev/null 2>&1 || true
 ok "Zurücksetzen nur nach Bestätigung" '[ -f "$T/test/daten/notiz.php" ]'

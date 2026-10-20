@@ -6,6 +6,11 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 /* ---------------- Protokoll ---------------- */
 
 /* Ein Eintrag je Vorgang; fortlaufendes Bearbeiten des Entwurfs durch dieselbe Person wird zusammengefasst */
+/* Vorgänge mit Kundendaten (Adressen, E-Mails, Bestellungen) – im Protokoll nur mit Recht „Kunden ansehen“ vollständig */
+const LOG_KUNDENDATEN = ['customers', 'kunde_login', 'kunde_login_fail', 'kunde_password', 'kunde_abmeldung', 'einzelangebot', 'bestellung', 'mail', 'einkauf'];
+const LOG_KUNDENDATEN_TEXT = ['customers' => 'Kundendaten geändert', 'kunde_login' => 'Kunde angemeldet', 'kunde_login_fail' => 'Kunden-Anmeldung fehlgeschlagen',
+    'kunde_password' => 'Kunde hat Passwort festgelegt', 'kunde_abmeldung' => 'Kunde hat E-Mails ab- oder angemeldet', 'einzelangebot' => 'Einzelangebot bearbeitet',
+    'bestellung' => 'Bestellwunsch bearbeitet', 'mail' => 'E-Mail-Versand', 'einkauf' => 'Einkauf benachrichtigt'];
 function audit(string $a, string $s, array $d = [], ?array $who = null, bool $merge = false): void
 {
     global $ME;
@@ -23,7 +28,9 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
                 if (!$last['d']) array_pop($log); else $log[count($log) - 1] = $last;
             } else {
                 if ($merge && !$d) return;
-                $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => client_ip(), 'a' => $a, 's' => $s];
+                // Kunden: IP nur bei fehlgeschlagener Anmeldung (Sicherheit), sonst nicht speichern (wie bei der Auswertung zugesagt)
+                $ip = ($who['role'] ?? '') === 'kunde' && $a !== 'kunde_login_fail' ? '' : client_ip();
+                $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => $ip, 'a' => $a, 's' => $s];
                 if ($d) $e['d'] = $d;
                 $log[] = $e;
             }
@@ -168,20 +175,44 @@ function changes_summary(array $d): string
 }
 
 /* Anmeldeversuche begrenzen */
+/* Darf diese Gegenstelle die Besucher-IP weiterreichen (X-Forwarded-For)?
+   WA_TRUSTED_PROXIES (Docker: „caddy“) = Liste aus Namen, IP-Adressen oder Netzen; nur diese gelten als eigener Proxy.
+   Ohne Angabe (Hostinger, lokale Tests) wie bisher: jede private Adresse. */
+function trusted_proxy(string $ip): bool
+{
+    static $cache = [];
+    if (isset($cache[$ip])) return $cache[$ip];
+    $cfg = trim((string)(getenv('WA_TRUSTED_PROXIES') ?: ($_SERVER['WA_TRUSTED_PROXIES'] ?? '')));
+    if ($cfg === '') return $cache[$ip] = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    foreach (preg_split('/[\s,]+/', $cfg) as $t) {
+        if ($t === '') continue;
+        if (strpos($t, '/') !== false) { if (function_exists('ip_in') && ip_in($ip, $t)) return $cache[$ip] = true; continue; }
+        if (filter_var($t, FILTER_VALIDATE_IP)) { if ($t === $ip) return $cache[$ip] = true; continue; }
+        if (preg_match('/^[a-z0-9.-]{1,253}$/i', $t) && in_array($ip, gethostbynamel($t) ?: [], true)) return $cache[$ip] = true;   // Docker-Dienstname
+    }
+    return $cache[$ip] = false;
+}
 function client_ip(): string
 {
     $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
-    // Hinter dem eigenen Proxy (Caddy im Docker-Netz) die weitergereichte Besucher-IP verwenden
-    $private = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
+    // Hinter dem eigenen Proxy (Caddy) die weitergereichte Besucher-IP verwenden – nur von diesem, nie von anderen Containern
     $fwd = (string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '');
-    if ($private && $fwd !== '') {
+    if ($fwd !== '' && trusted_proxy($ip)) {
         $parts = array_map('trim', explode(',', $fwd));
         $last = end($parts);
         if (filter_var($last, FILTER_VALIDATE_IP)) return $last;
     }
     return $ip;
 }
-function client_key(): string { return hash('sha256', client_ip()); }
+/* Schlüssel für Fehlversuche: IPv4 je Adresse, IPv6 je /64-Netz (ein Anschluss hat meist ein ganzes /64 –
+   sonst könnte man durch Wechseln der Adresse beliebig oft raten) */
+function client_key(): string
+{
+    $ip = client_ip();
+    $bin = @inet_pton($ip);
+    if ($bin !== false && strlen($bin) === 16 && substr($bin, 0, 12) !== str_repeat("\0", 10) . "\xff\xff") $ip = inet_ntop(substr($bin, 0, 8) . str_repeat("\0", 8)) . '/64';
+    return hash('sha256', $ip);
+}
 function attempts_check(): void
 {
     $a = store_read('logins') ?? [];

@@ -1081,7 +1081,7 @@
   }
   function renderLogList() {
     const list = logFiltered();
-    $('#log-count').textContent = plural(list.length, 'Eintrag', 'Einträge');
+    $('#log-count').textContent = plural(list.length, 'Eintrag', 'Einträge') + (list.some((e) => e.masked) ? ' · Kundendaten nur mit Recht „Kunden ansehen“' : '');
     const host = $('#log-list');
     if (!list.length) { host.innerHTML = `<div class="ed-empty"><h3>Keine Einträge</h3><p>${logData.entries.length ? 'Filter anpassen oder anderen Monat wählen.' : 'In diesem Monat wurde noch nichts protokolliert.'}</p></div>`; return; }
     let day = '';

@@ -19,6 +19,12 @@ PHP_IMAGE=php:8.3-apache
 fehler() { echo "FEHLER: $*" >&2; exit 1; }
 dc() { docker compose --project-directory "$ZIEL" -f "$ZIEL/docker-compose.yml" "$@"; }
 
+# Eigenes Netz „wochenangebot-edge“ (legt docker-compose.yml des Echtbetriebs an): Caddy ↔ Testumgebung,
+# ohne Zugang zur Produktiv-App. Fehlt es, läuft der Echtbetrieb noch mit einer älteren Version.
+edge_pruefen() {
+  docker network inspect wochenangebot-edge >/dev/null 2>&1 || fehler "Netz 'wochenangebot-edge' fehlt – bitte zuerst den Echtbetrieb mit der aktuellen Version starten (Release einspielen bzw. 'docker compose up -d' im Ordner $PROD)."
+}
+
 vorlagen_kopieren() {
   cp "$PROD/deploy/testumgebung/docker-compose.yml" "$ZIEL/docker-compose.yml"
   cp "$PROD/deploy/testumgebung/apache-schutz.conf" "$ZIEL/apache-schutz.conf"
@@ -60,12 +66,11 @@ case "${1:-}" in
     [ -n "$DOMAIN" ] || fehler "DOMAIN fehlt in $PROD/.env"
     CADDY=$(cd "$PROD" && docker compose ps -q caddy)
     [ -n "$CADDY" ] || fehler "Der Caddy-Container des Echtbetriebs läuft nicht."
-    NETZ=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{println $k}}{{end}}' "$CADDY" | head -n 1)
-    [ -n "$NETZ" ] || fehler "Netzwerk des Echtbetriebs nicht gefunden."
+    edge_pruefen
     mkdir -p "$ZIEL"
     if [ ! -d "$ZIEL/src/.git" ]; then git clone -q "$REPO_URL" "$ZIEL/src"; fi
     vorlagen_kopieren
-    printf 'PROD_NETWORK=%s\nTEST_DOMAIN=test.%s\n' "$NETZ" "$DOMAIN" > "$ZIEL/.env"
+    printf 'TEST_DOMAIN=test.%s\n' "$DOMAIN" > "$ZIEL/.env"
     [ -f "$ZIEL/zugang.htpasswd" ] || passwort_setzen
     [ -d "$ZIEL/daten" ] || daten_neu
     dc up -d
@@ -79,8 +84,9 @@ case "${1:-}" in
     # Nur Zweige des eigenen Repositorys (keine fremden Forks)
     git -C "$ZIEL/src" fetch -q origin "+refs/heads/$ZWEIG:refs/remotes/origin/$ZWEIG" || fehler "Zweig '$ZWEIG' nicht gefunden."
     git -C "$ZIEL/src" checkout -q --detach "origin/$ZWEIG"
+    edge_pruefen
     vorlagen_kopieren
-    dc up -d
+    dc up -d --force-recreate   # übernimmt auch geänderte Netz-/Umgebungseinstellungen
     echo "Eingespielt: $ZWEIG – $(git -C "$ZIEL/src" log -1 --format='%h %s')"
     echo "Im Browser einmal neu laden. Testdaten bleiben erhalten (neu: … zuruecksetzen)."
     ;;

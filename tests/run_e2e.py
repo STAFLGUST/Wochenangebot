@@ -76,6 +76,7 @@ SUITES['einzelangebote'] = SUITES['bestellung']
 SUITES['vkgruppen'] = (8790, 'data-seed', True)
 SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
+SUITES['sicherheit_freigaben'] = SUITES['bestellung']
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
@@ -137,7 +138,7 @@ PRINT = threading.Lock()
 
 def ports(slot):
     """Webserver, Hilfsserver, Test-Mailserver 1 und 2 eines Arbeitsplatzes."""
-    b = 9100 + slot * 10
+    b = int(os.environ.get("WA_PORT_BASE", "9100")) + slot * 10   # WA_PORT_BASE: getrennte Ports für parallele Läufe
     return b, b + 1, b + 2, b + 3
 
 

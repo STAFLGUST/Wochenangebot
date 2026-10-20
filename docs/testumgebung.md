@@ -41,6 +41,12 @@ Läuft die Testumgebung nicht, ist nur `test.<Domain>` nicht erreichbar.
 
 ## Hinweis für Wartungsarbeiten
 
-Der Test-Container hängt am Docker-Netz des Echtbetriebs. Ein manuelles `docker compose down` im Echtbetrieb
-scheitert, solange die Testumgebung läuft – vorher `sh deploy/testumgebung.sh stoppen`. Releases sind davon nicht
-betroffen (sie verwenden kein `down`).
+Der Test-Container hängt nur im Netz `wochenangebot-edge`, das der Echtbetrieb für Caddy anlegt – nicht im Netz der
+Produktiv-App. Code aus einem Testzweig erreicht die Produktiv-App also nicht direkt, und die App übernimmt die
+Besucher-IP (`X-Forwarded-For`) nur von Caddy (`WA_TRUSTED_PROXIES`). Ein manuelles `docker compose down` im
+Echtbetrieb scheitert, solange die Testumgebung läuft – vorher `sh deploy/testumgebung.sh stoppen`. Releases sind
+davon nicht betroffen (sie verwenden kein `down`).
+
+**Umstellung (einmalig nach dem Release mit dem Netz `wochenangebot-edge`):** Das Release erstellt Caddy und App neu und
+legt das Netz an. Danach im Ordner des Echtbetriebs `sh deploy/testumgebung.sh einspielen main` (oder den gewünschten
+Zweig) – der Test-Container wird dabei neu erstellt und wechselt ins neue Netz. Bis dahin läuft er unverändert weiter.

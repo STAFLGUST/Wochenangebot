@@ -6,6 +6,13 @@ DirectoryIndex index.html index.php
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "same-origin"
+  # Wie im Caddyfile: nur eigene Skripte (Schutz vor eingeschleustem Code), keine Einbettung in fremde Seiten
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+  Header always set Cross-Origin-Resource-Policy "same-origin"
+  # HTTPS erzwingen (nur über HTTPS gesendet)
+  Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
+  Header always unset X-Powered-By
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"
   </FilesMatch>

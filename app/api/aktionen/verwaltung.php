@@ -197,7 +197,7 @@ switch ($action) {
 
         case 'user_unlock': {
             require_admin_confirmation('user_unlock');
-            $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; });
+            $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; unset($x['lockTries']); });
             if (!$u) fail('Nutzer nicht gefunden.', 404);
             audit('security', "Zugang „{$u['username']}“ entsperrt");
             respond(['ok' => true]);
@@ -340,7 +340,7 @@ switch ($action) {
         }
 
         case 'log': {
-            require_perm('protokoll.sehen');
+            $me = require_perm('protokoll.sehen');
             header('Cache-Control: no-store');
             $months = [];
             foreach (store_names('protokoll') as $f) {
@@ -350,6 +350,20 @@ switch ($action) {
             rsort($months);
             $month = (string)($_GET['month'] ?? '');
             if (!preg_match('/^\d{4}-\d{2}$/', $month)) $month = $months[0] ?? gmdate('Y-m');
-            respond(['ok' => true, 'month' => $month, 'months' => $months, 'entries' => array_reverse(store_read('protokoll/' . $month) ?? [])]);
+            $entries = array_reverse(store_read('protokoll/' . $month) ?? []);
+            // Ohne Recht „Kunden ansehen“: Einträge mit Kundendaten (Adressen, E-Mails, Bestellungen, Kunden-IP) nur als Vorgang zeigen
+            if (!may($me, 'kunden.sehen')) {
+                foreach ($entries as &$e) {
+                    if (($e['r'] ?? '') === 'kunde' || in_array($e['a'] ?? '', LOG_KUNDENDATEN, true)) {
+                        $e['s'] = LOG_KUNDENDATEN_TEXT[$e['a']] ?? 'Vorgang mit Kundendaten';
+                        unset($e['d']);
+                        $e['ip'] = '';
+                        if (($e['r'] ?? '') === 'kunde') { $e['u'] = 'kunde'; $e['n'] = 'Kunde'; }
+                        $e['masked'] = true;
+                    }
+                }
+                unset($e);
+            }
+            respond(['ok' => true, 'month' => $month, 'months' => $months, 'entries' => $entries]);
         }
 }

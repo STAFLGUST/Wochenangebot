@@ -112,8 +112,8 @@ with sync_playwright() as p:
         x = br.new_context().new_page(); login(x, 'vic', 'Falsch-Passwort-1', wait=False); x.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
         msg = x.inner_text('#auth-err'); x.context.close()
     check('account locked after 3 failures', 'gesperrt' in msg, msg)
-    x = br.new_context().new_page(); login(x, 'vic', 'Gut-Passwort-2026', wait=False); x.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
-    check('locked account rejects correct password', 'gesperrt' in x.inner_text('#auth-err')); x.context.close()
+    x = br.new_context().new_page(); login(x, 'vic', 'Gut-Passwort-2026', wait=False); x.wait_for_selector('#au-code-wrap:not([hidden])')
+    check('locked account with 2FA: correct password leads to code step (owner not locked out)', x.locator('#au-code').is_visible()); x.context.close()
     a.click('#vt-edit'); a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
     until(lambda: a.locator('[data-sec=unlock]').count() == 1)   # Ansicht lädt neu
     check('locked user shown', a.locator('[data-sec=unlock]').count() == 1)

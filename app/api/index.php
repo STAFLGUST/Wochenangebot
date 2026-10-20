@@ -129,6 +129,12 @@ if (in_array($action, $writeActions, true)) {
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
 $isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['app_info', 'kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'], true);
+// Mitarbeiter-Sitzung ruft ein nicht öffentliches Angebot ab (Kundenpreise, Einzelangebote): gelten IP-Freigabe und
+// Ländersperre des Eingabebereichs – auch wenn die Aktion sonst zur öffentlichen Angebotsseite gehört
+if ($isPublic && $action === 'offer') {
+    $oidQ = (string)($_GET['angebot'] ?? OFFER_STD);
+    if (($oidQ !== '' && $oidQ !== OFFER_STD) || !std_public()) { if (current_user()) $isPublic = false; }
+}
 $S = sec();
 if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     $cc = geo_blocked(client_ip(), $S);

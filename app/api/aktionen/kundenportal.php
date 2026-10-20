@@ -43,6 +43,7 @@ switch ($action) {
                 return ['bad', null];
             });
             [$st, $c] = $res;
+            if ($st === 'bad' && $c === null && ghost_lock('k', $name, true)) $st = 'locked';   // unbekannter Name: gleiche Sperre wie bei echten Zugängen
             $who = ['username' => 'kunde:' . mb_substr($name, 0, 40), 'name' => $c['firma'] ?? '', 'role' => 'kunde'];
             if ($st !== 'ok') {
                 attempts_record(false);

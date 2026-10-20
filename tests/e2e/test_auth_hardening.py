@@ -105,7 +105,12 @@ for i in range(3):
     check('new password step preserves failure count ' + str(i), attacker.login()[1].get('need2fa') is True)
     expected = 429 if i == 2 else 401
     check('account counts factor failure ' + str(i), attacker.call('login_2fa', {'code': 'invalid'})[0] == expected)
-check('account lock blocks fresh password step', Client('192.0.2.30').login()[0] == 429)
+# Gesperrt: richtiges Passwort führt zum Code-Schritt (Inhaber nicht aussperrbar), aber nur 3 Code-Versuche je Sperre
+for i in range(3):
+    attacker = Client('192.0.2.' + str(30 + i))
+    check('locked account: password step offers factor ' + str(i), attacker.login()[1].get('need2fa') is True)
+    attacker.call('login_2fa', {'code': 'invalid'})
+check('after 3 factor tries during lock: fresh password step blocked', Client('192.0.2.40').login()[0] == 429)
 check('account lock blocks existing challenge and valid recovery', waiting.call('login_2fa', {'code': enabled['recovery'][0]})[0] == 429)
 check('existing authenticated session can unlock account', a.call('user_unlock', {'id': me['id']})[0] == 200)
 recovered = Client('192.0.2.31')
