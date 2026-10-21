@@ -39,5 +39,52 @@ ok "SQLite-Archiv enthält geprüfte Datenbank" 'python3 "$T/deploy/datenbank.py
 ok "SQLite-Archiv enthält keinen Postfachschlüssel" '[ ! -f "$T/restore/mail-schluessel.php" ]'
 printf 'broken' > "$T/restore/.sqlite/store.sqlite"
 ok "Beschädigte Datenbank im Archiv erkannt" '[ "$(python3 "$T/deploy/sicherung-pruefen.py" "$T/restore")" -gt 0 ]'
+ok "ohne zentrale Anmeldung: keine Keycloak-Sicherung, Status aus" '[ "$(st anmeldung)" = aus ] && ! ls "$T"/sicherungen/anmeldung-* >/dev/null 2>&1'
+
+# ── Zentrale Anmeldung: Keycloak-Datenbank (echte PostgreSQL-Instanz statt Container; Ersatz für „docker compose“) ──
+PGBIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)
+if [ -z "$PGBIN" ]; then
+  echo "HINWEIS: keine PostgreSQL-Programme – Prüfungen der Keycloak-Sicherung übersprungen"
+else
+  als() { if [ "$(id -u)" = 0 ]; then runuser -u postgres -- "$@"; else "$@"; fi; }
+  PG=$(mktemp -d); chmod 755 "$PG"; mkdir "$PG/daten" "$PG/sock"
+  [ "$(id -u)" = 0 ] && chown postgres "$PG/daten" "$PG/sock"
+  PGPORT=$((20000 + $$ % 10000))
+  als "$PGBIN/initdb" -D "$PG/daten" -A trust -U keycloak >/dev/null
+  als "$PGBIN/pg_ctl" -D "$PG/daten" -l "$PG/sock/log" -o "-p $PGPORT -k $PG/sock -c listen_addresses=" -w start >/dev/null
+  trap 'als "$PGBIN/pg_ctl" -D "$PG/daten" -m fast stop >/dev/null 2>&1; rm -rf "$PG"; chmod -R u+rwx "$T" 2>/dev/null; rm -rf "$T"' EXIT
+  export PGHOST="$PG/sock" PGPORT PGBIN
+  "$PGBIN/createdb" -U keycloak keycloak
+  "$PGBIN/psql" -U keycloak -d keycloak -q -c "CREATE TABLE user_entity (id text primary key, username text)" -c "INSERT INTO user_entity VALUES ('1', 'probe-konto')"
+  # Ersatz für „docker compose -f … -f …“: ps -q keycloak-db / exec -T keycloak-db <Programm> …
+  cat > "$T/compose.sh" <<'EOF2'
+#!/bin/sh
+case "$1" in
+  ps) [ -f "$KC_LAEUFT" ] && echo 0123abcd; exit 0 ;;
+  exec) shift; [ "$1" = -T ] && shift; shift; p=$1; shift; exec "$PGBIN/$p" "$@" ;;
+esac
+exit 1
+EOF2
+  export WA_KC_COMPOSE="sh $T/compose.sh" KC_LAEUFT="$T/kc-laeuft"
+  mkdir -p "$T/deploy/anmeldung" "$T/daten-anmeldung"; touch "$T/deploy/anmeldung/docker-compose.anmeldung.yml"
+  sleep 1
+  sh "$T/deploy/sichern.sh" --jetzt >/dev/null
+  ok "Anmeldung eingerichtet, Keycloak noch nicht gestartet: nicht gesichert, kein Fehler" '[ "$(st ok)" = True ] && [ "$(st anmeldung)" = aus ]'
+  touch "$KC_LAEUFT"; sleep 1
+  export AUS; AUS=$(sh "$T/deploy/sichern.sh" --jetzt)
+  DUMP=$(ls -1t "$T"/sicherungen/anmeldung-*.dump 2>/dev/null | head -1)
+  ok "Keycloak läuft: Datenbank gesichert und geprüft" '[ "$(st ok)" = True ] && [ "$(st anmeldung)" = ok ] && [ -n "$DUMP" ] && [ "$(st anmeldung_datei)" = "$(basename "$DUMP")" ]'
+  ok "Keycloak-Sicherung nur für root lesbar, Meldung nennt sie" '[ "$(stat -c %a "$DUMP")" = 600 ] && echo "$AUS" | grep -q "Anmeldung: anmeldung-"'
+  "$PGBIN/createdb" -U keycloak rueck
+  "$PGBIN/pg_restore" -U keycloak -d rueck --no-owner "$DUMP"
+  ok "Rücksicherung: Konten wieder da" '[ "$("$PGBIN/psql" -U keycloak -d rueck -tAc "SELECT username FROM user_entity")" = probe-konto ]'
+  "$PGBIN/psql" -U keycloak -d keycloak -q -c "DROP TABLE user_entity"; sleep 1
+  sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?; export R
+  ok "Keycloak-Sicherung ohne Konten wird als Fehler gemeldet (Geschäftsdaten trotzdem gesichert)" '[ "$R" = 1 ] && [ "$(st ok)" = False ] && [ "$(st anmeldung)" = fehler ] && grep -q "Anmeldung (Keycloak) fehlgeschlagen" "$T/daten/sicherung.php" && [ "$(ls "$T"/sicherungen/daten-*.tar.gz | wc -l)" -ge 4 ]'
+  ok "keine halbfertige Keycloak-Sicherung liegen gelassen" '! ls "$T"/sicherungen/anmeldung-*.tmp >/dev/null 2>&1 && [ "$(ls "$T"/sicherungen/anmeldung-*.dump | wc -l)" = 1 ]'
+  rm "$KC_LAEUFT"; printf 'COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$T/.env"; sleep 1
+  sh "$T/deploy/sichern.sh" --jetzt >/dev/null 2>&1 && R=0 || R=$?; export R
+  ok "Anmeldung in Betrieb, Datenbank läuft nicht: Fehler statt stiller Lücke" '[ "$R" = 1 ] && [ "$(st anmeldung)" = fehler ] && grep -q "Datenbank läuft aber nicht" "$T/daten/sicherung.php"'
+fi
 echo "$PASS/$((PASS + FAIL)) passed"
 [ "$FAIL" -eq 0 ]

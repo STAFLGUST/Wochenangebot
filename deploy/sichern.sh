@@ -9,6 +9,9 @@
 # Sicherungen enthalten das Passwort damit nur verschlüsselt; nach einer Wiederherstellung auf neuem Server muss es
 # unter Verwaltung → E-Mail neu eingegeben werden.
 # Ablage: /opt/wochenangebot/sicherungen (nur für root lesbar, nicht über das Web erreichbar), die letzten 30 Stände.
+# Zentrale Anmeldung: läuft Keycloak (deploy/anmeldung), wird zusätzlich dessen Datenbank gesichert
+# (anmeldung-<Zeit>.dump, pg_dump im Container, Inhalt geprüft). Enthält Passwort-Hashes und Einmalcode-Geheimnisse –
+# gleicher Schutz wie die Geschäftsdaten. Rücksicherung: docs/plattform/inbetriebnahme-anmeldung.md.
 # Status: daten/sicherung.php (Anzeige im Eingabebereich unter „Sicherheit“). Jeder Abbruch – auch ein
 # unerwarteter – hinterlässt dort einen Fehlerstatus. Optional meldet das Skript Erfolg/Fehler an einen
 # Totmannschalter-Dienst: HC_SICHERUNG_URL=https://… in .env (bei Fehler wird „/fail“ angehängt).
@@ -25,11 +28,15 @@ PRUEF=""
 SNAP=""
 DATENSAETZE=0
 SPEICHER=dateien
+ANMELDUNG=aus          # aus (nicht in Betrieb) | ok | fehler
+ANM_DATEI=""
+ANM_MELDUNG=""
+KC_COMPOSE=${WA_KC_COMPOSE:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml}
 
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
-  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s"}' \
-    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" > "$STATUS.tmp" || return 0
+  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s"}' \
+    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" > "$STATUS.tmp" || return 0
   chown 33:33 "$STATUS.tmp" 2>/dev/null || true
   chmod 644 "$STATUS.tmp"
   mv "$STATUS.tmp" "$STATUS"
@@ -43,6 +50,7 @@ aufraeumen() {
   RC=$?
   [ -n "$SNAP" ] && rm -rf "$SNAP"
   [ -n "$PRUEF" ] && rm -rf "$PRUEF"
+  rm -f "$ZIEL"/anmeldung-*.dump.tmp 2>/dev/null
   if [ "$FERTIG" -eq 0 ] && [ "$RC" -ne 0 ]; then   # unerwarteter Abbruch: Fehler sichtbar machen
     touch "$ZIEL/.letzter-fehler" 2>/dev/null || true
     status false "" 0 0 1 false "Abbruch (Code $RC)"
@@ -103,9 +111,37 @@ case "$DATENSAETZE" in ''|*[!0-9]*) DATENSAETZE=0 ;; esac
 mv "$DATEI.tmp" "$DATEI"
 chmod 600 "$DATEI"
 ls -1t "$ZIEL"/daten-*.tar.gz | tail -n +$((BEHALTEN + 1)) | xargs -r rm -f
+
+# ── Zentrale Anmeldung: Keycloak-Datenbank, sobald sie läuft oder laut .env in Betrieb ist ──
+anmeldung_sichern() {
+  KC_DUMP="$ZIEL/anmeldung-$STAMP.dump"
+  # shellcheck disable=SC2086  # KC_COMPOSE ist bewusst ein Befehl mit Argumenten
+  $KC_COMPOSE exec -T keycloak-db pg_dump -U keycloak -d keycloak --format=custom > "$KC_DUMP.tmp" 2>/dev/null || return 1
+  # Prüfung: Archiv lesbar und enthält die Konten (Tabelle user_entity mit Daten)
+  # shellcheck disable=SC2086
+  $KC_COMPOSE exec -T keycloak-db pg_restore --list < "$KC_DUMP.tmp" 2>/dev/null | grep -q 'TABLE DATA public user_entity' || return 1
+  mv "$KC_DUMP.tmp" "$KC_DUMP"; chmod 600 "$KC_DUMP"
+  ls -1t "$ZIEL"/anmeldung-*.dump | tail -n +$((BEHALTEN + 1)) | xargs -r rm -f
+  ANM_DATEI=$(basename "$KC_DUMP")
+}
+if [ -f "$BASIS/deploy/anmeldung/docker-compose.anmeldung.yml" ] && [ -d "$BASIS/daten-anmeldung" ]; then
+  # shellcheck disable=SC2086
+  if [ -n "$($KC_COMPOSE ps -q keycloak-db 2>/dev/null)" ]; then
+    if anmeldung_sichern; then ANMELDUNG=ok; else ANMELDUNG=fehler; ANM_MELDUNG="Sicherung der Anmeldung (Keycloak) fehlgeschlagen"; fi
+  elif grep -q '^COMPOSE_FILE=.*anmeldung' "$BASIS/.env" 2>/dev/null; then
+    ANMELDUNG=fehler; ANM_MELDUNG="Anmeldung (Keycloak) in Betrieb, Datenbank läuft aber nicht – nicht gesichert"
+  fi
+fi
+rm -f "$ZIEL"/anmeldung-*.dump.tmp
 GROESSE=$(stat -c %s "$DATEI")
 FERTIG=1
-if [ "$FEHLER" -eq 0 ]; then
+if [ "$FEHLER" -eq 0 ] && [ "$ANMELDUNG" = fehler ]; then
+  touch "$ZIEL/.letzter-fehler"
+  status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 "$INHALT" "$ANM_MELDUNG"
+  melden fail
+  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI"); aber: $ANM_MELDUNG"
+  exit 1
+elif [ "$FEHLER" -eq 0 ]; then
   rm -f "$ZIEL/.letzter-fehler"
   if [ "$INHALT" = true ]; then
     status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 true ""
@@ -113,10 +149,10 @@ if [ "$FEHLER" -eq 0 ]; then
     status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 false "Inhalt nicht geprüft (kein Python/PHP verfügbar)"
   fi
   melden ok
-  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI") ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))"
+  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI") ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")"
 else
   touch "$ZIEL/.letzter-fehler"
-  status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" "$FEHLER" "$INHALT" "$FEHLER Datei(en) fehlerhaft"
+  status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" "$FEHLER" "$INHALT" "$FEHLER Datei(en) fehlerhaft${ANM_MELDUNG:+; $ANM_MELDUNG}"
   melden fail
   echo "Datensicherung erstellt, aber $FEHLER Datei(en) fehlerhaft: $(basename "$DATEI")"
   exit 1
