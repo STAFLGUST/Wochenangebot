@@ -10,6 +10,7 @@ Alle Tests laufen gegen **Testkopien mit anonymisierten Testdaten** – nie gege
 | Prüfliste | `python3 werkzeuge/integritaet.py` | Prüfliste der Dateiprüfung (`app/api/lib/integritaet-liste.php`) passt zu den Dateien unter `app/` (nach `asset_versionen.py --setzen` erneuern) |
 | Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | rund 45 Gruppen, über 1.100 Prüfungen im echten Browser gegen frische PHP-Testserver; 4 Gruppen parallel mit eigenen Ports (`WA_JOBS`, zur Fehlersuche `WA_JOBS=1`), volle Ausgabe je Gruppe in `tests/.arbeit/test-<gruppe>.log` |
 | App | `cd mobile && npm ci && npm run pruefen` | TypeScript, Unit-Tests der App-Logik (Jest, u. a. gleiche Merklisten-Schlüssel wie die Website, Fracht wie der Server, Statusübergänge wie `orders.php`), iOS- und Android-Bundle |
+| Regelwerk | `python3 werkzeuge/regeln.py pruefen`, `python3 tests/regeln/test_regeln.py` | Modulregister, Datenverantwortung (Speicherzugriffe im Code), Rechte → Modul, Geschäftsregeln mit vorhandenen Tests, Wartungs-Entscheidungstabelle (Vollständigkeit, Invarianten, Vertragstests), Caddy-Hosts ↔ Register; Negativtests mit künstlichen Projekten |
 | Betrieb | `sh tests/deploy/test_sichern.sh`, `sh tests/deploy/test_freigabe.sh`, `sh tests/deploy/test_release_pruefen.sh` | Datensicherung; Release-Modus mit Healthcheck und automatischem Rückfall; Prüfungen des Release-Laufs (Freigabepflicht, aktueller Stand, CI) |
 
 Voraussetzungen lokal: PHP 8.3, Node.js, Python 3.12, `pip install -r tests/requirements.txt`, `python -m playwright install chromium`.

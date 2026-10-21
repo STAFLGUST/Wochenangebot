@@ -1,0 +1,224 @@
+# Katalog der verbindlichen Geschäfts- und Architekturregeln.
+#
+# Jede Regel hat eine feste Kennung (GR-xxx, nie wiederverwenden), einen verantwortlichen Bereich, betroffene
+# Module und Daten sowie die Tests, die sie absichern. AGENTS.md nennt die Regeln nur kurz mit Kennung; die
+# vollständige Definition steht hier. werkzeuge/regeln.py prüft Kennungen, Verweise und Tests.
+#
+# tests:  "e2e:<gruppe>" (tests/run_e2e.py), "datei:<pfad>" (Testskript), "ci:<Name des CI-Schritts>"
+# status: verbindlich | geplant (geplant = Regel steht fest, Durchsetzung entsteht in der genannten Phase)
+# Änderungen an Regeln sind koordinationspflichtig: version erhöhen und „geaendert“ setzen.
+
+schema = 1
+
+# ───────────── Fachliche Regeln (bestehend, aus AGENTS.md übernommen) ─────────────
+
+[[regel]]
+id = "GR-001"
+titel = "Öffentliche Seite ohne interne Bestandsdaten"
+beschreibung = "Die öffentliche Seite liefert nie Mengen, Chargen, MHD oder Einkaufspreise aus."
+verantwortlich = "angebot"
+module = ["angebot", "bestand"]
+daten = ["angebot", "bestand"]
+tests = ["e2e:frontend", "e2e:stock"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-002"
+titel = "Kundenpreise nur für berechtigte Kunden"
+beschreibung = "Preise eines Kundenangebots (variants) werden nur in offer_resolve aufgelöst und nur an angemeldete, berechtigte Nutzer ausgeliefert; das öffentliche Wochenangebot enthält nie Kundenpreise."
+verantwortlich = "angebot"
+module = ["angebot"]
+daten = ["angebote", "angebot"]
+tests = ["e2e:angebote"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-003"
+titel = "Kundenzugänge getrennt vom Eingabebereich"
+beschreibung = "Aktionen des Eingabebereichs prüfen nur die Mitarbeiter-Anmeldung (require_auth); Kunden (current_customer) sehen ausschließlich freigeschaltete Angebote. Passwörter nur als Hash, nie in Antworten oder im Protokoll."
+verantwortlich = "plattform"
+module = ["angebot", "verwaltung", "plattform"]
+daten = ["kunden", "kundensitzungen", "nutzer"]
+tests = ["e2e:kunden", "e2e:users"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-004"
+titel = "Bestellpreise rechnet nur der Server"
+beschreibung = "Preise und Summen eines Bestellwunsches berechnet ausschließlich der Server aus dem veröffentlichten Angebot des Kunden; vom Browser gesendete Preise werden ignoriert."
+verantwortlich = "angebot"
+module = ["angebot", "mobile"]
+daten = ["bestellungen"]
+tests = ["e2e:bestellung", "e2e:order_management"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-005"
+titel = "Sichtbarkeit und Sonderpreise nur serverseitig"
+beschreibung = "Sichtbarkeit (variants.std) und Sonderpreise (sale) löst nur der Server in offer_resolve auf; nie wird die Sonderpreis-Struktur anderer Angebote ausgeliefert. Sonderposten-Mails gehen nur an Kunden des jeweiligen Angebots."
+verantwortlich = "angebot"
+module = ["angebot"]
+daten = ["angebote", "angebot", "kunden"]
+tests = ["e2e:restposten"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-006"
+titel = "Datenformate nur erweitern"
+beschreibung = "Code muss bestehende Daten weiter lesen können, damit ein Rückfall auf die Vorversion keine Daten beschädigt. Unverträgliche Änderungen brauchen eine eigene Migration mit Freigabe."
+verantwortlich = "plattform"
+module = ["plattform"]
+daten = []
+tests = ["e2e:storage", "datei:tests/deploy/test_datenbank.py"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-007"
+titel = "Keine echten Daten und keine Geheimnisse im Repository"
+beschreibung = "Keine Angebote, Bestände, Nutzer, Tokens, Passwörter oder IP-Adressen im (öffentlichen) Repository; Testdaten nur synthetisch aus tests/fixtures/, Geheimnisse nur in .env auf dem Server."
+verantwortlich = "plattform"
+module = ["plattform"]
+daten = []
+tests = ["ci:Secret-Scan über den gesamten Verlauf (gitleaks)"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-008"
+titel = "Einkaufspreise nur mit eigenem Recht"
+beschreibung = "Einkaufspreise (EK) erscheinen nur mit dem Recht bestand.einkaufspreise – weder in Antworten noch in Oberflächen für andere."
+verantwortlich = "bestand"
+module = ["bestand", "angebot", "einkauf"]
+daten = ["bestand"]
+tests = ["e2e:stock", "e2e:einzelangebote"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-009"
+titel = "Wartung der Angebotsseite lässt Mitarbeiter weiterarbeiten"
+beschreibung = "Der heutige Wartungsmodus pausiert nur die Angebotsseite und die Kundenfunktionen (WARTUNG_GESPERRT, HTTP 503); Mitarbeiter arbeiten normal weiter. Ein-/Ausschalten nur durch Administratoren mit Passwortbestätigung."
+verantwortlich = "plattform"
+module = ["angebot", "plattform"]
+daten = ["wartung"]
+tests = ["e2e:wartung"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+# ───────────── Plattformregeln (neu mit dem Plattformumbau) ─────────────
+
+[[regel]]
+id = "GR-101"
+titel = "Datenverantwortung je Modul"
+beschreibung = "Jedes Speicher-Dokument hat genau einen Eigentümer (regeln/datenverantwortung.toml). Andere Module schreiben nur, wenn sie als schreiber eingetragen sind, und lesen nur als leser; neue Dokumente werden dort registriert."
+verantwortlich = "plattform"
+module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "plattform"]
+daten = []
+tests = ["ci:Regelwerk und Modulgrenzen (werkzeuge/regeln.py)", "datei:tests/regeln/test_regeln.py"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-102"
+titel = "Entwicklung, Freigabe und Wartung sind getrennt"
+beschreibung = "Ein Modul ist nur erreichbar, wenn es zum Entwicklungsstand passend freigegeben ist; das Beenden einer Wartung macht kein Modul produktiv. Einzige Definition: Entscheidungstabelle in regeln/wartung.toml."
+verantwortlich = "plattform"
+module = ["dashboard", "verwaltung", "plattform"]
+daten = ["module"]
+tests = ["datei:tests/regeln/test_regeln.py"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-103"
+titel = "Autorisierung immer serverseitig"
+beschreibung = "Jede Aktion prüft Anmeldung und Recht auf dem Server (require_auth/require_perm). Sichtbarkeit einer Kachel, ein Modulstatus oder versteckte Knöpfe sind nie eine Berechtigung. Jedes Recht ist einem Modul zugeordnet (regeln/berechtigungen.toml)."
+verantwortlich = "plattform"
+module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "dashboard", "plattform"]
+daten = ["rechte", "nutzer"]
+tests = ["e2e:users", "e2e:rechte", "e2e:sidenav"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-104"
+titel = "Externe Nutzer nie in der Mitarbeiterplattform"
+beschreibung = "Kunden und künftige QS-Portal-Nutzer (Kunden, Lieferanten, Prüfer) sind eigene Nutzergruppen; ein externer Zugang berechtigt nie zu Mitarbeiter-Oberflächen oder internen APIs."
+verantwortlich = "plattform"
+module = ["angebot", "qs", "dashboard", "plattform"]
+daten = ["kunden", "kundensitzungen", "nutzer"]
+tests = ["e2e:kunden"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-105"
+titel = "Dashboard-Adressen erst nach Freigabe routen"
+beschreibung = "Die Hosts unter dashboard-stafl.de liefern bis zur Freigabe des jeweiligen Moduls nur den 503-Platzhalter – kein Reverse Proxy zur Angebots-API oder zu internen Containern."
+verantwortlich = "plattform"
+module = ["dashboard", "plattform"]
+daten = []
+tests = ["datei:tests/deploy/test_dashboard_domains.py", "ci:Dashboard-Domains nur als geschützte Platzhalter"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-106"
+titel = "Historische Vorgänge bleiben unverändert"
+beschreibung = "Bestätigte Vorgänge (Bestellwünsche, veröffentlichte Angebote, Preisverlauf; später Wareneingänge, Prüfberichte, freigegebene Dokumente) speichern die zum Zeitpunkt gültigen Stammdaten als Schnappschuss. Spätere Stammdatenänderungen ändern sie nicht."
+verantwortlich = "plattform"
+module = ["angebot", "bestand", "einkauf", "qs", "verwaltung"]
+daten = ["bestellungen", "versionen/*", "historie/*"]
+tests = ["e2e:bestellung", "e2e:hist"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-107"
+titel = "Wartung serverseitig je Oberfläche"
+beschreibung = "Wartung und Deaktivierung wirken auf API, Schreibaktionen, Hintergrundläufe, Importe, E-Mail-Versand und Veröffentlichungen der Oberfläche – nicht nur auf die Anzeige. Antwort 503 mit no-store; Administration bleibt erreichbar."
+verantwortlich = "plattform"
+module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "plattform"]
+daten = ["module"]
+tests = []
+quelle = "AGENTS.md"
+status = "geplant"
+phase = 5
+version = 1
+seit = "2026-10-21"

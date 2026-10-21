@@ -4,6 +4,7 @@
 - `mobile/` – App für iOS und Android (Kunden und Mitarbeiter), siehe `mobile/LIESMICH.md`; Schnittstelle: `docs/app-api.md`
 - `Caddyfile`, `docker-compose.yml` – Webserver mit automatischem HTTPS und IP-Freigabe
 - `deploy/` – automatische Aktualisierung auf dem Server
+- `regeln/`, `werkzeuge/regeln.py` – Regelwerk der STAFL-Plattform (Module, Datenverantwortung, Rechte, Geschäftsregeln, Wartung), von der CI geprüft; Zielbild und Roadmap: `docs/plattform/`
 
 Auf dem Server (`/opt/wochenangebot`) liegen zusätzlich, **nicht im Repository**:
 - `.env` – Domain und freigegebene IP-Adressen (Vorlage: `.env.example`)
