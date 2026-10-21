@@ -140,7 +140,9 @@ with sync_playwright() as p:
     # versions
     a.click('#btn-more'); a.click('[data-act="versions"]'); a.wait_for_selector('#dlg-versions [data-ver]')
     n = a.locator('#dlg-versions [data-ver]').count(); check('versions listed', n == 2, n)
-    a.locator('#dlg-versions [data-ver]').last.click(); a.wait_for_timeout(300)
+    a.locator('#dlg-versions [data-ver]').last.click()
+    try: a.wait_for_function("document.querySelector('#m-week') && document.querySelector('#m-week').value === '43'", timeout=10000)
+    except Exception: pass
     check('version loaded as draft (KW43 original)', a.input_value('#m-week') == '43' and row('19999').count() == 0)
     a.click('#btn-undo'); a.wait_for_timeout(200); check('undo version load', a.input_value('#m-week') == '44')
     wait_saved()
