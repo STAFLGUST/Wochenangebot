@@ -157,7 +157,7 @@ Subdomains nicht. Deshalb, abgestuft:
 | 2 | Aktion ↔ Host (Roadmap PR 2) | keine |
 | 3 | Keycloak + PostgreSQL in der CI; OIDC-Client, hostgebundene Sitzungen, Fetch-Metadata-Prüfung im Plattformkern; Tests für jede Bedrohung aus §1. Die Herkunftsprüfung (`lib/herkunft.php`) ist vorgezogen und wirkt schon für `angebot-stafl.de` | Herkunftsprüfung: Anfragen fremder Seiten abgewiesen; sonst keine |
 | 4 | DNS `login.` und `angebot.` unter `dashboard-stafl.de` | **DNS – Freigabe** |
-| 5 | Produktiv: Keycloak-Dienst, Dashboard und Angebot-Eingabe unter neuen Hosts; Passkeys einrichten; `/admin/` übergangsweise parallel, danach Weiterleitung | **Server, Anmeldung – Freigabe** |
+| 5 | Produktiv (Ablaufplan: [inbetriebnahme-anmeldung.md](inbetriebnahme-anmeldung.md)): Keycloak-Dienst, Dashboard und Angebot-Eingabe unter neuen Hosts; Passkeys einrichten; `/admin/` übergangsweise parallel, danach Weiterleitung | **Server, Anmeldung – Freigabe** |
 | 6 | Vertrauenszonen und Datenbankrollen (mit der PostgreSQL-Migration) | **Freigabe** |
 | 7 | Testdomain mit eigenem Server und eigener Keycloak-Instanz | mittelfristig, **Freigabe** |
 

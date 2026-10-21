@@ -126,6 +126,11 @@ jobs:
           persist-credentials: false
       - name: Image bauen und mit dem Grundimage vergleichen
         run: bash deploy/image/pruefen.sh
+      - name: Betriebskonfiguration der zentralen Anmeldung prüfen (deploy/anmeldung, nicht aktiv)
+        run: |
+          docker pull -q quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244 >/dev/null
+          docker pull -q postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 >/dev/null
+          bash deploy/anmeldung/pruefen.sh
       - name: Trivy installieren
         run: |
           curl -sSLf -o /tmp/tv.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"

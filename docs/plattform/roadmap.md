@@ -16,6 +16,7 @@ Datenbank-, DNS- und Serveränderungen sind gesondert markiert und brauchen zus�
 | 7b-2 | Anmeldung: erneute Anmeldung bei Keycloak vor sensiblen Aktionen (`max_age=0`) statt Passwortabfrage; Anmeldestärke (`acr` = `mfa`) zusätzlich von unserem Server geprüft; Realm mit Stufen-Ablauf (Passwort, zweiter Faktor) | 6 | keine (nur CI) | **produktiv ausgeliefert** (PR #74; wirkt erst mit Keycloak-Host) |
 | 7b-3 | Passkeys als zweiter Faktor im Realm: Passkey, wenn eingerichtet, sonst Einmalcode (Einrichtung erzwungen); Bestätigung am Gerät Pflicht | 6 | keine (nur CI) | **gemergt** (PR #75, nur CI) – Keycloak 26.8.1: PR #76 |
 | 7b-4 | Anwendungs-Image `deploy/image/` (php:8.3-apache fest über Digest + mod_auth_openidc, nicht geladen), CI: Bau, Vergleich mit dem Grundimage, Schwachstellen-Scan | 6 | keine (`docker-compose.yml` unverändert) | **implementiert, PR offen** |
+| 7c | Inbetriebnahme der zentralen Anmeldung vorbereitet: Ablaufplan [inbetriebnahme-anmeldung.md](inbetriebnahme-anmeldung.md), Betriebskonfiguration `deploy/anmeldung/` (Compose-Ergänzung, Apache, Caddy, Realm aus dem Test-Realm erzeugt), in der CI mit Docker geprüft | 6 | keine – Ausführung Schritt für Schritt nur mit Freigabe (DNS, Server, Release) | **implementiert, PR offen** |
 | 8 | Angebot-Eingabe unter `angebot.dashboard-stafl.de` (ADR-003), `/admin/` übergangsweise parallel, danach Weiterleitung | 7 | Mitarbeiter-Adresse ändert sich; Kundenseite unverändert | geplant (E-2 entschieden) |
 | 9 | Integrationsumgebung `test.dashboard-stafl.de` (Container wie `app-test`, synthetische Daten) | 3 | **Serveränderung (mit Freigabe)** | geplant |
 | 10 | Verwaltung: Stammdaten- und Importzentrale; Importleser bleiben beim Daten-Eigentümer | 8 | neue Oberfläche | geplant |
@@ -31,7 +32,7 @@ Echtbetrieb sofort verbessert und für die schrittweise Freigabe der Module gebr
 
 | Nr. | Frage | Empfehlung |
 | --- | --- | --- |
-| E-1 | Wer pflegt Kundenstammdaten – Verwaltung oder CRM? | Verwaltung (Nummer, Name, Anschrift, Gruppe, Zugang); CRM ergänzt Ansprechpartner, Aktivitäten, Vorgänge |
+| E-1 | Wer pflegt Kundenstammdaten – Verwaltung oder CRM? | **entschieden 21.10.2026: Verwaltung** (Nummer, Name, Anschrift, Gruppe, Zugang); CRM ergänzt Ansprechpartner, Aktivitäten, Vorgänge |
 | E-2 | Domain- und Anmeldestruktur | **entschieden 21.10.2026:** Subdomains, eigener Anmelde-Host, Keycloak – [ADR-003](adr-003-domains-anmeldung.md) |
 | E-3 | SQLite jetzt produktiv aktivieren? | ja, im Wartungsfenster mit dem vorhandenen Werkzeug – nach Ihrer Freigabe; vorher Status auf dem Server prüfen |
 | E-4 | Repository privat stellen, bevor interne Module (Einkauf, QS) entstehen? | ja; Code darf zwar nie Sicherheit tragen, aber interne Abläufe müssen nicht öffentlich sein |
