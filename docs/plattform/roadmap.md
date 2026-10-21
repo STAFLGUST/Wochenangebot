@@ -5,10 +5,10 @@ Datenbank-, DNS- und Serveränderungen sind gesondert markiert und brauchen zus�
 
 | # | Inhalt | Phase | Produktivwirkung nach Release | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Regelwerk `regeln/`, Prüfwerkzeug, CI-Schritt, Architektur-Doku, AGENTS.md | 1–3 | keine (nichts unter `app/` geändert) | **implementiert, getestet, PR offen** |
+| 1 | Regelwerk `regeln/`, Prüfwerkzeug, CI-Schritt, Architektur-Doku, AGENTS.md | 1–3 | keine (nichts unter `app/` geändert) | **produktiv** |
 | 2 | Aktions-Register je Bereich: jede Aktion gehört genau einer Oberfläche; Einstieg liest die Listen daraus statt `$writeActions`/`$isPublic`/`WARTUNG_GESPERRT`; CI prüft Vollständigkeit | 3 | keine (gleiches Verhalten, gleiche E2E-Tests) | **produktiv** (PR #66) |
 | 3 | Modulregister zur Laufzeit: aus `regeln/` erzeugte PHP-Liste (`app/api/lib/module-liste.php`), Lese-Aktion `module_status` (nur angemeldet), Entscheidungstabelle in PHP mit denselben Vertragstests | 4–5 | keine sichtbare | **produktiv** (PR #67) |
-| 4 | Wartung je Oberfläche serverseitig (Dokument `module`, Protokoll, Bestätigung, Notfallskript); heutiger Wartungsmodus wird `angebot.kunden` | 5 | Verwaltung → Wartung zeigt Oberflächen statt eines Schalters | **implementiert, PR offen** – Eingabebereich; weitere Oberflächen, sobald sie freigegeben sind |
+| 4 | Wartung je Oberfläche serverseitig (Dokument `module`, Protokoll, Bestätigung, Notfallskript); heutiger Wartungsmodus wird `angebot.kunden` | 5 | Verwaltung → Wartung zeigt Oberflächen statt eines Schalters | **produktiv** (PR #69, Release 20261021-153029) – Eingabebereich; weitere Oberflächen, sobald sie freigegeben sind |
 | 5 | Modulverwaltung im heutigen Eingabebereich (Liste, Freigabe, Wartung planen, Historie, Tester) | 5 | neue Ansicht für Administratoren | geplant |
 | 6 | Dashboard-Oberfläche `dashboard/` (Kacheln aus dem Register, Status, Wartung, hell/dunkel, 390 px) – außerhalb der Dokumentwurzel, nur in Tests | 4 | keine (Caddy bleibt 503) | in Prüfung (PR) |
 | 7 | Anmeldung nach ADR-003: OIDC-Client und hostgebundene Sitzungen im Plattformkern, Fetch-Metadata-Prüfung, Modulzugang `<modul>.zugang`, Back-Channel-Logout – zuerst nur in der CI | 6 | **Server (Keycloak, PostgreSQL), DNS – mit Freigabe** | geplant (E-2 entschieden) |
