@@ -11,9 +11,12 @@ on:
 permissions:
   contents: read
 
+# Pull Requests: ein neuer Push bricht den veralteten Lauf ab (spart Zeit).
+# main: nie abbrechen – sonst kann ein verspäteter oder zusätzlich gestarteter Lauf den Lauf beenden, der den Release
+# zur Freigabe vorlegt (so geschehen am 21.10.2026). Weitere Läufe warten, bis der laufende fertig ist.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   GITLEAKS_VERSION: "8.30.1"

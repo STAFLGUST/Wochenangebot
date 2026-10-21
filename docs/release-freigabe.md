@@ -16,6 +16,11 @@ Neue Stände gehen nur live, wenn der Inhaber sie ausdrücklich freigibt. Die Fr
 Von Hand starten geht weiterhin: Actions → **Release** → **Run workflow** (Branch `main`, Grund eintragen). Auch
 dann wartet der Lauf auf die Freigabe.
 
+**Keine Freigabeanfrage nach dem Merge?** Nur der automatische CI-Lauf nach dem Merge (Ereignis „push“) legt den Release
+vor. Wurde die CI auf `main` von Hand gestartet (Actions → CI → Run workflow) oder kam der automatische Lauf nicht,
+den Release wie oben von Hand starten – der Release prüft selbst, dass es für genau diesen Commit eine grüne CI gibt.
+CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinander (`concurrency` in `ci.yml`).
+
 ## Was der Lauf nach der Freigabe prüft (`.github/scripts/release-pruefen.sh`)
 
 | Prüfung | Abbruch, wenn … |
