@@ -1314,6 +1314,82 @@
         ${verlauf ? `<details><summary>Verlauf der Wartungen</summary><ul class="wv-list">${verlauf}</ul></details>` : ''}
       </form>`;
   }
+  /* Modulverwaltung (Roadmap 5): Freigabe und Tester je Bereich. Die Daten kommen aus module_status (Modulregister +
+     Laufzeit, lib/module.php); was erlaubt ist, entscheidet der Server – die Oberfläche bietet nur die dort genannten Werte an. */
+  const MV_ENTW = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Fertig' };
+  const MV_FREI = { keine: 'Nicht freigegeben', test: 'Testbetrieb (nur Tester)', produktiv: 'Produktiv', deaktiviert: 'Deaktiviert' };
+  let mvDaten = null, mvWahl = '';
+  function mvBereiche() {
+    const out = [];
+    for (const m of (mvDaten && mvDaten.module) || []) for (const o of m.oberflaechen || []) out.push({ ziel: `${m.id}.${o.id}`, modul: m, o });
+    return out;
+  }
+  function mvTabelle() {
+    const rows = mvBereiche().map(({ ziel, modul, o }) => {
+      const v = o.verwaltung || {};
+      const quelle = v.laufzeit ? `<div class="sub">geändert von ${esc(v.laufzeit.von)} · ${esc(v.laufzeit.grund)}</div>` : !v.aenderbar ? '<div class="sub">nur über ein Release</div>' : '';
+      const tester = (v.tester || []).map((t) => esc(t.name) + (t.aktiv ? '' : ' (gesperrt)')).join(', ');
+      const kann = v.aenderbar || v.tester_moeglich;
+      return `<tr data-mvziel="${esc(ziel)}"${ziel === mvWahl ? ' class="sel"' : ''}><td><div class="nm">${esc(modul.name)}</div><div class="sub">${esc(o.name)}${o.art === 'extern' ? ' · extern' : ''}</div></td>
+        <td>${esc(MV_ENTW[o.entwicklung] || o.entwicklung)}</td><td>${esc(MV_FREI[o.freigabe] || o.freigabe)}${quelle}</td>
+        <td>${o.betrieb === 'wartung' ? '<span class="st-warn">Wartung</span>' : 'normal'}</td><td>${tester || '<span class="muted">—</span>'}</td>
+        <td class="act">${kann ? `<button type="button" class="btn sm" data-mv="waehlen" data-ziel="${esc(ziel)}">Ändern</button>` : ''}</td></tr>`;
+    }).join('');
+    return `<div class="tblwrap"><table class="etab mvtab"><thead><tr><th>Bereich</th><th>Entwicklung</th><th>Freigabe</th><th>Betrieb</th><th>Tester</th><th><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  function mvFormular() {
+    const b = mvBereiche().find((x) => x.ziel === mvWahl);
+    if (!b) return '';
+    const v = b.o.verwaltung || {}, tester = new Set((v.tester || []).map((t) => t.id));
+    const nutzer = ((secData && secData.users) || []).filter((u) => u.active || tester.has(u.id));
+    return `<div class="mv-form" id="mv-form">
+        <h4>${esc(b.modul.name)} · ${esc(b.o.name)}</h4>
+        <div class="sec-rows">
+          ${v.aenderbar ? `<label class="fld"><span>Freigabe</span><select name="freigabe">${(v.moeglich || []).map((f) => `<option value="${esc(f)}"${f === b.o.freigabe ? ' selected' : ''}>${esc(MV_FREI[f] || f)}</option>`).join('')}</select></label>` : `<p class="hint span2">Die Freigabe dieses Bereichs wird nur über ein Release gesteuert.</p>`}
+          <label class="fld${v.aenderbar ? '' : ' span2'}"><span>Grund <small>(Pflicht für die Freigabe, wird protokolliert)</small></span><input type="text" name="grund" maxlength="200" placeholder="z. B. Abnahme durch die Fachabteilung"></label>
+        </div>
+        ${v.tester_moeglich ? `<fieldset class="mv-tester"><legend>Tester <small>(nur sie sehen den Bereich bei „Testbetrieb“; Administratoren nur, wenn sie hier eingetragen sind)</small></legend>
+          ${nutzer.map((u) => `<label class="chk"><input type="checkbox" name="tester" value="${esc(u.id)}"${tester.has(u.id) ? ' checked' : ''}><span>${esc(u.name)} <span class="sub">${esc(u.username)}${u.active ? '' : ' · gesperrt'}</span></span></label>`).join('')}</fieldset>` : ''}
+        <div class="sec-foot">${v.aenderbar ? '<button type="button" class="btn primary" data-mv="freigabe">Freigabe speichern</button>' : ''}${v.tester_moeglich ? '<button type="button" class="btn" data-mv="tester">Tester speichern</button>' : ''}<button type="button" class="btn ghost" data-mv="schliessen">Schließen</button></div>
+        <p class="form-err" id="mv-err" role="alert"></p>
+      </div>`;
+  }
+  function mvVerlauf() {
+    const v = ((mvDaten && mvDaten.verlauf) || []).filter((x) => x.art === 'freigabe' || x.art === 'tester').slice(0, 10);
+    if (!v.length) return '';
+    return `<details><summary>Verlauf der Modulverwaltung</summary><ul class="wv-list">${v.map((x) => `<li>${esc(dateTime(x.t))} Uhr · ${esc(x.bereich)}: ${esc(x.alt)} → <strong>${esc(x.neu)}</strong> · ${esc(x.wer)}${x.grund ? ` · ${esc(x.grund)}` : ''}</li>`).join('')}</ul></details>`;
+  }
+  function mvZeichnen() {
+    const box = $('#mv-box');
+    if (!box) return;
+    box.innerHTML = `<h3 class="sec-h" id="sec-module">Module und Freigaben</h3>
+      <p class="hint" style="margin-top:0">Wer welchen Bereich nutzen darf: Der Entwicklungsstand kommt aus dem Code; die Freigabe kann hier nur innerhalb dessen geändert werden, was der Code zulässt („produktiv“ erst, wenn ein Modul als fertig ausgeliefert ist). Laufende Produktivbereiche und die Verwaltung selbst werden nur über ein Release gesteuert. Jede Änderung wird mit Grund protokolliert und muss bestätigt werden.</p>
+      ${mvTabelle()}${mvFormular()}${mvVerlauf()}`;
+  }
+  async function mvLaden() {
+    const box = $('#mv-box');
+    if (!box) return;
+    try { mvDaten = await api('module_status'); mvZeichnen(); } catch (e) { box.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
+  }
+  async function mvAktion(btn) {
+    const a = btn.dataset.mv;
+    if (a === 'waehlen') { mvWahl = btn.dataset.ziel; mvZeichnen(); const f = $('#mv-form'); if (f) f.scrollIntoView({ block: 'nearest' }); return; }
+    if (a === 'schliessen') { mvWahl = ''; mvZeichnen(); return; }
+    const f = $('#mv-form'), err = $('#mv-err');
+    err.textContent = '';
+    btn.disabled = true;
+    try {
+      if (a === 'freigabe') {
+        const r = await api('modul_freigabe_save', { body: { bereich: mvWahl, freigabe: f.querySelector('[name=freigabe]').value, grund: f.querySelector('[name=grund]').value } });
+        toast(`Freigabe gespeichert: ${MV_FREI[r.freigabe.neu] || r.freigabe.neu}.`);
+      } else if (a === 'tester') {
+        const tester = [...f.querySelectorAll('[name=tester]:checked')].map((x) => x.value);
+        await api('modul_tester_save', { body: { bereich: mvWahl, tester, grund: f.querySelector('[name=grund]').value } });
+        toast(tester.length ? `Tester gespeichert (${tester.length}).` : 'Keine Tester mehr eingetragen.');
+      }
+      await mvLaden();
+    } catch (ex) { if ($('#mv-err')) $('#mv-err').textContent = ex.message; btn.disabled = false; }
+  }
   function wartungCard(w, card) {
     return w ? card('warn', 'Wartungsmodus', 'aktiv – Kunden sehen einen Wartungshinweis', `seit ${esc(dateTime(w.since))} Uhr${esc(wartungBis(w))}`)
       : card('ok', 'Wartungsmodus', 'aus – Angebotsseite normal erreichbar', '');
@@ -1478,7 +1554,7 @@
     const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
-      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-datei">Dateiprüfung</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
+      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-datei">Dateiprüfung</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-module">Module</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
       <section id="sec-lage" class="sec-sect">
         <div class="sec-score" id="sec-score"></div>
         <div class="sec-grid">${secCards(d)}</div>
@@ -1513,6 +1589,7 @@
         <p class="form-err" id="wartung-err" role="alert"></p>
       </form>
       ${eingabeWartungForm(d)}
+      <section class="gcard sec-block mv-box" id="mv-box"><div class="loading"><div class="spinner"></div>Module werden geladen …</div></section>
       <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens ${S.bestaetigungMinuten || 5} Minuten alte Anmeldung oder Passwortbestätigung (einstellbar unter „Passwortbestätigung“). Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
       <form class="gcard sec-form sec-sect" id="sec-form" autocomplete="off">
         <h3 class="sec-h" id="sec-einst">Einstellungen</h3>
@@ -1574,6 +1651,7 @@
     secScore();
     secBrowserChecks();
     secIntegrity();
+    mvLaden();
   }
   /* ---------- Dateiprüfung: Programmdateien gegen die Prüfliste, Datenordner, auffällige Muster, Komponenten ---------- */
   const IP_LVL = { kritisch: 'bad', warnung: 'warn', hinweis: 'info', ok: 'ok' };
@@ -1663,6 +1741,8 @@
       } catch (ex) { err.textContent = ex.message; wb.disabled = false; }
       return;
     }
+    const mvb = e.target.closest('#mv-box [data-mv]');
+    if (mvb) { await mvAktion(mvb); return; }
     const eb = e.target.closest('#ew-form [data-ewart]');
     if (eb) {
       const f = $('#ew-form'), a = eb.dataset.ewart, err = $('#ew-err');

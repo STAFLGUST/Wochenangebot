@@ -126,7 +126,7 @@ Wartungsmodus als Betrieb von `angebot.kunden` angebunden.
 
 **Umgesetzt (Roadmap PR 4):** Wartung je Oberfläche für die Mitarbeiter-Eingabe (Dokument `module`, Grund, Hinweis,
 geplanter Beginn, Verlauf, Protokoll, Passwortbestätigung), Durchsetzung im API-Einstieg, Sperrbildschirm,
-Notfallwerkzeug `deploy/wartung-aus.sh`. Offen: Freigaben und Tester zur Laufzeit, weitere Oberflächen.
+Notfallwerkzeug `deploy/wartung-aus.sh`. Freigaben und Tester zur Laufzeit: Modulverwaltung (Verwaltung → Sicherheit → Module, Roadmap 5) – nur innerhalb des Entwicklungsstands im Code, Produktivbereiche und Verwaltung nur über ein Release.
 
 Umsetzung (Phase 5):
 - Laufzeitzustand im Dokument `module` (Freigabe, Wartung mit Beginn/Ende, Grund, Hinweis, Tester); Startwerte aus dem

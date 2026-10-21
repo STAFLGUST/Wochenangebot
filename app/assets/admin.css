@@ -745,6 +745,29 @@ body.ro .vtog { display: none; }
 .ew-card .btn + .btn { margin-top: 8px; }
 .wv-list { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-2); }
 .wv-list li { padding: 5px 0; border-top: 1px solid var(--line); }
+/* Modulverwaltung (Verwaltung → Sicherheit → Module) */
+.mv-box .tblwrap { overflow-x: auto; }
+.mvtab td { padding: 7px 8px; font-size: 13px; vertical-align: middle; }
+.mvtab .nm { font-weight: 600; }
+.mvtab .act { text-align: right; white-space: nowrap; width: 1%; }
+@media (max-width: 560px) { .mvtab .act { text-align: left; } }
+.mvtab tr.sel td { background: var(--accent-soft, rgba(150, 24, 44, .06)); }
+.mv-form { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r-md, 10px); background: var(--surface-2, transparent); }
+.mv-form h4 { margin: 0 0 10px; font-size: 15px; }
+.mv-tester { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; }
+.mv-tester legend { padding: 0 4px; font-size: 13px; color: var(--text-2); }
+.mv-tester .chk { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+@media (max-width: 560px) {
+  .mvtab thead { display: none; }
+  .mvtab, .mvtab tbody, .mvtab tr, .mvtab td { display: block; width: 100%; }
+  .mvtab tr { padding: 10px 0; border-top: 1px solid var(--line); }
+  .mvtab td { border: 0 !important; padding: 2px 0 !important; }
+  .mvtab td:nth-child(2)::before { content: "Entwicklung: "; color: var(--text-2); }
+  .mvtab td:nth-child(3)::before { content: "Freigabe: "; color: var(--text-2); }
+  .mvtab td:nth-child(4)::before { content: "Betrieb: "; color: var(--text-2); }
+  .mvtab td:nth-child(5)::before { content: "Tester: "; color: var(--text-2); }
+  .mvtab td.act { padding-top: 6px !important; }
+}
 .wv-list li:first-child { border-top: 0; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 @media screen { :root[data-theme="dark"] .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }

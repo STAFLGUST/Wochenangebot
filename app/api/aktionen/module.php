@@ -21,3 +21,24 @@ if ($action === 'modul_wartung_save') {
     [$m, $o] = array_pad(explode('.', $ziel, 2), 2, '');
     respond(['ok' => true, 'bereich' => $ziel, 'wartung' => modul_wartung_anzeige($m, $o, $me), 'zustand' => modul_zustand($m, $o, $me), 'aktiv' => $w !== null]);
 }
+
+/* POST ?action=modul_freigabe_save {bereich, freigabe: keine|test|produktiv|deaktiviert, grund}
+   Nur Administratoren, immer mit Bestätigung; nur Werte, die der Entwicklungsstand im Code zulässt (lib/module.php). */
+if ($action === 'modul_freigabe_save') {
+    $me = require_admin_confirmation('modul_freigabe_save');
+    $b = body();
+    $ziel = (string)($b['bereich'] ?? '');
+    $r = modul_freigabe_setzen($ziel, $b, $me);
+    [$m, $o] = array_pad(explode('.', $ziel, 2), 2, '');
+    respond(['ok' => true, 'bereich' => $ziel, 'freigabe' => $r, 'zustand' => modul_zustand($m, $o, $me)]);
+}
+
+/* POST ?action=modul_tester_save {bereich, tester: [Nutzer-IDs], grund} – wer eine Testfreigabe nutzen darf */
+if ($action === 'modul_tester_save') {
+    $me = require_admin_confirmation('modul_tester_save');
+    $b = body();
+    $ziel = (string)($b['bereich'] ?? '');
+    $ids = modul_tester_setzen($ziel, $b, $me);
+    [$m, $o] = array_pad(explode('.', $ziel, 2), 2, '');
+    respond(['ok' => true, 'bereich' => $ziel, 'tester' => $ids, 'zustand' => modul_zustand($m, $o, $me)]);
+}

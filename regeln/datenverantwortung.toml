@@ -257,7 +257,7 @@ name = "module"
 eigentuemer = "plattform"
 leser = ["dashboard", "verwaltung"]
 schutz = "intern"
-beschreibung = "Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis) und Verlauf der Änderungen; Freigaben und Tester folgen (lib/module.php)"
+beschreibung = "Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis), Freigabe aus der Modulverwaltung (innerhalb des Entwicklungsstands im Code), Tester und Verlauf der Änderungen (lib/module.php)"
 historie = "Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, Grund, Beginn, bis) zusätzlich zum Protokoll"
 
 [[dokument]]

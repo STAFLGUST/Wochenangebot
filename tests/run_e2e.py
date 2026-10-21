@@ -95,6 +95,7 @@ SUITES['aktionsregister'] = (8790, 'data-seed', True)   # Register wirkt für je
 SUITES['herkunft'] = (8790, 'data-seed', True)   # Herkunftsprüfung im API-Einstieg (GR-109), fremde Seite auf AUX_PORT
 SUITES['dashboard'] = (8790, 'data-seed', True)   # Mitarbeiter-Dashboard (dashboard/, liegt außerhalb von app/)
 SUITES['oidc_kern'] = (8790, 'data-seed', True, {'WA_OIDC': '1', 'WA_OIDC_ISSUER': 'https://login.example/realms/mitarbeiter'})   # Keycloak-Host ohne Modul (GR-110)
+SUITES['modulverwaltung'] = (8790, 'data-seed', True)   # Freigabe und Tester zur Laufzeit (Roadmap 5)
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
@@ -170,6 +171,23 @@ def run(name):
 # Noch nicht produktiv ausgelieferte Oberflächen (nicht in app/): nur in der jeweiligen Testgruppe unter dem Testserver
 ZUSATZ = {'dashboard': [('dashboard', 'dashboard')]}
 
+# Testzustand des Modulregisters für einzelne Gruppen: heute sind alle neuen Module „geplant“ – um Testfreigabe und
+# Produktivfreigabe der Modulverwaltung zu prüfen, stellt die Gruppe zwei Module in ihrer App-Kopie weiter
+# (Bestand: in Prüfung, Einkauf: fertig). Nur die Kopie im Testordner; das Register im Code bleibt unverändert.
+REGISTER_TEST = {'modulverwaltung': [("'bestand' => [", 'in_pruefung'), ("'einkauf' => [", 'fertig')]}
+
+
+def register_anpassen(app, aenderungen):
+    pfad = os.path.join(app, 'api', 'lib', 'module-liste.php')
+    with open(pfad, encoding='utf-8') as f:
+        zeilen = f.read().split('\n')
+    for anfang, stand in aenderungen:
+        i = next(n for n, z in enumerate(zeilen) if z.strip().startswith(anfang))
+        assert "'entwicklung' => 'geplant'" in zeilen[i], anfang
+        zeilen[i] = zeilen[i].replace("'entwicklung' => 'geplant'", f"'entwicklung' => '{stand}'", 1)
+    with open(pfad, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(zeilen))
+
 
 def run_in(name, slot):
     _, seed, admin, *extra = SUITES[name]
@@ -188,6 +206,8 @@ def run_in(name, slot):
     shutil.copytree(os.path.join(REPO, 'app'), app)
     for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
         shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))
+    if name in REGISTER_TEST:
+        register_anpassen(app, REGISTER_TEST[name])
     data = os.path.join(app, 'data')
     shutil.rmtree(data)
     shutil.copytree(os.path.join(FIX, seed), data)
