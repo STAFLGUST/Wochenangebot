@@ -9,6 +9,11 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 
 - **Server:** Hostinger-VPS, Docker Compose: `php:8.3-apache` (Ordner `app/` nur lesend, Daten in `daten/` →
   `/var/www/html/data`) und Caddy davor (HTTPS, Sicherheits- und Cache-Header, `Caddyfile`; versionierte Skripte/Stylesheets `/assets/…?v=…` ein Jahr `immutable`, alles andere `no-cache`).
+- **Anwendungs-Image (vorbereitet, nicht im Betrieb):** `deploy/image/Dockerfile` = `php:8.3-apache` (fest über Digest) plus
+  mod_auth_openidc, installiert, aber nicht geladen – Voraussetzung für die zentrale Anmeldung (ADR-003). Die CI baut es
+  und prüft mit `deploy/image/pruefen.sh`, dass es sich ohne Konfiguration genau wie das Grundimage verhält
+  (Apache-Module, PHP-Erweiterungen, Antworten, Sicherheitskopfzeilen); kritische Lücken blockieren. Umstellung von
+  `docker-compose.yml` ist ein eigener Schritt mit Freigabe (eine Änderung dort startet die Container beim Release neu).
 - **Auslieferung:** nur über Release: nach grüner CI auf `main` wartet der Release-Lauf auf die Freigabe des
   Inhabers (Umgebung `produktion`, `docs/release-freigabe.md`); der Server spielt per Timer ein
   (`deploy/freigabe-einspielen.sh`: Prüfung, Healthcheck, automatischer Rückfall).

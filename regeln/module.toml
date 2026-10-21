@@ -413,7 +413,7 @@ pfade = ["regeln/katalog.toml", "regeln/module.toml", "regeln/wartung.toml", "AG
 
 [[koordination]]
 bereich = "Betrieb: Docker, Caddy, Release und Sicherung"
-pfade = ["Caddyfile", "docker-compose.yml", "deploy/*.sh", "deploy/testumgebung/**", ".github/workflows/**",
+pfade = ["Caddyfile", "docker-compose.yml", "deploy/*.sh", "deploy/testumgebung/**", "deploy/image/**", ".github/workflows/**",
   ".github/scripts/**"]
 
 [[koordination]]
