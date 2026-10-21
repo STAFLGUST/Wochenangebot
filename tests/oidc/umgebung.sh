@@ -59,7 +59,6 @@ start() {
   cat > "$OIDC_WORK/geheim.env" <<EOF
 OIDC_CRYPTO_DASHBOARD=$(zufall)
 OIDC_CRYPTO_ANGEBOT=$(zufall)
-OIDC_CRYPTO_LEGACY=$(zufall)
 OIDC_SECRET_DASHBOARD=$(zufall)
 OIDC_SECRET_ANGEBOT=$(zufall)
 KC_DB_PASSWORD=$(zufall)
