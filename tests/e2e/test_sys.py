@@ -104,11 +104,17 @@ with sync_playwright() as p:
     last.locator('input[data-f="price"]').fill('19,90'); last.locator('input[data-f="price"]').press('Tab')
     wait_saved()
 
-    # search/filter in editor
-    a.fill('#ed-q', 'tomahawk'); a.wait_for_timeout(300)
-    vis = a.locator('tr[data-id]:not(.hidden-row)').count(); check('editor search (2× Tomahawk)', vis == 2, vis)
-    a.fill('#ed-q', ''); a.check('#only-changes'); a.wait_for_timeout(200)
-    vis = a.locator('tr[data-id]:not(.hidden-row)').count(); check('only changes filter (3 Preise + 2 neu)', vis == 5, vis)
+    # search/filter in editor – auf das erwartete Ergebnis warten statt fester Wartezeit (Filter greift verzögert)
+    def sichtbar(n):
+        try:
+            a.wait_for_function("n => document.querySelectorAll('tr[data-id]:not(.hidden-row)').length === n", arg=n, timeout=5000)
+        except Exception:
+            pass
+        return a.locator('tr[data-id]:not(.hidden-row)').count()
+    a.fill('#ed-q', 'tomahawk')
+    vis = sichtbar(2); check('editor search (2× Tomahawk)', vis == 2, vis)
+    a.fill('#ed-q', ''); a.check('#only-changes')
+    vis = sichtbar(5); check('only changes filter (3 Preise + 2 neu)', vis == 5, vis)
     a.uncheck('#only-changes'); a.wait_for_timeout(200)
 
     # publish

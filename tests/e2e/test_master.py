@@ -82,12 +82,19 @@ with sync_playwright() as p:
     a.click('#vt-edit')
     with a.expect_file_chooser() as fc: a.click('#btn-import')
     fc.value.set_files(XL44); a.wait_for_selector('#dlg-import [data-ia=apply]', timeout=15000)
-    a.click('#dlg-import [data-ia=apply]'); a.wait_for_timeout(600); wait_saved(a)
+    a.click('#dlg-import [data-ia=apply]')
+    # Hinweis direkt nach dem Übernehmen prüfen – ein späterer Hinweis des Hintergrundabgleichs kann ihn ersetzen
+    try:
+        a.wait_for_function("() => (document.querySelector('#toast')?.innerText || '').includes('Stammdaten')", timeout=5000)
+        toast_text = a.inner_text('#toast')
+    except Exception:
+        toast_text = a.inner_text('#toast')
+    wait_saved(a)
     left = [n for n in names(a) if FR.search(n)]
     check('import: no frisch in names', all('gefr' in x for x in left), left)
     check('import: master applied (10601 → Roastbeef Färse Fleischmeister)', a.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) input[data-f=name]').first.input_value() == 'Roastbeef Färse Fleischmeister')
     check('import: brand + origin codes applied', a.locator('tr[data-id]:has(input[data-f="code"][value="10701"]) input[data-f=name]').first.input_value() == 'Entrecote Fleischmeister' and a.locator('tr[data-id]:has(input[data-f="code"][value="10701"]) input[data-f=origin]').first.input_value() == '4xD')
-    check('import toast mentions Stammdaten', 'Stammdaten' in a.inner_text('#toast'), a.inner_text('#toast'))
+    check('import toast mentions Stammdaten', 'Stammdaten' in toast_text, toast_text)
     # Artikel-Dialog → als Stammdaten speichern
     r10823 = a.locator('tr[data-id]:has(input[data-f="code"][value="10823"])').first
     r10823.locator('select[data-f=condition]').select_option('dry-aged'); a.wait_for_timeout(300)
