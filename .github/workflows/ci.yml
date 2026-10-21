@@ -44,6 +44,8 @@ jobs:
         run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py werkzeuge/*.py deploy/*.py
       - name: Versionsnummern der Skripte und Stylesheets
         run: python3 werkzeuge/asset_versionen.py
+      - name: Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php)
+        run: python3 werkzeuge/integritaet.py
       - name: Tests ohne fest eingetragene Ports (parallele Testläufe)
         run: |
           if grep -rnE "127\.0\.0\.1:[0-9]{4}" tests/e2e --include=*.py | grep -v "tests/e2e/umgebung.py"; then

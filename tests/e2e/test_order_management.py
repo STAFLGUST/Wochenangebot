@@ -28,7 +28,7 @@ o=e.call('bestellung&nr='+nr)[1]['order']; assignee=e.call('status')[1]['user'][
 body={'nr':nr,'revision':o['revision'],'workflow':'in_bearbeitung','assignee':assignee,'note':'Internal <script>secret</script>'}
 check('mutation requires POST',e.call('bestellung_save')[0]==405)
 old=e.csrf;e.csrf='wrong';check('mutation requires CSRF',e.call('bestellung_save',body)[0]==403);e.csrf=old
-check('customer cannot mutate staff order',k.call('bestellung_save',body)[0]==401)
+check('customer cannot mutate staff order',k.call('bestellung_save',body)[0] in (401,403))   # 403: Firewall (Skript im Inhalt)
 check('viewer cannot mutate',v.call('bestellung_save',body)[0]==403)
 check('valid update saved',e.call('bestellung_save',body)[0]==200)
 check('stale revision rejected',e.call('bestellung_save',body)[0]==409)

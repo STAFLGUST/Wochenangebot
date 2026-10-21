@@ -9,7 +9,7 @@
 <link rel="icon" href="../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=869828ad16">
-<link rel="stylesheet" href="../assets/admin.css?v=6a61583375">
+<link rel="stylesheet" href="../assets/admin.css?v=5a4889a42b">
 </head>
 <body class="adm">
 
@@ -26,6 +26,7 @@
     <div id="auth-twofa" hidden></div>
     <p class="form-err" id="auth-err" role="alert"></p>
     <button class="btn primary wide" type="submit" id="auth-submit">Anmelden</button>
+    <button class="btn wide" type="button" id="auth-passkey" hidden><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span>Mit Passkey anmelden</span></button>
     <a class="auth-back" href="../">Zur öffentlichen Angebotsseite</a>
   </form>
 </main>
@@ -58,6 +59,7 @@
             <hr>
             <button role="menuitem" type="button" data-act="open-site"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Öffentliche Seite öffnen</button>
             <button role="menuitem" type="button" data-act="twofa"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg>Zwei-Faktor-Anmeldung</button>
+            <button role="menuitem" type="button" data-act="passkeys"><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>Passkeys</button>
             <button role="menuitem" type="button" data-act="password"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg>Passwort ändern</button>
             <button role="menuitem" type="button" data-act="theme"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg>Hell / Dunkel</button>
             <hr>
@@ -90,6 +92,7 @@
       <button role="tab" type="button" id="vt-users" aria-selected="false" aria-controls="view-users" hidden><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span>Nutzer</span></button>
       <button role="tab" type="button" id="vt-log" aria-selected="false" aria-controls="view-log" hidden><svg class="i" aria-hidden="true"><use href="#i-history"/></svg><span>Protokoll</span></button>
       <button role="tab" type="button" id="vt-sec" aria-selected="false" aria-controls="view-sec" hidden><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Sicherheit</span></button>
+      <button role="tab" type="button" id="vt-schutz" aria-selected="false" aria-controls="view-schutz" hidden><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span>Schutz</span></button>
     </div>
   </nav>
   <main class="page adm-page">
@@ -140,6 +143,7 @@
     <div id="view-auswertung" hidden></div>
     <div id="view-log" hidden></div>
     <div id="view-sec" hidden></div>
+    <div id="view-schutz" hidden></div>
   </main>
   </div>
 </div>
@@ -194,6 +198,8 @@
 <dialog class="modal wide" id="dlg-rund" aria-labelledby="rd-title"><div class="dlg" id="rund-body"></div></dialog>
 <!-- Zwei-Faktor-Anmeldung -->
 <dialog class="modal" id="dlg-twofa" aria-labelledby="tf-title"><div class="dlg" id="twofa-body"></div></dialog>
+<!-- Passkeys -->
+<dialog class="modal" id="dlg-passkeys" aria-labelledby="pk-title"><div class="dlg" id="passkeys-body"></div></dialog>
 <!-- Erneute Passwortbestätigung für sensible Verwaltungsaktionen -->
 <dialog class="modal" id="dlg-reauth" aria-labelledby="reauth-title" aria-describedby="reauth-description">
   <form class="dlg" id="reauth-form">
@@ -266,9 +272,10 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=59eb27542c"></script>
-<script src="../assets/admin.js?v=c636e75f42"></script>
-<script src="../assets/admin-verwaltung.js?v=10a965394c"></script>
+<script src="../assets/admin.js?v=4255613241"></script>
+<script src="../assets/admin-verwaltung.js?v=d2815fb6ae"></script>
 <script src="../assets/admin-einzel.js?v=5cf3247306"></script>
 <script src="../assets/admin-auswertung.js?v=f28d8770e4"></script>
+<script src="../assets/admin-schutz.js?v=1897328904"></script>
 </body>
 </html>

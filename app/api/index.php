@@ -28,6 +28,7 @@
  *   GET  ?action=users | log      Nutzerliste / Protokoll (nur Administrator)
  *   GET  ?action=security_status  Sicherheitsübersicht (nur Administrator)
  *   POST ?action=security_diag | security_export   nur lesende Diagnosen; Sicherheitsprotokoll als CSV (Administrator)
+ *   GET  ?action=security_integrity  letzte Dateiprüfung; POST {run:true} jetzt prüfen (Administrator)
  *   POST ?action=security_save | session_end | ip_unblock | user_unlock | geo_update
  *   GET  ?action=offers            Angebote (Standard + Kundenangebote), angemeldet
  *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
@@ -40,6 +41,8 @@
  *   GET  ?action=app_info          Grunddaten für die App (Mindestversion, Bestellfunktion, Wartung); docs/app-api.md
  *   GET  ?action=kunde_status      Kunden-Anmeldung auf der Angebotsseite; POST kunde_login | kunde_logout | kunde_passwort
  *   POST ?action=kunde_token_check | kunde_token_set   Passwort über Link aus der E-Mail festlegen (Einladung/Zurücksetzen)
+ *   GET  ?action=fw_status | fw_verkehr | fw_export   Schutzzentrale (Administrator); POST fw_save | fw_sperren | fw_freigeben | fw_feed_update | fw_vorlage | fw_import
+ *   GET  ?action=waf_probe&p=…     Falle für Angriffswerkzeuge (Caddy leitet z. B. /wp-login.php hierher) → 404, Treffer zählen
  *   GET  ?action=mail_info         Kurzinfo E-Mail-Versand (eingerichtet, Angebotswoche) für Nutzer mit Kundenrechten
  *   GET  ?action=mail_status       E-Mail-Versand (nur Administrator); POST mail_save | mail_test | kunde_mail | kunden_rundmail | kunden_mail_vorschau
  *   POST ?action=kunde_bestellung  Bestellwunsch eines Kunden (Preise serverseitig aus dem Angebot) → E-Mail an uns (+ Kopie)
@@ -53,6 +56,8 @@
  *   POST ?action=mail_konto_save   Postfach/Absender speichern (nur Administrator; Passwort verschlüsselt, nie zurückgegeben)
  *   POST ?action=login_2fa        zweiter Anmeldeschritt (Code aus der Authenticator-App)
  *   POST ?action=twofa_begin | twofa_enable | twofa_disable   eigene Zwei-Faktor-Anmeldung
+ *   GET  ?action=passkey_list · POST passkey_begin | passkey_register | passkey_rename | passkey_delete   eigene Passkeys
+ *   POST ?action=passkey_login_begin | passkey_login   Anmeldung mit Passkey (ohne Benutzername oder als zweiter Schritt)
  *   POST ?action=user_save | user_delete   (inkl. abweichender Rechte je Nutzer: grant/deny)
  *   GET  ?action=rechte · POST ?action=rechte_save   Rechte je Rolle (Administrator)
  *
@@ -102,6 +107,7 @@ require __DIR__ . '/lib/nutzer.php';
 require __DIR__ . '/lib/rechte.php';
 require __DIR__ . '/lib/sicherheit.php';
 require __DIR__ . '/lib/sitzung.php';
+require __DIR__ . '/lib/passkey.php';
 require __DIR__ . '/lib/protokoll.php';
 require __DIR__ . '/lib/angebote.php';
 require __DIR__ . '/lib/kunden.php';
@@ -114,6 +120,8 @@ require __DIR__ . '/lib/diagnose.php';
 require __DIR__ . '/lib/auswertung.php';
 require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
+require __DIR__ . '/lib/firewall.php';
+require __DIR__ . '/lib/integritaet.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -123,15 +131,21 @@ $writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_dr
                  'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
                  'kunde_save', 'kunde_delete', 'kunden_import', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
                  'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
-                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'vertreter_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden'];
+                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'vertreter_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden',
+                 'fw_save', 'fw_sperren', 'fw_freigeben', 'fw_feed_update', 'fw_vorlage', 'fw_import',
+                 'passkey_begin', 'passkey_register', 'passkey_rename', 'passkey_delete', 'passkey_login_begin', 'passkey_login'];
+if ($method === 'POST') $writeActions[] = 'security_integrity';   // Dateiprüfung: GET liefert den letzten Lauf, POST prüft
 if (in_array($action, $writeActions, true)) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
 
+/* Schutz: Sperrliste, Firewall (Angriffsmuster), Fehlerbremse und Live-Verkehr (lib/firewall.php) */
+fw_guard($action);
+
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['app_info', 'kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'], true);
+$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['waf_probe', 'app_info', 'kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'], true);
 // Mitarbeiter-Sitzung ruft ein nicht öffentliches Angebot ab (Kundenpreise, Einzelangebote): gelten IP-Freigabe und
 // Ländersperre des Eingabebereichs – auch wenn die Aktion sonst zur öffentlichen Angebotsseite gehört
 if ($isPublic && $action === 'offer') {
@@ -170,6 +184,7 @@ try {
     require __DIR__ . '/aktionen/mail.php';
     require __DIR__ . '/aktionen/kundenverwaltung.php';
     require __DIR__ . '/aktionen/zugang.php';
+    require __DIR__ . '/aktionen/passkey.php';
     require __DIR__ . '/aktionen/bestand.php';
     require __DIR__ . '/aktionen/einkauf.php';
     require __DIR__ . '/aktionen/verwaltung.php';
@@ -179,6 +194,8 @@ try {
     require __DIR__ . '/aktionen/app.php';
     require __DIR__ . '/aktionen/kundengruppen.php';
     require __DIR__ . '/aktionen/einzelangebote.php';
+    require __DIR__ . '/aktionen/schutz.php';
+    require __DIR__ . '/aktionen/integritaet.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

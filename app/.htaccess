@@ -13,6 +13,7 @@ DirectoryIndex index.html index.php
   # HTTPS erzwingen (nur über HTTPS gesendet)
   Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
   Header always unset X-Powered-By
+  Header unset X-Powered-By
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
@@ -22,4 +23,6 @@ DirectoryIndex index.html index.php
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteRule ^data(?:/|$) - [F,L,NC]
+  # Falle für Angriffswerkzeuge (wie im Caddyfile): Firewall zählt Treffer und sperrt automatisch
+  RewriteRule ^(wp-login\.php|xmlrpc\.php|wp-admin|wp-content|wp-includes|\.env|\.git|phpmyadmin|pma|myadmin|vendor/phpunit|cgi-bin|\.aws|server-status|actuator|administrator|admin\.php|boaform)(?:[/.].*)?$ api/index.php?action=waf_probe&p=$1 [L,NC]
 </IfModule>

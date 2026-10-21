@@ -80,50 +80,7 @@ switch ($action) {
             $me = require_admin_confirmation('security_save');
             $b = body();
             $old = sec();
-            $twofa = in_array($b['twofa'] ?? '', ['off', 'admins', 'all'], true) ? $b['twofa'] : 'off';
-            $ips = [];
-            foreach (array_slice(is_array($b['adminIps'] ?? null) ? $b['adminIps'] : [], 0, 50) as $c) {
-                $c = trim((string)$c);
-                if ($c === '') continue;
-                if (!valid_cidr($c)) throw new InvalidArgumentException("„{$c}“ ist keine gültige IP-Adresse oder kein gültiger Bereich (z. B. 80.147.24.150 oder 80.147.24.0/24).");
-                $ips[] = $c;
-            }
-            $ipEnabled = !empty($b['ipEnabled']);
-            if ($ipEnabled && !$ips) throw new InvalidArgumentException('Bitte mindestens eine freigegebene IP-Adresse eintragen.');
-            if ($ipEnabled && !ip_allowed(client_ip(), $ips)) throw new InvalidArgumentException('Ihre aktuelle Adresse ' . client_ip() . ' ist nicht in der Liste – Sie würden sich selbst aussperren.');
-            $geoEnabled = !empty($b['geoEnabled']);
-            $geoMode = ($b['geoMode'] ?? '') === 'allow' ? 'allow' : 'block';
-            $geoScope = ($b['geoScope'] ?? '') === 'all' ? 'all' : 'admin';
-            $gc = [];
-            foreach (array_slice(is_array($b['geoCountries'] ?? null) ? $b['geoCountries'] : [], 0, 300) as $c) {
-                $c = strtoupper(trim((string)$c));
-                if (in_array($c, GEO_COUNTRIES, true) && !in_array($c, $gc, true)) $gc[] = $c;
-            }
-            sort($gc);
-            if ($geoEnabled && !$gc) throw new InvalidArgumentException($geoMode === 'allow' ? 'Bitte mindestens ein erlaubtes Land auswählen.' : 'Bitte mindestens ein Land zum Sperren auswählen.');
-            if ($geoEnabled && !geo_info()) throw new InvalidArgumentException('Die Länderdatenbank fehlt – bitte zuerst „Länderdaten aktualisieren“.');
-            $geoS = ['geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'adminIps' => $ips];
-            if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException("Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
-            if ($twofa !== 'off' && empty($me['totp']) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
-            $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
-                    'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)($b['idleMinutes'] ?? 480) : 480,
-                    'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
-                    'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15))),
-                    'geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'geoScope' => $geoScope];
-            // Passwortbestätigung: nur abschaltbare Aktionen; ohne Angabe (ältere Oberfläche) bleibt der bisherige Stand
-            if (array_key_exists('bestaetigungAus', $b)) {
-                $aus = [];
-                foreach ((array)$b['bestaetigungAus'] as $k) {
-                    $k = (string)$k;
-                    if (!isset(BESTAETIGUNG[$k])) throw new InvalidArgumentException('Unbekannte Aktion bei der Passwortbestätigung.');
-                    if (BESTAETIGUNG[$k][2]) throw new InvalidArgumentException('„' . BESTAETIGUNG[$k][1] . '“ verlangt immer eine Passwortbestätigung.');
-                    if (!in_array($k, $aus, true)) $aus[] = $k;
-                }
-                $new['bestaetigungAus'] = array_values(array_filter(array_keys(BESTAETIGUNG), fn($k) => in_array($k, $aus, true)));
-            } else $new['bestaetigungAus'] = array_values((array)($old['bestaetigungAus'] ?? []));
-            $min = (int)($b['bestaetigungMinuten'] ?? ($old['bestaetigungMinuten'] ?? 5));
-            if (!in_array($min, BESTAETIGUNG_MINUTEN, true)) throw new InvalidArgumentException('Ungültige Gültigkeitsdauer der Passwortbestätigung.');
-            $new['bestaetigungMinuten'] = $min;
+            $new = sec_clean($b, $old, $me);
             store_write('sicherheit', $new);
             $GLOBALS['SEC'] = $new;
             $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
@@ -274,8 +231,8 @@ switch ($action) {
                 $i = user_find($users, $id);
                 if ($i === null) fail('Nutzer nicht gefunden.', 404);
                 $old = $users[$i];
-                if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']))) {
-                    fail('Für den eigenen Zugang bitte „Passwort ändern“ oder „Zwei-Faktor-Anmeldung“ verwenden.', 403);
+                if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']) || !empty($b['resetPasskeys']))) {
+                    fail('Für den eigenen Zugang bitte „Passwort ändern“, „Zwei-Faktor-Anmeldung“ oder „Passkeys“ verwenden.', 403);
                 }
                 if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
                 $users[$i]['name'] = $name;
@@ -300,6 +257,12 @@ switch ($action) {
                     $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;
                     $d[] = ['k' => 'u|2fa', 'code' => '', 'name' => $old['username'], 'f' => 'Zwei-Faktor', 'from' => 'eingerichtet', 'to' => 'zurückgesetzt'];
                 }
+                if (!empty($b['resetPasskeys']) && has_passkeys($old)) {
+                    unset($users[$i]['passkeys']);
+                    $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;
+                    $n = count($old['passkeys']);
+                    $d[] = ['k' => 'u|passkey', 'code' => '', 'name' => $old['username'], 'f' => 'Passkeys', 'from' => $n === 1 ? '1 Passkey' : "$n Passkeys", 'to' => 'alle entfernt'];
+                }
                 if ($setPw) {
                     $users[$i]['hash'] = password_hash(check_password($pw, $old['username']), PASSWORD_DEFAULT);
                     $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
@@ -314,7 +277,7 @@ switch ($action) {
             if ($u['id'] === $me['id']) { $_SESSION['sv'] = (int)$u['sv']; }
             elseif ((int)$u['sv'] > 1 || empty($u['active'])) {
                 $uid = $u['id']; $sv = (int)$u['sv'];
-                if (empty($u['active']) || array_filter($d, function ($x) { return in_array($x['k'], ['u|pw', 'u|2fa'], true); })) sess_remove(function ($k, $v) use ($uid) { return $v['uid'] === $uid; });
+                if (empty($u['active']) || array_filter($d, function ($x) { return in_array($x['k'], ['u|pw', 'u|2fa', 'u|passkey'], true); })) sess_remove(function ($k, $v) use ($uid) { return $v['uid'] === $uid; });
             }
             if ($d) audit('user', $msg, $d);
             respond(['ok' => true, 'user' => user_public($u)]);
