@@ -109,6 +109,7 @@ require __DIR__ . '/lib/nutzer.php';
 require __DIR__ . '/lib/rechte.php';
 require __DIR__ . '/lib/sicherheit.php';
 require __DIR__ . '/lib/sitzung.php';
+require __DIR__ . '/lib/oidc.php';
 require __DIR__ . '/lib/passkey.php';
 require __DIR__ . '/lib/protokoll.php';
 require __DIR__ . '/lib/angebote.php';
@@ -145,6 +146,9 @@ if ($schreibend) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
+
+/* Keycloak-Host (lib/oidc.php): eigene Anmeldeverfahren gibt es dort nicht (GR-110) – nur zentrale Anmeldung */
+if ($AKTION !== null && $AKTION['lokale_anmeldung'] && oidc_modus()) fail('Die Anmeldung erfolgt zentral über die STAFL-Anmeldung.', 403);
 
 /* Schutz: Sperrliste, Firewall (Angriffsmuster), Fehlerbremse und Live-Verkehr (lib/firewall.php) */
 fw_guard($action);

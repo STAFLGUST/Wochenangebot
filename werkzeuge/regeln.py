@@ -628,7 +628,8 @@ def aktionen_tabelle(rw: Regelwerk) -> dict:
             tab[name] = {"modul": inhalt.get("modul", datei), "oberflaeche": a.get("oberflaeche", ""),
                          "schreibend": a.get("schreibend", False), "oeffentlich": a.get("oeffentlich", False),
                          "kunden_wartung": a.get("kunden_wartung", False), "wartung_frei": a.get("wartung_frei", False),
-                         "fremde_herkunft": a.get("fremde_herkunft", False)}
+                         "fremde_herkunft": a.get("fremde_herkunft", False),
+                         "lokale_anmeldung": a.get("lokale_anmeldung", False)}
     return tab
 
 
@@ -645,11 +646,12 @@ def aktionen_php(rw: Regelwerk) -> str:
          "   öffentlich (ohne Mitarbeiter-Anmeldung, keine IP-/Ländersperre des Eingabebereichs) und kunden_wartung",
          "   (pausiert im Wartungsmodus der Angebotsseite), wartung_frei (bleibt bei Wartung der Oberfläche erreichbar:",
          "   Anmeldung, Abmelden, Status), fremde_herkunft (darf von fremden Seiten kommen – nur Ein-Klick-Abmeldung,",
-         "   GR-109). Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
+         "   GR-109), lokale_anmeldung (eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt, GR-110).",
+         "   Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
          "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
          "const AKTIONEN = ["]
     for name, a in sorted(aktionen_tabelle(rw).items()):
-        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft"))
+        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung"))
         z.append(f"    '{name}' => [{felder}],")
     z.append("];")
     return "\n".join(z) + "\n"
@@ -731,7 +733,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: schon in {gesehen[name]} registriert – jede Aktion gehört genau einem Modul")
                 continue
             gesehen[name] = ort
-            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft"}
+            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung"}
             if unbekannt:
                 rw.f(f"{wo}: unbekannte Felder {', '.join(sorted(unbekannt))}")
             ob = oberflaechen.get(a.get("oberflaeche", ""))
@@ -739,7 +741,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: oberflaeche „{a.get('oberflaeche', '')}“ gibt es nicht (Form <modul>.<oberfläche>)")
             if a.get("schreibend", False) not in (True, False, "post"):
                 rw.f(f"{wo}: schreibend muss true, false oder \"post\" sein")
-            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft"):
+            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft", "lokale_anmeldung"):
                 if not isinstance(a.get(feld, False), bool):
                     rw.f(f"{wo}: {feld} muss true oder false sein")
             if ob and a.get("oeffentlich") and ob.get("art") != "extern":

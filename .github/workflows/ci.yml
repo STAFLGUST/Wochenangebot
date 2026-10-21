@@ -184,11 +184,53 @@ jobs:
           RESULT: ${{ needs.e2e.result }}
         run: test "$RESULT" = success
 
+  oidc:
+    # Anmeldung über Keycloak (Roadmap 7b, ADR-003): Keycloak + PostgreSQL + Caddy + Apache/mod_auth_openidc nur hier in
+    # der CI (GR-111) – nichts davon läuft auf dem Server. Versionen und Prüfsummen in tests/oidc/umgebung.sh.
+    name: Anmeldung über Keycloak (nur CI)
+    needs: statisch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Testumgebung einrichten
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q apache2 libapache2-mod-auth-openidc libapache2-mod-php8.3 postgresql
+          python -m pip install -r tests/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Keycloak, Caddy und Apache starten
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
+          bash tests/oidc/umgebung.sh start
+      - name: Anmeldung über Keycloak prüfen
+        run: python tests/oidc/test_oidc.py
+      - name: Umgebung beenden
+        if: always()
+        run: bash tests/oidc/umgebung.sh stop
+      - name: Protokolle bei Fehler sichern
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: oidc-ergebnisse
+          path: |
+            tests/.ergebnisse/oidc_*
+            tests/.arbeit/oidc/*.log
+            tests/.arbeit/oidc/apache/*.log
+          retention-days: 7
+
   release_vorlegen:
     # Nach erfolgreicher CI auf main: Release-Lauf starten. Er wartet auf die Freigabe in der Umgebung
     # „produktion“ (release.yml); ohne Freigabe geht nichts live.
     name: Release zur Freigabe vorlegen
-    needs: [statisch, sicherheit, betrieb, e2e_required]
+    needs: [statisch, sicherheit, betrieb, e2e_required, oidc]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5

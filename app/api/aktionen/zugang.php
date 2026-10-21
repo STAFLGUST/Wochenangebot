@@ -304,7 +304,8 @@ switch ($action) {
             if ($u) { audit('logout', 'Abgemeldet'); $sid = (string)($_SESSION['sid'] ?? ''); sess_remove(function ($k) use ($sid) { return $k === $sid; }); }
             $_SESSION = [];
             session_destroy();
-            respond(['ok' => true]);
+            // Keycloak-Host: danach über das Modul auch zentral abmelden (alle Anwendungen per Back-Channel-Logout)
+            respond(oidc_modus() ? ['ok' => true, 'abmelden' => oidc_abmelde_adresse()] : ['ok' => true]);
         }
 
         case 'change_password': {

@@ -1,0 +1,283 @@
+"""Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen gegen die Testumgebung aus umgebung.sh.
+
+Prüft die Bedrohungen aus ADR-003 §1, soweit sie diese Stufe betreffen: Härtung von Keycloak (Verwaltung nicht öffentlich,
+kein Passwort-Grant, PKCE, exakte Weiterleitungen), Pflicht zum zweiten Faktor, eigene Sitzung je Host (__Host-Cookies,
+keine Domain-Cookies, Sitzung eines Hosts gilt nicht auf dem anderen), Single Sign-on, Rechte bleiben bei uns, keine
+eigenen Anmeldeverfahren auf Keycloak-Hosts, untergeschobene Kopfzeilen, gesperrte und unbekannte Konten, Abmelden für
+alle Anwendungen (Back-Channel-Logout).
+"""
+import base64
+import hashlib
+import hmac
+import http.cookiejar
+import json
+import os
+import ssl
+import struct
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+from playwright.sync_api import sync_playwright
+
+for _v in ('no_proxy', 'NO_PROXY'):   # Testhosts nie über einen Proxy
+    os.environ[_v] = ','.join(x for x in (os.environ.get(_v), '.stafl.test') if x)
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+WORK = os.environ.get('OIDC_WORK') or os.path.join(REPO, 'tests', '.arbeit', 'oidc')
+SH = os.environ.get('WA_SHOTS') or os.path.join(REPO, 'tests', '.ergebnisse')
+os.makedirs(SH, exist_ok=True)
+PORT = 8443
+D, A, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'login'))
+LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
+KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
+CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
+GEHEIM = dict(z.strip().split('=', 1) for z in open(os.path.join(WORK, 'geheim.env')) if '=' in z)
+PW_ALT = 'Sicheres-Passwort-1'   # Administrator der Testdaten (tests/fixtures/data-seed)
+NUTZER = {'admin': ('Admin-Kennwort-CI-1', 'nur-fuer-tests-otp-admin'), 'erika': ('Erika-Kennwort-CI-1', 'nur-fuer-tests-otp-erika'),
+          'fremd': ('Fremd-Kennwort-CI-1', 'nur-fuer-tests-otp-fremd'), 'neu': ('Neu-Kennwort-CI-1', None)}
+res = []
+
+
+def check(n, c, i=''):
+    res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:300]) if i else ''), flush=True)
+
+
+def totp(geheim, versatz=0):
+    """Einmalcode wie Keycloak (HmacSHA1, 6 Stellen, 30 s; Schlüssel = Bytes des gespeicherten Geheimnisses)."""
+    zaehler = int(time.time() // 30) + versatz
+    h = hmac.new(geheim.encode(), struct.pack('>Q', zaehler), hashlib.sha1).digest()
+    o = h[-1] & 15
+    return '%06d' % ((struct.unpack('>I', h[o:o + 4])[0] & 0x7fffffff) % 1000000)
+
+
+TLS = ssl.create_default_context(cafile=CA)
+# Seitenaufruf wie ein Browser (mod_auth_openidc leitet nur Seitenaufrufe zur Anmeldung weiter, sonst 401)
+SEITE = {'Accept': 'text/html', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document'}
+
+
+class OhneWeiterleitung(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None
+
+
+def anfrage(url, method='GET', daten=None, kopf=None, folgen=False, jar=None):
+    h = [urllib.request.HTTPSHandler(context=TLS)]
+    if not folgen: h.append(OhneWeiterleitung())
+    if jar is not None: h.append(urllib.request.HTTPCookieProcessor(jar))
+    op = urllib.request.build_opener(*h)
+    req = urllib.request.Request(url, data=daten, method=method, headers=kopf or {})
+    try:
+        r = op.open(req, timeout=30)
+    except urllib.error.HTTPError as e:
+        r = e
+    text = r.read().decode('utf-8', 'replace')
+    return r.code, r.headers, text
+
+
+class Legacy:
+    """Bisheriger Zugang (wie heute angebot-stafl.de) – nur zur Vorbereitung der Mitarbeiterkonten."""
+    def __init__(self):
+        self.jar = http.cookiejar.CookieJar(); self.csrf = ''
+
+    def call(self, action, data=None):
+        h = {'Host': 'legacy.stafl.test', 'Content-Type': 'application/json', 'X-CSRF-Token': self.csrf, 'X-Forwarded-For': '198.51.100.9'}
+        code, _, text = anfrage(LEGACY + '/api/?action=' + action, 'POST' if data is not None else 'GET',
+                                None if data is None else json.dumps(data).encode(), h, jar=self.jar)
+        try: j = json.loads(text)
+        except ValueError: j = {}
+        if j.get('csrf'): self.csrf = j['csrf']
+        return code, j
+
+
+def nutzer_roh():
+    with open(os.path.join(WORK, 'app', 'data', 'nutzer.php'), encoding='utf-8') as f:
+        roh = f.read()
+    return {u['username']: u for u in json.loads(roh[roh.index('?>') + 2:].strip())['users']}
+
+
+# ── Vorbereitung: Mitarbeiterkonten im bisherigen Eingabebereich (gleiche Benutzernamen wie in Keycloak) ──
+V = Legacy()
+check('Vorbereitung: Administrator der Testdaten angemeldet (bisheriger Zugang)', V.call('login', {'username': 'admin', 'password': PW_ALT})[0] == 200)
+V.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
+if not nutzer_roh()['erika'].get('active'):   # Wiederholung ohne Neustart der Umgebung
+    V.call('user_save', {'id': nutzer_roh()['erika']['id'], 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True})
+check('Vorbereitung: Bearbeiterin erika angelegt und aktiv', nutzer_roh()['erika'].get('active') is True)
+
+# ── Härtung von Keycloak (ADR-003 §2) ──
+code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
+meta = json.loads(text) if code == 200 else {}
+check('Realm „mitarbeiter“ über login.stafl.test erreichbar, Aussteller stimmt', meta.get('issuer') == L + '/realms/mitarbeiter', meta.get('issuer'))
+check('PKCE mit S256 angeboten', 'S256' in meta.get('code_challenge_methods_supported', []))
+for pfad in ('/admin/', '/admin/master/console/', '/realms/master/.well-known/openid-configuration', '/realms/master/protocol/openid-connect/auth'):
+    check(f'Verwaltung/Master-Realm nicht öffentlich: {pfad} → 404', anfrage(L + pfad)[0] == 404)
+code, _, text = anfrage(meta.get('token_endpoint', L + '/x'), 'POST', urllib.parse.urlencode({
+    'grant_type': 'password', 'client_id': 'dashboard', 'client_secret': GEHEIM['OIDC_SECRET_DASHBOARD'],
+    'username': 'erika', 'password': NUTZER['erika'][0], 'scope': 'openid'}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+check('Passwort-Grant (Anmeldung ohne Browser) abgelehnt', code in (400, 401) and 'access_token' not in text, (code, text[:120]))
+code, kopf, _ = anfrage(meta.get('authorization_endpoint', L) + '?' + urllib.parse.urlencode({
+    'client_id': 'dashboard', 'response_type': 'code', 'scope': 'openid', 'redirect_uri': 'https://angreifer.example/oidc/callback', 'state': 'x'}))
+check('fremde Weiterleitungsadresse abgelehnt (exakte Adressen)', code == 400, code)
+code, kopf, _ = anfrage(meta.get('authorization_endpoint', L) + '?' + urllib.parse.urlencode({
+    'client_id': 'dashboard', 'response_type': 'code', 'scope': 'openid', 'redirect_uri': D + '/oidc/callback', 'state': 'x'}))
+check('Anmeldung ohne PKCE abgelehnt', code in (302, 303, 400) and ('code_challenge' in (kopf.get('Location') or '') or code == 400 or 'error=' in (kopf.get('Location') or '')), (code, kopf.get('Location')))
+
+# Einstellungen aus der Verwaltungsschnittstelle (nur lokal auf 127.0.0.1, nie über Caddy)
+code, _, text = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+    'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
+    {'Content-Type': 'application/x-www-form-urlencoded'})
+tok = json.loads(text).get('access_token', '') if code == 200 else ''
+check('Verwaltungszugang nur lokal (Testvorbereitung)', bool(tok), (code, text[:100]))
+_, _, text = anfrage(KC + '/admin/realms/mitarbeiter', kopf={'Authorization': 'Bearer ' + tok})
+realm = json.loads(text) if text.startswith('{') else {}
+check('Realm: Brute-Force-Schutz an, keine Selbstregistrierung, kein Passwort-Zurücksetzen per E-Mail',
+      realm.get('bruteForceProtected') is True and realm.get('registrationAllowed') is False and realm.get('resetPasswordAllowed') is False, realm.get('bruteForceProtected'))
+check('Realm: nur HTTPS, Anmeldesitzung 30 Min. Leerlauf / 10 Std. höchstens',
+      realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 1800 and realm.get('ssoSessionMaxLifespan') == 36000)
+_, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
+clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
+for cid in ('dashboard', 'angebot'):
+    c = clients.get(cid, {})
+    check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
+          c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
+          and c.get('serviceAccountsEnabled') is False and c.get('attributes', {}).get('pkce.code.challenge.method') == 'S256'
+          and all('*' not in u for u in c.get('redirectUris', ['*'])) and c.get('webOrigins') == [], c.get('redirectUris'))
+    check(f'Client {cid}: Back-Channel-Logout eingerichtet', c.get('attributes', {}).get('backchannel.logout.url', '').startswith(f'https://{cid}.stafl.test'))
+
+# ── Ohne Anmeldung ──
+code, kopf, _ = anfrage(D + '/dashboard/', kopf=SEITE)
+ziel = urllib.parse.urlparse(kopf.get('Location') or '')
+q = urllib.parse.parse_qs(ziel.query)
+check('Dashboard ohne Anmeldung → Weiterleitung zu Keycloak', code in (302, 303) and ziel.netloc == f'login.stafl.test:{PORT}', kopf.get('Location'))
+check('… mit state, nonce und PKCE (S256)', q.get('state') and q.get('nonce') and q.get('code_challenge') and q.get('code_challenge_method') == ['S256'], q)
+check('… an die eigene, registrierte Rücksprungadresse', q.get('redirect_uri') == [D + '/oidc/callback'], q.get('redirect_uri'))
+code, kopf, text = anfrage(D + '/api/?action=status')
+check('Schnittstelle ohne Anmeldung: 401 statt Weiterleitung', code == 401, code)
+for k in ({'OIDC_CLAIM_sub': 'x', 'OIDC-CLAIM-sub': 'x', 'OIDC_CLAIM_preferred_username': 'admin'}, {'Remote-User': 'admin', 'X-Remote-User': 'admin'},
+          {'X-Forwarded-User': 'admin', 'X-Auth-Request-User': 'admin'}):
+    check(f'untergeschobene Kopfzeilen melden nicht an: {", ".join(k)}', anfrage(D + '/api/?action=status', kopf=k)[0] == 401)
+check('abgemeldet-Seite und Stylesheets ohne Anmeldung erreichbar', anfrage(D + '/dashboard/abgemeldet.html')[0] == 200 and anfrage(D + '/assets/app.css')[0] == 200)
+check('Mitarbeiter-Eingabe (angebot) ohne Anmeldung → Keycloak', anfrage(A + '/admin/', kopf=SEITE)[0] in (302, 303))
+
+fehler = []
+
+
+def anmelden(pg, wer, otp=True):
+    pg.wait_for_selector('#username'); pg.fill('#username', wer); pg.fill('#password', NUTZER[wer][0]); pg.click('#kc-login')
+    if otp:
+        pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1])); pg.click('#kc-login')
+
+
+def eigene_seite(pg):
+    pg.on('pageerror', lambda e: fehler.append(f'{pg.url}: {e}') if '.stafl.test' in pg.url and 'login.' not in pg.url else None)
+    return pg
+
+
+def kekse(ctx, host):
+    return {c['name']: c for c in ctx.cookies() if c['domain'].lstrip('.') == host}
+
+
+with sync_playwright() as pw:
+    br = pw.chromium.launch(args=['--proxy-server=direct://', '--proxy-bypass-list=*'])   # Testhosts direkt, nie über einen Proxy
+    ctx = br.new_context(ignore_https_errors=True, viewport={'width': 1280, 'height': 900})
+    pg = eigene_seite(ctx.new_page())
+
+    # ── Anmeldung erika: Passwort + Pflicht zum zweiten Faktor ──
+    pg.goto(D + '/'); pg.wait_for_selector('#username')
+    check('Anmeldeseite von Keycloak (login.stafl.test)', pg.url.startswith(L + '/realms/mitarbeiter/'), pg.url)
+    pg.fill('#username', 'erika'); pg.fill('#password', NUTZER['erika'][0]); pg.click('#kc-login')
+    pg.wait_for_selector('#otp')
+    check('nach dem Passwort wird der Einmalcode verlangt (zweiter Faktor Pflicht)', pg.is_visible('#otp'))
+    pg.fill('#otp', '000000'); pg.click('#kc-login'); pg.wait_for_selector('#otp')
+    check('falscher Einmalcode: keine Anmeldung', pg.url.startswith(L))
+    pg.fill('#otp', totp(NUTZER['erika'][1])); pg.click('#kc-login')
+    pg.wait_for_selector('#db-grid .db-tile')
+    check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
+    check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto', 'Erika Editor' in pg.text_content('#db-user'), pg.text_content('#db-user'))
+    check('acht Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 8 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
+    pg.screenshot(path=os.path.join(SH, 'oidc_dashboard_1280.png'), full_page=True)
+    k = kekse(ctx, f'dashboard.stafl.test')
+    check('Cookies des Dashboards nur mit __Host-Präfix (Secure, Pfad /, ohne Domain)',
+          k and all(n.startswith('__Host-') and c['secure'] and c['path'] == '/' for n, c in k.items()), sorted(k))
+    check('Sitzungs-Cookies HttpOnly', k.get('__Host-oidc_sitzung', {}).get('httpOnly') and k.get('__Host-WA_ADMIN', {}).get('httpOnly'), sorted(k))
+    check('kein Cookie für alle Subdomains (.stafl.test)', not [c for c in ctx.cookies() if c['domain'] in ('.stafl.test', 'stafl.test')])
+    check('Verknüpfung: Mitarbeiterkonto erika trägt die Keycloak-Kennung', bool(nutzer_roh()['erika'].get('oidcSub')))
+
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('status: angemeldet, zentrale Anmeldung, kein eigener 2FA-Zwang', st.get('loggedIn') and st['user'].get('zentral') and not st['user'].get('needTwofa'), st.get('user'))
+    csrf = st.get('csrf', '')
+    js_post = "([a, b, t]) => fetch('../api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: JSON.stringify(b)}).then(async r => [r.status, await r.json().catch(() => ({}))])"
+    for a in ('login', 'login_2fa', 'setup', 'change_password', 'twofa_begin', 'passkey_begin', 'passkey_login_begin', 'reauth', 'kunde_login'):
+        code, j = pg.evaluate(js_post, [a, {'username': 'admin', 'password': PW_ALT}, csrf])
+        check(f'eigenes Anmeldeverfahren auf Keycloak-Host gesperrt: {a} → 403', code == 403 and 'zentral' in j.get('error', ''), (code, j))
+    code, j = pg.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", csrf)
+    check('Rechte bleiben bei uns: Bearbeiterin darf keine Sicherheitseinstellungen lesen (403)', code == 403, (code, j))
+    code, _ = pg.evaluate(js_post, ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, csrf])
+    check('Rechte bleiben bei uns: Bearbeiterin legt keine Nutzer an', code == 403, code)
+
+    # ── Single Sign-on in die zweite Anwendung, aber eigene Sitzung je Host ──
+    pa = eigene_seite(ctx.new_page())
+    pa.goto(A + '/admin/'); pa.wait_for_function("location.host.startsWith('angebot.')")
+    sta = pa.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('Single Sign-on: Mitarbeiter-Eingabe ohne erneute Eingabe angemeldet', sta.get('loggedIn') and sta['user']['username'] == 'erika', sta.get('user'))
+    ka = kekse(ctx, 'angebot.stafl.test')
+    check('eigene Sitzung je Host: andere Cookie-Werte auf angebot', ka.get('__Host-oidc_sitzung', {}).get('value') not in (None, k.get('__Host-oidc_sitzung', {}).get('value'))
+          and ka.get('__Host-WA_ADMIN', {}).get('value') != k.get('__Host-WA_ADMIN', {}).get('value'), sorted(ka))
+    pa.wait_for_selector('#screen-editor:not([hidden]), #screen-auth:not([hidden])', timeout=30000)
+    check('Mitarbeiter-Eingabe zeigt den Editor (keine eigene Anmeldemaske)', pa.is_visible('#screen-editor'))
+    # Sitzung des Dashboards auf dem anderen Host untergeschoben
+    fremd = br.new_context(ignore_https_errors=True)
+    fremd.add_cookies([{'name': n, 'value': c['value'], 'url': A + '/'} for n, c in k.items()])
+    pf = fremd.new_page(); pf.goto(A + '/dashboard/abgemeldet.html')
+    code = pf.evaluate("fetch('/api/?action=status').then(r => r.status)")
+    check('Sitzung des Dashboards gilt nicht auf angebot (GR-108)', code == 401, code)
+    fremd.close()
+
+    # ── Gesperrtes Konto: sofort ausgesperrt, trotz gültiger Keycloak-Sitzung ──
+    uid = nutzer_roh()['erika']['id']
+    V.call('user_save', {'id': uid, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': False})
+    code, j = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('gesperrtes Mitarbeiterkonto: sofort 403', code == 403 and 'gesperrt' in j.get('error', ''), (code, j))
+    pg.reload(); pg.wait_for_selector('#db-err:not([hidden])')
+    check('Dashboard zeigt die Sperre verständlich an', 'gesperrt' in pg.text_content('#db-err'))
+    V.call('user_save', {'id': uid, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True})
+    pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    check('wieder freigegeben: Dashboard nutzbar', pg.is_visible('#db-grid'))
+
+    # ── Mobil ──
+    pg.set_viewport_size({'width': 390, 'height': 860}); pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    check('390 px: kein waagerechtes Scrollen', not pg.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
+    pg.screenshot(path=os.path.join(SH, 'oidc_dashboard_390.png'), full_page=True)
+    pg.set_viewport_size({'width': 1280, 'height': 900})
+
+    # ── Abmelden: beendet die Anmeldung für alle Anwendungen ──
+    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    check('Abmelden führt über Keycloak zur Abmeldeseite', pg.url == D + '/dashboard/abgemeldet.html', pg.url)
+    pg.screenshot(path=os.path.join(SH, 'oidc_abgemeldet.png'))
+    code = pg.evaluate("fetch('/api/?action=status').then(r => r.status)")
+    check('Dashboard danach abgemeldet (401)', code == 401, code)
+    code = pa.evaluate("fetch('/api/?action=status').then(r => r.status)")
+    check('Back-Channel-Logout: Mitarbeiter-Eingabe ebenfalls abgemeldet', code == 401, code)
+    pg.goto(D + '/'); pg.wait_for_selector('#username')
+    check('erneuter Aufruf verlangt wieder Passwort (zentrale Sitzung beendet)', pg.url.startswith(L))
+    ctx.close()
+
+    # ── Keycloak-Nutzer ohne Mitarbeiterkonto ──
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); anmelden(pg, 'fremd'); pg.wait_for_selector('#db-err:not([hidden])')
+    check('ohne Mitarbeiterkonto: kein Zugang, verständlicher Hinweis', 'kein Mitarbeiterkonto' in pg.text_content('#db-err') and pg.is_hidden('#db-bereich'))
+    check('ohne Mitarbeiterkonto: keine Verknüpfung angelegt', not any(u.get('oidcSub') and u['username'] == 'fremd' for u in nutzer_roh().values()))
+    ctx.close()
+
+    # ── Neuer Nutzer ohne zweiten Faktor: muss ihn bei Keycloak einrichten ──
+    ctx = br.new_context(ignore_https_errors=True); pg = ctx.new_page()
+    pg.goto(D + '/'); anmelden(pg, 'neu', otp=False); pg.wait_for_selector('#totp, [name="totp"]')
+    check('ohne zweiten Faktor: Einrichtung bei Keycloak erzwungen, keine Anmeldung', pg.url.startswith(L) and pg.locator('#totp, [name="totp"]').count() > 0, pg.url)
+    ctx.close()
+    br.close()
+
+check('keine JavaScript-Fehler auf unseren Seiten', not fehler, fehler)
+ok = sum(res)
+print(f'{ok}/{len(res)} passed')
+sys.exit(0 if ok == len(res) else 1)

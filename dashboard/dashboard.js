@@ -20,7 +20,7 @@
     });
     let data = null;
     try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
-    return { status: res.status, data: data || {} };
+    return { status: res.status, data: data || {}, json: data !== null };
   }
 
   /* Ziel einer Kachel: im Echtbetrieb die eingetragene Adresse, in Test- und Entwicklungsumgebungen derselbe Pfad auf
@@ -65,19 +65,29 @@
     $('#db-sub').textContent = `${frei} von ${kacheln.length} Anwendungen für Sie verfügbar`;
   }
 
-  function zeigeAnmeldung() {
+  function fehler(text) {
+    $('#db-login').hidden = true; $('#db-bereich').hidden = true;
+    $('#db-err').hidden = false; $('#db-err').textContent = text;
+  }
+
+  function zeigeAnmeldung(ziel) {
+    if (ziel) $('#db-login a').setAttribute('href', ziel);
     $('#db-login').hidden = false; $('#db-bereich').hidden = true; $('#db-logout').hidden = true; $('#db-user').hidden = true;
   }
 
   async function laden() {
     const st = await api('status');
+    // Keycloak-Host: zentrale Sitzung abgelaufen (401 vom Webserver, kein JSON) → Anmelden = Seite neu laden
+    if (st.status === 401 && !st.json) { zeigeAnmeldung('./'); return; }
+    // Angemeldet bei Keycloak, aber hier kein (aktives) Mitarbeiterkonto: Hinweis statt Anmeldemaske
+    if (st.status === 403 && st.data.error) { fehler(st.data.error); return; }
     if (st.status !== 200 || !st.data.loggedIn) { zeigeAnmeldung(); return; }
     csrf = st.data.csrf || '';
     $('#db-user').hidden = false; $('#db-user').textContent = `Angemeldet als ${st.data.user ? st.data.user.name : ''}`;
     $('#db-logout').hidden = false;
     const r = await api('module_status');
-    if (r.status === 401) { zeigeAnmeldung(); return; }
-    if (r.status !== 200 || !r.data.ok) { $('#db-err').hidden = false; $('#db-err').textContent = r.data.error || `Die Anwendungen konnten nicht geladen werden (${r.status}).`; return; }
+    if (r.status === 401) { zeigeAnmeldung(r.json ? '' : './'); return; }
+    if (r.status !== 200 || !r.data.ok) { fehler(r.data.error || `Die Anwendungen konnten nicht geladen werden (${r.status}).`); return; }
     $('#db-login').hidden = true; $('#db-bereich').hidden = false;
     render(r.data.module || []);
   }
@@ -97,10 +107,12 @@
     themaKnopf();
   });
   $('#db-logout').addEventListener('click', async () => {
-    await api('logout', {});
+    const r = await api('logout', {});
+    // Zentrale Anmeldung (Keycloak-Host): auch bei Keycloak abmelden – beendet die Anmeldung für alle Anwendungen
+    if (typeof r.data.abmelden === 'string' && r.data.abmelden.startsWith('/oidc/')) { location.replace(r.data.abmelden); return; }
     zeigeAnmeldung();
   });
 
   themaKnopf();
-  laden().catch(() => { $('#db-err').hidden = false; $('#db-err').textContent = 'Keine Verbindung zum Server.'; });
+  laden().catch(() => fehler('Keine Verbindung zum Server.'));
 })();

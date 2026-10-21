@@ -12,6 +12,7 @@ dem die Aktion fachlich gehört. Daraus erzeugt `python3 werkzeuge/regeln.py erz
 | `oeffentlich` | ohne Mitarbeiter-Anmeldung erreichbar (Angebotsseite, Kundenportal); nur auf externen Oberflächen | `false` |
 | `kunden_wartung` | pausiert im Wartungsmodus der Angebotsseite (503), nur für öffentliche Aktionen (GR-009) | `false` |
 | `fremde_herkunft` | darf von fremden Seiten kommen (keine Herkunftsprüfung, `lib/herkunft.php`, GR-109); nur für die in `werkzeuge/regeln.py` (`FREMDE_HERKUNFT`) festgelegten öffentlichen, nicht schreibenden Aktionen – heute nur `abmelden1` (RFC 8058) | `false` |
+| `lokale_anmeldung` | eigenes Anmeldeverfahren (Passwort, zweiter Faktor, Passkey, Kunden-Anmeldung); auf Keycloak-Hosts (`WA_OIDC=1`) mit 403 gesperrt (GR-110, `lib/oidc.php`) | `false` |
 | `wartung_frei` | bleibt erreichbar, wenn die Oberfläche in Wartung ist (Anmeldung, Abmelden, Status, eigener Zugang) – damit sich Administratoren anmelden können; schreibend nur für die Anmelde-Aktionen | `false` |
 
 Neue Aktion: Eintrag in der Datei des eigenen Moduls, `python3 werkzeuge/regeln.py erzeugen` (schreibt auch

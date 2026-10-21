@@ -1,0 +1,30 @@
+# Testumgebung „Anmeldung über Keycloak“ (nur CI und lokal, GR-111) – bildet die Produktion nach: Caddy beendet TLS
+# (hier mit eigener Test-CA), setzt X-Forwarded-*, Keycloak und die Anwendung laufen dahinter nur auf 127.0.0.1.
+{
+	admin off
+	local_certs
+	skip_install_trust
+	auto_https disable_redirects
+	http_port {$OIDC_HTTP_PORT}
+	https_port {$OIDC_PORT}
+	storage file_system {$OIDC_WORK}/caddy
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+# Keycloak: nur der Anmeldeteil; Verwaltungsoberfläche und -schnittstelle nie über den öffentlichen Host (ADR-003)
+login.stafl.test {
+	tls internal
+	@anmeldung path /realms/mitarbeiter/* /resources/*
+	handle @anmeldung {
+		reverse_proxy 127.0.0.1:{$KC_PORT}
+	}
+	respond 404
+}
+
+# Anwendungen: jede auf eigenem Host, eigene Sitzung (GR-108)
+dashboard.stafl.test, angebot.stafl.test {
+	tls internal
+	reverse_proxy 127.0.0.1:{$APACHE_PORT}
+}

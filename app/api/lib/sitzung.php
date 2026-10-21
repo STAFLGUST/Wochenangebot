@@ -67,6 +67,7 @@ function current_user(): ?array
 {
     global $ME;
     if ($ME !== null) return $ME;
+    if (oidc_modus()) return $ME = oidc_nutzer();   // Keycloak-Host: Identität vom Webserver (lib/oidc.php, GR-110)
     start_session();
     if (empty($_SESSION['uid'])) return null;
     $users = users_load();
@@ -93,8 +94,9 @@ function require_auth(bool $write = false, string $role = 'viewer'): array
         $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
         if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
     }
-    if (!empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
-    if (twofa_required($u) && !has_second_factor($u)) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
+    // Passwort und zweiter Faktor prüft auf Keycloak-Hosts Keycloak (Pflicht im Realm), nicht diese Anwendung
+    if (!oidc_modus() && !empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
+    if (!oidc_modus() && twofa_required($u) && !has_second_factor($u)) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
     if (ROLES[$u['role']] < ROLES[$role]) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
     return $u;
 }
@@ -115,6 +117,12 @@ function sign_in(array $u): string
 }
 function me_payload(array $u): array
 {
+    if (oidc_modus()) {
+        // Zentrale Anmeldung: Passwort, zweiter Faktor und Passkeys verwaltet Keycloak
+        return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => false, 'mustChangeGrund' => '',
+                'twofa' => true, 'passkeys' => 0, 'needTwofa' => false, 'twofaRequired' => false, 'zentral' => true,
+                'perms' => function_exists('user_perms') ? user_perms($u) : []];
+    }
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),
             'mustChangeGrund' => !empty($u['mustChange']) ? (string)($u['mustChangeGrund'] ?? '') : '',
             'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])),
@@ -163,6 +171,8 @@ function require_admin_confirmation(string $key = ''): array
 /* Gemeinsame, kontoweite Bremse für Passwortbestätigungen; nie durch neue Sitzungen zurücksetzen. */
 function confirm_password(array $me, string $password, int $invalidStatus = 422): array
 {
+    // Keycloak-Host: kein eigenes Passwort; Bestätigung durch erneute Anmeldung bei Keycloak (folgt, Roadmap 7b-2)
+    if (oidc_modus()) respond(['ok' => false, 'code' => 'reauth_required', 'error' => 'Bitte melden Sie sich erneut an, um diese Aktion zu bestätigen.'], 403);
     $result = with_lock('nutzer', function () use ($me, $password) {
         $users = users_load();
         $i = user_find($users, $me['id']);

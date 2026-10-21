@@ -330,7 +330,7 @@ abhaengigkeiten = []
 testgruppen = ["users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
-  "app_api", "sitzung_cookie", "herkunft", "aktionsregister", "module_status", "modul_wartung"]
+  "app_api", "sitzung_cookie", "herkunft", "oidc_kern", "aktionsregister", "module_status", "modul_wartung"]
 pfade = [
   "regeln/aktionen/plattform.toml",
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
@@ -391,7 +391,7 @@ beschreibung = "503-Platzhalter – nicht als Testumgebung nutzen (ADR-003, GR-1
 
 [[koordination]]
 bereich = "Anmeldung, Sitzungen und Zwei-Faktor"
-pfade = ["app/api/lib/sitzung.php", "app/api/lib/passkey.php", "app/api/lib/geraete.php", "app/api/aktionen/zugang.php",
+pfade = ["app/api/lib/sitzung.php", "app/api/lib/oidc.php", "app/api/lib/passkey.php", "app/api/lib/geraete.php", "app/api/aktionen/zugang.php",
   "app/api/aktionen/passkey.php"]
 
 [[koordination]]

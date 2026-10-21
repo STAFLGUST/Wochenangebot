@@ -1,0 +1,131 @@
+{
+  "realm": "mitarbeiter",
+  "displayName": "STAFL-Plattform (Test)",
+  "enabled": true,
+  "sslRequired": "all",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": false,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "passwordPolicy": "length(12) and notUsername and notEmail and passwordHistory(3)",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyCodeReusable": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 0,
+  "offlineSessionMaxLifespanEnabled": true,
+  "offlineSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["de"],
+  "defaultLocale": "de",
+  "eventsEnabled": true,
+  "adminEventsEnabled": true,
+  "requiredActions": [
+    {"alias": "CONFIGURE_TOTP", "name": "Configure OTP", "providerId": "CONFIGURE_TOTP", "enabled": true, "defaultAction": true, "priority": 10, "config": {}}
+  ],
+  "clients": [
+    {
+      "clientId": "dashboard",
+      "name": "STAFL-Dashboard",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "@GEHEIM_DASHBOARD@",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["https://dashboard.stafl.test:8443/oidc/callback"],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://dashboard.stafl.test:8443/dashboard/abgemeldet.html",
+        "backchannel.logout.url": "https://dashboard.stafl.test:8443/oidc/callback?logout=backchannel",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "false"
+      }
+    },
+    {
+      "clientId": "angebot",
+      "name": "Angebot – Mitarbeiter-Eingabe",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "@GEHEIM_ANGEBOT@",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "redirectUris": ["https://angebot.stafl.test:8443/oidc/callback"],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://angebot.stafl.test:8443/dashboard/abgemeldet.html",
+        "backchannel.logout.url": "https://angebot.stafl.test:8443/oidc/callback?logout=backchannel",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "false"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin", "enabled": true, "firstName": "Test", "lastName": "Administrator", "email": "admin@stafl.test", "emailVerified": true,
+      "credentials": [
+        {"type": "password", "value": "Admin-Kennwort-CI-1", "temporary": false},
+        {"type": "otp", "userLabel": "Test", "secretData": "{\"value\":\"nur-fuer-tests-otp-admin\"}", "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"}
+      ]
+    },
+    {
+      "username": "erika", "enabled": true, "firstName": "Erika", "lastName": "Editor", "email": "erika@stafl.test", "emailVerified": true,
+      "credentials": [
+        {"type": "password", "value": "Erika-Kennwort-CI-1", "temporary": false},
+        {"type": "otp", "userLabel": "Test", "secretData": "{\"value\":\"nur-fuer-tests-otp-erika\"}", "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"}
+      ]
+    },
+    {
+      "username": "fremd", "enabled": true, "firstName": "Ohne", "lastName": "Mitarbeiterkonto", "email": "fremd@stafl.test", "emailVerified": true,
+      "credentials": [
+        {"type": "password", "value": "Fremd-Kennwort-CI-1", "temporary": false},
+        {"type": "otp", "userLabel": "Test", "secretData": "{\"value\":\"nur-fuer-tests-otp-fremd\"}", "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"}
+      ]
+    },
+    {
+      "username": "neu", "enabled": true, "firstName": "Neu", "lastName": "Ohne Zweitfaktor", "email": "neu@stafl.test", "emailVerified": true,
+      "requiredActions": ["CONFIGURE_TOTP"],
+      "credentials": [{"type": "password", "value": "Neu-Kennwort-CI-1", "temporary": false}]
+    }
+  ]
+}
