@@ -34,7 +34,7 @@ return [
     'api/lib/druck-logo.jpg' => '64701aa887b9d267f172c0cb7b53da5f7485feee3cdc5d4d45692d020f0edf5b',
     'api/lib/einkauf.php' => 'b9ccc7136d1e73f344b3fc01ff259551030cd03aeb13581db187079073a4be0f',
     'api/lib/einzelangebote.php' => '43055f6fa737b327eb583445465da7d0a7394fe474134deabeea47202f71ce1c',
-    'api/lib/firewall.php' => '5e769de56e39053b3af2c1bd5cd56ff767f3d0041b87e500fb33af93dccf79cb',
+    'api/lib/firewall.php' => '27c4c12f2c4676b14b2ea161a217b70a45ec09605c3c0972ac9db2e28779a63c',
     'api/lib/fracht.php' => '8c8d4c25fcc8f1e38eeaa7b9297dd6b49c121aacab250cf8a16e46858c17ae2a',
     'api/lib/geraete.php' => '432244aa26f512f66072ac815a8288d728681aa9c52ff42cf4e4c4f1bbd6d0ce',
     'api/lib/integritaet.php' => '140f601683fa12b8c5f102ada9dd200efdada0e5df7b7713b8257619ba274682',

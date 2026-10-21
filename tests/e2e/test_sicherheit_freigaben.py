@@ -302,6 +302,11 @@ ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()
 check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=31536000" env=HTTPS' in ht
       and 'Permissions-Policy' in ht)
 check('.htaccess: X-Powered-By (PHP-Version) wird entfernt', 'Header unset X-Powered-By' in ht)
+cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
+bloecke = cf.split('test.{$DOMAIN} {')
+check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, alles andere weiter „no-cache“ – Echtbetrieb und Testumgebung',
+      len(bloecke) == 2 and all('@versioniert {\n\t\tpath /assets/*\n\t\tquery v=*\n\t}' in b and 'header @versioniert >Cache-Control "public, max-age=31536000, immutable"' in b
+                               and '?Cache-Control "no-cache"' in b for b in bloecke))
 
 # ---------- Oberfläche: Hinweis im Code-Schritt bei gesperrtem Zugang ----------
 storage_write('sicherheit', {**sec, 'ipEnabled': False, 'lockAfter': 3, 'lockMinutes': 5})
