@@ -50,6 +50,15 @@
       "defaultAction": true,
       "priority": 10,
       "config": {}
+    },
+    {
+      "alias": "webauthn-register",
+      "name": "Webauthn Register",
+      "providerId": "webauthn-register",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 20,
+      "config": {}
     }
   ],
   "clients": [
@@ -278,7 +287,7 @@
     },
     {
       "alias": "mitarbeiter-stufe-2",
-      "description": "Stufe 2: zweiter Faktor",
+      "description": "Stufe 2: zweiter Faktor – Passkey oder Einmalcode",
       "providerId": "basic-flow",
       "topLevel": false,
       "builtIn": false,
@@ -290,6 +299,76 @@
           "authenticator": "conditional-level-of-authentication",
           "authenticatorFlow": false,
           "authenticatorConfig": "stufe-2"
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "flowAlias": "mitarbeiter-zweiter-faktor",
+          "authenticatorFlow": true
+        }
+      ]
+    },
+    {
+      "alias": "mitarbeiter-zweiter-faktor",
+      "description": "Passkey, wenn eingerichtet – sonst Einmalcode (Einrichtung erzwungen)",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "flowAlias": "mitarbeiter-mit-passkey",
+          "authenticatorFlow": true
+        },
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "flowAlias": "mitarbeiter-mit-einmalcode",
+          "authenticatorFlow": true
+        }
+      ]
+    },
+    {
+      "alias": "mitarbeiter-mit-passkey",
+      "description": "nur wenn der Nutzer einen Passkey hat",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticator": "webauthn-authenticator",
+          "authenticatorFlow": false
+        }
+      ]
+    },
+    {
+      "alias": "mitarbeiter-mit-einmalcode",
+      "description": "wenn kein Passkey verwendet wurde",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-credential",
+          "authenticatorFlow": false,
+          "authenticatorConfig": "ohne-passkey"
         },
         {
           "requirement": "REQUIRED",
@@ -315,6 +394,26 @@
         "loa-condition-level": "2",
         "loa-max-age": "36000"
       }
+    },
+    {
+      "alias": "ohne-passkey",
+      "config": {
+        "credentials": "webauthn",
+        "included": "false"
+      }
     }
-  ]
+  ],
+  "webAuthnPolicyRpEntityName": "STAFL-Plattform",
+  "webAuthnPolicySignatureAlgorithms": [
+    "ES256",
+    "RS256"
+  ],
+  "webAuthnPolicyRpId": "",
+  "webAuthnPolicyAttestationConveyancePreference": "none",
+  "webAuthnPolicyAuthenticatorAttachment": "not specified",
+  "webAuthnPolicyRequireResidentKey": "not specified",
+  "webAuthnPolicyUserVerificationRequirement": "required",
+  "webAuthnPolicyCreateTimeout": 0,
+  "webAuthnPolicyAvoidSameAuthenticatorRegister": true,
+  "webAuthnPolicyAcceptableAaguids": []
 }
