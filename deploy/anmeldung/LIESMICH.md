@@ -10,6 +10,7 @@ Nichts hiervon wird durch ein Release aktiv: `docker-compose.yml` und `Caddyfile
 | `Caddyfile.anmeldung` | neue Hosts für Caddy (Schritt 6) |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
+| `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
 
 ## Geheimnisse (nur in `.env` auf dem Server)
 
@@ -17,15 +18,10 @@ Nichts hiervon wird durch ein Release aktiv: `docker-compose.yml` und `Caddyfile
 (Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, einmalig `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD`.
 Erzeugen z. B. mit `openssl rand -base64 36 | tr -dc 'A-Za-z0-9' | head -c 40`.
 
-Realm mit eingesetzten Client-Geheimnissen (auf dem Server, nicht im Repository):
-
-```sh
-mkdir -p daten-anmeldung/realm-import && chmod 700 daten-anmeldung
-set -a; . ./.env; set +a
-sed -e "s/@GEHEIM_DASHBOARD@/$OIDC_SECRET_DASHBOARD/" -e "s/@GEHEIM_ANGEBOT@/$OIDC_SECRET_ANGEBOT/" \
-  deploy/anmeldung/realm-mitarbeiter.json > daten-anmeldung/realm-import/realm-mitarbeiter.json
-chmod 600 daten-anmeldung/realm-import/realm-mitarbeiter.json
-```
+Erzeugen und den Realm-Import vorbereiten übernimmt `deploy/anmeldung/einrichten.sh` (Schritt 2, im Installationsordner
+auf dem Server): ergänzt nur fehlende Einträge in `.env` (nie überschreiben, nie anzeigen), schreibt
+`daten-anmeldung/realm-import/realm-mitarbeiter.json` mit eingesetzten Client-Geheimnissen (nur für den Keycloak-Benutzer
+lesbar) und startet nichts. `--pruefen` zeigt nur, was fehlt. Getestet: `tests/deploy/test_anmeldung_einrichten.sh`.
 
 Der Import läuft nur beim ersten Start (vorhandener Realm wird nicht überschrieben). Spätere Änderungen am Realm über
 die Verwaltung (SSH-Tunnel) oder einen eigenen, geprüften Schritt.
