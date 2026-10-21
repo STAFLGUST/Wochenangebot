@@ -67,6 +67,21 @@ switch ($action) {
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
             attempts_record(true);
+            // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
+            $leak = pw_leak_bei_anmeldung($pw, $c['login'], $merker);
+            if ($merker !== null) {
+                $c = with_lock('kunden', function () use ($c, $merker, $leak) {
+                    $d = customers_load();
+                    foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id'] && !empty($x['login'])) {
+                        $d['customers'][$i]['login']['leakGeprueft'] = $merker;
+                        if ($leak) { $d['customers'][$i]['login']['mustChange'] = true; $d['customers'][$i]['login']['mustChangeGrund'] = 'datenleck'; }
+                        store_write('kunden', $d);
+                        return $d['customers'][$i];
+                    }
+                    return $c;
+                });
+                if ($leak) audit('security', 'Passwort des Kundenzugangs „' . $c['login']['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
+            }
             kunde_sign_in($c);
             audit('kunde_login', 'Kunde angemeldet', [], $who);
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c)]);
@@ -109,6 +124,7 @@ switch ($action) {
                 foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) {
                     $d['customers'][$i]['login']['hash'] = password_hash($new, PASSWORD_DEFAULT);
                     $d['customers'][$i]['login']['mustChange'] = false;
+                    unset($d['customers'][$i]['login']['mustChangeGrund']);
                     $d['customers'][$i]['login']['pwSet'] = now();
                     $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
                     geraete_zuruecksetzen($d['customers'][$i]['login']);   // vertraut bleibt nur dieses Gerät
@@ -151,6 +167,7 @@ switch ($action) {
                     $l = &$d['customers'][$i]['login'];
                     $l['hash'] = password_hash($new, PASSWORD_DEFAULT);
                     $l['mustChange'] = false; $l['pwSet'] = now(); $l['sv'] = (int)($l['sv'] ?? 0) + 1;
+                    unset($l['mustChangeGrund']);
                     $l['failCount'] = 0; $l['lockedUntil'] = 0; $l['lastLogin'] = now();
                     geraete_zuruecksetzen($l, true);   // Passwort über den Link neu gesetzt: bisherige Geräte nicht mehr vertraut,
                     geraet_merken($l);                 // dieses Gerät (Inhaber des E-Mail-Postfachs) schon

@@ -114,6 +114,14 @@ switch ($action) {
                 $u = ['lockedUntil' => $until];
             }
             $who = ['username' => mb_substr($name, 0, 40), 'name' => $u['name'] ?? '', 'role' => $u['role'] ?? ''];
+            if ($st === 'ok') {
+                // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
+                $leak = pw_leak_bei_anmeldung($pw, $u, $merker);
+                if ($merker !== null) {
+                    $u = user_update($u['id'], function (&$y) use ($merker, $leak) { $y['leakGeprueft'] = $merker; if ($leak) { $y['mustChange'] = true; $y['mustChangeGrund'] = 'datenleck'; } }) ?? $u;
+                    if ($leak) audit('security', 'Passwort von „' . $u['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
+                }
+            }
             if ($st === 'ok_locked' || $st === 'locked_code') {
                 // Während einer Sperre: für jedes Passwort dieselbe Antwort (Code-Schritt mit Hinweis auf die Sperre)
                 attempts_record(false);
@@ -307,6 +315,7 @@ switch ($action) {
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$me['sv']) fail('Bitte erneut anmelden.', 401);
                 $users[$i]['hash'] = password_hash($new, PASSWORD_DEFAULT);
                 $users[$i]['mustChange'] = false;
+                unset($users[$i]['mustChangeGrund']);
                 $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;   // andere Sitzungen dieses Nutzers abmelden
                 geraete_zuruecksetzen($users[$i]);              // vertraut bleibt nur dieses Gerät
                 $users[$i]['changed'] = now();

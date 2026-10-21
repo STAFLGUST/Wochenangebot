@@ -82,6 +82,7 @@ SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung
 SUITES['geraete'] = SUITES['bestellung']   # vertraute Geräte
+SUITES['passwortpruefung'] = (8790, 'data-seed', True, {'WA_PWNED_URL': 'http://127.0.0.1:{AUX}/range/%s'})   # Datenleck-Prüfung (nachgebauter Dienst)
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
@@ -165,7 +166,8 @@ def run_in(name, slot):
     php_env.update(extra[0] if extra else {})
     if 'MAIL_SMTP_PORT' in php_env: php_env['MAIL_SMTP_PORT'] = str(smtp1)
     if 'WA_URL' in php_env: php_env['WA_URL'] = base
-    if 'WA_ORT_URL' in php_env: php_env['WA_ORT_URL'] = php_env['WA_ORT_URL'].replace('{AUX}', str(aux))
+    for k in list(php_env):   # Platzhalter {AUX} (nachgebaute externe Dienste) in allen Angaben
+        if isinstance(php_env[k], str) and '{AUX}' in php_env[k]: php_env[k] = php_env[k].replace('{AUX}', str(aux))
     lines = []
     say = lines.append
     app = os.path.join(WORK, f'app-{name}')

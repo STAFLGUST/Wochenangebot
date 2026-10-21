@@ -140,5 +140,56 @@ function check_password($pw, string $username = ''): string
         $classes = (int)preg_match('/[a-zäöüß]/u', $pw) + (int)preg_match('/[A-ZÄÖÜ]/u', $pw) + (int)preg_match('/\d/', $pw) + (int)preg_match('/[^\p{L}\d]/u', $pw);
         if ($classes < 3) throw new InvalidArgumentException('Das Passwort braucht mindestens drei der vier Zeichenarten: Kleinbuchstaben, Großbuchstaben, Ziffern, Sonderzeichen.');
     }
+    if (!empty($S['pwLeak']) && ($n = pw_datenleck($pw)) > 0) {
+        throw new InvalidArgumentException('Dieses Passwort ist in bekannten Datenlecks aufgetaucht' . ($n > 1 ? ' (' . number_format($n, 0, ',', '.') . '-mal)' : '') . ' und gilt deshalb als unsicher. Bitte ein anderes wählen.');
+    }
     return $pw;
+}
+
+/* Prüfung gegen „Pwned Passwords“ (haveibeenpwned.com) mit k-Anonymität: Übertragen werden nur die ersten 5 Zeichen des
+   SHA-1-Prüfwerts; der Abgleich der Antwort (alle Prüfwerte mit diesem Anfang, aufgefüllt) geschieht hier. Liefert die Anzahl
+   der Funde, 0 = nicht bekannt, null = Dienst nicht erreichbar (dann wird nichts blockiert). */
+const PW_LEAK_URL = 'https://api.pwnedpasswords.com/range/%s';
+function pw_datenleck(string $pw): ?int
+{
+    $h = strtoupper(sha1($pw));
+    $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => false, 'user_agent' => 'Wochenangebot',
+                                             'header' => "Add-Padding: true\r\n"], 'ssl' => ['verify_peer' => true]]);
+    $url = sprintf(getenv('WA_PWNED_URL') ?: PW_LEAK_URL, substr($h, 0, 5));   // WA_PWNED_URL nur in den Tests
+    $t0 = microtime(true);
+    $body = @file_get_contents($url, false, $ctx, 0, 2 * 1024 * 1024);
+    $ok = is_string($body) && $body !== '';
+    pw_datenleck_status($ok);
+    if (!$ok) { error_log('[wochenangebot] Datenleck-Prüfung nicht erreichbar (' . round(microtime(true) - $t0, 1) . ' s)'); return null; }
+    $suffix = substr($h, 5);
+    foreach (preg_split('/\R/', $body) as $line) {
+        $p = explode(':', trim($line));
+        if (count($p) === 2 && hash_equals(strtoupper($p[0]), $suffix)) return max(0, (int)$p[1]);   // aufgefüllte Einträge haben 0
+    }
+    return 0;
+}
+
+/* Letztes Ergebnis merken (Konfigurationsprüfung zeigt, ob der Dienst erreichbar war); Fehler stören nicht */
+function pw_datenleck_status(bool $ok): void
+{
+    try {
+        $alt = store_read('datenleck') ?? [];
+        if (($alt['ok'] ?? null) === $ok && (int)($alt['t'] ?? 0) > time() - 3600) return;   // höchstens stündlich schreiben
+        store_write('datenleck', ['ok' => $ok, 't' => time()]);
+    } catch (Throwable $e) { error_log('[wochenangebot] datenleck-status: ' . $e->getMessage()); }
+}
+
+/* Bei der Anmeldung: bestehendes Passwort einmal je Passwort prüfen (Merker = Prüfwert des gespeicherten Hashes). Ist es
+   betroffen, muss es sofort geändert werden. Läuft außerhalb der Sperre der Nutzerdaten; Ausfall des Dienstes blockiert nicht.
+   Liefert true, wenn das Passwort betroffen ist; $merker ist dann bzw. bei unauffälligem Ergebnis der neue Merker. */
+function pw_leak_bei_anmeldung(string $pw, array $acc, ?string &$merker = null): bool
+{
+    $merker = null;
+    if (empty(sec()['pwLeak']) || empty($acc['hash'])) return false;
+    $m = hash('sha256', 'leak|' . (string)$acc['hash']);
+    if (hash_equals((string)($acc['leakGeprueft'] ?? ''), $m)) return false;
+    $n = pw_datenleck($pw);
+    if ($n === null) return false;   // später erneut versuchen
+    $merker = $m;
+    return $n > 0;
 }

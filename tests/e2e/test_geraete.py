@@ -193,7 +193,7 @@ E4 = gleicher_browser(E1, '198.51.100.15')
 assert E4.call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})[0] == 200
 assert Client('198.51.100.16').call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})[0] == 200
 check('zwei Geräte vertraut', len(nutzer('eddi').get('geraete', [])) == 2)
-st, r = E4.call('change_password', {'current': 'Editor-Zugang-77', 'password': 'Editor-Zugang-88'})
+st, r = E4.call('change_password', {'current': 'Editor-Zugang-77', 'password': 'Neues-Kennwort-66'})
 check('eigener Passwortwechsel: nur dieses Gerät bleibt vertraut', st == 200 and len(nutzer('eddi').get('geraete', [])) == 1, (st, nutzer('eddi').get('geraete')))
 A.call('user_save', {'id': eu['id'], 'name': 'Eddi Editor', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
 check('neues Passwort durch den Administrator: kein Gerät mehr vertraut', not nutzer('eddi').get('geraete'))

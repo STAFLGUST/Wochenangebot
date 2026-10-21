@@ -83,7 +83,7 @@ switch ($action) {
             $new = sec_clean($b, $old, $me);
             store_write('sicherheit', $new);
             $GLOBALS['SEC'] = $new;
-            $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
+            $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'pwLeak' => 'Passwörter gegen Datenlecks prüfen', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
                   'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)',
                   'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art', 'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für',
                   'bestaetigungMinuten' => 'Passwortbestätigung gilt (Min.)'];
@@ -271,6 +271,7 @@ switch ($action) {
                 if ($setPw) {
                     $users[$i]['hash'] = password_hash(check_password($pw, $old['username']), PASSWORD_DEFAULT);
                     $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
+                    unset($users[$i]['mustChangeGrund']);
                     $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;      // bestehende Sitzungen des Nutzers beenden
                     geraete_zuruecksetzen($users[$i], true);            // neues Passwort: kein Gerät mehr vertraut
                     $d[] = ['k' => 'u|pw', 'code' => '', 'name' => $old['username'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . ($users[$i]['mustChange'] ? ' (muss beim Anmelden geändert werden)' : '')];

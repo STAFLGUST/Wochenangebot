@@ -1266,7 +1266,7 @@
       ordersCard(d.orders, card),
       customersCard(d.customers, card),
       card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
-      card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
+      card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}${S.pwLeak ? ', Datenleck-Prüfung' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
   }
   /* ---------- IT-Lagebild: Verlauf, auffällige Adressen, Konfigurationsprüfung, Diagnose ---------- */
@@ -1422,8 +1422,9 @@
             <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert.</small></label>
           <label class="fld"><span>Automatisch abmelden nach Inaktivität</span><select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${S.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
           <div class="fld"><span>Passwörter</span><div class="sec-inline"><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${S.pwMin}"> Zeichen</label>
-            <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label></div>
-            <small>Gilt für neue Passwörter. Allerweltspasswörter und der eigene Benutzername sind immer gesperrt.</small></div>
+            <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label>
+            <label class="check"><input type="checkbox" name="pwLeak"${S.pwLeak ? ' checked' : ''}> Gegen bekannte Datenlecks prüfen</label></div>
+            <small>Gilt für neue Passwörter. Allerweltspasswörter und der eigene Benutzername sind immer gesperrt. Die Datenleck-Prüfung („Pwned Passwords“) lehnt Passwörter ab, die in veröffentlichten Datenlecks vorkommen; bestehende Passwörter werden bei der nächsten Anmeldung einmal geprüft und müssen dann geändert werden. Übertragen werden nur die ersten 5 Zeichen eines Prüfwerts, nie das Passwort; ist der Dienst nicht erreichbar, wird nichts blockiert.</small></div>
           <div class="fld"><span>Kontosperre</span><div class="sec-inline"><label>nach <input type="number" name="lockAfter" min="3" max="20" value="${S.lockAfter}"> Fehlversuchen</label><label>für <input type="number" name="lockMinutes" min="5" max="1440" value="${S.lockMinutes}"> Minuten</label></div>
             <small>Zusätzlich wird jede IP-Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div>
           <div class="fld span2"><span>Eingabebereich nur von bestimmten Internetadressen</span>
@@ -1612,7 +1613,7 @@
     e.preventDefault();
     const f = e.target.elements;
     const body = {
-      twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked,
+      twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked, pwLeak: f.pwLeak.checked,
       lockAfter: +f.lockAfter.value, lockMinutes: +f.lockMinutes.value, ipEnabled: f.ipEnabled.checked,
       adminIps: f.adminIps.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean),
       geoEnabled: f.geoEnabled.checked, geoMode: f.geoMode.value, geoScope: f.geoScope.value, geoCountries: [...geoSel],

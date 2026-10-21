@@ -344,11 +344,11 @@ const FW_VORLAGEN = [
     'standard' => ['label' => 'Standard', 'text' => 'Ausgewogen für den Alltag: Firewall weist Angriffe ab, automatische Sperre nach 5 Treffern für 1 Stunde, Zwei-Faktor für Administratoren.',
         'sec' => ['twofa' => 'admins', 'pwMin' => 10, 'pwComplex' => false, 'idleMinutes' => 480, 'lockAfter' => 10, 'lockMinutes' => 15],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 5, 'sperrMinuten' => 60, 'fehlerLimit' => 30]],
-    'streng' => ['label' => 'Streng', 'text' => 'Mehr Schutz: Zwei-Faktor für alle, längere Passwörter, kürzere Sitzungen, Sperre nach 3 Treffern für einen Tag, Bedrohungsliste an.',
-        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'idleMinutes' => 60, 'lockAfter' => 5, 'lockMinutes' => 60],
+    'streng' => ['label' => 'Streng', 'text' => 'Mehr Schutz: Zwei-Faktor für alle, längere Passwörter mit Datenleck-Prüfung, kürzere Sitzungen, Sperre nach 3 Treffern für einen Tag, Bedrohungsliste an.',
+        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'pwLeak' => true, 'idleMinutes' => 60, 'lockAfter' => 5, 'lockMinutes' => 60],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 3, 'sperrMinuten' => 1440, 'fehlerLimit' => 20, 'feed' => true]],
     'notfall' => ['label' => 'Notfall (laufender Angriff)', 'text' => 'Für akute Angriffe: Sperre schon nach dem ersten Treffer für 7 Tage, sehr kurze Sitzungen, Mitschnitt aller Anfragen für 60 Minuten. Tipp: vorher die Büro-Adresse unter „nie sperren“ eintragen.',
-        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'idleMinutes' => 30, 'lockAfter' => 3, 'lockMinutes' => 240],
+        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'pwLeak' => true, 'idleMinutes' => 30, 'lockAfter' => 3, 'lockMinutes' => 240],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 1, 'sperrMinuten' => 10080, 'fehlerLimit' => 10, 'feed' => true, 'mitschnittMinuten' => 60]],
 ];
 

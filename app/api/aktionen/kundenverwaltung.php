@@ -64,6 +64,7 @@ switch ($action) {
                     if ($pw !== '') {
                         $l['hash'] = password_hash(check_password($pw, $uname), PASSWORD_DEFAULT);
                         $l['mustChange'] = !empty($lg['mustChange']);
+                        unset($l['mustChangeGrund']);
                         $l['pwSet'] = now();
                         $l['sv'] = (int)($l['sv'] ?? 0) + 1;
                         unset($l['token']);

@@ -104,7 +104,7 @@ function kunde_payload(array $c): array
     foreach (customer_offers($c) as $id) { $d = offer_def($id); if ($d) $names[] = ['id' => $id, 'name' => $d['name']]; }
     foreach (einzel_fuer_kunde($c) as $e) $names[] = ['id' => 'e-' . $e['id'], 'name' => einzel_titel($e), 'einzel' => true, 'gueltigBis' => $e['gueltigBis'] ?? null];
     return ['firma' => $c['firma'], 'ansprechpartner' => $c['ansprechpartner'] ?? '', 'username' => $c['login']['username'],
-            'mustChange' => !empty($c['login']['mustChange']), 'angebote' => $names];
+            'mustChange' => !empty($c['login']['mustChange']), 'mustChangeGrund' => !empty($c['login']['mustChange']) ? (string)($c['login']['mustChangeGrund'] ?? '') : '', 'angebote' => $names];
 }
 const CUSTOMER_FIELDS = ['nr' => 30, 'gruppe' => 10, 'vertreter' => 10, 'vertreter2' => 10, 'firma' => 120, 'ansprechpartner' => 120, 'strasse' => 120, 'plz' => 10, 'ort' => 80, 'land' => 60, 'email' => 160, 'telefon' => 40, 'notiz' => 500];
 const CUSTOMER_LABELS = ['mailAngebot' => 'Wochenangebot per E-Mail', 'nr' => 'Kundennummer', 'gruppe' => 'Kundengruppe', 'vertreter' => 'Vertreter', 'vertreter2' => 'Vertreter 2', 'firma' => 'Firma', 'ansprechpartner' => 'Ansprechpartner', 'strasse' => 'Straße', 'plz' => 'PLZ', 'ort' => 'Ort',
