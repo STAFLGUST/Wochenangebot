@@ -113,6 +113,29 @@ jobs:
             echo "::endgroup::"
           done
 
+  image:
+    # Anwendungs-Image mit mod_auth_openidc (deploy/image, Roadmap 7b-4) – noch nicht im Betrieb (docker-compose.yml
+    # nutzt php:8.3-apache). Geprüft: Bau, gleiches Verhalten wie das Grundimage, Schwachstellen (kritisch blockiert).
+    name: Anwendungs-Image prüfen
+    needs: statisch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Image bauen und mit dem Grundimage vergleichen
+        run: bash deploy/image/pruefen.sh
+      - name: Trivy installieren
+        run: |
+          curl -sSLf -o /tmp/tv.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  /tmp/tv.tgz" | sha256sum -c -
+          tar xzf /tmp/tv.tgz -C /tmp trivy
+      - name: Schwachstellen im Image (kritisch mit Korrektur blockiert, hoch als Bericht)
+        run: |
+          /tmp/trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 stafl-app:pruefung
+          /tmp/trivy image --scanners vuln --severity HIGH --ignore-unfixed --exit-code 0 stafl-app:pruefung
+
   betrieb:
     name: Sicherung und Release-Prozess
     needs: statisch
