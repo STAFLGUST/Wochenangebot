@@ -65,7 +65,7 @@ function fw_mitarbeiter(): bool
 {
     global $ME;
     if ($ME) return true;
-    if (empty($_COOKIE['WA_ADMIN']) && empty($_SERVER['HTTP_X_WA_SITZUNG'])) return false;
+    if (empty($_COOKIE[sitzung_cookie_name()]) && empty($_SERVER['HTTP_X_WA_SITZUNG'])) return false;
     return (bool)current_user();
 }
 /* Von einer fremden Seite ausgelöst (z. B. <img src="…/wp-login.php"> oder ein Link)? Browser senden Sec-Fetch-Site;

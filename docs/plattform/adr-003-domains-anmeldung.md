@@ -141,7 +141,7 @@ Subdomains nicht. Deshalb, abgestuft:
 
 | Nr. | Befund | Risiko | Vorschlag |
 | --- | --- | --- | --- |
-| B-1 | Sitzungs-Cookie `WA_ADMIN` ohne `__Host-`-Präfix; Mitarbeiter und Kunden teilen eine PHP-Sitzung auf der Kundendomain | Cookie-Tossing von `test.angebot-stafl.de`; abgemildert durch `SameSite=Strict`, HttpOnly, strikten Sitzungsmodus, neue Kennung nach Anmeldung, CSRF-Token, CSP | Präfix `__Host-` (kleiner PR; alle Sitzungen enden einmalig, Kunden und Mitarbeiter melden sich neu an; App nicht betroffen) |
+| B-1 | **Umgesetzt (PR „Sitzung: __Host-Präfix“), wirksam nach Release.** Sitzungs-Cookie `WA_ADMIN` ohne `__Host-`-Präfix; Mitarbeiter und Kunden teilen eine PHP-Sitzung auf der Kundendomain | Cookie-Tossing von `test.angebot-stafl.de`; abgemildert durch `SameSite=Strict`, HttpOnly, strikten Sitzungsmodus, neue Kennung nach Anmeldung, CSRF-Token, CSP | Präfix `__Host-` (kleiner PR; alle Sitzungen enden einmalig, Kunden und Mitarbeiter melden sich neu an; App nicht betroffen) |
 | B-2 | Testumgebung mit beliebigen Branches auf Produktivserver und -domain | §3 | Testdomain und eigener Server mittelfristig |
 | B-3 | Eigene WebAuthn-Prüfung für Passkeys | Eigenbau sicherheitskritischer Prüfungen | für Mitarbeiter durch Keycloak ersetzen |
 
