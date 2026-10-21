@@ -404,7 +404,7 @@ with sync_playwright() as pw:
     ordner = tempfile.mkdtemp(prefix='konten-')
     with open(os.path.join(ordner, '.env'), 'w') as f:
         f.write(f"DOMAIN=angebot-stafl.de\nKC_BOOTSTRAP_ADMIN_USERNAME=verwaltung-ci\nKC_BOOTSTRAP_ADMIN_PASSWORD={GEHEIM['KC_ADMIN_PASSWORD']}\n")
-    kc_dir = next(os.path.join(WORK, d) for d in os.listdir(WORK) if d.startswith('keycloak-'))
+    kc_dir = next(os.path.join(WORK, d) for d in sorted(os.listdir(WORK)) if os.path.isfile(os.path.join(WORK, d, 'bin', 'kcadm.sh')))
     umg = dict(os.environ, KCADM=f"env -u JAVA_TOOL_OPTIONS {kc_dir}/bin/kcadm.sh", KC_SERVER=KC)
 
     def konten(*args):
