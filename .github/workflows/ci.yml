@@ -40,6 +40,8 @@ jobs:
         run: for f in app/assets/*.js app/assets/vendor/*.js tests/unit/*.js; do node --check "$f"; done
       - name: Shell-Skripte (shellcheck)
         run: shellcheck --severity=warning deploy/*.sh tests/deploy/*.sh
+      - name: Dashboard-Domains nur als geschützte Platzhalter
+        run: python3 tests/deploy/test_dashboard_domains.py
       - name: Python-Syntax
         run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py werkzeuge/*.py deploy/*.py
       - name: Versionsnummern der Skripte und Stylesheets
