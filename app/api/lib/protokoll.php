@@ -202,7 +202,7 @@ function trusted_proxy(string $ip): bool
         if ($t === '') continue;
         if (strpos($t, '/') !== false) { $aufgeloest = true; if (function_exists('ip_in') && ip_in($ip, $t)) return $cache[$ip] = true; continue; }
         if (filter_var($t, FILTER_VALIDATE_IP)) { $aufgeloest = true; if (@inet_pton($t) === @inet_pton($ip)) return $cache[$ip] = true; continue; }
-        if (!preg_match('/^[a-z0-9.-]{1,253}$/i', $t)) continue;
+        if (!preg_match('/^[a-z0-9.-]{1,253}$/i', $t) || !preg_match('/[a-z]/i', $t)) continue;   // Name mit Buchstaben (sonst würde „10.1“ als 10.0.0.1 aufgelöst)
         $adr = gethostbynamel($t) ?: [];   // Docker-Dienstname (IPv4)
         if (strpos($ip, ':') !== false && function_exists('dns_get_record')) $adr = array_merge($adr, array_column(@dns_get_record($t, DNS_AAAA) ?: [], 'ipv6'));   // IPv6-Netz
         $adr = proxy_adressen_merken($t, $adr, strpos($ip, ':') !== false ? '6' : '4');   // kurze DNS-Störung: zuletzt aufgelöste Adressen weiterverwenden

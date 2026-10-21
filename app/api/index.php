@@ -122,6 +122,7 @@ require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
 require __DIR__ . '/lib/firewall.php';
 require __DIR__ . '/lib/integritaet.php';
+require __DIR__ . '/lib/geraete.php';
 
 /* ---------------- Aktionen ---------------- */
 

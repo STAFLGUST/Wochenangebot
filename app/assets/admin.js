@@ -227,7 +227,7 @@
     const setup = mode === 'setup', newpw = mode === 'newpw', code = mode === 'code', tf = mode === 'twofa', pk = mode === 'passkey';
     $('#auth-intro').textContent = setup
       ? 'Ersteinrichtung: Legen Sie den ersten Administrator-Zugang an (Passwort mindestens 10 Zeichen). Weitere Nutzer legen Sie danach unter „Nutzer“ an.'
-      : newpw ? `Hallo ${me ? me.name : ''}, bitte legen Sie jetzt ein eigenes Passwort fest.`
+      : newpw ? (me && me.mustChangeGrund === 'datenleck' ? `Hallo ${me.name}, Ihr bisheriges Passwort ist in bekannten Datenlecks aufgetaucht und gilt deshalb als unsicher. Bitte legen Sie jetzt ein neues Passwort fest.` : `Hallo ${me ? me.name : ''}, bitte legen Sie jetzt ein eigenes Passwort fest.`)
         : code ? 'Bitte den 6-stelligen Code aus Ihrer Authenticator-App eingeben – oder einen Ihrer Wiederherstellungscodes.'
           : pk ? 'Bitte bestätigen Sie die Anmeldung mit Ihrem Passkey – per Fingerabdruck, Gesicht oder PIN Ihres Geräts.'
           : tf ? `Hallo ${me ? me.name : ''}, für Ihren Zugang ist die Zwei-Faktor-Anmeldung vorgeschrieben. Bitte richten Sie sie jetzt ein.`

@@ -39,6 +39,7 @@ function user_public(array $u): array
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
             'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
+            'geraete' => function_exists('geraete_public') ? geraete_public($u) : [],
             'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])),
             'perms' => function_exists('user_perms') ? user_perms($u) : []];
 }
@@ -50,6 +51,33 @@ function setup_allowed(): bool
     return store_mtime('nutzer') === null && store_mtime('admin') === null;
 }
 /* Unter der Nutzersperre aufrufen: gilt für Passwort UND zweiten Anmeldeschritt. */
+/* Vergleichswert für unbekannte Benutzernamen: gleiche Rechenzeit wie bei einem vorhandenen Zugang. Die Kosten richten sich
+   nach den gespeicherten Passwörtern (PHP 8.4 erhöht den Standard von 10 auf 12; sonst wären unbekannte Namen schneller). */
+const DUMMY_HASHES = [
+    10 => '$2y$10$mvZvmdEAVEQ3qaAv8iuXuuDEFqUa7vwt.m2SPPnd0efnA2gP5.1fi',
+    11 => '$2y$11$270c1FHrghnxeifZDDTN7eUHr00fuM/TZpKbxj6eqHnAlU6GOrKLy',
+    12 => '$2y$12$viN1CkKfMccsPR4Vk0FnNu0lBewb6H2IuPzvHS4UyiDtgFZeArpUO',
+    13 => '$2y$13$afHdYZG5U990s5BOYZrAou8JrcS9e.7kkqfubrzPW2igqN8grOZjS',
+];
+function dummy_kosten(array $hashes): int
+{
+    foreach ($hashes as $h) {
+        $i = is_string($h) ? password_get_info($h) : [];
+        if (($i['algoName'] ?? '') === 'bcrypt' && isset(DUMMY_HASHES[(int)($i['options']['cost'] ?? 0)])) return (int)$i['options']['cost'];
+    }
+    $std = defined('PASSWORD_BCRYPT_DEFAULT_COST') ? (int)PASSWORD_BCRYPT_DEFAULT_COST : 10;
+    return isset(DUMMY_HASHES[$std]) ? $std : 10;
+}
+function dummy_verify(string $pw, array $hashes): void { password_verify($pw, DUMMY_HASHES[dummy_kosten($hashes)]); }
+/* Antworten auf fehlgeschlagene Anmeldungen gleich lang machen (ab Beginn der Anfrage), unabhängig davon, ob es den Namen
+   gibt und wie aufwendig sein Passwort-Prüfwert ist (bcrypt-Kosten 10–12) – bremst zugleich das Durchprobieren */
+const ANMELDUNG_ANTWORT_SEK = 0.6;
+function anmeldung_angleichen(): void
+{
+    $start = (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true));
+    $rest = $start + ANMELDUNG_ANTWORT_SEK - microtime(true);
+    usleep($rest > 0 ? (int)($rest * 1e6) : 0);
+}
 function login_failure(array &$u): bool
 {
     $S = sec();
@@ -121,5 +149,62 @@ function check_password($pw, string $username = ''): string
         $classes = (int)preg_match('/[a-zäöüß]/u', $pw) + (int)preg_match('/[A-ZÄÖÜ]/u', $pw) + (int)preg_match('/\d/', $pw) + (int)preg_match('/[^\p{L}\d]/u', $pw);
         if ($classes < 3) throw new InvalidArgumentException('Das Passwort braucht mindestens drei der vier Zeichenarten: Kleinbuchstaben, Großbuchstaben, Ziffern, Sonderzeichen.');
     }
+    if (!empty($S['pwLeak']) && ($n = pw_datenleck($pw)) > 0) {
+        throw new InvalidArgumentException('Dieses Passwort ist in bekannten Datenlecks aufgetaucht' . ($n > 1 ? ' (' . number_format($n, 0, ',', '.') . '-mal)' : '') . ' und gilt deshalb als unsicher. Bitte ein anderes wählen.');
+    }
     return $pw;
+}
+
+/* Prüfung gegen „Pwned Passwords“ (haveibeenpwned.com) mit k-Anonymität: Übertragen werden nur die ersten 5 Zeichen des
+   SHA-1-Prüfwerts; der Abgleich der Antwort (alle Prüfwerte mit diesem Anfang, aufgefüllt) geschieht hier. Liefert die Anzahl
+   der Funde, 0 = nicht bekannt, null = Dienst nicht erreichbar (dann wird nichts blockiert). */
+const PW_LEAK_URL = 'https://api.pwnedpasswords.com/range/%s';
+function pw_datenleck(string $pw): ?int
+{
+    static $cache = [];   // je Anfrage: Vorabprüfung außerhalb der Datensperre, danach ohne erneuten Netzzugriff
+    $h = strtoupper(sha1($pw));
+    if (array_key_exists($h, $cache)) return $cache[$h];
+    $st = store_read('datenleck');
+    if (is_array($st) && empty($st['ok']) && (int)($st['t'] ?? 0) > time() - 600) return $cache[$h] = null;   // nach einem Ausfall 10 Minuten Pause
+    $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => false, 'user_agent' => 'Wochenangebot',
+                                             'header' => "Add-Padding: true\r\n"], 'ssl' => ['verify_peer' => true]]);
+    $url = sprintf(getenv('WA_PWNED_URL') ?: PW_LEAK_URL, substr($h, 0, 5));   // WA_PWNED_URL nur in den Tests
+    $t0 = microtime(true);
+    $body = @file_get_contents($url, false, $ctx, 0, 2 * 1024 * 1024);
+    $ok = is_string($body) && $body !== '';
+    pw_datenleck_status($ok);
+    if (!$ok) { error_log('[wochenangebot] Datenleck-Prüfung nicht erreichbar (' . round(microtime(true) - $t0, 1) . ' s)'); return $cache[$h] = null; }
+    $suffix = substr($h, 5);
+    foreach (preg_split('/\R/', $body) as $line) {
+        $p = explode(':', trim($line));
+        if (count($p) === 2 && hash_equals(strtoupper($p[0]), $suffix)) return $cache[$h] = max(0, (int)$p[1]);   // aufgefüllte Einträge haben 0
+    }
+    return $cache[$h] = 0;
+}
+/* Vorab (vor dem Sperren der Nutzer-/Kundendaten) prüfen, damit die Anfrage beim Dienst keine anderen Anmeldungen aufhält */
+function pw_datenleck_vorab($pw): void { if (is_string($pw) && $pw !== '' && strlen($pw) <= 200 && !empty(sec()['pwLeak'])) pw_datenleck($pw); }
+
+/* Letztes Ergebnis merken (Konfigurationsprüfung zeigt, ob der Dienst erreichbar war); Fehler stören nicht */
+function pw_datenleck_status(bool $ok): void
+{
+    try {
+        $alt = store_read('datenleck') ?? [];
+        if (($alt['ok'] ?? null) === $ok && (int)($alt['t'] ?? 0) > time() - ($ok ? 3600 : 600)) return;   // selten schreiben (Ausfall: Pause 10 Min., s. o.)
+        store_write('datenleck', ['ok' => $ok, 't' => time()]);
+    } catch (Throwable $e) { error_log('[wochenangebot] datenleck-status: ' . $e->getMessage()); }
+}
+
+/* Bei der Anmeldung: bestehendes Passwort einmal je Passwort prüfen (Merker = Prüfwert des gespeicherten Hashes). Ist es
+   betroffen, muss es sofort geändert werden. Läuft außerhalb der Sperre der Nutzerdaten; Ausfall des Dienstes blockiert nicht.
+   Liefert true, wenn das Passwort betroffen ist; $merker ist dann bzw. bei unauffälligem Ergebnis der neue Merker. */
+function pw_leak_bei_anmeldung(string $pw, array $acc, ?string &$merker = null): bool
+{
+    $merker = null;
+    if (empty(sec()['pwLeak']) || empty($acc['hash'])) return false;
+    $m = hash('sha256', 'leak|' . (string)$acc['hash']);
+    if (hash_equals((string)($acc['leakGeprueft'] ?? ''), $m)) return false;
+    $n = pw_datenleck($pw);
+    if ($n === null) return false;   // später erneut versuchen
+    $merker = $m;
+    return $n > 0;
 }

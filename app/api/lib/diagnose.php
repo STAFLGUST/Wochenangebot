@@ -99,6 +99,12 @@ function sec_config_checks(array $users): array
     $add('Dienste', $ns['on'] && $ns['to'] ? 'ok' : 'warn', 'Alarm bei Sicherheitsereignissen', $ns['on'] && $ns['to'] ? 'per E-Mail an ' . implode(', ', $ns['to']) : 'ausgeschaltet', $ns['on'] && $ns['to'] ? '' : 'Verwaltung → E-Mail → Benachrichtigungen → Sicherheitsereignisse.');
     $g = geo_info();
     $gAge = $g ? (int)floor((time() - strtotime($g['date'] . 'T00:00:00Z')) / 86400) : null;
+    if (!empty(sec()['pwLeak'])) {
+        $dl = store_read('datenleck');
+        $add('Dienste', !$dl ? 'info' : ($dl['ok'] ? 'ok' : 'warn'), 'Datenleck-Prüfung der Passwörter', !$dl ? 'eingeschaltet, noch nicht benutzt'
+            : ($dl['ok'] ? 'Dienst erreichbar (' . date('d.m.Y, H:i', (int)$dl['t']) . ' Uhr)' : 'Dienst zuletzt nicht erreichbar (' . date('d.m.Y, H:i', (int)$dl['t']) . ' Uhr)'),
+            $dl && !$dl['ok'] ? 'Ohne Verbindung werden Passwörter nicht gegen Datenlecks geprüft (aber auch nicht blockiert). Ausgehende Verbindung zu api.pwnedpasswords.com prüfen.' : '');
+    }
     $add('Dienste', !$g ? 'warn' : ($gAge > 120 ? 'warn' : 'ok'), 'Länderdaten', $g ? 'Stand ' . date('d.m.Y', strtotime($g['date'])) . " ({$gAge} Tage)" : 'fehlen', !$g || $gAge > 120 ? 'Unter Einstellungen „Länderdaten aktualisieren“.' : '');
     return $c;
 }

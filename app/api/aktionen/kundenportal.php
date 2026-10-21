@@ -25,8 +25,19 @@ switch ($action) {
                 foreach ($d['customers'] as $i => $c) {
                     $l = $c['login'] ?? null;
                     if (!$l || $name === '' || $l['username'] !== $name) continue;
-                    if ((int)($l['lockedUntil'] ?? 0) > time()) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
-                    if (!password_verify($pw, (string)$l['hash'])) {
+                    $gesperrt = (int)($l['lockedUntil'] ?? 0) > time();
+                    if ($gesperrt) {
+                        // Gesperrt: nur ein vertrautes Gerät des Kunden (lib/geraete.php) kommt mit dem richtigen Passwort durch –
+                        // so kann niemand den Kunden durch absichtliche Fehlversuche aussperren; falsche Passwörter zählen für das Gerät
+                        $gi = geraet_vertraut($l);
+                        if ($gi === null) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
+                        if (!password_verify($pw, (string)$l['hash'])) {
+                            geraet_fehlversuch($d['customers'][$i]['login'], $gi);
+                            store_write('kunden', $d);
+                            return ['bad', $d['customers'][$i]];
+                        }
+                    }
+                    if (!$gesperrt && !password_verify($pw, (string)$l['hash'])) {
                         $lockedNow = login_failure($d['customers'][$i]['login']);
                         store_write('kunden', $d);
                         return [$lockedNow ? 'lockednow' : 'bad', $d['customers'][$i]];
@@ -36,10 +47,11 @@ switch ($action) {
                     $d['customers'][$i]['login']['failCount'] = 0;
                     $d['customers'][$i]['login']['lockedUntil'] = 0;
                     $d['customers'][$i]['login']['lastLogin'] = now();
+                    geraet_merken($d['customers'][$i]['login']);
                     store_write('kunden', $d);
                     return ['ok', $d['customers'][$i]];
                 }
-                password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit
+                dummy_verify($pw, array_map(fn($x) => $x['login']['hash'] ?? null, $d['customers'])); // gleiche Laufzeit
                 return ['bad', null];
             });
             [$st, $c] = $res;
@@ -49,12 +61,27 @@ switch ($action) {
                 attempts_record(false);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('kunde_login_fail', 'Kunden-Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
-                usleep(400000);
+                anmeldung_angleichen();
                 if ($st === 'inactive') fail('Dieser Zugang ist deaktiviert. Bitte wenden Sie sich an Ihren Ansprechpartner.', 401);
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche vorübergehend gesperrt. Bitte später erneut versuchen.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
             attempts_record(true);
+            // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
+            $leak = pw_leak_bei_anmeldung($pw, $c['login'], $merker);
+            if ($merker !== null) {
+                $c = with_lock('kunden', function () use ($c, $merker, $leak) {
+                    $d = customers_load();
+                    foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id'] && !empty($x['login']) && hash_equals((string)($x['login']['hash'] ?? ''), (string)$c['login']['hash'])) {
+                        $d['customers'][$i]['login']['leakGeprueft'] = $merker;
+                        if ($leak) { $d['customers'][$i]['login']['mustChange'] = true; $d['customers'][$i]['login']['mustChangeGrund'] = 'datenleck'; }
+                        store_write('kunden', $d);
+                        return $d['customers'][$i];
+                    }
+                    return $c;
+                });
+                if ($leak && ($c['login']['mustChangeGrund'] ?? '') === 'datenleck') audit('security', 'Passwort des Kundenzugangs „' . $c['login']['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
+            }
             kunde_sign_in($c);
             audit('kunde_login', 'Kunde angemeldet', [], $who);
             respond(['ok' => true, 'csrf' => $_SESSION['kcsrf'], 'kunde' => kunde_payload($c)]);
@@ -97,8 +124,10 @@ switch ($action) {
                 foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) {
                     $d['customers'][$i]['login']['hash'] = password_hash($new, PASSWORD_DEFAULT);
                     $d['customers'][$i]['login']['mustChange'] = false;
+                    unset($d['customers'][$i]['login']['mustChangeGrund']);
                     $d['customers'][$i]['login']['pwSet'] = now();
                     $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
+                    geraete_zuruecksetzen($d['customers'][$i]['login']);   // vertraut bleibt nur dieses Gerät
                     unset($d['customers'][$i]['login']['token']);
                     store_write('kunden', $d);
                     return $d['customers'][$i];
@@ -138,7 +167,10 @@ switch ($action) {
                     $l = &$d['customers'][$i]['login'];
                     $l['hash'] = password_hash($new, PASSWORD_DEFAULT);
                     $l['mustChange'] = false; $l['pwSet'] = now(); $l['sv'] = (int)($l['sv'] ?? 0) + 1;
+                    unset($l['mustChangeGrund']);
                     $l['failCount'] = 0; $l['lockedUntil'] = 0; $l['lastLogin'] = now();
+                    geraete_zuruecksetzen($l, true);   // Passwort über den Link neu gesetzt: bisherige Geräte nicht mehr vertraut,
+                    geraet_merken($l);                 // dieses Gerät (Inhaber des E-Mail-Postfachs) schon
                     unset($l['token']);
                     store_write('kunden', $d);
                     return $d['customers'][$i];

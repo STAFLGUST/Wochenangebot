@@ -1641,7 +1641,7 @@ function openKundePw(forced) {
   $('#kp-err').textContent = '';
   d.dataset.forced = forced ? '1' : '';
   $('#kp-title').textContent = forced ? 'Eigenes Passwort festlegen' : 'Passwort ändern';
-  $('#kp-intro').textContent = forced ? 'Sie melden sich zum ersten Mal mit dem Startpasswort an. Bitte legen Sie jetzt ein eigenes Passwort fest (mindestens 10 Zeichen).' : 'Mindestens 10 Zeichen. Andere angemeldete Geräte werden danach abgemeldet.';
+  $('#kp-intro').textContent = forced ? (KUNDE && KUNDE.mustChangeGrund === 'datenleck' ? 'Ihr bisheriges Passwort ist in bekannten Datenlecks aufgetaucht und gilt deshalb als unsicher. Bitte legen Sie jetzt ein neues Passwort fest (mindestens 10 Zeichen).' : 'Sie melden sich zum ersten Mal mit dem Startpasswort an. Bitte legen Sie jetzt ein eigenes Passwort fest (mindestens 10 Zeichen).') : 'Mindestens 10 Zeichen. Andere angemeldete Geräte werden danach abgemeldet.';
   $('#kp-close').hidden = !!forced;
   $('#kp-cancel').textContent = forced ? 'Abmelden' : 'Abbrechen';
   if (!d.open) d.showModal();

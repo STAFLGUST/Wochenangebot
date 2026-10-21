@@ -12,7 +12,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    'manuell': nur auf Knopfdruck (immer bereit, kein Schalter; versendet von der jeweiligen Aktion). */
 const NOTIFY_EVENTS = [
     'bestellung' => ['label' => 'Neuer Bestellwunsch', 'text' => 'Ein angemeldeter Kunde sendet einen Bestellwunsch über das Portal (mit allen Positionen).', 'fest' => true, 'pause' => 0],
-    'sicherheit' => ['label' => 'Sicherheitsereignisse', 'text' => 'Anmeldesperre nach Fehlversuchen, Änderungen an Nutzern und Rollen, Zwei-Faktor, Sicherheitseinstellungen, Wartungsmodus.', 'fest' => false, 'pause' => 600],
+    'sicherheit' => ['label' => 'Sicherheitsereignisse', 'text' => 'Anmeldesperre nach Fehlversuchen, Administrator-Anmeldung von neuem Gerät, Passwort in Datenleck, Änderungen an Nutzern und Rollen, Zwei-Faktor, Sicherheitseinstellungen, Wartungsmodus.', 'fest' => false, 'pause' => 600],
     'einkauf' => ['label' => 'Einkaufsbedarf', 'text' => 'Fehlmengen aus offenen Bestellwünschen – auf Knopfdruck im Bereich „Einkauf“ (Bearbeiter und Administratoren).', 'fest' => false, 'pause' => 0, 'manuell' => true],
     'abmeldung' => ['label' => 'Abmeldung vom Wochenangebot', 'text' => 'Ein Kunde bestellt das Wochenangebot per E-Mail ab oder wieder an.', 'fest' => false, 'pause' => 0, 'ersatz' => true],
 ];

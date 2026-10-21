@@ -9,6 +9,8 @@
   const W = window.WA;
   const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
+  // Vertraute Geräte (Browser, auf denen sich der Zugang angemeldet hat; kommen auch bei einer fremd ausgelösten Sperre durch)
+  const geraeteText = (g) => `${plural(g.length, 'Gerät', 'Geräte')}: ${g.slice(0, 3).map((x) => `${x.name}, zuletzt ${dateTime(x.zuletzt)}`).join(' · ')}${g.length > 3 ? ' …' : ''}`;
   const mailInfo = () => (isAdmin() ? api('mail_status') : api('mail_info').catch(() => ({ configured: false })));   // Postfach-Details nur für Administratoren; sonst Kurzinfo (eingerichtet, Woche)
   let qTimer = null;
 
@@ -129,6 +131,7 @@
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
         ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
+        ${u && u.geraete && u.geraete.length && !self ? `<label class="check span2"><input type="checkbox" name="resetGeraete"> Vertraute Geräte entfernen (${esc(geraeteText(u.geraete))})</label>` : ''}
         <details class="span2 ur-box" id="ur-box"${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Nutzer${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
@@ -163,7 +166,7 @@
       id: editUid || '', name: f.name.value.trim(), username: u ? u.username : f.username.value.trim(),
       role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
-      resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false,
+      resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false, resetGeraete: f.resetGeraete ? f.resetGeraete.checked : false,
     };
     if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');
@@ -520,6 +523,7 @@
             <label class="check span2 k-pwfld"${pwMode ? '' : ' hidden'}><input type="checkbox" name="mustChange" checked> Kunde muss das Passwort bei der ersten Anmeldung ändern</label>
             <label class="check span2"><input type="checkbox" name="loginActive"${!l || l.active ? ' checked' : ''}> Zugang aktiv</label>
             ${l && l.lockedUntil ? `<label class="check span2 st-err"><input type="checkbox" name="unlock" checked> Sperre nach Fehlversuchen aufheben (gesperrt bis ${esc(timeOnly(new Date(l.lockedUntil * 1000).toISOString()))} Uhr)</label>` : ''}
+            ${l && l.geraete && l.geraete.length ? `<label class="check span2"><input type="checkbox" name="geraeteEntfernen"> Vertraute Geräte entfernen (${esc(geraeteText(l.geraete))})</label>` : ''}
             ${l ? `<p class="hint span2">Letzte Anmeldung: ${l.lastLogin ? esc(dateTime(l.lastLogin)) : 'noch nie'}${l.pwSet ? ` · Passwort gesetzt ${esc(dateTime(l.pwSet))}` : ''}${c.sessions ? ` · ${plural(c.sessions, 'aktive Sitzung', 'aktive Sitzungen')}` : ''}${l.mustChange ? ' · Startpasswort noch nicht geändert' : ''}${l.link ? ` · ${l.link.p === 'invite' ? 'Einladung' : 'Passwort-Link'} gültig bis ${esc(dmyTs(l.link.exp))}` : ''}</p>` : ''}
           </div>
           ${l ? '<p class="hint k-nologin" hidden>Beim Speichern wird der Zugang entfernt und der Kunde abgemeldet.</p>' : ''}
@@ -585,7 +589,7 @@
       if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
       if (!invite && !(c && c.login && c.login.hasPassword) && !pw) { err.textContent = 'Bitte ein Startpasswort festlegen (z. B. über „Vorschlag“).'; f.password.focus(); return; }
       if (invite && !body.email) { err.textContent = 'Für die Einladung per E-Mail bitte die E-Mail-Adresse angeben.'; f.email.focus(); return; }
-      body.login = { username: f.username.value.trim(), password: pw, mustChange: f.mustChange.checked, active: f.loginActive.checked, unlock: !!(f.unlock && f.unlock.checked), invite };
+      body.login = { username: f.username.value.trim(), password: pw, mustChange: f.mustChange.checked, active: f.loginActive.checked, unlock: !!(f.unlock && f.unlock.checked), geraeteEntfernen: !!(f.geraeteEntfernen && f.geraeteEntfernen.checked), invite };
     } else if (c && c.login) {
       if (!(await confirmBox('Zugang entfernen?', `Der Zugang „${esc(c.login.username)}“ wird entfernt; der Kunde kann sich nicht mehr anmelden. Die Stammdaten bleiben erhalten.`, 'Zugang entfernen', true))) return;
       body.login = { remove: true };
@@ -1262,7 +1266,7 @@
       ordersCard(d.orders, card),
       customersCard(d.customers, card),
       card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
-      card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
+      card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}${S.pwLeak ? ', Datenleck-Prüfung' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
     ].join('');
   }
   /* ---------- IT-Lagebild: Verlauf, auffällige Adressen, Konfigurationsprüfung, Diagnose ---------- */
@@ -1418,8 +1422,9 @@
             <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert.</small></label>
           <label class="fld"><span>Automatisch abmelden nach Inaktivität</span><select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${S.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
           <div class="fld"><span>Passwörter</span><div class="sec-inline"><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${S.pwMin}"> Zeichen</label>
-            <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label></div>
-            <small>Gilt für neue Passwörter. Allerweltspasswörter und der eigene Benutzername sind immer gesperrt.</small></div>
+            <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label>
+            <label class="check"><input type="checkbox" name="pwLeak"${S.pwLeak ? ' checked' : ''}> Gegen bekannte Datenlecks prüfen</label></div>
+            <small>Gilt für neue Passwörter. Allerweltspasswörter und der eigene Benutzername sind immer gesperrt. Die Datenleck-Prüfung („Pwned Passwords“) lehnt Passwörter ab, die in veröffentlichten Datenlecks vorkommen; bestehende Passwörter werden bei der nächsten Anmeldung einmal geprüft und müssen dann geändert werden. Übertragen werden nur die ersten 5 Zeichen eines Prüfwerts, nie das Passwort; ist der Dienst nicht erreichbar, wird nichts blockiert.</small></div>
           <div class="fld"><span>Kontosperre</span><div class="sec-inline"><label>nach <input type="number" name="lockAfter" min="3" max="20" value="${S.lockAfter}"> Fehlversuchen</label><label>für <input type="number" name="lockMinutes" min="5" max="1440" value="${S.lockMinutes}"> Minuten</label></div>
             <small>Zusätzlich wird jede IP-Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div>
           <div class="fld span2"><span>Eingabebereich nur von bestimmten Internetadressen</span>
@@ -1608,7 +1613,7 @@
     e.preventDefault();
     const f = e.target.elements;
     const body = {
-      twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked,
+      twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked, pwLeak: f.pwLeak.checked,
       lockAfter: +f.lockAfter.value, lockMinutes: +f.lockMinutes.value, ipEnabled: f.ipEnabled.checked,
       adminIps: f.adminIps.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean),
       geoEnabled: f.geoEnabled.checked, geoMode: f.geoMode.value, geoScope: f.geoScope.value, geoCountries: [...geoSel],

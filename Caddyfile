@@ -24,6 +24,13 @@
 		-Server
 		-X-Powered-By
 	}
+	# Skripte und Stylesheets mit Inhalts-Prüfsumme in der Adresse (?v=…, werkzeuge/asset_versionen.py) ändern sich nie:
+	# ein Jahr zwischenspeichern – eine neue Fassung hat eine neue Adresse. Alles andere fragt weiter nach („no-cache“).
+	@versioniert {
+		path /assets/*
+		query v=*
+	}
+	header @versioniert >Cache-Control "public, max-age=31536000, immutable"
 	@private path /data /data/*
 	respond @private 404
 	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
@@ -50,6 +57,13 @@ test.{$DOMAIN} {
 		-Server
 		-X-Powered-By
 	}
+	# Skripte und Stylesheets mit Inhalts-Prüfsumme in der Adresse (?v=…, werkzeuge/asset_versionen.py) ändern sich nie:
+	# ein Jahr zwischenspeichern – eine neue Fassung hat eine neue Adresse. Alles andere fragt weiter nach („no-cache“).
+	@versioniert {
+		path /assets/*
+		query v=*
+	}
+	header @versioniert >Cache-Control "public, max-age=31536000, immutable"
 	@private path /data /data/*
 	respond @private 404
 	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch

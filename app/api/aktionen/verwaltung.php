@@ -83,7 +83,7 @@ switch ($action) {
             $new = sec_clean($b, $old, $me);
             store_write('sicherheit', $new);
             $GLOBALS['SEC'] = $new;
-            $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
+            $L = ['twofa' => 'Zwei-Faktor-Pflicht', 'pwMin' => 'Passwort-Mindestlänge', 'pwComplex' => 'Passwort-Komplexität', 'pwLeak' => 'Passwörter gegen Datenlecks prüfen', 'idleMinutes' => 'Abmeldung nach Inaktivität (Min.)',
                   'ipEnabled' => 'IP-Freigabe Eingabebereich', 'adminIps' => 'Freigegebene Adressen', 'lockAfter' => 'Kontosperre nach Fehlversuchen', 'lockMinutes' => 'Kontosperre (Min.)',
                   'geoEnabled' => 'Ländersperre', 'geoMode' => 'Ländersperre – Art', 'geoCountries' => 'Ländersperre – Länder', 'geoScope' => 'Ländersperre – gilt für',
                   'bestaetigungMinuten' => 'Passwortbestätigung gilt (Min.)'];
@@ -196,6 +196,7 @@ switch ($action) {
         case 'user_save': {
             $me = require_admin_confirmation('user_save');
             $b = body();
+            pw_datenleck_vorab($b['password'] ?? null);
             $res = with_lock('nutzer', function () use ($b, $me) {
                 $users = users_load();
                 $id = is_string($b['id'] ?? null) ? $b['id'] : '';
@@ -263,10 +264,17 @@ switch ($action) {
                     $n = count($old['passkeys']);
                     $d[] = ['k' => 'u|passkey', 'code' => '', 'name' => $old['username'], 'f' => 'Passkeys', 'from' => $n === 1 ? '1 Passkey' : "$n Passkeys", 'to' => 'alle entfernt'];
                 }
+                if (!empty($b['resetGeraete']) && geraete_gueltig($old)) {
+                    $n = count(geraete_gueltig($old));
+                    geraete_zuruecksetzen($users[$i], true);
+                    $d[] = ['k' => 'u|geraete', 'code' => '', 'name' => $old['username'], 'f' => 'Vertraute Geräte', 'from' => $n === 1 ? '1 Gerät' : "$n Geräte", 'to' => 'alle entfernt'];
+                }
                 if ($setPw) {
                     $users[$i]['hash'] = password_hash(check_password($pw, $old['username']), PASSWORD_DEFAULT);
                     $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
+                    unset($users[$i]['mustChangeGrund']);
                     $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;      // bestehende Sitzungen des Nutzers beenden
+                    geraete_zuruecksetzen($users[$i], true);            // neues Passwort: kein Gerät mehr vertraut
                     $d[] = ['k' => 'u|pw', 'code' => '', 'name' => $old['username'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . ($users[$i]['mustChange'] ? ' (muss beim Anmelden geändert werden)' : '')];
                 }
                 $users[$i]['changed'] = now();

@@ -161,6 +161,15 @@ st, r = A.call('fw_save', {'feed': True})
 check('Bedrohungsliste einschalten', st == 200 and r['fw']['feed'] is True and r['feed']['anzahl'] == 2, r.get('error'))
 check('Adresse aus der Bedrohungsliste abgewiesen', roh('192.0.2.77', 'offer')[0] == 403 and roh('3fff:0:dead:1::5', 'offer')[0] == 403)
 check('… andere nicht', roh('198.51.100.77', 'offer')[0] == 200)
+ix = doc('bedrohungsliste')
+check('Liste einer älteren Version: schneller Index wird einmal nachgebaut (IPv4 als Bereiche, IPv6 als Liste, Liste unverändert)', ix.get('n4') == 1 and ix.get('v6') == ['3fff:0:dead::/48'] and ix['netze'] == ['192.0.2.0/24', '3fff:0:dead::/48'] and ix['anzahl'] == 2, ix)
+# Index mit vielen Netzen: gleiche Entscheidungen wie die bisherige Prüfung, Grenzen genau
+viele = ['192.0.2.0/24', '198.51.100.128/25', '203.0.113.8/29', '3fff:0:dead::/48'] + [f'{a}.{b}.0.0/16' for a in range(11, 40) for b in (7, 99)]
+storage_write('bedrohungsliste', {'quelle': 'Testliste', 'stand': '2026-10-20T11:00:00Z', 'anzahl': len(viele), 'netze': viele})
+check('… neue Liste ohne Index (z. B. von älterer Version geschrieben) wird sofort richtig geprüft', roh('25.7.1.1', 'offer')[0] == 403 and 'v4' in doc('bedrohungsliste'))
+erg = {ip: roh(ip, 'offer')[0] for ip in ['198.51.100.127', '198.51.100.128', '198.51.100.255', '203.0.113.7', '203.0.113.8', '203.0.113.15', '203.0.113.16', '25.99.255.255', '25.100.0.0', '3fff:0:dead:ffff::1', '3fff:0:deae::1']}
+check('Bedrohungsliste mit Index: Netzgrenzen genau (IPv4 und IPv6)', erg == {'198.51.100.127': 200, '198.51.100.128': 403, '198.51.100.255': 403, '203.0.113.7': 200, '203.0.113.8': 403,
+      '203.0.113.15': 403, '203.0.113.16': 200, '25.99.255.255': 403, '25.100.0.0': 200, '3fff:0:dead:ffff::1': 403, '3fff:0:deae::1': 200}, erg)
 st, r = A.call('fw_feed_update', {})
 check('Aktualisieren: Erfolg oder verständlicher Fehler ohne Verbindung (502)', st in (200, 502) and (st == 200 or 'Bedrohungsliste' in r.get('error', '')), (st, r.get('error')))
 A.call('fw_save', {'feed': False})

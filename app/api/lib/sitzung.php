@@ -103,6 +103,7 @@ function sign_in(array $u): string
 function me_payload(array $u): array
 {
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),
+            'mustChangeGrund' => !empty($u['mustChange']) ? (string)($u['mustChangeGrund'] ?? '') : '',
             'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])),
             'needTwofa' => twofa_required($u) && !has_second_factor($u), 'twofaRequired' => twofa_required($u),
             'perms' => function_exists('user_perms') ? user_perms($u) : []];

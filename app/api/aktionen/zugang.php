@@ -70,7 +70,9 @@ switch ($action) {
                 $users = users_load();
                 foreach ($users as $i => $u) {
                     if ($u['username'] !== $name) continue;
-                    if ((int)($u['lockedUntil'] ?? 0) > time()) {
+                    $gesperrt = (int)($u['lockedUntil'] ?? 0) > time();
+                    $gi = $gesperrt ? geraet_vertraut($u) : null;   // vertrautes Gerät des Inhabers (lib/geraete.php)
+                    if ($gesperrt && $gi === null) {
                         // Gesperrt: richtiges Passwort + zweiter Faktor kommt trotzdem durch (sonst könnte jeder durch Fehlversuche
                         // den Inhaber aussperren). Damit die Antwort nichts verrät, bekommt während der Sperre JEDES Passwort den
                         // Code-Schritt (auch bei Zugängen ohne zweiten Faktor und bei unbekannten Namen, siehe unten); wirksam ist er nur
@@ -80,8 +82,11 @@ switch ($action) {
                         if ($ok && $u['active'] && !empty($u['totp']) && (int)($u['lockTries'] ?? 0) < 3) return ['ok_locked', $u];
                         return ['locked_code', $u];
                     }
-                    if (!empty($u['lockTries'])) { unset($users[$i]['lockTries']); $u = $users[$i]; users_save($users); }   // Sperre abgelaufen
-                    if (!password_verify($pw, (string)$u['hash'])) {
+                    if ($gesperrt) {
+                        // Gesperrt, aber vertrautes Gerät: normal prüfen; falsche Passwörter zählen nur für dieses Gerät
+                        if (!password_verify($pw, (string)$u['hash'])) { geraet_fehlversuch($users[$i], $gi); users_save($users); return ['bad', $users[$i]]; }
+                    } elseif (!empty($u['lockTries'])) { unset($users[$i]['lockTries']); $u = $users[$i]; users_save($users); }   // Sperre abgelaufen
+                    if (!$gesperrt && !password_verify($pw, (string)$u['hash'])) {
                         $lockedNow = login_failure($users[$i]);
                         users_save($users);
                         return [$lockedNow ? 'lockednow' : 'bad', $users[$i]];
@@ -89,29 +94,41 @@ switch ($action) {
                     if (!$u['active']) return ['inactive', $u];
                     if (password_needs_rehash((string)$u['hash'], PASSWORD_DEFAULT)) $users[$i]['hash'] = password_hash($pw, PASSWORD_DEFAULT);
                     // Mit zweitem Faktor (Authenticator-App oder Passkey) ist das Passwort allein noch keine erfolgreiche Anmeldung.
+                    $x = ['gh' => $gi !== null ? (string)$u['geraete'][$gi]['h'] : '', 'neu' => false];
                     if (!has_second_factor($u)) {
                         $users[$i]['failCount'] = 0;
                         $users[$i]['lockedUntil'] = 0;
+                        unset($users[$i]['lockTries']);
                         $users[$i]['lastLogin'] = now();
+                        geraet_merken($users[$i], $x['neu']);
                     }
                     users_save($users);
-                    return ['ok', $users[$i]];
+                    return ['ok', $users[$i], $x];
                 }
-                password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit wie bei vorhandenem Nutzer
+                dummy_verify($pw, array_column($users, 'hash')); // gleiche Laufzeit wie bei vorhandenem Nutzer
                 return ['bad', null];
             });
-            [$st, $u] = $res;
+            [$st, $u, $x] = $res + [2 => ['gh' => '', 'neu' => false]];
             if ($st === 'bad' && $u === null && ($until = ghost_lock('u', $name, true, $neu))) {   // unbekannter Name: gleiche Sperre
                 $st = $neu ? 'lockednow' : 'locked_code';
                 $u = ['lockedUntil' => $until];
             }
             $who = ['username' => mb_substr($name, 0, 40), 'name' => $u['name'] ?? '', 'role' => $u['role'] ?? ''];
+            if ($st === 'ok') {
+                // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
+                $leak = pw_leak_bei_anmeldung($pw, $u, $merker);
+                if ($merker !== null) {
+                    $u = user_update($u['id'], function (&$y) use ($merker, $leak, $u) { if (!hash_equals((string)($y['hash'] ?? ''), (string)$u['hash'])) return;   // inzwischen geändert
+                        $y['leakGeprueft'] = $merker; if ($leak) { $y['mustChange'] = true; $y['mustChangeGrund'] = 'datenleck'; } }) ?? $u;
+                    if ($leak && ($u['mustChangeGrund'] ?? '') === 'datenleck') audit('security', 'Passwort von „' . $u['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
+                }
+            }
             if ($st === 'ok_locked' || $st === 'locked_code') {
                 // Während einer Sperre: für jedes Passwort dieselbe Antwort (Code-Schritt mit Hinweis auf die Sperre)
                 attempts_record(false);
                 audit('login_fail', 'Anmeldung während der Sperre' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '')
                     . ($st === 'ok_locked' ? ' – Passwort richtig, Code-Schritt' : ''), [], $who);
-                usleep(400000);
+                anmeldung_angleichen();
                 session_regenerate_id(true);
                 $_SESSION = ['pend' => $st === 'ok_locked'
                     ? ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => true, 'bis' => (int)$u['lockedUntil']]
@@ -122,7 +139,7 @@ switch ($action) {
                 attempts_record(false);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
-                usleep(400000);
+                anmeldung_angleichen();
                 if ($st === 'inactive') fail('Dieser Zugang ist deaktiviert.', 401);
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche bis ' . (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i') . ' Uhr gesperrt. Ein Administrator kann ihn vorher entsperren.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
@@ -135,13 +152,14 @@ switch ($action) {
                 }
                 // zweiter Schritt: Code aus der Authenticator-App oder Passkey (gesperrte Zugänge: siehe oben)
                 session_regenerate_id(true);
-                $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => false]];
+                $_SESSION = ['pend' => ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => false, 'gh' => (string)$x['gh']]];
                 $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) && !app_client() ? 'passkey' : null]));
                 respond(['ok' => true, 'need2fa' => true, 'methods' => $methods]);
             }
             attempts_record(true);
             $tok = sign_in($u);
             audit('login', 'Angemeldet');
+            geraet_neu_melden($u, (bool)$x['neu']);
             respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($u)]);
         }
 
@@ -162,10 +180,15 @@ switch ($action) {
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$p['sv'] || empty($users[$i]['totp'])) return ['gone', null];
                 $u = &$users[$i];
                 $gesperrt = (int)($u['lockedUntil'] ?? 0) > time();
+                // Passwort-Schritt auf einem vertrauten Gerät während der Sperre (lib/geraete.php): Sperre gilt hier nicht,
+                // falsche Codes zählen nur für dieses Gerät
+                $gi = null;
+                if (!empty($p['gh'])) foreach ((array)($u['geraete'] ?? []) as $k => $g) if (is_array($g) && hash_equals((string)($g['h'] ?? ''), (string)$p['gh']) && (int)($g['f'] ?? 0) < GERAET_FEHLER) $gi = $k;
+                $frei = $gesperrt && $gi !== null;
                 if (!empty($p['lk']) && !$gesperrt) return ['abgelaufen', null];   // Sperre vorzeitig aufgehoben (Administrator): neu anmelden
-                if ($gesperrt && empty($p['lk'])) return ['locked', $u];
+                if ($gesperrt && empty($p['lk']) && !$frei) return ['locked', $u];
                 // höchstens 3 Code-Versuche je Sperre – über alle parallelen Anmeldevorgänge; danach wie ein falscher Code
-                if ($gesperrt && (int)($u['lockTries'] ?? 0) >= 3) { $out = $u; unset($u); users_save($users); return ['bad', $out]; }
+                if ($gesperrt && !$frei && (int)($u['lockTries'] ?? 0) >= 3) { $out = $u; unset($u); users_save($users); return ['bad', $out]; }
                 $how = null;
                 $step = totp_check((string)$u['totp'], $code, (int)($u['totpLast'] ?? 0));
                 if ($step !== null) { $u['totpLast'] = $step; $how = 'app'; }
@@ -175,6 +198,7 @@ switch ($action) {
                     if ($k !== false) { array_splice($u['recovery'], $k, 1); $how = 'recovery'; }
                 }
                 if (!$how) {
+                    if ($frei) { geraet_fehlversuch($u, $gi); $out = $u; unset($u); users_save($users); return ['bad', $out]; }
                     if ($gesperrt) {   // Code-Versuch während der Sperre: zählt nur gegen die 3 Versuche (Antwort wie sonst)
                         $u['lockTries'] = (int)($u['lockTries'] ?? 0) + 1;
                         users_save($users);
@@ -188,12 +212,13 @@ switch ($action) {
                 $u['lockedUntil'] = 0;
                 unset($u['lockTries']);
                 $u['lastLogin'] = now();
+                geraet_merken($u, $neu);
                 $out = $u;
                 unset($u);
                 users_save($users);
-                return [$how, $out];
+                return [$how, $out, $neu];
             });
-            [$st, $u] = $res;
+            [$st, $u, $neuGeraet] = $res + [2 => false];
             if ($st === 'gone') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
             if ($st === 'abgelaufen') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             if ($st === 'bad' || $st === 'locked') {
@@ -208,6 +233,7 @@ switch ($action) {
             attempts_record(true);
             $tok = sign_in($u);
             audit('login', $st === 'recovery' ? 'Angemeldet (mit Wiederherstellungscode – noch ' . count($u['recovery'] ?? []) . ' übrig)' : 'Angemeldet (mit Zwei-Faktor-Code)');
+            geraet_neu_melden($u, (bool)$neuGeraet);
             respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($u), 'recoveryLeft' => $st === 'recovery' ? count($u['recovery'] ?? []) : null]);
         }
 
@@ -290,7 +316,9 @@ switch ($action) {
                 if ($i === null || !$users[$i]['active'] || (int)$users[$i]['sv'] !== (int)$me['sv']) fail('Bitte erneut anmelden.', 401);
                 $users[$i]['hash'] = password_hash($new, PASSWORD_DEFAULT);
                 $users[$i]['mustChange'] = false;
+                unset($users[$i]['mustChangeGrund']);
                 $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;   // andere Sitzungen dieses Nutzers abmelden
+                geraete_zuruecksetzen($users[$i]);              // vertraut bleibt nur dieses Gerät
                 $users[$i]['changed'] = now();
                 users_save($users);
                 return $users[$i];

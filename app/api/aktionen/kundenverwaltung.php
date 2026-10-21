@@ -19,6 +19,7 @@ switch ($action) {
         case 'kunde_save': {
             $me = require_perm_confirmed('kunden.bearbeiten', 'kunde_save');
             $b = body();
+            pw_datenleck_vorab(is_array($b['login'] ?? null) ? ($b['login']['password'] ?? null) : null);
             $res = with_lock('kunden', function () use ($b) {
                 $d = customers_load();
                 if ((int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte neu laden.', 409);
@@ -64,9 +65,11 @@ switch ($action) {
                     if ($pw !== '') {
                         $l['hash'] = password_hash(check_password($pw, $uname), PASSWORD_DEFAULT);
                         $l['mustChange'] = !empty($lg['mustChange']);
+                        unset($l['mustChangeGrund']);
                         $l['pwSet'] = now();
                         $l['sv'] = (int)($l['sv'] ?? 0) + 1;
                         unset($l['token']);
+                        geraete_zuruecksetzen($l, true);   // neues Passwort: kein Gerät mehr vertraut
                         $pwNew = true;
                     } elseif (empty($l['hash']) && empty($lg['invite'])) {
                         throw new InvalidArgumentException('Bitte ein Startpasswort festlegen oder eine Einladung per E-Mail senden.');
@@ -76,7 +79,8 @@ switch ($action) {
                         if (($row['email'] ?? '') === '') throw new InvalidArgumentException('Für eine Einladung per E-Mail bitte die E-Mail-Adresse angeben.');
                     }
                     if (!empty($lg['unlock'])) { $l['lockedUntil'] = 0; $l['failCount'] = 0; }
-                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; unset($l['token']); }
+                    if (!empty($lg['geraeteEntfernen'])) geraete_zuruecksetzen($l, true);
+                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; unset($l['token']); geraete_zuruecksetzen($l, true); }
                     if ($ol && !empty($ol['active']) && !$l['active']) $ended = true;
                     $row['login'] = $l;
                 }

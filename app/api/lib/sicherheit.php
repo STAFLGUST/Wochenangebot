@@ -5,7 +5,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* ---------------- Sicherheitseinstellungen ---------------- */
 
-const SEC_DEFAULTS = ['twofa' => 'off', 'pwMin' => 10, 'pwComplex' => false, 'idleMinutes' => 480,
+const SEC_DEFAULTS = ['twofa' => 'off', 'pwMin' => 10, 'pwComplex' => false, 'pwLeak' => false, 'idleMinutes' => 480,
                       'ipEnabled' => false, 'adminIps' => [], 'lockAfter' => 10, 'lockMinutes' => 15,
                       'geoEnabled' => false, 'geoMode' => 'block', 'geoCountries' => [], 'geoScope' => 'admin',
                       'bestaetigungAus' => [], 'bestaetigungMinuten' => 5];
@@ -229,6 +229,7 @@ function sec_clean(array $b, array $old, array $me): array
     if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException("Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
     if ($twofa !== 'off' && !has_second_factor($me) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
     $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
+            'pwLeak' => array_key_exists('pwLeak', $b) ? !empty($b['pwLeak']) : !empty($old['pwLeak']),   // ältere Oberfläche ohne Feld: unverändert
             'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)($b['idleMinutes'] ?? 480) : 480,
             'ipEnabled' => $ipEnabled, 'adminIps' => $ips,
             'lockAfter' => max(3, min(20, (int)($b['lockAfter'] ?? 10))), 'lockMinutes' => max(5, min(1440, (int)($b['lockMinutes'] ?? 15))),

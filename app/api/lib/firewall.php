@@ -96,10 +96,7 @@ function fw_gesperrt(string $ip): ?string
     foreach ($L['manuell'] as $e) if ((!(int)($e['bis'] ?? 0) || (int)$e['bis'] > $now) && ip_in($ip, (string)$e['ip'])) return 'von Hand gesperrt' . (($e['grund'] ?? '') !== '' ? ' (' . $e['grund'] . ')' : '');
     $a = $L['auto'][fw_key($ip)] ?? null;
     if ($a && (int)($a['bis'] ?? 0) > $now) return 'automatisch gesperrt (' . ($a['grund'] ?? 'Angriff') . ')';
-    if (fw()['feed']) {
-        $f = store_read('bedrohungsliste');
-        if ($f && !empty($f['netze']) && ip_allowed($ip, $f['netze'])) return 'Bedrohungsliste (Spamhaus DROP)';
-    }
+    if (fw()['feed'] && fw_feed_trifft($ip)) return 'Bedrohungsliste (Spamhaus DROP)';
     return null;
 }
 
@@ -306,8 +303,65 @@ function fw_feed_speichern(array $netze, string $quelle): array
         return true;
     })));
     $d = ['quelle' => $quelle, 'stand' => now(), 'anzahl' => count($netze), 'netze' => array_slice($netze, 0, 50000)];
-    store_write('bedrohungsliste', $d);
+    store_write('bedrohungsliste', $d + fw_feed_index($d['netze']));
     return ['quelle' => $quelle, 'stand' => $d['stand'], 'anzahl' => $d['anzahl']];
+}
+/* Schneller Index der Bedrohungsliste für die Prüfung vor jeder Anfrage: IPv4 als sortierte, zusammengefasste Bereiche
+   (gepackt: Anfang/Ende je 4 Byte, base64) für eine binäre Suche; IPv6 (wenige Netze) als Liste. Steht im selben Dokument
+   wie die Liste (zusätzliche Felder v4/v6/n4): Schreibt eine ältere Version die Liste neu, fehlt der Index und wird neu
+   gebaut – er kann nie zu einer anderen Liste gehören. Ältere Versionen ignorieren die Felder. */
+function fw_feed_index(array $netze): array
+{
+    $r = []; $v6 = [];
+    foreach ($netze as $c) {
+        $p = explode('/', (string)$c, 2);
+        if (strpos($p[0], ':') !== false) { $v6[] = $c; continue; }
+        $a = ip2long($p[0]);
+        if ($a === false) continue;
+        $bits = isset($p[1]) ? max(0, min(32, (int)$p[1])) : 32;
+        $mask = $bits === 0 ? 0 : ((0xFFFFFFFF << (32 - $bits)) & 0xFFFFFFFF);
+        $start = $a & $mask;
+        $r[] = [$start, $start | (~$mask & 0xFFFFFFFF)];
+    }
+    usort($r, fn($x, $y) => $x[0] <=> $y[0]);
+    $m = [];
+    foreach ($r as [$a, $b]) {
+        $k = count($m) - 1;
+        if ($k >= 0 && $a <= $m[$k][1] + 1) $m[$k][1] = max($m[$k][1], $b); else $m[] = [$a, $b];
+    }
+    $bin = '';
+    foreach ($m as [$a, $b]) $bin .= pack('NN', $a, $b);
+    return ['v4' => base64_encode($bin), 'v6' => $v6, 'n4' => count($m)];
+}
+/* Steht die Adresse auf der Bedrohungsliste? Mit Index binäre Suche; ohne Index (Liste einer älteren Version) wie bisher */
+function fw_feed_trifft(string $ip): bool
+{
+    $x = store_read('bedrohungsliste');
+    if (!is_array($x) || empty($x['netze'])) return false;
+    if (!isset($x['v4'])) {
+        // Liste ohne Index (von einer älteren Version geladen): einmal nachbauen, bis dahin wie bisher prüfen
+        // (scheitert das Speichern, höchstens einmal je Minute erneut versuchen)
+        $merk = rtrim(sys_get_temp_dir(), '/') . '/wa-bl-index-' . substr(hash('sha256', (string)($GLOBALS['DATA'] ?? '')), 0, 12);
+        if (@filemtime($merk) > time() - 60) return ip_allowed($ip, (array)$x['netze']);
+        try {
+            with_lock('bedrohungsliste', function () {
+                $f = store_read('bedrohungsliste');
+                if (is_array($f) && !empty($f['netze']) && !isset($f['v4'])) store_write('bedrohungsliste', $f + fw_feed_index((array)$f['netze']));
+            });
+        } catch (Throwable $e) { @touch($merk); error_log('[wochenangebot] bedrohungsliste-index: ' . $e->getMessage()); }
+        return ip_allowed($ip, (array)$x['netze']);
+    }
+    if (strpos($ip, ':') !== false) return !empty($x['v6']) && ip_allowed($ip, (array)$x['v6']);
+    $a = ip2long($ip);
+    $bin = base64_decode((string)$x['v4'], true);
+    if ($a === false || !is_string($bin) || $bin === '') return false;
+    $lo = 0; $hi = intdiv(strlen($bin), 8) - 1;
+    while ($lo <= $hi) {
+        $mid = ($lo + $hi) >> 1;
+        $s = unpack('N', $bin, $mid * 8)[1]; $e = unpack('N', $bin, $mid * 8 + 4)[1];
+        if ($a < $s) $hi = $mid - 1; elseif ($a > $e) $lo = $mid + 1; else return true;
+    }
+    return false;
 }
 function fw_feed_info(): ?array
 {
@@ -344,11 +398,11 @@ const FW_VORLAGEN = [
     'standard' => ['label' => 'Standard', 'text' => 'Ausgewogen für den Alltag: Firewall weist Angriffe ab, automatische Sperre nach 5 Treffern für 1 Stunde, Zwei-Faktor für Administratoren.',
         'sec' => ['twofa' => 'admins', 'pwMin' => 10, 'pwComplex' => false, 'idleMinutes' => 480, 'lockAfter' => 10, 'lockMinutes' => 15],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 5, 'sperrMinuten' => 60, 'fehlerLimit' => 30]],
-    'streng' => ['label' => 'Streng', 'text' => 'Mehr Schutz: Zwei-Faktor für alle, längere Passwörter, kürzere Sitzungen, Sperre nach 3 Treffern für einen Tag, Bedrohungsliste an.',
-        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'idleMinutes' => 60, 'lockAfter' => 5, 'lockMinutes' => 60],
+    'streng' => ['label' => 'Streng', 'text' => 'Mehr Schutz: Zwei-Faktor für alle, längere Passwörter mit Datenleck-Prüfung, kürzere Sitzungen, Sperre nach 3 Treffern für einen Tag, Bedrohungsliste an.',
+        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'pwLeak' => true, 'idleMinutes' => 60, 'lockAfter' => 5, 'lockMinutes' => 60],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 3, 'sperrMinuten' => 1440, 'fehlerLimit' => 20, 'feed' => true]],
     'notfall' => ['label' => 'Notfall (laufender Angriff)', 'text' => 'Für akute Angriffe: Sperre schon nach dem ersten Treffer für 7 Tage, sehr kurze Sitzungen, Mitschnitt aller Anfragen für 60 Minuten. Tipp: vorher die Büro-Adresse unter „nie sperren“ eintragen.',
-        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'idleMinutes' => 30, 'lockAfter' => 3, 'lockMinutes' => 240],
+        'sec' => ['twofa' => 'all', 'pwMin' => 12, 'pwComplex' => true, 'pwLeak' => true, 'idleMinutes' => 30, 'lockAfter' => 3, 'lockMinutes' => 240],
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 1, 'sperrMinuten' => 10080, 'fehlerLimit' => 10, 'feed' => true, 'mitschnittMinuten' => 60]],
 ];
 

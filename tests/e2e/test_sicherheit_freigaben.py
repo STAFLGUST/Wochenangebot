@@ -58,7 +58,8 @@ FAELLE = [[None, '172.18.0.3', '203.0.113.7'],            # ohne Angabe: private
           ['localhost', '172.18.0.3', '203.0.113.12'],              # Name auflösbar, andere Gegenstelle: nicht vertraut
           ['2001:db8::1', '2001:db8:0:0:0:0:0:1', '203.0.113.14'],  # IPv6 in anderer Schreibweise: gleiche Adresse
           ['schon-mal-aufgeloest.invalid', '127.0.0.5', '203.0.113.15'],  # DNS-Störung, früher aufgelöst: gemerkte Adresse gilt
-          ['schon-mal-aufgeloest.invalid', '172.18.0.3', '203.0.113.16']]  # … andere Container bleiben ausgeschlossen
+          ['schon-mal-aufgeloest.invalid', '172.18.0.3', '203.0.113.16'],  # … andere Container bleiben ausgeschlossen
+          ['10.1, 10.0.0.5', '10.0.0.1', '203.0.113.17']]  # Tippfehler „10.1“ ist kein Name (würde sonst als 10.0.0.1 aufgelöst)
 TMP = tempfile.mkdtemp(prefix='wa-proxy-')
 with open(os.path.join(TMP, 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json'), 'w') as fh:
     json.dump(['127.0.0.5'], fh)
@@ -74,6 +75,11 @@ check('Name nicht auflösbar: wie ohne Angabe – Besucher fallen nicht auf die 
 check('Name auflösbar, andere Gegenstelle: X-Forwarded-For ignoriert', outs[6] == '172.18.0.3', outs[6])
 check('IPv6-Proxy in anderer Schreibweise wird erkannt', outs[7] == '203.0.113.14', outs[7])
 check('Name gerade nicht auflösbar: zuletzt aufgelöste Adresse gilt weiter (kein Rückfall auf alle privaten Adressen)', outs[8] == '203.0.113.15' and outs[9] == '172.18.0.3', outs[8:10])
+check('Proxy-Angabe ohne Buchstaben wird nicht als Name aufgelöst', outs[10] == '10.0.0.1', outs[10])
+DUMMY = r"""define('WA_API', 1); require $argv[1] . '/app/api/lib/nutzer.php';
+echo json_encode([dummy_kosten([password_hash('x', PASSWORD_BCRYPT, ['cost' => 12])]), dummy_kosten([null, password_hash('x', PASSWORD_BCRYPT, ['cost' => 11])]), dummy_kosten([]), dummy_kosten(['kein-hash'])]);"""
+aus = subprocess.run(['php', '-r', DUMMY, REPO], capture_output=True, text=True).stdout
+check('Vergleichswert für unbekannte Namen mit denselben Kosten wie die gespeicherten Passwörter (z. B. PHP 8.4: 12)', aus == '[12,11,10,10]', aus)
 check('aufgelöste Proxy-Adresse wird gemerkt', any(f.startswith('wa-proxy-') and f.endswith('.json') and f != 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json' for f in os.listdir(TMP)), os.listdir(TMP))
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
 test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()
@@ -231,6 +237,27 @@ check('nach Ablauf der Sperre: beide Vorgänge gleich beendet („abgelaufen“)
 storage_write('sicherheit', {**sec, 'lockAfter': 3, 'lockMinutes': 5})
 storage_write('logins', {})
 
+# Fehlgeschlagene Anmeldungen dauern gleich lang – auch bei aufwendigerem Prüfwert (bcrypt-Kosten 12, z. B. nach PHP 8.4)
+storage_write('logins', {})
+A.call('user_save', {'username': 'teo', 'name': 'Teo Teuer', 'role': 'viewer', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
+h12 = subprocess.run(['php', '-r', 'echo password_hash("Bearbeiter-Zugang-1", PASSWORD_BCRYPT, ["cost" => 12]);'], capture_output=True, text=True).stdout
+nu = doc('nutzer')
+for x in nu['users']:
+    if x['username'] == 'teo': x['hash'] = h12
+storage_write('nutzer', nu)
+
+
+def dauer(name, netz):
+    t = []
+    for i in range(3):
+        t0 = time.time(); Client(f'198.18.{netz}.{i + 1}').call('login', {'username': name, 'password': 'Falsches-Passwort-1'}); t.append(time.time() - t0)
+    return sorted(t)[1]
+
+
+d_teo, d_fremd = dauer('teo', 20), dauer('niemand.hier', 21)
+check('fehlgeschlagene Anmeldung: bekannter Name (Kosten 12) und unbekannter Name gleich lang (ca. 0,6 s)', 0.55 <= d_fremd <= 1.0 and 0.55 <= d_teo <= 1.0 and abs(d_teo - d_fremd) < 0.15, (round(d_teo, 3), round(d_fremd, 3)))
+storage_write('logins', {})
+
 # Liste unbekannter Namen: laufende Sperren werden beim Kürzen nie entfernt
 jetzt = int(time.time())
 viele = {f'u:{i:064x}': {'n': 1, 'until': 0, 't': jetzt - 10} for i in range(5001)}
@@ -296,6 +323,11 @@ ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()
 check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=31536000" env=HTTPS' in ht
       and 'Permissions-Policy' in ht)
 check('.htaccess: X-Powered-By (PHP-Version) wird entfernt', 'Header unset X-Powered-By' in ht)
+cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
+bloecke = cf.split('test.{$DOMAIN} {')
+check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, alles andere weiter „no-cache“ – Echtbetrieb und Testumgebung',
+      len(bloecke) == 2 and all('@versioniert {\n\t\tpath /assets/*\n\t\tquery v=*\n\t}' in b and 'header @versioniert >Cache-Control "public, max-age=31536000, immutable"' in b
+                               and '?Cache-Control "no-cache"' in b for b in bloecke))
 
 # ---------- Oberfläche: Hinweis im Code-Schritt bei gesperrtem Zugang ----------
 storage_write('sicherheit', {**sec, 'ipEnabled': False, 'lockAfter': 3, 'lockMinutes': 5})
