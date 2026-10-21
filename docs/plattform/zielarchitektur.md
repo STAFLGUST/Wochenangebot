@@ -33,7 +33,7 @@ Eintrag – das Dashboard liest das Register, es gibt keine fest programmierte L
 app/                         Docroot (nur lesend eingebunden, Prüfliste der Dateiprüfung)
 ├── index.html, assets/       Angebot · Kunden-Frontend (unverändert)
 ├── admin/ → eingabe/         Angebot · Mitarbeiter (Phase 7)
-├── dashboard/                Dashboard-Oberfläche (neu)
+├── dashboard/                Dashboard-Oberfläche (heute noch unter /dashboard/ außerhalb von app/, nicht ausgeliefert)
 ├── module/<id>/              Oberflächen der Fachmodule (neu)
 └── api/
     ├── index.php             gemeinsamer Einstieg: Anmeldung, Rechte, Wartung, CSRF, Protokoll

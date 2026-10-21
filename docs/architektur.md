@@ -81,6 +81,16 @@ Expo/React Native (TypeScript) für iOS und Android, eigener Build (`npm ci`), w
 `X-WA-Sitzung` ([app-api.md](app-api.md)). `offer-core.js` wird mitgebündelt (Metro `watchFolders`), damit
 Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIESMICH.md](../mobile/LIESMICH.md).
 
+## Dashboard (`dashboard/`)
+
+Mitarbeiter-Dashboard der STAFL-Plattform (Roadmap PR 6): `index.html`, `dashboard.css`, `dashboard.js`, ohne Inline-Skript.
+Liest `status` und `module_status` und zeigt die acht Kacheln in der Reihenfolge des Modulregisters – keine fest
+programmierte Liste. Status je Kachel (Verfügbar, Wartung, Entwicklungsstand …) kommt aus `modul_zustand`; die Kachel ist
+nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt bewusst **außerhalb** von `app/` und wird daher nicht
+ausgeliefert; `dashboard-stafl.de` bleibt 503-Platzhalter (GR-105), bis die Anmeldung über Keycloak (ADR-003, PR 7) steht
+und der Inhaber die Freigabe erteilt. Der Testlauf blendet den Ordner nur in der Gruppe `dashboard` unter `/dashboard/` ein
+(`ZUSATZ` in `tests/run_e2e.py`). Hell/Dunkel mit demselben Speicherschlüssel wie die Angebotsseite.
+
 ## Tests
 
 Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
