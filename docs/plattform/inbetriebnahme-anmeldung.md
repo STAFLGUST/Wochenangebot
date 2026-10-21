@@ -29,8 +29,8 @@ Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nut
 
 | # | Schritt | Wer | Freigabe | Rückweg |
 | --- | --- | --- | --- | --- |
-| 1 | **DNS:** A-/AAAA-Einträge `login.dashboard-stafl.de` und `angebot.dashboard-stafl.de` auf den Server (wie `dashboard-stafl.de`) | Inhaber | **DNS** | Einträge löschen |
-| 2 | **Geheimnisse** auf dem Server erzeugen und in `.env` eintragen (Namen siehe `deploy/anmeldung/LIESMICH.md`); Realm mit eingesetzten Geheimnissen nach `daten-anmeldung/realm-import/` | Inhaber oder Claude per Anleitung | **Server** | Dateien löschen |
+| 1 | **DNS:** CNAME `login` und `angebot` → `dashboard-stafl.de` (wie `bestand.`/`www.`) – **erledigt 21.10.2026**, von außen geprüft | Inhaber | **DNS** | Einträge löschen |
+| 2 | **Geheimnisse** erzeugen und Realm-Import vorbereiten: im Installationsordner `sh deploy/anmeldung/einrichten.sh` (ergänzt nur fehlende Einträge in `.env`, zeigt keine Werte, startet nichts; `--pruefen` vorher/nachher) | Inhaber | **Server** | neue Zeilen in `.env` und `daten-anmeldung/` löschen |
 | 3 | **Keycloak und Datenbank starten:** `docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d keycloak keycloak-db` – noch ohne Caddy-Route, also nicht öffentlich | Inhaber | **Server** | `docker compose … stop keycloak keycloak-db` |
 | 4 | **Einrichten über SSH-Tunnel** (`ssh -L 8180:127.0.0.1:8180 server`, dann `http://127.0.0.1:8180/admin/`): eigenes Verwaltungskonto mit zweitem Faktor anlegen, Start-Konto löschen (`KC_BOOTSTRAP_*` aus `.env` entfernen); Mitarbeiter mit **gleichem Benutzernamen** wie im Eingabebereich anlegen, Pflichtaktionen „Passwort festlegen“ und „Einmalcode/Passkey einrichten“ | Inhaber | – | Konten löschen |
 | 5 | **Anwendungs-Image** auf dem Server bauen und die App mit Ergänzungsdatei neu starten (`… up -d app`). Ab hier lädt Apache die Keycloak-Hosts; `angebot-stafl.de` bleibt Standard-Host und verhält sich unverändert (in `pruefen.sh` geprüft) | Inhaber | **Server** | ohne Ergänzungsdatei neu starten (`docker compose up -d app`) |

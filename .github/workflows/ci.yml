@@ -42,7 +42,7 @@ jobs:
       - name: JavaScript-Syntax
         run: for f in app/assets/*.js app/assets/vendor/*.js dashboard/*.js tests/unit/*.js; do node --check "$f"; done
       - name: Shell-Skripte (shellcheck)
-        run: shellcheck --severity=warning deploy/*.sh tests/deploy/*.sh
+        run: shellcheck --severity=warning deploy/*.sh deploy/*/*.sh tests/deploy/*.sh
       - name: Caddy-Konfiguration mit echtem Parser prüfen
         run: |
           docker run --rm --network none \
@@ -162,6 +162,8 @@ jobs:
         run: sh tests/deploy/test_testumgebung.sh
       - name: Prüfungen des Release-Laufs (mit Platzhalter für gh)
         run: sh tests/deploy/test_release_pruefen.sh
+      - name: Einrichtung der zentralen Anmeldung (Geheimnisse, Realm-Import)
+        run: sh tests/deploy/test_anmeldung_einrichten.sh
 
   e2e:
     strategy:
