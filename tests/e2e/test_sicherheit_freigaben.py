@@ -58,7 +58,8 @@ FAELLE = [[None, '172.18.0.3', '203.0.113.7'],            # ohne Angabe: private
           ['localhost', '172.18.0.3', '203.0.113.12'],              # Name auflösbar, andere Gegenstelle: nicht vertraut
           ['2001:db8::1', '2001:db8:0:0:0:0:0:1', '203.0.113.14'],  # IPv6 in anderer Schreibweise: gleiche Adresse
           ['schon-mal-aufgeloest.invalid', '127.0.0.5', '203.0.113.15'],  # DNS-Störung, früher aufgelöst: gemerkte Adresse gilt
-          ['schon-mal-aufgeloest.invalid', '172.18.0.3', '203.0.113.16']]  # … andere Container bleiben ausgeschlossen
+          ['schon-mal-aufgeloest.invalid', '172.18.0.3', '203.0.113.16'],  # … andere Container bleiben ausgeschlossen
+          ['10.1, 10.0.0.5', '10.0.0.1', '203.0.113.17']]  # Tippfehler „10.1“ ist kein Name (würde sonst als 10.0.0.1 aufgelöst)
 TMP = tempfile.mkdtemp(prefix='wa-proxy-')
 with open(os.path.join(TMP, 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json'), 'w') as fh:
     json.dump(['127.0.0.5'], fh)
@@ -74,6 +75,11 @@ check('Name nicht auflösbar: wie ohne Angabe – Besucher fallen nicht auf die 
 check('Name auflösbar, andere Gegenstelle: X-Forwarded-For ignoriert', outs[6] == '172.18.0.3', outs[6])
 check('IPv6-Proxy in anderer Schreibweise wird erkannt', outs[7] == '203.0.113.14', outs[7])
 check('Name gerade nicht auflösbar: zuletzt aufgelöste Adresse gilt weiter (kein Rückfall auf alle privaten Adressen)', outs[8] == '203.0.113.15' and outs[9] == '172.18.0.3', outs[8:10])
+check('Proxy-Angabe ohne Buchstaben wird nicht als Name aufgelöst', outs[10] == '10.0.0.1', outs[10])
+DUMMY = r"""define('WA_API', 1); require $argv[1] . '/app/api/lib/nutzer.php';
+echo json_encode([dummy_kosten([password_hash('x', PASSWORD_BCRYPT, ['cost' => 12])]), dummy_kosten([null, password_hash('x', PASSWORD_BCRYPT, ['cost' => 11])]), dummy_kosten([]), dummy_kosten(['kein-hash'])]);"""
+aus = subprocess.run(['php', '-r', DUMMY, REPO], capture_output=True, text=True).stdout
+check('Vergleichswert für unbekannte Namen mit denselben Kosten wie die gespeicherten Passwörter (z. B. PHP 8.4: 12)', aus == '[12,11,10,10]', aus)
 check('aufgelöste Proxy-Adresse wird gemerkt', any(f.startswith('wa-proxy-') and f.endswith('.json') and f != 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json' for f in os.listdir(TMP)), os.listdir(TMP))
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
 test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()

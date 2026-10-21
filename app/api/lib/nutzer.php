@@ -51,6 +51,24 @@ function setup_allowed(): bool
     return store_mtime('nutzer') === null && store_mtime('admin') === null;
 }
 /* Unter der Nutzersperre aufrufen: gilt für Passwort UND zweiten Anmeldeschritt. */
+/* Vergleichswert für unbekannte Benutzernamen: gleiche Rechenzeit wie bei einem vorhandenen Zugang. Die Kosten richten sich
+   nach den gespeicherten Passwörtern (PHP 8.4 erhöht den Standard von 10 auf 12; sonst wären unbekannte Namen schneller). */
+const DUMMY_HASHES = [
+    10 => '$2y$10$mvZvmdEAVEQ3qaAv8iuXuuDEFqUa7vwt.m2SPPnd0efnA2gP5.1fi',
+    11 => '$2y$11$270c1FHrghnxeifZDDTN7eUHr00fuM/TZpKbxj6eqHnAlU6GOrKLy',
+    12 => '$2y$12$viN1CkKfMccsPR4Vk0FnNu0lBewb6H2IuPzvHS4UyiDtgFZeArpUO',
+    13 => '$2y$13$afHdYZG5U990s5BOYZrAou8JrcS9e.7kkqfubrzPW2igqN8grOZjS',
+];
+function dummy_kosten(array $hashes): int
+{
+    foreach ($hashes as $h) {
+        $i = is_string($h) ? password_get_info($h) : [];
+        if (($i['algoName'] ?? '') === 'bcrypt' && isset(DUMMY_HASHES[(int)($i['options']['cost'] ?? 0)])) return (int)$i['options']['cost'];
+    }
+    $std = defined('PASSWORD_BCRYPT_DEFAULT_COST') ? (int)PASSWORD_BCRYPT_DEFAULT_COST : 10;
+    return isset(DUMMY_HASHES[$std]) ? $std : 10;
+}
+function dummy_verify(string $pw, array $hashes): void { password_verify($pw, DUMMY_HASHES[dummy_kosten($hashes)]); }
 function login_failure(array &$u): bool
 {
     $S = sec();

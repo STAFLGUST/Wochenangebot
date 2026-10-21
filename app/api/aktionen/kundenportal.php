@@ -51,7 +51,7 @@ switch ($action) {
                     store_write('kunden', $d);
                     return ['ok', $d['customers'][$i]];
                 }
-                password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit
+                dummy_verify($pw, array_map(fn($x) => $x['login']['hash'] ?? null, $d['customers'])); // gleiche Laufzeit
                 return ['bad', null];
             });
             [$st, $c] = $res;

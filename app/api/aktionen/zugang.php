@@ -105,7 +105,7 @@ switch ($action) {
                     users_save($users);
                     return ['ok', $users[$i], $x];
                 }
-                password_verify($pw, '$2y$10$y80WR5wtxxV9G3NpBGQXmeL3EYKIGKm4gaElkDTK2cWFQtjyZdoPa'); // gleiche Laufzeit wie bei vorhandenem Nutzer
+                dummy_verify($pw, array_column($users, 'hash')); // gleiche Laufzeit wie bei vorhandenem Nutzer
                 return ['bad', null];
             });
             [$st, $u, $x] = $res + [2 => ['gh' => '', 'neu' => false]];
