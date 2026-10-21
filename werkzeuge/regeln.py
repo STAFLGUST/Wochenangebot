@@ -281,6 +281,10 @@ def pruefe_module(rw: Regelwerk) -> None:
                 rw.f(f"Oberfläche {oid}: art muss intern oder extern sein")
             if not str(o.get("adresse", "")).startswith("https://"):
                 rw.f(f"Oberfläche {oid}: adresse muss mit https:// beginnen")
+            if "ziel" in o and not str(o["ziel"]).startswith("https://"):
+                rw.f(f"Oberfläche {oid}: ziel muss mit https:// beginnen")
+            if o.get("dns") is False and o.get("freigabe") != "keine":
+                rw.f(f"Oberfläche {oid}: ohne DNS-Eintrag (dns = false) ist nur freigabe = \"keine\" zulässig")
             e, fr = o.get("entwicklung"), o.get("freigabe")
             if e not in ENTWICKLUNG:
                 rw.f(f"Oberfläche {oid}: unbekannter Entwicklungsstand „{e}“ ({', '.join(ENTWICKLUNG)})")
@@ -290,8 +294,9 @@ def pruefe_module(rw: Regelwerk) -> None:
                 rw.f(f"Oberfläche {oid}: Freigabe „{fr}“ ist bei Entwicklungsstand „{e}“ nicht zulässig (GR-102)")
             if not isinstance(o.get("sperrbar"), bool):
                 rw.f(f"Oberfläche {oid}: sperrbar (true/false) fehlt")
-            if o.get("art") == "extern" and DASHBOARD_DOMAIN in host(str(o.get("adresse", ""))):
-                rw.f(f"Oberfläche {oid}: externe Oberflächen dürfen nicht unter {DASHBOARD_DOMAIN} liegen (GR-104)")
+            for feld in ("adresse", "ziel"):
+                if o.get("art") == "extern" and DASHBOARD_DOMAIN in host(str(o.get(feld, ""))):
+                    rw.f(f"Oberfläche {oid}: externe Oberflächen dürfen nicht unter {DASHBOARD_DOMAIN} liegen (GR-104)")
         if m.get("dashboard"):
             ziel = m.get("kachel_ziel")
             if ziel:
@@ -548,14 +553,22 @@ def pruefe_wartung(rw: Regelwerk) -> None:
 
 def pruefe_caddy(rw: Regelwerk) -> None:
     alle, platzhalter = caddy_hosts(rw.wurzel)
-    oberflaechen = {}
+    oberflaechen, ohne_dns, ziele = {}, set(), set()
     for m in rw.modulliste:
         for o in m.get("oberflaeche", []):
             h = host(o.get("adresse", ""))
+            if o.get("ziel"):
+                ziele.add(host(o["ziel"]))
             if DASHBOARD_DOMAIN in h:
                 oberflaechen.setdefault(h, []).append((f"{m['id']}.{o.get('id')}", o.get("freigabe")))
+                if o.get("dns") is False:
+                    ohne_dns.add(h)
     umgebungen = {host(a) for u in rw.module.get("umgebung", []) for a in u.get("adressen", [])}
     for h in sorted(oberflaechen):
+        if h in ohne_dns:
+            if h in alle:
+                rw.f(f"{h} steht im Caddyfile, ist aber als dns = false vermerkt – Vermerk entfernen, sobald DNS steht")
+            continue
         if h not in alle:
             rw.f(f"{h} (Oberfläche {', '.join(o for o, _ in oberflaechen[h])}) fehlt im Caddyfile")
         if all(fr in ("keine", "deaktiviert") for _, fr in oberflaechen[h]) and h not in platzhalter:
@@ -563,7 +576,7 @@ def pruefe_caddy(rw: Regelwerk) -> None:
     for h in sorted(alle):
         if h.startswith("www."):
             continue
-        if h not in oberflaechen and h not in umgebungen:
+        if h not in oberflaechen and h not in umgebungen and h not in ziele:
             rw.f(f"Caddyfile: {h} ist weder Oberfläche noch Umgebung in regeln/module.toml")
 
 
@@ -689,7 +702,7 @@ def steckbrief(rw: Regelwerk, mid: str) -> str:
         z.append(f"Technisch Teil von: {m['teil_von']} (Kachel → {m.get('kachel_ziel')})")
     for o in m.get("oberflaeche", []):
         z.append(f"- Oberfläche {o['id']}: {o['adresse']} ({o['art']}, {o['entwicklung']}, Freigabe {o['freigabe']}"
-                 + (f", heute {o['heute']}" if o.get("heute") else "") + ")")
+                 + (f", künftig {o['ziel']}" if o.get("ziel") else "") + (", noch ohne DNS" if o.get("dns") is False else "") + ")")
     z += ["", f"Hängt ab von: {', '.join(m.get('abhaengigkeiten', [])) or '–'}; davon abhängig: {', '.join(abh) or '–'}",
           f"Eigene Dateien ({len(eigene)}): " + (", ".join(eigene[:40]) + (" …" if len(eigene) > 40 else "") if eigene else "–"),
           f"Geplante Orte für neuen Code: {', '.join(m.get('pfade_geplant', [])) or '–'}",

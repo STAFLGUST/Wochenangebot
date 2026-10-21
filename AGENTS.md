@@ -59,6 +59,11 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
 - **GR-105 Dashboard-Adressen** bleiben 503-Platzhalter, bis das jeweilige Modul freigegeben ist.
 - **GR-106 Historische Vorgänge** speichern Schnappschüsse; spätere Stammdatenänderungen ändern sie nicht.
 - **GR-107 Wartung je Oberfläche** wirkt serverseitig auf API, Schreiben, Importe, E-Mails und Hintergrundläufe (geplant, Phase 5).
+- **Domains und Anmeldung** (`docs/plattform/adr-003-domains-anmeldung.md`): jede Anwendung auf eigener Subdomain.
+  **GR-108** nur `__Host-`-Cookies, nie Cookies für alle Subdomains, eigene Sitzung je Host · **GR-109** API nur vom eigenen
+  Host (Aktion ↔ Host, `Sec-Fetch-Site`, `Origin`, CSRF, keine CORS-Freigaben) · **GR-110** Mitarbeiteranmeldung nur über
+  Keycloak (OIDC), keine eigenen Logins in Modulen · **GR-111** Testumgebungen ohne Produktivsitzungen, -geheimnisse und
+  -daten; Keycloak bis zur eigenen Testdomain nur in der CI. GR-108–GR-110 sind geplant; neuer Code hält sie schon ein.
 
 ## Arbeiten mit mehreren Agenten
 

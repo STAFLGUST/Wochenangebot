@@ -222,3 +222,60 @@ status = "geplant"
 phase = 5
 version = 1
 seit = "2026-10-21"
+
+# ───────────── Domain- und Anmeldestruktur (ADR-003, angenommen 21.10.2026) ─────────────
+
+[[regel]]
+id = "GR-108"
+titel = "Hostgebundene Sitzungen, keine Domain-Cookies"
+beschreibung = "Sitzungs- und Sicherheits-Cookies nur mit Präfix __Host- (Secure, Path=/, ohne Domain), HttpOnly, SameSite=Strict. Nie ein Cookie mit Domain=dashboard-stafl.de oder für alle Subdomains. Jede Anwendung hat ihre eigene Sitzung; eine Sitzung berechtigt nur zu Aktionen ihres Hosts."
+verantwortlich = "plattform"
+module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "dashboard", "plattform"]
+daten = ["sitzungen", "kundensitzungen"]
+tests = []
+quelle = "AGENTS.md"
+status = "geplant"
+phase = 6
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-109"
+titel = "API-Anfragen nur vom eigenen Host"
+beschreibung = "Jede API-Aktion gehört genau einer Oberfläche und wird auf anderen Hosts abgewiesen. Datenliefernde und schreibende Anfragen nur mit Sec-Fetch-Site same-origin (oder none) und passendem Origin, zusätzlich CSRF-Token. Keine CORS-Freigaben (Access-Control-Allow-*) zwischen Modulen."
+verantwortlich = "plattform"
+module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "dashboard", "plattform"]
+daten = []
+tests = []
+quelle = "AGENTS.md"
+status = "geplant"
+phase = 3
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-110"
+titel = "Mitarbeiteranmeldung nur über den zentralen Identitätsanbieter"
+beschreibung = "Neue Mitarbeiter-Oberflächen bauen keine eigene Anmeldung, Passwort- oder Passkey-Prüfung, sondern nutzen OpenID Connect mit Keycloak (Realm mitarbeiter, Passkey oder zweiter Faktor Pflicht). Token bleiben auf dem Server; jede Anwendung ist ein eigener Client. Rechte prüft weiterhin unser Server je Aktion (GR-103). Externe Realms (QS-Portal) werden von Mitarbeiter-Anwendungen abgewiesen."
+verantwortlich = "plattform"
+module = ["dashboard", "angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "plattform", "mobile"]
+daten = ["nutzer"]
+tests = []
+quelle = "AGENTS.md"
+status = "geplant"
+phase = 6
+version = 1
+seit = "2026-10-21"
+
+[[regel]]
+id = "GR-111"
+titel = "Testumgebungen ohne Produktivsitzungen, -geheimnisse und -daten"
+beschreibung = "Testumgebungen nutzen nur synthetische Daten, eigene Zugangsdaten und eigene Schlüssel; nie Produktivdaten, -passwörter oder -geheimnisse. Bis zur eigenen Testdomain läuft der Identitätsanbieter nur in der CI – keine Test-Instanz unter dashboard-stafl.de oder angebot-stafl.de; test.dashboard-stafl.de bleibt Platzhalter."
+verantwortlich = "plattform"
+module = ["plattform"]
+daten = ["testpostfach"]
+tests = ["e2e:testumgebung", "datei:tests/deploy/test_testumgebung.sh"]
+quelle = "AGENTS.md"
+status = "verbindlich"
+version = 1
+seit = "2026-10-21"

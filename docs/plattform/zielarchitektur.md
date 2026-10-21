@@ -53,10 +53,12 @@ um, wenn ein Modul ohnehin daran arbeitet.
 | Host | Ziel | Heute |
 | --- | --- | --- |
 | `angebot-stafl.de` | Kunden-Frontend + `/api/` | produktiv |
-| `angebot-stafl.de/admin/` → `/eingabe/` | Mitarbeiter-Eingabe (siehe ADR-3) | `/admin/` produktiv |
+| `angebot-stafl.de/admin/` | heutige Mitarbeiter-Eingabe; Ziel laut ADR-003: `angebot.dashboard-stafl.de` (alte Adresse leitet weiter) | produktiv |
 | `dashboard-stafl.de` | Dashboard + Anmeldung | 503-Platzhalter |
 | `<modul>.dashboard-stafl.de` | Modul-Oberfläche `app/module/<id>/` + `/api/` | 503-Platzhalter |
-| `test.dashboard-stafl.de` | Integrationstest (synthetische Daten, Passwort) | 503-Platzhalter |
+| `test.dashboard-stafl.de` | nicht als Testumgebung nutzen (ADR-003); Integration später auf eigener Testdomain | 503-Platzhalter |
+| `login.dashboard-stafl.de` | Keycloak (ADR-003) | DNS fehlt |
+| `angebot.dashboard-stafl.de` | Angebot · Mitarbeiter-Eingabe (ADR-003) | DNS fehlt |
 | `test.angebot-stafl.de` | bestehende Testumgebung | produktiv (401) |
 
 - Caddy schaltet einen Host erst frei, wenn **alle** seine Oberflächen eine Freigabe haben (GR-105, CI prüft gegen das
@@ -68,41 +70,16 @@ um, wenn ein Modul ohnehin daran arbeitet.
 
 ## 4. Anmeldung und Single Sign-on
 
-Anforderungen: zentrale Mitarbeiteridentität, MFA/Passkeys, Rollen je Modul, Rechte je Funktion, Widerruf, sicherer
-Logout, Trennung extern/intern, Kunden behalten ihre Zugänge.
+Ausführliche Sicherheitsbewertung und Empfehlung: **[ADR-003](adr-003-domains-anmeldung.md)** (Entscheidungsvorlage,
+angenommen am 21.10.2026, noch nicht umgesetzt). Kurzfassung:
 
-**Ausgangslage:** Identitäten (Dokument `nutzer`), Zwei-Faktor, Passkeys, vertraute Geräte, Sitzungsregister und Widerruf
-existieren bereits und sind gut getestet. Das wird nicht ersetzt, sondern wiederverwendet.
-
-**Kernfrage ist ADR-3:** Wo liegt die Mitarbeiter-Eingabe des Angebots?
-
-| Variante | Anmeldung | Betrieb | Bewertung |
-| --- | --- | --- | --- |
-| **A (empfohlen):** alle Mitarbeiter-Oberflächen unter `dashboard-stafl.de`, Angebot-Eingabe z. B. unter `angebot.dashboard-stafl.de`; `angebot-stafl.de/admin/` und `/eingabe/` leiten dorthin | Eine Sitzung für die ganze Mitarbeiterplattform: ein Cookie für `dashboard-stafl.de` und seine Subdomains (Secure, HttpOnly, SameSite=Lax), Sitzungsregister wie heute, CSRF je Anfrage. Passkeys mit RP-ID `dashboard-stafl.de` gelten für alle Subdomains | kein zusätzlicher Dienst | Einfachste sichere Lösung. Kundendomain enthält keine Mitarbeiteranmeldung mehr (kleinere Angriffsfläche). Kosten: ein DNS-Eintrag (`angebot.dashboard-stafl.de`), Passkeys einmal neu registrieren |
-| **B:** Eingabe bleibt unter `angebot-stafl.de/eingabe/` (wie im Auftrag) | Domainübergreifend nur mit OpenID Connect: Anbieter unter `dashboard-stafl.de`, `angebot-stafl.de` als Client | zusätzlicher Dienst + Datenbank | Siehe Komponentenvergleich unten |
-| C: Übergang | wie B, aber zunächst getrennte Anmeldung mit demselben Nutzerbestand | keiner | Zwischenschritt, kein SSO |
-
-**Komponenten für Variante B** (etabliert, nicht selbst gebaut):
-
-| Komponente | Eignung hier | Betriebsaufwand |
-| --- | --- | --- |
-| Ory Hydra | reiner OIDC-Anbieter; Anmeldung/Einwilligung bleiben in der bestehenden PHP-Anmeldung (2FA, Passkeys, Geräte bleiben) | klein (ein Go-Dienst), braucht SQL-Datenbank (PostgreSQL) |
-| Keycloak | vollständig (eigene Nutzerverwaltung, MFA, Passkeys) | hoch (Java, viel Arbeitsspeicher); Nutzer und MFA müssten umziehen |
-| Authentik, Zitadel | eigene Nutzerverwaltung, gute Oberfläche | mittel (PostgreSQL); Nutzer und MFA müssten umziehen |
-| Authelia | sehr leicht | Nutzer in Dateien/LDAP – passt nicht zur vorhandenen Nutzerverwaltung |
-
-Zusätzlich bräuchte die PHP-Seite einen geprüften OIDC-Client (Fremdbibliothek, bisher bewusst vermieden).
-
-**Empfehlung:** Variante A jetzt. Den Sitzungsdienst so schneiden (`lib/sitzung.php` → Plattformkern-Schnittstelle), dass
-später ein OIDC-Anbieter (Hydra mit der bestehenden Anmeldung als Login-Oberfläche) davorgesetzt werden kann – nötig erst,
-wenn fremde Domains oder Anwendungen Mitarbeiter-SSO brauchen. **Abweichung vom Auftrag → Ihre Entscheidung (E-2).**
-
-Unabhängig von der Variante:
-- Kunden behalten Zugänge und Sitzungen unverändert (Nutzergruppe `kunde`, `regeln/berechtigungen.toml`).
-- QS-Portal: eigene externe Nutzergruppe mit eigener Anmeldung auf eigener Domain – nie Mitarbeiter-SSO (GR-104).
-- Modulzugang über Recht `<modul>.zugang`, Funktionen über `<modul>.<recht>`; jede Aktion prüft serverseitig (GR-103).
-- Logout beendet die zentrale Sitzung (Sitzungsregister) – damit alle Module zugleich; Rechteänderung wirkt bei der
-  nächsten Anfrage, weil Rechte nicht in der Sitzung zwischengespeichert werden (wie heute `user_perms`).
+- Getrennte Subdomains je Anwendung, Mitarbeiter-Eingabe des Angebots unter `angebot.dashboard-stafl.de`;
+  die Kundendomain `angebot-stafl.de` enthält danach keine Mitarbeitersitzung mehr.
+- OpenID Connect mit Keycloak als Identitätsanbieter auf eigenem Host `login.dashboard-stafl.de`; jede Anwendung ist ein
+  eigener Client mit eigener, hostgebundener `__Host-`-Sitzung – **kein** gemeinsames Cookie für alle Subdomains.
+- Rechte je Modul und Funktion prüft weiterhin unser Server bei jeder Aktion (GR-103).
+- Kunden behalten ihre Zugänge unverändert; das QS-Portal erhält eine eigene Nutzergruppe (GR-104).
+- Eigene registrierbare Testdomain mittelfristig; bis dahin läuft die neue Anmeldung nur in der CI (GR-111).
 
 ## 5. Datenarchitektur
 
@@ -178,7 +155,7 @@ nur in `.env`, gitleaks und Trivy in der CI. Neue Fremdabhängigkeiten nur mit B
 | --- | --- | --- | --- |
 | ADR-1 | `app/` bleibt Docroot, Module unter `app/module/` und `app/api/module/` | vorgeschlagen | `apps/`+`packages/` (Big-Bang-Risiko) |
 | ADR-2 | Regelwerk als TOML (Python-Standardbibliothek), Laufzeit-Daten daraus erzeugt | **umgesetzt** | YAML (bräuchte Zusatzpaket in CI und PHP) |
-| ADR-3 | Mitarbeiter-Oberflächen unter `dashboard-stafl.de`, eine Sitzung, kein IdP | **offen – E-2** | `/eingabe/` + OIDC (Hydra) |
+| ADR-3 | Subdomains je Anwendung, OIDC (Keycloak), hostgebundene Sitzungen, Testdomain mittelfristig – [ADR-003](adr-003-domains-anmeldung.md) | **angenommen 21.10.2026, nicht umgesetzt** | Unterverzeichnisse (ein Origin, keine Isolation im Browser) |
 | ADR-4 | PostgreSQL als Ziel für gemeinsame Daten, Dokumente zunächst unverändert | vorgeschlagen | nur SQLite (ein Schreiber, keine Rollen je Modul) |
 | ADR-5 | Zugriff je Oberfläche nur über die Entscheidungstabelle | **umgesetzt (Spezifikation)** | Logik je Modul |
 | ADR-6 | Kein CODEOWNERS vorerst | vorgeschlagen | siehe [multi-agent.md](multi-agent.md) |
