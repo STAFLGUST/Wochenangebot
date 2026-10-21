@@ -74,3 +74,23 @@ test.{$DOMAIN} {
 	rewrite @falle /api/index.php?action=waf_probe&p={path}
 	reverse_proxy app-test:80
 }
+
+# STAFL-Plattform: vorbereitete Domains ohne öffentlich erreichbare Mitarbeiter-Anwendung.
+# Erst nach fertiger Anmeldung, Rechteprüfung und geprüfter Release-Freigabe pro Modul routen.
+# Bis dahin: keine Weiterleitung an die produktive Angebots-API oder interne Container.
+dashboard-stafl.de, bestand.dashboard-stafl.de, crm.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, verwaltung.dashboard-stafl.de, test.dashboard-stafl.de {
+	encode zstd gzip
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	respond "STAFL-Plattform: Dieser Bereich befindet sich in Vorbereitung." 503
+}
+
+# Die WWW-Adresse des Dashboards dient nur als Weiterleitung auf den zentralen Einstieg.
+www.dashboard-stafl.de {
+	redir https://dashboard-stafl.de{uri} 308
+}
