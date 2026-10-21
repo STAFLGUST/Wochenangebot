@@ -62,7 +62,7 @@ prüfen, lässt sich `.github/CODEOWNERS` aus `regeln/module.toml` erzeugen (Pfa
 | Ebene | Wo | Was | Daten |
 | --- | --- | --- | --- |
 | 1 · Agent/PR | lokal im Worktree + GitHub Actions je PR | Regelwerk, Syntax, Unit-, Vertrags- und E2E-Tests, Sicherheitsprüfungen | frisch je Testgruppe aus `tests/fixtures/` (eigene Ports, eigener Datenordner, Test-Mailserver) – keine Produktivdaten, keine echten Zugangsdaten |
-| 2 · Integration | `test.dashboard-stafl.de` (geplant) | Zusammenspiel: Dashboard-Anmeldung, Modulregister, Wartung, Angebot, Stammdaten, Importe | synthetisch (`werkzeuge/testdaten_erzeugen.py`), eigener Container wie `app-test`, nie Zugriff auf Produktionsdaten |
+| 2 · Integration | eigene Testdomain (ADR-003, vorgeschlagen; ursprünglich `test.dashboard-stafl.de`) | Zusammenspiel: Dashboard-Anmeldung, Modulregister, Wartung, Angebot, Stammdaten, Importe | synthetisch (`werkzeuge/testdaten_erzeugen.py`), eigener Container wie `app-test`, nie Zugriff auf Produktionsdaten |
 | 3 · Produktion | Release mit Freigabe | nur freigegebene Commits, Healthcheck, Rückfall | echte Daten |
 
 Ebene 1 ist bereits so isoliert, wie es der Auftrag verlangt (jede Gruppe startet einen eigenen PHP-Server mit eigener

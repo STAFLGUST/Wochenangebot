@@ -18,7 +18,7 @@ Die Kundenwebsite `angebot-stafl.de` und `test.angebot-stafl.de` behalten ihre b
 
 ## Weiterarbeit
 
-Claude-/Plattform-Agenten sollen diese Hostnamen später durch echte Module ersetzen, **erst nachdem** Authentifizierung, Berechtigungen, Routing, Schutz vor unberechtigten API-Zugriffen, Integrationstests und die separate QS-Portal-Domain geklärt sind. `/eingabe/` liegt auf der bestehenden Angebotsdomain, nicht unter dem Dashboard. (Vorschlag einer Alternative mit einer gemeinsamen Mitarbeiter-Sitzung: offene Entscheidung E-2 in `docs/plattform/roadmap.md`.)
+Claude-/Plattform-Agenten sollen diese Hostnamen später durch echte Module ersetzen, **erst nachdem** Authentifizierung, Berechtigungen, Routing, Schutz vor unberechtigten API-Zugriffen, Integrationstests und die separate QS-Portal-Domain geklärt sind. `/eingabe/` liegt auf der bestehenden Angebotsdomain, nicht unter dem Dashboard. (Neue Empfehlung: Mitarbeiter-Eingabe unter `angebot.dashboard-stafl.de` mit eigener Sitzung, siehe `docs/plattform/adr-003-domains-anmeldung.md` – Entscheidung offen.)
 
 Status 21.10.2026: eingespielt (von außen geprüft: `dashboard-stafl.de` und Subdomains antworten mit 503). Welche Oberfläche
 zu welchem Host gehört, steht jetzt in `regeln/module.toml`; die CI prüft Caddy-Hosts gegen das Register (GR-105).
