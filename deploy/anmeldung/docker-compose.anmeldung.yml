@@ -1,0 +1,71 @@
+# STAFL-Plattform – zentrale Anmeldung im Betrieb (ADR-003, Roadmap: Inbetriebnahme). NOCH NICHT AKTIV.
+#
+# Ergänzt docker-compose.yml, ohne es zu ändern (eine Änderung dort startet beim Release die Container neu):
+#   docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d
+# Nur nach ausdrücklicher Freigabe des Inhabers und in der Reihenfolge aus docs/plattform/inbetriebnahme-anmeldung.md.
+# Alle Images fest über Version und Digest. Geheimnisse nur in .env auf dem Server (Namen: deploy/anmeldung/LIESMICH.md).
+services:
+  app:
+    # Anwendungs-Image mit mod_auth_openidc (deploy/image, in der CI gebaut und mit php:8.3-apache verglichen)
+    image: stafl-app:${STAFL_APP_VERSION:-lokal}
+    build: ./deploy/image
+    volumes:
+      - ./dashboard:/var/www/dashboard:ro                 # Dashboard (außerhalb von app/; per Alias nur auf den Keycloak-Hosts)
+      - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # nach 000-default: angebot-stafl.de bleibt Standard
+    environment:
+      OIDC_ISSUER: https://login.dashboard-stafl.de/realms/mitarbeiter
+      OIDC_SECRET_DASHBOARD: ${OIDC_SECRET_DASHBOARD:?in .env setzen}
+      OIDC_SECRET_ANGEBOT: ${OIDC_SECRET_ANGEBOT:?in .env setzen}
+      OIDC_CRYPTO_DASHBOARD: ${OIDC_CRYPTO_DASHBOARD:?in .env setzen}
+      OIDC_CRYPTO_ANGEBOT: ${OIDC_CRYPTO_ANGEBOT:?in .env setzen}
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
+    restart: unless-stopped
+    command: ["start", "--import-realm"]
+    depends_on:
+      - keycloak-db
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:?in .env setzen}
+      KC_HOSTNAME: https://login.dashboard-stafl.de
+      # Verwaltungsoberfläche nur über einen SSH-Tunnel auf 127.0.0.1:8180 – nie über Caddy (ADR-003)
+      KC_HOSTNAME_ADMIN: http://127.0.0.1:8180
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_FEATURES_DISABLED: twitter-broker,identity-brokering-api
+      # Erstes Verwaltungskonto nur für die Einrichtung; danach in Keycloak ersetzen und hier entfernen
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-}
+      JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx1024m"
+    volumes:
+      # Realm mit eingesetzten Geheimnissen (auf dem Server erzeugt, nicht im Repository – siehe LIESMICH)
+      - ./daten-anmeldung/realm-import:/opt/keycloak/data/import:ro
+    ports:
+      - "127.0.0.1:8180:8080"                              # nur lokal (SSH-Tunnel für die Verwaltung)
+    networks:
+      default:
+      anmeldung:
+
+  keycloak-db:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:?in .env setzen}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8 --auth=scram-sha-256"
+    volumes:
+      - keycloak_db:/var/lib/postgresql/data
+    networks:
+      anmeldung:                                           # eigene Datenbank und eigenes Netz, getrennt von den Geschäftsdaten
+
+networks:
+  anmeldung:
+    internal: true
+
+volumes:
+  keycloak_db:

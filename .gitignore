@@ -1,6 +1,7 @@
 # Nur auf dem Server – nie ins Repository
 .env
 daten/
+daten-anmeldung/
 sicherungen/
 tests/.arbeit/
 tests/.ergebnisse/
