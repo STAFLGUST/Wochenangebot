@@ -40,7 +40,7 @@ jobs:
           php --version | head -1
           find app deploy -name '*.php' ! -path 'app/api/geo/*' -print0 | xargs -0 -n1 php -l
       - name: JavaScript-Syntax
-        run: for f in app/assets/*.js app/assets/vendor/*.js tests/unit/*.js; do node --check "$f"; done
+        run: for f in app/assets/*.js app/assets/vendor/*.js dashboard/*.js tests/unit/*.js; do node --check "$f"; done
       - name: Shell-Skripte (shellcheck)
         run: shellcheck --severity=warning deploy/*.sh tests/deploy/*.sh
       - name: Caddy-Konfiguration mit echtem Parser prüfen
