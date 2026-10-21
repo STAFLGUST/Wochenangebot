@@ -200,6 +200,15 @@ def anmelden(pg, wer, otp=True):
         pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1])); pg.click('#kc-login')
 
 
+def otp_eingeben(pg, wer):
+    """Einmalcode eingeben; ein schon verwendeter Code (keine Wiederverwendung) → nächster Code."""
+    for versatz in (0, 1):
+        pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1], versatz)); pg.click('#kc-login')
+        pg.wait_for_load_state()
+        if not (pg.url.startswith(L) and pg.locator('#otp').count()):
+            return
+
+
 def eigene_seite(pg):
     pg.on('pageerror', lambda e: fehler.append(f'{pg.url}: {e}') if '.stafl.test' in pg.url and 'login.' not in pg.url else None)
     return pg
@@ -348,6 +357,35 @@ with sync_playwright() as pw:
     check('ohne zweiten Faktor angemeldet (acr=pwd): unser Server weist ab (403)', code == 403 and 'zweitem Faktor' in j.get('error', ''), (code, j))
     ctx.close()
     check('Testvorbereitung: Client „angebot“ wieder auf „mfa“', client_attribute('angebot', **{'minimum.acr.value': 'mfa', 'default.acr.values': 'mfa'}) == 204)
+
+    # ── Passkey als zweiter Faktor (virtueller Authenticator mit Bestätigung am Gerät) ──
+    kopf = {'Authorization': 'Bearer ' + kc_token(), 'Content-Type': 'application/json'}
+    _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=erika', kopf=kopf)
+    kc_erika = json.loads(text)[0]
+    kc_erika['requiredActions'] = ['webauthn-register']
+    check('Testvorbereitung: erika soll einen Passkey einrichten', anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_erika['id']}", 'PUT', json.dumps(kc_erika).encode(), kopf)[0] == 204)
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    cdp = ctx.new_cdp_session(pg); cdp.send('WebAuthn.enable')
+    cdp.send('WebAuthn.addVirtualAuthenticator', {'options': {'protocol': 'ctap2', 'transport': 'internal', 'hasResidentKey': True,
+             'hasUserVerification': True, 'isUserVerified': True, 'automaticPresenceSimulation': True}})
+    pg.on('dialog', lambda d: d.accept('Testschlüssel'))
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'erika'); pg.fill('#password', NUTZER['erika'][0]); pg.click('#kc-login')
+    otp_eingeben(pg, 'erika')
+    pg.wait_for_selector('#registerWebAuthn')
+    check('Passkey-Einrichtung bei Keycloak angeboten', pg.is_visible('#registerWebAuthn'))
+    pg.click('#registerWebAuthn'); pg.wait_for_selector('#db-grid .db-tile')
+    _, _, text = anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_erika['id']}/credentials", kopf={'Authorization': 'Bearer ' + kc_token()})
+    arten = sorted(c['type'] for c in json.loads(text))
+    check('Passkey bei Keycloak gespeichert (neben Passwort und Einmalcode)', 'webauthn' in arten, arten)
+    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'erika'); pg.fill('#password', NUTZER['erika'][0]); pg.click('#kc-login')
+    pg.wait_for_selector('#authenticateWebAuthnButton')
+    check('mit Passkey: zweiter Faktor per Passkey, kein Einmalcode verlangt', pg.locator('#otp').count() == 0)
+    pg.click('#authenticateWebAuthnButton'); pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('Anmeldung mit Passkey: Stufe „mfa“, unser Server lässt sie zu', st.get('loggedIn') and st['user']['username'] == 'erika', st.get('user'))
+    pg.screenshot(path=os.path.join(SH, 'oidc_passkey_dashboard.png'))
+    ctx.close()
     br.close()
 
 check('keine JavaScript-Fehler auf unseren Seiten', not fehler, fehler)
