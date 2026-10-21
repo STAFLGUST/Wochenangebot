@@ -89,6 +89,7 @@ SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; brauch
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
 SUITES['passkeys'] = (8790, 'data-seed', True)
+SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 

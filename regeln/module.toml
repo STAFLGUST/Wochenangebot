@@ -327,7 +327,7 @@ abhaengigkeiten = []
 testgruppen = ["users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
-  "app_api"]
+  "app_api", "sitzung_cookie"]
 pfade = [
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",

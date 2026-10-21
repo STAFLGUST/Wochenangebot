@@ -20,6 +20,13 @@ function app_session_header(): void
     header('Cache-Control: no-store');
 }
 
+/* Name des Sitzungs-Cookies (Mitarbeiter und Kunden). Über HTTPS mit Präfix „__Host-“: der Browser nimmt das Cookie
+   nur vom Server selbst an (Secure, Pfad /, ohne Domain) – eine Nachbar-Subdomain wie test.<Domain> kann es weder setzen
+   noch überschreiben (GR-108, ADR-003 Befund B-1). Über einfaches HTTP (nur lokale Tests) ohne Präfix, weil Browser
+   „__Host-“ dort verwerfen. Das frühere Cookie ohne Präfix wird über HTTPS nicht mehr gelesen, sondern gelöscht. */
+const SITZUNG_COOKIE = 'WA_ADMIN';
+function sitzung_cookie_name(): string { return (is_https() ? '__Host-' : '') . SITZUNG_COOKIE; }
+
 function start_session(): void
 {
     global $CFG, $APP_SITZUNG;
@@ -34,8 +41,14 @@ function start_session(): void
         if (preg_match('/^[A-Za-z0-9,-]{22,256}$/D', $sid)) session_id($sid);
         $APP_SITZUNG = true;
     }
-    session_name('WA_ADMIN');
+    session_name(sitzung_cookie_name());
     session_set_cookie_params(['lifetime' => 0, 'path' => '/', 'secure' => $https, 'httponly' => true, 'samesite' => 'Strict']);
+    // Altes Cookie ohne Präfix (vor dem Umstieg gesetzt oder von einer Nachbar-Subdomain untergeschoben) nie übernehmen,
+    // sondern im Browser löschen. Ein Cookie einer Nachbar-Subdomain mit Domain-Angabe lässt sich so nicht löschen – es
+    // wird aber ohnehin nicht gelesen.
+    if ($https && !$APP_SITZUNG && isset($_COOKIE[SITZUNG_COOKIE]) && !headers_sent()) {
+        setcookie(SITZUNG_COOKIE, '', ['expires' => 1, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
+    }
     session_start();
     $max = (int)sec()['idleMinutes'] * 60;
     if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) { $_SESSION = []; session_regenerate_id(true); }
