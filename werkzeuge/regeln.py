@@ -5,7 +5,9 @@
   python3 werkzeuge/regeln.py betroffen [DATEI …]       Welche Module, Regeln, Daten und Tests betrifft eine Änderung?
   python3 werkzeuge/regeln.py betroffen --basis origin/main   … für alle Änderungen gegenüber main (auch ungespeicherte)
   python3 werkzeuge/regeln.py modul <id>                Steckbrief eines Moduls (Pfade, Daten, Rechte, Regeln, Tests)
-  python3 werkzeuge/regeln.py erzeugen                  app/api/lib/aktionen-liste.php aus regeln/aktionen/*.toml schreiben
+  python3 werkzeuge/regeln.py erzeugen                  erzeugte PHP-Listen schreiben: app/api/lib/aktionen-liste.php
+                                                        (regeln/aktionen/) und app/api/lib/module-liste.php (Modulregister,
+                                                        Entscheidungstabelle aus regeln/module.toml und regeln/wartung.toml)
 
 Quelle aller Angaben: regeln/*.toml. Erklärung: docs/plattform/multi-agent.md
 """
@@ -643,6 +645,62 @@ def aktionen_php(rw: Regelwerk) -> str:
     return "\n".join(z) + "\n"
 
 
+MODULE_LISTE = "app/api/lib/module-liste.php"
+
+
+def php_ausdruck(v, einzug: str = "") -> str:
+    """Python-Wert als PHP-Ausdruck (Listen, Tabellen, Text, Zahl, Wahrheitswert, null) – stabil sortiert nach Eingabe."""
+    if v is None:
+        return "null"
+    if isinstance(v, (bool, str)):
+        return php_wert(v)
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, list):
+        return "[" + ", ".join(php_ausdruck(x, einzug) for x in v) + "]"
+    if isinstance(v, dict):
+        return "[" + ", ".join(f"{php_wert(str(k))} => {php_ausdruck(x, einzug)}" for k, x in v.items()) + "]"
+    raise TypeError(f"Nicht darstellbar: {v!r}")
+
+
+def kachel_ziel(m: dict) -> str | None:
+    ziel = m.get("kachel_ziel")
+    if ziel:
+        return ziel if "." in ziel else f"{m['id']}.{ziel}"
+    intern = [o for o in m.get("oberflaeche", []) if o.get("art") == "intern"]
+    return f"{m['id']}.{intern[0]['id']}" if intern else None
+
+
+def module_php(rw: Regelwerk) -> str:
+    """Laufzeitfassung des Modulregisters (ohne Code-Pfade, Agenten oder Hinweise) und der Entscheidungstabelle.
+    Der Server wertet ausschließlich diese Tabelle aus (GR-102) – keine zweite, handgeschriebene Logik."""
+    z = ["<?php", "declare(strict_types=1);",
+         "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml –",
+         "   nicht von Hand ändern. Auswertung: lib/module.php. Bei Konflikten nach einem Rebase neu erzeugen. */",
+         "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
+         "const MODULE = ["]
+    for m in sorted(rw.modulliste, key=lambda m: (m.get("reihenfolge", 1000), m["id"])):
+        obs = {}
+        for o in m.get("oberflaeche", []):
+            obs[o["id"]] = {"name": o["name"], "art": o["art"], "adresse": o["adresse"], "ziel": o.get("ziel"),
+                            "entwicklung": o["entwicklung"], "freigabe": o["freigabe"], "sperrbar": o["sperrbar"],
+                            "dns": o.get("dns", True)}
+        eintrag = {"name": m["name"], "beschreibung": m.get("beschreibung", ""), "icon": m.get("icon", ""),
+                   "reihenfolge": m.get("reihenfolge"), "dashboard": bool(m.get("dashboard")), "teil_von": m.get("teil_von"),
+                   "kachel_ziel": kachel_ziel(m) if m.get("dashboard") else None,
+                   "abhaengigkeiten": list(m.get("abhaengigkeiten", [])), "oberflaechen": obs}
+        z.append(f"    {php_wert(m['id'])} => {php_ausdruck(eintrag)},")
+    z.append("];")
+    w = rw.wartung
+    z.append("const MODUL_FREIGABE_ERLAUBT = " + php_ausdruck({k: list(v) for k, v in w.get("freigabe_erlaubt", {}).items()}) + ";")
+    z.append("const MODUL_REGELN = [")
+    for r in sorted(w.get("regel", []), key=lambda r: r.get("nr", 0)):
+        z.append("    " + php_ausdruck({"nr": r["nr"], "wenn": dict(r.get("wenn", {})), "zugang": r["zugang"], "http": r["http"],
+                                         "kachel": r["kachel"], "hinweis": bool(r.get("hinweis", False))}) + ",")
+    z.append("];")
+    return "\n".join(z) + "\n"
+
+
 def pruefe_aktionen(rw: Regelwerk) -> None:
     ids = rw.modul_ids()
     oberflaechen = {f"{m['id']}.{o.get('id')}": o for m in rw.modulliste for o in m.get("oberflaeche", [])}
@@ -689,6 +747,10 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
     if gesehen or liste.is_file():
         if not liste.is_file() or liste.read_text(encoding="utf-8") != aktionen_php(rw):
             rw.f(f"{AKTIONEN_LISTE} passt nicht zu regeln/aktionen/ – `python3 werkzeuge/regeln.py erzeugen` ausführen")
+    mliste = rw.wurzel / MODULE_LISTE
+    if mliste.is_file() or (rw.wurzel / "app/api/lib/module.php").is_file():
+        if not mliste.is_file() or mliste.read_text(encoding="utf-8") != module_php(rw):
+            rw.f(f"{MODULE_LISTE} passt nicht zu regeln/module.toml bzw. regeln/wartung.toml – `python3 werkzeuge/regeln.py erzeugen` ausführen")
 
 
 def pruefen(rw: Regelwerk) -> Regelwerk:
@@ -838,7 +900,7 @@ def main(argv=None) -> int:
     b.add_argument("dateien", nargs="*")
     b.add_argument("--basis", help="Git-Referenz, z. B. origin/main")
     b.add_argument("--json", action="store_true")
-    sub.add_parser("erzeugen", help=f"{AKTIONEN_LISTE} aus regeln/aktionen/*.toml schreiben")
+    sub.add_parser("erzeugen", help=f"{AKTIONEN_LISTE} und {MODULE_LISTE} aus regeln/ schreiben")
     s = sub.add_parser("modul", help="Steckbrief eines Moduls")
     s.add_argument("id")
     a = ap.parse_args(argv)
@@ -858,9 +920,10 @@ def main(argv=None) -> int:
               f"{len(rw.katalog.get('regel', []))} Regeln, {len(dateien(wurzel))} Dateien zugeordnet.")
         return 0
     if a.befehl == "erzeugen":
-        ziel = wurzel / AKTIONEN_LISTE
-        ziel.write_text(aktionen_php(rw), encoding="utf-8")
-        print(f"geschrieben: {AKTIONEN_LISTE} ({len(aktionen_tabelle(rw))} Aktionen) – danach: python3 werkzeuge/integritaet.py --setzen")
+        (wurzel / AKTIONEN_LISTE).write_text(aktionen_php(rw), encoding="utf-8")
+        (wurzel / MODULE_LISTE).write_text(module_php(rw), encoding="utf-8")
+        print(f"geschrieben: {AKTIONEN_LISTE} ({len(aktionen_tabelle(rw))} Aktionen), {MODULE_LISTE} "
+              f"({len(rw.modulliste)} Module) – danach: python3 werkzeuge/integritaet.py --setzen")
         return 0
     if a.befehl == "betroffen":
         liste = sorted(set(a.dateien) | (set(geaenderte_dateien(wurzel, a.basis)) if a.basis else set()))

@@ -230,6 +230,9 @@ class Projekt:
     def erzeugen(self) -> None:
         self.schreiben(regeln.AKTIONEN_LISTE, regeln.aktionen_php(regeln.laden(self.wurzel)))
 
+    def erzeugen_module(self) -> None:
+        self.schreiben(regeln.MODULE_LISTE, regeln.module_php(regeln.laden(self.wurzel)))
+
     def schreiben(self, pfad: str, text: str) -> None:
         p = self.wurzel / pfad
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -284,6 +287,32 @@ class EchtesRegelwerk(unittest.TestCase):
         self.assertEqual({a for a, x in tab.items() if x["schreibend"] == "post"}, {"security_integrity"})
         self.assertEqual({a for a, x in tab.items() if x["oeffentlich"]}, ALT_OEFFENTLICH)
         self.assertEqual({a for a, x in tab.items() if x["kunden_wartung"]}, ALT_WARTUNG)
+
+    def test_php_tabelle_entscheidet_wie_die_pruefung(self):
+        """Vertragstest GR-102: lib/module.php wertet die erzeugte Tabelle für alle Kombinationen genauso aus wie
+        werkzeuge/regeln.py – und erfüllt die Testfälle aus regeln/wartung.toml."""
+        import json, subprocess
+        rw = regeln.laden(WURZEL)
+        lagen = list(regeln.alle_lagen(rw.wartung)) + [t["eingabe"] for t in rw.wartung["testfall"]]
+        php = ("define('WA_API', 1); require $argv[1]; require $argv[2]; $out = [];"
+               "foreach (json_decode($argv[3], true) as $l) $out[] = modul_entscheiden($l); echo json_encode($out);")
+        r = subprocess.run(["php", "-r", php, str(WURZEL / "app/api/lib/module-liste.php"), str(WURZEL / "app/api/lib/module.php"),
+                            json.dumps(lagen)], capture_output=True, text=True, check=True)
+        ergebnisse = json.loads(r.stdout)
+        self.assertEqual(len(ergebnisse), len(lagen))
+        for lage, ph in zip(lagen, ergebnisse):
+            py = regeln.entscheiden(rw.wartung, lage)
+            self.assertEqual((ph["nr"], ph["zugang"], ph["http"], ph["kachel"]), (py["nr"], py["zugang"], py["http"], py["kachel"]), lage)
+        for t, ph in zip(rw.wartung["testfall"], ergebnisse[-len(rw.wartung["testfall"]):]):
+            for k, v in t["erwartet"].items():
+                self.assertEqual(ph[k], v, t["name"])
+
+    def test_module_liste_erzeugt_und_ohne_interna(self):
+        rw = regeln.laden(WURZEL)
+        text = (WURZEL / regeln.MODULE_LISTE).read_text(encoding="utf-8")
+        self.assertEqual(text, regeln.module_php(rw))
+        for intern in ("pfade", "agent", "hinweise", "testgruppen", "app/api/"):
+            self.assertNotIn(intern, text, intern)
 
     def test_aktionen_vollstaendig_und_erzeugt(self):
         rw = regeln.laden(WURZEL)
@@ -552,6 +581,12 @@ class Verstoesse(unittest.TestCase):
         self.p.ersetzen("regeln/aktionen/angebot.toml", 'modul = "angebot"', 'modul = "lager"')
         self.p.erzeugen()
         self.assertFehler("modul muss „angebot“ lauten")
+
+    def test_veraltete_module_liste(self):
+        self.p.erzeugen_module()
+        self.assertEqual(self.p.fehler(), [])
+        self.p.ersetzen("regeln/module.toml", 'name = "Lager"\nbeschreibung', 'name = "Lager neu"\nbeschreibung')
+        self.assertFehler("module-liste.php passt nicht zu regeln/module.toml")
 
     def test_erzeugte_liste_ist_php(self):
         text = (self.p.wurzel / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8")

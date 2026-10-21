@@ -203,3 +203,6 @@ oeffentlich = true
 [aktion.wartung_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+[aktion.module_status]
+oberflaeche = "angebot.eingabe"
