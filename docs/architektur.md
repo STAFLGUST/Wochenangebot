@@ -2,6 +2,9 @@
 
 Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `tests/README.md`.
 
+Ziel und Umbau zur STAFL-Plattform: `docs/plattform/`. Welche Datei, welches Speicher-Dokument und welches Recht zu
+welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <id>`).
+
 ## Laufzeit
 
 - **Server:** Hostinger-VPS, Docker Compose: `php:8.3-apache` (Ordner `app/` nur lesend, Daten in `daten/` →
@@ -85,4 +88,4 @@ Bestandsdaten, exakte Wochenpreise, ETA-Quelle und kompatible Erweiterungen:
   `auth_helpers`, `wait_text()`, `until()`, `shot()`, Test-Mailserver `smtp_test.TestSmtp`.
 - App: `cd mobile && npm test` (Jest), `npm run typecheck`, `npm run export:native`; Gruppe `app_web` testet den Web-Build der App gegen den Testserver (nur wenn `mobile/dist-web` gebaut ist).
 - `tests/unit/*.test.js` (Node), `tests/deploy/*` (Sicherung, Release-Modus, Release-Prüfungen, Datenbank, Testumgebung).
-- CI (`.github/workflows/ci.yml`): Syntax, Versionsnummern, Prüfliste der Dateiprüfung, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten.
+- CI (`.github/workflows/ci.yml`): Syntax, Regelwerk und Modulgrenzen (`werkzeuge/regeln.py`), Versionsnummern, Prüfliste der Dateiprüfung, Ports, Secrets, Abhängigkeiten, E2E in beiden Speicherarten.

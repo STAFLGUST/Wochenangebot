@@ -1,0 +1,406 @@
+# Modulregister der STAFL-Plattform – einzige Quelle für Module, Oberflächen, Zuständigkeiten und Code-Pfade.
+#
+# Gelesen von: werkzeuge/regeln.py (CI-Prüfung und Änderungsfolgenanalyse), später vom Dashboard und der
+# Modulverwaltung (erzeugte PHP-Liste, wie app/api/lib/integritaet-liste.php). Erklärung: docs/plattform/zielarchitektur.md
+#
+# Felder je Oberfläche:
+#   entwicklung  Stand laut Code (ändert sich nur per Pull Request): geplant | in_entwicklung | in_pruefung | fertig
+#   freigabe     Startwert der kontrollierten Freigabe (später zur Laufzeit in der Verwaltung, protokolliert):
+#                keine | test (nur eingetragene Tester) | produktiv | deaktiviert
+#                produktiv setzt entwicklung = fertig voraus; test setzt mindestens in_entwicklung voraus.
+#   sperrbar     false = darf nie in Wartung/Deaktivierung gehen (Schutz vor Aussperrung der Administration)
+#   Der Betriebszustand (normal/wartung) steht bewusst NICHT hier – er ist reine Laufzeit (regeln/wartung.toml).
+#
+# Pfade: „pfade“ müssen auf vorhandene Dateien passen, „pfade_geplant“ dürfen noch leer sein.
+# Muster: * = beliebig innerhalb eines Ordners, ** = beliebig tief. Die genaueste (längste) Angabe gewinnt.
+
+schema = 1
+
+[dashboard]
+# Verbindlicher Startumfang laut Auftrag; weitere Module kommen durch einen neuen [[modul]]-Eintrag hinzu.
+pflichtmodule = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "import", "verwaltung"]
+
+# ───────────────────────────── Fachmodule (Kacheln im Dashboard) ─────────────────────────────
+
+[[modul]]
+id = "angebot"
+name = "Angebot"
+beschreibung = "Wochenangebot, Kundenangebote, Einzelangebote, Kundenportal, Bestellwünsche, Preisverlauf"
+icon = "tag"
+reihenfolge = 10
+dashboard = true
+kachel_ziel = "eingabe"
+agent = "angebot"
+abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
+testgruppen = ["sys", "frontend", "design", "hist", "editor_aux", "revert", "gemeinsam", "angebote", "angebotsliste",
+  "einzelangebote", "restposten", "bestellung", "order_management", "order_management_ui", "order_outbox",
+  "order_outbox_ui", "versand", "kunden_mail", "web_app", "legal_pages", "wartung", "sidenav", "p0", "fehlerpruefung"]
+pfade = [
+  "app/index.html", "app/manifest.json", "app/sw.js", "app/admin/**",
+  "app/datenschutz/**", "app/impressum/**", "app/kontakt/**",
+  "app/assets/frontend.js", "app/assets/app.css", "app/assets/legal.css", "app/assets/webapp.js",
+  "app/assets/offer-core.js", "app/assets/admin.js", "app/assets/admin-einzel.js",
+  "app/api/lib/angebote.php", "app/api/lib/einzelangebote.php", "app/api/lib/fracht.php",
+  "app/api/lib/preisverlauf.php", "app/api/lib/kundenmail.php",
+  "app/api/aktionen/angebote.php", "app/api/aktionen/einzelangebote.php", "app/api/aktionen/entwurf.php",
+  "app/api/aktionen/kundenportal.php", "app/api/aktionen/preisverlauf.php",
+  "app/api/orders.php", "app/api/order_outbox.php",
+  "docs/bestell-api-v1.md", "docs/bestell-mailversand.md", "docs/rechtliche-seiten.md",
+  "tests/e2e/test_sys.py", "tests/e2e/test_frontend.py", "tests/e2e/test_design.py", "tests/e2e/test_hist.py",
+  "tests/e2e/test_editor_aux.py", "tests/e2e/test_revert.py", "tests/e2e/test_gemeinsam.py",
+  "tests/e2e/test_angebote.py", "tests/e2e/test_angebotsliste.py", "tests/e2e/test_einzelangebote.py",
+  "tests/e2e/test_restposten.py", "tests/e2e/test_bestellung.py", "tests/e2e/test_order_*.py",
+  "tests/e2e/order_setup.py", "tests/e2e/test_versand.py", "tests/e2e/test_kunden_mail.py",
+  "tests/e2e/test_web_app.py", "tests/e2e/test_legal_pages.py", "tests/e2e/test_wartung.py",
+  "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py",
+  "tests/unit/merge.test.js", "tests/fixtures/angebote/**",
+]
+pfade_geplant = ["app/eingabe/**", "app/api/module/angebot/**"]
+hinweise = [
+  "Kunden-Frontend angebot-stafl.de ist produktiv und besonders schützenswert (Regeln GR-001 bis GR-005).",
+  "app/assets/admin.js ist der gemeinsame Eingabebereich aller heutigen Fachfunktionen (Hotspot): nur kleine, klar abgegrenzte Änderungen.",
+]
+
+  [[modul.oberflaeche]]
+  id = "kunden"
+  name = "Kunden-Frontend"
+  art = "extern"
+  adresse = "https://angebot-stafl.de/"
+  entwicklung = "fertig"
+  freigabe = "produktiv"
+  sperrbar = true
+
+  [[modul.oberflaeche]]
+  id = "eingabe"
+  name = "Mitarbeiter-Eingabe"
+  art = "intern"
+  adresse = "https://angebot-stafl.de/eingabe/"
+  heute = "https://angebot-stafl.de/admin/"
+  entwicklung = "fertig"
+  freigabe = "produktiv"
+  sperrbar = true
+
+[[modul]]
+id = "bestand"
+name = "Bestand"
+beschreibung = "Lagerbestände, Partien/Chargen, MHD, Warenbewegungen, Bestandsauswertungen"
+icon = "boxes"
+reihenfolge = 20
+dashboard = true
+agent = "bestand"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = ["stock", "stock_overview", "bestand_pdf", "master"]
+pfade = [
+  "app/api/lib/bestand.php", "app/api/lib/bestand-pdf.php", "app/api/aktionen/bestand.php",
+  "app/assets/stock-core.js", "docs/bestand-wochenpreise.md",
+  "tests/e2e/test_stock.py", "tests/e2e/test_stock_overview.py", "tests/e2e/test_bestand_pdf.py",
+  "tests/unit/bestand_parser.test.js", "tests/unit/stock_prices.*", "tests/fixtures/bestand/**",
+]
+pfade_geplant = ["app/api/module/bestand/**", "app/module/bestand/**"]
+hinweise = [
+  "Bestandsfunktionen sind heute Teil des Eingabebereichs (angebot.eingabe); die eigene Oberfläche entsteht in Phase 9.",
+  "Öffentlich nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern (GR-001, GR-008).",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Bestand"
+  art = "intern"
+  adresse = "https://bestand.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+[[modul]]
+id = "crm"
+name = "CRM"
+beschreibung = "Ansprechpartner, Kundenbeziehungen, Aktivitäten, Vorgänge, Vertriebsinformationen"
+icon = "users"
+reihenfolge = 30
+dashboard = true
+agent = "crm"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
+hinweise = [
+  "Kundenstammdaten (Nummer, Name, Anschrift, Gruppe, Portalzugang) gehören der Verwaltung; CRM ändert sie nur über deren Schnittstelle (offene Entscheidung E-1).",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "CRM"
+  art = "intern"
+  adresse = "https://crm.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+[[modul]]
+id = "rewe"
+name = "REWE"
+beschreibung = "Eigenständiger Fachbereich REWE – Anforderungen werden separat definiert"
+icon = "store"
+reihenfolge = 40
+dashboard = true
+agent = "rewe"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["app/api/module/rewe/**", "app/module/rewe/**", "tests/e2e/test_rewe*.py"]
+hinweise = ["Keine fachlichen Annahmen über REWE-Prozesse treffen, bis die Anforderungen vorliegen."]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "REWE"
+  art = "intern"
+  adresse = "https://rewe.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+[[modul]]
+id = "qs"
+name = "Qualitätssicherungskonzept"
+beschreibung = "QS nach IFS Wholesale – jetzt nur technische Grundlage, Fachlogik ist ein eigenes späteres Projekt"
+icon = "shield-check"
+reihenfolge = 50
+dashboard = true
+agent = "qs"
+abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py"]
+hinweise = [
+  "Keine QS-Fachlogik vor dem separaten QS-Auftrag implementieren (Master-Auftrag Abschnitt 6.2).",
+  "Externe QS-Nutzer (Kunden, Lieferanten, Prüfer) erhalten nie Zugang zur Mitarbeiterplattform (GR-104).",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "QS-Verwaltung"
+  art = "intern"
+  adresse = "https://qs.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+  [[modul.oberflaeche]]
+  id = "portal"
+  name = "QS-Portal (Kunden, Lieferanten, Prüfer)"
+  art = "extern"
+  adresse = "https://qs-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+  vorbehalt = "Domain noch nicht bestätigt"
+
+[[modul]]
+id = "einkauf"
+name = "Einkauf"
+beschreibung = "Lieferanten, Einkaufsbestellungen, Bedarfsplanung, Einkaufspreise, Wareneingänge, Liefertermine"
+icon = "truck"
+reihenfolge = 60
+dashboard = true
+agent = "einkauf"
+abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
+testgruppen = ["einkauf"]
+pfade = ["app/api/lib/einkauf.php", "app/api/aktionen/einkauf.php", "tests/e2e/test_einkauf.py"]
+pfade_geplant = ["app/api/module/einkauf/**", "app/module/einkauf/**"]
+hinweise = ["Fehlmengen-Ansicht und Einkaufsmeldung existieren heute im Eingabebereich (Verwaltung → Einkauf)."]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Einkauf"
+  art = "intern"
+  adresse = "https://einkauf.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+[[modul]]
+id = "import"
+name = "Import"
+beschreibung = "Zentrale Importoberfläche für Artikel, Bestände, Preise, Kunden, Lieferanten"
+icon = "upload"
+reihenfolge = 70
+dashboard = true
+teil_von = "verwaltung"
+kachel_ziel = "verwaltung.import"
+agent = "verwaltung"
+abhaengigkeiten = ["verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = []
+hinweise = [
+  "Eigene Kachel, aber technisch Teil der Verwaltung – keine eigene Implementierung (keine doppelten Importe).",
+  "Die Leser der Dateiformate bleiben beim Daten-Eigentümer (z. B. Bestandsliste in bestand); die Importzentrale ruft sie über Schnittstellen auf.",
+]
+
+[[modul]]
+id = "verwaltung"
+name = "Verwaltung"
+beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Sicherheit, Geschäftsregeln, Module & Wartung, Systemstatus"
+icon = "settings"
+reihenfolge = 80
+dashboard = true
+agent = "verwaltung"
+abhaengigkeiten = ["plattform"]
+testgruppen = ["kunden", "kundengruppen", "vkgruppen", "vertreter", "kundenimport", "auswertung", "master"]
+pfade = [
+  "app/api/lib/kunden.php", "app/api/lib/auswertung.php", "app/api/ort.php",
+  "app/api/aktionen/kundenverwaltung.php", "app/api/aktionen/kundengruppen.php", "app/api/aktionen/auswertung.php",
+  "app/assets/admin-verwaltung.js", "app/assets/admin-auswertung.js", "app/assets/karte.json",
+  "werkzeuge/karte_bauen.py",
+  "tests/e2e/test_kunden.py", "tests/e2e/test_kundengruppen.py", "tests/e2e/test_vkgruppen.py",
+  "tests/e2e/test_vertreter.py", "tests/e2e/test_kundenimport.py", "tests/e2e/test_auswertung.py",
+  "tests/e2e/test_master.py",
+  "tests/fixtures/kunden/**", "tests/fixtures/kundengruppen/**", "tests/fixtures/stammdaten/**",
+]
+pfade_geplant = ["app/api/module/verwaltung/**", "app/module/verwaltung/**"]
+hinweise = [
+  "Zentrale Stammdaten (Artikel, Kunden, Lieferanten, Gruppen) gehören der Verwaltung; andere Module lesen und schreiben nur über ihre Schnittstellen.",
+  "Benutzer, Rechte und Sicherheit sind Oberflächen der Verwaltung, die Dienste dahinter gehören zum Plattformkern (koordinationspflichtig).",
+]
+
+  [[modul.oberflaeche]]
+  id = "verwaltung"
+  name = "Verwaltung"
+  art = "intern"
+  adresse = "https://verwaltung.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+  [[modul.oberflaeche]]
+  id = "import"
+  name = "Importzentrale"
+  art = "intern"
+  adresse = "https://verwaltung.dashboard-stafl.de/import/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+  [[modul.oberflaeche]]
+  id = "system"
+  name = "System: Module & Wartungsmodus"
+  art = "intern"
+  adresse = "https://verwaltung.dashboard-stafl.de/system/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = false
+
+# ───────────────────────────── Gemeinsame Bereiche (keine eigene Kachel) ─────────────────────────────
+
+[[modul]]
+id = "dashboard"
+name = "Dashboard"
+beschreibung = "Zentraler Einstieg: Anmeldung, Kacheln aus dem Modulregister, Modulstatus, Abmeldung"
+icon = "layout-grid"
+dashboard = false
+agent = "dashboard"
+abhaengigkeiten = ["plattform"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["app/dashboard/**", "tests/e2e/test_dashboard*.py"]
+hinweise = ["Kacheln kommen ausschließlich aus dem Modulregister – keine fest programmierte Liste."]
+
+  [[modul.oberflaeche]]
+  id = "start"
+  name = "Mitarbeiter-Dashboard"
+  art = "intern"
+  adresse = "https://dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = false
+
+[[modul]]
+id = "plattform"
+name = "Plattformkern"
+beschreibung = "Anmeldung, Sitzungen, Rechte, Sicherheit, Speicherschicht, E-Mail, Protokoll, Betrieb, CI und Regelwerk"
+icon = "cpu"
+dashboard = false
+agent = "plattform"
+abhaengigkeiten = []
+testgruppen = ["users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
+  "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
+  "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
+  "app_api"]
+pfade = [
+  "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
+  "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
+  "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-schutz.js", "app/assets/vendor/**",
+  "app/assets/fonts/**", "app/assets/icons/**", "app/assets/logo-*",
+  "Caddyfile", "docker-compose.yml", ".env.example", ".gitignore", ".gitleaks.toml", ".github/**",
+  "deploy/**", "werkzeuge/**", "regeln/**", "docs/**", "AGENTS.md", "CLAUDE.md", "LIESMICH.md",
+  "tests/**",
+]
+pfade_geplant = ["app/api/module/plattform/**"]
+hinweise = [
+  "Jede Änderung hier betrifft potenziell alle Module: Änderungsfolgen mit `python3 werkzeuge/regeln.py betroffen` prüfen.",
+]
+
+[[modul]]
+id = "mobile"
+name = "App (iOS/Android)"
+beschreibung = "Expo-App für Kunden und Mitarbeiter; nutzt dieselbe Schnittstelle wie die Website"
+icon = "smartphone"
+dashboard = false
+agent = "mobile"
+abhaengigkeiten = ["angebot", "plattform"]
+testgruppen = ["app_api", "app_web"]
+pfade = ["mobile/**", "docs/app-api.md", "docs/app-grundlagen.md", "tests/e2e/test_app_api.py", "tests/e2e/test_app_web.py"]
+pfade_geplant = []
+hinweise = ["Die App bündelt app/assets/offer-core.js mit – Änderungen dort betreffen Website und App."]
+
+# ───────────────────────────── Umgebungen (keine Module) ─────────────────────────────
+
+[[umgebung]]
+id = "produktion"
+adressen = ["https://angebot-stafl.de/", "https://dashboard-stafl.de/"]
+beschreibung = "Echtbetrieb – nur freigegebene Releases (docs/release-freigabe.md)"
+
+[[umgebung]]
+id = "test-angebot"
+adressen = ["https://test.angebot-stafl.de/"]
+beschreibung = "Bestehende Testumgebung des Angebotsportals (Container app-test, docs/testumgebung.md)"
+
+[[umgebung]]
+id = "integration"
+adressen = ["https://test.dashboard-stafl.de/"]
+beschreibung = "Geplante Integrations-Testumgebung der Plattform (synthetische Daten, Passwortschutz) – noch 503-Platzhalter"
+
+# ───────────────────────────── Koordinationspflichtige Bereiche ─────────────────────────────
+# Änderungen hier nur nach Abstimmung (PR-Text: Abschnitt „Koordination“), weil mehrere Module/Agenten betroffen sind.
+
+[[koordination]]
+bereich = "Anmeldung, Sitzungen und Zwei-Faktor"
+pfade = ["app/api/lib/sitzung.php", "app/api/lib/passkey.php", "app/api/lib/geraete.php", "app/api/aktionen/zugang.php",
+  "app/api/aktionen/passkey.php"]
+
+[[koordination]]
+bereich = "Nutzer, Rechte und Sicherheit"
+pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicherheit.php", "app/api/lib/firewall.php",
+  "app/api/aktionen/verwaltung.php", "app/api/aktionen/schutz.php", "regeln/berechtigungen.toml"]
+
+[[koordination]]
+bereich = "Speicherschicht, Datenformate und Migrationen"
+pfade = ["app/api/storage.php", "deploy/datenbank.py", "deploy/datenbank-umschalten.sh", "regeln/datenverantwortung.toml"]
+
+[[koordination]]
+bereich = "Gemeinsamer API-Einstieg"
+pfade = ["app/api/index.php", "app/api/config.php", "app/api/lib/kern.php", "app/.htaccess"]
+
+[[koordination]]
+bereich = "Geschäftsregeln, Modulregister und Wartung"
+pfade = ["regeln/katalog.toml", "regeln/module.toml", "regeln/wartung.toml", "AGENTS.md", "werkzeuge/regeln.py"]
+
+[[koordination]]
+bereich = "Betrieb: Docker, Caddy, Release und Sicherung"
+pfade = ["Caddyfile", "docker-compose.yml", "deploy/*.sh", "deploy/testumgebung/**", ".github/workflows/**",
+  ".github/scripts/**"]
+
+[[koordination]]
+bereich = "Globale Tests und Testdaten"
+pfade = ["tests/run_e2e.py", "tests/e2e/umgebung.py", "tests/e2e/auth_helpers.py", "tests/e2e/testdaten.py",
+  "tests/fixtures/data-seed/**", "tests/fixtures/data-seed-clean/**", "tests/requirements.txt"]

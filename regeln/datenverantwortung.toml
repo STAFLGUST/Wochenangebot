@@ -1,0 +1,356 @@
+# Datenverantwortung: welchem Modul gehört welches Speicher-Dokument (app/api/storage.php)?
+#
+# Regel GR-101: Ein Modul schreibt nur eigene Dokumente. Fremde Dokumente schreibt es nur, wenn es unter
+# „schreiber“ eingetragen ist – und dann über die Funktionen des Eigentümers. Lesen fremder Dokumente nur, wenn
+# es unter „leser“ oder „schreiber“ steht. Der Plattformkern darf für Betrieb, Sicherung und Diagnose alles lesen.
+# werkzeuge/regeln.py prüft das anhand der Aufrufe store_read/store_write/store_delete/with_lock im Code.
+#
+# Einträge unter „schreiber“ mit Vermerk „Altbestand“ sind heutige Querzugriffe, die beim Umzug in Module
+# (Phase 8/9) durch Schnittstellen ersetzt werden. Neue Querzugriffe nur nach Abstimmung (koordinationspflichtig).
+#
+# schutz:  oeffentlich – darf (gefiltert) an nicht angemeldete Besucher gehen
+#          intern      – nur angemeldete Mitarbeiter
+#          vertraulich – Kunden-/Geschäftsdaten (Preise, Einkaufspreise, Kontaktdaten); nur mit passendem Recht
+#          geheim      – Passwort-Hashes, Schlüssel, Sitzungen; nie in Antworten oder Protokollen
+# historie: wie frühere Stände gegen spätere Stammdatenänderungen geschützt sind (Master-Auftrag Abschnitt 10)
+# dynamisch = true: Name wird im Code berechnet (Konstante/Variable) und ist für die Prüfung nicht sichtbar.
+
+schema = 1
+
+# ───────────── Angebot ─────────────
+
+[[dokument]]
+name = "angebot"
+eigentuemer = "angebot"
+leser = ["bestand", "plattform"]
+schutz = "oeffentlich"
+beschreibung = "Veröffentlichtes Wochenangebot; öffentlich nur gefiltert über offer_resolve (GR-001, GR-002)"
+historie = "Jede Veröffentlichung legt eine Version an (versionen/*) und den Preisverlauf (historie/*)"
+
+[[dokument]]
+name = "angebote"
+eigentuemer = "angebot"
+schutz = "vertraulich"
+beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen"
+
+[[dokument]]
+name = "entwurf"
+eigentuemer = "angebot"
+schutz = "intern"
+beschreibung = "Bearbeitungsstand des nächsten Wochenangebots (gemeinsames Bearbeiten mit Revisionen)"
+
+[[dokument]]
+name = "entwurf-stand"
+eigentuemer = "angebot"
+schutz = "intern"
+beschreibung = "Revisionszähler des Entwurfs"
+
+[[dokument]]
+name = "anwesenheit"
+eigentuemer = "angebot"
+schutz = "intern"
+beschreibung = "Wer bearbeitet gerade den Entwurf (gemeinsames Bearbeiten)"
+
+[[dokument]]
+name = "versionen/*"
+eigentuemer = "angebot"
+leser = ["bestand"]
+schutz = "intern"
+beschreibung = "Frühere veröffentlichte Angebote (unveränderliche Schnappschüsse)"
+historie = "Schnappschuss je Veröffentlichung; Anzahl begrenzt (keep_versions)"
+
+[[dokument]]
+name = "historie/*"
+eigentuemer = "angebot"
+leser = ["bestand"]
+schutz = "intern"
+beschreibung = "Preisverlauf je Kalenderwoche"
+historie = "Schnappschuss je Woche, ohne Kunden- und Einkaufspreise"
+
+[[dokument]]
+name = "historie_geloescht"
+eigentuemer = "angebot"
+leser = ["bestand"]
+schutz = "intern"
+beschreibung = "Bewusst gelöschte Wochen des Preisverlaufs"
+
+[[dokument]]
+name = "einzelangebote"
+eigentuemer = "angebot"
+schutz = "vertraulich"
+beschreibung = "Einzelangebote für genau einen Kunden (E-JJJJ-0001)"
+
+[[dokument]]
+name = "bestellungen"
+eigentuemer = "angebot"
+leser = ["einkauf", "plattform"]
+schutz = "vertraulich"
+beschreibung = "Bestellwünsche der Kunden (Bestell-API v1) mit Verlauf"
+historie = "Positionen, Preise, Firma und Angebotswoche werden beim Absenden als Schnappschuss gespeichert"
+
+[[dokument]]
+name = "bestellung"
+eigentuemer = "angebot"
+schreiber = ["plattform"]   # Altbestand: E-Mail-Einstellungen (aktionen/mail.php)
+schutz = "intern"
+beschreibung = "Einstellungen der Bestellfunktion (an/aus, Empfänger)"
+
+[[dokument]]
+name = "fracht"
+eigentuemer = "angebot"
+schutz = "intern"
+beschreibung = "Frachtregel (Staffeln, Hinweis unter dem Angebot)"
+
+[[dokument]]
+name = "merklisten"
+eigentuemer = "angebot"
+schreiber = ["verwaltung"]   # Altbestand: Kunde löschen räumt die Merkliste (aktionen/kundenverwaltung.php)
+schutz = "vertraulich"
+beschreibung = "Merklisten angemeldeter Kunden (geräteübergreifend)"
+
+[[dokument]]
+name = "abmelde-schluessel"
+eigentuemer = "angebot"
+schutz = "geheim"
+beschreibung = "Schlüssel für Abmelde-Links in Kunden-E-Mails"
+
+[[dokument]]
+name = "mailvorlage"
+eigentuemer = "angebot"
+schreiber = ["plattform"]   # Altbestand: Signatur wird in den E-Mail-Einstellungen gepflegt (aktionen/mail.php)
+schutz = "intern"
+beschreibung = "Signatur der Kunden-E-Mails"
+
+# ───────────── Bestand und Einkauf ─────────────
+
+[[dokument]]
+name = "bestand"
+eigentuemer = "bestand"
+leser = ["angebot", "einkauf"]
+schutz = "vertraulich"
+beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001)"
+
+[[dokument]]
+name = "einkauf-meldungen"
+eigentuemer = "einkauf"
+schutz = "intern"
+beschreibung = "Versandte Meldungen an den Einkauf (Fehlmengen)"
+
+# ───────────── Verwaltung: zentrale Stammdaten ─────────────
+
+[[dokument]]
+name = "stammdaten"
+eigentuemer = "verwaltung"
+leser = ["angebot", "bestand"]
+schreiber = ["bestand"]   # Altbestand: master_save in aktionen/bestand.php
+schutz = "intern"
+beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN)"
+
+[[dokument]]
+name = "kunden"
+eigentuemer = "verwaltung"
+leser = ["angebot"]
+schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
+schutz = "vertraulich"
+beschreibung = "Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003)"
+
+[[dokument]]
+name = "kundensitzungen"
+eigentuemer = "verwaltung"
+schreiber = ["angebot"]   # Altbestand: Einmal-Links aus Kunden-E-Mails
+schutz = "geheim"
+beschreibung = "Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6)"
+
+[[dokument]]
+name = "kundengruppen"
+eigentuemer = "verwaltung"
+leser = ["angebot"]
+schutz = "intern"
+dynamisch = true
+beschreibung = "Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php)"
+
+[[dokument]]
+name = "vkgruppen"
+eigentuemer = "verwaltung"
+leser = ["angebot", "bestand"]
+schutz = "intern"
+dynamisch = true
+beschreibung = "VK-Gruppen der Artikel"
+
+[[dokument]]
+name = "vertreter"
+eigentuemer = "verwaltung"
+schutz = "vertraulich"
+dynamisch = true
+beschreibung = "Vertreter mit Kontaktdaten"
+
+[[dokument]]
+name = "anmeldeorte"
+eigentuemer = "verwaltung"
+schutz = "vertraulich"
+beschreibung = "Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP)"
+
+# ───────────── Plattformkern ─────────────
+
+[[dokument]]
+name = "nutzer"
+eigentuemer = "plattform"
+schutz = "geheim"
+beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte"
+
+[[dokument]]
+name = "admin"
+eigentuemer = "plattform"
+schutz = "geheim"
+beschreibung = "Altformat des ersten Administratorzugangs (wird beim Lesen in „nutzer“ übernommen)"
+
+[[dokument]]
+name = "anmeldenamen"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Vergebene Benutzernamen"
+
+[[dokument]]
+name = "sitzungen"
+eigentuemer = "plattform"
+schutz = "geheim"
+beschreibung = "Sitzungsregister der Mitarbeiter"
+
+[[dokument]]
+name = "logins"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Fehlversuche und Sperren bei der Anmeldung"
+
+[[dokument]]
+name = "datenleck"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Ergebnis der Datenleck-Prüfung von Passwörtern (ohne Passwort)"
+
+[[dokument]]
+name = "rechte"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Rechte je Rolle (Katalog PERMS in lib/rechte.php)"
+
+[[dokument]]
+name = "sicherheit"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Sicherheitseinstellungen (Zwei-Faktor-Pflicht, IP-/Ländersperre, Passwortbestätigungen)"
+
+[[dokument]]
+name = "laendersperre"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Statistik der Länder-/IP-Sperre"
+
+[[dokument]]
+name = "wartung"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Heutiger globaler Wartungsmodus der Angebotsseite (nur Kundenfunktionen)"
+
+[[dokument]]
+name = "module"
+eigentuemer = "plattform"
+leser = ["dashboard", "verwaltung"]
+schutz = "intern"
+geplant = true
+beschreibung = "Laufzeitzustand je Modul/Oberfläche: Freigabe, Wartung (geplant/aktiv), Tester, Hinweise (Phase 5)"
+historie = "Jede Änderung mit Grund im Protokoll (regeln/wartung.toml, [protokoll])"
+
+[[dokument]]
+name = "firewall"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Firewall-Einstellungen der Schutzzentrale"
+
+[[dokument]]
+name = "sperrliste"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Gesperrte Adressen"
+
+[[dokument]]
+name = "bedrohungsliste"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Externe Bedrohungsliste (Spamhaus DROP) mit Suchindex"
+
+[[dokument]]
+name = "fw_zaehler"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Zähler der Firewall"
+
+[[dokument]]
+name = "verkehr"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Live-Verkehr (Ringpuffer) der Schutzzentrale"
+
+[[dokument]]
+name = "integritaet"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Ergebnisse der Dateiprüfung"
+
+[[dokument]]
+name = "protokoll/*"
+eigentuemer = "plattform"
+schutz = "vertraulich"
+beschreibung = "Änderungsprotokoll je Monat (audit)"
+historie = "Nur anhängen; Einträge werden nicht geändert"
+
+[[dokument]]
+name = "benachrichtigungen"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Einstellungen der Benachrichtigungen an Mitarbeiter"
+
+[[dokument]]
+name = "benachrichtigung-stand"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Bündelungsstand der Benachrichtigungen"
+
+[[dokument]]
+name = "mailversand"
+eigentuemer = "plattform"
+schreiber = ["angebot", "einkauf"]   # über die Versandfunktionen (Bestellwünsche, Kunden-E-Mails, Einkaufsmeldung)
+schutz = "vertraulich"
+beschreibung = "Versandaufträge und Versandprotokoll aller E-Mails"
+
+[[dokument]]
+name = "testpostfach"
+eigentuemer = "plattform"
+schreiber = ["angebot"]   # Kunden-E-Mails landen in der Testumgebung hier
+schutz = "vertraulich"
+beschreibung = "Abgefangene E-Mails der Testumgebung (WA_TESTUMGEBUNG=1)"
+
+[[dokument]]
+name = "mailkonto"
+eigentuemer = "plattform"
+schutz = "geheim"
+beschreibung = "Postfach-Zugang (Passwort verschlüsselt)"
+
+[[dokument]]
+name = "mail-schluessel"
+eigentuemer = "plattform"
+schutz = "geheim"
+dynamisch = true
+beschreibung = "Schlüssel für das Postfach-Passwort – nie in Sicherungen (Konstante MAIL_KEY_STORE)"
+
+[[dokument]]
+name = "sicherung"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Status der Datensicherung (Datei neben der Datenbank)"
+
+[[dokument]]
+name = "deployment"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Status des Release-Einspielens (Datei neben der Datenbank)"

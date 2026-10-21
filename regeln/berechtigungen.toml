@@ -1,0 +1,65 @@
+# Zuordnung der Mitarbeiterrechte zu Modulen.
+#
+# Der Rechtekatalog selbst bleibt in app/api/lib/rechte.php (Konstante PERMS) – dort wird serverseitig geprüft.
+# Diese Datei ordnet jedes Recht genau einem Modul zu, damit Agenten sehen, welches Modul ein Recht verantwortet,
+# und damit die CI meldet, wenn ein neues Recht ohne Zuordnung entsteht (werkzeuge/regeln.py).
+#
+# Regeln (GR-103):
+# - Bestehende Schlüssel werden NICHT umbenannt: sie sind in den gespeicherten Rollenrechten (Dokument „rechte“)
+#   und in den Ausnahmen je Nutzer (grant/deny) enthalten. Umbenennen bräuchte eine Migration mit Freigabe.
+# - Neue Rechte beginnen mit der Modul-ID: „<modul>.<recht>“, z. B. „crm.sehen“, „crm.bearbeiten“.
+#   Solche Rechte brauchen hier keinen Eintrag; sie werden über das Präfix zugeordnet.
+# - Der Zugang zu einem Modul (Kachel, Oberfläche) wird später über „<modul>.zugang“ gesteuert; die eigentliche
+#   Autorisierung erfolgt immer serverseitig je Aktion (require_perm), nie über die Sichtbarkeit einer Kachel.
+
+schema = 1
+
+# Bestehende Rechte (Stand rechte.php) → Modul
+[zuordnung]
+"angebot.bearbeiten"        = "angebot"
+"angebot.veroeffentlichen"  = "angebot"
+"angebote.verwalten"        = "angebot"
+"angebote.loeschen"         = "angebot"
+"preisverlauf.sehen"        = "angebot"
+"preisverlauf.bearbeiten"   = "angebot"
+"bestellungen.sehen"        = "angebot"
+"bestellungen.bearbeiten"   = "angebot"
+"einzelangebote.sehen"      = "angebot"
+"einzelangebote.bearbeiten" = "angebot"
+"wochenangebot.senden"      = "angebot"
+"sonderposten.senden"       = "angebot"
+"bestand.sehen"             = "bestand"
+"bestand.einkaufspreise"    = "bestand"
+"bestand.importieren"       = "bestand"
+"einkauf.sehen"             = "einkauf"
+"einkauf.melden"            = "einkauf"
+"stammdaten.sehen"          = "verwaltung"
+"stammdaten.bearbeiten"     = "verwaltung"
+"kunden.sehen"              = "verwaltung"
+"kunden.bearbeiten"         = "verwaltung"
+"protokoll.sehen"           = "verwaltung"
+"auswertung.sehen"          = "verwaltung"
+
+# Fest den Administratoren vorbehalten (kein Eintrag in PERMS, siehe PERMS_ADMIN_ONLY): Nutzer und Rechte,
+# Sicherheit und Wartungsmodus, E-Mail-Postfach. Gehören zum Plattformkern; künftig zusätzlich die Modulverwaltung.
+[nur_administratoren]
+modul = "plattform"
+bereiche = ["Nutzer und Rechte verwalten", "Sicherheit und Wartungsmodus", "E-Mail-Postfach, Signatur und Benachrichtigungen",
+  "Module, Freigaben und Wartung je Modul (geplant)"]
+
+# Externe Nutzergruppen sind strikt getrennt von Mitarbeitern (GR-003, GR-104).
+[[nutzergruppe]]
+id = "mitarbeiter"
+art = "intern"
+beschreibung = "Mitarbeiterzugänge (Dokument „nutzer“), Rollen viewer/editor/admin plus Ausnahmen je Nutzer"
+
+[[nutzergruppe]]
+id = "kunde"
+art = "extern"
+beschreibung = "Kundenzugänge des Angebotsportals (Dokument „kunden“), sehen nur freigeschaltete Angebote"
+
+[[nutzergruppe]]
+id = "qs_extern"
+art = "extern"
+geplant = true
+beschreibung = "Kunden, Lieferanten und Prüfer im QS-Portal – eigener Zugang, nie Mitarbeiterplattform"

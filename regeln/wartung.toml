@@ -1,0 +1,200 @@
+# Zustandsmodell je Oberfläche: Entwicklungsstand, Freigabe, Betrieb (Wartung) und Zugriff.
+#
+# Drei getrennte Eigenschaften (Master-Auftrag Abschnitt 8.2):
+#   entwicklung  – Stand laut Code, ändert sich nur per Pull Request (regeln/module.toml)
+#   freigabe     – kontrollierte Freigabe durch einen Administrator (Startwert in module.toml, später Dokument „module“)
+#   betrieb      – normal | wartung (zur Laufzeit, auch geplant mit Beginn/Ende)
+# Dazu die Person: normal | tester (für diese Oberfläche eingetragen) | administrator (darf Wartung umgehen)
+#
+# Die Entscheidungstabelle ist die EINZIGE Definition, wer eine Oberfläche nutzen darf. Später liest der Server
+# eine daraus erzeugte PHP-Liste (keine zweite, handgeschriebene Logik). werkzeuge/regeln.py prüft:
+#   - jede Kombination wird von genau einer ersten passenden Zeile entschieden (Vollständigkeit),
+#   - die Invarianten unten gelten für ALLE Kombinationen,
+#   - die Testfälle unten liefern das erwartete Ergebnis (sie sind zugleich Vertragstests für die PHP-Umsetzung).
+# Wichtig: „zugang = true“ heißt nur, dass die Oberfläche erreichbar ist. Jede Aktion prüft zusätzlich die Rechte
+# serverseitig (require_perm) – eine Kachel oder ein Status ist nie eine Berechtigung (GR-103).
+
+schema = 1
+
+[werte]
+entwicklung = ["geplant", "in_entwicklung", "in_pruefung", "fertig"]
+freigabe = ["keine", "test", "produktiv", "deaktiviert"]
+betrieb = ["normal", "wartung"]
+person = ["normal", "tester", "administrator"]
+
+# Erlaubte Freigaben je Entwicklungsstand (auch in module.toml geprüft). Wird ein Modul im Code zurückgestuft,
+# gilt die Freigabe als „keine“, bis ein Administrator neu entscheidet.
+[freigabe_erlaubt]
+geplant = ["keine", "deaktiviert"]
+in_entwicklung = ["keine", "test", "deaktiviert"]
+in_pruefung = ["keine", "test", "deaktiviert"]
+fertig = ["keine", "test", "produktiv", "deaktiviert"]
+
+# Entscheidungstabelle: die erste passende Zeile gilt. Leeres Feld (fehlt) = beliebig.
+# http: Antwort für nicht zugelassene Anfragen; 404 verrät nichts über interne Bereiche, 503 = vorübergehend.
+# kachel: was das Dashboard anzeigt (nur Anzeige – keine Berechtigung).
+
+[[regel]]
+nr = 1
+wenn = { freigabe_unzulaessig = true }
+zugang = false
+http = 404
+kachel = "nicht_verfuegbar"
+grund = "Freigabe passt nicht zum Entwicklungsstand (z. B. produktiv, aber Code nur geplant) – sicherer Ausfall"
+
+[[regel]]
+nr = 2
+wenn = { freigabe = "deaktiviert" }
+zugang = false
+http = 404
+kachel = "deaktiviert"
+grund = "Bewusst abgeschaltet – auch für Administratoren; Wiedereinschalten nur in der Modulverwaltung"
+
+[[regel]]
+nr = 3
+wenn = { freigabe = "keine" }
+zugang = false
+http = 404
+kachel = "entwicklungsstand"
+grund = "Nicht freigegeben – das Ende einer Wartung ändert daran nichts"
+
+[[regel]]
+nr = 4
+wenn = { freigabe = "test", person = "normal" }
+zugang = false
+http = 404
+kachel = "in_pruefung"
+grund = "Testfreigabe gilt nur für eingetragene Tester"
+
+[[regel]]
+nr = 5
+wenn = { betrieb = "wartung", person = "administrator" }
+zugang = true
+http = 200
+kachel = "wartung"
+hinweis = true
+grund = "Administratoren können während der Wartung prüfen und reparieren (Hinweisleiste)"
+
+[[regel]]
+nr = 6
+wenn = { betrieb = "wartung" }
+zugang = false
+http = 503
+kachel = "wartung"
+grund = "Wartung: Retry-After und Cache-Control: no-store, Hinweistext aus der Modulverwaltung"
+
+[[regel]]
+nr = 7
+wenn = { freigabe = "test" }
+zugang = true
+http = 200
+kachel = "testbetrieb"
+hinweis = true
+grund = "Tester bzw. Administratoren, die als Tester eingetragen sind"
+
+[[regel]]
+nr = 8
+wenn = { freigabe = "produktiv" }
+zugang = true
+http = 200
+kachel = "verfuegbar"
+grund = "Produktiv freigegeben"
+
+# Hinweis zu Regel 4/7: Administratoren gelten für eine Testfreigabe als Tester. Die Laufzeit setzt dafür
+# person = "tester" (Administratoren werden nicht automatisch Tester – sie tragen sich bewusst ein).
+
+# Invarianten: müssen für jede Kombination gelten.
+[[invariante]]
+name = "Ohne Freigabe kein Zugang – unabhängig von Wartung"
+wenn = { freigabe = "keine" }
+dann = { zugang = false }
+
+[[invariante]]
+name = "Deaktiviert ist für alle gesperrt"
+wenn = { freigabe = "deaktiviert" }
+dann = { zugang = false }
+
+[[invariante]]
+name = "Unfertiger Code wird nie produktiv"
+wenn = { entwicklung = "geplant" }
+dann = { zugang = false }
+
+[[invariante]]
+name = "Wartung sperrt normale Nutzer"
+wenn = { betrieb = "wartung", person = "normal" }
+dann = { zugang = false }
+
+[[invariante]]
+name = "Testfreigabe nie für normale Nutzer"
+wenn = { freigabe = "test", person = "normal" }
+dann = { zugang = false }
+
+[[invariante]]
+name = "Administratoren werden durch Wartung nie ausgesperrt"
+wenn = { entwicklung = "fertig", freigabe = "produktiv", person = "administrator" }
+dann = { zugang = true }
+
+# Testfälle (Vertragstests): Beispiele aus dem Master-Auftrag Abschnitt 8.1/8.4.
+[[testfall]]
+name = "CRM in Wartung, normaler Nutzer"
+eingabe = { entwicklung = "fertig", freigabe = "produktiv", betrieb = "wartung", person = "normal" }
+erwartet = { zugang = false, http = 503, kachel = "wartung" }
+
+[[testfall]]
+name = "Angebot läuft weiter"
+eingabe = { entwicklung = "fertig", freigabe = "produktiv", betrieb = "normal", person = "normal" }
+erwartet = { zugang = true, http = 200, kachel = "verfuegbar" }
+
+[[testfall]]
+name = "QS in Entwicklung – Wartung beenden macht es nicht produktiv"
+eingabe = { entwicklung = "in_entwicklung", freigabe = "keine", betrieb = "normal", person = "normal" }
+erwartet = { zugang = false, http = 404 }
+
+[[testfall]]
+name = "REWE für ausgewählte Tester"
+eingabe = { entwicklung = "in_pruefung", freigabe = "test", betrieb = "normal", person = "tester" }
+erwartet = { zugang = true, kachel = "testbetrieb" }
+
+[[testfall]]
+name = "REWE für andere Mitarbeiter unsichtbar"
+eingabe = { entwicklung = "in_pruefung", freigabe = "test", betrieb = "normal", person = "normal" }
+erwartet = { zugang = false, http = 404 }
+
+[[testfall]]
+name = "Einkauf vorübergehend deaktiviert"
+eingabe = { entwicklung = "fertig", freigabe = "deaktiviert", betrieb = "normal", person = "administrator" }
+erwartet = { zugang = false, kachel = "deaktiviert" }
+
+[[testfall]]
+name = "Produktiv-Freigabe bei nur geplantem Code wird abgewiesen"
+eingabe = { entwicklung = "geplant", freigabe = "produktiv", betrieb = "normal", person = "administrator" }
+erwartet = { zugang = false, kachel = "nicht_verfuegbar" }
+
+[[testfall]]
+name = "Administrator repariert während der Wartung"
+eingabe = { entwicklung = "fertig", freigabe = "produktiv", betrieb = "wartung", person = "administrator" }
+erwartet = { zugang = true, http = 200 }
+
+# Serverseitige Durchsetzung (Phase 5) – was eine Oberfläche in Wartung bzw. ohne Zugang blockiert.
+[durchsetzung]
+api = "Jede Aktion ist genau einer Oberfläche zugeordnet; die Prüfung läuft im gemeinsamen Einstieg (app/api/index.php) vor der Aktion."
+schreibaktionen = "In Wartung abgewiesen (503, no-store), auch für laufende Sitzungen; Lesen nur für Administratoren."
+hintergrund = "Geplante Läufe und Importe des Moduls pausieren und werden protokolliert, nicht verworfen."
+email = "Versandaufträge des Moduls bleiben in der Warteschlange (Dokument mailversand) und gehen nach der Wartung raus."
+veroeffentlichung = "Veröffentlichen ist eine Schreibaktion der Oberfläche angebot.eingabe."
+transaktionen = "Wartung beginnt erst, wenn laufende Schreibtransaktionen (with_lock) beendet sind; neue werden abgewiesen."
+gemeinsame_dienste = "Plattformkern, Anmeldung, Dashboard und Verwaltung → System sind nicht sperrbar (sperrbar = false)."
+getrennt = "Frontend und Backend eines Moduls haben eigene Zustände, z. B. Angebot: Kunden aktiv, Eingabe in Wartung."
+heute = "Der bestehende Wartungsmodus (Dokument wartung) entspricht angebot.kunden in Wartung und wird in Phase 5 übernommen."
+
+[protokoll]
+pflichtfelder = ["wer", "wann", "modul", "oberflaeche", "alt", "neu", "grund", "geplante_dauer"]
+bestaetigung = "Änderungen an Freigabe und Wartung brauchen eine Passwortbestätigung (Katalog BESTAETIGUNG, lib/sicherheit.php)."
+
+[notfall]
+beschreibung = "Fehlerhafte Wartungsregeln dürfen die Administration nie aussperren."
+massnahmen = [
+  "Verwaltung → System und das Dashboard sind nicht sperrbar (Prüfung in werkzeuge/regeln.py).",
+  "Regel 5: Administratoren erreichen jede produktive Oberfläche auch in Wartung.",
+  "Server-Werkzeug nach dem Muster deploy/ip-freigabe-aus.sh: alle Wartungen beenden (geplant, Phase 5).",
+]

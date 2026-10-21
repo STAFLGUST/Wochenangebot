@@ -1,0 +1,36 @@
+# Roadmap – priorisierte Pull Requests
+
+Jeder Schritt ist ein eigener, kleiner PR mit voller CI. Kein Schritt ändert Produktion ohne Release-Freigabe;
+Datenbank-, DNS- und Serveränderungen sind gesondert markiert und brauchen zusätzlich Ihre ausdrückliche Freigabe.
+
+| # | Inhalt | Phase | Produktivwirkung nach Release | Status |
+| --- | --- | --- | --- | --- |
+| 1 | Regelwerk `regeln/`, Prüfwerkzeug, CI-Schritt, Architektur-Doku, AGENTS.md | 1–3 | keine (nichts unter `app/` geändert) | **implementiert, getestet, PR offen** |
+| 2 | Aktions-Register je Bereich: jede Aktion gehört genau einer Oberfläche; Einstieg liest die Listen daraus statt `$writeActions`/`$isPublic`/`WARTUNG_GESPERRT`; CI prüft Vollständigkeit | 3 | keine (gleiches Verhalten, gleiche E2E-Tests) | geplant |
+| 3 | Modulregister zur Laufzeit: aus `regeln/` erzeugte PHP-Liste (`app/api/lib/module-liste.php`), Lese-Aktion `module_status` (nur angemeldet), Entscheidungstabelle in PHP mit denselben Vertragstests | 4–5 | keine sichtbare | geplant |
+| 4 | Wartung je Oberfläche serverseitig (Dokument `module`, Protokoll, Bestätigung, Notfallskript); heutiger Wartungsmodus wird `angebot.kunden` | 5 | Verwaltung → Wartung zeigt Oberflächen statt eines Schalters | geplant |
+| 5 | Modulverwaltung im heutigen Eingabebereich (Liste, Freigabe, Wartung planen, Historie, Tester) | 5 | neue Ansicht für Administratoren | geplant |
+| 6 | Dashboard-Oberfläche `app/dashboard/` (Kacheln aus dem Register, Status, hell/dunkel, 390 px) – zunächst nur in Tests und `test.angebot-stafl.de` | 4 | keine (Caddy bleibt 503) | geplant |
+| 7 | Anmeldung nach Entscheidung E-2: Sitzung für `dashboard-stafl.de`, Modulzugang `<modul>.zugang`, zentraler Logout | 6 | **Caddy-Freigabe `dashboard-stafl.de` (koordiniert, mit Freigabe)** | geplant, braucht E-2 |
+| 8 | Angebot-Eingabe: neuer Ort (E-2), `/admin/` leitet weiter, alte Links bleiben gültig | 7 | Mitarbeiter-Adresse ändert sich; Kundenseite unverändert | geplant, braucht E-2 |
+| 9 | Integrationsumgebung `test.dashboard-stafl.de` (Container wie `app-test`, synthetische Daten) | 3 | **Serveränderung (mit Freigabe)** | geplant |
+| 10 | Verwaltung: Stammdaten- und Importzentrale; Importleser bleiben beim Daten-Eigentümer | 8 | neue Oberfläche | geplant |
+| 11 | PostgreSQL in CI/Testumgebung, dritter Speichertreiber, Migrationswerkzeug | 8 | **keine, bis Migration freigegeben** | geplant |
+| 12 | Fachmodule Bestand → Einkauf → CRM → REWE (je eigener Agent, eigene PR-Serie) | 9 | je Modul, Freigabe einzeln | geplant |
+| 13 | QS-Großprojekt (IFS Wholesale) – separater Auftrag | 10 | – | nicht begonnen |
+
+Reihenfolge-Begründung: PR 2 und 3 entfernen die Sammelstellen, an denen parallele Agenten sich heute blockieren würden;
+erst danach lohnt paralleles Arbeiten an Fachmodulen. Wartung (4–5) kommt vor dem Dashboard, weil sie den bestehenden
+Echtbetrieb sofort verbessert und für die schrittweise Freigabe der Module gebraucht wird.
+
+## Offene Entscheidungen
+
+| Nr. | Frage | Empfehlung |
+| --- | --- | --- |
+| E-1 | Wer pflegt Kundenstammdaten – Verwaltung oder CRM? | Verwaltung (Nummer, Name, Anschrift, Gruppe, Zugang); CRM ergänzt Ansprechpartner, Aktivitäten, Vorgänge |
+| E-2 | Mitarbeiter-Eingabe unter `angebot-stafl.de/eingabe/` (OIDC nötig) oder unter `dashboard-stafl.de` (eine Sitzung)? | `dashboard-stafl.de` – siehe [zielarchitektur.md §4](zielarchitektur.md#4-anmeldung-und-single-sign-on); weicht vom Auftrag ab |
+| E-3 | SQLite jetzt produktiv aktivieren? | ja, im Wartungsfenster mit dem vorhandenen Werkzeug – nach Ihrer Freigabe; vorher Status auf dem Server prüfen |
+| E-4 | Repository privat stellen, bevor interne Module (Einkauf, QS) entstehen? | ja; Code darf zwar nie Sicherheit tragen, aber interne Abläufe müssen nicht öffentlich sein |
+| E-5 | Vorschauumgebungen je PR? | vorerst nein (Last und Fremdcode auf dem Produktiv-VPS); später ggf. getrennter Test-VPS |
+| E-6 | Domain `qs-stafl.de` für das QS-Portal? | im QS-Auftrag entscheiden; Register führt sie mit Vorbehalt |
+| E-7 | Externe Datensicherung | weiterhin zurückgestellt (Ihr Wunsch) – Risiko in [bestandsaufnahme.md](bestandsaufnahme.md#risiken-dokumentiert-nicht-behoben) |
