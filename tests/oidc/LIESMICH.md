@@ -4,14 +4,14 @@ Bildet die geplante Mitarbeiteranmeldung aus ADR-003 vollständig nach – **nur
 (GR-111). Nichts hiervon ändert `angebot-stafl.de`: ohne `WA_OIDC=1` im Webserver verhält sich die Anwendung wie bisher.
 
 ```text
-Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─▶ Keycloak 26.7.5 (Realm „mitarbeiter“) ─▶ PostgreSQL (nur Keycloak)
+Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─▶ Keycloak 26.8.1 (Realm „mitarbeiter“) ─▶ PostgreSQL (nur Keycloak)
                                   ├─ dashboard.stafl.test  ─▶ Apache + mod_auth_openidc (Client „dashboard“) ─▶ app/ + dashboard/
                                   └─ angebot.stafl.test    ─▶ Apache + mod_auth_openidc (Client „angebot“)   ─▶ app/
 ```
 
 | Datei | Inhalt |
 | --- | --- |
-| `umgebung.sh` | `start` / `stop`: PostgreSQL, Keycloak, Caddy, Apache; Versionen mit Prüfsumme, Geheimnisse bei jedem Start neu (`tests/.arbeit/oidc/geheim.env`) |
+| `umgebung.sh` | `start` / `stop`: PostgreSQL (UTF-8, nur für Keycloak), Keycloak (veraltete Funktionen abgeschaltet), Caddy, Apache; Versionen mit Prüfsumme, Geheimnisse bei jedem Start neu (`tests/.arbeit/oidc/geheim.env`). Keycloak-Updates: Version und SHA-256 hier eintragen, CI-Auftrag muss grün sein (ADR-003) |
 | `realm-mitarbeiter.json` | Test-Realm: Brute-Force-Schutz, nur HTTPS, keine Selbstregistrierung, Pflicht zum zweiten Faktor, Sitzung 30 Min. Leerlauf / 10 Std.; Clients vertraulich, nur Code-Ablauf mit PKCE (S256), exakte Rücksprungadressen, kein CORS, Back-Channel-Logout. Testnutzer mit Testkennwörtern (keine echten Daten) |
 | `Caddyfile` | TLS wie in der Produktion; auf `login.` nur `/realms/mitarbeiter/` und `/resources/` (Verwaltung und Master-Realm nie öffentlich) |
 | `apache.conf` | je Host ein eigener Client und eine eigene Sitzung (`__Host-oidc_sitzung`), Schnittstelle ohne Anmeldung 401, Identität nur als Server-Umgebung (`OIDCPassClaimsAs environment`) |
