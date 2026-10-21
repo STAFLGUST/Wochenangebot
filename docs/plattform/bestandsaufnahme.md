@@ -31,7 +31,7 @@ läuft. Bitte bei Gelegenheit auf dem Server prüfen: `ls -la daten/.sqlite-acti
   (HTTPS, Sicherheitsheader, CSP, Fallenpfade). Kein Build-Schritt, keine Fremdbibliotheken im Server-Code.
 - **Server-Code:** ein Einstieg `app/api/index.php` (RPC über `?action=`, 115 Aktionen in `aktionen/*.php`, `orders.php`,
   `order_outbox.php`), Bibliotheken in `app/api/lib/`. Zentrale Listen im Einstieg: Schreibaktionen, öffentliche
-  Aktionen, `WARTUNG_GESPERRT`.
+  Aktionen, `WARTUNG_GESPERRT` (seit PR 2 ersetzt durch das Aktionsregister `regeln/aktionen/`).
 - **Oberflächen:** Kundenseite (`index.html`, `frontend.js`), Eingabebereich `/admin/` (`admin.js` 3.806 Zeilen,
   `admin-verwaltung.js` 1.919, `admin-einzel.js`, `admin-schutz.js`, `admin-auswertung.js`), App in `mobile/` (Expo).
 - **Daten:** Dokumentenspeicher `app/api/storage.php` – JSON-Dateien oder SQLite-Tabelle `documents` (Schema 1,

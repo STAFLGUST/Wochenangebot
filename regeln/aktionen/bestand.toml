@@ -1,0 +1,16 @@
+# Aktionen des Moduls „bestand“: Bestandsliste, Bestands-PDF, Bestandsimport.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "bestand"
+
+[aktion.stock]
+oberflaeche = "angebot.eingabe"
+
+[aktion.stock_import]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.stock_pdf]
+oberflaeche = "angebot.eingabe"
+schreibend = true

@@ -1,0 +1,205 @@
+# Aktionen des Moduls „plattform“: Anmeldung, Zwei-Faktor, Passkeys, Nutzer und Rechte, Sicherheit, Schutzzentrale, E-Mail-Postfach, Benachrichtigungen, Wartungsmodus, Dateiprüfung.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "plattform"
+
+[aktion.benachrichtigung_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.benachrichtigung_test]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.change_password]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fw_export]
+oberflaeche = "angebot.eingabe"
+
+[aktion.fw_feed_update]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fw_freigeben]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fw_import]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fw_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fw_sperren]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fw_status]
+oberflaeche = "angebot.eingabe"
+
+[aktion.fw_verkehr]
+oberflaeche = "angebot.eingabe"
+
+[aktion.fw_vorlage]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.geo_clear_stats]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.geo_lookup]
+oberflaeche = "angebot.eingabe"
+
+[aktion.geo_update]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.ip_unblock]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.log]
+oberflaeche = "angebot.eingabe"
+
+[aktion.login]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.login_2fa]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.logout]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.mail_konto_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.mail_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.mail_status]
+oberflaeche = "angebot.eingabe"
+
+[aktion.mail_test]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.passkey_begin]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.passkey_delete]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.passkey_list]
+oberflaeche = "angebot.eingabe"
+
+[aktion.passkey_login]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.passkey_login_begin]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.passkey_register]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.passkey_rename]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.reauth]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.rechte]
+oberflaeche = "angebot.eingabe"
+
+[aktion.rechte_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.security_diag]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.security_export]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.security_integrity]
+oberflaeche = "angebot.eingabe"
+schreibend = "post"   # GET liefert den letzten Lauf, POST prüft
+
+[aktion.security_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.security_status]
+oberflaeche = "angebot.eingabe"
+
+[aktion.session_end]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.setup]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.status]
+oberflaeche = "angebot.eingabe"
+
+[aktion.testpostfach]
+oberflaeche = "angebot.eingabe"
+
+[aktion.twofa_begin]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.twofa_disable]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.twofa_enable]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.user_delete]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.user_mail]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.user_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.user_unlock]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.users]
+oberflaeche = "angebot.eingabe"
+
+[aktion.waf_probe]
+oberflaeche = "angebot.kunden"
+oeffentlich = true
+
+[aktion.wartung_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true

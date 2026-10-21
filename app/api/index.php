@@ -123,20 +123,18 @@ require __DIR__ . '/lib/bestand.php';
 require __DIR__ . '/lib/firewall.php';
 require __DIR__ . '/lib/integritaet.php';
 require __DIR__ . '/lib/geraete.php';
+require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus regeln/aktionen/*.toml)
 
 /* ---------------- Aktionen ---------------- */
 
 $action = (string)($_GET['action'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$writeActions = ['reauth', 'setup', 'login', 'logout', 'save_draft', 'discard_draft', 'publish', 'change_password', 'history_import', 'history_delete', 'user_save', 'user_delete', 'user_mail', 'stock_import', 'stock_pdf', 'master_save',
-                 'login_2fa', 'twofa_begin', 'twofa_enable', 'twofa_disable', 'security_save', 'session_end', 'ip_unblock', 'user_unlock', 'geo_update', 'geo_clear_stats', 'offers_save',
-                 'kunde_save', 'kunde_delete', 'kunden_import', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set',
-                 'mail_save', 'mail_test', 'kunde_mail', 'kunden_rundmail', 'kunden_mail_vorschau', 'mail_konto_save', 'kunde_abmelden_info', 'kunde_abmelden', 'kunde_merkliste_save', 'kunde_bestellung', 'bestell_settings_save', 'wartung_save', 'draft_ping', 'bestellung_save', 'bestellung_mail_retry', 'kunden_restposten',
-                 'benachrichtigung_save', 'benachrichtigung_test', 'einkauf_melden', 'security_diag', 'security_export', 'rechte_save', 'fracht_save', 'ort_update', 'kundengruppen_save', 'vkgruppen_save', 'vertreter_save', 'einzel_save', 'einzel_status', 'einzel_loeschen', 'einzel_senden',
-                 'fw_save', 'fw_sperren', 'fw_freigeben', 'fw_feed_update', 'fw_vorlage', 'fw_import',
-                 'passkey_begin', 'passkey_register', 'passkey_rename', 'passkey_delete', 'passkey_login_begin', 'passkey_login'];
-if ($method === 'POST') $writeActions[] = 'security_integrity';   // Dateiprüfung: GET liefert den letzten Lauf, POST prüft
-if (in_array($action, $writeActions, true)) {
+/* Eigenschaften der Aktion aus dem Register (regeln/aktionen/<modul>.toml → lib/aktionen-liste.php): Modul, Oberfläche,
+   schreibend, öffentlich, pausiert im Wartungsmodus. Unbekannte Aktionen: nicht öffentlich, nicht schreibend → am Ende 404.
+   Neue Aktionen nur dort eintragen und `python3 werkzeuge/regeln.py erzeugen` ausführen (die CI prüft das). */
+$AKTION = AKTIONEN[$action] ?? null;
+$schreibend = $AKTION !== null && ($AKTION['schreibend'] === true || ($AKTION['schreibend'] === 'post' && $method === 'POST'));
+if ($schreibend) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
@@ -146,7 +144,7 @@ fw_guard($action);
 
 /* Ländersperre (ganze Seite oder nur Eingabebereich) */
 /* Öffentlicher Bereich = Angebotsseite inkl. Kunden-Anmeldung (Kundenangebote verlangen dort selbst eine Anmeldung) */
-$isPublic = ($action === 'offer' && empty($_GET['draft'])) || in_array($action, ['waf_probe', 'app_info', 'kunde_status', 'kunde_login', 'kunde_logout', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_abmelden_info', 'kunde_abmelden', 'abmelden1', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'], true);
+$isPublic = $AKTION !== null && $AKTION['oeffentlich'] && !($action === 'offer' && !empty($_GET['draft']));
 // Mitarbeiter-Sitzung ruft ein nicht öffentliches Angebot ab (Kundenpreise, Einzelangebote): gelten IP-Freigabe und
 // Ländersperre des Eingabebereichs – auch wenn die Aktion sonst zur öffentlichen Angebotsseite gehört
 if ($isPublic && $action === 'offer') {
@@ -164,8 +162,7 @@ if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
 
 /* Wartungsmodus: Angebotsseite und Kundenfunktionen pausieren; Mitarbeiter arbeiten normal weiter.
    Abmelden vom Wochenangebot und Kunden-Abmelden bleiben immer möglich. */
-const WARTUNG_GESPERRT = ['offer', 'kunde_login', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'kunde_merkliste', 'kunde_merkliste_save', 'kunde_bestellung', 'kunde_bestellungen', 'kunde_bestellung_detail'];
-if (in_array($action, WARTUNG_GESPERRT, true) && ($W = wartung()) && !current_user()) {
+if ($AKTION !== null && $AKTION['kunden_wartung'] && ($W = wartung()) && !current_user()) {
     header('Retry-After: 600');
     respond(['ok' => false, 'wartung' => true, 'error' => $W['message'], 'until' => $W['until']], 503);
 }

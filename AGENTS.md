@@ -81,7 +81,8 @@ Ablauf und Begründungen: `docs/plattform/multi-agent.md`. Kurzfassung:
    genannte Regeln, abhängige Module und Testgruppen prüfen.
 5. **Schnittstellen statt Durchgriff:** Module nutzen fremde Daten über Funktionen des Eigentümers. Ändert sich eine
    Schnittstelle, nennt der PR alle Nutzer (abhängige Module) und erweitert nur (alte Aufrufe bleiben gültig).
-6. **Neue Dateien, Dokumente, Rechte, Testgruppen** im selben PR in `regeln/` eintragen – die CI lehnt sonst ab.
+6. **Neue Dateien, Dokumente, Rechte, Testgruppen und API-Aktionen** im selben PR in `regeln/` eintragen – die CI lehnt sonst ab.
+   Aktionen stehen in `regeln/aktionen/<modul>.toml` (danach `python3 werkzeuge/regeln.py erzeugen`), nie mehr als Liste in `index.php`.
 
 ## Definition of Done (jeder Pull Request)
 

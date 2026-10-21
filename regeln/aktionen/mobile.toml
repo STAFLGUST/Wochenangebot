@@ -1,0 +1,9 @@
+# Aktionen des Moduls „mobile“: Grunddaten für die App.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "mobile"
+
+[aktion.app_info]
+oberflaeche = "angebot.kunden"
+oeffentlich = true

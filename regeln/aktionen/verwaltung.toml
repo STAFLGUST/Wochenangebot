@@ -1,0 +1,55 @@
+# Aktionen des Moduls „verwaltung“: Stammdaten (Artikel, Kunden, Gruppen, Vertreter), Kundenimport, Auswertung.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "verwaltung"
+
+[aktion.auswertung]
+oberflaeche = "angebot.eingabe"
+
+[aktion.kunde_delete]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.kunde_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.kunden]
+oberflaeche = "angebot.eingabe"
+
+[aktion.kunden_import]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.kundengruppen]
+oberflaeche = "angebot.eingabe"
+
+[aktion.kundengruppen_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.master]
+oberflaeche = "angebot.eingabe"
+
+[aktion.master_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.ort_update]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.vertreter]
+oberflaeche = "angebot.eingabe"
+
+[aktion.vertreter_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.vkgruppen]
+oberflaeche = "angebot.eingabe"
+
+[aktion.vkgruppen_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true

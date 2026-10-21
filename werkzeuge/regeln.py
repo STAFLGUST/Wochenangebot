@@ -5,6 +5,7 @@
   python3 werkzeuge/regeln.py betroffen [DATEI …]       Welche Module, Regeln, Daten und Tests betrifft eine Änderung?
   python3 werkzeuge/regeln.py betroffen --basis origin/main   … für alle Änderungen gegenüber main (auch ungespeicherte)
   python3 werkzeuge/regeln.py modul <id>                Steckbrief eines Moduls (Pfade, Daten, Rechte, Regeln, Tests)
+  python3 werkzeuge/regeln.py erzeugen                  app/api/lib/aktionen-liste.php aus regeln/aktionen/*.toml schreiben
 
 Quelle aller Angaben: regeln/*.toml. Erklärung: docs/plattform/multi-agent.md
 """
@@ -46,6 +47,7 @@ class Regelwerk:
     rechte: dict
     katalog: dict
     wartung: dict
+    aktionen: dict = field(default_factory=dict)   # Dateiname (Modul) → Inhalt von regeln/aktionen/<modul>.toml
     fehler: list = field(default_factory=list)
     warnungen: list = field(default_factory=list)
 
@@ -77,6 +79,9 @@ def laden(wurzel: Path = WURZEL) -> Regelwerk:
             raise SystemExit(f"FEHLER: {pfad.relative_to(wurzel)} ist kein gültiges TOML: {e}")
     rw = Regelwerk(wurzel, toml("module.toml"), toml("datenverantwortung.toml"), toml("berechtigungen.toml"),
                    toml("katalog.toml"), toml("wartung.toml"))
+    ordner = wurzel / "regeln" / "aktionen"
+    for pfad in sorted(ordner.glob("*.toml")) if ordner.is_dir() else []:
+        rw.aktionen[pfad.stem] = toml(f"aktionen/{pfad.name}")
     for name, d in [("module.toml", rw.module), ("datenverantwortung.toml", rw.daten),
                     ("berechtigungen.toml", rw.rechte), ("katalog.toml", rw.katalog), ("wartung.toml", rw.wartung)]:
         if d.get("schema") != 1:
@@ -580,6 +585,112 @@ def pruefe_caddy(rw: Regelwerk) -> None:
             rw.f(f"Caddyfile: {h} ist weder Oberfläche noch Umgebung in regeln/module.toml")
 
 
+# ─────────────────────────────── Aktionsregister ───────────────────────────────
+
+AKTIONEN_LISTE = "app/api/lib/aktionen-liste.php"
+CASE_RE = re.compile(r"case '([a-z0-9_]+)'")
+GLEICH_RE = re.compile(r"\$action === '([a-z0-9_]+)'")
+
+
+def aktionen_im_code(wurzel: Path) -> set:
+    """Aktionen, die der Server tatsächlich bearbeitet: switch-Zweige in app/api/aktionen/*.php, Vergleiche mit
+    $action dort sowie die Listen in orders_action() (app/api/orders.php)."""
+    gefunden = set()
+    ordner = wurzel / "app/api/aktionen"
+    for p in sorted(ordner.glob("*.php")) if ordner.is_dir() else []:
+        t = p.read_text(encoding="utf-8")
+        gefunden |= set(CASE_RE.findall(t)) | set(GLEICH_RE.findall(t))
+    orders = wurzel / "app/api/orders.php"
+    if orders.is_file():
+        m = re.search(r"function orders_action\(.*?\n\}", orders.read_text(encoding="utf-8"), re.DOTALL)
+        if m:
+            for liste in re.findall(r"in_array\(\$action, \[(.*?)\]", m.group(0)):
+                gefunden |= set(re.findall(r"'([a-z0-9_]+)'", liste))
+    return gefunden
+
+
+def aktionen_tabelle(rw: Regelwerk) -> dict:
+    """Aktion → Eigenschaften mit Standardwerten; doppelte Einträge meldet pruefe_aktionen."""
+    tab = {}
+    for datei, inhalt in sorted(rw.aktionen.items()):
+        for name, a in sorted((inhalt.get("aktion") or {}).items()):
+            if name in tab:
+                continue
+            tab[name] = {"modul": inhalt.get("modul", datei), "oberflaeche": a.get("oberflaeche", ""),
+                         "schreibend": a.get("schreibend", False), "oeffentlich": a.get("oeffentlich", False),
+                         "kunden_wartung": a.get("kunden_wartung", False)}
+    return tab
+
+
+def php_wert(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    return "'" + str(v).replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def aktionen_php(rw: Regelwerk) -> str:
+    z = ["<?php", "declare(strict_types=1);",
+         "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/aktionen/*.toml – nicht von Hand ändern.",
+         "   Je Aktion: zuständiges Modul, Oberfläche (Host), schreibend (true | false | 'post' = nur per POST),",
+         "   öffentlich (ohne Mitarbeiter-Anmeldung, keine IP-/Ländersperre des Eingabebereichs) und kunden_wartung",
+         "   (pausiert im Wartungsmodus der Angebotsseite). Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
+         "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
+         "const AKTIONEN = ["]
+    for name, a in sorted(aktionen_tabelle(rw).items()):
+        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung"))
+        z.append(f"    '{name}' => [{felder}],")
+    z.append("];")
+    return "\n".join(z) + "\n"
+
+
+def pruefe_aktionen(rw: Regelwerk) -> None:
+    ids = rw.modul_ids()
+    oberflaechen = {f"{m['id']}.{o.get('id')}": o for m in rw.modulliste for o in m.get("oberflaeche", [])}
+    gesehen = {}
+    for datei, inhalt in sorted(rw.aktionen.items()):
+        ort = f"regeln/aktionen/{datei}.toml"
+        if inhalt.get("schema") != 1:
+            rw.f(f"{ort}: schema = 1 fehlt")
+        if inhalt.get("modul") != datei:
+            rw.f(f"{ort}: modul muss „{datei}“ lauten (Dateiname = Modul)")
+        if datei not in ids:
+            rw.f(f"{ort}: Modul „{datei}“ gibt es nicht in regeln/module.toml")
+        for name, a in sorted((inhalt.get("aktion") or {}).items()):
+            wo = f"Aktion {name} ({ort})"
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+                rw.f(f"{wo}: ungültiger Name")
+            if name in gesehen:
+                rw.f(f"{wo}: schon in {gesehen[name]} registriert – jede Aktion gehört genau einem Modul")
+                continue
+            gesehen[name] = ort
+            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung"}
+            if unbekannt:
+                rw.f(f"{wo}: unbekannte Felder {', '.join(sorted(unbekannt))}")
+            ob = oberflaechen.get(a.get("oberflaeche", ""))
+            if not ob:
+                rw.f(f"{wo}: oberflaeche „{a.get('oberflaeche', '')}“ gibt es nicht (Form <modul>.<oberfläche>)")
+            if a.get("schreibend", False) not in (True, False, "post"):
+                rw.f(f"{wo}: schreibend muss true, false oder \"post\" sein")
+            for feld in ("oeffentlich", "kunden_wartung"):
+                if not isinstance(a.get(feld, False), bool):
+                    rw.f(f"{wo}: {feld} muss true oder false sein")
+            if ob and a.get("oeffentlich") and ob.get("art") != "extern":
+                rw.f(f"{wo}: öffentliche Aktion auf interner Oberfläche {a['oberflaeche']} (GR-104)")
+            if ob and ob.get("art") == "extern" and not a.get("oeffentlich"):
+                rw.f(f"{wo}: Mitarbeiter-Aktion auf externer Oberfläche {a['oberflaeche']} – auf die interne Oberfläche legen (GR-104, GR-109)")
+            if a.get("kunden_wartung") and not a.get("oeffentlich"):
+                rw.f(f"{wo}: kunden_wartung nur für öffentliche Kundenaktionen (GR-009)")
+    code = aktionen_im_code(rw.wurzel)
+    for name in sorted(code - set(gesehen)):
+        rw.f(f"Aktion {name} wird im Code bearbeitet, ist aber in keinem regeln/aktionen/*.toml registriert (GR-109)")
+    for name in sorted(set(gesehen) - code):
+        rw.f(f"Aktion {name} ist registriert ({gesehen[name]}), wird im Code aber nicht bearbeitet")
+    liste = rw.wurzel / AKTIONEN_LISTE
+    if gesehen or liste.is_file():
+        if not liste.is_file() or liste.read_text(encoding="utf-8") != aktionen_php(rw):
+            rw.f(f"{AKTIONEN_LISTE} passt nicht zu regeln/aktionen/ – `python3 werkzeuge/regeln.py erzeugen` ausführen")
+
+
 def pruefen(rw: Regelwerk) -> Regelwerk:
     liste = dateien(rw.wurzel)
     pruefe_module(rw)
@@ -590,6 +701,7 @@ def pruefen(rw: Regelwerk) -> Regelwerk:
     pruefe_katalog(rw)
     pruefe_wartung(rw)
     pruefe_caddy(rw)
+    pruefe_aktionen(rw)
     return rw
 
 
@@ -726,6 +838,7 @@ def main(argv=None) -> int:
     b.add_argument("dateien", nargs="*")
     b.add_argument("--basis", help="Git-Referenz, z. B. origin/main")
     b.add_argument("--json", action="store_true")
+    sub.add_parser("erzeugen", help=f"{AKTIONEN_LISTE} aus regeln/aktionen/*.toml schreiben")
     s = sub.add_parser("modul", help="Steckbrief eines Moduls")
     s.add_argument("id")
     a = ap.parse_args(argv)
@@ -743,6 +856,11 @@ def main(argv=None) -> int:
         n = len(rw.modulliste)
         print(f"OK: Regelwerk stimmig – {n} Module, {len(rw.daten.get('dokument', []))} Dokumente, "
               f"{len(rw.katalog.get('regel', []))} Regeln, {len(dateien(wurzel))} Dateien zugeordnet.")
+        return 0
+    if a.befehl == "erzeugen":
+        ziel = wurzel / AKTIONEN_LISTE
+        ziel.write_text(aktionen_php(rw), encoding="utf-8")
+        print(f"geschrieben: {AKTIONEN_LISTE} ({len(aktionen_tabelle(rw))} Aktionen) – danach: python3 werkzeuge/integritaet.py --setzen")
         return 0
     if a.befehl == "betroffen":
         liste = sorted(set(a.dateien) | (set(geaenderte_dateien(wurzel, a.basis)) if a.basis else set()))

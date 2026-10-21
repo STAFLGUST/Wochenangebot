@@ -38,6 +38,7 @@ testgruppen = ["sys", "frontend", "design", "hist", "editor_aux", "revert", "gem
   "einzelangebote", "restposten", "bestellung", "order_management", "order_management_ui", "order_outbox",
   "order_outbox_ui", "versand", "kunden_mail", "web_app", "legal_pages", "wartung", "sidenav", "p0", "fehlerpruefung"]
 pfade = [
+  "regeln/aktionen/angebot.toml",
   "app/index.html", "app/manifest.json", "app/sw.js", "app/admin/**",
   "app/datenschutz/**", "app/impressum/**", "app/kontakt/**",
   "app/assets/frontend.js", "app/assets/app.css", "app/assets/legal.css", "app/assets/webapp.js",
@@ -93,6 +94,7 @@ agent = "bestand"
 abhaengigkeiten = ["plattform", "verwaltung"]
 testgruppen = ["stock", "stock_overview", "bestand_pdf", "master"]
 pfade = [
+  "regeln/aktionen/bestand.toml",
   "app/api/lib/bestand.php", "app/api/lib/bestand-pdf.php", "app/api/aktionen/bestand.php",
   "app/assets/stock-core.js", "docs/bestand-wochenpreise.md",
   "tests/e2e/test_stock.py", "tests/e2e/test_stock_overview.py", "tests/e2e/test_bestand_pdf.py",
@@ -124,7 +126,7 @@ agent = "crm"
 abhaengigkeiten = ["plattform", "verwaltung"]
 testgruppen = []
 pfade = []
-pfade_geplant = ["app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
+pfade_geplant = ["regeln/aktionen/crm.toml", "app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
 hinweise = [
   "Kundenstammdaten (Nummer, Name, Anschrift, Gruppe, Portalzugang) gehören der Verwaltung; CRM ändert sie nur über deren Schnittstelle (offene Entscheidung E-1).",
 ]
@@ -149,7 +151,7 @@ agent = "rewe"
 abhaengigkeiten = ["plattform", "verwaltung"]
 testgruppen = []
 pfade = []
-pfade_geplant = ["app/api/module/rewe/**", "app/module/rewe/**", "tests/e2e/test_rewe*.py"]
+pfade_geplant = ["regeln/aktionen/rewe.toml", "app/api/module/rewe/**", "app/module/rewe/**", "tests/e2e/test_rewe*.py"]
 hinweise = ["Keine fachlichen Annahmen über REWE-Prozesse treffen, bis die Anforderungen vorliegen."]
 
   [[modul.oberflaeche]]
@@ -172,7 +174,7 @@ agent = "qs"
 abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
 testgruppen = []
 pfade = []
-pfade_geplant = ["app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py"]
+pfade_geplant = ["regeln/aktionen/qs.toml", "app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py"]
 hinweise = [
   "Keine QS-Fachlogik vor dem separaten QS-Auftrag implementieren (Master-Auftrag Abschnitt 6.2).",
   "Externe QS-Nutzer (Kunden, Lieferanten, Prüfer) erhalten nie Zugang zur Mitarbeiterplattform (GR-104).",
@@ -207,7 +209,7 @@ dashboard = true
 agent = "einkauf"
 abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
 testgruppen = ["einkauf"]
-pfade = ["app/api/lib/einkauf.php", "app/api/aktionen/einkauf.php", "tests/e2e/test_einkauf.py"]
+pfade = ["regeln/aktionen/einkauf.toml", "app/api/lib/einkauf.php", "app/api/aktionen/einkauf.php", "tests/e2e/test_einkauf.py"]
 pfade_geplant = ["app/api/module/einkauf/**", "app/module/einkauf/**"]
 hinweise = ["Fehlmengen-Ansicht und Einkaufsmeldung existieren heute im Eingabebereich (Verwaltung → Einkauf)."]
 
@@ -250,6 +252,7 @@ agent = "verwaltung"
 abhaengigkeiten = ["plattform"]
 testgruppen = ["kunden", "kundengruppen", "vkgruppen", "vertreter", "kundenimport", "auswertung", "master"]
 pfade = [
+  "regeln/aktionen/verwaltung.toml",
   "app/api/lib/kunden.php", "app/api/lib/auswertung.php", "app/api/ort.php",
   "app/api/aktionen/kundenverwaltung.php", "app/api/aktionen/kundengruppen.php", "app/api/aktionen/auswertung.php",
   "app/assets/admin-verwaltung.js", "app/assets/admin-auswertung.js", "app/assets/karte.json",
@@ -304,7 +307,7 @@ agent = "dashboard"
 abhaengigkeiten = ["plattform"]
 testgruppen = []
 pfade = []
-pfade_geplant = ["app/dashboard/**", "tests/e2e/test_dashboard*.py"]
+pfade_geplant = ["regeln/aktionen/dashboard.toml", "app/dashboard/**", "tests/e2e/test_dashboard*.py"]
 hinweise = ["Kacheln kommen ausschließlich aus dem Modulregister – keine fest programmierte Liste."]
 
   [[modul.oberflaeche]]
@@ -327,8 +330,9 @@ abhaengigkeiten = []
 testgruppen = ["users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
-  "app_api", "sitzung_cookie"]
+  "app_api", "sitzung_cookie", "aktionsregister"]
 pfade = [
+  "regeln/aktionen/plattform.toml",
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
   "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-schutz.js", "app/assets/vendor/**",
@@ -361,7 +365,7 @@ dashboard = false
 agent = "mobile"
 abhaengigkeiten = ["angebot", "plattform"]
 testgruppen = ["app_api", "app_web"]
-pfade = ["mobile/**", "docs/app-api.md", "docs/app-grundlagen.md", "tests/e2e/test_app_api.py", "tests/e2e/test_app_web.py"]
+pfade = ["regeln/aktionen/mobile.toml", "mobile/**", "docs/app-api.md", "docs/app-grundlagen.md", "tests/e2e/test_app_api.py", "tests/e2e/test_app_web.py"]
 pfade_geplant = []
 hinweise = ["Die App bündelt app/assets/offer-core.js mit – Änderungen dort betreffen Website und App."]
 

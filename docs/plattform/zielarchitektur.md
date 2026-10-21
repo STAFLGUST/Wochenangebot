@@ -136,8 +136,9 @@ Umsetzung (Phase 5):
 
 - Weiter RPC über `?action=` (bestehende Clients, App mit `apiVersion`), aber **Registrierung je Modul**: jede
   `app/api/module/<id>/aktionen.php` liefert eine Tabelle Aktion → Oberfläche, Recht, schreibend, öffentlich. Der Einstieg
-  setzt Prüfungen einheitlich durch – keine verstreuten Listen mehr (heute `$writeActions`, `$isPublic`,
-  `WARTUNG_GESPERRT` als Sammelstellen in `index.php`). Die CI prüft, dass jede Aktion genau einer Oberfläche gehört.
+  setzt Prüfungen einheitlich durch – keine verstreuten Listen mehr. **Umgesetzt** als `regeln/aktionen/<modul>.toml` →
+  `app/api/lib/aktionen-liste.php`; die CI prüft, dass jede Aktion genau einem Modul und einer Oberfläche gehört.
+  Noch offen: Durchsetzung „Aktion nur auf ihrem Host“ (GR-109), sobald es mehrere Hosts gibt.
 - Modulübergreifend nur über `vertrag.php` des Eigentümers (PHP-Funktionen mit festen Ein-/Ausgaben). Änderungen nur
   erweitern; Vertragstests je Funktion im Eigentümer-Modul. Beschreibung der Verträge unter `docs/plattform/schnittstellen/`.
 - Externe Schnittstellen (Bestell-API v1, App-API) bleiben versioniert wie heute.

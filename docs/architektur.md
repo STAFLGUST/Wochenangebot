@@ -52,8 +52,10 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 
 Aktionsdateien werden im globalen Gültigkeitsbereich eingebunden (`$action`, `$CFG`, … stehen zur Verfügung); jede Aktion
 endet mit `respond()`/`fail()`. Bibliotheks- und Aktionsdateien sind nur über `index.php` nutzbar (Konstante `WA_API`).
-Neue Schreibaktionen gehören in `$writeActions` (index.php), öffentliche Kundenaktionen zusätzlich in `$isPublic`
-und ggf. `WARTUNG_GESPERRT`.
+Jede Aktion steht im Aktionsregister `regeln/aktionen/<modul>.toml` (Modul, Oberfläche, `schreibend`, `oeffentlich`,
+`kunden_wartung`; Erklärung `regeln/aktionen/LIESMICH.md`). `python3 werkzeuge/regeln.py erzeugen` schreibt daraus
+`lib/aktionen-liste.php` (Konstante `AKTIONEN`), nach der `index.php` Schreibschutz (POST/JSON), öffentlichen Bereich
+(IP-/Ländersperre) und Wartungsmodus anwendet. Die CI lehnt nicht registrierte oder verwaiste Aktionen ab.
 
 ## Browser (`app/assets/`)
 

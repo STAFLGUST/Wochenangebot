@@ -34,7 +34,7 @@ dashboard = true
 agent = "angebot"
 abhaengigkeiten = ["plattform", "lager"]
 testgruppen = ["frontend"]
-pfade = ["app/api/lib/angebote.php", "tests/e2e/test_frontend.py"]
+pfade = ["app/api/lib/angebote.php", "tests/e2e/test_frontend.py", "app/api/aktionen/demo.php", "regeln/aktionen/angebot.toml"]
 pfade_geplant = ["app/api/module/angebot/**"]
   [[modul.oberflaeche]]
   id = "kunden"
@@ -197,6 +197,20 @@ DATEIEN = {
     "app/api/lib/angebote.php": "<?php\n$a = store_read('angebot');\nstore_write('angebot', $a);\n$b = store_read('bestand');\n",
     "app/api/lib/bestand.php": "<?php\nwith_lock('bestand', function () { store_write('bestand', []); });\n",
     "app/api/lib/protokoll.php": "<?php\nstore_write('protokoll/' . $monat, []);\n",
+    "app/api/aktionen/demo.php": "<?php\nswitch ($action) {\n    case 'offer': respond([]);\n    case 'save_draft': respond([]);\n}\n",
+    "regeln/aktionen/angebot.toml": textwrap.dedent("""\
+        schema = 1
+        modul = "angebot"
+
+        [aktion.offer]
+        oberflaeche = "angebot.kunden"
+        oeffentlich = true
+        kunden_wartung = true
+
+        [aktion.save_draft]
+        oberflaeche = "angebot.eingabe"
+        schreibend = true
+        """),
 }
 
 
@@ -211,6 +225,10 @@ class Projekt:
                       "regeln/wartung.toml": WARTUNG})
         for pfad, text in texte.items():
             self.schreiben(pfad, text)
+        self.erzeugen()
+
+    def erzeugen(self) -> None:
+        self.schreiben(regeln.AKTIONEN_LISTE, regeln.aktionen_php(regeln.laden(self.wurzel)))
 
     def schreiben(self, pfad: str, text: str) -> None:
         p = self.wurzel / pfad
@@ -230,7 +248,49 @@ class Projekt:
         shutil.rmtree(self.wurzel, ignore_errors=True)
 
 
+# Stand vor dem Aktionsregister (app/api/index.php, main 39483ff) – darf sich für diese Aktionen nicht unbemerkt ändern.
+ALT_SCHREIBEND = {
+    'benachrichtigung_save', 'benachrichtigung_test', 'bestell_settings_save', 'bestellung_mail_retry',
+    'bestellung_save', 'change_password', 'discard_draft', 'draft_ping', 'einkauf_melden', 'einzel_loeschen',
+    'einzel_save', 'einzel_senden', 'einzel_status', 'fracht_save', 'fw_feed_update', 'fw_freigeben',
+    'fw_import', 'fw_save', 'fw_sperren', 'fw_vorlage', 'geo_clear_stats', 'geo_update', 'history_delete',
+    'history_import', 'ip_unblock', 'kunde_abmelden', 'kunde_abmelden_info', 'kunde_bestellung', 'kunde_delete',
+    'kunde_login', 'kunde_logout', 'kunde_mail', 'kunde_merkliste_save', 'kunde_passwort', 'kunde_save',
+    'kunde_token_check', 'kunde_token_set', 'kunden_import', 'kunden_mail_vorschau', 'kunden_restposten',
+    'kunden_rundmail', 'kundengruppen_save', 'login', 'login_2fa', 'logout', 'mail_konto_save', 'mail_save',
+    'mail_test', 'master_save', 'offers_save', 'ort_update', 'passkey_begin', 'passkey_delete', 'passkey_login',
+    'passkey_login_begin', 'passkey_register', 'passkey_rename', 'publish', 'reauth', 'rechte_save',
+    'save_draft', 'security_diag', 'security_export', 'security_save', 'session_end', 'setup', 'stock_import',
+    'stock_pdf', 'twofa_begin', 'twofa_disable', 'twofa_enable', 'user_delete', 'user_mail', 'user_save',
+    'user_unlock', 'vertreter_save', 'vkgruppen_save', 'wartung_save',
+}
+ALT_OEFFENTLICH = {
+    'abmelden1', 'app_info', 'kunde_abmelden', 'kunde_abmelden_info', 'kunde_bestellung',
+    'kunde_bestellung_detail', 'kunde_bestellungen', 'kunde_login', 'kunde_logout', 'kunde_merkliste',
+    'kunde_merkliste_save', 'kunde_passwort', 'kunde_status', 'kunde_token_check', 'kunde_token_set', 'offer',
+    'waf_probe',
+}
+ALT_WARTUNG = {
+    'kunde_bestellung', 'kunde_bestellung_detail', 'kunde_bestellungen', 'kunde_login', 'kunde_merkliste',
+    'kunde_merkliste_save', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'offer',
+}
+
+
 class EchtesRegelwerk(unittest.TestCase):
+    def test_aktionen_wie_vor_dem_register(self):
+        """Schreibschutz, öffentlicher Bereich und Wartung bleiben für alle bisherigen Aktionen unverändert."""
+        tab = regeln.aktionen_tabelle(regeln.laden(WURZEL))
+        self.assertEqual({a for a, x in tab.items() if x["schreibend"] is True}, ALT_SCHREIBEND)
+        self.assertEqual({a for a, x in tab.items() if x["schreibend"] == "post"}, {"security_integrity"})
+        self.assertEqual({a for a, x in tab.items() if x["oeffentlich"]}, ALT_OEFFENTLICH)
+        self.assertEqual({a for a, x in tab.items() if x["kunden_wartung"]}, ALT_WARTUNG)
+
+    def test_aktionen_vollstaendig_und_erzeugt(self):
+        rw = regeln.laden(WURZEL)
+        self.assertEqual(set(regeln.aktionen_tabelle(rw)), regeln.aktionen_im_code(WURZEL))
+        self.assertEqual((WURZEL / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8"), regeln.aktionen_php(rw))
+        self.assertGreater(len(regeln.aktionen_tabelle(rw)), 100)
+
     def test_repository_ist_stimmig(self):
         rw = regeln.pruefen(regeln.laden(WURZEL))
         self.assertEqual(rw.fehler, [], "\n".join(rw.fehler))
@@ -443,6 +503,60 @@ class Verstoesse(unittest.TestCase):
                         'adresse = "https://angebot.example/eingabe/"\n  ziel = "https://angebot.dashboard-stafl.de/"')
         self.p.ersetzen("Caddyfile", "verwaltung.dashboard-stafl.de {", "verwaltung.dashboard-stafl.de, angebot.dashboard-stafl.de {")
         self.assertEqual(self.p.fehler(), [])
+
+    def test_aktion_im_code_nicht_registriert(self):
+        self.p.ersetzen("app/api/aktionen/demo.php", "    case 'save_draft'", "    case 'geheim_export': respond([]);\n    case 'save_draft'")
+        self.assertFehler("Aktion geheim_export wird im Code bearbeitet, ist aber in keinem regeln/aktionen/*.toml registriert")
+
+    def test_registrierte_aktion_ohne_code(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "[aktion.save_draft]", "[aktion.alt]\noberflaeche = \"angebot.eingabe\"\n\n[aktion.save_draft]")
+        self.p.erzeugen()
+        self.assertFehler("Aktion alt ist registriert")
+
+    def test_aktion_doppelt_registriert(self):
+        self.p.schreiben("regeln/aktionen/lager.toml", 'schema = 1\nmodul = "lager"\n\n[aktion.offer]\noberflaeche = "angebot.kunden"\noeffentlich = true\n')
+        self.p.ersetzen("regeln/module.toml", 'pfade = ["app/api/lib/bestand.php"]', 'pfade = ["app/api/lib/bestand.php", "regeln/aktionen/lager.toml"]')
+        self.p.erzeugen()
+        self.assertFehler("jede Aktion gehört genau einem Modul")
+
+    def test_mitarbeiteraktion_auf_externer_oberflaeche(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", 'oberflaeche = "angebot.eingabe"', 'oberflaeche = "angebot.kunden"')
+        self.p.erzeugen()
+        self.assertFehler("Mitarbeiter-Aktion auf externer Oberfläche angebot.kunden")
+
+    def test_oeffentliche_aktion_auf_interner_oberflaeche(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", 'oberflaeche = "angebot.kunden"', 'oberflaeche = "angebot.eingabe"')
+        self.p.erzeugen()
+        self.assertFehler("öffentliche Aktion auf interner Oberfläche angebot.eingabe")
+
+    def test_unbekannte_oberflaeche(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", 'oberflaeche = "angebot.eingabe"', 'oberflaeche = "angebot.backoffice"')
+        self.p.erzeugen()
+        self.assertFehler("oberflaeche „angebot.backoffice“ gibt es nicht")
+
+    def test_kunden_wartung_nur_oeffentlich(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", "schreibend = true\nkunden_wartung = true")
+        self.p.erzeugen()
+        self.assertFehler("kunden_wartung nur für öffentliche Kundenaktionen")
+
+    def test_falscher_wert_schreibend(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", 'schreibend = "ja"')
+        self.p.erzeugen()
+        self.assertFehler('schreibend muss true, false oder "post" sein')
+
+    def test_erzeugte_liste_veraltet(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", "schreibend = false")
+        self.assertFehler("aktionen-liste.php passt nicht zu regeln/aktionen/")
+
+    def test_modul_passt_nicht_zum_dateinamen(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", 'modul = "angebot"', 'modul = "lager"')
+        self.p.erzeugen()
+        self.assertFehler("modul muss „angebot“ lauten")
+
+    def test_erzeugte_liste_ist_php(self):
+        text = (self.p.wurzel / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8")
+        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true],", text)
+        self.assertIn("'save_draft' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true,", text)
 
     def test_folgen_im_kleinen(self):
         rw = regeln.laden(self.p.wurzel)
