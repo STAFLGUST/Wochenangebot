@@ -82,7 +82,7 @@ code, r, raw = A.call('kunden', raw=True)
 check('list sorted by firma, no secrets', [c['firma'] for c in r['customers']] == ['Gasthaus Muster GmbH', 'Ohne Zugang KG'] and '$2y$' not in raw and '"hash"' not in raw)
 c1 = r['customers'][0]
 check('stored master data complete', all(c1[k] == base[k] for k in ['nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']))
-check('login status: mustChange, never logged in', c1['login'] == {'username': 'gasthaus.muster', 'active': True, 'mustChange': True, 'lastLogin': None, 'pwSet': c1['login']['pwSet'], 'lockedUntil': 0, 'hasPassword': True, 'link': None})
+check('login status: mustChange, never logged in', c1['login'] == {'username': 'gasthaus.muster', 'active': True, 'mustChange': True, 'lastLogin': None, 'pwSet': c1['login']['pwSet'], 'lockedUntil': 0, 'hasPassword': True, 'geraete': [], 'link': None})
 
 # ---------- Rechte im Eingabebereich ----------
 code, r = A.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})

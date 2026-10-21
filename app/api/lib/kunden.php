@@ -45,6 +45,7 @@ function customer_public(array $c): array
                           'lastLogin' => $l['lastLogin'] ?? null, 'pwSet' => $l['pwSet'] ?? null,
                           'lockedUntil' => (int)($l['lockedUntil'] ?? 0) > time() ? (int)$l['lockedUntil'] : 0,
                           'hasPassword' => !empty($l['hash']),
+                          'geraete' => function_exists('geraete_public') ? geraete_public($l) : [],
                           'link' => !empty($l['token']) && (int)$l['token']['exp'] > time() ? ['p' => $l['token']['p'], 'exp' => (int)$l['token']['exp']] : null] : null;
     $out['mailAngebot'] = !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']);
     return $out;

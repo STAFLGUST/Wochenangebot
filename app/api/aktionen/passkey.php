@@ -172,11 +172,12 @@ switch ($action) {
                 $u['lockedUntil'] = 0;
                 unset($u['lockTries']);   // Zähler der Sperre zurücksetzen (wie nach Passwort + Code)
                 $u['lastLogin'] = now();
+                geraet_merken($u, $neu);
                 $out = $u; unset($u);
                 users_save($users);
-                return ['ok', $out, $name];
+                return ['ok', $out, $name, $neu];
             });
-            [$st, $u, $name] = $res;
+            [$st, $u, $name, $neuGeraet] = $res + [3 => false];
             $nm = $name !== '' ? ' „' . $name . '“' : '';
             if ($st === 'unknown') $denied('Anmeldung mit unbekanntem Passkey', null, 'Dieser Passkey ist hier nicht bekannt. Bitte mit Benutzername und Passwort anmelden.');
             if ($st === 'wrong') $denied('Passkey' . $nm . ' gehört zu einem anderen Zugang (zweiter Anmeldeschritt)', $u, 'Dieser Passkey gehört nicht zu diesem Zugang.');
@@ -188,6 +189,7 @@ switch ($action) {
             attempts_record(true);
             $tok = sign_in($u);
             audit('login', $second ? 'Angemeldet (mit Passwort und Passkey)' : 'Angemeldet (mit Passkey)');
+            geraet_neu_melden($u, (bool)$neuGeraet);
             respond(['ok' => true, 'csrf' => $tok, 'user' => me_payload($u)]);
         }
 }

@@ -67,6 +67,7 @@ switch ($action) {
                         $l['pwSet'] = now();
                         $l['sv'] = (int)($l['sv'] ?? 0) + 1;
                         unset($l['token']);
+                        geraete_zuruecksetzen($l, true);   // neues Passwort: kein Gerät mehr vertraut
                         $pwNew = true;
                     } elseif (empty($l['hash']) && empty($lg['invite'])) {
                         throw new InvalidArgumentException('Bitte ein Startpasswort festlegen oder eine Einladung per E-Mail senden.');
@@ -76,7 +77,8 @@ switch ($action) {
                         if (($row['email'] ?? '') === '') throw new InvalidArgumentException('Für eine Einladung per E-Mail bitte die E-Mail-Adresse angeben.');
                     }
                     if (!empty($lg['unlock'])) { $l['lockedUntil'] = 0; $l['failCount'] = 0; }
-                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; unset($l['token']); }
+                    if (!empty($lg['geraeteEntfernen'])) geraete_zuruecksetzen($l, true);
+                    if ($ol && $ol['username'] !== $uname) { $l['sv'] = (int)($l['sv'] ?? 0) + 1; $ended = true; unset($l['token']); geraete_zuruecksetzen($l, true); }
                     if ($ol && !empty($ol['active']) && !$l['active']) $ended = true;
                     $row['login'] = $l;
                 }

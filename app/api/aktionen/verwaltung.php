@@ -263,10 +263,16 @@ switch ($action) {
                     $n = count($old['passkeys']);
                     $d[] = ['k' => 'u|passkey', 'code' => '', 'name' => $old['username'], 'f' => 'Passkeys', 'from' => $n === 1 ? '1 Passkey' : "$n Passkeys", 'to' => 'alle entfernt'];
                 }
+                if (!empty($b['resetGeraete']) && geraete_gueltig($old)) {
+                    $n = count(geraete_gueltig($old));
+                    geraete_zuruecksetzen($users[$i], true);
+                    $d[] = ['k' => 'u|geraete', 'code' => '', 'name' => $old['username'], 'f' => 'Vertraute Geräte', 'from' => $n === 1 ? '1 Gerät' : "$n Geräte", 'to' => 'alle entfernt'];
+                }
                 if ($setPw) {
                     $users[$i]['hash'] = password_hash(check_password($pw, $old['username']), PASSWORD_DEFAULT);
                     $users[$i]['mustChange'] = $id !== $me['id'] && !empty($b['mustChange']);
                     $users[$i]['sv'] = (int)$users[$i]['sv'] + 1;      // bestehende Sitzungen des Nutzers beenden
+                    geraete_zuruecksetzen($users[$i], true);            // neues Passwort: kein Gerät mehr vertraut
                     $d[] = ['k' => 'u|pw', 'code' => '', 'name' => $old['username'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . ($users[$i]['mustChange'] ? ' (muss beim Anmelden geändert werden)' : '')];
                 }
                 $users[$i]['changed'] = now();

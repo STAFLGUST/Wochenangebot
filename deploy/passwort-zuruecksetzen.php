@@ -16,7 +16,7 @@ foreach ($data['users'] as &$u) {
     $u['hash'] = password_hash($pw, PASSWORD_DEFAULT);
     $u['mustChange'] = true;
     $u['active'] = true;
-    unset($u['totp'], $u['totpLast'], $u['recovery'], $u['passkeys']);   // Zwei-Faktor (App und Passkeys) neu einrichten
+    unset($u['totp'], $u['totpLast'], $u['recovery'], $u['passkeys'], $u['geraete']);   // Zwei-Faktor (App und Passkeys) neu einrichten, keine vertrauten Geräte
     $u['lockedUntil'] = 0; $u['failCount'] = 0;
     $u['sv'] = (int)($u['sv'] ?? 0) + 1;
     $u['changed'] = gmdate('Y-m-d\TH:i:s\Z');

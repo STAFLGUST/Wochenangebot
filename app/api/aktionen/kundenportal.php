@@ -25,8 +25,19 @@ switch ($action) {
                 foreach ($d['customers'] as $i => $c) {
                     $l = $c['login'] ?? null;
                     if (!$l || $name === '' || $l['username'] !== $name) continue;
-                    if ((int)($l['lockedUntil'] ?? 0) > time()) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
-                    if (!password_verify($pw, (string)$l['hash'])) {
+                    $gesperrt = (int)($l['lockedUntil'] ?? 0) > time();
+                    if ($gesperrt) {
+                        // Gesperrt: nur ein vertrautes Gerät des Kunden (lib/geraete.php) kommt mit dem richtigen Passwort durch –
+                        // so kann niemand den Kunden durch absichtliche Fehlversuche aussperren; falsche Passwörter zählen für das Gerät
+                        $gi = geraet_vertraut($l);
+                        if ($gi === null) { password_verify($pw, (string)$l['hash']); return ['locked', $c]; }
+                        if (!password_verify($pw, (string)$l['hash'])) {
+                            geraet_fehlversuch($d['customers'][$i]['login'], $gi);
+                            store_write('kunden', $d);
+                            return ['bad', $d['customers'][$i]];
+                        }
+                    }
+                    if (!$gesperrt && !password_verify($pw, (string)$l['hash'])) {
                         $lockedNow = login_failure($d['customers'][$i]['login']);
                         store_write('kunden', $d);
                         return [$lockedNow ? 'lockednow' : 'bad', $d['customers'][$i]];
@@ -36,6 +47,7 @@ switch ($action) {
                     $d['customers'][$i]['login']['failCount'] = 0;
                     $d['customers'][$i]['login']['lockedUntil'] = 0;
                     $d['customers'][$i]['login']['lastLogin'] = now();
+                    geraet_merken($d['customers'][$i]['login']);
                     store_write('kunden', $d);
                     return ['ok', $d['customers'][$i]];
                 }
@@ -99,6 +111,7 @@ switch ($action) {
                     $d['customers'][$i]['login']['mustChange'] = false;
                     $d['customers'][$i]['login']['pwSet'] = now();
                     $d['customers'][$i]['login']['sv'] = (int)($x['login']['sv'] ?? 0) + 1;
+                    geraete_zuruecksetzen($d['customers'][$i]['login']);   // vertraut bleibt nur dieses Gerät
                     unset($d['customers'][$i]['login']['token']);
                     store_write('kunden', $d);
                     return $d['customers'][$i];
@@ -139,6 +152,8 @@ switch ($action) {
                     $l['hash'] = password_hash($new, PASSWORD_DEFAULT);
                     $l['mustChange'] = false; $l['pwSet'] = now(); $l['sv'] = (int)($l['sv'] ?? 0) + 1;
                     $l['failCount'] = 0; $l['lockedUntil'] = 0; $l['lastLogin'] = now();
+                    geraete_zuruecksetzen($l, true);   // Passwort über den Link neu gesetzt: bisherige Geräte nicht mehr vertraut,
+                    geraet_merken($l);                 // dieses Gerät (Inhaber des E-Mail-Postfachs) schon
                     unset($l['token']);
                     store_write('kunden', $d);
                     return $d['customers'][$i];
