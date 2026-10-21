@@ -18,8 +18,9 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Keycloak gleich benannter Nutzer erhält keinen Zugang zu einem bereits verknüpften Konto.
 
    Grenzen dieser Stufe: Eine hier beendete Sitzung (Verwaltung → Sitzungen) entsteht beim nächsten Aufruf neu, solange die
-   Keycloak-Sitzung gilt – zentral beenden heißt in Keycloak abmelden bzw. das Konto sperren (wirkt sofort). Aktionen mit
-   Passwortbestätigung gelten nur kurz nach der Anmeldung bei Keycloak (auth_time); erneute Anmeldung folgt (7b-2). */
+   Keycloak-Sitzung gilt – zentral beenden heißt in Keycloak abmelden bzw. das Konto sperren (wirkt sofort). Sensible
+   Aktionen (sonst Passwortbestätigung) verlangen eine erneute Anmeldung bei Keycloak (max_age=0, oidc_neu_anmelden); als
+   Bestätigung zählt der Anmeldezeitpunkt (auth_time) innerhalb der eingestellten Bestätigungsdauer. */
 
 function oidc_modus(): bool
 {
@@ -42,7 +43,16 @@ function oidc_identitaet(): ?array
     if ($sub === '' || $erwartet === '' || !hash_equals($erwartet, $iss)) return null;
     if ((string)($_SERVER['REMOTE_USER'] ?? '') !== $sub) return null;   // vom Modul gesetzt (OIDCRemoteUserClaim sub)
     return ['sub' => $sub, 'name' => (string)($_SERVER['OIDC_CLAIM_preferred_username'] ?? ''),
-            'authTime' => (int)($_SERVER['OIDC_CLAIM_auth_time'] ?? 0), 'sid' => (string)($_SERVER['OIDC_CLAIM_sid'] ?? '')];
+            'authTime' => (int)($_SERVER['OIDC_CLAIM_auth_time'] ?? 0), 'sid' => (string)($_SERVER['OIDC_CLAIM_sid'] ?? ''),
+            'acr' => (string)($_SERVER['OIDC_CLAIM_acr'] ?? '')];
+}
+
+/* Anmeldestärke: Keycloak meldet die erreichte Stufe im Claim acr (Realm: pwd = nur Passwort, mfa = mit zweitem Faktor).
+   Wir verlassen uns nicht allein auf die Einstellung in Keycloak: ohne die verlangte Stufe kein Zugang (Standard: mfa). */
+function oidc_stufe_ok(array $id): bool
+{
+    $verlangt = oidc_einstellung('WA_OIDC_ACR');
+    return hash_equals($verlangt !== '' ? $verlangt : 'mfa', $id['acr']);
 }
 
 /* Mitarbeiterkonto zur Identität; ohne aktives Konto 403 (nicht 401 – sonst meldete der Browser sich endlos neu an) */
@@ -79,6 +89,10 @@ function oidc_nutzer(): ?array
 {
     $id = oidc_identitaet();
     if ($id === null) return null;
+    if (!oidc_stufe_ok($id)) {
+        audit('oidc_stufe', 'Anmeldung über Keycloak ohne zweiten Faktor abgewiesen', ['stufe' => substr($id['acr'], 0, 20)]);
+        fail('Bitte melden Sie sich mit zweitem Faktor an (Einmalcode oder Passkey).', 403);
+    }
     $u = oidc_konto($id);
     start_session();
     $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
@@ -92,6 +106,13 @@ function oidc_nutzer(): ?array
         // Bestätigung sensibler Aktionen = Zeitpunkt der letzten echten Anmeldung bei Keycloak, nicht der Sitzungsbeginn hier
         $_SESSION['adminConfirmedAt'] = $id['authTime'];
     } else {
+        // Erneute Anmeldung bei Keycloak (oidc_neu_anmelden): neuer Anmeldezeitpunkt bestätigt sensible Aktionen
+        if ($id['authTime'] > (int)($_SESSION['authAt'] ?? 0)) {
+            $_SESSION['authAt'] = $id['authTime'];
+            $_SESSION['adminConfirmedAt'] = $id['authTime'];
+            $_SESSION['adminConfirmedSv'] = (int)$u['sv'];
+            audit('reauth', 'Erneut bei Keycloak angemeldet (Bestätigung)', [], $u);
+        }
         oidc_gesehen();
     }
     return $u;
@@ -114,4 +135,19 @@ function oidc_abmelde_adresse(): string
 {
     $ziel = 'https://' . strtolower((string)($_SERVER['HTTP_HOST'] ?? '')) . '/dashboard/abgemeldet.html';
     return '/oidc/callback?logout=' . rawurlencode($ziel);
+}
+
+/* Erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003: max_age=0). Das Modul startet dafür eine neue
+   Anmeldung (Drittanbieter-Einstieg über die eigene Rücksprungadresse); Ziel ist nur der eigene Host (OIDCRedirectURLsAllowed).
+   Die Oberfläche hängt die aktuelle Seite als target_link_uri an. */
+function oidc_neu_anmelden_adresse(): string
+{
+    return '/oidc/callback?' . http_build_query(['iss' => oidc_einstellung('WA_OIDC_ISSUER'), 'auth_request_params' => 'max_age=0'], '', '&', PHP_QUERY_RFC3986)
+        . '&target_link_uri=';
+}
+function oidc_neu_anmelden(): never
+{
+    respond(['ok' => false, 'code' => 'reauth_required', 'anmelden' => oidc_neu_anmelden_adresse(),
+             'error' => 'Bitte melden Sie sich zur Bestätigung erneut an.'], 403);
+    exit;
 }

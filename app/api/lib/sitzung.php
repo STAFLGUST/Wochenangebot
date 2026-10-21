@@ -166,13 +166,14 @@ function require_admin_confirmation(string $key = ''): array
     confirmation_locked($u);
     $at = (int)($_SESSION['adminConfirmedAt'] ?? 0);
     if ($at <= time() && $at > time() - bestaetigung_sekunden() && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
+    if (oidc_modus()) oidc_neu_anmelden();   // Keycloak-Host: erneute Anmeldung statt Passwort (lib/oidc.php)
     respond(['ok' => false, 'code' => 'confirmation_required', 'error' => 'Bitte bestätigen Sie diese Verwaltungsaktion mit Ihrem aktuellen Passwort.'], 403);
 }
 /* Gemeinsame, kontoweite Bremse für Passwortbestätigungen; nie durch neue Sitzungen zurücksetzen. */
 function confirm_password(array $me, string $password, int $invalidStatus = 422): array
 {
-    // Keycloak-Host: kein eigenes Passwort; Bestätigung durch erneute Anmeldung bei Keycloak (folgt, Roadmap 7b-2)
-    if (oidc_modus()) respond(['ok' => false, 'code' => 'reauth_required', 'error' => 'Bitte melden Sie sich erneut an, um diese Aktion zu bestätigen.'], 403);
+    // Keycloak-Host: kein eigenes Passwort – Bestätigung durch erneute Anmeldung bei Keycloak (lib/oidc.php)
+    if (oidc_modus()) oidc_neu_anmelden();
     $result = with_lock('nutzer', function () use ($me, $password) {
         $users = users_load();
         $i = user_find($users, $me['id']);

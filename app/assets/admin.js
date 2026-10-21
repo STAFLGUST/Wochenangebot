@@ -125,6 +125,12 @@
       showEingabeWartung(data);
       throw Object.assign(new Error(data.error || 'Wartungsarbeiten.'), { status: 503, wartung: true });
     }
+    // Zentrale Anmeldung (Keycloak-Host): Bestätigung durch erneute Anmeldung bei Keycloak, danach zurück auf diese Seite
+    if (res.status === 403 && data?.code === 'reauth_required' && typeof data.anmelden === 'string' && data.anmelden.startsWith('/oidc/')) {
+      try { if (unsaved()) await saveNow(); } catch { /* Entwurf bleibt lokal erhalten */ }
+      location.assign(data.anmelden + encodeURIComponent(location.href));
+      throw Object.assign(new Error(data.error || 'Bitte erneut anmelden.'), { status: 403 });
+    }
     if (res.status === 403 && data?.code === 'confirmation_required' && !opts.confirmationRetry) {
       await confirmAdminAction();
       return api(action, { ...opts, confirmationRetry: true });
