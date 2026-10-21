@@ -118,8 +118,9 @@ switch ($action) {
                 // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
                 $leak = pw_leak_bei_anmeldung($pw, $u, $merker);
                 if ($merker !== null) {
-                    $u = user_update($u['id'], function (&$y) use ($merker, $leak) { $y['leakGeprueft'] = $merker; if ($leak) { $y['mustChange'] = true; $y['mustChangeGrund'] = 'datenleck'; } }) ?? $u;
-                    if ($leak) audit('security', 'Passwort von „' . $u['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
+                    $u = user_update($u['id'], function (&$y) use ($merker, $leak, $u) { if (!hash_equals((string)($y['hash'] ?? ''), (string)$u['hash'])) return;   // inzwischen geändert
+                        $y['leakGeprueft'] = $merker; if ($leak) { $y['mustChange'] = true; $y['mustChangeGrund'] = 'datenleck'; } }) ?? $u;
+                    if ($leak && ($u['mustChangeGrund'] ?? '') === 'datenleck') audit('security', 'Passwort von „' . $u['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
                 }
             }
             if ($st === 'ok_locked' || $st === 'locked_code') {
@@ -127,7 +128,7 @@ switch ($action) {
                 attempts_record(false);
                 audit('login_fail', 'Anmeldung während der Sperre' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '')
                     . ($st === 'ok_locked' ? ' – Passwort richtig, Code-Schritt' : ''), [], $who);
-                usleep(400000);
+                anmeldung_angleichen();
                 session_regenerate_id(true);
                 $_SESSION = ['pend' => $st === 'ok_locked'
                     ? ['uid' => $u['id'], 'sv' => (int)$u['sv'], 't' => time(), 'n' => 0, 'lk' => true, 'bis' => (int)$u['lockedUntil']]
@@ -138,7 +139,7 @@ switch ($action) {
                 attempts_record(false);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
-                usleep(400000);
+                anmeldung_angleichen();
                 if ($st === 'inactive') fail('Dieser Zugang ist deaktiviert.', 401);
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche bis ' . (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i') . ' Uhr gesperrt. Ein Administrator kann ihn vorher entsperren.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);

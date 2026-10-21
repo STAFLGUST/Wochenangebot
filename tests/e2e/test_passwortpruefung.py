@@ -135,7 +135,11 @@ dl = [x for x in cfg.get('config', []) if 'Datenleck' in x.get('title', '')]
 check('… Konfigurationsprüfung warnt „zuletzt nicht erreichbar“', len(dl) == 1 and dl[0]['level'] == 'warn' and 'nicht erreichbar' in dl[0]['text'], dl)
 st, r = Client('198.51.100.24').call('login', {'username': 'ole', 'password': GELEAKT})
 check('… Anmeldung ohne Pflicht, Prüfung beim nächsten Mal', st == 200 and not r['user']['mustChange'] and not nutzer('ole').get('leakGeprueft'), r.get('user'))
+n1 = len(ANFRAGEN)
+A.call('user_save', {'username': 'pia', 'name': 'Pia Pause', 'role': 'viewer', 'active': True, 'password': GELEAKT, 'mustChange': False})
+check('… nach einem Ausfall 10 Minuten Pause (kein Warten bei jeder Anmeldung)', len(ANFRAGEN) == n1, ANFRAGEN[n1:])
 AUSFALL['an'] = False
+storage_write('datenleck', {'ok': True, 't': 0})   # Pause beenden (wie nach 10 Minuten)
 
 # ---------- Oberfläche ----------
 A.call('user_save', {'id': nutzer('mia')['id'], 'name': 'Mia Muster', 'role': 'editor', 'active': True})

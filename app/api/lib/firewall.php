@@ -340,12 +340,15 @@ function fw_feed_trifft(string $ip): bool
     if (!is_array($x) || empty($x['netze'])) return false;
     if (!isset($x['v4'])) {
         // Liste ohne Index (von einer älteren Version geladen): einmal nachbauen, bis dahin wie bisher prüfen
+        // (scheitert das Speichern, höchstens einmal je Minute erneut versuchen)
+        $merk = rtrim(sys_get_temp_dir(), '/') . '/wa-bl-index-' . substr(hash('sha256', (string)($GLOBALS['DATA'] ?? '')), 0, 12);
+        if (@filemtime($merk) > time() - 60) return ip_allowed($ip, (array)$x['netze']);
         try {
             with_lock('bedrohungsliste', function () {
                 $f = store_read('bedrohungsliste');
                 if (is_array($f) && !empty($f['netze']) && !isset($f['v4'])) store_write('bedrohungsliste', $f + fw_feed_index((array)$f['netze']));
             });
-        } catch (Throwable $e) { error_log('[wochenangebot] bedrohungsliste-index: ' . $e->getMessage()); }
+        } catch (Throwable $e) { @touch($merk); error_log('[wochenangebot] bedrohungsliste-index: ' . $e->getMessage()); }
         return ip_allowed($ip, (array)$x['netze']);
     }
     if (strpos($ip, ':') !== false) return !empty($x['v6']) && ip_allowed($ip, (array)$x['v6']);

@@ -196,6 +196,7 @@ switch ($action) {
         case 'user_save': {
             $me = require_admin_confirmation('user_save');
             $b = body();
+            pw_datenleck_vorab($b['password'] ?? null);
             $res = with_lock('nutzer', function () use ($b, $me) {
                 $users = users_load();
                 $id = is_string($b['id'] ?? null) ? $b['id'] : '';

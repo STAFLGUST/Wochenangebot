@@ -175,12 +175,19 @@ neu = meldungen()[vorher:]
 check('neues Gerät des Administrators: Sicherheitsereignis mit Gerätename', len(neu) == 1 and 'Chrome · Windows' in neu[0]['s'], neu)
 assert Client('198.51.100.32').call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})[0] == 200
 check('neues Gerät eines Bearbeiters: keine Meldung', len(meldungen()) == vorher + 1)
+# Fremde Kennung (z. B. von einer Subdomain untergeschoben) wird nie übernommen
+mitk = mit_kennung(E1, 'C' * 43, '198.51.100.34')
+st, r = mitk.call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})
+neu_k = kennung(mitk)
+check('unbekannte Kennung im Browser wird bei der Anmeldung nicht übernommen, sondern durch eine neue ersetzt', st == 200 and neu_k is not None and neu_k.value != 'C' * 43
+      and all(g['h'] != hashlib.sha256(b'wa-geraet|' + b'C' * 43).hexdigest() for g in nutzer('eddi').get('geraete', [])), (st, neu_k and neu_k.value))
+storage_write('logins', {})
 storage_write('logins', {})
 
 # ---------- Verwaltung: anzeigen und entfernen ----------
 st, r = A.call('users')
 eu = next(u for u in r['users'] if u['username'] == 'eddi')
-check('Nutzerliste zeigt vertraute Geräte ohne Prüfsummen', len(eu['geraete']) == 2 and all(set(x) == {'name', 'seit', 'zuletzt'} for x in eu['geraete']), eu['geraete'])
+check('Nutzerliste zeigt vertraute Geräte ohne Prüfsummen', len(eu['geraete']) == 3 and all(set(x) == {'name', 'seit', 'zuletzt'} for x in eu['geraete']), eu['geraete'])
 st, r = A.call('user_save', {'id': eu['id'], 'name': 'Eddi Editor', 'role': 'editor', 'active': True, 'resetGeraete': True})
 check('Administrator entfernt vertraute Geräte (mit Protokoll)', st == 200 and not nutzer('eddi').get('geraete')
       and any('Vertraute Geräte' in json.dumps(e.get('d', []), ensure_ascii=False) for e in doc('protokoll/' + time.strftime('%Y-%m', time.gmtime())) or []), (st, r))

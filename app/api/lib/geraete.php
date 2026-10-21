@@ -7,15 +7,17 @@ declare(strict_types=1);
    die Sperre unverändert, deshalb ändert sich für Angreifer nichts. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-const GERAET_COOKIE = 'WA_GERAET';
+const GERAET_COOKIE = 'WA_GERAET';   // über HTTPS mit Präfix „__Host-“ (Browser nehmen es nur vom Server selbst an: Secure, Pfad /, ohne Domain)
 const GERAET_TAGE = 180;     // unbenutzte Geräte verfallen
 const GERAET_MAX = 10;       // je Zugang (die zuletzt benutzten bleiben)
 const GERAET_FEHLER = 5;     // falsche Passwörter/Codes je Gerät während einer Sperre
 
+/* Name des Cookies: über HTTPS „__Host-WA_GERAET“ – eine Subdomain oder ein Angreifer im Netz kann es so nicht setzen */
+function geraet_cookie_name(): string { return (is_https() ? '__Host-' : '') . GERAET_COOKIE; }
 /* Kennung aus dem Cookie (nur das Format wird geprüft) */
 function geraet_token(): string
 {
-    $t = (string)($_COOKIE[GERAET_COOKIE] ?? '');
+    $t = (string)($_COOKIE[geraet_cookie_name()] ?? '');
     return preg_match('/^[A-Za-z0-9_-]{43}$/D', $t) ? $t : '';
 }
 function geraet_hash(string $t): string { return hash('sha256', 'wa-geraet|' . $t); }
@@ -65,21 +67,26 @@ function geraet_merken(array &$acc, ?bool &$neu = null): void
     $neu = false;
     if (function_exists('app_client') && app_client()) return;
     $list = geraete_gueltig($acc);
+    // Eine vorhandene Kennung wird nur übernommen, wenn sie für genau diesen Zugang schon vertraut ist – sonst immer eine neue
+    // (eine von außen untergeschobene Kennung wäre dem Angreifer bekannt). Melden sich mehrere Zugänge im selben Browser an,
+    // bleibt deshalb nur der zuletzt angemeldete Zugang auf diesem Gerät vertraut.
     $t = geraet_token();
-    if ($t === '') $t = b64u_enc(random_bytes(32));   // vorhandene Kennung des Browsers weiterverwenden (mehrere Zugänge im selben Browser)
-    $h = geraet_hash($t);
     $gefunden = false;
-    foreach ($list as $k => $g) {
-        if (hash_equals((string)$g['h'], $h)) { $list[$k]['zuletzt'] = time(); $list[$k]['f'] = 0; $gefunden = true; }
+    if ($t !== '') {
+        $h = geraet_hash($t);
+        foreach ($list as $k => $g) {
+            if (hash_equals((string)$g['h'], $h)) { $list[$k]['zuletzt'] = time(); $list[$k]['f'] = 0; $gefunden = true; }
+        }
     }
     if (!$gefunden) {
         $neu = $list !== [];
-        $list[] = ['h' => $h, 'name' => geraet_name((string)($_SERVER['HTTP_USER_AGENT'] ?? '')), 'seit' => now(), 'zuletzt' => time(), 'f' => 0];
+        $t = b64u_enc(random_bytes(32));
+        $list[] = ['h' => geraet_hash($t), 'name' => geraet_name((string)($_SERVER['HTTP_USER_AGENT'] ?? '')), 'seit' => now(), 'zuletzt' => time(), 'f' => 0];
     }
     usort($list, fn($a, $b) => (int)$b['zuletzt'] <=> (int)$a['zuletzt']);
     $acc['geraete'] = array_slice($list, 0, GERAET_MAX);
     if (!headers_sent()) {
-        setcookie(GERAET_COOKIE, $t, ['expires' => time() + GERAET_TAGE * 86400, 'path' => '/', 'secure' => is_https(), 'httponly' => true, 'samesite' => 'Strict']);
+        setcookie(geraet_cookie_name(), $t, ['expires' => time() + GERAET_TAGE * 86400, 'path' => '/', 'secure' => is_https(), 'httponly' => true, 'samesite' => 'Strict']);
     }
 }
 

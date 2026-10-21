@@ -237,6 +237,27 @@ check('nach Ablauf der Sperre: beide Vorgänge gleich beendet („abgelaufen“)
 storage_write('sicherheit', {**sec, 'lockAfter': 3, 'lockMinutes': 5})
 storage_write('logins', {})
 
+# Fehlgeschlagene Anmeldungen dauern gleich lang – auch bei aufwendigerem Prüfwert (bcrypt-Kosten 12, z. B. nach PHP 8.4)
+storage_write('logins', {})
+A.call('user_save', {'username': 'teo', 'name': 'Teo Teuer', 'role': 'viewer', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
+h12 = subprocess.run(['php', '-r', 'echo password_hash("Bearbeiter-Zugang-1", PASSWORD_BCRYPT, ["cost" => 12]);'], capture_output=True, text=True).stdout
+nu = doc('nutzer')
+for x in nu['users']:
+    if x['username'] == 'teo': x['hash'] = h12
+storage_write('nutzer', nu)
+
+
+def dauer(name, netz):
+    t = []
+    for i in range(3):
+        t0 = time.time(); Client(f'198.18.{netz}.{i + 1}').call('login', {'username': name, 'password': 'Falsches-Passwort-1'}); t.append(time.time() - t0)
+    return sorted(t)[1]
+
+
+d_teo, d_fremd = dauer('teo', 20), dauer('niemand.hier', 21)
+check('fehlgeschlagene Anmeldung: bekannter Name (Kosten 12) und unbekannter Name gleich lang (ca. 0,6 s)', 0.55 <= d_fremd <= 1.0 and 0.55 <= d_teo <= 1.0 and abs(d_teo - d_fremd) < 0.15, (round(d_teo, 3), round(d_fremd, 3)))
+storage_write('logins', {})
+
 # Liste unbekannter Namen: laufende Sperren werden beim Kürzen nie entfernt
 jetzt = int(time.time())
 viele = {f'u:{i:064x}': {'n': 1, 'until': 0, 't': jetzt - 10} for i in range(5001)}

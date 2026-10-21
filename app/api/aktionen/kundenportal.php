@@ -61,7 +61,7 @@ switch ($action) {
                 attempts_record(false);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('kunde_login_fail', 'Kunden-Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
-                usleep(400000);
+                anmeldung_angleichen();
                 if ($st === 'inactive') fail('Dieser Zugang ist deaktiviert. Bitte wenden Sie sich an Ihren Ansprechpartner.', 401);
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche vorübergehend gesperrt. Bitte später erneut versuchen.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
@@ -72,7 +72,7 @@ switch ($action) {
             if ($merker !== null) {
                 $c = with_lock('kunden', function () use ($c, $merker, $leak) {
                     $d = customers_load();
-                    foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id'] && !empty($x['login'])) {
+                    foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id'] && !empty($x['login']) && hash_equals((string)($x['login']['hash'] ?? ''), (string)$c['login']['hash'])) {
                         $d['customers'][$i]['login']['leakGeprueft'] = $merker;
                         if ($leak) { $d['customers'][$i]['login']['mustChange'] = true; $d['customers'][$i]['login']['mustChangeGrund'] = 'datenleck'; }
                         store_write('kunden', $d);
@@ -80,7 +80,7 @@ switch ($action) {
                     }
                     return $c;
                 });
-                if ($leak) audit('security', 'Passwort des Kundenzugangs „' . $c['login']['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
+                if ($leak && ($c['login']['mustChangeGrund'] ?? '') === 'datenleck') audit('security', 'Passwort des Kundenzugangs „' . $c['login']['username'] . '“ in bekannten Datenlecks gefunden – muss bei der Anmeldung geändert werden', [], $who);
             }
             kunde_sign_in($c);
             audit('kunde_login', 'Kunde angemeldet', [], $who);

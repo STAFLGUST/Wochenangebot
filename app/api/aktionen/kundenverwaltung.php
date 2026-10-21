@@ -19,6 +19,7 @@ switch ($action) {
         case 'kunde_save': {
             $me = require_perm_confirmed('kunden.bearbeiten', 'kunde_save');
             $b = body();
+            pw_datenleck_vorab(is_array($b['login'] ?? null) ? ($b['login']['password'] ?? null) : null);
             $res = with_lock('kunden', function () use ($b) {
                 $d = customers_load();
                 if ((int)($b['rev'] ?? -1) !== (int)$d['rev']) fail('Die Kundendaten wurden inzwischen an anderer Stelle geändert. Bitte neu laden.', 409);

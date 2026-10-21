@@ -69,6 +69,15 @@ function dummy_kosten(array $hashes): int
     return isset(DUMMY_HASHES[$std]) ? $std : 10;
 }
 function dummy_verify(string $pw, array $hashes): void { password_verify($pw, DUMMY_HASHES[dummy_kosten($hashes)]); }
+/* Antworten auf fehlgeschlagene Anmeldungen gleich lang machen (ab Beginn der Anfrage), unabhängig davon, ob es den Namen
+   gibt und wie aufwendig sein Passwort-Prüfwert ist (bcrypt-Kosten 10–12) – bremst zugleich das Durchprobieren */
+const ANMELDUNG_ANTWORT_SEK = 0.6;
+function anmeldung_angleichen(): void
+{
+    $start = (float)($_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true));
+    $rest = $start + ANMELDUNG_ANTWORT_SEK - microtime(true);
+    usleep($rest > 0 ? (int)($rest * 1e6) : 0);
+}
 function login_failure(array &$u): bool
 {
     $S = sec();
@@ -152,7 +161,11 @@ function check_password($pw, string $username = ''): string
 const PW_LEAK_URL = 'https://api.pwnedpasswords.com/range/%s';
 function pw_datenleck(string $pw): ?int
 {
+    static $cache = [];   // je Anfrage: Vorabprüfung außerhalb der Datensperre, danach ohne erneuten Netzzugriff
     $h = strtoupper(sha1($pw));
+    if (array_key_exists($h, $cache)) return $cache[$h];
+    $st = store_read('datenleck');
+    if (is_array($st) && empty($st['ok']) && (int)($st['t'] ?? 0) > time() - 600) return $cache[$h] = null;   // nach einem Ausfall 10 Minuten Pause
     $ctx = stream_context_create(['http' => ['timeout' => 3, 'ignore_errors' => false, 'user_agent' => 'Wochenangebot',
                                              'header' => "Add-Padding: true\r\n"], 'ssl' => ['verify_peer' => true]]);
     $url = sprintf(getenv('WA_PWNED_URL') ?: PW_LEAK_URL, substr($h, 0, 5));   // WA_PWNED_URL nur in den Tests
@@ -160,21 +173,23 @@ function pw_datenleck(string $pw): ?int
     $body = @file_get_contents($url, false, $ctx, 0, 2 * 1024 * 1024);
     $ok = is_string($body) && $body !== '';
     pw_datenleck_status($ok);
-    if (!$ok) { error_log('[wochenangebot] Datenleck-Prüfung nicht erreichbar (' . round(microtime(true) - $t0, 1) . ' s)'); return null; }
+    if (!$ok) { error_log('[wochenangebot] Datenleck-Prüfung nicht erreichbar (' . round(microtime(true) - $t0, 1) . ' s)'); return $cache[$h] = null; }
     $suffix = substr($h, 5);
     foreach (preg_split('/\R/', $body) as $line) {
         $p = explode(':', trim($line));
-        if (count($p) === 2 && hash_equals(strtoupper($p[0]), $suffix)) return max(0, (int)$p[1]);   // aufgefüllte Einträge haben 0
+        if (count($p) === 2 && hash_equals(strtoupper($p[0]), $suffix)) return $cache[$h] = max(0, (int)$p[1]);   // aufgefüllte Einträge haben 0
     }
-    return 0;
+    return $cache[$h] = 0;
 }
+/* Vorab (vor dem Sperren der Nutzer-/Kundendaten) prüfen, damit die Anfrage beim Dienst keine anderen Anmeldungen aufhält */
+function pw_datenleck_vorab($pw): void { if (is_string($pw) && $pw !== '' && strlen($pw) <= 200 && !empty(sec()['pwLeak'])) pw_datenleck($pw); }
 
 /* Letztes Ergebnis merken (Konfigurationsprüfung zeigt, ob der Dienst erreichbar war); Fehler stören nicht */
 function pw_datenleck_status(bool $ok): void
 {
     try {
         $alt = store_read('datenleck') ?? [];
-        if (($alt['ok'] ?? null) === $ok && (int)($alt['t'] ?? 0) > time() - 3600) return;   // höchstens stündlich schreiben
+        if (($alt['ok'] ?? null) === $ok && (int)($alt['t'] ?? 0) > time() - ($ok ? 3600 : 600)) return;   // selten schreiben (Ausfall: Pause 10 Min., s. o.)
         store_write('datenleck', ['ok' => $ok, 't' => time()]);
     } catch (Throwable $e) { error_log('[wochenangebot] datenleck-status: ' . $e->getMessage()); }
 }
