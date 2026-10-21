@@ -37,7 +37,7 @@ a = Client()
 assert a.login()[0] == 200
 st, r = a.call('security_status')
 kat = {b['key']: b for b in r.get('bestaetigung', [])}
-FEST = ['user_save', 'user_delete', 'user_unlock', 'user_mail', 'rechte_save', 'session_end', 'ip_unblock', 'security_save', 'security_export', 'fw_save', 'fw_sperren', 'mail_konto_save', 'modul_wartung_save']
+FEST = ['user_save', 'user_delete', 'user_unlock', 'user_mail', 'rechte_save', 'session_end', 'ip_unblock', 'security_save', 'security_export', 'fw_save', 'fw_sperren', 'mail_konto_save', 'modul_wartung_save', 'modul_freigabe_save', 'modul_tester_save']
 check('Katalog in der Sicherheitsübersicht, standardmäßig überall Pflicht', st == 200 and kat and all(b['noetig'] for b in kat.values()) and r['bestaetigungMinuten'] == [5, 15, 30, 60]
       and r['settings'].get('bestaetigungMinuten') == 5, len(kat))
 check('Zugänge, Rechte, Sicherheit und Postfach fest', all(kat.get(k, {}).get('fest') for k in FEST) and not kat['kunde_save']['fest'] and not kat['einzel_senden']['fest'])

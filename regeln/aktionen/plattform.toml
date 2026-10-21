@@ -237,3 +237,11 @@ wartung_frei = true
 [aktion.modul_wartung_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+[aktion.modul_freigabe_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.modul_tester_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true

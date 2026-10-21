@@ -32,11 +32,122 @@ function modul_entscheiden(array $lage): array
     return ['nr' => 0, 'wenn' => [], 'zugang' => false, 'http' => 404, 'kachel' => 'nicht_verfuegbar', 'hinweis' => false];
 }
 
-/* Rolle für die Tabelle: Administratoren dürfen in der Wartung prüfen. Tester je Oberfläche folgen mit der
-   Modulverwaltung (Roadmap PR 4/5); bis dahin gibt es keine Testfreigaben. */
-function modul_person(?array $u): string
+/* Rolle für die Tabelle (Hinweis zu Regel 4/7 in regeln/wartung.toml):
+   - Testfreigabe: nur eingetragene Tester haben Zugang; Administratoren nur, wenn sie sich bewusst eingetragen haben
+     (dann als „administrator“, damit sie auch während einer Wartung prüfen können).
+   - sonst: Administratoren dürfen in der Wartung prüfen und reparieren, alle anderen sind „normal“. */
+function modul_person(?array $u, string $ziel = '', string $freigabe = ''): string
 {
-    return ($u['role'] ?? '') === 'admin' ? 'administrator' : 'normal';
+    $admin = ($u['role'] ?? '') === 'admin';
+    if ($freigabe === 'test') {
+        if (!$u || !in_array((string)$u['id'], modul_tester($ziel), true)) return 'normal';
+        return $admin ? 'administrator' : 'tester';
+    }
+    return $admin ? 'administrator' : 'normal';
+}
+
+/* ---------- Freigabe und Tester zur Laufzeit (Modulverwaltung, Roadmap 5) ----------
+   Startwert der Freigabe ist das Modulregister (Code, regeln/module.toml). Administratoren können sie in der
+   Modulverwaltung ändern – aber nur innerhalb dessen, was der Code erlaubt (MODUL_FREIGABE_ERLAUBT: „produktiv“ nur bei
+   Entwicklungsstand „fertig“, also erst nach geprüftem und vom Inhaber freigegebenem Code). Nicht änderbar:
+   - Bereiche, die laut Register schon produktiv laufen (heute Angebot: Kundenseite und Eingabebereich) – sie werden
+     weiter nur über ein Release gesteuert, damit niemand die laufenden Kunden- und Mitarbeiterfunktionen abschaltet,
+   - nicht sperrbare Bereiche (Dashboard, Anmeldung, Verwaltung → System: Schutz vor Aussperrung).
+   Dokument „module“: freigabe {"<modul>.<oberfläche>": {wert, grund, von, t}}, tester {"<modul>.<oberfläche>": [Nutzer-IDs]}
+   (Format nur erweitert, GR-006 – ältere Fassungen ignorieren die Felder und nutzen das Register). */
+/* Dokument „module“ einmal je Anfrage lesen (die Übersicht fragt jede Oberfläche ab); nach eigenem Schreiben neu laden */
+function modul_dok(bool $neu = false): array
+{
+    static $d = null;
+    if ($neu || $d === null) $d = store_read('module') ?? [];
+    return $d;
+}
+function modul_freigabe_aenderbar(array $o): bool
+{
+    return $o['sperrbar'] && $o['freigabe'] !== 'produktiv';
+}
+function modul_freigabe(string $modul, string $oberflaeche): string
+{
+    $o = MODULE[$modul]['oberflaechen'][$oberflaeche] ?? null;
+    if ($o === null) return 'keine';
+    if (!modul_freigabe_aenderbar($o)) return $o['freigabe'];
+    $f = modul_dok()['freigabe']["$modul.$oberflaeche"]['wert'] ?? null;
+    return is_string($f) && in_array($f, ['keine', 'test', 'produktiv', 'deaktiviert'], true) ? $f : $o['freigabe'];
+}
+function modul_tester(string $ziel): array
+{
+    $t = modul_dok()['tester'][$ziel] ?? [];
+    return is_array($t) ? array_values(array_filter($t, 'is_string')) : [];
+}
+
+/* Freigabe setzen ($me: bestätigter Administrator). Nur Werte, die der Entwicklungsstand im Code zulässt. */
+function modul_freigabe_setzen(string $ziel, array $b, array $me): array
+{
+    [$modul, $oberflaeche] = array_pad(explode('.', $ziel, 2), 2, '');
+    $o = MODULE[$modul]['oberflaechen'][$oberflaeche] ?? null;
+    if (!$o) throw new InvalidArgumentException('Unbekannter Bereich.');
+    if (!$o['sperrbar']) throw new InvalidArgumentException('Dieser Bereich ist immer verfügbar (Schutz vor Aussperrung).');
+    if ($o['freigabe'] === 'produktiv') throw new InvalidArgumentException('Dieser Bereich läuft produktiv und wird nur über ein Release gesteuert.');
+    $wert = (string)($b['freigabe'] ?? '');
+    if (!in_array($wert, ['keine', 'test', 'produktiv', 'deaktiviert'], true)) throw new InvalidArgumentException('Unbekannte Freigabe.');
+    if (!modul_freigabe_zulaessig($o['entwicklung'], $wert)) {
+        throw new InvalidArgumentException($wert === 'produktiv' ? 'Produktiv freigeben geht erst, wenn der Code als fertig eingetragen ist (Release).'
+            : 'Diese Freigabe passt nicht zum Entwicklungsstand „' . $o['entwicklung'] . '“.');
+    }
+    $grund = modul_text((string)($b['grund'] ?? ''), 200);
+    if (mb_strlen($grund) < 3) throw new InvalidArgumentException('Bitte einen Grund angeben (wird protokolliert).');
+    $alt = modul_freigabe($modul, $oberflaeche);
+    with_lock('module', function () use ($ziel, $wert, $grund, $me, $alt, $o) {
+        $d = store_read('module') ?? [];
+        $f = is_array($d['freigabe'] ?? null) ? $d['freigabe'] : [];
+        if ($wert === $o['freigabe']) unset($f[$ziel]);   // wieder wie im Register
+        else $f[$ziel] = ['wert' => $wert, 'grund' => $grund, 'von' => $me['name'], 't' => now()];
+        $d['freigabe'] = $f;
+        $v = is_array($d['verlauf'] ?? null) ? $d['verlauf'] : [];
+        array_unshift($v, ['t' => now(), 'wer' => $me['name'], 'bereich' => $ziel, 'art' => 'freigabe', 'alt' => "freigabe: $alt", 'neu' => "freigabe: $wert",
+                           'grund' => $grund, 'ab' => null, 'bis' => null]);
+        $d['verlauf'] = array_slice($v, 0, MODUL_VERLAUF_MAX);
+        if (!is_array($d['wartung'] ?? null)) $d['wartung'] = [];
+        store_write('module', $d);
+    });
+    modul_dok(true);
+    $name = MODULE[$modul]['name'] . ' · ' . $o['name'];
+    audit('modul_freigabe', "Freigabe geändert: {$name} ({$alt} → {$wert}) – Grund: {$grund}", [['k' => 'freigabe|' . $ziel, 'code' => '', 'name' => $name, 'f' => 'Freigabe', 'from' => $alt, 'to' => $wert]]);
+    return ['alt' => $alt, 'neu' => $wert];
+}
+
+/* Tester einer Oberfläche festlegen: nur aktive Mitarbeiterkonten; wirkt nur bei Freigabe „test“. */
+function modul_tester_setzen(string $ziel, array $b, array $me): array
+{
+    [$modul, $oberflaeche] = array_pad(explode('.', $ziel, 2), 2, '');
+    $o = MODULE[$modul]['oberflaechen'][$oberflaeche] ?? null;
+    if (!$o) throw new InvalidArgumentException('Unbekannter Bereich.');
+    if ($o['art'] !== 'intern') throw new InvalidArgumentException('Tester gibt es nur für interne Bereiche (Mitarbeiter).');
+    if (!modul_freigabe_aenderbar($o)) throw new InvalidArgumentException('Für diesen Bereich gibt es keine Testfreigabe (Freigabe nur über ein Release).');
+    $ids = array_values(array_unique(array_filter(array_map('strval', (array)($b['tester'] ?? [])), 'strlen')));
+    if (count($ids) > 100) throw new InvalidArgumentException('Zu viele Tester.');
+    $aktive = [];
+    foreach (users_load() as $u) if (!empty($u['active'])) $aktive[(string)$u['id']] = (string)$u['name'];
+    foreach ($ids as $id) if (!isset($aktive[$id])) throw new InvalidArgumentException('Unbekanntes oder gesperrtes Mitarbeiterkonto.');
+    $grund = modul_text((string)($b['grund'] ?? ''), 200);
+    $alt = modul_tester($ziel);
+    with_lock('module', function () use ($ziel, $ids, $grund, $me, $alt, $aktive) {
+        $d = store_read('module') ?? [];
+        $t = is_array($d['tester'] ?? null) ? $d['tester'] : [];
+        if ($ids) $t[$ziel] = $ids; else unset($t[$ziel]);
+        $d['tester'] = $t;
+        $namen = fn(array $l) => implode(', ', array_map(fn($i) => $aktive[$i] ?? 'gelöscht', $l)) ?: 'keine';
+        $v = is_array($d['verlauf'] ?? null) ? $d['verlauf'] : [];
+        array_unshift($v, ['t' => now(), 'wer' => $me['name'], 'bereich' => $ziel, 'art' => 'tester', 'alt' => 'Tester: ' . $namen($alt), 'neu' => 'Tester: ' . $namen($ids),
+                           'grund' => $grund, 'ab' => null, 'bis' => null]);
+        $d['verlauf'] = array_slice($v, 0, MODUL_VERLAUF_MAX);
+        if (!is_array($d['wartung'] ?? null)) $d['wartung'] = [];
+        store_write('module', $d);
+    });
+    modul_dok(true);
+    $name = MODULE[$modul]['name'] . ' · ' . $o['name'];
+    audit('modul_tester', "Tester geändert: {$name} (" . count($ids) . ')' . ($grund !== '' ? " – Grund: {$grund}" : ''), []);
+    return $ids;
 }
 
 /* ---------- Wartung je Oberfläche (GR-107) ----------
@@ -113,7 +224,7 @@ function modul_wartung_setzen(string $ziel, array $b, array $me): ?array
     if ($ziel === 'angebot.kunden') throw new InvalidArgumentException('Die Angebotsseite für Kunden bitte über „Wartungsmodus (Angebotsseite)“ steuern.');
     if (!$o['sperrbar']) throw new InvalidArgumentException('Dieser Bereich kann nicht in Wartung gesetzt werden (Schutz vor Aussperrung).');
     if ($o['art'] !== 'intern') throw new InvalidArgumentException('Externe Bereiche werden hier nicht gesteuert.');
-    if (!in_array($o['freigabe'], ['produktiv', 'test'], true)) throw new InvalidArgumentException('Dieser Bereich ist noch nicht freigegeben – eine Wartung hätte keine Wirkung.');
+    if (!in_array(modul_freigabe($modul, $oberflaeche), ['produktiv', 'test'], true)) throw new InvalidArgumentException('Dieser Bereich ist noch nicht freigegeben – eine Wartung hätte keine Wirkung.');
     $an = !empty($b['active']);
     $grund = modul_text((string)($b['grund'] ?? ''), 200);
     $msg = modul_text((string)($b['message'] ?? ''), 500);
@@ -170,7 +281,9 @@ function modul_zustand(string $modul, string $oberflaeche, ?array $u): ?array
 {
     $o = MODULE[$modul]['oberflaechen'][$oberflaeche] ?? null;
     if ($o === null) return null;
-    $lage = ['entwicklung' => $o['entwicklung'], 'freigabe' => $o['freigabe'], 'betrieb' => modul_betrieb($modul, $oberflaeche), 'person' => modul_person($u)];
+    $freigabe = modul_freigabe($modul, $oberflaeche);
+    $lage = ['entwicklung' => $o['entwicklung'], 'freigabe' => $freigabe, 'betrieb' => modul_betrieb($modul, $oberflaeche),
+             'person' => modul_person($u, "$modul.$oberflaeche", $freigabe)];
     $r = modul_entscheiden($lage);
     return $lage + ['zugang' => $r['zugang'], 'http' => $r['http'], 'kachel' => $r['kachel'], 'hinweis' => $r['hinweis'], 'regel' => $r['nr']];
 }
@@ -193,8 +306,10 @@ function modul_uebersicht(?array $u): array
     foreach (MODULE as $id => $m) {
         $obs = [];
         foreach ($m['oberflaechen'] as $oid => $o) {
-            $obs[] = ['id' => $oid, 'name' => $o['name'], 'art' => $o['art'], 'adresse' => $o['adresse'], 'ziel' => $o['ziel'], 'sperrbar' => $o['sperrbar'],
-                      'wartung' => modul_wartung_anzeige($id, $oid, $u)] + modul_zustand($id, $oid, $u);
+            $ob = ['id' => $oid, 'name' => $o['name'], 'art' => $o['art'], 'adresse' => $o['adresse'], 'ziel' => $o['ziel'], 'sperrbar' => $o['sperrbar'],
+                   'wartung' => modul_wartung_anzeige($id, $oid, $u)] + modul_zustand($id, $oid, $u);
+            if (($u['role'] ?? '') === 'admin') $ob['verwaltung'] = modul_verwaltung_angaben($id, $oid, $o);
+            $obs[] = $ob;
         }
         $kachel = null;
         if ($m['dashboard'] && $m['kachel_ziel']) {
@@ -207,4 +322,19 @@ function modul_uebersicht(?array $u): array
                   'dashboard' => $m['dashboard'], 'teil_von' => $m['teil_von'], 'kachel' => $kachel, 'oberflaechen' => $obs];
     }
     return $out;
+}
+
+/* Angaben für die Modulverwaltung (nur Administratoren): Herkunft der Freigabe, mögliche Werte, Tester mit Namen */
+function modul_verwaltung_angaben(string $modul, string $oberflaeche, array $o): array
+{
+    $ziel = "$modul.$oberflaeche";
+    $lauf = modul_dok()['freigabe'][$ziel] ?? null;
+    static $namen = null;
+    if ($namen === null) { $namen = []; foreach (users_load() as $u) $namen[(string)$u['id']] = ['name' => (string)$u['name'], 'aktiv' => !empty($u['active'])]; }
+    $aenderbar = modul_freigabe_aenderbar($o);
+    return ['register' => $o['freigabe'], 'aenderbar' => $aenderbar,
+            'moeglich' => $aenderbar ? array_values(MODUL_FREIGABE_ERLAUBT[$o['entwicklung']] ?? []) : [],
+            'laufzeit' => $aenderbar && is_array($lauf) ? ['grund' => (string)($lauf['grund'] ?? ''), 'von' => (string)($lauf['von'] ?? ''), 't' => $lauf['t'] ?? null] : null,
+            'tester' => array_map(fn($i) => ['id' => $i, 'name' => $namen[$i]['name'] ?? 'gelöschtes Konto', 'aktiv' => $namen[$i]['aktiv'] ?? false], modul_tester($ziel)),
+            'tester_moeglich' => $aenderbar && $o['art'] === 'intern'];
 }
