@@ -34,6 +34,9 @@ regexes = [
   '''Max-Zugang-12345''',
   '''Zweiter-Zugang-4711''',
   '''Dritter-Zugang-4712''',
+  # Nutzer anlegen und Zugangsdaten per E-Mail (tests/e2e/test_nutzer_anlegen.py)
+  '''Erik-Kennwort-123''',
+  '''Start-Kennwort-4711''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]

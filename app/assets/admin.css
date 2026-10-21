@@ -1355,3 +1355,16 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   .fwtab .fw-q { max-width: 150px; }
 }
 @media (max-width: 560px) { .fw-add { grid-template-columns: 1fr; } }
+
+/* Verwaltung → Nutzer: Abschluss nach dem Anlegen mit Zugangsdaten und E-Mail */
+.us-uhint { margin: -6px 0 0; }
+.us-fertig .us-daten { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 16px; margin: 0 0 16px; align-items: center; }
+.us-fertig .us-daten dt { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.us-fertig .us-daten dd { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+.us-fertig code { font-family: var(--mono); font-size: 14.5px; padding: 3px 8px; border-radius: 7px; background: var(--surface-3); color: var(--text); }
+.us-mail { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.us-mail .hint { margin: 6px 0 0; }
+.us-mail-st { margin: 8px 0 0; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
+.us-mail-st:empty { display: none; }
+.utab .u-name { min-width: 0; }
+.utab .u-mail { overflow-wrap: anywhere; }

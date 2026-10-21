@@ -267,7 +267,7 @@ with sync_playwright() as p:
         breit = pg.evaluate('document.documentElement.scrollWidth > window.innerWidth')
         pg.screenshot(path=os.path.join(WORK, f'geraete-nutzer-{breite}.png'))
         check(f'{breite} px: Nutzer-Dialog zeigt „Vertraute Geräte entfernen“ mit Gerät und Zeit, kein waagrechtes Scrollen', '1 Gerät' in txt and 'zuletzt' in txt and not breit, (txt, breit))
-        pg.keyboard.press('Escape')
+        pg.click('#user-body .dlg-foot [data-close]')
         pg.evaluate("document.querySelector('#vt-kunden').click()")
         pg.wait_for_selector(f'[data-kedit="{kd["id"]}"]')
         pg.click(f'[data-kedit="{kd["id"]}"]')

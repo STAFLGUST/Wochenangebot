@@ -35,7 +35,8 @@ function users_save(array $users): void { store_write('nutzer', ['users' => arra
 function user_find(array $users, string $id): ?int { foreach ($users as $i => $u) if ($u['id'] === $id) return $i; return null; }
 function user_public(array $u): array
 {
-    return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'active' => (bool)$u['active'],
+    return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'vorname' => (string)($u['vorname'] ?? ''), 'nachname' => (string)($u['nachname'] ?? ''),
+            'email' => (string)($u['email'] ?? ''), 'mailInfo' => $u['mailInfo'] ?? null, 'role' => $u['role'], 'active' => (bool)$u['active'],
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
             'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
@@ -125,6 +126,42 @@ function ghost_lock(string $scope, string $name, bool $fail, ?bool &$neu = null)
     });
 }
 function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
+/* Benutzername aus Vor- und Nachname: „vorname-nachname“, klein, Umlaute als ae/oe/ue/ss, Akzente ohne Zeichen,
+   Leerzeichen und Sonderzeichen werden zu „-“; belegt → „-2“, „-3“ … (höchstens 32 Zeichen). */
+function benutzername_vorschlag(string $vorname, string $nachname, array $belegt = []): string
+{
+    $teil = function (string $s): string {
+        $s = mb_strtolower(trim($s));
+        $s = strtr($s, ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss']);
+        $t = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+        $s = $t !== false ? strtolower($t) : $s;
+        return trim(preg_replace('/[^a-z0-9]+/', '-', $s) ?? '', '-');
+    };
+    $basis = trim(implode('-', array_filter([$teil($vorname), $teil($nachname)], 'strlen')), '-');
+    $basis = rtrim(substr($basis, 0, 32), '-');
+    if (strlen($basis) < 2) return '';
+    $belegt = array_map('strtolower', $belegt);
+    $u = $basis; $n = 2;
+    while (in_array($u, $belegt, true)) { $suf = '-' . $n++; $u = rtrim(substr($basis, 0, 32 - strlen($suf)), '-') . $suf; }
+    return $u;
+}
+/* Name, Vorname, Nachname und E-Mail eines Nutzers aus der Anfrage. Ältere Oberflächen schicken nur „name“. */
+function nutzer_person(array $b, bool $neu = true): array
+{
+    $vor = s($b['vorname'] ?? '', 40) ?? '';
+    $nach = s($b['nachname'] ?? '', 40) ?? '';
+    $mail = strtolower(trim((string)($b['email'] ?? '')));
+    if ($mail !== '' && (strlen($mail) > 160 || filter_var($mail, FILTER_VALIDATE_EMAIL) === false || preg_match('/[\r\n]/', $mail))) throw new InvalidArgumentException('Die E-Mail-Adresse ist ungültig.');
+    if ($vor !== '' || $nach !== '') {
+        // Neu: beides Pflicht. Ältere Zugänge mit einwortigem Namen (z. B. „Administrator“) bleiben speicherbar.
+        if ($neu && ($vor === '' || $nach === '')) throw new InvalidArgumentException('Bitte Vorname und Nachname angeben.');
+        $name = trim($vor . ' ' . $nach);
+    } else {
+        $name = s($b['name'] ?? '', 80, false);
+        if ($name === null || $name === '') throw new InvalidArgumentException('Bitte Vorname und Nachname angeben.');
+    }
+    return ['name' => mb_substr($name, 0, 80), 'vorname' => $vor, 'nachname' => $nach, 'email' => $mail];
+}
 function clean_username($v): string
 {
     $v = is_string($v) ? strtolower(trim($v)) : '';
@@ -208,3 +245,37 @@ function pw_leak_bei_anmeldung(string $pw, array $acc, ?string &$merker = null):
     $merker = $m;
     return $n > 0;
 }
+
+/* E-Mail an einen Mitarbeiter mit seinen Zugangsdaten (Verwaltung → Nutzer). Das Startpasswort steht nur darin,
+   wenn es mitgegeben wurde (und zum gespeicherten Passwort passt – geprüft in der Aktion user_mail). */
+function mail_tpl_nutzer(array $u, ?string $startPw, string $note = ''): array
+{
+    global $CFG;
+    $company = (string)($CFG['company'] ?? '');
+    $url = mail_base_url() . '/admin/';
+    $vor = (string)($u['vorname'] ?? '') !== '' ? $u['vorname'] : '';
+    $gruss = $vor !== '' ? "Hallo $vor," : 'Guten Tag ' . $u['name'] . ',';
+    $rolle = ROLE_LABELS[$u['role']] ?? $u['role'];
+    $subject = 'Ihr Zugang zum Eingabebereich' . ($company !== '' ? " – $company" : '');
+    $pwSatz = $startPw !== null
+        ? 'Bei der ersten Anmeldung legen Sie ein eigenes Passwort fest; das Startpasswort gilt danach nicht mehr.'
+        : (!empty($u['mustChange']) ? 'Ihr Startpasswort erhalten Sie separat. Bei der ersten Anmeldung legen Sie ein eigenes Passwort fest.' : 'Ihr Passwort erhalten Sie separat.');
+    $intro = "für Sie wurde ein Zugang zum Eingabebereich des Wochenangebots eingerichtet (Rolle: $rolle).";
+    $sig = mail_settings()['signature'];
+    $foot = "Diese E-Mail wurde von $company über den Eingabebereich versendet. Falls Sie keinen Zugang erwartet haben, wenden Sie sich bitte an Ihren Administrator.";
+    $t = "$gruss\n\n$intro\n\n" . ($note !== '' ? $note . "\n\n" : '')
+       . "Adresse:       $url\nBenutzername:  {$u['username']}\n" . ($startPw !== null ? "Startpasswort: $startPw\n" : '')
+       . "\n$pwSatz\nBitte geben Sie Ihr Passwort nicht weiter.\n\n$sig\n\n-- \n$foot\n";
+    $row = function (string $k, string $v, bool $mono = false) {
+        return '<tr><td style="padding:6px 14px 6px 0;color:#857c72;white-space:nowrap;vertical-align:top;">' . mail_h($k) . '</td><td style="padding:6px 0;font-weight:600;'
+            . ($mono ? 'font-family:Consolas,Menlo,monospace;font-size:15px;letter-spacing:.02em;' : '') . '">' . mail_h($v) . '</td></tr>';
+    };
+    $h = '<p style="margin:0 0 14px;">' . mail_h($gruss) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
+       . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '')
+       . '<table role="presentation" cellpadding="0" cellspacing="0" style="font-size:14px;margin:0 0 14px;border-collapse:collapse;">'
+       . $row('Benutzername', $u['username'], true) . ($startPw !== null ? $row('Startpasswort', $startPw, true) : '') . '</table>'
+       . mail_button($url, 'Zum Eingabebereich')
+       . '<p style="margin:12px 0 6px;">' . mail_h($pwSatz) . '</p><p style="margin:0 0 14px;font-size:12.5px;color:#857c72;">Bitte geben Sie Ihr Passwort nicht weiter.</p>';
+    return [$subject, $t, mail_layout($subject, $h, $sig, $foot)];
+}
+
