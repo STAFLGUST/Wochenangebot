@@ -348,11 +348,18 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .mhd-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; font-weight: 600; }
 .mhd-legend > span { font-weight: 600; }
 .st-actions { display: inline-flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-/* MHD: farbiger Hintergrund, schwarze Schrift (abgelaufen: Anthrazit mit weißer Schrift) */
-.mhd-past { background-color: #343a40; color: #fff; }
-.mhd-0-4 { background-color: #dc2626; color: #111; }
-.mhd-5-7 { background-color: #ea580c; color: #111; }
-.mhd-8-14 { background-color: #fdba74; color: #111; }
+/* MHD: dezent getönter Hintergrund mit kräftiger Schrift in derselben Farbe (statt voller Signalfarben); dunkles Design
+   mit eigenen Tönen. Druck und PDF nutzen die hellen Töne. Kontrast Schrift/Grund jeweils ≥ 7:1. */
+:root { --mhd-past-bg: #d9d6d2; --mhd-past-fg: #1f1d1a; --mhd-04-bg: #fbe0dd; --mhd-04-fg: #8f1d14; --mhd-57-bg: #fde7d3; --mhd-57-fg: #7a3209;
+        --mhd-814-bg: #fbf0c9; --mhd-814-fg: #6b4a05; }
+@media screen { :root[data-theme="dark"] { --mhd-past-bg: #3a3936; --mhd-past-fg: #e8e5e0; --mhd-04-bg: rgba(229,83,75,.20); --mhd-04-fg: #f6b8b2;
+        --mhd-57-bg: rgba(232,128,52,.18); --mhd-57-fg: #f5c79e; --mhd-814-bg: rgba(214,170,40,.15); --mhd-814-fg: #ecd68d; } }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --mhd-past-bg: #3a3936; --mhd-past-fg: #e8e5e0; --mhd-04-bg: rgba(229,83,75,.20); --mhd-04-fg: #f6b8b2;
+        --mhd-57-bg: rgba(232,128,52,.18); --mhd-57-fg: #f5c79e; --mhd-814-bg: rgba(214,170,40,.15); --mhd-814-fg: #ecd68d; } }
+.mhd-past { background-color: var(--mhd-past-bg); color: var(--mhd-past-fg); font-weight: 650; }
+.mhd-0-4 { background-color: var(--mhd-04-bg); color: var(--mhd-04-fg); font-weight: 650; }
+.mhd-5-7 { background-color: var(--mhd-57-bg); color: var(--mhd-57-fg); font-weight: 650; }
+.mhd-8-14 { background-color: var(--mhd-814-bg); color: var(--mhd-814-fg); font-weight: 650; }
 :not(td).mhd-past, :not(td).mhd-0-4, :not(td).mhd-5-7, :not(td).mhd-8-14 { display: inline-block; padding: 1px 7px; border-radius: 5px; }
 .mhd-skull { font-size: 1.25em; line-height: 1; margin-right: 4px; vertical-align: -1px; }
 .st-card { overflow-x: auto; width: fit-content; max-width: 100%; }
@@ -390,6 +397,9 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .lottab td { padding: 6px 8px; } .lottab th { padding: 8px; }
 .lottab tfoot td { padding: 8px; border-top: 1.5px solid var(--text); font-weight: 650; white-space: nowrap; }
 .lottab .lot-ek { white-space: nowrap; }
+.lottab .lot-marke { max-width: 160px; white-space: normal; overflow-wrap: break-word; }
+.lot-marke-sub { display: none; }   /* Handy: Marke klein unter der Partienummer statt eigener Spalte */
+@media (max-width: 560px) { .lottab .lot-marke { display: none; } .lottab .lot-marke-sub { display: block; font-size: 11.5px; color: var(--muted); white-space: normal; line-height: 1.25; } }
 .lot-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; min-width: 0; }
 @media (max-width: 560px) { .lottab td, .lottab th, .lottab tfoot td { padding: 6px 4px; font-size: 13px; } .lottab td { white-space: nowrap; } .lottab .lot-ank { display: none; } }
 .item-stock { font-size: 13.5px; }

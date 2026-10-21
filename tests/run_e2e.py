@@ -83,6 +83,7 @@ SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung
 SUITES['geraete'] = SUITES['bestellung']   # vertraute Geräte
+SUITES['bestand_pdf'] = (8790, 'data-seed', True)   # Bestand: Marke, MHD-Farben, PDF
 SUITES['passwortpruefung'] = (8790, 'data-seed', True, {'WA_PWNED_URL': 'http://127.0.0.1:{AUX}/range/%s'})   # Datenleck-Prüfung (nachgebauter Dienst)
 SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; braucht mobile/dist-web
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)

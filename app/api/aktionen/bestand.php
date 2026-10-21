@@ -13,6 +13,34 @@ switch ($action) {
                      'prices' => may($me, 'preisverlauf.sehen') ? stock_week_prices() : ['allowed' => false]]);
         }
 
+        /* Bestand als PDF (ohne Preise, erfassten Bestand, Gesamt verfügbar und Zugänge): Reihenfolge/Gruppen aus der Ansicht,
+           Zahlen aus dem gespeicherten Bestand (lib/bestand-pdf.php) */
+        case 'stock_pdf': {
+            require_perm('bestand.sehen', true);
+            $b = body();
+            $st = store_read('bestand');
+            if (!$st) fail('Es ist noch kein Bestand übernommen.', 404);
+            $src = $b['rows'] ?? [];
+            if (!is_array($src) || !array_is_list($src) || count($src) > 25000) fail('Ungültige Auswahl.', 422);
+            $zeilen = [];
+            foreach ($src as $z) {
+                if (is_array($z) && is_string($z['g'] ?? null)) { $zeilen[] = ['g' => s($z['g'], 80) ?? '']; continue; }
+                if (is_array($z) && is_string($z['c'] ?? null) && preg_match('#^[0-9A-Za-z./-]{1,20}$#', $z['c'])) { $zeilen[] = ['c' => $z['c']]; continue; }
+                fail('Ungültige Auswahl.', 422);
+            }
+            $mhd = !empty($b['mhd']);
+            $q = s($b['q'] ?? '', 60) ?? '';
+            $zusatz = $mhd ? ' – MHD bis ' . date('d.m.Y', strtotime('+14 days')) : ($q !== '' ? ' – Suche „' . $q . '“' : '');
+            require_once __DIR__ . '/../lib/bestand-pdf.php';
+            $pdf = stock_pdf($st, $zeilen, $zusatz);
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: attachment; filename="' . stock_pdf_name($st, $mhd ? 'MHD' : ($q !== '' ? 'Auswahl' : '')) . '"');
+            header('Cache-Control: private, no-store');
+            header('Content-Length: ' . strlen($pdf));
+            echo $pdf;
+            exit;
+        }
+
         case 'stock_import': {
             $me = require_perm('bestand.importieren', true);
             $b = body();

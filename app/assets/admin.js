@@ -2643,7 +2643,7 @@
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const stockWeekLabel = (which) => stockPrices?.[which] ? `KW ${stockPrices[which].week}/${stockPrices[which].year}` : 'KW unbekannt';
   const stockPriceText = (p) => !stockPrices?.allowed ? 'keine Berechtigung' : p?.status === 'ambiguous' ? 'mehrere Preisangaben' : p?.status === 'value' ? `${stockPriceNumber.format(p.value)} €${p.label ? ' · ' + p.label : '/kg'}` : p?.status === 'request' ? 'auf Anfrage' : '—';
-  const incomingHTML = (a) => a.incoming.length ? `<ul class="st-incoming">${a.incoming.map((d) => `<li><strong>${esc(kgText(d.kg))}</strong> · ${d.arrival ? 'ETA ' + esc(dmy(d.arrival)) : 'ETA unbekannt'}${d.lot ? ` <small>Partie ${esc(d.lot)}</small>` : ''}</li>`).join('')}</ul>` : '<span class="muted">keine Zugangsdaten</span>';
+  const incomingHTML = (a) => a.incoming.length ? `<ul class="st-incoming">${a.incoming.map((d) => `<li><strong>${esc(kgText(d.kg))}</strong> · ${d.arrival ? 'ETA ' + esc(dmy(d.arrival)) : 'ETA unbekannt'}${d.marke || d.lot ? ` <small>${d.marke ? esc(d.marke) + (d.lot ? ' · ' : '') : ''}${d.lot ? 'Partie ' + esc(d.lot) : ''}</small>` : ''}</li>`).join('')}</ul>` : '<span class="muted">keine Zugangsdaten</span>';
   const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
   /* Summe in ganzen Gramm (exakt, unabhängig von der Reihenfolge) */
   const sum = (list, f) => list.reduce((t, a) => t + (Number.isFinite(a[f]) ? Math.round(a[f] * 1000) : 0), 0) / 1000;
@@ -2721,6 +2721,7 @@
         <span class="ed-hint" id="st-count"></span>
         <span class="st-actions">
           <button type="button" class="btn" data-st="print">${icon('print')}Drucken</button>
+          <button type="button" class="btn" data-st="pdf" title="PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge">${icon('file')}PDF</button>
           <button type="button" class="btn" data-st="csv">${icon('download')}CSV</button>
           ${roStock ? '' : `<button type="button" class="btn primary" data-st="import">${icon('upload')}Bestand hochladen</button>`}
         </span>
@@ -2760,6 +2761,7 @@
       const a = b.dataset.st;
       if (a === 'import') { if (!roStock) $('#stock-file-input').click(); }
       if (a === 'print') printStock();
+      if (a === 'pdf') stockPDF(b);
       if (a === 'csv') stockCSV();
       return;
     }
@@ -2789,10 +2791,11 @@
     const ekLots = lots.filter((l) => Number.isFinite(l.ek) && Number.isFinite(l.kg) && l.kg > 0);
     const ekKg = ekLots.reduce((t, l) => t + Math.round(l.kg * 1000), 0);
     const ekAvg = ekKg ? ekLots.reduce((t, l) => t + l.ek * Math.round(l.kg * 1000), 0) / ekKg : null;
-    const row = (l) => `<tr><td class="ch-code">${esc(l.lot || '—')}</td><td class="lot-ank">${l.arrival ? esc(dmy(l.arrival)) : '—'}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : '<span class="muted">ohne MHD</span>'}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
-    return `<div class="lot-scroll"><table class="etab lottab"><thead><tr><th>Partie</th><th class="lot-ank">Ankunft</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
+    const mitMarke = lots.some((l) => l.marke);   // Bestand vor der Marken-Spalte: Spalte weglassen
+    const row = (l) => `<tr>${mitMarke ? `<td class="lot-marke">${l.marke ? esc(l.marke) : '<span class="muted">—</span>'}</td>` : ''}<td class="ch-code">${esc(l.lot || '—')}${mitMarke && l.marke ? `<small class="lot-marke-sub">${esc(l.marke)}</small>` : ''}</td><td class="lot-ank">${l.arrival ? esc(dmy(l.arrival)) : '—'}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : '<span class="muted">ohne MHD</span>'}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
+    return `<div class="lot-scroll"><table class="etab lottab"><thead><tr>${mitMarke ? '<th class="lot-marke">Marke</th>' : ''}<th>Partie</th><th class="lot-ank">Ankunft</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
           ${lots.map(row).join('')}
-        </tbody>${lots.length ? `<tfoot><tr class="lot-sum"><td>Summe</td><td class="lot-ank"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
+        </tbody>${lots.length ? `<tfoot><tr class="lot-sum">${mitMarke ? '<td class="lot-marke"></td>' : ''}<td>Summe</td><td class="lot-ank"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
         ${mitEk && lots.length && !ekLots.length ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}`;
   }
   function openStockItem(idx) {
@@ -2913,6 +2916,38 @@
     document.body.appendChild(el); el.click(); el.remove();
     setTimeout(() => URL.revokeObjectURL(el.href), 2000);
   }
+  /* PDF zum Weitergeben (Server, lib/bestand-pdf.php): nur Art.-Nr., Bezeichnung, eingelagerter Bestand, kürzestes MHD,
+     Kg kürz. MHD – ohne Preise, erfassten Bestand, Gesamt verfügbar und Zugänge. Auswahl, Reihenfolge und Gruppen wie
+     angezeigt; die Mengen nimmt der Server aus dem gespeicherten Bestand. */
+  async function stockPDF(btn) {
+    const res = stockResult(stockQ);
+    const rows = [];
+    if (res.flat) for (const a of res.list) rows.push({ c: a.code });
+    else for (const g of res.groups) { rows.push({ g: g.label }); for (const a of g.items) rows.push({ c: a.code }); }
+    if (btn) btn.disabled = true;
+    try {
+      const r = await fetch(API + '?action=stock_pdf', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf || '' }, body: JSON.stringify({ rows, q: isMhdQuery(stockQ) ? '' : stockQ, mhd: isMhdQuery(stockQ) }) });
+      if (r.status === 401) { showAuth('expired'); return; }
+      if (!r.ok || !(r.headers.get('Content-Type') || '').includes('application/pdf')) {
+        let msg = `PDF konnte nicht erstellt werden (${r.status}).`;
+        try { const j = await r.json(); if (j.error) msg = j.error; } catch { /* keine JSON-Antwort */ }
+        throw new Error(msg);
+      }
+      const name = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1] || `Bestand_${stock.date || isoToday()}.pdf`;
+      const url = URL.createObjectURL(await r.blob());
+      const el = document.createElement('a');
+      el.href = url; el.download = name;
+      document.body.appendChild(el); el.click(); el.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast(`PDF „${name}“ erstellt.`);
+    } catch (e) {
+      toast(e.message || 'PDF konnte nicht erstellt werden.');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   /* Druck / PDF (DIN A4) */
   function printStock() {
     const res = stockResult(stockQ);
@@ -2930,7 +2965,7 @@
       .s-mkg { font-weight: 700; } thead { display: table-header-group; } tr { break-inside: avoid; }
       .wg-h td { font-weight: 700; padding-top: 8px; border-bottom: 1pt solid #999; } .wg-sum td, .st-total td { font-weight: 700; background: #f3f1ee; }
       .wg-gap td { border: 0; height: 6px; padding: 0; } .st-total td { border-top: 1.5pt solid #333; }
-      .mhd-past { background: #343a40; color: #fff; } .mhd-0-4 { background: #dc2626; color: #111; } .mhd-5-7 { background: #ea580c; color: #111; } .mhd-8-14 { background: #fdba74; color: #111; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
+      .mhd-past { background: #d9d6d2; color: #1f1d1a; } .mhd-0-4 { background: #fbe0dd; color: #8f1d14; } .mhd-5-7 { background: #fde7d3; color: #7a3209; } .mhd-8-14 { background: #fbf0c9; color: #6b4a05; } .mhd-past, .mhd-0-4, .mhd-5-7, .mhd-8-14 { font-weight: 700; } .mhd-skull { font-size: 1.15em; margin-right: 3px; }
     </style></head><body><h1>${esc(company ? company + ' · ' : '')}${esc(title)}</h1>
       <p class="meta">${fmtInt.format(res.list.length)} Artikel · Bestand und erwartete Zugänge getrennt · Standardpreise ${esc(stockWeekLabel('current'))} / ${esc(stockWeekLabel('previous'))} · gedruckt ${esc(dateTime(new Date().toISOString()))} · intern – nicht zur Weitergabe</p>
       ${stockTableHTML(res, true).replace(/ tabindex="0"/g, '').replace(/<button[^>]*>/g, '').replace(/<\/button>/g, '')}
