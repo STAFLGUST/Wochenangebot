@@ -224,5 +224,27 @@ with sync_playwright() as p:
     br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])
+# ---------- Zeitzone: Server rechnet in deutscher Zeit (Mails, Ausdrucke, Gültigkeit) ----------
+from datetime import datetime  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+st, r = A.call('security_diag', {'check': 'php'})
+zeile = next((x['value'] for x in (r.get('result') or {}).get('items', []) if x['label'] == 'Serverzeit'), '')
+try:
+    abw = abs((datetime.strptime(zeile[:19], '%d.%m.%Y %H:%M:%S').replace(tzinfo=ZoneInfo('Europe/Berlin')) - datetime.now(ZoneInfo('Europe/Berlin'))).total_seconds())
+except ValueError:
+    abw = 9999
+check('Serverzeit in deutscher Zeit (Europe/Berlin), nicht UTC', st == 200 and 'Europe/Berlin' in zeile and abw < 120, (st, zeile, abw))
+# Monatsdateien des Protokolls (UTC) auch nachts richtig: 01:13 Uhr deutscher Zeit am 21.10. ist noch der 20.10. UTC
+import os, subprocess  # noqa: E401,E402
+REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+PHP = r"""define('WA_API', 1); require $argv[1] . '/app/api/lib/kern.php'; date_default_timezone_set('Europe/Berlin');
+$o = []; foreach (['2026-10-20T23:13:00Z', '2026-03-31T22:30:00Z', '2026-12-31T23:59:00Z'] as $iso) { $t = strtotime($iso); $o[] = [utc_monat(-1, $t), utc_monat(0, $t), utc_monat(1, $t)]; }
+echo json_encode($o);"""
+aus = subprocess.run(['php', '-r', PHP, REPO], capture_output=True, text=True).stdout
+check('Monate (UTC) unabhängig von der Zeitzone, auch über Jahreswechsel', aus and json.loads(aus) == [['2026-09', '2026-10', '2026-11'], ['2026-02', '2026-03', '2026-04'], ['2026-11', '2026-12', '2027-01']], aus)
+A.call('reauth', {'password': PW})
+st, r = A.call('security_export', {'days': 365})
+check('Sicherheitsprotokoll-Export über ein Jahr antwortet (keine Endlosschleife beim Monatswechsel)', st == 200 and 'csv' in r, (st, str(r)[:200]))
+
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

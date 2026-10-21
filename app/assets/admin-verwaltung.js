@@ -48,7 +48,7 @@
     const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div></td>
         <td>${roleBadge(u.role)}${exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
-        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
       </tr>`).join('');
@@ -128,6 +128,7 @@
         </div>`}
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
+        ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
         <details class="span2 ur-box" id="ur-box"${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Nutzer${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
@@ -162,6 +163,7 @@
       id: editUid || '', name: f.name.value.trim(), username: u ? u.username : f.username.value.trim(),
       role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
+      resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false,
     };
     if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');
@@ -1242,7 +1244,7 @@
   }
   function secCards(d) {
     const S = d.settings, users = d.users.filter((u) => u.active);
-    const with2 = users.filter((u) => u.twofa).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa).length;
+    const with2 = users.filter((u) => u.twofa || u.passkeys).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa && !u.passkeys).length;
     const locked = d.users.filter((u) => u.lockedUntil).length, blocked = d.blockedIps.filter((x) => x.until).length;
     const card = (lvl, title, text, hint) => `<div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${esc(title)}</strong><span>${text}</span>${hint ? `<em>${hint}</em>` : ''}</div></div>`;
     return [
@@ -1363,7 +1365,7 @@
     geoSel = new Set(S.geoCountries || []); geoQ = '';
     const G = d.geo;
     const geoStatRows = (d.geoStats || []).map((x) => `<tr><td>${esc(ccName(x.cc))} <span class="sub">${esc(x.cc)}</span></td><td class="num-s">${fmtInt.format(x.n)}</td><td class="num-s">${esc(dateTime(x.last))}</td></tr>`).join('');
-    const no2 = d.users.filter((u) => u.active && !u.twofa);
+    const no2 = d.users.filter((u) => u.active && !u.twofa && !u.passkeys);
     const sessRows = d.sessions.map((x) => `<tr><td><div class="nm">${esc(x.name)}</div><div class="sub uname">${esc(x.username)}</div></td><td class="mono-s">${esc(x.ip)}</td><td>${esc(uaShort(x.ua))}</td>
         <td class="num-s">${esc(dateTime(x.created))}</td><td class="num-s">${esc(dateTime(x.seen))}</td>
         <td class="act">${x.current ? '<span class="muted">diese Sitzung</span>' : `<button type="button" class="btn sm" data-sec="end" data-sid="${esc(x.sid)}">Beenden</button>`}</td></tr>`).join('');
@@ -1371,7 +1373,7 @@
     const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
     const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
     host.innerHTML = `
-      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
+      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-datei">Dateiprüfung</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
       <section id="sec-lage" class="sec-sect">
         <div class="sec-score" id="sec-score"></div>
         <div class="sec-grid">${secCards(d)}</div>
@@ -1392,6 +1394,8 @@
         <div class="dg-export"><label class="fld"><span>Sicherheitsprotokoll exportieren (CSV)</span><select id="dg-days"><option value="7">7 Tage</option><option value="30">30 Tage</option><option value="90" selected>90 Tage</option><option value="365">365 Tage</option></select></label><button type="button" class="btn" data-diag="export">${icon('download', 'sm')}Exportieren</button></div>
         <p class="form-err" id="dg-err" role="alert"></p>
       </section>
+      <section id="sec-datei" class="gcard sec-block sec-sect"><h3 class="sec-h">Dateiprüfung</h3>
+        <div id="ip-out" aria-live="polite"><p class="sub">Wird geladen …</p></div></section>
       <form class="gcard sec-form wartung-form${d.wartung ? ' on' : ''}" id="wartung-form" autocomplete="off">
         <h3 class="sec-h">Wartungsmodus</h3>
         <p class="hint" style="margin-top:0">Pausiert die Angebotsseite für Kunden (Angebot, Anmeldung, Merkliste, Bestellwünsche). Sie und alle Mitarbeiter arbeiten im Eingabebereich und auf der Angebotsseite normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>
@@ -1462,6 +1466,46 @@
     geoRefresh();
     secScore();
     secBrowserChecks();
+    secIntegrity();
+  }
+  /* ---------- Dateiprüfung: Programmdateien gegen die Prüfliste, Datenordner, auffällige Muster, Komponenten ---------- */
+  const IP_LVL = { kritisch: 'bad', warnung: 'warn', hinweis: 'info', ok: 'ok' };
+  const IP_ART = { geaendert: 'verändert', fehlt: 'fehlt', unbekannt: 'unbekannt', verdaechtig: 'verdächtig', daten: 'Datenordner' };
+  function ipHTML(d) {
+    const r = d.result;
+    const btn = `<div class="dg-btns"><button type="button" class="btn" data-ip="run">${icon('check', 'sm')}Jetzt prüfen</button></div>`;
+    if (!r) return `<p class="sec-empty">Noch keine Dateiprüfung durchgeführt.</p>${btn}<p class="form-err" id="ip-err" role="alert"></p>`;
+    const c = r.counts, lvl = c.critical ? 'bad' : c.warnings ? 'warn' : 'ok';
+    const row = (l, main, sub) => `<tr><td>${lvlDot(l)}</td><td>${main}${sub ? `<div class="sub">${sub}</div>` : ''}</td></tr>`;
+    const items = r.items.slice(0, 100).map((x) => row(IP_LVL[x.stufe] || 'info', `<span class="mono-s" style="word-break:break-all">${esc(x.path)}</span>`,
+      `${esc(IP_ART[x.art] || x.art)} · ${esc(x.text)}${x.signatur ? ` · <strong>Muster: ${esc(x.signatur)}</strong>` : ''}`)).join('');
+    const more = r.items.length - 100 + (r.truncated || 0);
+    const comp = (r.components || []).map((x) => row(IP_LVL[x.stufe] || 'info', `<span class="nm">${esc(x.name)}</span> <span class="mono-s" style="word-break:break-all">${esc(x.version)}</span>`, esc(x.text))).join('');
+    return `<div class="sec-grid"><div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${lvl === 'ok' ? 'Keine Auffälligkeiten' : `${c.critical} kritisch · ${c.warnings} ${c.warnings === 1 ? 'Warnung' : 'Warnungen'}`}</strong>
+        <span>${fmtInt.format(c.checked)} Dateien und Datensätze geprüft · ${c.modified} verändert · ${c.missing} fehlen · ${c.unknown} unbekannt · ${c.suspicious} verdächtig</span>
+        <em>zuletzt ${esc(dateTime(r.ranAt))} Uhr${r.auto ? ' (automatisch)' : r.by ? ` (${esc(r.by)})` : ''} · ${fmtInt.format(r.ms)} ms</em></div></div></div>
+      ${r.partial ? `<p class="st-warn">Unvollständig: ${esc(r.partialText)}.</p>` : ''}
+      ${items ? `<table class="etab sectab cftab ip-tab"><thead><tr><th class="lv-h"><span class="sr-only">Stufe</span></th><th>Befund</th></tr></thead><tbody>${items}</tbody></table>${more > 0 ? `<p class="sub">… und ${fmtInt.format(more)} weitere.</p>` : ''}` : ''}
+      ${btn}<p class="form-err" id="ip-err" role="alert"></p>
+      <h4 class="sec-h" style="margin-top:18px">Komponenten</h4>
+      <table class="etab sectab cftab ip-comp"><tbody>${comp}</tbody></table>
+      <p class="hint">Vergleicht alle Programmdateien mit der freigegebenen Fassung, prüft den Datenordner und sucht nach typischen Mustern von Schadcode. Läuft automatisch einmal am Tag beim Öffnen dieser Ansicht; neue Befunde gehen als Sicherheitsereignis per E-Mail raus.</p>`;
+  }
+  async function secIntegrity(run) {
+    const host = $('#ip-out');
+    if (!host) return;
+    const b = host.querySelector('[data-ip="run"]');
+    if (b) { b.disabled = true; b.innerHTML = '<span class="spinner sm"></span>Wird geprüft …'; }
+    try {
+      const d = await api('security_integrity', run ? { body: { run: true } } : {});
+      if (!$('#ip-out')) return;
+      $('#ip-out').innerHTML = ipHTML(d);
+      if (run) toast(d.result && d.result.ok ? 'Dateiprüfung: keine Auffälligkeiten.' : 'Dateiprüfung abgeschlossen – bitte Befunde ansehen.');
+    } catch (ex) {
+      if (b) { b.disabled = false; b.innerHTML = `${icon('check', 'sm')}Jetzt prüfen`; const e = $('#ip-err'); if (e) e.textContent = ex.message; }
+      else host.innerHTML = `<p class="form-err" role="alert">${esc(ex.message)}</p>`;
+    }
+    secScore();
   }
   async function runDiag(k, btn) {
     const out = $('#dg-out'), err = $('#dg-err');
@@ -1485,6 +1529,7 @@
   $('#view-sec').addEventListener('click', (e) => {
     const b = e.target.closest('[data-diag]');
     if (b) runDiag(b.dataset.diag, b);
+    if (e.target.closest('[data-ip="run"]')) secIntegrity(true);
     const a = e.target.closest('.sec-nav a');
     if (a) { e.preventDefault(); const t = document.getElementById(a.getAttribute('href').slice(1)); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   });

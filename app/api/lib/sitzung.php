@@ -81,7 +81,7 @@ function require_auth(bool $write = false, string $role = 'viewer'): array
         if (!is_string($tok) || !hash_equals((string)($_SESSION['csrf'] ?? ''), $tok)) fail('Sicherheitsprüfung fehlgeschlagen – bitte Seite neu laden.', 403);
     }
     if (!empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
-    if (twofa_required($u) && empty($u['totp'])) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
+    if (twofa_required($u) && !has_second_factor($u)) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
     if (ROLES[$u['role']] < ROLES[$role]) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
     return $u;
 }
@@ -94,7 +94,7 @@ function sign_in(array $u): string
     $_SESSION['seen'] = time();
     $_SESSION['authAt'] = time();   // Zeitpunkt der Passwort-Anmeldung (z. B. für die Ersteinrichtung der Zwei-Faktor-Anmeldung)
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
-    unset($_SESSION['pend'], $_SESSION['totpPending']);
+    unset($_SESSION['pend'], $_SESSION['totpPending'], $_SESSION['pkReg'], $_SESSION['pkAuth']);
     mark_admin_confirmed($u);
     sess_register($u);
     $ME = $u;
@@ -103,7 +103,8 @@ function sign_in(array $u): string
 function me_payload(array $u): array
 {
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),
-            'twofa' => !empty($u['totp']), 'needTwofa' => twofa_required($u) && empty($u['totp']), 'twofaRequired' => twofa_required($u),
+            'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])),
+            'needTwofa' => twofa_required($u) && !has_second_factor($u), 'twofaRequired' => twofa_required($u),
             'perms' => function_exists('user_perms') ? user_perms($u) : []];
 }
 /* Nutzer innerhalb der Sperre ändern und speichern */
@@ -181,7 +182,7 @@ function keep_current_session(array $u): void
     $_SESSION['sv'] = (int)$u['sv'];
     // Eine vorhandene Freigabe nicht verlängern, nur an die neue Sitzungsversion binden.
     $_SESSION['adminConfirmedSv'] = (int)$u['sv'];
-    unset($_SESSION['totpPending']);
+    unset($_SESSION['totpPending'], $_SESSION['pkReg']);
     $GLOBALS['ME'] = $u;
     $sid = (string)($_SESSION['sid'] ?? '');
     sess_remove(function ($k, $v) use ($u, $sid) { return $v['uid'] === $u['id'] && $k !== $sid; });

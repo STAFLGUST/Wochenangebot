@@ -30,7 +30,7 @@ with sync_playwright() as p:
     a.on('pageerror', lambda e: errs.append(str(e)))
     login(a, 'admin', 'Sicheres-Passwort-1')
     a.click('#vt-sec'); a.wait_for_selector('#geo-box')
-    check('15 status cards incl. Ländersperre', a.locator('.sec-card').count() == 15 and 'Ländersperre' in a.inner_text('.sec-grid'))
+    check('15 status cards incl. Ländersperre', a.locator('#sec-lage .sec-card').count() == 15 and 'Ländersperre' in a.inner_text('.sec-grid'))
     check('db info shown', 'Stand 17.06.2026' in a.inner_text('#geo-box'), a.inner_text('.geo-db'))
     check('unknown own country hint', 'nicht bekannt' in a.inner_text('#geo-me'))
     check('country list German names', a.locator('.geo-opt').count() > 240 and 'Deutschland' in a.inner_text('#geo-list'), a.locator('.geo-opt').count())

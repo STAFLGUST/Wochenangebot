@@ -52,6 +52,8 @@ In der Auswertung erscheinen Kunden-Anmeldungen aus der App mit dem Gerätetyp �
 | Kunde | `kunde_status`, `kunde_login`, `kunde_logout`, `kunde_passwort`, `offer` (`angebot=<id>`), `kunde_merkliste`, `kunde_merkliste_save`, `kunde_bestellung` (mit `requestId`), `kunde_bestellungen`, `kunde_bestellung_detail` |
 | Mitarbeiter | `status`, `login`, `login_2fa`, `logout`, `bestellungen`, `bestellung`, `bestellung_save` |
 
+Passkeys gibt es in der App nicht: Hat ein Mitarbeiter nur Passkeys und keine Authenticator-App, antwortet `login` nach
+korrektem Passwort mit 403 und `code: app_totp_required`; mit beidem nennt `methods` nur `totp`.
 Mitarbeiter mit Pflicht zum Passwortwechsel oder zur Einrichtung der Zwei-Faktor-Anmeldung erledigen das zuerst im
 Eingabebereich der Website; die App meldet sie dann wieder ab und sagt das. Aktionen mit zusätzlicher
 Passwortbestätigung (Verwaltung) bietet die App nicht an.

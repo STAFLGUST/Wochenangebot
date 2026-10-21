@@ -111,7 +111,7 @@ with sync_playwright() as pw:
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
     a.fill('#au-user', 'admin'); a.fill('#pw1', PW); a.click('#auth-submit'); a.wait_for_selector('#screen-editor:not([hidden])')
     a.click('#vt-sec'); a.wait_for_selector('#sec-lage .sec-grid')
-    check('section navigation', a.eval_on_selector_all('.sec-nav a', 'e => e.map(x => x.getAttribute("href"))') == ['#sec-lage', '#sec-konfig', '#sec-diag', '#sec-einst', '#sec-bst', '#sec-zugang'])
+    check('section navigation', a.eval_on_selector_all('.sec-nav a', 'e => e.map(x => x.getAttribute("href"))') == ['#sec-lage', '#sec-konfig', '#sec-diag', '#sec-datei', '#sec-einst', '#sec-bst', '#sec-zugang'])
     check('overall status shown', a.locator('#sec-score strong').count() == 1 and 'in Ordnung' in a.inner_text('#sec-score'))
     check('timeline chart with 14 days', a.locator('svg.tl g').count() == 14)
     check('suspicious address in table', '203.0.113.9' in a.inner_text('#sec-lage'))

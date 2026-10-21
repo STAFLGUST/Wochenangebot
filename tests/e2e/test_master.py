@@ -68,11 +68,15 @@ with sync_playwright() as p:
     a.fill('#master-new-body [name=code]', '11872'); a.press('#master-new-body [name=code]', 'Tab'); a.wait_for_timeout(200)
     check('new: name prefilled from stock without frisch', a.input_value('#master-new-body [name=name]') == 'Rinderfett, EG', a.input_value('#master-new-body [name=name]'))
     a.click('#master-new-body [type=submit]'); wait_master(a)
+    try: a.wait_for_selector('.mtab tr[data-mcode="11872"]', timeout=8000)   # Liste wird nach dem Speichern neu gezeichnet
+    except Exception: pass
     check('new master row', a.locator('.mtab tr[data-mcode="11872"]').count() == 1)
     a.fill('#ms-q', '10012'); a.wait_for_timeout(300)
     check('WinAB name shown when different', 'WinAB:' in a.inner_text('.mtab tr[data-mcode="10012"]') if a.locator('.mtab tr[data-mcode="10012"]').count() else True)
     a.fill('#ms-q', '11872'); a.wait_for_timeout(300)
     a.click('.mtab tr[data-mcode="11872"] [data-ma=del]'); a.click('#dlg-confirm [data-v="1"]'); wait_master(a)
+    try: a.wait_for_function("!document.querySelector('.mtab tr[data-mcode=\"11872\"]')", timeout=8000)   # Liste wird nach dem Speichern neu gezeichnet
+    except Exception: pass
     check('master row deleted', a.locator('.mtab tr[data-mcode="11872"]').count() == 0)
     # Excel-Import übernimmt Stammdaten und entfernt frisch
     a.click('#vt-edit')
