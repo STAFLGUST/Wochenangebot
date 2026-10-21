@@ -26,6 +26,9 @@ function body(): array
     return $data;
 }
 function now(): string { return gmdate('Y-m-d\TH:i:s\Z'); }
+/* Monat (UTC, „JJJJ-MM“) relativ zum aktuellen bzw. zu $t – unabhängig von der eingestellten Zeitzone (Monatsdateien des
+   Protokolls sind nach UTC benannt; strtotime('first day of …') rechnet dagegen in Ortszeit) */
+function utc_monat(int $versatz = 0, ?int $t = null): string { $t ??= time(); return gmdate('Y-m', gmmktime(0, 0, 0, (int)gmdate('n', $t) + $versatz, 1, (int)gmdate('Y', $t))); }
 
 /* ---------------- Datenprüfung ---------------- */
 

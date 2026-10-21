@@ -38,7 +38,7 @@ function user_public(array $u): array
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'active' => (bool)$u['active'],
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
-            'twofa' => !empty($u['totp']), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
+            'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
             'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])),
             'perms' => function_exists('user_perms') ? user_perms($u) : []];
 }
@@ -53,22 +53,36 @@ function setup_allowed(): bool
 function login_failure(array &$u): bool
 {
     $S = sec();
+    // Fehlversuche verfallen nach 24 Stunden ohne weiteren Fehlversuch – wie bei unbekannten Namen (ghost_lock), damit beide
+    // gleich reagieren und vereinzelte Vertipper nicht monatelang mitzählen
+    if ((int)($u['failAt'] ?? 0) < time() - 86400) $u['failCount'] = 0;
+    $u['failAt'] = time();
     $u['failCount'] = (int)($u['failCount'] ?? 0) + 1;
     if ($u['failCount'] < max(3, (int)$S['lockAfter'])) return false;
     $u['lockedUntil'] = time() + 60 * max(1, (int)$S['lockMinutes']);
     $u['failCount'] = 0;
+    unset($u['lockTries']);   // neue Sperre: Code-Versuche neu zählen (keine Reste einer früheren Sperre)
     return true;
 }
 /* Fehlversuche für unbekannte Benutzernamen wie bei echten Zugängen zählen: gleiche Sperrmeldung nach gleich vielen
-   Versuchen, damit die Antwort nicht verrät, ob es einen Benutzernamen gibt. Gibt das Sperrende zurück (0 = nicht gesperrt). */
-function ghost_lock(string $scope, string $name, bool $fail): int
+   Versuchen, damit die Antwort nicht verrät, ob es einen Benutzernamen gibt. Gibt das Sperrende zurück (0 = nicht gesperrt);
+   $neu ist true, wenn die Sperre gerade durch diesen Fehlversuch begonnen hat. */
+function ghost_lock(string $scope, string $name, bool $fail, ?bool &$neu = null): int
 {
+    $neu = false;
     if ($name === '') return 0;
-    return (int)with_lock('anmeldenamen', function () use ($scope, $name, $fail) {
+    return (int)with_lock('anmeldenamen', function () use ($scope, $name, $fail, &$neu) {
         $S = sec();
         $now = time();
         $a = store_read('anmeldenamen') ?? [];
         foreach ($a as $k => $v) if ((int)($v['until'] ?? 0) < $now && (int)($v['t'] ?? 0) < $now - 86400) unset($a[$k]);
+        if (count($a) > 5000) {   // Größe begrenzen: laufende Sperren nie vorzeitig entfernen (sonst verriete ihr Ende den Namen), sonst die ältesten
+            $aktiv = array_filter($a, fn($v) => (int)($v['until'] ?? 0) >= $now);
+            if (count($aktiv) > 20000) { uasort($aktiv, fn($x, $y) => (int)$y['until'] <=> (int)$x['until']); $aktiv = array_slice($aktiv, 0, 20000, true); }   // Obergrenze auch für laufende Sperren
+            $rest = array_diff_key($a, $aktiv);
+            uasort($rest, fn($x, $y) => (int)($y['t'] ?? 0) <=> (int)($x['t'] ?? 0));
+            $a = $aktiv + array_slice($rest, 0, max(0, 4000 - count($aktiv)), true);
+        }
         $k = $scope . ':' . hash('sha256', $name);
         $g = $a[$k] ?? ['n' => 0, 'until' => 0, 't' => 0];
         if ((int)$g['until'] > $now) return (int)$g['until'];
@@ -76,7 +90,7 @@ function ghost_lock(string $scope, string $name, bool $fail): int
         $g['n'] = (int)$g['n'] + 1;
         $g['t'] = $now;
         $g['until'] = 0;
-        if ($g['n'] >= max(3, (int)$S['lockAfter'])) { $g['until'] = $now + 60 * max(1, (int)$S['lockMinutes']); $g['n'] = 0; }
+        if ($g['n'] >= max(3, (int)$S['lockAfter'])) { $g['until'] = $now + 60 * max(1, (int)$S['lockMinutes']); $g['n'] = 0; $neu = true; }
         $a[$k] = $g;
         store_write('anmeldenamen', $a);
         return (int)$g['until'];

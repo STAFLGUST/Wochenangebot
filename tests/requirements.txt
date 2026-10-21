@@ -1,3 +1,4 @@
 # Abhängigkeiten der automatischen Tests (fest versioniert; Aktualisierung über Pull Request)
 playwright==1.56.0
 openpyxl==3.1.5
+cryptography==50.0.1   # Passkey-Tests: Testschlüssel (ES256/RS256) für den Software-Authenticator

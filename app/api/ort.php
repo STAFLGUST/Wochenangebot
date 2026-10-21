@@ -158,7 +158,7 @@ function ort_build($in, string $out, string $date): array
 function ort_download(string $out): array
 {
     $ctx = stream_context_create(['http' => ['timeout' => 120, 'user_agent' => 'Wochenangebot', 'follow_location' => 1], 'ssl' => ['verify_peer' => true]]);
-    foreach ([gmdate('Y-m'), gmdate('Y-m', strtotime('first day of last month'))] as $m) {
+    foreach ([utc_monat(), utc_monat(-1)] as $m) {
         $in = @fopen('compress.zlib://' . sprintf(getenv('WA_ORT_URL') ?: ORT_URL, $m), 'rb', false, $ctx);   // WA_ORT_URL nur in den Tests
         if (!$in) continue;
         try { return ort_build($in, $out, $m . '-01') + ['date' => $m . '-01']; } finally { fclose($in); }

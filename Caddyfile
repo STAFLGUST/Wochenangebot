@@ -26,6 +26,9 @@
 	}
 	@private path /data /data/*
 	respond @private 404
+	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
+	@falle path /wp-login.php /xmlrpc.php /wp-admin /wp-admin/* /wp-content/* /wp-includes/* /.env /.env.* /.git /.git/* /phpmyadmin* /pma/* /myadmin* /vendor/phpunit/* /cgi-bin/* /.aws/* /server-status /actuator* /admin.php /administrator/* /boaform/* /HNAP1*
+	rewrite @falle /api/index.php?action=waf_probe&p={path}
 	reverse_proxy app:80
 }
 
@@ -49,5 +52,8 @@ test.{$DOMAIN} {
 	}
 	@private path /data /data/*
 	respond @private 404
+	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
+	@falle path /wp-login.php /xmlrpc.php /wp-admin /wp-admin/* /wp-content/* /wp-includes/* /.env /.env.* /.git /.git/* /phpmyadmin* /pma/* /myadmin* /vendor/phpunit/* /cgi-bin/* /.aws/* /server-status /actuator* /admin.php /administrator/* /boaform/* /HNAP1*
+	rewrite @falle /api/index.php?action=waf_probe&p={path}
 	reverse_proxy app-test:80
 }

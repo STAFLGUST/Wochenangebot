@@ -10,10 +10,11 @@ import os
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 
 from kunden_hilfe import Client
-from umgebung import storage_raw, storage_write
+from umgebung import BASE, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 KPW = 'Kantine-Kennwort-5'
@@ -53,15 +54,27 @@ FAELLE = [[None, '172.18.0.3', '203.0.113.7'],            # ohne Angabe: private
           ['10.0.0.5', '10.0.0.5', '203.0.113.8'],        # eigener Proxy (IP)
           ['10.1.0.0/24', '10.1.0.9', '203.0.113.9'],     # eigener Proxy (Netz)
           ['localhost', '127.0.0.1', '203.0.113.10'],     # eigener Proxy (Name)
-          ['gibt-es-nicht.invalid', '127.0.0.2', '203.0.113.11']]
+          ['gibt-es-nicht.invalid', '127.0.0.2', '203.0.113.11'],  # Name nicht auflösbar (DNS-Störung): wie ohne Angabe
+          ['localhost', '172.18.0.3', '203.0.113.12'],              # Name auflösbar, andere Gegenstelle: nicht vertraut
+          ['2001:db8::1', '2001:db8:0:0:0:0:0:1', '203.0.113.14'],  # IPv6 in anderer Schreibweise: gleiche Adresse
+          ['schon-mal-aufgeloest.invalid', '127.0.0.5', '203.0.113.15'],  # DNS-Störung, früher aufgelöst: gemerkte Adresse gilt
+          ['schon-mal-aufgeloest.invalid', '172.18.0.3', '203.0.113.16']]  # … andere Container bleiben ausgeschlossen
+TMP = tempfile.mkdtemp(prefix='wa-proxy-')
+with open(os.path.join(TMP, 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json'), 'w') as fh:
+    json.dump(['127.0.0.5'], fh)
 env = {k: v for k, v in os.environ.items() if k != 'WA_TRUSTED_PROXIES'}
+env['TMPDIR'] = TMP
 outs = [subprocess.run(['php', '-r', PHP, REPO, json.dumps(f)], capture_output=True, text=True, env=env).stdout.strip() or 'Fehler' for f in FAELLE]
 check('ohne WA_TRUSTED_PROXIES: wie bisher (private Gegenstelle)', outs[0] == '203.0.113.7', outs[0])
 check('fremder Container darf keine Besucher-IP vorgeben', outs[1] == '172.18.0.3', outs[1])
 check('eigener Proxy per IP', outs[2] == '203.0.113.8', outs[2])
 check('eigener Proxy per Netz', outs[3] == '203.0.113.9', outs[3])
 check('eigener Proxy per Name (Docker-Dienst)', outs[4] == '203.0.113.10', outs[4])
-check('unbekannter Name: nichts vertraut', outs[5] == '127.0.0.2', outs[5])
+check('Name nicht auflösbar: wie ohne Angabe – Besucher fallen nicht auf die Proxy-Adresse zusammen', outs[5] == '203.0.113.11', outs[5])
+check('Name auflösbar, andere Gegenstelle: X-Forwarded-For ignoriert', outs[6] == '172.18.0.3', outs[6])
+check('IPv6-Proxy in anderer Schreibweise wird erkannt', outs[7] == '203.0.113.14', outs[7])
+check('Name gerade nicht auflösbar: zuletzt aufgelöste Adresse gilt weiter (kein Rückfall auf alle privaten Adressen)', outs[8] == '203.0.113.15' and outs[9] == '172.18.0.3', outs[8:10])
+check('aufgelöste Proxy-Adresse wird gemerkt', any(f.startswith('wa-proxy-') and f.endswith('.json') and f != 'wa-proxy-4-' + hashlib.sha256(b'schon-mal-aufgeloest.invalid').hexdigest() + '.json' for f in os.listdir(TMP)), os.listdir(TMP))
 compose = open(os.path.join(REPO, 'docker-compose.yml'), encoding='utf-8').read()
 test_compose = open(os.path.join(REPO, 'deploy/testumgebung/docker-compose.yml'), encoding='utf-8').read()
 check('Echtbetrieb vertraut nur Caddy, Testumgebung nicht im Produktivnetz', 'WA_TRUSTED_PROXIES: caddy' in compose and 'PROD_NETWORK' not in test_compose
@@ -92,8 +105,8 @@ def versuche(name, n, start, aktion='login'):
 
 echt = versuche('eddi', 4, 1)
 fake = versuche('gibt.es.nicht', 4, 2)
-check('echter Zugang: nach 3 Fehlversuchen gesperrt (429)', [s for s, _ in echt] == [401, 401, 429, 429], [s for s, _ in echt])
-check('unbekannter Name: identisches Verhalten (401, 401, 429, 429)', [s for s, _ in fake] == [401, 401, 429, 429], [s for s, _ in fake])
+check('echter Zugang: nach 3 Fehlversuchen gesperrt (429), danach Code-Schritt mit Sperrhinweis', [s for s, _ in echt] == [401, 401, 429, 200] and echt[3][1].get('need2fa') and echt[3][1].get('gesperrtBis'), echt)
+check('unbekannter Name: identisches Verhalten (401, 401, 429, Code-Schritt)', [s for s, _ in fake] == [401, 401, 429, 200] and set(fake[3][1]) == set(echt[3][1]), fake)
 norm = lambda t: t.split(' bis ')[0]   # noqa: E731 – Uhrzeit kann um eine Minute abweichen
 check('… mit gleicher Meldung', norm(echt[2][1].get('error', '')) == norm(fake[2][1].get('error', '')) and 'gesperrt' in fake[2][1].get('error', ''), (echt[2][1], fake[2][1]))
 check('Liste der Namen speichert nur Prüfsummen', 'gibt.es.nicht' not in (storage_raw('anmeldenamen') or ''))
@@ -114,18 +127,132 @@ secret = Z.call('twofa_begin', {})[1]['secret']
 step = int(time.time() // 30)
 assert Z.call('twofa_enable', {'code': totp(secret, step)})[0] == 200
 versuche('zara', 3, 5)
-st, r = Client('198.18.6.1').call('login', {'username': 'zara', 'password': 'Falsches-Passwort-1'})
-check('Zugang mit zweitem Faktor nach Fehlversuchen gesperrt', st == 429, (st, r))
+Zf = Client('198.18.6.1')
+st, r = Zf.call('login', {'username': 'zara', 'password': 'Falsches-Passwort-1'})
+check('gesperrt + falsches Passwort: Code-Schritt mit Sperrhinweis (Antwort verrät das Passwort nicht)', st == 200 and r.get('need2fa') and r.get('gesperrtBis'), (st, r))
+falsch = r
+st, r = Zf.call('login_2fa', {'code': totp(secret, step + 1)})
+check('… dort hilft auch der richtige Code nicht (falsches Passwort bleibt falsch)', st == 401 and 'nicht korrekt' in r.get('error', ''), (st, r))
 Z2 = Client('198.18.6.2')
 st, r = Z2.call('login', {'username': 'zara', 'password': 'Bearbeiter-Zugang-1'})
 check('gesperrt + richtiges Passwort → zweiter Schritt statt Aussperren', st == 200 and r.get('need2fa') is True, (st, r))
+check('… mit genau derselben Antwort wie bei falschem Passwort', r == falsch, (r, falsch))
 st, r = Z2.call('login_2fa', {'code': '000000'})
-check('… falscher Code bleibt abgewiesen', st in (401, 429), (st, r))
-st, r = Z2.call('login', {'username': 'zara', 'password': 'Bearbeiter-Zugang-1'})
+check('… falscher Code abgewiesen (gleiche Meldung wie sonst)', st == 401 and 'nicht korrekt' in r.get('error', ''), (st, r))
 st, r = Z2.call('login_2fa', {'code': totp(secret, step + 1)})
 check('… richtiger Code meldet an und hebt die Sperre auf', st == 200 and r.get('user', {}).get('username') == 'zara', (st, r))
-st, r = Client('198.18.6.3').call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})
-check('Zugang ohne zweiten Faktor bleibt bei Sperre gesperrt', st == 429, (st, r))
+E = Client('198.18.6.3')
+st, r = E.call('login', {'username': 'eddi', 'password': 'Editor-Zugang-77'})
+eddi_login = r
+check('Zugang ohne zweiten Faktor, gesperrt, richtiges Passwort: gleiche Antwort wie jedes andere Passwort', st == 200 and r.get('need2fa') and r.get('gesperrtBis'), (st, r))
+st, r = E.call('login_2fa', {'code': '123456'})
+eddi_code = r
+check('… aber keine Anmeldung möglich (bleibt bis zum Ablauf gesperrt)', st == 401 and 'user' not in r and E.call('status')[1].get('loggedIn') is False, (st, r))
+G = Client('198.18.6.4')
+st, r = G.call('login', {'username': 'gibt.es.nicht', 'password': 'Falsches-Passwort-1'})
+st2, r2 = G.call('login_2fa', {'code': '123456'})
+check('unbekannter gesperrter Name: gleicher Code-Schritt, gleiche Ablehnung', st == 200 and set(r) == set(eddi_login) and r.get('need2fa') and st2 == 401 and r2 == eddi_code, (st, r, st2, r2, eddi_code))
+storage_write('logins', {})
+
+
+def zweifaktor(name, ip):
+    A.call('user_save', {'username': name, 'name': name.title() + ' Test', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
+    c = Client(ip); assert c.call('login', {'username': name, 'password': 'Bearbeiter-Zugang-1'})[0] == 200
+    sek = c.call('twofa_begin', {})[1]['secret']
+    stp = int(time.time() // 30)
+    assert c.call('twofa_enable', {'code': totp(sek, stp)})[0] == 200
+    return sek, stp
+
+
+def nutzer(name):
+    d = doc('nutzer')
+    return next(x for x in (d['users'] if isinstance(d, dict) else d) if x.get('username') == name)
+
+
+# Höchstens 3 Code-Versuche je Sperre – auch mit mehreren parallel geöffneten Anmeldevorgängen
+ysek, ystep = zweifaktor('yara', '198.51.100.42')
+versuche('yara', 3, 7)
+offen = []
+for i in range(4):
+    c = Client(f'198.18.8.{i + 1}')
+    st, r = c.call('login', {'username': 'yara', 'password': 'Bearbeiter-Zugang-1'})
+    offen.append((c, st, r.get('need2fa')))
+check('gesperrt: mehrere Anmeldevorgänge gleichzeitig geöffnet (je Code-Schritt)', all(st == 200 and n for _, st, n in offen), [(st, n) for _, st, n in offen])
+codes = [c.call('login_2fa', {'code': '000000'})[0] for c, _, _ in offen[:3]]
+st4, r4 = offen[3][0].call('login_2fa', {'code': totp(ysek, ystep + 1)})
+check('nach 3 falschen Codes (verteilt auf Vorgänge) hilft auch der richtige Code nicht mehr', codes == [401, 401, 401] and st4 == 401 and nutzer('yara').get('lockTries') == 3, (codes, st4, r4, nutzer('yara').get('lockTries')))
+Y = Client('198.18.8.9')
+st, r = Y.call('login', {'username': 'yara', 'password': 'Bearbeiter-Zugang-1'})
+st2, _ = Y.call('login_2fa', {'code': totp(ysek, ystep + 2)})
+check('… Passwort-Schritt antwortet unverändert (verrät nicht, dass die Codes verbraucht sind), Anmeldung bleibt gesperrt', st == 200 and r.get('need2fa') and st2 == 401, (st, r, st2))
+storage_write('logins', {})
+
+# Falsche Passwörter während der Sperre: kein Raten (gleiche Antwort) und kein Aussperren des Inhabers
+xsek, xstep = zweifaktor('xena', '198.51.100.43')
+versuche('xena', 3, 9)
+andere = versuche('xena', 8, 11)
+check('viele falsche Passwörter während der Sperre: immer dieselbe Antwort', all(st == 200 and r.get('need2fa') for st, r in andere) and len({json.dumps(r, sort_keys=True) for _, r in andere}) == 1, andere[:2])
+X = Client('198.18.12.1')
+st, r = X.call('login', {'username': 'xena', 'password': 'Bearbeiter-Zugang-1'})
+st2, r2 = X.call('login_2fa', {'code': totp(xsek, xstep + 1)})
+check('… der Inhaber kommt mit richtigem Passwort und Code trotzdem hinein', st == 200 and st2 == 200 and r2.get('user', {}).get('username') == 'xena', (st, r, st2, r2))
+check('… und die Sperre samt Zählern ist aufgehoben', not nutzer('xena').get('lockedUntil') and 'lockTries' not in nutzer('xena'), nutzer('xena'))
+storage_write('logins', {})
+
+# Neue Sperre beginnt ohne Reste der früheren (Code-Versuche neu gezählt)
+nu = doc('nutzer')
+for x in (nu['users'] if isinstance(nu, dict) else nu):
+    if x.get('username') == 'xena': x.update({'lockTries': 3, 'lockedUntil': int(time.time()) - 5, 'failCount': 0})
+storage_write('nutzer', nu)
+versuche('xena', 3, 14)
+X2 = Client('198.18.15.1')
+st, r = X2.call('login', {'username': 'xena', 'password': 'Bearbeiter-Zugang-1'})
+while int(time.time() // 30) + 1 <= xstep + 1: time.sleep(1)   # noch nicht benutzter Code im gültigen Fenster
+check('neue Sperre beginnt ohne alte Code-Versuche', nutzer('xena').get('lockedUntil', 0) > time.time() and 'lockTries' not in nutzer('xena'), nutzer('xena'))
+st2, r2 = X2.call('login_2fa', {'code': totp(xsek, int(time.time() // 30) + 1)})
+check('neue Sperre: alte Code-Versuche zählen nicht mit', st == 200 and st2 == 200 and r2.get('user', {}).get('username') == 'xena', (st, r, st2, r2))
+storage_write('logins', {})
+
+# Code-Schritte aus einer Sperre enden mit ihr – echte und wirkungslose gleich, ohne Folgen für die Zähler
+storage_write('sicherheit', {**sec, 'lockAfter': 3, 'lockMinutes': 1})
+vsek, vstep = zweifaktor('vera', '198.51.100.45')
+versuche('vera', 3, 18)
+V1, V2 = Client('198.18.19.1'), Client('198.18.19.2')
+a1 = V1.call('login', {'username': 'vera', 'password': 'Bearbeiter-Zugang-1'})
+a2 = V2.call('login', {'username': 'vera', 'password': 'Falsches-Passwort-1'})
+check('Sperre (1 Min.): echter und wirkungsloser Code-Schritt gleich', a1 == a2 and a1[0] == 200, (a1, a2))
+bis = nutzer('vera')['lockedUntil']
+while time.time() <= bis + 1: time.sleep(1)
+vor = {k: nutzer('vera').get(k) for k in ('failCount', 'lockedUntil', 'lockTries')}
+b1 = V1.call('login_2fa', {'code': '000000'})
+b2 = V2.call('login_2fa', {'code': '000000'})
+nach_v = {k: nutzer('vera').get(k) for k in ('failCount', 'lockedUntil', 'lockTries')}
+check('nach Ablauf der Sperre: beide Vorgänge gleich beendet („abgelaufen“), Zähler unverändert', b1 == b2 and b1[0] == 401 and 'abgelaufen' in b1[1].get('error', '') and vor == nach_v, (b1, b2, vor, nach_v))
+storage_write('sicherheit', {**sec, 'lockAfter': 3, 'lockMinutes': 5})
+storage_write('logins', {})
+
+# Liste unbekannter Namen: laufende Sperren werden beim Kürzen nie entfernt
+jetzt = int(time.time())
+viele = {f'u:{i:064x}': {'n': 1, 'until': 0, 't': jetzt - 10} for i in range(5001)}
+aktiv_key = 'u:' + hashlib.sha256(b'gesperrt.unbekannt').hexdigest()
+viele[aktiv_key] = {'n': 0, 'until': jetzt + 300, 't': jetzt - 3600}   # älteste, aber gesperrt
+storage_write('anmeldenamen', viele)
+Client('198.18.16.1').call('login', {'username': 'noch.ein.name', 'password': 'Falsches-Passwort-1'})
+nach = doc('anmeldenamen')
+check('Kürzen der Namensliste behält laufende Sperren', len(nach) <= 4001 and aktiv_key in nach, len(nach))
+st, r = Client('198.18.16.2').call('login', {'username': 'gesperrt.unbekannt', 'password': 'Falsches-Passwort-1'})
+check('… der gesperrte unbekannte Name bleibt gesperrt (Code-Schritt)', st == 200 and r.get('need2fa'), (st, r))
+storage_write('anmeldenamen', {})
+storage_write('logins', {})
+
+# Fehlversuche verfallen nach 24 Stunden – bei echten und unbekannten Namen gleich
+nu = doc('nutzer')
+lst = nu['users'] if isinstance(nu, dict) and 'users' in nu else nu
+for x in lst:
+    if x.get('username') == 'eddi': x.update({'failCount': 2, 'failAt': int(time.time()) - 90000, 'lockedUntil': 0})
+storage_write('nutzer', nu)
+st, r = Client('198.18.13.1').call('login', {'username': 'eddi', 'password': 'Falsches-Passwort-1'})
+check('alte Fehlversuche (älter als 24 h) zählen nicht mehr: nur 1 Fehlversuch, keine Sperre', st == 401 and next(x for x in (doc('nutzer')['users'] if isinstance(doc('nutzer'), dict) else doc('nutzer')) if x.get('username') == 'eddi')['failCount'] == 1, (st, r))
 storage_write('logins', {})
 
 # ---------- Kundenangebote nur aus freigegebenen Netzen ----------
@@ -168,6 +295,31 @@ check('mit Kundenrecht (Administrator) vollständig', 'Kantine Freigabe' in al)
 ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()
 check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=31536000" env=HTTPS' in ht
       and 'Permissions-Policy' in ht)
+check('.htaccess: X-Powered-By (PHP-Version) wird entfernt', 'Header unset X-Powered-By' in ht)
+
+# ---------- Oberfläche: Hinweis im Code-Schritt bei gesperrtem Zugang ----------
+storage_write('sicherheit', {**sec, 'ipEnabled': False, 'lockAfter': 3, 'lockMinutes': 5})
+storage_write('logins', {})
+zweifaktor('wanda', '198.51.100.44')
+versuche('wanda', 3, 17)
+storage_write('logins', {})
+from playwright.sync_api import sync_playwright  # noqa: E402
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    for breite in (1440, 390):
+        ctx = br.new_context(viewport={'width': breite, 'height': 900})
+        pg = ctx.new_page(); fehler = []; pg.on('pageerror', lambda ex: fehler.append(str(ex)))
+        pg.goto(BASE + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+        pg.fill('#au-user', 'wanda'); pg.fill('#pw1', 'Falsches-Passwort-1'); pg.click('#auth-submit')
+        pg.wait_for_selector('#au-code-wrap:not([hidden])')
+        intro = pg.inner_text('#auth-intro')
+        breit = pg.evaluate('document.documentElement.scrollWidth > window.innerWidth')
+        pg.screenshot(path=os.path.join(REPO, 'tests', '.arbeit', f'sperre-code-{breite}.png'))
+        check(f'{breite} px: Code-Schritt erklärt die Sperre (Uhrzeit, App, Administrator), kein waagrechtes Scrollen, keine Skriptfehler',
+              'gesperrt' in intro and 'Uhr' in intro and 'Authenticator-App' in intro and 'Administrator' in intro and not breit and not fehler, (intro, breit, fehler))
+        ctx.close()
+    br.close()
+storage_write('logins', {})
 
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

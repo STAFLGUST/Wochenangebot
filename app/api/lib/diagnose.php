@@ -12,10 +12,10 @@ function sec_log_entries(int $days): array
 {
     $since = time() - $days * 86400;
     $out = [];
-    for ($t = $since; ; $t = strtotime('first day of next month', $t)) {
-        $m = gmdate('Y-m', $t);
+    for ($i = 0; $i <= 24; $i++) {   // Monatsdateien (UTC) vom Startmonat bis heute; höchstens 2 Jahre
+        $m = utc_monat($i, $since);
         foreach (store_read('protokoll/' . $m) ?? [] as $e) if (strtotime((string)$e['t']) >= $since) $out[] = $e;
-        if ($m === gmdate('Y-m')) break;
+        if ($m >= utc_monat()) break;
     }
     return $out;
 }
