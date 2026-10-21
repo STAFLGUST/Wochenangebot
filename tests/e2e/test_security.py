@@ -145,7 +145,11 @@ with sync_playwright() as p:
     a.click('#vt-users'); a.wait_for_selector('.utab')
     check('2FA badge in user list', a.locator('.utab .tf-badge').count() == 2)
     a.locator('.utab tbody tr:has-text("Vic")').click(); a.wait_for_selector('#dlg-user[open]')
-    a.check('#user-body [name=reset2fa]'); a.click('#user-body [type=submit]'); a.wait_for_timeout(600)
+    a.check('#user-body [name=reset2fa]'); a.click('#user-body [type=submit]')
+    try:   # auf die aktualisierte Liste warten statt fester Wartezeit (unter Last dauert das Speichern länger)
+        a.wait_for_function("() => document.querySelectorAll('.utab .tf-badge').length === 1", timeout=8000)
+    except Exception:
+        pass
     check('2FA reset by admin', a.locator('.utab .tf-badge').count() == 1)
     # --- Protokoll
     a.click('#vt-log'); a.wait_for_selector('.ltab'); t = a.inner_text('#log-list')
