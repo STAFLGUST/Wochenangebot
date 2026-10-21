@@ -43,6 +43,7 @@ const BESTAETIGUNG = [
     'fw_save'               => ['Immer mit Bestätigung', 'Firewall-Einstellungen und Vorlagen anwenden', true],
     'fw_sperren'            => ['Immer mit Bestätigung', 'Adresse sperren oder freigeben (Schutz)', true],
     'mail_konto_save'       => ['Immer mit Bestätigung', 'Postfach für den E-Mail-Versand (Zugangsdaten) ändern', true],
+    'modul_wartung_save'    => ['Immer mit Bestätigung', 'Wartung einzelner Bereiche (z. B. Eingabebereich) starten, planen oder beenden', true],
 ];
 const BESTAETIGUNG_MINUTEN = [5, 15, 30, 60];
 function bestaetigung_noetig(string $key): bool

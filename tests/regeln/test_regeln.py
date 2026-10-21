@@ -278,11 +278,34 @@ ALT_WARTUNG = {
     'kunde_merkliste_save', 'kunde_passwort', 'kunde_token_check', 'kunde_token_set', 'offer',
 }
 
+ALT_ALLE = {  # alle 122 Aktionen vor dem Register; neue Aktionen sind von diesem Vergleich ausgenommen
+    'abmelden1', 'app_info', 'auswertung', 'benachrichtigung_save', 'benachrichtigung_test',
+    'bestell_settings_save', 'bestellung', 'bestellung_mail_retry', 'bestellung_save', 'bestellungen',
+    'change_password', 'discard_draft', 'draft', 'draft_ping', 'einkauf', 'einkauf_melden', 'einzel_artikel',
+    'einzel_detail', 'einzel_liste', 'einzel_loeschen', 'einzel_pdf', 'einzel_save', 'einzel_senden',
+    'einzel_status', 'fracht_save', 'fw_export', 'fw_feed_update', 'fw_freigeben', 'fw_import', 'fw_save',
+    'fw_sperren', 'fw_status', 'fw_verkehr', 'fw_vorlage', 'geo_clear_stats', 'geo_lookup', 'geo_update',
+    'history_data', 'history_delete', 'history_import', 'history_list', 'history_prev', 'ip_unblock',
+    'kunde_abmelden', 'kunde_abmelden_info', 'kunde_bestellung', 'kunde_bestellung_detail',
+    'kunde_bestellungen', 'kunde_delete', 'kunde_login', 'kunde_logout', 'kunde_mail', 'kunde_merkliste',
+    'kunde_merkliste_save', 'kunde_passwort', 'kunde_save', 'kunde_status', 'kunde_token_check',
+    'kunde_token_set', 'kunden', 'kunden_import', 'kunden_mail_vorschau', 'kunden_restposten',
+    'kunden_rundmail', 'kundengruppen', 'kundengruppen_save', 'log', 'login', 'login_2fa', 'logout',
+    'mail_info', 'mail_konto_save', 'mail_save', 'mail_status', 'mail_test', 'master', 'master_save', 'offer',
+    'offers', 'offers_save', 'ort_update', 'passkey_begin', 'passkey_delete', 'passkey_list', 'passkey_login',
+    'passkey_login_begin', 'passkey_register', 'passkey_rename', 'publish', 'reauth', 'rechte', 'rechte_save',
+    'restposten_info', 'save_draft', 'security_diag', 'security_export', 'security_integrity', 'security_save',
+    'security_status', 'session_end', 'setup', 'status', 'stock', 'stock_import', 'stock_pdf', 'testpostfach',
+    'twofa_begin', 'twofa_disable', 'twofa_enable', 'user_delete', 'user_mail', 'user_save', 'user_unlock',
+    'users', 'version', 'versions', 'vertreter', 'vertreter_save', 'vkgruppen', 'vkgruppen_save', 'waf_probe',
+    'wartung_save',
+}
 
 class EchtesRegelwerk(unittest.TestCase):
     def test_aktionen_wie_vor_dem_register(self):
         """Schreibschutz, öffentlicher Bereich und Wartung bleiben für alle bisherigen Aktionen unverändert."""
-        tab = regeln.aktionen_tabelle(regeln.laden(WURZEL))
+        tab = {a: x for a, x in regeln.aktionen_tabelle(regeln.laden(WURZEL)).items() if a in ALT_ALLE}
+        self.assertEqual(set(tab), ALT_ALLE, "eine bisherige Aktion fehlt im Register")
         self.assertEqual({a for a, x in tab.items() if x["schreibend"] is True}, ALT_SCHREIBEND)
         self.assertEqual({a for a, x in tab.items() if x["schreibend"] == "post"}, {"security_integrity"})
         self.assertEqual({a for a, x in tab.items() if x["oeffentlich"]}, ALT_OEFFENTLICH)
@@ -568,6 +591,16 @@ class Verstoesse(unittest.TestCase):
         self.p.erzeugen()
         self.assertFehler("kunden_wartung nur für öffentliche Kundenaktionen")
 
+    def test_wartung_frei_nicht_fuer_oeffentliche(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "kunden_wartung = true", "kunden_wartung = true\nwartung_frei = true")
+        self.p.erzeugen()
+        self.assertFehler("wartung_frei nur für Mitarbeiter-Aktionen")
+
+    def test_wartung_frei_nicht_fuer_beliebige_schreibaktionen(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", "schreibend = true\nwartung_frei = true")
+        self.p.erzeugen()
+        self.assertFehler("schreibende Aktion als wartung_frei")
+
     def test_falscher_wert_schreibend(self):
         self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", 'schreibend = "ja"')
         self.p.erzeugen()
@@ -590,7 +623,7 @@ class Verstoesse(unittest.TestCase):
 
     def test_erzeugte_liste_ist_php(self):
         text = (self.p.wurzel / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8")
-        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true],", text)
+        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false],", text)
         self.assertIn("'save_draft' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true,", text)
 
     def test_folgen_im_kleinen(self):

@@ -89,6 +89,7 @@ SUITES['app_web'] = SUITES['bestellung']   # App (mobile/) als Web-Build; brauch
 # Gruppen, die einen vorherigen Build brauchen: im vollen Lauf nur, wenn der Build vorliegt (sonst Hinweis)
 OPTIONAL = {'app_web': os.path.join(REPO, 'mobile', 'dist-web', 'index.html')}
 SUITES['passkeys'] = (8790, 'data-seed', True)
+SUITES['modul_wartung'] = (8790, 'data-seed', True)   # Wartung je Oberfläche (GR-107)
 SUITES['module_status'] = (8790, 'data-seed', True)   # Modulzustand zur Laufzeit (GR-102)
 SUITES['aktionsregister'] = (8790, 'data-seed', True)   # Register wirkt für jede Aktion (Schreibschutz, 404)
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)

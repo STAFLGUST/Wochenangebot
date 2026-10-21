@@ -124,7 +124,11 @@ die Beispiele aus dem Auftrag als Vertragstests.
 `module_status`; Vertragstest: PHP und Prüfwerkzeug entscheiden alle Kombinationen gleich. Heute ist nur der bisherige
 Wartungsmodus als Betrieb von `angebot.kunden` angebunden.
 
-Umsetzung (Phase 5, offen):
+**Umgesetzt (Roadmap PR 4):** Wartung je Oberfläche für die Mitarbeiter-Eingabe (Dokument `module`, Grund, Hinweis,
+geplanter Beginn, Verlauf, Protokoll, Passwortbestätigung), Durchsetzung im API-Einstieg, Sperrbildschirm,
+Notfallwerkzeug `deploy/wartung-aus.sh`. Offen: Freigaben und Tester zur Laufzeit, weitere Oberflächen.
+
+Umsetzung (Phase 5):
 - Laufzeitzustand im Dokument `module` (Freigabe, Wartung mit Beginn/Ende, Grund, Hinweis, Tester); Startwerte aus dem
   Register. Die Tabelle wird als erzeugte PHP-Datei ausgeliefert (Muster wie `integritaet-liste.php`), nicht nachprogrammiert.
 - Jede Aktion ist genau einer Oberfläche zugeordnet; der Einstieg prüft Zustand → Anmeldung → Recht → CSRF, bevor die

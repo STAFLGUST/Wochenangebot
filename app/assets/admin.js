@@ -121,6 +121,10 @@
       showAuth('expired');
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
+    if (res.status === 503 && data?.wartung && data.bereich) {
+      showEingabeWartung(data);
+      throw Object.assign(new Error(data.error || 'Wartungsarbeiten.'), { status: 503, wartung: true });
+    }
     if (res.status === 403 && data?.code === 'confirmation_required' && !opts.confirmationRetry) {
       await confirmAdminAction();
       return api(action, { ...opts, confirmationRetry: true });
@@ -587,16 +591,41 @@
     for (const it of m.items) if (C.normalizeItem(it, gb.get(it.groupId))) n++;
     return n;
   }
+  /* Wartung des Eingabebereichs: Mitarbeiter ohne Administratorrechte sehen nur den Wartungshinweis (der Server weist
+     ihre Aktionen mit 503 ab, lib/module.php); Administratoren arbeiten weiter und sehen einen Hinweis. */
+  let wartungEingabe = null;
+  function showEingabeWartung(w) {
+    $('#ew-text').textContent = w.error || w.message || 'Der Eingabebereich wird gerade gewartet. Bitte versuchen Sie es später erneut.';
+    const bis = w.until ? new Date(w.until).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    $('#ew-bis').hidden = !bis; $('#ew-bis').textContent = bis ? `Voraussichtlich wieder verfügbar ab ${bis} Uhr.` : '';
+    $('#screen-editor').hidden = true; $('#screen-auth').hidden = true; $('#screen-wartung').hidden = false;
+  }
+  document.addEventListener('click', async (e) => {
+    if (e.target.closest('#ew-retry')) location.reload();
+    if (e.target.closest('#ew-logout')) { try { await api('logout', { body: {} }); } catch { /* ignore */ } location.reload(); }
+  });
+
   /* Wartungsmodus: Hinweis für alle Mitarbeiter oben im Eingabebereich */
   let wartungSt = null;
   const wartungBis = (w) => (w && w.until ? ` · voraussichtlich bis ${new Date(w.until).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr` : '');
   function renderWartungBanner() {
     const b = $('#adm-wartung');
     if (!b) return;
-    b.hidden = !wartungSt;
-    if (wartungSt) b.innerHTML = `${icon('info', 'sm')}<span><strong>Wartungsmodus aktiv</strong> – Kunden sehen auf der Angebotsseite nur einen Wartungshinweis${esc(wartungBis(wartungSt))}.</span>${can('admin') ? '<button type="button" class="btn sm" data-wartung="goto">Verwalten</button>' : ''}`;
+    const ew = wartungEingabe && !wartungEingabe.geplant;
+    b.hidden = !wartungSt && !ew;
+    const teile = [];
+    if (ew) teile.push(`<strong>Eingabebereich in Wartung</strong> – nur Administratoren können gerade arbeiten${esc(wartungBis(wartungEingabe))}.`);
+    if (wartungSt) teile.push(`<strong>Wartungsmodus aktiv</strong> – Kunden sehen auf der Angebotsseite nur einen Wartungshinweis${esc(wartungBis(wartungSt))}.`);
+    if (!b.hidden) b.innerHTML = `${icon('info', 'sm')}<span>${teile.join('<br>')}</span>${can('admin') ? '<button type="button" class="btn sm" data-wartung="goto">Verwalten</button>' : ''}`;
   }
-  async function refreshWartung() { try { wartungSt = (await api('status')).wartung || null; } catch { /* Hinweis später */ } renderWartungBanner(); }
+  async function refreshWartung() {
+    try {
+      const st = await api('status');
+      wartungSt = st.wartung || null; wartungEingabe = st.wartungEingabe || null;
+      if (st.eingabeGesperrt) showEingabeWartung({ error: (st.wartungEingabe && st.wartungEingabe.message) || '', until: st.wartungEingabe && st.wartungEingabe.until });
+    } catch { /* Hinweis später */ }
+    renderWartungBanner();
+  }
   document.addEventListener('click', (e) => { if (e.target.closest('[data-wartung="goto"]')) setView('sec'); });
 
   async function openEditor() {
@@ -3774,6 +3803,7 @@
     loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
     get me() { return me; }, get offers() { return offers; }, get stdPublic() { return stdPublic; },
     get wartungSt() { return wartungSt; }, set wartungSt(v) { wartungSt = v; },
+    get wartungEingabe() { return wartungEingabe; }, set wartungEingabe(v) { wartungEingabe = v; },
     views: {},
   };
 

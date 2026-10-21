@@ -9,7 +9,7 @@
 <link rel="icon" href="../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
 <script src="../assets/theme.js?v=4e171a7cc8"></script>
 <link rel="stylesheet" href="../assets/app.css?v=869828ad16">
-<link rel="stylesheet" href="../assets/admin.css?v=5a2fb14bee">
+<link rel="stylesheet" href="../assets/admin.css?v=dbf4d0ff7d">
 </head>
 <body class="adm">
 
@@ -29,6 +29,18 @@
     <button class="btn wide" type="button" id="auth-passkey" hidden><svg class="i" aria-hidden="true"><use href="#i-lock"/></svg><span>Mit Passkey anmelden</span></button>
     <a class="auth-back" href="../">Zur öffentlichen Angebotsseite</a>
   </form>
+</main>
+
+<!-- Wartung des Eingabebereichs (für Mitarbeiter ohne Administratorrechte) -->
+<main class="auth" id="screen-wartung" hidden>
+  <section class="auth-card ew-card" aria-labelledby="ew-h">
+    <div class="brand"><img class="brand-logo" src="../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"><div><div class="brand-company" data-company></div><h1 id="ew-h">Wartungsarbeiten</h1></div></div>
+    <p class="auth-intro" id="ew-text"></p>
+    <p class="hint" id="ew-bis" hidden></p>
+    <p class="hint">Die Angebotsseite für Kunden ist davon nicht betroffen.</p>
+    <button class="btn primary wide" type="button" id="ew-retry">Erneut versuchen</button>
+    <button class="btn wide" type="button" id="ew-logout">Abmelden</button>
+  </section>
 </main>
 
 <!-- Editor -->
@@ -272,8 +284,8 @@
 <script src="../assets/offer-core.js?v=06678349ba"></script>
 <script src="../assets/vendor/qrcode.js?v=18ae399f81"></script>
 <script src="../assets/stock-core.js?v=71db446d5b"></script>
-<script src="../assets/admin.js?v=13c783035a"></script>
-<script src="../assets/admin-verwaltung.js?v=d3f4047913"></script>
+<script src="../assets/admin.js?v=cda6215260"></script>
+<script src="../assets/admin-verwaltung.js?v=7da357c8f3"></script>
 <script src="../assets/admin-einzel.js?v=5cf3247306"></script>
 <script src="../assets/admin-auswertung.js?v=f28d8770e4"></script>
 <script src="../assets/admin-schutz.js?v=1897328904"></script>

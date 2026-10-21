@@ -212,16 +212,16 @@ seit = "2026-10-21"
 [[regel]]
 id = "GR-107"
 titel = "Wartung serverseitig je Oberfläche"
-beschreibung = "Wartung und Deaktivierung wirken auf API, Schreibaktionen, Hintergrundläufe, Importe, E-Mail-Versand und Veröffentlichungen der Oberfläche – nicht nur auf die Anzeige. Antwort 503 mit no-store; Administration bleibt erreichbar."
+beschreibung = "Wartung und Deaktivierung wirken serverseitig auf jede Aktion der Oberfläche (API, Schreibaktionen, Importe, E-Mail-Versand, Veröffentlichungen, Hintergrundabgleich) – nicht nur auf die Anzeige; Prüfung im API-Einstieg (modul_durchsetzen). Antwort 503 mit no-store und Retry-After. Administratoren arbeiten weiter; Anmeldung, Abmelden und Status bleiben erreichbar (wartung_frei); Notfallwerkzeug deploy/wartung-aus.sh. Künftige Hintergrunddienste außerhalb von Aktionen müssen modul_zustand selbst prüfen."
 verantwortlich = "plattform"
 module = ["angebot", "bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "plattform"]
-daten = ["module"]
-tests = []
+daten = ["module", "wartung"]
+tests = ["e2e:modul_wartung", "e2e:wartung"]
 quelle = "AGENTS.md"
-status = "geplant"
-phase = 5
-version = 1
+status = "verbindlich"
+version = 2
 seit = "2026-10-21"
+geaendert = "2026-10-21: umgesetzt für die Mitarbeiter-Eingabe (Roadmap PR 4)"
 
 # ───────────── Domain- und Anmeldestruktur (ADR-003, angenommen 21.10.2026) ─────────────
 
