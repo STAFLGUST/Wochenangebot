@@ -2,7 +2,7 @@
 /* Prüfliste der ausgelieferten Dateien (Pfad unter app/ => SHA-256) für die Dateiprüfung.
    Automatisch erzeugt mit: python3 werkzeuge/integritaet.py --setzen – nicht von Hand ändern. */
 return [
-    '.htaccess' => '19ebb28e0d4f5112add0fedae2dfe5788a21292016f89fea5a3cfca1ca27bcb5',
+    '.htaccess' => '34a4a401cdb2a59459b2974dd3caf03584008b349f545452498dc7a4b6709714',
     'admin/.htaccess' => '0910acbea2b93e39f455edf4ed99bf0fcf7e3804eea12e25435cb56cf1e3d41a',
     'admin/index.html' => '2e4f2384c7b68225a84cb37b82433a1a8b108ac0f4fc41d7cc8dbb4d517d71ea',
     'api/aktionen/angebote.php' => '66dd09e0a42b0298f4f21449493aa967ea0229469889157a203dceb7382a41bc',
