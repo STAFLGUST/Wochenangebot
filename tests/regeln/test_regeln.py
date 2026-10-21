@@ -622,6 +622,20 @@ class Verstoesse(unittest.TestCase):
         fremd = sorted(n for n, a in regeln.aktionen_tabelle(rw).items() if a["fremde_herkunft"])
         self.assertEqual(fremd, ["abmelden1"])
 
+    def test_lokale_anmeldung_kein_wahrheitswert(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", 'schreibend = true\nlokale_anmeldung = "ja"')
+        self.p.erzeugen()
+        self.assertFehler("lokale_anmeldung muss true oder false sein")
+
+    def test_echtes_register_lokale_anmeldung(self):
+        # Eigene Anmeldeverfahren, die auf Keycloak-Hosts gesperrt sind (GR-110) – Änderung nur bewusst
+        rw = regeln.laden(WURZEL)
+        lokal = {n for n, a in regeln.aktionen_tabelle(rw).items() if a["lokale_anmeldung"]}
+        self.assertEqual(lokal, {"reauth", "setup", "login", "login_2fa", "twofa_begin", "twofa_enable", "twofa_disable",
+                                 "change_password", "passkey_begin", "passkey_register", "passkey_rename", "passkey_delete",
+                                 "passkey_login_begin", "passkey_login", "kunde_login", "kunde_passwort", "kunde_token_set",
+                                 "kunde_token_check"})
+
     def test_falscher_wert_schreibend(self):
         self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", 'schreibend = "ja"')
         self.p.erzeugen()
@@ -644,7 +658,7 @@ class Verstoesse(unittest.TestCase):
 
     def test_erzeugte_liste_ist_php(self):
         text = (self.p.wurzel / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8")
-        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false, 'fremde_herkunft' => false],", text)
+        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false, 'fremde_herkunft' => false, 'lokale_anmeldung' => false],", text)
         self.assertIn("'save_draft' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true,", text)
 
     def test_folgen_im_kleinen(self):

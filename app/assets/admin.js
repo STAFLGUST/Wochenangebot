@@ -2060,9 +2060,12 @@
     }
     if (a === 'logout') {
       if (unsaved()) await saveNow();
-      try { await api('logout', { body: {} }); } catch { /* ignore */ }
-      // Seite neu laden: zwischengespeicherte Daten (Bestand, Kunden, Stammdaten …) gehören nicht dem nächsten Nutzer
-      location.replace(location.pathname);
+      let r = null;
+      try { r = await api('logout', { body: {} }); } catch { /* ignore */ }
+      // Zentrale Anmeldung (Keycloak-Host): auch dort abmelden; sonst Seite neu laden – zwischengespeicherte Daten
+      // (Bestand, Kunden, Stammdaten …) gehören nicht dem nächsten Nutzer
+      if (r && typeof r.abmelden === 'string' && r.abmelden.startsWith('/oidc/')) location.replace(r.abmelden);
+      else location.replace(location.pathname);
     }
   });
 

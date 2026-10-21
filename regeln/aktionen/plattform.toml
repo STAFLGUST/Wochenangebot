@@ -13,6 +13,7 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.change_password]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
@@ -69,11 +70,13 @@ schreibend = true
 oberflaeche = "angebot.eingabe"
 
 [aktion.login]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
 
 [aktion.login_2fa]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
@@ -99,11 +102,13 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.passkey_begin]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
 
 [aktion.passkey_delete]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
@@ -111,25 +116,30 @@ schreibend = true
 oberflaeche = "angebot.eingabe"
 
 [aktion.passkey_login]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
 
 [aktion.passkey_login_begin]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
 
 [aktion.passkey_register]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
 
 [aktion.passkey_rename]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.reauth]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
@@ -164,6 +174,7 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.setup]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
@@ -176,15 +187,18 @@ wartung_frei = true
 oberflaeche = "angebot.eingabe"
 
 [aktion.twofa_begin]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true
 
 [aktion.twofa_disable]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.twofa_enable]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"
 schreibend = true
 wartung_frei = true

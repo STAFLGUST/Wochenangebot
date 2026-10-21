@@ -115,6 +115,7 @@ oeffentlich = true
 kunden_wartung = true
 
 [aktion.kunde_login]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.kunden"
 schreibend = true
 oeffentlich = true
@@ -141,6 +142,7 @@ oeffentlich = true
 kunden_wartung = true
 
 [aktion.kunde_passwort]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.kunden"
 schreibend = true
 oeffentlich = true
@@ -151,12 +153,14 @@ oberflaeche = "angebot.kunden"
 oeffentlich = true
 
 [aktion.kunde_token_check]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.kunden"
 schreibend = true
 oeffentlich = true
 kunden_wartung = true
 
 [aktion.kunde_token_set]
+lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.kunden"
 schreibend = true
 oeffentlich = true

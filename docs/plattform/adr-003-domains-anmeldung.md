@@ -107,8 +107,11 @@ bewegliche Teile) und Ory Hydra (Anmeldung und Passkey-Prüfung blieben Eigenbau
   hohe innerhalb von 7 Tagen über den normalen Release-Prozess einspielen; vor jedem Update CI-Tests gegen die neue Version.
 - Eigene Datenbank und Datenbankrolle für Keycloak, getrennt von den Geschäftsdaten.
 
-Auf PHP-Seite braucht es einen geprüften OIDC-Client (erste Server-Bibliothek von außen, fest versioniert, im
-Trivy-Scan); Auswahl im Umsetzungs-PR.
+**OIDC-Client (entschieden 2026-10-21):** das Apache-Modul **mod_auth_openidc** (OpenID-zertifiziert, von Debian/Ubuntu
+und Red Hat gepflegt) statt einer PHP-Bibliothek – kein Eigenbau sicherheitskritischer Prüfungen in der Anwendung. Es
+übernimmt state, nonce, PKCE, Code-Tausch, Token-Prüfung, die hostgebundene Sitzung und den Back-Channel-Logout; die
+Anwendung liest nur die geprüfte Identität (`lib/oidc.php`). Für den Betrieb braucht es ein eigenes, in der CI gebautes
+Image statt `php:8.3-apache` (ohnehin nötig für PostgreSQL). Umsetzung zunächst nur in der CI: `tests/oidc/` (Roadmap 7b).
 
 ## 3. Testumgebung
 
