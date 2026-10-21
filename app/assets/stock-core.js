@@ -225,6 +225,7 @@
     kolli: ['kolli', 'karton', 'kartons'],
     kg: ['netto', 'nettokg', 'kgnetto', 'menge', 'kg'],
     ek: ['ekpreis', 'ek', 'preis', 'einkaufspreis'],
+    marke: ['marke'],
   };
   const pad = (n) => String(n).padStart(2, '0');
   function toDate(v, allowSerial) {
@@ -301,12 +302,19 @@
     const cols = { status: stCol };
     const cand = [];
     for (const [f, h] of Object.entries(head)) {
-      if (f === 'status' || !ok[f]) continue;
+      if (f === 'status' || f === 'marke' || !ok[f]) continue;
       for (let c = Math.max(0, h - 2); c <= h + 2; c++) if (c !== stCol && prof[c] && ok[f](prof[c])) cand.push([Math.abs(c - h), f, c]);
     }
     cand.sort((a, b) => a[0] - b[0]);
     const taken = new Set([stCol]);
     for (const [, f, c] of cand) if (!(f in cols) && !taken.has(c)) { cols[f] = c; taken.add(c); }
+    // Marke (optional, z. B. Lieferant/Herkunft): erst nach den Pflichtspalten, nur eine noch freie Textspalte neben der
+    // Überschrift (in der WinAB-Liste steht „Marke“ eine Spalte rechts von den Werten) – nie die Bezeichnung
+    if ('marke' in head) {
+      const textSpalte = (p) => p && p.n && p.str / p.n >= 0.8 && p.code / p.n < 0.5 && p.date / p.n < 0.5;
+      const m = [0, -1, 1, -2, 2].map((d) => head.marke + d).find((c) => c >= 0 && !taken.has(c) && textSpalte(prof[c]));
+      if (m != null) { cols.marke = m; taken.add(m); }
+    }
     const missing = ['code', 'name', 'kg'].filter((f) => !(f in cols));
     if (missing.length) {
       const L = { code: 'Art.-Nr.', name: 'Bezeichnung', kg: 'netto' };
@@ -329,6 +337,7 @@
     for (const s of sheets) { res = parseSheet(s.grid); if (res) break; }
     if (!res) throw new Error('Keine Bestandszeilen mit Status „eingelagert“ gefunden – ist das die Bestandsliste aus WinAB?');
     const { cols, rows } = res;
+    const marke = (row) => (cols.marke != null && row[cols.marke] != null ? String(row[cols.marke]).replace(/\s+/g, ' ').trim().slice(0, 40) : '');
     const stats = { rows: rows.length, stored: 0, expected: 0, other: {}, skipped: 0, noMhd: 0 };
     const by = new Map();
     const incoming = [];
@@ -343,6 +352,7 @@
         if (kg <= 0) { stats.skipped++; continue; }
         incoming.push({ code, name: String(row[cols.name] ?? '').trim(),
           lot: cols.lot != null && row[cols.lot] != null ? String(row[cols.lot]).trim().slice(0, 20) : '',
+          marke: marke(row),
           arrival: cols.arrival != null ? toDate(row[cols.arrival], true) : null,
           kg: Math.round(kg * 1000) / 1000 });
         stats.expected++;
@@ -357,6 +367,7 @@
       if (!a.name && row[cols.name]) a.name = String(row[cols.name]).trim();
       a.lots.push({
         lot: cols.lot != null && row[cols.lot] != null ? String(row[cols.lot]).trim().slice(0, 20) : '',
+        marke: marke(row),
         arrival: cols.arrival != null ? toDate(row[cols.arrival], true) : null,
         mhd,
         kolli: cols.kolli != null ? toNum(row[cols.kolli]) : null,

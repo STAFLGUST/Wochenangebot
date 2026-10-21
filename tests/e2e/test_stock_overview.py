@@ -21,7 +21,8 @@ check('import separates stock and incoming', A.call('stock_import', payload)[0] 
 before = storage_docs('historie')
 r = A.call('stock')[1]
 check('stock read never writes history', storage_docs('historie') == before)
-check('incoming persisted individually; not counted as stock', r['stock']['incoming'] == payload['incoming'] and r['stock']['articles'][0]['kg'] == 12.5 and len(r['stock']['articles']) == 4)
+ohne_marke = lambda zs: [{k: v for k, v in z.items() if k != 'marke'} for z in zs]   # noqa: E731 – Marke ist ein optionales Zusatzfeld
+check('incoming persisted individually; not counted as stock', ohne_marke(r['stock']['incoming']) == payload['incoming'] and all(z['marke'] == '' for z in r['stock']['incoming']) and r['stock']['articles'][0]['kg'] == 12.5 and len(r['stock']['articles']) == 4)
 for which in ('current','previous'):
     week = r['prices'][which]
     items = [{'code':fixture['articles'][i]['code'], 'name':fixture['articles'][i]['name'], 'price':{'status':'value','value':v}} for i,v in enumerate(fixture[which])]
@@ -32,7 +33,7 @@ for bad in (-1, 0, '12', 10000001):
     check('invalid quantity rejected: ' + str(bad), A.call('stock_import', p)[0] == 422)
 p = copy.deepcopy(payload); p['incoming'][0]['arrival'] = '2026-02-30'
 check('invalid ETA rejected', A.call('stock_import', p)[0] == 422)
-check('failed import keeps previous state', A.call('stock')[1]['stock']['incoming'] == payload['incoming'])
+check('failed import keeps previous state', ohne_marke(A.call('stock')[1]['stock']['incoming']) == payload['incoming'])
 check('anonymous cannot see stock or ETA', Client('198.51.100.4').call('stock')[0] == 401)
 public = json.dumps(Client('198.51.100.4').call('offer')[1])
 check('public offer contains no incoming/ETA', 'incoming' not in public and 'TEST-A' not in public and 'arrival' not in public)

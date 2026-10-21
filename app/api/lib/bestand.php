@@ -64,7 +64,7 @@ function clean_incoming($rows): array
         $arrival = clean_date($row['arrival'] ?? null);
         if (isset($row['arrival']) && $arrival === null) throw new InvalidArgumentException('Ungültiges Ankunftsdatum im Zugang.');
         $out[] = ['code' => $code, 'name' => s($row['name'] ?? '', 200) ?: '(ohne Bezeichnung)',
-                  'lot' => s($row['lot'] ?? '', 20) ?? '', 'arrival' => $arrival, 'kg' => $kg];
+                  'lot' => s($row['lot'] ?? '', 20) ?? '', 'marke' => s($row['marke'] ?? '', 40) ?? '', 'arrival' => $arrival, 'kg' => $kg];
     }
     return $out;
 }
@@ -87,7 +87,7 @@ function clean_stock($b, bool $allowEmpty = false): array
             if (!is_array($l)) continue;
             $kolli = $l['kolli'] ?? null;
             $ek = $l['ek'] ?? null;   // Einkaufspreis € je kg – nur für Berechtigte ausgeliefert (stock_ohne_ek)
-            $lots[] = ['lot' => s($l['lot'] ?? '', 20) ?? '', 'arrival' => clean_date($l['arrival'] ?? null), 'mhd' => clean_date($l['mhd'] ?? null),
+            $lots[] = ['lot' => s($l['lot'] ?? '', 20) ?? '', 'marke' => s($l['marke'] ?? '', 40) ?? '', 'arrival' => clean_date($l['arrival'] ?? null), 'mhd' => clean_date($l['mhd'] ?? null),
                        'kolli' => (is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000 ? round((float)$kolli, 2) : null, 'kg' => clean_kg($l['kg'] ?? null, $code),
                        'ek' => (is_int($ek) || is_float($ek)) && $ek >= 0 && $ek < 100000 ? round((float)$ek, 3) : null];
         }
