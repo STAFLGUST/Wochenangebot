@@ -48,7 +48,7 @@ return [
     'api/lib/module-liste.php' => '77c3441cdcdb445bb802be54c1da505319c08d35ce64f47985eaf43ace6b7125',
     'api/lib/module.php' => 'ef9ebb7dc275d7331253ec505b0fcaa49e0588935177d22841eb707f6caea709',
     'api/lib/nutzer.php' => '8189c770e7ae1406b40eced6ddf29e6b39efe350dca224eba108124749bb49bd',
-    'api/lib/oidc.php' => 'd3b1c4dd60d4e26da75c29921a4da9cffc9068df0e43dab692bc6ba1b0625ff7',
+    'api/lib/oidc.php' => '153fc6cc943bf86b8b4e44804a76236a538cc2a5e343d88ce170dcd1145f81fc',
     'api/lib/passkey.php' => '3fb57bb9e252bed977e0de7daa82f0a9c511f6ccf63d3e80bdcf46bf86833860',
     'api/lib/pdf-breiten.php' => 'a5c39c48885abb3d0e0132bba3f39222f2c099bedf4d787dd6371a964fe47d21',
     'api/lib/pdf.php' => 'b6a36f492978e2816bf10e6fed9abf553afd7815ad03bfa332fe205f2d6d4a01',

@@ -15,7 +15,11 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    nutzer) und werden bei jeder Anfrage frisch gelesen – ein gesperrtes Konto ist sofort ausgesperrt. Verknüpfung: Feld
    oidcSub im Nutzerkonto (Datenformat nur erweitert, GR-006). Bei der ersten Anmeldung wird ein noch nicht verknüpftes
    Konto mit gleichem Benutzernamen verknüpft; danach zählt nur noch die unveränderliche Kennung (sub) – ein später in
-   Keycloak gleich benannter Nutzer erhält keinen Zugang zu einem bereits verknüpften Konto. */
+   Keycloak gleich benannter Nutzer erhält keinen Zugang zu einem bereits verknüpften Konto.
+
+   Grenzen dieser Stufe: Eine hier beendete Sitzung (Verwaltung → Sitzungen) entsteht beim nächsten Aufruf neu, solange die
+   Keycloak-Sitzung gilt – zentral beenden heißt in Keycloak abmelden bzw. das Konto sperren (wirkt sofort). Aktionen mit
+   Passwortbestätigung gelten nur kurz nach der Anmeldung bei Keycloak (auth_time); erneute Anmeldung folgt (7b-2). */
 
 function oidc_modus(): bool
 {
@@ -87,8 +91,21 @@ function oidc_nutzer(): ?array
         $_SESSION['authAt'] = $id['authTime'];
         // Bestätigung sensibler Aktionen = Zeitpunkt der letzten echten Anmeldung bei Keycloak, nicht der Sitzungsbeginn hier
         $_SESSION['adminConfirmedAt'] = $id['authTime'];
+    } else {
+        oidc_gesehen();
     }
     return $u;
+}
+/* Sitzungsregister aktuell halten (Anzeige „zuletzt aktiv“, Adresse) – wie bei der bisherigen Anmeldung */
+function oidc_gesehen(): void
+{
+    $sid = (string)($_SESSION['sid'] ?? '');
+    $reg = store_read('sitzungen') ?? [];
+    if ($sid === '' || bg_request() || !isset($reg[$sid]) || ((int)$reg[$sid]['seen'] >= time() - 60 && $reg[$sid]['ip'] === client_ip())) return;
+    with_lock('sitzungen', function () use ($sid) {
+        $l = store_read('sitzungen') ?? [];
+        if (isset($l[$sid])) { $l[$sid]['seen'] = time(); $l[$sid]['ip'] = client_ip(); store_write('sitzungen', sess_prune($l)); }
+    });
 }
 
 /* Abmelden auf einem Keycloak-Host: eigene Sitzung beenden; der Browser meldet sich danach über das Modul bei Keycloak ab
