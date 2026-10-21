@@ -2075,7 +2075,16 @@
     if (w) w.location = u; else location.href = u;
   });
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
-  for (const d of $$('dialog')) d.addEventListener('click', (e) => { if (e.target === d || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm' && !d.dataset.busy) d.close(); } });
+  /* Dialoge schließen per Klick daneben, Escape oder [data-close]. Dialoge mit data-fest (Formulare wie „Nutzer anlegen“)
+     schließen nur über ihre Knöpfe – ein Klick daneben oder Escape verwirft keine Eingaben. */
+  for (const d of $$('dialog')) {
+    d.addEventListener('click', (e) => {
+      const daneben = e.target === d;
+      if (daneben && d.dataset.fest !== undefined) return;
+      if (daneben || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm' && !d.dataset.busy) d.close(); }
+    });
+    d.addEventListener('cancel', (e) => { if (d.dataset.fest !== undefined) e.preventDefault(); });
+  }
 
   document.addEventListener('keydown', (e) => {
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);

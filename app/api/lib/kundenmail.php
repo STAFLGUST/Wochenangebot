@@ -348,7 +348,7 @@ function mail_record(array $entries, ?array $wk = null): void
         store_write('mailversand', array_slice($l, -3000));
     });
 }
-const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch', 'restposten' => 'Sonderposten', 'benachrichtigung' => 'Benachrichtigung', 'einkauf' => 'Einkaufsbedarf', 'einzelangebot' => 'Einzelangebot'];
+const MAIL_TYP = ['woche' => 'Wochenangebot', 'angebot' => 'Angebotslink', 'invite' => 'Einladung', 'reset' => 'Passwort-Link', 'test' => 'Testmail', 'hinweis' => 'Hinweis Abmeldung', 'bestellung' => 'Bestellwunsch', 'bestellkopie' => 'Kopie Bestellwunsch', 'restposten' => 'Sonderposten', 'benachrichtigung' => 'Benachrichtigung', 'einkauf' => 'Einkaufsbedarf', 'einzelangebot' => 'Einzelangebot', 'zugang' => 'Zugangsdaten Mitarbeiter'];
 function mail_job_for(array $c, string $typ, string $note = '', ?array $wk = null): array
 {
     if (empty($c['email'])) throw new InvalidArgumentException("Für „{$c['firma']}“ ist keine E-Mail-Adresse hinterlegt.");

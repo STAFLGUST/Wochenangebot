@@ -20,7 +20,7 @@ Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `te
 | --- | --- |
 | `index.php` | Einstieg: Konfiguration, Bibliotheken laden, Schreibschutz (POST/JSON), Länder-/IP-Sperre, Wartungsmodus, Aktionen einbinden |
 | `lib/kern.php` | `respond()`, `fail()`, `body()`, `now()`, Eingabeprüfung `s()`, `clean_price()` |
-| `lib/nutzer.php` | Mitarbeiter-Zugänge, Passwortregeln |
+| `lib/nutzer.php` | Mitarbeiter-Zugänge (optional `vorname`, `nachname`, `email`, `mailInfo`; `name` bleibt für Anzeige und ältere Clients), Benutzername aus Vor-/Nachname (`benutzername_vorschlag`), Prüfung `nutzer_person`, Passwortregeln, E-Mail mit Zugangsdaten (`mail_tpl_nutzer`, Aktion `user_mail` in `aktionen/verwaltung.php`) |
 | `lib/rechte.php` | Nutzerrechte: Katalog `PERMS`, Rechte je Rolle (Dokument `rechte`), Ausnahmen je Nutzer (`grant`/`deny`), `user_perms`, `require_perm`, `require_perm_confirmed` |
 | `lib/sitzung.php` | Mitarbeiter-Sitzung, Rollen (`require_auth` – setzt `Cache-Control: private, no-store`), Anmeldezeitpunkt `authAt` (Zwei-Faktor-Ersteinrichtung ohne Passwort nur bis 5 Minuten danach), Passwortbestätigung, CSRF; App-Betriebsart (`X-WA-Client: app`, Kennung in `X-WA-Sitzung`) |
 | `lib/sicherheit.php` | Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wartungsmodus; Katalog der Passwortbestätigungen `BESTAETIGUNG` (je Aktion abschaltbar oder fest, `bestaetigung_noetig`, Gültigkeit `bestaetigung_sekunden`). Jede Bestätigungsstelle ruft `require_admin_confirmation('<aktion>')` bzw. `require_perm_confirmed('<recht>', '<aktion>')` mit ihrem Katalogschlüssel auf (der Test `bestaetigung` prüft das) |
