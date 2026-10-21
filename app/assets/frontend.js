@@ -1830,6 +1830,7 @@ function renderWartung(w) {
   bind();
   render();
   updateFavCount();
+  document.documentElement.dataset.bereit = '1';   // Bedienelemente aktiv (Ansicht, Filter, Mengen) – Tests warten darauf
   if (DRUCKEN) {   // Parameter entfernen, damit ein Neuladen nicht erneut druckt
     const u = new URL(location.href); u.searchParams.delete('drucken'); history.replaceState(history.state, '', u);
     openPrint();
