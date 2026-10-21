@@ -15,7 +15,7 @@ Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─�
 | `realm-mitarbeiter.json` | Test-Realm: Brute-Force-Schutz, nur HTTPS, keine Selbstregistrierung, Pflicht zum zweiten Faktor, Sitzung 30 Min. Leerlauf / 10 Std.; Clients vertraulich, nur Code-Ablauf mit PKCE (S256), exakte Rücksprungadressen, kein CORS, Back-Channel-Logout. Testnutzer mit Testkennwörtern (keine echten Daten) |
 | `Caddyfile` | TLS wie in der Produktion; auf `login.` nur `/realms/mitarbeiter/` und `/resources/` (Verwaltung und Master-Realm nie öffentlich) |
 | `apache.conf` | je Host ein eigener Client und eine eigene Sitzung (`__Host-oidc_sitzung`), Schnittstelle ohne Anmeldung 401, Identität nur als Server-Umgebung (`OIDCPassClaimsAs environment`) |
-| `test_oidc.py` | 65 Prüfungen (Härtung, zweiter Faktor, Sitzung je Host, Single Sign-on, Rechte, gesperrte/unbekannte Konten, Abmelden für alle Anwendungen) |
+| `test_oidc.py` | 80 Prüfungen (Härtung, zweiter Faktor und Anmeldestärke, erneute Anmeldung, Sitzung je Host, Single Sign-on, Rechte, gesperrte/unbekannte Konten, Abmelden für alle Anwendungen) |
 
 Lokal (Ubuntu 24.04 mit `apache2 libapache2-mod-auth-openidc libapache2-mod-php8.3 postgresql`, Java 21):
 
@@ -30,6 +30,14 @@ Was die Anwendung dazu beiträgt, steht in `app/api/lib/oidc.php`: Konto zur Key
 erste Anmeldung über den gleichen Benutzernamen), Rechte und „aktiv“ weiterhin aus dem eigenen Nutzerkonto, eigene
 Anmeldeverfahren gesperrt (Registerfeld `lokale_anmeldung`), Abmelden über Keycloak.
 
-Noch offen (Roadmap 7b-2): erneute Anmeldung für sensible Aktionen (`max_age=0`) – bis dahin werden Aktionen mit
-Passwortbestätigung auf Keycloak-Hosts abgewiesen; serverseitige Prüfung der Anmeldestärke (`acr`/`amr`); Passkeys im Realm;
-eigenes Container-Image mit mod_auth_openidc für den späteren Betrieb.
+**Anmeldestärke:** Der Realm meldet über `acr`, wie angemeldet wurde (`pwd` = nur Passwort, `mfa` = mit zweitem Faktor;
+eigener Ablauf `mitarbeiter-browser` mit Stufen). Die Clients verlangen `mfa`, und unser Server prüft es zusätzlich
+(`WA_OIDC_ACR`, Standard `mfa`) – auch ein falsch eingestellter Client öffnet keinen Zugang ohne zweiten Faktor.
+
+**Sensible Aktionen** (sonst Passwortbestätigung): bestätigt ist, wer sich innerhalb der eingestellten Bestätigungsdauer
+bei Keycloak angemeldet hat. Danach antwortet der Server mit `reauth_required` und einer Adresse; der Eingabebereich
+leitet zur erneuten Anmeldung (`max_age=0`: Passwort und zweiter Faktor) und kehrt auf dieselbe Seite zurück. Ziele nur
+auf dem eigenen Host (`OIDCRedirectURLsAllowed`, keine offene Weiterleitung).
+
+Noch offen: Passkeys im Realm (zweiter Faktor oder ohne Passwort); eigenes Container-Image mit mod_auth_openidc für den
+späteren Betrieb.

@@ -12,6 +12,7 @@ import hmac
 import http.cookiejar
 import json
 import os
+import re
 import ssl
 import struct
 import sys
@@ -144,6 +145,8 @@ for cid in ('dashboard', 'angebot'):
           and c.get('serviceAccountsEnabled') is False and c.get('attributes', {}).get('pkce.code.challenge.method') == 'S256'
           and all('*' not in u for u in c.get('redirectUris', ['*'])) and c.get('webOrigins') == [], c.get('redirectUris'))
     check(f'Client {cid}: Back-Channel-Logout eingerichtet', c.get('attributes', {}).get('backchannel.logout.url', '').startswith(f'https://{cid}.stafl.test'))
+    check(f'Client {cid}: verlangt Anmeldestärke „mfa“ (zweiter Faktor)', c.get('attributes', {}).get('minimum.acr.value') == 'mfa', c.get('attributes', {}).get('minimum.acr.value'))
+check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 
 # ── Ohne Anmeldung ──
 code, kopf, _ = anfrage(D + '/dashboard/', kopf=SEITE)
@@ -161,6 +164,34 @@ check('abgemeldet-Seite und Stylesheets ohne Anmeldung erreichbar', anfrage(D + 
 check('Mitarbeiter-Eingabe (angebot) ohne Anmeldung → Keycloak', anfrage(A + '/admin/', kopf=SEITE)[0] in (302, 303))
 
 fehler = []
+
+
+def kc_token():
+    _, _, t = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+    return json.loads(t)['access_token']
+
+
+def client_attribute(cid, **attr):
+    """Attribute eines Clients in Keycloak ändern (Testvorbereitung über die lokale Verwaltungsschnittstelle)."""
+    t = kc_token(); kopf = {'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json'}
+    c = clients[cid]
+    _, _, text = anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{c['id']}", kopf=kopf)
+    c = json.loads(text); c['attributes'].update(attr)
+    return anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{c['id']}", 'PUT', json.dumps(c).encode(), kopf)[0]
+
+
+def bestaetigung_abgelaufen(ctx, host):
+    """Nachgestellt: die Bestätigung sensibler Aktionen ist abgelaufen (sonst 5 Minuten warten) – PHP-Sitzungsdatei."""
+    sid = kekse(ctx, host)['__Host-WA_ADMIN']['value']
+    pfad = os.path.join(WORK, 'sessions', 'sess_' + sid)
+    with open(pfad, encoding='utf-8') as f:
+        roh = f.read()
+    neu = re.sub(r'adminConfirmedAt\|i:\d+;', 'adminConfirmedAt|i:0;', roh)
+    with open(pfad, 'w', encoding='utf-8') as f:
+        f.write(neu)
+    return neu != roh
 
 
 def anmelden(pg, wer, otp=True):
@@ -275,6 +306,48 @@ with sync_playwright() as pw:
     pg.goto(D + '/'); anmelden(pg, 'neu', otp=False); pg.wait_for_selector('#totp, [name="totp"]')
     check('ohne zweiten Faktor: Einrichtung bei Keycloak erzwungen, keine Anmeldung', pg.url.startswith(L) and pg.locator('#totp, [name="totp"]').count() > 0, pg.url)
     ctx.close()
+
+    # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(A + '/admin/'); anmelden(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    js = "([a, t]) => fetch('../api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])"
+    code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
+    check('direkt nach der Anmeldung: sensible Aktion ohne weitere Abfrage (Anmeldezeitpunkt zählt)', code == 200, (code, j))
+    check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'angebot.stafl.test'))
+    code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
+    check('abgelaufen: 403 „erneut anmelden“ statt Passwortabfrage', code == 403 and j.get('code') == 'reauth_required', (code, j))
+    neu = j.get('anmelden', '')
+    check('… mit Adresse für die erneute Anmeldung (eigener Host, max_age=0)', neu.startswith('/oidc/callback?iss=') and 'auth_request_params=max_age%3D0' in neu, neu)
+    code, j = pg.evaluate(js, ['reauth', st['csrf']])
+    check('eigene Passwortbestätigung bleibt gesperrt', code == 403, (code, j))
+    # Oberfläche: Speichern in Verwaltung → Sicherheit führt selbst zur erneuten Anmeldung und zurück
+    pg.reload(); pg.wait_for_selector('#screen-editor:not([hidden])')
+    pg.click('#vt-sec'); pg.wait_for_selector('#sec-form')
+    with pg.expect_navigation(url=lambda u: u.startswith(L)):
+        pg.click('#sec-form [type=submit]')
+    check('Speichern ohne gültige Bestätigung: Weiterleitung zu Keycloak mit max_age=0', 'max_age=0' in urllib.parse.unquote(pg.url), pg.url)
+    pg.wait_for_selector('#password')
+    check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
+    pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
+    pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER['admin'][1], 1)); pg.click('#kc-login')   # nächster Code (keine Wiederverwendung)
+    pg.wait_for_url(A + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
+    check('nach der erneuten Anmeldung: Aktion bestätigt', code == 200, (code, j))
+    pg.goto(D + '/'); pg.wait_for_selector('#db-grid .db-tile')   # SSO auf den anderen Host
+    pg.goto(A + '/oidc/callback?' + urllib.parse.urlencode({'iss': L + '/realms/mitarbeiter', 'target_link_uri': 'https://angreifer.example/'}))
+    check('erneute Anmeldung leitet nie auf fremde Seiten (offene Weiterleitung)', urllib.parse.urlparse(pg.url).hostname != 'angreifer.example', pg.url)
+    ctx.close()
+
+    # ── Anmeldestärke prüft auch unser Server: Keycloak-Client falsch eingestellt (nur Passwort) → kein Zugang ──
+    check('Testvorbereitung: Client „angebot“ verlangt nur noch Passwort', client_attribute('angebot', **{'minimum.acr.value': 'pwd', 'default.acr.values': 'pwd'}) == 204)
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(A + '/admin/'); anmelden(pg, 'erika', otp=False)
+    pg.wait_for_url(A + '/**')
+    code, j = pg.evaluate("fetch('/api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('ohne zweiten Faktor angemeldet (acr=pwd): unser Server weist ab (403)', code == 403 and 'zweitem Faktor' in j.get('error', ''), (code, j))
+    ctx.close()
+    check('Testvorbereitung: Client „angebot“ wieder auf „mfa“', client_attribute('angebot', **{'minimum.acr.value': 'mfa', 'default.acr.values': 'mfa'}) == 204)
     br.close()
 
 check('keine JavaScript-Fehler auf unseren Seiten', not fehler, fehler)
