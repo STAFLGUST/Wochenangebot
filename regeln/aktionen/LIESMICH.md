@@ -12,7 +12,8 @@ dem die Aktion fachlich gehört. Daraus erzeugt `python3 werkzeuge/regeln.py erz
 | `oeffentlich` | ohne Mitarbeiter-Anmeldung erreichbar (Angebotsseite, Kundenportal); nur auf externen Oberflächen | `false` |
 | `kunden_wartung` | pausiert im Wartungsmodus der Angebotsseite (503), nur für öffentliche Aktionen (GR-009) | `false` |
 
-Neue Aktion: Eintrag in der Datei des eigenen Moduls, `python3 werkzeuge/regeln.py erzeugen`, danach
+Neue Aktion: Eintrag in der Datei des eigenen Moduls, `python3 werkzeuge/regeln.py erzeugen` (schreibt auch
+`app/api/lib/module-liste.php` aus Modulregister und Wartungstabelle), danach
 `python3 werkzeuge/integritaet.py --setzen`. Die Berechtigung prüft weiterhin die Aktion selbst (`require_perm`, GR-103) –
 das Register ersetzt keine Rechteprüfung. Konflikt in `aktionen-liste.php` nach einem Rebase: nicht von Hand
 zusammenführen, sondern neu erzeugen.

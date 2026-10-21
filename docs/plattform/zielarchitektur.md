@@ -120,7 +120,11 @@ Betrieb (normal/Wartung, auch geplant). Wer zugreifen darf, entscheidet ausschli
 `regeln/wartung.toml`; die CI prüft Vollständigkeit, Invarianten (z. B. „Wartung beenden macht nichts produktiv“) und
 die Beispiele aus dem Auftrag als Vertragstests.
 
-Umsetzung (Phase 5):
+**Umgesetzt (Roadmap PR 3):** erzeugte Tabelle `app/api/lib/module-liste.php`, Auswertung `lib/module.php`, Lese-Aktion
+`module_status`; Vertragstest: PHP und Prüfwerkzeug entscheiden alle Kombinationen gleich. Heute ist nur der bisherige
+Wartungsmodus als Betrieb von `angebot.kunden` angebunden.
+
+Umsetzung (Phase 5, offen):
 - Laufzeitzustand im Dokument `module` (Freigabe, Wartung mit Beginn/Ende, Grund, Hinweis, Tester); Startwerte aus dem
   Register. Die Tabelle wird als erzeugte PHP-Datei ausgeliefert (Muster wie `integritaet-liste.php`), nicht nachprogrammiert.
 - Jede Aktion ist genau einer Oberfläche zugeordnet; der Einstieg prüft Zustand → Anmeldung → Recht → CSRF, bevor die

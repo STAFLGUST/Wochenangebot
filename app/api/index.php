@@ -60,6 +60,7 @@
  *   POST ?action=passkey_login_begin | passkey_login   Anmeldung mit Passkey (ohne Benutzername oder als zweiter Schritt)
  *   POST ?action=user_save | user_delete   (inkl. abweichender Rechte je Nutzer: grant/deny)
  *   GET  ?action=rechte · POST ?action=rechte_save   Rechte je Rolle (Administrator)
+ *   GET  ?action=module_status   Module, Oberflächen, Freigabe, Wartung und Zugang (angemeldet; lib/module.php)
  *
  * Alle Daten liegen als .php-Dateien mit Zugriffssperre im Datenordner –
  * sie lassen sich auch ohne .htaccess nicht direkt im Browser abrufen.
@@ -124,6 +125,8 @@ require __DIR__ . '/lib/firewall.php';
 require __DIR__ . '/lib/integritaet.php';
 require __DIR__ . '/lib/geraete.php';
 require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus regeln/aktionen/*.toml)
+require __DIR__ . '/lib/module-liste.php';     // Modulregister und Entscheidungstabelle (erzeugt aus regeln/)
+require __DIR__ . '/lib/module.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -194,6 +197,7 @@ try {
     require __DIR__ . '/aktionen/einzelangebote.php';
     require __DIR__ . '/aktionen/schutz.php';
     require __DIR__ . '/aktionen/integritaet.php';
+    require __DIR__ . '/aktionen/module.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

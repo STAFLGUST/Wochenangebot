@@ -84,6 +84,7 @@ const AKTIONEN = [
     'mail_test' => ['modul' => 'plattform', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false],
     'master' => ['modul' => 'verwaltung', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false],
     'master_save' => ['modul' => 'verwaltung', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false],
+    'module_status' => ['modul' => 'plattform', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false],
     'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true],
     'offers' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => false, 'oeffentlich' => false, 'kunden_wartung' => false],
     'offers_save' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true, 'oeffentlich' => false, 'kunden_wartung' => false],
