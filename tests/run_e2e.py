@@ -93,6 +93,7 @@ SUITES['modul_wartung'] = (8790, 'data-seed', True)   # Wartung je Oberfläche (
 SUITES['module_status'] = (8790, 'data-seed', True)   # Modulzustand zur Laufzeit (GR-102)
 SUITES['aktionsregister'] = (8790, 'data-seed', True)   # Register wirkt für jede Aktion (Schreibschutz, 404)
 SUITES['herkunft'] = (8790, 'data-seed', True)   # Herkunftsprüfung im API-Einstieg (GR-109), fremde Seite auf AUX_PORT
+SUITES['dashboard'] = (8790, 'data-seed', True)   # Mitarbeiter-Dashboard (dashboard/, liegt außerhalb von app/)
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
@@ -165,6 +166,10 @@ def run(name):
         SLOTS.put(slot)
 
 
+# Noch nicht produktiv ausgelieferte Oberflächen (nicht in app/): nur in der jeweiligen Testgruppe unter dem Testserver
+ZUSATZ = {'dashboard': [('dashboard', 'dashboard')]}
+
+
 def run_in(name, slot):
     _, seed, admin, *extra = SUITES[name]
     port, aux, smtp1, smtp2 = ports(slot)
@@ -180,6 +185,8 @@ def run_in(name, slot):
     app = os.path.join(WORK, f'app-{name}')
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(os.path.join(REPO, 'app'), app)
+    for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
+        shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))
     data = os.path.join(app, 'data')
     shutil.rmtree(data)
     shutil.copytree(os.path.join(FIX, seed), data)

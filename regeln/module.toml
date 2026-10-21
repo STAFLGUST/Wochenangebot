@@ -305,9 +305,9 @@ icon = "layout-grid"
 dashboard = false
 agent = "dashboard"
 abhaengigkeiten = ["plattform"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/dashboard.toml", "app/dashboard/**", "tests/e2e/test_dashboard*.py"]
+testgruppen = ["dashboard"]
+pfade = ["dashboard/**", "tests/e2e/test_dashboard.py"]
+pfade_geplant = ["regeln/aktionen/dashboard.toml"]
 hinweise = ["Kacheln kommen ausschließlich aus dem Modulregister – keine fest programmierte Liste."]
 
   [[modul.oberflaeche]]

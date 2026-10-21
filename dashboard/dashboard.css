@@ -1,0 +1,39 @@
+/* STAFL-Plattform · Dashboard – nutzt die Farben und Schriften des Designsystems „Klar“ (../assets/app.css) */
+body.db { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font); }
+.db-top { position: sticky; top: 0; z-index: 5; background: var(--header-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.db-top-inner { max-width: 1200px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.db-top .brand-logo { height: 34px; width: auto; }
+.db-top h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+.db-top .brand-company { font-size: 12px; color: var(--muted); }
+.db-actions { display: flex; align-items: center; gap: 8px; }
+.db-user { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.db-main { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
+.db-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.db-head h2 { margin: 0; font-size: 20px; font-weight: 650; }
+.db-sub { margin: 0; font-size: 13px; color: var(--muted); }
+.db-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1000px) { .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .db-grid { grid-template-columns: 1fr; } .db-user { display: none; } .db-top .brand h1, .db-top .brand-company { display: none; } .db-top .brand-logo { height: 30px; } .db-top-inner { padding: 10px 16px; } .db-main { padding: 18px 16px 40px; } }
+.db-tile { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 150px; padding: 18px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
+a.db-tile:hover { border-color: var(--accent-line); transform: translateY(-1px); }
+a.db-tile:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent); }
+.db-tile.off { background: var(--surface-2); color: var(--text-2); cursor: default; }
+.db-ico { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+.db-tile.off .db-ico { background: var(--surface-3); color: var(--muted); }
+.db-ico .i { width: 22px; height: 22px; }
+.db-name { font-size: 16px; font-weight: 650; margin: 0; }
+.db-desc { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.4; }
+.db-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.db-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 550; background: var(--surface-3); color: var(--text-2); }
+.db-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .7; }
+.db-badge.ok { background: var(--c-fresh-bg); color: var(--c-fresh); }
+.db-badge.warn { background: #fff4e0; color: #8a5400; }
+.db-hint { font-size: 12.5px; color: #8a5400; margin: 0; }
+.db-login { max-width: 420px; margin: 8vh auto 0; padding: 28px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+.db-login h2 { margin: 10px 0 6px; font-size: 20px; }
+.db-login p { margin: 0 0 18px; color: var(--text-2); font-size: 14px; }
+.db-login-i { width: 30px; height: 30px; color: var(--accent); }
+.db-err { padding: 10px 14px; border-radius: var(--r); background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent); }
+.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .db-badge.warn, :root:not([data-theme="light"]) .db-hint { background: rgba(224,144,31,.14); color: #f3c98a; } :root:not([data-theme="light"]) .db-hint { background: none; } }
+@media screen { :root[data-theme="dark"] .db-badge.warn { background: rgba(224,144,31,.14); color: #f3c98a; } :root[data-theme="dark"] .db-hint { color: #f3c98a; } }
