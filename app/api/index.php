@@ -128,6 +128,7 @@ require __DIR__ . '/lib/geraete.php';
 require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus regeln/aktionen/*.toml)
 require __DIR__ . '/lib/module-liste.php';     // Modulregister und Entscheidungstabelle (erzeugt aus regeln/)
 require __DIR__ . '/lib/module.php';
+require __DIR__ . '/lib/herkunft.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -137,6 +138,8 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
    schreibend, öffentlich, pausiert im Wartungsmodus. Unbekannte Aktionen: nicht öffentlich, nicht schreibend → am Ende 404.
    Neue Aktionen nur dort eintragen und `python3 werkzeuge/regeln.py erzeugen` ausführen (die CI prüft das). */
 $AKTION = AKTIONEN[$action] ?? null;
+/* Nur Anfragen von der eigenen Seite (lib/herkunft.php, GR-109) – vor allen weiteren Prüfungen, Firewall und Anmeldung */
+herkunft_pruefen($AKTION, $method);
 $schreibend = $AKTION !== null && ($AKTION['schreibend'] === true || ($AKTION['schreibend'] === 'post' && $method === 'POST'));
 if ($schreibend) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);

@@ -594,6 +594,9 @@ AKTIONEN_LISTE = "app/api/lib/aktionen-liste.php"
 # (Pflicht-Passwortwechsel, Zwei-Faktor/Passkey bei der Anmeldung) – sonst könnten sich Administratoren nicht anmelden.
 WARTUNG_FREI_SCHREIBEND = {"login", "login_2fa", "logout", "setup", "passkey_login_begin", "passkey_login", "change_password",
                            "twofa_begin", "twofa_enable", "passkey_begin", "passkey_register"}
+# Aktionen, die von fremden Seiten kommen dürfen (GR-109): Ein-Klick-Abmeldung nach RFC 8058 – das E-Mail-Programm sendet
+# das Formular selbst; geschützt durch den Abmelde-Schlüssel im Link. Erweiterung nur mit Begründung im PR.
+FREMDE_HERKUNFT = {"abmelden1"}
 CASE_RE = re.compile(r"case '([a-z0-9_]+)'")
 GLEICH_RE = re.compile(r"\$action === '([a-z0-9_]+)'")
 
@@ -624,7 +627,8 @@ def aktionen_tabelle(rw: Regelwerk) -> dict:
                 continue
             tab[name] = {"modul": inhalt.get("modul", datei), "oberflaeche": a.get("oberflaeche", ""),
                          "schreibend": a.get("schreibend", False), "oeffentlich": a.get("oeffentlich", False),
-                         "kunden_wartung": a.get("kunden_wartung", False), "wartung_frei": a.get("wartung_frei", False)}
+                         "kunden_wartung": a.get("kunden_wartung", False), "wartung_frei": a.get("wartung_frei", False),
+                         "fremde_herkunft": a.get("fremde_herkunft", False)}
     return tab
 
 
@@ -640,11 +644,12 @@ def aktionen_php(rw: Regelwerk) -> str:
          "   Je Aktion: zuständiges Modul, Oberfläche (Host), schreibend (true | false | 'post' = nur per POST),",
          "   öffentlich (ohne Mitarbeiter-Anmeldung, keine IP-/Ländersperre des Eingabebereichs) und kunden_wartung",
          "   (pausiert im Wartungsmodus der Angebotsseite), wartung_frei (bleibt bei Wartung der Oberfläche erreichbar:",
-         "   Anmeldung, Abmelden, Status). Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
+         "   Anmeldung, Abmelden, Status), fremde_herkunft (darf von fremden Seiten kommen – nur Ein-Klick-Abmeldung,",
+         "   GR-109). Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
          "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
          "const AKTIONEN = ["]
     for name, a in sorted(aktionen_tabelle(rw).items()):
-        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei"))
+        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft"))
         z.append(f"    '{name}' => [{felder}],")
     z.append("];")
     return "\n".join(z) + "\n"
@@ -726,7 +731,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: schon in {gesehen[name]} registriert – jede Aktion gehört genau einem Modul")
                 continue
             gesehen[name] = ort
-            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei"}
+            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft"}
             if unbekannt:
                 rw.f(f"{wo}: unbekannte Felder {', '.join(sorted(unbekannt))}")
             ob = oberflaechen.get(a.get("oberflaeche", ""))
@@ -734,7 +739,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: oberflaeche „{a.get('oberflaeche', '')}“ gibt es nicht (Form <modul>.<oberfläche>)")
             if a.get("schreibend", False) not in (True, False, "post"):
                 rw.f(f"{wo}: schreibend muss true, false oder \"post\" sein")
-            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei"):
+            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei", "fremde_herkunft"):
                 if not isinstance(a.get(feld, False), bool):
                     rw.f(f"{wo}: {feld} muss true oder false sein")
             if ob and a.get("oeffentlich") and ob.get("art") != "extern":
@@ -745,6 +750,8 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: kunden_wartung nur für öffentliche Kundenaktionen (GR-009)")
             if a.get("wartung_frei") and a.get("oeffentlich"):
                 rw.f(f"{wo}: wartung_frei nur für Mitarbeiter-Aktionen (öffentliche regelt kunden_wartung)")
+            if a.get("fremde_herkunft") and (not a.get("oeffentlich") or a.get("schreibend") or name not in FREMDE_HERKUNFT):
+                rw.f(f"{wo}: fremde_herkunft nur für die festgelegten öffentlichen, nicht schreibenden Aktionen {sorted(FREMDE_HERKUNFT)} (GR-109)")
             if a.get("wartung_frei") and a.get("schreibend") is True and name not in WARTUNG_FREI_SCHREIBEND:
                 rw.f(f"{wo}: schreibende Aktion als wartung_frei – nur Anmeldung und eigener Zugang erlaubt (GR-107)")
     code = aktionen_im_code(rw.wurzel)

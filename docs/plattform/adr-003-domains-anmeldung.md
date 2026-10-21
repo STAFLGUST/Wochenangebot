@@ -152,7 +152,7 @@ Subdomains nicht. Deshalb, abgestuft:
 | 0 | Entscheidung festhalten, Modulregister und Regeln GR-108–GR-111 (dieser PR) | keine |
 | 1 | B-1: `__Host-`-Präfix für die heutige Sitzung | einmalig neu anmelden – **Freigabe** |
 | 2 | Aktion ↔ Host (Roadmap PR 2) | keine |
-| 3 | Keycloak + PostgreSQL in der CI; OIDC-Client, hostgebundene Sitzungen, Fetch-Metadata-Prüfung im Plattformkern; Tests für jede Bedrohung aus §1 | keine |
+| 3 | Keycloak + PostgreSQL in der CI; OIDC-Client, hostgebundene Sitzungen, Fetch-Metadata-Prüfung im Plattformkern; Tests für jede Bedrohung aus §1. Die Herkunftsprüfung (`lib/herkunft.php`) ist vorgezogen und wirkt schon für `angebot-stafl.de` | Herkunftsprüfung: Anfragen fremder Seiten abgewiesen; sonst keine |
 | 4 | DNS `login.` und `angebot.` unter `dashboard-stafl.de` | **DNS – Freigabe** |
 | 5 | Produktiv: Keycloak-Dienst, Dashboard und Angebot-Eingabe unter neuen Hosts; Passkeys einrichten; `/admin/` übergangsweise parallel, danach Weiterleitung | **Server, Anmeldung – Freigabe** |
 | 6 | Vertrauenszonen und Datenbankrollen (mit der PostgreSQL-Migration) | **Freigabe** |

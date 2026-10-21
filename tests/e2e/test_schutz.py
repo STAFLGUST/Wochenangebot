@@ -86,7 +86,7 @@ def fremd(ip, query):
     try: return urllib.request.urlopen(req, timeout=20).code
     except urllib.error.HTTPError as ex: return ex.code
 codes = [fremd('203.0.113.12', 'waf_probe&p=/wp-login.php') for _ in range(8)]
-check('Bild auf fremder Seite (Sec-Fetch-Site: cross-site): 404, aber keine Sperre des Besuchers', codes == [404] * 8 and roh('203.0.113.12', 'offer')[0] == 200, codes)
+check('Bild auf fremder Seite (Sec-Fetch-Site: cross-site): abgewiesen (403, Herkunftsprüfung), aber keine Sperre des Besuchers', codes == [403] * 8 and roh('203.0.113.12', 'offer')[0] == 200, codes)
 codes = [fremd('203.0.113.13', 'offer&x=%3Cscript%3E') for _ in range(8)]
 check('… Firewall-Treffer von fremder Seite: abgewiesen, nicht gezählt', codes == [403] * 8 and roh('203.0.113.13', 'offer')[0] == 200, codes)
 

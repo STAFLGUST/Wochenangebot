@@ -129,12 +129,24 @@ check('HTTPS: nach Abmelden ungültig', roh('status', cookies={NEU: sid})[1].get
 # ── Echter Browser: Chromium behandelt 127.0.0.1 als sicheren Ursprung und speichert dort auch __Host-Cookies ──
 from playwright.sync_api import sync_playwright  # noqa: E402
 
+# Wie hinter Caddy: der Browser sähe https://… als eigene Herkunft (Herkunftsprüfung, GR-109)
+HTTPS_ORIGIN = BASE.replace('http://', 'https://', 1)
+
+
+def wie_https(ctx):
+    """Origin der API-Anfragen wie hinter Caddy (https://…) – Chromium setzt ihn selbst, daher über route umschreiben."""
+    def umschreiben(route):
+        h = dict(route.request.headers)
+        if 'origin' in h: h['origin'] = HTTPS_ORIGIN
+        route.continue_(headers=h)
+    ctx.route('**/api/**', umschreiben)
+    return ctx
 fehler = []
 with sync_playwright() as pw:
     br = pw.chromium.launch()
     for breite in (1280, 390):
-        ctx = br.new_context(viewport={'width': breite, 'height': 900},
-                             extra_http_headers={'X-Forwarded-Proto': 'https', 'X-Forwarded-For': f'198.51.100.{80 + breite % 7}'})
+        ctx = wie_https(br.new_context(viewport={'width': breite, 'height': 900},
+                             extra_http_headers={'X-Forwarded-Proto': 'https', 'X-Forwarded-For': f'198.51.100.{80 + breite % 7}'}))
         ctx.add_cookies([{'name': ALT, 'value': alt_sid, 'url': BASE + '/'}])   # Altbestand bzw. untergeschoben
         pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
         pg.goto(BASE + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
@@ -150,7 +162,7 @@ with sync_playwright() as pw:
         check(f'Browser {breite}px: Sitzung bleibt nach Neuladen bestehen', pg.is_visible('#screen-editor'))
         ctx.close()
     # Kundenseite im Browser
-    ctx = br.new_context(viewport={'width': 390, 'height': 900}, extra_http_headers={'X-Forwarded-Proto': 'https', 'X-Forwarded-For': '198.51.100.90'})
+    ctx = wie_https(br.new_context(viewport={'width': 390, 'height': 900}, extra_http_headers={'X-Forwarded-Proto': 'https', 'X-Forwarded-For': '198.51.100.90'}))
     pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
     pg.goto(BASE + '/'); pg.wait_for_selector('#btn-kunde-login')
     pg.click('#btn-kunde-login'); pg.fill('#kl-form [name=username]', 'cookie.kunde'); pg.fill('#kl-form [name=password]', 'Kunden-Kennwort-7'); pg.click('#kl-form [type=submit]')
