@@ -16,8 +16,8 @@ LADEN="${OIDC_DOWNLOADS:-$REPO/tests/.arbeit/downloads}"
 export OIDC_PORT=8443 OIDC_HTTP_PORT="${OIDC_HTTP_PORT:-8081}" KC_PORT="${KC_PORT:-8180}" KC_MGMT_PORT="${KC_MGMT_PORT:-9180}"
 export APACHE_PORT="${APACHE_PORT:-8280}" PG_PORT="${PG_PORT:-5433}"
 
-KC_VERSION=26.7.5
-KC_SHA256=87d680d13cf4600d232ca0433a2553c57ebf03e56f7718fc0d03a1a8705497c8
+KC_VERSION=26.8.1
+KC_SHA256=4e2740b181faa2ea623a1c2ecf00855935311e546046e2f857615a47ed24cbe8
 CADDY_VERSION=2.10.2
 CADDY_SHA512=747df7ee74de188485157a383633a1a963fd9233b71fbb4a69ddcbcc589ce4e2cc82dacf5dbbe136cb51d17e14c59daeb5d9bc92487610b0f3b93680b2646546
 HOSTS="login.stafl.test dashboard.stafl.test angebot.stafl.test legacy.stafl.test"
@@ -72,7 +72,7 @@ EOF
   mkdir -p "$OIDC_WORK/pg"
   if [ "$ALS_ROOT" = 1 ]; then chown postgres "$OIDC_WORK/pg" "$OIDC_WORK/pgsock"; chmod 711 "$OIDC_WORK"; fi
   printf '%s\n' "$KC_DB_PASSWORD" > "$OIDC_WORK/pgsock/pw"; [ "$ALS_ROOT" = 1 ] && chown postgres "$OIDC_WORK/pgsock/pw"
-  als postgres "$pg/initdb" -D "$OIDC_WORK/pg" -A scram-sha-256 -U postgres --pwfile="$OIDC_WORK/pgsock/pw" >/dev/null
+  als postgres "$pg/initdb" -D "$OIDC_WORK/pg" -A scram-sha-256 -E UTF8 --locale=C.UTF-8 -U postgres --pwfile="$OIDC_WORK/pgsock/pw" >/dev/null
   rm -f "$OIDC_WORK/pgsock/pw"
   als postgres "$pg/pg_ctl" -D "$OIDC_WORK/pg" -l "$OIDC_WORK/pg/log" -o "-p $PG_PORT -k $OIDC_WORK/pgsock -c listen_addresses=127.0.0.1" -w start >/dev/null
   PGPASSWORD="$KC_DB_PASSWORD" psql -h 127.0.0.1 -p "$PG_PORT" -U postgres -q -v ON_ERROR_STOP=1 \
@@ -109,7 +109,7 @@ EOF
   chmod 755 "$OIDC_WORK/caddy" "$OIDC_WORK/caddy/pki" "$OIDC_WORK/caddy/pki/authorities" "$OIDC_WORK/caddy/pki/authorities/local"
   chmod 644 "$OIDC_WORK/caddy/pki/authorities/local/root.crt"
 
-  "$kc/bin/kc.sh" build --db=postgres --health-enabled=true >"$OIDC_WORK/keycloak-build.log" 2>&1
+  "$kc/bin/kc.sh" build --db=postgres --health-enabled=true --features-disabled=twitter-broker,identity-brokering-api >"$OIDC_WORK/keycloak-build.log" 2>&1
   nohup env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY "$kc/bin/kc.sh" start --optimized --import-realm >"$OIDC_WORK/keycloak.log" 2>&1 &
   echo $! > "$OIDC_WORK/keycloak.pid"
 
