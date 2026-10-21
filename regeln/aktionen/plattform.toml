@@ -15,6 +15,7 @@ schreibend = true
 [aktion.change_password]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.fw_export]
 oberflaeche = "angebot.eingabe"
@@ -70,14 +71,17 @@ oberflaeche = "angebot.eingabe"
 [aktion.login]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.login_2fa]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.logout]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.mail_konto_save]
 oberflaeche = "angebot.eingabe"
@@ -97,6 +101,7 @@ schreibend = true
 [aktion.passkey_begin]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.passkey_delete]
 oberflaeche = "angebot.eingabe"
@@ -108,14 +113,17 @@ oberflaeche = "angebot.eingabe"
 [aktion.passkey_login]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.passkey_login_begin]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.passkey_register]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.passkey_rename]
 oberflaeche = "angebot.eingabe"
@@ -158,9 +166,11 @@ schreibend = true
 [aktion.setup]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.status]
 oberflaeche = "angebot.eingabe"
+wartung_frei = true
 
 [aktion.testpostfach]
 oberflaeche = "angebot.eingabe"
@@ -168,6 +178,7 @@ oberflaeche = "angebot.eingabe"
 [aktion.twofa_begin]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.twofa_disable]
 oberflaeche = "angebot.eingabe"
@@ -176,6 +187,7 @@ schreibend = true
 [aktion.twofa_enable]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+wartung_frei = true
 
 [aktion.user_delete]
 oberflaeche = "angebot.eingabe"
@@ -206,3 +218,8 @@ schreibend = true
 
 [aktion.module_status]
 oberflaeche = "angebot.eingabe"
+wartung_frei = true
+
+[aktion.modul_wartung_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true

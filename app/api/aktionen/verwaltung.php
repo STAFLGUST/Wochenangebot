@@ -37,7 +37,8 @@ switch ($action) {
             respond(['ok' => true, 'settings' => sec(), 'bestaetigung' => bestaetigung_katalog(), 'bestaetigungMinuten' => BESTAETIGUNG_MINUTEN, 'myIp' => client_ip(), 'https' => is_https(),
                      'timeline' => sec_timeline($secLog), 'topIps' => sec_top_ips($secLog), 'config' => sec_config_checks($users),
                      'backup' => store_read('sicherung'),
-                     'wartung' => wartung(), 'storage' => store_stats(), 'php' => PHP_VERSION,
+                     'wartung' => wartung(), 'wartungEingabe' => modul_wartung_anzeige('angebot', 'eingabe', $me),
+                     'wartungVerlauf' => array_slice(modul_laufzeit()['verlauf'], 0, 20), 'storage' => store_stats(), 'php' => PHP_VERSION,
                      'disk' => ['free' => @disk_free_space($DATA) ?: null, 'total' => @disk_total_space($DATA) ?: null],
                      'mail' => (function () {
                          $l = array_filter(store_read('mailversand') ?? [], function ($x) { return strtotime($x['t']) > time() - 7 * 86400; });

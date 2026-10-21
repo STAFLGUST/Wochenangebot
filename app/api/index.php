@@ -61,6 +61,7 @@
  *   POST ?action=user_save | user_delete   (inkl. abweichender Rechte je Nutzer: grant/deny)
  *   GET  ?action=rechte · POST ?action=rechte_save   Rechte je Rolle (Administrator)
  *   GET  ?action=module_status   Module, Oberflächen, Freigabe, Wartung und Zugang (angemeldet; lib/module.php)
+ *   POST ?action=modul_wartung_save   Wartung eines Bereichs starten/planen/beenden (Administrator, immer mit Bestätigung)
  *
  * Alle Daten liegen als .php-Dateien mit Zugriffssperre im Datenordner –
  * sie lassen sich auch ohne .htaccess nicht direkt im Browser abrufen.
@@ -176,6 +177,9 @@ if (!$isPublic) {
         fail('Der Eingabebereich ist von dieser Internetadresse (' . client_ip() . ') aus nicht freigegeben.', 403);
     }
 }
+
+/* Wartung und Freigabe je Oberfläche (lib/module.php, GR-102/GR-107) – nach Länder- und IP-Sperre, vor der Aktion */
+modul_durchsetzen($AKTION);
 
 try {
     orders_action($action);

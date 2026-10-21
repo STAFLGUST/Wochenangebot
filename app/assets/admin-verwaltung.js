@@ -1292,6 +1292,28 @@
   }
   const mb = (n) => (n / 1024 / 1024).toFixed(1).replace('.', ',');
   const gb = (n) => (n / 1024 / 1024 / 1024).toFixed(1).replace('.', ',');
+  /* Wartung des Eingabebereichs (modul_wartung_save, immer mit Passwortbestätigung); Verlauf aller Wartungsänderungen */
+  const BEREICH_NAME = { 'angebot.kunden': 'Angebotsseite (Kunden)', 'angebot.eingabe': 'Eingabebereich (Mitarbeiter)' };
+  const ZUSTAND = { normal: 'normal', wartung: 'Wartung', 'wartung geplant': 'Wartung geplant' };
+  function eingabeWartungForm(d) {
+    const w = d.wartungEingabe;
+    const verlauf = (d.wartungVerlauf || []).slice(0, 10).map((v) => `<li>${esc(dateTime(v.t))} Uhr · ${esc(BEREICH_NAME[v.bereich] || v.bereich)}: ${esc(ZUSTAND[v.alt] || v.alt)} → <strong>${esc(ZUSTAND[v.neu] || v.neu)}</strong> · ${esc(v.wer)}${v.grund ? ` · ${esc(v.grund)}` : ''}</li>`).join('');
+    const status = !w ? '' : w.geplant ? `<span class="st-warn">Geplant ab ${esc(dateTime(w.ab))} Uhr</span>` : `<span class="st-warn">Aktiv seit ${esc(dateTime(w.since))} Uhr</span>`;
+    return `<form class="gcard sec-form wartung-form${w ? ' on' : ''}" id="ew-form" autocomplete="off">
+        <h3 class="sec-h">Wartung Eingabebereich</h3>
+        <p class="hint" style="margin-top:0">Sperrt den Eingabebereich für alle Mitarbeiter außer Administratoren (z. B. für eine Datenübernahme). Kunden sehen die Angebotsseite weiter normal. Jede Änderung wird mit Grund protokolliert und muss mit Ihrem Passwort bestätigt werden.</p>
+        <div class="sec-rows">
+          <label class="fld span2"><span>Grund <small>(Pflicht, nur für Administratoren sichtbar)</small></span><input type="text" name="grund" maxlength="200" value="${esc(w ? w.grund || '' : '')}" placeholder="z. B. Datenübernahme Stammdaten"></label>
+          <label class="fld span2"><span>Hinweis für Mitarbeiter</span><textarea name="message" rows="2" maxlength="500" placeholder="Der Eingabebereich wird gerade gewartet. Bitte versuchen Sie es später erneut.">${esc(w ? w.message : '')}</textarea></label>
+          <label class="fld"><span>Beginn <small>(optional, sonst sofort)</small></span><input type="datetime-local" name="ab" value="${esc(w && w.ab ? w.ab : '')}"></label>
+          <label class="fld"><span>Voraussichtlich bis <small>(optional)</small></span><input type="datetime-local" name="until" value="${esc(w && w.until ? w.until : '')}"></label>
+        </div>
+        <div class="sec-foot wartung-foot">${w ? `${status}<button type="button" class="btn" data-ewart="save">Änderungen speichern</button><button type="button" class="btn primary" data-ewart="off">Wartung beenden</button>`
+          : '<button type="button" class="btn primary" data-ewart="on">Wartung starten bzw. planen</button>'}</div>
+        <p class="form-err" id="ew-err" role="alert"></p>
+        ${verlauf ? `<details><summary>Verlauf der Wartungen</summary><ul class="wv-list">${verlauf}</ul></details>` : ''}
+      </form>`;
+  }
   function wartungCard(w, card) {
     return w ? card('warn', 'Wartungsmodus', 'aktiv – Kunden sehen einen Wartungshinweis', `seit ${esc(dateTime(w.since))} Uhr${esc(wartungBis(w))}`)
       : card('ok', 'Wartungsmodus', 'aus – Angebotsseite normal erreichbar', '');
@@ -1490,6 +1512,7 @@
           : '<button type="button" class="btn primary" data-wartung="on">Wartungsmodus einschalten</button>'}</div>
         <p class="form-err" id="wartung-err" role="alert"></p>
       </form>
+      ${eingabeWartungForm(d)}
       <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens ${S.bestaetigungMinuten || 5} Minuten alte Anmeldung oder Passwortbestätigung (einstellbar unter „Passwortbestätigung“). Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
       <form class="gcard sec-form sec-sect" id="sec-form" autocomplete="off">
         <h3 class="sec-h" id="sec-einst">Einstellungen</h3>
@@ -1638,6 +1661,20 @@
         toast(a === 'on' ? 'Wartungsmodus eingeschaltet.' : a === 'off' ? 'Wartungsmodus beendet – die Angebotsseite ist wieder erreichbar.' : 'Hinweis gespeichert.', 4500);
         renderSecView();
       } catch (ex) { err.textContent = ex.message; wb.disabled = false; }
+      return;
+    }
+    const eb = e.target.closest('#ew-form [data-ewart]');
+    if (eb) {
+      const f = $('#ew-form'), a = eb.dataset.ewart, err = $('#ew-err');
+      err.textContent = '';
+      if (a === 'on' && !(await confirmBox('Wartung des Eingabebereichs starten?', f.ab.value ? 'Ab dem gewählten Zeitpunkt können nur noch Administratoren im Eingabebereich arbeiten. Kunden sind nicht betroffen.' : 'Mitarbeiter ohne Administratorrechte sehen ab sofort nur noch den Wartungshinweis; offene Bearbeitungen werden unterbrochen. Kunden sind nicht betroffen.', 'Starten'))) return;
+      eb.disabled = true;
+      try {
+        const r = await api('modul_wartung_save', { body: { bereich: 'angebot.eingabe', active: a !== 'off', grund: f.grund.value, message: f.message.value, ab: f.ab.value, until: f.until.value } });
+        W.wartungEingabe = r.wartung; renderWartungBanner();
+        toast(a === 'off' ? 'Wartung beendet – der Eingabebereich ist wieder für alle freigegeben.' : r.wartung && r.wartung.geplant ? 'Wartung geplant.' : a === 'on' ? 'Wartung gestartet.' : 'Gespeichert.', 4500);
+        renderSecView();
+      } catch (ex) { err.textContent = ex.message; eb.disabled = false; }
       return;
     }
     const del = e.target.closest('[data-geo-del]');

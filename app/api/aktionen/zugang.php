@@ -10,7 +10,10 @@ switch ($action) {
             $u = current_user();
             $noUsers = !users_load();
             respond(['ok' => true, 'setupRequired' => $noUsers && setup_allowed(), 'setupLocked' => $noUsers && !setup_allowed(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
-                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null, 'testumgebung' => testumgebung()]);
+                     'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null, 'testumgebung' => testumgebung(),
+                     // Wartung des Eingabebereichs (lib/module.php): Hinweis für Administratoren, Sperrbildschirm für alle anderen
+                     'wartungEingabe' => $u ? modul_wartung_anzeige('angebot', 'eingabe', $u) : null,
+                     'eingabeGesperrt' => $u ? !modul_zustand('angebot', 'eingabe', $u)['zugang'] : false]);
         }
 
         case 'wartung_save': {
@@ -23,6 +26,8 @@ switch ($action) {
             $old = wartung();
             $new = ['active' => $on, 'message' => $msg, 'until' => $until !== '' ? $until : null, 'since' => $on ? ($old['since'] ?? now()) : null, 'by' => $me['name'], 'changed' => now()];
             store_write('wartung', $new);
+            if ((bool)$old !== $on) modul_verlauf_eintragen(['t' => now(), 'wer' => $me['name'], 'bereich' => 'angebot.kunden', 'alt' => $old ? 'wartung' : 'normal',
+                                                             'neu' => $on ? 'wartung' : 'normal', 'grund' => '', 'ab' => null, 'bis' => $on ? $new['until'] : null]);
             if ((bool)$old !== $on) audit('wartung', $on ? 'Wartungsmodus eingeschaltet – Angebotsseite für Kunden pausiert' : 'Wartungsmodus ausgeschaltet – Angebotsseite wieder erreichbar',
                 [['k' => 'wartung', 'code' => '', 'name' => 'Wartungsmodus', 'f' => 'Status', 'from' => $old ? 'an' : 'aus', 'to' => $on ? 'an' : 'aus']]);
             elseif ($on) audit('wartung', 'Hinweis zum Wartungsmodus geändert');
