@@ -10,7 +10,10 @@
 
 	encode zstd gzip
 	header {
-		Strict-Transport-Security "max-age=31536000"
+		# HTTPS-Pflicht auch für alle Subdomains (keine braucht unverschlüsseltes HTTP, s. LIESMICH) – verhindert, dass über eine
+		# erfundene unverschlüsselte Subdomain Cookies für die Seite untergeschoben werden. Merkdauer zunächst 1 Tag (Probe),
+		# danach auf 1 Jahr (31536000) erhöhen.
+		Strict-Transport-Security "max-age=86400; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "same-origin"

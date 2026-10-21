@@ -214,7 +214,7 @@ with sync_playwright() as p:
     c.reload(); c.wait_for_selector('tr.row .qty')
     check('cleared cart stays cleared', c.locator('#orderbar').is_hidden())
     # Mobil
-    mpg = ctx.new_page(); mpg.set_viewport_size({'width': 390, 'height': 820}); mpg.goto(B + '/?angebot=edeka'); mpg.wait_for_selector('#modebar'); mpg.click('#modebar [data-mode=liste]'); mpg.wait_for_selector('tr.row .qty')
+    mpg = ctx.new_page(); mpg.set_viewport_size({'width': 390, 'height': 820}); mpg.goto(B + '/?angebot=edeka'); mpg.wait_for_selector('html[data-bereit]'); mpg.click('#modebar [data-mode=liste]'); mpg.wait_for_selector('tr.row .qty')
     mpg.locator(f'#list .qty[data-qty="{I1["id"]}"]').fill('7'); mpg.locator(f'#list .qty[data-qty="{I1["id"]}"]').press('Tab'); mpg.wait_for_selector('#orderbar:not([hidden])')
     check('mobile: quantity usable, no horizontal scroll', mpg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
     mpg.screenshot(path=SH + '/bestellung-mobil.png')

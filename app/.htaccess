@@ -11,7 +11,7 @@ DirectoryIndex index.html index.php
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
   Header always set Cross-Origin-Resource-Policy "same-origin"
   # HTTPS erzwingen (nur über HTTPS gesendet)
-  Header always set Strict-Transport-Security "max-age=31536000" env=HTTPS
+  Header always set Strict-Transport-Security "max-age=86400; includeSubDomains" env=HTTPS
   Header always unset X-Powered-By
   Header unset X-Powered-By
   <FilesMatch "\.html$">

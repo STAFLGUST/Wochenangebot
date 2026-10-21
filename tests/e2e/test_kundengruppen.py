@@ -138,7 +138,9 @@ with sync_playwright() as p:
     a.fill('#k-q', 'großküche'); a.wait_for_function("document.querySelectorAll('#view-kunden tr[data-kid]').length === 1")
     check('Kundensuche findet über die Gruppe', True)
     a.click('#vt-gruppen'); a.wait_for_selector('.kgtab tr[data-kg="15"]')
-    check('Kundenanzahl je Gruppe', a.inner_text('.kgtab tr[data-kg="15"] td.kg-n') == '1')
+    try: a.wait_for_function("(document.querySelector('.kgtab tr[data-kg=\"15\"] td.kg-n') || {}).innerText === '1'", timeout=8000)   # Liste wird nach dem Laden neu gezeichnet
+    except Exception: pass
+    check('Kundenanzahl je Gruppe', a.inner_text('.kgtab tr[data-kg="15"] td.kg-n') == '1', a.inner_text('.kgtab tr[data-kg="15"] td.kg-n'))
 
     # ---------- Handy ----------
     m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True)

@@ -2,7 +2,7 @@
 /* Prüfliste der ausgelieferten Dateien (Pfad unter app/ => SHA-256) für die Dateiprüfung.
    Automatisch erzeugt mit: python3 werkzeuge/integritaet.py --setzen – nicht von Hand ändern. */
 return [
-    '.htaccess' => '19ebb28e0d4f5112add0fedae2dfe5788a21292016f89fea5a3cfca1ca27bcb5',
+    '.htaccess' => '34a4a401cdb2a59459b2974dd3caf03584008b349f545452498dc7a4b6709714',
     'admin/.htaccess' => '0910acbea2b93e39f455edf4ed99bf0fcf7e3804eea12e25435cb56cf1e3d41a',
     'admin/index.html' => '4b95b912cd0b32922568ae6ba9cc979b122b7d07adb2db93e8a7849a59cd3f11',
     'api/aktionen/angebote.php' => '66dd09e0a42b0298f4f21449493aa967ea0229469889157a203dceb7382a41bc',
@@ -66,7 +66,7 @@ return [
     'assets/fonts/geist-latin-ext-wght-normal.woff2' => '824f485b5d26e2f2da3c2b236132ece1bc8e4e43373452950bb0e40548b4313f',
     'assets/fonts/geist-latin-wght-normal.woff2' => '19f9c92546aa300c312235e3125af1b81394d8db9a4bc4a425cd5b641d2d54e1',
     'assets/fonts/geist-mono-latin-wght-normal.woff2' => '684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc',
-    'assets/frontend.js' => '8c00110e136ecb5dafe459ab0fe20bcad3d046c86aa1f9a4f14db492b8d97930',
+    'assets/frontend.js' => '7da0e4ab2dca84c79f370652efa8780b553e63b1a23d164be23ddeab26442449',
     'assets/icons/apple-touch-icon.png' => 'fb3114fedbfb44f09ae2094b8d0910574bb57999b1e07820b01f668236274c46',
     'assets/icons/favicon-32.png' => '2223fa5423bf42b61c4dfc9ea68d497bb4cd5f2eddec848d8dec939d3d77c126',
     'assets/icons/icon-192.png' => '7affb005c2ffb5c545623c06cd51b1da0a8184b2da94dc52fa056d7bdbcc75be',
@@ -83,7 +83,7 @@ return [
     'assets/webapp.js' => '21a6af042158c166b539b9785c32ae9e33796a6ab8e3decbf450b1cd2200436b',
     'datenschutz/index.html' => '45e1974b1ff7e86bcba00f27c06aa33d2dfef334e5abf5eb2621affe76d49d3a',
     'impressum/index.html' => 'a0b6270e990041b440e66f63949c04c0acd942626a4a5492f58815c152397f1b',
-    'index.html' => '7ce360c6a8107096dbcabc6419282e998e0d57a994961058315fb71eaa1d497c',
+    'index.html' => '44319e6becedee253e1bb733762398c7c29b3737714a67ad89a62be240bd1ed1',
     'kontakt/index.html' => '8458af5e3a1e12fbd7c082b6d00ee13c5421409269fc3ab07971296748bfd661',
     'manifest.json' => 'bc515647d3cd00116e7c943f763394eba7e7c8bd127e26c5f13ec7e6d4508851',
     'sw.js' => 'e7b34391d72e4de92da27ef2a639d7e1a4fee88c37b14058d008a4404290540c',
