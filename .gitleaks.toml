@@ -53,3 +53,10 @@ description = "Prüfliste der Dateiprüfung: SHA-256-Prüfsummen der ausgeliefer
 paths = [
   '''^app/api/lib/integritaet-liste\.php$''',
 ]
+
+[[allowlists]]
+description = "Keine Geheimnisse: Datenbankadresse (Host/Port/Name) der vorbereiteten Keycloak-Konfiguration; Passwörter nur in .env"
+condition = "AND"
+regexTarget = "line"
+paths = ['''^deploy/anmeldung/docker-compose\.anmeldung\.yml$''']
+regexes = ['''KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak''']
