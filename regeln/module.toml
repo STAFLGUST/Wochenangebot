@@ -9,6 +9,8 @@
 #                keine | test (nur eingetragene Tester) | produktiv | deaktiviert
 #                produktiv setzt entwicklung = fertig voraus; test setzt mindestens in_entwicklung voraus.
 #   sperrbar     false = darf nie in Wartung/Deaktivierung gehen (Schutz vor Aussperrung der Administration)
+#   adresse      heutige Adresse; ziel = beschlossene künftige Adresse (ADR-003), noch nicht in Betrieb
+#   dns = false  Host hat noch keinen DNS-Eintrag und darf noch nicht im Caddyfile stehen (nur mit freigabe = "keine")
 #   Der Betriebszustand (normal/wartung) steht bewusst NICHT hier – er ist reine Laufzeit (regeln/wartung.toml).
 #
 # Pfade: „pfade“ müssen auf vorhandene Dateien passen, „pfade_geplant“ dürfen noch leer sein.
@@ -55,7 +57,7 @@ pfade = [
   "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py",
   "tests/unit/merge.test.js", "tests/fixtures/angebote/**",
 ]
-pfade_geplant = ["app/eingabe/**", "app/api/module/angebot/**"]
+pfade_geplant = ["app/api/module/angebot/**"]
 hinweise = [
   "Kunden-Frontend angebot-stafl.de ist produktiv und besonders schützenswert (Regeln GR-001 bis GR-005).",
   "app/assets/admin.js ist der gemeinsame Eingabebereich aller heutigen Fachfunktionen (Hotspot): nur kleine, klar abgegrenzte Änderungen.",
@@ -74,8 +76,8 @@ hinweise = [
   id = "eingabe"
   name = "Mitarbeiter-Eingabe"
   art = "intern"
-  adresse = "https://angebot-stafl.de/eingabe/"
-  heute = "https://angebot-stafl.de/admin/"
+  adresse = "https://angebot-stafl.de/admin/"
+  ziel = "https://angebot.dashboard-stafl.de/"   # ADR-003; /admin/ leitet später dorthin weiter
   entwicklung = "fertig"
   freigabe = "produktiv"
   sperrbar = true
@@ -340,6 +342,16 @@ hinweise = [
   "Jede Änderung hier betrifft potenziell alle Module: Änderungsfolgen mit `python3 werkzeuge/regeln.py betroffen` prüfen.",
 ]
 
+  [[modul.oberflaeche]]
+  id = "anmeldung"
+  name = "Zentrale Mitarbeiteranmeldung (Keycloak, ADR-003)"
+  art = "intern"
+  adresse = "https://login.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = false
+  dns = false
+
 [[modul]]
 id = "mobile"
 name = "App (iOS/Android)"
@@ -368,7 +380,7 @@ beschreibung = "Bestehende Testumgebung des Angebotsportals (Container app-test,
 [[umgebung]]
 id = "integration"
 adressen = ["https://test.dashboard-stafl.de/"]
-beschreibung = "Geplante Integrations-Testumgebung der Plattform (synthetische Daten, Passwortschutz) – noch 503-Platzhalter"
+beschreibung = "503-Platzhalter – nicht als Testumgebung nutzen (ADR-003, GR-111); Integration später auf eigener Testdomain"
 
 # ───────────────────────────── Koordinationspflichtige Bereiche ─────────────────────────────
 # Änderungen hier nur nach Abstimmung (PR-Text: Abschnitt „Koordination“), weil mehrere Module/Agenten betroffen sind.

@@ -10,7 +10,7 @@ zu gefährden.
 | [zielarchitektur.md](zielarchitektur.md) | Module, Domains und Routing, Code-Struktur, Datenarchitektur und Datenbankstrategie, Anmeldung/SSO, Wartungskonzept, API-Konzept, Sicherheit, Entscheidungen (ADR) |
 | [multi-agent.md](multi-agent.md) | Entwicklungsmodell mit parallelen KI-Agenten, Regelwerk und Werkzeug, Test- und CI-Konzept |
 | [roadmap.md](roadmap.md) | Priorisierte Schritte als Pull Requests, offene Entscheidungen |
-| [adr-003-domains-anmeldung.md](adr-003-domains-anmeldung.md) | Sicherheitsbewertung Unterverzeichnisse vs. Subdomains, Anmeldung (OIDC), Testdomain – Entscheidungsvorlage |
+| [adr-003-domains-anmeldung.md](adr-003-domains-anmeldung.md) | Domain- und Anmeldestruktur: Subdomains, OIDC mit Keycloak, Testumgebung – angenommen |
 
 Maschinenlesbare Quelle aller Festlegungen ist `regeln/` (von der CI geprüft). Diese Dokumente erklären und
 begründen – sie wiederholen keine Listen aus `regeln/`, damit nichts auseinanderläuft.
@@ -43,6 +43,6 @@ keine Datenbank je Modul.
 | DNS + Caddy-Platzhalter (503) für dashboard-stafl.de und 7 Subdomains | **produktiv ausgerollt** (PR #62, live geprüft) |
 | Regelwerk `regeln/`, Modulregister, Prüfwerkzeug `werkzeuge/regeln.py`, CI-Schritt | **gemergt** (PR #63); ohne Wirkung auf den Echtbetrieb |
 | Architektur, Datenbankstrategie, Wartungskonzept, Multi-Agent-Modell | **dokumentiert** (PR #63) |
-| Domain- und Anmeldestruktur (ADR-003) | **Entscheidungsvorlage**, nicht umgesetzt |
+| Domain- und Anmeldestruktur (ADR-003) | **entschieden**, nicht umgesetzt |
 | Dashboard, Modulverwaltung, Wartung je Oberfläche, zentrale Anmeldung, `/eingabe/` | **geplant** ([roadmap.md](roadmap.md)) |
 | Fachmodule Bestand, CRM, REWE, Einkauf; QS-Fachlogik | **geplant** (QS als separates Großprojekt) |

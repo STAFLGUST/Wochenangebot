@@ -56,9 +56,9 @@ um, wenn ein Modul ohnehin daran arbeitet.
 | `angebot-stafl.de/admin/` | heutige Mitarbeiter-Eingabe; Ziel laut ADR-003: `angebot.dashboard-stafl.de` (alte Adresse leitet weiter) | produktiv |
 | `dashboard-stafl.de` | Dashboard + Anmeldung | 503-Platzhalter |
 | `<modul>.dashboard-stafl.de` | Modul-Oberfläche `app/module/<id>/` + `/api/` | 503-Platzhalter |
-| `test.dashboard-stafl.de` | ursprünglich Integrationstest; laut ADR-003 besser eigene Testdomain | 503-Platzhalter |
-| `login.dashboard-stafl.de` | Identitätsanbieter (ADR-003, vorgeschlagen) | DNS fehlt |
-| `angebot.dashboard-stafl.de` | Angebot · Mitarbeiter-Eingabe (ADR-003, vorgeschlagen) | DNS fehlt |
+| `test.dashboard-stafl.de` | nicht als Testumgebung nutzen (ADR-003); Integration später auf eigener Testdomain | 503-Platzhalter |
+| `login.dashboard-stafl.de` | Keycloak (ADR-003) | DNS fehlt |
+| `angebot.dashboard-stafl.de` | Angebot · Mitarbeiter-Eingabe (ADR-003) | DNS fehlt |
 | `test.angebot-stafl.de` | bestehende Testumgebung | produktiv (401) |
 
 - Caddy schaltet einen Host erst frei, wenn **alle** seine Oberflächen eine Freigabe haben (GR-105, CI prüft gegen das
@@ -71,15 +71,15 @@ um, wenn ein Modul ohnehin daran arbeitet.
 ## 4. Anmeldung und Single Sign-on
 
 Ausführliche Sicherheitsbewertung und Empfehlung: **[ADR-003](adr-003-domains-anmeldung.md)** (Entscheidungsvorlage,
-nicht umgesetzt). Kurzfassung der Empfehlung:
+angenommen am 21.10.2026, noch nicht umgesetzt). Kurzfassung:
 
 - Getrennte Subdomains je Anwendung, Mitarbeiter-Eingabe des Angebots unter `angebot.dashboard-stafl.de`;
   die Kundendomain `angebot-stafl.de` enthält danach keine Mitarbeitersitzung mehr.
-- OpenID Connect mit ZITADEL als Identitätsanbieter auf eigenem Host `login.dashboard-stafl.de`; jede Anwendung ist ein
+- OpenID Connect mit Keycloak als Identitätsanbieter auf eigenem Host `login.dashboard-stafl.de`; jede Anwendung ist ein
   eigener Client mit eigener, hostgebundener `__Host-`-Sitzung – **kein** gemeinsames Cookie für alle Subdomains.
 - Rechte je Modul und Funktion prüft weiterhin unser Server bei jeder Aktion (GR-103).
 - Kunden behalten ihre Zugänge unverändert; das QS-Portal erhält eine eigene Nutzergruppe (GR-104).
-- Eigene registrierbare Testdomain statt Test-Subdomains der Produktion.
+- Eigene registrierbare Testdomain mittelfristig; bis dahin läuft die neue Anmeldung nur in der CI (GR-111).
 
 ## 5. Datenarchitektur
 
@@ -155,7 +155,7 @@ nur in `.env`, gitleaks und Trivy in der CI. Neue Fremdabhängigkeiten nur mit B
 | --- | --- | --- | --- |
 | ADR-1 | `app/` bleibt Docroot, Module unter `app/module/` und `app/api/module/` | vorgeschlagen | `apps/`+`packages/` (Big-Bang-Risiko) |
 | ADR-2 | Regelwerk als TOML (Python-Standardbibliothek), Laufzeit-Daten daraus erzeugt | **umgesetzt** | YAML (bräuchte Zusatzpaket in CI und PHP) |
-| ADR-3 | Subdomains je Anwendung, OIDC (ZITADEL), hostgebundene Sitzungen, eigene Testdomain – [ADR-003](adr-003-domains-anmeldung.md) | **vorgeschlagen, Entscheidung offen** | Unterverzeichnisse (ein Origin, keine Isolation im Browser) |
+| ADR-3 | Subdomains je Anwendung, OIDC (Keycloak), hostgebundene Sitzungen, Testdomain mittelfristig – [ADR-003](adr-003-domains-anmeldung.md) | **angenommen 21.10.2026, nicht umgesetzt** | Unterverzeichnisse (ein Origin, keine Isolation im Browser) |
 | ADR-4 | PostgreSQL als Ziel für gemeinsame Daten, Dokumente zunächst unverändert | vorgeschlagen | nur SQLite (ein Schreiber, keine Rollen je Modul) |
 | ADR-5 | Zugriff je Oberfläche nur über die Entscheidungstabelle | **umgesetzt (Spezifikation)** | Logik je Modul |
 | ADR-6 | Kein CODEOWNERS vorerst | vorgeschlagen | siehe [multi-agent.md](multi-agent.md) |

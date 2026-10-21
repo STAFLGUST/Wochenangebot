@@ -253,8 +253,17 @@ class EchtesRegelwerk(unittest.TestCase):
         o = {x["id"]: x for x in regeln.laden(WURZEL).modul("angebot")["oberflaeche"]}
         self.assertEqual(o["kunden"]["art"], "extern")
         self.assertEqual(o["eingabe"]["art"], "intern")
-        self.assertEqual(o["eingabe"]["adresse"], "https://angebot-stafl.de/eingabe/")
-        self.assertEqual(o["eingabe"]["heute"], "https://angebot-stafl.de/admin/")
+        self.assertEqual(o["eingabe"]["adresse"], "https://angebot-stafl.de/admin/")
+        self.assertEqual(o["eingabe"]["ziel"], "https://angebot.dashboard-stafl.de/")
+
+    def test_adr003_hosts_und_regeln(self):
+        rw = regeln.laden(WURZEL)
+        anm = {o["id"]: o for o in rw.modul("plattform")["oberflaeche"]}["anmeldung"]
+        self.assertEqual(anm["adresse"], "https://login.dashboard-stafl.de/")
+        self.assertIs(anm["sperrbar"], False)
+        self.assertEqual(anm["freigabe"], "keine")
+        ids = {r["id"] for r in rw.katalog["regel"]}
+        self.assertTrue({"GR-108", "GR-109", "GR-110", "GR-111"} <= ids)
 
     def test_entscheidungstabelle_vollstaendig(self):
         w = regeln.laden(WURZEL).wartung
@@ -407,6 +416,33 @@ class Verstoesse(unittest.TestCase):
         self.p.ersetzen("regeln/module.toml", 'adresse = "https://angebot.example/"',
                         'adresse = "https://portal.dashboard-stafl.de/"')
         self.assertFehler("externe Oberflächen dürfen nicht unter dashboard-stafl.de liegen")
+
+    def test_host_ohne_dns_darf_im_caddyfile_fehlen(self):
+        self.p.ersetzen("regeln/module.toml", 'adresse = "https://lager.dashboard-stafl.de/"',
+                        'adresse = "https://neu.dashboard-stafl.de/"\n  dns = false')
+        self.p.ersetzen("Caddyfile", "dashboard-stafl.de, lager.dashboard-stafl.de,", "dashboard-stafl.de,")
+        self.assertEqual(self.p.fehler(), [])
+
+    def test_host_ohne_dns_nicht_freigeben(self):
+        self.p.ersetzen("regeln/module.toml", 'adresse = "https://lager.dashboard-stafl.de/"\n  entwicklung = "geplant"\n  freigabe = "keine"',
+                        'adresse = "https://neu.dashboard-stafl.de/"\n  dns = false\n  entwicklung = "geplant"\n  freigabe = "deaktiviert"')
+        self.assertFehler("ohne DNS-Eintrag (dns = false) ist nur freigabe")
+
+    def test_veralteter_dns_vermerk(self):
+        self.p.ersetzen("regeln/module.toml", 'adresse = "https://lager.dashboard-stafl.de/"',
+                        'adresse = "https://lager.dashboard-stafl.de/"\n  dns = false')
+        self.assertFehler("als dns = false vermerkt")
+
+    def test_externes_ziel_nicht_unter_dashboard(self):
+        self.p.ersetzen("regeln/module.toml", 'adresse = "https://angebot.example/"',
+                        'adresse = "https://angebot.example/"\n  ziel = "https://kunden.dashboard-stafl.de/"')
+        self.assertFehler("externe Oberflächen dürfen nicht unter dashboard-stafl.de liegen")
+
+    def test_ziel_host_im_caddyfile_erlaubt(self):
+        self.p.ersetzen("regeln/module.toml", 'adresse = "https://angebot.example/eingabe/"',
+                        'adresse = "https://angebot.example/eingabe/"\n  ziel = "https://angebot.dashboard-stafl.de/"')
+        self.p.ersetzen("Caddyfile", "verwaltung.dashboard-stafl.de {", "verwaltung.dashboard-stafl.de, angebot.dashboard-stafl.de {")
+        self.assertEqual(self.p.fehler(), [])
 
     def test_folgen_im_kleinen(self):
         rw = regeln.laden(self.p.wurzel)

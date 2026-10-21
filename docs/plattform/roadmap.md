@@ -11,8 +11,8 @@ Datenbank-, DNS- und Serveränderungen sind gesondert markiert und brauchen zus�
 | 4 | Wartung je Oberfläche serverseitig (Dokument `module`, Protokoll, Bestätigung, Notfallskript); heutiger Wartungsmodus wird `angebot.kunden` | 5 | Verwaltung → Wartung zeigt Oberflächen statt eines Schalters | geplant |
 | 5 | Modulverwaltung im heutigen Eingabebereich (Liste, Freigabe, Wartung planen, Historie, Tester) | 5 | neue Ansicht für Administratoren | geplant |
 | 6 | Dashboard-Oberfläche `app/dashboard/` (Kacheln aus dem Register, Status, hell/dunkel, 390 px) – zunächst nur in Tests und `test.angebot-stafl.de` | 4 | keine (Caddy bleibt 503) | geplant |
-| 7 | Anmeldung nach ADR-003: OIDC-Client und hostgebundene Sitzungen im Plattformkern, Fetch-Metadata-Prüfung, Modulzugang `<modul>.zugang`, Back-Channel-Logout – zuerst nur CI und Testdomain | 6 | **Server (ZITADEL, PostgreSQL), DNS – mit Freigabe** | geplant, braucht E-2 |
-| 8 | Angebot-Eingabe unter `angebot.dashboard-stafl.de` (ADR-003), `/admin/` übergangsweise parallel, danach Weiterleitung | 7 | Mitarbeiter-Adresse ändert sich; Kundenseite unverändert | geplant, braucht E-2 |
+| 7 | Anmeldung nach ADR-003: OIDC-Client und hostgebundene Sitzungen im Plattformkern, Fetch-Metadata-Prüfung, Modulzugang `<modul>.zugang`, Back-Channel-Logout – zuerst nur in der CI | 6 | **Server (Keycloak, PostgreSQL), DNS – mit Freigabe** | geplant (E-2 entschieden) |
+| 8 | Angebot-Eingabe unter `angebot.dashboard-stafl.de` (ADR-003), `/admin/` übergangsweise parallel, danach Weiterleitung | 7 | Mitarbeiter-Adresse ändert sich; Kundenseite unverändert | geplant (E-2 entschieden) |
 | 9 | Integrationsumgebung `test.dashboard-stafl.de` (Container wie `app-test`, synthetische Daten) | 3 | **Serveränderung (mit Freigabe)** | geplant |
 | 10 | Verwaltung: Stammdaten- und Importzentrale; Importleser bleiben beim Daten-Eigentümer | 8 | neue Oberfläche | geplant |
 | 11 | PostgreSQL in CI/Testumgebung, dritter Speichertreiber, Migrationswerkzeug | 8 | **keine, bis Migration freigegeben** | geplant |
@@ -28,10 +28,10 @@ Echtbetrieb sofort verbessert und für die schrittweise Freigabe der Module gebr
 | Nr. | Frage | Empfehlung |
 | --- | --- | --- |
 | E-1 | Wer pflegt Kundenstammdaten – Verwaltung oder CRM? | Verwaltung (Nummer, Name, Anschrift, Gruppe, Zugang); CRM ergänzt Ansprechpartner, Aktivitäten, Vorgänge |
-| E-2 | Domain- und Anmeldestruktur | Subdomains + OIDC (ZITADEL) + eigener Anmelde-Host + eigene Testdomain – [ADR-003](adr-003-domains-anmeldung.md); Betreiber tendiert zu Subdomains |
+| E-2 | Domain- und Anmeldestruktur | **entschieden 21.10.2026:** Subdomains, eigener Anmelde-Host, Keycloak – [ADR-003](adr-003-domains-anmeldung.md) |
 | E-3 | SQLite jetzt produktiv aktivieren? | ja, im Wartungsfenster mit dem vorhandenen Werkzeug – nach Ihrer Freigabe; vorher Status auf dem Server prüfen |
 | E-4 | Repository privat stellen, bevor interne Module (Einkauf, QS) entstehen? | ja; Code darf zwar nie Sicherheit tragen, aber interne Abläufe müssen nicht öffentlich sein |
-| E-8 | Testdomain (eigene registrierbare Domain) und eigener Test-Server | ja – [ADR-003 §3](adr-003-domains-anmeldung.md#3-testumgebung) |
+| E-8 | Testdomain (eigene registrierbare Domain) und eigener Test-Server | **entschieden:** mittelfristig; bis dahin Übergangsregeln GR-111 – [ADR-003 §3](adr-003-domains-anmeldung.md#3-testumgebung) |
 | E-5 | Vorschauumgebungen je PR? | vorerst nein (Last und Fremdcode auf dem Produktiv-VPS); später ggf. getrennter Test-VPS |
 | E-6 | Domain `qs-stafl.de` für das QS-Portal? | im QS-Auftrag entscheiden; Register führt sie mit Vorbehalt |
 | E-7 | Externe Datensicherung | weiterhin zurückgestellt (Ihr Wunsch) – Risiko in [bestandsaufnahme.md](bestandsaufnahme.md#risiken-dokumentiert-nicht-behoben) |
