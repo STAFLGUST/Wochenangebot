@@ -1,4 +1,4 @@
-# STAFL-Plattform – zentrale Anmeldung im Betrieb (ADR-003, Roadmap: Inbetriebnahme). NOCH NICHT AKTIV.
+# STAFL-Plattform – zentrale Anmeldung im Betrieb (ADR-003, Roadmap: Inbetriebnahme). Aktiv über COMPOSE_FILE in .env (Schritt 5).
 #
 # Ergänzt docker-compose.yml, ohne es zu ändern (eine Änderung dort startet beim Release die Container neu):
 #   docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d
@@ -18,6 +18,10 @@ services:
       OIDC_SECRET_ANGEBOT: ${OIDC_SECRET_ANGEBOT:?in .env setzen}
       OIDC_CRYPTO_DASHBOARD: ${OIDC_CRYPTO_DASHBOARD:?in .env setzen}
       OIDC_CRYPTO_ANGEBOT: ${OIDC_CRYPTO_ANGEBOT:?in .env setzen}
+    networks:
+      default:
+        aliases:
+          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot. – nur mit dieser Datei
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244

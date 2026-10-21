@@ -5,7 +5,7 @@
 #   2. docker compose mit Ergänzungsdatei gültig; alle neuen Images fest über Digest
 #   3. Anwendungs-Image mit apache-oidc.conf: Konfiguration gültig; angebot-stafl.de (Standard-Host) verhält sich
 #      unverändert; die neuen Hosts liefern ohne Anmeldung nichts aus der Anwendung aus
-#   4. Caddy-Teil für die neuen Hosts gültig
+#   4. Caddyfile (mit den Anmelde-Hosts) gültig; deren Ziele gibt es nur mit der Ergänzungsdatei
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HIER="$REPO/deploy/anmeldung"
@@ -40,6 +40,12 @@ docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-
 assert all(p.get('host_ip')=='127.0.0.1' for p in kc.get('ports',[])); assert not db.get('ports'); assert list(db['networks'])==['anmeldung']; \
 assert d['networks']['anmeldung'].get('internal') is True" \
   && ok "Keycloak nur lokal erreichbar, Datenbank nur im internen Netz" || nein "Netz/Ports von Keycloak bzw. Datenbank"
+# Ziele der Anmelde-Hosts in Caddy (app-mitarbeiter, keycloak) nur mit der Ergänzungsdatei – ohne sie: 502 statt App ohne Anmeldung
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); assert 'app-mitarbeiter' in (d['services']['app']['networks']['default'] or {}).get('aliases', [])" \
+  && docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); s=d['services']; assert 'keycloak' not in s; assert all('app-mitarbeiter' not in json.dumps(v) for v in s.values())" \
+  && ok "Ziele app-mitarbeiter und keycloak nur mit der Ergänzungsdatei" || nein "Netzwerkname app-mitarbeiter bzw. keycloak"
 
 # ── 3. Anwendungs-Image mit der Betriebskonfiguration ──
 docker build -q -t stafl-app:pruefung "$REPO/deploy/image" >/dev/null
@@ -68,9 +74,9 @@ done
 docker logs stafl-pruefung 2>&1 | grep -iE "AH0|error" | grep -viE "metadata|oidc_provider_static_config|oidc_util_http|curl" | head -3 | sed 's/^/Info: /' || true
 
 # ── 4. Caddy ──
-if docker run --rm -v "$HIER/Caddyfile.anmeldung:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy-pruefung.txt 2>&1; then
-  ok "Caddy-Teil gültig"
+if docker run --rm -e DOMAIN=angebot-stafl.de -v "$REPO/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy-pruefung.txt 2>&1; then
+  ok "Caddyfile mit den Anmelde-Hosts gültig"
 else
-  nein "Caddy-Teil" "$(tail -3 /tmp/caddy-pruefung.txt)"
+  nein "Caddyfile" "$(tail -3 /tmp/caddy-pruefung.txt)"
 fi
 exit $FEHLER

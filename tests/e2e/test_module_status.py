@@ -52,7 +52,7 @@ for mid in ('bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'verwaltung'):
     check(f'{mid}: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)
 qs = mods['qs']
 check('QS-Portal extern, QS-Verwaltung intern – beide gesperrt', ob(qs, 'portal')['art'] == 'extern' and ob(qs, 'intern')['art'] == 'intern' and not ob(qs, 'portal')['zugang'] and not ob(qs, 'intern')['zugang'])
-check('Anmelde-Oberfläche (Keycloak) geplant, ohne Zugang', (lambda o: o['entwicklung'] == 'geplant' and o['zugang'] is False)(ob(mods['plattform'], 'anmeldung')))
+check('Anmelde-Oberfläche (Keycloak) und Dashboard freigegeben (Inbetriebnahme Schritt 6)', all(o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv' for o in (ob(mods['plattform'], 'anmeldung'), ob(mods['dashboard'], 'start'))))
 roh = json.dumps(r, ensure_ascii=False)
 check('keine Entwickler-Interna in der Antwort (Pfade, Agenten, Testgruppen)', not any(w in roh for w in ('"pfade"', '"agent"', '"testgruppen"', 'app/api/', 'tests/e2e')))
 
