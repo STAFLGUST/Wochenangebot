@@ -741,6 +741,11 @@ body.ro .vtog { display: none; }
 .wartung-form.on { border-color: #f0c27a; box-shadow: inset 4px 0 0 #e0901f, var(--shadow); }
 .wartung-form textarea { font-family: inherit !important; }
 .wartung-foot { gap: 10px; align-items: center; flex-wrap: wrap; }
+.ew-card { text-align: left; }
+.ew-card .btn + .btn { margin-top: 8px; }
+.wv-list { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-2); }
+.wv-list li { padding: 5px 0; border-top: 1px solid var(--line); }
+.wv-list li:first-child { border-top: 0; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 @media screen { :root[data-theme="dark"] .adm-wartung { background: rgba(224,144,31,.14); border-color: rgba(224,144,31,.4); color: #f3c98a; } }
 

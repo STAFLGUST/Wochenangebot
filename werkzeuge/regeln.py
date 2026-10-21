@@ -590,6 +590,10 @@ def pruefe_caddy(rw: Regelwerk) -> None:
 # ─────────────────────────────── Aktionsregister ───────────────────────────────
 
 AKTIONEN_LISTE = "app/api/lib/aktionen-liste.php"
+# Schreibende Aktionen, die auch während einer Wartung erreichbar sein müssen: Anmeldung, Abmelden und der eigene Zugang
+# (Pflicht-Passwortwechsel, Zwei-Faktor/Passkey bei der Anmeldung) – sonst könnten sich Administratoren nicht anmelden.
+WARTUNG_FREI_SCHREIBEND = {"login", "login_2fa", "logout", "setup", "passkey_login_begin", "passkey_login", "change_password",
+                           "twofa_begin", "twofa_enable", "passkey_begin", "passkey_register"}
 CASE_RE = re.compile(r"case '([a-z0-9_]+)'")
 GLEICH_RE = re.compile(r"\$action === '([a-z0-9_]+)'")
 
@@ -620,7 +624,7 @@ def aktionen_tabelle(rw: Regelwerk) -> dict:
                 continue
             tab[name] = {"modul": inhalt.get("modul", datei), "oberflaeche": a.get("oberflaeche", ""),
                          "schreibend": a.get("schreibend", False), "oeffentlich": a.get("oeffentlich", False),
-                         "kunden_wartung": a.get("kunden_wartung", False)}
+                         "kunden_wartung": a.get("kunden_wartung", False), "wartung_frei": a.get("wartung_frei", False)}
     return tab
 
 
@@ -635,11 +639,12 @@ def aktionen_php(rw: Regelwerk) -> str:
          "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/aktionen/*.toml – nicht von Hand ändern.",
          "   Je Aktion: zuständiges Modul, Oberfläche (Host), schreibend (true | false | 'post' = nur per POST),",
          "   öffentlich (ohne Mitarbeiter-Anmeldung, keine IP-/Ländersperre des Eingabebereichs) und kunden_wartung",
-         "   (pausiert im Wartungsmodus der Angebotsseite). Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
+         "   (pausiert im Wartungsmodus der Angebotsseite), wartung_frei (bleibt bei Wartung der Oberfläche erreichbar:",
+         "   Anmeldung, Abmelden, Status). Bei Konflikten nach einem Rebase einfach neu erzeugen. */",
          "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
          "const AKTIONEN = ["]
     for name, a in sorted(aktionen_tabelle(rw).items()):
-        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung"))
+        felder = ", ".join(f"'{k}' => {php_wert(a[k])}" for k in ("modul", "oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei"))
         z.append(f"    '{name}' => [{felder}],")
     z.append("];")
     return "\n".join(z) + "\n"
@@ -721,7 +726,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: schon in {gesehen[name]} registriert – jede Aktion gehört genau einem Modul")
                 continue
             gesehen[name] = ort
-            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung"}
+            unbekannt = set(a) - {"oberflaeche", "schreibend", "oeffentlich", "kunden_wartung", "wartung_frei"}
             if unbekannt:
                 rw.f(f"{wo}: unbekannte Felder {', '.join(sorted(unbekannt))}")
             ob = oberflaechen.get(a.get("oberflaeche", ""))
@@ -729,7 +734,7 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: oberflaeche „{a.get('oberflaeche', '')}“ gibt es nicht (Form <modul>.<oberfläche>)")
             if a.get("schreibend", False) not in (True, False, "post"):
                 rw.f(f"{wo}: schreibend muss true, false oder \"post\" sein")
-            for feld in ("oeffentlich", "kunden_wartung"):
+            for feld in ("oeffentlich", "kunden_wartung", "wartung_frei"):
                 if not isinstance(a.get(feld, False), bool):
                     rw.f(f"{wo}: {feld} muss true oder false sein")
             if ob and a.get("oeffentlich") and ob.get("art") != "extern":
@@ -738,6 +743,10 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
                 rw.f(f"{wo}: Mitarbeiter-Aktion auf externer Oberfläche {a['oberflaeche']} – auf die interne Oberfläche legen (GR-104, GR-109)")
             if a.get("kunden_wartung") and not a.get("oeffentlich"):
                 rw.f(f"{wo}: kunden_wartung nur für öffentliche Kundenaktionen (GR-009)")
+            if a.get("wartung_frei") and a.get("oeffentlich"):
+                rw.f(f"{wo}: wartung_frei nur für Mitarbeiter-Aktionen (öffentliche regelt kunden_wartung)")
+            if a.get("wartung_frei") and a.get("schreibend") is True and name not in WARTUNG_FREI_SCHREIBEND:
+                rw.f(f"{wo}: schreibende Aktion als wartung_frei – nur Anmeldung und eigener Zugang erlaubt (GR-107)")
     code = aktionen_im_code(rw.wurzel)
     for name in sorted(code - set(gesehen)):
         rw.f(f"Aktion {name} wird im Code bearbeitet, ist aber in keinem regeln/aktionen/*.toml registriert (GR-109)")

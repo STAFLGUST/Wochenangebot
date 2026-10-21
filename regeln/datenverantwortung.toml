@@ -257,9 +257,8 @@ name = "module"
 eigentuemer = "plattform"
 leser = ["dashboard", "verwaltung"]
 schutz = "intern"
-geplant = true
-beschreibung = "Laufzeitzustand je Modul/Oberfläche: Freigabe, Wartung (geplant/aktiv), Tester, Hinweise (Phase 5)"
-historie = "Jede Änderung mit Grund im Protokoll (regeln/wartung.toml, [protokoll])"
+beschreibung = "Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis) und Verlauf der Änderungen; Freigaben und Tester folgen (lib/module.php)"
+historie = "Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, Grund, Beginn, bis) zusätzlich zum Protokoll"
 
 [[dokument]]
 name = "firewall"
