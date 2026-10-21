@@ -46,15 +46,17 @@ with sync_playwright() as p:
     check('users list has admin', a.locator('.utab tbody tr').count() == 1)
     def add_user(uname, name, role, pw, must=True):
         a.click('#user-add'); a.wait_for_selector('#dlg-user[open]')
-        a.fill('#user-body [name=name]', name); a.fill('#user-body [name=username]', uname)
+        vor, _, nach = name.rpartition(' ')
+        a.fill('#user-body [name=vorname]', vor or name); a.fill('#user-body [name=nachname]', nach if vor else 'Test'); a.fill('#user-body [name=username]', uname)
         a.check(f'#user-body [name=role][value={role}]')
         a.fill('#user-body [name=password]', pw)
         if not must: a.uncheck('#user-body [name=mustChange]')
         a.click('#user-body [type=submit]')
-    add_user('anna', 'Anna Beispiel', 'editor', 'Start-Kennwort-123')
-    a.wait_for_function("!document.querySelector('#dlg-user').open"); a.wait_for_timeout(300)
-    add_user('ben', 'Ben Leser', 'viewer', 'Leser-Kennwort-123', must=False)
-    a.wait_for_function("!document.querySelector('#dlg-user').open"); a.wait_for_timeout(300)
+    def fertig():   # nach dem Anlegen: Abschluss-Schritt mit den Zugangsdaten, „Fertig“ schließt
+        a.wait_for_selector('#user-body .us-fertig'); a.click('#user-body .dlg-foot [data-close]')
+        a.wait_for_function("!document.querySelector('#dlg-user').open")
+    add_user('anna', 'Anna Beispiel', 'editor', 'Start-Kennwort-123'); fertig()
+    add_user('ben', 'Ben Leser', 'viewer', 'Leser-Kennwort-123', must=False); fertig()
     check('3 users listed', a.locator('.utab tbody tr').count() == 3, a.locator('.utab tbody tr').count())
     check('role badges', 'Bearbeiter' in a.inner_text('.utab') and 'Nur ansehen' in a.inner_text('.utab'))
     add_user('Anna', 'Doppelt', 'viewer', 'Irgendwas-123')
@@ -62,12 +64,12 @@ with sync_playwright() as p:
     a.fill('#user-body [name=username]', 'x'); a.click('#user-body [type=submit]'); wait_text(a, '#user-err', 'Benutzername')
     check('invalid username rejected', 'Benutzername' in a.inner_text('#user-err'))
     a.click('#user-body [data-uact="gen"]'); gp = a.input_value('#user-body [name=password]'); check('password suggestion', len(gp) >= 12, gp)
-    a.keyboard.press('Escape')
+    a.click('#user-body .dlg-foot [data-close]'); a.wait_for_function("!document.querySelector('#dlg-user').open")
     a.screenshot(path=SH + '/users.png')
     # eigener Zugang: Rolle / aktiv gesperrt
     a.locator('.utab tbody tr:has-text("(Sie)")').click(); a.wait_for_selector('#dlg-user[open]')
     check('own role + active locked', a.locator('#user-body [name=role]:disabled').count() == 3 and a.locator('#user-body [name=active]').is_disabled() and a.locator('#user-body [data-uact=del]').count() == 0)
-    a.keyboard.press('Escape')
+    a.click('#user-body .dlg-foot [data-close]'); a.wait_for_function("!document.querySelector('#dlg-user').open")
     r = api_from_page(a, 'user_save', {'id': a.evaluate("1") and '', 'name': 'x'})
     check('server validates role', r[0] == 422, r)
 
@@ -145,7 +147,8 @@ with sync_playwright() as p:
 
     # ---- Passwort für Anna neu setzen → muss ändern
     b.locator('.utab tbody tr:has-text("Anna Beispiel")').click(); b.wait_for_selector('#dlg-user[open]')
-    b.fill('#user-body [name=password]', 'Reset-Kennwort-999'); b.click('#user-body [type=submit]'); b.wait_for_function("!document.querySelector('#dlg-user').open"); b.wait_for_timeout(300)
+    b.fill('#user-body [name=password]', 'Reset-Kennwort-999'); b.click('#user-body [type=submit]')
+    b.wait_for_selector('#user-body .us-fertig'); b.click('#user-body .dlg-foot [data-close]'); b.wait_for_function("!document.querySelector('#dlg-user').open")
     check('anna must change after reset', 'muss Passwort ändern' in b.locator('.utab tbody tr:has-text("Anna Beispiel")').inner_text())
     # letzter Admin
     r = api_from_page(b, 'user_delete', {'id': b.locator('.utab tbody tr:has-text("(Sie)")').get_attribute('data-uid')})

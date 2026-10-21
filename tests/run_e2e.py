@@ -78,6 +78,7 @@ SUITES['kundenimport'] = SUITES['bestellung']
 SUITES['vertreter'] = SUITES['bestellung']
 SUITES['sicherheit_freigaben'] = SUITES['bestellung']
 SUITES['schutz'] = SUITES['bestellung']
+SUITES['nutzer_anlegen'] = SUITES['bestellung']
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung

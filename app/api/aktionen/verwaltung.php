@@ -201,8 +201,9 @@ switch ($action) {
                 $users = users_load();
                 $id = is_string($b['id'] ?? null) ? $b['id'] : '';
                 $isNew = $id === '';
-                $name = s($b['name'] ?? '', 80, false);
-                if ($name === null) throw new InvalidArgumentException('Bitte einen Namen angeben.');
+                $id = is_string($b['id'] ?? null) ? $b['id'] : '';
+                $person = nutzer_person($b, $id === '');
+                $name = $person['name'];
                 $role = is_string($b['role'] ?? null) && isset(ROLES[$b['role']]) ? $b['role'] : null;
                 if ($role === null) throw new InvalidArgumentException('Ungültige Rolle.');
                 $active = !empty($b['active']);
@@ -214,17 +215,21 @@ switch ($action) {
                 $grant = array_values(array_diff(rights_clean(is_array($b['grant'] ?? null) ? $b['grant'] : []), $deny));
                 $lbl = function (array $ks) { return implode(', ', array_map(function ($k) { return PERMS[$k]['l']; }, $ks)); };
                 if ($isNew) {
-                    $uname = clean_username($b['username'] ?? '');
+                    $wunsch = trim((string)($b['username'] ?? ''));
+                    if ($wunsch === '' && $person['vorname'] !== '') $wunsch = benutzername_vorschlag($person['vorname'], $person['nachname'], array_column($users, 'username'));
+                    $uname = clean_username($wunsch);
                     foreach ($users as $u) if ($u['username'] === $uname) throw new InvalidArgumentException('Der Benutzername „' . $uname . '“ ist bereits vergeben.');
                     if (!$setPw) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Nutzer festlegen.');
                     $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => $role, 'active' => $active,
                           'hash' => password_hash(check_password($pw, $uname), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
                           'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
+                    foreach (['vorname', 'nachname', 'email'] as $f) if ($person[$f] !== '') $u[$f] = $person[$f];
                     if ($hasRights && $role !== 'admin') { if ($grant) $u['grant'] = $grant; if ($deny) $u['deny'] = $deny; }
                     $users[] = $u;
                     users_save($users);
                     $d = [['k' => 'u|role', 'code' => '', 'name' => $uname, 'f' => 'Rolle', 'from' => '', 'to' => ROLE_LABELS[$role]]];
                     if (!$active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $uname, 'f' => 'Status', 'from' => '', 'to' => 'deaktiviert'];
+                    if ($person['email'] !== '') $d[] = ['k' => 'u|email', 'code' => '', 'name' => $uname, 'f' => 'E-Mail', 'from' => '', 'to' => $person['email']];
                     if (!empty($u['grant'])) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $uname, 'f' => 'Zusätzlich erlaubt', 'from' => '', 'to' => $lbl($u['grant'])];
                     if (!empty($u['deny'])) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $uname, 'f' => 'Verboten', 'from' => '', 'to' => $lbl($u['deny'])];
                     return [$u, 'Nutzer „' . $uname . '“ (' . $name . ') angelegt', $d];
@@ -237,11 +242,17 @@ switch ($action) {
                 }
                 if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
                 $users[$i]['name'] = $name;
+                foreach (['vorname', 'nachname', 'email'] as $f) {
+                    if ($f !== 'email' && $person['vorname'] === '' && $person['nachname'] === '') continue;   // ältere Oberfläche: nur „name“
+                    if (!array_key_exists($f, $b) && $f === 'email') continue;
+                    if ($person[$f] !== '') $users[$i][$f] = $person[$f]; else unset($users[$i][$f]);
+                }
                 $users[$i]['role'] = $role;
                 $users[$i]['active'] = $active;
                 if (active_admins($users) < 1) throw new InvalidArgumentException('Es muss mindestens ein aktiver Administrator bestehen bleiben.');
                 $d = [];
                 if ($old['name'] !== $name) $d[] = ['k' => 'u|name', 'code' => '', 'name' => $old['username'], 'f' => 'Name', 'from' => $old['name'], 'to' => $name];
+                if ((string)($old['email'] ?? '') !== (string)($users[$i]['email'] ?? '')) $d[] = ['k' => 'u|email', 'code' => '', 'name' => $old['username'], 'f' => 'E-Mail', 'from' => (string)($old['email'] ?? ''), 'to' => (string)($users[$i]['email'] ?? '')];
                 if ($old['role'] !== $role) $d[] = ['k' => 'u|role', 'code' => '', 'name' => $old['username'], 'f' => 'Rolle', 'from' => ROLE_LABELS[$old['role']], 'to' => ROLE_LABELS[$role]];
                 if ($hasRights || $role === 'admin') {
                     $og = array_values((array)($old['grant'] ?? [])); $od = array_values((array)($old['deny'] ?? []));
@@ -288,6 +299,42 @@ switch ($action) {
                 if (empty($u['active']) || array_filter($d, function ($x) { return in_array($x['k'], ['u|pw', 'u|2fa', 'u|passkey'], true); })) sess_remove(function ($k, $v) use ($uid) { return $v['uid'] === $uid; });
             }
             if ($d) audit('user', $msg, $d);
+            respond(['ok' => true, 'user' => user_public($u)]);
+        }
+
+        case 'user_mail': {   // Zugangsdaten per E-Mail an den Mitarbeiter (optional mit Startpasswort)
+            $me = require_admin_confirmation('user_mail');
+            $cfg = require_mail();
+            $b = body();
+            $users = users_load();
+            $i = user_find($users, (string)($b['id'] ?? ''));
+            if ($i === null) fail('Nutzer nicht gefunden.', 404);
+            $u = $users[$i];
+            if (empty($u['email'])) fail('Für diesen Nutzer ist keine E-Mail-Adresse hinterlegt.', 422);
+            if (empty($u['active'])) fail('Der Zugang ist deaktiviert – bitte zuerst aktivieren.', 422);
+            $pw = $b['password'] ?? null;
+            $startPw = null;
+            if (is_string($pw) && $pw !== '') {
+                if (empty($u['mustChange'])) fail('Ein Startpasswort wird nur mitgesendet, wenn der Nutzer es bei der ersten Anmeldung ändern muss.', 422);
+                if (!password_verify($pw, (string)$u['hash'])) fail('Das Startpasswort passt nicht zum gespeicherten Passwort.', 422);
+                $startPw = $pw;
+            }
+            $note = mb_substr(trim(str_replace("\r", '', (string)($b['note'] ?? ''))), 0, 1000);
+            [$sub, $txt, $html] = mail_tpl_nutzer($u, $startPw, $note);
+            @set_time_limit(60);
+            $r = mail_send_many($cfg, ['x' => ['to' => $u['email'], 'name' => $u['name'], 'subject' => $sub, 'text' => $txt, 'html' => $html]])['x'];
+            $info = ['t' => now(), 'to' => $u['email'], 'by' => $me['username'], 'ok' => $r['ok'], 'mitPasswort' => $startPw !== null];
+            $u = with_lock('nutzer', function () use ($u, $info) {
+                $users = users_load();
+                $i = user_find($users, $u['id']);
+                if ($i === null) return $u;
+                $users[$i]['mailInfo'] = $info;
+                users_save($users);
+                return $users[$i];
+            });
+            mail_record([['kid' => '', 'firma' => $u['name'] . ' (Mitarbeiter)', 'to' => $info['to'], 'typ' => 'zugang', 'ok' => $r['ok'], 'error' => $r['error'] ?? '']]);
+            audit('user', 'Zugangsdaten an „' . $u['username'] . '“ (' . $info['to'] . ') ' . ($startPw !== null ? 'mit Startpasswort ' : '') . ($r['ok'] ? 'per E-Mail versendet' : 'nicht zugestellt: ' . ($r['error'] ?? '')));
+            if (!$r['ok']) fail('Die E-Mail konnte nicht zugestellt werden: ' . ($r['error'] ?? 'unbekannter Fehler'), 502);
             respond(['ok' => true, 'user' => user_public($u)]);
         }
 

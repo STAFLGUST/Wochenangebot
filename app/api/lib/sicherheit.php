@@ -34,6 +34,7 @@ const BESTAETIGUNG = [
     'user_save'             => ['Immer mit Bestätigung', 'Nutzer anlegen oder ändern', true],
     'user_delete'           => ['Immer mit Bestätigung', 'Nutzer löschen', true],
     'user_unlock'           => ['Immer mit Bestätigung', 'Gesperrten Zugang entsperren', true],
+    'user_mail'             => ['Immer mit Bestätigung', 'Zugangsdaten per E-Mail an einen Nutzer senden', true],
     'rechte_save'           => ['Immer mit Bestätigung', 'Rechte der Rollen ändern', true],
     'session_end'           => ['Immer mit Bestätigung', 'Sitzung beenden', true],
     'ip_unblock'            => ['Immer mit Bestätigung', 'IP-Sperre aufheben', true],

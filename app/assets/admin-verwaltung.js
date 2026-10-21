@@ -48,7 +48,7 @@
     const order = { admin: 0, editor: 1, viewer: 2 };
     const list = users.slice().sort((a, b) => (b.active - a.active) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
     const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
-        <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div></td>
+        <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
         <td>${roleBadge(u.role)}${exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
         <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
@@ -111,16 +111,39 @@
     $('#ur-list').innerHTML = userRightsRows(u, e.target.value);
     for (const s2 of $$('#ur-list [data-ur]')) if (keep[s2.dataset.ur] !== undefined) s2.value = keep[s2.dataset.ur];
   });
+  /* Benutzername aus Vor- und Nachname wie auf dem Server (benutzername_vorschlag): „vorname-nachname“, Umlaute ae/oe/ue/ss */
+  function unameVorschlag(vor, nach) {
+    const teil = (x) => String(x || '').toLowerCase().trim().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const basis = [teil(vor), teil(nach)].filter(Boolean).join('-').slice(0, 32).replace(/-+$/, '');
+    if (basis.length < 2) return '';
+    const belegt = new Set((users || []).map((x) => x.username.toLowerCase()));
+    let u = basis, n = 2;
+    while (belegt.has(u)) { const suf = '-' + n++; u = basis.slice(0, 32 - suf.length).replace(/-+$/, '') + suf; }
+    return u;
+  }
+  const teileName = (u) => {   // ältere Zugänge haben nur „name“: letztes Wort = Nachname
+    if (!u) return ['', ''];
+    if (u.vorname || u.nachname) return [u.vorname, u.nachname];
+    const t = String(u.name || '').trim().split(/\s+/);
+    return t.length > 1 ? [t.slice(0, -1).join(' '), t[t.length - 1]] : [t[0] || '', ''];
+  };
+  const mailInfoText = (u) => (u && u.mailInfo ? `Zugangsdaten zuletzt per E-Mail: ${dateTime(u.mailInfo.t)} an ${u.mailInfo.to}${u.mailInfo.mitPasswort ? ' (mit Startpasswort)' : ''}${u.mailInfo.ok ? '' : ' – nicht zugestellt'}` : '');
+  let unameManuell = false, fertigInfo = null;
   function openUser(id) {
     const u = id ? users.find((x) => x.id === id) : null;
-    editUid = id;
+    editUid = id; unameManuell = false; fertigInfo = null;
     const self = u && u.id === W.me.id;
+    const [vor, nach] = teileName(u);
     $('#user-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="us-title">${u ? 'Nutzer bearbeiten' : 'Nutzer anlegen'}</h2><p>${u ? `Angelegt ${esc(dateTime(u.created))}${u.createdBy ? ' von ' + esc(u.createdBy) : ''}` : 'Der Nutzer meldet sich mit Benutzername und Passwort an.'}</p></div>
-        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Abbrechen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
-        <label class="fld"><span>Name</span><input name="name" value="${esc(u ? u.name : '')}" maxlength="80" required placeholder="z. B. Max Mustermann"></label>
-        <label class="fld"><span>Benutzername</span><input name="username" value="${esc(u ? u.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="z. B. mmustermann"${u ? ' disabled' : ' required'}></label>
+        <label class="fld"><span>Vorname</span><input name="vorname" value="${esc(vor)}" maxlength="40" required autocomplete="off" placeholder="z. B. Max"></label>
+        <label class="fld"><span>Nachname</span><input name="nachname" value="${esc(nach)}" maxlength="40"${u ? '' : ' required'} autocomplete="off" placeholder="z. B. Mustermann"></label>
+        <label class="fld"><span>E-Mail <small class="muted">(für die Zugangsdaten)</small></span><input name="email" type="email" value="${esc(u ? u.email : '')}" maxlength="160" autocomplete="off" spellcheck="false" placeholder="z. B. max.mustermann@standard-fleisch.de"></label>
+        <label class="fld"><span>Benutzername${u ? '' : ' <small class="muted">(automatisch)</small>'}</span><input name="username" value="${esc(u ? u.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="vorname-nachname"${u ? ' disabled' : ' required'}></label>
+        ${u ? '' : '<p class="hint span2 us-uhint" id="us-uhint">Wird aus Vorname-Nachname gebildet (Umlaute als ae/oe/ue/ss); bei Bedarf überschreibbar.</p>'}
         <div class="fld span2"><span>Rolle</span>
           <div class="role-pick">${['admin', 'editor', 'viewer'].map((r) => `<label class="role-opt"><input type="radio" name="role" value="${r}"${(u ? u.role : 'editor') === r ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(ROLE_LABEL[r])}</strong><small>${esc(ROLE_DESC[r])}</small></span></label>`).join('')}</div>
         </div>
@@ -136,19 +159,73 @@
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
         ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
+        ${u && u.mailInfo ? `<p class="hint span2" style="margin:0">${esc(mailInfoText(u))}</p>` : ''}
         <p class="form-err span2" id="user-err" role="alert"></p>
       </div>
       <div class="dlg-foot">
-        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Nutzer löschen</button>` : ''}</span>
+        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Nutzer löschen</button>` : ''}${u && !self && u.email && u.active ? `<button type="button" class="btn sm ghost" data-uact="mail">${icon('mail', 'sm')}Zugangsdaten per E-Mail</button>` : ''}</span>
         <button type="button" class="btn" data-close>Abbrechen</button>
         <button type="submit" class="btn primary">${u ? 'Speichern' : 'Nutzer anlegen'}</button>
       </div>`;
     dlgUser.showModal();
-    $('#user-body [name="name"]').focus();
+    $('#user-body [name="vorname"]').focus();
   }
+  /* Nach dem Anlegen (bzw. neuem Passwort): Zusammenfassung und „Zugangsdaten per E-Mail senden“ */
+  function zeigeFertig(u, pw, neu) {
+    fertigInfo = { id: u.id, pw };
+    const mitPwMoeglich = !!(pw && u.mustChange);
+    $('#user-body').innerHTML = `
+      <div class="dlg-head"><div><h2 id="us-title">${neu ? 'Nutzer angelegt' : 'Neues Passwort gesetzt'}</h2><p>${esc(u.name)} · ${esc(ROLE_LABEL[u.role] || u.role)}</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body us-fertig">
+        <dl class="us-daten"><dt>Benutzername</dt><dd><code>${esc(u.username)}</code></dd>
+          ${pw ? `<dt>${neu ? 'Startpasswort' : 'Neues Passwort'}</dt><dd><code id="us-pw">${esc(pw)}</code> <button type="button" class="btn sm ghost" data-uact="copy">${icon('copy', 'sm')}Kopieren</button></dd>` : ''}
+          <dt>E-Mail</dt><dd>${u.email ? esc(u.email) : '<span class="muted">keine hinterlegt</span>'}</dd></dl>
+        ${u.email ? `<div class="us-mail">
+            ${mitPwMoeglich ? `<label class="check"><input type="checkbox" id="us-mitpw" checked><span>${neu ? 'Startpasswort' : 'Neues Passwort'} in die E-Mail aufnehmen <small class="muted">(muss bei der ersten Anmeldung geändert werden)</small></span></label>`
+              : pw ? '<p class="hint">Das Passwort wird nicht mitgesendet, weil es nicht bei der ersten Anmeldung geändert werden muss – bitte separat weitergeben.</p>' : ''}
+            <p class="hint">Die E-Mail enthält Benutzername, Link zum Eingabebereich und den Hinweis zur ersten Anmeldung.</p>
+            <p class="us-mail-st" id="us-mail-st" role="status"></p></div>`
+          : `<p class="hint">${pw ? 'Passwort jetzt sicher weitergeben. ' : ''}Für eine E-Mail mit den Zugangsdaten bitte eine E-Mail-Adresse hinterlegen (Nutzer bearbeiten).</p>`}
+        <p class="form-err" id="user-err" role="alert"></p>
+      </div>
+      <div class="dlg-foot">${u.email ? `<button type="button" class="btn" data-close>Fertig</button><button type="button" class="btn primary" data-uact="sendmail">${icon('mail')}Zugangsdaten per E-Mail senden</button>` : '<button type="button" class="btn primary" data-close>Fertig</button>'}</div>`;
+    const b = $('#user-body [data-uact="sendmail"]') || $('#user-body [data-close]'); if (b) b.focus();
+  }
+  async function sendeZugang(id, pw) {
+    const r = await api('user_mail', { body: { id, password: pw || '' } });
+    const i = users.findIndex((x) => x.id === id); if (i >= 0) users[i] = r.user;
+    return r.user;
+  }
+  dlgUser.addEventListener('input', (e) => {
+    const f = $('#user-body');
+    if (editUid || fertigInfo || !f.username) return;
+    if (e.target.name === 'username') { unameManuell = e.target.value.trim() !== ''; return; }
+    if ((e.target.name === 'vorname' || e.target.name === 'nachname') && !unameManuell) f.username.value = unameVorschlag(f.vorname.value, f.nachname.value);
+  });
   dlgUser.addEventListener('click', async (e) => {
     const a = e.target.closest('[data-uact]')?.dataset.uact;
     if (a === 'gen') { const i = $('#user-body [name="password"]'); i.value = genPassword(); i.select(); return; }
+    if (a === 'copy') { try { await navigator.clipboard.writeText(fertigInfo.pw); toast('Passwort kopiert.'); } catch { const c = $('#us-pw'); if (c) getSelection().selectAllChildren(c); } return; }
+    if (a === 'sendmail') {
+      const btn = e.target.closest('button'), st = $('#us-mail-st'), mit = $('#us-mitpw');
+      btn.disabled = true; $('#user-err').textContent = '';
+      try {
+        const u = await sendeZugang(fertigInfo.id, mit && mit.checked ? fertigInfo.pw : '');
+        st.innerHTML = `${icon('check', 'sm')} E-Mail an ${esc(u.mailInfo.to)} gesendet${u.mailInfo.mitPasswort ? ' (mit Passwort)' : ''}.`;
+        st.className = 'us-mail-st st-ok';
+        btn.innerHTML = `${icon('mail')}Erneut senden`;
+        renderUsersView();
+      } catch (ex) { $('#user-err').textContent = ex.message; }
+      btn.disabled = false;
+      return;
+    }
+    if (a === 'mail') {
+      const u = users.find((x) => x.id === editUid);
+      if (!(await confirmBox('Zugangsdaten per E-Mail senden?', `${esc(u.name)} erhält an ${esc(u.email)} Benutzername und Link zum Eingabebereich – ohne Passwort (das wird nicht gespeichert und muss separat weitergegeben werden).`, 'Senden'))) return;
+      try { const nu = await sendeZugang(u.id, ''); toast(`Zugangsdaten an ${nu.mailInfo.to} gesendet.`); renderUsersView(); dlgUser.close(); } catch (ex) { $('#user-err').textContent = ex.message; }
+      return;
+    }
     if (a === 'del') {
       const u = users.find((x) => x.id === editUid);
       if (!(await confirmBox('Nutzer löschen?', `Der Zugang „${esc(u.username)}“ (${esc(u.name)}) wird gelöscht. Die Einträge im Protokoll bleiben erhalten. Alternativ können Sie den Zugang nur deaktivieren.`, 'Löschen', true))) return;
@@ -157,13 +234,15 @@
   });
   $('#user-body').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (fertigInfo) return;
     const f = e.target, err = $('#user-err');
     err.textContent = '';
     const pw = f.password ? f.password.value.trim() : '';
     if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
     const u = editUid ? users.find((x) => x.id === editUid) : null;
     const body = {
-      id: editUid || '', name: f.name.value.trim(), username: u ? u.username : f.username.value.trim(),
+      id: editUid || '', vorname: f.vorname.value.trim(), nachname: f.nachname.value.trim(), email: f.email.value.trim(),
+      username: u ? u.username : f.username.value.trim(),
       role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
       resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false, resetGeraete: f.resetGeraete ? f.resetGeraete.checked : false,
@@ -172,11 +251,11 @@
     const btn = f.querySelector('[type="submit"]');
     btn.disabled = true;
     try {
-      await api('user_save', { body });
-      dlgUser.close();
-      toast(u ? `Änderungen an „${u.username}“ gespeichert.` : `Nutzer „${body.username.toLowerCase()}“ angelegt.`);
-      if (pw) toast(`${u ? 'Neues Passwort für' : 'Nutzer angelegt –'} „${(u ? u.username : body.username).toLowerCase()}“: Passwort jetzt sicher weitergeben.`, 6000);
+      const r = await api('user_save', { body });
       renderUsersView();
+      if (!u || (pw && r.user.id !== W.me.id)) { zeigeFertig(r.user, pw, !u); return; }   // Abschluss mit „Zugangsdaten per E-Mail senden“
+      dlgUser.close();
+      toast(`Änderungen an „${u.username}“ gespeichert.`);
     } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
   });
 
