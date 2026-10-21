@@ -1,0 +1,206 @@
+# Aktionen des Moduls „angebot“: Wochenangebot, Kundenangebote, Einzelangebote, Kundenportal, Bestellwünsche, Preisverlauf, Kunden-E-Mails.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "angebot"
+
+[aktion.abmelden1]
+oberflaeche = "angebot.kunden"
+oeffentlich = true
+# Formular-POST aus dem E-Mail-Programm (RFC 8058) – bewusst nicht „schreibend“ (kein JSON, kein CSRF-Token möglich)
+
+[aktion.bestell_settings_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.bestellung]
+oberflaeche = "angebot.eingabe"
+
+[aktion.bestellung_mail_retry]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.bestellung_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.bestellungen]
+oberflaeche = "angebot.eingabe"
+
+[aktion.discard_draft]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.draft]
+oberflaeche = "angebot.eingabe"
+
+[aktion.draft_ping]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.einzel_artikel]
+oberflaeche = "angebot.eingabe"
+
+[aktion.einzel_detail]
+oberflaeche = "angebot.eingabe"
+
+[aktion.einzel_liste]
+oberflaeche = "angebot.eingabe"
+
+[aktion.einzel_loeschen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.einzel_pdf]
+oberflaeche = "angebot.eingabe"
+
+[aktion.einzel_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.einzel_senden]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.einzel_status]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.fracht_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.history_data]
+oberflaeche = "angebot.eingabe"
+
+[aktion.history_delete]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.history_import]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.history_list]
+oberflaeche = "angebot.eingabe"
+
+[aktion.history_prev]
+oberflaeche = "angebot.eingabe"
+
+[aktion.kunde_abmelden]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+
+[aktion.kunde_abmelden_info]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+
+[aktion.kunde_bestellung]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_bestellung_detail]
+oberflaeche = "angebot.kunden"
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_bestellungen]
+oberflaeche = "angebot.kunden"
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_login]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_logout]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+
+[aktion.kunde_mail]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.kunde_merkliste]
+oberflaeche = "angebot.kunden"
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_merkliste_save]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_passwort]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_status]
+oberflaeche = "angebot.kunden"
+oeffentlich = true
+
+[aktion.kunde_token_check]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunde_token_set]
+oberflaeche = "angebot.kunden"
+schreibend = true
+oeffentlich = true
+kunden_wartung = true
+
+[aktion.kunden_mail_vorschau]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.kunden_restposten]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.kunden_rundmail]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.mail_info]
+oberflaeche = "angebot.eingabe"
+
+[aktion.offer]
+oberflaeche = "angebot.kunden"
+oeffentlich = true   # ohne ?draft; nicht öffentliche Angebote für Mitarbeiter wie Eingabebereich (index.php)
+kunden_wartung = true
+
+[aktion.offers]
+oberflaeche = "angebot.eingabe"
+
+[aktion.offers_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.publish]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.restposten_info]
+oberflaeche = "angebot.eingabe"
+
+[aktion.save_draft]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.version]
+oberflaeche = "angebot.eingabe"
+
+[aktion.versions]
+oberflaeche = "angebot.eingabe"

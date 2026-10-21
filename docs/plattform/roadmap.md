@@ -6,7 +6,7 @@ Datenbank-, DNS- und Serveränderungen sind gesondert markiert und brauchen zus�
 | # | Inhalt | Phase | Produktivwirkung nach Release | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Regelwerk `regeln/`, Prüfwerkzeug, CI-Schritt, Architektur-Doku, AGENTS.md | 1–3 | keine (nichts unter `app/` geändert) | **implementiert, getestet, PR offen** |
-| 2 | Aktions-Register je Bereich: jede Aktion gehört genau einer Oberfläche; Einstieg liest die Listen daraus statt `$writeActions`/`$isPublic`/`WARTUNG_GESPERRT`; CI prüft Vollständigkeit | 3 | keine (gleiches Verhalten, gleiche E2E-Tests) | geplant |
+| 2 | Aktions-Register je Bereich: jede Aktion gehört genau einer Oberfläche; Einstieg liest die Listen daraus statt `$writeActions`/`$isPublic`/`WARTUNG_GESPERRT`; CI prüft Vollständigkeit | 3 | keine (gleiches Verhalten, gleiche E2E-Tests) | **implementiert, PR offen** |
 | 3 | Modulregister zur Laufzeit: aus `regeln/` erzeugte PHP-Liste (`app/api/lib/module-liste.php`), Lese-Aktion `module_status` (nur angemeldet), Entscheidungstabelle in PHP mit denselben Vertragstests | 4–5 | keine sichtbare | geplant |
 | 4 | Wartung je Oberfläche serverseitig (Dokument `module`, Protokoll, Bestätigung, Notfallskript); heutiger Wartungsmodus wird `angebot.kunden` | 5 | Verwaltung → Wartung zeigt Oberflächen statt eines Schalters | geplant |
 | 5 | Modulverwaltung im heutigen Eingabebereich (Liste, Freigabe, Wartung planen, Historie, Tester) | 5 | neue Ansicht für Administratoren | geplant |

@@ -1,0 +1,12 @@
+# Aktionen des Moduls „einkauf“: Fehlmengen und Meldung an den Einkauf.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "einkauf"
+
+[aktion.einkauf]
+oberflaeche = "angebot.eingabe"
+
+[aktion.einkauf_melden]
+oberflaeche = "angebot.eingabe"
+schreibend = true
