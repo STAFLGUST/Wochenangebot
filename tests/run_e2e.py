@@ -92,6 +92,7 @@ SUITES['passkeys'] = (8790, 'data-seed', True)
 SUITES['modul_wartung'] = (8790, 'data-seed', True)   # Wartung je Oberfläche (GR-107)
 SUITES['module_status'] = (8790, 'data-seed', True)   # Modulzustand zur Laufzeit (GR-102)
 SUITES['aktionsregister'] = (8790, 'data-seed', True)   # Register wirkt für jede Aktion (Schreibschutz, 404)
+SUITES['herkunft'] = (8790, 'data-seed', True)   # Herkunftsprüfung im API-Einstieg (GR-109), fremde Seite auf AUX_PORT
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)

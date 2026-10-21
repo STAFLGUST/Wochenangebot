@@ -601,6 +601,27 @@ class Verstoesse(unittest.TestCase):
         self.p.erzeugen()
         self.assertFehler("schreibende Aktion als wartung_frei")
 
+    def test_fremde_herkunft_nur_fuer_festgelegte_oeffentliche(self):
+        # Mitarbeiter-Aktion darf nie von fremden Seiten kommen (GR-109)
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", "schreibend = true\nfremde_herkunft = true")
+        self.p.erzeugen()
+        self.assertFehler("fremde_herkunft nur für die festgelegten")
+
+    def test_fremde_herkunft_nicht_fuer_beliebige_oeffentliche(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "kunden_wartung = true", "kunden_wartung = true\nfremde_herkunft = true")
+        self.p.erzeugen()
+        self.assertFehler("fremde_herkunft nur für die festgelegten")
+
+    def test_fremde_herkunft_kein_wahrheitswert(self):
+        self.p.ersetzen("regeln/aktionen/angebot.toml", "kunden_wartung = true", 'kunden_wartung = true\nfremde_herkunft = "ja"')
+        self.p.erzeugen()
+        self.assertFehler("fremde_herkunft muss true oder false sein")
+
+    def test_echtes_register_nur_abmelden1_von_fremd(self):
+        rw = regeln.laden(WURZEL)
+        fremd = sorted(n for n, a in regeln.aktionen_tabelle(rw).items() if a["fremde_herkunft"])
+        self.assertEqual(fremd, ["abmelden1"])
+
     def test_falscher_wert_schreibend(self):
         self.p.ersetzen("regeln/aktionen/angebot.toml", "schreibend = true", 'schreibend = "ja"')
         self.p.erzeugen()
@@ -623,7 +644,7 @@ class Verstoesse(unittest.TestCase):
 
     def test_erzeugte_liste_ist_php(self):
         text = (self.p.wurzel / regeln.AKTIONEN_LISTE).read_text(encoding="utf-8")
-        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false],", text)
+        self.assertIn("'offer' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.kunden', 'schreibend' => false, 'oeffentlich' => true, 'kunden_wartung' => true, 'wartung_frei' => false, 'fremde_herkunft' => false],", text)
         self.assertIn("'save_draft' => ['modul' => 'angebot', 'oberflaeche' => 'angebot.eingabe', 'schreibend' => true,", text)
 
     def test_folgen_im_kleinen(self):
