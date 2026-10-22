@@ -421,8 +421,8 @@ with sync_playwright() as pw:
     check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
     sichtbar = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
-    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Nutzer, Sicherheit, E-Mail, Protokoll; kein Angebot',
-          {'master', 'kunden', 'users', 'sec', 'mail', 'log', 'schutz'} <= set(sichtbar) and 'edit' not in sichtbar, sichtbar)
+    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, Sicherheit, E-Mail, Protokoll; kein Angebot',
+          {'master', 'kunden', 'importe', 'users', 'sec', 'mail', 'log', 'schutz'} <= set(sichtbar) and 'edit' not in sichtbar, sichtbar)
     pg.click('#vt-users'); pg.wait_for_selector('#view-users:not([hidden])')
     pg.screenshot(path=os.path.join(SH, 'oidc_verwaltung_admin_1280.png'))
     ctx.close()
