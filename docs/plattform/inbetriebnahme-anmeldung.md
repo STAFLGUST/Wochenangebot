@@ -65,22 +65,21 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
 
 ## Rücksicherung der Anmeldung (Keycloak)
 
-Im Installationsordner, `<datei>` = gewünschter Stand aus `sicherungen/anmeldung-*.dump`:
+Üben ohne Eingriff in den Betrieb (spielt die neueste Sicherung in eine Probedatenbank ein, zählt die Konten und
+löscht die Probedatenbank wieder):
+
+```sh
+sh deploy/anmeldung/ruecksicherung-probe.sh
+```
+
+Ernstfall – im Installationsordner, `<datei>` = gewünschter Stand aus `sicherungen/anmeldung-*.dump`. Die Datenbank
+verlangt auch im Container ein Passwort; es kommt aus der Umgebung des Containers (`POSTGRES_PASSWORD`):
 
 ```sh
 K="docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml"
 $K stop keycloak
-$K exec -T keycloak-db pg_restore -U keycloak -d keycloak --clean --if-exists --no-owner < sicherungen/<datei>
+$K exec -T keycloak-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U keycloak -d keycloak --clean --if-exists --no-owner' < sicherungen/<datei>
 $K start keycloak
-```
-
-Üben ohne Eingriff in den Betrieb (in eine Probedatenbank, danach wieder löschen):
-
-```sh
-$K exec -T keycloak-db createdb -U keycloak probe
-$K exec -T keycloak-db pg_restore -U keycloak -d probe --no-owner < "$(ls -1t sicherungen/anmeldung-*.dump | head -1)"
-$K exec -T keycloak-db psql -U keycloak -d probe -tAc "SELECT count(*) FROM user_entity"   # Anzahl Konten
-$K exec -T keycloak-db dropdb -U keycloak probe
 ```
 
 Die Sicherung enthält Passwort-Hashes und die Geheimnisse der Einmalcodes; sie liegt wie die Geschäftsdaten nur für root
