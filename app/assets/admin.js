@@ -407,7 +407,7 @@
     }
     $('#twofa-body').innerHTML = `${head}<div class="dlg-body" id="tf-host">
         <p class="tf-ok">${icon('check')} Eingeschaltet für <strong>${esc(me.username)}</strong>.</p>
-        ${me.twofaRequired ? `<p class="hint">Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben${me.passkeys ? ' – Ihre Passkeys erfüllen sie auch ohne Authenticator-App' : ''}.</p>` : ''}
+        ${me.twofaRequired ? `<p class="hint">Für Ihren Zugang ist die Zwei-Faktor-Anmeldung vorgeschrieben${me.passkeys ? ' – Ihre Passkeys erfüllen sie auch ohne Authenticator-App' : ''}.</p>` : ''}
         <div class="row-actions" style="justify-content:flex-start">
           <button type="button" class="btn" data-tfd="renew">Neu einrichten (neues Handy / neue Codes)</button>
           ${me.twofaRequired && !me.passkeys ? '' : '<button type="button" class="btn" data-tfd="off" style="color:var(--accent)">Ausschalten</button>'}

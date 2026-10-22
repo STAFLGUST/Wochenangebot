@@ -15,7 +15,7 @@
   let qTimer = null;
 
   /* ======================= Nutzerverwaltung (Administrator) ======================= */
-  let users = null, rights = null;
+  let users = null, rights = null, twofaModus = 'off';
   const ROLE_DESC = {
     admin: 'Alle Rechte, dazu Nutzer und Rechte, Sicherheit und E-Mail-Einstellungen',
     editor: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: Angebot bearbeiten und veröffentlichen, Bestellungen, Bestand)',
@@ -44,13 +44,13 @@
   async function renderUsersView() {
     const host = $('#view-users');
     if (!users) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Nutzer werden geladen …</div>';
-    try { [users, rights] = await Promise.all([api('users').then((r) => r.users), api('rechte')]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    try { [users, rights] = await Promise.all([api('users').then((r) => { twofaModus = r.twofaModus || 'off'; return r.users; }), api('rechte')]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const order = { admin: 0, editor: 1, viewer: 2 };
     const list = users.slice().sort((a, b) => (b.active - a.active) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
     const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
         <td>${roleBadge(u.role)}${exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
-        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
       </tr>`).join('');
@@ -101,8 +101,24 @@
     return `<table class="etab urtab"><tbody>${rights.catalog.map((p) => `<tr><td>${esc(p.label)}<div class="sub">${esc(p.group)}</div></td><td><select data-ur="${esc(p.key)}" aria-label="${esc(p.label)}">
       <option value=""${val(p.key) === '' ? ' selected' : ''}>wie Rolle (${base.includes(p.key) ? 'ja' : 'nein'})</option><option value="grant"${val(p.key) === 'grant' ? ' selected' : ''}>erlauben</option><option value="deny"${val(p.key) === 'deny' ? ' selected' : ''}>verbieten</option></select></td></tr>`).join('')}</tbody></table>`;
   }
+  /* Zwei-Faktor-Pflicht je Nutzer: gesperrt, wenn die Sicherheitseinstellung den Zugang ohnehin verpflichtet (alle bzw.
+     Administratoren) oder beim eigenen Zugang (gesperrt = nicht mitgesendet = unverändert); entscheidend ist der Server
+     (twofa_required, user_save) */
+  const PFLICHT_HINWEIS = 'Ohne eingerichteten zweiten Faktor (Authenticator-App oder Passkey) wird die Einrichtung bei der nächsten Anmeldung verlangt. Gilt für die Anmeldung hier und über die STAFL-Anmeldung.';
+  const pflichtDurchEinstellung = (role) => (twofaModus === 'all' ? 'Die Sicherheitseinstellung verpflichtet bereits alle Zugänge.'
+    : twofaModus === 'admins' && role === 'admin' ? 'Für Administratoren ist die Zwei-Faktor-Anmeldung immer verpflichtend.' : '');
+  function pflichtZeigen(role) {
+    const box = $('#user-body [name="twofaPflicht"]'); if (!box) return;
+    const self = !!editUid && editUid === W.me.id, zwang = pflichtDurchEinstellung(role);
+    if (!box.disabled || box.dataset.wahl === undefined) box.dataset.wahl = box.checked ? '1' : '';   // eigene Auswahl merken, falls die Sperre wieder entfällt
+    box.disabled = !!zwang || self;
+    box.checked = !!zwang || box.dataset.wahl === '1';
+    $('#us-2fa-hint').textContent = zwang || (self ? 'Die Pflicht für den eigenen Zugang kann nur ein anderer Administrator ändern.'
+      : role === 'admin' ? 'Über die STAFL-Anmeldung ist der zweite Faktor für Administratoren immer Pflicht; das Häkchen verlangt ihn auch bei der Anmeldung hier.' : PFLICHT_HINWEIS);
+  }
   dlgUser.addEventListener('change', (e) => {
     if (e.target.name !== 'role') return;
+    pflichtZeigen(e.target.value);
     const box = $('#ur-box'); if (!box) return;
     const u = editUid ? users.find((x) => x.id === editUid) : null;
     box.hidden = e.target.value === 'admin';
@@ -152,6 +168,7 @@
           <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u ? '' : ' required'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
         </div>`}
         ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
+        <div class="span2 us-2fa"><label class="check"><input type="checkbox" name="twofaPflicht"${u && u.twofaPflicht ? ' checked' : ''}> Zwei-Faktor-Anmeldung verpflichtend</label><p class="hint" id="us-2fa-hint"></p></div>
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
         ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
         ${u && u.geraete && u.geraete.length && !self ? `<label class="check span2"><input type="checkbox" name="resetGeraete"> Vertraute Geräte entfernen (${esc(geraeteText(u.geraete))})</label>` : ''}
@@ -167,6 +184,7 @@
         <button type="button" class="btn" data-close>Abbrechen</button>
         <button type="submit" class="btn primary">${u ? 'Speichern' : 'Nutzer anlegen'}</button>
       </div>`;
+    pflichtZeigen(u ? u.role : 'editor');
     dlgUser.showModal();
     $('#user-body [name="vorname"]').focus();
   }
@@ -247,6 +265,7 @@
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
       resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false, resetGeraete: f.resetGeraete ? f.resetGeraete.checked : false,
     };
+    if (f.twofaPflicht && !f.twofaPflicht.disabled) body.twofaPflicht = f.twofaPflicht.checked;   // gesperrt = unverändert
     if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');
     btn.disabled = true;
@@ -1599,7 +1618,7 @@
             <option value="off"${S.twofa === 'off' ? ' selected' : ''}>freiwillig</option>
             <option value="admins"${S.twofa === 'admins' ? ' selected' : ''}>für Administratoren</option>
             <option value="all"${S.twofa === 'all' ? ' selected' : ''}>für alle Zugänge</option></select>
-            <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert.</small></label>
+            <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert. Einzelne Zugänge zusätzlich unter Nutzer → Bearbeiten.</small></label>
           <label class="fld"><span>Automatisch abmelden nach Inaktivität</span><select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${S.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
           <div class="fld"><span>Passwörter</span><div class="sec-inline"><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${S.pwMin}"> Zeichen</label>
             <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label>

@@ -332,6 +332,21 @@ with sync_playwright() as pw:
     check('Bearbeiter ohne zweiten Faktor: nur mit Passwort im Dashboard (nicht vorgeschrieben)', st.get('loggedIn') and st['user']['username'] == 'neu', st.get('user'))
     ctx.close()
 
+    # ── Bearbeiter einzeln verpflichtet (Nutzerfeld twofaPflicht, Nutzer bearbeiten): unser Server verlangt die zweite Stufe ──
+    V2 = Legacy()   # frische Anmeldung: Bestätigung für user_save gültig
+    check('Vorbereitung: Administrator erneut angemeldet (bisheriger Zugang)', V2.call('login', {'username': 'admin', 'password': PW_ALT})[0] == 200)
+    code, j = V2.call('user_save', {'id': nutzer_roh()['neu']['id'], 'name': 'Neu Ohne Zweitfaktor', 'role': 'editor', 'active': True, 'twofaPflicht': True})
+    check('Zwei-Faktor-Pflicht für Bearbeiter „neu“ gesetzt', code == 200 and nutzer_roh()['neu'].get('twofaPflicht') is True, (code, j))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.route('**/dashboard/dashboard.js', lambda r: r.abort())   # nur die Antwort der Schnittstelle ansehen
+    pg.goto(D + '/'); anmelden(pg, 'neu', otp=False); pg.wait_for_url(D + '/dashboard/**')
+    code, j = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('einzeln verpflichteter Bearbeiter nur mit Passwort: kein Zugang, zweite Stufe angefordert (403)', code == 403
+          and j.get('code') == 'reauth_required' and 'acr_values%3Dmfa' in j.get('anmelden', ''), (code, j))
+    ctx.close()
+    code, j = V2.call('user_save', {'id': nutzer_roh()['neu']['id'], 'name': 'Neu Ohne Zweitfaktor', 'role': 'editor', 'active': True, 'twofaPflicht': False})
+    check('… Pflicht wieder entfernt', code == 200 and 'twofaPflicht' not in nutzer_roh()['neu'], (code, j))
+
     # ── Administrator ohne zweiten Faktor: unser Server verlangt ihn (zweite Stufe, Einrichtung bei Keycloak) ──
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
     pg.route('**/dashboard/dashboard.js', lambda r: r.abort())   # erst die Antwort der Schnittstelle ansehen

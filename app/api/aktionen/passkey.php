@@ -76,7 +76,7 @@ switch ($action) {
             $pk = null;
             foreach ((array)($me['passkeys'] ?? []) as $x) if (passkey_ref($x) === $ref) $pk = $x;
             if (!$pk) fail('Passkey nicht gefunden.', 404);
-            if (twofa_required($me) && empty($me['totp']) && count($me['passkeys']) === 1) fail('Für Ihre Rolle ist ein zweiter Faktor vorgeschrieben. Bitte zuerst die Authenticator-App einrichten oder einen weiteren Passkey hinzufügen.', 422);
+            if (twofa_required($me) && empty($me['totp']) && count($me['passkeys']) === 1) fail('Für Ihren Zugang ist ein zweiter Faktor vorgeschrieben. Bitte zuerst die Authenticator-App einrichten oder einen weiteren Passkey hinzufügen.', 422);
             $me = confirm_password($me, (string)($b['password'] ?? ''));
             $u = user_update($me['id'], function (&$x) use ($me, $ref) {
                 if ((int)$x['sv'] !== (int)$me['sv'] || !$x['active']) fail('Bitte erneut anmelden.', 401);
