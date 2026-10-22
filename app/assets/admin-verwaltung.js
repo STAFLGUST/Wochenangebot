@@ -406,7 +406,7 @@
         ${o.bemerkung ? `<p class="ord-note"><strong>Bemerkung des Kunden:</strong> ${esc(o.bemerkung)}</p>` : ''}
         <table class="etab ordpos"><thead><tr><th>Art.-Nr.</th><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
           ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(qty(p.qty))}</td><td class="r">${p.price == null ? 'auf Anfrage' : esc(eur2.format(p.price)) + ' €'}</td><td class="r">${p.sum == null ? '–' : esc(fmtNum.format(p.sum)) + ' €'}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="2"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(qty(o.totalQty || 0))}</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td colspan="4">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(fmtNum.format(o.fracht.kosten))} €</td></tr><tr><td colspan="4"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(fmtNum.format(o.total + o.fracht.kosten))} €</strong></td></tr>` : ''}</tfoot></table>
+        </tbody><tfoot><tr><td class="ord-nr"></td><td><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(qty(o.totalQty || 0))}</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td class="ord-nr"></td><td colspan="3">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(fmtNum.format(o.fracht.kosten))} €</td></tr><tr><td class="ord-nr"></td><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(fmtNum.format(o.total + o.fracht.kosten))} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <section class="ord-outbox"><h3>E-Mail-Versand</h3>
           <p class="hint">Erfolgreich bedeutet: vom Mailserver angenommen. Bei einem Verbindungsabbruch kann eine E-Mail trotz fehlender Bestätigung angekommen sein. Vor erneutem Versand bitte prüfen.</p>
@@ -552,7 +552,7 @@
   function mailLine(c) {
     const parts = [];
     if (c.mailAngebot === false && c.abgemeldet) parts.push(`<span class="st-warn">vom Wochenangebot abgemeldet ${esc(dateTime(c.abgemeldet.t))}</span>`);
-    else if (c.mailAngebot === false) parts.push('<span class="muted">kein Wochenangebot per E-Mail</span>');
+    else if (c.mailAngebot === false) parts.push('<span class="muted">kein Wochenangebot per <span class="nobr">E-Mail</span></span>');
     else if (sentThisWeek(c)) parts.push(`<span class="st-ok">${icon('check', 'sm')}KW ${c.weekly.week} gesendet ${esc(dateTime(c.weekly.t))}</span>`);
     if (c.mailLast && !c.mailLast.ok) parts.push(`<span class="st-err">${esc(MAIL_TYP[c.mailLast.typ] || 'E-Mail')} nicht zugestellt</span>`);
     return parts.length ? `<div class="sub k-mail">${parts.join(' · ')}</div>` : '';

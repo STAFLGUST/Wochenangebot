@@ -67,7 +67,8 @@
   /* Ausschnitt an das Seitenverhältnis der Kartenfläche anpassen */
   function aspect(b) {
     const svg = $('#aw-svg');
-    const r = svg ? svg.clientWidth / Math.max(1, svg.clientHeight) : 1.6;
+    /* Ansicht schon wieder verlassen (Kartenfläche ohne Größe): Standardformat statt Division durch 0 (sonst viewBox mit NaN/Infinity) */
+    const r = svg && svg.clientWidth > 0 && svg.clientHeight > 0 ? svg.clientWidth / svg.clientHeight : 1.6;
     let [x, y, w, h] = b;
     if (w / h < r) { const nw = h * r; x -= (nw - w) / 2; w = nw; } else { const nh = w / r; y -= (nh - h) / 2; h = nh; }
     return [x, y, w, h];

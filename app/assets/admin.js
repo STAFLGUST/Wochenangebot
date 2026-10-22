@@ -2280,6 +2280,23 @@
   /* Ansicht umschalten */
   const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec', 'schutz'];
+  /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
+     Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
+  function navSichtbar(btn) {
+    if (!btn) return;
+    for (const box of [btn.closest('.side-tabs'), btn.closest('.side-nav')]) {
+      if (!box) continue;
+      const b = btn.getBoundingClientRect(), c = box.getBoundingClientRect();
+      if (box.scrollHeight > box.clientHeight + 1) {
+        if (b.top < c.top) box.scrollTop -= c.top - b.top + 12;
+        else if (b.bottom > c.bottom) box.scrollTop += b.bottom - c.bottom + 12;
+      }
+      if (box.scrollWidth > box.clientWidth + 1) {
+        if (b.left < c.left) box.scrollLeft -= c.left - b.left + 24;
+        else if (b.right > c.right) box.scrollLeft += b.right - c.right + 24;
+      }
+    }
+  }
   function setView(v) {
     if (!viewAllowed(v)) v = viewAllowed('edit') ? 'edit' : (VIEWS.find(viewAllowed) || 'edit');
     currentView = v;
@@ -2287,6 +2304,7 @@
       $('#vt-' + k).setAttribute('aria-selected', k === v);
       $('#view-' + k).hidden = k !== v;
     }
+    navSichtbar($('#vt-' + v));
     document.body.classList.toggle('in-hist', v === 'hist');
     document.body.classList.toggle('in-other', v !== 'edit');
     document.body.classList.toggle('in-einzel', v === 'einzel');
@@ -2787,7 +2805,7 @@
     const age = stock.date ? Math.round((Date.parse(isoToday() + 'T12:00:00Z') - Date.parse(stock.date + 'T12:00:00Z')) / 864e5) : null;
     host.innerHTML = `
       <div class="st-info${age != null && age > 2 ? ' old' : ''}">
-        <div><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}<span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · Mengenstand aus dem letzten Import</span><span class="sub">Preise: gespeicherte Wochenstände des Standardangebots, €/kg (abweichende Preisbasis ausdrücklich angegeben). Eingelagert = im Lager. Erfasst = noch nicht eingetroffen. Gesamt verfügbar = eingelagerter + erfasster Bestand.</span></div>
+        <div><span class="st-kopf"><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}</span><span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · Mengenstand aus dem letzten Import</span><span class="sub">Preise: gespeicherte Wochenstände des Standardangebots, €/kg (abweichende Preisbasis ausdrücklich angegeben). Eingelagert = im Lager. Erfasst = noch nicht eingetroffen. Gesamt verfügbar = eingelagerter + erfasster Bestand.</span></div>
         ${legendHTML()}
       </div>
       <div class="ed-toolbar">

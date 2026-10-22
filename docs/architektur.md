@@ -96,7 +96,9 @@ Eingabebereich im Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, 
 eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
 drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über
 `.topbar-inner::before`, damit das Menü darin eigenes Glas bleibt), Seitenleiste als Glaskarte, Karten 28 px, „Preise für“ als
-Segment. Klebende Leisten (Kopfzeile, Werkzeugleiste) sind fast deckend, damit darunter durchlaufende Tabellen auch ohne
+Segment. Karten mit direkter Tabelle scrollen bei Bedarf waagerecht in sich (nie die Seite, z. B. 901–1100 px neben der
+Seitenleiste); mit Fingerbedienung (`pointer: coarse`, bis 900 px) sind Bedienelemente mindestens 36 px groß. Die Seitenleiste
+hält den aktiven Eintrag sichtbar (`navSichtbar` in `admin.js`). Klebende Leisten (Kopfzeile, Werkzeugleiste) sind fast deckend, damit darunter durchlaufende Tabellen auch ohne
 Unschärfe (Software-Darstellung) nicht stören. Ohne `backdrop-filter` (`@supports not`) bzw. bei
 `prefers-reduced-transparency: reduce` deckende Flächen. Die Kundenseite lädt `admin.css` nicht und bleibt im Design „Klar“;
 `app.css` ist dafür unverändert.
