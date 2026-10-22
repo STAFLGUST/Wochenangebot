@@ -2,14 +2,14 @@
 
 Stand: **Schritte 1–8 ausgeführt am 22.10.2026** (Probe mit dem eigenen Konto erfolgreich), offen ist Schritt 9.
 Jeder Schritt mit „Freigabe“ wurde nach ausdrücklicher Zustimmung des Inhabers ausgeführt (AGENTS.md: Server, DNS, Anmeldung). Grundlage: [ADR-003](adr-003-domains-anmeldung.md), in der CI
-vollständig geprüft (`tests/oidc/`, 126 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
+vollständig geprüft (`tests/oidc/`, 131 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
 
 ## Ziel nach der Inbetriebnahme
 
 | Adresse | Inhalt | Anmeldung |
 | --- | --- | --- |
 | `angebot-stafl.de` | Kundenseite und – übergangsweise – `/admin/` wie heute | unverändert (eigene Anmeldung) |
-| `login.dashboard-stafl.de` | Keycloak, nur Realm `mitarbeiter` | Passwort + Einmalcode oder Passkey |
+| `login.dashboard-stafl.de` | Keycloak, nur Realm `mitarbeiter` | Passwort; zweiter Faktor (Einmalcode oder Passkey) Pflicht für Administratoren und einzeln verpflichtete, sonst freiwillig |
 | `dashboard-stafl.de` | Mitarbeiter-Dashboard | über Keycloak |
 | `angebot.dashboard-stafl.de` | Mitarbeiter-Eingabe (dieselbe Anwendung wie `/admin/`) | über Keycloak |
 | übrige `*.dashboard-stafl.de` | 503-Platzhalter bis zur Freigabe des Moduls (GR-105) | – |
@@ -32,7 +32,7 @@ Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nut
 | 1 | **DNS:** CNAME `login` und `angebot` → `dashboard-stafl.de` (wie `bestand.`/`www.`) – **erledigt 21.10.2026**, von außen geprüft | Inhaber | **DNS** | Einträge löschen |
 | 2 | **Geheimnisse** erzeugen und Realm-Import vorbereiten: im Installationsordner `sh deploy/anmeldung/einrichten.sh` (ergänzt nur fehlende Einträge in `.env`, zeigt keine Werte, startet nichts; `--pruefen` vorher/nachher) | Inhaber | **Server** | neue Zeilen in `.env` und `daten-anmeldung/` löschen |
 | 3 | **Keycloak und Datenbank starten:** `docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d keycloak keycloak-db` – noch ohne Caddy-Route, also nicht öffentlich; Kontrolle: `curl -s http://127.0.0.1:8180/realms/mitarbeiter/.well-known/openid-configuration` | Inhaber | **Server** | `docker compose -f … -f … stop keycloak keycloak-db` |
-| 4 | **Konten in der Serverkonsole** (kein SSH, kein Browser): `sh deploy/anmeldung/konten.sh verwaltung` (dauerhaftes Verwaltungskonto mit Zufallspasswort in `.env`, Start-Konto in Keycloak und `daten-anmeldung/einrichtung.env` gelöscht), dann je Mitarbeiter `sh deploy/anmeldung/konten.sh anlegen <benutzername> <e-mail> <vorname> <nachname>` mit dem **gleichen Benutzernamen** wie im Eingabebereich – Startpasswort wird einmal angezeigt; bei der ersten Anmeldung sind eigenes Passwort und Einmalcode Pflicht. Zunächst nur das eigene Konto (Probe in Schritt 8), die übrigen danach | Inhaber | – | `konten.sh sperren <name>` |
+| 4 | **Konten in der Serverkonsole** (kein SSH, kein Browser): `sh deploy/anmeldung/konten.sh verwaltung` (dauerhaftes Verwaltungskonto mit Zufallspasswort in `.env`, Start-Konto in Keycloak und `daten-anmeldung/einrichtung.env` gelöscht), dann je Mitarbeiter `sh deploy/anmeldung/konten.sh anlegen <benutzername> <e-mail> <vorname> <nachname>` mit dem **gleichen Benutzernamen** wie im Eingabebereich – Startpasswort wird einmal angezeigt; bei der ersten Anmeldung ist ein eigenes Passwort Pflicht (zweiter Faktor nur für Pflicht-Konten). Zunächst nur das eigene Konto (Probe in Schritt 8), die übrigen danach | Inhaber | – | `konten.sh sperren <name>` |
 | 5 | **Ergänzungsdatei dauerhaft aktivieren** – in `.env`: `COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml` (sonst würde ein späteres Release die App wieder ohne Keycloak-Hosts starten) –, dann Anwendungs-Image bauen und App neu starten (`docker compose build app && docker compose up -d app`, wenige Sekunden Unterbrechung). `angebot-stafl.de` bleibt Standard-Host und verhält sich unverändert (in `pruefen.sh` geprüft) | Inhaber | **Server** | Zeile `COMPOSE_FILE` entfernen, `docker compose up -d app` |
 | 6 | **Caddy:** Release mit den Hosts `login.`, `dashboard-stafl.de` und `angebot.dashboard-stafl.de` im `Caddyfile` (PR „Anmeldung öffentlich erreichbar“) – **erst nach Schritt 5 und 7 freigeben**. Damit werden Anmeldung, Dashboard und Mitarbeiter-Eingabe öffentlich erreichbar; Caddy holt die Zertifikate selbst. Weil sich das `Caddyfile` ändert, startet das Release alle Container einmal neu (wenige Sekunden, auch die Kundenseite). Ausfallsicher: die Ziele (`keycloak`, `app-mitarbeiter`) gibt es nur mit der Ergänzungsdatei – fehlt sie, antworten die neuen Hosts mit 502, nie mit der Anwendung ohne Keycloak-Anmeldung | Claude (PR), Inhaber (Release) | **Release** | `deploy/release-zurueck.sh` |
 | 7 | **Sicherung** der Keycloak-Datenbank: `deploy/sichern.sh` sichert sie automatisch mit, sobald Keycloak läuft (`sicherungen/anmeldung-<Zeit>.dump`, `pg_dump` im Container, Inhalt geprüft, nur für root lesbar, 30 Stände; läuft Keycloak laut `.env` aber die Datenbank nicht, meldet die Sicherung einen Fehler). Nach Schritt 3 einmal `sh deploy/sichern.sh --jetzt` und die Rücksicherung unten üben | Claude (PR), Inhaber (Release, Probe) | Release | – |
@@ -49,9 +49,15 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   (`127.0.0.1:8180`). Caddy leitet auf `login.` ausschließlich `/realms/mitarbeiter/` und `/resources/` weiter
   (Master-Realm und Verwaltung: 404).
 - **Neue Mitarbeiter:** Mitarbeiterkonto im Eingabebereich anlegen, dann `konten.sh einladen <name> <e-mail> <vorname>
-  <nachname>` – Mail mit Link (72 Std.), Passwort und Einmalcode legt der Mitarbeiter selbst fest. Einmalig vorher
+  <nachname>` – Mail mit Link (72 Std.), das Passwort legt der Mitarbeiter selbst fest. Einmalig vorher
   `konten.sh mail-einrichten <eigene-adresse>` (Postfach der Anwendung, Passwort nur im Tresor von Keycloak).
-- **Passwort vergessen:** `konten.sh startpasswort <name>` – der Einmalcode bleibt Pflicht, danach eigenes Passwort.
+- **Zweiter Faktor (seit 22.10.2026):** Pflicht für Administratoren (immer) und für Mitarbeiter, bei denen er im
+  Eingabebereich vorgeschrieben ist (Sicherheitseinstellung bzw. je Nutzer); die Anwendung prüft das selbst (Claim `amr`)
+  und fordert sonst die zweite Stufe bei Keycloak an, die ihn einrichten lässt. Alle anderen melden sich mit Passwort an;
+  wer freiwillig einen Einmalcode oder Passkey einrichtet (Anmeldeseite → „Konto“), wird danach immer gefragt.
+  Neu anmelden nach 4 Stunden Leerlauf, höchstens nach 10 Stunden. Umgestellt mit `konten.sh realm-aktualisieren`
+  (idempotent; bei jeder späteren Realm-Änderung erneut ausführen, die CI prüft genau diesen Weg).
+- **Passwort vergessen:** `konten.sh startpasswort <name>` – wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort.
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
   Mitarbeiterkonto hängt an der Keycloak-Kennung.

@@ -38,6 +38,13 @@ lesbar) und startet nichts. `--pruefen` zeigt nur, was fehlt. Getestet: `tests/d
 Der Import läuft nur beim ersten Start (vorhandener Realm wird nicht überschrieben). Spätere Änderungen am Realm nur
 als eigener, geprüfter Schritt (`kcadm` im Container, wie in `konten.sh`).
 
+## Realm im Betrieb ändern
+
+Der Realm wird nur beim ersten Start importiert. Spätere Änderungen bringt `sh deploy/anmeldung/konten.sh realm-aktualisieren`
+auf den laufenden Realm (idempotent, ohne Kontenverlust); die Testumgebung (`tests/oidc/umgebung.sh`) führt denselben
+Befehl nach dem Import aus, die CI prüft also genau diesen Weg. Stand 2 (22.10.2026): zweiter Faktor nur für
+Pflicht-Konten (entscheidet die Anwendung), Anmeldemethoden im Claim `amr`, Leerlauf 4 Stunden.
+
 ## Einladungen per Mail
 
 Einmalig `sh deploy/anmeldung/konten.sh mail-einrichten <eigene-adresse>`: Keycloak verschickt über dasselbe Postfach wie

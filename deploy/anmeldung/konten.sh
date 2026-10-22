@@ -13,12 +13,13 @@
 #   sh deploy/anmeldung/konten.sh mail-einrichten [<test-adresse>]  # Mailversand von Keycloak über das Postfach der Anwendung
 #   sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>   # Konto anlegen und einladen
 #   sh deploy/anmeldung/konten.sh einladen <benutzername>         # Einladung erneut senden
+#   sh deploy/anmeldung/konten.sh realm-aktualisieren             # Realm auf den aktuellen Stand bringen (idempotent)
 #
-# Einladung: Keycloak schickt eine Mail mit Link (72 Stunden gültig); darüber legt der Mitarbeiter selbst Passwort und
-# Einmalcode fest – kein Passwort per Mail. Vorher muss es das Mitarbeiterkonto im Eingabebereich geben.
+# Einladung: Keycloak schickt eine Mail mit Link (72 Stunden gültig); darüber legt der Mitarbeiter selbst sein Passwort
+# fest – kein Passwort per Mail. Den zweiten Faktor verlangt die Anmeldung nur bei Pflicht-Konten (Administratoren u. a.). Vorher muss es das Mitarbeiterkonto im Eingabebereich geben.
 #
 # - Mitarbeiter erhalten ein Startpasswort (einmal angezeigt) und müssen bei der ersten Anmeldung ein eigenes Passwort
-#   und den Einmalcode einrichten. Der Benutzername muss dem im Eingabebereich entsprechen (Verwaltung → Nutzer).
+#   festlegen; den zweiten Faktor nur, wenn ihr Konto ihn braucht (Pflicht laut Eingabebereich). Der Benutzername muss dem im Eingabebereich entsprechen (Verwaltung → Nutzer).
 # - Rechte vergibt weiter nur die Anwendung; ein Keycloak-Konto allein gibt keinen Zugang.
 # - Das Verwaltungskonto (Realm 'master') hat ein langes Zufallspasswort in .env (KC_VERWALTUNG_PASSWORD, nie anzeigen).
 set -eu
@@ -49,10 +50,10 @@ kc_als() { # kc_als <benutzer> <passwort> <kcadm-Befehl…>
   # shellcheck disable=SC2086  # KCADM ist bewusst ein Befehl mit Argumenten
   $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" --password "$p" 2>"$FEHLER"
 }
-bereit() { [ -n "$(wert KC_VERWALTUNG_PASSWORD)" ] || abbruch "noch kein Verwaltungskonto – zuerst: sh deploy/anmeldung/konten.sh verwaltung"; }
+bereit() { [ -n "${KC_ADMIN_PASSWORD_TEST:-}$(wert KC_VERWALTUNG_PASSWORD)" ] || abbruch "noch kein Verwaltungskonto – zuerst: sh deploy/anmeldung/konten.sh verwaltung"; }
 kc() {
-  pw=$(wert KC_VERWALTUNG_PASSWORD)
-  kc_als "$VERWALTUNG" "$pw" "$@" || { grep -v '^Logging into' "$FEHLER" >&2; abbruch "Keycloak hat den Befehl abgelehnt (läuft Keycloak? Schritt 3)."; }
+  pw=${KC_ADMIN_PASSWORD_TEST:-$(wert KC_VERWALTUNG_PASSWORD)}
+  kc_als "${KC_ADMIN_USER_TEST:-$VERWALTUNG}" "$pw" "$@" || { grep -v '^Logging into' "$FEHLER" >&2; abbruch "Keycloak hat den Befehl abgelehnt (läuft Keycloak? Schritt 3)."; }
 }
 name_pruefen() { # gleiche Regel wie im Eingabebereich (clean_username); Keycloak speichert ohnehin klein
   printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9._-]{1,31}$' || abbruch "Benutzername: 2–32 Zeichen, nur a–z, Ziffern, Punkt, Binde- und Unterstrich (wie im Eingabebereich)."
@@ -92,6 +93,7 @@ verwaltung() {
     sed -i '/^KC_BOOTSTRAP_ADMIN_/d' "$ENV"; echo "entfernt:  KC_BOOTSTRAP_ADMIN_* aus .env"
   fi
   if [ -f "$START" ]; then rm -f "$START"; echo "entfernt:  daten-anmeldung/einrichtung.env (Start-Konto)"; fi
+  realm_aktualisieren
   echo "Fertig. Nächster Schritt: Mitarbeiterkonten anlegen (konten.sh anlegen …)."
 }
 
@@ -102,7 +104,7 @@ anlegen() {
   id=$(nutzer_id "$1")
   [ -z "$id" ] || abbruch "Konto '$1' gibt es schon (neues Startpasswort: konten.sh startpasswort $1)."
   kc create users -r "$REALM" -s username="$1" -s email="$2" -s firstName="$3" -s lastName="$4" \
-    -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD","CONFIGURE_TOTP"]' >/dev/null
+    -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD"]' >/dev/null
   neues_startpasswort "$1"
 }
 
@@ -110,7 +112,7 @@ neues_startpasswort() {
   sp=$(startpasswort)
   kc set-password -r "$REALM" --username "$1" --new-password "$sp" --temporary >/dev/null
   echo "Konto '$1' – Startpasswort (nur jetzt sichtbar, persönlich weitergeben): $sp"
-  echo "Bei der ersten Anmeldung: eigenes Passwort festlegen und Einmalcode (App) einrichten."
+  echo "Bei der ersten Anmeldung: eigenes Passwort festlegen (Einmalcode nur bei Pflicht-Konten)."
 }
 
 startpasswort_neu() {
@@ -127,7 +129,7 @@ zuruecksetzen() { # nur nach persönlicher Prüfung der Person: Einmalcode und P
   for z in $liste_cred; do
     case "${z#*,}" in otp|webauthn|webauthn-passwordless) kc delete "users/$id/credentials/${z%%,*}" -r "$REALM" >/dev/null ;; esac
   done
-  kc update "users/$id" -r "$REALM" -s 'requiredActions=["UPDATE_PASSWORD","CONFIGURE_TOTP"]' >/dev/null
+  kc update "users/$id" -r "$REALM" -s 'requiredActions=["UPDATE_PASSWORD"]' >/dev/null
   echo "Konto '$1': Einmalcode und Passkeys gelöscht, überall abgemeldet."
   neues_startpasswort "$1"
 }
@@ -136,7 +138,7 @@ passkey() {
   [ $# -eq 1 ] || abbruch "Aufruf: konten.sh passkey <benutzername>"
   name_pruefen "$1"; id=$(nutzer_id_pflicht "$1")
   kc update "users/$id" -r "$REALM" -s 'requiredActions=["webauthn-register"]' >/dev/null
-  echo "Konto '$1': bei der nächsten Anmeldung (nach dem Einmalcode) wird ein Passkey eingerichtet."
+  echo "Konto '$1': bei der nächsten Anmeldung wird ein Passkey eingerichtet."
 }
 
 sperren() {
@@ -213,16 +215,106 @@ einladen() {
     [ $# -eq 4 ] || abbruch "Konto '$1' gibt es in Keycloak noch nicht – mit E-Mail, Vor- und Nachname aufrufen."
     printf '%s' "$2" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || abbruch "E-Mail-Adresse ungültig."
     kc create users -r "$REALM" -s username="$1" -s email="$2" -s firstName="$3" -s lastName="$4" \
-      -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD","CONFIGURE_TOTP"]' >/dev/null
+      -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD"]' >/dev/null
     id=$(nutzer_id "$1"); echo "angelegt:  Konto '$1'"
   elif [ $# -eq 4 ]; then
     abbruch "Konto '$1' gibt es schon – Einladung erneut senden mit: konten.sh einladen $1"
+  else
+    kc update "users/$id" -r "$REALM" -s 'requiredActions=["UPDATE_PASSWORD"]' >/dev/null   # ältere Einladungen verlangten den Einmalcode
   fi
-  # Einmalcode nur einrichten lassen, wenn noch keiner da ist (sonst nur Passwort)
-  aktionen='["UPDATE_PASSWORD","CONFIGURE_TOTP"]'
-  if kc get "users/$id/credentials" -r "$REALM" --fields type --format csv --noquotes | grep -qx otp; then aktionen='["UPDATE_PASSWORD"]'; fi
+  # Nur das Passwort; den zweiten Faktor verlangt die Anmeldung selbst, wenn das Konto ihn braucht (Pflicht-Konten)
+  aktionen='["UPDATE_PASSWORD"]'
   kc update "users/$id/execute-actions-email" -r "$REALM" -q lifespan=$((EINLADUNG_STUNDEN * 3600)) -q client_id=dashboard -b "$aktionen" >/dev/null
-  echo "Einladung an '$1' verschickt (Link $EINLADUNG_STUNDEN Stunden gültig): eigenes Passwort und Einmalcode festlegen, danach https://dashboard-stafl.de/"
+  echo "Einladung an '$1' verschickt (Link $EINLADUNG_STUNDEN Stunden gültig): eigenes Passwort festlegen, danach https://dashboard-stafl.de/"
+}
+
+# ── Realm-Stand (Änderungen am laufenden Realm; der Import beim ersten Start gilt nur einmal) ──
+# Stand 2: zweiter Faktor nur noch für Pflicht-Konten (entscheidet die Anwendung, twofa_required) und für alle, die ihn
+# eingerichtet haben; Anmeldestärke im Claim amr (pwd/otp/hwk); Leerlauf 4 Stunden.
+ausfuehrungen() { kc get "authentication/flows/mitarbeiter-browser/executions" -r "$REALM"; }
+ausf_id() { # ausf_id <python-Bedingung über e> – ID der ersten passenden Ausführung
+  ausfuehrungen | python3 -c "import json,sys; e=[e for e in json.load(sys.stdin) if $1]; print(e[0]['id'] if e else '')"
+}
+unterfluss() { # unterfluss <eltern-alias> <alias> <beschreibung> – CONDITIONAL-Unterablauf anlegen (falls fehlt)
+  if [ -z "$(ausf_id "e.get('displayName')=='$2' and e.get('authenticationFlow')")" ]; then
+    kc create "authentication/flows/$1/executions/flow" -r "$REALM" -b "{\"alias\":\"$2\",\"type\":\"basic-flow\",\"provider\":\"registration-page-form\",\"description\":\"$3\"}" >/dev/null
+    id=$(ausf_id "e.get('displayName')=='$2' and e.get('authenticationFlow')")
+    kc update "authentication/flows/$1/executions" -r "$REALM" -b "{\"id\":\"$id\",\"requirement\":\"CONDITIONAL\"}" >/dev/null
+    echo "angelegt:  Ablauf $2"
+  fi
+}
+schritt() { # schritt <ablauf-alias> <provider> [<config-json>] – REQUIRED-Ausführung anhängen
+  kc create "authentication/flows/$1/executions/execution" -r "$REALM" -b "{\"provider\":\"$2\"}" >/dev/null
+  id=$(kc get "authentication/flows/$1/executions" -r "$REALM" | python3 -c "import json,sys; print([e['id'] for e in json.load(sys.stdin) if e.get('providerId')=='$2'][-1])")
+  kc update "authentication/flows/$1/executions" -r "$REALM" -b "{\"id\":\"$id\",\"requirement\":\"REQUIRED\"}" >/dev/null
+  if [ -n "${3:-}" ]; then kc create "authentication/executions/$id/config" -r "$REALM" -b "$3" >/dev/null; fi
+}
+
+prioritaet() { # prioritaet <ablauf> <provider oder unterablauf> <zahl> – nur direkte Ausführungen des Ablaufs, nur wenn abweichend
+  kc get "authentication/flows/$1/executions" -r "$REALM" | python3 -c "
+import json, sys
+es = json.load(sys.stdin); top = min(e['level'] for e in es)
+for e in es:
+    if e['level'] == top and '$2' in (e.get('providerId'), e.get('displayName')) and e.get('priority') != $3:
+        print(json.dumps({'id': e['id'], 'requirement': e['requirement'], 'priority': $3}))" | while read -r j; do
+    kc update "authentication/flows/$1/executions" -r "$REALM" -b "$j" >/dev/null
+  done
+}
+
+realm_aktualisieren() {
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  kc update "realms/$REALM" -s ssoSessionIdleTimeout=14400 -s ssoSessionMaxLifespan=36000 >/dev/null
+  echo "gesetzt:   Leerlauf 4 Stunden, höchstens 10 Stunden"
+  # Neue Konten bekommen „Einmalcode einrichten“ nicht mehr automatisch (nur Pflicht-Konten, über die zweite Stufe)
+  kc update "authentication/required-actions/CONFIGURE_TOTP" -r "$REALM" -s defaultAction=false >/dev/null
+  # Optionaler zweiter Faktor in Stufe 1 (wer ihn eingerichtet hat, wird gefragt) – Aufbau wie Stufe 2
+  if [ -z "$(ausf_id "e.get('displayName')=='mitarbeiter-optional-passkey'")" ]; then
+    unterfluss mitarbeiter-stufe-1 mitarbeiter-optional-passkey "Passkey, wenn eingerichtet"
+    schritt mitarbeiter-optional-passkey conditional-user-configured
+    schritt mitarbeiter-optional-passkey webauthn-authenticator
+  fi
+  if [ -z "$(ausf_id "e.get('displayName')=='mitarbeiter-optional-einmalcode'")" ]; then
+    unterfluss mitarbeiter-stufe-1 mitarbeiter-optional-einmalcode "Einmalcode, wenn eingerichtet und kein Passkey verwendet"
+    schritt mitarbeiter-optional-einmalcode conditional-user-configured
+    schritt mitarbeiter-optional-einmalcode conditional-credential '{"alias":"optional-ohne-passkey","config":{"credentials":"webauthn","included":"false"}}'
+    schritt mitarbeiter-optional-einmalcode auth-otp-form
+  fi
+  # Reihenfolge festlegen (neue Ausführungen haben sonst Priorität 0 und liefen vor der Passwortabfrage)
+  prioritaet mitarbeiter-stufe-1 mitarbeiter-optional-passkey 30
+  prioritaet mitarbeiter-stufe-1 mitarbeiter-optional-einmalcode 40
+  prioritaet mitarbeiter-optional-passkey conditional-user-configured 10
+  prioritaet mitarbeiter-optional-passkey webauthn-authenticator 20
+  prioritaet mitarbeiter-optional-einmalcode conditional-user-configured 10
+  prioritaet mitarbeiter-optional-einmalcode conditional-credential 20
+  prioritaet mitarbeiter-optional-einmalcode auth-otp-form 30
+  # Anmeldemethoden im Claim amr (die Anwendung prüft damit den zweiten Faktor für Pflicht-Konten); gültig so lange wie
+  # die Sitzung höchstens dauert (36000 s) – sonst fehlte der Nachweis bei Single Sign-on auf dem zweiten Host
+  ausfuehrungen | python3 -c '
+import json, sys
+ref = {"auth-username-password-form": "pwd", "auth-otp-form": "otp", "webauthn-authenticator": "hwk"}
+for e in json.load(sys.stdin):
+    if e.get("providerId") in ref:
+        print(e["id"], ref[e["providerId"]], e.get("authenticationConfig") or "-")' | while read -r id r cfg; do
+    soll="{\"default.reference.value\":\"$r\",\"default.reference.maxAge\":\"36000\"}"
+    if [ "$cfg" = - ]; then
+      kc create "authentication/executions/$id/config" -r "$REALM" -b "{\"alias\":\"amr-$r-$(printf '%s' "$id" | cut -c1-8)\",\"config\":$soll}" >/dev/null
+      echo "gesetzt:   amr '$r' für Ausführung $(printf '%s' "$id" | cut -c1-8)"
+    elif kc get "authentication/config/$cfg" -r "$REALM" | python3 -c 'import json,sys; c=json.load(sys.stdin); sys.exit(0 if c["alias"].startswith("amr-") and c["config"].get("default.reference.maxAge") != "36000" else 1)'; then
+      alias=$(kc get "authentication/config/$cfg" -r "$REALM" | python3 -c 'import json,sys; print(json.load(sys.stdin)["alias"])')
+      kc update "authentication/config/$cfg" -r "$REALM" -b "{\"id\":\"$cfg\",\"alias\":\"$alias\",\"config\":$soll}" >/dev/null
+      echo "angepasst: amr '$r' für Ausführung $(printf '%s' "$id" | cut -c1-8)"
+    fi
+  done
+  for c in dashboard angebot; do
+    cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
+    [ -n "$cid" ] || continue
+    kc update "clients/$cid" -r "$REALM" -s 'attributes."default.acr.values"=pwd' -s 'attributes."minimum.acr.value"=pwd' >/dev/null
+    if ! kc get "clients/$cid/protocol-mappers/models" -r "$REALM" | grep -q '"oidc-amr-mapper"'; then
+      kc create "clients/$cid/protocol-mappers/models" -r "$REALM" -b '{"name":"amr","protocol":"openid-connect","protocolMapper":"oidc-amr-mapper","config":{"id.token.claim":"true","access.token.claim":"true","introspection.token.claim":"true","userinfo.token.claim":"true"}}' >/dev/null
+      echo "angelegt:  amr-Claim für Client $c"
+    fi
+  done
+  echo "Realm aktuell (Stand 2: zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
 }
 
 liste() {
@@ -232,7 +324,7 @@ liste() {
 
 befehl=${1:-}; [ $# -gt 0 ] && shift
 if [ $# -gt 0 ]; then n=$(klein "$1"); shift; set -- "$n" "$@"; fi
-case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|liste|mail-einrichten|einladen) bereit ;; esac
+case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|liste|mail-einrichten|einladen|realm-aktualisieren) bereit ;; esac
 case "$befehl" in
   verwaltung) verwaltung ;;
   anlegen) anlegen "$@" ;;
@@ -244,5 +336,6 @@ case "$befehl" in
   liste) liste ;;
   mail-einrichten) mail_einrichten "$@" ;;
   einladen) einladen "$@" ;;
+  realm-aktualisieren) realm_aktualisieren ;;
   *) sed -n '2,/^set -eu/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

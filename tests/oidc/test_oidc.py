@@ -39,8 +39,9 @@ CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
 GEHEIM = dict(z.strip().split('=', 1) for z in open(os.path.join(WORK, 'geheim.env')) if '=' in z)
 PW_ALT = 'Sicheres-Passwort-1'   # Administrator der Testdaten (tests/fixtures/data-seed)
 NUTZER = {'admin': ('Admin-Kennwort-CI-1', 'nur-fuer-tests-otp-admin'), 'erika': ('Erika-Kennwort-CI-1', 'nur-fuer-tests-otp-erika'),
-          'fremd': ('Fremd-Kennwort-CI-1', 'nur-fuer-tests-otp-fremd'), 'neu': ('Neu-Kennwort-CI-1', None)}
-SVEN = {'eigen': 'Sven-Eigenes-Kennwort-1', 'zweit': 'Sven-Zweites-Kennwort-2', 'eva': 'Eva-Eigenes-Kennwort-1'}   # über die Konsole angelegte Konten (nur Test)
+          'fremd': ('Fremd-Kennwort-CI-1', 'nur-fuer-tests-otp-fremd'), 'neu': ('Neu-Kennwort-CI-1', None),
+          'chef': ('Chef-Kennwort-CI-1', None)}
+SVEN = {'eigen': 'Sven-Eigenes-Kennwort-1', 'zweit': 'Sven-Zweites-Kennwort-2', 'dritt': 'Sven-Drittes-Kennwort-3', 'neu_app': 'Bearbeiter-Zugang-7788', 'chef_app': 'Leitung-Zugang-7788', 'eva': 'Eva-Eigenes-Kennwort-1'}   # über die Konsole angelegte Konten (nur Test)
 POSTFACH = {'port': int(os.environ.get('OIDC_SMTP_PORT', '2526')), 'user': 'postfach@stafl.test', 'pass': 'Postfach-Test-' + str(os.getpid())}
 res = []
 
@@ -111,6 +112,9 @@ if not nutzer_roh()['erika'].get('active'):   # Wiederholung ohne Neustart der U
 check('Vorbereitung: Bearbeiterin erika angelegt und aktiv', nutzer_roh()['erika'].get('active') is True)
 V.call('user_save', {'id': '', 'name': 'Sven Start', 'username': 'Sven.Start', 'role': 'editor', 'active': True, 'password': 'Start-Zugang-77', 'mustChange': False})
 check('Vorbereitung: Mitarbeiterkonto für ein später über die Konsole angelegtes Keycloak-Konto', 'sven.start' in nutzer_roh())
+V.call('user_save', {'id': '', 'name': 'Neu Ohne Zweitfaktor', 'username': 'neu', 'role': 'editor', 'active': True, 'password': SVEN['neu_app'], 'mustChange': False})
+V.call('user_save', {'id': '', 'name': 'Chef Administrator', 'username': 'chef', 'role': 'admin', 'active': True, 'password': SVEN['chef_app'], 'mustChange': False})
+check('Vorbereitung: Bearbeiter „neu“ und Administrator „chef“ (beide ohne zweiten Faktor)', {'neu', 'chef'} <= set(nutzer_roh()))
 V.call('user_save', {'id': '', 'name': 'Eva Einladung', 'username': 'eva.einladung', 'role': 'editor', 'active': True, 'password': 'Eva-Zugang-7788', 'mustChange': False})
 check('Vorbereitung: Mitarbeiterkonto für eine Einladung per Mail', 'eva.einladung' in nutzer_roh())
 
@@ -142,8 +146,8 @@ _, _, text = anfrage(KC + '/admin/realms/mitarbeiter', kopf={'Authorization': 'B
 realm = json.loads(text) if text.startswith('{') else {}
 check('Realm: Brute-Force-Schutz an, keine Selbstregistrierung, kein Passwort-Zurücksetzen per E-Mail',
       realm.get('bruteForceProtected') is True and realm.get('registrationAllowed') is False and realm.get('resetPasswordAllowed') is False, realm.get('bruteForceProtected'))
-check('Realm: nur HTTPS, Anmeldesitzung 30 Min. Leerlauf / 10 Std. höchstens',
-      realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 1800 and realm.get('ssoSessionMaxLifespan') == 36000)
+check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
+      realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
 for cid in ('dashboard', 'angebot'):
@@ -153,8 +157,11 @@ for cid in ('dashboard', 'angebot'):
           and c.get('serviceAccountsEnabled') is False and c.get('attributes', {}).get('pkce.code.challenge.method') == 'S256'
           and all('*' not in u for u in c.get('redirectUris', ['*'])) and c.get('webOrigins') == [], c.get('redirectUris'))
     check(f'Client {cid}: Back-Channel-Logout eingerichtet', c.get('attributes', {}).get('backchannel.logout.url', '').startswith(f'https://{cid}.stafl.test'))
-    check(f'Client {cid}: verlangt Anmeldestärke „mfa“ (zweiter Faktor)', c.get('attributes', {}).get('minimum.acr.value') == 'mfa', c.get('attributes', {}).get('minimum.acr.value'))
+    check(f'Client {cid}: Standard nur Passwort (zweiter Faktor je Konto), Anmeldemethoden im Claim amr',
+          c.get('attributes', {}).get('minimum.acr.value') == 'pwd' and any(m.get('protocolMapper') == 'oidc-amr-mapper' for m in c.get('protocolMappers', [])),
+          (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell' in open(os.path.join(WORK, 'realm-aktualisieren.log')).read())
 
 # ── Ohne Anmeldung ──
 code, kopf, _ = anfrage(D + '/dashboard/', kopf=SEITE)
@@ -231,12 +238,12 @@ with sync_playwright() as pw:
     ctx = br.new_context(ignore_https_errors=True, viewport={'width': 1280, 'height': 900})
     pg = eigene_seite(ctx.new_page())
 
-    # ── Anmeldung erika: Passwort + Pflicht zum zweiten Faktor ──
+    # ── Anmeldung erika (Bearbeiterin, Einmalcode freiwillig eingerichtet): wird abgefragt ──
     pg.goto(D + '/'); pg.wait_for_selector('#username')
     check('Anmeldeseite von Keycloak (login.stafl.test)', pg.url.startswith(L + '/realms/mitarbeiter/'), pg.url)
     pg.fill('#username', 'erika'); pg.fill('#password', NUTZER['erika'][0]); pg.click('#kc-login')
     pg.wait_for_selector('#otp')
-    check('nach dem Passwort wird der Einmalcode verlangt (zweiter Faktor Pflicht)', pg.is_visible('#otp'))
+    check('nach dem Passwort wird der Einmalcode verlangt (eingerichtet = wird abgefragt)', pg.is_visible('#otp'))
     pg.fill('#otp', '000000'); pg.click('#kc-login'); pg.wait_for_selector('#otp')
     check('falscher Einmalcode: keine Anmeldung', pg.url.startswith(L))
     pg.fill('#otp', totp(NUTZER['erika'][1])); pg.click('#kc-login')
@@ -318,10 +325,36 @@ with sync_playwright() as pw:
     check('ohne Mitarbeiterkonto: keine Verknüpfung angelegt', not any(u.get('oidcSub') and u['username'] == 'fremd' for u in nutzer_roh().values()))
     ctx.close()
 
-    # ── Neuer Nutzer ohne zweiten Faktor: muss ihn bei Keycloak einrichten ──
-    ctx = br.new_context(ignore_https_errors=True); pg = ctx.new_page()
-    pg.goto(D + '/'); anmelden(pg, 'neu', otp=False); pg.wait_for_selector('#totp, [name="totp"]')
-    check('ohne zweiten Faktor: Einrichtung bei Keycloak erzwungen, keine Anmeldung', pg.url.startswith(L) and pg.locator('#totp, [name="totp"]').count() > 0, pg.url)
+    # ── Bearbeiter ohne zweiten Faktor (nicht vorgeschrieben): nur Passwort ──
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); anmelden(pg, 'neu', otp=False); pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('Bearbeiter ohne zweiten Faktor: nur mit Passwort im Dashboard (nicht vorgeschrieben)', st.get('loggedIn') and st['user']['username'] == 'neu', st.get('user'))
+    ctx.close()
+
+    # ── Administrator ohne zweiten Faktor: unser Server verlangt ihn (zweite Stufe, Einrichtung bei Keycloak) ──
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.route('**/dashboard/dashboard.js', lambda r: r.abort())   # erst die Antwort der Schnittstelle ansehen
+    pg.goto(D + '/'); anmelden(pg, 'chef', otp=False); pg.wait_for_url(D + '/dashboard/**')
+    code, j = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('Administrator nur mit Passwort: kein Zugang, zweite Stufe angefordert (403)', code == 403 and j.get('code') == 'reauth_required'
+          and 'acr_values%3Dmfa' in j.get('anmelden', '') and 'vorgeschrieben' in j.get('error', ''), (code, j))
+    pg.unroute('**/dashboard/dashboard.js'); pg.reload()
+    pg.wait_for_selector('#totpSecret', state='attached')
+    check('… Dashboard leitet zur zweiten Stufe, Keycloak verlangt die Einrichtung des Einmalcodes', pg.url.startswith(L) and 'CONFIGURE_TOTP' in pg.url, pg.url)
+    chef_otp = pg.get_attribute('#totpSecret', 'value')
+    pg.fill('#totp', totp(chef_otp)); pg.fill('#userLabel', 'Telefon'); pg.click('#saveTOTPBtn')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… danach als Administrator angemeldet', st.get('loggedIn') and st['user']['username'] == 'chef', st.get('user'))
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(A + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'chef'); pg.fill('#password', NUTZER['chef'][0]); pg.click('#kc-login')
+    pg.wait_for_selector('#otp')
+    check('nächste Anmeldung des Administrators: Einmalcode gleich in der ersten Stufe', pg.is_visible('#otp'))
+    pg.fill('#otp', totp(chef_otp, 1)); pg.click('#kc-login'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    code, _ = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
     ctx.close()
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
@@ -355,16 +388,6 @@ with sync_playwright() as pw:
     pg.goto(A + '/oidc/callback?' + urllib.parse.urlencode({'iss': L + '/realms/mitarbeiter', 'target_link_uri': 'https://angreifer.example/'}))
     check('erneute Anmeldung leitet nie auf fremde Seiten (offene Weiterleitung)', urllib.parse.urlparse(pg.url).hostname != 'angreifer.example', pg.url)
     ctx.close()
-
-    # ── Anmeldestärke prüft auch unser Server: Keycloak-Client falsch eingestellt (nur Passwort) → kein Zugang ──
-    check('Testvorbereitung: Client „angebot“ verlangt nur noch Passwort', client_attribute('angebot', **{'minimum.acr.value': 'pwd', 'default.acr.values': 'pwd'}) == 204)
-    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
-    pg.goto(A + '/admin/'); anmelden(pg, 'erika', otp=False)
-    pg.wait_for_url(A + '/**')
-    code, j = pg.evaluate("fetch('/api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
-    check('ohne zweiten Faktor angemeldet (acr=pwd): unser Server weist ab (403)', code == 403 and 'zweitem Faktor' in j.get('error', ''), (code, j))
-    ctx.close()
-    check('Testvorbereitung: Client „angebot“ wieder auf „mfa“', client_attribute('angebot', **{'minimum.acr.value': 'mfa', 'default.acr.values': 'mfa'}) == 204)
 
     # ── Passkey als zweiter Faktor (virtueller Authenticator mit Bestätigung am Gerät) ──
     kopf = {'Authorization': 'Bearer ' + kc_token(), 'Content-Type': 'application/json'}
@@ -402,6 +425,7 @@ with sync_playwright() as pw:
     _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/authentication/required-actions', kopf={'Authorization': 'Bearer ' + kc_token()})
     aktiv = sorted(a['alias'] for a in json.loads(text) if a.get('enabled'))
     check('Pflichtaktionen: nur Passwort ändern, Einmalcode, Passkey', aktiv == sorted(['UPDATE_PASSWORD', 'CONFIGURE_TOTP', 'webauthn-register']), aktiv)
+    check('neue Konten müssen den Einmalcode nicht automatisch einrichten', not any(a.get('defaultAction') for a in json.loads(text)), [a['alias'] for a in json.loads(text) if a.get('defaultAction')])
 
     # ── Konten über die Serverkonsole (deploy/anmeldung/konten.sh, Schritt 4) – zuletzt: löscht das Start-Konto ──
     ordner = tempfile.mkdtemp(prefix='konten-')
@@ -455,20 +479,17 @@ with sync_playwright() as pw:
     pg.fill('#password-new', 'kurz'); pg.fill('#password-confirm', 'kurz'); pg.click('#kc-submit'); pg.wait_for_selector('#password-new')
     check('… zu kurzes Passwort abgelehnt (Richtlinie des Realms)', 'UPDATE_PASSWORD' in pg.url and pg.locator('#input-error-password, .kc-feedback-text, [id*=error]').count() > 0)
     pg.fill('#password-new', SVEN['eigen']); pg.fill('#password-confirm', SVEN['eigen']); pg.click('#kc-submit')
-    pg.wait_for_selector('#totpSecret', state='attached')
-    check('… danach Einrichtung des Einmalcodes erzwungen', 'CONFIGURE_TOTP' in pg.url, pg.url)
-    sven_otp = pg.get_attribute('#totpSecret', 'value')
-    pg.fill('#totp', totp(sven_otp)); pg.fill('#userLabel', 'Telefon'); pg.click('#saveTOTPBtn')
     pg.wait_for_selector('#db-grid .db-tile')
+    check('… danach ohne Einmalcode im Dashboard (für Bearbeiter nicht vorgeschrieben)', pg.url.startswith(D + '/dashboard/'), pg.url)
     st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
-    check('… danach angemeldet und mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
+    check('… angemeldet und mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
     code, aus = konten('sperren', 'sven.start')
     check('Konsole: Konto gesperrt', code == 0 and 'gesperrt' in aus, aus)
     pg.wait_for_function("fetch('../api/?action=status').then(r => r.status === 401)", polling=500, timeout=15000)
     check('… und sofort überall abgemeldet (Back-Channel-Logout)', True)
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['eigen']); pg.click('#kc-login')
     pg.wait_for_load_state()
-    check('gesperrtes Konto: keine Anmeldung', pg.url.startswith(L) and pg.locator('#otp').count() == 0, pg.url)
+    check('gesperrtes Konto: keine Anmeldung', pg.url.startswith(L) and pg.locator('#db-grid').count() == 0, pg.url)
     code, aus = konten('entsperren', 'sven.start')
     code2, aus2 = konten('startpasswort', 'sven.start')
     m = re.search(r'weitergeben\): (\S+)', aus2)
@@ -476,10 +497,35 @@ with sync_playwright() as pw:
     ctx.close()
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', m.group(1) if m else 'x'); pg.click('#kc-login')
-    pg.wait_for_selector('#otp'); pg.fill('#otp', totp(sven_otp, 1)); pg.click('#kc-login')
     pg.wait_for_selector('#password-new')
-    check('neues Startpasswort: Einmalcode bleibt Pflicht, danach eigenes Passwort verlangt', 'UPDATE_PASSWORD' in pg.url, pg.url)
+    check('neues Startpasswort: danach eigenes Passwort verlangt', 'UPDATE_PASSWORD' in pg.url, pg.url)
+    pg.fill('#password-new', SVEN['zweit']); pg.fill('#password-confirm', SVEN['zweit']); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile')
     ctx.close()
+
+    # Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
+    def vtoken():
+        return json.loads(anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+            'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung', 'password': env_datei()['KC_VERWALTUNG_PASSWORD']}).encode(),
+            {'Content-Type': 'application/x-www-form-urlencoded'})[2])['access_token']
+    kopf = {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    kc_sven = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=sven.start', kopf=kopf)[2])[0]
+    kc_sven['requiredActions'] = ['CONFIGURE_TOTP']
+    anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_sven['id']}", 'PUT', json.dumps(kc_sven).encode(), kopf)
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['zweit']); pg.click('#kc-login')
+    pg.wait_for_selector('#totpSecret', state='attached')
+    sven_otp = pg.get_attribute('#totpSecret', 'value')
+    pg.fill('#totp', totp(sven_otp)); pg.fill('#userLabel', 'Telefon'); pg.click('#saveTOTPBtn')
+    pg.wait_for_selector('#db-grid .db-tile')
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['zweit']); pg.click('#kc-login')
+    pg.wait_for_selector('#otp')
+    check('freiwillig eingerichteter Einmalcode wird bei der Anmeldung abgefragt', pg.is_visible('#otp'))
+    pg.fill('#otp', totp(sven_otp, 1)); pg.click('#kc-login'); pg.wait_for_selector('#db-grid .db-tile')
+    ctx.close()
+
     code, aus = konten('zuruecksetzen', 'sven.start')
     m = re.search(r'weitergeben\): (\S+)', aus)
     check('Konsole: zweiter Faktor zurückgesetzt (Handy verloren), neues Startpasswort', code == 0 and 'gelöscht' in aus and m, aus)
@@ -487,11 +533,7 @@ with sync_playwright() as pw:
     pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', m.group(1) if m else 'x'); pg.click('#kc-login')
     pg.wait_for_selector('#password-new')
     check('… alter Einmalcode nicht mehr abgefragt, eigenes Passwort verlangt', pg.locator('#otp').count() == 0 and 'UPDATE_PASSWORD' in pg.url, pg.url)
-    pg.fill('#password-new', SVEN['zweit']); pg.fill('#password-confirm', SVEN['zweit']); pg.click('#kc-submit')
-    pg.wait_for_selector('#totpSecret', state='attached')
-    neu_otp = pg.get_attribute('#totpSecret', 'value')
-    check('… neuer Einmalcode muss eingerichtet werden (neues Geheimnis)', 'CONFIGURE_TOTP' in pg.url and neu_otp and neu_otp != sven_otp, pg.url)
-    pg.fill('#totp', totp(neu_otp)); pg.fill('#userLabel', 'Neues Telefon'); pg.click('#saveTOTPBtn')
+    pg.fill('#password-new', SVEN['dritt']); pg.fill('#password-confirm', SVEN['dritt']); pg.click('#kc-submit')
     pg.wait_for_selector('#db-grid .db-tile')
     st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('… danach wieder dasselbe Mitarbeiterkonto (Verknüpfung bleibt)', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
@@ -532,7 +574,7 @@ with sync_playwright() as pw:
     code, aus = konten('einladen', 'Eva.Einladung', 'eva@stafl.test', 'Eva', 'Einladung')
     m = warte_mail('eva@stafl.test')
     link = re.search(r'https://login\.stafl\.test:8443/realms/mitarbeiter/login-actions/action-token\?key=\S+', m['text']).group(0) if m else ''
-    check('Einladung verschickt: Mail mit Link, ohne Passwort', code == 0 and link and 'Passwort aktualisieren' in m['text'] and 'Mehrfachauthentifizierung' in m['text']
+    check('Einladung verschickt: Mail mit Link, ohne Passwort, nur „Passwort aktualisieren“', code == 0 and link and 'Passwort aktualisieren' in m['text'] and 'Mehrfachauthentifizierung' not in m['text']
           and m['von'] == 'anmeldung@stafl.test', (aus, m and m['text'][:300]))
     code, aus = konten('einladen', 'eva.einladung', 'eva@stafl.test', 'Eva', 'Einladung')
     check('vorhandenes Konto nicht doppelt angelegt (Hinweis auf erneutes Senden)', code == 1 and 'gibt es schon' in aus, aus)
@@ -542,17 +584,12 @@ with sync_playwright() as pw:
         pg.click('a[href*="action-token"]'); pg.wait_for_selector('#password-new')
     check('Link aus der Einladung: eigenes Passwort festlegen', 'UPDATE_PASSWORD' in pg.url, pg.url)
     pg.fill('#password-new', SVEN['eva']); pg.fill('#password-confirm', SVEN['eva']); pg.click('#kc-submit')
-    pg.wait_for_selector('#totpSecret', state='attached')
-    eva_otp = pg.get_attribute('#totpSecret', 'value')
-    pg.fill('#totp', totp(eva_otp)); pg.fill('#userLabel', 'Telefon'); pg.click('#saveTOTPBtn')
     pg.wait_for_selector('a[href="https://dashboard.stafl.test:8443/"]')
-    check('… danach Einmalcode eingerichtet, Rückweg zum Dashboard', 'aktualisiert' in pg.inner_text('body'))
+    check('… danach Konto aktualisiert (ohne Einmalcode), Rückweg zum Dashboard', 'aktualisiert' in pg.inner_text('body') and pg.locator('#totpSecret').count() == 0)
     pg.click('a[href="https://dashboard.stafl.test:8443/"]')
     pg.wait_for_selector('#db-grid .db-tile, #username, #otp')
     if pg.locator('#username').count():
         pg.fill('#username', 'eva.einladung'); pg.fill('#password', SVEN['eva']); pg.click('#kc-login'); pg.wait_for_selector('#db-grid .db-tile, #otp')
-    if pg.locator('#otp').count():
-        pg.fill('#otp', totp(eva_otp, 1)); pg.click('#kc-login')
     pg.wait_for_selector('#db-grid .db-tile')
     st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('… im Dashboard angemeldet, mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'eva.einladung', st.get('user'))
@@ -564,7 +601,7 @@ with sync_playwright() as pw:
     ctx.close()
     code, aus = konten('einladen', 'eva.einladung')
     m2 = warte_mail('eva@stafl.test', 2)
-    check('erneute Einladung: nur noch Passwort (Einmalcode bleibt)', code == 0 and m2 and 'Passwort aktualisieren' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
+    check('erneute Einladung: wieder nur „Passwort aktualisieren“', code == 0 and m2 and 'Passwort aktualisieren' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
     pf.schliessen()
     br.close()
 
