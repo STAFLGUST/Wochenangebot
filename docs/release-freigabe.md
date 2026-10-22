@@ -38,8 +38,25 @@ CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinand
    Image bleibt als `stafl-app:release-vorher` erhalten.
 5. Healthcheck wie ein Besucher. Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
    (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
+6. Nach erfolgreichem Healthcheck: `docker image prune -f` entfernt nur hängende Images ohne Namen (z. B. das von
+   `release-vorher` verdrängte). Getaggte und laufende Images sowie Volumes bleiben unberührt; ein Fehler beim Aufräumen
+   ändert nichts am erfolgreichen Release (nur ein Hinweis im Protokoll).
 
 Getestet ohne Docker in `tests/deploy/test_freigabe.sh`.
+
+## Notfall-Rückfall von Hand (`deploy/release-zurueck.sh`)
+
+`sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten Release zurück (`vorher` in
+`daten/deployment.php`); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt.
+Container und Image wie beim automatischen Rückfall:
+
+- `Caddyfile`, `docker-compose.yml` oder die Ergänzungsdatei der Anmeldung unterscheiden sich → alle Container neu.
+- `deploy/image/` unterscheidet sich und `COMPOSE_FILE` enthält die Ergänzungsdatei → `stafl-app:release-vorher` wieder
+  auf den aktiven Namen, nur die App neu. Fehlt das gemerkte Image, meldet das Skript das und baut das Image aus dem
+  Bauplan des vorherigen Stands (`docker compose build app`); scheitert der Bau (oder das Taggen), bricht es ab – Code
+  und Container bleiben unverändert.
+- Gesperrt: Rückfall auf einen abgelehnten bzw. automatisch zurückgenommenen Release (steht nach einem automatischen
+  Rückfall als `vorher` im Status) und, solange SQLite aktiv ist, auf Code ohne Speicherschicht (`docs/datenbank.md`).
 
 ## Was der Lauf nach der Freigabe prüft (`.github/scripts/release-pruefen.sh`)
 

@@ -18,7 +18,9 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 
 **Releases:** Ändert ein Release `deploy/image/` (z. B. neuer Digest des Basis-Images), baut `deploy/freigabe-einspielen.sh`
 das Image vor dem Einspielen neu (`docker compose build --pull app`) und erstellt die App neu – nur solange `COMPOSE_FILE`
-die Ergänzungsdatei enthält. Bau-Fehler → nicht eingespielt; Rückfall → altes Image (`stafl-app:release-vorher`).
+die Ergänzungsdatei enthält. Bau-Fehler → nicht eingespielt; Rückfall (automatisch und von Hand mit
+`deploy/release-zurueck.sh`) → altes Image (`stafl-app:release-vorher`, fehlt es: Neubau aus dem alten Bauplan).
+Nach erfolgreichem Release werden hängende Images ohne Namen entfernt (`docker image prune -f`).
 Ablauf: [docs/release-freigabe.md](../../docs/release-freigabe.md).
 
 ## Geheimnisse (nur in `.env` auf dem Server)

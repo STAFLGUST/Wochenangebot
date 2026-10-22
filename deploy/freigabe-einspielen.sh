@@ -15,7 +15,9 @@
 # (datenbank.py, sicherung-pruefen.*) noch im alten Stand.
 # Anwendungs-Image (deploy/image): Ist die Ergänzungsdatei der Anmeldung über COMPOSE_FILE in .env aktiv und ändert das
 # Release deploy/image/, wird das Image vorab als stafl-app:release-neu gebaut (Code bleibt bis dahin unverändert), erst
-# beim Einspielen auf den aktiven Namen umgetaggt; das bisherige Image bleibt als stafl-app:release-vorher für den Rückfall.
+# beim Einspielen auf den aktiven Namen umgetaggt; das bisherige Image bleibt als stafl-app:release-vorher für den Rückfall
+# (auch für den manuellen Notfall-Rückfall deploy/release-zurueck.sh). Nach erfolgreichem Healthcheck werden hängende
+# Images ohne Namen entfernt (docker image prune -f).
 #
 # Für Tests überschreibbar: WA_BASIS, WA_API (GitHub-API), WA_HEALTH_URL, WA_HEALTH_HOST, WA_COMPOSE, WA_DOCKER, WA_SICHERN
 set -eu
@@ -149,6 +151,9 @@ if gesund; then
   status true "$SHA" "$AKTUELL" "$LAUF_ID" ""
   melden ok
   echo "Release eingespielt: $(git log -1 --format='%h %s')"
+  # Aufräumen: nur hängende Images ohne Namen (z. B. das von release-vorher verdrängte); getaggte und laufende Images
+  # sowie Volumes bleiben. Ein Fehler hier ändert nichts am erfolgreichen Release.
+  $DOCKER image prune -f || echo "Hinweis: Aufräumen alter Images fehlgeschlagen – Release ist trotzdem eingespielt."
   exit 0
 fi
 echo "Healthcheck fehlgeschlagen – zurück auf $AKTUELL"
