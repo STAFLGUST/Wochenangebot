@@ -171,11 +171,13 @@ check('Client „verwaltung“: Geheimnis aus .env übernommen (Code-Austausch f
 _env = os.path.join(WORK, 'installation', '.env')
 _vorher = open(_env, encoding='utf-8').read()
 _r = subprocess.run(['sh', 'deploy/anmeldung/konten.sh', 'realm-aktualisieren'], cwd=os.path.join(WORK, 'installation'), capture_output=True, text=True,
-                    env=dict(os.environ, KCADM=f"env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY {next(d for d in (os.path.join(WORK, x) for x in os.listdir(WORK)) if os.path.isfile(os.path.join(d, 'bin', 'kcadm.sh')))}/bin/kcadm.sh",
+                    # Ausgabe stückweise wie über docker compose exec (im Betrieb gab es sonst falsche „Abbruch“-Meldungen)
+                    env=dict(os.environ, KCADM=f"sh {os.path.join(REPO, 'tests', 'oidc', 'kcadm-stueckweise.sh')} env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY {next(d for d in (os.path.join(WORK, x) for x in os.listdir(WORK)) if os.path.isfile(os.path.join(d, 'bin', 'kcadm.sh')))}/bin/kcadm.sh",
                              KC_SERVER=KC, KC_ADMIN_USER_TEST='verwaltung-ci', KC_ADMIN_PASSWORD_TEST=GEHEIM['KC_ADMIN_PASSWORD'],
                              KC_REALM_DATEI=os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json')))
 check('realm-aktualisieren ein zweites Mal: nichts neu angelegt, .env unverändert',
       _r.returncode == 0 and 'angelegt:' not in _r.stdout and 'erzeugt:' not in _r.stdout and open(_env, encoding='utf-8').read() == _vorher, (_r.returncode, _r.stdout[-300:], _r.stderr[-300:]))
+check('realm-aktualisieren mit stückweiser Ausgabe (wie docker compose exec): keine Abbruch-Meldung', 'Abbruch' not in _r.stderr, _r.stderr[-300:])
 
 # ── Ohne Anmeldung ──
 code, kopf, _ = anfrage(D + '/dashboard/', kopf=SEITE)
