@@ -81,7 +81,8 @@ mkdir -p "$KCP/deploy/anmeldung"
 cp "$REPO/docker-compose.yml" "$KCP/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/realm-mitarbeiter.json" "$HIER/einrichten.sh" "$KCP/deploy/anmeldung/"
 printf 'DOMAIN=angebot-stafl.de\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$KCP/.env"
 (cd "$KCP" && sh deploy/anmeldung/einrichten.sh >/dev/null)
-kc_bereit() { for _ in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:8180/realms/mitarbeiter/.well-known/openid-configuration 2>/dev/null && return 0; sleep 2; done; return 1; }
+# bis 400 s: der erste Start (Datenbank anlegen, Indizes prüfen) dauert auf CI-Rechnern deutlich länger
+kc_bereit() { for _ in $(seq 1 200); do curl -fsS -o /dev/null http://127.0.0.1:8180/realms/mitarbeiter/.well-known/openid-configuration 2>/dev/null && return 0; sleep 2; done; return 1; }
 if (cd "$KCP" && docker compose -p "$KCPROJ" up -d keycloak-db keycloak >/dev/null 2>&1) && kc_bereit; then
   ok "Keycloak startet mit Start-Konto (Ersteinrichtung)"
   START_PW=$(sed -n 's/^KC_BOOTSTRAP_ADMIN_PASSWORD=//p' "$KCP/daten-anmeldung/einrichtung.env")
