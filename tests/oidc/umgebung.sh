@@ -90,6 +90,8 @@ EOF
   export KC_HTTP_MANAGEMENT_PORT="$KC_MGMT_PORT" KC_PROXY_HEADERS=xforwarded KC_HEALTH_ENABLED=true
   export KC_BOOTSTRAP_ADMIN_USERNAME=verwaltung-ci KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_ADMIN_PASSWORD"
   export JAVA_OPTS_KC_HEAP="-Xms256m -Xmx768m"
+  # Geheimnisse für Keycloak als Dateien (wie im Betrieb: Postfach-Passwort, deploy/anmeldung/konten.sh mail-einrichten)
+  mkdir -p "$OIDC_WORK/vault"; export KC_VAULT_DIR="$OIDC_WORK/vault"
   # Back-Channel-Logout an die Anwendungen: nur mit unserer Test-CA und direkt (Proxy-Vorgaben der Umgebung entfernt)
   export KC_TRUSTSTORE_PATHS="$OIDC_WORK/caddy/pki/authorities/local/root.crt"
 
@@ -109,7 +111,7 @@ EOF
   chmod 755 "$OIDC_WORK/caddy" "$OIDC_WORK/caddy/pki" "$OIDC_WORK/caddy/pki/authorities" "$OIDC_WORK/caddy/pki/authorities/local"
   chmod 644 "$OIDC_WORK/caddy/pki/authorities/local/root.crt"
 
-  "$kc/bin/kc.sh" build --db=postgres --health-enabled=true --features-disabled=twitter-broker,identity-brokering-api >"$OIDC_WORK/keycloak-build.log" 2>&1
+  "$kc/bin/kc.sh" build --db=postgres --health-enabled=true --vault=file --features-disabled=twitter-broker,identity-brokering-api >"$OIDC_WORK/keycloak-build.log" 2>&1
   nohup env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY "$kc/bin/kc.sh" start --optimized --import-realm >"$OIDC_WORK/keycloak.log" 2>&1 &
   echo $! > "$OIDC_WORK/keycloak.pid"
 

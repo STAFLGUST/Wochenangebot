@@ -74,6 +74,7 @@
   "clients": [
     {
       "clientId": "dashboard",
+      "baseUrl": "https://dashboard.stafl.test:8443/",
       "name": "STAFL-Dashboard",
       "enabled": true,
       "protocol": "openid-connect",
@@ -106,6 +107,7 @@
     },
     {
       "clientId": "angebot",
+      "baseUrl": "https://angebot.stafl.test:8443/admin/",
       "name": "Angebot – Mitarbeiter-Eingabe",
       "enabled": true,
       "protocol": "openid-connect",

@@ -67,8 +67,9 @@ TMP="$ZIEL.neu"
 sed -e "s/@GEHEIM_DASHBOARD@/$(wert OIDC_SECRET_DASHBOARD)/" -e "s/@GEHEIM_ANGEBOT@/$(wert OIDC_SECRET_ANGEBOT)/" "$REALM_QUELLE" > "$TMP"
 if grep -q "@GEHEIM_" "$TMP"; then rm -f "$TMP"; echo "Abbruch: Platzhalter im Realm nicht ersetzt." >&2; exit 1; fi
 mv "$TMP" "$ZIEL"
-chmod 700 "$ORDNER/daten-anmeldung" "$ZIEL_DIR"; chmod 600 "$ZIEL"
-if [ "$(id -u)" = 0 ]; then chown -R "$KC_UID" "$ZIEL_DIR"; fi
+mkdir -p "$ORDNER/daten-anmeldung/vault"   # Tresor von Keycloak (Dateien, z. B. Postfach-Passwort)
+chmod 700 "$ORDNER/daten-anmeldung" "$ZIEL_DIR" "$ORDNER/daten-anmeldung/vault"; chmod 600 "$ZIEL"
+if [ "$(id -u)" = 0 ]; then chown -R "$KC_UID" "$ZIEL_DIR" "$ORDNER/daten-anmeldung/vault"; fi
 echo "geschrieben: daten-anmeldung/realm-import/realm-mitarbeiter.json"
 echo "Fertig ($neu neue Einträge in .env). Nächster Schritt laut Ablaufplan: Keycloak und Datenbank starten (Schritt 3)."
 if [ -f "$START" ]; then echo 'Das Start-Konto "einrichtung" steht in daten-anmeldung/einrichtung.env - nur für die Einrichtung (konten.sh verwaltung löscht es).'; fi

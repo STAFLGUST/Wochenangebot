@@ -15,7 +15,7 @@ Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─�
 | `realm-mitarbeiter.json` | Test-Realm: Brute-Force-Schutz, nur HTTPS, keine Selbstregistrierung, Pflicht zum zweiten Faktor, Sitzung 30 Min. Leerlauf / 10 Std.; Clients vertraulich, nur Code-Ablauf mit PKCE (S256), exakte Rücksprungadressen, kein CORS, Back-Channel-Logout. Testnutzer mit Testkennwörtern (keine echten Daten) |
 | `Caddyfile` | TLS wie in der Produktion; auf `login.` nur `/realms/mitarbeiter/` und `/resources/` (Verwaltung und Master-Realm nie öffentlich) |
 | `apache.conf` | je Host ein eigener Client und eine eigene Sitzung (`__Host-oidc_sitzung`), Schnittstelle ohne Anmeldung 401, Identität nur als Server-Umgebung (`OIDCPassClaimsAs environment`) |
-| `test_oidc.py` | 112 Prüfungen (Härtung, zweiter Faktor mit Einmalcode oder Passkey und Anmeldestärke, erneute Anmeldung, Sitzung je Host, Single Sign-on, Rechte, gesperrte/unbekannte Konten, Abmelden für alle Anwendungen, Konten über die Serverkonsole mit `deploy/anmeldung/konten.sh`) |
+| `test_oidc.py` | 126 Prüfungen (Härtung, zweiter Faktor mit Einmalcode oder Passkey und Anmeldestärke, erneute Anmeldung, Sitzung je Host, Single Sign-on, Rechte, gesperrte/unbekannte Konten, Abmelden für alle Anwendungen, Konten über die Serverkonsole mit `deploy/anmeldung/konten.sh`, Einladung per Mail über einen Test-Mailserver `postfach.py`) |
 
 Lokal (Ubuntu 24.04 mit `apache2 libapache2-mod-auth-openidc libapache2-mod-php8.3 postgresql`, Java 21):
 

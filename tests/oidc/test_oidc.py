@@ -40,7 +40,8 @@ GEHEIM = dict(z.strip().split('=', 1) for z in open(os.path.join(WORK, 'geheim.e
 PW_ALT = 'Sicheres-Passwort-1'   # Administrator der Testdaten (tests/fixtures/data-seed)
 NUTZER = {'admin': ('Admin-Kennwort-CI-1', 'nur-fuer-tests-otp-admin'), 'erika': ('Erika-Kennwort-CI-1', 'nur-fuer-tests-otp-erika'),
           'fremd': ('Fremd-Kennwort-CI-1', 'nur-fuer-tests-otp-fremd'), 'neu': ('Neu-Kennwort-CI-1', None)}
-SVEN = {'eigen': 'Sven-Eigenes-Kennwort-1', 'zweit': 'Sven-Zweites-Kennwort-2'}   # über die Konsole angelegtes Konto (nur Test)
+SVEN = {'eigen': 'Sven-Eigenes-Kennwort-1', 'zweit': 'Sven-Zweites-Kennwort-2', 'eva': 'Eva-Eigenes-Kennwort-1'}   # über die Konsole angelegte Konten (nur Test)
+POSTFACH = {'port': int(os.environ.get('OIDC_SMTP_PORT', '2526')), 'user': 'postfach@stafl.test', 'pass': 'Postfach-Test-' + str(os.getpid())}
 res = []
 
 
@@ -110,6 +111,8 @@ if not nutzer_roh()['erika'].get('active'):   # Wiederholung ohne Neustart der U
 check('Vorbereitung: Bearbeiterin erika angelegt und aktiv', nutzer_roh()['erika'].get('active') is True)
 V.call('user_save', {'id': '', 'name': 'Sven Start', 'username': 'Sven.Start', 'role': 'editor', 'active': True, 'password': 'Start-Zugang-77', 'mustChange': False})
 check('Vorbereitung: Mitarbeiterkonto für ein später über die Konsole angelegtes Keycloak-Konto', 'sven.start' in nutzer_roh())
+V.call('user_save', {'id': '', 'name': 'Eva Einladung', 'username': 'eva.einladung', 'role': 'editor', 'active': True, 'password': 'Eva-Zugang-7788', 'mustChange': False})
+check('Vorbereitung: Mitarbeiterkonto für eine Einladung per Mail', 'eva.einladung' in nutzer_roh())
 
 # ── Härtung von Keycloak (ADR-003 §2) ──
 code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
@@ -495,6 +498,74 @@ with sync_playwright() as pw:
     ctx.close()
     code, aus = konten('passkey', 'gibt-es-nicht')
     check('Konsole: unbekanntes Konto verständlich abgelehnt', code == 1 and 'gibt es in Keycloak nicht' in aus, aus)
+
+    # ── Einladung per Mail (konten.sh mail-einrichten / einladen): Link statt Passwort, Postfach-Passwort nur im Tresor ──
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from postfach import Postfach
+    pf = Postfach(POSTFACH['port'], POSTFACH['user'], POSTFACH['pass'])
+    umg.update(APP_PHP=f"env WA_APP_DIR={WORK}/app MAIL_SMTP_HOST=127.0.0.1 MAIL_SMTP_PORT={POSTFACH['port']} MAIL_SMTP_SECURE=none "
+                       f"MAIL_SMTP_USER={POSTFACH['user']} MAIL_SMTP_PASS={POSTFACH['pass']} MAIL_FROM=anmeldung@stafl.test MAIL_FROM_NAME=STAFL php",
+               KC_VAULT_HOST_DIR=os.path.join(WORK, 'vault'), KC_BASEURL_BEHALTEN='1')
+    os.symlink(os.path.join(REPO, 'deploy'), os.path.join(ordner, 'deploy'))   # app-abfrage.php relativ zum Installationsordner
+
+    def warte_mail(adresse, anzahl=1):
+        for _ in range(60):
+            if len(pf.an(adresse)) >= anzahl: return pf.an(adresse)[anzahl - 1]
+            time.sleep(0.5)
+        return None
+
+    code, aus = konten('einladen', 'eva.einladung')
+    check('Einladung: ohne eingerichteten Mailversand abgelehnt', code == 1 and 'mail-einrichten' in aus, aus)
+    code, aus = konten('mail-einrichten', 'pruefung@stafl.test')
+    tresor = os.path.join(WORK, 'vault', 'mitarbeiter_smtp__password')
+    check('Mailversand eingerichtet, Testmail angekommen', code == 0 and warte_mail('pruefung@stafl.test') is not None, aus)
+    check('Postfach-Passwort nur in der Tresor-Datei (nur Besitzer), nie in der Ausgabe',
+          open(tresor).read() == POSTFACH['pass'] and oct(os.stat(tresor).st_mode)[-3:] == '600' and POSTFACH['pass'] not in aus)
+    vtok = json.loads(anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung', 'password': env_datei()['KC_VERWALTUNG_PASSWORD']}).encode(),
+        {'Content-Type': 'application/x-www-form-urlencoded'})[2])['access_token']
+    smtp = json.loads(anfrage(KC + '/admin/realms/mitarbeiter', kopf={'Authorization': 'Bearer ' + vtok})[2]).get('smtpServer', {})
+    check('Keycloak-Datenbank kennt nur den Verweis auf den Tresor (nicht in der Sicherung)', smtp.get('password') == '${vault.smtp_password}' and smtp.get('host') == '127.0.0.1', smtp)
+    check('Postfach mit den Zugangsdaten der Anwendung angemeldet', (POSTFACH['user'], True) in pf.anmeldungen and not any(not ok for _, ok in pf.anmeldungen), pf.anmeldungen)
+    code, aus = konten('einladen', 'ohne.konto', 'ohne@stafl.test', 'Ohne', 'Konto')
+    check('Einladung ohne Mitarbeiterkonto im Eingabebereich abgelehnt', code == 1 and 'kein Mitarbeiterkonto' in aus and not pf.an('ohne@stafl.test'), aus)
+    code, aus = konten('einladen', 'Eva.Einladung', 'eva@stafl.test', 'Eva', 'Einladung')
+    m = warte_mail('eva@stafl.test')
+    link = re.search(r'https://login\.stafl\.test:8443/realms/mitarbeiter/login-actions/action-token\?key=\S+', m['text']).group(0) if m else ''
+    check('Einladung verschickt: Mail mit Link, ohne Passwort', code == 0 and link and 'Passwort aktualisieren' in m['text'] and 'Mehrfachauthentifizierung' in m['text']
+          and m['von'] == 'anmeldung@stafl.test', (aus, m and m['text'][:300]))
+    code, aus = konten('einladen', 'eva.einladung', 'eva@stafl.test', 'Eva', 'Einladung')
+    check('vorhandenes Konto nicht doppelt angelegt (Hinweis auf erneutes Senden)', code == 1 and 'gibt es schon' in aus, aus)
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(link); pg.wait_for_selector('a[href*="action-token"], #password-new')
+    if pg.locator('#password-new').count() == 0:
+        pg.click('a[href*="action-token"]'); pg.wait_for_selector('#password-new')
+    check('Link aus der Einladung: eigenes Passwort festlegen', 'UPDATE_PASSWORD' in pg.url, pg.url)
+    pg.fill('#password-new', SVEN['eva']); pg.fill('#password-confirm', SVEN['eva']); pg.click('#kc-submit')
+    pg.wait_for_selector('#totpSecret', state='attached')
+    eva_otp = pg.get_attribute('#totpSecret', 'value')
+    pg.fill('#totp', totp(eva_otp)); pg.fill('#userLabel', 'Telefon'); pg.click('#saveTOTPBtn')
+    pg.wait_for_selector('a[href="https://dashboard.stafl.test:8443/"]')
+    check('… danach Einmalcode eingerichtet, Rückweg zum Dashboard', 'aktualisiert' in pg.inner_text('body'))
+    pg.click('a[href="https://dashboard.stafl.test:8443/"]')
+    pg.wait_for_selector('#db-grid .db-tile, #username, #otp')
+    if pg.locator('#username').count():
+        pg.fill('#username', 'eva.einladung'); pg.fill('#password', SVEN['eva']); pg.click('#kc-login'); pg.wait_for_selector('#db-grid .db-tile, #otp')
+    if pg.locator('#otp').count():
+        pg.fill('#otp', totp(eva_otp, 1)); pg.click('#kc-login')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… im Dashboard angemeldet, mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'eva.einladung', st.get('user'))
+    pg.screenshot(path=os.path.join(SH, 'oidc_einladung_dashboard.png'))
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = ctx.new_page()
+    pg.goto(link); pg.wait_for_load_state()
+    check('Link aus der Einladung nur einmal verwendbar', pg.locator('#password-new').count() == 0 and pg.url.startswith(L), pg.url)
+    ctx.close()
+    code, aus = konten('einladen', 'eva.einladung')
+    m2 = warte_mail('eva@stafl.test', 2)
+    check('erneute Einladung: nur noch Passwort (Einmalcode bleibt)', code == 0 and m2 and 'Passwort aktualisieren' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
+    pf.schliessen()
     br.close()
 
 check('keine JavaScript-Fehler auf unseren Seiten', not fehler, fehler)
