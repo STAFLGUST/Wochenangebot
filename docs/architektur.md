@@ -99,7 +99,10 @@ drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `
 Segment. Klebende Leisten (Kopfzeile, Werkzeugleiste) sind fast deckend, damit darunter durchlaufende Tabellen auch ohne
 Unschärfe (Software-Darstellung) nicht stören. Ohne `backdrop-filter` (`@supports not`) bzw. bei
 `prefers-reduced-transparency: reduce` deckende Flächen. Die Kundenseite lädt `admin.css` nicht und bleibt im Design „Klar“;
-`app.css` ist dafür unverändert.
+`app.css` gilt dafür unverändert; die Darstellungskorrekturen der Angebotsseite am Ende von `app.css` greifen nur auf der
+Kundenseite (`body:not(.adm):not(.db)`): Tippflächen am Handy ≥ 36 px, Kontrast kleiner grauer Zusätze, Platzhalter mit „…“,
+Wartungsseite ohne Ansichtsumschalter, Symbolknopf `.ibtn` im Bestellwunsch. `legal.css` (Kontakt, Impressum, Datenschutz)
+folgt zusätzlich der dunklen Systemeinstellung.
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
 
@@ -124,6 +127,11 @@ Glaskapsel (Logo, Hell/Dunkel, Nutzer-Chip mit Initialen, Abmelden), Begrüßung
 Glasflächen; Symbolfarbe hängt am Registersymbol (`icon`), nicht am Modul. Nicht nutzbare Kacheln sind blass und tragen
 ein Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige); Wartung und abgeschaltete Module ohne Band, mit eigener Pille.
 Ohne `backdrop-filter` oder bei „Transparenz reduzieren“ deckende Flächen, bei „Bewegung reduzieren“ keine Übergänge.
+Kachelnamen werden nie automatisch getrennt (`hyphens: manual`): `dashboard.js` (`namenEinpassen`) verkleinert die Schrift
+langer Namen in halben Pixeln bis höchstens drei Viertel, erst dann bricht ein Wort als Notlösung um. `baenderLegen` legt das
+gedrehte Band je gesperrter Kachel mittig zwischen Name und Status-Pille (`--db-band-y`) und macht die Kachel nur so viel
+höher wie nötig; beides neu bei Breitenänderung (ResizeObserver) und nach dem Laden der Schrift. Lange Pillen brechen als
+abgerundetes Feld um, Wartungshinweise brechen auch in langen Adressen um.
 
 ## Tests
 

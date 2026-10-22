@@ -654,6 +654,11 @@ function renderEmpty() {
       <p>Markieren Sie Artikel mit dem Stern, um sie hier zu sammeln, gesammelt auszudrucken oder als CSV zu exportieren.</p>
       <div class="row-actions"><button type="button" class="btn" data-act="tab-all">Zum Angebot</button></div></div>`;
   }
+  // Angebot ohne Artikel (nicht Suche/Filter): kein Hinweis auf Schreibweise oder Filter
+  if (!DATA.items.length) {
+    return `<div class="empty k-leer"><div class="empty-ico">${icon('info')}</div><h3>Noch keine Artikel im Angebot</h3>
+      <p>Dieses Angebot enthält derzeit keine Artikel. Bitte schauen Sie später wieder vorbei.</p></div>`;
+  }
   const q = state.q.trim();
   return `<div class="empty"><div class="empty-ico">${icon('search')}</div><h3>Keine Artikel gefunden</h3>
     <p>${q ? `Für „${esc(q)}“` : 'Für diese Auswahl'}${activeFilterCount() ? ' mit den aktiven Filtern' : ''} gibt es ${state.tab === 'fav' ? 'auf Ihrer Merkliste ' : ''}keine Treffer. Prüfen Sie die Schreibweise oder lockern Sie die Filter.</p>

@@ -202,6 +202,8 @@ with sync_playwright() as p:
     check('order bar shows freight and missing weight', 'Fracht' in c.inner_text('#orderbar') and 'bis frachtfrei' in c.inner_text('#orderbar'))
     c.fill('#order-body .qty[data-qty="%s"]' % I1['id'], '3'); c.press('#order-body .qty[data-qty="%s"]' % I1['id'], 'Tab')
     check('quantity editable in dialog (sum updates)', '59,97 €' in c.inner_text('#order-body') and c.input_value(f'#list .qty[data-qty="{I1["id"]}"]') == '3')
+    rm = c.evaluate("(() => { const b = document.querySelector('#order-body .ibtn[data-order=rm]'), s = getComputedStyle(b); return [s.backgroundColor, s.borderTopWidth, b.offsetWidth, b.offsetHeight]; })()")
+    check('order dialog: remove button styled (no grey default button)', rm[0] == 'rgba(0, 0, 0, 0)' and rm[1] == '0px' and rm[2] >= 32 and rm[3] >= 32, rm)
     c.fill('#or-ref', 'Woche 43'); c.fill('#or-bem', 'Bitte bis 10 Uhr liefern')
     c.screenshot(path=SH + '/bestellung-dialog.png')
     n0 = len(smtp.messages)
