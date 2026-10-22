@@ -718,6 +718,21 @@ with sync_playwright() as pw:
     check('freiwillig eingerichteter Einmalcode wird bei der Anmeldung abgefragt', pg.is_visible('#otp'))
     pg.fill('#otp', totp(sven_otp, 1)); pg.click('#kc-login'); pg.wait_for_selector('#db-grid .db-tile')
     ctx.close()
+    # Diagnose (konten.sh pruefen): falscher Einmalcode erscheint als Ereignis, nur lesend, kein Geheimnis in der Ausgabe
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['zweit']); pg.click('#kc-login')
+    pg.wait_for_selector('#otp'); pg.fill('#otp', '000000' if totp(sven_otp, 1) != '000000' else '111111'); pg.click('#kc-login')
+    pg.wait_for_selector('#otp')
+    ctx.close()
+    vorher = anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_sven['id']}", kopf={'Authorization': 'Bearer ' + vtoken()})[2]
+    code, aus = konten('pruefen', 'Sven.Start')
+    check('Konsole pruefen: Konto aktiv, ein Einmalcode-Gerät mit Bezeichnung',
+          code == 0 and "Konto 'sven.start': aktiv" in aus and aus.count('Einmalcode (App): eingerichtet') == 1 and '„Telefon“' in aus, aus)
+    check('… falscher Einmalcode als Ereignis mit verständlicher Ursache',
+          re.search(r'LOGIN_ERROR · Passwort oder Einmalcode falsch', aus) and 'Fehlversuche in Folge: 1' in aus, aus)
+    check('… Regeln und Uhr angezeigt, kein Geheimnis des Einmalcodes', 'jeder Code nur einmal' in aus and 'Serveruhr:' in aus and sven_otp not in aus, aus)
+    check('… ändert nichts am Konto', json.loads(vorher) == json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_sven['id']}", kopf={'Authorization': 'Bearer ' + vtoken()})[2]))
+    code, aus = konten('entsperren', 'sven.start')   # Fehlversuch zurücksetzen, damit die folgenden Anmeldungen nicht in die Sperre laufen
 
     code, aus = konten('zuruecksetzen', 'sven.start')
     m = re.search(r'weitergeben\): (\S+)', aus)

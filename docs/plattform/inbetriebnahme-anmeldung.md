@@ -63,6 +63,11 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
   Mitarbeiterkonto hängt an der Keycloak-Kennung.
+- **Anmeldung klappt nicht („Ungültiger Einmalcode“ o. Ä.):** zuerst `konten.sh pruefen <name>` – ändert nichts und zeigt:
+  Konto aktiv/gesperrt, automatische Sperre nach Fehlversuchen, eingerichtete Faktoren (mehrere Einmalcode-Geräte sind
+  eine häufige Ursache: die Anmeldeseite prüft nur das dort ausgewählte Gerät), die letzten zehn Anmeldeereignisse mit
+  Ursache auf Deutsch und die Serveruhr samt Abweichung (über ±15 s werden Codes abgelehnt). Jeder Code gilt nur einmal –
+  nach einem Fehlschlag auf den nächsten Code warten.
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
 - **Rechte** bleiben in der Anwendung (Nutzer → Rollen und Rechte). Keycloak sagt nur „wer“; ein in der Anwendung
