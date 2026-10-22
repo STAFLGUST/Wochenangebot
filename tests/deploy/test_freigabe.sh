@@ -4,7 +4,9 @@
 # Prüft: kein Release → nichts passiert; freigegebener Commit geht live; defekter Release wird erkannt und
 # automatisch zurückgesetzt (und nicht erneut versucht); Release ohne CI und Commit außerhalb von main werden abgelehnt;
 # Sicherung mit dem Skript des neuen Commits; Anwendungs-Image wird nur bei Änderungen unter deploy/image/ (und aktiver
-# Ergänzungsdatei der Anmeldung) gebaut, ein Bau-Fehler verhindert das Einspielen, beim Rückfall gilt das alte Image.
+# Ergänzungsdatei der Anmeldung) gebaut, ein Bau-Fehler verhindert das Einspielen, beim Rückfall gilt das alte Image;
+# nach erfolgreichem Release nur hängende Images aufgeräumt (Fehler dabei unschädlich); manueller Notfall-Rückfall
+# (deploy/release-zurueck.sh) mit Container-Neustart bei geänderter Konfiguration, gemerktem bzw. neu gebautem Image.
 set -eu
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 T=$(mktemp -d)
@@ -50,11 +52,23 @@ echo "compose \$*\${STAFL_APP_VERSION:+ [STAFL_APP_VERSION=\$STAFL_APP_VERSION]}
 if [ "\$1" = build ] && [ -f "$T/bau-fehler" ]; then echo "Bau fehlgeschlagen"; exit 1; fi
 exit 0
 STUB
+# Docker-Ersatz: gibt Befehle aus; stafl-app:release-vorher fehlt (inspect und tag scheitern), solange $T/kein-vorher
+# existiert, „tag“ allgemein, solange $T/tag-fehler existiert, „image prune“, solange $T/prune-fehler existiert
+cat > "$T/docker.sh" <<STUB
+#!/bin/sh
+echo "docker \$*"
+if [ -f "$T/kein-vorher" ] && { [ "\$1 \$2" = "tag stafl-app:release-vorher" ] || [ "\$1 \$2 \$3" = "image inspect stafl-app:release-vorher" ]; }; then echo "Error: No such image"; exit 1; fi
+if [ "\$1" = tag ] && [ -f "$T/tag-fehler" ]; then echo "Error: tag fehlgeschlagen"; exit 1; fi
+if [ "\$1 \$2" = "image prune" ] && [ -f "$T/prune-fehler" ]; then echo "Cannot connect to the Docker daemon"; exit 1; fi
+exit 0
+STUB
 python3 "$REPO/tests/deploy/github_stub.py" $API_PORT "$T/state.json" & API_PID=$!
 (cd "$B/app" && exec php -S 127.0.0.1:$WEB_PORT >/dev/null 2>&1) & WEB_PID=$!
 sleep 1
 lauf() { WA_BASIS="$B" WA_API="http://127.0.0.1:$API_PORT" WA_HEALTH_URL="http://127.0.0.1:$WEB_PORT" WA_HEALTH_HOST="test.local:80:127.0.0.1" \
-         WA_COMPOSE="sh $T/compose.sh" WA_DOCKER="echo docker" sh "$B/deploy/freigabe-einspielen.sh" > "$T/out.txt" 2>&1; rc=$?; [ -z "${DEBUG:-}" ] || { echo "--- rc=$rc"; cat "$T/out.txt"; }; return $rc; }
+         WA_COMPOSE="sh $T/compose.sh" WA_DOCKER="sh $T/docker.sh" sh "$B/deploy/freigabe-einspielen.sh" > "$T/out.txt" 2>&1; rc=$?; [ -z "${DEBUG:-}" ] || { echo "--- rc=$rc"; cat "$T/out.txt"; }; return $rc; }
+# manueller Notfall-Rückfall mit denselben Ersatzbefehlen
+zurueck() { WA_COMPOSE="sh $T/compose.sh" WA_DOCKER="sh $T/docker.sh" sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1; rc=$?; [ -z "${DEBUG:-}" ] || { echo "--- rc=$rc"; cat "$T/out.txt"; }; return $rc; }
 kopf() { git -C "$B" rev-parse HEAD; }
 st() { python3 -c "import json,sys; t=open('$B/daten/deployment.php').read(); print(json.loads(t[t.index(chr(10))+1:]).get('$1'))"; }
 
@@ -62,6 +76,7 @@ lauf; ok "kein Release: nichts passiert" '[ "$(kopf)" = "$A_SHA" ]'
 
 printf '{"release":"%s","ci_ok":["%s"]}' "$G_SHA" "$G_SHA" > "$T/state.json"
 lauf; ok "freigegebener Commit geht live" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st ok)" = True ]'
+ok "nach erfolgreichem Release: nur hängende Images aufgeräumt" 'grep -qx "docker image prune -f" "$T/out.txt" && ! grep -qE "^docker (system|volume|container)|prune .*(-a|--all|--volumes|--filter)" "$T/out.txt"'
 ok "vor dem Release gesichert" '[ -n "$(ls "$B"/sicherungen/daten-*.tar.gz 2>/dev/null)" ]'
 lauf; ok "erneuter Lauf: keine Änderung" '[ "$(kopf)" = "$G_SHA" ]'
 
@@ -69,8 +84,13 @@ lauf; ok "erneuter Lauf: keine Änderung" '[ "$(kopf)" = "$G_SHA" ]'
 printf '{"release":"%s","ci_ok":["%s","%s"]}' "$X_SHA" "$G_SHA" "$X_SHA" > "$T/state.json"
 lauf || true
 ok "defekter Release: automatisch zurück auf Vorversion" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php"'
+ok "defekter Release: nichts aufgeräumt" '! grep -q "image prune" "$T/out.txt"'
 ok "Seite nach Rückfall erreichbar" 'curl -fsS "http://127.0.0.1:$WEB_PORT/api/?action=status" | grep -q "\"ok\":true"'
 lauf || true; ok "defekter Release wird nicht erneut versucht" '[ "$(kopf)" = "$G_SHA" ] && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+# Status nach dem automatischen Rückfall nennt den abgelehnten Release als „vorher“ – der Notfall-Rückfall darf nie dorthin
+zurueck || true
+ok "Notfall-Rückfall nach automatischem Rückfall: nie auf den abgelehnten Release" '[ "$(kopf)" = "$G_SHA" ] && grep -q "automatisch zurückgenommen" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
+git -C "$B" reset -q --hard "$G_SHA"   # Ausgangslage der folgenden Prüfungen unabhängig vom Ergebnis oben
 
 rm -f "$B/.release-abgelehnt"
 printf '{"release":"%s","ci_ok":["%s"]}' "$X_SHA" "$G_SHA" > "$T/state.json"
@@ -96,8 +116,17 @@ printf '%s\n{"active":true,"message":"Test"}' '<?php http_response_code(404); ex
 ok "Testvoraussetzung: Wartungsmodus aktiv" '[ "$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$WEB_PORT/api/?action=offer")" = 503 ]'
 printf '{"release":"%s","ci_ok":["%s"]}' "$W_SHA" "$W_SHA" > "$T/state.json"
 lauf || true; ok "Wartungsmodus: Release geht live" '[ "$(kopf)" = "$W_SHA" ] && [ "$(st ok)" = True ]'
-ok "nur Code geändert: Container werden nicht neu erstellt" '! grep -qE "^(compose|docker)" "$T/out.txt"'
+ok "nur Code geändert: Container werden nicht neu erstellt" '! grep -qE "^(compose|docker tag)" "$T/out.txt"'
 rm -f "$B/daten/wartung.php"
+# Aufräumen scheitert (z. B. Docker kurz nicht erreichbar): Release bleibt erfolgreich
+touch "$T/prune-fehler"
+RC=0; export RC   # in den Prüfausdrücken verwendet
+U_SHA=$(commit gut4 x "echo '<!-- gut4 -->' >> '$T/src/app/index.html'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$U_SHA" "$U_SHA" > "$T/state.json"
+RC=0; lauf || RC=$?
+ok "Aufräumen fehlgeschlagen: Release bleibt erfolgreich" '[ "$RC" = 0 ] && [ "$(kopf)" = "$U_SHA" ] && [ "$(st ok)" = True ] \
+  && grep -q "Aufräumen alter Images fehlgeschlagen" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt" 2>/dev/null)" != "$U_SHA" ]'
+rm -f "$T/prune-fehler"
 # Ergänzungsdatei der Anmeldung geändert (COMPOSE_FILE in .env): Container neu erstellen wie bei docker-compose.yml
 C_SHA=$(commit ergaenzung x "echo '# geändert' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$C_SHA" "$C_SHA" > "$T/state.json"
@@ -134,7 +163,7 @@ ok "aktiver Stand ohne Sicherungsskript: Skript des neuen Commits sichert" '[ "$
 I0_SHA=$(commit image-ohne-anmeldung x "echo '# Update 1' >> '$T/src/deploy/image/Dockerfile'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$I0_SHA" "$I0_SHA" > "$T/state.json"
 lauf || true
-ok "Image geändert ohne COMPOSE_FILE: kein Bau, keine neuen Container" '[ "$(kopf)" = "$I0_SHA" ] && [ "$(st ok)" = True ] && ! grep -qE "^(compose|docker)" "$T/out.txt"'
+ok "Image geändert ohne COMPOSE_FILE: kein Bau, keine neuen Container" '[ "$(kopf)" = "$I0_SHA" ] && [ "$(st ok)" = True ] && ! grep -qE "^(compose|docker tag)" "$T/out.txt"'
 cp "$B/.env" "$T/env.ohne"
 printf 'COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' >> "$B/.env"
 I_SHA=$(commit image x "echo '# Update 2' >> '$T/src/deploy/image/Dockerfile'")
@@ -148,14 +177,14 @@ ok "Image mit dem neuen Bauplan gebaut, bevor der Code wechselt" 'grep -q "^bau-
 J_SHA=$(commit nur-code x "echo '<!-- j -->' >> '$T/src/app/index.html'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$J_SHA" "$J_SHA" > "$T/state.json"
 lauf || true
-ok "nur Code geändert mit COMPOSE_FILE: kein Bau, keine neuen Container" '[ "$(kopf)" = "$J_SHA" ] && [ "$(st ok)" = True ] && ! grep -qE "^(compose|docker)" "$T/out.txt"'
+ok "nur Code geändert mit COMPOSE_FILE: kein Bau, keine neuen Container" '[ "$(kopf)" = "$J_SHA" ] && [ "$(st ok)" = True ] && ! grep -qE "^(compose|docker tag)" "$T/out.txt"'
 touch "$T/bau-fehler"
 P_SHA=$(commit image-baufehler x "echo '# Update 3' >> '$T/src/deploy/image/Dockerfile'")
 N0=$(anzahl)
 printf '{"release":"%s","ci_ok":["%s"]}' "$P_SHA" "$P_SHA" > "$T/state.json"
 lauf || true
 ok "Image-Bau fehlgeschlagen: nicht eingespielt, Status ok:false" '[ "$(kopf)" = "$J_SHA" ] && [ "$(st ok)" = False ] && grep -q "nicht gebaut werden" "$B/daten/deployment.php" \
-  && ! grep -qE "^(compose up|docker tag)" "$T/out.txt" && git -C "$B" diff --quiet HEAD -- deploy docker-compose.yml && [ "$(anzahl)" = "$N0" ]'
+  && ! grep -qE "^(compose up|docker)" "$T/out.txt" && git -C "$B" diff --quiet HEAD -- deploy docker-compose.yml && [ "$(anzahl)" = "$N0" ]'
 ok "Image-Bau fehlgeschlagen: nicht dauerhaft abgelehnt" '[ "$(cat "$B/.release-abgelehnt" 2>/dev/null)" != "$P_SHA" ]'
 rm -f "$T/bau-fehler"
 lauf || true
@@ -174,8 +203,43 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$E_SHA" "$E_SHA" > "$T/state.json"
 lauf || true
 ok "Image und Ergänzungsdatei geändert: gebaut, alle Container neu erstellt" '[ "$(kopf)" = "$E_SHA" ] && [ "$(st ok)" = True ] \
   && grep -q "^compose build --pull app" "$T/out.txt" && grep -qx "compose up -d --force-recreate" "$T/out.txt" && ! grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
+
+# Manueller Notfall-Rückfall (deploy/release-zurueck.sh): Container und Image wie beim automatischen Rückfall
+zurueck_lage() { # aktiv vorher: Lage wie nach einem erfolgreichen Release von <vorher> auf <aktiv>
+  git -C "$B" reset -q --hard "$1"
+  printf '%s\n{"ok":true,"sha":"%s","vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$1" "$2" > "$B/daten/deployment.php"
+  rm -f "$B/.release-abgelehnt"
+}
+ZC_SHA=$(commit rueck-ergaenzung x "echo '# rueck' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
+ZI_SHA=$(commit rueck-image x "echo '# Rueck 1' >> '$T/src/deploy/image/Dockerfile'")
+git -C "$B" fetch -q origin main
+zurueck_lage "$ZC_SHA" "$E_SHA"; zurueck || true
+ok "Notfall-Rückfall, Ergänzungsdatei unterscheidet sich: alle Container neu erstellt" '[ "$(kopf)" = "$E_SHA" ] && grep -qx "compose up -d --force-recreate" "$T/out.txt" \
+  && ! grep -qE "^(docker|compose build)" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$ZC_SHA" ]'
+zurueck || true; ok "Notfall-Rückfall erneut: nichts mehr zu tun" '[ "$(kopf)" = "$E_SHA" ] && grep -q "bereits aktiv" "$T/out.txt"'
+zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
+ok "Notfall-Rückfall, Image unterscheidet sich: gemerktes Image wieder aktiv, nur die App neu erstellt" '[ "$(kopf)" = "$ZC_SHA" ] \
+  && grep -qx "docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && grep -qx "compose up -d --force-recreate app" "$T/out.txt" \
+  && ! grep -qx "compose up -d --force-recreate" "$T/out.txt" && ! grep -q "^compose build" "$T/out.txt" && ! grep -q "image prune" "$T/out.txt"'
+touch "$T/tag-fehler"
+zurueck_lage "$ZI_SHA" "$ZC_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, gemerktes Image lässt sich nicht taggen: Abbruch ohne Codewechsel" '[ "$RC" != 0 ] && [ "$(kopf)" = "$ZI_SHA" ] \
+  && grep -q "Rückfall abgebrochen" "$T/out.txt" && ! grep -qE "^compose (up|build)" "$T/out.txt" && git -C "$B" diff --quiet HEAD && [ ! -e "$B/.release-abgelehnt" ]'
+rm -f "$T/tag-fehler"
+touch "$T/kein-vorher"
+zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
+ok "Notfall-Rückfall, gemerktes Image fehlt: Meldung, Bau aus dem alten Bauplan vor dem Codewechsel" '[ "$(kopf)" = "$ZC_SHA" ] \
+  && grep -q "release-vorher fehlt" "$T/out.txt" && grep -qx "compose build app" "$T/out.txt" && grep -qx "bau-stand $ZI_SHA app-alt # Update 5" "$T/out.txt" \
+  && grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
+touch "$T/bau-fehler"
+zurueck_lage "$ZI_SHA" "$ZC_SHA"; RC=0; zurueck || RC=$?
+ok "Notfall-Rückfall, Bau scheitert: Abbruch ohne Codewechsel" '[ "$RC" != 0 ] && [ "$(kopf)" = "$ZI_SHA" ] && grep -q "Rückfall abgebrochen" "$T/out.txt" \
+  && ! grep -q "^compose up" "$T/out.txt" && git -C "$B" diff --quiet HEAD && [ ! -e "$B/.release-abgelehnt" ]'
+rm -f "$T/bau-fehler" "$T/kein-vorher"
 cp "$T/env.ohne" "$B/.env"
-H_SHA=$E_SHA   # aktueller Stand für die folgenden Prüfungen
+zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
+ok "Notfall-Rückfall, Image unterscheidet sich ohne COMPOSE_FILE: weder Tag noch Bau noch neue Container" '[ "$(kopf)" = "$ZC_SHA" ] && ! grep -qE "^(compose|docker)" "$T/out.txt"'
+H_SHA=$ZC_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
 L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")
