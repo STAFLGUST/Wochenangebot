@@ -4,7 +4,7 @@
 return [
     '.htaccess' => '34a4a401cdb2a59459b2974dd3caf03584008b349f545452498dc7a4b6709714',
     'admin/.htaccess' => '0910acbea2b93e39f455edf4ed99bf0fcf7e3804eea12e25435cb56cf1e3d41a',
-    'admin/index.html' => 'e43544c1974ae391040fbe000e30b9b444e09a5a43ad3294c56031f848d34ac8',
+    'admin/index.html' => '641ee952dd37199d6b91617810189de38a8b06f6ed28de63d04139b7d01ce559',
     'api/aktionen/angebote.php' => '66dd09e0a42b0298f4f21449493aa967ea0229469889157a203dceb7382a41bc',
     'api/aktionen/app.php' => '6815c4c75423ca8eddc4e145da75090400f4bc8ac9933840f99e29056e2b1165',
     'api/aktionen/auswertung.php' => '64f9a4431d88f5c284dc3ce886392a8524195beddd7c6e66550ed253c9230193',
@@ -74,7 +74,7 @@ return [
     'assets/admin-schutz.js' => '1897328904b5c47aa114a7a4a585e4a9045dba2c9c7b84d2ac41e630ed06fdbf',
     'assets/admin-verwaltung.js' => '51b85f0c45d7227e5a717126a829f413db7265511586db7e47d6b9faa0f3b302',
     'assets/admin.css' => '6737de328d070273fe90771d731945ea53c67140711f06521a2886ae4a00beb4',
-    'assets/admin.js' => 'bc2679a027f0703a82cfaed1312dc7fc042b8bcff8c10604b6e4f28cfc087341',
+    'assets/admin.js' => 'c41582555892c3210720d3e08a3451b0dffe88237947341f4e72557db3f9ec1d',
     'assets/app.css' => '869828ad16f48bee513d14ecb7fdffb99b212e50fd66bba4a5b3fa536ab4cc3d',
     'assets/fonts/LICENSE-Geist.txt' => '71609cbb5c78b5870d712eab73a31d76622635c6ed034ab5cee3b9ecbda8685f',
     'assets/fonts/geist-latin-ext-wght-normal.woff2' => '824f485b5d26e2f2da3c2b236132ece1bc8e4e43373452950bb0e40548b4313f',

@@ -302,6 +302,10 @@ with sync_playwright() as pw:
           and ka.get('__Host-WA_ADMIN', {}).get('value') != k.get('__Host-WA_ADMIN', {}).get('value'), sorted(ka))
     pa.wait_for_selector('#screen-editor:not([hidden]), #screen-auth:not([hidden])', timeout=30000)
     check('Mitarbeiter-Eingabe zeigt den Editor (keine eigene Anmeldemaske)', pa.is_visible('#screen-editor'))
+    pa.wait_for_function("document.querySelector('#vt-master').hidden && !document.querySelector('#vt-edit').hidden")
+    sicht_a = pa.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
+    check('Angebot (angebot.stafl.test): nur Angebotsbereiche, keine Verwaltung (Stammdaten, Kunden, Import …)',
+          'edit' in sicht_a and not {'master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'users', 'log', 'sec'} & set(sicht_a), sicht_a)
     # Sitzung des Dashboards auf dem anderen Host untergeschoben
     fremd = br.new_context(ignore_https_errors=True)
     fremd.add_cookies([{'name': n, 'value': c['value'], 'url': A + '/'} for n, c in k.items()])
@@ -429,19 +433,19 @@ with sync_playwright() as pw:
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
-    pg.goto(A + '/admin/'); anmelden(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    pg.goto(W + '/admin/'); anmelden(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
     st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
     js = "([a, t]) => fetch('../api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])"
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
     check('direkt nach der Anmeldung: sensible Aktion ohne weitere Abfrage (Anmeldezeitpunkt zählt)', code == 200, (code, j))
-    check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'angebot.stafl.test'))
+    check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
     check('abgelaufen: 403 „erneut anmelden“ statt Passwortabfrage', code == 403 and j.get('code') == 'reauth_required', (code, j))
     neu = j.get('anmelden', '')
     check('… mit Adresse für die erneute Anmeldung (eigener Host, max_age=0)', neu.startswith('/oidc/callback?iss=') and 'auth_request_params=max_age%3D0' in neu, neu)
     code, j = pg.evaluate(js, ['reauth', st['csrf']])
     check('eigene Passwortbestätigung bleibt gesperrt', code == 403, (code, j))
-    # Oberfläche: Speichern in Verwaltung → Sicherheit führt selbst zur erneuten Anmeldung und zurück
+    # Oberfläche (Verwaltung unter eigener Adresse): Speichern in Sicherheit führt selbst zur erneuten Anmeldung und zurück
     pg.reload(); pg.wait_for_selector('#screen-editor:not([hidden])')
     pg.click('#vt-sec'); pg.wait_for_selector('#sec-form')
     with pg.expect_navigation(url=lambda u: u.startswith(L)):
@@ -451,7 +455,7 @@ with sync_playwright() as pw:
     check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
     pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
     pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER['admin'][1], 1)); pg.click('#kc-login')   # nächster Code (keine Wiederverwendung)
-    pg.wait_for_url(A + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    pg.wait_for_url(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
     check('nach der erneuten Anmeldung: Aktion bestätigt', code == 200, (code, j))
     pg.goto(D + '/'); pg.wait_for_selector('#db-grid .db-tile')   # SSO auf den anderen Host
