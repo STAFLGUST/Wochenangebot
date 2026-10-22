@@ -164,7 +164,8 @@ with sync_playwright() as p:
     e.fill('#au-user', 'eddi'); e.fill('#pw1', 'Editor-Zugang-77'); e.click('#auth-submit'); e.wait_for_selector('#screen-editor:not([hidden])')
     e.click('#vt-gruppen'); e.wait_for_selector('.kgtab tbody tr')
     check('Bearbeiter: Import und Anlegen möglich', e.locator('#kg-import').count() == 1 and e.locator('#kg-add').count() == 1)
-    check('Bearbeiter: Verwaltung-Überschrift weiterhin nicht sichtbar', not e.locator('#side-admin').is_visible())
+    check('Bearbeiter: unter Verwaltung nur der Import (Importzentrale), keine Verwaltungsbereiche', e.locator('#vt-importe').is_visible()
+          and not any(e.locator('#vt-' + v).is_visible() for v in ['users', 'log', 'sec', 'mail', 'auswertung']))
 
     check('keine JavaScript-Fehler', not errors)
     if errors:

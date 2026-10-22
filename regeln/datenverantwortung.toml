@@ -141,8 +141,7 @@ beschreibung = "Versandte Meldungen an den Einkauf (Fehlmengen)"
 [[dokument]]
 name = "stammdaten"
 eigentuemer = "verwaltung"
-leser = ["angebot", "bestand"]
-schreiber = ["bestand"]   # Altbestand: master_save in aktionen/bestand.php
+leser = ["angebot", "bestand"]   # master_save (aktionen/bestand.php) speichert über stammdaten_speichern() der Verwaltung
 schutz = "intern"
 beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN)"
 

@@ -34,6 +34,7 @@
  *   POST ?action=offers_save       Angebote anlegen/umbenennen/Regel ändern (Bearbeiter), löschen (Administrator)
  *   GET  ?action=kunden            Kundenstammdaten (nur Administrator); POST kunde_save | kunde_delete
  *   POST ?action=kunden_import     Kundenstammdaten aus der Warenwirtschaft (CSV im Browser gelesen; pruefen = Vorschau)
+ *   GET  ?action=import_arten · POST import_pruefen | import_uebernehmen   Importzentrale (Recht je Importart)
  *   GET  ?action=einzel_liste | einzel_detail | einzel_artikel   Einzelangebote je Kunde; POST einzel_save | einzel_status | einzel_loeschen | einzel_senden
  *   GET  ?action=kundengruppen     Kundengruppen (Stammdaten); POST kundengruppen_save (ganze Liste, Revision)
  *   GET  ?action=vkgruppen         VK-Gruppen (Stammdaten, Artikel über vkGruppe); POST vkgruppen_save
@@ -130,6 +131,11 @@ require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus r
 require __DIR__ . '/lib/module-liste.php';     // Modulregister und Entscheidungstabelle (erzeugt aus regeln/)
 require __DIR__ . '/lib/module.php';
 require __DIR__ . '/lib/herkunft.php';
+/* Importverträge der Daten-Eigentümer und Importzentrale (docs/plattform/schnittstellen/import.md) */
+require __DIR__ . '/module/verwaltung/import.php';
+require __DIR__ . '/module/bestand/import.php';
+require __DIR__ . '/module/angebot/import.php';
+require __DIR__ . '/module/verwaltung/importzentrale.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -209,6 +215,7 @@ try {
     require __DIR__ . '/aktionen/schutz.php';
     require __DIR__ . '/aktionen/integritaet.php';
     require __DIR__ . '/aktionen/module.php';
+    require __DIR__ . '/aktionen/importzentrale.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

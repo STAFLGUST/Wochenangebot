@@ -98,6 +98,7 @@ SUITES['oidc_kern'] = (8790, 'data-seed', True, {'WA_OIDC': '1', 'WA_OIDC_ISSUER
 SUITES['modulverwaltung'] = (8790, 'data-seed', True)   # Freigabe und Tester zur Laufzeit (Roadmap 5)
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
+SUITES['importzentrale'] = (8790, 'data-seed', True)   # Importzentrale (Verwaltung → Import, Roadmap 10b)
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 

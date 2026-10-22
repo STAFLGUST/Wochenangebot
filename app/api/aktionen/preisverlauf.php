@@ -61,13 +61,9 @@ switch ($action) {
             $week = $b['week'] ?? null;
             $year = $b['year'] ?? null;
             if (!is_int($week) || $week < 1 || $week > 53 || !is_int($year) || $year < 2000 || $year > 2100) fail('Kalenderwoche oder Jahr ungültig.', 422);
-            $items = clean_history_items($b['items'] ?? null);
-            $id = history_id($week, $year);
-            $replaced = store_read('historie/' . $id) !== null;
-            store_write('historie/' . $id, ['week' => $week, 'year' => $year, 'origin' => 'Import', 'source' => s($b['source'] ?? '', 200) ?? '', 'savedAt' => now(), 'items' => $items]);
-            history_undelete($id);
-            audit('history', 'Preisverlauf: KW ' . $week . '/' . $year . ($replaced ? ' ersetzt' : ' hochgeladen') . ' – ' . (s($b['source'] ?? '', 120) ?: 'ohne Dateiname') . ', ' . count($items) . ' Artikel');
-            respond(['ok' => true, 'id' => $id, 'replaced' => $replaced]);
+            // Prüfen, Speichern und Protokoll: preisverlauf_woche_speichern() (module/angebot/import.php, auch für die Importzentrale)
+            $r = preisverlauf_woche_speichern($week, $year, $b['items'] ?? null, s($b['source'] ?? '', 200) ?? '');
+            respond(['ok' => true, 'id' => $r['id'], 'replaced' => $r['replaced']]);
         }
 
         case 'history_delete': {
