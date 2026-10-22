@@ -81,7 +81,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 | master | 29 | Stammdaten, Bezeichnungsregeln |
 | editor_aux | 21 | Vorwoche, Bestand im Editor |
 | revert | 16 | einzelne Änderung mit Bestätigung zurücknehmen |
-| sidenav | 12 | Navigation, Rechte je Rolle |
+| sidenav | 39 | Navigation, Rechte je Rolle, Kopfzeile ohne Überlappung je Breite; Design „Liquid Glass“ des Eingabebereichs: warmer Grund mit drei Farbflächen (fest, ohne Rot), Glas der Kopfzeilen-Kapsel und Seitenleiste (berechnetes `backdrop-filter`), Einträge 44 px, „Veröffentlichen“ als einzige farbige Taste, Karten 28 px, Segment „Preise für“, Preisfelder, klebende Leisten dicht genug ohne Unschärfe, Menü als eigenes Glas, dunkles Design über die Umschaltung, „weniger Transparenz“ (hell und dunkel) deckend ohne Unschärfe, Druck hell ohne Glas; Kundenseite unverändert (Design „Klar“, kein admin.css, kein Glas) |
 | angebote | 38 | Kundenangebote: eigene Preise, Ausblenden, Übernahme, Verwaltung, Rechte, keine Kundenpreise öffentlich |
 | kunden | 125 | Kundenstammdaten, Freischaltung, Kunden-Login mit Pflicht-Passwortwechsel, Sperre, Sitzungsende, kein Zugriff auf den Eingabebereich, Merkliste je Kunde (geräteübergreifend, Übernahme der Browser-Merkliste), Oberfläche |
 | testumgebung | 17 | Testumgebung (`WA_TESTUMGEBUNG=1`): Kennzeichen, E-Mails und Bestellwünsche nur ins Testpostfach, Rechte, Oberfläche |
