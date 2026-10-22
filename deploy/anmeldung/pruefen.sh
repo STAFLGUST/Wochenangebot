@@ -5,6 +5,7 @@
 #   2. docker compose mit Ergänzungsdatei gültig; alle neuen Images fest über Digest
 #   3. Anwendungs-Image mit apache-oidc.conf: Konfiguration gültig; angebot-stafl.de (Standard-Host) verhält sich
 #      unverändert; die neuen Hosts liefern ohne Anmeldung nichts aus der Anwendung aus
+#   3b. Keycloak startet wirklich – mit Start-Konto und nach der Einrichtung ohne (Neustart)
 #   4. Caddyfile (mit den Anmelde-Hosts) gültig; deren Ziele gibt es nur mit der Ergänzungsdatei
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -72,6 +73,32 @@ for h in dashboard-stafl.de angebot.dashboard-stafl.de; do
   c="$(code "$h" /dashboard/abgemeldet.html)"; [ "$c" = 200 ] && ok "$h: Abmeldeseite öffentlich" || nein "$h Abmeldeseite" "$c"
 done
 docker logs stafl-pruefung 2>&1 | grep -iE "AH0|error" | grep -viE "metadata|oidc_provider_static_config|oidc_util_http|curl" | head -3 | sed 's/^/Info: /' || true
+
+# ── 3b. Keycloak wirklich starten (wie auf dem Server): mit Start-Konto, dann ohne (nach konten.sh verwaltung) neu ──
+KCP="$(mktemp -d)"; KCPROJ=stafl-kcpruefung
+kc_ende() { (cd "$KCP" && docker compose -p "$KCPROJ" down -v >/dev/null 2>&1); rm -rf "$KCP"; }
+mkdir -p "$KCP/deploy/anmeldung"
+cp "$REPO/docker-compose.yml" "$KCP/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/realm-mitarbeiter.json" "$HIER/einrichten.sh" "$KCP/deploy/anmeldung/"
+printf 'DOMAIN=angebot-stafl.de\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$KCP/.env"
+(cd "$KCP" && sh deploy/anmeldung/einrichten.sh >/dev/null)
+kc_bereit() { for _ in $(seq 1 90); do curl -fsS -o /dev/null http://127.0.0.1:8180/realms/mitarbeiter/.well-known/openid-configuration 2>/dev/null && return 0; sleep 2; done; return 1; }
+if (cd "$KCP" && docker compose -p "$KCPROJ" up -d keycloak-db keycloak >/dev/null 2>&1) && kc_bereit; then
+  ok "Keycloak startet mit Start-Konto (Ersteinrichtung)"
+  START_PW=$(sed -n 's/^KC_BOOTSTRAP_ADMIN_PASSWORD=//p' "$KCP/daten-anmeldung/einrichtung.env")
+  curl -fsS -d grant_type=password -d client_id=admin-cli -d username=einrichtung --data-urlencode "password=$START_PW" \
+    http://127.0.0.1:8180/realms/master/protocol/openid-connect/token 2>/dev/null | grep -q access_token \
+    && ok "Start-Konto aus daten-anmeldung/einrichtung.env funktioniert" || nein "Start-Konto"
+else
+  nein "Keycloak startet nicht (Ersteinrichtung)" "$(cd "$KCP" && docker compose -p "$KCPROJ" logs --tail 15 keycloak 2>&1)"
+fi
+rm -f "$KCP/daten-anmeldung/einrichtung.env"   # wie nach konten.sh verwaltung
+if (cd "$KCP" && docker compose -p "$KCPROJ" up -d --force-recreate keycloak >/dev/null 2>&1) && sleep 5 && kc_bereit \
+  && [ -z "$(cd "$KCP" && docker compose -p "$KCPROJ" exec -T keycloak env | grep '^KC_BOOTSTRAP')" ]; then
+  ok "Keycloak startet nach der Einrichtung ohne Start-Konto neu (keine leeren KC_BOOTSTRAP-Variablen)"
+else
+  nein "Keycloak startet nach der Einrichtung nicht neu" "$(cd "$KCP" && docker compose -p "$KCPROJ" logs --tail 15 keycloak 2>&1)"
+fi
+kc_ende
 
 # ── 4. Caddy ──
 if docker run --rm -e DOMAIN=angebot-stafl.de -v "$REPO/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy-pruefung.txt 2>&1; then

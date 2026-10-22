@@ -41,10 +41,12 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       KC_FEATURES_DISABLED: twitter-broker,identity-brokering-api
-      # Erstes Verwaltungskonto nur für die Einrichtung; danach in Keycloak ersetzen und hier entfernen
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-}
       JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx1024m"
+    # Start-Konto (KC_BOOTSTRAP_ADMIN_*) nur während der Einrichtung: die Datei schreibt einrichten.sh, konten.sh verwaltung
+    # löscht sie wieder. Fehlt sie, bekommt Keycloak die Variablen gar nicht (leer gesetzt bricht Keycloak 26.8 den Start ab).
+    env_file:
+      - path: ./daten-anmeldung/einrichtung.env
+        required: false
     volumes:
       # Realm mit eingesetzten Geheimnissen (auf dem Server erzeugt, nicht im Repository – siehe LIESMICH)
       - ./daten-anmeldung/realm-import:/opt/keycloak/data/import:ro

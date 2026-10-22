@@ -6,6 +6,7 @@
 #   sh deploy/anmeldung/einrichten.sh --pruefen  # nur anzeigen, was fehlt (keine Änderung)
 #
 # - Ergänzt in .env nur fehlende Einträge (vorhandene werden nie überschrieben) und zeigt nie einen Wert an.
+# - Start-Konto für Keycloak in daten-anmeldung/einrichtung.env (nur bis zur Einrichtung; konten.sh verwaltung löscht es).
 # - Schreibt daten-anmeldung/realm-import/realm-mitarbeiter.json mit eingesetzten Client-Geheimnissen
 #   (nur für den Keycloak-Container lesbar, liegt außerhalb des Repositorys – .gitignore).
 # - Mehrfach ausführbar: ein zweiter Lauf ändert nichts mehr.
@@ -17,7 +18,8 @@ REALM_QUELLE="$ORDNER/deploy/anmeldung/realm-mitarbeiter.json"
 ZIEL_DIR="$ORDNER/daten-anmeldung/realm-import"
 ZIEL="$ZIEL_DIR/realm-mitarbeiter.json"
 KC_UID=${KC_UID:-1000}   # Benutzer im Keycloak-Image (quay.io/keycloak/keycloak)
-NAMEN="OIDC_SECRET_DASHBOARD OIDC_SECRET_ANGEBOT OIDC_CRYPTO_DASHBOARD OIDC_CRYPTO_ANGEBOT KC_DB_PASSWORD KC_BOOTSTRAP_ADMIN_PASSWORD"
+NAMEN="OIDC_SECRET_DASHBOARD OIDC_SECRET_ANGEBOT OIDC_CRYPTO_DASHBOARD OIDC_CRYPTO_ANGEBOT KC_DB_PASSWORD"
+START="$ORDNER/daten-anmeldung/einrichtung.env"   # Start-Konto für Keycloak, nur bis konten.sh verwaltung
 
 [ -f "$ENV" ] || { echo "Abbruch: $ENV nicht gefunden – im Installationsordner ausführen." >&2; exit 1; }
 [ -f "$REALM_QUELLE" ] || { echo "Abbruch: $REALM_QUELLE fehlt – Stand von main einspielen." >&2; exit 1; }
@@ -27,9 +29,11 @@ wert() { sed -n "s/^$1=//p" "$ENV" | tail -1; }
 zufall() { od -An -N48 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-48; }
 
 if [ "${1:-}" = "--pruefen" ]; then
-  for n in $NAMEN KC_BOOTSTRAP_ADMIN_USERNAME; do
+  for n in $NAMEN; do
     if hat "$n"; then echo "vorhanden: $n"; else echo "fehlt:     $n"; fi
   done
+  if hat KC_VERWALTUNG_PASSWORD; then echo "vorhanden: KC_VERWALTUNG_PASSWORD (Einrichtung abgeschlossen)"
+  elif [ -f "$START" ]; then echo "vorhanden: $START (Start-Konto)"; else echo "fehlt:     $START (Start-Konto)"; fi
   if [ -f "$ZIEL" ]; then echo "vorhanden: $ZIEL"; else echo "fehlt:     $ZIEL"; fi
   exit 0
 fi
@@ -40,8 +44,22 @@ grep -q "^# Zentrale Anmeldung" "$ENV" || printf '%s\n' "# Zentrale Anmeldung (d
 for n in $NAMEN; do
   if ! hat "$n"; then printf '%s=%s\n' "$n" "$(zufall)" >> "$ENV"; neu=$((neu + 1)); echo "erzeugt:   $n"; else echo "vorhanden: $n"; fi
 done
-if ! hat KC_BOOTSTRAP_ADMIN_USERNAME; then echo "KC_BOOTSTRAP_ADMIN_USERNAME=einrichtung" >> "$ENV"; echo "erzeugt:   KC_BOOTSTRAP_ADMIN_USERNAME"; fi
 chmod 600 "$ENV"
+mkdir -p "$ORDNER/daten-anmeldung"; chmod 700 "$ORDNER/daten-anmeldung"
+# Start-Konto nur, solange die Einrichtung nicht abgeschlossen ist (kein Verwaltungskonto); ältere Fassungen schrieben es
+# in .env – dann von dort übernehmen und aus .env entfernen (Keycloak bekäme sonst leere Werte, wenn sie fehlen)
+if ! hat KC_VERWALTUNG_PASSWORD && [ ! -f "$START" ]; then
+  if hat KC_BOOTSTRAP_ADMIN_PASSWORD; then
+    grep '^KC_BOOTSTRAP_ADMIN_' "$ENV" > "$START.neu"
+    grep -q '^KC_BOOTSTRAP_ADMIN_USERNAME=.' "$START.neu" || echo "KC_BOOTSTRAP_ADMIN_USERNAME=einrichtung" >> "$START.neu"
+    echo "übernommen: Start-Konto aus .env nach daten-anmeldung/einrichtung.env"
+  else
+    printf 'KC_BOOTSTRAP_ADMIN_USERNAME=einrichtung\nKC_BOOTSTRAP_ADMIN_PASSWORD=%s\n' "$(zufall)" > "$START.neu"
+    echo "erzeugt:   Start-Konto (daten-anmeldung/einrichtung.env)"
+  fi
+  chmod 600 "$START.neu"; mv "$START.neu" "$START"
+fi
+if grep -q '^KC_BOOTSTRAP_ADMIN_' "$ENV"; then sed -i '/^KC_BOOTSTRAP_ADMIN_/d' "$ENV"; echo "entfernt:  KC_BOOTSTRAP_ADMIN_* aus .env (gehört nicht dorthin)"; fi
 
 # Realm mit eingesetzten Geheimnissen (Werte enthalten nur 0-9a-f – sicher für sed)
 mkdir -p "$ZIEL_DIR"
@@ -53,4 +71,4 @@ chmod 700 "$ORDNER/daten-anmeldung" "$ZIEL_DIR"; chmod 600 "$ZIEL"
 if [ "$(id -u)" = 0 ]; then chown -R "$KC_UID" "$ZIEL_DIR"; fi
 echo "geschrieben: daten-anmeldung/realm-import/realm-mitarbeiter.json"
 echo "Fertig ($neu neue Einträge in .env). Nächster Schritt laut Ablaufplan: Keycloak und Datenbank starten (Schritt 3)."
-echo 'Das Passwort des Start-Kontos "einrichtung" steht in .env (KC_BOOTSTRAP_ADMIN_PASSWORD) - nur für die Einrichtung.'
+if [ -f "$START" ]; then echo 'Das Start-Konto "einrichtung" steht in daten-anmeldung/einrichtung.env - nur für die Einrichtung (konten.sh verwaltung löscht es).'; fi
