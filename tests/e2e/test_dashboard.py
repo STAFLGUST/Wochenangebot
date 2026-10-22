@@ -73,6 +73,12 @@ with sync_playwright() as pw:
     check('Zähler: 2 von 8 Anwendungen', '2 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
+    echt = pg.evaluate("""fetch('../api/?action=module_status').then(r => r.json()).then(d => {
+        const alle = Object.fromEntries(d.module.map((m) => [m.id, m]));
+        return ['angebot', 'verwaltung'].map((id) => [window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'dashboard-stafl.de'),
+                                                      window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'angebot.stafl.test')]); })""")
+    check('Echtbetrieb (dashboard-stafl.de): Kacheln führen zu den Hosts der zentralen Anmeldung, nicht zum bisherigen /admin/',
+          echt == [['https://angebot.dashboard-stafl.de/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/admin/', '/admin/']], echt)
     pg.click('#db-grid a[data-modul="angebot"]'); pg.wait_for_url('**/admin/')
     check('Klick auf Angebot öffnet die Mitarbeiter-Eingabe', pg.url.endswith('/admin/'))
     ctx.close()

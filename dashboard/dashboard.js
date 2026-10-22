@@ -23,14 +23,17 @@
     return { status: res.status, data: data || {}, json: data !== null };
   }
 
-  /* Ziel einer Kachel: im Echtbetrieb die eingetragene Adresse, in Test- und Entwicklungsumgebungen derselbe Pfad auf
-     dem aktuellen Server (sonst würde ein Test auf die Produktion verlinken). */
-  function ziel(adresse) {
+  /* Ziel einer Kachel. Im Echtbetrieb (Dashboard unter dashboard-stafl.de) die Adresse unter der zentralen Anmeldung:
+     das beschlossene Ziel der Oberfläche (z. B. angebot.dashboard-stafl.de statt angebot-stafl.de/admin/), sonst ihre
+     Adresse. In Test- und Entwicklungsumgebungen derselbe Pfad auf dem aktuellen Server (nie auf die Produktion). */
+  function kachelZiel(k, alle, host) {
+    const [zm, zo] = String((k && k.ziel) || '').split('.');
+    const ob = ((alle[zm] || {}).oberflaechen || []).find((o) => o.id === zo) || {};
     try {
-      const u = new URL(adresse);
-      return /(^|\.)stafl\.de$/.test(location.hostname) ? u.href : u.pathname;
+      return /(^|\.)dashboard-stafl\.de$/.test(host) ? new URL(ob.ziel || k.adresse).href : new URL(k.adresse).pathname;
     } catch { return '#'; }
   }
+  window.STAFL_KACHEL_ZIEL = kachelZiel;   // für die Tests (reine Funktion, keine Daten)
 
   function status(m, alle) {
     const k = m.kachel || {};
@@ -58,7 +61,7 @@
         ${s.hinweis ? `<p class="db-hint">${esc(s.hinweis)}</p>` : ''}
         <div class="db-foot"><span class="db-badge ${s.cls}">${esc(s.text)}</span></div>`;
       return m.kachel.zugang
-        ? `<a class="db-tile" role="listitem" data-modul="${esc(m.id)}" href="${esc(ziel(m.kachel.adresse))}">${inhalt}</a>`
+        ? `<a class="db-tile" role="listitem" data-modul="${esc(m.id)}" href="${esc(kachelZiel(m.kachel, alle, location.hostname))}">${inhalt}</a>`
         : `<div class="db-tile off" role="listitem" data-modul="${esc(m.id)}" aria-disabled="true">${inhalt}</div>`;
     }).join('');
     const frei = kacheln.filter((m) => m.kachel.zugang).length;
