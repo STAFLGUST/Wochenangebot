@@ -1,5 +1,8 @@
 # Automatische Prüfungen für jeden Pull Request und jeden Commit auf main.
 # Ein Release (release.yml) ist nur für einen Commit möglich, für den dieser Workflow erfolgreich war.
+# Keine Doppelprüfung nach dem Merge: Hat ein Pull-Request-Lauf genau denselben Inhalt (Git-Tree) vollständig und
+# erfolgreich geprüft, überspringt der Lauf auf main die schweren Aufträge und legt den Release sofort vor
+# (Auftrag „nachweis“, .github/scripts/ci_nachweis.py, docs/release-freigabe.md). Sonst volle CI.
 name: CI
 
 on:
@@ -27,6 +30,40 @@ env:
   TRIVY_SHA256: "e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7"
 
 jobs:
+  nachweis:
+    # Pull Request: hält den geprüften Stand (Tree) fest; er erscheint am Ende im Namen von „Vollständig geprüft (…)“.
+    # main (push): sucht einen erfolgreichen, vollständigen Pull-Request-Lauf mit genau diesem Tree (nur Vergleich von
+    # Hashes über die API, keine fremden Dateien). Gefunden → uebernommen=true; jeder Zweifel → volle CI.
+    name: Schon im Pull Request geprüft?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read         # CI-Läufe und Aufträge der Pull Requests lesen
+      pull-requests: read   # Pull Request zum main-Commit (Squash/Rebase)
+    outputs:
+      tree: ${{ steps.stand.outputs.tree }}
+      uebernommen: ${{ steps.suche.outputs.uebernommen }}
+      lauf: ${{ steps.suche.outputs.lauf }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Geprüfter Stand (Git-Tree)
+        id: stand
+        run: |
+          tree=$(git rev-parse 'HEAD^{tree}')
+          echo "tree=${tree}" >> "${GITHUB_OUTPUT}"
+          echo "Geprüfter Stand: Commit ${GITHUB_SHA}, Tree ${tree}"
+      - name: Vollständig geprüften Pull-Request-Lauf mit gleichem Stand suchen (nur main)
+        id: suche
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+          TREE: ${{ steps.stand.outputs.tree }}
+        run: python3 -I .github/scripts/ci_nachweis.py --sha "${SHA}" --tree "${TREE}"
+
   statisch:
     name: Statische Prüfungen
     runs-on: ubuntu-24.04
@@ -53,7 +90,7 @@ jobs:
       - name: Dashboard-Domains nur als geschützte Platzhalter
         run: python3 tests/deploy/test_dashboard_domains.py
       - name: Python-Syntax
-        run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py tests/regeln/*.py werkzeuge/*.py deploy/*.py
+        run: python3 -m py_compile tests/run_e2e.py tests/e2e/*.py tests/regeln/*.py tests/unit/*.py werkzeuge/*.py deploy/*.py .github/scripts/*.py
       - name: Regelwerk und Modulgrenzen (werkzeuge/regeln.py)
         # Modulregister, Datenverantwortung, Rechte-Zuordnung, Geschäftsregeln, Wartungs-Entscheidungstabelle (regeln/*.toml)
         run: |
@@ -76,6 +113,11 @@ jobs:
           node tests/unit/stock_prices.test.js
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
+      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat)
+        run: |
+          python3 tests/unit/test_run_e2e_teile.py
+          python3 tests/unit/test_ci_nachweis.py
+          python3 tests/unit/test_apt_vorrat.py
       - name: Workflows prüfen (actionlint)
         run: |
           curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
@@ -117,7 +159,9 @@ jobs:
     # Anwendungs-Image mit mod_auth_openidc (deploy/image, Roadmap 7b-4) – noch nicht im Betrieb (docker-compose.yml
     # nutzt php:8.3-apache). Geprüft: Bau, gleiches Verhalten wie das Grundimage, Schwachstellen (kritisch blockiert).
     name: Anwendungs-Image prüfen
-    needs: statisch
+    needs: [nachweis, statisch]
+    # Übersprungen nur auf main, wenn der Pull-Request-Lauf denselben Stand vollständig geprüft hat (Auftrag „nachweis“)
+    if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -143,7 +187,8 @@ jobs:
 
   betrieb:
     name: Sicherung und Release-Prozess
-    needs: statisch
+    needs: [nachweis, statisch]
+    if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -166,59 +211,19 @@ jobs:
         run: sh tests/deploy/test_anmeldung_einrichten.sh
 
   e2e:
+    # Je Speicherart drei Teile mit möglichst gleicher Laufzeit (tests/run_e2e.py, teile()). Die Zahl der Teile steht
+    # zweimal: Liste „teil“ und Nenner in WA_TEIL – tests/unit/test_run_e2e_teile.py prüft, dass beides zusammenpasst.
     strategy:
       fail-fast: false
       matrix:
         storage: [files, sqlite]
-    name: Ende-zu-Ende-Tests (${{ matrix.storage }})
+        teil: [1, 2, 3]
+    name: Ende-zu-Ende-Tests (${{ matrix.storage }}, Teil ${{ matrix.teil }}/3)
     env:
       WA_TEST_STORAGE: ${{ matrix.storage }}
-    needs: statisch
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: "3.12"
-      - name: Testumgebung einrichten
-        run: |
-          php --version | head -1
-          python -m pip install -r tests/requirements.txt
-          python -m playwright install --with-deps chromium
-      - name: Alle Testgruppen gegen frische Testserver (4 Gruppen parallel)
-        env:
-          WA_JOBS: "4"
-        run: python tests/run_e2e.py
-      - name: Protokolle und Bildschirmfotos bei Fehler sichern
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: e2e-ergebnisse-${{ matrix.storage }}
-          path: |
-            tests/.ergebnisse/
-            tests/.arbeit/*.log
-          retention-days: 7
-
-  e2e_required:
-    # Stable required-check name: preserve existing branch protection with the new matrix.
-    name: Ende-zu-Ende-Tests
-    needs: e2e
-    if: always()
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Beide Speicherarten erfolgreich
-        env:
-          RESULT: ${{ needs.e2e.result }}
-        run: test "$RESULT" = success
-
-  oidc:
-    # Anmeldung über Keycloak (Roadmap 7b, ADR-003): Keycloak + PostgreSQL + Caddy + Apache/mod_auth_openidc nur hier in
-    # der CI (GR-111) – nichts davon läuft auf dem Server. Versionen und Prüfsummen in tests/oidc/umgebung.sh.
-    name: Anmeldung über Keycloak (nur CI)
-    needs: statisch
+      WA_TEIL: ${{ matrix.teil }}/3
+    needs: [nachweis, statisch]
+    if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -228,12 +233,78 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
+      - name: Paketvorrat aus dem Zwischenspeicher (gefüllt von zwischenspeicher.yml)
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/stafl-apt
+          # Einträge heißen …-<hash>-<Woche>: neuester mit gleicher Paketliste, sonst neuester überhaupt
+          key: apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}
+          restore-keys: |
+            apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}-
+            apt-v1-${{ runner.os }}-
       - name: Testumgebung einrichten
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q apache2 libapache2-mod-auth-openidc libapache2-mod-php8.3 postgresql
-          python -m pip install -r tests/requirements.txt
-          python -m playwright install --with-deps chromium
+          php --version | head -1
+          bash .github/scripts/testumgebung.sh e2e
+      - name: Testgruppen dieses Teils gegen frische Testserver (4 Gruppen parallel)
+        env:
+          WA_JOBS: "4"
+        run: python tests/run_e2e.py
+      - name: Protokolle und Bildschirmfotos bei Fehler sichern
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-ergebnisse-${{ matrix.storage }}-teil${{ matrix.teil }}
+          path: |
+            tests/.ergebnisse/
+            tests/.arbeit/*.log
+          retention-days: 7
+
+  e2e_required:
+    # Stable required-check name: preserve existing branch protection with the new matrix.
+    # Verlangt alle Teile beider Speicherarten. Übersprungen nur, wenn der Nachweis die Prüfung übernommen hat (main).
+    name: Ende-zu-Ende-Tests
+    needs: [nachweis, e2e]
+    if: ${{ always() && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Alle Teile beider Speicherarten erfolgreich
+        env:
+          RESULT: ${{ needs.e2e.result }}
+        run: test "$RESULT" = success
+
+  oidc:
+    # Anmeldung über Keycloak (Roadmap 7b, ADR-003): Keycloak + PostgreSQL + Caddy + Apache/mod_auth_openidc nur hier in
+    # der CI (GR-111) – nichts davon läuft auf dem Server. Versionen und Prüfsummen in tests/oidc/umgebung.sh.
+    name: Anmeldung über Keycloak (nur CI)
+    needs: [nachweis, statisch]
+    if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Paketvorrat aus dem Zwischenspeicher (gefüllt von zwischenspeicher.yml)
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/stafl-apt
+          # Einträge heißen …-<hash>-<Woche>: neuester mit gleicher Paketliste, sonst neuester überhaupt
+          key: apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}
+          restore-keys: |
+            apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}-
+            apt-v1-${{ runner.os }}-
+      - name: Keycloak und Caddy aus dem Zwischenspeicher (Prüfsummen prüft umgebung.sh bei jedem Start)
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: tests/.arbeit/downloads
+          key: oidc-downloads-v1-${{ hashFiles('tests/oidc/umgebung.sh') }}
+          restore-keys: oidc-downloads-v1-
+      - name: Testumgebung einrichten
+        run: bash .github/scripts/testumgebung.sh oidc
       - name: Keycloak, Caddy und Apache starten
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_21_X64 }}
@@ -256,12 +327,45 @@ jobs:
             tests/.arbeit/oidc/apache/*.log
           retention-days: 7
 
+  vollstaendig:
+    # Läuft nur, wenn alle Aufträge erfolgreich waren. Der Name hält den geprüften Stand fest: Daran erkennt der Lauf
+    # nach dem Merge (Auftrag „nachweis“), dass genau dieser Inhalt schon vollständig geprüft ist. Auch release-pruefen.sh
+    # verlangt diesen Auftrag (oder „Prüfung aus Pull Request übernommen“) im CI-Lauf des Release-Commits.
+    name: Vollständig geprüft (Stand ${{ needs.nachweis.outputs.tree }})
+    needs: [nachweis, statisch, sicherheit, image, betrieb, e2e_required, oidc]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Geprüften Stand festhalten
+        env:
+          TREE: ${{ needs.nachweis.outputs.tree }}
+        run: |
+          [ "${#TREE}" = 40 ] || { echo "::error::Kein geprüfter Stand vom Auftrag nachweis."; exit 1; }
+          echo "### Vollständig geprüft: Tree \`${TREE}\` (Commit \`${GITHUB_SHA:0:7}\`)" >> "${GITHUB_STEP_SUMMARY}"
+
+  uebernommen:
+    # Nur auf main: Der Pull-Request-Lauf hat genau diesen Stand vollständig geprüft – schwere Aufträge übersprungen.
+    name: Prüfung aus Pull Request übernommen
+    needs: [nachweis, statisch, sicherheit]
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Nachweis festhalten
+        env:
+          LAUF: ${{ needs.nachweis.outputs.lauf }}
+          TREE: ${{ needs.nachweis.outputs.tree }}
+        run: |
+          echo "### Prüfung übernommen: Tree \`${TREE}\` wurde bereits vollständig geprüft" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Pull-Request-Lauf: ${LAUF}" >> "${GITHUB_STEP_SUMMARY}"
+
   release_vorlegen:
     # Nach erfolgreicher CI auf main: Release-Lauf starten. Er wartet auf die Freigabe in der Umgebung
-    # „produktion“ (release.yml); ohne Freigabe geht nichts live.
+    # „produktion“ (release.yml); ohne Freigabe geht nichts live. Vorgelegt wird nur mit Nachweis: entweder alle
+    # Aufträge in diesem Lauf erfolgreich („vollstaendig“) oder Prüfung aus dem Pull Request übernommen („uebernommen“).
     name: Release zur Freigabe vorlegen
-    needs: [statisch, sicherheit, betrieb, e2e_required, oidc]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [vollstaendig, uebernommen]
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && (needs.vollstaendig.result == 'success' || needs.uebernommen.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

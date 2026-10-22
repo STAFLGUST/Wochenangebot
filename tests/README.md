@@ -6,15 +6,34 @@ Alle Tests laufen gegen **Testkopien mit anonymisierten Testdaten** – nie gege
 | --- | --- | --- |
 | Unit | `node tests/unit/bestand_parser.test.js` | Bestands-Parser der App gegen unabhängige Referenzauswertung |
 | Unit | `node tests/unit/merge.test.js` | Abgleich beim gemeinsamen Bearbeiten des Entwurfs (feldweise, Kundenpreise, neue/gelöschte Artikel) |
+| CI-Werkzeuge | `python3 tests/unit/test_run_e2e_teile.py`, `python3 tests/unit/test_ci_nachweis.py`, `python3 tests/unit/test_apt_vorrat.py` | Aufteilung der E2E-Gruppen (jede Gruppe genau einmal, ähnliche Laufzeit, passend zu `ci.yml`); Nachweis „schon im Pull Request geprüft“ mit nachgebauter GitHub-API (Merge/Squash, main weiter, Fork, fehlende/fehlgeschlagene Aufträge, API-Fehler → volle CI); Paketvorrat übernimmt nur Pakete mit passender Prüfsumme |
 | Einbindungen | `python3 werkzeuge/asset_versionen.py` | jede eingebundene Datei existiert, keine Versionsnummern `?v=` im Repository (setzt der Server beim Einspielen, `deploy/bereitstellen.py`) |
 | Prüfliste | `python3 werkzeuge/integritaet.py` | Prüfliste der Dateiprüfung steht nicht im Repository (`.gitignore`), ihre Erzeugung liefert die erwarteten Dateien |
-| Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | rund 45 Gruppen, über 1.100 Prüfungen im echten Browser gegen frische PHP-Testserver; 4 Gruppen parallel mit eigenen Ports (`WA_JOBS`, zur Fehlersuche `WA_JOBS=1`), volle Ausgabe je Gruppe in `tests/.arbeit/test-<gruppe>.log` |
+| Ende-zu-Ende | `python3 tests/run_e2e.py [gruppe …]` | rund 45 Gruppen, über 1.100 Prüfungen im echten Browser gegen frische PHP-Testserver; 4 Gruppen parallel mit eigenen Ports (`WA_JOBS`, zur Fehlersuche `WA_JOBS=1`), volle Ausgabe je Gruppe in `tests/.arbeit/test-<gruppe>.log`; `WA_TEIL=k/n` führt nur Teil k von n aus (CI, siehe unten) |
 | App | `cd mobile && npm ci && npm run pruefen` | TypeScript, Unit-Tests der App-Logik (Jest, u. a. gleiche Merklisten-Schlüssel wie die Website, Fracht wie der Server, Statusübergänge wie `orders.php`), iOS- und Android-Bundle |
 | Regelwerk | `python3 werkzeuge/regeln.py pruefen`, `python3 tests/regeln/test_regeln.py` | Modulregister, Datenverantwortung (Speicherzugriffe im Code), Rechte → Modul, Geschäftsregeln mit vorhandenen Tests, Wartungs-Entscheidungstabelle (Vollständigkeit, Invarianten, Vertragstests), Caddy-Hosts ↔ Register, Aktionsregister (jede Aktion im Code genau einmal registriert, Oberfläche passend, erzeugte `aktionen-liste.php` aktuell, Schreibschutz/öffentlich/Wartung unverändert gegenüber dem Stand vor dem Register); Negativtests mit künstlichen Projekten |
-| Betrieb | `sh tests/deploy/test_sichern.sh`, `sh tests/deploy/test_freigabe.sh`, `sh tests/deploy/test_release_pruefen.sh` | Datensicherung; Release-Modus mit Healthcheck und automatischem Rückfall, Sicherung mit dem Skript des neuen Commits, Neubau des Anwendungs-Images, Aufräumen hängender Images, Notfall-Rückfall von Hand (Container, gemerktes bzw. neu gebautes Image), Bereitstellung (Versionsnummern = Prüfsumme der ausgelieferten Datei, neue Adresse nach geänderter Datei, Prüfliste aus genau dem Commit auch nach Rückfall, Arbeitsordner wird nie übernommen, fehlende Liste/Nummern nachgeholt, Übergang von und zu Ständen mit eigener Liste); Prüfungen des Release-Laufs (Freigabepflicht, aktueller Stand, CI) |
+| Betrieb | `sh tests/deploy/test_sichern.sh`, `sh tests/deploy/test_freigabe.sh`, `sh tests/deploy/test_release_pruefen.sh` | Datensicherung; Release-Modus mit Healthcheck und automatischem Rückfall, Sicherung mit dem Skript des neuen Commits, Neubau des Anwendungs-Images, Aufräumen hängender Images, Notfall-Rückfall von Hand (Container, gemerktes bzw. neu gebautes Image), Bereitstellung (Versionsnummern = Prüfsumme der ausgelieferten Datei, neue Adresse nach geänderter Datei, Prüfliste aus genau dem Commit auch nach Rückfall, Arbeitsordner wird nie übernommen, fehlende Liste/Nummern nachgeholt, Übergang von und zu Ständen mit eigener Liste); Prüfungen des Release-Laufs (Freigabepflicht, aktueller Stand, CI mit Nachweis-Auftrag, kurz leere API-Antworten) |
 
 Voraussetzungen lokal: PHP 8.3, Node.js, Python 3.12, `pip install -r tests/requirements.txt`, `python -m playwright install chromium`.
 In GitHub laufen alle Ebenen automatisch bei jedem Pull Request und jedem Commit auf `main` (`.github/workflows/ci.yml`).
+Auf `main` werden die schweren Aufträge übersprungen, wenn der Pull Request genau denselben Inhalt schon vollständig
+geprüft hat (`docs/release-freigabe.md`, „Keine Doppelprüfung nach dem Merge“).
+
+### Aufteilung der Ende-zu-Ende-Tests in der CI
+
+Die CI führt die Gruppen je Speicherart in **3 Aufträgen** aus („Ende-zu-Ende-Tests (files, Teil 1/3)“ …, zusammen
+6 Aufträge, je 4 Gruppen parallel). `tests/run_e2e.py` verteilt mit `WA_TEIL=k/n` deterministisch: Gruppen nach
+geschätzter Laufzeit (`GEWICHT`, Sekunden aus den CI-Protokollen; neue Gruppen zählen 15 s) absteigend, jede in den
+Teil mit der bisher kleinsten Summe. Die Verteilung hängt nicht davon ab, ob ein optionaler Build vorliegt. Ohne
+`WA_TEIL` läuft lokal alles wie bisher (nur die Startreihenfolge richtet sich jetzt nach `GEWICHT`).
+
+- Lokal einen Teil nachstellen: `WA_TEIL=2/3 python3 tests/run_e2e.py` (die Liste der Gruppen steht in der ersten Zeile).
+- Der Pflicht-Check „Ende-zu-Ende-Tests“ ist nur grün, wenn **alle** Teile beider Speicherarten grün sind.
+- Artefakte bei Fehlern: `e2e-ergebnisse-<speicherart>-teil<k>`.
+- Mehr oder weniger Teile: in `ci.yml` die Liste `teil: [1, 2, 3]` **und** den Nenner in `WA_TEIL` ändern –
+  `tests/unit/test_run_e2e_teile.py` prüft, dass beides zusammenpasst (sonst bliebe ein Teil ungeprüft).
+- Gewichte erneuern, wenn sich Laufzeiten deutlich ändern: Zeilen „[gruppe] … bestanden in N s“ der CI-Protokolle.
+  Die längste Gruppe (`sicherheit_freigaben`, ~2 Min.) bestimmt die Mindestdauer eines Teils.
 
 ## Testdaten
 
