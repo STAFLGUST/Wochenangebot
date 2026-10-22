@@ -8,8 +8,10 @@
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
-  /* Symbolnamen des Registers → Symbole dieser Seite (unbekannt → Raster) */
-  const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', truck: 'cart', upload: 'upload', settings: 'sliders' };
+  /* Symbolnamen des Registers → Symbole dieser Seite (unbekannt → Raster). Die Farbe des Symbol-Quadrats hängt im
+     Stylesheet ebenfalls am Symbolnamen (data-symbol), nicht am Modul. */
+  const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', truck: 'cart', upload: 'upload', settings: 'haus' };
+  const BAND = 'Im Bau · Bald verfügbar · Im Bau · Bald verfügbar';
   const ENTWICKLUNG = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Nicht freigegeben' };
   let csrf = '';
 
@@ -55,17 +57,40 @@
     const kacheln = module.filter((m) => m.dashboard && m.kachel).sort((a, b) => (a.reihenfolge ?? 999) - (b.reihenfolge ?? 999));
     $('#db-grid').innerHTML = kacheln.map((m) => {
       const s = status(m, alle);
-      const inhalt = `<span class="db-ico">${icon(ICON[m.icon] || 'grid')}</span>
-        <h3 class="db-name">${esc(m.name)}</h3>
-        <p class="db-desc">${esc(m.beschreibung)}</p>
+      // Absperrband nur für Anwendungen, die (noch) nicht nutzbar sind – nicht für Wartung (eigener Zustand mit Hinweis)
+      // und nicht für abgeschaltete Module; der Text der Pille nennt weiter den genauen Stand.
+      const band = !m.kachel.zugang && !['wartung', 'deaktiviert'].includes(m.kachel.status);
+      const inhalt = `<span class="db-ico" data-symbol="${esc(m.icon)}">${icon(ICON[m.icon] || 'grid')}</span>
+        <div class="db-text"><h2 class="db-name">${esc(m.name)}</h2><p class="db-desc">${esc(m.beschreibung)}</p></div>
         ${s.hinweis ? `<p class="db-hint">${esc(s.hinweis)}</p>` : ''}
-        <div class="db-foot"><span class="db-badge ${s.cls}">${esc(s.text)}</span></div>`;
+        <span class="db-foot"><span class="db-badge ${s.cls}">${esc(s.text)}</span></span>
+        ${band ? `<span class="db-band" aria-hidden="true"><span>${BAND}</span></span>` : ''}`;
       return m.kachel.zugang
-        ? `<a class="db-tile" role="listitem" data-modul="${esc(m.id)}" href="${esc(kachelZiel(m.kachel, alle, location.hostname))}">${inhalt}</a>`
-        : `<div class="db-tile off" role="listitem" data-modul="${esc(m.id)}" aria-disabled="true">${inhalt}</div>`;
+        ? `<a class="db-tile db-glas" role="listitem" data-modul="${esc(m.id)}" href="${esc(kachelZiel(m.kachel, alle, location.hostname))}">${inhalt}</a>`
+        : `<div class="db-tile db-glas off${band ? ' gesperrt' : ''}" role="listitem" data-modul="${esc(m.id)}" aria-disabled="true">${inhalt}</div>`;
     }).join('');
     const frei = kacheln.filter((m) => m.kachel.zugang).length;
     $('#db-sub').textContent = `${frei} von ${kacheln.length} Anwendungen für Sie verfügbar`;
+  }
+
+  /* Begrüßung nach Tageszeit (Uhr des Geräts) und Datum, z. B. „Donnerstag, 22. Oktober“ */
+  function gruss(stunde) {
+    if (stunde >= 5 && stunde < 11) return 'Guten Morgen';
+    if (stunde >= 11 && stunde < 18) return 'Guten Tag';
+    return 'Guten Abend';
+  }
+  window.STAFL_GRUSS = gruss;   // für die Tests (reine Funktion)
+  function begruessung() {
+    const jetzt = new Date();
+    $('#db-datum').textContent = jetzt.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('#db-titel').textContent = gruss(jetzt.getHours());
+  }
+
+  /* Initialen für den Nutzer-Chip: erste Buchstaben der ersten beiden Namensteile („Erika Editor“ → „EE“) */
+  function initialen(name) {
+    const teile = String(name || '').trim().split(/[\s.\-_]+/).filter(Boolean);
+    const z = teile.length > 1 ? teile[0][0] + teile[1][0] : (teile[0] || '?').slice(0, 2);
+    return z.toLocaleUpperCase('de-DE');
   }
 
   function fehler(text) {
@@ -90,12 +115,15 @@
     if (st.status === 403 && st.data.error) { fehler(st.data.error); return; }
     if (st.status !== 200 || !st.data.loggedIn) { zeigeAnmeldung(); return; }
     csrf = st.data.csrf || '';
-    $('#db-user').hidden = false; $('#db-user').textContent = `Angemeldet als ${st.data.user ? st.data.user.name : ''}`;
+    const name = st.data.user ? (st.data.user.name || st.data.user.username || '') : '';
+    $('#db-user').hidden = false; $('#db-user-name').textContent = name; $('#db-initialen').textContent = initialen(name);
+    $('#db-user').title = `Angemeldet als ${name}`;
     $('#db-logout').hidden = false;
     const r = await api('module_status');
     if (r.status === 401) { zeigeAnmeldung(r.json ? '' : './'); return; }
     if (r.status !== 200 || !r.data.ok) { fehler(r.data.error || `Die Anwendungen konnten nicht geladen werden (${r.status}).`); return; }
     $('#db-login').hidden = true; $('#db-bereich').hidden = false;
+    begruessung();
     render(r.data.module || []);
   }
 

@@ -119,6 +119,11 @@ nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt bewusst **außer
 ausgeliefert; `dashboard-stafl.de` bleibt 503-Platzhalter (GR-105), bis die Anmeldung über Keycloak (ADR-003, PR 7) steht
 und der Inhaber die Freigabe erteilt. Der Testlauf blendet den Ordner nur in der Gruppe `dashboard` unter `/dashboard/` ein
 (`ZUSATZ` in `tests/run_e2e.py`). Hell/Dunkel mit demselben Speicherschlüssel wie die Angebotsseite.
+Gestaltung „Liquid Glass“ (eigene Farbwerte `--db-*` in `dashboard.css`, Schrift Geist aus `app.css`): Kopfzeile als
+Glaskapsel (Logo, Hell/Dunkel, Nutzer-Chip mit Initialen, Abmelden), Begrüßung nach Tageszeit mit Datum, Kacheln als
+Glasflächen; Symbolfarbe hängt am Registersymbol (`icon`), nicht am Modul. Nicht nutzbare Kacheln sind blass und tragen
+ein Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige); Wartung und abgeschaltete Module ohne Band, mit eigener Pille.
+Ohne `backdrop-filter` oder bei „Transparenz reduzieren“ deckende Flächen, bei „Bewegung reduzieren“ keine Übergänge.
 
 ## Tests
 
