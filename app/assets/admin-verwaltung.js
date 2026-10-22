@@ -708,11 +708,12 @@
     if (kopf.includes('bezeichnung1') || kopf.includes('vgrp')) throw new Error('Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren.');
     const v = (r, k) => (i[k] >= 0 ? (r[i[k]] || '').trim().replace(/\s{2,}/g, ' ') : '');
     const out = [];
-    for (const r of rows.slice(1)) {
+    for (const [n, r] of rows.slice(1).entries()) {
       const alpha = v(r, 'alpha');
       const mails = v(r, 'email').split(/[;,\s]+/).filter((m) => /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(m));
       const x = { nr: v(r, 'nr'), firma: v(r, 'firma') || alpha.replace(/^\*\s*/, ''), strasse: v(r, 'strasse'), plz: v(r, 'plz'), ort: v(r, 'ort'), land: landName(v(r, 'land')),
-        telefon: v(r, 'telefon'), email: mails[0] || (v(r, 'email') && !v(r, 'email').includes('@') ? '' : v(r, 'email')), gruppe: v(r, 'gruppe'), vertreter: v(r, 'vertreter'), vertreter2: v(r, 'vertreter2'), stern: alpha.startsWith('*') || v(r, 'firma').startsWith('*') };
+        telefon: v(r, 'telefon'), email: mails[0] || (v(r, 'email') && !v(r, 'email').includes('@') ? '' : v(r, 'email')), gruppe: v(r, 'gruppe'), vertreter: v(r, 'vertreter'), vertreter2: v(r, 'vertreter2'), stern: alpha.startsWith('*') || v(r, 'firma').startsWith('*'),
+        zeile: n + 2 };   // Zeile in der Datei (Kopfzeile = 1) – Anzeige in der Vorschau der Importzentrale
       if (!x.nr && !x.firma) continue;
       out.push(x);
     }
@@ -726,7 +727,7 @@
     dlgKI.showModal();
     await kImportPruefen();
   }
-  const kImpRows = () => kImp.rows.filter((r) => !(kImp.ohneStern && r.stern)).map(({ stern, ...r }) => r);
+  const kImpRows = () => kImp.rows.filter((r) => !(kImp.ohneStern && r.stern)).map(({ stern, zeile, ...r }) => r);
   async function kImportPruefen() {
     const body = $('#k-import-body');
     const stern = kImp.rows.filter((r) => r.stern).length;
@@ -1955,18 +1956,19 @@
       const fehlt = cfg.pruefeKopf ? cfg.pruefeKopf(kopfZ) : '';
       if (fehlt) throw new Error(fehlt);
       if (iNr < 0 || idx.name < 0) throw new Error(`Spalten „Nummer“ und „${FN.label}“ nicht gefunden. Erwartet wird die Liste „${viele}“ aus der Warenwirtschaft (${cfg.csvText || spaltenText}).`);
-      const out = [], fehler = [];
+      const out = [], fehler = [], fehlerZeilen = [], zeileVon = new Map();
       rows.slice(1).forEach((r, i) => {
         const g = { nr: (r[iNr] || '').trim() };
         for (const f of F) g[f.k] = idx[f.k] >= 0 ? (r[idx[f.k]] || '').trim().replace(/\s{2,}/g, ' ') : '';
         if (!g.nr && !g.name) return;
-        if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || !g.name) { fehler.push(`Zeile ${i + 2}`); return; }
+        if (!/^[0-9A-Za-z._-]{1,10}$/.test(g.nr) || !g.name) { fehler.push(`Zeile ${i + 2}`); fehlerZeilen.push({ zeile: i + 2, schluessel: g.nr, text: `Nummer oder ${FN.label} fehlt/ungültig – übersprungen` }); return; }
+        zeileVon.set(g, i + 2);
         out.push(g);
       });
       const doppelt = out.filter((g, i) => out.findIndex((x) => x.nr === g.nr) !== i).map((g) => g.nr);
       if (doppelt.length) throw new Error(`Nummer doppelt in der Datei: ${[...new Set(doppelt)].join(', ')}`);
       if (!out.length) throw new Error(`Keine ${viele} in der Datei gefunden.`);
-      return { groups: out, fehler };
+      return { groups: out, fehler, fehlerZeilen, zeileVon };
     }
     async function importDatei(file) {
       let res;
@@ -2011,7 +2013,15 @@
       if (tr && may('stammdaten.bearbeiten')) open(tr.dataset.kg);
     });
     host.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-kg]') && may('stammdaten.bearbeiten')) open(e.target.dataset.kg); });
-    return { load, render, name, groups: () => groups };
+    /* Leser für die Importzentrale: dieselbe CSV-Prüfung wie hier; Vergleich und Speichern macht der Server */
+    const importLeser = {
+      async lesen([file]) {
+        const res = ausCsv(await file.arrayBuffer());
+        return { daten: { groups: res.groups.map((g) => ({ ...g, zeile: res.zeileVon.get(g) })) }, zeilen: res.groups.length, fehler: res.fehlerZeilen, hinweise: [] };
+      },
+      nachher() { groups = null; },
+    };
+    return { load, render, name, groups: () => groups, importLeser };
   }
   const KG = gruppenListe({ liste: 'kundengruppen', p: 'kg', view: '#view-gruppen', eine: 'Kundengruppe', viele: 'Kundengruppen', nrSpalten: ['gruppe', 'kundengruppe'],
     zaehler: 'kunden', zaehlerSpalte: 'Kunden', zEine: 'Kunde', zViele: 'Kunden', hinweis: 'Kundengruppen ordnen Kunden zu (Kunde bearbeiten → Kundengruppe).' });
@@ -2030,6 +2040,17 @@
     pruefeKopf: (k) => (k.includes('bezeichnung') && !k.includes('name1') ? 'Das ist eine Gruppenliste. Vertreter bitte mit dem Vertreter-Export der Warenwirtschaft (Nummer; Alpha; Name1 …) importieren.' : ''),
     zaehler: 'kunden', zaehlerSpalte: 'Kunden', zEine: 'Kunde', zViele: 'Kunden', hinweis: 'Vertreter werden den Kunden zugeordnet (Kunde bearbeiten → Vertreter und Vertreter 2; beim Kundenimport aus den Spalten „Vertreter“ und „Vertreter2“).' });
   const loadKGruppen = KG.load, kgName = KG.name;
+  /* Leser der Verwaltung für die Importzentrale (admin-import.js, docs/plattform/schnittstellen/import.md) */
+  Object.assign(W.importLeser, {
+    kunden: {
+      async lesen([file]) {
+        const rows = kAusCsv(await file.arrayBuffer());
+        return { daten: { rows }, zeilen: rows.length, fehler: [], hinweise: [] };   // „*“-Kunden: Option und Hinweis vom Server
+      },
+      nachher() { kunden = null; },
+    },
+    kundengruppen: KG.importLeser, vkgruppen: VG.importLeser, vertreter: VT.importLeser,
+  });
   const vtName = (nr) => VT.name(nr);
 
   W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, vertreter: VT.render, mail: renderMailView, log: renderLogView, sec: renderSecView };

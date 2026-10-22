@@ -46,12 +46,8 @@ switch ($action) {
             $b = body();
             $incoming = clean_incoming($b['incoming'] ?? []);
             $articles = clean_stock($b, count($incoming) > 0);
-            $date = clean_date($b['date'] ?? null);
-            $total = 0.0;
-            foreach ($articles as $a) $total += $a['kg'];
-            $st = ['date' => $date, 'source' => s($b['source'] ?? '', 200) ?? '', 'importedAt' => now(), 'importedBy' => $me['name'], 'articles' => $articles, 'incoming' => $incoming];
-            store_write('bestand', $st);
-            audit('stock', 'Bestand übernommen: ' . ($st['source'] ?: 'Datei') . ($date ? ' – Stand ' . date('d.m.Y', strtotime($date)) : '') . ', ' . count($articles) . ' Artikel, ' . number_format($total, 2, ',', '.') . ' kg eingelagert, ' . count($incoming) . ' erwartete Zugänge');
+            // Speichern und Protokoll: bestand_speichern() im Importvertrag des Moduls (module/bestand/import.php, auch für die Importzentrale)
+            $st = bestand_speichern(clean_date($b['date'] ?? null), s($b['source'] ?? '', 200) ?? '', $articles, $incoming, $me);
             respond(['ok' => true, 'stock' => may($me, 'bestand.einkaufspreise') ? $st : stock_ohne_ek($st)]);
         }
 
@@ -65,15 +61,8 @@ switch ($action) {
         case 'master_save': {
             $me = require_perm('stammdaten.bearbeiten', true);
             $b = body();
-            $articles = clean_master($b['articles'] ?? null);
-            $res = with_lock('stammdaten', function () use ($b, $articles, $me) {
-                $cur = store_read('stammdaten') ?: ['rev' => 0, 'articles' => []];
-                if ((int)($b['rev'] ?? -1) !== (int)$cur['rev']) fail('Die Stammdaten wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
-                $m = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'articles' => $articles];
-                store_write('stammdaten', $m);
-                return [$m, master_changes($cur['articles'], $articles)];
-            });
-            [$m, $d] = $res;
+            // Prüfen, Revision, Speichern: stammdaten_speichern() beim Daten-Eigentümer (module/verwaltung/import.php)
+            [$m, $d] = stammdaten_speichern($b['articles'] ?? null, (int)($b['rev'] ?? -1), $me);
             if ($d) audit('master', 'Stammdaten bearbeitet', array_slice($d, 0, 2000), null, true);
             respond(['ok' => true, 'rev' => $m['rev'], 'updatedAt' => $m['updatedAt']]);
         }

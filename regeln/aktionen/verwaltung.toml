@@ -1,4 +1,4 @@
-# Aktionen des Moduls „verwaltung“: Stammdaten (Artikel, Kunden, Gruppen, Vertreter), Kundenimport, Auswertung.
+# Aktionen des Moduls „verwaltung“: Stammdaten (Artikel, Kunden, Gruppen, Vertreter), Kundenimport, Importzentrale, Auswertung.
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 
 schema = 1
@@ -19,6 +19,19 @@ schreibend = true
 oberflaeche = "angebot.eingabe"
 
 [aktion.kunden_import]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+# Importzentrale (Verwaltung → Import). Heute im Eingabebereich; sobald die Oberfläche verwaltung.import
+# (verwaltung.dashboard-stafl.de/import/) freigegeben ist, ziehen diese drei Aktionen dorthin um.
+[aktion.import_arten]
+oberflaeche = "angebot.eingabe"
+
+[aktion.import_pruefen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.import_uebernehmen]
 oberflaeche = "angebot.eingabe"
 schreibend = true
 

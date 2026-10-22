@@ -17,17 +17,9 @@ switch ($action) {
             header('Cache-Control: no-store');
             $d = gruppen_load($action);
             $out = ['ok' => true, 'rev' => $d['rev'], 'groups' => $d['groups'], 'updatedAt' => $d['updatedAt'], 'updatedBy' => $d['updatedBy']];
-            $n = [];
-            if ($vk) {   // Anzahl zugeordneter Artikel (Stammdaten)
-                foreach ((store_read('stammdaten')['articles'] ?? []) as $a) if (($a['vkGruppe'] ?? '') !== '') $n[$a['vkGruppe']] = ($n[$a['vkGruppe']] ?? 0) + 1;
-                $out['artikel'] = (object)$n;
-            } elseif (may($me, 'kunden.sehen')) {   // Anzahl zugeordneter Kunden nur für Berechtigte
-                foreach (customers_load()['customers'] as $c) {
-                    $nrs = $action === 'vertreter' ? array_unique(array_filter([(string)($c['vertreter'] ?? ''), (string)($c['vertreter2'] ?? '')], 'strlen')) : array_filter([(string)($c['gruppe'] ?? '')], 'strlen');
-                    foreach ($nrs as $x) $n[$x] = ($n[$x] ?? 0) + 1;
-                }
-                $out['kunden'] = (object)$n;
-            }
+            // Anzahl zugeordneter Artikel (VK-Gruppen) bzw. Kunden (nur für Berechtigte) – gruppen_zuordnungen() in module/verwaltung/import.php
+            if ($vk) $out['artikel'] = (object)gruppen_zuordnungen($action);
+            elseif (may($me, 'kunden.sehen')) $out['kunden'] = (object)gruppen_zuordnungen($action);
             respond($out);
         }
 
@@ -35,23 +27,8 @@ switch ($action) {
         case 'vkgruppen_save':
         case 'vertreter_save': {
             $me = require_perm('stammdaten.bearbeiten', true);
-            $liste = substr($action, 0, -5);
-            $L = GRUPPEN_LISTEN[$liste];
             $b = body();
-            $groups = gruppen_clean($liste, $b['groups'] ?? null);
-            $quelle = s($b['quelle'] ?? '', 120) ?? '';
-            $res = with_lock($liste, function () use ($b, $groups, $me, $liste, $L) {
-                $cur = gruppen_load($liste);
-                if ((int)($b['rev'] ?? -1) !== $cur['rev']) fail("Die {$L['viele']} wurden inzwischen an anderer Stelle geändert. Bitte neu laden.", 409);
-                $alt = []; foreach ($cur['groups'] as $g) $alt[$g['nr']] = $g;
-                $neu = 0; $geaendert = 0;
-                foreach ($groups as $g) { if (!isset($alt[$g['nr']])) $neu++; elseif ($alt[$g['nr']] != $g) $geaendert++; unset($alt[$g['nr']]); }
-                $d = ['rev' => $cur['rev'] + 1, 'groups' => $groups, 'updatedAt' => now(), 'updatedBy' => $me['name']];
-                store_write($liste, $d);
-                return [$d, $neu, $geaendert, count($alt)];
-            });
-            [$d, $neu, $geaendert, $weg] = $res;
-            if ($neu || $geaendert || $weg) audit('master', $L['viele'] . ' ' . ($quelle !== '' ? "aus „{$quelle}“ übernommen" : 'gespeichert') . ": $neu neu, $geaendert geändert, $weg entfernt (" . count($groups) . ' insgesamt)');
-            respond(['ok' => true, 'rev' => $d['rev'], 'groups' => $d['groups'], 'neu' => $neu, 'geaendert' => $geaendert, 'entfernt' => $weg]);
+            // Prüfen, Revision, Speichern und Protokoll: gruppen_speichern() (module/verwaltung/import.php, auch für die Importzentrale)
+            respond(['ok' => true] + gruppen_speichern(substr($action, 0, -5), $b['groups'] ?? null, (int)($b['rev'] ?? -1), $me, s($b['quelle'] ?? '', 120) ?? ''));
         }
 }

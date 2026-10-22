@@ -239,6 +239,7 @@ pfade_geplant = []
 hinweise = [
   "Eigene Kachel, aber technisch Teil der Verwaltung – keine eigene Implementierung (keine doppelten Importe).",
   "Die Leser der Dateiformate bleiben beim Daten-Eigentümer (z. B. Bestandsliste in bestand); die Importzentrale ruft sie über Schnittstellen auf.",
+  "Umgesetzt (Roadmap 10b) heute im Eingabebereich unter Verwaltung → Import: app/api/module/verwaltung/importzentrale.php, Importvertrag je Eigentümer app/api/module/<modul>/import.php (docs/plattform/schnittstellen/import.md).",
 ]
 
 [[modul]]
@@ -250,16 +251,18 @@ reihenfolge = 80
 dashboard = true
 agent = "verwaltung"
 abhaengigkeiten = ["plattform"]
-testgruppen = ["kunden", "kundengruppen", "vkgruppen", "vertreter", "kundenimport", "auswertung", "master"]
+testgruppen = ["kunden", "kundengruppen", "vkgruppen", "vertreter", "kundenimport", "auswertung", "master", "importzentrale"]
 pfade = [
   "regeln/aktionen/verwaltung.toml",
   "app/api/lib/kunden.php", "app/api/lib/auswertung.php", "app/api/ort.php",
   "app/api/aktionen/kundenverwaltung.php", "app/api/aktionen/kundengruppen.php", "app/api/aktionen/auswertung.php",
+  "app/api/aktionen/importzentrale.php",
   "app/assets/admin-verwaltung.js", "app/assets/admin-auswertung.js", "app/assets/karte.json",
+  "app/assets/admin-import.js", "app/assets/admin-import.css",
   "werkzeuge/karte_bauen.py",
   "tests/e2e/test_kunden.py", "tests/e2e/test_kundengruppen.py", "tests/e2e/test_vkgruppen.py",
   "tests/e2e/test_vertreter.py", "tests/e2e/test_kundenimport.py", "tests/e2e/test_auswertung.py",
-  "tests/e2e/test_master.py",
+  "tests/e2e/test_master.py", "tests/e2e/test_importzentrale.py",
   "tests/fixtures/kunden/**", "tests/fixtures/kundengruppen/**", "tests/fixtures/stammdaten/**",
 ]
 pfade_geplant = ["app/api/module/verwaltung/**", "app/module/verwaltung/**"]
