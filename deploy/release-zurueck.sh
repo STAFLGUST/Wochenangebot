@@ -63,5 +63,5 @@ git reset -q --hard "$VORHER"
 if [ -f deploy/bereitstellen.py ]; then python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung unvollständig – aktualisieren.sh holt sie nach"; fi
 # Container-Konfiguration geändert: alle neu erstellen; nur das Image: nur die App (Keycloak und seine Datenbank laufen weiter)
 if git diff --name-only "$JETZT" "$VORHER" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
-elif [ "$BILD" = 1 ]; then $COMPOSE up -d --force-recreate app; fi
+elif [ "$BILD" = 1 ] || git diff --name-only "$JETZT" "$VORHER" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then $COMPOSE up -d --force-recreate app; fi   # Apache-Konfiguration: einzelne Datei eingebunden
 echo "Zurückgesetzt auf $(git log -1 --format='%h %s')"

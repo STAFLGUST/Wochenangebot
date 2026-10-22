@@ -143,13 +143,17 @@ rm -f "$T/prune-fehler"
 C_SHA=$(commit ergaenzung x "echo '# geändert' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$C_SHA" "$C_SHA" > "$T/state.json"
 lauf || true; ok "Ergänzungsdatei der Anmeldung geändert: Container werden neu erstellt" '[ "$(kopf)" = "$C_SHA" ] && grep -q "^compose up -d --force-recreate" "$T/out.txt"'
+# Apache-Konfiguration der Anmeldung geändert (einzeln eingebundene Datei): nur die App neu erstellen, sonst sähe sie die alte Fassung
+O_SHA=$(commit apache-oidc x "echo '# geändert' >> '$T/src/deploy/anmeldung/apache-oidc.conf'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$O_SHA" "$O_SHA" > "$T/state.json"
+lauf || true; ok "Apache-Konfiguration der Anmeldung geändert: nur die App neu erstellt" '[ "$(kopf)" = "$O_SHA" ] && grep -qx "compose up -d --force-recreate app" "$T/out.txt" && ! grep -qx "compose up -d --force-recreate" "$T/out.txt"'
 
 # Sicherung vor dem Release mit dem Skript des NEUEN Commits (ein defektes altes Skript blockiert die Korrektur nicht)
 ok "temporäres Sicherungsskript steht in .gitignore" 'git -C "$REPO" check-ignore -q deploy/.sichern-release.sh'
 K_SHA=$(commit sichern-kaputt x "sed -i 's/^set -eu\$/set -eu; echo kaputt; exit 3/' '$T/src/deploy/sichern.sh'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$K_SHA" "$K_SHA" > "$T/state.json"
 lauf || true
-ok "neues Sicherungsskript defekt: nicht eingespielt" '[ "$(kopf)" = "$C_SHA" ] && [ "$(st ok)" = False ] && grep -q "Sicherung vor dem Release fehlgeschlagen" "$B/daten/deployment.php" && [ ! -e "$B/deploy/.sichern-release.sh" ]'
+ok "neues Sicherungsskript defekt: nicht eingespielt" '[ "$(kopf)" = "$O_SHA" ] && [ "$(st ok)" = False ] && grep -q "Sicherung vor dem Release fehlgeschlagen" "$B/daten/deployment.php" && [ ! -e "$B/deploy/.sichern-release.sh" ]'
 git -C "$B" reset -q --hard "$K_SHA"   # Lage wie im Betrieb: aktiver Stand mit defektem Sicherungsskript
 ok "Testvoraussetzung: aktives Sicherungsskript defekt" '! sh "$B/deploy/sichern.sh" --jetzt >/dev/null 2>&1'
 F_SHA=$(commit sichern-repariert x "sed -i 's/^set -eu; echo kaputt; exit 3\$/set -eu/' '$T/src/deploy/sichern.sh'")
