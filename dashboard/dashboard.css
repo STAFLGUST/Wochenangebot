@@ -1,39 +1,191 @@
-/* STAFL-Plattform · Dashboard – nutzt die Farben und Schriften des Designsystems „Klar“ (../assets/app.css) */
-body.db { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font); }
-.db-top { position: sticky; top: 0; z-index: 5; background: var(--header-bg); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-.db-top-inner { max-width: 1200px; margin: 0 auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.db-top .brand-logo { height: 34px; width: auto; }
-.db-top h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
-.db-top .brand-company { font-size: 12px; color: var(--muted); }
-.db-actions { display: flex; align-items: center; gap: 8px; }
-.db-user { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-.db-main { max-width: 1200px; margin: 0 auto; padding: 24px 20px 48px; }
-.db-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.db-head h2 { margin: 0; font-size: 20px; font-weight: 650; }
-.db-sub { margin: 0; font-size: 13px; color: var(--muted); }
-.db-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
-@media (max-width: 1000px) { .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .db-grid { grid-template-columns: 1fr; } .db-user { display: none; } .db-top .brand h1, .db-top .brand-company { display: none; } .db-top .brand-logo { height: 30px; } .db-top-inner { padding: 10px 16px; } .db-main { padding: 18px 16px 40px; } }
-.db-tile { position: relative; display: flex; flex-direction: column; gap: 10px; min-height: 150px; padding: 18px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
-a.db-tile:hover { border-color: var(--accent-line); transform: translateY(-1px); }
-a.db-tile:focus-visible { outline: none; box-shadow: var(--focus); border-color: var(--accent); }
-.db-tile.off { background: var(--surface-2); color: var(--text-2); cursor: default; }
-.db-ico { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
-.db-tile.off .db-ico { background: var(--surface-3); color: var(--muted); }
-.db-ico .i { width: 22px; height: 22px; }
-.db-name { font-size: 16px; font-weight: 650; margin: 0; }
-.db-desc { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.4; }
+/* STAFL-Plattform · Dashboard – Gestaltung „Liquid Glass“ (vom Inhaber freigegebener Entwurf)
+   Ruhiger heller Grund mit drei weichen Farbflächen, Glasflächen für Kopfzeile und Kacheln. Schrift und Grundregeln
+   kommen aus ../assets/app.css (Geist, lokal eingebunden); alle Farben dieser Seite stehen als --db-* hier. */
+
+body.db {
+  --db-bg: #f4f1ee;
+  --db-text: #1c1a19;
+  --db-muted: #6b6560;
+  --db-glass: rgba(255, 255, 255, .52);
+  --db-deckend: #fbfaf8;                       /* Fläche ohne Glas (kein backdrop-filter, weniger Transparenz) */
+  --db-rand: rgba(255, 255, 255, .78);
+  --db-glanz: rgba(255, 255, 255, .95);
+  --db-schatten: 0 10px 40px rgba(60, 30, 25, .10);
+  --db-blob-a: #8fa7c4;                        /* Blaugrau */
+  --db-blob-b: #e2a54a;                        /* Bernstein */
+  --db-blob-c: #3f7a5a;                        /* Salbeigrün */
+  --db-off: .55;
+  --db-ok: #186a3b;                            /* Vorlage #1f7a45, etwas dunkler für 4,5:1 auf der Pille */
+  --db-ok-bg: rgba(31, 122, 69, .12);
+  --db-warn: #7f4d00;
+  --db-warn-bg: rgba(226, 165, 74, .22);
+  --db-neutral-bg: rgba(28, 26, 25, .07);
+  --db-aus: rgba(28, 26, 25, .08);
+  --db-aus-hover: rgba(28, 26, 25, .13);
+  --db-akzent: #8c1d2c;                        /* Bordeaux (Initialen, Hauptknopf) */
+  --db-akzent-ink: #8c1d2c;                    /* Bordeaux als Text-/Symbolfarbe */
+  --db-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
+  --db-fehler: #8c1d2c;
+  --db-fehler-bg: rgba(140, 29, 44, .09);
+  --db-band: #f5c400;
+  --db-band-ink: #1c1a19;
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  background: var(--db-bg); color: var(--db-text); font-family: var(--font);
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body.db {
+    --db-bg: #121011; --db-text: #f5f1ee; --db-muted: #a59d97;
+    --db-glass: rgba(40, 36, 36, .48); --db-deckend: #211d1d;
+    --db-rand: rgba(255, 255, 255, .14); --db-glanz: rgba(255, 255, 255, .22); --db-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --db-blob-a: #3b5573; --db-blob-b: #9a6a24; --db-blob-c: #245a40; --db-off: .5;
+    --db-ok: #5fd08f; --db-ok-bg: rgba(95, 208, 143, .14); --db-warn: #f3c98a; --db-warn-bg: rgba(224, 144, 31, .16);
+    --db-neutral-bg: rgba(255, 255, 255, .08); --db-aus: rgba(255, 255, 255, .08); --db-aus-hover: rgba(255, 255, 255, .14);
+    --db-akzent-ink: #f0a3ae; --db-fokus: 0 0 0 3px rgba(224, 129, 144, .55); --db-fehler: #f0a3ae; --db-fehler-bg: rgba(224, 129, 144, .12);
+  }
+}
+@media screen {
+  :root[data-theme="dark"] body.db {
+    --db-bg: #121011; --db-text: #f5f1ee; --db-muted: #a59d97;
+    --db-glass: rgba(40, 36, 36, .48); --db-deckend: #211d1d;
+    --db-rand: rgba(255, 255, 255, .14); --db-glanz: rgba(255, 255, 255, .22); --db-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --db-blob-a: #3b5573; --db-blob-b: #9a6a24; --db-blob-c: #245a40; --db-off: .5;
+    --db-ok: #5fd08f; --db-ok-bg: rgba(95, 208, 143, .14); --db-warn: #f3c98a; --db-warn-bg: rgba(224, 144, 31, .16);
+    --db-neutral-bg: rgba(255, 255, 255, .08); --db-aus: rgba(255, 255, 255, .08); --db-aus-hover: rgba(255, 255, 255, .14);
+    --db-akzent-ink: #f0a3ae; --db-fokus: 0 0 0 3px rgba(224, 129, 144, .55); --db-fehler: #f0a3ae; --db-fehler-bg: rgba(224, 129, 144, .12);
+  }
+}
+
+/* ── Hintergrund: drei sehr weiche Farbflächen (kein Rot) ── */
+.db-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.db-bg span { position: absolute; border-radius: 50%; filter: blur(140px); }
+.db-bg span:nth-child(1) { width: 640px; height: 640px; left: -160px; top: -220px; background: var(--db-blob-a); opacity: .22; }
+.db-bg span:nth-child(2) { width: 560px; height: 560px; right: -120px; top: 120px; background: var(--db-blob-b); opacity: .18; filter: blur(150px); }
+.db-bg span:nth-child(3) { width: 620px; height: 620px; left: 32%; bottom: -320px; background: var(--db-blob-c); opacity: .16; filter: blur(150px); }
+
+/* ── Glas ── */
+.db-glas {
+  background: var(--db-glass); border: 1px solid var(--db-rand);
+  box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-schatten);
+  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%);
+}
+/* Ohne backdrop-filter oder bei „Transparenz reduzieren“: deckende Flächen statt Glas */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .db-glas { background: var(--db-deckend); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .db-glas { background: var(--db-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .db-bg { display: none; }
+}
+
+/* ── Seite ── */
+.db-seite { position: relative; z-index: 1; max-width: 1240px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 40px; min-height: 100vh; min-height: 100dvh; }
+.db-main { flex: 1; }
+.db .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.db :focus-visible { outline: none; box-shadow: var(--db-fokus); }
+
+/* ── Kopfzeile: schwebende Glaskapsel ── */
+.db-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
+.db-marke { display: flex; align-items: center; gap: 16px; min-width: 0; }
+body.db .db-kopf .brand-logo { height: 28px; width: auto; object-fit: initial; }
+.db-plattform { font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--db-muted); }
+.db-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.db-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--db-aus); color: var(--db-text); cursor: pointer; transition: background .15s; }
+.db-rund:hover, .db-abmelden:hover { background: var(--db-aus-hover); }
+.db-user { display: flex; align-items: center; gap: 10px; height: 40px; min-width: 0; padding: 0 14px 0 4px; border-radius: 999px; background: var(--db-aus); font-size: 14px; font-weight: 500; }
+.db-user[hidden] { display: none; }
+.db-initialen { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--db-akzent); color: #fff; font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.db-user-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.db-abmelden { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 13px; border: 0; border-radius: 999px; background: var(--db-aus); color: var(--db-text); font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; }
+.db-abmelden[hidden] { display: none; }
+
+/* ── Begrüßung ── */
+.db-gruss { display: flex; flex-direction: column; gap: 6px; padding: 0 8px; margin-bottom: 40px; }
+.db-datum { margin: 0; font-size: 15px; font-weight: 500; color: var(--db-muted); }
+.db-gruss h1 { margin: 0; font-size: 44px; line-height: 1.08; font-weight: 700; letter-spacing: -.035em; }
+.db-sub { margin: 4px 0 0; font-size: 17px; color: var(--db-muted); }
+
+/* ── Kacheln ── */
+.db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+.db-tile { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; min-height: 196px; padding: 22px; border-radius: 28px; color: inherit; text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
+a.db-tile:hover { transform: translateY(-2px); color: inherit; }
+a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-schatten), var(--db-fokus); }
+.db-tile.off { box-shadow: inset 0 1px 0 var(--db-glanz); cursor: default; }
+.db-ico { --ico-a: #7a7570; --ico-b: #4a4643; width: 52px; height: 52px; flex: none; border-radius: 15px; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, var(--ico-a), var(--ico-b)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); }
+.db-ico .i { width: 26px; height: 26px; stroke-width: 1.8; }
+/* Farbe je Symbol des Modulregisters (icon), nicht je Modul – neue Module erhalten ohne Änderung das neutrale Grau */
+.db-ico[data-symbol="tag"] { --ico-a: #b3263a; --ico-b: #7a1624; }
+.db-ico[data-symbol="settings"] { --ico-a: #5b5f68; --ico-b: #2f3238; }
+.db-ico[data-symbol="boxes"] { --ico-a: #3f7a5a; --ico-b: #23503a; }
+.db-ico[data-symbol="truck"] { --ico-a: #c98a2b; --ico-b: #94601a; }
+.db-ico[data-symbol="users"] { --ico-a: #3d6fa8; --ico-b: #234873; }
+.db-ico[data-symbol="store"] { --ico-a: #c2414f; --ico-b: #8e2532; }
+.db-ico[data-symbol="shield-check"] { --ico-a: #2f8a86; --ico-b: #1b5d5a; }
+.db-ico[data-symbol="upload"] { --ico-a: #6a5fa8; --ico-b: #463d7a; }
+.db-text { display: flex; flex-direction: column; gap: 4px; }
+.db-name { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.015em; hyphens: auto; overflow-wrap: anywhere; }
+.db-desc { margin: 0; font-size: 14px; line-height: 1.45; color: var(--db-muted); }
+.db-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--db-warn); }
 .db-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.db-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 550; background: var(--surface-3); color: var(--text-2); }
-.db-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .7; }
-.db-badge.ok { background: var(--c-fresh-bg); color: var(--c-fresh); }
-.db-badge.warn { background: #fff4e0; color: #8a5400; }
-.db-hint { font-size: 12.5px; color: #8a5400; margin: 0; }
-.db-login { max-width: 420px; margin: 8vh auto 0; padding: 28px; text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
-.db-login h2 { margin: 10px 0 6px; font-size: 20px; }
-.db-login p { margin: 0 0 18px; color: var(--text-2); font-size: 14px; }
-.db-login-i { width: 30px; height: 30px; color: var(--accent); }
-.db-err { padding: 10px 14px; border-radius: var(--r); background: var(--accent-soft); border: 1px solid var(--accent-line); color: var(--accent); }
-.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .db-badge.warn, :root:not([data-theme="light"]) .db-hint { background: rgba(224,144,31,.14); color: #f3c98a; } :root:not([data-theme="light"]) .db-hint { background: none; } }
-@media screen { :root[data-theme="dark"] .db-badge.warn { background: rgba(224,144,31,.14); color: #f3c98a; } :root[data-theme="dark"] .db-hint { color: #f3c98a; } }
+.db-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--db-neutral-bg); color: var(--db-muted); }
+.db-badge::before { content: ""; width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; }
+.db-badge.ok { background: var(--db-ok-bg); color: var(--db-ok); }
+.db-badge.warn { background: var(--db-warn-bg); color: var(--db-warn); }
+/* Nicht nutzbar: Inhalt blass; Wartung behält Pille und Hinweis in voller Stärke */
+.db-tile.off .db-ico, .db-tile.off .db-text { opacity: var(--db-off); }
+.db-tile.gesperrt .db-foot { opacity: var(--db-off); }
+
+/* Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige, die Sperre setzt der Server durch) */
+.db-band { position: absolute; left: -30%; right: -30%; top: 54%; padding: 5px 0; transform: translateY(-50%) rotate(-11deg);
+  background: repeating-linear-gradient(135deg, var(--db-band-ink) 0 12px, var(--db-band) 12px 24px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .25); pointer-events: none; }
+.db-band > span { display: block; overflow: hidden; white-space: nowrap; text-align: center; background: var(--db-band); color: var(--db-band-ink);
+  font-size: 13px; font-weight: 800; line-height: 30px; letter-spacing: .16em; text-transform: uppercase; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+
+/* ── Anmeldung, Fehler, Fuß ── */
+.db-login { max-width: 440px; margin: 8vh auto 0; padding: 32px 28px; text-align: center; border-radius: 28px; }
+.db-login h1 { margin: 12px 0 6px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.db-login p { margin: 0 0 20px; color: var(--db-muted); font-size: 15px; }
+.db-login-i { width: 30px; height: 30px; color: var(--db-akzent-ink); }
+.db-login .btn.primary { height: 42px; padding: 0 20px; border-radius: 999px; background: var(--db-akzent); border-color: var(--db-akzent); color: #fff; }
+.db-login .btn.primary:hover { background: #6e1622; border-color: #6e1622; }
+.db-err { max-width: 640px; margin: 0 auto; padding: 12px 16px; border-radius: 16px; background: var(--db-fehler-bg); border: 1px solid var(--db-fehler-bg); color: var(--db-fehler); }
+.db-fuss { padding: 0 8px; font-size: 13px; color: var(--db-muted); }
+
+/* ── Bewegung ── */
+@media (prefers-reduced-motion: reduce) {
+  .db-tile, .db-rund, .db-abmelden { transition: none; }
+  a.db-tile:hover { transform: none; }
+}
+
+/* ── Tablet und Handy ── */
+@media (max-width: 760px) {
+  .db-plattform { display: none; }
+  .db-user-name { max-width: 120px; }
+}
+@media (max-width: 560px) {
+  .db-seite { padding: 16px 16px 40px; gap: 22px; }
+  .db-kopf { top: 10px; gap: 8px; padding: 8px 8px 8px 16px; }
+  body.db .db-kopf .brand-logo { height: 22px; width: auto; }
+  .db-user { padding: 0; background: none; }
+  .db-user-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .db-initialen { width: 40px; height: 40px; border: 1px solid var(--db-rand); }
+  .db-abmelden { width: 40px; padding: 0; justify-content: center; }
+  .db-abmelden span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .db-gruss { gap: 4px; padding: 0 4px; margin-bottom: 22px; }
+  .db-datum { font-size: 14px; }
+  .db-gruss h1 { font-size: 34px; line-height: 1.1; letter-spacing: -.03em; }
+  .db-sub { margin-top: 2px; font-size: 15px; }
+  .db-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .db-tile { gap: 10px; min-height: 150px; padding: 16px; border-radius: 24px; }
+  .db-ico { width: 44px; height: 44px; border-radius: 13px; }
+  .db-ico .i { width: 22px; height: 22px; }
+  .db-name { font-size: 16px; letter-spacing: -.01em; }
+  .db-desc { display: none; }
+  .db-badge { min-height: 24px; padding: 0 10px; font-size: 12px; }
+  .db-badge::before { width: 6px; height: 6px; }
+  /* Handy: Pille gesperrter Kacheln nur für Screenreader (wie im Entwurf), Band tiefer – der Name bleibt lesbar */
+  .db-tile.gesperrt { padding-bottom: 60px; }
+  .db-tile.gesperrt .db-foot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .db-band { left: -35%; right: -35%; top: auto; bottom: 12px; padding: 4px 0; transform: rotate(-14deg); background: repeating-linear-gradient(135deg, var(--db-band-ink) 0 10px, var(--db-band) 10px 20px); box-shadow: 0 5px 14px rgba(0, 0, 0, .25); }
+  .db-band > span { font-size: 10px; line-height: 22px; letter-spacing: .14em; box-shadow: none; }
+}
