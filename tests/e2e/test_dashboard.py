@@ -1,4 +1,5 @@
-"""Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6): Kacheln aus dem Modulregister, Status, Wartung, Abmeldung.
+"""Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6): Kacheln aus dem Modulregister, Status, Wartung, Abmeldung,
+Gestaltung „Liquid Glass“ (Glasflächen, Begrüßung, Absperrband für nicht nutzbare Anwendungen, hell/dunkel, 390 px).
 
 Das Dashboard liegt noch außerhalb der Dokumentwurzel (wird nicht produktiv ausgeliefert); der Testlauf blendet es nur für
 diese Gruppe unter /dashboard/ ein. Die Kachel ist nur Anzeige – die Sperre setzt der Server durch (GR-102, GR-103).
@@ -6,6 +7,8 @@ diese Gruppe unter /dashboard/ ein. Die Kachel ist nur Anzeige – die Sperre se
 import json
 import os
 import sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
@@ -27,21 +30,49 @@ REIHE = ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'verwal
 fehler = []
 
 
-def anmelden(br, user, pw, ip, breite=1280, dunkel=False):
+BERLIN = ZoneInfo('Europe/Berlin')
+
+
+def anmelden(br, user, pw, ip, breite=1280, dunkel=False, uhr=None):
     ctx = br.new_context(viewport={'width': breite, 'height': 900}, color_scheme='dark' if dunkel else 'light',
-                         extra_http_headers={'X-Forwarded-For': ip})
+                         extra_http_headers={'X-Forwarded-For': ip}, timezone_id='Europe/Berlin', locale='de-DE')
     pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
     pg.wait_for_selector('#screen-auth', state='hidden')
+    if uhr:   # feste Uhrzeit nur für das Dashboard (Begrüßung, Datum); Zeitgeber laufen weiter
+        pg.clock.set_fixed_time(uhr)
     pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
     return ctx, pg
 
 
 def kacheln(pg):
     return pg.eval_on_selector_all('#db-grid .db-tile', '''els => els.map(e => ({id: e.dataset.modul, tag: e.tagName, href: e.getAttribute('href'),
-        name: e.querySelector('.db-name').textContent, badge: e.querySelector('.db-badge').textContent,
+        name: e.querySelector('.db-name').textContent, badge: e.querySelector('.db-badge').textContent, badgeCls: e.querySelector('.db-badge').className,
+        band: (e.querySelector('.db-band') || {}).textContent || '', bandVersteckt: (e.querySelector('.db-band') || {getAttribute: () => null}).getAttribute('aria-hidden'),
+        gesperrt: e.classList.contains('gesperrt'), symbol: e.querySelector('.db-ico').dataset.symbol,
         hint: (e.querySelector('.db-hint') || {}).textContent || '', bilder: e.querySelectorAll('.db-hint img').length}))''')
+
+
+# Kontrast Text ↔ Untergrund: halbtransparente Flächen (Glas, Pillen) werden bis zum deckenden Seitengrund verrechnet.
+# Die weichen Farbflächen im Hintergrund (Deckkraft ≤ .22, stark unscharf) bleiben unberücksichtigt.
+KONTRAST = '''(sels) => {
+  const rgba = (s) => { const m = s.match(/[\\d.]+/g).map(Number); return [m[0], m[1], m[2], m.length > 3 ? m[3] : 1]; };
+  const ueber = (o, u) => [0, 1, 2].map((i) => o[i] * o[3] + u[i] * (1 - o[3])).concat(1);
+  const grund = (el) => { const s = []; for (let e = el; e; e = e.parentElement) { const c = rgba(getComputedStyle(e).backgroundColor); if (c[3] > 0) s.push(c); if (c[3] >= 1) break; }
+    return s.reverse().reduce((u, o) => ueber(o, u), [255, 255, 255, 1]); };
+  const lum = (c) => { const f = (v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(c[0]) + .7152 * f(c[1]) + .0722 * f(c[2]); };
+  return sels.map((s) => { const el = document.querySelector(s); if (!el) return [s, 0];
+    const g = grund(el), t = ueber(rgba(getComputedStyle(el).color), g), [h, d] = [lum(t), lum(g)].sort((x, y) => y - x);
+    return [s, Math.round((h + .05) / (d + .05) * 100) / 100]; });
+}'''
+TEXTE = ['#db-datum', '#db-titel', '#db-sub', '[data-modul="angebot"] .db-name', '[data-modul="angebot"] .db-desc',
+         '[data-modul="angebot"] .db-badge', '.db-band > span', '#db-initialen', '#db-user-name', '#db-logout']
+
+
+def kontrast_ok(pg, name):
+    werte = pg.evaluate(KONTRAST, TEXTE)
+    check(f'{name}: Textkontrast mindestens 4,5:1 (auch auf Glas)', all(w >= 4.5 for _, w in werte), werte)
 
 
 with sync_playwright() as pw:
@@ -71,7 +102,30 @@ with sync_playwright() as pw:
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in k[1:-1]), [x['badge'] for x in k])
     check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
     check('Zähler: 2 von 8 Anwendungen', '2 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
-    check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user'))
+    check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user') and pg.text_content('#db-user-name') == 'Administrator', pg.text_content('#db-user'))
+    check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
+    gesperrt = [x for x in k if x['tag'] == 'DIV']
+    check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
+          len(gesperrt) == 6 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+    check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
+    check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
+    band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
+        return [s.backgroundColor, s.textTransform, b.transform !== 'none', b.backgroundImage.includes('repeating-linear-gradient')]; })()""")
+    check('Absperrband gelb/schwarz gestreift, Großbuchstaben, gedreht', band == ['rgb(245, 196, 0)', 'uppercase', True, True], band)
+    blass = pg.evaluate("[getComputedStyle(document.querySelector('.gesperrt .db-text')).opacity, getComputedStyle(document.querySelector('a.db-tile .db-text')).opacity]")
+    check('gesperrte Kacheln blass, verfügbare in voller Stärke', blass == ['0.55', '1'], blass)
+    check('Symbolfarbe je Registersymbol (Angebot: tag, Verwaltung: settings)', k[0]['symbol'] == 'tag' and k[-1]['symbol'] == 'settings', [x['symbol'] for x in k])
+    glas = pg.evaluate("""[...document.querySelectorAll('.db-kopf, a.db-tile')].map(e => { const s = getComputedStyle(e);
+        return (s.backdropFilter || s.webkitBackdropFilter || '').includes('blur(28px)') && s.backgroundColor.startsWith('rgba'); })""")
+    check('Kopfzeile und Kacheln als Glasflächen (halbtransparent, unscharf)', glas and all(glas), glas)
+    form = pg.evaluate("[getComputedStyle(document.querySelector('.db-kopf')).borderTopLeftRadius, getComputedStyle(document.querySelector('.db-tile')).borderTopLeftRadius]")
+    check('Kopfzeile als Kapsel, Kacheln mit 28 px Radius', form[0] in ('999px', '9.99e+02px') and form[1] == '28px', form)
+    hg = pg.evaluate("getComputedStyle(document.body).backgroundColor")
+    check('heller Grund #f4f1ee', hg == 'rgb(244, 241, 238)', hg)
+    ueberlauf = pg.evaluate("[...document.querySelectorAll('.db-name')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    check('Kachelnamen passen in die Kachel (lange Registernamen brechen um)', not ueberlauf, ueberlauf)
+    check('Schrift Geist (selbst gehostet)', 'Geist' in pg.evaluate("getComputedStyle(document.querySelector('#db-titel')).fontFamily"))
+    kontrast_ok(pg, 'hell')
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
     echt = pg.evaluate("""fetch('../api/?action=module_status').then(r => r.json()).then(d => {
         const alle = Object.fromEntries(d.module.map((m) => [m.id, m]));
@@ -83,23 +137,66 @@ with sync_playwright() as pw:
     check('Klick auf Angebot öffnet die Mitarbeiter-Eingabe', pg.url.endswith('/admin/'))
     ctx.close()
 
+    # ── Begrüßung nach Tageszeit und Datum (feste Uhr, Europe/Berlin), dunkles Design am Desktop ──
+    ctx, pg = anmelden(br, 'admin', PW, '198.51.100.46', dunkel=True, uhr=datetime(2026, 10, 22, 19, 30, tzinfo=BERLIN))
+    check('Datum deutsch ausgeschrieben', pg.text_content('#db-datum') == 'Donnerstag, 22. Oktober', pg.text_content('#db-datum'))
+    check('abends: „Guten Abend“ als Hauptüberschrift', pg.text_content('#db-titel') == 'Guten Abend' and pg.evaluate("document.querySelector('#db-titel').tagName") == 'H1')
+    grenzen = pg.evaluate("[0, 4, 5, 10, 11, 17, 18, 23].map((h) => window.STAFL_GRUSS(h))")
+    check('Begrüßung: Grenzen 5/11/18 Uhr', grenzen == ['Guten Abend', 'Guten Abend', 'Guten Morgen', 'Guten Morgen', 'Guten Tag', 'Guten Tag', 'Guten Abend', 'Guten Abend'], grenzen)
+    hg = pg.evaluate("getComputedStyle(document.body).backgroundColor")
+    check('dunkles Design folgt der Systemeinstellung (Grund #121011)', hg == 'rgb(18, 16, 17)', hg)
+    kontrast_ok(pg, 'dunkel')
+    pg.screenshot(path=os.path.join(SH, 'dashboard_1280_dunkel.png'), full_page=True)
+    pg.clock.set_fixed_time(datetime(2026, 10, 23, 8, 15, tzinfo=BERLIN)); pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    check('morgens: „Guten Morgen“, Datum des Tages', pg.text_content('#db-titel') == 'Guten Morgen' and pg.text_content('#db-datum') == 'Freitag, 23. Oktober',
+          (pg.text_content('#db-titel'), pg.text_content('#db-datum')))
+    # Weniger Transparenz (Systemeinstellung): deckende Flächen statt Glas
+    cdp = ctx.new_cdp_session(pg)
+    cdp.send('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-reduced-transparency', 'value': 'reduce'}]})
+    pg.wait_for_function("getComputedStyle(document.querySelector('.db-tile')).backdropFilter === 'none'")
+    deckend = pg.evaluate("[...document.querySelectorAll('.db-kopf, .db-tile')].map(e => getComputedStyle(e).backgroundColor)")
+    check('weniger Transparenz: deckende Flächen, kein Glas', all(c.startswith('rgb(') for c in deckend), deckend)
+    cdp.send('Emulation.setEmulatedMedia', {'features': [{'name': 'prefers-reduced-motion', 'value': 'reduce'}]})
+    pg.wait_for_function("getComputedStyle(document.querySelector('a.db-tile')).transitionDuration === '0s'")
+    check('weniger Bewegung: keine Übergänge an den Kacheln', pg.evaluate("getComputedStyle(document.querySelector('a.db-tile')).transitionDuration") == '0s')
+    ctx.close()
+
     # ── Mobil (390 px) und dunkles Design ──
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.42', breite=390, dunkel=True)
     breiter = pg.evaluate('document.documentElement.scrollWidth > window.innerWidth')
     check('390 px: kein waagerechtes Scrollen', not breiter)
-    kopf = pg.evaluate("""(() => { const t = document.querySelector('.db-top-inner').getBoundingClientRect();
-        return [...document.querySelectorAll('.db-top-inner > *')].every(e => { const r = e.getBoundingClientRect(); return r.left >= t.left - 1 && r.right <= t.right + 1; }); })()""")
+    kopf = pg.evaluate("""(() => { const t = document.querySelector('.db-kopf').getBoundingClientRect();
+        return [...document.querySelectorAll('.db-kopf img, .db-kopf button, .db-initialen')].every(e => { const r = e.getBoundingClientRect(); return r.left >= t.left - 1 && r.right <= t.right + 1; }); })()""")
     check('390 px: Kopfzeile passt in die Breite', kopf)
+    sichtbar = pg.evaluate("['#db-theme', '#db-logout', '#db-initialen'].map((s) => document.querySelector(s).getBoundingClientRect().width > 0)")
+    abm = pg.evaluate("[document.querySelector('#db-logout').textContent.trim(), document.querySelector('#db-logout').getBoundingClientRect().width]")
+    check('390 px: Hell/Dunkel, Initialen und Abmelden erreichbar (Abmelden als Symbol mit Text für Screenreader)', all(sichtbar) and abm[0] == 'Abmelden' and abm[1] <= 44, (sichtbar, abm))
     spalten = pg.evaluate("getComputedStyle(document.querySelector('#db-grid')).gridTemplateColumns.split(' ').length")
-    check('390 px: Kacheln untereinander (eine Spalte)', spalten == 1, spalten)
+    check('390 px: zwei Kachelspalten', spalten == 2, spalten)
+    gross = pg.evaluate("parseFloat(getComputedStyle(document.querySelector('#db-titel')).fontSize)")
+    check('390 px: große Überschrift (34 px)', gross == 34, gross)
+    ueberlauf = pg.evaluate("[...document.querySelectorAll('.db-name')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+    check('390 px: Kachelnamen passen in die Kachel', not ueberlauf, ueberlauf)
+    # Abstand der Ecken des Namenstextes zur gedrehten Mittellinie des Bandes (Rechteck des Bandes allein wäre zu grob)
+    verdeckt = pg.evaluate("""[...document.querySelectorAll('.gesperrt')].filter(t => {
+        const band = t.querySelector('.db-band'), r = band.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(band).transform);
+        const w = Math.atan2(m.b, m.a), cx = r.left + r.width / 2, cy = r.top + r.height / 2, halb = band.offsetHeight / 2;
+        const bereich = document.createRange(); bereich.selectNodeContents(t.querySelector('.db-name'));
+        const d = [...bereich.getClientRects()].flatMap(q => [[q.left, q.top], [q.right, q.top], [q.left, q.bottom], [q.right, q.bottom]])
+          .map(([x, y]) => -(x - cx) * Math.sin(w) + (y - cy) * Math.cos(w));
+        return Math.max(...d) > -halb && Math.min(...d) < halb; }).map(t => t.dataset.modul)""")
+    check('390 px: Absperrband verdeckt die Kachelnamen nicht', not verdeckt, verdeckt)
+    check('390 px: Stand gesperrter Kacheln bleibt für Screenreader im Text', all(x['badge'] for x in kacheln(pg)))
     hg = pg.evaluate("getComputedStyle(document.body).backgroundColor")
-    check('dunkles Design folgt der Systemeinstellung', hg != 'rgb(255, 255, 255)', hg)
+    check('dunkles Design folgt der Systemeinstellung', hg == 'rgb(18, 16, 17)', hg)
     pg.screenshot(path=os.path.join(SH, 'dashboard_390_dunkel.png'), full_page=True)
     pg.click('#db-theme'); pg.wait_for_function("document.documentElement.getAttribute('data-theme') === 'light'")
     gespeichert = pg.evaluate("localStorage.getItem('wochenangebot.theme')")
     check('Umschalter speichert das Design wie die Angebotsseite', json.loads(gespeichert or 'null') == 'light', gespeichert)
     pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
     check('gewähltes Design bleibt nach dem Neuladen', pg.evaluate("document.documentElement.getAttribute('data-theme')") == 'light')
+    check('helles Design trotz dunkler Systemeinstellung', pg.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(244, 241, 238)')
+    pg.screenshot(path=os.path.join(SH, 'dashboard_390_hell.png'), full_page=True)
     ctx.close()
 
     # ── Wartung des Eingabebereichs: Bearbeiter gesperrt, Administrator mit Hinweis ──
@@ -109,6 +206,8 @@ with sync_playwright() as pw:
     ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.43')
     a = kacheln(pg)[0]
     check('Bearbeiter: Angebot in Wartung, ohne Verweis', a['tag'] == 'DIV' and not a['href'] and a['badge'] == 'Wartung', a)
+    check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
+    check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
     check('Bearbeiter: nur noch die Verwaltung verfügbar (1 von 8)', '1 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
@@ -116,6 +215,7 @@ with sync_playwright() as pw:
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')
     a = kacheln(pg)[0]
     check('Administrator: Angebot in Wartung, aber weiter erreichbar', a['tag'] == 'A' and a['badge'] == 'Wartung – Zugang für Administratoren', a)
+    check('Administrator: Wartungs-Pille ohne Absperrband', 'warn' in a['badgeCls'] and not a['band'], a)
     ctx.close()
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': False, 'grund': 'Test beendet'})
     check('Wartung beendet', st == 200 and r.get('aktiv') is False, (st, r))
@@ -128,6 +228,11 @@ with sync_playwright() as pw:
     check('Abmelden: Anmeldehinweis und Sitzung beendet', angemeldet is False and pg.is_hidden('#db-bereich'), angemeldet)
     pg.reload(); pg.wait_for_selector('#db-login:not([hidden])')
     check('nach dem Neuladen weiter abgemeldet', pg.is_hidden('#db-bereich'))
+    check('Anmeldehinweis als Glasfläche mit echtem Link', pg.evaluate("getComputedStyle(document.querySelector('#db-login')).backgroundColor").startswith('rgba')
+          and pg.evaluate("document.querySelector('#db-login a').tagName") == 'A')
+    pg.goto(B + '/dashboard/abgemeldet.html'); pg.wait_for_selector('#db-abgemeldet')
+    check('Abmeldeseite im neuen Design (Grund, Glaskarte, Link zur Anmeldung)', pg.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(244, 241, 238)'
+          and pg.get_attribute('#db-abgemeldet a', 'href') == './' and not pg.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
     ctx.close()
     br.close()
 
