@@ -3,6 +3,7 @@
 #   bash tests/oidc/umgebung.sh start   # PostgreSQL, Keycloak (Realm „mitarbeiter“), Caddy (TLS), Apache + mod_auth_openidc
 #   python3 tests/oidc/test_oidc.py      # Prüfungen (Browser und HTTP)
 #   bash tests/oidc/umgebung.sh stop
+#   bash tests/oidc/umgebung.sh laden   # nur Keycloak und Caddy herunterladen und prüfen (OIDC_DOWNLOADS, CI-Zwischenspeicher)
 # Voraussetzungen (Ubuntu 24.04, wie in der CI): apache2, libapache2-mod-auth-openidc, libapache2-mod-php8.3, postgresql,
 # Java 21; Keycloak und Caddy werden mit fester Version und Prüfsumme heruntergeladen. Hosts *.stafl.test → 127.0.0.1.
 # Geheimnisse (Client-Geheimnisse, Schlüssel, Datenbank- und Verwaltungspasswort) entstehen bei jedem Start neu und
@@ -38,9 +39,19 @@ zufall() { head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40; }
 
 laden() { # laden <URL> <Datei> <Algorithmus> <Prüfsumme>
   mkdir -p "$LADEN"
+  # Vorhandene Datei (frühere Läufe, CI-Zwischenspeicher) nur mit passender Prüfsumme; sonst einmal neu laden.
+  if [ -f "$LADEN/$2" ] && ! echo "$4  $LADEN/$2" | "${3}sum" -c --quiet - >/dev/null 2>&1; then
+    echo "Vorhandene Datei $2 passt nicht zur Prüfsumme – lade neu." >&2; rm -f "$LADEN/$2"
+  fi
   if [ ! -f "$LADEN/$2" ]; then curl -fsSL --retry 3 -o "$LADEN/$2.teil" "$1"; mv "$LADEN/$2.teil" "$LADEN/$2"; fi
   echo "$4  $LADEN/$2" | "${3}sum" -c --quiet - || { echo "Prüfsumme falsch: $2" >&2; rm -f "$LADEN/$2"; exit 1; }
 }
+alles_laden() {
+  laden "https://github.com/keycloak/keycloak/releases/download/$KC_VERSION/keycloak-$KC_VERSION.tar.gz" "keycloak-$KC_VERSION.tar.gz" sha256 "$KC_SHA256"
+  laden "https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" "caddy-$CADDY_VERSION.tar.gz" sha512 "$CADDY_SHA512"
+}
+T0=$(date +%s)
+zeit() { echo "[$(( $(date +%s) - T0 )) s] $*"; }   # Dauer der Abschnitte im CI-Protokoll
 
 hosts_eintragen() {
   for h in $HOSTS; do
@@ -77,9 +88,11 @@ EOF
   als postgres "$pg/pg_ctl" -D "$OIDC_WORK/pg" -l "$OIDC_WORK/pg/log" -o "-p $PG_PORT -k $OIDC_WORK/pgsock -c listen_addresses=127.0.0.1" -w start >/dev/null
   PGPASSWORD="$KC_DB_PASSWORD" psql -h 127.0.0.1 -p "$PG_PORT" -U postgres -q -v ON_ERROR_STOP=1 \
     -c "CREATE ROLE keycloak LOGIN PASSWORD '$KC_DB_PASSWORD'" -c "CREATE DATABASE keycloak OWNER keycloak" >/dev/null
+  zeit "PostgreSQL bereit"
 
   # ── Keycloak (feste Version, Prüfsumme) mit Realm „mitarbeiter“ ──
-  laden "https://github.com/keycloak/keycloak/releases/download/$KC_VERSION/keycloak-$KC_VERSION.tar.gz" "keycloak-$KC_VERSION.tar.gz" sha256 "$KC_SHA256"
+  alles_laden
+  zeit "Keycloak und Caddy geladen und geprüft"
   tar xzf "$LADEN/keycloak-$KC_VERSION.tar.gz" -C "$OIDC_WORK"
   local kc="$OIDC_WORK/keycloak-$KC_VERSION"
   mkdir -p "$kc/data/import"
@@ -105,19 +118,21 @@ EOF
   if [ "$ALS_ROOT" = 1 ]; then chown -R www-data "$OIDC_WORK/app/data" "$OIDC_WORK/sessions" "$OIDC_WORK/apache"; fi
 
   # ── Caddy (TLS wie in der Produktion, Test-CA) ──
-  laden "https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" "caddy-$CADDY_VERSION.tar.gz" sha512 "$CADDY_SHA512"
   mkdir -p "$OIDC_WORK/bin"; tar xzf "$LADEN/caddy-$CADDY_VERSION.tar.gz" -C "$OIDC_WORK/bin" caddy
   nohup "$OIDC_WORK/bin/caddy" run --config "$HIER/Caddyfile" --adapter caddyfile >"$OIDC_WORK/caddy.log" 2>&1 &
   echo $! > "$OIDC_WORK/caddy.pid"
   warte "Test-CA von Caddy" 30 test -f "$OIDC_WORK/caddy/pki/authorities/local/root.crt"
   chmod 755 "$OIDC_WORK/caddy" "$OIDC_WORK/caddy/pki" "$OIDC_WORK/caddy/pki/authorities" "$OIDC_WORK/caddy/pki/authorities/local"
   chmod 644 "$OIDC_WORK/caddy/pki/authorities/local/root.crt"
+  zeit "Caddy bereit"
 
   "$kc/bin/kc.sh" build --db=postgres --health-enabled=true --vault=file --features-disabled=twitter-broker,identity-brokering-api >"$OIDC_WORK/keycloak-build.log" 2>&1
+  zeit "Keycloak gebaut (kc.sh build)"
   nohup env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY "$kc/bin/kc.sh" start --optimized --import-realm >"$OIDC_WORK/keycloak.log" 2>&1 &
   echo $! > "$OIDC_WORK/keycloak.pid"
 
   warte "Keycloak bereit" 240 curl -fsS "http://127.0.0.1:$KC_MGMT_PORT/health/ready"
+  zeit "Keycloak gestartet"
   warte "Realm über Caddy erreichbar" 60 curl -fsS --cacert "$OIDC_WORK/caddy/pki/authorities/local/root.crt" \
     "https://login.stafl.test:$OIDC_PORT/realms/mitarbeiter/.well-known/openid-configuration"
 
@@ -132,12 +147,14 @@ EOF
   grep -E '^OIDC_(SECRET|CRYPTO)_VERWALTUNG=' "$OIDC_WORK/installation/.env" >> "$OIDC_WORK/geheim.env"
   set -a; . "$OIDC_WORK/geheim.env"; set +a
   [ -n "${OIDC_SECRET_VERWALTUNG:-}" ] && [ -n "${OIDC_CRYPTO_VERWALTUNG:-}" ] || { echo "realm-aktualisieren hat keine Werte für die Verwaltung erzeugt" >&2; exit 1; }
+  zeit "Realm aktualisiert (konten.sh realm-aktualisieren)"
 
   # ── Apache mit mod_auth_openidc (nie als root) ──
   local def=(); [ "$ALS_ROOT" = 1 ] && def=(-DALS_ROOT)
   apache2 -f "$HIER/apache.conf" "${def[@]}" -t >/dev/null 2>&1 || apache2 -f "$HIER/apache.conf" "${def[@]}" -t
   apache2 -f "$HIER/apache.conf" "${def[@]}" -k start
   warte "Apache bereit" 30 curl -fsS -o /dev/null -H "Host: legacy.stafl.test" "http://127.0.0.1:$APACHE_PORT/api/?action=status"
+  zeit "Apache bereit"
   echo "Testumgebung läuft: https://dashboard.stafl.test:$OIDC_PORT/ · https://angebot.stafl.test:$OIDC_PORT/ · https://verwaltung.stafl.test:$OIDC_PORT/ · Arbeitsordner $OIDC_WORK"
 }
 
@@ -157,5 +174,6 @@ stop() (   # eigene Subshell: Fehler beim Beenden brechen nichts ab
 case "${1:-}" in
   start) start ;;
   stop) stop ;;
-  *) echo "Aufruf: $0 start|stop" >&2; exit 2 ;;
+  laden) alles_laden; echo "Keycloak und Caddy liegen geprüft in $LADEN" ;;   # nur herunterladen (CI-Zwischenspeicher)
+  *) echo "Aufruf: $0 start|stop|laden" >&2; exit 2 ;;
 esac
