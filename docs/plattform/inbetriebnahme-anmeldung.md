@@ -2,7 +2,7 @@
 
 Stand: vorbereitet, **nicht ausgeführt**. Jeder Schritt mit „Freigabe“ wird erst nach ausdrücklicher Zustimmung des
 Inhabers ausgeführt (AGENTS.md: Server, DNS, Anmeldung). Grundlage: [ADR-003](adr-003-domains-anmeldung.md), in der CI
-vollständig geprüft (`tests/oidc/`, 112 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
+vollständig geprüft (`tests/oidc/`, 126 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
 
 ## Ziel nach der Inbetriebnahme
 
@@ -48,6 +48,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Passkey, sperren/entsperren, Liste); die Verwaltungsoberfläche ist nur auf dem Server selbst erreichbar
   (`127.0.0.1:8180`). Caddy leitet auf `login.` ausschließlich `/realms/mitarbeiter/` und `/resources/` weiter
   (Master-Realm und Verwaltung: 404).
+- **Neue Mitarbeiter:** Mitarbeiterkonto im Eingabebereich anlegen, dann `konten.sh einladen <name> <e-mail> <vorname>
+  <nachname>` – Mail mit Link (72 Std.), Passwort und Einmalcode legt der Mitarbeiter selbst fest. Einmalig vorher
+  `konten.sh mail-einrichten <eigene-adresse>` (Postfach der Anwendung, Passwort nur im Tresor von Keycloak).
 - **Passwort vergessen:** `konten.sh startpasswort <name>` – der Einmalcode bleibt Pflicht, danach eigenes Passwort.
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
@@ -83,7 +86,8 @@ $K start keycloak
 ```
 
 Die Sicherung enthält Passwort-Hashes und die Geheimnisse der Einmalcodes; sie liegt wie die Geschäftsdaten nur für root
-lesbar auf dem Server. Für einen neuen Server werden zusätzlich die Einträge der zentralen Anmeldung aus `.env` gebraucht.
+lesbar auf dem Server. Für einen neuen Server werden zusätzlich die Einträge der zentralen Anmeldung aus `.env` gebraucht; das Postfach-Passwort
+im Tresor (`daten-anmeldung/vault/`) wird nicht gesichert – danach `konten.sh mail-einrichten` erneut ausführen.
 
 ## Offene Punkte vor Schritt 6
 

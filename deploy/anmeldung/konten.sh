@@ -10,6 +10,12 @@
 #   sh deploy/anmeldung/konten.sh sperren <benutzername>         # deaktivieren und überall abmelden
 #   sh deploy/anmeldung/konten.sh entsperren <benutzername>
 #   sh deploy/anmeldung/konten.sh liste
+#   sh deploy/anmeldung/konten.sh mail-einrichten [<test-adresse>]  # Mailversand von Keycloak über das Postfach der Anwendung
+#   sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>   # Konto anlegen und einladen
+#   sh deploy/anmeldung/konten.sh einladen <benutzername>         # Einladung erneut senden
+#
+# Einladung: Keycloak schickt eine Mail mit Link (72 Stunden gültig); darüber legt der Mitarbeiter selbst Passwort und
+# Einmalcode fest – kein Passwort per Mail. Vorher muss es das Mitarbeiterkonto im Eingabebereich geben.
 #
 # - Mitarbeiter erhalten ein Startpasswort (einmal angezeigt) und müssen bei der ersten Anmeldung ein eigenes Passwort
 #   und den Einmalcode einrichten. Der Benutzername muss dem im Eingabebereich entsprechen (Verwaltung → Nutzer).
@@ -23,6 +29,11 @@ KCADM=${KCADM:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-c
 KC_SERVER=${KC_SERVER:-http://localhost:8080}
 REALM=mitarbeiter
 VERWALTUNG=verwaltung
+# PHP der Anwendung (Postfach und Mitarbeiterkonten lesen) und Ordner des Keycloak-Tresors (Dateien, nur Keycloak liest sie)
+APP_PHP=${APP_PHP:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml exec -T -u www-data app php}
+VAULT_DIR=${KC_VAULT_HOST_DIR:-$(pwd)/daten-anmeldung/vault}
+KC_UID=${KC_UID:-1000}
+EINLADUNG_STUNDEN=72
 FEHLER=$(mktemp); trap 'rm -f "$FEHLER"' EXIT
 
 abbruch() { echo "Abbruch: $*" >&2; exit 1; }
@@ -143,6 +154,77 @@ entsperren() {
   echo "Konto '$1' entsperrt."
 }
 
+app() { # app <postfach|nutzer> [name] – Abfrage im App-Container (deploy/anmeldung/app-abfrage.php über die Standardeingabe)
+  # shellcheck disable=SC2086  # APP_PHP ist bewusst ein Befehl mit Argumenten
+  $APP_PHP -- "$@" < deploy/anmeldung/app-abfrage.php
+}
+
+mail_einrichten() {
+  [ $# -le 1 ] || abbruch "Aufruf: konten.sh mail-einrichten [<test-adresse>]"
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  mkdir -p "$VAULT_DIR"; chmod 700 "$VAULT_DIR"
+  # Postfach der Anwendung lesen; Passwort nur in die Tresor-Datei (Realm „mitarbeiter“, Schlüssel smtp_password),
+  # die Keycloak-Datenbank (und damit ihre Sicherung) enthält nur den Verweis ${vault.smtp_password}
+  einstellungen=$(app postfach | python3 -c '
+import json, os, sys
+c = json.load(sys.stdin); pfad = sys.argv[1]
+neu = pfad + ".neu"
+fd = os.open(neu, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+with os.fdopen(fd, "w") as f: f.write(c["pass"])
+os.replace(neu, pfad)
+sec = c["secure"]
+smtp = {"host": c["host"], "port": str(c["port"]), "from": c["from"], "fromDisplayName": c["fromName"],
+        "replyTo": c["replyTo"] or "", "ssl": str(sec == "ssl").lower(), "starttls": str(sec == "starttls").lower(),
+        "auth": str(bool(c["user"])).lower(), "user": c["user"] or "", "password": "${vault.smtp_password}"}
+print(json.dumps({"smtpServer": smtp}))
+print("Postfach: %s (%s), Absender %s, Quelle: %s" % (c["host"], sec, c["from"], "Eingabebereich" if c["quelle"] == "admin" else ".env"), file=sys.stderr)
+' "$VAULT_DIR/mitarbeiter_smtp__password") || abbruch "Postfach der Anwendung nicht lesbar (läuft die App? E-Mail im Eingabebereich eingerichtet?)."
+  if [ "$(id -u)" = 0 ]; then chown -R "$KC_UID" "$VAULT_DIR"; fi
+  printf '%s\n' "$einstellungen" | kc update "realms/$REALM" -f - >/dev/null
+  # „Zurück zur Anwendung“ nach den Aktionen der Einladung: Startadresse der Clients (im Realm-Import schon gesetzt)
+  for paar in dashboard=https://dashboard-stafl.de/ angebot=https://angebot.dashboard-stafl.de/admin/; do
+    cid=$(kc get clients -r "$REALM" -q clientId="${paar%%=*}" --fields id --format csv --noquotes | head -1)
+    [ -z "$cid" ] || [ -n "${KC_BASEURL_BEHALTEN:-}" ] || kc update "clients/$cid" -r "$REALM" -s baseUrl="${paar#*=}" >/dev/null
+  done
+  echo "Mailversand der Anmeldung eingerichtet (Passwort nur in der Tresor-Datei, nicht in der Datenbank)."
+  if [ $# -eq 1 ]; then
+    printf '%s' "$1" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || abbruch "Test-Adresse ungültig."
+    vid=$(kc get users -r master -q username="$VERWALTUNG" -q exact=true --fields id --format csv --noquotes | head -1)
+    kc update "users/$vid" -r master -s email="$1" >/dev/null   # Testmail geht an die Adresse des Verwaltungskontos
+    printf '%s\n' "$einstellungen" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["smtpServer"]))' \
+      | kc create "realms/$REALM/testSMTPConnection" -f - >/dev/null
+    echo "Testmail an $1 verschickt – bitte Posteingang prüfen."
+  fi
+}
+
+einladen() {
+  [ $# -eq 1 ] || [ $# -eq 4 ] || abbruch "Aufruf: konten.sh einladen <benutzername> [<e-mail> <vorname> <nachname>]"
+  name_pruefen "$1"
+  stand=$(app nutzer "$1") || abbruch "Mitarbeiterkonten der Anwendung nicht lesbar (läuft die App?)."
+  case "$stand" in
+    aktiv) ;;
+    gesperrt) abbruch "Das Mitarbeiterkonto '$1' ist im Eingabebereich gesperrt – erst entsperren." ;;
+    *) abbruch "Im Eingabebereich gibt es kein Mitarbeiterkonto '$1' – zuerst dort anlegen (gleicher Benutzername)." ;;
+  esac
+  kc get "realms/$REALM" | python3 -c 'import json,sys; sys.exit(0 if (json.load(sys.stdin).get("smtpServer") or {}).get("host") else 1)' \
+    || abbruch "Mailversand noch nicht eingerichtet – zuerst: sh deploy/anmeldung/konten.sh mail-einrichten"
+  id=$(nutzer_id "$1")
+  if [ -z "$id" ]; then
+    [ $# -eq 4 ] || abbruch "Konto '$1' gibt es in Keycloak noch nicht – mit E-Mail, Vor- und Nachname aufrufen."
+    printf '%s' "$2" | grep -Eq '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' || abbruch "E-Mail-Adresse ungültig."
+    kc create users -r "$REALM" -s username="$1" -s email="$2" -s firstName="$3" -s lastName="$4" \
+      -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD","CONFIGURE_TOTP"]' >/dev/null
+    id=$(nutzer_id "$1"); echo "angelegt:  Konto '$1'"
+  elif [ $# -eq 4 ]; then
+    abbruch "Konto '$1' gibt es schon – Einladung erneut senden mit: konten.sh einladen $1"
+  fi
+  # Einmalcode nur einrichten lassen, wenn noch keiner da ist (sonst nur Passwort)
+  aktionen='["UPDATE_PASSWORD","CONFIGURE_TOTP"]'
+  if kc get "users/$id/credentials" -r "$REALM" --fields type --format csv --noquotes | grep -qx otp; then aktionen='["UPDATE_PASSWORD"]'; fi
+  kc update "users/$id/execute-actions-email" -r "$REALM" -q lifespan=$((EINLADUNG_STUNDEN * 3600)) -q client_id=dashboard -b "$aktionen" >/dev/null
+  echo "Einladung an '$1' verschickt (Link $EINLADUNG_STUNDEN Stunden gültig): eigenes Passwort und Einmalcode festlegen, danach https://dashboard-stafl.de/"
+}
+
 liste() {
   echo "benutzername,vorname,nachname,e-mail,aktiv"
   kc get users -r "$REALM" --fields username,firstName,lastName,email,enabled --format csv --noquotes
@@ -150,7 +232,7 @@ liste() {
 
 befehl=${1:-}; [ $# -gt 0 ] && shift
 if [ $# -gt 0 ]; then n=$(klein "$1"); shift; set -- "$n" "$@"; fi
-case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|liste) bereit ;; esac
+case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|liste|mail-einrichten|einladen) bereit ;; esac
 case "$befehl" in
   verwaltung) verwaltung ;;
   anlegen) anlegen "$@" ;;
@@ -160,5 +242,7 @@ case "$befehl" in
   sperren) sperren "$@" ;;
   entsperren) entsperren "$@" ;;
   liste) liste ;;
-  *) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  mail-einrichten) mail_einrichten "$@" ;;
+  einladen) einladen "$@" ;;
+  *) sed -n '2,/^set -eu/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

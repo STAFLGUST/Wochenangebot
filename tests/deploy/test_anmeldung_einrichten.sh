@@ -28,6 +28,7 @@ R=daten-anmeldung/realm-import/realm-mitarbeiter.json
 ok "Realm geschrieben, keine Platzhalter mehr" 'test -f $R && ! grep -q "@GEHEIM_" $R'
 ok "Client-Geheimnisse eingesetzt" 'grep -q "\"secret\": \"$VORHANDEN\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_DASHBOARD=//p" .env)\"" $R'
 ok "Realm-Datei und Ordner nur für den Besitzer" 'test "$(stat -c %a $R)" = 600 && test "$(stat -c %a daten-anmeldung)" = 700'
+ok "Tresor-Ordner für Keycloak angelegt (nur Besitzer)" 'test "$(stat -c %a daten-anmeldung/vault)" = 700'
 ok "Realm gültiges JSON ohne Testnutzer" 'python3 -c "import json,sys; r=json.load(open(\"$R\")); sys.exit(\"users\" in r)"'
 export vorher; vorher=$(sha256sum .env $R $S)
 export AUS2; AUS2=$(KC_UID=$(id -u) sh "$REPO/deploy/anmeldung/einrichten.sh")

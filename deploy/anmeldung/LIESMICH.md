@@ -12,6 +12,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
+| `app-abfrage.php` | von `konten.sh` im App-Container ausgeführt: Postfach der Anwendung (für den Mailversand von Keycloak) und ob es ein Mitarbeiterkonto gibt |
 | `ruecksicherung-probe.sh` | Schritt 7: Rücksicherung der Keycloak-Sicherung in eine Probedatenbank üben (Konten zählen, danach löschen) |
 | `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste) |
 
@@ -31,6 +32,19 @@ lesbar) und startet nichts. `--pruefen` zeigt nur, was fehlt. Getestet: `tests/d
 
 Der Import läuft nur beim ersten Start (vorhandener Realm wird nicht überschrieben). Spätere Änderungen am Realm nur
 als eigener, geprüfter Schritt (`kcadm` im Container, wie in `konten.sh`).
+
+## Einladungen per Mail
+
+Einmalig `sh deploy/anmeldung/konten.sh mail-einrichten <eigene-adresse>`: Keycloak verschickt über dasselbe Postfach wie
+die Anwendung (Eingabebereich → Verwaltung → E-Mail oder `MAIL_SMTP_*` in `.env`) und schickt eine Testmail. Das
+Postfach-Passwort liegt nur im Tresor von Keycloak (`daten-anmeldung/vault/`, nur Keycloak liest es); die Datenbank und
+ihre Sicherung enthalten nur den Verweis `${vault.smtp_password}`. Ändert sich das Postfach-Passwort oder nach einer
+Wiederherstellung auf neuem Server: `mail-einrichten` erneut ausführen.
+
+Neue Mitarbeiter: zuerst das Mitarbeiterkonto im Eingabebereich anlegen (Rolle, Rechte), dann
+`sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>`. Die Mail enthält einen Link
+(72 Stunden gültig, nur einmal verwendbar); darüber legt der Mitarbeiter selbst Passwort und Einmalcode fest – kein
+Passwort per Mail. Abgelaufen: `konten.sh einladen <benutzername>` schickt eine neue Einladung.
 
 ## Konten (`konten.sh`, in der Serverkonsole)
 
