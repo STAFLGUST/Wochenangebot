@@ -1,8 +1,11 @@
 #!/bin/sh
-# Test: kcadm wie über „docker compose exec“ – die Ausgabe kommt in Stücken. Liest der Aufrufer nur den Anfang
-# (z. B. „| grep -q“) und schließt die Leitung, scheitert das zweite Stück mit SIGPIPE wie im Betrieb.
-aus=$("$@"); rc=$?
-printf '%s' "$aus" | head -c 64
-sleep 0.3
-printf '%s\n' "$aus" | tail -c +65 || exit 141
+# Test: kcadm wie über „docker compose exec“ – die Ausgabe kommt in kleinen Stücken. Liest der Aufrufer nur den Anfang
+# (z. B. „| grep -q“) und schließt die Leitung, scheitert das nächste Stück mit SIGPIPE wie im Betrieb.
+datei=$(mktemp); trap 'rm -f "$datei"' EXIT
+"$@" > "$datei"; rc=$?
+groesse=$(wc -c < "$datei"); i=0
+while [ "$i" -lt "$groesse" ]; do
+  dd if="$datei" bs=128 skip=$((i / 128)) count=1 2>/dev/null || exit 141
+  i=$((i + 128)); sleep 0.01
+done
 exit $rc
