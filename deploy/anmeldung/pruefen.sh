@@ -20,7 +20,8 @@ import json, sys
 t = open(sys.argv[1], encoding='utf-8').read(); r = json.loads(t)
 assert 'users' not in r and 'stafl.test' not in t and 'nur-fuer-tests' not in t
 assert all(c['secret'].startswith('@GEHEIM_') for c in r['clients'])
-host = {'dashboard': 'dashboard-stafl.de', 'angebot': 'angebot.dashboard-stafl.de', 'verwaltung': 'verwaltung.dashboard-stafl.de'}
+host = {'dashboard': 'dashboard-stafl.de', 'angebot': 'angebot.dashboard-stafl.de', 'verwaltung': 'verwaltung.dashboard-stafl.de',
+        'bestand': 'bestand.dashboard-stafl.de'}
 assert sorted(c['clientId'] for c in r['clients']) == sorted(host)
 assert all(c['redirectUris'] == [f"https://{host[c['clientId']]}/oidc/callback"] for c in r['clients'])
 assert all(c['secret'] == f"@GEHEIM_{c['clientId'].upper()}@" for c in r['clients'])
@@ -58,6 +59,14 @@ printf 'OIDC_SECRET_VERWALTUNG=pruefung-v\nOIDC_CRYPTO_VERWALTUNG=pruefung-c\n' 
 docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
   | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_VERWALTUNG']=='pruefung-c' and e['OIDC_SECRET_VERWALTUNG']=='pruefung-v'" \
   && ok "Verwaltung: eigene Werte aus .env" || nein "Verwaltung: eigene Werte aus .env"
+# Bestand (Stand 4) genauso: vor dem Konsolenschritt startbar, danach eigene Werte
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_BESTAND']=='pruefung-b' and e['OIDC_SECRET_BESTAND']" \
+  && ok "Bestand: ohne eigene Werte in .env startbar (Schlüssel des Eingabebereichs)" || nein "Bestand ohne Werte in .env"
+printf 'OIDC_SECRET_BESTAND=pruefung-s\nOIDC_CRYPTO_BESTAND=pruefung-d\n' >> "$ENV"
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_BESTAND']=='pruefung-d' and e['OIDC_SECRET_BESTAND']=='pruefung-s'" \
+  && ok "Bestand: eigene Werte aus .env" || nein "Bestand: eigene Werte aus .env"
 
 # ── 3. Anwendungs-Image mit der Betriebskonfiguration ──
 docker build -q -t stafl-app:pruefung "$REPO/deploy/image" >/dev/null
@@ -65,6 +74,7 @@ DATEN="$(mktemp -d)"; cp -r "$REPO/tests/fixtures/data-seed/." "$DATEN/"; chmod 
 docker run -d --name stafl-pruefung -p 127.0.0.1:18090:80 \
   -e OIDC_ISSUER=https://login.dashboard-stafl.de/realms/mitarbeiter -e OIDC_SECRET_DASHBOARD=x -e OIDC_SECRET_ANGEBOT=x \
   -e OIDC_CRYPTO_DASHBOARD=pruefung-a -e OIDC_CRYPTO_ANGEBOT=pruefung-b -e OIDC_SECRET_VERWALTUNG=x -e OIDC_CRYPTO_VERWALTUNG=pruefung-c \
+  -e OIDC_SECRET_BESTAND=x -e OIDC_CRYPTO_BESTAND=pruefung-d \
   -v "$REPO/app:/var/www/html:ro" -v "$DATEN:/var/www/html/data" -v "$REPO/dashboard:/var/www/dashboard:ro" \
   -v "$HIER/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro" stafl-app:pruefung >/dev/null
 for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:18090/ 2>/dev/null && break; sleep 1; done
@@ -77,12 +87,19 @@ antwort="$(curl -s -H 'Host: angebot-stafl.de' -H 'Content-Type: application/jso
 echo "$antwort" | grep -q "nicht korrekt" && ok "angebot-stafl.de: eigene Anmeldung unverändert (keine Keycloak-Sperre)" || nein "angebot-stafl.de Anmeldung" "$antwort"
 [ "$(code angebot-stafl.de /dashboard/)" = 404 ] && ok "angebot-stafl.de: kein Dashboard" || nein "Dashboard auf angebot-stafl.de" "$(code angebot-stafl.de /dashboard/)"
 [ "$(code unbekannt.example /)" = 200 ] && ok "unbekannter Host fällt auf den bisherigen Standard zurück" || nein "Standard-Host"
-for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-stafl.de; do
+for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-stafl.de bestand.dashboard-stafl.de; do
   c="$(code "$h" '/api/?action=status')"; [ "$c" = 401 ] && ok "$h: Schnittstelle ohne Anmeldung 401" || nein "$h Schnittstelle ohne Anmeldung" "$c"
   c="$(code "$h" '/api/?action=login' -H 'Content-Type: application/json' -d '{}')"; [ "$c" = 401 ] && ok "$h: eigene Anmeldung nicht erreichbar" || nein "$h Anmeldung" "$c"
   c="$(code "$h" /admin/ -H 'Accept: text/html')"; case "$c" in 302|500|502|503) ok "$h: Eingabebereich nur über Keycloak ($c, ohne Keycloak hier nicht erreichbar)";; *) nein "$h Eingabebereich" "$c";; esac
   c="$(code "$h" /dashboard/abgemeldet.html)"; [ "$c" = 200 ] && ok "$h: Abmeldeseite öffentlich" || nein "$h Abmeldeseite" "$c"
 done
+# Startadressen je Host (ohne Anmeldung nur die Weiterleitung, nichts aus der Anwendung): Bestand → /admin/, Import → Ansicht importe
+ziel() { curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H "Host: $1" -H 'X-Forwarded-Proto: https' "http://127.0.0.1:18090$2"; }
+case "$(ziel bestand.dashboard-stafl.de /)" in "302 "*/admin/) ok "bestand.dashboard-stafl.de: Startadresse führt in den Eingabebereich";; *) nein "bestand.dashboard-stafl.de Startadresse" "$(ziel bestand.dashboard-stafl.de /)";; esac
+for p in /import/ /import; do
+  case "$(ziel verwaltung.dashboard-stafl.de "$p")" in "302 "*"/admin/?ansicht=importe") ok "verwaltung.dashboard-stafl.de$p: Importzentrale (Ansicht importe)";; *) nein "verwaltung.dashboard-stafl.de$p" "$(ziel verwaltung.dashboard-stafl.de "$p")";; esac
+done
+case "$(ziel angebot.dashboard-stafl.de /import/)" in *ansicht=importe*) nein "angebot.dashboard-stafl.de/import/ leitet in die Importzentrale" "$(ziel angebot.dashboard-stafl.de /import/)";; *) ok "Import-Adresse nur auf dem Verwaltungs-Host";; esac
 docker logs stafl-pruefung 2>&1 | grep -iE "AH0|error" | grep -viE "metadata|oidc_provider_static_config|oidc_util_http|curl" | head -3 | sed 's/^/Info: /' || true
 
 # ── 3b. Keycloak wirklich starten (wie auf dem Server): mit Start-Konto, dann ohne (nach konten.sh verwaltung) neu ──

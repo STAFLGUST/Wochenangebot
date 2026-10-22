@@ -102,7 +102,8 @@ pfade = [
 ]
 pfade_geplant = ["app/api/module/bestand/**", "app/module/bestand/**"]
 hinweise = [
-  "Bestandsfunktionen sind heute Teil des Eingabebereichs (angebot.eingabe); die eigene Oberfläche entsteht in Phase 9.",
+  "Phase 1 (freigegeben): bestand.dashboard-stafl.de ist derselbe Eingabebereich mit eigenem Keycloak-Client, zeigt dort nur die Bestandsliste (Ansicht stock mit Bestandsimport). Die Aktionen bleiben vorerst unter angebot.eingabe registriert; Rechte bestand.sehen/bestand.importieren prüft der Server.",
+  "Auf angebot.dashboard-stafl.de bleibt die Bestandsliste sichtbar (das Angebot braucht den Bestand beim Bearbeiten). Eigene Fachlogik (Chargen, Warenbewegungen …) folgt erst nach Klärung mit dem Inhaber (Phase 2).",
   "Öffentlich nie Mengen, Chargen, MHD oder Einkaufspreise ausliefern (GR-001, GR-008).",
 ]
 
@@ -110,9 +111,9 @@ hinweise = [
   id = "intern"
   name = "Bestand"
   art = "intern"
-  adresse = "https://bestand.dashboard-stafl.de/"
-  entwicklung = "geplant"
-  freigabe = "keine"
+  adresse = "https://bestand.dashboard-stafl.de/admin/"
+  entwicklung = "fertig"
+  freigabe = "produktiv"
   sperrbar = true
 
 [[modul]]
@@ -165,7 +166,7 @@ hinweise = ["Keine fachlichen Annahmen über REWE-Prozesse treffen, bis die Anfo
 
 [[modul]]
 id = "qs"
-name = "Qualitätssicherungskonzept"
+name = "Qualitätssicherung"
 beschreibung = "QS nach IFS Wholesale – jetzt nur technische Grundlage, Fachlogik ist ein eigenes späteres Projekt"
 icon = "shield-check"
 reihenfolge = 50
@@ -240,6 +241,7 @@ hinweise = [
   "Eigene Kachel, aber technisch Teil der Verwaltung – keine eigene Implementierung (keine doppelten Importe).",
   "Die Leser der Dateiformate bleiben beim Daten-Eigentümer (z. B. Bestandsliste in bestand); die Importzentrale ruft sie über Schnittstellen auf.",
   "Umgesetzt (Roadmap 10b) heute im Eingabebereich unter Verwaltung → Import: app/api/module/verwaltung/importzentrale.php, Importvertrag je Eigentümer app/api/module/<modul>/import.php (docs/plattform/schnittstellen/import.md).",
+  "Freigegeben: verwaltung.dashboard-stafl.de/import/ öffnet den Eingabebereich direkt in der Importzentrale (Apache-Weiterleitung auf /admin/?ansicht=importe).",
 ]
 
 [[modul]]
@@ -284,9 +286,9 @@ hinweise = [
   id = "import"
   name = "Importzentrale"
   art = "intern"
-  adresse = "https://verwaltung.dashboard-stafl.de/import/"
-  entwicklung = "geplant"
-  freigabe = "keine"
+  adresse = "https://verwaltung.dashboard-stafl.de/import/"   # leitet in den Eingabebereich, Ansicht „importe“
+  entwicklung = "fertig"
+  freigabe = "produktiv"
   sperrbar = true
 
   [[modul.oberflaeche]]
