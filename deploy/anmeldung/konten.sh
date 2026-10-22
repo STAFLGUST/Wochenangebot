@@ -28,6 +28,7 @@ FEHLER=$(mktemp); trap 'rm -f "$FEHLER"' EXIT
 abbruch() { echo "Abbruch: $*" >&2; exit 1; }
 [ -f "$ENV" ] || abbruch "$ENV nicht gefunden – im Installationsordner ausführen."
 wert() { sed -n "s/^$1=//p" "$ENV" | tail -1; }
+startwert() { v=$(sed -n "s/^$1=//p" "$START" 2>/dev/null | tail -1); [ -n "$v" ] && echo "$v" || wert "$1"; }
 zufall() { od -An -N48 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-48; }
 # Startpasswort: gut vorlesbar (keine 0/O/1/l/I), 16 Zeichen in Vierergruppen; Realm verlangt mindestens 12
 startpasswort() { tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' < /dev/urandom | head -c 16 | sed 's/\(....\)/\1-/g; s/-$//'; }
@@ -56,9 +57,10 @@ verwaltung() {
     echo "erzeugt:   KC_VERWALTUNG_PASSWORD (in .env)"
   fi
   pw=$(wert KC_VERWALTUNG_PASSWORD)
-  start=$(wert KC_BOOTSTRAP_ADMIN_USERNAME); start_pw=$(wert KC_BOOTSTRAP_ADMIN_PASSWORD)
+  START="$(pwd)/daten-anmeldung/einrichtung.env"   # Start-Konto (einrichten.sh); ältere Fassungen: in .env
+  start=$(startwert KC_BOOTSTRAP_ADMIN_USERNAME); start_pw=$(startwert KC_BOOTSTRAP_ADMIN_PASSWORD)
   if ! kc_als "$VERWALTUNG" "$pw" get realms/master --fields realm >/dev/null; then
-    [ -n "$start" ] && [ -n "$start_pw" ] || abbruch "Verwaltungskonto fehlt und kein Start-Konto in .env (KC_BOOTSTRAP_ADMIN_*)."
+    [ -n "$start" ] && [ -n "$start_pw" ] || abbruch "Verwaltungskonto fehlt und kein Start-Konto (daten-anmeldung/einrichtung.env)."
     kc_als "$start" "$start_pw" get realms/master --fields realm >/dev/null \
       || { grep -v '^Logging into' "$FEHLER" >&2; abbruch "Anmeldung mit dem Start-Konto fehlgeschlagen (läuft Keycloak? Schritt 3)."; }
     if [ -z "$(kc_als "$start" "$start_pw" get users -r master -q username="$VERWALTUNG" -q exact=true --fields id --format csv --noquotes)" ]; then
@@ -78,6 +80,7 @@ verwaltung() {
   if grep -q '^KC_BOOTSTRAP_ADMIN_' "$ENV"; then
     sed -i '/^KC_BOOTSTRAP_ADMIN_/d' "$ENV"; echo "entfernt:  KC_BOOTSTRAP_ADMIN_* aus .env"
   fi
+  if [ -f "$START" ]; then rm -f "$START"; echo "entfernt:  daten-anmeldung/einrichtung.env (Start-Konto)"; fi
   echo "Fertig. Nächster Schritt: Mitarbeiterkonten anlegen (konten.sh anlegen …)."
 }
 

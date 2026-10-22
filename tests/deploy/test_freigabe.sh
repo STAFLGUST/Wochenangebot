@@ -85,8 +85,13 @@ printf '%s\n{"active":true,"message":"Test"}' '<?php http_response_code(404); ex
 ok "Testvoraussetzung: Wartungsmodus aktiv" '[ "$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$WEB_PORT/api/?action=offer")" = 503 ]'
 printf '{"release":"%s","ci_ok":["%s"]}' "$W_SHA" "$W_SHA" > "$T/state.json"
 lauf || true; ok "Wartungsmodus: Release geht live" '[ "$(kopf)" = "$W_SHA" ] && [ "$(st ok)" = True ]'
+ok "nur Code geändert: Container werden nicht neu erstellt" '! grep -q "^compose" "$T/out.txt"'
 rm -f "$B/daten/wartung.php"
-H_SHA=$W_SHA   # aktueller Stand für die folgenden Prüfungen
+# Ergänzungsdatei der Anmeldung geändert (COMPOSE_FILE in .env): Container neu erstellen wie bei docker-compose.yml
+C_SHA=$(commit ergaenzung x "echo '# geändert' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$C_SHA" "$C_SHA" > "$T/state.json"
+lauf || true; ok "Ergänzungsdatei der Anmeldung geändert: Container werden neu erstellt" '[ "$(kopf)" = "$C_SHA" ] && grep -q "^compose up -d --force-recreate" "$T/out.txt"'
+H_SHA=$C_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
 L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")

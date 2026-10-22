@@ -403,7 +403,11 @@ with sync_playwright() as pw:
     # ── Konten über die Serverkonsole (deploy/anmeldung/konten.sh, Schritt 4) – zuletzt: löscht das Start-Konto ──
     ordner = tempfile.mkdtemp(prefix='konten-')
     with open(os.path.join(ordner, '.env'), 'w') as f:
-        f.write(f"DOMAIN=angebot-stafl.de\nKC_BOOTSTRAP_ADMIN_USERNAME=verwaltung-ci\nKC_BOOTSTRAP_ADMIN_PASSWORD={GEHEIM['KC_ADMIN_PASSWORD']}\n")
+        f.write("DOMAIN=angebot-stafl.de\n")
+    os.makedirs(os.path.join(ordner, 'daten-anmeldung'), mode=0o700)
+    start_datei = os.path.join(ordner, 'daten-anmeldung', 'einrichtung.env')   # Start-Konto wie von einrichten.sh
+    with open(start_datei, 'w') as f:
+        f.write(f"KC_BOOTSTRAP_ADMIN_USERNAME=verwaltung-ci\nKC_BOOTSTRAP_ADMIN_PASSWORD={GEHEIM['KC_ADMIN_PASSWORD']}\n")
     kc_dir = next(os.path.join(WORK, d) for d in sorted(os.listdir(WORK)) if os.path.isfile(os.path.join(WORK, d, 'bin', 'kcadm.sh')))
     umg = dict(os.environ, KCADM=f"env -u JAVA_TOOL_OPTIONS {kc_dir}/bin/kcadm.sh", KC_SERVER=KC)
 
@@ -420,6 +424,7 @@ with sync_playwright() as pw:
     code, aus = konten('verwaltung')
     e = env_datei()
     check('Konsole: dauerhaftes Verwaltungskonto angelegt, Start-Konto gelöscht', code == 0 and 'angelegt:' in aus and 'gelöscht:' in aus, aus)
+    check('Konsole: Datei mit dem Start-Konto gelöscht', not os.path.exists(start_datei))
     check('Konsole: Start-Konto aus .env entfernt, Verwaltungspasswort nur in .env (nie angezeigt)',
           not any(k.startswith('KC_BOOTSTRAP_') for k in e) and len(e.get('KC_VERWALTUNG_PASSWORD', '')) >= 40
           and e['KC_VERWALTUNG_PASSWORD'] not in aus and oct(os.stat(os.path.join(ordner, '.env')).st_mode)[-3:] == '600')

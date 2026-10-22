@@ -18,8 +18,10 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 ## Geheimnisse (nur in `.env` auf dem Server)
 
 `OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`, `OIDC_CRYPTO_ANGEBOT`
-(Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, einmalig `KC_BOOTSTRAP_ADMIN_USERNAME`/`KC_BOOTSTRAP_ADMIN_PASSWORD`
-(entfernt `konten.sh verwaltung`), danach `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“ im Realm master).
+(Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, nach der Einrichtung `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“
+im Realm master). Das Start-Konto (`KC_BOOTSTRAP_ADMIN_*`) steht nur während der Einrichtung in
+`daten-anmeldung/einrichtung.env` (Compose liest die Datei nur, wenn sie existiert; `konten.sh verwaltung` löscht sie).
+Nie leer in `.env` setzen: Keycloak 26.8 startet mit leerem Start-Konto-Namen nicht.
 Erzeugen z. B. mit `openssl rand -base64 36 | tr -dc 'A-Za-z0-9' | head -c 40`.
 
 Erzeugen und den Realm-Import vorbereiten übernimmt `deploy/anmeldung/einrichten.sh` (Schritt 2, im Installationsordner
