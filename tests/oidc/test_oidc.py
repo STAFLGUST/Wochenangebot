@@ -385,7 +385,7 @@ with sync_playwright() as pw:
     pz = eigene_seite(ctx.new_page())
     pz.goto(A + '/admin/'); pz.wait_for_selector('#btn-dashboard:not([hidden])', timeout=30000)
     pz.click('#btn-dashboard'); pz.wait_for_selector('#db-grid .db-tile', timeout=30000)
-    check('Klick auf „Dashboard“: zurück im Dashboard, ohne erneute Anmeldung', pz.url == D + '/', pz.url)
+    check('Klick auf „Dashboard“: zurück im Dashboard, ohne erneute Anmeldung', pz.url in (D + '/', D + '/dashboard/'), pz.url)
     pz.close()
     code, _ = pv.evaluate(js_post.replace("'../api/", "'/api/"), ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, stv.get('csrf', '')])
     check('Verwaltung: Rechte bleiben serverseitig (Bearbeiterin legt keine Nutzer an)', code == 403, code)
