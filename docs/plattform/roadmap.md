@@ -21,7 +21,7 @@ Datenbank-, DNS- und Serveränderungen sind gesondert markiert und brauchen zus�
 | 9 | Integrationsumgebung `test.dashboard-stafl.de` (Container wie `app-test`, synthetische Daten) | 3 | **Serveränderung (mit Freigabe)** | geplant |
 | 10 | Verwaltung: Stammdaten- und Importzentrale; Importleser bleiben beim Daten-Eigentümer | 8 | neue Oberfläche | 10b Importzentrale im Eingabebereich: **implementiert, PR offen** ([Schnittstelle](schnittstellen/import.md)); 10a `verwaltung.dashboard-stafl.de` mit zentraler Anmeldung (Eingabebereich zeigt dort nur die Verwaltungsbereiche inkl. Importzentrale, Kachel aktiv): **implementiert, PR offen** |
 | 11 | PostgreSQL in CI/Testumgebung, dritter Speichertreiber, Migrationswerkzeug | 8 | **keine, bis Migration freigegeben** | geplant |
-| 12 | Fachmodule Bestand → Einkauf → CRM → REWE (je eigener Agent, eigene PR-Serie) | 9 | je Modul, Freigabe einzeln | geplant |
+| 12 | Fachmodule Bestand → Einkauf → CRM → REWE (je eigener Agent, eigene PR-Serie) | 9 | je Modul, Freigabe einzeln | Bestand Phase 1 (**implementiert, PR offen**): `bestand.dashboard-stafl.de` mit eigenem Client, zeigt nur die heutige Bestandsliste mit Bestandsimport; die Bestandsliste wandert aus dem Angebots-Host (Entscheidung des Inhabers 22.10.2026, Bestandsdaten im Angebotseditor bleiben); Import-Kachel → `verwaltung.dashboard-stafl.de/import/`. Weitere Fachlogik vorerst nicht vorgesehen. Übrige Module geplant |
 | 13 | QS-Großprojekt (IFS Wholesale) – separater Auftrag | 10 | – | nicht begonnen |
 
 Reihenfolge-Begründung: PR 2 und 3 entfernen die Sammelstellen, an denen parallele Agenten sich heute blockieren würden;

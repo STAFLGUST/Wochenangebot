@@ -48,10 +48,17 @@ check('Angebot · Eingabe: heutige Adresse und beschlossenes Ziel', (lambda o: o
 imp = mods['import']
 check('Import: eigene Kachel, Teil der Verwaltung, Ziel verwaltung.import', imp['teil_von'] == 'verwaltung' and imp['kachel']['ziel'] == 'verwaltung.import' and imp['oberflaechen'] == [], imp)
 verw = mods['verwaltung']
-check('Verwaltung freigegeben (verwaltung.dashboard-stafl.de): Kachel verfügbar, Import und System noch nicht',
+check('Verwaltung freigegeben (verwaltung.dashboard-stafl.de): Kachel verfügbar, Importzentrale freigegeben, System noch nicht',
       verw['kachel']['ziel'] == 'verwaltung.verwaltung' and verw['kachel']['zugang'] is True and verw['kachel']['status'] == 'verfuegbar'
-      and ob(verw, 'verwaltung')['adresse'] == 'https://verwaltung.dashboard-stafl.de/admin/' and not ob(verw, 'import')['zugang'] and not ob(verw, 'system')['zugang'], verw)
-for mid in ('bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import'):
+      and ob(verw, 'verwaltung')['adresse'] == 'https://verwaltung.dashboard-stafl.de/admin/' and ob(verw, 'import')['zugang'] and not ob(verw, 'system')['zugang'], verw)
+check('Import freigegeben: Kachel verfügbar, Adresse /import/ auf dem Verwaltungs-Host (auch für Leser – Rechte je Importart prüft der Server)',
+      imp['kachel']['zugang'] is True and imp['kachel']['status'] == 'verfuegbar' and imp['kachel']['adresse'] == 'https://verwaltung.dashboard-stafl.de/import/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(verw, 'import')), imp['kachel'])
+best = mods['bestand']
+check('Bestand freigegeben (bestand.dashboard-stafl.de, Phase 1): Kachel verfügbar, Adresse /admin/ auf dem Bestands-Host',
+      best['kachel']['ziel'] == 'bestand.intern' and best['kachel']['zugang'] is True and best['kachel']['status'] == 'verfuegbar'
+      and (lambda o: o['adresse'] == 'https://bestand.dashboard-stafl.de/admin/' and o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(best, 'intern')), best['kachel'])
+for mid in ('crm', 'rewe', 'qs', 'einkauf'):
     k = mods[mid]['kachel']
     check(f'{mid}: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)
 qs = mods['qs']
