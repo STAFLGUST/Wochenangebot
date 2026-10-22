@@ -92,6 +92,15 @@ Jede Aktion steht im Aktionsregister `regeln/aktionen/<modul>.toml` (Modul, Ober
 
 Dunkle Farben (`prefers-color-scheme: dark`, `data-theme="dark"`) gelten nur für `@media screen` – der Druck ist immer hell. Druckregeln: Angebotsseite in `app.css` (`#print-root`), Eingabebereich in `admin.css` (geöffnete Ansicht bzw. offenes Fenster).
 
+Eingabebereich im Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
+eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
+drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über
+`.topbar-inner::before`, damit das Menü darin eigenes Glas bleibt), Seitenleiste als Glaskarte, Karten 28 px, „Preise für“ als
+Segment. Klebende Leisten (Kopfzeile, Werkzeugleiste) sind fast deckend, damit darunter durchlaufende Tabellen auch ohne
+Unschärfe (Software-Darstellung) nicht stören. Ohne `backdrop-filter` (`@supports not`) bzw. bei
+`prefers-reduced-transparency: reduce` deckende Flächen. Die Kundenseite lädt `admin.css` nicht und bleibt im Design „Klar“;
+`app.css` ist dafür unverändert.
+
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
 
 ## App (`mobile/`)
