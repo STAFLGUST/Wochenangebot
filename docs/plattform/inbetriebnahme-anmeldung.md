@@ -2,7 +2,7 @@
 
 Stand: **Schritte 1–8 ausgeführt am 22.10.2026** (Probe mit dem eigenen Konto erfolgreich), offen ist Schritt 9.
 Jeder Schritt mit „Freigabe“ wurde nach ausdrücklicher Zustimmung des Inhabers ausgeführt (AGENTS.md: Server, DNS, Anmeldung). Grundlage: [ADR-003](adr-003-domains-anmeldung.md), in der CI
-vollständig geprüft (`tests/oidc/`, 159 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
+vollständig geprüft (`tests/oidc/`, 164 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
 
 ## Ziel nach der Inbetriebnahme
 
