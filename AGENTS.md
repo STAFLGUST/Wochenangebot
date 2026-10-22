@@ -38,9 +38,10 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
    Passwörter nur als Hash, nie in Antworten oder im Protokoll.
 10. **Bestellwünsche:** Preise und Summen berechnet ausschließlich der Server aus dem veröffentlichten Angebot des Kunden;
    vom Browser gesendete Preise werden ignoriert (GR-004).
-11. **Skripte und Stylesheets:** nach jeder Änderung an `app/assets/` die Versionsnummern mit
-   `python3 werkzeuge/asset_versionen.py --setzen` aktualisieren (die CI prüft das), sonst laden Browser alte Kopien.
-   Nach jeder Änderung unter `app/` danach die Prüfliste der Dateiprüfung erneuern: `python3 werkzeuge/integritaet.py --setzen`.
+11. **Skripte, Stylesheets und Prüfliste:** Versionsnummern (`?v=…`) und die Prüfliste der Dateiprüfung
+   (`app/api/lib/integritaet-liste.php`) stehen nicht im Repository – der Server erzeugt beide beim Einspielen aus dem
+   freigegebenen Commit (`deploy/bereitstellen.py`). Skripte und Stylesheets in HTML-Seiten ohne `?v=` einbinden; die CI
+   prüft das (`python3 werkzeuge/asset_versionen.py`, `python3 werkzeuge/integritaet.py`). Kein `--setzen` nötig.
 12. **Sichtbarkeit und Sonderpreise** (`variants.std` = im Wochenangebot ausgeblendet, `sale`) löst nur der Server in `offer_resolve` auf;
    ausgeliefert wird nie die Sonderpreis-Struktur anderer Angebote. Sonderposten-Mails gehen nur an Kunden des jeweiligen Angebots (GR-005).
 13. **Wartung der Angebotsseite** pausiert nur Kundenfunktionen; Mitarbeiter arbeiten weiter (GR-009).
@@ -96,7 +97,7 @@ erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern f
    Suite lokal nur zur Fehlersuche oder wenn die CI nicht verfügbar ist.
 2. Neues Verhalten hat Tests (auch Rechte, Fehler- und Grenzfälle); `tests/README.md` nennt neue Gruppen.
 3. Oberfläche per Bildschirmfoto angesehen (Desktop und 390 px Mobil); keine JavaScript-Fehler.
-4. Versionsnummern der Assets aktuell (`werkzeuge/asset_versionen.py`), gitleaks ohne Funde.
+4. Einbindungen der Assets geprüft (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`), gitleaks ohne Funde.
 5. `LIESMICH.md` bzw. `docs/` aktualisiert; PR-Text in Alltagssprache (Vorlage `.github/pull_request_template.md`).
 6. PR als „bereit zum Mergen“ markiert, sobald die CI grün ist; Merge und Release macht ausschließlich der Inhaber.
 7. `python3 werkzeuge/regeln.py pruefen` grün; Änderungsfolgen (`betroffen`) im PR; Rückfallweg bzw. Migrationspfad genannt.
