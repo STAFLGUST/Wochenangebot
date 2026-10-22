@@ -198,6 +198,10 @@ check('Verwaltung ohne Anmeldung → Keycloak, eigener Client und eigene Rücksp
       code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['verwaltung']
       and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [W + '/oidc/callback'], kopf.get('Location'))
 check('Verwaltung: Schnittstelle ohne Anmeldung 401', anfrage(W + '/api/?action=status')[0] == 401)
+for h in (D, A, W):
+    code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
+    check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
+          code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
 
 fehler = []
 
@@ -578,6 +582,24 @@ with sync_playwright() as pw:
     pg.fill('#password-new', SVEN['zweit']); pg.fill('#password-confirm', SVEN['zweit']); pg.click('#kc-submit')
     pg.wait_for_selector('#db-grid .db-tile')
     ctx.close()
+    # Automatische Sperre nach Fehlversuchen (Brute-Force-Schutz): entsperren hebt sie auf
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    for _ in range(6):
+        pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', 'Falsch-Falsch-1'); pg.click('#kc-login')
+        pg.wait_for_load_state()
+    ctx.close()
+    def vtoken_bf():   # das Start-Konto der Tests gibt es hier nicht mehr (konten.sh verwaltung)
+        return json.loads(anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+            'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung', 'password': env_datei()['KC_VERWALTUNG_PASSWORD']}).encode(),
+            {'Content-Type': 'application/x-www-form-urlencoded'})[2])['access_token']
+    _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=sven.start', kopf={'Authorization': 'Bearer ' + vtoken_bf()})
+    sid = json.loads(text)[0]['id']
+    bf = lambda: json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/attack-detection/brute-force/users/{sid}', kopf={'Authorization': 'Bearer ' + vtoken_bf()})[2])
+    vorher = bf()
+    check('Fehlversuche: Konto automatisch vorübergehend gesperrt', vorher.get('disabled') is True and vorher.get('numFailures', 0) >= 1, vorher)
+    code, aus = konten('entsperren', 'sven.start')
+    nachher = bf()
+    check('Konsole: entsperren hebt auch die automatische Sperre auf', code == 0 and 'Fehlversuchen' in aus and not nachher.get('disabled') and nachher.get('numFailures', 0) == 0, (aus, nachher))
 
     # Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
     def vtoken():
