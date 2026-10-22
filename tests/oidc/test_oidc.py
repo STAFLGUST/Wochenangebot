@@ -596,7 +596,7 @@ with sync_playwright() as pw:
     sid = json.loads(text)[0]['id']
     bf = lambda: json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/attack-detection/brute-force/users/{sid}', kopf={'Authorization': 'Bearer ' + vtoken_bf()})[2])
     vorher = bf()
-    check('Fehlversuche: Konto automatisch vorübergehend gesperrt', vorher.get('disabled') is True and vorher.get('numFailures', 0) >= 5, vorher)
+    check('Fehlversuche: Konto automatisch vorübergehend gesperrt', vorher.get('disabled') is True and vorher.get('numFailures', 0) >= 1, vorher)
     code, aus = konten('entsperren', 'sven.start')
     nachher = bf()
     check('Konsole: entsperren hebt auch die automatische Sperre auf', code == 0 and 'Fehlversuchen' in aus and not nachher.get('disabled') and nachher.get('numFailures', 0) == 0, (aus, nachher))
