@@ -12,6 +12,9 @@
   const DAUER = { 10: '10 Minuten', 60: '1 Stunde', 360: '6 Stunden', 1440: '1 Tag', 10080: '7 Tage' };
   const regionName = (() => { try { const d = new Intl.DisplayNames(['de'], { type: 'region' }); return (c) => { try { return d.of(c); } catch (e) { return c; } }; } catch (e) { return (c) => c; } })();
   let data = null, filter = '', timer = null, letzte = 0;
+  /* Einträge haben nur Sekunden: neue Einträge derselben Sekunde wie der letzte angezeigte gingen sonst verloren.
+     Daher ab dieser Sekunde nachfragen (seit = letzte − 1) und bereits angezeigte Einträge überspringen. */
+  const schluessel = (e) => [e.t, e.ip, e.m, e.q, e.st, e.why, e.ua, e.u, e.n || 1].join('\u0001');
 
   const zeit = (t) => dateTime(new Date(t * 1000).toISOString());
   const uhr = (t) => new Date(t * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -117,10 +120,12 @@
       const v = $('#view-schutz');
       if (!v || v.hidden || document.hidden) { if (v && v.hidden) clearInterval(timer); return; }
       try {
-        const r = await api('fw_verkehr', { query: `&seit=${letzte}${filter ? '&filter=' + filter : ''}` });
-        if (!r.verkehr.length) return;
-        letzte = r.verkehr[0].t;
-        data.verkehr = [...r.verkehr, ...data.verkehr].slice(0, 200);
+        const r = await api('fw_verkehr', { query: `&seit=${Math.max(0, letzte - 1)}${filter ? '&filter=' + filter : ''}` });
+        const gesehen = new Set(data.verkehr.map(schluessel));
+        const neu = r.verkehr.filter((e) => !gesehen.has(schluessel(e)));
+        if (!neu.length) return;
+        letzte = Math.max(letzte, neu[0].t);
+        data.verkehr = [...neu, ...data.verkehr].slice(0, 200);
         $('#fw-verkehr').innerHTML = verkehrHTML(data.verkehr);
       } catch { /* nächster Versuch */ }
     }, 5000);
