@@ -339,7 +339,10 @@ for e in json.load(sys.stdin):
     cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
     [ -n "$cid" ] || continue
     kc update "clients/$cid" -r "$REALM" -s 'attributes."default.acr.values"=pwd' -s 'attributes."minimum.acr.value"=pwd' >/dev/null
-    if ! kc get "clients/$cid/protocol-mappers/models" -r "$REALM" | grep -q '"oidc-amr-mapper"'; then
+    # Ausgabe erst ganz lesen: „| grep -q“ schlösse die Leitung beim ersten Treffer, und docker compose exec bräche mit
+    # SIGPIPE ab (Meldung „Abbruch: Keycloak hat den Befehl abgelehnt“, obwohl alles in Ordnung ist)
+    mapper=$(kc get "clients/$cid/protocol-mappers/models" -r "$REALM")
+    if ! printf '%s' "$mapper" | grep -q '"oidc-amr-mapper"'; then
       kc create "clients/$cid/protocol-mappers/models" -r "$REALM" -b '{"name":"amr","protocol":"openid-connect","protocolMapper":"oidc-amr-mapper","config":{"id.token.claim":"true","access.token.claim":"true","introspection.token.claim":"true","userinfo.token.claim":"true"}}' >/dev/null
       echo "angelegt:  amr-Claim für Client $c"
     fi
