@@ -18,7 +18,8 @@ QUELLE = WURZEL / 'tests' / 'oidc' / 'realm-mitarbeiter.json'
 ZIEL = WURZEL / 'deploy' / 'anmeldung' / 'realm-mitarbeiter.json'
 HOSTS = {'https://dashboard.stafl.test:8443': 'https://dashboard-stafl.de',
          'https://angebot.stafl.test:8443': 'https://angebot.dashboard-stafl.de',
-         'https://verwaltung.stafl.test:8443': 'https://verwaltung.dashboard-stafl.de'}
+         'https://verwaltung.stafl.test:8443': 'https://verwaltung.dashboard-stafl.de',
+         'https://bestand.stafl.test:8443': 'https://bestand.dashboard-stafl.de'}
 
 
 def ersetzen(wert):
