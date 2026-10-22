@@ -45,7 +45,8 @@ Heutige Sammelstellen und wie sie entschärft werden:
 | `app/api/index.php` (Listen der Schreib-/öffentlichen/Wartungs-Aktionen) | jede neue Aktion ändert sie | Module registrieren Aktionen in eigener Datei (Roadmap PR 2) |
 | `app/assets/admin.js`, `admin-verwaltung.js` | alle Fachfunktionen | neue Module bekommen eigene Oberflächen unter `app/module/<id>/`; nichts Neues in diese Dateien |
 | `tests/run_e2e.py` (`SUITES`) | jede neue Gruppe | Gruppen je Modul registrieren (später `tests/e2e/<modul>/`), bis dahin nur eine Zeile anhängen |
-| `app/api/lib/integritaet-liste.php`, Versionsnummern | erzeugt, ändert sich bei jeder Datei | erzeugte Dateien: bei Konflikt nicht von Hand zusammenführen, sondern nach dem Rebase neu erzeugen (`--setzen`) |
+| `app/api/lib/integritaet-liste.php`, Versionsnummern `?v=` | erledigt: nicht mehr im Repository | erzeugt der Server beim Einspielen aus dem freigegebenen Commit (`deploy/bereitstellen.py`); die CI lehnt `?v=` und die Liste im Repository ab |
+| `app/api/lib/aktionen-liste.php`, `module-liste.php` | erzeugt aus `regeln/` | bei Konflikt nicht von Hand zusammenführen, sondern nach dem Rebase neu erzeugen (`werkzeuge/regeln.py erzeugen`) |
 | `regeln/*.toml` | eine Zeile je neuer Datei/Dokument | Muster je Modul (`app/module/<id>/**`) vorab eingetragen → neue Dateien brauchen meist keinen Eintrag |
 
 Grundregel: Änderungen an koordinationspflichtigen Bereichen (`[[koordination]]`) kommen in eigene, kleine PRs des

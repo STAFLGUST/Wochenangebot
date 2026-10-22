@@ -130,7 +130,7 @@ Notfallwerkzeug `deploy/wartung-aus.sh`. Freigaben und Tester zur Laufzeit: Modu
 
 Umsetzung (Phase 5):
 - Laufzeitzustand im Dokument `module` (Freigabe, Wartung mit Beginn/Ende, Grund, Hinweis, Tester); Startwerte aus dem
-  Register. Die Tabelle wird als erzeugte PHP-Datei ausgeliefert (Muster wie `integritaet-liste.php`), nicht nachprogrammiert.
+  Register. Die Tabelle wird als erzeugte PHP-Datei ausgeliefert (Muster wie `aktionen-liste.php`), nicht nachprogrammiert.
 - Jede Aktion ist genau einer Oberfläche zugeordnet; der Einstieg prüft Zustand → Anmeldung → Recht → CSRF, bevor die
   Aktion läuft. Wartung: 503, `Retry-After`, `Cache-Control: no-store`; Schreibaktionen auch für offene Sitzungen gesperrt;
   Importe/Hintergrundläufe pausieren; E-Mails bleiben in der Warteschlange.

@@ -46,11 +46,18 @@ def mails(word):
     return [m for m in smtp.messages if 'it@example.org' in m['to'] and word in m['subject']]
 
 
-# ---------- Prüfliste im Repository ----------
+# ---------- Prüfliste: nicht im Repository, beim Einspielen erzeugt (deploy/bereitstellen.py, hier: run_e2e.py) ----------
 p = subprocess.run([sys.executable, os.path.join(REPO, 'werkzeuge', 'integritaet.py')], capture_output=True, text=True)
-check('werkzeuge/integritaet.py: list in repository is current', p.returncode == 0 and 'aktuell' in p.stdout, p.stdout + p.stderr)
-liste = open(os.path.join(REPO, 'app', 'api', 'lib', 'integritaet-liste.php'), encoding='utf-8').read()
-check('list starts with the guard and has no data files', liste.startswith("<?php if (!defined('WA_API')) { http_response_code(404); exit; }") and "'data/" not in liste and "'index.html' =>" in liste and "'.htaccess' =>" in liste)
+check('werkzeuge/integritaet.py: list is not part of the repository, generation works', p.returncode == 0 and 'nicht im Repository' in p.stdout, p.stdout + p.stderr)
+check('list is not tracked by git', subprocess.run(['git', '-C', REPO, 'ls-files', '--error-unmatch', 'app/api/lib/integritaet-liste.php'], capture_output=True).returncode != 0)
+LISTE = os.path.join(APP, 'api', 'lib', 'integritaet-liste.php')
+liste = open(LISTE, encoding='utf-8').read()
+check('generated list starts with the guard and has no data files', liste.startswith("<?php if (!defined('WA_API')) { http_response_code(404); exit; }") and "'data/" not in liste and "'index.html' =>" in liste and "'.htaccess' =>" in liste and 'deploy/bereitstellen.py' in liste)
+check('HTML pages listed with two allowed versions (with/without ?v=)', "'index.html' => ['" in liste and "'admin/index.html' => ['" in liste and "'api/index.php' => '" in liste)
+seite = open(os.path.join(APP, 'index.html'), encoding='utf-8').read()
+import hashlib
+v_frontend = hashlib.sha256(open(os.path.join(APP, 'assets', 'frontend.js'), 'rb').read()).hexdigest()[:10]
+check('test copy is provided like the server: ?v= is the content hash', f'assets/frontend.js?v={v_frontend}"' in seite and '?v=' not in open(os.path.join(REPO, 'app', 'index.html'), encoding='utf-8').read())
 try:
     st = urllib.request.urlopen(B + '/api/lib/integritaet-liste.php').status
 except urllib.error.HTTPError as e:
@@ -204,6 +211,26 @@ for p in [os.path.join(APP, 'api', 'x.php'), os.path.join(APP, 'assets', 'notiz.
 storage_write('notiz-test', {'text': 'Hallo'})
 code, r = run(A)
 check('after cleanup: clean again', code == 200 and r['result']['ok'] and r['result']['items'] == [], r['result']['items'][:5])
+
+# ---------- HTML-Seiten: mit und ohne Versionsnummern zulässig, jede andere Abweichung nicht ----------
+SEITE = os.path.join(APP, 'index.html')
+gestempelt = open(SEITE, encoding='utf-8').read()
+with open(SEITE, 'w', encoding='utf-8') as f: f.write(open(os.path.join(REPO, 'app', 'index.html'), encoding='utf-8').read())
+code, r = run(A)
+check('page without version numbers (state of the commit) is accepted', code == 200 and r['result']['ok'] and r['result']['items'] == [], r['result']['items'][:5])
+with open(SEITE, 'w', encoding='utf-8') as f: f.write(gestempelt.replace(f'frontend.js?v={v_frontend}', 'frontend.js?v=0000000000'))
+I = by_path(run(A)[1])
+check('page with a foreign version number is reported as modified', I.get('index.html', {}).get('art') == 'geaendert', I.get('index.html'))
+with open(SEITE, 'w', encoding='utf-8') as f: f.write(gestempelt)
+
+# ---------- Fehlende Prüfliste (z. B. Bereitstellung nicht gelaufen) bleibt kritisch ----------
+liste_inhalt = open(LISTE, 'rb').read()
+os.remove(LISTE)
+code, r = run(A)
+I = by_path(r)
+check('missing list: critical finding', I.get('api/lib/integritaet-liste.php', {}).get('stufe') == 'kritisch' and 'Prüfliste fehlt' in I['api/lib/integritaet-liste.php']['text'] and r['result']['ok'] is False, I.get('api/lib/integritaet-liste.php'))
+with open(LISTE, 'wb') as f: f.write(liste_inhalt)
+check('list restored: clean again', run(A)[1]['result']['ok'])
 
 # ---------- Datenbankordner ----------
 if storage_sqlite():

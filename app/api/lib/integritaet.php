@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 /* Dateiprüfung (wie ein Datei-Scanner gegen Schadcode): vergleicht die Programmdateien mit der Prüfliste der
-   freigegebenen Fassung (integritaet-liste.php, erzeugt von werkzeuge/integritaet.py), meldet unbekannte Dateien,
+   freigegebenen Fassung (integritaet-liste.php, beim Einspielen aus dem freigegebenen Commit erzeugt von
+   deploy/bereitstellen.py; Wert = SHA-256 oder bei HTML-Seiten [mit, ohne Versionsnummern]), meldet unbekannte Dateien,
    prüft den Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners) und sucht in unbekannten bzw.
    veränderten Dateien und in gespeicherten Daten nach typischen Mustern von Hintertüren, Schadcode und Link-Spam.
    Dazu eine Übersicht der Komponenten (PHP, SQLite, OpenSSL, eingebundene Bibliotheken). Nur lesend, keine Dienste
@@ -113,7 +114,8 @@ function integritaet_pruefen(): array
         $n++; $c['checked']++;
         $abs = $root . '/' . $rel;
         if (!is_file($abs)) { $c['missing']++; $add($rel, 'fehlt', 'warnung', 'Datei der freigegebenen Fassung fehlt'); continue; }
-        if (!hash_equals((string)$hash, (string)hash_file('sha256', $abs))) {
+        $ist = (string)hash_file('sha256', $abs);   // HTML-Seiten: zwei zulässige Fassungen (mit/ohne Versionsnummern)
+        if (!array_filter((array)$hash, function ($h) use ($ist) { return is_string($h) && hash_equals($h, $ist); })) {
             $c['modified']++;
             $art = integritaet_art($rel); $txt = $art ? $lesen($abs) : null;
             [$sig, $ss] = $txt !== null ? integritaet_muster($txt, $art) : [[], ''];

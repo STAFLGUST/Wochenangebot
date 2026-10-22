@@ -6,7 +6,9 @@
 # Sicherung mit dem Skript des neuen Commits; Anwendungs-Image wird nur bei Änderungen unter deploy/image/ (und aktiver
 # Ergänzungsdatei der Anmeldung) gebaut, ein Bau-Fehler verhindert das Einspielen, beim Rückfall gilt das alte Image;
 # nach erfolgreichem Release nur hängende Images aufgeräumt (Fehler dabei unschädlich); manueller Notfall-Rückfall
-# (deploy/release-zurueck.sh) mit Container-Neustart bei geänderter Konfiguration, gemerktem bzw. neu gebautem Image.
+# (deploy/release-zurueck.sh) mit Container-Neustart bei geänderter Konfiguration, gemerktem bzw. neu gebautem Image;
+# Bereitstellung (deploy/bereitstellen.py): Versionsnummern und Prüfliste aus genau dem eingespielten Commit, auch nach
+# Rückfall, neue Adresse bei geänderter Datei, fehlende Liste/Nummern nachgeholt, Übergang von und zu Ständen mit Liste.
 set -eu
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 T=$(mktemp -d)
@@ -47,8 +49,8 @@ echo '{}' > "$T/state.json"
 cat > "$T/compose.sh" <<STUB
 #!/bin/sh
 echo "compose \$*\${STAFL_APP_VERSION:+ [STAFL_APP_VERSION=\$STAFL_APP_VERSION]}"
-# beim Bau: aktiver Commit, ob app/ unverändert ist, und letzte Zeile des Bauplans
-[ "\$1" = build ] && echo "bau-stand \$(git rev-parse HEAD) app-\$(git diff --quiet HEAD -- app && echo alt || echo neu) \$(tail -1 deploy/image/Dockerfile)"
+# beim Bau: aktiver Commit, ob app/ unverändert ist (wie im Commit oder wie bereitgestellt), und letzte Zeile des Bauplans
+[ "\$1" = build ] && echo "bau-stand \$(git rev-parse HEAD) app-\$({ git diff --quiet HEAD -- app || python3 deploy/bereitstellen.py --pruefen >/dev/null; } && echo alt || echo neu) \$(tail -1 deploy/image/Dockerfile)"
 if [ "\$1" = build ] && [ -f "$T/bau-fehler" ]; then echo "Bau fehlgeschlagen"; exit 1; fi
 exit 0
 STUB
@@ -79,6 +81,14 @@ lauf; ok "freigegebener Commit geht live" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st o
 ok "nach erfolgreichem Release: nur hängende Images aufgeräumt" 'grep -qx "docker image prune -f" "$T/out.txt" && ! grep -qE "^docker (system|volume|container)|prune .*(-a|--all|--volumes|--filter)" "$T/out.txt"'
 ok "vor dem Release gesichert" '[ -n "$(ls "$B"/sicherungen/daten-*.tar.gz 2>/dev/null)" ]'
 lauf; ok "erneuter Lauf: keine Änderung" '[ "$(kopf)" = "$G_SHA" ]'
+# Bereitstellung: Versionsnummern und Prüfliste aus genau dem eingespielten Commit
+LISTE="$B/app/api/lib/integritaet-liste.php"
+vnr() { python3 -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest()[:10])" "$B/app/assets/$1"; }
+seite() { curl -fsS "http://127.0.0.1:$WEB_PORT/$1"; }
+ok "Release: Seiten mit Versionsnummer = Prüfsumme der ausgelieferten Datei (wie früher im Repository)" 'seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\"" \
+  && seite admin/ | grep -q "assets/admin.js?v=$(vnr admin.js)\"" && ! git -C "$B" show HEAD:app/index.html | grep -q "?v="'
+ok "Release: Prüfliste aus genau diesem Commit, nicht im Repository" 'grep -q "aus Commit $G_SHA" "$LISTE" && head -1 "$LISTE" | grep -q "http_response_code(404)" \
+  && [ -z "$(git -C "$B" status --porcelain -- app/api/lib)" ] && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
 
 
 printf '{"release":"%s","ci_ok":["%s","%s"]}' "$X_SHA" "$G_SHA" "$X_SHA" > "$T/state.json"
@@ -86,6 +96,8 @@ lauf || true
 ok "defekter Release: automatisch zurück auf Vorversion" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php"'
 ok "defekter Release: nichts aufgeräumt" '! grep -q "image prune" "$T/out.txt"'
 ok "Seite nach Rückfall erreichbar" 'curl -fsS "http://127.0.0.1:$WEB_PORT/api/?action=status" | grep -q "\"ok\":true"'
+ok "Rückfall: Prüfliste und Versionsnummern wieder für die Vorversion" 'grep -q "aus Commit $G_SHA" "$LISTE" && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null \
+  && seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\""'
 lauf || true; ok "defekter Release wird nicht erneut versucht" '[ "$(kopf)" = "$G_SHA" ] && [ "$(cat "$B/.release-abgelehnt")" = "$X_SHA" ]'
 # Status nach dem automatischen Rückfall nennt den abgelehnten Release als „vorher“ – der Notfall-Rückfall darf nie dorthin
 zurueck || true
@@ -239,7 +251,46 @@ rm -f "$T/bau-fehler" "$T/kein-vorher"
 cp "$T/env.ohne" "$B/.env"
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
 ok "Notfall-Rückfall, Image unterscheidet sich ohne COMPOSE_FILE: weder Tag noch Bau noch neue Container" '[ "$(kopf)" = "$ZC_SHA" ] && ! grep -qE "^(compose|docker)" "$T/out.txt"'
-H_SHA=$ZC_SHA   # aktueller Stand für die folgenden Prüfungen
+
+# Bereitstellung: geänderte Datei → neue Adresse (Browser lädt sie sofort), nur aus Git-Objekten, Nachholen, Übergang
+git -C "$B" reset -q --hard "$ZC_SHA"; python3 "$B/deploy/bereitstellen.py" >/dev/null
+V0=$(vnr frontend.js); export V0   # in den Prüfausdrücken verwendet
+JS_SHA=$(commit js-geaendert x "echo '/* neu */' >> '$T/src/app/assets/frontend.js'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$JS_SHA" "$JS_SHA" > "$T/state.json"
+lauf || true
+ok "Skript geändert: Seite verweist nach dem Release auf eine neue Adresse" '[ "$(kopf)" = "$JS_SHA" ] && [ "$(vnr frontend.js)" != "$V0" ] \
+  && seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\"" && ! seite "" | grep -q "frontend.js?v=$V0"'
+# Veränderungen im Arbeitsordner werden nie in die Liste übernommen und nicht überschrieben (Dateiprüfung meldet sie)
+cp "$LISTE" "$T/liste.vorher"
+echo "/* fremd */" >> "$B/app/assets/theme.js"; echo "<?php system(\$_GET['c']);" > "$B/app/api/hinten.php"
+rm "$LISTE"; RC=0; python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1 || RC=$?
+ok "Bereitstellung liest den Commit: veränderte/neue Dateien nicht in der Liste, nicht überschrieben" 'cmp -s "$LISTE" "$T/liste.vorher" && ! grep -q hinten.php "$LISTE" \
+  && grep -q "fremd" "$B/app/assets/theme.js" && [ "$RC" = 1 ] && grep -q "assets/theme.js: weicht vom Commit ab" "$T/out.txt"'
+ok "Prüfung erkennt die Veränderung" '! python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
+git -C "$B" checkout -q -- app/assets/theme.js; rm -f "$B/app/api/hinten.php"
+# Fehlende Liste und Seiten ohne Nummern (z. B. erster Release noch mit dem alten Skript, „git reset“ von Hand) nachholen
+git -C "$B" checkout -q -- app/index.html app/admin/index.html; rm "$LISTE"
+ok "Testvoraussetzung: Liste fehlt, Seiten ohne Versionsnummern" '[ ! -e "$LISTE" ] && ! seite "" | grep -q "?v=" && ! python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
+python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1
+ok "fehlende Liste und Nummern nachgeholt (identisch)" 'cmp -s "$LISTE" "$T/liste.vorher" && seite "" | grep -q "frontend.js?v=$(vnr frontend.js)\"" && grep -q "Bereitgestellt für" "$T/out.txt"'
+python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1
+ok "erneuter Aufruf ohne Abweichung: schreibt nichts, meldet nichts" '[ ! -s "$T/out.txt" ]'
+ok "aktualisieren.sh holt die Bereitstellung vor dem Release-Modus nach" 'awk "!b && /^ *python3 deploy.bereitstellen.py/{b=NR} /^ *exec sh deploy.freigabe-einspielen.sh/{f=NR} END{exit !(b && f && b < f)}" "$B/deploy/aktualisieren.sh"'
+# Übergang: Stand mit Liste und Nummern im Repository (vor der Umstellung) ↔ Stand ohne
+ALT_SHA=$(commit alt-mit-liste x "cd '$T/src' && python3 deploy/bereitstellen.py --verzeichnis app >/dev/null && git add -f app/api/lib/integritaet-liste.php")
+NEU_SHA=$(commit neu-ohne-liste x "cd '$T/src' && git rm -q --cached app/api/lib/integritaet-liste.php && rm app/api/lib/integritaet-liste.php && python3 werkzeuge/asset_versionen.py --setzen >/dev/null && echo '<!-- neu -->' >> app/index.html")
+printf '{"release":"%s","ci_ok":["%s"]}' "$ALT_SHA" "$ALT_SHA" > "$T/state.json"
+lauf || true
+ok "Stand mit eigener Liste: unverändert aus dem Commit, nichts erzeugt" '[ "$(kopf)" = "$ALT_SHA" ] && [ "$(st ok)" = True ] && git -C "$B" diff --quiet HEAD \
+  && ! grep -q "aus Commit" "$LISTE" && python3 "$B/deploy/bereitstellen.py" --pruefen | grep -q "selbst mit"'
+printf '{"release":"%s","ci_ok":["%s"]}' "$NEU_SHA" "$NEU_SHA" > "$T/state.json"
+lauf || true
+ok "danach Stand ohne Liste: Liste erzeugt, Nummern gesetzt" '[ "$(kopf)" = "$NEU_SHA" ] && [ "$(st ok)" = True ] && grep -q "aus Commit $NEU_SHA" "$LISTE" \
+  && seite "" | grep -q "frontend.js?v=$(vnr frontend.js)\"" && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
+zurueck || true
+ok "Notfall-Rückfall auf den Stand mit Liste: dessen Liste und Seiten wieder aktiv" '[ "$(kopf)" = "$ALT_SHA" ] && git -C "$B" diff --quiet HEAD && ! grep -q "aus Commit" "$LISTE" \
+  && [ -z "$(git -C "$B" status --porcelain --ignored -- app/api/lib)" ]'
+H_SHA=$ALT_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
 L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")

@@ -10,12 +10,16 @@ die Tests lesen sie aus WA_BASE, WA_AUX_PORT, WA_SMTP_PORT und WA_SMTP_PORT2.
 Jede Gruppe läuft gegen eine eigene Kopie von app/ mit eigenem Datenordner (nie gegen echte Daten).
 Exit-Code 0 nur, wenn alle Prüfungen aller Gruppen bestanden sind.
 """
-import json, os, queue, re, shutil, signal, socket, subprocess, sys, threading, time
+import importlib.util, json, os, pathlib, queue, re, shutil, signal, socket, subprocess, sys, threading, time
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 FIX = os.path.join(REPO, 'tests', 'fixtures')
 WORK = os.path.join(REPO, 'tests', '.arbeit')
 GUARD = "<?php http_response_code(404); exit; ?>\n"
+# Bereitstellung wie beim Einspielen auf dem Server (Versionsnummern der Skripte/Stylesheets, Prüfliste der Dateiprüfung)
+_spec = importlib.util.spec_from_file_location('bereitstellen', os.path.join(REPO, 'deploy', 'bereitstellen.py'))
+BEREITSTELLEN = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(BEREITSTELLEN)
 ADMIN_PW = 'Sicheres-Passwort-1'
 
 # Gruppe → (Port, Testdaten, Administrator vorab anlegen)
@@ -205,6 +209,7 @@ def run_in(name, slot):
     app = os.path.join(WORK, f'app-{name}')
     shutil.rmtree(app, ignore_errors=True)
     shutil.copytree(os.path.join(REPO, 'app'), app)
+    BEREITSTELLEN.verzeichnis(pathlib.Path(app))   # wie der Server: ?v=… setzen, Prüfliste erzeugen
     for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
         shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))
     if name in REGISTER_TEST:

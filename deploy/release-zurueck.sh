@@ -9,6 +9,8 @@
 # auf den aktiven Namen getaggt (fehlt es: aus dem Bauplan des vorherigen Stands bauen, bei Fehlschlag Abbruch ohne
 # Codewechsel) und die App neu erstellt.
 #
+# Danach Versionsnummern und Prüfliste aus dem zurückgeholten Commit (deploy/bereitstellen.py, falls dort vorhanden).
+#
 # Für Tests überschreibbar: WA_COMPOSE, WA_DOCKER
 set -eu
 cd "$(dirname "$0")/.."
@@ -57,6 +59,8 @@ fi
 
 echo "$JETZT" > .release-abgelehnt
 git reset -q --hard "$VORHER"
+# Versionsnummern und Prüfliste aus dem zurückgeholten Commit (dessen eigenes Skript; ältere Stände bringen beides mit)
+if [ -f deploy/bereitstellen.py ]; then python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung unvollständig – aktualisieren.sh holt sie nach"; fi
 # Container-Konfiguration geändert: alle neu erstellen; nur das Image: nur die App (Keycloak und seine Datenbank laufen weiter)
 if git diff --name-only "$JETZT" "$VORHER" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
 elif [ "$BILD" = 1 ]; then $COMPOSE up -d --force-recreate app; fi

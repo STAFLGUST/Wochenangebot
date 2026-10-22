@@ -12,7 +12,7 @@
 - [ ] Volle E2E-Suite lokal grün – **Dateien und SQLite** (`python3 tests/run_e2e.py`, `WA_TEST_STORAGE=sqlite …`), Ergebnis unten eingetragen
 - [ ] Neue Tests für neues Verhalten (inkl. Rechte/Fehlerfälle), `tests/README.md` ergänzt
 - [ ] Oberfläche per Bildschirmfoto geprüft (Desktop und Mobil, hell/dunkel bei neuen Farben)
-- [ ] `python3 werkzeuge/asset_versionen.py` grün (nach Änderungen an `app/assets/`: `--setzen`)
+- [ ] `python3 werkzeuge/asset_versionen.py` und `python3 werkzeuge/integritaet.py` grün (Einbindungen ohne `?v=`; Nummern und Prüfliste erzeugt der Server)
 - [ ] `python3 werkzeuge/regeln.py pruefen` grün (neue Dateien, Dokumente, Rechte, Testgruppen in `regeln/` eingetragen)
 - [ ] Doku aktualisiert (`LIESMICH.md`, ggf. `docs/`), keine Geheimnisse/echten Daten (gitleaks)
 - [ ] Keine Produktionsänderung ohne Freigabe; PR als **bereit zum Mergen** markiert (kein Entwurf)

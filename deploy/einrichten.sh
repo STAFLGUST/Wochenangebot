@@ -27,6 +27,7 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now wochenangebot-update.timer
 chown -R 33:33 daten
+python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung unvollständig – aktualisieren.sh holt sie nach"   # Versionsnummern, Prüfliste
 docker compose up -d --force-recreate
 echo
 echo "Fertig. Automatische Aktualisierung aktiv:"

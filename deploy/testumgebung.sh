@@ -84,6 +84,10 @@ case "${1:-}" in
     # Nur Zweige des eigenen Repositorys (keine fremden Forks)
     git -C "$ZIEL/src" fetch -q origin "+refs/heads/$ZWEIG:refs/remotes/origin/$ZWEIG" || fehler "Zweig '$ZWEIG' nicht gefunden."
     git -C "$ZIEL/src" checkout -q --detach "origin/$ZWEIG"
+    # Versionsnummern und Prüfliste aus dem eingespielten Stand (wie im Echtbetrieb; ältere Stände bringen beides mit)
+    if [ -f "$ZIEL/src/deploy/bereitstellen.py" ]; then
+      python3 "$ZIEL/src/deploy/bereitstellen.py" || echo "Hinweis: Bereitstellung unvollständig (Versionsnummern/Prüfliste)"
+    fi
     edge_pruefen
     vorlagen_kopieren
     dc up -d --force-recreate   # übernimmt auch geänderte Netz-/Umgebungseinstellungen
