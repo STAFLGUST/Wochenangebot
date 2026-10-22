@@ -84,7 +84,7 @@ check('Mitarbeiter-Eingabe bleibt verfügbar (getrennte Oberflächen)', ee['betr
 check('Wartung beenden', A.call('wartung_save', {'active': False})[0] == 200)
 ke = ob(nach_id(E.call('module_status')[1]['module'])['angebot'], 'kunden')
 check('nach der Wartung wieder normal', ke['betrieb'] == 'normal' and ke['zugang'] is True, ke)
-check('Wartung beenden macht nichts produktiv (Bestand bleibt gesperrt)', nach_id(E.call('module_status')[1]['module'])['bestand']['kachel']['zugang'] is False)
+check('Wartung beenden macht nichts produktiv (Einkauf bleibt gesperrt)', nach_id(E.call('module_status')[1]['module'])['einkauf']['kachel']['zugang'] is False)
 
 # Kundenzugang berechtigt nicht zur Mitarbeiter-Übersicht (GR-104)
 rev = A.call('kunden')[1]['rev']
