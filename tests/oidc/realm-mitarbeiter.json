@@ -57,7 +57,7 @@
       "name": "Configure OTP",
       "providerId": "CONFIGURE_TOTP",
       "enabled": true,
-      "defaultAction": true,
+      "defaultAction": false,
       "priority": 10,
       "config": {}
     },
@@ -210,13 +210,25 @@
       "lastName": "Ohne Zweitfaktor",
       "email": "neu@stafl.test",
       "emailVerified": true,
-      "requiredActions": [
-        "CONFIGURE_TOTP"
-      ],
       "credentials": [
         {
           "type": "password",
           "value": "Neu-Kennwort-CI-1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "chef",
+      "enabled": true,
+      "firstName": "Chef",
+      "lastName": "Administrator ohne Zweitfaktor",
+      "email": "chef@stafl.test",
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Chef-Kennwort-CI-1",
           "temporary": false
         }
       ]

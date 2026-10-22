@@ -119,6 +119,13 @@ EOF
   warte "Realm über Caddy erreichbar" 60 curl -fsS --cacert "$OIDC_WORK/caddy/pki/authorities/local/root.crt" \
     "https://login.stafl.test:$OIDC_PORT/realms/mitarbeiter/.well-known/openid-configuration"
 
+  # ── Realm auf den aktuellen Stand bringen wie im Betrieb (deploy/anmeldung/konten.sh realm-aktualisieren) ──
+  mkdir -p "$OIDC_WORK/installation"; echo "DOMAIN=angebot-stafl.de" > "$OIDC_WORK/installation/.env"
+  ln -sfn "$REPO/deploy" "$OIDC_WORK/installation/deploy"
+  (cd "$OIDC_WORK/installation" && env KCADM="env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY $kc/bin/kcadm.sh" KC_SERVER="http://127.0.0.1:$KC_PORT" \
+    KC_ADMIN_USER_TEST=verwaltung-ci KC_ADMIN_PASSWORD_TEST="$KC_ADMIN_PASSWORD" sh deploy/anmeldung/konten.sh realm-aktualisieren) > "$OIDC_WORK/realm-aktualisieren.log" 2>&1 \
+    || { cat "$OIDC_WORK/realm-aktualisieren.log" >&2; exit 1; }
+
   # ── Apache mit mod_auth_openidc (nie als root) ──
   local def=(); [ "$ALS_ROOT" = 1 ] && def=(-DALS_ROOT)
   apache2 -f "$HIER/apache.conf" "${def[@]}" -t >/dev/null 2>&1 || apache2 -f "$HIER/apache.conf" "${def[@]}" -t

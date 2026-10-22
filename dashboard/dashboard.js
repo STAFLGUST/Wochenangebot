@@ -79,6 +79,10 @@
     const st = await api('status');
     // Keycloak-Host: zentrale Sitzung abgelaufen (401 vom Webserver, kein JSON) → Anmelden = Seite neu laden
     if (st.status === 401 && !st.json) { zeigeAnmeldung('./'); return; }
+    // Zweiter Faktor für dieses Konto vorgeschrieben: zweite Stufe bei Keycloak, danach zurück auf diese Seite
+    if (st.status === 403 && st.data.code === 'reauth_required' && typeof st.data.anmelden === 'string' && st.data.anmelden.startsWith('/oidc/')) {
+      location.assign(st.data.anmelden + encodeURIComponent(location.href)); return;
+    }
     // Angemeldet bei Keycloak, aber hier kein (aktives) Mitarbeiterkonto: Hinweis statt Anmeldemaske
     if (st.status === 403 && st.data.error) { fehler(st.data.error); return; }
     if (st.status !== 200 || !st.data.loggedIn) { zeigeAnmeldung(); return; }

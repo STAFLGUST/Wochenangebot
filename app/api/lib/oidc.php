@@ -44,15 +44,30 @@ function oidc_identitaet(): ?array
     if ((string)($_SERVER['REMOTE_USER'] ?? '') !== $sub) return null;   // vom Modul gesetzt (OIDCRemoteUserClaim sub)
     return ['sub' => $sub, 'name' => (string)($_SERVER['OIDC_CLAIM_preferred_username'] ?? ''),
             'authTime' => (int)($_SERVER['OIDC_CLAIM_auth_time'] ?? 0), 'sid' => (string)($_SERVER['OIDC_CLAIM_sid'] ?? ''),
-            'acr' => (string)($_SERVER['OIDC_CLAIM_acr'] ?? '')];
+            'acr' => (string)($_SERVER['OIDC_CLAIM_acr'] ?? ''),
+            // Anmeldemethoden (Keycloak-Mapper „amr“: pwd, otp, hwk); das Modul reicht Listen kommagetrennt weiter
+            'amr' => array_values(array_filter(array_map('trim', explode(',', (string)($_SERVER['OIDC_CLAIM_amr'] ?? '')))))];
 }
 
-/* Anmeldestärke: Keycloak meldet die erreichte Stufe im Claim acr (Realm: pwd = nur Passwort, mfa = mit zweitem Faktor).
-   Wir verlassen uns nicht allein auf die Einstellung in Keycloak: ohne die verlangte Stufe kein Zugang (Standard: mfa). */
-function oidc_stufe_ok(array $id): bool
+/* Anmeldestärke: Den zweiten Faktor verlangen wir nur von Konten, für die er vorgeschrieben ist: Administratoren immer,
+   übrige nach Sicherheitseinstellung bzw. einzeln verpflichtet (twofa_required). Nachweis: Keycloak meldet die
+   Stufe „mfa“ (acr, nach erzwungener zweiter Stufe) oder Einmalcode/Passkey unter den Anmeldemethoden (amr). Wer den
+   zweiten Faktor freiwillig eingerichtet hat, wird bei Keycloak ohnehin danach gefragt. */
+function oidc_zweiter_faktor(array $id): bool
 {
-    $verlangt = oidc_einstellung('WA_OIDC_ACR');
-    return hash_equals($verlangt !== '' ? $verlangt : 'mfa', $id['acr']);
+    $stufe = oidc_einstellung('WA_OIDC_ACR');
+    return hash_equals($stufe !== '' ? $stufe : 'mfa', $id['acr']) || array_intersect($id['amr'], ['otp', 'hwk', 'swk']) !== [];
+}
+function oidc_stufe_ok(array $id, array $u): bool
+{
+    // Administratoren immer (Entscheidung Inhaber 22.10.2026), übrige nach Sicherheitseinstellung bzw. Einzelpflicht
+    return !(($u['role'] ?? '') === 'admin' || twofa_required($u)) || oidc_zweiter_faktor($id);
+}
+/* Anmeldung mit zweitem Faktor bei Keycloak anfordern (zweite Stufe; fehlt er, richtet der Mitarbeiter ihn dort ein) */
+function oidc_stufe_adresse(): string
+{
+    return '/oidc/callback?' . http_build_query(['iss' => oidc_einstellung('WA_OIDC_ISSUER'), 'auth_request_params' => 'acr_values=mfa'], '', '&', PHP_QUERY_RFC3986)
+        . '&target_link_uri=';
 }
 
 /* Mitarbeiterkonto zur Identität; ohne aktives Konto 403 (nicht 401 – sonst meldete der Browser sich endlos neu an) */
@@ -89,12 +104,26 @@ function oidc_nutzer(): ?array
 {
     $id = oidc_identitaet();
     if ($id === null) return null;
-    if (!oidc_stufe_ok($id)) {
-        audit('oidc_stufe', 'Anmeldung über Keycloak ohne zweiten Faktor abgewiesen', ['stufe' => substr($id['acr'], 0, 20)]);
-        fail('Bitte melden Sie sich mit zweitem Faktor an (Einmalcode oder Passkey).', 403);
-    }
     $u = oidc_konto($id);
+    if (!oidc_stufe_ok($id, $u)) {
+        start_session();
+        // Schutz vor einer Endlosschleife, falls Keycloak die zweite Stufe nicht bestätigt (Einstellung falsch):
+        // höchstens drei Anforderungen in zehn Minuten, danach Hinweis statt erneuter Weiterleitung
+        $a = $_SESSION['oidcStufeAngefordert'] ?? [];
+        $a = array_values(array_filter(is_array($a) ? $a : [], fn($t) => (int)$t > time() - 600));
+        if (count($a) >= 3) {
+            audit('oidc_stufe', 'Zweite Stufe bei Keycloak mehrfach angefordert, aber nicht bestätigt', ['stufe' => substr($id['acr'], 0, 20)], $u);
+            fail('Die Anmeldung mit zweitem Faktor wurde nicht bestätigt. Bitte erneut anmelden oder an einen Administrator wenden.', 403);
+        }
+        $a[] = time();
+        $_SESSION['oidcStufeAngefordert'] = $a;
+        audit('oidc_stufe', 'Anmeldung über Keycloak ohne vorgeschriebenen zweiten Faktor – zweite Stufe angefordert', ['stufe' => substr($id['acr'], 0, 20)], $u);
+        respond(['ok' => false, 'code' => 'reauth_required', 'anmelden' => oidc_stufe_adresse(),
+                 'error' => 'Für Ihr Konto ist die Anmeldung mit zweitem Faktor (Einmalcode oder Passkey) vorgeschrieben.'], 403);
+        exit;
+    }
     start_session();
+    unset($_SESSION['oidcStufeAngefordert']);
     $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
         && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'] && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
     if (!$passt) {
