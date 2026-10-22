@@ -9,6 +9,7 @@
 #   sh deploy/anmeldung/konten.sh passkey <benutzername>         # bei der nächsten Anmeldung Passkey einrichten
 #   sh deploy/anmeldung/konten.sh sperren <benutzername>         # deaktivieren und überall abmelden
 #   sh deploy/anmeldung/konten.sh entsperren <benutzername>      # auch nach zu vielen falschen Passwörtern/Codes
+#   sh deploy/anmeldung/konten.sh pruefen <benutzername>        # nur lesen: warum klappt die Anmeldung nicht?
 #   sh deploy/anmeldung/konten.sh liste
 #   sh deploy/anmeldung/konten.sh mail-einrichten [<test-adresse>]  # Mailversand von Keycloak über das Postfach der Anwendung
 #   sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>   # Konto anlegen und einladen
@@ -353,6 +354,90 @@ for e in json.load(sys.stdin):
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
 }
 
+pruefen() { # nur lesen: warum klappt die Anmeldung nicht? Konto, Sperre, zweiter Faktor, letzte Anmeldeereignisse, Uhrzeit
+  [ $# -eq 1 ] || abbruch "Aufruf: konten.sh pruefen <benutzername>"
+  name_pruefen "$1"; id=$(nutzer_id_pflicht "$1")
+  d=$(mktemp -d); trap 'rm -rf "$d" "$FEHLER" "$FEHLER.client"' EXIT
+  kc get "users/$id" -r "$REALM" >"$d/konto"
+  kc get "users/$id/credentials" -r "$REALM" >"$d/faktoren"
+  kc get "attack-detection/brute-force/users/$id" -r "$REALM" >"$d/sperre"
+  kc get events -r "$REALM" -q user="$id" -q max=10 >"$d/ereignisse"
+  kc get "realms/$REALM" --fields otpPolicyPeriod,otpPolicyLookAheadWindow,otpPolicyCodeReusable,failureFactor,eventsEnabled >"$d/realm"
+  # Uhrzeit: Einmalcodes hängen an der Serveruhr (Container nutzen die Uhr des Servers); Vergleich mit einer Zeitquelle
+  quelle=${ZEIT_QUELLE:-https://github.com}
+  fremd=$(curl -sSI --max-time 5 "$quelle" 2>/dev/null | sed -n 's/^[Dd]ate: *//p' | tr -d '\r' | head -1) || fremd=
+  ntp=$(timedatectl show -p NTPSynchronized --value 2>/dev/null) || ntp=
+  NAME="$1" FREMD="$fremd" NTP="$ntp" QUELLE="$quelle" python3 - "$d" <<'PY'
+import json, os, sys, time
+from email.utils import parsedate_to_datetime
+d = sys.argv[1]
+lade = lambda n: json.load(open(os.path.join(d, n)))
+konto, faktoren, sperre, ereignisse, realm = lade('konto'), lade('faktoren'), lade('sperre'), lade('ereignisse'), lade('realm')
+zeit = lambda ms: time.strftime('%d.%m.%Y %H:%M:%S', time.localtime(ms / 1000)) if ms else '–'
+hinweise = []
+print(f"Konto '{os.environ['NAME']}': {'aktiv' if konto.get('enabled') else 'GESPERRT (konten.sh entsperren)'}")
+if konto.get('requiredActions'):
+    print('  offene Schritte bei der nächsten Anmeldung:', ', '.join(konto['requiredActions']))
+print('Automatische Sperre nach Fehlversuchen:', 'JA, vorübergehend gesperrt' if sperre.get('disabled') else 'nein',
+      f"· Fehlversuche in Folge: {sperre.get('numFailures', 0)} (Grenze {realm.get('failureFactor', '?')})",
+      f"· letzter Fehlversuch: {zeit(sperre.get('lastFailure'))}")
+if sperre.get('disabled'):
+    hinweise.append('Sperre aufheben: sh deploy/anmeldung/konten.sh entsperren ' + os.environ['NAME'])
+arten = {'password': 'Passwort', 'otp': 'Einmalcode (App)', 'webauthn': 'Passkey', 'webauthn-passwordless': 'Passkey (ohne Passwort)'}
+print('Anmeldefaktoren:')
+for f in faktoren:
+    print(f"  - {arten.get(f.get('type'), f.get('type'))}: eingerichtet {zeit(f.get('createdDate'))}"
+          + (f" · Bezeichnung „{f['userLabel']}“" if f.get('userLabel') else ''))
+otp = [f for f in faktoren if f.get('type') == 'otp']
+if len(otp) > 1:
+    hinweise.append(f'{len(otp)} Einmalcode-Geräte eingerichtet: die Anmeldeseite fragt den Code des dort ausgewählten Geräts ab – '
+                    'ein Code aus einem anderen App-Eintrag gilt als falsch. Am einfachsten: konten.sh zuruecksetzen, in der App '
+                    'alle Einträge „STAFL-Plattform“ löschen und neu einrichten.')
+print(f"Einmalcode-Regeln: wechselt alle {realm.get('otpPolicyPeriod', 30)} s, Toleranz ±{realm.get('otpPolicyLookAheadWindow', 1)} Schritt(e), "
+      + ('mehrfach verwendbar' if realm.get('otpPolicyCodeReusable') else 'jeder Code nur einmal (nach einem Fehlschlag auf den nächsten Code warten)'))
+fehler_text = {
+    'invalid_user_credentials': 'Passwort oder Einmalcode falsch (auch: Code schon benutzt, falscher App-Eintrag, Uhr verstellt)',
+    'user_temporarily_disabled': 'vorübergehend gesperrt nach Fehlversuchen',
+    'user_disabled': 'Konto gesperrt',
+    'user_not_found': 'Benutzername unbekannt',
+    'expired_code': 'Anmeldeseite zu lange offen – neu laden',
+    'invalid_code': 'Anmeldevorgang abgelaufen oder doppelt abgeschickt',
+    'cookie_not_found': 'Browser hat das Anmelde-Cookie nicht mitgeschickt (privates Fenster/Cookies prüfen)',
+}
+print('Letzte Anmeldeereignisse (neueste zuerst):')
+if not ereignisse:
+    print('  keine gespeichert' + ('' if realm.get('eventsEnabled') else ' (Ereignisprotokoll ist aus)'))
+for e in ereignisse:
+    det = e.get('details') or {}
+    teil = [zeit(e.get('time')), e.get('type', '?')]
+    if e.get('error'):
+        teil.append(fehler_text.get(e['error'], e['error']))
+    if det.get('credential_type') or det.get('auth_method'):
+        teil.append('Schritt: ' + str(det.get('credential_type') or det.get('auth_method')))
+    if e.get('clientId'):
+        teil.append('über ' + e['clientId'])
+    if e.get('ipAddress'):
+        teil.append('von ' + e['ipAddress'])
+    print('  - ' + ' · '.join(teil))
+jetzt = time.time()
+print('Serveruhr:', time.strftime('%d.%m.%Y %H:%M:%S %Z', time.localtime(jetzt)),
+      '· mit Zeitserver abgeglichen:', {'yes': 'ja', 'no': 'NEIN'}.get(os.environ.get('NTP', ''), 'unbekannt'))
+if os.environ.get('FREMD'):
+    try:
+        abw = jetzt - parsedate_to_datetime(os.environ['FREMD']).timestamp()
+        print(f"  Abweichung gegenüber {os.environ['QUELLE']}: {abw:+.0f} s")
+        if abs(abw) > 15:
+            hinweise.append(f'Serveruhr weicht {abw:+.0f} s ab – Einmalcodes werden dann abgelehnt. Uhr synchronisieren (timedatectl).')
+    except (TypeError, ValueError):
+        pass
+if os.environ.get('NTP') == 'no':
+    hinweise.append('Serveruhr wird nicht mit einem Zeitserver abgeglichen (timedatectl set-ntp true).')
+print('Hinweise:' if hinweise else 'Keine Auffälligkeiten gefunden.')
+for h in hinweise:
+    print('  * ' + h)
+PY
+}
+
 liste() {
   echo "benutzername,vorname,nachname,e-mail,aktiv"
   kc get users -r "$REALM" --fields username,firstName,lastName,email,enabled --format csv --noquotes
@@ -360,7 +445,7 @@ liste() {
 
 befehl=${1:-}; [ $# -gt 0 ] && shift
 if [ $# -gt 0 ]; then n=$(klein "$1"); shift; set -- "$n" "$@"; fi
-case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|liste|mail-einrichten|einladen|realm-aktualisieren) bereit ;; esac
+case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|pruefen|liste|mail-einrichten|einladen|realm-aktualisieren) bereit ;; esac
 case "$befehl" in
   verwaltung) verwaltung ;;
   anlegen) anlegen "$@" ;;
@@ -369,6 +454,7 @@ case "$befehl" in
   passkey) passkey "$@" ;;
   sperren) sperren "$@" ;;
   entsperren) entsperren "$@" ;;
+  pruefen) pruefen "$@" ;;
   liste) liste ;;
   mail-einrichten) mail_einrichten "$@" ;;
   einladen) einladen "$@" ;;
