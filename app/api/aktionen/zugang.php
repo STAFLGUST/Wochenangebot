@@ -285,7 +285,7 @@ switch ($action) {
         case 'twofa_disable': {
             $me = require_auth(true);
             if (empty($me['totp'])) fail('Die Zwei-Faktor-Anmeldung ist nicht eingerichtet.', 409);
-            if (twofa_required($me) && !has_passkeys($me)) fail('Für Ihre Rolle ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
+            if (twofa_required($me) && !has_passkeys($me)) fail('Für Ihren Zugang ist die Zwei-Faktor-Anmeldung vorgeschrieben und kann nicht ausgeschaltet werden.', 422);
             $me = confirm_password($me, (string)(body()['password'] ?? ''));
             $u = user_update($me['id'], function (&$x) use ($me) {
                 if ((int)$x['sv'] !== (int)$me['sv'] || !$x['active']) fail('Bitte erneut anmelden.', 401);

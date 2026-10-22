@@ -164,7 +164,7 @@ switch ($action) {
         case 'users': {
             require_auth(false, 'admin');
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'users' => array_map('user_public', users_load())]);
+            respond(['ok' => true, 'users' => array_map('user_public', users_load()), 'twofaModus' => sec()['twofa']]);
         }
 
         /* Nutzerrechte: Rechte je Rolle und Übersicht je Nutzer (Administrator) */
@@ -215,6 +215,9 @@ switch ($action) {
                 $deny = rights_clean(is_array($b['deny'] ?? null) ? $b['deny'] : []);
                 $grant = array_values(array_diff(rights_clean(is_array($b['grant'] ?? null) ? $b['grant'] : []), $deny));
                 $lbl = function (array $ks) { return implode(', ', array_map(function ($k) { return PERMS[$k]['l']; }, $ks)); };
+                // Zwei-Faktor-Pflicht je Nutzer (optional; ohne Angabe – ältere Oberfläche – bleibt sie unverändert)
+                $hasPflicht = array_key_exists('twofaPflicht', $b);
+                $pflicht = !empty($b['twofaPflicht']);
                 if ($isNew) {
                     $wunsch = trim((string)($b['username'] ?? ''));
                     if ($wunsch === '' && $person['vorname'] !== '') $wunsch = benutzername_vorschlag($person['vorname'], $person['nachname'], array_column($users, 'username'));
@@ -225,6 +228,7 @@ switch ($action) {
                           'hash' => password_hash(check_password($pw, $uname), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
                           'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
                     foreach (['vorname', 'nachname', 'email'] as $f) if ($person[$f] !== '') $u[$f] = $person[$f];
+                    if ($pflicht) $u['twofaPflicht'] = true;
                     if ($hasRights && $role !== 'admin') { if ($grant) $u['grant'] = $grant; if ($deny) $u['deny'] = $deny; }
                     $users[] = $u;
                     users_save($users);
@@ -233,6 +237,7 @@ switch ($action) {
                     if ($person['email'] !== '') $d[] = ['k' => 'u|email', 'code' => '', 'name' => $uname, 'f' => 'E-Mail', 'from' => '', 'to' => $person['email']];
                     if (!empty($u['grant'])) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $uname, 'f' => 'Zusätzlich erlaubt', 'from' => '', 'to' => $lbl($u['grant'])];
                     if (!empty($u['deny'])) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $uname, 'f' => 'Verboten', 'from' => '', 'to' => $lbl($u['deny'])];
+                    if ($pflicht) $d[] = ['k' => 'u|2fapflicht', 'code' => '', 'name' => $uname, 'f' => 'Zwei-Faktor-Pflicht', 'from' => '', 'to' => 'ja'];
                     return [$u, 'Nutzer „' . $uname . '“ (' . $name . ') angelegt', $d];
                 }
                 $i = user_find($users, $id);
@@ -242,6 +247,7 @@ switch ($action) {
                     fail('Für den eigenen Zugang bitte „Passwort ändern“, „Zwei-Faktor-Anmeldung“ oder „Passkeys“ verwenden.', 403);
                 }
                 if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
+                if ($id === $me['id'] && $hasPflicht && $pflicht !== !empty($old['twofaPflicht'])) fail('Die Zwei-Faktor-Pflicht des eigenen Zugangs kann nur ein anderer Administrator ändern.', 403);
                 $users[$i]['name'] = $name;
                 foreach (['vorname', 'nachname', 'email'] as $f) {
                     if ($f !== 'email' && $person['vorname'] === '' && $person['nachname'] === '') continue;   // ältere Oberfläche: nur „name“
@@ -263,6 +269,10 @@ switch ($action) {
                     if ($deny) $users[$i]['deny'] = $deny;
                     if ($og != $grant) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $old['username'], 'f' => 'Zusätzlich erlaubt', 'from' => $lbl($og), 'to' => $lbl($grant)];
                     if ($od != $deny) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $old['username'], 'f' => 'Verboten', 'from' => $lbl($od), 'to' => $lbl($deny)];
+                }
+                if ($hasPflicht && $pflicht !== !empty($old['twofaPflicht'])) {
+                    if ($pflicht) $users[$i]['twofaPflicht'] = true; else unset($users[$i]['twofaPflicht']);
+                    $d[] = ['k' => 'u|2fapflicht', 'code' => '', 'name' => $old['username'], 'f' => 'Zwei-Faktor-Pflicht', 'from' => $pflicht ? 'nein' : 'ja', 'to' => $pflicht ? 'ja' : 'nein'];
                 }
                 if ((bool)$old['active'] !== $active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $old['username'], 'f' => 'Status', 'from' => $old['active'] ? 'aktiv' : 'deaktiviert', 'to' => $active ? 'aktiv' : 'deaktiviert'];
                 if (!empty($b['reset2fa']) && !empty($old['totp'])) {

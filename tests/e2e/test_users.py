@@ -1,4 +1,5 @@
 from umgebung import storage_raw
+from auth_helpers import read_users
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import sys
 import json, os, re
@@ -188,6 +189,112 @@ with sync_playwright() as p:
     m.click('#vt-log'); m.wait_for_selector('.ltab'); m.locator('tr.lrow.has-d').first.click(); m.wait_for_timeout(200); m.screenshot(path=SH + '/log-mobile.png')
     sw2 = m.evaluate('document.documentElement.scrollWidth')
     check('mobile no h-scroll', sw1 <= 390 and sw2 <= 390, (sw1, sw2))
+
+    # ---- Zwei-Faktor-Pflicht je Nutzer (Feld twofaPflicht; wirkt über twofa_required auf beide Anmeldewege)
+    PW_CLARA = 'Pflicht-Kennwort-123'
+    BOX = '#user-body [name=twofaPflicht]'
+    def nutzer_roh(name):
+        return next(u for u in read_users()['users'] if u['username'] == name)
+    z = br.new_context(viewport={'width': 1440, 'height': 950}).new_page(); z.on('pageerror', lambda e: errs.append('z: ' + str(e))); z.on('dialog', lambda d: d.accept())
+    login(z, 'admin', 'Sicheres-Passwort-1')   # frische Anmeldung: Bestätigung für user_save gültig
+    z.click('#vt-users'); z.wait_for_selector('.utab')
+    z.click('#user-add'); z.wait_for_selector('#dlg-user[open]')
+    check('2FA-Pflicht: Häkchen beim Anlegen frei und nicht gesetzt', z.locator(BOX).is_enabled() and not z.is_checked(BOX))
+    check('2FA-Pflicht: Hinweis nennt beide Anmeldewege', 'STAFL-Anmeldung' in z.inner_text('#us-2fa-hint'), z.inner_text('#us-2fa-hint'))
+    z.fill('#user-body [name=vorname]', 'Clara'); z.fill('#user-body [name=nachname]', 'Pflicht'); z.fill('#user-body [name=username]', 'clara')
+    z.check('#user-body [name=role][value=editor]'); z.fill('#user-body [name=password]', PW_CLARA); z.uncheck('#user-body [name=mustChange]')
+    z.check(BOX); z.click('#user-body [type=submit]')
+    z.wait_for_selector('#user-body .us-fertig'); z.click('#user-body .dlg-foot [data-close]'); z.wait_for_function("!document.querySelector('#dlg-user').open")
+    check('2FA-Pflicht: beim Anlegen gespeichert', nutzer_roh('clara').get('twofaPflicht') is True, nutzer_roh('clara'))
+    row = z.locator('.utab tbody tr:has-text("Clara Pflicht")')
+    until(lambda: '2FA-Pflicht' in row.inner_text())
+    z.screenshot(path=SH + '/users-2fa-pflicht-liste.png')
+    check('2FA-Pflicht: Kennzeichen in der Nutzerliste', '2FA-Pflicht' in row.inner_text() and z.locator('.utab .tf-pflicht').count() == 1, row.inner_text())
+    cid = nutzer_roh('clara')['id']; aid = nutzer_roh('admin')['id']
+
+    # Bisherige Anmeldung: Einrichtung des zweiten Faktors wird erzwungen (wie bei Administratoren)
+    c = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page(); c.on('pageerror', lambda e: errs.append('c: ' + str(e)))
+    login(c, 'clara', PW_CLARA, wait=False); c.wait_for_selector('#auth-twofa:not([hidden]) .tf-qr svg')
+    check('2FA-Pflicht: Anmeldung verlangt die Einrichtung (QR-Code)', c.locator('#screen-editor').is_hidden())
+    c.screenshot(path=SH + '/users-2fa-pflicht-anmeldung-mobile.png')
+    st = c.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('2FA-Pflicht: status meldet needTwofa/twofaRequired', st.get('user', {}).get('needTwofa') is True and st['user'].get('twofaRequired') is True, st.get('user'))
+    r = c.evaluate("fetch('../api/?action=draft').then(async r => [r.status, await r.json()])")
+    check('2FA-Pflicht: ohne zweiten Faktor keine Aktion (403)', r[0] == 403 and 'Zwei-Faktor' in r[1].get('error', ''), r)
+    r = api_from_page(c, 'user_save', {'id': cid, 'name': 'Clara Pflicht', 'role': 'editor', 'active': True, 'twofaPflicht': False})
+    check('2FA-Pflicht: Nutzer kann sie sich nicht selbst entfernen (403)', r[0] == 403 and nutzer_roh('clara').get('twofaPflicht') is True, r)
+
+    # Dialog „Nutzer bearbeiten“: Häkchen gesetzt; Bildschirmfotos Desktop und 390 px
+    row.click(); z.wait_for_selector('#dlg-user[open]')
+    check('2FA-Pflicht: Bearbeiten zeigt Häkchen gesetzt und änderbar', z.is_checked(BOX) and z.locator(BOX).is_enabled())
+    z.locator('#user-body .us-2fa').scroll_into_view_if_needed(); z.screenshot(path=SH + '/users-2fa-pflicht.png')
+    z.check('#user-body [name=role][value=admin]')
+    check('2FA-Pflicht: Administrator bei Einstellung „freiwillig“ – Häkchen bleibt frei, Hinweis auf STAFL-Anmeldung',
+          z.locator(BOX).is_enabled() and z.is_checked(BOX) and 'Administratoren immer' in z.inner_text('#us-2fa-hint'), z.inner_text('#us-2fa-hint'))
+    z.check('#user-body [name=role][value=editor]')
+    z.click('#user-body .dlg-foot [data-close]'); z.wait_for_function("!document.querySelector('#dlg-user').open")
+    mz = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page(); mz.on('pageerror', lambda e: errs.append('mz: ' + str(e)))
+    login(mz, 'admin', 'Sicheres-Passwort-1'); mz.click('#vt-users'); mz.wait_for_selector('.utab')
+    mz.locator('.utab tbody tr:has-text("Clara Pflicht")').click(); mz.wait_for_selector('#dlg-user[open]')
+    mz.locator('#user-body .us-2fa').scroll_into_view_if_needed(); mz.screenshot(path=SH + '/users-2fa-pflicht-mobile.png')
+    sw = mz.evaluate('document.documentElement.scrollWidth')
+    check('2FA-Pflicht: Dialog 390 px ohne waagerechtes Scrollen', sw <= 390, sw)
+    mz.context.close()
+
+    # Sicherheitseinstellung verpflichtet ohnehin (Anzeige; Antwort der Schnittstelle simuliert): Häkchen gesetzt und gesperrt
+    modus = {'w': 'admins'}
+    def users_modus(route):
+        if not modus['w']: route.fallback(); return
+        resp = route.fetch(); j = resp.json(); j['twofaModus'] = modus['w']; route.fulfill(response=resp, json=j)
+    z.route(re.compile(r'.*/api/\?action=users$'), users_modus)
+    z.click('#vt-log'); z.wait_for_selector('.ltab'); z.click('#vt-users'); z.wait_for_selector('.utab')
+    z.locator('.utab tbody tr:has-text("Clara Pflicht")').click(); z.wait_for_selector('#dlg-user[open]')
+    z.uncheck(BOX); z.check('#user-body [name=role][value=admin]')
+    check('2FA-Pflicht: „für Administratoren“ + Rolle Administrator → gesetzt und gesperrt',
+          z.locator(BOX).is_disabled() and z.is_checked(BOX) and 'Für Administratoren' in z.inner_text('#us-2fa-hint'), z.inner_text('#us-2fa-hint'))
+    z.screenshot(path=SH + '/users-2fa-pflicht-gesperrt.png')
+    z.check('#user-body [name=role][value=editor]')
+    check('2FA-Pflicht: zurück zu Bearbeiter → eigene Auswahl wieder da', z.locator(BOX).is_enabled() and not z.is_checked(BOX))
+    z.click('#user-body .dlg-foot [data-close]'); z.wait_for_function("!document.querySelector('#dlg-user').open")
+    z.locator('.utab tbody tr:has-text("(Sie)")').click(); z.wait_for_selector('#dlg-user[open]')
+    check('2FA-Pflicht: eigener Administrator-Zugang gesetzt und gesperrt', z.locator(BOX).is_disabled() and z.is_checked(BOX))
+    z.click('#user-body .dlg-foot [data-close]'); z.wait_for_function("!document.querySelector('#dlg-user').open")
+    modus['w'] = 'all'
+    z.click('#vt-log'); z.wait_for_selector('.ltab'); z.click('#vt-users'); z.wait_for_selector('.utab')
+    z.locator('.utab tbody tr:has-text("Clara Pflicht")').click(); z.wait_for_selector('#dlg-user[open]')
+    check('2FA-Pflicht: „für alle Zugänge“ → auch Bearbeiter gesetzt und gesperrt',
+          z.locator(BOX).is_disabled() and z.is_checked(BOX) and 'alle Zugänge' in z.inner_text('#us-2fa-hint'), z.inner_text('#us-2fa-hint'))
+    z.click('#user-body [type=submit]'); z.wait_for_function("!document.querySelector('#dlg-user').open")
+    check('2FA-Pflicht: gesperrtes Häkchen wird nicht gesendet – gespeicherte Pflicht bleibt', nutzer_roh('clara').get('twofaPflicht') is True)
+    modus['w'] = None   # wieder die echte Antwort (Route bleibt bestehen: kein Abbruch einer laufenden Anfrage)
+
+    # Server: eigener Zugang, ältere Oberfläche, Protokoll
+    r = api_from_page(z, 'user_save', {'id': aid, 'name': 'Administrator', 'role': 'admin', 'active': True, 'twofaPflicht': True})
+    check('2FA-Pflicht: eigene Pflicht nur durch anderen Administrator (403)', r[0] == 403 and not nutzer_roh('admin').get('twofaPflicht'), r)
+    r = api_from_page(z, 'user_save', {'id': cid, 'vorname': 'Clara', 'nachname': 'Pflicht', 'role': 'editor', 'active': True})
+    check('2FA-Pflicht: Speichern ohne Feld (ältere Oberfläche) lässt sie unverändert', r[0] == 200 and r[1]['user'].get('twofaPflicht') is True and nutzer_roh('clara').get('twofaPflicht') is True, r)
+
+    # Administrator nimmt die Pflicht zurück (Oberfläche) → protokolliert, Anmeldung ohne zweiten Faktor wieder möglich
+    z.click('#vt-log'); z.wait_for_selector('.ltab'); z.click('#vt-users'); z.wait_for_selector('.utab')
+    z.locator('.utab tbody tr:has-text("Clara Pflicht")').click(); z.wait_for_selector('#dlg-user[open]')
+    z.uncheck(BOX); z.click('#user-body [type=submit]'); z.wait_for_function("!document.querySelector('#dlg-user').open")
+    ohne = until(lambda: '2FA-Pflicht' not in z.locator('.utab tbody tr:has-text("Clara Pflicht")').inner_text())
+    check('2FA-Pflicht: entfernt (Feld gelöscht, Liste ohne Kennzeichen)', ohne and 'twofaPflicht' not in nutzer_roh('clara'), nutzer_roh('clara'))
+    z.click('#vt-log'); z.wait_for_selector('.ltab')
+    z.locator('tr.lrow.has-d:has-text("Nutzer „clara“ geändert")').first.click(); wait_text(z, '#log-list', 'Zwei-Faktor-Pflicht')
+    lt = z.inner_text('#log-list')
+    check('2FA-Pflicht: Änderung im Protokoll (ja → nein)', 'Zwei-Faktor-Pflicht' in lt and 'nein' in lt, re.sub(r'\s+', ' ', lt)[:300])
+    c.context.close()
+    c = br.new_context(viewport={'width': 1440, 'height': 950}).new_page(); c.on('pageerror', lambda e: errs.append('c2: ' + str(e)))
+    login(c, 'clara', PW_CLARA)
+    check('2FA-Pflicht: ohne Pflicht Anmeldung ohne zweiten Faktor', c.locator('#screen-editor').is_visible())
+    r = api_from_page(c, 'user_save', {'id': cid, 'name': 'Clara Pflicht', 'role': 'editor', 'active': True, 'twofaPflicht': True})
+    check('2FA-Pflicht: Bearbeiter darf das Feld nicht setzen (403)', r[0] == 403 and 'twofaPflicht' not in nutzer_roh('clara'), r)
+    # erneut verpflichtet, während Clara angemeldet ist → nächste Aktion verlangt den zweiten Faktor
+    r = api_from_page(z, 'user_save', {'id': cid, 'name': 'Clara Pflicht', 'role': 'editor', 'active': True, 'twofaPflicht': True})
+    check('2FA-Pflicht: per Schnittstelle gesetzt (Administrator)', r[0] == 200 and nutzer_roh('clara').get('twofaPflicht') is True, r)
+    r = c.evaluate("fetch('../api/?action=draft').then(async r => [r.status, await r.json()])")
+    check('2FA-Pflicht: laufende Sitzung ohne zweiten Faktor danach gesperrt (403)', r[0] == 403 and 'Zwei-Faktor' in r[1].get('error', ''), r)
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

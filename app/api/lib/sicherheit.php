@@ -122,7 +122,15 @@ function valid_cidr(string $c): bool
     $max = strpos($p[0], ':') !== false ? 128 : 32;
     return ctype_digit($p[1]) && (int)$p[1] >= 8 && (int)$p[1] <= $max;
 }
-function twofa_required(array $u): bool { $m = sec()['twofa']; return $m === 'all' || ($m === 'admins' && $u['role'] === 'admin'); }
+/* Pflicht zum zweiten Faktor: nach Sicherheitseinstellung (off|admins|all) oder einzeln vom Administrator gesetzt (Nutzerfeld
+   twofaPflicht, optional – fehlt bei älteren Datensätzen = freiwillig). Gilt für die bisherige Anmeldung und über oidc_stufe_ok()
+   auch für die zentrale Anmeldung. */
+function twofa_required(array $u): bool
+{
+    if (!empty($u['twofaPflicht'])) return true;
+    $m = sec()['twofa'];
+    return $m === 'all' || ($m === 'admins' && ($u['role'] ?? '') === 'admin');
+}
 function is_https(): bool { return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'); }
 
 /* ---------------- Zwei-Faktor (TOTP, RFC 6238) ---------------- */
