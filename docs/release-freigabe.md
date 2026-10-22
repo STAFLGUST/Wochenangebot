@@ -33,8 +33,9 @@ CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinand
    fehlt das Skript im neuen Commit, das vorhandene). Ein Fehler im alten Skript blockiert so nicht mehr das Release,
    das ihn behebt. Die Hilfsdateien in `deploy/` (`datenbank.py`, `sicherung-pruefen.*`) stammen dabei noch aus dem
    alten Stand. Ohne Sicherung kein Release.
-4. Code wechseln. Container werden nur neu erstellt, wenn sich `Caddyfile`, `docker-compose.yml`, die Ergänzungsdatei
-   oder (bei Bau in Schritt 2) das Image ändern; das bisherige Image bleibt als `stafl-app:release-vorher` erhalten.
+4. Code wechseln. Alle Container werden neu erstellt, wenn sich `Caddyfile`, `docker-compose.yml` oder die
+   Ergänzungsdatei ändern; wurde in Schritt 2 nur das Image gebaut, nur die App (Keycloak läuft weiter). Das bisherige
+   Image bleibt als `stafl-app:release-vorher` erhalten.
 5. Healthcheck wie ein Besucher. Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
    (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
 

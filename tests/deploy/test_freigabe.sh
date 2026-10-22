@@ -143,7 +143,7 @@ lauf || true
 ok "Image geändert mit COMPOSE_FILE: gebaut, umgetaggt, Container neu erstellt" '[ "$(kopf)" = "$I_SHA" ] && [ "$(st ok)" = True ] \
   && grep -q "^compose build --pull app \[STAFL_APP_VERSION=release-neu\]" "$T/out.txt" \
   && grep -q "^docker tag stafl-app:lokal stafl-app:release-vorher" "$T/out.txt" && grep -q "^docker tag stafl-app:release-neu stafl-app:lokal" "$T/out.txt" \
-  && grep -q "^compose up -d --force-recreate" "$T/out.txt"'
+  && grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
 ok "Image mit dem neuen Bauplan gebaut, bevor der Code wechselt" 'grep -q "^bau-stand $I0_SHA app-alt # Update 2" "$T/out.txt"'
 J_SHA=$(commit nur-code x "echo '<!-- j -->' >> '$T/src/app/index.html'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$J_SHA" "$J_SHA" > "$T/state.json"
@@ -164,13 +164,18 @@ Q_SHA=$(commit image-defekt x "echo '# Update 4' >> '$T/src/deploy/image/Dockerf
 printf '{"release":"%s","ci_ok":["%s"]}' "$Q_SHA" "$Q_SHA" > "$T/state.json"
 lauf || true
 ok "Image geändert, Release defekt: zurück, altes Image wieder aktiv" '[ "$(kopf)" = "$P_SHA" ] && [ "$(st ok)" = False ] && grep -q "zurückgesetzt" "$B/daten/deployment.php" \
-  && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -c "^compose up -d --force-recreate" "$T/out.txt")" = 2 ]'
+  && grep -q "^docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && [ "$(grep -cx "compose up -d --force-recreate app" "$T/out.txt")" = 2 ]'
 S_SHA=$(commit repariert2 x "sed -i 's/ kaputt(//' '$T/src/app/api/index.php'")
 printf '{"release":"%s","ci_ok":["%s"]}' "$S_SHA" "$S_SHA" > "$T/state.json"
 lauf || true
 ok "reparierter Release mit Image geht live" '[ "$(kopf)" = "$S_SHA" ] && [ "$(st ok)" = True ]'
+E_SHA=$(commit image-und-ergaenzung x "echo '# Update 5' >> '$T/src/deploy/image/Dockerfile'; echo '# geändert 2' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
+printf '{"release":"%s","ci_ok":["%s"]}' "$E_SHA" "$E_SHA" > "$T/state.json"
+lauf || true
+ok "Image und Ergänzungsdatei geändert: gebaut, alle Container neu erstellt" '[ "$(kopf)" = "$E_SHA" ] && [ "$(st ok)" = True ] \
+  && grep -q "^compose build --pull app" "$T/out.txt" && grep -qx "compose up -d --force-recreate" "$T/out.txt" && ! grep -qx "compose up -d --force-recreate app" "$T/out.txt"'
 cp "$T/env.ohne" "$B/.env"
-H_SHA=$S_SHA   # aktueller Stand für die folgenden Prüfungen
+H_SHA=$E_SHA   # aktueller Stand für die folgenden Prüfungen
 
 # Active SQLite must never be silently opened by an old file-only release.
 L_SHA=$(commit ohne-sqlite x "rm '$T/src/app/api/storage.php'")

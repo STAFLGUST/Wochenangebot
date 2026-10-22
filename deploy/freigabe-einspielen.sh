@@ -87,8 +87,10 @@ einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstelle
     $DOCKER tag "$BILD_NEU" "$APP_BILD"
   fi
   git reset -q --hard "$1"
-  # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env)
-  if [ "$BAUEN" = 1 ] || git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate; fi
+  # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env);
+  # nur das Image geändert: nur die App neu erstellen (Keycloak und seine Datenbank laufen weiter)
+  if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
+  elif [ "$BAUEN" = 1 ]; then $COMPOSE up -d --force-recreate app; fi
 }
 
 # 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main
