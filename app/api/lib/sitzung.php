@@ -121,6 +121,8 @@ function me_payload(array $u): array
         // Zentrale Anmeldung: Passwort, zweiter Faktor und Passkeys verwaltet Keycloak
         return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => false, 'mustChangeGrund' => '',
                 'twofa' => true, 'passkeys' => 0, 'needTwofa' => false, 'twofaRequired' => false, 'zentral' => true,
+                // Oberfläche dieses Hosts (Webserver: WA_OBERFLAECHE) – nur Anzeige; Rechte prüft weiter jede Aktion (GR-103)
+                'bereich' => oidc_einstellung('WA_OBERFLAECHE') ?: 'angebot.eingabe',
                 'perms' => function_exists('user_perms') ? user_perms($u) : []];
     }
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),

@@ -8,7 +8,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | Datei | Inhalt |
 | --- | --- |
 | `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.1 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
-| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de` und `angebot.dashboard-stafl.de` (wie `tests/oidc/apache.conf`); als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
+| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de` und `verwaltung.dashboard-stafl.de` (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
@@ -25,8 +25,8 @@ Ablauf: [docs/release-freigabe.md](../../docs/release-freigabe.md).
 
 ## Geheimnisse (nur in `.env` auf dem Server)
 
-`OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`, `OIDC_CRYPTO_ANGEBOT`
-(Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, nach der Einrichtung `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“
+`OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT`, `OIDC_SECRET_VERWALTUNG` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`,
+`OIDC_CRYPTO_ANGEBOT`, `OIDC_CRYPTO_VERWALTUNG` (Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, nach der Einrichtung `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“
 im Realm master). Das Start-Konto (`KC_BOOTSTRAP_ADMIN_*`) steht nur während der Einrichtung in
 `daten-anmeldung/einrichtung.env` (Compose liest die Datei nur, wenn sie existiert; `konten.sh verwaltung` löscht sie).
 Nie leer in `.env` setzen: Keycloak 26.8 startet mit leerem Start-Konto-Namen nicht.
@@ -46,6 +46,11 @@ Der Realm wird nur beim ersten Start importiert. Spätere Änderungen bringt `sh
 auf den laufenden Realm (idempotent, ohne Kontenverlust); die Testumgebung (`tests/oidc/umgebung.sh`) führt denselben
 Befehl nach dem Import aus, die CI prüft also genau diesen Weg. Stand 2 (22.10.2026): zweiter Faktor nur für
 Pflicht-Konten (entscheidet die Anwendung), Anmeldemethoden im Claim `amr`, Leerlauf 4 Stunden.
+Stand 3 (22.10.2026): Client `verwaltung` für `verwaltung.dashboard-stafl.de` – legt ihn an, falls er fehlt (Definition aus
+`realm-mitarbeiter.json`), und ergänzt fehlende `OIDC_SECRET_VERWALTUNG`/`OIDC_CRYPTO_VERWALTUNG` in `.env` (nie angezeigt).
+Danach liest die Anwendung die neuen Werte erst nach `docker compose up -d app` (der Befehl weist darauf hin). Bis dahin
+startet die Anwendung trotzdem (Compose nimmt für die Verwaltung den Schlüssel des Eingabebereichs; ohne Client in
+Keycloak ist dort keine Anmeldung möglich).
 
 ## Einladungen per Mail
 

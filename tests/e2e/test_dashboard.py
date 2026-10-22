@@ -63,11 +63,14 @@ with sync_playwright() as pw:
     check('Kachelnamen aus dem Register', [x['name'] for x in k][:2] == ['Angebot', 'Bestand'], [x['name'] for x in k])
     ang = k[0]
     check('Angebot: verfügbar, als Verweis auf die Mitarbeiter-Eingabe (Testserver: gleicher Host)', ang['tag'] == 'A' and ang['href'] == '/admin/' and ang['badge'] == 'Verfügbar', ang)
-    gesperrt = [x for x in k[1:] if x['tag'] != 'DIV' or x['href']]
+    verw = k[-1]
+    check('Verwaltung: freigegeben (Roadmap 10a), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
+          verw['id'] == 'verwaltung' and verw['tag'] == 'A' and verw['href'] == '/admin/' and verw['badge'] == 'Verfügbar', verw)
+    gesperrt = [x for x in k[1:-1] if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
-    check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in k[1:]), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 7)
-    check('Zähler: 1 von 8 Anwendungen', '1 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in k[1:-1]), [x['badge'] for x in k])
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
+    check('Zähler: 2 von 8 Anwendungen', '2 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
     pg.click('#db-grid a[data-modul="angebot"]'); pg.wait_for_url('**/admin/')
@@ -101,7 +104,7 @@ with sync_playwright() as pw:
     a = kacheln(pg)[0]
     check('Bearbeiter: Angebot in Wartung, ohne Verweis', a['tag'] == 'DIV' and not a['href'] and a['badge'] == 'Wartung', a)
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: 0 von 8 Anwendungen', '0 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: nur noch die Verwaltung verfügbar (1 von 8)', '1 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')

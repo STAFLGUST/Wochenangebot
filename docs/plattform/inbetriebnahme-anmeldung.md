@@ -12,6 +12,7 @@ vollständig geprüft (`tests/oidc/`, 135 Prüfungen) und die Betriebskonfigurat
 | `login.dashboard-stafl.de` | Keycloak, nur Realm `mitarbeiter` | Passwort; zweiter Faktor (Einmalcode oder Passkey) Pflicht für Administratoren und einzeln verpflichtete, sonst freiwillig |
 | `dashboard-stafl.de` | Mitarbeiter-Dashboard | über Keycloak |
 | `angebot.dashboard-stafl.de` | Mitarbeiter-Eingabe (dieselbe Anwendung wie `/admin/`) | über Keycloak |
+| `verwaltung.dashboard-stafl.de` | Verwaltung (dieselbe Anwendung, nur Verwaltungsbereiche; seit Roadmap 10a, Konsolenschritt `konten.sh realm-aktualisieren`) | über Keycloak |
 | übrige `*.dashboard-stafl.de` | 503-Platzhalter bis zur Freigabe des Moduls (GR-105) | – |
 
 Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nutzen; die alte Anmeldung unter

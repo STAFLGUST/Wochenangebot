@@ -20,7 +20,7 @@ KC_VERSION=26.8.1
 KC_SHA256=4e2740b181faa2ea623a1c2ecf00855935311e546046e2f857615a47ed24cbe8
 CADDY_VERSION=2.10.2
 CADDY_SHA512=747df7ee74de188485157a383633a1a963fd9233b71fbb4a69ddcbcc589ce4e2cc82dacf5dbbe136cb51d17e14c59daeb5d9bc92487610b0f3b93680b2646546
-HOSTS="login.stafl.test dashboard.stafl.test angebot.stafl.test legacy.stafl.test"
+HOSTS="login.stafl.test dashboard.stafl.test angebot.stafl.test verwaltung.stafl.test legacy.stafl.test"
 # Testhosts nie über einen Proxy (lokal und in der CI)
 export no_proxy="${no_proxy:+$no_proxy,}.stafl.test" NO_PROXY="${NO_PROXY:+$NO_PROXY,}.stafl.test"
 
@@ -83,8 +83,10 @@ EOF
   tar xzf "$LADEN/keycloak-$KC_VERSION.tar.gz" -C "$OIDC_WORK"
   local kc="$OIDC_WORK/keycloak-$KC_VERSION"
   mkdir -p "$kc/data/import"
-  sed -e "s/@GEHEIM_DASHBOARD@/$OIDC_SECRET_DASHBOARD/" -e "s/@GEHEIM_ANGEBOT@/$OIDC_SECRET_ANGEBOT/" \
-    "$HIER/realm-mitarbeiter.json" > "$kc/data/import/realm-mitarbeiter.json"
+  # Wie im Betrieb: der erste Import kannte den Client „verwaltung“ noch nicht – ihn legt konten.sh realm-aktualisieren an
+  sed -e "s/@GEHEIM_DASHBOARD@/$OIDC_SECRET_DASHBOARD/" -e "s/@GEHEIM_ANGEBOT@/$OIDC_SECRET_ANGEBOT/" "$HIER/realm-mitarbeiter.json" \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin); r["clients"]=[c for c in r["clients"] if c["clientId"]!="verwaltung"]; json.dump(r,sys.stdout,ensure_ascii=False)' \
+    > "$kc/data/import/realm-mitarbeiter.json"
   export KC_DB=postgres KC_DB_URL="jdbc:postgresql://127.0.0.1:$PG_PORT/keycloak" KC_DB_USERNAME=keycloak
   export KC_HOSTNAME="https://login.stafl.test:$OIDC_PORT" KC_HTTP_ENABLED=true KC_HTTP_HOST=127.0.0.1 KC_HTTP_PORT="$KC_PORT"
   export KC_HTTP_MANAGEMENT_PORT="$KC_MGMT_PORT" KC_PROXY_HEADERS=xforwarded KC_HEALTH_ENABLED=true
@@ -123,15 +125,20 @@ EOF
   mkdir -p "$OIDC_WORK/installation"; echo "DOMAIN=angebot-stafl.de" > "$OIDC_WORK/installation/.env"
   ln -sfn "$REPO/deploy" "$OIDC_WORK/installation/deploy"
   (cd "$OIDC_WORK/installation" && env KCADM="env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY $kc/bin/kcadm.sh" KC_SERVER="http://127.0.0.1:$KC_PORT" \
-    KC_ADMIN_USER_TEST=verwaltung-ci KC_ADMIN_PASSWORD_TEST="$KC_ADMIN_PASSWORD" sh deploy/anmeldung/konten.sh realm-aktualisieren) > "$OIDC_WORK/realm-aktualisieren.log" 2>&1 \
+    KC_ADMIN_USER_TEST=verwaltung-ci KC_ADMIN_PASSWORD_TEST="$KC_ADMIN_PASSWORD" KC_REALM_DATEI="$HIER/realm-mitarbeiter.json" \
+    sh deploy/anmeldung/konten.sh realm-aktualisieren) > "$OIDC_WORK/realm-aktualisieren.log" 2>&1 \
     || { cat "$OIDC_WORK/realm-aktualisieren.log" >&2; exit 1; }
+  # Geheimnisse des neuen Clients hat realm-aktualisieren in .env der Installation erzeugt – wie auf dem Server übernehmen
+  grep -E '^OIDC_(SECRET|CRYPTO)_VERWALTUNG=' "$OIDC_WORK/installation/.env" >> "$OIDC_WORK/geheim.env"
+  set -a; . "$OIDC_WORK/geheim.env"; set +a
+  [ -n "${OIDC_SECRET_VERWALTUNG:-}" ] && [ -n "${OIDC_CRYPTO_VERWALTUNG:-}" ] || { echo "realm-aktualisieren hat keine Werte für die Verwaltung erzeugt" >&2; exit 1; }
 
   # ── Apache mit mod_auth_openidc (nie als root) ──
   local def=(); [ "$ALS_ROOT" = 1 ] && def=(-DALS_ROOT)
   apache2 -f "$HIER/apache.conf" "${def[@]}" -t >/dev/null 2>&1 || apache2 -f "$HIER/apache.conf" "${def[@]}" -t
   apache2 -f "$HIER/apache.conf" "${def[@]}" -k start
   warte "Apache bereit" 30 curl -fsS -o /dev/null -H "Host: legacy.stafl.test" "http://127.0.0.1:$APACHE_PORT/api/?action=status"
-  echo "Testumgebung läuft: https://dashboard.stafl.test:$OIDC_PORT/ · https://angebot.stafl.test:$OIDC_PORT/ · Arbeitsordner $OIDC_WORK"
+  echo "Testumgebung läuft: https://dashboard.stafl.test:$OIDC_PORT/ · https://angebot.stafl.test:$OIDC_PORT/ · https://verwaltung.stafl.test:$OIDC_PORT/ · Arbeitsordner $OIDC_WORK"
 }
 
 stop() (   # eigene Subshell: Fehler beim Beenden brechen nichts ab

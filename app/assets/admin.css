@@ -159,6 +159,10 @@ body:has(.auth.overlay:not([hidden])) #screen-editor { visibility: hidden; }
    ========================================================================== */
 .view-tabs { margin: 0 0 16px; }
 body.in-other #btn-undo, body.in-other #btn-import, body.in-other #btn-preview { display: none; }
+/* Verwaltung unter eigener Adresse: keine Angebotsaktionen in der Kopfzeile (Entwurfsstand, Veröffentlichen, Versand) */
+body.bereich-verwaltung #save-state, body.bereich-verwaltung #btn-site, body.bereich-verwaltung #btn-send, body.bereich-verwaltung #btn-publish,
+body.bereich-verwaltung #menu-more [data-act="versions"], body.bereich-verwaltung #menu-more [data-act="discard"],
+body.bereich-verwaltung #menu-more [data-act="open-site"] { display: none !important; }
 /* Einzelangebote: oben Drucken/E-Mail des geöffneten Einzelangebots statt Versand des Wochenangebots */
 #btn-ez-druck, #btn-ez-mail { display: none; }
 body.in-einzel.ez-editor #btn-ez-druck, body.in-einzel.ez-editor.ez-darf.ez-gespeichert #btn-ez-mail { display: inline-flex; }

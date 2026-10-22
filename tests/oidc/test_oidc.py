@@ -32,7 +32,7 @@ WORK = os.environ.get('OIDC_WORK') or os.path.join(REPO, 'tests', '.arbeit', 'oi
 SH = os.environ.get('WA_SHOTS') or os.path.join(REPO, 'tests', '.ergebnisse')
 os.makedirs(SH, exist_ok=True)
 PORT = 8443
-D, A, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'login'))
+D, A, W, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'verwaltung', 'login'))
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
@@ -150,7 +150,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot'):
+for cid in ('dashboard', 'angebot', 'verwaltung'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -161,7 +161,21 @@ for cid in ('dashboard', 'angebot'):
           c.get('attributes', {}).get('minimum.acr.value') == 'pwd' and any(m.get('protocolMapper') == 'oidc-amr-mapper' for m in c.get('protocolMappers', [])),
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell' in open(os.path.join(WORK, 'realm-aktualisieren.log')).read())
+_log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 3' in _log, _log[-300:])
+check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
+      'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
+      and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
+check('Client „verwaltung“: Geheimnis aus .env übernommen (Code-Austausch funktioniert, siehe Anmeldung unten), kein Platzhalter',
+      clients.get('verwaltung', {}).get('secret') not in (None, '@GEHEIM_VERWALTUNG@'))
+_env = os.path.join(WORK, 'installation', '.env')
+_vorher = open(_env, encoding='utf-8').read()
+_r = subprocess.run(['sh', 'deploy/anmeldung/konten.sh', 'realm-aktualisieren'], cwd=os.path.join(WORK, 'installation'), capture_output=True, text=True,
+                    env=dict(os.environ, KCADM=f"env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY {next(d for d in (os.path.join(WORK, x) for x in os.listdir(WORK)) if os.path.isfile(os.path.join(d, 'bin', 'kcadm.sh')))}/bin/kcadm.sh",
+                             KC_SERVER=KC, KC_ADMIN_USER_TEST='verwaltung-ci', KC_ADMIN_PASSWORD_TEST=GEHEIM['KC_ADMIN_PASSWORD'],
+                             KC_REALM_DATEI=os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json')))
+check('realm-aktualisieren ein zweites Mal: nichts neu angelegt, .env unverändert',
+      _r.returncode == 0 and 'angelegt:' not in _r.stdout and 'erzeugt:' not in _r.stdout and open(_env, encoding='utf-8').read() == _vorher, (_r.returncode, _r.stdout[-300:], _r.stderr[-300:]))
 
 # ── Ohne Anmeldung ──
 code, kopf, _ = anfrage(D + '/dashboard/', kopf=SEITE)
@@ -177,6 +191,11 @@ for k in ({'OIDC_CLAIM_sub': 'x', 'OIDC-CLAIM-sub': 'x', 'OIDC_CLAIM_preferred_u
     check(f'untergeschobene Kopfzeilen melden nicht an: {", ".join(k)}', anfrage(D + '/api/?action=status', kopf=k)[0] == 401)
 check('abgemeldet-Seite und Stylesheets ohne Anmeldung erreichbar', anfrage(D + '/dashboard/abgemeldet.html')[0] == 200 and anfrage(D + '/assets/app.css')[0] == 200)
 check('Mitarbeiter-Eingabe (angebot) ohne Anmeldung → Keycloak', anfrage(A + '/admin/', kopf=SEITE)[0] in (302, 303))
+code, kopf, _ = anfrage(W + '/admin/', kopf=SEITE)
+check('Verwaltung ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['verwaltung']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [W + '/oidc/callback'], kopf.get('Location'))
+check('Verwaltung: Schnittstelle ohne Anmeldung 401', anfrage(W + '/api/?action=status')[0] == 401)
 
 fehler = []
 
@@ -251,6 +270,8 @@ with sync_playwright() as pw:
     check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
     check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto', 'Erika Editor' in pg.text_content('#db-user'), pg.text_content('#db-user'))
     check('acht Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 8 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
+    check('Kachel Verwaltung verfügbar (freigegeben)', pg.text_content('[data-modul="verwaltung"] .db-badge') == 'Verfügbar'
+          and pg.get_attribute('[data-modul="verwaltung"]', 'href') is not None, pg.text_content('[data-modul="verwaltung"] .db-badge'))
     pg.screenshot(path=os.path.join(SH, 'oidc_dashboard_1280.png'), full_page=True)
     k = kekse(ctx, f'dashboard.stafl.test')
     check('Cookies des Dashboards nur mit __Host-Präfix (Secure, Pfad /, ohne Domain)',
@@ -289,6 +310,32 @@ with sync_playwright() as pw:
     check('Sitzung des Dashboards gilt nicht auf angebot (GR-108)', code == 401, code)
     fremd.close()
 
+    # ── Verwaltung unter eigener Adresse: Single Sign-on, eigene Sitzung, nur Verwaltungsbereiche (Rechte unverändert) ──
+    pv = eigene_seite(ctx.new_page())
+    pv.goto(W + '/'); pv.wait_for_selector('#screen-editor:not([hidden]), #screen-auth:not([hidden])', timeout=30000)
+    check('Verwaltung: Single Sign-on, Startadresse führt in den Eingabebereich', pv.url == W + '/admin/' and pv.is_visible('#screen-editor'), pv.url)
+    stv = pv.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('Verwaltung: Bereich kommt vom Webserver (verwaltung.verwaltung)', stv.get('loggedIn') and stv['user'].get('bereich') == 'verwaltung.verwaltung', stv.get('user'))
+    check('Angebot: Bereich angebot.eingabe', sta['user'].get('bereich') == 'angebot.eingabe', sta.get('user'))
+    kv = kekse(ctx, 'verwaltung.stafl.test')
+    check('Verwaltung: eigene Sitzung (andere Cookie-Werte als angebot)', kv.get('__Host-oidc_sitzung', {}).get('value') not in (None, ka.get('__Host-oidc_sitzung', {}).get('value'))
+          and kv.get('__Host-WA_ADMIN', {}).get('value') not in (None, ka.get('__Host-WA_ADMIN', {}).get('value')), sorted(kv))
+    pv.wait_for_function("!document.querySelector('#vt-master').hidden")
+    check('Verwaltung: Überschrift und Titel', pv.text_content('#topbar h1') == 'Verwaltung' and pv.title().startswith('Verwaltung'), (pv.text_content('#topbar h1'), pv.title()))
+    sichtbar = pv.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
+    check('Verwaltung: nur Verwaltungsbereiche (kein Angebot, Bestand, Einkauf, Bestellungen); Bearbeiterin ohne Nutzer/Sicherheit',
+          'master' in sichtbar and not {'edit', 'einzel', 'hist', 'stock', 'einkauf', 'orders', 'angebote', 'users', 'sec', 'schutz', 'mail'} & set(sichtbar), sichtbar)
+    check('Verwaltung: erster erlaubter Bereich geöffnet (nicht der Angebotseditor)', pv.is_hidden('#view-edit') and pv.is_visible('#view-master'))
+    check('Verwaltung: keine Angebotsaktionen in der Kopfzeile (Veröffentlichen, Entwurfsstand, Angebotsseite)',
+          pv.is_hidden('#btn-publish') and pv.is_hidden('#save-state') and pv.is_hidden('#btn-site') and pv.is_hidden('#btn-send'))
+    check('Angebot: Kopfzeile unverändert (Veröffentlichen sichtbar)', pa.is_visible('#btn-publish') and pa.text_content('#topbar h1') == 'Eingabebereich')
+    code, _ = pv.evaluate(js_post.replace("'../api/", "'/api/"), ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, stv.get('csrf', '')])
+    check('Verwaltung: Rechte bleiben serverseitig (Bearbeiterin legt keine Nutzer an)', code == 403, code)
+    pv.screenshot(path=os.path.join(SH, 'oidc_verwaltung_1280.png'))
+    pv.set_viewport_size({'width': 390, 'height': 860}); pv.reload(); pv.wait_for_selector('#screen-editor:not([hidden])')
+    check('Verwaltung 390 px: kein waagerechtes Scrollen', not pv.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
+    pv.screenshot(path=os.path.join(SH, 'oidc_verwaltung_390.png'))
+
     # ── Gesperrtes Konto: sofort ausgesperrt, trotz gültiger Keycloak-Sitzung ──
     uid = nutzer_roh()['erika']['id']
     V.call('user_save', {'id': uid, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': False})
@@ -314,6 +361,8 @@ with sync_playwright() as pw:
     check('Dashboard danach abgemeldet (401)', code == 401, code)
     code = pa.evaluate("fetch('/api/?action=status').then(r => r.status)")
     check('Back-Channel-Logout: Mitarbeiter-Eingabe ebenfalls abgemeldet', code == 401, code)
+    code = pv.evaluate("fetch('/api/?action=status').then(r => r.status)")
+    check('Back-Channel-Logout: Verwaltung ebenfalls abgemeldet', code == 401, code)
     pg.goto(D + '/'); pg.wait_for_selector('#username')
     check('erneuter Aufruf verlangt wieder Passwort (zentrale Sitzung beendet)', pg.url.startswith(L))
     ctx.close()
@@ -370,6 +419,12 @@ with sync_playwright() as pw:
     pg.fill('#otp', totp(chef_otp, 1)); pg.click('#kc-login'); pg.wait_for_selector('#screen-editor:not([hidden])')
     code, _ = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
     check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
+    sichtbar = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
+    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, Sicherheit, E-Mail, Protokoll; kein Angebot',
+          {'master', 'kunden', 'importe', 'users', 'sec', 'mail', 'log', 'schutz'} <= set(sichtbar) and 'edit' not in sichtbar, sichtbar)
+    pg.click('#vt-users'); pg.wait_for_selector('#view-users:not([hidden])')
+    pg.screenshot(path=os.path.join(SH, 'oidc_verwaltung_admin_1280.png'))
     ctx.close()
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──

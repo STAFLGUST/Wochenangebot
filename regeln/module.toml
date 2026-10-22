@@ -275,9 +275,9 @@ hinweise = [
   id = "verwaltung"
   name = "Verwaltung"
   art = "intern"
-  adresse = "https://verwaltung.dashboard-stafl.de/"
-  entwicklung = "geplant"
-  freigabe = "keine"
+  adresse = "https://verwaltung.dashboard-stafl.de/admin/"
+  entwicklung = "fertig"
+  freigabe = "produktiv"
   sperrbar = true
 
   [[modul.oberflaeche]]

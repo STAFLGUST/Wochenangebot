@@ -18,7 +18,7 @@ REALM_QUELLE="$ORDNER/deploy/anmeldung/realm-mitarbeiter.json"
 ZIEL_DIR="$ORDNER/daten-anmeldung/realm-import"
 ZIEL="$ZIEL_DIR/realm-mitarbeiter.json"
 KC_UID=${KC_UID:-1000}   # Benutzer im Keycloak-Image (quay.io/keycloak/keycloak)
-NAMEN="OIDC_SECRET_DASHBOARD OIDC_SECRET_ANGEBOT OIDC_CRYPTO_DASHBOARD OIDC_CRYPTO_ANGEBOT KC_DB_PASSWORD"
+NAMEN="OIDC_SECRET_DASHBOARD OIDC_SECRET_ANGEBOT OIDC_SECRET_VERWALTUNG OIDC_CRYPTO_DASHBOARD OIDC_CRYPTO_ANGEBOT OIDC_CRYPTO_VERWALTUNG KC_DB_PASSWORD"
 START="$ORDNER/daten-anmeldung/einrichtung.env"   # Start-Konto für Keycloak, nur bis konten.sh verwaltung
 
 [ -f "$ENV" ] || { echo "Abbruch: $ENV nicht gefunden – im Installationsordner ausführen." >&2; exit 1; }
@@ -64,7 +64,8 @@ if grep -q '^KC_BOOTSTRAP_ADMIN_' "$ENV"; then sed -i '/^KC_BOOTSTRAP_ADMIN_/d' 
 # Realm mit eingesetzten Geheimnissen (Werte enthalten nur 0-9a-f – sicher für sed)
 mkdir -p "$ZIEL_DIR"
 TMP="$ZIEL.neu"
-sed -e "s/@GEHEIM_DASHBOARD@/$(wert OIDC_SECRET_DASHBOARD)/" -e "s/@GEHEIM_ANGEBOT@/$(wert OIDC_SECRET_ANGEBOT)/" "$REALM_QUELLE" > "$TMP"
+sed -e "s/@GEHEIM_DASHBOARD@/$(wert OIDC_SECRET_DASHBOARD)/" -e "s/@GEHEIM_ANGEBOT@/$(wert OIDC_SECRET_ANGEBOT)/" \
+  -e "s/@GEHEIM_VERWALTUNG@/$(wert OIDC_SECRET_VERWALTUNG)/" "$REALM_QUELLE" > "$TMP"
 if grep -q "@GEHEIM_" "$TMP"; then rm -f "$TMP"; echo "Abbruch: Platzhalter im Realm nicht ersetzt." >&2; exit 1; fi
 mv "$TMP" "$ZIEL"
 mkdir -p "$ORDNER/daten-anmeldung/vault"   # Tresor von Keycloak (Dateien, z. B. Postfach-Passwort)

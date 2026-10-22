@@ -35,7 +35,9 @@ APP_PHP=${APP_PHP:-docker compose -f docker-compose.yml -f deploy/anmeldung/dock
 VAULT_DIR=${KC_VAULT_HOST_DIR:-$(pwd)/daten-anmeldung/vault}
 KC_UID=${KC_UID:-1000}
 EINLADUNG_STUNDEN=72
-FEHLER=$(mktemp); trap 'rm -f "$FEHLER"' EXIT
+# Realm-Datei aus dem Repository (Clients für neue Hosts; die Tests setzen die Testfassung)
+REALM_DATEI=${KC_REALM_DATEI:-$(pwd)/deploy/anmeldung/realm-mitarbeiter.json}
+FEHLER=$(mktemp); trap 'rm -f "$FEHLER" "$FEHLER.client"' EXIT
 
 abbruch() { echo "Abbruch: $*" >&2; exit 1; }
 [ -f "$ENV" ] || abbruch "$ENV nicht gefunden – im Installationsordner ausführen."
@@ -261,6 +263,33 @@ for e in es:
   done
 }
 
+# Client eines neuen Hosts anlegen (Stand 3: verwaltung). Definition aus der Realm-Datei, Geheimnisse aus .env – fehlen sie,
+# werden sie wie von einrichten.sh erzeugt (nie angezeigt). Danach liest die Anwendung sie erst nach einem Neustart.
+ENV_NEU=0
+client_anlegen() { # client_anlegen <clientId>
+  c=$1; n=$(printf '%s' "$1" | tr 'a-z' 'A-Z')
+  [ -n "$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)" ] && return 0
+  [ -f "$REALM_DATEI" ] || abbruch "$REALM_DATEI fehlt – Stand von main einspielen."
+  for g in SECRET CRYPTO; do
+    if [ -z "$(wert "OIDC_${g}_$n")" ]; then
+      [ -n "$(tail -c1 "$ENV")" ] && echo >> "$ENV"
+      printf 'OIDC_%s_%s=%s\n' "$g" "$n" "$(zufall)" >> "$ENV"; ENV_NEU=1
+      echo "erzeugt:   OIDC_${g}_$n in .env"
+    fi
+  done
+  # Geheimnis über die Umgebung an python und über die Standardeingabe an Keycloak – nie als Argument (Prozessliste)
+  GEHEIM=$(wert "OIDC_SECRET_$n") python3 -c '
+import json, os, sys
+r = json.load(open(sys.argv[1], encoding="utf-8"))
+c = [x for x in r.get("clients", []) if x.get("clientId") == sys.argv[2]]
+if not c: sys.exit("Client " + sys.argv[2] + " fehlt in " + sys.argv[1])
+t = json.dumps(c[0]).replace("@GEHEIM_" + sys.argv[2].upper() + "@", os.environ["GEHEIM"])
+if "@GEHEIM_" in t: sys.exit("Platzhalter nicht ersetzt")
+print(t)' "$REALM_DATEI" "$c" > "$FEHLER.client" || { rm -f "$FEHLER.client"; abbruch "Client $c: Definition nicht lesbar."; }
+  kc create clients -r "$REALM" -f - < "$FEHLER.client" >/dev/null; rm -f "$FEHLER.client"
+  echo "angelegt:  Client $c (Host aus $(basename "$REALM_DATEI"))"
+}
+
 realm_aktualisieren() {
   command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
   kc update "realms/$REALM" -s ssoSessionIdleTimeout=14400 -s ssoSessionMaxLifespan=36000 >/dev/null
@@ -305,7 +334,8 @@ for e in json.load(sys.stdin):
       echo "angepasst: amr '$r' für Ausführung $(printf '%s' "$id" | cut -c1-8)"
     fi
   done
-  for c in dashboard angebot; do
+  client_anlegen verwaltung
+  for c in dashboard angebot verwaltung; do
     cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
     [ -n "$cid" ] || continue
     kc update "clients/$cid" -r "$REALM" -s 'attributes."default.acr.values"=pwd' -s 'attributes."minimum.acr.value"=pwd' >/dev/null
@@ -314,7 +344,8 @@ for e in json.load(sys.stdin):
       echo "angelegt:  amr-Claim für Client $c"
     fi
   done
-  echo "Realm aktuell (Stand 2: zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  echo "Realm aktuell (Stand 3: Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
 }
 
 liste() {
