@@ -245,6 +245,30 @@ with sync_playwright() as p:
             roh('203.0.113.90', 'waf_probe&p=/phpmyadmin/')
             a.wait_for_function(f"document.querySelectorAll('#fw-rows tr').length > {n0}", timeout=12000)
             check('Live-Verkehr aktualisiert sich selbst (neuer Eintrag ohne Neuladen)', '203.0.113.90' in a.inner_text('#fw-rows'))
+            # Einträge haben nur Sekunden: ein neuer Eintrag in derselben Sekunde wie der zuletzt angezeigte darf nicht
+            # verloren gehen (in der CI so geschehen). Ansicht neu laden und in derselben Sekunde einen Eintrag erzeugen.
+            gleich = False
+            for versuch in range(5):
+                while time.time() % 1 > 0.2:
+                    time.sleep(0.02)
+                ip_a, ip_b = f'203.0.113.{140 + 2 * versuch}', f'203.0.113.{141 + 2 * versuch}'
+                roh(ip_a, 'waf_probe&p=/sekunde-a/')
+                a.evaluate("document.querySelector('#vt-schutz').click()")
+                a.wait_for_function(f"(document.querySelector('#fw-rows') || {{}}).textContent?.includes('{ip_a}')", timeout=8000)
+                roh(ip_b, 'waf_probe&p=/sekunde-b/')
+                zeiten = {e['ip']: e['t'] for e in A.call('fw_status')[1].get('verkehr', []) if e['ip'] in (ip_a, ip_b)}
+                gleich = len(zeiten) == 2 and zeiten[ip_a] == zeiten[ip_b]
+                try:
+                    a.wait_for_function(f"document.querySelector('#fw-rows').textContent.includes('{ip_b}')", timeout=12000)
+                    erschienen = True
+                except Exception:
+                    erschienen = False
+                if gleich or not erschienen:
+                    break
+            check('Live-Verkehr: Eintrag in derselben Sekunde wie der letzte angezeigte erscheint', gleich and erschienen,
+                  f'gleiche Sekunde: {gleich}, erschienen: {erschienen}')
+            n_b = a.evaluate(f"[...document.querySelectorAll('#fw-rows tr')].filter(r => r.textContent.includes('{ip_b}')).length")
+            check('… und nur einmal (keine doppelten Zeilen)', n_b == 1, n_b)
             a.click('[data-fw-filter=anmeldung]'); a.wait_for_function("document.querySelector('[data-fw-filter=anmeldung]').classList.contains('on')")
             check('Filter „Anmeldungen“', all('Anmeldung' in t for t in a.locator('#fw-rows tr td:nth-child(3)').all_inner_texts()))
             a.click('[data-fw-filter=""]'); a.wait_for_function("document.querySelector('[data-fw-filter=\"\"]').classList.contains('on')")
