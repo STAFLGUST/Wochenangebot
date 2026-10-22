@@ -40,8 +40,18 @@
   ],
   "defaultLocale": "de",
   "eventsEnabled": true,
+  "eventsExpiration": 2592000,
   "adminEventsEnabled": true,
   "requiredActions": [
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 5,
+      "config": {}
+    },
     {
       "alias": "CONFIGURE_TOTP",
       "name": "Configure OTP",
