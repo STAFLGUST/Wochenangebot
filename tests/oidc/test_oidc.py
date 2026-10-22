@@ -50,12 +50,30 @@ def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + ' '.join(str(i).split())[:300]) if i else ''), flush=True)
 
 
-def totp(geheim, versatz=0):
+def totp_zaehler(geheim, zaehler):
     """Einmalcode wie Keycloak (HmacSHA1, 6 Stellen, 30 s; Schlüssel = Bytes des gespeicherten Geheimnisses)."""
-    zaehler = int(time.time() // 30) + versatz
     h = hmac.new(geheim.encode(), struct.pack('>Q', zaehler), hashlib.sha1).digest()
     o = h[-1] & 15
     return '%06d' % ((struct.unpack('>I', h[o:o + 4])[0] & 0x7fffffff) % 1000000)
+
+
+BENUTZT = {}   # Geheimnis → schon eingegebene Zeitschritte (Keycloak lässt jeden Code nur einmal zu: otpPolicyCodeReusable=false)
+
+
+def totp(geheim, versatz=0):
+    """Noch nie eingegebener, gültiger Einmalcode (aktueller oder nächster Zeitschritt; Keycloak lässt ±1 Schritt zu).
+    Sind beide schon verbraucht, wird bis zum nächsten Zeitschritt gewartet (Zustand der Uhr, keine feste Wartezeit).
+    So entstehen keine Fehlversuche, die der Brute-Force-Schutz als schnelle Wiederholung werten würde. „versatz“
+    bleibt aus älteren Aufrufen erhalten und ist nur noch ein Mindestabstand."""
+    benutzt = BENUTZT.setdefault(geheim, set())
+    while True:
+        jetzt = int(time.time() // 30)
+        frei = [z for z in (jetzt + versatz, jetzt + 1) if z >= jetzt and z <= jetzt + 1 and z not in benutzt]
+        if frei:
+            benutzt.add(frei[0])
+            return totp_zaehler(geheim, frei[0])
+        while int(time.time() // 30) == jetzt:
+            time.sleep(0.2)
 
 
 TLS = ssl.create_default_context(cafile=CA)
@@ -258,12 +276,9 @@ def anmelden(pg, wer, otp=True):
 
 
 def otp_eingeben(pg, wer):
-    """Einmalcode eingeben; ein schon verwendeter Code (keine Wiederverwendung) → nächster Code."""
-    for versatz in (0, 1):
-        pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1], versatz)); pg.click('#kc-login')
-        pg.wait_for_load_state()
-        if not (pg.url.startswith(L) and pg.locator('#otp').count()):
-            return
+    """Einmalcode eingeben – immer ein noch nicht verwendeter Code (totp), daher ohne Fehlversuch."""
+    pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1])); pg.click('#kc-login')
+    pg.wait_for_load_state()
 
 
 def eigene_seite(pg):
