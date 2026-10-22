@@ -56,7 +56,7 @@ echo '{"numFailures": 0, "disabled": false, "lastFailure": 0}' > "$T/kc/sperre"
 echo "[{\"time\":$jetzt_ms,\"type\":\"LOGIN\",\"clientId\":\"dashboard\",\"ipAddress\":\"192.0.2.10\"}]" > "$T/kc/ereignisse"
 echo '{"otpPolicyPeriod": 30, "otpPolicyLookAheadWindow": 1, "otpPolicyCodeReusable": false, "failureFactor": 5, "eventsEnabled": true}' > "$T/kc/realm"
 cd "$T/inst"
-export AUS; AUS=$(sh "$REPO/deploy/anmeldung/konten.sh" pruefen Admin 2>&1) && CODE=0 || CODE=$?
+export AUS CODE; AUS=$(sh "$REPO/deploy/anmeldung/konten.sh" pruefen Admin 2>&1) && CODE=0 || CODE=$?
 ok "unauffälliges Konto: Erfolg, keine Hinweise" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Keine Auffälligkeiten gefunden"'
 ok "Name wird klein geschrieben gesucht" 'grep -q "username=admin" "$T/kc/aufrufe"'
 ok "Faktoren mit Bezeichnung, nie Geheimnisse" 'echo "$AUS" | grep -q "Einmalcode (App): eingerichtet .*„Telefon“" && ! echo "$AUS" | grep -q GEHEIM'
