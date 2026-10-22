@@ -137,6 +137,39 @@
         "minimum.acr.value": "mfa",
         "default.acr.values": "mfa"
       }
+    },
+    {
+      "clientId": "verwaltung",
+      "baseUrl": "https://verwaltung.dashboard-stafl.de/admin/",
+      "name": "Verwaltung",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "@GEHEIM_VERWALTUNG@",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "https://verwaltung.dashboard-stafl.de/oidc/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://verwaltung.dashboard-stafl.de/dashboard/abgemeldet.html",
+        "backchannel.logout.url": "https://verwaltung.dashboard-stafl.de/oidc/callback?logout=backchannel",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "false",
+        "minimum.acr.value": "mfa",
+        "default.acr.values": "mfa"
+      }
     }
   ],
   "browserFlow": "mitarbeiter-browser",

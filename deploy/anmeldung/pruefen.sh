@@ -20,7 +20,10 @@ import json, sys
 t = open(sys.argv[1], encoding='utf-8').read(); r = json.loads(t)
 assert 'users' not in r and 'stafl.test' not in t and 'nur-fuer-tests' not in t
 assert all(c['secret'].startswith('@GEHEIM_') for c in r['clients'])
-assert all(c['redirectUris'] == [f"https://{'dashboard-stafl.de' if c['clientId'] == 'dashboard' else 'angebot.dashboard-stafl.de'}/oidc/callback"] for c in r['clients'])
+host = {'dashboard': 'dashboard-stafl.de', 'angebot': 'angebot.dashboard-stafl.de', 'verwaltung': 'verwaltung.dashboard-stafl.de'}
+assert sorted(c['clientId'] for c in r['clients']) == sorted(host)
+assert all(c['redirectUris'] == [f"https://{host[c['clientId']]}/oidc/callback"] for c in r['clients'])
+assert all(c['secret'] == f"@GEHEIM_{c['clientId'].upper()}@" for c in r['clients'])
 PY
 
 # ── 2. Compose ──
@@ -47,13 +50,21 @@ docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-
   && docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" config --format json 2>/dev/null \
   | python3 -c "import sys,json; d=json.load(sys.stdin); s=d['services']; assert 'keycloak' not in s; assert all('app-mitarbeiter' not in json.dumps(v) for v in s.values())" \
   && ok "Ziele app-mitarbeiter und keycloak nur mit der Ergänzungsdatei" || nein "Netzwerkname app-mitarbeiter bzw. keycloak"
+# Release vor dem Konsolenschritt für die Verwaltung (Werte fehlen in .env): Anwendung startet trotzdem, Schlüssel nie leer
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_VERWALTUNG']=='pruefung-b' and e['OIDC_SECRET_VERWALTUNG']" \
+  && ok "Verwaltung: ohne eigene Werte in .env startbar (Schlüssel des Eingabebereichs)" || nein "Verwaltung ohne Werte in .env"
+printf 'OIDC_SECRET_VERWALTUNG=pruefung-v\nOIDC_CRYPTO_VERWALTUNG=pruefung-c\n' >> "$ENV"
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_VERWALTUNG']=='pruefung-c' and e['OIDC_SECRET_VERWALTUNG']=='pruefung-v'" \
+  && ok "Verwaltung: eigene Werte aus .env" || nein "Verwaltung: eigene Werte aus .env"
 
 # ── 3. Anwendungs-Image mit der Betriebskonfiguration ──
 docker build -q -t stafl-app:pruefung "$REPO/deploy/image" >/dev/null
 DATEN="$(mktemp -d)"; cp -r "$REPO/tests/fixtures/data-seed/." "$DATEN/"; chmod -R a+rwX "$DATEN"
 docker run -d --name stafl-pruefung -p 127.0.0.1:18090:80 \
   -e OIDC_ISSUER=https://login.dashboard-stafl.de/realms/mitarbeiter -e OIDC_SECRET_DASHBOARD=x -e OIDC_SECRET_ANGEBOT=x \
-  -e OIDC_CRYPTO_DASHBOARD=pruefung-a -e OIDC_CRYPTO_ANGEBOT=pruefung-b \
+  -e OIDC_CRYPTO_DASHBOARD=pruefung-a -e OIDC_CRYPTO_ANGEBOT=pruefung-b -e OIDC_SECRET_VERWALTUNG=x -e OIDC_CRYPTO_VERWALTUNG=pruefung-c \
   -v "$REPO/app:/var/www/html:ro" -v "$DATEN:/var/www/html/data" -v "$REPO/dashboard:/var/www/dashboard:ro" \
   -v "$HIER/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro" stafl-app:pruefung >/dev/null
 for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:18090/ 2>/dev/null && break; sleep 1; done
@@ -66,7 +77,7 @@ antwort="$(curl -s -H 'Host: angebot-stafl.de' -H 'Content-Type: application/jso
 echo "$antwort" | grep -q "nicht korrekt" && ok "angebot-stafl.de: eigene Anmeldung unverändert (keine Keycloak-Sperre)" || nein "angebot-stafl.de Anmeldung" "$antwort"
 [ "$(code angebot-stafl.de /dashboard/)" = 404 ] && ok "angebot-stafl.de: kein Dashboard" || nein "Dashboard auf angebot-stafl.de" "$(code angebot-stafl.de /dashboard/)"
 [ "$(code unbekannt.example /)" = 200 ] && ok "unbekannter Host fällt auf den bisherigen Standard zurück" || nein "Standard-Host"
-for h in dashboard-stafl.de angebot.dashboard-stafl.de; do
+for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-stafl.de; do
   c="$(code "$h" '/api/?action=status')"; [ "$c" = 401 ] && ok "$h: Schnittstelle ohne Anmeldung 401" || nein "$h Schnittstelle ohne Anmeldung" "$c"
   c="$(code "$h" '/api/?action=login' -H 'Content-Type: application/json' -d '{}')"; [ "$c" = 401 ] && ok "$h: eigene Anmeldung nicht erreichbar" || nein "$h Anmeldung" "$c"
   c="$(code "$h" /admin/ -H 'Accept: text/html')"; case "$c" in 302|500|502|503) ok "$h: Eingabebereich nur über Keycloak ($c, ohne Keycloak hier nicht erreichbar)";; *) nein "$h Eingabebereich" "$c";; esac

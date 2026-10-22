@@ -217,7 +217,11 @@
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
   const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '' };
+  /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
+  const BEREICH_VIEWS = { 'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'] };
   function viewAllowed(v) {
+    const nur = BEREICH_VIEWS[me && me.bereich];
+    if (nur && !nur.includes(v)) return false;
     if (['mail', 'users', 'sec', 'schutz'].includes(v)) return can('admin');
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
     if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
@@ -557,14 +561,18 @@
     document.body.classList.toggle('ro', ro);
     document.body.classList.toggle('ro-hist', roHist);   // Preisverlauf hochladen/löschen hängt am eigenen Recht, nicht am Entwurfsrecht
     document.body.classList.toggle('is-admin', can('admin'));
-    for (const [v, p] of Object.entries(VIEW_PERM)) $('#vt-' + v).hidden = !viewAllowed(v);
+    for (const v of VIEWS) $('#vt-' + v).hidden = !viewAllowed(v);
+    const verw = !!(me && me.bereich === 'verwaltung.verwaltung');
+    document.body.classList.toggle('bereich-verwaltung', verw);
+    $('#topbar h1').textContent = verw ? 'Verwaltung' : 'Eingabebereich';
+    document.title = verw ? 'Verwaltung · STAFL' : 'Wochenangebot · Eingabebereich';
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
     $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
-    if (!viewAllowed(currentView)) setView('edit');
+    if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
   }
   /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
   function lockInputs(root) {
@@ -2251,7 +2259,7 @@
   const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec', 'schutz'];
   function setView(v) {
-    if (!viewAllowed(v)) v = 'edit';
+    if (!viewAllowed(v)) v = viewAllowed('edit') ? 'edit' : (VIEWS.find(viewAllowed) || 'edit');
     currentView = v;
     for (const k of VIEWS) {
       $('#vt-' + k).setAttribute('aria-selected', k === v);

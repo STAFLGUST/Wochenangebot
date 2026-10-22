@@ -359,6 +359,9 @@ class EchtesRegelwerk(unittest.TestCase):
         rw = regeln.laden(WURZEL)
         for mid in ("bestand", "crm", "rewe", "qs", "einkauf", "verwaltung"):
             for o in rw.modul(mid).get("oberflaeche", []):
+                if (mid, o["id"]) == ("verwaltung", "verwaltung"):   # Roadmap 10a: Verwaltung unter eigener Adresse freigegeben
+                    self.assertEqual((o["entwicklung"], o["freigabe"]), ("fertig", "produktiv"))
+                    continue
                 self.assertEqual(o["freigabe"], "keine", f"{mid}.{o['id']}")
         # Inbetriebnahme Schritt 6: Dashboard und zentrale Anmeldung freigegeben (nur mit fertigem Entwicklungsstand)
         for mid, oid in (("dashboard", "start"), ("plattform", "anmeldung")):
