@@ -1,64 +1,61 @@
 #!/usr/bin/env python3
-"""Versionsnummern der eingebundenen Skripte und Stylesheets prüfen bzw. setzen.
+"""Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ prüfen.
 
-Jede Einbindung von /assets/... in den HTML-Seiten unter app/ trägt ?v=<Prüfsumme>.
-Die Prüfsumme ergibt sich aus dem Dateiinhalt. Ändert sich eine Datei, ändert sich
-ihre Adresse – Browser laden sie dann sicher neu statt eine alte Kopie zu verwenden.
+Versionsnummern (?v=<Prüfsumme des Inhalts>) stehen nicht mehr im Repository: Sie entstanden bei fast jedem Pull
+Request neu und lösten Merge-Konflikte aus. Der Server setzt sie beim Einspielen aus genau dem freigegebenen Commit
+(deploy/bereitstellen.py) – dieselbe Prüfsumme wie früher, also dieselben Adressen und dasselbe Zwischenspeichern.
+Fehlt eine Nummer, lädt der Browser die Datei mit Rückfrage („no-cache“, Caddyfile) – nie eine veraltete Kopie.
 
-  python3 werkzeuge/asset_versionen.py           prüfen (Exit 1 bei veralteter Nummer)
-  python3 werkzeuge/asset_versionen.py --setzen  alle Nummern aktualisieren
+  python3 werkzeuge/asset_versionen.py           prüfen: jede eingebundene Datei existiert, keine ?v= im Repository
+  python3 werkzeuge/asset_versionen.py --setzen  vorhandene ?v= entfernen (früherer Arbeitsschritt, jetzt unschädlich)
+  python3 werkzeuge/asset_versionen.py --zeigen  Seiten so ausgeben, wie der Server sie bereitstellt (nur Anzeige)
 """
-import hashlib
+import importlib.util
 import pathlib
-import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / 'app'
-REF = re.compile(r'''(?P<attr>(?:src|href)=")(?P<pfad>(?:\.\./|/)?assets/[^"?#]+\.(?:js|css))(?:\?v=[^"#]*)?"''')
-
-
-def version(datei: pathlib.Path) -> str:
-    return hashlib.sha256(datei.read_bytes()).hexdigest()[:10]
+_spec = importlib.util.spec_from_file_location('bereitstellen', ROOT / 'deploy' / 'bereitstellen.py')
+B = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(B)
 
 
 def seiten():
     for p in sorted(APP.rglob('*.html')):
-        if '.arbeit' not in p.parts:
-            yield p
-
-
-def ziel(seite: pathlib.Path, pfad: str) -> pathlib.Path:
-    return APP / pfad.lstrip('/') if pfad.startswith('/') else (seite.parent / pfad).resolve()
+        rel = p.relative_to(APP).as_posix()
+        if B.ist_seite(rel) and B.ausgeliefert(rel):
+            yield rel, p
 
 
 def main() -> int:
-    setzen = '--setzen' in sys.argv[1:]
+    args = sys.argv[1:]
+    dateien = B.ordner_dateien(APP)
     fehler = []
-    for seite in seiten():
-        text = seite.read_text(encoding='utf-8')
-
-        def ersetzen(m):
-            datei = ziel(seite, m.group('pfad'))
-            if not datei.is_file():
-                fehler.append(f'{seite.relative_to(ROOT)}: {m.group("pfad")} existiert nicht')
-                return m.group(0)
-            neu = f'{m.group("attr")}{m.group("pfad")}?v={version(datei)}"'
-            if neu != m.group(0) and not setzen:
-                fehler.append(f'{seite.relative_to(ROOT)}: {m.group("pfad")} braucht ?v={version(datei)}')
-            return neu
-
-        neu = REF.sub(ersetzen, text)
-        if setzen and neu != text:
-            seite.write_text(neu, encoding='utf-8')
-            print(f'aktualisiert: {seite.relative_to(ROOT)}')
+    for rel, p in seiten():
+        inhalt = p.read_bytes()
+        fehlend = []
+        gestempelt = B.stempeln(rel, inhalt, dateien, fehlend)
+        fehler += fehlend
+        ohne = B.ohne_versionen(inhalt)
+        if '--setzen' in args:
+            if ohne != inhalt:
+                p.write_bytes(ohne)
+                print(f'Versionsnummern entfernt: app/{rel}')
+        elif '--zeigen' in args:
+            print(f'===== app/{rel}')
+            sys.stdout.write(gestempelt.decode('utf-8'))
+        elif ohne != inhalt:
+            fehler.append(f'app/{rel}: enthält ?v=… – Versionsnummern setzt der Server beim Einspielen')
     if fehler:
         print('\n'.join(fehler))
-        if not setzen:
-            print('\nVersionsnummern veraltet – bitte ausführen: python3 werkzeuge/asset_versionen.py --setzen')
+        if any('?v=' in f for f in fehler):
+            print('\nEntfernen: python3 werkzeuge/asset_versionen.py --setzen')
         return 1
-    if not setzen:
-        print('Versionsnummern aktuell.')
+    if not args:
+        print('Einbindungen in Ordnung (Versionsnummern setzt der Server beim Einspielen: deploy/bereitstellen.py).')
+    elif '--setzen' in args:
+        print('Nichts weiter zu tun – Versionsnummern setzt der Server beim Einspielen (deploy/bereitstellen.py).')
     return 0
 
 

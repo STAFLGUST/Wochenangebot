@@ -943,7 +943,7 @@ def main(argv=None) -> int:
         (wurzel / AKTIONEN_LISTE).write_text(aktionen_php(rw), encoding="utf-8")
         (wurzel / MODULE_LISTE).write_text(module_php(rw), encoding="utf-8")
         print(f"geschrieben: {AKTIONEN_LISTE} ({len(aktionen_tabelle(rw))} Aktionen), {MODULE_LISTE} "
-              f"({len(rw.modulliste)} Module) – danach: python3 werkzeuge/integritaet.py --setzen")
+              f"({len(rw.modulliste)} Module)")
         return 0
     if a.befehl == "betroffen":
         liste = sorted(set(a.dateien) | (set(geaenderte_dateien(wurzel, a.basis)) if a.basis else set()))

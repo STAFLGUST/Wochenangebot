@@ -1,67 +1,57 @@
 #!/usr/bin/env python3
-"""Prüfliste der ausgelieferten Programmdateien prüfen bzw. neu erzeugen.
+"""Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht.
 
-app/api/lib/integritaet-liste.php enthält für jede Datei unter app/ (außer app/data/ und der Liste selbst)
-die SHA-256-Prüfsumme. Die Dateiprüfung im Eingabebereich (Sicherheit → Dateiprüfung) vergleicht damit
-den Stand auf dem Server und meldet veränderte, fehlende und unbekannte Dateien.
+Die Liste (Pfad unter app/ => SHA-256) entsteht beim Einspielen aus genau dem freigegebenen Commit
+(deploy/bereitstellen.py) und liegt dann im nur lesend eingebundenen Programmordner – wie früher, nur ohne
+Merge-Konflikte. Die Dateiprüfung im Eingabebereich (Sicherheit → Dateiprüfung) vergleicht damit den Stand auf dem
+Server und meldet veränderte, fehlende und unbekannte Dateien; fehlt die Liste, meldet sie das als kritisch.
 
-  python3 werkzeuge/integritaet.py           prüfen (Exit 1 bei veralteter Liste)
-  python3 werkzeuge/integritaet.py --setzen  Liste neu erzeugen
-
-Reihenfolge nach Änderungen unter app/: erst asset_versionen.py --setzen (ändert HTML-Seiten), dann diese Liste.
+  python3 werkzeuge/integritaet.py           prüfen (CI): Liste nicht versioniert, in .gitignore, Erzeugung funktioniert
+  python3 werkzeuge/integritaet.py --setzen  eine lokal liegende Liste entfernen (früherer Arbeitsschritt, jetzt unnötig)
+  python3 werkzeuge/integritaet.py --zeigen  Liste ausgeben, wie sie der Server für den Arbeitsstand erzeugen würde
 """
-import hashlib
-import os
+import importlib.util
 import pathlib
+import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 APP = ROOT / 'app'
-LISTE = APP / 'api' / 'lib' / 'integritaet-liste.php'
-KOPF = ("<?php if (!defined('WA_API')) { http_response_code(404); exit; }\n"
-        "/* Prüfliste der ausgelieferten Dateien (Pfad unter app/ => SHA-256) für die Dateiprüfung.\n"
-        "   Automatisch erzeugt mit: python3 werkzeuge/integritaet.py --setzen – nicht von Hand ändern. */\n")
+_spec = importlib.util.spec_from_file_location('bereitstellen', ROOT / 'deploy' / 'bereitstellen.py')
+B = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(B)
+REL = 'app/' + B.LISTE
+LISTE = ROOT / REL
 
 
-def dateien():
-    out = []
-    for ordner, unter, namen in os.walk(APP):
-        rel = pathlib.Path(ordner).relative_to(APP)
-        if rel.parts[:1] == ('data',):
-            unter[:] = []
-            continue
-        unter[:] = [u for u in unter if not (rel == pathlib.Path('.') and u == 'data')]
-        for n in namen:
-            p = pathlib.Path(ordner) / n
-            if p == LISTE or p.is_symlink() or not p.is_file():
-                continue
-            out.append((p.relative_to(APP).as_posix(), p))
-    return sorted(out)
-
-
-def inhalt() -> str:
-    zeilen = [KOPF, 'return [\n']
-    for rel, p in dateien():
-        pfad = rel.replace('\\', '\\\\').replace("'", "\\'")
-        zeilen.append(f"    '{pfad}' => '{hashlib.sha256(p.read_bytes()).hexdigest()}',\n")
-    zeilen.append('];\n')
-    return ''.join(zeilen)
+def git(*args) -> int:
+    return subprocess.run(['git', '-C', str(ROOT), *args], capture_output=True).returncode
 
 
 def main() -> int:
-    neu = inhalt()
-    if '--setzen' in sys.argv[1:]:
-        with open(LISTE, 'w', encoding='utf-8', newline='\n') as f:
-            f.write(neu)
-        print(f'Prüfliste geschrieben: {LISTE.relative_to(ROOT)} ({neu.count(" => ")} Dateien)')
+    args = sys.argv[1:]
+    if '--setzen' in args:
+        if LISTE.exists() and git('ls-files', '--error-unmatch', REL) != 0:
+            LISTE.unlink()
+            print(f'Lokale Prüfliste entfernt: {REL}')
+        print('Nichts weiter zu tun – die Prüfliste erzeugt der Server beim Einspielen (deploy/bereitstellen.py).')
         return 0
-    alt = LISTE.read_bytes().decode('utf-8') if LISTE.is_file() else ''
-    if alt != neu:
-        print('Prüfliste der Dateien (app/api/lib/integritaet-liste.php) ist veraltet.\n'
-              'Bitte zuerst python3 werkzeuge/asset_versionen.py --setzen und danach\n'
-              'python3 werkzeuge/integritaet.py --setzen ausführen (die Versionsnummern ändern HTML-Seiten).')
+    seiten, liste, fehlend = B.bereitstellung(B.ordner_dateien(APP))
+    if '--zeigen' in args:
+        sys.stdout.write(B.liste_php(liste, 'dem Arbeitsstand').decode('utf-8'))
+        return 0
+    fehler = []
+    if git('ls-files', '--error-unmatch', REL) == 0:
+        fehler.append(f'{REL} steht im Repository – entfernen (git rm --cached {REL}); sie entsteht beim Einspielen.')
+    if git('check-ignore', '-q', REL) != 0:
+        fehler.append(f'{REL} fehlt in .gitignore.')
+    if not {'index.html', '.htaccess', 'api/index.php', 'api/lib/integritaet.php'} <= set(liste) or B.LISTE in liste:
+        fehler.append('Erzeugung der Prüfliste liefert nicht die erwarteten Dateien.')
+    fehler += fehlend
+    if fehler:
+        print('\n'.join(fehler))
         return 1
-    print('Prüfliste aktuell.')
+    print(f'Prüfliste in Ordnung: nicht im Repository, entsteht beim Einspielen ({len(liste)} Dateien).')
     return 0
 
 

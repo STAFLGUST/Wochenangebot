@@ -36,6 +36,9 @@ CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinand
 4. Code wechseln. Alle Container werden neu erstellt, wenn sich `Caddyfile`, `docker-compose.yml` oder die
    Ergänzungsdatei ändern; wurde in Schritt 2 nur das Image gebaut, nur die App (Keycloak läuft weiter). Das bisherige
    Image bleibt als `stafl-app:release-vorher` erhalten.
+   Direkt danach **Bereitstellung** (`deploy/bereitstellen.py` des neuen Stands): Versionsnummern der Skripte/Stylesheets
+   und Prüfliste der Dateiprüfung aus den Git-Objekten genau dieses Commits (siehe unten). Ein Fehler dabei verhindert das
+   Release nicht – die Seite lädt Dateien ohne Nummer mit Rückfrage, `aktualisieren.sh` holt die Bereitstellung nach.
 5. Healthcheck wie ein Besucher. Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
    (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
 6. Nach erfolgreichem Healthcheck: `docker image prune -f` entfernt nur hängende Images ohne Namen (z. B. das von
@@ -44,11 +47,33 @@ CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinand
 
 Getestet ohne Docker in `tests/deploy/test_freigabe.sh`.
 
+## Versionsnummern und Prüfliste (`deploy/bereitstellen.py`)
+
+Früher standen beide im Repository und lösten bei fast jedem Pull Request Merge-Konflikte aus. Jetzt erzeugt sie der
+Server aus dem eingespielten (also freigegebenen, CI-geprüften) Commit:
+
+- **Versionsnummern** `?v=…` = SHA-256 des Dateiinhalts (10 Zeichen), wie früher – gleiche Adressen, gleiches
+  Zwischenspeichern (Caddy: mit `?v=` ein Jahr, sonst `no-cache`). Eine geänderte Datei bekommt eine neue Adresse, der
+  Browser lädt sie sofort. Fehlt eine Nummer, fragt der Browser beim Server nach – nie eine veraltete Kopie.
+- **Prüfliste** `app/api/lib/integritaet-liste.php` (nicht versioniert, `.gitignore`): gelesen aus den Git-Objekten des
+  Commits, nicht aus dem Arbeitsordner – veränderte oder zusätzliche Dateien werden nie als freigegeben übernommen; sie
+  liegt im nur lesend eingebundenen Programmordner. HTML-Seiten stehen mit beiden Fassungen darin (mit/ohne Nummern).
+- Läuft nach jedem Codewechsel (Release, automatischer und manueller Rückfall, `testumgebung.sh einspielen`,
+  `einrichten.sh`) und bei jedem Lauf von `aktualisieren.sh` (alle 2 Minuten; schreibt nur, wenn etwas fehlt). Eine Seite
+  wird nur ergänzt, wenn sie genau dem Commit entspricht; anders veränderte Dateien bleiben stehen und die Dateiprüfung
+  meldet sie.
+- Stände von vor der Umstellung enthalten Liste und Nummern selbst – dann ändert das Skript nichts (Rückfall).
+- **Übergang:** Den ersten Release mit `bereitstellen.py` spielt noch das alte Skript ein. Bis zum nächsten Lauf von
+  `aktualisieren.sh` (höchstens 2 Minuten) fehlen Nummern (Dateien werden mit Rückfrage geladen) und Prüfliste (eine
+  Dateiprüfung in diesem Moment meldet „Prüfliste fehlt“). Keine Serverschritte nötig.
+- Prüfen von Hand: `python3 deploy/bereitstellen.py --pruefen` (entspricht `app/` dem bereitgestellten Stand?).
+
 ## Notfall-Rückfall von Hand (`deploy/release-zurueck.sh`)
 
 `sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten Release zurück (`vorher` in
 `daten/deployment.php`); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt.
-Container und Image wie beim automatischen Rückfall:
+Danach Versionsnummern und Prüfliste des zurückgeholten Stands (`deploy/bereitstellen.py`). Container und Image wie beim
+automatischen Rückfall:
 
 - `Caddyfile`, `docker-compose.yml` oder die Ergänzungsdatei der Anmeldung unterscheiden sich → alle Container neu.
 - `deploy/image/` unterscheidet sich und `COMPOSE_FILE` enthält die Ergänzungsdatei → `stafl-app:release-vorher` wieder

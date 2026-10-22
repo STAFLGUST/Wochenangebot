@@ -18,6 +18,9 @@
 # beim Einspielen auf den aktiven Namen umgetaggt; das bisherige Image bleibt als stafl-app:release-vorher für den Rückfall
 # (auch für den manuellen Notfall-Rückfall deploy/release-zurueck.sh). Nach erfolgreichem Healthcheck werden hängende
 # Images ohne Namen entfernt (docker image prune -f).
+# Bereitstellung (deploy/bereitstellen.py des eingespielten Stands): nach jedem Codewechsel setzt sie die Versionsnummern
+# der Skripte/Stylesheets und erzeugt die Prüfliste der Dateiprüfung aus genau diesem Commit. Fehlt sie oder schlägt sie
+# fehl, bleibt die Seite korrekt (Dateien ohne Nummer werden mit Rückfrage geladen); aktualisieren.sh holt sie nach.
 #
 # Für Tests überschreibbar: WA_BASIS, WA_API (GitHub-API), WA_HEALTH_URL, WA_HEALTH_HOST, WA_COMPOSE, WA_DOCKER, WA_SICHERN
 set -eu
@@ -77,6 +80,10 @@ gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher
   done
   return 1
 }
+bereitstellen() { # Versionsnummern und Prüfliste aus dem aktiven Commit (Skript des aktiven Stands; ältere Stände bringen beides mit)
+  [ -f deploy/bereitstellen.py ] || return 0
+  python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung (Versionsnummern/Prüfliste) unvollständig – nächster Versuch beim nächsten Lauf"
+}
 einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstellen, wenn sich Konfiguration oder Image ändern
   if [ -f daten/.sqlite-active ] && ! git cat-file -e "$1:app/api/storage.php" 2>/dev/null; then
     echo "SQLite aktiv: Vor einem Rückfall auf Dateispeicherung erst deploy/datenbank-umschalten.sh rollback ausführen."
@@ -89,6 +96,7 @@ einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstelle
     $DOCKER tag "$BILD_NEU" "$APP_BILD"
   fi
   git reset -q --hard "$1"
+  bereitstellen
   # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env);
   # nur das Image geändert: nur die App neu erstellen (Keycloak und seine Datenbank laufen weiter)
   if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
