@@ -218,12 +218,22 @@
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
   const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
-  /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung. Ohne Bereich
-     (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
+  /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
+     Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
+     mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
     'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'],
-    'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'angebote'],
+    'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
+    'bestand.intern': ['stock'],
   };
+  /* Überschrift je Bereich ohne Angebotsaktionen in der Kopfzeile (Regel body.bereich-verwaltung in admin.css) */
+  const BEREICH_KOPF = { 'verwaltung.verwaltung': 'Verwaltung', 'bestand.intern': 'Bestand' };
+  /* Startansicht aus der Adresse (#importe oder ?ansicht=importe, z. B. verwaltung…/import/) – nur erlaubte Ansichten */
+  function startAnsicht() {
+    let v = '';
+    try { v = decodeURIComponent(location.hash.slice(1)) || new URLSearchParams(location.search).get('ansicht') || ''; } catch { v = ''; }
+    return VIEWS.includes(v) && viewAllowed(v) ? v : '';
+  }
   function viewAllowed(v) {
     const nur = BEREICH_VIEWS[me && me.bereich];
     if (nur && !nur.includes(v)) return false;
@@ -567,14 +577,15 @@
     document.body.classList.toggle('ro-hist', roHist);   // Preisverlauf hochladen/löschen hängt am eigenen Recht, nicht am Entwurfsrecht
     document.body.classList.toggle('is-admin', can('admin'));
     for (const v of VIEWS) $('#vt-' + v).hidden = !viewAllowed(v);
-    const verw = !!(me && me.bereich === 'verwaltung.verwaltung');
-    document.body.classList.toggle('bereich-verwaltung', verw);
-    $('#topbar h1').textContent = verw ? 'Verwaltung' : 'Eingabebereich';
+    const kopf = (me && BEREICH_KOPF[me.bereich]) || '';
+    document.body.classList.toggle('bereich-verwaltung', !!kopf);   // keine Angebotsaktionen in der Kopfzeile
+    document.body.classList.toggle('bereich-bestand', !!(me && me.bereich === 'bestand.intern'));
+    $('#topbar h1').textContent = kopf || 'Eingabebereich';
+    document.title = kopf ? kopf + ' · STAFL' : 'Wochenangebot · Eingabebereich';
     /* Rückweg zum Dashboard nur unter der zentralen Anmeldung; die Adresse kommt vom Server (nur https) */
     const dash = me && me.zentral && /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(me.dashboard || '') ? me.dashboard : '';
     $('#btn-dashboard').hidden = !dash;
     if (dash) $('#btn-dashboard').href = dash;
-    document.title = verw ? 'Verwaltung · STAFL' : 'Wochenangebot · Eingabebereich';
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
@@ -675,6 +686,8 @@
       if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel). Zum Übernehmen veröffentlichen.`, 7000); }
       loadMaster().then(() => migrateMaster()).catch(() => {});
     }
+    const start = startAnsicht();
+    if (start) currentView = start;
     if (currentView !== 'edit') setView(currentView);
     startSync();
   }
@@ -2298,6 +2311,7 @@
     if (v === 'schutz' && window.WA.views.schutz) window.WA.views.schutz();
   }
   for (const k of VIEWS) $('#vt-' + k).addEventListener('click', () => setView(k));
+  window.addEventListener('hashchange', () => { const v = me && startAnsicht(); if (v) setView(v); });
 
   async function renderHistView() {
     const host = $('#view-hist');

@@ -359,7 +359,8 @@ class EchtesRegelwerk(unittest.TestCase):
         rw = regeln.laden(WURZEL)
         for mid in ("bestand", "crm", "rewe", "qs", "einkauf", "verwaltung"):
             for o in rw.modul(mid).get("oberflaeche", []):
-                if (mid, o["id"]) == ("verwaltung", "verwaltung"):   # Roadmap 10a: Verwaltung unter eigener Adresse freigegeben
+                # Roadmap 10a: Verwaltung unter eigener Adresse; Phase 1 Bestand/Import: bestand.dashboard-stafl.de und Importzentrale
+                if (mid, o["id"]) in (("verwaltung", "verwaltung"), ("verwaltung", "import"), ("bestand", "intern")):
                     self.assertEqual((o["entwicklung"], o["freigabe"]), ("fertig", "produktiv"))
                     continue
                 self.assertEqual(o["freigabe"], "keine", f"{mid}.{o['id']}")

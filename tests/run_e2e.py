@@ -222,10 +222,10 @@ def run(name):
 # Noch nicht produktiv ausgelieferte Oberflächen (nicht in app/): nur in der jeweiligen Testgruppe unter dem Testserver
 ZUSATZ = {'dashboard': [('dashboard', 'dashboard')]}
 
-# Testzustand des Modulregisters für einzelne Gruppen: heute sind alle neuen Module „geplant“ – um Testfreigabe und
-# Produktivfreigabe der Modulverwaltung zu prüfen, stellt die Gruppe zwei Module in ihrer App-Kopie weiter
-# (Bestand: in Prüfung, Einkauf: fertig). Nur die Kopie im Testordner; das Register im Code bleibt unverändert.
-REGISTER_TEST = {'modulverwaltung': [("'bestand' => [", 'in_pruefung'), ("'einkauf' => [", 'fertig')]}
+# Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
+# prüfen, stellt die Gruppe zwei noch geplante Module in ihrer App-Kopie weiter (REWE: in Prüfung, Einkauf: fertig;
+# Bestand ist seit Phase 1 produktiv). Nur die Kopie im Testordner; das Register im Code bleibt unverändert.
+REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung'), ("'einkauf' => [", 'fertig')]}
 
 
 def register_anpassen(app, aenderungen):

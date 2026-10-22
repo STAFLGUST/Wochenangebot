@@ -94,19 +94,26 @@ with sync_playwright() as pw:
     check('Kachelnamen aus dem Register', [x['name'] for x in k][:2] == ['Angebot', 'Bestand'], [x['name'] for x in k])
     ang = k[0]
     check('Angebot: verfügbar, als Verweis auf die Mitarbeiter-Eingabe (Testserver: gleicher Host)', ang['tag'] == 'A' and ang['href'] == '/admin/' and ang['badge'] == 'Verfügbar', ang)
-    verw = k[-1]
+    kid = {x['id']: x for x in k}
+    verw = kid['verwaltung']
     check('Verwaltung: freigegeben (Roadmap 10a), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
-          verw['id'] == 'verwaltung' and verw['tag'] == 'A' and verw['href'] == '/admin/' and verw['badge'] == 'Verfügbar', verw)
-    gesperrt = [x for x in k[1:-1] if x['tag'] != 'DIV' or x['href']]
+          verw['tag'] == 'A' and verw['href'] == '/admin/' and verw['badge'] == 'Verfügbar', verw)
+    best = kid['bestand']
+    check('Bestand: freigegeben (Phase 1), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
+          best['tag'] == 'A' and best['href'] == '/admin/' and best['badge'] == 'Verfügbar', best)
+    imp = kid['import']
+    check('Import: freigegeben, Verweis auf /import/ (Testserver: gleicher Host)', imp['tag'] == 'A' and imp['href'] == '/import/' and imp['badge'] == 'Verfügbar', imp)
+    offen = [kid[m] for m in ('crm', 'rewe', 'qs', 'einkauf')]
+    gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
-    check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in k[1:-1]), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
-    check('Zähler: 2 von 8 Anwendungen', '2 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 4)
+    check('Zähler: 4 von 8 Anwendungen', '4 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user') and pg.text_content('#db-user-name') == 'Administrator', pg.text_content('#db-user'))
     check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
     gesperrt = [x for x in k if x['tag'] == 'DIV']
     check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
-          len(gesperrt) == 6 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+          len(gesperrt) == 4 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
     check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
     check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
     band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
@@ -129,10 +136,11 @@ with sync_playwright() as pw:
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
     echt = pg.evaluate("""fetch('../api/?action=module_status').then(r => r.json()).then(d => {
         const alle = Object.fromEntries(d.module.map((m) => [m.id, m]));
-        return ['angebot', 'verwaltung'].map((id) => [window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'dashboard-stafl.de'),
+        return ['angebot', 'verwaltung', 'bestand', 'import'].map((id) => [window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'dashboard-stafl.de'),
                                                       window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'angebot.stafl.test')]); })""")
     check('Echtbetrieb (dashboard-stafl.de): Kacheln führen zu den Hosts der zentralen Anmeldung, nicht zum bisherigen /admin/',
-          echt == [['https://angebot.dashboard-stafl.de/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/admin/', '/admin/']], echt)
+          echt == [['https://angebot.dashboard-stafl.de/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/admin/', '/admin/'],
+                   ['https://bestand.dashboard-stafl.de/admin/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/import/', '/import/']], echt)
     pg.click('#db-grid a[data-modul="angebot"]'); pg.wait_for_url('**/admin/')
     check('Klick auf Angebot öffnet die Mitarbeiter-Eingabe', pg.url.endswith('/admin/'))
     ctx.close()
@@ -209,7 +217,7 @@ with sync_playwright() as pw:
     check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: nur noch die Verwaltung verfügbar (1 von 8)', '1 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Bestand, Import und Verwaltung weiter verfügbar (3 von 8)', '3 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')
