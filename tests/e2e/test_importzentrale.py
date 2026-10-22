@@ -310,6 +310,10 @@ with sync_playwright() as p:
     m.set_input_files('#view-importe input[data-imp-datei="kunden"]', KUNDEN_CSV); m.wait_for_selector('#imp-neu')
     check('390 px: Vorschau ohne waagerechtes Scrollen', m.evaluate('document.documentElement.scrollWidth') <= 390, m.evaluate('document.documentElement.scrollWidth'))
     m.screenshot(path=SH + '/importzentrale-390-vorschau.png', full_page=True)
+    m.emulate_media(color_scheme='dark'); m.wait_for_function("getComputedStyle(document.body).backgroundColor !== 'rgb(243, 243, 241)'")
+    check('dunkel: Kennzeichen „Fehler“ lesbar (eigene Farbe, nicht Hintergrund)', m.evaluate(
+        "() => { const b = document.querySelector('.imp-badge.fehler'); const s = b && getComputedStyle(b); return !!s && s.color !== s.backgroundColor; }"))
+    m.screenshot(path=SH + '/importzentrale-390-dunkel.png', full_page=True)
 
     # Anzeige je Recht (Menüpunkt passt zur Liste des Servers)
     def sicht(user):

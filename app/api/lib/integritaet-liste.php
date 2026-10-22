@@ -4,7 +4,7 @@
 return [
     '.htaccess' => '34a4a401cdb2a59459b2974dd3caf03584008b349f545452498dc7a4b6709714',
     'admin/.htaccess' => '0910acbea2b93e39f455edf4ed99bf0fcf7e3804eea12e25435cb56cf1e3d41a',
-    'admin/index.html' => 'ca628609c013cb5809d13b93c58f35289be92acd0dad40c97b11f246a7b46b70',
+    'admin/index.html' => 'a4f8b246a5d3c452437c4ad68774eb5ddee53b156402e007a87a6c7faa077d6e',
     'api/aktionen/angebote.php' => '66dd09e0a42b0298f4f21449493aa967ea0229469889157a203dceb7382a41bc',
     'api/aktionen/app.php' => '6815c4c75423ca8eddc4e145da75090400f4bc8ac9933840f99e29056e2b1165',
     'api/aktionen/auswertung.php' => '64f9a4431d88f5c284dc3ce886392a8524195beddd7c6e66550ed253c9230193',
@@ -69,7 +69,7 @@ return [
     'api/storage.php' => 'c3f266950a0b25b56d3bd4f91dc200e3b92461c15b68dfd50779e885362ac5a5',
     'assets/admin-auswertung.js' => 'f28d8770e49ffaa1ad1eb7feed0e68dab5c10ce5fc7b2ff9613ebe0b25f4f398',
     'assets/admin-einzel.js' => '5cf324730631786b5ccee848a48f02b6fcfe640c1c87f553c5d0ca8567cbf712',
-    'assets/admin-import.css' => '081352262ced535156cea8813e5314cf5939542c0847b20063da1153bbe02ab9',
+    'assets/admin-import.css' => '4aaba4360f5114783da2ff3ba13b7a6cbbaaad1288ef5ee749e8c02f9dd20198',
     'assets/admin-import.js' => 'b9e588b2c513dea857fb0ae82187b4d933fc8d3588e899e1ca0d630b61f34bc4',
     'assets/admin-schutz.js' => '1897328904b5c47aa114a7a4a585e4a9045dba2c9c7b84d2ac41e630ed06fdbf',
     'assets/admin-verwaltung.js' => 'a099c36250387d42d9b7f355ec8f76a6a5fc15769451f2606d40785441d31d8d',

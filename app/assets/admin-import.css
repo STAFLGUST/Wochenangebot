@@ -57,3 +57,7 @@
   .imp-fuss .btn { flex: 1 1 auto; justify-content: center; }
   .imp-fuss .sp { display: none; }
 }
+
+/* Hinweise „Prüfen“ im dunklen Design (app.css hat dafür nur die Variante mit data-theme="dark") */
+@media screen { :root[data-theme="dark"] .imp-hinweise li.warn { background: rgba(217, 168, 101, .08); } }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .imp-hinweise li.warn { background: rgba(217, 168, 101, .08); } }
