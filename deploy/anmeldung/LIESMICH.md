@@ -1,13 +1,14 @@
-# Zentrale Anmeldung – Betriebskonfiguration (noch nicht aktiv)
+# Zentrale Anmeldung – Betriebskonfiguration
 
 Vorbereitet für die Inbetriebnahme nach [docs/plattform/inbetriebnahme-anmeldung.md](../../docs/plattform/inbetriebnahme-anmeldung.md).
-Nichts hiervon wird durch ein Release aktiv: `docker-compose.yml` und `Caddyfile` bleiben unverändert.
+`docker-compose.yml` bleibt unverändert; aktiv wird die Ergänzungsdatei erst über `COMPOSE_FILE` in `.env` (Schritt 5).
+Die öffentlichen Hosts stehen im `Caddyfile` (Schritt 6) und führen nur zu Zielen, die es ausschließlich mit der
+Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie antworten sie mit 502.
 
 | Datei | Inhalt |
 | --- | --- |
 | `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.1 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
 | `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de` und `angebot.dashboard-stafl.de` (wie `tests/oidc/apache.conf`); als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
-| `Caddyfile.anmeldung` | neue Hosts für Caddy (Schritt 6) |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |

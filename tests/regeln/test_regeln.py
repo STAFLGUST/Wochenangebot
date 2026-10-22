@@ -357,9 +357,13 @@ class EchtesRegelwerk(unittest.TestCase):
 
     def test_unfertige_module_nicht_freigegeben(self):
         rw = regeln.laden(WURZEL)
-        for mid in ("bestand", "crm", "rewe", "qs", "einkauf", "verwaltung", "dashboard"):
+        for mid in ("bestand", "crm", "rewe", "qs", "einkauf", "verwaltung"):
             for o in rw.modul(mid).get("oberflaeche", []):
                 self.assertEqual(o["freigabe"], "keine", f"{mid}.{o['id']}")
+        # Inbetriebnahme Schritt 6: Dashboard und zentrale Anmeldung freigegeben (nur mit fertigem Entwicklungsstand)
+        for mid, oid in (("dashboard", "start"), ("plattform", "anmeldung")):
+            o = {x["id"]: x for x in rw.modul(mid)["oberflaeche"]}[oid]
+            self.assertEqual((o["entwicklung"], o["freigabe"]), ("fertig", "produktiv"), f"{mid}.{oid}")
 
     def test_angebot_kunden_und_eingabe_getrennt(self):
         o = {x["id"]: x for x in regeln.laden(WURZEL).modul("angebot")["oberflaeche"]}
@@ -373,7 +377,7 @@ class EchtesRegelwerk(unittest.TestCase):
         anm = {o["id"]: o for o in rw.modul("plattform")["oberflaeche"]}["anmeldung"]
         self.assertEqual(anm["adresse"], "https://login.dashboard-stafl.de/")
         self.assertIs(anm["sperrbar"], False)
-        self.assertEqual(anm["freigabe"], "keine")
+        self.assertEqual(anm["freigabe"], "produktiv")
         ids = {r["id"] for r in rw.katalog["regel"]}
         self.assertTrue({"GR-108", "GR-109", "GR-110", "GR-111"} <= ids)
 

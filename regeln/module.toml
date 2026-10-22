@@ -315,8 +315,8 @@ hinweise = ["Kacheln kommen ausschließlich aus dem Modulregister – keine fest
   name = "Mitarbeiter-Dashboard"
   art = "intern"
   adresse = "https://dashboard-stafl.de/"
-  entwicklung = "geplant"
-  freigabe = "keine"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Inbetriebnahme Schritt 6 (Freigabe des Inhabers mit dem Merge)
   sperrbar = false
 
 [[modul]]
@@ -351,10 +351,9 @@ hinweise = [
   name = "Zentrale Mitarbeiteranmeldung (Keycloak, ADR-003)"
   art = "intern"
   adresse = "https://login.dashboard-stafl.de/"
-  entwicklung = "geplant"
-  freigabe = "keine"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Inbetriebnahme Schritt 6 (Freigabe des Inhabers mit dem Merge)
   sperrbar = false
-  dns = false
 
 [[modul]]
 id = "mobile"

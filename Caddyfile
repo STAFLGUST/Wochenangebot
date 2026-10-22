@@ -75,10 +75,53 @@ test.{$DOMAIN} {
 	reverse_proxy app-test:80
 }
 
-# STAFL-Plattform: vorbereitete Domains ohne öffentlich erreichbare Mitarbeiter-Anwendung.
+# STAFL-Plattform: zentrale Anmeldung (ADR-003, docs/plattform/inbetriebnahme-anmeldung.md Schritt 6).
+# Ziele gibt es nur mit der Ergänzungsdatei deploy/anmeldung/docker-compose.anmeldung.yml (COMPOSE_FILE in .env):
+# „keycloak“ und der Netzwerkname „app-mitarbeiter“ (dieselbe App, dort mit Keycloak-Hosts in Apache). Ohne sie
+# antworten diese Hosts mit einem Fehler (502) – nie mit der Anwendung ohne Keycloak-Anmeldung.
+
+# Keycloak: nur der Realm „mitarbeiter“ und statische Dateien; Verwaltung und Master-Realm nie öffentlich
+login.dashboard-stafl.de {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+	@anmeldung path /realms/mitarbeiter/* /resources/*
+	handle @anmeldung {
+		reverse_proxy keycloak:8080
+	}
+	respond 404
+}
+
+# Dashboard und Mitarbeiter-Eingabe: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
+dashboard-stafl.de, angebot.dashboard-stafl.de {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://login.dashboard-stafl.de; frame-ancestors 'self'; upgrade-insecure-requests"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+		Cross-Origin-Resource-Policy "same-origin"
+		X-Robots-Tag "noindex, nofollow"
+		?Cache-Control "no-cache"
+		-Server
+		-X-Powered-By
+	}
+	@private path /data /data/*
+	respond @private 404
+	reverse_proxy app-mitarbeiter:80
+}
+
+# STAFL-Plattform: vorbereitete Modul-Domains ohne öffentlich erreichbare Anwendung (GR-105).
 # Erst nach fertiger Anmeldung, Rechteprüfung und geprüfter Release-Freigabe pro Modul routen.
 # Bis dahin: keine Weiterleitung an die produktive Angebots-API oder interne Container.
-dashboard-stafl.de, bestand.dashboard-stafl.de, crm.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, verwaltung.dashboard-stafl.de, test.dashboard-stafl.de {
+bestand.dashboard-stafl.de, crm.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, verwaltung.dashboard-stafl.de, test.dashboard-stafl.de {
 	encode zstd gzip
 	header {
 		X-Robots-Tag "noindex, nofollow"

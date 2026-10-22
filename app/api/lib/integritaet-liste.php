@@ -45,7 +45,7 @@ return [
     'api/lib/kern.php' => 'e6b604e2c9e1db7c14026d39ba6ddcd78ef09f0bd844317bc2eb78de75ec08c9',
     'api/lib/kunden.php' => 'ef40d998c238ee3686cf92bc52beb49803079b62a669bb938adf227da48fc656',
     'api/lib/kundenmail.php' => '32fa3df343e02e27bf64c754b73de904ff748e9b3740364e88ebc58d3e39b567',
-    'api/lib/module-liste.php' => '77c3441cdcdb445bb802be54c1da505319c08d35ce64f47985eaf43ace6b7125',
+    'api/lib/module-liste.php' => 'dcd7495fd426a9b2cb1ec8365109ca0203eed3ac42ec1d98c63c82e6a0d08e3d',
     'api/lib/module.php' => 'a9958168c6a431800dacf5f83451023feaf9fbc6a5b0bd6c6973a7ffa8e062c9',
     'api/lib/nutzer.php' => '8189c770e7ae1406b40eced6ddf29e6b39efe350dca224eba108124749bb49bd',
     'api/lib/oidc.php' => 'd93b3caeee132a20a473c718d3d842e8b229e108033adb7ba72416565ed59b4a',
