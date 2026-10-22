@@ -35,7 +35,7 @@ Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nut
 | 4 | **Konten in der Serverkonsole** (kein SSH, kein Browser): `sh deploy/anmeldung/konten.sh verwaltung` (dauerhaftes Verwaltungskonto mit Zufallspasswort in `.env`, Start-Konto gelöscht, `KC_BOOTSTRAP_*` aus `.env` entfernt), dann je Mitarbeiter `sh deploy/anmeldung/konten.sh anlegen <benutzername> <e-mail> <vorname> <nachname>` mit dem **gleichen Benutzernamen** wie im Eingabebereich – Startpasswort wird einmal angezeigt; bei der ersten Anmeldung sind eigenes Passwort und Einmalcode Pflicht. Zunächst nur das eigene Konto (Probe in Schritt 8), die übrigen danach | Inhaber | – | `konten.sh sperren <name>` |
 | 5 | **Ergänzungsdatei dauerhaft aktivieren** – in `.env`: `COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml` (sonst würde ein späteres Release die App wieder ohne Keycloak-Hosts starten) –, dann Anwendungs-Image bauen und App neu starten (`docker compose build app && docker compose up -d app`, wenige Sekunden Unterbrechung). `angebot-stafl.de` bleibt Standard-Host und verhält sich unverändert (in `pruefen.sh` geprüft) | Inhaber | **Server** | Zeile `COMPOSE_FILE` entfernen, `docker compose up -d app` |
 | 6 | **Caddy:** Platzhalter für `dashboard-stafl.de` durch `deploy/anmeldung/Caddyfile.anmeldung` ersetzen (eigener PR mit Release) – damit werden Anmeldung, Dashboard und Mitarbeiter-Eingabe öffentlich erreichbar | Claude (PR), Inhaber (Release) | **Release** | Release zurück |
-| 7 | **Sicherung** der Keycloak-Datenbank in `deploy/sichern.sh` ergänzen (`pg_dump`, verschlüsselt wie die Geschäftsdaten) und Rücksicherung einmal üben | Claude (PR) | Release | – |
+| 7 | **Sicherung** der Keycloak-Datenbank: `deploy/sichern.sh` sichert sie automatisch mit, sobald Keycloak läuft (`sicherungen/anmeldung-<Zeit>.dump`, `pg_dump` im Container, Inhalt geprüft, nur für root lesbar, 30 Stände; läuft Keycloak laut `.env` aber die Datenbank nicht, meldet die Sicherung einen Fehler). Nach Schritt 3 einmal `sh deploy/sichern.sh --jetzt` und die Rücksicherung unten üben | Claude (PR), Inhaber (Release, Probe) | Release | – |
 | 8 | **Probe mit einem Konto** (Inhaber): Anmeldung mit Einmalcode und Passkey, Dashboard, Mitarbeiter-Eingabe, sensible Aktion (erneute Anmeldung), Abmelden für alle | Inhaber | – | – |
 | 9 | **Mitarbeiter informieren:** neue Adresse `angebot.dashboard-stafl.de`; `/admin/` bleibt bis Roadmap 8 parallel | Inhaber | – | – |
 
@@ -62,6 +62,29 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   `tests/oidc/umgebung.sh` gemeinsam erhöhen; erst wenn der CI-Auftrag grün ist (ADR-003: kritische Lücken in 72 Std.).
 - **Notfall:** Keycloak nicht erreichbar → Mitarbeiter arbeiten übergangsweise über `angebot-stafl.de/admin/` weiter
   (solange Roadmap 8 nicht umgesetzt ist). Danach: Rückweg in Schritt 5/6.
+
+## Rücksicherung der Anmeldung (Keycloak)
+
+Im Installationsordner, `<datei>` = gewünschter Stand aus `sicherungen/anmeldung-*.dump`:
+
+```sh
+K="docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml"
+$K stop keycloak
+$K exec -T keycloak-db pg_restore -U keycloak -d keycloak --clean --if-exists --no-owner < sicherungen/<datei>
+$K start keycloak
+```
+
+Üben ohne Eingriff in den Betrieb (in eine Probedatenbank, danach wieder löschen):
+
+```sh
+$K exec -T keycloak-db createdb -U keycloak probe
+$K exec -T keycloak-db pg_restore -U keycloak -d probe --no-owner < "$(ls -1t sicherungen/anmeldung-*.dump | head -1)"
+$K exec -T keycloak-db psql -U keycloak -d probe -tAc "SELECT count(*) FROM user_entity"   # Anzahl Konten
+$K exec -T keycloak-db dropdb -U keycloak probe
+```
+
+Die Sicherung enthält Passwort-Hashes und die Geheimnisse der Einmalcodes; sie liegt wie die Geschäftsdaten nur für root
+lesbar auf dem Server. Für einen neuen Server werden zusätzlich die Einträge der zentralen Anmeldung aus `.env` gebraucht.
 
 ## Offene Punkte vor Schritt 6
 
