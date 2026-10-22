@@ -33,7 +33,8 @@ Damit erkennt ein CRM-Agent ohne QS-Wissen, wenn seine Änderung Kundenstammdate
 1. `git fetch origin && git worktree add ../wa-<modul> -b agent/<modul>/<thema> origin/main`
 2. `python3 werkzeuge/regeln.py modul <modul>` lesen, betroffene Regeln in `regeln/katalog.toml` lesen.
 3. Entwickeln; schnelle Prüfung: `python3 werkzeuge/regeln.py pruefen` und die Testgruppen aus `betroffen`.
-4. Vor dem PR: volle E2E-Suite in beiden Speicherarten (Definition of Done), `betroffen`-Ausgabe in den PR-Text.
+4. Vor dem PR: die Gruppen aus `betroffen` in beiden Speicherarten; die volle E2E-Suite läuft in der CI (Definition of
+   Done), `betroffen`-Ausgabe in den PR-Text; „bereit zum Mergen“ erst mit grüner CI.
 5. PR „bereit zum Mergen“; Merge und Release nur durch den Inhaber.
 
 ## Konflikte vermeiden
@@ -70,7 +71,8 @@ Ebene 1 ist bereits so isoliert, wie es der Auftrag verlangt (jede Gruppe starte
 Kopie der Testdaten). Darauf aufbauend:
 
 - **Schneller während der Entwicklung:** `betroffen` nennt die Testgruppen; die volle Suite (≈ 10 min je Speicherart)
-  bleibt Pflicht vor dem PR und in der CI. Keine bestehende Pflichtprüfung wird abgeschaltet.
+  bleibt Pflicht in der CI (seit 22.10.2026 nicht mehr zusätzlich lokal – bei mehreren Agenten auf einer Maschine
+  kostete das 30–60 min je PR). Keine bestehende Pflichtprüfung wird abgeschaltet.
 - **Vertragstests:** die Wartungs-Entscheidungstabelle ist in `regeln/wartung.toml` mit Testfällen hinterlegt; die
   PHP-Umsetzung (Phase 5) muss dieselben Fälle bestehen – eine Definition, zwei Prüfer.
 - **Architekturtests:** `werkzeuge/regeln.py pruefen` (Modulgrenzen, Datenverantwortung, Rechte, Caddy ↔ Register).

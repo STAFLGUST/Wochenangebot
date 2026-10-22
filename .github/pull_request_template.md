@@ -9,7 +9,7 @@
      Bei koordinationspflichtigen Bereichen: was ändert sich an der gemeinsamen Schnittstelle, wer nutzt sie? -->
 
 ## Definition of Done (AGENTS.md)
-- [ ] Volle E2E-Suite lokal grün – **Dateien und SQLite** (`python3 tests/run_e2e.py`, `WA_TEST_STORAGE=sqlite …`), Ergebnis unten eingetragen
+- [ ] Betroffene Testgruppen lokal grün – **Dateien und SQLite** (`python3 werkzeuge/regeln.py betroffen`), volle Suite in der CI grün, beides unten eingetragen
 - [ ] Neue Tests für neues Verhalten (inkl. Rechte/Fehlerfälle), `tests/README.md` ergänzt
 - [ ] Oberfläche per Bildschirmfoto geprüft (Desktop und Mobil, hell/dunkel bei neuen Farben)
 - [ ] `python3 werkzeuge/asset_versionen.py` und `python3 werkzeuge/integritaet.py` grün (Einbindungen ohne `?v=`; Nummern und Prüfliste erzeugt der Server)

@@ -90,20 +90,25 @@ Ablauf und Begründungen: `docs/plattform/multi-agent.md`. Kurzfassung:
 Ein PR ist erst fertig, wenn alle Punkte erfüllt sind – unabhängig davon, welches Werkzeug oder welche Sitzung ihn
 erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern fertiggestellt oder klar als offen beschrieben.
 
-1. Volle E2E-Suite in **beiden** Speicherarten lokal grün (Dateien und `WA_TEST_STORAGE=sqlite`); Ergebnis im PR.
+1. Lokal: die betroffenen Testgruppen (`python3 werkzeuge/regeln.py betroffen`) in **beiden** Speicherarten grün (Dateien und
+   `WA_TEST_STORAGE=sqlite`). Die **volle** E2E-Suite in beiden Speicherarten und die Keycloak-Prüfung laufen in der CI
+   (Pflicht-Checks) – fertig ist der PR erst mit grüner CI. Im PR stehen beide Ergebnisse (lokal und CI). Die volle
+   Suite lokal nur zur Fehlersuche oder wenn die CI nicht verfügbar ist.
 2. Neues Verhalten hat Tests (auch Rechte, Fehler- und Grenzfälle); `tests/README.md` nennt neue Gruppen.
 3. Oberfläche per Bildschirmfoto angesehen (Desktop und 390 px Mobil); keine JavaScript-Fehler.
 4. Versionsnummern der Assets aktuell (`werkzeuge/asset_versionen.py`), gitleaks ohne Funde.
 5. `LIESMICH.md` bzw. `docs/` aktualisiert; PR-Text in Alltagssprache (Vorlage `.github/pull_request_template.md`).
-6. PR als „bereit zum Mergen“ markiert; Merge und Release macht ausschließlich der Inhaber.
+6. PR als „bereit zum Mergen“ markiert, sobald die CI grün ist; Merge und Release macht ausschließlich der Inhaber.
 7. `python3 werkzeuge/regeln.py pruefen` grün; Änderungsfolgen (`betroffen`) im PR; Rückfallweg bzw. Migrationspfad genannt.
 8. Im Bericht klar trennen: geplant · implementiert · getestet · gemergt · produktiv ausgerollt.
 
 ## Schnell arbeiten, ohne Qualität zu verlieren
 
 - Während der Entwicklung nur betroffene Testgruppen laufen lassen (`python3 tests/run_e2e.py gruppe1 gruppe2`; welche,
-  sagt `python3 werkzeuge/regeln.py betroffen`), vor dem PR die volle Suite. Gruppen laufen parallel (`WA_JOBS`,
-  Standard 4); zur Fehlersuche `WA_JOBS=1`.
+  sagt `python3 werkzeuge/regeln.py betroffen`), vor dem PR dieselben Gruppen auch mit `WA_TEST_STORAGE=sqlite`; die
+  volle Suite übernimmt die CI. Gruppen laufen parallel (`WA_JOBS`, Standard 4); zur Fehlersuche `WA_JOBS=1`.
+- Mehrere Läufe auf einer Maschine: nie zwei Testläufe gleichzeitig im selben Arbeitsordner (gemeinsames
+  `tests/.arbeit/`), jeder Agent in seinem Worktree mit eigenem `WA_PORT_BASE`.
 - Tests nie mit festen Wartezeiten prüfen (`wait_for_timeout` vor einem `check`), sondern auf den erwarteten Zustand
   warten (`wait_for_selector`, `wait_for_function`). Der Hintergrundabgleich im Eingabebereich zeigt bei beendeter
   Sitzung jederzeit die Anmeldemaske – Tests dürfen nicht annehmen, dass eine Seite danach bedienbar bleibt.

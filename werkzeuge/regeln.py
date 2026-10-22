@@ -868,8 +868,10 @@ def folgen_text(e: dict) -> str:
         z.append(f"**Tests während der Entwicklung:** `python3 tests/run_e2e.py {' '.join(e['testgruppen'])}`")
     if e["weitere_pruefungen"]:
         z.append("**Weitere Prüfungen:** " + "; ".join(e["weitere_pruefungen"]))
-    z.append("**Vor dem PR:** volle E2E-Suite in beiden Speicherarten (AGENTS.md, Definition of Done)"
-             + (" – hier zwingend, da Plattformkern/koordinationspflichtige Bereiche berührt sind." if e["volle_suite_noetig"] else "."))
+    z.append("**Vor dem PR:** diese Gruppen lokal in beiden Speicherarten; die volle E2E-Suite läuft in der CI (AGENTS.md,"
+             " Definition of Done)"
+             + (" – Plattformkern/koordinationspflichtige Bereiche berührt: erst mit grüner CI „bereit zum Mergen“."
+                if e["volle_suite_noetig"] else "."))
     for mid, hs in e["hinweise"].items():
         for h in hs:
             z.append(f"- Hinweis {mid}: {h}")
