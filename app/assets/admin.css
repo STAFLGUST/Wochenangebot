@@ -1413,3 +1413,331 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .us-mail-st:empty { display: none; }
 .utab .u-name { min-width: 0; }
 .utab .u-mail { overflow-wrap: anywhere; }
+
+/* ==========================================================================
+   Design „Liquid Glass“ – nur Eingabebereich (diese Datei lädt nur admin/index.html; die Kundenseite nutzt app.css
+   allein und bleibt unverändert). Ruhiger warmer Grund mit drei weichen Farbflächen, Glasflächen mit Unschärfe,
+   schwebende Kopfzeile als Kapsel, Seitenleiste als Glaskarte. Alles nur für den Bildschirm: der Druck bleibt hell
+   und ohne Glas (Regeln oben in „@media print“). Ohne backdrop-filter oder bei „weniger Transparenz“ deckende Flächen.
+   ========================================================================== */
+@media screen {
+  body.adm {
+    --bg: #f4f1ee;
+    --surface: #ffffff; --surface-2: #faf8f6; --surface-3: #efebe7;
+    --line: #e6e1dc; --line-strong: #d4cdc7;
+    --text: #1c1a19; --text-2: #4d4743; --muted: #6b6560;
+    --accent: #8c1d2c; --accent-hover: #6e1622; --accent-soft: #f9eeef; --accent-line: #ebc6cb;
+    --header-bg: transparent;
+    /* Glas */
+    --glas: rgba(255, 255, 255, .55);            /* Seitenleiste, Anmeldung (dahinter nur der ruhige Grund) */
+    --glas-kopf: rgba(255, 255, 255, .88);       /* klebende Leisten, unter denen Inhalt durchläuft: lesbar auch ohne Unschärfe (Software-Darstellung) */
+    --glas-karte: rgba(255, 255, 255, .72);      /* Karten mit dichten Tabellen: deckender, ruhiger lesbar */
+    --glas-stark: rgba(255, 255, 255, .78);      /* aktive Einträge, Segment */
+    --glas-fenster: rgba(255, 255, 255, .88);    /* Dialoge, Menüs */
+    --glas-rand: rgba(255, 255, 255, .8);
+    --glas-glanz: rgba(255, 255, 255, .95);
+    --glas-schatten: 0 10px 40px rgba(60, 30, 25, .10);
+    --glas-filter: blur(30px) saturate(180%);
+    --aus: rgba(28, 26, 25, .07);                /* Knopf- und Segmentgrund */
+    --zeile: rgba(28, 26, 25, .035);             /* Zeile unter dem Mauszeiger */
+    --linie: rgba(28, 26, 25, .08);
+    --feld: rgba(255, 255, 255, .78);
+    --feld-rand: rgba(28, 26, 25, .13);
+    --primaer: linear-gradient(180deg, #a3202f, #7f1824);
+    --primaer-schatten: inset 0 1px 0 rgba(255, 255, 255, .3), 0 6px 18px rgba(140, 29, 44, .35);
+    --nav-akzent: #a3202f;
+    --punkt-ok: #1f9a55;
+    --blob-a: rgba(143, 167, 196, .2); --blob-b: rgba(226, 165, 74, .17); --blob-c: rgba(63, 122, 90, .14);
+    --r-glas: 28px;
+  }
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body.adm {
+    --bg: #121011;
+    --surface: #1d1a1a; --surface-2: #231f1f; --surface-3: #2d2828;
+    --line: #322d2c; --line-strong: #453f3d;
+    --text: #f5f1ee; --text-2: #d2cac4; --muted: #a59d97;
+    --accent: #e08190; --accent-hover: #ea98a5; --accent-soft: rgba(224, 129, 144, .12); --accent-line: rgba(224, 129, 144, .32);
+    --glas: rgba(40, 36, 36, .5); --glas-kopf: rgba(30, 27, 27, .88); --glas-karte: rgba(34, 31, 31, .78); --glas-stark: rgba(58, 52, 52, .7); --glas-fenster: rgba(30, 27, 27, .9);
+    --glas-rand: rgba(255, 255, 255, .14); --glas-glanz: rgba(255, 255, 255, .2); --glas-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --aus: rgba(255, 255, 255, .08); --zeile: rgba(255, 255, 255, .04); --linie: rgba(255, 255, 255, .08);
+    --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .16);
+    --nav-akzent: #e08190; --punkt-ok: #5fd08f;
+    --blob-a: rgba(59, 85, 115, .2); --blob-b: rgba(154, 106, 36, .17); --blob-c: rgba(36, 90, 64, .14);
+  }
+}
+@media screen {
+  :root[data-theme="dark"] body.adm {
+    --bg: #121011;
+    --surface: #1d1a1a; --surface-2: #231f1f; --surface-3: #2d2828;
+    --line: #322d2c; --line-strong: #453f3d;
+    --text: #f5f1ee; --text-2: #d2cac4; --muted: #a59d97;
+    --accent: #e08190; --accent-hover: #ea98a5; --accent-soft: rgba(224, 129, 144, .12); --accent-line: rgba(224, 129, 144, .32);
+    --glas: rgba(40, 36, 36, .5); --glas-kopf: rgba(30, 27, 27, .88); --glas-karte: rgba(34, 31, 31, .78); --glas-stark: rgba(58, 52, 52, .7); --glas-fenster: rgba(30, 27, 27, .9);
+    --glas-rand: rgba(255, 255, 255, .14); --glas-glanz: rgba(255, 255, 255, .2); --glas-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --aus: rgba(255, 255, 255, .08); --zeile: rgba(255, 255, 255, .04); --linie: rgba(255, 255, 255, .08);
+    --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .16);
+    --nav-akzent: #e08190; --punkt-ok: #5fd08f;
+    --blob-a: rgba(59, 85, 115, .2); --blob-b: rgba(154, 106, 36, .17); --blob-c: rgba(36, 90, 64, .14);
+  }
+}
+/* Ohne backdrop-filter (ältere Browser): Glas fast deckend, damit Text auf jedem Grund ruhig lesbar bleibt */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  @media screen { body.adm { --glas-kopf: rgba(255, 255, 255, .95); --glas: rgba(255, 255, 255, .92); --glas-karte: rgba(255, 255, 255, .95); --glas-stark: #fff; --glas-fenster: #fff; } }
+  @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body.adm { --glas-kopf: rgba(29, 26, 26, .96); --glas: rgba(29, 26, 26, .94); --glas-karte: rgba(29, 26, 26, .96); --glas-stark: #3a3434; --glas-fenster: #1d1a1a; } }
+  @media screen { :root[data-theme="dark"] body.adm { --glas-kopf: rgba(29, 26, 26, .96); --glas: rgba(29, 26, 26, .94); --glas-karte: rgba(29, 26, 26, .96); --glas-stark: #3a3434; --glas-fenster: #1d1a1a; } }
+}
+/* Weniger Transparenz (Systemeinstellung): deckende Flächen ohne Unschärfe – auch im dunklen Design (daher die höhere
+   Spezifität des Selektors) */
+@media screen and (prefers-reduced-transparency: reduce) {
+  :root body.adm.adm.adm { --glas: var(--surface); --glas-kopf: var(--surface); --glas-karte: var(--surface); --glas-stark: var(--surface-3); --glas-fenster: var(--surface); --glas-filter: none; --feld: var(--surface); }
+}
+
+@media screen {
+  /* Grund: drei sehr weiche Farbflächen, fest hinter dem Inhalt (kein Rot) */
+  body.adm { background: var(--bg); color: var(--text); }
+  body.adm::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(circle 600px at -60px 520px, var(--blob-a), transparent 70%),
+      radial-gradient(circle 680px at calc(100% + 40px) -40px, var(--blob-b), transparent 70%),
+      radial-gradient(circle 640px at 72% calc(100% + 120px), var(--blob-c), transparent 70%);
+  }
+  body.adm .auth.overlay {   /* bleibt deckend (keine Daten hinter der Anmeldung), mit demselben Grund */
+    background:
+      radial-gradient(circle 600px at -60px 520px, var(--blob-a), transparent 70%),
+      radial-gradient(circle 680px at calc(100% + 40px) -40px, var(--blob-b), transparent 70%),
+      radial-gradient(circle 640px at 72% calc(100% + 120px), var(--blob-c), transparent 70%), var(--bg);
+  }
+
+  /* Glasflächen */
+  body.adm .topbar-inner::before, body.adm :is(.side-nav, .gcard, .meta-card, .offer-bar, .st-info, .np-card, .sec-card, .sec-score, .ed-toolbar,
+    .sec-nav, .auth-card, .menu, dialog.modal, .ed-empty, .changes .chg, .send-in, .adm-wartung) {
+    -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter);
+  }
+  body.adm .topbar-inner::before { background: var(--glas-kopf); border: 1px solid var(--glas-rand); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
+  body.adm :is(.side-nav, .auth-card) {
+    background: var(--glas); border: 1px solid var(--glas-rand);
+    box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten);
+  }
+  body.adm :is(.gcard, .meta-card, .offer-bar, .st-info, .np-card, .sec-card, .sec-score, .ed-empty) {
+    background: var(--glas-karte); border: 1px solid var(--glas-rand);
+    box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten);
+  }
+  body.adm :is(.gcard, .np-card) { border-radius: var(--r-glas); }
+  body.adm :is(.meta-card, .offer-bar, .st-info, .sec-score, .ed-empty) { border-radius: 22px; }
+  body.adm .sec-card { border-radius: 18px; }
+  body.adm .sec-card.bad, body.adm .sec-score.bad { border-color: #f1b4b4; }
+  body.adm .st-info.old { border-color: var(--c-aged); }
+  body.adm .ed-empty { border-style: dashed; border-color: var(--line-strong); }
+  body.adm .meta-card { padding: 18px 22px; }
+  body.adm .st-info { padding: 14px 20px; }
+  /* Rundung der Karte auch für Kopf- und letzte Tabellenzeile (Hover-Fläche ragt nicht über die Ecken) */
+  body.adm .gcard > .ghead { border-radius: var(--r-glas) var(--r-glas) 0 0; }
+  body.adm .gcard > table:last-child > tbody > tr:last-child > td:first-child { border-bottom-left-radius: var(--r-glas); }
+  body.adm .gcard > table:last-child > tbody > tr:last-child > td:last-child { border-bottom-right-radius: var(--r-glas); }
+  body.adm .gcard.sec-form, body.adm .gcard.sec-block { padding: 18px 22px; }
+  body.adm .sec-h { font-size: 16px; font-weight: 650; letter-spacing: -.01em; }
+  /* Karte mit aufklappender Kundenliste liegt über den folgenden Karten (Glas bildet eigene Ebenen) */
+  body.adm .ez-kopf { position: relative; z-index: 3; }
+
+  /* Kopfzeile: schwebende Glaskapsel */
+  body.adm .topbar { background: transparent; border-bottom: 0; -webkit-backdrop-filter: none; backdrop-filter: none; padding: 12px 20px 0; }
+  /* Glas der Kapsel auf einer eigenen Ebene: so bleibt das Menü darin selbst Glas über der Seite (verschachteltes
+     backdrop-filter würde nur die Kapsel unscharf zeigen) */
+  body.adm .topbar-inner { position: relative; isolation: isolate; border-radius: 30px; padding: 10px 10px 10px 22px; gap: 8px 16px; }
+  body.adm .topbar-inner::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; }
+  body.adm .topbar .brand-logo { height: 30px; }
+  body.adm .topbar .brand h1 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+  body.adm .actions { gap: 6px; }
+  body.adm .topbar .btn, body.adm .topbar .btn.ghost {
+    height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: var(--aus); color: var(--text); font-weight: 500; box-shadow: none;
+  }
+  body.adm .topbar .btn:hover:not(:disabled) { background: rgba(28, 26, 25, .12); }
+  body.adm .topbar .btn.icon { width: 40px; padding: 0; }
+  body.adm .topbar .btn:disabled { opacity: .45; }
+  body.adm .btn.primary, body.adm .topbar .btn.primary {
+    background: var(--primaer); color: #fff; border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
+  }
+  body.adm .btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, #8f1c29, #6e1520); }
+  body.adm .adm-page .btn.primary, body.adm dialog .btn.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 3px 10px rgba(140, 29, 44, .22); }
+  body.adm .topbar .btn.primary { padding: 0 20px; }
+  body.adm .save-state { font-size: 14px; color: var(--muted); }
+  body.adm .save-state.saved .dot { background: var(--punkt-ok); }
+  body.adm .save-state.error { color: var(--accent); }
+
+  /* Schaltflächen im Inhalt: Pillen */
+  body.adm .btn { border-radius: 999px; border-color: var(--feld-rand); background: var(--feld); box-shadow: none; }
+  body.adm .btn:hover:not(:disabled) { background: var(--surface); border-color: var(--line-strong); }
+  body.adm .btn.ghost { background: transparent; border-color: transparent; }
+  body.adm .btn.ghost:hover:not(:disabled) { background: var(--aus); border-color: transparent; }
+  body.adm .btn.sm { border-radius: 999px; }
+  body.adm .ibtn { border-radius: 10px; }
+  body.adm .ibtn:hover { background: var(--aus); }
+
+  /* Seitenleiste: Glaskarte mit 44 px hohen Einträgen */
+  body.adm .adm-shell { grid-template-columns: 284px minmax(0, 1fr); }
+  body.adm .side-nav {
+    top: calc(var(--topbar-h, 70px) + 12px); max-height: calc(100vh - var(--topbar-h, 70px) - 24px);
+    margin: 20px 0 20px 20px; padding: 14px 12px; border-radius: var(--r-glas); scrollbar-width: thin;
+  }
+  body.adm .side-tabs { gap: 4px; }
+  body.adm .side-tabs button { height: 44px; border-radius: 14px; font-size: 15px; font-weight: 500; color: var(--text); gap: 12px; }
+  body.adm .side-tabs button svg.i { width: 19px; height: 19px; color: var(--muted); }
+  body.adm .side-tabs button:hover { background: var(--aus); }
+  body.adm .side-tabs button[aria-selected="true"] {
+    background: var(--glas-stark); font-weight: 600; box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 10px rgba(0, 0, 0, .06);
+  }
+  body.adm .side-tabs button[aria-selected="true"] svg.i { color: var(--nav-akzent); }
+  body.adm .side-sep { padding: 16px 12px 6px; border-top: 1px solid var(--linie); margin-top: 8px; }
+  body.adm .adm-shell .adm-page { padding-top: 20px; }
+
+  /* Große Überschriften, wo ein Bereich einen Titel hat */
+  body.adm .ez-top h2 { font-size: 36px; line-height: 1.1; font-weight: 700; letter-spacing: -.03em; }
+  body.adm .auth-card .brand h1 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  body.adm .gsec { font-size: 12px; letter-spacing: .07em; margin: 30px 6px 10px; }
+  body.adm .gsec:first-child { margin-top: 4px; }
+
+  /* Gruppen und Tabellen: Kopf klein, Großbuchstaben, gedämpft; Zeilen ruhig */
+  body.adm .ghead { background: transparent; border-bottom-color: var(--linie); padding: 14px 14px 12px 20px; }
+  body.adm .ghead .g-name { font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
+  body.adm .ghead .g-count { height: 24px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; background: var(--aus); color: var(--muted); font-weight: 600; }
+  /* Kapitälchen statt text-transform: sieht aus wie kleine Großbuchstaben, der Text der Überschrift bleibt unverändert
+     (Kopieren, Vorlesen, Tests) */
+  body.adm .etab th { font-size: 15px; line-height: 1.2; font-weight: 600; font-variant-caps: all-small-caps; letter-spacing: .04em; color: var(--muted); border-bottom-color: var(--linie); }
+  body.adm .etab th small { font-variant-caps: normal; letter-spacing: 0; font-size: 10.5px; }
+  body.adm .etab td { border-bottom-color: var(--linie); }
+  body.adm .etab th:first-child, body.adm .etab td:first-child { padding-left: 14px; }
+  body.adm .etab th:last-child, body.adm .etab td:last-child { padding-right: 12px; }
+  body.adm .etab tbody tr:hover td, body.adm .utab tbody tr:hover, body.adm .ltab tr.has-d:hover, body.adm .ordtab tr[data-order-nr]:hover td,
+  body.adm .aw-tab tr[data-aw-pt]:hover td, body.adm .ezp-tab tr.ezp-z:hover > td { background: var(--zeile); }
+  body.adm .stab tr.wg-gap td { background: transparent; }
+  body.adm .in:hover { border-color: var(--feld-rand); }
+  body.adm .in:focus { background: var(--surface); }
+  /* Preisfelder: sichtbare Felder mit 10 px Rundung */
+  body.adm .etab .e-price .in.num, body.adm .etab .e-var .in.num {
+    border-radius: 10px; border-color: var(--feld-rand); background: var(--feld); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .06);
+  }
+  body.adm .etab tr.is-price .e-price .in { background: var(--accent-soft); }
+  body.adm .etab .e-price .in.num.invalid { border-color: var(--accent); background: var(--accent-soft); }
+  body.adm .etab .e-price .in.num:disabled { box-shadow: none; }
+  body.adm .gfoot { padding: 8px 12px 12px; }
+
+  /* Suchfelder, Eingaben */
+  body.adm .search input { height: 42px; border-radius: 14px; border: 1px solid var(--feld-rand); background: var(--feld); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .04); }
+  body.adm .fld input, body.adm .fld select, body.adm .fld textarea, body.adm .sec-rows textarea, body.adm .ek-send textarea, body.adm .sec-inline input[type="number"],
+  body.adm .urtab select, body.adm .dg-export .fld select, body.adm .ord-filter select.in, body.adm .altrow input, body.adm .ezpos .ez-in-num {
+    border-color: var(--feld-rand); background-color: var(--feld); border-radius: 12px;
+  }
+  body.adm .fld input:focus, body.adm .fld select:focus, body.adm .fld textarea:focus { background-color: var(--surface); }
+  body.adm .fld > span { color: var(--muted); }
+
+  /* Werkzeugleiste unter der Kopfzeile: klebende Glasleiste */
+  body.adm .ed-toolbar {
+    top: calc(var(--header-h) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: 22px;
+    box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); padding: 8px 10px; margin: 18px 0 16px;
+  }
+  body.adm .ed-toolbar .search input { height: 40px; }
+  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: 999px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
+  body.adm .sec-nav a { border-radius: 999px; border: 0; background: var(--aus); }
+  body.adm .sec-nav a:hover { background: var(--glas-stark); }
+
+  /* „Preise für“: Segment-Umschalter (Pillen in einer Spur, aktive als Glas) */
+  body.adm .offer-bar { padding: 12px 16px; }
+  body.adm .ob-tabs { gap: 2px; padding: 4px; border-radius: 22px; background: var(--aus); }
+  body.adm .ob-tabs button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 500; }
+  body.adm .ob-tabs button:hover { color: var(--text); background: rgba(255, 255, 255, .35); }
+  body.adm .ob-tabs button[aria-selected="true"] {
+    background: var(--glas-stark); color: var(--text); font-weight: 600; box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 8px rgba(0, 0, 0, .08);
+  }
+  body.adm .ob-tabs button small { background: var(--aus); }
+  body.adm .ob-tabs button[aria-selected="true"] small { background: var(--accent-soft); color: var(--accent); }
+
+  /* Hinweise */
+  body.adm .changes .chg { border-radius: 18px; background: var(--glas-karte); border-color: var(--glas-rand); }
+  body.adm .changes .chg.has { background: var(--accent-soft); border-color: var(--accent-line); }
+  body.adm .send-in { border-radius: 18px; }
+  body.adm .adm-wartung { border-radius: 18px; }
+  body.adm .np-head { border-radius: var(--r-glas); }
+
+  /* Menü, Dialoge, Meldungen */
+  body.adm .menu { background: var(--glas-fenster); border: 1px solid var(--glas-rand); border-radius: 20px; box-shadow: inset 0 1px 0 var(--glas-glanz), 0 18px 48px rgba(10, 10, 10, .16); padding: 8px; }
+  body.adm .menu button { border-radius: 12px; }
+  body.adm .menu button:hover, body.adm .menu button:focus-visible { background: var(--aus); }
+  body.adm .menu hr { border-top-color: var(--linie); }
+  body.adm dialog.modal { background: var(--glas-fenster); border: 1px solid var(--glas-rand); border-radius: var(--r-glas); box-shadow: inset 0 1px 0 var(--glas-glanz), 0 24px 64px rgba(20, 12, 10, .22); }
+  body.adm dialog::backdrop { background: rgba(28, 22, 20, .3); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  body.adm .dlg-head { padding: 22px 24px 14px; border-bottom-color: var(--linie); }
+  body.adm .dlg-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  body.adm .dlg-body { padding: 18px 24px; }
+  body.adm .dlg-foot { padding: 14px 24px 20px; border-top-color: var(--linie); }
+  body.adm .plist li, body.adm .pk-item, body.adm .item-hist, body.adm .us-mail { border-radius: 12px; }
+  body.adm .toast { border-radius: 16px; -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); background: rgba(28, 26, 25, .9); color: #f5f1ee; }
+
+  /* Anmeldung */
+  body.adm .auth-card { border-radius: var(--r-glas); padding: 30px; }
+  body.adm .btn.wide { height: 44px; }
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+  :root:not([data-theme="light"]) body.adm .ob-tabs button:hover { background: rgba(255, 255, 255, .06); }
+  :root:not([data-theme="light"]) body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
+}
+@media screen {
+  :root[data-theme="dark"] body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+  :root[data-theme="dark"] body.adm .ob-tabs button:hover { background: rgba(255, 255, 255, .06); }
+  :root[data-theme="dark"] body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
+}
+/* Mittlere Breite: Speicherstand in eigener Zeile der Kapsel */
+@media screen and (max-width: 1600px) {
+  body.adm .topbar-inner { padding: 10px 10px 12px 22px; }
+}
+/* Mittlere Breite: schmalere Seitenleiste mit den kurzen Beschriftungen (wie auf dem Handy), damit die Tabellen Platz behalten */
+@media screen and (min-width: 901px) and (max-width: 1280px) {
+  body.adm .adm-shell { grid-template-columns: 228px minmax(0, 1fr); }
+  body.adm .side-tabs .m-hide { display: none; }
+}
+/* Schmal: Navigation als Segment-Spur über dem Inhalt, Kapsel mit kleinerem Rand */
+@media screen and (max-width: 900px) {
+  body.adm .side-nav { margin: 0; padding: 14px 16px 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; max-height: none; }
+  body.adm .side-tabs { background: var(--aus); padding: 4px; border-radius: 999px; gap: 2px; }
+  body.adm .side-tabs button { height: 34px; border-radius: 999px; font-size: 14px; padding: 0 14px; color: var(--muted); }
+  body.adm .side-tabs button[aria-selected="true"] { color: var(--text); }
+  body.adm .side-sep { border-top: 0; margin: 0; }
+}
+@media screen and (max-width: 860px) {
+  body.adm .topbar { padding: 8px 10px 0; }
+  body.adm .topbar-inner { border-radius: 24px; padding: 8px 8px 10px 14px; }
+  body.adm .topbar .btn:not(.icon), body.adm .topbar .btn.ghost:not(.icon) { width: 40px; padding: 0; justify-content: center; }
+  body.adm .topbar #btn-publish { width: auto; min-width: 40px; padding: 0 12px; }
+  body.adm .ez-top h2 { font-size: 28px; }
+}
+@media screen and (max-width: 640px) {
+  body.adm { --r-glas: 22px; }
+  body.adm dialog.modal, body.adm dialog.modal.wide { border-radius: 24px 24px 0 0; border-bottom: 0; }
+  body.adm dialog.modal.ez-pick { border-radius: 0; }
+  body.adm .dlg-head { padding: 20px 18px 12px; }
+  body.adm .dlg-body { padding: 16px 18px; }
+  body.adm .dlg-foot { padding: 12px 18px 18px; }
+  body.adm .ed-toolbar { border-radius: 18px; }
+  body.adm .meta-card { padding: 16px; }
+  body.adm .gcard.sec-form, body.adm .gcard.sec-block { padding: 14px 16px; }
+  body.adm .ez-top h2 { font-size: 24px; }
+}
+@media screen and (max-width: 560px) {
+  body.adm .etab th { font-size: 13.5px; letter-spacing: .02em; }
+  body.adm .etab th:first-child, body.adm .etab td:first-child { padding-left: 8px; }
+  body.adm #groups .etab .e-price { width: 96px; }   /* Preisfeld mit Rahmen: Platz für „25,54“ */
+  body.adm .etab .e-price .in.num { padding: 0 6px; }
+}
+@media screen and (max-width: 480px) {
+  body.adm .topbar .brand-logo { height: 26px; }
+  body.adm .topbar-inner { padding-left: 12px; column-gap: 8px; }
+  body.adm .actions { gap: 4px; }
+  body.adm .topbar .btn:not(.icon), body.adm .topbar .btn.ghost:not(.icon) { width: 36px; height: 36px; }
+  body.adm .topbar .btn.icon { width: 36px; height: 36px; }
+  body.adm .topbar #btn-publish { width: auto; min-width: 36px; height: 36px; padding: 0 10px; }
+}
+@media screen and (max-width: 1180px) {
+  body.adm .topbar .btn:not(.primary):not(.icon) { width: 40px; padding: 0; justify-content: center; }
+}
