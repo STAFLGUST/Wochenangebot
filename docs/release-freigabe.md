@@ -62,12 +62,12 @@ vollständig; danach den Release von Hand starten (siehe oben).
 **Zurück zum alten Verhalten:** im Auftrag „Schon im Pull Request geprüft?“ den Schritt „… suchen (nur main)“ entfernen
 (ohne Ausgabe `uebernommen=true` läuft immer die volle CI) – oder den PR „CI schneller“ zurücknehmen.
 
-### Laufzeiten (gemessen 22.10.2026, vorher)
+### Laufzeiten (gemessen 22.10.2026)
 
-| | vorher | Ziel |
+| | vorher | nachher |
 | --- | --- | --- |
-| CI eines Pull Requests | 6–19 Min. (Engpass: Paket-Downloads 45–60 kB/s, Keycloak 6–19, E2E 5–13 Min.) | ~6 Min., gleichmäßig |
-| CI auf `main` nach dem Merge | 6–30 Min., mehrere Merges nacheinander | ~1 Min. bei gleichem Inhalt, sonst wie PR |
+| CI eines Pull Requests | 6–19 Min. (Engpass: Paket-Downloads mit 30–60 kB/s; Keycloak 6–23, E2E 5–13 Min.) | ~6–7 Min., gleichmäßig (Keycloak ~6 Min., E2E-Teile je 2–2,7 Min.) |
+| CI auf `main` nach dem Merge | 6–30 Min., mehrere Merges nacheinander | ~1 Min. bei gleichem Inhalt (Normalfall), sonst wie PR |
 | Merge → Freigabeanfrage | 6–30 Min. (+ Wartezeit auf vorherige Läufe) | ~1–2 Min. |
 
 Beschleunigt außerdem: Ende-zu-Ende-Tests in 3 Teilen je Speicherart (`tests/README.md`), Paketvorrat und
