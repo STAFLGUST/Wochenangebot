@@ -9,3 +9,4 @@ __pycache__/
 .release-modus
 .release-abgelehnt
 .release-letzter-stand
+deploy/.sichern-release.sh

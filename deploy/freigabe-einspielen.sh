@@ -10,7 +10,14 @@
 # Optional:
 #   HC_DEPLOY_URL=https://…  Totmannschalter/Benachrichtigung (bei Fehler wird „/fail“ angehängt)
 #
-# Für Tests überschreibbar: WA_BASIS, WA_API (GitHub-API), WA_HEALTH_URL, WA_HEALTH_HOST, WA_COMPOSE, WA_SICHERN
+# Sicherung vor dem Einspielen mit dem Sicherungsskript des NEUEN Commits (ein Fehler im alten Skript blockiert sonst
+# auch das Release mit der Korrektur). Es läuft als deploy/.sichern-release.sh und nutzt die übrigen Dateien in deploy/
+# (datenbank.py, sicherung-pruefen.*) noch im alten Stand.
+# Anwendungs-Image (deploy/image): Ist die Ergänzungsdatei der Anmeldung über COMPOSE_FILE in .env aktiv und ändert das
+# Release deploy/image/, wird das Image vorab als stafl-app:release-neu gebaut (Code bleibt bis dahin unverändert), erst
+# beim Einspielen auf den aktiven Namen umgetaggt; das bisherige Image bleibt als stafl-app:release-vorher für den Rückfall.
+#
+# Für Tests überschreibbar: WA_BASIS, WA_API (GitHub-API), WA_HEALTH_URL, WA_HEALTH_HOST, WA_COMPOSE, WA_DOCKER, WA_SICHERN
 set -eu
 BASIS=${WA_BASIS:-/opt/wochenangebot}
 cd "$BASIS"
@@ -22,7 +29,16 @@ DOMAIN=$(envwert DOMAIN)
 HEALTH_URL=${WA_HEALTH_URL:-https://$DOMAIN}
 HEALTH_HOST=${WA_HEALTH_HOST:-$DOMAIN:443:127.0.0.1}
 COMPOSE=${WA_COMPOSE:-docker compose}
-SICHERN=${WA_SICHERN:-sh deploy/sichern.sh --jetzt}
+DOCKER=${WA_DOCKER:-docker}
+ANMELDUNG_COMPOSE=deploy/anmeldung/docker-compose.anmeldung.yml
+APP_VERSION=$(envwert STAFL_APP_VERSION)
+APP_BILD="stafl-app:${APP_VERSION:-lokal}"   # Name wie in der Ergänzungsdatei: stafl-app:${STAFL_APP_VERSION:-lokal}
+BILD_NEU=stafl-app:release-neu
+BILD_VORHER=stafl-app:release-vorher
+SICHERN_NEU="$BASIS/deploy/.sichern-release.sh"
+trap 'rm -f "$SICHERN_NEU"' EXIT
+trap 'exit 1' HUP INT TERM
+BAUEN=0
 HC_URL=$(envwert HC_DEPLOY_URL)
 STATUS="$BASIS/daten/deployment.php"
 GUARD='<?php http_response_code(404); exit; ?>'
@@ -59,14 +75,20 @@ gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher
   done
   return 1
 }
-einspielen() { # sha vorher: Code wechseln; Container nur neu erstellen, wenn sich ihre Konfiguration ändert
+einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstellen, wenn sich Konfiguration oder Image ändern
   if [ -f daten/.sqlite-active ] && ! git cat-file -e "$1:app/api/storage.php" 2>/dev/null; then
     echo "SQLite aktiv: Vor einem Rückfall auf Dateispeicherung erst deploy/datenbank-umschalten.sh rollback ausführen."
     return 1
   fi
+  if [ "$BAUEN" = 1 ] && [ "${3:-}" = zurueck ]; then
+    $DOCKER tag "$BILD_VORHER" "$APP_BILD" || echo "Altes Image $BILD_VORHER nicht gefunden – App läuft mit dem neuen Image"
+  elif [ "$BAUEN" = 1 ]; then
+    $DOCKER tag "$APP_BILD" "$BILD_VORHER" || true   # für den Rückfall merken
+    $DOCKER tag "$BILD_NEU" "$APP_BILD"
+  fi
   git reset -q --hard "$1"
   # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env)
-  if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate; fi
+  if [ "$BAUEN" = 1 ] || git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate; fi
 }
 
 # 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main
@@ -92,10 +114,34 @@ git fetch -q origin main
 git cat-file -e "$SHA^{commit}" 2>/dev/null || ablehnen "Commit $SHA liegt nicht auf main – nicht eingespielt"
 git merge-base --is-ancestor "$SHA" origin/main || ablehnen "Commit $SHA liegt nicht auf main – nicht eingespielt"
 
-# 4. Sicherung vor dem Einspielen; ohne Sicherung kein Release
+# 4. Anwendungs-Image vorab bauen, wenn das Release deploy/image/ ändert und die App dieses Image nutzt (COMPOSE_FILE).
+#    Nur Bauplan und Compose-Dateien des neuen Stands auschecken, bauen, sofort zurück: App-Code und laufende Container
+#    bleiben unverändert. Fehlschlag → nicht eingespielt, nächster Versuch beim nächsten Lauf (noch keine Sicherung erstellt).
+if git diff --name-only "$AKTUELL" "$SHA" | grep -q '^deploy/image/' && envwert COMPOSE_FILE | grep -qF "$ANMELDUNG_COMPOSE"; then
+  BAUEN=1
+  if rm -rf deploy/image && git checkout -q "$SHA" -- deploy/image docker-compose.yml "$ANMELDUNG_COMPOSE" && STAFL_APP_VERSION=release-neu $COMPOSE build --pull app; then
+    git reset -q --hard "$AKTUELL"
+  else
+    git reset -q --hard "$AKTUELL"
+    status false "$AKTUELL" "$AKTUELL" "$LAUF_ID" "Anwendungs-Image des Release konnte nicht gebaut werden – nicht eingespielt, bisheriger Stand bleibt aktiv (nächster Versuch beim nächsten Lauf)"
+    melden fail; echo "Image-Bau fehlgeschlagen – Release nicht eingespielt"; exit 1
+  fi
+fi
+
+# 5. Sicherung vor dem Einspielen mit dem Sicherungsskript des neuen Commits (fehlt es dort: vorhandenes Skript);
+#    ohne Sicherung kein Release
+if [ -n "${WA_SICHERN:-}" ]; then
+  SICHERN=$WA_SICHERN
+elif git show "$SHA:deploy/sichern.sh" > "$SICHERN_NEU" 2>/dev/null; then
+  SICHERN="sh $SICHERN_NEU --jetzt"
+else
+  rm -f "$SICHERN_NEU"; SICHERN="sh deploy/sichern.sh --jetzt"
+fi
 $SICHERN >/dev/null || { status false "$AKTUELL" "$AKTUELL" "$LAUF_ID" "Sicherung vor dem Release fehlgeschlagen – nicht eingespielt (nächster Versuch beim nächsten Lauf)"; melden fail; echo "Sicherung fehlgeschlagen – Release nicht eingespielt"; exit 1; }
 
-# 5. Einspielen, prüfen, bei Fehler zurück
+rm -f "$SICHERN_NEU"
+
+# 6. Einspielen, prüfen, bei Fehler zurück
 einspielen "$SHA" "$AKTUELL"
 if gesund; then
   status true "$SHA" "$AKTUELL" "$LAUF_ID" ""
@@ -105,7 +151,7 @@ if gesund; then
 fi
 echo "Healthcheck fehlgeschlagen – zurück auf $AKTUELL"
 echo "$SHA" > "$ABGELEHNT"
-einspielen "$AKTUELL" "$SHA"
+einspielen "$AKTUELL" "$SHA" zurueck
 if gesund; then
   status false "$AKTUELL" "$SHA" "$LAUF_ID" "Release $SHA fehlerhaft – automatisch auf Vorversion zurückgesetzt"
 else

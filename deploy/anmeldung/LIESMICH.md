@@ -15,6 +15,11 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | `ruecksicherung-probe.sh` | Schritt 7: Rücksicherung der Keycloak-Sicherung in eine Probedatenbank üben (Konten zählen, danach löschen) |
 | `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste) |
 
+**Releases:** Ändert ein Release `deploy/image/` (z. B. neuer Digest des Basis-Images), baut `deploy/freigabe-einspielen.sh`
+das Image vor dem Einspielen neu (`docker compose build --pull app`) und erstellt die App neu – nur solange `COMPOSE_FILE`
+die Ergänzungsdatei enthält. Bau-Fehler → nicht eingespielt; Rückfall → altes Image (`stafl-app:release-vorher`).
+Ablauf: [docs/release-freigabe.md](../../docs/release-freigabe.md).
+
 ## Geheimnisse (nur in `.env` auf dem Server)
 
 `OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`, `OIDC_CRYPTO_ANGEBOT`

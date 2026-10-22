@@ -21,6 +21,25 @@ vor. Wurde die CI auf `main` von Hand gestartet (Actions → CI → Run workflow
 den Release wie oben von Hand starten – der Release prüft selbst, dass es für genau diesen Commit eine grüne CI gibt.
 CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinander (`concurrency` in `ci.yml`).
 
+## Was der Server beim Einspielen macht (`deploy/freigabe-einspielen.sh`)
+
+1. Prüft Release-Lauf, CI und dass der Commit auf `main` liegt.
+2. **Anwendungs-Image** (nur wenn das Release Dateien unter `deploy/image/` ändert und `COMPOSE_FILE` in `.env` die
+   Ergänzungsdatei `deploy/anmeldung/docker-compose.anmeldung.yml` enthält): baut das Image des neuen Stands vorab
+   (`docker compose build --pull app`, als `stafl-app:release-neu`). App-Code und laufende Container bleiben dabei
+   unverändert. Schlägt der Bau fehl, wird nichts eingespielt; Meldung im Eingabebereich, nächster Versuch beim
+   nächsten Lauf (alle 2 Minuten). So kommen Sicherheitsupdates des Basis-Images (neuer Digest) wirklich an.
+3. **Sicherung** mit dem Sicherungsskript des **neuen** Commits (`deploy/.sichern-release.sh`, wird danach gelöscht;
+   fehlt das Skript im neuen Commit, das vorhandene). Ein Fehler im alten Skript blockiert so nicht mehr das Release,
+   das ihn behebt. Die Hilfsdateien in `deploy/` (`datenbank.py`, `sicherung-pruefen.*`) stammen dabei noch aus dem
+   alten Stand. Ohne Sicherung kein Release.
+4. Code wechseln. Container werden nur neu erstellt, wenn sich `Caddyfile`, `docker-compose.yml`, die Ergänzungsdatei
+   oder (bei Bau in Schritt 2) das Image ändern; das bisherige Image bleibt als `stafl-app:release-vorher` erhalten.
+5. Healthcheck wie ein Besucher. Schlägt er fehl: zurück auf den alten Commit, das alte Image wieder aktiv
+   (`stafl-app:release-vorher` → aktiver Name), Container neu erstellt.
+
+Getestet ohne Docker in `tests/deploy/test_freigabe.sh`.
+
 ## Was der Lauf nach der Freigabe prüft (`.github/scripts/release-pruefen.sh`)
 
 | Prüfung | Abbruch, wenn … |
