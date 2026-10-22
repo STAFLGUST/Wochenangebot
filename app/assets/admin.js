@@ -216,10 +216,11 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '' };
   function viewAllowed(v) {
     if (['mail', 'users', 'sec', 'schutz'].includes(v)) return can('admin');
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
+    if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
     return !VIEW_PERM[v] || may(VIEW_PERM[v]);
   }
   /* Einzelrecht (Administrator: alle) – die verbindliche Prüfung macht der Server */
@@ -560,7 +561,7 @@
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !['auswertung', 'mail', 'users', 'log', 'sec', 'schutz'].some(viewAllowed);
+    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!viewAllowed(currentView)) setView('edit');
@@ -2247,7 +2248,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec', 'schutz'];
   function setView(v) {
     if (!viewAllowed(v)) v = 'edit';
@@ -2272,6 +2273,7 @@
     if (v === 'vkgruppen' && window.WA.views.vkgruppen) window.WA.views.vkgruppen();
     if (v === 'vertreter' && window.WA.views.vertreter) window.WA.views.vertreter();
     if (v === 'einzel' && window.WA.views.einzel) window.WA.views.einzel();
+    if (v === 'importe' && window.WA.views.importe) window.WA.views.importe();   // Importzentrale (admin-import.js)
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
     if (v === 'log' && window.WA.views.log) window.WA.views.log();
@@ -2516,6 +2518,19 @@
   });
 
   /* ---------- Alte Angebote hochladen (mehrere Dateien) ---------- */
+  /* Eine Angebotsliste als Woche lesen (Angebotsleser offer-core.js) – hier und in der Importzentrale */
+  async function histAusDatei(file) {
+    if (!/\.(xlsx|xlsm)$/i.test(file.name)) throw new Error('keine .xlsx-Datei');
+    const m = C.parseOfferWorkbook(await C.xlsxReadWorkbook(await file.arrayBuffer()), file.name);
+    if (!m.items.length) throw new Error('keine Artikel gefunden');
+    const gn = new Map(m.groups.map((g) => [g.id, g.name]));
+    const items = m.items.map((it) => {
+      const row = { code: it.code, name: it.name, group: gn.get(it.groupId) || '', category: it.category, price: it.price };
+      if (it.altPrices && it.altPrices.length) row.altPrices = it.altPrices;
+      return row;
+    });
+    return { items, week: m.meta.week, year: m.meta.year, warn: m.issues.filter((x) => x.level === 'warn').length };
+  }
   const dlgHI = $('#dlg-hist-import');
   let hiEntries = [];
   $('#hist-file-input').addEventListener('change', (e) => { const files = [...e.target.files]; e.target.value = ''; if (files.length) histImportFiles(files); });
@@ -2529,17 +2544,7 @@
     try { await loadHistory(); } catch { /* Liste ggf. leer */ }
     for (const en of added) {
       try {
-        if (!/\.(xlsx|xlsm)$/i.test(en.file.name)) throw new Error('keine .xlsx-Datei');
-        const m = C.parseOfferWorkbook(await C.xlsxReadWorkbook(await en.file.arrayBuffer()), en.file.name);
-        if (!m.items.length) throw new Error('keine Artikel gefunden');
-        const gn = new Map(m.groups.map((g) => [g.id, g.name]));
-        en.items = m.items.map((it) => {
-          const row = { code: it.code, name: it.name, group: gn.get(it.groupId) || '', category: it.category, price: it.price };
-          if (it.altPrices && it.altPrices.length) row.altPrices = it.altPrices;
-          return row;
-        });
-        en.week = m.meta.week; en.year = m.meta.year;
-        en.warn = m.issues.filter((x) => x.level === 'warn').length;
+        Object.assign(en, await histAusDatei(en.file));
         en.status = 'ok';
       } catch (ex) { en.status = 'fehler'; en.error = ex.message; }
       renderHistImport();
@@ -2877,6 +2882,14 @@
       : `<div class="muted" style="font-size:13px">${it.code ? 'Kein eingelagerter Bestand zu dieser Artikelnummer.' : 'Ohne Artikelnummer kein Bestandsabgleich.'}</div>`);
   }
 
+  /* Bestandsliste lesen (Leser des Moduls Bestand: stock-core.js) – hier und in der Importzentrale */
+  async function stockAusDatei(file) {
+    if (file.size > 30 * 1024 * 1024) throw new Error('Die Datei ist größer als 30 MB.');
+    const r = S.parseStockWorkbook(await S.readStockWorkbook(await file.arrayBuffer()), file.name);
+    if (!r.articles.length && !r.incoming.length) throw new Error('Keine eingelagerten Partien oder erwarteten Zugänge gefunden.');
+    return r;
+  }
+
   /* Bestandsliste hochladen */
   const dlgSI = $('#dlg-stock-import');
   let stockPending = null;
@@ -2888,9 +2901,7 @@
     $('#stock-import-body').innerHTML = `${head('Bestandsliste', esc(file.name))}<div class="dlg-body"><div class="loading"><div class="spinner"></div>Datei wird gelesen …</div></div>`;
     if (!dlgSI.open) dlgSI.showModal();
     try {
-      if (file.size > 30 * 1024 * 1024) throw new Error('Die Datei ist größer als 30 MB.');
-      const r = S.parseStockWorkbook(await S.readStockWorkbook(await file.arrayBuffer()), file.name);
-      if (!r.articles.length && !r.incoming.length) throw new Error('Keine eingelagerten Partien oder erwarteten Zugänge gefunden.');
+      const r = await stockAusDatei(file);
       stockPending = r;
       try { await loadStock(); } catch { /* ignore */ }
       const total = sum(r.articles, 'kg');
@@ -3670,22 +3681,23 @@
     const iNr = sp('nummer', 'artikelnummer', 'artnr'), iName = sp('bezeichnung1', 'bezeichnung'), iName2 = sp('bezeichnung2'), iVk = sp('vgrp', 'vkgruppe', 'vkgrp'), iGtin = sp('gtin', 'ean');
     if (iNr < 0 || iName < 0) throw new Error('Spalten „Nummer“ und „Bezeichnung1“ nicht gefunden. Erwartet wird der Artikelstammdaten-Export der Warenwirtschaft (Semikolon getrennt).');
     if (iVk < 0 && kopf.includes('klasse')) throw new Error('Das ist eine Gruppenliste. VK-Gruppen bitte unter Stammdaten → VK-Gruppen importieren.');
-    const out = [], fehler = [], seen = new Set();
+    const out = [], fehler = [], seen = new Set(), fehlerZeilen = [];   // fehlerZeilen: je Zeile für die Importzentrale
     let ohneName = 0, doppelt = 0;
     rows.slice(1).forEach((r, i) => {
       const code = (r[iNr] || '').trim();
       const name = C.clean(r[iName] || '');
+      const zeile = i + 2;
       if (!code) return;
-      if (!/^[0-9A-Za-z./-]{1,20}$/.test(code)) { fehler.push(code); return; }   // z. B. Kostenkonten („wek 19%“)
-      if (!name || !/[A-Za-zÄÖÜäöüß]/.test(name)) { ohneName++; return; }
+      if (!/^[0-9A-Za-z./-]{1,20}$/.test(code)) { fehler.push(code); fehlerZeilen.push({ zeile, schluessel: code, text: 'keine gültige Artikelnummer – übersprungen' }); return; }   // z. B. Kostenkonten („wek 19%“)
+      if (!name || !/[A-Za-zÄÖÜäöüß]/.test(name)) { ohneName++; fehlerZeilen.push({ zeile, schluessel: code, text: 'Bezeichnung fehlt – übersprungen' }); return; }
       const k = mKey(code);
-      if (seen.has(k)) { doppelt++; return; }
+      if (seen.has(k)) { doppelt++; fehlerZeilen.push({ zeile, schluessel: code, text: 'Artikelnummer steht mehrfach in der Datei – nur die erste Zeile zählt' }); return; }
       seen.add(k);
       const vk = iVk >= 0 ? (r[iVk] || '').trim() : '', gtin = iGtin >= 0 ? (r[iGtin] || '').replace(/\s+/g, '') : '';
-      out.push({ code, name, name2: iName2 >= 0 ? C.clean(r[iName2] || '') : '', vkGruppe: /^[0-9A-Za-z._-]{1,10}$/.test(vk) ? vk : '', gtin: /^\d{8,14}$/.test(gtin) ? gtin : '' });
+      out.push({ code, name, name2: iName2 >= 0 ? C.clean(r[iName2] || '') : '', vkGruppe: /^[0-9A-Za-z._-]{1,10}$/.test(vk) ? vk : '', gtin: /^\d{8,14}$/.test(gtin) ? gtin : '', zeile });
     });
     if (!out.length) throw new Error('Keine Artikel mit Nummer und Bezeichnung in der Datei gefunden.');
-    return { rows: out, fehler, ohneName, doppelt };
+    return { rows: out, fehler, ohneName, doppelt, fehlerZeilen };
   }
   function masterNeuAus(r) {
     const sug = C.suggestAttributes(r.name, [vkName(r.vkGruppe), r.name2].filter(Boolean).join(' '), '');
@@ -3697,21 +3709,37 @@
     if (r.gtin) e.gtin = r.gtin;
     return e;
   }
-  async function masterImportDatei(file) {
-    let res;
-    try { await loadVkGruppen(); res = masterAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+  /* Gelesene Zeilen mit den Stammdaten zusammenführen: neue Artikel mit vorgeschlagenen Merkmalen, bestehende nur um
+     VK-Gruppe/GTIN ergänzt (leere Felder in der Datei löschen nichts). Liefert auch die vollständige neue Liste –
+     dieselbe Regel für den Import hier und in der Importzentrale (dort prüft und vergleicht der Server die Liste). */
+  function masterZusammenfuehren(res, basis) {
+    const by = new Map();
+    for (const e of basis) if (!by.has(mKey(e.code))) by.set(mKey(e.code), e);
     const neu = [], ergaenzt = [];
     let gleich = 0;
     for (const r of res.rows) {
-      const ent = masterOf(r.code);
+      const ent = by.get(mKey(r.code));
       if (!ent) { neu.push(masterNeuAus(r)); continue; }
-      const vk = r.vkGruppe || ent.vkGruppe || '', gtin = r.gtin || ent.gtin || '';   // leere Felder in der Datei löschen nichts
+      const vk = r.vkGruppe || ent.vkGruppe || '', gtin = r.gtin || ent.gtin || '';
       if (vk !== (ent.vkGruppe || '') || gtin !== (ent.gtin || '')) ergaenzt.push({ ent, vk, gtin }); else gleich++;
     }
-    const inDatei = new Set(res.rows.map((r) => mKey(r.code)));
-    const nichtInDatei = master.articles.filter((e) => !inDatei.has(mKey(e.code))).length;
+    const erg = new Map(ergaenzt.map((x) => [x.ent, x]));
+    const articles = basis.map((e) => { const x = erg.get(e); if (!x) return e; const c = { ...e }; if (x.vk) c.vkGruppe = x.vk; if (x.gtin) c.gtin = x.gtin; return c; }).concat(neu);
+    articles.sort((a, b) => a.code.localeCompare(b.code, 'de', { numeric: true }));
+    return { neu, ergaenzt, gleich, articles };
+  }
+  const masterFremdeVk = (res) => {
     const fremd = new Map();
     if (vkg.length) for (const r of res.rows) if (r.vkGruppe && !vkgMap.has(r.vkGruppe)) fremd.set(r.vkGruppe, (fremd.get(r.vkGruppe) || 0) + 1);
+    return fremd;
+  };
+  async function masterImportDatei(file) {
+    let res;
+    try { await loadVkGruppen(); res = masterAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+    const { neu, ergaenzt, gleich } = masterZusammenfuehren(res, master.articles);
+    const inDatei = new Set(res.rows.map((r) => mKey(r.code)));
+    const nichtInDatei = master.articles.filter((e) => !inDatei.has(mKey(e.code))).length;
+    const fremd = masterFremdeVk(res);
     const mitVk = res.rows.filter((r) => r.vkGruppe).length;
     const nix = !neu.length && !ergaenzt.length;
     const li = (l, f) => l.slice(0, 8).map(f).join('') + (l.length > 8 ? `<li class="muted">… und ${fmtInt.format(l.length - 8)} weitere</li>` : '');
@@ -3733,11 +3761,8 @@
     dlgMI.showModal();
     $('#msi-ok').onclick = async () => {
       $('#msi-ok').disabled = true;
-      const vorher = clone(master.articles);
-      const byCode = new Map(master.articles.map((e) => [mKey(e.code), e]));
-      for (const x of ergaenzt) { const e = byCode.get(mKey(x.ent.code)); if (!e) continue; if (x.vk) e.vkGruppe = x.vk; if (x.gtin) e.gtin = x.gtin; }
-      master.articles.push(...neu.filter((e) => !byCode.has(mKey(e.code))));
-      master.articles.sort((a, b) => a.code.localeCompare(b.code, 'de', { numeric: true }));
+      const vorher = master.articles;
+      master.articles = masterZusammenfuehren(res, master.articles).articles;   // auf den Stand beim Klick anwenden
       clearTimeout(masterTimer);
       while (masterSaving) await new Promise((r) => setTimeout(r, 100));
       await saveMaster();
@@ -3807,7 +3832,54 @@
   }
 
   /* ======================= Schnittstelle für admin-verwaltung.js ======================= */
+  /* Leser für die Importzentrale (admin-import.js): die Dateien liest weiter der Leser des Daten-Eigentümers, der hier
+     schon für den Import an Ort und Stelle läuft. lesen(dateien) → { daten (an den Server), zeilen, fehler, hinweise,
+     optionen }; nachher() leert zwischengespeicherte Stände nach der Übernahme. Vertrag: docs/plattform/schnittstellen/import.md */
+  const IMPORT_LESER = {
+    stammdaten: {
+      async lesen([file]) {
+        const [m] = await Promise.all([api('master'), loadVkGruppen()]);
+        const basis = m.master || { rev: 0, articles: [] };
+        const res = masterAusCsv(await file.arrayBuffer());
+        const z = masterZusammenfuehren(res, basis.articles || []);
+        const fremd = [...masterFremdeVk(res)];
+        const hinweise = [];
+        if (!vkg.length) hinweise.push({ stufe: 'warn', text: 'Die VK-Gruppen-Liste ist noch leer. Am besten zuerst die VK-Gruppen importieren – die Gruppennamen helfen beim Vorschlag von Fleischart, Herkunft und Zustand.' });
+        if (fremd.length) hinweise.push({ stufe: 'warn', text: `VK-Gruppe nicht in der Liste: ${fremd.slice(0, 8).map(([nr, n]) => `${nr} (${n})`).join(', ')}${fremd.length > 8 ? ' …' : ''} – wird trotzdem eingetragen; bitte unter Stammdaten → VK-Gruppen ergänzen.` });
+        if (z.neu.length) hinweise.push({ stufe: 'info', text: 'Neue Artikel: Fleischart, Herkunft und Zustand werden aus Bezeichnung und VK-Gruppe vorgeschlagen und lassen sich danach unter Stammdaten → Artikelstammdaten prüfen.' });
+        return { daten: { rev: basis.rev || 0, articles: z.articles, zeilen: Object.fromEntries(res.rows.map((r) => [r.code, r.zeile])) }, zeilen: res.rows.length, fehler: res.fehlerZeilen, hinweise };
+      },
+      nachher() { master = null; },
+    },
+    bestand: {
+      async lesen([file]) {
+        const r = await stockAusDatei(file);
+        const other = Object.entries(r.stats.other).map(([k, v]) => `${fmtInt.format(v)} × „${k}“`).join(', ');
+        const hinweise = [];
+        if (!r.date) hinweise.push({ stufe: 'warn', text: 'Kein Datum in der Datei gefunden – bitte das Bestandsdatum prüfen.' });
+        if (other) hinweise.push({ stufe: 'info', text: `Nicht berücksichtigt (anderer Status): ${other}.` });
+        if (r.stats.skipped) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer übersprungen (z. B. „Etiketten“).` });
+        if (r.stats.noMhd) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.` });
+        return { daten: { articles: r.articles, incoming: r.incoming }, zeilen: r.stats.rows, fehler: [], hinweise, optionen: { datum: r.date || isoToday() } };
+      },
+      async nachher() { try { await loadStock(true); stockIdxFor = null; refreshAux(); } catch { /* wird beim nächsten Öffnen geladen */ } },
+    },
+    preisverlauf: {
+      async lesen(files) {
+        const wochen = [], fehler = [];
+        for (const f of files) {
+          try { const w = await histAusDatei(f); wochen.push({ datei: f.name, week: w.week ?? null, year: w.year ?? null, items: w.items }); }
+          catch (ex) { fehler.push({ datei: f.name, text: ex.message }); }
+        }
+        if (!wochen.length) throw new Error(fehler.length === 1 ? `${fehler[0].datei}: ${fehler[0].text}` : 'Keine der Dateien ließ sich als Angebotsliste lesen.');
+        return { daten: { wochen }, zeilen: wochen.length, fehler, hinweise: [] };
+      },
+      nachher() { hist = null; prevKey = ''; },   // Preisverlauf und Vorwochenpreise beim nächsten Öffnen neu laden
+    },
+  };
+
   window.WA = {
+    importLeser: IMPORT_LESER,
     $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort,
     loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may,
     get me() { return me; }, get offers() { return offers; }, get stdPublic() { return stdPublic; },

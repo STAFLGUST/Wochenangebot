@@ -29,7 +29,8 @@ with sync_playwright() as p:
     check('Daten button hidden elsewhere', not a.locator('#hist-data').is_visible())
     a.evaluate("async () => { const s = await (await fetch('/api/?action=status')).json(); await fetch('/api/?action=user_save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({name:'Eddi', username:'eddi', role:'editor', active:true, password:'Bearbeiter-Zugang-1', mustChange:false})}); }")
     e = br.new_page(viewport={'width': 1440, 'height': 900}); login(e, 'eddi', 'Bearbeiter-Zugang-1')
-    check('editor: no admin heading/tabs', not e.locator('#side-admin').is_visible() and not e.locator('#vt-users').is_visible())
+    check('editor: under Verwaltung only Import (Importzentrale), no admin tabs', e.locator('#side-admin').is_visible() and e.locator('#vt-importe').is_visible()
+          and not any(e.locator('#vt-' + v).is_visible() for v in ['users', 'log', 'sec', 'schutz', 'mail', 'auswertung']))
     overlap_js = '''() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
       const hit = (a, b) => a.width && b.width && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
       const brand = r('#topbar .brand'), st = r('#save-state'), act = r('#topbar .actions');
