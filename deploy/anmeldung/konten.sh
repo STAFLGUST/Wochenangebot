@@ -8,7 +8,7 @@
 #   sh deploy/anmeldung/konten.sh zuruecksetzen <benutzername>   # Handy/Passkey verloren: zweiten Faktor neu einrichten
 #   sh deploy/anmeldung/konten.sh passkey <benutzername>         # bei der nächsten Anmeldung Passkey einrichten
 #   sh deploy/anmeldung/konten.sh sperren <benutzername>         # deaktivieren und überall abmelden
-#   sh deploy/anmeldung/konten.sh entsperren <benutzername>
+#   sh deploy/anmeldung/konten.sh entsperren <benutzername>      # auch nach zu vielen falschen Passwörtern/Codes
 #   sh deploy/anmeldung/konten.sh liste
 #   sh deploy/anmeldung/konten.sh mail-einrichten [<test-adresse>]  # Mailversand von Keycloak über das Postfach der Anwendung
 #   sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>   # Konto anlegen und einladen
@@ -155,7 +155,9 @@ entsperren() {
   [ $# -eq 1 ] || abbruch "Aufruf: konten.sh entsperren <benutzername>"
   name_pruefen "$1"; id=$(nutzer_id_pflicht "$1")
   kc update "users/$id" -r "$REALM" -s enabled=true >/dev/null
-  echo "Konto '$1' entsperrt."
+  # auch die automatische Sperre nach Fehlversuchen (Schutz vor Passwort-/Code-Raten, bis 15 Minuten) aufheben
+  kc delete "attack-detection/brute-force/users/$id" -r "$REALM" >/dev/null
+  echo "Konto '$1' entsperrt (auch die automatische Sperre nach Fehlversuchen aufgehoben)."
 }
 
 app() { # app <postfach|nutzer> [name] – Abfrage im App-Container (deploy/anmeldung/app-abfrage.php über die Standardeingabe)

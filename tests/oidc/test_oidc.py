@@ -578,6 +578,21 @@ with sync_playwright() as pw:
     pg.fill('#password-new', SVEN['zweit']); pg.fill('#password-confirm', SVEN['zweit']); pg.click('#kc-submit')
     pg.wait_for_selector('#db-grid .db-tile')
     ctx.close()
+    # Automatische Sperre nach Fehlversuchen (Brute-Force-Schutz): entsperren hebt sie auf
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    for _ in range(6):
+        pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', 'Falsch-Falsch-1'); pg.click('#kc-login')
+        pg.wait_for_load_state()
+    ctx.close()
+    kopf_bf = {'Authorization': 'Bearer ' + kc_token()}
+    _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=sven.start', kopf=kopf_bf)
+    sid = json.loads(text)[0]['id']
+    bf = lambda: json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/attack-detection/brute-force/users/{sid}', kopf={'Authorization': 'Bearer ' + kc_token()})[2])
+    vorher = bf()
+    check('Fehlversuche: Konto automatisch vorübergehend gesperrt', vorher.get('disabled') is True and vorher.get('numFailures', 0) >= 5, vorher)
+    code, aus = konten('entsperren', 'sven.start')
+    nachher = bf()
+    check('Konsole: entsperren hebt auch die automatische Sperre auf', code == 0 and 'Fehlversuchen' in aus and not nachher.get('disabled') and nachher.get('numFailures', 0) == 0, (aus, nachher))
 
     # Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
     def vtoken():
