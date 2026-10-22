@@ -6,6 +6,8 @@ Neue Stände gehen nur live, wenn der Inhaber sie ausdrücklich freigibt. Die Fr
 
 1. PR mergen (optional vorher in der Testumgebung prüfen, siehe `docs/testumgebung.md`).
 2. Die CI läuft auf `main`. Ist sie grün, startet sie den Release-Lauf (Job „Release zur Freigabe vorlegen“).
+   Hat die CI des Pull Requests genau denselben Inhalt schon vollständig geprüft (Normalfall), dauert das etwa
+   1 Minute statt 6–30 Minuten – siehe „Keine Doppelprüfung nach dem Merge“.
 3. Der Release-Lauf **wartet** in der GitHub-Umgebung `produktion`. Die eingetragenen Prüfer bekommen eine
    E-Mail bzw. eine Meldung in der GitHub-App („Deployment review requested“).
 4. Freigeben: Lauf öffnen → **Review deployments** → Haken bei `produktion` → **Approve and deploy**.
@@ -20,6 +22,58 @@ dann wartet der Lauf auf die Freigabe.
 vor. Wurde die CI auf `main` von Hand gestartet (Actions → CI → Run workflow) oder kam der automatische Lauf nicht,
 den Release wie oben von Hand starten – der Release prüft selbst, dass es für genau diesen Commit eine grüne CI gibt.
 CI-Läufe auf `main` brechen sich nicht gegenseitig ab, sondern warten aufeinander (`concurrency` in `ci.yml`).
+
+## Keine Doppelprüfung nach dem Merge
+
+Die CI eines Pull Requests prüft nicht den Branch allein, sondern den Stand **nach** dem Zusammenführen mit `main`
+(`refs/pull/N/merge`). Weil `main` nur mit aktuellem Branch zusammengeführt werden darf (Branchschutz „up to date“),
+ist der Inhalt nach dem Merge in aller Regel Byte für Byte derselbe (gleicher Git-Tree; nachgeprüft für PR #92, #94, #95).
+Eine zweite volle Prüfung auf `main` bringt dann nichts Neues, kostete aber 15–30 Minuten und staute weitere Merges.
+
+So läuft es jetzt (`ci.yml`, `.github/scripts/ci_nachweis.py`):
+
+1. **Im Pull Request** läuft die volle CI. Sind alle Aufträge grün, hält der letzte Auftrag den geprüften Inhalt fest:
+   „Vollständig geprüft (Stand `<Tree>`)“.
+2. **Nach dem Merge auf `main`** fragt der Auftrag „Schon im Pull Request geprüft?“ die GitHub-API: Gibt es einen
+   erfolgreichen CI-Lauf eines Pull Requests **aus diesem Repository** (kein Fork), dessen Kopf-Commit zu diesem Merge
+   gehört, in dem **alle** Aufträge grün sind und „Vollständig geprüft“ **genau den Tree** des neuen `main`-Commits nennt?
+   - **Ja** → Anwendungs-Image, Sicherung/Release-Prozess, Ende-zu-Ende-Tests und Keycloak werden übersprungen;
+     der Auftrag „Prüfung aus Pull Request übernommen“ verlinkt den Pull-Request-Lauf; der Release wird sofort vorgelegt.
+     Statische Prüfungen und Secret-Scan (je ~20 s) laufen trotzdem.
+   - **Nein oder unklar** (z. B. `main` hat sich seit dem PR-Lauf bewegt → anderer Tree, Lauf aus der Zeit vor dieser
+     Änderung, API-Fehler) → volle CI wie bisher.
+3. Verglichen werden nur Hashes, Namen und Ergebnisse über die API – kein Code und keine Dateien aus anderen Läufen.
+4. **Release-Prüfung** (`release-pruefen.sh ci`): ein erfolgreicher CI-Lauf zählt nur, wenn er den Auftrag „Vollständig
+   geprüft (Stand …)“ **oder** „Prüfung aus Pull Request übernommen“ erfolgreich enthält. Ein Lauf, in dem nur
+   übersprungen wurde, reicht nie für einen Release.
+
+**Woran man es erkennt:** Im CI-Lauf auf `main` steht der Auftrag „Prüfung aus Pull Request übernommen“ (grün) mit
+Link zum Pull-Request-Lauf; die schweren Aufträge sind grau (übersprungen); der Release-Lauf wartet nach etwa einer
+Minute auf die Freigabe. Bei voller CI steht stattdessen am Ende „Vollständig geprüft (Stand …)“; der Grund steht in
+der Zusammenfassung des Auftrags „Schon im Pull Request geprüft?“.
+
+**Vorher ausprobieren (ändert nichts):** Actions → **CI-Nachweis (Trockenlauf)** → Run workflow (Branch `main`,
+optional einen Commit eintragen) – zeigt, ob übernommen würde und warum (nicht). Lokal mit `gh`:
+`GITHUB_REPOSITORY=STAFLGUST/Wochenangebot python3 .github/scripts/ci_nachweis.py --sha <commit> --trockenlauf`.
+
+**Volle CI auf main erzwingen:** Actions → CI → Run workflow (Branch `main`). Von Hand gestartete Läufe prüfen immer
+vollständig; danach den Release von Hand starten (siehe oben).
+
+**Zurück zum alten Verhalten:** im Auftrag „Schon im Pull Request geprüft?“ den Schritt „… suchen (nur main)“ entfernen
+(ohne Ausgabe `uebernommen=true` läuft immer die volle CI) – oder den PR „CI schneller“ zurücknehmen.
+
+### Laufzeiten (gemessen 22.10.2026, vorher)
+
+| | vorher | Ziel |
+| --- | --- | --- |
+| CI eines Pull Requests | 6–19 Min. (Engpass: Paket-Downloads 45–60 kB/s, Keycloak 6–19, E2E 5–13 Min.) | ~6 Min., gleichmäßig |
+| CI auf `main` nach dem Merge | 6–30 Min., mehrere Merges nacheinander | ~1 Min. bei gleichem Inhalt, sonst wie PR |
+| Merge → Freigabeanfrage | 6–30 Min. (+ Wartezeit auf vorherige Läufe) | ~1–2 Min. |
+
+Beschleunigt außerdem: Ende-zu-Ende-Tests in 3 Teilen je Speicherart (`tests/README.md`), Paketvorrat und
+Keycloak/Caddy im Zwischenspeicher (Workflow „Zwischenspeicher“, `.github/scripts/testumgebung.sh`). Pakete aus dem
+Zwischenspeicher werden nur mit passender Prüfsumme aus der signierten Ubuntu-Paketliste verwendet
+(`.github/scripts/apt_vorrat.py`), Keycloak/Caddy nur mit der festen Prüfsumme aus `tests/oidc/umgebung.sh`.
 
 ## Was der Server beim Einspielen macht (`deploy/freigabe-einspielen.sh`)
 
@@ -89,7 +143,7 @@ automatischen Rückfall:
 | --- | --- |
 | Freigabepflicht | die Umgebung `produktion` keine Prüfer verlangt (Schutz gegen versehentliches Abschalten) |
 | Aktueller Stand | `main` inzwischen weiter ist – dann wartet bereits ein neuerer Lauf |
-| CI | die CI für genau diesen Commit nicht erfolgreich war (läuft sie noch, wartet der Lauf bis 10 Minuten) |
+| CI | die CI für genau diesen Commit nicht erfolgreich war oder keinen Nachweis enthält („Vollständig geprüft (Stand …)“ bzw. „Prüfung aus Pull Request übernommen“); läuft sie noch, wartet der Lauf bis 10 Minuten |
 
 Es wartet immer nur der neueste Lauf: Ein neuer Merge beendet einen älteren, noch nicht freigegebenen Lauf
 (Status „abgebrochen“). Das Protokoll (Tag-Beschreibung) nennt, wer freigegeben hat.

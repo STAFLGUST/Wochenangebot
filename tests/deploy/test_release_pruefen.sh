@@ -2,7 +2,8 @@
 # Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh:
 # Antworten der GitHub-API liegen als Dateien bereit (bei Folgen: <name>.1, <name>.2, …).
 # Prüft: ohne Freigabepflicht kein Release; veraltete Stände werden abgelehnt; CI wird abgewartet;
-# fehlgeschlagene CI blockiert; der Freigebende wird ermittelt.
+# fehlgeschlagene CI blockiert; erfolgreicher Lauf zählt nur mit Nachweis-Auftrag (vollständig geprüft oder aus dem
+# Pull Request übernommen), nicht wenn alles übersprungen wurde; der Freigebende wird ermittelt.
 set -eu
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 S="$REPO/.github/scripts/release-pruefen.sh"
@@ -32,7 +33,10 @@ leere() { rm -f "$T/api/"* "$T/api/".zaehler-*; }
 lauf() { "$@" > "$T/out" 2>&1; }
 ENV=repos/o/r/environments/produktion
 CI="repos/o/r/actions/workflows/ci.yml/runs?head_sha=$A&branch=main&per_page=20"
-lauf_json() { printf '{"workflow_runs":[{"head_branch":"main","event":"%s","status":"%s","conclusion":%s}]}' "$1" "$2" "$3"; }
+lauf_json() { printf '{"workflow_runs":[{"id":41,"head_branch":"main","event":"%s","status":"%s","conclusion":%s}]}' "$1" "$2" "$3"; }
+JOBS="repos/o/r/actions/runs/41/jobs?filter=latest&per_page=100"
+jobs_json() { printf '{"jobs":[{"name":"Statische Prüfungen","conclusion":"success"},{"name":"%s","conclusion":"%s"}]}' "$1" "$2"; }
+VOLL="Vollständig geprüft (Stand $B)"
 
 # --- schutz
 ok "schutz: Umgebung fehlt → Abbruch mit Hinweis" "! lauf sh '$S' schutz && grep -q 'Required reviewers' '$T/out'"
@@ -53,7 +57,18 @@ ok "aktuell: Lauf-Commit nicht mehr neuester → Abbruch" "! SHA=$B lauf sh '$S'
 # --- ci
 leere
 setze "$CI" "$(lauf_json push completed '"success"')"
-ok "ci: erfolgreich → ok" "SHA=$A lauf sh '$S' ci"
+setze "$JOBS" "$(jobs_json "$VOLL" success)"
+ok "ci: erfolgreich, vollständig geprüft → ok" "SHA=$A lauf sh '$S' ci"
+setze "$JOBS" "$(jobs_json "Prüfung aus Pull Request übernommen" success)"
+ok "ci: erfolgreich, Prüfung aus Pull Request übernommen → ok" "SHA=$A lauf sh '$S' ci"
+setze "$JOBS" "$(jobs_json "$VOLL" skipped)"
+ok "ci: erfolgreich, aber alles übersprungen (kein Nachweis) → Abbruch" "! SHA=$A lauf sh '$S' ci && grep -q 'ohne Nachweis' '$T/out'"
+setze "$JOBS" "$(jobs_json "Prüfung aus Pull Request übernommen" skipped)"
+ok "ci: Übernahme übersprungen → Abbruch" "! SHA=$A lauf sh '$S' ci"
+setze "$JOBS" "$(jobs_json "Vollständig geprüft (alt)" success)"
+ok "ci: fremder Auftragsname zählt nicht" "! SHA=$A lauf sh '$S' ci"
+rm -f "$T/api/$(datei "$JOBS")"
+ok "ci: Aufträge nicht lesbar → Abbruch" "! SHA=$A lauf sh '$S' ci"
 leere
 setze "$CI" "$(lauf_json push completed '"failure"')"
 ok "ci: fehlgeschlagen → Abbruch" "! SHA=$A lauf sh '$S' ci && grep -q 'keinen erfolgreichen CI-Lauf' '$T/out'"
@@ -65,7 +80,16 @@ folge() { printf '%s' "$3" > "$T/api/$(datei "$1").$2"; }   # Antwort Nr. k
 folge "$CI" 1 "$(lauf_json push in_progress null)"
 folge "$CI" 2 "$(lauf_json push in_progress null)"
 folge "$CI" 3 "$(lauf_json push completed '"success"')"
+setze "$JOBS" "$(jobs_json "$VOLL" success)"
 ok "ci: läuft noch → wartet, dann ok" "SHA=$A lauf sh '$S' ci && grep -q 'warte' '$T/out' && [ \"\$(cat '$T/api/.zaehler-$(datei "$CI")')\" = 3 ]"
+leere
+folge "$CI" 1 '{"workflow_runs":[]}'
+folge "$CI" 2 "$(lauf_json push completed '"success"')"
+setze "$JOBS" "$(jobs_json "$VOLL" success)"
+ok "ci: Suche zuerst leer (API), dann gefunden → ok" "SHA=$A lauf sh '$S' ci && grep -q 'frage erneut' '$T/out'"
+leere
+setze "$CI" '{"workflow_runs":[]}'
+ok "ci: dauerhaft kein Lauf → Abbruch nach 3 Abfragen" "! SHA=$A lauf sh '$S' ci && grep -q 'keinen erfolgreichen' '$T/out' && [ \"\$(cat '$T/api/.zaehler-$(datei "$CI")')\" = 3 ]"
 leere
 setze "$CI" "$(lauf_json push queued null)"
 ok "ci: Wartezeit überschritten → Abbruch" "! SHA=$A WARTEN=0 lauf sh '$S' ci && grep -q 'noch nicht fertig' '$T/out'"

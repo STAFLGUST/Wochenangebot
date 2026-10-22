@@ -1,0 +1,79 @@
+# Füllt den GitHub-Zwischenspeicher für die Testaufträge der CI (ci.yml: Ende-zu-Ende-Tests, Anmeldung über Keycloak):
+#   * Paketvorrat: Debian-Pakete für Chromium, Apache, mod_auth_openidc, PHP-Modul, PostgreSQL (~40 MB). Der
+#     Ubuntu-Spiegel der Runner liefert zeitweise nur 45–60 kB/s – ohne Vorrat dauerte die Einrichtung bis zu 14 Minuten.
+#   * Keycloak und Caddy (Downloads mit Prüfsumme, tests/oidc/umgebung.sh).
+# Warum ein eigener Workflow: Zwischenspeicher aus Pull Requests sind nur für denselben Pull Request sichtbar, nur
+# Einträge von main für alle. Seit die CI auf main bereits geprüfte Stände überspringt, füllt dieser Lauf die Einträge
+# für main – unabhängig vom CI-Ergebnis, damit er die Release-Prüfung nie aufhält.
+# Sicherheit: Die Testaufträge übernehmen Pakete nur mit passender Prüfsumme aus der signierten Paketliste
+# (.github/scripts/apt_vorrat.py), Keycloak/Caddy nur mit der festen Prüfsumme aus umgebung.sh. Sonst laden sie selbst.
+name: Zwischenspeicher
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"   # montags: neuer Wochenstand der Pakete (Sicherheitsupdates von Ubuntu)
+  workflow_dispatch:
+  pull_request:            # nur zum Prüfen von Änderungen an diesem Ablauf (Einträge gelten dann nur für den PR)
+    paths:
+      - .github/workflows/zwischenspeicher.yml
+      - .github/scripts/testumgebung.sh
+      - .github/scripts/apt_vorrat.py
+      - tests/oidc/umgebung.sh
+      - tests/requirements.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zwischenspeicher-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuellen:
+    name: Zwischenspeicher für die Testaufträge füllen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - name: Wochenstand
+        id: woche
+        run: echo "woche=$(date -u +%G-%V)" >> "${GITHUB_OUTPUT}"
+      - name: Paketvorrat dieser Woche schon vorhanden?
+        id: apt
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/stafl-apt
+          key: apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}-${{ steps.woche.outputs.woche }}
+          lookup-only: true
+      - name: Pakete installieren und sammeln
+        if: steps.apt.outputs.cache-hit != 'true'
+        run: bash .github/scripts/testumgebung.sh vorrat
+      - name: Paketvorrat speichern
+        if: steps.apt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/stafl-apt
+          key: apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}-${{ steps.woche.outputs.woche }}
+      - name: Keycloak und Caddy schon vorhanden?
+        id: laden
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: tests/.arbeit/downloads
+          key: oidc-downloads-v1-${{ hashFiles('tests/oidc/umgebung.sh') }}
+          lookup-only: true
+      - name: Keycloak und Caddy herunterladen und Prüfsummen prüfen
+        if: steps.laden.outputs.cache-hit != 'true'
+        run: bash tests/oidc/umgebung.sh laden
+      - name: Keycloak und Caddy speichern
+        if: steps.laden.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: tests/.arbeit/downloads
+          key: oidc-downloads-v1-${{ hashFiles('tests/oidc/umgebung.sh') }}

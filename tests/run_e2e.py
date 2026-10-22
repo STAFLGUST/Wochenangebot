@@ -3,6 +3,7 @@
     python3 tests/run_e2e.py              # alle Gruppen (parallel, WA_JOBS Gruppen gleichzeitig)
     python3 tests/run_e2e.py users geo    # nur bestimmte
     WA_JOBS=1 python3 tests/run_e2e.py    # nacheinander (z. B. zur Fehlersuche)
+    WA_TEIL=2/3 python3 tests/run_e2e.py  # nur Teil 2 von 3 (CI: Aufträge je Speicherart und Teil, siehe teile())
 
 Jede gleichzeitig laufende Gruppe bekommt eigene Ports (Webserver, Hilfsserver, Test-Mailserver);
 die Tests lesen sie aus WA_BASE, WA_AUX_PORT, WA_SMTP_PORT und WA_SMTP_PORT2.
@@ -104,6 +105,51 @@ SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitz
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 SUITES['importzentrale'] = (8790, 'data-seed', True)   # Importzentrale (Verwaltung → Import, Roadmap 10b)
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
+
+# Laufzeit je Gruppe in Sekunden (Median aus 12 CI-Aufträgen vom 22.10.2026, beide Speicherarten, 4 Gruppen parallel).
+# Nur für die Startreihenfolge (lange zuerst) und die Aufteilung auf CI-Aufträge (WA_TEIL) – nicht für das Ergebnis.
+# Gruppen ohne Eintrag zählen mit GEWICHT_STANDARD; Werte bei Bedarf aus den Zeilen „[gruppe] … bestanden in N s“ erneuern.
+GEWICHT_STANDARD = 15
+GEWICHT = {
+    'sicherheit_freigaben': 118, 'security': 60, 'users': 46, 'sys': 41, 'geraete': 40, 'angebote': 38,
+    'passkeys': 28, 'kunden': 28, 'revert': 26, 'hist': 25, 'master': 25, 'sidenav': 24, 'gemeinsam': 22,
+    'geo': 21, 'einzelangebote': 20, 'stock': 18, 'editor_aux': 18, 'bestellung': 18, 'frontend': 18,
+    'app_api': 17, 'vkgruppen': 16, 'restposten': 15, 'kunden_mail': 15, 'p0': 15, 'schutz': 15, 'rechte': 14,
+    'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'kundenimport': 12,
+    'sicherheit_druck': 11, 'angebotsliste': 11, 'stock_overview': 11, 'sicherheit_it': 10, 'auswertung': 9,
+    'benachrichtigung': 9, 'vertreter': 9, 'admin_confirmation': 8, 'einkauf': 8, 'wartung': 7,
+    'order_management_ui': 7, 'nutzer_anlegen': 7, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
+    'passwortpruefung': 6, 'bestaetigung': 6, 'geo_ip': 6, 'integritaet': 6, 'sitzung_cookie': 6, 'design': 5,
+    'testumgebung': 5, 'modul_wartung': 5, 'bestand_pdf': 5, 'modulverwaltung': 4, 'order_outbox_ui': 4,
+    'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
+    'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1,
+}
+
+
+def gewicht(name):
+    return GEWICHT.get(name, GEWICHT_STANDARD)
+
+
+def teil_lesen(text):
+    """„k/n“ (1 ≤ k ≤ n) → (k, n); sonst ValueError. Leer → None (alle Gruppen)."""
+    if not text:
+        return None
+    m = re.fullmatch(r'\s*(\d+)\s*/\s*(\d+)\s*', text)
+    if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
+        raise ValueError(f'WA_TEIL muss „k/n“ mit 1 ≤ k ≤ n sein, nicht „{text}“')
+    return int(m.group(1)), int(m.group(2))
+
+
+def teile(namen, n):
+    """Verteilt die Gruppen auf n Teile mit möglichst gleicher Laufzeit (längste zuerst in den leichtesten Teil).
+    Deterministisch und unabhängig von der Reihenfolge der Eingabe; jede Gruppe landet in genau einem Teil."""
+    last = [0] * n
+    ergebnis = [[] for _ in range(n)]
+    for name in sorted(set(namen), key=lambda g: (-gewicht(g), g)):
+        i = min(range(n), key=lambda t: (last[t], t))
+        ergebnis[i].append(name)
+        last[i] += gewicht(name)
+    return ergebnis
 
 
 def wait_port(port, up=True, timeout=10):
@@ -262,19 +308,28 @@ def run_in(name, slot):
 
 
 def main():
-    names = sys.argv[1:] or [n for n in SUITES if n not in OPTIONAL or os.path.isfile(OPTIONAL[n])]
-    for n, f in OPTIONAL.items():
-        if not sys.argv[1:] and not os.path.isfile(f):
-            print(f'Hinweis: Gruppe {n} übersprungen – Build fehlt ({os.path.relpath(f, REPO)}; siehe tests/README.md)')
+    try:
+        teil = teil_lesen(os.environ.get('WA_TEIL', ''))
+    except ValueError as e:
+        sys.exit(str(e))
+    names = sys.argv[1:] or list(SUITES)
+    if teil:   # Aufteilung über alle Gruppen (auch optionale), damit sie nicht davon abhängt, ob ein Build vorliegt
+        names = [n for n in names if n in teile(names, teil[1])[teil[0] - 1]]
+        print(f'Teil {teil[0]}/{teil[1]}: {len(names)} Gruppen ({sum(gewicht(n) for n in names)} s geschätzt): {" ".join(names)}')
+    if not sys.argv[1:]:
+        for n, f in OPTIONAL.items():
+            if n in names and not os.path.isfile(f):
+                print(f'Hinweis: Gruppe {n} übersprungen – Build fehlt ({os.path.relpath(f, REPO)}; siehe tests/README.md)')
+        names = [n for n in names if n not in OPTIONAL or os.path.isfile(OPTIONAL[n])]
     unknown = [n for n in names if n not in SUITES]
     if unknown: sys.exit('Unbekannte Testgruppe: ' + ', '.join(unknown))
+    if not names: sys.exit('Keine Testgruppe ausgewählt')
     os.makedirs(WORK, exist_ok=True)
     jobs = max(1, min(int(os.environ.get('WA_JOBS') or min(4, max(2, os.cpu_count() or 2))), len(names)))
     for i in range(jobs): SLOTS.put(i)
     t0 = time.time()
-    # Lange Gruppen zuerst, damit am Ende nicht eine einzelne Gruppe allein läuft
-    slow = ['kunden_mail', 'kunden', 'security', 'bestellung', 'users', 'gemeinsam', 'sys', 'restposten', 'angebote', 'hist', 'frontend', 'geo']
-    order = sorted(names, key=lambda n: slow.index(n) if n in slow else len(slow))
+    # Lange Gruppen zuerst (GEWICHT), damit am Ende nicht eine einzelne Gruppe allein läuft
+    order = sorted(names, key=lambda n: -gewicht(n))
     res = {}
     def worker(items):
         while True:
