@@ -15,7 +15,9 @@ import os
 import re
 import ssl
 import struct
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -38,11 +40,12 @@ GEHEIM = dict(z.strip().split('=', 1) for z in open(os.path.join(WORK, 'geheim.e
 PW_ALT = 'Sicheres-Passwort-1'   # Administrator der Testdaten (tests/fixtures/data-seed)
 NUTZER = {'admin': ('Admin-Kennwort-CI-1', 'nur-fuer-tests-otp-admin'), 'erika': ('Erika-Kennwort-CI-1', 'nur-fuer-tests-otp-erika'),
           'fremd': ('Fremd-Kennwort-CI-1', 'nur-fuer-tests-otp-fremd'), 'neu': ('Neu-Kennwort-CI-1', None)}
+SVEN = {'eigen': 'Sven-Eigenes-Kennwort-1', 'zweit': 'Sven-Zweites-Kennwort-2'}   # über die Konsole angelegtes Konto (nur Test)
 res = []
 
 
 def check(n, c, i=''):
-    res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:300]) if i else ''), flush=True)
+    res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + ' '.join(str(i).split())[:300]) if i else ''), flush=True)
 
 
 def totp(geheim, versatz=0):
@@ -105,6 +108,8 @@ V.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'rol
 if not nutzer_roh()['erika'].get('active'):   # Wiederholung ohne Neustart der Umgebung
     V.call('user_save', {'id': nutzer_roh()['erika']['id'], 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True})
 check('Vorbereitung: Bearbeiterin erika angelegt und aktiv', nutzer_roh()['erika'].get('active') is True)
+V.call('user_save', {'id': '', 'name': 'Sven Start', 'username': 'Sven.Start', 'role': 'editor', 'active': True, 'password': 'Start-Zugang-77', 'mustChange': False})
+check('Vorbereitung: Mitarbeiterkonto für ein später über die Konsole angelegtes Keycloak-Konto', 'sven.start' in nutzer_roh())
 
 # ── Härtung von Keycloak (ADR-003 §2) ──
 code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
@@ -386,6 +391,105 @@ with sync_playwright() as pw:
     check('Anmeldung mit Passkey: Stufe „mfa“, unser Server lässt sie zu', st.get('loggedIn') and st['user']['username'] == 'erika', st.get('user'))
     pg.screenshot(path=os.path.join(SH, 'oidc_passkey_dashboard.png'))
     ctx.close()
+
+    # ── Realm-Einstellungen für den Betrieb ──
+    _, _, text = anfrage(KC + '/admin/realms/mitarbeiter', kopf={'Authorization': 'Bearer ' + kc_token()})
+    realm = json.loads(text)
+    check('Anmeldeereignisse werden 30 Tage aufbewahrt (Datenschutz)', realm.get('eventsEnabled') and realm.get('eventsExpiration') == 2592000, realm.get('eventsExpiration'))
+    _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/authentication/required-actions', kopf={'Authorization': 'Bearer ' + kc_token()})
+    aktiv = sorted(a['alias'] for a in json.loads(text) if a.get('enabled'))
+    check('Pflichtaktionen: nur Passwort ändern, Einmalcode, Passkey', aktiv == sorted(['UPDATE_PASSWORD', 'CONFIGURE_TOTP', 'webauthn-register']), aktiv)
+
+    # ── Konten über die Serverkonsole (deploy/anmeldung/konten.sh, Schritt 4) – zuletzt: löscht das Start-Konto ──
+    ordner = tempfile.mkdtemp(prefix='konten-')
+    with open(os.path.join(ordner, '.env'), 'w') as f:
+        f.write(f"DOMAIN=angebot-stafl.de\nKC_BOOTSTRAP_ADMIN_USERNAME=verwaltung-ci\nKC_BOOTSTRAP_ADMIN_PASSWORD={GEHEIM['KC_ADMIN_PASSWORD']}\n")
+    kc_dir = next(os.path.join(WORK, d) for d in sorted(os.listdir(WORK)) if os.path.isfile(os.path.join(WORK, d, 'bin', 'kcadm.sh')))
+    umg = dict(os.environ, KCADM=f"env -u JAVA_TOOL_OPTIONS {kc_dir}/bin/kcadm.sh", KC_SERVER=KC)
+
+    def konten(*args):
+        r = subprocess.run(['sh', os.path.join(REPO, 'deploy', 'anmeldung', 'konten.sh'), *args], cwd=ordner, env=umg,
+                           capture_output=True, text=True, timeout=300)
+        return r.returncode, r.stdout + r.stderr
+
+    def env_datei():
+        return dict(z.strip().split('=', 1) for z in open(os.path.join(ordner, '.env')) if '=' in z)
+
+    code, aus = konten('anlegen', 'sven.start', 'sven@stafl.test', 'Sven', 'Start')
+    check('Konsole: ohne Verwaltungskonto kein Anlegen (Hinweis auf „verwaltung“)', code == 1 and 'konten.sh verwaltung' in aus, aus)
+    code, aus = konten('verwaltung')
+    e = env_datei()
+    check('Konsole: dauerhaftes Verwaltungskonto angelegt, Start-Konto gelöscht', code == 0 and 'angelegt:' in aus and 'gelöscht:' in aus, aus)
+    check('Konsole: Start-Konto aus .env entfernt, Verwaltungspasswort nur in .env (nie angezeigt)',
+          not any(k.startswith('KC_BOOTSTRAP_') for k in e) and len(e.get('KC_VERWALTUNG_PASSWORD', '')) >= 40
+          and e['KC_VERWALTUNG_PASSWORD'] not in aus and oct(os.stat(os.path.join(ordner, '.env')).st_mode)[-3:] == '600')
+    code, _, text = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+    check('Konsole: Start-Konto kann sich nicht mehr anmelden', code in (400, 401) and 'access_token' not in text, (code, text[:120]))
+    code, aus = konten('verwaltung')
+    check('Konsole: „verwaltung“ erneut ausgeführt ändert nichts', code == 0 and 'vorhanden:' in aus and 'angelegt:' not in aus, aus)
+    code, aus = konten('anlegen', 'Sven.Start', 'sven@stafl.test', 'Sven', 'Start')
+    m = re.search(r'weitergeben\): (\S+)', aus)
+    check('Konsole: Mitarbeiterkonto angelegt (Name klein wie im Eingabebereich), Startpasswort einmal angezeigt', code == 0 and m and len(m.group(1)) >= 12, aus)
+    start_pw = m.group(1) if m else ''
+    code, aus = konten('anlegen', 'sven.start', 'sven@stafl.test', 'Sven', 'Start')
+    check('Konsole: doppeltes Konto abgelehnt', code == 1 and 'gibt es schon' in aus, aus)
+    code, aus = konten('anlegen', 'x; rm -rf /', 'a@b.de', 'A', 'B')
+    check('Konsole: ungültiger Benutzername abgelehnt', code == 1 and 'Benutzername' in aus, aus)
+    code, aus = konten('liste')
+    check('Konsole: Liste zeigt das neue Konto', code == 0 and 'sven.start,Sven,Start,sven@stafl.test,true' in aus, aus)
+
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', start_pw); pg.click('#kc-login')
+    pg.wait_for_selector('#password-new')
+    check('erste Anmeldung mit Startpasswort: eigenes Passwort verlangt', 'UPDATE_PASSWORD' in pg.url, pg.url)
+    pg.fill('#password-new', 'kurz'); pg.fill('#password-confirm', 'kurz'); pg.click('#kc-submit'); pg.wait_for_selector('#password-new')
+    check('… zu kurzes Passwort abgelehnt (Richtlinie des Realms)', 'UPDATE_PASSWORD' in pg.url and pg.locator('#input-error-password, .kc-feedback-text, [id*=error]').count() > 0)
+    pg.fill('#password-new', SVEN['eigen']); pg.fill('#password-confirm', SVEN['eigen']); pg.click('#kc-submit')
+    pg.wait_for_selector('#totpSecret', state='attached')
+    check('… danach Einrichtung des Einmalcodes erzwungen', 'CONFIGURE_TOTP' in pg.url, pg.url)
+    sven_otp = pg.get_attribute('#totpSecret', 'value')
+    pg.fill('#totp', totp(sven_otp)); pg.fill('#userLabel', 'Telefon'); pg.click('#saveTOTPBtn')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… danach angemeldet und mit dem Mitarbeiterkonto verknüpft', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
+    code, aus = konten('sperren', 'sven.start')
+    check('Konsole: Konto gesperrt', code == 0 and 'gesperrt' in aus, aus)
+    pg.wait_for_function("fetch('../api/?action=status').then(r => r.status === 401)", polling=500, timeout=15000)
+    check('… und sofort überall abgemeldet (Back-Channel-Logout)', True)
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', SVEN['eigen']); pg.click('#kc-login')
+    pg.wait_for_load_state()
+    check('gesperrtes Konto: keine Anmeldung', pg.url.startswith(L) and pg.locator('#otp').count() == 0, pg.url)
+    code, aus = konten('entsperren', 'sven.start')
+    code2, aus2 = konten('startpasswort', 'sven.start')
+    m = re.search(r'weitergeben\): (\S+)', aus2)
+    check('Konsole: entsperrt, neues Startpasswort', code == 0 and code2 == 0 and m, aus + aus2)
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', m.group(1) if m else 'x'); pg.click('#kc-login')
+    pg.wait_for_selector('#otp'); pg.fill('#otp', totp(sven_otp, 1)); pg.click('#kc-login')
+    pg.wait_for_selector('#password-new')
+    check('neues Startpasswort: Einmalcode bleibt Pflicht, danach eigenes Passwort verlangt', 'UPDATE_PASSWORD' in pg.url, pg.url)
+    ctx.close()
+    code, aus = konten('zuruecksetzen', 'sven.start')
+    m = re.search(r'weitergeben\): (\S+)', aus)
+    check('Konsole: zweiter Faktor zurückgesetzt (Handy verloren), neues Startpasswort', code == 0 and 'gelöscht' in aus and m, aus)
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'sven.start'); pg.fill('#password', m.group(1) if m else 'x'); pg.click('#kc-login')
+    pg.wait_for_selector('#password-new')
+    check('… alter Einmalcode nicht mehr abgefragt, eigenes Passwort verlangt', pg.locator('#otp').count() == 0 and 'UPDATE_PASSWORD' in pg.url, pg.url)
+    pg.fill('#password-new', SVEN['zweit']); pg.fill('#password-confirm', SVEN['zweit']); pg.click('#kc-submit')
+    pg.wait_for_selector('#totpSecret', state='attached')
+    neu_otp = pg.get_attribute('#totpSecret', 'value')
+    check('… neuer Einmalcode muss eingerichtet werden (neues Geheimnis)', 'CONFIGURE_TOTP' in pg.url and neu_otp and neu_otp != sven_otp, pg.url)
+    pg.fill('#totp', totp(neu_otp)); pg.fill('#userLabel', 'Neues Telefon'); pg.click('#saveTOTPBtn')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… danach wieder dasselbe Mitarbeiterkonto (Verknüpfung bleibt)', st.get('loggedIn') and st['user']['username'] == 'sven.start', st.get('user'))
+    ctx.close()
+    code, aus = konten('passkey', 'gibt-es-nicht')
+    check('Konsole: unbekanntes Konto verständlich abgelehnt', code == 1 and 'gibt es in Keycloak nicht' in aus, aus)
     br.close()
 
 check('keine JavaScript-Fehler auf unseren Seiten', not fehler, fehler)
