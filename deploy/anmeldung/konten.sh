@@ -409,7 +409,17 @@ pruefen() { # nur lesen: warum klappt die Anmeldung nicht? Konto, Sperre, zweite
     printf '%s' "$k" >>"$d/konfig"; kc get "authentication/config/$cfg" -r "$REALM" >>"$d/konfig"; k=,
   done
   printf ']' >>"$d/konfig"
-  kc get clients -r "$REALM" --fields clientId,protocolMappers,attributes >"$d/clients"
+  # je Anwendung die Mapper einzeln (die Liste der Clients enthält sie nicht zuverlässig)
+  printf '[' >"$d/clients"; k=
+  for c in dashboard angebot verwaltung bestand; do
+    cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
+    [ -n "$cid" ] || continue
+    attr=$(kc get "clients/$cid" -r "$REALM" --fields attributes)
+    mapper=$(kc get "clients/$cid/protocol-mappers/models" -r "$REALM")
+    printf '%s{"clientId":"%s","attributes":%s,"protocolMappers":%s}' "$k" "$c" \
+      "$(printf '%s' "$attr" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("attributes") or {}))')" "$mapper" >>"$d/clients"; k=,
+  done
+  printf ']' >>"$d/clients"
   # Uhrzeit: Einmalcodes hängen an der Serveruhr (Container nutzen die Uhr des Servers); Vergleich mit einer Zeitquelle
   quelle=${ZEIT_QUELLE:-https://github.com}
   fremd=$(curl -sSI --max-time 5 "$quelle" 2>/dev/null | sed -n 's/^[Dd]ate: *//p' | tr -d '\r' | head -1) || fremd=
