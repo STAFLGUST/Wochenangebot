@@ -77,7 +77,8 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
 - **Anmeldung klappt nicht („Ungültiger Einmalcode“ o. Ä.):** zuerst `konten.sh pruefen <name>` – ändert nichts und zeigt:
   Konto aktiv/gesperrt, automatische Sperre nach Fehlversuchen, eingerichtete Faktoren (mehrere Einmalcode-Geräte sind
   eine häufige Ursache: die Anmeldeseite prüft nur das dort ausgewählte Gerät), die letzten zehn Anmeldeereignisse mit
-  Ursache auf Deutsch und die Serveruhr samt Abweichung (über ±15 s werden Codes abgelehnt). Jeder Code gilt nur einmal –
+  Ursache auf Deutsch, den Anmeldeablauf (meldet jede Stufe ihre Anmeldemethode „amr“? sonst fragt die Anwendung den
+  zweiten Faktor ein zweites Mal ab), die Anwendungen mit amr-Claim und die Serveruhr samt Abweichung (über ±15 s werden Codes abgelehnt). Jeder Code gilt nur einmal –
   nach einem Fehlschlag auf den nächsten Code warten.
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
