@@ -15,6 +15,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | `app-abfrage.php` | von `konten.sh` im App-Container ausgeführt: Postfach der Anwendung (für den Mailversand von Keycloak) und ob es ein Mitarbeiterkonto gibt |
 | `ruecksicherung-probe.sh` | Schritt 7: Rücksicherung der Keycloak-Sicherung in eine Probedatenbank üben (Konten zählen, danach löschen) |
 | `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste) |
+| `theme/stafl/login/` | Design der Anmeldeseite („Liquid Glass“ wie Dashboard und Eingabebereich, Logo aus `app/assets/`): erbt von `keycloak.v2`; eigen sind `stafl.css`, `stafl-otp.js` (Einmalcode-Felder), `messages_de.properties` und zwei Vorlagen (`login-otp.ftl`, `login-config-totp.ftl`, Grundlage Keycloak 26.8.1). Per Volume nur lesend in Keycloak |
 
 **Releases:** Ändert ein Release `deploy/image/` (z. B. neuer Digest des Basis-Images), baut `deploy/freigabe-einspielen.sh`
 das Image vor dem Einspielen neu (`docker compose build --pull app`) und erstellt die App neu – nur solange `COMPOSE_FILE`
@@ -54,6 +55,28 @@ Keycloak ist dort keine Anmeldung möglich).
 Stand 4 (22.10.2026): Client `bestand` für `bestand.dashboard-stafl.de` – gleiches Vorgehen wie Stand 3 (`OIDC_SECRET_BESTAND`/
 `OIDC_CRYPTO_BESTAND`, danach `docker compose up -d app`). Der Befehl geht jetzt alle Clients der Realm-Datei durch (fehlende
 anlegen, Anmeldestärke und Claim `amr` einheitlich setzen) – ein künftiger Modul-Host braucht dort keine Codeänderung mehr.
+
+## Design der Anmeldeseite
+
+Keycloak liest das Theme aus `deploy/anmeldung/theme/stafl` (Volume in `docker-compose.anmeldung.yml`, nur lesend).
+Aktiv wird es erst mit `sh deploy/anmeldung/konten.sh design-setzen` (setzt `loginTheme=stafl` im Realm „mitarbeiter“,
+idempotent, ändert sonst nichts – keine Abläufe, Richtlinien oder Clients). Neuinstallationen bekommen es schon über
+`realm-mitarbeiter.json`. Der Befehl bricht ab, wenn Keycloak das Theme nicht kennt (Container noch ohne Volume: zuerst
+`docker compose … up -d keycloak`). Rückfall: `sh deploy/anmeldung/konten.sh design-setzen standard` (mitgeliefertes
+Design von Keycloak, sofort wirksam).
+
+- **Einmalcode:** Feld mit `autocomplete="one-time-code"`, Ziffernblock, Muster für 6 Ziffern und Hinweis auf die App
+  „STAFL-Plattform“. Keycloak vergleicht den Code genau so, wie er ankommt – „123 456“ wäre ein Fehlversuch. Das kleine
+  Skript `stafl-otp.js` entfernt deshalb beim Tippen und Einfügen alles außer Ziffern (ohne Skript verhindert das Muster
+  das Absenden). Bei der Einrichtung weist ein Kasten darauf hin, alte Einträge in der Authenticator-App zu löschen.
+- **Abgelehnter Code und Sperre:** Jeder Code gilt nur einmal; zwei Fehlversuche in unter einer Sekunde sperren 60 s.
+  Keycloak zeigt bei einer Sperre dieselbe Meldung wie bei einem falschen Code (verrät sie nicht). Der deutsche Text nennt
+  deshalb beides („nur einmal … neuen Code abwarten … nach mehreren Fehlversuchen gesperrt“), und `stafl-otp.js` schickt
+  jedes Anmeldeformular nur einmal ab (Doppelklick, Eingabetaste plus Klick). Aufheben: `konten.sh entsperren <name>`.
+- **Zwischenspeicher:** `KC_SPI_THEME__CACHE_THEMES/…CACHE_TEMPLATES=false`, `…STATIC_MAX_AGE=3600` – ein Release mit
+  geändertem Theme wirkt ohne Neustart von Keycloak, Browser holen Stylesheet und Skript spätestens nach einer Stunde neu.
+- **Keycloak-Update:** die beiden Vorlagen mit der neuen Fassung von `keycloak.v2` vergleichen und die Versionsangabe
+  darin anpassen (der CI-Auftrag „Anmeldung über Keycloak“ prüft, dass sie zur Version in `tests/oidc/umgebung.sh` passt).
 
 ## Einladungen per Mail
 

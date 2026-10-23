@@ -1,0 +1,299 @@
+/* STAFL-Plattform · Anmeldeseite (Keycloak) – Gestaltung „Liquid Glass“
+   Farben und Formen aus dashboard/dashboard.css und dem Eingabebereich (app/assets/admin.css, body.adm): ruhiger warmer
+   Grund mit drei weichen Farbflächen (kein Rot), Glasfläche mit Unschärfe, Radius 28 px, Akzent Bordeaux, Systemschrift.
+   Liegt über css/styles.css und PatternFly 5 aus keycloak.v2; alle eigenen Farben stehen als --st-* hier. */
+
+:root {
+  --st-bg: #f4f1ee;
+  --st-text: #1c1a19;
+  --st-text-2: #4d4743;
+  --st-muted: #6b6560;
+  --st-glas: rgba(255, 255, 255, .55);
+  --st-glas-kopf: rgba(255, 255, 255, .52);
+  --st-deckend: #fbfaf8;
+  --st-rand: rgba(255, 255, 255, .78);
+  --st-glanz: rgba(255, 255, 255, .95);
+  --st-schatten: 0 10px 40px rgba(60, 30, 25, .10);
+  --st-filter: blur(30px) saturate(180%);
+  --st-blob-a: rgba(143, 167, 196, .22);       /* Blaugrau  #8fa7c4 */
+  --st-blob-b: rgba(226, 165, 74, .18);        /* Bernstein #e2a54a */
+  --st-blob-c: rgba(63, 122, 90, .16);         /* Salbeigrün #3f7a5a */
+  --st-feld: rgba(255, 255, 255, .78);
+  --st-feld-rand: rgba(28, 26, 25, .13);
+  --st-aus: rgba(28, 26, 25, .07);
+  --st-aus-hover: rgba(28, 26, 25, .12);
+  --st-linie: rgba(28, 26, 25, .08);
+  --st-akzent: #8c1d2c;                        /* Bordeaux */
+  --st-akzent-ink: #8c1d2c;
+  --st-primaer: linear-gradient(180deg, #a3202f, #7f1824);
+  --st-primaer-hover: linear-gradient(180deg, #8c1d2c, #6e1622);
+  --st-primaer-schatten: inset 0 1px 0 rgba(255, 255, 255, .3), 0 6px 18px rgba(140, 29, 44, .35);
+  --st-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
+  --st-fehler: #8c1d2c;
+  --st-fehler-bg: rgba(140, 29, 44, .09);
+  --st-warn: #7f4d00;
+  --st-warn-bg: rgba(226, 165, 74, .22);
+  --st-ok: #186a3b;
+  --st-ok-bg: rgba(31, 122, 69, .12);
+  --st-info-bg: rgba(143, 167, 196, .2);
+  --st-logo-grund: transparent;
+  --st-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --st-r-glas: 28px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --st-bg: #121011;
+    --st-text: #f5f1ee;
+    --st-text-2: #d2cac4;
+    --st-muted: #a59d97;
+    --st-glas: rgba(40, 36, 36, .5);
+    --st-glas-kopf: rgba(40, 36, 36, .48);
+    --st-deckend: #211d1d;
+    --st-rand: rgba(255, 255, 255, .14);
+    --st-glanz: rgba(255, 255, 255, .2);
+    --st-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --st-blob-a: rgba(59, 85, 115, .22);       /* #3b5573 */
+    --st-blob-b: rgba(154, 106, 36, .18);      /* #9a6a24 */
+    --st-blob-c: rgba(36, 90, 64, .16);        /* #245a40 */
+    --st-feld: rgba(255, 255, 255, .07);
+    --st-feld-rand: rgba(255, 255, 255, .16);
+    --st-aus: rgba(255, 255, 255, .08);
+    --st-aus-hover: rgba(255, 255, 255, .14);
+    --st-linie: rgba(255, 255, 255, .08);
+    --st-akzent-ink: #f0a3ae;
+    --st-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
+    --st-fehler: #f0a3ae;
+    --st-fehler-bg: rgba(224, 129, 144, .12);
+    --st-warn: #f3c98a;
+    --st-warn-bg: rgba(224, 144, 31, .16);
+    --st-ok: #5fd08f;
+    --st-ok-bg: rgba(95, 208, 143, .14);
+    --st-info-bg: rgba(59, 85, 115, .3);
+    --st-logo-grund: #fff;                     /* Logo im Dunkeln auf weißem Grund (wie app.css) */
+    color-scheme: dark;
+  }
+}
+/* Ohne backdrop-filter oder bei „Transparenz reduzieren“: deckende Flächen statt Glas */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --st-glas: var(--st-deckend); --st-glas-kopf: var(--st-deckend); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --st-glas: var(--st-deckend); --st-glas-kopf: var(--st-deckend); --st-filter: none; }
+}
+
+/* ── Grund: drei sehr weiche Farbflächen, fest hinter dem Inhalt (kein Rot) ── */
+html.login-pf, .login-pf body {
+  background: var(--st-bg);
+  color: var(--st-text);
+  font-family: var(--st-font);
+  -webkit-font-smoothing: antialiased;
+}
+.login-pf body {
+  min-height: 100vh; min-height: 100dvh; height: auto;
+  background-image: none;
+  /* PatternFly-Grundwerte der Seite auf die Plattformfarben */
+  --pf-v5-global--FontFamily--text: var(--st-font);
+  --pf-v5-global--FontFamily--heading: var(--st-font);
+  --pf-v5-global--Color--100: var(--st-text);
+  --pf-v5-global--Color--200: var(--st-muted);
+  --pf-v5-global--primary-color--100: var(--st-akzent);
+  --pf-v5-global--link--Color: var(--st-akzent-ink);
+  --pf-v5-global--link--Color--hover: var(--st-akzent-ink);
+  --pf-v5-global--BackgroundColor--100: transparent;
+}
+.login-pf body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(circle 600px at -60px 520px, var(--st-blob-a), transparent 70%),
+    radial-gradient(circle 680px at calc(100% + 40px) -40px, var(--st-blob-b), transparent 70%),
+    radial-gradient(circle 640px at 72% calc(100% + 120px), var(--st-blob-c), transparent 70%);
+}
+@media (prefers-reduced-transparency: reduce) { .login-pf body::before { display: none; } }
+
+/* ── Seite: eine Spalte, mittig ── */
+.login-pf .pf-v5-c-login {
+  position: relative; z-index: 1;
+  min-height: 100vh; min-height: 100dvh;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: max(6vh, 32px) 24px 48px;
+  background: none;
+}
+.login-pf .pf-v5-c-login__container {
+  display: flex; flex-direction: column; align-items: stretch; gap: 20px;
+  width: 100%; max-width: 460px; margin: 0; padding: 0;
+  grid-template-columns: none; grid-template-areas: none;
+}
+
+/* ── Kopf: Glaskapsel nur mit Logo (wie die Kopfzeile des Dashboards); Name nur für Screenreader ── */
+.login-pf .stafl-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.login-pf .pf-v5-c-login__header { padding: 0; margin: 0; display: flex; justify-content: center; }
+.login-pf #kc-header-wrapper {
+  display: inline-flex; align-items: center; gap: 14px;
+  min-height: 52px; padding: 10px 18px; border-radius: 999px;
+  background: var(--st-glas-kopf); border: 1px solid var(--st-rand);
+  box-shadow: inset 0 1px 0 var(--st-glanz), var(--st-schatten);
+  -webkit-backdrop-filter: var(--st-filter); backdrop-filter: var(--st-filter);
+  font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.2; text-transform: none;
+  color: var(--st-muted) !important; white-space: nowrap;
+}
+.login-pf #kc-header-wrapper::before {
+  content: ""; flex: none; display: block;
+  width: 125px; height: 28px;                   /* Logo 428 × 96 px */
+  background: var(--st-logo-grund) url("../img/logo-standard-fleisch-kopf.png") no-repeat center / contain;
+  background-origin: content-box;
+  border-radius: 6px; box-sizing: content-box;
+}
+@media (prefers-color-scheme: dark) {
+  .login-pf #kc-header-wrapper::before { padding: 3px 6px; }
+}
+
+/* ── Karte aus Glas ── */
+.login-pf .pf-v5-c-login__main {
+  width: 100%; box-sizing: border-box; margin: 0; padding: 32px 28px 28px; border-radius: var(--st-r-glas);
+  background: var(--st-glas); border: 1px solid var(--st-rand);
+  box-shadow: inset 0 1px 0 var(--st-glanz), var(--st-schatten);
+  -webkit-backdrop-filter: var(--st-filter); backdrop-filter: var(--st-filter);
+  color: var(--st-text);
+}
+.login-pf .pf-v5-c-login__main-header {
+  border-top: 0; padding: 0; margin: 0 0 22px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.login-pf #kc-page-title {
+  margin: 0; font-family: var(--st-font); font-size: 26px; font-weight: 700; line-height: 1.15; letter-spacing: -.025em; color: var(--st-text);
+}
+.login-pf .pf-v5-c-login__main-body { padding: 0; }
+.login-pf .pf-v5-c-login__main-footer { padding: 0; }
+.login-pf .pf-v5-c-login__main-footer:empty { display: none; }
+.login-pf .pf-v5-c-login__main-footer-band { margin-top: 20px; padding: 16px 0 0; border-top: 1px solid var(--st-linie); background: none; color: var(--st-muted); font-size: 14px; }
+
+/* ── Text und Listen (Einrichtung des Einmalcodes, Hinweisseiten) ── */
+.login-pf .pf-v5-c-login__main-body, .login-pf .pf-v5-c-login__main-body p, .login-pf .pf-v5-c-list { font-size: 15px; line-height: 1.5; color: var(--st-text-2); }
+.login-pf .pf-v5-c-list { padding-left: 20px; }
+.login-pf .pf-v5-c-list > li + li { margin-top: 14px; }
+.login-pf #kc-totp-settings ul { margin: 6px 0 0; padding-left: 18px; color: var(--st-muted); }
+.login-pf #kc-totp-secret-key { font: 600 15px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .06em; overflow-wrap: anywhere; color: var(--st-text); }
+.login-pf .kc-qr-code img, .login-pf #kc-totp-secret-qr-code {
+  background: #fff; padding: 10px; border-radius: 18px; box-shadow: 0 1px 0 var(--st-linie), var(--st-schatten); max-width: 100%; height: auto;
+}
+.login-pf a { color: var(--st-akzent-ink); text-underline-offset: .2em; }
+.login-pf a:hover { color: var(--st-akzent-ink); }
+
+/* ── Formular ── */
+.login-pf .pf-v5-c-form { gap: 18px; }
+.login-pf .pf-v5-c-form__label, .login-pf .pf-v5-c-form__label-text { font-size: 14px; font-weight: 600; color: var(--st-text); }
+.login-pf .pf-v5-c-form__label-required { color: var(--st-akzent-ink); }
+.login-pf .pf-v5-c-form-control {
+  --pf-v5-c-form-control--BackgroundColor: var(--st-feld);
+  --pf-v5-c-form-control--FontSize: 16px;      /* 16 px: iOS vergrößert die Seite beim Tippen nicht */
+  --pf-v5-c-form-control--PaddingTop: 11px; --pf-v5-c-form-control--PaddingBottom: 11px;
+  --pf-v5-c-form-control--PaddingLeft: 14px; --pf-v5-c-form-control--PaddingRight: 14px;
+  min-height: 46px; border-radius: 14px;
+  background: var(--st-feld); color: var(--st-text);
+  box-shadow: inset 0 0 0 1px var(--st-feld-rand);
+  transition: box-shadow .15s;
+}
+.login-pf .pf-v5-c-form-control::before, .login-pf .pf-v5-c-form-control::after { border: 0 !important; }
+.login-pf .pf-v5-c-form-control:hover { box-shadow: inset 0 0 0 1px rgba(140, 29, 44, .35); }
+.login-pf .pf-v5-c-form-control:focus-within { box-shadow: inset 0 0 0 1px var(--st-akzent), var(--st-fokus); }
+.login-pf .pf-v5-c-form-control.pf-m-error { box-shadow: inset 0 0 0 1.5px var(--st-fehler); }
+.login-pf .pf-v5-c-form-control.pf-m-error:focus-within { box-shadow: inset 0 0 0 1.5px var(--st-fehler), var(--st-fokus); }
+.login-pf .pf-v5-c-form-control.pf-m-readonly { background: var(--st-aus); box-shadow: none; }
+.login-pf .pf-v5-c-form-control > input, .login-pf .pf-v5-c-form-control > select { color: var(--st-text); background: transparent; font-family: var(--st-font); }
+.login-pf .pf-v5-c-form-control > input::placeholder { color: var(--st-muted); }
+.login-pf .pf-v5-c-form-control .pf-v5-c-form-control__icon.pf-m-status { color: var(--st-fehler); }
+/* Passwort mit Augen-Knopf */
+.login-pf .pf-v5-c-input-group { gap: 8px; }
+.login-pf .pf-v5-c-input-group__item::before, .login-pf .pf-v5-c-input-group__item::after { display: none; }
+.login-pf .pf-v5-c-button.pf-m-control {
+  width: 46px; min-height: 46px; padding: 0; border-radius: 14px;
+  background: var(--st-aus); color: var(--st-text); border: 0;
+}
+.login-pf .pf-v5-c-button.pf-m-control::after { border: 0 !important; }
+.login-pf .pf-v5-c-button.pf-m-control:hover { background: var(--st-aus-hover); }
+/* Hinweis am Knopf „Anmeldung neu starten“: unter dem Knopf statt rechts daneben (sonst seitliches Scrollen auf dem Handy) */
+.login-pf .kc-login-tooltip .kc-tooltip-text { top: calc(100% + 8px); left: auto; right: 0; border-radius: 10px; background: var(--st-text); color: var(--st-bg); }
+.login-pf .kc-login-tooltip .kc-tooltip-text::after { display: none; }
+/* angemeldeter Benutzername über dem Einmalcode: Abstand zum nächsten Feld */
+.login-pf .pf-v5-c-login__main-body > .pf-v5-c-form.pf-v5-u-mb-md-on-md { margin-bottom: 18px; }
+/* Fehlertext unter dem Feld */
+.login-pf .pf-v5-c-helper-text__item.pf-m-error, .login-pf .kc-feedback-text.pf-m-error, .login-pf .pf-v5-c-helper-text__item-text.pf-m-error {
+  color: var(--st-fehler); font-size: 14px; line-height: 1.45;
+}
+.login-pf .pf-v5-c-form__helper-text { margin-top: 6px; }
+
+/* Hinweis unter dem Einmalcode-Feld */
+.login-pf .stafl-hinweis { margin: 8px 0 0; font-size: 14px; line-height: 1.45; color: var(--st-muted); }
+.login-pf .pf-v5-c-login__main-body p.stafl-hinweis { font-size: 14px; color: var(--st-muted); }
+/* Einmalcode: große, gut lesbare Ziffern */
+.login-pf input[data-stafl-otp] {
+  font: 600 22px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: .32em; font-variant-numeric: tabular-nums;
+}
+.login-pf .pf-v5-c-form-control:has(> input[data-stafl-otp]) { min-height: 54px; }
+
+/* ── Knöpfe ── */
+.login-pf .pf-v5-c-button { font-family: var(--st-font); }
+.login-pf .pf-v5-c-button.pf-m-primary {
+  min-height: 48px; padding: 0 22px; border-radius: 999px; border: 0;
+  background: var(--st-primaer); color: #fff; font-size: 16px; font-weight: 600; letter-spacing: -.005em;
+  box-shadow: var(--st-primaer-schatten);
+}
+.login-pf .pf-v5-c-button.pf-m-primary::after { border: 0 !important; }
+.login-pf .pf-v5-c-button.pf-m-primary:hover:not(:disabled) { background: var(--st-primaer-hover); color: #fff; }
+.login-pf .pf-v5-c-button.pf-m-primary:disabled { opacity: .55; }
+.login-pf .pf-v5-c-button.pf-m-secondary, .login-pf .pf-v5-c-button.pf-m-tertiary {
+  min-height: 46px; border-radius: 999px; border: 0;
+  background: var(--st-aus); color: var(--st-text); font-weight: 500;
+}
+.login-pf .pf-v5-c-button.pf-m-secondary::after, .login-pf .pf-v5-c-button.pf-m-tertiary::after { border: 0 !important; }
+.login-pf .pf-v5-c-button.pf-m-secondary:hover, .login-pf .pf-v5-c-button.pf-m-tertiary:hover { background: var(--st-aus-hover); color: var(--st-text); }
+.login-pf .pf-v5-c-button.pf-m-link { color: var(--st-akzent-ink); }
+.login-pf .pf-v5-c-form__actions { gap: 10px; margin-top: 4px; }
+.login-pf :focus-visible { outline: none; box-shadow: var(--st-fokus); }
+.login-pf .pf-v5-c-button.pf-m-primary:focus-visible { box-shadow: var(--st-primaer-schatten), var(--st-fokus); }
+.login-pf .pf-v5-c-form-control > input:focus-visible { box-shadow: none; }
+
+/* ── Meldungen ── */
+.login-pf .pf-v5-c-alert {
+  --pf-v5-c-alert--BoxShadow: none;
+  border: 0; border-radius: 16px; padding: 12px 16px; margin-bottom: 18px;
+  background: var(--st-info-bg); color: var(--st-text); box-shadow: none;
+  grid-template-columns: auto 1fr; column-gap: 10px;
+}
+.login-pf .pf-v5-c-alert::before { display: none; }
+.login-pf .pf-v5-c-alert .pf-v5-c-alert__title { font-size: 14px; font-weight: 600; line-height: 1.45; color: inherit; margin: 0; }
+.login-pf .pf-v5-c-alert .pf-v5-c-alert__description { grid-column: 2; font-size: 14px; line-height: 1.45; }
+.login-pf .pf-v5-c-alert .pf-v5-c-alert__description p { margin: 4px 0 0; font-size: 14px; color: inherit; }
+.login-pf .pf-v5-c-alert .pf-v5-c-alert__icon { color: inherit; font-size: 15px; margin-top: 1px; }
+.login-pf .pf-v5-c-alert.pf-m-danger { background: var(--st-fehler-bg); color: var(--st-fehler); }
+.login-pf .pf-v5-c-alert.pf-m-warning { background: var(--st-warn-bg); color: var(--st-warn); }
+.login-pf .pf-v5-c-alert.pf-m-success { background: var(--st-ok-bg); color: var(--st-ok); }
+.login-pf .stafl-warnung .pf-v5-c-alert__description p { color: var(--st-text); }
+
+/* ── Auswahl (mehrere Einmalcode-Geräte, anderer Weg) ── */
+.login-pf .pf-v5-c-tile { border-radius: 16px; background: var(--st-aus); border: 0; color: var(--st-text); }
+.login-pf .pf-v5-c-tile::before { border-radius: 16px; }
+.login-pf .pf-v5-c-tile.pf-m-selected { box-shadow: inset 0 0 0 2px var(--st-akzent); }
+.login-pf .pf-v5-c-data-list { background: none; border: 0; }
+.login-pf .pf-v5-c-data-list__item { background: var(--st-aus); border-radius: 16px; margin-bottom: 8px; border: 0; }
+.login-pf .pf-v5-c-data-list__item:hover { background: var(--st-aus-hover); }
+.login-pf .pf-v5-c-check__label { color: var(--st-text-2); font-size: 14px; }
+.login-pf .pf-v5-c-check__input { accent-color: var(--st-akzent); }
+
+/* ── Bewegung ── */
+@media (prefers-reduced-motion: reduce) {
+  .login-pf .pf-v5-c-form-control { transition: none; }
+}
+
+/* ── Handy ── */
+@media (max-width: 560px) {
+  .login-pf .pf-v5-c-login { padding: 16px 16px 32px; }
+  .login-pf .pf-v5-c-login__container { gap: 14px; }
+  .login-pf #kc-header-wrapper { min-height: 46px; padding: 8px 14px; gap: 12px; font-size: 14px; }
+  .login-pf #kc-header-wrapper::before { width: 100px; height: 23px; }
+  .login-pf .pf-v5-c-login__main { padding: 24px 20px 22px; border-radius: 24px; }
+  .login-pf #kc-page-title { font-size: 23px; }
+  .login-pf .pf-v5-c-login__main-header { margin-bottom: 18px; }
+}

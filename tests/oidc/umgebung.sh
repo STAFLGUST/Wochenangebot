@@ -106,6 +106,8 @@ EOF
   export KC_HTTP_MANAGEMENT_PORT="$KC_MGMT_PORT" KC_PROXY_HEADERS=xforwarded KC_HEALTH_ENABLED=true
   export KC_BOOTSTRAP_ADMIN_USERNAME=verwaltung-ci KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_ADMIN_PASSWORD"
   export JAVA_OPTS_KC_HEAP="-Xms256m -Xmx768m"
+  # Design der Anmeldeseite wie im Betrieb: Änderungen wirken ohne Neustart, Browser fragen stündlich neu (docker-compose.anmeldung.yml)
+  export KC_SPI_THEME__CACHE_THEMES=false KC_SPI_THEME__CACHE_TEMPLATES=false KC_SPI_THEME__STATIC_MAX_AGE=3600
   # Geheimnisse für Keycloak als Dateien (wie im Betrieb: Postfach-Passwort, deploy/anmeldung/konten.sh mail-einrichten)
   mkdir -p "$OIDC_WORK/vault"; export KC_VAULT_DIR="$OIDC_WORK/vault"
   # Back-Channel-Logout an die Anwendungen: nur mit unserer Test-CA und direkt (Proxy-Vorgaben der Umgebung entfernt)
@@ -127,6 +129,11 @@ EOF
   chmod 644 "$OIDC_WORK/caddy/pki/authorities/local/root.crt"
   zeit "Caddy bereit"
 
+  # Plattform-Design der Anmeldeseite (im Betrieb per Volume, deploy/anmeldung/docker-compose.anmeldung.yml). Wie beim
+  # bestehenden Realm im Betrieb ist es im ersten Import noch nicht gesetzt – das übernimmt konten.sh design-setzen (unten)
+  ln -sfn "$REPO/deploy/anmeldung/theme/stafl" "$kc/themes/stafl"
+  python3 -c 'import json,sys; p=sys.argv[1]; r=json.load(open(p,encoding="utf-8")); r.pop("loginTheme",None); json.dump(r,open(p,"w",encoding="utf-8"),ensure_ascii=False)' \
+    "$kc/data/import/realm-mitarbeiter.json"
   "$kc/bin/kc.sh" build --db=postgres --health-enabled=true --vault=file --features-disabled=twitter-broker,identity-brokering-api >"$OIDC_WORK/keycloak-build.log" 2>&1
   zeit "Keycloak gebaut (kc.sh build)"
   nohup env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY -u http_proxy -u HTTP_PROXY "$kc/bin/kc.sh" start --optimized --import-realm >"$OIDC_WORK/keycloak.log" 2>&1 &
@@ -150,6 +157,10 @@ EOF
   [ -n "${OIDC_SECRET_VERWALTUNG:-}" ] && [ -n "${OIDC_CRYPTO_VERWALTUNG:-}" ] || { echo "realm-aktualisieren hat keine Werte für die Verwaltung erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_BESTAND:-}" ] && [ -n "${OIDC_CRYPTO_BESTAND:-}" ] || { echo "realm-aktualisieren hat keine Werte für den Bestand erzeugt" >&2; exit 1; }
   zeit "Realm aktualisiert (konten.sh realm-aktualisieren)"
+  (cd "$OIDC_WORK/installation" && env KCADM="env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY $kc/bin/kcadm.sh" KC_SERVER="http://127.0.0.1:$KC_PORT" \
+    KC_ADMIN_USER_TEST=verwaltung-ci KC_ADMIN_PASSWORD_TEST="$KC_ADMIN_PASSWORD" sh deploy/anmeldung/konten.sh design-setzen) \
+    > "$OIDC_WORK/design-setzen.log" 2>&1 || { cat "$OIDC_WORK/design-setzen.log" >&2; exit 1; }
+  zeit "Anmeldeseite im Plattform-Design (konten.sh design-setzen)"
 
   # ── Apache mit mod_auth_openidc (nie als root) ──
   local def=(); [ "$ALS_ROOT" = 1 ] && def=(-DALS_ROOT)

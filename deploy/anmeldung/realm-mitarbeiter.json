@@ -39,6 +39,7 @@
     "de"
   ],
   "defaultLocale": "de",
+  "loginTheme": "stafl",
   "eventsEnabled": true,
   "eventsExpiration": 2592000,
   "adminEventsEnabled": true,
