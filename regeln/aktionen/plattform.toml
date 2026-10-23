@@ -150,6 +150,14 @@ oberflaeche = "angebot.eingabe"
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+[aktion.rolle_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.rolle_loeschen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.security_diag]
 oberflaeche = "angebot.eingabe"
 schreibend = true

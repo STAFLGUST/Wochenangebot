@@ -415,7 +415,7 @@ icon = "cpu"
 dashboard = false
 agent = "plattform"
 abhaengigkeiten = []
-testgruppen = ["stilllegung", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
+testgruppen = ["rollen", "rollen_host", "stilllegung", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
   "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "aktionsregister", "module_status", "modul_wartung"]
@@ -423,7 +423,7 @@ pfade = [
   "regeln/aktionen/plattform.toml",
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
-  "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-schutz.js", "app/assets/vendor/**",
+  "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-schutz.js", "app/assets/admin-rollen.js", "app/assets/vendor/**",
   "app/assets/fonts/**", "app/assets/icons/**", "app/assets/logo-*",
   "Caddyfile", "docker-compose.yml", ".env.example", ".gitignore", ".gitleaks.toml", ".github/**",
   "deploy/**", "werkzeuge/**", "regeln/**", "docs/**", "AGENTS.md", "CLAUDE.md", "LIESMICH.md",
@@ -484,7 +484,7 @@ pfade = ["app/api/lib/sitzung.php", "app/api/lib/oidc.php", "app/api/lib/passkey
 [[koordination]]
 bereich = "Nutzer, Rechte und Sicherheit"
 pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicherheit.php", "app/api/lib/firewall.php", "app/api/lib/herkunft.php",
-  "app/api/aktionen/verwaltung.php", "app/api/aktionen/schutz.php", "regeln/berechtigungen.toml"]
+  "app/api/aktionen/verwaltung.php", "app/api/aktionen/schutz.php", "app/assets/admin-rollen.js", "regeln/berechtigungen.toml"]
 
 [[koordination]]
 bereich = "Speicherschicht, Datenformate und Migrationen"

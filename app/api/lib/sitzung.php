@@ -98,7 +98,8 @@ function require_auth(bool $write = false, string $role = 'viewer'): array
     // Passwort und zweiter Faktor prüft auf Keycloak-Hosts Keycloak (Pflicht im Realm), nicht diese Anwendung
     if (!oidc_modus() && !empty($u['mustChange'])) fail('Bitte zuerst ein neues Passwort festlegen.', 403);
     if (!oidc_modus() && twofa_required($u) && !has_second_factor($u)) fail('Bitte zuerst die Zwei-Faktor-Anmeldung einrichten.', 403);
-    if (ROLES[$u['role']] < ROLES[$role]) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+    // Stufe: Administrator 3, Bearbeiter 2, alle anderen Rollen (Nur ansehen, eigene Rollen) 1 – heute fragt nur „admin“ ab
+    if ((ROLES[$u['role']] ?? 1) < ROLES[$role]) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
     return $u;
 }
 function sign_in(array $u): string
@@ -126,13 +127,17 @@ function me_payload(array $u): array
                 'bereich' => oidc_einstellung('WA_OBERFLAECHE') ?: 'angebot.eingabe',
                 // Rückweg zum Mitarbeiter-Dashboard (Register: dashboard.start); Testumgebungen setzen WA_DASHBOARD im Webserver
                 'dashboard' => oidc_einstellung('WA_DASHBOARD') ?: 'https://dashboard-stafl.de/',
-                'perms' => function_exists('user_perms') ? user_perms($u) : []];
+                'perms' => function_exists('user_perms') ? user_perms($u) : [], 'rollenName' => rollen_text($u),
+                // Modulzugang für die Oberfläche dieses Hosts (lib/rechte.php) – die Sperre setzt der Server je Aktion durch
+                'modulzugang' => modul_host_frei($u, $hm = explode('.', oidc_einstellung('WA_OBERFLAECHE') ?: 'angebot.eingabe', 2)[0]),
+                'modulName' => MODULE[$hm]['name'] ?? ''];
     }
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),
             'mustChangeGrund' => !empty($u['mustChange']) ? (string)($u['mustChangeGrund'] ?? '') : '',
             'twofa' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])),
             'needTwofa' => twofa_required($u) && !has_second_factor($u), 'twofaRequired' => twofa_required($u),
-            'perms' => function_exists('user_perms') ? user_perms($u) : []];
+            'perms' => function_exists('user_perms') ? user_perms($u) : [], 'rollenName' => rollen_text($u),
+            'modulzugang' => ($m = anfrage_modul(null)) === null || modul_host_frei($u, $m), 'modulName' => $m !== null ? (MODULE[$m]['name'] ?? '') : ''];
 }
 /* Nutzer innerhalb der Sperre ändern und speichern */
 function user_update(string $id, callable $fn): ?array

@@ -23,26 +23,13 @@
     editor: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: Angebot bearbeiten und veröffentlichen, Bestellungen, Bestand)',
     viewer: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: nur ansehen)',
   };
-  /* Rechte: Voraussetzungen (bearbeiten setzt sehen voraus) */
-  const reqOf = (k) => ((rights && rights.catalog.find((p) => p.key === k)) || { requires: [] }).requires;
-  const withReq = (set) => { let added = true; while (added) { added = false; for (const k of [...set]) for (const r of reqOf(k)) if (!set.has(r)) { set.add(r); added = true; } } return set; };
-  const dependents = (k) => rights.catalog.filter((p) => p.requires.includes(k)).map((p) => p.key);
-  function rightsMatrix() {
-    if (!rights) return '';
-    const groups = [...new Set(rights.catalog.map((p) => p.group))];
-    const cell = (r, k) => `<td class="rm-c"><input type="checkbox" data-rm-role="${r}" data-rm-key="${esc(k)}"${rights.roles[r].includes(k) ? ' checked' : ''} aria-label="${esc(ROLE_LABEL[r])}: ${esc(rights.catalog.find((p) => p.key === k).label)}"></td>`;
-    const lock = '<td class="rm-c"><span class="rm-lock" title="Administratoren haben immer alle Rechte">✓</span></td>';
-    return `<section class="gcard rm-card" id="rm-card"><div class="rm-head"><div><h3 class="sec-h">Rollen und Rechte</h3><p class="hint">Was jede Rolle sehen und tun darf. Einzelnen Mitarbeitern geben oder entziehen Sie Rechte zusätzlich in „Bearbeiten“. Wer etwas bearbeiten darf, darf es auch sehen.</p></div>
-        ${rights.updatedAt ? `<span class="sub">Geändert ${esc(dateTime(rights.updatedAt))}${rights.updatedBy ? ' von ' + esc(rights.updatedBy) : ''}</span>` : ''}</div>
-      <div class="rm-wrap"><table class="etab rmtab"><thead><tr><th>Recht</th>${[['viewer', 'Lesen'], ['editor', 'Bearb.'], ['admin', 'Admin']].map(([r, k]) => `<th class="rm-c"><span class="rm-ll">${esc(ROLE_LABEL[r])}</span><abbr class="rm-ls" title="${esc(ROLE_LABEL[r])}">${k}</abbr></th>`).join('')}</tr></thead><tbody>
-        ${groups.map((g) => `<tr class="rm-g"><th colspan="4">${esc(g)}</th></tr>${rights.catalog.filter((p) => p.group === g).map((p) => `<tr><td><span class="rm-k rm-${esc(p.kind)}">${p.kind === 'sehen' ? 'sehen' : 'tun'}</span>${esc(p.label)}</td>${cell('viewer', p.key)}${cell('editor', p.key)}${lock}</tr>`).join('')}`).join('')}
-        <tr class="rm-g"><th colspan="4">Nur Administratoren</th></tr>${rights.adminOnly.map((l) => `<tr class="rm-fixed"><td><span class="rm-k rm-machen">tun</span>${esc(l)}</td><td class="rm-c">–</td><td class="rm-c">–</td>${lock}</tr>`).join('')}
-      </tbody></table></div>
-      <p class="form-err" id="rm-err" role="alert"></p>
-      <div class="sec-foot"><button type="button" class="btn ghost" data-rm="default">Standard wiederherstellen</button><button type="button" class="btn primary" data-rm="save">${icon('check', 'sm')}Rechte speichern</button></div></section>`;
-  }
+  /* Rollen eines Mitarbeiters (Hauptrolle + weitere; Namen aus „rechte“) – Rollen und Rechte verwaltet admin-rollen.js */
+  const rollenVon = (u) => (u.rollen && u.rollen.length ? u.rollen : [u.role]);
+  const rollenName = (r) => (rights && rights.roleLabels && rights.roleLabels[r]) || ROLE_LABEL[r] || r;
+  const rollenRechte = (ids) => new Set(ids.flatMap((r) => (rights && rights.roles[r]) || []));
   const exceptions = (u) => (u.role === 'admin' ? '' : [u.grant.length ? `+${u.grant.length}` : '', u.deny.length ? `−${u.deny.length}` : ''].filter(Boolean).join(' / '));
-  const roleBadge = (r) => `<span class="role-b r-${esc(r)}">${esc(ROLE_LABEL[r] || r)}</span>`;
+  const roleBadge = (r) => `<span class="role-b r-${['admin', 'editor', 'viewer'].includes(r) ? esc(r) : 'eigen'}">${esc(rollenName(r))}</span>`;
+  const roleBadges = (u) => rollenVon(u).map(roleBadge).join(' ');
   const hrAn = () => !!(W.hr && may('hr.verwalten'));
   async function renderUsersView() {
     const host = $('#view-users');
@@ -51,13 +38,13 @@
     try { [users, rights] = await Promise.all([api('users').then((r) => { twofaModus = r.twofaModus || 'off'; return r.users; }), api('rechte'), hrAn() ? W.hr.laden().catch(() => null) : null]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const order = { admin: 0, editor: 1, viewer: 2 };
     const aktivRang = (u) => (u.active ? 2 : u.zugang === false ? 1 : 0);
-    const list = users.slice().sort((a, b) => (aktivRang(b) - aktivRang(a)) || (u0(a) - u0(b)) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
+    const list = users.slice().sort((a, b) => (aktivRang(b) - aktivRang(a)) || (u0(a) - u0(b)) || (order[a.role] ?? 3) - (order[b.role] ?? 3) || a.name.localeCompare(b.name, 'de'));
     function u0(u) { return u.zugang === false ? 1 : 0; }
     const hr = hrAn() && W.hr.daten;
     const rows = list.map((u) => { const z = hr ? W.hr.zelle(u.id) : null; return `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active || u.zugang === false ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${u.zugang === false ? 'ohne Anmeldung' : esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
         ${hr ? `<td class="u-abt">${z.abteilung}</td>` : ''}
-        <td>${u.zugang === false ? '<span class="muted">–</span>' : roleBadge(u.role)}${u.zugang !== false && exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
+        <td>${u.zugang === false ? '<span class="muted">–</span>' : roleBadges(u)}${u.zugang !== false && exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
         <td class="u-st">${u.zugang === false ? '<span class="muted">ohne Anmeldung</span>' : u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.zugang === false ? '<span class="muted">–</span>' : u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         ${hr ? `<td class="u-urlaub num">${z.urlaub}</td>` : ''}
@@ -71,33 +58,21 @@
       </div>
       ${hr ? W.hr.altbestand() : ''}
       <div class="gcard"><table class="etab utab"><thead><tr><th>Name / Benutzername</th>${hr ? '<th class="u-abt">Abteilung</th>' : ''}<th>Rolle</th><th class="u-st">Status</th><th class="u-last">Letzte Anmeldung</th>${hr ? `<th class="u-urlaub num">Urlaub ${new Date().getFullYear()}</th>` : ''}<th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>
-      ${rightsMatrix()}`;
+      <section class="gcard us-rollen-link"><p><strong>Rollen und Rechte</strong><br><span class="hint">Welche Module eine Rolle öffnen und was sie darin sehen und bearbeiten darf – auch eigene Rollen anlegen.</span></p>
+        <button type="button" class="btn" id="us-zu-rollen">${icon('key')}Rollen und Rechte verwalten</button></section>`;
   }
-  $('#view-users').addEventListener('change', (e) => {
-    const k = e.target.dataset.rmKey, r = e.target.dataset.rmRole;
-    if (!k) return;
-    const box = (key) => $(`#rm-card [data-rm-role="${r}"][data-rm-key="${CSS.escape(key)}"]`);
-    if (e.target.checked) for (const q of withReq(new Set([k]))) { const b = box(q); if (b) b.checked = true; }
-    else { const stack = [k]; while (stack.length) for (const d of dependents(stack.pop())) { const b = box(d); if (b && b.checked) { b.checked = false; stack.push(d); } } }
-  });
-  $('#view-users').addEventListener('click', async (e) => {
-    const a = e.target.closest('[data-rm]')?.dataset.rm;
-    if (!a) return;
-    if (a === 'default') { for (const b of $$('#rm-card [data-rm-key]')) b.checked = rights.catalog.find((p) => p.key === b.dataset.rmKey).default.includes(b.dataset.rmRole); toast('Standard eingetragen – zum Übernehmen „Rechte speichern“.'); return; }
-    const roles = { viewer: [], editor: [] };
-    for (const b of $$('#rm-card [data-rm-key]:checked')) roles[b.dataset.rmRole].push(b.dataset.rmKey);
-    e.target.closest('button').disabled = true;
-    try { await api('rechte_save', { body: { roles } }); toast('Rechte gespeichert. Sie gelten ab der nächsten Aktion der Mitarbeiter.'); renderUsersView(); }
-    catch (ex) { $('#rm-err').textContent = ex.message; e.target.closest('button').disabled = false; }
-  });
   $('#view-users').addEventListener('click', (e) => {
     if (e.target.closest('#user-add')) { openUser(null); return; }
+    if (e.target.closest('#us-zu-rollen')) { W.setView('rollen'); return; }
     const tr = e.target.closest('tr[data-uid]');
     if (tr) openUser(tr.dataset.uid);
   });
   $('#view-users').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-uid]')) openUser(e.target.dataset.uid); });
 
   const dlgUser = $('#dlg-user');
+  /* Rollen zur Auswahl (aus „rechte“: Administrator, Standardrollen, eigene) – Fallback: die drei bisherigen */
+  const rollenListe = () => (rights && rights.rollen ? rights.rollen : ['admin', 'editor', 'viewer'].map((id) => ({ id, name: ROLE_LABEL[id], beschreibung: ROLE_DESC[id] })));
+  const startRollen = (u) => (u ? rollenVon(u) : ['editor']);
   let editUid = null;
   function genPassword() {
     const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -105,12 +80,12 @@
     crypto.getRandomValues(a);
     return [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-').slice(0, 14);
   }
-  function userRightsRows(u, role) {
-    if (!rights || role === 'admin') return '';
-    const base = rights.roles[role] || [];
+  function userRightsRows(u, rollen) {
+    if (!rights || rollen.includes('admin')) return '';
+    const base = rollenRechte(rollen);
     const val = (k) => (u && u.grant.includes(k) ? 'grant' : u && u.deny.includes(k) ? 'deny' : '');
     return `<table class="etab urtab"><tbody>${rights.catalog.map((p) => `<tr><td>${esc(p.label)}<div class="sub">${esc(p.group)}</div></td><td><select data-ur="${esc(p.key)}" aria-label="${esc(p.label)}">
-      <option value=""${val(p.key) === '' ? ' selected' : ''}>wie Rolle (${base.includes(p.key) ? 'ja' : 'nein'})</option><option value="grant"${val(p.key) === 'grant' ? ' selected' : ''}>erlauben</option><option value="deny"${val(p.key) === 'deny' ? ' selected' : ''}>verbieten</option></select></td></tr>`).join('')}</tbody></table>`;
+      <option value=""${val(p.key) === '' ? ' selected' : ''}>wie Rolle (${base.has(p.key) ? 'ja' : 'nein'})</option><option value="grant"${val(p.key) === 'grant' ? ' selected' : ''}>erlauben</option><option value="deny"${val(p.key) === 'deny' ? ' selected' : ''}>verbieten</option></select></td></tr>`).join('')}</tbody></table>`;
   }
   /* Zwei-Faktor-Pflicht je Mitarbeiter: gesperrt, wenn die Sicherheitseinstellung den Zugang ohnehin verpflichtet (alle bzw.
      Administratoren) oder beim eigenen Zugang (gesperrt = nicht mitgesendet = unverändert); entscheidend ist der Server
@@ -127,16 +102,21 @@
     $('#us-2fa-hint').textContent = zwang || (self ? 'Die Pflicht für den eigenen Zugang kann nur ein anderer Administrator ändern.'
       : role === 'admin' ? 'Über die STAFL-Anmeldung ist der zweite Faktor für Administratoren immer Pflicht; das Häkchen verlangt ihn auch bei der Anmeldung hier.' : PFLICHT_HINWEIS);
   }
+  /* Gewählte Rollen im Dialog: Administrator schließt alle anderen aus, ohne Auswahl bleibt die bisherige Hauptrolle */
+  const gewaehlteRollen = () => $$('#user-body [name="rollen"]:checked').map((x) => x.value);
   dlgUser.addEventListener('change', (e) => {
     if (e.target.name === 'zugang') { zugangZeigen(); return; }
-    if (e.target.name !== 'role') return;
-    pflichtZeigen(e.target.value);
+    if (e.target.name !== 'rollen') return;
+    if (e.target.checked && e.target.value === 'admin') for (const x of $$('#user-body [name="rollen"]')) { if (x.value !== 'admin') x.checked = false; }
+    if (e.target.checked && e.target.value !== 'admin') { const ad = $('#user-body [name="rollen"][value="admin"]'); if (ad) ad.checked = false; }
+    const gew = gewaehlteRollen();
+    pflichtZeigen(gew.includes('admin') ? 'admin' : gew[0] || '');
     const box = $('#ur-box'); if (!box) return;
     const u = editUid ? users.find((x) => x.id === editUid) : null;
-    box.hidden = e.target.value === 'admin';
+    box.hidden = gew.includes('admin');
     if (box.hidden) return;   // Auswahl bleibt erhalten, falls wieder eine andere Rolle gewählt wird
     const keep = {}; for (const s2 of $$('#ur-list [data-ur]')) keep[s2.dataset.ur] = s2.value;
-    $('#ur-list').innerHTML = userRightsRows(u, e.target.value);
+    $('#ur-list').innerHTML = userRightsRows(u, gew);
     for (const s2 of $$('#ur-list [data-ur]')) if (keep[s2.dataset.ur] !== undefined) s2.value = keep[s2.dataset.ur];
   });
   /* Benutzername aus Vor- und Nachname wie auf dem Server (benutzername_vorschlag): „vorname-nachname“, Umlaute ae/oe/ue/ss */
@@ -176,8 +156,8 @@
         <label class="fld" data-nurzugang><span>E-Mail <small class="muted">(für die Zugangsdaten)</small></span><input name="email" type="email" value="${esc(u ? u.email : '')}" maxlength="160" autocomplete="off" spellcheck="false" placeholder="z. B. max.mustermann@standard-fleisch.de"></label>
         <label class="fld" data-nurzugang><span>Benutzername${u ? '' : ' <small class="muted">(automatisch)</small>'}</span><input name="username" value="${esc(u ? u.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="vorname-nachname"${u ? ' disabled' : ' required'}></label>
         ${u ? '' : '<p class="hint span2 us-uhint" id="us-uhint" data-nurzugang>Wird aus Vorname-Nachname gebildet (Umlaute als ae/oe/ue/ss); bei Bedarf überschreibbar.</p>'}
-        <div class="fld span2" data-nurzugang><span>Rolle</span>
-          <div class="role-pick">${['admin', 'editor', 'viewer'].map((r) => `<label class="role-opt"><input type="radio" name="role" value="${r}"${(u ? u.role : 'editor') === r ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(ROLE_LABEL[r])}</strong><small>${esc(ROLE_DESC[r])}</small></span></label>`).join('')}</div>
+        <div class="fld span2" data-nurzugang><span>Rollen <small class="muted">(mehrere möglich – die Rechte addieren sich)</small></span>
+          <div class="role-pick${rollenListe().length > 3 ? ' mehr' : ''}">${rollenListe().map((r) => `<label class="role-opt"><input type="checkbox" name="rollen" value="${esc(r.id)}"${startRollen(u).includes(r.id) ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(r.name)}</strong><small>${esc(r.beschreibung || ROLE_DESC[r.id] || '')}</small></span></label>`).join('')}</div>
         </div>
         <label class="check span2" data-nurzugang><input type="checkbox" name="active"${!u || u.active || !zugang ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
         ${self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2" data-nurzugang><span>${u && zugang ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
@@ -188,9 +168,9 @@
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
         ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
         ${u && u.geraete && u.geraete.length && !self ? `<label class="check span2"><input type="checkbox" name="resetGeraete"> Vertraute Geräte entfernen (${esc(geraeteText(u.geraete))})</label>` : ''}
-        <details class="span2 ur-box" id="ur-box" data-nurzugang${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Mitarbeiter${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
+        <details class="span2 ur-box" id="ur-box" data-nurzugang${u && (u.grant.length || u.deny.length) ? ' open' : ''}${startRollen(u).includes('admin') ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Mitarbeiter${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
-          <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
+          <div id="ur-list">${userRightsRows(u, startRollen(u))}</div></details>
         ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
         ${u && u.mailInfo ? `<p class="hint span2" style="margin:0">${esc(mailInfoText(u))}</p>` : ''}
         ${hrAn() ? W.hr.formular(u ? u.id : null) : ''}
@@ -201,7 +181,7 @@
         <button type="button" class="btn" data-close>Abbrechen</button>
         <button type="submit" class="btn primary">${u ? 'Speichern' : 'Mitarbeiter anlegen'}</button>
       </div>`;
-    pflichtZeigen(u ? u.role : 'editor');
+    pflichtZeigen(startRollen(u).includes('admin') ? 'admin' : 'editor');
     zugangZeigen();
     dlgUser.showModal();
     $('#user-body [name="vorname"]').focus();
@@ -210,7 +190,7 @@
   function zugangZeigen() {
     const r = $('#user-body [name="zugang"]:checked');
     const mit = !r || r.value === '1';
-    for (const el of $$('#user-body [data-nurzugang]')) el.hidden = !mit || (el.id === 'ur-box' && ($('#user-body [name="role"]:checked') || {}).value === 'admin');
+    for (const el of $$('#user-body [data-nurzugang]')) el.hidden = !mit || (el.id === 'ur-box' && gewaehlteRollen().includes('admin'));
     const pw = $('#user-body [name="password"]');
     if (pw) pw.required = mit && pw.hasAttribute('data-pflicht');
   }
@@ -219,7 +199,7 @@
     fertigInfo = { id: u.id, pw };
     const mitPwMoeglich = !!(pw && u.mustChange);
     $('#user-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="us-title">${neu ? 'Mitarbeiter angelegt' : 'Neues Passwort gesetzt'}</h2><p>${esc(u.name)} · ${esc(ROLE_LABEL[u.role] || u.role)}</p></div>
+      <div class="dlg-head"><div><h2 id="us-title">${neu ? 'Mitarbeiter angelegt' : 'Neues Passwort gesetzt'}</h2><p>${esc(u.name)} · ${esc(rollenVon(u).map(rollenName).join(', '))}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body us-fertig">
         <dl class="us-daten"><dt>Benutzername</dt><dd><code>${esc(u.username)}</code></dd>
@@ -289,10 +269,14 @@
     const body = { zugang,
       id: editUid || '', vorname: f.vorname.value.trim(), nachname: f.nachname.value.trim(), email: f.email.value.trim(),
       username: u ? u.username : f.username.value.trim(),
-      role: zugang ? (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role) : (u && u.zugang !== false ? u.role : 'viewer'), active: f.active.checked,
+      role: zugang ? gewaehlteRollen()[0] || (u && u.role) : (u && u.zugang !== false ? u.role : 'viewer'), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
       resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false, resetGeraete: f.resetGeraete ? f.resetGeraete.checked : false,
     };
+    if (zugang && !(u && u.id === W.me.id)) {   // eigener Zugang: Rollen gesperrt (nicht mitgesendet = unverändert)
+      body.rollen = gewaehlteRollen();
+      if (!body.rollen.length) { err.textContent = 'Bitte mindestens eine Rolle wählen.'; return; }
+    }
     if (f.twofaPflicht && !f.twofaPflicht.disabled) body.twofaPflicht = f.twofaPflicht.checked;   // gesperrt = unverändert
     if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');

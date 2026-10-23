@@ -151,7 +151,7 @@ with sync_playwright() as p:
     check('log: stock import', 'Bestand übernommen' in a.inner_text('#log-list') and '283 Artikel' in a.inner_text('#log-list'))
     # Nur ansehen
     a.click('#vt-users'); a.wait_for_selector('.utab'); a.click('#user-add'); a.wait_for_selector('#dlg-user[open]')
-    a.fill('#user-body [name=vorname]', 'Lea'); a.fill('#user-body [name=nachname]', 'Leser'); a.fill('#user-body [name=username]', 'lea'); a.check('#user-body [name=role][value=viewer]')
+    a.fill('#user-body [name=vorname]', 'Lea'); a.fill('#user-body [name=nachname]', 'Leser'); a.fill('#user-body [name=username]', 'lea'); a.locator('#user-body [name=rollen]').evaluate_all("(els, v) => els.forEach((e) => { if (e.checked !== (e.value === v)) e.click(); })", 'viewer')
     a.fill('#user-body [name=password]', 'Leserin-Zugang-2'); a.uncheck('#user-body [name=mustChange]'); a.click('#user-body [type=submit]')
     a.wait_for_selector('#user-body .us-fertig'); a.click('#user-body .dlg-foot [data-close]'); a.wait_for_function("!document.querySelector('#dlg-user').open")
     v = br.new_context(viewport={'width': 1440, 'height': 950}).new_page(); v.on('pageerror', lambda e: errs.append('v: ' + str(e)))

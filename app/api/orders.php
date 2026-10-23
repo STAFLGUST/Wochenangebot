@@ -79,7 +79,7 @@ function orders_action(string $action): bool
                 $assignee = (string)($b['assignee'] ?? '');
                 if ($assignee !== '') {
                     $valid = false;
-                    foreach (users_load() as $u) if ($u['id'] === $assignee && !empty($u['active']) && in_array($u['role'], ['editor','admin'], true)) $valid = true;
+                    foreach (users_load() as $u) if ($u['id'] === $assignee && !empty($u['active']) && may($u, 'bestellungen.bearbeiten')) $valid = true;
                     if (!$valid) fail('Bitte einen aktiven Bearbeiter wählen.', 422);
                 }
                 $note = trim((string)($b['note'] ?? ''));
@@ -109,6 +109,6 @@ function orders_action(string $action): bool
     // List responses omit position arrays; detail endpoint delivers the immutable snapshot.
     foreach ($rows as &$row) { $row['positionCount'] = count($row['positions'] ?? []); unset($row['positions'], $row['history'], $row['note'], $row['kunde'], $row['outbox']); } unset($row);
     $out = ['ok'=>true,'apiVersion'=>1,'orders'=>$rows,'total'=>count($all),'offset'=>$offset,'limit'=>$limit];
-    if (!$customer) $out['assignees'] = array_values(array_map(fn($u) => ['id'=>$u['id'],'name'=>$u['name']], array_filter(users_load(), fn($u) => !empty($u['active']) && in_array($u['role'], ['editor','admin'], true))));
+    if (!$customer) $out['assignees'] = array_values(array_map(fn($u) => ['id'=>$u['id'],'name'=>$u['name']], array_filter(users_load(), fn($u) => !empty($u['active']) && may($u, 'bestellungen.bearbeiten'))));
     respond($out);
 }

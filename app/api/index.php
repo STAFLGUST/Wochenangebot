@@ -208,6 +208,8 @@ if (!$isPublic) {
 
 /* Wartung und Freigabe je Oberfläche (lib/module.php, GR-102/GR-107) – nach Länder- und IP-Sperre, vor der Aktion */
 modul_durchsetzen($AKTION);
+/* Modulzugang je Rolle (lib/rechte.php, GR-103): ohne „<modul>.zugang“ laufen auf dem Host des Moduls keine Aktionen */
+modul_zugang_durchsetzen($AKTION);
 
 try {
     orders_action($action);

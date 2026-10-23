@@ -673,6 +673,22 @@ with sync_playwright() as pw:
     check('Bestand: ohne Recht bestand.sehen verweigert der Server die Bestandsliste (403)', code == 403, code)
     V.call('user_save', {'id': uid_e, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'deny': []})
     check('Bestand: Recht wieder hergestellt', pb.evaluate("fetch('../api/?action=stock').then(r => r.status)") == 200)
+    # Modulzugang je Rolle (lib/rechte.php): ohne „bestand.zugang“ sperrt der Server den ganzen Bestands-Host (WA_OBERFLAECHE vom
+    # Webserver), obwohl bestand.sehen bleibt – auf dem Angebots-Host bleibt die Bestandsliste (Angebot braucht sie) erreichbar
+    V.call('user_save', {'id': uid_e, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'deny': ['bestand.zugang']})
+    code, j = pb.evaluate("fetch('../api/?action=stock').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('Modulzugang: ohne bestand.zugang sperrt der Bestands-Host (403 kein_modulzugang)', code == 403 and j.get('code') == 'kein_modulzugang' and j.get('name') == 'Bestand', (code, j))
+    stz = pb.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('Modulzugang: Status meldet den fehlenden Zugang', stz.get('loggedIn') and stz['user'].get('modulzugang') is False and stz['user'].get('modulName') == 'Bestand', stz.get('user'))
+    pb.reload(); pb.wait_for_selector('#kein-zugang')
+    check('Modulzugang: Seite zeigt „Kein Zugang“ mit Rückweg zum Dashboard', 'Kein Zugang zu „Bestand“' in pb.text_content('#kein-zugang')
+          and pb.get_attribute('#kein-zugang a.btn', 'href') == D + '/', pb.text_content('#kein-zugang'))
+    check('Modulzugang: Angebots-Host liefert die Bestandsliste weiter', pa.evaluate("fetch('/api/?action=stock').then(r => r.status)") == 200)
+    kach = pg.evaluate("fetch('/api/?action=module_status').then(r => r.json()).then(d => Object.fromEntries(d.module.filter(m => m.kachel).map(m => [m.id, m.kachel.recht])))")
+    check('Modulzugang: Dashboard bekommt die Kachel Bestand ohne Recht', kach.get('bestand') is False and kach.get('angebot') is True, kach)
+    V.call('user_save', {'id': uid_e, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'deny': []})
+    pb.reload(); pb.wait_for_selector('#view-stock:not([hidden])')
+    check('Modulzugang: wieder erteilt, Bestand offen', pb.evaluate("fetch('../api/?action=stock').then(r => r.status)") == 200)
 
     # ── HR unter eigener Adresse: Single Sign-on, eigene Sitzung, Urlaubsverwaltung für jede Mitarbeiterin mit hr.antrag ──
     ph = eigene_seite(ctx.new_page())

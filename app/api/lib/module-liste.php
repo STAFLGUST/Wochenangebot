@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml –
-   nicht von Hand ändern. Auswertung: lib/module.php. Bei Konflikten nach einem Rebase neu erzeugen. */
+   nicht von Hand ändern. Auswertung: lib/module.php (Rechte → Modul: lib/rechte.php). Bei Konflikten nach einem Rebase neu erzeugen. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const MODULE = [
@@ -20,6 +20,7 @@ const MODULE = [
     'mobile' => ['name' => 'App (iOS/Android)', 'beschreibung' => 'Expo-App für Kunden und Mitarbeiter; nutzt dieselbe Schnittstelle wie die Website', 'icon' => 'smartphone', 'reihenfolge' => null, 'dashboard' => false, 'teil_von' => null, 'kachel_ziel' => null, 'abhaengigkeiten' => ['angebot', 'plattform'], 'oberflaechen' => []],
     'plattform' => ['name' => 'Plattformkern', 'beschreibung' => 'Anmeldung, Sitzungen, Rechte, Sicherheit, Speicherschicht, E-Mail, Protokoll, Betrieb, CI und Regelwerk', 'icon' => 'cpu', 'reihenfolge' => null, 'dashboard' => false, 'teil_von' => null, 'kachel_ziel' => null, 'abhaengigkeiten' => [], 'oberflaechen' => ['anmeldung' => ['name' => 'Zentrale Mitarbeiteranmeldung (Keycloak, ADR-003)', 'art' => 'intern', 'adresse' => 'https://login.dashboard-stafl.de/', 'ziel' => null, 'entwicklung' => 'fertig', 'freigabe' => 'produktiv', 'sperrbar' => false, 'dns' => true]]],
 ];
+const RECHTE_MODUL = ['angebot.bearbeiten' => 'angebot', 'angebot.veroeffentlichen' => 'angebot', 'angebote.loeschen' => 'angebot', 'angebote.verwalten' => 'angebot', 'auswertung.sehen' => 'verwaltung', 'bestand.einkaufspreise' => 'bestand', 'bestand.importieren' => 'bestand', 'bestand.sehen' => 'bestand', 'bestellungen.bearbeiten' => 'angebot', 'bestellungen.sehen' => 'angebot', 'einkauf.melden' => 'einkauf', 'einkauf.sehen' => 'einkauf', 'einzelangebote.bearbeiten' => 'angebot', 'einzelangebote.sehen' => 'angebot', 'kunden.bearbeiten' => 'verwaltung', 'kunden.sehen' => 'verwaltung', 'preisverlauf.bearbeiten' => 'angebot', 'preisverlauf.sehen' => 'angebot', 'protokoll.sehen' => 'verwaltung', 'sonderposten.senden' => 'angebot', 'stammdaten.bearbeiten' => 'verwaltung', 'stammdaten.sehen' => 'verwaltung', 'wochenangebot.senden' => 'angebot'];
 const MODUL_FREIGABE_ERLAUBT = ['geplant' => ['keine', 'deaktiviert'], 'in_entwicklung' => ['keine', 'test', 'deaktiviert'], 'in_pruefung' => ['keine', 'test', 'deaktiviert'], 'fertig' => ['keine', 'test', 'produktiv', 'deaktiviert']];
 const MODUL_REGELN = [
     ['nr' => 1, 'wenn' => ['freigabe_unzulaessig' => true], 'zugang' => false, 'http' => 404, 'kachel' => 'nicht_verfuegbar', 'hinweis' => false],

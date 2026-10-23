@@ -41,6 +41,7 @@ function user_public(array $u): array
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'vorname' => (string)($u['vorname'] ?? ''), 'nachname' => (string)($u['nachname'] ?? ''),
             'zugang' => nutzer_hat_zugang($u),
             'email' => (string)($u['email'] ?? ''), 'mailInfo' => $u['mailInfo'] ?? null, 'role' => $u['role'], 'active' => (bool)$u['active'],
+            'rollen' => function_exists('user_rollen') ? user_rollen($u) : [$u['role']],
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
             'twofa' => !empty($u['totp']), 'twofaPflicht' => !empty($u['twofaPflicht']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
@@ -281,7 +282,7 @@ function mail_tpl_nutzer(array $u, ?string $startPw, string $note = ''): array
     $url = mail_base_url() . '/admin/';
     $vor = (string)($u['vorname'] ?? '') !== '' ? $u['vorname'] : '';
     $gruss = $vor !== '' ? "Hallo $vor," : 'Guten Tag ' . $u['name'] . ',';
-    $rolle = ROLE_LABELS[$u['role']] ?? $u['role'];
+    $rolle = rollen_text($u);
     $subject = 'Ihr Zugang zum Eingabebereich' . ($company !== '' ? " – $company" : '');
     $pwSatz = $startPw !== null
         ? 'Bei der ersten Anmeldung legen Sie ein eigenes Passwort fest; das Startpasswort gilt danach nicht mehr.'
