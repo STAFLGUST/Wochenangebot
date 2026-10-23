@@ -156,7 +156,7 @@ switch ($action) {
         case 'user_unlock': {
             require_admin_confirmation('user_unlock');
             $u = user_update((string)(body()['id'] ?? ''), function (&$x) { $x['lockedUntil'] = 0; $x['failCount'] = 0; unset($x['lockTries']); });
-            if (!$u) fail('Nutzer nicht gefunden.', 404);
+            if (!$u) fail('Mitarbeiter nicht gefunden.', 404);
             audit('security', "Zugang „{$u['username']}“ entsperrt");
             respond(['ok' => true]);
         }
@@ -207,8 +207,11 @@ switch ($action) {
                 $name = $person['name'];
                 $role = is_string($b['role'] ?? null) && isset(ROLES[$b['role']]) ? $b['role'] : null;
                 if ($role === null) throw new InvalidArgumentException('Ungültige Rolle.');
-                $active = !empty($b['active']);
-                $pw = $b['password'] ?? '';
+                // Mitarbeiter ohne Anmeldung (z. B. Lager, nur Urlaubsplanung): immer deaktiviert, kein Passwort nötig
+                $zugang = !array_key_exists('zugang', $b) || !empty($b['zugang']);
+                $active = $zugang && !empty($b['active']);
+                if (!$zugang) $role = 'viewer';   // ohne Anmeldung keine Rechte; beim Einrichten der Anmeldung neu wählen
+                $pw = $zugang ? ($b['password'] ?? '') : '';
                 $setPw = is_string($pw) && $pw !== '';
                 // Abweichende Rechte (nur wenn mitgeschickt); verboten hat Vorrang
                 $hasRights = array_key_exists('grant', $b) || array_key_exists('deny', $b);
@@ -223,10 +226,11 @@ switch ($action) {
                     if ($wunsch === '' && $person['vorname'] !== '') $wunsch = benutzername_vorschlag($person['vorname'], $person['nachname'], array_column($users, 'username'));
                     $uname = clean_username($wunsch);
                     foreach ($users as $u) if ($u['username'] === $uname) throw new InvalidArgumentException('Der Benutzername „' . $uname . '“ ist bereits vergeben.');
-                    if (!$setPw) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Nutzer festlegen.');
+                    if (!$setPw && $zugang) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Mitarbeiter festlegen.');
                     $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => $role, 'active' => $active,
-                          'hash' => password_hash(check_password($pw, $uname), PASSWORD_DEFAULT), 'mustChange' => !empty($b['mustChange']), 'sv' => 1,
+                          'hash' => password_hash($zugang ? check_password($pw, $uname) : bin2hex(random_bytes(24)), PASSWORD_DEFAULT), 'mustChange' => $zugang && !empty($b['mustChange']), 'sv' => 1,
                           'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
+                    if (!$zugang) { $u['zugang'] = false; $pflicht = false; }
                     foreach (['vorname', 'nachname', 'email'] as $f) if ($person[$f] !== '') $u[$f] = $person[$f];
                     if ($pflicht) $u['twofaPflicht'] = true;
                     if ($hasRights && $role !== 'admin') { if ($grant) $u['grant'] = $grant; if ($deny) $u['deny'] = $deny; }
@@ -238,11 +242,14 @@ switch ($action) {
                     if (!empty($u['grant'])) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $uname, 'f' => 'Zusätzlich erlaubt', 'from' => '', 'to' => $lbl($u['grant'])];
                     if (!empty($u['deny'])) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $uname, 'f' => 'Verboten', 'from' => '', 'to' => $lbl($u['deny'])];
                     if ($pflicht) $d[] = ['k' => 'u|2fapflicht', 'code' => '', 'name' => $uname, 'f' => 'Zwei-Faktor-Pflicht', 'from' => '', 'to' => 'ja'];
-                    return [$u, 'Nutzer „' . $uname . '“ (' . $name . ') angelegt', $d];
+                    return [$u, 'Mitarbeiter „' . $uname . '“ (' . $name . ') ' . ($zugang ? 'angelegt' : 'ohne Anmeldung angelegt'), $d];
                 }
                 $i = user_find($users, $id);
-                if ($i === null) fail('Nutzer nicht gefunden.', 404);
+                if ($i === null) fail('Mitarbeiter nicht gefunden.', 404);
                 $old = $users[$i];
+                if ($id === $me['id'] && !$zugang) throw new InvalidArgumentException('Den eigenen Zugang können Sie nicht entfernen.');
+                // Anmeldung neu einrichten: nur mit neuem Passwort (das bisherige ist unbrauchbar)
+                if ($zugang && !nutzer_hat_zugang($old) && !$setPw) throw new InvalidArgumentException('Für die Anmeldung bitte ein Passwort festlegen.');
                 if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']) || !empty($b['resetPasskeys']))) {
                     fail('Für den eigenen Zugang bitte „Passwort ändern“, „Zwei-Faktor-Anmeldung“ oder „Passkeys“ verwenden.', 403);
                 }
@@ -256,6 +263,7 @@ switch ($action) {
                 }
                 $users[$i]['role'] = $role;
                 $users[$i]['active'] = $active;
+                if ($zugang) unset($users[$i]['zugang']); else { $users[$i]['zugang'] = false; $users[$i]['mustChange'] = false; }
                 if (active_admins($users) < 1) throw new InvalidArgumentException('Es muss mindestens ein aktiver Administrator bestehen bleiben.');
                 $d = [];
                 if ($old['name'] !== $name) $d[] = ['k' => 'u|name', 'code' => '', 'name' => $old['username'], 'f' => 'Name', 'from' => $old['name'], 'to' => $name];
@@ -274,6 +282,7 @@ switch ($action) {
                     if ($pflicht) $users[$i]['twofaPflicht'] = true; else unset($users[$i]['twofaPflicht']);
                     $d[] = ['k' => 'u|2fapflicht', 'code' => '', 'name' => $old['username'], 'f' => 'Zwei-Faktor-Pflicht', 'from' => $pflicht ? 'nein' : 'ja', 'to' => $pflicht ? 'ja' : 'nein'];
                 }
+                if (nutzer_hat_zugang($old) !== $zugang) $d[] = ['k' => 'u|zugang', 'code' => '', 'name' => $old['username'], 'f' => 'Anmeldung', 'from' => $zugang ? 'ohne' : 'mit', 'to' => $zugang ? 'mit' : 'ohne'];
                 if ((bool)$old['active'] !== $active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $old['username'], 'f' => 'Status', 'from' => $old['active'] ? 'aktiv' : 'deaktiviert', 'to' => $active ? 'aktiv' : 'deaktiviert'];
                 if (!empty($b['reset2fa']) && !empty($old['totp'])) {
                     unset($users[$i]['totp'], $users[$i]['totpLast'], $users[$i]['recovery']);
@@ -301,7 +310,7 @@ switch ($action) {
                 }
                 $users[$i]['changed'] = now();
                 users_save($users);
-                return [$users[$i], 'Nutzer „' . $old['username'] . '“ geändert', $d];
+                return [$users[$i], 'Mitarbeiter „' . $old['username'] . '“ geändert', $d];
             });
             [$u, $msg, $d] = $res;
             if ($u['id'] === $me['id']) { $_SESSION['sv'] = (int)$u['sv']; }
@@ -319,14 +328,14 @@ switch ($action) {
             $b = body();
             $users = users_load();
             $i = user_find($users, (string)($b['id'] ?? ''));
-            if ($i === null) fail('Nutzer nicht gefunden.', 404);
+            if ($i === null) fail('Mitarbeiter nicht gefunden.', 404);
             $u = $users[$i];
-            if (empty($u['email'])) fail('Für diesen Nutzer ist keine E-Mail-Adresse hinterlegt.', 422);
+            if (empty($u['email'])) fail('Für diesen Mitarbeiter ist keine E-Mail-Adresse hinterlegt.', 422);
             if (empty($u['active'])) fail('Der Zugang ist deaktiviert – bitte zuerst aktivieren.', 422);
             $pw = $b['password'] ?? null;
             $startPw = null;
             if (is_string($pw) && $pw !== '') {
-                if (empty($u['mustChange'])) fail('Ein Startpasswort wird nur mitgesendet, wenn der Nutzer es bei der ersten Anmeldung ändern muss.', 422);
+                if (empty($u['mustChange'])) fail('Ein Startpasswort wird nur mitgesendet, wenn der Mitarbeiter es bei der ersten Anmeldung ändern muss.', 422);
                 if (!password_verify($pw, (string)$u['hash'])) fail('Das Startpasswort passt nicht zum gespeicherten Passwort.', 422);
                 $startPw = $pw;
             }
@@ -355,7 +364,7 @@ switch ($action) {
             $gone = with_lock('nutzer', function () use ($id, $me) {
                 $users = users_load();
                 $i = user_find($users, $id);
-                if ($i === null) fail('Nutzer nicht gefunden.', 404);
+                if ($i === null) fail('Mitarbeiter nicht gefunden.', 404);
                 if ($id === $me['id']) throw new InvalidArgumentException('Den eigenen Zugang können Sie nicht löschen.');
                 $u = $users[$i];
                 array_splice($users, $i, 1);
@@ -364,7 +373,7 @@ switch ($action) {
                 return $u;
             });
             sess_remove(function ($k, $v) use ($gone) { return $v['uid'] === $gone['id']; });
-            audit('user', 'Nutzer „' . $gone['username'] . '“ (' . $gone['name'] . ') gelöscht');
+            audit('user', 'Mitarbeiter „' . $gone['username'] . '“ (' . $gone['name'] . ') gelöscht');
             respond(['ok' => true]);
         }
 

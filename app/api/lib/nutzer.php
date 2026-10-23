@@ -33,9 +33,13 @@ function users_load(): array
 }
 function users_save(array $users): void { store_write('nutzer', ['users' => array_values($users)]); }
 function user_find(array $users, string $id): ?int { foreach ($users as $i => $u) if ($u['id'] === $id) return $i; return null; }
+/* Mitarbeiter ohne Anmeldung (z. B. Lager): gehört zur Mitarbeiterliste (Urlaubsplanung), kann sich aber nicht anmelden –
+   immer deaktiviert, unbrauchbares Passwort. Fehlt das Feld, hat der Mitarbeiter einen Zugang (ältere Daten). */
+function nutzer_hat_zugang(array $u): bool { return ($u['zugang'] ?? true) !== false; }
 function user_public(array $u): array
 {
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'vorname' => (string)($u['vorname'] ?? ''), 'nachname' => (string)($u['nachname'] ?? ''),
+            'zugang' => nutzer_hat_zugang($u),
             'email' => (string)($u['email'] ?? ''), 'mailInfo' => $u['mailInfo'] ?? null, 'role' => $u['role'], 'active' => (bool)$u['active'],
             'mustChange' => (bool)($u['mustChange'] ?? false), 'created' => $u['created'] ?? null, 'createdBy' => $u['createdBy'] ?? '',
             'lastLogin' => $u['lastLogin'] ?? null, 'changed' => $u['changed'] ?? null,
@@ -144,6 +148,28 @@ function benutzername_vorschlag(string $vorname, string $nachname, array $belegt
     $u = $basis; $n = 2;
     while (in_array($u, $belegt, true)) { $suf = '-' . $n++; $u = rtrim(substr($basis, 0, 32 - strlen($suf)), '-') . $suf; }
     return $u;
+}
+/* Mitarbeiter ohne Anmeldung anlegen (Schnittstelle für Module, z. B. HR-Übernahme der Urlaubsplanung). Unter der Sperre
+   „nutzer“; Benutzername „vorname-nachname“ (belegt → „-2“ …). Rückgabe: der neue Datensatz. */
+function mitarbeiter_ohne_zugang_anlegen(string $vorname, string $nachname, array $me): array
+{
+    return with_lock('nutzer', function () use ($vorname, $nachname, $me) {
+        $users = users_load();
+        $vor = s($vorname, 40) ?? ''; $nach = s($nachname, 40) ?? '';
+        $name = trim($vor . ' ' . $nach);
+        if ($name === '') throw new InvalidArgumentException('Bitte einen Namen angeben.');
+        $uname = benutzername_vorschlag($vor, $nach, array_column($users, 'username'));
+        if ($uname === '') $uname = benutzername_vorschlag('mitarbeiter', (string)(count($users) + 1), array_column($users, 'username'));
+        $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => mb_substr($name, 0, 80), 'role' => 'viewer', 'active' => false,
+              'zugang' => false, 'hash' => password_hash(bin2hex(random_bytes(24)), PASSWORD_DEFAULT), 'mustChange' => false, 'sv' => 1,
+              'created' => now(), 'createdBy' => (string)($me['username'] ?? ''), 'lastLogin' => null];
+        if ($vor !== '') $u['vorname'] = $vor;
+        if ($nach !== '') $u['nachname'] = $nach;
+        $users[] = $u;
+        users_save($users);
+        audit('user', 'Mitarbeiter „' . $uname . '“ (' . $u['name'] . ') ohne Anmeldung angelegt', [], $me);
+        return $u;
+    });
 }
 /* Name, Vorname, Nachname und E-Mail eines Nutzers aus der Anfrage. Ältere Oberflächen schicken nur „name“. */
 function nutzer_person(array $b, bool $neu = true): array

@@ -1,6 +1,6 @@
 /* ==========================================================================
    Wochenangebot – Eingabebereich, Verwaltung
-   Nutzer, Bestellungen, Kunden, E-Mail, Protokoll, Sicherheit. Hilfen und Zustand kommen aus admin.js
+   Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll, Sicherheit. Hilfen und Zustand kommen aus admin.js
    (window.WA, Zustand über Getter: W.me, W.offers, W.stdPublic, W.wartungSt); die Ansichten werden dort
    über W.views aufgerufen.
    ========================================================================== */
@@ -14,10 +14,12 @@
   const mailInfo = () => (isAdmin() ? api('mail_status') : api('mail_info').catch(() => ({ configured: false })));   // Postfach-Details nur für Administratoren; sonst Kurzinfo (eingerichtet, Woche)
   let qTimer = null;
 
-  /* ======================= Nutzerverwaltung (Administrator) ======================= */
+  /* ======================= Mitarbeiter (Administrator; Personalstelle: nur HR-Angaben) =======================
+     Mitarbeiter = Nutzer der Plattform. Auch Kollegen ohne Anmeldung (z. B. Lager) sind Mitarbeiter („ohne Anmeldung“)
+     – für die Urlaubsverwaltung. HR-Angaben (Abteilung, Arbeitstage, Urlaubsanspruch) kommen aus app/module/hr/verwaltung-hr.js (W.hr). */
   let users = null, rights = null, twofaModus = 'off';
   const ROLE_DESC = {
-    admin: 'Alle Rechte, dazu Nutzer und Rechte, Sicherheit und E-Mail-Einstellungen',
+    admin: 'Alle Rechte, dazu Mitarbeiter und Rechte, Sicherheit und E-Mail-Einstellungen',
     editor: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: Angebot bearbeiten und veröffentlichen, Bestellungen, Bestand)',
     viewer: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: nur ansehen)',
   };
@@ -30,7 +32,7 @@
     const groups = [...new Set(rights.catalog.map((p) => p.group))];
     const cell = (r, k) => `<td class="rm-c"><input type="checkbox" data-rm-role="${r}" data-rm-key="${esc(k)}"${rights.roles[r].includes(k) ? ' checked' : ''} aria-label="${esc(ROLE_LABEL[r])}: ${esc(rights.catalog.find((p) => p.key === k).label)}"></td>`;
     const lock = '<td class="rm-c"><span class="rm-lock" title="Administratoren haben immer alle Rechte">✓</span></td>';
-    return `<section class="gcard rm-card" id="rm-card"><div class="rm-head"><div><h3 class="sec-h">Rollen und Rechte</h3><p class="hint">Was jede Rolle sehen und tun darf. Einzelnen Nutzern geben oder entziehen Sie Rechte zusätzlich in „Bearbeiten“. Wer etwas bearbeiten darf, darf es auch sehen.</p></div>
+    return `<section class="gcard rm-card" id="rm-card"><div class="rm-head"><div><h3 class="sec-h">Rollen und Rechte</h3><p class="hint">Was jede Rolle sehen und tun darf. Einzelnen Mitarbeitern geben oder entziehen Sie Rechte zusätzlich in „Bearbeiten“. Wer etwas bearbeiten darf, darf es auch sehen.</p></div>
         ${rights.updatedAt ? `<span class="sub">Geändert ${esc(dateTime(rights.updatedAt))}${rights.updatedBy ? ' von ' + esc(rights.updatedBy) : ''}</span>` : ''}</div>
       <div class="rm-wrap"><table class="etab rmtab"><thead><tr><th>Recht</th>${[['viewer', 'Lesen'], ['editor', 'Bearb.'], ['admin', 'Admin']].map(([r, k]) => `<th class="rm-c"><span class="rm-ll">${esc(ROLE_LABEL[r])}</span><abbr class="rm-ls" title="${esc(ROLE_LABEL[r])}">${k}</abbr></th>`).join('')}</tr></thead><tbody>
         ${groups.map((g) => `<tr class="rm-g"><th colspan="4">${esc(g)}</th></tr>${rights.catalog.filter((p) => p.group === g).map((p) => `<tr><td><span class="rm-k rm-${esc(p.kind)}">${p.kind === 'sehen' ? 'sehen' : 'tun'}</span>${esc(p.label)}</td>${cell('viewer', p.key)}${cell('editor', p.key)}${lock}</tr>`).join('')}`).join('')}
@@ -41,25 +43,34 @@
   }
   const exceptions = (u) => (u.role === 'admin' ? '' : [u.grant.length ? `+${u.grant.length}` : '', u.deny.length ? `−${u.deny.length}` : ''].filter(Boolean).join(' / '));
   const roleBadge = (r) => `<span class="role-b r-${esc(r)}">${esc(ROLE_LABEL[r] || r)}</span>`;
+  const hrAn = () => !!(W.hr && may('hr.verwalten'));
   async function renderUsersView() {
     const host = $('#view-users');
-    if (!users) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Nutzer werden geladen …</div>';
-    try { [users, rights] = await Promise.all([api('users').then((r) => { twofaModus = r.twofaModus || 'off'; return r.users; }), api('rechte')]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    if (!isAdmin()) { if (W.hr) W.hr.renderNurHr(host); return; }   // Personalstelle: nur HR-Angaben
+    if (!users) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Mitarbeiter werden geladen …</div>';
+    try { [users, rights] = await Promise.all([api('users').then((r) => { twofaModus = r.twofaModus || 'off'; return r.users; }), api('rechte'), hrAn() ? W.hr.laden().catch(() => null) : null]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const order = { admin: 0, editor: 1, viewer: 2 };
-    const list = users.slice().sort((a, b) => (b.active - a.active) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
-    const rows = list.map((u) => `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active ? '' : 'inactive'}">
-        <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
-        <td>${roleBadge(u.role)}${exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
-        <td class="u-st">${u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
-        <td class="u-last">${u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
+    const aktivRang = (u) => (u.active ? 2 : u.zugang === false ? 1 : 0);
+    const list = users.slice().sort((a, b) => (aktivRang(b) - aktivRang(a)) || (u0(a) - u0(b)) || order[a.role] - order[b.role] || a.name.localeCompare(b.name, 'de'));
+    function u0(u) { return u.zugang === false ? 1 : 0; }
+    const hr = hrAn() && W.hr.daten;
+    const rows = list.map((u) => { const z = hr ? W.hr.zelle(u.id) : null; return `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active || u.zugang === false ? '' : 'inactive'}">
+        <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${u.zugang === false ? 'ohne Anmeldung' : esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
+        ${hr ? `<td class="u-abt">${z.abteilung}</td>` : ''}
+        <td>${u.zugang === false ? '<span class="muted">–</span>' : roleBadge(u.role)}${u.zugang !== false && exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
+        <td class="u-st">${u.zugang === false ? '<span class="muted">ohne Anmeldung</span>' : u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-last">${u.zugang === false ? '<span class="muted">–</span>' : u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
+        ${hr ? `<td class="u-urlaub num">${z.urlaub}</td>` : ''}
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
-      </tr>`).join('');
+      </tr>`; }).join('');
+    const ohne = users.filter((u) => u.zugang === false).length, aus = users.filter((u) => !u.active && u.zugang !== false).length;
     host.innerHTML = `
       <div class="ed-toolbar">
-        <span class="ed-hint">${plural(users.filter((u) => u.active).length, 'aktiver Zugang', 'aktive Zugänge')}${users.some((u) => !u.active) ? ` · ${users.filter((u) => !u.active).length} deaktiviert` : ''}</span>
-        <button type="button" class="btn primary" id="user-add">${icon('plus')}Nutzer anlegen</button>
+        <span class="ed-hint">${plural(users.length, 'Mitarbeiter', 'Mitarbeiter')} · ${plural(users.filter((u) => u.active).length, 'aktiver Zugang', 'aktive Zugänge')}${ohne ? ` · ${ohne} ohne Anmeldung` : ''}${aus ? ` · ${aus} deaktiviert` : ''}</span>
+        <button type="button" class="btn primary" id="user-add">${icon('plus')}Mitarbeiter anlegen</button>
       </div>
-      <div class="gcard"><table class="etab utab"><thead><tr><th>Name / Benutzername</th><th>Rolle</th><th class="u-st">Status</th><th class="u-last">Letzte Anmeldung</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${hr ? W.hr.altbestand() : ''}
+      <div class="gcard"><table class="etab utab"><thead><tr><th>Name / Benutzername</th>${hr ? '<th class="u-abt">Abteilung</th>' : ''}<th>Rolle</th><th class="u-st">Status</th><th class="u-last">Letzte Anmeldung</th>${hr ? `<th class="u-urlaub num">Urlaub ${new Date().getFullYear()}</th>` : ''}<th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>
       ${rightsMatrix()}`;
   }
   $('#view-users').addEventListener('change', (e) => {
@@ -76,7 +87,7 @@
     const roles = { viewer: [], editor: [] };
     for (const b of $$('#rm-card [data-rm-key]:checked')) roles[b.dataset.rmRole].push(b.dataset.rmKey);
     e.target.closest('button').disabled = true;
-    try { await api('rechte_save', { body: { roles } }); toast('Rechte gespeichert. Sie gelten ab der nächsten Aktion der Nutzer.'); renderUsersView(); }
+    try { await api('rechte_save', { body: { roles } }); toast('Rechte gespeichert. Sie gelten ab der nächsten Aktion der Mitarbeiter.'); renderUsersView(); }
     catch (ex) { $('#rm-err').textContent = ex.message; e.target.closest('button').disabled = false; }
   });
   $('#view-users').addEventListener('click', (e) => {
@@ -101,7 +112,7 @@
     return `<table class="etab urtab"><tbody>${rights.catalog.map((p) => `<tr><td>${esc(p.label)}<div class="sub">${esc(p.group)}</div></td><td><select data-ur="${esc(p.key)}" aria-label="${esc(p.label)}">
       <option value=""${val(p.key) === '' ? ' selected' : ''}>wie Rolle (${base.includes(p.key) ? 'ja' : 'nein'})</option><option value="grant"${val(p.key) === 'grant' ? ' selected' : ''}>erlauben</option><option value="deny"${val(p.key) === 'deny' ? ' selected' : ''}>verbieten</option></select></td></tr>`).join('')}</tbody></table>`;
   }
-  /* Zwei-Faktor-Pflicht je Nutzer: gesperrt, wenn die Sicherheitseinstellung den Zugang ohnehin verpflichtet (alle bzw.
+  /* Zwei-Faktor-Pflicht je Mitarbeiter: gesperrt, wenn die Sicherheitseinstellung den Zugang ohnehin verpflichtet (alle bzw.
      Administratoren) oder beim eigenen Zugang (gesperrt = nicht mitgesendet = unverändert); entscheidend ist der Server
      (twofa_required, user_save) */
   const PFLICHT_HINWEIS = 'Ohne eingerichteten zweiten Faktor (Authenticator-App oder Passkey) wird die Einrichtung bei der nächsten Anmeldung verlangt. Gilt für die Anmeldung hier und über die STAFL-Anmeldung.';
@@ -117,6 +128,7 @@
       : role === 'admin' ? 'Über die STAFL-Anmeldung ist der zweite Faktor für Administratoren immer Pflicht; das Häkchen verlangt ihn auch bei der Anmeldung hier.' : PFLICHT_HINWEIS);
   }
   dlgUser.addEventListener('change', (e) => {
+    if (e.target.name === 'zugang') { zugangZeigen(); return; }
     if (e.target.name !== 'role') return;
     pflichtZeigen(e.target.value);
     const box = $('#ur-box'); if (!box) return;
@@ -151,49 +163,63 @@
     editUid = id; unameManuell = false; fertigInfo = null;
     const self = u && u.id === W.me.id;
     const [vor, nach] = teileName(u);
+    const zugang = !u || u.zugang !== false;
     $('#user-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="us-title">${u ? 'Nutzer bearbeiten' : 'Nutzer anlegen'}</h2><p>${u ? `Angelegt ${esc(dateTime(u.created))}${u.createdBy ? ' von ' + esc(u.createdBy) : ''}` : 'Der Nutzer meldet sich mit Benutzername und Passwort an.'}</p></div>
+      <div class="dlg-head"><div><h2 id="us-title">${u ? 'Mitarbeiter bearbeiten' : 'Mitarbeiter anlegen'}</h2><p>${u ? `Angelegt ${esc(dateTime(u.created))}${u.createdBy ? ' von ' + esc(u.createdBy) : ''}` : 'Mit Anmeldung: Benutzername und Passwort. Ohne Anmeldung: nur für die Urlaubsverwaltung (z. B. Lager).'}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Abbrechen">${icon('x')}</button></div>
       <div class="dlg-body form-grid two">
         <label class="fld"><span>Vorname</span><input name="vorname" value="${esc(vor)}" maxlength="40" required autocomplete="off" placeholder="z. B. Max"></label>
         <label class="fld"><span>Nachname</span><input name="nachname" value="${esc(nach)}" maxlength="40"${u ? '' : ' required'} autocomplete="off" placeholder="z. B. Mustermann"></label>
-        <label class="fld"><span>E-Mail <small class="muted">(für die Zugangsdaten)</small></span><input name="email" type="email" value="${esc(u ? u.email : '')}" maxlength="160" autocomplete="off" spellcheck="false" placeholder="z. B. max.mustermann@standard-fleisch.de"></label>
-        <label class="fld"><span>Benutzername${u ? '' : ' <small class="muted">(automatisch)</small>'}</span><input name="username" value="${esc(u ? u.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="vorname-nachname"${u ? ' disabled' : ' required'}></label>
-        ${u ? '' : '<p class="hint span2 us-uhint" id="us-uhint">Wird aus Vorname-Nachname gebildet (Umlaute als ae/oe/ue/ss); bei Bedarf überschreibbar.</p>'}
-        <div class="fld span2"><span>Rolle</span>
+        ${self ? '' : `<div class="fld span2"><span>Anmeldung</span><div class="role-pick us-zugang">
+          <label class="role-opt"><input type="radio" name="zugang" value="1"${zugang ? ' checked' : ''}><span><strong>Mit Anmeldung</strong><small>Meldet sich an, sieht seine Anwendungen und seinen Urlaub</small></span></label>
+          <label class="role-opt"><input type="radio" name="zugang" value="0"${zugang ? '' : ' checked'}><span><strong>Ohne Anmeldung</strong><small>Nur in der Urlaubsverwaltung (Kalender, Export) – kein Zugang</small></span></label></div></div>`}
+        <label class="fld" data-nurzugang><span>E-Mail <small class="muted">(für die Zugangsdaten)</small></span><input name="email" type="email" value="${esc(u ? u.email : '')}" maxlength="160" autocomplete="off" spellcheck="false" placeholder="z. B. max.mustermann@standard-fleisch.de"></label>
+        <label class="fld" data-nurzugang><span>Benutzername${u ? '' : ' <small class="muted">(automatisch)</small>'}</span><input name="username" value="${esc(u ? u.username : '')}" maxlength="32" autocapitalize="none" spellcheck="false" placeholder="vorname-nachname"${u ? ' disabled' : ' required'}></label>
+        ${u ? '' : '<p class="hint span2 us-uhint" id="us-uhint" data-nurzugang>Wird aus Vorname-Nachname gebildet (Umlaute als ae/oe/ue/ss); bei Bedarf überschreibbar.</p>'}
+        <div class="fld span2" data-nurzugang><span>Rolle</span>
           <div class="role-pick">${['admin', 'editor', 'viewer'].map((r) => `<label class="role-opt"><input type="radio" name="role" value="${r}"${(u ? u.role : 'editor') === r ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(ROLE_LABEL[r])}</strong><small>${esc(ROLE_DESC[r])}</small></span></label>`).join('')}</div>
         </div>
-        <label class="check span2"><input type="checkbox" name="active"${!u || u.active ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
-        ${self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2"><span>${u ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
-          <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u ? '' : ' required'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
+        <label class="check span2" data-nurzugang><input type="checkbox" name="active"${!u || u.active || !zugang ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
+        ${self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2" data-nurzugang><span>${u && zugang ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
+          <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u && zugang ? '' : ' data-pflicht'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
         </div>`}
-        ${self ? '' : `<label class="check span2"><input type="checkbox" name="mustChange" checked> Nutzer muss das Passwort bei der nächsten Anmeldung ändern</label>`}
-        <div class="span2 us-2fa"><label class="check"><input type="checkbox" name="twofaPflicht"${u && u.twofaPflicht ? ' checked' : ''}> Zwei-Faktor-Anmeldung verpflichtend</label><p class="hint" id="us-2fa-hint"></p></div>
+        ${self ? '' : `<label class="check span2" data-nurzugang><input type="checkbox" name="mustChange" checked> Mitarbeiter muss das Passwort bei der nächsten Anmeldung ändern</label>`}
+        <div class="span2 us-2fa" data-nurzugang><label class="check"><input type="checkbox" name="twofaPflicht"${u && u.twofaPflicht ? ' checked' : ''}> Zwei-Faktor-Anmeldung verpflichtend</label><p class="hint" id="us-2fa-hint"></p></div>
         ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
         ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
         ${u && u.geraete && u.geraete.length && !self ? `<label class="check span2"><input type="checkbox" name="resetGeraete"> Vertraute Geräte entfernen (${esc(geraeteText(u.geraete))})</label>` : ''}
-        <details class="span2 ur-box" id="ur-box"${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Nutzer${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
+        <details class="span2 ur-box" id="ur-box" data-nurzugang${u && (u.grant.length || u.deny.length) ? ' open' : ''}${(u ? u.role : 'editor') === 'admin' ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Mitarbeiter${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, u ? u.role : 'editor')}</div></details>
         ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
         ${u && u.mailInfo ? `<p class="hint span2" style="margin:0">${esc(mailInfoText(u))}</p>` : ''}
+        ${hrAn() ? W.hr.formular(u ? u.id : null) : ''}
         <p class="form-err span2" id="user-err" role="alert"></p>
       </div>
       <div class="dlg-foot">
-        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Nutzer löschen</button>` : ''}${u && !self && u.email && u.active ? `<button type="button" class="btn sm ghost" data-uact="mail">${icon('mail', 'sm')}Zugangsdaten per E-Mail</button>` : ''}</span>
+        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Mitarbeiter löschen</button>` : ''}${u && !self && u.email && u.active ? `<button type="button" class="btn sm ghost" data-uact="mail" data-nurzugang>${icon('mail', 'sm')}Zugangsdaten per E-Mail</button>` : ''}</span>
         <button type="button" class="btn" data-close>Abbrechen</button>
-        <button type="submit" class="btn primary">${u ? 'Speichern' : 'Nutzer anlegen'}</button>
+        <button type="submit" class="btn primary">${u ? 'Speichern' : 'Mitarbeiter anlegen'}</button>
       </div>`;
     pflichtZeigen(u ? u.role : 'editor');
+    zugangZeigen();
     dlgUser.showModal();
     $('#user-body [name="vorname"]').focus();
+  }
+  /* Mit/ohne Anmeldung: Felder für Anmeldung, Rolle, Passwort, zweiten Faktor und Rechte nur mit Anmeldung */
+  function zugangZeigen() {
+    const r = $('#user-body [name="zugang"]:checked');
+    const mit = !r || r.value === '1';
+    for (const el of $$('#user-body [data-nurzugang]')) el.hidden = !mit || (el.id === 'ur-box' && ($('#user-body [name="role"]:checked') || {}).value === 'admin');
+    const pw = $('#user-body [name="password"]');
+    if (pw) pw.required = mit && pw.hasAttribute('data-pflicht');
   }
   /* Nach dem Anlegen (bzw. neuem Passwort): Zusammenfassung und „Zugangsdaten per E-Mail senden“ */
   function zeigeFertig(u, pw, neu) {
     fertigInfo = { id: u.id, pw };
     const mitPwMoeglich = !!(pw && u.mustChange);
     $('#user-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="us-title">${neu ? 'Nutzer angelegt' : 'Neues Passwort gesetzt'}</h2><p>${esc(u.name)} · ${esc(ROLE_LABEL[u.role] || u.role)}</p></div>
+      <div class="dlg-head"><div><h2 id="us-title">${neu ? 'Mitarbeiter angelegt' : 'Neues Passwort gesetzt'}</h2><p>${esc(u.name)} · ${esc(ROLE_LABEL[u.role] || u.role)}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body us-fertig">
         <dl class="us-daten"><dt>Benutzername</dt><dd><code>${esc(u.username)}</code></dd>
@@ -204,7 +230,7 @@
               : pw ? '<p class="hint">Das Passwort wird nicht mitgesendet, weil es nicht bei der ersten Anmeldung geändert werden muss – bitte separat weitergeben.</p>' : ''}
             <p class="hint">Die E-Mail enthält Benutzername, Link zum Eingabebereich und den Hinweis zur ersten Anmeldung.</p>
             <p class="us-mail-st" id="us-mail-st" role="status"></p></div>`
-          : `<p class="hint">${pw ? 'Passwort jetzt sicher weitergeben. ' : ''}Für eine E-Mail mit den Zugangsdaten bitte eine E-Mail-Adresse hinterlegen (Nutzer bearbeiten).</p>`}
+          : `<p class="hint">${pw ? 'Passwort jetzt sicher weitergeben. ' : ''}Für eine E-Mail mit den Zugangsdaten bitte eine E-Mail-Adresse hinterlegen (Mitarbeiter bearbeiten).</p>`}
         <p class="form-err" id="user-err" role="alert"></p>
       </div>
       <div class="dlg-foot">${u.email ? `<button type="button" class="btn" data-close>Fertig</button><button type="button" class="btn primary" data-uact="sendmail">${icon('mail')}Zugangsdaten per E-Mail senden</button>` : '<button type="button" class="btn primary" data-close>Fertig</button>'}</div>`;
@@ -246,8 +272,8 @@
     }
     if (a === 'del') {
       const u = users.find((x) => x.id === editUid);
-      if (!(await confirmBox('Nutzer löschen?', `Der Zugang „${esc(u.username)}“ (${esc(u.name)}) wird gelöscht. Die Einträge im Protokoll bleiben erhalten. Alternativ können Sie den Zugang nur deaktivieren.`, 'Löschen', true))) return;
-      try { await api('user_delete', { body: { id: u.id } }); dlgUser.close(); toast(`Nutzer „${u.username}“ gelöscht.`); renderUsersView(); } catch (ex) { $('#user-err').textContent = ex.message; }
+      if (!(await confirmBox('Mitarbeiter löschen?', `„${esc(u.name)}“ (${esc(u.username)}) wird gelöscht. Die Einträge im Protokoll und in der Urlaubsverwaltung bleiben erhalten. Alternativ können Sie den Zugang nur deaktivieren oder auf „ohne Anmeldung“ stellen.`, 'Löschen', true))) return;
+      try { await api('user_delete', { body: { id: u.id } }); dlgUser.close(); toast(`Mitarbeiter „${u.username}“ gelöscht.`); renderUsersView(); } catch (ex) { $('#user-err').textContent = ex.message; }
     }
   });
   $('#user-body').addEventListener('submit', async (e) => {
@@ -255,13 +281,15 @@
     if (fertigInfo) return;
     const f = e.target, err = $('#user-err');
     err.textContent = '';
-    const pw = f.password ? f.password.value.trim() : '';
+    const zr = f.querySelector('[name="zugang"]:checked');
+    const zugang = !zr || zr.value === '1';
+    const pw = f.password && zugang ? f.password.value.trim() : '';
     if (pw && pw.length < 10) { err.textContent = 'Das Passwort muss mindestens 10 Zeichen lang sein.'; return; }
     const u = editUid ? users.find((x) => x.id === editUid) : null;
-    const body = {
+    const body = { zugang,
       id: editUid || '', vorname: f.vorname.value.trim(), nachname: f.nachname.value.trim(), email: f.email.value.trim(),
       username: u ? u.username : f.username.value.trim(),
-      role: (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role), active: f.active.checked,
+      role: zugang ? (f.querySelector('[name="role"]:checked') || {}).value || (u && u.role) : (u && u.zugang !== false ? u.role : 'viewer'), active: f.active.checked,
       password: pw, mustChange: f.mustChange ? f.mustChange.checked : false, reset2fa: f.reset2fa ? f.reset2fa.checked : false,
       resetPasskeys: f.resetPasskeys ? f.resetPasskeys.checked : false, resetGeraete: f.resetGeraete ? f.resetGeraete.checked : false,
     };
@@ -271,10 +299,13 @@
     btn.disabled = true;
     try {
       const r = await api('user_save', { body });
+      editUid = r.user.id;   // ab jetzt Bearbeiten (falls die HR-Angaben scheitern, legt ein zweiter Klick keinen zweiten Mitarbeiter an)
+      try { if (hrAn()) await W.hr.speichern(r.user.id, f); }
+      catch (ex2) { renderUsersView(); err.textContent = 'Mitarbeiter gespeichert, Urlaubsangaben nicht: ' + ex2.message; return; }
       renderUsersView();
-      if (!u || (pw && r.user.id !== W.me.id)) { zeigeFertig(r.user, pw, !u); return; }   // Abschluss mit „Zugangsdaten per E-Mail senden“
+      if (zugang && (!u || (pw && r.user.id !== W.me.id))) { zeigeFertig(r.user, pw, !u); return; }   // Abschluss mit „Zugangsdaten per E-Mail senden“
       dlgUser.close();
-      toast(`Änderungen an „${u.username}“ gespeichert.`);
+      toast(u ? `Änderungen an „${r.user.name}“ gespeichert.` : `Mitarbeiter „${r.user.name}“ ohne Anmeldung angelegt.`);
     } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
   });
 
@@ -1124,12 +1155,12 @@
     ['stock', 'Bestand'],
     ['master', 'Stammdaten'],
     ['auth', 'Anmeldungen'],
-    ['user', 'Nutzerverwaltung'],
+    ['user', 'Mitarbeiter'],
     ['kunden', 'Kunden (Stammdaten, Anmeldungen, E-Mails, Bestellwünsche)'],
     ['security', 'Sicherheit'],
   ];
   const typeOf = (a) => ({ draft: 'offer', import: 'offer', discard: 'offer', offers: 'offer', publish: 'publish', history: 'history', stock: 'stock', einkauf: 'stock', master: 'master', login: 'auth', logout: 'auth', login_fail: 'auth', password: 'auth', setup: 'user', user: 'user', security: 'security', wartung: 'security', twofa: 'auth', reauth: 'auth', reauth_fail: 'auth', customers: 'kunden', kunde_login: 'kunden', kunde_login_fail: 'kunden', kunde_password: 'kunden', mail: 'kunden', kunde_abmeldung: 'kunden', bestellung: 'kunden', einzelangebot: 'kunden' }[a] || '');
-  const ACTION_LABEL = { einkauf: 'Einkauf', wartung: 'Wartungsmodus', bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Nutzerverwaltung', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
+  const ACTION_LABEL = { einkauf: 'Einkauf', wartung: 'Wartungsmodus', bestellung: 'Bestellwunsch', kunde_abmeldung: 'Abmeldung Wochenangebot', mail: 'E-Mail', customers: 'Kunden', kunde_login: 'Kunden-Anmeldung', kunde_login_fail: 'Kunden-Anmeldung fehlgeschlagen', kunde_password: 'Kunden-Passwort', offers: 'Angebote', draft: 'Entwurf bearbeitet', import: 'Entwurf ersetzt', discard: 'Entwurf verworfen', publish: 'Veröffentlicht', history: 'Preisverlauf', stock: 'Bestand', master: 'Stammdaten', login: 'Anmeldung', logout: 'Abmeldung', login_fail: 'Anmeldung fehlgeschlagen', password: 'Passwort', setup: 'Einrichtung', user: 'Mitarbeiter', security: 'Sicherheit', twofa: 'Zwei-Faktor', reauth: 'Verwaltungsaktion bestätigt', reauth_fail: 'Passwortbestätigung fehlgeschlagen' };
   function draftSummary(d) {
     let p = 0, n = 0, r = 0, o = 0;
     for (const c of d || []) { const f = c.k.split('|')[1]; if (f === 'price' || String(f).startsWith('v:')) p++; else if (f === '+') n++; else if (f === '-') r++; else o++; }
@@ -1158,7 +1189,7 @@
       <div class="ed-toolbar">
         <div class="search">${icon('search')}<input id="log-q" type="search" autocomplete="off" placeholder="Suchen: Artikel, Nummer, Text …" aria-label="Protokoll durchsuchen" value="${esc(logQ)}"></div>
         <label class="select"><span class="sr-only">Monat</span><select id="log-month">${months.map((m) => `<option value="${m}"${m === logMonth ? ' selected' : ''}>${esc(monthLabel(m))}</option>`).join('')}</select>${icon('chev', 'sm')}</label>
-        <label class="select"><span class="sr-only">Nutzer</span><select id="log-user"><option value="">Alle Nutzer</option>${names.map(([u, n]) => `<option value="${esc(u)}"${u === logUser ? ' selected' : ''}>${esc(n)} (${esc(u)})</option>`).join('')}</select>${icon('chev', 'sm')}</label>
+        <label class="select"><span class="sr-only">Mitarbeiter</span><select id="log-user"><option value="">Alle Mitarbeiter</option>${names.map(([u, n]) => `<option value="${esc(u)}"${u === logUser ? ' selected' : ''}>${esc(n)} (${esc(u)})</option>`).join('')}</select>${icon('chev', 'sm')}</label>
         <label class="select"><span class="sr-only">Vorgang</span><select id="log-type">${LOG_TYPES.map(([v, l]) => `<option value="${v}"${v === logType ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${icon('chev', 'sm')}</label>
         <span class="ed-hint" id="log-count"></span>
         <button type="button" class="btn" id="log-csv">${icon('download')}CSV</button>
@@ -1206,7 +1237,7 @@
       </tr>`);
       if (hasD && isOpen) rows.push(`<tr class="ldet"><td></td><td colspan="3">${changesTable(e.d)}<div class="sub">IP-Adresse ${esc(e.ip || '—')}</div></td></tr>`);
     }
-    host.innerHTML = `<div class="gcard"><table class="etab ltab"><thead><tr><th class="l-time">Zeit</th><th class="l-user">Nutzer</th><th>Vorgang</th><th class="l-more"><span class="sr-only">Details</span></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+    host.innerHTML = `<div class="gcard"><table class="etab ltab"><thead><tr><th class="l-time">Zeit</th><th class="l-user">Mitarbeiter</th><th>Vorgang</th><th class="l-more"><span class="sr-only">Details</span></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
   }
   $('#view-log').addEventListener('input', (e) => {
     if (e.target.id === 'log-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { logQ = e.target.value.trim(); renderLogList(); }, 150); }
@@ -1618,7 +1649,7 @@
             <option value="off"${S.twofa === 'off' ? ' selected' : ''}>freiwillig</option>
             <option value="admins"${S.twofa === 'admins' ? ' selected' : ''}>für Administratoren</option>
             <option value="all"${S.twofa === 'all' ? ' selected' : ''}>für alle Zugänge</option></select>
-            <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert. Einzelne Zugänge zusätzlich unter Nutzer → Bearbeiten.</small></label>
+            <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert. Einzelne Zugänge zusätzlich unter Mitarbeiter → Bearbeiten.</small></label>
           <label class="fld"><span>Automatisch abmelden nach Inaktivität</span><select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${S.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
           <div class="fld"><span>Passwörter</span><div class="sec-inline"><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${S.pwMin}"> Zeichen</label>
             <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label>
@@ -1659,7 +1690,7 @@
       ${geoStatRows ? `<section class="gcard sec-block"><h3 class="sec-h">Abgewiesene Zugriffe nach Land <span class="muted">(7 Tage: ${fmtInt.format(d.geoBlocked7 || 0)})</span><button type="button" class="btn sm ghost sec-h-act" data-sec="geo-clear">Zurücksetzen</button></h3>
         <table class="etab sectab"><thead><tr><th>Land</th><th class="num-s">Zugriffe gesamt</th><th class="num-s">zuletzt</th></tr></thead><tbody>${geoStatRows}</tbody></table></section>` : ''}
       <section class="gcard sec-block sec-sect" id="sec-zugang"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
-        <table class="etab sectab"><thead><tr><th>Nutzer</th><th>IP-Adresse</th><th>Gerät</th><th>angemeldet</th><th>zuletzt aktiv</th><th class="act"></th></tr></thead><tbody>${sessRows}</tbody></table></section>
+        <table class="etab sectab"><thead><tr><th>Mitarbeiter</th><th>IP-Adresse</th><th>Gerät</th><th>angemeldet</th><th>zuletzt aktiv</th><th class="act"></th></tr></thead><tbody>${sessRows}</tbody></table></section>
       <section class="gcard sec-block"><h3 class="sec-h">Sperren</h3>
         ${ipRows || lockRows ? `<table class="etab sectab"><thead><tr><th>IP-Adresse / Zugang</th><th></th><th>Status</th><th class="act"></th></tr></thead><tbody>${lockRows}${ipRows}</tbody></table>` : '<p class="sec-empty">Keine gesperrten IP-Adressen oder Zugänge.</p>'}</section>
       <section class="gcard sec-block"><h3 class="sec-h">Zugänge ohne Zwei-Faktor-Anmeldung <span class="muted">(${no2.length})</span></h3>

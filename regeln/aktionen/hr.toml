@@ -1,7 +1,8 @@
 # Aktionen des Moduls „hr“: Urlaubsverwaltung (Anträge, Genehmigung, Abwesenheiten, Monatsplan, Export, Übernahme).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
-# Alle Aktionen gehören zur Oberfläche hr.intern (produktiv seit 23.10.2026, hr.dashboard-stafl.de). Auf anderen
-# Keycloak-Hosts antworten sie mit 404 (Aktion ↔ Host, GR-109, lib/herkunft.php).
+# Die Aktionen der HR-Seite gehören zur Oberfläche hr.intern (produktiv seit 23.10.2026, hr.dashboard-stafl.de); auf
+# anderen Keycloak-Hosts antworten sie mit 404 (Aktion ↔ Host, GR-109, lib/herkunft.php). Mitarbeiter-Angaben,
+# Urlaubseinstellungen und die Übernahme der Excel-Planung bedient die Verwaltung (Eingabebereich, angebot.eingabe).
 
 schema = 1
 modul = "hr"
@@ -31,18 +32,6 @@ schreibend = true
 oberflaeche = "hr.intern"
 schreibend = true
 
-[aktion.hr_person_save]
-oberflaeche = "hr.intern"
-schreibend = true
-
-[aktion.hr_verknuepfen]
-oberflaeche = "hr.intern"
-schreibend = true
-
-[aktion.hr_einstellungen_save]
-oberflaeche = "hr.intern"
-schreibend = true
-
 [aktion.hr_export]
 oberflaeche = "hr.intern"
 schreibend = true
@@ -53,4 +42,20 @@ schreibend = true
 
 [aktion.hr_import_uebernehmen]
 oberflaeche = "hr.intern"
+schreibend = true
+
+# Verwaltung → Mitarbeiter und Urlaubseinstellungen (Personalstelle): im Eingabebereich der Verwaltung, nicht auf dem HR-Host
+[aktion.mitarbeiter_hr]
+oberflaeche = "angebot.eingabe"
+
+[aktion.mitarbeiter_hr_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.hr_personal_uebernehmen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.hr_einstellungen_save]
+oberflaeche = "angebot.eingabe"
 schreibend = true

@@ -106,13 +106,88 @@ function hr_person_norm(array $p): array
 }
 function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
 
-function hr_personal(): array
+/* ---------------- Mitarbeiter = Nutzer ----------------
+   Die Mitarbeiter der Urlaubsverwaltung sind die Mitarbeiter der Plattform (Verwaltung → Mitarbeiter, Dokument „nutzer“
+   des Plattformkerns, gelesen über users_load()). Auch Kollegen ohne Anmeldung (z. B. Lager) sind dort Mitarbeiter
+   („ohne Anmeldung“). „hr-personal“ speichert nur die HR-Angaben je Mitarbeiter (Abteilung, Reihenfolge, Arbeitstage,
+   im Urlaubsplan, Anspruch/Übertrag je Jahr), verknüpft über „nutzer“. Ohne gespeicherte Angaben gelten Standardwerte;
+   die Kennung der Person ist dann die Mitarbeiter-Kennung (u…). Einträge ohne Mitarbeiter (Altbestand vor Oktober 2026,
+   gelöschte Mitarbeiter) bleiben lesbar und lassen sich in der Verwaltung übernehmen (hr_personal_uebernehmen). */
+
+/* Gespeicherte HR-Angaben (Rohdaten zum Schreiben) */
+function hr_personal_roh(): array
 {
     $d = store_read('hr-personal') ?? [];
-    $ps = array_map('hr_person_norm', array_values(array_filter((array)($d['personen'] ?? []), 'is_array')));
-    usort($ps, function ($a, $b) { return [$a['pos'] ?: 9999, hr_name($a)] <=> [$b['pos'] ?: 9999, hr_name($b)]; });
-    return ['rev' => (int)($d['rev'] ?? 0), 'personen' => $ps];
+    return ['rev' => (int)($d['rev'] ?? 0), 'personen' => array_map('hr_person_norm', array_values(array_filter((array)($d['personen'] ?? []), 'is_array')))];
 }
+
+/* Vor- und Nachname eines Mitarbeiters (ältere Konten haben nur „name“: letztes Wort = Nachname) */
+function hr_nutzer_namen(array $u): array
+{
+    $vor = (string)($u['vorname'] ?? ''); $nach = (string)($u['nachname'] ?? '');
+    if ($vor !== '' || $nach !== '') return [$vor, $nach];
+    $t = preg_split('/\s+/u', trim((string)($u['name'] ?? ''))) ?: [];
+    return count($t) > 1 ? [implode(' ', array_slice($t, 0, -1)), (string)end($t)] : [(string)($t[0] ?? ''), ''];
+}
+
+/* Alle Mitarbeiter mit ihren HR-Angaben, sortiert nach Position */
+function hr_personal(): array
+{
+    $roh = hr_personal_roh();
+    $nachNutzer = [];
+    foreach ($roh['personen'] as $e) if ($e['nutzer'] !== null && !isset($nachNutzer[$e['nutzer']])) $nachNutzer[$e['nutzer']] = $e;
+    $ps = []; $vergeben = [];
+    foreach (users_load() as $u) {
+        $uid = (string)$u['id'];
+        [$vor, $nach] = hr_nutzer_namen($u);
+        $zugang = nutzer_hat_zugang($u);
+        $e = $nachNutzer[$uid] ?? null;
+        $basis = $e ?? hr_person_norm(['id' => $uid, 'nutzer' => $uid, 'aktiv' => !$zugang || !empty($u['active'])]);
+        $vergeben[$basis['id']] = true;
+        $ps[] = array_merge($basis, ['vorname' => $vor, 'nachname' => $nach, 'nutzer' => $uid, 'gespeichert' => $e !== null,
+                                     'zugang' => $zugang, 'kontoAktiv' => !empty($u['active']), 'username' => (string)$u['username'], 'altbestand' => false]);
+    }
+    foreach ($roh['personen'] as $e) {
+        if (isset($vergeben[$e['id']])) continue;
+        $ps[] = array_merge($e, ['nutzer' => null, 'gespeichert' => true, 'zugang' => false, 'kontoAktiv' => false, 'username' => '', 'altbestand' => true]);
+    }
+    usort($ps, function ($a, $b) { return [$a['pos'] ?: 9999, hr_name($a)] <=> [$b['pos'] ?: 9999, hr_name($b)]; });
+    return ['rev' => $roh['rev'], 'personen' => $ps];
+}
+
+/* HR-Angaben eines Mitarbeiters speichern (anlegen oder ändern; unter der Sperre „hr-personal“ aufrufen).
+   $werte: abteilung, pos, arbeitstage, aktiv, jahre – nur die übergebenen Felder ändern sich. */
+function hr_angaben_setzen(array &$roh, string $uid, array $werte, array $u): array
+{
+    [$vor, $nach] = hr_nutzer_namen($u);
+    foreach ($roh['personen'] as &$e) {
+        if ($e['nutzer'] !== $uid) continue;
+        $e = hr_person_norm(array_merge($e, $werte, ['vorname' => $vor, 'nachname' => $nach, 'geaendert' => now()]));
+        return $e;
+    }
+    unset($e);
+    $neu = hr_person_norm(array_merge(['id' => $uid, 'nutzer' => $uid, 'aktiv' => !nutzer_hat_zugang($u) || !empty($u['active'])], $werte,
+                                      ['vorname' => $vor, 'nachname' => $nach, 'geaendert' => now()]));
+    $roh['personen'][] = $neu;
+    return $neu;
+}
+
+/* Abwesenheiten von einer Personenkennung auf eine andere umhängen (Übernahme eines Altbestands-Eintrags) */
+function hr_abwesenheiten_umhaengen(string $von, string $nach): int
+{
+    if ($von === $nach) return 0;
+    return with_lock('hr-abwesenheiten', function () use ($von, $nach) {
+        $abw = hr_abwesenheiten(); $n = 0;
+        foreach ($abw['eintraege'] as &$e) {
+            if ($e['person'] === $von) { $e['person'] = $nach; $n++; }
+            if (($e['vertretung'] ?? null) === $von) $e['vertretung'] = $nach;
+        }
+        unset($e);
+        if ($n) hr_abwesenheiten_schreiben($abw);
+        return $n;
+    });
+}
+
 function hr_abwesenheiten(): array
 {
     $d = store_read('hr-abwesenheiten') ?? [];
@@ -142,44 +217,84 @@ function hr_personen_index(array $personal): array { $o = []; foreach ($personal
 
 function hr_namekey(string $n): string { return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $n) ?? '')); }
 
-/* ---------------- Verknüpfung Mitarbeiter ↔ Mitarbeiterkonto ----------------
-   Jeder Mitarbeiter mit Konto sieht nach der Anmeldung seinen Teil (Konto, Anträge, eigene Zeile im Kalender). Die
-   Verknüpfung entsteht von Hand (Personalstelle) oder automatisch, wenn der Name des Kontos eindeutig zu genau einem
-   aktiven, noch nicht verknüpften Mitarbeiter passt (Anzeigename, Vor- + Nachname oder Benutzername „vorname-nachname“). */
+/* ---------------- Altbestand: Einträge ohne Mitarbeiter übernehmen ----------------
+   Einträge aus der Zeit vor „Mitarbeiter = Nutzer“ (oder nach dem Löschen eines Mitarbeiters) gehören zu keinem
+   Mitarbeiter. Beim ersten Aufruf von HR übernimmt ein Mitarbeiter ohne eigene HR-Angaben automatisch den einzigen
+   gleichnamigen Eintrag (Anzeigename, Vor- + Nachname oder Benutzername „vorname-nachname“); in der Verwaltung lassen
+   sich alle übrigen übernehmen (gleichnamiger Mitarbeiter oder neuer Mitarbeiter ohne Anmeldung). */
 function hr_konto_namen(array $u): array
 {
     $n = [hr_namekey((string)($u['name'] ?? '')), hr_namekey(trim(($u['vorname'] ?? '') . ' ' . ($u['nachname'] ?? ''))),
           hr_namekey(str_replace(['-', '.', '_'], ' ', (string)($u['username'] ?? '')))];
     return array_values(array_unique(array_filter($n, function ($x) { return $x !== '' && str_contains($x, ' '); })));
 }
-/* Vorschlag: genau ein aktiver, unverknüpfter Mitarbeiter mit passendem Namen – sonst null */
-function hr_vorschlag(array $personal, array $u): ?array
+/* Vorschlag: genau ein Altbestands-Eintrag mit passendem Namen – sonst null */
+function hr_vorschlag(array $roh, array $u): ?array
 {
     $namen = hr_konto_namen($u);
     if (!$namen) return null;
-    $treffer = array_values(array_filter($personal['personen'], function ($p) use ($namen) {
-        return $p['aktiv'] && $p['nutzer'] === null && in_array(hr_namekey(hr_name($p)), $namen, true);
+    $treffer = array_values(array_filter($roh['personen'], function ($p) use ($namen) {
+        return $p['nutzer'] === null && in_array(hr_namekey(hr_name($p)), $namen, true);
     }));
     return count($treffer) === 1 ? $treffer[0] : null;
 }
-/* Beim ersten Aufruf automatisch verknüpfen (nur eindeutige Namen; protokolliert) */
+/* Altbestands-Eintrag einem Mitarbeiter zuordnen (unter der Sperre „hr-personal“): Abwesenheiten, die schon unter der
+   Mitarbeiter-Kennung stehen, wandern zum Eintrag */
+function hr_altbestand_zuordnen(array &$roh, string $eintragId, array $u): array
+{
+    foreach ($roh['personen'] as $x) if ($x['nutzer'] === (string)$u['id']) throw new InvalidArgumentException(hr_name($x) . ' hat bereits HR-Angaben.');
+    [$vor, $nach] = hr_nutzer_namen($u);
+    foreach ($roh['personen'] as &$e) {
+        if ($e['id'] !== $eintragId) continue;
+        $e['nutzer'] = (string)$u['id']; $e['vorname'] = $vor; $e['nachname'] = $nach; $e['geaendert'] = now();
+        $kopie = $e;
+        unset($e);
+        hr_abwesenheiten_umhaengen((string)$u['id'], $eintragId);
+        return $kopie;
+    }
+    unset($e);
+    throw new InvalidArgumentException('Eintrag nicht gefunden.');
+}
+/* Beim ersten Aufruf automatisch übernehmen (nur eindeutige Namen; protokolliert) */
 function hr_auto_verknuepfen(array $me): ?array
 {
     return with_lock('hr-personal', function () use ($me) {
-        $personal = hr_personal();
-        if (hr_ich($personal, $me)) return null;
-        foreach ($personal['personen'] as $p) if ($p['nutzer'] === (string)$me['id']) return null;   // verknüpft, aber inaktiv
-        $v = hr_vorschlag($personal, $me);
+        $roh = hr_personal_roh();
+        foreach ($roh['personen'] as $p) if ($p['nutzer'] === (string)$me['id']) return null;
+        $v = hr_vorschlag($roh, $me);
         if (!$v) return null;
-        foreach ($personal['personen'] as &$p) if ($p['id'] === $v['id']) { $p['nutzer'] = (string)$me['id']; $p['geaendert'] = now(); $v = $p; }
-        unset($p);
-        hr_personal_schreiben($personal);
-        audit('hr', 'HR: Mitarbeiterkonto ' . $me['name'] . ' automatisch mit ' . hr_name($v) . ' verknüpft (gleicher Name)');
+        $v = hr_altbestand_zuordnen($roh, $v['id'], $me);
+        hr_personal_schreiben($roh);
+        audit('hr', 'HR: Eintrag der Urlaubsliste „' . hr_name($v) . '“ automatisch dem Mitarbeiter ' . $me['name'] . ' zugeordnet (gleicher Name)');
         return $v;
     });
 }
+/* Alle Altbestands-Einträge übernehmen: gleichnamiger Mitarbeiter ohne HR-Angaben, sonst neuer Mitarbeiter ohne Anmeldung */
+function hr_personal_uebernehmen(array $me): array
+{
+    return with_lock('hr-personal', function () use ($me) {
+        $roh = hr_personal_roh();
+        $text = [];
+        foreach ($roh['personen'] as $e) {
+            if ($e['nutzer'] !== null) continue;
+            $mit = array_column(array_filter($roh['personen'], function ($x) { return $x['nutzer'] !== null; }), 'nutzer');
+            $treffer = array_values(array_filter(users_load(), function ($u) use ($e, $mit) {
+                return !in_array((string)$u['id'], $mit, true) && in_array(hr_namekey(hr_name($e)), hr_konto_namen($u), true);
+            }));
+            if (count($treffer) === 1) { hr_altbestand_zuordnen($roh, $e['id'], $treffer[0]); $text[] = hr_name($e) . ' → ' . $treffer[0]['name']; continue; }
+            $u = mitarbeiter_ohne_zugang_anlegen($e['vorname'], $e['nachname'] !== '' ? $e['nachname'] : '', $me);
+            hr_altbestand_zuordnen($roh, $e['id'], $u);
+            $text[] = hr_name($e) . ' als Mitarbeiter ohne Anmeldung angelegt';
+        }
+        if ($text) {
+            hr_personal_schreiben($roh);
+            audit('hr', 'HR: Urlaubsliste in die Mitarbeiter übernommen – ' . implode('; ', array_slice($text, 0, 30)) . (count($text) > 30 ? ' …' : ''));
+        }
+        return $text;
+    });
+}
 
-/* Person des angemeldeten Mitarbeiters (Verknüpfung über das Mitarbeiterkonto) */
+/* Person des angemeldeten Mitarbeiters (im Urlaubsplan) */
 function hr_ich(array $personal, array $me): ?array
 {
     foreach ($personal['personen'] as $p) if ($p['nutzer'] !== null && $p['nutzer'] === (string)$me['id'] && $p['aktiv']) return $p;
