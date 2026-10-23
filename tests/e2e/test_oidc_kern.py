@@ -4,7 +4,7 @@ Der Testserver läuft mit WA_OIDC=1 (wie ein Keycloak-Host), aber ohne Webserver
 Identität. Geprüft wird, dass sich eine Identität nicht über Kopfzeilen unterschieben lässt, dass eigene Anmeldeverfahren
 gesperrt sind und dass ohne WA_OIDC (heutiger Betrieb) alles beim Alten bleibt (eigene Gruppe „aktionsregister“ u. a.).
 Der Server meldet sich als Host der Mitarbeiter-Eingabe (WA_OBERFLAECHE=angebot.eingabe): Aktionen einer eigenen Modulseite
-(hr.intern) werden hier abgewiesen (GR-109).
+(hr.intern, crm.intern) werden hier abgewiesen (GR-109).
 Den vollständigen Ablauf mit Keycloak prüft tests/oidc/ (CI-Auftrag „Anmeldung über Keycloak“).
 """
 import sys
@@ -42,6 +42,9 @@ check('Modulübersicht ohne Identität 401', P.call('module_status')[0] == 401)
 for a, b in (('hr_start', None), ('hr_monat', None), ('hr_antrag', {'von': '2030-01-07', 'bis': '2030-01-07'})):
     code, r = P.call(a, b)
     check(f'HR-Aktion auf fremdem Host: {a} → 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
+for a, b in (('crm_start', None), ('crm_kunde_save', {'key': 'kx', 'felder': {'segment': 'Catering'}}), ('crm_export', {})):
+    code, r = P.call(a, b)
+    check(f'CRM-Aktion auf fremdem Host: {a} → 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
 check('Aktionen des Eingabebereichs hier weiter wie bisher (status 200, users 401)', P.call('status')[0] == 200 and P.call('users')[0] == 401)
 F2 = Client('198.51.100.32')
 F2.headers = {'WA_OBERFLAECHE': 'hr.intern', 'WA-OBERFLAECHE': 'hr.intern'}

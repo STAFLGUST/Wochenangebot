@@ -20,7 +20,8 @@ HOSTS = {'https://dashboard.stafl.test:8443': 'https://dashboard-stafl.de',
          'https://angebot.stafl.test:8443': 'https://angebot.dashboard-stafl.de',
          'https://verwaltung.stafl.test:8443': 'https://verwaltung.dashboard-stafl.de',
          'https://bestand.stafl.test:8443': 'https://bestand.dashboard-stafl.de',
-         'https://hr.stafl.test:8443': 'https://hr.dashboard-stafl.de'}
+         'https://hr.stafl.test:8443': 'https://hr.dashboard-stafl.de',
+         'https://crm.stafl.test:8443': 'https://crm.dashboard-stafl.de'}
 
 
 def ersetzen(wert):

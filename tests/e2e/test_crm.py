@@ -1,6 +1,6 @@
 """CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/).
 
-Geprüft: Freigabe (in Entwicklung, nur mit Testfreigabe für eingetragene Tester), Rechte crm.sehen / crm.bearbeiten /
+Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit CRM-Recht, keine Testfreigabe), Rechte crm.sehen / crm.bearbeiten /
 crm.exportieren serverseitig (GR-103) inkl. ohne Anmeldung, ohne CSRF, falsche Methode; Kunden kommen aus den
 Kundenstammdaten der Verwaltung (nur lesend, E-1: das CRM schreibt das Dokument „kunden“ nie, keine Zugangsdaten in der
 Antwort); Kundenblatt (nur mitgeschickte Felder, gleichzeitiges Bearbeiten verschiedener Felder, Prüfungen und Grenzen);
@@ -69,7 +69,7 @@ for u, n, r, p, extra in (('verena', 'Verena Sehen', 'viewer', 'Leserin-Zugang-1
                           ('bert', 'Bert Bearbeiter', 'editor', 'Bearbeiter-Zugang-1', {'grant': ['crm.bearbeiten']}),
                           ('xena', 'Xena Export', 'editor', 'Editor-Zugang-77', {'grant': ['crm.bearbeiten', 'crm.exportieren']}),
                           ('otto', 'Otto Ohne', 'editor', 'Konto-Passwort-9', {}),
-                          ('nora', 'Nora Nichttester', 'editor', 'Merk-Kennwort-31', {'grant': ['crm.sehen']})):
+                          ('nora', 'Nora Neu', 'editor', 'Merk-Kennwort-31', {'grant': ['crm.sehen']})):
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
 ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
@@ -83,17 +83,13 @@ N = Client('198.51.100.8')
 # ── Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['crm']
 ob = mod['oberflaechen'][0]
-check('Register: CRM in Entwicklung, ohne Freigabe, Adresse crm.dashboard-stafl.de/module/crm/', ob['entwicklung'] == 'in_entwicklung' and ob['freigabe'] == 'keine'
-      and ob['adresse'] == 'https://crm.dashboard-stafl.de/module/crm/', ob)
-check('ohne Freigabe: auch Administrator 404', A.call('crm_start')[0] == 404)
-st, r = A.call('modul_freigabe_save', {'bereich': 'crm.intern', 'freigabe': 'produktiv', 'grund': 'Test'})
-check('keine Produktivfreigabe für ein Modul in Entwicklung (422)', st == 422, (st, r))
-st, r = A.call('modul_freigabe_save', {'bereich': 'crm.intern', 'freigabe': 'test', 'grund': 'Abnahme Vertrieb'})
-check('Testfreigabe gesetzt', st == 200, r)
-st, r = A.call('modul_tester_save', {'bereich': 'crm.intern', 'tester': [ids['admin'], ids['verena'], ids['bert'], ids['xena'], ids['otto']], 'grund': 'Abnahme'})
-check('Tester eingetragen', st == 200, r)
-check('nicht eingetragener Mitarbeiter (mit crm.sehen): 404', Nn.call('crm_start')[0] == 404)
-check('ohne Anmeldung: kein Zugang (401/404)', N.call('crm_start')[0] in (401, 404) and N.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}})[0] in (401, 404))
+check('Register: CRM fertig und produktiv, Adresse crm.dashboard-stafl.de/module/crm/', ob['entwicklung'] == 'fertig' and ob['freigabe'] == 'produktiv'
+      and ob['zugang'] and ob['adresse'] == 'https://crm.dashboard-stafl.de/module/crm/', ob)
+check('Kachel verfügbar', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True, mod['kachel'])
+st, r = A.call('modul_freigabe_save', {'bereich': 'crm.intern', 'freigabe': 'test', 'grund': 'Test'})
+check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über ein Release)', st == 422, (st, r))
+check('jeder Mitarbeiter mit „CRM ansehen“: Start ok (nie als Tester eingetragen)', Nn.call('crm_start')[0] == 200)
+check('ohne Anmeldung: 401', N.call('crm_start')[0] == 401 and N.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}})[0] == 401)
 
 # ── Rechte (GR-103) ──
 check('Tester ohne CRM-Recht: 403', O.call('crm_start')[0] == 403 and O.call('crm_verlauf&key=kaaa111111111')[0] == 403)

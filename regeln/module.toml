@@ -132,7 +132,8 @@ hinweise = [
   "Kundenstammdaten (Nummer, Name, Anschrift, Telefon, E-Mail, Gruppe, Vertreter, Portalzugang) gehören der Verwaltung (E-1, entschieden 21.10.2026); das CRM liest sie nur über deren Funktionen (customers_load, vertreter_load, kundengruppen_load) und ändert sie nie.",
   "CRM pflegt eigene Kundenblätter (crm-kunden: Ansprechpartner, Segment, Phase, Anruf-Rhythmus, Potenzial, Wiedervorlage, Notiz), Interessenten ohne Kundennummer (crm-interessenten) und den Aktivitätenverlauf (crm-aktivitaeten, Schnappschuss von Firma und Kundennummer, GR-106).",
   "Vorlage: Vertriebs-CRM-Musterdatei (Oktober 2026) – Cockpit, Kunden, Karte, Wiedervorlagen, Pipeline, Auswertung. Echte Daten der Musterdatei gehören nicht ins Repository (GR-007).",
-  "Rechte crm.sehen, crm.bearbeiten, crm.exportieren ohne Standardrollen (Kontaktdaten): Administratoren vergeben sie. Live-Betrieb unter crm.dashboard-stafl.de (Caddy, Keycloak-Client) erst mit Freigabe des Inhabers.",
+  "Rechte crm.sehen, crm.bearbeiten, crm.exportieren ohne Standardrollen (Kontaktdaten): Administratoren vergeben sie unter Verwaltung → Rollen und Rechte; der Modulzugang crm.zugang allein zeigt keine Kundendaten.",
+  "Freigegeben (Inhaber 23.10.2026): crm.dashboard-stafl.de mit eigenem Keycloak-Client „crm“ (Stand 6); / und /admin/ führen zu /module/crm/. Aktionen crm_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden.",
 ]
 
   [[modul.oberflaeche]]
@@ -140,8 +141,8 @@ hinweise = [
   name = "CRM"
   art = "intern"
   adresse = "https://crm.dashboard-stafl.de/module/crm/"
-  entwicklung = "in_entwicklung"
-  freigabe = "keine"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Freigabe des Inhabers 23.10.2026 (Keycloak-Client, Caddy, produktiv) mit dem Merge; DNS-Eintrag crm besteht seit 21.10.2026
   sperrbar = true
 
 [[modul]]

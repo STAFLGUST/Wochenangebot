@@ -136,12 +136,15 @@ with sync_playwright() as pw:
     hr = kid['hr']
     check('HR: freigegeben (Inhaber 23.10.2026), Verweis auf die Urlaubsverwaltung (Testserver: gleicher Host, Pfad /module/hr/)',
           hr['tag'] == 'A' and hr['href'] == '/module/hr/' and hr['badge'] == 'Verfügbar', hr)
-    offen = [kid[m] for m in ('crm', 'rewe', 'qs', 'einkauf', 'marketing', 'controlling')]
+    crm = kid['crm']
+    check('CRM: freigegeben (Inhaber 23.10.2026), Verweis auf das CRM (Testserver: gleicher Host, Pfad /module/crm/)',
+          crm['tag'] == 'A' and crm['href'] == '/module/crm/' and crm['badge'] == 'Verfügbar', crm)
+    offen = [kid[m] for m in ('rewe', 'qs', 'einkauf', 'marketing', 'controlling')]
     gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
-    check('Zähler: 5 von 11 Anwendungen', '5 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 5)
+    check('Zähler: 6 von 11 Anwendungen', '6 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
     check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR verfügbar, Marketing und Controlling geplant ohne Verweis',
           [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and all(x['tag'] == 'DIV' and not x['href'] for x in neu[1:])
