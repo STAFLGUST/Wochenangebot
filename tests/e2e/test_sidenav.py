@@ -205,6 +205,25 @@ with sync_playwright() as p:
     check('area host Verwaltung: first heading without a separator line above, later headings with one', sep == ['0px', '1px'], sep)
     v.screenshot(path=SH + '/sidenav-bereich-verwaltung.png')
     v.close()
+    # Kachel „Import“ (verwaltung…/import/ → ?ansicht=importe&nur=import): nur die Importzentrale, ohne Seitenleiste
+    sichtbar_js = "[...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))"
+    for w in (1440, 390):
+        v = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); v.on('pageerror', lambda x: errs.append(str(x)))
+        login(v, 'admin', 'Sicheres-Passwort-1')
+        v.route('**/api/?action=status*', verwaltung)
+        v.goto(B + '/admin/?ansicht=importe&nur=import'); v.wait_for_selector('#view-importe:not([hidden])')
+        v.wait_for_function("document.title.startsWith('Import')")
+        check(f'{w}px Kachel „Import“: nur die Importzentrale (keine Nutzer, Protokoll, Sicherheit, Schutz), ohne Seitenleiste, Titel „Import“',
+              v.evaluate(sichtbar_js) == ['importe'] and v.is_hidden('.side-nav') and v.text_content('#topbar h1') == 'Import'
+              and v.is_hidden('#btn-publish'), (v.evaluate(sichtbar_js), v.title()))
+        check(f'{w}px Kachel „Import“: kein waagerechtes Scrollen, Kopfzeile ohne Überlappung', v.evaluate('document.documentElement.scrollWidth') <= w and not v.evaluate(overlap_js))
+        v.screenshot(path=SH + f'/import-bereich-{w}.png', full_page=True)
+        v.evaluate("location.hash = 'users'"); v.wait_for_function("location.hash === '#users'")
+        check(f'{w}px … #users in der Adresse öffnet keine Nutzerverwaltung', v.is_hidden('#view-users') and v.is_visible('#view-importe'))
+        v.goto(B + '/admin/'); v.wait_for_function("!document.querySelector('#vt-users').hidden")
+        check(f'{w}px Kachel „Verwaltung“: alle Verwaltungsbereiche mit Seitenleiste', {'importe', 'users', 'log', 'sec', 'schutz'} <= set(v.evaluate(sichtbar_js))
+              and v.is_visible('.side-nav') and v.text_content('#topbar h1') == 'Verwaltung', v.evaluate(sichtbar_js))
+        v.close()
     check('no JS errors', not errs, errs)
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
