@@ -30,6 +30,7 @@ historie = "Jede Veröffentlichung legt eine Version an (versionen/*) und den Pr
 [[dokument]]
 name = "angebote"
 eigentuemer = "angebot"
+leser = ["crm"]   # nur Namen der für einen Kunden freigeschalteten Angebote (customer_offers, offer_def) – nie Preise
 schutz = "vertraulich"
 beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen"
 
@@ -157,6 +158,27 @@ eigentuemer = "hr"
 schutz = "intern"
 beschreibung = "Urlaubssperren und Ferienzeiträume der Urlaubsverwaltung"
 
+# ───────────── CRM ─────────────
+
+[[dokument]]
+name = "crm-kunden"
+eigentuemer = "crm"
+schutz = "vertraulich"
+beschreibung = "Kundenblätter des CRM je Kunde (Kunden-ID der Verwaltung) bzw. Interessent: Ansprechpartner, Segment, Phase, Anruf-Rhythmus und -Status, Potenzial, nächster Schritt, Wiedervorlage, Notiz"
+
+[[dokument]]
+name = "crm-interessenten"
+eigentuemer = "crm"
+schutz = "vertraulich"
+beschreibung = "Interessenten ohne Kundennummer mit eigenen Adress- und Kontaktangaben (Kunden selbst pflegt die Verwaltung)"
+
+[[dokument]]
+name = "crm-aktivitaeten"
+eigentuemer = "crm"
+schutz = "vertraulich"
+beschreibung = "Aktivitätenverlauf (Telefonat, E-Mail, Besuch, Muster, Angebot, Bestellung, Notiz) je Kunde"
+historie = "Firma und Kundennummer werden beim Erfassen als Schnappschuss gespeichert (GR-106); höchstens 50 000 Einträge, älteste fallen weg"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]
@@ -169,7 +191,7 @@ beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, V
 [[dokument]]
 name = "kunden"
 eigentuemer = "verwaltung"
-leser = ["angebot"]
+leser = ["angebot", "crm"]   # CRM: nur lesend über customers_load (E-1)
 schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
 schutz = "vertraulich"
 beschreibung = "Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003)"
@@ -184,7 +206,7 @@ beschreibung = "Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdiens
 [[dokument]]
 name = "kundengruppen"
 eigentuemer = "verwaltung"
-leser = ["angebot"]
+leser = ["angebot", "crm"]
 schutz = "intern"
 dynamisch = true
 beschreibung = "Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php)"
@@ -200,6 +222,7 @@ beschreibung = "VK-Gruppen der Artikel"
 [[dokument]]
 name = "vertreter"
 eigentuemer = "verwaltung"
+leser = ["crm"]   # nur Nummer und Name über vertreter_load
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Vertreter mit Kontaktdaten"

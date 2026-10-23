@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · CRM · Vertrieb</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="crm.css">
+</head>
+<body class="crm">
+<div class="crm-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="crm-seite">
+  <header class="crm-kopf crm-glas">
+    <a class="crm-marke" id="crm-zurueck" href="../../dashboard/" title="Zum Dashboard">
+      <img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch">
+    </a>
+    <span class="crm-modul"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg>CRM · Vertrieb</span>
+    <div class="crm-aktionen">
+      <button class="btn crm-export" id="crm-export" type="button" hidden><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span>CSV</span></button>
+      <button class="crm-rund" id="crm-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+      <span class="crm-user" id="crm-user" hidden><span class="crm-initialen" id="crm-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="crm-user-name" id="crm-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="crm-main">
+    <section class="crm-hinweisbox crm-glas" id="crm-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Das CRM steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="crm-fehler" id="crm-err" role="alert" hidden></p>
+
+    <section id="crm-app" hidden>
+      <nav class="crm-tabs" id="crm-tabs" role="tablist" aria-label="Bereiche">
+        <button type="button" role="tab" data-tab="cockpit" aria-selected="true">Cockpit</button>
+        <button type="button" role="tab" data-tab="kunden" aria-selected="false">Kunden</button>
+        <button type="button" role="tab" data-tab="wiedervorlagen" aria-selected="false">Wiedervorlagen <span class="crm-zahl" id="crm-faellig" hidden></span></button>
+        <button type="button" role="tab" data-tab="pipeline" aria-selected="false">Pipeline</button>
+        <button type="button" role="tab" data-tab="karte" aria-selected="false">Karte</button>
+        <button type="button" role="tab" data-tab="auswertung" aria-selected="false">Auswertung</button>
+      </nav>
+      <div class="crm-tab" id="tab-cockpit" role="tabpanel"></div>
+      <div class="crm-tab" id="tab-kunden" role="tabpanel" hidden></div>
+      <div class="crm-tab" id="tab-wiedervorlagen" role="tabpanel" hidden></div>
+      <div class="crm-tab" id="tab-pipeline" role="tabpanel" hidden></div>
+      <div class="crm-tab" id="tab-karte" role="tabpanel" hidden></div>
+      <div class="crm-tab" id="tab-auswertung" role="tabpanel" hidden></div>
+    </section>
+  </main>
+  <footer class="crm-fuss">STAFL-Plattform · Standard-Fleisch · Kundenstammdaten aus der Verwaltung</footer>
+</div>
+
+<!-- Kundenblatt -->
+<dialog class="crm-dialog breit" id="dlg-kunde" aria-labelledby="kunde-titel">
+  <div class="crm-dkopf">
+    <div><h2 id="kunde-titel">Kunde</h2><p id="kunde-sub"></p></div>
+    <button type="button" class="crm-rund klein" data-schliessen aria-label="Kundenblatt schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="crm-dinhalt" id="kunde-inhalt"></div>
+</dialog>
+
+<!-- Interessent anlegen / ändern -->
+<dialog class="crm-dialog" id="dlg-interessent" aria-labelledby="interessent-titel">
+  <form method="dialog" id="interessent-form" novalidate>
+    <h2 id="interessent-titel">Neuer Interessent</h2>
+    <p class="crm-klein">Interessenten ohne Kundennummer pflegt das CRM selbst. Wird daraus ein Kunde, legt die Verwaltung ihn in den Kundenstammdaten an.</p>
+    <label>Firma<input type="text" id="int-firma" maxlength="120" required></label>
+    <label>Ansprechpartner<input type="text" id="int-ansprechpartner" maxlength="120"></label>
+    <label>Straße<input type="text" id="int-strasse" maxlength="120"></label>
+    <div class="crm-felder drei">
+      <label>PLZ<input type="text" id="int-plz" maxlength="10" inputmode="numeric"></label>
+      <label>Ort<input type="text" id="int-ort" maxlength="80"></label>
+      <label>Land<input type="text" id="int-land" maxlength="60"></label>
+    </div>
+    <div class="crm-felder zwei">
+      <label>Telefon<input type="tel" id="int-telefon" maxlength="40"></label>
+      <label>E-Mail<input type="email" id="int-email" maxlength="160"></label>
+    </div>
+    <div class="crm-felder zwei">
+      <label>Vertreter<select id="int-vertreter"></select></label>
+      <label>Vertreter 2<select id="int-vertreter2"></select></label>
+    </div>
+    <label class="crm-check"><input type="checkbox" id="int-aktiv" checked> aktiv</label>
+    <p class="crm-meldung" id="interessent-meldung" role="status"></p>
+    <div class="crm-knoepfe"><span class="crm-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn primary" id="int-speichern">Speichern</button></div>
+  </form>
+</dialog>
+
+<div class="crm-toast" id="crm-toast" role="status" aria-live="polite"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.2a6.5 6.5 0 0 1 3.5 5.3"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 3.5h3.2l1.6 4.2-2.1 1.4a11 11 0 0 0 5.2 5.2l1.4-2.1 4.2 1.6V17a3 3 0 0 1-3 3A15.5 15.5 0 0 1 2 6.5a3 3 0 0 1 3-3z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-fit" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="i-extern" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+</svg>
+<script src="crm.js"></script>
+</body>
+</html>

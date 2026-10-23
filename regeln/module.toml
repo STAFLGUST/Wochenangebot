@@ -125,19 +125,22 @@ reihenfolge = 30
 dashboard = true
 agent = "crm"
 abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/crm.toml", "app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
+testgruppen = ["crm"]
+pfade = ["regeln/aktionen/crm.toml", "app/api/aktionen/crm.php", "app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
+pfade_geplant = []
 hinweise = [
-  "Kundenstammdaten (Nummer, Name, Anschrift, Gruppe, Portalzugang) gehören der Verwaltung; CRM ändert sie nur über deren Schnittstelle (offene Entscheidung E-1).",
+  "Kundenstammdaten (Nummer, Name, Anschrift, Telefon, E-Mail, Gruppe, Vertreter, Portalzugang) gehören der Verwaltung (E-1, entschieden 21.10.2026); das CRM liest sie nur über deren Funktionen (customers_load, vertreter_load, kundengruppen_load) und ändert sie nie.",
+  "CRM pflegt eigene Kundenblätter (crm-kunden: Ansprechpartner, Segment, Phase, Anruf-Rhythmus, Potenzial, Wiedervorlage, Notiz), Interessenten ohne Kundennummer (crm-interessenten) und den Aktivitätenverlauf (crm-aktivitaeten, Schnappschuss von Firma und Kundennummer, GR-106).",
+  "Vorlage: Vertriebs-CRM-Musterdatei (Oktober 2026) – Cockpit, Kunden, Karte, Wiedervorlagen, Pipeline, Auswertung. Echte Daten der Musterdatei gehören nicht ins Repository (GR-007).",
+  "Rechte crm.sehen, crm.bearbeiten, crm.exportieren ohne Standardrollen (Kontaktdaten): Administratoren vergeben sie. Live-Betrieb unter crm.dashboard-stafl.de (Caddy, Keycloak-Client) erst mit Freigabe des Inhabers.",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "CRM"
   art = "intern"
-  adresse = "https://crm.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://crm.dashboard-stafl.de/module/crm/"
+  entwicklung = "in_entwicklung"
   freigabe = "keine"
   sperrbar = true
 

@@ -108,6 +108,7 @@ SUITES['hr'] = (8790, 'data-seed', True)   # HR · Urlaubsverwaltung (app/module
 SUITES['rollen'] = (8790, 'data-seed', True)   # Rollen und Rechte, Modulzugang je Rolle (lib/rechte.php)
 SUITES['rollen_host'] = (8790, 'data-seed', True, {'WA_OBERFLAECHE': 'bestand.intern'})   # Modulzugang je Host (wie bestand.dashboard-stafl.de)
 SUITES['stilllegung'] = (8790, 'data-seed', True, {'WA_EIGENE_ANMELDUNG': 'aus'})   # alter Eingabebereich angebot-stafl.de/admin/ stillgelegt
+SUITES['crm'] = (8790, 'data-seed', True)   # CRM · Vertrieb (app/module/crm/, Oberfläche crm.intern)
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 # Laufzeit je Gruppe in Sekunden (Median aus 12 CI-Aufträgen vom 22.10.2026, beide Speicherarten, 4 Gruppen parallel).
@@ -128,7 +129,8 @@ GEWICHT = {
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
     'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1,
     'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
-    'stilllegung': 8,
+    'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 
