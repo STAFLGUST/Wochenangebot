@@ -117,7 +117,9 @@ function oidc_nutzer(): ?array
         }
         $a[] = time();
         $_SESSION['oidcStufeAngefordert'] = $a;
-        audit('oidc_stufe', 'Anmeldung über Keycloak ohne vorgeschriebenen zweiten Faktor – zweite Stufe angefordert', ['stufe' => substr($id['acr'], 0, 20)], $u);
+        // Stufe und gemeldete Anmeldemethoden mitschreiben (nur Kürzel wie pwd/otp/hwk – zur Fehlersuche bei doppelter Code-Abfrage)
+        audit('oidc_stufe', 'Anmeldung über Keycloak ohne vorgeschriebenen zweiten Faktor – zweite Stufe angefordert',
+              ['stufe' => substr($id['acr'], 0, 20), 'methoden' => substr(implode(',', array_map(fn($m) => preg_replace('/[^a-z0-9_-]/i', '', (string)$m), $id['amr'])), 0, 60)], $u);
         respond(['ok' => false, 'code' => 'reauth_required', 'anmelden' => oidc_stufe_adresse(),
                  'error' => 'Für Ihr Konto ist die Anmeldung mit zweitem Faktor (Einmalcode oder Passkey) vorgeschrieben.'], 403);
         exit;

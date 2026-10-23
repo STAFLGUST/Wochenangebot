@@ -115,6 +115,15 @@ class Legacy:
         return code, j
 
 
+def protokoll_roh():
+    """Einträge des Protokolls (Dateispeicher der Testumgebung, aktueller Monat)."""
+    pfad = os.path.join(WORK, 'app', 'data', 'protokoll', time.strftime('%Y-%m', time.gmtime()) + '.php')
+    if not os.path.exists(pfad):
+        return []
+    roh = open(pfad, encoding='utf-8').read()
+    return json.loads(roh[roh.index('?>') + 2:].strip()) if '?>' in roh else json.loads(roh)
+
+
 def nutzer_roh():
     with open(os.path.join(WORK, 'app', 'data', 'nutzer.php'), encoding='utf-8') as f:
         roh = f.read()
@@ -706,6 +715,10 @@ with sync_playwright() as pw:
     code, j = pg.evaluate("fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])")
     check('Administrator nur mit Passwort: kein Zugang, zweite Stufe angefordert (403)', code == 403 and j.get('code') == 'reauth_required'
           and 'acr_values%3Dmfa' in j.get('anmelden', '') and 'vorgeschrieben' in j.get('error', ''), (code, j))
+    _stufe = [e for e in protokoll_roh() if e.get('a') == 'oidc_stufe' and e.get('u') == 'chef']
+    _d = (_stufe[-1].get('d') or {}) if _stufe else {}
+    check('Protokoll: zweite Stufe mit gemeldeter Stufe und Anmeldemethoden (nur Kürzel, hier nur Passwort)',
+          _stufe and _d.get('stufe') == 'pwd' and _d.get('methoden') == 'pwd', _stufe[-1:] if _stufe else protokoll_roh()[-3:])
     pg.unroute('**/dashboard/dashboard.js'); pg.reload()
     pg.wait_for_selector('#totpSecret', state='attached')
     check('… Dashboard leitet zur zweiten Stufe, Keycloak verlangt die Einrichtung des Einmalcodes', pg.url.startswith(L) and 'CONFIGURE_TOTP' in pg.url, pg.url)
@@ -945,6 +958,10 @@ with sync_playwright() as pw:
           re.search(r'LOGIN_ERROR · Passwort oder Einmalcode falsch', aus) and 'Fehlversuche in Folge: 1' in aus, aus)
     check('… Regeln und Uhr angezeigt, kein Geheimnis des Einmalcodes', 'jeder Code nur einmal' in aus and 'Serveruhr:' in aus and sven_otp not in aus, aus)
     check('… ändert nichts am Konto', json.loads(vorher) == json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{kc_sven['id']}", kopf={'Authorization': 'Bearer ' + vtoken()})[2]))
+    check('… Anmeldeablauf: Passwort und Einmalcode (beide Stufen) melden ihre Anmeldemethode', "Passwort (Ebene" in aus and aus.count("Einmalcode (Ebene") >= 2
+          and "meldet NICHTS" not in aus and "meldet 'otp', gültig 36000 s" in aus, aus)
+    check('… alle Anwendungen mit Anmeldemethoden im Anmelde-Token', all(f'{c}: amr-Claim im Anmelde-Token' in aus for c in ('dashboard', 'angebot', 'verwaltung', 'bestand'))
+          and 'FEHLT' not in aus, aus)
     code, aus = konten('entsperren', 'sven.start')   # Fehlversuch zurücksetzen, damit die folgenden Anmeldungen nicht in die Sperre laufen
 
     code, aus = konten('zuruecksetzen', 'sven.start')

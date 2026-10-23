@@ -400,7 +400,16 @@ pruefen() { # nur lesen: warum klappt die Anmeldung nicht? Konto, Sperre, zweite
   kc get "users/$id/credentials" -r "$REALM" >"$d/faktoren"
   kc get "attack-detection/brute-force/users/$id" -r "$REALM" >"$d/sperre"
   kc get events -r "$REALM" -q user="$id" -q max=10 >"$d/ereignisse"
-  kc get "realms/$REALM" --fields otpPolicyPeriod,otpPolicyLookAheadWindow,otpPolicyCodeReusable,failureFactor,eventsEnabled >"$d/realm"
+  kc get "realms/$REALM" --fields otpPolicyPeriod,otpPolicyLookAheadWindow,otpPolicyCodeReusable,failureFactor,eventsEnabled,browserFlow,attributes >"$d/realm"
+  # Anmeldeablauf: meldet Keycloak den Einmalcode als Anmeldemethode (amr)? Sonst fordert die Anwendung bei Pflicht-Konten
+  # eine zweite Stufe an – die Code-Maske erscheint dann ein zweites Mal
+  kc get "authentication/flows/mitarbeiter-browser/executions" -r "$REALM" >"$d/ablauf"
+  printf '[' >"$d/konfig"; k=
+  for cfg in $(python3 -c 'import json,sys; print(" ".join(e["authenticationConfig"] for e in json.load(open(sys.argv[1])) if e.get("authenticationConfig")))' "$d/ablauf"); do
+    printf '%s' "$k" >>"$d/konfig"; kc get "authentication/config/$cfg" -r "$REALM" >>"$d/konfig"; k=,
+  done
+  printf ']' >>"$d/konfig"
+  kc get clients -r "$REALM" --fields clientId,protocolMappers,attributes >"$d/clients"
   # Uhrzeit: Einmalcodes hängen an der Serveruhr (Container nutzen die Uhr des Servers); Vergleich mit einer Zeitquelle
   quelle=${ZEIT_QUELLE:-https://github.com}
   fremd=$(curl -sSI --max-time 5 "$quelle" 2>/dev/null | sed -n 's/^[Dd]ate: *//p' | tr -d '\r' | head -1) || fremd=
@@ -411,6 +420,7 @@ from email.utils import parsedate_to_datetime
 d = sys.argv[1]
 lade = lambda n: json.load(open(os.path.join(d, n)))
 konto, faktoren, sperre, ereignisse, realm = lade('konto'), lade('faktoren'), lade('sperre'), lade('ereignisse'), lade('realm')
+ablauf, konfig, clients = lade('ablauf'), {c.get('id'): c for c in lade('konfig')}, lade('clients')
 zeit = lambda ms: time.strftime('%d.%m.%Y %H:%M:%S', time.localtime(ms / 1000)) if ms else '–'
 hinweise = []
 print(f"Konto '{os.environ['NAME']}': {'aktiv' if konto.get('enabled') else 'GESPERRT (konten.sh entsperren)'}")
@@ -457,6 +467,25 @@ for e in ereignisse:
     if e.get('ipAddress'):
         teil.append('von ' + e['ipAddress'])
     print('  - ' + ' · '.join(teil))
+print('Anmeldeablauf (gemeldete Anmeldemethoden, amr):')
+art = {'auth-username-password-form': 'Passwort', 'auth-otp-form': 'Einmalcode', 'webauthn-authenticator': 'Passkey'}
+for e in ablauf:
+    if e.get('providerId') in art:
+        c = (konfig.get(e.get('authenticationConfig')) or {}).get('config') or {}
+        ref, alter = c.get('default.reference.value'), c.get('default.reference.maxAge')
+        print(f"  - {art[e['providerId']]} (Ebene {e.get('level')}, {e.get('requirement')}): " + (f"meldet '{ref}', gültig {alter or '?'} s" if ref else 'meldet NICHTS'))
+        if not ref:
+            hinweise.append(f"{art[e['providerId']]} (Ebene {e.get('level')}) wird nicht als Anmeldemethode gemeldet – die Anwendung erkennt ihn nicht und fragt den zweiten Faktor ein zweites Mal ab. Abhilfe: sh deploy/anmeldung/konten.sh realm-aktualisieren")
+print('Anwendungen (Clients):')
+for c in sorted(clients, key=lambda c: c.get('clientId', '')):
+    if c.get('clientId') not in ('dashboard', 'angebot', 'verwaltung', 'bestand'):
+        continue
+    amr = [m for m in c.get('protocolMappers') or [] if m.get('protocolMapper') == 'oidc-amr-mapper']
+    im_token = any((m.get('config') or {}).get('id.token.claim') == 'true' for m in amr)
+    acr = (c.get('attributes') or {}).get('default.acr.values', '–')
+    print(f"  - {c['clientId']}: amr-Claim " + ('im Anmelde-Token' if im_token else ('vorhanden, aber NICHT im Anmelde-Token' if amr else 'FEHLT')) + f" · Standard-Stufe {acr}")
+    if not im_token:
+        hinweise.append(f"Client {c['clientId']}: Anmeldemethoden fehlen im Anmelde-Token – Abhilfe: sh deploy/anmeldung/konten.sh realm-aktualisieren")
 jetzt = time.time()
 print('Serveruhr:', time.strftime('%d.%m.%Y %H:%M:%S %Z', time.localtime(jetzt)),
       '· mit Zeitserver abgeglichen:', {'yes': 'ja', 'no': 'NEIN'}.get(os.environ.get('NTP', ''), 'unbekannt'))
