@@ -353,9 +353,9 @@ class EchtesRegelwerk(unittest.TestCase):
         # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling
         self.assertEqual(set(kacheln), {"angebot", "bestand", "crm", "rewe", "qs", "einkauf", "import", "verwaltung", "hr", "marketing", "controlling"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
-        for neu in ("hr", "marketing", "controlling"):   # angelegt, aber weder entwickelt noch freigegeben, ohne DNS (GR-105)
+        for neu, stand in (("hr", "in_entwicklung"), ("marketing", "geplant"), ("controlling", "geplant")):   # nicht freigegeben, ohne DNS (GR-105)
             o = rw.modul(neu)["oberflaeche"][0]
-            self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns")), ("geplant", "keine", False), neu)
+            self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns")), (stand, "keine", False), neu)
         self.assertEqual(rw.modul("import")["teil_von"], "verwaltung")
         self.assertEqual(rw.modul("import")["kachel_ziel"], "verwaltung.import")
         self.assertEqual(rw.modul("angebot")["kachel_ziel"], "eingabe")

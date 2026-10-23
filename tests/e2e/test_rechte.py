@@ -18,8 +18,8 @@ def check(n, c, i=''):
 
 EDITOR_DEFAULT = {'angebot.bearbeiten', 'angebot.veroeffentlichen', 'angebote.verwalten', 'preisverlauf.sehen', 'preisverlauf.bearbeiten',
                   'bestand.sehen', 'bestand.einkaufspreise', 'bestand.importieren', 'stammdaten.sehen', 'stammdaten.bearbeiten', 'einkauf.sehen', 'einkauf.melden',
-                  'bestellungen.sehen', 'bestellungen.bearbeiten'}
-VIEWER_DEFAULT = {'preisverlauf.sehen', 'bestand.sehen', 'stammdaten.sehen', 'einkauf.sehen'}
+                  'bestellungen.sehen', 'bestellungen.bearbeiten', 'hr.antrag'}
+VIEWER_DEFAULT = {'preisverlauf.sehen', 'bestand.sehen', 'stammdaten.sehen', 'einkauf.sehen', 'hr.antrag'}   # hr.antrag: eigener Urlaub (Modul HR)
 STOCK = {'date': '2026-10-16', 'source': 'Bestand.xls', 'articles': [{'code': '1', 'name': 'Testartikel', 'kg': 10, 'lots': []}]}
 
 smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
