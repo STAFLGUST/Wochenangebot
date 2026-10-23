@@ -741,8 +741,14 @@ with sync_playwright() as pw:
     check('Kachel „Import“ 390 px: ohne Seitenleiste, kein waagerechtes Scrollen', pg.is_hidden('.side-nav') and not pg.evaluate('document.documentElement.scrollWidth > innerWidth'))
     pg.screenshot(path=os.path.join(SH, 'oidc_import_admin_390.png'))
     pg.set_viewport_size({'width': 1280, 'height': 900})
-    pg.goto(W + '/admin/'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
-    check('… über die Kachel „Verwaltung“ wieder alle Verwaltungsbereiche', pg.is_visible('.side-nav') and pg.is_visible('#vt-users') and pg.is_visible('#vt-sec'))
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    try:
+        pg.wait_for_function("!document.querySelector('#vt-users').hidden", timeout=10000)
+    except Exception:
+        pass
+    _zustand = pg.evaluate("({ url: location.href, titel: document.title, sichtbar: [...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3)), "
+                           "klassen: document.body.className })")
+    check('… über die Kachel „Verwaltung“ wieder alle Verwaltungsbereiche', pg.is_visible('.side-nav') and pg.is_visible('#vt-users') and pg.is_visible('#vt-sec'), _zustand)
     ctx.close()
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
