@@ -109,6 +109,16 @@ Kundenseite (`body:not(.adm):not(.db)`): Tippflächen am Handy ≥ 36 px, Kontra
 Wartungsseite ohne Ansichtsumschalter, Symbolknopf `.ibtn` im Bestellwunsch. `legal.css` (Kontakt, Impressum, Datenschutz)
 folgt zusätzlich der dunklen Systemeinstellung.
 
+**Gemeinsame Bausteine aller Mitarbeiterseiten** (Eingabebereich auf jedem Bereichs-Host, Dashboard, HR, CRM; geprüft von
+der Gruppe `einheit`): **Logo** im dunklen Design weiß direkt auf dem Grund (eine Regel in `app.css` für jedes
+`logo-standard-fleisch*`, ebenso `legal.css` und die Anmeldeseite `deploy/anmeldung/theme/stafl/login/resources/css/stafl.css`);
+auf Modulseiten am Handy (≤ 480 px) nur das Bildzeichen. **Zurück-Knopf** `.stafl-zurueck` (`app.css`): Pfeil + „Dashboard“,
+36 px, rund, vor dem Logo; ≤ 560 px nur der Pfeil, im Eingabebereich mit Angebotsaktionen bis 1600 px nur der Pfeil.
+**Waagerecht scrollende Leisten** (Reiter am Handy, Schnellauswahl der Kundenseite) tragen `.stafl-streifen`: Text läuft am
+Rand weich aus, solange in diese Richtung noch etwas folgt. **Hell/Dunkel am Konto** (`theme.js`, Aktion `theme_save`,
+Feld `theme` am Mitarbeiter): jeder Host hat eigenen Browser-Speicher (GR-108), daher übernimmt jede Seite nach dem Status
+die Wahl des Kontos (`STAFL_THEME.konto(user, csrf, api)`), und jeder Wechsel über den Knopf der Seite wird am Konto gespeichert.
+
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
 
 ## App (`mobile/`)

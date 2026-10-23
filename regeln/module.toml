@@ -418,7 +418,7 @@ icon = "cpu"
 dashboard = false
 agent = "plattform"
 abhaengigkeiten = []
-testgruppen = ["rollen", "rollen_host", "stilllegung", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
+testgruppen = ["einheit", "rollen", "rollen_host", "stilllegung", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
   "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "aktionsregister", "module_status", "modul_wartung"]
