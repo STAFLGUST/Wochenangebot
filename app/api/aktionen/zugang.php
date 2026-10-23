@@ -13,7 +13,9 @@ switch ($action) {
                      'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null, 'testumgebung' => testumgebung(),
                      // Wartung des Eingabebereichs (lib/module.php): Hinweis für Administratoren, Sperrbildschirm für alle anderen
                      'wartungEingabe' => $u ? modul_wartung_anzeige('angebot', 'eingabe', $u) : null,
-                     'eingabeGesperrt' => $u ? !modul_zustand('angebot', 'eingabe', $u)['zugang'] : false]);
+                     'eingabeGesperrt' => $u ? !modul_zustand('angebot', 'eingabe', $u)['zugang'] : false,
+                     // alter Eingabebereich stillgelegt (lib/oidc.php): neue Adresse für Hinweis und Weiterleitung
+                     'umgezogen' => eigene_anmeldung_stillgelegt() ? eingabe_adresse() : null]);
         }
 
         case 'wartung_save': {

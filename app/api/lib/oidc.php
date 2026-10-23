@@ -26,6 +26,24 @@ function oidc_modus(): bool
 {
     return oidc_einstellung('WA_OIDC') === '1';
 }
+/* Bisheriger Eingabebereich mit eigener Anmeldung (angebot-stafl.de/admin/) stillgelegt (Entscheidung Inhaber 23.10.2026):
+   WA_EIGENE_ANMELDUNG=aus (Betrieb: docker-compose.anmeldung.yml). Mitarbeiter arbeiten nur noch über die zentrale
+   Anmeldung; Kundenseite und Kundenanmeldung bleiben unverändert. Notzugang (Keycloak gestört): deploy/notzugang.sh an */
+function alter_zugang_aus(): bool
+{
+    return oidc_einstellung('WA_EIGENE_ANMELDUNG') === 'aus';
+}
+/* Gilt für diese Anfrage: Host ohne zentrale Anmeldung und alter Zugang aus */
+function eigene_anmeldung_stillgelegt(): bool
+{
+    return !oidc_modus() && alter_zugang_aus();
+}
+/* Neuer Eingabebereich (Hinweis, Weiterleitung, Verweise in Mails) – nur https-Adressen */
+function eingabe_adresse(): string
+{
+    $a = oidc_einstellung('WA_EINGABE_ADRESSE');
+    return preg_match('#^https://[a-z0-9.-]+(:[0-9]+)?/[^\s"\'<>]*$#i', $a) ? $a : 'https://angebot.dashboard-stafl.de/admin/';
+}
 /* Einstellung des Webservers (SetEnv) bzw. des Prozesses – nie aus Kopfzeilen (die heißen HTTP_…) */
 function oidc_einstellung(string $name): string
 {

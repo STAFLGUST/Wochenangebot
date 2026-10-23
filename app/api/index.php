@@ -161,6 +161,12 @@ if ($schreibend) {
     if (stripos((string)($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) fail('Ungültige Anfrage.', 415);
 }
 
+/* Alter Eingabebereich stillgelegt (lib/oidc.php): auf diesem Host nur noch Kundenseite und Kundenfunktionen; Status bleibt
+   (Healthcheck, Hinweis mit neuer Adresse), Abmelden beendet eine alte Sitzung. Alle Mitarbeiteraktionen: 410 mit Ziel. */
+if (eigene_anmeldung_stillgelegt() && !($AKTION !== null && $AKTION['oeffentlich']) && !in_array($action, ['status', 'logout'], true)) {
+    respond(['ok' => false, 'code' => 'umgezogen', 'ziel' => eingabe_adresse(),
+             'error' => 'Der Eingabebereich ist umgezogen – bitte über das Mitarbeiter-Dashboard anmelden: ' . eingabe_adresse()], 410);
+}
 /* Keycloak-Host (lib/oidc.php): eigene Anmeldeverfahren gibt es dort nicht (GR-110) – nur zentrale Anmeldung */
 if ($AKTION !== null && $AKTION['lokale_anmeldung'] && oidc_modus()) fail('Die Anmeldung erfolgt zentral über die STAFL-Anmeldung.', 403);
 

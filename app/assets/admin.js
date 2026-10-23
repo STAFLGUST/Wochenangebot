@@ -121,6 +121,11 @@
       showAuth('expired');
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
+    // Alter Eingabebereich stillgelegt (angebot-stafl.de/admin/): Hinweis und weiter zum neuen Eingabebereich
+    if (res.status === 410 && data?.code === 'umgezogen') {
+      zeigeUmgezogen(data.ziel);
+      throw Object.assign(new Error(data.error || 'Der Eingabebereich ist umgezogen.'), { status: 410 });
+    }
     if (res.status === 503 && data?.wartung && data.bereich) {
       showEingabeWartung(data);
       throw Object.assign(new Error(data.error || 'Wartungsarbeiten.'), { status: 503, wartung: true });
@@ -3956,10 +3961,23 @@
     new ResizeObserver(setH).observe(tb); setH();
   } catch { /* ältere Browser: fester Wert aus CSS */ }
 
+  /* Alter Eingabebereich stillgelegt: nur ein Hinweis mit Verweis, danach Weiterleitung (Adresse vom Server, nur https) */
+  function zeigeUmgezogen(ziel) {
+    const url = /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(ziel || '') ? ziel : 'https://angebot.dashboard-stafl.de/admin/';
+    document.title = 'Eingabebereich umgezogen';
+    document.body.className = 'adm umgezogen';
+    document.body.innerHTML = `<main class="auth"><div class="auth-card"><div class="brand"><img class="brand-logo" src="../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></div>
+      <h1 style="margin:14px 0 6px;font-size:20px">Der Eingabebereich ist umgezogen</h1>
+      <p class="auth-intro">Mitarbeiter melden sich jetzt zentral über das Mitarbeiter-Dashboard an. Sie werden gleich weitergeleitet.</p>
+      <p><a class="btn primary" id="umgezogen-weiter" href="${esc(url)}">Zum neuen Eingabebereich</a></p></div></main>`;
+    setTimeout(() => location.replace(url), 1500);
+  }
+
   /* ======================= Start ======================= */
   (async function boot() {
     try {
       const s = await api('status');
+      if (s.umgezogen) { zeigeUmgezogen(s.umgezogen); return; }
       company = s.company || '';
       document.body.classList.toggle('is-test', !!s.testumgebung);   // Kennzeichen „Testumgebung“
       $$('[data-company]').forEach((el) => { el.textContent = company; el.hidden = !company; });

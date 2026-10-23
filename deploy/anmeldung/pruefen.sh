@@ -76,13 +76,23 @@ docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-
   | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_HR']=='pruefung-e' and e['OIDC_SECRET_HR']=='pruefung-h'" \
   && ok "HR: eigene Werte aus .env" || nein "HR: eigene Werte aus .env"
 
+# Alter Eingabebereich: im Betrieb stillgelegt, Notzugang über .env (deploy/notzugang.sh)
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['WA_EIGENE_ANMELDUNG']=='aus'" \
+  && ok "alter Eingabebereich: im Betrieb stillgelegt (WA_EIGENE_ANMELDUNG=aus)" || nein "alter Eingabebereich nicht stillgelegt"
+printf 'WA_EIGENE_ANMELDUNG=an\n' >> "$ENV"
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['WA_EIGENE_ANMELDUNG']=='an'" \
+  && ok "Notzugang: über .env einschaltbar" || nein "Notzugang über .env"
+sed -i '/^WA_EIGENE_ANMELDUNG=/d' "$ENV"
+
 # ── 3. Anwendungs-Image mit der Betriebskonfiguration ──
 docker build -q -t stafl-app:pruefung "$REPO/deploy/image" >/dev/null
 DATEN="$(mktemp -d)"; cp -r "$REPO/tests/fixtures/data-seed/." "$DATEN/"; chmod -R a+rwX "$DATEN"
 docker run -d --name stafl-pruefung -p 127.0.0.1:18090:80 \
   -e OIDC_ISSUER=https://login.dashboard-stafl.de/realms/mitarbeiter -e OIDC_SECRET_DASHBOARD=x -e OIDC_SECRET_ANGEBOT=x \
   -e OIDC_CRYPTO_DASHBOARD=pruefung-a -e OIDC_CRYPTO_ANGEBOT=pruefung-b -e OIDC_SECRET_VERWALTUNG=x -e OIDC_CRYPTO_VERWALTUNG=pruefung-c \
-  -e OIDC_SECRET_BESTAND=x -e OIDC_CRYPTO_BESTAND=pruefung-d -e OIDC_SECRET_HR=x -e OIDC_CRYPTO_HR=pruefung-e \
+  -e OIDC_SECRET_BESTAND=x -e OIDC_CRYPTO_BESTAND=pruefung-d -e OIDC_SECRET_HR=x -e OIDC_CRYPTO_HR=pruefung-e -e WA_EIGENE_ANMELDUNG=aus \
   -v "$REPO/app:/var/www/html:ro" -v "$DATEN:/var/www/html/data" -v "$REPO/dashboard:/var/www/dashboard:ro" \
   -v "$HIER/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro" stafl-app:pruefung >/dev/null
 for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:18090/ 2>/dev/null && break; sleep 1; done
@@ -92,7 +102,11 @@ code() { curl -s -o /dev/null -w '%{http_code}' -H "Host: $1" -H 'X-Forwarded-Pr
 [ "$(code angebot-stafl.de /)" = 200 ] && ok "angebot-stafl.de: Startseite wie bisher" || nein "angebot-stafl.de Startseite" "$(code angebot-stafl.de /)"
 [ "$(code angebot-stafl.de '/api/?action=kunde_status')" = 200 ] && ok "angebot-stafl.de: Schnittstelle wie bisher" || nein "angebot-stafl.de Schnittstelle"
 antwort="$(curl -s -H 'Host: angebot-stafl.de' -H 'Content-Type: application/json' -d '{"username":"x","password":"y"}' 'http://127.0.0.1:18090/api/?action=kunde_login')"
-echo "$antwort" | grep -q "nicht korrekt" && ok "angebot-stafl.de: eigene Anmeldung unverändert (keine Keycloak-Sperre)" || nein "angebot-stafl.de Anmeldung" "$antwort"
+echo "$antwort" | grep -q "nicht korrekt" && ok "angebot-stafl.de: Kundenanmeldung unverändert (keine Keycloak-Sperre)" || nein "angebot-stafl.de Kundenanmeldung" "$antwort"
+antwort="$(curl -s -w ' %{http_code}' -H 'Host: angebot-stafl.de' -H 'Content-Type: application/json' -d '{"username":"admin","password":"y"}' 'http://127.0.0.1:18090/api/?action=login')"
+case "$antwort" in *umgezogen*" 410") ok "angebot-stafl.de: alter Eingabebereich stillgelegt (Mitarbeiteranmeldung 410, Verweis auf die neue Adresse)";; *) nein "angebot-stafl.de: Mitarbeiteranmeldung" "$antwort";; esac
+curl -s -H 'Host: angebot-stafl.de' 'http://127.0.0.1:18090/api/?action=status' | grep -q '"ok":true.*"umgezogen":"https://angebot.dashboard-stafl.de/admin/"' \
+  && ok "angebot-stafl.de: Status für den Healthcheck weiter erreichbar" || nein "angebot-stafl.de Status"
 [ "$(code angebot-stafl.de /dashboard/)" = 404 ] && ok "angebot-stafl.de: kein Dashboard" || nein "Dashboard auf angebot-stafl.de" "$(code angebot-stafl.de /dashboard/)"
 [ "$(code unbekannt.example /)" = 200 ] && ok "unbekannter Host fällt auf den bisherigen Standard zurück" || nein "Standard-Host"
 for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-stafl.de bestand.dashboard-stafl.de hr.dashboard-stafl.de; do
