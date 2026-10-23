@@ -1,6 +1,6 @@
 """HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/).
 
-Geprüft: Freigabe (ohne Testfreigabe 404, nur eingetragene Tester), Rechte (hr.antrag für alle, hr.verwalten nur
+Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, keine Testfreigabe), Rechte (hr.antrag für alle, hr.verwalten nur
 Personalstelle, serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
 Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.03. und Verfall, 4-Tage-Woche,
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
@@ -56,15 +56,17 @@ O = Client('198.51.100.6'); O.call('login', {'username': 'otto', 'password': 'Oh
 N = Client('198.51.100.7')
 
 # ── Freigabe ──
-check('vor der Testfreigabe: 404 auch für Administratoren', A.call('hr_start')[0] == 404 and P.call('hr_verwaltung')[0] == 404)
+# Produktiv seit der Freigabe des Inhabers (23.10.2026): kein Testbetrieb, keine Tester – jeder Mitarbeiter mit hr.antrag
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['hr']
-check('Register: HR in Entwicklung, Adresse /module/hr/', mod['oberflaechen'][0]['entwicklung'] == 'in_entwicklung' and mod['oberflaechen'][0]['adresse'].endswith('/module/hr/'), mod)
-st, r = A.call('modul_freigabe_save', {'bereich': 'hr.intern', 'freigabe': 'test', 'grund': 'Abnahme Personalstelle'})
-check('Testfreigabe gesetzt', st == 200, r)
-st, r = A.call('modul_tester_save', {'bereich': 'hr.intern', 'tester': [ids['admin'], ids['erika'], ids['lena'], ids['paul']], 'grund': 'Abnahme'})
-check('Tester eingetragen', st == 200, r)
-check('nicht eingetragener Mitarbeiter: 404', O.call('hr_start')[0] == 404)
-check('ohne Anmeldung: kein Zugang', N.call('hr_start')[0] in (401, 404))
+check('Register: HR fertig und produktiv, Adresse hr.dashboard-stafl.de/module/hr/', (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv'
+      and o['zugang'] and o['adresse'] == 'https://hr.dashboard-stafl.de/module/hr/')(mod['oberflaechen'][0]), mod)
+check('Kachel verfügbar', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True, mod['kachel'])
+st, r = A.call('modul_freigabe_save', {'bereich': 'hr.intern', 'freigabe': 'test', 'grund': 'Test'})
+check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über ein Release)', st == 422, (st, r))
+st, r = O.call('hr_start')
+check('jeder Mitarbeiter mit hr.antrag: Start ok (otto, nie als Tester eingetragen)', st == 200 and r.get('ok'), (st, r))
+check('Administrator und Personalstelle: Start ok', A.call('hr_start')[0] == 200 and P.call('hr_start')[0] == 200)
+check('ohne Anmeldung: 401', N.call('hr_start')[0] == 401 and N.call('hr_verwaltung')[0] == 401)
 
 # ── Rechte ──
 check('Mitarbeiter ohne Personalrecht: hr_verwaltung 403', L.call('hr_verwaltung')[0] == 403 and E.call('hr_verwaltung')[0] == 403)
@@ -395,10 +397,11 @@ with sync_playwright() as p:
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_{breite}.png'), full_page=True)
         ctx.close()
 
-    # nicht freigegeben: Hinweis statt Fehler
+    # produktiv: jeder Mitarbeiter sieht die normale Seite (otto war nie Tester)
     ctx, pg = anmelden('otto', 'Ohne-Zugang-77', '198.51.100.6')
-    pg.goto(B + '/module/hr/'); pg.wait_for_selector('#hr-err:not([hidden])')
-    check('nicht eingetragener Tester: Hinweis „noch nicht freigegeben“', 'nicht freigegeben' in pg.text_content('#hr-err'))
+    pg.goto(B + '/module/hr/'); pg.wait_for_selector('#hr-app:not([hidden]), #hr-err:not([hidden])')
+    check('Mitarbeiter ohne Tester-Eintrag: normale Seite (Mein Urlaub), kein Hinweis „nicht freigegeben“',
+          pg.is_visible('#hr-app') and pg.is_hidden('#hr-err') and pg.is_hidden('[data-tab="antraege"]'), pg.text_content('#hr-err'))
     ctx.close()
     ctx = br.new_context(); pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
     pg.goto(B + '/module/hr/'); pg.wait_for_selector('#hr-login:not([hidden])')

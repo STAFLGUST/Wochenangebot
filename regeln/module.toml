@@ -261,6 +261,7 @@ hinweise = [
   "Mitarbeiter der Urlaubsverwaltung (hr-personal) sind keine Zugänge: auch Kollegen ohne Mitarbeiterkonto (z. B. Lager) werden geführt; mit Konto verknüpft, können sie selbst beantragen.",
   "Personaldaten sind besonders schützenswert: Abwesenheitsgründe (z. B. Krankheit) nie für Kollegen sichtbar; Rechte hr.* serverseitig (GR-103).",
   "Anmeldung nur über die zentrale Anmeldung (Keycloak, GR-110) – das Modul legt keine Zugänge an; die Personalliste wird mit vorhandenen Mitarbeiterkonten verknüpft.",
+  "Freigegeben (Inhaber 23.10.2026): hr.dashboard-stafl.de mit eigenem Keycloak-Client „hr“; / führt zu /module/hr/. Aktionen hr_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden.",
 ]
 
   [[modul.oberflaeche]]
@@ -268,10 +269,9 @@ hinweise = [
   name = "HR"
   art = "intern"
   adresse = "https://hr.dashboard-stafl.de/module/hr/"
-  entwicklung = "in_entwicklung"
-  freigabe = "keine"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Freigabe des Inhabers 23.10.2026 (DNS, Keycloak-Client, Caddy, produktiv) mit dem Merge
   sperrbar = true
-  dns = false
 
 [[modul]]
 id = "marketing"

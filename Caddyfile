@@ -97,8 +97,8 @@ login.dashboard-stafl.de {
 	respond 404
 }
 
-# Dashboard, Mitarbeiter-Eingabe, Verwaltung und Bestand: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
-dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de {
+# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand und HR: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
+dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de {
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"

@@ -8,7 +8,8 @@ Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─�
                                   ├─ dashboard.stafl.test  ─▶ Apache + mod_auth_openidc (Client „dashboard“) ─▶ app/ + dashboard/
                                   ├─ angebot.stafl.test    ─▶ Apache + mod_auth_openidc (Client „angebot“)   ─▶ app/
                                   ├─ verwaltung.stafl.test ─▶ Apache + mod_auth_openidc (Client „verwaltung“, angelegt von realm-aktualisieren) ─▶ app/
-                                  └─ bestand.stafl.test    ─▶ Apache + mod_auth_openidc (Client „bestand“, angelegt von realm-aktualisieren)    ─▶ app/
+                                  ├─ bestand.stafl.test    ─▶ Apache + mod_auth_openidc (Client „bestand“, angelegt von realm-aktualisieren)    ─▶ app/
+                                  └─ hr.stafl.test         ─▶ Apache + mod_auth_openidc (Client „hr“, angelegt von realm-aktualisieren)         ─▶ app/module/hr/
 ```
 
 | Datei | Inhalt |
@@ -17,7 +18,7 @@ Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─�
 | `realm-mitarbeiter.json` | Test-Realm: Brute-Force-Schutz, nur HTTPS, keine Selbstregistrierung, Pflicht zum zweiten Faktor, Sitzung 30 Min. Leerlauf / 10 Std.; Clients vertraulich, nur Code-Ablauf mit PKCE (S256), exakte Rücksprungadressen, kein CORS, Back-Channel-Logout. Testnutzer mit Testkennwörtern (keine echten Daten) |
 | `Caddyfile` | TLS wie in der Produktion; auf `login.` nur `/realms/mitarbeiter/` und `/resources/` (Verwaltung und Master-Realm nie öffentlich) |
 | `apache.conf` | je Host ein eigener Client und eine eigene Sitzung (`__Host-oidc_sitzung`), Schnittstelle ohne Anmeldung 401, Identität nur als Server-Umgebung (`OIDCPassClaimsAs environment`) |
-| `test_oidc.py` | 197 Prüfungen (Härtung, zweiter Faktor freiwillig bzw. Pflicht für Administratoren und einzeln verpflichtete Konten mit zweiter Stufe, Anmeldemethoden im Claim amr, Realm-Umstellung mit `konten.sh realm-aktualisieren`, erneute Anmeldung, Sitzung je Host, Single Sign-on, Verwaltung und Bestand unter eigener Adresse (nur ihre Bereiche, Clients nachträglich angelegt, Import-Adresse öffnet die Importzentrale auch nach erstmaliger Anmeldung), Rechte, gesperrte/unbekannte Konten, Abmelden für alle Anwendungen, Konten über die Serverkonsole mit `deploy/anmeldung/konten.sh`, Einladung per Mail über einen Test-Mailserver `postfach.py`) |
+| `test_oidc.py` | 197 Prüfungen (Härtung, zweiter Faktor freiwillig bzw. Pflicht für Administratoren und einzeln verpflichtete Konten mit zweiter Stufe, Anmeldemethoden im Claim amr, Realm-Umstellung mit `konten.sh realm-aktualisieren`, erneute Anmeldung, Sitzung je Host, Single Sign-on, Verwaltung und Bestand unter eigener Adresse (nur ihre Bereiche, Clients nachträglich angelegt, Import-Adresse öffnet die Importzentrale auch nach erstmaliger Anmeldung), HR unter eigener Adresse (Urlaubsverwaltung für jede Mitarbeiterin mit `hr.antrag`, HR-Aktionen nur auf dem HR-Host und dort keine Aktionen des Eingabebereichs – GR-109, Anmeldehinweis nach dem Abmelden), Rechte, gesperrte/unbekannte Konten, Abmelden für alle Anwendungen, Konten über die Serverkonsole mit `deploy/anmeldung/konten.sh`, Einladung per Mail über einen Test-Mailserver `postfach.py`) |
 
 Lokal (Ubuntu 24.04 mit `apache2 libapache2-mod-auth-openidc libapache2-mod-php8.3 postgresql`, Java 21):
 

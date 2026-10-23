@@ -40,9 +40,14 @@ mods = nach_id(r.get('module', []))
 check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
 check('elf Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung'], kacheln)
-for neu in ('hr', 'marketing', 'controlling'):
+for neu in ('marketing', 'controlling'):
     k = mods.get(neu, {}).get('kachel') or {}
     check(f'{neu}: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
+hr = mods['hr']
+check('HR freigegeben (hr.dashboard-stafl.de, Inhaber 23.10.2026): Kachel verfügbar, Adresse /module/hr/ auf dem HR-Host',
+      hr['kachel']['ziel'] == 'hr.intern' and hr['kachel']['zugang'] is True and hr['kachel']['status'] == 'verfuegbar'
+      and hr['kachel']['adresse'] == 'https://hr.dashboard-stafl.de/module/hr/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(hr, 'intern')), hr['kachel'])
 
 ang = mods['angebot']
 check('Angebot-Kachel führt zur Mitarbeiter-Eingabe und ist verfügbar', ang['kachel']['ziel'] == 'angebot.eingabe' and ang['kachel']['zugang'] is True and ang['kachel']['status'] == 'verfuegbar', ang['kachel'])
