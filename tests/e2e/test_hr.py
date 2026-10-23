@@ -1,6 +1,6 @@
 """HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/).
 
-Geprüft: Freigabe (ohne Testfreigabe 404, nur eingetragene Tester), Rechte (hr.antrag für alle, hr.verwalten nur
+Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, keine Testfreigabe), Rechte (hr.antrag für alle, hr.verwalten nur
 Personalstelle, serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
 Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.03. und Verfall, 4-Tage-Woche,
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
@@ -208,6 +208,54 @@ check('Protokoll nennt HR-Vorgänge, aber nie „Krank“', 'HR: Abwesenheit Len
 raw = storage_raw('hr-abwesenheiten') or ''
 check('Einträge bleiben erhalten (Status statt Löschen)', '"storniert"' in raw and '"zurueckgezogen"' in raw and '"abgelehnt"' in raw)
 
+# ── Verknüpfung Mitarbeiterkonto ↔ Mitarbeiter ──
+neue = {}
+for u, n in (('gerda-gleich', 'Gerda Gleich'), ('hans', 'Hans Doppelt'), ('ines', 'Ines Neu'), ('karl', 'Karl Konto'), ('mia', 'Mia Muster')):
+    st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': 'Urlaub-Konto-4711', 'mustChange': False})
+    assert st == 200, r_
+ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+A.call('modul_tester_save', {'bereich': 'hr.intern', 'tester': [ids[x] for x in ('admin', 'erika', 'lena', 'paul', 'gerda-gleich', 'hans', 'ines', 'karl', 'mia')], 'grund': 'Abnahme'})   # nur solange HR in der Testfreigabe ist
+rev = P.call('hr_verwaltung')[1]['rev']
+PG = person({'vorname': 'Gerda', 'nachname': 'Gleich', 'abteilung': 'Lager', 'pos': 4})
+person({'vorname': 'Hans', 'nachname': 'Doppelt', 'abteilung': 'Lager', 'pos': 5}); person({'vorname': 'Hans', 'nachname': 'Doppelt', 'abteilung': 'GF', 'pos': 6})
+PI = person({'vorname': 'Ines', 'nachname': 'Neu', 'abteilung': 'Verwaltung', 'pos': 7})
+PM = person({'vorname': 'Mia', 'nachname': 'Muster', 'abteilung': 'Verwaltung', 'pos': 8})
+G = Client('198.51.100.8'); G.call('login', {'username': 'gerda-gleich', 'password': 'Urlaub-Konto-4711'})
+st, r = G.call('hr_start')
+check('erster Aufruf: Konto automatisch mit gleichnamigem Mitarbeiter verknüpft', st == 200 and r['neuVerknuepft'] is True and r['ich'] and r['ich']['id'] == PG, r)
+check('… danach nicht erneut gemeldet', G.call('hr_start')[1]['neuVerknuepft'] is False)
+H = Client('198.51.100.9'); H.call('login', {'username': 'hans', 'password': 'Urlaub-Konto-4711'})
+st, r = H.call('hr_start')
+check('gleicher Name zweimal: keine automatische Verknüpfung', st == 200 and r['ich'] is None and r['neuVerknuepft'] is False, r)
+log = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('automatische Verknüpfung im Protokoll', 'automatisch mit Gerda Gleich verknüpft' in log)
+v = P.call('hr_verwaltung')[1]
+kn = {u['username']: u for u in v['nutzer']}
+check('Personalstelle: Konten mit Zuordnung und Vorschlag', kn['gerda-gleich']['person'] == PG and kn['ines']['vorschlag'] == PI and kn['hans']['vorschlag'] is None
+      and kn['karl']['vorschlag'] is None and kn['erika']['person'] == PE, {k: (x['person'], x['vorschlag']) for k, x in kn.items()})
+check('Verknüpfen: ohne Personalrecht 403', L.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}], 'rev': v['rev']})[0] == 403)
+check('Verknüpfen: veralteter Stand 409', P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}], 'rev': v['rev'] - 1})[0] == 409)
+check('Verknüpfen: unbekanntes Konto 422', P.call('hr_verknuepfen', {'paare': [{'nutzer': 'u-gibt-es-nicht', 'person': PI}], 'rev': v['rev']})[0] == 422)
+st, r = P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}, {'nutzer': ids['karl'], 'person': 'neu'}], 'rev': v['rev']})
+check('Vorschlag verknüpft und Konto als neuer Mitarbeiter angelegt', st == 200 and r['anzahl'] == 2, r)
+v = P.call('hr_verwaltung')[1]
+pn = {p_['name']: p_ for p_ in v['personen']}
+check('… Karl Konto angelegt und verknüpft, Ines verknüpft', pn.get('Karl Konto', {}).get('nutzer') == ids['karl'] and pn['Ines Neu']['nutzer'] == ids['ines'])
+I = Client('198.51.100.10'); I.call('login', {'username': 'ines', 'password': 'Urlaub-Konto-4711'})
+r = I.call('hr_start')[1]
+check('verknüpftes Konto sieht seinen Teil (Konto, eigene Zeile)', r['ich'] and r['ich']['id'] == PI and r['neuVerknuepft'] is False and r['konto'] is not None, r.get('ich'))
+zi = [p_ for p_ in I.call(f'hr_monat&jahr={Y}&monat=2')[1]['personen'] if p_['ich']]
+check('… im Kalender als eigene Zeile markiert', len(zi) == 1 and zi[0]['id'] == PI)
+st, r = P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PE}], 'rev': v['rev']})
+v = P.call('hr_verwaltung')[1]
+pn = {p_['id']: p_ for p_ in v['personen']}
+check('Umhängen: ein Konto gehört höchstens zu einem Mitarbeiter', st == 200 and pn[PE]['nutzer'] == ids['ines'] and pn[PI]['nutzer'] is None, (pn[PE]['nutzer'], pn[PI]['nutzer']))
+P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}, {'nutzer': ids['erika'], 'person': PE}], 'rev': v['rev']})
+v = P.call('hr_verwaltung')[1]
+st, r = P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['karl'], 'person': None}], 'rev': v['rev']})
+check('Verknüpfung aufheben', st == 200 and {p_['name']: p_ for p_ in P.call('hr_verwaltung')[1]['personen']}['Karl Konto']['nutzer'] is None)
+check('Erika wieder verknüpft', E.call('hr_start')[1]['ich']['id'] == PE)
+
 # ── Excel-Export ──
 st, r, body = P.call('hr_export', {'jahr': Y, 'monate': [2]}, raw=True)
 check('Export: 200, xlsx', st == 200 and body.startswith('PK'), (st, body[:80]))
@@ -263,6 +311,7 @@ with sync_playwright() as p:
     pg.click('#dlg-import [data-schliessen]')
     st, r = P.call('hr_verwaltung&jahr=2025')
     namen = {p_['name']: p_ for p_ in r['personen']}
+    anzahl_personen = len(r['personen'])
     imp = [e for e in r['eintraege'] if e['quelle'] == 'import']
     check('Übernommen: Mitarbeiter mit Abteilung (verbundene Zellen fortgeführt)', namen.get('Emil Lager', {}).get('abteilung') == 'Lager' and namen.get('Bernd Muster', {}).get('abteilung') == 'Verwaltung'
           and namen.get('Carla Probe', {}).get('abteilung') == 'Verwaltung', {k: v['abteilung'] for k, v in namen.items()})
@@ -276,14 +325,20 @@ with sync_playwright() as p:
     check('erneute Übernahme: frühere Einträge werden ersetzt', '13 Einträge der letzten Übernahme werden ersetzt' in pg.text_content('#import-vorschau'), pg.text_content('#import-vorschau')[:300])
     pg.click('#import-los'); pg.wait_for_selector('#import-meldung.ok'); pg.click('#dlg-import [data-schliessen]')
     r = P.call('hr_verwaltung&jahr=2025')[1]
-    check('… keine doppelten Einträge oder Mitarbeiter', len([e for e in r['eintraege'] if e['quelle'] == 'import']) == 13 and len(r['personen']) == 8, (len(r['eintraege']), len(r['personen'])))
+    check('… keine doppelten Einträge oder Mitarbeiter', len([e for e in r['eintraege'] if e['quelle'] == 'import']) == 13 and len(r['personen']) == anzahl_personen, (len(r['eintraege']), len(r['personen'])))
     k26 = {p_['name']: p_['konto'] for p_ in P.call('hr_verwaltung&jahr=2026')[1]['personen']}
     check('ohne bekannten Anspruch im Vorjahr kein (negativer) automatischer Übertrag', k26['Anna Beispiel']['uebertrag'] == 0, k26['Anna Beispiel'])
     abt = [p_['abteilung'] for p_ in P.call(f'hr_monat&jahr={Y}&monat=1')[1]['personen']]
     bloecke = [x for i, x in enumerate(abt) if i == 0 or abt[i - 1] != x]
     check('Kalender: jede Abteilung ein Block (Reihenfolge nach Position)', len(bloecke) == len(set(bloecke)) and bloecke[0] == 'GF', abt)
     pg.goto(B + '/module/hr/#mitarbeiter'); pg.wait_for_selector('#ma-tabelle tr[data-person]')
+    check('Konten: Vorschlag „Mia Muster“ angeboten', pg.is_visible('#ma-vorschlaege') and 'Mia Muster' in pg.text_content('#ma-konten-liste'), pg.text_content('#ma-konten-liste')[:300])
     pg.screenshot(path=os.path.join(SH, 'hr_mitarbeiter_1280.png'), full_page=True)
+    pg.click('#ma-vorschlaege'); pg.wait_for_selector('#ma-konten-meldung.ok')
+    check('Oberfläche: Vorschläge verknüpft', {p_['name']: p_ for p_ in P.call('hr_verwaltung')[1]['personen']}['Mia Muster']['nutzer'] == ids['mia'])
+    li = pg.locator('#ma-konten-liste li[data-nutzer="%s"]' % ids['hans'])
+    li.locator('select').select_option(PA); li.locator('[data-verknuepfen]').click(); pg.wait_for_selector('#ma-konten-meldung.ok')
+    check('Oberfläche: Konto einzeln einem Mitarbeiter zugeordnet', {p_['id']: p_ for p_ in P.call('hr_verwaltung')[1]['personen']}[PA]['nutzer'] == ids['hans'])
 
     # Antrag genehmigen in der Oberfläche
     pg.click('[data-tab="antraege"]'); pg.wait_for_selector('.hr-antrag')

@@ -1,7 +1,7 @@
 # Aktionen des Moduls „hr“: Urlaubsverwaltung (Anträge, Genehmigung, Abwesenheiten, Monatsplan, Export, Übernahme).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
-# Alle Aktionen gehören zur Oberfläche hr.intern – solange sie nicht freigegeben ist, antworten sie mit 404
-# (Testfreigabe nur für eingetragene Tester, regeln/wartung.toml).
+# Alle Aktionen gehören zur Oberfläche hr.intern (produktiv seit 23.10.2026, hr.dashboard-stafl.de). Auf anderen
+# Keycloak-Hosts antworten sie mit 404 (Aktion ↔ Host, GR-109, lib/herkunft.php).
 
 schema = 1
 modul = "hr"
@@ -32,6 +32,10 @@ oberflaeche = "hr.intern"
 schreibend = true
 
 [aktion.hr_person_save]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_verknuepfen]
 oberflaeche = "hr.intern"
 schreibend = true
 

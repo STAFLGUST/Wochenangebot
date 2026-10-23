@@ -100,6 +100,7 @@
   function zeigeMein() {
     const d = S.start;
     $('#mein-titel').textContent = `Mein Urlaub ${d.jahr}`;
+    if (d.neuVerknuepft && d.ich) meldung($('#mein-info'), `Willkommen! Ihr Konto ist jetzt mit Ihrem Eintrag in der Urlaubsverwaltung verknüpft (${d.ich.name}).`, 'ok');
     $('#mein-ohne').hidden = !!d.ich;
     $('#mein-inhalt').hidden = !d.ich;
     if (!d.ich) return;
@@ -353,8 +354,43 @@
   });
 
   /* ---------- Mitarbeiter ---------- */
+  /* Mitarbeiterkonten ohne Zuordnung: Vorschlag (gleicher Name), Auswahl eines Mitarbeiters oder neu anlegen */
+  function zeigeKonten() {
+    const v = S.verw;
+    const offen = v.nutzer.filter((u) => !u.person);
+    const vorschlaege = offen.filter((u) => u.vorschlag);
+    $('#ma-konten-stand').textContent = `${v.nutzer.length - offen.length} von ${v.nutzer.length} Konten verknüpft`;
+    const knopf = $('#ma-vorschlaege');
+    knopf.hidden = !vorschlaege.length;
+    knopf.textContent = vorschlaege.length === 1 ? '1 Vorschlag verknüpfen' : `${vorschlaege.length} Vorschläge verknüpfen`;
+    const frei = v.personen.filter((p) => p.aktiv && !p.nutzer);
+    $('#ma-konten-liste').innerHTML = offen.length ? offen.map((u) => `<li data-nutzer="${esc(u.id)}">
+        <span class="wer"><b>${esc(u.name)}</b> <span class="gedaempft">${esc(u.username)}${u.angemeldet ? '' : ' · noch nie angemeldet'}</span></span>
+        <select aria-label="Mitarbeiter für ${esc(u.name)}"><option value="">– Mitarbeiter wählen –</option>
+          ${frei.map((p) => `<option value="${esc(p.id)}"${p.id === u.vorschlag ? ' selected' : ''}>${esc(p.name)}${p.id === u.vorschlag ? ' (Vorschlag)' : ''}</option>`).join('')}
+          <option value="neu">+ als neuen Mitarbeiter anlegen</option></select>
+        <button type="button" class="btn" data-verknuepfen>Verknüpfen</button></li>`).join('')
+      : '<li class="leer">Alle Mitarbeiterkonten sind verknüpft.</li>';
+  }
+  async function verknuepfen(paare) {
+    const m = $('#ma-konten-meldung');
+    const r = await api('hr_verknuepfen', { paare, rev: S.verw.rev });
+    if (r.status !== 200) { meldung(m, fehlerText(r, 'Verknüpfen fehlgeschlagen')); return; }
+    await ladeVerwaltung();
+    meldung($('#ma-konten-meldung'), r.data.anzahl === 1 ? 'Konto verknüpft.' : `${r.data.anzahl} Konten verknüpft.`, 'ok');
+  }
+  $('#ma-vorschlaege').addEventListener('click', () => verknuepfen(S.verw.nutzer.filter((u) => !u.person && u.vorschlag).map((u) => ({ nutzer: u.id, person: u.vorschlag }))));
+  $('#ma-konten-liste').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-verknuepfen]');
+    if (!b) return;
+    const li = b.closest('li'), wahl = $('select', li).value;
+    if (!wahl) { meldung($('#ma-konten-meldung'), 'Bitte einen Mitarbeiter wählen oder „als neuen Mitarbeiter anlegen“.'); return; }
+    verknuepfen([{ nutzer: li.dataset.nutzer, person: wahl }]);
+  });
+
   function zeigeMitarbeiter() {
     const v = S.verw;
+    zeigeKonten();
     $('#ma-titel').textContent = `Mitarbeiter · Urlaub ${v.jahr}`;
     $('#ma-tabelle').innerHTML = '<thead><tr><th class="zahl">Pos.</th><th>Name</th><th>Abteilung</th><th>Arbeitstage</th><th class="zahl">Anspruch</th><th class="zahl">Übertrag</th>'
       + '<th class="zahl">Genommen</th><th class="zahl">Geplant</th><th class="zahl">Rest</th><th>Konto</th></tr></thead><tbody>'

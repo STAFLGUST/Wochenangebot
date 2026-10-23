@@ -12,7 +12,6 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 const HR_IMPORT_MONATE = ['jan' => 1, 'feb' => 2, 'mär' => 3, 'mrz' => 3, 'mar' => 3, 'apr' => 4, 'mai' => 5, 'jun' => 6, 'jul' => 7, 'aug' => 8,
     'sep' => 9, 'okt' => 10, 'nov' => 11, 'dez' => 12];
 
-function hr_namekey(string $n): string { return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $n) ?? '')); }
 
 /* Monat und Jahr eines Blatts: Datum in K2 (Excel-Seriennummer), sonst aus dem Blattnamen („Okt. '26“, „Januar ´26“) */
 function hr_import_monat(array $blatt): ?array

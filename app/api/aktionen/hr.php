@@ -27,6 +27,7 @@ switch ($action) {
             $me = require_perm('hr.antrag');
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
+            $neuVerknuepft = hr_ich(hr_personal(), $me) === null ? hr_auto_verknuepfen($me) !== null : false;
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $ich = hr_ich($personal, $me);
             $verwalten = may($me, 'hr.verwalten');
@@ -35,7 +36,7 @@ switch ($action) {
             usort($eigene, function ($a, $b) { return $b['von'] <=> $a['von']; });
             $kollegen = [];
             foreach ($personal['personen'] as $p) if ($p['aktiv'] && (!$ich || $p['id'] !== $ich['id'])) $kollegen[] = ['id' => $p['id'], 'name' => hr_name($p)];
-            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten,
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'neuVerknuepft' => $neuVerknuepft,
                      'offen' => $verwalten ? count(array_filter($abw['eintraege'], function ($e) { return $e['status'] === 'beantragt'; })) : null,
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
@@ -118,10 +119,14 @@ switch ($action) {
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $idx = hr_personen_index($personal);
-            $nutzer = []; $nutzerNamen = [];
+            $nutzer = []; $nutzerNamen = []; $verknuepft = [];
+            foreach ($personal['personen'] as $p) if ($p['nutzer'] !== null) $verknuepft[$p['nutzer']] = $p['id'];
             foreach (users_load() as $u) {
                 if (empty($u['active'])) continue;
-                $nutzer[] = ['id' => $u['id'], 'name' => (string)$u['name'], 'vorname' => (string)($u['vorname'] ?? ''), 'nachname' => (string)($u['nachname'] ?? '')];
+                $v = isset($verknuepft[$u['id']]) ? null : hr_vorschlag($personal, $u);
+                $nutzer[] = ['id' => $u['id'], 'name' => (string)$u['name'], 'username' => (string)$u['username'], 'vorname' => (string)($u['vorname'] ?? ''),
+                             'nachname' => (string)($u['nachname'] ?? ''), 'person' => $verknuepft[$u['id']] ?? null, 'vorschlag' => $v['id'] ?? null,
+                             'angemeldet' => $u['lastLogin'] ?? null];
                 $nutzerNamen[$u['id']] = (string)$u['name'];
             }
             $eintraege = []; $offen = []; $freiJe = [];
@@ -263,6 +268,47 @@ switch ($action) {
             });
             audit('hr', 'HR: Mitarbeiter ' . hr_name($p) . ($id === '' ? ' angelegt' : ' geändert'));
             respond(['ok' => true, 'person' => $p]);
+        }
+
+        /* Mitarbeiterkonten verknüpfen: [{nutzer, person: <id> | "neu" | null}] – "neu" legt den Mitarbeiter aus dem Konto an
+           (Vor-/Nachname), null hebt die Verknüpfung des Kontos auf. Ein Konto gehört höchstens zu einem Mitarbeiter. */
+        case 'hr_verknuepfen': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $paare = $b['paare'] ?? null;
+            if (!is_array($paare) || !array_is_list($paare) || !$paare || count($paare) > 500) fail('Ungültige Angaben.', 422);
+            $konten = [];
+            foreach (users_load() as $u) if (!empty($u['active'])) $konten[$u['id']] = $u;
+            $ergebnis = with_lock('hr-personal', function () use ($paare, $konten, $b) {
+                $personal = hr_personal();
+                if ((int)($b['rev'] ?? -1) !== $personal['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
+                $text = [];
+                foreach ($paare as $x) {
+                    $nid = (string)($x['nutzer'] ?? '');
+                    $u = $konten[$nid] ?? fail('Ein gewähltes Mitarbeiterkonto gibt es nicht (mehr) oder es ist gesperrt.', 422);
+                    $ziel = $x['person'] ?? null;
+                    foreach ($personal['personen'] as &$p) if ($p['nutzer'] === $nid) { $p['nutzer'] = null; $p['geaendert'] = now(); }
+                    unset($p);
+                    if ($ziel === null) { $text[] = $u['name'] . ': Verknüpfung aufgehoben'; continue; }
+                    if ($ziel === 'neu') {
+                        $vor = s($u['vorname'] ?? '', 60) ?? ''; $nach = s($u['nachname'] ?? '', 60) ?? '';
+                        if ($vor === '' && $nach === '') { $teile = explode(' ', (string)$u['name']); $nach = count($teile) > 1 ? array_pop($teile) : ''; $vor = implode(' ', $teile); }
+                        $personal['personen'][] = hr_person_norm(['id' => hr_neue_id('p'), 'vorname' => $vor, 'nachname' => $nach, 'abteilung' => '', 'pos' => 0,
+                                                                  'nutzer' => $nid, 'arbeitstage' => [1, 2, 3, 4, 5], 'aktiv' => true, 'jahre' => [], 'geaendert' => now()]);
+                        $text[] = $u['name'] . ': als Mitarbeiter angelegt';
+                        continue;
+                    }
+                    $treffer = false;
+                    foreach ($personal['personen'] as &$p) if ($p['id'] === (string)$ziel) { $p['nutzer'] = $nid; $p['geaendert'] = now(); $treffer = hr_name($p); }
+                    unset($p);
+                    if ($treffer === false) fail('Mitarbeiter nicht gefunden.', 404);
+                    $text[] = $u['name'] . ' → ' . $treffer;
+                }
+                hr_personal_schreiben($personal);
+                return $text;
+            });
+            audit('hr', 'HR: Mitarbeiterkonten verknüpft – ' . implode('; ', array_slice($ergebnis, 0, 30)) . (count($ergebnis) > 30 ? ' …' : ''));
+            respond(['ok' => true, 'anzahl' => count($ergebnis)]);
         }
 
         /* Urlaubssperren und Ferien */
