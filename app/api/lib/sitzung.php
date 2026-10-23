@@ -123,6 +123,8 @@ function me_payload(array $u): array
                 'twofa' => true, 'passkeys' => 0, 'needTwofa' => false, 'twofaRequired' => false, 'zentral' => true,
                 // Oberfläche dieses Hosts (Webserver: WA_OBERFLAECHE) – nur Anzeige; Rechte prüft weiter jede Aktion (GR-103)
                 'bereich' => oidc_einstellung('WA_OBERFLAECHE') ?: 'angebot.eingabe',
+                // Rückweg zum Mitarbeiter-Dashboard (Register: dashboard.start); Testumgebungen setzen WA_DASHBOARD im Webserver
+                'dashboard' => oidc_einstellung('WA_DASHBOARD') ?: 'https://dashboard-stafl.de/',
                 'perms' => function_exists('user_perms') ? user_perms($u) : []];
     }
     return ['id' => $u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'mustChange' => (bool)($u['mustChange'] ?? false),

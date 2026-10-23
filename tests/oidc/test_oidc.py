@@ -376,11 +376,25 @@ with sync_playwright() as pw:
     check('Verwaltung: keine Angebotsaktionen in der Kopfzeile (Veröffentlichen, Entwurfsstand, Angebotsseite)',
           pv.is_hidden('#btn-publish') and pv.is_hidden('#save-state') and pv.is_hidden('#btn-site') and pv.is_hidden('#btn-send'))
     check('Angebot: Kopfzeile unverändert (Veröffentlichen sichtbar)', pa.is_visible('#btn-publish') and pa.text_content('#topbar h1') == 'Eingabebereich')
+    # Rückweg zum Dashboard in der Kopfzeile (Adresse vom Webserver: WA_DASHBOARD, sonst https://dashboard-stafl.de/)
+    for name, seite in (('Angebot', pa), ('Verwaltung', pv)):
+        check(f'{name}: Knopf „Dashboard“ oben sichtbar, führt zum Dashboard-Host', seite.is_visible('#btn-dashboard')
+              and seite.get_attribute('#btn-dashboard', 'href') == D + '/' and seite.text_content('#btn-dashboard').strip() == 'Dashboard',
+              (seite.is_visible('#btn-dashboard'), seite.get_attribute('#btn-dashboard', 'href')))
+    check('Angebot: Adresse des Dashboards kommt vom Server', sta['user'].get('dashboard') == D + '/', sta['user'].get('dashboard'))
+    pz = eigene_seite(ctx.new_page())
+    pz.goto(A + '/admin/'); pz.wait_for_selector('#btn-dashboard:not([hidden])', timeout=30000)
+    pz.click('#btn-dashboard'); pz.wait_for_selector('#db-grid .db-tile', timeout=30000)
+    check('Klick auf „Dashboard“: zurück im Dashboard, ohne erneute Anmeldung', pz.url in (D + '/', D + '/dashboard/'), pz.url)
+    pz.close()
     code, _ = pv.evaluate(js_post.replace("'../api/", "'/api/"), ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, stv.get('csrf', '')])
     check('Verwaltung: Rechte bleiben serverseitig (Bearbeiterin legt keine Nutzer an)', code == 403, code)
     pv.screenshot(path=os.path.join(SH, 'oidc_verwaltung_1280.png'))
     pv.set_viewport_size({'width': 390, 'height': 860}); pv.reload(); pv.wait_for_selector('#screen-editor:not([hidden])')
     check('Verwaltung 390 px: kein waagerechtes Scrollen', not pv.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
+    zb = pv.locator('#btn-dashboard').bounding_box()
+    check('Verwaltung 390 px: Dashboard-Knopf als Symbol sichtbar und mindestens 36 px groß', pv.is_visible('#btn-dashboard') and zb and zb['x'] >= 0
+          and zb['width'] >= 36 and zb['height'] >= 36 and zb['x'] + zb['width'] <= 390, zb)
     pv.screenshot(path=os.path.join(SH, 'oidc_verwaltung_390.png'))
     pv.set_viewport_size({'width': 1280, 'height': 900})
     # Import-Kachel: /import/ auf dem Verwaltungs-Host öffnet die Importzentrale (Single Sign-on)

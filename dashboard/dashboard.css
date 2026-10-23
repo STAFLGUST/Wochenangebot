@@ -87,7 +87,6 @@ body.db {
 .db-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
 .db-marke { display: flex; align-items: center; gap: 16px; min-width: 0; }
 body.db .db-kopf .brand-logo { height: 28px; width: auto; object-fit: initial; }
-.db-plattform { font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--db-muted); }
 .db-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .db-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--db-aus); color: var(--db-text); cursor: pointer; transition: background .15s; }
 .db-rund:hover, .db-abmelden:hover { background: var(--db-aus-hover); }
@@ -159,7 +158,6 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 
 /* ── Tablet und Handy ── */
 @media (max-width: 760px) {
-  .db-plattform { display: none; }
   .db-user-name { max-width: 120px; }
 }
 @media (max-width: 560px) {

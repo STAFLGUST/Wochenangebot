@@ -582,6 +582,10 @@
     document.body.classList.toggle('bereich-bestand', !!(me && me.bereich === 'bestand.intern'));
     $('#topbar h1').textContent = kopf || 'Eingabebereich';
     document.title = kopf ? kopf + ' · STAFL' : 'Wochenangebot · Eingabebereich';
+    /* Rückweg zum Dashboard nur unter der zentralen Anmeldung; die Adresse kommt vom Server (nur https) */
+    const dash = me && me.zentral && /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(me.dashboard || '') ? me.dashboard : '';
+    $('#btn-dashboard').hidden = !dash;
+    if (dash) $('#btn-dashboard').href = dash;
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;

@@ -11,6 +11,7 @@ with sync_playwright() as p:
     br = p.chromium.launch(); errs = []
     a = br.new_page(viewport={'width': 1711, 'height': 1000}); a.on('pageerror', lambda e: errs.append(str(e)))
     login(a, 'admin', 'Sicheres-Passwort-1'); a.wait_for_timeout(300)
+    check('eigene Anmeldung (ohne zentrale Anmeldung): kein Dashboard-Knopf', a.locator('#btn-dashboard').count() == 1 and a.locator('#btn-dashboard').is_hidden())
     boxes = [a.locator('#vt-' + v).bounding_box() for v in ['edit', 'hist', 'stock', 'master', 'users', 'log', 'sec']]
     check('tabs stacked vertically', all(boxes[i+1]['y'] > boxes[i]['y'] and abs(boxes[i+1]['x'] - boxes[i]['x']) < 1 for i in range(6)))
     main = a.locator('main.adm-page').bounding_box()
@@ -34,8 +35,9 @@ with sync_playwright() as p:
     overlap_js = '''() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
       const hit = (a, b) => a.width && b.width && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
       const brand = r('#topbar .brand'), st = r('#save-state'), act = r('#topbar .actions');
-      return hit(brand, st) || hit(brand, act) || hit(st, act); }'''
-    for w in [1440, 1280, 1180, 1024, 768, 390]:
+      const h1 = r('#topbar h1');
+      return hit(brand, st) || hit(brand, act) || hit(st, act) || hit(h1, act) || hit(h1, st); }'''
+    for w in [1536, 1440, 1401, 1366, 1361, 1280, 1180, 1024, 768, 390]:
         m = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); m.on('pageerror', lambda x: errs.append(str(x)))
         login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)
         m.screenshot(path=SH + f'/sidenav-{w}.png')
@@ -90,6 +92,36 @@ with sync_playwright() as p:
       return [b.backgroundColor, getComputedStyle(document.body, '::before').content, t.backdropFilter, t.backgroundColor,
               [...document.styleSheets].map((s) => s.href || '').filter((h) => /admin/.test(h)).length]; })()""")
     check('customer page unchanged: design „Klar“, no admin stylesheet, no glass', kc == ['rgb(243, 243, 241)', 'none', 'saturate(1.6) blur(14px)', 'rgba(255, 255, 255, 0.9)', 0], kc)
+    # Rückweg zum Dashboard: Antwort des Servers unter zentraler Anmeldung nachgestellt (echter Ablauf: tests/oidc/)
+    def zentral(route, adresse):
+        r = route.fetch(); j = r.json()
+        if j.get('user'):
+            j['user'].update({'zentral': True, 'bereich': 'angebot.eingabe', 'dashboard': adresse})
+        route.fulfill(response=r, json=j)
+    for w in (1920, 1601, 1440, 1366, 1361, 1280, 1181, 1024, 390):
+        z = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); z.on('pageerror', lambda x: errs.append(str(x)))
+        login(z, 'admin', 'Sicheres-Passwort-1')
+        z.route('**/api/?action=status*', lambda route: zentral(route, 'https://dashboard-stafl.de/'))
+        z.reload(); z.wait_for_selector('#btn-dashboard:not([hidden])')
+        zb = z.locator('#btn-dashboard').bounding_box(); lb = z.locator('#topbar .brand-logo').bounding_box()
+        check(f'{w}px zentrale Anmeldung: Knopf „Dashboard“ links vor dem Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
+              and zb['x'] + zb['width'] <= lb['x'] + 1 and abs((zb['y'] + zb['height'] / 2) - (lb['y'] + lb['height'] / 2)) < 4, (zb, lb))
+        lbl = z.locator('#btn-dashboard .lbl').bounding_box()
+        if w > 1600:
+            check(f'{w}px breit: Pfeil und Beschriftung „Dashboard“ sichtbar', lbl['width'] > 40 and z.locator('#btn-dashboard .zurueck').is_visible(), lbl)
+        else:
+            check(f'{w}px Beschriftung „Dashboard“ nur für Screenreader, Kachel-Symbol, Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36
+                  and z.locator('#btn-dashboard .kacheln').is_visible() and z.locator('#btn-dashboard .zurueck').is_hidden(), (lbl, zb))
+        check(f'{w}px mit Knopf: Kopfzeile ohne Überlappung, kein waagerechtes Scrollen', not z.evaluate(overlap_js)
+              and z.evaluate('document.documentElement.scrollWidth') <= w)
+        z.screenshot(path=SH + f'/dashboard-knopf-{w}.png')
+        z.evaluate("document.documentElement.dataset.theme = 'dark'")
+        z.screenshot(path=SH + f'/dashboard-knopf-{w}-dunkel.png')
+        z.unroute('**/api/?action=status*')
+        z.route('**/api/?action=status*', lambda route: zentral(route, 'javascript:alert(1)'))
+        z.reload(); z.wait_for_function("document.querySelector('#menu-user').textContent.includes('admin')")
+        check(f'{w}px ungültige Dashboard-Adresse: Knopf bleibt verborgen', z.locator('#btn-dashboard').is_hidden())
+        z.close()
     check('no JS errors', not errs, errs)
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
