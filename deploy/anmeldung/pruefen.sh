@@ -97,7 +97,7 @@ done
 ziel() { curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H "Host: $1" -H 'X-Forwarded-Proto: https' "http://127.0.0.1:18090$2"; }
 case "$(ziel bestand.dashboard-stafl.de /)" in "302 "*/admin/) ok "bestand.dashboard-stafl.de: Startadresse führt in den Eingabebereich";; *) nein "bestand.dashboard-stafl.de Startadresse" "$(ziel bestand.dashboard-stafl.de /)";; esac
 for p in /import/ /import; do
-  case "$(ziel verwaltung.dashboard-stafl.de "$p")" in "302 "*"/admin/?ansicht=importe") ok "verwaltung.dashboard-stafl.de$p: Importzentrale (Ansicht importe)";; *) nein "verwaltung.dashboard-stafl.de$p" "$(ziel verwaltung.dashboard-stafl.de "$p")";; esac
+  case "$(ziel verwaltung.dashboard-stafl.de "$p")" in "302 "*"/admin/?ansicht=importe&nur=import") ok "verwaltung.dashboard-stafl.de$p: Importzentrale (Ansicht importe)";; *) nein "verwaltung.dashboard-stafl.de$p" "$(ziel verwaltung.dashboard-stafl.de "$p")";; esac
 done
 case "$(ziel angebot.dashboard-stafl.de /import/)" in *ansicht=importe*) nein "angebot.dashboard-stafl.de/import/ leitet in die Importzentrale" "$(ziel angebot.dashboard-stafl.de /import/)";; *) ok "Import-Adresse nur auf dem Verwaltungs-Host";; esac
 docker logs stafl-pruefung 2>&1 | grep -iE "AH0|error" | grep -viE "metadata|oidc_provider_static_config|oidc_util_http|curl" | head -3 | sed 's/^/Info: /' || true

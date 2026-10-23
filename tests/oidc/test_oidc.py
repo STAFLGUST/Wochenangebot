@@ -305,7 +305,7 @@ code, kopf, _ = anfrage(B + '/', kopf=SEITE)
 check('Bestand: Startadresse führt in den Eingabebereich', code == 302 and (kopf.get('Location') or '').endswith('/admin/'), (code, kopf.get('Location')))
 for pfad in ('/import/', '/import'):
     code, kopf, _ = anfrage(W + pfad, kopf=SEITE)
-    check(f'Import-Adresse {pfad} (Verwaltungs-Host): Weiterleitung in die Importzentrale', code == 302 and (kopf.get('Location') or '').endswith('/admin/?ansicht=importe'), (code, kopf.get('Location')))
+    check(f'Import-Adresse {pfad} (Verwaltungs-Host): Weiterleitung in die Importzentrale', code == 302 and (kopf.get('Location') or '').endswith('/admin/?ansicht=importe&nur=import'), (code, kopf.get('Location')))
 code, kopf, _ = anfrage(B + '/import/', kopf=SEITE)
 check('Import-Adresse nur auf dem Verwaltungs-Host (Bestand: keine Weiterleitung in die Importzentrale)', 'ansicht=importe' not in (kopf.get('Location') or ''), (code, kopf.get('Location')))
 for h in (D, A, W, B):
@@ -592,7 +592,7 @@ with sync_playwright() as pw:
     pv.set_viewport_size({'width': 1280, 'height': 900})
     # Import-Kachel: /import/ auf dem Verwaltungs-Host öffnet die Importzentrale (Single Sign-on)
     pv.goto(W + '/import/'); pv.wait_for_selector('#view-importe:not([hidden])')
-    check('Import-Adresse öffnet den Eingabebereich in der Importzentrale', pv.url == W + '/admin/?ansicht=importe' and pv.is_hidden('#view-master')
+    check('Import-Adresse öffnet den Eingabebereich in der Importzentrale', pv.url == W + '/admin/?ansicht=importe&nur=import' and pv.is_hidden('#view-master')
           and pv.get_attribute('#vt-importe', 'aria-selected') == 'true', pv.url)
     pv.screenshot(path=os.path.join(SH, 'oidc_import_1280.png'))
     pv.goto(W + '/admin/#importe'); pv.wait_for_selector('#view-importe:not([hidden])')
@@ -676,7 +676,7 @@ with sync_playwright() as pw:
     pg.goto(W + '/import/'); pg.wait_for_selector('#username')
     pg.fill('#username', 'erika'); pg.fill('#password', NUTZER['erika'][0]); pg.click('#kc-login'); otp_eingeben(pg, 'erika')
     pg.wait_for_selector('#view-importe:not([hidden])')
-    check('Import-Adresse ohne Sitzung: nach der Anmeldung direkt in der Importzentrale', pg.url == W + '/admin/?ansicht=importe' and pg.is_visible('#view-importe'), pg.url)
+    check('Import-Adresse ohne Sitzung: nach der Anmeldung direkt in der Importzentrale', pg.url == W + '/admin/?ansicht=importe&nur=import' and pg.is_visible('#view-importe'), pg.url)
     ctx.close()
 
     # ── Keycloak-Nutzer ohne Mitarbeiterkonto ──
@@ -741,6 +741,27 @@ with sync_playwright() as pw:
           {'master', 'kunden', 'importe', 'users', 'sec', 'mail', 'log', 'schutz'} <= set(sichtbar) and 'edit' not in sichtbar, sichtbar)
     pg.click('#vt-users'); pg.wait_for_selector('#view-users:not([hidden])')
     pg.screenshot(path=os.path.join(SH, 'oidc_verwaltung_admin_1280.png'))
+    # Kachel „Import“: nur die Importzentrale – Nutzer, Protokoll, Sicherheit, Schutz nur über die Kachel „Verwaltung“
+    pg.goto(W + '/import/'); pg.wait_for_selector('#view-importe:not([hidden])')
+    nur_import = pg.evaluate("[...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
+    check('Administrator über die Kachel „Import“: nur die Importzentrale, keine Verwaltungsbereiche, ohne Seitenleiste, Titel „Import“',
+          nur_import == ['importe'] and pg.is_hidden('.side-nav') and pg.text_content('#topbar h1') == 'Import' and pg.title().startswith('Import')
+          and pg.is_visible('#btn-dashboard'), (nur_import, pg.title()))
+    pg.goto(W + '/admin/?ansicht=importe&nur=import#users'); pg.wait_for_selector('#view-importe:not([hidden])')
+    check('… auch über #users in der Adresse keine Nutzerverwaltung', pg.is_hidden('#view-users'))
+    pg.screenshot(path=os.path.join(SH, 'oidc_import_admin_1280.png'))
+    pg.set_viewport_size({'width': 390, 'height': 844}); pg.reload(); pg.wait_for_selector('#view-importe:not([hidden])')
+    check('Kachel „Import“ 390 px: ohne Seitenleiste, kein waagerechtes Scrollen', pg.is_hidden('.side-nav') and not pg.evaluate('document.documentElement.scrollWidth > innerWidth'))
+    pg.screenshot(path=os.path.join(SH, 'oidc_import_admin_390.png'))
+    pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    try:
+        pg.wait_for_function("!document.querySelector('#vt-users').hidden", timeout=10000)
+    except Exception:
+        pass
+    _zustand = pg.evaluate("({ url: location.href, titel: document.title, sichtbar: [...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3)), "
+                           "klassen: document.body.className })")
+    check('… über die Kachel „Verwaltung“ wieder alle Verwaltungsbereiche', pg.is_visible('.side-nav') and pg.is_visible('#vt-users') and pg.is_visible('#vt-sec'), _zustand)
     ctx.close()
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
