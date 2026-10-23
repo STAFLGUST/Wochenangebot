@@ -26,7 +26,7 @@ def check(n, c, i=''):
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 A.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
-REIHE = ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'verwaltung']
+REIHE = ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung']
 fehler = []
 
 
@@ -117,10 +117,10 @@ with sync_playwright() as pw:
     check('Anmeldehinweis: Schloss-Symbol 30 px, Knopf ohne Unterstreichung', knopf == [30, 'none'], knopf)
     ctx.close()
 
-    # ── Administrator: acht Kacheln aus dem Register ──
+    # ── Administrator: elf Kacheln aus dem Register ──
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.41')
     k = kacheln(pg)
-    check('acht Kacheln in der Reihenfolge des Modulregisters', [x['id'] for x in k] == REIHE, [x['id'] for x in k])
+    check('elf Kacheln in der Reihenfolge des Modulregisters', [x['id'] for x in k] == REIHE, [x['id'] for x in k])
     check('Kachelnamen aus dem Register', [x['name'] for x in k][:2] == ['Angebot', 'Bestand'], [x['name'] for x in k])
     ang = k[0]
     check('Angebot: verfügbar, als Verweis auf die Mitarbeiter-Eingabe (Testserver: gleicher Host)', ang['tag'] == 'A' and ang['href'] == '/admin/' and ang['badge'] == 'Verfügbar', ang)
@@ -133,17 +133,23 @@ with sync_playwright() as pw:
           best['tag'] == 'A' and best['href'] == '/admin/' and best['badge'] == 'Verfügbar', best)
     imp = kid['import']
     check('Import: freigegeben, Verweis auf /import/ (Testserver: gleicher Host)', imp['tag'] == 'A' and imp['href'] == '/import/' and imp['badge'] == 'Verfügbar', imp)
-    offen = [kid[m] for m in ('crm', 'rewe', 'qs', 'einkauf')]
+    offen = [kid[m] for m in ('crm', 'rewe', 'qs', 'einkauf', 'hr', 'marketing', 'controlling')]
     gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 4)
-    check('Zähler: 4 von 8 Anwendungen', '4 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 7)
+    check('Zähler: 4 von 11 Anwendungen', '4 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
+    check('neue Module HR, Marketing, Controlling: Name aus dem Register, „Geplant“, ohne Verweis',
+          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and all(x['tag'] == 'DIV' and not x['href'] and x['badge'] == 'Geplant' for x in neu), neu)
+    sym = pg.eval_on_selector_all('#db-grid .db-tile[data-modul="hr"] use, #db-grid .db-tile[data-modul="marketing"] use, #db-grid .db-tile[data-modul="controlling"] use',
+                                  'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
+    check('eigene Symbole (Kalender, Megafon, Diagramm), vorhanden', [x[0] for x in sym] == ['#i-calendar', '#i-megaphone', '#i-chart'] and all(x[1] for x in sym), sym)
     check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user') and pg.text_content('#db-user-name') == 'Administrator', pg.text_content('#db-user'))
     check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
     gesperrt = [x for x in k if x['tag'] == 'DIV']
     check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
-          len(gesperrt) == 4 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+          len(gesperrt) == 7 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
     check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
     check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
     band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
@@ -289,7 +295,7 @@ with sync_playwright() as pw:
     check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: Bestand, Import und Verwaltung weiter verfügbar (3 von 8)', '3 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Bestand, Import und Verwaltung weiter verfügbar (3 von 11)', '3 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')
