@@ -22,6 +22,8 @@ const PERMS = [
     'stammdaten.bearbeiten'    => ['g' => 'Stammdaten', 'l' => 'Stammdaten bearbeiten', 'k' => 'machen', 'd' => ['editor'], 'r' => ['stammdaten.sehen']],
     'einkauf.sehen'            => ['g' => 'Einkauf', 'l' => 'Einkauf (Fehlmengen) ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],
     'einkauf.melden'           => ['g' => 'Einkauf', 'l' => 'Einkauf per E-Mail benachrichtigen', 'k' => 'machen', 'd' => ['editor'], 'r' => ['einkauf.sehen']],
+    'hr.antrag'                => ['g' => 'HR', 'l' => 'Eigenen Urlaub beantragen, Abwesenheitskalender ansehen (nur „abwesend“)', 'k' => 'machen', 'd' => ['viewer', 'editor'], 'r' => []],
+    'hr.verwalten'             => ['g' => 'HR', 'l' => 'Personalstelle: Urlaub genehmigen, Abwesenheiten mit Grund, Mitarbeiter, Excel-Export', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag']],
     'bestellungen.sehen'       => ['g' => 'Bestellungen', 'l' => 'Bestellwünsche mit Kundendaten ansehen', 'k' => 'sehen', 'd' => ['editor'], 'r' => []],
     'bestellungen.bearbeiten'  => ['g' => 'Bestellungen', 'l' => 'Bestellwünsche bearbeiten (Status, Notiz, E-Mail erneut senden)', 'k' => 'machen', 'd' => ['editor'], 'r' => ['bestellungen.sehen']],
     'kunden.sehen'             => ['g' => 'Kunden', 'l' => 'Kundenstammdaten ansehen', 'k' => 'sehen', 'd' => [], 'r' => []],

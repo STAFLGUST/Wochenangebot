@@ -136,6 +136,27 @@ eigentuemer = "einkauf"
 schutz = "intern"
 beschreibung = "Versandte Meldungen an den Einkauf (Fehlmengen)"
 
+# ───────────── HR: Urlaubsverwaltung ─────────────
+
+[[dokument]]
+name = "hr-personal"
+eigentuemer = "hr"
+schutz = "vertraulich"
+beschreibung = "Mitarbeiter der Urlaubsverwaltung: Name, Abteilung, Reihenfolge, Arbeitstage, Urlaubsanspruch und Übertrag je Jahr, Verknüpfung zum Mitarbeiterkonto"
+
+[[dokument]]
+name = "hr-abwesenheiten"
+eigentuemer = "hr"
+schutz = "vertraulich"
+beschreibung = "Urlaubsanträge und Abwesenheiten (Urlaub, Krank, Gleittag, freie Tage) mit Status und Entscheidung; Art und Notiz nur für die Person selbst und die Personalstelle (hr.verwalten), Kollegen sehen nur „abwesend“"
+historie = "Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornieren ändern nur den Status (mit Zeitpunkt und Person)"
+
+[[dokument]]
+name = "hr-einstellungen"
+eigentuemer = "hr"
+schutz = "intern"
+beschreibung = "Urlaubssperren und Ferienzeiträume der Urlaubsverwaltung"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]

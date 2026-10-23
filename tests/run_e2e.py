@@ -104,6 +104,7 @@ SUITES['modulverwaltung'] = (8790, 'data-seed', True)   # Freigabe und Tester zu
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 SUITES['importzentrale'] = (8790, 'data-seed', True)   # Importzentrale (Verwaltung → Import, Roadmap 10b)
+SUITES['hr'] = (8790, 'data-seed', True)   # HR · Urlaubsverwaltung (app/module/hr/, Oberfläche hr.intern)
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 # Laufzeit je Gruppe in Sekunden (Median aus 12 CI-Aufträgen vom 22.10.2026, beide Speicherarten, 4 Gruppen parallel).
@@ -123,6 +124,7 @@ GEWICHT = {
     'testumgebung': 5, 'modul_wartung': 5, 'bestand_pdf': 5, 'modulverwaltung': 4, 'order_outbox_ui': 4,
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
     'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1,
+    'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
 }
 
 

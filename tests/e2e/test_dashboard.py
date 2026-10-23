@@ -140,8 +140,9 @@ with sync_playwright() as pw:
     check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 7)
     check('Zähler: 4 von 11 Anwendungen', '4 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
-    check('neue Module HR, Marketing, Controlling: Name aus dem Register, „Geplant“, ohne Verweis',
-          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and all(x['tag'] == 'DIV' and not x['href'] and x['badge'] == 'Geplant' for x in neu), neu)
+    check('neue Module HR, Marketing, Controlling: Name aus dem Register, Entwicklungsstand, ohne Verweis',
+          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and all(x['tag'] == 'DIV' and not x['href'] for x in neu)
+          and [x['badge'] for x in neu] == ['In Entwicklung', 'Geplant', 'Geplant'], neu)
     sym = pg.eval_on_selector_all('#db-grid .db-tile[data-modul="hr"] use, #db-grid .db-tile[data-modul="marketing"] use, #db-grid .db-tile[data-modul="controlling"] use',
                                   'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('eigene Symbole (Kalender, Megafon, Diagramm), vorhanden', [x[0] for x in sym] == ['#i-calendar', '#i-megaphone', '#i-chart'] and all(x[1] for x in sym), sym)

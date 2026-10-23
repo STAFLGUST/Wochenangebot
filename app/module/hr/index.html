@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · HR · Urlaub</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="hr.css">
+</head>
+<body class="hr">
+<div class="hr-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="hr-seite">
+  <header class="hr-kopf hr-glas">
+    <a class="hr-marke" id="hr-zurueck" href="../../dashboard/" title="Zum Dashboard">
+      <img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch">
+    </a>
+    <span class="hr-modul"><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>HR · Urlaub</span>
+    <div class="hr-aktionen">
+      <button class="hr-rund" id="hr-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+      <span class="hr-user" id="hr-user" hidden><span class="hr-initialen" id="hr-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="hr-user-name" id="hr-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="hr-main">
+    <section class="hr-hinweisbox hr-glas" id="hr-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Die Urlaubsverwaltung steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="hr-fehler" id="hr-err" role="alert" hidden></p>
+
+    <section id="hr-app" hidden>
+      <nav class="hr-tabs" id="hr-tabs" role="tablist" aria-label="Bereiche">
+        <button type="button" role="tab" data-tab="mein" aria-selected="true">Mein Urlaub</button>
+        <button type="button" role="tab" data-tab="kalender" aria-selected="false">Kalender</button>
+        <button type="button" role="tab" data-tab="antraege" aria-selected="false" data-verwalten hidden>Anträge <span class="hr-zahl" id="hr-offen" hidden></span></button>
+        <button type="button" role="tab" data-tab="mitarbeiter" aria-selected="false" data-verwalten hidden>Mitarbeiter</button>
+        <button type="button" role="tab" data-tab="export" aria-selected="false" data-verwalten hidden>Export</button>
+        <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" data-verwalten hidden>Einstellungen</button>
+      </nav>
+
+      <!-- Mein Urlaub -->
+      <div class="hr-tab" id="tab-mein" role="tabpanel">
+        <div class="hr-jahr">
+          <button type="button" class="hr-rund klein" data-jahr="-1" aria-label="Vorheriges Jahr"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+          <h1 id="mein-titel">Mein Urlaub</h1>
+          <button type="button" class="hr-rund klein" data-jahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+        </div>
+        <p class="hr-hinweis" id="mein-ohne" hidden>Ihr Konto ist noch keinem Mitarbeiter der Urlaubsverwaltung zugeordnet. Bitte an die Personalstelle wenden.</p>
+        <div id="mein-inhalt">
+          <div class="hr-konto" id="mein-konto"></div>
+          <div class="hr-spalten">
+            <form class="hr-karte hr-glas" id="antrag" novalidate>
+              <h2>Urlaub beantragen</h2>
+              <div class="hr-felder zwei">
+                <label>Erster Urlaubstag<input type="date" id="antrag-von" required></label>
+                <label>Letzter Urlaubstag<input type="date" id="antrag-bis" required></label>
+              </div>
+              <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
+              <label><span>Vertretung <span class="opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
+              <label><span>Notiz an die Personalstelle <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
+              <p class="hr-meldung" id="antrag-meldung" role="status"></p>
+              <button class="btn primary" type="submit" id="antrag-senden">Antrag stellen</button>
+            </form>
+            <div class="hr-karte hr-glas">
+              <h2>Meine Einträge</h2>
+              <ul class="hr-liste" id="mein-liste"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Kalender -->
+      <div class="hr-tab" id="tab-kalender" role="tabpanel" hidden>
+        <div class="hr-jahr">
+          <button type="button" class="hr-rund klein" data-monat="-1" aria-label="Vorheriger Monat"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+          <h1 id="kal-titel">Kalender</h1>
+          <button type="button" class="hr-rund klein" data-monat="1" aria-label="Nächster Monat"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+          <button type="button" class="btn" id="kal-eintragen" data-verwalten hidden>Abwesenheit eintragen</button>
+        </div>
+        <div class="hr-legende" id="kal-legende"></div>
+        <div class="hr-plan-rahmen hr-glas"><table class="hr-plan" id="kal-plan"></table></div>
+      </div>
+
+      <!-- Anträge (Personalstelle) -->
+      <div class="hr-tab" id="tab-antraege" role="tabpanel" hidden>
+        <h1>Offene Anträge</h1>
+        <div class="hr-antraege" id="antraege-liste"></div>
+        <div class="hr-jahr klein">
+          <button type="button" class="hr-rund klein" data-jahr="-1" aria-label="Vorheriges Jahr"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+          <h2 id="eintraege-titel">Alle Einträge</h2>
+          <button type="button" class="hr-rund klein" data-jahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+          <label class="hr-filter">Mitarbeiter<select id="eintraege-person"><option value="">alle</option></select></label>
+        </div>
+        <div class="hr-tabelle-rahmen hr-glas"><table class="hr-tabelle" id="eintraege-tabelle"></table></div>
+      </div>
+
+      <!-- Mitarbeiter (Personalstelle) -->
+      <div class="hr-tab" id="tab-mitarbeiter" role="tabpanel" hidden>
+        <div class="hr-jahr">
+          <button type="button" class="hr-rund klein" data-jahr="-1" aria-label="Vorheriges Jahr"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+          <h1 id="ma-titel">Mitarbeiter</h1>
+          <button type="button" class="hr-rund klein" data-jahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+          <button type="button" class="btn" id="ma-neu">Mitarbeiter anlegen</button>
+          <button type="button" class="btn" id="ma-import">Aus Excel übernehmen</button>
+        </div>
+        <div class="hr-tabelle-rahmen hr-glas"><table class="hr-tabelle" id="ma-tabelle"></table></div>
+      </div>
+
+      <!-- Export (Personalstelle) -->
+      <div class="hr-tab" id="tab-export" role="tabpanel" hidden>
+        <h1>Excel für den Steuerberater</h1>
+        <form class="hr-karte hr-glas schmal" id="export" novalidate>
+          <p>Ein Blatt je Monat im Aufbau der bisherigen Urlaubsplanung: Mitarbeiter nach Abteilung, Tage mit U, K, G und „x“ für freie Tage, Summen je Mitarbeiter. Nur genehmigte Einträge.</p>
+          <div class="hr-felder zwei">
+            <label>Jahr<select id="export-jahr"></select></label>
+            <label>Monat<select id="export-monat"></select></label>
+          </div>
+          <label class="hr-check"><input type="checkbox" id="export-jahrganz"> ganzes Jahr (12 Blätter)</label>
+          <p class="hr-meldung" id="export-meldung" role="status"></p>
+          <button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Excel herunterladen</button>
+        </form>
+      </div>
+
+      <!-- Einstellungen (Personalstelle) -->
+      <div class="hr-tab" id="tab-einstellungen" role="tabpanel" hidden>
+        <h1>Urlaubssperren und Ferien</h1>
+        <form class="hr-karte hr-glas schmal" id="einst" novalidate>
+          <h2>Urlaubssperren</h2>
+          <p class="hr-klein">In diesen Zeiträumen können Mitarbeiter keinen Urlaub beantragen. Die Personalstelle kann weiterhin eintragen.</p>
+          <div class="hr-zeitraeume" id="einst-sperren"></div>
+          <button type="button" class="btn klein" data-plus="sperren">+ Sperre</button>
+          <h2>Ferien</h2>
+          <p class="hr-klein">Nur zur Anzeige im Kalender und im Export (grün).</p>
+          <div class="hr-zeitraeume" id="einst-ferien"></div>
+          <button type="button" class="btn klein" data-plus="ferien">+ Ferien</button>
+          <p class="hr-meldung" id="einst-meldung" role="status"></p>
+          <button class="btn primary" type="submit">Speichern</button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <footer class="hr-fuss">STAFL-Plattform · Standard-Fleisch</footer>
+</div>
+
+<!-- Abwesenheit eintragen / ändern (Personalstelle) -->
+<dialog class="hr-dialog" id="dlg-eintrag" aria-labelledby="dlg-eintrag-titel">
+  <form method="dialog" id="eintrag-form" novalidate>
+    <h2 id="dlg-eintrag-titel">Abwesenheit eintragen</h2>
+    <label>Mitarbeiter<select id="eintrag-person" required></select></label>
+    <label>Art<select id="eintrag-art">
+      <option value="U">Urlaub (U)</option><option value="K">Krank (K)</option><option value="G">Gleittag (G)</option><option value="X">Freier Tag (x)</option>
+    </select></label>
+    <div class="hr-felder zwei">
+      <label>Von<input type="date" id="eintrag-von" required></label>
+      <label>Bis<input type="date" id="eintrag-bis" required></label>
+    </div>
+    <label><span>Notiz <span class="opt">(nur für die Personalstelle)</span></span><input type="text" id="eintrag-notiz" maxlength="300"></label>
+    <p class="hr-meldung" id="eintrag-meldung" role="status"></p>
+    <div class="hr-knoepfe">
+      <button type="button" class="btn gefahr" id="eintrag-storno" hidden>Stornieren</button>
+      <span class="hr-platz"></span>
+      <button type="button" class="btn" data-schliessen>Abbrechen</button>
+      <button type="submit" class="btn primary" id="eintrag-speichern">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Antrag ablehnen -->
+<dialog class="hr-dialog" id="dlg-ablehnen" aria-labelledby="dlg-ablehnen-titel">
+  <form method="dialog" id="ablehnen-form" novalidate>
+    <h2 id="dlg-ablehnen-titel">Antrag ablehnen</h2>
+    <p id="ablehnen-text"></p>
+    <label>Grund (sieht der Mitarbeiter)<input type="text" id="ablehnen-grund" maxlength="300" required></label>
+    <p class="hr-meldung" id="ablehnen-meldung" role="status"></p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn gefahr">Ablehnen</button></div>
+  </form>
+</dialog>
+
+<!-- Mitarbeiter anlegen / ändern -->
+<dialog class="hr-dialog" id="dlg-person" aria-labelledby="dlg-person-titel">
+  <form method="dialog" id="person-form" novalidate>
+    <h2 id="dlg-person-titel">Mitarbeiter</h2>
+    <div class="hr-felder zwei">
+      <label>Vorname<input type="text" id="person-vorname" maxlength="60"></label>
+      <label>Nachname<input type="text" id="person-nachname" maxlength="60"></label>
+      <label>Abteilung<input type="text" id="person-abteilung" maxlength="40" list="abteilungen"></label>
+      <label>Position (Reihenfolge)<input type="number" id="person-pos" min="0" max="9999" step="1"></label>
+    </div>
+    <datalist id="abteilungen"></datalist>
+    <label><span>Mitarbeiterkonto (Anmeldung) <span class="opt">– damit kann die Person selbst Urlaub beantragen</span></span><select id="person-nutzer"><option value="">– ohne Konto –</option></select></label>
+    <fieldset class="hr-wochentage"><legend>Arbeitstage</legend><div id="person-tage"></div></fieldset>
+    <div class="hr-felder zwei">
+      <label><span id="person-anspruch-label">Urlaubsanspruch</span><input type="number" id="person-anspruch" min="0" max="100" step="0.5"></label>
+      <label><span id="person-uebertrag-label">Übertrag aus dem Vorjahr</span><input type="number" id="person-uebertrag" min="-100" max="100" step="0.5" placeholder="automatisch"></label>
+    </div>
+    <p class="hr-klein">Übertrag leer lassen: wird aus dem Resturlaub des Vorjahres berechnet. Nicht genommener Übertrag verfällt nach dem 31.03.</p>
+    <label class="hr-check"><input type="checkbox" id="person-aktiv" checked> aktiv (im Kalender und Export)</label>
+    <p class="hr-meldung" id="person-meldung" role="status"></p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn primary">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Übernahme der Excel-Urlaubsplanung -->
+<dialog class="hr-dialog breit" id="dlg-import" aria-labelledby="dlg-import-titel">
+  <form method="dialog" id="import-form" novalidate>
+    <h2 id="dlg-import-titel">Urlaubsplanung aus Excel übernehmen</h2>
+    <p class="hr-klein">Datei im Aufbau „Urlaub 2026.xlsx“: ein Blatt je Monat, Kopfzeile „Pos.“, Namen in Spalte C, Tage ab Spalte D. Erneutes Übernehmen ersetzt die zuvor übernommenen Einträge desselben Jahres.</p>
+    <label>Excel-Datei (.xlsx)<input type="file" id="import-datei" accept=".xlsx"></label>
+    <div id="import-vorschau" class="hr-vorschau"></div>
+    <p class="hr-meldung" id="import-meldung" role="status"></p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Schließen</button><button type="submit" class="btn primary" id="import-los" disabled>Übernehmen</button></div>
+  </form>
+</dialog>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17.5h2"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-links" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></symbol>
+  <symbol id="i-rechts" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+</svg>
+<script src="../../assets/offer-core.js"></script>
+<script src="hr.js"></script>
+</body>
+</html>

@@ -253,21 +253,22 @@ reihenfolge = 72
 dashboard = true
 agent = "hr"
 abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/hr.toml", "app/api/module/hr/**", "app/module/hr/**", "tests/e2e/test_hr*.py"]
+testgruppen = ["hr"]
+pfade = ["regeln/aktionen/hr.toml", "app/api/aktionen/hr.php", "app/api/module/hr/**", "app/module/hr/**", "tests/e2e/test_hr*.py", "tests/fixtures/hr/**"]
+pfade_geplant = []
 hinweise = [
-  "Erstes Fachthema nach dem Anlegen: Urlaubsverwaltung (Urlaubstage, Urlaubsanträge, Genehmigung). Fachliche Regeln vor dem Bau mit dem Inhaber klären.",
+  "Urlaubsverwaltung (Oktober 2026): Anträge der Mitarbeiter (hr.antrag), Genehmigung durch eine zentrale Stelle (hr.verwalten), Krank/Gleittag/freie Tage nur durch die Personalstelle, Übertrag bis 31.03., Kalender für alle nur „abwesend“, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung.",
+  "Mitarbeiter der Urlaubsverwaltung (hr-personal) sind keine Zugänge: auch Kollegen ohne Mitarbeiterkonto (z. B. Lager) werden geführt; mit Konto verknüpft, können sie selbst beantragen.",
   "Personaldaten sind besonders schützenswert: Abwesenheitsgründe (z. B. Krankheit) nie für Kollegen sichtbar; Rechte hr.* serverseitig (GR-103).",
-  "Mitarbeiter kommen aus der zentralen Anmeldung (Keycloak, GR-110) – keine eigene Nutzerverwaltung im Modul.",
+  "Anmeldung nur über die zentrale Anmeldung (Keycloak, GR-110) – das Modul legt keine Zugänge an; die Personalliste wird mit vorhandenen Mitarbeiterkonten verknüpft.",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "HR"
   art = "intern"
-  adresse = "https://hr.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://hr.dashboard-stafl.de/module/hr/"
+  entwicklung = "in_entwicklung"
   freigabe = "keine"
   sperrbar = true
   dns = false

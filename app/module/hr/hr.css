@@ -1,0 +1,283 @@
+/* STAFL-Plattform · HR · Urlaub – Gestaltung wie das Dashboard („Liquid Glass“): heller Grund mit weichen Farbflächen,
+   Glasflächen für Kopf und Karten. Schrift und Grundregeln aus ../../assets/app.css; alle Farben dieser Seite als --hr-*.
+   Farben der Kürzel wie in der Excel-Planung: Wochenende grau, Feiertag orange, Ferien hellgrün, Sperre rot. */
+
+body.hr {
+  --hr-bg: #f4f1ee;
+  --hr-text: #1c1a19;
+  --hr-muted: #6b6560;
+  --hr-glass: rgba(255, 255, 255, .58);
+  --hr-deckend: #fbfaf8;
+  --hr-rand: rgba(255, 255, 255, .8);
+  --hr-linie: rgba(28, 26, 25, .1);
+  --hr-glanz: rgba(255, 255, 255, .95);
+  --hr-schatten: 0 10px 40px rgba(60, 30, 25, .10);
+  --hr-blob-a: #8e4fa0; --hr-blob-b: #e2a54a; --hr-blob-c: #3f7a5a;
+  --hr-aus: rgba(28, 26, 25, .07);
+  --hr-aus-hover: rgba(28, 26, 25, .12);
+  --hr-akzent: #8c1d2c;
+  --hr-akzent-ink: #8c1d2c;
+  --hr-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
+  --hr-ok: #186a3b; --hr-ok-bg: rgba(31, 122, 69, .12);
+  --hr-warn: #7f4d00; --hr-warn-bg: rgba(226, 165, 74, .22);
+  --hr-fehler: #8c1d2c; --hr-fehler-bg: rgba(140, 29, 44, .09);
+  --hr-wochenende: rgba(28, 26, 25, .09);
+  --hr-feiertag: rgba(255, 192, 0, .38);
+  --hr-ferien: rgba(112, 173, 71, .16);
+  --hr-sperre: #d1342f;
+  --hr-u: #2f6fb0; --hr-u-bg: rgba(47, 111, 176, .14);
+  --hr-k: #a8323f; --hr-k-bg: rgba(168, 50, 63, .13);
+  --hr-g: #8a5a00; --hr-g-bg: rgba(226, 165, 74, .26);
+  --hr-x: #6b6560; --hr-x-bg: rgba(28, 26, 25, .06);
+  --hr-a: #6a4a7a; --hr-a-bg: rgba(142, 79, 160, .16);
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  background: var(--hr-bg); color: var(--hr-text); font-family: var(--font);
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body.hr {
+    --hr-bg: #121011; --hr-text: #f5f1ee; --hr-muted: #a59d97; --hr-glass: rgba(40, 36, 36, .55); --hr-deckend: #211d1d;
+    --hr-rand: rgba(255, 255, 255, .14); --hr-linie: rgba(255, 255, 255, .1); --hr-glanz: rgba(255, 255, 255, .2); --hr-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --hr-blob-a: #5f2f70; --hr-blob-b: #9a6a24; --hr-blob-c: #245a40;
+    --hr-aus: rgba(255, 255, 255, .08); --hr-aus-hover: rgba(255, 255, 255, .14); --hr-akzent-ink: #f0a3ae; --hr-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
+    --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
+    --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
+    --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
+    --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
+    --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
+    --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
+  }
+}
+@media screen {
+  :root[data-theme="dark"] body.hr {
+    --hr-bg: #121011; --hr-text: #f5f1ee; --hr-muted: #a59d97; --hr-glass: rgba(40, 36, 36, .55); --hr-deckend: #211d1d;
+    --hr-rand: rgba(255, 255, 255, .14); --hr-linie: rgba(255, 255, 255, .1); --hr-glanz: rgba(255, 255, 255, .2); --hr-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --hr-blob-a: #5f2f70; --hr-blob-b: #9a6a24; --hr-blob-c: #245a40;
+    --hr-aus: rgba(255, 255, 255, .08); --hr-aus-hover: rgba(255, 255, 255, .14); --hr-akzent-ink: #f0a3ae; --hr-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
+    --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
+    --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
+    --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
+    --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
+    --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
+    --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
+  }
+}
+
+/* ── Hintergrund und Glas ── */
+.hr-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.hr-bg span { position: absolute; border-radius: 50%; filter: blur(140px); }
+.hr-bg span:nth-child(1) { width: 620px; height: 620px; left: -180px; top: -220px; background: var(--hr-blob-a); opacity: .16; }
+.hr-bg span:nth-child(2) { width: 540px; height: 540px; right: -140px; top: 160px; background: var(--hr-blob-b); opacity: .15; }
+.hr-bg span:nth-child(3) { width: 600px; height: 600px; left: 30%; bottom: -320px; background: var(--hr-blob-c); opacity: .13; }
+.hr-glas { background: var(--hr-glass); border: 1px solid var(--hr-rand); box-shadow: inset 0 1px 0 var(--hr-glanz), var(--hr-schatten);
+  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .hr-glas { background: var(--hr-deckend); } }
+@media (prefers-reduced-transparency: reduce) { .hr-glas { background: var(--hr-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; } .hr-bg { display: none; } }
+
+/* ── Seite und Kopf ── */
+.hr-seite { position: relative; z-index: 1; max-width: 1320px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 28px; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; }
+.hr-main { flex: 1; min-width: 0; }
+.hr .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.hr :focus-visible { outline: none; box-shadow: var(--hr-fokus); }
+.hr-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
+.hr-marke { display: flex; align-items: center; }
+body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
+.hr-modul { display: inline-flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid var(--hr-linie); font-weight: 600; font-size: 15px; white-space: nowrap; }
+.hr-modul .i { color: #8e4fa0; }
+.hr-aktionen { margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hr-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--hr-aus); color: var(--hr-text); cursor: pointer; }
+.hr-rund:hover { background: var(--hr-aus-hover); }
+.hr-rund.klein { width: 34px; height: 34px; }
+.hr-user { display: flex; align-items: center; gap: 10px; height: 40px; min-width: 0; padding: 0 14px 0 4px; border-radius: 999px; background: var(--hr-aus); font-size: 14px; font-weight: 500; }
+.hr-user[hidden] { display: none; }
+.hr-initialen { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--hr-akzent); color: #fff; font-size: 13px; font-weight: 600; }
+.hr-user-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.hr-fuss { padding: 0 8px; font-size: 13px; color: var(--hr-muted); }
+
+/* ── Bereiche (Reiter) ── */
+.hr-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--hr-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.hr-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--hr-muted);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hr-tabs button[aria-selected="true"] { background: var(--hr-deckend); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.hr-tabs button[hidden] { display: none; }
+.hr-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--hr-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
+.hr-zahl[hidden] { display: none; }
+
+.hr h1 { margin: 0 0 16px; font-size: 30px; line-height: 1.15; font-weight: 700; letter-spacing: -.03em; }
+.hr h2 { margin: 0 0 14px; font-size: 18px; font-weight: 650; letter-spacing: -.015em; }
+.hr-jahr { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.hr-jahr h1, .hr-jahr h2 { margin: 0; }
+.hr-jahr.klein { margin: 32px 0 12px; }
+.hr-jahr .btn { margin-left: auto; }
+.hr-jahr .btn + .btn { margin-left: 0; }
+.hr-hinweis { padding: 12px 16px; border-radius: 16px; background: var(--hr-warn-bg); color: var(--hr-warn); }
+.hr-klein { margin: 0 0 12px; font-size: 13px; color: var(--hr-muted); }
+.opt { font-weight: 400; color: var(--hr-muted); }
+
+/* ── Urlaubskonto ── */
+.hr-konto { display: grid; grid-template-columns: 1.4fr repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+.hr-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.hr-wert b { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.hr-wert span { font-size: 13px; color: var(--hr-muted); }
+.hr-wert small { font-size: 12px; color: var(--hr-warn); font-weight: 600; }
+.hr-wert.haupt b { font-size: 40px; color: var(--hr-akzent-ink); }
+.hr-wert.minus b { color: var(--hr-fehler); }
+
+/* ── Karten, Formulare ── */
+.hr-spalten { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
+.hr-karte { padding: 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hr-karte.schmal { max-width: 620px; }
+.hr-karte p { margin: 0; }
+.hr label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--hr-muted); }
+.hr label.hr-check { flex-direction: row; align-items: center; gap: 8px; color: var(--hr-text); font-weight: 500; font-size: 14px; }
+.hr input[type="date"], .hr input[type="text"], .hr input[type="number"], .hr select {
+  height: 42px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--hr-linie); background: var(--hr-deckend); color: var(--hr-text);
+  font: inherit; font-size: 15px; font-weight: 400; box-sizing: border-box; width: 100%; min-width: 0; }
+.hr input[type="file"] { font: inherit; font-size: 14px; color: var(--hr-text); }
+.hr-felder { display: grid; gap: 12px; }
+.hr-felder.zwei { grid-template-columns: 1fr 1fr; }
+.hr-rechnung { min-height: 20px; font-size: 14px; font-weight: 600; }
+.hr-meldung { min-height: 0; font-size: 14px; }
+.hr-meldung:empty { display: none; }
+.hr-meldung.fehler { padding: 10px 14px; border-radius: 12px; background: var(--hr-fehler-bg); color: var(--hr-fehler); }
+.hr-meldung.ok { padding: 10px 14px; border-radius: 12px; background: var(--hr-ok-bg); color: var(--hr-ok); }
+.hr-meldung.warn { padding: 10px 14px; border-radius: 12px; background: var(--hr-warn-bg); color: var(--hr-warn); }
+.hr .btn { border-radius: 999px; }
+.hr .btn.primary { background: var(--hr-akzent); border-color: var(--hr-akzent); color: #fff; align-self: flex-start; }
+.hr .btn.primary:hover { background: #6e1622; border-color: #6e1622; }
+.hr .btn.gefahr { color: var(--hr-fehler); }
+.hr .btn.klein { height: 32px; font-size: 13px; align-self: flex-start; }
+.hr .btn .i { margin-right: 6px; }
+
+/* ── Listen und Status ── */
+.hr-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hr-liste li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--hr-linie); flex-wrap: wrap; }
+.hr-liste li:first-child { border-top: 0; }
+.hr-liste .zeitraum { font-weight: 600; font-variant-numeric: tabular-nums; }
+.hr-liste .mehr { font-size: 13px; color: var(--hr-muted); flex-basis: 100%; }
+.hr-liste .leer { color: var(--hr-muted); }
+.hr-liste .btn { margin-left: auto; height: 30px; font-size: 13px; }
+.hr-pille { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 12px; font-size: 12px; font-weight: 650; background: var(--hr-aus); color: var(--hr-muted); white-space: nowrap; }
+.hr-pille.genehmigt { background: var(--hr-ok-bg); color: var(--hr-ok); }
+.hr-pille.beantragt { background: var(--hr-warn-bg); color: var(--hr-warn); }
+.hr-pille.abgelehnt { background: var(--hr-fehler-bg); color: var(--hr-fehler); }
+.hr-art { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 4px; border-radius: 7px; font-size: 12px; font-weight: 700; box-sizing: border-box; }
+.hr-art.U { background: var(--hr-u-bg); color: var(--hr-u); }
+.hr-art.K { background: var(--hr-k-bg); color: var(--hr-k); }
+.hr-art.G { background: var(--hr-g-bg); color: var(--hr-g); }
+.hr-art.X, .hr-art.x { background: var(--hr-x-bg); color: var(--hr-x); }
+.hr-art.A { background: var(--hr-a-bg); color: var(--hr-a); }
+
+/* ── Monatsplan ── */
+.hr-legende { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; font-size: 13px; color: var(--hr-muted); }
+.hr-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.hr-legende i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.hr-plan-rahmen, .hr-tabelle-rahmen { border-radius: 22px; overflow: auto; max-width: 100%; }
+.hr-plan { border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.hr-plan th, .hr-plan td { height: 32px; min-width: 30px; padding: 0; text-align: center; border-bottom: 1px solid var(--hr-linie); }
+.hr-plan thead th { position: sticky; top: 0; z-index: 2; background: var(--hr-deckend); font-weight: 600; line-height: 1.15; padding: 6px 0; }
+.hr-plan thead th small { display: block; font-size: 11px; font-weight: 500; color: var(--hr-muted); }
+.hr-plan .name { position: sticky; left: 0; z-index: 1; min-width: 190px; max-width: 220px; padding: 0 12px; text-align: left; background: var(--hr-deckend);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; border-right: 1px solid var(--hr-linie); }
+.hr-plan thead .name { z-index: 3; }
+.hr-plan tr.ich .name { font-weight: 700; color: var(--hr-akzent-ink); }
+.hr-plan tr.abt th { position: sticky; left: 0; text-align: left; padding: 10px 12px 4px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--hr-muted); background: transparent; border-bottom: 0; }
+.hr-plan .we { background: var(--hr-wochenende); }
+.hr-plan .ft { background: var(--hr-feiertag); }
+.hr-plan .fe { background: var(--hr-ferien); }
+.hr-plan thead th.sp { box-shadow: inset 0 -3px 0 var(--hr-sperre); }
+.hr-plan thead th.heute { color: var(--hr-akzent-ink); }
+.hr-plan td.klick { cursor: pointer; }
+.hr-plan td.klick:hover { box-shadow: inset 0 0 0 2px var(--hr-akzent); }
+.hr-plan td .hr-art { min-width: 22px; height: 22px; }
+.hr-plan td .offen { background: repeating-linear-gradient(135deg, var(--hr-warn-bg) 0 4px, transparent 4px 8px); color: var(--hr-warn); outline: 1px dashed var(--hr-warn); }
+
+/* ── Tabellen ── */
+.hr-tabelle { width: 100%; border-collapse: collapse; font-size: 14px; }
+.hr-tabelle th, .hr-tabelle td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--hr-linie); white-space: nowrap; }
+.hr-tabelle th { font-size: 12px; font-weight: 650; color: var(--hr-muted); text-transform: uppercase; letter-spacing: .04em; background: var(--hr-deckend); position: sticky; top: 0; }
+.hr-tabelle td.zahl, .hr-tabelle th.zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.hr-tabelle tr.aus td { opacity: .5; }
+.hr-tabelle tbody tr:hover td { background: var(--hr-aus); }
+.hr-tabelle .btn { height: 30px; font-size: 13px; }
+.hr-tabelle .gedaempft { color: var(--hr-muted); }
+
+/* ── Offene Anträge ── */
+.hr-antraege { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.hr-antrag { padding: 18px 20px; border-radius: 22px; display: flex; flex-direction: column; gap: 8px; }
+.hr-antrag h3 { margin: 0; font-size: 17px; }
+.hr-antrag .zeitraum { font-size: 15px; font-weight: 600; }
+.hr-antrag dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.hr-antrag dt { color: var(--hr-muted); }
+.hr-antrag dd { margin: 0; }
+.hr-antrag .knoepfe { display: flex; gap: 8px; margin-top: 6px; }
+.hr-leer { padding: 18px 20px; border-radius: 22px; color: var(--hr-muted); }
+
+/* ── Einstellungen ── */
+.hr-zeitraeume { display: flex; flex-direction: column; gap: 8px; }
+.hr-zeitraum { display: grid; grid-template-columns: 1fr 1fr 1.4fr auto; gap: 8px; align-items: center; }
+.hr-filter { flex-direction: row !important; align-items: center; margin-left: auto; }
+.hr-filter select { width: auto; min-width: 200px; }
+
+/* ── Dialoge (schließen nur über die Knöpfe oder Esc) ── */
+.hr-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--hr-rand); border-radius: 26px;
+  background: var(--hr-deckend); color: var(--hr-text); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
+.hr-dialog.breit { width: min(860px, calc(100vw - 32px)); }
+.hr-dialog::backdrop { background: rgba(20, 16, 16, .38); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.hr-dialog form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.hr-knoepfe { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.hr-platz { flex: 1; }
+.hr-knoepfe .btn.primary { align-self: auto; }
+.hr-wochentage { border: 0; margin: 0; padding: 0; }
+.hr-wochentage legend { font-size: 13px; font-weight: 600; color: var(--hr-muted); margin-bottom: 6px; }
+.hr-wochentage div { display: flex; gap: 6px; flex-wrap: wrap; }
+.hr-wochentage label { flex-direction: row; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px; background: var(--hr-aus); color: var(--hr-text); cursor: pointer; }
+.hr-vorschau { max-height: 340px; overflow: auto; font-size: 13px; }
+.hr-vorschau:empty { display: none; }
+.hr-vorschau .zahlen { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.hr-vorschau ul { margin: 0; padding: 0; list-style: none; }
+.hr-vorschau li { display: grid; grid-template-columns: 90px 1fr; gap: 4px 10px; padding: 6px 0; border-top: 1px solid var(--hr-linie); }
+.hr-vorschau li b { font-weight: 600; }
+.hr-vorschau li .hr-pille { justify-self: start; }
+.hr label > span:first-child { display: block; }
+.hr-vorschau .hinweis { padding: 8px 12px; margin-bottom: 8px; border-radius: 10px; background: var(--hr-aus); }
+.hr-vorschau .hinweis.warn { background: var(--hr-warn-bg); color: var(--hr-warn); }
+
+/* ── Anmeldung / Fehler ── */
+.hr-hinweisbox { max-width: 440px; margin: 8vh auto 0; padding: 32px 28px; text-align: center; border-radius: 28px; }
+.hr-hinweisbox h1 { margin: 12px 0 6px; font-size: 24px; }
+.hr-hinweisbox p { margin: 0 0 20px; color: var(--hr-muted); }
+.hr-hinweisbox .i { width: 30px; height: 30px; color: var(--hr-akzent-ink); }
+.hr-hinweisbox .btn.primary { display: inline-flex; text-decoration: none; height: 42px; padding: 0 20px; align-items: center; background: var(--hr-akzent); border-color: var(--hr-akzent); color: #fff; }
+.hr-fehler { max-width: 640px; margin: 0 auto; padding: 12px 16px; border-radius: 16px; background: var(--hr-fehler-bg); color: var(--hr-fehler); }
+
+/* ── Tablet und Handy ── */
+@media (max-width: 1000px) {
+  .hr-konto { grid-template-columns: repeat(3, 1fr); }
+  .hr-wert.haupt { grid-column: span 3; }
+  .hr-spalten { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .hr-seite { padding: 16px 16px 40px; gap: 20px; }
+  .hr-kopf { top: 10px; gap: 10px; padding: 8px 8px 8px 16px; }
+  body.hr .hr-kopf .brand-logo { height: 22px; }
+  .hr-modul { padding-left: 10px; font-size: 14px; }
+  .hr-modul .i { display: none; }
+  .hr-user { padding: 0; background: none; }
+  .hr-user-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hr-initialen { width: 40px; height: 40px; }
+  .hr h1 { font-size: 24px; }
+  .hr-tabs { margin-bottom: 18px; }
+  .hr-tabs button { padding: 0 12px; }
+  .hr-konto { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hr-wert.haupt { grid-column: span 2; }
+  .hr-wert { padding: 12px 14px; border-radius: 18px; }
+  .hr-wert b { font-size: 22px; }
+  .hr-wert.haupt b { font-size: 34px; }
+  .hr-karte { padding: 18px; border-radius: 22px; }
+  .hr-felder.zwei { grid-template-columns: 1fr; }
+  .hr-plan .name { min-width: 120px; max-width: 130px; padding: 0 8px; }
+  .hr-zeitraum { grid-template-columns: 1fr 1fr; }
+  .hr-filter { margin-left: 0; }
+  .hr-filter select { min-width: 0; }
+  .hr-jahr .btn { margin-left: 0; }
+}

@@ -1,0 +1,313 @@
+<?php
+declare(strict_types=1);
+/* Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Monatsplan).
+   Eigene Dokumente (regeln/datenverantwortung.toml): hr-personal, hr-abwesenheiten, hr-einstellungen.
+   Mitarbeiterkonten liest das Modul nur über users_load() des Plattformkerns (Verknüpfung Person ↔ Anmeldung).
+
+   Fachliche Regeln (mit dem Inhaber abgestimmt, Oktober 2026):
+   - Genehmigung durch eine zentrale Stelle (Recht hr.verwalten); Mitarbeiter beantragen nur Urlaub.
+   - Krank (K), Gleittag (G) und freie Tage (X) trägt nur die Personalstelle ein.
+   - Resturlaub wird ins Folgejahr übertragen und verfällt am 31.03., soweit er bis dahin nicht genommen ist.
+   - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
+     und die Personalstelle.
+   - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“). */
+if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+
+const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag'];
+const HR_STATUS = ['beantragt', 'genehmigt', 'abgelehnt', 'zurueckgezogen', 'storniert'];
+const HR_AKTIV = ['beantragt', 'genehmigt'];
+const HR_UEBERTRAG_BIS = '03-31';            // Resturlaub aus dem Vorjahr verfällt nach diesem Tag
+const HR_WOCHENTAGE = [1 => 'Mo', 2 => 'Di', 3 => 'Mi', 4 => 'Do', 5 => 'Fr', 6 => 'Sa', 7 => 'So'];
+const HR_MONATE = [1 => 'Januar', 2 => 'Februar', 3 => 'März', 4 => 'April', 5 => 'Mai', 6 => 'Juni', 7 => 'Juli', 8 => 'August',
+    9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Dezember'];
+const HR_MAX_PERSONEN = 500;
+const HR_MAX_EINTRAEGE = 20000;
+
+/* ---------------- Datum ---------------- */
+
+function hr_heute(): string { return date('Y-m-d'); }
+function hr_ts(string $d): int { return (int)gmmktime(0, 0, 0, (int)substr($d, 5, 2), (int)substr($d, 8, 2), (int)substr($d, 0, 4)); }
+function hr_plus(string $d, int $n): string { return gmdate('Y-m-d', hr_ts($d) + $n * 86400); }
+function hr_wochentag(string $d): int { return (int)gmdate('N', hr_ts($d)); }
+function hr_datum($v): ?string
+{
+    if (!is_string($v) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $v, $m)) return null;
+    return checkdate((int)$m[2], (int)$m[3], (int)$m[1]) && (int)$m[1] >= 2000 && (int)$m[1] <= 2100 ? $v : null;
+}
+function hr_de(string $d): string { return substr($d, 8, 2) . '.' . substr($d, 5, 2) . '.' . substr($d, 0, 4); }
+function hr_zeitraum_text(string $von, string $bis): string { return $von === $bis ? hr_de($von) : hr_de($von) . '–' . hr_de($bis); }
+
+/* Ostersonntag (gregorianisch, Verfahren nach Meeus/Jones/Butcher) – ohne PHP-Erweiterung „calendar“ */
+function hr_ostern(int $j): string
+{
+    $a = $j % 19; $b = intdiv($j, 100); $c = $j % 100; $d = intdiv($b, 4); $e = $b % 4; $f = intdiv($b + 8, 25);
+    $g = intdiv($b - $f + 1, 3); $h = (19 * $a + $b - $d - $g + 15) % 30; $i = intdiv($c, 4); $k = $c % 4;
+    $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7; $m = intdiv($a + 11 * $h + 22 * $l, 451);
+    $mon = intdiv($h + $l - 7 * $m + 114, 31); $tag = (($h + $l - 7 * $m + 114) % 31) + 1;
+    return sprintf('%04d-%02d-%02d', $j, $mon, $tag);
+}
+
+/* Gesetzliche Feiertage in Hamburg: Datum → Name */
+function hr_feiertage(int $j): array
+{
+    static $cache = [];
+    if (isset($cache[$j])) return $cache[$j];
+    $o = hr_ostern($j);
+    $f = [sprintf('%04d-01-01', $j) => 'Neujahr', hr_plus($o, -2) => 'Karfreitag', hr_plus($o, 1) => 'Ostermontag',
+          sprintf('%04d-05-01', $j) => 'Tag der Arbeit', hr_plus($o, 39) => 'Christi Himmelfahrt', hr_plus($o, 50) => 'Pfingstmontag',
+          sprintf('%04d-10-03', $j) => 'Tag der Deutschen Einheit', sprintf('%04d-10-31', $j) => 'Reformationstag',
+          sprintf('%04d-12-25', $j) => '1. Weihnachtstag', sprintf('%04d-12-26', $j) => '2. Weihnachtstag'];
+    ksort($f);
+    return $cache[$j] = $f;
+}
+function hr_feiertag(string $d): ?string { return hr_feiertage((int)substr($d, 0, 4))[$d] ?? null; }
+
+/* Arbeitstag der Person (Wochentag laut Arbeitstagen, kein Feiertag) */
+function hr_arbeitstag(array $p, string $d): bool { return in_array(hr_wochentag($d), $p['arbeitstage'], true) && hr_feiertag($d) === null; }
+
+/* Arbeitstage einer Person im Zeitraum (optional nur innerhalb [$ab, $bis2]; ohne freie Tage aus $frei: Datum → true) */
+function hr_tage(array $p, string $von, string $bis, ?string $ab = null, ?string $bis2 = null, array $frei = []): array
+{
+    $out = [];
+    $d = $ab !== null && $ab > $von ? $ab : $von;
+    $ende = $bis2 !== null && $bis2 < $bis ? $bis2 : $bis;
+    for (; $d <= $ende; $d = hr_plus($d, 1)) if (hr_arbeitstag($p, $d) && !isset($frei[$d])) $out[] = $d;
+    return $out;
+}
+
+/* Einzeln eingetragene freie Tage („x“) einer Person: Datum → true */
+function hr_freie_tage(array $eintraege, string $person): array
+{
+    $out = [];
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $person || $e['art'] !== 'X' || !in_array($e['status'], HR_AKTIV, true)) continue;
+        for ($d = $e['von']; $d <= $e['bis']; $d = hr_plus($d, 1)) $out[$d] = true;
+    }
+    return $out;
+}
+
+/* ---------------- Daten lesen und prüfen ---------------- */
+
+function hr_person_norm(array $p): array
+{
+    $at = array_values(array_unique(array_filter(array_map('intval', (array)($p['arbeitstage'] ?? [1, 2, 3, 4, 5])), function ($w) { return $w >= 1 && $w <= 7; })));
+    sort($at);
+    $jahre = [];
+    foreach ((array)($p['jahre'] ?? []) as $j => $v) {
+        if (!preg_match('/^\d{4}$/', (string)$j) || !is_array($v)) continue;
+        $jahre[(string)$j] = ['anspruch' => isset($v['anspruch']) && is_numeric($v['anspruch']) ? (float)$v['anspruch'] : null,
+                              'uebertrag' => isset($v['uebertrag']) && is_numeric($v['uebertrag']) ? (float)$v['uebertrag'] : null];
+    }
+    ksort($jahre);
+    return ['id' => (string)($p['id'] ?? ''), 'vorname' => (string)($p['vorname'] ?? ''), 'nachname' => (string)($p['nachname'] ?? ''),
+            'abteilung' => (string)($p['abteilung'] ?? ''), 'pos' => (int)($p['pos'] ?? 0), 'nutzer' => isset($p['nutzer']) && $p['nutzer'] !== '' ? (string)$p['nutzer'] : null,
+            'arbeitstage' => $at ?: [1, 2, 3, 4, 5], 'aktiv' => !array_key_exists('aktiv', $p) || (bool)$p['aktiv'], 'jahre' => $jahre,
+            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'geaendert']));
+}
+function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
+
+function hr_personal(): array
+{
+    $d = store_read('hr-personal') ?? [];
+    $ps = array_map('hr_person_norm', array_values(array_filter((array)($d['personen'] ?? []), 'is_array')));
+    usort($ps, function ($a, $b) { return [$a['pos'] ?: 9999, hr_name($a)] <=> [$b['pos'] ?: 9999, hr_name($b)]; });
+    return ['rev' => (int)($d['rev'] ?? 0), 'personen' => $ps];
+}
+function hr_abwesenheiten(): array
+{
+    $d = store_read('hr-abwesenheiten') ?? [];
+    return ['rev' => (int)($d['rev'] ?? 0), 'eintraege' => array_values(array_filter((array)($d['eintraege'] ?? []), function ($e) {
+        return is_array($e) && isset($e['id'], $e['person'], $e['art'], $e['von'], $e['bis'], $e['status']);
+    }))];
+}
+function hr_einstellungen(): array
+{
+    $d = store_read('hr-einstellungen') ?? [];
+    $z = function ($l) { return array_values(array_filter((array)$l, function ($x) { return is_array($x) && hr_datum($x['von'] ?? null) && hr_datum($x['bis'] ?? null); })); };
+    return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $z($d['sperren'] ?? []), 'ferien' => $z($d['ferien'] ?? [])];
+}
+/* Reihenfolge für Kalender und Export: Abteilungen nach der kleinsten Position ihrer Mitarbeiter, darin nach Position
+   (wie in der Planungsdatei: jede Abteilung ein Block, auch wenn Positionen später ergänzt wurden) */
+function hr_nach_abteilung(array $personen): array
+{
+    $erste = [];
+    foreach ($personen as $p) { $k = mb_strtolower($p['abteilung']); $erste[$k] = min($erste[$k] ?? PHP_INT_MAX, $p['pos'] ?: 9999); }
+    usort($personen, function ($a, $b) use ($erste) {
+        $ka = mb_strtolower($a['abteilung']); $kb = mb_strtolower($b['abteilung']);
+        return [$erste[$ka], $ka, $a['pos'] ?: 9999, hr_name($a)] <=> [$erste[$kb], $kb, $b['pos'] ?: 9999, hr_name($b)];
+    });
+    return $personen;
+}
+function hr_personen_index(array $personal): array { $o = []; foreach ($personal['personen'] as $p) $o[$p['id']] = $p; return $o; }
+
+/* Person des angemeldeten Mitarbeiters (Verknüpfung über das Mitarbeiterkonto) */
+function hr_ich(array $personal, array $me): ?array
+{
+    foreach ($personal['personen'] as $p) if ($p['nutzer'] !== null && $p['nutzer'] === (string)$me['id'] && $p['aktiv']) return $p;
+    return null;
+}
+
+/* Zeiträume (Urlaubssperren, Ferien) prüfen: [{von, bis, text}] */
+function hr_zeitraeume_pruefen($l, string $was): array
+{
+    if (!is_array($l) || !array_is_list($l) || count($l) > 200) throw new InvalidArgumentException("Ungültige Angaben ($was).");
+    $out = [];
+    foreach ($l as $i => $x) {
+        $von = hr_datum($x['von'] ?? null); $bis = hr_datum($x['bis'] ?? null);
+        if (!$von || !$bis) throw new InvalidArgumentException("$was, Zeile " . ($i + 1) . ': bitte Beginn und Ende angeben.');
+        if ($bis < $von) throw new InvalidArgumentException("$was, Zeile " . ($i + 1) . ': das Ende liegt vor dem Beginn.');
+        $out[] = ['von' => $von, 'bis' => $bis, 'text' => s($x['text'] ?? '', 80) ?? ''];
+    }
+    usort($out, function ($a, $b) { return $a['von'] <=> $b['von']; });
+    return $out;
+}
+function hr_in_zeitraum(array $liste, string $d): ?array { foreach ($liste as $z) if ($z['von'] <= $d && $d <= $z['bis']) return $z; return null; }
+function hr_ueberschneidung(array $liste, string $von, string $bis): ?array { foreach ($liste as $z) if ($z['von'] <= $bis && $von <= $z['bis']) return $z; return null; }
+
+/* ---------------- Urlaubskonto ---------------- */
+
+/* Anspruch eines Jahres: Eintrag des Jahres, sonst der letzte frühere Eintrag (gleichbleibender Anspruch) */
+function hr_anspruch(array $p, int $jahr): float
+{
+    $wert = 0.0;
+    foreach ($p['jahre'] as $j => $v) if ((int)$j <= $jahr && $v['anspruch'] !== null) $wert = $v['anspruch'];
+    return $wert;
+}
+
+/* Urlaubskonto einer Person für ein Jahr. Übertrag: von Hand gesetzt (z. B. erstes Jahr im System) oder Rest des
+   Vorjahres. Der Übertrag wird zuerst verbraucht; was davon bis 31.03. nicht genommen (genehmigt) ist, verfällt. */
+function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, int $tiefe = 0): array
+{
+    $heute = $heute ?? hr_heute();
+    $u = ['genommen' => 0, 'geplant' => 0, 'beantragt' => 0, 'bis_frist' => 0];
+    $frist = sprintf('%04d-%s', $jahr, HR_UEBERTRAG_BIS);
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $p['id']) continue;
+        if ($e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true)) continue;
+        foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) {
+            if ($e['status'] === 'beantragt') { $u['beantragt']++; continue; }
+            $u[$d <= $heute ? 'genommen' : 'geplant']++;
+            if ($d <= $frist) $u['bis_frist']++;
+        }
+    }
+    $anspruch = hr_anspruch($p, $jahr);
+    $manuell = $p['jahre'][(string)$jahr]['uebertrag'] ?? null;
+    if ($manuell !== null) $uebertrag = $manuell;
+    else {
+        // automatisch nur, wenn für das Vorjahr ein Anspruch bekannt ist (sonst z. B. nach einer Übernahme negative Reste)
+        $vorjahrDaten = (bool)array_filter($p['jahre'], function ($v, $j) use ($jahr) { return (int)$j < $jahr && $v['anspruch'] !== null; }, ARRAY_FILTER_USE_BOTH);
+        $uebertrag = $vorjahrDaten && $tiefe < 30 ? hr_konto($p, $eintraege, $jahr - 1, $heute, $tiefe + 1)['rest_jahresende'] : 0.0;
+    }
+    $offen = max(0.0, $uebertrag - $u['bis_frist']);          // bis zur Frist noch nicht verplanter Übertrag
+    $verfallen = $heute > $frist ? $offen : 0.0;
+    $rest = $anspruch + $uebertrag - $verfallen - $u['genommen'] - $u['geplant'];
+    // Rest zum Jahresende (für den Übertrag ins Folgejahr): Verfall gilt dann in jedem Fall
+    $restEnde = $anspruch + $uebertrag - $offen - $u['genommen'] - $u['geplant'];
+    return ['jahr' => $jahr, 'anspruch' => $anspruch, 'uebertrag' => $uebertrag, 'uebertrag_manuell' => $manuell !== null,
+            'frist' => $frist, 'verfaellt' => $heute <= $frist ? $offen : 0.0, 'verfallen' => $verfallen,
+            'genommen' => $u['genommen'], 'geplant' => $u['geplant'], 'beantragt' => $u['beantragt'],
+            'rest' => $rest, 'verfuegbar' => $rest - $u['beantragt'], 'rest_jahresende' => $restEnde];
+}
+
+/* ---------------- Einträge (Anträge und Eintragungen der Personalstelle) ---------------- */
+
+/* Eintrag für die Ausgabe. $voll: Personalstelle oder die Person selbst (Art, Notiz, Entscheidung) */
+function hr_eintrag_aus(array $e, array $p, array $frei = []): array
+{
+    return ['id' => $e['id'], 'person' => $e['person'], 'name' => hr_name($p), 'art' => $e['art'], 'artText' => HR_ARTEN[$e['art']] ?? $e['art'],
+            'von' => $e['von'], 'bis' => $e['bis'], 'tage' => $e['art'] === 'X' ? count(hr_tage($p, $e['von'], $e['bis'])) : count(hr_tage($p, $e['von'], $e['bis'], null, null, $frei)), 'status' => $e['status'],
+            'notiz' => (string)($e['notiz'] ?? ''), 'vertretung' => $e['vertretung'] ?? null, 'quelle' => (string)($e['quelle'] ?? ''),
+            'erfasst' => $e['erfasst'] ?? null, 'entscheidung' => $e['entscheidung'] ?? null];
+}
+
+/* Überschneidung mit einem aktiven Eintrag derselben Person (außer $ohne) */
+function hr_kollision(array $eintraege, string $person, string $von, string $bis, ?string $ohne = null): ?array
+{
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $person || $e['id'] === $ohne || !in_array($e['status'], HR_AKTIV, true)) continue;
+        if ($e['von'] <= $bis && $von <= $e['bis']) return $e;
+    }
+    return null;
+}
+
+function hr_zeitraum_pruefen(array $b): array
+{
+    $von = hr_datum($b['von'] ?? null); $bis = hr_datum($b['bis'] ?? null);
+    if (!$von || !$bis) throw new InvalidArgumentException('Bitte Beginn und Ende angeben.');
+    if ($bis < $von) throw new InvalidArgumentException('Das Ende liegt vor dem Beginn.');
+    if (hr_ts($bis) - hr_ts($von) > 366 * 86400) throw new InvalidArgumentException('Ein Eintrag umfasst höchstens ein Jahr.');
+    return [$von, $bis];
+}
+
+function hr_neue_id(string $prefix): string { return $prefix . bin2hex(random_bytes(6)); }
+
+/* Abwesenheiten speichern (unter Sperre aufrufen) */
+function hr_abwesenheiten_schreiben(array $d): void
+{
+    if (count($d['eintraege']) > HR_MAX_EINTRAEGE) throw new InvalidArgumentException('Zu viele Einträge.');
+    store_write('hr-abwesenheiten', ['rev' => $d['rev'] + 1, 'eintraege' => array_values($d['eintraege'])]);
+}
+function hr_personal_schreiben(array $d): void
+{
+    if (count($d['personen']) > HR_MAX_PERSONEN) throw new InvalidArgumentException('Zu viele Mitarbeiter.');
+    store_write('hr-personal', ['rev' => $d['rev'] + 1, 'personen' => array_values($d['personen'])]);
+}
+
+/* ---------------- Monatsplan und Kalender ---------------- */
+
+/* Tageskopf eines Monats: Wochentag, Wochenende, Feiertag, Ferien, Urlaubssperre */
+function hr_monatstage(int $jahr, int $monat, array $einst): array
+{
+    $n = (int)gmdate('t', (int)gmmktime(0, 0, 0, $monat, 1, $jahr));
+    $out = [];
+    for ($t = 1; $t <= $n; $t++) {
+        $d = sprintf('%04d-%02d-%02d', $jahr, $monat, $t);
+        $w = hr_wochentag($d);
+        $out[] = ['tag' => $t, 'datum' => $d, 'wt' => HR_WOCHENTAGE[$w], 'wochenende' => $w >= 6, 'feiertag' => hr_feiertag($d),
+                  'ferien' => (hr_in_zeitraum($einst['ferien'], $d)['text'] ?? null) !== null, 'sperre' => hr_in_zeitraum($einst['sperren'], $d) !== null];
+    }
+    return $out;
+}
+
+/* Kürzel je Person und Tag eines Monats.
+   $sicht: 'voll' (Personalstelle: Art, auch beantragt mit „?“), 'eigen' (eigene Zeile wie voll), 'kollege' (nur „A“ =
+   abwesend, nur genehmigt, nie der Grund; freie Tage einer verkürzten Woche ebenfalls „A“). */
+function hr_zeile(array $p, array $eintraege, array $tage, string $sicht): array
+{
+    $out = [];
+    foreach ($tage as $t) {
+        if ($t['wochenende'] || $t['feiertag'] !== null) continue;
+        if (!in_array(hr_wochentag($t['datum']), $p['arbeitstage'], true)) $out[$t['tag']] = $sicht === 'kollege' ? 'A' : 'x';
+    }
+    $erster = $tage[0]['datum']; $letzter = $tage[count($tage) - 1]['datum'];
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $p['id'] || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $erster || $e['von'] > $letzter) continue;
+        if ($sicht === 'kollege' && $e['status'] !== 'genehmigt') continue;
+        foreach ($tage as $t) {
+            $d = $t['datum'];
+            if ($d < $e['von'] || $d > $e['bis'] || $t['wochenende'] || $t['feiertag'] !== null) continue;
+            if ($e['art'] === 'X') { $out[$t['tag']] = $sicht === 'kollege' ? 'A' : 'x'; continue; }
+            if (!in_array(hr_wochentag($d), $p['arbeitstage'], true)) continue;
+            $out[$t['tag']] = $sicht === 'kollege' ? 'A' : $e['art'] . ($e['status'] === 'beantragt' ? '?' : '');
+        }
+    }
+    return $out;
+}
+
+/* Monatsplan: alle aktiven Mitarbeiter, gruppiert nach Abteilung (Reihenfolge laut Position) */
+function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
+{
+    $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
+    $tage = hr_monatstage($jahr, $monat, $einst);
+    $ich = hr_ich($personal, $me);
+    $zeilen = [];
+    foreach (hr_nach_abteilung($personal['personen']) as $p) {
+        if (!$p['aktiv']) continue;
+        $eigen = $ich !== null && $ich['id'] === $p['id'];
+        $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'ich' => $eigen,
+                     'tage' => (object)hr_zeile($p, $abw['eintraege'], $tage, $voll || $eigen ? 'voll' : 'kollege')];
+    }
+    return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen,
+            'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']];
+}
