@@ -22,10 +22,13 @@ services:
       # startet die Anwendung trotzdem (Release vor dem Konsolenschritt): Schlüssel wie beim Eingabebereich, Client fehlt in Keycloak
       OIDC_SECRET_VERWALTUNG: ${OIDC_SECRET_VERWALTUNG:-noch-nicht-eingerichtet}
       OIDC_CRYPTO_VERWALTUNG: ${OIDC_CRYPTO_VERWALTUNG:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
+      # Bestand (bestand.dashboard-stafl.de, Stand 4): wie bei der Verwaltung – startbar vor dem Konsolenschritt
+      OIDC_SECRET_BESTAND: ${OIDC_SECRET_BESTAND:-noch-nicht-eingerichtet}
+      OIDC_CRYPTO_BESTAND: ${OIDC_CRYPTO_BESTAND:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
     networks:
       default:
         aliases:
-          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung. – nur mit dieser Datei
+          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand. – nur mit dieser Datei
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244

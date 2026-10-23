@@ -2,7 +2,7 @@
 
 Stand: **Schritte 1–8 ausgeführt am 22.10.2026** (Probe mit dem eigenen Konto erfolgreich), offen ist Schritt 9.
 Jeder Schritt mit „Freigabe“ wurde nach ausdrücklicher Zustimmung des Inhabers ausgeführt (AGENTS.md: Server, DNS, Anmeldung). Grundlage: [ADR-003](adr-003-domains-anmeldung.md), in der CI
-vollständig geprüft (`tests/oidc/`, 164 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
+vollständig geprüft (`tests/oidc/`, 197 Prüfungen) und die Betriebskonfiguration in `deploy/anmeldung/` (`pruefen.sh`).
 
 ## Ziel nach der Inbetriebnahme
 
@@ -12,7 +12,8 @@ vollständig geprüft (`tests/oidc/`, 164 Prüfungen) und die Betriebskonfigurat
 | `login.dashboard-stafl.de` | Keycloak, nur Realm `mitarbeiter` | Passwort; zweiter Faktor (Einmalcode oder Passkey) Pflicht für Administratoren und einzeln verpflichtete, sonst freiwillig |
 | `dashboard-stafl.de` | Mitarbeiter-Dashboard | über Keycloak |
 | `angebot.dashboard-stafl.de` | Mitarbeiter-Eingabe (dieselbe Anwendung wie `/admin/`) | über Keycloak |
-| `verwaltung.dashboard-stafl.de` | Verwaltung (dieselbe Anwendung, nur Verwaltungsbereiche; seit Roadmap 10a, Konsolenschritt `konten.sh realm-aktualisieren`) | über Keycloak |
+| `verwaltung.dashboard-stafl.de` | Verwaltung (dieselbe Anwendung, nur Verwaltungsbereiche; seit Roadmap 10a, Konsolenschritt `konten.sh realm-aktualisieren`); `/import/` öffnet die Importzentrale (Kachel „Import“) | über Keycloak |
+| `bestand.dashboard-stafl.de` | Bestand (dieselbe Anwendung, nur die Bestandsliste mit Bestandsimport; Phase 1, Konsolenschritt `konten.sh realm-aktualisieren` Stand 4) | über Keycloak |
 | übrige `*.dashboard-stafl.de` | 503-Platzhalter bis zur Freigabe des Moduls (GR-105) | – |
 
 Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nutzen; die alte Anmeldung unter
@@ -70,7 +71,13 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   1–15 Minuten und zeigt dann – um die Sperre nicht zu verraten – dieselbe Meldung wie bei einem falschen Code, auch
   wenn der Code stimmt. Abhilfe: warten oder `konten.sh entsperren <name>`. Weitere häufige Ursachen: alter Eintrag
   „STAFL-Plattform“ in der Authenticator-App (löschen, nur den neuesten verwenden) und Leerzeichen im Code (entfernt
-  das Design inzwischen selbst; Keycloak nimmt „123 456“ nicht an).
+  das Design inzwischen selbst; Keycloak nimmt „123 456“ nicht an). Häufigster Fall laut `konten.sh pruefen`: derselbe Code
+  kurz nach einer Anmeldung noch einmal eingegeben (zweiter Tab, Neuladen) – jeder Code gilt nur einmal.
+- **Anmeldung klappt nicht („Ungültiger Einmalcode“ o. Ä.):** zuerst `konten.sh pruefen <name>` – ändert nichts und zeigt:
+  Konto aktiv/gesperrt, automatische Sperre nach Fehlversuchen, eingerichtete Faktoren (mehrere Einmalcode-Geräte sind
+  eine häufige Ursache: die Anmeldeseite prüft nur das dort ausgewählte Gerät), die letzten zehn Anmeldeereignisse mit
+  Ursache auf Deutsch und die Serveruhr samt Abweichung (über ±15 s werden Codes abgelehnt). Jeder Code gilt nur einmal –
+  nach einem Fehlschlag auf den nächsten Code warten.
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
 - **Rechte** bleiben in der Anwendung (Nutzer → Rollen und Rechte). Keycloak sagt nur „wer“; ein in der Anwendung

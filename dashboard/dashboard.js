@@ -71,7 +71,63 @@
     }).join('');
     const frei = kacheln.filter((m) => m.kachel.zugang).length;
     $('#db-sub').textContent = `${frei} von ${kacheln.length} Anwendungen für Sie verfügbar`;
+    einpassen();
   }
+
+  /* Lange Kachelnamen (Registernamen wie „Qualitätssicherung“) nicht mitten im Wort trennen: Schrift in halben Pixeln
+     verkleinern, bis das längste Wort in die Kachel passt – höchstens auf drei Viertel der Grundgröße. Reicht das
+     nicht, darf das Wort als Notlösung umbrechen (Klasse db-name-umbruch), statt über die Kachel hinauszuragen. */
+  function namenEinpassen() {
+    for (const el of document.querySelectorAll('#db-grid .db-name')) {
+      el.style.fontSize = ''; el.classList.remove('db-name-umbruch');
+      const basis = parseFloat(getComputedStyle(el).fontSize), min = Math.max(12, basis * .75);
+      let g = basis;
+      while (el.scrollWidth > el.clientWidth + 1 && g > min) { g = Math.max(min, g - .5); el.style.fontSize = g + 'px'; }
+      if (el.scrollWidth > el.clientWidth + 1) el.classList.add('db-name-umbruch');
+    }
+  }
+
+  /* Absperrband je gesperrter Kachel so legen, dass es weder den Namen (oben links) noch die Status-Pille (unten links)
+     schneidet: das Band ist gedreht (rechts höher), also zählt beim Namen sein rechtes Ende, bei der Pille ihr linker
+     Rand. Mittellinie in die Mitte des freien Bereichs. Reicht der Platz nicht (breite, flache Kachel, sehr langer
+     Name), wird die Kachel so viel höher, dass das Band passt – die Pille rutscht nach unten, die Reihe bleibt gleich hoch.
+     Am Handy ist die Pille nur für Screenreader da und das Band unten verankert (Stylesheet): dort wird die Kachel nur
+     höher, falls ein langer Name sonst ans Band reicht. */
+  const RAND = 4;
+  function bandLage(t) {
+    const band = t.querySelector('.db-band'), pille = t.querySelector('.db-badge'), name = t.querySelector('.db-name');
+    if (!band || !pille || !name) return null;
+    const k = t.getBoundingClientRect(), p = pille.getBoundingClientRect();
+    const m = new DOMMatrix(getComputedStyle(band).transform), w = Math.atan2(m.b, m.a);
+    const steig = Math.abs(Math.tan(w)), halb = band.offsetHeight / 2 / Math.cos(w), mitte = k.left + k.width / 2;
+    const r = document.createRange(); r.selectNodeContents(name);
+    const z = [...r.getClientRects()];
+    if (!z.length) return null;
+    const unten = Math.max(...z.map((q) => q.bottom)) - k.top, rechts = Math.max(...z.map((q) => q.right));
+    const ab = unten + halb + steig * (rechts - mitte) + RAND;              // tiefste Lage, die den Namen frei lässt
+    if (pille.parentElement.getBoundingClientRect().width < 2) {            // Handy: Pille nur für Screenreader
+      return { hoehe: k.height, ab, bis: band.offsetTop + band.offsetHeight / 2, fest: true };
+    }
+    return { hoehe: k.height, ab, bis: p.top - k.top - halb + steig * (p.left - mitte) - RAND };   // bis: höchste Lage vor der Pille
+  }
+  function baenderLegen() {
+    const gesperrt = [...document.querySelectorAll('#db-grid .gesperrt')];
+    for (const t of gesperrt) { t.style.removeProperty('--db-band-y'); t.style.minHeight = ''; }
+    for (const t of gesperrt) {
+      const l = bandLage(t);
+      if (l && l.ab > l.bis) t.style.minHeight = Math.ceil(l.hoehe + l.ab - l.bis) + 'px';
+    }
+    for (const t of gesperrt) {
+      const l = bandLage(t);
+      if (l && !l.fest) t.style.setProperty('--db-band-y', Math.round((l.ab + l.bis) / 2) + 'px');
+    }
+  }
+
+  let breite = 0;
+  function einpassen() { breite = $('#db-grid').clientWidth; namenEinpassen(); baenderLegen(); }
+  // Neu einpassen, wenn sich die Breite ändert (Fenster, Drehen) und sobald die Schrift geladen ist
+  new ResizeObserver(() => { if ($('#db-grid').clientWidth !== breite && $('#db-grid .db-tile')) einpassen(); }).observe($('#db-grid'));
+  if (document.fonts) document.fonts.ready.then(() => { if ($('#db-grid .db-tile')) einpassen(); });
 
   /* Begrüßung nach Tageszeit (Uhr des Geräts) und Datum, z. B. „Donnerstag, 22. Oktober“ */
   function gruss(stunde) {

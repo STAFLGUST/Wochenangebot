@@ -218,12 +218,22 @@
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
   const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
-  /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung. Ohne Bereich
-     (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
+  /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
+     Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
+     mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
     'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'],
-    'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'angebote'],
+    'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
+    'bestand.intern': ['stock'],
   };
+  /* Überschrift je Bereich ohne Angebotsaktionen in der Kopfzeile (Regel body.bereich-verwaltung in admin.css) */
+  const BEREICH_KOPF = { 'verwaltung.verwaltung': 'Verwaltung', 'bestand.intern': 'Bestand' };
+  /* Startansicht aus der Adresse (#importe oder ?ansicht=importe, z. B. verwaltung…/import/) – nur erlaubte Ansichten */
+  function startAnsicht() {
+    let v = '';
+    try { v = decodeURIComponent(location.hash.slice(1)) || new URLSearchParams(location.search).get('ansicht') || ''; } catch { v = ''; }
+    return VIEWS.includes(v) && viewAllowed(v) ? v : '';
+  }
   function viewAllowed(v) {
     const nur = BEREICH_VIEWS[me && me.bereich];
     if (nur && !nur.includes(v)) return false;
@@ -567,10 +577,15 @@
     document.body.classList.toggle('ro-hist', roHist);   // Preisverlauf hochladen/löschen hängt am eigenen Recht, nicht am Entwurfsrecht
     document.body.classList.toggle('is-admin', can('admin'));
     for (const v of VIEWS) $('#vt-' + v).hidden = !viewAllowed(v);
-    const verw = !!(me && me.bereich === 'verwaltung.verwaltung');
-    document.body.classList.toggle('bereich-verwaltung', verw);
-    $('#topbar h1').textContent = verw ? 'Verwaltung' : 'Eingabebereich';
-    document.title = verw ? 'Verwaltung · STAFL' : 'Wochenangebot · Eingabebereich';
+    const kopf = (me && BEREICH_KOPF[me.bereich]) || '';
+    document.body.classList.toggle('bereich-verwaltung', !!kopf);   // keine Angebotsaktionen in der Kopfzeile
+    document.body.classList.toggle('bereich-bestand', !!(me && me.bereich === 'bestand.intern'));
+    $('#topbar h1').textContent = kopf || 'Eingabebereich';
+    document.title = kopf ? kopf + ' · STAFL' : 'Wochenangebot · Eingabebereich';
+    /* Rückweg zum Dashboard nur unter der zentralen Anmeldung; die Adresse kommt vom Server (nur https) */
+    const dash = me && me.zentral && /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(me.dashboard || '') ? me.dashboard : '';
+    $('#btn-dashboard').hidden = !dash;
+    if (dash) $('#btn-dashboard').href = dash;
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
@@ -671,6 +686,8 @@
       if (n) { saveNote = { type: 'cleanup', count: n }; changed({ render: true }); toast(`${plural(n, 'Artikel', 'Artikel')} vereinheitlicht (ohne „frisch“, Marke Fleischmeister, Herkunft als Kürzel). Zum Übernehmen veröffentlichen.`, 7000); }
       loadMaster().then(() => migrateMaster()).catch(() => {});
     }
+    const start = startAnsicht();
+    if (start) currentView = start;
     if (currentView !== 'edit') setView(currentView);
     startSync();
   }
@@ -2263,6 +2280,23 @@
   /* Ansicht umschalten */
   const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec', 'schutz'];
+  /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
+     Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
+  function navSichtbar(btn) {
+    if (!btn) return;
+    for (const box of [btn.closest('.side-tabs'), btn.closest('.side-nav')]) {
+      if (!box) continue;
+      const b = btn.getBoundingClientRect(), c = box.getBoundingClientRect();
+      if (box.scrollHeight > box.clientHeight + 1) {
+        if (b.top < c.top) box.scrollTop -= c.top - b.top + 12;
+        else if (b.bottom > c.bottom) box.scrollTop += b.bottom - c.bottom + 12;
+      }
+      if (box.scrollWidth > box.clientWidth + 1) {
+        if (b.left < c.left) box.scrollLeft -= c.left - b.left + 24;
+        else if (b.right > c.right) box.scrollLeft += b.right - c.right + 24;
+      }
+    }
+  }
   function setView(v) {
     if (!viewAllowed(v)) v = viewAllowed('edit') ? 'edit' : (VIEWS.find(viewAllowed) || 'edit');
     currentView = v;
@@ -2270,6 +2304,7 @@
       $('#vt-' + k).setAttribute('aria-selected', k === v);
       $('#view-' + k).hidden = k !== v;
     }
+    navSichtbar($('#vt-' + v));
     document.body.classList.toggle('in-hist', v === 'hist');
     document.body.classList.toggle('in-other', v !== 'edit');
     document.body.classList.toggle('in-einzel', v === 'einzel');
@@ -2294,6 +2329,7 @@
     if (v === 'schutz' && window.WA.views.schutz) window.WA.views.schutz();
   }
   for (const k of VIEWS) $('#vt-' + k).addEventListener('click', () => setView(k));
+  window.addEventListener('hashchange', () => { const v = me && startAnsicht(); if (v) setView(v); });
 
   async function renderHistView() {
     const host = $('#view-hist');
@@ -2769,7 +2805,7 @@
     const age = stock.date ? Math.round((Date.parse(isoToday() + 'T12:00:00Z') - Date.parse(stock.date + 'T12:00:00Z')) / 864e5) : null;
     host.innerHTML = `
       <div class="st-info${age != null && age > 2 ? ' old' : ''}">
-        <div><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}<span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · Mengenstand aus dem letzten Import</span><span class="sub">Preise: gespeicherte Wochenstände des Standardangebots, €/kg (abweichende Preisbasis ausdrücklich angegeben). Eingelagert = im Lager. Erfasst = noch nicht eingetroffen. Gesamt verfügbar = eingelagerter + erfasster Bestand.</span></div>
+        <div><span class="st-kopf"><strong>Bestand vom ${stock.date ? esc(dmy(stock.date)) : 'unbekannten Datum'}</strong>${age != null && age > 2 ? ` <span class="st-age">· ${age} Tage alt</span>` : ''}</span><span class="sub">${esc(stock.source || '')}${stock.importedAt ? ` · übernommen ${esc(dateTime(stock.importedAt))}${stock.importedBy ? ' von ' + esc(stock.importedBy) : ''}` : ''} · Mengenstand aus dem letzten Import</span><span class="sub">Preise: gespeicherte Wochenstände des Standardangebots, €/kg (abweichende Preisbasis ausdrücklich angegeben). Eingelagert = im Lager. Erfasst = noch nicht eingetroffen. Gesamt verfügbar = eingelagerter + erfasster Bestand.</span></div>
         ${legendHTML()}
       </div>
       <div class="ed-toolbar">

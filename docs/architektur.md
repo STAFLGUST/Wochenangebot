@@ -86,7 +86,7 @@ Jede Aktion steht im Aktionsregister `regeln/aktionen/<modul>.toml` (Modul, Ober
 | `stock-core.js` | Bestandsliste lesen (WinAB .xls/.xlsx), eingelagerte Partien und erfasste Zugänge trennen, Wochenpreise vergleichen |
 | `webapp.js`, `../sw.js`, `../manifest.json`, `icons/` | Web-App: Hinweis „Zum Home-Bildschirm“, Offline-Speicher (nur Startseite, `/assets/`, öffentliches Wochenangebot; zuerst Netz), Manifest und Symbole |
 | `frontend.js` + `app.css` | Angebotsseite: Filter, Merkliste, Kunden-Login, Bestellwunsch, „Meine Bestellwünsche“, Wartungsseite; `?drucken=1` öffnet den Druckdialog (aus den Einzelangeboten) |
-| `admin.js` + `admin.css` | Eingabebereich: Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten (mit Artikelimport aus der Warenwirtschaft und Filter nach VK-Gruppe; Angebote mit Kundengruppen, `renderOffersView`, Preisimport `ofPreiseDatei`) |
+| `admin.js` + `admin.css` | Eingabebereich (unter der zentralen Anmeldung je Host nur die Ansichten seines Bereichs `me.bereich` = `WA_OBERFLAECHE`: `BEREICH_VIEWS` für `angebot.eingabe`, `verwaltung.verwaltung`, `bestand.intern` – nur Anzeige, Rechte prüft der Server; Startansicht aus der Adresse `?ansicht=<id>` oder `#<id>`, nur erlaubte Ansichten): Anmeldung, Entwurf bearbeiten, gemeinsames Bearbeiten, Angebote, Veröffentlichen, Preisverlauf, Bestand, Sonderposten, Stammdaten (mit Artikelimport aus der Warenwirtschaft und Filter nach VK-Gruppe; Angebote mit Kundengruppen, `renderOffersView`, Preisimport `ofPreiseDatei`) |
 | `admin-einzel.js` | Eingabebereich, Angebot bearbeiten → Einzelangebote erstellen: Übersicht, Bearbeiten, Kundenauswahl mit Suche, Fenster „Artikel hinzufügen“ (VK-Gruppen links, Artikeltabelle mit Häkchen rechts, Suche über alle Gruppen, Details mit Partien und Ankünften), Abweichungspunkt, Freigabe, Drucken/PDF (öffnet die Angebotsseite `?angebot=e-<id>&drucken=1` mit deren Druckdialog), E-Mail als Liste oder PDF-Anhang, Knöpfe in der Kopfleiste (nutzt `window.WA`) |
 | `admin-import.js` + `admin-import.css` | Eingabebereich, Verwaltung → Import (Ansicht `importe`): Importzentrale – Liste der Importarten aus `import_arten`, einheitliche Vorprüfung der Datei (Endung, leer, UTF-16, Excel statt CSV), Leser des Eigentümers aus `window.WA.importLeser` (registriert in `admin.js`: Artikelstammdaten, Bestand, Preisverlauf; in `admin-verwaltung.js`: Kunden, Kundengruppen, VK-Gruppen, Vertreter), Vorschau mit Zahlen, Hinweisen, Zeilen je Art und Filter, Übernahme, Ergebnis |
 | `admin-verwaltung.js` | Eingabebereich, Verwaltung: Nutzer, Bestellungen, Einkauf, Kunden (mit CSV-Import aus der Warenwirtschaft, `kunden_import`), Listen der Stammdaten (`gruppenListe` mit Feldern je Liste: Kundengruppen, VK-Gruppen, Vertreter; CSV-Leser `W.csvZeilen`/`W.csvText`), E-Mail, Protokoll, Sicherheit (nutzt `window.WA` aus `admin.js`) |
@@ -97,10 +97,15 @@ Eingabebereich im Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, 
 eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
 drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über
 `.topbar-inner::before`, damit das Menü darin eigenes Glas bleibt), Seitenleiste als Glaskarte, Karten 28 px, „Preise für“ als
-Segment. Klebende Leisten (Kopfzeile, Werkzeugleiste) sind fast deckend, damit darunter durchlaufende Tabellen auch ohne
+Segment. Karten mit direkter Tabelle scrollen bei Bedarf waagerecht in sich (nie die Seite, z. B. 901–1100 px neben der
+Seitenleiste); mit Fingerbedienung (`pointer: coarse`, bis 900 px) sind Bedienelemente mindestens 36 px groß. Die Seitenleiste
+hält den aktiven Eintrag sichtbar (`navSichtbar` in `admin.js`). Klebende Leisten (Kopfzeile, Werkzeugleiste) sind fast deckend, damit darunter durchlaufende Tabellen auch ohne
 Unschärfe (Software-Darstellung) nicht stören. Ohne `backdrop-filter` (`@supports not`) bzw. bei
 `prefers-reduced-transparency: reduce` deckende Flächen. Die Kundenseite lädt `admin.css` nicht und bleibt im Design „Klar“;
-`app.css` ist dafür unverändert.
+`app.css` gilt dafür unverändert; die Darstellungskorrekturen der Angebotsseite am Ende von `app.css` greifen nur auf der
+Kundenseite (`body:not(.adm):not(.db)`): Tippflächen am Handy ≥ 36 px, Kontrast kleiner grauer Zusätze, Platzhalter mit „…“,
+Wartungsseite ohne Ansichtsumschalter, Symbolknopf `.ibtn` im Bestellwunsch. `legal.css` (Kontakt, Impressum, Datenschutz)
+folgt zusätzlich der dunklen Systemeinstellung.
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
 
@@ -125,6 +130,11 @@ Glaskapsel (Logo, Hell/Dunkel, Nutzer-Chip mit Initialen, Abmelden), Begrüßung
 Glasflächen; Symbolfarbe hängt am Registersymbol (`icon`), nicht am Modul. Nicht nutzbare Kacheln sind blass und tragen
 ein Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige); Wartung und abgeschaltete Module ohne Band, mit eigener Pille.
 Ohne `backdrop-filter` oder bei „Transparenz reduzieren“ deckende Flächen, bei „Bewegung reduzieren“ keine Übergänge.
+Kachelnamen werden nie automatisch getrennt (`hyphens: manual`): `dashboard.js` (`namenEinpassen`) verkleinert die Schrift
+langer Namen in halben Pixeln bis höchstens drei Viertel, erst dann bricht ein Wort als Notlösung um. `baenderLegen` legt das
+gedrehte Band je gesperrter Kachel mittig zwischen Name und Status-Pille (`--db-band-y`) und macht die Kachel nur so viel
+höher wie nötig; beides neu bei Breitenänderung (ResizeObserver) und nach dem Laden der Schrift. Lange Pillen brechen als
+abgerundetes Feld um, Wartungshinweise brechen auch in langen Adressen um.
 
 ## Tests
 

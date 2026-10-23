@@ -30,6 +30,23 @@
 /* Kopf */
 .adm-top { grid-template-columns: auto minmax(0, 1fr) auto; }
 .adm .brand h1 { white-space: nowrap; }
+/* Name der Oberfläche nur für Screenreader und Seitentitel – das Logo genügt als Kopf (Wunsch des Inhabers) */
+body.adm .topbar .brand h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
+/* Rückweg zum Mitarbeiter-Dashboard (nur unter der zentralen Anmeldung sichtbar, admin.js) */
+.dash-back { display: inline-flex; align-items: center; gap: 3px; flex: none; height: 36px; padding: 0 13px 0 8px; margin-right: 2px;
+  border-radius: 999px; background: rgba(28, 26, 25, .06); color: var(--text); font-size: 14px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+.dash-back:hover { background: rgba(28, 26, 25, .12); }
+.dash-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dash-back[hidden] { display: none; }
+.dash-back .i { width: 18px; height: 18px; }
+.dash-back .i.kacheln { display: none; }
+/* schmaler: nur ein Kachel-Symbol (Beschriftung bleibt für Screenreader, Name über title/aria-label) */
+@media (max-width: 1600px) {
+  .dash-back { width: 36px; padding: 0; justify-content: center; }
+  .dash-back .i.zurueck { display: none; }
+  .dash-back .i.kacheln { display: block; }
+  .dash-back .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 .save-state { justify-self: start; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); min-width: 0; }
 .save-state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
 .save-state.saved .dot { background: var(--c-fresh); }
@@ -561,7 +578,7 @@ a.btn#btn-site { text-decoration: none; }
 .sec-rows textarea { font-family: var(--mono); font-size: 13px; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: var(--surface); color: var(--text); resize: vertical; }
 .sec-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-size: 13.5px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--text); }
 .sec-inline input[type="number"] { width: 64px; height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 6px; text-align: right; background: var(--surface); color: var(--text); }
-.sec-foot { display: flex; justify-content: flex-end; }
+.sec-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }   /* umbrechen statt links aus dem Bild zu ragen (Handy) */
 .sectab td { padding: 7px 8px; font-size: 13px; vertical-align: middle; }
 .sectab .nm { font-weight: 600; }
 .sectab .act { text-align: right; white-space: nowrap; width: 1%; }
@@ -793,7 +810,7 @@ body.ro .vtog { display: none; }
 .ordtab td { padding: 9px 10px; vertical-align: top; }
 .ordtab .nm { font-weight: 600; overflow-wrap: anywhere; }
 .ordtab .sub { font-size: 12.5px; color: var(--text-2); }
-.ordtab .ord-nr .nm { font-family: var(--mono); font-size: 13px; }
+.ordtab .ord-nr .nm { font-family: var(--mono); font-size: 13px; white-space: nowrap; overflow-wrap: normal; }   /* „B-2026-0006“ nie am Bindestrich trennen */
 .ordtab .ord-sum, .ordtab .ord-wish { white-space: nowrap; }
 .ord-st { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 99px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .ord-st.ord-neu { background: var(--accent-soft); color: var(--accent); }
@@ -806,8 +823,11 @@ body.ro .vtog { display: none; }
 .ord-note { margin: 0 0 12px; padding: 10px 12px; background: var(--surface-2); border-radius: 8px; font-size: 13.5px; }
 .ordpos { margin: 0 0 8px; }
 .ordpos td, .ordpos th { padding: 6px 8px; font-size: 13.5px; }
+.nobr { white-space: nowrap; }   /* z. B. „E-Mail“ nie am Bindestrich umbrechen */
 .ordpos .r { text-align: right; white-space: nowrap; }
 .ordpos .mono { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+/* „mono“ ist in app.css das runde Kategorie-Monogramm (24 px, Kreis, fett): in der Positionstabelle nur Schriftart */
+.ordpos td.mono { display: table-cell; width: auto; height: auto; border-radius: 0; background: none; font-weight: 400; letter-spacing: 0; }
 .ordpos tfoot td { border-top: 2px solid var(--line); }
 .ord-hist ul { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; }
 .ord-hist li { display: flex; flex-wrap: wrap; gap: 2px 12px; padding: 5px 0; border-bottom: 1px solid var(--line); }
@@ -815,6 +835,7 @@ body.ro .vtog { display: none; }
 .ord-pager { position: static; justify-content: center; }
 @media (max-width: 860px) { .ordtab .ord-wish, .ordtab .ord-mail { display: none; } }
 @media (max-width: 560px) { .ordtab .ord-sum { display: none; } .ord-meta { grid-template-columns: 1fr; } .ordpos th:first-child, .ordpos td:first-child { display: none; } }
+/* Fußzeile: erste Zelle ist die (leere) Spalte der Artikelnummer, damit die Beschriftungen schmal mit ausgeblendeter Nummer erhalten bleiben */
 /* Sonderposten (kurzes MHD, solange der Vorrat reicht) und Kein-Bestand-Zeichen */
 :root { --sale: #c2410c; --sale-bg: #fff1e6; --nostock: #dc2626; }
 @media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --sale: #fb923c; --sale-bg: rgba(251,146,60,.14); --nostock: #f87171; } }
@@ -935,7 +956,7 @@ body.ro .sale-tag { cursor: default; }
   .adm-top { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
   .adm-top .save-state { grid-column: 1 / -1; grid-row: 2; }
 }
-@media (max-width: 1180px) {
+@media (max-width: 1360px) {
   .adm-top .actions .btn:not(.primary) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 /* schmal: Veröffentlichen-Knopf behält Platz für die Zahl der Änderungen */
@@ -1532,6 +1553,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ed-empty { border-style: dashed; border-color: var(--line-strong); }
   body.adm .meta-card { padding: 18px 22px; }
   body.adm .st-info { padding: 14px 20px; }
+  body.adm .st-info + .gcard { margin-top: 16px; }   /* Erklärkarte direkt über einer Tabelle (Stammdaten → Angebote) */
+  body.adm .st-info .st-kopf { display: flex; flex-wrap: wrap; column-gap: .3em; }   /* Datum und „· n Tage alt“ in einer Zeile */
+  body.adm .role-b.r-viewer { color: var(--text-2); }   /* „Nur ansehen“: Kontrast ≥ 4,5:1 auf dem Glas (hell und dunkel) */
   /* Rundung der Karte auch für Kopf- und letzte Tabellenzeile (Hover-Fläche ragt nicht über die Ecken) */
   body.adm .gcard > .ghead { border-radius: var(--r-glas) var(--r-glas) 0 0; }
   body.adm .gcard > table:last-child > tbody > tr:last-child > td:first-child { border-bottom-left-radius: var(--r-glas); }
@@ -1555,6 +1579,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   }
   body.adm .topbar .btn:hover:not(:disabled) { background: rgba(28, 26, 25, .12); }
   body.adm .topbar .btn.icon { width: 40px; padding: 0; }
+  body.adm .topbar .dash-back { height: 40px; background: var(--aus); }
+  @media (max-width: 1600px) { body.adm .topbar .dash-back { width: 40px; } }
+  body.adm .topbar .dash-back:hover { background: rgba(28, 26, 25, .12); }
   body.adm .topbar .btn:disabled { opacity: .45; }
   body.adm .btn.primary, body.adm .topbar .btn.primary {
     background: var(--primaer); color: #fff; border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
@@ -1589,7 +1616,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     background: var(--glas-stark); font-weight: 600; box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 10px rgba(0, 0, 0, .06);
   }
   body.adm .side-tabs button[aria-selected="true"] svg.i { color: var(--nav-akzent); }
-  body.adm .side-sep { padding: 16px 12px 6px; border-top: 1px solid var(--linie); margin-top: 8px; }
+  body.adm .side-sep { padding: 6px 12px; }
+  body.adm .side-tabs > button:not([hidden]) ~ .side-sep { padding-top: 16px; border-top: 1px solid var(--linie); margin-top: 8px; }   /* Linie nur unter sichtbaren Einträgen (Bereichs-Hosts beginnen mit einer Überschrift) */
   body.adm .adm-shell .adm-page { padding-top: 20px; }
 
   /* Große Überschriften, wo ein Bereich einen Titel hat */
@@ -1638,7 +1666,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); padding: 8px 10px; margin: 18px 0 16px;
   }
   body.adm .ed-toolbar .search input { height: 40px; }
-  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: 999px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
+  /* 22 px statt 999 px: einzeilig sieht die Leiste gleich aus, umbrochen (schmale Fenster) bleibt sie ein Rechteck mit
+     runden Ecken statt eines Ovals, aus dem die Pillen herausragen */
+  body.adm .sec-nav { top: calc(var(--topbar-h, 60px) + 8px); background: var(--glas-kopf); border: 1px solid var(--glas-rand); border-radius: 22px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
   body.adm .sec-nav a { border-radius: 999px; border: 0; background: var(--aus); }
   body.adm .sec-nav a:hover { background: var(--glas-stark); }
 
@@ -1650,7 +1680,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ob-tabs button[aria-selected="true"] {
     background: var(--glas-stark); color: var(--text); font-weight: 600; box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 8px rgba(0, 0, 0, .08);
   }
-  body.adm .ob-tabs button small { background: var(--aus); }
+  body.adm .ob-tabs button small { background: var(--aus); color: var(--text-2); }   /* Zähler auf doppeltem Segmentgrund: Kontrast ≥ 4,5:1 */
   body.adm .ob-tabs button[aria-selected="true"] small { background: var(--accent-soft); color: var(--accent); }
 
   /* Hinweise */
@@ -1671,6 +1701,11 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .dlg-head h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
   body.adm .dlg-body { padding: 18px 24px; }
   body.adm .dlg-foot { padding: 14px 24px 20px; border-top-color: var(--linie); }
+  /* Schließen-Knopf behält seine Größe neben langen Titeln (sonst auf dem Handy nur 20 px breit) */
+  body.adm .dlg-head > .btn.icon { flex: none; }
+  /* Tabellen, die neben der Seitenleiste (mittlere Breite, 901–1100 px) breiter als ihre Karte werden: eigener
+     Scrollbereich in der Karte statt waagerechtem Scrollen der ganzen Seite (passt die Tabelle, bleibt alles wie bisher) */
+  body.adm .adm-page .gcard:has(> table) { overflow-x: auto; }
   body.adm .plist li, body.adm .pk-item, body.adm .item-hist, body.adm .us-mail { border-radius: 12px; }
   body.adm .toast { border-radius: 16px; -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); background: rgba(28, 26, 25, .9); color: #f5f1ee; }
 
@@ -1682,11 +1717,13 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   :root:not([data-theme="light"]) body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
   :root:not([data-theme="light"]) body.adm .ob-tabs button:hover { background: rgba(255, 255, 255, .06); }
   :root:not([data-theme="light"]) body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
+  :root:not([data-theme="light"]) body.adm :is(.nostock, .mhd-card .np-badge) { color: #1c1a19; }   /* helle Füllung im Dunkeln: weiße Schrift < 3:1 */
 }
 @media screen {
   :root[data-theme="dark"] body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
   :root[data-theme="dark"] body.adm .ob-tabs button:hover { background: rgba(255, 255, 255, .06); }
   :root[data-theme="dark"] body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
+  :root[data-theme="dark"] body.adm :is(.nostock, .mhd-card .np-badge) { color: #1c1a19; }
 }
 /* Mittlere Breite: Speicherstand in eigener Zeile der Kapsel */
 @media screen and (max-width: 1600px) {
@@ -1701,7 +1738,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 @media screen and (max-width: 900px) {
   body.adm .side-nav { margin: 0; padding: 14px 16px 0; background: none; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-radius: 0; max-height: none; }
   body.adm .side-tabs { background: var(--aus); padding: 4px; border-radius: 999px; gap: 2px; }
-  body.adm .side-tabs button { height: 34px; border-radius: 999px; font-size: 14px; padding: 0 14px; color: var(--muted); }
+  body.adm .side-tabs button { height: 34px; border-radius: 999px; font-size: 14px; padding: 0 14px; color: var(--text-2); }   /* --muted auf der Spur: < 4,5:1 */
   body.adm .side-tabs button[aria-selected="true"] { color: var(--text); }
   body.adm .side-sep { border-top: 0; margin: 0; }
 }
@@ -1723,6 +1760,20 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .meta-card { padding: 16px; }
   body.adm .gcard.sec-form, body.adm .gcard.sec-block { padding: 14px 16px; }
   body.adm .ez-top h2 { font-size: 24px; }
+}
+/* Handy/Tablet mit Fingerbedienung: Bedienelemente mindestens 36 px (kleine Pillen, Segmente, Tabellenfelder) */
+@media screen and (max-width: 900px) and (pointer: coarse) {
+  body.adm :is(.adm-page, dialog) :is(.btn.sm, .seg button, .ob-tabs button, .gfoot .btn), body.adm .sec-nav a, body.adm .side-tabs button { height: 36px; }
+  body.adm :is(.adm-page, dialog) .ibtn { width: 36px; height: 36px; }
+  body.adm .ezpos tbody td.ez-code { min-height: 30px; }   /* Einzelangebot als Karte: Bezeichnung beginnt unter dem Entfernen-Knopf */
+  body.adm :is(.adm-page, dialog) :is(.in, select, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"])) { min-height: 36px; }
+  body.adm .ofg-bar .link-btn { min-height: 36px; }
+}
+/* Angebote als Karten (schmal): Standardzeile einheitlich hinterlegt statt Streifen je Zelle (Zellen haben dort
+   unterschiedliche Breiten und Abstände); Zeilenhervorhebung unter dem Finger ebenso nur für die ganze Karte */
+@media screen and (max-width: 700px) {
+  body.adm .oftab tr.of-std { background: var(--aus); }
+  body.adm .oftab tr.of-std td, body.adm .oftab tbody tr:hover td { background: transparent; }
 }
 @media screen and (max-width: 560px) {
   body.adm .etab th { font-size: 13.5px; letter-spacing: .02em; }

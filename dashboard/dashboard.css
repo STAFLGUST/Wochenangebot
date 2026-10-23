@@ -87,7 +87,6 @@ body.db {
 .db-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
 .db-marke { display: flex; align-items: center; gap: 16px; min-width: 0; }
 body.db .db-kopf .brand-logo { height: 28px; width: auto; object-fit: initial; }
-.db-plattform { font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--db-muted); }
 .db-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .db-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--db-aus); color: var(--db-text); cursor: pointer; transition: background .15s; }
 .db-rund:hover, .db-abmelden:hover { background: var(--db-aus-hover); }
@@ -121,21 +120,27 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 .db-ico[data-symbol="store"] { --ico-a: #c2414f; --ico-b: #8e2532; }
 .db-ico[data-symbol="shield-check"] { --ico-a: #2f8a86; --ico-b: #1b5d5a; }
 .db-ico[data-symbol="upload"] { --ico-a: #6a5fa8; --ico-b: #463d7a; }
-.db-text { display: flex; flex-direction: column; gap: 4px; }
-.db-name { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.015em; hyphens: auto; overflow-wrap: anywhere; }
+.db-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* Namen nie mitten im Wort trennen: dashboard.js verkleinert die Schrift langer Namen, bis das längste Wort passt
+   (namenEinpassen); nur wenn auch die kleinste Stufe nicht reicht, darf ein Wort als Notlösung umbrechen. */
+.db-name { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -.015em; hyphens: manual; overflow-wrap: normal; word-break: normal; }
+.db-name.db-name-umbruch { hyphens: auto; overflow-wrap: anywhere; }
 .db-desc { margin: 0; font-size: 14px; line-height: 1.45; color: var(--db-muted); }
-.db-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--db-warn); }
+.db-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--db-warn); overflow-wrap: anywhere; }   /* freier Text, z. B. lange Adressen */
 .db-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.db-badge { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 11px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--db-neutral-bg); color: var(--db-muted); }
-.db-badge::before { content: ""; width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; }
+/* Lange Pillen („Wartung – Zugang für Administratoren“) brechen als abgerundetes Feld um; einzeilig unverändert rund */
+.db-badge { display: inline-flex; align-items: flex-start; gap: 6px; min-height: 26px; padding: 4px 11px; border-radius: 13px; font-size: 13px; line-height: 1.35; font-weight: 600; background: var(--db-neutral-bg); color: var(--db-muted); }
+.db-badge::before { content: ""; width: 7px; height: 7px; flex: none; margin-top: calc((1.35em - 7px) / 2); border-radius: 50%; background: currentColor; }
 .db-badge.ok { background: var(--db-ok-bg); color: var(--db-ok); }
 .db-badge.warn { background: var(--db-warn-bg); color: var(--db-warn); }
 /* Nicht nutzbar: Inhalt blass; Wartung behält Pille und Hinweis in voller Stärke */
 .db-tile.off .db-ico, .db-tile.off .db-text { opacity: var(--db-off); }
 .db-tile.gesperrt .db-foot { opacity: var(--db-off); }
 
-/* Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige, die Sperre setzt der Server durch) */
-.db-band { position: absolute; left: -30%; right: -30%; top: 54%; padding: 5px 0; transform: translateY(-50%) rotate(-11deg);
+/* Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige, die Sperre setzt der Server durch). Die Höhe der Mittellinie
+   setzt dashboard.js je Kachel (--db-band-y) mittig zwischen Name und Status-Pille, damit das gedrehte Band beide frei
+   lässt; ohne Skript bzw. vor der Messung 54 %. */
+.db-band { position: absolute; left: -30%; right: -30%; top: var(--db-band-y, 54%); padding: 5px 0; transform: translateY(-50%) rotate(-11deg);
   background: repeating-linear-gradient(135deg, var(--db-band-ink) 0 12px, var(--db-band) 12px 24px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, .25); pointer-events: none; }
 .db-band > span { display: block; overflow: hidden; white-space: nowrap; text-align: center; background: var(--db-band); color: var(--db-band-ink);
@@ -145,8 +150,8 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 .db-login { max-width: 440px; margin: 8vh auto 0; padding: 32px 28px; text-align: center; border-radius: 28px; }
 .db-login h1 { margin: 12px 0 6px; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
 .db-login p { margin: 0 0 20px; color: var(--db-muted); font-size: 15px; }
-.db-login-i { width: 30px; height: 30px; color: var(--db-akzent-ink); }
-.db-login .btn.primary { height: 42px; padding: 0 20px; border-radius: 999px; background: var(--db-akzent); border-color: var(--db-akzent); color: #fff; }
+.db .db-login-i { width: 30px; height: 30px; color: var(--db-akzent-ink); }
+.db-login .btn.primary { text-decoration: none; height: 42px; padding: 0 20px; border-radius: 999px; background: var(--db-akzent); border-color: var(--db-akzent); color: #fff; }
 .db-login .btn.primary:hover { background: #6e1622; border-color: #6e1622; }
 .db-err { max-width: 640px; margin: 0 auto; padding: 12px 16px; border-radius: 16px; background: var(--db-fehler-bg); border: 1px solid var(--db-fehler-bg); color: var(--db-fehler); }
 .db-fuss { padding: 0 8px; font-size: 13px; color: var(--db-muted); }
@@ -159,7 +164,6 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 
 /* ── Tablet und Handy ── */
 @media (max-width: 760px) {
-  .db-plattform { display: none; }
   .db-user-name { max-width: 120px; }
 }
 @media (max-width: 560px) {
@@ -181,8 +185,8 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
   .db-ico .i { width: 22px; height: 22px; }
   .db-name { font-size: 16px; letter-spacing: -.01em; }
   .db-desc { display: none; }
-  .db-badge { min-height: 24px; padding: 0 10px; font-size: 12px; }
-  .db-badge::before { width: 6px; height: 6px; }
+  .db-badge { min-height: 24px; padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+  .db-badge::before { width: 6px; height: 6px; margin-top: calc((1.35em - 6px) / 2); }
   /* Handy: Pille gesperrter Kacheln nur für Screenreader (wie im Entwurf), Band tiefer – der Name bleibt lesbar */
   .db-tile.gesperrt { padding-bottom: 60px; }
   .db-tile.gesperrt .db-foot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

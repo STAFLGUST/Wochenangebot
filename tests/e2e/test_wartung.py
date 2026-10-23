@@ -64,6 +64,12 @@ with sync_playwright() as p:
     v = br.new_page(viewport={'width': 1280, 'height': 900}); v.goto(B + '/'); v.wait_for_selector('.k-wartung')
     v.screenshot(path=SH + '/wartung-seite.png')
     check('visitor sees maintenance page, no articles', 'Wir spielen gerade ein Update ein.' in v.inner_text('#list') and v.locator('tr.row').count() == 0)
+    # Darstellung der Wartungsseite: kein Ansichtsumschalter (ohne Funktion), keine leere doppelte Trennlinie im Fuß
+    check('maintenance page: no view switch, no empty footer line', v.is_hidden('#modebar') and v.is_hidden('#foot') and v.is_visible('.legal-links'))
+    vm = br.new_page(viewport={'width': 390, 'height': 844}); vm.goto(B + '/'); vm.wait_for_selector('.k-wartung')
+    lage = vm.evaluate("[getComputedStyle(document.querySelector('#topbar .search')).display, document.querySelector('#topbar').getBoundingClientRect().height, document.documentElement.scrollWidth <= innerWidth]")
+    check('maintenance page 390 px: no empty gap for the hidden search in the header', lage[0] == 'none' and lage[1] < 80 and lage[2], lage)
+    vm.screenshot(path=SH + '/wartung-seite-390.png'); vm.close()
     # Mitarbeiter im selben Browser sieht die Seite
     a2 = actx.new_page(); a2.goto(B + '/'); a2.wait_for_selector('tr.row')
     check('staff sees offer + maintenance banner', a2.is_visible('#wartung-banner') and 'Wartungsmodus aktiv' in a2.inner_text('#wartung-banner'))

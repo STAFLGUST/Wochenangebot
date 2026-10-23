@@ -99,8 +99,10 @@ einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstelle
   bereitstellen
   # Container-Konfiguration: Caddyfile, docker-compose.yml und die Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env);
   # nur das Image geändert: nur die App neu erstellen (Keycloak und seine Datenbank laufen weiter)
+  # Apache-Konfiguration der Anmeldung (als einzelne Datei eingebunden: nach dem Codewechsel sähe der Container sonst
+  # weiter die alte Fassung) → nur die App neu erstellen
   if git diff --name-only "$2" "$1" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
-  elif [ "$BAUEN" = 1 ]; then $COMPOSE up -d --force-recreate app; fi
+  elif [ "$BAUEN" = 1 ] || git diff --name-only "$2" "$1" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then $COMPOSE up -d --force-recreate app; fi
 }
 
 # 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main

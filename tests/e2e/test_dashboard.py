@@ -75,6 +75,34 @@ def kontrast_ok(pg, name):
     check(f'{name}: Textkontrast mindestens 4,5:1 (auch auf Glas)', all(w >= 4.5 for _, w in werte), werte)
 
 
+# Abstand des gedrehten Absperrbands zu Name und Status-Pille je gesperrter Kachel (px; < 0 = verdeckt). Gemessen an den
+# Ecken der Textzeilen bzw. der Pille gegen die Mittellinie des Bandes. Pille am Handy nur für Screenreader → None.
+BAND_ABSTAND = """[...document.querySelectorAll('#db-grid .gesperrt')].map(t => {
+  const band = t.querySelector('.db-band'), r = band.getBoundingClientRect(), m = new DOMMatrix(getComputedStyle(band).transform);
+  const w = Math.atan2(m.b, m.a), cx = r.left + r.width / 2, cy = r.top + r.height / 2, halb = band.offsetHeight / 2;
+  const abst = (q) => { const d = q.flatMap(z => [[z.left, z.top], [z.right, z.top], [z.left, z.bottom], [z.right, z.bottom]])
+      .map(([x, y]) => -(x - cx) * Math.sin(w) + (y - cy) * Math.cos(w));
+    return Math.round(Math.max(Math.min(...d) - halb, -Math.max(...d) - halb)); };
+  const n = document.createRange(); n.selectNodeContents(t.querySelector('.db-name'));
+  const fuss = t.querySelector('.db-foot').getBoundingClientRect();
+  return [t.dataset.modul, abst([...n.getClientRects()]), fuss.width > 2 ? abst([t.querySelector('.db-badge').getBoundingClientRect()]) : null]; })"""
+# Wörter, die über eine Zeile hinaus umbrechen (mitten im Wort getrennt), je Kachelname; Notlösung (db-name-umbruch) getrennt
+WORT_GETRENNT = """[...document.querySelectorAll('#db-grid .db-name')].map(e => {
+  const t = e.firstChild, text = t ? t.textContent : '', getrennt = [];
+  for (const m of text.matchAll(/\\S+/g)) { const r = document.createRange(); r.setStart(t, m.index); r.setEnd(t, m.index + m[0].length);
+    if (new Set([...r.getClientRects()].map(q => Math.round(q.top))).size > 1) getrennt.push(m[0]); }
+  return [e.textContent, getrennt, e.classList.contains('db-name-umbruch'), parseFloat(getComputedStyle(e).fontSize), getComputedStyle(e).hyphens]; })"""
+
+
+def bilder(pg):   # auf zwei Bilder warten: ResizeObserver und Neuberechnung nach einer Größenänderung
+    pg.wait_for_function("new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true))))")
+
+
+def band_frei(pg, name):
+    werte = pg.evaluate(BAND_ABSTAND)
+    check(f'{name}: Absperrband verdeckt weder Namen noch Status-Pille', werte and all(n >= 0 and (p is None or p >= 0) for _, n, p in werte), werte)
+
+
 with sync_playwright() as pw:
     br = pw.chromium.launch()
 
@@ -85,6 +113,8 @@ with sync_playwright() as pw:
     check('ohne Anmeldung: Anmeldehinweis sichtbar, Kachelbereich verborgen', pg.is_hidden('#db-bereich') and pg.is_hidden('#db-logout'))
     check('Anmeldehinweis führt zur Mitarbeiter-Anmeldung', (pg.get_attribute('#db-login a', 'href') or '').endswith('/admin/'), pg.get_attribute('#db-login a', 'href'))
     check('keine Kacheln ohne Anmeldung', pg.locator('#db-grid .db-tile').count() == 0)
+    knopf = pg.evaluate("[document.querySelector('.db-login-i').getBoundingClientRect().width, getComputedStyle(document.querySelector('#db-login a')).textDecorationLine]")
+    check('Anmeldehinweis: Schloss-Symbol 30 px, Knopf ohne Unterstreichung', knopf == [30, 'none'], knopf)
     ctx.close()
 
     # ── Administrator: acht Kacheln aus dem Register ──
@@ -94,19 +124,26 @@ with sync_playwright() as pw:
     check('Kachelnamen aus dem Register', [x['name'] for x in k][:2] == ['Angebot', 'Bestand'], [x['name'] for x in k])
     ang = k[0]
     check('Angebot: verfügbar, als Verweis auf die Mitarbeiter-Eingabe (Testserver: gleicher Host)', ang['tag'] == 'A' and ang['href'] == '/admin/' and ang['badge'] == 'Verfügbar', ang)
-    verw = k[-1]
+    kid = {x['id']: x for x in k}
+    verw = kid['verwaltung']
     check('Verwaltung: freigegeben (Roadmap 10a), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
-          verw['id'] == 'verwaltung' and verw['tag'] == 'A' and verw['href'] == '/admin/' and verw['badge'] == 'Verfügbar', verw)
-    gesperrt = [x for x in k[1:-1] if x['tag'] != 'DIV' or x['href']]
+          verw['tag'] == 'A' and verw['href'] == '/admin/' and verw['badge'] == 'Verfügbar', verw)
+    best = kid['bestand']
+    check('Bestand: freigegeben (Phase 1), Verweis auf den Eingabebereich (Testserver: gleicher Host, Pfad /admin/)',
+          best['tag'] == 'A' and best['href'] == '/admin/' and best['badge'] == 'Verfügbar', best)
+    imp = kid['import']
+    check('Import: freigegeben, Verweis auf /import/ (Testserver: gleicher Host)', imp['tag'] == 'A' and imp['href'] == '/import/' and imp['badge'] == 'Verfügbar', imp)
+    offen = [kid[m] for m in ('crm', 'rewe', 'qs', 'einkauf')]
+    gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
-    check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in k[1:-1]), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
-    check('Zähler: 2 von 8 Anwendungen', '2 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 4)
+    check('Zähler: 4 von 8 Anwendungen', '4 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Name des angemeldeten Nutzers im Kopf', 'Angemeldet als' in pg.text_content('#db-user') and pg.text_content('#db-user-name') == 'Administrator', pg.text_content('#db-user'))
     check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
     gesperrt = [x for x in k if x['tag'] == 'DIV']
     check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
-          len(gesperrt) == 6 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+          len(gesperrt) == 4 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
     check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
     check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
     band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
@@ -127,14 +164,57 @@ with sync_playwright() as pw:
     check('Schrift Geist (selbst gehostet)', 'Geist' in pg.evaluate("getComputedStyle(document.querySelector('#db-titel')).fontFamily"))
     kontrast_ok(pg, 'hell')
     pg.screenshot(path=os.path.join(SH, 'dashboard_1280.png'), full_page=True)
+    # Gemeldet: „Qualitätssicherungskon-zept“ – Namen werden nicht mehr automatisch getrennt, Band lässt Name und Pille frei
+    for breite in (1920, 1280, 1024, 768, 575, 390, 360):
+        pg.set_viewport_size({'width': breite, 'height': 900}); bilder(pg)
+        namen = pg.evaluate(WORT_GETRENNT)
+        check(f'{breite} px: Registernamen ohne Silbentrennung und ohne Umbruch im Wort (auch „Qualitätssicherung“)',
+              all(not g and not u and h != 'auto' for _, g, u, _f, h in namen), namen)
+        band_frei(pg, f'{breite} px')
+    pg.set_viewport_size({'width': 1280, 'height': 900}); bilder(pg)
     echt = pg.evaluate("""fetch('../api/?action=module_status').then(r => r.json()).then(d => {
         const alle = Object.fromEntries(d.module.map((m) => [m.id, m]));
-        return ['angebot', 'verwaltung'].map((id) => [window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'dashboard-stafl.de'),
+        return ['angebot', 'verwaltung', 'bestand', 'import'].map((id) => [window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'dashboard-stafl.de'),
                                                       window.STAFL_KACHEL_ZIEL(alle[id].kachel, alle, 'angebot.stafl.test')]); })""")
     check('Echtbetrieb (dashboard-stafl.de): Kacheln führen zu den Hosts der zentralen Anmeldung, nicht zum bisherigen /admin/',
-          echt == [['https://angebot.dashboard-stafl.de/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/admin/', '/admin/']], echt)
+          echt == [['https://angebot.dashboard-stafl.de/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/admin/', '/admin/'],
+                   ['https://bestand.dashboard-stafl.de/admin/', '/admin/'], ['https://verwaltung.dashboard-stafl.de/import/', '/import/']], echt)
     pg.click('#db-grid a[data-modul="angebot"]'); pg.wait_for_url('**/admin/')
     check('Klick auf Angebot öffnet die Mitarbeiter-Eingabe', pg.url.endswith('/admin/'))
+    ctx.close()
+
+    # ── Überlange Registernamen (nachgestellte Antwort): erst kleinere Schrift, Trennung nur als Notlösung ──
+    ctx, pg = anmelden(br, 'admin', PW, '198.51.100.47')
+    def lange_namen(route):
+        r = route.fetch(); d = r.json()
+        for m in d['module']:
+            if m['id'] == 'qs': m['name'] = 'Qualitätssicherungskonzept'
+            if m['id'] == 'crm': m['name'] = 'Kundenbeziehungsmanagement'
+        route.fulfill(response=r, body=json.dumps(d))
+    pg.route('**/api/?action=module_status', lange_namen); pg.reload(); pg.wait_for_selector('#db-grid .db-tile')
+    for breite in (1280, 1024, 575, 390):
+        pg.set_viewport_size({'width': breite, 'height': 900}); bilder(pg)
+        namen = pg.evaluate(WORT_GETRENNT)
+        lang = [x for x in namen if x[0] in ('Qualitätssicherungskonzept', 'Kundenbeziehungsmanagement')]
+        if breite > 560:
+            check(f'{breite} px: überlange Namen in einer Zeile, nicht getrennt (Schrift höchstens 19 px)',
+                  len(lang) == 2 and all(not g and not u and f <= 19 for _, g, u, f, _h in lang), lang)
+        if breite == 1280:
+            check('1280 px: zu lange Namen mit kleinerer Schrift statt Trennung', any(f < 19 for *_x, f, _h in lang), lang)
+        check(f'{breite} px: kurze Namen behalten ihre Schriftgröße', all(f == (19 if breite > 560 else 16) for n, _g, _u, f, _h in namen if n in ('Angebot', 'REWE')), namen)
+        band_frei(pg, f'{breite} px, überlange Namen')
+        ueber = pg.evaluate("[...document.querySelectorAll('.db-name')].filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent)")
+        check(f'{breite} px: überlange Namen ragen nicht aus der Kachel', not ueber, ueber)
+    namen = pg.evaluate(WORT_GETRENNT)   # 390 px: zwei Spalten, 26 Zeichen passen auch mit 12 px nicht
+    lang = [x for x in namen if x[0] in ('Qualitätssicherungskonzept', 'Kundenbeziehungsmanagement')]
+    check('390 px: passt ein Wort auch in kleinster Schrift nicht, bricht es als Notlösung um (12 px, ohne Überlauf)',
+          all(u and f == 12 for _, _g, u, f, _h in lang) and not pg.evaluate("[...document.querySelectorAll('.db-name')].some(e => e.scrollWidth > e.clientWidth + 1)"), lang)
+    band_frei(pg, '390 px, überlange Namen')
+    pg.screenshot(path=os.path.join(SH, 'dashboard_390_lange_namen.png'), full_page=True)
+    hoehen = pg.evaluate("[...document.querySelectorAll('#db-grid .db-tile')].map(t => Math.round(t.getBoundingClientRect().top) + ':' + Math.round(t.getBoundingClientRect().height))")
+    reihen = {}
+    for h in hoehen: reihen.setdefault(h.split(':')[0], set()).add(h.split(':')[1])
+    check('Kacheln einer Reihe gleich hoch (auch wenn eine Kachel für das Band höher wird)', all(len(v) == 1 for v in reihen.values()), hoehen)
     ctx.close()
 
     # ── Begrüßung nach Tageszeit und Datum (feste Uhr, Europe/Berlin), dunkles Design am Desktop ──
@@ -201,7 +281,7 @@ with sync_playwright() as pw:
 
     # ── Wartung des Eingabebereichs: Bearbeiter gesperrt, Administrator mit Hinweis ──
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': True, 'grund': 'Test Dashboard',
-                                          'message': 'Kurz weg <img src=x onerror="window.__xss=1">'})
+                                          'message': 'Kurz weg <img src=x onerror="window.__xss=1"> Infos: https://angebot-stafl.de/hinweise/wartungsfenster-oktober-2026'})
     check('Wartung des Eingabebereichs gestartet', st == 200 and r.get('aktiv') is True, (st, r))
     ctx, pg = anmelden(br, 'erika', 'Editor-Zugang-77', '198.51.100.43')
     a = kacheln(pg)[0]
@@ -209,13 +289,21 @@ with sync_playwright() as pw:
     check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: nur noch die Verwaltung verfügbar (1 von 8)', '1 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Bestand, Import und Verwaltung weiter verfügbar (3 von 8)', '3 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')
     a = kacheln(pg)[0]
     check('Administrator: Angebot in Wartung, aber weiter erreichbar', a['tag'] == 'A' and a['badge'] == 'Wartung – Zugang für Administratoren', a)
     check('Administrator: Wartungs-Pille ohne Absperrband', 'warn' in a['badgeCls'] and not a['band'], a)
+    pg.set_viewport_size({'width': 360, 'height': 900}); bilder(pg)
+    lage = pg.evaluate("""(() => { const t = document.querySelector('[data-modul="angebot"]'), k = t.getBoundingClientRect(), h = t.querySelector('.db-hint'), p = t.querySelector('.db-badge');
+        const pr = p.getBoundingClientRect(), s = getComputedStyle(p);
+        return {hinweis: h.scrollWidth <= h.clientWidth + 1 && h.getBoundingClientRect().right <= k.right - 8, pille: pr.right <= k.right - 8 && pr.left >= k.left,
+                zeilen: Math.round(pr.height / parseFloat(s.lineHeight)), radius: parseFloat(s.borderTopLeftRadius)}; })()""")
+    check('360 px: langer Wartungshinweis (Adresse) bricht innerhalb der Kachel um', lage['hinweis'], lage)
+    check('360 px: lange Pille „Wartung – Zugang für Administratoren“ bleibt in der Kachel, mehrzeilig als abgerundetes Feld', lage['pille'] and lage['zeilen'] >= 2 and lage['radius'] <= 13, lage)
+    pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_admin_360.png'), full_page=True)
     ctx.close()
     st, r = A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': False, 'grund': 'Test beendet'})
     check('Wartung beendet', st == 200 and r.get('aktiv') is False, (st, r))
@@ -233,6 +321,7 @@ with sync_playwright() as pw:
     pg.goto(B + '/dashboard/abgemeldet.html'); pg.wait_for_selector('#db-abgemeldet')
     check('Abmeldeseite im neuen Design (Grund, Glaskarte, Link zur Anmeldung)', pg.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(244, 241, 238)'
           and pg.get_attribute('#db-abgemeldet a', 'href') == './' and not pg.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
+    check('Abmeldeseite: Knopf „Erneut anmelden“ ohne Unterstreichung', pg.evaluate("getComputedStyle(document.querySelector('#db-abgemeldet a')).textDecorationLine") == 'none')
     ctx.close()
     br.close()
 
