@@ -119,7 +119,7 @@ Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIES
 ## Dashboard (`dashboard/`)
 
 Mitarbeiter-Dashboard der STAFL-Plattform (Roadmap PR 6): `index.html`, `dashboard.css`, `dashboard.js`, ohne Inline-Skript.
-Liest `status` und `module_status` und zeigt die acht Kacheln in der Reihenfolge des Modulregisters – keine fest
+Liest `status` und `module_status` und zeigt die Kacheln (derzeit elf, darunter HR, Marketing und Controlling als geplante Module) in der Reihenfolge des Modulregisters – keine fest
 programmierte Liste. Status je Kachel (Verfügbar, Wartung, Entwicklungsstand …) kommt aus `modul_zustand`; die Kachel ist
 nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt bewusst **außerhalb** von `app/` und wird daher nicht
 ausgeliefert; `dashboard-stafl.de` bleibt 503-Platzhalter (GR-105), bis die Anmeldung über Keycloak (ADR-003, PR 7) steht

@@ -37,9 +37,12 @@ check('ohne Anmeldung 401', P.call('module_status')[0] == 401)
 code, r = L.call('module_status')
 check('Leser darf die Übersicht sehen', code == 200 and r.get('ok'), (code, r))
 mods = nach_id(r.get('module', []))
-check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
+check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
-check('acht Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'verwaltung'], kacheln)
+check('elf Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung'], kacheln)
+for neu in ('hr', 'marketing', 'controlling'):
+    k = mods.get(neu, {}).get('kachel') or {}
+    check(f'{neu}: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
 
 ang = mods['angebot']
 check('Angebot-Kachel führt zur Mitarbeiter-Eingabe und ist verfügbar', ang['kachel']['ziel'] == 'angebot.eingabe' and ang['kachel']['zugang'] is True and ang['kachel']['status'] == 'verfuegbar', ang['kachel'])

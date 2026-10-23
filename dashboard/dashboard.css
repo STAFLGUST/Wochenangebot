@@ -120,6 +120,9 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 .db-ico[data-symbol="store"] { --ico-a: #c2414f; --ico-b: #8e2532; }
 .db-ico[data-symbol="shield-check"] { --ico-a: #2f8a86; --ico-b: #1b5d5a; }
 .db-ico[data-symbol="upload"] { --ico-a: #6a5fa8; --ico-b: #463d7a; }
+.db-ico[data-symbol="calendar"] { --ico-a: #8e4fa0; --ico-b: #5f2f70; }
+.db-ico[data-symbol="megaphone"] { --ico-a: #e06a3a; --ico-b: #a8481f; }
+.db-ico[data-symbol="chart"] { --ico-a: #5b7a2e; --ico-b: #3a5119; }
 .db-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* Namen nie mitten im Wort trennen: dashboard.js verkleinert die Schrift langer Namen, bis das längste Wort passt
    (namenEinpassen); nur wenn auch die kleinste Stufe nicht reicht, darf ein Wort als Notlösung umbrechen. */

@@ -10,7 +10,8 @@
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   /* Symbolnamen des Registers → Symbole dieser Seite (unbekannt → Raster). Die Farbe des Symbol-Quadrats hängt im
      Stylesheet ebenfalls am Symbolnamen (data-symbol), nicht am Modul. */
-  const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', truck: 'cart', upload: 'upload', settings: 'haus' };
+  const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', truck: 'cart', upload: 'upload', settings: 'haus',
+    calendar: 'calendar', megaphone: 'megaphone', chart: 'chart' };
   const BAND = 'Im Bau · Bald verfügbar · Im Bau · Bald verfügbar';
   const ENTWICKLUNG = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Nicht freigegeben' };
   let csrf = '';
