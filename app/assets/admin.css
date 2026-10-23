@@ -643,6 +643,10 @@ a.btn#btn-site { text-decoration: none; }
 .side-tabs button[hidden], .side-sep[hidden] { display: none; }
 .side-sep { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 16px 12px 6px; }
 .adm-shell .adm-page { max-width: 1440px; margin: 0; min-width: 0; }
+/* Kachel „Import“: nur die Importzentrale – keine Seitenleiste mit Verwaltungsbereichen (admin.js, bereich-import) */
+body.bereich-import .side-nav { display: none; }
+body.bereich-import .adm-shell { display: block; }
+body.bereich-import .adm-shell .adm-page { margin: 0 auto; }
 .view-bar { justify-content: flex-end; }
 body:not(.in-hist) .view-bar { display: none; }
 @media (max-width: 900px) {
