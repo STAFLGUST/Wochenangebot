@@ -438,7 +438,7 @@ with sync_playwright() as p:
 
     # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
     pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
-    check('Personalstelle: Mitarbeiterliste mit HR-Angaben, ohne Rollen/Rechte', 'Rest' in pg.text_content('#view-users') and pg.locator('#rm-card').count() == 0
+    check('Personalstelle: Mitarbeiterliste mit HR-Angaben, ohne Rollen/Rechte', 'Rest' in pg.text_content('#view-users') and pg.locator('#us-zu-rollen').count() == 0
           and pg.locator('#user-add').count() == 0)
     pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open]')
     pg.fill('#dlg-hr-person [name="hr_abteilung"]', 'Vertrieb'); pg.fill('#dlg-hr-person [name="hr_anspruch"]', '31')

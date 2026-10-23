@@ -105,6 +105,8 @@ SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitz
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 SUITES['importzentrale'] = (8790, 'data-seed', True)   # Importzentrale (Verwaltung → Import, Roadmap 10b)
 SUITES['hr'] = (8790, 'data-seed', True)   # HR · Urlaubsverwaltung (app/module/hr/, Oberfläche hr.intern)
+SUITES['rollen'] = (8790, 'data-seed', True)   # Rollen und Rechte, Modulzugang je Rolle (lib/rechte.php)
+SUITES['rollen_host'] = (8790, 'data-seed', True, {'WA_OBERFLAECHE': 'bestand.intern'})   # Modulzugang je Host (wie bestand.dashboard-stafl.de)
 SUITES['stilllegung'] = (8790, 'data-seed', True, {'WA_EIGENE_ANMELDUNG': 'aus'})   # alter Eingabebereich angebot-stafl.de/admin/ stillgelegt
 SUITES['crm'] = (8790, 'data-seed', True)   # CRM · Vertrieb (app/module/crm/, Oberfläche crm.intern)
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
@@ -129,6 +131,7 @@ GEWICHT = {
     'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
     'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'rollen': 20, 'rollen_host': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 
 
@@ -226,7 +229,7 @@ def run(name):
 
 
 # Noch nicht produktiv ausgelieferte Oberflächen (nicht in app/): nur in der jeweiligen Testgruppe unter dem Testserver
-ZUSATZ = {'dashboard': [('dashboard', 'dashboard')]}
+ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')]}
 
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
 # prüfen, stellt die Gruppe zwei noch geplante Module in ihrer App-Kopie weiter (REWE: in Prüfung, Einkauf: fertig;

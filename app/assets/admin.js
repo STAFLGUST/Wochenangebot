@@ -122,6 +122,11 @@
       throw Object.assign(new Error('Sitzung abgelaufen – bitte erneut anmelden.'), { status: 401 });
     }
     // Alter Eingabebereich stillgelegt (angebot-stafl.de/admin/): Hinweis und weiter zum neuen Eingabebereich
+    // Kein Modulzugang für diesen Bereich (Rolle, lib/rechte.php): Hinweis mit Rückweg zum Dashboard
+    if (res.status === 403 && data?.code === 'kein_modulzugang') {
+      zeigeKeinZugang(data.name);
+      throw Object.assign(new Error(data.error || 'Kein Zugang zu diesem Bereich.'), { status: 403 });
+    }
     if (res.status === 410 && data?.code === 'umgezogen') {
       zeigeUmgezogen(data.ziel);
       throw Object.assign(new Error(data.error || 'Der Eingabebereich ist umgezogen.'), { status: 410 });
@@ -221,13 +226,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', sec: '', schutz: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'urlaub', 'log', 'sec', 'schutz'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -240,7 +245,9 @@
   const NUR_IMPORT = (() => { try { return new URLSearchParams(location.search).get('nur') === 'import'; } catch { return false; } })();
   function bereich() {
     const b = me && me.bereich;
-    return b === 'verwaltung.verwaltung' && NUR_IMPORT ? 'verwaltung.import' : b;
+    // Nur Modulzugang „Import“ (ohne „Verwaltung“): auf dem Verwaltungs-Host nur die Importzentrale (Server: modul_host_frei)
+    const nurImport = NUR_IMPORT || (b === 'verwaltung.verwaltung' && !may('verwaltung.zugang') && may('import.zugang'));
+    return b === 'verwaltung.verwaltung' && nurImport ? 'verwaltung.import' : b;
   }
   /* Startansicht aus der Adresse (#importe oder ?ansicht=importe, z. B. verwaltung…/import/) – nur erlaubte Ansichten */
   function startAnsicht() {
@@ -251,7 +258,7 @@
   function viewAllowed(v) {
     const nur = BEREICH_VIEWS[bereich()];
     if (nur && !nur.includes(v)) return false;
-    if (['mail', 'sec', 'schutz'].includes(v)) return can('admin');
+    if (['mail', 'rollen', 'sec', 'schutz'].includes(v)) return can('admin');
     if (v === 'users') return can('admin') || may('hr.verwalten');   // Mitarbeiter: Administratoren alles, Personalstelle die HR-Angaben
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
     if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
@@ -605,9 +612,9 @@
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'urlaub', 'log', 'sec', 'schutz'].some(viewAllowed);
+    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
-    $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
+    $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
   }
   /* Nur-Ansicht: Eingabefelder sperren (Suche/Filter bleiben bedienbar) */
@@ -680,6 +687,7 @@
   document.addEventListener('click', (e) => { if (e.target.closest('[data-wartung="goto"]')) setView('sec'); });
 
   async function openEditor() {
+    if (me && me.modulzugang === false) { zeigeKeinZugang(me.modulName || ''); return; }   // Rolle ohne Zugang zu diesem Bereich
     refreshWartung();
     const d = await api('draft');
     published = d.published ? strip(d.published) : null;
@@ -2294,8 +2302,8 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'urlaub', 'log', 'sec', 'schutz'];
-  const ADMIN_VIEWS = ['mail', 'users', 'sec', 'schutz'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'];
+  const ADMIN_VIEWS = ['mail', 'users', 'rollen', 'sec', 'schutz'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
   function navSichtbar(btn) {
@@ -2330,6 +2338,7 @@
     if (v === 'master') renderMasterView();
     if (v === 'angebote') renderOffersView();
     if (v === 'users' && window.WA.views.users) window.WA.views.users();
+    if (v === 'rollen' && window.WA.views.rollen) window.WA.views.rollen();   // Rollen und Rechte (admin-rollen.js)
     if (v === 'urlaub' && window.WA.views.urlaub) window.WA.views.urlaub();
     if (v === 'orders' && window.WA.views.orders) window.WA.views.orders();
     if (v === 'einkauf' && window.WA.views.einkauf) window.WA.views.einkauf();
@@ -3971,6 +3980,20 @@
       <p class="auth-intro">Mitarbeiter melden sich jetzt zentral über das Mitarbeiter-Dashboard an. Sie werden gleich weitergeleitet.</p>
       <p><a class="btn primary" id="umgezogen-weiter" href="${esc(url)}" style="text-decoration:none">Zum neuen Eingabebereich</a></p></div></main>`;
     setTimeout(() => location.replace(url), 1500);
+  }
+
+  /* Kein Modulzugang (Rolle ohne „<modul>.zugang“): der Server sperrt alle Aktionen dieses Bereichs; hier nur der Hinweis */
+  function zeigeKeinZugang(name) {
+    const dash = me && /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(me.dashboard || '') ? me.dashboard : '';
+    if ($('#kein-zugang')) return;
+    document.title = 'Kein Zugang · STAFL';
+    document.body.classList.add('kein-zugang');
+    // Seite nur verdecken, nicht ersetzen: laufende Abläufe (Anmeldeformular, Hintergrundabgleich) greifen weiter auf ihre Elemente zu
+    for (const el of document.body.children) el.hidden = true;
+    document.body.insertAdjacentHTML('beforeend', `<main class="auth"><div class="auth-card" id="kein-zugang"><img src="../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch" style="display:block;height:30px;width:134px;max-width:none;object-fit:contain">
+      <h1 style="margin:14px 0 6px;font-size:20px">Kein Zugang${name ? ' zu „' + esc(name) + '“' : ''}</h1>
+      <p class="auth-intro">Ihre Rolle hat für diesen Bereich keinen Zugang. Wenn Sie ihn brauchen, wenden Sie sich bitte an einen Administrator.</p>
+      ${dash ? `<p><a class="btn primary" href="${esc(dash)}" style="text-decoration:none">Zum Dashboard</a></p>` : ''}</div></main>`);
   }
 
   /* ======================= Start ======================= */

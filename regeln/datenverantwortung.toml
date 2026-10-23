@@ -275,7 +275,13 @@ beschreibung = "Ergebnis der Datenleck-Prüfung von Passwörtern (ohne Passwort)
 name = "rechte"
 eigentuemer = "plattform"
 schutz = "intern"
-beschreibung = "Rechte je Rolle (Katalog PERMS in lib/rechte.php)"
+beschreibung = "Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern"
+
+[[dokument]]
+name = "rollen"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php)"
 
 [[dokument]]
 name = "sicherheit"

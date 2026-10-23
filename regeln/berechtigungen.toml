@@ -9,8 +9,12 @@
 #   und in den Ausnahmen je Nutzer (grant/deny) enthalten. Umbenennen bräuchte eine Migration mit Freigabe.
 # - Neue Rechte beginnen mit der Modul-ID: „<modul>.<recht>“, z. B. „crm.sehen“, „crm.bearbeiten“.
 #   Solche Rechte brauchen hier keinen Eintrag; sie werden über das Präfix zugeordnet.
-# - Der Zugang zu einem Modul (Kachel, Oberfläche) wird später über „<modul>.zugang“ gesteuert; die eigentliche
-#   Autorisierung erfolgt immer serverseitig je Aktion (require_perm), nie über die Sichtbarkeit einer Kachel.
+# - Der Zugang zu einem Modul (Kachel, Oberfläche) heißt „<modul>.zugang“. lib/rechte.php erzeugt ihn für jedes Modul mit
+#   Kachel aus dem Modulregister (kein Eintrag hier nötig); ohne ihn sperrt der Server den Host des Moduls
+#   (modul_zugang_durchsetzen). Die eigentliche Autorisierung erfolgt weiter serverseitig je Aktion (require_perm),
+#   nie über die Sichtbarkeit einer Kachel.
+# - Die Zuordnung unten erzeugt werkzeuge/regeln.py zusätzlich als RECHTE_MODUL (lib/module-liste.php): danach gliedert
+#   die Verwaltung („Rollen und Rechte“) die Rechte nach Modulen.
 
 schema = 1
 
@@ -51,7 +55,7 @@ bereiche = ["Nutzer und Rechte verwalten", "Sicherheit und Wartungsmodus", "E-Ma
 [[nutzergruppe]]
 id = "mitarbeiter"
 art = "intern"
-beschreibung = "Mitarbeiterzugänge (Dokument „nutzer“), Rollen viewer/editor/admin plus Ausnahmen je Nutzer"
+beschreibung = "Mitarbeiterzugänge (Dokument „nutzer“): Rollen admin (fest), viewer/editor (Standard) und eigene Rollen (Dokument „rollen“), mehrere je Mitarbeiter, plus Ausnahmen je Nutzer"
 
 [[nutzergruppe]]
 id = "kunde"

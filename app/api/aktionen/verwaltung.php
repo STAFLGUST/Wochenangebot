@@ -167,31 +167,114 @@ switch ($action) {
             respond(['ok' => true, 'users' => array_map('user_public', users_load()), 'twofaModus' => sec()['twofa']]);
         }
 
-        /* Nutzerrechte: Rechte je Rolle und Übersicht je Nutzer (Administrator) */
+        /* Nutzerrechte: Rollen, Rechte je Rolle und Übersicht je Nutzer (Administrator) */
         case 'rechte': {
             require_auth(false, 'admin');
             header('Cache-Control: no-store');
             $roles = rights_roles();
-            respond(['ok' => true, 'catalog' => rights_catalog(), 'roles' => $roles, 'adminOnly' => PERMS_ADMIN_ONLY, 'roleLabels' => ROLE_LABELS,
-                     'custom' => store_read('rechte') !== null, 'updatedAt' => store_read('rechte')['updatedAt'] ?? null, 'updatedBy' => store_read('rechte')['updatedBy'] ?? '',
-                     'users' => array_map(function ($u) use ($roles) { return ['id' => $u['id'], 'name' => $u['name'], 'username' => $u['username'], 'role' => $u['role'], 'active' => (bool)$u['active'],
-                         'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])), 'perms' => user_perms($u, $roles)]; }, users_load())]);
+            $users = users_load();
+            $d = store_read('rechte') ?? [];
+            $labels = ROLE_LABELS; foreach (array_keys($roles) as $r) $labels[$r] = rolle_name($r);
+            respond(['ok' => true, 'catalog' => rights_catalog(), 'roles' => $roles, 'adminOnly' => PERMS_ADMIN_ONLY, 'roleLabels' => $labels,
+                     'rollen' => rollen_liste($roles, $users), 'module' => rechte_module(),
+                     'custom' => store_read('rechte') !== null, 'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? '',
+                     'users' => array_map(function ($u) use ($roles) { return ['id' => $u['id'], 'name' => $u['name'], 'username' => $u['username'], 'role' => $u['role'], 'rollen' => user_rollen($u), 'active' => (bool)$u['active'],
+                         'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])), 'perms' => user_perms($u, $roles)]; }, $users)]);
         }
+        /* Rechte der Standardrollen (bisherige Oberfläche; die Rollenverwaltung nutzt rolle_save) */
         case 'rechte_save': {
             $me = require_admin_confirmation('rechte_save');
             $in = body()['roles'] ?? null;
             if (!is_array($in)) fail('Ungültige Anfrage.', 422);
             $old = rights_roles();
             $new = []; $d = [];
+            $kat = perms_katalog();
             foreach (PERM_ROLES as $r) {
-                $new[$r] = is_array($in[$r] ?? null) ? rights_close(rights_clean($in[$r])) : $old[$r];
+                $new[$r] = is_array($in[$r] ?? null) ? rights_clean($in[$r]) : $old[$r];
+                // Ältere Oberfläche (noch geöffnete Seite) kennt den Modulzugang nicht: bisherigen Wert behalten statt ihn zu entziehen
+                $istZugang = fn($k) => ($kat[$k]['k'] ?? '') === 'zugang';
+                if (!array_filter($new[$r], $istZugang)) $new[$r] = array_merge($new[$r], array_filter($old[$r], $istZugang));
+                $new[$r] = rights_close(array_values(array_unique($new[$r])));
                 $add = array_diff($new[$r], $old[$r]); $rem = array_diff($old[$r], $new[$r]);
-                foreach ($add as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => ROLE_LABELS[$r], 'f' => PERMS[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
-                foreach ($rem as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => ROLE_LABELS[$r], 'f' => PERMS[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
+                foreach ($add as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => rolle_name($r), 'f' => $kat[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
+                foreach ($rem as $k) $d[] = ['k' => "r|$r|$k", 'code' => '', 'name' => rolle_name($r), 'f' => $kat[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
             }
-            store_write('rechte', ['roles' => $new, 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+            store_write('rechte', ['roles' => $new, 'bekannt' => array_keys($kat), 'updatedAt' => now(), 'updatedBy' => $me['name']]);
             if ($d) audit('user', 'Rechte der Rollen geändert', $d);
             respond(['ok' => true, 'roles' => $new]);
+        }
+        /* Rolle anlegen oder ändern: Name, Beschreibung, Rechte (inkl. Modulzugang). Standardrollen: Name und Rechte,
+           Administrator: fest. Neue Rolle optional als Kopie einer bestehenden (kopieVon). */
+        case 'rolle_save': {
+            $me = require_admin_confirmation('rechte_save');
+            $b = body();
+            $id = is_string($b['id'] ?? null) ? $b['id'] : '';
+            if ($id === 'admin') fail('Die Rolle „Administrator“ hat immer alle Rechte und kann nicht geändert werden.', 422);
+            $res = with_lock('rollen', function () use ($b, $id, $me) {
+                $dok = rollen_dok(true);
+                $eigene = rollen_eigene();
+                $alt = rights_roles();
+                $kat = perms_katalog();
+                $name = s($b['name'] ?? null, 40, false);
+                if ($name === null || mb_strlen($name) < 2) throw new InvalidArgumentException('Bitte einen Namen für die Rolle angeben (mindestens 2 Zeichen).');
+                $besch = s($b['beschreibung'] ?? '', 160) ?? '';
+                $neu = $id === '';
+                if (!$neu && !in_array($id, PERM_ROLES, true) && !isset($eigene[$id])) fail('Rolle nicht gefunden.', 404);
+                foreach (array_merge(['admin'], PERM_ROLES, array_keys($eigene)) as $r) {
+                    if ($r !== $id && mb_strtolower(rolle_name($r)) === mb_strtolower($name)) throw new InvalidArgumentException('Eine Rolle mit dem Namen „' . $name . '“ gibt es bereits.');
+                }
+                $quelle = is_string($b['kopieVon'] ?? null) ? $b['kopieVon'] : '';
+                if (is_array($b['rechte'] ?? null)) $rechte = rights_close(rights_clean($b['rechte']));
+                elseif ($neu && $quelle !== '' && rolle_existiert($quelle)) $rechte = $quelle === 'admin' ? array_keys($kat) : ($alt[$quelle] ?? []);
+                elseif (!$neu) $rechte = $alt[$id];
+                else $rechte = [];
+                if ($neu) { do { $id = 'r' . bin2hex(random_bytes(4)); } while (isset($eigene[$id])); }
+                $vorher = $neu ? [] : $alt[$id];
+                $altName = $neu ? '' : rolle_name($id);
+                $d = [];
+                if ($altName !== $name) $d[] = ['k' => "rolle|$id|name", 'code' => '', 'name' => $name, 'f' => 'Name', 'from' => $altName, 'to' => $name];
+                foreach (array_diff($rechte, $vorher) as $k) $d[] = ['k' => "r|$id|$k", 'code' => '', 'name' => $name, 'f' => $kat[$k]['l'], 'from' => 'nein', 'to' => 'ja'];
+                foreach (array_diff($vorher, $rechte) as $k) $d[] = ['k' => "r|$id|$k", 'code' => '', 'name' => $name, 'f' => $kat[$k]['l'], 'from' => 'ja', 'to' => 'nein'];
+                if (in_array($id, PERM_ROLES, true)) {
+                    // Standardrolle: Rechte im Dokument „rechte“ (wie bisher, ältere Fassungen lesen sie weiter), Name im Dokument „rollen“
+                    $roles = []; foreach (PERM_ROLES as $r) $roles[$r] = $r === $id ? $rechte : $alt[$r];
+                    store_write('rechte', ['roles' => $roles, 'bekannt' => array_keys($kat), 'updatedAt' => now(), 'updatedBy' => $me['name']]);
+                    $namen = is_array($dok['namen'] ?? null) ? $dok['namen'] : [];
+                    if ($name === ROLE_LABELS[$id]) unset($namen[$id]); else $namen[$id] = $name;
+                    $dok['namen'] = $namen;
+                } else {
+                    $e = is_array($dok['eigene'] ?? null) ? $dok['eigene'] : [];
+                    $e[$id] = ['name' => $name, 'beschreibung' => $besch, 'rechte' => $rechte,
+                               'erstellt' => $e[$id]['erstellt'] ?? now(), 'von' => $e[$id]['von'] ?? $me['name'], 'geaendert' => now(), 'geaendertVon' => $me['name']];
+                    $dok['eigene'] = $e;
+                }
+                store_write('rollen', $dok);
+                rollen_dok(true);
+                return [$id, $name, $neu, $d];
+            });
+            [$id, $name, $neu, $d] = $res;
+            audit('user', $neu ? "Rolle „{$name}“ angelegt" : "Rolle „{$name}“ geändert", $d);
+            respond(['ok' => true, 'id' => $id, 'rollen' => rollen_liste()]);
+        }
+        /* Eigene Rolle löschen – nur, wenn kein Mitarbeiter sie mehr hat (sonst verlöre er stillschweigend Rechte) */
+        case 'rolle_loeschen': {
+            $me = require_admin_confirmation('rechte_save');
+            $id = (string)(body()['id'] ?? '');
+            if ($id === 'admin' || in_array($id, PERM_ROLES, true)) fail('Standardrollen können nicht gelöscht werden.', 422);
+            $name = with_lock('rollen', function () use ($id) {
+                $dok = rollen_dok(true);
+                if (!isset(rollen_eigene()[$id])) fail('Rolle nicht gefunden.', 404);
+                $mit = array_values(array_filter(users_load(), fn($u) => in_array($id, user_rollen($u), true)));
+                if ($mit) throw new InvalidArgumentException('Die Rolle ist noch ' . (count($mit) === 1 ? '1 Mitarbeiter' : count($mit) . ' Mitarbeitern') . ' zugeordnet ('
+                    . implode(', ', array_slice(array_column($mit, 'name'), 0, 5)) . (count($mit) > 5 ? ' …' : '') . '). Bitte zuerst dort eine andere Rolle wählen.');
+                $name = rolle_name($id);
+                unset($dok['eigene'][$id]);
+                store_write('rollen', $dok);
+                rollen_dok(true);
+                return $name;
+            });
+            audit('user', "Rolle „{$name}“ gelöscht", [['k' => "rolle|$id|name", 'code' => '', 'name' => $name, 'f' => 'Rolle', 'from' => $name, 'to' => '']]);
+            respond(['ok' => true, 'rollen' => rollen_liste()]);
         }
 
         case 'user_save': {
@@ -205,19 +288,34 @@ switch ($action) {
                 $id = is_string($b['id'] ?? null) ? $b['id'] : '';
                 $person = nutzer_person($b, $id === '');
                 $name = $person['name'];
-                $role = is_string($b['role'] ?? null) && isset(ROLES[$b['role']]) ? $b['role'] : null;
-                if ($role === null) throw new InvalidArgumentException('Ungültige Rolle.');
+                // Rollen: „rollen“ (Liste, neue Oberfläche) oder „role“ (eine Rolle, ältere Oberfläche). Administrator nur allein.
+                $weitere = null;
+                if (is_array($b['rollen'] ?? null)) {
+                    $liste = array_values(array_unique(array_filter($b['rollen'], fn($x) => is_string($x) && $x !== '')));
+                    foreach ($liste as $r) if (!rolle_existiert($r)) throw new InvalidArgumentException('Ungültige Rolle.');
+                    if (!$liste) throw new InvalidArgumentException('Bitte mindestens eine Rolle wählen.');
+                    if (in_array('admin', $liste, true)) { $role = 'admin'; $weitere = []; }
+                    else {
+                        // Hauptrolle bevorzugt eine Standardrolle: ältere Fassungen (Rückfall) kennen nur diese – nie mehr Rechte als hier
+                        $std = array_values(array_intersect($liste, PERM_ROLES));
+                        $role = $std[0] ?? $liste[0];
+                        $weitere = array_values(array_diff($liste, [$role]));
+                    }
+                } else {
+                    $role = is_string($b['role'] ?? null) && rolle_existiert($b['role']) ? $b['role'] : null;
+                    if ($role === null) throw new InvalidArgumentException('Ungültige Rolle.');
+                }
                 // Mitarbeiter ohne Anmeldung (z. B. Lager, nur Urlaubsplanung): immer deaktiviert, kein Passwort nötig
                 $zugang = !array_key_exists('zugang', $b) || !empty($b['zugang']);
                 $active = $zugang && !empty($b['active']);
-                if (!$zugang) $role = 'viewer';   // ohne Anmeldung keine Rechte; beim Einrichten der Anmeldung neu wählen
+                if (!$zugang) { $role = 'viewer'; $weitere = []; }   // ohne Anmeldung keine Rechte; beim Einrichten der Anmeldung neu wählen
                 $pw = $zugang ? ($b['password'] ?? '') : '';
                 $setPw = is_string($pw) && $pw !== '';
                 // Abweichende Rechte (nur wenn mitgeschickt); verboten hat Vorrang
                 $hasRights = array_key_exists('grant', $b) || array_key_exists('deny', $b);
                 $deny = rights_clean(is_array($b['deny'] ?? null) ? $b['deny'] : []);
                 $grant = array_values(array_diff(rights_clean(is_array($b['grant'] ?? null) ? $b['grant'] : []), $deny));
-                $lbl = function (array $ks) { return implode(', ', array_map(function ($k) { return PERMS[$k]['l']; }, $ks)); };
+                $lbl = function (array $ks) { return implode(', ', array_map(function ($k) { return perms_katalog()[$k]['l'] ?? $k; }, $ks)); };
                 // Zwei-Faktor-Pflicht je Nutzer (optional; ohne Angabe – ältere Oberfläche – bleibt sie unverändert)
                 $hasPflicht = array_key_exists('twofaPflicht', $b);
                 $pflicht = !empty($b['twofaPflicht']);
@@ -234,9 +332,10 @@ switch ($action) {
                     foreach (['vorname', 'nachname', 'email'] as $f) if ($person[$f] !== '') $u[$f] = $person[$f];
                     if ($pflicht) $u['twofaPflicht'] = true;
                     if ($hasRights && $role !== 'admin') { if ($grant) $u['grant'] = $grant; if ($deny) $u['deny'] = $deny; }
+                    if ($weitere) $u['rollen'] = $weitere;
                     $users[] = $u;
                     users_save($users);
-                    $d = [['k' => 'u|role', 'code' => '', 'name' => $uname, 'f' => 'Rolle', 'from' => '', 'to' => ROLE_LABELS[$role]]];
+                    $d = [['k' => 'u|role', 'code' => '', 'name' => $uname, 'f' => 'Rolle', 'from' => '', 'to' => rollen_text($u)]];
                     if (!$active) $d[] = ['k' => 'u|active', 'code' => '', 'name' => $uname, 'f' => 'Status', 'from' => '', 'to' => 'deaktiviert'];
                     if ($person['email'] !== '') $d[] = ['k' => 'u|email', 'code' => '', 'name' => $uname, 'f' => 'E-Mail', 'from' => '', 'to' => $person['email']];
                     if (!empty($u['grant'])) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $uname, 'f' => 'Zusätzlich erlaubt', 'from' => '', 'to' => $lbl($u['grant'])];
@@ -253,7 +352,12 @@ switch ($action) {
                 if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']) || !empty($b['resetPasskeys']))) {
                     fail('Für den eigenen Zugang bitte „Passwort ändern“, „Zwei-Faktor-Anmeldung“ oder „Passkeys“ verwenden.', 403);
                 }
-                if ($id === $me['id'] && ($role !== $old['role'] || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
+                $vergleich = function (string $r, ?array $w, array $alt): array {
+                    $l = $r === 'admin' ? ['admin'] : array_merge([$r], $w ?? array_map('strval', (array)($alt['rollen'] ?? [])));
+                    $l = array_values(array_unique($l)); sort($l); return $l;
+                };
+                $altRollen = user_rollen($old); sort($altRollen);
+                if ($id === $me['id'] && ($vergleich($role, $weitere, $old) != $altRollen || !$active)) throw new InvalidArgumentException('Die eigene Rolle und den eigenen Zugang können Sie nicht ändern.');
                 if ($id === $me['id'] && $hasPflicht && $pflicht !== !empty($old['twofaPflicht'])) fail('Die Zwei-Faktor-Pflicht des eigenen Zugangs kann nur ein anderer Administrator ändern.', 403);
                 $users[$i]['name'] = $name;
                 foreach (['vorname', 'nachname', 'email'] as $f) {
@@ -262,13 +366,14 @@ switch ($action) {
                     if ($person[$f] !== '') $users[$i][$f] = $person[$f]; else unset($users[$i][$f]);
                 }
                 $users[$i]['role'] = $role;
+                if ($weitere !== null || $role === 'admin') { if ($weitere && $role !== 'admin') $users[$i]['rollen'] = $weitere; else unset($users[$i]['rollen']); }
                 $users[$i]['active'] = $active;
                 if ($zugang) unset($users[$i]['zugang']); else { $users[$i]['zugang'] = false; $users[$i]['mustChange'] = false; }
                 if (active_admins($users) < 1) throw new InvalidArgumentException('Es muss mindestens ein aktiver Administrator bestehen bleiben.');
                 $d = [];
                 if ($old['name'] !== $name) $d[] = ['k' => 'u|name', 'code' => '', 'name' => $old['username'], 'f' => 'Name', 'from' => $old['name'], 'to' => $name];
                 if ((string)($old['email'] ?? '') !== (string)($users[$i]['email'] ?? '')) $d[] = ['k' => 'u|email', 'code' => '', 'name' => $old['username'], 'f' => 'E-Mail', 'from' => (string)($old['email'] ?? ''), 'to' => (string)($users[$i]['email'] ?? '')];
-                if ($old['role'] !== $role) $d[] = ['k' => 'u|role', 'code' => '', 'name' => $old['username'], 'f' => 'Rolle', 'from' => ROLE_LABELS[$old['role']], 'to' => ROLE_LABELS[$role]];
+                if (rollen_text($old) !== rollen_text($users[$i])) $d[] = ['k' => 'u|role', 'code' => '', 'name' => $old['username'], 'f' => 'Rolle', 'from' => rollen_text($old), 'to' => rollen_text($users[$i])];
                 if ($hasRights || $role === 'admin') {
                     $og = array_values((array)($old['grant'] ?? [])); $od = array_values((array)($old['deny'] ?? []));
                     if ($role === 'admin') { $grant = []; $deny = []; }

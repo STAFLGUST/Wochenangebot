@@ -85,7 +85,7 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   nach einem Fehlschlag auf den nächsten Code warten.
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
-- **Rechte** bleiben in der Anwendung (Nutzer → Rollen und Rechte). Keycloak sagt nur „wer“; ein in der Anwendung
+- **Rechte** bleiben in der Anwendung (Verwaltung → Rollen und Rechte, inklusive Modulzugang je Rolle). Keycloak sagt nur „wer“; ein in der Anwendung
   gesperrtes Konto ist sofort ausgesperrt. Neue Mitarbeiter brauchen beides: Konto in Keycloak und Mitarbeiterkonto.
 - **Abmelden / Sperren:** Abmelden in einer Anwendung meldet in allen ab (Back-Channel-Logout). Ein Konto zentral
   sperren: `konten.sh sperren <name>` (deaktiviert und meldet überall ab) oder in der Anwendung sperren (wirkt sofort).

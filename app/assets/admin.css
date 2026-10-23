@@ -967,19 +967,65 @@ body.ro .sale-tag { cursor: default; }
 @media (max-width: 860px) { .adm-top #btn-publish { width: auto; min-width: 36px; padding: 0 9px; gap: 6px; } }
 @media (max-width: 480px) { .adm-top .brand > div:not(.brand-mark) { display: none; } }
 
-/* Rollen und Rechte */
-.rm-card { padding: 14px 16px; margin-top: 16px; }
-.rm-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
-.rm-head .hint { margin: 0 0 10px; }
-.rm-wrap { overflow-x: auto; }
-.rmtab { min-width: 560px; }
-.rmtab td, .rmtab th { padding: 7px 8px; font-size: 13px; }
-.rmtab .rm-c { width: 120px; text-align: center; }
-.rmtab .rm-ls { display: none; text-decoration: none; }
-.rmtab .rm-c input { width: 17px; height: 17px; accent-color: var(--accent); }
-.rmtab tr.rm-g th { text-align: left; background: var(--surface-3); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
-.rmtab tr.rm-fixed td { color: var(--text-2); }
-.rm-lock { color: var(--c-fresh); font-weight: 700; }
+/* Rollen und Rechte (admin-rollen.js): links die Rollen, rechts je Modul Zugang und Rechte */
+.rl-layout { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.rl-liste { display: grid; gap: 4px; padding: 8px; position: sticky; top: 12px; margin-bottom: 0; }
+.rl-item { display: grid; gap: 2px; width: 100%; padding: 9px 12px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.rl-item:hover { background: var(--surface-2); }
+.rl-item.on { border-color: var(--accent); background: var(--accent-soft); }
+.rl-item-n { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.rl-item-m { font-size: 12.5px; color: var(--text-2); }
+.rl-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 5px; background: var(--surface-3); color: var(--text-2); font-size: 11px; font-weight: 600; vertical-align: 1px; }
+.rl-tag.rl-plan { background: var(--c-aged-bg); color: var(--c-aged); }
+.rl-detail { padding: 16px 18px; margin-bottom: 0; min-width: 0; }
+.rl-det-kopf { display: flex; flex-wrap: wrap; gap: 12px 16px; justify-content: space-between; align-items: flex-end; }
+.rl-felder { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; flex: 1 1 420px; }
+.rl-felder .rl-art { margin: 0; align-self: end; }
+.rl-det-akt { display: flex; flex-wrap: wrap; gap: 8px; }
+.rl-loeschen { color: var(--accent); }
+.rl-meta { margin: 8px 0 0; }
+.rl-h { margin: 18px 0 4px; }
+.rl-module { display: grid; gap: 10px; margin-top: 10px; }
+.rl-mod { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface); }
+.rl-mod-kopf { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
+.rl-mod-t h4 { margin: 0; font-size: 15px; }
+.rl-mod-t p { margin: 2px 0 0; font-size: 12.5px; color: var(--text-2); }
+.rl-rechte { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.rl-recht { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; font-size: 13.5px; line-height: 1.35; cursor: pointer; }
+.rl-recht input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--accent); }
+.rl-recht .rm-k { flex: none; min-width: 66px; margin: 1px 0 0; }
+.rl-recht.fest { cursor: default; color: var(--text-2); }
+.rl-fest-i { flex: none; width: 17px; text-align: center; font-weight: 700; color: var(--c-fresh); }
+.rl-mod.zu { background: var(--surface-2, var(--surface)); }
+.rl-mod.zu .rl-rechte { opacity: .55; }
+.rl-mod.zu .rl-mod-t h4 { color: var(--text-2); }
+.rl-mod-hinw { margin: 8px 0 0; font-size: 12.5px; color: var(--text-2); }
+.rl-admin { background: transparent; border-style: dashed; }
+/* Schalter „Modul öffnen“ (Kontrollkästchen mit role="switch") */
+.rl-schalter { flex: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.rl-schalter input { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 999px; background: var(--line-2, #c9c3bd); border: 0; cursor: pointer; transition: background .15s; }
+.rl-schalter input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s; }
+.rl-schalter input:checked { background: var(--c-fresh); }
+.rl-schalter input:checked::after { transform: translateX(16px); }
+.rl-schalter input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rl-schalter input:disabled { cursor: default; opacity: .6; }
+.rl-schalter-t { min-width: 76px; color: var(--text-2); }
+.rl-foot { align-items: center; }
+.rl-stand { margin-right: auto; font-size: 13px; color: var(--c-aged); }
+.role-b.r-eigen { color: var(--c-fresh); background: var(--c-fresh-bg, var(--surface-3)); }
+.role-pick.mehr { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.us-rollen-link { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 12px 16px; margin-top: 16px; }
+.us-rollen-link p { margin: 0; }
+@media (max-width: 900px) {
+  .rl-layout { grid-template-columns: 1fr; }
+  .rl-liste { position: static; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
+@media (max-width: 560px) {
+  .rl-detail { padding: 14px 12px; }
+  .rl-rechte { grid-template-columns: 1fr; }
+  .rl-mod-kopf { flex-wrap: wrap; }
+  .rl-schalter-t { min-width: 0; }
+}
 .rm-k { display: inline-block; min-width: 38px; margin-right: 8px; padding: 1px 6px; border-radius: 5px; font-size: 11px; font-weight: 600; text-align: center; }
 .rm-sehen { background: var(--c-frozen-bg); color: var(--c-frozen); }
 .rm-machen { background: var(--accent-soft); color: var(--accent); }
@@ -989,15 +1035,7 @@ body.ro .sale-tag { cursor: default; }
 .ur-box .hint { margin: 6px 0 8px; }
 .urtab td { padding: 6px 4px; font-size: 13px; vertical-align: middle; }
 .urtab select { height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
-@media (max-width: 560px) {
-  .rmtab { min-width: 0; }
-  .rmtab .rm-c { width: 58px; padding: 6px 2px; }
-  .rmtab thead th.rm-c { font-size: 11px; line-height: 1.25; white-space: normal; }
-  .rmtab .rm-k { display: none; }
-  .rmtab .rm-ll { display: none; }
-  .rmtab .rm-ls { display: inline; }
-  .urtab select { max-width: 132px; }
-}
+@media (max-width: 560px) { .urtab select { max-width: 132px; } }
 
 /* Auswertung: Karte der Kunden-Anmeldungen */
 .aw-bar .aw-sum { color: var(--text-2); font-size: 13px; margin-left: auto; font-variant-numeric: tabular-nums; }
@@ -1370,7 +1408,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   .adm .adm-page .btn, .adm .adm-page .ibtn, .adm .adm-page input[type="file"], .adm .adm-page input[type="search"], .adm .adm-page .search { display: none !important; }
   .adm .adm-page thead, .adm .adm-page th, .adm .adm-page .view-bar { position: static !important; }   /* klebende Köpfe */
   .adm .adm-page * { box-shadow: none !important; }
-  .adm .adm-page [style*="overflow"], .adm .adm-page .st-card, .adm .adm-page .lot-scroll, .adm .adm-page .sec-block, .adm .adm-page .ek-wrap, .adm .adm-page .tl-wrap, .adm .adm-page .rm-wrap, .adm .adm-page .aw-tw, .adm .adm-page .ez-pos, .adm .adm-page .ez-dtw, .adm .adm-page .of-card { overflow: visible !important; max-height: none !important; width: auto; max-width: none; }
+  .adm .adm-page [style*="overflow"], .adm .adm-page .st-card, .adm .adm-page .lot-scroll, .adm .adm-page .sec-block, .adm .adm-page .ek-wrap, .adm .adm-page .tl-wrap, .adm .adm-page .aw-tw, .adm .adm-page .ez-pos, .adm .adm-page .ez-dtw, .adm .adm-page .of-card { overflow: visible !important; max-height: none !important; width: auto; max-width: none; }
   .adm .adm-page table { min-width: 0 !important; width: 100% !important; }
   .adm .adm-page tr { break-inside: avoid; }
   .adm .adm-page .card, .adm .adm-page .panel { border-color: #bbb; }

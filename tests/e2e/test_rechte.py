@@ -1,6 +1,7 @@
 """Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten).
-Prüft Standards (= bisheriges Rollenmodell), Durchsetzung auf dem Server, Voraussetzungen, Schutz der
-Administratorrechte, Protokoll und die Oberfläche (Rechte-Tabelle, Ausnahmen im Nutzer-Dialog, Sichtbarkeit).
+Prüft Standards (= bisheriges Rollenmodell plus Modulzugang für alle Kacheln), Durchsetzung auf dem Server,
+Voraussetzungen, Schutz der Administratorrechte, Protokoll und die Oberfläche (Rollen und Rechte, Ausnahmen im
+Nutzer-Dialog, Sichtbarkeit). Eigene Rollen und Modulzugang im Einzelnen: Gruppen „rollen“ und „rollen_host“.
 Läuft gegen den Test-Mailserver (Versand durch einen berechtigten Bearbeiter)."""
 import sys
 from playwright.sync_api import sync_playwright
@@ -20,6 +21,10 @@ EDITOR_DEFAULT = {'angebot.bearbeiten', 'angebot.veroeffentlichen', 'angebote.ve
                   'bestand.sehen', 'bestand.einkaufspreise', 'bestand.importieren', 'stammdaten.sehen', 'stammdaten.bearbeiten', 'einkauf.sehen', 'einkauf.melden',
                   'bestellungen.sehen', 'bestellungen.bearbeiten', 'hr.antrag'}
 VIEWER_DEFAULT = {'preisverlauf.sehen', 'bestand.sehen', 'stammdaten.sehen', 'einkauf.sehen', 'hr.antrag'}   # hr.antrag: eigener Urlaub (Modul HR)
+# Modulzugang „<modul>.zugang“ je Kachel (lib/rechte.php): Standard für beide Standardrollen – alle behalten ihre Kacheln
+ZUGANG = {f'{m}.zugang' for m in ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung']}
+EDITOR_DEFAULT |= ZUGANG
+VIEWER_DEFAULT |= ZUGANG
 STOCK = {'date': '2026-10-16', 'source': 'Bestand.xls', 'articles': [{'code': '1', 'name': 'Testartikel', 'kg': 10, 'lots': []}]}
 
 smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
@@ -105,39 +110,42 @@ with sync_playwright() as pw:
         return pg
 
     a = page('admin', PW)
-    a.click('#vt-users'); a.wait_for_selector('#rm-card')
-    box = lambda r, k: a.locator(f'#rm-card [data-rm-role="{r}"][data-rm-key="{k}"]')
-    check('UI: rights table shows saved role rights', box('viewer', 'protokoll.sehen').is_checked() and not box('editor', 'kunden.sehen').is_checked()
-          and a.locator('#rm-card tr.rm-fixed').count() == 3)
-    a.evaluate("window.scrollTo(0, document.querySelector('#rm-card').getBoundingClientRect().top + scrollY - 140)"); a.screenshot(path=SH + '/rechte-tabelle.png')
-    box('editor', 'kunden.bearbeiten').check()
-    check('UI: checking a right ticks its requirement', box('editor', 'kunden.sehen').is_checked())
-    box('editor', 'kunden.sehen').uncheck()
-    check('UI: unchecking a requirement clears dependent rights', not box('editor', 'kunden.bearbeiten').is_checked())
-    box('editor', 'bestellungen.sehen').uncheck()
-    a.click('[data-rm=save]'); a.wait_for_timeout(600)
+    a.click('#vt-rollen'); a.wait_for_selector('#view-rollen .rl-item.on')
+    box = lambda k: a.locator(f'#view-rollen [data-rl-key="{k}"]')
+    waehle = lambda r: (a.click(f'#view-rollen [data-rl-wahl="{r}"]'), a.wait_for_selector(f'#view-rollen .rl-item.on[data-rl-wahl="{r}"]'))
+    waehle('viewer')
+    check('UI: role view shows saved role rights', box('protokoll.sehen').is_checked() and a.locator('#view-rollen .rl-admin .rl-recht').count() == 3)
+    waehle('editor')
+    check('UI: editor rights as saved', not box('kunden.sehen').is_checked() and box('angebot.zugang').is_checked())
+    a.screenshot(path=SH + '/rechte-tabelle.png')
+    box('kunden.bearbeiten').check()
+    check('UI: checking a right ticks its requirement', box('kunden.sehen').is_checked())
+    box('kunden.sehen').uncheck()
+    check('UI: unchecking a requirement clears dependent rights', not box('kunden.bearbeiten').is_checked())
+    box('bestellungen.sehen').uncheck()
+    a.click('[data-rl-akt=speichern]'); a.wait_for_function("() => !document.querySelector('#rl-stand') || !document.querySelector('#rl-stand').textContent")
     check('UI: rights saved', 'bestellungen.sehen' not in A.call('rechte')[1]['roles']['editor'] and 'bestellungen.bearbeiten' not in A.call('rechte')[1]['roles']['editor'])
-    a.wait_for_selector('#rm-card')
-    a.click('[data-rm=default]')
-    check('UI: restore defaults fills the table', box('editor', 'bestellungen.sehen').is_checked() and not box('viewer', 'protokoll.sehen').is_checked())
-    a.click('[data-rm=save]'); a.wait_for_timeout(600)
+    a.click('[data-rl-akt=standard]')
+    check('UI: restore defaults fills the role', box('bestellungen.sehen').is_checked() and box('bestellungen.bearbeiten').is_checked())
+    a.click('[data-rl-akt=speichern]'); a.wait_for_function("() => !document.querySelector('#rl-stand').textContent")
+    waehle('viewer'); a.click('[data-rl-akt=standard]'); a.click('[data-rl-akt=speichern]'); a.wait_for_function("() => !document.querySelector('#rl-stand').textContent")
     check('UI: defaults saved', set(A.call('rechte')[1]['roles']['editor']) == EDITOR_DEFAULT and set(A.call('rechte')[1]['roles']['viewer']) == VIEWER_DEFAULT)
-    a.wait_for_selector('#rm-card')
+    a.click('#vt-users'); a.wait_for_selector('#us-zu-rollen')
     check('UI: users table shows exceptions', '+1' in a.inner_text('#view-users tr:has-text("vera")'))
     a.click(f'[data-uedit="{uid["vera"]}"]'); a.wait_for_selector('#dlg-user[open] #ur-box')
     check('UI: user dialog lists exceptions', a.locator('#ur-list [data-ur="bestand.importieren"]').input_value() == 'grant')
     a.select_option('#ur-list [data-ur="kunden.sehen"]', 'grant')
-    a.check('#dlg-user input[name=role][value=editor]')
+    a.check('#dlg-user input[name=rollen][value=editor]')
     check('UI: role change keeps chosen exceptions', a.locator('#ur-list [data-ur="kunden.sehen"]').input_value() == 'grant')
-    a.check('#dlg-user input[name=role][value=admin]')
+    a.check('#dlg-user input[name=rollen][value=admin]')
     check('UI: no exceptions for administrators', a.locator('#ur-box').is_hidden())
-    a.check('#dlg-user input[name=role][value=viewer]')
+    a.check('#dlg-user input[name=rollen][value=viewer]')
     a.screenshot(path=SH + '/rechte-nutzer.png')
     a.click('#dlg-user button[type=submit]'); a.wait_for_selector('#dlg-user', state='hidden')
     v = next(x for x in A.call('rechte')[1]['users'] if x['username'] == 'vera')
     check('UI: exceptions saved with the user', set(v['grant']) == {'bestand.importieren', 'kunden.sehen'} and v['role'] == 'viewer', v)
     a.set_viewport_size({'width': 390, 'height': 844}); a.wait_for_timeout(200)
-    a.evaluate("window.scrollTo(0, document.querySelector('#rm-card').getBoundingClientRect().top + scrollY - 210)"); a.screenshot(path=SH + '/rechte-390.png')
+    a.click('#vt-rollen'); a.wait_for_selector('#view-rollen .rl-item.on'); a.screenshot(path=SH + '/rechte-390.png')
     check('mobile: no horizontal page scroll', a.evaluate('document.documentElement.scrollWidth') <= 390)
     # Leser mit Kundenansicht: sieht Kunden, darf nichts ändern
     vp = page('vera', 'Leser-Zugang-55')

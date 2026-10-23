@@ -688,7 +688,7 @@ def module_php(rw: Regelwerk) -> str:
     Der Server wertet ausschließlich diese Tabelle aus (GR-102) – keine zweite, handgeschriebene Logik."""
     z = ["<?php", "declare(strict_types=1);",
          "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml –",
-         "   nicht von Hand ändern. Auswertung: lib/module.php. Bei Konflikten nach einem Rebase neu erzeugen. */",
+         "   nicht von Hand ändern. Auswertung: lib/module.php (Rechte → Modul: lib/rechte.php). Bei Konflikten nach einem Rebase neu erzeugen. */",
          "if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar", "",
          "const MODULE = ["]
     for m in sorted(rw.modulliste, key=lambda m: (m.get("reihenfolge", 1000), m["id"])):
@@ -703,6 +703,8 @@ def module_php(rw: Regelwerk) -> str:
                    "abhaengigkeiten": list(m.get("abhaengigkeiten", [])), "oberflaechen": obs}
         z.append(f"    {php_wert(m['id'])} => {php_ausdruck(eintrag)},")
     z.append("];")
+    # Recht → Modul (regeln/berechtigungen.toml); Rechte mit Präfix „<modul>.“ ordnet lib/rechte.php selbst zu
+    z.append("const RECHTE_MODUL = " + php_ausdruck(dict(sorted(rw.rechte.get("zuordnung", {}).items()))) + ";")
     w = rw.wartung
     z.append("const MODUL_FREIGABE_ERLAUBT = " + php_ausdruck({k: list(v) for k, v in w.get("freigabe_erlaubt", {}).items()}) + ";")
     z.append("const MODUL_REGELN = [")

@@ -55,7 +55,8 @@
 
   function render(module) {
     const alle = Object.fromEntries(module.map((m) => [m.id, m]));
-    const kacheln = module.filter((m) => m.dashboard && m.kachel).sort((a, b) => (a.reihenfolge ?? 999) - (b.reihenfolge ?? 999));
+    // Kacheln ohne Modulzugang der Rolle erscheinen nicht (recht: false) – die Sperre selbst setzt der Server durch
+    const kacheln = module.filter((m) => m.dashboard && m.kachel && m.kachel.recht !== false).sort((a, b) => (a.reihenfolge ?? 999) - (b.reihenfolge ?? 999));
     $('#db-grid').innerHTML = kacheln.map((m) => {
       const s = status(m, alle);
       // Absperrband nur für Anwendungen, die (noch) nicht nutzbar sind – nicht für Wartung (eigener Zustand mit Hinweis)
@@ -70,6 +71,7 @@
         ? `<a class="db-tile db-glas" role="listitem" data-modul="${esc(m.id)}" href="${esc(kachelZiel(m.kachel, alle, location.hostname))}">${inhalt}</a>`
         : `<div class="db-tile db-glas off${band ? ' gesperrt' : ''}" role="listitem" data-modul="${esc(m.id)}" aria-disabled="true">${inhalt}</div>`;
     }).join('');
+    if (!kacheln.length) $('#db-grid').innerHTML = '<p class="db-leer" role="listitem">Für Ihre Rolle ist noch keine Anwendung freigegeben. Bitte an einen Administrator wenden.</p>';
     const frei = kacheln.filter((m) => m.kachel.zugang).length;
     $('#db-sub').textContent = `${frei} von ${kacheln.length} Anwendungen für Sie verfügbar`;
     einpassen();

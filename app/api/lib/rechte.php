@@ -40,36 +40,111 @@ const PERMS = [
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */
 const PERMS_ADMIN_ONLY = ['Mitarbeiter (Anmeldung) und Rechte verwalten', 'Sicherheit und Wartungsmodus', 'E-Mail-Postfach, Signatur und Benachrichtigungen'];
+/* Standardrollen (Rechte im Dokument „rechte“, wie bisher). Eigene Rollen stehen im Dokument „rollen“ (siehe unten). */
 const PERM_ROLES = ['viewer', 'editor'];
 
-/* Rechte je Rolle (gespeichert oder Standard) */
-function rights_roles(): array
+/* ---------- Rechtekatalog: PERMS + Modulzugang je Kachel ----------
+   Modulzugang „<modul>.zugang“ (Roadmap 7b, GR-103): darf die Kachel im Dashboard sehen und die Oberfläche des Moduls
+   öffnen. Er entsteht aus dem Modulregister (jedes Modul mit Kachel) – neue Module bekommen ihn ohne Code-Änderung.
+   Standard: beide Standardrollen (so bleibt der bisherige Zugang aller Mitarbeiter unverändert). Die Rechte innerhalb
+   eines Moduls (PERMS) hängen nicht davon ab: ein Recht kann auch in einem anderen Modul genutzt werden (z. B. Kunden
+   sehen im Angebot), der Modulzugang sperrt nur die Oberfläche des Moduls (modul_zugang_durchsetzen). */
+function perms_katalog(): array
 {
-    $d = store_read('rechte');
+    static $k = null;
+    if ($k !== null) return $k;
+    $k = [];
+    foreach (MODULE as $id => $m) {
+        if (empty($m['dashboard']) || empty($m['kachel_ziel'])) continue;
+        $k["$id.zugang"] = ['g' => $m['name'], 'l' => 'Modul „' . $m['name'] . '“ öffnen (Kachel im Dashboard)', 'k' => 'zugang', 'd' => PERM_ROLES, 'r' => [], 'm' => $id];
+    }
+    foreach (PERMS as $key => $p) $k[$key] = $p + ['m' => recht_modul($key)];
+    return $k;
+}
+/* Modul eines Rechts: Zuordnung aus regeln/berechtigungen.toml (erzeugt: RECHTE_MODUL), sonst Präfix „<modul>.“ */
+function recht_modul(string $key): string
+{
+    if (isset(RECHTE_MODUL[$key])) return RECHTE_MODUL[$key];
+    $m = explode('.', $key, 2)[0];
+    return isset(MODULE[$m]) ? $m : 'plattform';
+}
+
+/* ---------- Rollen ----------
+   admin: fest, alle Rechte · viewer/editor: Standardrollen (Rechte im Dokument „rechte“, Name änderbar) ·
+   eigene Rollen „r<8 hex>“ im Dokument „rollen“: {eigene: {id: {name, beschreibung, rechte, erstellt, von, geaendert, geaendertVon}},
+   namen: {viewer|editor: Name}}. Ein Mitarbeiter hat eine Rolle („role“, wie bisher) und optional weitere („rollen“, nur
+   eigene oder Standardrollen) – die Rechte addieren sich. Format nur erweitert (GR-006): ältere Fassungen lesen „role“. */
+function rollen_dok(bool $neu = false): array
+{
+    static $d = null;
+    if ($neu || $d === null) { $x = store_read('rollen'); $d = is_array($x) ? $x : []; }
+    return $d;
+}
+function rollen_eigene(): array
+{
     $out = [];
-    foreach (PERM_ROLES as $r) {
-        if (is_array($d['roles'][$r] ?? null)) $out[$r] = array_values(array_intersect(array_keys(PERMS), $d['roles'][$r]));
-        else $out[$r] = array_keys(array_filter(PERMS, function ($p) use ($r) { return in_array($r, $p['d'], true); }));
+    foreach ((array)(rollen_dok()['eigene'] ?? []) as $id => $r) {
+        if (is_string($id) && preg_match('/^r[0-9a-f]{8}$/', $id) && is_array($r) && is_string($r['name'] ?? null)) $out[$id] = $r;
     }
     return $out;
 }
-function rights_clean(array $list): array { return array_values(array_unique(array_intersect(array_keys(PERMS), array_map('strval', $list)))); }
+function rolle_existiert(string $id): bool { return $id === 'admin' || in_array($id, PERM_ROLES, true) || isset(rollen_eigene()[$id]); }
+function rolle_name(string $id): string
+{
+    if (in_array($id, PERM_ROLES, true)) { $n = rollen_dok()['namen'][$id] ?? ''; return is_string($n) && $n !== '' ? $n : ROLE_LABELS[$id]; }
+    if ($id === 'admin') return ROLE_LABELS['admin'];
+    return (string)(rollen_eigene()[$id]['name'] ?? $id);
+}
+/* Alle Rollen eines Mitarbeiters (bekannte, ohne Doppelte); Administrator nur als Hauptrolle */
+function user_rollen(array $u): array
+{
+    $r = (string)($u['role'] ?? '');
+    if ($r === 'admin') return ['admin'];
+    $alle = array_merge([$r], array_map('strval', (array)($u['rollen'] ?? [])));
+    return array_values(array_unique(array_filter($alle, fn($x) => $x !== 'admin' && rolle_existiert($x))));
+}
+function rollen_text(array $u): string { return implode(', ', array_map('rolle_name', user_rollen($u))) ?: '–'; }
+
+/* Rechte je Rolle (Standardrollen gespeichert oder Standard, dazu die eigenen Rollen).
+   „bekannt“ (Dokument „rechte“) = Katalog beim letzten Speichern: Rechte, die danach neu hinzukamen, bekommen die
+   Standardrollen mit ihrem Standardwert – sonst verlöre z. B. jeder Mitarbeiter mit dem neuen Modulzugang alle Kacheln.
+   Ältere Dokumente ohne „bekannt“ kannten genau PERMS (der Modulzugang ist dort neu). */
+function rights_roles(): array
+{
+    $d = store_read('rechte') ?? [];
+    $kat = perms_katalog();
+    $bekannt = is_array($d['bekannt'] ?? null) ? $d['bekannt'] : array_keys(PERMS);
+    $out = [];
+    foreach (PERM_ROLES as $r) {
+        $std = array_keys(array_filter($kat, fn($p) => in_array($r, $p['d'], true)));
+        if (is_array($d['roles'][$r] ?? null)) {
+            $neu = array_values(array_filter($std, fn($k) => !in_array($k, $bekannt, true)));
+            $out[$r] = rights_close(array_values(array_unique(array_merge(rights_clean($d['roles'][$r]), $neu))));
+        } else $out[$r] = $std;
+    }
+    foreach (rollen_eigene() as $id => $rl) $out[$id] = rights_close(rights_clean((array)($rl['rechte'] ?? [])));
+    return $out;
+}
+function rights_clean(array $list): array { return array_values(array_unique(array_intersect(array_keys(perms_katalog()), array_map('strval', $list)))); }
 /* Voraussetzungen ergänzen (wer bearbeiten darf, darf auch sehen) */
 function rights_close(array $perms): array
 {
+    $kat = perms_katalog();
     $set = array_flip($perms);
     do {
         $added = false;
-        foreach (array_keys($set) as $p) foreach (PERMS[$p]['r'] ?? [] as $req) if (!isset($set[$req])) { $set[$req] = true; $added = true; }
+        foreach (array_keys($set) as $p) foreach ($kat[$p]['r'] ?? [] as $req) if (!isset($set[$req])) { $set[$req] = true; $added = true; }
     } while ($added);
-    return array_values(array_intersect(array_keys(PERMS), array_keys($set)));
+    return array_values(array_intersect(array_keys($kat), array_keys($set)));
 }
-/* Wirksame Rechte eines Nutzers: Rolle + erlaubt − verboten (Administrator: alle) */
+/* Wirksame Rechte eines Nutzers: alle Rollen + erlaubt − verboten (Administrator: alle) */
 function user_perms(array $u, ?array $roles = null): array
 {
-    if (($u['role'] ?? '') === 'admin') return array_keys(PERMS);
+    $kat = perms_katalog();
+    if (($u['role'] ?? '') === 'admin') return array_keys($kat);
     $roles = $roles ?? rights_roles();
-    $p = $roles[$u['role']] ?? [];
+    $p = [];
+    foreach (user_rollen($u) as $r) $p = array_merge($p, $roles[$r] ?? []);
     $p = array_merge($p, rights_clean((array)($u['grant'] ?? [])));
     $p = rights_close(array_values(array_unique($p)));
     $deny = rights_clean((array)($u['deny'] ?? []));
@@ -77,7 +152,7 @@ function user_perms(array $u, ?array $roles = null): array
     $p = array_values(array_diff($p, $deny));
     do {
         $n = count($p);
-        $p = array_values(array_filter($p, function ($k) use ($p) { foreach (PERMS[$k]['r'] as $req) if (!in_array($req, $p, true)) return false; return true; }));
+        $p = array_values(array_filter($p, function ($k) use ($p, $kat) { foreach ($kat[$k]['r'] as $req) if (!in_array($req, $p, true)) return false; return true; }));
     } while (count($p) !== $n);
     return $p;
 }
@@ -99,9 +174,86 @@ function require_perm_confirmed(string $perm, string $key = ''): array
     if ($at <= time() && $at > time() - bestaetigung_sekunden() && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
     respond(['ok' => false, 'code' => 'confirmation_required', 'error' => 'Bitte bestätigen Sie diese Aktion mit Ihrem aktuellen Passwort.'], 403);
 }
+
+/* ---------- Modulzugang durchsetzen (GR-103: serverseitig, nicht über die Kachel) ----------
+   Kachel: nur mit eigenem „<modul>.zugang“. Oberfläche (Host): mit dem Zugang des Moduls oder eines Teilmoduls
+   („teil_von“, z. B. Import → Verwaltung: die Importzentrale liegt auf dem Verwaltungs-Host). Module ohne Kachel
+   (Dashboard, Plattformkern) brauchen keinen Zugang. */
+function modul_zugang_frei(?array $u, string $modul, ?array $perms = null): bool
+{
+    if (!isset(perms_katalog()["$modul.zugang"])) return true;
+    if (!$u) return false;
+    return in_array("$modul.zugang", $perms ?? user_perms($u), true);
+}
+function modul_host_frei(?array $u, string $modul): bool
+{
+    $teile = [$modul];
+    foreach (MODULE as $id => $m) if (($m['teil_von'] ?? null) === $modul) $teile[] = $id;
+    $mit = array_values(array_filter($teile, fn($m) => isset(perms_katalog()["$m.zugang"])));
+    if (!$mit) return true;
+    if (!$u) return false;
+    $p = user_perms($u);
+    foreach ($mit as $m) if (in_array("$m.zugang", $p, true)) return true;
+    return false;
+}
+/* Modul der Oberfläche dieser Anfrage: der Host (Webserver: WA_OBERFLAECHE, nie aus Kopfzeilen) – sonst die Oberfläche der
+   Aktion, außer dem gemeinsamen Eingabebereich ohne eigenen Host (angebot.eingabe: dort liegen heute Angebot, Bestand,
+   Verwaltung zusammen; die Sichtbarkeit regeln dort die Einzelrechte) */
+function anfrage_modul(?array $aktion): ?string
+{
+    $host = oidc_einstellung('WA_OBERFLAECHE');
+    if ($host !== '') return explode('.', $host, 2)[0];
+    $ob = (string)($aktion['oberflaeche'] ?? '');
+    if ($ob === '' || $ob === 'angebot.eingabe') return null;
+    return explode('.', $ob, 2)[0];
+}
+function modul_zugang_durchsetzen(?array $aktion): void
+{
+    if ($aktion === null || $aktion['oeffentlich'] || $aktion['wartung_frei']) return;
+    if (in_array($aktion['modul'], ['plattform', 'dashboard'], true)) return;   // eigener Zugang, Status, Rollenprüfung im Kern
+    $m = anfrage_modul($aktion);
+    if ($m === null) return;
+    $u = current_user();
+    if (!$u || modul_host_frei($u, $m)) return;   // ohne Anmeldung: die Aktion meldet selbst „Bitte erneut anmelden“
+    header('Cache-Control: no-store');
+    $name = MODULE[$m]['name'] ?? $m;
+    respond(['ok' => false, 'code' => 'kein_modulzugang', 'modul' => $m, 'name' => $name,
+             'error' => 'Sie haben keinen Zugang zum Bereich „' . $name . '“. Bitte an einen Administrator wenden.'], 403);
+}
+
 function rights_catalog(): array
 {
     $out = [];
-    foreach (PERMS as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d']];
+    foreach (perms_katalog() as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m']];
+    return $out;
+}
+/* Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter */
+function rollen_liste(?array $roles = null, ?array $users = null): array
+{
+    $roles = $roles ?? rights_roles();
+    $users = $users ?? users_load();
+    $zahl = fn($id) => count(array_filter($users, fn($u) => nutzer_hat_zugang($u) && in_array($id, user_rollen($u), true)));
+    $out = [['id' => 'admin', 'name' => rolle_name('admin'), 'beschreibung' => 'Alle Rechte, dazu Mitarbeiter und Rechte, Sicherheit und E-Mail-Einstellungen',
+             'art' => 'fest', 'rechte' => array_keys(perms_katalog()), 'mitarbeiter' => $zahl('admin')]];
+    $besch = ['viewer' => 'Standardrolle: nur ansehen', 'editor' => 'Standardrolle: Angebot bearbeiten und veröffentlichen, Bestellungen, Bestand'];
+    foreach (PERM_ROLES as $r) $out[] = ['id' => $r, 'name' => rolle_name($r), 'beschreibung' => $besch[$r], 'art' => 'standard', 'rechte' => $roles[$r], 'mitarbeiter' => $zahl($r)];
+    $eigene = rollen_eigene();
+    uasort($eigene, fn($a, $b) => strcasecmp((string)$a['name'], (string)$b['name']));
+    foreach ($eigene as $id => $rl) $out[] = ['id' => $id, 'name' => (string)$rl['name'], 'beschreibung' => (string)($rl['beschreibung'] ?? ''), 'art' => 'eigen',
+        'rechte' => $roles[$id] ?? [], 'mitarbeiter' => $zahl($id), 'geaendert' => $rl['geaendert'] ?? null, 'geaendertVon' => (string)($rl['geaendertVon'] ?? '')];
+    return $out;
+}
+/* Module für die Rechte-Übersicht: Kachel-Module in Dashboard-Reihenfolge, dazu „plattform“ für Rechte ohne Modul */
+function rechte_module(): array
+{
+    $out = [];
+    foreach (MODULE as $id => $m) {
+        $kachel = !empty($m['dashboard']) && !empty($m['kachel_ziel']);
+        $hat = array_filter(perms_katalog(), fn($p) => $p['m'] === $id);
+        if (!$kachel && !$hat) continue;
+        $frei = false;
+        if ($kachel) { [$zm, $zo] = explode('.', (string)$m['kachel_ziel'], 2); $frei = modul_freigabe($zm, $zo) === 'produktiv'; }
+        $out[] = ['id' => $id, 'name' => $m['name'], 'beschreibung' => $m['beschreibung'], 'icon' => $m['icon'], 'teil_von' => $m['teil_von'], 'kachel' => $kachel, 'freigegeben' => $frei];
+    }
     return $out;
 }

@@ -303,6 +303,7 @@ function modul_wartung_anzeige(string $modul, string $oberflaeche, ?array $u): ?
 function modul_uebersicht(?array $u): array
 {
     $out = [];
+    $perms = $u ? user_perms($u) : [];
     foreach (MODULE as $id => $m) {
         $obs = [];
         foreach ($m['oberflaechen'] as $oid => $o) {
@@ -315,8 +316,10 @@ function modul_uebersicht(?array $u): array
         if ($m['dashboard'] && $m['kachel_ziel']) {
             [$zm, $zo] = explode('.', $m['kachel_ziel'], 2);
             $z = modul_zustand($zm, $zo, $u);
+            // Modulzugang der Rolle (lib/rechte.php): ohne ihn zeigt das Dashboard die Kachel nicht – gesperrt wird serverseitig
+            $recht = modul_zugang_frei($u, $id, $perms);
             $kachel = ['ziel' => $m['kachel_ziel'], 'adresse' => MODULE[$zm]['oberflaechen'][$zo]['adresse'] ?? null,
-                       'status' => $z['kachel'] ?? 'nicht_verfuegbar', 'zugang' => (bool)($z['zugang'] ?? false), 'hinweis' => (bool)($z['hinweis'] ?? false)];
+                       'status' => $z['kachel'] ?? 'nicht_verfuegbar', 'zugang' => $recht && (bool)($z['zugang'] ?? false), 'recht' => $recht, 'hinweis' => (bool)($z['hinweis'] ?? false)];
         }
         $out[] = ['id' => $id, 'name' => $m['name'], 'beschreibung' => $m['beschreibung'], 'icon' => $m['icon'], 'reihenfolge' => $m['reihenfolge'],
                   'dashboard' => $m['dashboard'], 'teil_von' => $m['teil_von'], 'kachel' => $kachel, 'oberflaechen' => $obs];
