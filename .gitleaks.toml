@@ -37,6 +37,8 @@ regexes = [
   # Nutzer anlegen und Zugangsdaten per E-Mail (tests/e2e/test_nutzer_anlegen.py)
   '''Erik-Kennwort-123''',
   '''Start-Kennwort-4711''',
+  # HR · Urlaubsverwaltung (tests/e2e/test_hr.py, Kontoverknüpfung – Branch agent/hr/kontoverknuepfung; die CI scannt alle Branches)
+  '''Urlaub-Konto-4711''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]
