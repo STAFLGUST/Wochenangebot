@@ -292,6 +292,10 @@ with sync_playwright() as p:
     # Kalender der Personalstelle: Eintrag per Klick
     pg.click('[data-tab="kalender"]'); pg.wait_for_selector('#kal-plan tbody tr')
     pg.screenshot(path=os.path.join(SH, 'hr_kalender_1280.png'), full_page=True)
+    pg.emulate_media(color_scheme='dark')
+    pg.screenshot(path=os.path.join(SH, 'hr_kalender_1280_dunkel.png'), full_page=True)
+    check('dunkles Design: dunkler Grund', pg.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(18, 16, 17)', pg.evaluate('getComputedStyle(document.body).backgroundColor'))
+    pg.emulate_media(color_scheme='light')
     pg.click('#kal-eintragen'); pg.wait_for_selector('#dlg-eintrag[open]')
     pg.select_option('#eintrag-person', PA); pg.select_option('#eintrag-art', 'G')
     gtag = montag(Y, 3, 2) + dt.timedelta(days=1)   # Dienstag im März (keine Feiertage)
