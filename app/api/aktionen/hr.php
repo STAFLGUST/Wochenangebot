@@ -205,6 +205,7 @@ switch ($action) {
                     if (!in_array($e['status'], HR_AKTIV, true)) fail('Erledigte Einträge lassen sich nicht mehr ändern.', 409);
                     if ($e['status'] === 'beantragt') fail('Offene Anträge bitte genehmigen oder ablehnen.', 409);
                     $e = array_merge($e, ['person' => $p['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'notiz' => s($b['notiz'] ?? '', 300) ?? '', 'geaendert' => $jetzt]);
+                    if ($art !== 'K') unset($e['urlaubAbzug']);   // „vom Urlaub abgezogen“ gilt nur für Krankheit aus der Zeiterfassung
                     $abw['eintraege'][$i] = $e;
                 }
                 hr_abwesenheiten_schreiben($abw);
@@ -240,6 +241,12 @@ switch ($action) {
             if (array_key_exists('abteilung', $b)) $werte['abteilung'] = s($b['abteilung'], 40) ?? '';
             if (array_key_exists('pos', $b)) $werte['pos'] = max(0, min(9999, (int)$b['pos']));
             if (array_key_exists('aktiv', $b)) $werte['aktiv'] = (bool)$b['aktiv'];
+            if (array_key_exists('personalnummer', $b)) {
+                // Mitarbeiternummer der Zeiterfassung (Zuordnung beim Import), eindeutig
+                $nr = trim((string)(s($b['personalnummer'], 20) ?? ''));
+                if ($nr !== '' && !preg_match('/^[A-Za-z0-9._\/-]{1,20}$/', $nr)) fail('Personalnummer: bitte nur Ziffern, Buchstaben, Punkt, Bindestrich oder Schrägstrich.', 422);
+                $werte['personalnummer'] = $nr;
+            }
             if (array_key_exists('arbeitstage', $b)) {
                 $at = is_array($b['arbeitstage']) ? array_values(array_unique(array_map('intval', $b['arbeitstage']))) : [];
                 if (!$at || array_filter($at, function ($w) { return $w < 1 || $w > 7; })) fail('Bitte mindestens einen Arbeitstag wählen.', 422);
@@ -259,6 +266,11 @@ switch ($action) {
             $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, $werte, $jahr, &$jv) {
                 $roh = hr_personal_roh();
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
+                if (($werte['personalnummer'] ?? '') !== '') {
+                    foreach (hr_personal()['personen'] as $x) {
+                        if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x) . '.', 409);
+                    }
+                }
                 if ($jahr !== null) {
                     $jahre = [];
                     foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) $jahre = $e['jahre'];

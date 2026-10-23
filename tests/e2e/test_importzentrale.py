@@ -73,10 +73,10 @@ ids = lambda cl: sorted(a['id'] for a in cl.call('import_arten')[1].get('arten',
 # ---------- Registrierung: jede Importart gehört dem Daten-Eigentümer ----------
 st, r = A.call('import_arten')
 arten = {a['id']: a for a in r.get('arten', [])}
-ALLE = ['angebot_excel', 'angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'urlaubsplanung', 'vertreter', 'vkgruppen']
+ALLE = ['angebot_excel', 'angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'urlaubsplanung', 'vertreter', 'vkgruppen', 'zeiterfassung']
 check('Administrator sieht alle heutigen Importe', st == 200 and sorted(arten) == ALLE, sorted(arten))
 EIG = {'kunden': 'verwaltung', 'kundengruppen': 'verwaltung', 'vkgruppen': 'verwaltung', 'vertreter': 'verwaltung', 'stammdaten': 'verwaltung',
-       'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_excel': 'angebot', 'angebot_preise': 'angebot', 'urlaubsplanung': 'hr'}
+       'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_excel': 'angebot', 'angebot_preise': 'angebot', 'urlaubsplanung': 'hr', 'zeiterfassung': 'hr'}
 check('Eigentümer je Importart wie in der Datenverantwortung', all(arten[k]['eigentuemer'] == v for k, v in EIG.items()), {k: a['eigentuemer'] for k, a in arten.items()})
 daten = tomllib.load(open(os.path.join(REPO, 'regeln/datenverantwortung.toml'), 'rb'))
 eig_doc = {d['name']: d['eigentuemer'] for d in daten['dokument']}
@@ -92,7 +92,7 @@ check('keine internen Funktionsnamen an den Browser', 'vorschau' not in json.dum
 # ---------- Rechte: Anzeige und Prüfung je Importart (GR-103) ----------
 check('ohne Anmeldung 401', Client().call('import_arten')[0] == 401 and Client().call('import_pruefen', {'art': 'kunden'})[0] == 401)
 check('Leser: keine Importart', ids(L) == [])
-check('Bearbeiter: alles außer Kunden und Urlaubsplanung (kein Kunden-/Personalrecht)', ids(E) == [x for x in ALLE if x not in ('kunden', 'urlaubsplanung')], ids(E))
+check('Bearbeiter: alles außer Kunden und HR-Importen (kein Kunden-/Personalrecht)', ids(E) == [x for x in ALLE if x not in ('kunden', 'urlaubsplanung', 'zeiterfassung')], ids(E))
 check('nur Kundenrecht: nur Kunden', ids(K) == ['kunden'], ids(K))
 ROWS = [{'nr': '2000001', 'firma': 'Zentrale Eins GmbH', 'plz': '20095', 'ort': 'Hamburg', 'zeile': 2}]
 check('Leser: Kundenimport 403', L.call('import_pruefen', {'art': 'kunden', 'daten': {'rows': ROWS}})[0] == 403)
@@ -187,7 +187,7 @@ with sync_playwright() as p:
     y = lambda s: a.locator(s).bounding_box()['y']   # noqa: E731
     check('Navigation: Import als erster Punkt unter Verwaltung', a.locator('#vt-importe').is_visible() and y('#side-admin') < y('#vt-importe') < y('#vt-orders'))
     a.click('#vt-importe'); a.wait_for_selector('#view-importe .imp-art[data-art="kunden"]')
-    check('Liste: alle Importarten mit Eigentümer', a.locator('#view-importe .imp-art').count() == 10 and a.text_content('#view-importe .imp-art[data-art="bestand"] .imp-eig') == 'Bestand')
+    check('Liste: alle Importarten mit Eigentümer', a.locator('#view-importe .imp-art').count() == len(ALLE) and a.text_content('#view-importe .imp-art[data-art="bestand"] .imp-eig') == 'Bestand')
     a.screenshot(path=SH + '/importzentrale-liste.png', full_page=True)
 
     def datei(art, pfad):
