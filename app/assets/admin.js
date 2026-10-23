@@ -216,13 +216,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', sec: '', schutz: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'urlaub', 'log', 'sec', 'schutz'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -246,7 +246,8 @@
   function viewAllowed(v) {
     const nur = BEREICH_VIEWS[bereich()];
     if (nur && !nur.includes(v)) return false;
-    if (['mail', 'users', 'sec', 'schutz'].includes(v)) return can('admin');
+    if (['mail', 'sec', 'schutz'].includes(v)) return can('admin');
+    if (v === 'users') return can('admin') || may('hr.verwalten');   // Mitarbeiter: Administratoren alles, Personalstelle die HR-Angaben
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
     if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
     return !VIEW_PERM[v] || may(VIEW_PERM[v]);
@@ -599,7 +600,7 @@
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'].some(viewAllowed);
+    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'urlaub', 'log', 'sec', 'schutz'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(ROLE_LABEL[me.role])}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
@@ -2288,7 +2289,7 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'urlaub', 'log', 'sec', 'schutz'];
   const ADMIN_VIEWS = ['mail', 'users', 'sec', 'schutz'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
@@ -2324,6 +2325,7 @@
     if (v === 'master') renderMasterView();
     if (v === 'angebote') renderOffersView();
     if (v === 'users' && window.WA.views.users) window.WA.views.users();
+    if (v === 'urlaub' && window.WA.views.urlaub) window.WA.views.urlaub();
     if (v === 'orders' && window.WA.views.orders) window.WA.views.orders();
     if (v === 'einkauf' && window.WA.views.einkauf) window.WA.views.einkauf();
     if (v === 'kunden' && window.WA.views.kunden) window.WA.views.kunden();

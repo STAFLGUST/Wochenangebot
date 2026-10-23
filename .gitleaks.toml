@@ -39,6 +39,7 @@ regexes = [
   '''Start-Kennwort-4711''',
   # HR · Verknüpfung Mitarbeiterkonto (tests/e2e/test_hr.py)
   '''Urlaub-Konto-4711''',
+  '''irgendwas-langes-1''',   # Anmeldeversuch für einen Mitarbeiter ohne Anmeldung (Verlauf von PR #119)
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]
