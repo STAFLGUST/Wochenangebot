@@ -14,6 +14,7 @@ vollständig geprüft (`tests/oidc/`, 197 Prüfungen) und die Betriebskonfigurat
 | `angebot.dashboard-stafl.de` | Mitarbeiter-Eingabe (dieselbe Anwendung wie `/admin/`) | über Keycloak |
 | `verwaltung.dashboard-stafl.de` | Verwaltung (dieselbe Anwendung, nur Verwaltungsbereiche; seit Roadmap 10a, Konsolenschritt `konten.sh realm-aktualisieren`); `/import/` öffnet die Importzentrale (Kachel „Import“) | über Keycloak |
 | `bestand.dashboard-stafl.de` | Bestand (dieselbe Anwendung, nur die Bestandsliste mit Bestandsimport; Phase 1, Konsolenschritt `konten.sh realm-aktualisieren` Stand 4) | über Keycloak |
+| `hr.dashboard-stafl.de` | HR · Urlaubsverwaltung (eigene Seite `/module/hr/` derselben Anwendung; `/` führt dorthin; Schnittstelle nur für HR-Aktionen, Status und Abmelden – GR-109). Freigabe des Inhabers 23.10.2026; DNS: CNAME `hr` → `dashboard-stafl.de`; Konsolenschritt `konten.sh realm-aktualisieren` Stand 5, danach `docker compose up -d app` | über Keycloak |
 | übrige `*.dashboard-stafl.de` | 503-Platzhalter bis zur Freigabe des Moduls (GR-105) | – |
 
 Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nutzen; die alte Anmeldung unter

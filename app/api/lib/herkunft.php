@@ -36,3 +36,39 @@ function herkunft_pruefen(?array $aktion, string $method): void
     header('Vary: Origin, Sec-Fetch-Site');
     fail('Diese Anfrage kam nicht von unserer Seite und wurde abgewiesen.', 403);
 }
+
+/* Aktion ↔ Host (GR-109, ADR-003 §3): Auf einem Keycloak-Host meldet der Webserver seine Oberfläche (SetEnv
+   WA_OBERFLAECHE, nie aus Kopfzeilen). Aktionen einer Oberfläche mit eigener Seite – jede Oberfläche außer dem gemeinsamen
+   Eingabebereich angebot.*, für die das Aktionsregister Aktionen führt (heute hr.intern) – beantwortet nur ihr eigener
+   Host. Auf einem solchen Host gibt es außer ihnen nur die Grundaktionen der Plattform, die auch während einer Wartung
+   erreichbar bleiben (Status, Abmelden, Modulübersicht). Dashboard, Angebot, Verwaltung und Bestand teilen sich weiter den
+   Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, App, Testserver) gilt
+   das Bisherige. Ergänzt die Rechteprüfung jeder Aktion (GR-103), ersetzt sie nicht. */
+function host_eigene_seite(string $oberflaeche): bool
+{
+    static $mitAktionen = null;
+    if ($mitAktionen === null) {
+        $mitAktionen = [];
+        foreach (AKTIONEN as $a) $mitAktionen[(string)$a['oberflaeche']] = true;
+    }
+    return $oberflaeche !== '' && strpos($oberflaeche, 'angebot.') !== 0 && isset($mitAktionen[$oberflaeche]);
+}
+
+/* true, wenn die Aktion auf diesem Host nicht angeboten wird */
+function host_fremd(?array $aktion): bool
+{
+    if ($aktion === null || !oidc_modus()) return false;
+    $host = oidc_einstellung('WA_OBERFLAECHE');
+    if ($host === '') return false;
+    $eigen = (string)$aktion['oberflaeche'];
+    if (host_eigene_seite($eigen)) return $eigen !== $host;
+    if (host_eigene_seite($host)) return !($aktion['modul'] === 'plattform' && $aktion['wartung_frei']);
+    return false;
+}
+
+function host_pruefen(?array $aktion): void
+{
+    if (!host_fremd($aktion)) return;
+    header('Cache-Control: no-store');
+    fail('Diese Aktion gibt es unter dieser Adresse nicht.', 404);
+}

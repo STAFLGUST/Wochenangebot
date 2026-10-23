@@ -153,6 +153,8 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 $AKTION = AKTIONEN[$action] ?? null;
 /* Nur Anfragen von der eigenen Seite (lib/herkunft.php, GR-109) – vor allen weiteren Prüfungen, Firewall und Anmeldung */
 herkunft_pruefen($AKTION, $method);
+/* Aktion nur auf ihrem Host (lib/herkunft.php, GR-109): Aktionen eigener Modulseiten (z. B. hr.intern) nur dort */
+host_pruefen($AKTION);
 $schreibend = $AKTION !== null && ($AKTION['schreibend'] === true || ($AKTION['schreibend'] === 'post' && $method === 'POST'));
 if ($schreibend) {
     if ($method !== 'POST') fail('Methode nicht erlaubt.', 405);

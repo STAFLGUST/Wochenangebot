@@ -25,10 +25,13 @@ services:
       # Bestand (bestand.dashboard-stafl.de, Stand 4): wie bei der Verwaltung – startbar vor dem Konsolenschritt
       OIDC_SECRET_BESTAND: ${OIDC_SECRET_BESTAND:-noch-nicht-eingerichtet}
       OIDC_CRYPTO_BESTAND: ${OIDC_CRYPTO_BESTAND:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
+      # HR (hr.dashboard-stafl.de, Stand 5): wie bei der Verwaltung – startbar vor dem Konsolenschritt
+      OIDC_SECRET_HR: ${OIDC_SECRET_HR:-noch-nicht-eingerichtet}
+      OIDC_CRYPTO_HR: ${OIDC_CRYPTO_HR:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
     networks:
       default:
         aliases:
-          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand. – nur mit dieser Datei
+          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr. – nur mit dieser Datei
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244

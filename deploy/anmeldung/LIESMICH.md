@@ -8,7 +8,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | Datei | Inhalt |
 | --- | --- |
 | `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.1 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
-| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale) und `bestand.dashboard-stafl.de` (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
+| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de` und `hr.dashboard-stafl.de` (`/` und `/admin/` → `/module/hr/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
@@ -26,8 +26,8 @@ Ablauf: [docs/release-freigabe.md](../../docs/release-freigabe.md).
 
 ## Geheimnisse (nur in `.env` auf dem Server)
 
-`OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT`, `OIDC_SECRET_VERWALTUNG`, `OIDC_SECRET_BESTAND` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`,
-`OIDC_CRYPTO_ANGEBOT`, `OIDC_CRYPTO_VERWALTUNG`, `OIDC_CRYPTO_BESTAND` (Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, nach der Einrichtung `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“
+`OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT`, `OIDC_SECRET_VERWALTUNG`, `OIDC_SECRET_BESTAND`, `OIDC_SECRET_HR` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`,
+`OIDC_CRYPTO_ANGEBOT`, `OIDC_CRYPTO_VERWALTUNG`, `OIDC_CRYPTO_BESTAND`, `OIDC_CRYPTO_HR` (Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, nach der Einrichtung `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“
 im Realm master). Das Start-Konto (`KC_BOOTSTRAP_ADMIN_*`) steht nur während der Einrichtung in
 `daten-anmeldung/einrichtung.env` (Compose liest die Datei nur, wenn sie existiert; `konten.sh verwaltung` löscht sie).
 Nie leer in `.env` setzen: Keycloak 26.8 startet mit leerem Start-Konto-Namen nicht.
@@ -55,6 +55,9 @@ Keycloak ist dort keine Anmeldung möglich).
 Stand 4 (22.10.2026): Client `bestand` für `bestand.dashboard-stafl.de` – gleiches Vorgehen wie Stand 3 (`OIDC_SECRET_BESTAND`/
 `OIDC_CRYPTO_BESTAND`, danach `docker compose up -d app`). Der Befehl geht jetzt alle Clients der Realm-Datei durch (fehlende
 anlegen, Anmeldestärke und Claim `amr` einheitlich setzen) – ein künftiger Modul-Host braucht dort keine Codeänderung mehr.
+Stand 5 (23.10.2026, Freigabe des Inhabers): Client `hr` für `hr.dashboard-stafl.de` (Urlaubsverwaltung) – gleiches Vorgehen
+(`OIDC_SECRET_HR`/`OIDC_CRYPTO_HR`, danach `docker compose up -d app`). Voraussetzung: DNS-Eintrag `hr` (CNAME →
+`dashboard-stafl.de`, wie `bestand.`/`login.`), sonst bekommt Caddy kein Zertifikat für den Host.
 
 ## Design der Anmeldeseite
 

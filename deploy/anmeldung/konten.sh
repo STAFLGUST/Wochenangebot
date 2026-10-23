@@ -296,7 +296,7 @@ for e in es:
   done
 }
 
-# Client eines neuen Hosts anlegen (Stand 3: verwaltung, Stand 4: bestand). Definition aus der Realm-Datei, Geheimnisse aus .env – fehlen sie,
+# Client eines neuen Hosts anlegen (Stand 3: verwaltung, Stand 4: bestand, Stand 5: hr). Definition aus der Realm-Datei, Geheimnisse aus .env – fehlen sie,
 # werden sie wie von einrichten.sh erzeugt (nie angezeigt). Danach liest die Anwendung sie erst nach einem Neustart.
 ENV_NEU=0
 client_anlegen() { # client_anlegen <clientId>
@@ -367,9 +367,9 @@ for e in json.load(sys.stdin):
       echo "angepasst: amr '$r' für Ausführung $(printf '%s' "$id" | cut -c1-8)"
     fi
   done
-  # Alle Clients der Realm-Datei (dashboard, angebot, verwaltung, bestand …): fehlende anlegen, dann einheitlich einstellen.
+  # Alle Clients der Realm-Datei (dashboard, angebot, verwaltung, bestand, hr …): fehlende anlegen, dann einheitlich einstellen.
   # Ohne Realm-Datei (anderer Ordner) die bekannten Clients – fehlt einer davon, bricht client_anlegen mit Hinweis ab
-  clients="dashboard angebot verwaltung bestand"
+  clients="dashboard angebot verwaltung bestand hr"
   [ ! -f "$REALM_DATEI" ] || clients=$(python3 -c '
 import json, re, sys
 ids = [c.get("clientId", "") for c in json.load(open(sys.argv[1], encoding="utf-8")).get("clients", [])]
@@ -388,7 +388,7 @@ print(" ".join(ids))' "$REALM_DATEI") || abbruch "Clients in $REALM_DATEI nicht 
       echo "angelegt:  amr-Claim für Client $c"
     fi
   done
-  echo "Realm aktuell (Stand 4: Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  echo "Realm aktuell (Stand 5: HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
 }
 
@@ -411,7 +411,7 @@ pruefen() { # nur lesen: warum klappt die Anmeldung nicht? Konto, Sperre, zweite
   printf ']' >>"$d/konfig"
   # je Anwendung die Mapper einzeln (die Liste der Clients enthält sie nicht zuverlässig)
   printf '[' >"$d/clients"; k=
-  for c in dashboard angebot verwaltung bestand; do
+  for c in dashboard angebot verwaltung bestand hr; do
     cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
     [ -n "$cid" ] || continue
     attr=$(kc get "clients/$cid" -r "$REALM" --fields attributes)
