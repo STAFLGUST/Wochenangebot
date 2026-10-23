@@ -1,7 +1,7 @@
 """Auswertung: Karte der Kunden-Anmeldungen. Ortsdaten laden (Test-Quelle über WA_ORT_URL, erzeugt aus erfundenen
 Bereichen), Anmeldeort je Kunden-Anmeldung (IPv4/IPv6, ohne IP-Adresse gespeichert), Zeitraum, Aufbewahrung,
 Löschen mit dem Kunden, Rechte und Oberfläche (Karte, Punkte, Hinweisfeld, Filter, Liste, 390 px)."""
-import gzip, http.server, os, sys, threading, time, urllib.error, urllib.request
+import gzip, http.server, os, re, sys, threading, time, urllib.error, urllib.request
 from datetime import datetime, timedelta, timezone
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
@@ -185,6 +185,24 @@ with sync_playwright() as pw:
     box = a.locator('#aw-svg').bounding_box(); vb1 = a.get_attribute('#aw-svg', 'viewBox')
     a.mouse.move(box['x'] + 200, box['y'] + 200); a.mouse.down(); a.mouse.move(box['x'] + 320, box['y'] + 260, steps=5); a.mouse.up()
     check('UI: dragging pans the map', a.get_attribute('#aw-svg', 'viewBox') != vb1)
+    # Ansicht verlassen, bevor die Daten da sind: Karte ohne Größe darf keinen ungültigen Ausschnitt setzen (Konsolenfehler)
+    gehalten, konsole = [], []
+    a.on('console', lambda m: konsole.append(m.text) if m.type == 'error' else None)
+    a.route('**/api/?action=auswertung*', lambda route: gehalten.append(route))
+    with a.expect_request(lambda r: 'action=auswertung' in r.url):
+        a.click('#vt-edit'); a.click('#vt-auswertung')
+    a.click('#vt-edit'); a.wait_for_selector('#view-auswertung', state='hidden')
+    for _ in range(100):   # Ereignisse verarbeiten, bis die angehaltene Anfrage da ist (kein fester Wartewert vor der Prüfung)
+        if gehalten: break
+        a.wait_for_timeout(50)
+    with a.expect_response(lambda r: 'action=auswertung' in r.url):
+        gehalten[0].continue_()
+    a.wait_for_function("document.querySelector('#view-auswertung #aw-svg') && document.querySelector('#aw-svg').getAttribute('viewBox')")
+    vb2 = a.get_attribute('#aw-svg', 'viewBox')
+    check('UI: map finished loading after leaving the view: valid section, no console error', not re.search('NaN|Infinity', vb2)
+          and not [t for t in konsole if 'viewBox' in t], (vb2, konsole))
+    a.unroute('**/api/?action=auswertung*')
+    a.click('#vt-auswertung'); a.wait_for_selector('#aw-svg #aw-pts .aw-pt')
     a.set_viewport_size({'width': 390, 'height': 844}); a.wait_for_timeout(300)
     a.click('[data-aw=fit]'); a.wait_for_timeout(100)
     a.screenshot(path=SH + '/auswertung-390.png', full_page=False)

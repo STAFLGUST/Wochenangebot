@@ -208,6 +208,9 @@ with sync_playwright() as p:
     cs = {c.get('nr'): c for c in doc('kunden')['customers']}
     check('importiert: Umlaute, Land als Name, erste gültige E-Mail', cs.get('1000008', {}).get('firma') == 'Bäckerei Größe & Söhne' and cs.get('1000003', {}).get('land') == 'Österreich'
           and cs.get('1000002', {}).get('email') == 'kantine@example.org' and cs.get('1000006', {}).get('land') == 'Frankreich', {k: cs.get(k, {}).get('land') for k in ('1000003', '1000006')})
+    a.wait_for_selector('#k-list .nobr')
+    nb = a.evaluate("(() => { const e = document.querySelector('#k-list .nobr'); return [e.textContent, getComputedStyle(e).whiteSpace, e.getClientRects().length]; })()")
+    check('Kundenliste: „E-Mail“ wird nicht am Bindestrich getrennt', nb == ['E-Mail', 'nowrap', 1], nb)
     check('unbekannte Gruppe leer, ungültige E-Mail leer', cs.get('1000006', {}).get('gruppe') == '' and cs.get('1000006', {}).get('email') == '')
     b = cs.get('1000003', {})
     check('Bestandskunde: Firma, E-Mail, Zugang, Freischaltung bleiben', b.get('firma') == 'Bestandskunde Gepflegt' and b.get('email') == 'bestand@example.org' and b.get('login', {}).get('username') == 'bestand.kunde' and b.get('angebote') == ['edeka'] and b.get('gruppe') == '7')

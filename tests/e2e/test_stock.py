@@ -60,6 +60,10 @@ with sync_playwright() as p:
     check('price uses calendar week, not draft', 'Aktuell' in r.locator('.s-vk').get_attribute('data-l'))
     check('qty two decimals + kg', re.match(r'^[\d.]+,\d\d kg$', r.locator('.s-kg').inner_text()) is not None)
     a.screenshot(path=SH + '/stock.png')
+    # Kopf der Bestandskarte: „· n Tage alt“ steht in der Zeile des Datums, nicht allein in einer eigenen Zeile (Liste vom 16.10.)
+    kopf = a.evaluate("""(() => { const s = document.querySelector('#view-stock .st-info strong').getBoundingClientRect(), g = document.querySelector('#view-stock .st-info .st-age');
+      return g ? [Math.round(s.top), Math.round(g.getBoundingClientRect().top), g.textContent] : null; })()""")
+    check('stock card: age next to the date (same line)', kopf and abs(kopf[0] - kopf[1]) <= 2 and 'Tage alt' in kopf[2], kopf)
     # Sortierung per Spaltenkopf
     def unmarked_codes():
         return first.locator('tr.srow').evaluate_all("rs => rs.filter(r => !r.querySelector('td.s-mhd').className.includes('mhd-')).map(r => +r.querySelector('td.s-code').textContent)")
