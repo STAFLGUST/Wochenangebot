@@ -62,7 +62,7 @@ for name, b, wort in (
         ('Kundenseite läuft produktiv → nur über Release', {'bereich': 'angebot.kunden', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Release'),
         ('Verwaltung → System nicht änderbar (Aussperrschutz)', {'bereich': 'verwaltung.system', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
         ('Dashboard nicht änderbar (Aussperrschutz)', {'bereich': 'dashboard.start', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
-        ('geplanter Code: keine Testfreigabe', {'bereich': 'crm.intern', 'freigabe': 'test', 'grund': 'Test'}, 'Entwicklungsstand'),
+        ('geplanter Code: keine Testfreigabe', {'bereich': 'qs.intern', 'freigabe': 'test', 'grund': 'Test'}, 'Entwicklungsstand'),
         ('Code in Prüfung: nicht produktiv', {'bereich': 'rewe.intern', 'freigabe': 'produktiv', 'grund': 'Test'}, 'fertig'),
         ('unbekannte Freigabe', {'bereich': 'rewe.intern', 'freigabe': 'irgendwie', 'grund': 'Test'}, 'Unbekannte'),
         ('ohne Grund', {'bereich': 'rewe.intern', 'freigabe': 'test', 'grund': ' '}, 'Grund')):
@@ -152,7 +152,7 @@ with sync_playwright() as pw:
             pg.wait_for_function("!document.querySelector('#mv-box tr[data-mvziel=\"rewe.intern\"]').innerText.includes('Administrator')")
             check('Oberfläche: Tester gespeichert', [t['name'] for t in ob(A, 'rewe.intern')['verwaltung']['tester']] == ['Erika Editor'])
             check('Produktivbereich und Verwaltung → System: ohne „Ändern“', pg.locator('#mv-box [data-mv="waehlen"][data-ziel="angebot.eingabe"], #mv-box [data-mv="waehlen"][data-ziel="verwaltung.system"]').count() == 0)
-            pg.click('#mv-box [data-mv="waehlen"][data-ziel="crm.intern"]'); pg.wait_for_selector('#mv-form')
+            pg.click('#mv-box [data-mv="waehlen"][data-ziel="qs.intern"]'); pg.wait_for_selector('#mv-form')
             check('geplanter Bereich: nur „nicht freigegeben“ oder „deaktiviert“', pg.eval_on_selector_all('#mv-form [name=freigabe] option', 'os => os.map(o => o.value)') == ['keine', 'deaktiviert'])
             pg.screenshot(path=os.path.join(SH, 'modulverwaltung-formular-1280.png'), full_page=False)
         ctx.close()
