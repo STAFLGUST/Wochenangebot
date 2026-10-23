@@ -140,6 +140,45 @@ function hr_nach_abteilung(array $personen): array
 }
 function hr_personen_index(array $personal): array { $o = []; foreach ($personal['personen'] as $p) $o[$p['id']] = $p; return $o; }
 
+function hr_namekey(string $n): string { return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $n) ?? '')); }
+
+/* ---------------- Verknüpfung Mitarbeiter ↔ Mitarbeiterkonto ----------------
+   Jeder Mitarbeiter mit Konto sieht nach der Anmeldung seinen Teil (Konto, Anträge, eigene Zeile im Kalender). Die
+   Verknüpfung entsteht von Hand (Personalstelle) oder automatisch, wenn der Name des Kontos eindeutig zu genau einem
+   aktiven, noch nicht verknüpften Mitarbeiter passt (Anzeigename, Vor- + Nachname oder Benutzername „vorname-nachname“). */
+function hr_konto_namen(array $u): array
+{
+    $n = [hr_namekey((string)($u['name'] ?? '')), hr_namekey(trim(($u['vorname'] ?? '') . ' ' . ($u['nachname'] ?? ''))),
+          hr_namekey(str_replace(['-', '.', '_'], ' ', (string)($u['username'] ?? '')))];
+    return array_values(array_unique(array_filter($n, function ($x) { return $x !== '' && str_contains($x, ' '); })));
+}
+/* Vorschlag: genau ein aktiver, unverknüpfter Mitarbeiter mit passendem Namen – sonst null */
+function hr_vorschlag(array $personal, array $u): ?array
+{
+    $namen = hr_konto_namen($u);
+    if (!$namen) return null;
+    $treffer = array_values(array_filter($personal['personen'], function ($p) use ($namen) {
+        return $p['aktiv'] && $p['nutzer'] === null && in_array(hr_namekey(hr_name($p)), $namen, true);
+    }));
+    return count($treffer) === 1 ? $treffer[0] : null;
+}
+/* Beim ersten Aufruf automatisch verknüpfen (nur eindeutige Namen; protokolliert) */
+function hr_auto_verknuepfen(array $me): ?array
+{
+    return with_lock('hr-personal', function () use ($me) {
+        $personal = hr_personal();
+        if (hr_ich($personal, $me)) return null;
+        foreach ($personal['personen'] as $p) if ($p['nutzer'] === (string)$me['id']) return null;   // verknüpft, aber inaktiv
+        $v = hr_vorschlag($personal, $me);
+        if (!$v) return null;
+        foreach ($personal['personen'] as &$p) if ($p['id'] === $v['id']) { $p['nutzer'] = (string)$me['id']; $p['geaendert'] = now(); $v = $p; }
+        unset($p);
+        hr_personal_schreiben($personal);
+        audit('hr', 'HR: Mitarbeiterkonto ' . $me['name'] . ' automatisch mit ' . hr_name($v) . ' verknüpft (gleicher Name)');
+        return $v;
+    });
+}
+
 /* Person des angemeldeten Mitarbeiters (Verknüpfung über das Mitarbeiterkonto) */
 function hr_ich(array $personal, array $me): ?array
 {

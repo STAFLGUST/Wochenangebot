@@ -238,6 +238,17 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-vorschau li { display: grid; grid-template-columns: 90px 1fr; gap: 4px 10px; padding: 6px 0; border-top: 1px solid var(--hr-linie); }
 .hr-vorschau li b { font-weight: 600; }
 .hr-vorschau li .hr-pille { justify-self: start; }
+.hr-konten { margin-bottom: 20px; }
+.hr-konten-kopf { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hr-konten-kopf h2 { margin: 0; }
+.hr-konten-kopf p { margin: 0; }
+.hr-konten-kopf .btn.primary { margin-left: auto; }
+.hr-konten-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hr-konten-liste li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 280px) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--hr-linie); }
+.hr-konten-liste li.leer { display: block; color: var(--hr-muted); }
+.hr-konten-liste .wer { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hr-konten-liste .gedaempft { color: var(--hr-muted); font-size: 13px; }
+@media (max-width: 560px) { .hr-konten-liste li { grid-template-columns: 1fr; } .hr-konten-kopf .btn.primary { margin-left: 0; } }
 .hr label > span:first-child { display: block; }
 .hr-vorschau .hinweis { padding: 8px 12px; margin-bottom: 8px; border-radius: 10px; background: var(--hr-aus); }
 .hr-vorschau .hinweis.warn { background: var(--hr-warn-bg); color: var(--hr-warn); }
