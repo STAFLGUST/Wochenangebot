@@ -827,7 +827,7 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 .al-col + .al-col { border-left: 1px solid var(--line); }
 .al-col:first-child { padding-left: 0; }
 .al-col:last-child { padding-right: 0; }
-.al-tab { --w-code: 46px; --w-price: 62px; --w-fav: 20px; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
+.al-tab { --w-code: 54px; --w-price: 62px; --w-fav: 20px; width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 13px; line-height: 1.3; }
 .al-tab .w-fav { width: var(--w-fav); }
 .al-tab .w-code { width: var(--w-code); }
 .al-tab .w-price { width: var(--w-price); }
@@ -864,7 +864,7 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
   .al-tab td { height: 34px; }
   .al-tab .star { color: var(--line-strong); }
   .al-tab td.c-code { display: table-cell; font-size: 13px; }
-  .al-tab { --w-code: 50px; --w-fav: 26px; --w-price: 66px; }
+  .al-tab { --w-code: 54px; --w-fav: 26px; --w-price: 66px; }
   .al-tab .qty { height: 28px; }
 }
 

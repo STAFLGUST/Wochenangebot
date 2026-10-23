@@ -100,6 +100,7 @@ with sync_playwright() as pw:
                         pg.wait_for_function("() => !document.querySelector('.adm-page .loading:not([hidden])')", timeout=20000)
                     teil = f'{name}{"-" + v if v else ""}'
                     pg.screenshot(path=f'{SH}/einheit-{teil}-{tag}.png')
+                    pg.evaluate('document.fonts.ready.then(() => true)')
                     weg = pg.evaluate(ABGESCHNITTEN)
                     check(f'{teil} {tag}: kein abgeschnittener Text', not weg, weg)
                     check(f'{teil} {tag}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth') <= breite)
@@ -121,6 +122,7 @@ with sync_playwright() as pw:
             for name, pfad, warte in (('abgemeldet', '/dashboard/abgemeldet.html', 'img.brand-logo'), ('kundenseite', '/', '.brand-logo'),
                                       ('kontakt', '/kontakt/', '.legal-logo')):
                 pg.goto(B + pfad); pg.wait_for_selector(warte)
+                pg.evaluate('document.fonts.ready.then(() => true)')
                 pg.screenshot(path=f'{SH}/einheit-{name}-{tag}.png')
                 weg = pg.evaluate(ABGESCHNITTEN)
                 check(f'{name} {tag}: kein abgeschnittener Text', not weg, weg)
