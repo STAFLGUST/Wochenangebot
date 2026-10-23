@@ -69,9 +69,10 @@ Design von Keycloak, sofort wirksam).
   „STAFL-Plattform“. Keycloak vergleicht den Code genau so, wie er ankommt – „123 456“ wäre ein Fehlversuch. Das kleine
   Skript `stafl-otp.js` entfernt deshalb beim Tippen und Einfügen alles außer Ziffern (ohne Skript verhindert das Muster
   das Absenden). Bei der Einrichtung weist ein Kasten darauf hin, alte Einträge in der Authenticator-App zu löschen.
-- **Sperre nach Fehlversuchen:** Keycloak zeigt bei vorübergehender Sperre dieselbe Meldung wie bei einem falschen Code
-  (verrät die Sperre nicht). Der deutsche Text nennt deshalb beides: „stimmt nicht … nach mehreren Fehlversuchen einige
-  Minuten gesperrt“. Aufheben: `konten.sh entsperren <name>`.
+- **Abgelehnter Code und Sperre:** Jeder Code gilt nur einmal; zwei Fehlversuche in unter einer Sekunde sperren 60 s.
+  Keycloak zeigt bei einer Sperre dieselbe Meldung wie bei einem falschen Code (verrät sie nicht). Der deutsche Text nennt
+  deshalb beides („nur einmal … neuen Code abwarten … nach mehreren Fehlversuchen gesperrt“), und `stafl-otp.js` schickt
+  jedes Anmeldeformular nur einmal ab (Doppelklick, Eingabetaste plus Klick). Aufheben: `konten.sh entsperren <name>`.
 - **Zwischenspeicher:** `KC_SPI_THEME__CACHE_THEMES/…CACHE_TEMPLATES=false`, `…STATIC_MAX_AGE=3600` – ein Release mit
   geändertem Theme wirkt ohne Neustart von Keycloak, Browser holen Stylesheet und Skript spätestens nach einer Stunde neu.
 - **Keycloak-Update:** die beiden Vorlagen mit der neuen Fassung von `keycloak.v2` vergleichen und die Versionsangabe

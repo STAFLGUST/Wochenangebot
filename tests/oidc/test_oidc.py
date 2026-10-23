@@ -371,6 +371,46 @@ with sync_playwright() as pw:
     ctx = br.new_context(ignore_https_errors=True, viewport={'width': 1280, 'height': 900})
     pg = eigene_seite(ctx.new_page())
 
+    # ── Skript des Designs: Formular kommt beim Server nur einmal an, auch wenn es mehrmals kurz nacheinander abgeschickt wird
+    #    (langsamer Server nachgestellt; ohne das Skript kommen alle Absendungen an → bei Keycloak Sperre für 60 s) ──
+    import http.server, socketserver, threading
+    _ankunft = []
+    _skript = open(os.path.join(REPO, 'deploy', 'anmeldung', 'theme', 'stafl', 'login', 'resources', 'js', 'stafl-otp.js')).read()
+    _seite = {'html': ''}
+
+    class _Langsam(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200); self.send_header('Content-Type', 'text/html; charset=utf-8'); self.end_headers(); self.wfile.write(_seite['html'].encode())
+
+        def do_POST(self):
+            _ankunft.append(self.rfile.read(int(self.headers.get('Content-Length', 0))).decode())
+            time.sleep(0.8)
+            try:
+                self.send_response(200); self.send_header('Content-Type', 'text/html'); self.end_headers(); self.wfile.write(b'<p id="fertig">ok</p>')
+            except OSError:
+                pass   # Browser hat die frühere Absendung abgebrochen
+
+        def log_message(self, *a):
+            pass
+
+    class _Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
+        daemon_threads = True
+    _srv = _Server(('127.0.0.1', 0), _Langsam); threading.Thread(target=_srv.serve_forever, daemon=True).start()
+    _form = ('<!doctype html><html lang="de"><body><form id="f" method="post" action="/anmelden" onsubmit="login.disabled = true; return true;">'
+             '<input id="otp" name="otp" data-stafl-otp pattern="[0-9]{6}"><button id="kc-login" name="login" type="submit">Anmelden</button></form>%s</body></html>')
+    _zahl = {}
+    for _mit in (True, False):
+        _seite['html'] = _form % (f'<script>{_skript}</script>' if _mit else ''); _ankunft.clear()
+        _pz = br.new_page(); _pz.goto(f'http://127.0.0.1:{_srv.server_address[1]}/')
+        _pz.fill('#otp', '12 34 56' if _mit else '123456')
+        _pz.evaluate("() => { const f = document.querySelector('#f'); f.requestSubmit(); setTimeout(() => f.requestSubmit(), 150); setTimeout(() => f.requestSubmit(), 300); }")
+        _pz.wait_for_selector('#fertig', timeout=10000)
+        _zahl[_mit] = (len(_ankunft), list(_ankunft))
+        _pz.close()
+    _srv.shutdown()
+    check('Skript: dreimal kurz nacheinander abgeschickt → beim Server genau einmal, Code ohne Leerzeichen', _zahl[True][0] == 1 and 'otp=123456' in _zahl[True][1][0], _zahl[True])
+    check('… Gegenprobe ohne Skript: alle Absendungen kommen an (so entstand die Sperre)', _zahl[False][0] >= 2, _zahl[False])
+
     # ── Anmeldeseite im Plattform-Design: hell und dunkel, 390 px, keine JavaScript-Fehler ──
     login_fehler = []
     for _schema, _grund in (('light', 'rgb(244, 241, 238)'), ('dark', 'rgb(18, 16, 17)')):
