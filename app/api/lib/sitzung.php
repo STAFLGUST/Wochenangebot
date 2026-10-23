@@ -68,6 +68,7 @@ function current_user(): ?array
     global $ME;
     if ($ME !== null) return $ME;
     if (oidc_modus()) return $ME = oidc_nutzer();   // Keycloak-Host: Identität vom Webserver (lib/oidc.php, GR-110)
+    if (eigene_anmeldung_stillgelegt()) return null;   // alter Eingabebereich stillgelegt: keine Mitarbeitersitzung mehr (lib/oidc.php)
     start_session();
     if (empty($_SESSION['uid'])) return null;
     $users = users_load();

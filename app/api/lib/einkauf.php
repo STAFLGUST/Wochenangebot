@@ -77,7 +77,8 @@ function einkauf_mail(array $items, array $stock, string $note, string $by): arr
     $h .= '<tr><td colspan="4" style="padding:8px 6px;font-weight:bold;">Fehlmenge gesamt</td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_qty($sum) . ' kg</td><td></td></tr></table>';
     $t .= "\nFehlmenge gesamt: " . de_qty($sum) . " kg\nGesendet von {$by} über das Angebotsportal.\n";
     $base = mail_base_url();
-    if ($base) { $t .= "Bereich Einkauf: {$base}/admin/\n"; $h .= '<p style="margin:16px 0 0;"><a href="' . mail_h($base . '/admin/') . '" style="color:#7b1e2b;">Bereich Einkauf öffnen</a></p>'; }
+    $ziel = alter_zugang_aus() ? eingabe_adresse() : ($base ? $base . '/admin/' : '');   // alter Zugang stillgelegt: neuer Eingabebereich
+    if ($ziel) { $t .= "Bereich Einkauf: {$ziel}\n"; $h .= '<p style="margin:16px 0 0;"><a href="' . mail_h($ziel) . '" style="color:#7b1e2b;">Bereich Einkauf öffnen</a></p>'; }
     $foot = "Gesendet von {$by} über das Angebotsportal. Empfänger: Verwaltung → E-Mail → Benachrichtigungen.";
     return [$subject, $t, mail_layout($subject, $h, '', $foot)];
 }

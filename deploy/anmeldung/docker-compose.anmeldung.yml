@@ -28,6 +28,10 @@ services:
       # HR (hr.dashboard-stafl.de, Stand 5): wie bei der Verwaltung – startbar vor dem Konsolenschritt
       OIDC_SECRET_HR: ${OIDC_SECRET_HR:-noch-nicht-eingerichtet}
       OIDC_CRYPTO_HR: ${OIDC_CRYPTO_HR:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
+      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – Mitarbeiter
+      # nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung unverändert. Notzugang bei gestörter Anmeldung:
+      # sh deploy/notzugang.sh an (setzt WA_EIGENE_ANMELDUNG=an in .env und startet die App neu), danach wieder „aus“
+      WA_EIGENE_ANMELDUNG: ${WA_EIGENE_ANMELDUNG:-aus}
     networks:
       default:
         aliases:

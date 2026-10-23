@@ -211,6 +211,8 @@ jobs:
         run: sh tests/deploy/test_release_pruefen.sh
       - name: Einrichtung der zentralen Anmeldung (Geheimnisse, Realm-Import)
         run: sh tests/deploy/test_anmeldung_einrichten.sh
+      - name: Notzugang zum alten Eingabebereich (deploy/notzugang.sh, mit Platzhalter für docker compose)
+        run: sh tests/deploy/test_notzugang.sh
       - name: Diagnose von Anmeldeproblemen (konten.sh pruefen, mit Platzhalter für Keycloak)
         run: sh tests/deploy/test_konten_pruefen.sh
 

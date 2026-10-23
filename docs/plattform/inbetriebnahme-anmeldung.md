@@ -8,7 +8,7 @@ vollständig geprüft (`tests/oidc/`, 197 Prüfungen) und die Betriebskonfigurat
 
 | Adresse | Inhalt | Anmeldung |
 | --- | --- | --- |
-| `angebot-stafl.de` | Kundenseite und – übergangsweise – `/admin/` wie heute | unverändert (eigene Anmeldung) |
+| `angebot-stafl.de` | Kundenseite und Kundenanmeldung; `/admin/` stillgelegt (seit 23.10.2026, Hinweis und Weiterleitung) | Kunden unverändert, Mitarbeiter nur über das Dashboard |
 | `login.dashboard-stafl.de` | Keycloak, nur Realm `mitarbeiter` | Passwort; zweiter Faktor (Einmalcode oder Passkey) Pflicht für Administratoren und einzeln verpflichtete, sonst freiwillig |
 | `dashboard-stafl.de` | Mitarbeiter-Dashboard | über Keycloak |
 | `angebot.dashboard-stafl.de` | Mitarbeiter-Eingabe (dieselbe Anwendung wie `/admin/`) | über Keycloak |
@@ -18,7 +18,9 @@ vollständig geprüft (`tests/oidc/`, 197 Prüfungen) und die Betriebskonfigurat
 | übrige `*.dashboard-stafl.de` | 503-Platzhalter bis zur Freigabe des Moduls (GR-105) | – |
 
 Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nutzen; die alte Anmeldung unter
-`angebot-stafl.de/admin/` wird erst in einem späteren, eigenen Schritt abgeschaltet (Roadmap 8).
+`angebot-stafl.de/admin/` ist seit dem 23.10.2026 stillgelegt (Roadmap 8, Entscheidung Inhaber): `WA_EIGENE_ANMELDUNG=aus` in
+`deploy/anmeldung/docker-compose.anmeldung.yml`. Dort gibt es keine Mitarbeiteranmeldung und keine Mitarbeiteraktionen mehr
+(410 „umgezogen“ mit Verweis auf `angebot.dashboard-stafl.de/admin/`), Mitarbeiter-Mails verweisen auf die neue Adresse.
 
 ## Voraussetzungen
 
@@ -89,8 +91,10 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   sperren: `konten.sh sperren <name>` (deaktiviert und meldet überall ab) oder in der Anwendung sperren (wirkt sofort).
 - **Updates von Keycloak:** Version und Digest in `deploy/anmeldung/docker-compose.anmeldung.yml` und
   `tests/oidc/umgebung.sh` gemeinsam erhöhen; erst wenn der CI-Auftrag grün ist (ADR-003: kritische Lücken in 72 Std.).
-- **Notfall:** Keycloak nicht erreichbar → Mitarbeiter arbeiten übergangsweise über `angebot-stafl.de/admin/` weiter
-  (solange Roadmap 8 nicht umgesetzt ist). Danach: Rückweg in Schritt 5/6.
+- **Notfall:** Keycloak nicht erreichbar → zuerst `docker compose ps -a` und `docker compose up -d` (startet fehlende
+  Dienste, z. B. nach einem unterbrochenen Release). Hilft das nicht: `sh deploy/notzugang.sh an` öffnet vorübergehend den alten
+  Eingabebereich `angebot-stafl.de/admin/` (bisherige Passwörter, Notfall-Administrator: `deploy/passwort-zuruecksetzen.sh`);
+  sobald die Anmeldung wieder läuft: `sh deploy/notzugang.sh aus`.
 
 ## Rücksicherung der Anmeldung (Keycloak)
 

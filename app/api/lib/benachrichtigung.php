@@ -119,7 +119,8 @@ function notify_mail(string $ev, array $items, int $skipped, bool $test = false)
         $t .= "\nSeit der letzten Benachrichtigung gab es {$skipped} weitere Ereignisse dieser Art (siehe Protokoll).\n";
         $h .= '<p style="margin:16px 0 0;padding:10px 12px;background:#f7efe9;border-radius:8px;">Seit der letzten Benachrichtigung gab es ' . $skipped . ' weitere Ereignisse dieser Art – Details im Protokoll.</p>';
     }
-    if ($base) { $t .= "\nEingabebereich: {$base}/admin/\n"; $h .= '<p style="margin:16px 0 0;"><a href="' . mail_h($base . '/admin/') . '" style="color:#7b1e2b;">Eingabebereich öffnen</a></p>'; }
+    $ziel = alter_zugang_aus() ? eingabe_adresse() : ($base ? $base . '/admin/' : '');   // alter Zugang stillgelegt: neuer Eingabebereich
+    if ($ziel) { $t .= "\nEingabebereich: {$ziel}\n"; $h .= '<p style="margin:16px 0 0;"><a href="' . mail_h($ziel) . '" style="color:#7b1e2b;">Eingabebereich öffnen</a></p>'; }
     $foot = 'Automatisch erzeugt vom Angebotsportal. Einstellbar unter Verwaltung → E-Mail → Benachrichtigungen.';
     $t .= "\n" . $foot . "\n";
     return [$subject, $t, mail_layout($subject, $h, '', $foot)];
