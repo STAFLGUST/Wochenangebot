@@ -206,6 +206,13 @@ check('Stand 5: Client „hr“ nachträglich angelegt (Schleife über die Clien
       and GEHEIM['OIDC_SECRET_HR'] not in _log, _log[-500:])
 check('Client „hr“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('hr', {}).get('secret') not in (None, '@GEHEIM_HR@') and clients.get('hr', {}).get('redirectUris') == [HR + '/oidc/callback'])
+def kc_token():
+    _, _, t = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
+        {'Content-Type': 'application/x-www-form-urlencoded'})
+    return json.loads(t)['access_token']
+
+
 _env = os.path.join(WORK, 'installation', '.env')
 _vorher = open(_env, encoding='utf-8').read()
 # Zustand wie im Betrieb nachstellen: nur die Passwort-Abfrage meldet ihre Anmeldemethode (amr), Einmalcode und Passkey
@@ -349,13 +356,6 @@ for h in (D, A, W, B, HR):
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
 
 fehler = []
-
-
-def kc_token():
-    _, _, t = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
-        'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
-        {'Content-Type': 'application/x-www-form-urlencoded'})
-    return json.loads(t)['access_token']
 
 
 def client_attribute(cid, **attr):
