@@ -1,0 +1,31 @@
+# Aktionen des Moduls „crm“: Vertrieb – Kunden (aus den Stammdaten der Verwaltung), Kundenblätter, Ansprechpartner,
+# Wiedervorlagen, Pipeline, Aktivitäten, Interessenten, CSV-Export.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+# Oberfläche crm.intern (in Entwicklung, nur mit Testfreigabe). Auf Keycloak-Hosts antworten die Aktionen nur auf dem
+# eigenen Host crm.dashboard-stafl.de (Aktion ↔ Host, GR-109, lib/herkunft.php) – der Host wird erst mit der Freigabe
+# des Inhabers eingerichtet; bis dahin nutzbar auf angebot-stafl.de und in den Tests.
+
+schema = 1
+modul = "crm"
+
+[aktion.crm_start]
+oberflaeche = "crm.intern"
+
+[aktion.crm_verlauf]
+oberflaeche = "crm.intern"
+
+[aktion.crm_kunde_save]
+oberflaeche = "crm.intern"
+schreibend = true
+
+[aktion.crm_aktivitaet]
+oberflaeche = "crm.intern"
+schreibend = true
+
+[aktion.crm_interessent_save]
+oberflaeche = "crm.intern"
+schreibend = true
+
+[aktion.crm_export]
+oberflaeche = "crm.intern"
+schreibend = true
