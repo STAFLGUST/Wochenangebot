@@ -208,6 +208,17 @@ check('Client „hr“: Geheimnis aus .env übernommen, kein Platzhalter, Rücks
       clients.get('hr', {}).get('secret') not in (None, '@GEHEIM_HR@') and clients.get('hr', {}).get('redirectUris') == [HR + '/oidc/callback'])
 _env = os.path.join(WORK, 'installation', '.env')
 _vorher = open(_env, encoding='utf-8').read()
+# Zustand wie im Betrieb nachstellen: nur die Passwort-Abfrage meldet ihre Anmeldemethode (amr), Einmalcode und Passkey
+# nicht – so hatte „… | while read“ mit docker compose exec den Realm hinterlassen (doppelte Code-Abfrage)
+def _ablauf():
+    return json.loads(anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-browser/executions', kopf={'Authorization': 'Bearer ' + kc_token()})[2])
+_geloescht = 0
+for _e in _ablauf():
+    if _e.get('providerId') in ('auth-otp-form', 'webauthn-authenticator') and _e.get('authenticationConfig'):
+        _geloescht += anfrage(f"{KC}/admin/realms/mitarbeiter/authentication/config/{_e['authenticationConfig']}", 'DELETE', None,
+                              {'Authorization': 'Bearer ' + kc_token()})[0] == 204
+_vorher_amr = [e['providerId'] for e in _ablauf() if e.get('providerId') in ('auth-otp-form', 'webauthn-authenticator') and not e.get('authenticationConfig')]
+check('Vorbereitung: Einmalcode und Passkey ohne gemeldete Anmeldemethode (Zustand im Betrieb)', _geloescht == 4 and len(_vorher_amr) == 4, (_geloescht, _vorher_amr))
 _r = subprocess.run(['sh', 'deploy/anmeldung/konten.sh', 'realm-aktualisieren'], cwd=os.path.join(WORK, 'installation'), capture_output=True, text=True,
                     # Ausgabe stückweise wie über docker compose exec (im Betrieb gab es sonst falsche „Abbruch“-Meldungen)
                     env=dict(os.environ, KCADM=f"sh {os.path.join(REPO, 'tests', 'oidc', 'kcadm-stueckweise.sh')} env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY {next(d for d in (os.path.join(WORK, x) for x in os.listdir(WORK)) if os.path.isfile(os.path.join(d, 'bin', 'kcadm.sh')))}/bin/kcadm.sh",
@@ -215,6 +226,14 @@ _r = subprocess.run(['sh', 'deploy/anmeldung/konten.sh', 'realm-aktualisieren'],
                              KC_REALM_DATEI=os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json')))
 check('realm-aktualisieren ein zweites Mal: nichts neu angelegt, .env unverändert',
       _r.returncode == 0 and 'angelegt:' not in _r.stdout and 'erzeugt:' not in _r.stdout and open(_env, encoding='utf-8').read() == _vorher, (_r.returncode, _r.stdout[-300:], _r.stderr[-300:]))
+_amr = {}
+for _e in _ablauf():
+    if _e.get('providerId') in ('auth-username-password-form', 'auth-otp-form', 'webauthn-authenticator') and _e.get('authenticationConfig'):
+        _c = json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/authentication/config/{_e['authenticationConfig']}", kopf={'Authorization': 'Bearer ' + kc_token()})[2])
+        _amr.setdefault(_e['providerId'], []).append(_c['config'].get('default.reference.value'))
+check('realm-aktualisieren (Eingabe wie docker compose exec mitgelesen): Anmeldemethode für ALLE Einmalcode- und Passkey-Abfragen nachgetragen',
+      _amr.get('auth-otp-form') == ['otp', 'otp'] and _amr.get('webauthn-authenticator') == ['hwk', 'hwk'] and _amr.get('auth-username-password-form') == ['pwd']
+      and _r.stdout.count("gesetzt:   amr 'otp'") == 2 and _r.stdout.count("gesetzt:   amr 'hwk'") == 2, (_amr, _r.stdout[-400:]))
 check('realm-aktualisieren mit stückweiser Ausgabe (wie docker compose exec): keine Abbruch-Meldung', 'Abbruch' not in _r.stderr, _r.stderr[-300:])
 
 # ── Anmeldeseite im Plattform-Design (Theme „stafl“ aus deploy/anmeldung/theme, konten.sh design-setzen) ──
