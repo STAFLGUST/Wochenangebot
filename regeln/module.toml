@@ -245,6 +245,88 @@ hinweise = [
 ]
 
 [[modul]]
+id = "hr"
+name = "HR"
+beschreibung = "Personal: Urlaubsverwaltung – Urlaubsanspruch, Urlaubsanträge, Genehmigung, Vertretung, Abwesenheitskalender"
+icon = "calendar"
+reihenfolge = 72
+dashboard = true
+agent = "hr"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["regeln/aktionen/hr.toml", "app/api/module/hr/**", "app/module/hr/**", "tests/e2e/test_hr*.py"]
+hinweise = [
+  "Erstes Fachthema nach dem Anlegen: Urlaubsverwaltung (Urlaubstage, Urlaubsanträge, Genehmigung). Fachliche Regeln vor dem Bau mit dem Inhaber klären.",
+  "Personaldaten sind besonders schützenswert: Abwesenheitsgründe (z. B. Krankheit) nie für Kollegen sichtbar; Rechte hr.* serverseitig (GR-103).",
+  "Mitarbeiter kommen aus der zentralen Anmeldung (Keycloak, GR-110) – keine eigene Nutzerverwaltung im Modul.",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "HR"
+  art = "intern"
+  adresse = "https://hr.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+  dns = false
+
+[[modul]]
+id = "marketing"
+name = "Marketing"
+beschreibung = "Marketing mit eigenem CMS für Website-Inhalte, Kampagnen und Medien"
+icon = "megaphone"
+reihenfolge = 74
+dashboard = true
+agent = "marketing"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["regeln/aktionen/marketing.toml", "app/api/module/marketing/**", "app/module/marketing/**", "tests/e2e/test_marketing*.py"]
+hinweise = [
+  "Enthält später ein CMS. Veröffentlichte Inhalte sind öffentlich – nie Mengen, Chargen, MHD, Einkaufs- oder Kundenpreise ausliefern (GR-001, GR-002, GR-008).",
+  "Anforderungen an CMS und Kampagnen vor dem Bau mit dem Inhaber klären.",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Marketing"
+  art = "intern"
+  adresse = "https://marketing.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+  dns = false
+
+[[modul]]
+id = "controlling"
+name = "Controlling"
+beschreibung = "Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche"
+icon = "chart"
+reihenfolge = 76
+dashboard = true
+agent = "controlling"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["regeln/aktionen/controlling.toml", "app/api/module/controlling/**", "app/module/controlling/**", "tests/e2e/test_controlling*.py"]
+hinweise = [
+  "Liest Daten anderer Module nur über deren Schnittstellen (GR-101); Einkaufspreise und Margen nur mit eigenem Recht.",
+  "Kennzahlen und Quellen vor dem Bau mit dem Inhaber klären.",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Controlling"
+  art = "intern"
+  adresse = "https://controlling.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+  dns = false
+
+[[modul]]
 id = "verwaltung"
 name = "Verwaltung"
 beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Sicherheit, Geschäftsregeln, Module & Wartung, Systemstatus"
