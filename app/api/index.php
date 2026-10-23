@@ -63,6 +63,8 @@
  *   GET  ?action=rechte · POST ?action=rechte_save   Rechte je Rolle (Administrator)
  *   GET  ?action=module_status   Module, Oberflächen, Freigabe, Wartung und Zugang (angemeldet; lib/module.php)
  *   POST ?action=modul_wartung_save   Wartung eines Bereichs starten/planen/beenden (Administrator, immer mit Bestätigung)
+ *   HR (Oberfläche hr.intern): GET hr_start | hr_monat · POST hr_antrag | hr_antrag_zurueckziehen   eigener Urlaub (hr.antrag)
+ *   GET hr_verwaltung · POST hr_entscheiden | hr_eintrag_save | hr_person_save | hr_einstellungen_save | hr_export | hr_import_*   Personalstelle (hr.verwalten)
  *
  * Alle Daten liegen als .php-Dateien mit Zugriffssperre im Datenordner –
  * sie lassen sich auch ohne .htaccess nicht direkt im Browser abrufen.
@@ -136,6 +138,10 @@ require __DIR__ . '/module/verwaltung/import.php';
 require __DIR__ . '/module/bestand/import.php';
 require __DIR__ . '/module/angebot/import.php';
 require __DIR__ . '/module/verwaltung/importzentrale.php';
+/* Fachmodule mit eigener Oberfläche */
+require __DIR__ . '/module/hr/urlaub.php';
+require __DIR__ . '/module/hr/export.php';
+require __DIR__ . '/module/hr/import.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -216,6 +222,7 @@ try {
     require __DIR__ . '/aktionen/integritaet.php';
     require __DIR__ . '/aktionen/module.php';
     require __DIR__ . '/aktionen/importzentrale.php';
+    require __DIR__ . '/aktionen/hr.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

@@ -1,0 +1,52 @@
+# Aktionen des Moduls „hr“: Urlaubsverwaltung (Anträge, Genehmigung, Abwesenheiten, Monatsplan, Export, Übernahme).
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+# Alle Aktionen gehören zur Oberfläche hr.intern – solange sie nicht freigegeben ist, antworten sie mit 404
+# (Testfreigabe nur für eingetragene Tester, regeln/wartung.toml).
+
+schema = 1
+modul = "hr"
+
+[aktion.hr_start]
+oberflaeche = "hr.intern"
+
+[aktion.hr_monat]
+oberflaeche = "hr.intern"
+
+[aktion.hr_antrag]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_antrag_zurueckziehen]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_verwaltung]
+oberflaeche = "hr.intern"
+
+[aktion.hr_entscheiden]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_eintrag_save]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_person_save]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_einstellungen_save]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_export]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_import_pruefen]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_import_uebernehmen]
+oberflaeche = "hr.intern"
+schreibend = true
