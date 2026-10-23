@@ -51,8 +51,17 @@ startpasswort() { tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789
 
 kc_als() { # kc_als <benutzer> <passwort> <kcadm-Befehl…>
   u=$1; p=$2; shift 2
-  # shellcheck disable=SC2086  # KCADM ist bewusst ein Befehl mit Argumenten
-  $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" --password "$p" 2>"$FEHLER"
+  # Standardeingabe nur bei „-f -“ (Daten über die Eingabe) weiterreichen: docker compose exec liest sie sonst mit und
+  # „schluckt“ in Schleifen („… | while read“) die restlichen Zeilen – dann wurde nur der erste Eintrag bearbeitet
+  # (im Betrieb: Anmeldemethode nur für das Passwort, nicht für Einmalcode und Passkey → doppelte Code-Abfrage)
+  case " $* " in
+    *" -f - "*)
+      # shellcheck disable=SC2086  # KCADM ist bewusst ein Befehl mit Argumenten
+      $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" --password "$p" 2>"$FEHLER" ;;
+    *)
+      # shellcheck disable=SC2086
+      $KCADM "$@" --no-config --server "$KC_SERVER" --realm master --user "$u" --password "$p" 2>"$FEHLER" </dev/null ;;
+  esac
 }
 bereit() { [ -n "${KC_ADMIN_PASSWORD_TEST:-}$(wert KC_VERWALTUNG_PASSWORD)" ] || abbruch "noch kein Verwaltungskonto – zuerst: sh deploy/anmeldung/konten.sh verwaltung"; }
 kc() {
