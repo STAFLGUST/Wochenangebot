@@ -48,8 +48,11 @@
     if (ziel) $('#hr-login a').setAttribute('href', ziel);
     $('#hr-login').hidden = false; $('#hr-app').hidden = true; $('#hr-user').hidden = true;
   }
-  // Im Echtbetrieb führt das Logo zum Dashboard unter der zentralen Anmeldung, sonst zum Dashboard dieses Servers
-  if (/(^|\.)dashboard-stafl\.de$/.test(location.hostname)) $('#hr-zurueck').href = 'https://dashboard-stafl.de/';
+  // Im Echtbetrieb führt das Logo zum Dashboard unter der zentralen Anmeldung, sonst zum Dashboard dieses Servers;
+  // Mitarbeiter und Urlaubseinstellungen pflegt die Personalstelle in der Verwaltung (Mitarbeiter = Nutzer der Plattform)
+  const ECHT = /(^|\.)dashboard-stafl\.de$/.test(location.hostname);
+  if (ECHT) $('#hr-zurueck').href = 'https://dashboard-stafl.de/';
+  for (const a of $$('[data-verwaltung-link]')) a.href = (ECHT ? 'https://verwaltung.dashboard-stafl.de/admin/' : '../../admin/') + '#' + a.dataset.verwaltungLink;
 
   const dunkel = () => document.documentElement.getAttribute('data-theme') === 'dark'
     || (!document.documentElement.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
@@ -72,8 +75,7 @@
     for (const p of $$('.hr-tab')) p.hidden = p.id !== 'tab-' + tab;
     try { history.replaceState(null, '', '#' + tab); } catch { /* egal */ }
     if (tab === 'kalender') ladeKalender();
-    if (tab === 'antraege' || tab === 'mitarbeiter') ladeVerwaltung();
-    if (tab === 'einstellungen') ladeVerwaltung().then(zeigeEinstellungen);
+    if (tab === 'antraege') ladeVerwaltung();
     if (tab === 'export') zeigeExport();
   }
   $('#hr-tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) zeigeTab(b.dataset.tab); });
@@ -173,7 +175,7 @@
     if (!b) return;
     S.jahr += Number(b.dataset.jahr);
     await ladeStart();
-    if (S.tab === 'antraege' || S.tab === 'mitarbeiter') ladeVerwaltung();
+    if (S.tab === 'antraege') ladeVerwaltung();
   });
 
   /* ---------- Kalender / Monatsplan ---------- */
@@ -243,9 +245,8 @@
     const offen = $('#hr-offen');
     offen.hidden = !r.data.offen.length; offen.textContent = r.data.offen.length || '';
     if (S.tab === 'antraege') zeigeAntraege();
-    if (S.tab === 'mitarbeiter') zeigeMitarbeiter();
   }
-  function fehlerVerwaltung(text) { for (const id of ['#antraege-liste', '#ma-tabelle']) $(id).innerHTML = `<p class="hr-meldung fehler">${esc(text)}</p>`; }
+  function fehlerVerwaltung(text) { for (const id of ['#antraege-liste']) $(id).innerHTML = `<p class="hr-meldung fehler">${esc(text)}</p>`; }
 
   /* ---------- Anträge ---------- */
   function zeigeAntraege() {
@@ -353,155 +354,6 @@
     nachEintrag();
   });
 
-  /* ---------- Mitarbeiter ---------- */
-  /* Mitarbeiterkonten ohne Zuordnung: Vorschlag (gleicher Name), Auswahl eines Mitarbeiters oder neu anlegen */
-  function zeigeKonten() {
-    const v = S.verw;
-    const offen = v.nutzer.filter((u) => !u.person);
-    const vorschlaege = offen.filter((u) => u.vorschlag);
-    $('#ma-konten-stand').textContent = `${v.nutzer.length - offen.length} von ${v.nutzer.length} Konten verknüpft`;
-    const knopf = $('#ma-vorschlaege');
-    knopf.hidden = !vorschlaege.length;
-    knopf.textContent = vorschlaege.length === 1 ? '1 Vorschlag verknüpfen' : `${vorschlaege.length} Vorschläge verknüpfen`;
-    const frei = v.personen.filter((p) => p.aktiv && !p.nutzer);
-    $('#ma-konten-liste').innerHTML = offen.length ? offen.map((u) => `<li data-nutzer="${esc(u.id)}">
-        <span class="wer"><b>${esc(u.name)}</b> <span class="gedaempft">${esc(u.username)}${u.angemeldet ? '' : ' · noch nie angemeldet'}</span></span>
-        <select aria-label="Mitarbeiter für ${esc(u.name)}"><option value="">– Mitarbeiter wählen –</option>
-          ${frei.map((p) => `<option value="${esc(p.id)}"${p.id === u.vorschlag ? ' selected' : ''}>${esc(p.name)}${p.id === u.vorschlag ? ' (Vorschlag)' : ''}</option>`).join('')}
-          <option value="neu">+ als neuen Mitarbeiter anlegen</option></select>
-        <button type="button" class="btn" data-verknuepfen>Verknüpfen</button></li>`).join('')
-      : '<li class="leer">Alle Mitarbeiterkonten sind verknüpft.</li>';
-  }
-  async function verknuepfen(paare) {
-    const m = $('#ma-konten-meldung');
-    const r = await api('hr_verknuepfen', { paare, rev: S.verw.rev });
-    if (r.status !== 200) { meldung(m, fehlerText(r, 'Verknüpfen fehlgeschlagen')); return; }
-    await ladeVerwaltung();
-    meldung($('#ma-konten-meldung'), r.data.anzahl === 1 ? 'Konto verknüpft.' : `${r.data.anzahl} Konten verknüpft.`, 'ok');
-  }
-  $('#ma-vorschlaege').addEventListener('click', () => verknuepfen(S.verw.nutzer.filter((u) => !u.person && u.vorschlag).map((u) => ({ nutzer: u.id, person: u.vorschlag }))));
-  $('#ma-konten-liste').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-verknuepfen]');
-    if (!b) return;
-    const li = b.closest('li'), wahl = $('select', li).value;
-    if (!wahl) { meldung($('#ma-konten-meldung'), 'Bitte einen Mitarbeiter wählen oder „als neuen Mitarbeiter anlegen“.'); return; }
-    verknuepfen([{ nutzer: li.dataset.nutzer, person: wahl }]);
-  });
-
-  function zeigeMitarbeiter() {
-    const v = S.verw;
-    zeigeKonten();
-    $('#ma-titel').textContent = `Mitarbeiter · Urlaub ${v.jahr}`;
-    $('#ma-tabelle').innerHTML = '<thead><tr><th class="zahl">Pos.</th><th>Name</th><th>Abteilung</th><th>Arbeitstage</th><th class="zahl">Anspruch</th><th class="zahl">Übertrag</th>'
-      + '<th class="zahl">Genommen</th><th class="zahl">Geplant</th><th class="zahl">Rest</th><th>Konto</th></tr></thead><tbody>'
-      + (v.personen.length ? v.personen.map((p) => `<tr class="${p.aktiv ? '' : 'aus'}" data-person="${esc(p.id)}" style="cursor:pointer">
-        <td class="zahl">${esc(p.pos || '')}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.abteilung)}</td>
-        <td>${esc(p.arbeitstage.map((w) => WT[w - 1]).join(' '))}</td><td class="zahl">${esc(zahl(p.konto.anspruch))}</td>
-        <td class="zahl">${esc(zahl(p.konto.uebertrag))}${p.konto.verfaellt > 0 ? ' *' : ''}</td><td class="zahl">${esc(zahl(p.konto.genommen))}</td>
-        <td class="zahl">${esc(zahl(p.konto.geplant))}</td><td class="zahl"><b>${esc(zahl(p.konto.rest))}</b></td>
-        <td class="gedaempft">${esc(p.nutzerName || '–')}</td></tr>`).join('')
-        : '<tr><td colspan="10" class="gedaempft">Noch keine Mitarbeiter. „Mitarbeiter anlegen“ oder „Aus Excel übernehmen“.</td></tr>') + '</tbody>';
-  }
-  $('#ma-tabelle').addEventListener('click', (e) => {
-    const tr = e.target.closest('tr[data-person]');
-    if (tr) personDialog(S.verw.personen.find((p) => p.id === tr.dataset.person));
-  });
-  $('#ma-neu').addEventListener('click', () => personDialog(null));
-
-  function personDialog(p) {
-    const v = S.verw, j = String(v.jahr);
-    const d = $('#dlg-person');
-    d.dataset.id = p ? p.id : '';
-    $('#dlg-person-titel').textContent = p ? p.name : 'Mitarbeiter anlegen';
-    $('#person-vorname').value = p ? p.vorname : ''; $('#person-nachname').value = p ? p.nachname : '';
-    $('#person-abteilung').value = p ? p.abteilung : ''; $('#person-pos').value = p ? p.pos : (Math.max(0, ...v.personen.map((x) => x.pos)) + 1);
-    $('#abteilungen').innerHTML = [...new Set(v.personen.map((x) => x.abteilung).filter(Boolean))].map((a) => `<option value="${esc(a)}">`).join('');
-    const vergeben = new Set(v.personen.filter((x) => x.nutzer && (!p || x.id !== p.id)).map((x) => x.nutzer));
-    $('#person-nutzer').innerHTML = '<option value="">– ohne Konto –</option>' + v.nutzer.filter((u) => !vergeben.has(u.id))
-      .map((u) => `<option value="${esc(u.id)}">${esc(u.name)}</option>`).join('');
-    let nutzer = p ? p.nutzer || '' : '';
-    $('#person-nutzer').value = nutzer;
-    $('#person-tage').innerHTML = WT.map((w, i) => `<label><input type="checkbox" value="${i + 1}" ${(p ? p.arbeitstage : [1, 2, 3, 4, 5]).includes(i + 1) ? 'checked' : ''}>${w}</label>`).join('');
-    const jv = (p && p.jahre[j]) || {};
-    $('#person-anspruch-label').textContent = `Urlaubsanspruch ${j}`;
-    $('#person-uebertrag-label').textContent = `Übertrag aus ${Number(j) - 1}`;
-    $('#person-anspruch').value = jv.anspruch ?? (p ? p.konto.anspruch || '' : '');
-    $('#person-uebertrag').value = jv.uebertrag ?? '';
-    $('#person-uebertrag').placeholder = p ? `automatisch (${zahl(p.konto.uebertrag)})` : 'automatisch';
-    $('#person-aktiv').checked = p ? p.aktiv : true;
-    meldung($('#person-meldung'), '');
-    d.showModal();
-  }
-  // Vorschlag: Mitarbeiterkonto mit gleichem Namen
-  for (const id of ['#person-vorname', '#person-nachname']) {
-    $(id).addEventListener('change', () => {
-      if ($('#person-nutzer').value) return;
-      const n = `${$('#person-vorname').value} ${$('#person-nachname').value}`.trim().toLowerCase();
-      const u = S.verw.nutzer.find((x) => x.name.trim().toLowerCase() === n || `${x.vorname} ${x.nachname}`.trim().toLowerCase() === n);
-      if (u && [...$('#person-nutzer').options].some((o) => o.value === u.id)) $('#person-nutzer').value = u.id;
-    });
-  }
-  $('#person-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const v = S.verw, id = $('#dlg-person').dataset.id, alt = id ? v.personen.find((p) => p.id === id) : null;
-    const jahre = { ...(alt ? alt.jahre : {}) };
-    const an = $('#person-anspruch').value, ue = $('#person-uebertrag').value;
-    jahre[String(v.jahr)] = { anspruch: an === '' ? null : Number(an), uebertrag: ue === '' ? null : Number(ue) };
-    const person = { id, vorname: $('#person-vorname').value, nachname: $('#person-nachname').value, abteilung: $('#person-abteilung').value,
-      pos: Number($('#person-pos').value || 0), nutzer: $('#person-nutzer').value || null, aktiv: $('#person-aktiv').checked,
-      arbeitstage: $$('#person-tage input:checked').map((x) => Number(x.value)), jahre };
-    const r = await api('hr_person_save', { person, rev: v.rev });
-    if (r.status !== 200) { meldung($('#person-meldung'), fehlerText(r, 'Speichern fehlgeschlagen')); return; }
-    $('#dlg-person').close();
-    await ladeVerwaltung();
-    ladeStart();
-  });
-
-  /* ---------- Übernahme aus Excel ---------- */
-  let importDaten = null;
-  $('#ma-import').addEventListener('click', () => {
-    importDaten = null;
-    $('#import-datei').value = ''; $('#import-vorschau').innerHTML = ''; $('#import-los').disabled = true; meldung($('#import-meldung'), '');
-    $('#dlg-import').showModal();
-  });
-  function zeigeVorschau(v) {
-    const n = v.zahlen;
-    $('#import-vorschau').innerHTML = `<div class="zahlen"><span class="hr-pille genehmigt">${n.neu} neu</span><span class="hr-pille">${n.geaendert} geändert</span>`
-      + `<span class="hr-pille">${n.entfaellt} ersetzt</span><span class="hr-pille ${n.fehler ? 'abgelehnt' : ''}">${n.fehler} nicht übernommen</span></div>`
-      + v.hinweise.map((h) => `<p class="hinweis ${esc(h.stufe)}">${esc(h.text)}</p>`).join('')
-      + '<ul>' + v.zeilen.map((z) => `<li><span class="hr-pille ${z.art === 'fehler' ? 'abgelehnt' : z.art === 'neu' ? 'genehmigt' : ''}">${esc({ neu: 'neu', geaendert: 'geändert', entfaellt: 'ersetzt', fehler: 'Hinweis' }[z.art] || z.art)}</span>`
-        + `<span><b>${esc(z.name)}</b> ${esc(z.schluessel)} – ${esc(z.text)}</span></li>`).join('') + '</ul>';
-  }
-  $('#import-datei').addEventListener('change', async () => {
-    const f = $('#import-datei').files[0];
-    importDaten = null; $('#import-los').disabled = true; $('#import-vorschau').innerHTML = '';
-    if (!f) return;
-    meldung($('#import-meldung'), 'Datei wird gelesen …', 'warn');
-    try {
-      if (!/\.xlsx$/i.test(f.name)) throw new Error('Bitte eine Excel-Arbeitsmappe (.xlsx) wählen.');
-      const blaetter = await window.OfferCore.xlsxReadWorkbook(await f.arrayBuffer());
-      // nur die Zellen, die der Server braucht: Zeilen bis 300, Spalten bis 40
-      const daten = { blaetter: blaetter.map((b) => ({ name: b.name, grid: b.grid.slice(0, 300).map((z) => Array.from({ length: Math.min(z.length, 40) }, (_, i) => z[i] ?? null)) })) };
-      const r = await api('hr_import_pruefen', { daten, quelle: f.name });
-      if (r.status !== 200) throw new Error(fehlerText(r, 'Die Datei konnte nicht geprüft werden'));
-      importDaten = { daten, quelle: f.name, stand: r.data.stand };
-      zeigeVorschau(r.data);
-      meldung($('#import-meldung'), '');
-      $('#import-los').disabled = false;
-    } catch (err) { meldung($('#import-meldung'), err.message || String(err)); }
-  });
-  $('#import-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!importDaten) return;
-    $('#import-los').disabled = true;
-    const r = await api('hr_import_uebernehmen', importDaten);
-    if (r.status !== 200) { meldung($('#import-meldung'), fehlerText(r, 'Übernahme fehlgeschlagen')); $('#import-los').disabled = false; return; }
-    importDaten = null;
-    meldung($('#import-meldung'), 'Übernommen. Bitte jetzt Urlaubsanspruch und Übertrag je Mitarbeiter prüfen.', 'ok');
-    await ladeVerwaltung();
-    ladeStart();
-  });
-
   /* ---------- Export ---------- */
   function zeigeExport() {
     const j = $('#export-jahr'), m = $('#export-monat');
@@ -530,33 +382,6 @@
       setTimeout(() => URL.revokeObjectURL(url), 10000);
       meldung(m, `${name} wurde heruntergeladen.`, 'ok');
     } catch (err) { meldung(m, err.message || String(err)); }
-  });
-
-  /* ---------- Einstellungen ---------- */
-  function zeitraumZeile(z) {
-    return `<div class="hr-zeitraum"><input type="date" value="${esc(z.von || '')}" aria-label="Von"><input type="date" value="${esc(z.bis || '')}" aria-label="Bis">
-      <input type="text" value="${esc(z.text || '')}" maxlength="80" placeholder="Bezeichnung" aria-label="Bezeichnung"><button type="button" class="btn" data-weg aria-label="Entfernen">✕</button></div>`;
-  }
-  function zeigeEinstellungen() {
-    if (!S.verw) return;
-    $('#einst-sperren').innerHTML = S.verw.sperren.map(zeitraumZeile).join('');
-    $('#einst-ferien').innerHTML = S.verw.ferien.map(zeitraumZeile).join('');
-    meldung($('#einst-meldung'), '');
-  }
-  $('#einst').addEventListener('click', (e) => {
-    const plus = e.target.closest('[data-plus]');
-    if (plus) $('#einst-' + plus.dataset.plus).insertAdjacentHTML('beforeend', zeitraumZeile({}));
-    const weg = e.target.closest('[data-weg]');
-    if (weg) weg.parentElement.remove();
-  });
-  const zeitraeume = (id) => $$(id + ' .hr-zeitraum').map((z) => { const i = $$('input', z); return { von: i[0].value, bis: i[1].value, text: i[2].value }; });
-  $('#einst').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const r = await api('hr_einstellungen_save', { sperren: zeitraeume('#einst-sperren'), ferien: zeitraeume('#einst-ferien') });
-    if (r.status !== 200) { meldung($('#einst-meldung'), fehlerText(r, 'Speichern fehlgeschlagen')); return; }
-    S.verw.sperren = r.data.sperren; S.verw.ferien = r.data.ferien;
-    zeigeEinstellungen();
-    meldung($('#einst-meldung'), 'Gespeichert.', 'ok');
   });
 
   /* Dialoge: „Abbrechen“/„Schließen“ */

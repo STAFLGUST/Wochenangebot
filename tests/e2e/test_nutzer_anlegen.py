@@ -129,7 +129,7 @@ with sync_playwright() as p:
     a.screenshot(path=SH + '/nutzer-anlegen.png')
     a.click('#user-body [type=submit]'); a.wait_for_selector('#user-body .us-fertig')
     t = a.inner_text('#user-body')
-    check('Abschluss: Nutzer angelegt mit Benutzername, Startpasswort, E-Mail, Mail-Knopf', 'Nutzer angelegt' in t and 'lena-lager' in t and pw in t and 'lena.lager@example.org' in t
+    check('Abschluss: Mitarbeiter angelegt mit Benutzername, Startpasswort, E-Mail, Mail-Knopf', 'Mitarbeiter angelegt' in t and 'lena-lager' in t and pw in t and 'lena.lager@example.org' in t
           and a.locator('#user-body [data-uact="sendmail"]').is_visible() and a.is_checked('#us-mitpw'), t[:300])
     check('Liste schon aktualisiert', a.locator('.utab tr:has-text("lena-lager")').count() == 1)
     a.mouse.click(30, 30)

@@ -15,10 +15,9 @@ function hr_jahr_param($v): int
 }
 
 /* Angaben einer Person für die Personalstelle */
-function hr_person_aus(array $p, array $eintraege, int $jahr, array $nutzerNamen): array
+function hr_person_aus(array $p, array $eintraege, int $jahr): array
 {
-    return $p + ['name' => hr_name($p), 'nutzerName' => $p['nutzer'] !== null ? ($nutzerNamen[$p['nutzer']] ?? null) : null,
-                 'konto' => hr_konto($p, $eintraege, $jahr)];
+    return $p + ['name' => hr_name($p), 'konto' => hr_konto($p, $eintraege, $jahr)];
 }
 
 switch ($action) {
@@ -27,7 +26,7 @@ switch ($action) {
             $me = require_perm('hr.antrag');
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
-            $neuVerknuepft = hr_ich(hr_personal(), $me) === null ? hr_auto_verknuepfen($me) !== null : false;
+            $neuVerknuepft = hr_auto_verknuepfen($me) !== null;   // Altbestand mit gleichem Namen übernehmen (einmalig)
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $ich = hr_ich($personal, $me);
             $verwalten = may($me, 'hr.verwalten');
@@ -119,16 +118,6 @@ switch ($action) {
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $idx = hr_personen_index($personal);
-            $nutzer = []; $nutzerNamen = []; $verknuepft = [];
-            foreach ($personal['personen'] as $p) if ($p['nutzer'] !== null) $verknuepft[$p['nutzer']] = $p['id'];
-            foreach (users_load() as $u) {
-                if (empty($u['active'])) continue;
-                $v = isset($verknuepft[$u['id']]) ? null : hr_vorschlag($personal, $u);
-                $nutzer[] = ['id' => $u['id'], 'name' => (string)$u['name'], 'username' => (string)$u['username'], 'vorname' => (string)($u['vorname'] ?? ''),
-                             'nachname' => (string)($u['nachname'] ?? ''), 'person' => $verknuepft[$u['id']] ?? null, 'vorschlag' => $v['id'] ?? null,
-                             'angemeldet' => $u['lastLogin'] ?? null];
-                $nutzerNamen[$u['id']] = (string)$u['name'];
-            }
             $eintraege = []; $offen = []; $freiJe = [];
             foreach ($abw['eintraege'] as $e) {
                 $p = $idx[$e['person']] ?? null;
@@ -150,8 +139,8 @@ switch ($action) {
             usort($offen, function ($a, $b) { return $a['von'] <=> $b['von']; });
             usort($eintraege, function ($a, $b) { return [$a['von'], $a['name']] <=> [$b['von'], $b['name']]; });
             respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'heute' => hr_heute(),
-                     'personen' => array_map(function ($p) use ($abw, $jahr, $nutzerNamen) { return hr_person_aus($p, $abw['eintraege'], $jahr, $nutzerNamen); }, $personal['personen']),
-                     'nutzer' => $nutzer, 'offen' => $offen, 'eintraege' => $eintraege, 'sperren' => $einst['sperren'], 'ferien' => $einst['ferien'], 'arten' => HR_ARTEN]);
+                     'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
+                     'offen' => $offen, 'eintraege' => $eintraege, 'sperren' => $einst['sperren'], 'ferien' => $einst['ferien'], 'arten' => HR_ARTEN]);
         }
 
         /* Antrag genehmigen oder ablehnen */
@@ -227,88 +216,70 @@ switch ($action) {
             respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p) : null]);
         }
 
-        /* Mitarbeiter anlegen oder ändern (Name, Abteilung, Reihenfolge, Konto, Arbeitstage, Anspruch und Übertrag je Jahr) */
-        case 'hr_person_save': {
-            $me = require_perm('hr.verwalten', true);
-            $b = body();
-            $x = is_array($b['person'] ?? null) ? $b['person'] : fail('Ungültige Angaben.', 422);
-            $vor = s($x['vorname'] ?? '', 60) ?? ''; $nach = s($x['nachname'] ?? '', 60) ?? '';
-            if ($vor === '' && $nach === '') fail('Bitte einen Namen angeben.', 422);
-            $at = is_array($x['arbeitstage'] ?? null) ? array_values(array_unique(array_map('intval', $x['arbeitstage']))) : [1, 2, 3, 4, 5];
-            if (!$at || array_filter($at, function ($w) { return $w < 1 || $w > 7; })) fail('Bitte mindestens einen Arbeitstag wählen.', 422);
-            sort($at);
-            $jahre = [];
-            foreach ((array)($x['jahre'] ?? []) as $j => $v) {
-                if (!preg_match('/^\d{4}$/', (string)$j) || (int)$j < 2000 || (int)$j > 2100 || !is_array($v)) fail('Ungültiges Jahr beim Urlaubsanspruch.', 422);
-                $zahl = function ($z, string $was, float $min) use ($j) {
-                    if ($z === null || $z === '') return null;
-                    if (!is_numeric($z) || (float)$z < $min || (float)$z > 100 || fmod((float)$z * 2, 1.0) != 0.0) fail("$was $j: bitte eine Zahl in ganzen oder halben Tagen angeben.", 422);
-                    return (float)$z;
-                };
-                $jahre[(string)$j] = ['anspruch' => $zahl($v['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($v['uebertrag'] ?? null, 'Übertrag', -100)];
-            }
-            $nutzer = ($x['nutzer'] ?? null) === null || $x['nutzer'] === '' ? null : (string)$x['nutzer'];
-            if ($nutzer !== null && user_find(users_load(), $nutzer) === null) fail('Das gewählte Mitarbeiterkonto gibt es nicht.', 422);
-            $id = s($x['id'] ?? '', 40) ?? '';
-            $p = with_lock('hr-personal', function () use ($id, $vor, $nach, $at, $jahre, $nutzer, $x, $b) {
-                $personal = hr_personal();
-                if ((int)($b['rev'] ?? -1) !== $personal['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
-                if ($nutzer !== null) foreach ($personal['personen'] as $o) if ($o['nutzer'] === $nutzer && $o['id'] !== $id) fail('Dieses Mitarbeiterkonto ist bereits ' . hr_name($o) . ' zugeordnet.', 409);
-                $neu = ['vorname' => $vor, 'nachname' => $nach, 'abteilung' => s($x['abteilung'] ?? '', 40) ?? '', 'pos' => max(0, min(9999, (int)($x['pos'] ?? 0))),
-                        'nutzer' => $nutzer, 'arbeitstage' => $at, 'aktiv' => !array_key_exists('aktiv', $x) || (bool)$x['aktiv'], 'jahre' => $jahre, 'geaendert' => now()];
-                if ($id === '') { $p = hr_person_norm(['id' => hr_neue_id('p')] + $neu); $personal['personen'][] = $p; }
-                else {
-                    $p = null;
-                    foreach ($personal['personen'] as &$o) if ($o['id'] === $id) { $o = hr_person_norm(array_merge($o, $neu)); $p = $o; }
-                    unset($o);
-                    if (!$p) fail('Mitarbeiter nicht gefunden.', 404);
-                }
-                hr_personal_schreiben($personal);
-                return $p;
-            });
-            audit('hr', 'HR: Mitarbeiter ' . hr_name($p) . ($id === '' ? ' angelegt' : ' geändert'));
-            respond(['ok' => true, 'person' => $p]);
+        /* Verwaltung → Mitarbeiter: HR-Angaben aller Mitarbeiter mit Urlaubskonto, Urlaubssperren, Ferien (Personalstelle).
+           Oberfläche wie die Mitarbeiterverwaltung (Eingabebereich der Verwaltung). */
+        case 'mitarbeiter_hr': {
+            $me = require_perm('hr.verwalten');
+            header('Cache-Control: no-store');
+            $jahr = hr_jahr_param($_GET['jahr'] ?? null);
+            $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
+            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => HR_UEBERTRAG_BIS,
+                     'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
+                     'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']]);
         }
 
-        /* Mitarbeiterkonten verknüpfen: [{nutzer, person: <id> | "neu" | null}] – "neu" legt den Mitarbeiter aus dem Konto an
-           (Vor-/Nachname), null hebt die Verknüpfung des Kontos auf. Ein Konto gehört höchstens zu einem Mitarbeiter. */
-        case 'hr_verknuepfen': {
+        /* HR-Angaben eines Mitarbeiters: Abteilung, Position, Arbeitstage, im Urlaubsplan, Anspruch und Übertrag eines Jahres */
+        case 'mitarbeiter_hr_save': {
             $me = require_perm('hr.verwalten', true);
             $b = body();
-            $paare = $b['paare'] ?? null;
-            if (!is_array($paare) || !array_is_list($paare) || !$paare || count($paare) > 500) fail('Ungültige Angaben.', 422);
-            $konten = [];
-            foreach (users_load() as $u) if (!empty($u['active'])) $konten[$u['id']] = $u;
-            $ergebnis = with_lock('hr-personal', function () use ($paare, $konten, $b) {
-                $personal = hr_personal();
-                if ((int)($b['rev'] ?? -1) !== $personal['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
-                $text = [];
-                foreach ($paare as $x) {
-                    $nid = (string)($x['nutzer'] ?? '');
-                    $u = $konten[$nid] ?? fail('Ein gewähltes Mitarbeiterkonto gibt es nicht (mehr) oder es ist gesperrt.', 422);
-                    $ziel = $x['person'] ?? null;
-                    foreach ($personal['personen'] as &$p) if ($p['nutzer'] === $nid) { $p['nutzer'] = null; $p['geaendert'] = now(); }
-                    unset($p);
-                    if ($ziel === null) { $text[] = $u['name'] . ': Verknüpfung aufgehoben'; continue; }
-                    if ($ziel === 'neu') {
-                        $vor = s($u['vorname'] ?? '', 60) ?? ''; $nach = s($u['nachname'] ?? '', 60) ?? '';
-                        if ($vor === '' && $nach === '') { $teile = explode(' ', (string)$u['name']); $nach = count($teile) > 1 ? array_pop($teile) : ''; $vor = implode(' ', $teile); }
-                        $personal['personen'][] = hr_person_norm(['id' => hr_neue_id('p'), 'vorname' => $vor, 'nachname' => $nach, 'abteilung' => '', 'pos' => 0,
-                                                                  'nutzer' => $nid, 'arbeitstage' => [1, 2, 3, 4, 5], 'aktiv' => true, 'jahre' => [], 'geaendert' => now()]);
-                        $text[] = $u['name'] . ': als Mitarbeiter angelegt';
-                        continue;
-                    }
-                    $treffer = false;
-                    foreach ($personal['personen'] as &$p) if ($p['id'] === (string)$ziel) { $p['nutzer'] = $nid; $p['geaendert'] = now(); $treffer = hr_name($p); }
-                    unset($p);
-                    if ($treffer === false) fail('Mitarbeiter nicht gefunden.', 404);
-                    $text[] = $u['name'] . ' → ' . $treffer;
+            $uid = (string)($b['nutzer'] ?? '');
+            $users = users_load();
+            $ui = user_find($users, $uid);
+            if ($ui === null) fail('Mitarbeiter nicht gefunden.', 404);
+            $werte = [];
+            if (array_key_exists('abteilung', $b)) $werte['abteilung'] = s($b['abteilung'], 40) ?? '';
+            if (array_key_exists('pos', $b)) $werte['pos'] = max(0, min(9999, (int)$b['pos']));
+            if (array_key_exists('aktiv', $b)) $werte['aktiv'] = (bool)$b['aktiv'];
+            if (array_key_exists('arbeitstage', $b)) {
+                $at = is_array($b['arbeitstage']) ? array_values(array_unique(array_map('intval', $b['arbeitstage']))) : [];
+                if (!$at || array_filter($at, function ($w) { return $w < 1 || $w > 7; })) fail('Bitte mindestens einen Arbeitstag wählen.', 422);
+                sort($at);
+                $werte['arbeitstage'] = $at;
+            }
+            $jahr = null;
+            if (array_key_exists('jahr', $b)) {
+                $jahr = hr_jahr_param($b['jahr']);
+                $zahl = function ($z, string $was, float $min) use ($jahr) {
+                    if ($z === null || $z === '') return null;
+                    if (!is_numeric($z) || (float)$z < $min || (float)$z > 100 || fmod((float)$z * 2, 1.0) != 0.0) fail("$was $jahr: bitte eine Zahl in ganzen oder halben Tagen angeben.", 422);
+                    return (float)$z;
+                };
+                $jv = ['anspruch' => $zahl($b['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($b['uebertrag'] ?? null, 'Übertrag', -100)];
+            }
+            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, $werte, $jahr, &$jv) {
+                $roh = hr_personal_roh();
+                if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
+                if ($jahr !== null) {
+                    $jahre = [];
+                    foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) $jahre = $e['jahre'];
+                    $jahre[(string)$jahr] = $jv;
+                    $werte['jahre'] = $jahre;
                 }
-                hr_personal_schreiben($personal);
-                return $text;
+                $p = hr_angaben_setzen($roh, $uid, $werte, $users[$ui]);
+                hr_personal_schreiben($roh);
+                return $p;
             });
-            audit('hr', 'HR: Mitarbeiterkonten verknüpft – ' . implode('; ', array_slice($ergebnis, 0, 30)) . (count($ergebnis) > 30 ? ' …' : ''));
-            respond(['ok' => true, 'anzahl' => count($ergebnis)]);
+            audit('hr', 'HR: Angaben von ' . $users[$ui]['name'] . ' geändert');
+            $personal = hr_personal(); $abw = hr_abwesenheiten();
+            foreach ($personal['personen'] as $x) if ($x['nutzer'] === $uid) respond(['ok' => true, 'rev' => $personal['rev'], 'person' => hr_person_aus($x, $abw['eintraege'], $jahr ?? (int)date('Y'))]);
+            respond(['ok' => true, 'rev' => $personal['rev']]);
+        }
+
+        /* Einträge der Urlaubsliste ohne Mitarbeiter (Altbestand) in die Mitarbeiter übernehmen */
+        case 'hr_personal_uebernehmen': {
+            $me = require_perm('hr.verwalten', true);
+            $text = hr_personal_uebernehmen($me);
+            respond(['ok' => true, 'anzahl' => count($text), 'text' => $text]);
         }
 
         /* Urlaubssperren und Ferien */

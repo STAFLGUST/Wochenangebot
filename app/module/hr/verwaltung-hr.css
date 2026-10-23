@@ -1,0 +1,23 @@
+/* STAFL-Plattform · HR im Eingabebereich der Verwaltung (Mitarbeiter-Dialog, Urlaubseinstellungen, Altbestand).
+   Farben und Grundformen aus ../../assets/admin.css. */
+.hr-teil { margin: 4px 0 0; padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: var(--r); }
+.hr-teil legend { padding: 0 6px; font-weight: 650; font-size: 14px; }
+.hr-teil .form-grid { gap: 12px; }
+.hr-tage-feld { display: flex; flex-direction: column; gap: 8px; }
+.hr-lbl { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.hr-tage { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.hr-tage .check { margin: 0; }
+.hr-alt { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 14px; border-color: var(--accent-line); background: var(--accent-soft); }
+.hr-alt p { flex: 1 1 320px; margin: 0; font-size: 14px; }
+.hr-einst { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.hr-einst .sec-h { margin: 10px 0 0; }
+.hr-einst .hint { margin: 0; }
+.hr-einst > .btn { align-self: flex-start; }
+.hr-zr { display: grid; grid-template-columns: 1fr 1fr 1.4fr auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+.hr-zr input { height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; min-width: 0; }
+.utab td.num, .utab th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 760px) {
+  .utab .u-abt, .utab .u-urlaub { display: none; }
+  .hr-zr { grid-template-columns: 1fr 1fr; }
+}
+.hr-nurhr { margin: 0 0 12px; }

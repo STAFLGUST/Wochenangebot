@@ -1,11 +1,13 @@
 """HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/).
 
-Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, keine Testfreigabe), Rechte (hr.antrag für alle, hr.verwalten nur
-Personalstelle, serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
+Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, keine Testfreigabe), Mitarbeiter = Nutzer
+(jeder Mitarbeiter ist sofort in der Urlaubsverwaltung; Mitarbeiter ohne Anmeldung; HR-Angaben in der Verwaltung;
+Übernahme alter Einträge ohne Mitarbeiter), Rechte (hr.antrag für alle, hr.verwalten nur Personalstelle, serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
 Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.03. und Verfall, 4-Tage-Woche,
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
 Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmigte Einträge), Übernahme der bisherigen
-Excel-Planung (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx) und die Oberfläche (Desktop, 390 px).
+Excel-Planung über die Importzentrale (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx) und die Oberflächen
+(HR-Seite, Verwaltung → Mitarbeiter und Urlaub; Desktop, 390 px).
 """
 import datetime as dt
 import io
@@ -18,7 +20,7 @@ import openpyxl
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, FIX, storage_raw
+from umgebung import SH, FIX, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -38,6 +40,16 @@ def montag(jahr, monat, woche=1):
 def iso(d): return d.isoformat()
 
 
+def dokument(name):
+    """Gespeichertes Dokument lesen (Dateien: ohne Schutzzeile)."""
+    raw = storage_raw(name)
+    if not raw:
+        return {}
+    if raw.startswith('<?php'):
+        raw = raw.split('\n', 1)[1]
+    return json.loads(raw)
+
+
 Y = dt.date.today().year + 1           # Anträge nur für die Zukunft: alles im nächsten Jahr
 FEB = montag(Y, 2)                      # Montag der ersten vollen Februarwoche (vor dem 31.03.: verbraucht Übertrag)
 AUG = montag(Y, 8, 2)
@@ -48,7 +60,14 @@ for u, n, r, p, extra in (('erika', 'Erika Editor', 'editor', 'Editor-Zugang-77'
                           ('paul', 'Paul Personal', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.verwalten']}), ('otto', 'Otto Ohne', 'editor', 'Ohne-Zugang-77', {})):
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
+st, r_ = A.call('user_save', {'id': '', 'vorname': 'Andre', 'nachname': 'Vierzig', 'role': 'editor', 'active': True, 'zugang': False})
+check('Mitarbeiter ohne Anmeldung: ohne Passwort angelegt, deaktiviert, Rolle Leser', st == 200 and r_['user']['zugang'] is False and r_['user']['active'] is False
+      and r_['user']['role'] == 'viewer' and r_['user']['username'] == 'andre-vierzig', r_)
 ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+check('… kann sich nicht anmelden', Client('198.51.100.30').call('login', {'username': 'andre-vierzig', 'password': 'irgendwas-langes-1'})[0] in (401, 403))
+st, r_ = A.call('user_save', {'id': ids['andre-vierzig'], 'vorname': 'Andre', 'nachname': 'Vierzig', 'role': 'viewer', 'active': True, 'zugang': True})
+check('Anmeldung einrichten nur mit Passwort (422)', st == 422 and 'Passwort' in r_.get('error', ''), r_)
+check('eigenen Zugang nicht auf „ohne Anmeldung“ (422)', A.call('user_save', {'id': ids['admin'], 'name': 'Administrator', 'role': 'admin', 'active': True, 'zugang': False})[0] == 422)
 E = Client('198.51.100.3'); E.call('login', {'username': 'erika', 'password': 'Editor-Zugang-77'})
 L = Client('198.51.100.4'); L.call('login', {'username': 'lena', 'password': 'Leser-Zugang-77'})
 P = Client('198.51.100.5'); P.call('login', {'username': 'paul', 'password': 'Personal-Zugang-77'})
@@ -66,39 +85,46 @@ check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über
 st, r = O.call('hr_start')
 check('jeder Mitarbeiter mit hr.antrag: Start ok (otto, nie als Tester eingetragen)', st == 200 and r.get('ok'), (st, r))
 check('Administrator und Personalstelle: Start ok', A.call('hr_start')[0] == 200 and P.call('hr_start')[0] == 200)
-check('ohne Anmeldung: 401', N.call('hr_start')[0] == 401 and N.call('hr_verwaltung')[0] == 401)
+check('ohne Anmeldung: 401', N.call('hr_start')[0] == 401 and N.call('hr_verwaltung')[0] == 401 and N.call('mitarbeiter_hr')[0] == 401)
 
 # ── Rechte ──
-check('Mitarbeiter ohne Personalrecht: hr_verwaltung 403', L.call('hr_verwaltung')[0] == 403 and E.call('hr_verwaltung')[0] == 403)
+check('Mitarbeiter ohne Personalrecht: hr_verwaltung 403', L.call('hr_verwaltung')[0] == 403 and E.call('hr_verwaltung')[0] == 403 and L.call('mitarbeiter_hr')[0] == 403)
 for a, b in (('hr_entscheiden', {'id': 'x', 'entscheidung': 'genehmigt'}), ('hr_eintrag_save', {'person': 'x', 'art': 'K', 'von': iso(FEB), 'bis': iso(FEB)}),
-             ('hr_person_save', {'person': {'vorname': 'X'}, 'rev': 0}), ('hr_export', {'jahr': Y, 'monate': [2]}), ('hr_einstellungen_save', {'sperren': []}),
-             ('hr_import_pruefen', {'daten': {'blaetter': []}})):
+             ('mitarbeiter_hr_save', {'nutzer': 'x', 'rev': 0}), ('hr_export', {'jahr': Y, 'monate': [2]}), ('hr_einstellungen_save', {'sperren': []}),
+             ('hr_personal_uebernehmen', {}), ('hr_import_pruefen', {'daten': {'blaetter': []}})):
     check(f'{a}: ohne Personalrecht 403', L.call(a, b)[0] == 403)
-st, r = E.call('hr_start', None)
-check('Mitarbeiter ohne Zuordnung: Start ok, ohne Konto', st == 200 and r['ich'] is None and r['verwalten'] is False, r)
-check('Antrag ohne Zuordnung: 409 mit Hinweis', (lambda s: s[0] == 409 and 'Personalstelle' in s[1]['error'])(E.call('hr_antrag', {'von': iso(AUG), 'bis': iso(AUG)})))
 
-# ── Mitarbeiter anlegen (Personalstelle) ──
-rev = P.call('hr_verwaltung')[1]['rev']
+# ── Mitarbeiter = Nutzer ──
+st, r = E.call('hr_start')
+check('jeder Mitarbeiter ist sofort in der Urlaubsverwaltung (ohne Zuordnung)', st == 200 and r['ich'] and r['ich']['id'] == ids['erika'] and r['konto']['anspruch'] == 0, r.get('ich'))
+v = P.call('mitarbeiter_hr')[1]
+pv = {p_['nutzer']: p_ for p_ in v['personen'] if p_['nutzer']}
+check('Verwaltung: alle Mitarbeiter mit HR-Angaben (Standard: Mo–Fr, im Urlaubsplan)', set(ids.values()) <= set(pv) and pv[ids['otto']]['arbeitstage'] == [1, 2, 3, 4, 5]
+      and pv[ids['otto']]['aktiv'] is True and pv[ids['andre-vierzig']]['zugang'] is False, sorted(pv))
+rev = v['rev']
 
 
-def person(daten):
+def hr(uid, **werte):
     global rev
-    st, r = P.call('hr_person_save', {'person': daten, 'rev': rev})
+    st, r = P.call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
     assert st == 200, r
-    rev += 1
+    rev = r['rev']
     return r['person']['id']
 
 
-PE = person({'vorname': 'Erika', 'nachname': 'Editor', 'abteilung': 'Verwaltung', 'pos': 1, 'nutzer': ids['erika'], 'jahre': {str(Y): {'anspruch': 30, 'uebertrag': 5}}})
-PL = person({'vorname': 'Lena', 'nachname': 'Leser', 'abteilung': 'Verwaltung', 'pos': 2, 'nutzer': ids['lena'], 'jahre': {'2025': {'anspruch': 30, 'uebertrag': 4}}})
-PA = person({'vorname': 'Andre', 'nachname': 'Vierzig', 'abteilung': 'Lager', 'pos': 3, 'arbeitstage': [1, 2, 3, 4], 'jahre': {str(Y): {'anspruch': 24}}})
-st, r = P.call('hr_person_save', {'person': {'vorname': 'Doppelt', 'nutzer': ids['erika']}, 'rev': rev})
-check('Mitarbeiterkonto nur einmal zuordenbar', st == 409, r)
-st, r = P.call('hr_person_save', {'person': {'vorname': 'Alt'}, 'rev': rev - 1})
-check('veralteter Stand der Mitarbeiterliste: 409', st == 409, r)
-check('ungültiger Anspruch (Viertel-Tage): 422', P.call('hr_person_save', {'person': {'vorname': 'X', 'jahre': {str(Y): {'anspruch': 10.25}}}, 'rev': rev})[0] == 422)
-check('ohne Arbeitstage: 422', P.call('hr_person_save', {'person': {'vorname': 'X', 'arbeitstage': []}, 'rev': rev})[0] == 422)
+PE = hr(ids['erika'], abteilung='Verwaltung', pos=1, jahr=Y, anspruch=30, uebertrag=5)
+PL = hr(ids['lena'], abteilung='Verwaltung', pos=2, jahr=2025, anspruch=30, uebertrag=4)
+PA = hr(ids['andre-vierzig'], abteilung='Lager', pos=3, arbeitstage=[1, 2, 3, 4], jahr=Y, anspruch=24)
+check('Person = Mitarbeiter-Kennung', (PE, PL, PA) == (ids['erika'], ids['lena'], ids['andre-vierzig']))
+check('veralteter Stand: 409', P.call('mitarbeiter_hr_save', {'nutzer': ids['erika'], 'rev': rev - 1, 'pos': 1})[0] == 409)
+check('ungültiger Anspruch (Viertel-Tage): 422', P.call('mitarbeiter_hr_save', {'nutzer': ids['erika'], 'rev': rev, 'jahr': Y, 'anspruch': 10.25})[0] == 422)
+check('ohne Arbeitstage: 422', P.call('mitarbeiter_hr_save', {'nutzer': ids['erika'], 'rev': rev, 'arbeitstage': []})[0] == 422)
+check('unbekannter Mitarbeiter: 404', P.call('mitarbeiter_hr_save', {'nutzer': 'u-gibt-es-nicht', 'rev': rev})[0] == 404)
+hr(ids['otto'], aktiv=False)
+check('nicht im Urlaubsplan: kein eigenes Konto, Antrag 409', O.call('hr_start')[1]['ich'] is None and O.call('hr_antrag', {'von': iso(AUG), 'bis': iso(AUG)})[0] == 409)
+check('… und nicht im Kalender', ids['otto'] not in [p_['id'] for p_ in P.call(f'hr_monat&jahr={Y}&monat=2')[1]['personen']])
+hr(ids['admin'], aktiv=False); hr(ids['paul'], aktiv=False)
+check('Namen kommen aus dem Mitarbeiter (Verwaltung → Mitarbeiter)', {p_['id']: p_['name'] for p_ in P.call('hr_verwaltung')[1]['personen']}[PA] == 'Andre Vierzig')
 
 # ── Konto und Antrag ──
 st, r = E.call('hr_start&jahr=' + str(Y))
@@ -208,54 +234,49 @@ check('Protokoll nennt HR-Vorgänge, aber nie „Krank“', 'HR: Abwesenheit Len
 raw = storage_raw('hr-abwesenheiten') or ''
 check('Einträge bleiben erhalten (Status statt Löschen)', '"storniert"' in raw and '"zurueckgezogen"' in raw and '"abgelehnt"' in raw)
 
-# ── Verknüpfung Mitarbeiterkonto ↔ Mitarbeiter ──
-neue = {}
-for u, n in (('gerda-gleich', 'Gerda Gleich'), ('hans', 'Hans Doppelt'), ('ines', 'Ines Neu'), ('karl', 'Karl Konto'), ('mia', 'Mia Muster')):
+# ── Altbestand: Einträge der Urlaubsliste ohne Mitarbeiter (vor „Mitarbeiter = Nutzer“) ──
+for u, n in (('gerda-gleich', 'Gerda Gleich'), ('hans', 'Hans Doppelt')):
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': 'Urlaub-Konto-4711', 'mustChange': False})
     assert st == 200, r_
 ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
-A.call('modul_tester_save', {'bereich': 'hr.intern', 'tester': [ids[x] for x in ('admin', 'erika', 'lena', 'paul', 'gerda-gleich', 'hans', 'ines', 'karl', 'mia')], 'grund': 'Abnahme'})   # nur solange HR in der Testfreigabe ist
-rev = P.call('hr_verwaltung')[1]['rev']
-PG = person({'vorname': 'Gerda', 'nachname': 'Gleich', 'abteilung': 'Lager', 'pos': 4})
-person({'vorname': 'Hans', 'nachname': 'Doppelt', 'abteilung': 'Lager', 'pos': 5}); person({'vorname': 'Hans', 'nachname': 'Doppelt', 'abteilung': 'GF', 'pos': 6})
-PI = person({'vorname': 'Ines', 'nachname': 'Neu', 'abteilung': 'Verwaltung', 'pos': 7})
-PM = person({'vorname': 'Mia', 'nachname': 'Muster', 'abteilung': 'Verwaltung', 'pos': 8})
+alt = dokument('hr-personal')
+alt['personen'] += [{'id': 'pgerda', 'vorname': 'Gerda', 'nachname': 'Gleich', 'abteilung': 'Lager', 'pos': 4, 'aktiv': True, 'jahre': {str(Y): {'anspruch': 28}}},
+                    {'id': 'phans1', 'vorname': 'Hans', 'nachname': 'Doppelt', 'abteilung': 'Lager', 'pos': 5, 'aktiv': True},
+                    {'id': 'phans2', 'vorname': 'Hans', 'nachname': 'Doppelt', 'abteilung': 'GF', 'pos': 6, 'aktiv': True},
+                    {'id': 'pkarl', 'vorname': 'Karl', 'nachname': 'Alt', 'abteilung': 'Lager', 'pos': 7, 'aktiv': True}]
+alt['rev'] = alt.get('rev', 0) + 1
+storage_write('hr-personal', alt)
+ab = dokument('hr-abwesenheiten')
+ab['eintraege'] += [{'id': 'aalt1', 'person': 'pgerda', 'art': 'U', 'von': iso(montag(Y, 6)), 'bis': iso(montag(Y, 6)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                    {'id': 'aalt2', 'person': 'pkarl', 'art': 'U', 'von': iso(montag(Y, 6)), 'bis': iso(montag(Y, 6)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'}]
+ab['rev'] = ab.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab)
+v = P.call('mitarbeiter_hr')[1]
+check('Verwaltung zeigt den Altbestand (ohne Mitarbeiter)', sorted(p_['id'] for p_ in v['personen'] if p_['altbestand']) == ['pgerda', 'phans1', 'phans2', 'pkarl'])
 G = Client('198.51.100.8'); G.call('login', {'username': 'gerda-gleich', 'password': 'Urlaub-Konto-4711'})
-st, r = G.call('hr_start')
-check('erster Aufruf: Konto automatisch mit gleichnamigem Mitarbeiter verknüpft', st == 200 and r['neuVerknuepft'] is True and r['ich'] and r['ich']['id'] == PG, r)
+st, r = G.call('hr_start&jahr=' + str(Y))
+check('erster Aufruf: gleichnamiger Eintrag automatisch übernommen (mit Urlaub und Anspruch)', st == 200 and r['neuVerknuepft'] is True and r['ich']['id'] == 'pgerda'
+      and r['konto']['anspruch'] == 28 and any(e['id'] == 'aalt1' for e in r['eintraege']), r.get('ich'))
 check('… danach nicht erneut gemeldet', G.call('hr_start')[1]['neuVerknuepft'] is False)
+log = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('automatische Übernahme im Protokoll', 'automatisch dem Mitarbeiter Gerda Gleich zugeordnet' in log)
 H = Client('198.51.100.9'); H.call('login', {'username': 'hans', 'password': 'Urlaub-Konto-4711'})
 st, r = H.call('hr_start')
-check('gleicher Name zweimal: keine automatische Verknüpfung', st == 200 and r['ich'] is None and r['neuVerknuepft'] is False, r)
-log = json.dumps(A.call('log')[1], ensure_ascii=False)
-check('automatische Verknüpfung im Protokoll', 'automatisch mit Gerda Gleich verknüpft' in log)
-v = P.call('hr_verwaltung')[1]
-kn = {u['username']: u for u in v['nutzer']}
-check('Personalstelle: Konten mit Zuordnung und Vorschlag', kn['gerda-gleich']['person'] == PG and kn['ines']['vorschlag'] == PI and kn['hans']['vorschlag'] is None
-      and kn['karl']['vorschlag'] is None and kn['erika']['person'] == PE, {k: (x['person'], x['vorschlag']) for k, x in kn.items()})
-check('Verknüpfen: ohne Personalrecht 403', L.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}], 'rev': v['rev']})[0] == 403)
-check('Verknüpfen: veralteter Stand 409', P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}], 'rev': v['rev'] - 1})[0] == 409)
-check('Verknüpfen: unbekanntes Konto 422', P.call('hr_verknuepfen', {'paare': [{'nutzer': 'u-gibt-es-nicht', 'person': PI}], 'rev': v['rev']})[0] == 422)
-st, r = P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}, {'nutzer': ids['karl'], 'person': 'neu'}], 'rev': v['rev']})
-check('Vorschlag verknüpft und Konto als neuer Mitarbeiter angelegt', st == 200 and r['anzahl'] == 2, r)
-v = P.call('hr_verwaltung')[1]
-pn = {p_['name']: p_ for p_ in v['personen']}
-check('… Karl Konto angelegt und verknüpft, Ines verknüpft', pn.get('Karl Konto', {}).get('nutzer') == ids['karl'] and pn['Ines Neu']['nutzer'] == ids['ines'])
-I = Client('198.51.100.10'); I.call('login', {'username': 'ines', 'password': 'Urlaub-Konto-4711'})
-r = I.call('hr_start')[1]
-check('verknüpftes Konto sieht seinen Teil (Konto, eigene Zeile)', r['ich'] and r['ich']['id'] == PI and r['neuVerknuepft'] is False and r['konto'] is not None, r.get('ich'))
-zi = [p_ for p_ in I.call(f'hr_monat&jahr={Y}&monat=2')[1]['personen'] if p_['ich']]
-check('… im Kalender als eigene Zeile markiert', len(zi) == 1 and zi[0]['id'] == PI)
-st, r = P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PE}], 'rev': v['rev']})
-v = P.call('hr_verwaltung')[1]
-pn = {p_['id']: p_ for p_ in v['personen']}
-check('Umhängen: ein Konto gehört höchstens zu einem Mitarbeiter', st == 200 and pn[PE]['nutzer'] == ids['ines'] and pn[PI]['nutzer'] is None, (pn[PE]['nutzer'], pn[PI]['nutzer']))
-P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['ines'], 'person': PI}, {'nutzer': ids['erika'], 'person': PE}], 'rev': v['rev']})
-v = P.call('hr_verwaltung')[1]
-st, r = P.call('hr_verknuepfen', {'paare': [{'nutzer': ids['karl'], 'person': None}], 'rev': v['rev']})
-check('Verknüpfung aufheben', st == 200 and {p_['name']: p_ for p_ in P.call('hr_verwaltung')[1]['personen']}['Karl Konto']['nutzer'] is None)
-check('Erika wieder verknüpft', E.call('hr_start')[1]['ich']['id'] == PE)
+check('gleicher Name zweimal im Altbestand: keine automatische Übernahme', st == 200 and r['neuVerknuepft'] is False and r['ich']['id'] == ids['hans'], r.get('ich'))
+st, r = P.call('hr_personal_uebernehmen', {})
+check('Altbestand übernehmen: gleichnamiger Mitarbeiter bzw. neuer Mitarbeiter ohne Anmeldung', st == 200 and r['anzahl'] == 3, r)
+v = P.call('mitarbeiter_hr')[1]
+rev = v['rev']
+pv = {p_['id']: p_ for p_ in v['personen']}
+nutzer = {u['id']: u for u in A.call('users')[1]['users']}
+check('… kein Altbestand mehr', not [p_ for p_ in v['personen'] if p_['altbestand']])
+check('… Karl Alt ist Mitarbeiter ohne Anmeldung, sein Urlaub bleibt', pv['pkarl']['zugang'] is False and nutzer[pv['pkarl']['nutzer']]['name'] == 'Karl Alt'
+      and any(e['person'] == 'pkarl' for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege']))
+hans = [p_ for p_ in v['personen'] if p_['vorname'] == 'Hans']
+check('… Hans Doppelt: einer zum vorhandenen Mitarbeiter, einer neu ohne Anmeldung', len(hans) == 2 and sorted(p_['zugang'] for p_ in hans) == [False, True], [(p_['id'], p_['zugang']) for p_ in hans])
+hr(pv['phans1']['nutzer'], aktiv=False); hr(pv['phans2']['nutzer'], aktiv=False)
 
+# ── Excel-Export ──
 # ── Excel-Export ──
 st, r, body = P.call('hr_export', {'jahr': Y, 'monate': [2]}, raw=True)
 check('Export: 200, xlsx', st == 200 and body.startswith('PK'), (st, body[:80]))
@@ -299,31 +320,36 @@ with sync_playwright() as p:
         pg.wait_for_selector('#screen-auth', state='hidden')
         return ctx, pg
 
+    # ── Verwaltung → Import: bisherige Excel-Planung (Importzentrale, Personalstelle ohne Administratorrechte) ──
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
-    pg.goto(B + '/module/hr/#mitarbeiter'); pg.wait_for_selector('#ma-tabelle tr[data-person]')
-    check('Personalstelle: alle Bereiche sichtbar, offener Antrag gezählt', pg.is_visible('[data-tab="antraege"]') and pg.text_content('#hr-offen') == '1')
-    pg.click('#ma-import'); pg.set_input_files('#import-datei', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
-    pg.wait_for_selector('#import-vorschau .zahlen'); pg.wait_for_function('!document.querySelector("#import-los").disabled')
-    txt = pg.text_content('#import-vorschau')
-    check('Vorschau: 5 neue Mitarbeiter, Einträge, unbekanntes Kürzel, regelmäßige freie Tage', 'Anna Beispiel' in txt and '„S“ (1×)' in txt and 'Dieter Test (meist Fr)' in txt, txt[:400])
-    pg.screenshot(path=os.path.join(SH, 'hr_import_1280.png'))
-    pg.click('#import-los'); pg.wait_for_selector('#import-meldung.ok')
-    pg.click('#dlg-import [data-schliessen]')
+    pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="urlaubsplanung"]')
+    check('Importzentrale: Importart „Urlaubsplanung“ für die Personalstelle', 'HR' in pg.text_content('#view-importe .imp-art[data-art="urlaubsplanung"]'))
+    pg.set_input_files('#view-importe input[data-imp-datei="urlaubsplanung"]', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
+    pg.wait_for_selector('#imp-neu', timeout=20000)
+    txt = pg.inner_text('#view-importe')
+    check('Vorschau: neue Mitarbeiter ohne Anmeldung, unbekanntes Kürzel, regelmäßige freie Tage', 'Anna Beispiel' in txt and 'ohne Anmeldung' in txt and '„S“ (1×)' in txt
+          and 'Dieter Test (meist Fr)' in txt, txt[:600])
+    pg.screenshot(path=os.path.join(SH, 'hr_import_1280.png'), full_page=True)
+    pg.click('#imp-ok'); pg.wait_for_selector('#imp-ergebnis')
     st, r = P.call('hr_verwaltung&jahr=2025')
     namen = {p_['name']: p_ for p_ in r['personen']}
     anzahl_personen = len(r['personen'])
     imp = [e for e in r['eintraege'] if e['quelle'] == 'import']
     check('Übernommen: Mitarbeiter mit Abteilung (verbundene Zellen fortgeführt)', namen.get('Emil Lager', {}).get('abteilung') == 'Lager' and namen.get('Bernd Muster', {}).get('abteilung') == 'Verwaltung'
           and namen.get('Carla Probe', {}).get('abteilung') == 'Verwaltung', {k: v['abteilung'] for k, v in namen.items()})
+    nutzer = {u['name']: u for u in A.call('users')[1]['users']}
+    check('Übernommen: unbekannte Namen sind jetzt Mitarbeiter ohne Anmeldung', all(nutzer.get(n, {}).get('zugang') is False for n in ('Anna Beispiel', 'Emil Lager', 'Dieter Test')), list(nutzer))
     arten = sorted((e['name'], e['art'], e['von'], e['bis']) for e in imp if e['art'] != 'X')
     check('Übernommen: Zeiträume zusammengefasst', arten == [('Anna Beispiel', 'U', '2025-01-13', '2025-01-17'), ('Bernd Muster', 'K', '2025-01-20', '2025-01-21'),
                                                           ('Carla Probe', 'G', '2025-01-31', '2025-01-31'), ('Carla Probe', 'U', '2025-02-03', '2025-02-04')], arten)
     check('Übernommen: freie Tage „x“ als einzelne Tage', len([e for e in imp if e['art'] == 'X']) == 9 and all(e['status'] == 'genehmigt' for e in imp))
-    # erneute Übernahme ersetzt (keine Doppelten)
-    pg.click('#ma-import'); pg.set_input_files('#import-datei', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
-    pg.wait_for_function('!document.querySelector("#import-los").disabled')
-    check('erneute Übernahme: frühere Einträge werden ersetzt', '13 Einträge der letzten Übernahme werden ersetzt' in pg.text_content('#import-vorschau'), pg.text_content('#import-vorschau')[:300])
-    pg.click('#import-los'); pg.wait_for_selector('#import-meldung.ok'); pg.click('#dlg-import [data-schliessen]')
+    # erneute Übernahme ersetzt (keine Doppelten, Namen jetzt bekannt)
+    pg.click('[data-imp="liste"]'); pg.wait_for_selector('#view-importe input[data-imp-datei="urlaubsplanung"]', state='attached')
+    pg.set_input_files('#view-importe input[data-imp-datei="urlaubsplanung"]', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
+    pg.wait_for_selector('#imp-neu', timeout=20000)
+    check('erneute Übernahme: frühere Einträge werden ersetzt, keine neuen Mitarbeiter', '13 Einträge der letzten Übernahme werden ersetzt' in pg.inner_text('#view-importe')
+          and 'ohne Anmeldung' not in pg.inner_text('#imp-zeilen'), pg.inner_text('#view-importe')[:400])
+    pg.click('#imp-ok'); pg.wait_for_selector('#imp-ergebnis')
     r = P.call('hr_verwaltung&jahr=2025')[1]
     check('… keine doppelten Einträge oder Mitarbeiter', len([e for e in r['eintraege'] if e['quelle'] == 'import']) == 13 and len(r['personen']) == anzahl_personen, (len(r['eintraege']), len(r['personen'])))
     k26 = {p_['name']: p_['konto'] for p_ in P.call('hr_verwaltung&jahr=2026')[1]['personen']}
@@ -331,15 +357,50 @@ with sync_playwright() as p:
     abt = [p_['abteilung'] for p_ in P.call(f'hr_monat&jahr={Y}&monat=1')[1]['personen']]
     bloecke = [x for i, x in enumerate(abt) if i == 0 or abt[i - 1] != x]
     check('Kalender: jede Abteilung ein Block (Reihenfolge nach Position)', len(bloecke) == len(set(bloecke)) and bloecke[0] == 'GF', abt)
-    pg.goto(B + '/module/hr/#mitarbeiter'); pg.wait_for_selector('#ma-tabelle tr[data-person]')
-    check('Konten: Vorschlag „Mia Muster“ angeboten', pg.is_visible('#ma-vorschlaege') and 'Mia Muster' in pg.text_content('#ma-konten-liste'), pg.text_content('#ma-konten-liste')[:300])
-    pg.screenshot(path=os.path.join(SH, 'hr_mitarbeiter_1280.png'), full_page=True)
-    pg.click('#ma-vorschlaege'); pg.wait_for_selector('#ma-konten-meldung.ok')
-    check('Oberfläche: Vorschläge verknüpft', {p_['name']: p_ for p_ in P.call('hr_verwaltung')[1]['personen']}['Mia Muster']['nutzer'] == ids['mia'])
-    li = pg.locator('#ma-konten-liste li[data-nutzer="%s"]' % ids['hans'])
-    li.locator('select').select_option(PA); li.locator('[data-verknuepfen]').click(); pg.wait_for_selector('#ma-konten-meldung.ok')
-    check('Oberfläche: Konto einzeln einem Mitarbeiter zugeordnet', {p_['id']: p_ for p_ in P.call('hr_verwaltung')[1]['personen']}[PA]['nutzer'] == ids['hans'])
 
+    # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
+    pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
+    check('Personalstelle: Mitarbeiterliste mit HR-Angaben, ohne Rollen/Rechte', 'Rest' in pg.text_content('#view-users') and pg.locator('#rm-card').count() == 0
+          and pg.locator('#user-add').count() == 0)
+    pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open]')
+    pg.fill('#dlg-hr-person [name="hr_abteilung"]', 'Vertrieb'); pg.fill('#dlg-hr-person [name="hr_anspruch"]', '31')
+    pg.click('#dlg-hr-person [type="submit"]'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
+    pe = {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['erika']]
+    check('Oberfläche: Abteilung und Anspruch gespeichert', pe['abteilung'] == 'Vertrieb' and pe['jahre'][str(dt.date.today().year)]['anspruch'] == 31, pe)
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_personal_1280.png'), full_page=True)
+    pg.click('#vt-urlaub'); pg.wait_for_selector('#hr-einst')
+    check('Verwaltung → Urlaub: Sperren und Ferien aus der HR', pg.locator('#hr-sperren .hr-zr').count() == 1 and pg.locator('#hr-ferien .hr-zr').count() == 1)
+    pg.click('[data-plus="hr-ferien"]')
+    zr = pg.locator('#hr-ferien .hr-zr').nth(1).locator('input')
+    zr.nth(0).fill(f'{Y}-10-05'); zr.nth(1).fill(f'{Y}-10-16'); zr.nth(2).fill('Herbstferien')
+    pg.click('#hr-einst [type="submit"]'); pg.wait_for_function('document.querySelectorAll("#hr-ferien .hr-zr").length === 2 && !document.querySelector("#hr-einst-err").textContent')
+    check('Verwaltung → Urlaub: Ferien gespeichert', len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
+    ctx.close()
+
+    # ── Verwaltung → Mitarbeiter (Administrator): anlegen ohne Anmeldung, HR-Teil im Dialog ──
+    ctx, pg = anmelden('admin', PW, '198.51.100.2')
+    pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-uid]')
+    check('Navigation heißt „Mitarbeiter“, Spalten Abteilung und Urlaub', pg.text_content('#vt-users').strip() == 'Mitarbeiter' and 'Abteilung' in pg.text_content('#view-users thead')
+          and 'Urlaub' in pg.text_content('#view-users thead'))
+    pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open]')
+    pg.check('#user-body [name="zugang"][value="0"]')
+    check('ohne Anmeldung: keine Felder für Passwort, Rolle, Rechte', pg.is_hidden('#user-body [name="password"]') and pg.is_hidden('#user-body .role-pick:not(.us-zugang)') and pg.is_visible('#hr-teil'))
+    pg.fill('#user-body [name="vorname"]', 'Lisa'); pg.fill('#user-body [name="nachname"]', 'Lager')
+    pg.fill('#user-body [name="hr_abteilung"]', 'Lager'); pg.uncheck('#user-body [name="hr_tag"][value="5"]'); pg.fill('#user-body [name="hr_anspruch"]', '25')
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_mitarbeiter_neu_1280.png'), full_page=True)
+    pg.click('#user-body [type="submit"]'); pg.wait_for_selector('#dlg-user[open]', state='hidden')
+    lisa = next(u for u in A.call('users')[1]['users'] if u['name'] == 'Lisa Lager')
+    pl = {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[lisa['id']]
+    check('Oberfläche: Mitarbeiter ohne Anmeldung mit HR-Angaben angelegt', lisa['zugang'] is False and pl['abteilung'] == 'Lager' and pl['arbeitstage'] == [1, 2, 3, 4]
+          and pl['jahre'][str(dt.date.today().year)]['anspruch'] == 25, (lisa, pl))
+    pg.wait_for_selector(f'#view-users tr[data-uid="{lisa["id"]}"]')
+    check('Liste: „ohne Anmeldung“ statt Benutzername und Rolle', 'ohne Anmeldung' in pg.text_content(f'#view-users tr[data-uid="{lisa["id"]}"]'))
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_mitarbeiter_1280.png'), full_page=True)
+    ctx.close()
+    ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
+    pg.goto(B + '/module/hr/')
+    pg.wait_for_selector('#hr-app:not([hidden])')
     # Antrag genehmigen in der Oberfläche
     pg.click('[data-tab="antraege"]'); pg.wait_for_selector('.hr-antrag')
     pg.screenshot(path=os.path.join(SH, 'hr_antraege_1280.png'), full_page=True)

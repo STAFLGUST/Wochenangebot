@@ -13,7 +13,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* Module mit Importvertrag, in dieser Reihenfolge angezeigt. Neuer Eigentümer: Datei module/<id>/import.php mit
    import_arten_<id>(), in api/index.php laden und hier eintragen. */
-const IMPORT_EIGENTUEMER = ['verwaltung', 'bestand', 'angebot'];
+const IMPORT_EIGENTUEMER = ['verwaltung', 'bestand', 'angebot', 'hr'];
 const IMPORT_ZEILEN_MAX = 500;              // Zeilen der Vorschau, die an den Browser gehen (Zahlen zählen immer alle)
 const IMPORT_DATEITYPEN = ['csv', 'xls', 'xlsx', 'xlsm'];
 const IMPORT_ABLAEUFE = ['zentrale', 'editor'];

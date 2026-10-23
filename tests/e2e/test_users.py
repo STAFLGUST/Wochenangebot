@@ -164,10 +164,10 @@ with sync_playwright() as p:
     b.click('#vt-log'); b.wait_for_selector('.ltab')
     t = b.inner_text('#log-list')
     for label, cond in [('anna password change', 'Eigenes Passwort geändert' in t), ('publish by anna', 'veröffentlicht' in t and 'Anna Beispiel' in t),
-                        ('failed login logged', 'Anmeldung fehlgeschlagen' in t and '„ben“' in t), ('user created', 'Nutzer „anna“' in t),
+                        ('failed login logged', 'Anmeldung fehlgeschlagen' in t and '„ben“' in t), ('user created', 'Mitarbeiter „anna“' in t),
                         ('user deleted', '„ben“ (Ben Leser) gelöscht' in t), ('deactivation logged', True)]:
         check('log: ' + label, cond)
-    b.locator('tr.lrow:has-text("Nutzer „ben“ geändert")').first.click(); b.wait_for_timeout(200)
+    b.locator('tr.lrow:has-text("Mitarbeiter „ben“ geändert")').first.click(); b.wait_for_timeout(200)
     check('log details: deactivation', 'deaktiviert' in b.inner_text('#log-list'))
     b.select_option('#log-user', 'anna'); b.wait_for_timeout(200)
     names = set(x.strip() for x in b.locator('.ltab .l-user .uname').all_inner_texts())
@@ -281,7 +281,7 @@ with sync_playwright() as p:
     ohne = until(lambda: '2FA-Pflicht' not in z.locator('.utab tbody tr:has-text("Clara Pflicht")').inner_text())
     check('2FA-Pflicht: entfernt (Feld gelöscht, Liste ohne Kennzeichen)', ohne and 'twofaPflicht' not in nutzer_roh('clara'), nutzer_roh('clara'))
     z.click('#vt-log'); z.wait_for_selector('.ltab')
-    z.locator('tr.lrow.has-d:has-text("Nutzer „clara“ geändert")').first.click(); wait_text(z, '#log-list', 'Zwei-Faktor-Pflicht')
+    z.locator('tr.lrow.has-d:has-text("Mitarbeiter „clara“ geändert")').first.click(); wait_text(z, '#log-list', 'Zwei-Faktor-Pflicht')
     lt = z.inner_text('#log-list')
     check('2FA-Pflicht: Änderung im Protokoll (ja → nein)', 'Zwei-Faktor-Pflicht' in lt and 'nein' in lt, re.sub(r'\s+', ' ', lt)[:300])
     c.context.close()
