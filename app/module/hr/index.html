@@ -51,6 +51,7 @@
           <h1 id="mein-titel">Mein Urlaub</h1>
           <button type="button" class="hr-rund klein" data-jahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
         </div>
+        <p class="hr-meldung" id="mein-info" role="status"></p>
         <p class="hr-hinweis" id="mein-ohne" hidden>Ihr Konto ist noch keinem Mitarbeiter der Urlaubsverwaltung zugeordnet. Bitte an die Personalstelle wenden.</p>
         <div id="mein-inhalt">
           <div class="hr-konto" id="mein-konto"></div>
@@ -109,6 +110,16 @@
           <button type="button" class="btn" id="ma-neu">Mitarbeiter anlegen</button>
           <button type="button" class="btn" id="ma-import">Aus Excel übernehmen</button>
         </div>
+        <section class="hr-karte hr-glas hr-konten" id="ma-konten" aria-labelledby="ma-konten-titel">
+          <div class="hr-konten-kopf">
+            <h2 id="ma-konten-titel">Mitarbeiterkonten</h2>
+            <p class="hr-klein" id="ma-konten-stand"></p>
+            <button type="button" class="btn primary" id="ma-vorschlaege" hidden></button>
+          </div>
+          <p class="hr-klein">Ein verknüpftes Konto sieht nach der Anmeldung seinen Urlaub, kann Anträge stellen und findet sich im Kalender. Bei gleichem Namen verknüpft sich ein Konto beim ersten Aufruf von selbst.</p>
+          <ul class="hr-konten-liste" id="ma-konten-liste"></ul>
+          <p class="hr-meldung" id="ma-konten-meldung" role="status"></p>
+        </section>
         <div class="hr-tabelle-rahmen hr-glas"><table class="hr-tabelle" id="ma-tabelle"></table></div>
       </div>
 

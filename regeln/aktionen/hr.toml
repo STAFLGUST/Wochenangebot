@@ -35,6 +35,10 @@ schreibend = true
 oberflaeche = "hr.intern"
 schreibend = true
 
+[aktion.hr_verknuepfen]
+oberflaeche = "hr.intern"
+schreibend = true
+
 [aktion.hr_einstellungen_save]
 oberflaeche = "hr.intern"
 schreibend = true
