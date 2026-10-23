@@ -730,7 +730,7 @@ with sync_playwright() as pw:
     pg.screenshot(path=os.path.join(SH, 'oidc_verwaltung_admin_1280.png'))
     # Kachel „Import“: nur die Importzentrale – Nutzer, Protokoll, Sicherheit, Schutz nur über die Kachel „Verwaltung“
     pg.goto(W + '/import/'); pg.wait_for_selector('#view-importe:not([hidden])')
-    nur_import = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
+    nur_import = pg.evaluate("[...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Administrator über die Kachel „Import“: nur die Importzentrale, keine Verwaltungsbereiche, ohne Seitenleiste, Titel „Import“',
           nur_import == ['importe'] and pg.is_hidden('.side-nav') and pg.text_content('#topbar h1') == 'Import' and pg.title().startswith('Import')
           and pg.is_visible('#btn-dashboard'), (nur_import, pg.title()))

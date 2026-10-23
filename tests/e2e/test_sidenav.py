@@ -206,12 +206,7 @@ with sync_playwright() as p:
     v.screenshot(path=SH + '/sidenav-bereich-verwaltung.png')
     v.close()
     # Kachel „Import“ (verwaltung…/import/ → ?ansicht=importe&nur=import): nur die Importzentrale, ohne Seitenleiste
-    def verwaltung(route):
-        r = route.fetch(); j = r.json()
-        if j.get('user'):
-            j['user'].update({'zentral': True, 'bereich': 'verwaltung.verwaltung', 'dashboard': 'https://dashboard-stafl.de/'})
-        route.fulfill(response=r, json=j)
-    sichtbar_js = "[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))"
+    sichtbar_js = "[...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))"
     for w in (1440, 390):
         v = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500); v.on('pageerror', lambda x: errs.append(str(x)))
         login(v, 'admin', 'Sicheres-Passwort-1')
