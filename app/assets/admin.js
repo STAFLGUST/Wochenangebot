@@ -3966,10 +3966,10 @@
     const url = /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(ziel || '') ? ziel : 'https://angebot.dashboard-stafl.de/admin/';
     document.title = 'Eingabebereich umgezogen';
     document.body.className = 'adm umgezogen';
-    document.body.innerHTML = `<main class="auth"><div class="auth-card"><div class="brand"><img class="brand-logo" src="../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></div>
+    document.body.innerHTML = `<main class="auth"><div class="auth-card"><img src="../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch" style="display:block;height:30px;width:auto">
       <h1 style="margin:14px 0 6px;font-size:20px">Der Eingabebereich ist umgezogen</h1>
       <p class="auth-intro">Mitarbeiter melden sich jetzt zentral über das Mitarbeiter-Dashboard an. Sie werden gleich weitergeleitet.</p>
-      <p><a class="btn primary" id="umgezogen-weiter" href="${esc(url)}">Zum neuen Eingabebereich</a></p></div></main>`;
+      <p><a class="btn primary" id="umgezogen-weiter" href="${esc(url)}" style="text-decoration:none">Zum neuen Eingabebereich</a></p></div></main>`;
     setTimeout(() => location.replace(url), 1500);
   }
 
