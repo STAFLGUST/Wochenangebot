@@ -1,4 +1,5 @@
-/* STAFL-Plattform – Einmalcode-Felder der Anmeldeseite (Felder mit data-stafl-otp: Anmeldung und Einrichtung).
+/* STAFL-Plattform – Einmalcode-Felder der Anmeldeseite (Felder mit data-stafl-otp: Anmeldung und Einrichtung) und Schutz
+   gegen doppelt abgeschickte Anmeldeformulare (einmalAbsenden, unten).
    Keycloak vergleicht den Code genau so, wie er ankommt: „123 456“ (so zeigen viele Apps den Code an) oder ein Code mit
    Zeilenumbruch aus der Zwischenablage gilt dort als falsch und zählt als Fehlversuch. Das Skript entfernt deshalb beim
    Tippen, Einfügen und automatischen Ausfüllen alles außer Ziffern. Nur Darstellung/Eingabe – die Prüfung des Codes, die
@@ -50,9 +51,43 @@
     bereinigen(feld);
   }
 
+  /* Jedes Anmeldeformular nur einmal absenden. Keycloak sperrt ein Konto 60 Sekunden, wenn zwei Fehlversuche weniger als
+     eine Sekunde auseinanderliegen (quickLoginCheckMilliSeconds) – ein doppelt abgeschicktes Formular (Eingabetaste und
+     Klick, zweimal Eingabe, Passwortmanager plus Klick) löste das aus; danach galt auch der richtige Code als falsch.
+     Zurück-Taste (Seite aus dem Zwischenspeicher) und ein abgebrochener Seitenwechsel geben das Formular wieder frei. */
+  function einmalAbsenden(form) {
+    if (form.dataset.staflEinmal) {
+      return;
+    }
+    form.dataset.staflEinmal = '1';
+    form.addEventListener('submit', function (e) {
+      if (form.dataset.staflGesendet) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      form.dataset.staflGesendet = '1';
+      setTimeout(function () { delete form.dataset.staflGesendet; }, 8000);
+    });
+  }
+
+  function freigeben() {
+    Array.prototype.forEach.call(document.querySelectorAll('form[data-stafl-gesendet]'), function (f) {
+      delete f.dataset.staflGesendet;
+      Array.prototype.forEach.call(f.querySelectorAll('[type=submit]'), function (k) { k.disabled = false; });
+    });
+  }
+
   function start() {
     Array.prototype.forEach.call(document.querySelectorAll('input[data-stafl-otp]'), einrichten);
+    Array.prototype.forEach.call(document.querySelectorAll('form[method=post], form[method=POST]'), einmalAbsenden);
   }
+
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) {
+      freigeben();
+    }
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', start);

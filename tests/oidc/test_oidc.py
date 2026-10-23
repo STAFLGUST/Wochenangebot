@@ -235,7 +235,7 @@ check('design-setzen ein zweites Mal: unverändert (idempotent), auch mit stück
 _r = design_setzen('standard')
 _std = realm_jetzt()
 code, _, text = anmeldeseite()
-check('Rückfall: design-setzen standard → mitgeliefertes Design von Keycloak', _r.returncode == 0 and 'gesetzt:' in _r.stdout and not _std.get('loginTheme')
+check('Rückfall: design-setzen standard → mitgeliefertes Design von Keycloak', _r.returncode == 0 and 'gesetzt:' in _r.stdout and _std.get('loginTheme') in (None, '', 'keycloak.v2')
       and code == 200 and '/login/stafl/' not in text and '/login/keycloak.v2/' in text, (_r.stdout, _r.stderr[-200:], _std.get('loginTheme')))
 _r = design_setzen()
 _r2 = design_setzen()
@@ -251,11 +251,11 @@ code, _, text = anmeldeseite()
 _css = re.search(r'href="(/resources/[^"]+/login/stafl/css/stafl\.css)"', text)
 check('Anmeldeseite liefert das STAFL-Stylesheet und das Skript für den Einmalcode, Sprache Deutsch',
       code == 200 and bool(_css) and re.search(r'src="/resources/[^"]+/login/stafl/js/stafl-otp\.js"', text) and 'lang="de"' in text
-      and '>Plattform<' in text and 'Anmelden' in text, text[:300])
+      and 'class="stafl-sr"' in text and '>Plattform<' not in text and 'Anmelden' in text, text[:300])
 code, kopf, css = anfrage(L + _css.group(1)) if _css else (0, {}, '')
 check('Stylesheet: Farben des Plattform-Designs (Grund, Bordeaux, Farbflächen ohne Rot, Glas, dunkel)',
       code == 200 and all(x in css for x in ('#f4f1ee', '#121011', '#8c1d2c', '#a3202f', 'rgba(143, 167, 196', 'rgba(226, 165, 74', 'rgba(63, 122, 90',
-                                            'backdrop-filter: blur(30px) saturate(180%)', 'prefers-color-scheme: dark', '28px', '-apple-system')), code)
+                                            '--st-filter: blur(30px) saturate(180%)', 'backdrop-filter: var(--st-filter)', 'prefers-color-scheme: dark', '28px', '-apple-system')), code)
 check('Stylesheet: Browser fragen spätestens nach einer Stunde neu (Änderungen am Design kommen an)', 'max-age=3600' in (kopf.get('Cache-Control') or ''), kopf.get('Cache-Control'))
 _res = _css.group(1).rsplit('/css/', 1)[0] if _css else ''
 for _quelle, _ziel in (('app/assets/logo-standard-fleisch-kopf.png', '/img/logo-standard-fleisch-kopf.png'), ('app/assets/icons/favicon-32.png', '/img/favicon.ico')):
@@ -341,6 +341,16 @@ def anmelden(pg, wer, otp=True):
         pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1])); pg.click('#kc-login')
 
 
+FEHLVERSUCH = [0.0]   # Zeitpunkt des letzten absichtlichen Fehlversuchs
+
+
+def fehlversuch_abstand():
+    """Keycloak sperrt 60 s, wenn zwei Fehlversuche weniger als 1 s (quickLoginCheckMilliSeconds) auseinanderliegen – der
+    Test wartet daher bis 1,2 s nach dem letzten absichtlichen Fehlversuch (Zustand der Uhr, keine feste Pause)."""
+    while time.time() - FEHLVERSUCH[0] < 1.2:
+        time.sleep(0.05)
+
+
 def otp_eingeben(pg, wer):
     """Einmalcode eingeben – immer ein noch nicht verwendeter Code (totp), daher ohne Fehlversuch."""
     pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER[wer][1])); pg.click('#kc-login')
@@ -392,14 +402,33 @@ with sync_playwright() as pw:
           _otp['ac'] == 'one-time-code' and _otp['im'] == 'numeric' and _otp['muster'] == '[0-9]{6}' and _otp['fokus'] and _otp['label'] == 'Einmalcode'
           and 'STAFL-Plattform' in _otp['hinweis'] and '30 Sekunden' in _otp['hinweis'], _otp)
     pg.screenshot(path=os.path.join(SH, 'oidc_einmalcode_1280.png'))
-    pg.fill('#otp', '000000'); pg.click('#kc-login'); pg.wait_for_selector('#otp')
+    pg.fill('#otp', '000000'); pg.click('#kc-login'); pg.wait_for_selector('#otp'); FEHLVERSUCH[0] = time.time()
     check('falscher Einmalcode: keine Anmeldung', pg.url.startswith(L))
-    check('falscher Einmalcode: verständliche deutsche Meldung (auch Hinweis auf die Sperre nach Fehlversuchen)',
-          'Der Einmalcode stimmt nicht' in pg.text_content('#input-error-otp') and 'gesperrt' in pg.text_content('#input-error-otp'), pg.text_content('#input-error-otp'))
+    _meldung = pg.text_content('#input-error-otp')
+    check('falscher Einmalcode: verständliche deutsche Meldung (nur einmal gültig, auf neuen Code warten, Sperre nach Fehlversuchen)',
+          'nicht angenommen' in _meldung and 'nur einmal' in _meldung and 'neuen Code' in _meldung and 'gesperrt' in _meldung, _meldung)
+    _nach = pg.evaluate("() => ({ leer: document.querySelector('#otp').value === '', fokus: document.activeElement === document.querySelector('#otp'),"
+                        " ungueltig: document.querySelector('#otp').getAttribute('aria-invalid'), sichtbar: !!document.querySelector('#input-error-otp').offsetParent })")
+    check('… danach: Feld leer und wieder im Fokus, als fehlerhaft markiert, Meldung sichtbar', _nach['leer'] and _nach['fokus'] and _nach['ungueltig'] == 'true' and _nach['sichtbar'], _nach)
+    pg.screenshot(path=os.path.join(SH, 'oidc_einmalcode_fehler_1280.png'))
+    # Doppelt abgeschickt (Eingabetaste, noch einmal, Klick – in einem Zug): nur ein Fehlversuch. Zwei Fehlversuche in weniger
+    # als einer Sekunde sperren das Konto 60 s (quickLoginCheckMilliSeconds), danach gälte auch der richtige Code als falsch.
+    _eid = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=erika', kopf={'Authorization': 'Bearer ' + kc_token()})[2])[0]['id']
+    _bf = lambda: json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/attack-detection/brute-force/users/{_eid}', kopf={'Authorization': 'Bearer ' + kc_token()})[2])
+    _vor = _bf().get('numFailures', 0)
+    fehlversuch_abstand()
+    pg.fill('#otp', '000000')
+    with pg.expect_navigation():
+        pg.evaluate("() => { const f = document.querySelector('#otp').form; f.requestSubmit(); f.requestSubmit(); document.querySelector('#kc-login').click(); }")
+    pg.wait_for_selector('#input-error-otp'); FEHLVERSUCH[0] = time.time()
+    _nach_bf = _bf()
+    check('Formular dreimal schnell abgeschickt: nur ein Fehlversuch, keine Sperre', _nach_bf.get('numFailures', 0) == _vor + 1 and not _nach_bf.get('disabled'), (_vor, _nach_bf))
     # Keycloak selbst nimmt „123 456“ nicht an (Fehlversuch) – deshalb bereinigt das Skript des Designs die Eingabe
     _c = totp(NUTZER['erika'][1])
+    fehlversuch_abstand()
     pg.evaluate("c => { const f = document.querySelector('#otp'); f.value = c.slice(0, 3) + ' ' + c.slice(3); f.form.noValidate = true; f.form.submit(); }", _c)
-    pg.wait_for_selector('#otp')
+    pg.wait_for_selector('#otp'); FEHLVERSUCH[0] = time.time()
+    fehlversuch_abstand()
     check('ohne Skript: Keycloak lehnt einen Code mit Leerzeichen ab (Grund für die Bereinigung im Design)', pg.url.startswith(L) and pg.locator('#input-error-otp').count() == 1)
     pg.evaluate("() => { const f = document.querySelector('#otp'); f.value = '12 34 56'; f.dispatchEvent(new Event('input', { bubbles: true })); }")
     _ohne_ohne = pg.input_value('#otp')
@@ -408,6 +437,18 @@ with sync_playwright() as pw:
     pg.click('#kc-login')
     pg.wait_for_selector('#db-grid .db-tile')
     check('… und angemeldet (derselbe Code, keine Änderung an der Prüfung)', pg.url.startswith(D + '/dashboard/'), pg.url)
+    # Häufigster Fall in der Produktion: derselbe Code kurz danach noch einmal (zweiter Tab, Neuladen) – Keycloak lehnt ab,
+    # die Seite sagt, warum; mit dem nächsten Code (Eingabetaste statt Klick) klappt es
+    _c2 = br.new_context(ignore_https_errors=True, viewport={'width': 390, 'height': 844}); _p2 = eigene_seite(_c2.new_page())
+    _p2.on('pageerror', lambda e: login_fehler.append(str(e)))
+    _p2.goto(D + '/'); _p2.wait_for_selector('#username'); _p2.fill('#username', 'erika'); _p2.fill('#password', NUTZER['erika'][0]); _p2.keyboard.press('Enter')
+    _p2.wait_for_selector('#otp'); _p2.fill('#otp', _c); _p2.keyboard.press('Enter'); _p2.wait_for_selector('#input-error-otp')
+    check('derselbe Code ein zweites Mal: abgelehnt mit Hinweis „nur einmal … neuen Code“', _p2.url.startswith(L) and 'nur einmal' in _p2.text_content('#input-error-otp'),
+          _p2.text_content('#input-error-otp'))
+    _p2.screenshot(path=os.path.join(SH, 'oidc_einmalcode_doppelt_390.png'), full_page=True)
+    _p2.fill('#otp', totp(NUTZER['erika'][1])); _p2.keyboard.press('Enter'); _p2.wait_for_selector('#db-grid .db-tile')
+    check('… mit dem nächsten Code und der Eingabetaste angemeldet', _p2.url.startswith(D + '/dashboard/'), _p2.url)
+    _c2.close()
     check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
     check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto', 'Erika Editor' in pg.text_content('#db-user'), pg.text_content('#db-user'))
     check('acht Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 8 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')

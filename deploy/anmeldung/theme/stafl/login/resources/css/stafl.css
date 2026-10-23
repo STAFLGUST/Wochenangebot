@@ -125,11 +125,12 @@ html.login-pf, .login-pf body {
   grid-template-columns: none; grid-template-areas: none;
 }
 
-/* ── Kopf: Glaskapsel mit Logo und „Plattform“ (wie die Kopfzeile des Dashboards) ── */
+/* ── Kopf: Glaskapsel nur mit Logo (wie die Kopfzeile des Dashboards); Name nur für Screenreader ── */
+.login-pf .stafl-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .login-pf .pf-v5-c-login__header { padding: 0; margin: 0; display: flex; justify-content: center; }
 .login-pf #kc-header-wrapper {
   display: inline-flex; align-items: center; gap: 14px;
-  min-height: 52px; padding: 10px 22px 10px 16px; border-radius: 999px;
+  min-height: 52px; padding: 10px 18px; border-radius: 999px;
   background: var(--st-glas-kopf); border: 1px solid var(--st-rand);
   box-shadow: inset 0 1px 0 var(--st-glanz), var(--st-schatten);
   -webkit-backdrop-filter: var(--st-filter); backdrop-filter: var(--st-filter);
@@ -289,7 +290,7 @@ html.login-pf, .login-pf body {
 @media (max-width: 560px) {
   .login-pf .pf-v5-c-login { padding: 16px 16px 32px; }
   .login-pf .pf-v5-c-login__container { gap: 14px; }
-  .login-pf #kc-header-wrapper { min-height: 46px; padding: 8px 18px 8px 12px; gap: 12px; font-size: 14px; }
+  .login-pf #kc-header-wrapper { min-height: 46px; padding: 8px 14px; gap: 12px; font-size: 14px; }
   .login-pf #kc-header-wrapper::before { width: 98px; height: 22px; background-size: 98px 22px; }
   .login-pf .pf-v5-c-login__main { padding: 24px 20px 22px; border-radius: 24px; }
   .login-pf #kc-page-title { font-size: 23px; }
