@@ -59,6 +59,17 @@ Stand 5 (23.10.2026, Freigabe des Inhabers): Client `hr` für `hr.dashboard-staf
 (`OIDC_SECRET_HR`/`OIDC_CRYPTO_HR`, danach `docker compose up -d app`). Voraussetzung: DNS-Eintrag `hr` (CNAME →
 `dashboard-stafl.de`, wie `bestand.`/`login.`), sonst bekommt Caddy kein Zertifikat für den Host.
 
+## Alter Eingabebereich (angebot-stafl.de/admin/) stillgelegt
+
+Seit dem 23.10.2026 setzt diese Datei `WA_EIGENE_ANMELDUNG=aus`: Auf dem Host ohne zentrale Anmeldung gibt es keine
+Mitarbeiteranmeldung, keine Mitarbeitersitzung und keine Mitarbeiteraktion mehr (Antwort 410 `umgezogen` mit `ziel`,
+`/admin/` zeigt einen Hinweis und leitet nach `angebot.dashboard-stafl.de/admin/` weiter). Unverändert: Kundenseite,
+öffentliches Angebot, Kundenanmeldung und -bestellungen, `status` (Healthcheck), `logout`. Mails an Mitarbeiter
+verweisen auf die neue Adresse (`WA_EINGABE_ADRESSE`, Standard `https://angebot.dashboard-stafl.de/admin/`).
+
+Notzugang bei gestörter Anmeldung: `sh deploy/notzugang.sh an` (setzt `WA_EIGENE_ANMELDUNG=an` in `.env`, erstellt die App
+neu), danach `sh deploy/notzugang.sh aus`. Rückfall auf das alte Verhalten dauerhaft: dieselbe Zeile `=an`.
+
 ## Design der Anmeldeseite
 
 Keycloak liest das Theme aus `deploy/anmeldung/theme/stafl` (Volume in `docker-compose.anmeldung.yml`, nur lesend).

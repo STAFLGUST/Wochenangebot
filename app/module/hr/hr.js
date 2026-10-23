@@ -125,7 +125,7 @@
         <span class="zeitraum">${esc(zeitraum(e.von, e.bis))}</span><span>${esc(tageText(e.tage))}</span>
         <span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span>
         ${zurueck ? `<button type="button" class="btn" data-zurueck="${esc(e.id)}">Zurückziehen</button>` : ''}
-        ${e.notiz || ent ? `<span class="mehr">${esc([e.notiz, ent].filter(Boolean).join(' · '))}</span>` : ''}</li>`;
+        ${e.notiz || ent || e.urlaubAbzug ? `<span class="mehr">${esc([e.urlaubAbzug ? 'vom Urlaub abgezogen' : '', e.notiz, ent].filter(Boolean).join(' · '))}</span>` : ''}</li>`;
     }).join('') : `<li class="leer">Keine Einträge in ${d.jahr}.</li>`;
     antragTage();
   }
@@ -276,7 +276,7 @@
     $('#eintraege-tabelle').innerHTML = '<thead><tr><th>Mitarbeiter</th><th>Art</th><th>Zeitraum</th><th class="zahl">Tage</th><th>Status</th><th>Notiz / Entscheidung</th><th></th></tr></thead><tbody>'
       + (l.length ? l.map((e) => `<tr><td>${esc(e.name)}</td><td><span class="hr-art ${esc(e.art)}">${esc(e.art === 'X' ? 'x' : e.art)}</span> ${esc(e.artText)}</td>
         <td>${esc(zeitraum(e.von, e.bis))}</td><td class="zahl">${esc(zahl(e.tage))}</td><td><span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span></td>
-        <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.quelle === 'import' ? 'aus Excel übernommen' : ''].filter(Boolean).join(' · '))}</td>
+        <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'vom Urlaub abgezogen' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : ''].filter(Boolean).join(' · '))}</td>
         <td>${e.status === 'genehmigt' ? `<button type="button" class="btn" data-bearbeiten="${esc(e.id)}">Ändern</button>` : ''}</td></tr>`).join('')
         : '<tr><td colspan="7" class="gedaempft">Keine Einträge.</td></tr>') + '</tbody>';
   }

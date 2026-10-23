@@ -102,7 +102,8 @@ function hr_person_norm(array $p): array
     return ['id' => (string)($p['id'] ?? ''), 'vorname' => (string)($p['vorname'] ?? ''), 'nachname' => (string)($p['nachname'] ?? ''),
             'abteilung' => (string)($p['abteilung'] ?? ''), 'pos' => (int)($p['pos'] ?? 0), 'nutzer' => isset($p['nutzer']) && $p['nutzer'] !== '' ? (string)$p['nutzer'] : null,
             'arbeitstage' => $at ?: [1, 2, 3, 4, 5], 'aktiv' => !array_key_exists('aktiv', $p) || (bool)$p['aktiv'], 'jahre' => $jahre,
-            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'geaendert']));
+            'personalnummer' => trim((string)($p['personalnummer'] ?? '')),
+            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'geaendert']));
 }
 function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
 
@@ -338,7 +339,8 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
     $frei = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id']) continue;
-        if ($e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true)) continue;
+        // Urlaub; dazu Abwesenheiten, die laut Zeiterfassung vom Urlaub abgezogen werden („Krank ohne AU“)
+        if (($e['art'] !== 'U' && empty($e['urlaubAbzug'])) || !in_array($e['status'], HR_AKTIV, true)) continue;
         foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) {
             if ($e['status'] === 'beantragt') { $u['beantragt']++; continue; }
             $u[$d <= $heute ? 'genommen' : 'geplant']++;
@@ -372,7 +374,7 @@ function hr_eintrag_aus(array $e, array $p, array $frei = []): array
     return ['id' => $e['id'], 'person' => $e['person'], 'name' => hr_name($p), 'art' => $e['art'], 'artText' => HR_ARTEN[$e['art']] ?? $e['art'],
             'von' => $e['von'], 'bis' => $e['bis'], 'tage' => $e['art'] === 'X' ? count(hr_tage($p, $e['von'], $e['bis'])) : count(hr_tage($p, $e['von'], $e['bis'], null, null, $frei)), 'status' => $e['status'],
             'notiz' => (string)($e['notiz'] ?? ''), 'vertretung' => $e['vertretung'] ?? null, 'quelle' => (string)($e['quelle'] ?? ''),
-            'erfasst' => $e['erfasst'] ?? null, 'entscheidung' => $e['entscheidung'] ?? null];
+            'urlaubAbzug' => !empty($e['urlaubAbzug']), 'erfasst' => $e['erfasst'] ?? null, 'entscheidung' => $e['entscheidung'] ?? null];
 }
 
 /* Überschneidung mit einem aktiven Eintrag derselben Person (außer $ohne) */
