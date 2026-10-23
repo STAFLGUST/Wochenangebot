@@ -923,3 +923,45 @@ body.is-test::after { content: "TESTUMGEBUNG · nur Testdaten · E-Mails nur im 
 #print-root .al-note.in-col { margin-top: 1mm; }
 /* Handy: im Kopf nur das Bildzeichen (die vier Felder), damit Titel und Knöpfe Platz haben – das ganze Logo steht über der Angebotsliste */
 @media (max-width: 480px) { .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
+
+/* ==========================================================================
+   Darstellungskorrekturen der Angebotsseite (Prüfung 10/2026). Nur Kundenseite: body:not(.adm):not(.db) bzw. Elemente, die
+   es nur dort gibt – Eingabebereich (body.adm) und Dashboard (body.db) binden app.css ebenfalls ein und bleiben unverändert.
+   ========================================================================== */
+/* Kleine graue Zusätze auf grauem Grund (Artikelzahl im Abschnittskopf/Gruppenkopf, „Nicht angegeben“): Kontrast ≥ 4,5:1 */
+:root { --muted-fein: #68685f; --c-unknown-fein: #6b665f; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --muted-fein: var(--muted); --c-unknown-fein: var(--c-unknown); } }
+@media screen { :root[data-theme="dark"] { --muted-fein: var(--muted); --c-unknown-fein: var(--c-unknown); } }
+body:not(.adm):not(.db) .al-st > span, body:not(.adm):not(.db) .g-meta { color: var(--muted-fein); }
+body:not(.adm):not(.db) .cond-unbekannt { color: var(--c-unknown-fein); }
+/* Lange Platzhalter im Suchfeld mit „…“ statt hart abgeschnitten (Handy) */
+body:not(.adm):not(.db) .search input { text-overflow: ellipsis; }
+/* Titel der Angebotsliste ohne einzelnes Wort/Jahr in der letzten Zeile */
+body:not(.adm):not(.db) .al h2 { text-wrap: balance; }
+/* Leerer Fußbereich (z. B. Wartungsseite) ohne doppelte Trennlinie; Wartung ohne Ansichtsumschalter und ohne Lücke für die Suche */
+#foot:empty { display: none; }
+body.in-wartung .modebar { display: none; }
+@media (max-width: 860px) { body.in-wartung .topbar .search { display: none; } }
+/* „Position entfernen“ im Bestellwunsch: auf der Kundenseite fehlte die Gestaltung (die Klasse stand nur in admin.css),
+   der Knopf erschien als grauer Standardknopf – jetzt wie im Eingabebereich als ruhiger Symbolknopf */
+body:not(.adm):not(.db) .ibtn { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--muted); display: inline-grid; place-items: center; }
+body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var(--accent); }
+/* Handy: Tippflächen mindestens 36 px (WCAG 2.5.8 mit Reserve) – sichtbare Größe bleibt, wo es geht, gleich */
+@media (max-width: 640px) {
+  body:not(.adm):not(.db) .qn, body:not(.adm):not(.db) .tabs button, body:not(.adm):not(.db) .pill { height: 36px; }
+  body:not(.adm):not(.db) .btn.sm, body:not(.adm):not(.db) .qty, body:not(.adm):not(.db) .al-tab .qty { height: 36px; }
+  body:not(.adm):not(.db) .seg button { height: 36px; width: 36px; }
+  /* Logo-Verweis: größere Fläche ohne Verschieben (Innenabstand gleicht der negative Rand aus) */
+  body:not(.adm):not(.db) .brand-home { padding: 4px; margin: -4px; }
+  /* Artikelname als Knopf: Fläche nach oben/unten erweitert, Zeilenhöhe der Liste unverändert */
+  body:not(.adm):not(.db) .name-btn { padding-block: 8px; margin-block: -8px; }
+  body:not(.adm):not(.db) .al-tab .name-btn { padding-block: 9px; margin-block: -7px; }
+  /* Stern in der Angebotsansicht: 36 × 36 statt 20 × 22, ragt in den Kartenrand statt die Zeile zu vergrößern */
+  body:not(.adm):not(.db) .star { width: 36px; height: 36px; }
+  body:not(.adm):not(.db) .al-tab .star { width: 36px; height: 36px; margin: -7px -10px -7px 0; }
+  /* Schließen-Knopf im Fensterkopf nicht schmaler drücken lassen (Titel und Text daneben) */
+  body:not(.adm):not(.db) .dlg-head > .btn.icon { flex: none; }
+  body:not(.adm):not(.db) .ibtn { width: 36px; height: 36px; }
+  body:not(.adm):not(.db) .dlg .link-btn { padding-block: 9px; margin-block: -9px; }
+  .legal-links a { display: inline-block; padding: 9px 4px; }
+}
