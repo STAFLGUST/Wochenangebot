@@ -126,6 +126,7 @@ GEWICHT = {
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
     'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1,
     'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
+    'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 
 
