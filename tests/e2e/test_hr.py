@@ -64,7 +64,7 @@ st, r_ = A.call('user_save', {'id': '', 'vorname': 'Andre', 'nachname': 'Vierzig
 check('Mitarbeiter ohne Anmeldung: ohne Passwort angelegt, deaktiviert, Rolle Leser', st == 200 and r_['user']['zugang'] is False and r_['user']['active'] is False
       and r_['user']['role'] == 'viewer' and r_['user']['username'] == 'andre-vierzig', r_)
 ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
-check('… kann sich nicht anmelden', Client('198.51.100.30').call('login', {'username': 'andre-vierzig', 'password': 'irgendwas-langes-1'})[0] in (401, 403))
+check('… kann sich nicht anmelden', Client('198.51.100.30').call('login', {'username': 'andre-vierzig', 'password': 'Urlaub-Konto-4711'})[0] in (401, 403))
 st, r_ = A.call('user_save', {'id': ids['andre-vierzig'], 'vorname': 'Andre', 'nachname': 'Vierzig', 'role': 'viewer', 'active': True, 'zugang': True})
 check('Anmeldung einrichten nur mit Passwort (422)', st == 422 and 'Passwort' in r_.get('error', ''), r_)
 check('eigenen Zugang nicht auf „ohne Anmeldung“ (422)', A.call('user_save', {'id': ids['admin'], 'name': 'Administrator', 'role': 'admin', 'active': True, 'zugang': False})[0] == 422)
