@@ -46,6 +46,11 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_FEATURES_DISABLED: twitter-broker,identity-brokering-api
       JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx1024m"
+      # Design der Anmeldeseite (deploy/anmeldung/theme): Änderungen aus einem Release wirken ohne Neustart von Keycloak, und
+      # Browser holen Stylesheet und Skript spätestens nach einer Stunde neu (Standard wären 30 Tage)
+      KC_SPI_THEME__CACHE_THEMES: "false"
+      KC_SPI_THEME__CACHE_TEMPLATES: "false"
+      KC_SPI_THEME__STATIC_MAX_AGE: "3600"
       # Tresor für Geheimnisse als Dateien (z. B. Postfach-Passwort: konten.sh mail-einrichten) – nicht in der Datenbank
       KC_VAULT: file
       KC_VAULT_DIR: /opt/keycloak/vault
@@ -58,6 +63,8 @@ services:
       # Realm mit eingesetzten Geheimnissen (auf dem Server erzeugt, nicht im Repository – siehe LIESMICH)
       - ./daten-anmeldung/realm-import:/opt/keycloak/data/import:ro
       - ./daten-anmeldung/vault:/opt/keycloak/vault:ro      # nicht in den Sicherungen (wie mail-schluessel.php)
+      # Anmeldeseite im Plattform-Design (aus dem Repository, nur lesend); aktiv erst mit konten.sh design-setzen
+      - ./deploy/anmeldung/theme/stafl:/opt/keycloak/themes/stafl:ro
     ports:
       - "127.0.0.1:8180:8080"                              # nur lokal (SSH-Tunnel für die Verwaltung)
     networks:

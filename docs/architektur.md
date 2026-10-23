@@ -17,7 +17,8 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
   `docker-compose.yml` ist ein eigener Schritt mit Freigabe (eine Änderung dort startet die Container beim Release neu).
 - **Zentrale Anmeldung (vorbereitet, nicht aktiv):** `deploy/anmeldung/` – Compose-Ergänzung (App mit Anwendungs-Image,
   Keycloak 26.8.1, eigene PostgreSQL; nur `127.0.0.1` bzw. internes Netz), Apache-Hosts, Caddy-Teil, Realm (erzeugt von
-  `werkzeuge/realm_produktion.py` aus dem Test-Realm). Geprüft in der CI (`deploy/anmeldung/pruefen.sh`); Ablaufplan mit
+  `werkzeuge/realm_produktion.py` aus dem Test-Realm), Design der Anmeldeseite (`deploy/anmeldung/theme/stafl`, erbt von
+  `keycloak.v2`, aktiv mit `konten.sh design-setzen`). Geprüft in der CI (`deploy/anmeldung/pruefen.sh`); Ablaufplan mit
   Freigaben: `docs/plattform/inbetriebnahme-anmeldung.md`. Geheimnisse und Realm-Import nur auf dem Server (`daten-anmeldung/`).
 - **Auslieferung:** nur über Release: nach grüner CI auf `main` wartet der Release-Lauf auf die Freigabe des
   Inhabers (Umgebung `produktion`, `docs/release-freigabe.md`); der Server spielt per Timer ein

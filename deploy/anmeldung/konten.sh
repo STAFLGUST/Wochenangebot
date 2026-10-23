@@ -11,6 +11,7 @@
 #   sh deploy/anmeldung/konten.sh entsperren <benutzername>      # auch nach zu vielen falschen Passwörtern/Codes
 #   sh deploy/anmeldung/konten.sh liste
 #   sh deploy/anmeldung/konten.sh mail-einrichten [<test-adresse>]  # Mailversand von Keycloak über das Postfach der Anwendung
+#   sh deploy/anmeldung/konten.sh design-setzen [standard]     # Anmeldeseite im Plattform-Design (idempotent); „standard“ = Rückfall
 #   sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>   # Konto anlegen und einladen
 #   sh deploy/anmeldung/konten.sh einladen <benutzername>         # Einladung erneut senden
 #   sh deploy/anmeldung/konten.sh realm-aktualisieren             # Realm auf den aktuellen Stand bringen (idempotent)
@@ -232,6 +233,31 @@ einladen() {
   echo "Einladung an '$1' verschickt (Link $EINLADUNG_STUNDEN Stunden gültig): eigenes Passwort festlegen, danach https://dashboard-stafl.de/"
 }
 
+# ── Anmeldeseite im Plattform-Design (Theme „stafl“ aus deploy/anmeldung/theme, per Volume in Keycloak) ──
+# Eigener Schritt neben realm-aktualisieren: ändert nur loginTheme des Realms – keine Abläufe, Richtlinien oder Clients.
+# Idempotent; „standard“ stellt das mitgelieferte Design von Keycloak wieder ein (Rückfall).
+DESIGN=stafl
+design_setzen() {
+  [ $# -le 1 ] || abbruch "Aufruf: konten.sh design-setzen [standard]"
+  case "${1:-$DESIGN}" in "$DESIGN") soll=$DESIGN ;; standard) soll= ;; *) abbruch "Aufruf: konten.sh design-setzen [standard]" ;; esac
+  bereit
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  # Ausgaben erst ganz lesen (docker compose exec, siehe realm_aktualisieren)
+  realm=$(kc get "realms/$REALM" --fields loginTheme)
+  ist=$(printf '%s' "$realm" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("loginTheme") or "")')
+  if [ -n "$soll" ]; then
+    info=$(kc get serverinfo)
+    printf '%s' "$info" | python3 -c 'import json,sys; sys.exit(0 if any(t.get("name") == sys.argv[1] for t in json.load(sys.stdin).get("themes", {}).get("login", [])) else 1)' "$soll" \
+      || abbruch "Keycloak kennt das Design '$soll' nicht – zuerst Keycloak mit der aktuellen Compose-Datei neu erstellen: docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d keycloak"
+  fi
+  if [ "$ist" = "$soll" ]; then
+    echo "unverändert: Anmeldeseite im Design '${soll:-Keycloak-Standard}'"
+    return 0
+  fi
+  kc update "realms/$REALM" -s "loginTheme=$soll" >/dev/null
+  echo "gesetzt:   Anmeldeseite im Design '${soll:-Keycloak-Standard}' (vorher '${ist:-Keycloak-Standard}')"
+}
+
 # ── Realm-Stand (Änderungen am laufenden Realm; der Import beim ersten Start gilt nur einmal) ──
 # Stand 2: zweiter Faktor nur noch für Pflicht-Konten (entscheidet die Anwendung, twofa_required) und für alle, die ihn
 # eingerichtet haben; Anmeldestärke im Claim amr (pwd/otp/hwk); Leerlauf 4 Stunden.
@@ -372,6 +398,7 @@ case "$befehl" in
   liste) liste ;;
   mail-einrichten) mail_einrichten "$@" ;;
   einladen) einladen "$@" ;;
+  design-setzen) design_setzen "$@" ;;
   realm-aktualisieren) realm_aktualisieren ;;
   *) sed -n '2,/^set -eu/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

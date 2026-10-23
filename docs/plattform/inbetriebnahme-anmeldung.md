@@ -62,6 +62,15 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
   Mitarbeiterkonto hängt an der Keycloak-Kennung.
+- **Design der Anmeldeseite** (seit 22.10.2026): Theme `stafl` in `deploy/anmeldung/theme/` (Plattform-Design „Liquid
+  Glass“, STAFL-Logo, deutsche Texte), per Volume in Keycloak. Aktiv mit `sh deploy/anmeldung/konten.sh design-setzen`
+  (idempotent, ändert nur `loginTheme`); Rückfall `konten.sh design-setzen standard`. Spätere Änderungen am Theme wirken
+  mit dem Release ohne Neustart von Keycloak (Theme-Cache aus, Browser fragen stündlich neu).
+- **„Der Einmalcode stimmt nicht“:** Nach fünf Fehlversuchen (Passwort oder Code) sperrt Keycloak die Anmeldung für
+  1–15 Minuten und zeigt dann – um die Sperre nicht zu verraten – dieselbe Meldung wie bei einem falschen Code, auch
+  wenn der Code stimmt. Abhilfe: warten oder `konten.sh entsperren <name>`. Weitere häufige Ursachen: alter Eintrag
+  „STAFL-Plattform“ in der Authenticator-App (löschen, nur den neuesten verwenden) und Leerzeichen im Code (entfernt
+  das Design inzwischen selbst; Keycloak nimmt „123 456“ nicht an).
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
 - **Rechte** bleiben in der Anwendung (Nutzer → Rollen und Rechte). Keycloak sagt nur „wer“; ein in der Anwendung
