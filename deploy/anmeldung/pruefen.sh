@@ -107,6 +107,8 @@ KCP="$(mktemp -d)"; KCPROJ=stafl-kcpruefung
 kc_ende() { (cd "$KCP" && docker compose -p "$KCPROJ" down -v >/dev/null 2>&1); rm -rf "$KCP"; }
 mkdir -p "$KCP/deploy/anmeldung"
 cp "$REPO/docker-compose.yml" "$KCP/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/realm-mitarbeiter.json" "$HIER/einrichten.sh" "$KCP/deploy/anmeldung/"
+# Design der Anmeldeseite (Volume, nur lesend): Quelle muss existieren, sonst legt Docker sie als root-eigenen Leerordner an
+cp -r "$HIER/theme" "$KCP/deploy/anmeldung/"; chmod -R a+rX "$KCP/deploy/anmeldung/theme"
 printf 'DOMAIN=angebot-stafl.de\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$KCP/.env"
 (cd "$KCP" && sh deploy/anmeldung/einrichten.sh >/dev/null)
 # einrichten.sh übergibt den Realm-Import nur als root an den Keycloak-Benutzer (1000); ohne root (CI) diese Wegwerf-Kopie freigeben
@@ -126,6 +128,8 @@ rm -f "$KCP/daten-anmeldung/einrichtung.env"   # wie nach konten.sh verwaltung
 if (cd "$KCP" && docker compose -p "$KCPROJ" up -d --force-recreate keycloak >/dev/null 2>&1) && sleep 5 && kc_bereit \
   && [ -z "$(cd "$KCP" && docker compose -p "$KCPROJ" exec -T keycloak env | grep '^KC_BOOTSTRAP')" ]; then
   ok "Keycloak startet nach der Einrichtung ohne Start-Konto neu (keine leeren KC_BOOTSTRAP-Variablen)"
+  (cd "$KCP" && docker compose -p "$KCPROJ" exec -T keycloak test -r /opt/keycloak/themes/stafl/login/theme.properties) \
+    && ok "Design der Anmeldeseite im Container (Theme stafl, nur lesend eingebunden)" || nein "Design der Anmeldeseite fehlt im Container"
 else
   nein "Keycloak startet nach der Einrichtung nicht neu" "$(cd "$KCP" && docker compose -p "$KCPROJ" logs --tail 15 keycloak 2>&1)"
 fi
