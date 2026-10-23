@@ -3,7 +3,7 @@
      und Übertrag je Jahr) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
    - Verwaltung → Urlaub: Urlaubssperren und Ferien.
-   - Verwaltung → Import: Leser „Urlaubsplanung (Excel)“ für die Importzentrale (window.WA.importLeser).
+   - Verwaltung → Import: Leser „Urlaubsplanung (Excel)“ und „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
    Alle Rechte prüft der Server (hr.verwalten, GR-103); hier ist nur die Anzeige. Wird von admin/index.html nach
    admin.js, admin-verwaltung.js und admin-import.js geladen. */
 (function () {
@@ -43,7 +43,8 @@
     const maxPos = Math.max(0, ...(daten ? daten.personen.map((x) => x.pos || 0) : [0]));
     return `<fieldset class="span2 hr-teil" id="hr-teil" data-uid="${esc(uid || '')}"><legend>Urlaubsverwaltung</legend>
       <div class="form-grid two">
-        <label class="fld"><span>Abteilung</span><input name="hr_abteilung" value="${esc(p ? p.abteilung : '')}" maxlength="40" list="hr-abteilungen" autocomplete="off"></label>
+        <label class="fld span2"><span>Abteilung</span><input name="hr_abteilung" value="${esc(p ? p.abteilung : '')}" maxlength="40" list="hr-abteilungen" autocomplete="off"></label>
+        <label class="fld"><span>Personalnummer <small class="muted">(Zeiterfassung)</small></span><input name="hr_personalnummer" value="${esc(p ? p.personalnummer || '' : '')}" maxlength="20" autocomplete="off" inputmode="numeric"></label>
         <label class="fld"><span>Position <small class="muted">(Reihenfolge im Plan)</small></span><input name="hr_pos" type="number" min="0" max="9999" value="${esc(p ? p.pos || '' : maxPos + 1)}"></label>
         <div class="span2 hr-tage-feld"><span class="hr-lbl">Arbeitstage</span><div class="hr-tage">${WT.map((w, i) => `<label class="check"><input type="checkbox" name="hr_tag" value="${i + 1}"${at.includes(i + 1) ? ' checked' : ''}> ${w}</label>`).join('')}</div></div>
         <label class="fld"><span>Urlaubsanspruch ${JAHR}</span><input name="hr_anspruch" type="number" min="0" max="100" step="0.5" value="${esc(jv.anspruch ?? (p && p.konto.anspruch ? p.konto.anspruch : ''))}"></label>
@@ -61,7 +62,7 @@
     if (!teil || !may('hr.verwalten')) return;
     if (!daten) await laden();
     const wert = (n) => form.querySelector(`[name="${n}"]`).value;
-    const body = { nutzer: uid, rev: daten.rev, abteilung: wert('hr_abteilung'), pos: Number(wert('hr_pos') || 0),
+    const body = { nutzer: uid, rev: daten.rev, abteilung: wert('hr_abteilung'), personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
       arbeitstage: [...form.querySelectorAll('[name="hr_tag"]:checked')].map((x) => Number(x.value)),
       aktiv: form.querySelector('[name="hr_aktiv"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag') };
     let r;
@@ -96,7 +97,7 @@
     host.innerHTML = `<p class="hint hr-nurhr">${ps.length} Mitarbeiter · Abteilung, Arbeitstage und Urlaubsanspruch. Anmeldung, Rollen und Rechte verwaltet ein Administrator.</p>
       ${altbestand()}
       <div class="gcard"><table class="etab utab"><thead><tr><th>Name</th><th>Abteilung</th><th>Arbeitstage</th><th class="num">Anspruch</th><th class="num">Übertrag</th><th class="num">Rest ${JAHR}</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>
-      ${ps.map((p) => `<tr data-hr-uid="${esc(p.nutzer)}" tabindex="0" class="${p.aktiv ? '' : 'inactive'}"><td class="u-name"><div class="nm">${esc(`${p.vorname} ${p.nachname}`.trim())}</div><div class="sub">${p.zugang ? esc(p.username) : 'ohne Anmeldung'}</div></td>
+      ${ps.map((p) => `<tr data-hr-uid="${esc(p.nutzer)}" tabindex="0" class="${p.aktiv ? '' : 'inactive'}"><td class="u-name"><div class="nm">${esc(`${p.vorname} ${p.nachname}`.trim())}</div><div class="sub">${p.zugang ? esc(p.username) : 'ohne Anmeldung'}${p.personalnummer ? ' · Nr. ' + esc(p.personalnummer) : ''}</div></td>
         <td>${esc(p.abteilung)}</td><td>${esc(p.arbeitstage.map((w) => WT[w - 1]).join(' '))}</td><td class="num">${esc(zahl(p.konto.anspruch))}</td>
         <td class="num">${esc(zahl(p.konto.uebertrag))}</td><td class="num"><strong>${p.aktiv ? esc(zahl(p.konto.rest)) : '–'}</strong></td>
         <td class="u-act"><button type="button" class="btn sm">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div>`;
@@ -137,7 +138,7 @@
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
       <div id="hr-ferien">${daten.ferien.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-ferien">${icon('plus', 'sm')}Ferien</button>
-      <p class="hint">Mitarbeiter, Abteilungen, Arbeitstage und Urlaubsanspruch: Verwaltung → Mitarbeiter. Die bisherige Excel-Planung: Verwaltung → Import → „Urlaubsplanung (Excel)“.</p>
+      <p class="hint">Mitarbeiter, Abteilungen, Arbeitstage und Urlaubsanspruch: Verwaltung → Mitarbeiter. Urlaub und Krankheit aus der Zeiterfassung: Verwaltung → Import → „Abwesenheiten aus der Zeiterfassung“.</p>
       <p class="form-err" id="hr-einst-err" role="alert"></p>
       <div class="sec-foot"><button type="submit" class="btn primary">${icon('check', 'sm')}Speichern</button></div></form>`;
   }
@@ -173,6 +174,21 @@
       // nur die Zellen, die der Server braucht: Zeilen bis 300, Spalten bis 40
       const daten_ = { blaetter: blaetter.map((b) => ({ name: b.name, grid: b.grid.slice(0, 300).map((z) => Array.from({ length: Math.min(z.length, 40) }, (_, i) => z[i] ?? null)) })) };
       return { daten: daten_, zeilen: blaetter.length, fehler: [], hinweise: [] };
+    },
+    nachher() { daten = null; },
+  };
+
+  /* ---------- Importzentrale: Leser „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht) ---------- */
+  W.importLeser.zeiterfassung = {
+    async lesen(files) {
+      const f = files[0];
+      const blaetter = await window.OfferCore.xlsxReadWorkbook(await f.arrayBuffer());
+      const b = blaetter[0];
+      if (!b) return { daten: { blaetter: [] }, zeilen: 0, fehler: [{ datei: f.name, text: 'Die Datei enthält kein Tabellenblatt.' }], hinweise: [] };
+      // ein Blatt, Zeilen bis 5000, Spalten bis 15 (Datumswerte als Excel-Seriennummer – der Server rechnet um)
+      const grid = b.grid.slice(0, 5000).map((z) => Array.from({ length: Math.min(z.length, 15) }, (_, i) => z[i] ?? null));
+      const hinweise = b.grid.length > 5000 ? [{ stufe: 'warn', text: 'Nur die ersten 5000 Zeilen werden gelesen.' }] : [];
+      return { daten: { blaetter: [{ name: b.name, grid }] }, zeilen: grid.length, fehler: [], hinweise };
     },
     nachher() { daten = null; },
   };

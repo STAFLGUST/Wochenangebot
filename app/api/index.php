@@ -142,6 +142,7 @@ require __DIR__ . '/module/verwaltung/importzentrale.php';
 require __DIR__ . '/module/hr/urlaub.php';
 require __DIR__ . '/module/hr/export.php';
 require __DIR__ . '/module/hr/import.php';
+require __DIR__ . '/module/hr/zeiterfassung.php';
 
 /* ---------------- Aktionen ---------------- */
 
