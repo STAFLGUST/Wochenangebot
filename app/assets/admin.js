@@ -225,9 +225,18 @@
     'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'log', 'sec', 'schutz'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
+    'verwaltung.import': ['importe'],
   };
   /* Überschrift je Bereich ohne Angebotsaktionen in der Kopfzeile (Regel body.bereich-verwaltung in admin.css) */
-  const BEREICH_KOPF = { 'verwaltung.verwaltung': 'Verwaltung', 'bestand.intern': 'Bestand' };
+  const BEREICH_KOPF = { 'verwaltung.verwaltung': 'Verwaltung', 'bestand.intern': 'Bestand', 'verwaltung.import': 'Import' };
+  /* Kachel „Import“ (verwaltung…/import/ → /admin/?ansicht=importe&nur=import): auf dem Verwaltungs-Host nur die
+     Importzentrale – Nutzer, Protokoll, Sicherheit, Schutz usw. erscheinen nur über die Kachel „Verwaltung“. Die Adresse
+     kann den Bereich nur weiter einschränken, nie erweitern; die Rechte prüft weiter der Server (GR-103). */
+  const NUR_IMPORT = (() => { try { return new URLSearchParams(location.search).get('nur') === 'import'; } catch { return false; } })();
+  function bereich() {
+    const b = me && me.bereich;
+    return b === 'verwaltung.verwaltung' && NUR_IMPORT ? 'verwaltung.import' : b;
+  }
   /* Startansicht aus der Adresse (#importe oder ?ansicht=importe, z. B. verwaltung…/import/) – nur erlaubte Ansichten */
   function startAnsicht() {
     let v = '';
@@ -235,7 +244,7 @@
     return VIEWS.includes(v) && viewAllowed(v) ? v : '';
   }
   function viewAllowed(v) {
-    const nur = BEREICH_VIEWS[me && me.bereich];
+    const nur = BEREICH_VIEWS[bereich()];
     if (nur && !nur.includes(v)) return false;
     if (['mail', 'users', 'sec', 'schutz'].includes(v)) return can('admin');
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
@@ -577,9 +586,10 @@
     document.body.classList.toggle('ro-hist', roHist);   // Preisverlauf hochladen/löschen hängt am eigenen Recht, nicht am Entwurfsrecht
     document.body.classList.toggle('is-admin', can('admin'));
     for (const v of VIEWS) $('#vt-' + v).hidden = !viewAllowed(v);
-    const kopf = (me && BEREICH_KOPF[me.bereich]) || '';
+    const kopf = (me && BEREICH_KOPF[bereich()]) || '';
     document.body.classList.toggle('bereich-verwaltung', !!kopf);   // keine Angebotsaktionen in der Kopfzeile
-    document.body.classList.toggle('bereich-bestand', !!(me && me.bereich === 'bestand.intern'));
+    document.body.classList.toggle('bereich-bestand', bereich() === 'bestand.intern');
+    document.body.classList.toggle('bereich-import', bereich() === 'verwaltung.import');   // eine Ansicht: ohne Seitenleiste
     $('#topbar h1').textContent = kopf || 'Eingabebereich';
     document.title = kopf ? kopf + ' · STAFL' : 'Wochenangebot · Eingabebereich';
     /* Rückweg zum Dashboard nur unter der zentralen Anmeldung; die Adresse kommt vom Server (nur https) */
