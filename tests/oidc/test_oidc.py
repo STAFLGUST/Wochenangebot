@@ -491,11 +491,11 @@ with sync_playwright() as pw:
     _c2.close()
     check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
     check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto', 'Erika Editor' in pg.text_content('#db-user'), pg.text_content('#db-user'))
-    check('acht Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 8 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
+    check('elf Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 11 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
     check('Kachel Verwaltung verfügbar (freigegeben)', pg.text_content('[data-modul="verwaltung"] .db-badge') == 'Verfügbar'
           and pg.get_attribute('[data-modul="verwaltung"]', 'href') is not None, pg.text_content('[data-modul="verwaltung"] .db-badge'))
-    check('Kacheln Bestand und Import verfügbar (freigegeben), 4 von 8', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
-          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import')) and '4 von 8' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Kacheln Bestand und Import verfügbar (freigegeben), 4 von 11', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
+          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import')) and '4 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'oidc_dashboard_1280.png'), full_page=True)
     k = kekse(ctx, f'dashboard.stafl.test')
     check('Cookies des Dashboards nur mit __Host-Präfix (Secure, Pfad /, ohne Domain)',
