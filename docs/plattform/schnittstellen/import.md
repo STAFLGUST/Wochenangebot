@@ -18,6 +18,7 @@ keine Dateiformate und greift auf keine Daten zu; sie ruft nur die Funktionen de
 | `preisverlauf` | Angebotslisten .xlsx (mehrere) | `OfferCore.parseOfferWorkbook` über `histAusDatei` (admin.js) | `preisverlauf_woche_speichern` | `preisverlauf.bearbeiten` | angebot | Preisverlauf → Daten, Aktion `history_import` |
 | `angebot_excel` | Wochenangebot .xlsx | Angebotsleser (offer-core.js) | Entwurf (`save_draft`) | `angebot.bearbeiten` | angebot | Angebotseditor „Excel importieren“ – Ablauf `editor` |
 | `urlaubsplanung` | Excel-Urlaubsplanung (ein Blatt je Monat) | `importLeser.urlaubsplanung` (app/module/hr/verwaltung-hr.js, OfferCore-Excel-Leser) | `hr_import_vorschau`/`hr_import_uebernehmen` (unbekannte Namen → Mitarbeiter ohne Anmeldung über `mitarbeiter_ohne_zugang_anlegen`) | `hr.verwalten` | hr | – (bis Oktober 2026 im HR-Bereich „Mitarbeiter“) |
+| `zeiterfassung` | Abwesenheitsbericht der Zeiterfassung (.xlsx, Importvorlage für Urlaub und Krankheit) | `importLeser.zeiterfassung` (app/module/hr/verwaltung-hr.js, erstes Blatt) | `hr_zeit_vorschau`/`hr_zeit_uebernehmen` (Personalnummer, sonst Name; Option `abteilungen`; ersetzt frühere Übernahme im Zeitraum) | `hr.verwalten` | hr | – |
 | `angebot_preise` | CSV Artikelpreise | `preiseAusCsv` (admin.js) | Entwurf (`save_draft`) | `angebot.bearbeiten`, `angebote.verwalten` | angebot | Stammdaten → Angebote „Preise importieren“ – Ablauf `editor` |
 
 Nicht aufgenommen: Import der Schutz-Einstellungen (`fw_import`, Plattformkern, nur Administratoren) – das ist eine

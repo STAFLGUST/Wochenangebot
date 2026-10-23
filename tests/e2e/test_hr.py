@@ -6,7 +6,9 @@ Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, 
 Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.03. und Verfall, 4-Tage-Woche,
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
 Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmigte Einträge), Übernahme der bisherigen
-Excel-Planung über die Importzentrale (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx) und die Oberflächen
+Excel-Planung über die Importzentrale (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx), Abwesenheiten aus der
+Zeiterfassung (Importvorlage, tests/fixtures/hr/Abwesenheitsbericht_Muster.xlsx: Personalnummer, Schreibweisen, vom Urlaub
+abgezogene Krankheit, Ersetzen, veralteter Stand) und die Oberflächen
 (HR-Seite, Verwaltung → Mitarbeiter und Urlaub; Desktop, 390 px).
 """
 import datetime as dt
@@ -357,6 +359,82 @@ with sync_playwright() as p:
     abt = [p_['abteilung'] for p_ in P.call(f'hr_monat&jahr={Y}&monat=1')[1]['personen']]
     bloecke = [x for i, x in enumerate(abt) if i == 0 or abt[i - 1] != x]
     check('Kalender: jede Abteilung ein Block (Reihenfolge nach Position)', len(bloecke) == len(set(bloecke)) and bloecke[0] == 'GF', abt)
+
+    # ── Abwesenheiten aus der Zeiterfassung (Importvorlage, synthetischer Abwesenheitsbericht passend zur Planung 2025) ──
+    BERICHT = os.path.join(FIX, 'hr', 'Abwesenheitsbericht_Muster.xlsx')
+    wsb = openpyxl.load_workbook(BERICHT).active
+    D = {'blaetter': [{'name': wsb.title, 'grid': [[(v - dt.datetime(1899, 12, 30)).days if isinstance(v, dt.datetime) else v for v in z]
+                                                   for z in wsb.iter_rows(values_only=True)]}]}
+
+    def zeit(cl, uebernehmen=False, stand=None, **opt):
+        b = {'art': 'zeiterfassung', 'daten': D, 'quelle': 'Abwesenheitsbericht_Muster.xlsx', 'optionen': opt}
+        if uebernehmen: b['stand'] = stand
+        return cl.call('import_uebernehmen' if uebernehmen else 'import_pruefen', b)
+
+    check('Zeiterfassung: ohne Personalrecht 403', zeit(L)[0] == 403 and zeit(E)[0] == 403)
+    st, r = P.call('import_pruefen', {'art': 'zeiterfassung', 'daten': {'blaetter': [{'name': 'x', 'grid': [['Artikel', 'Preis'], ['A', 1]]}]}})
+    check('Zeiterfassung: andere Datei 422 mit Hinweis', st == 422 and 'Abwesenheitsbericht' in r.get('error', ''), (st, r))
+    st, v = zeit(P)
+    zl = {(z['art'], z['name']): z for z in v['zeilen'] if z['schluessel'] != 'Abwesenheiten'}
+    hw = ' '.join(h['text'] for h in v['hinweise'])
+    check('Vorschau: unbekannte Mitarbeiter neu (mit/ohne Personalnummer), Feiertage nicht übernommen', st == 200 and ('neu', 'Hans Neumann') in zl
+          and 'Nr. 105' == zl[('neu', 'Hans Neumann')]['schluessel'] and ('neu', 'Ina Ohnenummer') in zl, sorted(zl))
+    check('Vorschau: ähnliche Schreibweise als Hinweis, nie automatisch zugeordnet', 'ähnlich: Carla Probe' in zl.get(('neu', 'Karla Probe'), {}).get('text', ''), zl.get(('neu', 'Karla Probe')))
+    check('Vorschau: schon gleich eingetragene Tage bleiben (5 Tage Anna)', v['zahlen']['unveraendert'] == 5, v['zahlen'])
+    check('Vorschau: im System anders eingetragen → Fehlerzeile, bleibt unverändert', '20.01.2025 (K statt U)' in zl.get(('fehler', 'Bernd Muster'), {}).get('text', ''), zl.get(('fehler', 'Bernd Muster')))
+    check('Vorschau: ungültiges Datum und unbekannte Art gemeldet', any('Hans Neumann: Start- oder Enddatum' in z['text'] for z in v['zeilen']) and '„Elternzeit“ (1×)' in hw, hw)
+    # gleiche Person, andere Schreibweise: Personalnummer am Mitarbeiter eintragen → Zuordnung über die Nummer
+    rev = P.call('mitarbeiter_hr')[1]['rev']
+    hr(nutzer['Carla Probe']['id'], personalnummer='103')
+    check('Personalnummer eindeutig (409)', P.call('mitarbeiter_hr_save', {'nutzer': ids['erika'], 'rev': rev, 'personalnummer': '103'})[0] == 409)
+    check('Personalnummer: ungültige Zeichen 422', P.call('mitarbeiter_hr_save', {'nutzer': ids['erika'], 'rev': rev, 'personalnummer': 'ab cd'})[0] == 422)
+    st, v2 = zeit(P, abteilungen=True)
+    check('Option Abteilungen: Abteilung aus der Zeiterfassung als Änderung', any(z['art'] == 'geaendert' and z['name'] == 'Anna Beispiel' and 'Abteilung Geschäftsführung' in z['text'] for z in v2['zeilen']), v2['zeilen'][:6])
+    # Übernahme in der Oberfläche (Importzentrale)
+    pg.click('[data-imp="liste"]'); pg.wait_for_selector('#view-importe input[data-imp-datei="zeiterfassung"]', state='attached')
+    check('Importzentrale: Importart „Abwesenheiten aus der Zeiterfassung“', 'Zeiterfassung' in pg.text_content('#view-importe .imp-art[data-art="zeiterfassung"]'))
+    pg.set_input_files('#view-importe input[data-imp-datei="zeiterfassung"]', BERICHT)
+    pg.wait_for_selector('#imp-neu', timeout=20000)
+    txt = pg.inner_text('#view-importe')
+    check('Oberfläche: Vorschau über die Personalnummer (Carla statt neuer Karla)', 'Hans Neumann' in txt and 'Karla' not in txt and 'Carla Probe' in txt, txt[:700])
+    pg.screenshot(path=os.path.join(SH, 'hr_zeiterfassung_1280.png'), full_page=True)
+    pg.set_viewport_size({'width': 390, 'height': 844})
+    check('390px: Vorschau ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.screenshot(path=os.path.join(SH, 'hr_zeiterfassung_390.png'), full_page=True)
+    pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.click('#imp-ok'); pg.wait_for_selector('#imp-ergebnis')
+    r = P.call('hr_verwaltung&jahr=2025')[1]
+    ze = sorted((e['name'], e['art'], e['von'], e['bis'], e['urlaubAbzug'], e['status']) for e in r['eintraege'] if e['quelle'] == 'zeiterfassung')
+    check('Übernommen: Zeiträume (über Wochenenden zusammengefasst), genehmigt', ze == [
+        ('Bernd Muster', 'K', '2025-03-05', '2025-03-05', True, 'genehmigt'), ('Carla Probe', 'U', '2025-03-17', '2025-03-18', False, 'genehmigt'),
+        ('Erika Editor', 'K', '2025-02-10', '2025-02-14', False, 'genehmigt'), ('Erika Editor', 'U', '2025-03-24', '2025-03-28', False, 'genehmigt'),
+        ('Hans Neumann', 'U', '2025-02-27', '2025-03-04', False, 'genehmigt')], ze)
+    kk = {p_['name']: p_['konto'] for p_ in r['personen']}
+    check('Konto: „Krank ohne AU / vom Urlaub abgezogen“ zählt als Urlaub, Krank mit AU nicht', kk['Bernd Muster']['genommen'] == 1 and kk['Erika Editor']['genommen'] == 5
+          and kk['Hans Neumann']['genommen'] == 4, {k: kk[k]['genommen'] for k in ('Bernd Muster', 'Erika Editor', 'Hans Neumann')})
+    check('Übernommen: Planung (K 20.–21.01.) unverändert', any(e['name'] == 'Bernd Muster' and e['art'] == 'K' and e['von'] == '2025-01-20' and e['quelle'] == 'import' for e in r['eintraege']))
+    pm = {p_['name']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen']}
+    check('Übernommen: Personalnummern gespeichert, neue Mitarbeiter mit Abteilung, bestehende Abteilung unverändert (Option aus)',
+          [pm[n]['personalnummer'] for n in ('Anna Beispiel', 'Bernd Muster', 'Carla Probe', 'Erika Editor', 'Hans Neumann', 'Ina Ohnenummer')] == ['101', '102', '103', '104', '105', '']
+          and pm['Hans Neumann']['abteilung'] == 'Produktion' and pm['Anna Beispiel']['abteilung'] == 'GF' and pm['Hans Neumann']['zugang'] is False,
+          {n: (pm[n]['personalnummer'], pm[n]['abteilung']) for n in pm if n in ('Anna Beispiel', 'Hans Neumann', 'Ina Ohnenummer')})
+    # erneute Übernahme ersetzt die frühere, veralteter Stand wird abgewiesen
+    st, v3 = zeit(P)
+    check('erneut: 5 frühere Einträge ersetzt, keine neuen Mitarbeiter, 7 Tage unverändert', v3['zahlen']['entfaellt'] == 5 and not any(z['art'] == 'neu' and z['schluessel'] != 'Abwesenheiten' for z in v3['zeilen'])
+          and v3['zahlen']['unveraendert'] == 7, v3['zahlen'])
+    rev = P.call('mitarbeiter_hr')[1]['rev']
+    hr(nutzer['Carla Probe']['id'], pos=3)
+    check('Übernahme mit veraltetem Stand: 409', zeit(P, True, v3['stand'])[0] == 409)
+    st, v3 = zeit(P)
+    check('Übernahme mit aktuellem Stand: 200', zeit(P, True, v3['stand'])[0] == 200)
+    r = P.call('hr_verwaltung&jahr=2025')[1]
+    check('… keine doppelten Einträge oder Mitarbeiter', len([e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung']) == 5 and len(r['personen']) == anzahl_personen + 2, (len(r['personen']), anzahl_personen))
+    # Personalstelle ändert die Art: „vom Urlaub abgezogen“ entfällt
+    eb = next(e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Bernd Muster')
+    st, x = P.call('hr_eintrag_save', {'id': eb['id'], 'person': eb['person'], 'art': 'G', 'von': eb['von'], 'bis': eb['bis']})
+    r = P.call('hr_verwaltung&jahr=2025')[1]
+    eb2 = next(e for e in r['eintraege'] if e['id'] == eb['id'])
+    check('Art geändert: zählt nicht mehr gegen den Urlaub', st == 200 and eb2['urlaubAbzug'] is False and {p_['name']: p_['konto'] for p_ in r['personen']}['Bernd Muster']['genommen'] == 0, (st, x, eb2))
 
     # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
     pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
