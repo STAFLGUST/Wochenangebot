@@ -206,7 +206,7 @@ antwortet zusätzlich mit `apiVersion: 1`.
 | Status | Verwendung |
 | --- | --- |
 | 200 | Erfolg |
-| 304 | `offer` mit passendem `If-None-Match` (ETag) |
+| 304 | `offer` (öffentliches Wochenangebot) mit passendem `If-None-Match`; die ETag gilt für die aufgelöste Antwort samt Bestand (ausverkaufte Sonderposten) und Frachthinweis |
 | 400 | Standard von `fail()`, ungültiger Inhalt |
 | 401 | nicht angemeldet („Bitte erneut anmelden.“) |
 | 403 | fremde Herkunft, CSRF, fehlendes Recht, Sperren (IP, Land, Firewall), Bestätigung nötig |

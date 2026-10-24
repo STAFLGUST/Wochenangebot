@@ -338,6 +338,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `02-architektur.md` | plattform | 2 · Architektur |
 | `03-server.md` | plattform | 3 · Server (PHP-API) |
 | `04-anmeldung-rechte.md` | plattform | 4 · Anmeldung, Sitzungen, Rechte |
+| `04-anmeldung-rechte.md` | plattform | 4 · Anmeldung, Sitzungen, Rechte |
+| `04-anmeldung-rechte.md` | plattform | 4 · Anmeldung, Sitzungen, Rechte |
 | `05-daten.md` | plattform | 5 · Daten und Speicher-Dokumente |
 | `06-oberflaechen.md` | plattform | 6 · Oberflächen (Browser) |
 | `07-tests.md` | plattform | 7 · Tests |
@@ -353,6 +355,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `api.md` | plattform | Referenz: API-Aktionen |
 | `dateien.md` | plattform | Referenz: Dateien |
 | `daten.md` | plattform | Referenz: Speicher-Dokumente |
+| `module.md` | plattform | Referenz: Module und Oberflächen |
+| `module.md` | plattform | Referenz: Module und Oberflächen |
 | `module.md` | plattform | Referenz: Module und Oberflächen |
 | `rechte.md` | plattform | Referenz: Rechte |
 
@@ -382,6 +386,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `datenverantwortung.toml` | plattform | Datenverantwortung: welchem Modul gehört welches Speicher-Dokument (app/api/storage.php)? Regel GR-101 |
 | `katalog.toml` | plattform | Katalog der verbindlichen Geschäfts- und Architekturregeln. |
 | `module.toml` | plattform | Modulregister der STAFL-Plattform – einzige Quelle für Module, Oberflächen, Zuständigkeiten und Code-Pfade. |
+| `module.toml` | plattform | Modulregister der STAFL-Plattform – einzige Quelle für Module, Oberflächen, Zuständigkeiten und Code-Pfade. |
+| `module.toml` | plattform | Modulregister der STAFL-Plattform – einzige Quelle für Module, Oberflächen, Zuständigkeiten und Code-Pfade. |
 | `wartung.toml` | plattform | Zustandsmodell je Oberfläche |
 
 ## `regeln/aktionen/`
@@ -403,6 +409,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `README.md` | plattform | Automatische Tests |
+| `run_e2e.py` | plattform | Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt die Ende-zu-Ende-Tests aus. python3 tests/run_e2e.py # alle Gruppen (parallel, WA_JOBS Gruppen gleichzeitig) python3 tests/run_e2e.py … |
+| `run_e2e.py` | plattform | Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt die Ende-zu-Ende-Tests aus. python3 tests/run_e2e.py # alle Gruppen (parallel, WA_JOBS Gruppen gleichzeitig) python3 tests/run_e2e.py … |
 | `run_e2e.py` | plattform | Startet für jede Testgruppe einen frischen PHP-Server mit Testdaten und führt die Ende-zu-Ende-Tests aus. python3 tests/run_e2e.py # alle Gruppen (parallel, WA_JOBS Gruppen gleichzeitig) python3 tests/run_e2e.py … |
 
 ## `tests/deploy/`
@@ -471,6 +479,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |
 | `test_modulverwaltung.py` | plattform | Modulverwaltung (Roadmap 5, GR-102) |
 | `test_nutzer_anlegen.py` | plattform | Verwaltung → Nutzer anlegen |
+| `test_oidc_dashboard.py` | plattform | Dashboard-Host (dashboard-stafl.de): nur Grundaktionen (lib/herkunft.php, host_nur_grundaktionen, GR-109). |
 | `test_oidc_kern.py` | plattform | Zentrale Anmeldung – Verhalten der Anwendung ohne Keycloak (lib/oidc.php, GR-110). |
 | `test_order_management.py` | angebot | Testgruppe order_management |
 | `test_order_management_ui.py` | angebot | Artikelnummer als normale Tabellenzelle (Klasse „mono“ ist in app.css das runde Kategorie-Monogramm) |

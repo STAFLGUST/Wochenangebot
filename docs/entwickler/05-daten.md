@@ -199,7 +199,10 @@ Weitere Dokumente des Kerns (Firewall, Mailversand, Benachrichtigungen, Integrit
 ### Angebot
 
 **`entwurf`** und **`angebot`**: das Datenmodell aus `clean_model()` (`lib/angebote.php`). Der Entwurf trägt zusätzlich
-`savedAt`, `savedBy`, `rev`; das veröffentlichte Angebot `publishedAt`. Jede Veröffentlichung legt das vorige Angebot
+`savedAt`, `savedBy`, `rev`; das veröffentlichte Angebot `publishedAt` (streng steigend mit Millisekunden,
+`JJJJ-MM-TTThh:mm:ss.mmmZ`; ältere Stände ohne Millisekunden bleiben gültig – verglichen wird nur auf Gleichheit).
+`meta.week` ist eine ISO-Kalenderwoche: KW 53 nur in Jahren mit 53 Wochen (`kw_gueltig`); der Entwurf behält eine
+ungültige Angabe, Veröffentlichen lehnt sie ab. Jede Veröffentlichung legt das vorige Angebot
 als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den Preisverlauf `historie/<id>`.
 
 ```json
@@ -229,10 +232,15 @@ Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artik
 (GR-001, GR-002, GR-005).
 
 **`angebote`**: Kundenangebote.
-`{"rev": 4, "offers": [{"id": "kunde-a", "name": "Wochenangebot Kunde A", "fallback": "standard", "gruppen?": ["10"]}], "stdPublic": true, "updatedAt": "…", "updatedBy": "…"}`.
+`{"rev": 4, "offers": [{"id": "kunde-a", "name": "Wochenangebot Kunde A", "fallback": "standard", "gruppen?": ["10"]}], "stdPublic": true, "geloescht?": ["alt-id"], "updatedAt": "…", "updatedBy": "…"}`.
 `fallback`: `standard` = ohne eigenen Preis Standardpreis zeigen, `hidden` = Artikel ausblenden. `gruppen`: Kundengruppen,
 deren Kunden das Angebot ohne eigene Freischaltung sehen (je Gruppe höchstens ein Angebot). Fehlt das Dokument, gelten
 `OFFER_DEFAULTS`. Neue IDs dürfen nicht mit `e-` beginnen (Einzelangebote) und nicht nur aus Ziffern bestehen.
+`geloescht`: IDs gelöschter Angebote – sie werden nie wieder vergeben (`offers_save` hängt bei einem neuen Angebot mit
+gesperrter ID `-2`, `-3` … an), weil unter der alten ID noch Kundenpreise, Sonderpreise (veröffentlichtes Angebot,
+Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind auch solche Reste aus der Zeit vor dem Feld
+(`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung; Felder, die
+`offers_save` nicht kennt, bleiben erhalten (GR-006).
 
 Bestellwünsche (`bestellungen`) und Einzelangebote (`einzelangebote`): [bestell-api-v1.md](../bestell-api-v1.md),
 [architektur.md](../architektur.md).

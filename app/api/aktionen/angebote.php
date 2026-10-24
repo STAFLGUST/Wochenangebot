@@ -39,12 +39,14 @@ switch ($action) {
             }
             $published = store_read('angebot');
             if ($published === null) fail('Es ist noch kein Angebot veröffentlicht.', 404);
+            $offer = offer_resolve($published, $def);
             if ($oid === OFFER_STD && std_public()) {
-                $etag = '"' . hash('sha256', json_encode($published) . json_encode(fracht_public()) . ':std:2') . '"';   // Hinweis/Fracht gehören zur Antwort
+                // ETag über die aufgelöste Antwort: ausverkaufte Sonderposten (Bestand) und Hinweis/Fracht gehören dazu
+                $etag = '"' . hash('sha256', json_encode($offer) . json_encode(fracht_public()) . ':std:3') . '"';
                 header('ETag: ' . $etag);
                 if (trim((string)($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) { http_response_code(304); exit; }
             }
-            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => offer_resolve($published, $def), 'fracht' => fracht_public()]);
+            respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => fracht_public()]);
         }
 
         case 'offers': {
@@ -72,8 +74,9 @@ switch ($action) {
                 if ($id === '' || $id === OFFER_STD || !preg_match('/^[a-z0-9-]{1,40}$/', $id)) throw new InvalidArgumentException('Ungültige Angebots-ID.');
                 // „e-…“ ist Einzelangeboten vorbehalten; reine Zahlen werden in JSON zu Zahlenschlüsseln – beides nur für neue Angebote sperren
                 if ((preg_match('/^e-/', $id) || ctype_digit($id)) && !in_array($id, offer_ids(), true)) throw new InvalidArgumentException("Die Angebots-ID „{$id}“ ist nicht erlaubt (beginnt mit „e-“ oder besteht nur aus Ziffern).");
-                $fb = ($o['fallback'] ?? '') === 'hidden' ? 'hidden' : 'standard';
-                $row = ['id' => $id, 'name' => $name, 'fallback' => $fb];
+                // ohne Angabe bleibt die bisherige Einstellung (unten unter der Sperre), sonst hidden|standard
+                $row = ['id' => $id, 'name' => $name];
+                if (array_key_exists('fallback', $o)) $row['fallback'] = $o['fallback'] === 'hidden' ? 'hidden' : 'standard';
                 if (array_key_exists('gruppen', $o)) $row['gruppen'] = offer_gruppen_clean($o['gruppen'], $name);
                 $list[] = $row;
             }
@@ -82,6 +85,22 @@ switch ($action) {
                 $cur = offers_load();
                 if ((int)($b['rev'] ?? -1) !== (int)$cur['rev']) fail('Die Angebote wurden inzwischen an anderer Stelle geändert. Bitte die Seite neu laden.', 409);
                 $old = []; foreach ($cur['offers'] as $o) $old[$o['id']] = $o;
+                // IDs gelöschter Angebote werden nie wieder vergeben: im veröffentlichten Angebot, in der Historie und bei
+                // Kunden (direkte Freischaltung) können noch Preise, Sonderpreise und Freischaltungen unter der alten ID stehen.
+                $gesperrt = array_values(array_filter(is_array($cur['geloescht'] ?? null) ? $cur['geloescht'] : [], 'is_string'));
+                $gesperrt = array_values(array_unique(array_merge($gesperrt, angebot_ids_mit_resten(array_keys($old)))));   // Löschungen vor dieser Fassung
+                $belegt = array_flip(array_merge(array_keys($old), array_column($list, 'id'), $gesperrt));
+                foreach ($list as $i => $o) {
+                    if (isset($old[$o['id']]) || !in_array($o['id'], $gesperrt, true)) continue;
+                    $basis = substr($o['id'], 0, 36); $k = 2;
+                    while (isset($belegt["$basis-$k"])) $k++;
+                    $list[$i]['id'] = "$basis-$k"; $belegt["$basis-$k"] = true;
+                }
+                foreach ($list as $i => $o) {
+                    if (!array_key_exists('fallback', $o)) $list[$i]['fallback'] = ($old[$o['id']]['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard';
+                    // Felder, die dieser Stand nicht kennt (neuere Fassung), bleiben erhalten (GR-006); gruppen regelt der Block unten
+                    if (isset($old[$o['id']])) $list[$i] += array_diff_key($old[$o['id']], array_flip(['id', 'name', 'fallback', 'gruppen']));
+                }
                 // Kundengruppen: ohne Angabe bleiben sie unverändert; neu zugeordnete Gruppen muss es geben
                 $known = array_column(kundengruppen_load()['groups'], 'nr');
                 $chk = function (array $neu, array $alt, string $name) use ($known) {
@@ -120,7 +139,11 @@ switch ($action) {
                     require_perm_confirmed('angebote.loeschen', 'angebote_loeschen');
                     $d[] = ['k' => 'ostd|pub', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Öffentlich ohne Anmeldung', 'from' => $oldPub ? 'ja' : 'nein', 'to' => $pub ? 'ja' : 'nein'];
                 }
-                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub];
+                $geloescht = array_values(array_unique(array_merge($gesperrt, array_map('strval', array_keys($removed)))));
+                $out = ['rev' => (int)$cur['rev'] + 1, 'updatedAt' => now(), 'updatedBy' => $me['name'], 'offers' => array_values($new), 'stdPublic' => $pub,
+                        'geloescht' => array_slice($geloescht, -2000)]
+                     // weitere Felder einer neueren Fassung bleiben (GR-006); stdGruppen entfällt bewusst (gilt automatisch)
+                     + array_diff_key($cur, array_flip(['rev', 'updatedAt', 'updatedBy', 'offers', 'stdPublic', 'geloescht', 'stdGruppen']));
                 store_write('angebote', $out);
                 return [$out, $d];
             });

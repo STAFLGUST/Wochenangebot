@@ -260,21 +260,50 @@ function modul_wartung_setzen(string $ziel, array $b, array $me): ?array
 
 /* Durchsetzung im API-Einstieg (index.php): Aktionen einer Oberfläche, die für den Nutzer gerade nicht zugänglich ist,
    laufen nicht. Öffentliche Aktionen regelt weiterhin der bisherige Wartungsmodus (kunden_wartung, GR-009);
-   „wartung_frei“ (Anmeldung, Abmelden, Status) bleibt erreichbar, damit Administratoren sich anmelden können. */
+   „wartung_frei“ (Anmeldung, Abmelden, Status) bleibt erreichbar, damit Administratoren sich anmelden können.
+   Wartung (GR-107) wirkt zusätzlich, auch wenn die Aktion unter einer anderen Oberfläche registriert ist:
+   - Oberfläche des Hosts (WA_OBERFLAECHE, vom Webserver): Bestand und Verwaltung haben keine eigenen Aktionen, ihre Hosts
+     nutzen die des gemeinsamen Eingabebereichs – ohne diese Prüfung bliebe eine Wartung dort ohne Wirkung.
+   - schreibende Aktionen eines Fachmoduls, die im gemeinsamen Eingabebereich liegen (z. B. HR-Einstellungen in der
+     Verwaltung): Ist die Oberfläche des Moduls (Kachel-Ziel) in Wartung, werden seine Daten auch dort nicht verändert.
+   Diese beiden Prüfungen sperren nur wegen Wartung (503) – Freigabe und Tester regelt weiter die Oberfläche der Aktion. */
 function modul_durchsetzen(?array $aktion): void
 {
     if ($aktion === null || $aktion['oeffentlich'] || $aktion['wartung_frei']) return;
+    $u = current_user();
     [$modul, $oberflaeche] = array_pad(explode('.', (string)$aktion['oberflaeche'], 2), 2, '');
-    $z = modul_zustand($modul, $oberflaeche, current_user());
-    if ($z === null || $z['zugang']) return;
-    header('Cache-Control: no-store');
-    if ($z['betrieb'] === 'wartung') {
-        $w = modul_wartung($modul, $oberflaeche) ?? [];
-        header('Retry-After: 600');
-        respond(['ok' => false, 'wartung' => true, 'bereich' => "$modul.$oberflaeche", 'error' => ($w['message'] ?? '') !== '' ? $w['message'] : MODUL_WARTUNG_TEXT,
-                 'until' => $w['until'] ?? null], 503);
+    $z = modul_zustand($modul, $oberflaeche, $u);
+    if ($z !== null && !$z['zugang']) {
+        if ($z['betrieb'] === 'wartung') modul_wartung_antwort($modul, $oberflaeche);
+        header('Cache-Control: no-store');
+        fail('Dieser Bereich ist nicht verfügbar.', 404);
     }
-    fail('Dieser Bereich ist nicht verfügbar.', 404);
+    foreach (modul_wartung_weitere($aktion) as $ziel) {
+        [$m, $o] = explode('.', $ziel, 2);
+        $z = modul_zustand($m, $o, $u);
+        if ($z !== null && !$z['zugang'] && $z['betrieb'] === 'wartung') modul_wartung_antwort($m, $o);
+    }
+}
+/* Weitere Oberflächen, deren Wartung für diese Aktion gilt (siehe modul_durchsetzen) */
+function modul_wartung_weitere(array $aktion): array
+{
+    $eigen = (string)$aktion['oberflaeche'];
+    $out = [];
+    $host = oidc_einstellung('WA_OBERFLAECHE');
+    if ($host !== '' && $host !== $eigen) $out[] = $host;
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $schreibend = $aktion['schreibend'] === true || ($aktion['schreibend'] === 'post' && $method === 'POST');
+    $ziel = (string)(MODULE[$aktion['modul']]['kachel_ziel'] ?? '');
+    if ($schreibend && $ziel !== '' && $ziel !== $eigen && !in_array($ziel, $out, true)) $out[] = $ziel;
+    return $out;
+}
+function modul_wartung_antwort(string $modul, string $oberflaeche): void
+{
+    $w = modul_wartung($modul, $oberflaeche) ?? [];
+    header('Cache-Control: no-store');
+    header('Retry-After: 600');
+    respond(['ok' => false, 'wartung' => true, 'bereich' => "$modul.$oberflaeche", 'error' => ($w['message'] ?? '') !== '' ? $w['message'] : MODUL_WARTUNG_TEXT,
+             'until' => $w['until'] ?? null], 503);
 }
 
 function modul_zustand(string $modul, string $oberflaeche, ?array $u): ?array

@@ -192,8 +192,9 @@ Reihenfolge in `app/api/index.php` (Eigenschaften der Aktion aus `lib/aktionen-l
    für die Firewall.
 2. `host_pruefen()` (GR-109, nur auf Keycloak-Hosts): Aktionen einer Oberfläche mit eigener Seite (heute `hr.intern`,
    `crm.intern`) gibt es nur auf ihrem Host; auf einem solchen Host gibt es sonst nur Plattform-Aktionen mit
-   `wartung_frei` (Status, Abmelden, Modulübersicht). Sonst 404. Dashboard, Angebot, Verwaltung und Bestand teilen sich
-   die Aktionen von `angebot.eingabe`.
+   `wartung_frei` (Status, Abmelden, Modulübersicht). Sonst 404. Ebenso auf dem Dashboard-Host (`dashboard.start`,
+   `host_nur_grundaktionen`): dort nur diese Grundaktionen. Angebot, Verwaltung und Bestand teilen sich die Aktionen von
+   `angebot.eingabe`.
 3. Schreibende Aktionen (`schreibend`): nur POST (405) mit `Content-Type: application/json` (415).
 4. Stilllegung (410 `umgezogen`, 4.1) und Sperre `lokale_anmeldung` auf Keycloak-Hosts (403).
 5. `fw_guard()` (Firewall), Ländersperre, Wartungsmodus der Kundenseite (`kunden_wartung`), IP-Freigabe des
@@ -268,6 +269,13 @@ der Oberfläche der Aktion außer `angebot.eingabe`) jede nicht öffentliche Akt
 `modul_host_frei()` lässt auch den Zugang eines Teilmoduls gelten (`teil_von`, z. B. Import → Verwaltung). Der
 Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in mehreren Modulen genutzt werden.
 
+**Grenze des Modulzugangs:** Er sperrt einen Host (eine Oberfläche), nicht die Daten eines Moduls. Angebot, Bestand und
+Verwaltung teilen sich den Eingabebereich – der Editor lädt auf jedem dieser Hosts den Entwurf (`draft`), die
+Kundenansicht der Verwaltung nutzt Angebotsaktionen, das Angebot liest Bestand und Stammdaten. Wer z. B. ohne
+`angebot.zugang`, aber mit `bestand.zugang` und `bestellungen.sehen` den Bestand-Host öffnet, kann Bestellungen über
+die Schnittstelle weiter lesen. Wer Daten eines Moduls nicht sehen soll, dem die **Einzelrechte** entziehen. Der
+Dashboard-Host nimmt keine Fachaktionen an (Schritt 2), dort ließe sich der Modulzugang sonst ganz umgehen.
+
 **Namensregel (GR-103):** Neue Rechte heißen `<modul>.<recht>` (z. B. `crm.exportieren`) und brauchen dann keinen
 Eintrag in `berechtigungen.toml` (Zuordnung über das Präfix, `recht_modul`). Bestehende Schlüssel nie umbenennen – sie
 stehen in gespeicherten Rollen und in `grant`/`deny`.
@@ -284,6 +292,10 @@ erste passende Zeile gilt); `werkzeuge/regeln.py erzeugen` überträgt sie nach 
 wertet sie aus (`modul_entscheiden`, `modul_zustand`). `modul_durchsetzen()` im Einstieg weist Aktionen einer
 gesperrten Oberfläche ab: Wartung → 503 mit `Retry-After` und `no-store`, sonst 404 („nicht verfügbar“ verrät nichts).
 Ausgenommen sind `oeffentlich` und `wartung_frei` (Anmeldung, Abmelden, Status).
+Die Wartung gilt zusätzlich (nur Wartung, 503) für die **Oberfläche des Hosts** (`WA_OBERFLAECHE`; Bestand und
+Verwaltung haben keine eigenen Aktionen, ihre Hosts nutzen die des Eingabebereichs) und für **schreibende Aktionen
+eines Fachmoduls**, die im Eingabebereich liegen, wenn die Oberfläche des Moduls (Kachel-Ziel) in Wartung ist (z. B.
+HR-Einstellungen in der Verwaltung bei HR-Wartung; lesen bleibt) – `modul_wartung_weitere`.
 
 - **Person** (`modul_person`): Bei Testfreigabe gilt nur, wer in `tester` eingetragen ist; Administratoren werden
   nicht automatisch Tester. Sonst `administrator` oder `normal`. Administratoren erreichen produktive Oberflächen auch in
@@ -341,8 +353,9 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 ## 4.8 Offene Punkte
 
 - GR-108, GR-109 und GR-110 stehen in `regeln/katalog.toml` noch auf `geplant`, obwohl Hosts, Keycloak und
-  Aktion ↔ Host für HR und CRM produktiv sind; Dashboard, Angebot, Verwaltung und Bestand teilen sich weiter die
-  Aktionen von `angebot.eingabe`.
+  Aktion ↔ Host für HR und CRM produktiv sind; Angebot, Verwaltung und Bestand teilen sich weiter die Aktionen von
+  `angebot.eingabe` (der Modulzugang sperrt dort nur den Host, siehe 4.4). Eine echte Trennung braucht eigene
+  Oberflächen je Modul im Aktionsregister und einen Eingabebereich, der auf jedem Host nur die Daten seines Moduls lädt.
 - Die App kennt nur die lokale Anmeldung (Kopfzeile `X-WA-Sitzung`, Basisadresse z. B. `https://angebot-stafl.de`);
   dort ist die Mitarbeiteranmeldung stillgelegt (410). Die Anmeldung über OIDC für Apps ist geplant (ADR-003 §2).
 
