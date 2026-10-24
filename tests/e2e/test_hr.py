@@ -215,6 +215,27 @@ zl = {p['id']: p['tage'] for p in L.call(f'hr_monat&jahr={Y}&monat=8')[1]['perso
 check('… für Kollegen nur „abwesend“', zl[PA].get(fr) == 'A' and zl[PA].get(str(AUG.day)) == 'A', zl[PA])
 check('Eintrag nur an freiem Tag (U): 422', P.call('hr_eintrag_save', {'person': PA, 'art': 'U', 'von': iso(AUG + dt.timedelta(days=11)), 'bis': iso(AUG + dt.timedelta(days=11))})[0] == 422)
 
+# Eingetragener freier Tag („X“) sperrt keine Abwesenheit: er zählt nur nicht mit
+SEP = montag(Y, 9, 2)
+st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'X', 'von': iso(SEP + dt.timedelta(days=4)), 'bis': iso(SEP + dt.timedelta(days=4))})
+check('freier Tag (X) eingetragen', st == 200, r)
+FREI_X = r['eintrag']['id']
+check('zweiter freier Tag am selben Tag: 409', P.call('hr_eintrag_save', {'person': PE, 'art': 'X', 'von': iso(SEP + dt.timedelta(days=4)), 'bis': iso(SEP + dt.timedelta(days=4))})[0] == 409)
+st, r = E.call('hr_antrag', {'von': iso(SEP), 'bis': iso(SEP + dt.timedelta(days=4))})
+check('Antrag über eine Woche mit freiem Tag: 200, zählt 4 Tage', st == 200 and r['eintrag']['tage'] == 4, (st, r))
+ANTRAG_X = r['eintrag']['id'] if st == 200 else None
+st, r = P.call('hr_eintrag_save', {'person': PE, 'art': 'K', 'von': iso(SEP + dt.timedelta(days=4)), 'bis': iso(SEP + dt.timedelta(days=4))})
+check('… Krank am freien Tag: weiter 409 wegen des Antrags, nicht wegen „X“', st == 409 and 'Eintrag' in r.get('error', ''), (st, r))
+check('… aufräumen', E.call('hr_antrag_zurueckziehen', {'id': ANTRAG_X})[0] == 200 and P.call('hr_eintrag_save', {'id': FREI_X, 'stornieren': True})[0] == 200)
+
+# Antrag über den Jahreswechsel: „Resturlaub danach“ rechnet nur die Tage im Jahr des Kontos
+st, r = E.call('hr_antrag', {'von': f'{Y + 1}-12-28', 'bis': f'{Y + 2}-01-08'})
+check('Antrag über den Jahreswechsel', st == 200, (st, r))
+JW = r['eintrag']['id'] if st == 200 else None
+jw = next((a for a in P.call('hr_verwaltung')[1]['offen'] if a['id'] == JW), {})
+check('… Tage im Jahr des Kontos getrennt ausgewiesen', jw.get('tageImJahr', 0) > 0 and jw['tageImJahr'] < jw['tage'] and jw['konto']['jahr'] == Y + 1, jw)
+check('… zurückgezogen', E.call('hr_antrag_zurueckziehen', {'id': JW})[0] == 200)
+
 # Übertrag aus einem vergangenen Jahr: verfallen und automatisch übertragen
 for von, bis in (('2025-02-03', '2025-02-04'), ('2025-07-07', '2025-07-11')):
     assert P.call('hr_eintrag_save', {'person': PL, 'art': 'U', 'von': von, 'bis': bis})[0] == 200
@@ -279,7 +300,8 @@ check('… Hans Doppelt: einer zum vorhandenen Mitarbeiter, einer neu ohne Anmel
 hr(pv['phans1']['nutzer'], aktiv=False); hr(pv['phans2']['nutzer'], aktiv=False)
 
 # ── Excel-Export ──
-# ── Excel-Export ──
+# Lena nicht mehr im Urlaubsplan (z. B. ausgeschieden): im Februar (genehmigte Krankheit) weiter im Export, im August nicht
+hr(ids['lena'], aktiv=False)
 st, r, body = P.call('hr_export', {'jahr': Y, 'monate': [2]}, raw=True)
 check('Export: 200, xlsx', st == 200 and body.startswith('PK'), (st, body[:80]))
 import urllib.request
@@ -307,6 +329,8 @@ check('Abteilungen als senkrechte, verbundene Zellen', any(str(m).startswith('B'
 ws8 = wb[f'August {Y}']
 z8 = {ws8.cell(z, 3).value: z for z in range(9, 20) if ws8.cell(z, 3).value}
 check('August: 4-Tage-Woche mit „x“', 'x' in [ws8.cell(z8['Andre Vierzig'], c).value for c in range(4, 35)])
+check('nicht mehr im Urlaubsplan: nur in Monaten mit genehmigten Abwesenheiten im Export', 'Lena Leser' in zeile and 'Lena Leser' not in z8, (sorted(zeile), sorted(z8)))
+hr(ids['lena'], aktiv=True)
 check('Export ohne Monat: 422', P.call('hr_export', {'jahr': Y, 'monate': []})[0] == 422)
 
 # ── Übernahme der Excel-Planung (synthetische Datei) im Browser ──
@@ -429,6 +453,18 @@ with sync_playwright() as p:
     check('Übernahme mit aktuellem Stand: 200', zeit(P, True, v3['stand'])[0] == 200)
     r = P.call('hr_verwaltung&jahr=2025')[1]
     check('… keine doppelten Einträge oder Mitarbeiter', len([e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung']) == 5 and len(r['personen']) == anzahl_personen + 2, (len(r['personen']), anzahl_personen))
+    # gleicher Name, andere Personalnummer: andere Person – nie automatisch zuordnen, Personalnummer nicht überschreiben
+    D2 = json.loads(json.dumps(D))
+    for z in D2['blaetter'][0]['grid']:
+        if z[0] == 'Anna' and z[1] == 'Beispiel': z[7] = '199'
+    b2 = {'art': 'zeiterfassung', 'daten': D2, 'quelle': 'Abwesenheitsbericht_Muster.xlsx', 'optionen': {}}
+    st, v4 = P.call('import_pruefen', b2)
+    z4 = {(z['art'], z['name']): z for z in v4.get('zeilen', []) if z['schluessel'] != 'Abwesenheiten'}
+    check('gleicher Name, andere Personalnummer: als neu mit Hinweis, nicht der bestehenden Anna zugeordnet',
+          st == 200 and ('neu', 'Anna Beispiel') in z4 and 'Nr. 199' == z4[('neu', 'Anna Beispiel')]['schluessel']
+          and 'ähnlich: Anna Beispiel' in z4[('neu', 'Anna Beispiel')]['text']
+          and not any(z['art'] == 'geaendert' and z['name'] == 'Anna Beispiel' for z in v4['zeilen']), (st, sorted(z4)))
+
     # Personalstelle ändert die Art: „vom Urlaub abgezogen“ entfällt
     eb = next(e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Bernd Muster')
     st, x = P.call('hr_eintrag_save', {'id': eb['id'], 'person': eb['person'], 'art': 'G', 'von': eb['von'], 'bis': eb['bis']})
