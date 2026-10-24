@@ -10,12 +10,20 @@ switch ($action) {
 
         case 'fw_status': {
             require_auth(false, 'admin');
-            // Bedrohungsliste täglich auffrischen, wenn eingeschaltet (beim Öffnen der Ansicht; Fehler stören nicht)
-            $f = fw_feed_info();
-            if (fw()['feed'] && (!$f || strtotime((string)$f['stand']) < time() - 86400)) {
-                try { fw_feed_laden(); } catch (Throwable $e) { error_log('[wochenangebot] bedrohungsliste: ' . $e->getMessage()); }
-            }
-            respond(['ok' => true] + fw_status((string)($_GET['filter'] ?? '')));
+            // Nur lesen: Ist die Bedrohungsliste eingeschaltet und älter als einen Tag, meldet „feedVeraltet“ das – die Ansicht
+            // frischt sie danach mit fw_feed_auffrischen (POST) auf. Früher lud diese GET-Aktion selbst (bis zu 2 × 30 s
+            // Netzabruf und ein Schreibvorgang), die Ansicht hing so lange.
+            respond(['ok' => true, 'feedVeraltet' => fw_feed_veraltet()] + fw_status((string)($_GET['filter'] ?? '')));
+        }
+
+        /* Bedrohungsliste täglich auffrischen (beim Öffnen der Ansicht, eigener Aufruf; ohne Bestätigung, weil nur eine
+           ohnehin eingeschaltete, veraltete Liste neu geladen wird – „Jetzt aktualisieren“ bleibt fw_feed_update) */
+        case 'fw_feed_auffrischen': {
+            require_auth(true, 'admin');
+            if (!fw_feed_veraltet()) respond(['ok' => true, 'aufgefrischt' => false] + fw_status());
+            @set_time_limit(90);
+            try { fw_feed_laden(); } catch (Throwable $e) { error_log('[wochenangebot] bedrohungsliste: ' . $e->getMessage()); respond(['ok' => true, 'aufgefrischt' => false] + fw_status()); }
+            respond(['ok' => true, 'aufgefrischt' => true] + fw_status());
         }
 
         case 'fw_verkehr': {

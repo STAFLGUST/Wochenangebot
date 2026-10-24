@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-152 Aktionen in 8 Modulen.
+153 Aktionen in 8 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -143,6 +143,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `benachrichtigung_test` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/mail.php` |
 | `change_password` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/zugang.php` |
 | `fw_export` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
+| `fw_feed_auffrischen` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/schutz.php` |
 | `fw_feed_update` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
 | `fw_freigeben` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
 | `fw_import` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |

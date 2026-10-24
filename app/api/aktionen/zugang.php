@@ -303,6 +303,9 @@ switch ($action) {
 
         case 'logout': {
             $u = current_user();
+            // Mit Sitzung nur mit CSRF-Token (wie kunde_logout): eine fremde Seite kann niemanden abmelden. Ohne Sitzung
+            // (abgelaufen, schon abgemeldet) bleibt Abmelden ohne Token möglich, damit Oberflächen immer aufräumen können.
+            if ($u) require_csrf();
             if ($u) { audit('logout', 'Abgemeldet'); $sid = (string)($_SESSION['sid'] ?? ''); sess_remove(function ($k) use ($sid) { return $k === $sid; }); }
             $_SESSION = [];
             session_destroy();

@@ -16,7 +16,7 @@ switch ($action) {
 
         case 'kunde_login': {
             start_session();
-            attempts_check();
+            attempts_check('kunde');
             $b = body();
             $name = is_string($b['username'] ?? null) ? strtolower(trim($b['username'])) : '';
             $pw = (string)($b['password'] ?? '');
@@ -58,7 +58,7 @@ switch ($action) {
             if ($st === 'bad' && $c === null && ghost_lock('k', $name, true)) $st = 'locked';   // unbekannter Name: gleiche Sperre wie bei echten Zugängen
             $who = ['username' => 'kunde:' . mb_substr($name, 0, 40), 'name' => $c['firma'] ?? '', 'role' => 'kunde'];
             if ($st !== 'ok') {
-                attempts_record(false);
+                attempts_record(false, 'kunde');
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('kunde_login_fail', 'Kunden-Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
                 anmeldung_angleichen();
@@ -66,7 +66,7 @@ switch ($action) {
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche vorübergehend gesperrt. Bitte später erneut versuchen.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
-            attempts_record(true);
+            attempts_record(true, 'kunde');
             // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
             $leak = pw_leak_bei_anmeldung($pw, $c['login'], $merker);
             if ($merker !== null) {
@@ -145,19 +145,19 @@ switch ($action) {
 
         /* ---------- Passwort über Link aus der E-Mail (Einladung / Zurücksetzen) ---------- */
         case 'kunde_token_check': {
-            attempts_check();
+            attempts_check('kunde');
             $c = kunde_by_token((string)(body()['token'] ?? ''));
-            if (!$c) { attempts_record(false); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
             respond(['ok' => true, 'firma' => $c['firma'], 'username' => $c['login']['username'], 'purpose' => $c['login']['token']['p'], 'exp' => (int)$c['login']['token']['exp']]);
         }
 
         case 'kunde_token_set': {
             start_session();
-            attempts_check();
+            attempts_check('kunde');
             $b = body();
             $tok = (string)($b['token'] ?? '');
             $c = kunde_by_token($tok);
-            if (!$c) { attempts_record(false); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
             $new = check_password($b['password'] ?? '', $c['login']['username']);
             $c2 = with_lock('kunden', function () use ($c, $new, $tok) {
                 $d = customers_load();
@@ -178,7 +178,7 @@ switch ($action) {
                 return null;
             });
             if (!$c2) fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410);
-            attempts_record(true);
+            attempts_record(true, 'kunde');
             ksess_remove(function ($k, $v) use ($c2) { return $v['kid'] === $c2['id']; });
             kunde_sign_in($c2, 'link');
             audit('kunde_password', 'Kunde hat Passwort über den Link aus der E-Mail festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
@@ -341,19 +341,19 @@ switch ($action) {
 
         /* ---------- Abmelden vom Wochenangebot (Link aus der E-Mail, ohne Anmeldung) ---------- */
         case 'kunde_abmelden_info': {
-            attempts_check();
+            attempts_check('kunde');
             $c = abmelde_kunde((string)(body()['token'] ?? ''));
-            if (!$c) { attempts_record(false); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
             $e = (string)($c['email'] ?? '');
             $masked = $e !== '' ? preg_replace('/^(.).*?(@.*)$/u', '$1•••$2', $e) : '';
             respond(['ok' => true, 'firma' => $c['firma'], 'email' => $masked, 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
         }
 
         case 'kunde_abmelden': {
-            attempts_check();
+            attempts_check('kunde');
             $b = body();
             $c = abmelde_kunde((string)($b['token'] ?? ''));
-            if (!$c) { attempts_record(false); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
             $ab = empty($b['wieder']);
             if (abmelde_setzen($c, $ab, 'link')) abmelde_melden($c, $ab, 'link');
             respond(['ok' => true, 'subscribed' => !$ab]);
@@ -362,9 +362,9 @@ switch ($action) {
         case 'abmelden1': {
             // Ein-Klick-Abmeldung (RFC 8058): das E-Mail-Programm sendet POST mit „List-Unsubscribe=One-Click“
             if ($method !== 'POST') fail('Bitte den Abmeldelink in der E-Mail verwenden.', 405);
-            attempts_check();
+            attempts_check('kunde');
             $c = abmelde_kunde((string)($_GET['t'] ?? ''));
-            if (!$c) { attempts_record(false); fail('Ungültiger Abmeldelink.', 404); }
+            if (!$c) { attempts_record(false, 'kunde'); fail('Ungültiger Abmeldelink.', 404); }
             if (abmelde_setzen($c, true, '1klick')) abmelde_melden($c, true, '1klick');
             respond(['ok' => true]);
         }

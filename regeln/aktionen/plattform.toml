@@ -30,6 +30,10 @@ oberflaeche = "angebot.eingabe"
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+[aktion.fw_feed_auffrischen]
+oberflaeche = "angebot.eingabe"
+schreibend = true   # lädt eine eingeschaltete, veraltete Bedrohungsliste neu (vorher als Nebenwirkung von fw_status)
+
 [aktion.fw_freigeben]
 oberflaeche = "angebot.eingabe"
 schreibend = true

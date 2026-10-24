@@ -112,6 +112,16 @@
     try { data = await api('fw_status', { query: filter ? '&filter=' + filter : '' }); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     render();
     starten();
+    // Bedrohungsliste veraltet: im Hintergrund auffrischen (eigener Aufruf, die Ansicht wartet nicht darauf)
+    if (data.feedVeraltet) {
+      api('fw_feed_auffrischen', { body: {} }).then((r) => {
+        if (!r || !r.aufgefrischt) return;
+        data = { ...data, feed: r.feed };
+        // neu zeichnen nur, wenn gerade niemand im Formular arbeitet (sonst zeigt das nächste Öffnen den neuen Stand)
+        const v = $('#view-schutz');
+        if (v && !v.hidden && !v.contains(document.activeElement)) render();
+      }).catch(() => { /* nächstes Öffnen */ });
+    }
   }
   /* Live: alle 5 Sekunden neue Einträge holen, solange die Ansicht sichtbar ist */
   function starten() {

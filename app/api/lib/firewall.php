@@ -368,6 +368,13 @@ function fw_feed_info(): ?array
     $f = store_read('bedrohungsliste');
     return $f ? ['quelle' => $f['quelle'] ?? '', 'stand' => $f['stand'] ?? null, 'anzahl' => (int)($f['anzahl'] ?? 0)] : null;
 }
+/* Bedrohungsliste eingeschaltet, aber noch nie oder vor über einem Tag geladen (Auffrischen: fw_feed_auffrischen) */
+function fw_feed_veraltet(): bool
+{
+    if (empty(fw()['feed'])) return false;
+    $f = fw_feed_info();
+    return !$f || strtotime((string)$f['stand']) < time() - 86400;
+}
 
 /* Einstellungen prüfen (Firewall) */
 function fw_clean(array $b, array $old): array
