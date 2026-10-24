@@ -1,6 +1,6 @@
 """Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite.
 Regeln: Kunden sehen nur freigeschaltete Angebote, nie den Eingabebereich; Passwörter nie im Klartext/Hash nach außen."""
-from umgebung import storage_raw
+from umgebung import storage_raw, storage_write
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import http.cookiejar
 import json
@@ -83,6 +83,25 @@ check('list sorted by firma, no secrets', [c['firma'] for c in r['customers']] =
 c1 = r['customers'][0]
 check('stored master data complete', all(c1[k] == base[k] for k in ['nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'land', 'email', 'telefon', 'notiz']))
 check('login status: mustChange, never logged in', c1['login'] == {'username': 'gasthaus.muster', 'active': True, 'mustChange': True, 'lastLogin': None, 'pwSet': c1['login']['pwSet'], 'lockedUntil': 0, 'hasPassword': True, 'geraete': [], 'link': None})
+
+# ---------- Speichern mit Teilangaben (älterer/anderer Client): nichts geht verloren (GR-006) ----------
+def kdoc():
+    raw = storage_raw('kunden'); return json.loads(raw[raw.index('{'):])
+d = kdoc()
+for c in d['customers']:
+    if c['id'] == K1: c['zukunftsfeld'] = {'von': 'neuerer Fassung'}
+storage_write('kunden', d)
+rev = A.call('kunden')[1]['rev']
+code, r = A.call('kunde_save', {'id': K1, 'rev': rev, 'firma': 'Gasthaus Muster GmbH', 'telefon': '040 111111'})
+cu = r.get('customer') or {}
+check('Teilangaben: nur gesendete Felder ändern sich', code == 200 and cu.get('telefon') == '040 111111' and cu.get('email') == base['email'] and cu.get('notiz') == 'intern'
+      and cu.get('angebote') == ['edeka', 'bela'] and cu.get('active') is True and cu.get('mailAngebot') is True, (code, r))
+check('Teilangaben ohne „login“: Zugang bleibt (Passwort, Benutzername)', (cu.get('login') or {}).get('username') == 'gasthaus.muster' and (cu.get('login') or {}).get('hasPassword') is True, cu.get('login'))
+k1 = next(c for c in kdoc()['customers'] if c['id'] == K1)
+check('unbekanntes Feld einer neueren Fassung bleibt erhalten', k1.get('zukunftsfeld') == {'von': 'neuerer Fassung'} and k1['login'].get('hash'), sorted(k1))
+code, r = A.call('kunde_save', {'id': K1, 'rev': r['rev'], 'firma': 'Gasthaus Muster GmbH', 'notiz': '', 'telefon': '040 000000'})
+check('absichtlich geleertes Feld wird geleert', code == 200 and r['customer']['notiz'] == '', r)
+rev = r['rev']
 
 # ---------- Rechte im Eingabebereich ----------
 code, r = A.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
