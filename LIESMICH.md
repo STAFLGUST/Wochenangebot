@@ -1,5 +1,8 @@
 # Wochenangebot – angebot-stafl.de
 
+**Für Entwickler:** Einstieg, Schnellstart (`python3 werkzeuge/lokal.py`), Architektur, Anleitungen und eine aus dem
+Code erzeugte Referenz stehen in [`docs/entwickler/`](docs/entwickler/README.md).
+
 - `app/` – Website, Eingabebereich (`/admin/`) und PHP-API
 - `mobile/` – App für iOS und Android (Kunden und Mitarbeiter), siehe `mobile/LIESMICH.md`; Schnittstelle: `docs/app-api.md`
 - `Caddyfile`, `docker-compose.yml` – Webserver mit automatischem HTTPS und IP-Freigabe

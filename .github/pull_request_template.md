@@ -14,7 +14,8 @@
 - [ ] Oberfläche per Bildschirmfoto geprüft (Desktop und Mobil, hell/dunkel bei neuen Farben)
 - [ ] `python3 werkzeuge/asset_versionen.py` und `python3 werkzeuge/integritaet.py` grün (Einbindungen ohne `?v=`; Nummern und Prüfliste erzeugt der Server)
 - [ ] `python3 werkzeuge/regeln.py pruefen` grün (neue Dateien, Dokumente, Rechte, Testgruppen in `regeln/` eingetragen)
-- [ ] Doku aktualisiert (`LIESMICH.md`, ggf. `docs/`), keine Geheimnisse/echten Daten (gitleaks)
+- [ ] Entwickler-Doku: `python3 werkzeuge/doku.py erzeugen` ausgeführt (CI prüft), betroffene Kapitel in `docs/entwickler/` angepasst, neue Dateien mit Kopfkommentar
+- [ ] Doku aktualisiert (`LIESMICH.md`, `docs/architektur.md`, ggf. weitere `docs/`), keine Geheimnisse/echten Daten (gitleaks)
 - [ ] Keine Produktionsänderung ohne Freigabe; PR als **bereit zum Mergen** markiert (kein Entwurf)
 
 ## Tests (tatsächlich ausgeführt)

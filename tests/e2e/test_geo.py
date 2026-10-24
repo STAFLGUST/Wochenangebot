@@ -1,3 +1,4 @@
+"""Testgruppe geo: Ländersperre in der Sicherheit – Länderliste, Suche, Selbstaussperr-Schutz, Statuskarten."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)

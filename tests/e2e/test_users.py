@@ -1,3 +1,4 @@
+"""Testgruppe users: Mitarbeiterzugänge – Rollen, serverseitige Rechte, Protokoll, Sperren und Zwei-Faktor-Pflicht je Nutzer."""
 from umgebung import storage_raw
 from auth_helpers import read_users
 from umgebung import BASE  # Testserver je Gruppe (parallel)

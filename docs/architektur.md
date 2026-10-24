@@ -1,6 +1,7 @@
 # Architektur – was liegt wo
 
-Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `tests/README.md`.
+Kurzüberblick für Entwickler und KI-Sitzungen. Regeln: `AGENTS.md`. Tests: `tests/README.md`. Einstieg mit Schnellstart,
+Kapiteln und Anleitungen: [Entwickler-Dokumentation](entwickler/README.md).
 
 Ziel und Umbau zur STAFL-Plattform: `docs/plattform/`. Welche Datei, welches Speicher-Dokument und welches Recht zu
 welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <id>`).
@@ -133,10 +134,11 @@ Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIES
 Mitarbeiter-Dashboard der STAFL-Plattform (Roadmap PR 6): `index.html`, `dashboard.css`, `dashboard.js`, ohne Inline-Skript.
 Liest `status` und `module_status` und zeigt die Kacheln (derzeit elf; HR seit 23.10.2026 freigegeben, Marketing und Controlling geplant) in der Reihenfolge des Modulregisters – keine fest
 programmierte Liste. Status je Kachel (Verfügbar, Wartung, Entwicklungsstand …) kommt aus `modul_zustand`; die Kachel ist
-nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt bewusst **außerhalb** von `app/` und wird daher nicht
-ausgeliefert; `dashboard-stafl.de` bleibt 503-Platzhalter (GR-105), bis die Anmeldung über Keycloak (ADR-003, PR 7) steht
-und der Inhaber die Freigabe erteilt. Der Testlauf blendet den Ordner nur in der Gruppe `dashboard` unter `/dashboard/` ein
-(`ZUSATZ` in `tests/run_e2e.py`). Hell/Dunkel mit demselben Speicherschlüssel wie die Angebotsseite.
+nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt **außerhalb** von `app/`: ausgeliefert wird es nur über die
+zentrale Anmeldung – `deploy/anmeldung/docker-compose.anmeldung.yml` bindet den Ordner ein, Apache stellt ihn per
+`Alias /dashboard` auf den Keycloak-Hosts bereit (`dashboard-stafl.de/` → `/dashboard/`, produktiv seit der
+Inbetriebnahme der Anmeldung). Der Testlauf blendet den Ordner nur in den Gruppen mit Eintrag in `ZUSATZ`
+(`tests/run_e2e.py`) unter `/dashboard/` ein, `werkzeuge/lokal.py` ebenso. Hell/Dunkel mit demselben Speicherschlüssel wie die Angebotsseite.
 Gestaltung „Liquid Glass“ (eigene Farbwerte `--db-*` in `dashboard.css`, Schrift Geist aus `app.css`): Kopfzeile als
 Glaskapsel (Logo, Hell/Dunkel, Nutzer-Chip mit Initialen, Abmelden), Begrüßung nach Tageszeit mit Datum, Kacheln als
 Glasflächen; Symbolfarbe hängt am Registersymbol (`icon`), nicht am Modul. Nicht nutzbare Kacheln sind blass und tragen

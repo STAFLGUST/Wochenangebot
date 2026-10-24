@@ -47,6 +47,7 @@ CI (`.github/workflows/ci.yml`), Branchschutz und den Release-Prozess (`.github/
 13. **Wartung der Angebotsseite** pausiert nur Kundenfunktionen; Mitarbeiter arbeiten weiter (GR-009).
 
 Überblick über Aufbau und Dateien: `docs/architektur.md` (vor Änderungen lesen, nach Umbauten aktualisieren).
+Einstieg für neue Entwickler und Agenten: `docs/entwickler/README.md` (Schnellstart, Architektur, Anleitungen, Referenz).
 
 ## Plattformregeln (STAFL-Plattform, Details in `regeln/katalog.toml`)
 
@@ -98,7 +99,10 @@ erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern f
 2. Neues Verhalten hat Tests (auch Rechte, Fehler- und Grenzfälle); `tests/README.md` nennt neue Gruppen.
 3. Oberfläche per Bildschirmfoto angesehen (Desktop und 390 px Mobil); keine JavaScript-Fehler.
 4. Einbindungen der Assets geprüft (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`), gitleaks ohne Funde.
-5. `LIESMICH.md` bzw. `docs/` aktualisiert; PR-Text in Alltagssprache (Vorlage `.github/pull_request_template.md`).
+5. Dokumentation im selben PR: Entwickler-Doku `docs/entwickler/` (Einstieg für jeden neuen Entwickler) – Referenz mit
+   `python3 werkzeuge/doku.py erzeugen` neu schreiben (die CI prüft sie und verlangt für jede Code-Datei einen
+   beschreibenden Kopfkommentar), betroffene Kapitel anpassen; dazu `LIESMICH.md` bzw. `docs/`. PR-Text in
+   Alltagssprache (Vorlage `.github/pull_request_template.md`).
 6. PR als „bereit zum Mergen“ markiert, sobald die CI grün ist; Merge und Release macht ausschließlich der Inhaber.
 7. `python3 werkzeuge/regeln.py pruefen` grün; Änderungsfolgen (`betroffen`) im PR; Rückfallweg bzw. Migrationspfad genannt.
 8. Im Bericht klar trennen: geplant · implementiert · getestet · gemergt · produktiv ausgerollt.

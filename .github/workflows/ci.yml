@@ -96,6 +96,9 @@ jobs:
         run: |
           python3 werkzeuge/regeln.py pruefen
           python3 tests/regeln/test_regeln.py
+      - name: Entwickler-Dokumentation passt zum Code (werkzeuge/doku.py)
+        # Referenz docs/entwickler/referenz/ aus Code und regeln/ erzeugt; jede Code-Datei mit beschreibendem Kopfkommentar
+        run: python3 werkzeuge/doku.py pruefen
       - name: Versionsnummern der Skripte und Stylesheets
         run: python3 werkzeuge/asset_versionen.py
       - name: Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php)
@@ -113,11 +116,12 @@ jobs:
           node tests/unit/stock_prices.test.js
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
-      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat)
+      - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku)
         run: |
           python3 tests/unit/test_run_e2e_teile.py
           python3 tests/unit/test_ci_nachweis.py
           python3 tests/unit/test_apt_vorrat.py
+          python3 tests/unit/test_doku.py
       - name: Workflows prüfen (actionlint)
         run: |
           curl -sSLf -o /tmp/al.tgz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"

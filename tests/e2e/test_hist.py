@@ -1,3 +1,4 @@
+"""Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import glob, re

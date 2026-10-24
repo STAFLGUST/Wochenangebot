@@ -1,3 +1,4 @@
+"""Testgruppe order_management: Bestellverwaltung über die API – Rechte, Statusübergänge, Revision, Kundenansicht."""
 import sys
 from kunden_hilfe import Client
 from order_setup import setup, PW

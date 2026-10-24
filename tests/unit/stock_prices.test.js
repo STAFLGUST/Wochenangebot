@@ -1,3 +1,4 @@
+/* Unit-Test: Preisvergleich und Wochenpreise der Bestandsliste (StockCore aus app/assets/stock-core.js). */
 const assert = require('node:assert/strict');
 require('../../app/assets/stock-core.js');
 const S = globalThis.StockCore;
