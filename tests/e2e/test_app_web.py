@@ -199,12 +199,24 @@ with sync_playwright() as p:
     check('erneutes Senden ergibt keinen zweiten Bestellwunsch', len(orders) == 2 and len(smtp.messages) == 2)
     page.click('text=Weiter im Angebot')
     page.wait_for_selector(T('angebot-titel'), timeout=30000)   # Wechsel abwarten, sonst bricht das Neuladen ab (ERR_ABORTED)
+    # Die Adresse wechselt im Web-Build erst nach dem Bildschirm; ohne dieses Warten lud das Neuladen in der CI
+    # gelegentlich wieder den (leeren) Bestellwunsch statt des Angebots – dort gibt es keinen Offline-Hinweis
+    page.wait_for_url('**/angebot*', timeout=15000)
     page.wait_for_load_state('networkidle')
 
     # ---------- offline: gespeichertes Angebot mit Hinweis ----------
+    # erst offline gehen, wenn das Angebot des Kunden auf dem Gerät liegt (AsyncStorage = localStorage im Web-Build)
+    page.wait_for_function("Object.keys(localStorage).some((k) => k.startsWith('angebot.') && !k.includes('.gast.'))", timeout=15000)
     page.route('**/api/?action=offer*', lambda route: route.abort())
     page.reload()
-    page.wait_for_selector(T('hinweis-offline'), timeout=30000)
+    try:
+        page.wait_for_selector(T('hinweis-offline'), timeout=30000)
+    except Exception:
+        # Befund für die Fehlersuche (CI-Artefakt): was die App zeigt und was auf dem Gerät gespeichert ist
+        page.screenshot(path=SH + '/app-offline-fehler.png')
+        print('DIAGNOSE Seite:', page.inner_text('body')[:600].replace('\n', ' | '))
+        print('DIAGNOSE Ablage:', page.evaluate("Object.keys(localStorage).filter((k) => !k.startsWith('wa.')).sort().join(', ')"))
+        raise
     check('offline: gespeichertes Angebot mit Hinweis „ohne Gewähr“', 'ohne Gewähr' in page.inner_text(T('hinweis-offline')) and page.locator('[data-testid^="artikel-r"]').count() > 0)
     page.screenshot(path=SH + '/app-offline.png')
     page.unroute('**/api/?action=offer*')
