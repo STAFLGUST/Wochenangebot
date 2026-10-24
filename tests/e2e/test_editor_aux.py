@@ -1,3 +1,4 @@
+"""Testgruppe editor_aux: Hilfen im Angebotseditor – Vergleich mit der Vorwoche und Bestand im Editor."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re

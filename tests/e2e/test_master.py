@@ -1,3 +1,4 @@
+"""Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re

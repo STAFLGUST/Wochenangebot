@@ -1,3 +1,4 @@
+"""Testgruppe security: Zwei-Faktor-Anmeldung, Wiederherstellungscodes, Sitzungen, IP-Freigabe und Content-Security-Policy."""
 import sys
 from umgebung import BASE, wait_text, until
 import base64, hmac, hashlib, struct, time, json, os, re, subprocess

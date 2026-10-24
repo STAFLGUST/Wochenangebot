@@ -1,3 +1,4 @@
+"""Testgruppe sidenav: Navigation des Eingabebereichs, Sichtbarkeit je Rolle, Kopfzeile ohne Überlappung und Darstellung je Bildschirmbreite."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 from playwright.sync_api import sync_playwright
