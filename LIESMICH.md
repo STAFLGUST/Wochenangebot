@@ -19,6 +19,7 @@ Neue Versionen in `main` werden vom Server innerhalb von 2 Minuten automatisch �
 
 Nützlich auf dem Server:
 - Protokoll der Aktualisierung: `journalctl -u wochenangebot-update -n 20`
+- Speicherplatz: `sh deploy/speicher.sh` zeigt die Belegung (ändert nichts), `sh deploy/speicher.sh aufraeumen` entfernt Docker-Bauzwischenspeicher und ungenutzte Images – nie Daten, Sicherungen oder Volumes. Container-Protokolle sind auf 3 × 10 MB je Dienst begrenzt.
 - Status: `cd /opt/wochenangebot && docker compose ps`
 - Datensicherung: läuft automatisch täglich (über die Aktualisierung) nach `/opt/wochenangebot/sicherungen/`, die letzten 30 Stände; jede Sicherung wird nach dem Erstellen probeweise entpackt und geprüft. Status im Eingabebereich unter „Sicherheit“. Sofort sichern: `sh deploy/sichern.sh --jetzt`. Sobald die zentrale Anmeldung (Keycloak) läuft, wird deren Datenbank mitgesichert (`anmeldung-<Zeit>.dump`, Rücksicherung: `docs/plattform/inbetriebnahme-anmeldung.md`). Wichtig: Die Sicherungen liegen auf demselben Server – zusätzlich die VPS-Sicherung bei Hostinger aktivieren oder die Dateien regelmäßig woanders ablegen.
 - Wiederherstellen (Beispiel): `cd /opt/wochenangebot && docker compose stop app && mv daten daten-alt && mkdir daten && tar xzf sicherungen/daten-JJJJ-MM-TT_HHMMSS.tar.gz -C daten && chown -R 33:33 daten && docker compose start app`

@@ -5,6 +5,9 @@ services:
   app-test:
     image: php:8.3-apache
     restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     volumes:
       - ./src/app:/var/www/html:ro                                              # Code des eingespielten Zweigs (nur lesend)
       - ./daten:/var/www/html/data                                              # nur Testdaten
