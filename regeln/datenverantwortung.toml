@@ -238,6 +238,8 @@ beschreibung = "Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP)"
 [[dokument]]
 name = "nutzer"
 eigentuemer = "plattform"
+leser = ["angebot", "hr"]   # angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
+schreiber = ["hr"]   # nur über mitarbeiter_ohne_zugang_anlegen (lib/nutzer.php): Mitarbeiter ohne Anmeldung (zugang: false) für den Urlaubsplan
 schutz = "geheim"
 beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte"
 

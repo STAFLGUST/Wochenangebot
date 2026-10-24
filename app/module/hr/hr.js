@@ -19,10 +19,13 @@
   const S = { start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
 
   async function api(action, body, query = '') {
-    const res = await fetch(API + '?action=' + action + query, {
-      method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
-      headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {}, body: body ? JSON.stringify(body) : undefined,
-    });
+    let res;
+    try {
+      res = await fetch(API + '?action=' + action + query, {
+        method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {}, body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch { return { status: 0, data: {}, json: false }; }   // keine Verbindung: Aufrufer zeigen „Keine Verbindung zum Server.“
     let data = null;
     try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
     return { status: res.status, data: data || {}, json: data !== null };
@@ -134,6 +137,7 @@
   function antragTage() {
     const von = $('#antrag-von').value, bis = $('#antrag-bis').value, d = S.start;
     const out = $('#antrag-tage');
+    meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
     if (!von || !bis || !d || !d.ich) { out.textContent = ''; return; }
     if (bis < von) { out.textContent = 'Das Ende liegt vor dem Beginn.'; return; }
     let n = 0;
@@ -151,6 +155,7 @@
     const m = $('#antrag-meldung');
     const b = { von: $('#antrag-von').value, bis: $('#antrag-bis').value, vertretung: $('#antrag-vertretung').value, notiz: $('#antrag-notiz').value };
     if (!b.von || !b.bis) { meldung(m, 'Bitte ersten und letzten Urlaubstag angeben.'); return; }
+    if (b.bis < b.von) { meldung(m, ''); $('#antrag-bis').focus(); return; }   // der Hinweis unter den Daten sagt es schon
     $('#antrag-senden').disabled = true;
     const r = await api('hr_antrag', b);
     $('#antrag-senden').disabled = false;
@@ -252,11 +257,11 @@
   function zeigeAntraege() {
     const v = S.verw;
     $('#antraege-liste').innerHTML = v.offen.length ? v.offen.map((a) => {
-      const nach = a.konto.rest - a.tage;
+      const nach = a.konto.rest - (a.tageImJahr ?? a.tage);   // Konto des Beginnjahres: nur die Tage in diesem Jahr
       return `<article class="hr-antrag hr-glas" data-id="${esc(a.id)}">
         <h3>${esc(a.name)}</h3>
         <div class="zeitraum">${esc(zeitraum(a.von, a.bis))} · ${esc(tageText(a.tage))}</div>
-        <dl><dt>Resturlaub danach</dt><dd${nach < 0 ? ' style="color:var(--hr-fehler);font-weight:700"' : ''}>${esc(tageText(nach))} (von ${esc(zahl(a.konto.rest))})</dd>
+        <dl><dt>Resturlaub ${a.tageImJahr != null && a.tageImJahr < a.tage ? esc(String(a.konto.jahr)) + ' ' : ''}danach</dt><dd${nach < 0 ? ' style="color:var(--hr-fehler);font-weight:700"' : ''}>${esc(tageText(nach))} (von ${esc(zahl(a.konto.rest))})</dd>
         ${a.vertretungName ? `<dt>Vertretung</dt><dd>${esc(a.vertretungName)}</dd>` : ''}
         ${a.kollegen.length ? `<dt>Gleichzeitig weg</dt><dd>${esc(a.kollegen.join(', '))}</dd>` : ''}
         ${a.notiz ? `<dt>Notiz</dt><dd>${esc(a.notiz)}</dd>` : ''}
@@ -320,6 +325,9 @@
 
   /* ---------- Abwesenheit eintragen / ändern ---------- */
   function eintragDialog(e) {
+    // Personaldaten fehlen (z. B. Verbindung abgebrochen): Hinweis statt Skriptfehler
+    if (!S.verw) { meldung($('#kal-meldung'), 'Personaldaten nicht verfügbar. Bitte die Seite neu laden.'); return; }
+    meldung($('#kal-meldung'), '');
     const d = $('#dlg-eintrag');
     d.dataset.id = e.id || '';
     $('#dlg-eintrag-titel').textContent = e.id ? 'Abwesenheit ändern' : 'Abwesenheit eintragen';

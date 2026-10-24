@@ -247,15 +247,20 @@ function hr_xlsx(array $monate): string
     ] + $dateien);
 }
 
-/* Monatsplan für den Export: alle aktiven Mitarbeiter, nur genehmigte Einträge, Kürzel U/K/G/x */
+/* Monatsplan für den Export: alle aktiven Mitarbeiter, nur genehmigte Einträge, Kürzel U/K/G/x.
+   Nicht mehr im Urlaubsplan (z. B. ausgeschieden): nur in Monaten, in denen sie genehmigte Abwesenheiten haben – die
+   Abrechnung eines vergangenen Monats braucht sie weiter. */
 function hr_export_monat(int $jahr, int $monat): array
 {
     $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
     $tage = hr_monatstage($jahr, $monat, $einst);
     $genehmigt = array_values(array_filter($abw['eintraege'], function ($e) { return $e['status'] === 'genehmigt'; }));
+    $mv = sprintf('%04d-%02d-01', $jahr, $monat); $mb = sprintf('%04d-%02d-31', $jahr, $monat);
+    $imMonat = [];
+    foreach ($genehmigt as $e) if ($e['art'] !== 'X' && $e['von'] <= $mb && $e['bis'] >= $mv) $imMonat[$e['person']] = true;
     $zeilen = [];
     foreach (hr_nach_abteilung($personal['personen']) as $p) {
-        if (!$p['aktiv']) continue;
+        if (!$p['aktiv'] && !isset($imMonat[$p['id']])) continue;
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'], 'tage' => hr_zeile($p, $genehmigt, $tage, 'voll')];
     }
     return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen];
