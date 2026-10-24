@@ -37,6 +37,7 @@ function fracht_frei(array $s): ?int { return $s['aktiv'] && $s['staffeln'] ? (i
 /* Frachtanteil für eine Gesamtmenge: kleinste Grenze, die noch über der Menge liegt */
 function fracht_kosten(float $kg, ?array $s = null): array
 {
+    $kg = round($kg, 2);   // Summe aus Gleitkommazahlen (183,29 + 93,87 + 22,84 = 299,99999…) wie die angezeigte Gesamtmenge
     $s = $s ?? fracht_settings();
     $frei = fracht_frei($s);
     $hit = null;

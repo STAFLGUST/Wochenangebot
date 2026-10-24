@@ -154,7 +154,7 @@ function hr_import_planen(array $e): array
         if (!isset($zuordnung[$k])) continue;
         $pid = $zuordnung[$k];
         foreach (hr_import_zeitraeume($tage) as $z) {
-            $kol = hr_kollision($bleibt, $pid, $z['von'], $z['bis']);
+            $kol = hr_kollision($bleibt, $pid, $z['von'], $z['bis'], null, $z['art']);
             if ($kol) { $konflikte[] = [$l['personen'][$k]['name'], $z, $kol]; continue; }
             $neuE[] = ['id' => hr_neue_id('a'), 'person' => $pid, 'art' => $z['art'], 'von' => $z['von'], 'bis' => $z['bis'], 'status' => 'genehmigt',
                        'notiz' => '', 'quelle' => 'import'];

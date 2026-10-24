@@ -24,10 +24,13 @@
   };
 
   async function api(action, body, query = '') {
-    const res = await fetch(API + '?action=' + action + query, {
-      method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
-      headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {}, body: body ? JSON.stringify(body) : undefined,
-    });
+    let res;
+    try {
+      res = await fetch(API + '?action=' + action + query, {
+        method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+        headers: body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {}, body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch { return { status: 0, data: {}, json: false }; }   // keine Verbindung: Aufrufer zeigen „Keine Verbindung zum Server.“
     let data = null;
     try { data = await res.json(); } catch { /* keine JSON-Antwort */ }
     return { status: res.status, data: data || {}, json: data !== null };

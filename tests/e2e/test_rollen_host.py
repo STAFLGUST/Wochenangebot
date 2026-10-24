@@ -36,6 +36,17 @@ check('Schreibende Aktionen ebenso', E.call('stock_import', {'date': '2026-10-16
 check('Plattformkern bleibt erreichbar (Modulübersicht)', E.call('module_status')[0] == 200)
 check('Mit Modulzugang: Bestand offen', L.call('status')[1]['user']['modulzugang'] is True and L.call('stock')[0] == 200)
 check('Mit Modulzugang, ohne Einzelrecht: weiter gesperrt (Recht)', L.call('history_list')[0] == 403 and L.call('history_list')[1].get('code') != 'kein_modulzugang')
+
+# Wartung des Bestands (GR-107): Der Bestand-Host hat keine eigenen Aktionen (er nutzt die des gemeinsamen
+# Eingabebereichs) – die Wartung gilt trotzdem für alles, was über ihn läuft. Administratoren arbeiten weiter.
+code, r = A.call('modul_wartung_save', {'bereich': 'bestand.intern', 'active': True, 'grund': 'Inventur', 'message': 'Bestand gleich zurück.'})
+check('Bestand in Wartung gesetzt', code == 200 and r['aktiv'] is True, (code, r))
+code, r = L.call('stock')
+check('Wartung Bestand: Aktion des Eingabebereichs auf dem Bestand-Host 503', code == 503 and r.get('bereich') == 'bestand.intern' and r.get('error') == 'Bestand gleich zurück.', (code, r))
+check('… auch schreibend (Bestandsimport)', L.call('stock_import', {'date': '2026-10-16', 'articles': []})[0] == 503)
+check('… Status bleibt erreichbar', L.call('status')[0] == 200)
+check('… Administrator arbeitet weiter', A.call('stock')[0] == 200)
+check('Wartung Bestand beendet: wieder offen', A.call('modul_wartung_save', {'bereich': 'bestand.intern', 'active': False, 'grund': 'fertig'})[0] == 200 and L.call('stock')[0] == 200)
 check('Abmelden geht', E.call('logout', {})[0] == 200)
 
 with sync_playwright() as pw:

@@ -1384,7 +1384,9 @@ function loadCart() {
   if (gone) { saveCart(); toast(`${plural(gone, 'Position wurde', 'Positionen wurden')} aus Ihrem Bestellwunsch entfernt, weil sie nicht mehr im Angebot ${gone === 1 ? 'ist' : 'sind'}.`, 5000); }
 }
 function saveCart() { if (KUNDE) store.set(cartKey(), Object.fromEntries([...cart].map(([id, q]) => { const it = DATA.byId.get(id); return [id, it && it.key ? { q, k: it.key } : q]; }))); }
-const lineSum = (it, q) => Math.round(Math.round(it.price.value * 100) * q) / 100;   // in Cent, wie der Server
+/* Runden wie PHP 8.3 round() auf dem Server (vorher auf 15 Stellen, damit 1,005 € → 101 Cent statt 100) */
+const rundeWieServer = (x) => Math.round(Number(x.toPrecision(15)));
+const lineSum = (it, q) => rundeWieServer(rundeWieServer(it.price.value * 100) * q) / 100;   // in Cent, wie der Server
 function cartTotals() {
   let sum = 0, kg = 0, req = 0;
   for (const [id, q] of cart) {
@@ -1392,7 +1394,7 @@ function cartTotals() {
     kg += q;
     if (it.price.status === 'value') sum += lineSum(it, q); else req++;
   }
-  return { n: cart.size, sum, kg, req };
+  return { n: cart.size, sum: Math.round(sum * 100) / 100, kg: Math.round(kg * 100) / 100, req };   // Gesamtmenge wie der Server (Fracht ab genau 300 kg frei)
 }
 function renderOrderbar() {
   renderMerk();

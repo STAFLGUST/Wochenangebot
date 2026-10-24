@@ -19,8 +19,10 @@ export function setzen(w: Warenkorb, id: string, q: number): Warenkorb {
   if (q > 0 && Number.isFinite(q)) n[id] = Math.round(q * 100) / 100; else delete n[id];
   return n;
 }
-/** in Cent rechnen, wie der Server */
-export const zeilenSumme = (preis: number, q: number) => Math.round(Math.round(preis * 100) * q) / 100;
+/** Runden wie PHP 8.3 round() auf dem Server: vorher auf 15 Stellen, damit z. B. 1,005 € → 101 Cent statt 100 */
+const rundeWieServer = (x: number) => Math.round(Number(x.toPrecision(15)));
+/** in Cent rechnen, wie der Server (aktionen/kundenportal.php) und die Website (frontend.js) */
+export const zeilenSumme = (preis: number, q: number) => rundeWieServer(rundeWieServer(preis * 100) * q) / 100;
 
 export type Zeile = { it: Artikel; q: number; summe: number | null };
 export type Summen = { zeilen: Zeile[]; kg: number; summe: number; anfrage: number; fehlend: string[] };

@@ -256,6 +256,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `sicherung-einrichten.sh` | plattform | Einmalig auf dem Server (als root): eigene Zeitsteuerung für die Datensicherung einrichten. sh /opt/wochenangebot/deploy/sicherung-einrichten.sh Danach läuft die Sicherung täglich um 02:30 Uhr unabhängig von der … |
 | `sicherung-pruefen.php` | plattform | Prüft eine entpackte Datensicherung (Ersatz für sicherung-pruefen.py, falls kein Python vorhanden ist): jede Datendatei muss gültiges JSON enthalten. |
 | `sicherung-pruefen.py` | plattform | Prüft eine entpackte Datensicherung: jede Datendatei muss gültiges JSON enthalten. |
+| `speicher.sh` | plattform | Speicherbelegung des Servers anzeigen und gefahrlos Aufräumbares entfernen (Docker-Zwischenspeicher, ungenutzte Images). cd /opt/wochenangebot && sh deploy/speicher.sh # nur anzeigen – ändert nichts cd … |
 | `testumgebung.sh` | plattform | Testumgebung test.<Domain> auf demselben Server – vollständig getrennt vom Echtbetrieb (eigener Ordner, eigener Container, nur Testdaten, keine E-Mails, Passwortschutz). sh deploy/testumgebung.sh einrichten einmalig |
 | `wartung-aus.php` | plattform | Notfall: alle Wartungen beenden – Angebotsseite (Dokument „wartung“) und alle Bereiche (Dokument „module“). |
 | `wartung-aus.sh` | plattform | Notfall: alle Wartungen beenden (Angebotsseite und alle Bereiche), z. |
@@ -418,6 +419,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |
+| `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |
 | `test_sqlite_http.sh` | plattform | Exercise real production PHP image and Apache, not the built-in test server. |
 | `test_testumgebung.sh` | plattform | Test der Testumgebung-Verwaltung (deploy/testumgebung.sh) mit Platzhaltern für docker und git – ohne Server. |
 
@@ -470,6 +472,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |
 | `test_modulverwaltung.py` | plattform | Modulverwaltung (Roadmap 5, GR-102) |
 | `test_nutzer_anlegen.py` | plattform | Verwaltung → Nutzer anlegen |
+| `test_oidc_dashboard.py` | plattform | Dashboard-Host (dashboard-stafl.de): nur Grundaktionen (lib/herkunft.php, host_nur_grundaktionen, GR-109). |
 | `test_oidc_kern.py` | plattform | Zentrale Anmeldung – Verhalten der Anwendung ohne Keycloak (lib/oidc.php, GR-110). |
 | `test_order_management.py` | angebot | Testgruppe order_management |
 | `test_order_management_ui.py` | angebot | Artikelnummer als normale Tabellenzelle (Klasse „mono“ ist in app.css das runde Kategorie-Monogramm) |
