@@ -143,6 +143,11 @@ for name, felder in (('unbekanntes Segment', {'segment': 'Raumfahrt'}), ('ungül
     check(f'Kundenblatt: {name} → 422', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': felder})[0] == 422)
 check('Kundenblatt: unbekannter Kunde → 404', Bb.call('crm_kunde_save', {'key': 'kzzz999999999', 'felder': {'segment': 'Catering'}})[0] == 404)
 check('Kundenblatt: ohne Felder → 422', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {}})[0] == 422)
+# inaktiver Kunde ohne Kundenblatt: „Aktiv in der Wiedervorlage“ einschalten wird gespeichert (Vergleich mit dem echten Standard „nein“)
+st, r = Bb.call('crm_kunde_save', {'key': 'keee555555555', 'felder': {'anrufAktiv': True}})
+check('inaktiver Kunde: Wiedervorlage einschalten gespeichert', st == 200 and r['kunde']['crm']['anrufAktiv'] is True, r)
+check('… bleibt nach dem Neuladen eingeschaltet', {k_['key']: k_ for k_ in Bb.call('crm_start')[1]['kunden']}['keee555555555']['crm']['anrufAktiv'] is True)
+check('… wieder ausschalten', Bb.call('crm_kunde_save', {'key': 'keee555555555', 'felder': {'anrufAktiv': False}})[1]['kunde']['crm']['anrufAktiv'] is False)
 check('Stammdaten unverändert (CRM schreibt das Dokument „kunden“ nie, E-1)', storage_raw('kunden') == kunden_vorher)
 
 # ── Aktivitäten ──
@@ -172,6 +177,10 @@ check('Interessent angelegt: Phase Interessent, ohne Kundennummer', st == 200 an
 check('Interessent: unbekannter Vertreter → 422', Bb.call('crm_interessent_save', {'firma': 'X GmbH', 'vertreter': '99'})[0] == 422)
 check('Interessent: ohne Firma → 422', Bb.call('crm_interessent_save', {'firma': ' '})[0] == 422)
 check('Interessent: ungültige E-Mail → 422', Bb.call('crm_interessent_save', {'firma': 'X GmbH', 'email': 'nein'})[0] == 422)
+check('Interessent: PLZ ohne Ziffern → 422', Bb.call('crm_interessent_save', {'firma': 'X GmbH', 'plz': 'abcde'})[0] == 422)
+check('Interessent: deutsche PLZ nicht fünfstellig → 422', Bb.call('crm_interessent_save', {'firma': 'X GmbH', 'plz': '2276', 'land': 'Deutschland'})[0] == 422)
+st, r = Bb.call('crm_interessent_save', {'id': INT['key'], 'firma': 'Neukunde Grillhaus', 'plz': '1010', 'ort': 'Wien', 'land': 'Österreich', 'vertreter': '12'})
+check('Interessent: ausländische PLZ (Österreich, 4 Ziffern) angenommen', st == 200 and r['kunde']['plz'] == '1010', (st, r))
 st, r = Bb.call('crm_interessent_save', {'id': INT['key'], 'firma': 'Neukunde Grillhaus GmbH', 'plz': '22765', 'ort': 'Hamburg', 'vertreter': '12'})
 check('Interessent geändert (gleicher Schlüssel)', st == 200 and r['kunde']['key'] == INT['key'] and r['kunde']['firma'] == 'Neukunde Grillhaus GmbH', r)
 check('Interessent: unbekannte ID → 404', Bb.call('crm_interessent_save', {'id': 'igibtesnicht', 'firma': 'X GmbH'})[0] == 404)

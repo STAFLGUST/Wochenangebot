@@ -119,6 +119,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte { padding: 20px 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .crm-karte-kopf { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin-bottom: 2px; }
 .crm-karte-kopf .btn { height: 30px; font-size: 13px; }
+@media (pointer: coarse) { .crm-karte-kopf .btn, .crm-mehrfach .optionen .btn { height: 36px; } }   /* Fingerbedienung: Tippflächen ≥ 36 px */
 .crm-zeilen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .crm-zeilen li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--crm-linie); min-width: 0; }
 .crm-zeilen li:first-child { border-top: 0; }
@@ -145,6 +146,8 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm input:disabled, .crm select:disabled, .crm textarea:disabled { opacity: .75; cursor: default; }
 .crm label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--crm-muted); min-width: 0; }
 .crm label.crm-check { flex-direction: row; align-items: center; gap: 8px; color: var(--crm-text); font-weight: 500; font-size: 14px; }
+.crm label.crm-check { min-height: 36px; }   /* Tippfläche: die ganze Zeile schaltet das Kästchen */
+.crm label.crm-check input[type="checkbox"] { width: 20px; height: 20px; margin: 0; flex: none; }
 .crm-felder { display: grid; gap: 12px; }
 .crm-felder.zwei { grid-template-columns: 1fr 1fr; }
 .crm-felder.drei { grid-template-columns: 1fr 1.6fr 1fr; }
