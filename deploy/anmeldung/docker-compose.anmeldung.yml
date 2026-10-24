@@ -43,6 +43,9 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
     restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     command: ["start", "--import-realm"]
     depends_on:
       - keycloak-db
@@ -87,6 +90,9 @@ services:
   keycloak-db:
     image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak

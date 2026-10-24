@@ -99,7 +99,7 @@ def dateien(wurzel: Path) -> list:
         out = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=wurzel,
                              capture_output=True, check=True)
         liste = [p for p in out.stdout.decode().split("\0") if p]
-        return sorted(p for p in liste if (wurzel / p).is_file())
+        return sorted({p for p in liste if (wurzel / p).is_file()})   # eindeutig: bei Konflikten listet git jede Stufe einzeln
     except (OSError, subprocess.CalledProcessError):
         aus = {".git", "node_modules", "__pycache__", ".arbeit", ".ergebnisse"}
         return sorted(str(p.relative_to(wurzel)).replace("\\", "/") for p in wurzel.rglob("*")

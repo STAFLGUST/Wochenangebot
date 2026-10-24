@@ -193,6 +193,24 @@ automatisch 700 ms nach einer Änderung (`changed()` → `saveNow()`). Für Test
 [AGENTS.md → Schnell arbeiten](../../AGENTS.md#schnell-arbeiten-ohne-qualität-zu-verlieren) – der Abgleich kann jederzeit
 die Anmeldemaske zeigen.
 
+### Leistung des Angebotseditors
+
+Der Editor hat bei ~280 Artikeln rund 12 000 Elemente. Deshalb zeichnet `renderGroups()` (ganzer Editor per
+`innerHTML`) nur, wenn sich Gruppen oder Artikel ändern; häufige Bedienschritte ändern nur, was sich wirklich ändert:
+
+- **Suche und „Nur Änderungen“:** `filterAnwenden()` setzt `hidden-row` an Zeilen und `hidden` an Gruppen
+  (gleiche Regel `matchesFilter` wie `renderGroups`), `bereicheZeigen()` blendet Bereichsüberschriften ohne sichtbare
+  Gruppe aus.
+- **Wechsel „Preise für“:** `angebotZellen()` ersetzt nur Kopf, Vorwoche, Preiszelle und Zustand jeder Zeile.
+- **Zurück in den Editor:** `loadAux()` frischt Vorwoche und Bestand nur auf, wenn sie sich seit dem letzten Zeichnen
+  geändert haben (`auxStand`).
+- **CSS:** `#groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px }` – Gruppen außerhalb des
+  Bildschirms werden nicht gestylt, gesetzt und gezeichnet (beim Drucken aus).
+
+Neue Funktionen im Editor halten das bei: Ausgabe einer Zeile nur über `rowHTML`/`stdCellHTML`/`variantCellHTML`, damit
+Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit Playwright: Zeit vom Klick bis zwei
+`requestAnimationFrame` später, Aufteilung über CDP `Performance.getMetrics`.
+
 ### Dialoge, Bestätigung, Toast
 
 - Alle Fenster sind native `<dialog class="modal">` (breit: `modal wide`) **in `admin/index.html`**, Inhalt als

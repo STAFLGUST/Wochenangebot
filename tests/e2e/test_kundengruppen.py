@@ -6,7 +6,7 @@ import sys
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client
-from umgebung import BASE, FIX, SH, storage_raw
+from umgebung import BASE, FIX, SH, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 CSV1 = FIX + '/kundengruppen/kundengruppen.csv'
@@ -43,6 +43,19 @@ check('ungültige Nummer abgewiesen', ed.call('kundengruppen_save', {'rev': 0, '
 st, r = ed.call('kundengruppen_save', {'rev': 0, 'groups': [{'nr': '20', 'name': 'Zwanzig', 'klasse': '300'}, {'nr': '3', 'name': 'Drei <b>'}], 'quelle': 'Test'})
 check('Bearbeiter speichert, Liste nach Nummer sortiert', st == 200 and [g['nr'] for g in r['groups']] == ['3', '20'] and r['neu'] == 2 and r['groups'][0]['name'] == 'Drei <b>')
 check('veraltete Revision abgewiesen', ed.call('kundengruppen_save', {'rev': 0, 'groups': []})[0] == 409)
+# Felder, die eine Anfrage nicht enthält, und Felder einer neueren Fassung bleiben erhalten (GR-006)
+kg = doc('kundengruppen')
+kg['zukunft'] = 1
+for g in kg['groups']:
+    if g['nr'] == '20': g['farbe'] = 'blau'
+storage_write('kundengruppen', kg)
+st, r = ed.call('kundengruppen_save', {'rev': r['rev'], 'groups': [{'nr': '20', 'name': 'Zwanzig neu'}, {'nr': '3', 'name': 'Drei <b>', 'klasse': ''}]})
+kg = doc('kundengruppen')
+g20 = next((g for g in kg['groups'] if g['nr'] == '20'), {})
+check('ohne „klasse“ gesendet: Klasse bleibt, Name geändert, unbekannte Felder bleiben', st == 200 and g20.get('klasse') == '300' and g20.get('name') == 'Zwanzig neu'
+      and g20.get('farbe') == 'blau' and kg.get('zukunft') == 1 and r['geaendert'] == 1, (st, kg))
+st, r = ed.call('kundengruppen_save', {'rev': r['rev'], 'groups': [{'nr': '20', 'name': 'Zwanzig', 'klasse': ''}, {'nr': '3', 'name': 'Drei <b>'}]})
+check('absichtlich geleerte Klasse wird geleert', st == 200 and next(g for g in doc('kundengruppen')['groups'] if g['nr'] == '20')['klasse'] == '', r)
 check('Bearbeiter ohne Kundenrecht sieht keine Kundenanzahl', 'kunden' not in ed.call('kundengruppen')[1])
 check('Protokoll: Kundengruppen gespeichert', 'Kundengruppen aus „Test“ übernommen: 2 neu' in json.dumps(admin.call('log')[1], ensure_ascii=False))
 
