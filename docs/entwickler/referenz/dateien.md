@@ -470,6 +470,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |
 | `test_modulverwaltung.py` | plattform | Modulverwaltung (Roadmap 5, GR-102) |
 | `test_nutzer_anlegen.py` | plattform | Verwaltung → Nutzer anlegen |
+| `test_oidc_dashboard.py` | plattform | Dashboard-Host (dashboard-stafl.de): nur Grundaktionen (lib/herkunft.php, host_nur_grundaktionen, GR-109). |
 | `test_oidc_kern.py` | plattform | Zentrale Anmeldung – Verhalten der Anwendung ohne Keycloak (lib/oidc.php, GR-110). |
 | `test_order_management.py` | angebot | Testgruppe order_management |
 | `test_order_management_ui.py` | angebot | Artikelnummer als normale Tabellenzelle (Klasse „mono“ ist in app.css das runde Kategorie-Monogramm) |

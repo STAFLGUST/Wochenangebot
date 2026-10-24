@@ -570,19 +570,29 @@ with sync_playwright() as pw:
     check('status: angemeldet, zentrale Anmeldung, kein eigener 2FA-Zwang', st.get('loggedIn') and st['user'].get('zentral') and not st['user'].get('needTwofa'), st.get('user'))
     csrf = st.get('csrf', '')
     js_post = "([a, b, t]) => fetch('../api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: JSON.stringify(b)}).then(async r => [r.status, await r.json().catch(() => ({}))])"
+    # Dashboard-Host: nur Grundaktionen (Status, Modulübersicht, Darstellung, Abmelden) – alles andere „gibt es unter dieser
+    # Adresse nicht“ (404, lib/herkunft.php host_nur_grundaktionen); eigene Anmeldeverfahren sind ohnehin gesperrt (403)
     for a in ('login', 'login_2fa', 'setup', 'change_password', 'twofa_begin', 'passkey_begin', 'passkey_login_begin', 'reauth', 'kunde_login'):
         code, j = pg.evaluate(js_post, [a, {'username': 'admin', 'password': PW_ALT}, csrf])
-        check(f'eigenes Anmeldeverfahren auf Keycloak-Host gesperrt: {a} → 403', code == 403 and 'zentral' in j.get('error', ''), (code, j))
+        check(f'eigenes Anmeldeverfahren auf dem Dashboard-Host nicht verfügbar: {a} → 403/404', (code == 403 and 'zentral' in j.get('error', '')) or (code == 404 and 'Adresse' in j.get('error', '')), (code, j))
     code, j = pg.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", csrf)
-    check('Rechte bleiben bei uns: Bearbeiterin darf keine Sicherheitseinstellungen lesen (403)', code == 403, (code, j))
+    check('Dashboard-Host: Sicherheitseinstellungen nicht abrufbar (404)', code == 404, (code, j))
     code, _ = pg.evaluate(js_post, ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, csrf])
-    check('Rechte bleiben bei uns: Bearbeiterin legt keine Nutzer an', code == 403, code)
+    check('Dashboard-Host: keine Nutzerverwaltung (404)', code == 404, code)
+    for a in ('draft', 'bestellungen', 'kunden', 'stock', 'history_list'):
+        code = pg.evaluate("a => fetch('../api/?action=' + a).then(r => r.status)", a)
+        check(f'Dashboard-Host: Fachaktion {a} nicht verfügbar (404, Modulzugang nicht umgehbar)', code == 404, code)
+    check('Dashboard-Host: Modulübersicht weiter erreichbar', pg.evaluate("fetch('../api/?action=module_status').then(r => r.status)") == 200)
 
     # ── Single Sign-on in die zweite Anwendung, aber eigene Sitzung je Host ──
     pa = eigene_seite(ctx.new_page())
     pa.goto(A + '/admin/'); pa.wait_for_function("location.host.startsWith('angebot.')")
     sta = pa.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('Single Sign-on: Mitarbeiter-Eingabe ohne erneute Eingabe angemeldet', sta.get('loggedIn') and sta['user']['username'] == 'erika', sta.get('user'))
+    code, j = pa.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", sta.get('csrf', ''))
+    check('Rechte bleiben bei uns: Bearbeiterin darf keine Sicherheitseinstellungen lesen (403)', code == 403, (code, j))
+    code, _ = pa.evaluate(js_post, ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, sta.get('csrf', '')])
+    check('Rechte bleiben bei uns: Bearbeiterin legt keine Nutzer an', code == 403, code)
     ka = kekse(ctx, 'angebot.stafl.test')
     check('eigene Sitzung je Host: andere Cookie-Werte auf angebot', ka.get('__Host-oidc_sitzung', {}).get('value') not in (None, k.get('__Host-oidc_sitzung', {}).get('value'))
           and ka.get('__Host-WA_ADMIN', {}).get('value') != k.get('__Host-WA_ADMIN', {}).get('value'), sorted(ka))
