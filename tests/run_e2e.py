@@ -100,6 +100,7 @@ SUITES['aktionsregister'] = (8790, 'data-seed', True)   # Register wirkt für je
 SUITES['herkunft'] = (8790, 'data-seed', True)   # Herkunftsprüfung im API-Einstieg (GR-109), fremde Seite auf AUX_PORT
 SUITES['dashboard'] = (8790, 'data-seed', True)   # Mitarbeiter-Dashboard (dashboard/, liegt außerhalb von app/)
 SUITES['oidc_kern'] = (8790, 'data-seed', True, {'WA_OIDC': '1', 'WA_OIDC_ISSUER': 'https://login.example/realms/mitarbeiter', 'WA_OBERFLAECHE': 'angebot.eingabe'})   # Keycloak-Host ohne Modul (GR-110, GR-109)
+SUITES['oidc_dashboard'] = (8790, 'data-seed', True, {'WA_OIDC': '1', 'WA_OIDC_ISSUER': 'https://login.example/realms/mitarbeiter', 'WA_OBERFLAECHE': 'dashboard.start'})   # Dashboard-Host: nur Grundaktionen (GR-109)
 SUITES['modulverwaltung'] = (8790, 'data-seed', True)   # Freigabe und Tester zur Laufzeit (Roadmap 5)
 SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitzungs-Cookies über HTTPS (GR-108)
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
@@ -128,7 +129,7 @@ GEWICHT = {
     'passwortpruefung': 6, 'bestaetigung': 6, 'geo_ip': 6, 'integritaet': 6, 'sitzung_cookie': 6, 'design': 5,
     'testumgebung': 5, 'modul_wartung': 5, 'bestand_pdf': 5, 'modulverwaltung': 4, 'order_outbox_ui': 4,
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
-    'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1,
+    'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1, 'oidc_dashboard': 1,
     'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
     'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
