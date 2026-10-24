@@ -307,11 +307,13 @@ Bei jedem Pull Request und jedem Commit auf `main` läuft `.github/workflows/ci.
 - **Ende-zu-Ende-Tests:** 2 Speicherarten × 3 Teile, je 4 Gruppen parallel (`WA_JOBS=4`); Pflicht-Check
   „Ende-zu-Ende-Tests“ nur grün, wenn alle sechs Teile grün sind.
 - **Anmeldung über Keycloak (nur CI):** `tests/oidc/` vollständig.
+- **App prüfen (iOS, Android, Web):** Typprüfung, Unit-Tests und Bundles der App (`mobile/`), dann die Gruppe `app_web`
+  gegen den Web-Build in beiden Speicherarten (die E2E-Teile überspringen `app_web`, ihnen fehlt der Build).
 - Dazu Anwendungs-Image und Betriebsskripte (`tests/deploy/`).
 - Auf `main` werden die schweren Aufträge übersprungen, wenn der PR genau denselben Inhalt schon vollständig geprüft hat
   ([`docs/release-freigabe.md`](../release-freigabe.md), „Keine Doppelprüfung nach dem Merge“).
 
-Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>` bzw. `oidc-ergebnisse` herunterladen (Protokolle und
+Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>`, `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
 Bildschirmfotos), Gruppe lokal mit `WA_JOBS=1 python3 tests/run_e2e.py <gruppe>` nachstellen.
 
 Stand: 2026-10-24

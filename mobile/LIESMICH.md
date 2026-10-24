@@ -40,6 +40,9 @@ Die Ende-zu-Ende-Gruppe `app_web` testet den Web-Build der App gegen einen echte
 Speicherarten). Das Verhalten auf echten Geräten (Tastatur, Schlüsselbund, Systemdialoge) prüft sie nicht – dafür
 die Vorschau-Builds unten auf einem iPhone und einem Android-Gerät ausprobieren.
 
+Die CI prüft all das bei jedem Pull Request im Auftrag „App prüfen (iOS, Android, Web)“: Typprüfung, Unit-Tests,
+Bundles für iOS und Android, Web-Build und `app_web` in beiden Speicherarten.
+
 **Server wählen:** In der App siebenmal auf die Versionsnummer (Konto) tippen → „Server“: Echtbetrieb oder
 Testumgebung. Benutzer und Passwort der Testumgebung gibt man dort am Gerät ein; sie liegen nur im sicheren
 Speicher des Geräts und nie im Quellcode.
