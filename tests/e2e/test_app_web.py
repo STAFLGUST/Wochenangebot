@@ -199,6 +199,9 @@ with sync_playwright() as p:
     check('erneutes Senden ergibt keinen zweiten Bestellwunsch', len(orders) == 2 and len(smtp.messages) == 2)
     page.click('text=Weiter im Angebot')
     page.wait_for_selector(T('angebot-titel'), timeout=30000)   # Wechsel abwarten, sonst bricht das Neuladen ab (ERR_ABORTED)
+    # Die Adresse wechselt im Web-Build erst nach dem Bildschirm; ohne dieses Warten lud das Neuladen in der CI
+    # gelegentlich wieder den (leeren) Bestellwunsch statt des Angebots – dort gibt es keinen Offline-Hinweis
+    page.wait_for_url('**/angebot*', timeout=15000)
     page.wait_for_load_state('networkidle')
 
     # ---------- offline: gespeichertes Angebot mit Hinweis ----------
