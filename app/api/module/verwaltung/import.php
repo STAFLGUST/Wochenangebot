@@ -174,18 +174,19 @@ function gruppen_zuordnungen(string $liste): array
 function gruppen_speichern(string $liste, $groups, int $rev, array $me, string $quelle = ''): array
 {
     $L = GRUPPEN_LISTEN[$liste];
-    $groups = gruppen_clean($liste, $groups);
     $res = with_lock($liste, function () use ($rev, $groups, $me, $liste, $L) {
         $cur = gruppen_load($liste);
         if ($rev !== $cur['rev']) fail("Die {$L['viele']} wurden inzwischen an anderer Stelle geändert. Bitte neu laden.", 409);
         $alt = []; foreach ($cur['groups'] as $g) $alt[$g['nr']] = $g;
+        $groups = gruppen_clean($liste, $groups, $alt);   // unter der Sperre: nicht gesendete und unbekannte Felder bleiben
         $neu = 0; $geaendert = 0;
         foreach ($groups as $g) { if (!isset($alt[$g['nr']])) $neu++; elseif ($alt[$g['nr']] != $g) $geaendert++; unset($alt[$g['nr']]); }
-        $d = ['rev' => $cur['rev'] + 1, 'groups' => $groups, 'updatedAt' => now(), 'updatedBy' => $me['name']];
+        $d = ['rev' => $cur['rev'] + 1, 'groups' => $groups, 'updatedAt' => now(), 'updatedBy' => $me['name']]
+           + (is_array($roh = store_read($liste)) ? $roh : []);   // weitere Felder einer neueren Fassung bleiben (GR-006)
         store_write($liste, $d);
-        return [$d, $neu, $geaendert, count($alt)];
+        return [$d, $neu, $geaendert, count($alt), $groups];
     });
-    [$d, $neu, $geaendert, $weg] = $res;
+    [$d, $neu, $geaendert, $weg, $groups] = $res;
     if ($neu || $geaendert || $weg) audit('master', $L['viele'] . ' ' . ($quelle !== '' ? "aus „{$quelle}“ übernommen" : 'gespeichert') . ": $neu neu, $geaendert geändert, $weg entfernt (" . count($groups) . ' insgesamt)');
     return ['rev' => $d['rev'], 'groups' => $d['groups'], 'neu' => $neu, 'geaendert' => $geaendert, 'entfernt' => $weg];
 }
@@ -207,9 +208,9 @@ function gruppen_import_vorschau(array $e, array $me): array
     if (!$roh) fail("Keine {$L['viele']} in der Datei gefunden.", 422);
     $zeileVon = [];
     foreach ($roh as $g) if (is_array($g) && is_scalar($g['nr'] ?? null)) $zeileVon[(string)$g['nr']] = import_zeilennr($g);
-    $groups = gruppen_clean($liste, $roh);
     $cur = gruppen_load($liste);
     $alt = []; foreach ($cur['groups'] as $g) $alt[$g['nr']] = $g;
+    $groups = gruppen_clean($liste, $roh, $alt);
     $LABEL = ['name' => $liste === 'vertreter' ? 'Name' : 'Bezeichnung', 'kurz' => 'Kurzname', 'klasse' => 'Klasse', 'kategorie' => 'Kategorie',
               'telefon' => 'Telefon', 'plz' => 'PLZ', 'ort' => 'Ort', 'land' => 'Land'];
     $z = []; $n = ['neu' => 0, 'geaendert' => 0, 'entfaellt' => 0, 'unveraendert' => 0, 'fehler' => 0];

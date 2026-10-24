@@ -254,10 +254,15 @@ Weitere Felder: `weekly` (zuletzt gesendetes Wochenangebot), `mailLast` (letzte 
 `abgemeldet`; im Zugang `login` u. a. `pwSet`, `mustChangeGrund`, `geraete` und `token` (Einmal-Link
 `{h: SHA-256, exp, p: Zweck, t}`, nie der Link selbst). `login: null` = kein Portalzugang. Freigeschaltete Angebote
 berechnet `customer_offers()` aus `angebote` (direkt) und der Kundengruppe.
+`kunde_save` ändert nur, was die Anfrage enthält: fehlende Felder (auch `angebote`, `active`, `mailAngebot`) bleiben,
+fehlendes `login` lässt den Zugang unverändert (entfernt wird er nur mit `login: null` oder `{remove: true}`), ein
+leerer Text leert das Feld; Felder, die dieser Stand nicht kennt, bleiben erhalten (GR-006).
 
 **`kundengruppen`**, **`vkgruppen`**, **`vertreter`**: je Liste `{"rev": 2, "groups": [{"nr": "10", "name": "…", …}], "updatedAt": "…", "updatedBy": "…"}`;
 Felder je Liste in `GRUPPEN_LISTEN` (`lib/kunden.php`): Kunden- und VK-Gruppen `name`, `klasse`, `kategorie`;
 Vertreter `name`, `kurz`, `telefon`, `plz`, `ort`, `land`. Nummer `^[0-9A-Za-z._-]{1,10}$`, höchstens 2000.
+Gespeichert wird immer die ganze Liste (fehlende Nummern entfallen); je Eintrag bleiben nicht gesendete Felder und
+unbekannte Felder der gespeicherten Fassung erhalten (`gruppen_clean` mit `$alt`), ebenso weitere Felder des Dokuments.
 
 **`stammdaten`**: Artikelstammdaten aus `clean_master()`.
 `{"rev": 12, "updatedAt": "…", "updatedBy": "…", "articles": [{"code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE", "condition": "frisch", "vkGruppe?": "200", "gtin?": "4000000000000"}]}`.
