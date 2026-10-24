@@ -5,7 +5,7 @@ from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
-from umgebung import SH
+from umgebung import SH, storage_raw, storage_write
 from testdaten import de, preis
 B = BASE
 res = []
@@ -20,6 +20,20 @@ def post(pg, action, body):
       const r = await fetch('/api/?action=' + a, {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf || ''}, body: JSON.stringify(b)}); let j=null; try { j = await r.json(); } catch(e) {} return [r.status, j]; }""", [action, body])
 def get(pg, q):
     return pg.evaluate("""async (q) => { const r = await fetch('/api/?action=' + q); let j=null; try { j = await r.json(); } catch(e) {} return [r.status, j]; }""", q)
+def bestaetigt(pg, toast_text, timeout=15000):
+    # Löschen braucht eine Bestätigung jünger als 5 Minuten (Anmeldung zählt). Läuft der Test unter Last länger, fragt
+    # die Oberfläche nach dem Passwort – dann bestätigen, statt am Zeitfenster zu scheitern.
+    sel = f'#toast.show:has-text("{toast_text}")'
+    pg.wait_for_function("""(t) => document.querySelector('#dlg-reauth[open]')
+        || ((x) => x && x.classList.contains('show') && x.textContent.includes(t))(document.querySelector('#toast'))""", arg=toast_text, timeout=timeout)
+    if pg.locator('#dlg-reauth[open]').count():
+        pg.fill('#reauth-password', 'Sicheres-Passwort-1'); pg.click('#reauth-submit')
+        pg.wait_for_selector(sel, timeout=timeout)
+def post_bestaetigt(pg, action, body):
+    r = post(pg, action, body)
+    if r[0] == 403 and (r[1] or {}).get('code') == 'confirmation_required':
+        post(pg, 'reauth', {'password': 'Sicheres-Passwort-1'}); r = post(pg, action, body)
+    return r
 def row(pg, code): return pg.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])').first
 def wait_saved(pg): pg.wait_for_function("document.querySelector('#save-state').className.includes('saved') || /Keine Änderungen/.test(document.querySelector('#save-state').textContent)", timeout=8000)
 def tab(pg, label): return pg.locator(f'#offer-bar [data-offer]:has-text("{label}")').first
@@ -130,13 +144,47 @@ with sync_playwright() as p:
     # Admin löscht Angebot
     a.click('[data-ob=manage]'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
     a.locator('#view-angebote tr[data-oi]:has(input[value*="Metro"]) [data-ofa=del]').click(); a.click('#dlg-confirm [data-v="1"]')
-    a.click('[data-ofa=save]'); a.wait_for_selector('#toast.show:has-text("Angebote gespeichert")', timeout=8000)
+    a.click('[data-ofa=save]'); bestaetigt(a, 'Angebote gespeichert')
     a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
     check('admin deletes offer: tab gone', tab(a, 'Metro').count() == 0)
     r = get(a, f'offer&angebot={metro}'); check('deleted offer not deliverable (404)', r[0] == 404, r[0])
+    # Gleichnamiges Angebot neu anlegen: die alte ID (mit Kundenpreis 19,50 im veröffentlichten Angebot) wird nie wiederverwendet
+    cur = get(a, 'offers')[1]
+    r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': metro, 'name': 'Wochenangebot Metro', 'fallback': 'hidden'}]})
+    neu = next((o for o in (r[1] or {}).get('offers', []) if o['name'] == 'Wochenangebot Metro'), {})
+    check('neues Angebot mit Namen eines gelöschten: neue ID statt der alten', r[0] == 200 and neu.get('id') not in (None, metro) and neu['id'].startswith(metro + '-'), (r[0], neu))
+    r = get(a, f"offer&angebot={neu.get('id')}")
+    check('… keine alten Kundenpreise (Regel „ausblenden“: keine Artikel)', r[0] == 200 and r[1]['offer']['items'] == [], r[1]['offer']['items'][:2] if r[0] == 200 else r)
+    check('… alte ID bleibt unbekannt (404)', get(a, f'offer&angebot={metro}')[0] == 404)
+    cur = get(a, 'offers')[1]
+    doc = json.loads(storage_raw('angebote')[storage_raw('angebote').index('{'):])
+    check('… gelöschte ID vermerkt (geloescht)', metro in doc.get('geloescht', []), doc.get('geloescht'))
+    # Speichern ohne „fallback“ (älterer Client): Einstellung bleibt; Felder einer neueren Fassung bleiben erhalten
+    doc['zukunft'] = {'x': 1}
+    for o in doc['offers']:
+        if o['id'] == neu.get('id'): o['zukunftsfeld'] = 'bleibt'
+    storage_write('angebote', doc)
+    cur = get(a, 'offers')[1]
+    r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': [{'id': o['id'], 'name': o['name']} for o in cur['offers']]})
+    nach = {o['id']: o for o in (r[1] or {}).get('offers', [])}
+    check('ohne „fallback“: bisherige Einstellung bleibt (ausblenden)', r[0] == 200 and nach.get(neu.get('id'), {}).get('fallback') == 'hidden', r)
+    doc = json.loads(storage_raw('angebote')[storage_raw('angebote').index('{'):])
+    check('unbekannte Felder (Angebot und Dokument) bleiben erhalten', doc.get('zukunft') == {'x': 1} and next(o for o in doc['offers'] if o['id'] == neu.get('id')).get('zukunftsfeld') == 'bleibt' and metro in doc.get('geloescht', []), doc)
+    cur = get(a, 'offers')[1]
+    r = post_bestaetigt(a, 'offers_save', {'rev': cur['rev'], 'offers': [o for o in cur['offers'] if o['id'] != neu.get('id')]})
+    check('… wieder gelöscht', r[0] == 200, r)
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     # Protokoll
     log = json.dumps(get(a, 'log')[1], ensure_ascii=False)
     check('audit: offers + offer prices logged', 'Angebote geändert' in log and 'Preis Wochenangebot Edeka' in log)
+    # Zwei Veröffentlichungen direkt nacheinander: verschiedene, steigende Stände (Bestellwünsche prüfen gegen genau diesen)
+    d = get(a, 'draft')[1]
+    mdl = d['draft'] or d['published']
+    r1 = post(a, 'publish', {'revision': d['revision'], 'model': mdl})
+    r2 = post(a, 'publish', {'revision': r1[1].get('revision') if r1[1] else None, 'model': mdl})
+    p1, p2 = (r1[1] or {}).get('publishedAt', ''), (r2[1] or {}).get('publishedAt', '')
+    check('zweimal in derselben Sekunde veröffentlicht: verschiedene, steigende Stände', r1[0] == 200 and r2[0] == 200 and p1 and p2 and p2 > p1 and p1[:19] <= p2[:19], (r1[0], r2[0], p1, p2))
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     # Mobil
     m = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True); m.on('pageerror', lambda x: errs.append('m: ' + str(x)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_timeout(300)

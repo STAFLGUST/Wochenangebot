@@ -108,6 +108,11 @@ code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'q
 check('new tier applies', code == 200 and r['fracht']['kosten'] == 20.5 and r['fracht']['unter'] == 100)
 code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'qty': 120}]})
 check('at/above the limit: delivered freight-free', code == 200 and r['fracht']['kosten'] == 0)
+# Summe aus Gleitkommazahlen: 183,29 + 93,87 + 22,84 = 299,99999… – genau an der Grenze frachtfrei (wie angezeigt: 300 kg)
+A.call('fracht_save', {'aktiv': True, 'staffeln': [{'unter': 300, 'kosten': 30}], 'zusatz': ''})
+drei = [it['id'] for it in off['offer']['items']][:3]
+code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': drei[0], 'qty': 183.29}, {'id': drei[1], 'qty': 93.87}, {'id': drei[2], 'qty': 22.84}]})
+check('genau 300 kg aus drei Positionen: frachtfrei', code == 200 and r['totalQty'] == 300 and r['fracht']['kosten'] == 0, (code, r.get('totalQty'), r.get('fracht')))
 A.call('fracht_save', {'aktiv': False, 'staffeln': [{'unter': 100, 'kosten': 20.5}], 'zusatz': ''})
 code, r = K.call('kunde_bestellung', {**order, 'positions': [{'id': I1['id'], 'qty': 1}]})
 check('freight rule off: nothing added, note without minimum', code == 200 and r['fracht']['kosten'] == 0 and r['fracht']['frei'] is None and 'Mindestbestellmenge' not in str(K.call('offer&angebot=edeka')[1]['fracht']['hinweis']))

@@ -351,8 +351,10 @@ Registersymbole (`icon` in `regeln/module.toml`) über `ICON` in `dashboard.js` 
 - Schrift Geist / Geist Mono lokal aus `app/assets/fonts/` (`--font`, `--mono`); keine fremden Server.
 - Mobil wird mit **390 px** geprüft (Definition of Done), Dashboard und Kundenseite zusätzlich bis 360 px. Häufigste
   Grenzen in den Stylesheets: 560, 640 und 860 px; im Eingabebereich zusätzlich 900 px (Fingerbedienung,
-  `pointer: coarse`: Bedienelemente ≥ 36 px) und 1600 px (Kopfzeile). Nie waagerechtes Scrollen der Seite – breite
-  Tabellen scrollen in ihrer Karte.
+  `pointer: coarse`: Bedienelemente ≥ 36 px) und 1600 px (Kopfzeile). Bei Fingerbedienung gilt überall (`app.css`):
+  Kästchen `.check`/`.opt` 20 px in einer mindestens 36 px hohen Zeile. Nie waagerechtes Scrollen der Seite – breite
+  Tabellen scrollen in ihrer Karte; Auswahlfelder, deren Text sonst abgeschnitten würde, bekommen auf schmalen
+  Bildschirmen eine eigene Zeile (Sortierung der Kundenseite ≤ 480 px).
 - Kontrast ≥ 4,5:1 hell und dunkel (u. a. Gruppen `design`, `sidenav`, `dashboard` messen das).
 - Fokus: `:focus-visible { outline: none; box-shadow: var(--focus); }` aus `app.css`; Modulseiten mit eigenem
   `--…-fokus`. Fokus nie ersatzlos entfernen.
