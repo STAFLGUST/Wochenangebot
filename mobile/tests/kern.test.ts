@@ -171,6 +171,9 @@ describe('Bestellwunsch', () => {
     expect(s.kg).toBe(3.33);
     expect(s.fehlend).toEqual(['weg']);
     expect(zeilenSumme(10.995, 3)).toBe(33);   // 1100 Cent × 3
+    expect(zeilenSumme(1.005, 1)).toBe(1.01);   // wie PHP round(): 101 Cent (Math.round(100.49999…) ergäbe 100)
+    expect(zeilenSumme(0.285, 1)).toBe(0.29);
+    expect(zeilenSumme(0.145, 1)).toBe(0.15);
   });
   test('Fracht wie lib/fracht.php', () => {
     expect(frachtFuer(FRACHT, 120)).toEqual({ kosten: 35, unter: 200, frei: 300 });
