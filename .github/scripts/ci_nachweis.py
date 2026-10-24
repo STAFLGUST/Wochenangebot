@@ -33,7 +33,8 @@ WORKFLOW = '.github/workflows/ci.yml'
 NACHWEIS_PREFIX = 'Vollständig geprüft (Stand '
 # Muss zu den Auftragsnamen in ci.yml passen (tests/unit/test_ci_nachweis.py prüft das).
 PFLICHT = ['Schon im Pull Request geprüft?', 'Statische Prüfungen', 'Sicherheitsprüfungen', 'Anwendungs-Image prüfen',
-           'Sicherung und Release-Prozess', 'Ende-zu-Ende-Tests', 'Anmeldung über Keycloak (nur CI)']
+           'Sicherung und Release-Prozess', 'Ende-zu-Ende-Tests', 'Anmeldung über Keycloak (nur CI)',
+           'App prüfen (iOS, Android, Web)']
 ERLAUBT_UEBERSPRUNGEN = {'Release zur Freigabe vorlegen', 'Prüfung aus Pull Request übernommen'}
 HEX40 = re.compile(r'^[0-9a-f]{40}$')
 # Die gefilterte Läufe-Suche der API liefert gelegentlich (gemessen: 1–2 von 8 Abfragen) eine leere Liste für einen
