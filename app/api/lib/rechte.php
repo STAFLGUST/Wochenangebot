@@ -172,6 +172,10 @@ function require_perm_confirmed(string $perm, string $key = ''): array
     confirmation_locked($u);
     $at = (int)($_SESSION['adminConfirmedAt'] ?? 0);
     if ($at <= time() && $at > time() - bestaetigung_sekunden() && (int)($_SESSION['adminConfirmedSv'] ?? -1) === (int)$u['sv']) return $u;
+    // Keycloak-Host: kein eigenes Passwort – Bestätigung durch erneute Anmeldung bei Keycloak, wie bei Administratoren
+    // (require_admin_confirmation). Ohne diese Zeile bekäme die Oberfläche „confirmation_required“, öffnete die
+    // Passwortabfrage und liefe in die dort gesperrte Aktion reauth (403) – die Aktion wäre nicht mehr bestätigbar.
+    if (oidc_modus()) oidc_neu_anmelden();
     respond(['ok' => false, 'code' => 'confirmation_required', 'error' => 'Bitte bestätigen Sie diese Aktion mit Ihrem aktuellen Passwort.'], 403);
 }
 
