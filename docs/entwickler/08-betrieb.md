@@ -33,7 +33,7 @@ den Release vorlegt.
 | Statische Prüfungen (`statisch`) | siehe Liste unten | immer |
 | Sicherheitsprüfungen (`sicherheit`) | gitleaks über den Verlauf bis `HEAD` (`.gitleaks.toml`, Version und Prüfsumme fest); Trivy: `tests/requirements.txt` (HIGH/CRITICAL blockiert), Images aus `docker-compose.yml` (nur Bericht) | immer |
 | Anwendungs-Image prüfen (`image`) | `deploy/image/pruefen.sh` (Bau, Vergleich mit `php:8.3-apache`); `deploy/anmeldung/pruefen.sh` mit festen Keycloak-/PostgreSQL-Digests; Trivy auf `stafl-app:pruefung` (CRITICAL mit Korrektur blockiert, HIGH als Bericht) | nach `statisch`, außer übernommen |
-| Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_testumgebung.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_konten_pruefen.sh` | nach `statisch`, außer übernommen |
+| Sicherung und Release-Prozess (`betrieb`) | `tests/deploy/`: `test_datenbank.py`, `test_sqlite_http.sh`, `test_sichern.sh`, `test_freigabe.sh`, `test_testumgebung.sh`, `test_release_pruefen.sh`, `test_anmeldung_einrichten.sh`, `test_notzugang.sh`, `test_konten_pruefen.sh`, `test_speicher.sh` | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (*speicherart*, Teil *k*/3) (`e2e`) | Matrix `storage: [files, sqlite]` × `teil: [1, 2, 3]`; `.github/scripts/testumgebung.sh e2e`, dann `python tests/run_e2e.py` mit `WA_JOBS=4`; Artefakt bei Fehler | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (`e2e_required`) | fester Name für den Branchschutz; grün nur, wenn alle sechs Teile grün sind | nach `e2e` |
 | Anmeldung über Keycloak (nur CI) (`oidc`) | `testumgebung.sh oidc`, `tests/oidc/umgebung.sh start`, `tests/oidc/test_oidc.py`, `stop`; Artefakt `oidc-ergebnisse` | nach `statisch`, außer übernommen |
@@ -73,7 +73,7 @@ Sicherheitsprüfungen laufen trotzdem. Bei jedem Zweifel läuft die volle CI. Ei
 | Zwischenspeicher | `.github/workflows/zwischenspeicher.yml` | Push auf `main`, montags (Zeitplan), von Hand, PR nur bei Änderungen am Ablauf | füllt Paketvorrat (`testumgebung.sh vorrat`) und Keycloak/Caddy-Downloads (`tests/oidc/umgebung.sh laden`) für E2E und Keycloak; übernommen werden Pakete nur mit passender Prüfsumme (`.github/scripts/apt_vorrat.py`) |
 | CI-Nachweis (Trockenlauf) | `.github/workflows/ci-nachweis.yml` | von Hand | zeigt, ob ein `main`-Commit die PR-Prüfung übernehmen würde und warum (nicht); ändert nichts, zählt nicht als CI |
 
-Die App-Prüfung `mobile/` (`npm run pruefen`) ist in keinem Workflow enthalten.
+Die App `mobile/` prüft die CI im Auftrag „App prüfen (iOS, Android, Web)“ (Typprüfung, Unit-Tests, Bundles, `app_web`).
 
 ## 8.3 Release-Ablauf vom Merge bis zum Server
 
@@ -180,6 +180,7 @@ enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 5
 | `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen | Inhaber |
 | `passwort-zuruecksetzen.sh` | Notfall: Passwort eines Nutzers zurücksetzen bzw. Administrator neu anlegen | Inhaber |
 | `ip-freigabe-aus.sh` | Notfall: IP-Freigabe und Ländersperre ausschalten | Inhaber |
+| `speicher.sh` | Speicherbelegung anzeigen (nur lesend); `aufraeumen`: Docker-Bauzwischenspeicher und ungenutzte Images entfernen – nie Daten, Sicherungen, Volumes, Container oder `stafl-app:*` (Rückfall-Image) | Inhaber, bei Bedarf |
 | `anmeldung/einrichten.sh` | Geheimnisse der Anmeldung in `.env` ergänzen, Realm-Import vorbereiten; `--pruefen` | Inhaber, Inbetriebnahme |
 | `anmeldung/konten.sh` | Keycloak-Konten und Realm verwalten (siehe unten) | Inhaber |
 | `anmeldung/ruecksicherung-probe.sh` | Rücksicherung der Keycloak-Datenbank in eine Probedatenbank üben | Inhaber |
@@ -227,6 +228,21 @@ sh deploy/testumgebung.sh status | starten | stoppen
 
 Ein manuelles `docker compose down` im Echtbetrieb scheitert, solange die Testumgebung läuft (vorher `stoppen`). Die
 Keycloak-Anmeldung gibt es in der Testumgebung nicht; sie wird nur in der CI geprüft (GR-111).
+
+### Speicherplatz
+
+- Container-Protokolle sind in allen Compose-Dateien auf 3 × 10 MB je Dienst begrenzt (`logging`, Treiber `json-file`).
+  Ohne Begrenzung wächst das Protokoll der App mit jedem Seitenaufruf (Apache schreibt jede Anfrage ins Docker-Log).
+  Die Begrenzung gilt für Container, die nach der Änderung erstellt werden – also ab dem nächsten Release, das die
+  Container neu erstellt; dabei verschwinden auch die alten, unbegrenzten Protokolle.
+- Begrenzt im Code: `versionen/*` (`keep_versions`), `mailversand` (3000), `verkehr` (`FW_VERKEHR_MAX`),
+  `crm-aktivitaeten`, `anmeldeorte` (90 Tage), Sitzungen (Ablauf), Sicherungen (je 30 Stände).
+- Unbegrenzt, weil fachlich gewollt: `bestellungen` (Geschäftsvorgänge, Aufbewahrungspflicht), `historie/*`
+  (Preisverlauf je Woche), `protokoll/<JJJJ-MM>` (Aktivitätsprotokoll je Monat – Aufbewahrungsdauer ist eine
+  Entscheidung des Inhabers).
+- Prüfen und Aufräumen: `cd /opt/wochenangebot && sh deploy/speicher.sh` (nur anzeigen), `sh deploy/speicher.sh
+  aufraeumen` (Bauzwischenspeicher, alte Images z. B. nach einem Keycloak-Versionswechsel). Release-Läufe entfernen
+  nur hängende Images (`docker image prune -f`).
 
 ### Sicherung
 

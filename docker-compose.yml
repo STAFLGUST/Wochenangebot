@@ -3,6 +3,9 @@ services:
   app:
     image: php:8.3-apache
     restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     volumes:
       - ./app:/var/www/html:ro      # Website (nur lesend)
       - ./daten:/var/www/html/data  # gespeicherte Angebote, Entwurf, Versionen
@@ -23,6 +26,9 @@ services:
   caddy:
     image: caddy:2
     restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     depends_on:
       - app
     ports:
