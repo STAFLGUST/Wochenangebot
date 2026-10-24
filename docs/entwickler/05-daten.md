@@ -288,7 +288,9 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag. `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `personalstelle`, `zeiterfassung`; optional `geaendert`,
-  `urlaubAbzug` (Krankheit vom Urlaub abgezogen).
+  `urlaubAbzug` (Krankheit vom Urlaub abgezogen). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
+  Einträgen derselben Gruppe: Abwesenheiten (U/K/G) untereinander und freie Tage (X) untereinander – ein freier Tag in
+  einer Urlaubswoche zählt dort nur nicht mit.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ]}`.
 
 ### CRM (`module/crm/crm.php`)

@@ -377,11 +377,14 @@ function hr_eintrag_aus(array $e, array $p, array $frei = []): array
             'urlaubAbzug' => !empty($e['urlaubAbzug']), 'erfasst' => $e['erfasst'] ?? null, 'entscheidung' => $e['entscheidung'] ?? null];
 }
 
-/* Überschneidung mit einem aktiven Eintrag derselben Person (außer $ohne) */
-function hr_kollision(array $eintraege, string $person, string $von, string $bis, ?string $ohne = null): ?array
+/* Überschneidung mit einem aktiven Eintrag derselben Person (außer $ohne).
+   $art (Art des neuen Eintrags): freie Tage (X) und Abwesenheiten (U, K, G) schließen sich nicht aus – ein freier Tag
+   zählt bei einer Abwesenheit einfach nicht mit (hr_tage mit $frei). Ohne $art zählt jede Überschneidung (bisheriges Verhalten). */
+function hr_kollision(array $eintraege, string $person, string $von, string $bis, ?string $ohne = null, ?string $art = null): ?array
 {
     foreach ($eintraege as $e) {
         if ($e['person'] !== $person || $e['id'] === $ohne || !in_array($e['status'], HR_AKTIV, true)) continue;
+        if ($art !== null && ($art === 'X') !== (($e['art'] ?? '') === 'X')) continue;
         if ($e['von'] <= $bis && $von <= $e['bis']) return $e;
     }
     return null;

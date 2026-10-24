@@ -95,7 +95,13 @@ function hr_zeit_zuordnen(array $l, array $personal, array $users): array
     $zu = []; $neu = []; $mehrdeutig = []; $aehnlich = [];
     foreach ($l['personen'] as $wer => $x) {
         $treffer = $x['nr'] !== '' ? array_values($nachNr[$x['nr']] ?? []) : [];
-        if (!$treffer) $treffer = array_values($nachName[hr_namekey($x['name'])] ?? []);
+        if (!$treffer) {
+            $treffer = array_values($nachName[hr_namekey($x['name'])] ?? []);
+            // Steht im Bericht eine Personalnummer, zählt ein Namenstreffer nur ohne eigene Personalnummer – sonst ist es eine
+            // andere Person mit gleichem Namen (Urlaub und Krankheit dürfen nie der falschen Person zugebucht werden).
+            // Der Treffer erscheint dann als „ähnlich“-Hinweis (Abstand 0) und wird nie automatisch zugeordnet.
+            if ($x['nr'] !== '') $treffer = array_values(array_filter($treffer, function ($p) { return ($p['personalnummer'] ?? '') === ''; }));
+        }
         if (count($treffer) > 1) { $mehrdeutig[$wer] = $x['name']; continue; }
         if ($treffer) { $zu[$wer] = $treffer[0]; continue; }
         $neu[$wer] = $x;

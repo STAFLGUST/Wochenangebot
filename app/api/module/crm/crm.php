@@ -88,6 +88,13 @@ function crm_firma_nr(string $key): array
     return $c ? [(string)($c['firma'] ?? ''), (string)($c['nr'] ?? '')] : ['', ''];
 }
 
+/* Aktiv-Stand eines Kunden bzw. Interessenten – derselbe Standard für „Aktiv in der Wiedervorlage“ wie in crm_liste */
+function crm_ist_aktiv(string $key): bool
+{
+    if ($key !== '' && $key[0] === 'i') { foreach (crm_interessenten_doc()['liste'] as $i) if ($i['id'] === $key) return !empty($i['aktiv']); return false; }
+    return !empty((crm_stammkunden()[$key] ?? [])['active']);
+}
+
 /* ---------- Prüfen der Eingaben ---------- */
 function crm_datum($v, string $was): string
 {
@@ -192,6 +199,13 @@ function crm_interessent_pruefen(array $b, ?array $alt): array
     if (mb_strlen($row['firma']) < 2) throw new InvalidArgumentException('Bitte den Namen der Firma angeben.');
     $vt = array_column(crm_vertreter(), 'nr');
     foreach (['vertreter', 'vertreter2'] as $f) if ($row[$f] !== '' && $row[$f] !== (string)($alt[$f] ?? '') && !in_array($row[$f], $vt, true)) throw new InvalidArgumentException('Diesen Vertreter gibt es nicht. Vertreter werden in der Verwaltung unter Stammdaten → Vertreter gepflegt.');
+    // Postleitzahl: nur bei Änderung geprüft (ältere Einträge bleiben speicherbar); Deutschland (Land leer oder „Deutschland“/„DE“)
+    // fünfstellig, sonst Ziffern/Buchstaben/Leerzeichen/Bindestrich mit mindestens einer Ziffer (z. B. „1010“, „SW1A 1AA“)
+    if ($row['plz'] !== '' && $row['plz'] !== (string)($alt['plz'] ?? '')) {
+        $de = in_array(mb_strtolower($row['land']), ['', 'deutschland', 'de', 'germany'], true);
+        if ($de ? !preg_match('/^\d{5}$/', $row['plz']) : !preg_match('/^(?=.*\d)[A-Za-z0-9 \-]{3,10}$/', $row['plz']))
+            throw new InvalidArgumentException($de ? 'PLZ: bitte fünf Ziffern angeben.' : 'PLZ: bitte eine gültige Postleitzahl angeben.');
+    }
     $row['aktiv'] = !array_key_exists('aktiv', $b) || !empty($b['aktiv']);
     return $row;
 }

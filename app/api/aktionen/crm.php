@@ -61,10 +61,11 @@ switch ($action) {
                 $neu[$f] = ($F[$f][1])($v);
             }
             [, $nr] = crm_firma_nr($key);
-            with_lock('crm-kunden', function () use ($key, $neu, $me, $nr) {
+            $aktiv = crm_ist_aktiv($key);   // Vergleich mit dem angezeigten Standard (inaktive Kunden: „Aktiv in der Wiedervorlage“ = nein)
+            with_lock('crm-kunden', function () use ($key, $neu, $me, $nr, $aktiv) {
                 $doc = crm_kunden_doc();
                 $alt = $doc['eintraege'][$key] ?? [];
-                $d = crm_protokoll_aenderungen($key, $nr, crm_blatt($alt, $key[0] === 'i', true), $neu);
+                $d = crm_protokoll_aenderungen($key, $nr, crm_blatt($alt, $key[0] === 'i', $aktiv), $neu);
                 if (!$d) return;
                 $doc['eintraege'][$key] = array_merge($alt, $neu, ['geaendert' => now(), 'geaendertVon' => $me['name']]);
                 crm_schreiben('crm-kunden', $doc);

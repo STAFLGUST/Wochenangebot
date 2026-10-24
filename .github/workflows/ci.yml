@@ -162,8 +162,9 @@ jobs:
           done
 
   image:
-    # Anwendungs-Image mit mod_auth_openidc (deploy/image, Roadmap 7b-4) – noch nicht im Betrieb (docker-compose.yml
-    # nutzt php:8.3-apache). Geprüft: Bau, gleiches Verhalten wie das Grundimage, Schwachstellen (kritisch blockiert).
+    # Anwendungs-Image mit mod_auth_openidc (deploy/image): in Betrieb für die Mitarbeiter-Hosts (Dienst app-mitarbeiter,
+    # deploy/anmeldung/docker-compose.anmeldung.yml); die Kundenseite (docker-compose.yml) nutzt weiter php:8.3-apache.
+    # Geprüft: Bau, gleiches Verhalten wie das Grundimage, Schwachstellen (kritisch blockiert).
     name: Anwendungs-Image prüfen
     needs: [nachweis, statisch]
     # Übersprungen nur auf main, wenn der Pull-Request-Lauf denselben Stand vollständig geprüft hat (Auftrag „nachweis“)
@@ -176,7 +177,7 @@ jobs:
           persist-credentials: false
       - name: Image bauen und mit dem Grundimage vergleichen
         run: bash deploy/image/pruefen.sh
-      - name: Betriebskonfiguration der zentralen Anmeldung prüfen (deploy/anmeldung, nicht aktiv)
+      - name: Betriebskonfiguration der zentralen Anmeldung prüfen (deploy/anmeldung)
         run: |
           docker pull -q quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244 >/dev/null
           docker pull -q postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 >/dev/null
@@ -337,12 +338,75 @@ jobs:
             tests/.arbeit/oidc/apache/*.log
           retention-days: 7
 
+  app:
+    # App „Standard-Fleisch“ (mobile/, Expo, iOS und Android): Typprüfung, Unit-Tests, Bundles für beide Plattformen
+    # und der Web-Build gegen echte PHP-Testserver in beiden Speicherarten (Testgruppe app_web). Die E2E-Aufträge oben
+    # überspringen app_web, weil ihnen der Web-Build fehlt – geprüft wird die App nur hier.
+    name: App prüfen (iOS, Android, Web)
+    needs: [nachweis, statisch]
+    if: ${{ !cancelled() && needs.statisch.result == 'success' && !(needs.nachweis.result == 'success' && needs.nachweis.outputs.uebernommen == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Paketvorrat aus dem Zwischenspeicher (gefüllt von zwischenspeicher.yml)
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ~/.cache/stafl-apt
+          # Einträge heißen …-<hash>-<Woche>: neuester mit gleicher Paketliste, sonst neuester überhaupt
+          key: apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}
+          restore-keys: |
+            apt-v1-${{ runner.os }}-${{ hashFiles('.github/scripts/testumgebung.sh', 'tests/requirements.txt') }}-
+            apt-v1-${{ runner.os }}-
+      - name: Testumgebung einrichten
+        run: bash .github/scripts/testumgebung.sh e2e
+      - name: Abhängigkeiten der App (npm ci, genau nach package-lock.json)
+        working-directory: mobile
+        run: npm ci --no-audit --no-fund
+      - name: Typprüfung (TypeScript)
+        working-directory: mobile
+        run: npm run typecheck
+      - name: Unit-Tests der App
+        working-directory: mobile
+        run: npm test -- --ci
+      - name: Bundles für iOS und Android bauen
+        working-directory: mobile
+        run: npm run export:native
+      - name: Web-Build für die Ende-zu-Ende-Tests
+        working-directory: mobile
+        run: npm run export:web
+      - name: App gegen Testserver (Dateien)
+        run: python tests/run_e2e.py app_web
+      - name: App gegen Testserver (SQLite)
+        env:
+          WA_TEST_STORAGE: sqlite
+        run: python tests/run_e2e.py app_web
+      - name: Protokolle und Bildschirmfotos bei Fehler sichern
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-ergebnisse
+          path: |
+            tests/.ergebnisse/
+            tests/.arbeit/*.log
+          retention-days: 7
+
   vollstaendig:
     # Läuft nur, wenn alle Aufträge erfolgreich waren. Der Name hält den geprüften Stand fest: Daran erkennt der Lauf
     # nach dem Merge (Auftrag „nachweis“), dass genau dieser Inhalt schon vollständig geprüft ist. Auch release-pruefen.sh
     # verlangt diesen Auftrag (oder „Prüfung aus Pull Request übernommen“) im CI-Lauf des Release-Commits.
     name: Vollständig geprüft (Stand ${{ needs.nachweis.outputs.tree }})
-    needs: [nachweis, statisch, sicherheit, image, betrieb, e2e_required, oidc]
+    needs: [nachweis, statisch, sicherheit, image, betrieb, e2e_required, oidc, app]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
