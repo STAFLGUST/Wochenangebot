@@ -934,6 +934,11 @@ with sync_playwright() as pw:
     check('… mit Adresse für die erneute Anmeldung (eigener Host, max_age=0)', neu.startswith('/oidc/callback?iss=') and 'auth_request_params=max_age%3D0' in neu, neu)
     code, j = pg.evaluate(js, ['reauth', st['csrf']])
     check('eigene Passwortbestätigung bleibt gesperrt', code == 403, (code, j))
+    # Bestätigung über ein Recht (require_perm_confirmed, z. B. Kunden pflegen, Wochenangebot senden): ebenfalls erneute
+    # Anmeldung bei Keycloak – nie die hier gesperrte Passwortabfrage (sonst wäre die Aktion nicht mehr bestätigbar)
+    code, j = pg.evaluate(js, ['kunde_delete', st['csrf']])
+    check('abgelaufen, Bestätigung über ein Recht: 403 „erneut anmelden“ statt Passwortabfrage', code == 403 and j.get('code') == 'reauth_required'
+          and j.get('anmelden', '').startswith('/oidc/callback?iss='), (code, j))
     # Oberfläche (Verwaltung unter eigener Adresse): Speichern in Sicherheit führt selbst zur erneuten Anmeldung und zurück
     pg.reload(); pg.wait_for_selector('#screen-editor:not([hidden])')
     pg.click('#vt-sec'); pg.wait_for_selector('#sec-form')
