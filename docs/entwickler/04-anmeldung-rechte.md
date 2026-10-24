@@ -138,7 +138,7 @@ Die eigenen Verfahren leben weiter, weil der Notzugang und die E2E-Tests sie bra
 | Verfahren | Ort |
 | --- | --- |
 | Benutzername + Passwort, Sperre nach Fehlversuchen, gleiche Laufzeit für unbekannte Namen | `aktionen/zugang.php` (`login`), `lib/nutzer.php` (`login_failure`, `ghost_lock`, `dummy_verify`, `anmeldung_angleichen`) |
-| Bremse je Adresse (Dokument `logins`) | `lib/protokoll.php` (`attempts_check`, `attempts_record`): 5 Fehlversuche → 10 Min. Sperre; eine erfolgreiche Anmeldung setzt den Zähler **nicht** zurück (sonst Passwort-Spraying mit eigenem Zugang), Fehlversuche verfallen nach einer Stunde; Mitarbeiter und Kunden zählen getrennt (`$bereich`) |
+| Bremse je Adresse (Dokument `logins`) | `lib/protokoll.php` (`attempts_check`, `attempts_record`): 5 Fehlversuche → 10 Min. Sperre; eine erfolgreiche Anmeldung nimmt nur die Fehlversuche **für denselben Namen** zurück (Feld `wer`, Prüfsummen der Namen), nicht die für andere Namen (sonst Passwort-Spraying mit eigenem Zugang); Fehlversuche verfallen eine Stunde nach dem letzten; Mitarbeiter und Kunden zählen getrennt (`$bereich`) |
 | Zweiter Schritt TOTP / Wiederherstellungscodes | `login_2fa`, `twofa_begin|enable|disable`; `lib/sicherheit.php` (`totp_check`: jeder Code nur einmal) |
 | Passkeys (eigene WebAuthn-Prüfung, ADR-003 Befund B-3) | `lib/passkey.php`, `aktionen/passkey.php`; Herkunft = aufgerufener Host (`passkey_origin`) |
 | Vertraute Geräte | `lib/geraete.php`: Cookie `__Host-WA_GERAET`, gespeichert nur die Prüfsumme. Ein vertrautes Gerät umgeht **nur eine Sperre** durch fremde Fehlversuche – nie Passwort oder zweiten Faktor |

@@ -124,7 +124,7 @@ switch ($action) {
             if ($second && (!is_array($pend) || (int)$pend['t'] < time() - 300)) { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             $b = body();
             $denied = function (string $why, ?array $u, string $msg, int $code = 401) use ($second, $pend) {
-                attempts_record(false);
+                attempts_record(false, 'mitarbeiter', (string)($u['username'] ?? ''));
                 $who = $u ? ['username' => $u['username'], 'name' => $u['name'], 'role' => $u['role']] : ['username' => '', 'name' => '', 'role' => ''];
                 audit('login_fail', $why, [], $who);
                 if ($second) {
@@ -186,7 +186,7 @@ switch ($action) {
             if ($st === 'clone') $denied('Passkey' . $nm . ' abgewiesen: Signaturzähler zu niedrig (möglicherweise kopiert)', $u, 'Der Passkey wurde abgewiesen, weil sein Zähler nicht passt (möglicherweise kopiert). Bitte einen Administrator informieren.');
             if ($st === 'inactive') $denied('Anmeldung mit Passkey' . $nm . ' fehlgeschlagen – Zugang deaktiviert', $u, 'Dieser Zugang ist deaktiviert.');
             if ($st === 'mustchange') fail('Bitte zuerst mit Benutzername und Passwort anmelden und ein neues Passwort festlegen.', 403);
-            attempts_record(true);
+            attempts_record(true, 'mitarbeiter', (string)$u['username']);
             $tok = sign_in($u);
             audit('login', $second ? 'Angemeldet (mit Passwort und Passkey)' : 'Angemeldet (mit Passkey)');
             geraet_neu_melden($u, (bool)$neuGeraet);

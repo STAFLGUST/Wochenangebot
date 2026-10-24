@@ -1,7 +1,8 @@
 """Fehlversuchsbremse je Adresse (lib/protokoll.php), Abmelden mit CSRF und Bedrohungsliste ohne Nebenwirkung beim Lesen.
 
-- Eine erfolgreiche Anmeldung setzt die Fehlversuche einer Adresse nicht mehr zurück: Mit einem eigenen gültigen Zugang
-  ließ sich sonst zwischen je vier Fehlversuchen an fremden Konten unbegrenzt weiterraten (Passwort-Spraying).
+- Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche für denselben Namen zurück (eigene Vertipper), nicht die für
+  andere Namen: Mit einem eigenen gültigen Zugang ließ sich sonst zwischen je vier Fehlversuchen an fremden Konten
+  unbegrenzt weiterraten (Passwort-Spraying).
 - Mitarbeiter- und Kundenanmeldung zählen getrennt: Kunden-Fehlversuche sperren keine Mitarbeiter und umgekehrt, eine
   Kundenanmeldung entsperrt keine Mitarbeiteranmeldung.
 - `logout` mit bestehender Sitzung nur mit CSRF-Token; ohne Sitzung immer.
@@ -45,6 +46,17 @@ check('… Abmelden', S.call('logout', {})[0] == 200)
 S.call('login', {'username': 'fremd9', 'password': 'Falsches-Passwort-1'})
 code, r = S.call('login', ERIKA)
 check('fünfter Fehlversuch sperrt die Adresse trotz der Anmeldung dazwischen (429)', code == 429 and 'Fehlversuche' in r.get('error', ''), (code, r))
+
+# ── Eigene Vertipper: werden bei der eigenen Anmeldung zurückgenommen (wie bisher) ──
+T = Client('203.0.113.55')
+for i in range(2):
+    T.call('login', {'username': 'erika', 'password': 'Falsches-Passwort-1'})
+check('zweimal vertippt, dann angemeldet', T.call('login', ERIKA)[0] == 200)
+T.call('logout', {})
+for i in range(3):
+    T.call('login', {'username': f'fremd{i}', 'password': 'Falsches-Passwort-1'})
+check('… eigene Vertipper zählen danach nicht mehr mit (3 weitere Fehlversuche, keine Sperre)', T.call('login', ERIKA)[0] == 200)
+T.call('logout', {})
 
 # ── Mitarbeiter und Kunden getrennt ──
 K = Client('203.0.113.60')

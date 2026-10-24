@@ -58,7 +58,7 @@ switch ($action) {
             if ($st === 'bad' && $c === null && ghost_lock('k', $name, true)) $st = 'locked';   // unbekannter Name: gleiche Sperre wie bei echten Zugängen
             $who = ['username' => 'kunde:' . mb_substr($name, 0, 40), 'name' => $c['firma'] ?? '', 'role' => 'kunde'];
             if ($st !== 'ok') {
-                attempts_record(false, 'kunde');
+                attempts_record(false, 'kunde', $name);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('kunde_login_fail', 'Kunden-Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
                 anmeldung_angleichen();
@@ -66,7 +66,7 @@ switch ($action) {
                 if ($st === 'locked' || $st === 'lockednow') fail('Dieser Zugang ist wegen zu vieler Fehlversuche vorübergehend gesperrt. Bitte später erneut versuchen.', 429);
                 fail('Benutzername oder Passwort ist nicht korrekt.', 401);
             }
-            attempts_record(true, 'kunde');
+            attempts_record(true, 'kunde', $name);
             // Passwort in bekannten Datenlecks? (nur wenn eingeschaltet, einmal je Passwort) → muss sofort geändert werden
             $leak = pw_leak_bei_anmeldung($pw, $c['login'], $merker);
             if ($merker !== null) {
@@ -178,7 +178,7 @@ switch ($action) {
                 return null;
             });
             if (!$c2) fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410);
-            attempts_record(true, 'kunde');
+            attempts_record(true, 'kunde', (string)$c['login']['username']);
             ksess_remove(function ($k, $v) use ($c2) { return $v['kid'] === $c2['id']; });
             kunde_sign_in($c2, 'link');
             audit('kunde_password', 'Kunde hat Passwort über den Link aus der E-Mail festgelegt', [], ['username' => 'kunde:' . $c2['login']['username'], 'name' => $c2['firma'], 'role' => 'kunde']);
