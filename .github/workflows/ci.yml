@@ -220,6 +220,8 @@ jobs:
         run: sh tests/deploy/test_notzugang.sh
       - name: Diagnose von Anmeldeproblemen (konten.sh pruefen, mit Platzhalter für Keycloak)
         run: sh tests/deploy/test_konten_pruefen.sh
+      - name: Speicherbelegung und Aufräumen (deploy/speicher.sh, mit Platzhalter für docker), Protokollbegrenzung
+        run: sh tests/deploy/test_speicher.sh
 
   e2e:
     # Je Speicherart drei Teile mit möglichst gleicher Laufzeit (tests/run_e2e.py, teile()). Die Zahl der Teile steht
