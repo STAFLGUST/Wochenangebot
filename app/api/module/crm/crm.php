@@ -88,6 +88,13 @@ function crm_firma_nr(string $key): array
     return $c ? [(string)($c['firma'] ?? ''), (string)($c['nr'] ?? '')] : ['', ''];
 }
 
+/* Aktiv-Stand eines Kunden bzw. Interessenten – derselbe Standard für „Aktiv in der Wiedervorlage“ wie in crm_liste */
+function crm_ist_aktiv(string $key): bool
+{
+    if ($key !== '' && $key[0] === 'i') { foreach (crm_interessenten_doc()['liste'] as $i) if ($i['id'] === $key) return !empty($i['aktiv']); return false; }
+    return !empty((crm_stammkunden()[$key] ?? [])['active']);
+}
+
 /* ---------- Prüfen der Eingaben ---------- */
 function crm_datum($v, string $was): string
 {

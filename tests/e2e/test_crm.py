@@ -143,6 +143,11 @@ for name, felder in (('unbekanntes Segment', {'segment': 'Raumfahrt'}), ('ungül
     check(f'Kundenblatt: {name} → 422', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': felder})[0] == 422)
 check('Kundenblatt: unbekannter Kunde → 404', Bb.call('crm_kunde_save', {'key': 'kzzz999999999', 'felder': {'segment': 'Catering'}})[0] == 404)
 check('Kundenblatt: ohne Felder → 422', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {}})[0] == 422)
+# inaktiver Kunde ohne Kundenblatt: „Aktiv in der Wiedervorlage“ einschalten wird gespeichert (Vergleich mit dem echten Standard „nein“)
+st, r = Bb.call('crm_kunde_save', {'key': 'keee555555555', 'felder': {'anrufAktiv': True}})
+check('inaktiver Kunde: Wiedervorlage einschalten gespeichert', st == 200 and r['kunde']['crm']['anrufAktiv'] is True, r)
+check('… bleibt nach dem Neuladen eingeschaltet', {k_['key']: k_ for k_ in Bb.call('crm_start')[1]['kunden']}['keee555555555']['crm']['anrufAktiv'] is True)
+check('… wieder ausschalten', Bb.call('crm_kunde_save', {'key': 'keee555555555', 'felder': {'anrufAktiv': False}})[1]['kunde']['crm']['anrufAktiv'] is False)
 check('Stammdaten unverändert (CRM schreibt das Dokument „kunden“ nie, E-1)', storage_raw('kunden') == kunden_vorher)
 
 # ── Aktivitäten ──
