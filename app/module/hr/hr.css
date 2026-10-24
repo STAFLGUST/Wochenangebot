@@ -74,11 +74,12 @@ body.hr {
 @media (prefers-reduced-transparency: reduce) { .hr-glas { background: var(--hr-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; } .hr-bg { display: none; } }
 
 /* ── Seite und Kopf ── */
-.hr-seite { position: relative; z-index: 1; max-width: 1320px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 28px; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; }
+.hr-seite { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 28px; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; }
 .hr-main { flex: 1; min-width: 0; }
 .hr .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .hr :focus-visible { outline: none; box-shadow: var(--hr-fokus); }
-.hr-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
+.hr-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 12px; border-radius: 999px; }
+.hr-kopf .stafl-zurueck { margin-right: -4px; }   /* gemeinsamer Zurück-Knopf (app.css), vor dem Logo wie im Eingabebereich */
 .hr-marke { display: flex; align-items: center; }
 body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-modul { display: inline-flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid var(--hr-linie); font-weight: 600; font-size: 15px; white-space: nowrap; }
@@ -111,7 +112,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-jahr .btn + .btn { margin-left: 0; }
 .hr-hinweis { padding: 12px 16px; border-radius: 16px; background: var(--hr-warn-bg); color: var(--hr-warn); }
 .hr-klein { margin: 0 0 12px; font-size: 13px; color: var(--hr-muted); }
-.opt { font-weight: 400; color: var(--hr-muted); }
+.hr .opt { display: inline; padding: 0; margin: 0; border-radius: 0; background: none; cursor: inherit; user-select: auto; font-weight: 400; color: var(--hr-muted); }   /* nicht die Filteroption der Kundenseite (app.css .opt) */
 
 /* ── Urlaubskonto ── */
 .hr-konto { display: grid; grid-template-columns: 1.4fr repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
@@ -269,7 +270,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 }
 @media (max-width: 560px) {
   .hr-seite { padding: 16px 16px 40px; gap: 20px; }
-  .hr-kopf { top: 10px; gap: 10px; padding: 8px 8px 8px 16px; }
+  .hr-kopf { top: 10px; gap: 10px; padding: 8px; }
   body.hr .hr-kopf .brand-logo { height: 22px; }
   .hr-modul { padding-left: 10px; font-size: 14px; }
   .hr-modul .i { display: none; }
@@ -292,3 +293,5 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-filter select { min-width: 0; }
   .hr-jahr .btn { margin-left: 0; }
 }
+/* Handy: im Kopf nur das Bildzeichen des Logos wie im Eingabebereich (app.css) – Platz für Zurück, Modulname und Knöpfe */
+@media (max-width: 480px) { body.hr .hr-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }

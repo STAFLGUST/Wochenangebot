@@ -12,6 +12,11 @@ schreibend = true
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+[aktion.theme_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+wartung_frei = true   # eigene Anzeige-Einstellung, auf jedem Host (auch HR, CRM) wie Status und Abmelden
+
 [aktion.change_password]
 lokale_anmeldung = true   # eigenes Anmeldeverfahren – auf Keycloak-Hosts gesperrt (GR-110)
 oberflaeche = "angebot.eingabe"

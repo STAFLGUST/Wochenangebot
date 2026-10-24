@@ -7,3 +7,5 @@
 @media(max-width:650px){.back-link{max-width:none;white-space:nowrap}.contents a,.legal-footer nav a{display:inline-block;padding:8px 0}.legal-header .back-link{display:inline-block;padding:8px 0}.legal-card a:not(.contact-link){display:inline-block;padding:8px 0}}
 h1,h2{text-wrap:balance}
 @media screen and (prefers-color-scheme:dark){:root:not([data-theme=light]) body{background:#17191c;color:#e6e8ec}:root:not([data-theme=light]) .legal-card{background:#22262c;border-color:#42474e}:root:not([data-theme=light]) .address-card{background:#2a2e34}:root:not([data-theme=light]) .intro,:root:not([data-theme=light]) .legal-card p:not(.eyebrow),:root:not([data-theme=light]) .legal-footer{color:#b7bec8}:root:not([data-theme=light]) .eyebrow,:root:not([data-theme=light]) a:hover{color:#f2a6b2}:root:not([data-theme=light]) .legal-footer [aria-current]{color:#fff}}
+/* Logo weiß auf dem dunklen Kopf (der Kopf der Rechtsseiten ist in beiden Designs dunkel) – wie im dunklen Design der Plattform */
+@media screen{.legal-logo{filter:brightness(0) invert(1);background:none;padding:0}}
