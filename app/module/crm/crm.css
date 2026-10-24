@@ -70,7 +70,8 @@ body.crm {
 .crm-main { flex: 1; min-width: 0; }
 .crm .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .crm :focus-visible { outline: none; box-shadow: var(--crm-fokus); }
-.crm-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 20px; border-radius: 999px; }
+.crm-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 12px; border-radius: 999px; }
+.crm-kopf .stafl-zurueck { margin-right: -4px; }   /* gemeinsamer Zurück-Knopf (app.css), vor dem Logo wie im Eingabebereich */
 .crm-marke { display: flex; align-items: center; }
 body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-modul { display: inline-flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid var(--crm-linie); font-weight: 600; font-size: 15px; white-space: nowrap; }
@@ -300,7 +301,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 }
 @media (max-width: 560px) {
   .crm-seite { padding: 16px 16px 40px; gap: 20px; }
-  .crm-kopf { top: 10px; gap: 10px; padding: 8px 8px 8px 16px; }
+  .crm-kopf { top: 10px; gap: 10px; padding: 8px; }
   body.crm .crm-kopf .brand-logo { height: 22px; }
   .crm-modul { padding-left: 10px; font-size: 14px; }
   .crm-modul .i { display: none; }
@@ -332,3 +333,5 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
   .crm-tabelle .m-aus { display: none; }
   .crm-karte-flaeche { height: 62dvh; }
 }
+/* Handy: im Kopf nur das Bildzeichen des Logos wie im Eingabebereich (app.css) – Platz für Zurück, Modulname und Knöpfe */
+@media (max-width: 480px) { body.crm .crm-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
