@@ -25,10 +25,13 @@ def check(n, c, i=''):
 
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
-# CRM ist noch in Entwicklung: für die Durchsicht als Testfreigabe mit dem Administrator als Tester (Modulverwaltung)
+# CRM: produktiv freigegeben (Register) – solange ein Modul noch nicht freigegeben ist, prüft die Durchsicht es als Testfreigabe
 ADMIN = next(u['id'] for u in A.call('users')[1]['users'] if u['username'] == 'admin')
-check('CRM zur Prüfung freigegeben (Test, Tester Administrator)', A.call('modul_freigabe_save', {'bereich': 'crm.intern', 'freigabe': 'test', 'grund': 'Durchsicht'})[0] == 200
-      and A.call('modul_tester_save', {'bereich': 'crm.intern', 'tester': [ADMIN], 'grund': 'Durchsicht'})[0] == 200)
+crm = next(o for m in A.call('module_status')[1]['module'] if m['id'] == 'crm' for o in m['oberflaechen'] if o['id'] == 'intern')
+if not crm['zugang']:
+    check('CRM zur Prüfung freigegeben (Test, Tester Administrator)', A.call('modul_freigabe_save', {'bereich': 'crm.intern', 'freigabe': 'test', 'grund': 'Durchsicht'})[0] == 200
+          and A.call('modul_tester_save', {'bereich': 'crm.intern', 'tester': [ADMIN], 'grund': 'Durchsicht'})[0] == 200)
+check('CRM für den Administrator erreichbar', next(o for m in A.call('module_status')[1]['module'] if m['id'] == 'crm' for o in m['oberflaechen'] if o['id'] == 'intern')['zugang'])
 
 # Abgeschnittener Text: sichtbare Elemente mit eigenem Text, deren Inhalt breiter/höher als der Kasten ist, während der
 # Überlauf verdeckt wird (hidden/clip/ellipsis) – oder deren Text über den Bildschirmrand hinausragt.
