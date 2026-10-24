@@ -103,7 +103,9 @@ switch ($action) {
                     rsort($list);
                     foreach (array_slice($list, (int)$CFG['keep_versions']) as $old) store_delete($old);
                 }
-                $model['publishedAt'] = now();
+                // streng steigend mit Millisekunden (wie einzel_stand): zwei Veröffentlichungen in derselben Sekunde bekommen
+                // verschiedene Stände – ein Bestellwunsch auf der ersten Fassung wird dann nicht mit der zweiten gerechnet
+                $model['publishedAt'] = einzel_stand(is_array($prev) && is_string($prev['publishedAt'] ?? null) ? $prev['publishedAt'] : null);
                 store_write('angebot', $model);
                 $rev = draft_end($dr, 'veröffentlicht');
                 $h = history_from_model($model, 'Veröffentlichung', $model['publishedAt']);
