@@ -41,8 +41,8 @@ function herkunft_pruefen(?array $aktion, string $method): void
    WA_OBERFLAECHE, nie aus Kopfzeilen). Aktionen einer Oberfläche mit eigener Seite – jede Oberfläche außer dem gemeinsamen
    Eingabebereich angebot.*, für die das Aktionsregister Aktionen führt (heute hr.intern, crm.intern) – beantwortet nur ihr eigener
    Host. Auf einem solchen Host gibt es außer ihnen nur die Grundaktionen der Plattform, die auch während einer Wartung
-   erreichbar bleiben (Status, Abmelden, Modulübersicht). Dashboard, Angebot, Verwaltung und Bestand teilen sich weiter den
-   Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, App, Testserver) gilt
+   erreichbar bleiben (Status, Abmelden, Modulübersicht) – ebenso auf dem Dashboard-Host (host_nur_grundaktionen).
+   Angebot, Verwaltung und Bestand teilen sich weiter den Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, App, Testserver) gilt
    das Bisherige. Ergänzt die Rechteprüfung jeder Aktion (GR-103), ersetzt sie nicht. */
 function host_eigene_seite(string $oberflaeche): bool
 {
@@ -54,6 +54,15 @@ function host_eigene_seite(string $oberflaeche): bool
     return $oberflaeche !== '' && strpos($oberflaeche, 'angebot.') !== 0 && isset($mitAktionen[$oberflaeche]);
 }
 
+/* Hosts ohne Fachaktionen: das Dashboard (dashboard-stafl.de) braucht nur Status, Modulübersicht, Darstellung und Abmelden.
+   Ohne diese Regel nähme es jede Aktion des gemeinsamen Eingabebereichs an – und dort verlangt kein Modulzugang etwas
+   (Modul „dashboard“ hat keinen eigenen Zugang): Wem „angebot.zugang“ entzogen war, der hätte Entwurf, Bestellungen und
+   Kunden über die Dashboard-Adresse weiter abrufen können (Einzelrechte vorausgesetzt). */
+function host_nur_grundaktionen(string $host): bool
+{
+    return explode('.', $host, 2)[0] === 'dashboard';
+}
+
 /* true, wenn die Aktion auf diesem Host nicht angeboten wird */
 function host_fremd(?array $aktion): bool
 {
@@ -62,7 +71,7 @@ function host_fremd(?array $aktion): bool
     if ($host === '') return false;
     $eigen = (string)$aktion['oberflaeche'];
     if (host_eigene_seite($eigen)) return $eigen !== $host;
-    if (host_eigene_seite($host)) return !($aktion['modul'] === 'plattform' && $aktion['wartung_frei']);
+    if (host_eigene_seite($host) || host_nur_grundaktionen($host)) return !($aktion['modul'] === 'plattform' && $aktion['wartung_frei']);
     return false;
 }
 

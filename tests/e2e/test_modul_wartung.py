@@ -153,5 +153,19 @@ check('Notfall im Verlauf vermerkt', v[0]['wer'] == 'Notfallwerkzeug (Server)' a
 out = subprocess.run(['php', REPO + '/deploy/wartung-aus.php'], env={**os.environ, 'DATA_DIR': DATA}, capture_output=True, text=True)
 check('zweiter Aufruf: keine Wartung aktiv', 'Keine Wartung aktiv' in out.stdout, out.stdout)
 
+# ── Wartung eines Fachmoduls gilt auch für seine schreibenden Aktionen im gemeinsamen Eingabebereich (GR-107) ──
+st, r = A.call('rolle_save', {'name': 'Personalstelle', 'rechte': ['hr.zugang', 'hr.verwalten']})
+PERS = r.get('id')
+A.call('user_save', {'id': '', 'name': 'Paula Personal', 'username': 'paula', 'rollen': [PERS], 'active': True, 'password': 'Personal-Zugang-77', 'mustChange': False})
+Pa = Client('198.51.100.7'); Pa.call('login', {'username': 'paula', 'password': 'Personal-Zugang-77'})
+check('Personalstelle speichert HR-Einstellungen (Verwaltung)', Pa.call('hr_einstellungen_save', {'sperren': [], 'ferien': []})[0] == 200)
+check('HR in Wartung gesetzt', A.call('modul_wartung_save', {'bereich': 'hr.intern', 'active': True, 'grund': 'Datenübernahme HR'})[0] == 200)
+st, r = Pa.call('hr_einstellungen_save', {'sperren': [], 'ferien': []})
+check('Wartung HR: HR-Einstellungen über den Eingabebereich nicht speicherbar (503)', st == 503 and r.get('bereich') == 'hr.intern', (st, r))
+check('… lesen im Eingabebereich bleibt möglich (Mitarbeiter-Angaben)', Pa.call('mitarbeiter_hr')[0] == 200)
+check('… Administrator speichert weiter', A.call('hr_einstellungen_save', {'sperren': [], 'ferien': []})[0] == 200)
+check('Wartung HR beendet: Personalstelle speichert wieder', A.call('modul_wartung_save', {'bereich': 'hr.intern', 'active': False, 'grund': 'fertig'})[0] == 200
+      and Pa.call('hr_einstellungen_save', {'sperren': [], 'ferien': []})[0] == 200)
+
 print(f'\n{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)
