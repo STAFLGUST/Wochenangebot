@@ -96,7 +96,17 @@ check('bela: "no sale price" keeps the normal price', not be[IB['id']].get('sale
 
 # Bestand weg → Sonderposten verschwindet, wieder da → erscheint
 less = [a for a in articles if norm(a['code']) != norm(IA['code'])]
+import urllib.request as _ur, urllib.error as _ue
+def _etag_abruf(etag=None):
+    rq = _ur.Request(B + '/api/?action=offer', headers={'If-None-Match': etag} if etag else {})
+    try:
+        r = _ur.urlopen(rq); return r.status, r.headers.get('ETag')
+    except _ue.HTTPError as e:
+        return e.code, e.headers.get('ETag')
+st0, et0 = _etag_abruf()
 A.call('stock_import', {'date': '2026-10-17', 'source': 'Bestand.xls', 'articles': less})
+st1, et1 = _etag_abruf(et0)
+check('ETag: Sonderposten ausverkauft → neue Antwort statt 304 (Bestand gehört zur ETag)', st0 == 200 and et0 and st1 == 200 and et1 != et0, (st0, st1, et0, et1))
 check('stock gone: sale article hidden everywhere', IA['id'] not in {i['id'] for i in P.call('offer')[1]['offer']['items']} and IA['id'] not in offer_as('edeka.nord', 'edeka'))
 A.call('stock_import', {'date': '2026-10-17', 'source': 'Bestand.xls', 'articles': articles})
 check('stock back: sale article shown again', IA['id'] in {i['id'] for i in P.call('offer')[1]['offer']['items']})

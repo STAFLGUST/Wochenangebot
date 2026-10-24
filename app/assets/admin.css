@@ -8,6 +8,8 @@
 .auth-card .brand h1 { font-size: 19px; margin: 0; font-weight: 650; letter-spacing: -.015em; }
 .auth-intro { margin: 0; color: var(--text-2); font-size: 13.5px; }
 .auth-back { font-size: 12.5px; color: var(--muted); text-align: center; }
+/* Sonderposten-Dialog: Hinweiskästen und Abschnitte nicht aneinanderkleben */
+#dlg-rest .dlg-body > :is(.err-box, .notice, .hint, .k-rlist, .k-no) { margin-bottom: 12px; }
 .btn.wide { width: 100%; justify-content: center; height: 42px; }
 .form-err { margin: 0; min-height: 0; color: var(--accent); font-size: 13px; }
 .form-err:empty { display: none; }
@@ -1806,6 +1808,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .ezpos tbody td.ez-code { min-height: 30px; }   /* Einzelangebot als Karte: Bezeichnung beginnt unter dem Entfernen-Knopf */
   body.adm :is(.adm-page, dialog) :is(.in, select, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"])) { min-height: 36px; }
   body.adm .ofg-bar .link-btn { min-height: 36px; }
+  body.adm .e-var .vtog { width: 36px; height: 36px; }   /* Ausblenden / Sonderpreis in der Artikelzeile (vorher 26 px) */
+  body.adm .alts button { min-height: 32px; padding: 4px 10px; font-size: 13px; }   /* Zusatzpreis-Pille, z. B. „Flugware: …“ (vorher 19 px) */
+  body.adm .auth-back { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; }
 }
 /* Angebote als Karten (schmal): Standardzeile einheitlich hinterlegt statt Streifen je Zelle (Zellen haben dort
    unterschiedliche Breiten und Abstände); Zeilenhervorhebung unter dem Finger ebenso nur für die ganze Karte */

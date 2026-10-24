@@ -134,10 +134,12 @@ with sync_playwright() as p:
       const a = L(f), b = L(g); return Math.round((Math.max(a, b) + .05) / (Math.min(a, b) + .05) * 100) / 100; }'''
     innen = lambda pg, sel, box: pg.evaluate('''([s, b]) => { const r = document.querySelector(s).getBoundingClientRect(), c = document.querySelector(b).getBoundingClientRect();
       return r.top >= c.top - 1 && r.bottom <= c.bottom + 1 && r.left >= c.left - 1 && r.right <= c.right + 1; }''', [sel, box])
-    a.evaluate("async () => { const s = await (await fetch('/api/?action=status')).json(); await fetch('/api/?action=user_save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({name:'Lea', username:'lea', role:'viewer', active:true, password:'Leserin-Zugang-11', mustChange:false})}); }")
     d = br.new_page(viewport={'width': 1440, 'height': 900}); d.on('pageerror', lambda x: errs.append(str(x)))
     d.on('console', lambda m: errs.append('Konsole: ' + m.text) if m.type == 'error' else None)
     login(d, 'admin', 'Sicheres-Passwort-1')
+    # Leser-Konto mit der frischen Anmeldung anlegen: user_save braucht eine Bestätigung jünger als 5 Minuten – mit der
+    # Sitzung vom Testbeginn scheiterte das unter Last still (danach fehlte das Leser-Konto in der Liste)
+    d.evaluate("async () => { const s = await (await fetch('/api/?action=status')).json(); await fetch('/api/?action=user_save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({name:'Lea', username:'lea', role:'viewer', active:true, password:'Leserin-Zugang-11', mustChange:false})}); }")
     d.click('#vt-schutz'); d.wait_for_selector('#vt-schutz[aria-selected="true"]')
     check('1440×900: side navigation scrolls the active entry (Schutz, last) into view', d.evaluate("document.querySelector('.side-nav').scrollHeight > document.querySelector('.side-nav').clientHeight")
           and innen(d, '#vt-schutz', '.side-nav'))

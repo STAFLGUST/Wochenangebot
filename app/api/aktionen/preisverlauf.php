@@ -38,7 +38,7 @@ switch ($action) {
             history_backfill();
             $w = (int)($_GET['week'] ?? 0);
             $y = (int)($_GET['year'] ?? 0);
-            if ($w < 1 || $w > 53 || $y < 2000 || $y > 2100) respond(['ok' => true, 'week' => null]);
+            if ($y < 2000 || $y > 2100 || !kw_gueltig($w, $y)) respond(['ok' => true, 'week' => null]);
             $cur = history_id($w, $y);
             $prev = null;
             foreach (history_ids() as $id) if (strcmp($id, $cur) < 0) $prev = $id;   // jüngste Woche vor der Angebotswoche
@@ -60,7 +60,7 @@ switch ($action) {
             $b = body();
             $week = $b['week'] ?? null;
             $year = $b['year'] ?? null;
-            if (!is_int($week) || $week < 1 || $week > 53 || !is_int($year) || $year < 2000 || $year > 2100) fail('Kalenderwoche oder Jahr ungültig.', 422);
+            if (!is_int($week) || !is_int($year) || $year < 2000 || $year > 2100 || !kw_gueltig($week, $year)) fail('Kalenderwoche oder Jahr ungültig.', 422);
             // Prüfen, Speichern und Protokoll: preisverlauf_woche_speichern() (module/angebot/import.php, auch für die Importzentrale)
             $r = preisverlauf_woche_speichern($week, $year, $b['items'] ?? null, s($b['source'] ?? '', 200) ?? '');
             respond(['ok' => true, 'id' => $r['id'], 'replaced' => $r['replaced']]);
