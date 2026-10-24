@@ -23,6 +23,21 @@ function offers_load(): array
     return is_array($d) && isset($d['offers']) ? $d : ['rev' => 0, 'offers' => OFFER_DEFAULTS, 'updatedAt' => null];
 }
 function offer_ids(): array { return array_column(offers_load()['offers'], 'id'); }
+/* IDs nicht (mehr) vorhandener Angebote, unter denen noch Daten stehen: Kundenpreise/Sonderpreise im veröffentlichten
+   Angebot oder Entwurf, direkte Freischaltungen bei Kunden. Eine neue Angebots-ID darf keine davon sein (offers_save). */
+function angebot_ids_mit_resten(array $vorhanden): array
+{
+    $ids = [];
+    foreach (['angebot', 'entwurf'] as $doc) {
+        foreach ((store_read($doc) ?? [])['items'] ?? [] as $it) {
+            foreach (array_keys(is_array($it['variants'] ?? null) ? $it['variants'] : []) as $k) $ids[(string)$k] = true;
+            foreach (array_keys(is_array($it['sale']['offers'] ?? null) ? $it['sale']['offers'] : []) as $k) $ids[(string)$k] = true;
+        }
+    }
+    foreach (customers_load()['customers'] as $c) foreach (is_array($c['angebote'] ?? null) ? $c['angebote'] : [] as $k) $ids[(string)$k] = true;
+    unset($ids[OFFER_STD]);
+    return array_values(array_diff(array_keys($ids), $vorhanden));
+}
 /* Kundengruppen eines Angebots (Stammdaten → Angebote): Kunden dieser Gruppen sehen das Angebot ohne eigene Freischaltung */
 function offer_gruppen_clean($v, string $name): array
 {
@@ -169,6 +184,12 @@ function offer_resolve(array $m, array $def): array
     return $m;
 }
 
+/* Kalenderwoche nach ISO 8601: KW 53 gibt es nur in Jahren mit 53 Wochen (der 28.12. liegt immer in der letzten) */
+function kw_gueltig(int $woche, int $jahr): bool
+{
+    return $woche >= 1 && $woche <= (int)(new DateTimeImmutable(sprintf('%04d-12-28', $jahr)))->format('W');
+}
+
 /* Übernimmt nur bekannte Felder in bekannten Formaten */
 function clean_model($m, bool $strict): array
 {
@@ -179,6 +200,8 @@ function clean_model($m, bool $strict): array
     $week = is_int($week) && $week >= 1 && $week <= 53 ? $week : null;
     $year = is_int($year) && $year >= 2000 && $year <= 2100 ? $year : null;
     if ($strict && ($week === null || $year === null)) throw new InvalidArgumentException('Kalenderwoche und Jahr müssen angegeben sein.');
+    // Entwurf behält die Angabe (nichts geht verloren), veröffentlicht wird nur eine Woche, die es gibt
+    if ($strict && !kw_gueltig($week, $year)) throw new InvalidArgumentException("Die KW $week/$year gibt es nicht – das Jahr hat nur 52 Kalenderwochen.");
     $outMeta = ['week' => $week, 'year' => $year, 'notice' => s($meta['notice'] ?? '', 120) ?? ''];
     foreach (['title' => 200, 'source' => 200, 'sheetName' => 100] as $f => $max) {
         $v = s($meta[$f] ?? null, $max);

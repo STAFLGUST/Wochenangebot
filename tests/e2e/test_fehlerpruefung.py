@@ -62,6 +62,19 @@ st, r = E.call('save_draft', {'revision': d['revision'], 'model': model})
 saved = next(i for i in doc('entwurf')['items'] if i['id'] == it0['id'])
 check('Kundenpreis unter Zahlen-ID bleibt im Entwurf erhalten', st == 200 and saved.get('variants', {}).get('77') == {'status': 'value', 'value': 19.5}, saved.get('variants'))
 
+# ---------- KW 53 nur in Jahren mit 53 ISO-Wochen ----------
+d = A.call('draft')[1]
+m53 = json.loads(json.dumps(d['draft'] or d['published']))
+woche_vorher = dict(m53['meta'])
+m53['meta']['week'], m53['meta']['year'] = 53, 2027
+st, r = A.call('save_draft', {'revision': d['revision'], 'model': m53})
+check('Entwurf mit KW 53/2027 bleibt gespeichert (nichts geht verloren)', st == 200 and doc('entwurf')['meta']['week'] == 53, r)
+st, r = A.call('publish', {'revision': A.call('draft')[1]['revision'], 'model': m53})
+check('Veröffentlichen mit KW 53/2027 abgewiesen (2027 hat 52 Wochen)', st == 422 and '53/2027' in r.get('error', ''), (st, r))
+check('Preisverlauf: KW 53/2027 abgewiesen', (lambda x: x[0] == 422 and 'Kalenderwoche' in x[1].get('error', ''))(A.call('history_import', {'week': 53, 'year': 2027, 'items': []})))
+m53['meta'].update(woche_vorher)
+assert A.call('save_draft', {'revision': A.call('draft')[1]['revision'], 'model': m53})[0] == 200
+
 # ---------- Rechte: mail_info, history_prev ----------
 check('mail_info ohne Anmeldung gesperrt', Client().call('mail_info')[0] == 401)
 check('mail_info ohne Kunden-/Senderecht gesperrt', E.call('mail_info')[0] == 403)
