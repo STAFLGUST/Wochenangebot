@@ -687,6 +687,8 @@
       catch (ex) { $('#kunde-err').textContent = ex.message; }
     }
   });
+  // Eine Fehlermeldung zum vorigen Speichern gilt nach jeder Eingabe nicht mehr
+  $('#kunde-body').addEventListener('input', () => { $('#kunde-err').textContent = ''; });
   $('#kunde-body').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target, err = $('#kunde-err');
@@ -1814,7 +1816,9 @@
     if (a === 'addip') {
       const ta = $('#sec-form [name="adminIps"]');
       const list = ta.value.split(/\s+/).filter(Boolean);
-      if (!list.includes(secData.myIp)) ta.value = [...list, secData.myIp].join('\n');
+      if (list.includes(secData.myIp)) { toast('Ihre Adresse steht bereits in der Liste.'); return; }
+      ta.value = [...list, secData.myIp].join('\n');
+      toast('Adresse eingetragen – zum Übernehmen bitte speichern.');
       return;
     }
     try {
