@@ -66,7 +66,12 @@ best = mods['bestand']
 check('Bestand freigegeben (bestand.dashboard-stafl.de, Phase 1): Kachel verfügbar, Adresse /admin/ auf dem Bestands-Host',
       best['kachel']['ziel'] == 'bestand.intern' and best['kachel']['zugang'] is True and best['kachel']['status'] == 'verfuegbar'
       and (lambda o: o['adresse'] == 'https://bestand.dashboard-stafl.de/admin/' and o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(best, 'intern')), best['kachel'])
-for mid in ('crm', 'rewe', 'qs', 'einkauf'):
+crm = mods['crm']
+check('CRM freigegeben (crm.dashboard-stafl.de, Inhaber 23.10.2026): Kachel verfügbar, Adresse /module/crm/ auf dem CRM-Host',
+      crm['kachel']['ziel'] == 'crm.intern' and crm['kachel']['zugang'] is True and crm['kachel']['status'] == 'verfuegbar'
+      and crm['kachel']['adresse'] == 'https://crm.dashboard-stafl.de/module/crm/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(crm, 'intern')), crm['kachel'])
+for mid in ('rewe', 'qs', 'einkauf'):
     k = mods[mid]['kachel']
     check(f'{mid}: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)
 qs = mods['qs']
