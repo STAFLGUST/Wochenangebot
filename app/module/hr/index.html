@@ -15,9 +15,8 @@
 <div class="hr-bg" aria-hidden="true"><span></span><span></span><span></span></div>
 <div class="hr-seite">
   <header class="hr-kopf hr-glas">
-    <a class="hr-marke" id="hr-zurueck" href="../../dashboard/" title="Zum Dashboard">
-      <img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch">
-    </a>
+    <a class="stafl-zurueck" id="hr-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <span class="hr-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
     <span class="hr-modul"><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>HR · Urlaub</span>
     <div class="hr-aktionen">
       <button class="hr-rund" id="hr-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg></button>
@@ -35,7 +34,7 @@
     <p class="hr-fehler" id="hr-err" role="alert" hidden></p>
 
     <section id="hr-app" hidden>
-      <nav class="hr-tabs" id="hr-tabs" role="tablist" aria-label="Bereiche">
+      <nav class="hr-tabs stafl-streifen" id="hr-tabs" role="tablist" aria-label="Bereiche">
         <button type="button" role="tab" data-tab="mein" aria-selected="true">Mein Urlaub</button>
         <button type="button" role="tab" data-tab="kalender" aria-selected="false">Kalender</button>
         <button type="button" role="tab" data-tab="antraege" aria-selected="false" data-verwalten hidden>Anträge <span class="hr-zahl" id="hr-offen" hidden></span></button>
@@ -159,6 +158,7 @@
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M8 14h2M14 14h2M8 17.5h2"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>

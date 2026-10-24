@@ -108,10 +108,10 @@ with sync_playwright() as p:
               and zb['x'] + zb['width'] <= lb['x'] + 1 and abs((zb['y'] + zb['height'] / 2) - (lb['y'] + lb['height'] / 2)) < 4, (zb, lb))
         lbl = z.locator('#btn-dashboard .lbl').bounding_box()
         if w > 1600:
-            check(f'{w}px breit: Pfeil und Beschriftung „Dashboard“ sichtbar', lbl['width'] > 40 and z.locator('#btn-dashboard .zurueck').is_visible(), lbl)
+            check(f'{w}px breit: Pfeil und Beschriftung „Dashboard“ sichtbar', lbl['width'] > 40 and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), lbl)
         else:
-            check(f'{w}px Beschriftung „Dashboard“ nur für Screenreader, Kachel-Symbol, Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36
-                  and z.locator('#btn-dashboard .kacheln').is_visible() and z.locator('#btn-dashboard .zurueck').is_hidden(), (lbl, zb))
+            check(f'{w}px Beschriftung „Dashboard“ nur für Screenreader, Pfeil (wie auf allen Modulseiten), Fläche ≥ 36 px', lbl['width'] <= 1 and zb['width'] >= 36 and zb['height'] >= 36
+                  and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), (lbl, zb))
         check(f'{w}px mit Knopf: Kopfzeile ohne Überlappung, kein waagerechtes Scrollen', not z.evaluate(overlap_js)
               and z.evaluate('document.documentElement.scrollWidth') <= w)
         z.screenshot(path=SH + f'/dashboard-knopf-{w}.png')

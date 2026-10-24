@@ -70,7 +70,7 @@
     --st-ok: #5fd08f;
     --st-ok-bg: rgba(95, 208, 143, .14);
     --st-info-bg: rgba(59, 85, 115, .3);
-    --st-logo-grund: #fff;                     /* Logo im Dunkeln auf weißem Grund (wie app.css) */
+    --st-logo-grund: transparent;              /* Logo im Dunkeln weiß auf dunklem Grund (wie app.css) */
     color-scheme: dark;
   }
 }
@@ -145,7 +145,7 @@ html.login-pf, .login-pf body {
   border-radius: 6px; box-sizing: content-box;
 }
 @media (prefers-color-scheme: dark) {
-  .login-pf #kc-header-wrapper::before { padding: 3px 6px; }
+  .login-pf #kc-header-wrapper::before { filter: brightness(0) invert(1); }   /* weiß auf dunklem Grund (wie app.css) */
 }
 
 /* ── Karte aus Glas ── */

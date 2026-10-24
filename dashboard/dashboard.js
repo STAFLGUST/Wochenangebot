@@ -174,6 +174,7 @@
     if (st.status === 403 && st.data.error) { fehler(st.data.error); return; }
     if (st.status !== 200 || !st.data.loggedIn) { zeigeAnmeldung(); return; }
     csrf = st.data.csrf || '';
+    if (window.STAFL_THEME) { window.STAFL_THEME.konto(st.data.user, csrf, API); themaKnopf(); }   // Hell/Dunkel am Konto (theme.js)
     const name = st.data.user ? (st.data.user.name || st.data.user.username || '') : '';
     $('#db-user').hidden = false; $('#db-user-name').textContent = name; $('#db-initialen').textContent = initialen(name);
     $('#db-user').title = `Angemeldet als ${name}`;

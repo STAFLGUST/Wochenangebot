@@ -593,7 +593,8 @@ AKTIONEN_LISTE = "app/api/lib/aktionen-liste.php"
 # Schreibende Aktionen, die auch während einer Wartung erreichbar sein müssen: Anmeldung, Abmelden und der eigene Zugang
 # (Pflicht-Passwortwechsel, Zwei-Faktor/Passkey bei der Anmeldung) – sonst könnten sich Administratoren nicht anmelden.
 WARTUNG_FREI_SCHREIBEND = {"login", "login_2fa", "logout", "setup", "passkey_login_begin", "passkey_login", "change_password",
-                           "twofa_begin", "twofa_enable", "passkey_begin", "passkey_register"}
+                           "twofa_begin", "twofa_enable", "passkey_begin", "passkey_register",
+                           "theme_save"}   # Hell/Dunkel am eigenen Konto: auf jedem Host, ändert keine Daten anderer
 # Aktionen, die von fremden Seiten kommen dürfen (GR-109): Ein-Klick-Abmeldung nach RFC 8058 – das E-Mail-Programm sendet
 # das Formular selbst; geschützt durch den Abmelde-Schlüssel im Link. Erweiterung nur mit Begründung im PR.
 FREMDE_HERKUNFT = {"abmelden1"}
