@@ -458,6 +458,10 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .pdelta.up { color: var(--accent); } .pdelta.down { color: var(--c-fresh); }
 .mhd-dot { display: inline-block !important; width: 9px; height: 9px; padding: 0 !important; border-radius: 50% !important; margin-right: 6px; vertical-align: 0; }
 #groups.no-stock .e-stock, #groups.no-prev .e-prev { display: none; }
+/* Leistung: Gruppenkarten außerhalb des Bildschirms rendert der Browser nicht (Stil, Layout, Zeichnen werden
+   übersprungen, ~12 000 Elemente im Editor). „auto“ merkt sich die zuletzt gemessene Höhe, die Bildlaufleiste bleibt ruhig. */
+#groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px; }
+@media print { #groups > .gcard { content-visibility: visible; } }
 #noprice-panel { margin: 0 0 16px; }
 .np-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
 .np-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 16px; cursor: pointer; }
