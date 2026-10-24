@@ -46,7 +46,7 @@ function preisverlauf_import_wochen(array $e): array
     foreach ($roh as $i => $w) {
         $datei = s(is_array($w) ? ($w['datei'] ?? '') : '', 200) ?? '';
         $week = is_array($w) ? ($w['week'] ?? null) : null; $year = is_array($w) ? ($w['year'] ?? null) : null;
-        if (!is_int($week) || $week < 1 || $week > 53 || !is_int($year) || $year < 2000 || $year > 2100) {
+        if (!is_int($week) || !is_int($year) || $year < 2000 || $year > 2100 || !kw_gueltig($week, $year)) {
             $fehler[] = ['datei' => $datei, 'text' => 'Kalenderwoche oder Jahr nicht erkannt – bitte unter Preisverlauf → „Alte Angebote hochladen“ eintragen'];
             continue;
         }
