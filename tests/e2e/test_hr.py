@@ -562,7 +562,15 @@ with sync_playwright() as p:
             pg.click('[data-jahr="1"]')
             pg.wait_for_function(f'document.querySelector("#mein-titel").textContent.includes("{Y}")')
             tag_ = montag(Y, 9)
+            pg.evaluate("document.querySelectorAll('#antrag input[required]').forEach((i) => i.removeAttribute('required'))")   # eigene Meldung statt Browserhinweis
+            pg.click('#antrag-senden'); pg.wait_for_selector('#antrag-meldung.fehler')
             pg.fill('#antrag-von', iso(tag_)); pg.dispatch_event('#antrag-von', 'change')
+            check('Meldung zum leeren Antrag verschwindet nach Eingabe der Daten', pg.text_content('#antrag-meldung') == '', pg.text_content('#antrag-meldung'))
+            pg.fill('#antrag-bis', iso(tag_ - dt.timedelta(days=3))); pg.dispatch_event('#antrag-bis', 'change')
+            pg.click('#antrag-senden')
+            pg.wait_for_function("document.activeElement && document.activeElement.id === 'antrag-bis'")
+            check('Ende vor Beginn: Hinweis nur einmal, kein Antrag gesendet', pg.text_content('#antrag-tage') == 'Das Ende liegt vor dem Beginn.' and pg.text_content('#antrag-meldung') == '',
+                  (pg.text_content('#antrag-tage'), pg.text_content('#antrag-meldung')))
             pg.fill('#antrag-bis', iso(tag_ + dt.timedelta(days=4))); pg.dispatch_event('#antrag-bis', 'change')
             check('Vorschau: 5 Tage Urlaub', '5 Tage' in pg.text_content('#antrag-tage'), pg.text_content('#antrag-tage'))
             pg.click('#antrag-senden'); pg.wait_for_selector('#antrag-meldung.ok')

@@ -137,6 +137,7 @@
   function antragTage() {
     const von = $('#antrag-von').value, bis = $('#antrag-bis').value, d = S.start;
     const out = $('#antrag-tage');
+    meldung($('#antrag-meldung'), '');   // eine Meldung zum vorigen Absenden gilt nach einer Änderung der Daten nicht mehr
     if (!von || !bis || !d || !d.ich) { out.textContent = ''; return; }
     if (bis < von) { out.textContent = 'Das Ende liegt vor dem Beginn.'; return; }
     let n = 0;
@@ -154,6 +155,7 @@
     const m = $('#antrag-meldung');
     const b = { von: $('#antrag-von').value, bis: $('#antrag-bis').value, vertretung: $('#antrag-vertretung').value, notiz: $('#antrag-notiz').value };
     if (!b.von || !b.bis) { meldung(m, 'Bitte ersten und letzten Urlaubstag angeben.'); return; }
+    if (b.bis < b.von) { meldung(m, ''); $('#antrag-bis').focus(); return; }   // der Hinweis unter den Daten sagt es schon
     $('#antrag-senden').disabled = true;
     const r = await api('hr_antrag', b);
     $('#antrag-senden').disabled = false;
