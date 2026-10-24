@@ -37,6 +37,7 @@ den Release vorlegt.
 | Ende-zu-Ende-Tests (*speicherart*, Teil *k*/3) (`e2e`) | Matrix `storage: [files, sqlite]` × `teil: [1, 2, 3]`; `.github/scripts/testumgebung.sh e2e`, dann `python tests/run_e2e.py` mit `WA_JOBS=4`; Artefakt bei Fehler | nach `statisch`, außer übernommen |
 | Ende-zu-Ende-Tests (`e2e_required`) | fester Name für den Branchschutz; grün nur, wenn alle sechs Teile grün sind | nach `e2e` |
 | Anmeldung über Keycloak (nur CI) (`oidc`) | `testumgebung.sh oidc`, `tests/oidc/umgebung.sh start`, `tests/oidc/test_oidc.py`, `stop`; Artefakt `oidc-ergebnisse` | nach `statisch`, außer übernommen |
+| App prüfen (iOS, Android, Web) (`app`) | in `mobile/`: `npm ci`, `npm run typecheck`, `npm test -- --ci`, `npm run export:native` (Bundles iOS/Android), `npm run export:web`; danach `python tests/run_e2e.py app_web` in beiden Speicherarten; Artefakt `app-ergebnisse` | nach `statisch`, außer übernommen |
 | Vollständig geprüft (Stand *Tree*) (`vollstaendig`) | nur wenn alle vorigen Aufträge grün sind; der Name trägt den geprüften Tree (Nachweis für `main` und für den Release) | am Ende |
 | Prüfung aus Pull Request übernommen (`uebernommen`) | nur auf `main`, wenn `nachweis` einen passenden PR-Lauf gefunden hat; verlinkt ihn | nur `main` |
 | Release zur Freigabe vorlegen (`release_vorlegen`) | startet `release.yml` mit Grund (PR-Nummer und Titel) und erwartetem Commit | nur nach Push auf `main` mit Nachweis |
