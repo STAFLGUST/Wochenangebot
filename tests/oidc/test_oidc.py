@@ -3,7 +3,7 @@
 Prüft die Bedrohungen aus ADR-003 §1, soweit sie diese Stufe betreffen: Härtung von Keycloak (Verwaltung nicht öffentlich,
 kein Passwort-Grant, PKCE, exakte Weiterleitungen), Pflicht zum zweiten Faktor, eigene Sitzung je Host (__Host-Cookies,
 keine Domain-Cookies, Sitzung eines Hosts gilt nicht auf dem anderen), Single Sign-on, Rechte bleiben bei uns, Aktionen nur
-auf ihrem Host (GR-109, HR), keine
+auf ihrem Host (GR-109, HR, CRM), keine
 eigenen Anmeldeverfahren auf Keycloak-Hosts, untergeschobene Kopfzeilen, gesperrte und unbekannte Konten, Abmelden für
 alle Anwendungen (Back-Channel-Logout).
 """
@@ -33,7 +33,7 @@ WORK = os.environ.get('OIDC_WORK') or os.path.join(REPO, 'tests', '.arbeit', 'oi
 SH = os.environ.get('WA_SHOTS') or os.path.join(REPO, 'tests', '.ergebnisse')
 os.makedirs(SH, exist_ok=True)
 PORT = 8443
-D, A, W, B, HR, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'login'))
+D, A, W, B, HR, CRM, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'login'))
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
@@ -178,7 +178,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -190,7 +190,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr'):
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 5' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 6' in _log, _log[-300:])
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -206,6 +206,11 @@ check('Stand 5: Client „hr“ nachträglich angelegt (Schleife über die Clien
       and GEHEIM['OIDC_SECRET_HR'] not in _log, _log[-500:])
 check('Client „hr“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('hr', {}).get('secret') not in (None, '@GEHEIM_HR@') and clients.get('hr', {}).get('redirectUris') == [HR + '/oidc/callback'])
+check('Stand 6: Client „crm“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client crm' in _log and 'erzeugt:   OIDC_SECRET_CRM in .env' in _log and 'erzeugt:   OIDC_CRYPTO_CRM in .env' in _log
+      and GEHEIM['OIDC_SECRET_CRM'] not in _log, _log[-500:])
+check('Client „crm“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('crm', {}).get('secret') not in (None, '@GEHEIM_CRM@') and clients.get('crm', {}).get('redirectUris') == [CRM + '/oidc/callback'])
 def kc_token():
     _, _, t = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
         'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
@@ -350,7 +355,18 @@ for pfad in ('/', '/admin/', '/admin'):
     check(f'HR {pfad}: Weiterleitung zur Urlaubsverwaltung (/module/hr/), kein Eingabebereich auf dem HR-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/hr/'), (code, kopf.get('Location')))
 check('HR: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(HR + '/assets/app.css')[0] == 200 and anfrage(HR + '/dashboard/abgemeldet.html')[0] == 200)
-for h in (D, A, W, B, HR):
+code, kopf, _ = anfrage(CRM + '/module/crm/', kopf=SEITE)
+check('CRM ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['crm']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [CRM + '/oidc/callback'], kopf.get('Location'))
+check('CRM: Schnittstelle ohne Anmeldung 401 (auch crm_start), Postleitzahlen nur mit Anmeldung',
+      anfrage(CRM + '/api/?action=status')[0] == 401 and anfrage(CRM + '/api/?action=crm_start')[0] == 401 and anfrage(CRM + '/module/crm/plz.json')[0] in (302, 303, 401))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(CRM + pfad, kopf=SEITE)
+    check(f'CRM {pfad}: Weiterleitung zum CRM (/module/crm/), kein Eingabebereich auf dem CRM-Host',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/crm/'), (code, kopf.get('Location')))
+check('CRM: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(CRM + '/assets/app.css')[0] == 200 and anfrage(CRM + '/dashboard/abgemeldet.html')[0] == 200)
+for h in (D, A, W, B, HR, CRM):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
@@ -538,9 +554,10 @@ with sync_playwright() as pw:
     check('elf Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 11 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
     check('Kachel Verwaltung verfügbar (freigegeben)', pg.text_content('[data-modul="verwaltung"] .db-badge') == 'Verfügbar'
           and pg.get_attribute('[data-modul="verwaltung"]', 'href') is not None, pg.text_content('[data-modul="verwaltung"] .db-badge'))
-    check('Kacheln Bestand, Import und HR verfügbar (freigegeben), 5 von 11', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
-          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr')) and '5 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Kacheln Bestand, Import, HR und CRM verfügbar (freigegeben), 6 von 11', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
+          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr', 'crm')) and '6 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Kachel HR führt zur Urlaubsverwaltung (Testserver: Pfad /module/hr/)', pg.get_attribute('[data-modul="hr"]', 'href') == '/module/hr/', pg.get_attribute('[data-modul="hr"]', 'href'))
+    check('Kachel CRM führt zum CRM (Testserver: Pfad /module/crm/)', pg.get_attribute('[data-modul="crm"]', 'href') == '/module/crm/', pg.get_attribute('[data-modul="crm"]', 'href'))
     pg.screenshot(path=os.path.join(SH, 'oidc_dashboard_1280.png'), full_page=True)
     k = kekse(ctx, f'dashboard.stafl.test')
     check('Cookies des Dashboards nur mit __Host-Präfix (Secure, Pfad /, ohne Domain)',
@@ -731,6 +748,43 @@ with sync_playwright() as pw:
     ph.screenshot(path=os.path.join(SH, 'oidc_hr_390.png'), full_page=True)
     ph.set_viewport_size({'width': 1280, 'height': 900})
 
+    # ── CRM unter eigener Adresse: Single Sign-on, eigene Sitzung, Kundendaten nur mit Recht crm.sehen (keine Standardrolle) ──
+    pc = eigene_seite(ctx.new_page())
+    pc.goto(CRM + '/'); pc.wait_for_selector('#crm-app:not([hidden]), #crm-err:not([hidden]), #crm-login:not([hidden])', timeout=30000)
+    check('CRM: Single Sign-on, Startadresse führt zum CRM; ohne Recht „CRM ansehen“ verständlicher Hinweis statt Daten',
+          pc.url.startswith(CRM + '/module/crm/') and pc.is_visible('#crm-err') and 'Berechtigung' in (pc.text_content('#crm-err') or ''), (pc.url, pc.text_content('#crm-err')))
+    stc = pc.evaluate("fetch('../../api/?action=status').then(r => r.json())")
+    check('CRM: Bereich kommt vom Webserver (crm.intern)', stc.get('loggedIn') and stc['user'].get('bereich') == 'crm.intern', stc.get('user'))
+    kc_ = kekse(ctx, 'crm.stafl.test')
+    check('CRM: eigene Sitzung (andere Cookie-Werte als angebot, verwaltung, bestand und hr, nur __Host-)',
+          kc_.get('__Host-oidc_sitzung', {}).get('value') not in (None, ka.get('__Host-oidc_sitzung', {}).get('value'), kv.get('__Host-oidc_sitzung', {}).get('value'), kb.get('__Host-oidc_sitzung', {}).get('value'), kh.get('__Host-oidc_sitzung', {}).get('value'))
+          and kc_.get('__Host-WA_ADMIN', {}).get('value') not in (None, ka.get('__Host-WA_ADMIN', {}).get('value'), kv.get('__Host-WA_ADMIN', {}).get('value'), kb.get('__Host-WA_ADMIN', {}).get('value'), kh.get('__Host-WA_ADMIN', {}).get('value'))
+          and all(n.startswith('__Host-') for n in kc_), sorted(kc_))
+    code = pc.evaluate("fetch('/api/?action=crm_start').then(r => r.status)")
+    check('CRM: ohne Recht crm.sehen verweigert der Server die Kundendaten (403)', code == 403, code)
+    V.call('user_save', {'id': uid_e, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'deny': [], 'grant': ['crm.sehen']})
+    pc.reload(); pc.wait_for_selector('#crm-app:not([hidden])', timeout=30000)
+    code, j = pc.evaluate("fetch('../../api/?action=crm_start').then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('CRM: mit „CRM ansehen“ crm_start 200, nur ansehen (ohne Bearbeiten/Export)', code == 200 and j.get('ok') and j.get('rechte', {}).get('bearbeiten') is False
+          and j.get('rechte', {}).get('exportieren') is False, (code, j.get('rechte')))
+    check('CRM: Name im Kopf, kein CSV-Knopf', 'Erika Editor' in (pc.text_content('#crm-user-name') or '') and pc.is_hidden('#crm-export'), pc.text_content('#crm-user-name'))
+    pc.goto(CRM + '/admin/'); pc.wait_for_selector('#crm-app:not([hidden])')
+    check('CRM: Adresse /admin/ (Anmeldehinweis der Seite) führt zurück zum CRM', pc.url.startswith(CRM + '/module/crm/'), pc.url)
+    # Aktion ↔ Host (GR-109): CRM-Aktionen nur auf dem CRM-Host; dort weder Eingabebereich noch HR
+    for name, seite in (('Dashboard', pg), ('Angebot', pa), ('Verwaltung', pv), ('Bestand', pb), ('HR', ph)):
+        code = seite.evaluate("fetch('/api/?action=crm_start').then(r => r.status)")
+        check(f'GR-109: crm_start auf dem Host „{name}“ abgewiesen (404)', code == 404, code)
+    for a in ('stock', 'users', 'kunden', 'hr_start', 'module_status'):
+        code = pc.evaluate("a => fetch('/api/?action=' + a).then(r => r.status)", a)
+        check(f'GR-109: auf dem CRM-Host {a} → ' + ('200 (Grundaktion der Plattform)' if a == 'module_status' else '404 (Aktion einer anderen Oberfläche)'),
+              code == (200 if a == 'module_status' else 404), code)
+    pc.screenshot(path=os.path.join(SH, 'oidc_crm_1280.png'), full_page=True)
+    pc.set_viewport_size({'width': 390, 'height': 860}); pc.reload(); pc.wait_for_selector('#crm-app:not([hidden])')
+    check('CRM 390 px: kein waagerechtes Scrollen', not pc.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
+    pc.screenshot(path=os.path.join(SH, 'oidc_crm_390.png'), full_page=True)
+    pc.set_viewport_size({'width': 1280, 'height': 900})
+    V.call('user_save', {'id': uid_e, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'deny': [], 'grant': []})
+
     # ── Gesperrtes Konto: sofort ausgesperrt, trotz gültiger Keycloak-Sitzung ──
     uid = nutzer_roh()['erika']['id']
     V.call('user_save', {'id': uid, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': False})
@@ -762,6 +816,8 @@ with sync_playwright() as pw:
     check('Back-Channel-Logout: Bestand ebenfalls abgemeldet', code == 401, code)
     code = ph.evaluate("fetch('/api/?action=status').then(r => r.status)")
     check('Back-Channel-Logout: HR ebenfalls abgemeldet', code == 401, code)
+    code = pc.evaluate("fetch('/api/?action=status').then(r => r.status)")
+    check('Back-Channel-Logout: CRM ebenfalls abgemeldet', code == 401, code)
     # Offene HR-Seite: Antwort 401 ohne JSON (Webserver) → Anmeldehinweis „neu laden“, der über Keycloak zurückführt
     ph.click('[data-jahr="1"]'); ph.wait_for_selector('#hr-login:not([hidden])')
     check('HR nach dem Abmelden: Anmeldehinweis, Knopf lädt die Seite neu (nicht /admin/)', ph.get_attribute('#hr-login a', 'href') == './', ph.get_attribute('#hr-login a', 'href'))

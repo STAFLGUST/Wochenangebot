@@ -21,7 +21,8 @@ t = open(sys.argv[1], encoding='utf-8').read(); r = json.loads(t)
 assert 'users' not in r and 'stafl.test' not in t and 'nur-fuer-tests' not in t
 assert all(c['secret'].startswith('@GEHEIM_') for c in r['clients'])
 host = {'dashboard': 'dashboard-stafl.de', 'angebot': 'angebot.dashboard-stafl.de', 'verwaltung': 'verwaltung.dashboard-stafl.de',
-        'bestand': 'bestand.dashboard-stafl.de', 'hr': 'hr.dashboard-stafl.de'}
+        'bestand': 'bestand.dashboard-stafl.de', 'hr': 'hr.dashboard-stafl.de',
+        'crm': 'crm.dashboard-stafl.de'}
 assert sorted(c['clientId'] for c in r['clients']) == sorted(host)
 assert all(c['redirectUris'] == [f"https://{host[c['clientId']]}/oidc/callback"] for c in r['clients'])
 assert all(c['secret'] == f"@GEHEIM_{c['clientId'].upper()}@" for c in r['clients'])
@@ -75,6 +76,14 @@ printf 'OIDC_SECRET_HR=pruefung-h\nOIDC_CRYPTO_HR=pruefung-e\n' >> "$ENV"
 docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
   | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_HR']=='pruefung-e' and e['OIDC_SECRET_HR']=='pruefung-h'" \
   && ok "HR: eigene Werte aus .env" || nein "HR: eigene Werte aus .env"
+# CRM (Stand 6) genauso: vor dem Konsolenschritt startbar, danach eigene Werte
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_CRM']=='pruefung-b' and e['OIDC_SECRET_CRM']" \
+  && ok "CRM: ohne eigene Werte in .env startbar (Schlüssel des Eingabebereichs)" || nein "CRM ohne Werte in .env"
+printf 'OIDC_SECRET_CRM=pruefung-k\nOIDC_CRYPTO_CRM=pruefung-f\n' >> "$ENV"
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['OIDC_CRYPTO_CRM']=='pruefung-f' and e['OIDC_SECRET_CRM']=='pruefung-k'" \
+  && ok "CRM: eigene Werte aus .env" || nein "CRM: eigene Werte aus .env"
 
 # Alter Eingabebereich: im Betrieb stillgelegt, Notzugang über .env (deploy/notzugang.sh)
 docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
@@ -92,7 +101,7 @@ DATEN="$(mktemp -d)"; cp -r "$REPO/tests/fixtures/data-seed/." "$DATEN/"; chmod 
 docker run -d --name stafl-pruefung -p 127.0.0.1:18090:80 \
   -e OIDC_ISSUER=https://login.dashboard-stafl.de/realms/mitarbeiter -e OIDC_SECRET_DASHBOARD=x -e OIDC_SECRET_ANGEBOT=x \
   -e OIDC_CRYPTO_DASHBOARD=pruefung-a -e OIDC_CRYPTO_ANGEBOT=pruefung-b -e OIDC_SECRET_VERWALTUNG=x -e OIDC_CRYPTO_VERWALTUNG=pruefung-c \
-  -e OIDC_SECRET_BESTAND=x -e OIDC_CRYPTO_BESTAND=pruefung-d -e OIDC_SECRET_HR=x -e OIDC_CRYPTO_HR=pruefung-e -e WA_EIGENE_ANMELDUNG=aus \
+  -e OIDC_SECRET_BESTAND=x -e OIDC_CRYPTO_BESTAND=pruefung-d -e OIDC_SECRET_HR=x -e OIDC_CRYPTO_HR=pruefung-e -e OIDC_SECRET_CRM=x -e OIDC_CRYPTO_CRM=pruefung-f -e WA_EIGENE_ANMELDUNG=aus \
   -v "$REPO/app:/var/www/html:ro" -v "$DATEN:/var/www/html/data" -v "$REPO/dashboard:/var/www/dashboard:ro" \
   -v "$HIER/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro" stafl-app:pruefung >/dev/null
 for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:18090/ 2>/dev/null && break; sleep 1; done
@@ -109,7 +118,7 @@ curl -s -H 'Host: angebot-stafl.de' 'http://127.0.0.1:18090/api/?action=status' 
   && ok "angebot-stafl.de: Status für den Healthcheck weiter erreichbar" || nein "angebot-stafl.de Status"
 [ "$(code angebot-stafl.de /dashboard/)" = 404 ] && ok "angebot-stafl.de: kein Dashboard" || nein "Dashboard auf angebot-stafl.de" "$(code angebot-stafl.de /dashboard/)"
 [ "$(code unbekannt.example /)" = 200 ] && ok "unbekannter Host fällt auf den bisherigen Standard zurück" || nein "Standard-Host"
-for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-stafl.de bestand.dashboard-stafl.de hr.dashboard-stafl.de; do
+for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-stafl.de bestand.dashboard-stafl.de hr.dashboard-stafl.de crm.dashboard-stafl.de; do
   c="$(code "$h" '/api/?action=status')"; [ "$c" = 401 ] && ok "$h: Schnittstelle ohne Anmeldung 401" || nein "$h Schnittstelle ohne Anmeldung" "$c"
   c="$(code "$h" '/api/?action=login' -H 'Content-Type: application/json' -d '{}')"; [ "$c" = 401 ] && ok "$h: eigene Anmeldung nicht erreichbar" || nein "$h Anmeldung" "$c"
   c="$(code "$h" /admin/ -H 'Accept: text/html')"; case "$c" in 302|500|502|503) ok "$h: Eingabebereich nur über Keycloak ($c, ohne Keycloak hier nicht erreichbar)";; *) nein "$h Eingabebereich" "$c";; esac
@@ -127,6 +136,12 @@ for p in / /admin/ /admin; do
 done
 c="$(code hr.dashboard-stafl.de /module/hr/ -H 'Accept: text/html')"; case "$c" in 302|500|502|503) ok "hr.dashboard-stafl.de: Urlaubsverwaltung nur über Keycloak ($c)";; *) nein "hr.dashboard-stafl.de/module/hr/" "$c";; esac
 c="$(code hr.dashboard-stafl.de /assets/app.css)"; [ "$c" = 200 ] && ok "hr.dashboard-stafl.de: Stylesheets ohne Anmeldung (Abmeldeseite)" || nein "hr.dashboard-stafl.de /assets/" "$c"
+# CRM: Startadresse und Eingabebereich führen zum CRM; die Seite selbst nur über Keycloak
+for p in / /admin/ /admin; do
+  case "$(ziel crm.dashboard-stafl.de "$p")" in "302 "*/module/crm/) ok "crm.dashboard-stafl.de$p: führt zum CRM (/module/crm/)";; *) nein "crm.dashboard-stafl.de$p" "$(ziel crm.dashboard-stafl.de "$p")";; esac
+done
+c="$(code crm.dashboard-stafl.de /module/crm/ -H 'Accept: text/html')"; case "$c" in 302|500|502|503) ok "crm.dashboard-stafl.de: CRM nur über Keycloak ($c)";; *) nein "crm.dashboard-stafl.de/module/crm/" "$c";; esac
+c="$(code crm.dashboard-stafl.de /assets/app.css)"; [ "$c" = 200 ] && ok "crm.dashboard-stafl.de: Stylesheets ohne Anmeldung (Abmeldeseite)" || nein "crm.dashboard-stafl.de /assets/" "$c"
 case "$(ziel angebot.dashboard-stafl.de /import/)" in *ansicht=importe*) nein "angebot.dashboard-stafl.de/import/ leitet in die Importzentrale" "$(ziel angebot.dashboard-stafl.de /import/)";; *) ok "Import-Adresse nur auf dem Verwaltungs-Host";; esac
 docker logs stafl-pruefung 2>&1 | grep -iE "AH0|error" | grep -viE "metadata|oidc_provider_static_config|oidc_util_http|curl" | head -3 | sed 's/^/Info: /' || true
 

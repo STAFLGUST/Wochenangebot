@@ -360,6 +360,10 @@ class EchtesRegelwerk(unittest.TestCase):
         o = rw.modul("hr")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
                          ("fertig", "produktiv", True, "https://hr.dashboard-stafl.de/module/hr/"))
+        # CRM: vom Inhaber am 23.10.2026 freigegeben (Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
+        o = rw.modul("crm")["oberflaeche"][0]
+        self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
+                         ("fertig", "produktiv", True, "https://crm.dashboard-stafl.de/module/crm/"))
         self.assertEqual(rw.modul("import")["teil_von"], "verwaltung")
         self.assertEqual(rw.modul("import")["kachel_ziel"], "verwaltung.import")
         self.assertEqual(rw.modul("angebot")["kachel_ziel"], "eingabe")
@@ -369,7 +373,7 @@ class EchtesRegelwerk(unittest.TestCase):
         for mid in ("bestand", "crm", "rewe", "qs", "einkauf", "verwaltung"):
             for o in rw.modul(mid).get("oberflaeche", []):
                 # Roadmap 10a: Verwaltung unter eigener Adresse; Phase 1 Bestand/Import: bestand.dashboard-stafl.de und Importzentrale
-                if (mid, o["id"]) in (("verwaltung", "verwaltung"), ("verwaltung", "import"), ("bestand", "intern")):
+                if (mid, o["id"]) in (("verwaltung", "verwaltung"), ("verwaltung", "import"), ("bestand", "intern"), ("crm", "intern")):
                     self.assertEqual((o["entwicklung"], o["freigabe"]), ("fertig", "produktiv"))
                     continue
                 self.assertEqual(o["freigabe"], "keine", f"{mid}.{o['id']}")

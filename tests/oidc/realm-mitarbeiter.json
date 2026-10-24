@@ -237,6 +237,39 @@
         "minimum.acr.value": "mfa",
         "default.acr.values": "mfa"
       }
+    },
+    {
+      "clientId": "crm",
+      "baseUrl": "https://crm.stafl.test:8443/module/crm/",
+      "name": "CRM",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "@GEHEIM_CRM@",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "https://crm.stafl.test:8443/oidc/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://crm.stafl.test:8443/dashboard/abgemeldet.html",
+        "backchannel.logout.url": "https://crm.stafl.test:8443/oidc/callback?logout=backchannel",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "false",
+        "minimum.acr.value": "mfa",
+        "default.acr.values": "mfa"
+      }
     }
   ],
   "users": [
