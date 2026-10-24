@@ -126,7 +126,9 @@ function gruppen_load(string $liste): array
     $d = store_read($liste);
     return ['rev' => (int)($d['rev'] ?? 0), 'groups' => is_array($d['groups'] ?? null) ? $d['groups'] : [], 'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => (string)($d['updatedBy'] ?? '')];
 }
-function gruppen_clean(string $liste, $list): array
+/* $alt: gespeicherte Einträge nach Nummer – Felder, die ein Eintrag der Anfrage nicht enthält, und Felder, die dieser
+   Stand nicht kennt (neuere Fassung), bleiben dann erhalten (GR-006). Ein absichtlich geleertes Feld kommt als "". */
+function gruppen_clean(string $liste, $list, array $alt = []): array
 {
     $L = GRUPPEN_LISTEN[$liste];
     if (!is_array($list)) throw new InvalidArgumentException("{$L['viele']} fehlen.");
@@ -140,12 +142,13 @@ function gruppen_clean(string $liste, $list): array
         if (isset($seen[$key])) throw new InvalidArgumentException("{$L['eine']} $nr kommt doppelt vor.");
         $seen[$key] = true;
         $row = ['nr' => $nr];
+        $vorher = is_array($alt[$nr] ?? null) ? $alt[$nr] : [];
         foreach ($L['felder'] as $f => [$max, $pflicht]) {
-            $v = s($g[$f] ?? '', $max) ?? '';
+            $v = array_key_exists($f, $g) || !array_key_exists($f, $vorher) ? (s($g[$f] ?? '', $max) ?? '') : (string)$vorher[$f];
             if ($pflicht && $v === '') throw new InvalidArgumentException("{$L['eine']} $nr: " . ($f === 'name' ? ($liste === 'vertreter' ? 'Name' : 'Bezeichnung') : $f) . ' fehlt.');
             $row[$f] = $v;
         }
-        $out[] = $row;
+        $out[] = $row + $vorher;
     }
     usort($out, function ($a, $b) { return strnatcasecmp($a['nr'], $b['nr']); });
     return $out;

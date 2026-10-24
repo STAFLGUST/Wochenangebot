@@ -29,9 +29,10 @@ switch ($action) {
                 if ($id !== '' && $idx === null) fail('Kunde nicht gefunden.', 404);
                 $old = $idx !== null ? $d['customers'][$idx] : null;
                 $row = ['id' => $old['id'] ?? ('k' . bin2hex(random_bytes(6)))];
+                // Felder, die die Anfrage nicht enthält, bleiben unverändert (älterer oder anderer Client, GR-006);
+                // ein absichtlich geleertes Feld kommt als "" an und wird geleert
                 foreach (CUSTOMER_FIELDS as $f => $max) {
-                    $v = s($b[$f] ?? '', $max) ?? '';
-                    $row[$f] = $v;
+                    $row[$f] = array_key_exists($f, $b) ? (s($b[$f] ?? '', $max) ?? '') : (string)($old[$f] ?? '');
                 }
                 if (mb_strlen($row['firma']) < 2) throw new InvalidArgumentException('Bitte den Namen der Firma angeben.');
                 // Kundengruppe muss es geben – eine inzwischen entfernte Gruppe darf unverändert bleiben
@@ -41,9 +42,12 @@ switch ($action) {
                 if ($row['email'] !== '' && filter_var($row['email'], FILTER_VALIDATE_EMAIL) === false) throw new InvalidArgumentException('Die E-Mail-Adresse ist ungültig.');
                 foreach ($d['customers'] as $c) if ($c['id'] !== $row['id'] && $row['nr'] !== '' && ($c['nr'] ?? '') === $row['nr']) throw new InvalidArgumentException("Die Kundennummer {$row['nr']} ist bereits vergeben.");
                 $known = array_merge([OFFER_STD], offer_ids());
-                $row['angebote'] = array_values(array_unique(array_filter(is_array($b['angebote'] ?? null) ? $b['angebote'] : [], function ($o) use ($known) { return is_string($o) && in_array($o, $known, true); })));
-                $row['active'] = !empty($b['active']);
-                $row['mailAngebot'] = !array_key_exists('mailAngebot', $b) || !empty($b['mailAngebot']);
+                $row['angebote'] = array_key_exists('angebote', $b)
+                    ? array_values(array_unique(array_filter(is_array($b['angebote']) ? $b['angebote'] : [], function ($o) use ($known) { return is_string($o) && in_array($o, $known, true); })))
+                    : array_values(is_array($old['angebote'] ?? null) ? $old['angebote'] : []);
+                $row['active'] = array_key_exists('active', $b) ? !empty($b['active']) : !empty($old['active']);
+                // ohne Angabe: bisherige Einstellung (Abmeldung des Kunden bleibt bestehen); neu angelegte Kunden erhalten das Angebot
+                $row['mailAngebot'] = array_key_exists('mailAngebot', $b) ? !empty($b['mailAngebot']) : (!$old || !array_key_exists('mailAngebot', $old) || !empty($old['mailAngebot']));
                 foreach (['weekly', 'mailLast', 'abgemeldet'] as $keep) if (isset($old[$keep])) $row[$keep] = $old[$keep];
                 if ($row['mailAngebot']) unset($row['abgemeldet']);
                 $row['created'] = $old['created'] ?? now();
@@ -52,7 +56,9 @@ switch ($action) {
                 $lg = is_array($b['login'] ?? null) ? $b['login'] : null;
                 $ol = $old['login'] ?? null;
                 $pwNew = false; $ended = false;
-                if (!$lg || !empty($lg['remove'])) {
+                if (!array_key_exists('login', $b)) {
+                    $row['login'] = $ol;   // ohne Angabe bleibt der Zugang, wie er ist (nur null oder {remove:true} entfernt)
+                } elseif (!$lg || !empty($lg['remove'])) {
                     $row['login'] = null;
                     $ended = (bool)$ol;
                 } else {
@@ -85,6 +91,8 @@ switch ($action) {
                     $row['login'] = $l;
                 }
                 if (!$row['active']) $ended = $ended || ($old && !empty($old['active']));
+                // Felder, die dieser Stand nicht kennt (neuere Fassung, andere Module), bleiben erhalten (GR-006)
+                if ($old) $row += array_diff_key($old, array_flip(['abgemeldet', 'login']));
                 if ($idx === null) $d['customers'][] = $row; else $d['customers'][$idx] = $row;
                 usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
                 $d['rev'] = (int)$d['rev'] + 1;
