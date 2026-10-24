@@ -66,7 +66,7 @@ switch ($action) {
                 $tage = hr_tage($ich, $von, $bis, null, null, hr_freie_tage($abw['eintraege'], $ich['id']));
                 if (!$tage) fail('Im gewählten Zeitraum liegen keine Arbeitstage (Wochenende, Feiertag oder freier Tag).', 422);
                 if ($s = hr_ueberschneidung($einst['sperren'], $von, $bis)) fail('Im Zeitraum ' . hr_zeitraum_text($s['von'], $s['bis']) . ' gilt eine Urlaubssperre' . ($s['text'] !== '' ? ' (' . $s['text'] . ')' : '') . '.', 422);
-                if ($k = hr_kollision($abw['eintraege'], $ich['id'], $von, $bis)) fail('Für ' . hr_zeitraum_text($k['von'], $k['bis']) . ' gibt es bereits einen Eintrag.', 409);
+                if ($k = hr_kollision($abw['eintraege'], $ich['id'], $von, $bis, null, 'U')) fail('Für ' . hr_zeitraum_text($k['von'], $k['bis']) . ' gibt es bereits einen Eintrag.', 409);
                 $vert = null;
                 if (($b['vertretung'] ?? '') !== '' && ($b['vertretung'] ?? null) !== null) {
                     $vp = hr_personen_index($personal)[(string)$b['vertretung']] ?? null;
@@ -78,11 +78,11 @@ switch ($action) {
                 $abw['eintraege'][] = $e;
                 hr_abwesenheiten_schreiben($abw);
                 $jahr = (int)substr($von, 0, 4);
-                return [$e, $ich, count($tage), hr_konto($ich, $abw['eintraege'], $jahr)];
+                return [$e, $ich, count($tage), hr_konto($ich, $abw['eintraege'], $jahr), hr_freie_tage($abw['eintraege'], $ich['id'])];
             });
-            [$e, $ich, $n, $konto] = $res;
+            [$e, $ich, $n, $konto, $frei] = $res;
             audit('hr', 'HR: Urlaub beantragt ' . hr_zeitraum_text($e['von'], $e['bis']) . " ($n Arbeitstage)");
-            respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich), 'konto' => $konto,
+            respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto,
                      'hinweis' => $konto['verfuegbar'] < 0 ? 'Der Antrag übersteigt Ihren Resturlaub um ' . (-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.' : null]);
         }
 
@@ -124,7 +124,10 @@ switch ($action) {
                 if (!$p) continue;
                 $aus = hr_eintrag_aus($e, $p, $freiJe[$e['person']] ??= hr_freie_tage($abw['eintraege'], $e['person']));
                 if ($e['status'] === 'beantragt') {
-                    $aus['konto'] = hr_konto($p, $abw['eintraege'], (int)substr($e['von'], 0, 4));
+                    $kj = (int)substr($e['von'], 0, 4);
+                    $aus['konto'] = hr_konto($p, $abw['eintraege'], $kj);
+                    // Tage des Antrags im Jahr des Kontos (über den Jahreswechsel zählt der Rest im Folgejahr)
+                    $aus['tageImJahr'] = count(hr_tage($p, $e['von'], $e['bis'], "$kj-01-01", "$kj-12-31", $freiJe[$e['person']]));
                     $aus['vertretungName'] = $e['vertretung'] && isset($idx[$e['vertretung']]) ? hr_name($idx[$e['vertretung']]) : null;
                     $aus['kollegen'] = [];   // wer aus derselben Abteilung im Zeitraum ebenfalls abwesend ist
                     foreach ($abw['eintraege'] as $o) {
@@ -186,7 +189,7 @@ switch ($action) {
                     $abw['eintraege'][$i]['status'] = 'storniert';
                     $abw['eintraege'][$i]['entscheidung'] = ['t' => now(), 'by' => $me['name'], 'grund' => s($b['grund'] ?? '', 300) ?? ''];
                     hr_abwesenheiten_schreiben($abw);
-                    return [$abw['eintraege'][$i], $idx[$abw['eintraege'][$i]['person']] ?? null, 'storniert'];
+                    return [$abw['eintraege'][$i], $idx[$abw['eintraege'][$i]['person']] ?? null, 'storniert', hr_freie_tage($abw['eintraege'], $abw['eintraege'][$i]['person'])];
                 }
                 $p = $idx[(string)($b['person'] ?? '')] ?? null;
                 if (!$p) fail('Bitte einen Mitarbeiter wählen.', 422);
@@ -194,7 +197,7 @@ switch ($action) {
                 if (!isset(HR_ARTEN[$art])) fail('Unbekannte Art der Abwesenheit.', 422);
                 [$von, $bis] = hr_zeitraum_pruefen($b);
                 if ($art !== 'X' && !hr_tage($p, $von, $bis)) fail('Im gewählten Zeitraum liegen keine Arbeitstage.', 422);
-                if ($k = hr_kollision($abw['eintraege'], $p['id'], $von, $bis, $i !== null ? $id : null)) fail('Für ' . hr_name($p) . ' gibt es im Zeitraum ' . hr_zeitraum_text($k['von'], $k['bis']) . ' bereits einen Eintrag.', 409);
+                if ($k = hr_kollision($abw['eintraege'], $p['id'], $von, $bis, $i !== null ? $id : null, $art)) fail('Für ' . hr_name($p) . ' gibt es im Zeitraum ' . hr_zeitraum_text($k['von'], $k['bis']) . ' bereits einen Eintrag.', 409);
                 $jetzt = ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']];
                 if ($i === null) {
                     $e = ['id' => hr_neue_id('a'), 'person' => $p['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'status' => 'genehmigt',
@@ -209,12 +212,12 @@ switch ($action) {
                     $abw['eintraege'][$i] = $e;
                 }
                 hr_abwesenheiten_schreiben($abw);
-                return [$e, $p, $i === null ? 'eingetragen' : 'geändert'];
+                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id'])];
             });
-            [$e, $p, $was] = $res;
+            [$e, $p, $was, $frei] = $res;
             // Protokoll ohne Art der Abwesenheit (Krankheit ist ein Gesundheitsdatum)
             audit('hr', 'HR: Abwesenheit ' . ($p ? hr_name($p) : '') . ' ' . hr_zeitraum_text($e['von'], $e['bis']) . ' ' . $was);
-            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p) : null]);
+            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null]);
         }
 
         /* Verwaltung → Mitarbeiter: HR-Angaben aller Mitarbeiter mit Urlaubskonto, Urlaubssperren, Ferien (Personalstelle).
