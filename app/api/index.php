@@ -1,5 +1,8 @@
 <?php
 /*
+ * API-Einstieg der STAFL-Plattform (/api/?action=…): prüft jede Anfrage (Herkunft, Host, Schreibschutz, Sperren,
+ * Wartung, Modulzugang) und bindet die Aktionen aus aktionen/*.php ein. Ablauf: docs/entwickler/03-server.md.
+ *
  * Wochenangebot – API
  *
  * Öffentlich:

@@ -1,3 +1,4 @@
+"""Testgruppe geo_ip: IP-Suche der Ländersperre – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)

@@ -1,3 +1,4 @@
+"""Testgruppe order_outbox: dauerhafte Versandaufträge für Bestellwunsch-Mails – Teilfehler, SMTP-Ausfall, Sperren, Neuversand."""
 import fcntl, hashlib, json, os, sqlite3, sys
 from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 from pathlib import Path

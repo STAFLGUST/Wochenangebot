@@ -1,3 +1,4 @@
+"""Gemeinsame Vorbereitung der Bestell-Testgruppen: Kunde mit Zugang, veröffentlichtes Angebot und Test-Mailserver."""
 from kunden_hilfe import Client
 from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 from smtp_test import TestSmtp

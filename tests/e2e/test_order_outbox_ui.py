@@ -1,3 +1,4 @@
+"""Testgruppe order_outbox_ui: Versand von Bestellwunsch-Mails in der Oberfläche – Empfängeranzeige, Bestätigung, Neuversand ohne Duplikate."""
 import sys
 from umgebung import shot
 from playwright.sync_api import sync_playwright
