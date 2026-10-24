@@ -68,6 +68,7 @@
   const invalid = new Map(); // Artikel-ID → ungültiger Preistext
   const autoAttr = new Set();// neue Artikel: Attribute folgen der Bezeichnung
   let filterQ = '', onlyChanges = false;
+  const auxStand = { stock: undefined, prev: undefined };   // Bestand/Vorwoche beim letzten Zeichnen (loadAux)
   /* Mehrere Angebote: Standard („Wochenangebot“) + Kundenangebote mit eigenen Preisen je Artikel (it.variants[id]) */
   const OSTD = 'std';
   let offers = [], offersRev = 0, stdPublic = true;
@@ -997,13 +998,19 @@
     const hay = fold([it.code, it.name, it.origin, it.category, C.CONDITION_LABELS[it.condition]].join(' '));
     return fold(filterQ).split(/\s+/).filter(Boolean).every((t) => hay.includes(t));
   }
+  function wasHTML(it, st, before = diff.before[it.id]) {
+    return st === 'is-price' && before ? `<span class="was" title="Veröffentlichter Preis">bisher <s>${esc(priceShort(before.price))}</s></span>` : '';
+  }
+  function altsHTML(it) {
+    return (it.altPrices || []).length ? `<div class="alts">${it.altPrices.map((p) => `<button type="button" data-act="item" title="Zusatzpreis bearbeiten">${esc(p.label)}: ${esc(p.status === 'value' ? fmtNum.format(p.value) : priceShort(p))}</button>`).join('')}</div>` : '';
+  }
   function rowHTML(it) {
     const st = rowState(it);
     const bad = invalid.has(it.id);
     const before = diff.before[it.id];
-    const was = st === 'is-price' && before ? `<span class="was" title="Veröffentlichter Preis">bisher <s>${esc(priceShort(before.price))}</s></span>` : '';
+    const was = wasHTML(it, st, before);
     const label = it.price.label ? `<span class="was">${esc(it.price.label)}</span>` : '';
-    const alts = (it.altPrices || []).length ? `<div class="alts">${it.altPrices.map((p) => `<button type="button" data-act="item" title="Zusatzpreis bearbeiten">${esc(p.label)}: ${esc(p.status === 'value' ? fmtNum.format(p.value) : priceShort(p))}</button>`).join('')}</div>` : '';
+    const alts = altsHTML(it);
     return `<tr data-id="${esc(it.id)}" class="${st}${matchesFilter(it) ? '' : ' hidden-row'}">
       <td class="e-code"><input class="in mono" data-f="code" value="${esc(it.code || '')}" placeholder="—" aria-label="Artikelnummer" maxlength="20"></td>
       <td class="e-name"><input class="in" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}</td>
@@ -1076,7 +1083,7 @@
       const items = model.items.filter((i) => i.groupId === g.id);
       const visible = items.filter(matchesFilter);
       const hide = (filterQ || onlyChanges) && !visible.length;
-      if ((g.section || '') !== sec) { sec = g.section || ''; if (sec && !hide) out += `<h2 class="gsec">${esc(sec)}</h2>`; }
+      if ((g.section || '') !== sec) { sec = g.section || ''; if (sec) out += `<h2 class="gsec">${esc(sec)}</h2>`; }
       out += `<section class="gcard" data-gid="${esc(g.id)}"${hide ? ' hidden' : ''}>
         <div class="ghead">
           <input class="in g-name" data-gf="name" value="${esc(g.name)}" aria-label="Name der Angebotsgruppe" maxlength="200">
@@ -1097,7 +1104,65 @@
     host.innerHTML = out;
     host.classList.toggle('no-stock', !stock);
     host.classList.toggle('no-prev', !prevWeek);
+    bereicheZeigen(host);
     lockInputs(host);
+    auxGemerkt();
+  }
+  /* Bereichsüberschrift nur, wenn mindestens eine ihrer Gruppen sichtbar ist (Suche, „Nur Änderungen“) */
+  function bereicheZeigen(host) {
+    let kopf = null, sichtbar = false;
+    for (const el of host.children) {
+      if (el.matches('h2.gsec')) { if (kopf) kopf.hidden = !sichtbar; kopf = el; sichtbar = false; }
+      else if (el.matches('section.gcard') && !el.hidden) sichtbar = true;
+    }
+    if (kopf) kopf.hidden = !sichtbar;
+  }
+  /* Leistung: Suche und „Nur Änderungen“ blenden vorhandene Zeilen und Gruppen nur aus/ein, statt den Editor
+     (~12 000 Elemente) neu zu zeichnen. Ergebnis wie renderGroups (matchesFilter, leere Gruppen bei aktivem Filter aus). */
+  function filterAnwenden() {
+    const host = $('#groups');
+    if (!model || !model.groups.length || !host.querySelector('section.gcard')) { renderGroups(); return; }
+    const idx = new Map(model.items.map((i) => [i.id, i]));
+    const aktiv = !!(filterQ || onlyChanges);
+    for (const sec of host.querySelectorAll(':scope > section.gcard')) {
+      let treffer = 0;
+      for (const tr of sec.querySelectorAll('tbody > tr[data-id]')) {
+        const it = idx.get(tr.dataset.id);
+        const ok = !it || matchesFilter(it);
+        tr.classList.toggle('hidden-row', !ok);
+        if (ok) treffer++;
+      }
+      sec.hidden = aktiv && !treffer;
+    }
+    bereicheZeigen(host);
+  }
+  /* Leistung: Beim Wechsel „Preise für“ ändern sich nur Kopf, Vorwoche, Preiszelle und Zustand der Zeilen –
+     nur diese werden ersetzt (vorher: ganzer Editor neu). */
+  function angebotZellen() {
+    const host = $('#groups');
+    if (!model || !host.querySelector('section.gcard')) { renderGroups(); return; }
+    const ae = document.activeElement;
+    if (ae && host.contains(ae) && ae.closest('td.e-price, td.e-prev')) ae.blur();
+    const idx = new Map(model.items.map((i) => [i.id, i]));
+    for (const tr of host.querySelectorAll('thead tr')) {
+      tr.querySelectorAll('th.e-prev, th.e-price, th.e-stock').forEach((th) => th.remove());
+      const tmp = document.createElement('tr');
+      tmp.innerHTML = auxHeadHTML();
+      tr.querySelector('th.e-act').before(...tmp.children);
+    }
+    for (const tr of host.querySelectorAll('tbody > tr[data-id]')) {
+      const it = idx.get(tr.dataset.id);
+      if (!it) continue;
+      const st = rowState(it);
+      const tmp = document.createElement('tr');
+      tmp.innerHTML = prevCellHTML(it) + (curOffer === OSTD ? stdCellHTML(it, invalid.has(it.id), it.price.label ? `<span class="was">${esc(it.price.label)}</span>` : '', wasHTML(it, st), altsHTML(it)) : variantCellHTML(it, st));
+      const [pc, pr] = [...tmp.children];
+      tr.querySelector('td.e-prev').replaceWith(pc);
+      tr.querySelector('td.e-price').replaceWith(pr);
+      tr.className = st + (matchesFilter(it) ? '' : ' hidden-row');
+      lockInputs(pr);
+    }
+    filterAnwenden();
   }
 
   /* ======================= Bearbeiten ======================= */
@@ -1271,8 +1336,8 @@
 
   /* Suche / Filter im Editor */
   let qTimer;
-  $('#ed-q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { filterQ = e.target.value.trim(); renderGroups(); }, 120); });
-  $('#only-changes').addEventListener('change', (e) => { onlyChanges = e.target.checked; renderGroups(); });
+  $('#ed-q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { filterQ = e.target.value.trim(); filterAnwenden(); }, 120); });
+  $('#only-changes').addEventListener('change', (e) => { onlyChanges = e.target.checked; filterAnwenden(); });
   $('#ed-q').addEventListener('input', () => setTimeout(renderNoPrice, 150));
 
   /* ======================= Artikel-Dialog ======================= */
@@ -1528,7 +1593,7 @@
     curOffer = id;
     store.set('angebot', id);
     renderOfferBar();
-    renderGroups();
+    angebotZellen();
     renderNoPrice();
   }
   $('#offer-bar').addEventListener('click', (e) => {
@@ -3120,8 +3185,12 @@
   }
   async function loadAux() {
     await Promise.all([may('bestand.sehen') ? loadStock().catch(() => {}) : Promise.resolve(), loadPrev().catch(() => {})]);
+    // Leistung: Bestand und Vorwoche unverändert seit dem letzten Zeichnen → keine ~550 Zellen neu (nur Liste „ohne Preis“)
+    if (auxStand.stock === stock && auxStand.prev === prevWeek) { renderNoPrice(); return; }
     refreshAux();
   }
+  /* Stand von Bestand/Vorwoche, mit dem der Editor zuletzt gezeichnet wurde (renderGroups, refreshAux) */
+  function auxGemerkt() { auxStand.stock = stock; auxStand.prev = prevWeek; }
   function stockOf(code) {
     if (!stock || !code) return null;
     if (stockIdxFor !== stock) { stockIdx = new Map(stock.articles.map((a) => [S.normCode(a.code), a])); stockIdxFor = stock; }
@@ -3161,6 +3230,7 @@
   function refreshAux() {
     if (!model) return;
     const host = $('#groups');
+    auxGemerkt();
     host.classList.toggle('no-stock', !stock);
     host.classList.toggle('no-prev', !prevWeek);
     for (const tr of $$('thead tr', host)) {

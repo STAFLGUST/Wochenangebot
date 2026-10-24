@@ -66,5 +66,16 @@ ok('Module: jedes Modul', all(f"(`{m['id']}`)" in ref['docs/entwickler/referenz/
 ok('stabil: zweimal erzeugt = gleich', ref == doku.alle(rg.laden()))
 ok('Dateikarte enthält den API-Einstieg mit Beschreibung', '| `index.php` | plattform | API-Einstieg' in ref['docs/entwickler/referenz/dateien.md'])
 
+# Während einer Zusammenführung mit Konflikt listet git jede Stufe einer Datei einzeln – die Dateiliste bleibt eindeutig
+import subprocess  # noqa: E402
+with tempfile.TemporaryDirectory() as g:
+    g = Path(g)
+    def git(*a):
+        subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', *a], cwd=g, check=False, capture_output=True)
+    git('init', '-q', '-b', 'main'); (g / 'a.txt').write_text('1\n'); git('add', '.'); git('commit', '-qm', 'a')
+    git('checkout', '-qb', 'zweig'); (g / 'a.txt').write_text('2\n'); git('commit', '-qam', 'b')
+    git('checkout', '-q', 'main'); (g / 'a.txt').write_text('3\n'); git('commit', '-qam', 'c'); git('merge', 'zweig')
+    ok('Dateiliste bei Konflikt eindeutig', rg.dateien(g) == ['a.txt'], rg.dateien(g))
+
 print(f'{PASS}/{PASS + FAIL} passed')
 sys.exit(1 if FAIL else 0)
