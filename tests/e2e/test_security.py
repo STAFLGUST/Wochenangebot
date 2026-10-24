@@ -113,12 +113,14 @@ with sync_playwright() as p:
     v.check('#auth-twofa [data-tf=ack]'); v.click('#auth-twofa [data-tf=done]'); v.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     check('after setup editor opens', True)
     v.context.close()
-    # --- Kontosperre
+    # --- Kontosperre (eigene Adresse: Fehlversuche anderer Namen derselben Adresse zählen bei der Bremse je Adresse mit –
+    # eine Anmeldung nimmt nur die eigenen zurück, lib/protokoll.php; hier geht es um die Sperre des Kontos)
+    VIC_IP = {'X-Forwarded-For': '198.51.100.91'}
     for k in range(3):
-        x = br.new_context().new_page(); login(x, 'vic', 'Falsch-Passwort-1', wait=False); x.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
+        x = br.new_context(extra_http_headers=VIC_IP).new_page(); login(x, 'vic', 'Falsch-Passwort-1', wait=False); x.wait_for_function("document.querySelector('#auth-err').textContent.length > 0")
         msg = x.inner_text('#auth-err'); x.context.close()
     check('account locked after 3 failures', 'gesperrt' in msg, msg)
-    x = br.new_context().new_page(); login(x, 'vic', 'Gut-Passwort-2026', wait=False); x.wait_for_selector('#au-code-wrap:not([hidden])')
+    x = br.new_context(extra_http_headers=VIC_IP).new_page(); login(x, 'vic', 'Gut-Passwort-2026', wait=False); x.wait_for_selector('#au-code-wrap:not([hidden])')
     check('locked account with 2FA: correct password leads to code step (owner not locked out)', x.locator('#au-code').is_visible()); x.context.close()
     a.click('#vt-edit'); a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
     until(lambda: a.locator('[data-sec=unlock]').count() == 1)   # Ansicht lädt neu

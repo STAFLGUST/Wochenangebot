@@ -132,7 +132,7 @@ switch ($action) {
             }
             if ($st === 'ok_locked' || $st === 'locked_code') {
                 // Während einer Sperre: für jedes Passwort dieselbe Antwort (Code-Schritt mit Hinweis auf die Sperre)
-                attempts_record(false);
+                attempts_record(false, 'mitarbeiter', $name);
                 audit('login_fail', 'Anmeldung während der Sperre' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '')
                     . ($st === 'ok_locked' ? ' – Passwort richtig, Code-Schritt' : ''), [], $who);
                 anmeldung_angleichen();
@@ -143,7 +143,7 @@ switch ($action) {
                 respond(['ok' => true, 'need2fa' => true, 'methods' => ['totp'], 'gesperrtBis' => (new DateTime('@' . (int)$u['lockedUntil']))->setTimezone(new DateTimeZone('Europe/Berlin'))->format('H:i')]);
             }
             if ($st !== 'ok') {
-                attempts_record(false);
+                attempts_record(false, 'mitarbeiter', $name);
                 $why = ['inactive' => ' – Zugang deaktiviert', 'locked' => ' – Zugang gesperrt', 'lockednow' => ' – Zugang nach zu vielen Fehlversuchen gesperrt', 'bad' => ''][$st];
                 audit('login_fail', 'Anmeldung fehlgeschlagen' . ($name !== '' ? ' (Benutzername „' . mb_substr($name, 0, 40) . '“)' : '') . $why, [], $who);
                 anmeldung_angleichen();
@@ -163,7 +163,7 @@ switch ($action) {
                 $methods = array_values(array_filter([!empty($u['totp']) ? 'totp' : null, has_passkeys($u) && !app_client() ? 'passkey' : null]));
                 respond(['ok' => true, 'need2fa' => true, 'methods' => $methods]);
             }
-            attempts_record(true);
+            attempts_record(true, 'mitarbeiter', (string)$u['username']);
             $tok = sign_in($u);
             audit('login', 'Angemeldet');
             geraet_neu_melden($u, (bool)$x['neu']);
@@ -229,7 +229,7 @@ switch ($action) {
             if ($st === 'gone') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut anmelden.', 401); }
             if ($st === 'abgelaufen') { $_SESSION = []; fail('Die Anmeldung ist abgelaufen. Bitte erneut mit Benutzername und Passwort anmelden.', 401); }
             if ($st === 'bad' || $st === 'locked') {
-                attempts_record(false);
+                attempts_record(false, 'mitarbeiter', (string)($u['username'] ?? ''));
                 $_SESSION['pend']['n'] = (int)$p['n'] + 1;
                 audit('login_fail', 'Zwei-Faktor-Code falsch', [], ['username' => $u['username'], 'name' => $u['name'], 'role' => $u['role']]);
                 if ($st === 'locked') { $_SESSION = []; fail('Dieser Zugang ist wegen zu vieler Fehlversuche gesperrt. Bitte später erneut versuchen oder einen Administrator kontaktieren.', 429); }
@@ -237,7 +237,7 @@ switch ($action) {
                 usleep(300000);
                 fail('Der Code ist nicht korrekt oder abgelaufen.', 401);
             }
-            attempts_record(true);
+            attempts_record(true, 'mitarbeiter', (string)$u['username']);
             $tok = sign_in($u);
             audit('login', $st === 'recovery' ? 'Angemeldet (mit Wiederherstellungscode – noch ' . count($u['recovery'] ?? []) . ' übrig)' : 'Angemeldet (mit Zwei-Faktor-Code)');
             geraet_neu_melden($u, (bool)$neuGeraet);
@@ -303,6 +303,9 @@ switch ($action) {
 
         case 'logout': {
             $u = current_user();
+            // Mit Sitzung nur mit CSRF-Token (wie kunde_logout): eine fremde Seite kann niemanden abmelden. Ohne Sitzung
+            // (abgelaufen, schon abgemeldet) bleibt Abmelden ohne Token möglich, damit Oberflächen immer aufräumen können.
+            if ($u) require_csrf();
             if ($u) { audit('logout', 'Abgemeldet'); $sid = (string)($_SESSION['sid'] ?? ''); sess_remove(function ($k) use ($sid) { return $k === $sid; }); }
             $_SESSION = [];
             session_destroy();

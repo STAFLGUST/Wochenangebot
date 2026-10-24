@@ -436,6 +436,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_aktionsregister.py` | plattform | Aktionsregister (regeln/aktionen/*.toml → app/api/lib/aktionen-liste.php) wirkt im API-Einstieg für jede Aktion. |
 | `test_angebote.py` | angebot | Mehrere Angebote: Kundenangebote mit eigenen Preisen, Verwaltung, Übernahme, Veröffentlichen, Auslieferung nur an Berechtigte (Regel |
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |
+| `test_anmeldebremse.py` | plattform | Fehlversuchsbremse je Adresse (lib/protokoll.php), Abmelden mit CSRF und Bedrohungsliste ohne Nebenwirkung beim Lesen. - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche für denselben Namen zurück (eigene … |
 | `test_app_api.py` | mobile | Schnittstelle für die App (docs/app-api.md) |
 | `test_app_web.py` | mobile | App (mobile/) als Web-Build gegen den echten Testserver |
 | `test_auswertung.py` | verwaltung | Auswertung: Karte der Kunden-Anmeldungen. |

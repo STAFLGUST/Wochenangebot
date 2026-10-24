@@ -121,7 +121,7 @@ beginnen, und hängen die aktuelle Seite als `target_link_uri` an; mod_auth_open
 eigenen Hosts (`OIDCRedirectURLsAllowed`). Nach der Rückkehr ist `auth_time` neuer als `authAt`; `oidc_nutzer()` setzt
 damit `adminConfirmedAt` neu (Protokoll `reauth`).
 
-**Abmelden:** Aktion `logout` entfernt den Eintrag im Sitzungsregister, zerstört die PHP-Sitzung und liefert auf
+**Abmelden:** Aktion `logout` verlangt bei bestehender Sitzung das CSRF-Token (ohne Sitzung geht sie immer), entfernt den Eintrag im Sitzungsregister, zerstört die PHP-Sitzung und liefert auf
 Keycloak-Hosts `abmelden` = `/oidc/callback?logout=https://<host>/dashboard/abgemeldet.html`. Der Browser folgt; das
 Modul beendet seine Sitzung und die Keycloak-Sitzung, Keycloak meldet alle anderen Clients per Back-Channel-Logout ab
 (`backchannel.logout.url` je Client in `deploy/anmeldung/realm-mitarbeiter.json`). Sitzungsdauer im Modul: 4 Std.
@@ -138,6 +138,7 @@ Die eigenen Verfahren leben weiter, weil der Notzugang und die E2E-Tests sie bra
 | Verfahren | Ort |
 | --- | --- |
 | Benutzername + Passwort, Sperre nach Fehlversuchen, gleiche Laufzeit für unbekannte Namen | `aktionen/zugang.php` (`login`), `lib/nutzer.php` (`login_failure`, `ghost_lock`, `dummy_verify`, `anmeldung_angleichen`) |
+| Bremse je Adresse (Dokument `logins`) | `lib/protokoll.php` (`attempts_check`, `attempts_record`): 5 Fehlversuche → 10 Min. Sperre; eine erfolgreiche Anmeldung nimmt nur die Fehlversuche **für denselben Namen** zurück (Feld `wer`, Prüfsummen der Namen), nicht die für andere Namen (sonst Passwort-Spraying mit eigenem Zugang); Fehlversuche verfallen eine Stunde nach dem letzten; Mitarbeiter und Kunden zählen getrennt (`$bereich`) |
 | Zweiter Schritt TOTP / Wiederherstellungscodes | `login_2fa`, `twofa_begin|enable|disable`; `lib/sicherheit.php` (`totp_check`: jeder Code nur einmal) |
 | Passkeys (eigene WebAuthn-Prüfung, ADR-003 Befund B-3) | `lib/passkey.php`, `aktionen/passkey.php`; Herkunft = aufgerufener Host (`passkey_origin`) |
 | Vertraute Geräte | `lib/geraete.php`: Cookie `__Host-WA_GERAET`, gespeichert nur die Prüfsumme. Ein vertrautes Gerät umgeht **nur eine Sperre** durch fremde Fehlversuche – nie Passwort oder zweiten Faktor |
@@ -225,7 +226,7 @@ $me = require_perm_confirmed('kunden.bearbeiten', 'kunde_save');          // Rec
 
 Beide verlangen Anmeldung und CSRF und prüfen `adminConfirmedAt` gegen die Gültigkeit und die Sitzungsversion. Sonst
 antworten sie 403 `confirmation_required` (lokal: Passwortdialog → Aktion `reauth`) bzw. auf Keycloak-Hosts – bei
-`require_admin_confirmation` – 403 `reauth_required` (4.2). Der Test `bestaetigung` prüft, dass jede Stelle ihren
+beiden – 403 `reauth_required` mit der Adresse einer frischen Keycloak-Anmeldung (`anmelden`, `max_age=0`; 4.2). Der Test `bestaetigung` prüft, dass jede Stelle ihren
 Katalogschlüssel nutzt; neue sensible Aktionen bekommen einen Eintrag in `BESTAETIGUNG`.
 
 ## 4.4 Rollen und Rechte
@@ -355,10 +356,6 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
   Aktion ↔ Host für HR und CRM produktiv sind; Angebot, Verwaltung und Bestand teilen sich weiter die Aktionen von
   `angebot.eingabe` (der Modulzugang sperrt dort nur den Host, siehe 4.4). Eine echte Trennung braucht eigene
   Oberflächen je Modul im Aktionsregister und einen Eingabebereich, der auf jedem Host nur die Daten seines Moduls lädt.
-- `require_perm_confirmed()` antwortet auch auf Keycloak-Hosts mit `confirmation_required` (Passwortdialog), während
-  die Aktion `reauth` dort gesperrt ist; nur `require_admin_confirmation()` leitet zur erneuten Anmeldung. Für
-  Nicht-Administratoren mit bestätigungspflichtigen Rechten nach Ablauf der Bestätigung ungeprüft – vor Änderungen an
-  dieser Stelle mit Test klären.
 - Die App kennt nur die lokale Anmeldung (Kopfzeile `X-WA-Sitzung`, Basisadresse z. B. `https://angebot-stafl.de`);
   dort ist die Mitarbeiteranmeldung stillgelegt (410). Die Anmeldung über OIDC für Apps ist geplant (ADR-003 §2).
 

@@ -422,7 +422,7 @@ abhaengigkeiten = []
 testgruppen = ["einheit", "rollen", "rollen_host", "stilllegung", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
   "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "rechte", "testumgebung",
-  "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "oidc_dashboard", "aktionsregister", "module_status", "modul_wartung"]
+  "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "oidc_dashboard", "anmeldebremse", "aktionsregister", "module_status", "modul_wartung"]
 pfade = [
   "regeln/aktionen/plattform.toml",
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",

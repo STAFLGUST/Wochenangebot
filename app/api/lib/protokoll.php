@@ -236,30 +236,61 @@ function client_key(): string
     if ($bin !== false && strlen($bin) === 16 && substr($bin, 0, 12) !== str_repeat("\0", 10) . "\xff\xff") $ip = inet_ntop(substr($bin, 0, 8) . str_repeat("\0", 8)) . '/64';
     return hash('sha256', $ip);
 }
-function attempts_check(): void
+/* Fehlversuchsbremse je Adresse (Dokument „logins“: Schlüssel → {n, t, ip, until, bereich, wer}).
+   - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche **für denselben Benutzernamen** zurück (wer sich vertippt und
+     dann anmeldet, wird wie bisher nicht gesperrt). Fehlversuche für andere Namen bleiben stehen: Sonst könnte jemand mit
+     einem eigenen gültigen Zugang zwischen je vier Versuchen an fremden Konten kurz sich selbst anmelden und unbegrenzt
+     weiterraten (Passwort-Spraying). „wer“: Name → Zahl der Fehlversuche (nur Prüfsummen der Namen).
+   - Fehlversuche verfallen ATTEMPTS_FENSTER Sekunden nach dem letzten Fehlversuch.
+   - Mitarbeiter- und Kundenanmeldung zählen getrennt ($bereich): Ein Kundenzugang entsperrt nie die Mitarbeiteranmeldung
+     und umgekehrt. Mitarbeiter behalten den bisherigen Schlüssel (Rückfall auf die Vorversion liest ihn weiter, GR-006).
+   - Eine laufende Sperre (until) hebt keine Anmeldung auf – nur ein Administrator (ip_unblock) oder der Zeitablauf. */
+const ATTEMPTS_FENSTER = 3600;
+function attempts_key(string $bereich = 'mitarbeiter'): string
+{
+    return $bereich === 'kunde' ? hash('sha256', 'kunde|' . client_key()) : client_key();
+}
+function attempts_wer(string $name): string
+{
+    return substr(hash('sha256', 'wer|' . mb_strtolower(trim($name))), 0, 16);
+}
+function attempts_check(string $bereich = 'mitarbeiter'): void
 {
     $a = store_read('logins') ?? [];
-    $k = client_key();
+    $k = attempts_key($bereich);
     if (!empty($a[$k]['until']) && $a[$k]['until'] > time()) {
         fail('Zu viele Fehlversuche. Bitte in ' . (int)ceil(($a[$k]['until'] - time()) / 60) . ' Minuten erneut versuchen.', 429);
     }
 }
-function attempts_record(bool $ok): void
+/* $name: Benutzername des Versuchs ('' = ohne Namen, z. B. Einmal-Links – wird nie durch eine Anmeldung zurückgenommen) */
+function attempts_record(bool $ok, string $bereich = 'mitarbeiter', string $name = ''): void
 {
-    with_lock('logins', function () use ($ok) {
+    with_lock('logins', function () use ($ok, $bereich, $name) {
         global $CFG;
         $a = store_read('logins') ?? [];
-        $k = client_key();
+        $k = attempts_key($bereich);
+        $w = $name !== '' ? attempts_wer($name) : '';
+        $vorher = $a;
         foreach ($a as $kk => $v) if (($v['until'] ?? 0) < time() && ($v['t'] ?? 0) < time() - 86400) unset($a[$kk]);
-        if ($ok) unset($a[$k]);
-        else {
-            $n = (int)($a[$k]['n'] ?? 0) + 1;
-            $a[$k] = ['n' => $n, 't' => time(), 'ip' => client_ip(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : 0];
+        $alt = $a[$k] ?? null;
+        $frisch = $alt !== null && (int)($alt['t'] ?? 0) >= time() - ATTEMPTS_FENSTER;
+        if ($ok) {
+            if ($alt !== null && $frisch && $w !== '' && isset($alt['wer'][$w]) && (int)($alt['until'] ?? 0) <= time()) {
+                $n = max(0, (int)$alt['n'] - (int)$alt['wer'][$w]);
+                unset($alt['wer'][$w]);
+                if ($n === 0 && !$alt['wer']) unset($a[$k]); else $a[$k] = ['n' => $n] + $alt;
+            }
+        } else {
+            $wer = $frisch && is_array($alt['wer'] ?? null) ? $alt['wer'] : [];
+            if ($w !== '') $wer[$w] = (int)($wer[$w] ?? 0) + 1;
+            $n = ($frisch ? (int)($alt['n'] ?? 0) : 0) + 1;
+            $a[$k] = ['n' => $n, 't' => time(), 'ip' => client_ip(), 'until' => $n >= (int)$CFG['max_attempts'] ? time() + 60 * (int)$CFG['lock_minutes'] : (int)($alt['until'] ?? 0),
+                      'bereich' => $bereich, 'wer' => $wer];
             if ($n >= (int)$CFG['max_attempts']) {
-                $a[$k]['n'] = 0;
+                $a[$k]['n'] = 0; $a[$k]['wer'] = [];
                 if (function_exists('notify')) notify('sicherheit', 'Anmeldesperre nach ' . $n . ' Fehlversuchen', [['IP-Adresse', client_ip()], ['Gesperrt für', (int)$CFG['lock_minutes'] . ' Minuten']]);
             }
         }
-        store_write('logins', $a);
+        if ($a !== $vorher) store_write('logins', $a);
     });
 }
