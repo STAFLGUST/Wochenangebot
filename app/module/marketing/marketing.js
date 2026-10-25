@@ -84,7 +84,8 @@
   const nameVon = (o, id) => o ? o.name : (id ? id + ' (entfernt)' : '');
   const statusName = (s) => S.d.status[s] || s;
   const statusPille = (s) => `<span class="mkt-pille ${STATUS_ART[s] || ''}">${esc(statusName(s))}</span>`;
-  const initialen = (n) => String(n || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+  const initialen = (n) => { const t = String(n || '').trim().split(/[\s.\-_]+/).filter(Boolean);   // wie HR und CRM: „Administrator“ → „AD“
+    return (t.length > 1 ? t[0][0] + t[1][0] : (t[0] || '?').slice(0, 2)).toLocaleUpperCase('de-DE'); };
   const markenFarbe = (e) => (marke(e.marke) || {}).farbe || '#9a928b';
   const kanalKurz = (id) => { const k = kanal(id); return k ? k.name : id; };
   const darfBearbeiten = () => S.d.rechte.bearbeiten;
