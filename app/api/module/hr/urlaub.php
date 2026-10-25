@@ -5,7 +5,10 @@ declare(strict_types=1);
    Mitarbeiterkonten liest das Modul nur über users_load() des Plattformkerns (Verknüpfung Person ↔ Anmeldung).
 
    Fachliche Regeln (mit dem Inhaber abgestimmt, Oktober 2026):
-   - Genehmigung durch eine zentrale Stelle (Recht hr.verwalten); Mitarbeiter beantragen nur Urlaub.
+   - Genehmigung durch Personen mit dem zuweisbaren Recht hr.genehmigen (Inhaber 25.10.2026, eigene Rolle), nicht mehr
+     automatisch durch die Personalstelle (hr.verwalten). Niemand entscheidet über den eigenen Antrag und niemand trägt
+     sich selbst Abwesenheiten ein – auch Administratoren nicht (Vier-Augen-Prinzip, hr_eigen).
+     Mitarbeiter beantragen nur Urlaub.
    - Krank (K), Gleittag (G) und freie Tage (X) trägt nur die Personalstelle ein.
    - Resturlaub wird ins Folgejahr übertragen und verfällt am 31.03., soweit er bis dahin nicht genommen ist.
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
@@ -300,6 +303,48 @@ function hr_ich(array $personal, array $me): ?array
 {
     foreach ($personal['personen'] as $p) if ($p['nutzer'] !== null && $p['nutzer'] === (string)$me['id'] && $p['aktiv']) return $p;
     return null;
+}
+
+/* Gehört der Eintrag dem angemeldeten Mitarbeiter? Über die verknüpfte Person (auch inaktive) oder den Antragsteller.
+   Grundlage des Vier-Augen-Prinzips: eigene Anträge entscheidet und eigene Abwesenheiten trägt eine andere Person ein. */
+function hr_eigen(array $personal, array $me, array $e): bool
+{
+    if ((string)($e['erfasst']['byId'] ?? '') !== '' && ($e['quelle'] ?? '') === 'antrag' && (string)$e['erfasst']['byId'] === (string)$me['id']) return true;
+    return hr_eigene_person($personal, $me, (string)($e['person'] ?? ''));
+}
+function hr_eigene_person(array $personal, array $me, string $person): bool
+{
+    foreach ($personal['personen'] as $p) if ($p['id'] === $person && $p['nutzer'] !== null && $p['nutzer'] === (string)$me['id']) return true;
+    return false;
+}
+
+/* Offene Urlaubsanträge für die Entscheidung (hr_verwaltung, hr_offen): Konto, Vertretung, wer aus derselben Abteilung
+   gleichzeitig weg ist (ohne Grund), „eigen“ = Antrag des angemeldeten Mitarbeiters (nicht entscheidbar). */
+function hr_offene_antraege(array $personal, array $abw, array $me): array
+{
+    $idx = hr_personen_index($personal);
+    $offen = []; $freiJe = [];
+    foreach ($abw['eintraege'] as $e) {
+        if ($e['status'] !== 'beantragt') continue;
+        $p = $idx[$e['person']] ?? null;
+        if (!$p) continue;
+        $aus = hr_eintrag_aus($e, $p, $freiJe[$e['person']] ??= hr_freie_tage($abw['eintraege'], $e['person']));
+        $kj = (int)substr($e['von'], 0, 4);
+        $aus['konto'] = hr_konto($p, $abw['eintraege'], $kj);
+        // Tage des Antrags im Jahr des Kontos (über den Jahreswechsel zählt der Rest im Folgejahr)
+        $aus['tageImJahr'] = count(hr_tage($p, $e['von'], $e['bis'], "$kj-01-01", "$kj-12-31", $freiJe[$e['person']]));
+        $aus['vertretungName'] = $e['vertretung'] && isset($idx[$e['vertretung']]) ? hr_name($idx[$e['vertretung']]) : null;
+        $aus['eigen'] = hr_eigen($personal, $me, $e);
+        $aus['kollegen'] = [];
+        foreach ($abw['eintraege'] as $o) {
+            if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || !in_array($o['status'], HR_AKTIV, true) || $o['bis'] < $e['von'] || $o['von'] > $e['bis']) continue;
+            $op = $idx[$o['person']] ?? null;
+            if ($op && $op['abteilung'] === $p['abteilung']) $aus['kollegen'][] = hr_name($op) . ' (' . hr_zeitraum_text(max($o['von'], $e['von']), min($o['bis'], $e['bis'])) . ')';
+        }
+        $offen[] = $aus;
+    }
+    usort($offen, function ($a, $b) { return $a['von'] <=> $b['von']; });
+    return $offen;
 }
 
 /* Zeiträume (Urlaubssperren, Ferien) prüfen: [{von, bis, text}] */

@@ -37,7 +37,7 @@
       <nav class="hr-tabs stafl-streifen" id="hr-tabs" role="tablist" aria-label="Bereiche">
         <button type="button" role="tab" data-tab="mein" aria-selected="true">Mein Urlaub</button>
         <button type="button" role="tab" data-tab="kalender" aria-selected="false">Kalender</button>
-        <button type="button" role="tab" data-tab="antraege" aria-selected="false" data-verwalten hidden>Anträge <span class="hr-zahl" id="hr-offen" hidden></span></button>
+        <button type="button" role="tab" data-tab="antraege" aria-selected="false" data-antraege hidden>Anträge <span class="hr-zahl" id="hr-offen" hidden></span></button>
         <button type="button" role="tab" data-tab="export" aria-selected="false" data-verwalten hidden>Export</button>
       </nav>
 
@@ -61,7 +61,7 @@
               </div>
               <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
               <label><span>Vertretung <span class="opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
-              <label><span>Notiz an die Personalstelle <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
+              <label><span>Notiz zum Antrag <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
               <p class="hr-meldung" id="antrag-meldung" role="status"></p>
               <button class="btn primary" type="submit" id="antrag-senden">Antrag stellen</button>
             </form>
@@ -86,21 +86,21 @@
         <div class="hr-plan-rahmen hr-glas"><table class="hr-plan" id="kal-plan"></table></div>
       </div>
 
-      <!-- Anträge (Personalstelle) -->
+      <!-- Anträge: entscheiden mit dem Recht „Urlaub genehmigen“, Personalstelle sieht zusätzlich alle Einträge -->
       <div class="hr-tab" id="tab-antraege" role="tabpanel" hidden>
         <div class="hr-jahr">
           <h1>Offene Anträge</h1>
-          <a class="btn" data-verwaltung-link="users" href="../../admin/#users">Mitarbeiter und Urlaubsanspruch</a>
-          <a class="btn" data-verwaltung-link="urlaub" href="../../admin/#urlaub">Urlaubssperren und Ferien</a>
+          <a class="btn" data-verwalten hidden data-verwaltung-link="users" href="../../admin/#users">Mitarbeiter und Urlaubsanspruch</a>
+          <a class="btn" data-verwalten hidden data-verwaltung-link="urlaub" href="../../admin/#urlaub">Urlaubssperren und Ferien</a>
         </div>
         <div class="hr-antraege" id="antraege-liste"></div>
-        <div class="hr-jahr klein">
+        <div class="hr-jahr klein" data-verwalten hidden>
           <button type="button" class="hr-rund klein" data-jahr="-1" aria-label="Vorheriges Jahr"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
           <h2 id="eintraege-titel">Alle Einträge</h2>
           <button type="button" class="hr-rund klein" data-jahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
           <label class="hr-filter">Mitarbeiter<select id="eintraege-person"><option value="">alle</option></select></label>
         </div>
-        <div class="hr-tabelle-rahmen hr-glas"><table class="hr-tabelle" id="eintraege-tabelle"></table></div>
+        <div class="hr-tabelle-rahmen hr-glas" data-verwalten hidden><table class="hr-tabelle" id="eintraege-tabelle"></table></div>
       </div>
 
       <!-- Export (Personalstelle) -->
