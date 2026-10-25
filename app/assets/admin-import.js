@@ -71,7 +71,7 @@
           <p class="imp-typ">${esc(a.kodierung || typText(a))}${a.mehrere ? ' · mehrere Dateien möglich' : ''}${a.bestaetigung ? ' · Übernahme mit Passwortbestätigung' : ''}</p>
           <div class="imp-aktion">${!a.verfuegbar ? `<span class="st-warn">${a.wartung ? 'Pausiert: Wartungsarbeiten' : 'Nicht verfügbar'}</span>`
             : a.ablauf === 'editor' ? `<button type="button" class="btn sm" data-imp-editor="${esc(a.id)}">${icon('link', 'sm')}Im Angebotseditor öffnen</button>`
-            : `<button type="button" class="btn sm primary" data-imp-waehlen="${esc(a.id)}">${icon('upload', 'sm')}${a.mehrere ? 'Dateien wählen' : 'Datei wählen'}</button>
+            : `<button type="button" class="btn sm" data-imp-waehlen="${esc(a.id)}">${icon('upload', 'sm')}${a.mehrere ? 'Dateien wählen' : 'Datei wählen'}</button>
                <input type="file" hidden data-imp-datei="${esc(a.id)}" accept="${esc(a.dateien.map((d) => '.' + d).join(','))}"${a.mehrere ? ' multiple' : ''}>`}</div>
         </article>`).join('')}</div>`;
   }
