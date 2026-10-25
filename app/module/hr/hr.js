@@ -1,6 +1,7 @@
 /* STAFL-Plattform · HR · Urlaub
    Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag, eigene Einträge, Abwesenheitskalender (Kollegen nur „abwesend“).
-   Personalstelle (Recht hr.verwalten): offene Anträge genehmigen/ablehnen, Abwesenheiten eintragen (U, K, G, freier Tag),
+   Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
+   Personalstelle (Recht hr.verwalten): Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
    Mitarbeiter mit Anspruch und Übertrag, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung,
    Urlaubssperren und Ferien. Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Bereiche sind nur
    Anzeige. Kein Inline-Skript (Content-Security-Policy). */
@@ -16,7 +17,7 @@
   const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag' };
   const STATUS = { beantragt: 'beantragt', genehmigt: 'genehmigt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen', storniert: 'storniert' };
   let csrf = '';
-  const S = { start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
+  const S = { offen: [], start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
 
   async function api(action, body, query = '') {
     let res;
@@ -78,7 +79,7 @@
     for (const p of $$('.hr-tab')) p.hidden = p.id !== 'tab-' + tab;
     try { history.replaceState(null, '', '#' + tab); } catch { /* egal */ }
     if (tab === 'kalender') ladeKalender();
-    if (tab === 'antraege') ladeVerwaltung();
+    if (tab === 'antraege') ladeAntraege();
     if (tab === 'export') zeigeExport();
   }
   $('#hr-tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) zeigeTab(b.dataset.tab); });
@@ -93,6 +94,7 @@
     if (r.status !== 200 || !r.data.ok) { fehler(fehlerText(r, 'Die Urlaubsverwaltung konnte nicht geladen werden')); return false; }
     S.start = r.data;
     for (const el of $$('[data-verwalten]')) el.hidden = !r.data.verwalten;
+    for (const el of $$('[data-antraege]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
     const offen = $('#hr-offen');
     offen.hidden = !r.data.offen; offen.textContent = r.data.offen || '';
     zeigeMein();
@@ -162,7 +164,7 @@
     if (r.status !== 200) { meldung(m, fehlerText(r, 'Der Antrag konnte nicht gestellt werden')); return; }
     $('#antrag').reset();
     await ladeStart();
-    meldung($('#antrag-meldung'), r.data.hinweis ? 'Antrag gestellt. ' + r.data.hinweis : 'Antrag gestellt – die Personalstelle entscheidet.', r.data.hinweis ? 'warn' : 'ok');
+    meldung($('#antrag-meldung'), r.data.hinweis ? 'Antrag gestellt. ' + r.data.hinweis : 'Antrag gestellt – er wird jetzt geprüft.', r.data.hinweis ? 'warn' : 'ok');
   });
 
   $('#mein-liste').addEventListener('click', async (e) => {
@@ -180,7 +182,7 @@
     if (!b) return;
     S.jahr += Number(b.dataset.jahr);
     await ladeStart();
-    if (S.tab === 'antraege') ladeVerwaltung();
+    if (S.tab === 'antraege') ladeAntraege();
   });
 
   /* ---------- Kalender / Monatsplan ---------- */
@@ -215,7 +217,7 @@
         const offen = k.endsWith('?'), code = offen ? k.slice(0, -1) : k;
         const titel = code === 'A' ? 'abwesend' : code === 'x' ? 'freier Tag' : (ART[code] || '') + (offen ? ' (beantragt)' : '');
         const inhalt = code ? `<span class="hr-art ${esc(code)}${offen ? ' offen' : ''}" title="${esc(titel)}">${esc(code === 'A' ? '•' : code)}</span>` : '';
-        const klick = m.voll && !t.wochenende && !t.feiertag;
+        const klick = m.voll && !p.ich && !t.wochenende && !t.feiertag;   // eigene Abwesenheiten trägt eine andere Person ein
         return `<td class="${kl(t)}${klick ? ' klick' : ''}"${klick ? ` data-person="${esc(p.id)}" data-datum="${t.datum}"` : ''}>${inhalt}</td>`;
       }).join('') + '</tr>';
     }
@@ -247,16 +249,31 @@
     const r = await api('hr_verwaltung', null, '&jahr=' + j);
     if (r.status !== 200) { fehlerVerwaltung(fehlerText(r, 'Personaldaten nicht verfügbar')); return; }
     S.verw = r.data;
-    const offen = $('#hr-offen');
-    offen.hidden = !r.data.offen.length; offen.textContent = r.data.offen.length || '';
+    S.offen = r.data.offen;
+    zahlOffen();
     if (S.tab === 'antraege') zeigeAntraege();
+  }
+  /* Offene Anträge: Personalstelle über hr_verwaltung, sonst (nur „Urlaub genehmigen“) über hr_offen */
+  async function ladeAntraege() {
+    if (S.start && S.start.verwalten) { await ladeVerwaltung(); return; }
+    const r = await api('hr_offen');
+    if (r.status !== 200) { fehlerVerwaltung(fehlerText(r, 'Anträge nicht verfügbar')); return; }
+    S.offen = r.data.offen;
+    zahlOffen();
+    if (S.tab === 'antraege') zeigeAntraege();
+  }
+  // Zahl am Reiter: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen
+  function zahlOffen() {
+    const n = S.offen.filter((a) => !(S.start && S.start.genehmigen) || !a.eigen).length;
+    const offen = $('#hr-offen');
+    offen.hidden = !n; offen.textContent = n || '';
   }
   function fehlerVerwaltung(text) { for (const id of ['#antraege-liste']) $(id).innerHTML = `<p class="hr-meldung fehler">${esc(text)}</p>`; }
 
   /* ---------- Anträge ---------- */
   function zeigeAntraege() {
-    const v = S.verw;
-    $('#antraege-liste').innerHTML = v.offen.length ? v.offen.map((a) => {
+    const darf = !!(S.start && S.start.genehmigen);
+    $('#antraege-liste').innerHTML = S.offen.length ? S.offen.map((a) => {
       const nach = a.konto.rest - (a.tageImJahr ?? a.tage);   // Konto des Beginnjahres: nur die Tage in diesem Jahr
       return `<article class="hr-antrag hr-glas" data-id="${esc(a.id)}">
         <h3>${esc(a.name)}</h3>
@@ -266,9 +283,12 @@
         ${a.kollegen.length ? `<dt>Gleichzeitig weg</dt><dd>${esc(a.kollegen.join(', '))}</dd>` : ''}
         ${a.notiz ? `<dt>Notiz</dt><dd>${esc(a.notiz)}</dd>` : ''}
         <dt>Beantragt</dt><dd>${esc(a.erfasst ? new Date(a.erfasst.t).toLocaleDateString('de-DE') : '')}</dd></dl>
-        <div class="knoepfe"><button type="button" class="btn primary" data-genehmigen>Genehmigen</button><button type="button" class="btn gefahr" data-ablehnen>Ablehnen</button></div>
+        ${darf && !a.eigen ? '<div class="knoepfe"><button type="button" class="btn primary" data-genehmigen>Genehmigen</button><button type="button" class="btn gefahr" data-ablehnen>Ablehnen</button></div>'
+          : `<p class="hr-hinweis">${a.eigen ? 'Ihr eigener Antrag – darüber entscheidet eine andere Person mit dem Recht „Urlaub genehmigen“.' : 'Die Entscheidung trifft eine Person mit dem Recht „Urlaub genehmigen“.'}</p>`}
       </article>`;
     }).join('') : '<p class="hr-leer hr-glas">Keine offenen Anträge.</p>';
+    if (!S.start || !S.start.verwalten || !S.verw) return;   // „Alle Einträge“ nur für die Personalstelle
+    const v = S.verw;
     $('#eintraege-titel').textContent = `Alle Einträge ${v.jahr}`;
     const sel = $('#eintraege-person'), alt = sel.value;
     sel.innerHTML = '<option value="">alle</option>' + v.personen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
@@ -282,7 +302,7 @@
       + (l.length ? l.map((e) => `<tr><td>${esc(e.name)}</td><td><span class="hr-art ${esc(e.art)}">${esc(e.art === 'X' ? 'x' : e.art)}</span> ${esc(e.artText)}</td>
         <td>${esc(zeitraum(e.von, e.bis))}</td><td class="zahl">${esc(zahl(e.tage))}</td><td><span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span></td>
         <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'vom Urlaub abgezogen' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : ''].filter(Boolean).join(' · '))}</td>
-        <td>${e.status === 'genehmigt' ? `<button type="button" class="btn" data-bearbeiten="${esc(e.id)}">Ändern</button>` : ''}</td></tr>`).join('')
+        <td>${e.status === 'genehmigt' && !e.eigen ? `<button type="button" class="btn" data-bearbeiten="${esc(e.id)}">Ändern</button>` : ''}</td></tr>`).join('')
         : '<tr><td colspan="7" class="gedaempft">Keine Einträge.</td></tr>') + '</tbody>';
   }
   $('#eintraege-person').addEventListener('change', zeigeEintraege);
@@ -293,12 +313,13 @@
   $('#antraege-liste').addEventListener('click', async (e) => {
     const karte = e.target.closest('[data-id]');
     if (!karte) return;
-    const a = S.verw.offen.find((x) => x.id === karte.dataset.id);
+    const a = S.offen.find((x) => x.id === karte.dataset.id);
+    if (!a) return;
     if (e.target.closest('[data-genehmigen]')) {
       e.target.disabled = true;
       const r = await api('hr_entscheiden', { id: a.id, entscheidung: 'genehmigt' });
       if (r.status !== 200) { e.target.disabled = false; alertKarte(karte, fehlerText(r, 'Genehmigen fehlgeschlagen')); return; }
-      await ladeVerwaltung();
+      await ladeAntraege();
       return;
     }
     if (e.target.closest('[data-ablehnen]')) {
@@ -320,7 +341,7 @@
     const r = await api('hr_entscheiden', { id: $('#dlg-ablehnen').dataset.id, entscheidung: 'abgelehnt', grund });
     if (r.status !== 200) { meldung($('#ablehnen-meldung'), fehlerText(r, 'Ablehnen fehlgeschlagen')); return; }
     $('#dlg-ablehnen').close();
-    await ladeVerwaltung();
+    await ladeAntraege();
   });
 
   /* ---------- Abwesenheit eintragen / ändern ---------- */
@@ -331,7 +352,7 @@
     const d = $('#dlg-eintrag');
     d.dataset.id = e.id || '';
     $('#dlg-eintrag-titel').textContent = e.id ? 'Abwesenheit ändern' : 'Abwesenheit eintragen';
-    $('#eintrag-person').innerHTML = '<option value="">– bitte wählen –</option>' + S.verw.personen.filter((p) => p.aktiv || p.id === e.person)
+    $('#eintrag-person').innerHTML = '<option value="">– bitte wählen –</option>' + S.verw.personen.filter((p) => (p.aktiv || p.id === e.person) && !(S.start && S.start.ich && p.id === S.start.ich.id))
       .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     $('#eintrag-person').value = e.person || '';
     $('#eintrag-art').value = e.art || 'U';

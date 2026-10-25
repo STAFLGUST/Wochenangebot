@@ -24,6 +24,9 @@ schreibend = true
 [aktion.hr_verwaltung]
 oberflaeche = "hr.intern"
 
+[aktion.hr_offen]
+oberflaeche = "hr.intern"
+
 [aktion.hr_entscheiden]
 oberflaeche = "hr.intern"
 schreibend = true
