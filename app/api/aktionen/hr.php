@@ -2,7 +2,8 @@
 declare(strict_types=1);
 /* Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/)
    Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“);
-                    hr.verwalten – zentrale Stelle: genehmigen, Einträge K/G/U/freie Tage, Mitarbeiter, Export, Übernahme.
+                    hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
+                    hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Export, Übernahme.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -30,13 +31,19 @@ switch ($action) {
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $ich = hr_ich($personal, $me);
             $verwalten = may($me, 'hr.verwalten');
+            $genehmigen = may($me, 'hr.genehmigen');
             $eigene = [];
             if ($ich) { $frei = hr_freie_tage($abw['eintraege'], $ich['id']); foreach ($abw['eintraege'] as $e) if ($e['person'] === $ich['id']) $eigene[] = hr_eintrag_aus($e, $ich, $frei); }
             usort($eigene, function ($a, $b) { return $b['von'] <=> $a['von']; });
             $kollegen = [];
             foreach ($personal['personen'] as $p) if ($p['aktiv'] && (!$ich || $p['id'] !== $ich['id'])) $kollegen[] = ['id' => $p['id'], 'name' => hr_name($p)];
-            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'neuVerknuepft' => $neuVerknuepft,
-                     'offen' => $verwalten ? count(array_filter($abw['eintraege'], function ($e) { return $e['status'] === 'beantragt'; })) : null,
+            // Zahl am Reiter „Anträge“: was der Mitarbeiter entscheiden kann (ohne eigene); Personalstelle ohne Genehmigungsrecht: alle offenen
+            $offen = null;
+            if ($genehmigen || $verwalten) $offen = count(array_filter($abw['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
+                return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
+            }));
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'neuVerknuepft' => $neuVerknuepft,
+                     'offen' => $offen,
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => HR_UEBERTRAG_BIS]);
@@ -118,37 +125,30 @@ switch ($action) {
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $idx = hr_personen_index($personal);
-            $eintraege = []; $offen = []; $freiJe = [];
+            $eintraege = []; $freiJe = [];
             foreach ($abw['eintraege'] as $e) {
                 $p = $idx[$e['person']] ?? null;
                 if (!$p) continue;
-                $aus = hr_eintrag_aus($e, $p, $freiJe[$e['person']] ??= hr_freie_tage($abw['eintraege'], $e['person']));
-                if ($e['status'] === 'beantragt') {
-                    $kj = (int)substr($e['von'], 0, 4);
-                    $aus['konto'] = hr_konto($p, $abw['eintraege'], $kj);
-                    // Tage des Antrags im Jahr des Kontos (über den Jahreswechsel zählt der Rest im Folgejahr)
-                    $aus['tageImJahr'] = count(hr_tage($p, $e['von'], $e['bis'], "$kj-01-01", "$kj-12-31", $freiJe[$e['person']]));
-                    $aus['vertretungName'] = $e['vertretung'] && isset($idx[$e['vertretung']]) ? hr_name($idx[$e['vertretung']]) : null;
-                    $aus['kollegen'] = [];   // wer aus derselben Abteilung im Zeitraum ebenfalls abwesend ist
-                    foreach ($abw['eintraege'] as $o) {
-                        if ($o['id'] === $e['id'] || $o['person'] === $e['person'] || !in_array($o['status'], HR_AKTIV, true) || $o['bis'] < $e['von'] || $o['von'] > $e['bis']) continue;
-                        $op = $idx[$o['person']] ?? null;
-                        if ($op && $op['abteilung'] === $p['abteilung']) $aus['kollegen'][] = hr_name($op) . ' (' . hr_zeitraum_text(max($o['von'], $e['von']), min($o['bis'], $e['bis'])) . ')';
-                    }
-                    $offen[] = $aus;
-                }
-                if ($e['von'] <= "$jahr-12-31" && $e['bis'] >= "$jahr-01-01") $eintraege[] = $aus;
+                if ($e['von'] <= "$jahr-12-31" && $e['bis'] >= "$jahr-01-01") $eintraege[] = hr_eintrag_aus($e, $p, $freiJe[$e['person']] ??= hr_freie_tage($abw['eintraege'], $e['person'])) + ['eigen' => hr_eigen($personal, $me, $e)];
             }
-            usort($offen, function ($a, $b) { return $a['von'] <=> $b['von']; });
+            $offen = hr_offene_antraege($personal, $abw, $me);
             usort($eintraege, function ($a, $b) { return [$a['von'], $a['name']] <=> [$b['von'], $b['name']]; });
             respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'heute' => hr_heute(),
                      'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
                      'offen' => $offen, 'eintraege' => $eintraege, 'sperren' => $einst['sperren'], 'ferien' => $einst['ferien'], 'arten' => HR_ARTEN]);
         }
 
-        /* Antrag genehmigen oder ablehnen */
+        /* Offene Urlaubsanträge für Mitarbeiter mit dem Recht „Urlaub genehmigen“ (ohne Personalstelle):
+           nur Urlaubsanträge, keine Krankheiten oder anderen Abwesenheitsgründe, eigene Anträge als „eigen“ markiert */
+        case 'hr_offen': {
+            $me = require_perm('hr.genehmigen');
+            header('Cache-Control: no-store');
+            respond(['ok' => true, 'heute' => hr_heute(), 'offen' => hr_offene_antraege(hr_personal(), hr_abwesenheiten(), $me)]);
+        }
+
+        /* Antrag genehmigen oder ablehnen – Recht hr.genehmigen, nie der eigene Antrag (auch nicht als Administrator) */
         case 'hr_entscheiden': {
-            $me = require_perm('hr.verwalten', true);
+            $me = require_perm('hr.genehmigen', true);
             $b = body();
             $id = s($b['id'] ?? '', 40) ?? '';
             $ent = (string)($b['entscheidung'] ?? '');
@@ -156,9 +156,10 @@ switch ($action) {
             $grund = s($b['grund'] ?? '', 300) ?? '';
             if ($ent === 'abgelehnt' && $grund === '') fail('Bitte einen Grund für die Ablehnung angeben.', 422);
             [$e, $p] = with_lock('hr-abwesenheiten', function () use ($me, $id, $ent, $grund) {
-                $abw = hr_abwesenheiten(); $idx = hr_personen_index(hr_personal());
+                $abw = hr_abwesenheiten(); $personal = hr_personal(); $idx = hr_personen_index($personal);
                 foreach ($abw['eintraege'] as &$e) {
                     if ($e['id'] !== $id) continue;
+                    if (hr_eigen($personal, $me, $e)) fail('Über den eigenen Antrag entscheidet eine andere Person mit dem Recht „Urlaub genehmigen“.', 403);
                     if ($e['status'] !== 'beantragt') fail('Dieser Antrag wurde bereits entschieden oder zurückgezogen.', 409);
                     $e['status'] = $ent;
                     $e['entscheidung'] = ['t' => now(), 'by' => $me['name'], 'grund' => $grund];
@@ -173,17 +174,21 @@ switch ($action) {
             respond(['ok' => true, 'status' => $e['status']]);
         }
 
-        /* Eintrag der Personalstelle anlegen, ändern oder stornieren (U, K, G, freier Tag) – gilt als genehmigt */
+        /* Eintrag der Personalstelle anlegen, ändern oder stornieren (U, K, G, freier Tag) – gilt als genehmigt.
+           Nie für sich selbst (Vier-Augen-Prinzip): sonst könnte sich die Personalstelle Urlaub ohne Genehmigung eintragen. */
         case 'hr_eintrag_save': {
             $me = require_perm('hr.verwalten', true);
             $b = body();
             $id = s($b['id'] ?? '', 40) ?? '';
             $storno = !empty($b['stornieren']);
             $res = with_lock('hr-abwesenheiten', function () use ($me, $b, $id, $storno) {
-                $abw = hr_abwesenheiten(); $idx = hr_personen_index(hr_personal());
+                $abw = hr_abwesenheiten(); $personal = hr_personal(); $idx = hr_personen_index($personal);
                 $i = null;
                 foreach ($abw['eintraege'] as $k => $e) if ($e['id'] === $id) { $i = $k; break; }
                 if ($id !== '' && $i === null) fail('Eintrag nicht gefunden.', 404);
+                $selbst = 'Eigene Abwesenheiten trägt eine andere Person der Personalstelle ein; Urlaub bitte beantragen.';
+                if ($i !== null && hr_eigene_person($personal, $me, $abw['eintraege'][$i]['person'])) fail($selbst, 403);
+                if (!$storno && hr_eigene_person($personal, $me, (string)($b['person'] ?? ''))) fail($selbst, 403);
                 if ($storno) {
                     if ($i === null || !in_array($abw['eintraege'][$i]['status'], HR_AKTIV, true)) fail('Nur offene oder genehmigte Einträge lassen sich stornieren.', 409);
                     $abw['eintraege'][$i]['status'] = 'storniert';
