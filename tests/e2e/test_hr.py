@@ -2,7 +2,8 @@
 
 Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, keine Testfreigabe), Mitarbeiter = Nutzer
 (jeder Mitarbeiter ist sofort in der Urlaubsverwaltung; Mitarbeiter ohne Anmeldung; HR-Angaben in der Verwaltung;
-Übernahme alter Einträge ohne Mitarbeiter), Rechte (hr.antrag für alle, hr.verwalten nur Personalstelle, serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
+Übernahme alter Einträge ohne Mitarbeiter), Rechte (hr.antrag für alle, hr.verwalten nur Personalstelle, hr.genehmigen als eigenes
+zuweisbares Recht, nie der eigene Antrag und nie eigene Abwesenheiten – auch nicht als Administrator; serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
 Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.03. und Verfall, 4-Tage-Woche,
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
 Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmigte Einträge), Übernahme der bisherigen
@@ -59,7 +60,7 @@ AUG = montag(Y, 8, 2)
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 for u, n, r, p, extra in (('erika', 'Erika Editor', 'editor', 'Editor-Zugang-77', {}), ('lena', 'Lena Leser', 'viewer', 'Leser-Zugang-77', {}),
-                          ('paul', 'Paul Personal', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.verwalten']}), ('otto', 'Otto Ohne', 'editor', 'Ohne-Zugang-77', {})):
+                          ('paul', 'Paul Personal', 'viewer', 'Personal-Zugang-77', {'grant': ['hr.verwalten', 'hr.genehmigen']}), ('otto', 'Otto Ohne', 'editor', 'Ohne-Zugang-77', {})):
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
 st, r_ = A.call('user_save', {'id': '', 'vorname': 'Andre', 'nachname': 'Vierzig', 'role': 'editor', 'active': True, 'zugang': False})
@@ -95,6 +96,11 @@ for a, b in (('hr_entscheiden', {'id': 'x', 'entscheidung': 'genehmigt'}), ('hr_
              ('mitarbeiter_hr_save', {'nutzer': 'x', 'rev': 0}), ('hr_export', {'jahr': Y, 'monate': [2]}), ('hr_einstellungen_save', {'sperren': []}),
              ('hr_personal_uebernehmen', {}), ('hr_import_pruefen', {'daten': {'blaetter': []}})):
     check(f'{a}: ohne Personalrecht 403', L.call(a, b)[0] == 403)
+check('hr_offen: ohne „Urlaub genehmigen“ 403', L.call('hr_offen')[0] == 403 and E.call('hr_offen')[0] == 403 and N.call('hr_offen')[0] == 401)
+check('hr_start: Rechte-Hinweise für die Oberfläche', E.call('hr_start')[1]['genehmigen'] is False and P.call('hr_start')[1]['genehmigen'] is True)
+kat = {x['key']: x for x in A.call('rechte')[1]['catalog']}
+check('Recht „Urlaub genehmigen“ im Katalog: zuweisbar, keine Standardrollen, setzt hr.antrag voraus', kat['hr.genehmigen']['default'] == [] and kat['hr.genehmigen']['requires'] == ['hr.antrag']
+      and kat['hr.genehmigen']['group'] == 'HR' and 'hr.verwalten' in kat, kat.get('hr.genehmigen'))
 
 # ── Mitarbeiter = Nutzer ──
 st, r = E.call('hr_start')
@@ -204,6 +210,62 @@ check('… Konto wieder 35', k['rest'] == 35 and k['geplant'] == 0, k)
 st, r = E.call('hr_antrag', {'von': iso(FEB), 'bis': iso(FEB + dt.timedelta(days=2))})
 P.call('hr_entscheiden', {'id': r['eintrag']['id'], 'entscheidung': 'genehmigt'})
 OFFEN = E.call('hr_antrag', {'von': iso(montag(Y, 2, 3)), 'bis': iso(montag(Y, 2, 3) + dt.timedelta(days=1))})[1]['eintrag']['id']
+
+# ── Urlaub genehmigen: eigenes, zuweisbares Recht (Inhaber 25.10.2026); nie der eigene Antrag, nie eigene Abwesenheiten ──
+OKT = montag(Y, 10, 2)
+for u, n, extra in (('gina', 'Gina Genehmigt', ['hr.genehmigen']), ('vera', 'Vera Verwalten', ['hr.verwalten'])):
+    assert A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': 'Genehmigen-Zugang-77', 'mustChange': False, 'grant': extra})[0] == 200
+ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+G = Client('198.51.100.8'); G.call('login', {'username': 'gina', 'password': 'Genehmigen-Zugang-77'})
+V = Client('198.51.100.9'); V.call('login', {'username': 'vera', 'password': 'Genehmigen-Zugang-77'})
+st, r = G.call('hr_offen')
+og = {a['id']: a for a in r.get('offen', [])}
+check('nur „Urlaub genehmigen“: offene Anträge mit Konto, ohne Personaldaten', st == 200 and OFFEN in og and 'konto' in og[OFFEN] and og[OFFEN]['eigen'] is False
+      and 'personen' not in r and 'eintraege' not in r, (st, list(r)))
+check('… nur Urlaubsanträge, keine Krankheiten', all(a['art'] == 'U' for a in r['offen']) and 'Arzt' not in json.dumps(r), [a['art'] for a in r['offen']])
+check('… keine Personalstelle: hr_verwaltung, Einträge und Export 403', G.call('hr_verwaltung')[0] == 403
+      and G.call('hr_eintrag_save', {'person': PL, 'art': 'K', 'von': iso(OKT), 'bis': iso(OKT)})[0] == 403 and G.call('hr_export', {'jahr': Y, 'monate': [2]})[0] == 403)
+st, r = E.call('hr_antrag', {'von': iso(OKT), 'bis': iso(OKT + dt.timedelta(days=1))})
+A_OKT = r['eintrag']['id']
+check('fremden Antrag genehmigen mit „Urlaub genehmigen“', G.call('hr_entscheiden', {'id': A_OKT, 'entscheidung': 'genehmigt'})[0] == 200)
+check('… Mitarbeiterin zieht den künftigen Urlaub wieder zurück (Konto unverändert)', E.call('hr_antrag_zurueckziehen', {'id': A_OKT})[0] == 200)
+st, r = V.call('hr_verwaltung&jahr=' + str(Y))
+check('Personalstelle ohne Genehmigungsrecht: sieht offene Anträge', st == 200 and OFFEN in [a['id'] for a in r['offen']], st)
+check('… darf aber nicht entscheiden (403) und hr_offen nicht (403)', V.call('hr_entscheiden', {'id': OFFEN, 'entscheidung': 'genehmigt'})[0] == 403 and V.call('hr_offen')[0] == 403)
+check('… Start: Zahl offener Anträge trotzdem', (lambda x: x['verwalten'] is True and x['genehmigen'] is False and x['offen'] >= 1)(V.call('hr_start')[1]))
+# Vier-Augen-Prinzip
+st, r = G.call('hr_antrag', {'von': iso(OKT + dt.timedelta(days=7)), 'bis': iso(OKT + dt.timedelta(days=8))})
+A_GINA = r['eintrag']['id']
+og = {a['id']: a for a in G.call('hr_offen')[1]['offen']}
+check('eigener Antrag als „eigen“ markiert, zählt nicht am Reiter', og[A_GINA]['eigen'] is True and G.call('hr_start')[1]['offen'] == len(og) - 1, (og.get(A_GINA), G.call('hr_start')[1]['offen']))
+st, r = G.call('hr_entscheiden', {'id': A_GINA, 'entscheidung': 'genehmigt'})
+check('eigenen Antrag genehmigen: 403', st == 403 and 'eigenen Antrag' in r.get('error', ''), (st, r))
+check('eigenen Antrag ablehnen: 403', G.call('hr_entscheiden', {'id': A_GINA, 'entscheidung': 'abgelehnt', 'grund': 'x'})[0] == 403)
+check('… Antrag bleibt offen', {x['id']: x for x in G.call('hr_start&jahr=' + str(Y))[1]['eintraege']}[A_GINA]['status'] == 'beantragt')
+check('Administrator darf ihn entscheiden (andere Person)', A.call('hr_entscheiden', {'id': A_GINA, 'entscheidung': 'abgelehnt', 'grund': 'Test'})[0] == 200)
+hr(ids['admin'], aktiv=True)
+st, r = A.call('hr_antrag', {'von': iso(OKT + dt.timedelta(days=14)), 'bis': iso(OKT + dt.timedelta(days=14))})
+A_ADMIN = r['eintrag']['id']
+check('Administrator: eigenen Antrag nicht genehmigen (403, alle Rechte reichen nicht)', A.call('hr_entscheiden', {'id': A_ADMIN, 'entscheidung': 'genehmigt'})[0] == 403)
+check('… Paul genehmigt ihn', P.call('hr_entscheiden', {'id': A_ADMIN, 'entscheidung': 'genehmigt'})[0] == 200)
+check('Administrator: eigenen Urlaub nicht direkt eintragen (403)', A.call('hr_eintrag_save', {'person': ids['admin'], 'art': 'U', 'von': iso(OKT + dt.timedelta(days=21)), 'bis': iso(OKT + dt.timedelta(days=21))})[0] == 403)
+check('… und den genehmigten nicht ändern oder stornieren (403)', A.call('hr_eintrag_save', {'id': A_ADMIN, 'person': ids['admin'], 'art': 'U', 'von': iso(OKT + dt.timedelta(days=14)), 'bis': iso(OKT + dt.timedelta(days=16))})[0] == 403
+      and A.call('hr_eintrag_save', {'id': A_ADMIN, 'stornieren': True})[0] == 403)
+check('… Paul storniert ihn (andere Person)', P.call('hr_eintrag_save', {'id': A_ADMIN, 'stornieren': True})[0] == 200)
+hr(ids['admin'], aktiv=False)
+st, r = P.call('hr_eintrag_save', {'person': ids['paul'], 'art': 'U', 'von': iso(OKT), 'bis': iso(OKT)})
+check('Personalstelle: sich selbst Urlaub eintragen 403 (auch nicht im Urlaubsplan)', st == 403 and 'andere Person' in r.get('error', ''), (st, r))
+for art in ('K', 'G', 'X'):
+    check(f'… auch {art} für sich selbst 403', P.call('hr_eintrag_save', {'person': ids['paul'], 'art': art, 'von': iso(OKT), 'bis': iso(OKT)})[0] == 403)
+st, r = A.call('hr_eintrag_save', {'person': ids['paul'], 'art': 'K', 'von': iso(OKT), 'bis': iso(OKT)})
+EP = r.get('eintrag', {}).get('id')
+check('Eintrag einer anderen Person für Paul: Paul darf ihn nicht ändern oder umhängen (403)', st == 200
+      and P.call('hr_eintrag_save', {'id': EP, 'person': PL, 'art': 'K', 'von': iso(OKT), 'bis': iso(OKT)})[0] == 403
+      and P.call('hr_eintrag_save', {'id': EP, 'stornieren': True})[0] == 403, (st, r))
+r = P.call('hr_verwaltung&jahr=' + str(Y))[1]
+check('… in „Alle Einträge“ als eigen markiert', {e['id']: e for e in r['eintraege']}.get(EP, {}).get('eigen') is True)
+check('… Administrator storniert ihn', A.call('hr_eintrag_save', {'id': EP, 'stornieren': True})[0] == 200)
+hr(ids['gina'], aktiv=False); hr(ids['vera'], aktiv=False)
 
 # 4-Tage-Woche
 st, r = P.call('hr_eintrag_save', {'person': PA, 'art': 'U', 'von': iso(AUG), 'bis': iso(AUG + dt.timedelta(days=4))})
@@ -511,6 +573,22 @@ with sync_playwright() as p:
     pg.wait_for_selector(f'#view-users tr[data-uid="{lisa["id"]}"]')
     check('Liste: „ohne Anmeldung“ statt Benutzername und Rolle', 'ohne Anmeldung' in pg.text_content(f'#view-users tr[data-uid="{lisa["id"]}"]'))
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_mitarbeiter_1280.png'), full_page=True)
+    ctx.close()
+    # Nur „Urlaub genehmigen“ (Gina): Reiter Anträge mit Knöpfen, ohne Personalstelle (Alle Einträge, Export, Verwaltungs-Links)
+    for breite in (1280, 390):
+        ctx, pg = anmelden('gina', 'Genehmigen-Zugang-77', '198.51.100.8', breite)
+        pg.goto(B + '/module/hr/#antraege'); pg.wait_for_selector('.hr-antrag [data-genehmigen]')
+        check(f'{breite}px Genehmigende: Anträge mit Knöpfen, ohne Export und „Alle Einträge“', pg.is_visible('[data-tab="antraege"]') and not pg.is_visible('[data-tab="export"]')
+              and not pg.is_visible('#eintraege-tabelle') and not pg.is_visible('[data-verwaltung-link="users"]'))
+        check(f'{breite}px Genehmigende: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        pg.screenshot(path=os.path.join(SH, f'hr_genehmigen_{breite}.png'), full_page=True)
+        ctx.close()
+    # Personalstelle ohne Genehmigungsrecht (Vera): Anträge sichtbar, aber ohne Knöpfe, mit Hinweis
+    ctx, pg = anmelden('vera', 'Genehmigen-Zugang-77', '198.51.100.9')
+    pg.goto(B + '/module/hr/#antraege'); pg.wait_for_selector('.hr-antrag .hr-hinweis')
+    check('Personalstelle ohne „Urlaub genehmigen“: Hinweis statt Knöpfe, „Alle Einträge“ sichtbar', pg.locator('.hr-antrag [data-genehmigen]').count() == 0
+          and 'Urlaub genehmigen' in pg.text_content('.hr-antrag .hr-hinweis') and pg.is_visible('#eintraege-tabelle'))
+    pg.screenshot(path=os.path.join(SH, 'hr_antraege_ohne_genehmigen_1280.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
     pg.goto(B + '/module/hr/')
