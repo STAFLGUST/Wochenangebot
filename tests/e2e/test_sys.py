@@ -51,6 +51,19 @@ with sync_playwright() as p:
     pv = ctx.new_page(); pv.goto(B + '/?vorschau=1#suche=10601'); pv.wait_for_selector('tr.row')
     check('preview shows draft', pv.locator('tr.row td.c-price').first.inner_text().startswith('24,10') and pv.locator('#preview-banner').is_visible())
     pv.close()
+    # Knöpfe „Angebotsseite“ und „Vorschau“: index.html statt „../“ (auf angebot.dashboard-stafl.de leitet „/“ in den Editor um)
+    check('Knopf Angebotsseite zeigt auf index.html', a.get_attribute('#btn-site', 'href') == '../index.html', a.get_attribute('#btn-site', 'href'))
+    with ctx.expect_page() as neu:
+        a.click('#btn-site')
+    ps = neu.value; ps.wait_for_selector('tr.row')
+    check('Angebotsseite öffnet die öffentliche Seite (veröffentlichter Stand, kein Editor)', ps.url.endswith('/index.html') and ps.locator('#screen-editor').count() == 0
+          and ps.locator('#preview-banner').is_hidden(), ps.url)
+    ps.close()
+    with ctx.expect_page() as neu:
+        a.click('#btn-preview')
+    ps = neu.value; ps.wait_for_selector('#preview-banner:not([hidden])')
+    check('Vorschau öffnet index.html?vorschau=1 mit dem Entwurf', '/index.html?vorschau=1' in ps.url, ps.url)
+    ps.close()
     a.reload(); a.wait_for_selector('tr[data-id]')
     check('draft persists after reload', row('10601').locator('input[data-f="price"]').input_value() == '24,10')
 

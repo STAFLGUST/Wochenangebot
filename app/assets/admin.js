@@ -1571,6 +1571,11 @@
     stdPublic = r.stdPublic !== false;
     if (!knownOffer(curOffer)) curOffer = OSTD;
   }
+  /* Adresse der Angebotsseite auf diesem Host (Angebotsseite, Vorschau, Kundenangebot). Ausdrücklich index.html statt „../“:
+     Auf den Hosts der zentralen Anmeldung (angebot.dashboard-stafl.de) leitet der Webserver „/“ in den Eingabebereich um
+     (RedirectMatch ^/$ /admin/) – „../“ öffnete dort wieder den Editor. Gleicher Host = gleiche Mitarbeitersitzung, damit
+     Vorschau und Kundenangebote wie bisher funktionieren. */
+  function angebotsseite(abfrage) { return '../index.html' + (abfrage || ''); }
   function renderOfferBar() {
     const host = $('#offer-bar');
     if (!host || !model) return;
@@ -1585,7 +1590,7 @@
       <span class="ob-act">${may('sonderposten.senden') ? `<button type="button" class="btn sm ghost" data-ob="restposten" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden">${icon('mail', 'sm')}Sonderposten senden</button>` : ''}${!ro && curOffer !== OSTD ? `<button type="button" class="btn sm ghost" data-ob="copy">${icon('copy', 'sm')}Preise übernehmen</button>` : ''}${may('angebote.verwalten') ? `<button type="button" class="btn sm ghost" data-ob="manage">${icon('list', 'sm')}Angebote verwalten</button>` : ''}</span></div>
       <p class="ob-hint">${hint}</p>`;
     const site = $('#btn-site');
-    if (site) site.href = '../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
+    if (site) site.href = angebotsseite(curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
   }
   function setOffer(id) {
     if (!knownOffer(id) || id === curOffer) return;
@@ -2152,7 +2157,7 @@
     if (!a) return;
     setMenu(false);
     if (a === 'versions') openVersions();
-    if (a === 'open-site') window.open('../' + (curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : ''), '_blank', 'noopener');
+    if (a === 'open-site') window.open(angebotsseite(curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : ''), '_blank', 'noopener');
     if (a === 'twofa') openTwofaDialog();
     if (a === 'passkeys') openPasskeyDialog();
     if (a === 'password') { $('#pw-form').reset(); $('#pw-err').textContent = ''; $('#dlg-password').showModal(); }
@@ -2230,7 +2235,7 @@
   $('#btn-preview').addEventListener('click', async () => {
     const w = window.open('', '_blank');
     if (unsaved()) await saveNow();
-    const u = '../?vorschau=1' + (curOffer !== OSTD ? '&angebot=' + encodeURIComponent(curOffer) : '');
+    const u = angebotsseite('?vorschau=1' + (curOffer !== OSTD ? '&angebot=' + encodeURIComponent(curOffer) : ''));
     if (w) w.location = u; else location.href = u;
   });
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });

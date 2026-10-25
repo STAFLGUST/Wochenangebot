@@ -455,7 +455,8 @@
     try { w.document.write('<!doctype html><meta charset="utf-8"><title>Angebot wird vorbereitet …</title><p style="font:14px sans-serif;padding:24px">Angebot wird vorbereitet …</p>'); } catch { /* geschlossen */ }
     if ((dirty || !ed.id) && !(await speichern())) { w.close(); return; }
     if (w.closed) return;
-    w.location.href = new URL('../?angebot=e-' + encodeURIComponent(ed.id) + '&drucken=1', location.href).href;
+    // index.html statt „../“: auf angebot.dashboard-stafl.de leitet „/“ in den Eingabebereich um (siehe angebotsseite in admin.js)
+    w.location.href = new URL('../index.html?angebot=e-' + encodeURIComponent(ed.id) + '&drucken=1', location.href).href;
   }
 
   /* ---------- E-Mail ---------- */

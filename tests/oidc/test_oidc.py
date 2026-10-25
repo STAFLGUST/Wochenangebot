@@ -623,6 +623,18 @@ with sync_playwright() as pw:
     pa.goto(A + '/admin/?ansicht=stock'); pa.wait_for_selector('#screen-editor:not([hidden])'); pa.wait_for_function("!document.querySelector('#vt-edit').hidden")
     check('Angebot: Bestandsliste auch über die Adresse nicht zu öffnen (?ansicht=stock → Angebot bearbeiten)', pa.is_hidden('#view-stock') and pa.is_visible('#view-edit'))
     check('Angebot: Bestandsdaten im Angebotseditor bleiben (Bestandsliste über die Schnittstelle lesbar)', pa.evaluate("fetch('../api/?action=stock').then(r => r.status)") == 200)
+    # Gemeldet 25.10.2026: „Angebotsseite“ öffnete auf diesem Host wieder den Editor („/“ → /admin/). Jetzt index.html.
+    with ctx.expect_page() as _neu:
+        pa.click('#btn-site')
+    ps = _neu.value; ps.wait_for_selector('#main', timeout=30000); ps.wait_for_load_state('networkidle')
+    check('Angebot: Knopf „Angebotsseite“ öffnet die Angebotsseite (nicht wieder den Editor)', ps.url == A + '/index.html' and ps.locator('#screen-editor').count() == 0
+          and ps.locator('#kw-pill').count() == 1, ps.url)
+    ps.close()
+    with ctx.expect_page() as _neu:
+        pa.click('#btn-preview')
+    ps = _neu.value; ps.wait_for_selector('#preview-banner:not([hidden])', timeout=30000)
+    check('Angebot: Vorschau öffnet den Entwurf auf der Angebotsseite (index.html?vorschau=1)', ps.url.startswith(A + '/index.html?vorschau=1'), ps.url)
+    ps.close()
     # Sitzung des Dashboards auf dem anderen Host untergeschoben
     fremd = br.new_context(ignore_https_errors=True)
     fremd.add_cookies([{'name': n, 'value': c['value'], 'url': A + '/'} for n, c in k.items()])
