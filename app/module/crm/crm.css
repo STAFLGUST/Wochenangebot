@@ -7,6 +7,8 @@ body.crm {
   --crm-text: #1c1a19;
   --crm-muted: #6b6560;
   --crm-glass: rgba(255, 255, 255, .58);
+  --crm-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
+  --crm-reiter-aktiv: var(--crm-deckend);
   --crm-deckend: #fbfaf8;
   --crm-rand: rgba(255, 255, 255, .8);
   --crm-linie: rgba(28, 26, 25, .1);
@@ -31,7 +33,7 @@ body.crm {
 }
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.crm {
-    --crm-bg: #121011; --crm-text: #f5f1ee; --crm-muted: #a59d97; --crm-glass: rgba(40, 36, 36, .55); --crm-deckend: #211d1d;
+    --crm-bg: #121011; --crm-text: #f5f1ee; --crm-muted: #a59d97; --crm-glass: rgba(40, 36, 36, .55); --crm-kopf-glas: rgba(33, 29, 29, .95); --crm-reiter-aktiv: rgba(255, 255, 255, .17); --crm-deckend: #211d1d;
     --crm-rand: rgba(255, 255, 255, .14); --crm-linie: rgba(255, 255, 255, .1); --crm-glanz: rgba(255, 255, 255, .2); --crm-schatten: 0 12px 44px rgba(0, 0, 0, .45);
     --crm-blob-a: #245a40; --crm-blob-b: #9a6a24; --crm-blob-c: #1f4a75;
     --crm-aus: rgba(255, 255, 255, .08); --crm-aus-hover: rgba(255, 255, 255, .14); --crm-akzent-ink: #f0a3ae; --crm-modul: #6fd09c; --crm-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
@@ -43,7 +45,7 @@ body.crm {
 }
 @media screen {
   :root[data-theme="dark"] body.crm {
-    --crm-bg: #121011; --crm-text: #f5f1ee; --crm-muted: #a59d97; --crm-glass: rgba(40, 36, 36, .55); --crm-deckend: #211d1d;
+    --crm-bg: #121011; --crm-text: #f5f1ee; --crm-muted: #a59d97; --crm-glass: rgba(40, 36, 36, .55); --crm-kopf-glas: rgba(33, 29, 29, .95); --crm-reiter-aktiv: rgba(255, 255, 255, .17); --crm-deckend: #211d1d;
     --crm-rand: rgba(255, 255, 255, .14); --crm-linie: rgba(255, 255, 255, .1); --crm-glanz: rgba(255, 255, 255, .2); --crm-schatten: 0 12px 44px rgba(0, 0, 0, .45);
     --crm-blob-a: #245a40; --crm-blob-b: #9a6a24; --crm-blob-c: #1f4a75;
     --crm-aus: rgba(255, 255, 255, .08); --crm-aus-hover: rgba(255, 255, 255, .14); --crm-akzent-ink: #f0a3ae; --crm-modul: #6fd09c; --crm-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
@@ -90,7 +92,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--crm-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
 .crm-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--crm-muted);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.crm-tabs button[aria-selected="true"] { background: var(--crm-deckend); color: var(--crm-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.crm-tabs button[aria-selected="true"] { background: var(--crm-reiter-aktiv); color: var(--crm-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
 .crm-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--crm-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .crm-zahl[hidden] { display: none; }
 
@@ -212,7 +214,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-board { display: grid; grid-template-columns: repeat(6, minmax(220px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 6px; }
 .crm-spalte { padding: 12px; border-radius: 22px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .crm-spalte-kopf { display: flex; justify-content: space-between; align-items: center; font-weight: 650; font-size: 14px; padding: 2px 4px 4px; }
-.crm-deal { padding: 10px 12px; border-radius: 14px; background: var(--crm-deckend); border: 1px solid var(--crm-linie); display: flex; flex-direction: column; gap: 4px; }
+.crm-deal { overflow-wrap: anywhere; padding: 10px 12px; border-radius: 14px; background: var(--crm-deckend); border: 1px solid var(--crm-linie); display: flex; flex-direction: column; gap: 4px; }
 .crm-deal small { color: var(--crm-muted); font-size: 12px; }
 .crm-deal select { height: 32px; font-size: 13px; padding: 0 8px; border-radius: 9px; margin-top: 4px; }
 
@@ -338,3 +340,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 }
 /* Handy: im Kopf nur das Bildzeichen des Logos wie im Eingabebereich (app.css) – Platz für Zurück, Modulname und Knöpfe */
 @media (max-width: 480px) { body.crm .crm-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
+
+/* Feinschliff (Durchsicht 25.10.2026): Kopfzeile beim Scrollen deckend, Häkchen und Auswahlpunkte in der Markenfarbe */
+.crm-kopf.crm-glas { background: var(--crm-kopf-glas); }
+.crm input[type="checkbox"], .crm input[type="radio"] { accent-color: var(--crm-akzent); }
