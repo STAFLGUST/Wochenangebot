@@ -373,7 +373,7 @@ name = "protokoll/*"
 eigentuemer = "plattform"
 schutz = "vertraulich"
 beschreibung = "Änderungsprotokoll je Monat (audit)"
-historie = "Nur anhängen; Einträge werden nicht geändert"
+historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php)"
 
 [[dokument]]
 name = "benachrichtigungen"

@@ -319,7 +319,7 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
 - `$a` = Art des Vorgangs, z. B. `publish`, `draft`, `discard`, `offers`, `master`, `stock`, `history`, `customers`,
   `einzelangebot`, `bestellung`, `mail`, `einkauf`, `user`, `security`, `twofa`, `wartung`, `login`, `login_fail`,
   `logout`, `password`, `reauth`, `reauth_fail`, `setup`, `kunde_login`, `kunde_login_fail`, `kunde_password`,
-  `kunde_abmeldung`, `import`, `hr`, `crm`, `modul_freigabe`, `modul_tester`, `oidc_*`.
+  `kunde_abmeldung`, `import`, `hr`, `crm`, `modul_freigabe`, `modul_tester`, `oidc_*`, `protokoll_aufbewahrung`.
 - `$merge = true` fasst fortlaufende Vorgänge derselben Person und Art innerhalb von 30 Minuten zusammen
   (`changes_merge`).
 - Kunden: IP nur bei fehlgeschlagener Anmeldung. Vorgänge mit Kundendaten (`LOG_KUNDENDATEN`) sieht nur, wer
@@ -328,6 +328,11 @@ Eintrag an das Monatsdokument `protokoll/<JJJJ-MM>` (UTC) an:
   Kundennummer, Feld und Auswahlwerte).
 - Fehler beim Protokollieren landen im Server-Protokoll; nur innerhalb einer SQLite-Transaktion wird die Ausnahme
   weitergeworfen.
+- **Aufbewahrung:** laufender Monat plus `PROTOKOLL_MONATE` (6) Monate davor (`protokoll_grenze()`). `audit()` löscht
+  ältere Monatsdokumente unter derselben Sperre (`protokoll_aufraeumen()`, beide Speicherarten) und vermerkt das als
+  Vorgang `protokoll_aufbewahrung` (nur die Monate, keine Inhalte). Die Ansicht `log` bietet ältere Monate nie an
+  (`protokoll_monate()`), auch nicht über `?month=`. Sicherungen enthalten ältere Stände, bis sie selbst ablaufen.
+  Leser anderer Auswertungen (Fehlversuche der letzten 7 Tage, Diagnose) sind davon nicht betroffen.
 
 Fehlversuche bei der Anmeldung zählt `attempts_record()` im Dokument `logins` (Schlüssel: SHA-256 der IPv4-Adresse
 bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts`, `lock_minutes`).

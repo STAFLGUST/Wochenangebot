@@ -5,6 +5,33 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* ---------------- Protokoll ---------------- */
 
+/* Aufbewahrung (Inhaber 25.10.2026): das Protokoll umfasst den laufenden Monat und die sechs Monate davor. Ältere
+   Monatsdokumente „protokoll/JJJJ-MM“ löscht audit() beim Schreiben (gleiche Sperre, beide Speicherarten).
+   Sicherungen enthalten ältere Stände weiter, bis sie selbst ablaufen. */
+const PROTOKOLL_MONATE = 6;
+
+/* Ältester aufbewahrter Monat (JJJJ-MM): laufender Monat minus PROTOKOLL_MONATE */
+function protokoll_grenze(?int $jetzt = null): string { return utc_monat(-PROTOKOLL_MONATE, $jetzt); }
+/* Monate des Protokolls, die aufbewahrt werden (neueste zuerst) – Protokollansicht bietet nur diese an */
+function protokoll_monate(): array
+{
+    $grenze = protokoll_grenze(); $out = [];
+    foreach (store_names('protokoll') as $f) { $m = basename($f); if (preg_match('/^\d{4}-\d{2}$/', $m) && $m >= $grenze) $out[] = $m; }
+    rsort($out);
+    return $out;
+}
+/* Monatsdokumente vor der Grenze löschen; liefert die entfernten Monate (aufsteigend). Nur innerhalb von with_lock('protokoll'). */
+function protokoll_aufraeumen(): array
+{
+    $grenze = protokoll_grenze(); $weg = [];
+    foreach (store_names('protokoll') as $f) {
+        $m = basename($f);
+        if (preg_match('/^\d{4}-\d{2}$/', $m) && $m < $grenze) { store_delete('protokoll/' . $m); $weg[] = $m; }
+    }
+    sort($weg);
+    return $weg;
+}
+
 /* Ein Eintrag je Vorgang; fortlaufendes Bearbeiten des Entwurfs durch dieselbe Person wird zusammengefasst */
 /* Vorgänge mit Kundendaten (Adressen, E-Mails, Bestellungen) – im Protokoll nur mit Recht „Kunden ansehen“ vollständig */
 const LOG_KUNDENDATEN = ['customers', 'kunde_login', 'kunde_login_fail', 'kunde_password', 'kunde_abmeldung', 'einzelangebot', 'bestellung', 'mail', 'einkauf'];
@@ -19,6 +46,12 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
         $month = gmdate('Y-m');
         with_lock('protokoll', function () use ($a, $s, $d, $who, $merge, $month) {
             $log = store_read('protokoll/' . $month) ?? [];
+            // Aufbewahrung: ältere Monate entfernen und das im laufenden Monat vermerken (nur Monate, keine Inhalte)
+            if ($weg = protokoll_aufraeumen()) {
+                $log[] = ['t' => now(), 'u' => 'system', 'n' => 'System', 'r' => '', 'ip' => '', 'a' => 'protokoll_aufbewahrung',
+                          's' => 'Protokoll: ' . count($weg) . (count($weg) === 1 ? ' Monat' : ' Monate') . ' älter als ' . PROTOKOLL_MONATE . ' Monate entfernt ('
+                               . ($weg[0] === end($weg) ? $weg[0] : $weg[0] . ' bis ' . end($weg)) . ')'];
+            }
             $last = $log ? $log[count($log) - 1] : null;
             $u = $who['username'] ?? '';
             if ($merge && $last && $last['a'] === $a && $last['u'] === $u && strtotime($last['t']) > time() - 1800) {
@@ -27,7 +60,7 @@ function audit(string $a, string $s, array $d = [], ?array $who = null, bool $me
                 $last['s'] = $s;
                 if (!$last['d']) array_pop($log); else $log[count($log) - 1] = $last;
             } else {
-                if ($merge && !$d) return;
+                if ($merge && !$d) { if ($weg) store_write('protokoll/' . $month, $log); return; }
                 // Kunden: IP nur bei fehlgeschlagener Anmeldung (Sicherheit), sonst nicht speichern (wie bei der Auswertung zugesagt)
                 $ip = ($who['role'] ?? '') === 'kunde' && $a !== 'kunde_login_fail' ? '' : client_ip();
                 $e = ['t' => now(), 'u' => $u, 'n' => $who['name'] ?? '', 'r' => $who['role'] ?? '', 'ip' => $ip, 'a' => $a, 's' => $s];

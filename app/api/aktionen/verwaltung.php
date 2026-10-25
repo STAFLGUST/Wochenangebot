@@ -485,14 +485,9 @@ switch ($action) {
         case 'log': {
             $me = require_perm('protokoll.sehen');
             header('Cache-Control: no-store');
-            $months = [];
-            foreach (store_names('protokoll') as $f) {
-                $m = basename($f);
-                if (preg_match('/^\d{4}-\d{2}$/', $m)) $months[] = $m;
-            }
-            rsort($months);
+            $months = protokoll_monate();   // nur aufbewahrte Monate (PROTOKOLL_MONATE)
             $month = (string)($_GET['month'] ?? '');
-            if (!preg_match('/^\d{4}-\d{2}$/', $month)) $month = $months[0] ?? gmdate('Y-m');
+            if (!preg_match('/^\d{4}-\d{2}$/', $month) || $month < protokoll_grenze()) $month = $months[0] ?? gmdate('Y-m');
             $entries = array_reverse(store_read('protokoll/' . $month) ?? []);
             // Ohne Recht „Kunden ansehen“: Einträge mit Kundendaten (Adressen, E-Mails, Bestellungen, Kunden-IP) nur als Vorgang zeigen
             if (!may($me, 'kunden.sehen')) {
@@ -507,6 +502,6 @@ switch ($action) {
                 }
                 unset($e);
             }
-            respond(['ok' => true, 'month' => $month, 'months' => $months, 'entries' => $entries]);
+            respond(['ok' => true, 'month' => $month, 'months' => $months, 'aufbewahrung' => PROTOKOLL_MONATE, 'entries' => $entries]);
         }
 }
