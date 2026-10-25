@@ -1,5 +1,6 @@
 """Offline migration/rollback and online SQLite backup. Never executes PHP input."""
 import argparse
+import hashlib
 import fcntl
 import json
 import os
@@ -8,6 +9,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import tarfile
 import tempfile
 
 GUARD = '<?php http_response_code(404); exit; ?>\n'
@@ -16,16 +18,21 @@ KEY = re.compile(r'^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*$')
 SCHEMA = '''CREATE TABLE documents(name TEXT PRIMARY KEY, payload TEXT NOT NULL CHECK(json_valid(payload)), mtime INTEGER NOT NULL) WITHOUT ROWID; PRAGMA user_version=1;'''
 
 
+def document_path(relative):
+    """True for a data file that belongs in the database: not a dot path, geo/, index.php or a sidecar."""
+    if any(part.startswith('.') for part in relative.parts) or relative.parts[0] == 'geo' or relative.name == 'index.php':
+        return False
+    return str(relative.with_suffix('')) not in SIDECARS
+
+
 def documents(root):
     for p in sorted(root.rglob('*.php')):
         relative = p.relative_to(root)
         if p.is_symlink():
             raise ValueError('Symbolic links are not supported')
-        if any(part.startswith('.') for part in relative.parts) or relative.parts[0] == 'geo' or p.name == 'index.php':
+        if not document_path(relative):
             continue
         name = str(relative.with_suffix(''))
-        if name in SIDECARS:
-            continue
         if not KEY.fullmatch(name):
             raise ValueError('Invalid document name')
         raw = p.read_text()
@@ -97,7 +104,7 @@ def rollback(root):
         for p in root.rglob('*.php'):
             relative = p.relative_to(root)
             name = str(relative.with_suffix(''))
-            if p.name == 'index.php' or relative.parts[0] == 'geo' or any(part.startswith('.') for part in relative.parts) or name in SIDECARS:
+            if not document_path(relative):
                 continue
             if name not in wanted:
                 p.unlink()  # Do not resurrect deleted users/offers on rollback.
@@ -108,6 +115,83 @@ def rollback(root):
     finally:
         shutil.rmtree(stage)
     print(f'{len(rows)} current documents exported; SQLite deactivated')
+
+
+def legacy_files(root):
+    """Old data files after the switch to SQLite: same selection as documents(), never read by the application."""
+    if not (root / '.sqlite-active').is_file():
+        raise ValueError('SQLite not active; old data files are still the live data')
+    with connect(root) as db:
+        validate(db)   # only with a sound database: the files are no longer needed for anything else
+    out = []
+    for p in sorted(root.rglob('*.php')):
+        relative = p.relative_to(root)
+        if not document_path(relative):
+            continue
+        if p.is_symlink() or not p.is_file():
+            raise ValueError('Unexpected entry (symbolic link or special file): ' + str(relative))
+        out.append(p)
+    return out
+
+
+def _sha(p):
+    h = hashlib.sha256()
+    with p.open('rb') as f:
+        for block in iter(lambda: f.read(65536), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def legacy(root, archive):
+    """List old data files or move them into a checked archive (never deletes before the archive is verified)."""
+    files = legacy_files(root)
+    size = sum(p.stat().st_size for p in files)
+    if archive is None:
+        for p in files:
+            print(f'{p.stat().st_size:>10}  {p.relative_to(root)}')
+        print(f'{len(files)} old data files, {size} bytes (not used while SQLite is active)')
+        return
+    if not files:
+        print('No old data files present; nothing archived')
+        return
+    archive = archive.resolve()
+    if archive.exists():
+        raise ValueError('Archive destination must not exist')
+    if root in archive.parents or archive == root:
+        raise ValueError('Archive must be outside the data directory')
+    expected = {str(p.relative_to(root)): (_sha(p), p.stat().st_size) for p in files}
+    tmp = archive.with_name(archive.name + '.tmp')
+    try:
+        with tarfile.open(tmp, 'w:gz') as tar:
+            for p in files:
+                tar.add(p, arcname=str(p.relative_to(root)), recursive=False)
+        os.chmod(tmp, 0o600)
+        found = {}
+        with tarfile.open(tmp, 'r:gz') as tar:
+            for m in tar.getmembers():
+                if not m.isfile():
+                    raise ValueError('Archive check failed: unexpected entry ' + m.name)
+                found[m.name] = (hashlib.sha256(tar.extractfile(m).read()).hexdigest(), m.size)
+        if found != expected:
+            raise ValueError('Archive check failed: contents differ from the data files')
+        tmp.replace(archive)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    for p in files:
+        if _sha(p) != expected[str(p.relative_to(root))][0]:
+            raise ValueError('File changed during archiving, stopped before removing: ' + str(p.relative_to(root)))
+    for p in files:
+        p.unlink()
+    # Leave directories that still hold other entries; never touch dot directories or geo/
+    for d in sorted({p.parent for p in files}, key=lambda d: len(d.parts), reverse=True):
+        while d != root and root in d.parents:
+            try:
+                d.rmdir()
+            except OSError:
+                break
+            d = d.parent
+    print(f'{len(files)} old data files ({size} bytes) archived to {archive} and removed from the data directory')
 
 
 def snapshot(root, target):
@@ -132,10 +216,11 @@ def snapshot(root, target):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command', choices=['migrate', 'rollback', 'check', 'snapshot'])
+    p.add_argument('command', choices=['migrate', 'rollback', 'check', 'snapshot', 'altdateien'])
     p.add_argument('directory', type=Path)
     p.add_argument('--offline', action='store_true', help='confirm app container stopped (required for migration/rollback)')
     p.add_argument('--output', type=Path)
+    p.add_argument('--archiv', type=Path, help='altdateien: move old data files into this new .tar.gz (verified first)')
     a = p.parse_args(); root = a.directory.resolve()
     if not root.is_dir():
         p.error('Data directory missing')
@@ -145,6 +230,7 @@ def main():
         fcntl.flock(lock, fcntl.LOCK_EX if a.command in ('migrate', 'rollback') else fcntl.LOCK_SH)
         if a.command == 'migrate': migrate(root)
         elif a.command == 'rollback': rollback(root)
+        elif a.command == 'altdateien': legacy(root, a.archiv)
         elif a.command == 'snapshot':
             if not a.output: p.error('--output required')
             snapshot(root, a.output)
