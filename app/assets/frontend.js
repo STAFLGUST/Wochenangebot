@@ -556,7 +556,7 @@ function plBlockHTML(b, mode) {
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
 let plK = 3;
-const plColsFor = (w) => (w >= 720 ? 3 : w >= 500 ? 2 : 1);   // drei Blöcke nebeneinander, sobald es lesbar passt
+const plColsFor = (w) => (w >= 900 ? 3 : w >= 500 ? 2 : 1);   // drei Blöcke erst, wenn die Bezeichnungen ganz passen (768 px: zwei)
 function renderListe(list, grouped) {
   const host = $('#list');
   plK = plColsFor((host && host.clientWidth) || 1200);
