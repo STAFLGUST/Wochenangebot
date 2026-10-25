@@ -351,7 +351,8 @@ function modul_uebersicht(?array $u): array
                        'status' => $z['kachel'] ?? 'nicht_verfuegbar', 'zugang' => $recht && (bool)($z['zugang'] ?? false), 'recht' => $recht, 'hinweis' => (bool)($z['hinweis'] ?? false)];
         }
         $out[] = ['id' => $id, 'name' => $m['name'], 'beschreibung' => $m['beschreibung'], 'icon' => $m['icon'], 'reihenfolge' => $m['reihenfolge'],
-                  'dashboard' => $m['dashboard'], 'teil_von' => $m['teil_von'], 'kachel' => $kachel, 'oberflaechen' => $obs];
+                  'dashboard' => $m['dashboard'], 'gruppe' => $m['gruppe'] ?? ($m['dashboard'] ? 'anwendungen' : null), 'teil_von' => $m['teil_von'],
+                  'kachel' => $kachel, 'oberflaechen' => $obs];
     }
     return $out;
 }

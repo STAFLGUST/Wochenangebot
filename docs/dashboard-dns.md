@@ -22,3 +22,8 @@ Claude-/Plattform-Agenten sollen diese Hostnamen später durch echte Module erse
 
 Status 21.10.2026: eingespielt (von außen geprüft: `dashboard-stafl.de` und Subdomains antworten mit 503). Welche Oberfläche
 zu welchem Host gehört, steht jetzt in `regeln/module.toml`; die CI prüft Caddy-Hosts gegen das Register (GR-105).
+
+Stand 25.10.2026 (Übersicht der DNS-Verwaltung vom Inhaber): CNAME → `dashboard-stafl.de` für `www`, `angebot`, `login`,
+`verwaltung`, `bestand`, `hr`, `crm`, `marketing`, `rewe`, `qs`, `einkauf`, `controlling`, `leergut`, `container-import` und
+`test`; A-Eintrag `@` zum VPS. Freigegeben (über Keycloak): `angebot`, `verwaltung`, `bestand`, `hr`, `crm`, `marketing`.
+503-Platzhalter bis zur Freigabe (GR-105): `rewe`, `qs`, `einkauf`, `leergut`, `container-import`, `controlling`, `test`.

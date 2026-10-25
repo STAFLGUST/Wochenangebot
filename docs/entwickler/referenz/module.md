@@ -25,6 +25,16 @@ Agent: `bestand` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `sto
 | --- | --- | --- | --- | --- |
 | `bestand.intern` Bestand | intern | https://bestand.dashboard-stafl.de/admin/ | fertig | produktiv |
 
+## Leergut (`leergut`)
+
+Leergutkonten je Kunde und Lieferant: Paletten, Kisten und Behälter – Ausgabe, Rücknahme, Salden
+
+Agent: `leergut` · hängt ab von `plattform`, `verwaltung`
+
+| Oberfläche | Art | Adresse | Entwicklung | Freigabe |
+| --- | --- | --- | --- | --- |
+| `leergut.intern` Leergut | intern | https://leergut.dashboard-stafl.de/ | geplant | keine |
+
 ## CRM (`crm`)
 
 Ansprechpartner, Kundenbeziehungen, Aktivitäten, Vorgänge, Vertriebsinformationen
@@ -65,6 +75,16 @@ Agent: `einkauf` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgr
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
 | `einkauf.intern` Einkauf | intern | https://einkauf.dashboard-stafl.de/ | geplant | keine |
+
+## Container-Import (`containerimport`)
+
+Importcontainer verfolgen: Buchung, Verschiffung, Ankunft, Verzollung und Dokumente
+
+Agent: `containerimport` · hängt ab von `plattform`, `verwaltung`, `einkauf`
+
+| Oberfläche | Art | Adresse | Entwicklung | Freigabe |
+| --- | --- | --- | --- | --- |
+| `containerimport.intern` Container-Import | intern | https://container-import.dashboard-stafl.de/ | geplant | keine |
 
 ## Import (`import`)
 

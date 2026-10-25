@@ -42,7 +42,7 @@ code, rr = A.call('rechte')
 check('Übersicht: Rollen, Module und Katalog', code == 200 and [r['id'] for r in rr['rollen']] == ['admin', 'viewer', 'editor']
       and {m['id'] for m in rr['module']} >= {'angebot', 'bestand', 'hr', 'verwaltung', 'import'}, code)
 ZUGANG = {p['key'] for p in rr['catalog'] if p['kind'] == 'zugang'}
-check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung']}, sorted(ZUGANG))
+check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung']}, sorted(ZUGANG))
 check('Modulzugang gehört zum Modul, Standard: beide Standardrollen', all(p['modul'] == p['key'].split('.')[0] and p['default'] == ['viewer', 'editor'] for p in rr['catalog'] if p['kind'] == 'zugang'))
 check('Rechte sind Modulen zugeordnet (Register)', next(p for p in rr['catalog'] if p['key'] == 'kunden.sehen')['modul'] == 'verwaltung'
       and next(p for p in rr['catalog'] if p['key'] == 'preisverlauf.sehen')['modul'] == 'angebot')

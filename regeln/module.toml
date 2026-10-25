@@ -117,6 +117,32 @@ hinweise = [
   sperrbar = true
 
 [[modul]]
+id = "leergut"
+name = "Leergut"
+beschreibung = "Leergutkonten je Kunde und Lieferant: Paletten, Kisten und Behälter – Ausgabe, Rücknahme, Salden"
+icon = "crate"
+reihenfolge = 25
+dashboard = true
+agent = "leergut"
+abhaengigkeiten = ["plattform", "verwaltung"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["regeln/aktionen/leergut.toml", "app/api/module/leergut/**", "app/module/leergut/**", "tests/e2e/test_leergut*.py"]
+hinweise = [
+  "Angelegt auf Wunsch des Inhabers (25.10.2026) als geplante Kachel; Umfang (Leergutarten, Konten, Abgleich mit der Warenwirtschaft) vor dem Bau mit dem Inhaber klären.",
+  "Kunden und Lieferanten gehören der Verwaltung; Leergut liest sie nur über deren Funktionen (GR-101).",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Leergut"
+  art = "intern"
+  adresse = "https://leergut.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
+
+[[modul]]
 id = "crm"
 name = "CRM"
 beschreibung = "Ansprechpartner, Kundenbeziehungen, Aktivitäten, Vorgänge, Vertriebsinformationen"
@@ -228,12 +254,39 @@ hinweise = ["Fehlmengen-Ansicht und Einkaufsmeldung existieren heute im Eingabeb
   sperrbar = true
 
 [[modul]]
+id = "containerimport"
+name = "Container-Import"
+beschreibung = "Importcontainer verfolgen: Buchung, Verschiffung, Ankunft, Verzollung und Dokumente"
+icon = "container"
+reihenfolge = 65
+dashboard = true
+agent = "containerimport"
+abhaengigkeiten = ["plattform", "verwaltung", "einkauf"]
+testgruppen = []
+pfade = []
+pfade_geplant = ["regeln/aktionen/containerimport.toml", "app/api/module/containerimport/**", "app/module/containerimport/**", "tests/e2e/test_containerimport*.py"]
+hinweise = [
+  "Angelegt auf Wunsch des Inhabers (25.10.2026) als geplante Kachel; Umfang (Sendungsverfolgung, Zoll, Kontingente, Dokumente) vor dem Bau mit dem Inhaber klären.",
+  "Nicht verwechseln mit der Kachel „Import“ (Datenimport, Teil der Verwaltung).",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Container-Import"
+  art = "intern"
+  adresse = "https://container-import.dashboard-stafl.de/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
+
+[[modul]]
 id = "import"
 name = "Import"
 beschreibung = "Zentrale Importoberfläche für Artikel, Bestände, Preise, Kunden, Lieferanten"
 icon = "upload"
 reihenfolge = 70
 dashboard = true
+dashboard_gruppe = "verwaltung"   # Dashboard: eigener Bereich „Verwaltung & Daten“ unter den Anwendungen
 teil_von = "verwaltung"
 kachel_ziel = "verwaltung.import"
 agent = "verwaltung"
@@ -330,8 +383,7 @@ hinweise = [
   adresse = "https://controlling.dashboard-stafl.de/"
   entwicklung = "geplant"
   freigabe = "keine"
-  sperrbar = true
-  dns = false
+  sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
 
 [[modul]]
 id = "verwaltung"
@@ -340,6 +392,7 @@ beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Sicherheit, Gesch�
 icon = "settings"
 reihenfolge = 80
 dashboard = true
+dashboard_gruppe = "verwaltung"   # Dashboard: eigener Bereich „Verwaltung & Daten“ unter den Anwendungen
 agent = "verwaltung"
 abhaengigkeiten = ["plattform"]
 testgruppen = ["kunden", "kundengruppen", "vkgruppen", "vertreter", "kundenimport", "auswertung", "master", "importzentrale"]

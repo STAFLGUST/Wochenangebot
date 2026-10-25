@@ -11,7 +11,7 @@
   /* Symbolnamen des Registers → Symbole dieser Seite (unbekannt → Raster). Die Farbe des Symbol-Quadrats hängt im
      Stylesheet ebenfalls am Symbolnamen (data-symbol), nicht am Modul. */
   const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', truck: 'cart', upload: 'upload', settings: 'haus',
-    calendar: 'calendar', megaphone: 'megaphone', chart: 'chart' };
+    calendar: 'calendar', megaphone: 'megaphone', chart: 'chart', crate: 'kiste', container: 'container' };
   const BAND = 'Im Bau · Bald verfügbar · Im Bau · Bald verfügbar';
   const ENTWICKLUNG = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Nicht freigegeben' };
   let csrf = '';
@@ -53,40 +53,60 @@
     }
   }
 
+  /* Eine Kachel. breit: Bereich „Verwaltung & Daten“ (Symbol links, Text rechts; am Handy mit Pfeil statt grüner Pille) */
+  function kachel(m, alle, breit) {
+    const s = status(m, alle);
+    // Absperrband nur für Anwendungen, die (noch) nicht nutzbar sind – nicht für Wartung (eigener Zustand mit Hinweis)
+    // und nicht für abgeschaltete Module; der Text der Pille nennt weiter den genauen Stand.
+    const band = !m.kachel.zugang && !['wartung', 'deaktiviert'].includes(m.kachel.status);
+    const inhalt = `<span class="db-ico" data-symbol="${esc(m.icon)}">${icon(ICON[m.icon] || 'grid')}</span>
+      <div class="db-text"><h2 class="db-name">${esc(m.name)}</h2><p class="db-desc">${esc(m.beschreibung)}</p></div>
+      ${s.hinweis ? `<p class="db-hint">${esc(s.hinweis)}</p>` : ''}
+      <span class="db-foot"><span class="db-badge ${s.cls}">${esc(s.text)}</span></span>
+      ${band ? `<span class="db-band" aria-hidden="true"><span>${BAND}</span></span>` : ''}
+      ${breit && m.kachel.zugang ? `<span class="db-pfeil">${icon('pfeil')}</span>` : ''}`;
+    const art = breit ? ' db-breit' : '';
+    return m.kachel.zugang
+      ? `<a class="db-tile db-glas${art}" role="listitem" data-modul="${esc(m.id)}" href="${esc(kachelZiel(m.kachel, alle, location.hostname))}">${inhalt}</a>`
+      : `<div class="db-tile db-glas off${art}${band ? ' gesperrt' : ''}" role="listitem" data-modul="${esc(m.id)}" aria-disabled="true">${inhalt}</div>`;
+  }
+
   function render(module) {
     const alle = Object.fromEntries(module.map((m) => [m.id, m]));
     // Kacheln ohne Modulzugang der Rolle erscheinen nicht (recht: false) – die Sperre selbst setzt der Server durch
     const kacheln = module.filter((m) => m.dashboard && m.kachel && m.kachel.recht !== false).sort((a, b) => (a.reihenfolge ?? 999) - (b.reihenfolge ?? 999));
-    $('#db-grid').innerHTML = kacheln.map((m) => {
-      const s = status(m, alle);
-      // Absperrband nur für Anwendungen, die (noch) nicht nutzbar sind – nicht für Wartung (eigener Zustand mit Hinweis)
-      // und nicht für abgeschaltete Module; der Text der Pille nennt weiter den genauen Stand.
-      const band = !m.kachel.zugang && !['wartung', 'deaktiviert'].includes(m.kachel.status);
-      const inhalt = `<span class="db-ico" data-symbol="${esc(m.icon)}">${icon(ICON[m.icon] || 'grid')}</span>
-        <div class="db-text"><h2 class="db-name">${esc(m.name)}</h2><p class="db-desc">${esc(m.beschreibung)}</p></div>
-        ${s.hinweis ? `<p class="db-hint">${esc(s.hinweis)}</p>` : ''}
-        <span class="db-foot"><span class="db-badge ${s.cls}">${esc(s.text)}</span></span>
-        ${band ? `<span class="db-band" aria-hidden="true"><span>${BAND}</span></span>` : ''}`;
-      return m.kachel.zugang
-        ? `<a class="db-tile db-glas" role="listitem" data-modul="${esc(m.id)}" href="${esc(kachelZiel(m.kachel, alle, location.hostname))}">${inhalt}</a>`
-        : `<div class="db-tile db-glas off${band ? ' gesperrt' : ''}" role="listitem" data-modul="${esc(m.id)}" aria-disabled="true">${inhalt}</div>`;
-    }).join('');
+    // Bereiche aus dem Register (dashboard_gruppe): Fachanwendungen oben, „Verwaltung & Daten“ abgesetzt darunter
+    const verw = kacheln.filter((m) => m.gruppe === 'verwaltung'), apps = kacheln.filter((m) => m.gruppe !== 'verwaltung');
+    $('#db-grid').innerHTML = apps.map((m) => kachel(m, alle, false)).join('');
+    $('#db-grid-verwaltung').innerHTML = verw.map((m) => kachel(m, alle, true)).join('');
+    $('#db-verwaltung').hidden = !verw.length;
     if (!kacheln.length) $('#db-grid').innerHTML = '<p class="db-leer" role="listitem">Für Ihre Rolle ist noch keine Anwendung freigegeben. Bitte an einen Administrator wenden.</p>';
     const frei = kacheln.filter((m) => m.kachel.zugang).length;
     $('#db-sub').textContent = `${frei} von ${kacheln.length} Anwendungen für Sie verfügbar`;
     einpassen();
   }
 
-  /* Lange Kachelnamen (Registernamen wie „Qualitätssicherung“) nicht mitten im Wort trennen: Schrift in halben Pixeln
+  /* Lange Kachelnamen (Registernamen wie „Qualitätssicherung“, „Container-Import“) nicht mitten im Wort trennen: Schrift in halben Pixeln
      verkleinern, bis das längste Wort in die Kachel passt – höchstens auf drei Viertel der Grundgröße. Reicht das
      nicht, darf das Wort als Notlösung umbrechen (Klasse db-name-umbruch), statt über die Kachel hinauszuragen. */
+  /* true, wenn ein Wort über zwei Zeilen läuft – auch am Bindestrich („Container-Import“), den der Browser sonst trennt */
+  function wortGebrochen(el) {
+    const t = el.firstChild;
+    if (!t || t.nodeType !== 3) return false;
+    for (const m of t.textContent.matchAll(/\S+/g)) {
+      const r = document.createRange(); r.setStart(t, m.index); r.setEnd(t, m.index + m[0].length);
+      if (new Set([...r.getClientRects()].map((q) => Math.round(q.top))).size > 1) return true;
+    }
+    return false;
+  }
   function namenEinpassen() {
-    for (const el of document.querySelectorAll('#db-grid .db-name')) {
+    for (const el of document.querySelectorAll('#db-bereich .db-name')) {
       el.style.fontSize = ''; el.classList.remove('db-name-umbruch');
       const basis = parseFloat(getComputedStyle(el).fontSize), min = Math.max(12, basis * .75);
+      const zuBreit = () => el.scrollWidth > el.clientWidth + 1 || wortGebrochen(el);
       let g = basis;
-      while (el.scrollWidth > el.clientWidth + 1 && g > min) { g = Math.max(min, g - .5); el.style.fontSize = g + 'px'; }
-      if (el.scrollWidth > el.clientWidth + 1) el.classList.add('db-name-umbruch');
+      while (zuBreit() && g > min) { g = Math.max(min, g - .5); el.style.fontSize = g + 'px'; }
+      if (zuBreit()) el.classList.add('db-name-umbruch');
     }
   }
 
@@ -114,7 +134,7 @@
     return { hoehe: k.height, ab, bis: p.top - k.top - halb + steig * (p.left - mitte) - RAND };   // bis: höchste Lage vor der Pille
   }
   function baenderLegen() {
-    const gesperrt = [...document.querySelectorAll('#db-grid .gesperrt')];
+    const gesperrt = [...document.querySelectorAll('#db-bereich .gesperrt')];
     for (const t of gesperrt) { t.style.removeProperty('--db-band-y'); t.style.minHeight = ''; }
     for (const t of gesperrt) {
       const l = bandLage(t);

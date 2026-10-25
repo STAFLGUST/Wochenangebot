@@ -133,7 +133,7 @@ Merklisten-Schlüssel identisch sind. Aufbau und Veröffentlichung: [mobile/LIES
 ## Dashboard (`dashboard/`)
 
 Mitarbeiter-Dashboard der STAFL-Plattform (Roadmap PR 6): `index.html`, `dashboard.css`, `dashboard.js`, ohne Inline-Skript.
-Liest `status` und `module_status` und zeigt die Kacheln (derzeit elf; HR und CRM seit 23.10.2026, Marketing seit 25.10.2026 freigegeben, Controlling geplant) in der Reihenfolge des Modulregisters – keine fest
+Liest `status` und `module_status` und zeigt die Kacheln (derzeit dreizehn; HR und CRM seit 23.10.2026, Marketing seit 25.10.2026 freigegeben, Controlling, Leergut und Container-Import geplant) in der Reihenfolge des Modulregisters – keine fest
 programmierte Liste. Status je Kachel (Verfügbar, Wartung, Entwicklungsstand …) kommt aus `modul_zustand`; die Kachel ist
 nur Anzeige, gesperrt wird serverseitig (GR-102, GR-103). Liegt **außerhalb** von `app/`: ausgeliefert wird es nur über die
 zentrale Anmeldung – `deploy/anmeldung/docker-compose.anmeldung.yml` bindet den Ordner ein, Apache stellt ihn per
@@ -143,10 +143,13 @@ Inbetriebnahme der Anmeldung). Der Testlauf blendet den Ordner nur in den Gruppe
 Gestaltung „Liquid Glass“ (eigene Farbwerte `--db-*` in `dashboard.css`, Schrift Geist aus `app.css`): Kopfzeile als
 Glaskapsel (Logo, Hell/Dunkel, Nutzer-Chip mit Initialen, Abmelden), Begrüßung nach Tageszeit mit Datum, Kacheln als
 Glasflächen; Symbolfarbe hängt am Registersymbol (`icon`), nicht am Modul. Nicht nutzbare Kacheln sind blass und tragen
-ein Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige); Wartung und abgeschaltete Module ohne Band, mit eigener Pille.
+ein zurückhaltendes Absperrband „Im Bau · Bald verfügbar“ (blasses Sandgelb ohne Schatten, nur Anzeige); Wartung und
+abgeschaltete Module ohne Band, mit eigener Pille. Zwei Bereiche nach dem Registerfeld `dashboard_gruppe`: oben die
+Anwendungen (`#db-grid`), darunter abgesetzt „Verwaltung & Daten“ (`#db-grid-verwaltung`, Import und Verwaltung) mit
+breiten Kacheln (Symbol links; am Handy einspaltig mit Pfeil, die Pille bleibt für Screenreader).
 Ohne `backdrop-filter` oder bei „Transparenz reduzieren“ deckende Flächen, bei „Bewegung reduzieren“ keine Übergänge.
 Kachelnamen werden nie automatisch getrennt (`hyphens: manual`): `dashboard.js` (`namenEinpassen`) verkleinert die Schrift
-langer Namen in halben Pixeln bis höchstens drei Viertel, erst dann bricht ein Wort als Notlösung um. `baenderLegen` legt das
+langer Namen (auch bei Bindestrich wie „Container-Import“, den der Browser sonst trennt) in halben Pixeln bis höchstens drei Viertel, erst dann bricht ein Wort als Notlösung um. `baenderLegen` legt das
 gedrehte Band je gesperrter Kachel mittig zwischen Name und Status-Pille (`--db-band-y`) und macht die Kachel nur so viel
 höher wie nötig; beides neu bei Breitenänderung (ResizeObserver) und nach dem Laden der Schrift. Lange Pillen brechen als
 abgerundetes Feld um, Wartungshinweise brechen auch in langen Adressen um.
