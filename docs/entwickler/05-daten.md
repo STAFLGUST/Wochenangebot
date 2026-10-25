@@ -317,6 +317,19 @@ Kundenstammdaten liest das CRM nur über Funktionen der Verwaltung; eigene Dokum
 - **`crm-aktivitaeten`**: `{"rev": 40, "updatedAt": "…", "liste": [{"id": "a…", "key": "k…", "art": "Telefonat", "notiz": "…", "naechster": "…", "faellig": "…", "at": "…", "von": "…", "vonId": "u…", "firma": "Testfirma GmbH", "nr": "10001"}]}`.
   `firma` und `nr` sind Schnappschüsse (GR-106); höchstens 50 000 Einträge, die ältesten fallen weg.
 
+### Marketing (`module/marketing/marketing.php`)
+
+Eigene Dokumente, alle unter der Sperre `marketing-beitraege`:
+
+- **`marketing-beitraege`**: `{"rev": 12, "updatedAt": "…", "liste": [{"id": "b0123456789ab", "titel": "…", "status": "freigabe", "prioritaet": "normal", "marke": "standard-fleisch", "kanaele": ["instagram"], "format": "reel", "saeule": "wissen", "kampagne": "k…", "verantwortlich": "u…", "verantwortlichSchnappschuss": "…", "drehtermin": "2026-11-02", "produktionBis": "2026-11-04", "veroeffentlichung": "2026-11-06T18:30", "hook": "…", "text": "…", "hashtags": "…", "cta": "…", "notizen": "…", "checkliste": [{"text": "…", "erledigt": false}], "links": [{"titel": "…", "url": "https://…"}], "ki": false, "freigabe": {"t": "…", "von": "…", "vonId": "u…"}, "veroeffentlicht": {"instagram": "https://…"}, "ergebnisse": {"instagram": {"reichweite": 1200, "interaktionen": 85, "aufrufe": null}}, "kommentare": [{"id": "c…", "t": "…", "von": "…", "vonId": "u…", "text": "…"}], "verlauf": [{"t": "…", "von": "…", "was": "…"}], "rev": 4, "erstellt": {…}, "geaendert": {"t": "…", "von": "…"}}]}`.
+  `rev` je Beitrag schützt vor stillem Überschreiben (409 mit aktuellem Beitrag). `marketing_beitrag_save` prüft und ändert nur
+  mitgeschickte, geänderte Felder (`mkt_felder_pruefen`); fehlende ergänzt beim Lesen `mkt_beitrag_leer()`, unbekannte bleiben.
+  Namen in `freigabe`, `kommentare`, `verlauf` und `verantwortlichSchnappschuss` sind Schnappschüsse (GR-106).
+- **`marketing-kampagnen`**: `{"rev": 2, "liste": [{"id": "k…", "name": "…", "ziel": "…", "von": "…", "bis": "…", "marke": "", "farbe": "#c27a1a", "archiviert": false, "erstellt": {…}}]}`.
+- **`marketing-einstellungen`**: `{"marken": [{"id": "standard-fleisch", "name": "…", "farbe": "#8c1d2c", "aktiv": true}], "kanaele": [{"id": "instagram", "name": "Instagram", "limit": 2200, "hashtags": 30, "aktiv": true}], "formate": […], "saeulen": […]}`.
+  Ohne Dokument gelten die Grundwerte `mkt_grundwerte()`. Kennungen bleiben beim Umbenennen; neue entstehen aus dem Namen und
+  belegen nie eine frühere Kennung (`mkt_liste_pruefen`).
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:
@@ -348,6 +361,7 @@ diese Tabelle. Was ein Modul besitzt und liest: `python3 werkzeuge/regeln.py mod
 | --- | --- | --- |
 | CRM | `customers_load()`, `vertreter_load()`, `kundengruppen_load()`; Angebotsnamen über `customer_offers()`, `offer_def()` | Verwaltung, Angebot |
 | HR | `users_load()`, `nutzer_hat_zugang()`, `mitarbeiter_ohne_zugang_anlegen()` | Plattformkern |
+| Marketing | `users_load()`, `may()` (Verantwortliche = Mitarbeiter mit `marketing.bearbeiten`) | Plattformkern |
 | Bestand (`master_save`) | `stammdaten_speichern()` (`module/verwaltung/import.php`) | Verwaltung |
 | Importzentrale | Importverträge `module/<modul>/import.php` der Eigentümer | jeweiliges Modul |
 

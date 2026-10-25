@@ -280,26 +280,29 @@ hinweise = [
 [[modul]]
 id = "marketing"
 name = "Marketing"
-beschreibung = "Marketing mit eigenem CMS für Website-Inhalte, Kampagnen und Medien"
+beschreibung = "Redaktionsplan für Social Media: Inhalte planen, produzieren, freigeben und veröffentlichen; Kampagnen; später CMS für Website-Inhalte"
 icon = "megaphone"
 reihenfolge = 74
 dashboard = true
 agent = "marketing"
 abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/marketing.toml", "app/api/module/marketing/**", "app/module/marketing/**", "tests/e2e/test_marketing*.py"]
+testgruppen = ["marketing"]
+pfade = ["regeln/aktionen/marketing.toml", "app/api/aktionen/marketing.php", "app/api/module/marketing/**", "app/module/marketing/**", "tests/e2e/test_marketing*.py"]
+pfade_geplant = []
 hinweise = [
+  "Redaktionsplan (Auftrag des Inhabers 25.10.2026): Beiträge mit Marke, Kanälen, Format, Content-Säule, Kampagne, Verantwortlichen, Terminen (Dreh, Produktion bis, Veröffentlichung), Text, Hashtags, Skript, Checkliste, Material-Links und KI-Kennzeichen (Kennzeichnungspflicht Art. 50 KI-VO); Ablauf Idee → Planung → Produktion → Freigabe → geplant → veröffentlicht.",
+  "Rechte marketing.sehen, marketing.bearbeiten, marketing.freigeben, marketing.verwalten ohne Standardrollen; nur marketing.freigeben setzt „geplant“, eine inhaltliche Änderung ohne dieses Recht nimmt die Freigabe zurück.",
+  "Kein automatisches Posten in soziale Netzwerke (bräuchte Zugänge zu Meta, LinkedIn, TikTok): Veröffentlichung wird mit Link je Kanal und Kennzahlen von Hand festgehalten.",
   "Enthält später ein CMS. Veröffentlichte Inhalte sind öffentlich – nie Mengen, Chargen, MHD, Einkaufs- oder Kundenpreise ausliefern (GR-001, GR-002, GR-008).",
-  "Anforderungen an CMS und Kampagnen vor dem Bau mit dem Inhaber klären.",
+  "Live-Betrieb unter marketing.dashboard-stafl.de (DNS, Caddy, Keycloak-Client) erst mit Freigabe des Inhabers; bis dahin Testumgebung bzw. Testfreigabe.",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "Marketing"
   art = "intern"
-  adresse = "https://marketing.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://marketing.dashboard-stafl.de/module/marketing/"
+  entwicklung = "in_entwicklung"
   freigabe = "keine"
   sperrbar = true
   dns = false

@@ -88,6 +88,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kundenportal.php` | angebot | Aktionen: Kunden auf der Angebotsseite |
 | `kundenverwaltung.php` | verwaltung | Aktionen: Kundenstammdaten (Administrator) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `mail.php` | plattform | Aktionen: E-Mail-Versand (Administrator) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `marketing.php` | marketing | Aktionen: Marketing · Redaktionsplan (Oberfläche marketing.intern, Daten und Regeln in app/api/module/marketing/marketing.php) Rechte (GR-103): marketing.sehen – Übersicht, Kalender, Board, Liste, Kampagnen ansehen, … |
 | `module.php` | plattform | Modulübersicht (Plattformkern) |
 | `passkey.php` | plattform | Aktionen: Passkeys (WebAuthn) – eigene Passkeys verwalten, Anmeldung mit Passkey Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `preisverlauf.php` | angebot | Aktionen: Preisverlauf Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
@@ -155,6 +156,12 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `import.php` | hr | Modul HR · Übernahme der bisherigen Planungsdatei („Urlaub 2026.xlsx“, ein Blatt je Monat). |
 | `urlaub.php` | hr | Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Monatsplan). |
 | `zeiterfassung.php` | hr | Modul HR · Import „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht, .xlsx) – Importvorlage für die Urlaubstage (Entscheidung des Inhabers, 23.10.2026). |
+
+## `app/api/module/marketing/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `marketing.php` | marketing | Marketing · Redaktionsplan |
 
 ## `app/api/module/verwaltung/`
 
@@ -225,6 +232,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `index.html` | hr | Mein Urlaub |
 | `verwaltung-hr.css` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung (Mitarbeiter-Dialog, Urlaubseinstellungen, Altbestand). |
 | `verwaltung-hr.js` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbeiter |
+
+## `app/module/marketing/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `index.html` | marketing | Beitrag |
+| `marketing.css` | marketing | STAFL-Plattform · Marketing · Redaktionsplan – Gestaltung wie Dashboard, HR und CRM („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten, Kalender und Board. |
+| `marketing.js` | marketing | STAFL-Plattform · Marketing · Redaktionsplan Social-Media-Inhalte planen, produzieren, freigeben und veröffentlichen |
 
 ## `dashboard/`
 
@@ -395,6 +410,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `crm.toml` | crm | Aktionen des Moduls „crm“ |
 | `einkauf.toml` | einkauf | Aktionen des Moduls „einkauf“ |
 | `hr.toml` | hr | Aktionen des Moduls „hr“ |
+| `marketing.toml` | marketing | Aktionen des Moduls „marketing“ |
 | `mobile.toml` | mobile | Aktionen des Moduls „mobile“ |
 | `plattform.toml` | plattform | Aktionen des Moduls „plattform“ |
 | `verwaltung.toml` | verwaltung | Aktionen des Moduls „verwaltung“ |
@@ -468,6 +484,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_kundengruppen.py` | verwaltung | Stammdaten: Navigation (Artikel, Kunden, Kundengruppen), Kundengruppen per CSV (Windows-1252/UTF-8) importieren, bearbeiten, Rechte, Zuordnung im Kunden, Protokoll. |
 | `test_kundenimport.py` | verwaltung | Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der Warenwirtschaft (CSV) und Passwort-Auswahl im Kunden-Dialog. |
 | `test_legal_pages.py` | angebot | Öffentlich erreichbar, Navigation ohne JavaScript und mobile Darstellung. |
+| `test_marketing.py` | marketing | Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/). |
 | `test_master.py` | verwaltung | Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe). |
 | `test_modul_wartung.py` | plattform | Wartung je Oberfläche (GR-107) |
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |
