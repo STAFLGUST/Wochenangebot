@@ -255,6 +255,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `aktualisieren.sh` | plattform | Holt neue Versionen aus GitHub und spielt sie ein (läuft alle 2 Minuten per systemd-Timer). .env und daten/ werden nie verändert (außer der Statusdatei daten/sicherung.php der Datensicherung). |
+| `altdateien.sh` | plattform | Alte Datendateien aufräumen |
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
 | `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |
 | `datenbank.py` | plattform | Offline migration/rollback and online SQLite backup. |
@@ -427,6 +428,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `github_stub.py` | plattform | Minimaler Ersatz für die GitHub-API im Deploy-Test: liefert Release- und CI-Läufe aus einer Zustandsdatei. |
+| `test_altdateien.sh` | plattform | Test von deploy/altdateien.sh (Altdateien nach der Umschaltung auf SQLite) – echtes deploy/datenbank.py in einem Wegwerf-Ordner mit synthetischen Datensätzen, Platzhalter nur für die Sicherung (keine echten Daten, … |
 | `test_anmeldung_einrichten.sh` | plattform | Test von deploy/anmeldung/einrichten.sh (Schritt 2 der Inbetriebnahme) – in einem Wegwerf-Ordner, ohne Docker. |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
 | `test_datenbank.py` | plattform | Real PHP/SQLite, independent SQL inspection, migration failure and restore tests. |

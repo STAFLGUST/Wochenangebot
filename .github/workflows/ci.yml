@@ -210,6 +210,8 @@ jobs:
         run: sh tests/deploy/test_sichern.sh
       - name: Speicher umschalten mit Vorprüfung (deploy/datenbank-umschalten.sh, mit Platzhaltern)
         run: sh tests/deploy/test_datenbank_umschalten.sh
+      - name: Alte Datendateien nach der Umschaltung aufräumen (deploy/altdateien.sh)
+        run: sh tests/deploy/test_altdateien.sh
       - name: Release-Modus mit Healthcheck und Rückfall (deploy/freigabe-einspielen.sh)
         run: sh tests/deploy/test_freigabe.sh
       - name: Testumgebung verwalten (mit Platzhaltern für docker/git)

@@ -51,6 +51,26 @@ blockiert die Anwendung nicht (Sperre wird dann lesend gesetzt).
 `python3 deploy/datenbank.py check daten` prüft Integrität und Schema. Die internen Befehle `migrate`
 und `rollback` verlangen `--offline`; nur verwenden, wenn die Anwendung tatsächlich gestoppt ist.
 
+## Alte Datendateien aufräumen
+
+Nach der Umschaltung bleiben die bisherigen Datendateien (`daten/*.php` mit Angeboten, Kunden, Nutzern, Protokoll,
+HR …) im Datenordner liegen. Bei aktivem SQLite liest und schreibt die Anwendung sie nicht mehr (`app/api/storage.php`
+greift dann nur auf die Datenbank und die Statusdateien zu), die Sicherungen enthalten sie nicht, und der Rückfall
+(`rollback`) schreibt alle Dateien neu aus der Datenbank und entfernt übrige. Sie zeigen nur einen veralteten Stand mit
+personenbezogenen Daten. Aufräumen (im Projektordner, Anwendung bleibt in Betrieb):
+
+1. `sh deploy/altdateien.sh zeigen` – listet die Dateien mit Größe, ändert nichts.
+2. `sh deploy/altdateien.sh archivieren` – erstellt zuerst eine Sicherung, packt die Dateien nach
+   `sicherungen/altdateien-<Zeit>.tar.gz` (nur root, Rechte 600), prüft das Archiv Datei für Datei (Prüfsumme) und
+   entfernt die Dateien erst danach; leere Unterordner ebenfalls.
+
+Beide laufen nur bei aktivem SQLite mit fehlerfreier Datenbank (`datenbank.py check`), sonst Abbruch ohne Änderung.
+Ausgewählt werden genau die Dateien, die auch eine Migration übernehmen würde (`document_path` in `deploy/datenbank.py`):
+Datenbank, Schalter, Postfach-Schlüssel, Statusdateien (`sicherung`, `deployment`), `index.php`, `geo/` sowie Sperr- und
+Punktdateien bleiben stehen. Das Archiv wird nicht automatisch gelöscht (die Rotation betrifft nur `daten-*.tar.gz`).
+Zum Ansehen in einen leeren Ordner entpacken (`tar -xzf <archiv> -C <leerer-ordner>`), nie zurück nach `daten/` kopieren –
+bei aktivem SQLite wären das wieder veraltete Altdateien. Test: `tests/deploy/test_altdateien.sh`.
+
 ## Sicherung und Wiederherstellung
 
 Der bestehende Timer verwendet bei aktivem SQLite die SQLite-Backup-API über Python. Das Archiv
