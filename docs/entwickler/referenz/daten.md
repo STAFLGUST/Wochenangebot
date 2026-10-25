@@ -29,6 +29,9 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `hr-abwesenheiten` | HR | vertraulich | – | – | Urlaubsanträge und Abwesenheiten (Urlaub, Krank, Gleittag, freie Tage) mit Status und Entscheidung; Art und Notiz nur für die Person selbst und die Personalstelle (hr.verwalten), Kollegen sehen nur „abwesend“ – Historie: Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornieren ändern nur den Status (mit Zeitpunkt und Person) |
 | `hr-einstellungen` | HR | intern | – | – | Urlaubssperren und Ferienzeiträume der Urlaubsverwaltung |
 | `hr-personal` | HR | vertraulich | – | – | Mitarbeiter der Urlaubsverwaltung: Name, Abteilung, Reihenfolge, Arbeitstage, Urlaubsanspruch und Übertrag je Jahr, Verknüpfung zum Mitarbeiterkonto |
+| `marketing-beitraege` | Marketing | intern | – | – | Redaktionsplan: Beiträge mit Marke, Kanälen, Format, Content-Säule, Kampagne, Verantwortlichen, Terminen, Text, Hashtags, Skript, Checkliste, Material-Links, KI-Kennzeichen, Status mit Freigabe, Veröffentlichungs-Links und Kennzahlen je Kanal, Kommentare – Historie: Verlauf und Kommentare mit Namen als Schnappschuss (GR-106), Freigabe mit Name und Zeitpunkt; höchstens 20 000 Beiträge |
+| `marketing-einstellungen` | Marketing | intern | – | – | Marken, Kanäle (mit Zeichengrenze und Hashtag-Empfehlung), Formate und Content-Säulen des Redaktionsplans |
+| `marketing-kampagnen` | Marketing | intern | – | – | Kampagnen mit Zeitraum, Ziel, Marke und Farbe (archivieren statt löschen) |
 | `admin` | Plattformkern | geheim | – | – | Altformat des ersten Administratorzugangs (wird beim Lesen in „nutzer“ übernommen) |
 | `anmeldenamen` | Plattformkern | intern | – | – | Vergebene Benutzernamen |
 | `bedrohungsliste` | Plattformkern | intern | – | – | Externe Bedrohungsliste (Spamhaus DROP) mit Suchindex |
@@ -45,7 +48,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `mailkonto` | Plattformkern | geheim | – | – | Postfach-Zugang (Passwort verschlüsselt) |
 | `mailversand` | Plattformkern | vertraulich | – | angebot, einkauf | Versandaufträge und Versandprotokoll aller E-Mails |
 | `module` | Plattformkern | intern | dashboard, verwaltung | – | Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis), Freigabe aus der Modulverwaltung (innerhalb des Entwicklungsstands im Code), Tester und Verlauf der Änderungen (lib/module.php) – Historie: Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, Grund, Beginn, bis) zusätzlich zum Protokoll |
-| `nutzer` | Plattformkern | geheim | angebot, hr | hr | Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte |
+| `nutzer` | Plattformkern | geheim | angebot, hr, marketing | hr | Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte |
 | `protokoll/*` | Plattformkern | vertraulich | – | – | Änderungsprotokoll je Monat (audit) – Historie: Nur anhängen; Einträge werden nicht geändert |
 | `rechte` | Plattformkern | intern | – | – | Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern |
 | `rollen` | Plattformkern | intern | – | – | Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php) |

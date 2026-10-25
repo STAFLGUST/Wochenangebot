@@ -44,6 +44,10 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `crm.sehen` | CRM | CRM | sehen | CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung | – | – |
 | `crm.bearbeiten` | CRM | CRM | bearbeiten | CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen | – | `crm.sehen` |
 | `crm.exportieren` | CRM | CRM | bearbeiten | CRM-Liste mit Kontaktdaten als CSV herunterladen | – | `crm.sehen` |
+| `marketing.sehen` | Marketing | Marketing | sehen | Redaktionsplan ansehen: Beiträge, Kalender, Board, Kampagnen, CSV | – | – |
+| `marketing.bearbeiten` | Marketing | Marketing | bearbeiten | Beiträge und Kampagnen anlegen und ändern, kommentieren, zur Freigabe geben | – | `marketing.sehen` |
+| `marketing.freigeben` | Marketing | Marketing | bearbeiten | Beiträge freigeben (veröffentlichungsbereit) und zurückstufen | – | `marketing.bearbeiten` |
+| `marketing.verwalten` | Marketing | Marketing | bearbeiten | Einstellungen: Marken, Kanäle, Formate, Content-Säulen; Beiträge löschen | – | `marketing.bearbeiten` |
 | `bestellungen.sehen` | Angebot | Bestellungen | sehen | Bestellwünsche mit Kundendaten ansehen | Bearbeiter | – |
 | `bestellungen.bearbeiten` | Angebot | Bestellungen | bearbeiten | Bestellwünsche bearbeiten (Status, Notiz, E-Mail erneut senden) | Bearbeiter | `bestellungen.sehen` |
 | `kunden.sehen` | Verwaltung | Kunden | sehen | Kundenstammdaten ansehen | – | – |

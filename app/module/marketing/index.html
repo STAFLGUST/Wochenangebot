@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · Marketing · Redaktionsplan</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="marketing.css">
+</head>
+<body class="mkt">
+<div class="mkt-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="mkt-seite">
+  <header class="mkt-kopf mkt-glas">
+    <a class="stafl-zurueck" id="mkt-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <span class="mkt-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
+    <span class="mkt-modul"><svg class="i" aria-hidden="true"><use href="#i-megaphone"/></svg>Marketing</span>
+    <div class="mkt-aktionen">
+      <button class="btn primary mkt-neu" id="mkt-neu" type="button" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span>Beitrag</span></button>
+      <button class="mkt-rund" id="mkt-export" type="button" hidden aria-label="Redaktionsplan als CSV herunterladen" title="Als CSV (Excel) herunterladen"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg></button>
+      <button class="mkt-rund" id="mkt-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"><svg class="i" aria-hidden="true"><use href="#i-moon"/></svg></button>
+      <span class="mkt-user" id="mkt-user" hidden><span class="mkt-initialen" id="mkt-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="mkt-user-name" id="mkt-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="mkt-main">
+    <section class="mkt-hinweisbox mkt-glas" id="mkt-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Der Redaktionsplan steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="mkt-fehler" id="mkt-err" role="alert" hidden></p>
+
+    <section id="mkt-app" hidden>
+      <nav class="mkt-tabs stafl-streifen" id="mkt-tabs" role="tablist" aria-label="Bereiche">
+        <button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Übersicht</button>
+        <button type="button" role="tab" data-tab="kalender" aria-selected="false">Kalender</button>
+        <button type="button" role="tab" data-tab="board" aria-selected="false">Board <span class="mkt-zahl" id="mkt-freigabe-zahl" hidden></span></button>
+        <button type="button" role="tab" data-tab="liste" aria-selected="false">Liste</button>
+        <button type="button" role="tab" data-tab="kampagnen" aria-selected="false">Kampagnen</button>
+        <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" hidden>Einstellungen</button>
+      </nav>
+      <div class="mkt-tab" id="tab-uebersicht" role="tabpanel"></div>
+      <div class="mkt-tab" id="tab-kalender" role="tabpanel" hidden></div>
+      <div class="mkt-tab" id="tab-board" role="tabpanel" hidden></div>
+      <div class="mkt-tab" id="tab-liste" role="tabpanel" hidden></div>
+      <div class="mkt-tab" id="tab-kampagnen" role="tabpanel" hidden></div>
+      <div class="mkt-tab" id="tab-einstellungen" role="tabpanel" hidden></div>
+    </section>
+  </main>
+  <footer class="mkt-fuss">STAFL-Plattform · Standard-Fleisch · Redaktionsplan für Social Media</footer>
+</div>
+
+<!-- Beitrag -->
+<dialog class="mkt-dialog breit" id="dlg-beitrag" aria-labelledby="bt-titel-kopf">
+  <form method="dialog" id="bt-form" novalidate>
+    <div class="mkt-dkopf">
+      <div class="mkt-dtitel">
+        <h2 id="bt-titel-kopf" class="sr-only">Beitrag</h2>
+        <input type="text" id="bt-titel" maxlength="140" placeholder="Titel des Beitrags, z. B. „Reel: Woran erkennt man gutes Dry Aged?“" aria-label="Titel" required>
+        <div class="mkt-dstatus"><span class="mkt-status" id="bt-status"></span><span class="mkt-klein" id="bt-sub"></span></div>
+      </div>
+      <button type="button" class="mkt-rund klein" data-schliessen aria-label="Beitrag schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="mkt-dinhalt">
+      <p class="mkt-meldung warn" id="bt-konflikt" hidden></p>
+      <div class="mkt-zwei">
+        <div class="mkt-spalte-l">
+          <section class="mkt-abschnitt">
+            <div class="mkt-abschnitt-kopf"><h3>Inhalt</h3></div>
+            <label>Hook (erster Satz bzw. erste Sekunden)<input type="text" id="bt-hook" maxlength="300"></label>
+            <label>Text / Caption<textarea id="bt-text" rows="7" maxlength="5000"></textarea></label>
+            <div class="mkt-zaehler" id="bt-zaehler" aria-live="polite"></div>
+            <div class="mkt-felder zwei">
+              <label>Hashtags<input type="text" id="bt-hashtags" maxlength="1000" placeholder="#dryaged #fleischmeister"></label>
+              <label>Call-to-Action<input type="text" id="bt-cta" maxlength="200" placeholder="z. B. Link in der Bio"></label>
+            </div>
+            <label>Skript / Briefing (Szenen, Sprechtext, Bildideen)<textarea id="bt-notizen" rows="6" maxlength="20000"></textarea></label>
+          </section>
+          <section class="mkt-abschnitt">
+            <div class="mkt-abschnitt-kopf"><h3>Checkliste</h3><span class="mkt-klein" id="bt-check-stand"></span></div>
+            <ul class="mkt-check" id="bt-check"></ul>
+            <div class="mkt-zeile-neu" data-nur-bearbeiten><input type="text" id="bt-check-neu" maxlength="200" placeholder="Punkt hinzufügen, z. B. „B-Roll Reifekammer“"><button type="button" class="btn" id="bt-check-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Hinzufügen</button></div>
+            <div class="mkt-vorlagen" data-nur-bearbeiten><span class="mkt-klein">Vorlage:</span><button type="button" class="mkt-chipknopf" data-vorlage="reel">Reel</button><button type="button" class="mkt-chipknopf" data-vorlage="karussell">Karussell</button><button type="button" class="mkt-chipknopf" data-vorlage="foto">Foto</button></div>
+          </section>
+          <section class="mkt-abschnitt">
+            <div class="mkt-abschnitt-kopf"><h3>Material</h3><span class="mkt-klein">Links zu Canva, Drive, Rohmaterial</span></div>
+            <ul class="mkt-links" id="bt-links"></ul>
+            <div class="mkt-zeile-neu zwei" data-nur-bearbeiten><input type="text" id="bt-link-titel" maxlength="80" placeholder="Bezeichnung"><input type="url" id="bt-link-url" maxlength="500" placeholder="https://…"><button type="button" class="btn" id="bt-link-add"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Link</button></div>
+          </section>
+        </div>
+        <div class="mkt-spalte-r">
+          <section class="mkt-abschnitt mkt-kasten">
+            <div class="mkt-abschnitt-kopf"><h3>Planung</h3></div>
+            <div class="mkt-felder zwei">
+              <label>Marke<select id="bt-marke"></select></label>
+              <label>Format<select id="bt-format"></select></label>
+            </div>
+            <fieldset class="mkt-kanaele" id="bt-kanaele"><legend>Kanäle</legend></fieldset>
+            <div class="mkt-felder zwei">
+              <label>Content-Säule<select id="bt-saeule"></select></label>
+              <label>Kampagne<select id="bt-kampagne"></select></label>
+            </div>
+            <div class="mkt-felder zwei">
+              <label>Verantwortlich<select id="bt-verantwortlich"></select></label>
+              <label>Priorität<select id="bt-prioritaet"><option value="normal">normal</option><option value="hoch">hoch</option></select></label>
+            </div>
+            <div class="mkt-felder zwei">
+              <label>Drehtermin<input type="date" id="bt-dreh"></label>
+              <label>Produktion bis<input type="date" id="bt-produktion"></label>
+            </div>
+            <div class="mkt-felder zwei">
+              <label>Veröffentlichung am<input type="date" id="bt-datum"></label>
+              <label>Uhrzeit (optional)<input type="time" id="bt-zeit"></label>
+            </div>
+            <label class="mkt-check-z"><input type="checkbox" id="bt-ki"> Mit KI erzeugt oder wesentlich bearbeitet</label>
+            <p class="mkt-hinweis" id="bt-ki-hinweis" hidden>KI-erzeugte Bilder, Videos oder Texte müssen erkennbar sein (Transparenzpflicht nach Art. 50 KI-Verordnung). Kennzeichnung im Beitrag prüfen, z. B. „Mit KI erstellt“ bzw. die Kennzeichnung des Netzwerks nutzen.</p>
+          </section>
+          <section class="mkt-abschnitt mkt-kasten" id="bt-ablauf">
+            <div class="mkt-abschnitt-kopf"><h3>Ablauf</h3></div>
+            <div class="mkt-schritte" id="bt-schritte"></div>
+            <p class="mkt-klein" id="bt-freigabe-info"></p>
+          </section>
+          <section class="mkt-abschnitt mkt-kasten" id="bt-veroeff" hidden>
+            <div class="mkt-abschnitt-kopf"><h3>Veröffentlicht &amp; Kennzahlen</h3></div>
+            <div id="bt-veroeff-felder"></div>
+          </section>
+        </div>
+      </div>
+      <section class="mkt-abschnitt">
+        <div class="mkt-abschnitt-kopf"><h3>Kommentare</h3></div>
+        <ul class="mkt-kommentare" id="bt-kommentare"></ul>
+        <div class="mkt-zeile-neu" data-nur-bearbeiten><input type="text" id="bt-kommentar" maxlength="2000" placeholder="Kommentar, z. B. Feedback zur Freigabe"><button type="button" class="btn" id="bt-kommentar-add">Senden</button></div>
+      </section>
+      <details class="mkt-abschnitt mkt-verlauf-box"><summary><h3>Verlauf</h3></summary><ul class="mkt-verlauf" id="bt-verlauf"></ul></details>
+    </div>
+    <div class="mkt-dfuss">
+      <p class="mkt-meldung" id="bt-meldung" role="status"></p>
+      <div class="mkt-verwerfen" id="bt-verwerfen" hidden><span>Ungespeicherte Änderungen verwerfen?</span><button type="button" class="btn" id="bt-verwerfen-nein">Weiter bearbeiten</button><button type="button" class="btn gefahr" id="bt-verwerfen-ja">Verwerfen</button></div>
+      <div class="mkt-knoepfe">
+        <button type="button" class="btn gefahr" id="bt-loeschen" hidden>Löschen</button>
+        <button type="button" class="btn" id="bt-duplizieren" hidden>Duplizieren</button>
+        <span class="mkt-platz"></span>
+        <button type="button" class="btn" data-schliessen>Schließen</button>
+        <button type="submit" class="btn primary" id="bt-speichern" data-nur-bearbeiten>Speichern</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<!-- Kampagne -->
+<dialog class="mkt-dialog" id="dlg-kampagne" aria-labelledby="kp-titel">
+  <form method="dialog" id="kp-form" novalidate>
+    <h2 id="kp-titel">Neue Kampagne</h2>
+    <label>Name<input type="text" id="kp-name" maxlength="100" required></label>
+    <label>Ziel (was soll die Kampagne erreichen?)<textarea id="kp-ziel" rows="3" maxlength="500"></textarea></label>
+    <div class="mkt-felder zwei">
+      <label>Beginn<input type="date" id="kp-von"></label>
+      <label>Ende<input type="date" id="kp-bis"></label>
+    </div>
+    <div class="mkt-felder zwei">
+      <label>Marke<select id="kp-marke"></select></label>
+      <label>Farbe<select id="kp-farbe"></select></label>
+    </div>
+    <label class="mkt-check-z"><input type="checkbox" id="kp-archiviert"> archiviert (abgeschlossen, nicht mehr zur Auswahl)</label>
+    <p class="mkt-meldung" id="kp-meldung" role="status"></p>
+    <div class="mkt-knoepfe"><span class="mkt-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn primary" id="kp-speichern">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Rückfrage (statt Browser-Dialog) -->
+<dialog class="mkt-dialog" id="dlg-frage" aria-labelledby="fr-titel">
+  <form method="dialog">
+    <h2 id="fr-titel">Sicher?</h2>
+    <p id="fr-text"></p>
+    <div class="mkt-knoepfe"><span class="mkt-platz"></span><button type="button" class="btn" value="nein" data-antwort="nein">Abbrechen</button><button type="button" class="btn primary" data-antwort="ja" id="fr-ja">Ja</button></div>
+  </form>
+</dialog>
+
+<div class="mkt-toast" id="mkt-toast" role="status" aria-live="polite"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="M3.5 10v4a1 1 0 0 0 1 1H7l7 4V5L7 9H4.5a1 1 0 0 0-1 1z"/><path d="M7 15l1.2 5h2.3l-.9-4.3M17.5 9a4 4 0 0 1 0 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-links" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-rechts" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>
+  <symbol id="i-extern" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5.5h16v10H9l-5 4z"/></symbol>
+  <symbol id="i-uhr" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-kamera" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="m16 11 5-3v8l-5-3"/></symbol>
+  <symbol id="i-funke" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+  <symbol id="i-papierkorb" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></symbol>
+</svg>
+<script src="marketing.js"></script>
+</body>
+</html>

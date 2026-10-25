@@ -84,13 +84,13 @@ Agent: `hr` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `hr`
 
 ## Marketing (`marketing`)
 
-Marketing mit eigenem CMS für Website-Inhalte, Kampagnen und Medien
+Redaktionsplan für Social Media: Inhalte planen, produzieren, freigeben und veröffentlichen; Kampagnen; später CMS für Website-Inhalte
 
-Agent: `marketing` · hängt ab von `plattform`, `verwaltung`
+Agent: `marketing` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `marketing`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `marketing.intern` Marketing | intern | https://marketing.dashboard-stafl.de/ | geplant | keine |
+| `marketing.intern` Marketing | intern | https://marketing.dashboard-stafl.de/module/marketing/ | in_entwicklung | keine |
 
 ## Controlling (`controlling`)
 

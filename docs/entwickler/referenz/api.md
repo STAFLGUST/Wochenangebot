@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-153 Aktionen in 8 Modulen.
+160 Aktionen in 9 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -106,6 +106,18 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `hr_verwaltung` | `hr.intern` | lesend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `mitarbeiter_hr` | `angebot.eingabe` | lesend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `mitarbeiter_hr_save` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
+
+## Marketing (`marketing`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `marketing_beitrag_loeschen` | `marketing.intern` | schreibend | – | Recht marketing.verwalten | `app/api/aktionen/marketing.php` |
+| `marketing_beitrag_save` | `marketing.intern` | schreibend | – | Recht marketing.bearbeiten | `app/api/aktionen/marketing.php` |
+| `marketing_einstellungen_save` | `marketing.intern` | schreibend | – | Recht marketing.verwalten | `app/api/aktionen/marketing.php` |
+| `marketing_export` | `marketing.intern` | schreibend | – | Recht marketing.sehen | `app/api/aktionen/marketing.php` |
+| `marketing_kampagne_save` | `marketing.intern` | schreibend | – | Recht marketing.bearbeiten | `app/api/aktionen/marketing.php` |
+| `marketing_kommentar` | `marketing.intern` | schreibend | – | Recht marketing.bearbeiten | `app/api/aktionen/marketing.php` |
+| `marketing_start` | `marketing.intern` | lesend | – | Recht marketing.sehen | `app/api/aktionen/marketing.php` |
 
 ## Verwaltung (`verwaltung`)
 

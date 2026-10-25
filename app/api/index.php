@@ -147,6 +147,7 @@ require __DIR__ . '/module/hr/export.php';
 require __DIR__ . '/module/hr/import.php';
 require __DIR__ . '/module/hr/zeiterfassung.php';
 require __DIR__ . '/module/crm/crm.php';
+require __DIR__ . '/module/marketing/marketing.php';
 
 /* ---------------- Aktionen ---------------- */
 
@@ -239,6 +240,7 @@ try {
     require __DIR__ . '/aktionen/importzentrale.php';
     require __DIR__ . '/aktionen/hr.php';
     require __DIR__ . '/aktionen/crm.php';
+    require __DIR__ . '/aktionen/marketing.php';
     fail('Unbekannte Aktion.', 404);
 } catch (InvalidArgumentException $e) {
     store_rollback();

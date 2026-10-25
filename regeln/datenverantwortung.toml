@@ -179,6 +179,27 @@ schutz = "vertraulich"
 beschreibung = "Aktivitätenverlauf (Telefonat, E-Mail, Besuch, Muster, Angebot, Bestellung, Notiz) je Kunde"
 historie = "Firma und Kundennummer werden beim Erfassen als Schnappschuss gespeichert (GR-106); höchstens 50 000 Einträge, älteste fallen weg"
 
+# ───────────── Marketing ─────────────
+
+[[dokument]]
+name = "marketing-beitraege"
+eigentuemer = "marketing"
+schutz = "intern"
+beschreibung = "Redaktionsplan: Beiträge mit Marke, Kanälen, Format, Content-Säule, Kampagne, Verantwortlichen, Terminen, Text, Hashtags, Skript, Checkliste, Material-Links, KI-Kennzeichen, Status mit Freigabe, Veröffentlichungs-Links und Kennzahlen je Kanal, Kommentare"
+historie = "Verlauf und Kommentare mit Namen als Schnappschuss (GR-106), Freigabe mit Name und Zeitpunkt; höchstens 20 000 Beiträge"
+
+[[dokument]]
+name = "marketing-kampagnen"
+eigentuemer = "marketing"
+schutz = "intern"
+beschreibung = "Kampagnen mit Zeitraum, Ziel, Marke und Farbe (archivieren statt löschen)"
+
+[[dokument]]
+name = "marketing-einstellungen"
+eigentuemer = "marketing"
+schutz = "intern"
+beschreibung = "Marken, Kanäle (mit Zeichengrenze und Hashtag-Empfehlung), Formate und Content-Säulen des Redaktionsplans"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]
@@ -238,7 +259,7 @@ beschreibung = "Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP)"
 [[dokument]]
 name = "nutzer"
 eigentuemer = "plattform"
-leser = ["angebot", "hr"]   # angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
+leser = ["angebot", "hr", "marketing"]   # marketing: wählbare Verantwortliche (Kennung, Name, Recht marketing.bearbeiten); angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
 schreiber = ["hr"]   # nur über mitarbeiter_ohne_zugang_anlegen (lib/nutzer.php): Mitarbeiter ohne Anmeldung (zugang: false) für den Urlaubsplan
 schutz = "geheim"
 beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte"
