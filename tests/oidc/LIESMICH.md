@@ -10,7 +10,8 @@ Browser ──TLS──▶ Caddy (Test-CA) ─┬─ login.stafl.test      ─�
                                   ├─ verwaltung.stafl.test ─▶ Apache + mod_auth_openidc (Client „verwaltung“, angelegt von realm-aktualisieren) ─▶ app/
                                   ├─ bestand.stafl.test    ─▶ Apache + mod_auth_openidc (Client „bestand“, angelegt von realm-aktualisieren)    ─▶ app/
                                   ├─ hr.stafl.test         ─▶ Apache + mod_auth_openidc (Client „hr“, angelegt von realm-aktualisieren)         ─▶ app/module/hr/
-                                  └─ crm.stafl.test        ─▶ Apache + mod_auth_openidc (Client „crm“, angelegt von realm-aktualisieren)        ─▶ app/module/crm/
+                                  ├─ crm.stafl.test        ─▶ Apache + mod_auth_openidc (Client „crm“, angelegt von realm-aktualisieren)        ─▶ app/module/crm/
+                                  └─ marketing.stafl.test  ─▶ Apache + mod_auth_openidc (Client „marketing“, angelegt von realm-aktualisieren)  ─▶ app/module/marketing/
 ```
 
 | Datei | Inhalt |

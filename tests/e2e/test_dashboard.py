@@ -139,16 +139,19 @@ with sync_playwright() as pw:
     crm = kid['crm']
     check('CRM: freigegeben (Inhaber 23.10.2026), Verweis auf das CRM (Testserver: gleicher Host, Pfad /module/crm/)',
           crm['tag'] == 'A' and crm['href'] == '/module/crm/' and crm['badge'] == 'Verfügbar', crm)
-    offen = [kid[m] for m in ('rewe', 'qs', 'einkauf', 'marketing', 'controlling')]
+    mkt = kid['marketing']
+    check('Marketing: freigegeben (Inhaber 25.10.2026), Verweis auf den Redaktionsplan (Testserver: gleicher Host, Pfad /module/marketing/)',
+          mkt['tag'] == 'A' and mkt['href'] == '/module/marketing/' and mkt['badge'] == 'Verfügbar', mkt)
+    offen = [kid[m] for m in ('rewe', 'qs', 'einkauf', 'controlling')]
     gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 5)
-    check('Zähler: 6 von 11 Anwendungen', '6 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 4)
+    check('Zähler: 7 von 11 Anwendungen', '7 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
-    check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR verfügbar, Marketing in Entwicklung, Controlling geplant, beide ohne Verweis',
-          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and all(x['tag'] == 'DIV' and not x['href'] for x in neu[1:])
-          and [x['badge'] for x in neu] == ['Verfügbar', 'In Entwicklung', 'Geplant'], neu)
+    check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR und Marketing verfügbar, Controlling geplant ohne Verweis',
+          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and neu[2]['tag'] == 'DIV' and not neu[2]['href']
+          and [x['badge'] for x in neu] == ['Verfügbar', 'Verfügbar', 'Geplant'], neu)
     sym = pg.eval_on_selector_all('#db-grid .db-tile[data-modul="hr"] use, #db-grid .db-tile[data-modul="marketing"] use, #db-grid .db-tile[data-modul="controlling"] use',
                                   'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('eigene Symbole (Kalender, Megafon, Diagramm), vorhanden', [x[0] for x in sym] == ['#i-calendar', '#i-megaphone', '#i-chart'] and all(x[1] for x in sym), sym)
@@ -156,7 +159,7 @@ with sync_playwright() as pw:
     check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
     gesperrt = [x for x in k if x['tag'] == 'DIV']
     check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
-          len(gesperrt) == 5 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+          len(gesperrt) == 4 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
     check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
     check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
     band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
@@ -303,7 +306,7 @@ with sync_playwright() as pw:
     check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: Bestand, Import, HR, CRM und Verwaltung weiter verfügbar (5 von 11)', '5 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing und Verwaltung weiter verfügbar (6 von 11)', '6 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')

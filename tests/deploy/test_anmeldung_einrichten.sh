@@ -15,7 +15,7 @@ printf 'DOMAIN=angebot-stafl.de\nMAIL_SMTP_%s=vorhanden-bleibt\nOIDC_SECRET_ANGE
 cd "$T"
 export AUS; AUS=$(KC_UID=$(id -u) sh "$REPO/deploy/anmeldung/einrichten.sh")
 
-ok "fehlende Geheimnisse ergänzt" 'for n in OIDC_SECRET_DASHBOARD OIDC_CRYPTO_DASHBOARD OIDC_CRYPTO_ANGEBOT OIDC_SECRET_VERWALTUNG OIDC_CRYPTO_VERWALTUNG OIDC_SECRET_BESTAND OIDC_CRYPTO_BESTAND OIDC_SECRET_HR OIDC_CRYPTO_HR OIDC_SECRET_CRM OIDC_CRYPTO_CRM KC_DB_PASSWORD; do grep -q "^$n=." .env || exit 1; done'
+ok "fehlende Geheimnisse ergänzt" 'for n in OIDC_SECRET_DASHBOARD OIDC_CRYPTO_DASHBOARD OIDC_CRYPTO_ANGEBOT OIDC_SECRET_VERWALTUNG OIDC_CRYPTO_VERWALTUNG OIDC_SECRET_BESTAND OIDC_CRYPTO_BESTAND OIDC_SECRET_HR OIDC_CRYPTO_HR OIDC_SECRET_CRM OIDC_CRYPTO_CRM OIDC_SECRET_MARKETING OIDC_CRYPTO_MARKETING KC_DB_PASSWORD; do grep -q "^$n=." .env || exit 1; done'
 S=daten-anmeldung/einrichtung.env
 ok "Start-Konto in eigener Datei (nur Besitzer), nicht in .env" 'grep -q "^KC_BOOTSTRAP_ADMIN_USERNAME=einrichtung$" $S && test "$(sed -n "s/^KC_BOOTSTRAP_ADMIN_PASSWORD=//p" $S | wc -c)" -ge 40 && test "$(stat -c %a $S)" = 600 && ! grep -q "^KC_BOOTSTRAP_" .env'
 ok "Start-Konto-Passwort nicht in der Ausgabe" 'v=$(sed -n "s/^KC_BOOTSTRAP_ADMIN_PASSWORD=//p" $S); case "$AUS" in *"$v"*) exit 1;; esac'
@@ -26,7 +26,7 @@ ok "kein Geheimnis in der Ausgabe" 'for n in OIDC_SECRET_DASHBOARD KC_DB_PASSWOR
 ok ".env nur für den Besitzer lesbar" 'test "$(stat -c %a .env)" = 600'
 R=daten-anmeldung/realm-import/realm-mitarbeiter.json
 ok "Realm geschrieben, keine Platzhalter mehr" 'test -f $R && ! grep -q "@GEHEIM_" $R'
-ok "Client-Geheimnisse eingesetzt" 'grep -q "\"secret\": \"$VORHANDEN\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_DASHBOARD=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_VERWALTUNG=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_BESTAND=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_HR=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_CRM=//p" .env)\"" $R'
+ok "Client-Geheimnisse eingesetzt" 'grep -q "\"secret\": \"$VORHANDEN\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_DASHBOARD=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_VERWALTUNG=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_BESTAND=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_HR=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_CRM=//p" .env)\"" $R && grep -q "\"secret\": \"$(sed -n "s/^OIDC_SECRET_MARKETING=//p" .env)\"" $R'
 ok "Realm-Datei und Ordner nur für den Besitzer" 'test "$(stat -c %a $R)" = 600 && test "$(stat -c %a daten-anmeldung)" = 700'
 ok "Tresor-Ordner für Keycloak angelegt (nur Besitzer)" 'test "$(stat -c %a daten-anmeldung/vault)" = 700'
 ok "Realm gültiges JSON ohne Testnutzer" 'python3 -c "import json,sys; r=json.load(open(\"$R\")); sys.exit(\"users\" in r)"'

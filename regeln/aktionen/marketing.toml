@@ -1,8 +1,8 @@
 # Aktionen des Moduls „marketing“: Redaktionsplan für Social Media – Beiträge von der Idee bis zur Veröffentlichung,
 # Freigabe, Kommentare, Kampagnen, Einstellungen (Marken, Kanäle, Formate, Content-Säulen), CSV-Export.
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
-# Oberfläche marketing.intern (in Entwicklung; nutzbar mit Testfreigabe für eingetragene Tester). Auf Keycloak-Hosts
-# antworten die Aktionen nur auf ihrem eigenen Host (Aktion ↔ Host, GR-109, lib/herkunft.php).
+# Oberfläche marketing.intern (produktiv seit der Freigabe des Inhabers 25.10.2026, marketing.dashboard-stafl.de). Auf
+# Keycloak-Hosts antworten die Aktionen nur auf diesem Host (Aktion ↔ Host, GR-109, lib/herkunft.php), auf anderen mit 404.
 
 schema = 1
 modul = "marketing"

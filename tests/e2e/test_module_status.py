@@ -40,7 +40,7 @@ mods = nach_id(r.get('module', []))
 check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
 check('elf Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung'], kacheln)
-for neu in ('marketing', 'controlling'):
+for neu in ('controlling',):
     k = mods.get(neu, {}).get('kachel') or {}
     check(f'{neu}: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
 hr = mods['hr']
@@ -71,6 +71,11 @@ check('CRM freigegeben (crm.dashboard-stafl.de, Inhaber 23.10.2026): Kachel verf
       crm['kachel']['ziel'] == 'crm.intern' and crm['kachel']['zugang'] is True and crm['kachel']['status'] == 'verfuegbar'
       and crm['kachel']['adresse'] == 'https://crm.dashboard-stafl.de/module/crm/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(crm, 'intern')), crm['kachel'])
+mkt = mods['marketing']
+check('Marketing freigegeben (marketing.dashboard-stafl.de, Inhaber 25.10.2026): Kachel verfügbar, Adresse /module/marketing/ auf dem Marketing-Host',
+      mkt['kachel']['ziel'] == 'marketing.intern' and mkt['kachel']['zugang'] is True and mkt['kachel']['status'] == 'verfuegbar'
+      and mkt['kachel']['adresse'] == 'https://marketing.dashboard-stafl.de/module/marketing/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(mkt, 'intern')), mkt['kachel'])
 for mid in ('rewe', 'qs', 'einkauf'):
     k = mods[mid]['kachel']
     check(f'{mid}: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)

@@ -25,6 +25,7 @@ Alle Mitarbeiter-Hosts sind dieselbe PHP-Anwendung. Welcher Bereich ein Host ist
 | `bestand.dashboard-stafl.de` | derselbe Eingabebereich, nur Bestand | `bestand.intern` | Client `bestand` |
 | `hr.dashboard-stafl.de` | eigene Seite `/module/hr/` (`/admin` → dorthin) | `hr.intern` | Client `hr` |
 | `crm.dashboard-stafl.de` | eigene Seite `/module/crm/` (`/admin` → dorthin) | `crm.intern` | Client `crm` |
+| `marketing.dashboard-stafl.de` | eigene Seite `/module/marketing/` (`/admin` → dorthin) | `marketing.intern` | Client `marketing` |
 | `rewe.`, `qs.`, `einkauf.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
 
 Jeder Mitarbeiter-VirtualHost setzt außerdem `WA_OIDC 1`, `WA_OIDC_ISSUER` (Realm `mitarbeiter`) und
@@ -191,7 +192,7 @@ Reihenfolge in `app/api/index.php` (Eigenschaften der Aktion aus `lib/aktionen-l
    genau `Schema://Host` sein. Ausnahme nur `fremde_herkunft` (heute `abmelden1`, RFC 8058). Abweisungen zählen nicht
    für die Firewall.
 2. `host_pruefen()` (GR-109, nur auf Keycloak-Hosts): Aktionen einer Oberfläche mit eigener Seite (heute `hr.intern`,
-   `crm.intern`) gibt es nur auf ihrem Host; auf einem solchen Host gibt es sonst nur Plattform-Aktionen mit
+   `crm.intern`, `marketing.intern`) gibt es nur auf ihrem Host; auf einem solchen Host gibt es sonst nur Plattform-Aktionen mit
    `wartung_frei` (Status, Abmelden, Modulübersicht). Sonst 404. Ebenso auf dem Dashboard-Host (`dashboard.start`,
    `host_nur_grundaktionen`): dort nur diese Grundaktionen. Angebot, Verwaltung und Bestand teilen sich die Aktionen von
    `angebot.eingabe`.
