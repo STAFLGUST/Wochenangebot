@@ -7,6 +7,8 @@ body.hr {
   --hr-text: #1c1a19;
   --hr-muted: #6b6560;
   --hr-glass: rgba(255, 255, 255, .58);
+  --hr-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
+  --hr-reiter-aktiv: var(--hr-deckend);
   --hr-deckend: #fbfaf8;
   --hr-rand: rgba(255, 255, 255, .8);
   --hr-linie: rgba(28, 26, 25, .1);
@@ -35,7 +37,7 @@ body.hr {
 }
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.hr {
-    --hr-bg: #121011; --hr-text: #f5f1ee; --hr-muted: #a59d97; --hr-glass: rgba(40, 36, 36, .55); --hr-deckend: #211d1d;
+    --hr-bg: #121011; --hr-text: #f5f1ee; --hr-muted: #a59d97; --hr-glass: rgba(40, 36, 36, .55); --hr-kopf-glas: rgba(33, 29, 29, .95); --hr-reiter-aktiv: rgba(255, 255, 255, .17); --hr-deckend: #211d1d;
     --hr-rand: rgba(255, 255, 255, .14); --hr-linie: rgba(255, 255, 255, .1); --hr-glanz: rgba(255, 255, 255, .2); --hr-schatten: 0 12px 44px rgba(0, 0, 0, .45);
     --hr-blob-a: #5f2f70; --hr-blob-b: #9a6a24; --hr-blob-c: #245a40;
     --hr-aus: rgba(255, 255, 255, .08); --hr-aus-hover: rgba(255, 255, 255, .14); --hr-akzent-ink: #f0a3ae; --hr-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
@@ -49,7 +51,7 @@ body.hr {
 }
 @media screen {
   :root[data-theme="dark"] body.hr {
-    --hr-bg: #121011; --hr-text: #f5f1ee; --hr-muted: #a59d97; --hr-glass: rgba(40, 36, 36, .55); --hr-deckend: #211d1d;
+    --hr-bg: #121011; --hr-text: #f5f1ee; --hr-muted: #a59d97; --hr-glass: rgba(40, 36, 36, .55); --hr-kopf-glas: rgba(33, 29, 29, .95); --hr-reiter-aktiv: rgba(255, 255, 255, .17); --hr-deckend: #211d1d;
     --hr-rand: rgba(255, 255, 255, .14); --hr-linie: rgba(255, 255, 255, .1); --hr-glanz: rgba(255, 255, 255, .2); --hr-schatten: 0 12px 44px rgba(0, 0, 0, .45);
     --hr-blob-a: #5f2f70; --hr-blob-b: #9a6a24; --hr-blob-c: #245a40;
     --hr-aus: rgba(255, 255, 255, .08); --hr-aus-hover: rgba(255, 255, 255, .14); --hr-akzent-ink: #f0a3ae; --hr-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
@@ -98,7 +100,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--hr-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .hr-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--hr-muted);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.hr-tabs button[aria-selected="true"] { background: var(--hr-deckend); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.hr-tabs button[aria-selected="true"] { background: var(--hr-reiter-aktiv); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
 .hr-tabs button[hidden] { display: none; }
 .hr-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--hr-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .hr-zahl[hidden] { display: none; }
@@ -137,6 +139,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-felder { display: grid; gap: 12px; }
 .hr-felder.zwei { grid-template-columns: 1fr 1fr; }
 .hr-rechnung { min-height: 20px; font-size: 14px; font-weight: 600; }
+.hr-rechnung:empty { display: none; }   /* ohne Berechnung kein leerer Abstand vor „Vertretung“ */
 .hr-meldung { min-height: 0; font-size: 14px; }
 .hr-meldung:empty { display: none; }
 .hr-meldung.fehler { padding: 10px 14px; border-radius: 12px; background: var(--hr-fehler-bg); color: var(--hr-fehler); }
@@ -171,9 +174,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 /* ── Monatsplan ── */
 .hr-legende { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; font-size: 13px; color: var(--hr-muted); }
 .hr-legende span { display: inline-flex; align-items: center; gap: 6px; }
-.hr-legende i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.hr-legende i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; box-shadow: inset 0 0 0 1px var(--hr-linie, rgba(128, 128, 128, .35)); }   /* auch blasse Farben (Wochenende, Ferien) erkennbar */
 .hr-plan-rahmen, .hr-tabelle-rahmen { border-radius: 22px; overflow: auto; max-width: 100%; }
-.hr-plan { border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.hr-plan { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
 .hr-plan th, .hr-plan td { height: 32px; min-width: 30px; padding: 0; text-align: center; border-bottom: 1px solid var(--hr-linie); }
 .hr-plan thead th { position: sticky; top: 0; z-index: 2; background: var(--hr-deckend); font-weight: 600; line-height: 1.15; padding: 6px 0; }
 .hr-plan thead th small { display: block; font-size: 11px; font-weight: 500; color: var(--hr-muted); }
@@ -281,6 +284,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-tabs { margin-bottom: 18px; }
   .hr-tabs button { padding: 0 12px; }
   .hr-konto { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .hr-konto > :last-child:nth-child(odd) { grid-column: 1 / -1; }   /* wie CRM und Marketing: eine letzte Karte über die volle Breite */
   .hr-wert.haupt { grid-column: span 2; }
   .hr-wert { padding: 12px 14px; border-radius: 18px; }
   .hr-wert b { font-size: 22px; }
@@ -295,3 +299,8 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 }
 /* Handy: im Kopf nur das Bildzeichen des Logos wie im Eingabebereich (app.css) – Platz für Zurück, Modulname und Knöpfe */
 @media (max-width: 480px) { body.hr .hr-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
+
+/* Feinschliff (Durchsicht 25.10.2026): Kopfzeile beim Scrollen deckend, Häkchen und Auswahlpunkte in der Markenfarbe */
+.hr-kopf.hr-glas { background: var(--hr-kopf-glas); }
+.hr input[type="checkbox"], .hr input[type="radio"] { accent-color: var(--hr-akzent); }
+.hr a.btn { text-decoration: none; }   /* Knöpfe als Verweis ohne Unterstreichung */

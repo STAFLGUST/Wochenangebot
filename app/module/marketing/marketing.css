@@ -8,6 +8,8 @@ body.mkt {
   --mkt-text: #1c1a19;
   --mkt-muted: #6b6560;
   --mkt-glass: rgba(255, 255, 255, .58);
+  --mkt-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
+  --mkt-reiter-aktiv: var(--mkt-deckend);
   --mkt-deckend: #fbfaf8;
   --mkt-rand: rgba(255, 255, 255, .8);
   --mkt-linie: rgba(28, 26, 25, .1);
@@ -30,7 +32,7 @@ body.mkt {
 }
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.mkt {
-    --mkt-bg: #121011; --mkt-text: #f5f1ee; --mkt-muted: #a59d97; --mkt-glass: rgba(40, 36, 36, .55); --mkt-deckend: #211d1d;
+    --mkt-bg: #121011; --mkt-text: #f5f1ee; --mkt-muted: #a59d97; --mkt-glass: rgba(40, 36, 36, .55); --mkt-kopf-glas: rgba(33, 29, 29, .95); --mkt-reiter-aktiv: rgba(255, 255, 255, .17); --mkt-deckend: #211d1d;
     --mkt-rand: rgba(255, 255, 255, .14); --mkt-linie: rgba(255, 255, 255, .1); --mkt-glanz: rgba(255, 255, 255, .2); --mkt-schatten: 0 12px 44px rgba(0, 0, 0, .45);
     --mkt-blob-a: #6e2a44; --mkt-blob-b: #9a6a24; --mkt-blob-c: #4a3175;
     --mkt-aus: rgba(255, 255, 255, .08); --mkt-aus-hover: rgba(255, 255, 255, .14); --mkt-akzent-ink: #f0a3ae; --mkt-modul: #f08db0; --mkt-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
@@ -40,7 +42,7 @@ body.mkt {
 }
 @media screen {
   :root[data-theme="dark"] body.mkt {
-    --mkt-bg: #121011; --mkt-text: #f5f1ee; --mkt-muted: #a59d97; --mkt-glass: rgba(40, 36, 36, .55); --mkt-deckend: #211d1d;
+    --mkt-bg: #121011; --mkt-text: #f5f1ee; --mkt-muted: #a59d97; --mkt-glass: rgba(40, 36, 36, .55); --mkt-kopf-glas: rgba(33, 29, 29, .95); --mkt-reiter-aktiv: rgba(255, 255, 255, .17); --mkt-deckend: #211d1d;
     --mkt-rand: rgba(255, 255, 255, .14); --mkt-linie: rgba(255, 255, 255, .1); --mkt-glanz: rgba(255, 255, 255, .2); --mkt-schatten: 0 12px 44px rgba(0, 0, 0, .45);
     --mkt-blob-a: #6e2a44; --mkt-blob-b: #9a6a24; --mkt-blob-c: #4a3175;
     --mkt-aus: rgba(255, 255, 255, .08); --mkt-aus-hover: rgba(255, 255, 255, .14); --mkt-akzent-ink: #f0a3ae; --mkt-modul: #f08db0; --mkt-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
@@ -85,7 +87,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 24px; border-radius: 999px; background: var(--mkt-aus); width: max-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; box-sizing: border-box; }
 .mkt-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: none; color: var(--mkt-muted);
   font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.mkt-tabs button[aria-selected="true"] { background: var(--mkt-deckend); color: var(--mkt-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.mkt-tabs button[aria-selected="true"] { background: var(--mkt-reiter-aktiv); color: var(--mkt-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
 .mkt-zahl { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--mkt-akzent); color: #fff; font-size: 12px; line-height: 20px; text-align: center; box-sizing: border-box; }
 .mkt-zahl[hidden] { display: none; }
 
@@ -123,7 +125,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-zeilen small { display: block; color: var(--mkt-muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mkt-zeilen .wann { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mkt-zeilen .wann.ueber { color: var(--mkt-fehler); }
-.mkt-balken { display: grid; grid-template-columns: 120px minmax(0, 1fr) 48px; gap: 10px; align-items: center; font-size: 13px; padding: 5px 0; }
+.mkt-balken { display: grid; grid-template-columns: 156px minmax(0, 1fr) 48px; gap: 10px; align-items: center; font-size: 13px; padding: 5px 0; }
 .mkt-balken .spur { height: 10px; border-radius: 6px; background: var(--mkt-aus); overflow: hidden; }
 .mkt-balken .spur i { display: block; height: 100%; border-radius: 6px; background: var(--mkt-balken); }
 .mkt-balken b { text-align: right; font-variant-numeric: tabular-nums; }
@@ -275,7 +277,8 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
   .mkt-dinhalt { padding: 14px 16px 20px; }
   .mkt-dialog > form { padding: 18px; }
   .mkt-verlauf li { grid-template-columns: 1fr; gap: 2px; }
-  .mkt-balken { grid-template-columns: 96px minmax(0, 1fr) 40px; }
+  .mkt-balken { grid-template-columns: minmax(0, 1fr) 32px; row-gap: 4px; }
+  .mkt-balken > span:first-child { grid-column: 1 / -1; }   /* Handy: Beschriftung über dem Balken statt umbrochen daneben */
   .mkt-tabelle .m-aus { display: none; }
 }
 /* Handy: im Kopf nur das Bildzeichen des Logos wie im Eingabebereich (app.css) – Platz für Zurück, Modulname und Knöpfe */
@@ -491,3 +494,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 }
 @media (pointer: coarse), (max-width: 760px) { .mkt-zieh-hinweis { display: none; } }
 @media (max-width: 560px) { .mkt #bt-titel { font-size: 17px; } }
+
+/* Feinschliff (Durchsicht 25.10.2026): Kopfzeile beim Scrollen deckend, Häkchen und Auswahlpunkte in der Markenfarbe */
+.mkt-kopf.mkt-glas { background: var(--mkt-kopf-glas); }
+.mkt input[type="checkbox"], .mkt input[type="radio"] { accent-color: var(--mkt-akzent); }

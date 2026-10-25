@@ -213,7 +213,7 @@
           <td>${firmaKnopf(k)} ${k.art === 'interessent' ? '<span class="crm-pille info">Interessent</span>' : ''}<div class="gedaempft">${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc([k.plz, k.ort].filter(Boolean).join(' ') || 'Ort fehlt')}</div></td>
           <td class="m-aus">${zeilen(telefone(k), telLink)}</td>
           <td class="m-aus">${zeilen(namen(k))}</td>
-          <td class="nw">${esc(vName(k.vertreter) || '—')}${k.vertreter2 ? `<div class="gedaempft">${esc(vName(k.vertreter2))}</div>` : ''}</td>
+          <td class="nw">${vName(k.vertreter) ? esc(vName(k.vertreter)) : '<span class="gedaempft">—</span>'}${k.vertreter2 ? `<div class="gedaempft">${esc(vName(k.vertreter2))}</div>` : ''}</td>
           <td>${b ? `<select data-feld="segment" data-key="${esc(k.key)}" aria-label="Segment ${esc(k.firma)}">${opts(S.d.segmente, k.crm.segment, null)}</select>` : esc(k.crm.segment)}</td>
           <td>${b ? `<select data-feld="phase" data-key="${esc(k.key)}" aria-label="Phase ${esc(k.firma)}">${opts(S.d.phasen, k.crm.phase, null)}</select>` : esc(k.crm.phase)}</td>
           <td>${k.crm.naechsterSchritt ? `<span class="${tageBis(k.crm.wiedervorlage) < 0 ? 'crm-ueber' : ''}">${esc(k.crm.naechsterSchritt)}</span><div class="gedaempft">${k.crm.wiedervorlage ? de(k.crm.wiedervorlage) : ''}</div>` : '<span class="gedaempft">—</span>'}</td>
