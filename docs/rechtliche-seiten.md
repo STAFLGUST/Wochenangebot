@@ -12,9 +12,9 @@ USt-IdNr. DE118949959 sowie Asss/Manuel Struve als Datenschutzkontakt.
 
 - Genauer Hostinger-Vertragspartner, Serverstandort, Auftragsverarbeitung und etwaige Drittlandtransfers.
 - Tatsächlich konfigurierter E-Mail-Dienstleister, dessen Verarbeitung und gegebenenfalls Drittlandtransfers.
-- Betriebliche Löschfristen für Webserver-, Sicherheits-, Versandprotokolle und Sicherungen; der Code hat
-  keine allgemeine automatische Löschung des Auditprotokolls. Zweckbezogene Formulierung auf der Seite
-  ersetzt kein betriebliches Löschkonzept.
+- Betriebliche Löschfristen für Webserver-, Sicherheits-, Versandprotokolle und Sicherungen. Das Aktivitätsprotokoll
+  (Auditprotokoll) löscht der Code seit Oktober 2026 automatisch nach sechs Monaten (laufender Monat und sechs Monate
+  davor, `PROTOKOLL_MONATE`). Zweckbezogene Formulierung auf der Seite ersetzt kein betriebliches Löschkonzept.
 - Rechtsgrundlage für die vorhandenen Kontakte beim Angebotsversand und Aufbewahrung der Nachweise.
 
 Der PR bleibt bis zur Klärung dieser Betriebsangaben ein Entwurf. Keine Produktionsfreigabe.

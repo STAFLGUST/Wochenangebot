@@ -97,6 +97,7 @@ SUITES['passkeys'] = (8790, 'data-seed', True)
 SUITES['modul_wartung'] = (8790, 'data-seed', True)   # Wartung je Oberfläche (GR-107)
 SUITES['module_status'] = (8790, 'data-seed', True)   # Modulzustand zur Laufzeit (GR-102)
 SUITES['aktionsregister'] = (8790, 'data-seed', True)   # Register wirkt für jede Aktion (Schreibschutz, 404)
+SUITES['protokoll'] = (8790, 'data-seed', True)   # Aufbewahrung des Aktivitätsprotokolls (6 Monate)
 SUITES['herkunft'] = (8790, 'data-seed', True)   # Herkunftsprüfung im API-Einstieg (GR-109), fremde Seite auf AUX_PORT
 SUITES['dashboard'] = (8790, 'data-seed', True)   # Mitarbeiter-Dashboard (dashboard/, liegt außerhalb von app/)
 SUITES['oidc_kern'] = (8790, 'data-seed', True, {'WA_OIDC': '1', 'WA_OIDC_ISSUER': 'https://login.example/realms/mitarbeiter', 'WA_OBERFLAECHE': 'angebot.eingabe'})   # Keycloak-Host ohne Modul (GR-110, GR-109)
@@ -136,6 +137,7 @@ GEWICHT = {
     'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'marketing': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
 
