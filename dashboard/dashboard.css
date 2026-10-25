@@ -27,8 +27,11 @@ body.db {
   --db-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
   --db-fehler: #8c1d2c;
   --db-fehler-bg: rgba(140, 29, 44, .09);
-  --db-band: #f5c400;
-  --db-band-ink: #1c1a19;
+  --db-band: #efe5c8;                          /* Absperrband: blasses Sandgelb, tritt wie die gesperrte Kachel zurück */
+  --db-band-ink: #5f5852;                      /* Schrift im Band (≥ 4,5:1 auf --db-band) */
+  --db-band-gelb: rgba(229, 190, 80, .34);
+  --db-band-streifen: rgba(28, 26, 25, .14);
+  --db-linie: rgba(28, 26, 25, .12);
   margin: 0; min-height: 100vh; min-height: 100dvh;
   background: var(--db-bg); color: var(--db-text); font-family: var(--font);
 }
@@ -41,6 +44,7 @@ body.db {
     --db-ok: #5fd08f; --db-ok-bg: rgba(95, 208, 143, .14); --db-warn: #f3c98a; --db-warn-bg: rgba(224, 144, 31, .16);
     --db-neutral-bg: rgba(255, 255, 255, .08); --db-aus: rgba(255, 255, 255, .08); --db-aus-hover: rgba(255, 255, 255, .14);
     --db-akzent-ink: #f0a3ae; --db-fokus: 0 0 0 3px rgba(224, 129, 144, .55); --db-fehler: #f0a3ae; --db-fehler-bg: rgba(224, 129, 144, .12);
+    --db-band: #3a3426; --db-band-ink: #c9bfae; --db-band-gelb: rgba(200, 160, 60, .22); --db-band-streifen: rgba(255, 255, 255, .09); --db-linie: rgba(255, 255, 255, .12);
   }
 }
 @media screen {
@@ -52,6 +56,7 @@ body.db {
     --db-ok: #5fd08f; --db-ok-bg: rgba(95, 208, 143, .14); --db-warn: #f3c98a; --db-warn-bg: rgba(224, 144, 31, .16);
     --db-neutral-bg: rgba(255, 255, 255, .08); --db-aus: rgba(255, 255, 255, .08); --db-aus-hover: rgba(255, 255, 255, .14);
     --db-akzent-ink: #f0a3ae; --db-fokus: 0 0 0 3px rgba(224, 129, 144, .55); --db-fehler: #f0a3ae; --db-fehler-bg: rgba(224, 129, 144, .12);
+    --db-band: #3a3426; --db-band-ink: #c9bfae; --db-band-gelb: rgba(200, 160, 60, .22); --db-band-streifen: rgba(255, 255, 255, .09); --db-linie: rgba(255, 255, 255, .12);
   }
 }
 
@@ -110,7 +115,7 @@ a.db-tile:hover { transform: translateY(-2px); color: inherit; }
 a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-schatten), var(--db-fokus); }
 .db-tile.off { box-shadow: inset 0 1px 0 var(--db-glanz); cursor: default; }
 .db-ico { --ico-a: #7a7570; --ico-b: #4a4643; width: 52px; height: 52px; flex: none; border-radius: 15px; display: grid; place-items: center; color: #fff; background: linear-gradient(160deg, var(--ico-a), var(--ico-b)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35); }
-.db-ico .i { width: 26px; height: 26px; stroke-width: 1.8; }
+.db-ico .i { width: 26px; height: 26px; stroke-width: 2; }
 /* Farbe je Symbol des Modulregisters (icon), nicht je Modul – neue Module erhalten ohne Änderung das neutrale Grau */
 .db-ico[data-symbol="tag"] { --ico-a: #b3263a; --ico-b: #7a1624; }
 .db-ico[data-symbol="settings"] { --ico-a: #5b5f68; --ico-b: #2f3238; }
@@ -122,7 +127,9 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 .db-ico[data-symbol="upload"] { --ico-a: #6a5fa8; --ico-b: #463d7a; }
 .db-ico[data-symbol="calendar"] { --ico-a: #8e4fa0; --ico-b: #5f2f70; }
 .db-ico[data-symbol="megaphone"] { --ico-a: #e06a3a; --ico-b: #a8481f; }
-.db-ico[data-symbol="chart"] { --ico-a: #5b7a2e; --ico-b: #3a5119; }
+.db-ico[data-symbol="chart"] { --ico-a: #6b8a3a; --ico-b: #43601f; }
+.db-ico[data-symbol="crate"] { --ico-a: #8a7560; --ico-b: #5c4b3b; }
+.db-ico[data-symbol="container"] { --ico-a: #2a7f9e; --ico-b: #165570; }
 .db-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 /* Namen nie mitten im Wort trennen: dashboard.js verkleinert die Schrift langer Namen, bis das längste Wort passt
    (namenEinpassen); nur wenn auch die kleinste Stufe nicht reicht, darf ein Wort als Notlösung umbrechen. */
@@ -144,11 +151,23 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
 /* Absperrband „Im Bau · Bald verfügbar“ (nur Anzeige, die Sperre setzt der Server durch). Die Höhe der Mittellinie
    setzt dashboard.js je Kachel (--db-band-y) mittig zwischen Name und Status-Pille, damit das gedrehte Band beide frei
    lässt; ohne Skript bzw. vor der Messung 54 %. */
-.db-band { position: absolute; left: -30%; right: -30%; top: var(--db-band-y, 54%); padding: 5px 0; transform: translateY(-50%) rotate(-11deg);
-  background: repeating-linear-gradient(135deg, var(--db-band-ink) 0 12px, var(--db-band) 12px 24px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .25); pointer-events: none; }
+.db-band { position: absolute; left: -30%; right: -30%; top: var(--db-band-y, 54%); transform: translateY(-50%) rotate(-11deg);
+  background: repeating-linear-gradient(135deg, var(--db-band-streifen) 0 12px, var(--db-band-gelb) 12px 24px); padding: 3px 0; pointer-events: none; }
 .db-band > span { display: block; overflow: hidden; white-space: nowrap; text-align: center; background: var(--db-band); color: var(--db-band-ink);
-  font-size: 13px; font-weight: 800; line-height: 30px; letter-spacing: .16em; text-transform: uppercase; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+  font-size: 12px; font-weight: 700; line-height: 26px; letter-spacing: .18em; text-transform: uppercase; }
+
+/* ── Bereich „Verwaltung & Daten“ (Registerfeld dashboard_gruppe): abgesetzt unter den Anwendungen, breite Kacheln ── */
+.db-gruppe { margin-top: 48px; display: flex; flex-direction: column; gap: 16px; }
+.db-gruppe[hidden] { display: none; }
+.db-gruppe-kopf { display: flex; align-items: center; gap: 14px; padding: 0 8px; }
+.db-gruppe-kopf h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--db-muted); }
+.db-gruppe-kopf::after { content: ""; flex: 1; height: 1px; background: var(--db-linie); }
+.db-grid-breit { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.db-tile.db-breit { flex-direction: row; align-items: center; gap: 18px; min-height: 0; padding: 20px 22px; }
+.db-breit .db-text { flex: 1; }
+.db-breit .db-foot { margin-top: 0; }
+.db-pfeil { display: none; color: var(--db-muted); }
+.db-pfeil .i { width: 18px; height: 18px; stroke-width: 2; }
 
 /* ── Anmeldung, Fehler, Fuß ── */
 .db-login { max-width: 440px; margin: 8vh auto 0; padding: 32px 28px; text-align: center; border-radius: 28px; }
@@ -194,6 +213,15 @@ a.db-tile:focus-visible { box-shadow: inset 0 1px 0 var(--db-glanz), var(--db-sc
   /* Handy: Pille gesperrter Kacheln nur für Screenreader (wie im Entwurf), Band tiefer – der Name bleibt lesbar */
   .db-tile.gesperrt { padding-bottom: 60px; }
   .db-tile.gesperrt .db-foot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .db-band { left: -35%; right: -35%; top: auto; bottom: 12px; padding: 4px 0; transform: rotate(-14deg); background: repeating-linear-gradient(135deg, var(--db-band-ink) 0 10px, var(--db-band) 10px 20px); box-shadow: 0 5px 14px rgba(0, 0, 0, .25); }
-  .db-band > span { font-size: 10px; line-height: 22px; letter-spacing: .14em; box-shadow: none; }
+  .db-band { left: -35%; right: -35%; top: auto; bottom: 12px; padding: 3px 0; transform: rotate(-14deg); background: repeating-linear-gradient(135deg, var(--db-band-streifen) 0 10px, var(--db-band-gelb) 10px 20px); }
+  .db-band > span { font-size: 10px; line-height: 20px; letter-spacing: .16em; }
+  .db-gruppe { margin-top: 30px; gap: 12px; }
+  .db-gruppe-kopf { padding: 0 4px; }
+  .db-gruppe-kopf h2 { font-size: 12px; }
+  .db-grid-breit { grid-template-columns: minmax(0, 1fr); }
+  .db-tile.db-breit { gap: 14px; min-height: 0; padding: 14px 16px; }
+  .db-breit .db-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.35; }
+  /* Handy: verfügbare Verwaltungs-Kacheln mit Pfeil; die grüne Pille bleibt für Screenreader im Text */
+  a.db-breit .db-foot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .db-pfeil { display: grid; place-items: center; }
 }

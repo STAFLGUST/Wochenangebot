@@ -567,11 +567,11 @@ with sync_playwright() as pw:
     _c2.close()
     check('nach der Anmeldung: Dashboard auf dashboard.stafl.test', pg.url.startswith(D + '/dashboard/'), pg.url)
     check('Dashboard zeigt den Namen aus unserem Mitarbeiterkonto', 'Erika Editor' in pg.text_content('#db-user'), pg.text_content('#db-user'))
-    check('elf Kacheln, Angebot verfügbar', pg.locator('#db-grid .db-tile').count() == 11 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
+    check('dreizehn Kacheln, Angebot verfügbar', pg.locator('#db-bereich .db-tile').count() == 13 and pg.text_content('[data-modul="angebot"] .db-badge') == 'Verfügbar')
     check('Kachel Verwaltung verfügbar (freigegeben)', pg.text_content('[data-modul="verwaltung"] .db-badge') == 'Verfügbar'
           and pg.get_attribute('[data-modul="verwaltung"]', 'href') is not None, pg.text_content('[data-modul="verwaltung"] .db-badge'))
-    check('Kacheln Bestand, Import, HR, CRM und Marketing verfügbar (freigegeben), 7 von 11', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
-          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr', 'crm', 'marketing')) and '7 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Kacheln Bestand, Import, HR, CRM und Marketing verfügbar (freigegeben), 7 von 13', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
+          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr', 'crm', 'marketing')) and '7 von 13' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Kachel HR führt zur Urlaubsverwaltung (Testserver: Pfad /module/hr/)', pg.get_attribute('[data-modul="hr"]', 'href') == '/module/hr/', pg.get_attribute('[data-modul="hr"]', 'href'))
     check('Kachel CRM führt zum CRM (Testserver: Pfad /module/crm/)', pg.get_attribute('[data-modul="crm"]', 'href') == '/module/crm/', pg.get_attribute('[data-modul="crm"]', 'href'))
     check('Kachel Marketing führt zum Redaktionsplan (Testserver: Pfad /module/marketing/)', pg.get_attribute('[data-modul="marketing"]', 'href') == '/module/marketing/',

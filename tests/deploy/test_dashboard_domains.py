@@ -20,6 +20,9 @@ hosts = [
     "rewe.dashboard-stafl.de",
     "qs.dashboard-stafl.de",
     "einkauf.dashboard-stafl.de",
+    "leergut.dashboard-stafl.de",
+    "container-import.dashboard-stafl.de",
+    "controlling.dashboard-stafl.de",
     "test.dashboard-stafl.de",
 ]
 block = site(", ".join(hosts))
@@ -52,4 +55,4 @@ assert caddy.count("app-mitarbeiter:80") == 1 and caddy.count("keycloak:8080") =
 # Kundenportal und vorhandene Testumgebung behalten ihre separaten Routen.
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy
 assert "test.{$DOMAIN} {" in caddy
-print("OK: vier Modul-Hosts sind 503-Platzhalter; Anmeldung, Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM und Marketing nur mit der Ergänzungsdatei.")
+print("OK: sieben Modul-Hosts sind 503-Platzhalter; Anmeldung, Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM und Marketing nur mit der Ergänzungsdatei.")

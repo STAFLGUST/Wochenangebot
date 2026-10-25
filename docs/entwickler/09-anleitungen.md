@@ -99,7 +99,10 @@ Abschnitt „Koordination“.
 1. **Register:** `[[modul]]` in `regeln/module.toml` mit `id`, `name`, `beschreibung`, `icon`, `reihenfolge`,
    `dashboard = true`, `agent`, `abhaengigkeiten`, `testgruppen`, `pfade` (bzw. `pfade_geplant`), `hinweise` und
    `[[modul.oberflaeche]]` (`id`, `name`, `art` intern/extern, `adresse`, `entwicklung` = `geplant`, `freigabe` =
-   `keine`, `sperrbar`). `python3 werkzeuge/regeln.py erzeugen`.
+   `keine`, `sperrbar`). Optional `dashboard_gruppe = "verwaltung"`: Kachel im abgesetzten Bereich „Verwaltung & Daten“
+   (Standard `anwendungen`). Neues Symbol: `<symbol id="i-…">` in `dashboard/index.html`, Name in `ICON` (`dashboard.js`)
+   und Farbe `.db-ico[data-symbol="…"]` (`dashboard.css`). `python3 werkzeuge/regeln.py erzeugen`.
+   Ohne DNS-Eintrag `dns = false` an der Oberfläche; steht der Eintrag, kommt die Adresse in den 503-Platzhalter.
 2. Damit entstehen automatisch die Kachel (Stand „geplant“) und das Recht `<modul>.zugang` (Standard: beide
    Standardrollen). Die Adresse des Moduls muss im `Caddyfile` als 503-Platzhalter stehen, bis es freigegeben ist
    (GR-105; die CI prüft das).

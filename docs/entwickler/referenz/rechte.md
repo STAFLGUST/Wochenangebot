@@ -12,10 +12,12 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | --- | --- |
 | `angebot.zugang` | Angebot |
 | `bestand.zugang` | Bestand |
+| `leergut.zugang` | Leergut |
 | `crm.zugang` | CRM |
 | `rewe.zugang` | REWE |
 | `qs.zugang` | Qualitätssicherung |
 | `einkauf.zugang` | Einkauf |
+| `containerimport.zugang` | Container-Import |
 | `import.zugang` | Import |
 | `hr.zugang` | HR |
 | `marketing.zugang` | Marketing |

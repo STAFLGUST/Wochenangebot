@@ -37,10 +37,14 @@ check('ohne Anmeldung 401', P.call('module_status')[0] == 401)
 code, r = L.call('module_status')
 check('Leser darf die Übersicht sehen', code == 200 and r.get('ok'), (code, r))
 mods = nach_id(r.get('module', []))
-check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
+check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
-check('elf Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'crm', 'rewe', 'qs', 'einkauf', 'import', 'hr', 'marketing', 'controlling', 'verwaltung'], kacheln)
-for neu in ('controlling',):
+check('dreizehn Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung'], kacheln)
+gruppen = {m['id']: m['gruppe'] for m in r['module'] if m['dashboard']}
+check('Bereich je Kachel aus dem Register: Import und Verwaltung unter „Verwaltung & Daten“, alle anderen Anwendungen',
+      {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'verwaltung'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
+      and all(m['gruppe'] is None for m in r['module'] if not m['dashboard']), gruppen)
+for neu in ('leergut', 'containerimport', 'controlling'):
     k = mods.get(neu, {}).get('kachel') or {}
     check(f'{neu}: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
 hr = mods['hr']

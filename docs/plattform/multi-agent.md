@@ -11,7 +11,7 @@ Jedes Modul in `regeln/module.toml` nennt seinen Agenten (`agent`). Startbesetzu
 | --- | --- | --- |
 | dashboard | dashboard | `app/dashboard/**` |
 | angebot | angebot | Angebotsdateien laut Register, `app/eingabe/**` |
-| bestand, crm, rewe, einkauf, qs, hr, marketing, controlling | je eins | `app/module/<id>/**`, `app/api/module/<id>/**`, eigene Tests |
+| bestand, leergut, crm, rewe, einkauf, containerimport, qs, hr, marketing, controlling | je eins | `app/module/<id>/**`, `app/api/module/<id>/**`, eigene Tests |
 | verwaltung | verwaltung, import | Verwaltungsdateien laut Register |
 | plattform | plattform | Kern, `regeln/`, CI, Betrieb – **koordinationspflichtig** |
 | prüfung (H) | – | nichts; prüft PRs (Tests, Sicherheit, Änderungsfolgen), schreibt Befunde |

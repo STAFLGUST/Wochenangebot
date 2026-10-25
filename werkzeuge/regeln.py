@@ -26,6 +26,7 @@ from pathlib import Path
 WURZEL = Path(__file__).resolve().parent.parent
 
 ENTWICKLUNG = ["geplant", "in_entwicklung", "in_pruefung", "fertig"]
+DASHBOARD_GRUPPEN = ["anwendungen", "verwaltung"]   # Bereiche des Dashboards (Fachanwendungen oben, Verwaltung & Daten darunter)
 FREIGABE = ["keine", "test", "produktiv", "deaktiviert"]
 SCHUTZ = ["oeffentlich", "intern", "vertraulich", "geheim"]
 ID_MUSTER = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -272,6 +273,10 @@ def pruefe_module(rw: Regelwerk) -> None:
                 rw.f(f"Modul {mid}: reihenfolge {r} schon bei {reihen[r]}")
             else:
                 reihen[r] = mid
+            if m.get("dashboard_gruppe", "anwendungen") not in DASHBOARD_GRUPPEN:
+                rw.f(f"Modul {mid}: dashboard_gruppe „{m.get('dashboard_gruppe')}“ unbekannt ({', '.join(DASHBOARD_GRUPPEN)})")
+        elif "dashboard_gruppe" in m:
+            rw.f(f"Modul {mid}: dashboard_gruppe nur für Dashboard-Module")
         teil = m.get("teil_von")
         if teil:
             if m.get("pfade") or m.get("pfade_geplant") or m.get("oberflaeche"):
@@ -701,6 +706,7 @@ def module_php(rw: Regelwerk) -> str:
         eintrag = {"name": m["name"], "beschreibung": m.get("beschreibung", ""), "icon": m.get("icon", ""),
                    "reihenfolge": m.get("reihenfolge"), "dashboard": bool(m.get("dashboard")), "teil_von": m.get("teil_von"),
                    "kachel_ziel": kachel_ziel(m) if m.get("dashboard") else None,
+                   "gruppe": m.get("dashboard_gruppe", "anwendungen") if m.get("dashboard") else None,
                    "abhaengigkeiten": list(m.get("abhaengigkeiten", [])), "oberflaechen": obs}
         z.append(f"    {php_wert(m['id'])} => {php_ausdruck(eintrag)},")
     z.append("];")
