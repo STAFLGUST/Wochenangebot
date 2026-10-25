@@ -90,7 +90,7 @@ Agent: `marketing` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `m
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `marketing.intern` Marketing | intern | https://marketing.dashboard-stafl.de/module/marketing/ | in_entwicklung | keine |
+| `marketing.intern` Marketing | intern | https://marketing.dashboard-stafl.de/module/marketing/ | fertig | produktiv |
 
 ## Controlling (`controlling`)
 

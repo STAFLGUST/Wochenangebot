@@ -294,7 +294,7 @@ hinweise = [
   "Rechte marketing.sehen, marketing.bearbeiten, marketing.freigeben, marketing.verwalten ohne Standardrollen; nur marketing.freigeben setzt „geplant“, eine inhaltliche Änderung ohne dieses Recht nimmt die Freigabe zurück.",
   "Kein automatisches Posten in soziale Netzwerke (bräuchte Zugänge zu Meta, LinkedIn, TikTok): Veröffentlichung wird mit Link je Kanal und Kennzahlen von Hand festgehalten.",
   "Enthält später ein CMS. Veröffentlichte Inhalte sind öffentlich – nie Mengen, Chargen, MHD, Einkaufs- oder Kundenpreise ausliefern (GR-001, GR-002, GR-008).",
-  "Live-Betrieb unter marketing.dashboard-stafl.de (DNS, Caddy, Keycloak-Client) erst mit Freigabe des Inhabers; bis dahin Testumgebung bzw. Testfreigabe.",
+  "Freigegeben (Inhaber 25.10.2026): marketing.dashboard-stafl.de mit eigenem Keycloak-Client „marketing“ (Stand 7); / und /admin/ führen zu /module/marketing/. Aktionen marketing_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden.",
 ]
 
   [[modul.oberflaeche]]
@@ -302,10 +302,9 @@ hinweise = [
   name = "Marketing"
   art = "intern"
   adresse = "https://marketing.dashboard-stafl.de/module/marketing/"
-  entwicklung = "in_entwicklung"
-  freigabe = "keine"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Freigabe des Inhabers 25.10.2026 (Keycloak-Client, Caddy, produktiv) mit dem Merge; DNS-Eintrag marketing besteht seit 25.10.2026
   sperrbar = true
-  dns = false
 
 [[modul]]
 id = "controlling"

@@ -1,6 +1,6 @@
 """Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/).
 
-Geprüft: Freigabe (in Entwicklung, nur mit Testfreigabe für eingetragene Tester); Rechte marketing.sehen / bearbeiten /
+Geprüft: Freigabe (produktiv seit 25.10.2026: jeder Mitarbeiter mit Marketing-Recht, keine Testfreigabe); Rechte marketing.sehen / bearbeiten /
 freigeben / verwalten serverseitig (GR-103) inkl. ohne Anmeldung, ohne CSRF, falsche Methode; Beiträge (Pflichtfeld Titel,
 Prüfungen und Grenzen, nur mitgeschickte Felder, unbekannte gespeicherte Felder bleiben, gleichzeitiges Bearbeiten → 409);
 Ablauf (Freigeben nur mit Recht und mit Termin und Kanal, Veröffentlichen nur freigegeben, inhaltliche Änderung eines
@@ -61,21 +61,16 @@ N = Client('198.51.100.8')
 # ── Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['marketing']
 ob = mod['oberflaechen'][0]
-check('Register: Marketing in Entwicklung, ohne Freigabe, Adresse marketing.dashboard-stafl.de/module/marketing/', ob['entwicklung'] == 'in_entwicklung'
-      and ob['freigabe'] == 'keine' and ob['adresse'] == 'https://marketing.dashboard-stafl.de/module/marketing/', ob)
-check('ohne Freigabe: auch Administrator 404', A.call('marketing_start')[0] == 404)
-st, r = A.call('modul_freigabe_save', {'bereich': 'marketing.intern', 'freigabe': 'produktiv', 'grund': 'Test'})
-check('keine Produktivfreigabe für ein Modul in Entwicklung (422)', st == 422, (st, r))
-st, r = A.call('modul_freigabe_save', {'bereich': 'marketing.intern', 'freigabe': 'test', 'grund': 'Abnahme Marketing'})
-check('Testfreigabe gesetzt', st == 200, r)
-st, r = A.call('modul_tester_save', {'bereich': 'marketing.intern', 'tester': [ids[x] for x in ('admin', 'vera', 'bert', 'frieda', 'otto')], 'grund': 'Abnahme'})
-check('Tester eingetragen', st == 200, r)
-check('nicht eingetragener Mitarbeiter (mit Bearbeitungsrecht): 404', Nn.call('marketing_start')[0] == 404
-      and Nn.call('marketing_beitrag_save', {'felder': {'titel': 'x'}})[0] == 404)
-check('ohne Anmeldung: kein Zugang (401/404)', N.call('marketing_start')[0] in (401, 404) and N.call('marketing_beitrag_save', {'felder': {'titel': 'x'}})[0] in (401, 404))
+check('Register: Marketing fertig und produktiv (Inhaber 25.10.2026), Adresse marketing.dashboard-stafl.de/module/marketing/', ob['entwicklung'] == 'fertig'
+      and ob['freigabe'] == 'produktiv' and ob['zugang'] and ob['adresse'] == 'https://marketing.dashboard-stafl.de/module/marketing/', ob)
+check('Kachel verfügbar', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True, mod['kachel'])
+st, r = A.call('modul_freigabe_save', {'bereich': 'marketing.intern', 'freigabe': 'test', 'grund': 'Test'})
+check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über ein Release)', st == 422, (st, r))
+check('jeder Mitarbeiter mit Marketing-Recht: Start ok (nie als Tester eingetragen)', Nn.call('marketing_start')[0] == 200)
+check('ohne Anmeldung: 401', N.call('marketing_start')[0] == 401 and N.call('marketing_beitrag_save', {'felder': {'titel': 'x'}})[0] == 401)
 
 # ── Rechte (GR-103) ──
-check('Tester ohne Marketing-Recht: 403', O.call('marketing_start')[0] == 403 and O.call('marketing_export', {})[0] == 403)
+check('Mitarbeiter ohne Marketing-Recht: 403', O.call('marketing_start')[0] == 403 and O.call('marketing_export', {})[0] == 403)
 st, d = V.call('marketing_start')
 check('marketing.sehen: Start ok, ohne Bearbeiten/Freigeben/Verwalten', st == 200 and d['rechte'] == {'bearbeiten': False, 'freigeben': False, 'verwalten': False}, d.get('rechte'))
 for a, b in (('marketing_beitrag_save', {'felder': {'titel': 'Nur ansehen'}}), ('marketing_kommentar', {'id': 'bx', 'text': 'x'}),

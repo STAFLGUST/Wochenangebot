@@ -353,8 +353,8 @@ class EchtesRegelwerk(unittest.TestCase):
         # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling
         self.assertEqual(set(kacheln), {"angebot", "bestand", "crm", "rewe", "qs", "einkauf", "import", "verwaltung", "hr", "marketing", "controlling"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
-        # Marketing seit 25.10.2026 in Entwicklung (Redaktionsplan, nur Testfreigabe); beide nicht freigegeben, ohne DNS (GR-105)
-        for neu, stand in (("marketing", "in_entwicklung"), ("controlling", "geplant")):
+        # Controlling: nicht freigegeben, ohne DNS (GR-105)
+        for neu, stand in (("controlling", "geplant"),):
             o = rw.modul(neu)["oberflaeche"][0]
             self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns")), (stand, "keine", False), neu)
         # HR: vom Inhaber am 23.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
@@ -365,6 +365,10 @@ class EchtesRegelwerk(unittest.TestCase):
         o = rw.modul("crm")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
                          ("fertig", "produktiv", True, "https://crm.dashboard-stafl.de/module/crm/"))
+        # Marketing: vom Inhaber am 25.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
+        o = rw.modul("marketing")["oberflaeche"][0]
+        self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
+                         ("fertig", "produktiv", True, "https://marketing.dashboard-stafl.de/module/marketing/"))
         self.assertEqual(rw.modul("import")["teil_von"], "verwaltung")
         self.assertEqual(rw.modul("import")["kachel_ziel"], "verwaltung.import")
         self.assertEqual(rw.modul("angebot")["kachel_ziel"], "eingabe")
