@@ -1839,6 +1839,3 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 @media screen and (max-width: 1180px) {
   body.adm .topbar .btn:not(.primary):not(.icon) { width: 40px; padding: 0; justify-content: center; }
 }
-
-/* Bestandsliste: Spaltenköpfe wie in allen anderen Tabellen (gedämpft, Kapitälchen) statt fett und dunkel */
-body.adm .stab th, body.adm .stab th.s-code { font-size: 15px; line-height: 1.2; font-weight: 600; font-variant-caps: all-small-caps; letter-spacing: .04em; color: var(--muted); }
