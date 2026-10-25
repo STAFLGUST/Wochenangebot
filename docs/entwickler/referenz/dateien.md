@@ -81,7 +81,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `einkauf.php` | einkauf | Aktionen: Einkauf (Fehlmengen aus offenen Bestellwünschen) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `einzelangebote.php` | angebot | Aktionen: Einzelangebote (Angebot bearbeiten → Einzelangebote). |
 | `entwurf.php` | angebot | Aktionen: Entwurf, gemeinsames Bearbeiten, Veröffentlichen, Versionen Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
-| `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“); hr.verwalten – zentrale Stelle: … |
+| `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“); hr.genehmigen – Urlaubsanträge … |
 | `importzentrale.php` | verwaltung | Aktionen: Importzentrale (Verwaltung → Import; Ablauf und Prüfungen: module/verwaltung/importzentrale.php) GET import_arten Importarten, für die der angemeldete Nutzer das Recht hat (Anzeige ist keine Berechtigung) … |
 | `integritaet.php` | plattform | Aktion: Dateiprüfung (lib/integritaet.php) – nur Administratoren. |
 | `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen und Vertreter (Beschreibung: lib/kunden.php). |
@@ -257,7 +257,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `aktualisieren.sh` | plattform | Holt neue Versionen aus GitHub und spielt sie ein (läuft alle 2 Minuten per systemd-Timer). .env und daten/ werden nie verändert (außer der Statusdatei daten/sicherung.php der Datensicherung). |
 | `altdateien.sh` | plattform | Alte Datendateien aufräumen |
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
-| `datenbank-umschalten.sh` | plattform | Only after the owner released the database-capable version. |
+| `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |
 | `datenbank.py` | plattform | Offline migration/rollback and online SQLite backup. |
 | `einrichten.sh` | plattform | Einmalig auf dem Server ausführen: richtet die automatische Aktualisierung ein. |
 | `freigabe-einspielen.sh` | plattform | Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“), prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück. |
@@ -432,6 +432,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_anmeldung_einrichten.sh` | plattform | Test von deploy/anmeldung/einrichten.sh (Schritt 2 der Inbetriebnahme) – in einem Wegwerf-Ordner, ohne Docker. |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
 | `test_datenbank.py` | plattform | Real PHP/SQLite, independent SQL inspection, migration failure and restore tests. |
+| `test_datenbank_umschalten.sh` | plattform | Test von deploy/datenbank-umschalten.sh – Vorprüfung vor Sicherung und Stopp, mit Platzhaltern für docker, sichern.sh und datenbank.py in einem Wegwerf-Ordner (keine echten Daten, kein Container). |
 | `test_freigabe.sh` | plattform | Integrationstest des Release-Modus (deploy/freigabe-einspielen.sh) – komplett lokal: eigenes Git-„origin“, GitHub-API-Ersatz, PHP-Testserver als Live-Seite, echte Datensicherung. |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |

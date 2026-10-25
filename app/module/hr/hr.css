@@ -114,6 +114,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-jahr .btn + .btn { margin-left: 0; }
 .hr-hinweis { padding: 12px 16px; border-radius: 16px; background: var(--hr-warn-bg); color: var(--hr-warn); }
 .hr-klein { margin: 0 0 12px; font-size: 13px; color: var(--hr-muted); }
+.hr-antrag .hr-hinweis { margin: 4px 0 0; padding: 8px 12px; font-size: 13px; border-radius: 12px; background: none; border: 1px dashed currentColor; color: var(--hr-muted); }   /* Antrag ohne Entscheidungsrecht (eigener Antrag, nur Personalstelle) */
 .hr .opt { display: inline; padding: 0; margin: 0; border-radius: 0; background: none; cursor: inherit; user-select: auto; font-weight: 400; color: var(--hr-muted); }   /* nicht die Filteroption der Kundenseite (app.css .opt) */
 
 /* ── Urlaubskonto ── */

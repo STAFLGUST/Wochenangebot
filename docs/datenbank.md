@@ -38,6 +38,9 @@ löschen oder alte Dateien über die Datenbank kopieren.
    PHP-Container, stoppt die Anwendung, übernimmt und vergleicht alle Dokumente und startet danach
    wieder. Beschädigte Quelldaten oder eine bereits vorhandene Datenbank brechen die Übernahme ab.
    Nach einem Fehler bleibt die Anwendung bewusst gestoppt: Ursache prüfen, nicht blind erneut starten.
+   Vorher prüft das Skript ohne Sicherung und ohne Stopp: Ist SQLite schon aktiv (`daten/.sqlite-active`), meldet es
+   „bereits aktiv – nichts zu tun“; liegt nur ein alter Ordner `daten/.sqlite` ohne Marker vor, bricht es ab, ohne die
+   Anwendung anzuhalten. Ebenso tut `rollback` nichts, wenn SQLite nicht aktiv ist (Test: `tests/deploy/test_datenbank_umschalten.sh`).
 4. Anmeldung, Kundenangebot, Merkliste, Entwurf/Veröffentlichung und Bestellwunsch prüfen.
 5. `sh deploy/sichern.sh --jetzt`: Neue Sicherung mit SQLite erzeugen und Status kontrollieren.
 
