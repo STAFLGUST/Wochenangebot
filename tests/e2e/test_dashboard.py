@@ -306,7 +306,7 @@ with sync_playwright() as pw:
     check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: Bestand, Import, HR, CRM und Verwaltung weiter verfügbar (5 von 11)', '5 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing und Verwaltung weiter verfügbar (6 von 11)', '6 von 11' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')
