@@ -453,6 +453,17 @@ def bestaetigung_abgelaufen(ctx, host):
     return neu != roh
 
 
+def bestaetigung_stand(ctx, host):
+    """Zeitpunkt der letzten Bestätigung in der PHP-Sitzung (Diagnose; 0 = abgelaufen)."""
+    sid = kekse(ctx, host).get('__Host-WA_ADMIN', {}).get('value', '')
+    try:
+        with open(os.path.join(WORK, 'sessions', 'sess_' + sid), encoding='utf-8') as f:
+            m = re.search(r'adminConfirmedAt\|i:(\d+);', f.read())
+        return int(m.group(1)) if m else None
+    except OSError:
+        return 'keine Sitzungsdatei'
+
+
 def anmelden(pg, wer, otp=True):
     pg.wait_for_selector('#username'); pg.fill('#username', wer); pg.fill('#password', NUTZER[wer][0]); pg.click('#kc-login')
     if otp:
@@ -1055,14 +1066,19 @@ with sync_playwright() as pw:
     neu = j.get('anmelden', '')
     check('… mit Adresse für die erneute Anmeldung (eigener Host, max_age=0)', neu.startswith('/oidc/callback?iss=') and 'auth_request_params=max_age%3D0' in neu, neu)
     code, j = pg.evaluate(js, ['reauth', st['csrf']])
-    check('eigene Passwortbestätigung bleibt gesperrt', code == 403, (code, j))
+    check('eigene Passwortbestätigung bleibt gesperrt (403; auf dem Host des Moduls gibt es sie nicht: 404)', code in (403, 404), (code, j))
     # Oberfläche (Modul Sicherheit unter eigener Adresse): Speichern der Einstellungen führt selbst zur erneuten Anmeldung und zurück
     pg.reload(); pg.wait_for_selector('#sic-app:not([hidden])')
     pg.click('#sic-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#tab-einstellungen:not([hidden]) [data-e="e-anmeldung"]')
     pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
-    with pg.expect_navigation(url=lambda u: u.startswith(L)):
+    vorher = bestaetigung_stand(ctx, 'sicherheit.stafl.test')
+    bestaetigung_abgelaufen(ctx, 'sicherheit.stafl.test')   # unmittelbar vor dem Speichern (Seitenaufbau dazwischen)
+    with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort:
         pg.click('#sic-dlg .sic-dfuss [type=submit]')
-    check('Speichern ohne gültige Bestätigung: Weiterleitung zu Keycloak mit max_age=0', 'max_age=0' in urllib.parse.unquote(pg.url), pg.url)
+    sa = (antwort.value.status, antwort.value.json())
+    check('Speichern ohne gültige Bestätigung: Server verlangt die erneute Anmeldung', sa[0] == 403 and sa[1].get('code') == 'reauth_required', (sa, vorher))
+    pg.wait_for_url(lambda u: u.startswith(L))
+    check('… Seite leitet zu Keycloak mit max_age=0', 'max_age=0' in urllib.parse.unquote(pg.url), pg.url)
     pg.wait_for_selector('#password')
     check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
     pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
