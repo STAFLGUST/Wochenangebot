@@ -23,8 +23,12 @@ assert all(c['secret'].startswith('@GEHEIM_') for c in r['clients'])
 host = {'dashboard': 'dashboard-stafl.de', 'angebot': 'angebot.dashboard-stafl.de', 'verwaltung': 'verwaltung.dashboard-stafl.de',
         'bestand': 'bestand.dashboard-stafl.de', 'hr': 'hr.dashboard-stafl.de',
         'crm': 'crm.dashboard-stafl.de', 'marketing': 'marketing.dashboard-stafl.de'}
-assert sorted(c['clientId'] for c in r['clients']) == sorted(host)
-assert all(c['redirectUris'] == [f"https://{host[c['clientId']]}/oidc/callback"] for c in r['clients'])
+# Hosts mit Anmeldung; dazu genau ein Client ohne Host: „konten“ (Mitarbeiterkonten aus der Verwaltung, nur Service-Account)
+konten = [c for c in r['clients'] if c['clientId'] == 'konten']
+assert len(konten) == 1 and konten[0]['serviceAccountsEnabled'] is True and konten[0]['standardFlowEnabled'] is False \
+    and konten[0]['directAccessGrantsEnabled'] is False and not konten[0].get('redirectUris')
+assert sorted(c['clientId'] for c in r['clients'] if c['clientId'] != 'konten') == sorted(host)
+assert all(c['redirectUris'] == [f"https://{host[c['clientId']]}/oidc/callback"] for c in r['clients'] if c['clientId'] != 'konten')
 assert all(c['secret'] == f"@GEHEIM_{c['clientId'].upper()}@" for c in r['clients'])
 PY
 
