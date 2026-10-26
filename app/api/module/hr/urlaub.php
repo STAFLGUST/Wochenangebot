@@ -154,7 +154,11 @@ function hr_personal(): array
     }
     foreach ($roh['personen'] as $e) {
         if (isset($vergeben[$e['id']])) continue;
-        $ps[] = array_merge($e, ['nutzer' => null, 'gespeichert' => true, 'zugang' => false, 'kontoAktiv' => false, 'username' => '', 'altbestand' => true]);
+        // Ohne (gültigen) Mitarbeiter = ehemaliger Mitarbeiter (Inhaber 26.10.2026): zählt nicht mehr im Urlaubsplan (Kalender,
+        // Übersicht, Vertretung; Export nur in Monaten mit eigenen Einträgen), Einträge bleiben erhalten. Nur Anzeige –
+        // gespeichert bleibt „aktiv“ unverändert, damit eine spätere Zuordnung den bisherigen Stand übernimmt.
+        $ps[] = array_merge($e, ['nutzer' => null, 'gespeichert' => true, 'zugang' => false, 'kontoAktiv' => false, 'username' => '', 'altbestand' => true,
+                                 'ehemalig' => true, 'aktiv' => false]);
     }
     usort($ps, function ($a, $b) { return [$a['pos'] ?: 9999, hr_name($a)] <=> [$b['pos'] ?: 9999, hr_name($b)]; });
     return ['rev' => $roh['rev'], 'personen' => $ps];
@@ -382,7 +386,8 @@ function hr_auto_verknuepfen(array $me): ?array
         return $v;
     });
 }
-/* Alle Altbestands-Einträge übernehmen: gleichnamiger Mitarbeiter ohne HR-Angaben, sonst neuer Mitarbeiter ohne Anmeldung */
+/* Altbestands-Einträge dem gleichnamigen Mitarbeiter ohne HR-Angaben zuordnen (eindeutiger Name). Einträge ohne passenden
+   Mitarbeiter bleiben ehemalige Mitarbeiter – es entstehen keine neuen Mitarbeiter mehr (Inhaber 26.10.2026). */
 function hr_personal_uebernehmen(array $me): array
 {
     return with_lock('hr-personal', function () use ($me) {
@@ -396,11 +401,7 @@ function hr_personal_uebernehmen(array $me): array
             $treffer = array_values(array_filter($users, function ($u) use ($e, $mit) {
                 return !in_array((string)$u['id'], $mit, true) && in_array(hr_namekey(hr_name($e)), hr_konto_namen($u), true);
             }));
-            if (count($treffer) === 1) { hr_altbestand_zuordnen($roh, $e['id'], $treffer[0]); $text[] = hr_name($e) . ' → ' . $treffer[0]['name']; continue; }
-            $u = mitarbeiter_ohne_zugang_anlegen($e['vorname'], $e['nachname'] !== '' ? $e['nachname'] : '', $me);
-            $users[] = $u;
-            hr_altbestand_zuordnen($roh, $e['id'], $u);
-            $text[] = hr_name($e) . ' als Mitarbeiter ohne Anmeldung angelegt';
+            if (count($treffer) === 1) { hr_altbestand_zuordnen($roh, $e['id'], $treffer[0]); $text[] = hr_name($e) . ' → ' . $treffer[0]['name']; }
         }
         if ($text) {
             hr_personal_schreiben($roh);

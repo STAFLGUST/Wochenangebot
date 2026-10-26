@@ -78,12 +78,12 @@
     if (!daten || !may('hr.verwalten')) return '';
     const alt = daten.personen.filter((p) => p.altbestand);
     if (!alt.length) return '';
-    return `<div class="gcard hr-alt" id="hr-alt"><p><strong>${alt.length === 1 ? '1 Eintrag' : alt.length + ' Einträge'} der Urlaubsliste ohne Mitarbeiter:</strong>
+    return `<div class="gcard hr-alt" id="hr-alt"><p><strong>${alt.length === 1 ? '1 ehemaliger Mitarbeiter' : alt.length + ' ehemalige Mitarbeiter'} (nicht zugeordnet):</strong>
       ${esc(alt.slice(0, 8).map((p) => `${p.vorname} ${p.nachname}`.trim()).join(', '))}${alt.length > 8 ? ' …' : ''}.
-      Beim Übernehmen wird jeder Eintrag dem gleichnamigen Mitarbeiter zugeordnet oder als Mitarbeiter ohne Anmeldung angelegt – Urlaub und Abwesenheiten bleiben erhalten.
-      Weicht der Name ab (z. B. anderer Name im Konto), vorher <strong>einzeln zuordnen</strong>.</p>
-      <div class="hr-alt-knoepfe"><button type="button" class="btn" data-hr-alt-einzeln>Einzeln zuordnen …</button>
-      <button type="button" class="btn primary" data-hr-alt>${icon('check', 'sm')}In Mitarbeiter übernehmen</button></div></div>`;
+      Sie zählen nicht mehr im Urlaubsplan (Kalender, Übersicht); ihre bisherigen Einträge bleiben erhalten.
+      Arbeitet jemand davon noch hier, <strong>einzeln zuordnen</strong> – Personalnummer und Urlaub gehen dann auf den Mitarbeiter über.</p>
+      <div class="hr-alt-knoepfe"><button type="button" class="btn" data-hr-alt>${icon('check', 'sm')}Gleichnamige zuordnen</button>
+      <button type="button" class="btn primary" data-hr-alt-einzeln>Einzeln zuordnen …</button></div></div>`;
   }
 
   /* Einzeln zuordnen: jeden Eintrag ohne Mitarbeiter einem gewählten Mitarbeiter zuordnen – auch bei anderem Namen;
@@ -99,14 +99,14 @@
     const alt = daten.personen.filter((p) => p.altbestand);
     const ps = daten.personen.filter((p) => !p.altbestand).sort((a, b) => nk(a).localeCompare(nk(b), 'de'));
     const opts = (sel) => '<option value="">– Mitarbeiter wählen –</option>' + ps.map((p) => `<option value="${esc(p.nutzer)}"${p.nutzer === sel ? ' selected' : ''}>${esc(nk(p))}${p.zugang ? ' (' + esc(p.username) + ')' : ' (ohne Anmeldung)'}</option>`).join('');
-    return `<div class="dlg-head"><div><h2 id="hra-title">Einträge einzeln zuordnen</h2><p>Abwesenheiten, Personalnummer, Anspruch und Übertrag gehen auf den gewählten Mitarbeiter über.
+    return `<div class="dlg-head"><div><h2 id="hra-title">Ehemalige Mitarbeiter zuordnen</h2><p>Abwesenheiten, Personalnummer, Anspruch und Übertrag gehen auf den gewählten Mitarbeiter über.
         Hat er schon Angaben, gelten seine; nur leere Felder werden ergänzt.</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">${alt.length ? `<ul class="hr-alt-liste">${alt.map((e) => `<li data-eintrag="${esc(e.id)}">
           <div class="nm"><strong>${esc(nk(e))}</strong><span class="muted">${e.personalnummer ? 'Nr. ' + esc(e.personalnummer) : 'ohne Personalnummer'}${e.abteilung ? ' · ' + esc(e.abteilung) : ''}</span></div>
           <label class="fld"><span class="sr-only">Mitarbeiter für ${esc(nk(e))}</span><select>${opts(vorschlag(e, ps))}</select></label>
           <button type="button" class="btn sm primary" data-zuordnen>Zuordnen</button>
-          <p class="form-err" role="alert"></p></li>`).join('')}</ul>` : '<p class="hint">Alle Einträge sind zugeordnet.</p>'}</div>
+          <p class="form-err" role="alert"></p></li>`).join('')}</ul>` : '<p class="hint">Keine ehemaligen Mitarbeiter ohne Zuordnung.</p>'}</div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Fertig</button></div>`;
   }
   function altDialog(nachher) {
@@ -137,7 +137,7 @@
   }
   async function altbestandUebernehmen(btn, nachher) {
     btn.disabled = true;
-    try { const r = await api('hr_personal_uebernehmen', { body: {} }); toast(r.anzahl === 1 ? '1 Eintrag übernommen.' : `${r.anzahl} Einträge übernommen.`); await nachher(); }
+    try { const r = await api('hr_personal_uebernehmen', { body: {} }); toast(!r.anzahl ? 'Kein gleichnamiger Mitarbeiter gefunden – bitte einzeln zuordnen.' : r.anzahl === 1 ? '1 Eintrag zugeordnet.' : `${r.anzahl} Einträge zugeordnet.`, 6000); await nachher(); }
     catch (ex) { toast(ex.message, 6000); btn.disabled = false; }
   }
 

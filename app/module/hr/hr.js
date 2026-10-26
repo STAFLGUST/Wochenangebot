@@ -294,15 +294,16 @@
     const v = S.verw;
     $('#eintraege-titel').textContent = `Alle Einträge ${v.jahr}`;
     const sel = $('#eintraege-person'), alt = sel.value;
-    sel.innerHTML = '<option value="">alle</option>' + v.personen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    sel.innerHTML = '<option value="">alle</option>' + v.personen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}${p.ehemalig ? ' (ehemalig)' : ''}</option>`).join('');
     sel.value = alt;
     zeigeEintraege();
   }
   function zeigeEintraege() {
     const v = S.verw, f = $('#eintraege-person').value;
     const l = v.eintraege.filter((e) => !f || e.person === f);
+    const ehemalig = new Set(v.personen.filter((p) => p.ehemalig).map((p) => p.id));   // ohne Mitarbeiter: Einträge bleiben, Person markiert
     $('#eintraege-tabelle').innerHTML = '<thead><tr><th>Mitarbeiter</th><th>Art</th><th>Zeitraum</th><th class="zahl">Tage</th><th>Status</th><th>Notiz / Entscheidung</th><th></th></tr></thead><tbody>'
-      + (l.length ? l.map((e) => `<tr><td>${esc(e.name)}</td><td><span class="hr-art ${esc(e.art)}">${esc(e.art === 'X' ? 'x' : e.art)}</span> ${esc(e.artText)}</td>
+      + (l.length ? l.map((e) => `<tr><td>${esc(e.name)}${ehemalig.has(e.person) ? ' <span class="gedaempft">(ehemalig)</span>' : ''}</td><td><span class="hr-art ${esc(e.art)}">${esc(e.art === 'X' ? 'x' : e.art)}</span> ${esc(e.artText)}</td>
         <td>${esc(zeitraum(e.von, e.bis))}</td><td class="zahl">${esc(zahl(e.tage))}</td><td><span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span></td>
         <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'vom Urlaub abgezogen' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : ''].filter(Boolean).join(' · '))}</td>
         <td>${e.status === 'genehmigt' && !e.eigen ? `<button type="button" class="btn" data-bearbeiten="${esc(e.id)}">Ändern</button>` : ''}</td></tr>`).join('')
