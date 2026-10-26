@@ -373,5 +373,6 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
   .sic .nicht-schmal { display: none; }
   .sic .nur-schmal { display: block; margin-top: 3px; }
 }
-@media (max-width: 480px) { body.sic .sic-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; } }
+@media (max-width: 480px) { body.sic .sic-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; }
+  #sic-neu { display: none; } .sic-kopf .sic-rund { width: 36px; height: 36px; } .sic-aktionen { gap: 6px; } }
 @media (pointer: coarse) { .sic .btn.sm { height: 36px; } }
