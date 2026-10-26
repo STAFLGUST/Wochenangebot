@@ -515,7 +515,7 @@ check('Verfallstag 30.04. gespeichert (aus dem Datumsfeld nur Tag und Monat)', s
 k = konto_f()
 check('… Konto: Frist 30.04., Urlaub im April verbraucht den Übertrag zuerst', k['frist'] == f'{Y}-04-30' and k['verfaellt'] == max(0, 5 - NAPR), (k, NAPR))
 check('… gilt überall (Start, Verwaltung, Übersicht)', E.call('hr_start')[1]['uebertragBis'] == '04-30'
-      and next(z for z in P.call(f'hr_uebersicht&jahr={Y}')[1]['zeilen'] if z['id'] == PF)['frist'] == f'{Y}-04-30')
+      and P.call(f'hr_uebersicht&jahr={Y}')[1]['uebertragBis'] == '04-30')
 st, r = P.call('hr_einstellungen_save', einst)
 check('Speichern ohne Verfallstag lässt ihn unverändert', st == 200 and r['uebertragBis'] == '04-30' and P.call('mitarbeiter_hr')[1]['uebertragBis'] == '04-30', r)
 check('Änderung im Protokoll', 'Verfallstag Resturlaub auf 30.04. geändert' in json.dumps(A.call('log')[1], ensure_ascii=False))

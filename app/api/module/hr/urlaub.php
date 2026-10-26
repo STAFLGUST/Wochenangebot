@@ -546,7 +546,7 @@ function hr_uebersicht(int $jahr): array
         $k = hr_konto($p, $abw, $jahr);
         $t = hr_tage_je_art($p, $abw, $jahr);
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'],
-                     'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'], 'frist' => $k['frist'],
+                     'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'],
                      'genommen' => $k['genommen'], 'geplant' => $k['geplant'], 'beantragt' => $k['beantragt'], 'rest' => $k['rest'],
                      'krank' => $t['K'], 'gleittage' => $t['G']];
     }

@@ -58,7 +58,8 @@ switch ($action) {
             if (!may($me, 'hr.uebersicht') && !may($me, 'hr.verwalten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
-            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'zeilen' => hr_uebersicht($jahr)]);
+            // Verfallstag nur einmal als Monat-Tag (keine Datumsangaben je Mitarbeiter in der Antwort)
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'uebertragBis' => hr_uebertrag_bis(), 'zeilen' => hr_uebersicht($jahr)]);
         }
 
         /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, Personalstelle mit Kürzeln */

@@ -406,7 +406,7 @@
     const zelle = (z, k) => {
       const v = z[k];
       if (k === 'uebertrag' && (z.verfallen > 0 || z.verfaellt > 0)) {
-        const t = z.verfallen > 0 ? `${tageText(z.verfallen)} verfallen` : `${tageText(z.verfaellt)} verfallen nach dem ${de(z.frist).slice(0, 6)}`;
+        const t = z.verfallen > 0 ? `${tageText(z.verfallen)} verfallen` : `${tageText(z.verfaellt)} verfallen nach dem ${(S.ueb.uebertragBis || '03-31').split('-').reverse().join('.')}.`;
         return `<td class="zahl" title="${esc(t)}">${esc(zahl(v))}<small class="gedaempft"> (${esc(z.verfallen > 0 ? '−' + zahl(z.verfallen) : zahl(z.verfaellt) + '!')})</small></td>`;
       }
       return `<td class="zahl${k === 'rest' ? ' rest' + (v < 0 ? ' minus' : '') : ''}">${v ? esc(zahl(v)) : '<span class="gedaempft">0</span>'}</td>`;
