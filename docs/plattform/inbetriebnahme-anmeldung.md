@@ -74,6 +74,10 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   wer freiwillig einen Einmalcode oder Passkey einrichtet (Anmeldeseite → „Konto“), wird danach immer gefragt.
   Neu anmelden nach 4 Stunden Leerlauf, höchstens nach 10 Stunden. Umgestellt mit `konten.sh realm-aktualisieren`
   (idempotent; bei jeder späteren Realm-Änderung erneut ausführen, die CI prüft genau diesen Weg).
+  Abmeldung nach Inaktivität der Anwendung (Verwaltung → Sicherheit) und „Sitzung beenden“ (Verwaltung → Sitzungen) wirken
+  seit 26.10.2026 auch hier: danach erneute Anmeldung bei Keycloak (Passwort erneut), keine stille neue Sitzung.
+- **Passwort aus der Verwaltung für Administratoren und Pflicht-Konten** (zweiter Faktor verpflichtend): immer nur
+  vorübergehend – der Mitarbeiter legt bei der nächsten Anmeldung ein eigenes fest (seit 26.10.2026).
 - **Passwort vergessen:** `konten.sh startpasswort <name>` – wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort.
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
