@@ -26,7 +26,7 @@ Ablauf: [docs/release-freigabe.md](../../docs/release-freigabe.md).
 
 ## Geheimnisse (nur in `.env` auf dem Server)
 
-`OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT`, `OIDC_SECRET_VERWALTUNG`, `OIDC_SECRET_BESTAND`, `OIDC_SECRET_HR`, `OIDC_SECRET_CRM`, `OIDC_SECRET_MARKETING` (Client-Geheimnisse), `OIDC_CRYPTO_DASHBOARD`,
+`OIDC_SECRET_DASHBOARD`, `OIDC_SECRET_ANGEBOT`, `OIDC_SECRET_VERWALTUNG`, `OIDC_SECRET_BESTAND`, `OIDC_SECRET_HR`, `OIDC_SECRET_CRM`, `OIDC_SECRET_MARKETING`, `OIDC_SECRET_KONTEN` (Client-Geheimnisse; `KONTEN` = Mitarbeiterkonten aus der Verwaltung, ohne Sitzungsschlüssel), `OIDC_CRYPTO_DASHBOARD`,
 `OIDC_CRYPTO_ANGEBOT`, `OIDC_CRYPTO_VERWALTUNG`, `OIDC_CRYPTO_BESTAND`, `OIDC_CRYPTO_HR`, `OIDC_CRYPTO_CRM`, `OIDC_CRYPTO_MARKETING` (Sitzungsschlüssel je Host), `KC_DB_PASSWORD`, nach der Einrichtung `KC_VERWALTUNG_PASSWORD` (Verwaltungskonto „verwaltung“
 im Realm master). Das Start-Konto (`KC_BOOTSTRAP_ADMIN_*`) steht nur während der Einrichtung in
 `daten-anmeldung/einrichtung.env` (Compose liest die Datei nur, wenn sie existiert; `konten.sh verwaltung` löscht sie).
@@ -62,6 +62,15 @@ Stand 6 (23.10.2026, Freigabe des Inhabers): Client `crm` für `crm.dashboard-st
 (`OIDC_SECRET_CRM`/`OIDC_CRYPTO_CRM`, danach `docker compose up -d app`). Der DNS-Eintrag `crm` besteht seit 21.10.2026.
 Stand 7 (25.10.2026, Freigabe des Inhabers): Client `marketing` für `marketing.dashboard-stafl.de` (Marketing · Redaktionsplan) –
 gleiches Vorgehen (`OIDC_SECRET_MARKETING`/`OIDC_CRYPTO_MARKETING`, danach `docker compose up -d app`). Der DNS-Eintrag `marketing` besteht seit 25.10.2026.
+Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
+Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
+Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt
+(`app/api/lib/anmeldekonten.php`). Rechte genau `view-users` und `manage-users` von `realm-management` – keine Realm-,
+Client- oder Rollenverwaltung, kein Anmelden im Namen anderer, kein Passwort-Grant; `realm-aktualisieren` entfernt
+zusätzliche Rollen. Legt `OIDC_SECRET_KONTEN` in `.env` an (nie angezeigt); danach `docker compose up -d app`. Die Anwendung
+spricht Keycloak im internen Netz an (`WA_KONTEN_URL=http://keycloak:8080`, nicht über Caddy). Ohne das Geheimnis zeigt die
+Verwaltung „noch nicht eingerichtet“ – sonst ändert sich nichts. Rückweg: Client `konten` in Keycloak deaktivieren oder die
+Zeile `OIDC_SECRET_KONTEN` aus `.env` entfernen und `docker compose up -d app`.
 
 ## Alter Eingabebereich (angebot-stafl.de/admin/) stillgelegt
 

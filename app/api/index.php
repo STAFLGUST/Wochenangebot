@@ -116,6 +116,7 @@ require __DIR__ . '/lib/rechte.php';
 require __DIR__ . '/lib/sicherheit.php';
 require __DIR__ . '/lib/sitzung.php';
 require __DIR__ . '/lib/oidc.php';
+require __DIR__ . '/lib/anmeldekonten.php';   // Konten der zentralen Anmeldung (Keycloak) aus der Verwaltung
 require __DIR__ . '/lib/passkey.php';
 require __DIR__ . '/lib/protokoll.php';
 require __DIR__ . '/lib/angebote.php';
@@ -224,6 +225,7 @@ try {
     require __DIR__ . '/aktionen/mail.php';
     require __DIR__ . '/aktionen/kundenverwaltung.php';
     require __DIR__ . '/aktionen/zugang.php';
+    require __DIR__ . '/aktionen/anmeldekonten.php';
     require __DIR__ . '/aktionen/passkey.php';
     require __DIR__ . '/aktionen/bestand.php';
     require __DIR__ . '/aktionen/einkauf.php';
