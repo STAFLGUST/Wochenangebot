@@ -307,12 +307,15 @@ for e in es:
 
 # Client eines neuen Hosts anlegen (Stand 3: verwaltung, Stand 4: bestand, Stand 5: hr, Stand 6: crm, Stand 7: marketing). Definition aus der Realm-Datei, Geheimnisse aus .env – fehlen sie,
 # werden sie wie von einrichten.sh erzeugt (nie angezeigt). Danach liest die Anwendung sie erst nach einem Neustart.
+# Stand 8: Client „konten“ (nur Service-Account, kein Host): die Verwaltung der Anwendung steuert damit die Mitarbeiterkonten
+# (Passwort setzen, entsperren, Link, anlegen – lib/anmeldekonten.php); Geheimnis OIDC_SECRET_KONTEN, kein Sitzungsschlüssel.
 ENV_NEU=0
 client_anlegen() { # client_anlegen <clientId>
   c=$1; n=$(printf '%s' "$1" | tr 'a-z' 'A-Z')
   [ -n "$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)" ] && return 0
   [ -f "$REALM_DATEI" ] || abbruch "$REALM_DATEI fehlt – Stand von main einspielen."
-  for g in SECRET CRYPTO; do
+  gs="SECRET CRYPTO"; [ "$c" = konten ] && gs=SECRET   # Service-Account ohne Anmeldeseite: kein Sitzungsschlüssel
+  for g in $gs; do
     if [ -z "$(wert "OIDC_${g}_$n")" ]; then
       [ -n "$(tail -c1 "$ENV")" ] && echo >> "$ENV"
       printf 'OIDC_%s_%s=%s\n' "$g" "$n" "$(zufall)" >> "$ENV"; ENV_NEU=1
@@ -330,6 +333,23 @@ if "@GEHEIM_" in t: sys.exit("Platzhalter nicht ersetzt")
 print(t)' "$REALM_DATEI" "$c" > "$FEHLER.client" || { rm -f "$FEHLER.client"; abbruch "Client $c: Definition nicht lesbar."; }
   kc create clients -r "$REALM" -f - < "$FEHLER.client" >/dev/null; rm -f "$FEHLER.client"
   echo "angelegt:  Client $c (Host aus $(basename "$REALM_DATEI"))"
+}
+
+# Stand 8: Rechte des Service-Accounts „konten“ – genau view-users und manage-users von realm-management, sonst nichts
+# (keine Realm-, Client- oder Rollenverwaltung, kein Anmelden als andere Person). Überzählige Rollen werden entfernt.
+konten_rechte() {
+  cid=$(kc get clients -r "$REALM" -q clientId=konten --fields id --format csv --noquotes | head -1)
+  [ -n "$cid" ] || return 0
+  sa=$(kc get "clients/$cid/service-account-user" -r "$REALM" --fields id --format csv --noquotes | head -1)
+  [ -n "$sa" ] || abbruch "Client konten ohne Service-Account – Realm-Datei prüfen."
+  rm_id=$(kc get clients -r "$REALM" -q clientId=realm-management --fields id --format csv --noquotes | head -1)
+  ist=$(kc get "users/$sa/role-mappings/clients/$rm_id" -r "$REALM" --fields name --format csv --noquotes | sort | tr '\n' ' ')
+  for rolle in view-users manage-users; do
+    case " $ist " in *" $rolle "*) ;; *) kc add-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename "$rolle" >/dev/null; echo "gesetzt:   Recht $rolle für die Mitarbeiterkonten der Anwendung" ;; esac
+  done
+  for rolle in $ist; do
+    case "$rolle" in view-users|manage-users) ;; *) kc remove-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename "$rolle" >/dev/null; echo "entfernt:  überzähliges Recht $rolle (Client konten)" ;; esac
+  done
 }
 
 realm_aktualisieren() {
@@ -378,7 +398,7 @@ for e in json.load(sys.stdin):
   done
   # Alle Clients der Realm-Datei (dashboard, angebot, verwaltung, bestand, hr, crm, marketing …): fehlende anlegen, dann einheitlich einstellen.
   # Ohne Realm-Datei (anderer Ordner) die bekannten Clients – fehlt einer davon, bricht client_anlegen mit Hinweis ab
-  clients="dashboard angebot verwaltung bestand hr crm marketing"
+  clients="dashboard angebot verwaltung bestand hr crm marketing konten"
   [ ! -f "$REALM_DATEI" ] || clients=$(python3 -c '
 import json, re, sys
 ids = [c.get("clientId", "") for c in json.load(open(sys.argv[1], encoding="utf-8")).get("clients", [])]
@@ -386,6 +406,7 @@ if not ids or not all(re.fullmatch(r"[a-z][a-z0-9-]{0,30}", i) for i in ids): sy
 print(" ".join(ids))' "$REALM_DATEI") || abbruch "Clients in $REALM_DATEI nicht lesbar."
   for c in $clients; do client_anlegen "$c"; done
   for c in $clients; do
+    [ "$c" = konten ] && continue   # Service-Account: keine Anmeldestufe, kein amr-Claim
     cid=$(kc get clients -r "$REALM" -q clientId="$c" --fields id --format csv --noquotes | head -1)
     [ -n "$cid" ] || continue
     kc update "clients/$cid" -r "$REALM" -s 'attributes."default.acr.values"=pwd' -s 'attributes."minimum.acr.value"=pwd' >/dev/null
@@ -397,7 +418,8 @@ print(" ".join(ids))' "$REALM_DATEI") || abbruch "Clients in $REALM_DATEI nicht 
       echo "angelegt:  amr-Claim für Client $c"
     fi
   done
-  echo "Realm aktuell (Stand 7: Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  konten_rechte
+  echo "Realm aktuell (Stand 8: Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
 }
 

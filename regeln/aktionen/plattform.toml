@@ -228,6 +228,14 @@ schreibend = true
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+# Konten der zentralen Anmeldung (Keycloak) aus Verwaltung → Mitarbeiter (lib/anmeldekonten.php)
+[aktion.anmeldekonto]
+oberflaeche = "angebot.eingabe"
+
+[aktion.anmeldekonto_aendern]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.user_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true

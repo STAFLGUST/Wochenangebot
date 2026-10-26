@@ -538,7 +538,7 @@ beschreibung = "503-Platzhalter – nicht als Testumgebung nutzen (ADR-003, GR-1
 [[koordination]]
 bereich = "Anmeldung, Sitzungen und Zwei-Faktor"
 pfade = ["app/api/lib/sitzung.php", "app/api/lib/oidc.php", "app/api/lib/passkey.php", "app/api/lib/geraete.php", "app/api/aktionen/zugang.php",
-  "app/api/aktionen/passkey.php"]
+  "app/api/aktionen/passkey.php", "app/api/lib/anmeldekonten.php", "app/api/aktionen/anmeldekonten.php"]
 
 [[koordination]]
 bereich = "Nutzer, Rechte und Sicherheit"
