@@ -96,7 +96,7 @@ Agent: `verwaltung` · Teil von `verwaltung` · hängt ab von `verwaltung`
 
 Personal: Urlaubsverwaltung – Urlaubsanspruch, Urlaubsanträge, Genehmigung, Vertretung, Abwesenheitskalender
 
-Agent: `hr` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `hr`
+Agent: `hr` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `hr`, `hr_uebersicht`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

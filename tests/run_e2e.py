@@ -108,6 +108,7 @@ SUITES['sitzung_cookie'] = (8790, 'data-seed', True)   # __Host-Präfix des Sitz
 SUITES['auswertung'] =(8790, 'data-seed', True, {'WA_ORT_URL': 'http://127.0.0.1:{AUX}/dbip-city-lite-%s.csv.gz'})
 SUITES['importzentrale'] = (8790, 'data-seed', True)   # Importzentrale (Verwaltung → Import, Roadmap 10b)
 SUITES['hr'] = (8790, 'data-seed', True)   # HR · Urlaubsverwaltung (app/module/hr/, Oberfläche hr.intern)
+SUITES['hr_uebersicht'] = (8790, 'data-seed', True)   # HR · Urlaubsübersicht aller Mitarbeiter (Recht hr.uebersicht)
 SUITES['rollen'] = (8790, 'data-seed', True)   # Rollen und Rechte, Modulzugang je Rolle (lib/rechte.php)
 SUITES['rollen_host'] = (8790, 'data-seed', True, {'WA_OBERFLAECHE': 'bestand.intern'})   # Modulzugang je Host (wie bestand.dashboard-stafl.de)
 SUITES['einheit'] = (8790, 'data-seed', True)   # einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen
@@ -134,6 +135,7 @@ GEWICHT = {
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,
     'module_status': 1, 'storage': 1, 'aktionsregister': 1, 'oidc_kern': 1, 'oidc_dashboard': 1, 'anmeldebremse': 2,
     'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
+    'hr_uebersicht': 15,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'marketing': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
