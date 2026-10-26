@@ -419,6 +419,45 @@ check('Mitarbeiter ohne HR-Angaben: Eintrag wird seine Person (Personalnummer bl
 rev = v['rev']
 hr(ids['mara'], aktiv=False); hr(ids['nina'], aktiv=False)
 
+# ── Verwaiste Einträge: verknüpfter Mitarbeiter gelöscht bzw. zweiter Eintrag desselben Mitarbeiters (Fehler aus dem Betrieb
+#    26.10.2026: „schon einem Mitarbeiter zugeordnet“, obwohl der Eintrag als „ohne Mitarbeiter“ angezeigt wurde) ──
+for u, n in (('paula', 'Paula Platz'), ('quentin', 'Quentin Quer')):
+    assert A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': 'Urlaub-Konto-4711', 'mustChange': False})[0] == 200
+ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+alt = dokument('hr-personal')
+alt['personen'] += [{'id': 'pverwaist', 'nutzer': 'u-geloescht-1', 'vorname': 'Paula', 'nachname': 'Alt', 'abteilung': 'Lager', 'pos': 44, 'aktiv': True, 'personalnummer': '9910'},
+                    {'id': 'pdoppel', 'nutzer': ids['erika'], 'vorname': 'Erika', 'nachname': 'Doppelt', 'abteilung': '', 'pos': 45, 'aktiv': True},
+                    {'id': 'pquentin', 'nutzer': 'u-geloescht-2', 'vorname': 'Quentin', 'nachname': 'Quer', 'abteilung': 'Lager', 'pos': 46, 'aktiv': True}]
+alt['rev'] = alt.get('rev', 0) + 1
+storage_write('hr-personal', alt)
+ab = dokument('hr-abwesenheiten')
+ab['eintraege'].append({'id': 'av1', 'person': 'pverwaist', 'art': 'U', 'von': iso(montag(Y, 9, 2)), 'bis': iso(montag(Y, 9, 2)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'zeiterfassung'})
+ab['rev'] = ab.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab)
+v = P.call('mitarbeiter_hr')[1]
+rev = v['rev']
+altb = sorted(p_['id'] for p_ in v['personen'] if p_['altbestand'])
+check('verwaiste Einträge erscheinen als „ohne Mitarbeiter“ (gelöschter Mitarbeiter, zweiter Eintrag)', altb == ['pdoppel', 'pquentin', 'pverwaist'], altb)
+pe_vorher = {p_['id']: p_ for p_ in v['personen']}[PE]
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pverwaist', 'nutzer': ids['paula'], 'rev': rev})
+v = P.call('mitarbeiter_hr')[1]
+pp = [p_ for p_ in v['personen'] if p_['nutzer'] == ids['paula']]
+check('Eintrag eines gelöschten Mitarbeiters zuordnen (Mitarbeiter ohne Angaben): ok, Personalnummer und Urlaub kommen mit', st == 200
+      and len(pp) == 1 and pp[0]['id'] == 'pverwaist' and pp[0]['personalnummer'] == '9910' and r['abwesenheiten'] == 1, (st, r, pp))
+rev = v['rev']
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pdoppel', 'nutzer': ids['erika'], 'rev': rev})
+v = P.call('mitarbeiter_hr')[1]
+pe = {p_['id']: p_ for p_ in v['personen']}.get(PE, {})
+check('zweiter Eintrag desselben Mitarbeiters: in seine Angaben zusammengeführt, Angaben unverändert', st == 200 and 'pdoppel' not in [p_['id'] for p_ in v['personen']]
+      and pe.get('abteilung') == pe_vorher['abteilung'] and pe.get('jahre') == pe_vorher['jahre'], (st, r))
+st, r = P.call('hr_personal_uebernehmen', {})
+v = P.call('mitarbeiter_hr')[1]
+pq = [p_ for p_ in v['personen'] if p_['nutzer'] == ids['quentin']]
+check('„In Mitarbeiter übernehmen“ erfasst auch verwaiste Einträge (gleichnamiger Mitarbeiter)', st == 200 and r['anzahl'] == 1 and len(pq) == 1 and pq[0]['id'] == 'pquentin'
+      and not [p_ for p_ in v['personen'] if p_['altbestand']], (r, pq))
+rev = v['rev']
+hr(ids['paula'], aktiv=False); hr(ids['quentin'], aktiv=False)
+
 # ── Excel-Export ──
 # Lena nicht mehr im Urlaubsplan (z. B. ausgeschieden): im Februar (genehmigte Krankheit) weiter im Export, im August nicht
 hr(ids['lena'], aktiv=False)
