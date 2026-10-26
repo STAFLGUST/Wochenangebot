@@ -112,6 +112,7 @@
     dlgZurueck = null;
   });
   dlg.addEventListener('click', (e) => {
+    if (e.target.closest('.sic-pwschritt')) return;
     const b = e.target.closest('[data-d]');
     if (!b) return;
     e.preventDefault();
@@ -120,6 +121,7 @@
   });
   dlg.addEventListener('submit', (e) => {
     e.preventDefault();
+    if (e.target.classList.contains('sic-pwschritt')) return;   // eigener Ablauf (passwortBestaetigen)
     const b = e.submitter || $('.sic-dfuss [type=submit]', dlg);
     if (dlgHandler) lauf(b, () => dlgHandler('submit', b, e.target));
   });
@@ -143,23 +145,38 @@
       dlg.addEventListener('close', zu);
     });
   }
-  /* Passwortbestätigung (Testserver/alter Eingabebereich) – im selben Dialog */
+  /* Passwortbestätigung (Testserver/alter Eingabebereich) im selben Dialog: Ist ein Formular offen, legt sich der Schritt
+     darüber und das Formular bleibt mit allen Eingaben erhalten (Abbrechen kehrt dorthin zurück); sonst eigener Dialog. */
   function passwortBestaetigen() {
     return new Promise((ok) => {
-      let fertig = false;
-      const ende = (w) => { if (fertig) return; fertig = true; dlg.removeEventListener('close', zu); ok(w); };
-      const zu = () => ende(false);
-      dialog(`${dKopf('Bitte bestätigen', 'Sensible Aktion – Bestätigung mit Ihrem Passwort')}<div class="sic-dinhalt">
-          <label class="sic-feld">Aktuelles Passwort<input type="password" id="d-pw" autocomplete="current-password" required></label></div>
-        ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">Bestätigen</button>')}`,
-      { handler: async (a) => {
-        if (a !== 'submit') return;
-        const pw = $('#d-pw', dlg).value;
-        if (!pw) { dFehler('Bitte das Passwort eingeben.'); return; }
-        await api('reauth', { body: { password: pw } });
-        ende(true);
-      } });
+      const vorher = dlg.open ? $('.sic-dform', dlg) : null;
+      if (!dlg.open) { dlgZurueck = document.activeElement; dlg.className = 'sic-dialog'; dlg.innerHTML = ''; dlgHandler = null; dlg.showModal(); }
+      if (vorher) vorher.hidden = true;
+      const box = document.createElement('form');
+      box.className = 'sic-dform sic-pwschritt'; box.noValidate = true;
+      box.innerHTML = `${dKopf('Bitte bestätigen', 'Sensible Aktion – Bestätigung mit Ihrem Passwort').replace('data-d="zu"', 'data-pw="nein"')}<div class="sic-dinhalt">
+          <label class="sic-feld">Aktuelles Passwort<input type="password" id="sic-pw" autocomplete="current-password" required></label></div>
+        <p class="sic-dfehler" id="sic-pw-err" role="alert"></p><div class="sic-dfuss"><button type="button" class="btn" data-pw="nein">Abbrechen</button><button type="submit" class="btn primary" id="sic-pw-ok">Bestätigen</button></div>`;
+      dlg.append(box);
+      $('#sic-pw', box).focus();
+      const ende = (w) => {
+        box.remove(); dlg.removeEventListener('cancel', esc); dlg.removeEventListener('close', zu);
+        if (vorher && vorher.isConnected) { vorher.hidden = false; const k = $('.sic-dfuss [type=submit]', vorher); if (k) k.focus(); } else if (dlg.open) dialogZu();
+        ok(w);
+      };
+      const esc = (e) => { e.preventDefault(); ende(false); };
+      const zu = () => ok(false);
+      dlg.addEventListener('cancel', esc);
       dlg.addEventListener('close', zu);
+      box.addEventListener('click', (e) => { if (e.target.closest('[data-pw="nein"]')) { e.preventDefault(); ende(false); } });
+      box.addEventListener('submit', async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const feld = $('#sic-pw', box), knopf = $('#sic-pw-ok', box);
+        if (!feld.value) { $('#sic-pw-err', box).textContent = 'Bitte das Passwort eingeben.'; return; }
+        knopf.disabled = true;
+        try { await api('reauth', { body: { password: feld.value } }); ende(true); }
+        catch (ex) { feld.value = ''; $('#sic-pw-err', box).textContent = ex.message; knopf.disabled = false; feld.focus(); }
+      });
     });
   }
   function herunterladen(name, inhalt, typ) {
@@ -503,10 +520,10 @@
     <td><span class="sic-st">${e.st || '—'}</span> ${esc(e.why || 'Anfrage')}${e.n > 1 ? ` <span class="sub">(${zahl(e.n)}×)</span>` : ''}<div class="sub mono-s fw-q">${esc(e.m || '')} ${esc(e.q || '')}</div></td>
     <td class="fw-ua">${esc(geraet(e.ua))}${e.u ? `<div class="sub">${esc(e.u)}</div>` : ''}</td>
     <td class="act">${e.ip && e.ip !== S.fw.meineIp ? `<button type="button" class="btn sm" data-fw="sperr-ip" data-ip="${esc(e.ip)}">${icon('lock')}Sperren</button>` : ''}</td></tr>`;
-  const verkehr = (l) => l.length ? `<div class="sic-tabrahmen"><table class="sic-tabelle fw-verkehr"><thead><tr><th>Zeit</th><th>Adresse</th><th>Vorgang</th><th>Gerät</th><th class="act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${l.map(fwZeile).join('')}</tbody></table></div>`
+  const verkehr = (l) => l.length ? `<div class="sic-tabrahmen"><table class="sic-tabelle fw-verkehr"><thead><tr><th>Zeit</th><th>Adresse</th><th>Vorgang</th><th>Gerät</th><th class="act"><span class="sr-only">Aktion</span></th></tr></thead><tbody id="fw-rows">${l.map(fwZeile).join('')}</tbody></table></div>`
     : leer('Noch keine Einträge. Angezeigt werden abgewiesene und auffällige Anfragen, Anmeldungen und – während eines Mitschnitts – alle Anfragen.');
-  async function fwLaden() {
-    const [fw, sec] = await Promise.all([api('fw_status', { query: S.fwFilter ? '&filter=' + S.fwFilter : '' }), S.sec ? Promise.resolve(S.sec) : api('security_status')]);
+  async function fwLaden(mitSec = true) {   // Filterwechsel: nur der Verkehr neu (mitSec = false)
+    const [fw, sec] = await Promise.all([api('fw_status', { query: S.fwFilter ? '&filter=' + S.fwFilter : '' }), mitSec || !S.sec ? api('security_status') : Promise.resolve(S.sec)]);
     S.fw = fw; S.sec = sec;
     if (fw.feedVeraltet) {
       api('fw_feed_auffrischen', { body: {} }).then((r) => { if (r && r.aufgefrischt && S.fw) { S.fw.feed = r.feed; if (S.tab === 'firewall' && !$('#tab-firewall').contains(document.activeElement)) fwZeichnen(); } }).catch(() => {});
@@ -560,7 +577,7 @@
   function fwUebernehmen(r) { if (r) { S.fw = { ...S.fw, ...r }; if (S.tab === 'firewall') fwZeichnen(); } }
   $('#tab-firewall').addEventListener('click', (e) => {
     const f = e.target.closest('[data-fw-filter]');
-    if (f) { S.fwFilter = f.dataset.fwFilter; lauf(f, async () => { await fwLaden(); fwZeichnen(); }); return; }
+    if (f) { S.fwFilter = f.dataset.fwFilter; lauf(f, async () => { await fwLaden(false); fwZeichnen(); }); return; }
     const b = e.target.closest('[data-fw]');
     if (!b) return;
     const a = b.dataset.fw, ip = b.dataset.ip;
@@ -923,7 +940,7 @@
       if (g.ip.error) return leer(esc(g.ip.error));
       if (!g.ip.country) return leer(`<span class="mono-s">${esc(g.ip.ip)}</span> – ${g.ip.private ? 'interne Adresse, keinem Land zugeordnet' : 'kein Land bekannt'}.`);
       const c = g.ip.country;
-      return `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(g.ip.ip)}</span> → ${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
+      return `<label class="geo-opt geo-iphit"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(g.ip.ip)}</span> → ${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     }
     const q = g.q.toLowerCase();
     const alle = (S.sec.geoCountries || []).filter((c) => !q || c.toLowerCase() === q || land(c).toLowerCase().includes(q)).sort(landSort);
@@ -968,7 +985,7 @@
     for (const b of d.bestaetigung || []) { let g = gruppen.find((x) => x.name === b.group); if (!g) gruppen.push((g = { name: b.group, l: [] })); g.l.push(b); }
     dialog(`${dKopf('Passwortbestätigung', 'Welche Aktionen eine frische Anmeldung bzw. das Passwort verlangen')}<div class="sic-dinhalt" id="bst-form">
         <label class="sic-feld">Bestätigung gilt<select name="bestaetigungMinuten">${(d.bestaetigungMinuten || [5]).map((m) => `<option value="${m}"${(St.bestaetigungMinuten || 5) === m ? ' selected' : ''}>${m} Minuten</option>`).join('')}</select></label>
-        <div class="bst-gitter">${gruppen.map((g) => `<fieldset class="bst-g"><legend>${esc(g.name)}</legend>${g.l.map((b) => b.fest
+        <div class="bst-gitter">${gruppen.map((g) => `<fieldset class="bst-g${g.l.every((b) => b.fest) ? ' fest' : ''}"><legend>${esc(g.name)}</legend>${g.l.map((b) => b.fest
           ? `<label class="sic-check fest" title="Immer mit Bestätigung"><input type="checkbox" checked disabled><span>${icon('lock')}${esc(b.label)}</span></label>`
           : `<label class="sic-check"><input type="checkbox" name="bst" value="${esc(b.key)}"${b.noetig ? ' checked' : ''}><span>${esc(b.label)}</span></label>`).join('')}</fieldset>`).join('')}</div>
         <p class="sic-hinweis">Ohne Haken genügen Anmeldung und Berechtigung. Aktionen an Zugängen, Rechten und Sicherheit verlangen immer eine Bestätigung.</p></div>
@@ -1065,6 +1082,7 @@
     zeigeTab(location.hash.slice(1));
   }
   themaKnopf();
+  window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t && t !== S.tab && !$('#sic-app').hidden) zeigeTab(t); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.tab === 'firewall') fwLive(); });
   start().catch(() => fehler('Keine Verbindung zum Server.'));
 })();

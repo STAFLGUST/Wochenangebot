@@ -1,4 +1,4 @@
-"""Sicherheit → Passwortbestätigung: je Aktion einstellbar, ob das Passwort verlangt wird; feste Aktionen (Zugänge, Rechte,
+"""Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einstellbar, ob das Passwort verlangt wird; feste Aktionen (Zugänge, Rechte,
 Sicherheit, Postfach) immer mit Bestätigung; Gültigkeitsdauer 5/15/30/60 Minuten; Prüfungen, Protokoll, Rechte bleiben
 erhalten, ältere Oberfläche ohne Feld ändert nichts. Oberfläche: Karte mit Häkchen, Schloss, Rückfrage beim Abschalten, 390 px."""
 import json
@@ -37,7 +37,7 @@ a = Client()
 assert a.login()[0] == 200
 st, r = a.call('security_status')
 kat = {b['key']: b for b in r.get('bestaetigung', [])}
-FEST = ['user_save', 'user_delete', 'user_unlock', 'anmeldekonto', 'user_mail', 'rechte_save', 'session_end', 'ip_unblock', 'security_save', 'security_export', 'fw_save', 'fw_sperren', 'mail_konto_save', 'modul_wartung_save', 'modul_freigabe_save', 'modul_tester_save']
+FEST = ['user_save', 'user_delete', 'user_unlock', 'anmeldekonto', 'user_mail', 'rechte_save', 'session_end', 'ip_unblock', 'security_save', 'security_export', 'fw_save', 'fw_sperren', 'mail_konto_save', 'modul_wartung_save', 'modul_freigabe_save', 'modul_tester_save', 'notfall_beenden']
 check('Katalog in der Sicherheitsübersicht, standardmäßig überall Pflicht', st == 200 and kat and all(b['noetig'] for b in kat.values()) and r['bestaetigungMinuten'] == [5, 15, 30, 60]
       and r['settings'].get('bestaetigungMinuten') == 5, len(kat))
 check('Zugänge, Rechte, Sicherheit und Postfach fest', all(kat.get(k, {}).get('fest') for k in FEST) and not kat['kunde_save']['fest'] and not kat['einzel_senden']['fest'])
@@ -118,38 +118,39 @@ with sync_playwright() as p:
     pg.on('pageerror', lambda e: errors.append(str(e)))
     pg.goto(BASE + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', 'admin'); pg.fill('#pw1', PW); pg.click('#auth-submit'); pg.wait_for_selector('#screen-editor:not([hidden])')
-    pg.click('#vt-sec'); pg.wait_for_selector('#bst-form')
+    pg.goto(BASE + '/module/sicherheit/#einstellungen'); pg.wait_for_selector('#e-bst')
+    check('Karte „Passwortbestätigung“: Dauer und Zahl der Aktionen ohne Bestätigung', '15 Minuten' in pg.inner_text('#e-bst') and '3 ohne' in pg.inner_text('#e-bst'), pg.inner_text('#e-bst'))
+    pg.click('[data-e="e-bst"]'); pg.wait_for_selector('#sic-dlg[open] #bst-form')
     f = '#bst-form'
-    check('Karte „Passwortbestätigung“ mit Abschnittslink', pg.locator('.sec-nav a[href="#sec-bst"]').count() == 1 and 'Passwortbestätigung' in pg.inner_text(f + ' h3'))
+    check('Dialog „Passwortbestätigung“', 'Passwortbestätigung' in pg.inner_text('#sic-dlg h2'))
     check('Stand: abgeschaltete ohne Haken, andere mit Haken, Dauer 15 Min.', not pg.is_checked(f + ' input[value="kunde_save"]') and pg.is_checked(f + ' input[value="kunde_delete"]')
-          and pg.input_value(f + ' select[name="bestaetigungMinuten"]') == '15' and '3 Aktionen ohne Bestätigung' in pg.inner_text(f))
-    fest = pg.locator(f + ' .bst-z.fest')
+          and pg.input_value(f + ' select[name="bestaetigungMinuten"]') == '15')
+    fest = pg.locator(f + ' .sic-check.fest')
     check('feste Aktionen mit Schloss, angehakt und gesperrt', fest.count() == len(FEST) and all(fest.nth(i).locator('input').is_disabled() and fest.nth(i).locator('input').is_checked() for i in range(fest.count()))
-          and 'Sicherheitseinstellungen ändern' in pg.inner_text(f + ' .bst-g.fest'))
-    check('Hinweis oben nennt die eingestellte Dauer', 'höchstens 15 Minuten' in pg.inner_text('#view-sec'))
-    pg.locator(f).scroll_into_view_if_needed()
+          and 'Sicherheitseinstellungen ändern' in pg.inner_text(f + ' .bst-g.fest'), fest.count())
+    check('Notfall auslösen abschaltbar, beenden fest', pg.locator(f + ' input[value="notfall_ausloesen"]').is_enabled() and 'Notfallmodus beenden' in pg.inner_text(f + ' .bst-g.fest'))
     pg.uncheck(f + ' input[value="einzel_senden"]'); pg.check(f + ' input[value="kunde_save"]')
     pg.select_option(f + ' select[name="bestaetigungMinuten"]', '30')
-    pg.evaluate("document.querySelector('#bst-form').dataset.alt = '1'")   # nach dem Speichern wird die Karte neu aufgebaut
-    pg.click(f + ' button[type="submit"]')
-    pg.wait_for_selector('#dlg-confirm[open]')
-    check('Abschalten fragt nach und nennt die Aktion', 'Einzelangebot per E-Mail senden' in pg.inner_text('#dlg-confirm'))
-    pg.click('#dlg-confirm .btn.primary')
-    pg.wait_for_function("() => document.querySelector('#dlg-pw[open], #dlg-reauth[open], dialog[open] input[type=password]') || (document.querySelector('#bst-form input[value=\"einzel_senden\"]') && !document.querySelector('#bst-form input[value=\"einzel_senden\"]').checked && document.querySelector('#bst-form select').value === '30' && !document.querySelector('#dlg-confirm[open]'))")
-    if pg.locator('dialog[open] input[type=password]').count():   # Passwortbestätigung abgelaufen → Dialog
-        pg.fill('dialog[open] input[type=password]', PW); pg.keyboard.press('Enter')
-    pg.wait_for_selector('text=Passwortbestätigung gespeichert.')   # Server hat gespeichert, die Ansicht wird neu geladen
+    pg.click('#sic-dlg .sic-dfuss [type=submit]')
+    pg.wait_for_selector('#sic-dlg h2:has-text("Passwortbestätigung abschalten?")')
+    check('Abschalten fragt im selben Dialog nach und nennt die Aktion', 'Einzelangebot per E-Mail senden' in pg.inner_text('#sic-dlg'))
+    pg.click('#sic-dlg .sic-dfuss [type=submit]')
+    pg.wait_for_function("() => document.querySelector('#sic-pw') || document.querySelector('#sic-toast').textContent.includes('Passwortbestätigung gespeichert')")
+    if pg.locator('#sic-pw').count():   # Passwortbestätigung abgelaufen → Schritt im Dialog
+        pg.fill('#sic-pw', PW); pg.keyboard.press('Enter')
+    pg.wait_for_function("document.querySelector('#sic-toast').textContent.includes('Passwortbestätigung gespeichert')")
     until(lambda: sec_doc().get('bestaetigungMinuten') == 30)
-    pg.wait_for_selector('#bst-form:not([data-alt])')
-    pg.wait_for_function("() => { const s = document.querySelector('#bst-form select'); return s && s.value === '30' && document.querySelector('#bst-form input[value=\"kunde_save\"]').checked; }")
     d = sec_doc()
     check('gespeichert: Einzelangebot-Mail ohne, Kunde mit Bestätigung, 30 Min.', d.get('bestaetigungAus') == ['einzel_senden', 'mail_save', 'geo_clear_stats'] and d.get('bestaetigungMinuten') == 30, d.get('bestaetigungAus'))
-    pg.locator(f).screenshot(path=SH + '/sicherheit-bestaetigung.png')
+    pg.wait_for_function("document.querySelector('#e-bst') && document.querySelector('#e-bst').textContent.includes('30 Minuten')")
+    pg.click('[data-e="e-bst"]'); pg.wait_for_selector('#sic-dlg[open] #bst-form')
+    check('Dialog zeigt den gespeicherten Stand', pg.input_value(f + ' select[name="bestaetigungMinuten"]') == '30' and pg.is_checked(f + ' input[value="kunde_save"]')
+          and not pg.is_checked(f + ' input[value="einzel_senden"]'))
+    pg.locator('#sic-dlg').screenshot(path=SH + '/sicherheit-bestaetigung.png')
     pg.set_viewport_size({'width': 390, 'height': 820}); pg.emulate_media(color_scheme='dark')
-    pg.locator(f).scroll_into_view_if_needed()
     over = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     check('Mobil 390 px: kein seitliches Scrollen', over <= 1, over)
-    pg.locator(f).screenshot(path=SH + '/sicherheit-bestaetigung-mobil.png')
+    pg.locator('#sic-dlg').screenshot(path=SH + '/sicherheit-bestaetigung-mobil.png')
     br.close()
 check('keine JavaScript-Fehler', not errors, errors[:3])
 

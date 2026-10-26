@@ -37,12 +37,12 @@ check('ohne Anmeldung 401', P.call('module_status')[0] == 401)
 code, r = L.call('module_status')
 check('Leser darf die Übersicht sehen', code == 200 and r.get('ok'), (code, r))
 mods = nach_id(r.get('module', []))
-check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
+check('alle Module des Registers', set(mods) == {'angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit', 'dashboard', 'plattform', 'mobile'}, sorted(mods))
 kacheln = [m['id'] for m in sorted(r['module'], key=lambda m: m['reihenfolge'] or 999) if m['dashboard']]
-check('dreizehn Kacheln in fester Reihenfolge', kacheln == ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung'], kacheln)
+check('vierzehn Kacheln in fester Reihenfolge (Sicherheit nach der Verwaltung)', kacheln == ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit'], kacheln)
 gruppen = {m['id']: m['gruppe'] for m in r['module'] if m['dashboard']}
-check('Bereich je Kachel aus dem Register: Import und Verwaltung unter „Verwaltung & Daten“, alle anderen Anwendungen',
-      {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'verwaltung'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
+check('Bereich je Kachel aus dem Register: Import, Verwaltung und Sicherheit unter „Verwaltung & Daten“, alle anderen Anwendungen',
+      {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'verwaltung', 'sicherheit'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
       and all(m['gruppe'] is None for m in r['module'] if not m['dashboard']), gruppen)
 for neu in ('leergut', 'containerimport', 'controlling'):
     k = mods.get(neu, {}).get('kachel') or {}

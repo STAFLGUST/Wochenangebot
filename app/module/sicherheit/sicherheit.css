@@ -192,7 +192,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-legende i.tl-staff { background: var(--sic-tl-a); } .sic-legende i.tl-kunde { background: var(--sic-tl-b); } .sic-legende i.tl-reauth { background: var(--sic-tl-c); }
 
 /* ── Tabellen ── */
-.sic-tabrahmen { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+.sic-tabrahmen { position: relative; overflow-x: auto; margin: 0 -4px; padding: 0 4px; }   /* relative: versteckte Beschriftungen (sr-only) bleiben im Rahmen */
 .sic-tabelle { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .sic-tabelle th { text-align: left; font-size: 12px; font-weight: 600; color: var(--sic-muted); padding: 6px 10px; border-bottom: 1px solid var(--sic-linie); white-space: nowrap; }
 .sic-tabelle td { padding: 9px 10px; border-bottom: 1px solid var(--sic-linie); vertical-align: top; }
@@ -286,6 +286,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-dialog.breit { width: min(860px, calc(100vw - 32px)); }
 .sic-dialog::backdrop { background: rgba(20, 16, 16, .4); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .sic-dform { padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+.sic-dform[hidden] { display: none; }
 .sic-dkopf { display: flex; align-items: flex-start; gap: 12px; }
 .sic-dkopf > div { flex: 1; min-width: 0; }
 .sic-dkopf h2 { margin: 0; font-size: 19px; overflow-wrap: anywhere; }
