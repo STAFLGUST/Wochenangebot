@@ -49,6 +49,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `mailversand` | Plattformkern | vertraulich | – | angebot, einkauf | Versandaufträge und Versandprotokoll aller E-Mails |
 | `module` | Plattformkern | intern | dashboard, verwaltung | – | Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis), Freigabe aus der Modulverwaltung (innerhalb des Entwicklungsstands im Code), Tester und Verlauf der Änderungen (lib/module.php) – Historie: Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, Grund, Beginn, bis) zusätzlich zum Protokoll |
 | `nutzer` | Plattformkern | geheim | angebot, hr, marketing | hr | Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte |
+| `oidc-abmeldungen` | Plattformkern | intern | – | – | Beendete Sitzungen der zentralen Anmeldung (Keycloak-Sitzung bzw. Mitarbeiter → Zeitpunkt, höchstens 11 Stunden): weiter erst nach erneuter Anmeldung bei Keycloak |
 | `protokoll/*` | Plattformkern | vertraulich | – | – | Änderungsprotokoll je Monat (audit) – Historie: Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php) |
 | `rechte` | Plattformkern | intern | – | – | Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern |
 | `rollen` | Plattformkern | intern | – | – | Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php) |

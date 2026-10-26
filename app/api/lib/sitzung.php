@@ -51,7 +51,13 @@ function start_session(): void
     }
     session_start();
     $max = (int)sec()['idleMinutes'] * 60;
-    if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) { $_SESSION = []; session_regenerate_id(true); }
+    if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) {
+        $zentral = !empty($_SESSION['oidcSub']);
+        $_SESSION = []; session_regenerate_id(true);
+        // Keycloak-Host: Ende merken, damit lib/oidc.php nicht stillschweigend eine neue Sitzung anlegt, solange die Sitzung
+        // des Webserver-Moduls noch gilt – weiter erst nach erneuter Anmeldung bei Keycloak (oidc_ende_zeit)
+        if ($zentral) $_SESSION['oidcEnde'] = time();
+    }
     if (!empty($_SESSION['uid']) && !bg_request()) $_SESSION['seen'] = time();
 }
 /* Automatische Abfragen im Hintergrund (Abgleich mit anderen Bearbeitern) zählen nicht als Aktivität –

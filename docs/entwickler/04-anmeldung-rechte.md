@@ -128,9 +128,15 @@ Modul beendet seine Sitzung und die Keycloak-Sitzung, Keycloak meldet alle ander
 (`backchannel.logout.url` je Client in `deploy/anmeldung/realm-mitarbeiter.json`). Sitzungsdauer im Modul: 4 Std.
 Leerlauf, höchstens 10 Std. (`OIDCSessionInactivityTimeout 14400`, `OIDCSessionMaxDuration 36000`).
 
-Grenze (Kommentar in `lib/oidc.php`): Eine in der Verwaltung beendete Sitzung entsteht beim nächsten Aufruf neu, solange
-die Keycloak-Sitzung gilt. Wirklich aussperren: Konto in der Anwendung sperren (wirkt sofort, `oidc_aktiv`) oder in
-Keycloak (`deploy/anmeldung/konten.sh sperren`).
+**Ablauf und Beenden (seit 26.10.2026):** Ohne Vorkehrung entstünde die PHP-Sitzung eines Keycloak-Hosts beim nächsten
+Aufruf neu, solange die Sitzung des Moduls gilt. Deshalb merkt sich der Server das Ende: Abmeldung nach Inaktivität
+(Sicherheitseinstellung `idleMinutes`; Hintergrundabgleiche zählen nicht) in der geleerten PHP-Sitzung (`oidcEnde`,
+`start_session`), „Sitzung beenden“ in Verwaltung → Sitzungen im Dokument `oidc-abmeldungen` – je Keycloak-Sitzung (`sid`,
+am Registereintrag als `oidcSid` vermerkt) bzw. ohne bekannte `sid` oder bei „alle Sitzungen“ je Mitarbeiter (nie die eigene),
+11 Stunden lang. `oidc_ende_zeit` verlangt dann eine erneute Anmeldung bei Keycloak (`reauth_required` mit `max_age=0`;
+weiter erst mit `auth_time` nach dem Ende, Schleifenschutz 3 in 10 Minuten). Die Modul-Sitzung (4 Std. Leerlauf, wie
+`ssoSessionIdleTimeout` laut `konten.sh realm-aktualisieren`) bleibt die äußere Grenze. Sofort überall aussperren: Konto
+in der Anwendung sperren (`oidc_aktiv`) oder in Keycloak (`deploy/anmeldung/konten.sh sperren`).
 
 ### Lokale Anmeldung (nur Notzugang und Testserver)
 

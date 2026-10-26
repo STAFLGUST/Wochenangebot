@@ -124,7 +124,14 @@ switch ($action) {
             $who = '';
             $reg = store_read('sitzungen') ?? [];
             if ($sid !== '' && isset($reg[$sid])) $who = $reg[$sid]['uid'];
-            $n = sess_remove(function ($k, $v) use ($sid, $uid, $mine) { return $k !== $mine && (($sid !== '' && $k === $sid) || ($uid !== '' && $v['uid'] === $uid)); });
+            $treffer = function ($k, $v) use ($sid, $uid, $mine) { return $k !== $mine && (($sid !== '' && $k === $sid) || ($uid !== '' && $v['uid'] === $uid)); };
+            // Zentrale Anmeldung: beendete Sitzungen merken, sonst entstünden sie beim nächsten Aufruf neu (lib/oidc.php).
+            // Mit bekannter Keycloak-Sitzung genau diese, sonst – und bei „alle Sitzungen“ – alle des Mitarbeiters (nie die eigene).
+            $kc = []; $alle = [];
+            foreach ($reg as $k => $v) if ($treffer($k, $v)) { if (!empty($v['oidcSid'])) $kc[] = $v['oidcSid']; else $alle[] = $v['uid']; }
+            if ($uid !== '') $alle[] = $uid;
+            oidc_abmeldung_merken($kc, array_unique(array_filter($alle, fn($x) => $x !== $me['id'])));
+            $n = sess_remove($treffer);
             $users = users_load(); $un = ''; foreach ($users as $u) if ($u['id'] === ($uid ?: $who)) $un = $u['username'];
             if ($n) audit('security', $n === 1 ? "Sitzung von „{$un}“ beendet" : "{$n} Sitzungen von „{$un}“ beendet");
             respond(['ok' => true, 'ended' => $n]);

@@ -17,8 +17,9 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Konto mit gleichem Benutzernamen verknüpft; danach zählt nur noch die unveränderliche Kennung (sub) – ein später in
    Keycloak gleich benannter Nutzer erhält keinen Zugang zu einem bereits verknüpften Konto.
 
-   Grenzen dieser Stufe: Eine hier beendete Sitzung (Verwaltung → Sitzungen) entsteht beim nächsten Aufruf neu, solange die
-   Keycloak-Sitzung gilt – zentral beenden heißt in Keycloak abmelden bzw. das Konto sperren (wirkt sofort). Sensible
+   Ablauf und Beenden: Eine hier beendete Sitzung (Verwaltung → Sitzungen) und eine wegen Inaktivität abgelaufene Sitzung
+   (Sicherheitseinstellung) entstehen nicht stillschweigend neu, sondern verlangen eine erneute Anmeldung bei Keycloak
+   (oidc_ende_zeit, seit 26.10.2026). Sofort überall aussperren: Konto sperren (Anwendung oder Keycloak). Sensible
    Aktionen (sonst Passwortbestätigung) verlangen eine erneute Anmeldung bei Keycloak (max_age=0, oidc_neu_anmelden); als
    Bestätigung zählt der Anmeldezeitpunkt (auth_time) innerhalb der eingestellten Bestätigungsdauer. */
 
@@ -144,6 +145,12 @@ function oidc_nutzer(): ?array
     }
     start_session();
     unset($_SESSION['oidcStufeAngefordert']);
+    // Abgelaufen (Inaktivität) oder in Verwaltung → Sitzungen beendet: weiter erst nach erneuter Anmeldung bei Keycloak
+    [$ende, $grund] = oidc_ende_zeit($id, $u);
+    if ($ende > 0) {
+        if ($id['authTime'] <= $ende) oidc_erneuern($u, $grund, $ende);
+        unset($_SESSION['oidcEnde'], $_SESSION['oidcErneuert']);
+    }
     $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
         && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'] && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
     if (!$passt) {
@@ -151,6 +158,7 @@ function oidc_nutzer(): ?array
         sign_in($u);
         $_SESSION['oidcSub'] = $id['sub'];
         $_SESSION['oidcSid'] = $id['sid'];
+        oidc_sitzung_vermerken((string)($_SESSION['sid'] ?? ''), $id['sid']);
         $_SESSION['authAt'] = $id['authTime'];
         // Bestätigung sensibler Aktionen = Zeitpunkt der letzten echten Anmeldung bei Keycloak, nicht der Sitzungsbeginn hier
         $_SESSION['adminConfirmedAt'] = $id['authTime'];
@@ -166,6 +174,67 @@ function oidc_nutzer(): ?array
     }
     return $u;
 }
+/* ---------- Ablauf und Beenden von Sitzungen auf Keycloak-Hosts ----------
+   Die PHP-Sitzung eines Keycloak-Hosts entsteht neu, sobald sie fehlt – solange die Sitzung des Webserver-Moduls gilt.
+   Damit Abmeldung nach Inaktivität (Sicherheitseinstellung) und „Sitzung beenden“ (Verwaltung → Sitzungen) wirken,
+   merkt sich der Server das Ende: Inaktivität in der (geleerten) PHP-Sitzung (start_session), beendete Sitzungen im
+   Dokument „oidc-abmeldungen“ je Keycloak-Sitzung (sid) bzw. – ohne bekannte sid oder für alle Sitzungen eines
+   Mitarbeiters – je Mitarbeiter. Weiter geht es erst nach erneuter Anmeldung bei Keycloak (max_age=0, auth_time danach). */
+const OIDC_ABMELDUNG_HALTEN = 39600;   // Sekunden; länger als die Höchstdauer der Modul-Sitzung (OIDCSessionMaxDuration 36000)
+function oidc_abmeldungen(): array
+{
+    $d = store_read('oidc-abmeldungen') ?? [];
+    $grenze = time() - OIDC_ABMELDUNG_HALTEN;
+    $f = function ($l) use ($grenze) { return array_filter(is_array($l) ? $l : [], fn($t) => is_int($t) && $t > $grenze); };
+    return ['sid' => $f($d['sid'] ?? []), 'nutzer' => $f($d['nutzer'] ?? [])];
+}
+/* Beendete Sitzungen vermerken (Keycloak-sid bzw. Mitarbeiter-Kennungen) */
+function oidc_abmeldung_merken(array $sids, array $uids): void
+{
+    $sids = array_values(array_filter(array_map('strval', $sids), fn($x) => $x !== ''));
+    $uids = array_values(array_filter(array_map('strval', $uids), fn($x) => $x !== ''));
+    if (!$sids && !$uids) return;
+    with_lock('oidc-abmeldungen', function () use ($sids, $uids) {
+        $d = oidc_abmeldungen();
+        foreach ($sids as $x) $d['sid'][$x] = time();
+        foreach ($uids as $x) $d['nutzer'][$x] = time();
+        store_write('oidc-abmeldungen', $d);
+    });
+}
+/* Zeitpunkt, bis zu dem eine Anmeldung bei Keycloak nicht mehr genügt, und Grund ('inaktiv' | 'beendet'); 0 = keiner */
+function oidc_ende_zeit(array $id, array $u): array
+{
+    $ende = (int)($_SESSION['oidcEnde'] ?? 0); $grund = $ende ? 'inaktiv' : '';
+    $a = oidc_abmeldungen();
+    foreach ([$a['sid'][$id['sid']] ?? 0, $a['nutzer'][(string)$u['id']] ?? 0] as $t) if ($t > $ende) { $ende = $t; $grund = 'beendet'; }
+    return [$ende, $grund];
+}
+/* Erneute Anmeldung bei Keycloak verlangen; Schutz vor Endlosschleifen wie bei der zweiten Stufe (3 in 10 Minuten) */
+function oidc_erneuern(array $u, string $grund, int $ende): never
+{
+    $a = $_SESSION['oidcErneuert'] ?? [];
+    $a = array_values(array_filter(is_array($a) ? $a : [], fn($t) => (int)$t > time() - 600));
+    if (count($a) >= 3) fail('Die erneute Anmeldung wurde nicht bestätigt. Bitte abmelden und neu anmelden.', 403);
+    $a[] = time();
+    $_SESSION['oidcErneuert'] = $a;
+    if ((int)($_SESSION['oidcEndeGemeldet'] ?? 0) !== $ende) {
+        $_SESSION['oidcEndeGemeldet'] = $ende;
+        audit('oidc_ablauf', $grund === 'beendet' ? 'Beendete Sitzung: erneute Anmeldung bei Keycloak verlangt' : 'Sitzung wegen Inaktivität abgelaufen: erneute Anmeldung bei Keycloak verlangt', [], $u);
+    }
+    respond(['ok' => false, 'code' => 'reauth_required', 'anmelden' => oidc_neu_anmelden_adresse(),
+             'error' => $grund === 'beendet' ? 'Ihre Sitzung wurde beendet. Bitte melden Sie sich erneut an.' : 'Ihre Sitzung ist wegen Inaktivität abgelaufen. Bitte melden Sie sich erneut an.'], 403);
+    exit;
+}
+/* Keycloak-Sitzung (sid) am Eintrag im Sitzungsregister vermerken – für „Sitzung beenden“ */
+function oidc_sitzung_vermerken(string $regSid, string $kcSid): void
+{
+    if ($regSid === '' || $kcSid === '') return;
+    with_lock('sitzungen', function () use ($regSid, $kcSid) {
+        $l = store_read('sitzungen') ?? [];
+        if (isset($l[$regSid])) { $l[$regSid]['oidcSid'] = $kcSid; store_write('sitzungen', $l); }
+    });
+}
+
 /* Sitzungsregister aktuell halten (Anzeige „zuletzt aktiv“, Adresse) – wie bei der bisherigen Anmeldung */
 function oidc_gesehen(): void
 {

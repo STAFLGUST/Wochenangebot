@@ -283,6 +283,12 @@ schutz = "geheim"
 beschreibung = "Sitzungsregister der Mitarbeiter"
 
 [[dokument]]
+name = "oidc-abmeldungen"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Beendete Sitzungen der zentralen Anmeldung (Keycloak-Sitzung bzw. Mitarbeiter → Zeitpunkt, höchstens 11 Stunden): weiter erst nach erneuter Anmeldung bei Keycloak"
+
+[[dokument]]
 name = "logins"
 eigentuemer = "plattform"
 schutz = "intern"
