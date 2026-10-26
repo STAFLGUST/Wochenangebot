@@ -457,9 +457,9 @@ dashboard_gruppe = "verwaltung"   # Dashboard: im Bereich „Verwaltung & Daten�
 zugang_rollen = []   # Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter)
 agent = "sicherheit"
 abhaengigkeiten = ["plattform"]
-testgruppen = ["sicherheit_modul", "notfall"]
+testgruppen = ["sicherheit_modul", "notfall", "sicherheit_bereitschaft"]
 pfade = ["regeln/aktionen/sicherheit.toml", "app/api/aktionen/sicherheit.php", "app/module/sicherheit/**",
-  "tests/e2e/test_sicherheit_modul.py", "tests/e2e/test_notfall.py", "docs/plattform/modul-sicherheit.md"]
+  "tests/e2e/test_sicherheit_modul.py", "tests/e2e/test_notfall.py", "tests/e2e/test_sicherheit_bereitschaft.py", "docs/plattform/modul-sicherheit.md"]
 pfade_geplant = []
 hinweise = [
   "Auftrag und Freigabe des Inhabers (26.10.2026): Sicherheit als eigenes Modul mit Notfallmodus; Konzept docs/plattform/modul-sicherheit.md.",

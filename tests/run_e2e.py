@@ -117,6 +117,7 @@ SUITES['crm'] = (8790, 'data-seed', True)   # CRM · Vertrieb (app/module/crm/, 
 SUITES['marketing'] = (8790, 'data-seed', True)   # Marketing · Redaktionsplan (app/module/marketing/, Oberfläche marketing.intern)
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
+SUITES['sicherheit_bereitschaft'] = SUITES['bestellung']   # Leitfaden, Probealarm, Wochenbericht, ungenutzte Zugänge (lib/bereitschaft.php); Test-Mailserver
 # Gruppe → zusätzliche Umgebungsvariablen für den PHP-Server (4. Eintrag, optional)
 
 # Laufzeit je Gruppe in Sekunden (Median aus 12 CI-Aufträgen vom 22.10.2026, beide Speicherarten, 4 Gruppen parallel).
@@ -142,6 +143,7 @@ GEWICHT = {
     'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'sicherheit_modul': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'notfall': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'sicherheit_bereitschaft': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'marketing': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median

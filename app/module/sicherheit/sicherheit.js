@@ -992,7 +992,7 @@
     einstZeichnen();
   }
   function einstZeichnen() {
-    const d = S.sec, St = d.settings, G = d.geo;
+    const d = S.sec, St = d.settings, G = d.geo, B = S.lage && S.lage.bericht;
     const VKARTE = { standard: ['schild', 'Ausgewogen für den Alltag.'], streng: ['lock', 'Mehr Schutz bei erhöhtem Risiko.'], notfall: ['alarm', 'Startet den Notfallmodus: Firewall „Notfall“ und alle Zugänge außer Administratoren gesperrt.'] };
     const vorlagen = Object.entries(S.fw.vorlagen).map(([k, v]) => `<div class="sic-vorlage ${k}"><div class="sic-vkopf">${icon(VKARTE[k] ? VKARTE[k][0] : 'schild')}<strong>${esc(k === 'notfall' ? 'Notfall' : v.label)}</strong></div>
       <p>${esc(k === 'notfall' ? VKARTE.notfall[1] : v.text)}</p>
@@ -1011,6 +1011,9 @@
           ['gilt für', St.geoScope === 'all' ? 'die ganze Seite' : 'den Eingabebereich'], ['Länderdaten', G ? `Stand ${esc(datum(G.date + 'T12:00:00Z'))}` : '<span class="sic-pille bad">fehlen</span>']],
           `<button type="button" class="btn sm" data-e="geo-update">${icon('download')}Länderdaten aktualisieren</button>`, 'e-geo')}
         ${zusammen('Passwortbestätigung', [['gilt', `${St.bestaetigungMinuten || 5} Minuten`], ['Aktionen', `${zahl((d.bestaetigung || []).length - aus)} mit Bestätigung${aus ? ` · <strong>${aus} ohne</strong>` : ''}`]], '', 'e-bst')}
+        ${B ? zusammen('Wochenbericht', [['Versand', B.an ? `<span class="sic-pille ok">an</span> jeden ${esc(B.tage[B.tag])}` : '<span class="sic-pille">aus</span>'],
+          ['Empfänger', B.empfaenger.length ? esc(B.empfaenger.join(', ')) : '<span class="sic-pille bad">keine eingetragen</span>']],
+          `<button type="button" class="btn sm" data-bericht>${icon('bericht')}Bericht ansehen</button>`, 'e-bericht') : ''}
       </div>
       <p class="sic-hinweis">Fest eingebaut: HTTPS mit HSTS, Content-Security-Policy, CSRF-Schutz, sichere Sitzungs-Cookies, gesperrte Datenordner und ein lückenloses Protokoll.</p>`;
   }
@@ -1024,10 +1027,26 @@
     if (a === 'e-ip') ipDialog();
     if (a === 'e-geo') geoDialog();
     if (a === 'e-bst') bstDialog();
+    if (a === 'e-bericht') berichtEinstellen();
     if (a === 'export') lauf(b, async () => { const r = await api('fw_export'); herunterladen(`sicherheitseinstellungen-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(r.export, null, 2), 'application/json'); toast('Einstellungen exportiert.'); });
     if (a === 'import') importDialog();
     if (a === 'geo-update') lauf(b, async () => { const r = await aufruf('geo_update', { body: {} }); S.sec.geo = r.geo; einstZeichnen(); toast(`Länderdaten aktualisiert (Stand ${datum(r.geo.date + 'T12:00:00Z')}).`); });
   });
+  function berichtEinstellen() {
+    const B = S.lage.bericht;
+    dialog(`${dKopf('Wochenbericht', 'Zusammenfassung der letzten 7 Tage per E-Mail')}<div class="sic-dinhalt">
+        <label class="sic-check"><input type="checkbox" id="br-an"${B.an ? ' checked' : ''}><span>Wöchentlich senden <span class="sub">an die Empfänger der Sicherheitsereignisse${B.empfaenger.length ? `: ${esc(B.empfaenger.join(', '))}` : ' (noch keine eingetragen)'}</span></span></label>
+        <label class="sic-feld">Wochentag<select id="br-tag">${[1, 2, 3, 4, 5, 6, 7].map((t) => `<option value="${t}"${t === B.tag ? ' selected' : ''}>${esc(B.tage[t])}</option>`).join('')}</select></label>
+        <p class="sic-hinweis">Versand ab 7 Uhr mit der ersten Anmeldung eines Mitarbeiters an diesem Tag (ist an dem Tag niemand angemeldet, am nächsten). Nach dem Einschalten kommt der erste Bericht in der folgenden Woche – sofort geht es mit „Bericht ansehen“ → „Jetzt senden“.
+          Empfänger ändern: <a class="sic-link" href="${VERWALTUNG}#mail">Verwaltung → E-Mail ${icon('extern')}</a></p></div>
+      ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">Speichern</button>')}`,
+    { handler: async (a) => {
+      if (a !== 'submit') return;
+      const r = await api('sicherheit_bericht_einstellen', { body: { an: $('#br-an', dlg).checked, tag: +$('#br-tag', dlg).value } });
+      S.lage.bericht = r.einstellungen;
+      dialogZu(); toast('Wochenbericht gespeichert.'); einstZeichnen();
+    } });
+  }
   function vorlageDialog(k) {
     const v = S.fw.vorlagen[k], w = v.werte || { sec: {}, fw: {} }, St = S.sec.settings, F = S.fw.fw;
     const zeilen = [...Object.entries(w.sec).map(([x, n]) => [SEC_LABEL[x] || x, wertText(x, St[x]), wertText(x, n)]), ...Object.entries(w.fw).map(([x, n]) => [FW_LABEL[x] || x, wertText(x, F[x]), wertText(x, n)])];
@@ -1211,12 +1230,12 @@
     } });
   }
 
-  /* ======================= Privilegierte Konten ======================= */
+  /* ======================= Konten: privilegierte und ungenutzte ======================= */
   async function kontenTab() {
     const host = $('#tab-konten');
     if (!S.konten) host.innerHTML = '<div class="sic-laden"><span class="sic-spinner"></span>Konten werden geladen …</div>';
-    S.konten = await api('sicherheit_konten');
-    const d = S.konten, Z = d.zahlen;
+    S.konten = await api('sicherheit_konten', { query: '&tage=' + (S.kontenTage || 90) });
+    const d = S.konten, Z = d.zahlen, U = d.ungenutzt;
     const schutz = (k) => k.zentral ? '<span class="sic-pille ok">zentrale Anmeldung</span>' : k.zweiFaktor ? `<span class="sic-pille ok">${k.passkeys ? 'Passkey' : 'Einmalcode'}</span>` : '<span class="sic-pille bad">nur Passwort</span>';
     const zeilen = d.konten.map((k, i) => `<tr class="sic-klick${k.aktiv ? '' : ' aus'}" data-konto="${i}" tabindex="0"><td><span class="sic-av${k.admin ? ' admin' : ''}" aria-hidden="true">${esc(initialen(k.name))}</span><div class="sic-nm">${esc(k.name)}</div><div class="sub">${esc(k.username)}${k.aktiv ? '' : ' · gesperrt'}</div></td>
       <td>${k.admin ? '<span class="sic-pille warn">Administrator</span>' : esc(k.rollen)}</td><td>${k.admin ? '<span class="sub">alle Rechte</span>' : k.rechte.map((r) => `<span class="sic-chip klein" title="${esc(r.label)}">${esc(r.key)}</span>`).join(' ')}</td>
@@ -1228,10 +1247,45 @@
         ${karte(Z.ohneZweiFaktor ? 'bad' : 'ok', 'Ohne zweiten Faktor', zahl(Z.ohneZweiFaktor), Z.ohneZweiFaktor ? 'Einmalcode oder Passkey einrichten lassen' : 'alle geschützt')}
         ${karte('ok', 'Dürfen Notfall auslösen', zahl(Z.notfall), 'Administratoren und Recht „Notfall auslösen“')}
       </div>
-      ${block(`Konten <span class="sub">${zahl(d.konten.length)}</span>`, `<div class="sic-tabrahmen"><table class="sic-tabelle konten"><thead><tr><th>Konto</th><th>Rolle</th><th>Sicherheitsrelevante Rechte</th><th>Anmeldeschutz</th><th class="num-s">letzte Anmeldung</th><th class="num-s">Sitzungen</th></tr></thead><tbody>${zeilen}</tbody></table></div>
-        <p class="sic-hinweis">Rollen und Rechte ändern Sie in der <a href="${VERWALTUNG}#users" class="sic-link">Verwaltung → Mitarbeiter ${icon('extern')}</a>.</p>`)}`;
+      ${block(`Privilegierte Konten <span class="sub">${zahl(d.konten.length)}</span>`, `<div class="sic-tabrahmen"><table class="sic-tabelle konten"><thead><tr><th>Konto</th><th>Rolle</th><th>Sicherheitsrelevante Rechte</th><th>Anmeldeschutz</th><th class="num-s">letzte Anmeldung</th><th class="num-s">Sitzungen</th></tr></thead><tbody>${zeilen}</tbody></table></div>
+        <p class="sic-hinweis">Rollen und Rechte ändern Sie in der <a href="${VERWALTUNG}#users" class="sic-link">Verwaltung → Mitarbeiter ${icon('extern')}</a>.</p>`)}
+      ${ungenutztHtml(U)}`;
   }
-  $('#tab-konten').addEventListener('click', (e) => { const z = e.target.closest('[data-konto]'); if (z) kontoDialog(S.konten.konten[+z.dataset.konto]); });
+  function ungenutztHtml(U) {
+    const zeilen = U.konten.map((k, i) => `<tr><td><span class="sic-av${k.admin ? ' admin' : ''}" aria-hidden="true">${esc(initialen(k.name))}</span><div class="sic-nm">${esc(k.name)}</div><div class="sub">${esc(k.username)}</div></td>
+      <td>${k.admin ? '<span class="sic-pille warn">Administrator</span>' : esc(k.rollen)}</td>
+      <td class="num-s">${k.nie ? `<span class="sic-pille warn">nie angemeldet</span><div class="sub">angelegt ${esc(datum(k.created))}</div>` : esc(datum(k.lastLogin))}</td>
+      <td class="num-s">${zahl(k.tage)} Tage</td>
+      <td class="act">${S.me && k.id === S.me.id ? '<span class="sub">Ihr Zugang</span>' : `<button type="button" class="btn sm" data-deakt="${i}">${icon('lock')}Deaktivieren …</button>`}</td></tr>`).join('');
+    return block(`Ungenutzte Zugänge <span class="sub">${zahl(U.konten.length)}</span>`, `${zeilen ? `<div class="sic-tabrahmen"><table class="sic-tabelle ungenutzt"><thead><tr><th>Konto</th><th>Rolle</th><th class="num-s">letzte Anmeldung</th><th class="num-s">ungenutzt</th><th class="act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${zeilen}</tbody></table></div>`
+      : leer(`Alle aktiven Zugänge wurden in den letzten ${zahl(U.tage)} Tagen genutzt.`)}
+      <p class="sic-hinweis">Gezählt wird die letzte Anmeldung – bei der zentralen Anmeldung die letzte Anmeldung bei Keycloak; Zugänge mit laufender Sitzung zählen nicht. Deaktivierte Zugänge lassen sich unter <a href="${VERWALTUNG}#users" class="sic-link">Verwaltung → Mitarbeiter ${icon('extern')}</a> wieder aktivieren.</p>`,
+    `<label class="sic-wahl"><span class="sr-only">Zeitraum</span><select id="ung-tage">${U.wahl.map((t) => `<option value="${t}"${t === U.tage ? ' selected' : ''}>seit ${t} Tagen</option>`).join('')}</select></label>`, 'sic-ungenutzt');
+  }
+  function deaktDialog(k) {
+    dialog(`${dKopf(`Zugang „${k.name}“ deaktivieren?`, esc(k.username), 'gefahr')}<div class="sic-dinhalt">
+        <dl class="sic-dl"><dt>letzte Anmeldung</dt><dd>${k.nie ? `nie <span class="sub">(angelegt ${esc(datum(k.created))})</span>` : `${esc(zeit(k.lastLogin))} Uhr <span class="sub">(vor ${zahl(k.tage)} Tagen)</span>`}</dd>
+          <dt>Rolle</dt><dd>${k.admin ? 'Administrator' : esc(k.rollen)}</dd></dl>
+        <p>${esc(k.name)} kann sich danach nicht mehr anmelden; laufende Sitzungen enden sofort. Daten wie Urlaub, Protokoll und Vorgänge bleiben erhalten.</p>
+        <p class="sic-hinweis">Wieder aktivieren: Verwaltung → Mitarbeiter. Die Änderung steht im Protokoll und wird als Sicherheitsereignis gemeldet.</p></div>
+      ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn gefahr">Deaktivieren</button>')}`,
+    { handler: async (a) => {
+      if (a !== 'submit') return;
+      await aufruf('sicherheit_konto_deaktivieren', { body: { id: k.id } });
+      dialogZu(); toast(`Zugang „${k.username}“ deaktiviert.`);
+      await kontenTab();
+    } });
+  }
+  $('#tab-konten').addEventListener('click', (e) => {
+    const x = e.target.closest('[data-deakt]');
+    if (x) { deaktDialog(S.konten.ungenutzt.konten[+x.dataset.deakt]); return; }
+    const z = e.target.closest('[data-konto]'); if (z) kontoDialog(S.konten.konten[+z.dataset.konto]);
+  });
+  $('#tab-konten').addEventListener('change', (e) => {
+    if (e.target.id !== 'ung-tage') return;
+    S.kontenTage = +e.target.value;
+    kontenTab().then(() => { const w = $('#ung-tage'); if (w) w.focus(); }).catch((ex) => toast(ex.message, true));
+  });
   $('#tab-konten').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-konto]')) kontoDialog(S.konten.konten[+e.target.dataset.konto]); });
   function kontoDialog(k) {
     const sitz = k.sitzungen.map((s) => `<tr><td class="mono-s">${esc(s.ip)}</td><td>${esc(geraet(s.ua))}</td><td class="num-s">${esc(zeit(s.seen))}</td><td class="act">${s.current ? '<span class="sub">diese</span>' : `<button type="button" class="btn sm" data-d="ende" data-sid="${esc(s.sid)}">Beenden</button>`}</td></tr>`).join('');

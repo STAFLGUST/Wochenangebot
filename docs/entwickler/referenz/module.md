@@ -138,7 +138,7 @@ Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kund
 
 Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen und privilegierte Konten
 
-Agent: `sicherheit` · hängt ab von `plattform` · Testgruppen: `sicherheit_modul`, `notfall`
+Agent: `sicherheit` · hängt ab von `plattform` · Testgruppen: `sicherheit_modul`, `notfall`, `sicherheit_bereitschaft`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

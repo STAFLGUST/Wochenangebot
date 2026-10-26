@@ -55,7 +55,7 @@ function leitfaden(): array
     $eigen = array_values(array_filter((array)($l['schritte'] ?? []), function ($s) { return is_array($s) && isset($s['id'], $s['titel']); }));
     $kontakte = array_values(array_filter((array)($l['kontakte'] ?? []), 'is_array'));
     return ['schritte' => $eigen ?: LEITFADEN_STANDARD, 'standard' => !$eigen, 'kontakte' => $kontakte, 'hinweis' => (string)($l['hinweis'] ?? ''),
-            'geaendert' => $l['geaendert'] ?? null, 'von' => (string)($l['von'] ?? '')];
+            'geaendert' => $l['geaendert'] ?? null, 'von' => (string)($l['von'] ?? ''), 'vorlage' => LEITFADEN_STANDARD];
 }
 /* Speichern (Administrator). $b: schritte[{id?, titel, text}] oder standard = true, kontakte[{rolle, name, telefon, email}], hinweis */
 function leitfaden_speichern(array $me, array $b): array
@@ -270,10 +270,10 @@ function bericht_speichern(array $me, array $b): array
     $tag = (int)($b['tag'] ?? 1);
     if ($tag < 1 || $tag > 7) fail('Ungültiger Wochentag.', 422);
     $alt = bericht_einstellungen();
-    bereit_aendern(function (array &$d) use ($an, $tag) {
+    bereit_aendern(function (array &$d) use ($an, $tag, $alt) {
         $x = is_array($d['bericht'] ?? null) ? $d['bericht'] : [];
         // Einschalten: der erste automatische Bericht kommt in der folgenden Woche (keine Überraschungs-Mail beim Einschalten)
-        if ($an && (!array_key_exists('an', $x) || empty($x['an'])) && empty($x['woche'])) $x['woche'] = date('o-\WW');
+        if ($an && (!$alt['an'] || empty($x['woche']))) $x['woche'] = date('o-\WW');
         $x['an'] = $an; $x['tag'] = $tag;
         $d['bericht'] = $x;
     });
