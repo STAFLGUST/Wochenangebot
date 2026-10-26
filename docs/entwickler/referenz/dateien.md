@@ -74,6 +74,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `angebote.php` | angebot | Aktionen: Angebote (öffentlich und Eingabebereich) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `anmeldekonten.php` | plattform | Aktionen: Konten der zentralen Anmeldung (Keycloak) aus Verwaltung → Mitarbeiter (nur Administratoren). anmeldekonto (lesen) |
 | `app.php` | plattform | Aktionen: Grunddaten für die App (iOS/Android, Ordner mobile/). |
 | `auswertung.php` | verwaltung | Aktionen: Auswertung (Karte der Kunden-Anmeldungen) und Aktualisieren der Ortsdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `bestand.php` | bestand | Aktionen: Bestand und Stammdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
@@ -102,6 +103,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `aktionen-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/aktionen/*.toml – nicht von Hand ändern. |
 | `angebote.php` | angebot | Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten |
+| `anmeldekonten.php` | plattform | Konten der zentralen Anmeldung (Keycloak, Realm „mitarbeiter“) aus der Verwaltung steuern – EIN Passwort für alles. |
 | `auswertung.php` | verwaltung | Auswertung: Anmeldeorte der Kunden (ungefährer Ort aus der IP-Adresse, ort.php). |
 | `benachrichtigung.php` | plattform | Benachrichtigungen an Mitarbeiter (E-Mail): welche Ereignisse an wen gehen, legt der Administrator fest. |
 | `bestand-pdf.php` | bestand | Bestand als PDF (Verwaltung → Bestand → „PDF“) |

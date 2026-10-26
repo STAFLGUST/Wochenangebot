@@ -190,7 +190,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 7' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 8' in _log, _log[-300:])
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -216,6 +216,32 @@ check('Stand 7: Client „marketing“ nachträglich angelegt, Geheimnisse in .e
       and GEHEIM['OIDC_SECRET_MARKETING'] not in _log, _log[-500:])
 check('Client „marketing“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('marketing', {}).get('secret') not in (None, '@GEHEIM_MARKETING@') and clients.get('marketing', {}).get('redirectUris') == [MKT + '/oidc/callback'])
+check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
+      'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
+      and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
+_k = clients.get('konten', {})
+check('Client „konten“: vertraulich, nur Service-Account (kein Anmeldeablauf, kein Passwort-Grant, keine Weiterleitungen), ohne Anmeldestufe',
+      _k.get('publicClient') is False and _k.get('serviceAccountsEnabled') is True and _k.get('standardFlowEnabled') is False
+      and _k.get('directAccessGrantsEnabled') is False and _k.get('implicitFlowEnabled') is False and not _k.get('redirectUris')
+      and 'minimum.acr.value' not in _k.get('attributes', {}) and _k.get('secret') not in (None, '@GEHEIM_KONTEN@'), _k)
+_sa = json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{_k.get('id')}/service-account-user", kopf={'Authorization': 'Bearer ' + tok})[2])
+_rm = clients.get('realm-management', {}).get('id')
+_rollen = sorted(x['name'] for x in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_sa.get('id')}/role-mappings/clients/{_rm}", kopf={'Authorization': 'Bearer ' + tok})[2]))
+check('Service-Account „konten“: genau view-users und manage-users (keine Realm-/Client-Verwaltung, kein impersonation)', _rollen == ['manage-users', 'view-users'], _rollen)
+_c, _, _t = anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+    'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+_kt = json.loads(_t).get('access_token', '') if _c == 200 else ''
+check('Service-Account „konten“: Token per client_credentials', bool(_kt), (_c, _t[:120]))
+check('… darf keine Realm-Einstellungen ändern und keine Clients lesen (403)',
+      anfrage(KC + '/admin/realms/mitarbeiter', 'PUT', b'{"registrationAllowed":true}', {'Authorization': 'Bearer ' + _kt, 'Content-Type': 'application/json'})[0] == 403
+      and anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + _kt})[0] == 403
+      and anfrage(KC + '/admin/realms/master/users', kopf={'Authorization': 'Bearer ' + _kt})[0] in (401, 403))
+_c, _, _t = anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+    'grant_type': 'password', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN'], 'username': 'erika', 'password': NUTZER['erika'][0]}).encode(),
+    {'Content-Type': 'application/x-www-form-urlencoded'})
+check('… kein Passwort-Grant (Anmeldung im Namen von Mitarbeitern unmöglich)', _c in (400, 401) and 'access_token' not in _t, (_c, _t[:120]))
+
+
 def kc_token():
     _, _, t = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
         'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),
@@ -1301,6 +1327,99 @@ with sync_playwright() as pw:
     code, aus = konten('einladen', 'eva.einladung')
     m2 = warte_mail('eva@stafl.test', 2)
     check('erneute Einladung: wieder nur „Passwort aktualisieren“', code == 0 and m2 and 'Passwort aktualisieren' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
+
+    # ── Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): EIN Passwort – das der zentralen Anmeldung ──
+    KIM = {'eigen': 'Kim-Eigenes-Kennwort-1', 'zweit': 'Kim-Zweites-Kennwort-2'}
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(W + '/admin/'); anmelden(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    post = "([a, b]) => fetch('../api/?action=status').then(r => r.json()).then(s => fetch('../api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': s.csrf}, body: JSON.stringify(b)})).then(async r => [r.status, await r.json().catch(() => ({}))])"
+    hole = "id => fetch('../api/?action=anmeldekonto&id=' + encodeURIComponent(id)).then(async r => [r.status, await r.json().catch(() => ({}))])"
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Kim', 'nachname': 'Konto', 'username': 'kim.konto', 'email': 'kim@stafl.test', 'rollen': ['editor'], 'active': True, 'password': 'Lokales-Kennwort-99'}])
+    check('Verwaltung (zentrale Anmeldung): kein Passwort der Anwendung mehr (422 mit Hinweis)', code == 422 and 'zentrale Anmeldung' in j.get('error', ''), (code, j))
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Kim', 'nachname': 'Konto', 'username': 'kim.konto', 'email': 'kim@stafl.test', 'rollen': ['editor'], 'active': True}])
+    kim = j.get('user', {}).get('id', '')
+    check('… Mitarbeiter ohne Passwort angelegt (Passwort vergibt Keycloak)', code == 200 and kim and j['user']['mustChange'] is False, (code, j))
+    code, j = pg.evaluate(hole, kim)
+    check('Zustand: eingerichtet, noch kein Konto in Keycloak', code == 200 and j['konto'].get('eingerichtet') is True and j['konto'].get('vorhanden') is False, (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'anlegen'}])
+    check('Konto anlegen: vorhanden, verknüpft, muss Passwort festlegen', code == 200 and j['konto'].get('vorhanden') and j['konto'].get('verknuepft')
+          and j['konto'].get('passwortAendern') and j['konto'].get('email') == 'kim@stafl.test', (code, j))
+    check('… Verknüpfung (oidcSub) im Mitarbeiterkonto gesetzt', bool(nutzer_roh()['kim.konto'].get('oidcSub')))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'anlegen'}])
+    check('… zweites Anlegen abgelehnt (409)', code == 409, (code, j))
+    # Oberfläche: Abschnitt „Zentrale Anmeldung“ statt Passwortfeld, Passwort setzen
+    pg.click('#vt-users'); pg.wait_for_selector(f'#view-users tr[data-uid="{kim}"]')
+    check('Liste: kein irreführendes „muss Passwort ändern“ der Anwendung', 'muss Passwort ändern' not in pg.inner_text(f'#view-users tr[data-uid="{kim}"]'))
+    pg.click(f'#view-users tr[data-uid="{kim}"]'); pg.wait_for_selector('#ka-knoepfe [data-ka="pw-auf"]')
+    check('Dialog: Abschnitt „Zentrale Anmeldung“ mit Zustand, ohne Passwort der Anwendung', pg.locator('#user-body [name=password]').count() == 0
+          and pg.locator('#user-body [name=mustChange]').count() == 0 and 'Passwort gesetzt' not in pg.inner_text('#ka-status') and 'eigenes Passwort festlegen' in pg.inner_text('#ka-status'), pg.inner_text('#ka'))
+    pg.click('#ka-knoepfe [data-ka="pw-auf"]'); pg.click('#ka-pw [data-ka="gen"]')
+    kim_start = pg.input_value('#user-body [name=ka_pw]')
+    pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_1280.png'))
+    pg.click('#ka-pw [data-ka="passwort"]'); pg.wait_for_selector('#ka-meldung.st-ok')
+    check('Oberfläche: Passwort gesetzt (Vorschlag, muss geändert werden), Zustand aktualisiert', len(kim_start) >= 16 and 'Passwort gesetzt' in pg.inner_text('#ka-status')
+          and 'eigenes Passwort festlegen' in pg.inner_text('#ka-status'), pg.inner_text('#ka'))
+    check('… Protokoll ohne Passwort', any('Passwort für „kim.konto“ in der zentralen Anmeldung gesetzt' in str(e) for e in protokoll_roh())
+          and kim_start not in json.dumps(protokoll_roh(), ensure_ascii=False) and kim_start not in open(os.path.join(WORK, 'app', 'data', 'nutzer.php'), encoding='utf-8').read())
+    pg.set_viewport_size({'width': 390, 'height': 844})
+    check('Dialog 390 px: kein waagerechtes Scrollen', pg.evaluate("document.querySelector('#dlg-user').scrollWidth <= document.querySelector('#dlg-user').clientWidth + 1"))
+    pg.locator('#ka').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_390.png'))
+    pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.click('#dlg-user [data-close]')
+    c2 = br.new_context(ignore_https_errors=True); p2 = eigene_seite(c2.new_page())
+    p2.goto(D + '/'); p2.wait_for_selector('#username'); p2.fill('#username', 'kim.konto'); p2.fill('#password', kim_start); p2.click('#kc-login')
+    p2.wait_for_selector('#password-new')
+    check('Anmeldung mit dem aus der Verwaltung gesetzten Passwort: eigenes Passwort verlangt', 'UPDATE_PASSWORD' in p2.url, p2.url)
+    p2.fill('#password-new', KIM['eigen']); p2.fill('#password-confirm', KIM['eigen']); p2.click('#kc-submit'); p2.wait_for_selector('#db-grid .db-tile')
+    st = p2.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… danach im Dashboard, mit dem Mitarbeiterkonto (Verknüpfung über die ID)', st.get('loggedIn') and st['user']['username'] == 'kim.konto', st.get('user'))
+    c2.close()
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': KIM['eigen'], 'aendern': False}])
+    check('Passwortregeln von Keycloak verständlich (kürzlich verwendet → 422)', code == 422 and 'kürzlich' in j.get('error', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': 'kurz'}])
+    check('zu kurzes Passwort: 422', code == 422, (code, j))
+    # Sperre nach Fehlversuchen: in der Verwaltung sichtbar und aufhebbar
+    c2 = br.new_context(ignore_https_errors=True); p2 = c2.new_page()
+    for _ in range(6):
+        fehlversuch_abstand()
+        p2.goto(D + '/'); p2.wait_for_selector('#username'); p2.fill('#username', 'kim.konto'); p2.fill('#password', 'Falsch-Falsch-1'); p2.click('#kc-login')
+        p2.wait_for_load_state(); FEHLVERSUCH[0] = time.time()
+    c2.close()
+    code, j = pg.evaluate(hole, kim)
+    check('Zustand: vorübergehend gesperrt mit Zahl der Fehlversuche', code == 200 and j['konto'].get('gesperrt') is True and j['konto'].get('fehlversuche', 0) >= 1, j)
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'entsperren'}])
+    check('Entsperren aus der Verwaltung', code == 200 and j['konto'].get('gesperrt') is False and j['konto'].get('fehlversuche') == 0, (code, j))
+    c2 = br.new_context(ignore_https_errors=True); p2 = c2.new_page()
+    p2.goto(D + '/'); p2.wait_for_selector('#username'); p2.fill('#username', 'kim.konto'); p2.fill('#password', KIM['eigen']); p2.click('#kc-login')
+    p2.wait_for_selector('#db-grid .db-tile')
+    check('… danach Anmeldung mit dem eigenen Passwort wieder möglich', p2.url.startswith(D + '/dashboard/'), p2.url)
+    c2.close()
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'link'}])
+    m3 = warte_mail('kim@stafl.test')
+    check('Link zum Passwort-Festlegen per Mail (über Keycloak, nur „Passwort aktualisieren“)', code == 200 and j.get('an') == 'kim@stafl.test' and m3
+          and 'Passwort aktualisieren' in m3['text'] and 'action-token' in m3['text'], (code, j, m3 and m3['text'][:200]))
+    # Zweiter Faktor bleibt beim Zurücksetzen (Pflicht-Konten bleiben geschützt)
+    erika_id = nutzer_roh()['erika']['id']
+    code, j = pg.evaluate(hole, erika_id)
+    vor = j.get('konto', {})
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Erika-Neues-Kennwort-7'}])
+    check('Passwort setzen: Einmalcode bleibt eingerichtet', code == 200 and vor.get('einmalcode', 0) >= 1 and j['konto'].get('einmalcode') == vor.get('einmalcode'), (vor, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': nutzer_roh()['admin']['id'], 'was': 'passwort', 'passwort': 'Admin-Neues-Kennwort-7'}])
+    check('eigenes Konto nicht über die Verwaltung (403)', code == 403, (code, j))
+    check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'entsperren'}])
+    check('ohne frische Bestätigung: erneute Anmeldung verlangt (403)', code == 403 and j.get('code') == 'reauth_required', (code, j))
+    code, j = pg.evaluate(hole, kim)
+    check('… Lesen bleibt möglich', code == 200 and j['konto'].get('vorhanden') is True, (code, j))
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(A + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'kim.konto'); pg.fill('#password', KIM['eigen']); pg.click('#kc-login')
+    pg.wait_for_selector('#screen-editor:not([hidden])')
+    code, j = pg.evaluate(hole, kim)
+    check('Bearbeiterin: Zustand nicht lesbar (403)', code == 403, (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Fremd-Gesetzt-Kennwort-1'}])
+    check('Bearbeiterin: kein Passwort für andere (403)', code == 403, (code, j))
+    ctx.close()
     pf.schliessen()
     br.close()
 

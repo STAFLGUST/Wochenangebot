@@ -55,6 +55,15 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Passkey, sperren/entsperren, Liste); die Verwaltungsoberfläche ist nur auf dem Server selbst erreichbar
   (`127.0.0.1:8180`). Caddy leitet auf `login.` ausschließlich `/realms/mitarbeiter/` und `/resources/` weiter
   (Master-Realm und Verwaltung: 404).
+- **Konten aus der Verwaltung (seit 26.10.2026, Stand 8):** Verwaltung → Mitarbeiter → Abschnitt „Zentrale Anmeldung“
+  (nur Administratoren, mit Bestätigung, im Protokoll ohne Passwort): Konto anlegen, Passwort setzen (Standard: bei der
+  ersten Anmeldung eigenes festlegen), Sperre nach Fehlversuchen aufheben, Link zum Passwort-Festlegen per Mail. Technisch
+  über den Client `konten` (nur Service-Account, Rollen `view-users`/`manage-users`, Geheimnis `OIDC_SECRET_KONTEN` in `.env`),
+  Keycloak im internen Netz. **Entscheidung:** Unter der zentralen Anmeldung bietet die Verwaltung kein Passwort der
+  Anwendung mehr an (der Server lehnt es dort ab) – es gibt nur noch das Passwort von Keycloak. Die gespeicherten Passwörter
+  der Anwendung bleiben unverändert für den Notzugang (`deploy/notzugang.sh`, Notfall-Administrator:
+  `deploy/passwort-zuruecksetzen.sh`). Zweiter Faktor und Passkeys bleiben beim Setzen erhalten; zurücksetzen nur in der
+  Konsole (`konten.sh zuruecksetzen`, nach persönlicher Prüfung).
 - **Neue Mitarbeiter:** Mitarbeiterkonto im Eingabebereich anlegen, dann `konten.sh einladen <name> <e-mail> <vorname>
   <nachname>` – Mail mit Link (72 Std.), das Passwort legt der Mitarbeiter selbst fest. Einmalig vorher
   `konten.sh mail-einrichten <eigene-adresse>` (Postfach der Anwendung, Passwort nur im Tresor von Keycloak).

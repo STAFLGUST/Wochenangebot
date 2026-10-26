@@ -31,6 +31,9 @@
   const roleBadge = (r) => `<span class="role-b r-${['admin', 'editor', 'viewer'].includes(r) ? esc(r) : 'eigen'}">${esc(rollenName(r))}</span>`;
   const roleBadges = (u) => rollenVon(u).map(roleBadge).join(' ');
   const hrAn = () => !!(W.hr && may('hr.verwalten'));
+  /* Zentrale Anmeldung (Keycloak-Host): es gibt nur das Passwort von Keycloak – kein Passwort der Anwendung im Dialog,
+     stattdessen der Abschnitt „Zentrale Anmeldung“ (anmeldekonto, lib/anmeldekonten.php) */
+  const zentral = () => !!(W.me && W.me.zentral);
   async function renderUsersView() {
     const host = $('#view-users');
     if (!isAdmin()) { if (W.hr) W.hr.renderNurHr(host); return; }   // Personalstelle: nur HR-Angaben
@@ -45,7 +48,7 @@
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${u.zugang === false ? 'ohne Anmeldung' : esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
         ${hr ? `<td class="u-abt">${z.abteilung}</td>` : ''}
         <td>${u.zugang === false ? '<span class="muted">–</span>' : roleBadges(u)}${u.zugang !== false && exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
-        <td class="u-st">${u.zugang === false ? '<span class="muted">ohne Anmeldung</span>' : u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
+        <td class="u-st">${u.zugang === false ? '<span class="muted">ohne Anmeldung</span>' : u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange && !zentral() ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
         <td class="u-last">${u.zugang === false ? '<span class="muted">–</span>' : u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         ${hr ? `<td class="u-urlaub num">${z.urlaub}</td>` : ''}
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
@@ -74,11 +77,12 @@
   const rollenListe = () => (rights && rights.rollen ? rights.rollen : ['admin', 'editor', 'viewer'].map((id) => ({ id, name: ROLE_LABEL[id], beschreibung: ROLE_DESC[id] })));
   const startRollen = (u) => (u ? rollenVon(u) : ['editor']);
   let editUid = null;
-  function genPassword() {
+  function genPassword(n = 14) {   // 14: Passwort der Anwendung (12 Zeichen + Striche) · 16: zentrale Anmeldung (mindestens 12 Zeichen ohne Striche)
     const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const a = new Uint32Array(14);
+    const a = new Uint32Array(n);
     crypto.getRandomValues(a);
-    return [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-').slice(0, 14);
+    const s = [...a].map((x) => chars[x % chars.length]).join('').replace(/(.{4})(?=.)/g, '$1-');
+    return n === 14 ? s.slice(0, 14) : s;
   }
   function userRightsRows(u, rollen) {
     if (!rights || rollen.includes('admin')) return '';
@@ -137,6 +141,74 @@
     return t.length > 1 ? [t.slice(0, -1).join(' '), t[t.length - 1]] : [t[0] || '', ''];
   };
   const mailInfoText = (u) => (u && u.mailInfo ? `Zugangsdaten zuletzt per E-Mail: ${dateTime(u.mailInfo.t)} an ${u.mailInfo.to}${u.mailInfo.mitPasswort ? ' (mit Startpasswort)' : ''}${u.mailInfo.ok ? '' : ' – nicht zugestellt'}` : '');
+  /* ---------- Zentrale Anmeldung (Keycloak): Zustand und Aktionen für ein Mitarbeiterkonto ---------- */
+  const kaAbschnitt = () => `<fieldset class="span2 ka" id="ka" data-nurzugang><legend>Zentrale Anmeldung</legend>
+      <p class="ka-status" id="ka-status"><span class="muted">Wird geladen …</span></p>
+      <div class="ka-knoepfe" id="ka-knoepfe"></div>
+      <div class="ka-pw" id="ka-pw" hidden>
+        <div class="fld"><span>Neues Passwort</span><div class="pw-row"><input name="ka_pw" type="text" autocomplete="new-password" minlength="12" maxlength="200" placeholder="mindestens 12 Zeichen" aria-label="Neues Passwort"><button type="button" class="btn" data-ka="gen">Vorschlag</button></div></div>
+        <label class="check"><input type="checkbox" name="ka_aendern" checked> muss bei der nächsten Anmeldung ein eigenes Passwort festlegen</label>
+        <div class="ka-knoepfe"><button type="button" class="btn" data-ka="pw-ab">Ausblenden</button><button type="button" class="btn primary" data-ka="passwort">Passwort setzen</button></div>
+      </div>
+      <p class="ka-meldung" id="ka-meldung" role="status"></p>
+    </fieldset>`;
+  let kaKonto = null;
+  function kaZeigen(k) {
+    kaKonto = k;
+    const st = $('#ka-status'), kn = $('#ka-knoepfe');
+    if (!st) return;
+    const t = [];
+    if (k.fehler) { st.innerHTML = `<span class="st-err">${esc(k.fehler)}</span>`; kn.innerHTML = ''; return; }
+    if (!k.eingerichtet) { st.innerHTML = `<span class="muted">${esc(k.hinweis || 'Noch nicht eingerichtet.')}</span>`; kn.innerHTML = ''; return; }
+    if (!k.vorhanden) {
+      st.innerHTML = `<span class="st-warn">Noch kein Konto in der zentralen Anmeldung – der Mitarbeiter kann sich nicht anmelden.</span>${k.hinweis ? `<br><span class="muted">${esc(k.hinweis)}</span>` : ''}`;
+      kn.innerHTML = k.fremd ? '' : `<button type="button" class="btn" data-ka="anlegen">${icon('plus', 'sm')}Konto anlegen</button>`;
+      return;
+    }
+    t.push(k.aktiv ? '<span class="st-ok">Konto aktiv</span>' : '<span class="st-err">Konto in Keycloak gesperrt</span>');
+    if (k.gesperrt) t.push(`<span class="st-err">vorübergehend gesperrt nach ${esc(String(k.fehlversuche))} Fehlversuchen</span>`);
+    t.push(k.passwort ? 'Passwort gesetzt' : '<span class="st-warn">noch kein Passwort</span>');
+    if (k.passwortAendern) t.push('muss bei der nächsten Anmeldung ein eigenes Passwort festlegen');
+    if (k.einmalcode) t.push(k.einmalcode === 1 ? 'Einmalcode eingerichtet' : `${k.einmalcode} Einmalcode-Geräte`);
+    if (k.passkeys) t.push(k.passkeys === 1 ? '1 Passkey' : `${k.passkeys} Passkeys`);
+    st.innerHTML = t.join(' · ');
+    kn.innerHTML = `<button type="button" class="btn" data-ka="pw-auf">${icon('key', 'sm')}Passwort setzen …</button>`
+      + (k.email ? `<button type="button" class="btn" data-ka="link">${icon('mail', 'sm')}Link zum Passwort-Festlegen per Mail</button>` : '')
+      + (k.gesperrt || !k.aktiv ? `<button type="button" class="btn" data-ka="entsperren">${icon('check', 'sm')}Entsperren</button>` : '');
+  }
+  async function kaLaden(id) {
+    try { const r = await api('anmeldekonto', { query: '&id=' + encodeURIComponent(id) }); kaZeigen(r.konto); }
+    catch (ex) { kaZeigen({ eingerichtet: true, fehler: ex.message }); }
+  }
+  async function kaAktion(was, knopf) {
+    const m = $('#ka-meldung'), body = { id: editUid, was };
+    m.textContent = ''; m.className = 'ka-meldung';
+    if (was === 'passwort') {
+      body.passwort = $('#user-body [name="ka_pw"]').value;
+      body.aendern = $('#user-body [name="ka_aendern"]').checked;
+      if (body.passwort.length < 12) { m.textContent = 'Das Passwort muss mindestens 12 Zeichen lang sein.'; m.classList.add('form-err'); return; }
+    }
+    if (knopf) knopf.disabled = true;
+    try {
+      const r = await api('anmeldekonto_aendern', { body });
+      kaZeigen(r.konto);
+      m.classList.add('st-ok');
+      m.textContent = was === 'passwort' ? (body.aendern ? 'Passwort gesetzt – bitte persönlich weitergeben; bei der ersten Anmeldung legt der Mitarbeiter ein eigenes fest.' : 'Passwort gesetzt.')
+        : was === 'link' ? `Mail mit Link an ${r.an} geschickt (${72} Stunden gültig).` : was === 'entsperren' ? 'Konto entsperrt.' : 'Konto angelegt – jetzt Passwort setzen oder den Link per Mail schicken.';
+      if (was === 'passwort') { $('#ka-pw').hidden = false; $('#user-body [name="ka_pw"]').readOnly = true; $('#ka-pw [data-ka="passwort"]').hidden = true; $('#ka-pw [data-ka="gen"]').hidden = true; }
+    } catch (ex) { m.textContent = ex.message; m.classList.add('form-err'); }
+    if (knopf) knopf.disabled = false;
+  }
+  dlgUser.addEventListener('click', (e) => {
+    const k = e.target.closest('[data-ka]');
+    if (!k) return;
+    const a = k.dataset.ka;
+    if (a === 'pw-auf') { $('#ka-pw').hidden = false; const i = $('#user-body [name="ka_pw"]'); i.readOnly = false; i.value = ''; $('#ka-pw [data-ka="passwort"]').hidden = false; $('#ka-pw [data-ka="gen"]').hidden = false; i.focus(); return; }
+    if (a === 'pw-ab') { $('#ka-pw').hidden = true; return; }
+    if (a === 'gen') { const i = $('#user-body [name="ka_pw"]'); i.value = genPassword(16); i.select(); return; }
+    kaAktion(a, k);
+  });
+
   let unameManuell = false, fertigInfo = null;
   function openUser(id) {
     const u = id ? users.find((x) => x.id === id) : null;
@@ -160,14 +232,15 @@
           <div class="role-pick${rollenListe().length > 3 ? ' mehr' : ''}">${rollenListe().map((r) => `<label class="role-opt"><input type="checkbox" name="rollen" value="${esc(r.id)}"${startRollen(u).includes(r.id) ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(r.name)}</strong><small>${esc(r.beschreibung || ROLE_DESC[r.id] || '')}</small></span></label>`).join('')}</div>
         </div>
         <label class="check span2" data-nurzugang><input type="checkbox" name="active"${!u || u.active || !zugang ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
-        ${self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2" data-nurzugang><span>${u && zugang ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
+        ${zentral() ? (u && !self && zugang ? kaAbschnitt() : u ? '' : '<p class="hint span2" data-nurzugang>Das Passwort vergibt die zentrale Anmeldung: nach dem Anlegen im Abschnitt „Zentrale Anmeldung“ das Konto anlegen und ein Passwort setzen oder den Link per Mail schicken.</p>')
+          : self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2" data-nurzugang><span>${u && zugang ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
           <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u && zugang ? '' : ' data-pflicht'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
         </div>`}
-        ${self ? '' : `<label class="check span2" data-nurzugang><input type="checkbox" name="mustChange" checked> Mitarbeiter muss das Passwort bei der nächsten Anmeldung ändern</label>`}
+        ${self || zentral() ? '' : `<label class="check span2" data-nurzugang><input type="checkbox" name="mustChange" checked> Mitarbeiter muss das Passwort bei der nächsten Anmeldung ändern</label>`}
         <div class="span2 us-2fa" data-nurzugang><label class="check"><input type="checkbox" name="twofaPflicht"${u && u.twofaPflicht ? ' checked' : ''}> Zwei-Faktor-Anmeldung verpflichtend</label><p class="hint" id="us-2fa-hint"></p></div>
-        ${u && u.twofa && !self ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
-        ${u && u.passkeys && !self ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
-        ${u && u.geraete && u.geraete.length && !self ? `<label class="check span2"><input type="checkbox" name="resetGeraete"> Vertraute Geräte entfernen (${esc(geraeteText(u.geraete))})</label>` : ''}
+        ${u && u.twofa && !self && !zentral() ? '<label class="check span2"><input type="checkbox" name="reset2fa"> Zwei-Faktor-Anmeldung zurücksetzen (z. B. Handy verloren – wird beim nächsten Anmelden neu eingerichtet)</label>' : ''}
+        ${u && u.passkeys && !self && !zentral() ? `<label class="check span2"><input type="checkbox" name="resetPasskeys"> Alle Passkeys entfernen (${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'}, z. B. Gerät verloren)</label>` : ''}
+        ${u && u.geraete && u.geraete.length && !self && !zentral() ? `<label class="check span2"><input type="checkbox" name="resetGeraete"> Vertraute Geräte entfernen (${esc(geraeteText(u.geraete))})</label>` : ''}
         <details class="span2 ur-box" id="ur-box" data-nurzugang${u && (u.grant.length || u.deny.length) ? ' open' : ''}${startRollen(u).includes('admin') ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Mitarbeiter${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, startRollen(u))}</div></details>
@@ -177,13 +250,14 @@
         <p class="form-err span2" id="user-err" role="alert"></p>
       </div>
       <div class="dlg-foot">
-        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Mitarbeiter löschen</button>` : ''}${u && !self && u.email && u.active ? `<button type="button" class="btn sm ghost" data-uact="mail" data-nurzugang>${icon('mail', 'sm')}Zugangsdaten per E-Mail</button>` : ''}</span>
+        <span class="left">${u && !self ? `<button type="button" class="btn sm ghost" data-uact="del" style="color:var(--accent)">${icon('trash', 'sm')}Mitarbeiter löschen</button>` : ''}${u && !self && u.email && u.active && !zentral() ? `<button type="button" class="btn sm ghost" data-uact="mail" data-nurzugang>${icon('mail', 'sm')}Zugangsdaten per E-Mail</button>` : ''}</span>
         <button type="button" class="btn" data-close>Abbrechen</button>
         <button type="submit" class="btn primary">${u ? 'Speichern' : 'Mitarbeiter anlegen'}</button>
       </div>`;
     pflichtZeigen(startRollen(u).includes('admin') ? 'admin' : 'editor');
     zugangZeigen();
     dlgUser.showModal();
+    if ($('#ka')) kaLaden(u.id);
     $('#user-body [name="vorname"]').focus();
   }
   /* Mit/ohne Anmeldung: Felder für Anmeldung, Rolle, Passwort, zweiten Faktor und Rechte nur mit Anmeldung */
@@ -286,6 +360,12 @@
       editUid = r.user.id;   // ab jetzt Bearbeiten (falls die HR-Angaben scheitern, legt ein zweiter Klick keinen zweiten Mitarbeiter an)
       try { if (hrAn()) await W.hr.speichern(r.user.id, f); }
       catch (ex2) { renderUsersView(); err.textContent = 'Mitarbeiter gespeichert, Urlaubsangaben nicht: ' + ex2.message; return; }
+      if (zentral() && zugang && !u) {   // Passwort vergibt Keycloak: gleich weiter zum Abschnitt „Zentrale Anmeldung“
+        await renderUsersView();
+        openUser(r.user.id);
+        toast(`Mitarbeiter „${r.user.name}“ angelegt – jetzt das Konto in der zentralen Anmeldung anlegen.`);
+        return;
+      }
       renderUsersView();
       if (zugang && (!u || (pw && r.user.id !== W.me.id))) { zeigeFertig(r.user, pw, !u); return; }   // Abschluss mit „Zugangsdaten per E-Mail senden“
       dlgUser.close();
