@@ -271,8 +271,13 @@ der Oberfläche der Aktion außer `angebot.eingabe`) jede nicht öffentliche Akt
 Modulzugang ersetzt keine Einzelrechte: ein Recht wie `kunden.sehen` kann in mehreren Modulen genutzt werden.
 
 **Grenze des Modulzugangs:** Er sperrt einen Host (eine Oberfläche), nicht die Daten eines Moduls. Angebot, Bestand und
-Verwaltung teilen sich den Eingabebereich – der Editor lädt auf jedem dieser Hosts den Entwurf (`draft`), die
-Kundenansicht der Verwaltung nutzt Angebotsaktionen, das Angebot liest Bestand und Stammdaten. Wer z. B. ohne
+Verwaltung teilen sich den Eingabebereich – die Kundenansicht der Verwaltung nutzt Angebotsaktionen, das Angebot liest
+Bestand und Stammdaten. Ausnahme seit Oktober 2026: Aktionen, die Angebotsinhalte ausliefern und sonst nur die Anmeldung
+prüfen würden – Entwurf (`draft`), Versionen (`versions`, `version`), Kundenangebote und Vorschau für Mitarbeiter
+(`offer` ohne öffentliches Wochenangebot) –, verlangen `require_modulzugang('angebot')`, also `angebot.zugang` auf jedem
+Host (403 ohne `kein_modulzugang`, damit die Seite nicht gesperrt wird). Die Liste der Kundenangebote (`offers`, nur Namen)
+gibt es mit `angebot.zugang` oder `kunden.sehen` (Kundenzuordnung). Die Oberfläche lädt ohne `angebot.zugang` keinen
+Entwurf und startet keinen Abgleich. Wer z. B. ohne
 `angebot.zugang`, aber mit `bestand.zugang` und `bestellungen.sehen` den Bestand-Host öffnet, kann Bestellungen über
 die Schnittstelle weiter lesen. Wer Daten eines Moduls nicht sehen soll, dem die **Einzelrechte** entziehen. Der
 Dashboard-Host nimmt keine Fachaktionen an (Schritt 2), dort ließe sich der Modulzugang sonst ganz umgehen.
