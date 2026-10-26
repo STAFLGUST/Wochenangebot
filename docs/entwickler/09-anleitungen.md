@@ -4,7 +4,7 @@ Schritt für Schritt für die häufigsten Aufgaben. Jede Anleitung endet mit den
 
 > **Abschluss jeder Änderung:** `python3 werkzeuge/regeln.py erzeugen` (wenn `regeln/` geändert) ·
 > `python3 werkzeuge/doku.py erzeugen` · `python3 werkzeuge/regeln.py pruefen && python3 werkzeuge/doku.py pruefen` ·
-> betroffene Testgruppen in beiden Speicherarten (`python3 werkzeuge/regeln.py betroffen --basis origin/main`) ·
+> geänderte bzw. betroffene Testgruppen (meist 1–3) in beiden Speicherarten (`python3 werkzeuge/regeln.py betroffen --basis origin/main`), Rest prüft die CI ·
 > Kapitel dieser Dokumentation anpassen · Pull Request nach Vorlage.
 
 Bereiche, die in [`regeln/module.toml`](../../regeln/module.toml) unter `[[koordination]]` stehen (Anmeldung, Rechte,
