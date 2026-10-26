@@ -125,12 +125,13 @@ function notify_mail(string $ev, array $items, int $skipped, bool $test = false)
     $t .= "\n" . $foot . "\n";
     return [$subject, $t, mail_layout($subject, $h, '', $foot)];
 }
-/* An die Empfänger eines Ereignisses senden und im Versandprotokoll vermerken; Ergebnis je Empfänger */
-function notify_send(string $ev, array $to, array $items, int $skipped, bool $test, string $by): array
+/* An die Empfänger eines Ereignisses senden und im Versandprotokoll vermerken; Ergebnis je Empfänger.
+   $inhalt: fertige E-Mail [Betreff, Text, HTML] statt der Ereignisliste (z. B. Wochenbericht des Moduls Sicherheit). */
+function notify_send(string $ev, array $to, array $items, int $skipped, bool $test, string $by, ?array $inhalt = null): array
 {
     $cfg = mail_cfg();
     if (!$cfg || !$to) return [];
-    [$subject, $text, $html] = notify_mail($ev, $items, $skipped, $test);
+    [$subject, $text, $html] = $inhalt ?? notify_mail($ev, $items, $skipped, $test);
     $jobs = [];
     foreach ($to as $a) $jobs[] = ['to' => $a, 'name' => '', 'subject' => $subject, 'text' => $text, 'html' => $html];
     // Benachrichtigungen gehen auch im Notfallmodus raus (nur an die eingetragenen Empfänger, lib/notfall.php)

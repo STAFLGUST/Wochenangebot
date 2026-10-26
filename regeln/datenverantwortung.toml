@@ -331,6 +331,13 @@ schutz = "intern"
 beschreibung = "Notfallmodus (Modul Sicherheit): Zustand, Grund, Kundenhinweis, Wirkung, gesicherte Sicherheits- und Firewall-Einstellungen, Verlauf"
 
 [[dokument]]
+name = "sicherheit-bereitschaft"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Bereitschaft (Modul Sicherheit, lib/bereitschaft.php): Leitfaden für den Ernstfall mit Ansprechpartnern, im Notfall abgehakte Schritte, Probealarme mit Bestätigungen, Wochenbericht (an/aus, Wochentag, Versandverlauf)"
+historie = "Probealarme (letzte 20) und abgehakte Leitfäden je Notfall (letzte 20) als Schnappschuss; Leitfaden selbst ohne Versionen"
+
+[[dokument]]
 name = "wartung"
 eigentuemer = "plattform"
 schutz = "intern"

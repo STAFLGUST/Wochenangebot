@@ -107,6 +107,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `anmeldekonten.php` | plattform | Konten der zentralen Anmeldung (Keycloak, Realm „mitarbeiter“) aus der Verwaltung steuern – EIN Passwort für alles. |
 | `auswertung.php` | verwaltung | Auswertung: Anmeldeorte der Kunden (ungefährer Ort aus der IP-Adresse, ort.php). |
 | `benachrichtigung.php` | plattform | Benachrichtigungen an Mitarbeiter (E-Mail): welche Ereignisse an wen gehen, legt der Administrator fest. |
+| `bereitschaft.php` | plattform | Bereitschaft für den Ernstfall (Oberfläche |
 | `bestand-pdf.php` | bestand | Bestand als PDF (Verwaltung → Bestand → „PDF“) |
 | `bestand.php` | bestand | Bestandsliste und Stammdaten |
 | `diagnose.php` | plattform | Sicherheit für IT-Administratoren |
@@ -528,6 +529,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_rollen_host.py` | plattform | Modulzugang je Host: der Testserver meldet sich wie bestand.dashboard-stafl.de (WA_OBERFLAECHE=bestand.intern). |
 | `test_schutz.py` | plattform | Schutzzentrale (Verwaltung → Schutz) |
 | `test_security.py` | plattform | Testgruppe security: Zwei-Faktor-Anmeldung, Wiederherstellungscodes, Sitzungen, IP-Freigabe und Content-Security-Policy. |
+| `test_sicherheit_bereitschaft.py` | sicherheit | Bereitschaft im Modul Sicherheit (lib/bereitschaft.php, docs/plattform/modul-sicherheit.md §8). |
 | `test_sicherheit_druck.py` | plattform | Sicherheit, Druck und Formatierung |
 | `test_sicherheit_freigaben.py` | plattform | Freigegebene Sicherheitsänderungen |
 | `test_sicherheit_it.py` | plattform | Sicherheit für IT-Administratoren |

@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-171 Aktionen in 10 Modulen.
+179 Aktionen in 10 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -148,11 +148,19 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |
+| `sicherheit_bericht` | `sicherheit.intern` | lesend | – | angemeldet | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_bericht_einstellen` | `sicherheit.intern` | schreibend | – | Administrator | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_bericht_senden` | `sicherheit.intern` | schreibend | – | Administrator | `app/api/aktionen/sicherheit.php` |
 | `sicherheit_ereignisse` | `sicherheit.intern` | lesend | – | angemeldet | `app/api/aktionen/sicherheit.php` |
 | `sicherheit_konten` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_konto_deaktivieren` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/sicherheit.php` |
 | `sicherheit_lage` | `sicherheit.intern` | lesend | – | angemeldet | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_leitfaden` | `sicherheit.intern` | schreibend | – | Administrator | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_leitfaden_haken` | `sicherheit.intern` | schreibend | – | Recht sicherheit.notfall | `app/api/aktionen/sicherheit.php` |
 | `sicherheit_notfall_an` | `sicherheit.intern` | schreibend | – | Recht sicherheit.notfall + Bestätigung | `app/api/aktionen/sicherheit.php` |
 | `sicherheit_notfall_aus` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_probe_gesehen` | `sicherheit.intern` | schreibend | – | angemeldet | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_probealarm` | `sicherheit.intern` | schreibend | – | Recht sicherheit.notfall | `app/api/aktionen/sicherheit.php` |
 
 ## App (iOS/Android) (`mobile`)
 

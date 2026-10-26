@@ -132,6 +132,7 @@ require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
 require __DIR__ . '/lib/firewall.php';
 require __DIR__ . '/lib/notfall.php';         // Notfallmodus (Modul Sicherheit): wirkt über Wartung, Sitzungen, E-Mail, Firewall
+require __DIR__ . '/lib/bereitschaft.php';    // Leitfaden, Probealarm, Wochenbericht (Modul Sicherheit)
 require __DIR__ . '/lib/integritaet.php';
 require __DIR__ . '/lib/geraete.php';
 require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus regeln/aktionen/*.toml)

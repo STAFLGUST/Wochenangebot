@@ -330,6 +330,72 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .geo-opt:hover { background: var(--sic-aus); }
 .geo-opt .sub { margin-left: auto; }
 
+/* ── Bereitschaft: Probealarm-Band, Leitfaden, Übungen, Wochenbericht ── */
+.sic-probeband { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 12px 16px; border-radius: 20px; background: var(--sic-warn-bg); color: var(--sic-warn); border: 1px solid rgba(224, 155, 45, .35); }
+.sic-probeband[hidden] { display: none; }
+.sic-probeband > .i { width: 24px; height: 24px; }
+.sic-probeband > div { flex: 1; min-width: 0; line-height: 1.45; color: var(--sic-text); }
+.sic-probeband strong { color: var(--sic-warn); }
+.sic .sic-probeband .sub { display: block; }
+.sic-probeband .btn { flex: none; }
+.sic-blockfuss { margin-top: 12px; }
+.sic-held-knopf .btn + .btn { margin-top: 4px; }
+.lf-stand { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; font-size: 14px; }
+.lf-balken { flex: 1; min-width: 160px; max-width: 420px; height: 10px; border-radius: 999px; background: var(--sic-aus); overflow: hidden; }
+.lf-balken span { display: block; height: 100%; width: var(--anteil); border-radius: inherit; background: linear-gradient(90deg, var(--sic-ok), #3fa56b); transition: width .3s ease; }
+.lf-raster { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 22px; }
+.lf-schritte { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; counter-reset: lf; }
+.lf-schritt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 16px; }
+.lf-schritt:nth-child(odd) { background: var(--sic-aus); }
+.lf-schritt > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lf-schritt p { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--sic-muted); }
+.lf-marke { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--sic-linie); background: var(--sic-deckend); color: var(--sic-text); font: inherit; font-size: 13px; font-weight: 700; }
+button.lf-marke { cursor: pointer; border-color: var(--sic-rot); color: var(--sic-rot); }
+button.lf-marke:hover { background: var(--sic-bad-bg); }
+.lf-schritt.erledigt .lf-marke { border-color: var(--sic-ok); background: var(--sic-ok); color: #fff; }
+.lf-schritt.erledigt strong { text-decoration: line-through; text-decoration-color: var(--sic-ok); text-decoration-thickness: 2px; }
+.lf-marke .i { width: 16px; height: 16px; stroke-width: 2.6; }
+.lf-seite h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; }
+.lf-seite h4 .i { color: var(--sic-modul); }
+.lf-kontakte { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lf-kontakte li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 16px; background: var(--sic-aus); }
+.lf-kontakte li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lf-kontakte .sic-av { float: none; margin: 0; flex: none; }
+.lf-wege { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; }
+.lf-wege a { display: inline-flex; align-items: center; gap: 5px; color: inherit; font-size: 13.5px; font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.lf-wege a:hover { text-decoration: underline; }
+.lf-wege .i { width: 15px; height: 15px; color: var(--sic-modul); }
+.lf-notiz { margin: 10px 0 0; padding: 10px 12px; border-radius: 14px; background: var(--sic-info-bg); color: var(--sic-info); font-size: 13.5px; line-height: 1.45; }
+.lf-ed-liste { display: flex; flex-direction: column; gap: 8px; }
+.lf-ed-zeile { display: flex; gap: 8px; align-items: flex-start; padding: 10px; border-radius: 14px; background: var(--sic-aus); }
+.lf-ed-felder { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lf-ed-knoepfe { display: flex; flex-direction: column; gap: 4px; }
+.lf-ed-zeile:first-child [data-d="hoch"] { visibility: hidden; }
+.lf-ed-kontakt { display: grid; grid-template-columns: 1fr 1fr 1fr 1.2fr auto; gap: 6px; align-items: center; }
+.lf-ed-zeile input, .lf-ed-zeile textarea, .lf-ed-kontakt input { box-sizing: border-box; width: 100%; min-height: 36px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--sic-linie);
+  background: var(--sic-bg); color: inherit; font: inherit; font-size: 14px; }
+.lf-ed-zeile textarea { resize: vertical; font-size: 13.5px; }
+.lf-ed-zeile .lf-ed-titel { font-weight: 600; }
+.sic-wirkungen.uebung .i { background: var(--sic-ok-bg); color: var(--sic-ok); }
+.pb-kopf { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 18px; background: var(--sic-ok-bg); }
+.pb-kopf > div:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pb-kopf strong { font-size: 17px; }
+.pb-kopf.warn { background: var(--sic-warn-bg); } .pb-kopf.warn .sic-ring { --farbe: #e09b2d; }
+.pb-kopf.bad { background: var(--sic-bad-bg); } .pb-kopf.bad .sic-ring { --farbe: var(--sic-rot); }
+.pb-kopf .sic-ring small { font-size: 12px; color: var(--sic-muted); }
+.pb-punkte { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pb-punkte li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 4px; border-bottom: 1px solid var(--sic-linie); }
+.pb-punkte li:last-child { border-bottom: 0; }
+.pb-punkte .sic-punkt { margin-top: 5px; }
+.pb-punkte li > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 13.5px; }
+.br-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.br-abschnitt { padding: 12px 14px; border-radius: 16px; background: var(--sic-aus); min-width: 0; }
+.br-abschnitt.bad { background: var(--sic-bad-bg); } .br-abschnitt.warn { background: var(--sic-warn-bg); }
+.br-abschnitt h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14px; }
+.br-abschnitt .sic-tabelle td { border-bottom-color: var(--sic-linie); }
+.br-liste { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--sic-muted); overflow-wrap: anywhere; }
+.sic-tabelle.ungenutzt td { vertical-align: middle; }
+
 /* ── Hinweis unten ── */
 .sic-toast { position: fixed; left: 50%; bottom: 24px; z-index: 50; transform: translate(-50%, 20px); padding: 11px 18px; border-radius: 14px; background: var(--sic-text); color: var(--sic-bg);
   font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; max-width: calc(100vw - 32px); }
@@ -342,6 +408,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
   .sic-karten, .sic-karten.vier { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sic-zwei, .sic-zwei.breit-links, .sic-oben { grid-template-columns: 1fr; }
   .sic-vorlagen { grid-template-columns: 1fr; }
+  .lf-raster { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .sic-einstgitter, .bst-gitter { grid-template-columns: 1fr; }
@@ -370,6 +437,11 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
   .sic-tabelle { font-size: 13px; }
   .sic-tabelle td, .sic-tabelle th { padding: 7px 6px; }
   .geo-list { grid-template-columns: 1fr; }
+  .br-raster { grid-template-columns: 1fr; }
+  .lf-ed-kontakt { grid-template-columns: 1fr 1fr; padding: 10px; border-radius: 14px; background: var(--sic-aus); }
+  .lf-ed-kontakt .sic-rund { grid-column: 2; justify-self: end; }
+  .sic-probeband { flex-wrap: wrap; }
+  .sic-probeband .btn { width: 100%; justify-content: center; }
   .sic .nicht-schmal { display: none; }
   .sic .nur-schmal { display: block; margin-top: 3px; }
 }

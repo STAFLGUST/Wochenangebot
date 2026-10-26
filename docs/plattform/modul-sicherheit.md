@@ -24,14 +24,14 @@ Hauptansichten bleiben schlank (Lage, Listen, Zustände); Details, Bearbeiten un
 
 | Reiter | Inhalt | Wer |
 |---|---|---|
-| **Lagebild** | Gesamtbewertung, Notfall-Zustand, Kennzahlen (Angriffe/Abweisungen 24 h, Fehlanmeldungen, gesperrte Adressen, Sitzungen, Zwei-Faktor, Dateiprüfung, Sicherung, Bereitstellung), Verlauf 14 Tage, auffällige Adressen, Konfigurationsprüfung (Server und Browser), letzte Ereignisse | Administrator, `sicherheit.sehen` |
-| **Notfall** | Zustand, Wirkungen, Auslösen (mehrstufiger Dialog), Beenden (nur Administrator), letzte Notfälle | `sicherheit.notfall`, Administrator; `sicherheit.sehen` nur Zustand |
+| **Lagebild** | Gesamtbewertung, Notfall-Zustand, Kennzahlen (Angriffe/Abweisungen 24 h, Fehlanmeldungen, gesperrte Adressen, Sitzungen, Zwei-Faktor, Dateiprüfung, Sicherung, Bereitstellung), Verlauf 14 Tage, auffällige Adressen, Konfigurationsprüfung (Server und Browser), letzte Ereignisse, **Wochenbericht** (Ansehen im Dialog) und **Bereitschaft** (letzter Probealarm, Leitfaden) | Administrator, `sicherheit.sehen` |
+| **Notfall** | Zustand, Wirkungen, Auslösen (mehrstufiger Dialog), **Probealarm**, Beenden (nur Administrator), **Leitfaden für den Ernstfall** (im Notfall abhakbar), letzte Notfälle, **Übungen** | `sicherheit.notfall`, Administrator; `sicherheit.sehen` Zustand, Leitfaden und Übungen lesen |
 | **Firewall & Sperren** | Firewall-Einstellungen, Live-Verkehr, Sperrliste (sperren/freigeben im Dialog), IP-Sperren der Anmeldebremse, Länderstatistik | Administrator |
 | **Anmeldung & Sitzungen** | aktive Sitzungen (beenden mit Rückfrage), gesperrte Zugänge, Fehlanmeldungen 7 Tage, Zugänge ohne Zwei-Faktor | Administrator |
 | **Dateiprüfung** | letzter Lauf, Befunde (Details im Dialog), Komponenten, „Jetzt prüfen“ | Administrator |
 | **Ereignisse** | Sicherheitsprotokoll mit Filter (Art, Zeitraum, Suche), Details im Dialog, CSV-Export | Administrator, `sicherheit.sehen` |
 | **Einstellungen & Vorlagen** | Vorlagen Standard · Streng · **Notfall** (Vorschau der Änderungen im Dialog; „Notfall“ startet den Notfallmodus), Export/Import, Anmeldung und Passwörter, IP-Freigabe, Ländersperre, Passwortbestätigung | Administrator |
-| **Privilegierte Konten** | Administratoren und Inhaber sicherheitsrelevanter Rechte mit Zwei-Faktor/Passkey, letzter Anmeldung, Sitzungen, Sperre; Details im Dialog | Administrator |
+| **Konten** | Privilegierte Konten (Administratoren und Inhaber sicherheitsrelevanter Rechte mit Zwei-Faktor/Passkey, letzter Anmeldung, Sitzungen, Sperre; Details im Dialog) und **ungenutzte Zugänge** (Zeitraum wählbar, Deaktivieren im Dialog) | Administrator |
 
 In der **Verwaltung** bleibt nur, was zum Betrieb gehört: Ansicht **System** (Systemzustand, Diagnose, Wartungsmodus der
 Angebotsseite, Wartung des Eingabebereichs, Module & Freigaben) und ein Hinweis mit Link zum Modul Sicherheit. Die Ansicht
@@ -115,7 +115,46 @@ Dokument `sicherheit-notfall` (Eigentümer `plattform`): `aktiv`, `seit`, `von`,
   wirksam ist nur die serverseitige Sperre je Oberfläche.
 - **Alternative „eigene Sperrlogik je Modul“** verworfen: doppelte Logik; die Entscheidungstabelle gilt bereits überall.
 
-## 7. Folgearbeiten (eigene Pull Requests)
+## 7. Bereitschaft (Erweiterung, 26.10.2026)
 
-Probealarm (Notfall üben ohne Wirkung), Leitfaden für den Ernstfall, wöchentlicher Sicherheitsbericht, Erkennung ungenutzter
-Konten, Design-Feinschliff.
+Dienst `app/api/lib/bereitschaft.php` (Plattformkern), Dokument `sicherheit-bereitschaft` (Eigentümer `plattform`). Ziel: Der
+Ernstfall soll geübt, beschrieben und überwacht sein – nicht erst im Notfall auffallen, dass niemand die Meldung bekommt.
+
+**Leitfaden für den Ernstfall.** Schritte (Vorlage mit acht Schritten, u. a. Meldepflicht nach Art. 33 DSGVO binnen 72 Stunden
+prüfen; bis zu 15 eigene) und Ansprechpartner (Aufgabe, Name, Telefon, E-Mail; bis zu 10) mit einem Hinweis. Pflegen nur
+Administratoren (`sicherheit_leitfaden`, Protokoll „Notfall“); lesen alle mit Zugang zum Modul. Während eines Notfalls hakt ab,
+wer „Notfall auslösen“ hat (`sicherheit_leitfaden_haken`: wer, wann); die Haken bleiben beim jeweiligen Notfall (Schlüssel
+= Beginn) und erscheinen in dessen Verlauf. Im Notfall steht der Leitfaden mit Fortschrittsbalken direkt unter dem Kopf.
+
+**Probealarm.** Übung ohne jede Wirkung (`sicherheit_probealarm`, Recht wie Auslösen; nicht während eines Notfalls; höchstens
+einer je 5 Minuten): Bereitschaftsprüfung – Empfänger und Postfach für die Meldung, mindestens zwei Personen dürfen auslösen,
+mindestens zwei Administratoren können beenden, Administratoren mit zweitem Faktor, Ansprechpartner im Leitfaden, eigene
+Adresse vor der Notfall-Firewall geschützt („nie sperren“), Datensicherung aktuell, Keycloak-Sitzungen beendbar – und eine
+Test-Meldung („PROBEALARM (Übung) – keine Wirkung“) an die Empfänger der Sicherheitsereignisse. Wer die Meldung sieht, bestätigt
+im Modul (Band in allen Reitern, `sicherheit_probe_gesehen`, nicht für den eigenen Probealarm, 24 Stunden lang); die
+Reaktionszeit wird vermerkt. Übersicht „Übungen“ mit Ergebnis, Zustellung und Bestätigungen.
+
+**Wochenbericht.** Zusammenfassung der letzten 7 Tage (Konfigurationsprüfung, Anmeldungen und auffällige Adressen, Firewall,
+Zugänge mit Änderungen und ungenutzten Zugängen, Notfälle und Probealarme, Dateiprüfung/Sicherung/Bereitstellung) per E-Mail an
+die Empfänger der Sicherheitsereignisse (keine zweite Empfängerliste). Ansehen mit `sicherheit.sehen` (`sicherheit_bericht`,
+derselbe Inhalt wie die E-Mail), sofort senden und einstellen (an/aus, Wochentag) nur Administratoren. **Automatischer Versand
+ohne Zeitplan auf dem Server:** Die Statusabfrage angemeldeter Mitarbeiter (`status`) ruft `bericht_anstossen()` – ab 7 Uhr am
+eingestellten Wochentag (oder später in der Woche) vermerkt der Server die Woche unter Sperre (genau ein Versand) und sendet nach
+der Antwort. Der erste Aufruf nach dem Einspielen und das Wiedereinschalten vermerken nur die Woche – der erste Bericht kommt in
+der folgenden Woche. Grenzen: Ist eine ganze Woche niemand angemeldet, entfällt der Bericht; Fehlanmeldungen bei Keycloak zählt
+Keycloak selbst (im Bericht vermerkt).
+
+**Ungenutzte Zugänge.** `sec_ungenutzt()` (lib/diagnose.php; eine Quelle für Konfigurationsprüfung, Reiter Konten und Bericht):
+aktive Zugänge, deren letzte Anmeldung (ohne Anmeldung: Anlage) länger als 30/60/90/180/365 Tage zurückliegt, ohne laufende
+Sitzung. Auf Keycloak-Hosts schreibt die Anwendung seit dieser Erweiterung die Anmeldezeit bei Keycloak in `lastLogin`
+(`oidc_anmeldung_merken`); vorher fehlte sie dort. **Nach dem Einspielen** zeigen die ersten Tage daher auch Mitarbeiter, die
+sich nur über Keycloak angemeldet haben und noch keine neue Sitzung hatten – vor dem Deaktivieren einige Tage abwarten.
+Deaktivieren (`sicherheit_konto_deaktivieren`, Administrator mit derselben Bestätigung wie Verwaltung → Mitarbeiter,
+`nutzer_deaktivieren()` in lib/nutzer.php): nicht der eigene, nicht der letzte Administrator; Sitzungen enden; Protokoll „user“
+(meldet als Sicherheitsereignis); wieder aktivieren in der Verwaltung.
+
+Rückfall: Die Vorversion ignoriert das Dokument `sicherheit-bereitschaft` und das Feld `lastLogin` wird nur weiter gefüllt.
+
+## 8. Folgearbeiten
+
+Design-Feinschliff des Moduls; Fehlanmeldungen bei Keycloak (Ereignisse der zentralen Anmeldung) in Lagebild und Bericht.

@@ -8,6 +8,7 @@ eigenen Anmeldeverfahren auf Keycloak-Hosts, untergeschobene Kopfzeilen, gesperr
 alle Anwendungen (Back-Channel-Logout).
 """
 import base64
+import calendar
 import hashlib
 import hmac
 import http.cookiejar
@@ -1423,6 +1424,9 @@ with sync_playwright() as pw:
     p2.fill('#password-new', KIM['eigen']); p2.fill('#password-confirm', KIM['eigen']); p2.click('#kc-submit'); p2.wait_for_selector('#db-grid .db-tile')
     st = p2.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('… danach im Dashboard, mit dem Mitarbeiterkonto (Verknüpfung über die ID)', st.get('loggedIn') and st['user']['username'] == 'kim.konto', st.get('user'))
+    _ll = nutzer_roh()['kim.konto'].get('lastLogin') or ''
+    _alter = time.time() - calendar.timegm(time.strptime(_ll, '%Y-%m-%dT%H:%M:%SZ')) if _ll else None
+    check('… letzte Anmeldung am Mitarbeiterkonto = Anmeldung bei Keycloak (ungenutzte Zugänge, Modul Sicherheit)', _alter is not None and -5 < _alter < 300, (_ll, _alter))
     c2.close()
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': KIM['eigen'], 'aendern': False}])
     check('Passwortregeln von Keycloak verständlich (kürzlich verwendet → 422)', code == 422 and 'kürzlich' in j.get('error', ''), (code, j))
