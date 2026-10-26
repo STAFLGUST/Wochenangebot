@@ -131,6 +131,29 @@ function ghost_lock(string $scope, string $name, bool $fail, ?bool &$neu = null)
     });
 }
 function active_admins(array $users): int { $n = 0; foreach ($users as $u) if ($u['role'] === 'admin' && $u['active']) $n++; return $n; }
+/* Zugang eines Mitarbeiters deaktivieren (Modul Sicherheit → ungenutzte Konten; gleiche Wirkung wie „aktiv“ abwählen in
+   Verwaltung → Mitarbeiter): nicht der eigene, nicht der letzte aktive Administrator; Sitzungen enden sofort, auf
+   Keycloak-Hosts verweigert die Anwendung danach die Anmeldung (oidc_aktiv). Protokoll „user“ (meldet als Sicherheitsereignis).
+   Die Rechte prüft der Aufrufer. Rückgabe: geänderter Mitarbeiter. */
+function nutzer_deaktivieren(array $me, string $id, string $grund = ''): array
+{
+    if ($id === (string)$me['id']) fail('Den eigenen Zugang können Sie nicht deaktivieren.', 403);
+    $u = with_lock('nutzer', function () use ($id) {
+        $users = users_load();
+        $i = user_find($users, $id);
+        if ($i === null) fail('Mitarbeiter nicht gefunden.', 404);
+        if (empty($users[$i]['active'])) fail('Der Zugang ist bereits deaktiviert.', 409);
+        $users[$i]['active'] = false;
+        $users[$i]['changed'] = now();
+        if (active_admins($users) < 1) fail('Es muss mindestens ein aktiver Administrator bestehen bleiben.', 422);
+        users_save($users);
+        return $users[$i];
+    });
+    sess_remove(function ($k, $v) use ($id) { return (string)($v['uid'] ?? '') === $id; });
+    audit('user', 'Mitarbeiter „' . $u['username'] . '“ deaktiviert' . ($grund !== '' ? ' (' . $grund . ')' : ''),
+          [['k' => 'u|active', 'code' => '', 'name' => (string)$u['username'], 'f' => 'Status', 'from' => 'aktiv', 'to' => 'deaktiviert']]);
+    return $u;
+}
 /* Benutzername aus Vor- und Nachname: „vorname-nachname“, klein, Umlaute als ae/oe/ue/ss, Akzente ohne Zeichen,
    Leerzeichen und Sonderzeichen werden zu „-“; belegt → „-2“, „-3“ … (höchstens 32 Zeichen). */
 function benutzername_vorschlag(string $vorname, string $nachname, array $belegt = []): string

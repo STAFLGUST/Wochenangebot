@@ -466,6 +466,7 @@ hinweise = [
   "Das Modul ist die Oberfläche – die Dienste (Einstellungen, Firewall, Dateiprüfung, Sitzungen, Protokoll, Notfall lib/notfall.php) gehören zum Plattformkern (koordinationspflichtig).",
   "Rechte: sicherheit.sehen (Lagebild, Ereignisse lesen), sicherheit.notfall (Notfall auslösen) ohne Standardrollen; Einstellungen, Sperren, Sitzungen und das Beenden des Notfalls nur Administratoren.",
   "Notfallmodus nutzt die Wartungs-Entscheidungstabelle (alle sperrbaren internen Oberflächen in Wartung, Kunden-Wartung), keine eigene Sperrlogik. Server-Notfallwerkzeug: deploy/notfall-aus.sh.",
+  "Bereitschaft (lib/bereitschaft.php, Plattformkern): Leitfaden (Administrator pflegt, im Notfall abhakbar mit sicherheit.notfall), Probealarm (sicherheit.notfall, ohne Wirkung), Wochenbericht (Empfänger der Sicherheitsereignisse, automatisch über die Statusabfrage), ungenutzte Zugänge deaktivieren (Administrator, Bestätigung user_save).",
   "Freigegeben (Inhaber 26.10.2026): sicherheit.dashboard-stafl.de mit eigenem Keycloak-Client „sicherheit“ (Stand 9); / und /admin/ führen zu /module/sicherheit/. Aktionen nur auf diesem Host (GR-109).",
 ]
 
@@ -579,7 +580,7 @@ pfade = ["app/api/lib/sitzung.php", "app/api/lib/oidc.php", "app/api/lib/passkey
 [[koordination]]
 bereich = "Nutzer, Rechte und Sicherheit"
 pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicherheit.php", "app/api/lib/firewall.php", "app/api/lib/herkunft.php", "app/api/lib/notfall.php",
-  "app/api/aktionen/verwaltung.php", "app/api/aktionen/schutz.php", "app/assets/admin-rollen.js", "regeln/berechtigungen.toml"]
+  "app/api/lib/bereitschaft.php", "app/api/aktionen/verwaltung.php", "app/api/aktionen/schutz.php", "app/assets/admin-rollen.js", "regeln/berechtigungen.toml"]
 
 [[koordination]]
 bereich = "Speicherschicht, Datenformate und Migrationen"

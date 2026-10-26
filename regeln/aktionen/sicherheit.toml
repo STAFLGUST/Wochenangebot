@@ -1,4 +1,4 @@
-# Aktionen des Moduls „sicherheit“: Lagebild, Sicherheitsereignisse, privilegierte Konten, Notfallmodus auslösen und beenden.
+# Aktionen des Moduls „sicherheit“: Lagebild, Sicherheitsereignisse, Konten, Notfallmodus, Probealarm, Leitfaden, Wochenbericht.
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 # Oberfläche sicherheit.intern (produktiv seit der Freigabe des Inhabers 26.10.2026, sicherheit.dashboard-stafl.de). Auf
 # Keycloak-Hosts antworten die Aktionen nur auf diesem Host (Aktion ↔ Host, GR-109, lib/herkunft.php), auf anderen mit 404.
@@ -24,3 +24,35 @@ schreibend = true   # sicherheit.notfall, Bestätigungswort, Bestätigung „not
 [aktion.sicherheit_notfall_aus]
 oberflaeche = "sicherheit.intern"
 schreibend = true   # nur Administrator, immer mit Bestätigung „notfall_beenden“
+
+# Bereitschaft (lib/bereitschaft.php): Probealarm, Leitfaden, Wochenbericht; ungenutzte Zugänge (lib/diagnose.php, lib/nutzer.php)
+[aktion.sicherheit_probealarm]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # sicherheit.notfall (Administratoren immer): Übung ohne Wirkung, Test-Benachrichtigung
+
+[aktion.sicherheit_probe_gesehen]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # „Probealarm gesehen“ (sicherheit.sehen, sicherheit.notfall, Administrator)
+
+[aktion.sicherheit_leitfaden]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # Leitfaden für den Ernstfall speichern (Administrator)
+
+[aktion.sicherheit_leitfaden_haken]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # Schritt im laufenden Notfall abhaken (sicherheit.notfall)
+
+[aktion.sicherheit_bericht]
+oberflaeche = "sicherheit.intern"   # Wochenbericht ansehen (Administrator, sicherheit.sehen)
+
+[aktion.sicherheit_bericht_senden]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # Wochenbericht jetzt senden (Administrator)
+
+[aktion.sicherheit_bericht_einstellen]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # Wochenbericht an/aus und Wochentag (Administrator)
+
+[aktion.sicherheit_konto_deaktivieren]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # ungenutzten Zugang deaktivieren (Administrator, Bestätigung „user_save“)

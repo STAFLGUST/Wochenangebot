@@ -96,8 +96,8 @@ function sec_config_checks(array $users): array
     $act = array_filter($users, function ($u) { return !empty($u['active']); });
     $admins = array_filter($act, function ($u) { return $u['role'] === 'admin'; });
     $add('Zugänge', count($admins) <= 3 ? 'ok' : 'warn', 'Administratoren', (count($admins) === 1 ? '1 aktiver Administrator-Zugang' : count($admins) . ' aktive Administrator-Zugänge'), count($admins) <= 3 ? '' : 'Nur so viele Administratoren wie nötig – übrige als Bearbeiter führen.');
-    $stale = array_filter($act, function ($u) { $l = $u['lastLogin'] ?? null; $ref = $l ?: ($u['created'] ?? null); return $ref && strtotime((string)$ref) < time() - 90 * 86400; });
-    $add('Zugänge', $stale ? 'warn' : 'ok', 'Unbenutzte Zugänge', $stale ? count($stale) . ' aktive Zugänge seit über 90 Tagen nicht angemeldet: ' . implode(', ', array_slice(array_map(function ($u) { return $u['username']; }, $stale), 0, 6)) : 'keine', $stale ? 'Nicht mehr benötigte Zugänge deaktivieren.' : '');
+    $stale = sec_ungenutzt(SEC_UNGENUTZT_TAGE, $users)['konten'];
+    $add('Zugänge', $stale ? 'warn' : 'ok', 'Unbenutzte Zugänge', $stale ? count($stale) . ' aktive Zugänge seit über ' . SEC_UNGENUTZT_TAGE . ' Tagen nicht angemeldet: ' . implode(', ', array_slice(array_map(function ($u) { return $u['username']; }, $stale), 0, 6)) : 'keine', $stale ? 'Nicht mehr benötigte Zugänge deaktivieren (Sicherheit → Konten).' : '');
     $must = array_filter($act, function ($u) { return !empty($u['mustChange']); });
     $add('Zugänge', $must ? 'warn' : 'ok', 'Startpasswörter', $must ? count($must) . ' Zugänge mit noch nicht geändertem Startpasswort' : 'alle Passwörter selbst gesetzt', $must ? 'Startpasswörter nur kurz gültig halten bzw. Zugang deaktivieren, bis er gebraucht wird.' : '');
     // Sitzung und PHP
@@ -281,6 +281,36 @@ function sec_lagebild(array $me): array
         'timeline' => sec_timeline($log), 'topIps' => sec_top_ips($log), 'config' => sec_config_checks($users),
         'ereignisse' => array_slice(sec_ereignisse(7)['ereignisse'], 0, 8),
     ];
+}
+
+/* Ungenutzte Zugänge: aktive Mitarbeiter mit Anmeldung, deren letzte Anmeldung (bzw. ohne Anmeldung: Anlage) länger als
+   $tage Tage zurückliegt und die keine laufende Sitzung haben. Auf Keycloak-Hosts zählt die letzte Anmeldung bei Keycloak
+   (oidc_anmeldung_merken). Neueste zuerst nach Inaktivität (älteste oben). Eine Quelle für Konfigurationsprüfung, Modul
+   Sicherheit (Reiter Konten) und Wochenbericht. */
+const SEC_UNGENUTZT_TAGE = 90;
+const SEC_UNGENUTZT_WAHL = [30, 60, 90, 180, 365];
+function sec_ungenutzt(int $tage, ?array $users = null): array
+{
+    $users ??= users_load();
+    $aktiv = [];
+    foreach (sess_prune(store_read('sitzungen') ?? []) as $v) {
+        $uid = (string)($v['uid'] ?? '');
+        $aktiv[$uid] = max($aktiv[$uid] ?? 0, (int)($v['seen'] ?? 0));
+    }
+    $grenze = time() - $tage * 86400;
+    $out = [];
+    foreach ($users as $u) {
+        if (empty($u['active']) || !nutzer_hat_zugang($u) || isset($aktiv[(string)$u['id']])) continue;
+        $letzte = ($u['lastLogin'] ?? null) ?: null;
+        $ref = $letzte ?: ($u['created'] ?? null);
+        $t = $ref ? strtotime((string)$ref) : false;
+        if ($t === false || $t >= $grenze) continue;
+        $out[] = ['id' => (string)$u['id'], 'name' => (string)$u['name'], 'username' => (string)$u['username'], 'admin' => ($u['role'] ?? '') === 'admin',
+                  'rollen' => rollen_text($u), 'lastLogin' => $letzte, 'created' => $u['created'] ?? null, 'nie' => $letzte === null,
+                  'tage' => (int)floor((time() - $t) / 86400), 'zentral' => (string)($u['oidcSub'] ?? '') !== ''];
+    }
+    usort($out, function ($a, $b) { return ($b['tage'] <=> $a['tage']) ?: strcasecmp($a['name'], $b['name']); });
+    return ['konten' => $out, 'tage' => $tage, 'wahl' => SEC_UNGENUTZT_WAHL];
 }
 
 /* Privilegierte Konten: Administratoren und Inhaber sicherheitsrelevanter Rechte mit Anmeldeschutz, letzter Anmeldung, Sitzungen */

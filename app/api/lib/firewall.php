@@ -446,21 +446,29 @@ function fw_status(string $filter = ''): array
     $auto = array_values(array_filter($L['auto'], fn($a) => (int)($a['bis'] ?? 0) > $now));
     usort($auto, fn($a, $b) => strcmp((string)$b['t'], (string)$a['t']));
     $manuell = array_values(array_filter($L['manuell'], fn($e) => !(int)($e['bis'] ?? 0) || (int)$e['bis'] > $now));
-    $v = store_read('verkehr') ?? [];
-    $tag = array_filter($v, fn($e) => (int)$e['t'] > $now - 86400);
+    $z = fw_zahlen(86400);
+    $F = fw();
+    return ['fw' => $F, 'modi' => FW_WAF_MODI, 'sperrMinuten' => FW_SPERR_MINUTEN, 'vorlagen' => array_map(fn($x) => ['label' => $x['label'], 'text' => $x['text'], 'werte' => ['sec' => $x['sec'], 'fw' => $x['fw']]], FW_VORLAGEN),
+            'zahlen' => ['angriffe' => $z['angriffe'], 'abgewiesen' => $z['abgewiesen'], 'anmeldungFehl' => $z['anmeldungFehl'], 'gesperrteAdressen' => count($auto) + count($manuell)],
+            'manuell' => $manuell, 'auto' => array_slice($auto, 0, 300), 'autoGesamt' => count($auto), 'feed' => fw_feed_info(),
+            'meineIp' => client_ip(), 'mitschnitt' => (int)$F['mitschnittBis'] > $now ? (int)$F['mitschnittBis'] : 0,
+            'verkehr' => fw_verkehr_liste($filter, 0)];
+}
+/* Zahlen aus dem Verkehrsprotokoll für einen Zeitraum (Sekunden; Lagebild 24 h, Wochenbericht 7 Tage): Angriffsmuster,
+   abgewiesene Anfragen gesperrter Adressen, fehlgeschlagene Anmeldungen. Das Protokoll ist in der Länge begrenzt – bei sehr
+   viel Verkehr zählen nur die noch gespeicherten Einträge. */
+function fw_zahlen(int $sekunden): array
+{
+    $ab = time() - $sekunden;
     $angriffe = 0; $gesperrt = 0; $fehlAnm = 0;
-    foreach ($tag as $e) {
+    foreach (store_read('verkehr') ?? [] as $e) {
+        if ((int)($e['t'] ?? 0) <= $ab) continue;
         $w = (string)($e['why'] ?? ''); $n = (int)($e['n'] ?? 1);
         if (strpos($w, 'Firewall:') === 0 || strpos($w, 'Falle:') === 0) $angriffe += $n;
         if (strpos($w, 'Gesperrt:') === 0) $gesperrt += $n;
         if ($w === 'Anmeldung fehlgeschlagen') $fehlAnm += $n;
     }
-    $F = fw();
-    return ['fw' => $F, 'modi' => FW_WAF_MODI, 'sperrMinuten' => FW_SPERR_MINUTEN, 'vorlagen' => array_map(fn($x) => ['label' => $x['label'], 'text' => $x['text'], 'werte' => ['sec' => $x['sec'], 'fw' => $x['fw']]], FW_VORLAGEN),
-            'zahlen' => ['angriffe' => $angriffe, 'abgewiesen' => $gesperrt, 'anmeldungFehl' => $fehlAnm, 'gesperrteAdressen' => count($auto) + count($manuell)],
-            'manuell' => $manuell, 'auto' => array_slice($auto, 0, 300), 'autoGesamt' => count($auto), 'feed' => fw_feed_info(),
-            'meineIp' => client_ip(), 'mitschnitt' => (int)$F['mitschnittBis'] > $now ? (int)$F['mitschnittBis'] : 0,
-            'verkehr' => fw_verkehr_liste($filter, 0)];
+    return ['angriffe' => $angriffe, 'abgewiesen' => $gesperrt, 'anmeldungFehl' => $fehlAnm];
 }
 function fw_verkehr_liste(string $filter, int $seit): array
 {

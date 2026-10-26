@@ -154,6 +154,7 @@ function oidc_nutzer(): ?array
         $_SESSION['authAt'] = $id['authTime'];
         // Bestätigung sensibler Aktionen = Zeitpunkt der letzten echten Anmeldung bei Keycloak, nicht der Sitzungsbeginn hier
         $_SESSION['adminConfirmedAt'] = $id['authTime'];
+        oidc_anmeldung_merken($u, $id['authTime']);
     } else {
         // Erneute Anmeldung bei Keycloak (oidc_neu_anmelden): neuer Anmeldezeitpunkt bestätigt sensible Aktionen
         if ($id['authTime'] > (int)($_SESSION['authAt'] ?? 0)) {
@@ -165,6 +166,18 @@ function oidc_nutzer(): ?array
         oidc_gesehen();
     }
     return $u;
+}
+/* Letzte Anmeldung am Mitarbeiterkonto (lastLogin) = Anmeldezeitpunkt bei Keycloak (auth_time) – für „letzte Anmeldung“ und
+   ungenutzte Konten (Modul Sicherheit). Geschrieben nur, wenn die Anmeldung neuer ist (eine Anmeldung gilt für alle Hosts). */
+function oidc_anmeldung_merken(array $u, int $authTime): void
+{
+    if ($authTime <= 0) return;
+    $alt = strtotime((string)($u['lastLogin'] ?? '')) ?: 0;
+    if ($authTime <= $alt + 60) return;
+    $wann = gmdate('Y-m-d\TH:i:s\Z', min($authTime, time()));
+    user_update((string)$u['id'], function (array &$x) use ($wann) {
+        if ((strtotime((string)($x['lastLogin'] ?? '')) ?: 0) < strtotime($wann)) $x['lastLogin'] = $wann;
+    });
 }
 /* Sitzungsregister aktuell halten (Anzeige „zuletzt aktiv“, Adresse) – wie bei der bisherigen Anmeldung */
 function oidc_gesehen(): void

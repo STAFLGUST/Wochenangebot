@@ -9,6 +9,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $u = current_user();
             $noUsers = !users_load();
+            if ($u) bericht_anstossen();   // Wochenbericht der Sicherheit: einmal je Woche, versendet nach der Antwort (lib/bereitschaft.php)
             respond(['ok' => true, 'setupRequired' => $noUsers && setup_allowed(), 'setupLocked' => $noUsers && !setup_allowed(), 'loggedIn' => (bool)$u, 'csrf' => $u ? $_SESSION['csrf'] : null,
                      'user' => $u ? me_payload($u) : null, 'company' => $CFG['company'], 'wartung' => $u ? wartung() : null, 'testumgebung' => testumgebung(),
                      // Wartung des Eingabebereichs (lib/module.php): Hinweis für Administratoren, Sperrbildschirm für alle anderen

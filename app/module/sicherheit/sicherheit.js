@@ -1,6 +1,6 @@
 /* STAFL-Plattform · Sicherheit (Modul sicherheit, Oberfläche sicherheit.intern; docs/plattform/modul-sicherheit.md)
-   Reiter: Lagebild, Notfall, Firewall & Sperren, Anmeldung & Sitzungen, Dateiprüfung, Ereignisse, Einstellungen & Vorlagen,
-   Privilegierte Konten. Hauptansichten zeigen Lage, Listen und Zustände; Details, Bearbeiten und Bestätigungen öffnen sich in
+   Reiter: Lagebild (mit Wochenbericht und Bereitschaft), Notfall (mit Leitfaden und Probealarm), Firewall & Sperren,
+   Anmeldung & Sitzungen, Dateiprüfung, Ereignisse, Einstellungen & Vorlagen, Konten (privilegierte und ungenutzte). Hauptansichten zeigen Lage, Listen und Zustände; Details, Bearbeiten und Bestätigungen öffnen sich in
    einem Dialog (#sic-dlg, nie verschachtelt; mehrstufige Vorgänge ersetzen seinen Inhalt). Alle Rechte prüft der Server bei
    jeder Aktion (GR-103) – ausgeblendete Reiter und Knöpfe sind nur Anzeige. Bestätigung sensibler Aktionen: auf Keycloak-Hosts
    erneute Anmeldung (reauth_required, Rücksprung hierher), sonst Passwort im Dialog (confirmation_required → reauth).
@@ -220,7 +220,15 @@
     if (n) band.innerHTML = `${icon('alarm')}<div><strong>Notfallmodus aktiv</strong> seit ${esc(zeit(n.seit))} Uhr${n.von ? ` · ausgelöst von ${esc(n.von)}` : ''}${n.grund ? ` · ${esc(n.grund)}` : ''}
       <span class="sub">Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle sind ausgesperrt, E-Mail-Versand pausiert.</span></div>${S.tab !== 'notfall' ? '<button type="button" class="btn sm" data-geh="notfall">Zum Notfall</button>' : ''}`;
   }
-  async function lageLaden() { S.lage = await api('sicherheit_lage'); S.rechte = S.lage.rechte; notfallBand(); return S.lage; }
+  /* Offener Probealarm (Übung): Band in allen Reitern, bis man ihn als „gesehen“ bestätigt */
+  function probeBand() {
+    const p = S.lage && S.lage.probeOffen, b = $('#sic-probeband');
+    b.hidden = !p;
+    if (p) b.innerHTML = `${icon('uebung')}<div><strong>Probealarm – Übung ohne Wirkung</strong> · ${esc(p.vonName)} um ${esc(uhr(p.t))} Uhr
+      <span class="sub">Bitte bestätigen Sie, dass die Meldung bei Ihnen angekommen ist. Es wurde nichts gesperrt.</span></div>
+      <button type="button" class="btn sm" id="probe-gesehen" data-id="${esc(p.id)}">${icon('check')}Gesehen</button>`;
+  }
+  async function lageLaden() { S.lage = await api('sicherheit_lage'); S.rechte = S.lage.rechte; notfallBand(); probeBand(); return S.lage; }
 
   /* ---------- gemeinsame Bausteine ---------- */
   const karte = (l, titel, wert, text, ziel = '') => {
@@ -228,6 +236,7 @@
     return ziel && erlaubt(ziel) ? `<button type="button" class="sic-karte ${l}" data-geh="${ziel}">${inhalt}</button>` : `<div class="sic-karte ${l}">${inhalt}</div>`;
   };
   const leer = (t) => `<p class="sic-leer">${t}</p>`;
+  const dauerSek = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} Std. ${Math.floor((s % 3600) / 60)} Min.` : s >= 60 ? `${Math.floor(s / 60)} Min.` : `${Math.max(0, s)} Sek.`);
   const block = (titel, inhalt, extra = '', id = '') => `<section class="sic-block sic-glas"${id ? ` id="${id}"` : ''}><div class="sic-bkopf"><h3>${titel}</h3>${extra}</div>${inhalt}</section>`;
   function sicherungKarte(b) {
     if (!b || !b.t) return karte('warn', 'Datensicherung', 'keine', 'noch keine automatische Sicherung');
@@ -309,10 +318,52 @@
           '<button type="button" class="btn sm" id="sic-cf-alle" aria-pressed="false">Alle anzeigen</button>')}
         ${block('Letzte Ereignisse', L.ereignisse.length ? `<ul class="sic-evliste">${L.ereignisse.map((e, i) => `<li><button type="button" data-lev="${i}"><span class="sic-pille ${e.stufe}">${esc(EV_ART[e.art] || e.art)}</span><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(zeit(e.t))} Uhr${e.n ? ' · ' + esc(e.n) : ''}</span></button></li>`).join('')}</ul>
           <button type="button" class="btn sm" data-geh="ereignisse">Alle Ereignisse</button>` : leer('Keine Sicherheitsereignisse in den letzten 7 Tagen.'))}
-      </div>`;
+      </div>
+      <div class="sic-zwei">${berichtBlock()}${bereitBlock()}</div>`;
     gesamt();
     cfKnopf();
     browserPruefungen();
+  }
+  /* Wochenbericht: Versand, Empfänger, letzter Versand; Ansehen im Dialog (wie die E-Mail) */
+  function berichtBlock() {
+    const B = S.lage.bericht;
+    if (!B) return '';
+    const l = B.verlauf[0];
+    return block(`Wochenbericht <span class="sub">E-Mail</span>`, `<dl class="sic-dl eng">
+        <dt>Versand</dt><dd>${B.an ? `jeden ${esc(B.tage[B.tag])}${B.naechster ? ` <span class="sub">· nächster ${esc(zeit(B.naechster))} Uhr</span>` : ''}` : '<span class="sic-pille">aus</span>'}</dd>
+        <dt>Empfänger</dt><dd>${B.empfaenger.length ? esc(B.empfaenger.join(', ')) : '<span class="sic-pille bad">keine eingetragen</span>'}</dd>
+        <dt>zuletzt</dt><dd>${l ? `${esc(zeit(l.t))} Uhr${l.ok ? ` <span class="sub">· ${l.auto ? 'automatisch' : esc(l.von)}</span>` : ` <span class="sic-pille bad">${esc(l.fehler || 'nicht zugestellt')}</span>`}` : 'noch nicht versendet'}</dd></dl>
+      <div class="sic-knoepfe sic-blockfuss"><button type="button" class="btn sm" data-bericht>${icon('bericht')}Bericht ansehen</button>${S.rechte.admin ? `<button type="button" class="btn sm" data-geh="einstellungen">Einstellen</button>` : ''}</div>`, '', 'sic-berichtblock');
+  }
+  /* Bereitschaft: letzter Probealarm, Leitfaden und Ansprechpartner */
+  function bereitBlock() {
+    const P = (S.lage.proben || [])[0], L = S.lage.leitfaden;
+    return block('Bereitschaft für den Ernstfall', `<dl class="sic-dl eng">
+        <dt>Letzter Probealarm</dt><dd>${P ? `${esc(datum(P.t))} <span class="sub">· ${zahl(P.ok)} von ${zahl(P.gesamt)} in Ordnung · ${plural(P.quittiert.length, 'Bestätigung', 'Bestätigungen')}</span>` : '<span class="sic-pille warn">noch keiner</span>'}</dd>
+        <dt>Leitfaden</dt><dd>${L.standard ? 'Vorlage' : 'eigene Schritte'} <span class="sub">· ${plural(L.schritte.length, 'Schritt', 'Schritte')}</span></dd>
+        <dt>Ansprechpartner</dt><dd>${L.kontakte.length ? esc(L.kontakte.map((k) => k.name || k.rolle).join(', ')) : '<span class="sic-pille warn">keine eingetragen</span>'}</dd></dl>
+      <div class="sic-knoepfe sic-blockfuss"><button type="button" class="btn sm" data-geh="notfall">Zum Leitfaden</button>${S.rechte.notfall && !S.lage.notfall ? `<button type="button" class="btn sm" data-probe-start>${icon('uebung')}Probealarm …</button>` : ''}</div>`);
+  }
+  async function berichtDialog() {
+    const r = await api('sicherheit_bericht');
+    const B = r.bericht, E = r.einstellungen;
+    const ST = { ok: 'alles in Ordnung', warn: 'mit Hinweisen', bad: 'Handlungsbedarf' };
+    const teil = B.abschnitte.map((a) => `<section class="br-abschnitt ${esc(a.stufe)}"><h4>${punkt(a.stufe)}${esc(a.titel)}</h4>
+        <table class="sic-tabelle klein"><tbody>${a.zeilen.map((z) => `<tr><td class="lv-h">${punkt(z[2] || 'info')}</td><td>${esc(z[0])}</td><td class="num-s"><strong>${esc(z[1])}</strong></td></tr>`).join('')}</tbody></table>
+        ${a.liste.length ? `<ul class="br-liste">${a.liste.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${a.hinweis ? `<p class="sic-hinweis">${esc(a.hinweis)}</p>` : ''}</section>`).join('');
+    dialog(`${dKopf('Sicherheitsbericht', `${esc(datum(B.von))} – ${esc(datum(B.bis))} · <span class="sic-pille ${esc(B.stufe)}">${ST[B.stufe] || ''}</span>`)}<div class="sic-dinhalt">
+        <div class="br-raster">${teil}</div>
+        <p class="sic-hinweis">So sieht auch die E-Mail aus${E.an ? ` – automatisch jeden ${esc(E.tage[E.tag])}` : ''}. Empfänger: ${E.empfaenger.length ? esc(E.empfaenger.join(', ')) : 'noch keine (Verwaltung → E-Mail → Benachrichtigungen → Sicherheitsereignisse)'}.</p></div>
+      ${dFuss(`<button type="button" class="btn" data-d="zu">Schließen</button>${S.rechte.admin ? `<button type="button" class="btn primary" data-d="senden"${E.empfaenger.length ? '' : ' disabled'}>${icon('post')}Jetzt senden</button>` : ''}`)}`,
+    { breit: true, handler: async (a) => {
+      if (a !== 'senden') return;
+      const x = await api('sicherheit_bericht_senden', { body: {} });
+      S.lage.bericht = x.einstellungen;
+      dialogZu();
+      toast(x.versand.ok ? `Bericht an ${plural(x.versand.ok, 'Empfänger', 'Empfänger')} gesendet.` : `Bericht nicht zugestellt: ${x.versand.fehler || 'unbekannter Fehler'}`, !x.versand.ok);
+      const bb = $('#sic-berichtblock');
+      if (bb) bb.outerHTML = berichtBlock();
+    } });
   }
   function gesamt() {
     const el = $('#sic-gesamt');
@@ -412,11 +463,15 @@
         <div class="sic-held-icon">${icon('schild', 'gross')}</div>
         <div class="sic-held-text"><span class="sic-ueber">Normalbetrieb</span><h2>Kein Notfall aktiv</h2>
           <p>Bei einem Sicherheitsvorfall – etwa einem übernommenen Konto, auffälligen Änderungen oder einem laufenden Angriff – sperrt der Notfallmodus mit einem Schritt alle Zugänge außer denen der Administratoren.</p></div>
-        <div class="sic-held-knopf">${r.rechte.notfall ? `<button type="button" class="btn gefahr gross" id="nf-an">${icon('alarm')}Notfall auslösen …</button>` : '<p class="sub">Auslösen dürfen Administratoren und Mitarbeiter mit dem Recht „Notfall auslösen“.</p>'}</div>
+        <div class="sic-held-knopf">${r.rechte.notfall ? `<button type="button" class="btn gefahr gross" id="nf-an">${icon('alarm')}Notfall auslösen …</button>
+          <button type="button" class="btn" data-probe-start>${icon('uebung')}Probealarm …</button><span class="sub">Übung ohne Wirkung</span>` : '<p class="sub">Auslösen dürfen Administratoren und Mitarbeiter mit dem Recht „Notfall auslösen“.</p>'}</div>
       </section>`;
     const punkte = W.punkte.map(([k, t]) => `<li>${icon(WIRKUNG_ICON[k] || 'check')}<span>${esc(t)}</span></li>`).join('');
     const verlauf = (r.verlauf || []).map((v, i) => `<tr class="sic-klick" data-nfv="${i}" tabindex="0"><td class="num-s">${esc(zeit(v.seit))}</td><td>${esc(dauerText(v.seit, v.bis))}</td><td>${esc(v.von)}</td><td>${esc(v.beendetVon)}</td><td>${esc(v.grund)}</td></tr>`).join('');
-    host.innerHTML = `${hero}
+    const lf = leitfadenHtml();
+    const unten = r.rechte.sehen ? `<div class="sic-zwei">${block('Letzte Notfälle', verlauf ? `<div class="sic-tabrahmen"><table class="sic-tabelle"><thead><tr><th>Beginn</th><th>Dauer</th><th>ausgelöst von</th><th>beendet von</th><th>Grund</th></tr></thead><tbody>${verlauf}</tbody></table></div>` : leer('Bisher wurde kein Notfall ausgelöst.'))}${probenHtml()}</div>`
+      : r.rechte.notfall ? probenHtml() : '';
+    host.innerHTML = `${hero}${n ? lf : ''}
       <div class="sic-zwei">
         ${block(n ? 'Was jetzt gilt' : 'Was beim Auslösen passiert', `<ul class="sic-wirkungen">${punkte}</ul>
           <p class="sic-zahlen"><span><strong>${zahl(Z.mitarbeiterSitzungen)}</strong> Mitarbeitersitzungen ohne Administratorrolle</span><span><strong>${zahl(Z.kundenOnline)}</strong> Kunden angemeldet</span><span><strong>${zahl(Z.adminSitzungen)}</strong> Administratorsitzungen</span></p>`)}
@@ -424,8 +479,118 @@
           <p class="sic-chips">${W.bereiche.map((b) => `<span class="sic-chip">${esc(b)}</span>`).join('')}</p>
           <p class="sic-hinweis">Immer erreichbar bleiben das Dashboard, die zentrale Anmeldung und diese Sicherheitszentrale. Ein Server-Werkzeug beendet den Notfall auch ohne Oberfläche: <span class="mono-s">sh deploy/notfall-aus.sh</span>.</p>`)}
       </div>
-      ${r.rechte.sehen ? block('Letzte Notfälle', verlauf ? `<div class="sic-tabrahmen"><table class="sic-tabelle"><thead><tr><th>Beginn</th><th>Dauer</th><th>ausgelöst von</th><th>beendet von</th><th>Grund</th></tr></thead><tbody>${verlauf}</tbody></table></div>` : leer('Bisher wurde kein Notfall ausgelöst.')) : ''}`;
+      ${n ? '' : lf}${unten}`;
     entwurfFortsetzen();
+  }
+
+  /* ---------- Leitfaden für den Ernstfall (im Notfall abhakbar) ---------- */
+  function leitfadenHtml() {
+    const r = S.lage, L = r.leitfaden, n = r.notfall, H = L.haken || {};
+    const abhaken = !!n && r.rechte.notfall;
+    const fertig = L.schritte.filter((x) => H[x.id]).length;
+    const schritte = L.schritte.map((x, i) => {
+      const h = H[x.id];
+      const marke = abhaken ? `<button type="button" class="lf-marke" data-lf="${esc(x.id)}" aria-pressed="${h ? 'true' : 'false'}" title="${h ? 'Zurücknehmen' : 'Als erledigt abhaken'}"><span class="sr-only">${esc(x.titel)}: ${h ? 'erledigt' : 'offen'}</span>${h ? icon('check') : `<span aria-hidden="true">${i + 1}</span>`}</button>`
+        : `<span class="lf-marke" aria-hidden="true">${h ? icon('check') : i + 1}</span>`;
+      return `<li class="lf-schritt${h ? ' erledigt' : ''}">${marke}<div><strong>${esc(x.titel)}</strong>${x.text ? `<p>${esc(x.text)}</p>` : ''}${h ? `<span class="sub">erledigt ${esc(uhr(h.t))} Uhr · ${esc(h.name)}</span>` : ''}</div></li>`;
+    }).join('');
+    const wege = (k) => [k.telefon ? `<a href="tel:${esc(k.telefon.replace(/[^0-9+]/g, ''))}">${icon('telefon')}${esc(k.telefon)}</a>` : '', k.email ? `<a href="mailto:${esc(k.email)}">${icon('post')}${esc(k.email)}</a>` : ''].join('');
+    const kontakte = L.kontakte.length ? `<ul class="lf-kontakte">${L.kontakte.map((k) => `<li><span class="sic-av" aria-hidden="true">${esc(initialen(k.name || k.rolle))}</span><div><strong>${esc(k.name || k.rolle)}</strong>${k.name && k.rolle ? `<span class="sub">${esc(k.rolle)}</span>` : ''}<span class="lf-wege">${wege(k)}</span></div></li>`).join('')}</ul>`
+      : leer(r.rechte.admin ? 'Noch keine Ansprechpartner – über „Bearbeiten“ Telefonnummern von Geschäftsführung und IT-Dienstleister eintragen.' : 'Noch keine Ansprechpartner eingetragen.');
+    const anteil = Math.round((fertig / Math.max(1, L.schritte.length)) * 100);
+    const fortschritt = n ? `<div class="lf-stand"><div class="lf-balken" role="progressbar" aria-label="Erledigte Schritte" aria-valuemin="0" aria-valuemax="${L.schritte.length}" aria-valuenow="${fertig}"><span style="--anteil:${anteil}%"></span></div>
+      <span><strong>${zahl(fertig)}</strong> von ${zahl(L.schritte.length)} Schritten erledigt${abhaken ? '' : ' <span class="sub">(abhaken: Recht „Notfall auslösen“)</span>'}</span></div>` : '';
+    return block(`Leitfaden für den Ernstfall${L.standard ? ' <span class="sic-pille">Vorlage</span>' : ''}`, `${fortschritt}
+      <div class="lf-raster"><ol class="lf-schritte">${schritte}</ol><div class="lf-seite"><h4>${icon('telefon')}Ansprechpartner</h4>${kontakte}${L.hinweis ? `<p class="lf-notiz">${esc(L.hinweis)}</p>` : ''}</div></div>
+      ${L.geaendert ? `<p class="sic-hinweis">Zuletzt geändert ${esc(zeit(L.geaendert))} Uhr von ${esc(L.von)}.</p>` : ''}`,
+    r.rechte.admin ? `<button type="button" class="btn sm" id="lf-bearbeiten">${icon('stift')}Bearbeiten …</button>` : '', 'sic-leitfaden');
+  }
+  function leitfadenNeu(fokus = '') {
+    const el = $('#sic-leitfaden');
+    if (!el) return;
+    el.outerHTML = leitfadenHtml();
+    const f = fokus && $(`#sic-leitfaden [data-lf="${CSS.escape(fokus)}"]`);
+    if (f) f.focus();
+  }
+  function leitfadenDialog() {
+    const L = S.lage.leitfaden;
+    const sZeile = (x = { id: '', titel: '', text: '' }) => `<div class="lf-ed-zeile" data-id="${esc(x.id)}"><div class="lf-ed-felder">
+        <input type="text" class="lf-ed-titel" maxlength="80" placeholder="Überschrift, z. B. Ansprechpartner informieren" value="${esc(x.titel)}" aria-label="Überschrift">
+        <textarea class="lf-ed-text" rows="2" maxlength="400" placeholder="Was ist zu tun?" aria-label="Beschreibung">${esc(x.text)}</textarea></div>
+      <div class="lf-ed-knoepfe"><button type="button" class="sic-rund klein" data-d="hoch" aria-label="Nach oben" title="Nach oben">${icon('hoch')}</button><button type="button" class="sic-rund klein" data-d="weg" aria-label="Schritt entfernen" title="Entfernen">${icon('x')}</button></div></div>`;
+    const kZeile = (k = {}) => `<div class="lf-ed-kontakt">
+        <input type="text" class="k-rolle" maxlength="60" placeholder="Aufgabe, z. B. IT-Dienstleister" value="${esc(k.rolle || '')}" aria-label="Aufgabe">
+        <input type="text" class="k-name" maxlength="80" placeholder="Name" value="${esc(k.name || '')}" aria-label="Name">
+        <input type="tel" class="k-tel" maxlength="40" placeholder="Telefon" value="${esc(k.telefon || '')}" aria-label="Telefon">
+        <input type="email" class="k-mail" maxlength="120" placeholder="E-Mail" value="${esc(k.email || '')}" aria-label="E-Mail">
+        <button type="button" class="sic-rund klein" data-d="k-weg" aria-label="Ansprechpartner entfernen" title="Entfernen">${icon('x')}</button></div>`;
+    dialog(`${dKopf('Leitfaden bearbeiten', 'Schritte und Ansprechpartner für den Ernstfall')}<div class="sic-dinhalt">
+        <h4>Schritte</h4><div class="lf-ed-liste" id="lf-ed-schritte">${L.schritte.map(sZeile).join('')}</div>
+        <div class="sic-knoepfe"><button type="button" class="btn sm" data-d="s-plus">${icon('plus')}Schritt hinzufügen</button><button type="button" class="btn sm" data-d="vorlage">Vorlage einsetzen</button></div>
+        <h4>Ansprechpartner</h4><div class="lf-ed-liste" id="lf-ed-kontakte">${(L.kontakte.length ? L.kontakte : [{}]).map(kZeile).join('')}</div>
+        <div class="sic-knoepfe"><button type="button" class="btn sm" data-d="k-plus">${icon('plus')}Ansprechpartner hinzufügen</button></div>
+        <label class="sic-feld">Hinweis <small>(optional, z. B. wo die Unterlagen für den Notfall liegen – keine Passwörter eintragen)</small><textarea id="lf-hinweis" rows="2" maxlength="500">${esc(L.hinweis)}</textarea></label>
+        <p class="sic-hinweis">Sichtbar für Administratoren und Mitarbeiter mit „Notfall auslösen“ oder „Sicherheit ansehen“.</p></div>
+      ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">Speichern</button>')}`,
+    { breit: true, fokus: '.lf-ed-titel', handler: async (a, b) => {
+      const liste = $('#lf-ed-schritte', dlg), kliste = $('#lf-ed-kontakte', dlg);
+      if (a === 's-plus') { liste.insertAdjacentHTML('beforeend', sZeile()); $('.lf-ed-zeile:last-child .lf-ed-titel', liste).focus(); return; }
+      if (a === 'k-plus') { kliste.insertAdjacentHTML('beforeend', kZeile()); $('.lf-ed-kontakt:last-child .k-rolle', kliste).focus(); return; }
+      if (a === 'vorlage') { liste.innerHTML = L.vorlage.map(sZeile).join(''); $('.lf-ed-titel', liste).focus(); return; }
+      if (a === 'weg' || a === 'k-weg') { const z = b.closest('.lf-ed-zeile, .lf-ed-kontakt'), nb = z.nextElementSibling || z.previousElementSibling; z.remove(); if (nb) $('input', nb).focus(); return; }
+      if (a === 'hoch') { const z = b.closest('.lf-ed-zeile'); if (z.previousElementSibling) z.parentNode.insertBefore(z, z.previousElementSibling); b.focus(); return; }
+      if (a !== 'submit') return;
+      const schritte = $$('.lf-ed-zeile', dlg).map((z) => ({ id: z.dataset.id, titel: $('.lf-ed-titel', z).value.trim(), text: $('.lf-ed-text', z).value.trim() })).filter((x) => x.titel || x.text);
+      const kontakte = $$('.lf-ed-kontakt', dlg).map((z) => ({ rolle: $('.k-rolle', z).value.trim(), name: $('.k-name', z).value.trim(), telefon: $('.k-tel', z).value.trim(), email: $('.k-mail', z).value.trim() }))
+        .filter((k) => k.rolle || k.name || k.telefon || k.email);
+      const wieVorlage = JSON.stringify(schritte.map((x) => [x.titel, x.text])) === JSON.stringify(L.vorlage.map((x) => [x.titel, x.text]));
+      const r = await api('sicherheit_leitfaden', { body: { schritte, standard: wieVorlage, kontakte, hinweis: $('#lf-hinweis', dlg).value } });
+      S.lage.leitfaden = { ...r.leitfaden, haken: L.haken || {} };
+      dialogZu(); toast('Leitfaden gespeichert.');
+      if (S.tab === 'notfall') leitfadenNeu(); else if (S.tab === 'lage') lageTab();
+    } });
+  }
+
+  /* ---------- Probealarm (Übung ohne Wirkung) ---------- */
+  function probenHtml() {
+    const l = S.lage.proben || [];
+    const stufe = (p) => (p.punkte.some((x) => x.stufe === 'bad') ? 'bad' : p.ok < p.gesamt ? 'warn' : 'ok');
+    const zeilen = l.map((p, i) => `<tr class="sic-klick" data-probe="${i}" tabindex="0"><td class="num-s">${esc(zeit(p.t))}</td><td>${esc(p.vonName)}</td>
+      <td><span class="sic-pille ${stufe(p)}">${zahl(p.ok)} / ${zahl(p.gesamt)}</span></td>
+      <td>${p.mail.ok ? `${zahl(p.mail.ok)} von ${zahl(p.mail.an)}` : '<span class="sic-pille bad">nicht zugestellt</span>'}</td>
+      <td>${p.quittiert.length ? `${zahl(p.quittiert.length)} <span class="sub">· schnellste ${esc(dauerSek(Math.min(...p.quittiert.map((q) => q.sek))))}</span>` : '<span class="sub">noch niemand</span>'}</td></tr>`).join('');
+    return block('Übungen <span class="sub">Probealarm</span>', zeilen ? `<div class="sic-tabrahmen"><table class="sic-tabelle"><thead><tr><th>Zeit</th><th>ausgelöst von</th><th>Bereitschaft</th><th>Meldung</th><th>gesehen</th></tr></thead><tbody>${zeilen}</tbody></table></div>`
+      : leer('Noch kein Probealarm. Er prüft die Bereitschaft und schickt eine Test-Meldung – ohne jede Wirkung.'),
+    S.rechte.notfall && !S.lage.notfall ? `<button type="button" class="btn sm" data-probe-start>${icon('uebung')}Probealarm …</button>` : '');
+  }
+  function probeDialog() {
+    if (S.lage.notfall) { toast('Während eines Notfalls ist kein Probealarm möglich.', true); return; }
+    dialog(`${dKopf('Probealarm', 'Übung für den Ernstfall – ohne jede Wirkung')}<div class="sic-dinhalt">
+        <p>Der Probealarm ändert nichts: Niemand wird gesperrt oder abgemeldet, Kunden merken nichts.</p>
+        <ul class="sic-wirkungen klein uebung">
+          <li>${icon('check')}<span>Bereitschaft prüfen: Empfänger der Meldung, Vertretung beim Auslösen und Beenden, zweiter Faktor der Administratoren, Ansprechpartner, Schutz vor Selbstaussperrung, Datensicherung.</span></li>
+          <li>${icon('glocke')}<span>Test-Meldung an die Empfänger der Sicherheitsereignisse. Wer sie sieht, bestätigt hier mit „Gesehen“ – die Reaktionszeit wird festgehalten.</span></li></ul></div>
+      ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('uebung')}Probealarm starten</button>`)}`,
+    { handler: async (a) => {
+      if (a !== 'submit') return;
+      const r = await api('sicherheit_probealarm', { body: {} });
+      S.lage.proben = r.proben;
+      probeErgebnis(r.probe, true);
+      if (S.tab === 'notfall') notfallTab(); else if (S.tab === 'lage') lageTab();
+    } });
+  }
+  function probeErgebnis(p, neu = false) {
+    const w = p.punkte.some((x) => x.stufe === 'bad') ? 'bad' : p.ok < p.gesamt ? 'warn' : 'ok';
+    const anteil = Math.round((p.ok / Math.max(1, p.gesamt)) * 100);
+    const punkte = p.punkte.map((x) => `<li>${punkt(x.stufe)}<div><strong>${esc(x.titel)}</strong><span>${esc(x.text)}</span>${x.hinweis ? `<span class="sub">${esc(x.hinweis)}</span>` : ''}</div></li>`).join('');
+    const gesehen = p.quittiert.length ? `<ul class="sic-verlauf">${p.quittiert.map((q) => `<li>${icon('check')}<strong>${esc(q.name)}</strong><span class="sub">nach ${esc(dauerSek(q.sek))}</span></li>`).join('')}</ul>`
+      : leer(neu ? 'Die Empfänger bestätigen die Meldung hier mit „Gesehen“ – danach steht hier, wie schnell.' : 'Noch niemand hat den Probealarm bestätigt.');
+    dialog(`${dKopf(neu ? 'Probealarm ausgeführt' : `Probealarm vom ${datum(p.t)}`, `${esc(zeit(p.t))} Uhr · ${esc(p.vonName)} · keine Wirkung`)}<div class="sic-dinhalt">
+        <div class="pb-kopf ${w}"><div class="sic-ring" style="--wert:${anteil}" role="img" aria-label="${zahl(p.ok)} von ${zahl(p.gesamt)} Prüfpunkten in Ordnung"><span>${zahl(p.ok)}<small>/${zahl(p.gesamt)}</small></span></div>
+          <div><strong>${w === 'ok' ? 'Bereit für den Ernstfall' : w === 'warn' ? 'Bereit, mit Lücken' : 'Lücken mit Handlungsbedarf'}</strong>
+          <span>${p.mail.ok ? `Test-Meldung an ${plural(p.mail.ok, 'Empfänger', 'Empfänger')} zugestellt` : `Test-Meldung nicht zugestellt${p.mail.fehler ? ` – ${esc(p.mail.fehler)}` : ''}`}</span></div></div>
+        <ul class="pb-punkte">${punkte}</ul><h4>Gesehen</h4>${gesehen}</div>
+      ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`, { breit: true });
   }
   function dauerText(a, b) {
     const s = Math.max(0, (new Date(b) - new Date(a)) / 1000);
@@ -434,15 +599,55 @@
   $('#tab-notfall').addEventListener('click', (e) => {
     if (e.target.closest('#nf-an')) notfallAuslosen();
     if (e.target.closest('#nf-aus')) notfallBeenden();
+    if (e.target.closest('#lf-bearbeiten')) leitfadenDialog();
+    const h = e.target.closest('[data-lf]');
+    if (h) {
+      lauf(h, async () => {
+        const id = h.dataset.lf;
+        const r = await api('sicherheit_leitfaden_haken', { body: { schritt: id, erledigt: h.getAttribute('aria-pressed') !== 'true' } });
+        S.lage.leitfaden.haken = r.haken;
+        leitfadenNeu(id);
+      });
+      return;
+    }
     const v = e.target.closest('[data-nfv]');
     if (v) notfallVerlaufDialog(S.lage.verlauf[+v.dataset.nfv]);
+    const pr = e.target.closest('[data-probe]');
+    if (pr) probeErgebnis(S.lage.proben[+pr.dataset.probe]);
+  });
+  $('#tab-notfall').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.target.matches('[data-nfv]')) notfallVerlaufDialog(S.lage.verlauf[+e.target.dataset.nfv]);
+    if (e.target.matches('[data-probe]')) probeErgebnis(S.lage.proben[+e.target.dataset.probe]);
+  });
+  /* überall: Probealarm starten, als gesehen bestätigen, Wochenbericht ansehen */
+  document.addEventListener('click', (e) => {
+    const ps = e.target.closest('[data-probe-start]');
+    if (ps) { probeDialog(); return; }
+    const g = e.target.closest('#probe-gesehen');
+    if (g) {
+      lauf(g, async () => {
+        const r = await api('sicherheit_probe_gesehen', { body: { id: g.dataset.id } });
+        S.lage.probeOffen = null; probeBand();
+        const i = (S.lage.proben || []).findIndex((p) => p.id === r.probe.id);
+        if (i >= 0) S.lage.proben[i] = r.probe;
+        toast('Danke – Ihre Bestätigung ist vermerkt.');
+        if (S.tab === 'notfall') notfallTab();
+      });
+      return;
+    }
+    const br = e.target.closest('[data-bericht]');
+    if (br) lauf(br, berichtDialog);
   });
   function notfallVerlaufDialog(v) {
     const w = v.wirkung || {};
+    const hk = Object.entries(v.haken || {}).sort((a, b) => String(a[1].t).localeCompare(String(b[1].t)));
+    const titel = (id) => (S.lage.leitfaden.schritte.find((x) => x.id === id) || { titel: id }).titel;
+    const haken = hk.length ? `<h4>Leitfaden <span class="sub">${plural(hk.length, 'Schritt', 'Schritte')} abgehakt</span></h4><ul class="sic-verlauf">${hk.map(([id, x]) => `<li>${icon('check')}<strong>${esc(titel(id))}</strong><span class="sub">${esc(uhr(x.t))} Uhr · ${esc(x.name)}</span></li>`).join('')}</ul>` : '';
     dialog(`${dKopf('Notfall vom ' + datum(v.seit), `${esc(zeit(v.seit))} – ${esc(zeit(v.bis))} Uhr · ${esc(dauerText(v.seit, v.bis))}`)}<div class="sic-dinhalt"><dl class="sic-dl">
       <dt>Grund</dt><dd>${esc(v.grund)}</dd><dt>ausgelöst von</dt><dd>${esc(v.von)}</dd><dt>beendet von</dt><dd>${esc(v.beendetVon)}</dd>${v.notiz ? `<dt>Notiz</dt><dd>${esc(v.notiz)}</dd>` : ''}
       <dt>Sitzungen beendet</dt><dd>${zahl(w.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(w.kundenSitzungen)} Kunden</dd><dt>Firewall</dt><dd>${esc(w.firewall || '—')}</dd>
-      <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl></div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+      <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl>${haken}</div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
   }
   /* Auslösen in Schritten: 1 Wirkung → 2 Grund, Optionen, Bestätigungswort → 3 Bestätigung (Passwort bzw. erneute Anmeldung) */
   function notfallAuslosen(entwurf = null) {
