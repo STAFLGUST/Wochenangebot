@@ -1440,7 +1440,7 @@ with sync_playwright() as pw:
     pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
     pk.wait_for_selector('#password')
     check('… Keycloak verlangt das Passwort erneut', pk.is_visible('#password'))
-    pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_selector('#db-grid .db-tile')
+    pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung weiter', code == 200 and j.get('loggedIn'), (code, j))
     # „Sitzung beenden“ in der Verwaltung: gilt auch, solange die Sitzung bei Keycloak und im Webserver-Modul noch läuft
@@ -1458,7 +1458,7 @@ with sync_playwright() as pw:
     check('… danach dort weiter', pa_k.url.startswith(A + '/admin/'), pa_k.url)
     code, j = pk.evaluate(stat)
     pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
-    pk.wait_for_selector('#password'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_selector('#db-grid .db-tile')
+    pk.wait_for_selector('#password'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung wieder möglich', code == 200 and j.get('loggedIn'), (code, j))
     check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))

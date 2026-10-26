@@ -148,8 +148,12 @@ function oidc_nutzer(): ?array
     // Abgelaufen (Inaktivität) oder in Verwaltung → Sitzungen beendet: weiter erst nach erneuter Anmeldung bei Keycloak
     [$ende, $grund] = oidc_ende_zeit($id, $u);
     if ($ende > 0) {
-        if ($id['authTime'] <= $ende) oidc_erneuern($u, $grund, $ende);
-        unset($_SESSION['oidcEnde'], $_SESSION['oidcErneuert']);
+        // Inaktivität: Anmeldezeitpunkt bei Keycloak zum Zeitpunkt des Ablaufs merken – weiter erst mit einer NEUEN Anmeldung
+        // (späterer auth_time). Unabhängig von Uhrabweichungen zwischen Keycloak und diesem Server.
+        if ($grund === 'inaktiv' && !isset($_SESSION['oidcEndeAuth'])) $_SESSION['oidcEndeAuth'] = $id['authTime'];
+        $neu = $grund === 'inaktiv' ? $id['authTime'] > (int)$_SESSION['oidcEndeAuth'] : $id['authTime'] > $ende;
+        if (!$neu) oidc_erneuern($u, $grund, $ende, $id['authTime']);
+        unset($_SESSION['oidcEnde'], $_SESSION['oidcEndeAuth'], $_SESSION['oidcErneuert']);
     }
     $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
         && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'] && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
@@ -210,7 +214,7 @@ function oidc_ende_zeit(array $id, array $u): array
     return [$ende, $grund];
 }
 /* Erneute Anmeldung bei Keycloak verlangen; Schutz vor Endlosschleifen wie bei der zweiten Stufe (3 in 10 Minuten) */
-function oidc_erneuern(array $u, string $grund, int $ende): never
+function oidc_erneuern(array $u, string $grund, int $ende, int $authTime = 0): never
 {
     $a = $_SESSION['oidcErneuert'] ?? [];
     $a = array_values(array_filter(is_array($a) ? $a : [], fn($t) => (int)$t > time() - 600));
@@ -222,6 +226,7 @@ function oidc_erneuern(array $u, string $grund, int $ende): never
         audit('oidc_ablauf', $grund === 'beendet' ? 'Beendete Sitzung: erneute Anmeldung bei Keycloak verlangt' : 'Sitzung wegen Inaktivität abgelaufen: erneute Anmeldung bei Keycloak verlangt', [], $u);
     }
     respond(['ok' => false, 'code' => 'reauth_required', 'anmelden' => oidc_neu_anmelden_adresse(),
+             'stand' => ['anmeldung' => $authTime, 'ende' => $ende, 'grund' => $grund],   // nur Zeitpunkte der eigenen Sitzung (Fehlersuche)
              'error' => $grund === 'beendet' ? 'Ihre Sitzung wurde beendet. Bitte melden Sie sich erneut an.' : 'Ihre Sitzung ist wegen Inaktivität abgelaufen. Bitte melden Sie sich erneut an.'], 403);
     exit;
 }
