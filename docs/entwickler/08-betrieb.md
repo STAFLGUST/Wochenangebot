@@ -208,9 +208,11 @@ ohne SSH-Tunnel. Benutzernamen wie im Eingabebereich.
 | `liste` | Konten anzeigen |
 | `mail-einrichten [<adresse>]` | Mailversand von Keycloak über das Postfach der Anwendung, Testmail |
 | `design-setzen [standard]` | Anmeldeseite im Plattform-Design bzw. Rückfall auf Standard |
-| `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients) |
+| `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients; Stand 8: Client `konten` für die Verwaltung) |
 
-Neue Mitarbeiter brauchen beides: Mitarbeiterkonto im Eingabebereich (Rechte) und Keycloak-Konto (Identität). Konten
+Neue Mitarbeiter brauchen beides: Mitarbeiterkonto im Eingabebereich (Rechte) und Keycloak-Konto (Identität). Seit Stand 8 legt der
+Administrator das Keycloak-Konto auch direkt im Mitarbeiter an (Abschnitt „Zentrale Anmeldung“: anlegen, Passwort setzen,
+entsperren, Link per Mail – `app/api/lib/anmeldekonten.php`); die Konsolenbefehle bleiben für Notfälle und den zweiten Faktor. Konten
 nie löschen und neu anlegen – die Verknüpfung hängt an der Keycloak-Kennung. `realm-mitarbeiter.json` wird von
 `werkzeuge/realm_produktion.py` erzeugt, nicht von Hand geändert. Neue Modul-Hosts brauchen außerdem DNS, Caddy-Eintrag
 und Client – alles mit Freigabe ([Inbetriebnahme](../plattform/inbetriebnahme-anmeldung.md)).

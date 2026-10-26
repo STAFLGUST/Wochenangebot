@@ -96,10 +96,10 @@ EOF
   tar xzf "$LADEN/keycloak-$KC_VERSION.tar.gz" -C "$OIDC_WORK"
   local kc="$OIDC_WORK/keycloak-$KC_VERSION"
   mkdir -p "$kc/data/import"
-  # Wie im Betrieb: der erste Import kannte die Clients „verwaltung“ (Stand 3), „bestand“ (Stand 4), „hr“ (Stand 5) und „crm“
-  # (Stand 6) noch nicht – sie legt konten.sh realm-aktualisieren an
+  # Wie im Betrieb: der erste Import kannte die Clients „verwaltung“ (Stand 3), „bestand“ (Stand 4), „hr“ (Stand 5), „crm“
+  # (Stand 6), „marketing“ (Stand 7) und „konten“ (Stand 8) noch nicht – sie legt konten.sh realm-aktualisieren an
   sed -e "s/@GEHEIM_DASHBOARD@/$OIDC_SECRET_DASHBOARD/" -e "s/@GEHEIM_ANGEBOT@/$OIDC_SECRET_ANGEBOT/" "$HIER/realm-mitarbeiter.json" \
-    | python3 -c 'import json,sys; r=json.load(sys.stdin); r["clients"]=[c for c in r["clients"] if c["clientId"] not in ("verwaltung","bestand","hr","crm","marketing")]; json.dump(r,sys.stdout,ensure_ascii=False)' \
+    | python3 -c 'import json,sys; r=json.load(sys.stdin); r["clients"]=[c for c in r["clients"] if c["clientId"] not in ("verwaltung","bestand","hr","crm","marketing","konten")]; json.dump(r,sys.stdout,ensure_ascii=False)' \
     > "$kc/data/import/realm-mitarbeiter.json"
   export KC_DB=postgres KC_DB_URL="jdbc:postgresql://127.0.0.1:$PG_PORT/keycloak" KC_DB_USERNAME=keycloak
   export KC_HOSTNAME="https://login.stafl.test:$OIDC_PORT" KC_HTTP_ENABLED=true KC_HTTP_HOST=127.0.0.1 KC_HTTP_PORT="$KC_PORT"
@@ -152,13 +152,16 @@ EOF
     sh deploy/anmeldung/konten.sh realm-aktualisieren) > "$OIDC_WORK/realm-aktualisieren.log" 2>&1 \
     || { cat "$OIDC_WORK/realm-aktualisieren.log" >&2; exit 1; }
   # Geheimnisse der neuen Clients hat realm-aktualisieren in .env der Installation erzeugt – wie auf dem Server übernehmen
-  grep -E '^OIDC_(SECRET|CRYPTO)_(VERWALTUNG|BESTAND|HR|CRM|MARKETING)=' "$OIDC_WORK/installation/.env" >> "$OIDC_WORK/geheim.env"
+  grep -E '^OIDC_(SECRET|CRYPTO)_(VERWALTUNG|BESTAND|HR|CRM|MARKETING|KONTEN)=' "$OIDC_WORK/installation/.env" >> "$OIDC_WORK/geheim.env"
+  # Mitarbeiterkonten aus der Verwaltung (lib/anmeldekonten.php): Keycloak direkt, wie im Betrieb im internen Netz
+  echo "WA_KONTEN_URL=http://127.0.0.1:$KC_PORT" >> "$OIDC_WORK/geheim.env"
   set -a; . "$OIDC_WORK/geheim.env"; set +a
   [ -n "${OIDC_SECRET_VERWALTUNG:-}" ] && [ -n "${OIDC_CRYPTO_VERWALTUNG:-}" ] || { echo "realm-aktualisieren hat keine Werte für die Verwaltung erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_BESTAND:-}" ] && [ -n "${OIDC_CRYPTO_BESTAND:-}" ] || { echo "realm-aktualisieren hat keine Werte für den Bestand erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_HR:-}" ] && [ -n "${OIDC_CRYPTO_HR:-}" ] || { echo "realm-aktualisieren hat keine Werte für HR erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_CRM:-}" ] && [ -n "${OIDC_CRYPTO_CRM:-}" ] || { echo "realm-aktualisieren hat keine Werte für das CRM erzeugt" >&2; exit 1; }
   [ -n "${OIDC_SECRET_MARKETING:-}" ] && [ -n "${OIDC_CRYPTO_MARKETING:-}" ] || { echo "realm-aktualisieren hat keine Werte für Marketing erzeugt" >&2; exit 1; }
+  [ -n "${OIDC_SECRET_KONTEN:-}" ] && [ -z "${OIDC_CRYPTO_KONTEN:-}" ] || { echo "realm-aktualisieren: Geheimnis für die Mitarbeiterkonten fehlt (oder unnötiger Schlüssel)" >&2; exit 1; }
   zeit "Realm aktualisiert (konten.sh realm-aktualisieren)"
   (cd "$OIDC_WORK/installation" && env KCADM="env -u JAVA_TOOL_OPTIONS -u https_proxy -u HTTPS_PROXY $kc/bin/kcadm.sh" KC_SERVER="http://127.0.0.1:$KC_PORT" \
     KC_ADMIN_USER_TEST=verwaltung-ci KC_ADMIN_PASSWORD_TEST="$KC_ADMIN_PASSWORD" sh deploy/anmeldung/konten.sh design-setzen) \

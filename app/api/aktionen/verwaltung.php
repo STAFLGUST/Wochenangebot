@@ -311,6 +311,9 @@ switch ($action) {
                 if (!$zugang) { $role = 'viewer'; $weitere = []; }   // ohne Anmeldung keine Rechte; beim Einrichten der Anmeldung neu wählen
                 $pw = $zugang ? ($b['password'] ?? '') : '';
                 $setPw = is_string($pw) && $pw !== '';
+                // Zentrale Anmeldung (Keycloak-Host): es gibt nur noch das Passwort von Keycloak – gesetzt über „Zentrale Anmeldung“
+                // im Mitarbeiter (anmeldekonto_aendern). Das alte Passwort der Anwendung gilt nur noch im Notzugang (deploy/notzugang.sh).
+                if ($setPw && oidc_modus()) throw new InvalidArgumentException('Passwörter setzt die zentrale Anmeldung: im Mitarbeiter unter „Zentrale Anmeldung“ → „Passwort setzen“.');
                 // Abweichende Rechte (nur wenn mitgeschickt); verboten hat Vorrang
                 $hasRights = array_key_exists('grant', $b) || array_key_exists('deny', $b);
                 $deny = rights_clean(is_array($b['deny'] ?? null) ? $b['deny'] : []);
@@ -324,9 +327,9 @@ switch ($action) {
                     if ($wunsch === '' && $person['vorname'] !== '') $wunsch = benutzername_vorschlag($person['vorname'], $person['nachname'], array_column($users, 'username'));
                     $uname = clean_username($wunsch);
                     foreach ($users as $u) if ($u['username'] === $uname) throw new InvalidArgumentException('Der Benutzername „' . $uname . '“ ist bereits vergeben.');
-                    if (!$setPw && $zugang) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Mitarbeiter festlegen.');
+                    if (!$setPw && $zugang && !oidc_modus()) throw new InvalidArgumentException('Bitte ein Passwort für den neuen Mitarbeiter festlegen.');
                     $u = ['id' => 'u' . bin2hex(random_bytes(6)), 'username' => $uname, 'name' => $name, 'role' => $role, 'active' => $active,
-                          'hash' => password_hash($zugang ? check_password($pw, $uname) : bin2hex(random_bytes(24)), PASSWORD_DEFAULT), 'mustChange' => $zugang && !empty($b['mustChange']), 'sv' => 1,
+                          'hash' => password_hash($setPw ? check_password($pw, $uname) : bin2hex(random_bytes(24)), PASSWORD_DEFAULT), 'mustChange' => $setPw && !empty($b['mustChange']), 'sv' => 1,
                           'created' => now(), 'createdBy' => $me['username'], 'lastLogin' => null];
                     if (!$zugang) { $u['zugang'] = false; $pflicht = false; }
                     foreach (['vorname', 'nachname', 'email'] as $f) if ($person[$f] !== '') $u[$f] = $person[$f];
@@ -348,7 +351,7 @@ switch ($action) {
                 $old = $users[$i];
                 if ($id === $me['id'] && !$zugang) throw new InvalidArgumentException('Den eigenen Zugang können Sie nicht entfernen.');
                 // Anmeldung neu einrichten: nur mit neuem Passwort (das bisherige ist unbrauchbar)
-                if ($zugang && !nutzer_hat_zugang($old) && !$setPw) throw new InvalidArgumentException('Für die Anmeldung bitte ein Passwort festlegen.');
+                if ($zugang && !nutzer_hat_zugang($old) && !$setPw && !oidc_modus()) throw new InvalidArgumentException('Für die Anmeldung bitte ein Passwort festlegen.');
                 if ($id === $me['id'] && ($setPw || !empty($b['reset2fa']) || !empty($b['resetPasskeys']))) {
                     fail('Für den eigenen Zugang bitte „Passwort ändern“, „Zwei-Faktor-Anmeldung“ oder „Passkeys“ verwenden.', 403);
                 }
