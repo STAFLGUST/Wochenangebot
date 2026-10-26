@@ -3,6 +3,7 @@ declare(strict_types=1);
 /* Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/)
    Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
+                    hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
                     hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Export, Übernahme.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -32,6 +33,7 @@ switch ($action) {
             $ich = hr_ich($personal, $me);
             $verwalten = may($me, 'hr.verwalten');
             $genehmigen = may($me, 'hr.genehmigen');
+            $uebersicht = $verwalten || may($me, 'hr.uebersicht');
             $eigene = [];
             if ($ich) { $frei = hr_freie_tage($abw['eintraege'], $ich['id']); foreach ($abw['eintraege'] as $e) if ($e['person'] === $ich['id']) $eigene[] = hr_eintrag_aus($e, $ich, $frei); }
             usort($eigene, function ($a, $b) { return $b['von'] <=> $a['von']; });
@@ -42,11 +44,21 @@ switch ($action) {
             if ($genehmigen || $verwalten) $offen = count(array_filter($abw['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
                 return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
             }));
-            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'neuVerknuepft' => $neuVerknuepft,
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'uebersicht' => $uebersicht, 'neuVerknuepft' => $neuVerknuepft,
                      'offen' => $offen,
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => HR_UEBERTRAG_BIS]);
+        }
+
+        /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
+           Nur Anzahlen – keine Zeiträume, Notizen oder Gründe (Krankheitstage sind Gesundheitsdaten). */
+        case 'hr_uebersicht': {
+            $me = require_auth();
+            if (!may($me, 'hr.uebersicht') && !may($me, 'hr.verwalten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            header('Cache-Control: no-store');
+            $jahr = hr_jahr_param($_GET['jahr'] ?? null);
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'zeilen' => hr_uebersicht($jahr)]);
         }
 
         /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, Personalstelle mit Kürzeln */
@@ -276,7 +288,8 @@ switch ($action) {
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
                 if (($werte['personalnummer'] ?? '') !== '') {
                     foreach (hr_personal()['personen'] as $x) {
-                        if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x) . '.', 409);
+                        if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x)
+                            . (!empty($x['altbestand']) ? ' (Urlaubsliste ohne Mitarbeiter). Diesen Eintrag bitte über „Einzeln zuordnen“ mit dem Mitarbeiter zusammenführen – die Personalnummer kommt dann mit.' : '.'), 409);
                     }
                 }
                 if ($jahr !== null) {
@@ -296,6 +309,32 @@ switch ($action) {
         }
 
         /* Einträge der Urlaubsliste ohne Mitarbeiter (Altbestand) in die Mitarbeiter übernehmen */
+        /* Einen Eintrag der Urlaubsliste ohne Mitarbeiter von Hand einem Mitarbeiter zuordnen (auch bei anderem Namen
+           und wenn der Mitarbeiter schon HR-Angaben hat: zusammenführen, hr_altbestand_zusammenfuehren) */
+        case 'hr_altbestand_zuordnen': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $eintrag = s($b['eintrag'] ?? '', 60) ?? '';
+            $users = users_load();
+            $ui = user_find($users, (string)($b['nutzer'] ?? ''));
+            if ($ui === null) fail('Bitte einen Mitarbeiter wählen.', 422);
+            $u = $users[$ui];
+            [$p, $n, $doppelt, $name] = with_lock('hr-personal', function () use ($b, $eintrag, $u) {
+                $roh = hr_personal_roh();
+                if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
+                $name = '';
+                foreach ($roh['personen'] as $x) if ($x['id'] === $eintrag) $name = hr_name($x);
+                try { [$p, $n, $doppelt] = hr_altbestand_zusammenfuehren($roh, $eintrag, $u); }
+                catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 404); }
+                catch (HrZuordnungFehler $ex) { fail($ex->getMessage(), 409); }
+                hr_personal_schreiben($roh);
+                return [$p, $n, $doppelt, $name];
+            });
+            audit('hr', 'HR: Eintrag der Urlaubsliste „' . $name . '“ dem Mitarbeiter ' . $u['name'] . ' zugeordnet (' . $n . ' Abwesenheiten' . ($doppelt ? ", $doppelt doppelte storniert" : '') . ')');
+            $personal = hr_personal();
+            respond(['ok' => true, 'rev' => $personal['rev'], 'abwesenheiten' => $n, 'doppelt' => $doppelt]);
+        }
+
         case 'hr_personal_uebernehmen': {
             $me = require_perm('hr.verwalten', true);
             $text = hr_personal_uebernehmen($me);

@@ -25,6 +25,7 @@ const PERMS = [
     'hr.antrag'                => ['g' => 'HR', 'l' => 'Eigenen Urlaub beantragen, Abwesenheitskalender ansehen (nur „abwesend“)', 'k' => 'machen', 'd' => ['viewer', 'editor'], 'r' => []],
     'hr.verwalten'             => ['g' => 'HR', 'l' => 'Personalstelle: Abwesenheiten mit Grund eintragen (nicht für sich selbst), Mitarbeiter, Excel-Export', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag']],
     'hr.genehmigen'            => ['g' => 'HR', 'l' => 'Urlaubsanträge genehmigen oder ablehnen (nie den eigenen)', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag']],
+    'hr.uebersicht'            => ['g' => 'HR', 'l' => 'Urlaubsübersicht aller Mitarbeiter: Anspruch, genommen, geplant, Rest, Krank- und Gleittage (nur Anzahl)', 'k' => 'sehen', 'd' => [], 'r' => ['hr.antrag']],
     'crm.sehen'                => ['g' => 'CRM', 'l' => 'CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung', 'k' => 'sehen', 'd' => [], 'r' => []],
     'crm.bearbeiten'           => ['g' => 'CRM', 'l' => 'CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
     'crm.exportieren'          => ['g' => 'CRM', 'l' => 'CRM-Liste mit Kontaktdaten als CSV herunterladen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],

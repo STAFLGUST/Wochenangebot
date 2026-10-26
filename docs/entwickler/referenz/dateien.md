@@ -482,6 +482,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_herkunft.py` | plattform | Herkunftsprüfung im API-Einstieg (GR-109, lib/herkunft.php): nur Anfragen von der eigenen Seite. `Sec-Fetch-Site` same-site/cross-site → 403 (auch von Nachbar-Subdomains wie test.angebot-stafl.de); bei Anfragen außer … |
 | `test_hist.py` | angebot | Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog. |
 | `test_hr.py` | hr | HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/). |
+| `test_hr_uebersicht.py` | hr | HR · Urlaubsübersicht aller Mitarbeiter (Recht hr.uebersicht, Personalstelle hr.verwalten sieht sie auch). |
 | `test_importzentrale.py` | verwaltung | Importzentrale (Verwaltung → Import, Roadmap 10b): eine Stelle für alle Importe mit einheitlichem Ablauf (Importart → Datei → Vorschau neu/geändert/entfällt/Fehler je Zeile → Übernahme → Ergebnis und Protokoll). |
 | `test_integritaet.py` | plattform | Dateiprüfung (Sicherheit → Dateiprüfung) |
 | `test_kunden.py` | verwaltung | Kunden: Stammdaten, Freischaltung von Angeboten, Kunden-Anmeldung auf der Angebotsseite. |

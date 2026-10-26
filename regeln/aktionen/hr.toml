@@ -13,6 +13,9 @@ oberflaeche = "hr.intern"
 [aktion.hr_monat]
 oberflaeche = "hr.intern"
 
+[aktion.hr_uebersicht]
+oberflaeche = "hr.intern"
+
 [aktion.hr_antrag]
 oberflaeche = "hr.intern"
 schreibend = true
@@ -56,6 +59,10 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.hr_personal_uebernehmen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.hr_altbestand_zuordnen]
 oberflaeche = "angebot.eingabe"
 schreibend = true
 

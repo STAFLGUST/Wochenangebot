@@ -92,6 +92,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |
+| `hr_altbestand_zuordnen` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_antrag` | `hr.intern` | schreibend | – | Recht hr.antrag | `app/api/aktionen/hr.php` |
 | `hr_antrag_zurueckziehen` | `hr.intern` | schreibend | – | Recht hr.antrag | `app/api/aktionen/hr.php` |
 | `hr_einstellungen_save` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
@@ -104,6 +105,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `hr_offen` | `hr.intern` | lesend | – | Recht hr.genehmigen | `app/api/aktionen/hr.php` |
 | `hr_personal_uebernehmen` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_start` | `hr.intern` | lesend | – | Recht hr.antrag | `app/api/aktionen/hr.php` |
+| `hr_uebersicht` | `hr.intern` | lesend | – | angemeldet | `app/api/aktionen/hr.php` |
 | `hr_verwaltung` | `hr.intern` | lesend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `mitarbeiter_hr` | `angebot.eingabe` | lesend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `mitarbeiter_hr_save` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
