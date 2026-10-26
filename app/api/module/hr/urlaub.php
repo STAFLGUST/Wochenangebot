@@ -479,6 +479,35 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
             'rest' => $rest, 'verfuegbar' => $rest - $u['beantragt'], 'rest_jahresende' => $restEnde];
 }
 
+/* ---------------- Urlaubsübersicht (Recht hr.uebersicht oder hr.verwalten) ----------------
+   Je Mitarbeiter im Urlaubsplan nur Summen eines Jahres: Urlaubskonto (hr_konto) und genehmigte Arbeitstage je Art
+   (Krank, Gleittag). Keine Zeiträume, Notizen, Gründe oder Entscheidungen – Krankheitstage sind Gesundheitsdaten und
+   erscheinen nur hier als Anzahl. */
+function hr_tage_je_art(array $p, array $eintraege, int $jahr): array
+{
+    $n = ['K' => 0, 'G' => 0];
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $p['id'] || $e['status'] !== 'genehmigt' || !isset($n[$e['art']])) continue;
+        $n[$e['art']] += count(hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei));
+    }
+    return $n;
+}
+function hr_uebersicht(int $jahr): array
+{
+    $abw = hr_abwesenheiten()['eintraege'];
+    $zeilen = [];
+    foreach (hr_nach_abteilung(array_values(array_filter(hr_personal()['personen'], function ($p) { return $p['aktiv']; }))) as $p) {
+        $k = hr_konto($p, $abw, $jahr);
+        $t = hr_tage_je_art($p, $abw, $jahr);
+        $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'],
+                     'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'],
+                     'genommen' => $k['genommen'], 'geplant' => $k['geplant'], 'beantragt' => $k['beantragt'], 'rest' => $k['rest'],
+                     'krank' => $t['K'], 'gleittage' => $t['G']];
+    }
+    return $zeilen;
+}
+
 /* ---------------- Einträge (Anträge und Eintragungen der Personalstelle) ---------------- */
 
 /* Eintrag für die Ausgabe. $voll: Personalstelle oder die Person selbst (Art, Notiz, Entscheidung) */

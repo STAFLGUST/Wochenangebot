@@ -44,6 +44,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `hr.antrag` | HR | HR | bearbeiten | Eigenen Urlaub beantragen, Abwesenheitskalender ansehen (nur „abwesend“) | Nur ansehen, Bearbeiter | – |
 | `hr.verwalten` | HR | HR | bearbeiten | Personalstelle: Abwesenheiten mit Grund eintragen (nicht für sich selbst), Mitarbeiter, Excel-Export | – | `hr.antrag` |
 | `hr.genehmigen` | HR | HR | bearbeiten | Urlaubsanträge genehmigen oder ablehnen (nie den eigenen) | – | `hr.antrag` |
+| `hr.uebersicht` | HR | HR | sehen | Urlaubsübersicht aller Mitarbeiter: Anspruch, genommen, geplant, Rest, Krank- und Gleittage (nur Anzahl) | – | `hr.antrag` |
 | `crm.sehen` | CRM | CRM | sehen | CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung | – | – |
 | `crm.bearbeiten` | CRM | CRM | bearbeiten | CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen | – | `crm.sehen` |
 | `crm.exportieren` | CRM | CRM | bearbeiten | CRM-Liste mit Kontaktdaten als CSV herunterladen | – | `crm.sehen` |

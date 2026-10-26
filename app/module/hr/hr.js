@@ -1,5 +1,6 @@
 /* STAFL-Plattform · HR · Urlaub
    Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag, eigene Einträge, Abwesenheitskalender (Kollegen nur „abwesend“).
+   Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
    Personalstelle (Recht hr.verwalten): Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
    Mitarbeiter mit Anspruch und Übertrag, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung,
@@ -17,7 +18,7 @@
   const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag' };
   const STATUS = { beantragt: 'beantragt', genehmigt: 'genehmigt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen', storniert: 'storniert' };
   let csrf = '';
-  const S = { offen: [], start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
+  const S = { offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
 
   async function api(action, body, query = '') {
     let res;
@@ -81,6 +82,7 @@
     if (tab === 'kalender') ladeKalender();
     if (tab === 'antraege') ladeAntraege();
     if (tab === 'export') zeigeExport();
+    if (tab === 'uebersicht') ladeUebersicht();
   }
   $('#hr-tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) zeigeTab(b.dataset.tab); });
 
@@ -95,6 +97,7 @@
     S.start = r.data;
     for (const el of $$('[data-verwalten]')) el.hidden = !r.data.verwalten;
     for (const el of $$('[data-antraege]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
+    for (const el of $$('[data-uebersicht]')) el.hidden = !r.data.uebersicht;
     const offen = $('#hr-offen');
     offen.hidden = !r.data.offen; offen.textContent = r.data.offen || '';
     zeigeMein();
@@ -381,6 +384,53 @@
     const r = await api('hr_eintrag_save', { id: $('#dlg-eintrag').dataset.id, stornieren: true });
     if (r.status !== 200) { meldung($('#eintrag-meldung'), fehlerText(r, 'Stornieren fehlgeschlagen')); return; }
     nachEintrag();
+  });
+
+  /* ---------- Urlaubsübersicht (hr.uebersicht oder Personalstelle): nur Summen ---------- */
+  async function ladeUebersicht() {
+    $('#ueb-titel').textContent = `Urlaubsübersicht ${S.ujahr}`;
+    const r = await api('hr_uebersicht', null, '&jahr=' + S.ujahr);
+    if (r.status !== 200) { $('#ueb-tabelle').innerHTML = `<tbody><tr><td class="gedaempft">${esc(fehlerText(r, 'Übersicht nicht verfügbar'))}</td></tr></tbody>`; return; }
+    S.ueb = r.data;
+    const sel = $('#ueb-abteilung'), alt = sel.value;
+    const abt = [...new Set(r.data.zeilen.map((z) => z.abteilung))].sort((a, b) => a.localeCompare(b, 'de'));
+    sel.innerHTML = '<option value="">alle</option>' + abt.map((a) => `<option value="${esc(a)}">${esc(a || 'Ohne Abteilung')}</option>`).join('');
+    sel.value = abt.includes(alt) ? alt : '';
+    zeigeUebersicht();
+  }
+  // Rest zuerst: die wichtigste Zahl ist auf dem Handy ohne Scrollen sichtbar
+  const SP = [['rest', 'Rest'], ['anspruch', 'Anspruch'], ['uebertrag', 'Übertrag'], ['genommen', 'Genommen'], ['geplant', 'Geplant'], ['beantragt', 'Beantragt'], ['krank', 'Krank'], ['gleittage', 'Gleittage']];
+  function zeigeUebersicht() {
+    const f = $('#ueb-abteilung').value;
+    const zeilen = S.ueb.zeilen.filter((z) => !f || z.abteilung === f);
+    const zelle = (z, k) => {
+      const v = z[k];
+      if (k === 'uebertrag' && (z.verfallen > 0 || z.verfaellt > 0)) {
+        const t = z.verfallen > 0 ? `${tageText(z.verfallen)} verfallen` : `${tageText(z.verfaellt)} verfallen nach dem 31.03.`;
+        return `<td class="zahl" title="${esc(t)}">${esc(zahl(v))}<small class="gedaempft"> (${esc(z.verfallen > 0 ? '−' + zahl(z.verfallen) : zahl(z.verfaellt) + '!')})</small></td>`;
+      }
+      return `<td class="zahl${k === 'rest' ? ' rest' + (v < 0 ? ' minus' : '') : ''}">${v ? esc(zahl(v)) : '<span class="gedaempft">0</span>'}</td>`;
+    };
+    let html = `<thead><tr><th scope="col">Mitarbeiter</th>${SP.map(([, t]) => `<th scope="col" class="zahl">${t}</th>`).join('')}</tr></thead><tbody>`;
+    let abt = null;
+    for (const z of zeilen) {
+      if (z.abteilung !== abt) { abt = z.abteilung; html += `<tr class="abt"><th colspan="${SP.length + 1}" scope="rowgroup">${esc(abt || 'Ohne Abteilung')}</th></tr>`; }
+      html += `<tr><th scope="row" class="name">${esc(z.name)}</th>${SP.map(([k]) => zelle(z, k)).join('')}</tr>`;
+    }
+    if (!zeilen.length) html += `<tr><td colspan="${SP.length + 1}" class="gedaempft">Keine Mitarbeiter im Urlaubsplan.</td></tr>`;
+    html += '</tbody>';
+    if (zeilen.length > 1) {
+      const sum = (k) => zeilen.reduce((a, z) => a + Number(z[k] || 0), 0);
+      html += `<tfoot><tr><th scope="row">Summe (${zeilen.length})</th>${SP.map(([k]) => `<td class="zahl">${esc(zahl(sum(k)))}</td>`).join('')}</tr></tfoot>`;
+    }
+    $('#ueb-tabelle').innerHTML = html;
+  }
+  $('#ueb-abteilung').addEventListener('change', zeigeUebersicht);
+  $('#tab-uebersicht').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ujahr]');
+    if (!b) return;
+    S.ujahr += Number(b.dataset.ujahr);
+    ladeUebersicht();
   });
 
   /* ---------- Export ---------- */

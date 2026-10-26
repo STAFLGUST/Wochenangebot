@@ -3,6 +3,7 @@ declare(strict_types=1);
 /* Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/)
    Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
+                    hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
                     hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Export, Übernahme.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -32,6 +33,7 @@ switch ($action) {
             $ich = hr_ich($personal, $me);
             $verwalten = may($me, 'hr.verwalten');
             $genehmigen = may($me, 'hr.genehmigen');
+            $uebersicht = $verwalten || may($me, 'hr.uebersicht');
             $eigene = [];
             if ($ich) { $frei = hr_freie_tage($abw['eintraege'], $ich['id']); foreach ($abw['eintraege'] as $e) if ($e['person'] === $ich['id']) $eigene[] = hr_eintrag_aus($e, $ich, $frei); }
             usort($eigene, function ($a, $b) { return $b['von'] <=> $a['von']; });
@@ -42,11 +44,21 @@ switch ($action) {
             if ($genehmigen || $verwalten) $offen = count(array_filter($abw['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
                 return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
             }));
-            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'neuVerknuepft' => $neuVerknuepft,
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'uebersicht' => $uebersicht, 'neuVerknuepft' => $neuVerknuepft,
                      'offen' => $offen,
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => HR_UEBERTRAG_BIS]);
+        }
+
+        /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
+           Nur Anzahlen – keine Zeiträume, Notizen oder Gründe (Krankheitstage sind Gesundheitsdaten). */
+        case 'hr_uebersicht': {
+            $me = require_auth();
+            if (!may($me, 'hr.uebersicht') && !may($me, 'hr.verwalten')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            header('Cache-Control: no-store');
+            $jahr = hr_jahr_param($_GET['jahr'] ?? null);
+            respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'zeilen' => hr_uebersicht($jahr)]);
         }
 
         /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, Personalstelle mit Kürzeln */

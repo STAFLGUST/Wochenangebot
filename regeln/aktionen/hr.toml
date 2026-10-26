@@ -13,6 +13,9 @@ oberflaeche = "hr.intern"
 [aktion.hr_monat]
 oberflaeche = "hr.intern"
 
+[aktion.hr_uebersicht]
+oberflaeche = "hr.intern"
+
 [aktion.hr_antrag]
 oberflaeche = "hr.intern"
 schreibend = true
