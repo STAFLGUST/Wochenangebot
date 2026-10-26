@@ -9,7 +9,7 @@
      Bei koordinationspflichtigen Bereichen: was ändert sich an der gemeinsamen Schnittstelle, wer nutzt sie? -->
 
 ## Definition of Done (AGENTS.md)
-- [ ] Betroffene Testgruppen lokal grün – **Dateien und SQLite** (`python3 werkzeuge/regeln.py betroffen`), volle Suite in der CI grün, beides unten eingetragen
+- [ ] Geänderte/betroffene Testgruppen lokal grün – **Dateien und SQLite** (`python3 werkzeuge/regeln.py betroffen`, meist 1–3), volle Suite in der CI grün, beides unten eingetragen
 - [ ] Neue Tests für neues Verhalten (inkl. Rechte/Fehlerfälle), `tests/README.md` ergänzt
 - [ ] Oberfläche per Bildschirmfoto geprüft (Desktop und Mobil, hell/dunkel bei neuen Farben)
 - [ ] `python3 werkzeuge/asset_versionen.py` und `python3 werkzeuge/integritaet.py` grün (Einbindungen ohne `?v=`; Nummern und Prüfliste erzeugt der Server)
