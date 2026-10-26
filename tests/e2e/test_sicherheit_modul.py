@@ -6,7 +6,7 @@ sicherheitsrelevanter Rechte, Sitzungen) mit Rechten (anonym 401, ohne Recht 403
 Administrator, Hinweis auf das Modul, keine Sicherheitsansichten mehr); Oberfläche: Reiter je Recht (Administrator alle,
 „Notfall auslösen“ nur Notfall, „Sicherheit ansehen“ Lagebild/Notfall/Ereignisse), Lagebild mit Gesamtbewertung, Dialoge
 (Ereignis, auffällige Adresse, Vorlage mit Vorschau, Einstellungen, Ländersperre, Passwortbestätigung, Sperre, Sitzung, Konto,
-Befund) mit Esc/Schließen und Fokus, Notfall auslösen in Schritten (Wirkung → Grund und Bestätigungswort) und beenden,
+Befund) mit Esc/Schließen und Fokus, Notfall auslösen in Schritten (Wirkung → Grund, Knopf gedrückt halten) und beenden,
 Vorlage „Notfall“ startet den Notfallmodus, Dashboard-Hinweis im Notfall; hell/dunkel, Desktop und 390 px (Dialog als Blatt
 von unten); keine JavaScript-Fehler. Nur synthetische Testdaten.
 """
@@ -117,6 +117,12 @@ with sync_playwright() as p:
     def dialog_zu(pg):
         pg.keyboard.press('Escape'); pg.wait_for_selector('#sic-dlg', state='hidden')
 
+    def halten(pg):
+        """Notfall auslösen: Knopf gedrückt halten, bis der Dialog „Notfallmodus ist aktiv“ zeigt (1,5 s), dann loslassen"""
+        pg.hover('#nf-los'); pg.mouse.down()
+        pg.wait_for_selector('#sic-dlg h2:has-text("Notfallmodus ist aktiv")', timeout=15000)
+        pg.mouse.up()
+
     ctx, pg = anmelden('admin', PW, '198.51.100.2')
     pg.wait_for_selector('#sic-app:not([hidden])'); pg.wait_for_selector('#sic-gesamt strong')
     sichtbar = pg.eval_on_selector_all('#sic-tabs [data-tab]', 'b => b.filter(x => !x.hidden).map(x => x.dataset.tab)')
@@ -221,12 +227,20 @@ with sync_playwright() as p:
     pg.click('#nf-an'); pg.wait_for_selector('#sic-dlg[open]')
     check('Schritt 1: Wirkung', 'Schritt 1 von 2' in pg.inner_text('#sic-dlg'))
     pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg #nf-grund')
-    check('Schritt 2: Fokus im Grund, Knopf erst mit Bestätigungswort', pg.evaluate("document.activeElement.id") == 'nf-grund' and pg.is_disabled('#nf-los'))
-    pg.fill('#nf-grund', 'Probe über die Oberfläche'); pg.fill('#nf-wort', 'notfal')
-    check('falsches Wort: Knopf gesperrt', pg.is_disabled('#nf-los'))
-    pg.fill('#nf-wort', 'notfall')
+    check('Schritt 2: Fokus im Grund, Knopf „gedrückt halten“, kein Bestätigungswort mehr', pg.evaluate("document.activeElement.id") == 'nf-grund'
+          and 'Gedrückt halten' in pg.inner_text('#nf-los') and pg.locator('#nf-wort').count() == 0)
+    pg.hover('#nf-los'); pg.mouse.down(); pg.mouse.up()
+    check('ohne Grund: Halten startet nicht, Hinweis auf den Grund', 'Grund' in pg.inner_text('#d-err') and not (doc('sicherheit-notfall') or {}).get('aktiv'))
+    pg.fill('#nf-grund', 'Probe über die Oberfläche')
+    pg.click('#nf-los')
+    check('kurzer Klick löst nichts aus', pg.is_visible('#nf-los') and not (doc('sicherheit-notfall') or {}).get('aktiv'))
+    pg.focus('#nf-los'); pg.keyboard.down('Space')
+    pg.wait_for_function("document.querySelector('#nf-los') && parseFloat(getComputedStyle(document.querySelector('#nf-los')).getPropertyValue('--anteil')) > 20")
     pg.screenshot(path=f'{SH}/sicherheit_notfall_dialog_1440.png')
-    pg.click('#nf-los'); pg.wait_for_selector('#sic-dlg h2:has-text("Notfallmodus ist aktiv")')
+    pg.keyboard.up('Space')
+    pg.wait_for_function("getComputedStyle(document.querySelector('#nf-los')).getPropertyValue('--anteil').trim() === '0%'")
+    check('Leertaste zu früh losgelassen: abgebrochen, nichts ausgelöst', not (doc('sicherheit-notfall') or {}).get('aktiv'))
+    halten(pg)
     check('Notfall ausgelöst: Zusammenfassung', 'Mitarbeitersitzungen beendet' in pg.inner_text('#sic-dlg') and (doc('sicherheit-notfall') or {}).get('aktiv') is True)
     pg.click('#sic-dlg .sic-dfuss [data-d="zu"]'); pg.wait_for_selector('#sic-dlg', state='hidden')
     pg.wait_for_selector('#tab-notfall .sic-held.aktiv')
@@ -278,8 +292,7 @@ with sync_playwright() as p:
     check('Recht „Notfall auslösen“: nur Reiter Notfall, ohne Verlauf', sichtbar == ['notfall'] and 'Letzte Notfälle' not in pg.inner_text('#tab-notfall'), sichtbar)
     pg.click('#nf-an'); pg.wait_for_selector('#sic-dlg[open]'); pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg #nf-grund')
     check('ohne Administratorrolle: keine Option „andere Administratoren abmelden“', pg.locator('#nf-admins').count() == 0)
-    pg.fill('#nf-grund', 'Auffälliges Konto im Vertrieb'); pg.fill('#nf-wort', 'NOTFALL'); pg.click('#nf-los')
-    pg.wait_for_selector('#sic-dlg h2:has-text("Notfallmodus ist aktiv")')
+    pg.fill('#nf-grund', 'Auffälliges Konto im Vertrieb'); halten(pg)
     check('Mitarbeiterin löst aus', doc('sicherheit-notfall').get('von') == 'nele')
     dialog_zu(pg)
     pg.wait_for_selector('#tab-notfall .sic-held.aktiv')

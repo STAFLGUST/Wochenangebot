@@ -49,7 +49,8 @@ with sync_playwright() as p:
     # Sicherheit: eigenes Modul (gleiche Sitzung, eigene Seite)
     s = ctx.new_page(); s.on('pageerror', lambda e: errs.append(str(e)))
     s.goto(B + '/module/sicherheit/'); s.wait_for_selector('#sic-gesamt strong')
-    check('status cards (Lagebild)', s.locator('#tab-lage .sic-karte').count() == 10, s.locator('#tab-lage .sic-karte').count())
+    check('status cards (Lagebild): 8 Karten, Abwehr der letzten 24 Stunden und Notfall-Konsole', s.locator('#tab-lage .sic-karte').count() == 8
+          and s.locator('#tab-lage .sic-abwehr').count() == 1 and s.locator('#tab-lage .sic-konsole').count() == 1, s.locator('#tab-lage .sic-karte').count())
     s.click('#sic-tabs [data-tab="sitzungen"]'); s.wait_for_selector('#sic-sitzungen')
     check('own session listed', 'diese Sitzung' in s.inner_text('#tab-sitzungen'))
     s.screenshot(path=SH + '/security.png', full_page=True)

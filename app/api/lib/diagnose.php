@@ -278,7 +278,7 @@ function sec_lagebild(array $me): array
                             'waf' => (string)($fw['fw']['waf'] ?? ''), 'autoSperre' => !empty($fw['fw']['autoSperre']), 'feed' => !empty($fw['fw']['feed'])],
         'dateipruefung' => $ip ? ['ranAt' => $ip['ranAt'] ?? null, 'ok' => !empty($ip['ok']), 'counts' => $ip['counts'] ?? []] : null,
         'backup' => store_read('sicherung'), 'deployment' => store_read('deployment'), 'https' => is_https(),
-        'timeline' => sec_timeline($log), 'topIps' => sec_top_ips($log), 'config' => sec_config_checks($users),
+        'timeline' => sec_timeline($log), 'topIps' => sec_top_ips($log), 'config' => sec_config_checks($users), 'stunden' => fw_stunden(),
         'ereignisse' => array_slice(sec_ereignisse(7)['ereignisse'], 0, 8),
     ];
 }

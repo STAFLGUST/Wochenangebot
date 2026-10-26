@@ -250,7 +250,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `index.html` | sicherheit | Seite „STAFL-Plattform · Sicherheit“ |
-| `sicherheit.css` | sicherheit | STAFL-Plattform · Sicherheit – Gestaltung wie Dashboard, HR, CRM und Marketing („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten und Blöcke. |
+| `sicherheit.css` | sicherheit | STAFL-Plattform · Sicherheit – „Leitstand“ (Entwurf des Inhabers 26.10.2026): dunkel ein Leitstand mit Graphit-Grund, Bordeaux- und Blaulicht, hell dieselbe Gliederung auf warmem Grau; folgt der Hell/Dunkel-Wahl am … |
 | `sicherheit.js` | sicherheit | STAFL-Plattform · Sicherheit (Modul sicherheit, Oberfläche sicherheit.intern; docs/plattform/modul-sicherheit.md) Reiter |
 
 ## `dashboard/`
