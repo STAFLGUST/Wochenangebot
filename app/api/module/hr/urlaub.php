@@ -259,6 +259,74 @@ function hr_altbestand_zuordnen(array &$roh, string $eintragId, array $u): array
     unset($e);
     throw new InvalidArgumentException('Eintrag nicht gefunden.');
 }
+/* Altbestands-Eintrag von Hand einem Mitarbeiter zuordnen – auch bei abweichendem Namen und auch dann, wenn der
+   Mitarbeiter schon HR-Angaben hat (z. B. „Lennert Gust“ aus der Zeiterfassung ↔ Konto „Administrator Gust“).
+   Unter der Sperre „hr-personal“ aufrufen. Ohne HR-Angaben: wie hr_altbestand_zuordnen (der Eintrag wird die Person).
+   Mit HR-Angaben: zusammenführen – die Angaben des Mitarbeiters gelten, leere Felder (Abteilung, Personalnummer,
+   Anspruch/Übertrag je Jahr) kommen aus dem Eintrag; Abwesenheiten wandern zum Mitarbeiter, exakt doppelte
+   (gleiche Art, Zeitraum, Status) werden beim Eintrag storniert (mit Grund), andere Überschneidungen brechen ab.
+   Unterschiedliche Personalnummern brechen ab. Der Eintrag selbst verschwindet aus der Urlaubsliste; Abwesenheiten
+   bleiben vollständig erhalten (nie gelöscht). Rückgabe: [Person, umgehängt, storniert]. */
+/* Fachlicher Abbruch beim Zusammenführen (Antwort 409); eigene Klasse, damit Speicherfehler (PDOException) nicht als Meldung erscheinen */
+final class HrZuordnungFehler extends RuntimeException {}
+function hr_altbestand_zusammenfuehren(array &$roh, string $eintragId, array $u): array
+{
+    $uid = (string)$u['id'];
+    $ei = null; $zi = null;
+    foreach ($roh['personen'] as $k => $x) {
+        if ($x['id'] === $eintragId && $x['nutzer'] === null) $ei = $k;
+        if ($x['nutzer'] === $uid) $zi = $k;
+    }
+    if ($ei === null) throw new InvalidArgumentException('Dieser Eintrag der Urlaubsliste ist schon einem Mitarbeiter zugeordnet. Bitte neu laden.');
+    if ($zi === null) {
+        $n = 0;
+        foreach (hr_abwesenheiten()['eintraege'] as $a) if ($a['person'] === $eintragId) $n++;
+        return [hr_altbestand_zuordnen($roh, $eintragId, $u), $n, 0];
+    }
+    $e = $roh['personen'][$ei]; $z = $roh['personen'][$zi];
+    if ($e['personalnummer'] !== '' && $z['personalnummer'] !== '' && $e['personalnummer'] !== $z['personalnummer']) {
+        throw new HrZuordnungFehler('Unterschiedliche Personalnummern: ' . hr_name($e) . ' hat ' . $e['personalnummer'] . ', ' . ($u['name'] ?? '') . ' hat ' . $z['personalnummer'] . '. Bitte zuerst eine der beiden Nummern korrigieren.');
+    }
+    [$umgehaengt, $storniert] = with_lock('hr-abwesenheiten', function () use ($e, $z) {
+        $abw = hr_abwesenheiten();
+        $ziel = array_values(array_filter($abw['eintraege'], function ($a) use ($z) { return $a['person'] === $z['id'] && in_array($a['status'], HR_AKTIV, true); }));
+        $konflikte = []; $doppelt = [];
+        foreach ($abw['eintraege'] as $i => $a) {
+            if ($a['person'] !== $e['id'] || !in_array($a['status'], HR_AKTIV, true)) continue;
+            foreach ($ziel as $b) {
+                if (($a['art'] === 'X') !== ($b['art'] === 'X') || $a['bis'] < $b['von'] || $a['von'] > $b['bis']) continue;
+                if ($a['art'] === $b['art'] && $a['von'] === $b['von'] && $a['bis'] === $b['bis'] && $a['status'] === $b['status']) { $doppelt[$i] = true; continue 2; }
+                $konflikte[] = hr_zeitraum_text($a['von'], $a['bis']) . ' (Urlaubsliste) ↔ ' . hr_zeitraum_text($b['von'], $b['bis']);
+            }
+        }
+        if ($konflikte) throw new HrZuordnungFehler('Überschneidende Abwesenheiten – bitte zuerst im HR-Bereich bereinigen: ' . implode('; ', array_slice($konflikte, 0, 5)) . (count($konflikte) > 5 ? ' …' : '') . '.');
+        $n = 0;
+        foreach ($abw['eintraege'] as $i => &$a) {
+            if (isset($doppelt[$i])) {
+                $a['status'] = 'storniert';
+                $a['entscheidung'] = ['t' => now(), 'by' => 'System', 'grund' => 'doppelt beim Zusammenführen mit dem Mitarbeiter'];
+            }
+            if ($a['person'] === $e['id']) { $a['person'] = $z['id']; $n++; }
+            if (($a['vertretung'] ?? null) === $e['id']) $a['vertretung'] = $z['id'];
+        }
+        unset($a);
+        if ($n || $doppelt) hr_abwesenheiten_schreiben($abw);
+        return [$n - count($doppelt), count($doppelt)];
+    });
+    // Angaben: Mitarbeiter gilt, leere Felder aus dem Eintrag
+    $jahre = $z['jahre'];
+    foreach ($e['jahre'] as $j => $v) {
+        $alt = $jahre[$j] ?? ['anspruch' => null, 'uebertrag' => null];
+        $jahre[$j] = ['anspruch' => $alt['anspruch'] ?? $v['anspruch'], 'uebertrag' => $alt['uebertrag'] ?? $v['uebertrag']];
+    }
+    [$vor, $nach] = hr_nutzer_namen($u);
+    $roh['personen'][$zi] = hr_person_norm(array_merge($z, ['jahre' => $jahre, 'vorname' => $vor, 'nachname' => $nach, 'geaendert' => now(),
+        'personalnummer' => $z['personalnummer'] !== '' ? $z['personalnummer'] : $e['personalnummer'],
+        'abteilung' => $z['abteilung'] !== '' ? $z['abteilung'] : $e['abteilung']]));
+    array_splice($roh['personen'], $ei, 1);
+    return [$roh['personen'][$ei < $zi ? $zi - 1 : $zi], $umgehaengt, $storniert];
+}
+
 /* Beim ersten Aufruf automatisch übernehmen (nur eindeutige Namen; protokolliert) */
 function hr_auto_verknuepfen(array $me): ?array
 {

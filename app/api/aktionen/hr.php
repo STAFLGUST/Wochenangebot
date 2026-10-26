@@ -276,7 +276,8 @@ switch ($action) {
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
                 if (($werte['personalnummer'] ?? '') !== '') {
                     foreach (hr_personal()['personen'] as $x) {
-                        if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x) . '.', 409);
+                        if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x)
+                            . (!empty($x['altbestand']) ? ' (Urlaubsliste ohne Mitarbeiter). Diesen Eintrag bitte über „Einzeln zuordnen“ mit dem Mitarbeiter zusammenführen – die Personalnummer kommt dann mit.' : '.'), 409);
                     }
                 }
                 if ($jahr !== null) {
@@ -296,6 +297,32 @@ switch ($action) {
         }
 
         /* Einträge der Urlaubsliste ohne Mitarbeiter (Altbestand) in die Mitarbeiter übernehmen */
+        /* Einen Eintrag der Urlaubsliste ohne Mitarbeiter von Hand einem Mitarbeiter zuordnen (auch bei anderem Namen
+           und wenn der Mitarbeiter schon HR-Angaben hat: zusammenführen, hr_altbestand_zusammenfuehren) */
+        case 'hr_altbestand_zuordnen': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $eintrag = s($b['eintrag'] ?? '', 60) ?? '';
+            $users = users_load();
+            $ui = user_find($users, (string)($b['nutzer'] ?? ''));
+            if ($ui === null) fail('Bitte einen Mitarbeiter wählen.', 422);
+            $u = $users[$ui];
+            [$p, $n, $doppelt, $name] = with_lock('hr-personal', function () use ($b, $eintrag, $u) {
+                $roh = hr_personal_roh();
+                if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
+                $name = '';
+                foreach ($roh['personen'] as $x) if ($x['id'] === $eintrag) $name = hr_name($x);
+                try { [$p, $n, $doppelt] = hr_altbestand_zusammenfuehren($roh, $eintrag, $u); }
+                catch (InvalidArgumentException $ex) { fail($ex->getMessage(), 404); }
+                catch (HrZuordnungFehler $ex) { fail($ex->getMessage(), 409); }
+                hr_personal_schreiben($roh);
+                return [$p, $n, $doppelt, $name];
+            });
+            audit('hr', 'HR: Eintrag der Urlaubsliste „' . $name . '“ dem Mitarbeiter ' . $u['name'] . ' zugeordnet (' . $n . ' Abwesenheiten' . ($doppelt ? ", $doppelt doppelte storniert" : '') . ')');
+            $personal = hr_personal();
+            respond(['ok' => true, 'rev' => $personal['rev'], 'abwesenheiten' => $n, 'doppelt' => $doppelt]);
+        }
+
         case 'hr_personal_uebernehmen': {
             $me = require_perm('hr.verwalten', true);
             $text = hr_personal_uebernehmen($me);
