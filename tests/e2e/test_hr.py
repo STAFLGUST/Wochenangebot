@@ -348,18 +348,22 @@ check('automatische Übernahme im Protokoll', 'automatisch dem Mitarbeiter Gerda
 H = Client('198.51.100.9'); H.call('login', {'username': 'hans', 'password': 'Urlaub-Konto-4711'})
 st, r = H.call('hr_start')
 check('gleicher Name zweimal im Altbestand: keine automatische Übernahme', st == 200 and r['neuVerknuepft'] is False and r['ich']['id'] == ids['hans'], r.get('ich'))
+# Ohne Mitarbeiter = ehemaliger Mitarbeiter (Inhaber 26.10.2026): nicht im Urlaubsplan, Einträge bleiben, keine neuen Mitarbeiter
+v = P.call('mitarbeiter_hr')[1]
+pv = {p_['id']: p_ for p_ in v['personen']}
+check('ehemalige Mitarbeiter: markiert, nicht im Urlaubsplan', pv['pkarl']['ehemalig'] is True and pv['pkarl']['aktiv'] is False, pv['pkarl'])
+check('… nicht im Kalender, nicht als Vertretung', 'pkarl' not in [p_['id'] for p_ in P.call(f'hr_monat&jahr={Y}&monat=6')[1]['personen']]
+      and 'pkarl' not in [k['id'] for k in E.call('hr_start')[1]['kollegen']])
+check('… ihre Einträge bleiben in „Alle Einträge“', any(e['person'] == 'pkarl' for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege']))
+anzahl_nutzer = len(A.call('users')[1]['users'])
 st, r = P.call('hr_personal_uebernehmen', {})
-check('Altbestand übernehmen: gleichnamiger Mitarbeiter bzw. neuer Mitarbeiter ohne Anmeldung', st == 200 and r['anzahl'] == 3, r)
+check('Gleichnamige zuordnen: nur eindeutig gleichnamige Mitarbeiter, keine neuen Mitarbeiter', st == 200 and r['anzahl'] == 1 and len(A.call('users')[1]['users']) == anzahl_nutzer, r)
 v = P.call('mitarbeiter_hr')[1]
 rev = v['rev']
 pv = {p_['id']: p_ for p_ in v['personen']}
-nutzer = {u['id']: u for u in A.call('users')[1]['users']}
-check('… kein Altbestand mehr', not [p_ for p_ in v['personen'] if p_['altbestand']])
-check('… Karl Alt ist Mitarbeiter ohne Anmeldung, sein Urlaub bleibt', pv['pkarl']['zugang'] is False and nutzer[pv['pkarl']['nutzer']]['name'] == 'Karl Alt'
-      and any(e['person'] == 'pkarl' for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege']))
-hans = [p_ for p_ in v['personen'] if p_['vorname'] == 'Hans']
-check('… Hans Doppelt: einer zum vorhandenen Mitarbeiter, einer neu ohne Anmeldung', len(hans) == 2 and sorted(p_['zugang'] for p_ in hans) == [False, True], [(p_['id'], p_['zugang']) for p_ in hans])
-hr(pv['phans1']['nutzer'], aktiv=False); hr(pv['phans2']['nutzer'], aktiv=False)
+check('… Hans Doppelt: einer beim Mitarbeiter, der zweite bleibt ehemalig; Karl Alt bleibt ehemalig', pv['phans1']['nutzer'] == ids['hans']
+      and sorted(p_['id'] for p_ in v['personen'] if p_['altbestand']) == ['phans2', 'pkarl'], sorted(p_['id'] for p_ in v['personen'] if p_['altbestand']))
+hr(ids['hans'], aktiv=False)
 
 # ── Altbestand einzeln zuordnen (abweichender Name, Mitarbeiter mit HR-Angaben: zusammenführen) ──
 for u, n in (('mara', 'Mara Konto'), ('nina', 'Nina Neu')):
@@ -437,7 +441,7 @@ storage_write('hr-abwesenheiten', ab)
 v = P.call('mitarbeiter_hr')[1]
 rev = v['rev']
 altb = sorted(p_['id'] for p_ in v['personen'] if p_['altbestand'])
-check('verwaiste Einträge erscheinen als „ohne Mitarbeiter“ (gelöschter Mitarbeiter, zweiter Eintrag)', altb == ['pdoppel', 'pquentin', 'pverwaist'], altb)
+check('verwaiste Einträge erscheinen als „ohne Mitarbeiter“ (gelöschter Mitarbeiter, zweiter Eintrag)', altb == ['pdoppel', 'phans2', 'pkarl', 'pquentin', 'pverwaist'], altb)
 pe_vorher = {p_['id']: p_ for p_ in v['personen']}[PE]
 st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pverwaist', 'nutzer': ids['paula'], 'rev': rev})
 v = P.call('mitarbeiter_hr')[1]
@@ -453,8 +457,8 @@ check('zweiter Eintrag desselben Mitarbeiters: in seine Angaben zusammengeführt
 st, r = P.call('hr_personal_uebernehmen', {})
 v = P.call('mitarbeiter_hr')[1]
 pq = [p_ for p_ in v['personen'] if p_['nutzer'] == ids['quentin']]
-check('„In Mitarbeiter übernehmen“ erfasst auch verwaiste Einträge (gleichnamiger Mitarbeiter)', st == 200 and r['anzahl'] == 1 and len(pq) == 1 and pq[0]['id'] == 'pquentin'
-      and not [p_ for p_ in v['personen'] if p_['altbestand']], (r, pq))
+check('„Gleichnamige zuordnen“ erfasst auch verwaiste Einträge', st == 200 and r['anzahl'] == 1 and len(pq) == 1 and pq[0]['id'] == 'pquentin'
+      and sorted(p_['id'] for p_ in v['personen'] if p_['altbestand']) == ['phans2', 'pkarl'], (r, pq))
 rev = v['rev']
 hr(ids['paula'], aktiv=False); hr(ids['quentin'], aktiv=False)
 
@@ -659,6 +663,9 @@ with sync_playwright() as p:
     for breite in (390, 1280):
         ctx, pg = anmelden('admin', PW, '198.51.100.2', breite)
         pg.goto(B + '/admin/#users'); pg.wait_for_selector('#hr-alt [data-hr-alt-einzeln]')
+        check(f'{breite}px: Hinweis nennt ehemalige Mitarbeiter, „Einzeln zuordnen“ vorne', 'ehemalige Mitarbeiter' in pg.text_content('#hr-alt')
+              and pg.locator('#hr-alt .btn.primary[data-hr-alt-einzeln]').count() == 1)
+        pg.locator('#hr-alt').screenshot(path=os.path.join(SH, f'hr_ehemalige_hinweis_{breite}.png'))
         pg.click('#hr-alt [data-hr-alt-einzeln]'); pg.wait_for_selector('#dlg-hr-alt[open] li[data-eintrag="pute"]')
         breit = pg.evaluate("document.querySelector('#dlg-hr-alt').scrollWidth <= document.querySelector('#dlg-hr-alt').clientWidth + 1")
         check(f'{breite}px: Dialog „Einzeln zuordnen“ mit Eintrag und Mitarbeiterauswahl, ohne waagerechtes Scrollen', breit and pg.locator('#dlg-hr-alt li[data-eintrag="pute"] select option').count() > 3)
