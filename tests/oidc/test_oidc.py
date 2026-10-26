@@ -1078,15 +1078,21 @@ with sync_playwright() as pw:
     # Inhalt der Antwort ist nach der Weiterleitung nicht mehr abrufbar – Status genügt (Code prüft der Aufruf oben)
     check('Speichern ohne gültige Bestätigung: Server verlangt die Bestätigung (403)', antwort.value.status == 403,
           {'status': antwort.value.status, 'bestaetigt_vor_dem_ablauf': vorher})
-    pg.wait_for_url(lambda u: u.startswith(L))
-    check('… Seite leitet zu Keycloak mit max_age=0', 'max_age=0' in urllib.parse.unquote(pg.url), pg.url)
-    pg.wait_for_selector('#password')
-    check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
-    pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
-    pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER['admin'][1], 1)); pg.click('#kc-login')   # nächster Code (keine Wiederverwendung)
-    pg.wait_for_url(SIC + '/module/sicherheit/**'); pg.wait_for_selector('#sic-app:not([hidden])')
-    code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
-    check('nach der erneuten Anmeldung: Aktion bestätigt (Rücksprung ins Modul Sicherheit)', code == 200, (code, j))
+    try:
+        pg.wait_for_url(lambda u: u.startswith(L), timeout=20000); bei_keycloak = True
+    except Exception:
+        bei_keycloak = False
+    _log = os.path.join(WORK, 'apache', 'access.log')
+    _zeilen = open(_log, encoding='utf-8', errors='replace').read().splitlines()[-14:] if os.path.exists(_log) else []
+    check('… Seite leitet zu Keycloak mit max_age=0', bei_keycloak and 'max_age=0' in urllib.parse.unquote(pg.url), {'url': pg.url, 'zugriffe': _zeilen})
+    if bei_keycloak:
+        pg.wait_for_selector('#password')
+        check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
+        pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
+        pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER['admin'][1], 1)); pg.click('#kc-login')   # nächster Code (keine Wiederverwendung)
+        pg.wait_for_url(SIC + '/module/sicherheit/**'); pg.wait_for_selector('#sic-app:not([hidden])')
+        code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
+        check('nach der erneuten Anmeldung: Aktion bestätigt (Rücksprung ins Modul Sicherheit)', code == 200, (code, j))
     # Bestätigung über ein Recht (require_perm_confirmed, z. B. Kunden pflegen, Wochenangebot senden): ebenfalls erneute
     # Anmeldung bei Keycloak – nie die hier gesperrte Passwortabfrage (sonst wäre die Aktion nicht mehr bestätigbar)
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')   # Single Sign-on auf die Verwaltung
