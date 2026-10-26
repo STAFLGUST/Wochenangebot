@@ -1497,10 +1497,15 @@ with sync_playwright() as pw:
     pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung weiter', code == 200 and j.get('loggedIn'), (code, j))
-    # „Sitzung beenden“ in der Verwaltung: gilt auch, solange die Sitzung bei Keycloak und im Webserver-Modul noch läuft
-    code, j = pg.evaluate(post, ['session_end', {'uid': kim}])
-    if code == 403:   # Bestätigung der Verwaltung abgelaufen (langsame Umgebung): über den bisherigen Zugang beenden
+    # „Sitzung beenden“ (seit Stand 9 im Modul Sicherheit, Aktion nur auf dessen Host – GR-109): gilt auch, solange die
+    # Sitzung bei Keycloak und im Webserver-Modul noch läuft. Der Administrator ist in diesem Browser angemeldet (SSO).
+    check('„Sitzung beenden“ auf dem Verwaltungs-Host nicht mehr erreichbar (404)', pg.evaluate(post, ['session_end', {'uid': kim}])[0] == 404)
+    ps = eigene_seite(ctx.new_page())
+    ps.goto(SIC + '/module/sicherheit/'); ps.wait_for_selector('#sic-app:not([hidden])')
+    code, j = ps.evaluate(post.replace("'../api/", "'/api/"), ['session_end', {'uid': kim}])
+    if code == 403:   # Bestätigung abgelaufen (langsame Umgebung): über den bisherigen Zugang beenden
         V.call('reauth', {'password': PW_ALT}); code, j = V.call('session_end', {'uid': kim})
+    ps.close()
     check('Sitzung beenden (alle Sitzungen von Kim)', code == 200 and j.get('ended', 0) >= 1, (code, j))
     code, j = pk.evaluate(stat)
     check('… beendete Sitzung entsteht nicht neu: erneute Anmeldung verlangt (403)', code == 403 and j.get('code') == 'reauth_required' and 'beendet' in j.get('error', ''), (code, j))
