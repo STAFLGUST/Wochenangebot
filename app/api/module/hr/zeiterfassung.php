@@ -115,14 +115,18 @@ function hr_zeit_zuordnen(array $l, array $personal, array $users): array
 }
 
 /* Plan der Übernahme (ohne zu speichern) */
-function hr_zeit_planen(array $e): array
+/* $me: wer übernimmt – Abwesenheiten der eigenen Person werden nicht übernommen, ihre früheren Einträge nicht ersetzt und
+   ihre Angaben nicht geändert (Vier-Augen-Prinzip: eigene Abwesenheiten trägt eine andere Person der Personalstelle ein) */
+function hr_zeit_planen(array $e, ?array $me = null): array
 {
     $l = hr_zeit_lesen($e);
     $personal = hr_personal(); $abw = hr_abwesenheiten();
+    $eigen = $me ? hr_eigene_ids($personal, $me) : [];
     $users = []; foreach (users_load() as $u) $users[(string)$u['id']] = $u;
     [$zu, $neu, $mehrdeutig, $aehnlich] = hr_zeit_zuordnen($l, $personal, $users);
     $abteilungen = !empty($e['optionen']['abteilungen']);
-    $aend = [];
+    $aend = []; $eigeneZeilen = [];
+    foreach ($zu as $wer => $p) if (isset($eigen[$p['id']])) { $eigeneZeilen[$wer] = $l['personen'][$wer]['name']; unset($zu[$wer]); }
     foreach ($zu as $wer => $p) {
         $x = $l['personen'][$wer]; $w = [];
         if ($x['nr'] !== '' && ($p['personalnummer'] ?? '') !== $x['nr']) $w['personalnummer'] = $x['nr'];
@@ -131,8 +135,8 @@ function hr_zeit_planen(array $e): array
     }
     // zuvor aus der Zeiterfassung übernommene Einträge im Zeitraum des Berichts werden ersetzt
     $rv = $l['von']; $rb = $l['bis'];
-    $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb) {
-        return ($x['quelle'] ?? '') === 'zeiterfassung' && $x['von'] >= $rv && $x['bis'] <= $rb;   // nur ganz im Zeitraum (Rest bleibt)
+    $alt = $rv === null ? [] : array_values(array_filter($abw['eintraege'], function ($x) use ($rv, $rb, $eigen) {
+        return ($x['quelle'] ?? '') === 'zeiterfassung' && $x['von'] >= $rv && $x['bis'] <= $rb && !isset($eigen[$x['person']]);   // nur ganz im Zeitraum (Rest bleibt), nie die eigenen
     }));
     $altIds = array_column($alt, 'id');
     $bleibt = array_values(array_filter($abw['eintraege'], function ($x) use ($altIds) { return !in_array($x['id'], $altIds, true); }));
@@ -144,7 +148,7 @@ function hr_zeit_planen(array $e): array
     }
     $tage = []; $gleich = 0; $abweichend = [];
     foreach ($l['eintraege'] as $x) {
-        if (isset($mehrdeutig[$x['wer']])) continue;
+        if (isset($mehrdeutig[$x['wer']]) || isset($eigeneZeilen[$x['wer']])) continue;
         $pid = isset($zu[$x['wer']]) ? $zu[$x['wer']]['id'] : 'neu:' . $x['wer'];
         $code = $x['art'] . ($x['abzug'] ? '!' : '');
         for ($d = $x['von']; $d <= $x['bis']; $d = hr_plus($d, 1)) {
@@ -164,14 +168,14 @@ function hr_zeit_planen(array $e): array
                        'notiz' => '', 'quelle' => 'zeiterfassung'] + (str_ends_with($z['art'], '!') ? ['urlaubAbzug' => true] : []);
         }
     }
-    return ['lesen' => $l, 'zu' => $zu, 'neu' => $neu, 'mehrdeutig' => $mehrdeutig, 'aehnlich' => $aehnlich, 'aend' => $aend, 'alt' => $alt, 'bleibt' => $bleibt,
+    return ['lesen' => $l, 'zu' => $zu, 'neu' => $neu, 'mehrdeutig' => $mehrdeutig, 'eigen' => $eigeneZeilen, 'aehnlich' => $aehnlich, 'aend' => $aend, 'alt' => $alt, 'bleibt' => $bleibt,
             'neuE' => $neuE, 'gleich' => $gleich, 'abweichend' => $abweichend, 'personen' => hr_personen_index($personal),
             'stand' => hr_import_stand($personal, $abw, count($users))];
 }
 
 function hr_zeit_vorschau(array $e, array $me): array
 {
-    $pl = hr_zeit_planen($e);
+    $pl = hr_zeit_planen($e, $me);
     $l = $pl['lesen'];
     $n = ['neu' => 0, 'geaendert' => 0, 'entfaellt' => 0, 'unveraendert' => $pl['gleich'], 'fehler' => 0];
     $z = [];
@@ -181,6 +185,7 @@ function hr_zeit_vorschau(array $e, array $me): array
         $z[] = ['art' => 'neu', 'zeile' => $x['zeile'], 'schluessel' => $x['nr'] !== '' ? 'Nr. ' . $x['nr'] : 'Mitarbeiter', 'name' => $x['name'],
                 'text' => 'neuer Mitarbeiter ohne Anmeldung' . ($x['abteilung'] !== '' ? ' (' . $x['abteilung'] . ')' : '') . $hinweis];
     }
+    foreach ($pl['eigen'] as $wer => $name) { $n['fehler']++; $z[] = ['art' => 'fehler', 'zeile' => $l['personen'][$wer]['zeile'], 'schluessel' => 'Mitarbeiter', 'name' => $name, 'text' => 'nicht übernommen – eigene Person: bitte durch eine andere Person der Personalstelle übernehmen lassen']; }
     foreach ($pl['mehrdeutig'] as $wer => $name) { $n['fehler']++; $z[] = ['art' => 'fehler', 'zeile' => $l['personen'][$wer]['zeile'], 'schluessel' => 'Mitarbeiter', 'name' => $name, 'text' => 'nicht übernommen: Name/Personalnummer gibt es mehrfach unter den Mitarbeitern']; }
     foreach ($pl['aend'] as $pid => $w) {
         $n['geaendert']++;
@@ -221,7 +226,7 @@ function hr_zeit_uebernehmen(array $e, array $me): array
         return with_lock('hr-abwesenheiten', function () use ($e, $me) {
             $v = hr_zeit_vorschau($e, $me);
             if ((string)($e['stand'] ?? '') !== $v['stand']) fail('Die HR-Daten wurden inzwischen geändert. Bitte die Vorschau neu laden.', 409);
-            $pl = hr_zeit_planen($e);
+            $pl = hr_zeit_planen($e, $me);
             $neuNutzer = [];
             foreach ($pl['neu'] as $wer => $x) $neuNutzer[$wer] = mitarbeiter_ohne_zugang_anlegen($x['vorname'], $x['nachname'], $me);
             $users = []; foreach (users_load() as $u) $users[(string)$u['id']] = $u;

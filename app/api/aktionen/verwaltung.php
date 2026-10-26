@@ -498,6 +498,17 @@ switch ($action) {
                 }
                 unset($e);
             }
+            // Ohne Recht „HR verwalten“: Vorgänge der Urlaubsverwaltung (Namen, Zeiträume von Abwesenheiten) nur als Vorgang zeigen –
+            // aus Name und Zeitraum ließe sich auf Krankheit schließen (Gesundheitsdaten)
+            if (!may($me, 'hr.verwalten')) {
+                foreach ($entries as &$e) {
+                    if (($e['a'] ?? '') !== 'hr') continue;
+                    $e['s'] = 'Vorgang der Urlaubsverwaltung';
+                    unset($e['d']);
+                    $e['masked'] = true;
+                }
+                unset($e);
+            }
             respond(['ok' => true, 'month' => $month, 'months' => $months, 'aufbewahrung' => PROTOKOLL_MONATE, 'entries' => $entries]);
         }
 }

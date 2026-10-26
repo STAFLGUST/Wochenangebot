@@ -118,10 +118,13 @@ function import_arten_hr(): array
 
 /* Plan der Übernahme (ohne zu speichern). Namen werden den Mitarbeitern zugeordnet (Anzeigename, Vor- + Nachname,
    Benutzername „vorname-nachname“); unbekannte Namen werden bei der Übernahme Mitarbeiter ohne Anmeldung. */
-function hr_import_planen(array $e): array
+/* $me: wer übernimmt – Zeilen der eigenen Person werden nicht übernommen und ihre früheren Einträge nicht ersetzt
+   (Vier-Augen-Prinzip: eigene Abwesenheiten trägt eine andere Person der Personalstelle ein) */
+function hr_import_planen(array $e, ?array $me = null): array
 {
     $l = hr_import_lesen($e);
     $personal = hr_personal(); $abw = hr_abwesenheiten();
+    $eigen = $me ? hr_eigene_ids($personal, $me) : [];
     $users = []; foreach (users_load() as $u) $users[(string)$u['id']] = $u;
     $nachName = [];
     foreach ($personal['personen'] as $p) {
@@ -129,12 +132,13 @@ function hr_import_planen(array $e): array
         if ($p['nutzer'] !== null && isset($users[$p['nutzer']])) $namen = array_merge($namen, hr_konto_namen($users[$p['nutzer']]));
         foreach (array_unique($namen) as $k) if ($k !== '') $nachName[$k][$p['id']] = $p;
     }
-    $neuP = []; $aendP = []; $zuordnung = []; $mehrdeutig = [];
+    $neuP = []; $aendP = []; $zuordnung = []; $mehrdeutig = []; $eigeneZeilen = [];
     foreach ($l['personen'] as $k => $x) {
         $treffer = array_values($nachName[$k] ?? []);
         if (count($treffer) > 1) { $mehrdeutig[$k] = $x['name']; continue; }
         if ($treffer) {
             $p = $treffer[0];
+            if (isset($eigen[$p['id']])) { $eigeneZeilen[$k] = $x['name']; continue; }
             if ($p['abteilung'] !== $x['abteilung'] || $p['pos'] !== $x['pos']) $aendP[$p['id']] = ['abteilung' => $x['abteilung'], 'pos' => $x['pos']];
             $zuordnung[$k] = $p['id'];
             continue;
@@ -146,7 +150,7 @@ function hr_import_planen(array $e): array
     }
     $jahr = $l['jahr'];
     // bisher übernommene Einträge dieses Jahres werden ersetzt
-    $alt = array_values(array_filter($abw['eintraege'], function ($x) use ($jahr) { return ($x['quelle'] ?? '') === 'import' && (int)substr($x['von'], 0, 4) === $jahr; }));
+    $alt = array_values(array_filter($abw['eintraege'], function ($x) use ($jahr, $eigen) { return ($x['quelle'] ?? '') === 'import' && (int)substr($x['von'], 0, 4) === $jahr && !isset($eigen[$x['person']]); }));
     $altIds = array_column($alt, 'id');
     $bleibt = array_values(array_filter($abw['eintraege'], function ($x) use ($altIds) { return !in_array($x['id'], $altIds, true); }));
     $neuE = []; $konflikte = [];
@@ -160,17 +164,18 @@ function hr_import_planen(array $e): array
                        'notiz' => '', 'quelle' => 'import'];
         }
     }
-    return ['lesen' => $l, 'neuP' => $neuP, 'aendP' => $aendP, 'mehrdeutig' => $mehrdeutig, 'alt' => $alt, 'bleibt' => $bleibt, 'neuE' => $neuE,
+    return ['lesen' => $l, 'neuP' => $neuP, 'aendP' => $aendP, 'mehrdeutig' => $mehrdeutig, 'eigen' => $eigeneZeilen, 'alt' => $alt, 'bleibt' => $bleibt, 'neuE' => $neuE,
             'konflikte' => $konflikte, 'personen' => hr_personen_index($personal), 'stand' => hr_import_stand($personal, $abw, count($users))];
 }
 function hr_import_stand(array $personal, array $abw, int $mitarbeiter = 0): string { return $personal['rev'] . '-' . $abw['rev'] . '-' . $mitarbeiter; }
 
 function hr_import_vorschau(array $e, array $me): array
 {
-    $pl = hr_import_planen($e);
+    $pl = hr_import_planen($e, $me);
     $l = $pl['lesen'];
     $n = ['neu' => 0, 'geaendert' => 0, 'entfaellt' => 0, 'unveraendert' => 0, 'fehler' => 0];
     $z = [];
+    foreach ($pl['eigen'] as $name) { $n['fehler']++; $z[] = ['art' => 'fehler', 'schluessel' => 'Mitarbeiter', 'name' => $name, 'text' => 'nicht übernommen – eigene Person: bitte durch eine andere Person der Personalstelle übernehmen lassen']; }
     foreach ($pl['neuP'] as $p) { $n['neu']++; $z[] = ['art' => 'neu', 'schluessel' => 'Mitarbeiter', 'name' => hr_name($p), 'text' => 'neuer Mitarbeiter ohne Anmeldung' . ($p['abteilung'] !== '' ? ' (' . $p['abteilung'] . ')' : '')]; }
     foreach ($pl['mehrdeutig'] as $name) { $n['fehler']++; $z[] = ['art' => 'fehler', 'schluessel' => 'Mitarbeiter', 'name' => $name, 'text' => 'nicht übernommen: Name gibt es mehrfach unter den Mitarbeitern – bitte Namen eindeutig machen']; }
     $alle = $pl['personen'] + $pl['neuP'];
@@ -209,7 +214,7 @@ function hr_import_uebernehmen(array $e, array $me): array
         return with_lock('hr-abwesenheiten', function () use ($e, $me) {
             $v = hr_import_vorschau($e, $me);
             if ((string)($e['stand'] ?? '') !== $v['stand']) fail('Die HR-Daten wurden inzwischen geändert. Bitte die Vorschau neu laden.', 409);
-            $pl = hr_import_planen($e);
+            $pl = hr_import_planen($e, $me);
             // neue Mitarbeiter ohne Anmeldung anlegen (Plattformkern), dann HR-Angaben setzen
             $ids = [];
             foreach ($pl['neuP'] as $platz => $p) $ids[$platz] = mitarbeiter_ohne_zugang_anlegen($p['vorname'], $p['nachname'], $me);
