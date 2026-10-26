@@ -21,8 +21,8 @@ switch ($action) {
                 respond(['ok' => true, 'company' => $CFG['company'], 'offer' => einzel_model($e), 'fracht' => fracht_public()]);
             }
             if ($oid !== OFFER_STD || !std_public()) {
-                // Mitarbeiter sehen alle Angebote; Kunden nur freigeschaltete; sonst Anmeldung nötig
-                if (current_user()) require_auth();
+                // Mitarbeiter mit Modulzugang Angebot sehen alle Angebote; Kunden nur freigeschaltete; sonst Anmeldung nötig
+                if (current_user()) require_modulzugang('angebot');
                 elseif ($k = current_customer()) {
                     if (!empty($k['login']['mustChange'])) fail('Bitte zuerst ein eigenes Passwort festlegen.', 403);
                     if (!in_array($oid, customer_offers($k), true)) fail('Dieses Angebot ist für Ihren Zugang nicht freigeschaltet.', 403);
@@ -32,7 +32,7 @@ switch ($action) {
             $def = offer_def($oid);
             if (!$def) fail('Unbekanntes Angebot.', 404);
             if (!empty($_GET['draft'])) {
-                require_auth();
+                require_modulzugang('angebot');
                 $d = store_read('entwurf') ?? store_read('angebot');
                 if (!$d) fail('Kein Entwurf vorhanden.', 404);
                 respond(['ok' => true, 'company' => $CFG['company'], 'preview' => true, 'offer' => offer_resolve($d, $def), 'fracht' => fracht_public()]);
@@ -49,8 +49,10 @@ switch ($action) {
             respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => fracht_public()]);
         }
 
+        /* Liste der Kundenangebote (Name, Kennung, Rückfall – keine Preise): Angebot sowie Kundenverwaltung (Zuordnung) */
         case 'offers': {
-            require_auth();
+            $me = require_auth();
+            if (!modul_zugang_frei($me, 'angebot') && !may($me, 'kunden.sehen')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             header('Cache-Control: no-store');
             $d = offers_load();
             respond(['ok' => true, 'rev' => $d['rev'], 'offers' => $d['offers'], 'std' => offer_def(OFFER_STD), 'stdPublic' => std_public()]);
