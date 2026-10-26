@@ -19,6 +19,31 @@ const INTEGRITAET_STUFEN = ['kritisch' => 3, 'warnung' => 2, 'hinweis' => 1];
 /* Ende der Sicherheitsupdates je PHP-Version (php.net/supported-versions, Stand Oktober 2026) */
 const PHP_SUPPORT_ENDE = ['7.4' => '2022-11-28', '8.0' => '2023-11-26', '8.1' => '2025-12-31', '8.2' => '2026-12-31', '8.3' => '2027-12-31', '8.4' => '2028-12-31', '8.5' => '2029-12-31'];
 /* Vom Webserver oder der Shell ausführbare Dateien */
+/* Nur sperrende Zugriffsregeln (.htaccess im Datenordner und im Datenbankordner): jede Zeile ist leer, Kommentar,
+   „Require all denied“, „Deny from all“, „Order allow,deny“/„Order deny,allow“ oder ein <IfModule>-Rahmen; mindestens
+   eine Sperrzeile. Alles andere (z. B. AddHandler, php_value, Rewrite, Allow) gilt als verändert. */
+function integritaet_nur_sperre(string $t): bool
+{
+    $sperre = false;
+    foreach (preg_split('/\R/', $t) ?: [] as $z) {
+        $z = trim($z);
+        if ($z === '' || $z[0] === '#') continue;
+        if (preg_match('~^(?:Require\s+all\s+denied|Deny\s+from\s+all)$~i', $z)) { $sperre = true; continue; }
+        if (preg_match('~^(?:Order\s+(?:allow,deny|deny,allow)|<IfModule\s+!?[A-Za-z0-9_.]+>|</IfModule>)$~i', $z)) continue;
+        return false;
+    }
+    return $sperre;
+}
+/* Merkdatei der Proxy-Adressen (proxy_adressen_merken in lib/protokoll.php): nur eine JSON-Liste von IP-Adressen */
+const INTEGRITAET_PROXY_DATEI = '~^wa-proxy-[46]-[0-9a-f]{64}\.json$~';
+function integritaet_proxy_ok(?string $t): bool
+{
+    if ($t === null || strlen($t) > 4096) return false;
+    $j = json_decode($t, true);
+    if (!is_array($j) || !array_is_list($j) || count($j) > 64) return false;
+    foreach ($j as $x) if (!is_string($x) || filter_var($x, FILTER_VALIDATE_IP) === false) return false;
+    return true;
+}
 const INTEGRITAET_AUSFUEHRBAR = '~\.(?:php\d?|phtml|phar|pht|phps|inc|cgi|pl|py|sh|bash|shtml)$|(?:^|/)\.(?:htaccess|htpasswd|user\.ini)$~i';
 /* Muster: [Bezeichnung, regulärer Ausdruck, Stufe, Dateiarten (php = PHP-Dateien, web = JS/HTML/SVG, conf = .htaccess/.user.ini,
    daten = gespeicherte Dokumente)]. Die Ausdrücke sind so geschrieben, dass sie nicht auf diese Datei selbst passen. */
@@ -177,6 +202,18 @@ function integritaet_pruefen(): array
                 if ($sig) { $c['suspicious']++; $add($path, 'verdaechtig', $ss, 'Auffälliges Muster in gespeicherten Daten', $sig); }
                 continue;
             }
+            // Zugriffssperre im Datenordner (z. B. aus der Zeit vor Docker): erlaubt, solange sie nur sperrt
+            if ($rel === '.htaccess') {
+                if (integritaet_nur_sperre((string)$lesen($f->getPathname()))) continue;
+                $c['data']++; $add($path, 'daten', 'kritisch', 'Zugriffsregeln im Datenordner (.htaccess) enthalten mehr als eine Sperre');
+                continue;
+            }
+            // Proxy-Merkdatei der Anwendung: erwartet, solange sie nur IP-Adressen enthält
+            if (preg_match(INTEGRITAET_PROXY_DATEI, $rel)) {
+                if (integritaet_proxy_ok($lesen($f->getPathname()))) continue;
+                $c['data']++; $add($path, 'daten', 'warnung', 'Merkdatei der Proxy-Adressen mit unerwartetem Inhalt');
+                continue;
+            }
             $c['data']++;
             if (preg_match(INTEGRITAET_AUSFUEHRBAR, $rel)) $add($path, 'daten', 'kritisch', 'Ausführbare Datei im Datenordner');
             else $add($path, 'daten', 'hinweis', 'Unerwartete Datei im Datenordner');
@@ -192,7 +229,7 @@ function integritaet_pruefen(): array
             if (is_file($ht)) {
                 $n++; $c['checked']++;
                 $t = (string)@file_get_contents($ht, false, null, 0, 4096);
-                if (!preg_match('~^\s*(?:Require\s+all\s+denied|Deny\s+from\s+all)\s*$~mi', $t) || preg_match('~\b(?:php_value|php_flag|AddType|AddHandler|SetHandler|Rewrite\w*|Allow\s+from|Require\s+all\s+granted)\b~i', $t)) {
+                if (!integritaet_nur_sperre($t)) {
                     $c['data']++; $add('data/.sqlite/.htaccess', 'daten', 'kritisch', 'Zugriffssperre des Datenbankordners verändert');
                 }
             } elseif ($sqlite) { $c['data']++; $add('data/.sqlite/.htaccess', 'daten', 'warnung', 'Zugriffssperre des Datenbankordners (.htaccess) fehlt'); }
