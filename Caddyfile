@@ -11,9 +11,9 @@
 	encode zstd gzip
 	header {
 		# HTTPS-Pflicht auch für alle Subdomains (keine braucht unverschlüsseltes HTTP, s. LIESMICH) – verhindert, dass über eine
-		# erfundene unverschlüsselte Subdomain Cookies für die Seite untergeschoben werden. Merkdauer zunächst 1 Tag (Probe),
-		# danach auf 1 Jahr (31536000) erhöhen.
-		Strict-Transport-Security "max-age=86400; includeSubDomains"
+		# erfundene unverschlüsselte Subdomain Cookies für die Seite untergeschoben werden. Merkdauer 1 Jahr (nach der Probe mit
+		# 1 Tag seit 21.10.2026 ohne Probleme, Sicherheitsdurchsicht 26.10.2026); bewusst ohne „preload“.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "same-origin"
@@ -124,6 +124,7 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, leergut.dashboard-stafl.de, container-import.dashboard-stafl.de, controlling.dashboard-stafl.de, test.dashboard-stafl.de {
 	encode zstd gzip
 	header {
+		Strict-Transport-Security "max-age=31536000"
 		X-Robots-Tag "noindex, nofollow"
 		Cache-Control "no-store"
 		X-Content-Type-Options "nosniff"
@@ -135,5 +136,6 @@ rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, leer
 
 # Die WWW-Adresse des Dashboards dient nur als Weiterleitung auf den zentralen Einstieg.
 www.dashboard-stafl.de {
+	header Strict-Transport-Security "max-age=31536000"
 	redir https://dashboard-stafl.de{uri} 308
 }
