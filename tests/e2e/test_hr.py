@@ -496,6 +496,38 @@ check('nicht mehr im Urlaubsplan: nur in Monaten mit genehmigten Abwesenheiten i
 hr(ids['lena'], aktiv=True)
 check('Export ohne Monat: 422', P.call('hr_export', {'jahr': Y, 'monate': []})[0] == 422)
 
+# ── Verfallstag des Resturlaubs einstellbar (Verwaltung → Urlaub; Standard 31.03.) ──
+assert A.call('user_save', {'id': '', 'name': 'Fritz Frist', 'username': 'fritz', 'role': 'viewer', 'active': True, 'password': 'Urlaub-Konto-4711', 'mustChange': False})[0] == 200
+ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+rev = P.call('mitarbeiter_hr')[1]['rev']
+PF = hr(ids['fritz'], abteilung='Lager', pos=50, jahr=Y, anspruch=20, uebertrag=5)
+APR = montag(Y, 4, 2)
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'U', 'von': iso(APR), 'bis': iso(APR + dt.timedelta(days=4))})
+NAPR = r['eintrag']['tage']
+konto_f = lambda: next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y}')[1]['personen'] if p_['id'] == PF)['konto']
+v = P.call('mitarbeiter_hr')[1]
+check('Standard: Verfallstag 31.03.', v['uebertragBis'] == '03-31' and E.call('hr_start')[1]['uebertragBis'] == '03-31', v.get('uebertragBis'))
+k = konto_f()
+check('… Urlaub im April verbraucht den Übertrag nicht (verfällt ganz)', k['frist'] == f'{Y}-03-31' and k['verfaellt'] == 5, k)
+einst = {'sperren': v['sperren'], 'ferien': v['ferien']}
+for falsch in ('02-29', f'{Y}-13-01', '31.04.', 'x'):
+    st, r = P.call('hr_einstellungen_save', {**einst, 'uebertragBis': falsch})
+    check(f'ungültiger Verfallstag {falsch}: 422', st == 422 and 'Verfallstag' in r.get('error', ''), (st, r))
+check('ohne Personalrecht: 403', L.call('hr_einstellungen_save', {**einst, 'uebertragBis': '04-30'})[0] == 403)
+st, r = P.call('hr_einstellungen_save', {**einst, 'uebertragBis': f'{Y}-04-30'})
+check('Verfallstag 30.04. gespeichert (aus dem Datumsfeld nur Tag und Monat)', st == 200 and r['uebertragBis'] == '04-30', r)
+k = konto_f()
+check('… Konto: Frist 30.04., Urlaub im April verbraucht den Übertrag zuerst', k['frist'] == f'{Y}-04-30' and k['verfaellt'] == max(0, 5 - NAPR), (k, NAPR))
+check('… gilt überall (Start, Verwaltung, Übersicht)', E.call('hr_start')[1]['uebertragBis'] == '04-30'
+      and P.call(f'hr_uebersicht&jahr={Y}')[1]['uebertragBis'] == '04-30')
+st, r = P.call('hr_einstellungen_save', einst)
+check('Speichern ohne Verfallstag lässt ihn unverändert', st == 200 and r['uebertragBis'] == '04-30' and P.call('mitarbeiter_hr')[1]['uebertragBis'] == '04-30', r)
+check('Änderung im Protokoll', 'Verfallstag Resturlaub auf 30.04. geändert' in json.dumps(A.call('log')[1], ensure_ascii=False))
+st, r = P.call('hr_einstellungen_save', {**einst, 'uebertragBis': '03-31'})
+check('Rückweg auf 31.03.', st == 200 and r['uebertragBis'] == '03-31' and konto_f()['verfaellt'] == 5, r)
+rev = P.call('mitarbeiter_hr')[1]['rev']
+hr(ids['fritz'], aktiv=False)
+
 # ── Übernahme der Excel-Planung (synthetische Datei) im Browser ──
 fehler = []
 with sync_playwright() as p:
@@ -652,7 +684,18 @@ with sync_playwright() as p:
     zr.nth(0).fill(f'{Y}-10-05'); zr.nth(1).fill(f'{Y}-10-16'); zr.nth(2).fill('Herbstferien')
     pg.click('#hr-einst [type="submit"]'); pg.wait_for_function('document.querySelectorAll("#hr-ferien .hr-zr").length === 2 && !document.querySelector("#hr-einst-err").textContent')
     check('Verwaltung → Urlaub: Ferien gespeichert', len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
+    check('Verwaltung → Urlaub: Verfallstag vorbelegt (31.03.)', pg.input_value('#hr-uebertrag-bis').endswith('-03-31') and '31.03.' in pg.text_content('#hr-uebertrag-anzeige'))
+    pg.fill('#hr-uebertrag-bis', f'{Y}-04-15')
+    pg.click('#hr-einst [type="submit"]'); pg.wait_for_function('document.querySelector("#hr-uebertrag-anzeige") && document.querySelector("#hr-uebertrag-anzeige").textContent.includes("15.04.")')
+    check('Oberfläche: Verfallstag 15.04. gespeichert, Ferien bleiben', P.call('mitarbeiter_hr')[1]['uebertragBis'] == '04-15' and len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
+    v_ = P.call('mitarbeiter_hr')[1]
+    assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31'})[0] == 200
+    ctx.close()
+    ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5', 390)
+    pg.goto(B + '/admin/#urlaub'); pg.wait_for_selector('#hr-uebertrag-bis')
+    check('390px Verwaltung → Urlaub: Verfallstag ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_390.png'), full_page=True)
     ctx.close()
 
     # ── Verwaltung → Mitarbeiter: Eintrag ohne Mitarbeiter einzeln zuordnen (abweichender Name) ──

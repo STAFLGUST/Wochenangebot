@@ -24,6 +24,7 @@
 .hr-einst .sec-h { margin: 10px 0 0; }
 .hr-einst .hint { margin: 0; }
 .hr-einst > .btn { align-self: flex-start; }
+.hr-einst .hr-verfall { max-width: 220px; }   /* Verfallstag des Resturlaubs */
 .hr-zr { display: grid; grid-template-columns: 1fr 1fr 1.4fr auto; gap: 8px; align-items: center; margin-bottom: 6px; }
 .hr-zr input { height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; min-width: 0; }
 .utab td.num, .utab th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
