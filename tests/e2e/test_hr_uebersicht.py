@@ -59,7 +59,8 @@ rev = P.call('mitarbeiter_hr')[1]['rev']
 
 def hr(uid, **werte):
     global rev
-    st, r = P.call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
+    # eigene Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip) – für Paul der Administrator
+    st, r = (A if uid == ids['paul'] else P).call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
     assert st == 200, r
     rev = r['rev']
 

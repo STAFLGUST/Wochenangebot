@@ -114,7 +114,8 @@ rev = v['rev']
 
 def hr(uid, **werte):
     global rev
-    st, r = P.call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
+    # eigene Urlaubsangaben ändert eine andere Person der Personalstelle (Vier-Augen-Prinzip) – für Paul der Administrator
+    st, r = (A if uid == ids['paul'] else P).call('mitarbeiter_hr_save', {'nutzer': uid, 'rev': rev, **werte})
     assert st == 200, r
     rev = r['rev']
     return r['person']['id']
@@ -339,12 +340,11 @@ storage_write('hr-abwesenheiten', ab)
 v = P.call('mitarbeiter_hr')[1]
 check('Verwaltung zeigt den Altbestand (ohne Mitarbeiter)', sorted(p_['id'] for p_ in v['personen'] if p_['altbestand']) == ['pgerda', 'phans1', 'phans2', 'pkarl'])
 G = Client('198.51.100.8'); G.call('login', {'username': 'gerda-gleich', 'password': 'Urlaub-Konto-4711'})
+rev_vorher = dokument('hr-personal').get('rev')
 st, r = G.call('hr_start&jahr=' + str(Y))
-check('erster Aufruf: gleichnamiger Eintrag automatisch übernommen (mit Urlaub und Anspruch)', st == 200 and r['neuVerknuepft'] is True and r['ich']['id'] == 'pgerda'
-      and r['konto']['anspruch'] == 28 and any(e['id'] == 'aalt1' for e in r['eintraege']), r.get('ich'))
-check('… danach nicht erneut gemeldet', G.call('hr_start')[1]['neuVerknuepft'] is False)
-log = json.dumps(A.call('log')[1], ensure_ascii=False)
-check('automatische Übernahme im Protokoll', 'automatisch dem Mitarbeiter Gerda Gleich zugeordnet' in log)
+# Keine automatische Verknüpfung mehr (Sicherheitsdurchsicht 26.10.2026): nur die Personalstelle ordnet zu
+check('erster Aufruf: gleichnamiger Eintrag wird NICHT automatisch übernommen, nichts gespeichert', st == 200 and r['neuVerknuepft'] is False
+      and r['ich']['id'] == ids['gerda-gleich'] and not any(e['id'] == 'aalt1' for e in r['eintraege']) and dokument('hr-personal').get('rev') == rev_vorher, r.get('ich'))
 H = Client('198.51.100.9'); H.call('login', {'username': 'hans', 'password': 'Urlaub-Konto-4711'})
 st, r = H.call('hr_start')
 check('gleicher Name zweimal im Altbestand: keine automatische Übernahme', st == 200 and r['neuVerknuepft'] is False and r['ich']['id'] == ids['hans'], r.get('ich'))
@@ -357,7 +357,10 @@ check('… nicht im Kalender, nicht als Vertretung', 'pkarl' not in [p_['id'] fo
 check('… ihre Einträge bleiben in „Alle Einträge“', any(e['person'] == 'pkarl' for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege']))
 anzahl_nutzer = len(A.call('users')[1]['users'])
 st, r = P.call('hr_personal_uebernehmen', {})
-check('Gleichnamige zuordnen: nur eindeutig gleichnamige Mitarbeiter, keine neuen Mitarbeiter', st == 200 and r['anzahl'] == 1 and len(A.call('users')[1]['users']) == anzahl_nutzer, r)
+check('Gleichnamige zuordnen: nur eindeutig gleichnamige Mitarbeiter, keine neuen Mitarbeiter', st == 200 and r['anzahl'] == 2 and len(A.call('users')[1]['users']) == anzahl_nutzer, r)
+st, r = G.call('hr_start&jahr=' + str(Y))
+check('… Gerda Gleich jetzt durch die Personalstelle zugeordnet (mit Urlaub und Anspruch)', st == 200 and r['ich']['id'] == 'pgerda' and r['konto']['anspruch'] == 28
+      and any(e['id'] == 'aalt1' for e in r['eintraege']), r.get('ich'))
 v = P.call('mitarbeiter_hr')[1]
 rev = v['rev']
 pv = {p_['id']: p_ for p_ in v['personen']}
@@ -461,6 +464,96 @@ check('„Gleichnamige zuordnen“ erfasst auch verwaiste Einträge', st == 200 
       and sorted(p_['id'] for p_ in v['personen'] if p_['altbestand']) == ['phans2', 'pkarl'], (r, pq))
 rev = v['rev']
 hr(ids['paula'], aktiv=False); hr(ids['quentin'], aktiv=False)
+
+# ── Vier-Augen-Prinzip auch bei Angaben, Zuordnung und Importen (Sicherheitsdurchsicht 26.10.2026) ──
+for u, n, g in (('pia', 'Pia Personal', ['hr.verwalten']), ('olga', 'Olga Protokoll', ['protokoll.sehen'])):
+    assert A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': 'Urlaub-Konto-4711', 'mustChange': False, 'grant': g})[0] == 200
+ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+PI = Client('198.51.100.10'); PI.call('login', {'username': 'pia', 'password': 'Urlaub-Konto-4711'})
+OL = Client('198.51.100.11'); OL.call('login', {'username': 'olga', 'password': 'Urlaub-Konto-4711'})
+# (a) eigene Urlaubsangaben
+v = P.call('mitarbeiter_hr')[1]
+rev = v['rev']
+pp = {p_['nutzer']: p_ for p_ in v['personen'] if p_['nutzer']}[ids['paul']]
+nein = []
+for werte in ({'jahr': Y, 'anspruch': 99}, {'jahr': Y, 'uebertrag': 5}, {'arbeitstage': [1, 2, 3]}, {'aktiv': not pp['aktiv']}, {'personalnummer': '777'}):
+    st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': rev, **werte})
+    nein.append((st, 'andere Person' in r.get('error', '')))
+check('eigene Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, Urlaubsplan, Personalnummer): 403', nein == [(403, True)] * 5, nein)
+st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': rev, 'abteilung': 'Personal', 'pos': 9, 'personalnummer': pp['personalnummer'],
+                                        'arbeitstage': pp['arbeitstage'], 'aktiv': pp['aktiv'], 'jahr': Y, 'anspruch': '', 'uebertrag': ''})
+check('… Abteilung und Position der eigenen Person bleiben änderbar (Dialog schickt unveränderte Werte mit)', st == 200 and r['person']['abteilung'] == 'Personal'
+      and r['person']['jahre'] == pp['jahre'], (st, r))
+rev = r['rev']
+st, r = A.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': rev, 'jahr': Y, 'anspruch': 25})
+check('… eine andere Person (Administrator) ändert sie', st == 200 and r['person']['jahre'][str(Y)]['anspruch'] == 25, (st, r))
+rev = r['rev']
+# (b) Zuordnung ehemaliger Mitarbeiter
+alt = dokument('hr-personal')
+alt['personen'] += [{'id': 'ppia', 'vorname': 'Pia', 'nachname': 'Personal', 'abteilung': 'Personal', 'pos': 47, 'aktiv': True},
+                    {'id': 'ppaulalt', 'vorname': 'Paul', 'nachname': 'Früher', 'abteilung': 'Personal', 'pos': 48, 'aktiv': True}]
+alt['rev'] = alt.get('rev', 0) + 1
+storage_write('hr-personal', alt)
+ab = dokument('hr-abwesenheiten')
+ab['eintraege'] += [{'id': 'apia', 'person': 'ppia', 'art': 'U', 'von': iso(montag(Y, 12, 1)), 'bis': iso(montag(Y, 12, 1)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'},
+                    {'id': 'apaul', 'person': 'ppaulalt', 'art': 'U', 'von': iso(montag(Y, 12, 1)), 'bis': iso(montag(Y, 12, 1)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'personalstelle'}]
+ab['rev'] = ab.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab)
+rev = P.call('mitarbeiter_hr')[1]['rev']
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'ppaulalt', 'nutzer': ids['paul'], 'rev': rev})
+check('Eintrag sich selbst zuordnen: 403', st == 403 and 'andere Person' in r.get('error', ''), (st, r))
+st, r = A.call('hr_altbestand_zuordnen', {'eintrag': 'ppaulalt', 'nutzer': ids['paul'], 'rev': rev})
+check('… eine andere Person ordnet zu', st == 200 and r['abwesenheiten'] == 1, (st, r))
+st, r = PI.call('hr_personal_uebernehmen', {})
+altb = [p_['id'] for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['altbestand']]
+check('„Gleichnamige zuordnen“ trifft nie die eigene Person', st == 200 and r['anzahl'] == 0 and 'ppia' in altb, (r, altb))
+st, r = P.call('hr_personal_uebernehmen', {})
+pv = {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}
+check('… eine andere Person ordnet gleichnamig zu', st == 200 and r['anzahl'] == 1 and pv[ids['pia']]['id'] == 'ppia', r)
+# (c) Importe: eigene Zeilen werden nicht übernommen, der Rest schon
+NOV = montag(Y, 11, 2)
+ser = lambda d: (dt.datetime(d.year, d.month, d.day) - dt.datetime(1899, 12, 30)).days
+KOPF = ['Vorname', 'Nachname', 'Name (Abwesenheit)', 'Abwesenheitsvergütung', 'Startdatum', 'Enddatum', 'Dauer', 'Mitarbeiternummer', 'Zweite Mitarbeiternummer', 'Abteilung', 'Standort', 'Gesamt']
+def person_zeile(v, n): return [v, n, None, None, None, None, None, '', None, 'Personal', 'STAFL', '16:00']
+def urlaub(d1, d2): return [None, None, 'Urlaub ', 'Bezahlte Abwesenheit', ser(d1), ser(d2), '16:00', None, None, None, None, None]
+DZ = {'blaetter': [{'name': 'Bericht', 'grid': [KOPF, person_zeile('Pia', 'Personal'), urlaub(NOV, NOV + dt.timedelta(days=1)),
+                                                person_zeile('Quentin', 'Quer'), urlaub(NOV + dt.timedelta(days=2), NOV + dt.timedelta(days=3))]}]}
+def zimp(cl, uebernehmen=False, stand=None):
+    b = {'art': 'zeiterfassung', 'daten': DZ, 'quelle': 'test.xlsx', 'optionen': {}}
+    if uebernehmen: b['stand'] = stand
+    return cl.call('import_uebernehmen' if uebernehmen else 'import_pruefen', b)
+st, v = zimp(PI)
+eig = [z for z in v.get('zeilen', []) if z['name'] == 'Pia Personal' and z['art'] == 'fehler']
+neu = [z['name'] for z in v.get('zeilen', []) if z['art'] == 'neu' and z['schluessel'] == 'Abwesenheiten']
+check('Zeiterfassung: eigene Zeilen in der Vorschau als „eigene Person“ markiert, Rest wird übernommen', st == 200 and eig and 'eigene Person' in eig[0]['text'] and neu == ['Quentin Quer'], (st, v.get('zeilen')))
+st, _ = zimp(PI, True, v['stand'])
+ze = lambda name: [e for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege'] if e['name'] == name and e['quelle'] == 'zeiterfassung' and e['von'] >= iso(NOV)]
+check('… übernommen: Quentin ja, eigene nicht', st == 200 and len(ze('Quentin Quer')) == 1 and ze('Pia Personal') == [], (ze('Quentin Quer'), ze('Pia Personal')))
+st, v = zimp(P)
+st, _ = zimp(P, True, v['stand'])
+check('… eine andere Person übernimmt die Zeile', st == 200 and len(ze('Pia Personal')) == 1 and len(ze('Quentin Quer')) == 1)
+st, v = zimp(PI)
+check('… eigene frühere Übernahme wird bei erneutem Import nicht ersetzt', st == 200 and v['zahlen']['entfaellt'] == 1, v['zahlen'])
+# Excel-Planung (Monatsblatt im Aufbau der Planung)
+tage = list(range(1, 31))
+def zeile(pos, abt, name, tag): return [pos, abt, name] + ['U' if t == tag else None for t in tage]
+DP = {'blaetter': [{'name': f'November {Y}', 'grid': [[None], [None], ['Pos.', None, 'November'] + tage,
+                                                       zeile(1, 'Personal', 'Pia Personal', NOV.day + 7), zeile(2, 'Personal', 'Quentin Quer', NOV.day + 8)]}]}
+st, v = PI.call('import_pruefen', {'art': 'urlaubsplanung', 'daten': DP, 'quelle': 'plan.xlsx', 'optionen': {}})
+eig = [z for z in v.get('zeilen', []) if z['name'] == 'Pia Personal' and z['art'] == 'fehler']
+neu = [z['name'] for z in v.get('zeilen', []) if z['art'] == 'neu' and z['schluessel'].startswith('Einträge')]
+check('Excel-Planung: eigene Zeile markiert, Rest wird übernommen', st == 200 and eig and 'eigene Person' in eig[0]['text'] and neu == ['Quentin Quer'], (st, v.get('zeilen'), v.get('error')))
+st, _ = PI.call('import_uebernehmen', {'art': 'urlaubsplanung', 'daten': DP, 'quelle': 'plan.xlsx', 'optionen': {}, 'stand': v['stand']})
+imp = lambda name: [e for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege'] if e['name'] == name and e['quelle'] == 'import']
+check('… übernommen: Quentin ja, eigene nicht', st == 200 and len(imp('Quentin Quer')) == 1 and imp('Pia Personal') == [], (imp('Quentin Quer'), imp('Pia Personal')))
+# Protokoll: Vorgänge der Urlaubsverwaltung ohne „HR verwalten“ nur als Vorgang
+st, r = OL.call('log')
+hr_e = [e for e in r.get('entries', []) if e.get('a') == 'hr']
+check('Protokoll ohne HR-Recht: Vorgänge der Urlaubsverwaltung maskiert (keine Namen, keine Zeiträume)', st == 200 and hr_e and all(e.get('masked') and e['s'] == 'Vorgang der Urlaubsverwaltung' for e in hr_e)
+      and 'Quentin' not in json.dumps(hr_e, ensure_ascii=False), hr_e[:2])
+check('… mit HR-Recht (Administrator) vollständig', any(e.get('a') == 'hr' and not e.get('masked') and 'Urlaubsliste' in e['s'] for e in A.call('log')[1]['entries']))
+rev = P.call('mitarbeiter_hr')[1]['rev']
+hr(ids['pia'], aktiv=False)
 
 # ── Excel-Export ──
 # Lena nicht mehr im Urlaubsplan (z. B. ausgeschieden): im Februar (genehmigte Krankheit) weiter im Export, im August nicht
@@ -747,6 +840,14 @@ with sync_playwright() as p:
     pg.wait_for_selector(f'#view-users tr[data-uid="{lisa["id"]}"]')
     check('Liste: „ohne Anmeldung“ statt Benutzername und Rolle', 'ohne Anmeldung' in pg.text_content(f'#view-users tr[data-uid="{lisa["id"]}"]'))
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_mitarbeiter_1280.png'), full_page=True)
+    # eigener Eintrag: Urlaubsangaben gesperrt (Vier-Augen-Prinzip), Speichern des Dialogs funktioniert trotzdem
+    pg.click(f'#view-users tr[data-uid="{ids["admin"]}"]'); pg.wait_for_selector('#dlg-user[open] #hr-teil')
+    gesperrt = pg.evaluate('''["hr_anspruch", "hr_uebertrag", "hr_personalnummer", "hr_aktiv"].every((n) => document.querySelector(`#hr-teil [name="${n}"]`).disabled)
+        && [...document.querySelectorAll('#hr-teil [name="hr_tag"]')].every((x) => x.disabled) && !document.querySelector('#hr-teil [name="hr_abteilung"]').disabled''')
+    check('eigener Eintrag: Urlaubsangaben gesperrt mit Hinweis, Abteilung frei', gesperrt and 'andere Person der Personalstelle' in pg.text_content('#hr-teil'))
+    pg.fill('#hr-teil [name="hr_abteilung"]', 'Geschäftsführung')
+    pg.click('#user-body [type="submit"]'); pg.wait_for_selector('#dlg-user[open]', state='hidden')
+    check('… Speichern des eigenen Dialogs klappt (Abteilung geändert)', {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['admin']]['abteilung'] == 'Geschäftsführung')
     ctx.close()
     # Nur „Urlaub genehmigen“ (Gina): Reiter Anträge mit Knöpfen, ohne Personalstelle (Alle Einträge, Export, Verwaltungs-Links)
     for breite in (1280, 390):
