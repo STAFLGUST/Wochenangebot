@@ -19,7 +19,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `bestellung_save` | `angebot.eingabe` | schreibend | – | siehe Datei | `app/api/orders.php` |
 | `bestellungen` | `angebot.eingabe` | lesend | – | siehe Datei | `app/api/aktionen/kundenportal.php` |
 | `discard_draft` | `angebot.eingabe` | schreibend | – | Recht angebot.bearbeiten | `app/api/aktionen/entwurf.php` |
-| `draft` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/entwurf.php` |
+| `draft` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |
 | `draft_ping` | `angebot.eingabe` | schreibend | – | angemeldet | `app/api/aktionen/entwurf.php` |
 | `einzel_artikel` | `angebot.eingabe` | lesend | – | Recht einzelangebote.bearbeiten | `app/api/aktionen/einzelangebote.php` |
 | `einzel_detail` | `angebot.eingabe` | lesend | – | Recht einzelangebote.sehen | `app/api/aktionen/einzelangebote.php` |
@@ -59,8 +59,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `publish` | `angebot.eingabe` | schreibend | – | Recht angebot.veroeffentlichen | `app/api/aktionen/entwurf.php` |
 | `restposten_info` | `angebot.eingabe` | lesend | – | Recht sonderposten.senden | `app/api/aktionen/mail.php` |
 | `save_draft` | `angebot.eingabe` | schreibend | – | Recht angebot.bearbeiten | `app/api/aktionen/entwurf.php` |
-| `version` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/entwurf.php` |
-| `versions` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/entwurf.php` |
+| `version` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |
+| `versions` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/entwurf.php` |
 
 ## Bestand (`bestand`)
 

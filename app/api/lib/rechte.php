@@ -201,6 +201,17 @@ function modul_zugang_frei(?array $u, string $modul, ?array $perms = null): bool
     if (!$u) return false;
     return in_array("$modul.zugang", $perms ?? user_perms($u), true);
 }
+/* Angemeldet UND Modulzugang „<modul>.zugang“ – unabhängig vom Host der Anfrage (GR-103). Für lesende Aktionen, die
+   Inhalte eines Moduls ausliefern und sonst nur die Anmeldung prüfen würden (z. B. Entwurf und Kundenpreise des Angebots,
+   die der gemeinsame Eingabebereich auch auf anderen Hosts abrufen kann). Bewusst ohne code „kein_modulzugang“: der
+   ersetzt in der Oberfläche die ganze Seite (Host ohne Zugang) – hier geht es nur um einzelne Inhalte eines Bereichs. */
+function require_modulzugang(string $modul, bool $write = false): array
+{
+    $u = require_auth($write);
+    if (modul_zugang_frei($u, $modul)) return $u;
+    header('Cache-Control: no-store');
+    fail('Dafür fehlt Ihnen der Zugang zum Bereich „' . (MODULE[$modul]['name'] ?? $modul) . '“. Bitte an einen Administrator wenden.', 403);
+}
 function modul_host_frei(?array $u, string $modul): bool
 {
     $teile = [$modul];

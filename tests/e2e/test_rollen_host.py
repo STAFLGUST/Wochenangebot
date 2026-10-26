@@ -36,6 +36,8 @@ check('Schreibende Aktionen ebenso', E.call('stock_import', {'date': '2026-10-16
 check('Plattformkern bleibt erreichbar (Modulübersicht)', E.call('module_status')[0] == 200)
 check('Mit Modulzugang: Bestand offen', L.call('status')[1]['user']['modulzugang'] is True and L.call('stock')[0] == 200)
 check('Mit Modulzugang, ohne Einzelrecht: weiter gesperrt (Recht)', L.call('history_list')[0] == 403 and L.call('history_list')[1].get('code') != 'kein_modulzugang')
+check('Bestand-Host ohne Modulzugang Angebot: kein Entwurf und keine Kundenpreise', L.call('draft')[0] == 403 and L.call('versions')[0] == 403
+      and L.call('offer&angebot=' + A.call('offers')[1]['offers'][0]['id'])[0] == 403 and L.call('offers')[0] == 403)
 
 # Wartung des Bestands (GR-107): Der Bestand-Host hat keine eigenen Aktionen (er nutzt die des gemeinsamen
 # Eingabebereichs) – die Wartung gilt trotzdem für alles, was über ihn läuft. Administratoren arbeiten weiter.
@@ -60,6 +62,21 @@ with sync_playwright() as pw:
         check(f'UI {breite}: Hinweis „Kein Zugang zu Bestand“', 'Kein Zugang zu „Bestand“' in pg.inner_text('#kein-zugang'))
         check(f'UI {breite}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth') <= breite)
         pg.screenshot(path=SH + '/' + datei)
+        pg.close()
+    # Bestand ohne Modulzugang Angebot: Oberfläche startet ohne Entwurf (kein Abruf, keine Fehler)
+    for breite in (1280, 390):
+        pg = br.new_page(viewport={'width': breite, 'height': 800}, is_mobile=breite < 500); pg.on('pageerror', lambda e: fehler.append(str(e)))
+        abrufe = []
+        pg.on('request', lambda q: abrufe.append(q.url))
+        pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+        pg.fill('#au-user', 'lars'); pg.fill('#pw1', 'Lager-Zugang-551'); pg.click('#auth-submit')
+        pg.wait_for_selector('#screen-editor:not([hidden])')
+        pg.wait_for_load_state('networkidle')
+        pg.click('#vt-stock'); pg.wait_for_selector('#view-stock:not([hidden])')
+        pg.wait_for_function("document.querySelector('#view-stock').textContent.trim().length > 0")
+        check(f'UI {breite}: ohne Modulzugang Angebot – Bestandsliste da, kein Entwurf abgerufen', not [u for u in abrufe if 'action=draft' in u or 'action=versions' in u],
+              [u for u in abrufe if 'action=' in u][:8])
+        pg.screenshot(path=SH + f'/rollen-bestand-ohne-angebot-{breite}.png')
         pg.close()
     check('keine Seitenfehler', not fehler, fehler[:3])
     br.close()

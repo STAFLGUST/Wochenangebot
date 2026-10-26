@@ -70,6 +70,19 @@ check('Mitarbeiter bekommt eine eigene Rolle', code == 200 and r['user']['role']
 st = L.call('status')[1]['user']
 check('Rechte genau laut Rolle', set(st['perms']) == {'bestand.zugang', 'bestand.einkaufspreise', 'bestand.sehen'} and st['rollenName'] == 'Lager', st)
 check('Lager sieht Bestand mit EK, nicht den Preisverlauf', L.call('stock')[0] == 200 and L.call('history_list')[0] == 403)
+# Angebotsinhalte (Entwurf, Versionen, Kundenangebote mit Kundenpreisen) nur mit Modulzugang Angebot – unabhängig vom Host (GR-103)
+OID = A.call('offers')[1]['offers'][0]['id']
+for name, (code, r) in [('Entwurf', L.call('draft')), ('Versionen', L.call('versions')), ('Version', L.call('version&id=20260101-000000-abcdef')),
+                        ('Kundenangebot', L.call('offer&angebot=' + OID)), ('Vorschau des Entwurfs', L.call('offer&draft=1')), ('Liste der Kundenangebote', L.call('offers'))]:
+    check(f'Ohne Modulzugang Angebot: {name} 403 (ohne Seitensperre)', code == 403 and r.get('code') != 'kein_modulzugang', (code, r))
+check('Standardrolle mit Modulzugang: Entwurf, Versionen, Kundenangebot, Liste weiter offen', all(V.call(a_)[0] == 200 for a_ in ('draft', 'versions', 'offers', 'offer&angebot=' + OID)))
+check('Öffentliches Wochenangebot ohne Anmeldung unverändert', Client('198.51.100.90').call('offer')[0] == 200)
+code, r = A.call('rolle_save', {'name': 'Kundenservice', 'rechte': ['verwaltung.zugang', 'kunden.sehen']})
+KS = r['id']
+assert A.call('user_save', {'id': '', 'name': 'Kurt Kunde', 'username': 'kurt', 'rollen': [KS], 'active': True, 'password': 'Kunden-Zugang-88', 'mustChange': False})[0] == 200
+K = anmelden('kurt', 'Kunden-Zugang-88')
+check('Kundenverwaltung ohne Modulzugang Angebot: Liste der Kundenangebote (Namen) ja, Entwurf und Kundenpreise nein',
+      K.call('offers')[0] == 200 and K.call('draft')[0] == 403 and K.call('offer&angebot=' + OID)[0] == 403)
 code, r = L.call('hr_start')
 check('Ohne HR-Zugang: HR gesperrt (Server)', code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'hr', r)
 ms = {m['id']: m for m in L.call('module_status')[1]['module']}
@@ -130,7 +143,7 @@ with sync_playwright() as pw:
     a = seite('admin', PW)
     a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     a.click('#vt-rollen'); a.wait_for_selector('#view-rollen .rl-item.on')
-    check('UI: Rollenliste mit Standard- und eigenen Rollen', a.locator('#view-rollen .rl-item').count() == 6
+    check('UI: Rollenliste mit Standard- und eigenen Rollen', a.locator('#view-rollen .rl-item').count() == 7
           and 'Vertrieb Innendienst' in a.inner_text('#view-rollen .rl-liste') and 'Lager Nord' in a.inner_text('#view-rollen .rl-liste'))
     a.screenshot(path=SH + '/rollen-desktop.png', full_page=True)
     # Neue Rolle über die Oberfläche
