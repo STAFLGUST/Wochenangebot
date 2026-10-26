@@ -5,8 +5,9 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 switch ($action) {
+        /* Entwurf und veröffentlichtes Angebot mit Kundenpreisen: nur mit Modulzugang Angebot (auch über andere Hosts) */
         case 'draft': {
-            require_auth();
+            require_modulzugang('angebot');
             header('Cache-Control: no-store');
             $pub = store_read('angebot');
             $draft = store_read('entwurf');
@@ -117,7 +118,7 @@ switch ($action) {
         }
 
         case 'versions': {
-            require_auth();
+            require_modulzugang('angebot');
             $list = store_names('versionen');
             rsort($list);
             $out = [];
@@ -133,7 +134,7 @@ switch ($action) {
         }
 
         case 'version': {
-            require_auth();
+            require_modulzugang('angebot');
             $id = (string)($_GET['id'] ?? '');
             if (!preg_match('/^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}$/', $id)) fail('Ungültige Version.');
             $d = store_read('versionen/' . $id);
