@@ -47,8 +47,10 @@ den Release vorlegt.
 1. PHP-Syntax (`php -l` für `app/` und `deploy/`, ohne `app/api/geo/`)
 2. JavaScript-Syntax (`node --check` für `app/assets/`, `app/assets/vendor/`, `dashboard/`, `tests/unit/`)
 3. Shell-Skripte (`shellcheck --severity=warning` für `deploy/` und `tests/deploy/`)
-4. Caddy-Konfiguration mit echtem Parser (`caddy validate` im Container `caddy:2`, ohne Netz)
-5. Dashboard-Domains nur als geschützte Platzhalter (`tests/deploy/test_dashboard_domains.py`, GR-105)
+4. Caddy-Konfiguration mit echtem Parser (`caddy validate` mit derselben Caddy-Fassung wie in `docker-compose.yml`, ohne Netz)
+   und Container-Images fest über Digest (`tests/deploy/test_images.py`: alle fremden Images mit `@sha256`, gleiches PHP-Grundimage
+   für Kundenseite, Anwendungs-Image und Testumgebung, CI lädt und scannt dieselben Fassungen)
+5. Dashboard-Domains nur als geschützte Platzhalter (`tests/deploy/test_dashboard_domains.py`, GR-105; HSTS 1 Jahr je Host)
 6. Python-Syntax (`py_compile` für Tests, Werkzeuge, `deploy/*.py`, `.github/scripts/*.py`)
 7. Regelwerk und Modulgrenzen (`werkzeuge/regeln.py pruefen`, `tests/regeln/test_regeln.py`)
 8. Entwickler-Dokumentation passt zum Code (`werkzeuge/doku.py pruefen`: Referenz in `docs/entwickler/referenz/`,
@@ -271,3 +273,18 @@ Keycloak-Anmeldung gibt es in der Testumgebung nicht; sie wird nur in der CI gep
 Alle Notfallwerkzeuge laufen nur auf dem Server und nur durch den Inhaber.
 
 Stand: 2026-10-24
+
+## Images aktualisieren
+
+Alle fremden Container-Images sind über Version und Digest festgelegt (`tests/deploy/test_images.py` prüft das): ein Release holt
+so nie unbemerkt eine andere Fassung, und die CI prüft genau das, was der Server später nutzt. Sicherheitsupdates kommen
+deshalb nur über einen eigenen PR:
+
+1. Aktuelle Fassung und Digest ermitteln, z. B. `docker buildx imagetools inspect caddy:2` (Zeile „Digest“, Version aus
+   `CADDY_VERSION`) bzw. `docker buildx imagetools inspect php:8.3-apache`.
+2. Eintragen: Caddy in `docker-compose.yml`; PHP an allen vier Stellen gleich (`deploy/image/Dockerfile`, `docker-compose.yml`,
+   `deploy/testumgebung/docker-compose.yml`, `deploy/testumgebung.sh`); Keycloak/PostgreSQL in
+   `deploy/anmeldung/docker-compose.anmeldung.yml` und den `docker pull`-Zeilen in `.github/workflows/ci.yml`.
+3. PR mit grüner CI (Caddy-Prüfung, Anwendungs-Image, Trivy-Bericht); nach dem Release startet der betroffene Container einmal
+   neu (Caddy: wenige Sekunden, Zertifikate bleiben im Volume).
+

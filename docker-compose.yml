@@ -1,7 +1,8 @@
 # Wochenangebot – Start:  docker compose up -d
 services:
   app:
-    image: php:8.3-apache
+    # Fest über Digest (gleiches Grundimage wie deploy/image/Dockerfile); aktualisieren: docs/entwickler/08-betrieb.md, „Images aktualisieren“
+    image: php:8.3-apache@sha256:9f1f03b7e093c8e70227d782e31a305590ab71d7b48c076589dcc92ba8c9300c
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file
@@ -24,7 +25,8 @@ services:
       MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
 
   caddy:
-    image: caddy:2
+    # Fest über Version und Digest (vorher „caddy:2“ – wechselte unbemerkt); aktualisieren: docs/entwickler/08-betrieb.md, „Images aktualisieren“
+    image: caddy:2.11.7@sha256:504a44d7d74bd2bc28a66afc4774912fc21223ca8a67734af1c54ab2f999b489
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file
