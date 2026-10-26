@@ -10,7 +10,8 @@ declare(strict_types=1);
      sich selbst Abwesenheiten ein – auch Administratoren nicht (Vier-Augen-Prinzip, hr_eigen).
      Mitarbeiter beantragen nur Urlaub.
    - Krank (K), Gleittag (G) und freie Tage (X) trägt nur die Personalstelle ein.
-   - Resturlaub wird ins Folgejahr übertragen und verfällt am 31.03., soweit er bis dahin nicht genommen ist.
+   - Resturlaub wird ins Folgejahr übertragen und verfällt am Verfallstag (Standard 31.03., einstellbar in Verwaltung →
+     Urlaub, hr_uebertrag_bis), soweit er bis dahin nicht genommen ist.
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
      und die Personalstelle.
    - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“). */
@@ -19,7 +20,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag'];
 const HR_STATUS = ['beantragt', 'genehmigt', 'abgelehnt', 'zurueckgezogen', 'storniert'];
 const HR_AKTIV = ['beantragt', 'genehmigt'];
-const HR_UEBERTRAG_BIS = '03-31';            // Resturlaub aus dem Vorjahr verfällt nach diesem Tag
+const HR_UEBERTRAG_BIS = '03-31';            // Standard: Resturlaub aus dem Vorjahr verfällt nach diesem Tag (einstellbar: hr_uebertrag_bis)
 const HR_WOCHENTAGE = [1 => 'Mo', 2 => 'Di', 3 => 'Mi', 4 => 'Do', 5 => 'Fr', 6 => 'Sa', 7 => 'So'];
 const HR_MONATE = [1 => 'Januar', 2 => 'Februar', 3 => 'März', 4 => 'April', 5 => 'Mai', 6 => 'Juni', 7 => 'Juli', 8 => 'August',
     9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Dezember'];
@@ -203,7 +204,26 @@ function hr_einstellungen(): array
 {
     $d = store_read('hr-einstellungen') ?? [];
     $z = function ($l) { return array_values(array_filter((array)$l, function ($x) { return is_array($x) && hr_datum($x['von'] ?? null) && hr_datum($x['bis'] ?? null); })); };
-    return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $z($d['sperren'] ?? []), 'ferien' => $z($d['ferien'] ?? [])];
+    return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $z($d['sperren'] ?? []), 'ferien' => $z($d['ferien'] ?? []),
+            'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS];
+}
+
+/* ---------------- Verfallstag des Resturlaubs aus dem Vorjahr ----------------
+   Gespeichert als „MM-TT“ im Dokument hr-einstellungen (Feld uebertragBis, nur erweitert – GR-006); fehlt oder ungültig:
+   HR_UEBERTRAG_BIS (31.03.). Gilt für alle Mitarbeiter und alle Jahre. */
+function hr_uebertrag_bis_norm($v): ?string
+{
+    if (!is_string($v)) return null;
+    if (preg_match('/^\d{4}-(\d{2})-(\d{2})$/', $v, $m)) $v = $m[1] . '-' . $m[2];   // aus einem Datumsfeld: nur Monat und Tag
+    if (!preg_match('/^(\d{2})-(\d{2})$/', $v, $m)) return null;
+    // Prüfung an einem Nicht-Schaltjahr: der 29.02. gibt es nicht jedes Jahr und ist deshalb nicht erlaubt
+    return checkdate((int)$m[1], (int)$m[2], 2001) ? $v : null;
+}
+function hr_uebertrag_bis(bool $neu = false): string
+{
+    static $wert = null;
+    if ($wert === null || $neu) $wert = hr_einstellungen()['uebertragBis'];
+    return $wert;
 }
 /* Reihenfolge für Kalender und Export: Abteilungen nach der kleinsten Position ihrer Mitarbeiter, darin nach Position
    (wie in der Planungsdatei: jede Abteilung ein Block, auch wenn Positionen später ergänzt wurden) */
@@ -467,12 +487,13 @@ function hr_anspruch(array $p, int $jahr): float
 }
 
 /* Urlaubskonto einer Person für ein Jahr. Übertrag: von Hand gesetzt (z. B. erstes Jahr im System) oder Rest des
-   Vorjahres. Der Übertrag wird zuerst verbraucht; was davon bis 31.03. nicht genommen (genehmigt) ist, verfällt. */
+   Vorjahres. Der Übertrag wird zuerst verbraucht; was davon bis zum Verfallstag (hr_uebertrag_bis, Standard 31.03.)
+   nicht genommen (genehmigt) ist, verfällt. */
 function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, int $tiefe = 0): array
 {
     $heute = $heute ?? hr_heute();
     $u = ['genommen' => 0, 'geplant' => 0, 'beantragt' => 0, 'bis_frist' => 0];
-    $frist = sprintf('%04d-%s', $jahr, HR_UEBERTRAG_BIS);
+    $frist = sprintf('%04d-%s', $jahr, hr_uebertrag_bis());
     $frei = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id']) continue;
@@ -525,7 +546,7 @@ function hr_uebersicht(int $jahr): array
         $k = hr_konto($p, $abw, $jahr);
         $t = hr_tage_je_art($p, $abw, $jahr);
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'],
-                     'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'],
+                     'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'], 'frist' => $k['frist'],
                      'genommen' => $k['genommen'], 'geplant' => $k['geplant'], 'beantragt' => $k['beantragt'], 'rest' => $k['rest'],
                      'krank' => $t['K'], 'gleittage' => $t['G']];
     }

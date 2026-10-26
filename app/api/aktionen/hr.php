@@ -48,7 +48,7 @@ switch ($action) {
                      'offen' => $offen,
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
-                     'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => HR_UEBERTRAG_BIS]);
+                     'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis']]);
         }
 
         /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
@@ -244,7 +244,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
-            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => HR_UEBERTRAG_BIS,
+            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => $einst['uebertragBis'],
                      'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
                      'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']]);
         }
@@ -347,12 +347,21 @@ switch ($action) {
             $b = body();
             $sperren = hr_zeitraeume_pruefen($b['sperren'] ?? [], 'Urlaubssperren');
             $ferien = hr_zeitraeume_pruefen($b['ferien'] ?? [], 'Ferien');
-            with_lock('hr-einstellungen', function () use ($sperren, $ferien) {
+            // Verfallstag des Resturlaubs (optional; ohne Angabe bleibt der gespeicherte Wert)
+            $bis = null;
+            if (array_key_exists('uebertragBis', $b)) {
+                $bis = hr_uebertrag_bis_norm($b['uebertragBis']);
+                if ($bis === null) fail('Verfallstag des Resturlaubs: bitte ein gültiges Datum wählen (der 29.02. ist nicht möglich, weil es ihn nicht jedes Jahr gibt).', 422);
+            }
+            $vorher = hr_einstellungen()['uebertragBis'];
+            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis) {
                 $d = store_read('hr-einstellungen') ?? [];
-                store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien]));
+                store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien],
+                                                            $bis !== null ? ['uebertragBis' => $bis] : []));
             });
             audit('hr', 'HR: Urlaubssperren und Ferien gespeichert (' . count($sperren) . ' Sperren, ' . count($ferien) . ' Ferienzeiträume)');
-            respond(['ok' => true, 'sperren' => $sperren, 'ferien' => $ferien]);
+            if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');
+            respond(['ok' => true, 'sperren' => $sperren, 'ferien' => $ferien, 'uebertragBis' => hr_uebertrag_bis(true)]);
         }
 
         /* Excel für den Steuerberater: ausgewählte Monate eines Jahres im Aufbau der Urlaubsplanung */

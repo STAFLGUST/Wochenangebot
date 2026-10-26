@@ -15,6 +15,7 @@
   const zahl = (n) => (Math.round(Number(n || 0) * 2) / 2).toLocaleString('de-DE', { maximumFractionDigits: 1 });
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
   const JAHR = new Date().getFullYear();
+  const tagMonat = (mmtt) => { const m = /^(\d{2})-(\d{2})$/.exec(mmtt || ''); return m ? `${m[2]}.${m[1]}.` : '31.03.'; };   // Verfallstag „MM-TT“ → „TT.MM.“
 
   async function laden() {
     if (!may('hr.verwalten')) { daten = null; return null; }
@@ -52,7 +53,7 @@
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
       <datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>
-      ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem 31.03.` : ''}</p>` : ''}
+      ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}</p>` : ''}
     </fieldset>`;
   }
 
@@ -190,6 +191,9 @@
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
       <div id="hr-ferien">${daten.ferien.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-ferien">${icon('plus', 'sm')}Ferien</button>
+      <h3 class="sec-h">Resturlaub aus dem Vorjahr</h3><p class="hint">Nicht genommener Übertrag verfällt nach diesem Tag. Gilt für alle Mitarbeiter und alle Jahre – gespeichert werden nur Tag und Monat (der 29.02. ist nicht möglich).</p>
+      <label class="fld hr-verfall"><span>Verfällt am</span><input type="date" id="hr-uebertrag-bis" value="${esc(`${JAHR}-${daten.uebertragBis || '03-31'}`)}" required></label>
+      <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt am ${esc(tagMonat(daten.uebertragBis))}</p>
       <p class="hint">Mitarbeiter, Abteilungen, Arbeitstage und Urlaubsanspruch: Verwaltung → Mitarbeiter. Urlaub und Krankheit aus der Zeiterfassung: Verwaltung → Import → „Abwesenheiten aus der Zeiterfassung“.</p>
       <p class="form-err" id="hr-einst-err" role="alert"></p>
       <div class="sec-foot"><button type="submit" class="btn primary">${icon('check', 'sm')}Speichern</button></div></form>`;
@@ -210,9 +214,11 @@
     e.preventDefault();
     const liste = (id) => $$('#' + id + ' .hr-zr').map((z) => { const i = $$('input', z); return { von: i[0].value, bis: i[1].value, text: i[2].value }; });
     try {
-      const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien') } });
-      daten.sperren = r.sperren; daten.ferien = r.ferien;
-      toast('Urlaubssperren und Ferien gespeichert.');
+      const bis = $('#hr-uebertrag-bis').value;
+      if (!bis) { $('#hr-einst-err').textContent = 'Bitte den Verfallstag des Resturlaubs wählen.'; return; }
+      const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis } });
+      daten.sperren = r.sperren; daten.ferien = r.ferien; daten.uebertragBis = r.uebertragBis;
+      toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }
   });
