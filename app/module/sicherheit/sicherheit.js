@@ -345,6 +345,11 @@
       const sd = Date.parse(h('date'));
       if (!Number.isNaN(sd)) { const d = Math.round((Date.now() - sd) / 1000); add(Math.abs(d) > 120 ? 'warn' : 'ok', 'Uhrzeit Server/Browser', Math.abs(d) <= 2 ? 'stimmt überein' : `Abweichung ${d} s`, Math.abs(d) > 120 ? 'Uhrzeit prüfen (Zwei-Faktor-Codes hängen davon ab).' : ''); }
     } catch (e) { add('warn', 'Sicherheits-Header', 'nicht prüfbar'); }
+    try {
+      const r = await fetch(API + '?action=status', { cache: 'no-store', credentials: 'same-origin' });
+      const pb = r.headers.get('x-powered-by') || '';
+      add(pb ? 'warn' : 'ok', 'Server-Software verborgen', pb ? `sichtbar: ${pb}` : 'keine Versionsangabe (X-Powered-By)', pb ? 'Header X-Powered-By entfernen.' : '');
+    } catch { /* nicht prüfbar */ }
     for (const [pfad, titel] of [['/data/nutzer.php', 'Datenordner'], ['/api/lib/kern.php', 'Programmdateien']]) {
       try {
         const r = await fetch(pfad, { cache: 'no-store', credentials: 'omit' });

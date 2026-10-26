@@ -140,9 +140,9 @@ with sync_playwright() as p:
     # Leser-Konto mit der frischen Anmeldung anlegen: user_save braucht eine Bestätigung jünger als 5 Minuten – mit der
     # Sitzung vom Testbeginn scheiterte das unter Last still (danach fehlte das Leser-Konto in der Liste)
     d.evaluate("async () => { const s = await (await fetch('/api/?action=status')).json(); await fetch('/api/?action=user_save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({name:'Lea', username:'lea', role:'viewer', active:true, password:'Leserin-Zugang-11', mustChange:false})}); }")
-    d.click('#vt-schutz'); d.wait_for_selector('#vt-schutz[aria-selected="true"]')
-    check('1440×900: side navigation scrolls the active entry (Schutz, last) into view', d.evaluate("document.querySelector('.side-nav').scrollHeight > document.querySelector('.side-nav').clientHeight")
-          and innen(d, '#vt-schutz', '.side-nav'))
+    d.click('#vt-sec'); d.wait_for_selector('#vt-sec[aria-selected="true"]')
+    check('1440×900: side navigation scrolls the active entry (System, last) into view', d.evaluate("document.querySelector('.side-nav').scrollHeight > document.querySelector('.side-nav').clientHeight")
+          and innen(d, '#vt-sec', '.side-nav'))
     d.click('#vt-edit'); d.wait_for_selector('#offer-bar .ob-tabs button small')
     for th in ('light', 'dark'):
         d.evaluate(f"document.documentElement.dataset.theme = '{th}'")
@@ -170,12 +170,10 @@ with sync_playwright() as p:
     # Handy mit Fingerbedienung: aktive Ansicht in der Spur sichtbar, Zielgrößen ≥ 36 px, Kontrast, Dialogkopf, Fußleisten
     h = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True); h.on('pageerror', lambda x: errs.append(str(x)))
     login(h, 'admin', 'Sicheres-Passwort-1')
-    h.click('#vt-sec'); h.wait_for_selector('#view-sec .sec-nav a')
-    check('390 px: active entry (Sicherheit) scrolled into view in the navigation track', innen(h, '#vt-sec', '.side-tabs'))
-    nav = h.evaluate("""(() => { const n = document.querySelector('#view-sec .sec-nav'), c = n.getBoundingClientRect();
-      return [getComputedStyle(n).borderTopLeftRadius, [...n.querySelectorAll('a')].every((a) => { const r = a.getBoundingClientRect(); return r.left >= c.left && r.right <= c.right && r.top >= c.top && r.bottom <= c.bottom; }), n.getBoundingClientRect().height]; })()""")
-    check('390 px: security sub-navigation wraps into a rounded rectangle (no oval with pills sticking out)', nav[0] == '22px' and nav[1] and nav[2] > 80, nav)
-    hs = h.evaluate("[...document.querySelectorAll('.side-tabs button, #view-sec .sec-nav a')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height))")
+    h.click('#vt-sec'); h.wait_for_selector('#view-sec #sic-umzug')
+    check('390 px: active entry (System) scrolled into view in the navigation track', innen(h, '#vt-sec', '.side-tabs'))
+    check('390 px: link to the security module fits', h.evaluate("document.querySelector('#sic-link').getBoundingClientRect().right <= innerWidth"))
+    hs = h.evaluate("[...document.querySelectorAll('.side-tabs button')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height))")
     check('390 px touch: navigation entries at least 36 px high', hs and min(hs) >= 36, hs)
     k = h.evaluate(KONTRAST, '.side-tabs button[aria-selected="false"]:not([hidden])')
     check('390 px: inactive navigation entries have contrast ≥ 4.5:1 on the track', k is not None and k >= 4.5, k)
@@ -224,7 +222,7 @@ with sync_playwright() as p:
         v.evaluate("location.hash = 'users'"); v.wait_for_function("location.hash === '#users'")
         check(f'{w}px … #users in der Adresse öffnet keine Nutzerverwaltung', v.is_hidden('#view-users') and v.is_visible('#view-importe'))
         v.goto(B + '/admin/'); v.wait_for_function("!document.querySelector('#vt-users').hidden")
-        check(f'{w}px Kachel „Verwaltung“: alle Verwaltungsbereiche mit Seitenleiste', {'importe', 'users', 'log', 'sec', 'schutz'} <= set(v.evaluate(sichtbar_js))
+        check(f'{w}px Kachel „Verwaltung“: alle Verwaltungsbereiche mit Seitenleiste', {'importe', 'users', 'log', 'sec'} <= set(v.evaluate(sichtbar_js)) and 'schutz' not in set(v.evaluate(sichtbar_js))
               and v.is_visible('.side-nav') and v.text_content('#topbar h1') == 'Verwaltung', v.evaluate(sichtbar_js))
         v.close()
     check('no JS errors', not errs, errs)
