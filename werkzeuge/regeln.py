@@ -811,6 +811,16 @@ def geaenderte_dateien(wurzel: Path, basis: str) -> list:
     return sorted(p for p in liste if p)
 
 
+# Reine Dokumentation ändert kein Verhalten: sie zählt nicht als Änderung eines Moduls (sonst machte z. B. die bei jedem
+# PR neu erzeugte Entwickler-Referenz unter docs/ den Plattformkern „betroffen“ und alle plattformweiten Testgruppen
+# liefen mit). Koordinationspflicht (z. B. AGENTS.md) und die Liste der Dateien bleiben unverändert.
+NUR_DOKU = ("docs/**", "**/*.md", "*.md")
+
+
+def nur_doku(pfad: str) -> bool:
+    return any(passt(mu, pfad) for mu in NUR_DOKU)
+
+
 def folgen(rw: Regelwerk, liste: list) -> dict:
     zugriffe = speicherzugriffe(rw.wurzel, [p for p in liste if (rw.wurzel / p).is_file()])
     dateien_info, module, koord, docs = [], set(), {}, {}
@@ -818,7 +828,7 @@ def folgen(rw: Regelwerk, liste: list) -> dict:
         mid, mu = eigentuemer(rw, p)
         k = koordination(rw, p)
         dateien_info.append({"datei": p, "modul": mid, "muster": mu, "koordination": k})
-        if mid and not mid.startswith("!"):
+        if mid and not mid.startswith("!") and not nur_doku(p):
             module.add(mid)
         for b in k:
             koord.setdefault(b, []).append(p)
@@ -842,14 +852,22 @@ def folgen(rw: Regelwerk, liste: list) -> dict:
     weitere = []
     # Tests einer Regel nur, wenn das verantwortliche Modul oder ihre Daten berührt sind (sonst liefe für jede
     # Modul-Änderung die Testmenge aller plattformweiten Regeln mit).
+    # Plattformkern: nicht automatisch alle plattformweiten Regeltests (sonst liefe für jede Kern-Änderung fast die ganze
+    # Suite lokal) – die volle Suite prüft die CI; lokal zählen geänderte Testdateien und berührte Daten.
     for r in regeln:
-        if r.get("verantwortlich") not in module and not set(r.get("daten", [])) & set(docs):
+        if r.get("verantwortlich") not in (module - {"plattform"}) and not set(r.get("daten", [])) & set(docs):
             continue
         for t in r.get("tests", []):
             if t.startswith("e2e:"):
                 gruppen.add(t[4:])
             elif t not in weitere:
                 weitere.append(t)
+    # Geänderte Testdateien: ihre Gruppe läuft immer mit (tests/e2e/test_<gruppe>.py)
+    bekannte = testgruppen_aus_code(rw.wurzel)
+    for p in liste:
+        m = re.match(r"tests/e2e/test_(\w+)\.py$", p)
+        if m and m.group(1) in bekannte:
+            gruppen.add(m.group(1))
     voll = bool(koord) or "plattform" in module
     return {
         "dateien": dateien_info,
@@ -884,8 +902,8 @@ def folgen_text(e: dict) -> str:
         z.append(f"**Tests während der Entwicklung:** `python3 tests/run_e2e.py {' '.join(e['testgruppen'])}`")
     if e["weitere_pruefungen"]:
         z.append("**Weitere Prüfungen:** " + "; ".join(e["weitere_pruefungen"]))
-    z.append("**Vor dem PR:** diese Gruppen lokal in beiden Speicherarten; die volle E2E-Suite läuft in der CI (AGENTS.md,"
-             " Definition of Done)"
+    z.append("**Vor dem PR:** lokal nur die Gruppen, deren Tests oder Verhalten du geändert hast (meist 1–3), in beiden"
+             " Speicherarten; alle hier genannten Gruppen und die volle E2E-Suite prüft die CI (AGENTS.md, Definition of Done)"
              + (" – Plattformkern/koordinationspflichtige Bereiche berührt: erst mit grüner CI „bereit zum Mergen“."
                 if e["volle_suite_noetig"] else "."))
     for mid, hs in e["hinweise"].items():

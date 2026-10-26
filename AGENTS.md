@@ -92,10 +92,11 @@ Ablauf und Begründungen: `docs/plattform/multi-agent.md`. Kurzfassung:
 Ein PR ist erst fertig, wenn alle Punkte erfüllt sind – unabhängig davon, welches Werkzeug oder welche Sitzung ihn
 erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern fertiggestellt oder klar als offen beschrieben.
 
-1. Lokal: die betroffenen Testgruppen (`python3 werkzeuge/regeln.py betroffen`) in **beiden** Speicherarten grün (Dateien und
-   `WA_TEST_STORAGE=sqlite`). Die **volle** E2E-Suite in beiden Speicherarten und die Keycloak-Prüfung laufen in der CI
-   (Pflicht-Checks) – fertig ist der PR erst mit grüner CI. Im PR stehen beide Ergebnisse (lokal und CI). Die volle
-   Suite lokal nur zur Fehlersuche oder wenn die CI nicht verfügbar ist.
+1. Lokal: nur die Testgruppen, deren Tests oder Verhalten der PR ändert (`python3 werkzeuge/regeln.py betroffen`, meist
+   1–3 Gruppen), in **beiden** Speicherarten grün (Dateien und `WA_TEST_STORAGE=sqlite`). Alles Weitere prüft die CI:
+   die **volle** E2E-Suite in beiden Speicherarten (rund 3 Minuten) und die Keycloak-Prüfung (Pflicht-Checks) – fertig
+   ist der PR erst mit grüner CI. Im PR stehen beide Ergebnisse (lokal und CI). Die volle Suite lokal nur zur
+   Fehlersuche oder wenn die CI nicht verfügbar ist (Entscheidung Inhaber 26.10.2026: Tempo, CI ist das Sicherheitsnetz).
 2. Neues Verhalten hat Tests (auch Rechte, Fehler- und Grenzfälle); `tests/README.md` nennt neue Gruppen.
 3. Oberfläche per Bildschirmfoto angesehen (Desktop und 390 px Mobil); keine JavaScript-Fehler.
 4. Einbindungen der Assets geprüft (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`), gitleaks ohne Funde.
@@ -110,8 +111,12 @@ erstellt hat. Unfertige Arbeit wird nicht als Entwurf liegen gelassen, sondern f
 ## Schnell arbeiten, ohne Qualität zu verlieren
 
 - Während der Entwicklung nur betroffene Testgruppen laufen lassen (`python3 tests/run_e2e.py gruppe1 gruppe2`; welche,
-  sagt `python3 werkzeuge/regeln.py betroffen`), vor dem PR dieselben Gruppen auch mit `WA_TEST_STORAGE=sqlite`; die
-  volle Suite übernimmt die CI. Gruppen laufen parallel (`WA_JOBS`, Standard 4); zur Fehlersuche `WA_JOBS=1`.
+  sagt `python3 werkzeuge/regeln.py betroffen` – reine Doku zählt nicht, geänderte Testdateien immer), vor dem PR
+  dieselben Gruppen auch mit `WA_TEST_STORAGE=sqlite`; die volle Suite übernimmt die CI. Früh pushen und den PR stellen,
+  sobald es lauffähig ist – die CI ist schneller als lange lokale Läufe. Gruppen laufen parallel (`WA_JOBS`, Standard 4);
+  zur Fehlersuche `WA_JOBS=1`.
+- Höchstens zwei bis drei Agenten gleichzeitig mit Testläufen auf einer Maschine; zusammengehörige kleine Änderungen in
+  einem PR bündeln (weniger Konflikte und CI-Läufe).
 - Mehrere Läufe auf einer Maschine: nie zwei Testläufe gleichzeitig im selben Arbeitsordner (gemeinsames
   `tests/.arbeit/`), jeder Agent in seinem Worktree mit eigenem `WA_PORT_BASE`.
 - Tests nie mit festen Wartezeiten prüfen (`wait_for_timeout` vor einem `check`), sondern auf den erwarteten Zustand
