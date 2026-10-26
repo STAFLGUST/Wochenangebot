@@ -1458,7 +1458,11 @@ with sync_playwright() as pw:
     check('… danach dort weiter', pa_k.url.startswith(A + '/admin/'), pa_k.url)
     code, j = pk.evaluate(stat)
     pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
-    pk.wait_for_selector('#password'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
+    # Kim hat das Passwort eben auf dem anderen Host neu eingegeben (nach dem Beenden). Keycloak fragt bei max_age=0
+    # nur, wenn diese Eingabe mindestens eine Sekunde zurückliegt – beides ist richtig (frische Anmeldung nach dem Ende).
+    if pk.url.startswith(L):
+        pk.wait_for_selector('#password'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login')
+    pk.wait_for_url(D + '/dashboard/**')
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung wieder möglich', code == 200 and j.get('loggedIn'), (code, j))
     check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))
