@@ -205,6 +205,18 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-tabelle tbody tr:hover td { background: var(--hr-aus); }
 .hr-tabelle .btn { height: 30px; font-size: 13px; }
 .hr-tabelle .gedaempft { color: var(--hr-muted); }
+/* Urlaubsübersicht: Abteilungsgruppen, Rest hervorgehoben, Summenzeile */
+.hr-ueb th.name, .hr-ueb tbody th { text-align: left; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--hr-text); background: none; position: static; }
+.hr-ueb tr.abt th { padding-top: 16px; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-muted); }
+.hr-ueb td.rest { font-weight: 700; }
+.hr-ueb td.rest.minus { color: var(--hr-fehler); }
+.hr-ueb small { font-size: 11px; }
+@media (max-width: 640px) {
+  .hr-ueb th, .hr-ueb td { padding: 9px 10px; }
+  .hr-ueb tbody tr:not(.abt) th, .hr-ueb thead th:first-child, .hr-ueb tfoot th { position: sticky; left: 0; z-index: 1; background: var(--hr-deckend); }   /* Name bleibt beim Wischen stehen */
+}
+.hr-ueb tfoot th, .hr-ueb tfoot td { font-weight: 700; border-bottom: 0; border-top: 2px solid var(--hr-linie); }
+.hr-ueb tfoot th { text-align: left; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--hr-text); background: none; position: static; }
 
 /* ── Offene Anträge ── */
 .hr-antraege { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }

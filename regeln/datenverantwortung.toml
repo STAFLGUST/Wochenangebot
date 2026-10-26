@@ -149,7 +149,7 @@ beschreibung = "Mitarbeiter der Urlaubsverwaltung: Name, Abteilung, Reihenfolge,
 name = "hr-abwesenheiten"
 eigentuemer = "hr"
 schutz = "vertraulich"
-beschreibung = "Urlaubsanträge und Abwesenheiten (Urlaub, Krank, Gleittag, freie Tage) mit Status und Entscheidung; Art und Notiz nur für die Person selbst und die Personalstelle (hr.verwalten); wer Urlaub genehmigt (hr.genehmigen), sieht nur offene Urlaubsanträge mit Konto; Kollegen sehen nur „abwesend“"
+beschreibung = "Urlaubsanträge und Abwesenheiten (Urlaub, Krank, Gleittag, freie Tage) mit Status und Entscheidung; Art und Notiz nur für die Person selbst und die Personalstelle (hr.verwalten); wer Urlaub genehmigt (hr.genehmigen), sieht nur offene Urlaubsanträge mit Konto; die Urlaubsübersicht (hr.uebersicht) zeigt nur Summen je Mitarbeiter und Jahr, auch Krank- und Gleittage als Anzahl, nie Zeiträume oder Notizen; Kollegen sehen nur „abwesend“"
 historie = "Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornieren ändern nur den Status (mit Zeitpunkt und Person)"
 
 [[dokument]]
