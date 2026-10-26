@@ -691,7 +691,9 @@
     if (window.STAFL_THEME && me) window.STAFL_THEME.konto(me, csrf, '../api/');   // Hell/Dunkel am Konto (theme.js) – gilt auf jedem Host
     if (me && me.modulzugang === false) { zeigeKeinZugang(me.modulName || ''); return; }   // Rolle ohne Zugang zu diesem Bereich
     refreshWartung();
-    const d = await api('draft');
+    // Entwurf und Kundenpreise nur mit Modulzugang Angebot (Server: require_modulzugang) – sonst leerer Stand, kein Abgleich
+    const mitAngebot = may('angebot.zugang');
+    const d = mitAngebot ? await api('draft') : { published: null, draft: null, revision: 0 };
     published = d.published ? strip(d.published) : null;
     model = d.draft ? strip(d.draft) : published ? clone(published) : emptyModel();
     base = clone(model);
@@ -715,7 +717,7 @@
     const start = startAnsicht();
     if (start) currentView = start;
     if (currentView !== 'edit') setView(currentView);
-    startSync();
+    if (mitAngebot) startSync();
   }
 
   /* ======================= Speichern ======================= */
