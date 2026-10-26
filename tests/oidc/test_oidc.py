@@ -1056,6 +1056,7 @@ with sync_playwright() as pw:
     #    Sicherheitsaktionen (geo_clear_stats, security_save) liegen seit Stand 9 auf dem Host des Moduls Sicherheit.
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
     pg.goto(SIC + '/module/sicherheit/'); anmelden(pg, 'admin'); pg.wait_for_selector('#sic-app:not([hidden])')
+    angemeldet_um = time.time()
     st = pg.evaluate("fetch('/api/?action=status').then(r => r.json())")
     js = "([a, t]) => fetch('/api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])"
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
@@ -1073,6 +1074,11 @@ with sync_playwright() as pw:
     pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
     vorher = bestaetigung_stand(ctx, 'sicherheit.stafl.test')
     bestaetigung_abgelaufen(ctx, 'sicherheit.stafl.test')   # unmittelbar vor dem Speichern (Seitenaufbau dazwischen)
+    # Keycloak vergleicht auth_time in ganzen Sekunden: max_age=0 verlangt die erneute Anmeldung erst, wenn die letzte
+    # Anmeldung in einer früheren Sekunde lag (sonst gilt sie als frisch und Keycloak leitet ohne Abfrage zurück).
+    # Der Test ist schneller als ein Mensch – daher bis 2 s nach der Anmeldung warten (Zustand der Uhr, keine feste Pause).
+    while time.time() - angemeldet_um < 2:
+        time.sleep(0.05)
     with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort:
         pg.click('#sic-dlg .sic-dfuss [type=submit]')
     # Inhalt der Antwort ist nach der Weiterleitung nicht mehr abrufbar – Status genügt (Code prüft der Aufruf oben)
