@@ -247,9 +247,9 @@ function hr_namekey(string $n): string { return mb_strtolower(trim(preg_replace(
 
 /* ---------------- Altbestand: Einträge ohne Mitarbeiter übernehmen ----------------
    Einträge aus der Zeit vor „Mitarbeiter = Nutzer“ (oder nach dem Löschen eines Mitarbeiters) gehören zu keinem
-   Mitarbeiter. Beim ersten Aufruf von HR übernimmt ein Mitarbeiter ohne eigene HR-Angaben automatisch den einzigen
-   gleichnamigen Eintrag (Anzeigename, Vor- + Nachname oder Benutzername „vorname-nachname“); in der Verwaltung lassen
-   sich alle übrigen übernehmen (gleichnamiger Mitarbeiter oder neuer Mitarbeiter ohne Anmeldung). */
+   Mitarbeiter (ehemalige Mitarbeiter). Zugeordnet werden sie nur durch die Personalstelle (Verwaltung → Mitarbeiter:
+   „Einzeln zuordnen“ mit Vorschlag, „Gleichnamige zuordnen“) – nie automatisch beim Aufruf von HR (Sicherheitsdurchsicht
+   26.10.2026: sonst sähe ein neuer gleichnamiger Mitarbeiter Abwesenheiten seines Vorgängers) und nie durch die eigene Person. */
 function hr_konto_namen(array $u): array
 {
     $n = [hr_namekey((string)($u['name'] ?? '')), hr_namekey(trim(($u['vorname'] ?? '') . ' ' . ($u['nachname'] ?? ''))),
@@ -276,17 +276,6 @@ function hr_eintrag_des_nutzers(array $roh, string $uid): ?int
     return null;
 }
 
-/* Vorschlag: genau ein Altbestands-Eintrag mit passendem Namen – sonst null */
-function hr_vorschlag(array $roh, array $u): ?array
-{
-    $namen = hr_konto_namen($u);
-    if (!$namen) return null;
-    $alt = hr_altbestand_ids($roh);
-    $treffer = array_values(array_filter($roh['personen'], function ($p) use ($namen, $alt) {
-        return isset($alt[$p['id']]) && in_array(hr_namekey(hr_name($p)), $namen, true);
-    }));
-    return count($treffer) === 1 ? $treffer[0] : null;
-}
 /* Altbestands-Eintrag einem Mitarbeiter zuordnen (unter der Sperre „hr-personal“): Abwesenheiten, die schon unter der
    Mitarbeiter-Kennung stehen, wandern zum Eintrag */
 function hr_altbestand_zuordnen(array &$roh, string $eintragId, array $u): array
@@ -372,20 +361,6 @@ function hr_altbestand_zusammenfuehren(array &$roh, string $eintragId, array $u)
     return [$roh['personen'][$ei < $zi ? $zi - 1 : $zi], $umgehaengt, $storniert];
 }
 
-/* Beim ersten Aufruf automatisch übernehmen (nur eindeutige Namen; protokolliert) */
-function hr_auto_verknuepfen(array $me): ?array
-{
-    return with_lock('hr-personal', function () use ($me) {
-        $roh = hr_personal_roh();
-        foreach ($roh['personen'] as $p) if ($p['nutzer'] === (string)$me['id']) return null;
-        $v = hr_vorschlag($roh, $me);
-        if (!$v) return null;
-        $v = hr_altbestand_zuordnen($roh, $v['id'], $me);
-        hr_personal_schreiben($roh);
-        audit('hr', 'HR: Eintrag der Urlaubsliste „' . hr_name($v) . '“ automatisch dem Mitarbeiter ' . $me['name'] . ' zugeordnet (gleicher Name)');
-        return $v;
-    });
-}
 /* Altbestands-Einträge dem gleichnamigen Mitarbeiter ohne HR-Angaben zuordnen (eindeutiger Name). Einträge ohne passenden
    Mitarbeiter bleiben ehemalige Mitarbeiter – es entstehen keine neuen Mitarbeiter mehr (Inhaber 26.10.2026). */
 function hr_personal_uebernehmen(array $me): array
@@ -401,7 +376,8 @@ function hr_personal_uebernehmen(array $me): array
             $treffer = array_values(array_filter($users, function ($u) use ($e, $mit) {
                 return !in_array((string)$u['id'], $mit, true) && in_array(hr_namekey(hr_name($e)), hr_konto_namen($u), true);
             }));
-            if (count($treffer) === 1) { hr_altbestand_zuordnen($roh, $e['id'], $treffer[0]); $text[] = hr_name($e) . ' → ' . $treffer[0]['name']; }
+            // nie der eigenen Person zuordnen (Vier-Augen-Prinzip) – das macht eine andere Person der Personalstelle
+            if (count($treffer) === 1 && (string)$treffer[0]['id'] !== (string)$me['id']) { hr_altbestand_zuordnen($roh, $e['id'], $treffer[0]); $text[] = hr_name($e) . ' → ' . $treffer[0]['name']; }
         }
         if ($text) {
             hr_personal_schreiben($roh);
@@ -424,6 +400,36 @@ function hr_eigen(array $personal, array $me, array $e): bool
 {
     if ((string)($e['erfasst']['byId'] ?? '') !== '' && ($e['quelle'] ?? '') === 'antrag' && (string)$e['erfasst']['byId'] === (string)$me['id']) return true;
     return hr_eigene_person($personal, $me, (string)($e['person'] ?? ''));
+}
+/* Eigene HR-Angaben (mitarbeiter_hr_save für sich selbst): Felder mit Einfluss auf das Urlaubskonto dürfen sich nicht
+   ändern – unveränderte Werte werden entfernt, geänderte abgelehnt (403). $werte/$jahr/$jv werden angepasst. */
+function hr_eigene_angaben_pruefen(array &$werte, ?int &$jahr, ?array &$jv, string $uid, array $u): void
+{
+    $ist = null;
+    foreach (hr_personal()['personen'] as $x) if ($x['nutzer'] === $uid) { $ist = $x; break; }
+    $ist = $ist ?? hr_person_norm(['id' => $uid, 'nutzer' => $uid, 'aktiv' => !nutzer_hat_zugang($u) || !empty($u['active'])]);
+    $nein = 'Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle.';
+    foreach (['aktiv', 'arbeitstage', 'personalnummer'] as $f) {
+        if (!array_key_exists($f, $werte)) continue;
+        if ($werte[$f] !== $ist[$f]) fail($nein, 403);
+        unset($werte[$f]);
+    }
+    if ($jahr !== null) {
+        $alt = $ist['jahre'][(string)$jahr] ?? ['anspruch' => null, 'uebertrag' => null];
+        // Anspruch: gespeicherter Wert des Jahres oder (Dialog-Vorbelegung) der geltende aus einem früheren Jahr
+        $anspruchGleich = $jv['anspruch'] === null ? $alt['anspruch'] === null : ((float)$jv['anspruch'] === (float)($alt['anspruch'] ?? hr_anspruch($ist, $jahr)));
+        $uebertragGleich = $jv['uebertrag'] === null ? $alt['uebertrag'] === null : ($alt['uebertrag'] !== null && (float)$jv['uebertrag'] === (float)$alt['uebertrag']);
+        if (!$anspruchGleich || !$uebertragGleich) fail($nein, 403);
+        $jahr = null; $jv = null;
+    }
+}
+/* Kennungen der eigenen Person(en) des angemeldeten Mitarbeiters (verknüpft, auch nicht im Urlaubsplan) – für das
+   Vier-Augen-Prinzip bei Angaben, Zuordnung und Importen: eigene Daten ändert immer eine andere Person der Personalstelle */
+function hr_eigene_ids(array $personal, array $me): array
+{
+    $o = [];
+    foreach ($personal['personen'] as $p) if ($p['nutzer'] !== null && $p['nutzer'] === (string)$me['id']) $o[$p['id']] = true;
+    return $o;
 }
 function hr_eigene_person(array $personal, array $me, string $person): bool
 {

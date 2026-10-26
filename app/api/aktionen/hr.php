@@ -28,7 +28,7 @@ switch ($action) {
             $me = require_perm('hr.antrag');
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
-            $neuVerknuepft = hr_auto_verknuepfen($me) !== null;   // Altbestand mit gleichem Namen übernehmen (einmalig)
+            $neuVerknuepft = false;   // früher automatische Verknüpfung beim ersten Aufruf – entfällt (nur noch die Personalstelle ordnet zu); Feld bleibt für ältere Oberflächen
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             $ich = hr_ich($personal, $me);
             $verwalten = may($me, 'hr.verwalten');
@@ -274,7 +274,7 @@ switch ($action) {
                 sort($at);
                 $werte['arbeitstage'] = $at;
             }
-            $jahr = null;
+            $jahr = null; $jv = null;
             if (array_key_exists('jahr', $b)) {
                 $jahr = hr_jahr_param($b['jahr']);
                 $zahl = function ($z, string $was, float $min) use ($jahr) {
@@ -284,9 +284,14 @@ switch ($action) {
                 };
                 $jv = ['anspruch' => $zahl($b['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($b['uebertrag'] ?? null, 'Übertrag', -100)];
             }
-            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, $werte, $jahr, &$jv) {
+            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me) {
                 $roh = hr_personal_roh();
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
+                // Vier-Augen-Prinzip: die eigenen Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, im Urlaubsplan, Personalnummer –
+                // sie bestimmt die Zuordnung beim Import) ändert eine andere Person der Personalstelle. Abteilung und Position
+                // (Reihenfolge im Plan) sind ohne Einfluss auf das Urlaubskonto und bleiben erlaubt. Unveränderte Werte (der
+                // Dialog schickt immer alle Felder) werden still übergangen, damit z. B. der eigene Name änderbar bleibt.
+                if ($uid === (string)$me['id']) hr_eigene_angaben_pruefen($werte, $jahr, $jv, $uid, $users[$ui]);
                 if (($werte['personalnummer'] ?? '') !== '') {
                     foreach (hr_personal()['personen'] as $x) {
                         if ($x['nutzer'] !== $uid && ($x['personalnummer'] ?? '') === $werte['personalnummer']) fail('Die Personalnummer ' . $werte['personalnummer'] . ' hat schon ' . hr_name($x)
@@ -320,6 +325,8 @@ switch ($action) {
             $ui = user_find($users, (string)($b['nutzer'] ?? ''));
             if ($ui === null) fail('Bitte einen Mitarbeiter wählen.', 422);
             $u = $users[$ui];
+            // Vier-Augen-Prinzip: Einträge (mit Urlaub und Abwesenheiten) sich selbst zuordnen darf nur eine andere Person
+            if ((string)$u['id'] === (string)$me['id']) fail('Einträge der Urlaubsliste ordnet Ihnen eine andere Person der Personalstelle zu.', 403);
             [$p, $n, $doppelt, $name] = with_lock('hr-personal', function () use ($b, $eintrag, $u) {
                 $roh = hr_personal_roh();
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);

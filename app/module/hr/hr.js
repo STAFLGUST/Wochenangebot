@@ -110,7 +110,6 @@
   function zeigeMein() {
     const d = S.start;
     $('#mein-titel').textContent = `Mein Urlaub ${d.jahr}`;
-    if (d.neuVerknuepft && d.ich) meldung($('#mein-info'), `Willkommen! Ihr Konto ist jetzt mit Ihrem Eintrag in der Urlaubsverwaltung verknüpft (${d.ich.name}).`, 'ok');
     $('#mein-ohne').hidden = !!d.ich;
     $('#mein-inhalt').hidden = !d.ich;
     if (!d.ich) return;
