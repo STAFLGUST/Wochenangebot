@@ -225,6 +225,9 @@ function oidc_erneuern(array $u, string $grund, int $ende, int $authTime = 0): n
         $_SESSION['oidcEndeGemeldet'] = $ende;
         audit('oidc_ablauf', $grund === 'beendet' ? 'Beendete Sitzung: erneute Anmeldung bei Keycloak verlangt' : 'Sitzung wegen Inaktivität abgelaufen: erneute Anmeldung bei Keycloak verlangt', [], $u);
     }
+    // Keycloak rechnet auth_time in ganzen Sekunden: liegen Anmeldung und Ende in derselben Sekunde, gilt max_age=0 dort
+    // noch als erfüllt (keine Passwortabfrage) – dann kurz warten, damit die erneute Anmeldung wirklich verlangt wird
+    if (time() <= $ende + 1) { session_write_close(); sleep(1); }
     respond(['ok' => false, 'code' => 'reauth_required', 'anmelden' => oidc_neu_anmelden_adresse(),
              'stand' => ['anmeldung' => $authTime, 'ende' => $ende, 'grund' => $grund],   // nur Zeitpunkte der eigenen Sitzung (Fehlersuche)
              'error' => $grund === 'beendet' ? 'Ihre Sitzung wurde beendet. Bitte melden Sie sich erneut an.' : 'Ihre Sitzung ist wegen Inaktivität abgelaufen. Bitte melden Sie sich erneut an.'], 403);
