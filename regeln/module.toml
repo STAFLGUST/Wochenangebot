@@ -314,7 +314,7 @@ testgruppen = ["hr", "hr_uebersicht"]
 pfade = ["regeln/aktionen/hr.toml", "app/api/aktionen/hr.php", "app/api/module/hr/**", "app/module/hr/**", "tests/e2e/test_hr*.py", "tests/fixtures/hr/**"]
 pfade_geplant = []
 hinweise = [
-  "Urlaubsverwaltung (Oktober 2026): Anträge der Mitarbeiter (hr.antrag), Genehmigung durch Mitarbeiter mit dem zuweisbaren Recht hr.genehmigen (seit 25.10.2026, nie den eigenen Antrag; vorher hr.verwalten), Krank/Gleittag/freie Tage nur durch die Personalstelle, Übertrag bis 31.03., Kalender für alle nur „abwesend“, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung.",
+  "Urlaubsverwaltung (Oktober 2026): Anträge der Mitarbeiter (hr.antrag), Genehmigung durch Mitarbeiter mit dem zuweisbaren Recht hr.genehmigen (seit 25.10.2026, nie den eigenen Antrag; vorher hr.verwalten), Krank/Gleittag/freie Tage nur durch die Personalstelle, Übertrag bis 31.03. (Verfallstag einstellbar in Verwaltung → Urlaub, hr-einstellungen.uebertragBis), Kalender für alle nur „abwesend“, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung.",
   "Einträge ohne (gültigen) Mitarbeiter = ehemalige Mitarbeiter (Inhaber 26.10.2026): nicht im Urlaubsplan, Einträge bleiben; Zuordnung nur von Hand bzw. bei eindeutig gleichem Namen, keine neuen Mitarbeiter.",
   "Mitarbeiter der Urlaubsverwaltung (hr-personal) sind keine Zugänge: auch Kollegen ohne Mitarbeiterkonto (z. B. Lager) werden geführt; mit Konto verknüpft, können sie selbst beantragen.",
   "Urlaubsübersicht (26.10.2026): zuweisbares Recht hr.uebersicht (auch hr.verwalten) – alle Mitarbeiter im Urlaubsplan mit Summen je Jahr (Konto, Krank-, Gleittage als Anzahl), Aktion hr_uebersicht.",

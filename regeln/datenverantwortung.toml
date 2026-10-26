@@ -156,7 +156,7 @@ historie = "Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornier
 name = "hr-einstellungen"
 eigentuemer = "hr"
 schutz = "intern"
-beschreibung = "Urlaubssperren und Ferienzeiträume der Urlaubsverwaltung"
+beschreibung = "Urlaubssperren, Ferienzeiträume und Verfallstag des Resturlaubs (uebertragBis, MM-TT; fehlt: 31.03.) der Urlaubsverwaltung"
 
 # ───────────── CRM ─────────────
 
