@@ -124,7 +124,7 @@ Agent: `controlling` · hängt ab von `plattform`, `verwaltung`
 
 ## Verwaltung (`verwaltung`)
 
-Stammdaten, Import, Benutzer, Berechtigungen, Sicherheit, Geschäftsregeln, Module & Wartung, Systemstatus
+Stammdaten, Import, Benutzer, Berechtigungen, Geschäftsregeln, Module & Wartung, Systemstatus
 
 Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kundengruppen`, `vkgruppen`, `vertreter`, `kundenimport`, `auswertung`, `master`, `importzentrale`
 
@@ -133,6 +133,16 @@ Agent: `verwaltung` · hängt ab von `plattform` · Testgruppen: `kunden`, `kund
 | `verwaltung.verwaltung` Verwaltung | intern | https://verwaltung.dashboard-stafl.de/admin/ | fertig | produktiv |
 | `verwaltung.import` Importzentrale | intern | https://verwaltung.dashboard-stafl.de/import/ | fertig | produktiv |
 | `verwaltung.system` System: Module & Wartungsmodus | intern | https://verwaltung.dashboard-stafl.de/system/ | geplant | keine |
+
+## Sicherheit (`sicherheit`)
+
+Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen und privilegierte Konten
+
+Agent: `sicherheit` · hängt ab von `plattform` · Testgruppen: `sicherheit_modul`, `notfall`
+
+| Oberfläche | Art | Adresse | Entwicklung | Freigabe |
+| --- | --- | --- | --- | --- |
+| `sicherheit.intern` Sicherheit | intern | https://sicherheit.dashboard-stafl.de/module/sicherheit/ | fertig | produktiv |
 
 ## Dashboard (`dashboard`)
 

@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-165 Aktionen in 9 Modulen.
+171 Aktionen in 10 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -144,6 +144,16 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `vkgruppen` | `angebot.eingabe` | lesend | – | – | `app/api/aktionen/kundengruppen.php` |
 | `vkgruppen_save` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/kundengruppen.php` |
 
+## Sicherheit (`sicherheit`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `sicherheit_ereignisse` | `sicherheit.intern` | lesend | – | angemeldet | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_konten` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_lage` | `sicherheit.intern` | lesend | – | angemeldet | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_notfall_an` | `sicherheit.intern` | schreibend | – | Recht sicherheit.notfall + Bestätigung | `app/api/aktionen/sicherheit.php` |
+| `sicherheit_notfall_aus` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/sicherheit.php` |
+
 ## App (iOS/Android) (`mobile`)
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
@@ -158,21 +168,22 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `anmeldekonto_aendern` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/anmeldekonten.php` |
 | `benachrichtigung_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/mail.php` |
 | `benachrichtigung_test` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/mail.php` |
+| `betrieb_status` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
 | `change_password` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/zugang.php` |
-| `fw_export` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
-| `fw_feed_auffrischen` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/schutz.php` |
-| `fw_feed_update` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
-| `fw_freigeben` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
-| `fw_import` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
-| `fw_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
-| `fw_sperren` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
-| `fw_status` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
-| `fw_verkehr` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
-| `fw_vorlage` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
-| `geo_clear_stats` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
-| `geo_lookup` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
-| `geo_update` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
-| `ip_unblock` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `fw_export` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
+| `fw_feed_auffrischen` | `sicherheit.intern` | schreibend | – | Administrator | `app/api/aktionen/schutz.php` |
+| `fw_feed_update` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
+| `fw_freigeben` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
+| `fw_import` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
+| `fw_save` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
+| `fw_sperren` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
+| `fw_status` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
+| `fw_verkehr` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
+| `fw_vorlage` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/schutz.php` |
+| `geo_clear_stats` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `geo_lookup` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
+| `geo_update` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `ip_unblock` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `log` | `angebot.eingabe` | lesend | – | Recht protokoll.sehen | `app/api/aktionen/verwaltung.php` |
 | `login` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/zugang.php` |
 | `login_2fa` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/zugang.php` |
@@ -198,11 +209,11 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `rolle_loeschen` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `rolle_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `security_diag` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/verwaltung.php` |
-| `security_export` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
-| `security_integrity` | `angebot.eingabe` | post | – | siehe Datei | `app/api/aktionen/integritaet.php` |
-| `security_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
-| `security_status` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
-| `session_end` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `security_export` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `security_integrity` | `sicherheit.intern` | post | – | siehe Datei | `app/api/aktionen/integritaet.php` |
+| `security_save` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `security_status` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
+| `session_end` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `setup` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/zugang.php` |
 | `status` | `angebot.eingabe` | lesend | wartungsfrei | – | `app/api/aktionen/zugang.php` |
 | `testpostfach` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/mail.php` |
@@ -213,7 +224,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `user_delete` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `user_mail` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `user_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
-| `user_unlock` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
+| `user_unlock` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `users` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
 | `waf_probe` | `angebot.kunden` | lesend | öffentlich | – | `app/api/aktionen/schutz.php` |
 | `wartung_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/zugang.php` |

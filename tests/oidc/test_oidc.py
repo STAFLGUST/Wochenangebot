@@ -34,6 +34,7 @@ SH = os.environ.get('WA_SHOTS') or os.path.join(REPO, 'tests', '.ergebnisse')
 os.makedirs(SH, exist_ok=True)
 PORT = 8443
 D, A, W, B, HR, CRM, MKT, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'login'))
+SIC = f'https://sicherheit.stafl.test:{PORT}'   # Modul Sicherheit (Stand 9, Freigabe des Inhabers 26.10.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
@@ -178,7 +179,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -190,7 +191,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 8' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 9' in _log, _log[-300:])
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -216,6 +217,11 @@ check('Stand 7: Client „marketing“ nachträglich angelegt, Geheimnisse in .e
       and GEHEIM['OIDC_SECRET_MARKETING'] not in _log, _log[-500:])
 check('Client „marketing“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('marketing', {}).get('secret') not in (None, '@GEHEIM_MARKETING@') and clients.get('marketing', {}).get('redirectUris') == [MKT + '/oidc/callback'])
+check('Stand 9: Client „sicherheit“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client sicherheit' in _log and 'erzeugt:   OIDC_SECRET_SICHERHEIT in .env' in _log and 'erzeugt:   OIDC_CRYPTO_SICHERHEIT in .env' in _log
+      and GEHEIM['OIDC_SECRET_SICHERHEIT'] not in _log, _log[-500:])
+check('Client „sicherheit“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('sicherheit', {}).get('secret') not in (None, '@GEHEIM_SICHERHEIT@') and clients.get('sicherheit', {}).get('redirectUris') == [SIC + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
       and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
@@ -408,7 +414,17 @@ for pfad in ('/', '/admin/', '/admin'):
     check(f'Marketing {pfad}: Weiterleitung zum Redaktionsplan (/module/marketing/), kein Eingabebereich auf dem Marketing-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/marketing/'), (code, kopf.get('Location')))
 check('Marketing: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(MKT + '/assets/app.css')[0] == 200 and anfrage(MKT + '/dashboard/abgemeldet.html')[0] == 200)
-for h in (D, A, W, B, HR, CRM, MKT):
+code, kopf, _ = anfrage(SIC + '/module/sicherheit/', kopf=SEITE)
+check('Sicherheit ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['sicherheit']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [SIC + '/oidc/callback'], kopf.get('Location'))
+check('Sicherheit: Schnittstelle ohne Anmeldung 401 (auch sicherheit_lage, security_status)',
+      all(anfrage(SIC + '/api/?action=' + a)[0] == 401 for a in ('status', 'sicherheit_lage', 'security_status')))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(SIC + pfad, kopf=SEITE)
+    check(f'Sicherheit {pfad}: Weiterleitung zur Sicherheitszentrale (/module/sicherheit/), kein Eingabebereich auf dem Sicherheits-Host',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/sicherheit/'), (code, kopf.get('Location')))
+for h in (D, A, W, B, HR, CRM, MKT, SIC):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
@@ -634,7 +650,7 @@ with sync_playwright() as pw:
     sta = pa.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('Single Sign-on: Mitarbeiter-Eingabe ohne erneute Eingabe angemeldet', sta.get('loggedIn') and sta['user']['username'] == 'erika', sta.get('user'))
     code, j = pa.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", sta.get('csrf', ''))
-    check('Rechte bleiben bei uns: Bearbeiterin darf keine Sicherheitseinstellungen lesen (403)', code == 403, (code, j))
+    check('Rechte bleiben bei uns: Bearbeiterin liest keine Sicherheitseinstellungen (403; seit dem Modul Sicherheit nur auf dessen Host: 404)', code in (403, 404), (code, j))
     code, _ = pa.evaluate(js_post, ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, sta.get('csrf', '')])
     check('Rechte bleiben bei uns: Bearbeiterin legt keine Nutzer an', code == 403, code)
     ka = kekse(ctx, 'angebot.stafl.test')

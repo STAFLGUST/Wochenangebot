@@ -39,15 +39,15 @@ assert re.search(r"handle @anmeldung \{\s*reverse_proxy keycloak:8080\s*\}", log
 assert login.count("reverse_proxy") == 1 and login.rstrip("}").rstrip().endswith("respond 404")
 assert "/admin" not in login and "master" not in login
 
-# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM und Marketing (freigegeben): nur über den Netzwerknamen der App mit Keycloak-Hosts
-mitarbeiter = site("dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de")
+# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing und Sicherheit (freigegeben): nur über den Netzwerknamen der App mit Keycloak-Hosts
+mitarbeiter = site("dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de")
 assert re.findall(r"reverse_proxy (\S+)", mitarbeiter) == ["app-mitarbeiter:80"]
 assert "respond @private 404" in mitarbeiter and "Strict-Transport-Security" in mitarbeiter
 assert "form-action 'self' https://login.dashboard-stafl.de" in mitarbeiter
 assert "app-mitarbeiter" in ergaenzung and "app-mitarbeiter" not in basis and "keycloak" not in basis
 
 # Kein anderer Siteblock erwähnt die Anmelde-Hosts; jeder Dashboard-Host genau einmal
-for h in hosts + ["dashboard-stafl.de", "angebot.dashboard-stafl.de", "verwaltung.dashboard-stafl.de", "bestand.dashboard-stafl.de", "hr.dashboard-stafl.de", "crm.dashboard-stafl.de", "marketing.dashboard-stafl.de", "login.dashboard-stafl.de"]:
+for h in hosts + ["dashboard-stafl.de", "angebot.dashboard-stafl.de", "verwaltung.dashboard-stafl.de", "bestand.dashboard-stafl.de", "hr.dashboard-stafl.de", "crm.dashboard-stafl.de", "marketing.dashboard-stafl.de", "sicherheit.dashboard-stafl.de", "login.dashboard-stafl.de"]:
     kopfzeilen = [z for z in caddy.splitlines() if z.endswith("{") and not z.startswith(("\t", " ", "#"))]
     assert sum(1 for z in kopfzeilen if re.search(r"(?<![\w.-])" + re.escape(h) + r"(?![\w.-])", z)) == 1, h
 assert caddy.count("app-mitarbeiter:80") == 1 and caddy.count("keycloak:8080") == 1
@@ -55,4 +55,4 @@ assert caddy.count("app-mitarbeiter:80") == 1 and caddy.count("keycloak:8080") =
 # Kundenportal und vorhandene Testumgebung behalten ihre separaten Routen.
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy
 assert "test.{$DOMAIN} {" in caddy
-print("OK: sieben Modul-Hosts sind 503-Platzhalter; Anmeldung, Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM und Marketing nur mit der Ergänzungsdatei.")
+print("OK: sieben Modul-Hosts sind 503-Platzhalter; Anmeldung, Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing und Sicherheit nur mit der Ergänzungsdatei.")
