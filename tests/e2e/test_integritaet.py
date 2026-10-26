@@ -212,6 +212,25 @@ storage_write('notiz-test', {'text': 'Hallo'})
 code, r = run(A)
 check('after cleanup: clean again', code == 200 and r['result']['ok'] and r['result']['items'] == [], r['result']['items'][:5])
 
+# ---------- Datenordner: sperrende .htaccess und Proxy-Merkdatei der Anwendung sind erwartet (Befund aus dem Betrieb 26.10.2026) ----------
+HT = os.path.join(DATA, '.htaccess')
+PX = os.path.join(DATA, 'wa-proxy-4-' + 'd' * 64 + '.json')
+with open(HT, 'w') as f:
+    f.write('# Kein direkter Zugriff auf gespeicherte Daten (zusätzliche Absicherung)\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n'
+            '<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n')
+with open(PX, 'w') as f: f.write('["172.18.0.2"]')
+code, r = run(A)
+check('data: blocking .htaccess and proxy file of the app are no finding', code == 200 and r['result']['ok'] and r['result']['items'] == [], r['result']['items'][:5])
+with open(HT, 'a') as f: f.write('AddHandler application/x-httpd-php .txt\n')
+with open(PX, 'w') as f: f.write('["172.18.0.2", "<script>"]')
+I = by_path(run(A)[1])
+check('data: .htaccess with more than a block is critical', I.get('data/.htaccess', {}).get('stufe') == 'kritisch', I.get('data/.htaccess'))
+check('data: proxy file with other content is a warning', I.get('data/' + os.path.basename(PX), {}).get('stufe') == 'warnung', I.get('data/' + os.path.basename(PX)))
+with open(HT, 'w') as f: f.write('Options -Indexes\n')
+I = by_path(run(A)[1])
+check('data: .htaccess without a block is critical', I.get('data/.htaccess', {}).get('stufe') == 'kritisch', I.get('data/.htaccess'))
+os.remove(HT); os.remove(PX)
+
 # ---------- HTML-Seiten: mit und ohne Versionsnummern zulässig, jede andere Abweichung nicht ----------
 SEITE = os.path.join(APP, 'index.html')
 gestempelt = open(SEITE, encoding='utf-8').read()
