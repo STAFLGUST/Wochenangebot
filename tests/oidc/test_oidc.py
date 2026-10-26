@@ -1075,8 +1075,9 @@ with sync_playwright() as pw:
     bestaetigung_abgelaufen(ctx, 'sicherheit.stafl.test')   # unmittelbar vor dem Speichern (Seitenaufbau dazwischen)
     with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort:
         pg.click('#sic-dlg .sic-dfuss [type=submit]')
-    sa = (antwort.value.status, antwort.value.json())
-    check('Speichern ohne gültige Bestätigung: Server verlangt die erneute Anmeldung', sa[0] == 403 and sa[1].get('code') == 'reauth_required', (sa, vorher))
+    # Inhalt der Antwort ist nach der Weiterleitung nicht mehr abrufbar – Status genügt (Code prüft der Aufruf oben)
+    check('Speichern ohne gültige Bestätigung: Server verlangt die Bestätigung (403)', antwort.value.status == 403,
+          {'status': antwort.value.status, 'bestaetigt_vor_dem_ablauf': vorher})
     pg.wait_for_url(lambda u: u.startswith(L))
     check('… Seite leitet zu Keycloak mit max_age=0', 'max_age=0' in urllib.parse.unquote(pg.url), pg.url)
     pg.wait_for_selector('#password')
