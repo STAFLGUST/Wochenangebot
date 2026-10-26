@@ -29,6 +29,7 @@ block = site(", ".join(hosts))
 assert 'respond "STAFL-Plattform: Dieser Bereich befindet sich in Vorbereitung." 503' in block
 assert 'X-Robots-Tag "noindex, nofollow"' in block
 assert 'Cache-Control "no-store"' in block
+assert 'Strict-Transport-Security "max-age=31536000"' in block   # HTTPS-Pflicht auch für Platzhalter (Sicherheitsdurchsicht 26.10.2026)
 for verboten in ("reverse_proxy", "file_server", "redir"):
     assert verboten not in block, verboten
 
@@ -51,6 +52,11 @@ for h in hosts + ["dashboard-stafl.de", "angebot.dashboard-stafl.de", "verwaltun
     kopfzeilen = [z for z in caddy.splitlines() if z.endswith("{") and not z.startswith(("\t", " ", "#"))]
     assert sum(1 for z in kopfzeilen if re.search(r"(?<![\w.-])" + re.escape(h) + r"(?![\w.-])", z)) == 1, h
 assert caddy.count("app-mitarbeiter:80") == 1 and caddy.count("keycloak:8080") == 1
+
+# HTTPS-Pflicht (HSTS, 1 Jahr) für jeden Dashboard-Host, auch für die Weiterleitung von www
+for kopf in ("login.dashboard-stafl.de", "www.dashboard-stafl.de"):
+    assert 'Strict-Transport-Security "max-age=31536000"' in site(kopf), kopf
+assert 'Strict-Transport-Security "max-age=31536000"' in mitarbeiter
 
 # Kundenportal und vorhandene Testumgebung behalten ihre separaten Routen.
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy

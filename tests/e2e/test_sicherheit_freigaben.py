@@ -320,11 +320,12 @@ check('mit Kundenrecht (Administrator) vollständig', 'Kantine Freigabe' in al)
 
 # ---------- Schutz-Header ohne Caddy ----------
 ht = open(os.path.join(REPO, 'app/.htaccess'), encoding='utf-8').read()
-check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=86400; includeSubDomains" env=HTTPS' in ht
+check('.htaccess: CSP, HSTS (nur HTTPS), Permissions-Policy', "Content-Security-Policy \"default-src 'self'; script-src 'self';" in ht and 'Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS' in ht
       and 'Permissions-Policy' in ht)
 check('.htaccess: X-Powered-By (PHP-Version) wird entfernt', 'Header unset X-Powered-By' in ht)
 cf_haupt = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read().split('test.{$DOMAIN} {')[0]
-check('Caddy: HTTPS-Pflicht (HSTS) auch für alle Subdomains', 'Strict-Transport-Security "max-age=86400; includeSubDomains"' in cf_haupt)
+check('Caddy: HTTPS-Pflicht (HSTS) 1 Jahr, auch für alle Subdomains, ohne preload', 'Strict-Transport-Security "max-age=31536000; includeSubDomains"' in cf_haupt
+      and not any('preload' in z for z in cf_haupt.splitlines() if 'Strict-Transport-Security' in z))
 cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
 bloecke = cf.split('test.{$DOMAIN} {')
 check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, alles andere weiter „no-cache“ – Echtbetrieb und Testumgebung',

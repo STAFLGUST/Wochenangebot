@@ -3,7 +3,7 @@
 name: wochenangebot-test
 services:
   app-test:
-    image: php:8.3-apache
+    image: php:8.3-apache@sha256:9f1f03b7e093c8e70227d782e31a305590ab71d7b48c076589dcc92ba8c9300c   # wie docker-compose.yml (tests/deploy/test_images.py)
     restart: unless-stopped
     logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
       driver: json-file

@@ -210,7 +210,8 @@ fi
 kc_ende
 
 # ── 4. Caddy ──
-if docker run --rm -e DOMAIN=angebot-stafl.de -v "$REPO/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy-pruefung.txt 2>&1; then
+CADDY_IMAGE=$(sed -n 's/^ *image: *\(caddy:[^ ]*\).*$/\1/p' "$REPO/docker-compose.yml")   # dieselbe Fassung wie im Betrieb
+if docker run --rm -e DOMAIN=angebot-stafl.de -v "$REPO/Caddyfile:/etc/caddy/Caddyfile:ro" "$CADDY_IMAGE" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/tmp/caddy-pruefung.txt 2>&1; then
   ok "Caddyfile mit den Anmelde-Hosts gültig"
 else
   nein "Caddyfile" "$(tail -3 /tmp/caddy-pruefung.txt)"
