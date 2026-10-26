@@ -27,6 +27,7 @@ WURZEL = Path(__file__).resolve().parent.parent
 
 ENTWICKLUNG = ["geplant", "in_entwicklung", "in_pruefung", "fertig"]
 DASHBOARD_GRUPPEN = ["anwendungen", "verwaltung"]   # Bereiche des Dashboards (Fachanwendungen oben, Verwaltung & Daten darunter)
+STANDARDROLLEN = ["viewer", "editor"]   # zugang_rollen: wer den Modulzugang standardmäßig hat (ohne Angabe: beide, lib/rechte.php)
 FREIGABE = ["keine", "test", "produktiv", "deaktiviert"]
 SCHUTZ = ["oeffentlich", "intern", "vertraulich", "geheim"]
 ID_MUSTER = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -275,8 +276,13 @@ def pruefe_module(rw: Regelwerk) -> None:
                 reihen[r] = mid
             if m.get("dashboard_gruppe", "anwendungen") not in DASHBOARD_GRUPPEN:
                 rw.f(f"Modul {mid}: dashboard_gruppe „{m.get('dashboard_gruppe')}“ unbekannt ({', '.join(DASHBOARD_GRUPPEN)})")
-        elif "dashboard_gruppe" in m:
-            rw.f(f"Modul {mid}: dashboard_gruppe nur für Dashboard-Module")
+            zr = m.get("zugang_rollen")
+            if zr is not None and (not isinstance(zr, list) or any(r not in STANDARDROLLEN for r in zr)):
+                rw.f(f"Modul {mid}: zugang_rollen muss eine Liste aus {', '.join(STANDARDROLLEN)} sein (auch leer)")
+            if zr is not None and m.get("teil_von"):
+                rw.f(f"Modul {mid}: zugang_rollen nur für Module mit eigenem Zugang (nicht mit teil_von)")
+        elif "dashboard_gruppe" in m or "zugang_rollen" in m:
+            rw.f(f"Modul {mid}: dashboard_gruppe und zugang_rollen nur für Dashboard-Module")
         teil = m.get("teil_von")
         if teil:
             if m.get("pfade") or m.get("pfade_geplant") or m.get("oberflaeche"):
@@ -707,6 +713,7 @@ def module_php(rw: Regelwerk) -> str:
                    "reihenfolge": m.get("reihenfolge"), "dashboard": bool(m.get("dashboard")), "teil_von": m.get("teil_von"),
                    "kachel_ziel": kachel_ziel(m) if m.get("dashboard") else None,
                    "gruppe": m.get("dashboard_gruppe", "anwendungen") if m.get("dashboard") else None,
+                   "zugang_rollen": list(m["zugang_rollen"]) if isinstance(m.get("zugang_rollen"), list) else None,
                    "abhaengigkeiten": list(m.get("abhaengigkeiten", [])), "oberflaechen": obs}
         z.append(f"    {php_wert(m['id'])} => {php_ausdruck(eintrag)},")
     z.append("];")

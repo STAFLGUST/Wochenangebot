@@ -103,19 +103,9 @@ switch ($action) {
         /* Vorlage anwenden: Sicherheitseinstellungen (gleiche Prüfungen wie beim Speichern) + Firewall */
         case 'fw_vorlage': {
             $me = require_admin_confirmation('fw_save');
-            $k = (string)(body()['vorlage'] ?? '');
-            $V = FW_VORLAGEN[$k] ?? null;
-            if (!$V) throw new InvalidArgumentException('Unbekannte Vorlage.');
-            $oldS = sec();
-            $newS = sec_clean(array_merge($oldS, $V['sec']), $oldS, $me);
-            $newF = fw_clean($V['fw'], fw());
-            if ($newF['feed'] && !fw_feed_info()) {
-                try { fw_feed_laden(); } catch (Throwable $e) { $newF['feed'] = false; }   // ohne Verbindung: Vorlage trotzdem anwenden
-            }
-            store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
-            store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
-            audit('security', 'Vorlage „' . $V['label'] . '“ für die Sicherheitseinstellungen angewendet' . (!empty($V['fw']['feed']) && !$newF['feed'] ? ' (Bedrohungsliste nicht erreichbar – aus)' : ''));
-            respond(['ok' => true, 'sec' => $newS] + fw_status());
+            $v = fw_vorlage_anwenden((string)(body()['vorlage'] ?? ''), $me);
+            audit('security', 'Vorlage „' . $v['label'] . '“ für die Sicherheitseinstellungen angewendet' . $v['hinweis']);
+            respond(['ok' => true, 'sec' => $v['sec']] + fw_status());
         }
 
         /* Export/Import der Einstellungen als JSON (ohne Listen von Nutzern, Sperren oder Geheimnissen) */

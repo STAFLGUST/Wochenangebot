@@ -14,6 +14,8 @@ switch ($action) {
                      // Wartung des Eingabebereichs (lib/module.php): Hinweis für Administratoren, Sperrbildschirm für alle anderen
                      'wartungEingabe' => $u ? modul_wartung_anzeige('angebot', 'eingabe', $u) : null,
                      'eingabeGesperrt' => $u ? !modul_zustand('angebot', 'eingabe', $u)['zugang'] : false,
+                     // Notfallmodus (lib/notfall.php): Hinweis für alle Mitarbeiter, Einzelheiten nur für Administratoren und Berechtigte
+                     'notfall' => notfall_anzeige($u),
                      // alter Eingabebereich stillgelegt (lib/oidc.php): neue Adresse für Hinweis und Weiterleitung
                      'umgezogen' => eigene_anmeldung_stillgelegt() ? eingabe_adresse() : null]);
         }
@@ -25,7 +27,7 @@ switch ($action) {
             $msg = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['message'] ?? '')) ?? '')), 0, 500);
             $until = (string)($b['until'] ?? '');
             if ($until !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/', $until)) fail('Bitte eine gültige Uhrzeit für das voraussichtliche Ende angeben.', 422);
-            $old = wartung();
+            $old = wartung_gespeichert();   // nur die von Hand eingeschaltete Wartung (der Notfallmodus hat einen eigenen Schalter)
             $new = ['active' => $on, 'message' => $msg, 'until' => $until !== '' ? $until : null, 'since' => $on ? ($old['since'] ?? now()) : null, 'by' => $me['name'], 'changed' => now()];
             store_write('wartung', $new);
             if ((bool)$old !== $on) modul_verlauf_eintragen(['t' => now(), 'wer' => $me['name'], 'bereich' => 'angebot.kunden', 'alt' => $old ? 'wartung' : 'normal',
@@ -39,7 +41,7 @@ switch ($action) {
         case 'reauth': {
             $me = require_auth(true);
             // Passwortbestätigung nur für Nutzer, die bestätigungspflichtige Aktionen ausführen dürfen
-            if ($me['role'] !== 'admin' && !array_intersect(user_perms($me), ['kunden.bearbeiten', 'wochenangebot.senden', 'sonderposten.senden', 'angebote.loeschen', 'einzelangebote.bearbeiten'])) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            if ($me['role'] !== 'admin' && !array_intersect(user_perms($me), ['kunden.bearbeiten', 'wochenangebot.senden', 'sonderposten.senden', 'angebote.loeschen', 'einzelangebote.bearbeiten', 'sicherheit.notfall'])) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
             $u = confirm_password($me, (string)(body()['password'] ?? ''));
             mark_admin_confirmed($u);
             audit('reauth', 'Sensible Verwaltungsaktionen für fünf Minuten bestätigt');

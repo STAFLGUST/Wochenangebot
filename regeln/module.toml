@@ -11,6 +11,7 @@
 #   sperrbar     false = darf nie in Wartung/Deaktivierung gehen (Schutz vor Aussperrung der Administration)
 #   adresse      heutige Adresse; ziel = beschlossene künftige Adresse (ADR-003), noch nicht in Betrieb
 #   dns = false  Host hat noch keinen DNS-Eintrag und darf noch nicht im Caddyfile stehen (nur mit freigabe = "keine")
+# Feld je Modul: zugang_rollen = Standardrollen mit Modulzugang „<modul>.zugang“ (ohne Angabe: viewer und editor; [] = keine)
 #   Der Betriebszustand (normal/wartung) steht bewusst NICHT hier – er ist reine Laufzeit (regeln/wartung.toml).
 #
 # Pfade: „pfade“ müssen auf vorhandene Dateien passen, „pfade_geplant“ dürfen noch leer sein.
@@ -390,7 +391,7 @@ hinweise = [
 [[modul]]
 id = "verwaltung"
 name = "Verwaltung"
-beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Sicherheit, Geschäftsregeln, Module & Wartung, Systemstatus"
+beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Geschäftsregeln, Module & Wartung, Systemstatus"
 icon = "settings"
 reihenfolge = 80
 dashboard = true
@@ -414,7 +415,8 @@ pfade = [
 pfade_geplant = ["app/api/module/verwaltung/**", "app/module/verwaltung/**"]
 hinweise = [
   "Zentrale Stammdaten (Artikel, Kunden, Lieferanten, Gruppen) gehören der Verwaltung; andere Module lesen und schreiben nur über ihre Schnittstellen.",
-  "Benutzer, Rechte und Sicherheit sind Oberflächen der Verwaltung, die Dienste dahinter gehören zum Plattformkern (koordinationspflichtig).",
+  "Benutzer und Rechte sind Oberflächen der Verwaltung, die Dienste dahinter gehören zum Plattformkern (koordinationspflichtig).",
+  "Sicherheit hat seit 26.10.2026 ein eigenes Modul (sicherheit); die Verwaltung behält die Ansicht System (Systemzustand, Diagnose, Wartung, Module & Freigaben) und verweist dorthin.",
 ]
 
   [[modul.oberflaeche]]
@@ -443,6 +445,38 @@ hinweise = [
   entwicklung = "geplant"
   freigabe = "keine"
   sperrbar = false
+
+[[modul]]
+id = "sicherheit"
+name = "Sicherheit"
+beschreibung = "Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen und privilegierte Konten"
+icon = "shield-lock"
+reihenfolge = 81
+dashboard = true
+dashboard_gruppe = "verwaltung"   # Dashboard: im Bereich „Verwaltung & Daten“ direkt rechts neben der Verwaltung
+zugang_rollen = []   # Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter)
+agent = "sicherheit"
+abhaengigkeiten = ["plattform"]
+testgruppen = ["sicherheit_modul", "notfall"]
+pfade = ["regeln/aktionen/sicherheit.toml", "app/api/aktionen/sicherheit.php", "app/module/sicherheit/**",
+  "tests/e2e/test_sicherheit_modul.py", "tests/e2e/test_notfall.py", "docs/plattform/modul-sicherheit.md"]
+pfade_geplant = []
+hinweise = [
+  "Auftrag und Freigabe des Inhabers (26.10.2026): Sicherheit als eigenes Modul mit Notfallmodus; Konzept docs/plattform/modul-sicherheit.md.",
+  "Das Modul ist die Oberfläche – die Dienste (Einstellungen, Firewall, Dateiprüfung, Sitzungen, Protokoll, Notfall lib/notfall.php) gehören zum Plattformkern (koordinationspflichtig).",
+  "Rechte: sicherheit.sehen (Lagebild, Ereignisse lesen), sicherheit.notfall (Notfall auslösen) ohne Standardrollen; Einstellungen, Sperren, Sitzungen und das Beenden des Notfalls nur Administratoren.",
+  "Notfallmodus nutzt die Wartungs-Entscheidungstabelle (alle sperrbaren internen Oberflächen in Wartung, Kunden-Wartung), keine eigene Sperrlogik. Server-Notfallwerkzeug: deploy/notfall-aus.sh.",
+  "Freigegeben (Inhaber 26.10.2026): sicherheit.dashboard-stafl.de mit eigenem Keycloak-Client „sicherheit“ (Stand 9); / und /admin/ führen zu /module/sicherheit/. Aktionen nur auf diesem Host (GR-109).",
+]
+
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Sicherheit"
+  art = "intern"
+  adresse = "https://sicherheit.dashboard-stafl.de/module/sicherheit/"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Freigabe des Inhabers 26.10.2026 (Keycloak-Client, Caddy, produktiv) mit dem Merge; DNS-Eintrag sicherheit besteht seit 26.10.2026
+  sperrbar = false   # die Sicherheitszentrale darf nie in Wartung gehen (auch nicht im Notfallmodus)
 
 # ───────────────────────────── Gemeinsame Bereiche (keine eigene Kachel) ─────────────────────────────
 
@@ -484,7 +518,7 @@ pfade = [
   "regeln/aktionen/plattform.toml",
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
-  "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-schutz.js", "app/assets/admin-rollen.js", "app/assets/vendor/**",
+  "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-rollen.js", "app/assets/vendor/**",
   "app/assets/fonts/**", "app/assets/icons/**", "app/assets/logo-*",
   "Caddyfile", "docker-compose.yml", ".env.example", ".gitignore", ".gitleaks.toml", ".github/**",
   "deploy/**", "werkzeuge/**", "regeln/**", "docs/**", "AGENTS.md", "CLAUDE.md", "LIESMICH.md",
@@ -544,7 +578,7 @@ pfade = ["app/api/lib/sitzung.php", "app/api/lib/oidc.php", "app/api/lib/passkey
 
 [[koordination]]
 bereich = "Nutzer, Rechte und Sicherheit"
-pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicherheit.php", "app/api/lib/firewall.php", "app/api/lib/herkunft.php",
+pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicherheit.php", "app/api/lib/firewall.php", "app/api/lib/herkunft.php", "app/api/lib/notfall.php",
   "app/api/aktionen/verwaltung.php", "app/api/aktionen/schutz.php", "app/assets/admin-rollen.js", "regeln/berechtigungen.toml"]
 
 [[koordination]]

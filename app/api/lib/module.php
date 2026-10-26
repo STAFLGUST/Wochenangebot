@@ -172,6 +172,8 @@ function modul_wartung_eintrag(string $modul, string $oberflaeche): ?array
         $w = wartung();
         return $w ? ['active' => true, 'message' => $w['message'], 'until' => $w['until'], 'since' => $w['since'], 'by' => $w['by'], 'ab' => null, 'grund' => ''] : null;
     }
+    // Notfallmodus (lib/notfall.php): jede sperrbare interne Oberfläche gilt als in Wartung – Administratoren arbeiten weiter
+    if ($n = notfall_wartung($modul, $oberflaeche)) return $n;
     $w = modul_laufzeit()['wartung']["$modul.$oberflaeche"] ?? null;
     return is_array($w) && !empty($w['active']) ? $w : null;
 }

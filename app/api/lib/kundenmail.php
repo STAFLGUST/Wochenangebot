@@ -311,6 +311,8 @@ function testpost_ablegen(array $cfg, array $jobs): array
 /* Mehrere Nachrichten über eine Verbindung; Ergebnis je Auftrag */
 function mail_send_many(array $cfg, array $jobs): array
 {
+    // Notfallmodus (lib/notfall.php): kein Versand – außer Benachrichtigungen an die eingetragenen Empfänger (notify_send)
+    if (function_exists('notfall_mail_gesperrt') && notfall_mail_gesperrt()) return array_map(function () { return ['ok' => false, 'error' => NOTFALL_MAIL_TEXT]; }, $jobs);
     if (testumgebung()) return testpost_ablegen($cfg, $jobs);
     $smtp = new Smtp($cfg);
     $res = [];
