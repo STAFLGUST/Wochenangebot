@@ -1,66 +1,67 @@
-/* STAFL-Plattform · Sicherheit – Gestaltung wie Dashboard, HR, CRM und Marketing („Liquid Glass“): heller Grund mit weichen
-   Farbflächen, Glasflächen für Kopf, Karten und Blöcke. Schrift und Grundregeln aus ../../assets/app.css; alle Farben dieser
-   Seite als --sic-*. Zustände: ok (grün), warn (bernstein), bad (rot); der Notfallmodus färbt Kopf, Band und Karte rot.
-   Dialoge: ein <dialog> (#sic-dlg), auf dem Handy als Blatt von unten. */
+/* STAFL-Plattform · Sicherheit – „Leitstand“ (Entwurf des Inhabers 26.10.2026): dunkel ein Leitstand mit Graphit-Grund,
+   Bordeaux- und Blaulicht, hell dieselbe Gliederung auf warmem Grau; folgt der Hell/Dunkel-Wahl am Konto wie alle Module.
+   Glasflächen für Kopf, Karten und Blöcke; Zahlen in Geist Mono. Schrift und Grundregeln aus ../../assets/app.css; alle
+   Farben dieser Seite als --sic-*. Zustände: ok (grün), warn (bernstein), bad (rot), info (blau); der Notfallmodus färbt
+   Kopf, Band und Alarmkopf rot. Dialoge: ein <dialog> (#sic-dlg), auf dem Handy als Blatt von unten. */
 
 body.sic {
-  --sic-bg: #f2f1ef;
+  --sic-bg: #f3f1ee;
   --sic-text: #1b1a19;
-  --sic-muted: #6a6560;
-  --sic-glass: rgba(255, 255, 255, .6);
-  --sic-kopf-glas: rgba(255, 255, 255, .9);
+  --sic-muted: #625c57;
+  --sic-glass: rgba(255, 255, 255, .7);
+  --sic-kopf-glas: rgba(255, 255, 255, .92);
   --sic-deckend: #fbfaf9;
-  --sic-rand: rgba(255, 255, 255, .82);
+  --sic-rand: rgba(27, 26, 25, .08);
   --sic-linie: rgba(27, 26, 25, .1);
   --sic-glanz: rgba(255, 255, 255, .95);
-  --sic-schatten: 0 10px 40px rgba(40, 30, 30, .10);
-  --sic-blob-a: #8c1d2c; --sic-blob-b: #2f6fb0; --sic-blob-c: #2f7a52;
-  --sic-aus: rgba(27, 26, 25, .06);
-  --sic-aus-hover: rgba(27, 26, 25, .11);
+  --sic-schatten: 0 10px 40px rgba(40, 30, 30, .08);
+  --sic-glow-a: rgba(140, 29, 44, .12); --sic-glow-b: rgba(47, 111, 176, .08);
+  --sic-aus: rgba(27, 26, 25, .055);
+  --sic-aus-hover: rgba(27, 26, 25, .1);
   --sic-modul: #8c1d2c;
   --sic-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
-  --sic-ok: #186a3b; --sic-ok-bg: rgba(31, 122, 69, .12);
-  --sic-warn: #7f4d00; --sic-warn-bg: rgba(226, 165, 74, .22);
-  --sic-bad: #a3192d; --sic-bad-bg: rgba(196, 30, 52, .1);
-  --sic-info: #1f5f9a; --sic-info-bg: rgba(47, 111, 176, .12);
+  --sic-ok: #17683a; --sic-ok-bg: rgba(31, 122, 69, .12); --sic-ok-hell: #23a05c;
+  --sic-warn: #7a4900; --sic-warn-bg: rgba(226, 165, 74, .2); --sic-warn-hell: #e09b2d;
+  --sic-bad: #a3192d; --sic-bad-bg: rgba(196, 30, 52, .1); --sic-bad-hell: #d6304a;
+  --sic-info: #1f5f9a; --sic-info-bg: rgba(47, 111, 176, .12); --sic-info-hell: #4f8fd0;
   --sic-rot: #c41e34; --sic-rot-dunkel: #8c1424;
-  --sic-tl-a: #8c1d2c; --sic-tl-b: #2f6fb0; --sic-tl-c: #c27a1a;
-  margin: 0; min-height: 100vh; min-height: 100dvh;
-  background: var(--sic-bg); color: var(--sic-text); font-family: var(--font);
+  --sic-tl-a: #b3253a; --sic-tl-b: #4f8fd0; --sic-tl-c: #c27a1a;
+  --sic-aktiv-tab: #fff; --sic-aktiv-tab-text: #1b1a19;
+  margin: 0; min-height: 100vh; min-height: 100dvh; color: var(--sic-text); font-family: var(--font);
+  background: radial-gradient(1200px 700px at 12% -10%, var(--sic-glow-a), transparent 60%), radial-gradient(900px 600px at 100% 10%, var(--sic-glow-b), transparent 60%) fixed, var(--sic-bg);
 }
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.sic {
-    --sic-bg: #111012; --sic-text: #f4f1ee; --sic-muted: #a49c96; --sic-glass: rgba(40, 36, 38, .56); --sic-kopf-glas: rgba(32, 29, 30, .95); --sic-deckend: #201d1e;
-    --sic-rand: rgba(255, 255, 255, .13); --sic-linie: rgba(255, 255, 255, .1); --sic-glanz: rgba(255, 255, 255, .18); --sic-schatten: 0 12px 44px rgba(0, 0, 0, .45);
-    --sic-blob-a: #6e1a28; --sic-blob-b: #1d4670; --sic-blob-c: #1d4f36;
-    --sic-aus: rgba(255, 255, 255, .08); --sic-aus-hover: rgba(255, 255, 255, .14); --sic-modul: #f0a3ae; --sic-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
-    --sic-ok: #5fd08f; --sic-ok-bg: rgba(95, 208, 143, .14); --sic-warn: #f3c98a; --sic-warn-bg: rgba(224, 144, 31, .17);
-    --sic-bad: #ff9aa8; --sic-bad-bg: rgba(255, 92, 115, .14); --sic-info: #8bb8e8; --sic-info-bg: rgba(139, 184, 232, .14);
-    --sic-rot: #e2475d; --sic-rot-dunkel: #b02a3e; --sic-tl-a: #f0a3ae; --sic-tl-b: #8bb8e8; --sic-tl-c: #f3c98a;
+    --sic-bg: #0b0a0d; --sic-text: #f4f1ee; --sic-muted: #a39c97; --sic-glass: rgba(255, 255, 255, .035); --sic-kopf-glas: rgba(20, 18, 23, .88); --sic-deckend: #161318;
+    --sic-rand: rgba(255, 255, 255, .08); --sic-linie: rgba(255, 255, 255, .08); --sic-glanz: rgba(255, 255, 255, .06); --sic-schatten: 0 14px 44px rgba(0, 0, 0, .35);
+    --sic-glow-a: rgba(140, 29, 44, .38); --sic-glow-b: rgba(47, 111, 176, .16);
+    --sic-aus: rgba(255, 255, 255, .06); --sic-aus-hover: rgba(255, 255, 255, .11); --sic-modul: #e2475d; --sic-fokus: 0 0 0 3px rgba(226, 71, 93, .55);
+    --sic-ok: #3dd68c; --sic-ok-bg: rgba(61, 214, 140, .12); --sic-ok-hell: #3dd68c; --sic-warn: #f2b544; --sic-warn-bg: rgba(242, 181, 68, .14); --sic-warn-hell: #f2b544;
+    --sic-bad: #ff8a9a; --sic-bad-bg: rgba(255, 92, 114, .12); --sic-bad-hell: #ff5c72; --sic-info: #7fb2f0; --sic-info-bg: rgba(127, 178, 240, .12); --sic-info-hell: #7fb2f0;
+    --sic-rot: #e2304a; --sic-rot-dunkel: #a3192d; --sic-tl-a: #e2475d; --sic-tl-b: #7fb2f0; --sic-tl-c: #f2b544;
+    --sic-aktiv-tab: #f4f1ee; --sic-aktiv-tab-text: #141217;
   }
 }
 @media screen {
   :root[data-theme="dark"] body.sic {
-    --sic-bg: #111012; --sic-text: #f4f1ee; --sic-muted: #a49c96; --sic-glass: rgba(40, 36, 38, .56); --sic-kopf-glas: rgba(32, 29, 30, .95); --sic-deckend: #201d1e;
-    --sic-rand: rgba(255, 255, 255, .13); --sic-linie: rgba(255, 255, 255, .1); --sic-glanz: rgba(255, 255, 255, .18); --sic-schatten: 0 12px 44px rgba(0, 0, 0, .45);
-    --sic-blob-a: #6e1a28; --sic-blob-b: #1d4670; --sic-blob-c: #1d4f36;
-    --sic-aus: rgba(255, 255, 255, .08); --sic-aus-hover: rgba(255, 255, 255, .14); --sic-modul: #f0a3ae; --sic-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
-    --sic-ok: #5fd08f; --sic-ok-bg: rgba(95, 208, 143, .14); --sic-warn: #f3c98a; --sic-warn-bg: rgba(224, 144, 31, .17);
-    --sic-bad: #ff9aa8; --sic-bad-bg: rgba(255, 92, 115, .14); --sic-info: #8bb8e8; --sic-info-bg: rgba(139, 184, 232, .14);
-    --sic-rot: #e2475d; --sic-rot-dunkel: #b02a3e; --sic-tl-a: #f0a3ae; --sic-tl-b: #8bb8e8; --sic-tl-c: #f3c98a;
+    --sic-bg: #0b0a0d; --sic-text: #f4f1ee; --sic-muted: #a39c97; --sic-glass: rgba(255, 255, 255, .035); --sic-kopf-glas: rgba(20, 18, 23, .88); --sic-deckend: #161318;
+    --sic-rand: rgba(255, 255, 255, .08); --sic-linie: rgba(255, 255, 255, .08); --sic-glanz: rgba(255, 255, 255, .06); --sic-schatten: 0 14px 44px rgba(0, 0, 0, .35);
+    --sic-glow-a: rgba(140, 29, 44, .38); --sic-glow-b: rgba(47, 111, 176, .16);
+    --sic-aus: rgba(255, 255, 255, .06); --sic-aus-hover: rgba(255, 255, 255, .11); --sic-modul: #e2475d; --sic-fokus: 0 0 0 3px rgba(226, 71, 93, .55);
+    --sic-ok: #3dd68c; --sic-ok-bg: rgba(61, 214, 140, .12); --sic-ok-hell: #3dd68c; --sic-warn: #f2b544; --sic-warn-bg: rgba(242, 181, 68, .14); --sic-warn-hell: #f2b544;
+    --sic-bad: #ff8a9a; --sic-bad-bg: rgba(255, 92, 114, .12); --sic-bad-hell: #ff5c72; --sic-info: #7fb2f0; --sic-info-bg: rgba(127, 178, 240, .12); --sic-info-hell: #7fb2f0;
+    --sic-rot: #e2304a; --sic-rot-dunkel: #a3192d; --sic-tl-a: #e2475d; --sic-tl-b: #7fb2f0; --sic-tl-c: #f2b544;
+    --sic-aktiv-tab: #f4f1ee; --sic-aktiv-tab-text: #141217;
   }
 }
 
-/* ── Hintergrund und Glas ── */
-.sic-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.sic-bg span { position: absolute; border-radius: 50%; filter: blur(140px); }
-.sic-bg span:nth-child(1) { width: 620px; height: 620px; left: -180px; top: -220px; background: var(--sic-blob-a); opacity: .14; }
-.sic-bg span:nth-child(2) { width: 540px; height: 540px; right: -140px; top: 160px; background: var(--sic-blob-b); opacity: .12; }
-.sic-bg span:nth-child(3) { width: 600px; height: 600px; left: 30%; bottom: -320px; background: var(--sic-blob-c); opacity: .1; }
+/* ── Grund und Glas ── */
+.sic-bg { display: none; }   /* Lichtflächen kommen aus dem Hintergrund von body.sic */
 .sic-glas { background: var(--sic-glass); border: 1px solid var(--sic-rand); box-shadow: inset 0 1px 0 var(--sic-glanz), var(--sic-schatten);
-  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); }
+  -webkit-backdrop-filter: blur(24px) saturate(160%); backdrop-filter: blur(24px) saturate(160%); }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .sic-glas { background: var(--sic-deckend); } }
-@media (prefers-reduced-transparency: reduce) { .sic-glas { background: var(--sic-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; } .sic-bg { display: none; } }
+@media (prefers-reduced-transparency: reduce) { .sic-glas { background: var(--sic-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+.sic .num, .sic-kwert.num, .sic .num-s { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* ── Seite und Kopf ── */
 .sic-seite { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 24px; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; }
@@ -102,7 +103,7 @@ body.sic .sic-kopf .brand-logo { height: 28px; width: auto; }
 .sic-tabs::-webkit-scrollbar { display: none; }
 .sic-tabs button { flex: none; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--sic-muted); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
 .sic-tabs button:hover { color: var(--sic-text); }
-.sic-tabs button[aria-selected="true"] { background: var(--sic-deckend); color: var(--sic-text); box-shadow: 0 2px 10px rgba(0, 0, 0, .08); }
+.sic-tabs button[aria-selected="true"] { background: var(--sic-aktiv-tab); color: var(--sic-aktiv-tab-text); font-weight: 600; box-shadow: 0 2px 10px rgba(0, 0, 0, .12); }
 .sic-tabs button[data-tab="notfall"] { color: var(--sic-bad); }
 .sic-tab { display: flex; flex-direction: column; gap: 18px; }
 .sic-tab[hidden] { display: none; }
@@ -129,7 +130,7 @@ body.sic .sic-kopf .brand-logo { height: 28px; width: auto; }
 .sic-spinner.klein { width: 14px; height: 14px; }
 @keyframes sic-dreh { to { transform: rotate(360deg); } }
 .sic-punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--sic-muted); vertical-align: middle; flex: none; }
-.sic-punkt.ok { background: var(--sic-ok); } .sic-punkt.warn { background: #e09b2d; } .sic-punkt.bad { background: var(--sic-rot); } .sic-punkt.info { background: var(--sic-info); }
+.sic-punkt.ok { background: var(--sic-ok-hell); } .sic-punkt.warn { background: var(--sic-warn-hell); } .sic-punkt.bad { background: var(--sic-bad-hell); } .sic-punkt.info { background: var(--sic-info-hell); }
 .sic-pille { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--sic-aus); color: var(--sic-muted); white-space: nowrap; }
 .sic-pille.ok { background: var(--sic-ok-bg); color: var(--sic-ok); } .sic-pille.warn { background: var(--sic-warn-bg); color: var(--sic-warn); }
 .sic-pille.bad { background: var(--sic-bad-bg); color: var(--sic-bad); } .sic-pille.info { background: var(--sic-info-bg); color: var(--sic-info); }
@@ -150,7 +151,8 @@ body.sic .sic-kopf .brand-logo { height: 28px; width: auto; }
 .sic .btn .i { width: 16px; height: 16px; }
 
 /* ── Karten ── */
-.sic-karten { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.sic-karten { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.sic-karten.wirkung { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .sic-karten.vier { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .sic-karte { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 20px; border: 1px solid var(--sic-rand); background: var(--sic-glass);
   box-shadow: inset 0 1px 0 var(--sic-glanz); color: inherit; font: inherit; text-align: left; min-width: 0; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
@@ -158,17 +160,27 @@ button.sic-karte { cursor: pointer; transition: transform .15s ease, box-shadow 
 button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 var(--sic-glanz), 0 8px 24px rgba(0, 0, 0, .08); }
 .sic-karte > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sic-kpunkt { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; background: var(--sic-muted); }
-.sic-karte.ok .sic-kpunkt { background: var(--sic-ok); } .sic-karte.warn .sic-kpunkt { background: #e09b2d; } .sic-karte.bad .sic-kpunkt { background: var(--sic-rot); }
+.sic-karte.ok .sic-kpunkt { background: var(--sic-ok-hell); } .sic-karte.warn .sic-kpunkt { background: var(--sic-warn-hell); } .sic-karte.bad .sic-kpunkt { background: var(--sic-bad-hell); }
 .sic-karte.bad { background: linear-gradient(var(--sic-bad-bg), var(--sic-bad-bg)), var(--sic-glass); }
 .sic-ktitel { font-size: 12.5px; color: var(--sic-muted); font-weight: 500; }
-.sic-kwert { font-size: 22px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; overflow-wrap: anywhere; }
+.sic-kwert { font-size: 24px; font-weight: 600; letter-spacing: -.01em; line-height: 1.15; overflow-wrap: anywhere; }
+.sic-kzeile { display: flex; align-items: flex-end; gap: 10px; }
+.sic-mini { width: 64px; height: 26px; margin-left: auto; flex: none; fill: var(--sic-muted); }
+.sic-karte.ok .sic-mini { fill: var(--sic-ok-hell); } .sic-karte.warn .sic-mini { fill: var(--sic-warn-hell); } .sic-karte.bad .sic-mini { fill: var(--sic-bad-hell); }
 .sic-ktext { font-size: 12.5px; color: var(--sic-muted); line-height: 1.4; }
 
 /* ── Lagebild oben: Gesamtbewertung und Notfall ── */
-.sic-oben { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
-.sic-gesamt { display: flex; align-items: center; gap: 18px; padding: 18px 22px; border-radius: 24px; }
-.sic-gesamt > div:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.sic-gesamt strong { font-size: 19px; }
+.sic-oben { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; }
+.sic-gesamt { display: flex; align-items: center; gap: 20px; padding: 22px 24px; border-radius: 24px; }
+.sic-gesamt > div:last-child { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.sic-gesamt strong { font-size: 22px; line-height: 1.2; }
+.sic-gesamt .sic-chips { gap: 5px; }
+.sic-ringsvg { width: 132px; height: 132px; flex: none; }
+.sic-ringsvg circle { fill: none; stroke-width: 12; stroke-linecap: round; }
+.sic-ringsvg .r-grund { stroke: var(--sic-aus); }
+.sic-ringsvg .r-ok { stroke: var(--sic-ok-hell); } .sic-ringsvg .r-warn { stroke: var(--sic-warn-hell); } .sic-ringsvg .r-bad { stroke: var(--sic-bad-hell); }
+.sic-ringsvg .r-zahl { font: 800 38px var(--font); fill: var(--sic-text); }
+.sic-ringsvg .r-einheit { font: 500 11px var(--font); fill: var(--sic-muted); }
 .sic-ring { --farbe: var(--sic-ok); width: 76px; height: 76px; flex: none; border-radius: 50%; display: grid; place-items: center;
   background: conic-gradient(var(--farbe) calc(var(--wert) * 1%), var(--sic-aus) 0); }
 .sic-ring span { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; background: var(--sic-deckend); font-weight: 700; font-size: 19px; }
@@ -209,7 +221,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic .nur-schmal { display: none; }
 .sic-pfad { word-break: break-all; }
 .fw-row.bad td:first-child { box-shadow: inset 3px 0 0 var(--sic-rot); }
-.fw-row.warn td:first-child { box-shadow: inset 3px 0 0 #e09b2d; }
+.fw-row.warn td:first-child { box-shadow: inset 3px 0 0 var(--sic-warn-hell); }
 .sic-st { display: inline-block; min-width: 30px; padding: 0 5px; border-radius: 6px; background: var(--sic-aus); font-family: var(--mono); font-size: 11.5px; text-align: center; }
 .fw-q { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fw-ua { max-width: 180px; }
@@ -220,7 +232,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-leiste { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .sic-filter { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .sic-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--sic-muted); }
-.sic-livepunkt { width: 8px; height: 8px; border-radius: 50%; background: var(--sic-ok); animation: sic-puls-gruen 2s ease-in-out infinite; }
+.sic-livepunkt { width: 8px; height: 8px; border-radius: 50%; background: var(--sic-ok-hell); animation: sic-puls-gruen 2s ease-in-out infinite; }
 @keyframes sic-puls-gruen { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 .sic-suche { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 999px; background: var(--sic-aus); flex: 1; min-width: 180px; max-width: 360px; }
 .sic-suche input { border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; outline: none; width: 100%; }
@@ -342,7 +354,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .sic-held-knopf .btn + .btn { margin-top: 4px; }
 .lf-stand { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; font-size: 14px; }
 .lf-balken { flex: 1; min-width: 160px; max-width: 420px; height: 10px; border-radius: 999px; background: var(--sic-aus); overflow: hidden; }
-.lf-balken span { display: block; height: 100%; width: var(--anteil); border-radius: inherit; background: linear-gradient(90deg, var(--sic-ok), #3fa56b); transition: width .3s ease; }
+.lf-balken span { display: block; height: 100%; width: var(--anteil); border-radius: inherit; background: var(--sic-ok-hell); transition: width .3s ease; }
 .lf-raster { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 22px; }
 .lf-schritte { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; counter-reset: lf; }
 .lf-schritt { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 16px; }
@@ -352,7 +364,7 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .lf-marke { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--sic-linie); background: var(--sic-deckend); color: var(--sic-text); font: inherit; font-size: 13px; font-weight: 700; }
 button.lf-marke { cursor: pointer; border-color: var(--sic-rot); color: var(--sic-rot); }
 button.lf-marke:hover { background: var(--sic-bad-bg); }
-.lf-schritt.erledigt .lf-marke { border-color: var(--sic-ok); background: var(--sic-ok); color: #fff; }
+.lf-schritt.erledigt .lf-marke { border-color: var(--sic-ok-hell); background: var(--sic-ok-hell); color: var(--sic-bg); }
 .lf-schritt.erledigt strong { text-decoration: line-through; text-decoration-color: var(--sic-ok); text-decoration-thickness: 2px; }
 .lf-marke .i { width: 16px; height: 16px; stroke-width: 2.6; }
 .lf-seite h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 14px; }
@@ -396,6 +408,75 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
 .br-liste { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.5; color: var(--sic-muted); overflow-wrap: anywhere; }
 .sic-tabelle.ungenutzt td { vertical-align: middle; }
 
+/* ── Leitstand: Kopf, Abwehr, Notfall-Konsole, Ereignisse, Alarm, Gedrückt halten ── */
+.sic-modul-zusatz { margin-left: 6px; color: var(--sic-muted); font-weight: 500; }
+.sic-uhr { color: var(--sic-muted); font-size: 13px; white-space: nowrap; }
+.sic-lage-pille .sic-livepunkt { width: 8px; height: 8px; }
+.sic-abwehr { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px; border-radius: 24px; min-width: 0; }
+.sic-abwehr .sic-bkopf { margin-bottom: 0; }
+.sic-abwehr .sic-live { margin-left: auto; }
+.ab-zahlen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ab-zahlen button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; margin: -6px -8px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ab-zahlen button:hover { background: var(--sic-aus); }
+.ab-zahlen strong { font-size: 30px; font-weight: 600; line-height: 1.1; }
+.ab-zahlen strong.rot { color: var(--sic-bad); }
+.ab-zahlen span { color: var(--sic-muted); font-size: 12.5px; line-height: 1.35; }
+.ab-verlauf { width: 100%; height: 90px; display: block; }
+.ab-verlauf line { stroke: var(--sic-linie); }
+.ab-verlauf .ab-abgewiesen, .sic-legende i.ab-abgewiesen { fill: var(--sic-info-hell); background: var(--sic-info-hell); opacity: .6; }
+.ab-verlauf .ab-angriff, .sic-legende i.ab-angriff { fill: var(--sic-bad-hell); background: var(--sic-bad-hell); }
+.sic-abwehr .sic-legende { margin: 0; }
+.ab-achse { margin-left: auto; }
+.sic-konsole { display: flex; flex-direction: column; gap: 12px; padding: 20px 22px; border-radius: 24px; min-width: 0;
+  background: linear-gradient(160deg, rgba(196, 30, 52, .14), transparent 60%), var(--sic-glass); border-color: rgba(226, 71, 93, .3); }
+.sic-konsole .sic-bkopf { margin-bottom: 0; }
+.sic-konsole .sic-bkopf .sic-pille { margin-left: auto; }
+.ko-ausloesen { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 74px; padding: 0 18px; border-radius: 18px; border: 1px solid rgba(255, 255, 255, .2);
+  background: linear-gradient(180deg, #e2304a, #a3192d); color: #fff; font: inherit; text-align: left; cursor: pointer; box-shadow: 0 14px 36px rgba(226, 48, 74, .3), inset 0 1px 0 rgba(255, 255, 255, .25); }
+.ko-ausloesen:hover { filter: brightness(1.06); }
+.ko-ausloesen strong { display: block; font-size: 18px; }
+.ko-ausloesen span span, .ko-ausloesen > span:last-child > span { display: block; font-size: 12.5px; color: rgba(255, 255, 255, .85); }
+.ko-icon { width: 44px; height: 44px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, .16); }
+.ko-icon .i { width: 24px; height: 24px; }
+.ko-knoepfe { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ko-knoepfe .btn { justify-content: center; }
+.sic-konsole .sub { line-height: 1.45; }
+.sic-konsole.aktiv { background: linear-gradient(125deg, var(--sic-rot), var(--sic-rot-dunkel)); color: #fff; border-color: transparent; }
+.sic-konsole.aktiv .sic-ueber, .sic-konsole.aktiv span { color: rgba(255, 255, 255, .9); }
+.ko-titel { font-size: 20px; }
+.sic-konsole.aktiv .btn.primary { align-self: flex-start; background: #fff; border-color: #fff; color: var(--sic-rot-dunkel); }
+.sic-evliste button, .ev-zeile { display: grid; grid-template-columns: 46px 12px minmax(0, 1fr); gap: 0 10px; align-items: start; }
+.ev-zeile { padding: 8px 10px; font-size: 13.5px; }
+.ev-zeit { color: var(--sic-muted); font-size: 12.5px; padding-top: 1px; }
+.ev-punkt { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--sic-info-hell); box-shadow: 0 0 0 4px var(--sic-info-bg); }
+.ev-punkt.warn { background: var(--sic-warn-hell); box-shadow: 0 0 0 4px var(--sic-warn-bg); }
+.ev-punkt.bad { background: var(--sic-bad-hell); box-shadow: 0 0 0 4px var(--sic-bad-bg); }
+.ev-text { display: flex; flex-direction: column; min-width: 0; }
+.sic-bkopf h3 .sic-live { font-size: 12px; font-weight: 500; }
+.ip-n { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.ip-balken { display: inline-block; width: 56px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--sic-bad-hell) var(--anteil), var(--sic-aus) 0); }
+.sic-alarmring { position: relative; border-radius: 50%; }
+.sic-held.aktiv .sic-held-icon { width: 84px; height: 84px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35); }
+.sic-alarmring .welle { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .55); animation: sic-welle 2.4s ease-out infinite; pointer-events: none; }
+.sic-alarmring .welle.zwei { animation-delay: 1.2s; }
+@keyframes sic-welle { 0% { transform: scale(.75); opacity: .85; } 100% { transform: scale(1.75); opacity: 0; } }
+.sic-held.aktiv { padding: 30px 34px; }
+.sic-held.aktiv h2 { font-size: 32px; }
+.lf-schritt.jetzt { background: var(--sic-warn-bg); box-shadow: inset 0 0 0 1px rgba(242, 181, 68, .45); }
+.lf-schritt.jetzt .lf-marke { border-color: var(--sic-warn-hell); color: var(--sic-warn); }
+.lf-jetzt { margin-left: auto; flex: none; }
+.sic-halten-bereich { display: flex; flex-direction: column; gap: 8px; }
+.sic-halten { position: relative; overflow: hidden; width: 100%; min-height: 64px; padding: 0 18px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .18);
+  background: var(--sic-rot-dunkel); color: #fff; font: 700 17px var(--font); cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: none; }
+.sic-halten-fuell { position: absolute; inset: 0 auto 0 0; width: var(--anteil, 0%); background: linear-gradient(90deg, var(--sic-rot), #ff5c72); }
+.sic-halten.fertig .sic-halten-fuell { width: 100%; }
+.sic-halten-text { position: relative; display: inline-flex; align-items: center; gap: 10px; }
+.sic-halten-text .i { width: 22px; height: 22px; }
+.sic-halten:disabled { cursor: progress; }
+.sic-halten-bereich .sic-hinweis { margin: 0; text-align: center; }
+.sic-mobilnotfall { display: none; }
+@media (prefers-reduced-motion: reduce) { .sic-alarmring .welle { animation: none; opacity: 0; } }
+
 /* ── Hinweis unten ── */
 .sic-toast { position: fixed; left: 50%; bottom: 24px; z-index: 50; transform: translate(-50%, 20px); padding: 11px 18px; border-radius: 14px; background: var(--sic-text); color: var(--sic-bg);
   font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; max-width: calc(100vw - 32px); }
@@ -403,10 +484,11 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
 .sic-toast.fehler { background: var(--sic-rot); color: #fff; }
 
 /* ── Breiten ── */
-@media (max-width: 1280px) { .sic-karten { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1280px) { .sic-oben { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .sic-konsole { grid-column: 1 / -1; } }
 @media (max-width: 1100px) {
   .sic-karten, .sic-karten.vier { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sic-zwei, .sic-zwei.breit-links, .sic-oben { grid-template-columns: 1fr; }
+  .sic-uhr { display: none; }
   .sic-vorlagen { grid-template-columns: 1fr; }
   .lf-raster { grid-template-columns: 1fr; }
 }
@@ -434,6 +516,17 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
   .sic-dform { padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
   .sic-dfuss { position: sticky; bottom: 0; margin: 0 -16px -18px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--sic-deckend); border-top: 1px solid var(--sic-linie); }
   .sic-dfuss .btn { flex: 1; justify-content: center; }
+  .sic-mobilnotfall { display: block; position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 6; }
+  .sic-mobilnotfall .btn { width: 100%; justify-content: center; min-height: 54px; border-radius: 16px; box-shadow: 0 12px 30px rgba(226, 48, 74, .35); }
+  #tab-lage:has(.sic-mobilnotfall) { padding-bottom: 76px; }
+  #tab-lage:has(.sic-mobilnotfall) .ko-ausloesen { display: none; }   /* auf dem Handy unten im Daumenbereich */
+  .sic-ringsvg { width: 104px; height: 104px; }
+  .sic-gesamt { gap: 14px; padding: 18px; }
+  .sic-gesamt strong { font-size: 19px; }
+  .ab-zahlen strong { font-size: 24px; }
+  .sic-held.aktiv { padding: 22px; }
+  .sic-held.aktiv h2 { font-size: 24px; }
+  .sic-modul-zusatz { display: none; }
   .sic-tabelle { font-size: 13px; }
   .sic-tabelle td, .sic-tabelle th { padding: 7px 6px; }
   .geo-list { grid-template-columns: 1fr; }

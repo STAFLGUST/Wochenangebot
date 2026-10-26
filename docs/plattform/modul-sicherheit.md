@@ -53,9 +53,11 @@ vertrauenswürdigen Personen schnell ausgelöst, aber nur nach Prüfung durch ei
 
 ## 4. Notfallmodus
 
-Auslösen: Dialog in drei Schritten – (1) Wirkungen ansehen, (2) Grund, optionaler Kundenhinweis, Optionen und das
-Bestätigungswort `NOTFALL`, (3) Bestätigung durch erneute Anmeldung (Katalog `BESTAETIGUNG`, Schlüssel `notfall_ausloesen`,
-abschaltbar; Beenden `notfall_beenden`, immer mit Bestätigung). Aktion `sicherheit_notfall_an` bzw. `sicherheit_notfall_aus`.
+Auslösen: Dialog in drei Schritten – (1) Wirkungen ansehen, (2) Grund, optionaler Kundenhinweis, Optionen und den Knopf
+**1,5 Sekunden gedrückt halten** (Maus, Finger oder Leertaste; ein kurzer Klick löst nichts aus – Entscheidung des Inhabers
+26.10.2026, ersetzt das Eintippen von `NOTFALL`; die Oberfläche sendet das Wort weiterhin mit, der Server prüft es wie bisher),
+(3) Bestätigung durch erneute Anmeldung (Katalog `BESTAETIGUNG`, Schlüssel `notfall_ausloesen`, abschaltbar; Beenden
+`notfall_beenden`, immer mit Bestätigung). Aktion `sicherheit_notfall_an` bzw. `sicherheit_notfall_aus`.
 
 Wirkungen (alle serverseitig):
 
@@ -109,7 +111,7 @@ Dokument `sicherheit-notfall` (Eigentümer `plattform`): `aktiv`, `seit`, `von`,
 
 - **Selbstaussperrung**: Die Notfall-Firewall kann die eigene Adresse sperren. Gegenmittel: Büroadresse unter „nie sperren“,
   Server-Werkzeug `deploy/notfall-aus.sh` (stellt die Einstellungen wieder her), `deploy/ip-freigabe-aus.sh`.
-- **Missbrauch des Knopfs** (Störung des Betriebs): nur mit eigenem Recht, Bestätigungswort, erneuter Anmeldung, Protokoll und
+- **Missbrauch des Knopfs** (Störung des Betriebs): nur mit eigenem Recht, Gedrückthalten, erneuter Anmeldung, Protokoll und
   sofortiger Benachrichtigung; Beenden nur durch Administratoren.
 - **Alternative „Notfall = alle Abmelden“** verworfen: Auf Keycloak-Hosts meldet die zentrale Anmeldung sofort wieder an;
   wirksam ist nur die serverseitige Sperre je Oberfläche.
@@ -155,6 +157,17 @@ Deaktivieren (`sicherheit_konto_deaktivieren`, Administrator mit derselben Best�
 
 Rückfall: Die Vorversion ignoriert das Dokument `sicherheit-bereitschaft` und das Feld `lastLogin` wird nur weiter gefüllt.
 
-## 8. Folgearbeiten
+## 8. Gestaltung „Leitstand“ (26.10.2026)
 
-Design-Feinschliff des Moduls; Fehlanmeldungen bei Keycloak (Ereignisse der zentralen Anmeldung) in Lagebild und Bericht.
+Entwurf des Inhabers (Zeichenfläche „Sicherheitszentrale – Design“), umgesetzt in `app/module/sicherheit/`. Dunkel ist das Modul
+ein Leitstand (Graphit, Bordeaux- und Blaulicht, Zahlen in Geist Mono), hell dieselbe Gliederung – es folgt wie alle Module der
+Hell/Dunkel-Wahl am Konto (Entscheidung des Inhabers). Kopf mit „· Leitstand“, Uhr und Lage-Pille. Lagebild oben: Sicherheitslage
+als Ring in Abschnitten (in Ordnung, Hinweise, kritisch), **Abwehr der letzten 24 Stunden** (Angriffsmuster, abgewiesene Anfragen,
+gesperrte Adressen, Verlauf je Stunde aus `fw_stunden()`), **Notfall-Konsole** (Auslösen, Probealarm, Leitfaden, letzte Übung).
+Kennzahlen als Karten (Fehlanmeldungen mit Verlauf der letzten 7 Tage), Ereignisse als Zeitleiste. Notfall aktiv: roter Alarmkopf
+mit pulsierendem Ring und laufender Zeit, Leitfaden direkt darunter mit hervorgehobenem nächsten Schritt („jetzt“), Wirkung als
+Kennzahlen, Verlauf dieses Notfalls. Auf dem Handy sitzt „Notfall auslösen“ fest unten im Daumenbereich.
+
+## 9. Folgearbeiten
+
+Fehlanmeldungen bei Keycloak (Ereignisse der zentralen Anmeldung) in Lagebild und Bericht.

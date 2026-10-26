@@ -215,7 +215,7 @@
     const band = $('#sic-notfallband'), pille = $('#sic-lage-pille');
     pille.hidden = false;
     pille.className = 'sic-lage-pille' + (n ? ' aktiv' : '');
-    pille.innerHTML = n ? `${icon('alarm')}<span>Notfall aktiv</span>` : `${icon('check')}<span>Normalbetrieb</span>`;
+    pille.innerHTML = n ? `${icon('alarm')}<span>Notfall aktiv</span>` : `<span class="sic-livepunkt" aria-hidden="true"></span><span>Normalbetrieb</span>`;
     band.hidden = !n || S.tab === 'notfall';   // im Reiter Notfall zeigt der Kopfbereich dasselbe
     if (n) band.innerHTML = `${icon('alarm')}<div><strong>Notfallmodus aktiv</strong> seit ${esc(zeit(n.seit))} Uhr${n.von ? ` · ausgelöst von ${esc(n.von)}` : ''}${n.grund ? ` · ${esc(n.grund)}` : ''}
       <span class="sub">Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle sind ausgesperrt, E-Mail-Versand pausiert.</span></div>${S.tab !== 'notfall' ? '<button type="button" class="btn sm" data-geh="notfall">Zum Notfall</button>' : ''}`;
@@ -231,8 +231,14 @@
   async function lageLaden() { S.lage = await api('sicherheit_lage'); S.rechte = S.lage.rechte; notfallBand(); probeBand(); return S.lage; }
 
   /* ---------- gemeinsame Bausteine ---------- */
-  const karte = (l, titel, wert, text, ziel = '') => {
-    const inhalt = `<span class="sic-kpunkt"></span><div><span class="sic-ktitel">${esc(titel)}</span><strong class="sic-kwert">${wert}</strong>${text ? `<span class="sic-ktext">${text}</span>` : ''}</div>`;
+  /* Mini-Verlauf (Balken, letzter Wert kräftig) für Karten mit Zeitreihe */
+  const miniBalken = (w) => {
+    if (!w || !w.length) return '';
+    const max = Math.max(1, ...w);
+    return `<svg class="sic-mini" viewBox="0 0 ${w.length * 9} 26" aria-hidden="true">${w.map((v, i) => { const h = Math.max(2, Math.round((v / max) * 24)); return `<rect x="${i * 9}" y="${26 - h}" width="6" height="${h}" rx="2"${i === w.length - 1 ? '' : ' opacity=".45"'}></rect>`; }).join('')}</svg>`;
+  };
+  const karte = (l, titel, wert, text, ziel = '', reihe = null) => {
+    const inhalt = `<span class="sic-kpunkt"></span><div><span class="sic-ktitel">${esc(titel)}</span><span class="sic-kzeile"><strong class="sic-kwert${/^[\d\s.,:/%+–-]+$/.test(String(wert).replace(/<[^>]*>/g, '')) ? ' num' : ''}">${wert}</strong>${miniBalken(reihe)}</span>${text ? `<span class="sic-ktext">${text}</span>` : ''}</div>`;
     return ziel && erlaubt(ziel) ? `<button type="button" class="sic-karte ${l}" data-geh="${ziel}">${inhalt}</button>` : `<div class="sic-karte ${l}">${inhalt}</div>`;
   };
   const leer = (t) => `<p class="sic-leer">${t}</p>`;
@@ -286,25 +292,25 @@
     const dp = L.dateipruefung;
     const dpKarte = !dp ? karte('warn', 'Dateiprüfung', 'offen', 'noch keine Prüfung', 'datei')
       : karte(dp.counts.critical ? 'bad' : dp.counts.warnings ? 'warn' : 'ok', 'Dateiprüfung', dp.counts.critical ? `${dp.counts.critical} kritisch` : dp.counts.warnings ? `${dp.counts.warnings} Warnungen` : 'unauffällig', `zuletzt ${esc(zeit(dp.ranAt))} Uhr`, 'datei');
+    const tl7 = (L.timeline || []).slice(-7).map((d) => d.staff + d.kunde + d.reauth);
     const karten = [
-      karte(K.angriffe24 ? 'warn' : 'ok', 'Angriffsversuche (24 h)', zahl(K.angriffe24), `${zahl(K.abgewiesen24)} Anfragen gesperrter Adressen abgewiesen`, 'firewall'),
-      karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen'),
+      karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen', tl7),
       karte(K.gesperrteAdressen || K.gesperrteKonten ? 'warn' : 'ok', 'Gesperrt', zahl(K.gesperrteAdressen + K.gesperrteKonten), `${plural(K.gesperrteAdressen, 'Adresse', 'Adressen')} · ${plural(K.gesperrteKonten, 'Zugang', 'Zugänge')}`, 'firewall'),
       karte(K.adminsOhneZweiFaktor ? 'bad' : K.ohneZweiFaktor ? 'warn' : 'ok', 'Zwei-Faktor-Anmeldung', `${zahl(K.zugaenge - K.ohneZweiFaktor)} / ${zahl(K.zugaenge)}`, K.adminsOhneZweiFaktor ? `${plural(K.adminsOhneZweiFaktor, 'Administrator', 'Administratoren')} ohne zweiten Faktor` : K.ohneZweiFaktor ? `${zahl(K.ohneZweiFaktor)} Zugänge ohne zweiten Faktor` : 'alle Zugänge geschützt', 'konten'),
       karte('ok', 'Aktive Sitzungen', zahl(K.sitzungen), `${zahl(K.kundenOnline)} Kunden angemeldet`, 'sitzungen'),
       karte(E.waf === 'sperren' && E.autoSperre ? 'ok' : E.waf === 'aus' ? 'bad' : 'warn', 'Firewall', E.waf === 'sperren' ? 'sperrt' : E.waf === 'protokoll' ? 'protokolliert' : 'aus', `${E.autoSperre ? 'automatische Sperre an' : 'automatische Sperre aus'} · Bedrohungsliste ${E.feed ? 'an' : 'aus'}`, 'firewall'),
       dpKarte, sicherungKarte(L.backup), bereitstellungKarte(L.deployment),
-      karte(L.https ? 'ok' : 'bad', 'Verbindung', L.https ? 'HTTPS' : 'unverschlüsselt', L.https ? 'verschlüsselt mit HSTS' : 'Seite nur über https:// aufrufen'),
     ];
-    const tops = (L.topIps || []).map((x, i) => `<tr class="sic-klick" data-topip="${i}" tabindex="0"><td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="sic-pille bad">gesperrt</span>' : ''}</td><td class="num-s">${zahl(x.n)}</td><td>${x.cc ? esc(land(x.cc)) : '<span class="sub">unbekannt</span>'}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
+    const maxIp = Math.max(1, ...(L.topIps || []).map((x) => x.n));
+    const tops = (L.topIps || []).map((x, i) => `<tr class="sic-klick" data-topip="${i}" tabindex="0"><td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="sic-pille bad">gesperrt</span>' : ''}</td>
+      <td class="num-s"><span class="ip-n"><span class="ip-balken" style="--anteil:${Math.max(6, Math.round((x.n / maxIp) * 100))}%"></span>${zahl(x.n)}</span></td><td>${x.cc ? esc(land(x.cc)) : '<span class="sub">unbekannt</span>'}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
+    const evl = L.ereignisse.map((e, i) => `<li><button type="button" data-lev="${i}"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span>
+      <span class="ev-text"><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(EV_ART[e.art] || e.art)}${e.n ? ' · ' + esc(e.n) : ''} · ${esc(datum(e.t))}</span></span></button></li>`).join('');
     host.innerHTML = `
       <div class="sic-oben">
         <div class="sic-gesamt sic-glas" id="sic-gesamt"></div>
-        <div class="sic-notfallkarte sic-glas ${n ? 'aktiv' : ''}">
-          ${icon(n ? 'alarm' : 'schild', 'gross')}
-          <div><strong>${n ? 'Notfallmodus aktiv' : 'Normalbetrieb'}</strong><span>${n ? `seit ${esc(zeit(n.seit))} Uhr${n.von ? ' · ' + esc(n.von) : ''}` : 'Kein Notfall aktiv. Im Ernstfall sperrt ein Knopf Kunden- und Mitarbeiterzugänge.'}</span></div>
-          <button type="button" class="btn ${n ? '' : 'gefahr'}" data-geh="notfall">${n ? 'Zum Notfall' : 'Notfall …'}</button>
-        </div>
+        ${abwehrHtml(L, K)}
+        ${konsoleHtml()}
       </div>
       <div class="sic-karten">${karten.join('')}</div>
       <div class="sic-zwei">
@@ -316,10 +322,11 @@
           <tbody>${pruefZeilen(L.config || [])}</tbody><tbody id="sic-bchecks"><tr><td></td><td colspan="3" class="sub">Browser-Prüfungen laufen …</td></tr></tbody></table></div>
           <p class="sic-hinweis">Angezeigt werden Hinweise und kritische Befunde. Der Server selbst (Betriebssystem, SSH, Updates) ist aus der Anwendung nicht einsehbar und wird separat geprüft.</p>`,
           '<button type="button" class="btn sm" id="sic-cf-alle" aria-pressed="false">Alle anzeigen</button>')}
-        ${block('Letzte Ereignisse', L.ereignisse.length ? `<ul class="sic-evliste">${L.ereignisse.map((e, i) => `<li><button type="button" data-lev="${i}"><span class="sic-pille ${e.stufe}">${esc(EV_ART[e.art] || e.art)}</span><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(zeit(e.t))} Uhr${e.n ? ' · ' + esc(e.n) : ''}</span></button></li>`).join('')}</ul>
+        ${block(`Letzte Ereignisse <span class="sic-live" aria-hidden="true"><span class="sic-livepunkt"></span>laufend</span>`, L.ereignisse.length ? `<ul class="sic-evliste">${evl}</ul>
           <button type="button" class="btn sm" data-geh="ereignisse">Alle Ereignisse</button>` : leer('Keine Sicherheitsereignisse in den letzten 7 Tagen.'))}
       </div>
-      <div class="sic-zwei">${berichtBlock()}${bereitBlock()}</div>`;
+      <div class="sic-zwei">${berichtBlock()}${bereitBlock()}</div>
+      ${S.rechte.notfall && !n ? `<div class="sic-mobilnotfall"><button type="button" class="btn gefahr gross" data-notfall-start>${icon('alarm')}Notfall auslösen …</button></div>` : ''}`;
     gesamt();
     cfKnopf();
     browserPruefungen();
@@ -373,10 +380,52 @@
     const w = n('bad') ? 'bad' : n('warn') ? 'warn' : 'ok';
     const ring = lv.length ? Math.round((n('ok') / Math.max(1, n('ok') + n('warn') + n('bad'))) * 100) : 100;
     el.className = 'sic-gesamt sic-glas ' + w;
-    el.innerHTML = `<div class="sic-ring" style="--wert:${ring}" role="img" aria-label="${ring} Prozent der Prüfungen in Ordnung"><span>${ring}<small>%</small></span></div>
-      <div><strong>${w === 'bad' ? 'Handlungsbedarf' : w === 'warn' ? 'In Ordnung, mit Hinweisen' : 'Alles in Ordnung'}</strong>
-      <span>${zahl(n('ok'))} in Ordnung · ${plural(n('warn'), 'Hinweis', 'Hinweise')} · ${zahl(n('bad'))} kritisch</span>
+    // Ring in Abschnitten: in Ordnung (grün), Hinweise (bernstein), kritisch (rot) – Anteil an allen bewerteten Prüfungen
+    const r = 52, U = 2 * Math.PI * r, summe = Math.max(1, n('ok') + n('warn') + n('bad'));
+    let start = 0;
+    const teil = (k, kl) => { const len = (n(k) / summe) * U; const svg = len > 0.5 ? `<circle class="${kl}" cx="64" cy="64" r="${r}" stroke-dasharray="${Math.max(0, len - 3).toFixed(1)} ${U.toFixed(1)}" stroke-dashoffset="${(-start).toFixed(1)}"></circle>` : ''; start += len; return svg; };
+    const ringe = teil('ok', 'r-ok') + teil('warn', 'r-warn') + teil('bad', 'r-bad');
+    el.innerHTML = `<svg class="sic-ringsvg" viewBox="0 0 128 128" role="img" aria-label="${ring} Prozent der Prüfungen in Ordnung"><circle class="r-grund" cx="64" cy="64" r="${r}"></circle><g transform="rotate(-90 64 64)">${ringe}</g>
+        <text x="64" y="70" text-anchor="middle" class="r-zahl">${ring}</text><text x="64" y="90" text-anchor="middle" class="r-einheit">Prozent</text></svg>
+      <div><span class="sic-ueber">Sicherheitslage</span><strong>${w === 'bad' ? 'Handlungsbedarf' : w === 'warn' ? 'In Ordnung, mit Hinweisen' : 'Alles in Ordnung'}</strong>
+      <span class="sic-chips"><span class="sic-pille ok">${zahl(n('ok'))} in Ordnung</span><span class="sic-pille warn">${plural(n('warn'), 'Hinweis', 'Hinweise')}</span><span class="sic-pille ${n('bad') ? 'bad' : ''}">${zahl(n('bad'))} kritisch</span></span>
       <span class="sub">Stand ${esc(uhr(S.lage.zeit))} Uhr · Ihre Adresse <span class="mono-s">${esc(S.lage.ich.ip)}</span></span></div>`;
+  }
+  /* Abwehr der letzten 24 Stunden: Angriffsmuster, abgewiesene Anfragen, gesperrte Adressen und Verlauf je Stunde */
+  function abwehrHtml(L, K) {
+    const st = L.stunden || [];
+    const max = Math.max(1, ...st.map((x) => x.angriffe + x.abgewiesen));
+    const balken = st.map((x, i) => {
+      const ha = Math.round((x.abgewiesen / max) * 82), hn = Math.round((x.angriffe / max) * 82);
+      const tipp = `${String((new Date().getHours() + 1 + i) % 24).padStart(2, '0')} Uhr: ${x.angriffe} Angriffsmuster, ${x.abgewiesen} abgewiesen`;
+      return `<g><title>${esc(tipp)}</title>${ha ? `<rect class="ab-abgewiesen" x="${i * 20 + 3}" y="${88 - ha}" width="14" height="${ha}" rx="3"></rect>` : ''}${hn ? `<rect class="ab-angriff" x="${i * 20 + 3}" y="${88 - ha - hn - (ha ? 2 : 0)}" width="14" height="${hn}" rx="3"></rect>` : ''}</g>`;
+    }).join('');
+    return `<section class="sic-abwehr sic-glas" aria-label="Abwehr der letzten 24 Stunden">
+      <div class="sic-bkopf"><span class="sic-ueber">Abwehr · letzte 24 Stunden</span><span class="sic-live"><span class="sic-livepunkt"></span>live</span></div>
+      <div class="ab-zahlen"><button type="button" data-geh="firewall"><strong class="num">${zahl(K.angriffe24)}</strong><span>Angriffsversuche erkannt</span></button>
+        <button type="button" data-geh="firewall"><strong class="num">${zahl(K.abgewiesen24)}</strong><span>Anfragen abgewiesen</span></button>
+        <button type="button" data-geh="firewall"><strong class="num${K.gesperrteAdressen ? ' rot' : ''}">${zahl(K.gesperrteAdressen)}</strong><span>Adressen gesperrt</span></button></div>
+      ${st.length ? `<svg class="ab-verlauf" viewBox="0 0 480 90" preserveAspectRatio="none" role="img" aria-label="Angriffsmuster und abgewiesene Anfragen je Stunde"><line x1="0" y1="89" x2="480" y2="89"></line>${balken}</svg>
+      <p class="sic-legende"><span><i class="ab-abgewiesen"></i>abgewiesen</span><span><i class="ab-angriff"></i>Angriffsmuster</span><span class="ab-achse num">vor 24 h · jetzt</span></p>` : ''}
+    </section>`;
+  }
+  /* Notfall-Konsole im Lagebild: Zustand, Auslösen (Recht), Probealarm, Leitfaden, letzte Übung */
+  function konsoleHtml() {
+    const r = S.lage, n = r.notfall, P = (r.proben || [])[0], LF = r.leitfaden;
+    if (n) {
+      return `<section class="sic-konsole aktiv sic-glas" aria-label="Notfall-Konsole"><div class="sic-bkopf"><span class="sic-ueber">Notfallmodus aktiv</span></div>
+        <strong class="ko-titel">seit ${esc(uhr(n.seit))} Uhr${n.von ? ` · ${esc(n.von)}` : ''}</strong>${n.grund ? `<span>${esc(n.grund)}</span>` : ''}
+        <button type="button" class="btn primary" data-geh="notfall">Zum Notfall</button></section>`;
+    }
+    const gesehen = P ? `${P.quittiert.length} ${P.quittiert.length === 1 ? 'Bestätigung' : 'Bestätigungen'}` : '';
+    return `<section class="sic-konsole sic-glas" aria-label="Notfall-Konsole">
+      <div class="sic-bkopf"><span class="sic-ueber">Notfall-Konsole</span><span class="sic-pille ok">Normalbetrieb · bereit</span></div>
+      ${r.rechte.notfall ? `<button type="button" class="ko-ausloesen" data-notfall-start><span class="ko-icon">${icon('alarm')}</span><span><strong>Notfall auslösen</strong><span>Kunden: Wartung · Mitarbeiter gesperrt · Mails pausiert</span></span></button>
+        <div class="ko-knoepfe"><button type="button" class="btn" data-probe-start>${icon('uebung')}Probealarm</button><button type="button" class="btn" data-geh="notfall">Leitfaden</button></div>`
+        : `<p class="sic-hinweis">Auslösen dürfen Administratoren und Mitarbeiter mit dem Recht „Notfall auslösen“.</p><div class="ko-knoepfe"><button type="button" class="btn" data-geh="notfall">Leitfaden</button></div>`}
+      <span class="sub">${P ? `Letzter Probealarm ${esc(datum(P.t))} · ${zahl(P.ok)} von ${zahl(P.gesamt)} in Ordnung · ${gesehen}` : 'Noch kein Probealarm – einmal üben lohnt sich.'}</span>
+      <span class="sub">Leitfaden: ${plural(LF.schritte.length, 'Schritt', 'Schritte')} · ${LF.kontakte.length ? plural(LF.kontakte.length, 'Ansprechpartner', 'Ansprechpartner') : 'noch keine Ansprechpartner'}</span>
+    </section>`;
   }
   /* Prüfungen aus Sicht des Browsers: Sicherheits-Header, gesperrte Ordner, Uhrzeit */
   async function browserPruefungen() {
@@ -449,14 +498,10 @@
     const host = $('#tab-notfall');
     await lageLaden();
     const r = S.lage, n = r.notfall, W = r.wirkungen, Z = W.zahlen;
-    const wirkung = n && n.wirkung ? [
-      ['Mitarbeitersitzungen beendet', zahl(n.wirkung.mitarbeiterSitzungen)], ['Kundensitzungen beendet', zahl(n.wirkung.kundenSitzungen)],
-      ['Firewall und Einstellungen', esc(n.wirkung.firewall || '—')], ...(n.wirkung.keycloak ? [['Zentrale Anmeldung', `${zahl(n.wirkung.keycloak.beendet)} Konten abgemeldet${n.wirkung.keycloak.fehler ? `, ${n.wirkung.keycloak.fehler} Fehler` : ''}`]] : [])] : [];
     const hero = n ? `<section class="sic-held aktiv sic-glas" aria-live="polite">
-        <div class="sic-held-icon">${icon('alarm', 'gross')}</div>
-        <div class="sic-held-text"><span class="sic-ueber">Notfallmodus</span><h2>Aktiv seit ${esc(zeit(n.seit))} Uhr</h2>
-          ${n.grund !== undefined ? `<p><strong>Grund:</strong> ${esc(n.grund)} · <strong>ausgelöst von</strong> ${esc(n.von)}</p><p class="sub">Hinweis für Kunden: „${esc(n.kundentext)}“</p>` : '<p>Einzelheiten sehen Administratoren.</p>'}
-          ${wirkung.length ? `<dl class="sic-dl eng">${wirkung.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}</div>
+        <div class="sic-held-icon sic-alarmring"><span class="welle" aria-hidden="true"></span><span class="welle zwei" aria-hidden="true"></span>${icon('alarm', 'gross')}</div>
+        <div class="sic-held-text"><span class="sic-ueber">Notfallmodus aktiv</span><h2>Seit ${esc(uhr(n.seit))} Uhr · <span class="num" id="nf-dauer" data-seit="${esc(n.seit)}">${esc(laufzeit(n.seit))}</span></h2>
+          ${n.grund !== undefined ? `<p><strong>Grund:</strong> ${esc(n.grund)} · <strong>ausgelöst von</strong> ${esc(n.von)}</p><p class="sub">Hinweis für Kunden: „${esc(n.kundentext)}“</p>` : '<p>Einzelheiten sehen Administratoren.</p>'}</div>
         <div class="sic-held-knopf">${r.rechte.beenden ? `<button type="button" class="btn primary gross" id="nf-aus">${icon('unlock')}Notfall beenden …</button>` : '<p class="sub">Beenden können nur Administratoren.</p>'}</div>
       </section>`
       : `<section class="sic-held sic-glas">
@@ -471,16 +516,43 @@
     const lf = leitfadenHtml();
     const unten = r.rechte.sehen ? `<div class="sic-zwei">${block('Letzte Notfälle', verlauf ? `<div class="sic-tabrahmen"><table class="sic-tabelle"><thead><tr><th>Beginn</th><th>Dauer</th><th>ausgelöst von</th><th>beendet von</th><th>Grund</th></tr></thead><tbody>${verlauf}</tbody></table></div>` : leer('Bisher wurde kein Notfall ausgelöst.'))}${probenHtml()}</div>`
       : r.rechte.notfall ? probenHtml() : '';
-    host.innerHTML = `${hero}${n ? lf : ''}
+    // im Notfall: Wirkung als Kennzahlen und der Verlauf dieses Notfalls (Ereignisse seit Beginn)
+    const kacheln = n ? `<div class="sic-karten wirkung">${[
+      karte('ok', 'Angebotsseite', 'Wartung', 'Kunden sehen den neutralen Hinweis'),
+      karte('ok', 'Mitarbeiter ohne Administratorrolle', 'gesperrt', 'Administratoren arbeiten weiter'),
+      ...(n.wirkung ? [karte('ok', 'Sitzungen beendet', zahl((+n.wirkung.mitarbeiterSitzungen || 0) + (+n.wirkung.kundenSitzungen || 0)), `${zahl(n.wirkung.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(n.wirkung.kundenSitzungen)} Kunden${n.wirkung.keycloak ? ` · ${zahl(n.wirkung.keycloak.beendet)} bei Keycloak` : ''}`)] : []),
+      karte('ok', 'E-Mail-Versand', 'pausiert', 'Benachrichtigungen gehen weiter'),
+      ...(n.wirkung ? [karte(/^nicht angewendet/.test(n.wirkung.firewall || '') ? 'warn' : 'ok', 'Firewall', /angewendet/.test(n.wirkung.firewall || '') && !/^nicht/.test(n.wirkung.firewall || '') ? 'Notfall' : 'unverändert', esc(n.wirkung.firewall || ''))] : []),
+    ].join('')}</div>` : '';
+    const seit = n ? Date.parse(n.seit) : 0;
+    const evNf = n && r.lage ? (r.lage.ereignisse || []).filter((e) => Date.parse(e.t) >= seit) : [];
+    const nfVerlauf = n && r.rechte.sehen ? block('Verlauf dieses Notfalls', evNf.length ? `<ul class="sic-evliste">${evNf.map((e) => `<li><span class="ev-zeile"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span><span class="ev-text"><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(e.n || e.u || '')}</span></span></span></li>`).join('')}</ul>
+      <button type="button" class="btn sm" data-geh="ereignisse">Alle Ereignisse</button>` : leer('Seit Beginn des Notfalls noch keine weiteren Ereignisse.')) : '';
+    host.innerHTML = `${hero}${n ? lf + kacheln : ''}
       <div class="sic-zwei">
-        ${block(n ? 'Was jetzt gilt' : 'Was beim Auslösen passiert', `<ul class="sic-wirkungen">${punkte}</ul>
+        ${n ? nfVerlauf || '' : ''}
+        ${n ? '' : block('Was beim Auslösen passiert', `<ul class="sic-wirkungen">${punkte}</ul>
           <p class="sic-zahlen"><span><strong>${zahl(Z.mitarbeiterSitzungen)}</strong> Mitarbeitersitzungen ohne Administratorrolle</span><span><strong>${zahl(Z.kundenOnline)}</strong> Kunden angemeldet</span><span><strong>${zahl(Z.adminSitzungen)}</strong> Administratorsitzungen</span></p>`)}
         ${block('Gesperrte Bereiche', `<p class="sic-hinweis">Im Notfall antworten diese Anwendungen Mitarbeitern ohne Administratorrolle mit „gesperrt“:</p>
           <p class="sic-chips">${W.bereiche.map((b) => `<span class="sic-chip">${esc(b)}</span>`).join('')}</p>
           <p class="sic-hinweis">Immer erreichbar bleiben das Dashboard, die zentrale Anmeldung und diese Sicherheitszentrale. Ein Server-Werkzeug beendet den Notfall auch ohne Oberfläche: <span class="mono-s">sh deploy/notfall-aus.sh</span>.</p>`)}
       </div>
       ${n ? '' : lf}${unten}`;
+    laufzeitStarten();
     entwurfFortsetzen();
+  }
+  /* Laufzeit des Notfalls (Std:Min:Sek), jede Sekunde neu – nur solange der Reiter Notfall sichtbar ist */
+  function laufzeit(seit) {
+    const s = Math.max(0, Math.floor((Date.now() - Date.parse(seit)) / 1000));
+    const zwei = (x) => String(x).padStart(2, '0');
+    return `${zwei(Math.floor(s / 3600))}:${zwei(Math.floor((s % 3600) / 60))}:${zwei(s % 60)}`;
+  }
+  let laufzeitTimer = 0;
+  function laufzeitStarten() {
+    clearInterval(laufzeitTimer);
+    const el = $('#nf-dauer');
+    if (!el) return;
+    laufzeitTimer = setInterval(() => { if (!el.isConnected) { clearInterval(laufzeitTimer); return; } el.textContent = laufzeit(el.dataset.seit); }, 1000);
   }
 
   /* ---------- Leitfaden für den Ernstfall (im Notfall abhakbar) ---------- */
@@ -488,11 +560,12 @@
     const r = S.lage, L = r.leitfaden, n = r.notfall, H = L.haken || {};
     const abhaken = !!n && r.rechte.notfall;
     const fertig = L.schritte.filter((x) => H[x.id]).length;
+    const jetzt = n ? (L.schritte.find((x) => !H[x.id]) || {}).id : null;   // im Notfall: der nächste offene Schritt
     const schritte = L.schritte.map((x, i) => {
       const h = H[x.id];
       const marke = abhaken ? `<button type="button" class="lf-marke" data-lf="${esc(x.id)}" aria-pressed="${h ? 'true' : 'false'}" title="${h ? 'Zurücknehmen' : 'Als erledigt abhaken'}"><span class="sr-only">${esc(x.titel)}: ${h ? 'erledigt' : 'offen'}</span>${h ? icon('check') : `<span aria-hidden="true">${i + 1}</span>`}</button>`
         : `<span class="lf-marke" aria-hidden="true">${h ? icon('check') : i + 1}</span>`;
-      return `<li class="lf-schritt${h ? ' erledigt' : ''}">${marke}<div><strong>${esc(x.titel)}</strong>${x.text ? `<p>${esc(x.text)}</p>` : ''}${h ? `<span class="sub">erledigt ${esc(uhr(h.t))} Uhr · ${esc(h.name)}</span>` : ''}</div></li>`;
+      return `<li class="lf-schritt${h ? ' erledigt' : ''}${x.id === jetzt ? ' jetzt' : ''}">${marke}<div><strong>${esc(x.titel)}</strong>${x.text ? `<p>${esc(x.text)}</p>` : ''}${h ? `<span class="sub">erledigt ${esc(uhr(h.t))} Uhr · ${esc(h.name)}</span>` : ''}</div>${x.id === jetzt ? '<span class="sic-pille warn lf-jetzt">jetzt</span>' : ''}</li>`;
     }).join('');
     const wege = (k) => [k.telefon ? `<a href="tel:${esc(k.telefon.replace(/[^0-9+]/g, ''))}">${icon('telefon')}${esc(k.telefon)}</a>` : '', k.email ? `<a href="mailto:${esc(k.email)}">${icon('post')}${esc(k.email)}</a>` : ''].join('');
     const kontakte = L.kontakte.length ? `<ul class="lf-kontakte">${L.kontakte.map((k) => `<li><span class="sic-av" aria-hidden="true">${esc(initialen(k.name || k.rolle))}</span><div><strong>${esc(k.name || k.rolle)}</strong>${k.name && k.rolle ? `<span class="sub">${esc(k.rolle)}</span>` : ''}<span class="lf-wege">${wege(k)}</span></div></li>`).join('')}</ul>`
@@ -624,6 +697,8 @@
   document.addEventListener('click', (e) => {
     const ps = e.target.closest('[data-probe-start]');
     if (ps) { probeDialog(); return; }
+    const ns = e.target.closest('[data-notfall-start]');
+    if (ns) { if (S.lage && !S.lage.notfall) notfallAuslosen(); return; }
     const g = e.target.closest('#probe-gesehen');
     if (g) {
       lauf(g, async () => {
@@ -668,17 +743,19 @@
           ${S.rechte.admin ? `<label class="sic-check"><input type="checkbox" id="nf-admins"${e.admins ? ' checked' : ''}><span>Auch andere Administratoren abmelden <span class="sub">(z. B. bei Verdacht auf ein Administratorkonto; Ihre Sitzung bleibt)</span></span></label>` : ''}
           ${W.keycloak ? `<label class="sic-check"><input type="checkbox" id="nf-kc"${e.keycloak ? ' checked' : ''}><span>Sitzungen in der zentralen Anmeldung beenden <span class="sub">(betroffene Konten werden bei Keycloak abgemeldet)</span></span></label>` : ''}
         </fieldset>
-        <label class="sic-feld wort"><span>Zur Bestätigung <strong>${esc(W.wort)}</strong> eintippen</span><input type="text" id="nf-wort" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label></div>
-      ${dFuss(`<button type="button" class="btn" data-d="zurueck">Zurück</button><button type="submit" class="btn gefahr" id="nf-los" disabled>${icon('alarm')}Notfall jetzt auslösen</button>`)}`,
-    { breit: true, fokus: e.grund ? '#nf-wort' : '#nf-grund', handler: async (a) => {
+        <div class="sic-halten-bereich"><button type="button" class="sic-halten" id="nf-los" aria-describedby="nf-halten-hinweis"><span class="sic-halten-fuell" aria-hidden="true"></span>
+          <span class="sic-halten-text">${icon('alarm')}<span id="nf-los-text">Gedrückt halten: Notfall auslösen</span></span></button>
+          <p class="sic-hinweis" id="nf-halten-hinweis">1,5 Sekunden gedrückt halten – mit Maus, Finger oder Leertaste. Ein kurzer Klick löst nichts aus.</p></div></div>
+      ${dFuss('<button type="button" class="btn" data-d="zurueck">Zurück</button><button type="button" class="btn" data-d="zu">Abbrechen</button>')}`,
+    { breit: true, fokus: e.grund ? '#nf-los' : '#nf-grund', handler: async (a) => {
       const lies = () => ({ grund: $('#nf-grund', dlg).value.trim(), kundentext: $('#nf-kunde', dlg).value.trim(), firewall: $('#nf-fw', dlg).checked,
         admins: !!($('#nf-admins', dlg) || {}).checked, keycloak: !!($('#nf-kc', dlg) || {}).checked });
       if (a === 'zurueck') { Object.assign(e, lies()); schritt1(); return; }
-      if (a !== 'submit') return;
+      if (a !== 'ausloesen') return;   // nur nach vollständigem Gedrückthalten (haltenStart), nie per Klick oder Eingabetaste
       const b = lies();
       if (b.grund.length < 5) { dFehler('Bitte kurz den Grund angeben (mindestens 5 Zeichen).'); $('#nf-grund', dlg).focus(); return; }
       Object.assign(e, b);
-      const r = await aufruf('sicherheit_notfall_an', { body: { ...b, wort: $('#nf-wort', dlg).value } }, [NOTFALL_ENTWURF, b]);
+      const r = await aufruf('sicherheit_notfall_an', { body: { ...b, wort: W.wort } }, [NOTFALL_ENTWURF, b]);
       try { sessionStorage.removeItem(NOTFALL_ENTWURF); } catch { /* ohne Speicher */ }
       const w = r.notfall.wirkung || {};
       dialog(`${dKopf('Notfallmodus ist aktiv', esc(zeit(r.notfall.seit)) + ' Uhr', 'gefahr')}<div class="sic-dinhalt">
@@ -689,11 +766,47 @@
       toast('Notfallmodus ausgelöst.');
       await notfallTab();
     } });
-    if (entwurf) schritt2('Anmeldung bestätigt – bitte das Bestätigungswort eintippen und erneut auslösen.'); else schritt1();
+    if (entwurf) schritt2('Anmeldung bestätigt – bitte den Knopf erneut gedrückt halten, um auszulösen.'); else schritt1();
   }
-  dlg.addEventListener('input', (e) => {
-    if (e.target.id === 'nf-wort') { const k = $('#nf-los', dlg); if (k) k.disabled = e.target.value.trim().toUpperCase() !== S.lage.wirkungen.wort; }
-  });
+  /* Gedrückt halten statt Bestätigungswort: 1,5 s mit Maus, Finger oder Leertaste/Eingabetaste; loslassen bricht ab */
+  const HALTEN_MS = 1500;
+  let halten = null;
+  function haltenStart(k) {
+    if (halten || k.disabled) return;
+    const g = $('#nf-grund', dlg);
+    if (g && g.value.trim().length < 5) { dFehler('Bitte kurz den Grund angeben (mindestens 5 Zeichen).'); g.focus(); return; }
+    dFehler('');
+    k.classList.remove('fertig'); k.classList.add('haelt');
+    const text = $('#nf-los-text', dlg), beginn = performance.now();
+    const schritt = (jetzt) => {
+      const anteil = Math.min(1, (jetzt - beginn) / HALTEN_MS);
+      k.style.setProperty('--anteil', (anteil * 100).toFixed(1) + '%');
+      if (anteil < 1) { if (text) text.textContent = `Weiter halten … ${Math.round(anteil * 100)} %`; halten.raf = requestAnimationFrame(schritt); return; }
+      halten = null;
+      k.classList.remove('haelt'); k.classList.add('fertig');
+      if (text) text.textContent = 'Wird ausgelöst …';
+      if (dlgHandler) lauf(k, async () => {
+        try { await dlgHandler('ausloesen', k, $('form', dlg)); } finally {
+          if (k.isConnected) { k.classList.remove('fertig'); k.style.setProperty('--anteil', '0%'); if (text) text.textContent = 'Gedrückt halten: Notfall auslösen'; }
+        }
+      });
+    };
+    halten = { raf: requestAnimationFrame(schritt), knopf: k };
+  }
+  function haltenStopp() {
+    if (!halten) return;
+    cancelAnimationFrame(halten.raf);
+    const k = halten.knopf; halten = null;
+    k.classList.remove('haelt'); k.style.setProperty('--anteil', '0%');
+    const text = $('#nf-los-text', dlg); if (text) text.textContent = 'Gedrückt halten: Notfall auslösen';
+  }
+  dlg.addEventListener('pointerdown', (e) => { const k = e.target.closest('#nf-los'); if (k && e.button === 0) { e.preventDefault(); k.focus(); haltenStart(k); } });
+  dlg.addEventListener('pointerup', haltenStopp);
+  dlg.addEventListener('pointercancel', haltenStopp);
+  dlg.addEventListener('pointerout', (e) => { if (halten && e.target.closest('#nf-los') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#nf-los'))) haltenStopp(); });
+  dlg.addEventListener('keydown', (e) => { if (e.target.id === 'nf-los' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); if (!e.repeat) haltenStart(e.target); } });
+  dlg.addEventListener('keyup', (e) => { if (e.target.id === 'nf-los' && (e.key === ' ' || e.key === 'Enter')) haltenStopp(); });
+  dlg.addEventListener('close', haltenStopp);
   function entwurfFortsetzen() {
     let e = null;
     try { e = JSON.parse(sessionStorage.getItem(NOTFALL_ENTWURF) || 'null'); } catch { /* ohne Speicher */ }
@@ -1346,6 +1459,9 @@
     zeigeTab(location.hash.slice(1));
   }
   themaKnopf();
+  /* Uhr im Kopf (Leitstand): Wochentag, Datum, Uhrzeit – nur Anzeige */
+  const uhrKopf = () => { const d = new Date(); $('#sic-uhr').textContent = d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }) + ' · ' + d.toLocaleTimeString('de-DE'); };
+  uhrKopf(); setInterval(uhrKopf, 1000);
   window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t && t !== S.tab && !$('#sic-app').hidden) zeigeTab(t); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S.tab === 'firewall') fwLive(); });
   start().catch(() => fehler('Keine Verbindung zum Server.'));

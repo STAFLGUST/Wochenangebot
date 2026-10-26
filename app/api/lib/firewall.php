@@ -470,6 +470,22 @@ function fw_zahlen(int $sekunden): array
     }
     return ['angriffe' => $angriffe, 'abgewiesen' => $gesperrt, 'anmeldungFehl' => $fehlAnm];
 }
+/* Verlauf der letzten 24 Stunden je Stunde (älteste zuerst, letzte = laufende Stunde): Angriffsmuster und abgewiesene
+   Anfragen gesperrter Adressen – für das Lagebild (Modul Sicherheit) */
+function fw_stunden(): array
+{
+    $jetzt = time();
+    $out = array_fill(0, 24, ['angriffe' => 0, 'abgewiesen' => 0]);
+    foreach (store_read('verkehr') ?? [] as $e) {
+        $alter = $jetzt - (int)($e['t'] ?? 0);
+        if ($alter < 0 || $alter >= 86400) continue;
+        $i = 23 - intdiv($alter, 3600);
+        $w = (string)($e['why'] ?? ''); $n = (int)($e['n'] ?? 1);
+        if (strpos($w, 'Firewall:') === 0 || strpos($w, 'Falle:') === 0) $out[$i]['angriffe'] += $n;
+        elseif (strpos($w, 'Gesperrt:') === 0) $out[$i]['abgewiesen'] += $n;
+    }
+    return $out;
+}
 function fw_verkehr_liste(string $filter, int $seit): array
 {
     $v = array_reverse(store_read('verkehr') ?? []);
