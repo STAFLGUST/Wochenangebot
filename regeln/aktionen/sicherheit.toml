@@ -1,0 +1,26 @@
+# Aktionen des Moduls „sicherheit“: Lagebild, Sicherheitsereignisse, privilegierte Konten, Notfallmodus auslösen und beenden.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+# Oberfläche sicherheit.intern (produktiv seit der Freigabe des Inhabers 26.10.2026, sicherheit.dashboard-stafl.de). Auf
+# Keycloak-Hosts antworten die Aktionen nur auf diesem Host (Aktion ↔ Host, GR-109, lib/herkunft.php), auf anderen mit 404.
+# Die bisherigen Sicherheitsaktionen (security_*, fw_*, geo_*, session_end, ip_unblock, user_unlock) liegen ebenfalls auf
+# sicherheit.intern, bleiben aber im Plattformkern registriert (regeln/aktionen/plattform.toml, Code in app/api/aktionen/).
+
+schema = 1
+modul = "sicherheit"
+
+[aktion.sicherheit_lage]
+oberflaeche = "sicherheit.intern"   # Lagebild und Notfall-Zustand (Administrator, sicherheit.sehen; sicherheit.notfall: nur Zustand)
+
+[aktion.sicherheit_ereignisse]
+oberflaeche = "sicherheit.intern"   # Sicherheitsprotokoll mit Filter (Administrator, sicherheit.sehen)
+
+[aktion.sicherheit_konten]
+oberflaeche = "sicherheit.intern"   # privilegierte Konten (Administrator)
+
+[aktion.sicherheit_notfall_an]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # sicherheit.notfall, Bestätigungswort, Bestätigung „notfall_ausloesen“
+
+[aktion.sicherheit_notfall_aus]
+oberflaeche = "sicherheit.intern"
+schreibend = true   # nur Administrator, immer mit Bestätigung „notfall_beenden“

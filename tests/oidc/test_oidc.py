@@ -34,6 +34,7 @@ SH = os.environ.get('WA_SHOTS') or os.path.join(REPO, 'tests', '.ergebnisse')
 os.makedirs(SH, exist_ok=True)
 PORT = 8443
 D, A, W, B, HR, CRM, MKT, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'login'))
+SIC = f'https://sicherheit.stafl.test:{PORT}'   # Modul Sicherheit (Stand 9, Freigabe des Inhabers 26.10.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
@@ -178,7 +179,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -190,7 +191,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 8' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 9' in _log, _log[-300:])
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -216,6 +217,11 @@ check('Stand 7: Client „marketing“ nachträglich angelegt, Geheimnisse in .e
       and GEHEIM['OIDC_SECRET_MARKETING'] not in _log, _log[-500:])
 check('Client „marketing“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('marketing', {}).get('secret') not in (None, '@GEHEIM_MARKETING@') and clients.get('marketing', {}).get('redirectUris') == [MKT + '/oidc/callback'])
+check('Stand 9: Client „sicherheit“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client sicherheit' in _log and 'erzeugt:   OIDC_SECRET_SICHERHEIT in .env' in _log and 'erzeugt:   OIDC_CRYPTO_SICHERHEIT in .env' in _log
+      and GEHEIM['OIDC_SECRET_SICHERHEIT'] not in _log, _log[-500:])
+check('Client „sicherheit“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('sicherheit', {}).get('secret') not in (None, '@GEHEIM_SICHERHEIT@') and clients.get('sicherheit', {}).get('redirectUris') == [SIC + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
       and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
@@ -408,7 +414,17 @@ for pfad in ('/', '/admin/', '/admin'):
     check(f'Marketing {pfad}: Weiterleitung zum Redaktionsplan (/module/marketing/), kein Eingabebereich auf dem Marketing-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/marketing/'), (code, kopf.get('Location')))
 check('Marketing: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(MKT + '/assets/app.css')[0] == 200 and anfrage(MKT + '/dashboard/abgemeldet.html')[0] == 200)
-for h in (D, A, W, B, HR, CRM, MKT):
+code, kopf, _ = anfrage(SIC + '/module/sicherheit/', kopf=SEITE)
+check('Sicherheit ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['sicherheit']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [SIC + '/oidc/callback'], kopf.get('Location'))
+check('Sicherheit: Schnittstelle ohne Anmeldung 401 (auch sicherheit_lage, security_status)',
+      all(anfrage(SIC + '/api/?action=' + a)[0] == 401 for a in ('status', 'sicherheit_lage', 'security_status')))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(SIC + pfad, kopf=SEITE)
+    check(f'Sicherheit {pfad}: Weiterleitung zur Sicherheitszentrale (/module/sicherheit/), kein Eingabebereich auf dem Sicherheits-Host',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/sicherheit/'), (code, kopf.get('Location')))
+for h in (D, A, W, B, HR, CRM, MKT, SIC):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
@@ -435,6 +451,17 @@ def bestaetigung_abgelaufen(ctx, host):
     with open(pfad, 'w', encoding='utf-8') as f:
         f.write(neu)
     return neu != roh
+
+
+def bestaetigung_stand(ctx, host):
+    """Zeitpunkt der letzten Bestätigung in der PHP-Sitzung (Diagnose; 0 = abgelaufen)."""
+    sid = kekse(ctx, host).get('__Host-WA_ADMIN', {}).get('value', '')
+    try:
+        with open(os.path.join(WORK, 'sessions', 'sess_' + sid), encoding='utf-8') as f:
+            m = re.search(r'adminConfirmedAt\|i:(\d+);', f.read())
+        return int(m.group(1)) if m else None
+    except OSError:
+        return 'keine Sitzungsdatei'
 
 
 def anmelden(pg, wer, otp=True):
@@ -634,7 +661,7 @@ with sync_playwright() as pw:
     sta = pa.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('Single Sign-on: Mitarbeiter-Eingabe ohne erneute Eingabe angemeldet', sta.get('loggedIn') and sta['user']['username'] == 'erika', sta.get('user'))
     code, j = pa.evaluate("t => fetch('../api/?action=security_status', {headers: {'X-CSRF-Token': t}}).then(async r => [r.status, await r.json()])", sta.get('csrf', ''))
-    check('Rechte bleiben bei uns: Bearbeiterin darf keine Sicherheitseinstellungen lesen (403)', code == 403, (code, j))
+    check('Rechte bleiben bei uns: Bearbeiterin liest keine Sicherheitseinstellungen (403; seit dem Modul Sicherheit nur auf dessen Host: 404)', code in (403, 404), (code, j))
     code, _ = pa.evaluate(js_post, ['user_save', {'id': '', 'name': 'X', 'username': 'x', 'role': 'admin', 'active': True}, sta.get('csrf', '')])
     check('Rechte bleiben bei uns: Bearbeiterin legt keine Nutzer an', code == 403, code)
     ka = kekse(ctx, 'angebot.stafl.test')
@@ -998,11 +1025,11 @@ with sync_playwright() as pw:
     check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
     sichtbar = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
-    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, Sicherheit, E-Mail, Protokoll; kein Angebot',
-          {'master', 'kunden', 'importe', 'users', 'sec', 'mail', 'log', 'schutz'} <= set(sichtbar) and 'edit' not in sichtbar, sichtbar)
+    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, System, E-Mail, Protokoll; kein Angebot, kein „Schutz“ (Modul Sicherheit)',
+          {'master', 'kunden', 'importe', 'users', 'sec', 'mail', 'log'} <= set(sichtbar) and not {'edit', 'schutz'} & set(sichtbar), sichtbar)
     pg.click('#vt-users'); pg.wait_for_selector('#view-users:not([hidden])')
     pg.screenshot(path=os.path.join(SH, 'oidc_verwaltung_admin_1280.png'))
-    # Kachel „Import“: nur die Importzentrale – Nutzer, Protokoll, Sicherheit, Schutz nur über die Kachel „Verwaltung“
+    # Kachel „Import“: nur die Importzentrale – Nutzer, Protokoll, System nur über die Kachel „Verwaltung“
     pg.goto(W + '/import/'); pg.wait_for_selector('#view-importe:not([hidden])')
     nur_import = pg.evaluate("[...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
     check('Administrator über die Kachel „Import“: nur die Importzentrale, keine Verwaltungsbereiche, ohne Seitenleiste, Titel „Import“',
@@ -1026,37 +1053,60 @@ with sync_playwright() as pw:
     ctx.close()
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
+    #    Sicherheitsaktionen (geo_clear_stats, security_save) liegen seit Stand 9 auf dem Host des Moduls Sicherheit.
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
-    pg.goto(W + '/admin/'); anmelden(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
-    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
-    js = "([a, t]) => fetch('../api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])"
+    pg.goto(SIC + '/module/sicherheit/'); anmelden(pg, 'admin'); pg.wait_for_selector('#sic-app:not([hidden])')
+    angemeldet_um = time.time()
+    st = pg.evaluate("fetch('/api/?action=status').then(r => r.json())")
+    js = "([a, t]) => fetch('/api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])"
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
     check('direkt nach der Anmeldung: sensible Aktion ohne weitere Abfrage (Anmeldezeitpunkt zählt)', code == 200, (code, j))
-    check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
+    check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'sicherheit.stafl.test'))
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
     check('abgelaufen: 403 „erneut anmelden“ statt Passwortabfrage', code == 403 and j.get('code') == 'reauth_required', (code, j))
     neu = j.get('anmelden', '')
     check('… mit Adresse für die erneute Anmeldung (eigener Host, max_age=0)', neu.startswith('/oidc/callback?iss=') and 'auth_request_params=max_age%3D0' in neu, neu)
     code, j = pg.evaluate(js, ['reauth', st['csrf']])
-    check('eigene Passwortbestätigung bleibt gesperrt', code == 403, (code, j))
+    check('eigene Passwortbestätigung bleibt gesperrt (403; auf dem Host des Moduls gibt es sie nicht: 404)', code in (403, 404), (code, j))
+    # Oberfläche (Modul Sicherheit unter eigener Adresse): Speichern der Einstellungen führt selbst zur erneuten Anmeldung und zurück
+    pg.reload(); pg.wait_for_selector('#sic-app:not([hidden])')
+    pg.click('#sic-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#tab-einstellungen:not([hidden]) [data-e="e-anmeldung"]')
+    pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+    vorher = bestaetigung_stand(ctx, 'sicherheit.stafl.test')
+    bestaetigung_abgelaufen(ctx, 'sicherheit.stafl.test')   # unmittelbar vor dem Speichern (Seitenaufbau dazwischen)
+    # Keycloak vergleicht auth_time in ganzen Sekunden: max_age=0 verlangt die erneute Anmeldung erst, wenn die letzte
+    # Anmeldung in einer früheren Sekunde lag (sonst gilt sie als frisch und Keycloak leitet ohne Abfrage zurück).
+    # Der Test ist schneller als ein Mensch – daher bis 2 s nach der Anmeldung warten (Zustand der Uhr, keine feste Pause).
+    while time.time() - angemeldet_um < 2:
+        time.sleep(0.05)
+    with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort:
+        pg.click('#sic-dlg .sic-dfuss [type=submit]')
+    # Inhalt der Antwort ist nach der Weiterleitung nicht mehr abrufbar – Status genügt (Code prüft der Aufruf oben)
+    check('Speichern ohne gültige Bestätigung: Server verlangt die Bestätigung (403)', antwort.value.status == 403,
+          {'status': antwort.value.status, 'bestaetigt_vor_dem_ablauf': vorher})
+    try:
+        pg.wait_for_url(lambda u: u.startswith(L), timeout=20000); bei_keycloak = True
+    except Exception:
+        bei_keycloak = False
+    _log = os.path.join(WORK, 'apache', 'access.log')
+    _zeilen = open(_log, encoding='utf-8', errors='replace').read().splitlines()[-14:] if os.path.exists(_log) else []
+    check('… Seite leitet zu Keycloak mit max_age=0', bei_keycloak and 'max_age=0' in urllib.parse.unquote(pg.url), {'url': pg.url, 'zugriffe': _zeilen})
+    if bei_keycloak:
+        pg.wait_for_selector('#password')
+        check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
+        pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
+        pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER['admin'][1], 1)); pg.click('#kc-login')   # nächster Code (keine Wiederverwendung)
+        pg.wait_for_url(SIC + '/module/sicherheit/**'); pg.wait_for_selector('#sic-app:not([hidden])')
+        code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
+        check('nach der erneuten Anmeldung: Aktion bestätigt (Rücksprung ins Modul Sicherheit)', code == 200, (code, j))
     # Bestätigung über ein Recht (require_perm_confirmed, z. B. Kunden pflegen, Wochenangebot senden): ebenfalls erneute
     # Anmeldung bei Keycloak – nie die hier gesperrte Passwortabfrage (sonst wäre die Aktion nicht mehr bestätigbar)
-    code, j = pg.evaluate(js, ['kunde_delete', st['csrf']])
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')   # Single Sign-on auf die Verwaltung
+    stw = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('Bestätigung in der Verwaltung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
+    code, j = pg.evaluate(js.replace("'/api/", "'../api/"), ['kunde_delete', stw['csrf']])
     check('abgelaufen, Bestätigung über ein Recht: 403 „erneut anmelden“ statt Passwortabfrage', code == 403 and j.get('code') == 'reauth_required'
           and j.get('anmelden', '').startswith('/oidc/callback?iss='), (code, j))
-    # Oberfläche (Verwaltung unter eigener Adresse): Speichern in Sicherheit führt selbst zur erneuten Anmeldung und zurück
-    pg.reload(); pg.wait_for_selector('#screen-editor:not([hidden])')
-    pg.click('#vt-sec'); pg.wait_for_selector('#sec-form')
-    with pg.expect_navigation(url=lambda u: u.startswith(L)):
-        pg.click('#sec-form [type=submit]')
-    check('Speichern ohne gültige Bestätigung: Weiterleitung zu Keycloak mit max_age=0', 'max_age=0' in urllib.parse.unquote(pg.url), pg.url)
-    pg.wait_for_selector('#password')
-    check('Keycloak verlangt erneut Passwort und zweiten Faktor', pg.is_visible('#password'))
-    pg.fill('#password', NUTZER['admin'][0]); pg.click('#kc-login')
-    pg.wait_for_selector('#otp'); pg.fill('#otp', totp(NUTZER['admin'][1], 1)); pg.click('#kc-login')   # nächster Code (keine Wiederverwendung)
-    pg.wait_for_url(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')
-    code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
-    check('nach der erneuten Anmeldung: Aktion bestätigt', code == 200, (code, j))
     pg.goto(D + '/'); pg.wait_for_selector('#db-grid .db-tile')   # SSO auf den anderen Host
     pg.goto(A + '/oidc/callback?' + urllib.parse.urlencode({'iss': L + '/realms/mitarbeiter', 'target_link_uri': 'https://angreifer.example/'}))
     check('erneute Anmeldung leitet nie auf fremde Seiten (offene Weiterleitung)', urllib.parse.urlparse(pg.url).hostname != 'angreifer.example', pg.url)
@@ -1404,6 +1454,69 @@ with sync_playwright() as pw:
     vor = j.get('konto', {})
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Erika-Neues-Kennwort-7'}])
     check('Passwort setzen: Einmalcode bleibt eingerichtet', code == 200 and vor.get('einmalcode', 0) >= 1 and j['konto'].get('einmalcode') == vor.get('einmalcode'), (vor, j))
+    # Administratoren und Pflicht-Konten: Passwort nur vorübergehend (Sicherheitsdurchsicht 26.10.2026)
+    V3 = Legacy()   # frische Anmeldung: Bestätigung für user_save gültig (wie V2 oben)
+    V3.call('login', {'username': 'admin', 'password': PW_ALT})
+    code_p, j_p = V3.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'twofaPflicht': True})
+    check('Vorbereitung: Zwei-Faktor-Pflicht für erika gesetzt', code_p == 200 and nutzer_roh()['erika'].get('twofaPflicht') is True, (code_p, j_p))
+    code, j = pg.evaluate(hole, erika_id)
+    check('Pflicht-Konto (zweiter Faktor verpflichtend): Passwort nur vorübergehend', code == 200 and j['konto'].get('nurTemporaer') is True, (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Erika-Drittes-Kennwort-9', 'aendern': False}])
+    check('… „dauerhaft“ wird übergangen: muss bei der nächsten Anmeldung ein eigenes festlegen', code == 200 and j.get('temporaer') is True
+          and j['konto'].get('passwortAendern') is True, (code, j))
+    V3.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'twofaPflicht': False})
+    code, j = pg.evaluate(hole, kim)
+    check('normales Konto: Wahl bleibt', code == 200 and j['konto'].get('nurTemporaer') is False, (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': KIM['zweit'], 'aendern': False}])
+    check('… dauerhaft gesetzt (kein eigenes Passwort verlangt)', code == 200 and j.get('temporaer') is False and j['konto'].get('passwortAendern') is False, (code, j))
+
+    # ── Ablauf und Beenden von Sitzungen auf Keycloak-Hosts (Sicherheitsdurchsicht 26.10.2026): keine stille neue Sitzung ──
+    ck = br.new_context(ignore_https_errors=True); pk = eigene_seite(ck.new_page())
+    pk.goto(D + '/'); pk.wait_for_selector('#username'); pk.fill('#username', 'kim.konto'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login')
+    pk.wait_for_selector('#db-grid .db-tile')
+    stat = "fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])"
+    code, j = pk.evaluate(stat)
+    check('Sitzungen: Kim im Dashboard angemeldet', code == 200 and j.get('loggedIn'), (code, j))
+    # Inaktivität nachgestellt (sonst 8 Stunden warten): letzte Aktivität der PHP-Sitzung zurückdrehen
+    sid_k = kekse(ck, 'dashboard.stafl.test')['__Host-WA_ADMIN']['value']; pfad = os.path.join(WORK, 'sessions', 'sess_' + sid_k)
+    with open(pfad, encoding='utf-8') as f:
+        roh = f.read()
+    neu = re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - 9 * 3600};', roh)
+    with open(pfad, 'w', encoding='utf-8') as f:
+        f.write(neu)
+    code, j = pk.evaluate(stat)
+    check('nach Inaktivität: keine neue Sitzung ohne erneute Anmeldung (403, max_age=0)', neu != roh and code == 403 and j.get('code') == 'reauth_required'
+          and 'max_age%3D0' in j.get('anmelden', '') and 'Inaktivität' in j.get('error', ''), (code, j))
+    pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
+    pk.wait_for_selector('#password')
+    check('… Keycloak verlangt das Passwort erneut', pk.is_visible('#password'))
+    pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
+    code, j = pk.evaluate(stat)
+    check('… nach erneuter Anmeldung weiter', code == 200 and j.get('loggedIn'), (code, j))
+    # „Sitzung beenden“ in der Verwaltung: gilt auch, solange die Sitzung bei Keycloak und im Webserver-Modul noch läuft
+    code, j = pg.evaluate(post, ['session_end', {'uid': kim}])
+    if code == 403:   # Bestätigung der Verwaltung abgelaufen (langsame Umgebung): über den bisherigen Zugang beenden
+        V.call('reauth', {'password': PW_ALT}); code, j = V.call('session_end', {'uid': kim})
+    check('Sitzung beenden (alle Sitzungen von Kim)', code == 200 and j.get('ended', 0) >= 1, (code, j))
+    code, j = pk.evaluate(stat)
+    check('… beendete Sitzung entsteht nicht neu: erneute Anmeldung verlangt (403)', code == 403 and j.get('code') == 'reauth_required' and 'beendet' in j.get('error', ''), (code, j))
+    # anderer Host ohne bisherige Sitzung dort: Single Sign-on gilt, aber vor dem Beenden angemeldet → erneute Anmeldung
+    pa_k = eigene_seite(ck.new_page())
+    pa_k.goto(A + '/admin/'); pa_k.wait_for_selector('#password', timeout=30000)
+    check('… auch auf einem anderen Host: Keycloak verlangt das Passwort erneut (Mitarbeiter vermerkt)', pa_k.url.startswith(L) and pa_k.is_visible('#password'), pa_k.url)
+    pa_k.fill('#password', KIM['zweit']); pa_k.click('#kc-login'); pa_k.wait_for_selector('#screen-editor:not([hidden])')
+    check('… danach dort weiter', pa_k.url.startswith(A + '/admin/'), pa_k.url)
+    code, j = pk.evaluate(stat)
+    pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
+    # Kim hat das Passwort eben auf dem anderen Host neu eingegeben (nach dem Beenden). Keycloak fragt bei max_age=0
+    # nur, wenn diese Eingabe mindestens eine Sekunde zurückliegt – beides ist richtig (frische Anmeldung nach dem Ende).
+    if pk.url.startswith(L):
+        pk.wait_for_selector('#password'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login')
+    pk.wait_for_url(D + '/dashboard/**')
+    code, j = pk.evaluate(stat)
+    check('… nach erneuter Anmeldung wieder möglich', code == 200 and j.get('loggedIn'), (code, j))
+    check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))
+    ck.close()
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': nutzer_roh()['admin']['id'], 'was': 'passwort', 'passwort': 'Admin-Neues-Kennwort-7'}])
     check('eigenes Konto nicht über die Verwaltung (403)', code == 403, (code, j))
     check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
@@ -1413,7 +1526,7 @@ with sync_playwright() as pw:
     check('… Lesen bleibt möglich', code == 200 and j['konto'].get('vorhanden') is True, (code, j))
     ctx.close()
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
-    pg.goto(A + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'kim.konto'); pg.fill('#password', KIM['eigen']); pg.click('#kc-login')
+    pg.goto(A + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'kim.konto'); pg.fill('#password', KIM['zweit']); pg.click('#kc-login')
     pg.wait_for_selector('#screen-editor:not([hidden])')
     code, j = pg.evaluate(hole, kim)
     check('Bearbeiterin: Zustand nicht lesbar (403)', code == 403, (code, j))

@@ -413,6 +413,31 @@ const FW_VORLAGEN = [
         'fw' => ['waf' => 'sperren', 'autoSperre' => true, 'treffer' => 1, 'sperrMinuten' => 10080, 'fehlerLimit' => 10, 'feed' => true, 'mitschnittMinuten' => 60]],
 ];
 
+/* Vorlage anwenden (Aktion fw_vorlage, Notfallmodus lib/notfall.php): Sicherheits- und Firewall-Einstellungen speichern.
+   $notfall = true: fehlt dem Auslösenden selbst der zweite Faktor, bleibt die Zwei-Faktor-Pflicht unverändert, statt abzubrechen
+   (ein Notfall darf daran nicht scheitern). Liefert neue Einstellungen, Namen und Hinweistext für das Protokoll. */
+function fw_vorlage_anwenden(string $k, array $me, bool $notfall = false): array
+{
+    $V = FW_VORLAGEN[$k] ?? null;
+    if (!$V) throw new InvalidArgumentException('Unbekannte Vorlage.');
+    $oldS = sec();
+    $hinweis = '';
+    try { $newS = sec_clean(array_merge($oldS, $V['sec']), $oldS, $me); }
+    catch (InvalidArgumentException $e) {
+        if (!$notfall) throw $e;
+        $newS = sec_clean(array_merge($oldS, array_diff_key($V['sec'], ['twofa' => 1])), $oldS, $me);
+        $hinweis = ' (Zwei-Faktor-Pflicht unverändert: eigener Zugang ohne zweiten Faktor)';
+    }
+    $newF = fw_clean($V['fw'], fw());
+    if ($newF['feed'] && !fw_feed_info()) {
+        try { fw_feed_laden(); } catch (Throwable $e) { $newF['feed'] = false; }   // ohne Verbindung: Vorlage trotzdem anwenden
+    }
+    store_write('sicherheit', $newS); $GLOBALS['SEC'] = $newS;
+    store_write('firewall', $newF); $GLOBALS['FWS'] = $newF;
+    if (!empty($V['fw']['feed']) && !$newF['feed']) $hinweis .= ' (Bedrohungsliste nicht erreichbar – aus)';
+    return ['sec' => $newS, 'fw' => $newF, 'label' => $V['label'], 'hinweis' => $hinweis];
+}
+
 /* Übersicht für die Ansicht „Schutz“ */
 function fw_status(string $filter = ''): array
 {
@@ -431,7 +456,7 @@ function fw_status(string $filter = ''): array
         if ($w === 'Anmeldung fehlgeschlagen') $fehlAnm += $n;
     }
     $F = fw();
-    return ['fw' => $F, 'modi' => FW_WAF_MODI, 'sperrMinuten' => FW_SPERR_MINUTEN, 'vorlagen' => array_map(fn($x) => ['label' => $x['label'], 'text' => $x['text']], FW_VORLAGEN),
+    return ['fw' => $F, 'modi' => FW_WAF_MODI, 'sperrMinuten' => FW_SPERR_MINUTEN, 'vorlagen' => array_map(fn($x) => ['label' => $x['label'], 'text' => $x['text'], 'werte' => ['sec' => $x['sec'], 'fw' => $x['fw']]], FW_VORLAGEN),
             'zahlen' => ['angriffe' => $angriffe, 'abgewiesen' => $gesperrt, 'anmeldungFehl' => $fehlAnm, 'gesperrteAdressen' => count($auto) + count($manuell)],
             'manuell' => $manuell, 'auto' => array_slice($auto, 0, 300), 'autoGesamt' => count($auto), 'feed' => fw_feed_info(),
             'meineIp' => client_ip(), 'mitschnitt' => (int)$F['mitschnittBis'] > $now ? (int)$F['mitschnittBis'] : 0,

@@ -17,6 +17,7 @@ vollständig geprüft (`tests/oidc/`) und die Betriebskonfiguration in `deploy/a
 | `hr.dashboard-stafl.de` | HR · Urlaubsverwaltung (eigene Seite `/module/hr/` derselben Anwendung; `/` führt dorthin; Schnittstelle nur für HR-Aktionen, Status und Abmelden – GR-109). Freigabe des Inhabers 23.10.2026; DNS: CNAME `hr` → `dashboard-stafl.de`; Konsolenschritt `konten.sh realm-aktualisieren` Stand 5, danach `docker compose up -d app` | über Keycloak |
 | `crm.dashboard-stafl.de` | CRM · Vertrieb (eigene Seite `/module/crm/` derselben Anwendung; `/` und `/admin/` führen dorthin; Schnittstelle nur für CRM-Aktionen, Status und Abmelden – GR-109). Freigabe des Inhabers 23.10.2026; DNS: CNAME `crm` → `dashboard-stafl.de` (seit 21.10.2026); Konsolenschritt `konten.sh realm-aktualisieren` Stand 6, danach `docker compose up -d app` | über Keycloak |
 | `marketing.dashboard-stafl.de` | Marketing · Redaktionsplan (eigene Seite `/module/marketing/` derselben Anwendung; `/` und `/admin/` führen dorthin; Schnittstelle nur für Marketing-Aktionen, Status und Abmelden – GR-109). Freigabe des Inhabers 25.10.2026; DNS: CNAME `marketing` → `dashboard-stafl.de` (seit 25.10.2026); Konsolenschritt `konten.sh realm-aktualisieren` Stand 7, danach `docker compose up -d app` | über Keycloak |
+| `sicherheit.dashboard-stafl.de` | Modul Sicherheit mit Notfallmodus (eigene Seite `/module/sicherheit/` derselben Anwendung; `/` und `/admin/` führen dorthin; Schnittstelle nur für Sicherheitsaktionen, Status und Abmelden – GR-109). Freigabe des Inhabers 26.10.2026; Client `sicherheit` (Stand 9, `konten.sh realm-aktualisieren`); DNS-Eintrag seit 26.10.2026 | Zugang nur Administratoren und ausdrücklich Berechtigte |
 | übrige `*.dashboard-stafl.de` | 503-Platzhalter bis zur Freigabe des Moduls (GR-105) | – |
 
 Kunden merken nichts. Mitarbeiter können während der Übergangszeit beides nutzen; die alte Anmeldung unter
@@ -73,6 +74,10 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   wer freiwillig einen Einmalcode oder Passkey einrichtet (Anmeldeseite → „Konto“), wird danach immer gefragt.
   Neu anmelden nach 4 Stunden Leerlauf, höchstens nach 10 Stunden. Umgestellt mit `konten.sh realm-aktualisieren`
   (idempotent; bei jeder späteren Realm-Änderung erneut ausführen, die CI prüft genau diesen Weg).
+  Abmeldung nach Inaktivität der Anwendung (Verwaltung → Sicherheit) und „Sitzung beenden“ (Verwaltung → Sitzungen) wirken
+  seit 26.10.2026 auch hier: danach erneute Anmeldung bei Keycloak (Passwort erneut), keine stille neue Sitzung.
+- **Passwort aus der Verwaltung für Administratoren und Pflicht-Konten** (zweiter Faktor verpflichtend): immer nur
+  vorübergehend – der Mitarbeiter legt bei der nächsten Anmeldung ein eigenes fest (seit 26.10.2026).
 - **Passwort vergessen:** `konten.sh startpasswort <name>` – wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort.
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem

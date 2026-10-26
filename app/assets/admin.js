@@ -227,13 +227,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', sec: '', schutz: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', sec: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -241,7 +241,7 @@
   /* Überschrift je Bereich ohne Angebotsaktionen in der Kopfzeile (Regel body.bereich-verwaltung in admin.css) */
   const BEREICH_KOPF = { 'verwaltung.verwaltung': 'Verwaltung', 'bestand.intern': 'Bestand', 'verwaltung.import': 'Import' };
   /* Kachel „Import“ (verwaltung…/import/ → /admin/?ansicht=importe&nur=import): auf dem Verwaltungs-Host nur die
-     Importzentrale – Nutzer, Protokoll, Sicherheit, Schutz usw. erscheinen nur über die Kachel „Verwaltung“. Die Adresse
+     Importzentrale – Nutzer, Protokoll, System usw. erscheinen nur über die Kachel „Verwaltung“. Die Adresse
      kann den Bereich nur weiter einschränken, nie erweitern; die Rechte prüft weiter der Server (GR-103). */
   const NUR_IMPORT = (() => { try { return new URLSearchParams(location.search).get('nur') === 'import'; } catch { return false; } })();
   function bereich() {
@@ -259,7 +259,7 @@
   function viewAllowed(v) {
     const nur = BEREICH_VIEWS[bereich()];
     if (nur && !nur.includes(v)) return false;
-    if (['mail', 'rollen', 'sec', 'schutz'].includes(v)) return can('admin');
+    if (['mail', 'rollen', 'sec'].includes(v)) return can('admin');   // sec = System (Betrieb); Sicherheit hat ein eigenes Modul
     if (v === 'users') return can('admin') || may('hr.verwalten');   // Mitarbeiter: Administratoren alles, Personalstelle die HR-Angaben
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
     if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
@@ -613,7 +613,7 @@
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'].some(viewAllowed);
+    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
@@ -2375,8 +2375,8 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'];
-  const ADMIN_VIEWS = ['mail', 'users', 'rollen', 'sec', 'schutz'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec'];
+  const ADMIN_VIEWS = ['mail', 'users', 'rollen', 'sec'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
   function navSichtbar(btn) {
@@ -2425,7 +2425,6 @@
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
     if (v === 'log' && window.WA.views.log) window.WA.views.log();
     if (v === 'sec' && window.WA.views.sec) window.WA.views.sec();
-    if (v === 'schutz' && window.WA.views.schutz) window.WA.views.schutz();
   }
   for (const k of VIEWS) $('#vt-' + k).addEventListener('click', () => setView(k));
   window.addEventListener('hashchange', () => { const v = me && startAnsicht(); if (v) setView(v); });

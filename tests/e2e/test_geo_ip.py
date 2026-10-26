@@ -1,4 +1,4 @@
-"""Testgruppe geo_ip: IP-Suche der Ländersperre – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren."""
+"""Testgruppe geo_ip: IP-Suche der Ländersperre (Modul Sicherheit, Dialog Ländersperre) – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
@@ -12,10 +12,11 @@ with sync_playwright() as p:
     a.on('pageerror', lambda e: errs.append(str(e)))
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
     a.fill('#au-user', 'admin'); a.fill('#pw1', 'Sicheres-Passwort-1'); a.click('#auth-submit'); a.wait_for_selector('tr[data-id]')
-    a.click('#vt-sec'); a.wait_for_selector('#geo-box')
+    a.goto(B + '/module/sicherheit/#einstellungen'); a.wait_for_selector('[data-e="e-geo"]')
+    a.click('[data-e="e-geo"]'); a.wait_for_selector('#sic-dlg[open] #geo-box')
     a.fill('#geo-q', '1.0.1.1'); a.wait_for_selector('.geo-iphit', timeout=5000)
     check('IPv4 → China', 'China' in a.inner_text('#geo-list') and '1.0.1.1' in a.inner_text('#geo-list'), a.inner_text('#geo-list'))
-    a.check('.geo-iphit input'); a.wait_for_timeout(100)
+    a.check('.geo-iphit input'); a.wait_for_function("document.querySelector('#geo-chips').textContent.includes('China')")
     check('select from IP hit adds chip', 'China' in a.inner_text('#geo-chips'))
     a.fill('#geo-q', '2003:e5:1234::1'); a.wait_for_function("document.querySelector('#geo-list').textContent.includes('Deutschland')", timeout=5000)
     check('IPv6 → Deutschland', True)
@@ -23,7 +24,7 @@ with sync_playwright() as p:
     check('private ip hint', True)
     a.fill('#geo-q', '999.1.1.1'); a.wait_for_function("document.querySelector('#geo-list').textContent.includes('Keine gültige')", timeout=5000)
     check('invalid ip message', True)
-    a.fill('#geo-q', 'chi'); a.wait_for_timeout(200)
+    a.fill('#geo-q', 'chi'); a.wait_for_function("!document.querySelector('.geo-iphit')")
     check('name search still works', 'China' in a.inner_text('#geo-list') and a.locator('.geo-iphit').count() == 0)
     a.fill('#geo-q', '77.88.8.8'); a.wait_for_selector('.geo-iphit'); shot(a.locator('#geo-box'), SH + '/geo-ip.png')
     c = br.new_page(); c.goto(B + '/admin/')

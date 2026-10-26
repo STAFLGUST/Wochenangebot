@@ -350,8 +350,8 @@ class EchtesRegelwerk(unittest.TestCase):
     def test_acht_pflichtmodule_im_dashboard(self):
         rw = regeln.laden(WURZEL)
         kacheln = [m["id"] for m in rw.modulliste if m.get("dashboard")]
-        # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling
-        self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling"})
+        # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling, Sicherheit
+        self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling", "sicherheit"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
         # Controlling, Leergut, Container-Import: nicht freigegeben; DNS besteht (25.10.2026) → 503-Platzhalter (GR-105)
         for neu, stand in (("controlling", "geplant"), ("leergut", "geplant"), ("containerimport", "geplant")):
@@ -369,6 +369,12 @@ class EchtesRegelwerk(unittest.TestCase):
         o = rw.modul("marketing")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
                          ("fertig", "produktiv", True, "https://marketing.dashboard-stafl.de/module/marketing/"))
+        # Sicherheit: vom Inhaber am 26.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv); nie sperrbar, Kachel direkt nach der
+        # Verwaltung im Bereich „Verwaltung & Daten“, Modulzugang ohne Standardrollen (zugang_rollen = [])
+        m = rw.modul("sicherheit"); o = m["oberflaeche"][0]
+        self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"], o["sperrbar"]),
+                         ("fertig", "produktiv", True, "https://sicherheit.dashboard-stafl.de/module/sicherheit/", False))
+        self.assertEqual((m["dashboard_gruppe"], m["zugang_rollen"], m["reihenfolge"]), ("verwaltung", [], rw.modul("verwaltung")["reihenfolge"] + 1))
         self.assertEqual(rw.modul("import")["teil_von"], "verwaltung")
         self.assertEqual(rw.modul("import")["kachel_ziel"], "verwaltung.import")
         self.assertEqual(rw.modul("angebot")["kachel_ziel"], "eingabe")
@@ -486,6 +492,13 @@ class Verstoesse(unittest.TestCase):
     def test_teil_von_ohne_eigene_implementierung(self):
         self.p.ersetzen("regeln/module.toml", 'id = "verwaltung"', 'id = "verwaltung"\nteil_von = "plattform"')
         self.assertFehler("keine eigenen Pfade/Oberflächen")
+
+    def test_zugang_rollen(self):
+        # Standardrollen mit Modulzugang je Modul (z. B. Sicherheit: keine) – nur Standardrollen, nur Dashboard-Module
+        self.p.ersetzen("regeln/module.toml", "reihenfolge = 10\ndashboard = true", "reihenfolge = 10\ndashboard = true\nzugang_rollen = []")
+        self.assertEqual(self.p.fehler(), [])
+        self.p.ersetzen("regeln/module.toml", "zugang_rollen = []", 'zugang_rollen = ["admin"]')
+        self.assertFehler("zugang_rollen muss eine Liste aus viewer, editor sein")
 
     def test_kreis_in_abhaengigkeiten(self):
         self.p.ersetzen("regeln/module.toml", 'abhaengigkeiten = ["plattform"]\ntestgruppen = ["stock"]',

@@ -210,7 +210,7 @@ ohne SSH-Tunnel. Benutzernamen wie im Eingabebereich.
 | `liste` | Konten anzeigen |
 | `mail-einrichten [<adresse>]` | Mailversand von Keycloak über das Postfach der Anwendung, Testmail |
 | `design-setzen [standard]` | Anmeldeseite im Plattform-Design bzw. Rückfall auf Standard |
-| `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients; Stand 8: Client `konten` für die Verwaltung) |
+| `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients; Stand 8: Client `konten` für die Verwaltung; Stand 9: Client `sicherheit`) |
 
 Neue Mitarbeiter brauchen beides: Mitarbeiterkonto im Eingabebereich (Rechte) und Keycloak-Konto (Identität). Seit Stand 8 legt der
 Administrator das Keycloak-Konto auch direkt im Mitarbeiter an (Abschnitt „Zentrale Anmeldung“: anlegen, Passwort setzen,

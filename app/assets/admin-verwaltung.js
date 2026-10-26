@@ -1,6 +1,6 @@
 /* ==========================================================================
    Wochenangebot – Eingabebereich, Verwaltung
-   Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll, Sicherheit. Hilfen und Zustand kommen aus admin.js
+   Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll, System (Betrieb, Wartung, Module). Sicherheit: eigenes Modul app/module/sicherheit/. Hilfen und Zustand kommen aus admin.js
    (window.WA, Zustand über Getter: W.me, W.offers, W.stdPublic, W.wartungSt); die Ansichten werden dort
    über W.views aufgerufen.
    ========================================================================== */
@@ -148,6 +148,7 @@
       <div class="ka-pw" id="ka-pw" hidden>
         <div class="fld"><span>Neues Passwort</span><div class="pw-row"><input name="ka_pw" type="text" autocomplete="new-password" minlength="12" maxlength="200" placeholder="mindestens 12 Zeichen" aria-label="Neues Passwort"><button type="button" class="btn" data-ka="gen">Vorschlag</button></div></div>
         <label class="check"><input type="checkbox" name="ka_aendern" checked> muss bei der nächsten Anmeldung ein eigenes Passwort festlegen</label>
+        <p class="hint" id="ka-nur-temporaer" hidden>Bei Administratoren und Konten mit Pflicht zum zweiten Faktor immer: Das Passwort gilt nur bis zur nächsten Anmeldung.</p>
         <div class="ka-knoepfe"><button type="button" class="btn" data-ka="pw-ab">Ausblenden</button><button type="button" class="btn primary" data-ka="passwort">Passwort setzen</button></div>
       </div>
       <p class="ka-meldung" id="ka-meldung" role="status"></p>
@@ -172,6 +173,10 @@
     if (k.einmalcode) t.push(k.einmalcode === 1 ? 'Einmalcode eingerichtet' : `${k.einmalcode} Einmalcode-Geräte`);
     if (k.passkeys) t.push(k.passkeys === 1 ? '1 Passkey' : `${k.passkeys} Passkeys`);
     st.innerHTML = t.join(' · ');
+    // Administratoren und Pflicht-Konten: Passwort nur vorübergehend (der Server erzwingt es ebenfalls)
+    const cb = $('#user-body [name="ka_aendern"]'), nur = !!k.nurTemporaer;
+    if (cb) { if (nur) cb.checked = true; cb.disabled = nur; }
+    if ($('#ka-nur-temporaer')) $('#ka-nur-temporaer').hidden = !nur;
     kn.innerHTML = `<button type="button" class="btn" data-ka="pw-auf">${icon('key', 'sm')}Passwort setzen …</button>`
       + (k.email ? `<button type="button" class="btn" data-ka="link">${icon('mail', 'sm')}Link zum Passwort-Festlegen per Mail</button>` : '')
       + (k.gesperrt || !k.aktiv ? `<button type="button" class="btn" data-ka="entsperren">${icon('check', 'sm')}Entsperren</button>` : '');
@@ -193,7 +198,7 @@
       const r = await api('anmeldekonto_aendern', { body });
       kaZeigen(r.konto);
       m.classList.add('st-ok');
-      m.textContent = was === 'passwort' ? (body.aendern ? 'Passwort gesetzt – bitte persönlich weitergeben; bei der ersten Anmeldung legt der Mitarbeiter ein eigenes fest.' : 'Passwort gesetzt.')
+      m.textContent = was === 'passwort' ? ((r.temporaer ?? body.aendern) ? 'Passwort gesetzt – bitte persönlich weitergeben; bei der ersten Anmeldung legt der Mitarbeiter ein eigenes fest.' : 'Passwort gesetzt.')
         : was === 'link' ? `Mail mit Link an ${r.an} geschickt (${72} Stunden gültig).` : was === 'entsperren' ? 'Konto entsperrt.' : 'Konto angelegt – jetzt Passwort setzen oder den Link per Mail schicken.';
       if (was === 'passwort') { $('#ka-pw').hidden = false; $('#user-body [name="ka_pw"]').readOnly = true; $('#ka-pw [data-ka="passwort"]').hidden = true; $('#ka-pw [data-ka="gen"]').hidden = true; }
     } catch (ex) { m.textContent = ex.message; m.classList.add('form-err'); }
@@ -244,7 +249,7 @@
         <details class="span2 ur-box" id="ur-box" data-nurzugang${u && (u.grant.length || u.deny.length) ? ' open' : ''}${startRollen(u).includes('admin') ? ' hidden' : ''}><summary>Abweichende Rechte für diesen Mitarbeiter${u && exceptions(u) ? ` <span class="rm-exc">${esc(exceptions(u))}</span>` : ''}</summary>
           <p class="hint">Normalerweise gelten die Rechte der Rolle. Hier können Sie einzelne Rechte zusätzlich erlauben oder verbieten.</p>
           <div id="ur-list">${userRightsRows(u, startRollen(u))}</div></details>
-        ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren unter „Sicherheit“.</p>` : ''}
+        ${u && u.lockedUntil ? `<p class="span2 st-err" style="margin:0">Zugang nach Fehlversuchen gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr – Entsperren im Modul Sicherheit (Anmeldung &amp; Sitzungen).</p>` : ''}
         ${u && u.mailInfo ? `<p class="hint span2" style="margin:0">${esc(mailInfoText(u))}</p>` : ''}
         ${hrAn() ? W.hr.formular(u ? u.id : null) : ''}
         <p class="form-err span2" id="user-err" role="alert"></p>
@@ -1339,64 +1344,14 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
-  /* ======================= Sicherheit (nur Administrator) ======================= */
+  /* ======================= System (nur Administrator): Betriebszustand, Diagnose, Wartung, Module ======================= */
+  /* Sicherheit (Lagebild, Notfall, Firewall, Sitzungen, Dateiprüfung, Ereignisse, Einstellungen, Konten) ist seit 26.10.2026 ein
+     eigenes Modul (app/module/sicherheit/, sicherheit.dashboard-stafl.de) – hier nur noch der Hinweis mit Link, keine zweite
+     Oberfläche. Daten: betrieb_status (lib/diagnose.php betrieb_daten), Diagnose security_diag, Module module_status. */
   let secData = null;
-  const uaShort = (ua) => {
-    const b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
-    const o = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
-    return o ? `${b} · ${o}` : b;
-  };
-  let geoSel = new Set(), geoQ = '';
-  const EUROPE = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'CH', 'GB', 'NO', 'IS', 'LI'];
-  let regionNames = null;
-  try { regionNames = new Intl.DisplayNames(['de'], { type: 'region' }); } catch { /* alter Browser */ }
-  const ccName = (c) => { let n = ''; try { n = regionNames ? regionNames.of(c) : ''; } catch { /* unbekannt */ } return n && n !== c ? n : c; };
-  const ccSort = (a, b) => ccName(a).localeCompare(ccName(b), 'de');
-  function geoChips() {
-    const list = [...geoSel].sort(ccSort);
-    return list.length ? list.map((c) => `<span class="geo-chip">${esc(ccName(c))} <span class="sub">${esc(c)}</span><button type="button" data-geo-del="${esc(c)}" aria-label="${esc(ccName(c))} entfernen">×</button></span>`).join('')
-      : '<span class="sub">Noch kein Land ausgewählt.</span>';
-  }
-  const IP_RE = /^(\d{1,3}(\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]+)$/i;
-  let geoIp = null, geoIpTimer;
-  function geoIpHit() {
-    if (!geoIp || geoIp.ip !== geoQ) return IP_RE.test(geoQ) ? '<p class="sec-empty">IP-Adresse wird gesucht …</p>' : '';
-    if (geoIp.error) return `<p class="sec-empty">${esc(geoIp.error)}</p>`;
-    if (!geoIp.country) return `<p class="sec-empty"><span class="mono-s">${esc(geoIp.ip)}</span> – ${geoIp.private ? 'interne Adresse, keinem Land zugeordnet' : 'kein Land bekannt'}.</p>`;
-    const c = geoIp.country;
-    return `<label class="geo-opt geo-iphit"><input type="checkbox" data-geo-cc="${esc(c)}"${geoSel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(geoIp.ip)}</span> → ${esc(ccName(c))}</span><span class="sub">${esc(c)}</span></label>`;
-  }
-  function geoLookup() {
-    clearTimeout(geoIpTimer);
-    if (!IP_RE.test(geoQ)) { geoIp = null; return; }
-    const ip = geoQ;
-    geoIpTimer = setTimeout(async () => {
-      try { const r = await api('geo_lookup', { query: '&ip=' + encodeURIComponent(ip) }); geoIp = { ip, country: r.country, private: r.private }; }
-      catch (ex) { geoIp = { ip, error: ex.message }; }
-      if (geoQ === ip && $('#geo-list')) $('#geo-list').innerHTML = geoList();
-    }, 250);
-  }
-  function geoList() {
-    if (IP_RE.test(geoQ)) return geoIpHit();
-    const q = geoQ.toLowerCase();
-    const all = (secData.geoCountries || []).filter((c) => !q || c.toLowerCase() === q || ccName(c).toLowerCase().includes(q)).sort(ccSort);
-    return all.length ? all.map((c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${geoSel.has(c) ? ' checked' : ''}> <span>${esc(ccName(c))}</span><span class="sub">${esc(c)}</span></label>`).join('')
-      : '<p class="sec-empty">Kein Land gefunden.</p>';
-  }
-  function geoRefresh() {
-    const f = $('#sec-form');
-    if (!f) return;
-    $('#geo-chips').innerHTML = geoChips();
-    $('#geo-count').textContent = geoSel.size ? `${geoSel.size} ausgewählt` : '';
-    const allow = f.elements.geoMode.value === 'allow';
-    const mc = secData.myCountry;
-    const blocked = mc && f.elements.geoEnabled.checked && (allow ? !geoSel.has(mc) : geoSel.has(mc));
-    const ok = $('#geo-me');
-    ok.className = 'geo-me' + (blocked ? ' bad' : '');
-    ok.innerHTML = mc ? `Sie greifen gerade aus <strong>${esc(ccName(mc))}</strong> zu${blocked ? ' – mit dieser Auswahl würden Sie sich aussperren.' : '.'}` : 'Ihr Land ist nicht bekannt (interne Adresse) – Sie werden nicht gesperrt.';
-    $('#geo-sel-label').textContent = allow ? 'Erlaubte Länder' : 'Gesperrte Länder';
-  }
-  const IDLE = [[15, '15 Minuten'], [30, '30 Minuten'], [60, '1 Stunde'], [120, '2 Stunden'], [240, '4 Stunden'], [480, '8 Stunden'], [720, '12 Stunden']];
+  const SICHERHEIT = /(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://sicherheit.dashboard-stafl.de/module/sicherheit/' : '../module/sicherheit/';
+  const LVL = { ok: 'in Ordnung', warn: 'Hinweis', bad: 'kritisch', info: 'Info' };
+  const lvlDot = (l) => `<span class="lv lv-${esc(l)}" title="${esc(LVL[l] || l)}"><span class="sr-only">${esc(LVL[l] || l)}</span></span>`;
   function backupCard(b, card) {
     if (!b || !b.t) return card('warn', 'Datensicherung', 'noch keine automatische Sicherung', 'Wird nach dem nächsten Server-Update täglich erstellt');
     const age = (Date.now() - new Date(b.t).getTime()) / 3600000;
@@ -1410,7 +1365,7 @@
   const mb = (n) => (n / 1024 / 1024).toFixed(1).replace('.', ',');
   const gb = (n) => (n / 1024 / 1024 / 1024).toFixed(1).replace('.', ',');
   /* Wartung des Eingabebereichs (modul_wartung_save, immer mit Passwortbestätigung); Verlauf aller Wartungsänderungen */
-  const BEREICH_NAME = { 'angebot.kunden': 'Angebotsseite (Kunden)', 'angebot.eingabe': 'Eingabebereich (Mitarbeiter)' };
+  const BEREICH_NAME = { 'angebot.kunden': 'Angebotsseite (Kunden)', 'angebot.eingabe': 'Eingabebereich (Mitarbeiter)', alle: 'alle Bereiche (Notfallmodus)' };
   const ZUSTAND = { normal: 'normal', wartung: 'Wartung', 'wartung geplant': 'Wartung geplant' };
   function eingabeWartungForm(d) {
     const w = d.wartungEingabe;
@@ -1540,287 +1495,57 @@
     if (!r.ok) return card('bad', 'Bereitstellung', `aktiv: ${sha} · ${esc(dateTime(r.t))} Uhr`, esc(r.meldung || 'Letztes Release fehlgeschlagen'));
     return card('ok', 'Bereitstellung', `Release ${sha} · ${esc(dateTime(r.t))} Uhr`, 'nur freigegebene, geprüfte Versionen');
   }
-  function secCards(d) {
-    const S = d.settings, users = d.users.filter((u) => u.active);
-    const with2 = users.filter((u) => u.twofa || u.passkeys).length, admins = users.filter((u) => u.role === 'admin'), admNo2 = admins.filter((u) => !u.twofa && !u.passkeys).length;
-    const locked = d.users.filter((u) => u.lockedUntil).length, blocked = d.blockedIps.filter((x) => x.until).length;
+  function notfallCard(n, card) {
+    return n ? card('bad', 'Notfallmodus', `aktiv seit ${esc(dateTime(n.seit))} Uhr`, 'Mitarbeiter ohne Administratorrolle gesperrt – beenden im Modul Sicherheit')
+      : card('ok', 'Notfallmodus', 'aus', '');
+  }
+  function sysCards(d) {
     const card = (lvl, title, text, hint) => `<div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${esc(title)}</strong><span>${text}</span>${hint ? `<em>${hint}</em>` : ''}</div></div>`;
-    return [
-      card(d.https ? 'ok' : 'bad', 'Verbindung', d.https ? 'Verschlüsselt (HTTPS)' : 'Nicht verschlüsselt', d.https ? '' : 'Seite nur über https:// aufrufen'),
-      card(with2 === users.length ? 'ok' : admNo2 ? 'bad' : 'warn', 'Zwei-Faktor-Anmeldung', `${with2} von ${users.length} aktiven Zugängen`, admNo2 ? `${admNo2} Administrator${admNo2 === 1 ? '' : 'en'} ohne Zwei-Faktor` : S.twofa === 'off' ? 'Pflicht ist ausgeschaltet' : ''),
-      card(S.ipEnabled ? 'ok' : 'warn', 'Zugriff Eingabebereich', S.ipEnabled ? `nur von ${S.adminIps.length} freigegebene${S.adminIps.length === 1 ? 'r Adresse' : 'n Adressen'}` : 'aus dem ganzen Internet erreichbar', S.ipEnabled ? '' : 'Empfehlung: IP-Freigabe einschalten oder Zwei-Faktor-Pflicht'),
-      card(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlgeschlagene Anmeldungen', `${fmtInt.format(d.fails24)} in den letzten 24 Stunden`, d.fails24 >= 20 ? 'Möglicher Angriff – Liste unten prüfen' : ''),
-      card(blocked || locked ? 'warn' : 'ok', 'Gesperrt', `${blocked} IP-Adresse${blocked === 1 ? '' : 'n'} · ${locked} Zugang${locked === 1 ? '' : 'e'}`, ''),
-      wartungCard(d.wartung, card),
-      backupCard(d.backup, card),
-      deployCard(d.deployment, card),
-      storageCard(d, card),
-      diskCard(d.disk, card),
-      mailCard(d.mail, card),
-      ordersCard(d.orders, card),
-      customersCard(d.customers, card),
-      card(S.geoEnabled ? 'ok' : 'warn', 'Ländersperre', S.geoEnabled ? `${S.geoMode === 'allow' ? `nur ${S.geoCountries.length} Länder erlaubt` : `${S.geoCountries.length} ${S.geoCountries.length === 1 ? 'Land' : 'Länder'} gesperrt`} · ${S.geoScope === 'all' ? 'ganze Seite' : 'Eingabebereich'}` : 'aus', S.geoEnabled ? `${fmtInt.format(d.geoBlocked7 || 0)} abgewiesene Zugriffe in 7 Tagen` : 'Optional: Zugriffe aus bestimmten Ländern sperren'),
-      card(S.pwMin >= 12 && S.pwComplex ? 'ok' : 'warn', 'Passwortregeln', `mind. ${S.pwMin} Zeichen${S.pwComplex ? ', gemischte Zeichen' : ''}${S.pwLeak ? ', Datenleck-Prüfung' : ''}`, S.pwMin >= 12 && S.pwComplex ? '' : 'Empfehlung: 12 Zeichen und Komplexität'),
-    ].join('');
-  }
-  /* ---------- IT-Lagebild: Verlauf, auffällige Adressen, Konfigurationsprüfung, Diagnose ---------- */
-  const LVL = { ok: 'in Ordnung', warn: 'Hinweis', bad: 'kritisch', info: 'Info' };
-  const lvlDot = (l) => `<span class="lv lv-${esc(l)}" title="${esc(LVL[l] || l)}"><span class="sr-only">${esc(LVL[l] || l)}</span></span>`;
-  function secTimeline(tl) {
-    if (!tl || !tl.length) return '';
-    const max = Math.max(1, ...tl.map((d) => d.staff + d.kunde + d.reauth));
-    const W = 28, H = 90;
-    const bars = tl.map((d, i) => {
-      const seg = [['staff', d.staff], ['kunde', d.kunde], ['reauth', d.reauth]];
-      let y = H;
-      const r = seg.map(([k, n]) => { const h = Math.round((n / max) * (H - 4)); y -= h; return n ? `<rect class="tl-${k}" x="${i * W + 4}" y="${y}" width="${W - 8}" height="${h}" rx="2"></rect>` : ''; }).join('');
-      const lab = `${d.d.slice(8, 10)}.${d.d.slice(5, 7)}.: ${d.staff} Mitarbeiter, ${d.kunde} Kunden, ${d.reauth} Passwortbestätigung fehlgeschlagen · ${d.ok} erfolgreiche Anmeldungen · ${d.geo} per Ländersperre abgewiesen`;
-      return `<g><title>${esc(lab)}</title><rect class="tl-hit" x="${i * W}" y="0" width="${W}" height="${H}"></rect>${r}<text x="${i * W + W / 2}" y="${H + 14}" text-anchor="middle">${esc(d.d.slice(8, 10))}</text></g>`;
-    }).join('');
-    const sum = (k) => tl.reduce((a, d) => a + d[k], 0);
-    return `<div class="tl-wrap"><svg class="tl" viewBox="0 0 ${tl.length * W} ${H + 18}" role="img" aria-label="Fehlgeschlagene Anmeldungen der letzten 14 Tage">${bars}</svg></div>
-      <p class="tl-legend"><span><i class="tl-staff"></i>Mitarbeiter ${fmtInt.format(sum('staff'))}</span><span><i class="tl-kunde"></i>Kunden ${fmtInt.format(sum('kunde'))}</span><span><i class="tl-reauth"></i>Passwortbestätigung ${fmtInt.format(sum('reauth'))}</span><span>Erfolgreiche Anmeldungen ${fmtInt.format(sum('ok'))}</span><span>Ländersperre ${fmtInt.format(sum('geo'))}</span></p>`;
-  }
-  function secTopIps(list) {
-    if (!list || !list.length) return '<p class="sec-empty">Keine fehlgeschlagenen Anmeldungen in den letzten 7 Tagen.</p>';
-    return `<table class="etab sectab"><thead><tr><th>IP-Adresse</th><th class="num-s">Fehlversuche</th><th>Land</th><th>versuchte Benutzernamen</th><th class="num-s">zuletzt</th></tr></thead><tbody>${list.map((x) => `<tr>
-      <td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="st-err">gesperrt</span>' : ''}</td><td class="num-s">${fmtInt.format(x.n)}${x.kunde ? ` <span class="sub">(${x.kunde} Kunden)</span>` : ''}</td>
-      <td>${x.cc ? `${esc(ccName(x.cc))} <span class="sub">${esc(x.cc)}</span>` : '<span class="muted">unbekannt</span>'}</td><td>${esc(x.users.join(', ') || '—')}</td><td class="num-s">${esc(dateTime(x.last))}</td></tr>`).join('')}</tbody></table>`;
-  }
-  function secConfigRows(list) {
-    return list.map((c) => `<tr class="cf-${esc(c.level)}"><td>${lvlDot(c.level)}</td><td><div class="nm">${esc(c.title)}</div><div class="sub">${esc(c.area)}</div></td><td>${esc(c.text)}</td><td class="sub">${esc(c.hint || '')}</td></tr>`).join('');
-  }
-  /* Prüfungen aus Sicht des Browsers: Sicherheits-Header, gesperrte Ordner, Uhrzeit */
-  async function secBrowserChecks() {
-    const host = $('#sec-bchecks');
-    if (!host) return;
-    const rows = [];
-    const add = (level, title, text, hint) => rows.push({ level, area: 'Browser', title, text, hint });
-    try {
-      const r = await fetch('/', { cache: 'no-store', credentials: 'same-origin' });
-      const h = (n) => r.headers.get(n) || '';
-      const csp = h('content-security-policy');
-      add(csp ? (/script-src[^;]*'self'/.test(csp) && !/unsafe-eval/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp) ? 'ok' : 'warn') : 'bad', 'Schutz gegen eingeschleuste Skripte (CSP)', csp ? 'gesetzt' : 'fehlt', csp ? '' : 'Content-Security-Policy im Webserver (Caddyfile) setzen.');
-      const https = location.protocol === 'https:';
-      add(!https ? 'info' : h('strict-transport-security') ? 'ok' : 'bad', 'HTTPS erzwingen (HSTS)', !https ? 'nur über HTTPS prüfbar' : h('strict-transport-security') || 'fehlt', https && !h('strict-transport-security') ? 'Strict-Transport-Security setzen.' : '');
-      add(/nosniff/i.test(h('x-content-type-options')) ? 'ok' : 'warn', 'MIME-Typ-Schutz', h('x-content-type-options') || 'fehlt', /nosniff/i.test(h('x-content-type-options')) ? '' : 'X-Content-Type-Options: nosniff setzen.');
-      const frame = h('x-frame-options') || (/frame-ancestors/.test(csp) ? 'frame-ancestors (CSP)' : '');
-      add(frame ? 'ok' : 'warn', 'Schutz gegen Einbetten (Clickjacking)', frame || 'fehlt', frame ? '' : 'frame-ancestors bzw. X-Frame-Options setzen.');
-      add(h('referrer-policy') ? 'ok' : 'warn', 'Referrer-Policy', h('referrer-policy') || 'fehlt');
-      const sd = Date.parse(h('date'));
-      if (!Number.isNaN(sd)) { const drift = Math.round((Date.now() - sd) / 1000); add(Math.abs(drift) > 120 ? 'warn' : 'ok', 'Uhrzeit Server/Browser', Math.abs(drift) <= 2 ? 'stimmt überein' : `Abweichung ${drift} s`, Math.abs(drift) > 120 ? 'Uhrzeit von Server oder Gerät prüfen (Zwei-Faktor-Codes hängen davon ab).' : ''); }
-    } catch (e) { add('warn', 'Sicherheits-Header', 'nicht prüfbar: ' + e.message); }
-    try {
-      const r = await fetch('/api/?action=status', { cache: 'no-store', credentials: 'same-origin' });
-      const pb = r.headers.get('x-powered-by') || '';
-      add(pb ? 'warn' : 'ok', 'Server-Software verborgen', pb ? `sichtbar: ${pb}` : 'keine Versionsangabe (X-Powered-By)', pb ? 'Header X-Powered-By entfernen.' : '');
-    } catch (e) { /* nicht prüfbar */ }
-    for (const [path, title] of [['/data/nutzer.php', 'Datenordner'], ['/api/lib/kern.php', 'Programmdateien']]) {
-      try {
-        const r = await fetch(path, { cache: 'no-store', credentials: 'omit' });
-        const t = r.status === 200 ? await r.text() : '';
-        const leak = r.status === 200 && /"(hash|username|password)"/.test(t);
-        add(leak ? 'bad' : 'ok', `${title} von außen gesperrt`, leak ? `lesbar (${path})` : `gesperrt (Status ${r.status})`, leak ? 'Sofort Webserver-Regeln prüfen!' : '');
-      } catch (e) { add('info', `${title} von außen gesperrt`, 'nicht prüfbar'); }
-    }
-    host.innerHTML = secConfigRows(rows);
-    secScore();
-  }
-  function secScore() {
-    const el = $('#sec-score');
-    if (!el) return;
-    const lv = $$('#view-sec .sec-card, #view-sec tr[class^="cf-"]').map((x) => (x.classList.contains('bad') || x.classList.contains('cf-bad') ? 'bad' : x.classList.contains('warn') || x.classList.contains('cf-warn') ? 'warn' : x.classList.contains('ok') || x.classList.contains('cf-ok') ? 'ok' : 'info'));
-    const n = (k) => lv.filter((x) => x === k).length;
-    const worst = n('bad') ? 'bad' : n('warn') ? 'warn' : 'ok';
-    el.className = 'sec-score ' + worst;
-    el.innerHTML = `${lvlDot(worst)}<div><strong>${worst === 'bad' ? 'Handlungsbedarf' : worst === 'warn' ? 'Insgesamt in Ordnung, mit Hinweisen' : 'Alles in Ordnung'}</strong><span>${n('ok')} in Ordnung · ${n('warn')} ${n('warn') === 1 ? 'Hinweis' : 'Hinweise'} · ${n('bad')} kritisch</span></div>`;
+    return [notfallCard(d.notfall, card), wartungCard(d.wartung, card), backupCard(d.backup, card), deployCard(d.deployment, card), storageCard(d, card), diskCard(d.disk, card),
+      mailCard(d.mail, card), ordersCard(d.orders, card), customersCard(d.customers, card)].join('');
   }
   const DIAG = [['storage', 'Datenablage prüfen', 'Lesbarkeit und Unversehrtheit aller Datensätze'], ['mail', 'E-Mail-Verbindung prüfen', 'Verbindung und Anmeldung am Mailserver, ohne E-Mail'], ['files', 'Dateien und Speicher', 'Schreibrechte, Schreibschutz, freier Speicher'], ['php', 'PHP-Umgebung', 'Version, Erweiterungen, Grenzwerte, Serverzeit']];
-  /* Passwortbestätigung je Aktion: Häkchen = Passwort wird verlangt; feste Aktionen (Zugänge, Rechte, Sicherheit) nicht abschaltbar */
-  function bstHTML(d) {
-    const kat = d.bestaetigung || [];
-    if (!kat.length) return '';
-    const S = d.settings, gruppen = [];
-    for (const b of kat) { let g = gruppen.find((x) => x.name === b.group); if (!g) gruppen.push((g = { name: b.group, l: [] })); g.l.push(b); }
-    const aus = kat.filter((b) => !b.fest && !b.noetig).length;
-    return `<form class="gcard sec-form sec-sect bst-form" id="bst-form" autocomplete="off">
-        <h3 class="sec-h" id="sec-bst">Passwortbestätigung</h3>
-        <p class="hint" style="margin-top:0">Bei angehakten Aktionen fragt der Eingabebereich nach Ihrem Passwort (einmal je Sitzung für die eingestellte Dauer). Ohne Haken genügen Anmeldung und Berechtigung. Aktionen an Zugängen, Rechten und Sicherheit verlangen immer eine Bestätigung.${aus ? ` <strong>${aus} ${aus === 1 ? 'Aktion' : 'Aktionen'} ohne Bestätigung.</strong>` : ''}</p>
-        <label class="fld bst-dauer"><span>Bestätigung gilt</span><select name="bestaetigungMinuten">${(d.bestaetigungMinuten || [5]).map((m) => `<option value="${m}"${(S.bestaetigungMinuten || 5) === m ? ' selected' : ''}>${m} Minuten</option>`).join('')}</select></label>
-        <div class="bst-grid">${gruppen.map((g) => `<fieldset class="bst-g${g.l.every((b) => b.fest) ? ' fest' : ''}"><legend>${esc(g.name)}</legend>
-          ${g.l.map((b) => b.fest
-            ? `<label class="check bst-z fest" title="Immer mit Passwortbestätigung"><input type="checkbox" checked disabled>${icon('lock', 'sm')}<span>${esc(b.label)}</span></label>`
-            : `<label class="check bst-z"><input type="checkbox" name="bst" value="${esc(b.key)}"${b.noetig ? ' checked' : ''}><span>${esc(b.label)}</span></label>`).join('')}</fieldset>`).join('')}</div>
-        <p class="form-err" id="bst-err" role="alert"></p>
-        <div class="sec-foot"><button type="submit" class="btn primary">${icon('check')}Passwortbestätigung speichern</button></div>
-      </form>`;
-  }
   async function renderSecView() {
     const host = $('#view-sec');
-    if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Sicherheitsübersicht wird geladen …</div>';
-    try { secData = await api('security_status'); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
-    const d = secData, S = d.settings;
-    geoSel = new Set(S.geoCountries || []); geoQ = '';
-    const G = d.geo;
-    const geoStatRows = (d.geoStats || []).map((x) => `<tr><td>${esc(ccName(x.cc))} <span class="sub">${esc(x.cc)}</span></td><td class="num-s">${fmtInt.format(x.n)}</td><td class="num-s">${esc(dateTime(x.last))}</td></tr>`).join('');
-    const no2 = d.users.filter((u) => u.active && !u.twofa && !u.passkeys);
-    const sessRows = d.sessions.map((x) => `<tr><td><div class="nm">${esc(x.name)}</div><div class="sub uname">${esc(x.username)}</div></td><td class="mono-s">${esc(x.ip)}</td><td>${esc(uaShort(x.ua))}</td>
-        <td class="num-s">${esc(dateTime(x.created))}</td><td class="num-s">${esc(dateTime(x.seen))}</td>
-        <td class="act">${x.current ? '<span class="muted">diese Sitzung</span>' : `<button type="button" class="btn sm" data-sec="end" data-sid="${esc(x.sid)}">Beenden</button>`}</td></tr>`).join('');
-    const ipRows = d.blockedIps.map((x) => `<tr><td class="mono-s">${esc(x.ip)}</td><td class="num-s">${x.n ? fmtInt.format(x.n) + ' Fehlversuch' + (x.n === 1 ? '' : 'e') : ''}</td><td>${x.until ? `<span class="st-err">gesperrt bis ${esc(timeOnly(x.until))} Uhr</span>` : '<span class="muted">beobachtet</span>'}</td><td class="act"><button type="button" class="btn sm" data-sec="unblock" data-key="${esc(x.key)}">Aufheben</button></td></tr>`).join('');
-    const lockRows = d.users.filter((u) => u.lockedUntil).map((u) => `<tr><td><div class="nm">${esc(u.name)}</div><div class="sub uname">${esc(u.username)}</div></td><td colspan="2"><span class="st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</span></td><td class="act"><button type="button" class="btn sm" data-sec="unlock" data-uid="${esc(u.id)}">Entsperren</button></td></tr>`).join('');
-    const failRows = d.fails.map((f) => `<tr><td class="num-s">${esc(dateTime(f.t))}</td><td>${esc(f.u || '—')}</td><td class="mono-s">${esc(f.ip)}</td><td>${esc(f.s)}</td></tr>`).join('');
+    if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>System wird geladen …</div>';
+    try {
+      const [d, u] = await Promise.all([api('betrieb_status'), api('users')]);
+      secData = { ...d, users: u.users || [] };
+    } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    const d = secData, w = d.wartung;
     host.innerHTML = `
-      <nav class="sec-nav" aria-label="Abschnitte"><a href="#sec-lage">Lagebild</a><a href="#sec-konfig">Konfiguration</a><a href="#sec-diag">Diagnose</a><a href="#sec-datei">Dateiprüfung</a><a href="#sec-einst">Einstellungen</a><a href="#sec-bst">Passwortbestätigung</a><a href="#sec-module">Module</a><a href="#sec-zugang">Zugänge und Sperren</a></nav>
-      <section id="sec-lage" class="sec-sect">
-        <div class="sec-score" id="sec-score"></div>
-        <div class="sec-grid">${secCards(d)}</div>
-        <div class="sec-two">
-          <section class="gcard sec-block"><h3 class="sec-h">Fehlgeschlagene Anmeldungen <span class="muted">(14 Tage)</span></h3>${secTimeline(d.timeline)}</section>
-          <section class="gcard sec-block"><h3 class="sec-h">Auffällige Adressen <span class="muted">(7 Tage)</span></h3>${secTopIps(d.topIps)}</section>
-        </div>
+      <section class="gcard sec-block sic-umzug" id="sic-umzug">
+        <div><h3 class="sec-h">${icon('shield')}Sicherheit hat ein eigenes Modul</h3>
+        <p class="hint" style="margin:0">Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen und privilegierte Konten finden Sie jetzt in der Sicherheitszentrale (Kachel „Sicherheit“ im Dashboard).</p></div>
+        <a class="btn primary" href="${esc(SICHERHEIT)}" id="sic-link">${icon('shield')}Sicherheit öffnen</a>
       </section>
-      <section id="sec-konfig" class="gcard sec-block sec-sect"><h3 class="sec-h">Konfigurationsprüfung</h3>
-        <table class="etab sectab cftab"><thead><tr><th class="lv-h"><span class="sr-only">Status</span></th><th>Prüfung</th><th>Befund</th><th>Empfehlung</th></tr></thead>
-          <tbody>${secConfigRows(d.config || [])}</tbody><tbody id="sec-bchecks"><tr><td></td><td colspan="3" class="sub">Browser-Prüfungen laufen …</td></tr></tbody></table>
-        <p class="hint">Der Server selbst (Betriebssystem, SSH, Firewall, Updates) ist aus der Anwendung nicht einsehbar und wird separat geprüft.</p>
-      </section>
+      <div class="sec-grid">${sysCards(d)}</div>
       <section id="sec-diag" class="gcard sec-block sec-sect"><h3 class="sec-h">Diagnose</h3>
         <p class="hint" style="margin-top:0">Alle Prüfungen lesen nur – es werden keine Daten verändert und keine Befehle auf dem Server ausgeführt.</p>
         <div class="dg-btns">${DIAG.map(([k, l, t]) => `<button type="button" class="btn" data-diag="${k}" title="${esc(t)}">${esc(l)}</button>`).join('')}</div>
         <div id="dg-out" class="dg-out" aria-live="polite"></div>
-        <div class="dg-export"><label class="fld"><span>Sicherheitsprotokoll exportieren (CSV)</span><select id="dg-days"><option value="7">7 Tage</option><option value="30">30 Tage</option><option value="90" selected>90 Tage</option><option value="365">365 Tage</option></select></label><button type="button" class="btn" data-diag="export">${icon('download', 'sm')}Exportieren</button></div>
         <p class="form-err" id="dg-err" role="alert"></p>
       </section>
-      <section id="sec-datei" class="gcard sec-block sec-sect"><h3 class="sec-h">Dateiprüfung</h3>
-        <div id="ip-out" aria-live="polite"><p class="sub">Wird geladen …</p></div></section>
-      <form class="gcard sec-form wartung-form${d.wartung ? ' on' : ''}" id="wartung-form" autocomplete="off">
+      <form class="gcard sec-form wartung-form${w ? ' on' : ''}" id="wartung-form" autocomplete="off">
         <h3 class="sec-h">Wartungsmodus</h3>
         <p class="hint" style="margin-top:0">Pausiert die Angebotsseite für Kunden (Angebot, Anmeldung, Merkliste, Bestellwünsche). Sie und alle Mitarbeiter arbeiten im Eingabebereich und auf der Angebotsseite normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>
+        ${w && w.notfall ? '<p class="st-err">Die Angebotsseite ist gerade durch den Notfallmodus gesperrt – beenden im Modul Sicherheit. Ein hier eingeschalteter Wartungsmodus bleibt danach bestehen.</p>' : ''}
         <div class="sec-rows">
-          <label class="fld span2"><span>Hinweis für Kunden</span><textarea name="message" rows="2" maxlength="500" placeholder="Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.">${esc(d.wartung ? d.wartung.message : '')}</textarea></label>
-          <label class="fld"><span>Voraussichtlich bis <small>(optional)</small></span><input type="datetime-local" name="until" value="${esc(d.wartung && d.wartung.until ? d.wartung.until : '')}"></label>
+          <label class="fld span2"><span>Hinweis für Kunden</span><textarea name="message" rows="2" maxlength="500" placeholder="Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.">${esc(w && !w.notfall ? w.message : '')}</textarea></label>
+          <label class="fld"><span>Voraussichtlich bis <small>(optional)</small></span><input type="datetime-local" name="until" value="${esc(w && w.until ? w.until : '')}"></label>
         </div>
-        <div class="sec-foot wartung-foot">${d.wartung ? `<span class="st-warn">Aktiv seit ${esc(dateTime(d.wartung.since))} Uhr</span><button type="button" class="btn" data-wartung="save">Hinweis speichern</button><button type="button" class="btn primary" data-wartung="off">Wartungsmodus beenden</button>`
+        <div class="sec-foot wartung-foot">${w && !w.notfall ? `<span class="st-warn">Aktiv seit ${esc(dateTime(w.since))} Uhr</span><button type="button" class="btn" data-wartung="save">Hinweis speichern</button><button type="button" class="btn primary" data-wartung="off">Wartungsmodus beenden</button>`
           : '<button type="button" class="btn primary" data-wartung="on">Wartungsmodus einschalten</button>'}</div>
         <p class="form-err" id="wartung-err" role="alert"></p>
       </form>
       ${eingabeWartungForm(d)}
-      <section class="gcard sec-block mv-box" id="mv-box"><div class="loading"><div class="spinner"></div>Module werden geladen …</div></section>
-      <p class="hint">Sensible Verwaltungsaktionen benötigen eine höchstens ${S.bestaetigungMinuten || 5} Minuten alte Anmeldung oder Passwortbestätigung (einstellbar unter „Passwortbestätigung“). Die Bestätigung gilt nur für diese Sitzung. Nach fünf falschen Passwortbestätigungen sind weitere Bestätigungen und sensible Verwaltungsaktionen für zehn Minuten gesperrt.</p>
-      <form class="gcard sec-form sec-sect" id="sec-form" autocomplete="off">
-        <h3 class="sec-h" id="sec-einst">Einstellungen</h3>
-        <div class="sec-rows">
-          <label class="fld"><span>Zwei-Faktor-Anmeldung verpflichtend</span><select name="twofa">
-            <option value="off"${S.twofa === 'off' ? ' selected' : ''}>freiwillig</option>
-            <option value="admins"${S.twofa === 'admins' ? ' selected' : ''}>für Administratoren</option>
-            <option value="all"${S.twofa === 'all' ? ' selected' : ''}>für alle Zugänge</option></select>
-            <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert. Einzelne Zugänge zusätzlich unter Mitarbeiter → Bearbeiten.</small></label>
-          <label class="fld"><span>Automatisch abmelden nach Inaktivität</span><select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${S.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-          <div class="fld"><span>Passwörter</span><div class="sec-inline"><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${S.pwMin}"> Zeichen</label>
-            <label class="check"><input type="checkbox" name="pwComplex"${S.pwComplex ? ' checked' : ''}> Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</label>
-            <label class="check"><input type="checkbox" name="pwLeak"${S.pwLeak ? ' checked' : ''}> Gegen bekannte Datenlecks prüfen</label></div>
-            <small>Gilt für neue Passwörter. Allerweltspasswörter und der eigene Benutzername sind immer gesperrt. Die Datenleck-Prüfung („Pwned Passwords“) lehnt Passwörter ab, die in veröffentlichten Datenlecks vorkommen; bestehende Passwörter werden bei der nächsten Anmeldung einmal geprüft und müssen dann geändert werden. Übertragen werden nur die ersten 5 Zeichen eines Prüfwerts, nie das Passwort; ist der Dienst nicht erreichbar, wird nichts blockiert.</small></div>
-          <div class="fld"><span>Kontosperre</span><div class="sec-inline"><label>nach <input type="number" name="lockAfter" min="3" max="20" value="${S.lockAfter}"> Fehlversuchen</label><label>für <input type="number" name="lockMinutes" min="5" max="1440" value="${S.lockMinutes}"> Minuten</label></div>
-            <small>Zusätzlich wird jede IP-Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div>
-          <div class="fld span2"><span>Eingabebereich nur von bestimmten Internetadressen</span>
-            <label class="check"><input type="checkbox" name="ipEnabled"${S.ipEnabled ? ' checked' : ''}> IP-Freigabe einschalten – die öffentliche Angebotsseite bleibt für alle erreichbar</label>
-            <textarea name="adminIps" rows="3" placeholder="eine Adresse oder ein Bereich pro Zeile, z. B. 80.147.24.150 oder 80.147.24.0/24">${esc(S.adminIps.join('\n'))}</textarea>
-            <div class="sec-inline"><small>Ihre aktuelle Adresse: <strong class="mono-s">${esc(d.myIp)}</strong>${d.myCountry ? ` · ${esc(ccName(d.myCountry))}` : ''}</small><button type="button" class="btn sm" data-sec="addip">${icon('plus', 'sm')}Hinzufügen</button></div></div>
-          <div class="fld span2 geo-box" id="geo-box"><span>Länder sperren</span>
-            <label class="check"><input type="checkbox" name="geoEnabled"${S.geoEnabled ? ' checked' : ''}> Ländersperre einschalten</label>
-            <div class="geo-opts">
-              <div class="geo-radio" role="radiogroup" aria-label="Art der Sperre">
-                <label class="check"><input type="radio" name="geoMode" value="block"${S.geoMode !== 'allow' ? ' checked' : ''}> ausgewählte Länder sperren</label>
-                <label class="check"><input type="radio" name="geoMode" value="allow"${S.geoMode === 'allow' ? ' checked' : ''}> nur ausgewählte Länder erlauben</label>
-              </div>
-              <label class="geo-scope">gilt für <select name="geoScope">
-                <option value="admin"${S.geoScope !== 'all' ? ' selected' : ''}>nur den Eingabebereich</option>
-                <option value="all"${S.geoScope === 'all' ? ' selected' : ''}>die ganze Seite (auch öffentliches Angebot)</option></select></label>
-            </div>
-            <div class="geo-me" id="geo-me"></div>
-            <div class="geo-pick">
-              <div class="geo-selbox"><div class="geo-hd"><strong id="geo-sel-label">Gesperrte Länder</strong><span class="sub" id="geo-count"></span>
-                <span class="geo-quick"><button type="button" class="btn sm ghost" data-sec="geo-eu" title="EU-Länder sowie Schweiz, Großbritannien, Norwegen, Island und Liechtenstein">Europa auswählen</button><button type="button" class="btn sm ghost" data-sec="geo-none">Auswahl leeren</button></span></div>
-                <div class="geo-chips" id="geo-chips"></div></div>
-              <div class="geo-search"><input type="search" id="geo-q" placeholder="Land oder IP-Adresse, z. B. China, CN oder 1.0.1.1" aria-label="Land oder IP-Adresse suchen"><div class="geo-list" id="geo-list">${geoList()}</div></div>
-            </div>
-            <small>Adressen aus der IP-Freigabeliste oben sind immer erlaubt. Adressen ohne bekannte Länderzuordnung werden nicht gesperrt. Die Zuordnung stimmt in den allermeisten Fällen, kann aber über VPN-Dienste umgangen werden – sie ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</small>
-            <div class="sec-inline geo-db"><small>${G ? `Länderdaten: Stand ${esc(new Date(G.date + 'T12:00:00Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }))} · ${fmtInt.format(G.v4 + G.v6)} Adressbereiche` : '<span class="st-err">Länderdaten fehlen</span>'}</small><button type="button" class="btn sm" data-sec="geo-update">${icon('download', 'sm')}Länderdaten aktualisieren</button></div>
-          </div>
-        </div>
-        <p class="form-err" id="sec-err" role="alert"></p>
-        <div class="sec-foot"><button type="submit" class="btn primary">${icon('check')}Einstellungen speichern</button></div>
-      </form>
-      ${bstHTML(d)}
-      ${geoStatRows ? `<section class="gcard sec-block"><h3 class="sec-h">Abgewiesene Zugriffe nach Land <span class="muted">(7 Tage: ${fmtInt.format(d.geoBlocked7 || 0)})</span><button type="button" class="btn sm ghost sec-h-act" data-sec="geo-clear">Zurücksetzen</button></h3>
-        <table class="etab sectab"><thead><tr><th>Land</th><th class="num-s">Zugriffe gesamt</th><th class="num-s">zuletzt</th></tr></thead><tbody>${geoStatRows}</tbody></table></section>` : ''}
-      <section class="gcard sec-block sec-sect" id="sec-zugang"><h3 class="sec-h">Aktive Sitzungen <span class="muted">(${d.sessions.length})</span></h3>
-        <table class="etab sectab"><thead><tr><th>Mitarbeiter</th><th>IP-Adresse</th><th>Gerät</th><th>angemeldet</th><th>zuletzt aktiv</th><th class="act"></th></tr></thead><tbody>${sessRows}</tbody></table></section>
-      <section class="gcard sec-block"><h3 class="sec-h">Sperren</h3>
-        ${ipRows || lockRows ? `<table class="etab sectab"><thead><tr><th>IP-Adresse / Zugang</th><th></th><th>Status</th><th class="act"></th></tr></thead><tbody>${lockRows}${ipRows}</tbody></table>` : '<p class="sec-empty">Keine gesperrten IP-Adressen oder Zugänge.</p>'}</section>
-      <section class="gcard sec-block"><h3 class="sec-h">Zugänge ohne Zwei-Faktor-Anmeldung <span class="muted">(${no2.length})</span></h3>
-        ${no2.length ? `<p class="sec-list">${no2.map((u) => `<span class="role-b r-${esc(u.role)}">${esc(u.name)} · ${esc(u.username)}</span>`).join(' ')}</p>` : '<p class="sec-empty">Alle aktiven Zugänge nutzen die Zwei-Faktor-Anmeldung.</p>'}</section>
-      <section class="gcard sec-block"><h3 class="sec-h">Fehlgeschlagene Anmeldungen <span class="muted">(7 Tage)</span></h3>
-        ${failRows ? `<table class="etab sectab"><thead><tr><th>Zeitpunkt</th><th>Benutzername</th><th>IP-Adresse</th><th>Vorgang</th></tr></thead><tbody>${failRows}</tbody></table>` : '<p class="sec-empty">Keine fehlgeschlagenen Anmeldungen.</p>'}</section>
-      <p class="hint sec-note">Weitere Schutzmaßnahmen sind fest eingebaut: HTTPS mit HSTS, Schutz gegen eingeschleuste Skripte (Content-Security-Policy), Schutz gegen fremde Formulare (CSRF), sichere Sitzungs-Cookies, gesperrte Datenordner und ein lückenloses Protokoll.</p>`;
-    geoRefresh();
-    secScore();
-    secBrowserChecks();
-    secIntegrity();
+      <section class="gcard sec-block mv-box" id="mv-box"><div class="loading"><div class="spinner"></div>Module werden geladen …</div></section>`;
     mvLaden();
-  }
-  /* ---------- Dateiprüfung: Programmdateien gegen die Prüfliste, Datenordner, auffällige Muster, Komponenten ---------- */
-  const IP_LVL = { kritisch: 'bad', warnung: 'warn', hinweis: 'info', ok: 'ok' };
-  const IP_ART = { geaendert: 'verändert', fehlt: 'fehlt', unbekannt: 'unbekannt', verdaechtig: 'verdächtig', daten: 'Datenordner' };
-  function ipHTML(d) {
-    const r = d.result;
-    const btn = `<div class="dg-btns"><button type="button" class="btn" data-ip="run">${icon('check', 'sm')}Jetzt prüfen</button></div>`;
-    if (!r) return `<p class="sec-empty">Noch keine Dateiprüfung durchgeführt.</p>${btn}<p class="form-err" id="ip-err" role="alert"></p>`;
-    const c = r.counts, lvl = c.critical ? 'bad' : c.warnings ? 'warn' : 'ok';
-    const row = (l, main, sub) => `<tr><td>${lvlDot(l)}</td><td>${main}${sub ? `<div class="sub">${sub}</div>` : ''}</td></tr>`;
-    const items = r.items.slice(0, 100).map((x) => row(IP_LVL[x.stufe] || 'info', `<span class="mono-s" style="word-break:break-all">${esc(x.path)}</span>`,
-      `${esc(IP_ART[x.art] || x.art)} · ${esc(x.text)}${x.signatur ? ` · <strong>Muster: ${esc(x.signatur)}</strong>` : ''}`)).join('');
-    const more = r.items.length - 100 + (r.truncated || 0);
-    const comp = (r.components || []).map((x) => row(IP_LVL[x.stufe] || 'info', `<span class="nm">${esc(x.name)}</span> <span class="mono-s" style="word-break:break-all">${esc(x.version)}</span>`, esc(x.text))).join('');
-    return `<div class="sec-grid"><div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${lvl === 'ok' ? 'Keine Auffälligkeiten' : `${c.critical} kritisch · ${c.warnings} ${c.warnings === 1 ? 'Warnung' : 'Warnungen'}`}</strong>
-        <span>${fmtInt.format(c.checked)} Dateien und Datensätze geprüft · ${c.modified} verändert · ${c.missing} fehlen · ${c.unknown} unbekannt · ${c.suspicious} verdächtig</span>
-        <em>zuletzt ${esc(dateTime(r.ranAt))} Uhr${r.auto ? ' (automatisch)' : r.by ? ` (${esc(r.by)})` : ''} · ${fmtInt.format(r.ms)} ms</em></div></div></div>
-      ${r.partial ? `<p class="st-warn">Unvollständig: ${esc(r.partialText)}.</p>` : ''}
-      ${items ? `<table class="etab sectab cftab ip-tab"><thead><tr><th class="lv-h"><span class="sr-only">Stufe</span></th><th>Befund</th></tr></thead><tbody>${items}</tbody></table>${more > 0 ? `<p class="sub">… und ${fmtInt.format(more)} weitere.</p>` : ''}` : ''}
-      ${btn}<p class="form-err" id="ip-err" role="alert"></p>
-      <h4 class="sec-h" style="margin-top:18px">Komponenten</h4>
-      <table class="etab sectab cftab ip-comp"><tbody>${comp}</tbody></table>
-      <p class="hint">Vergleicht alle Programmdateien mit der freigegebenen Fassung, prüft den Datenordner und sucht nach typischen Mustern von Schadcode. Läuft automatisch einmal am Tag beim Öffnen dieser Ansicht; neue Befunde gehen als Sicherheitsereignis per E-Mail raus.</p>`;
-  }
-  async function secIntegrity(run) {
-    const host = $('#ip-out');
-    if (!host) return;
-    const b = host.querySelector('[data-ip="run"]');
-    if (b) { b.disabled = true; b.innerHTML = '<span class="spinner sm"></span>Wird geprüft …'; }
-    try {
-      const d = await api('security_integrity', run ? { body: { run: true } } : {});
-      if (!$('#ip-out')) return;
-      $('#ip-out').innerHTML = ipHTML(d);
-      if (run) toast(d.result && d.result.ok ? 'Dateiprüfung: keine Auffälligkeiten.' : 'Dateiprüfung abgeschlossen – bitte Befunde ansehen.');
-    } catch (ex) {
-      if (b) { b.disabled = false; b.innerHTML = `${icon('check', 'sm')}Jetzt prüfen`; const e = $('#ip-err'); if (e) e.textContent = ex.message; }
-      else host.innerHTML = `<p class="form-err" role="alert">${esc(ex.message)}</p>`;
-    }
-    secScore();
   }
   async function runDiag(k, btn) {
     const out = $('#dg-out'), err = $('#dg-err');
     err.textContent = ''; btn.disabled = true;
     try {
-      if (k === 'export') {
-        const r = await api('security_export', { body: { days: +$('#dg-days').value } });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([r.csv], { type: 'text/csv;charset=utf-8' })); a.download = r.filename;
-        document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-        toast(`${fmtInt.format(r.count)} Einträge exportiert.`);
-        return;
-      }
       const r = (await api('security_diag', { body: { check: k } })).result;
       const label = (DIAG.find((x) => x[0] === k) || [k, k])[1];
       out.insertAdjacentHTML('afterbegin', `<div class="dg-res ${r.ok ? 'ok' : 'bad'}" data-res="${esc(k)}"><div class="dg-hd">${lvlDot(r.ok ? 'ok' : 'bad')}<strong>${esc(label)}</strong><span class="sub">${esc(timeOnly(new Date().toISOString()))} Uhr · ${r.ms} ms</span></div>
@@ -1828,22 +1553,9 @@
       $$('#dg-out .dg-res').slice(6).forEach((x) => x.remove());
     } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
   }
-  $('#view-sec').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-diag]');
-    if (b) runDiag(b.dataset.diag, b);
-    if (e.target.closest('[data-ip="run"]')) secIntegrity(true);
-    const a = e.target.closest('.sec-nav a');
-    if (a) { e.preventDefault(); const t = document.getElementById(a.getAttribute('href').slice(1)); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-  });
-  $('#view-sec').addEventListener('input', (e) => {
-    if (e.target.id === 'geo-q') { geoQ = e.target.value.trim(); geoLookup(); $('#geo-list').innerHTML = geoList(); }
-  });
-  $('#view-sec').addEventListener('change', (e) => {
-    const cc = e.target.dataset && e.target.dataset.geoCc;
-    if (cc) { if (e.target.checked) geoSel.add(cc); else geoSel.delete(cc); $('#sec-err').textContent = ''; geoRefresh(); return; }
-    if (['geoEnabled', 'geoMode'].includes(e.target.name)) geoRefresh();
-  });
   $('#view-sec').addEventListener('click', async (e) => {
+    const db = e.target.closest('[data-diag]');
+    if (db) { runDiag(db.dataset.diag, db); return; }
     const wb = e.target.closest('#wartung-form [data-wartung]');
     if (wb) {
       const f = $('#wartung-form'), a = wb.dataset.wartung, err = $('#wartung-err');
@@ -1872,82 +1584,7 @@
         toast(a === 'off' ? 'Wartung beendet – der Eingabebereich ist wieder für alle freigegeben.' : r.wartung && r.wartung.geplant ? 'Wartung geplant.' : a === 'on' ? 'Wartung gestartet.' : 'Gespeichert.', 4500);
         renderSecView();
       } catch (ex) { err.textContent = ex.message; eb.disabled = false; }
-      return;
     }
-    const del = e.target.closest('[data-geo-del]');
-    if (del) { geoSel.delete(del.dataset.geoDel); geoRefresh(); $('#geo-list').innerHTML = geoList(); return; }
-    const b = e.target.closest('[data-sec]');
-    if (!b) return;
-    const a = b.dataset.sec;
-    if (a === 'geo-eu' || a === 'geo-none') {
-      if (a === 'geo-none') geoSel.clear(); else EUROPE.forEach((c) => geoSel.add(c));
-      geoRefresh(); $('#geo-list').innerHTML = geoList(); return;
-    }
-    if (a === 'geo-update') {
-      b.disabled = true; const t = b.innerHTML; b.innerHTML = '<span class="spinner sm"></span>Wird geladen …';
-      try { const r = await api('geo_update', { body: {} }); toast(`Länderdaten aktualisiert (Stand ${new Date(r.geo.date + 'T12:00:00Z').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}).`); secData.geo = r.geo; renderSecView(); }
-      catch (ex) { toast(ex.message); b.disabled = false; b.innerHTML = t; }
-      return;
-    }
-    if (a === 'geo-clear') {
-      try { await api('geo_clear_stats', { body: {} }); toast('Zähler zurückgesetzt.'); renderSecView(); } catch (ex) { toast(ex.message); }
-      return;
-    }
-    if (a === 'addip') {
-      const ta = $('#sec-form [name="adminIps"]');
-      const list = ta.value.split(/\s+/).filter(Boolean);
-      if (list.includes(secData.myIp)) { toast('Ihre Adresse steht bereits in der Liste.'); return; }
-      ta.value = [...list, secData.myIp].join('\n');
-      toast('Adresse eingetragen – zum Übernehmen bitte speichern.');
-      return;
-    }
-    try {
-      if (a === 'end') await api('session_end', { body: { sid: b.dataset.sid } });
-      if (a === 'unblock') await api('ip_unblock', { body: { key: b.dataset.key } });
-      if (a === 'unlock') await api('user_unlock', { body: { id: b.dataset.uid } });
-      toast(a === 'end' ? 'Sitzung beendet.' : a === 'unblock' ? 'IP-Sperre aufgehoben.' : 'Zugang entsperrt.');
-      renderSecView();
-    } catch (ex) { toast(ex.message); }
-  });
-  $('#view-sec').addEventListener('submit', async (e) => {
-    if (e.target.id === 'bst-form') {
-      e.preventDefault();
-      const f = e.target, S0 = secData.settings;
-      const aus = [...f.querySelectorAll('input[name="bst"]')].filter((c) => !c.checked).map((c) => c.value);
-      const neuAus = aus.filter((k) => !(S0.bestaetigungAus || []).includes(k));
-      $('#bst-err').textContent = '';
-      if (neuAus.length && !(await confirmBox('Passwortbestätigung abschalten?', `Für ${neuAus.length === 1 ? 'diese Aktion' : `diese ${neuAus.length} Aktionen`} genügen danach Anmeldung und Berechtigung: ${(secData.bestaetigung || []).filter((b) => neuAus.includes(b.key)).map((b) => esc(b.label)).join(', ')}. Wer eine offene Sitzung nutzt, kann sie dann ohne Passwort ausführen.`, 'Abschalten'))) return;
-      try {
-        await api('security_save', { body: { ...S0, bestaetigungAus: aus, bestaetigungMinuten: +f.bestaetigungMinuten.value } });
-        toast('Passwortbestätigung gespeichert.');
-        renderSecView();
-      } catch (ex) { $('#bst-err').textContent = ex.message; }
-      return;
-    }
-    if (e.target.id !== 'sec-form') return;
-    e.preventDefault();
-    const f = e.target.elements;
-    const body = {
-      twofa: f.twofa.value, idleMinutes: +f.idleMinutes.value, pwMin: +f.pwMin.value, pwComplex: f.pwComplex.checked, pwLeak: f.pwLeak.checked,
-      lockAfter: +f.lockAfter.value, lockMinutes: +f.lockMinutes.value, ipEnabled: f.ipEnabled.checked,
-      adminIps: f.adminIps.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean),
-      geoEnabled: f.geoEnabled.checked, geoMode: f.geoMode.value, geoScope: f.geoScope.value, geoCountries: [...geoSel],
-    };
-    $('#sec-err').textContent = '';
-    const S0 = secData.settings;
-    if (body.geoEnabled && !body.geoCountries.length) { $('#sec-err').textContent = body.geoMode === 'allow' ? 'Bitte mindestens ein erlaubtes Land auswählen.' : 'Bitte mindestens ein Land zum Sperren auswählen.'; return; }
-    if (body.geoEnabled && (!S0.geoEnabled || S0.geoMode !== body.geoMode || S0.geoScope !== body.geoScope || S0.geoCountries.join() !== [...body.geoCountries].sort().join())) {
-      const names = body.geoCountries.sort(ccSort).map(ccName);
-      const what = body.geoMode === 'allow' ? `Zugriffe sind danach nur noch aus ${names.length > 8 ? names.length + ' ausgewählten Ländern' : names.join(', ')} möglich.` : `Zugriffe aus ${names.length > 8 ? names.length + ' Ländern' : names.join(', ')} werden danach abgewiesen.`;
-      const where = body.geoScope === 'all' ? 'Das gilt für die ganze Seite – auch Kunden in diesen Ländern sehen das Angebot dann nicht.' : 'Das gilt nur für den Eingabebereich; das öffentliche Angebot bleibt für alle sichtbar.';
-      if (!(await confirmBox('Ländersperre speichern?', `${esc(what)} ${esc(where)} Im Notfall lässt sich die Sperre auf dem Server zurücksetzen (siehe LIESMICH).`, 'Speichern'))) return;
-    }
-    if (body.ipEnabled && !(await confirmBox('IP-Freigabe einschalten?', `Der Eingabebereich ist danach nur noch von ${body.adminIps.map(esc).join(', ')} erreichbar. Die öffentliche Angebotsseite bleibt frei. Im Notfall lässt sich die Freigabe auf dem Server zurücksetzen (siehe LIESMICH).`, 'Einschalten'))) return;
-    try {
-      await api('security_save', { body });
-      toast('Sicherheitseinstellungen gespeichert.');
-      renderSecView();
-    } catch (ex) { $('#sec-err').textContent = ex.message; }
   });
 
   W.openRund = openRund;

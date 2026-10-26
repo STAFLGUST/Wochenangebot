@@ -1,0 +1,378 @@
+/* STAFL-Plattform · Sicherheit – Gestaltung wie Dashboard, HR, CRM und Marketing („Liquid Glass“): heller Grund mit weichen
+   Farbflächen, Glasflächen für Kopf, Karten und Blöcke. Schrift und Grundregeln aus ../../assets/app.css; alle Farben dieser
+   Seite als --sic-*. Zustände: ok (grün), warn (bernstein), bad (rot); der Notfallmodus färbt Kopf, Band und Karte rot.
+   Dialoge: ein <dialog> (#sic-dlg), auf dem Handy als Blatt von unten. */
+
+body.sic {
+  --sic-bg: #f2f1ef;
+  --sic-text: #1b1a19;
+  --sic-muted: #6a6560;
+  --sic-glass: rgba(255, 255, 255, .6);
+  --sic-kopf-glas: rgba(255, 255, 255, .9);
+  --sic-deckend: #fbfaf9;
+  --sic-rand: rgba(255, 255, 255, .82);
+  --sic-linie: rgba(27, 26, 25, .1);
+  --sic-glanz: rgba(255, 255, 255, .95);
+  --sic-schatten: 0 10px 40px rgba(40, 30, 30, .10);
+  --sic-blob-a: #8c1d2c; --sic-blob-b: #2f6fb0; --sic-blob-c: #2f7a52;
+  --sic-aus: rgba(27, 26, 25, .06);
+  --sic-aus-hover: rgba(27, 26, 25, .11);
+  --sic-modul: #8c1d2c;
+  --sic-fokus: 0 0 0 3px rgba(140, 29, 44, .38);
+  --sic-ok: #186a3b; --sic-ok-bg: rgba(31, 122, 69, .12);
+  --sic-warn: #7f4d00; --sic-warn-bg: rgba(226, 165, 74, .22);
+  --sic-bad: #a3192d; --sic-bad-bg: rgba(196, 30, 52, .1);
+  --sic-info: #1f5f9a; --sic-info-bg: rgba(47, 111, 176, .12);
+  --sic-rot: #c41e34; --sic-rot-dunkel: #8c1424;
+  --sic-tl-a: #8c1d2c; --sic-tl-b: #2f6fb0; --sic-tl-c: #c27a1a;
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  background: var(--sic-bg); color: var(--sic-text); font-family: var(--font);
+}
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body.sic {
+    --sic-bg: #111012; --sic-text: #f4f1ee; --sic-muted: #a49c96; --sic-glass: rgba(40, 36, 38, .56); --sic-kopf-glas: rgba(32, 29, 30, .95); --sic-deckend: #201d1e;
+    --sic-rand: rgba(255, 255, 255, .13); --sic-linie: rgba(255, 255, 255, .1); --sic-glanz: rgba(255, 255, 255, .18); --sic-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --sic-blob-a: #6e1a28; --sic-blob-b: #1d4670; --sic-blob-c: #1d4f36;
+    --sic-aus: rgba(255, 255, 255, .08); --sic-aus-hover: rgba(255, 255, 255, .14); --sic-modul: #f0a3ae; --sic-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
+    --sic-ok: #5fd08f; --sic-ok-bg: rgba(95, 208, 143, .14); --sic-warn: #f3c98a; --sic-warn-bg: rgba(224, 144, 31, .17);
+    --sic-bad: #ff9aa8; --sic-bad-bg: rgba(255, 92, 115, .14); --sic-info: #8bb8e8; --sic-info-bg: rgba(139, 184, 232, .14);
+    --sic-rot: #e2475d; --sic-rot-dunkel: #b02a3e; --sic-tl-a: #f0a3ae; --sic-tl-b: #8bb8e8; --sic-tl-c: #f3c98a;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] body.sic {
+    --sic-bg: #111012; --sic-text: #f4f1ee; --sic-muted: #a49c96; --sic-glass: rgba(40, 36, 38, .56); --sic-kopf-glas: rgba(32, 29, 30, .95); --sic-deckend: #201d1e;
+    --sic-rand: rgba(255, 255, 255, .13); --sic-linie: rgba(255, 255, 255, .1); --sic-glanz: rgba(255, 255, 255, .18); --sic-schatten: 0 12px 44px rgba(0, 0, 0, .45);
+    --sic-blob-a: #6e1a28; --sic-blob-b: #1d4670; --sic-blob-c: #1d4f36;
+    --sic-aus: rgba(255, 255, 255, .08); --sic-aus-hover: rgba(255, 255, 255, .14); --sic-modul: #f0a3ae; --sic-fokus: 0 0 0 3px rgba(224, 129, 144, .55);
+    --sic-ok: #5fd08f; --sic-ok-bg: rgba(95, 208, 143, .14); --sic-warn: #f3c98a; --sic-warn-bg: rgba(224, 144, 31, .17);
+    --sic-bad: #ff9aa8; --sic-bad-bg: rgba(255, 92, 115, .14); --sic-info: #8bb8e8; --sic-info-bg: rgba(139, 184, 232, .14);
+    --sic-rot: #e2475d; --sic-rot-dunkel: #b02a3e; --sic-tl-a: #f0a3ae; --sic-tl-b: #8bb8e8; --sic-tl-c: #f3c98a;
+  }
+}
+
+/* ── Hintergrund und Glas ── */
+.sic-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.sic-bg span { position: absolute; border-radius: 50%; filter: blur(140px); }
+.sic-bg span:nth-child(1) { width: 620px; height: 620px; left: -180px; top: -220px; background: var(--sic-blob-a); opacity: .14; }
+.sic-bg span:nth-child(2) { width: 540px; height: 540px; right: -140px; top: 160px; background: var(--sic-blob-b); opacity: .12; }
+.sic-bg span:nth-child(3) { width: 600px; height: 600px; left: 30%; bottom: -320px; background: var(--sic-blob-c); opacity: .1; }
+.sic-glas { background: var(--sic-glass); border: 1px solid var(--sic-rand); box-shadow: inset 0 1px 0 var(--sic-glanz), var(--sic-schatten);
+  -webkit-backdrop-filter: blur(28px) saturate(180%); backdrop-filter: blur(28px) saturate(180%); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .sic-glas { background: var(--sic-deckend); } }
+@media (prefers-reduced-transparency: reduce) { .sic-glas { background: var(--sic-deckend); -webkit-backdrop-filter: none; backdrop-filter: none; } .sic-bg { display: none; } }
+
+/* ── Seite und Kopf ── */
+.sic-seite { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 24px; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; }
+.sic-main { flex: 1; min-width: 0; }
+.sic .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sic .i.gross { width: 30px; height: 30px; stroke-width: 1.7; }
+.sic :focus-visible { outline: none; box-shadow: var(--sic-fokus); }
+.sic-kopf { position: sticky; top: 16px; z-index: 5; display: flex; align-items: center; gap: 16px; padding: 10px 12px; border-radius: 999px; background: var(--sic-kopf-glas); }
+.sic-kopf .stafl-zurueck { margin-right: -4px; }
+.sic-marke { display: flex; align-items: center; }
+body.sic .sic-kopf .brand-logo { height: 28px; width: auto; }
+.sic-modul { display: inline-flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid var(--sic-linie); font-weight: 600; font-size: 15px; white-space: nowrap; }
+.sic-modul .i { color: var(--sic-modul); }
+.sic-aktionen { margin-left: auto; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sic-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--sic-aus); color: var(--sic-text); cursor: pointer; }
+.sic-rund:hover { background: var(--sic-aus-hover); }
+.sic-rund.klein { width: 34px; height: 34px; }
+.sic-user { display: flex; align-items: center; gap: 10px; height: 40px; min-width: 0; padding: 0 14px 0 4px; border-radius: 999px; background: var(--sic-aus); font-size: 14px; font-weight: 500; }
+.sic-user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.sic-initialen { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--sic-modul); color: #fff; font-size: 12px; font-weight: 700; flex: none; }
+.sic-lage-pille { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--sic-ok-bg); color: var(--sic-ok); white-space: nowrap; }
+.sic-lage-pille .i { width: 16px; height: 16px; }
+.sic-lage-pille.aktiv { background: var(--sic-rot); color: #fff; animation: sic-puls 1.8s ease-in-out infinite; }
+@keyframes sic-puls { 0%, 100% { box-shadow: 0 0 0 0 rgba(196, 30, 52, .45); } 50% { box-shadow: 0 0 0 8px rgba(196, 30, 52, 0); } }
+@media (prefers-reduced-motion: reduce) { .sic-lage-pille.aktiv, .sic-livepunkt { animation: none; } }
+.sic-fuss { text-align: center; font-size: 12px; color: var(--sic-muted); }
+.sic-hinweisbox { max-width: 520px; margin: 48px auto; padding: 32px; border-radius: 28px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.sic-hinweisbox .i { width: 36px; height: 36px; color: var(--sic-modul); }
+.sic-hinweisbox h1 { margin: 0; font-size: 22px; }
+.sic-fehler { max-width: 640px; margin: 48px auto; padding: 18px 22px; border-radius: 18px; background: var(--sic-bad-bg); color: var(--sic-bad); font-weight: 500; }
+
+/* ── Notfallband und Reiter ── */
+.sic-notfallband { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 14px 18px; border-radius: 20px; background: linear-gradient(120deg, var(--sic-rot), var(--sic-rot-dunkel)); color: #fff; box-shadow: 0 10px 30px rgba(140, 20, 36, .3); }
+.sic-notfallband .i { width: 26px; height: 26px; }
+.sic-notfallband > div { flex: 1; min-width: 0; line-height: 1.45; }
+.sic .sic-notfallband .sub { display: block; color: rgba(255, 255, 255, .88); font-size: 13px; }
+.sic-notfallband .btn { background: rgba(255, 255, 255, .16); border-color: rgba(255, 255, 255, .35); color: #fff; flex: none; }
+.sic-tabs { display: flex; gap: 4px; padding: 5px; margin-bottom: 20px; border-radius: 999px; background: var(--sic-aus); overflow-x: auto; scrollbar-width: none; }
+.sic-tabs::-webkit-scrollbar { display: none; }
+.sic-tabs button { flex: none; height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--sic-muted); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.sic-tabs button:hover { color: var(--sic-text); }
+.sic-tabs button[aria-selected="true"] { background: var(--sic-deckend); color: var(--sic-text); box-shadow: 0 2px 10px rgba(0, 0, 0, .08); }
+.sic-tabs button[data-tab="notfall"] { color: var(--sic-bad); }
+.sic-tab { display: flex; flex-direction: column; gap: 18px; }
+.sic-tab[hidden] { display: none; }
+
+/* ── Bausteine ── */
+.sic .sub { color: var(--sic-muted); font-size: 12.5px; font-weight: 400; }
+.sic .mono-s { font-family: var(--mono); font-size: 12.5px; }
+.sic .num-s { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sic-nm { font-weight: 600; }
+.sic-block { border-radius: 24px; padding: 18px 20px; min-width: 0; }
+.sic-bkopf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.sic-bkopf h3 { margin: 0; font-size: 16px; font-weight: 650; display: flex; align-items: baseline; gap: 8px; }
+.sic-bkopf > :not(h3):first-of-type { margin-left: auto; }
+.sic-zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; min-width: 0; }
+.sic-zwei.breit-links { grid-template-columns: 1.6fr 1fr; }
+.sic-leer { margin: 0; padding: 16px; border-radius: 14px; background: var(--sic-aus); color: var(--sic-muted); font-size: 14px; }
+.sic-hinweis { margin: 10px 0 0; color: var(--sic-muted); font-size: 13px; line-height: 1.5; }
+.sic-meldung { margin: 0; padding: 12px 14px; border-radius: 14px; font-size: 14px; line-height: 1.45; background: var(--sic-info-bg); color: var(--sic-info); }
+.sic-meldung.ok { background: var(--sic-ok-bg); color: var(--sic-ok); }
+.sic-meldung.warn { background: var(--sic-warn-bg); color: var(--sic-warn); }
+.sic-meldung.fehler { background: var(--sic-bad-bg); color: var(--sic-bad); }
+.sic-laden { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px 0; color: var(--sic-muted); }
+.sic-spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--sic-linie); border-top-color: var(--sic-modul); animation: sic-dreh .8s linear infinite; display: inline-block; }
+.sic-spinner.klein { width: 14px; height: 14px; }
+@keyframes sic-dreh { to { transform: rotate(360deg); } }
+.sic-punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--sic-muted); vertical-align: middle; flex: none; }
+.sic-punkt.ok { background: var(--sic-ok); } .sic-punkt.warn { background: #e09b2d; } .sic-punkt.bad { background: var(--sic-rot); } .sic-punkt.info { background: var(--sic-info); }
+.sic-pille { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--sic-aus); color: var(--sic-muted); white-space: nowrap; }
+.sic-pille.ok { background: var(--sic-ok-bg); color: var(--sic-ok); } .sic-pille.warn { background: var(--sic-warn-bg); color: var(--sic-warn); }
+.sic-pille.bad { background: var(--sic-bad-bg); color: var(--sic-bad); } .sic-pille.info { background: var(--sic-info-bg); color: var(--sic-info); }
+.sic-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.sic-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--sic-aus); font-size: 13px; }
+.sic-chip.klein { padding: 1px 8px; font-size: 11.5px; font-family: var(--mono); }
+.sic-chip.bad { background: var(--sic-bad-bg); color: var(--sic-bad); }
+.sic-chip button { border: 0; background: none; color: inherit; font-size: 16px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.sic-zahl { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--sic-aus); font-size: 11.5px; text-align: center; }
+.sic-knoepfe { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.sic-link { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; gap: 4px; }
+.sic-link .i { width: 14px; height: 14px; }
+.btn.gefahr { background: var(--sic-rot); border-color: var(--sic-rot); color: #fff; }
+.btn.gefahr:hover { background: var(--sic-rot-dunkel); border-color: var(--sic-rot-dunkel); }
+.btn.gross { height: 46px; padding: 0 22px; font-size: 15px; border-radius: 14px; }
+.sic .btn.an { background: var(--sic-text); border-color: var(--sic-text); color: var(--sic-bg); }
+.sic .btn { display: inline-flex; align-items: center; gap: 6px; }
+.sic .btn .i { width: 16px; height: 16px; }
+
+/* ── Karten ── */
+.sic-karten { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.sic-karten.vier { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.sic-karte { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 20px; border: 1px solid var(--sic-rand); background: var(--sic-glass);
+  box-shadow: inset 0 1px 0 var(--sic-glanz); color: inherit; font: inherit; text-align: left; min-width: 0; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+button.sic-karte { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 var(--sic-glanz), 0 8px 24px rgba(0, 0, 0, .08); }
+.sic-karte > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sic-kpunkt { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: none; background: var(--sic-muted); }
+.sic-karte.ok .sic-kpunkt { background: var(--sic-ok); } .sic-karte.warn .sic-kpunkt { background: #e09b2d; } .sic-karte.bad .sic-kpunkt { background: var(--sic-rot); }
+.sic-karte.bad { background: linear-gradient(var(--sic-bad-bg), var(--sic-bad-bg)), var(--sic-glass); }
+.sic-ktitel { font-size: 12.5px; color: var(--sic-muted); font-weight: 500; }
+.sic-kwert { font-size: 22px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; overflow-wrap: anywhere; }
+.sic-ktext { font-size: 12.5px; color: var(--sic-muted); line-height: 1.4; }
+
+/* ── Lagebild oben: Gesamtbewertung und Notfall ── */
+.sic-oben { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+.sic-gesamt { display: flex; align-items: center; gap: 18px; padding: 18px 22px; border-radius: 24px; }
+.sic-gesamt > div:last-child { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sic-gesamt strong { font-size: 19px; }
+.sic-ring { --farbe: var(--sic-ok); width: 76px; height: 76px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--farbe) calc(var(--wert) * 1%), var(--sic-aus) 0); }
+.sic-ring span { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; background: var(--sic-deckend); font-weight: 700; font-size: 19px; }
+.sic-ring small { font-size: 11px; font-weight: 600; }
+.sic-gesamt.warn .sic-ring { --farbe: #e09b2d; } .sic-gesamt.bad .sic-ring { --farbe: var(--sic-rot); }
+.sic-notfallkarte { display: flex; align-items: center; gap: 14px; padding: 18px 22px; border-radius: 24px; }
+.sic-notfallkarte > div { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 13.5px; }
+.sic-notfallkarte strong { font-size: 16px; }
+.sic-notfallkarte .i { color: var(--sic-ok); }
+.sic-notfallkarte.aktiv { background: linear-gradient(120deg, var(--sic-rot), var(--sic-rot-dunkel)); color: #fff; border-color: transparent; }
+.sic-notfallkarte.aktiv .i { color: #fff; }
+
+/* ── Verlauf (SVG) ── */
+.sic-tl svg { width: 100%; height: auto; max-height: 180px; display: block; }
+.sic-tl text { font-size: 10px; fill: var(--sic-muted); }
+.sic-tl .tl-hit { fill: transparent; }
+.sic-tl g:hover .tl-hit { fill: var(--sic-aus); }
+.tl-staff { fill: var(--sic-tl-a); } .tl-kunde { fill: var(--sic-tl-b); } .tl-reauth { fill: var(--sic-tl-c); }
+.sic-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; font-size: 12.5px; color: var(--sic-muted); }
+.sic-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.sic-legende i.tl-staff { background: var(--sic-tl-a); } .sic-legende i.tl-kunde { background: var(--sic-tl-b); } .sic-legende i.tl-reauth { background: var(--sic-tl-c); }
+
+/* ── Tabellen ── */
+.sic-tabrahmen { position: relative; overflow-x: auto; margin: 0 -4px; padding: 0 4px; }   /* relative: versteckte Beschriftungen (sr-only) bleiben im Rahmen */
+.sic-tabelle { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.sic-tabelle th { text-align: left; font-size: 12px; font-weight: 600; color: var(--sic-muted); padding: 6px 10px; border-bottom: 1px solid var(--sic-linie); white-space: nowrap; }
+.sic-tabelle td { padding: 9px 10px; border-bottom: 1px solid var(--sic-linie); vertical-align: top; }
+.sic-tabelle tr:last-child td { border-bottom: 0; }
+.sic-tabelle .act { text-align: right; white-space: nowrap; width: 1%; }
+.sic-tabelle .lv-h { width: 22px; }
+.sic-tabelle.klein { font-size: 13px; }
+.sic-tabelle.klein td { padding: 7px 8px; }
+.sic-tabelle tr.sic-klick { cursor: pointer; }
+.sic-tabelle tr.sic-klick:hover td { background: var(--sic-aus); }
+.sic-tabelle tr.aus td { opacity: .6; }
+.sic-tabelle.vorschau tr.neu td { background: var(--sic-warn-bg); }
+.cftab:not(.alle) tr.cf-ok { display: none; }
+.sic .nur-schmal { display: none; }
+.sic-pfad { word-break: break-all; }
+.fw-row.bad td:first-child { box-shadow: inset 3px 0 0 var(--sic-rot); }
+.fw-row.warn td:first-child { box-shadow: inset 3px 0 0 #e09b2d; }
+.sic-st { display: inline-block; min-width: 30px; padding: 0 5px; border-radius: 6px; background: var(--sic-aus); font-family: var(--mono); font-size: 11.5px; text-align: center; }
+.fw-q { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-ua { max-width: 180px; }
+.sic-av { float: left; width: 32px; height: 32px; margin-right: 10px; border-radius: 50%; display: grid; place-items: center; background: var(--sic-aus); font-size: 11.5px; font-weight: 700; }
+.sic-av.admin { background: var(--sic-modul); color: #fff; }
+
+/* ── Leisten und Filter ── */
+.sic-leiste { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sic-filter { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.sic-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--sic-muted); }
+.sic-livepunkt { width: 8px; height: 8px; border-radius: 50%; background: var(--sic-ok); animation: sic-puls-gruen 2s ease-in-out infinite; }
+@keyframes sic-puls-gruen { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.sic-suche { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 999px; background: var(--sic-aus); flex: 1; min-width: 180px; max-width: 360px; }
+.sic-suche input { border: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; outline: none; width: 100%; }
+.sic-wahl select { height: 36px; border-radius: 999px; border: 0; padding: 0 12px; background: var(--sic-aus); color: inherit; font: inherit; font-size: 14px; }
+.ev-leiste { justify-content: space-between; }
+
+/* ── Ereignisliste (Lagebild) ── */
+.sic-evliste { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sic-evliste button { width: 100%; display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; padding: 8px 10px; border: 0; border-radius: 12px; background: transparent; color: inherit; font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.sic-evliste button:hover { background: var(--sic-aus); }
+.sic-evliste .sic-pille { grid-row: span 2; align-self: start; }
+.sic-evliste .sic-nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Held (Notfall, Dateiprüfung) ── */
+.sic-held { display: flex; align-items: center; gap: 22px; padding: 26px 28px; border-radius: 28px; }
+.sic-held-icon { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--sic-ok-bg); color: var(--sic-ok); flex: none; }
+.sic-held-text { flex: 1; min-width: 0; }
+.sic-held-text h2 { margin: 2px 0 6px; font-size: 24px; letter-spacing: -.01em; }
+.sic-held-text p { margin: 0 0 6px; line-height: 1.5; max-width: 760px; }
+.sic-ueber { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--sic-muted); }
+.sic-held-knopf { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 280px; text-align: right; }
+.sic-held.aktiv { background: linear-gradient(125deg, var(--sic-rot), var(--sic-rot-dunkel)); color: #fff; border-color: transparent; box-shadow: 0 16px 40px rgba(140, 20, 36, .32); }
+.sic-held.aktiv .sic-held-icon { background: rgba(255, 255, 255, .16); color: #fff; }
+.sic-held.aktiv .sic-ueber, .sic-held.aktiv .sub { color: rgba(255, 255, 255, .85); }
+.sic-held.aktiv .btn.primary { background: #fff; border-color: #fff; color: var(--sic-rot-dunkel); }
+.sic-held.aktiv .sic-dl dt { color: rgba(255, 255, 255, .8); }
+.sic-held.warn .sic-held-icon { background: var(--sic-warn-bg); color: var(--sic-warn); }
+.sic-held.bad .sic-held-icon { background: var(--sic-bad-bg); color: var(--sic-bad); }
+.sic-wirkungen { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sic-wirkungen li { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.45; }
+.sic-wirkungen .i { width: 32px; height: 32px; padding: 7px; box-sizing: border-box; border-radius: 10px; background: var(--sic-bad-bg); color: var(--sic-bad); }
+.sic-wirkungen.klein li { font-size: 13.5px; }
+.sic-wirkungen.klein .i { width: 28px; height: 28px; padding: 6px; }
+.sic-zahlen { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.sic-zahlen span { padding: 8px 12px; border-radius: 12px; background: var(--sic-aus); font-size: 13px; }
+.sic-zahlen strong { font-size: 16px; margin-right: 4px; }
+
+/* ── Definitionslisten ── */
+.sic-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+.sic-dl dt { color: var(--sic-muted); }
+.sic-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.sic-dl.eng { gap: 4px 14px; font-size: 13.5px; margin-top: 8px; }
+.sic-verlauf { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.sic-verlauf li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sic-rechte { margin: 0 0 8px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+
+/* ── Einstellungen und Vorlagen ── */
+.sic-vorlagen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sic-vorlage { display: flex; flex-direction: column; gap: 8px; padding: 16px; border-radius: 18px; background: var(--sic-aus); }
+.sic-vorlage p { margin: 0; flex: 1; font-size: 13.5px; line-height: 1.45; color: var(--sic-muted); }
+.sic-vorlage .btn { align-self: flex-start; }
+.sic-vkopf { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.sic-vorlage.notfall { background: var(--sic-bad-bg); }
+.sic-vorlage.notfall .sic-vkopf { color: var(--sic-bad); }
+.sic-einstgitter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.sic-einst { border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px; }
+.sic-einst .sic-bkopf { margin-bottom: 4px; }
+.sic-einst > .btn { align-self: flex-start; margin-top: 8px; }
+
+/* ── Dialog (auf dem Handy als Blatt von unten) ── */
+.sic-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--sic-rand); border-radius: 26px;
+  background: var(--sic-deckend); color: var(--sic-text); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); overflow: auto; }
+.sic-dialog.breit { width: min(860px, calc(100vw - 32px)); }
+.sic-dialog::backdrop { background: rgba(20, 16, 16, .4); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.sic-dform { padding: 22px 24px; display: flex; flex-direction: column; gap: 14px; }
+.sic-dform[hidden] { display: none; }
+.sic-dkopf { display: flex; align-items: flex-start; gap: 12px; }
+.sic-dkopf > div { flex: 1; min-width: 0; }
+.sic-dkopf h2 { margin: 0; font-size: 19px; overflow-wrap: anywhere; }
+.sic-dkopf.gefahr h2 { color: var(--sic-bad); }
+.sic-dsub { margin: 4px 0 0; color: var(--sic-muted); font-size: 13.5px; }
+.sic-dinhalt { display: flex; flex-direction: column; gap: 12px; font-size: 14px; line-height: 1.45; }
+.sic-dinhalt p { margin: 0; }
+.sic-dinhalt h4 { margin: 6px 0 0; font-size: 14px; }
+.sic-dfuss { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
+.sic-dfehler { margin: 0; color: var(--sic-bad); font-size: 13.5px; font-weight: 500; }
+.sic-dfehler:empty { display: none; }
+.sic-feld { display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; font-weight: 500; }
+.sic-feld > span:first-child { font-weight: 500; }
+.sic-feld small { font-weight: 400; color: var(--sic-muted); font-size: 12.5px; }
+.sic-feld input:not([type=checkbox]):not([type=radio]), .sic-feld select, .sic-feld textarea, .sic-dinhalt input[type=number], .sic-dinhalt select, .sic-inline select {
+  box-sizing: border-box; min-height: 38px; padding: 7px 11px; border-radius: 11px; border: 1px solid var(--sic-linie); background: var(--sic-bg); color: inherit; font: inherit; font-size: 14px; font-weight: 400; }
+.sic-feld textarea { resize: vertical; }
+.sic-dinhalt input[type=number] { width: 84px; }
+.sic-feld.wort input { font-family: var(--mono); font-size: 18px; letter-spacing: .14em; text-transform: uppercase; text-align: center; }
+.sic-felder.zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sic-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font-weight: 400; }
+.sic-check { display: flex; align-items: flex-start; gap: 9px; font-size: 14px; font-weight: 400; cursor: pointer; line-height: 1.4; }
+.sic-check input { margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--sic-modul); flex: none; }
+.sic-check.fest { cursor: default; color: var(--sic-muted); }
+.sic-check.fest .i { width: 13px; height: 13px; margin-right: 4px; vertical-align: -2px; }
+.sic-optionen { border: 1px solid var(--sic-linie); border-radius: 14px; padding: 10px 14px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.sic-optionen legend { padding: 0 6px; font-size: 12.5px; color: var(--sic-muted); font-weight: 600; }
+.bst-gitter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.bst-g { border: 1px solid var(--sic-linie); border-radius: 14px; padding: 8px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.bst-g legend { padding: 0 6px; font-size: 12.5px; font-weight: 600; color: var(--sic-muted); }
+.geo-me { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--sic-ok-bg); color: var(--sic-ok); font-size: 13.5px; }
+.geo-me.bad { background: var(--sic-bad-bg); color: var(--sic-bad); font-weight: 600; }
+.geo-wahl { display: flex; flex-direction: column; gap: 8px; }
+.geo-kopf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.geo-kopf .sic-knoepfe { margin-left: auto; }
+.geo-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+.geo-chips .sic-chip { background: var(--sic-bad-bg); }
+.geo-suche input { width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 11px; border-radius: 11px; border: 1px solid var(--sic-linie); background: var(--sic-bg); color: inherit; font: inherit; }
+.geo-list { max-height: 240px; overflow: auto; margin-top: 6px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 10px; }
+.geo-opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 13.5px; cursor: pointer; }
+.geo-opt:hover { background: var(--sic-aus); }
+.geo-opt .sub { margin-left: auto; }
+
+/* ── Hinweis unten ── */
+.sic-toast { position: fixed; left: 50%; bottom: 24px; z-index: 50; transform: translate(-50%, 20px); padding: 11px 18px; border-radius: 14px; background: var(--sic-text); color: var(--sic-bg);
+  font-size: 14px; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; max-width: calc(100vw - 32px); }
+.sic-toast.zeigen { opacity: 1; transform: translate(-50%, 0); }
+.sic-toast.fehler { background: var(--sic-rot); color: #fff; }
+
+/* ── Breiten ── */
+@media (max-width: 1280px) { .sic-karten { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1100px) {
+  .sic-karten, .sic-karten.vier { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sic-zwei, .sic-zwei.breit-links, .sic-oben { grid-template-columns: 1fr; }
+  .sic-vorlagen { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .sic-einstgitter, .bst-gitter { grid-template-columns: 1fr; }
+  .sic-held { flex-direction: column; align-items: flex-start; padding: 22px; }
+  .sic-held-knopf { align-items: stretch; max-width: none; width: 100%; text-align: left; }
+  .sic-held-knopf .btn { justify-content: center; }
+  .sic-user-name, .sic-lage-pille span { display: none; }
+  .sic-lage-pille { padding: 0 9px; }
+}
+@media (max-width: 560px) {
+  .sic-seite { padding: 12px 12px 32px; gap: 16px; }
+  .sic-kopf { top: 8px; gap: 8px; padding: 8px; }
+  .sic-modul { padding-left: 10px; font-size: 14px; }
+  .sic-user { padding: 0 4px; }
+  .sic-block, .sic-einst { padding: 14px; border-radius: 20px; }
+  .sic-karte { padding: 12px; }
+  .sic-kwert { font-size: 19px; }
+  .sic-notfallband { flex-wrap: wrap; }
+  .sic-felder.zwei { grid-template-columns: 1fr; }
+  .sic-dl { grid-template-columns: 1fr; gap: 2px; }
+  .sic-dl dd { margin-bottom: 6px; }
+  .sic-dialog, .sic-dialog.breit { width: 100vw; max-width: 100vw; max-height: 92dvh; margin: auto 0 0; border-radius: 24px 24px 0 0; border-bottom: 0; }
+  .sic-dform { padding: 18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .sic-dfuss { position: sticky; bottom: 0; margin: 0 -16px -18px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: var(--sic-deckend); border-top: 1px solid var(--sic-linie); }
+  .sic-dfuss .btn { flex: 1; justify-content: center; }
+  .sic-tabelle { font-size: 13px; }
+  .sic-tabelle td, .sic-tabelle th { padding: 7px 6px; }
+  .geo-list { grid-template-columns: 1fr; }
+  .sic .nicht-schmal { display: none; }
+  .sic .nur-schmal { display: block; margin-top: 3px; }
+}
+@media (max-width: 480px) { body.sic .sic-kopf .brand-logo { width: 30px; height: 28px; object-fit: cover; object-position: left center; }
+  #sic-neu { display: none; } .sic-kopf .sic-rund { width: 36px; height: 36px; } .sic-aktionen { gap: 6px; } }
+@media (pointer: coarse) { .sic .btn.sm { height: 36px; } }

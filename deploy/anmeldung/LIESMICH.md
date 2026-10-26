@@ -8,7 +8,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | Datei | Inhalt |
 | --- | --- |
 | `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.1 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
-| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de` (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
+| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de`, `sicherheit.dashboard-stafl.de` (`/` und `/admin/` → `/module/sicherheit/`) (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
@@ -41,6 +41,14 @@ lesbar) und startet nichts. `--pruefen` zeigt nur, was fehlt. Getestet: `tests/d
 Der Import läuft nur beim ersten Start (vorhandener Realm wird nicht überschrieben). Spätere Änderungen am Realm nur
 als eigener, geprüfter Schritt (`kcadm` im Container, wie in `konten.sh`).
 
+## Sitzungen: Ablauf und Beenden
+
+Die Sitzung des Webserver-Moduls (4 Stunden Leerlauf, höchstens 10 Stunden – wie der Realm nach `realm-aktualisieren`) ist die
+äußere Grenze. Zusätzlich gelten die Einstellungen der Anwendung auch auf den Keycloak-Hosts (seit 26.10.2026,
+`lib/oidc.php`): Nach der eingestellten Inaktivität (Verwaltung → Sicherheit) und nach „Sitzung beenden“ (Verwaltung →
+Sitzungen) geht es erst nach erneuter Anmeldung bei Keycloak weiter (Passwort erneut, `max_age=0`) – die Sitzung entsteht
+nicht mehr stillschweigend neu. Kein Konsolenbefehl nötig.
+
 ## Realm im Betrieb ändern
 
 Der Realm wird nur beim ersten Start importiert. Spätere Änderungen bringt `sh deploy/anmeldung/konten.sh realm-aktualisieren`
@@ -62,6 +70,8 @@ Stand 6 (23.10.2026, Freigabe des Inhabers): Client `crm` für `crm.dashboard-st
 (`OIDC_SECRET_CRM`/`OIDC_CRYPTO_CRM`, danach `docker compose up -d app`). Der DNS-Eintrag `crm` besteht seit 21.10.2026.
 Stand 7 (25.10.2026, Freigabe des Inhabers): Client `marketing` für `marketing.dashboard-stafl.de` (Marketing · Redaktionsplan) –
 gleiches Vorgehen (`OIDC_SECRET_MARKETING`/`OIDC_CRYPTO_MARKETING`, danach `docker compose up -d app`). Der DNS-Eintrag `marketing` besteht seit 25.10.2026.
+Stand 9 (26.10.2026, Freigabe des Inhabers): Client `sicherheit` für `sicherheit.dashboard-stafl.de` (Modul Sicherheit mit Notfallmodus) –
+gleiches Vorgehen (`OIDC_SECRET_SICHERHEIT`/`OIDC_CRYPTO_SICHERHEIT`, danach `docker compose up -d app`). Der DNS-Eintrag `sicherheit` (CNAME) besteht seit 26.10.2026.
 Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
 Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt
