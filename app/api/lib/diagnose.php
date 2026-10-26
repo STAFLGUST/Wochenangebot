@@ -5,7 +5,7 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 /* Sicherheitsrelevante Vorgänge im Protokoll (Export, Verlauf) */
-const SEC_LOG_TYPES = ['login', 'login_fail', 'logout', 'reauth', 'reauth_fail', 'twofa', 'password', 'security', 'user', 'setup', 'wartung', 'kunde_login', 'kunde_login_fail', 'kunde_password', 'mail'];
+const SEC_LOG_TYPES = ['login', 'login_fail', 'logout', 'reauth', 'reauth_fail', 'twofa', 'password', 'security', 'user', 'setup', 'wartung', 'kunde_login', 'kunde_login_fail', 'kunde_password', 'mail', 'notfall', 'oidc_stufe'];
 
 /* Protokolleinträge der letzten $days Tage (Monatsdateien) */
 function sec_log_entries(int $days): array
@@ -60,6 +60,30 @@ function sec_top_ips(array $entries): array
     $blocked = [];
     foreach (store_read('logins') ?? [] as $v) if ((int)($v['until'] ?? 0) > time()) $blocked[(string)($v['ip'] ?? '')] = true;
     return array_map(function ($b) use ($blocked) { return $b + ['cc' => geo_country($b['ip']), 'blocked' => isset($blocked[$b['ip']])]; }, array_slice(array_values($by), 0, 10));
+}
+
+/* Betriebszustand (Verwaltung → System und Lagebild im Modul Sicherheit): Wartung, Sicherung, Bereitstellung, Datenablage,
+   Speicher, E-Mail-Versand, Bestellwünsche, Kunden – nur lesend, für Administratoren */
+function betrieb_daten(array $me): array
+{
+    global $DATA;
+    $mail = array_filter(store_read('mailversand') ?? [], function ($x) { return strtotime((string)$x['t']) > time() - 7 * 86400; });
+    $alle = store_read('bestellungen') ?? [];
+    $woche = array_filter($alle, function ($x) { return strtotime((string)$x['t']) > time() - 7 * 86400; });
+    $letzte = $alle ? end($alle) : null;
+    $kunden = array_filter(customers_load()['customers'], function ($x) { return !empty($x['active']); });
+    return ['backup' => store_read('sicherung'),
+            'wartung' => wartung(), 'wartungEingabe' => modul_wartung_anzeige('angebot', 'eingabe', $me),
+            'wartungVerlauf' => array_slice(modul_laufzeit()['verlauf'], 0, 20), 'storage' => store_stats(), 'php' => PHP_VERSION,
+            'disk' => ['free' => @disk_free_space($DATA) ?: null, 'total' => @disk_total_space($DATA) ?: null],
+            'mail' => ['configured' => (bool)mail_cfg() && (bool)mail_base_url(), 'sent7' => count(array_filter($mail, function ($x) { return $x['ok']; })),
+                       'failed7' => count(array_filter($mail, function ($x) { return !$x['ok']; }))],
+            'orders' => ['enabled' => order_enabled(), 'n7' => count($woche), 'failed7' => count(array_filter($woche, function ($x) { return ($x['status'] ?? '') === 'fehler'; })),
+                         'last' => $letzte['t'] ?? null, 'lastNr' => $letzte['nr'] ?? null],
+            'customers' => ['active' => count($kunden), 'withLogin' => count(array_filter($kunden, function ($x) { return !empty($x['login']['active']); })),
+                            'online' => count(array_unique(array_column(ksess_prune(store_read('kundensitzungen') ?? []), 'kid')))],
+            'deployment' => store_read('deployment'),
+            'notfall' => notfall_anzeige($me)];
 }
 
 /* Konfigurationsprüfung (serverseitig sichtbar): [bereich, stufe ok|warn|bad|info, titel, befund, empfehlung] */
@@ -184,4 +208,112 @@ function sec_export_csv(int $days): array
         $out[] = implode(';', array_map($cell, [$e['t'], $e['a'], $e['u'] ?? '', $e['n'] ?? '', $e['r'] ?? '', $e['ip'] ?? '', $e['s'] ?? '', $det]));
     }
     return ['csv' => implode("\r\n", $out) . "\r\n", 'count' => count($rows)];
+}
+
+/* ---------- Modul Sicherheit: Lagebild, Ereignisse, privilegierte Konten (nur lesend; Aufrufer prüfen die Rechte) ---------- */
+
+/* Ereignisarten für Filter und Anzeige (Protokoll-Vorgang → Art) */
+const SEC_EREIGNIS_ARTEN = [
+    'anmeldung' => ['Anmeldung', ['login', 'login_fail', 'logout', 'reauth', 'reauth_fail', 'twofa', 'password', 'oidc_stufe']],
+    'kunden' => ['Kunden-Anmeldung', ['kunde_login', 'kunde_login_fail', 'kunde_password']],
+    'konten' => ['Zugänge und Rollen', ['user', 'setup']],
+    'einstellungen' => ['Einstellungen und Schutz', ['security', 'wartung', 'mail']],
+    'notfall' => ['Notfallmodus', ['notfall']],
+];
+function sec_ereignis_art(string $a): string
+{
+    foreach (SEC_EREIGNIS_ARTEN as $k => [, $liste]) if (in_array($a, $liste, true)) return $k;
+    return 'einstellungen';
+}
+/* Sicherheitsereignisse der letzten $tage Tage, neueste zuerst; Filter Art und Suchtext (Beschreibung, Benutzer, Name, IP) */
+function sec_ereignisse(int $tage, string $art = '', string $q = '', int $max = 300): array
+{
+    $q = mb_strtolower(trim($q));
+    $alle = array_reverse(array_values(array_filter(sec_log_entries($tage), function ($e) { return in_array($e['a'] ?? '', SEC_LOG_TYPES, true); })));
+    $zahlen = array_fill_keys(array_keys(SEC_EREIGNIS_ARTEN), 0);
+    $out = [];
+    foreach ($alle as $e) {
+        $k = sec_ereignis_art((string)$e['a']);
+        $zahlen[$k]++;
+        if ($art !== '' && $k !== $art) continue;
+        if ($q !== '' && strpos(mb_strtolower(implode(' ', [$e['s'] ?? '', $e['u'] ?? '', $e['n'] ?? '', $e['ip'] ?? ''])), $q) === false) continue;
+        if (count($out) >= $max) continue;
+        $stufe = in_array($e['a'], ['login_fail', 'kunde_login_fail', 'reauth_fail', 'oidc_stufe'], true) ? 'warn' : ($e['a'] === 'notfall' ? 'bad' : 'info');
+        $out[] = ['t' => $e['t'], 'a' => $e['a'], 'art' => $k, 'stufe' => $stufe, 'u' => (string)($e['u'] ?? ''), 'n' => (string)($e['n'] ?? ''), 'r' => (string)($e['r'] ?? ''),
+                  'ip' => (string)($e['ip'] ?? ''), 's' => (string)($e['s'] ?? ''), 'd' => array_slice(array_values(array_filter((array)($e['d'] ?? []), 'is_array')), 0, 20)];
+    }
+    $arten = [];
+    foreach (SEC_EREIGNIS_ARTEN as $k => [$label]) $arten[] = ['key' => $k, 'label' => $label, 'n' => $zahlen[$k]];
+    return ['ereignisse' => $out, 'arten' => $arten, 'gesamt' => count($alle), 'tage' => $tage];
+}
+
+/* Lagebild: Kennzahlen, Verlauf, auffällige Adressen, Konfigurationsprüfung, Dateiprüfung, letzte Ereignisse */
+function sec_lagebild(array $me): array
+{
+    $users = users_load();
+    $log = sec_log_entries(14);
+    $tag = time() - 86400;
+    $n24 = function (array $arten) use ($log, $tag) { return count(array_filter($log, function ($e) use ($arten, $tag) { return in_array($e['a'], $arten, true) && strtotime((string)$e['t']) > $tag; })); };
+    $aktiv = array_values(array_filter($users, function ($u) { return !empty($u['active']) && nutzer_hat_zugang($u); }));
+    $admins = array_filter($aktiv, function ($u) { return $u['role'] === 'admin'; });
+    $ohne2 = array_filter($aktiv, function ($u) { return !has_second_factor($u) && ($u['oidcSub'] ?? '') === ''; });
+    $gesperrtIp = 0;
+    foreach (store_read('logins') ?? [] as $v) if ((int)($v['until'] ?? 0) > time()) $gesperrtIp++;
+    $fw = fw_status();
+    $ip = integritaet_stand(false)['result'];
+    $S = sec();
+    $sitz = sess_prune(store_read('sitzungen') ?? []);
+    return [
+        'kennzahlen' => [
+            'fehl24' => $n24(['login_fail', 'kunde_login_fail', 'reauth_fail']), 'anmeldungen24' => $n24(['login', 'kunde_login']),
+            'angriffe24' => (int)($fw['zahlen']['angriffe'] ?? 0), 'abgewiesen24' => (int)($fw['zahlen']['abgewiesen'] ?? 0),
+            'gesperrteAdressen' => (int)($fw['zahlen']['gesperrteAdressen'] ?? 0) + $gesperrtIp,
+            'gesperrteKonten' => count(array_filter($users, function ($u) { return (int)($u['lockedUntil'] ?? 0) > time(); })),
+            'sitzungen' => count($sitz), 'kundenOnline' => count(array_unique(array_column(ksess_prune(store_read('kundensitzungen') ?? []), 'kid'))),
+            'zugaenge' => count($aktiv), 'admins' => count($admins), 'ohneZweiFaktor' => count($ohne2),
+            'adminsOhneZweiFaktor' => count(array_filter($ohne2, function ($u) { return $u['role'] === 'admin'; })),
+        ],
+        'einstellungen' => ['twofa' => $S['twofa'], 'ipEnabled' => (bool)$S['ipEnabled'], 'geoEnabled' => (bool)$S['geoEnabled'], 'pwMin' => (int)$S['pwMin'],
+                            'pwComplex' => (bool)$S['pwComplex'], 'pwLeak' => (bool)($S['pwLeak'] ?? false), 'idleMinutes' => (int)$S['idleMinutes'],
+                            'waf' => (string)($fw['fw']['waf'] ?? ''), 'autoSperre' => !empty($fw['fw']['autoSperre']), 'feed' => !empty($fw['fw']['feed'])],
+        'dateipruefung' => $ip ? ['ranAt' => $ip['ranAt'] ?? null, 'ok' => !empty($ip['ok']), 'counts' => $ip['counts'] ?? []] : null,
+        'backup' => store_read('sicherung'), 'deployment' => store_read('deployment'), 'https' => is_https(),
+        'timeline' => sec_timeline($log), 'topIps' => sec_top_ips($log), 'config' => sec_config_checks($users),
+        'ereignisse' => array_slice(sec_ereignisse(7)['ereignisse'], 0, 8),
+    ];
+}
+
+/* Privilegierte Konten: Administratoren und Inhaber sicherheitsrelevanter Rechte mit Anmeldeschutz, letzter Anmeldung, Sitzungen */
+const SEC_KONTEN_RECHTE = ['sicherheit.notfall', 'sicherheit.sehen', 'kunden.bearbeiten', 'wochenangebot.senden', 'sonderposten.senden',
+    'einzelangebote.bearbeiten', 'angebote.loeschen', 'hr.verwalten', 'hr.uebersicht', 'protokoll.sehen', 'auswertung.sehen'];
+function sec_konten(): array
+{
+    $users = users_load();
+    $roles = rights_roles();
+    $kat = perms_katalog();
+    $je = [];
+    foreach (sess_prune(store_read('sitzungen') ?? []) as $sid => $v) {
+        $je[(string)$v['uid']][] = ['sid' => (string)$sid, 'ip' => (string)($v['ip'] ?? ''), 'ua' => (string)($v['ua'] ?? ''), 'created' => $v['created'] ?? null,
+                                    'seen' => gmdate('Y-m-d\TH:i:s\Z', (int)($v['seen'] ?? 0)), 'current' => $sid === ($_SESSION['sid'] ?? '')];
+    }
+    $out = [];
+    foreach ($users as $u) {
+        if (!nutzer_hat_zugang($u)) continue;
+        $admin = ($u['role'] ?? '') === 'admin';
+        $heikel = $admin ? [] : array_values(array_intersect(SEC_KONTEN_RECHTE, user_perms($u, $roles)));
+        if (!$admin && !$heikel) continue;
+        $out[] = ['id' => (string)$u['id'], 'name' => (string)$u['name'], 'username' => (string)$u['username'], 'admin' => $admin, 'aktiv' => !empty($u['active']),
+                  'rollen' => rollen_text($u), 'rechte' => array_map(function ($k) use ($kat) { return ['key' => $k, 'label' => $kat[$k]['l'], 'gruppe' => $kat[$k]['g']]; }, $heikel),
+                  'totp' => !empty($u['totp']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'zentral' => (string)($u['oidcSub'] ?? '') !== '',
+                  'zweiFaktor' => has_second_factor($u), 'lastLogin' => $u['lastLogin'] ?? null, 'mustChange' => !empty($u['mustChange']),
+                  'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
+                  'geraete' => count(geraete_public($u)), 'sitzungen' => $je[(string)$u['id']] ?? []];
+    }
+    usort($out, function ($a, $b) { return ($b['admin'] <=> $a['admin']) ?: ($b['aktiv'] <=> $a['aktiv']) ?: strcasecmp($a['name'], $b['name']); });
+    $aktiv = array_filter($out, function ($k) { return $k['aktiv']; });
+    return ['konten' => $out, 'zahlen' => ['admins' => count(array_filter($aktiv, function ($k) { return $k['admin']; })),
+            'weitere' => count(array_filter($aktiv, function ($k) { return !$k['admin']; })),
+            'ohneZweiFaktor' => count(array_filter($aktiv, function ($k) { return !$k['zweiFaktor'] && !$k['zentral']; })),
+            'notfall' => count(array_filter($aktiv, function ($k) { return $k['admin'] || in_array('sicherheit.notfall', array_column($k['rechte'], 'key'), true); }))],
+            'rechte' => array_map(function ($k) use ($kat) { return ['key' => $k, 'label' => $kat[$k]['l'] ?? $k]; }, SEC_KONTEN_RECHTE)];
 }

@@ -10,7 +10,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             start_session();
             $k = current_customer();
-            $staff = current_user() !== null;
+            $staff = kunden_wartung_ausnahme(current_user());   // Mitarbeiter (im Notfallmodus nur Administratoren, lib/notfall.php)
             respond(['ok' => true, 'stdPublic' => std_public(), 'staff' => $staff, 'kunde' => $k ? kunde_payload($k) : null, 'bestellung' => $k ? order_enabled() : false, 'bestellfunktion' => order_enabled(), 'wartung' => wartung(), 'testumgebung' => testumgebung(), 'csrf' => $k ? ($_SESSION['kcsrf'] ?? null) : null]);
         }
 

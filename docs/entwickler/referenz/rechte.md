@@ -23,6 +23,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `marketing.zugang` | Marketing |
 | `controlling.zugang` | Controlling |
 | `verwaltung.zugang` | Verwaltung |
+| `sicherheit.zugang` | Sicherheit |
 
 ## Rechte innerhalb der Module
 
@@ -61,6 +62,8 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `wochenangebot.senden` | Angebot | Kunden | bearbeiten | Wochenangebot per E-Mail an Kunden senden | – | `kunden.sehen` |
 | `sonderposten.senden` | Angebot | Kunden | bearbeiten | Sonderposten per E-Mail an Kunden senden | – | `kunden.sehen` |
 | `protokoll.sehen` | Verwaltung | Verwaltung | sehen | Protokoll ansehen | – | – |
+| `sicherheit.sehen` | Sicherheit | Sicherheit | sehen | Lagebild, Sicherheitsereignisse und Notfall-Zustand ansehen (nur lesen, mit IP-Adressen und Benutzernamen) | – | `sicherheit.zugang` |
+| `sicherheit.notfall` | Sicherheit | Sicherheit | bearbeiten | Notfallmodus auslösen (Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle werden ausgesperrt); beenden nur Administratoren | – | `sicherheit.zugang` |
 | `auswertung.sehen` | Verwaltung | Verwaltung | sehen | Auswertung: Karte der Kunden-Anmeldungen ansehen | – | `kunden.sehen` |
 
 ## Nur Administratoren

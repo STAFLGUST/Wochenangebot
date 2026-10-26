@@ -131,6 +131,7 @@ require __DIR__ . '/lib/auswertung.php';
 require __DIR__ . '/lib/preisverlauf.php';
 require __DIR__ . '/lib/bestand.php';
 require __DIR__ . '/lib/firewall.php';
+require __DIR__ . '/lib/notfall.php';         // Notfallmodus (Modul Sicherheit): wirkt über Wartung, Sitzungen, E-Mail, Firewall
 require __DIR__ . '/lib/integritaet.php';
 require __DIR__ . '/lib/geraete.php';
 require __DIR__ . '/lib/aktionen-liste.php';   // Aktionsregister (erzeugt aus regeln/aktionen/*.toml)
@@ -198,9 +199,9 @@ if (!empty($S['geoEnabled']) && (!$isPublic || $S['geoScope'] === 'all')) {
     }
 }
 
-/* Wartungsmodus: Angebotsseite und Kundenfunktionen pausieren; Mitarbeiter arbeiten normal weiter.
-   Abmelden vom Wochenangebot und Kunden-Abmelden bleiben immer möglich. */
-if ($AKTION !== null && $AKTION['kunden_wartung'] && ($W = wartung()) && !current_user()) {
+/* Wartungsmodus: Angebotsseite und Kundenfunktionen pausieren; Mitarbeiter arbeiten normal weiter – im Notfallmodus nur noch
+   Administratoren (lib/notfall.php). Abmelden vom Wochenangebot und Kunden-Abmelden bleiben immer möglich. */
+if ($AKTION !== null && $AKTION['kunden_wartung'] && ($W = wartung()) && !kunden_wartung_ausnahme(current_user())) {
     header('Retry-After: 600');
     respond(['ok' => false, 'wartung' => true, 'error' => $W['message'], 'until' => $W['until']], 503);
 }
@@ -238,6 +239,7 @@ try {
     require __DIR__ . '/aktionen/einzelangebote.php';
     require __DIR__ . '/aktionen/schutz.php';
     require __DIR__ . '/aktionen/integritaet.php';
+    require __DIR__ . '/aktionen/sicherheit.php';   // Modul Sicherheit: Lagebild, Ereignisse, Konten, Notfallmodus
     require __DIR__ . '/aktionen/module.php';
     require __DIR__ . '/aktionen/importzentrale.php';
     require __DIR__ . '/aktionen/hr.php';

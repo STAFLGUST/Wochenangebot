@@ -26,6 +26,7 @@ Alle Mitarbeiter-Hosts sind dieselbe PHP-Anwendung. Welcher Bereich ein Host ist
 | `hr.dashboard-stafl.de` | eigene Seite `/module/hr/` (`/admin` → dorthin) | `hr.intern` | Client `hr` |
 | `crm.dashboard-stafl.de` | eigene Seite `/module/crm/` (`/admin` → dorthin) | `crm.intern` | Client `crm` |
 | `marketing.dashboard-stafl.de` | eigene Seite `/module/marketing/` (`/admin` → dorthin) | `marketing.intern` | Client `marketing` |
+| `sicherheit.dashboard-stafl.de` | eigene Seite `/module/sicherheit/` (`/admin` → dorthin) | `sicherheit.intern` | Client `sicherheit` |
 | `rewe.`, `qs.`, `einkauf.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
 
 Jeder Mitarbeiter-VirtualHost setzt außerdem `WA_OIDC 1`, `WA_OIDC_ISSUER` (Realm `mitarbeiter`) und

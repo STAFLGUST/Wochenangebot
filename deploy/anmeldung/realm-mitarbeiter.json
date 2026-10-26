@@ -305,6 +305,39 @@
       }
     },
     {
+      "clientId": "sicherheit",
+      "baseUrl": "https://sicherheit.dashboard-stafl.de/module/sicherheit/",
+      "name": "Sicherheit",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "@GEHEIM_SICHERHEIT@",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "https://sicherheit.dashboard-stafl.de/oidc/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://sicherheit.dashboard-stafl.de/dashboard/abgemeldet.html",
+        "backchannel.logout.url": "https://sicherheit.dashboard-stafl.de/oidc/callback?logout=backchannel",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "false",
+        "minimum.acr.value": "mfa",
+        "default.acr.values": "mfa"
+      }
+    },
+    {
       "clientId": "konten",
       "name": "Mitarbeiterkonten (Anwendung)",
       "description": "Nur Service-Account: die Verwaltung der Anwendung setzt Passwörter, hebt Sperren auf, schickt Links und legt fehlende Konten an (Rollen view-users und manage-users, gesetzt von konten.sh realm-aktualisieren).",
