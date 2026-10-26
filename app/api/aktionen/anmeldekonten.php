@@ -15,6 +15,13 @@ function anmeldekonto_nutzer(string $id): array
     return $users[$i];
 }
 
+/* Administratoren und Konten mit Pflicht zum zweiten Faktor: Passwort nur vorübergehend setzen (muss bei der nächsten
+   Anmeldung geändert werden) – sonst kennte der setzende Administrator ein dauerhaftes Passwort dieser Konten */
+function anmeldekonto_nur_temporaer(array $u): bool
+{
+    return ($u['role'] ?? '') === 'admin' || twofa_required($u);
+}
+
 switch ($action) {
         case 'anmeldekonto': {
             require_auth(false, 'admin');
@@ -23,7 +30,7 @@ switch ($action) {
             if (!nutzer_hat_zugang($u)) respond(['ok' => true, 'konto' => ['eingerichtet' => konten_eingerichtet(), 'ohneAnmeldung' => true]]);
             try { $k = konten_status($u); }
             catch (KontenFehler $e) { $k = ['eingerichtet' => $e->status !== 503, 'fehler' => $e->getMessage()]; }
-            respond(['ok' => true, 'konto' => $k]);
+            respond(['ok' => true, 'konto' => $k + ['nurTemporaer' => anmeldekonto_nur_temporaer($u)]]);
         }
 
         case 'anmeldekonto_aendern': {
@@ -42,10 +49,11 @@ switch ($action) {
                     $erzeugt = !empty($b['erzeugen']);
                     $pw = $erzeugt ? konten_startpasswort() : $b['passwort'] ?? null;
                     if (!is_string($pw) || mb_strlen($pw) < 12 || mb_strlen($pw) > 200) fail('Das Passwort muss mindestens 12 Zeichen lang sein.', 422);
-                    $temporaer = !array_key_exists('aendern', $b) || !empty($b['aendern']);
+                    $temporaer = !array_key_exists('aendern', $b) || !empty($b['aendern']) || anmeldekonto_nur_temporaer($u);
                     konten_passwort($u, $pw, $temporaer);
                     audit('security', 'Passwort für „' . $u['username'] . '“ in der zentralen Anmeldung gesetzt' . ($temporaer ? ' (muss bei der nächsten Anmeldung geändert werden)' : ' (dauerhaft)'));
                     if ($erzeugt) $antwort['passwort'] = $pw;   // nur dieses eine Mal, nie gespeichert
+                    $antwort['temporaer'] = $temporaer;
                 } elseif ($was === 'entsperren') {
                     konten_entsperren($u);
                     audit('security', 'Konto „' . $u['username'] . '“ in der zentralen Anmeldung entsperrt');
@@ -58,7 +66,7 @@ switch ($action) {
                     audit('security', 'Konto „' . $u['username'] . '“ in der zentralen Anmeldung angelegt und verknüpft');
                     $u = anmeldekonto_nutzer((string)$u['id']);
                 }
-                $antwort['konto'] = konten_status($u);
+                $antwort['konto'] = konten_status($u) + ['nurTemporaer' => anmeldekonto_nur_temporaer($u)];
             } catch (KontenFehler $e) { fail($e->getMessage(), $e->status); }
             respond($antwort);
         }

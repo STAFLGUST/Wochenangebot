@@ -148,6 +148,7 @@
       <div class="ka-pw" id="ka-pw" hidden>
         <div class="fld"><span>Neues Passwort</span><div class="pw-row"><input name="ka_pw" type="text" autocomplete="new-password" minlength="12" maxlength="200" placeholder="mindestens 12 Zeichen" aria-label="Neues Passwort"><button type="button" class="btn" data-ka="gen">Vorschlag</button></div></div>
         <label class="check"><input type="checkbox" name="ka_aendern" checked> muss bei der nächsten Anmeldung ein eigenes Passwort festlegen</label>
+        <p class="hint" id="ka-nur-temporaer" hidden>Bei Administratoren und Konten mit Pflicht zum zweiten Faktor immer: Das Passwort gilt nur bis zur nächsten Anmeldung.</p>
         <div class="ka-knoepfe"><button type="button" class="btn" data-ka="pw-ab">Ausblenden</button><button type="button" class="btn primary" data-ka="passwort">Passwort setzen</button></div>
       </div>
       <p class="ka-meldung" id="ka-meldung" role="status"></p>
@@ -172,6 +173,10 @@
     if (k.einmalcode) t.push(k.einmalcode === 1 ? 'Einmalcode eingerichtet' : `${k.einmalcode} Einmalcode-Geräte`);
     if (k.passkeys) t.push(k.passkeys === 1 ? '1 Passkey' : `${k.passkeys} Passkeys`);
     st.innerHTML = t.join(' · ');
+    // Administratoren und Pflicht-Konten: Passwort nur vorübergehend (der Server erzwingt es ebenfalls)
+    const cb = $('#user-body [name="ka_aendern"]'), nur = !!k.nurTemporaer;
+    if (cb) { if (nur) cb.checked = true; cb.disabled = nur; }
+    if ($('#ka-nur-temporaer')) $('#ka-nur-temporaer').hidden = !nur;
     kn.innerHTML = `<button type="button" class="btn" data-ka="pw-auf">${icon('key', 'sm')}Passwort setzen …</button>`
       + (k.email ? `<button type="button" class="btn" data-ka="link">${icon('mail', 'sm')}Link zum Passwort-Festlegen per Mail</button>` : '')
       + (k.gesperrt || !k.aktiv ? `<button type="button" class="btn" data-ka="entsperren">${icon('check', 'sm')}Entsperren</button>` : '');
@@ -193,7 +198,7 @@
       const r = await api('anmeldekonto_aendern', { body });
       kaZeigen(r.konto);
       m.classList.add('st-ok');
-      m.textContent = was === 'passwort' ? (body.aendern ? 'Passwort gesetzt – bitte persönlich weitergeben; bei der ersten Anmeldung legt der Mitarbeiter ein eigenes fest.' : 'Passwort gesetzt.')
+      m.textContent = was === 'passwort' ? ((r.temporaer ?? body.aendern) ? 'Passwort gesetzt – bitte persönlich weitergeben; bei der ersten Anmeldung legt der Mitarbeiter ein eigenes fest.' : 'Passwort gesetzt.')
         : was === 'link' ? `Mail mit Link an ${r.an} geschickt (${72} Stunden gültig).` : was === 'entsperren' ? 'Konto entsperrt.' : 'Konto angelegt – jetzt Passwort setzen oder den Link per Mail schicken.';
       if (was === 'passwort') { $('#ka-pw').hidden = false; $('#user-body [name="ka_pw"]').readOnly = true; $('#ka-pw [data-ka="passwort"]').hidden = true; $('#ka-pw [data-ka="gen"]').hidden = true; }
     } catch (ex) { m.textContent = ex.message; m.classList.add('form-err'); }

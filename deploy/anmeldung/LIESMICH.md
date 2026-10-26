@@ -41,6 +41,14 @@ lesbar) und startet nichts. `--pruefen` zeigt nur, was fehlt. Getestet: `tests/d
 Der Import läuft nur beim ersten Start (vorhandener Realm wird nicht überschrieben). Spätere Änderungen am Realm nur
 als eigener, geprüfter Schritt (`kcadm` im Container, wie in `konten.sh`).
 
+## Sitzungen: Ablauf und Beenden
+
+Die Sitzung des Webserver-Moduls (4 Stunden Leerlauf, höchstens 10 Stunden – wie der Realm nach `realm-aktualisieren`) ist die
+äußere Grenze. Zusätzlich gelten die Einstellungen der Anwendung auch auf den Keycloak-Hosts (seit 26.10.2026,
+`lib/oidc.php`): Nach der eingestellten Inaktivität (Verwaltung → Sicherheit) und nach „Sitzung beenden“ (Verwaltung →
+Sitzungen) geht es erst nach erneuter Anmeldung bei Keycloak weiter (Passwort erneut, `max_age=0`) – die Sitzung entsteht
+nicht mehr stillschweigend neu. Kein Konsolenbefehl nötig.
+
 ## Realm im Betrieb ändern
 
 Der Realm wird nur beim ersten Start importiert. Spätere Änderungen bringt `sh deploy/anmeldung/konten.sh realm-aktualisieren`

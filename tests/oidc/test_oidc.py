@@ -1454,6 +1454,69 @@ with sync_playwright() as pw:
     vor = j.get('konto', {})
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Erika-Neues-Kennwort-7'}])
     check('Passwort setzen: Einmalcode bleibt eingerichtet', code == 200 and vor.get('einmalcode', 0) >= 1 and j['konto'].get('einmalcode') == vor.get('einmalcode'), (vor, j))
+    # Administratoren und Pflicht-Konten: Passwort nur vorübergehend (Sicherheitsdurchsicht 26.10.2026)
+    V3 = Legacy()   # frische Anmeldung: Bestätigung für user_save gültig (wie V2 oben)
+    V3.call('login', {'username': 'admin', 'password': PW_ALT})
+    code_p, j_p = V3.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'twofaPflicht': True})
+    check('Vorbereitung: Zwei-Faktor-Pflicht für erika gesetzt', code_p == 200 and nutzer_roh()['erika'].get('twofaPflicht') is True, (code_p, j_p))
+    code, j = pg.evaluate(hole, erika_id)
+    check('Pflicht-Konto (zweiter Faktor verpflichtend): Passwort nur vorübergehend', code == 200 and j['konto'].get('nurTemporaer') is True, (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Erika-Drittes-Kennwort-9', 'aendern': False}])
+    check('… „dauerhaft“ wird übergangen: muss bei der nächsten Anmeldung ein eigenes festlegen', code == 200 and j.get('temporaer') is True
+          and j['konto'].get('passwortAendern') is True, (code, j))
+    V3.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'twofaPflicht': False})
+    code, j = pg.evaluate(hole, kim)
+    check('normales Konto: Wahl bleibt', code == 200 and j['konto'].get('nurTemporaer') is False, (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': KIM['zweit'], 'aendern': False}])
+    check('… dauerhaft gesetzt (kein eigenes Passwort verlangt)', code == 200 and j.get('temporaer') is False and j['konto'].get('passwortAendern') is False, (code, j))
+
+    # ── Ablauf und Beenden von Sitzungen auf Keycloak-Hosts (Sicherheitsdurchsicht 26.10.2026): keine stille neue Sitzung ──
+    ck = br.new_context(ignore_https_errors=True); pk = eigene_seite(ck.new_page())
+    pk.goto(D + '/'); pk.wait_for_selector('#username'); pk.fill('#username', 'kim.konto'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login')
+    pk.wait_for_selector('#db-grid .db-tile')
+    stat = "fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])"
+    code, j = pk.evaluate(stat)
+    check('Sitzungen: Kim im Dashboard angemeldet', code == 200 and j.get('loggedIn'), (code, j))
+    # Inaktivität nachgestellt (sonst 8 Stunden warten): letzte Aktivität der PHP-Sitzung zurückdrehen
+    sid_k = kekse(ck, 'dashboard.stafl.test')['__Host-WA_ADMIN']['value']; pfad = os.path.join(WORK, 'sessions', 'sess_' + sid_k)
+    with open(pfad, encoding='utf-8') as f:
+        roh = f.read()
+    neu = re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - 9 * 3600};', roh)
+    with open(pfad, 'w', encoding='utf-8') as f:
+        f.write(neu)
+    code, j = pk.evaluate(stat)
+    check('nach Inaktivität: keine neue Sitzung ohne erneute Anmeldung (403, max_age=0)', neu != roh and code == 403 and j.get('code') == 'reauth_required'
+          and 'max_age%3D0' in j.get('anmelden', '') and 'Inaktivität' in j.get('error', ''), (code, j))
+    pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
+    pk.wait_for_selector('#password')
+    check('… Keycloak verlangt das Passwort erneut', pk.is_visible('#password'))
+    pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
+    code, j = pk.evaluate(stat)
+    check('… nach erneuter Anmeldung weiter', code == 200 and j.get('loggedIn'), (code, j))
+    # „Sitzung beenden“ in der Verwaltung: gilt auch, solange die Sitzung bei Keycloak und im Webserver-Modul noch läuft
+    code, j = pg.evaluate(post, ['session_end', {'uid': kim}])
+    if code == 403:   # Bestätigung der Verwaltung abgelaufen (langsame Umgebung): über den bisherigen Zugang beenden
+        V.call('reauth', {'password': PW_ALT}); code, j = V.call('session_end', {'uid': kim})
+    check('Sitzung beenden (alle Sitzungen von Kim)', code == 200 and j.get('ended', 0) >= 1, (code, j))
+    code, j = pk.evaluate(stat)
+    check('… beendete Sitzung entsteht nicht neu: erneute Anmeldung verlangt (403)', code == 403 and j.get('code') == 'reauth_required' and 'beendet' in j.get('error', ''), (code, j))
+    # anderer Host ohne bisherige Sitzung dort: Single Sign-on gilt, aber vor dem Beenden angemeldet → erneute Anmeldung
+    pa_k = eigene_seite(ck.new_page())
+    pa_k.goto(A + '/admin/'); pa_k.wait_for_selector('#password', timeout=30000)
+    check('… auch auf einem anderen Host: Keycloak verlangt das Passwort erneut (Mitarbeiter vermerkt)', pa_k.url.startswith(L) and pa_k.is_visible('#password'), pa_k.url)
+    pa_k.fill('#password', KIM['zweit']); pa_k.click('#kc-login'); pa_k.wait_for_selector('#screen-editor:not([hidden])')
+    check('… danach dort weiter', pa_k.url.startswith(A + '/admin/'), pa_k.url)
+    code, j = pk.evaluate(stat)
+    pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
+    # Kim hat das Passwort eben auf dem anderen Host neu eingegeben (nach dem Beenden). Keycloak fragt bei max_age=0
+    # nur, wenn diese Eingabe mindestens eine Sekunde zurückliegt – beides ist richtig (frische Anmeldung nach dem Ende).
+    if pk.url.startswith(L):
+        pk.wait_for_selector('#password'); pk.fill('#password', KIM['zweit']); pk.click('#kc-login')
+    pk.wait_for_url(D + '/dashboard/**')
+    code, j = pk.evaluate(stat)
+    check('… nach erneuter Anmeldung wieder möglich', code == 200 and j.get('loggedIn'), (code, j))
+    check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))
+    ck.close()
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': nutzer_roh()['admin']['id'], 'was': 'passwort', 'passwort': 'Admin-Neues-Kennwort-7'}])
     check('eigenes Konto nicht über die Verwaltung (403)', code == 403, (code, j))
     check('Bestätigung nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
@@ -1463,7 +1526,7 @@ with sync_playwright() as pw:
     check('… Lesen bleibt möglich', code == 200 and j['konto'].get('vorhanden') is True, (code, j))
     ctx.close()
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
-    pg.goto(A + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'kim.konto'); pg.fill('#password', KIM['eigen']); pg.click('#kc-login')
+    pg.goto(A + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'kim.konto'); pg.fill('#password', KIM['zweit']); pg.click('#kc-login')
     pg.wait_for_selector('#screen-editor:not([hidden])')
     code, j = pg.evaluate(hole, kim)
     check('Bearbeiterin: Zustand nicht lesbar (403)', code == 403, (code, j))
