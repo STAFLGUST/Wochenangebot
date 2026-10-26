@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-/* Aktionen: Sicherheit, Länder-/IP-Sperre, Sitzungen, Nutzer, Protokoll
+/* Aktionen: Sicherheit, Länder-/IP-Sperre, Sitzungen (Oberfläche Modul Sicherheit), Betriebszustand, Nutzer, Protokoll
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -34,32 +34,18 @@ switch ($action) {
             $g7 = (($gs['day'] ?? '') === gmdate('Y-m-d') ? (int)($gs['today'] ?? 0) : 0);
             foreach ($gs['days'] ?? [] as $dd => $n) if ($dd > gmdate('Y-m-d', time() - 7 * 86400)) $g7 += (int)$n;
             $secLog = sec_log_entries(14);
-            respond(['ok' => true, 'settings' => sec(), 'bestaetigung' => bestaetigung_katalog(), 'bestaetigungMinuten' => BESTAETIGUNG_MINUTEN, 'myIp' => client_ip(), 'https' => is_https(),
+            respond(betrieb_daten($me) + ['ok' => true, 'settings' => sec(), 'bestaetigung' => bestaetigung_katalog(), 'bestaetigungMinuten' => BESTAETIGUNG_MINUTEN, 'myIp' => client_ip(), 'https' => is_https(),
                      'timeline' => sec_timeline($secLog), 'topIps' => sec_top_ips($secLog), 'config' => sec_config_checks($users),
-                     'backup' => store_read('sicherung'),
-                     'wartung' => wartung(), 'wartungEingabe' => modul_wartung_anzeige('angebot', 'eingabe', $me),
-                     'wartungVerlauf' => array_slice(modul_laufzeit()['verlauf'], 0, 20), 'storage' => store_stats(), 'php' => PHP_VERSION,
-                     'disk' => ['free' => @disk_free_space($DATA) ?: null, 'total' => @disk_total_space($DATA) ?: null],
-                     'mail' => (function () {
-                         $l = array_filter(store_read('mailversand') ?? [], function ($x) { return strtotime($x['t']) > time() - 7 * 86400; });
-                         return ['configured' => (bool)mail_cfg() && (bool)mail_base_url(), 'sent7' => count(array_filter($l, function ($x) { return $x['ok']; })), 'failed7' => count(array_filter($l, function ($x) { return !$x['ok']; }))];
-                     })(),
-                     'orders' => (function () {
-                         $all = store_read('bestellungen') ?? [];
-                         $l = array_filter($all, function ($x) { return strtotime($x['t']) > time() - 7 * 86400; });
-                         $last = $all ? end($all) : null;
-                         return ['enabled' => order_enabled(), 'n7' => count($l), 'failed7' => count(array_filter($l, function ($x) { return ($x['status'] ?? '') === 'fehler'; })), 'last' => $last['t'] ?? null, 'lastNr' => $last['nr'] ?? null];
-                     })(),
-                     'customers' => (function () {
-                         $c = customers_load()['customers'];
-                         $act = array_filter($c, function ($x) { return !empty($x['active']); });
-                         return ['active' => count($act), 'withLogin' => count(array_filter($act, function ($x) { return !empty($x['login']['active']); })),
-                                 'online' => count(array_unique(array_column(ksess_prune(store_read('kundensitzungen') ?? []), 'kid')))];
-                     })(),
-                     'deployment' => store_read('deployment'),
                      'myCountry' => geo_country(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
                      'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
+        }
+
+        /* Verwaltung → System: Betriebszustand (Wartung, Sicherung, Bereitstellung, Speicher, Versand) – nur lesend */
+        case 'betrieb_status': {
+            $me = require_auth(false, 'admin');
+            header('Cache-Control: no-store');
+            respond(['ok' => true] + betrieb_daten($me));
         }
 
         /* Nur lesende Diagnosen (keine Befehle auf dem Server) */

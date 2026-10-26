@@ -94,7 +94,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `passkey.php` | plattform | Aktionen: Passkeys (WebAuthn) – eigene Passkeys verwalten, Anmeldung mit Passkey Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `preisverlauf.php` | angebot | Aktionen: Preisverlauf Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `schutz.php` | plattform | Schutzzentrale (Verwaltung → Schutz, nur Administratoren) |
-| `verwaltung.php` | plattform | Aktionen: Sicherheit, Länder-/IP-Sperre, Sitzungen, Nutzer, Protokoll Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `sicherheit.php` | sicherheit | Aktionen des Moduls Sicherheit (Oberfläche sicherheit.intern, sicherheit.dashboard-stafl.de; docs/plattform/modul-sicherheit.md) |
+| `verwaltung.php` | plattform | Aktionen: Sicherheit, Länder-/IP-Sperre, Sitzungen (Oberfläche Modul Sicherheit), Betriebszustand, Nutzer, Protokoll Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit … |
 | `zugang.php` | plattform | Aktionen: Status, Wartungsmodus, Anmeldung, Zwei-Faktor, Passwort Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 
 ## `app/api/lib/`
@@ -121,6 +122,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kundenmail.php` | angebot | E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand |
 | `module-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml – nicht von Hand ändern. |
 | `module.php` | plattform | Modulzustand zur Laufzeit: wer darf welche Oberfläche nutzen (GR-102)? Grundlage ist ausschließlich die erzeugte Liste lib/module-liste.php (Modulregister regeln/module.toml und Entscheidungstabelle regeln/wartung.toml). |
+| `notfall.php` | plattform | Notfallmodus (Oberfläche |
 | `nutzer.php` | plattform | Mitarbeiter-Zugänge und Passwortregeln |
 | `oidc.php` | plattform | Mitarbeiteranmeldung über Keycloak (ADR-003, GR-110) – Roadmap 7b, vorerst nur in CI und lokaler Testumgebung. |
 | `passkey.php` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge – ohne Fremdbibliothek. |
@@ -181,8 +183,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-import.css` | verwaltung | Eingabebereich – Importzentrale (Verwaltung → Import, admin-import.js) Nutzt die Farben und Bausteine von app.css/admin.css; hier nur die eigenen Teile. |
 | `admin-import.js` | verwaltung | Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadmap 10b) Ein Ablauf für alle Importe |
 | `admin-rollen.js` | plattform | Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle: welche Module sie öffnen darf (Modulzugang „<modul>.zugang“) und … |
-| `admin-schutz.js` | plattform | Wochenangebot – Eingabebereich, Schutz (nur Administratoren) Firewall, Sperrliste (von Hand, automatisch, Bedrohungsliste), Live-Verkehr, Vorlagen und Export der Sicherheitseinstellungen. |
-| `admin-verwaltung.js` | verwaltung | Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll, Sicherheit. |
+| `admin-verwaltung.js` | verwaltung | Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll, System (Betrieb, Wartung, Module). |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
@@ -243,6 +244,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `marketing.css` | marketing | STAFL-Plattform · Marketing · Redaktionsplan – Gestaltung wie Dashboard, HR und CRM („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten, Kalender und Board. |
 | `marketing.js` | marketing | STAFL-Plattform · Marketing · Redaktionsplan Social-Media-Inhalte planen, produzieren, freigeben und veröffentlichen |
 
+## `app/module/sicherheit/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `index.html` | sicherheit | Seite „STAFL-Plattform · Sicherheit“ |
+| `sicherheit.css` | sicherheit | STAFL-Plattform · Sicherheit – Gestaltung wie Dashboard, HR, CRM und Marketing („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten und Blöcke. |
+| `sicherheit.js` | sicherheit | STAFL-Plattform · Sicherheit (Modul sicherheit, Oberfläche sicherheit.intern; docs/plattform/modul-sicherheit.md) Reiter |
+
 ## `dashboard/`
 
 | Datei | Modul | Inhalt |
@@ -265,6 +274,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `freigabe-einspielen.sh` | plattform | Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“), prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück. |
 | `ip-freigabe-aus.php` | plattform | Offline emergency tool, also supports SQLite. |
 | `ip-freigabe-aus.sh` | plattform | Notfall: IP-Freigabe und Ländersperre ausschalten (z. |
+| `notfall-aus.php` | plattform | Notfallmodus beenden (Server-Werkzeug zu deploy/notfall-aus.sh) – gleicher Ablauf wie notfall_ende() in app/api/lib/notfall.php, aber ohne Anmeldung |
+| `notfall-aus.sh` | plattform | Notfallmodus beenden (Modul Sicherheit), wenn das in der Oberfläche nicht mehr geht – z. |
 | `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (angebot-stafl.de/admin/ mit eigener Anmeldung) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
 | `passwort-zuruecksetzen.php` | plattform | Wird von passwort-zuruecksetzen.sh im App-Container ausgeführt (nicht über das Web erreichbar). |
 | `passwort-zuruecksetzen.sh` | plattform | Notfall: Passwort eines Nutzers zurücksetzen (z. |
@@ -383,6 +394,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `adr-003-domains-anmeldung.md` | plattform | ADR-003: Domainstruktur und Mitarbeiteranmeldung |
 | `bestandsaufnahme.md` | plattform | Bestandsaufnahme (Phase 0) – Stand 21.10.2026 |
 | `inbetriebnahme-anmeldung.md` | plattform | Inbetriebnahme der zentralen Anmeldung (Keycloak) – Ablaufplan |
+| `modul-sicherheit.md` | sicherheit | Modul Sicherheit (sicherheit.dashboard-stafl.de) |
 | `multi-agent.md` | plattform | Entwicklung mit mehreren KI-Agenten |
 | `roadmap.md` | plattform | Roadmap – priorisierte Pull Requests |
 | `zielarchitektur.md` | plattform | Zielarchitektur der STAFL-Plattform |
@@ -416,6 +428,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `marketing.toml` | marketing | Aktionen des Moduls „marketing“ |
 | `mobile.toml` | mobile | Aktionen des Moduls „mobile“ |
 | `plattform.toml` | plattform | Aktionen des Moduls „plattform“ |
+| `sicherheit.toml` | sicherheit | Aktionen des Moduls „sicherheit“ |
 | `verwaltung.toml` | verwaltung | Aktionen des Moduls „verwaltung“ |
 
 ## `tests/`
@@ -454,7 +467,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `order_setup.py` | angebot | Gemeinsame Vorbereitung der Bestell-Testgruppen |
 | `smtp_test.py` | plattform | Kleiner Test-Mailserver für die Ende-zu-Ende-Tests (nimmt Nachrichten an und hält sie im Speicher). |
 | `test_admin_confirmation.py` | plattform | Sensible Aktionen, kontoweite Bestätigungsbremse und Dateisperren über echte HTTP-Anfragen. |
-| `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe |
+| `test_admin_confirmation_ui.py` | plattform | Abgelaufene Admin-Freigabe im Browser |
 | `test_aktionsregister.py` | plattform | Aktionsregister (regeln/aktionen/*.toml → app/api/lib/aktionen-liste.php) wirkt im API-Einstieg für jede Aktion. |
 | `test_angebote.py` | angebot | Mehrere Angebote: Kundenangebote mit eigenen Preisen, Verwaltung, Übernahme, Veröffentlichen, Auslieferung nur an Berechtigte (Regel |
 | `test_angebotsliste.py` | angebot | Angebotsliste (Standardansicht der Angebotsseite) |
@@ -464,7 +477,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_auswertung.py` | verwaltung | Auswertung: Karte der Kunden-Anmeldungen. |
 | `test_auth_hardening.py` | plattform | Direkte HTTP-Regressionen |
 | `test_benachrichtigung.py` | plattform | Benachrichtigungen an Mitarbeiter |
-| `test_bestaetigung.py` | plattform | Sicherheit → Passwortbestätigung: je Aktion einstellbar, ob das Passwort verlangt wird; feste Aktionen (Zugänge, Rechte, Sicherheit, Postfach) immer mit Bestätigung; Gültigkeitsdauer 5/15/30/60 Minuten; Prüfungen, … |
+| `test_bestaetigung.py` | plattform | Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einstellbar, ob das Passwort verlangt wird; feste Aktionen (Zugänge, Rechte, Sicherheit, Postfach) immer mit Bestätigung; Gültigkeitsdauer … |
 | `test_bestand_pdf.py` | bestand | Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge. |
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |
@@ -477,8 +490,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_fehlerpruefung.py` | angebot | Regressionstests der Design- und Fehlerprüfung |
 | `test_frontend.py` | angebot | search |
 | `test_gemeinsam.py` | angebot | Mehrere Mitarbeiter bearbeiten den Entwurf gleichzeitig |
-| `test_geo.py` | plattform | Testgruppe geo: Ländersperre in der Sicherheit – Länderliste, Suche, Selbstaussperr-Schutz, Statuskarten. |
-| `test_geo_ip.py` | plattform | Testgruppe geo_ip: IP-Suche der Ländersperre – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren. |
+| `test_geo.py` | plattform | Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste, Suche, Selbstaussperr-Schutz, Zusammenfassung, Statistik (Firewall & Sperren). |
+| `test_geo_ip.py` | plattform | Testgruppe geo_ip: IP-Suche der Ländersperre (Modul Sicherheit, Dialog Ländersperre) – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren. |
 | `test_geraete.py` | plattform | Vertraute Geräte: Ein Browser, auf dem sich ein Zugang schon erfolgreich angemeldet hat, kommt auch während einer fremd ausgelösten Kontosperre mit dem richtigen Passwort durch (Mitarbeiter mit und ohne Zwei-Faktor, … |
 | `test_herkunft.py` | plattform | Herkunftsprüfung im API-Einstieg (GR-109, lib/herkunft.php): nur Anfragen von der eigenen Seite. `Sec-Fetch-Site` same-site/cross-site → 403 (auch von Nachbar-Subdomains wie test.angebot-stafl.de); bei Anfragen außer … |
 | `test_hist.py` | angebot | Testgruppe hist: Preisverlauf – Import alter Angebotslisten, Zeiträume, Datendialog. |
@@ -496,6 +509,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_modul_wartung.py` | plattform | Wartung je Oberfläche (GR-107) |
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |
 | `test_modulverwaltung.py` | plattform | Modulverwaltung (Roadmap 5, GR-102) |
+| `test_notfall.py` | sicherheit | Notfallmodus (Modul Sicherheit, lib/notfall.php, docs/plattform/modul-sicherheit.md). |
 | `test_nutzer_anlegen.py` | plattform | Verwaltung → Nutzer anlegen |
 | `test_oidc_dashboard.py` | plattform | Dashboard-Host (dashboard-stafl.de): nur Grundaktionen (lib/herkunft.php, host_nur_grundaktionen, GR-109). |
 | `test_oidc_kern.py` | plattform | Zentrale Anmeldung – Verhalten der Anwendung ohne Keycloak (lib/oidc.php, GR-110). |
@@ -517,6 +531,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_sicherheit_druck.py` | plattform | Sicherheit, Druck und Formatierung |
 | `test_sicherheit_freigaben.py` | plattform | Freigegebene Sicherheitsänderungen |
 | `test_sicherheit_it.py` | plattform | Sicherheit für IT-Administratoren |
+| `test_sicherheit_modul.py` | sicherheit | Modul Sicherheit (Oberfläche sicherheit.intern unter /module/sicherheit/, docs/plattform/modul-sicherheit.md). |
 | `test_sidenav.py` | angebot | Testgruppe sidenav: Navigation des Eingabebereichs, Sichtbarkeit je Rolle, Kopfzeile ohne Überlappung und Darstellung je Bildschirmbreite. |
 | `test_sitzung_cookie.py` | plattform | Sitzungs-Cookie mit Präfix __Host- über HTTPS (GR-108, ADR-003 Befund B-1). |
 | `test_stilllegung.py` | plattform | Alter Eingabebereich stillgelegt (WA_EIGENE_ANMELDUNG=aus, lib/oidc.php): auf dem Host ohne zentrale Anmeldung (angebot-stafl.de) gibt es keine Mitarbeiteranmeldung und keine Mitarbeiteraktionen mehr; die Kundenseite … |

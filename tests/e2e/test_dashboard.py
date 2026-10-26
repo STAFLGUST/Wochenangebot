@@ -27,7 +27,7 @@ A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 A.call('user_save', {'id': '', 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True, 'password': 'Editor-Zugang-77', 'mustChange': False})
 # Anwendungen in der Reihenfolge des Registers, danach der Bereich „Verwaltung & Daten“ (dashboard_gruppe)
-REIHE = ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'hr', 'marketing', 'controlling', 'import', 'verwaltung']
+REIHE = ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'hr', 'marketing', 'controlling', 'import', 'verwaltung', 'sicherheit']
 fehler = []
 
 
@@ -118,16 +118,16 @@ with sync_playwright() as pw:
     check('Anmeldehinweis: Schloss-Symbol 30 px, Knopf ohne Unterstreichung', knopf == [30, 'none'], knopf)
     ctx.close()
 
-    # ── Administrator: dreizehn Kacheln aus dem Register ──
+    # ── Administrator: vierzehn Kacheln aus dem Register ──
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.41')
     k = kacheln(pg)
-    check('dreizehn Kacheln in der Reihenfolge des Modulregisters, Verwaltung & Daten zuletzt', [x['id'] for x in k] == REIHE, [x['id'] for x in k])
+    check('vierzehn Kacheln in der Reihenfolge des Modulregisters, Verwaltung & Daten zuletzt', [x['id'] for x in k] == REIHE, [x['id'] for x in k])
     bereiche = pg.evaluate("""[[...document.querySelectorAll('#db-grid .db-tile')].map(t => t.dataset.modul),
         [...document.querySelectorAll('#db-grid-verwaltung .db-tile')].map(t => t.dataset.modul), document.querySelector('#db-verwaltung-titel').textContent,
         document.querySelector('#db-verwaltung').getBoundingClientRect().top > Math.max(...[...document.querySelectorAll('#db-grid .db-tile')].map(t => t.getBoundingClientRect().bottom)),
         [...document.querySelectorAll('#db-grid-verwaltung .db-tile')].every(t => t.classList.contains('db-breit') && getComputedStyle(t).flexDirection === 'row')]""")
-    check('Import und Verwaltung abgesetzt im eigenen Bereich „Verwaltung & Daten“ unter den Anwendungen, breite Kacheln (Symbol links)',
-          bereiche[0] == REIHE[:-2] and bereiche[1] == ['import', 'verwaltung'] and bereiche[2] == 'Verwaltung & Daten' and bereiche[3] and bereiche[4], bereiche)
+    check('Import, Verwaltung und Sicherheit abgesetzt im eigenen Bereich „Verwaltung & Daten“ unter den Anwendungen, breite Kacheln (Symbol links)',
+          bereiche[0] == REIHE[:-3] and bereiche[1] == ['import', 'verwaltung', 'sicherheit'] and bereiche[2] == 'Verwaltung & Daten' and bereiche[3] and bereiche[4], bereiche)
     check('Desktop: kein Pfeil in den breiten Kacheln (nur am Handy)', pg.evaluate("[...document.querySelectorAll('.db-pfeil')].every(e => getComputedStyle(e).display === 'none')"))
     check('Kachelnamen aus dem Register', [x['name'] for x in k][:2] == ['Angebot', 'Bestand'], [x['name'] for x in k])
     ang = k[0]
@@ -161,7 +161,11 @@ with sync_playwright() as pw:
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
     check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
-    check('Zähler: 7 von 13 Anwendungen', '7 von 13' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Zähler: 8 von 14 Anwendungen', '8 von 14' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    sic = kid['sicherheit']
+    check('Sicherheit: freigegeben (Inhaber 26.10.2026), rechts neben der Verwaltung, Verweis auf die Sicherheitszentrale, eigenes Symbol',
+          sic['tag'] == 'A' and sic['href'] == '/module/sicherheit/' and sic['badge'] == 'Verfügbar' and sic['symbol'] == 'shield-lock'
+          and pg.evaluate("!!document.querySelector('#i-schild') && document.querySelector('[data-modul=\"sicherheit\"] use').getAttribute('href') === '#i-schild'"), sic)
     neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
     check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR und Marketing verfügbar, Controlling geplant ohne Verweis',
           [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and neu[2]['tag'] == 'DIV' and not neu[2]['href']
@@ -182,7 +186,7 @@ with sync_playwright() as pw:
           and pg.evaluate("getComputedStyle(document.querySelector('.db-band')).boxShadow") == 'none', band)
     blass = pg.evaluate("[getComputedStyle(document.querySelector('.gesperrt .db-text')).opacity, getComputedStyle(document.querySelector('a.db-tile .db-text')).opacity]")
     check('gesperrte Kacheln blass, verfügbare in voller Stärke', blass == ['0.55', '1'], blass)
-    check('Symbolfarbe je Registersymbol (Angebot: tag, Verwaltung: settings)', k[0]['symbol'] == 'tag' and k[-1]['symbol'] == 'settings', [x['symbol'] for x in k])
+    check('Symbolfarbe je Registersymbol (Angebot: tag, Verwaltung: settings)', k[0]['symbol'] == 'tag' and kid['verwaltung']['symbol'] == 'settings', [x['symbol'] for x in k])
     glas = pg.evaluate("""[...document.querySelectorAll('.db-kopf, a.db-tile')].map(e => { const s = getComputedStyle(e);
         return (s.backdropFilter || s.webkitBackdropFilter || '').includes('blur(28px)') && s.backgroundColor.startsWith('rgba'); })""")
     check('Kopfzeile und Kacheln als Glasflächen (halbtransparent, unscharf)', glas and all(glas), glas)
@@ -288,7 +292,7 @@ with sync_playwright() as pw:
     breit = pg.evaluate("""[getComputedStyle(document.querySelector('#db-grid-verwaltung')).gridTemplateColumns.split(' ').length,
         [...document.querySelectorAll('#db-grid-verwaltung a.db-breit')].map(t => [getComputedStyle(t.querySelector('.db-pfeil')).display !== 'none',
           t.querySelector('.db-foot').getBoundingClientRect().width < 2, t.querySelector('.db-badge').textContent])]""")
-    check('390 px: Verwaltung & Daten einspaltig, Pfeil statt grüner Pille (Stand bleibt für Screenreader)', breit[0] == 1 and len(breit[1]) == 2
+    check('390 px: Verwaltung & Daten einspaltig, Pfeil statt grüner Pille (Stand bleibt für Screenreader)', breit[0] == 1 and len(breit[1]) == 3
           and all(p and f and b == 'Verfügbar' for p, f, b in breit[1]), breit)
     gross = pg.evaluate("parseFloat(getComputedStyle(document.querySelector('#db-titel')).fontSize)")
     check('390 px: große Überschrift (34 px)', gross == 34, gross)

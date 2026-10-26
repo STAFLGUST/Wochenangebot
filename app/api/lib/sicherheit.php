@@ -31,6 +31,7 @@ const BESTAETIGUNG = [
     'geo_update'            => ['Einstellungen', 'Länderdaten aktualisieren', false],
     'geo_clear_stats'       => ['Einstellungen', 'Statistik abgewiesener Zugriffe zurücksetzen', false],
     'fw_feed'               => ['Einstellungen', 'Bedrohungsliste (Spamhaus) aktualisieren', false],
+    'notfall_ausloesen'     => ['Sicherheit', 'Notfallmodus auslösen (zusätzlich zum Bestätigungswort)', false],
     'user_save'             => ['Immer mit Bestätigung', 'Nutzer anlegen oder ändern', true],
     'user_delete'           => ['Immer mit Bestätigung', 'Nutzer löschen', true],
     'user_unlock'           => ['Immer mit Bestätigung', 'Gesperrten Zugang entsperren', true],
@@ -47,6 +48,7 @@ const BESTAETIGUNG = [
     'modul_wartung_save'    => ['Immer mit Bestätigung', 'Wartung einzelner Bereiche (z. B. Eingabebereich) starten, planen oder beenden', true],
     'modul_freigabe_save'   => ['Immer mit Bestätigung', 'Freigabe eines Bereichs ändern (Modulverwaltung)', true],
     'modul_tester_save'     => ['Immer mit Bestätigung', 'Tester eines Bereichs festlegen (Modulverwaltung)', true],
+    'notfall_beenden'       => ['Immer mit Bestätigung', 'Notfallmodus beenden', true],
 ];
 const BESTAETIGUNG_MINUTEN = [5, 15, 30, 60];
 function bestaetigung_noetig(string $key): bool
@@ -206,7 +208,16 @@ function sess_remove(callable $match): int
 
 /* ---------- Wartungsmodus ---------- */
 const WARTUNG_TEXT = 'Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.';
+/* Wirksame Wartung der Angebotsseite: im Notfallmodus (lib/notfall.php) immer – mit dessen neutralem Kundenhinweis,
+   ohne Urheber („notfall“ = true) –, sonst die gespeicherte Wartung (wartung_gespeichert) */
 function wartung(): ?array
+{
+    $n = function_exists('notfall') ? notfall() : null;
+    if ($n) return ['active' => true, 'message' => notfall_kundentext($n), 'until' => null, 'since' => $n['seit'] ?? null, 'by' => '', 'notfall' => true];
+    return wartung_gespeichert();
+}
+/* Von Hand eingeschaltete Wartung (Dokument „wartung“) – unabhängig vom Notfallmodus, bleibt nach dessen Ende bestehen */
+function wartung_gespeichert(): ?array
 {
     $w = store_read('wartung');
     if (!is_array($w) || empty($w['active'])) return null;

@@ -6,7 +6,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 if ($action === 'module_status') {
     $me = require_auth();
-    $out = ['ok' => true, 'module' => modul_uebersicht($me)];
+    $out = ['ok' => true, 'module' => modul_uebersicht($me), 'notfall' => notfall_anzeige($me)];   // Notfallmodus: Hinweis im Dashboard
     if ($me['role'] === 'admin') $out['verlauf'] = array_slice(modul_laufzeit()['verlauf'], 0, 30);
     respond($out);
 }

@@ -1,4 +1,6 @@
 # Aktionen des Moduls „plattform“: Anmeldung, Zwei-Faktor, Passkeys, Nutzer und Rechte, Sicherheit, Schutzzentrale, E-Mail-Postfach, Benachrichtigungen, Wartungsmodus, Dateiprüfung.
+# Sicherheit, Schutzzentrale und Dateiprüfung liegen seit 26.10.2026 auf der Oberfläche des Moduls Sicherheit (sicherheit.intern,
+# nur auf sicherheit.dashboard-stafl.de, GR-109); der Code bleibt im Plattformkern (aktionen/verwaltung.php, schutz.php, integritaet.php).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 
 schema = 1
@@ -24,55 +26,55 @@ schreibend = true
 wartung_frei = true
 
 [aktion.fw_export]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 
 [aktion.fw_feed_update]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.fw_feed_auffrischen]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true   # lädt eine eingeschaltete, veraltete Bedrohungsliste neu (vorher als Nebenwirkung von fw_status)
 
 [aktion.fw_freigeben]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.fw_import]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.fw_save]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.fw_sperren]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.fw_status]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 
 [aktion.fw_verkehr]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 
 [aktion.fw_vorlage]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.geo_clear_stats]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.geo_lookup]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 
 [aktion.geo_update]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.ip_unblock]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.log]
@@ -172,22 +174,22 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.security_export]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.security_integrity]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = "post"   # GET liefert den letzten Lauf, POST prüft
 
 [aktion.security_save]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.security_status]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 
 [aktion.session_end]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.setup]
@@ -241,7 +243,7 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.user_unlock]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"
 schreibend = true
 
 [aktion.users]
@@ -254,6 +256,9 @@ oeffentlich = true
 [aktion.wartung_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+[aktion.betrieb_status]
+oberflaeche = "angebot.eingabe"   # Verwaltung → System: Systemzustand, Wartung, Sicherung, Bereitstellung (Administrator, nur lesend)
 
 [aktion.module_status]
 oberflaeche = "angebot.eingabe"

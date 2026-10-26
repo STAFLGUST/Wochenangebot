@@ -10,7 +10,7 @@
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   /* Symbolnamen des Registers → Symbole dieser Seite (unbekannt → Raster). Die Farbe des Symbol-Quadrats hängt im
      Stylesheet ebenfalls am Symbolnamen (data-symbol), nicht am Modul. */
-  const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', truck: 'cart', upload: 'upload', settings: 'haus',
+  const ICON = { tag: 'tag', boxes: 'box', users: 'users', store: 'store', 'shield-check': 'shield', 'shield-lock': 'schild', truck: 'cart', upload: 'upload', settings: 'haus',
     calendar: 'calendar', megaphone: 'megaphone', chart: 'chart', crate: 'kiste', container: 'container' };
   const BAND = 'Im Bau · Bald verfügbar · Im Bau · Bald verfügbar';
   const ENTWICKLUNG = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Nicht freigegeben' };
@@ -204,7 +204,19 @@
     if (r.status !== 200 || !r.data.ok) { fehler(r.data.error || `Die Anwendungen konnten nicht geladen werden (${r.status}).`); return; }
     $('#db-login').hidden = true; $('#db-bereich').hidden = false;
     begruessung();
+    notfallHinweis(r.data.notfall);
     render(r.data.module || []);
+  }
+
+  /* Notfallmodus (Modul Sicherheit): Hinweis über den Kacheln – Einzelheiten nur für Administratoren und Berechtigte */
+  function notfallHinweis(n) {
+    const el = $('#db-notfall');
+    el.hidden = !n;
+    if (!n) return;
+    const seit = new Date(n.seit).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    el.innerHTML = n.grund !== undefined
+      ? `<strong>Notfallmodus aktiv</strong> seit ${esc(seit)} Uhr${n.von ? ` · ausgelöst von ${esc(n.von)}` : ''}. Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle sind gesperrt.`
+      : '<strong>Anwendungen vorübergehend gesperrt.</strong> Wegen einer Sicherheitsmaßnahme ist der Zugriff gerade nicht möglich. Bitte wenden Sie sich an einen Administrator.';
   }
 
   /* Hell/Dunkel wie auf der Angebotsseite (gleicher Speicherschlüssel, theme.js setzt es vor dem ersten Zeichnen) */

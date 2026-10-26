@@ -42,6 +42,9 @@ const PERMS = [
     'wochenangebot.senden'     => ['g' => 'Kunden', 'l' => 'Wochenangebot per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
     'sonderposten.senden'      => ['g' => 'Kunden', 'l' => 'Sonderposten per E-Mail an Kunden senden', 'k' => 'machen', 'd' => [], 'r' => ['kunden.sehen']],
     'protokoll.sehen'          => ['g' => 'Verwaltung', 'l' => 'Protokoll ansehen', 'k' => 'sehen', 'd' => [], 'r' => []],
+    // Modul Sicherheit (26.10.2026): ohne Standardrollen; Einstellungen, Sperren, Sitzungen und das Beenden des Notfalls bleiben Administratoren vorbehalten
+    'sicherheit.sehen'         => ['g' => 'Sicherheit', 'l' => 'Lagebild, Sicherheitsereignisse und Notfall-Zustand ansehen (nur lesen, mit IP-Adressen und Benutzernamen)', 'k' => 'sehen', 'd' => [], 'r' => ['sicherheit.zugang']],
+    'sicherheit.notfall'       => ['g' => 'Sicherheit', 'l' => 'Notfallmodus auslösen (Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle werden ausgesperrt); beenden nur Administratoren', 'k' => 'machen', 'd' => [], 'r' => ['sicherheit.zugang']],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */
@@ -52,7 +55,8 @@ const PERM_ROLES = ['viewer', 'editor'];
 /* ---------- Rechtekatalog: PERMS + Modulzugang je Kachel ----------
    Modulzugang „<modul>.zugang“ (Roadmap 7b, GR-103): darf die Kachel im Dashboard sehen und die Oberfläche des Moduls
    öffnen. Er entsteht aus dem Modulregister (jedes Modul mit Kachel) – neue Module bekommen ihn ohne Code-Änderung.
-   Standard: beide Standardrollen (so bleibt der bisherige Zugang aller Mitarbeiter unverändert). Die Rechte innerhalb
+   Standard: beide Standardrollen (so bleibt der bisherige Zugang aller Mitarbeiter unverändert), außer das Register nennt
+   andere (Feld zugang_rollen, z. B. Sicherheit: keine). Die Rechte innerhalb
    eines Moduls (PERMS) hängen nicht davon ab: ein Recht kann auch in einem anderen Modul genutzt werden (z. B. Kunden
    sehen im Angebot), der Modulzugang sperrt nur die Oberfläche des Moduls (modul_zugang_durchsetzen). */
 function perms_katalog(): array
@@ -62,7 +66,9 @@ function perms_katalog(): array
     $k = [];
     foreach (MODULE as $id => $m) {
         if (empty($m['dashboard']) || empty($m['kachel_ziel'])) continue;
-        $k["$id.zugang"] = ['g' => $m['name'], 'l' => 'Modul „' . $m['name'] . '“ öffnen (Kachel im Dashboard)', 'k' => 'zugang', 'd' => PERM_ROLES, 'r' => [], 'm' => $id];
+        // Standardrollen mit Zugang: Registerfeld zugang_rollen (z. B. [] = nur Administratoren und ausdrücklich Berechtigte), sonst beide
+        $std = is_array($m['zugang_rollen'] ?? null) ? array_values(array_intersect($m['zugang_rollen'], PERM_ROLES)) : PERM_ROLES;
+        $k["$id.zugang"] = ['g' => $m['name'], 'l' => 'Modul „' . $m['name'] . '“ öffnen (Kachel im Dashboard)', 'k' => 'zugang', 'd' => $std, 'r' => [], 'm' => $id];
     }
     foreach (PERMS as $key => $p) $k[$key] = $p + ['m' => recht_modul($key)];
     return $k;

@@ -325,6 +325,12 @@ schutz = "intern"
 beschreibung = "Statistik der Länder-/IP-Sperre"
 
 [[dokument]]
+name = "sicherheit-notfall"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Notfallmodus (Modul Sicherheit): Zustand, Grund, Kundenhinweis, Wirkung, gesicherte Sicherheits- und Firewall-Einstellungen, Verlauf"
+
+[[dokument]]
 name = "wartung"
 eigentuemer = "plattform"
 schutz = "intern"

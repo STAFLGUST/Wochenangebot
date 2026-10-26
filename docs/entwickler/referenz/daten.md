@@ -54,6 +54,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `rechte` | Plattformkern | intern | – | – | Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern |
 | `rollen` | Plattformkern | intern | – | – | Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php) |
 | `sicherheit` | Plattformkern | intern | – | – | Sicherheitseinstellungen (Zwei-Faktor-Pflicht, IP-/Ländersperre, Passwortbestätigungen) |
+| `sicherheit-notfall` | Plattformkern | intern | – | – | Notfallmodus (Modul Sicherheit): Zustand, Grund, Kundenhinweis, Wirkung, gesicherte Sicherheits- und Firewall-Einstellungen, Verlauf |
 | `sicherung` | Plattformkern | intern | – | – | Status der Datensicherung (Datei neben der Datenbank) |
 | `sitzungen` | Plattformkern | geheim | – | – | Sitzungsregister der Mitarbeiter |
 | `sperrliste` | Plattformkern | intern | – | – | Gesperrte Adressen |

@@ -133,7 +133,9 @@ function notify_send(string $ev, array $to, array $items, int $skipped, bool $te
     [$subject, $text, $html] = notify_mail($ev, $items, $skipped, $test);
     $jobs = [];
     foreach ($to as $a) $jobs[] = ['to' => $a, 'name' => '', 'subject' => $subject, 'text' => $text, 'html' => $html];
-    $res = mail_send_many($cfg, $jobs);
+    // Benachrichtigungen gehen auch im Notfallmodus raus (nur an die eingetragenen Empfänger, lib/notfall.php)
+    $GLOBALS['NOTFALL_MAIL_FREI'] = true;
+    try { $res = mail_send_many($cfg, $jobs); } finally { $GLOBALS['NOTFALL_MAIL_FREI'] = false; }
     with_lock('mailversand', function () use ($jobs, $res, $by, $ev) {
         $l = store_read('mailversand') ?? [];
         foreach ($jobs as $k => $j) $l[] = ['t' => now(), 'typ' => 'benachrichtigung', 'kid' => '', 'firma' => NOTIFY_EVENTS[$ev]['label'], 'to' => $j['to'], 'ok' => !empty($res[$k]['ok']), 'error' => $res[$k]['error'] ?? '', 'by' => $by];
