@@ -79,8 +79,60 @@
     if (!alt.length) return '';
     return `<div class="gcard hr-alt" id="hr-alt"><p><strong>${alt.length === 1 ? '1 Eintrag' : alt.length + ' Einträge'} der Urlaubsliste ohne Mitarbeiter:</strong>
       ${esc(alt.slice(0, 8).map((p) => `${p.vorname} ${p.nachname}`.trim()).join(', '))}${alt.length > 8 ? ' …' : ''}.
-      Beim Übernehmen wird jeder Eintrag dem gleichnamigen Mitarbeiter zugeordnet oder als Mitarbeiter ohne Anmeldung angelegt – Urlaub und Abwesenheiten bleiben erhalten.</p>
-      <button type="button" class="btn primary" data-hr-alt>${icon('check', 'sm')}In Mitarbeiter übernehmen</button></div>`;
+      Beim Übernehmen wird jeder Eintrag dem gleichnamigen Mitarbeiter zugeordnet oder als Mitarbeiter ohne Anmeldung angelegt – Urlaub und Abwesenheiten bleiben erhalten.
+      Weicht der Name ab (z. B. anderer Name im Konto), vorher <strong>einzeln zuordnen</strong>.</p>
+      <div class="hr-alt-knoepfe"><button type="button" class="btn" data-hr-alt-einzeln>Einzeln zuordnen …</button>
+      <button type="button" class="btn primary" data-hr-alt>${icon('check', 'sm')}In Mitarbeiter übernehmen</button></div></div>`;
+  }
+
+  /* Einzeln zuordnen: jeden Eintrag ohne Mitarbeiter einem gewählten Mitarbeiter zuordnen – auch bei anderem Namen;
+     hat der Mitarbeiter schon HR-Angaben, führt der Server beide zusammen (hr_altbestand_zuordnen) */
+  let altDlg = null;
+  const nk = (p) => `${p.vorname} ${p.nachname}`.trim();
+  function vorschlag(e, ps) {
+    // gleicher Nachname, eindeutig – sonst keine Vorauswahl
+    const t = ps.filter((p) => p.nachname && e.nachname && p.nachname.toLocaleLowerCase('de-DE') === e.nachname.toLocaleLowerCase('de-DE'));
+    return t.length === 1 ? t[0].nutzer : '';
+  }
+  function altDialogInhalt() {
+    const alt = daten.personen.filter((p) => p.altbestand);
+    const ps = daten.personen.filter((p) => !p.altbestand).sort((a, b) => nk(a).localeCompare(nk(b), 'de'));
+    const opts = (sel) => '<option value="">– Mitarbeiter wählen –</option>' + ps.map((p) => `<option value="${esc(p.nutzer)}"${p.nutzer === sel ? ' selected' : ''}>${esc(nk(p))}${p.zugang ? ' (' + esc(p.username) + ')' : ' (ohne Anmeldung)'}</option>`).join('');
+    return `<div class="dlg-head"><div><h2 id="hra-title">Einträge einzeln zuordnen</h2><p>Abwesenheiten, Personalnummer, Anspruch und Übertrag gehen auf den gewählten Mitarbeiter über.
+        Hat er schon Angaben, gelten seine; nur leere Felder werden ergänzt.</p></div>
+        <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">${alt.length ? `<ul class="hr-alt-liste">${alt.map((e) => `<li data-eintrag="${esc(e.id)}">
+          <div class="nm"><strong>${esc(nk(e))}</strong><span class="muted">${e.personalnummer ? 'Nr. ' + esc(e.personalnummer) : 'ohne Personalnummer'}${e.abteilung ? ' · ' + esc(e.abteilung) : ''}</span></div>
+          <label class="fld"><span class="sr-only">Mitarbeiter für ${esc(nk(e))}</span><select>${opts(vorschlag(e, ps))}</select></label>
+          <button type="button" class="btn sm primary" data-zuordnen>Zuordnen</button>
+          <p class="form-err" role="alert"></p></li>`).join('')}</ul>` : '<p class="hint">Alle Einträge sind zugeordnet.</p>'}</div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Fertig</button></div>`;
+  }
+  function altDialog(nachher) {
+    if (!altDlg) {
+      altDlg = document.createElement('dialog');
+      altDlg.className = 'modal'; altDlg.id = 'dlg-hr-alt'; altDlg.setAttribute('aria-labelledby', 'hra-title');
+      altDlg.innerHTML = '<div class="dlg"></div>';
+      document.body.append(altDlg);
+      altDlg.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-close]')) { altDlg.close(); return; }
+        const b = e.target.closest('[data-zuordnen]');
+        if (!b) return;
+        const li = b.closest('li'), sel = li.querySelector('select'), err = li.querySelector('.form-err');
+        err.textContent = '';
+        if (!sel.value) { err.textContent = 'Bitte einen Mitarbeiter wählen.'; sel.focus(); return; }
+        b.disabled = true;
+        try {
+          const r = await api('hr_altbestand_zuordnen', { body: { eintrag: li.dataset.eintrag, nutzer: sel.value, rev: daten.rev } });
+          toast(`Zugeordnet: ${r.abwesenheiten === 1 ? '1 Abwesenheit' : r.abwesenheiten + ' Abwesenheiten'} übernommen${r.doppelt ? `, ${r.doppelt} doppelte storniert` : ''}.`);
+          await laden();
+          altDlg.querySelector('.dlg').innerHTML = altDialogInhalt();
+          await nachher();
+        } catch (ex) { err.textContent = ex.message; b.disabled = false; }
+      });
+    }
+    altDlg.querySelector('.dlg').innerHTML = altDialogInhalt();
+    altDlg.showModal();
   }
   async function altbestandUebernehmen(btn, nachher) {
     btn.disabled = true;
@@ -149,6 +201,7 @@
     if (weg) weg.parentElement.remove();
     const alt = e.target.closest('[data-hr-alt]');
     if (alt) altbestandUebernehmen(alt, async () => { await laden(); if (W.views.users) W.views.users(); });
+    if (e.target.closest('[data-hr-alt-einzeln]')) altDialog(async () => { if (W.views.users) W.views.users(); });
     const tr = e.target.closest('tr[data-hr-uid]');
     if (tr) nurHrDialog(tr.dataset.hrUid, $('#view-users'));
   });

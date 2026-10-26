@@ -361,6 +361,64 @@ hans = [p_ for p_ in v['personen'] if p_['vorname'] == 'Hans']
 check('… Hans Doppelt: einer zum vorhandenen Mitarbeiter, einer neu ohne Anmeldung', len(hans) == 2 and sorted(p_['zugang'] for p_ in hans) == [False, True], [(p_['id'], p_['zugang']) for p_ in hans])
 hr(pv['phans1']['nutzer'], aktiv=False); hr(pv['phans2']['nutzer'], aktiv=False)
 
+# ── Altbestand einzeln zuordnen (abweichender Name, Mitarbeiter mit HR-Angaben: zusammenführen) ──
+for u, n in (('mara', 'Mara Konto'), ('nina', 'Nina Neu')):
+    assert A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': 'Urlaub-Konto-4711', 'mustChange': False})[0] == 200
+ids = {u['username']: u['id'] for u in A.call('users')[1]['users']}
+rev = P.call('mitarbeiter_hr')[1]['rev']
+PM = hr(ids['mara'], abteilung='Vertrieb', pos=40, jahr=Y, anspruch=20)
+JUL = montag(Y, 7)
+alt = dokument('hr-personal')
+alt['personen'] += [{'id': 'pmarlene', 'vorname': 'Marlene', 'nachname': 'Konto-Alt', 'abteilung': 'Lager', 'pos': 41, 'aktiv': True, 'personalnummer': '9901',
+                     'jahre': {str(Y): {'anspruch': 25, 'uebertrag': 3}, str(Y - 1): {'anspruch': 24}}},
+                    {'id': 'pmarlene2', 'vorname': 'Marlene', 'nachname': 'Zwei', 'abteilung': 'Lager', 'pos': 42, 'aktiv': True, 'personalnummer': '9902'}]
+alt['rev'] = alt.get('rev', 0) + 1
+storage_write('hr-personal', alt)
+ab = dokument('hr-abwesenheiten')
+ab['eintraege'] += [{'id': 'am1', 'person': 'pmarlene', 'art': 'U', 'von': iso(JUL), 'bis': iso(JUL + dt.timedelta(days=1)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'zeiterfassung'},
+                    {'id': 'am2', 'person': 'pmarlene', 'art': 'K', 'von': iso(JUL + dt.timedelta(days=7)), 'bis': iso(JUL + dt.timedelta(days=7)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'zeiterfassung'},
+                    {'id': 'am3', 'person': 'pmarlene', 'art': 'U', 'von': iso(JUL + dt.timedelta(days=14)), 'bis': iso(JUL + dt.timedelta(days=15)), 'status': 'genehmigt', 'notiz': '', 'quelle': 'zeiterfassung'}]
+ab['rev'] = ab.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab)
+# Mara hat schon denselben Urlaub (doppelt) und einen überschneidenden
+assert P.call('hr_eintrag_save', {'person': PM, 'art': 'U', 'von': iso(JUL), 'bis': iso(JUL + dt.timedelta(days=1))})[0] == 200
+st, r = P.call('hr_eintrag_save', {'person': PM, 'art': 'U', 'von': iso(JUL + dt.timedelta(days=15)), 'bis': iso(JUL + dt.timedelta(days=16))})
+UEBER = r['eintrag']['id']
+v = P.call('mitarbeiter_hr')[1]
+rev = v['rev']
+st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['mara'], 'rev': rev, 'personalnummer': '9901'})
+check('Personalnummer schon beim Eintrag ohne Mitarbeiter: 409 mit Hinweis auf „Einzeln zuordnen“', st == 409 and 'Einzeln zuordnen' in r.get('error', ''), r)
+check('Zuordnen ohne Personalrecht: 403', L.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene', 'nutzer': ids['mara'], 'rev': rev})[0] == 403)
+check('Zuordnen: unbekannter Mitarbeiter 422, veralteter Stand 409', P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene', 'nutzer': 'u-gibt-es-nicht', 'rev': rev})[0] == 422
+      and P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene', 'nutzer': ids['mara'], 'rev': rev - 1})[0] == 409)
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene', 'nutzer': ids['mara'], 'rev': rev})
+check('Überschneidung mit vorhandener Abwesenheit: 409, nichts geändert', st == 409 and 'Überschneidende' in r.get('error', '')
+      and 'pmarlene' in [p_['id'] for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['altbestand']], r)
+assert P.call('hr_eintrag_save', {'id': UEBER, 'stornieren': True})[0] == 200
+anzahl_vorher = len(dokument('hr-abwesenheiten')['eintraege'])
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene', 'nutzer': ids['mara'], 'rev': rev})
+check('zusammengeführt: 2 Abwesenheiten übernommen, 1 doppelte storniert', st == 200 and r['abwesenheiten'] == 2 and r['doppelt'] == 1, (st, r))
+v = P.call('mitarbeiter_hr')[1]
+pm = {p_['id']: p_ for p_ in v['personen']}[PM]
+check('… Angaben: Mitarbeiter gilt, leere Felder aus dem Eintrag (Personalnummer, Übertrag, Vorjahr)', pm['personalnummer'] == '9901' and pm['abteilung'] == 'Vertrieb'
+      and pm['jahre'][str(Y)] == {'anspruch': 20, 'uebertrag': 3} and pm['jahre'][str(Y - 1)]['anspruch'] == 24 and pm['nutzer'] == ids['mara'], pm)
+check('… Eintrag ohne Mitarbeiter verschwunden', 'pmarlene' not in [p_['id'] for p_ in v['personen']])
+abw = dokument('hr-abwesenheiten')['eintraege']
+am = {e['id']: e for e in abw if e['id'] in ('am1', 'am2', 'am3')}
+check('… Abwesenheiten beim Mitarbeiter, doppelte storniert mit Grund, nichts gelöscht', len(abw) == anzahl_vorher and all(e['person'] == PM for e in am.values())
+      and am['am1']['status'] == 'storniert' and 'doppelt' in am['am1']['entscheidung']['grund'] and am['am2']['status'] == 'genehmigt', am)
+check('… im Protokoll', 'Eintrag der Urlaubsliste „Marlene Konto-Alt“ dem Mitarbeiter Mara Konto zugeordnet' in json.dumps(A.call('log')[1], ensure_ascii=False))
+rev = v['rev']
+check('schon zugeordneter Eintrag: 404', P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene', 'nutzer': ids['mara'], 'rev': rev})[0] == 404)
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene2', 'nutzer': ids['mara'], 'rev': rev})
+check('unterschiedliche Personalnummern: 409', st == 409 and 'Personalnummern' in r.get('error', ''), r)
+st, r = P.call('hr_altbestand_zuordnen', {'eintrag': 'pmarlene2', 'nutzer': ids['nina'], 'rev': rev})
+v = P.call('mitarbeiter_hr')[1]
+pn = [p_ for p_ in v['personen'] if p_['nutzer'] == ids['nina']]
+check('Mitarbeiter ohne HR-Angaben: Eintrag wird seine Person (Personalnummer bleibt)', st == 200 and len(pn) == 1 and pn[0]['id'] == 'pmarlene2' and pn[0]['personalnummer'] == '9902', (st, r, pn))
+rev = v['rev']
+hr(ids['mara'], aktiv=False); hr(ids['nina'], aktiv=False)
+
 # ── Excel-Export ──
 # Lena nicht mehr im Urlaubsplan (z. B. ausgeschieden): im Februar (genehmigte Krankheit) weiter im Export, im August nicht
 hr(ids['lena'], aktiv=False)
@@ -553,6 +611,33 @@ with sync_playwright() as p:
     check('Verwaltung → Urlaub: Ferien gespeichert', len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
     ctx.close()
+
+    # ── Verwaltung → Mitarbeiter: Eintrag ohne Mitarbeiter einzeln zuordnen (abweichender Name) ──
+    alt = dokument('hr-personal')
+    alt['personen'].append({'id': 'pute', 'vorname': 'Ute', 'nachname': 'Neu', 'abteilung': 'Lager', 'pos': 43, 'aktiv': True, 'personalnummer': '9903'})
+    alt['rev'] = alt.get('rev', 0) + 1
+    storage_write('hr-personal', alt)
+    for breite in (390, 1280):
+        ctx, pg = anmelden('admin', PW, '198.51.100.2', breite)
+        pg.goto(B + '/admin/#users'); pg.wait_for_selector('#hr-alt [data-hr-alt-einzeln]')
+        pg.click('#hr-alt [data-hr-alt-einzeln]'); pg.wait_for_selector('#dlg-hr-alt[open] li[data-eintrag="pute"]')
+        breit = pg.evaluate("document.querySelector('#dlg-hr-alt').scrollWidth <= document.querySelector('#dlg-hr-alt').clientWidth + 1")
+        check(f'{breite}px: Dialog „Einzeln zuordnen“ mit Eintrag und Mitarbeiterauswahl, ohne waagerechtes Scrollen', breit and pg.locator('#dlg-hr-alt li[data-eintrag="pute"] select option').count() > 3)
+        pg.screenshot(path=os.path.join(SH, f'hr_alt_zuordnen_{breite}.png'))
+        if breite == 1280:
+            check('Vorschlag: eindeutig gleicher Nachname vorausgewählt (Nina Neu)', pg.input_value('#dlg-hr-alt li[data-eintrag="pute"] select') == ids['nina'])
+            pg.click('#dlg-hr-alt li[data-eintrag="pute"] [data-zuordnen]'); pg.wait_for_selector('#dlg-hr-alt li[data-eintrag="pute"] .form-err:not(:empty)')
+            check('Fehler des Servers im Dialog (verschiedene Personalnummern)', 'Personalnummern' in pg.text_content('#dlg-hr-alt li[data-eintrag="pute"] .form-err'))
+            pg.select_option('#dlg-hr-alt li[data-eintrag="pute"] select', '')
+            pg.click('#dlg-hr-alt li[data-eintrag="pute"] [data-zuordnen]'); pg.wait_for_function("document.querySelector('#dlg-hr-alt li[data-eintrag=\"pute\"] .form-err').textContent.includes('wählen')")
+            check('ohne Auswahl: Hinweis im Dialog', 'Mitarbeiter wählen' in pg.text_content('#dlg-hr-alt li[data-eintrag="pute"] .form-err'))
+            pg.select_option('#dlg-hr-alt li[data-eintrag="pute"] select', ids['otto'])
+            pg.click('#dlg-hr-alt li[data-eintrag="pute"] [data-zuordnen]')
+            pg.wait_for_selector('#dlg-hr-alt li[data-eintrag="pute"]', state='detached')
+            pn = [p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer'] == ids['otto']]
+            check('Oberfläche: Eintrag dem gewählten Mitarbeiter zugeordnet (zusammengeführt, Personalnummer übernommen)', len(pn) == 1 and pn[0]['personalnummer'] == '9903'
+                  and 'pute' not in [p_['id'] for p_ in P.call('mitarbeiter_hr')[1]['personen']], pn)
+        ctx.close()
 
     # ── Verwaltung → Mitarbeiter (Administrator): anlegen ohne Anmeldung, HR-Teil im Dialog ──
     ctx, pg = anmelden('admin', PW, '198.51.100.2')

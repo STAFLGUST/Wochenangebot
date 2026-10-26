@@ -62,6 +62,10 @@ schreibend = true
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+[aktion.hr_altbestand_zuordnen]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.hr_einstellungen_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true

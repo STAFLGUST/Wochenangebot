@@ -9,6 +9,17 @@
 .hr-tage .check { margin: 0; }
 .hr-alt { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 14px; border-color: var(--accent-line); background: var(--accent-soft); }
 .hr-alt p { flex: 1 1 320px; margin: 0; font-size: 14px; }
+.hr-alt-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Einzeln zuordnen: Eintrag · Mitarbeiter-Auswahl · Knopf */
+.hr-alt-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.hr-alt-liste li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.hr-alt-liste li:last-child { border-bottom: 0; }
+.hr-alt-liste .nm { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hr-alt-liste .nm .muted { font-size: 12.5px; }
+.hr-alt-liste .fld { margin: 0; min-width: 0; }
+.hr-alt-liste .fld select { width: 100%; min-width: 0; }
+.hr-alt-liste .form-err { grid-column: 1 / -1; margin: 0; }
+.hr-alt-liste .form-err:empty { display: none; }
 .hr-einst { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
 .hr-einst .sec-h { margin: 10px 0 0; }
 .hr-einst .hint { margin: 0; }
@@ -18,6 +29,8 @@
 .utab td.num, .utab th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 760px) {
   .utab .u-abt, .utab .u-urlaub { display: none; }
+  .hr-alt-liste li { grid-template-columns: minmax(0, 1fr) auto; }
+  .hr-alt-liste .nm { grid-column: 1 / -1; }
   .hr-zr { grid-template-columns: 1fr 1fr; }
 }
 .hr-nurhr { margin: 0 0 12px; }
