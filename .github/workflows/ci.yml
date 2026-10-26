@@ -81,12 +81,16 @@ jobs:
       - name: Shell-Skripte (shellcheck)
         run: shellcheck --severity=warning deploy/*.sh deploy/*/*.sh tests/deploy/*.sh
       - name: Caddy-Konfiguration mit echtem Parser prüfen
+        # dieselbe Caddy-Fassung wie im Betrieb (fest über Digest in docker-compose.yml)
         run: |
+          CADDY_IMAGE=$(sed -n 's/^ *image: *\(caddy:[^ ]*\).*$/\1/p' docker-compose.yml)
           docker run --rm --network none \
             -e DOMAIN=angebot-stafl.de \
             -e ALLOWED_IPS=0.0.0.0/0 \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
-            caddy:2 caddy validate --config /etc/caddy/Caddyfile
+            "$CADDY_IMAGE" caddy validate --config /etc/caddy/Caddyfile
+      - name: Container-Images fest über Digest
+        run: python3 tests/deploy/test_images.py
       - name: Dashboard-Domains nur als geschützte Platzhalter
         run: python3 tests/deploy/test_dashboard_domains.py
       - name: Python-Syntax
@@ -154,8 +158,10 @@ jobs:
       - name: Python-Testabhängigkeiten auf bekannte Lücken prüfen
         run: /tmp/trivy fs --scanners vuln --exit-code 1 --severity HIGH,CRITICAL tests/requirements.txt
       - name: Container-Images auf bekannte Lücken prüfen (Bericht)
+        # Kundenseite und Caddy (docker-compose.yml) sowie Keycloak und PostgreSQL der zentralen Anmeldung; das selbst gebaute
+        # Anwendungs-Image (stafl-app) prüft der Auftrag „image“ (kritisch blockiert)
         run: |
-          grep -E '^\s*image:' docker-compose.yml | awk '{print $2}' | while read -r img; do
+          grep -hE '^\s*image:' docker-compose.yml deploy/anmeldung/docker-compose.anmeldung.yml | awk '{print $2}' | grep -v '^stafl-app:' | sort -u | while read -r img; do
             echo "::group::$img"
             /tmp/trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 "$img"
             echo "::endgroup::"
