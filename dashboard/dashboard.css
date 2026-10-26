@@ -107,6 +107,10 @@ body.db .db-kopf .brand-logo { height: 28px; width: auto; object-fit: initial; }
 .db-datum { margin: 0; font-size: 15px; font-weight: 500; color: var(--db-muted); }
 .db-gruss h1 { margin: 0; font-size: 44px; line-height: 1.08; font-weight: 700; letter-spacing: -.035em; }
 .db-sub { margin: 4px 0 0; font-size: 17px; color: var(--db-muted); }
+/* Notfallmodus (Modul Sicherheit): roter Hinweis über den Kacheln */
+.db-notfall { margin: 0 0 22px; padding: 14px 18px; border-radius: 18px; background: linear-gradient(120deg, #c41e34, #8c1424); color: #fff; font-size: 15px; line-height: 1.45;
+  box-shadow: 0 10px 30px rgba(140, 20, 36, .28); }
+.db-notfall[hidden] { display: none; }
 
 /* ── Kacheln ── */
 .db-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }

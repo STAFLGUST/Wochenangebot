@@ -456,7 +456,7 @@ function fw_status(string $filter = ''): array
         if ($w === 'Anmeldung fehlgeschlagen') $fehlAnm += $n;
     }
     $F = fw();
-    return ['fw' => $F, 'modi' => FW_WAF_MODI, 'sperrMinuten' => FW_SPERR_MINUTEN, 'vorlagen' => array_map(fn($x) => ['label' => $x['label'], 'text' => $x['text']], FW_VORLAGEN),
+    return ['fw' => $F, 'modi' => FW_WAF_MODI, 'sperrMinuten' => FW_SPERR_MINUTEN, 'vorlagen' => array_map(fn($x) => ['label' => $x['label'], 'text' => $x['text'], 'werte' => ['sec' => $x['sec'], 'fw' => $x['fw']]], FW_VORLAGEN),
             'zahlen' => ['angriffe' => $angriffe, 'abgewiesen' => $gesperrt, 'anmeldungFehl' => $fehlAnm, 'gesperrteAdressen' => count($auto) + count($manuell)],
             'manuell' => $manuell, 'auto' => array_slice($auto, 0, 300), 'autoGesamt' => count($auto), 'feed' => fw_feed_info(),
             'meineIp' => client_ip(), 'mitschnitt' => (int)$F['mitschnittBis'] > $now ? (int)$F['mitschnittBis'] : 0,

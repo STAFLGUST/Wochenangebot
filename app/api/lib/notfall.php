@@ -78,7 +78,7 @@ function notfall_wirkungen(): array
 {
     $sperrbar = [];
     foreach (MODULE as $id => $m) foreach ($m['oberflaechen'] as $oid => $o) {
-        if ($o['art'] === 'intern' && $o['sperrbar'] && modul_freigabe($id, $oid) !== 'keine') $sperrbar[] = $o['name'];
+        if ($o['art'] === 'intern' && $o['sperrbar'] && modul_freigabe($id, $oid) !== 'keine') $sperrbar[] = $o['name'] === $m['name'] ? $m['name'] : $m['name'] . ': ' . $o['name'];
     }
     $rollen = notfall_rollen();
     $sitz = 0; $admSitz = 0;

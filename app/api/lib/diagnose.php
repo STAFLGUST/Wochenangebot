@@ -285,7 +285,7 @@ function sec_lagebild(array $me): array
 
 /* Privilegierte Konten: Administratoren und Inhaber sicherheitsrelevanter Rechte mit Anmeldeschutz, letzter Anmeldung, Sitzungen */
 const SEC_KONTEN_RECHTE = ['sicherheit.notfall', 'sicherheit.sehen', 'kunden.bearbeiten', 'wochenangebot.senden', 'sonderposten.senden',
-    'einzelangebote.bearbeiten', 'angebote.loeschen', 'hr.verwalten', 'hr.uebersicht', 'bestand.einkaufspreise', 'protokoll.sehen', 'auswertung.sehen'];
+    'einzelangebote.bearbeiten', 'angebote.loeschen', 'hr.verwalten', 'hr.uebersicht', 'protokoll.sehen', 'auswertung.sehen'];
 function sec_konten(): array
 {
     $users = users_load();
