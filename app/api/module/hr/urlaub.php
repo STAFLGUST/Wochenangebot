@@ -232,13 +232,34 @@ function hr_konto_namen(array $u): array
           hr_namekey(str_replace(['-', '.', '_'], ' ', (string)($u['username'] ?? '')))];
     return array_values(array_unique(array_filter($n, function ($x) { return $x !== '' && str_contains($x, ' '); })));
 }
+/* Kennungen der Einträge ohne gültigen Mitarbeiter (genau die, die hr_personal() als „altbestand“ zeigt): kein „nutzer“,
+   der verknüpfte Mitarbeiter wurde gelöscht (z. B. ein beim Import angelegter Mitarbeiter ohne Anmeldung, später durch ein
+   anderes Konto ersetzt) oder ein zweiter Eintrag für denselben Mitarbeiter (es zählt der erste). Ergebnis: [id => true] */
+function hr_altbestand_ids(array $roh, ?array $users = null): array
+{
+    $nachNutzer = [];
+    foreach ($roh['personen'] as $e) if ($e['nutzer'] !== null && !isset($nachNutzer[$e['nutzer']])) $nachNutzer[$e['nutzer']] = $e['id'];
+    $vergeben = [];
+    foreach ($users ?? users_load() as $u) $vergeben[$nachNutzer[(string)$u['id']] ?? (string)$u['id']] = true;
+    $alt = [];
+    foreach ($roh['personen'] as $e) if (!isset($vergeben[$e['id']])) $alt[$e['id']] = true;
+    return $alt;
+}
+/* Erster gespeicherter Eintrag eines Mitarbeiters (seine HR-Angaben) – Index in $roh['personen'] oder null */
+function hr_eintrag_des_nutzers(array $roh, string $uid): ?int
+{
+    foreach ($roh['personen'] as $k => $x) if ($x['nutzer'] === $uid) return $k;
+    return null;
+}
+
 /* Vorschlag: genau ein Altbestands-Eintrag mit passendem Namen – sonst null */
 function hr_vorschlag(array $roh, array $u): ?array
 {
     $namen = hr_konto_namen($u);
     if (!$namen) return null;
-    $treffer = array_values(array_filter($roh['personen'], function ($p) use ($namen) {
-        return $p['nutzer'] === null && in_array(hr_namekey(hr_name($p)), $namen, true);
+    $alt = hr_altbestand_ids($roh);
+    $treffer = array_values(array_filter($roh['personen'], function ($p) use ($namen, $alt) {
+        return isset($alt[$p['id']]) && in_array(hr_namekey(hr_name($p)), $namen, true);
     }));
     return count($treffer) === 1 ? $treffer[0] : null;
 }
@@ -246,7 +267,7 @@ function hr_vorschlag(array $roh, array $u): ?array
    Mitarbeiter-Kennung stehen, wandern zum Eintrag */
 function hr_altbestand_zuordnen(array &$roh, string $eintragId, array $u): array
 {
-    foreach ($roh['personen'] as $x) if ($x['nutzer'] === (string)$u['id']) throw new InvalidArgumentException(hr_name($x) . ' hat bereits HR-Angaben.');
+    foreach ($roh['personen'] as $x) if ($x['nutzer'] === (string)$u['id'] && $x['id'] !== $eintragId) throw new InvalidArgumentException(hr_name($x) . ' hat bereits HR-Angaben.');
     [$vor, $nach] = hr_nutzer_namen($u);
     foreach ($roh['personen'] as &$e) {
         if ($e['id'] !== $eintragId) continue;
@@ -272,11 +293,11 @@ final class HrZuordnungFehler extends RuntimeException {}
 function hr_altbestand_zusammenfuehren(array &$roh, string $eintragId, array $u): array
 {
     $uid = (string)$u['id'];
-    $ei = null; $zi = null;
-    foreach ($roh['personen'] as $k => $x) {
-        if ($x['id'] === $eintragId && $x['nutzer'] === null) $ei = $k;
-        if ($x['nutzer'] === $uid) $zi = $k;
-    }
+    $alt = hr_altbestand_ids($roh);
+    $ei = null;
+    foreach ($roh['personen'] as $k => $x) if ($x['id'] === $eintragId && isset($alt[$x['id']])) $ei = $k;
+    $zi = hr_eintrag_des_nutzers($roh, $uid);
+    if ($zi === $ei) $zi = null;   // der Eintrag selbst ist (verwaist) mit diesem Mitarbeiter verknüpft
     if ($ei === null) throw new InvalidArgumentException('Dieser Eintrag der Urlaubsliste ist schon einem Mitarbeiter zugeordnet. Bitte neu laden.');
     if ($zi === null) {
         $n = 0;
@@ -346,15 +367,18 @@ function hr_personal_uebernehmen(array $me): array
 {
     return with_lock('hr-personal', function () use ($me) {
         $roh = hr_personal_roh();
+        $users = users_load();
         $text = [];
         foreach ($roh['personen'] as $e) {
-            if ($e['nutzer'] !== null) continue;
-            $mit = array_column(array_filter($roh['personen'], function ($x) { return $x['nutzer'] !== null; }), 'nutzer');
-            $treffer = array_values(array_filter(users_load(), function ($u) use ($e, $mit) {
+            $alt = hr_altbestand_ids($roh, $users);   // nach jeder Übernahme neu: zugeordnete Einträge zählen dann als vergeben
+            if (!isset($alt[$e['id']])) continue;
+            $mit = array_column(array_filter($roh['personen'], function ($x) use ($alt) { return $x['nutzer'] !== null && !isset($alt[$x['id']]); }), 'nutzer');
+            $treffer = array_values(array_filter($users, function ($u) use ($e, $mit) {
                 return !in_array((string)$u['id'], $mit, true) && in_array(hr_namekey(hr_name($e)), hr_konto_namen($u), true);
             }));
             if (count($treffer) === 1) { hr_altbestand_zuordnen($roh, $e['id'], $treffer[0]); $text[] = hr_name($e) . ' → ' . $treffer[0]['name']; continue; }
             $u = mitarbeiter_ohne_zugang_anlegen($e['vorname'], $e['nachname'] !== '' ? $e['nachname'] : '', $me);
+            $users[] = $u;
             hr_altbestand_zuordnen($roh, $e['id'], $u);
             $text[] = hr_name($e) . ' als Mitarbeiter ohne Anmeldung angelegt';
         }
