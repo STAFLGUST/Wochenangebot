@@ -33,10 +33,12 @@ function angebot_ids_mit_resten(array $vorhanden): array
 {
     $ids = [];
     foreach (['angebot', 'entwurf'] as $doc) {
-        foreach ((store_read($doc) ?? [])['items'] ?? [] as $it) {
+        $d = store_read($doc) ?? [];
+        foreach ($d['items'] ?? [] as $it) {
             foreach (array_keys(is_array($it['variants'] ?? null) ? $it['variants'] : []) as $k) $ids[(string)$k] = true;
             foreach (array_keys(is_array($it['sale']['offers'] ?? null) ? $it['sale']['offers'] : []) as $k) $ids[(string)$k] = true;
         }
+        foreach (array_keys(is_array($d['meta']['werbung'] ?? null) ? $d['meta']['werbung'] : []) as $k) $ids[(string)$k] = true;   // Werbung
     }
     foreach (customers_load()['customers'] as $c) foreach (is_array($c['angebote'] ?? null) ? $c['angebote'] : [] as $k) $ids[(string)$k] = true;
     unset($ids[OFFER_STD]);
@@ -89,6 +91,35 @@ function clean_variants($v, string $where, array $known): array
             $row['value'] = round($x, 4);
         }
         if (!empty($p['carried'])) $row['carried'] = true;
+        $out[$oid] = $row;
+    }
+    return $out;
+}
+/* Werbung je Angebot: $model['meta']['werbung'] = {<Angebots-ID>: {titel, text?, artikel: [{id, text?}]}} – Artikel, die im
+   Angebot oben in einem farbigen Block stehen und in der Liste hervorgehoben sind. Gilt nur für das eigene Angebot (keine
+   Übernahme durch Angebote, die dem Wochenangebot folgen); ausgeliefert wird nur der eigene Eintrag (offer_resolve). */
+const WERBUNG_MAX = 12;
+function clean_werbung($w, array $known, array $iids): array
+{
+    $out = [];
+    if (!is_array($w)) return $out;
+    foreach ($w as $oid => $e) {
+        $oid = (string)$oid;   // numerische Angebots-IDs kommen als Zahl an
+        if (!is_array($e) || ($oid !== OFFER_STD && !in_array($oid, $known, true))) continue;   // gelöschte Angebote fallen weg
+        $art = [];
+        foreach (array_slice(is_array($e['artikel'] ?? null) ? $e['artikel'] : [], 0, 200) as $a) {
+            if (!is_array($a)) continue;
+            $id = s($a['id'] ?? null, 40, false);
+            if ($id === null || !isset($iids[$id]) || isset($art[$id])) continue;   // gelöschte Artikel fallen weg
+            $art[$id] = ['id' => $id];
+            $t = s($a['text'] ?? null, 40);
+            if ($t !== null && $t !== '') $art[$id]['text'] = $t;
+            if (count($art) >= WERBUNG_MAX) break;
+        }
+        if (!$art) continue;
+        $row = ['titel' => s($e['titel'] ?? '', 80) ?? '', 'artikel' => array_values($art)];
+        $t = s($e['text'] ?? null, 240);
+        if ($t !== null && $t !== '') $row['text'] = $t;
         $out[$oid] = $row;
     }
     return $out;
@@ -183,6 +214,20 @@ function offer_resolve(array $m, array $def): array
     $m['sections'] = $secs;
     $m['items'] = $items;
     unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
+    // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote
+    $w = is_array($m['meta']['werbung'] ?? null) ? ($m['meta']['werbung'][$def['id']] ?? null) : null;
+    unset($m['meta']['werbung']);
+    if (is_array($w)) {
+        $da = [];
+        foreach ($items as $it) $da[(string)$it['id']] = true;
+        $art = [];
+        foreach (is_array($w['artikel'] ?? null) ? $w['artikel'] : [] as $a) {
+            $id = (string)($a['id'] ?? '');
+            if (!isset($da[$id])) continue;
+            $art[] = array_filter(['id' => $id, 'text' => (string)($a['text'] ?? '')], function ($x) { return $x !== ''; });
+        }
+        if ($art) $m['meta']['werbung'] = array_filter(['titel' => (string)($w['titel'] ?? ''), 'text' => (string)($w['text'] ?? ''), 'artikel' => $art], function ($x) { return $x !== ''; });
+    }
     $m['meta']['offerId'] = $def['id'];
     $m['meta']['offerName'] = $def['name'];
     return $m;
@@ -268,6 +313,8 @@ function clean_model($m, bool $strict): array
         $items[] = $row;
     }
     if ($strict && !$items) throw new InvalidArgumentException('Das Angebot enthält keine Artikel.');
+    $werbung = clean_werbung($meta['werbung'] ?? null, $known, $iids);   // optional (ältere Fassungen verwerfen das Feld)
+    if ($werbung) $outMeta['werbung'] = $werbung;
     $used = [];
     foreach ($items as $it) $used[$it['groupId']] = true;
     if ($strict) $groups = array_values(array_filter($groups, function ($g) use ($used) { return isset($used[$g['id']]); }));

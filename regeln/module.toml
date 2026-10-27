@@ -43,7 +43,7 @@ pfade = [
   "app/index.html", "app/manifest.json", "app/sw.js", "app/admin/**",
   "app/datenschutz/**", "app/impressum/**", "app/kontakt/**",
   "app/assets/frontend.js", "app/assets/app.css", "app/assets/legal.css", "app/assets/webapp.js",
-  "app/assets/offer-core.js", "app/assets/admin.js", "app/assets/admin-einzel.js", "app/assets/admin-artikelwahl.js",
+  "app/assets/offer-core.js", "app/assets/admin.js", "app/assets/admin-einzel.js", "app/assets/admin-artikelwahl.js", "app/assets/admin-werbung.js",
   "app/api/lib/angebote.php", "app/api/lib/einzelangebote.php", "app/api/lib/fracht.php",
   "app/api/lib/preisverlauf.php", "app/api/lib/kundenmail.php",
   "app/api/aktionen/angebote.php", "app/api/aktionen/einzelangebote.php", "app/api/aktionen/entwurf.php",

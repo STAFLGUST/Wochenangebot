@@ -23,7 +23,7 @@ Voraussetzungen und Abgrenzung:
 | Kundenseite (Wochenangebot) | `app/index.html` | `theme.js` (im `<head>`), `offer-core.js`, `frontend.js`, `webapp.js` | `app.css` |
 | Web-App | `app/manifest.json`, `app/sw.js` | `webapp.js` registriert `sw.js` (nur im sicheren Kontext) | – |
 | Rechtsseiten | `app/kontakt/`, `app/impressum/`, `app/datenschutz/` (je `index.html`) | `/assets/theme.js` | `legal.css` (ohne `app.css`, Systemschrift) |
-| Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-einzel.js`, `admin-auswertung.js`, `admin-schutz.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
+| Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-werbung.js`, `admin-einzel.js`, `admin-auswertung.js`, `admin-schutz.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
 | Dashboard | `dashboard/index.html`, `dashboard/abgemeldet.html` | `../assets/theme.js`, `dashboard.js` | `../assets/app.css`, `dashboard.css` |
 | HR · Urlaub | `app/module/hr/index.html` | `../../assets/theme.js`, `hr.js` | `../../assets/app.css`, `hr.css` |
 | CRM · Vertrieb | `app/module/crm/index.html` | `../../assets/theme.js`, `crm.js` | `../../assets/app.css`, `crm.css` |
@@ -205,6 +205,18 @@ Geändert wird die Zugehörigkeit nur über `aufnehmen()`, `nurIn()` (neuer Arti
 Einzelangebote) mit Daten aus `angebot_artikel` (Recht `angebot.bearbeiten`, Bestand nur mit `bestand.sehen`);
 die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Der Excel-Import ersetzt nur das Wochenangebot
 (`importKundenangebote()` übernimmt Kundeneinträge auf gleiche Artikelnummern bzw. behält Artikel nur in Kundenangeboten).
+
+### Werbung schalten
+
+Knopf „Werbung“ in der Werkzeugleiste (Zahl = beworbene Artikel des gewählten Angebots): `openWerbung()` (`admin.js`)
+übergibt die Artikel des Angebots an das Fenster `admin-werbung.js` (`WA.werbung.oeffnen(cfg)`: Überschrift, Werbetext,
+bis zu 12 Artikel mit Reihenfolge und Hinweis; Leser nur ansehen). Gespeichert wird in `model.meta.werbung[<Angebot>]`
+(Entwurf, sichtbar nach „Veröffentlichen“; Rücknahme je Angebot im Veröffentlichen-Dialog). `werbungBereinigen()` nimmt
+bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; der Excel-Import überträgt die Werbung auf die
+Artikel mit derselben Nummer (`werbungUebernehmen()`); `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
+tragen `tr.e-werb` und das Kennzeichen „Werbung“. Auf der Angebotsseite (`frontend.js`, `werbungHTML()`) steht oben ein
+farbiger Block (`.werb-block`, nur ohne Suche/Filter in „Alle Artikel“), beworbene Zeilen/Kacheln tragen `.werb-an` und
+den Hinweis als Kennzeichen; ein Klick auf eine Karte zeigt die Zeile in der Liste.
 
 ### Vorschau
 

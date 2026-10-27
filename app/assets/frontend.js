@@ -101,13 +101,18 @@ function prepare(raw) {
     return o;
   });
   const byId = new Map(items.map((i) => [i.id, i]));
+  /* Werbung dieses Angebots (der Server liefert nur den eigenen Eintrag): Artikel oben im Block und in der Liste hervorgehoben */
+  const wr = raw.meta && raw.meta.werbung;
+  const wa = wr && Array.isArray(wr.artikel) ? wr.artikel.map((a) => ({ it: byId.get(a.id), text: a.text || '' })).filter((x) => x.it) : [];
+  for (const x of wa) x.it.werb = x.text;
+  const werbung = wa.length ? { titel: wr.titel || '', text: wr.text || '', artikel: wa } : null;
   const groupTotal = new Map();
   for (const i of items) groupTotal.set(i.groupId, (groupTotal.get(i.groupId) || 0) + 1);
   const cmpMap = new Map();
   for (const i of items) { if (!cmpMap.has(i._cmp)) cmpMap.set(i._cmp, []); cmpMap.get(i._cmp).push(i); }
   const priced = items.filter((i) => i.price.status === 'value').map((i) => i.price.value);
   return {
-    meta: raw.meta, sections: raw.sections, groups: raw.groups, issues: raw.issues || [], items, byId, groupTotal, cmpMap,
+    meta: raw.meta, sections: raw.sections, groups: raw.groups, issues: raw.issues || [], items, byId, groupTotal, cmpMap, werbung,
     minPrice: priced.length ? Math.min(...priced) : null,
     maxPrice: priced.length ? Math.max(...priced) : null,
   };
@@ -257,6 +262,31 @@ function priceHTML(it) {
   const main = `<span>${it.price.label ? `<span class="pl">${esc(it.price.label)}</span>` : ''}${priceMain(it.price)}</span>`;
   const alts = it.altPrices.map((p) => `<span class="p-alt"><span class="pl">${esc(p.label)}</span>${esc(priceShort(p))}</span>`).join('');
   return `<span class="price">${main}${alts}</span>`;
+}
+
+/* ---------- Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst) ----------
+   Oben ein farbiger Block mit Überschrift, Text und Karten (nur in der Gesamtansicht ohne Suche/Filter), in der Liste sind
+   die Zeilen farbig hinterlegt und gekennzeichnet. Ein Klick auf eine Karte zeigt den Artikel in der Liste. */
+const WERB_TITEL = 'Unsere Empfehlung der Woche';
+const werbAn = (it) => typeof it.werb === 'string';
+const werbTagHTML = (it, cls) => (werbAn(it) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${icon('megaphone', 'sm')}${esc(it.werb || 'Empfehlung')}</span>` : '');
+function werbungHTML() {
+  const w = DATA.werbung;
+  if (!w || state.tab !== 'all' || hasFilters()) return '';
+  const karte = ({ it, text }) => `<button type="button" class="werb-karte" data-werb="${esc(it.id)}" title="In der Liste zeigen">
+      <span class="werb-hin">${esc(text || 'Empfehlung')}</span><span class="werb-name">${esc(plName(it))}</span>
+      <span class="werb-meta">${esc([it.code ? 'Art.-Nr. ' + it.code : '', it.origin, it.condition !== 'unbekannt' ? COND_LABEL[it.condition] : ''].filter(Boolean).join(' · '))}</span>
+      <span class="werb-preis">${priceHTML(it)}</span></button>`;
+  return `<section class="werb-block" aria-labelledby="werb-h"><div class="werb-kopf">${icon('megaphone')}<div><h2 id="werb-h">${esc(w.titel || WERB_TITEL)}</h2>${w.text ? `<p>${esc(w.text)}</p>` : ''}</div></div>
+    <div class="werb-karten">${w.artikel.map(karte).join('')}</div></section>`;
+}
+function werbZeigen(id) {
+  const el = $(`#list .row[data-id="${CSS.escape(id)}"], #list .card[data-id="${CSS.escape(id)}"]`);
+  if (!el) { openDetail(id); return; }
+  el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  el.classList.remove('werb-blink'); void el.offsetWidth; el.classList.add('werb-blink');
+  const q = KORDER && el.querySelector('input');
+  if (q) q.focus({ preventScroll: true });
 }
 
 /* ---------- Kopf, Kennzahlen, Navigation ---------- */
@@ -446,11 +476,11 @@ function renderTable(list, grouped) {
       if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="s-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="s-in">${esc(sec)}</div></th></tr>`); }
       if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span><span class="g-meta">${info(grp)}</span></div></th></tr>`); }
     }
-    rows.push(`<tr class="row" data-id="${it.id}">
+    rows.push(`<tr class="row${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
       <td class="c-fav">${starHTML(it)}</td>
       <td class="c-code">${it.code ? hl(it.code) : '<span class="muted" title="Ohne Artikelnummer">—</span>'}</td>
       <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>
-        <div class="m-meta">${esc([it.code, it.category, it.origin, COND_LABEL[it.condition]].filter(Boolean).join(' · '))}</div>${tagHTML(it, !grouped)}</td>
+        <div class="m-meta">${esc([it.code, it.category, it.origin, COND_LABEL[it.condition]].filter(Boolean).join(' · '))}</div>${werbTagHTML(it, 'm-werb')}${tagHTML(it, !grouped)}</td>
       <td class="c-cat"><span class="cat-cell">${monoHTML(it.category)}${esc(it.category)}</span></td>
       <td class="c-origin">${it.origin ? hl(it.origin) : '<span class="muted" title="In der Liste nicht angegeben">—</span>'}${grouped ? '' : `<div class="sub">${esc(it.group)}</div>`}</td>
       <td class="c-cond">${condBadge(it.condition)}</td>
@@ -550,9 +580,9 @@ function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
   const screen = mode !== 'print';
   const span = 2 + cols + (screen ? 1 : 0);
-  const row = (it) => `<tr class="row" data-id="${it.id}">
+  const row = (it) => `<tr class="row${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
-    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag')}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
   return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€ / kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
@@ -568,7 +598,7 @@ function renderListe(list, grouped) {
   const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150) / 6.6)));
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
-  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>`;
+  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML()}`;
   const secs = plSections(units).map((sec) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
     const cols = plBalance(sec.units, plK);
@@ -627,11 +657,11 @@ function buildPrintListe(list, grouped, scopeText) {
 
 function cardHTML(it, grouped) {
   const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`).join('');
-  return `<article class="card" data-id="${it.id}">
+  return `<article class="card${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
     <div class="card-top">${monoHTML(it.category)}<span class="code">${it.code ? 'Art.-Nr. ' + hl(it.code) : 'ohne Art.-Nr.'}</span>${starHTML(it)}</div>
     <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button></h3>
     <p class="card-meta">${esc(it.category)}${it.origin ? ' · ' + hl(it.origin) : ''}</p>
-    <div class="card-tags">${condBadge(it.condition)}${!grouped && it.brand ? `<span class="tag brand">${esc(it.brand)}</span>` : ''}${feats}</div>
+    <div class="card-tags">${werbTagHTML(it, '')}${condBadge(it.condition)}${!grouped && it.brand ? `<span class="tag brand">${esc(it.brand)}</span>` : ''}${feats}</div>
     ${grouped ? '' : `<p class="card-group">${esc(it.group)}</p>`}
     <div class="card-price">${priceHTML(it)}</div>
     ${KORDER ? `<label class="card-qty"><span>Menge kg</span>${qtyHTML(it)}</label>` : ''}
@@ -671,7 +701,7 @@ function renderEmpty() {
 
 function renderList() {
   const grouped = state.sortKey === 'offer';
-  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
+  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? werbungHTML() + renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? werbungHTML() + renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
 }
 
 function render() {
@@ -1260,6 +1290,8 @@ function bind() {
       if (a === 'tab-all') { state.tab = 'all'; render(); }
       return;
     }
+    const wk = e.target.closest('[data-werb]');
+    if (wk) { werbZeigen(wk.dataset.werb); return; }
     // Details nur über die Bezeichnung – ein Klick irgendwo in die Zeile (z. B. ins Mengenfeld) öffnet nichts
     const open = e.target.closest('[data-open]');
     if (open) openDetail(open.dataset.open);
