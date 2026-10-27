@@ -86,10 +86,30 @@ testgruppen = []
 pfade = []
 pfade_geplant = []
   [[modul.oberflaeche]]
-  id = "system"
-  name = "System"
+  id = "verwaltung"
+  name = "Verwaltung"
   art = "intern"
-  adresse = "https://verwaltung.dashboard-stafl.de/system/"
+  adresse = "https://verwaltung.dashboard-stafl.de/admin/"
+  entwicklung = "geplant"
+  freigabe = "keine"
+  sperrbar = true
+
+[[modul]]
+id = "sicherheit"
+name = "Sicherheit"
+beschreibung = "x"
+icon = "shield"
+dashboard = false
+agent = "sicherheit"
+abhaengigkeiten = ["plattform"]
+testgruppen = []
+pfade = []
+pfade_geplant = []
+  [[modul.oberflaeche]]
+  id = "intern"
+  name = "Sicherheit (mit System: Wartung, Module und Freigaben)"
+  art = "intern"
+  adresse = "https://sicherheit.dashboard-stafl.de/"
   entwicklung = "geplant"
   freigabe = "keine"
   sperrbar = false
@@ -183,7 +203,7 @@ DATEIEN = {
         \treverse_proxy app:80
         }
 
-        dashboard-stafl.de, lager.dashboard-stafl.de, verwaltung.dashboard-stafl.de {
+        dashboard-stafl.de, lager.dashboard-stafl.de, sicherheit.dashboard-stafl.de, verwaltung.dashboard-stafl.de {
         \theader {
         \t\tCache-Control "no-store"
         \t}

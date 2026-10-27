@@ -62,7 +62,7 @@ function sec_top_ips(array $entries): array
     return array_map(function ($b) use ($blocked) { return $b + ['cc' => geo_country($b['ip']), 'blocked' => isset($blocked[$b['ip']])]; }, array_slice(array_values($by), 0, 10));
 }
 
-/* Betriebszustand (Verwaltung → System und Lagebild im Modul Sicherheit): Wartung, Sicherung, Bereitstellung, Datenablage,
+/* Betriebszustand (Modul Sicherheit: Reiter System und Lagebild): Wartung, Sicherung, Bereitstellung, Datenablage,
    Speicher, E-Mail-Versand, Bestellwünsche, Kunden – nur lesend, für Administratoren */
 function betrieb_daten(array $me): array
 {

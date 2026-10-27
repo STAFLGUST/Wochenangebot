@@ -227,13 +227,13 @@
   let me = null;                                   // angemeldeter Nutzer
   const can = (role) => !!me && ROLE_RANK[me.role] >= ROLE_RANK[role];
   /* Bereiche und das Recht, das sie sichtbar macht (ohne Eintrag: alle; ADMIN_VIEWS: nur Administratoren) */
-  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', sec: '', importe: '', urlaub: 'hr.verwalten' };
+  const VIEW_PERM = { einzel: 'einzelangebote.sehen', hist: 'preisverlauf.sehen', stock: 'bestand.sehen', einkauf: 'einkauf.sehen', master: 'stammdaten.sehen', orders: 'bestellungen.sehen', kunden: 'kunden.sehen', gruppen: 'stammdaten.sehen', vkgruppen: 'stammdaten.sehen', angebote: 'angebote.verwalten', vertreter: 'stammdaten.sehen', auswertung: 'auswertung.sehen', log: 'protokoll.sehen', mail: '', users: '', rollen: '', importe: '', urlaub: 'hr.verwalten' };
   /* Verwaltung unter eigener Adresse (verwaltung.dashboard-stafl.de): nur ihre Bereiche – Anzeige, die Rechte prüft der Server */
   /* Angebot unter der zentralen Anmeldung (angebot.dashboard-stafl.de): Angebotsbereiche ohne Verwaltung und ohne die
      Bestandsliste (die Bestandsdaten im Angebotseditor bleiben). Bestand (bestand.dashboard-stafl.de): nur die Bestandsliste
      mit Bestandsimport. Ohne Bereich (bisheriger Zugang angebot-stafl.de/admin/) bleibt alles sichtbar. */
   const BEREICH_VIEWS = {
-    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec'],
+    'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
     'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
     'bestand.intern': ['stock'],
     'verwaltung.import': ['importe'],
@@ -254,12 +254,13 @@
   function startAnsicht() {
     let v = '';
     try { v = decodeURIComponent(location.hash.slice(1)) || new URLSearchParams(location.search).get('ansicht') || ''; } catch { v = ''; }
+    if (v === 'sec' && can('admin')) { location.assign(SICHERHEIT_SYSTEM); return ''; }   // alte Adresse von Verwaltung → System
     return VIEWS.includes(v) && viewAllowed(v) ? v : '';
   }
   function viewAllowed(v) {
     const nur = BEREICH_VIEWS[bereich()];
     if (nur && !nur.includes(v)) return false;
-    if (['mail', 'rollen', 'sec'].includes(v)) return can('admin');   // sec = System (Betrieb); Sicherheit hat ein eigenes Modul
+    if (['mail', 'rollen'].includes(v)) return can('admin');   // System (Betrieb, Wartung, Module) und Sicherheit: Modul Sicherheit
     if (v === 'users') return can('admin') || may('hr.verwalten');   // Mitarbeiter: Administratoren alles, Personalstelle die HR-Angaben
     if (v === 'gruppen' || v === 'vertreter') return may('stammdaten.sehen') || may('kunden.sehen');
     if (v === 'importe') return !!(window.WA && window.WA.importSichtbar && window.WA.importSichtbar());   // Importzentrale (admin-import.js)
@@ -613,7 +614,7 @@
     $('#btn-send').hidden = !may('wochenangebot.senden');
     $('#btn-publish').hidden = !may('angebot.veroeffentlichen');
     if (!may('wochenangebot.senden')) $('#send-hint').hidden = true;
-    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec'].some(viewAllowed);
+    $('#side-admin').hidden = !['importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'].some(viewAllowed);
     $('#side-stamm').hidden = !['master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter'].some(viewAllowed);
     $('#menu-user').innerHTML = me ? `<strong>${esc(me.name)}</strong><span>${esc(me.username)} · ${esc(me.rollenName || ROLE_LABEL[me.role] || '')}</span>` : '';
     if (!viewAllowed(currentView)) setView(VIEWS.find(viewAllowed) || 'edit');
@@ -664,7 +665,9 @@
     if (e.target.closest('#ew-logout')) { try { await api('logout', { body: {} }); } catch { /* ignore */ } location.reload(); }
   });
 
-  /* Wartungsmodus: Hinweis für alle Mitarbeiter oben im Eingabebereich */
+  /* Wartungsmodus: Hinweis für alle Mitarbeiter oben im Eingabebereich. Verwaltet werden Wartung, Module und Freigaben seit
+     27.10.2026 im Modul Sicherheit, Reiter System (vorher Verwaltung → System; die alte Adresse #sec leitet dorthin). */
+  const SICHERHEIT_SYSTEM = (/(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://sicherheit.dashboard-stafl.de/module/sicherheit/' : '../module/sicherheit/') + '#system';
   let wartungSt = null;
   const wartungBis = (w) => (w && w.until ? ` · voraussichtlich bis ${new Date(w.until).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr` : '');
   function renderWartungBanner() {
@@ -675,7 +678,7 @@
     const teile = [];
     if (ew) teile.push(`<strong>Eingabebereich in Wartung</strong> – nur Administratoren können gerade arbeiten${esc(wartungBis(wartungEingabe))}.`);
     if (wartungSt) teile.push(`<strong>Wartungsmodus aktiv</strong> – Kunden sehen auf der Angebotsseite nur einen Wartungshinweis${esc(wartungBis(wartungSt))}.`);
-    if (!b.hidden) b.innerHTML = `${icon('info', 'sm')}<span>${teile.join('<br>')}</span>${can('admin') ? '<button type="button" class="btn sm" data-wartung="goto">Verwalten</button>' : ''}`;
+    if (!b.hidden) b.innerHTML = `${icon('info', 'sm')}<span>${teile.join('<br>')}</span>${can('admin') ? `<a class="btn sm" data-wartung="goto" href="${esc(SICHERHEIT_SYSTEM)}">Verwalten</a>` : ''}`;
   }
   async function refreshWartung() {
     try {
@@ -685,7 +688,6 @@
     } catch { /* Hinweis später */ }
     renderWartungBanner();
   }
-  document.addEventListener('click', (e) => { if (e.target.closest('[data-wartung="goto"]')) setView('sec'); });
 
   async function openEditor() {
     if (window.STAFL_THEME && me) window.STAFL_THEME.konto(me, csrf, '../api/');   // Hell/Dunkel am Konto (theme.js) – gilt auf jedem Host
@@ -2375,8 +2377,8 @@
   }
 
   /* Ansicht umschalten */
-  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec'];
-  const ADMIN_VIEWS = ['mail', 'users', 'rollen', 'sec'];
+  const VIEWS = ['orders', 'edit', 'einzel', 'hist', 'stock', 'einkauf', 'master', 'vkgruppen', 'angebote', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'];
+  const ADMIN_VIEWS = ['mail', 'users', 'rollen'];
   /* Aktiven Eintrag in der Seitenleiste sichtbar halten: am Computer scrollt die Leiste senkrecht (mehr Einträge als
      Bildschirmhöhe), schmal ist sie eine waagerechte Spur. Nur die Leiste selbst wird verschoben, nie die Seite. */
   function navSichtbar(btn) {
@@ -2424,7 +2426,6 @@
     if (v === 'auswertung' && window.WA.views.auswertung) window.WA.views.auswertung();
     if (v === 'mail' && window.WA.views.mail) window.WA.views.mail();
     if (v === 'log' && window.WA.views.log) window.WA.views.log();
-    if (v === 'sec' && window.WA.views.sec) window.WA.views.sec();
   }
   for (const k of VIEWS) $('#vt-' + k).addEventListener('click', () => setView(k));
   window.addEventListener('hashchange', () => { const v = me && startAnsicht(); if (v) setView(v); });

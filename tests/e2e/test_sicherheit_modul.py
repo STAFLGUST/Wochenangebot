@@ -2,8 +2,9 @@
 
 Geprüft: Register und Kachel (Gruppe „Verwaltung & Daten“ direkt nach der Verwaltung, nur mit Modulzugang, Standardrollen ohne
 Zugang); Aktionen sicherheit_lage, sicherheit_ereignisse (Filter, Grenzen), sicherheit_konten (Administratoren und Inhaber
-sicherheitsrelevanter Rechte, Sitzungen) mit Rechten (anonym 401, ohne Recht 403); Verwaltung → System (betrieb_status nur
-Administrator, Hinweis auf das Modul, keine Sicherheitsansichten mehr); Oberfläche: Reiter je Recht (Administrator alle,
+sicherheitsrelevanter Rechte, Sitzungen) mit Rechten (anonym 401, ohne Recht 403); Reiter System (seit 27.10.2026, vorher
+Verwaltung → System: betrieb_status nur Administrator mit schlanker Testerauswahl, Betriebskarten, Wartungsmodus und Wartung
+des Eingabebereichs über Dialoge, Diagnose; die Verwaltung hat keine System-Ansicht mehr); Oberfläche: Reiter je Recht (Administrator alle,
 „Notfall auslösen“ nur Notfall, „Sicherheit ansehen“ Lagebild/Notfall/Ereignisse), Lagebild mit Gesamtbewertung, Dialoge
 (Ereignis, auffällige Adresse, Vorlage mit Vorschau, Einstellungen, Ländersperre, Passwortbestätigung, Sperre, Sitzung, Konto,
 Befund) mit Esc/Schließen und Fokus, Notfall auslösen in Schritten (Wirkung → Grund, Knopf gedrückt halten) und beenden,
@@ -91,9 +92,12 @@ check('Konten: Administrator, Notfall-, Ansehen- und Kundenrecht; Bearbeiter ohn
 check('Konten: Rechte und Anmeldeschutz je Konto', [x['key'] for x in k['nele']['rechte']] == ['sicherheit.notfall'] and k['admin']['admin'] and k['nele']['zweiFaktor'] is False
       and k['admin']['sitzungen'] and r['zahlen']['notfall'] == 2, (k['nele'], r.get('zahlen')))
 check('Konten: Sitzungen ohne Kennungen anderer Felder (nur sid, ip, Gerät, Zeiten)', set(k['admin']['sitzungen'][0]) == {'sid', 'ip', 'ua', 'created', 'seen', 'current'}, k['admin']['sitzungen'][0])
-check('Verwaltung → System: betrieb_status nur Administrator', A.call('betrieb_status')[0] == 200 and E.call('betrieb_status')[0] == 403 and N.call('betrieb_status')[0] == 401)
+check('Sicherheit → System: betrieb_status nur Administrator', A.call('betrieb_status')[0] == 200 and E.call('betrieb_status')[0] == 403 and N.call('betrieb_status')[0] == 401)
 st, r = A.call('betrieb_status')
 check('betrieb_status: Wartung, Sicherung, Speicher, Versand, Notfall – ohne Sicherheitseinstellungen', {'wartung', 'backup', 'storage', 'mail', 'orders', 'notfall'} <= set(r) and 'settings' not in r and 'sessions' not in r, sorted(r))
+nu = {x['username']: x for x in r.get('nutzer', [])}
+check('betrieb_status: Testerauswahl nur mit Kennung, Name, Benutzername und Status (keine Passwörter, Rechte, E-Mail)',
+      {'admin', 'erik', 'nele'} <= set(nu) and all(set(x) == {'id', 'name', 'username', 'active'} for x in nu.values()) and 'hash' not in json.dumps(r['nutzer']), list(nu.values())[:2])
 
 # ── Oberfläche ──
 with sync_playwright() as p:
@@ -126,7 +130,7 @@ with sync_playwright() as p:
     ctx, pg = anmelden('admin', PW, '198.51.100.2')
     pg.wait_for_selector('#sic-app:not([hidden])'); pg.wait_for_selector('#sic-gesamt strong')
     sichtbar = pg.eval_on_selector_all('#sic-tabs [data-tab]', 'b => b.filter(x => !x.hidden).map(x => x.dataset.tab)')
-    check('Administrator: alle acht Reiter', sichtbar == ['lage', 'notfall', 'firewall', 'sitzungen', 'datei', 'ereignisse', 'einstellungen', 'konten'], sichtbar)
+    check('Administrator: alle neun Reiter (mit System)', sichtbar == ['lage', 'notfall', 'firewall', 'sitzungen', 'datei', 'ereignisse', 'einstellungen', 'konten', 'system'], sichtbar)
     check('Kopf: Normalbetrieb, Benutzer', 'Normalbetrieb' in pg.inner_text('#sic-lage-pille') and pg.inner_text('#sic-user-name') == 'Administrator')
     pg.wait_for_function("!document.querySelector('#sic-bchecks').textContent.includes('laufen')")
     lage = pg.inner_text('#tab-lage')
@@ -236,9 +240,9 @@ with sync_playwright() as p:
     check('kurzer Klick löst nichts aus', pg.is_visible('#nf-los') and not (doc('sicherheit-notfall') or {}).get('aktiv'))
     pg.focus('#nf-los'); pg.keyboard.down('Space')
     pg.wait_for_function("document.querySelector('#nf-los') && parseFloat(getComputedStyle(document.querySelector('#nf-los')).getPropertyValue('--anteil')) > 20")
+    pg.keyboard.up('Space')   # sofort loslassen (ein Bildschirmfoto dazwischen kann unter Last länger als 1,5 s dauern)
+    pg.wait_for_function("(() => { const k = document.querySelector('#nf-los'); return !k || getComputedStyle(k).getPropertyValue('--anteil').trim() === '0%'; })()")
     pg.screenshot(path=f'{SH}/sicherheit_notfall_dialog_1440.png')
-    pg.keyboard.up('Space')
-    pg.wait_for_function("getComputedStyle(document.querySelector('#nf-los')).getPropertyValue('--anteil').trim() === '0%'")
     check('Leertaste zu früh losgelassen: abgebrochen, nichts ausgelöst', not (doc('sicherheit-notfall') or {}).get('aktiv'))
     halten(pg)
     check('Notfall ausgelöst: Zusammenfassung', 'Mitarbeitersitzungen beendet' in pg.inner_text('#sic-dlg') and (doc('sicherheit-notfall') or {}).get('aktiv') is True)
@@ -322,16 +326,57 @@ with sync_playwright() as p:
     check('Bearbeiter ohne Recht: Hinweis statt Inhalt', 'Berechtigung' in pg.inner_text('#sic-err'))
     ctx.close()
 
-    # Verwaltung → System
+    # Reiter System (bis 27.10.2026 Verwaltung → System) – frische Anmeldung, damit die Bestätigung gilt
     ctx, pg = anmelden('admin', PW, '198.51.100.2', ziel='')
     pg.wait_for_selector('#screen-editor:not([hidden])')
-    pg.click('#vt-sec'); pg.wait_for_selector('#sic-umzug')
-    sy = pg.inner_text('#view-sec')
-    check('Verwaltung → System: Hinweis mit Link, Betrieb, Wartung, Module – keine Sicherheitsansichten', 'Sicherheit hat ein eigenes Modul' in sy and 'Diagnose' in sy and pg.is_visible('#wartung-form')
-          and pg.locator('#sec-form, #bst-form, #geo-box, #ip-out').count() == 0 and pg.get_attribute('#sic-link', 'href') == '../module/sicherheit/', sy[:300])
-    check('Verwaltung: Reiter „Schutz“ entfernt, „System“ statt „Sicherheit“', pg.locator('#vt-schutz').count() == 0 and pg.inner_text('#vt-sec') == 'System')
-    pg.wait_for_selector('#mv-box table')
-    pg.screenshot(path=f'{SH}/verwaltung_system_1440.png', full_page=True)
+    check('Verwaltung: keine System-Ansicht mehr, Reiter „Schutz“ entfernt', pg.locator('#vt-sec, #view-sec, #vt-schutz').count() == 0)
+    pg.goto(B + '/admin/#sec'); pg.wait_for_url(lambda u: u.endswith('/module/sicherheit/#system')); pg.wait_for_selector('#tab-system:not([hidden]) #sy-kunden')
+    check('alte Adresse Verwaltung #sec führt zu Sicherheit → System', pg.url.endswith('/module/sicherheit/#system'))
+    sy = pg.inner_text('#tab-system')
+    check('System: Betriebskarten, Wartung, Module, Diagnose, Verlauf', pg.locator('#tab-system .sic-karte').count() == 8 and all(t in sy for t in (
+        'Notfallmodus', 'Datensicherung', 'Bereitstellung', 'Datenablage', 'Speicherplatz', 'E-Mail-Versand', 'Bestellwünsche', 'Kunden',
+        'Wartungsmodus · Angebotsseite', 'Wartung · Eingabebereich', 'Module und Freigaben', 'Diagnose', 'Verlauf')), sy[:300])
+    # Wartungsmodus der Angebotsseite: einschalten, Hinweis ändern, beenden – je im Dialog
+    pg.click('[data-sy="kunden-an"]'); pg.wait_for_selector('#sic-dlg[open] #sy-k-text')
+    pg.fill('#sy-k-text', 'Kurze Pause für die Inventur'); pg.click('#sic-dlg .sic-dfuss [type=submit]')
+    pg.wait_for_selector('#sic-dlg', state='hidden'); pg.wait_for_selector('#sy-kunden.warn')
+    w = A.call('betrieb_status')[1]['wartung']
+    check('Wartungsmodus über den Dialog eingeschaltet (Server)', bool(w) and w['message'] == 'Kurze Pause für die Inventur' and 'Kurze Pause' in pg.inner_text('#sy-kunden'), w)
+    pg.click('[data-sy="kunden-bearbeiten"]'); pg.wait_for_selector('#sic-dlg[open] #sy-k-text')
+    check('… Bearbeiten: Hinweis vorbelegt', pg.input_value('#sy-k-text') == 'Kurze Pause für die Inventur')
+    pg.fill('#sy-k-text', 'Inventur – bald zurück'); pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg', state='hidden')
+    pg.wait_for_function("document.querySelector('#sy-kunden') && document.querySelector('#sy-kunden').innerText.includes('bald zurück')")
+    check('… Hinweis geändert, Wartung bleibt an', (A.call('betrieb_status')[1]['wartung'] or {}).get('message') == 'Inventur – bald zurück')
+    pg.click('[data-sy="kunden-aus"]'); pg.wait_for_selector('#sic-dlg[open] h2:has-text("Wartungsmodus beenden?")')
+    pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg', state='hidden'); pg.wait_for_selector('#sy-kunden:not(.warn) [data-sy="kunden-an"]')
+    check('… beendet (Server)', A.call('betrieb_status')[1]['wartung'] is None)
+    # Wartung des Eingabebereichs: Grund ist Pflicht, Beginn in der Zukunft = geplant, beenden
+    pg.click('[data-sy="eingabe-an"]'); pg.wait_for_selector('#sic-dlg[open] #sy-e-grund')
+    pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#d-err:has-text("Grund")')
+    check('Wartung Eingabebereich: ohne Grund nicht gespeichert', A.call('betrieb_status')[1]['wartungEingabe'] is None)
+    pg.fill('#sy-e-grund', 'Datenübernahme Stammdaten'); pg.fill('#sy-e-ab', '2099-01-01T06:00')
+    pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg', state='hidden'); pg.wait_for_selector('#sy-eingabe .sic-pille.info')
+    we = A.call('betrieb_status')[1]['wartungEingabe']
+    check('… geplant (Beginn in der Zukunft), Mitarbeiter arbeiten weiter', bool(we) and we['geplant'] and we['grund'] == 'Datenübernahme Stammdaten' and 'geplant' in pg.inner_text('#sy-eingabe'), we)
+    pg.screenshot(path=f'{SH}/sicherheit_system_1440.png', full_page=True)
+    pg.click('[data-sy="eingabe-aus"]'); pg.wait_for_selector('#sic-dlg[open] #sy-e-ende')
+    pg.fill('#sy-e-ende', 'doch nicht nötig'); pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg', state='hidden')
+    pg.wait_for_selector('#sy-eingabe [data-sy="eingabe-an"]')
+    v = A.call('betrieb_status')[1]
+    check('… beendet, Verlauf mit Grund', v['wartungEingabe'] is None and any(x['bereich'] == 'angebot.eingabe' and x.get('grund') == 'doch nicht nötig' for x in v['wartungVerlauf'])
+          and 'doch nicht nötig' in pg.inner_text('#sy-verlauf'))
+    # Diagnose: nur lesend, Ergebnis im Reiter
+    pg.click('[data-diag="php"]'); pg.wait_for_selector('#sy-diag-erg .sy-diag[data-res="php"]')
+    check('Diagnose PHP-Umgebung: Ergebnis mit Prüfpunkten', pg.locator('#sy-diag-erg .sy-diag[data-res="php"] tr').count() >= 5)
+    ctx.close()
+    # Handy: System ohne waagerechtes Scrollen, Module je Bereich als Block, Dialog als Blatt
+    ctx, pg = anmelden('admin', PW, '198.51.100.2', breite=390, thema='dark', hoehe=844, ziel='/module/sicherheit/#system')
+    pg.wait_for_selector('#tab-system:not([hidden]) #sy-module tbody tr')
+    check('System 390 px: kein waagerechtes Scrollen', not pg.evaluate('document.documentElement.scrollWidth > innerWidth'))
+    pg.screenshot(path=f'{SH}/sicherheit_system_390.png', full_page=True)
+    pg.click('[data-sy="eingabe-an"]'); pg.wait_for_selector('#sic-dlg[open] #sy-e-grund')
+    box = pg.locator('#sic-dlg').bounding_box()
+    check('System 390 px: Dialog als Blatt von unten', box and abs(box['y'] + box['height'] - 844) < 2, box)
     ctx.close()
     br.close()
 

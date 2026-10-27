@@ -53,7 +53,7 @@
  *   POST ?action=bestell_settings_save   Bestellfunktion ein/aus, Kopie an Kunden (nur Administrator)
  *   POST ?action=fracht_save             Frachtfreigrenze, Frachtanteil je Staffel, Zusatz im Hinweis (nur Administrator)
  *   POST ?action=benachrichtigung_save | benachrichtigung_test   Benachrichtigungen an Mitarbeiter (nur Administrator)
- *   POST ?action=wartung_save      Wartungsmodus ein/aus (Administrator, mit Passwortbestätigung)
+ *   POST ?action=wartung_save      Wartungsmodus ein/aus (Administrator, mit Passwortbestätigung; Sicherheit → System)
  *   GET  ?action=kunde_merkliste   Merkliste des angemeldeten Kunden; POST kunde_merkliste_save (Kunden-CSRF)
  *   POST ?action=kunde_abmelden_info | kunde_abmelden   Abmeldelink aus der Angebotsmail (öffentlich, Code im Link)
  *   POST ?action=abmelden1&t=…     Ein-Klick-Abmeldung aus dem E-Mail-Programm (RFC 8058, Formular statt JSON)

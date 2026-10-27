@@ -183,7 +183,7 @@ hintergrund = "Geplante Läufe und Importe des Moduls pausieren und werden proto
 email = "Versandaufträge des Moduls bleiben in der Warteschlange (Dokument mailversand) und gehen nach der Wartung raus."
 veroeffentlichung = "Veröffentlichen ist eine Schreibaktion der Oberfläche angebot.eingabe."
 transaktionen = "Wartung beginnt erst, wenn laufende Schreibtransaktionen (with_lock) beendet sind; neue werden abgewiesen."
-gemeinsame_dienste = "Plattformkern, Anmeldung, Dashboard und Verwaltung → System sind nicht sperrbar (sperrbar = false)."
+gemeinsame_dienste = "Plattformkern, Anmeldung, Dashboard und die Sicherheitszentrale (mit dem Reiter System: Wartung, Module und Freigaben) sind nicht sperrbar (sperrbar = false)."
 getrennt = "Frontend und Backend eines Moduls haben eigene Zustände, z. B. Angebot: Kunden aktiv, Eingabe in Wartung."
 heute = "Der bestehende Wartungsmodus (Dokument wartung) entspricht angebot.kunden in Wartung und wird in Phase 5 übernommen."
 
@@ -194,7 +194,7 @@ bestaetigung = "Änderungen an Freigabe und Wartung brauchen eine Passwortbestä
 [notfall]
 beschreibung = "Fehlerhafte Wartungsregeln dürfen die Administration nie aussperren."
 massnahmen = [
-  "Verwaltung → System und das Dashboard sind nicht sperrbar (Prüfung in werkzeuge/regeln.py).",
+  "Die Sicherheitszentrale (Reiter System, bis 27.10.2026 Verwaltung → System) und das Dashboard sind nicht sperrbar (Prüfung in werkzeuge/regeln.py).",
   "Regel 5: Administratoren erreichen jede produktive Oberfläche auch in Wartung.",
   "Server-Werkzeug nach dem Muster deploy/ip-freigabe-aus.sh: alle Wartungen beenden (geplant, Phase 5).",
 ]

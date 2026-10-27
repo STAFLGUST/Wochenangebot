@@ -126,7 +126,7 @@ Wartungsmodus als Betrieb von `angebot.kunden` angebunden.
 
 **Umgesetzt (Roadmap PR 4):** Wartung je Oberfläche für die Mitarbeiter-Eingabe (Dokument `module`, Grund, Hinweis,
 geplanter Beginn, Verlauf, Protokoll, Passwortbestätigung), Durchsetzung im API-Einstieg, Sperrbildschirm,
-Notfallwerkzeug `deploy/wartung-aus.sh`. Freigaben und Tester zur Laufzeit: Modulverwaltung (Verwaltung → Sicherheit → Module, Roadmap 5) – nur innerhalb des Entwicklungsstands im Code, Produktivbereiche und Verwaltung nur über ein Release.
+Notfallwerkzeug `deploy/wartung-aus.sh`. Freigaben und Tester zur Laufzeit: Modulverwaltung (Modul Sicherheit → System → Module und Freigaben, Roadmap 5) – nur innerhalb des Entwicklungsstands im Code, Produktivbereiche und Verwaltung nur über ein Release.
 
 Umsetzung (Phase 5):
 - Laufzeitzustand im Dokument `module` (Freigabe, Wartung mit Beginn/Ende, Grund, Hinweis, Tester); Startwerte aus dem
@@ -135,7 +135,8 @@ Umsetzung (Phase 5):
   Aktion läuft. Wartung: 503, `Retry-After`, `Cache-Control: no-store`; Schreibaktionen auch für offene Sitzungen gesperrt;
   Importe/Hintergrundläufe pausieren; E-Mails bleiben in der Warteschlange.
 - Getrennt je Oberfläche, z. B. Angebot: Kunden aktiv, Eingabe in Wartung; QS: Portal aktiv, intern in Wartung.
-- Schutz vor Aussperrung: Dashboard und Verwaltung → System sind nicht sperrbar (CI prüft), Administratoren erreichen
+- Schutz vor Aussperrung: Dashboard und die Sicherheitszentrale mit dem Reiter System (bis 27.10.2026 Verwaltung → System)
+  sind nicht sperrbar (CI prüft), Administratoren erreichen
   produktive Oberflächen auch in Wartung, Notfallskript auf dem Server analog `deploy/ip-freigabe-aus.sh`.
 - Protokoll je Änderung (wer, wann, Modul, Oberfläche, alt, neu, Grund, geplante Dauer), Passwortbestätigung.
 - Der heutige Wartungsmodus wird zu „angebot.kunden in Wartung“ – gleiches Verhalten, gleiche Tests (`e2e:wartung`).

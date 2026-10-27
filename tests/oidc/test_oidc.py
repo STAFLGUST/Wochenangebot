@@ -1026,8 +1026,8 @@ with sync_playwright() as pw:
     check('… ohne zweite Abfrage in der Mitarbeiter-Eingabe (Einmalcode als Anmeldemethode erkannt)', code == 200 and pg.url.startswith(A + '/admin/'), (code, pg.url))
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])'); pg.wait_for_function("!document.querySelector('#vt-users').hidden")
     sichtbar = pg.evaluate("[...document.querySelectorAll('[id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3))")
-    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, System, E-Mail, Protokoll; kein Angebot, kein „Schutz“ (Modul Sicherheit)',
-          {'master', 'kunden', 'importe', 'users', 'sec', 'mail', 'log'} <= set(sichtbar) and not {'edit', 'schutz'} & set(sichtbar), sichtbar)
+    check('Administrator in der Verwaltung (Single Sign-on mit zweitem Faktor): Import, Nutzer, E-Mail, Protokoll; kein Angebot, kein „Schutz“, kein System (Modul Sicherheit)',
+          {'master', 'kunden', 'importe', 'users', 'mail', 'log'} <= set(sichtbar) and not {'edit', 'schutz', 'sec'} & set(sichtbar), sichtbar)
     pg.click('#vt-users'); pg.wait_for_selector('#view-users:not([hidden])')
     pg.screenshot(path=os.path.join(SH, 'oidc_verwaltung_admin_1280.png'))
     # Kachel „Import“: nur die Importzentrale – Nutzer, Protokoll, System nur über die Kachel „Verwaltung“
@@ -1050,7 +1050,12 @@ with sync_playwright() as pw:
         pass
     _zustand = pg.evaluate("({ url: location.href, titel: document.title, sichtbar: [...document.querySelectorAll('[role=tab][id^=vt-]')].filter(b => !b.hidden).map(b => b.id.slice(3)), "
                            "klassen: document.body.className })")
-    check('… über die Kachel „Verwaltung“ wieder alle Verwaltungsbereiche', pg.is_visible('.side-nav') and pg.is_visible('#vt-users') and pg.is_visible('#vt-sec'), _zustand)
+    check('… über die Kachel „Verwaltung“ wieder alle Verwaltungsbereiche (ohne System – liegt im Modul Sicherheit)', pg.is_visible('.side-nav') and pg.is_visible('#vt-users')
+          and pg.is_visible('#vt-log') and pg.locator('#vt-sec').count() == 0, _zustand)
+    # Reiter System (seit 27.10.2026 im Modul Sicherheit): seine Aktionen antworten auf dem Verwaltungs-Host nicht mehr (GR-109)
+    for a in ('betrieb_status', 'security_diag', 'wartung_save', 'modul_wartung_save', 'modul_freigabe_save', 'modul_tester_save'):
+        code = pg.evaluate("a => fetch('../api/?action=' + a).then(r => r.status)", a)
+        check(f'GR-109: {a} auf dem Verwaltungs-Host → 404 (Sicherheit → System)', code == 404, code)
     ctx.close()
 
     # ── Sensible Aktion: erneute Anmeldung bei Keycloak statt eigener Passwortabfrage (ADR-003, max_age=0) ──
@@ -1058,6 +1063,10 @@ with sync_playwright() as pw:
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
     pg.goto(SIC + '/module/sicherheit/'); anmelden(pg, 'admin'); pg.wait_for_selector('#sic-app:not([hidden])')
     angemeldet_um = time.time()
+    code = pg.evaluate("fetch('/api/?action=betrieb_status').then(r => r.status)")
+    check('Sicherheit → System: Betriebszustand auf dem Host des Moduls (200)', code == 200, code)
+    pg.click('#sic-tabs [data-tab="system"]'); pg.wait_for_selector('#tab-system:not([hidden]) #sy-module tbody tr')
+    check('… Reiter System mit Wartung und Module und Freigaben', pg.locator('#sy-kunden, #sy-eingabe').count() == 2)
     st = pg.evaluate("fetch('/api/?action=status').then(r => r.json())")
     js = "([a, t]) => fetch('/api/?action=' + a, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])"
     code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])

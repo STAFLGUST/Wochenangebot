@@ -391,7 +391,7 @@ hinweise = [
 [[modul]]
 id = "verwaltung"
 name = "Verwaltung"
-beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Geschäftsregeln, Module & Wartung, Systemstatus"
+beschreibung = "Stammdaten, Import, Benutzer, Berechtigungen, Geschäftsregeln, E-Mail, Protokoll"
 icon = "settings"
 reihenfolge = 80
 dashboard = true
@@ -416,7 +416,7 @@ pfade_geplant = ["app/api/module/verwaltung/**", "app/module/verwaltung/**"]
 hinweise = [
   "Zentrale Stammdaten (Artikel, Kunden, Lieferanten, Gruppen) gehören der Verwaltung; andere Module lesen und schreiben nur über ihre Schnittstellen.",
   "Benutzer und Rechte sind Oberflächen der Verwaltung, die Dienste dahinter gehören zum Plattformkern (koordinationspflichtig).",
-  "Sicherheit hat seit 26.10.2026 ein eigenes Modul (sicherheit); die Verwaltung behält die Ansicht System (Systemzustand, Diagnose, Wartung, Module & Freigaben) und verweist dorthin.",
+  "Sicherheit hat seit 26.10.2026 ein eigenes Modul (sicherheit); seit 27.10.2026 liegt dort auch der Reiter System (Systemzustand, Diagnose, Wartung, Module & Freigaben, vorher Verwaltung → System). Die Verwaltung hat keine eigene System-Ansicht mehr.",
 ]
 
   [[modul.oberflaeche]]
@@ -437,19 +437,10 @@ hinweise = [
   freigabe = "produktiv"
   sperrbar = true
 
-  [[modul.oberflaeche]]
-  id = "system"
-  name = "System: Module & Wartungsmodus"
-  art = "intern"
-  adresse = "https://verwaltung.dashboard-stafl.de/system/"
-  entwicklung = "geplant"
-  freigabe = "keine"
-  sperrbar = false
-
 [[modul]]
 id = "sicherheit"
 name = "Sicherheit"
-beschreibung = "Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen und privilegierte Konten"
+beschreibung = "Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen, privilegierte Konten und System (Betrieb, Wartung, Module)"
 icon = "shield-lock"
 reihenfolge = 81
 dashboard = true
@@ -468,6 +459,7 @@ hinweise = [
   "Notfallmodus nutzt die Wartungs-Entscheidungstabelle (alle sperrbaren internen Oberflächen in Wartung, Kunden-Wartung), keine eigene Sperrlogik. Server-Notfallwerkzeug: deploy/notfall-aus.sh.",
   "Bereitschaft (lib/bereitschaft.php, Plattformkern): Leitfaden (Administrator pflegt, im Notfall abhakbar mit sicherheit.notfall), Probealarm (sicherheit.notfall, ohne Wirkung), Wochenbericht (Empfänger der Sicherheitsereignisse, automatisch über die Statusabfrage), ungenutzte Zugänge deaktivieren (Administrator, Bestätigung user_save).",
   "Freigegeben (Inhaber 26.10.2026): sicherheit.dashboard-stafl.de mit eigenem Keycloak-Client „sicherheit“ (Stand 9); / und /admin/ führen zu /module/sicherheit/. Aktionen nur auf diesem Host (GR-109).",
+  "Reiter System (Auftrag des Inhabers 27.10.2026, vorher Verwaltung → System): Betriebszustand, Diagnose, Wartungsmodus, Wartung einzelner Bereiche, Module und Freigaben – nur Administratoren. Die Dienste (lib/module.php, lib/diagnose.php, Wartung) bleiben im Plattformkern; die Aktionen liegen auf sicherheit.intern.",
 ]
 
   [[modul.oberflaeche]]
@@ -477,7 +469,7 @@ hinweise = [
   adresse = "https://sicherheit.dashboard-stafl.de/module/sicherheit/"
   entwicklung = "fertig"
   freigabe = "produktiv"   # Freigabe des Inhabers 26.10.2026 (Keycloak-Client, Caddy, produktiv) mit dem Merge; DNS-Eintrag sicherheit besteht seit 26.10.2026
-  sperrbar = false   # die Sicherheitszentrale darf nie in Wartung gehen (auch nicht im Notfallmodus)
+  sperrbar = false   # die Sicherheitszentrale darf nie in Wartung gehen (auch nicht im Notfallmodus); Reiter System: Schutz vor Aussperrung (werkzeuge/regeln.py)
 
 # ───────────────────────────── Gemeinsame Bereiche (keine eigene Kachel) ─────────────────────────────
 

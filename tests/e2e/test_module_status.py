@@ -60,9 +60,12 @@ check('Angebot · Eingabe: heutige Adresse und beschlossenes Ziel', (lambda o: o
 imp = mods['import']
 check('Import: eigene Kachel, Teil der Verwaltung, Ziel verwaltung.import', imp['teil_von'] == 'verwaltung' and imp['kachel']['ziel'] == 'verwaltung.import' and imp['oberflaechen'] == [], imp)
 verw = mods['verwaltung']
-check('Verwaltung freigegeben (verwaltung.dashboard-stafl.de): Kachel verfügbar, Importzentrale freigegeben, System noch nicht',
+check('Verwaltung freigegeben (verwaltung.dashboard-stafl.de): Kachel verfügbar, Importzentrale freigegeben, keine eigene Oberfläche System mehr',
       verw['kachel']['ziel'] == 'verwaltung.verwaltung' and verw['kachel']['zugang'] is True and verw['kachel']['status'] == 'verfuegbar'
-      and ob(verw, 'verwaltung')['adresse'] == 'https://verwaltung.dashboard-stafl.de/admin/' and ob(verw, 'import')['zugang'] and not ob(verw, 'system')['zugang'], verw)
+      and ob(verw, 'verwaltung')['adresse'] == 'https://verwaltung.dashboard-stafl.de/admin/' and ob(verw, 'import')['zugang']
+      and [o['id'] for o in verw['oberflaechen']] == ['verwaltung', 'import'], verw)
+sic = mods['sicherheit']
+check('Sicherheit (mit dem Reiter System): produktiv, nicht sperrbar', (lambda o: o['freigabe'] == 'produktiv' and o['sperrbar'] is False)(ob(sic, 'intern')), sic)
 check('Import freigegeben: Kachel verfügbar, Adresse /import/ auf dem Verwaltungs-Host (auch für Leser – Rechte je Importart prüft der Server)',
       imp['kachel']['zugang'] is True and imp['kachel']['status'] == 'verfuegbar' and imp['kachel']['adresse'] == 'https://verwaltung.dashboard-stafl.de/import/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(verw, 'import')), imp['kachel'])

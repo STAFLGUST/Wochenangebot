@@ -57,7 +57,8 @@ st, r = A.call('modul_wartung_save', {'bereich': 'angebot.kunden', 'active': Tru
 check('Kunden-Frontend weiter nur über den bisherigen Schalter', st == 422 and 'Angebotsseite' in r.get('error', ''), r)
 st, r = A.call('modul_wartung_save', {'bereich': 'rewe.intern', 'active': True, 'grund': 'Test'})
 check('nicht freigegebener Bereich abgewiesen (Wartung ohne Wirkung)', st == 422 and 'nicht freigegeben' in r.get('error', ''), r)
-check('Verwaltung → System nicht sperrbar (Aussperrschutz)', 'Aussperrung' in A.call('modul_wartung_save', {'bereich': 'verwaltung.system', 'active': True, 'grund': 'Test'})[1].get('error', ''))
+check('Sicherheitszentrale (mit dem Reiter System) nicht sperrbar (Aussperrschutz)', 'Aussperrung' in A.call('modul_wartung_save', {'bereich': 'sicherheit.intern', 'active': True, 'grund': 'Test'})[1].get('error', ''))
+check('frühere Oberfläche Verwaltung → System gibt es nicht mehr', A.call('modul_wartung_save', {'bereich': 'verwaltung.system', 'active': True, 'grund': 'Test'})[0] == 422)
 check('ungültige Uhrzeit abgewiesen', A.call('modul_wartung_save', {'bereich': 'angebot.eingabe', 'active': True, 'grund': 'Test', 'until': 'morgen'})[0] == 422)
 
 # ── Geplante Wartung: wirkt erst ab Beginn ──
@@ -127,10 +128,17 @@ with sync_playwright() as pw:
         pg.wait_for_selector('#adm-wartung:not([hidden])')
         check(f'Administrator {breite}px: Eingabebereich mit Hinweis „nur Administratoren“', 'Eingabebereich in Wartung' in pg.inner_text('#adm-wartung'))
         if breite == 1280:
-            pg.click('#vt-sec'); pg.wait_for_selector('#ew-form')
-            check('Verwaltung: Formular mit Grund, Status und Verlauf', pg.input_value('#ew-form [name=grund]') == 'Datenübernahme Stammdaten' and 'Aktiv seit' in pg.inner_text('#ew-form') and pg.locator('#ew-form .wv-list li').count() >= 2)
-            pg.locator('#ew-form').scroll_into_view_if_needed()
-            shot(pg.locator('#ew-form'), f'{SH}/modul-wartung-verwaltung-1280.png')
+            # „Verwalten“ im Hinweis führt in das Modul Sicherheit, Reiter System (bis 27.10.2026 Verwaltung → System)
+            check('Hinweis „Verwalten“ verweist auf Sicherheit → System', pg.get_attribute('#adm-wartung [data-wartung="goto"]', 'href') == '../module/sicherheit/#system')
+            pg.click('#adm-wartung [data-wartung="goto"]'); pg.wait_for_selector('#tab-system:not([hidden]) #sy-eingabe')
+            t = pg.inner_text('#sy-eingabe')
+            check('Sicherheit → System: Wartung mit Grund und Status, Verlauf', 'Datenübernahme Stammdaten' in t and 'Wartung' in t and 'Wartung beenden' in t
+                  and pg.locator('#sy-verlauf li').count() >= 2, t)
+            pg.click('[data-sy="eingabe-bearbeiten"]'); pg.wait_for_selector('#sic-dlg[open] #sy-e-grund')
+            check('… Bearbeiten: Grund vorbelegt', pg.input_value('#sy-e-grund') == 'Datenübernahme Stammdaten')
+            pg.keyboard.press('Escape'); pg.wait_for_selector('#sic-dlg', state='hidden')
+            pg.locator('#sy-eingabe').scroll_into_view_if_needed()
+            shot(pg.locator('#sy-eingabe'), f'{SH}/modul-wartung-system-1280.png')
         ctx.close()
     br.close()
 check('keine JavaScript-Fehler', not fehler, fehler)
