@@ -248,7 +248,8 @@ function restposten_reason(array $c, string $oid): string
     if (array_key_exists('mailAngebot', $c) && empty($c['mailAngebot'])) return !empty($c['abgemeldet']) ? 'hat sich vom Wochenangebot abgemeldet' : 'Angebote per E-Mail nicht gewünscht';
     return '';
 }
-/* Einladung / Passwort zurücksetzen */
+/* Einladung / Passwort zurücksetzen – eigenes Layout (mail_layout_einladung): Überschrift, Benutzerkennung, großer Knopf,
+   Schritte. Der Link steht zusätzlich als Text darunter (falls der Knopf nicht funktioniert) und in der Textfassung. */
 function mail_tpl_zugang(array $c, string $url, string $purpose, int $exp): array
 {
     global $CFG;
@@ -256,16 +257,28 @@ function mail_tpl_zugang(array $c, string $url, string $purpose, int $exp): arra
     $subject = $inv ? "Ihr Zugang zum Angebotsportal von {$CFG['company']}" : "Passwort für Ihren Zugang neu festlegen – {$CFG['company']}";
     $until = date('d.m.Y, H:i', $exp) . ' Uhr';
     $user = $c['login']['username'];
-    $lines = $inv
-        ? ["für Sie ist ein Zugang zu unserem Angebotsportal eingerichtet. Dort sehen Sie jederzeit Ihr aktuelles Angebot.", "Ihre Benutzerkennung: $user", "Bitte legen Sie über den folgenden Link Ihr persönliches Passwort fest. Der Link ist bis $until gültig und kann nur einmal verwendet werden."]
-        : ["für Ihren Zugang zu unserem Angebotsportal (Benutzerkennung: $user) wurde ein neues Passwort angefordert.", "Bitte legen Sie über den folgenden Link ein neues Passwort fest. Der Link ist bis $until gültig und kann nur einmal verwendet werden."];
+    $ueberschrift = $inv ? 'Willkommen im Angebotsportal' : 'Neues Passwort festlegen';
+    $bestellen = order_enabled();
+    $intro = $inv
+        ? 'für Sie ist ein Zugang zu unserem Angebotsportal eingerichtet. Dort sehen Sie jederzeit Ihr aktuelles Angebot' . ($bestellen ? ' und können Bestellwünsche direkt an uns senden.' : '.')
+        : "für Ihren Zugang zu unserem Angebotsportal wurde ein neues Passwort angefordert. Ihr bisheriges Passwort gilt weiter, bis Sie ein neues festlegen.";
+    $knopf = $inv ? 'Passwort festlegen' : 'Neues Passwort festlegen';
+    $gueltig = "Der Link ist bis $until gültig und kann nur einmal verwendet werden.";
+    $schritte = $inv
+        ? ['Persönliches Passwort festlegen (mindestens 10 Zeichen) – danach sind Sie gleich angemeldet.', "Später auf der Angebotsseite über „Kunden-Login“ mit der Benutzerkennung „{$user}“ anmelden.", $bestellen ? 'Angebot ansehen, Artikel merken und Bestellwünsche senden.' : 'Angebot ansehen und Artikel auf die Merkliste setzen.']
+        : [];
     $sig = mail_settings()['signature'];
-    $t = mail_greeting($c) . "\n\n" . implode("\n\n", $lines) . "\n\n" . $url . "\n\n" . $sig . "\n\n-- \n" . mail_footer('zugang') . "\n";
-    $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p>';
-    foreach ($lines as $l) $h .= '<p style="margin:0 0 14px;">' . mail_h($l) . '</p>';
-    $h .= mail_button($url, $inv ? 'Passwort festlegen' : 'Neues Passwort festlegen')
-        . '<p style="margin:12px 0 0;font-size:12px;color:#857c72;word-break:break-all;">Falls die Schaltfläche nicht funktioniert: ' . mail_h($url) . '</p>';
-    return [$subject, $t, mail_layout($subject, $h, $sig, mail_footer('zugang'))];
+    $t = mail_greeting($c) . "\n\n" . $intro . "\n\nIhre Benutzerkennung: $user\n\n" . ($inv ? 'Bitte legen Sie über den folgenden Link Ihr persönliches Passwort fest. ' : 'Bitte legen Sie über den folgenden Link ein neues Passwort fest. ')
+        . $gueltig . "\n\n" . $url . "\n\n"
+        . ($schritte ? "So geht es weiter:\n" . implode("\n", array_map(function ($i, $x) { return ($i + 1) . '. ' . $x; }, array_keys($schritte), $schritte)) . "\n\n" : '')
+        . $sig . "\n\n-- \n" . mail_footer('zugang') . "\n";
+    $h = '<p style="margin:0 0 12px;">' . mail_h(mail_greeting($c)) . '</p>'
+        . '<p style="margin:0;">' . mail_h($intro) . '</p>'
+        . mail_feld('Ihre Benutzerkennung', $user)
+        . mail_button_gross($url, $knopf)
+        . '<p style="margin:0 0 6px;font-size:13px;color:#4a443e;">' . mail_h($gueltig) . '</p>'
+        . '<p style="margin:0;font-size:12px;color:#857c72;">Falls der Knopf nicht funktioniert, diesen Link in den Browser kopieren:<br><span style="word-break:break-all;">' . mail_h($url) . '</span></p>';
+    return [$subject, $t, mail_layout_einladung($subject, 'Angebotsportal', $ueberschrift, $h, $sig, mail_footer('zugang'), $schritte)];
 }
 /* Einmal-Link erzeugen (gespeichert wird nur der Hash) */
 function kunde_token_new(string $kid, string $purpose): array

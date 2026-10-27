@@ -285,7 +285,7 @@ $pres = with_lock('anwesenheit', function () use ($me, $now) {
 ## 3.6 E-Mail
 
 `app/api/mail.php` enthält einen eigenen SMTP-Client (Klasse `Smtp`, STARTTLS oder SSL, eine Verbindung für mehrere
-Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed), `mail_layout`, `mail_button`, `mail_h`.
+Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed), `mail_layout`, `mail_button`, `mail_h`; für Einladungen und Passwort-Links `mail_layout_einladung` (Kopfband, Überschrift, Schritte) mit `mail_button_gross` und `mail_feld` – dasselbe Aussehen hat die Keycloak-Vorlage `deploy/anmeldung/theme/stafl/email/html/executeActions.ftl`.
 
 - **Postfach:** `mail_cfg()` liefert die Einstellungen oder `null` (Versand nicht eingerichtet). Vorrang hat das im
   Eingabebereich gespeicherte Postfach (Dokument `mailkonto`, Passwort `passEnc` mit libsodium verschlüsselt,

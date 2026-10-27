@@ -84,8 +84,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Mitarbeiterkonto hängt an der Keycloak-Kennung.
 - **Design der Anmeldeseite** (seit 22.10.2026): Theme `stafl` in `deploy/anmeldung/theme/` (Plattform-Design „Liquid
   Glass“, STAFL-Logo, deutsche Texte), per Volume in Keycloak. Aktiv mit `sh deploy/anmeldung/konten.sh design-setzen`
-  (idempotent, ändert nur `loginTheme`); Rückfall `konten.sh design-setzen standard`. Spätere Änderungen am Theme wirken
-  mit dem Release ohne Neustart von Keycloak (Theme-Cache aus, Browser fragen stündlich neu).
+  (idempotent, ändert nur `loginTheme` und – seit 27.10.2026 – `emailTheme`: Einladungsmails im STAFL-Design); Rückfall
+  `konten.sh design-setzen standard`. Spätere Änderungen am Theme wirken mit dem Release ohne Neustart von Keycloak
+  (Theme-Cache aus, Browser fragen stündlich neu).
 - **„Der Code wurde nicht angenommen“:** Häufigste Ursache laut `konten.sh pruefen`: derselbe Code kurz nach einer
   Anmeldung noch einmal eingegeben (zweiter Tab, Neuladen) – jeder Code gilt nur einmal, also auf den nächsten warten.
   Zweite Ursache: zwei Fehlversuche in weniger als einer Sekunde (z. B. doppelt abgeschickt) sperren die Anmeldung für

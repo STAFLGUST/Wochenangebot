@@ -40,6 +40,7 @@
   ],
   "defaultLocale": "de",
   "loginTheme": "stafl",
+  "emailTheme": "stafl",
   "eventsEnabled": true,
   "eventsExpiration": 2592000,
   "adminEventsEnabled": true,

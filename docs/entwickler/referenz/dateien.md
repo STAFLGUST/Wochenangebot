@@ -308,6 +308,30 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `pruefen.sh` | plattform | Prüft die vorbereitete Betriebskonfiguration der zentralen Anmeldung (deploy/anmeldung) – lokal mit Docker und in der CI. |
 | `ruecksicherung-probe.sh` | plattform | Rücksicherung der Keycloak-Datenbank üben – ohne Eingriff in den Betrieb (Schritt 7 der Inbetriebnahme). |
 
+## `deploy/anmeldung/theme/stafl/email/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `theme.properties` | plattform | – |
+
+## `deploy/anmeldung/theme/stafl/email/html/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `executeActions.ftl` | plattform | STAFL-Plattform: E-Mail „Konto aktualisieren“ (Einladung aus der Verwaltung bzw. konten.sh einladen, Link zum Passwort-Festlegen) im Stil der Plattform-Mails (app/api/mail.php: mail_layout_einladung). |
+
+## `deploy/anmeldung/theme/stafl/email/messages/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `messages_de.properties` | plattform | – |
+
+## `deploy/anmeldung/theme/stafl/email/text/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `executeActions.ftl` | plattform | STAFL-Plattform: Textfassung der E-Mail „Konto aktualisieren“ (zur HTML-Fassung html/executeActions.ftl) |
+
 ## `deploy/anmeldung/theme/stafl/login/`
 
 | Datei | Modul | Inhalt |
