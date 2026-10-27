@@ -1019,14 +1019,14 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 
 /* ==========================================================================
    Design „Liquid Glass“ – nur Angebotsseite (body.kseite in index.html; Eingabebereich, Dashboard und Module nutzen
-   app.css ohne diese Klasse und bleiben unverändert). Inhalt und Aufbau wie bisher: warmer Grund mit weichen Farbflächen,
+   app.css ohne diese Klasse und bleiben unverändert). Inhalt und Aufbau wie bisher: warmer Grund mit weichen Farbflächen wie im Dashboard (Blaugrau, Bernstein, Salbei),
    schwebende Kopfzeile als Glaskapsel, Bedienelemente als Kapseln, Liste als Glaskarte mit abgerundeten Zeilen.
    Nur für den Bildschirm – der Druck (#print-root, @media print) bleibt unverändert. Ohne backdrop-filter oder bei
    „weniger Transparenz“ deckende Flächen.
    ========================================================================== */
 @media screen {
   body.kseite {
-    --bg: #efebe7;
+    --bg: #f4f1ee;
     --surface: #ffffff; --surface-2: #faf8f6; --surface-3: #efebe7;
     --line: #e6e1dc; --line-strong: #d4cdc7;
     --text: #0b0b0b; --text-2: #4d4648; --muted: #6d6669;   /* Text und Artikelnummern schwarz wie in der gedruckten Liste */
@@ -1048,12 +1048,12 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
     --feld: rgba(255, 255, 255, .74); --feld-rand: rgba(20, 18, 19, .08);
     --zebra: rgba(20, 18, 19, .035); --regel: rgba(20, 18, 19, .16);
     --knopf-dunkel: #1a1617; --knopf-dunkel-text: #ffffff;
-    --blob-a: rgba(140, 29, 44, .20); --blob-b: rgba(214, 158, 92, .24); --blob-c: rgba(112, 132, 150, .13);
+    --blob-a: rgba(143, 167, 196, .24); --blob-b: rgba(226, 165, 74, .18); --blob-c: rgba(63, 122, 90, .15);   /* wie Dashboard */
   }
 }
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.kseite {
-    --bg: #0d0b0b;
+    --bg: #121011;
     --surface: #1a1717; --surface-2: #201c1c; --surface-3: #2a2525;
     --line: #2f2a29; --line-strong: #433d3b;
     --text: #f3efec; --text-2: #d2cbc6; --muted: #a39c98;
@@ -1066,12 +1066,12 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
     --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .1);
     --zebra: rgba(255, 255, 255, .04); --regel: rgba(255, 255, 255, .18);
     --knopf-dunkel: #f3efec; --knopf-dunkel-text: #141213;
-    --blob-a: rgba(168, 34, 56, .38); --blob-b: rgba(196, 132, 62, .18); --blob-c: rgba(84, 104, 138, .18);
+    --blob-a: rgba(59, 85, 115, .24); --blob-b: rgba(154, 106, 36, .18); --blob-c: rgba(36, 90, 64, .16);
   }
 }
 @media screen {
   :root[data-theme="dark"] body.kseite {
-    --bg: #0d0b0b;
+    --bg: #121011;
     --surface: #1a1717; --surface-2: #201c1c; --surface-3: #2a2525;
     --line: #2f2a29; --line-strong: #433d3b;
     --text: #f3efec; --text-2: #d2cbc6; --muted: #a39c98;
@@ -1084,7 +1084,7 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
     --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .1);
     --zebra: rgba(255, 255, 255, .04); --regel: rgba(255, 255, 255, .18);
     --knopf-dunkel: #f3efec; --knopf-dunkel-text: #141213;
-    --blob-a: rgba(168, 34, 56, .38); --blob-b: rgba(196, 132, 62, .18); --blob-c: rgba(84, 104, 138, .18);
+    --blob-a: rgba(59, 85, 115, .24); --blob-b: rgba(154, 106, 36, .18); --blob-c: rgba(36, 90, 64, .16);
   }
 }
 /* Ohne backdrop-filter (ältere Browser): Glas fast deckend */
@@ -1099,14 +1099,14 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 }
 
 @media screen {
-  /* Grund: drei weiche Farbflächen, fest hinter dem Inhalt */
+  /* Grund: drei weiche Farbflächen wie im Dashboard (links oben Blaugrau, rechts Bernstein, unten Salbei), fest hinter dem Inhalt */
   body.kseite { background: var(--bg); color: var(--text); }
   body.kseite::before {
     content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
     background:
-      radial-gradient(circle 620px at 0 0, var(--blob-a), transparent 70%),
-      radial-gradient(circle 600px at 100% 0, var(--blob-b), transparent 70%),
-      radial-gradient(circle 680px at 62% 100%, var(--blob-c), transparent 70%);
+      radial-gradient(circle 640px at 160px 100px, var(--blob-a), transparent 70%),
+      radial-gradient(circle 560px at calc(100% - 160px) 400px, var(--blob-b), transparent 70%),
+      radial-gradient(circle 620px at 45% 100%, var(--blob-c), transparent 70%);
   }
 
   /* Kopfzeile: schwebende Glaskapsel */
