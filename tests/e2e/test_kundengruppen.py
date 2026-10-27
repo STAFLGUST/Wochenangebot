@@ -178,7 +178,7 @@ with sync_playwright() as p:
     e.click('#vt-gruppen'); e.wait_for_selector('.kgtab tbody tr')
     check('Bearbeiter: Import und Anlegen möglich', e.locator('#kg-import').count() == 1 and e.locator('#kg-add').count() == 1)
     check('Bearbeiter: unter Verwaltung nur der Import (Importzentrale), keine Verwaltungsbereiche', e.locator('#vt-importe').is_visible()
-          and not any(e.locator('#vt-' + v).is_visible() for v in ['users', 'log', 'sec', 'mail', 'auswertung']))
+          and not any(e.locator('#vt-' + v).is_visible() for v in ['users', 'log', 'mail', 'auswertung']))
 
     check('keine JavaScript-Fehler', not errors)
     if errors:

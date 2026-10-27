@@ -3,7 +3,7 @@
 Der Testlauf stellt in der App-Kopie dieser Gruppe REWE auf „in Prüfung“ und Einkauf auf „fertig“ (REGISTER_TEST in
 tests/run_e2e.py) – im Code sind beide noch „geplant“. Geprüft: Rechte, Grenzen (nur was der
 Entwicklungsstand zulässt, Produktivbereiche und Verwaltung nicht änderbar), Wirkung auf den Zugang (Tester,
-Administratoren nur eingetragen, Produktiv, Deaktiviert, Wartung), Verlauf, Datenformat, Oberfläche.
+Administratoren nur eingetragen, Produktiv, Deaktiviert, Wartung), Verlauf, Datenformat, Oberfläche (Modul Sicherheit → System).
 """
 import json
 import os
@@ -60,7 +60,8 @@ for name, b, wort in (
         ('unbekannter Bereich', {'bereich': 'gibt.es', 'freigabe': 'test', 'grund': 'Test'}, 'Unbekannt'),
         ('Eingabebereich läuft produktiv → nur über Release', {'bereich': 'angebot.eingabe', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Release'),
         ('Kundenseite läuft produktiv → nur über Release', {'bereich': 'angebot.kunden', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Release'),
-        ('Verwaltung → System nicht änderbar (Aussperrschutz)', {'bereich': 'verwaltung.system', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
+        ('Sicherheitszentrale (Reiter System) nicht änderbar (Aussperrschutz)', {'bereich': 'sicherheit.intern', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
+        ('frühere Oberfläche Verwaltung → System gibt es nicht mehr', {'bereich': 'verwaltung.system', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Unbekannt'),
         ('Dashboard nicht änderbar (Aussperrschutz)', {'bereich': 'dashboard.start', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
         ('geplanter Code: keine Testfreigabe', {'bereich': 'qs.intern', 'freigabe': 'test', 'grund': 'Test'}, 'Entwicklungsstand'),
         ('Code in Prüfung: nicht produktiv', {'bereich': 'rewe.intern', 'freigabe': 'produktiv', 'grund': 'Test'}, 'fertig'),
@@ -117,7 +118,7 @@ d = json.loads(roh[roh.index('?>') + 2:] if '?>' in roh else roh)
 check('Dokument „module“ nur erweitert: freigabe, tester, wartung, verlauf',
       set(d) >= {'freigabe', 'tester', 'wartung', 'verlauf'} and d['freigabe'] == {'rewe.intern': d['freigabe']['rewe.intern']} and d['tester']['rewe.intern'] == [ids['erika'], ids['admin']], sorted(d))
 
-# ── Oberfläche: Verwaltung → Sicherheit → Module ──
+# ── Oberfläche: Modul Sicherheit → System → Module und Freigaben (bis 27.10.2026 Verwaltung → System) ──
 fehler_js = []
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -127,33 +128,34 @@ with sync_playwright() as pw:
         pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
         pg.fill('#au-user', 'admin'); pg.fill('#pw1', PW); pg.click('#auth-submit')
         pg.wait_for_selector('#screen-editor:not([hidden])')
-        if breite == 390:
-            pg.evaluate("document.getElementById('vt-sec').click()")
-        else:
-            pg.click('#vt-sec')
-        pg.wait_for_selector('#mv-box .mvtab tbody tr')
-        zeilen = pg.locator('#mv-box .mvtab tbody tr').count()
+        check(f'{breite}px: Verwaltung ohne System-Ansicht', pg.locator('#vt-sec, #view-sec').count() == 0)
+        pg.goto(B + '/module/sicherheit/#system')
+        pg.wait_for_selector('#sy-module .mvtab tbody tr')
+        zeilen = pg.locator('#sy-module .mvtab tbody tr').count()
         check(f'{breite}px: Tabelle mit allen Bereichen', zeilen >= 12, zeilen)
-        check(f'{breite}px: Eingabebereich „nur über ein Release“', 'nur über ein Release' in pg.inner_text('#mv-box tr[data-mvziel="angebot.eingabe"]'))
-        check(f'{breite}px: REWE zeigt Testbetrieb, Grund und Tester', (lambda t: 'Testbetrieb' in t and 'Abnahme Fachabteilung' in t and 'Erika Editor' in t)(pg.inner_text('#mv-box tr[data-mvziel="rewe.intern"]')))
+        check(f'{breite}px: Eingabebereich „nur über ein Release“', 'nur über ein Release' in pg.inner_text('#sy-module tr[data-mvziel="angebot.eingabe"]'))
+        check(f'{breite}px: REWE zeigt Testbetrieb, Grund und Tester', (lambda t: 'Testbetrieb' in t and 'Abnahme Fachabteilung' in t and 'Erika Editor' in t)(pg.inner_text('#sy-module tr[data-mvziel="rewe.intern"]')))
         check(f'{breite}px: kein waagerechtes Scrollen der Seite', not pg.evaluate('document.documentElement.scrollWidth > window.innerWidth'))
-        pg.locator('#mv-box').scroll_into_view_if_needed()
+        pg.locator('#sy-module').scroll_into_view_if_needed()
         pg.screenshot(path=os.path.join(SH, f'modulverwaltung-{breite}.png'), full_page=False)
         if breite == 1280:
-            pg.click('#mv-box [data-mv="waehlen"][data-ziel="rewe.intern"]'); pg.wait_for_selector('#mv-form')
-            opts = pg.eval_on_selector_all('#mv-form [name=freigabe] option', 'os => os.map(o => o.value)')
-            check('Formular bietet nur erlaubte Freigaben an', opts == ['keine', 'test', 'deaktiviert'], opts)
-            pg.select_option('#mv-form [name=freigabe]', 'keine'); pg.fill('#mv-form [name=grund]', 'Abnahme beendet')
-            pg.click('#mv-form [data-mv="freigabe"]')
-            pg.wait_for_function("document.querySelector('#mv-box tr[data-mvziel=\"rewe.intern\"]') && document.querySelector('#mv-box tr[data-mvziel=\"rewe.intern\"]').innerText.includes('Nicht freigegeben')")
+            pg.click('#sy-module [data-sy="modul"][data-ziel="rewe.intern"]'); pg.wait_for_selector('#sic-dlg[open] #mv-freigabe')
+            opts = pg.eval_on_selector_all('#mv-freigabe option', 'os => os.map(o => o.value)')
+            check('Dialog bietet nur erlaubte Freigaben an', opts == ['keine', 'test', 'deaktiviert'], opts)
+            pg.select_option('#mv-freigabe', 'keine'); pg.fill('#mv-grund', 'Abnahme beendet')
+            pg.click('#sic-dlg [data-d="freigabe"]')
+            pg.wait_for_function("document.querySelector('#sy-module tr[data-mvziel=\"rewe.intern\"]') && document.querySelector('#sy-module tr[data-mvziel=\"rewe.intern\"]').innerText.includes('Nicht freigegeben')")
             check('Oberfläche: Freigabe gespeichert und Tabelle aktualisiert', ob(A, 'rewe.intern')['freigabe'] == 'keine')
-            pg.click('#mv-box [data-mv="waehlen"][data-ziel="rewe.intern"]'); pg.wait_for_selector('#mv-form')
-            pg.uncheck(f'#mv-form [name=tester][value="{ids["admin"]}"]'); pg.click('#mv-form [data-mv="tester"]')
-            pg.wait_for_function("!document.querySelector('#mv-box tr[data-mvziel=\"rewe.intern\"]').innerText.includes('Administrator')")
+            pg.wait_for_selector('#sic-dlg[open] [name="mv-tester"]')
+            check('… Dialog bleibt mit dem neuen Stand offen', pg.input_value('#mv-freigabe') == 'keine' and 'jetzt: Nicht freigegeben' in pg.inner_text('#sic-dlg .sic-dkopf'))
+            pg.uncheck(f'#sic-dlg [name="mv-tester"][value="{ids["admin"]}"]'); pg.click('#sic-dlg [data-d="tester"]')
+            pg.wait_for_function("!document.querySelector('#sy-module tr[data-mvziel=\"rewe.intern\"]').innerText.includes('Administrator')")
             check('Oberfläche: Tester gespeichert', [t['name'] for t in ob(A, 'rewe.intern')['verwaltung']['tester']] == ['Erika Editor'])
-            check('Produktivbereich und Verwaltung → System: ohne „Ändern“', pg.locator('#mv-box [data-mv="waehlen"][data-ziel="angebot.eingabe"], #mv-box [data-mv="waehlen"][data-ziel="verwaltung.system"]').count() == 0)
-            pg.click('#mv-box [data-mv="waehlen"][data-ziel="qs.intern"]'); pg.wait_for_selector('#mv-form')
-            check('geplanter Bereich: nur „nicht freigegeben“ oder „deaktiviert“', pg.eval_on_selector_all('#mv-form [name=freigabe] option', 'os => os.map(o => o.value)') == ['keine', 'deaktiviert'])
+            pg.keyboard.press('Escape'); pg.wait_for_selector('#sic-dlg', state='hidden')
+            check('Produktivbereich und Sicherheitszentrale: ohne „Ändern“', pg.locator('#sy-module [data-sy="modul"][data-ziel="angebot.eingabe"], #sy-module [data-sy="modul"][data-ziel="sicherheit.intern"], #sy-module [data-sy="modul"][data-ziel="dashboard.start"]').count() == 0
+                  and pg.locator('#sy-module tr[data-mvziel="sicherheit.intern"]').count() == 1)
+            pg.click('#sy-module tr[data-mvziel="qs.intern"] td:first-child'); pg.wait_for_selector('#sic-dlg[open] #mv-freigabe')
+            check('Zeile anklicken öffnet den Dialog; geplanter Bereich: nur „nicht freigegeben“ oder „deaktiviert“', pg.eval_on_selector_all('#mv-freigabe option', 'os => os.map(o => o.value)') == ['keine', 'deaktiviert'])
             pg.screenshot(path=os.path.join(SH, 'modulverwaltung-formular-1280.png'), full_page=False)
         ctx.close()
     br.close()

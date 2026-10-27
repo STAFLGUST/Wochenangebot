@@ -176,7 +176,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `anmeldekonto_aendern` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/anmeldekonten.php` |
 | `benachrichtigung_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/mail.php` |
 | `benachrichtigung_test` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/mail.php` |
-| `betrieb_status` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
+| `betrieb_status` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
 | `change_password` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/zugang.php` |
 | `fw_export` | `sicherheit.intern` | lesend | – | Administrator | `app/api/aktionen/schutz.php` |
 | `fw_feed_auffrischen` | `sicherheit.intern` | schreibend | – | Administrator | `app/api/aktionen/schutz.php` |
@@ -200,9 +200,9 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `mail_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/mail.php` |
 | `mail_status` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/mail.php` |
 | `mail_test` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/mail.php` |
-| `modul_freigabe_save` | `angebot.eingabe` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
-| `modul_tester_save` | `angebot.eingabe` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
-| `modul_wartung_save` | `angebot.eingabe` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
+| `modul_freigabe_save` | `sicherheit.intern` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
+| `modul_tester_save` | `sicherheit.intern` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
+| `modul_wartung_save` | `sicherheit.intern` | schreibend | – | siehe Datei | `app/api/aktionen/module.php` |
 | `module_status` | `angebot.eingabe` | lesend | wartungsfrei | siehe Datei | `app/api/aktionen/module.php` |
 | `passkey_begin` | `angebot.eingabe` | schreibend | wartungsfrei, eigene Anmeldung | – | `app/api/aktionen/passkey.php` |
 | `passkey_delete` | `angebot.eingabe` | schreibend | eigene Anmeldung | angemeldet | `app/api/aktionen/passkey.php` |
@@ -216,7 +216,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `rechte_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `rolle_loeschen` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `rolle_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
-| `security_diag` | `angebot.eingabe` | schreibend | – | Administrator | `app/api/aktionen/verwaltung.php` |
+| `security_diag` | `sicherheit.intern` | schreibend | – | Administrator | `app/api/aktionen/verwaltung.php` |
 | `security_export` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `security_integrity` | `sicherheit.intern` | post | – | siehe Datei | `app/api/aktionen/integritaet.php` |
 | `security_save` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
@@ -235,4 +235,4 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `user_unlock` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/verwaltung.php` |
 | `users` | `angebot.eingabe` | lesend | – | Administrator | `app/api/aktionen/verwaltung.php` |
 | `waf_probe` | `angebot.kunden` | lesend | öffentlich | – | `app/api/aktionen/schutz.php` |
-| `wartung_save` | `angebot.eingabe` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/zugang.php` |
+| `wartung_save` | `sicherheit.intern` | schreibend | – | Administrator + Bestätigung | `app/api/aktionen/zugang.php` |

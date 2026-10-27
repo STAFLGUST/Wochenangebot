@@ -1,6 +1,6 @@
 # Modul Sicherheit (sicherheit.dashboard-stafl.de)
 
-Stand 26.10.2026 · Auftrag des Inhabers vom 26.10.2026 („die Punkte als ein Modul im Dashboard, Aufbau überdenken,
+Stand 27.10.2026 · Auftrag des Inhabers vom 26.10.2026 („die Punkte als ein Modul im Dashboard, Aufbau überdenken,
 Notfall-Knopf, der wirklich etwas bewirkt, als Berechtigung zuweisbar, Kachel unten rechts neben Verwaltung“) ·
 Freigabe des Inhabers für eigene Adresse, eigenen Keycloak-Client und produktive Kachel mit dem Merge (26.10.2026).
 
@@ -32,10 +32,12 @@ Hauptansichten bleiben schlank (Lage, Listen, Zustände); Details, Bearbeiten un
 | **Ereignisse** | Sicherheitsprotokoll mit Filter (Art, Zeitraum, Suche), Details im Dialog, CSV-Export | Administrator, `sicherheit.sehen` |
 | **Einstellungen & Vorlagen** | Vorlagen Standard · Streng · **Notfall** (Vorschau der Änderungen im Dialog; „Notfall“ startet den Notfallmodus), Export/Import, Anmeldung und Passwörter, IP-Freigabe, Ländersperre, Passwortbestätigung | Administrator |
 | **Konten** | Privilegierte Konten (Administratoren und Inhaber sicherheitsrelevanter Rechte mit Zwei-Faktor/Passkey, letzter Anmeldung, Sitzungen, Sperre; Details im Dialog) und **ungenutzte Zugänge** (Zeitraum wählbar, Deaktivieren im Dialog) | Administrator |
+| **System** | Betriebskarten (Notfallmodus, Datensicherung, Bereitstellung, Datenablage, Speicherplatz, E-Mail-Versand, Bestellwünsche, Kunden), **Wartungsmodus der Angebotsseite** und **Wartung des Eingabebereichs** (einschalten bzw. planen, ändern, beenden im Dialog), **Module und Freigaben** (Freigabe und Tester je Bereich im Dialog), **Diagnose** (nur lesend), Verlauf | Administrator |
 
-In der **Verwaltung** bleibt nur, was zum Betrieb gehört: Ansicht **System** (Systemzustand, Diagnose, Wartungsmodus der
-Angebotsseite, Wartung des Eingabebereichs, Module & Freigaben) und ein Hinweis mit Link zum Modul Sicherheit. Die Ansicht
-„Schutz“ entfällt dort. Benutzer, Rollen und Rechte bleiben in der Verwaltung.
+Seit 27.10.2026 (Auftrag des Inhabers: „der Punkt System soll vollständig ins Modul Sicherheit übergehen“) hat die
+**Verwaltung** keine eigene Ansicht System mehr; die alte Adresse `/admin/#sec` führt Administratoren zu Sicherheit → System,
+der Wartungshinweis im Eingabebereich verweist mit „Verwalten“ dorthin. Die Ansicht „Schutz“ entfiel schon am 26.10.2026.
+Benutzer, Rollen und Rechte bleiben in der Verwaltung.
 
 ## 3. Rechte
 
@@ -98,8 +100,10 @@ Dokument `sicherheit-notfall` (Eigentümer `plattform`): `aktiv`, `seit`, `von`,
   (die Sicherheitszentrale darf sich nie selbst aussperren).
 - Aktionen auf `sicherheit.intern` (GR-109: nur auf diesem Host): die bisherigen `security_*`, `fw_*` (außer `waf_probe`),
   `geo_*`, `session_end`, `ip_unblock`, `user_unlock` (Code bleibt im Plattformkern, `regeln/aktionen/plattform.toml`) und die
-  neuen `sicherheit_*` (`app/api/aktionen/sicherheit.php`, `regeln/aktionen/sicherheit.toml`). Die Verwaltung nutzt für die
-  Ansicht System die neue Aktion `betrieb_status` und weiterhin `security_diag`.
+  neuen `sicherheit_*` (`app/api/aktionen/sicherheit.php`, `regeln/aktionen/sicherheit.toml`). Seit 27.10.2026 ebenso die
+  Aktionen des Reiters System: `betrieb_status` (mit schlanker Testerauswahl `nutzer`: Kennung, Name, Benutzername, aktiv),
+  `security_diag`, `wartung_save`, `modul_wartung_save`, `modul_freigabe_save`, `modul_tester_save` – auf anderen
+  Keycloak-Hosts (z. B. der Verwaltung) antworten sie mit 404. `module_status` bleibt Grundaktion auf jedem Host (Dashboard).
 - Notfall-Dienst: `app/api/lib/notfall.php`; Haken in `wartung()` (lib/sicherheit.php), `modul_wartung_eintrag()`
   (lib/module.php), Kundenprüfung im API-Einstieg, `mail_send_many()` (lib/kundenmail.php).
 - Oberfläche: `app/module/sicherheit/` (eigene Seite wie HR/CRM/Marketing, Hell/Dunkel am Konto, ohne Inline-Skripte).
@@ -167,6 +171,16 @@ gesperrte Adressen, Verlauf je Stunde aus `fw_stunden()`), **Notfall-Konsole** (
 Kennzahlen als Karten (Fehlanmeldungen mit Verlauf der letzten 7 Tage), Ereignisse als Zeitleiste. Notfall aktiv: roter Alarmkopf
 mit pulsierendem Ring und laufender Zeit, Leitfaden direkt darunter mit hervorgehobenem nächsten Schritt („jetzt“), Wirkung als
 Kennzahlen, Verlauf dieses Notfalls. Auf dem Handy sitzt „Notfall auslösen“ fest unten im Daumenbereich.
+
+### System im Modul (27.10.2026)
+
+Der Reiter System übernimmt die frühere Verwaltungsansicht vollständig und im selben Stil: Betriebskarten oben, darunter die
+beiden Wartungen als Karten mit Zustand und Knöpfen, Module und Freigaben als Tabelle (auf dem Handy je Bereich ein Block),
+Diagnose und Verlauf nebeneinander. Ändern geschieht immer im Dialog; auf Keycloak-Hosts führt die Bestätigung zur erneuten
+Anmeldung, danach öffnet sich der Dialog mit den Eingaben wieder (Entwurf nur in `sessionStorage`, keine Geheimnisse).
+Schutz vor Aussperrung: Die Sicherheitszentrale ist nicht sperrbar und ihre Freigabe nicht zur Laufzeit änderbar – die CI prüft
+das jetzt für `sicherheit.intern` statt für die frühere, nie gebaute Oberfläche `verwaltung.system` (aus dem Register entfernt;
+sie hatte keine gespeicherten Daten, da weder Freigabe noch Wartung noch Tester für sie möglich waren).
 
 ## 9. Folgearbeiten
 

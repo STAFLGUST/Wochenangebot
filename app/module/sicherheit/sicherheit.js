@@ -1,6 +1,7 @@
 /* STAFL-Plattform · Sicherheit (Modul sicherheit, Oberfläche sicherheit.intern; docs/plattform/modul-sicherheit.md)
    Reiter: Lagebild (mit Wochenbericht und Bereitschaft), Notfall (mit Leitfaden und Probealarm), Firewall & Sperren,
-   Anmeldung & Sitzungen, Dateiprüfung, Ereignisse, Einstellungen & Vorlagen, Konten (privilegierte und ungenutzte). Hauptansichten zeigen Lage, Listen und Zustände; Details, Bearbeiten und Bestätigungen öffnen sich in
+   Anmeldung & Sitzungen, Dateiprüfung, Ereignisse, Einstellungen & Vorlagen, Konten (privilegierte und ungenutzte), System
+   (Betrieb, Wartung, Module und Freigaben, Diagnose – bis 27.10.2026 Verwaltung → System). Hauptansichten zeigen Lage, Listen und Zustände; Details, Bearbeiten und Bestätigungen öffnen sich in
    einem Dialog (#sic-dlg, nie verschachtelt; mehrstufige Vorgänge ersetzen seinen Inhalt). Alle Rechte prüft der Server bei
    jeder Aktion (GR-103) – ausgeblendete Reiter und Knöpfe sind nur Anzeige. Bestätigung sensibler Aktionen: auf Keycloak-Hosts
    erneute Anmeldung (reauth_required, Rücksprung hierher), sonst Passwort im Dialog (confirmation_required → reauth).
@@ -44,7 +45,7 @@
   const IP_RE = /^(\d{1,3}(\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]+)$/i;
   const NOTFALL_ENTWURF = 'sic-notfall-entwurf';
 
-  const S = { me: null, csrf: '', rechte: {}, lage: null, sec: null, fw: null, datei: null, ev: null, konten: null, tab: '',
+  const S = { me: null, csrf: '', rechte: {}, lage: null, sec: null, fw: null, datei: null, ev: null, konten: null, system: null, module: null, tab: '',
     fwFilter: '', fwLetzte: 0, fwTimer: 0, evF: { tage: 7, art: '', q: '' }, geo: { sel: new Set(), q: '', ip: null } };
 
   /* ---------- Schnittstelle ---------- */
@@ -188,7 +189,7 @@
   /* ---------- Rahmen: Anmeldung, Fehler, Reiter, Notfallband ---------- */
   function zeigeAnmeldung() { $('#sic-app').hidden = true; $('#sic-login').hidden = false; }
   function fehler(t) { $('#sic-app').hidden = true; const e = $('#sic-err'); e.textContent = t; e.hidden = false; }
-  const TABS = { lage: 'sehen', notfall: '', firewall: 'admin', sitzungen: 'admin', datei: 'admin', ereignisse: 'sehen', einstellungen: 'admin', konten: 'admin' };
+  const TABS = { lage: 'sehen', notfall: '', firewall: 'admin', sitzungen: 'admin', datei: 'admin', ereignisse: 'sehen', einstellungen: 'admin', konten: 'admin', system: 'admin' };
   const erlaubt = (t) => t in TABS && (!TABS[t] || !!S.rechte[TABS[t]]);
   function zeigeTab(t) {
     if (!erlaubt(t)) t = S.rechte.sehen ? 'lage' : 'notfall';
@@ -244,17 +245,17 @@
   const leer = (t) => `<p class="sic-leer">${t}</p>`;
   const dauerSek = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} Std. ${Math.floor((s % 3600) / 60)} Min.` : s >= 60 ? `${Math.floor(s / 60)} Min.` : `${Math.max(0, s)} Sek.`);
   const block = (titel, inhalt, extra = '', id = '') => `<section class="sic-block sic-glas"${id ? ` id="${id}"` : ''}><div class="sic-bkopf"><h3>${titel}</h3>${extra}</div>${inhalt}</section>`;
-  function sicherungKarte(b) {
-    if (!b || !b.t) return karte('warn', 'Datensicherung', 'keine', 'noch keine automatische Sicherung');
+  function sicherungKarte(b, ziel = '') {
+    if (!b || !b.t) return karte('warn', 'Datensicherung', 'keine', 'noch keine automatische Sicherung', ziel);
     const alter = (Date.now() - new Date(b.t).getTime()) / 3600000;
-    if (!b.ok) return karte('bad', 'Datensicherung', 'fehlgeschlagen', esc(b.meldung || zeit(b.t)));
-    if (alter > 48) return karte('bad', 'Datensicherung', 'veraltet', `letzte ${esc(zeit(b.t))} Uhr`);
-    return karte('ok', 'Datensicherung', 'geprüft', `${esc(zeit(b.t))} Uhr${b.anzahl ? ` · ${b.anzahl} Stände` : ''}`);
+    if (!b.ok) return karte('bad', 'Datensicherung', 'fehlgeschlagen', esc(b.meldung || zeit(b.t)), ziel);
+    if (alter > 48) return karte('bad', 'Datensicherung', 'veraltet', `letzte ${esc(zeit(b.t))} Uhr`, ziel);
+    return karte('ok', 'Datensicherung', 'geprüft', `${esc(zeit(b.t))} Uhr${b.anzahl ? ` · ${b.anzahl} Stände` : ''}`, ziel);
   }
-  function bereitstellungKarte(r) {
-    if (!r || !r.t) return karte('warn', 'Bereitstellung', 'ohne Freigabe', 'Release-Modus noch nicht eingerichtet');
-    return r.ok ? karte('ok', 'Bereitstellung', esc(String(r.sha || '').slice(0, 7)), `freigegeben · ${esc(zeit(r.t))} Uhr`)
-      : karte('bad', 'Bereitstellung', esc(String(r.sha || '').slice(0, 7)), esc(r.meldung || 'letztes Release fehlgeschlagen'));
+  function bereitstellungKarte(r, ziel = '') {
+    if (!r || !r.t) return karte('warn', 'Bereitstellung', 'ohne Freigabe', 'Release-Modus noch nicht eingerichtet', ziel);
+    return r.ok ? karte('ok', 'Bereitstellung', esc(String(r.sha || '').slice(0, 7)), `freigegeben · ${esc(zeit(r.t))} Uhr`, ziel)
+      : karte('bad', 'Bereitstellung', esc(String(r.sha || '').slice(0, 7)), esc(r.meldung || 'letztes Release fehlgeschlagen'), ziel);
   }
   function verlaufSvg(tl) {
     if (!tl || !tl.length) return '';
@@ -299,7 +300,7 @@
       karte(K.adminsOhneZweiFaktor ? 'bad' : K.ohneZweiFaktor ? 'warn' : 'ok', 'Zwei-Faktor-Anmeldung', `${zahl(K.zugaenge - K.ohneZweiFaktor)} / ${zahl(K.zugaenge)}`, K.adminsOhneZweiFaktor ? `${plural(K.adminsOhneZweiFaktor, 'Administrator', 'Administratoren')} ohne zweiten Faktor` : K.ohneZweiFaktor ? `${zahl(K.ohneZweiFaktor)} Zugänge ohne zweiten Faktor` : 'alle Zugänge geschützt', 'konten'),
       karte('ok', 'Aktive Sitzungen', zahl(K.sitzungen), `${zahl(K.kundenOnline)} Kunden angemeldet`, 'sitzungen'),
       karte(E.waf === 'sperren' && E.autoSperre ? 'ok' : E.waf === 'aus' ? 'bad' : 'warn', 'Firewall', E.waf === 'sperren' ? 'sperrt' : E.waf === 'protokoll' ? 'protokolliert' : 'aus', `${E.autoSperre ? 'automatische Sperre an' : 'automatische Sperre aus'} · Bedrohungsliste ${E.feed ? 'an' : 'aus'}`, 'firewall'),
-      dpKarte, sicherungKarte(L.backup), bereitstellungKarte(L.deployment),
+      dpKarte, sicherungKarte(L.backup, 'system'), bereitstellungKarte(L.deployment, 'system'),
     ];
     const maxIp = Math.max(1, ...(L.topIps || []).map((x) => x.n));
     const tops = (L.topIps || []).map((x, i) => `<tr class="sic-klick" data-topip="${i}" tabindex="0"><td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="sic-pille bad">gesperrt</span>' : ''}</td>
@@ -1420,7 +1421,246 @@
     } });
   }
 
-  const LADEN = { lage: lageTab, notfall: notfallTab, firewall: firewallTab, sitzungen: sitzungenTab, datei: () => dateiTab(false), ereignisse: ereignisseTab, einstellungen: einstellungenTab, konten: kontenTab };
+  /* ======================= System: Betrieb, Wartung, Module und Freigaben, Diagnose (nur Administratoren) ======================= */
+  /* Bis 27.10.2026 Verwaltung → System. Daten: betrieb_status (lib/diagnose.php betrieb_daten, dazu die Auswahl der Tester)
+     und module_status (lib/module.php). Wartung, Freigabe und Tester verlangen eine Bestätigung – auf Keycloak-Hosts die erneute
+     Anmeldung; danach öffnet sich der Dialog mit den Eingaben wieder (Entwurf nur in sessionStorage). Was erlaubt ist,
+     entscheidet der Server: die Oberfläche bietet nur die Werte an, die module_status nennt. */
+  const SYSTEM_ENTWURF = 'sic-system-entwurf';
+  const SY_BEREICH = { 'angebot.kunden': 'Angebotsseite (Kunden)', 'angebot.eingabe': 'Eingabebereich (Mitarbeiter)', alle: 'alle Bereiche (Notfallmodus)' };
+  const SY_ZUSTAND = { normal: 'normal', wartung: 'Wartung', 'wartung geplant': 'Wartung geplant' };
+  const MV_ENTW = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Fertig' };
+  const MV_FREI = { keine: 'Nicht freigegeben', test: 'Testbetrieb (nur Tester)', produktiv: 'Produktiv', deaktiviert: 'Deaktiviert' };
+  const DIAG = [['storage', 'Datenablage prüfen', 'Lesbarkeit und Unversehrtheit aller Datensätze'], ['mail', 'E-Mail-Verbindung prüfen', 'Verbindung und Anmeldung am Mailserver, ohne E-Mail'],
+    ['files', 'Dateien und Speicher', 'Schreibrechte, Schreibschutz, freier Speicher'], ['php', 'PHP-Umgebung', 'Version, Erweiterungen, Grenzwerte, Serverzeit']];
+  const mbZahl = (n) => (n / 1024 / 1024).toFixed(1).replace('.', ',');
+  const gbZahl = (n) => (n / 1024 ** 3).toFixed(1).replace('.', ',');
+  const syBis = (w) => (w && w.until ? `${esc(zeit(w.until))} Uhr` : '<span class="sub">offen</span>');
+  let syDiag = [];   // letzte Diagnosen (neueste zuerst, nur Anzeige)
+  async function systemTab() {
+    const host = $('#tab-system');
+    if (!S.system) host.innerHTML = '<div class="sic-laden"><span class="sic-spinner"></span>System wird geladen …</div>';
+    const [d, m] = await Promise.all([api('betrieb_status'), api('module_status')]);
+    S.system = d; S.module = m;
+    systemZeichnen();
+    systemEntwurf();
+  }
+  function systemKarten(d) {
+    const n = d.notfall, b = d.backup, st = d.storage || {}, k = d.disk, ml = d.mail, o = d.orders, c = d.customers;
+    let sich;
+    if (!b || !b.t) sich = karte('warn', 'Datensicherung', 'keine', 'noch keine automatische Sicherung – entsteht nach dem nächsten Server-Update täglich');
+    else if (!b.ok) sich = karte('bad', 'Datensicherung', 'fehlgeschlagen', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung || (b.fehler ? `${b.fehler} Datei(en) fehlerhaft` : 'Server prüfen'))}`);
+    else if (b.inhalt === false) sich = karte('warn', 'Datensicherung', 'nur Archiv geprüft', `${esc(zeit(b.t))} Uhr · ${esc(b.meldung || 'Inhalt nicht geprüft')}`);
+    else if ((Date.now() - new Date(b.t).getTime()) / 3600000 > 48) sich = karte('bad', 'Datensicherung', 'veraltet', `letzte ${esc(zeit(b.t))} Uhr – älter als 2 Tage, Server prüfen`);
+    else sich = karte('ok', 'Datensicherung', 'geprüft', `${esc(zeit(b.t))} Uhr · ${b.datensaetze ? `${zahl(b.datensaetze)} Datensätze${b.speicher === 'sqlite' ? ' (Datenbank)' : ''} · ` : ''}${plural(+b.anzahl || 0, 'Stand', 'Stände')} je ${mbZahl(+b.groesse || 0)} MB`);
+    const frei = k && k.free && k.total ? (k.free < 1024 ** 3 ? 'bad' : k.free < 5 * 1024 ** 3 ? 'warn' : 'ok') : 'warn';
+    return [
+      n ? karte('bad', 'Notfallmodus', 'aktiv', `seit ${esc(zeit(n.seit))} Uhr – Mitarbeiter ohne Administratorrolle gesperrt`, 'notfall') : karte('ok', 'Notfallmodus', 'aus', 'Normalbetrieb', 'notfall'),
+      sich,
+      bereitstellungKarte(d.deployment),
+      karte('ok', 'Datenablage', st.mode === 'sqlite' ? 'SQLite' : 'Dateien', `${zahl(st.documents || 0)} Datensätze · ${mbZahl(st.bytes || 0)} MB${d.php ? ` · PHP ${esc(d.php)}` : ''}`),
+      k && k.free && k.total ? karte(frei, 'Speicherplatz', `${gbZahl(k.free)} GB`, `frei von ${gbZahl(k.total)} GB${frei === 'ok' ? '' : ' – bald aufräumen oder erweitern'}`) : karte('warn', 'Speicherplatz', 'unbekannt', ''),
+      !ml || !ml.configured ? karte('warn', 'E-Mail-Versand', 'nicht eingerichtet', 'Verwaltung → E-Mail')
+        : karte(ml.failed7 ? 'warn' : 'ok', 'E-Mail-Versand', zahl(ml.sent7), `zugestellt in 7 Tagen${ml.failed7 ? ` · ${zahl(ml.failed7)} nicht zugestellt (Versandliste unter Verwaltung → E-Mail)` : ''}`),
+      !o ? '' : !o.enabled ? karte('warn', 'Bestellwünsche', 'aus', 'Bestellfunktion ausgeschaltet (Verwaltung → E-Mail → Bestellwünsche)')
+        : karte(o.failed7 ? 'warn' : 'ok', 'Bestellwünsche', zahl(o.n7), `in 7 Tagen${o.failed7 ? ` · ${zahl(o.failed7)} nicht per E-Mail zugestellt` : o.last ? ` · zuletzt ${esc(o.lastNr || '')} am ${esc(zeit(o.last))} Uhr` : ' · noch keine'}`),
+      !c ? '' : karte('ok', 'Kunden', zahl(c.active), `aktiv · ${zahl(c.withLogin)} mit Zugang · ${c.online ? `${zahl(c.online)} gerade angemeldet` : 'niemand angemeldet'}`),
+    ].join('');
+  }
+  function systemWartung(d) {
+    const w = d.wartung, e = d.wartungEingabe;
+    const karte_ = (titel, id, zeilen, knoepfe, art = '') => `<section class="sic-einst sic-glas sy-wartung${art ? ' ' + art : ''}" id="${id}"><div class="sic-bkopf"><h3>${titel}</h3></div>
+      <dl class="sic-dl eng">${zeilen.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl><div class="sic-knoepfe sic-blockfuss">${knoepfe}</div></section>`;
+    const kunden = w && w.notfall
+      ? karte_('Wartungsmodus · Angebotsseite', 'sy-kunden', [['Zustand', '<span class="sic-pille bad">gesperrt durch den Notfallmodus</span>'], ['Kunden sehen', 'den Hinweis des Notfallmodus']],
+        `<button type="button" class="btn sm" data-geh="notfall">Zum Notfall</button><button type="button" class="btn sm" data-sy="kunden-an">Wartungsmodus einschalten …</button>`, 'bad')
+      : w ? karte_('Wartungsmodus · Angebotsseite', 'sy-kunden', [['Zustand', `<span class="sic-pille warn">Wartung</span> <span class="sub">seit ${esc(zeit(w.since))} Uhr</span>`],
+        ['Hinweis für Kunden', w.message ? esc(w.message) : '<span class="sub">Standardtext</span>'], ['voraussichtlich bis', syBis(w)]],
+        `<button type="button" class="btn sm" data-sy="kunden-bearbeiten">Hinweis bearbeiten …</button><button type="button" class="btn sm primary" data-sy="kunden-aus">Wartungsmodus beenden …</button>`, 'warn')
+      : karte_('Wartungsmodus · Angebotsseite', 'sy-kunden', [['Zustand', '<span class="sic-pille ok">normal</span> <span class="sub">Kunden sehen das Angebot</span>'],
+        ['wirkt auf', 'Angebot, Anmeldung, Merkliste und Bestellwünsche der Kunden – Mitarbeiter arbeiten weiter']], '<button type="button" class="btn sm" data-sy="kunden-an">Wartungsmodus einschalten …</button>');
+    const eingabe = e
+      ? karte_('Wartung · Eingabebereich', 'sy-eingabe', [['Zustand', e.geplant ? `<span class="sic-pille info">geplant</span> <span class="sub">ab ${esc(zeit(e.ab))} Uhr</span>` : `<span class="sic-pille warn">Wartung</span> <span class="sub">seit ${esc(zeit(e.since))} Uhr</span>`],
+        ['Grund', esc(e.grund || '—')], ['Hinweis für Mitarbeiter', e.message ? esc(e.message) : '<span class="sub">Standardtext</span>'], ['voraussichtlich bis', syBis(e)]],
+        `<button type="button" class="btn sm" data-sy="eingabe-bearbeiten">Bearbeiten …</button><button type="button" class="btn sm primary" data-sy="eingabe-aus">Wartung beenden …</button>`, e.geplant ? '' : 'warn')
+      : karte_('Wartung · Eingabebereich', 'sy-eingabe', [['Zustand', '<span class="sic-pille ok">normal</span> <span class="sub">alle Mitarbeiter arbeiten</span>'],
+        ['wirkt auf', 'alle Mitarbeiter außer Administratoren (z. B. für eine Datenübernahme) – Kunden sind nicht betroffen']], '<button type="button" class="btn sm" data-sy="eingabe-an">Wartung starten oder planen …</button>');
+    return kunden + eingabe;
+  }
+  function syBereiche() {
+    const out = [];
+    for (const m of (S.module && S.module.module) || []) for (const o of m.oberflaechen || []) out.push({ ziel: `${m.id}.${o.id}`, modul: m, o });
+    return out;
+  }
+  function systemModule() {
+    const zeilen = syBereiche().map(({ ziel, modul, o }) => {
+      const v = o.verwaltung || {};
+      const quelle = v.laufzeit ? `<div class="sub">geändert von ${esc(v.laufzeit.von)} · ${esc(v.laufzeit.grund)}</div>` : !v.aenderbar ? '<div class="sub">nur über ein Release</div>' : '';
+      const tester = (v.tester || []).map((t) => esc(t.name) + (t.aktiv ? '' : ' (gesperrt)')).join(', ');
+      const kann = v.aenderbar || v.tester_moeglich;
+      const fl = o.freigabe === 'produktiv' ? 'ok' : o.freigabe === 'test' ? 'info' : o.freigabe === 'deaktiviert' ? 'bad' : '';
+      return `<tr data-mvziel="${esc(ziel)}"${kann ? ` class="sic-klick" tabindex="0"` : ''}><td><div class="sic-nm">${esc(modul.name)}</div><div class="sub">${esc(o.name)}${o.art === 'extern' ? ' · extern' : ''}</div></td>
+        <td>${esc(MV_ENTW[o.entwicklung] || o.entwicklung)}</td><td><span class="sic-pille ${fl}">${esc(MV_FREI[o.freigabe] || o.freigabe)}</span>${quelle}</td>
+        <td>${o.betrieb === 'wartung' ? '<span class="sic-pille warn">Wartung</span>' : '<span class="sub">normal</span>'}</td><td>${tester || '<span class="sub">—</span>'}</td>
+        <td class="act">${kann ? `<button type="button" class="btn sm" data-sy="modul" data-ziel="${esc(ziel)}">Ändern …</button>` : ''}</td></tr>`;
+    }).join('');
+    return block('Module und Freigaben', `<div class="sic-tabrahmen"><table class="sic-tabelle mvtab"><thead><tr><th>Bereich</th><th>Entwicklung</th><th>Freigabe</th><th>Betrieb</th><th>Tester</th><th class="act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${zeilen}</tbody></table></div>
+      <p class="sic-hinweis">Der Entwicklungsstand kommt aus dem Code; die Freigabe lässt sich hier nur innerhalb dessen ändern, was der Code zulässt („produktiv“ erst, wenn ein Modul als fertig ausgeliefert ist). Laufende Produktivbereiche, die Sicherheitszentrale und das Dashboard werden nur über ein Release gesteuert. Jede Änderung wird mit Grund protokolliert und muss bestätigt werden.</p>`, '', 'sy-module');
+  }
+  function systemVerlauf(d) {
+    const namen = {};
+    for (const b of syBereiche()) namen[b.ziel] = `${b.modul.name} · ${b.o.name}`;
+    const l = (d.wartungVerlauf || []).slice(0, 12).map((v) => `<li><span class="num-s sub">${esc(zeit(v.t))}</span><span><strong>${esc(SY_BEREICH[v.bereich] || namen[v.bereich] || v.bereich)}</strong>: ${esc(SY_ZUSTAND[v.alt] || v.alt)} → <strong>${esc(SY_ZUSTAND[v.neu] || v.neu)}</strong>
+      <span class="sub">· ${esc(v.wer)}${v.grund ? ` · ${esc(v.grund)}` : ''}</span></span></li>`).join('');
+    return block('Verlauf <span class="sub">Wartung, Freigaben, Tester</span>', l ? `<ul class="sic-verlauf sy-verlauf">${l}</ul>` : leer('Noch keine Änderungen.'), '', 'sy-verlauf');
+  }
+  const diagHtml = () => syDiag.map((x) => `<div class="sy-diag ${x.r.ok ? 'ok' : 'bad'}" data-res="${esc(x.k)}"><div class="sy-diag-kopf">${punkt(x.r.ok ? 'ok' : 'bad')}<strong>${esc(x.label)}</strong><span class="sub">${esc(x.uhr)} Uhr · ${zahl(x.r.ms)} ms</span></div>
+      <table class="sic-tabelle klein"><tbody>${x.r.items.map((i) => `<tr><td class="lv-h">${punkt(i.level)}</td><td>${esc(i.label)}</td><td class="mono-s">${esc(i.value)}</td></tr>`).join('')}</tbody></table></div>`).join('');
+  function systemZeichnen() {
+    const d = S.system;
+    $('#tab-system').innerHTML = `
+      <div class="sic-karten">${systemKarten(d)}</div>
+      <div class="sic-einstgitter">${systemWartung(d)}</div>
+      ${systemModule()}
+      <div class="sic-zwei">
+        ${block('Diagnose', `<p class="sic-hinweis" style="margin-top:0">Alle Prüfungen lesen nur – es werden keine Daten verändert und keine Befehle auf dem Server ausgeführt.</p>
+          <div class="sic-knoepfe sy-diag-knoepfe">${DIAG.map(([k, l, t]) => `<button type="button" class="btn sm" data-diag="${k}" title="${esc(t)}">${esc(l)}</button>`).join('')}</div>
+          <div id="sy-diag-erg" class="sy-diag-erg" aria-live="polite">${diagHtml()}</div>`, '', 'sy-diagnose')}
+        ${systemVerlauf(d)}
+      </div>`;
+  }
+  /* Entwurf nach der erneuten Anmeldung (Keycloak) wieder öffnen – mit Hinweis, dass nur noch gespeichert werden muss */
+  function systemEntwurf() {
+    let e = null;
+    try { e = JSON.parse(sessionStorage.getItem(SYSTEM_ENTWURF) || 'null'); sessionStorage.removeItem(SYSTEM_ENTWURF); } catch { /* ohne Speicher */ }
+    if (!e || typeof e !== 'object' || dlg.open) return;
+    const h = 'Anmeldung bestätigt – bitte noch einmal speichern.';
+    if (e.art === 'kunden') kundenDialog(e.modus, e.werte, h);
+    else if (e.art === 'eingabe') eingabeDialog(e.modus, e.werte, h);
+    else if (e.art === 'modul' && syBereiche().some((b) => b.ziel === e.ziel)) modulDialog(e.ziel, e.werte, h);
+  }
+  const syHinweis = (h) => (h ? `<p class="sic-meldung ok">${esc(h)}</p>` : '');
+  async function sySpeichern(action, body, entwurf, text) {
+    const r = await aufruf(action, { body }, [SYSTEM_ENTWURF, entwurf]);
+    try { sessionStorage.removeItem(SYSTEM_ENTWURF); } catch { /* ohne Speicher */ }
+    dialogZu(); toast(text);
+    await systemTab();
+    return r;
+  }
+  /* Wartungsmodus der Angebotsseite (wartung_save): an, Hinweis ändern, aus */
+  function kundenDialog(modus, werte = null, hinweis = '') {
+    const w = S.system.wartung && !S.system.wartung.notfall ? S.system.wartung : null;
+    const v = werte || { message: w ? w.message || '' : '', until: w && w.until ? w.until : '' };
+    if (modus === 'aus') {
+      dialog(`${dKopf('Wartungsmodus beenden?', 'Angebotsseite für Kunden')}<div class="sic-dinhalt">${syHinweis(hinweis)}
+          <p>Kunden sehen danach wieder das Angebot und können sich anmelden und bestellen.</p></div>
+        ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">Wartungsmodus beenden</button>')}`,
+      { handler: async (a) => {
+        if (a !== 'submit') return;
+        await sySpeichern('wartung_save', { active: false, message: v.message, until: '' }, { art: 'kunden', modus, werte: v }, 'Wartungsmodus beendet – die Angebotsseite ist wieder erreichbar.');
+      } });
+      return;
+    }
+    const an = modus === 'an';
+    dialog(`${dKopf(an ? 'Wartungsmodus einschalten' : 'Hinweis zum Wartungsmodus', 'Angebotsseite für Kunden')}<div class="sic-dinhalt">${syHinweis(hinweis)}
+        ${an ? '<p>Kunden sehen auf der Angebotsseite dann nur noch den Hinweis und können sich nicht anmelden oder bestellen, bis Sie den Wartungsmodus beenden. Sie und alle Mitarbeiter arbeiten normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>' : ''}
+        ${S.system.wartung && S.system.wartung.notfall ? '<p class="sic-meldung fehler">Die Angebotsseite ist gerade durch den Notfallmodus gesperrt. Ein hier eingeschalteter Wartungsmodus bleibt nach dem Notfall bestehen.</p>' : ''}
+        <label class="sic-feld">Hinweis für Kunden <small>(optional)</small><textarea id="sy-k-text" rows="3" maxlength="500" placeholder="Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.">${esc(v.message)}</textarea></label>
+        <label class="sic-feld">Voraussichtlich bis <small>(optional)</small><input type="datetime-local" id="sy-k-bis" value="${esc(v.until || '')}"></label></div>
+      ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${an ? 'Wartungsmodus einschalten' : 'Hinweis speichern'}</button>`)}`,
+    { handler: async (a) => {
+      if (a !== 'submit') return;
+      const neu = { message: $('#sy-k-text', dlg).value, until: $('#sy-k-bis', dlg).value };
+      await sySpeichern('wartung_save', { active: true, ...neu }, { art: 'kunden', modus, werte: neu }, an ? 'Wartungsmodus eingeschaltet.' : 'Hinweis gespeichert.');
+    } });
+  }
+  /* Wartung des Eingabebereichs (modul_wartung_save, immer mit Bestätigung): starten bzw. planen, ändern, beenden */
+  function eingabeDialog(modus, werte = null, hinweis = '') {
+    const e = S.system.wartungEingabe;
+    const v = werte || { grund: e ? e.grund || '' : '', message: e ? e.message || '' : '', ab: e && e.ab ? e.ab : '', until: e && e.until ? e.until : '' };
+    if (modus === 'aus') {
+      dialog(`${dKopf('Wartung des Eingabebereichs beenden?', e && e.geplant ? 'geplante Wartung verwerfen' : 'Eingabebereich wieder für alle')}<div class="sic-dinhalt">${syHinweis(hinweis)}
+          <p>Alle Mitarbeiter können danach wieder im Eingabebereich arbeiten.</p>
+          <label class="sic-feld">Grund <small>(optional, wird protokolliert)</small><input id="sy-e-ende" maxlength="200" value="${esc(werte ? werte.grund : '')}" placeholder="z. B. Datenübernahme abgeschlossen"></label></div>
+        ${dFuss('<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">Wartung beenden</button>')}`,
+      { fokus: '.sic-dfuss .btn.primary', handler: async (a) => {
+        if (a !== 'submit') return;
+        const grund = $('#sy-e-ende', dlg).value;
+        await sySpeichern('modul_wartung_save', { bereich: 'angebot.eingabe', active: false, grund }, { art: 'eingabe', modus, werte: { grund } }, 'Wartung beendet – der Eingabebereich ist wieder für alle freigegeben.');
+      } });
+      return;
+    }
+    const an = modus === 'an';
+    dialog(`${dKopf(an ? 'Wartung des Eingabebereichs' : 'Wartung des Eingabebereichs ändern', 'Mitarbeiter ohne Administratorrolle sehen nur den Wartungshinweis')}<div class="sic-dinhalt">${syHinweis(hinweis)}
+        <p class="sic-hinweis" style="margin-top:0">Ohne Beginn startet die Wartung sofort: offene Bearbeitungen werden unterbrochen. Administratoren arbeiten weiter, Kunden sind nicht betroffen.</p>
+        <label class="sic-feld">Grund <small>(Pflicht, nur für Administratoren sichtbar)</small><input id="sy-e-grund" maxlength="200" value="${esc(v.grund)}" placeholder="z. B. Datenübernahme Stammdaten" required></label>
+        <label class="sic-feld">Hinweis für Mitarbeiter <small>(optional)</small><textarea id="sy-e-text" rows="2" maxlength="500" placeholder="Der Eingabebereich wird gerade gewartet. Bitte versuchen Sie es später erneut.">${esc(v.message)}</textarea></label>
+        <div class="sic-felder zwei"><label class="sic-feld">Beginn <small>(optional, sonst sofort)</small><input type="datetime-local" id="sy-e-ab" value="${esc(v.ab || '')}"></label>
+          <label class="sic-feld">Voraussichtlich bis <small>(optional)</small><input type="datetime-local" id="sy-e-bis" value="${esc(v.until || '')}"></label></div></div>
+      ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${an ? 'Wartung starten bzw. planen' : 'Änderungen speichern'}</button>`)}`,
+    { handler: async (a) => {
+      if (a !== 'submit') return;
+      const neu = { grund: $('#sy-e-grund', dlg).value.trim(), message: $('#sy-e-text', dlg).value, ab: $('#sy-e-ab', dlg).value, until: $('#sy-e-bis', dlg).value };
+      if (neu.grund.length < 3) { dFehler('Bitte einen Grund angeben (wird protokolliert).'); $('#sy-e-grund', dlg).focus(); return; }
+      const r = await sySpeichern('modul_wartung_save', { bereich: 'angebot.eingabe', active: true, ...neu }, { art: 'eingabe', modus, werte: neu },
+        neu.ab && new Date(neu.ab) > new Date() ? 'Wartung geplant.' : an ? 'Wartung gestartet.' : 'Gespeichert.');
+      return r;
+    } });
+  }
+  /* Freigabe und Tester eines Bereichs (modul_freigabe_save, modul_tester_save – getrennt gespeichert, je mit Bestätigung) */
+  function modulDialog(ziel, werte = null, hinweis = '') {
+    const b = syBereiche().find((x) => x.ziel === ziel);
+    if (!b) return;
+    const v = b.o.verwaltung || {}, jetzt = new Set((v.tester || []).map((t) => t.id));
+    const wahl = werte ? new Set(werte.tester || []) : jetzt;
+    const nutzer = (S.system.nutzer || []).filter((u) => u.active || jetzt.has(u.id)).sort((x, y) => x.name.localeCompare(y.name, 'de'));
+    dialog(`${dKopf(`${b.modul.name} · ${b.o.name}`, `${esc(MV_ENTW[b.o.entwicklung] || b.o.entwicklung)} · jetzt: ${esc(MV_FREI[b.o.freigabe] || b.o.freigabe)}`)}<div class="sic-dinhalt">${syHinweis(hinweis)}
+        <div class="sic-felder zwei">
+          ${v.aenderbar ? `<label class="sic-feld">Freigabe <small>(nur, was der Entwicklungsstand zulässt)</small><select id="mv-freigabe">${(v.moeglich || []).map((f) => `<option value="${esc(f)}"${f === (werte && werte.freigabe ? werte.freigabe : b.o.freigabe) ? ' selected' : ''}>${esc(MV_FREI[f] || f)}</option>`).join('')}</select></label>` : '<p class="sic-hinweis">Die Freigabe dieses Bereichs wird nur über ein Release gesteuert.</p>'}
+          <label class="sic-feld">Grund <small>(Pflicht für die Freigabe, wird protokolliert)</small><input id="mv-grund" maxlength="200" value="${esc(werte ? werte.grund || '' : '')}" placeholder="z. B. Abnahme durch die Fachabteilung"></label></div>
+        ${v.tester_moeglich ? `<fieldset class="sic-optionen"><legend>Tester – nur sie sehen den Bereich im Testbetrieb (Administratoren nur, wenn eingetragen)</legend>
+          ${nutzer.length ? `<div class="sy-tester">${nutzer.map((u) => `<label class="sic-check"><input type="checkbox" name="mv-tester" value="${esc(u.id)}"${wahl.has(u.id) ? ' checked' : ''}><span>${esc(u.name)} <span class="sub">${esc(u.username)}${u.active ? '' : ' · gesperrt'}</span></span></label>`).join('')}</div>` : leer('Keine aktiven Mitarbeiterkonten.')}</fieldset>` : ''}</div>
+      ${dFuss(`<button type="button" class="btn" data-d="zu">Schließen</button>${v.tester_moeglich ? '<button type="button" class="btn" data-d="tester">Tester speichern</button>' : ''}${v.aenderbar ? '<button type="button" class="btn primary" data-d="freigabe">Freigabe speichern</button>' : ''}`)}`,
+    { breit: true, handler: async (a) => {
+      if (a !== 'freigabe' && a !== 'tester') return;
+      const lies = () => ({ freigabe: ($('#mv-freigabe', dlg) || {}).value || '', grund: $('#mv-grund', dlg).value, tester: $$('[name="mv-tester"]:checked', dlg).map((x) => x.value) });
+      const n = lies();
+      if (a === 'freigabe') {
+        const r = await aufruf('modul_freigabe_save', { body: { bereich: ziel, freigabe: n.freigabe, grund: n.grund } }, [SYSTEM_ENTWURF, { art: 'modul', ziel, werte: n }]);
+        toast(`Freigabe gespeichert: ${MV_FREI[r.freigabe.neu] || r.freigabe.neu}.`);
+      } else {
+        await aufruf('modul_tester_save', { body: { bereich: ziel, tester: n.tester, grund: n.grund } }, [SYSTEM_ENTWURF, { art: 'modul', ziel, werte: n }]);
+        toast(n.tester.length ? `Tester gespeichert (${zahl(n.tester.length)}).` : 'Keine Tester mehr eingetragen.');
+      }
+      try { sessionStorage.removeItem(SYSTEM_ENTWURF); } catch { /* ohne Speicher */ }
+      await systemTab();
+      modulDialog(ziel);   // aktueller Stand; zum Weiterarbeiten offen
+    } });
+  }
+  async function diagnose(k, knopf) {
+    const r = (await api('security_diag', { body: { check: k } })).result;
+    syDiag = [{ k, r, label: (DIAG.find((x) => x[0] === k) || [k, k])[1], uhr: new Date().toLocaleTimeString('de-DE') }, ...syDiag.filter((x) => x.k !== k)].slice(0, 4);
+    const erg = $('#sy-diag-erg');
+    if (erg) erg.innerHTML = diagHtml();
+    if (knopf && knopf.isConnected) knopf.focus();
+  }
+  $('#tab-system').addEventListener('click', (e) => {
+    const dg = e.target.closest('[data-diag]');
+    if (dg) { lauf(dg, () => diagnose(dg.dataset.diag, dg)); return; }
+    const b = e.target.closest('[data-sy]');
+    if (b) {
+      const [art, modus] = b.dataset.sy.split('-');
+      if (art === 'kunden') kundenDialog(modus);
+      else if (art === 'eingabe') eingabeDialog(modus);
+      else if (art === 'modul') modulDialog(b.dataset.ziel);
+      return;
+    }
+    const z = e.target.closest('tr.sic-klick[data-mvziel]');
+    if (z) modulDialog(z.dataset.mvziel);
+  });
+  $('#tab-system').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr.sic-klick[data-mvziel]')) modulDialog(e.target.dataset.mvziel); });
+
+  const LADEN = { lage: lageTab, notfall: notfallTab, firewall: firewallTab, sitzungen: sitzungenTab, datei: () => dateiTab(false), ereignisse: ereignisseTab, einstellungen: einstellungenTab, konten: kontenTab, system: systemTab };
 
   /* ---------- Hell/Dunkel ---------- */
   function themaKnopf() {

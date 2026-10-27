@@ -355,8 +355,9 @@ def pruefe_module(rw: Regelwerk) -> None:
         m = rw.modul(p)
         if not m or not m.get("dashboard"):
             rw.f(f"Pflichtmodul „{p}“ fehlt im Dashboard (regeln/module.toml)")
-    # Schutz vor Aussperrung: Dashboard-Start und Verwaltung → System nie sperrbar
-    for ziel in ("dashboard.start", "verwaltung.system"):
+    # Schutz vor Aussperrung: Dashboard-Start und die Sicherheitszentrale (mit dem Reiter System: Wartung, Module und
+    # Freigaben – bis 27.10.2026 Verwaltung → System) nie sperrbar
+    for ziel in ("dashboard.start", "sicherheit.intern"):
         mid, oid = ziel.split(".")
         m = rw.modul(mid)
         o = next((o for o in (m or {}).get("oberflaeche", []) if o.get("id") == oid), None)

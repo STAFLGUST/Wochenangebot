@@ -84,7 +84,7 @@ with sync_playwright() as pw:
 
     SEITEN = [('dashboard', None, '/dashboard/', '#db-grid .db-tile', []),
               ('angebot', 'angebot.eingabe', '/admin/', '#screen-editor:not([hidden]) tr[data-id]', ['edit', 'hist', 'einzel', 'orders', 'einkauf']),
-              ('verwaltung', 'verwaltung.verwaltung', '/admin/', '#screen-editor:not([hidden])', ['master', 'kunden', 'users', 'rollen', 'log', 'sec']),
+              ('verwaltung', 'verwaltung.verwaltung', '/admin/', '#screen-editor:not([hidden])', ['master', 'kunden', 'users', 'rollen', 'log']),
               ('bestand', 'bestand.intern', '/admin/', '#view-stock:not([hidden])', ['stock']),
               ('hr', None, '/module/hr/', '#hr-app:not([hidden])', []),
               ('crm', None, '/module/crm/', '#crm-app:not([hidden])', [])]

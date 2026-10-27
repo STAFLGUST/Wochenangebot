@@ -1,6 +1,8 @@
 # Aktionen des Moduls „plattform“: Anmeldung, Zwei-Faktor, Passkeys, Nutzer und Rechte, Sicherheit, Schutzzentrale, E-Mail-Postfach, Benachrichtigungen, Wartungsmodus, Dateiprüfung.
 # Sicherheit, Schutzzentrale und Dateiprüfung liegen seit 26.10.2026 auf der Oberfläche des Moduls Sicherheit (sicherheit.intern,
 # nur auf sicherheit.dashboard-stafl.de, GR-109); der Code bleibt im Plattformkern (aktionen/verwaltung.php, schutz.php, integritaet.php).
+# Seit 27.10.2026 ebenso der Reiter „System“ (vorher Verwaltung → System): Betriebszustand, Diagnose, Wartungsmodus, Wartung
+# einzelner Bereiche, Module und Freigaben (Code in aktionen/verwaltung.php, zugang.php, module.php).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 
 schema = 1
@@ -170,7 +172,7 @@ oberflaeche = "angebot.eingabe"
 schreibend = true
 
 [aktion.security_diag]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"   # Sicherheit → System: nur lesende Diagnosen (Administrator)
 schreibend = true
 
 [aktion.security_export]
@@ -254,24 +256,24 @@ oberflaeche = "angebot.kunden"
 oeffentlich = true
 
 [aktion.wartung_save]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"   # Sicherheit → System: Wartungsmodus der Angebotsseite (Administrator, Bestätigung)
 schreibend = true
 
 [aktion.betrieb_status]
-oberflaeche = "angebot.eingabe"   # Verwaltung → System: Systemzustand, Wartung, Sicherung, Bereitstellung (Administrator, nur lesend)
+oberflaeche = "sicherheit.intern"   # Sicherheit → System: Systemzustand, Wartung, Sicherung, Bereitstellung, Testerauswahl (Administrator, nur lesend)
 
 [aktion.module_status]
 oberflaeche = "angebot.eingabe"
 wartung_frei = true
 
 [aktion.modul_wartung_save]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"   # Sicherheit → System: Wartung einzelner Bereiche (Administrator, immer mit Bestätigung)
 schreibend = true
 
 [aktion.modul_freigabe_save]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"   # Sicherheit → System: Module und Freigaben (Administrator, immer mit Bestätigung)
 schreibend = true
 
 [aktion.modul_tester_save]
-oberflaeche = "angebot.eingabe"
+oberflaeche = "sicherheit.intern"   # Sicherheit → System: Tester eines Bereichs (Administrator, immer mit Bestätigung)
 schreibend = true

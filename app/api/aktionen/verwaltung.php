@@ -41,11 +41,14 @@ switch ($action) {
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
         }
 
-        /* Verwaltung → System: Betriebszustand (Wartung, Sicherung, Bereitstellung, Speicher, Versand) – nur lesend */
+        /* Sicherheit → System (bis 27.10.2026 Verwaltung → System): Betriebszustand (Wartung, Sicherung, Bereitstellung,
+           Speicher, Versand) – nur lesend. „nutzer“: Auswahl der Tester (Module und Freigaben) – nur Name, Benutzername,
+           aktiv; die Liste der Mitarbeiter (Aktion users) gehört zur Verwaltung und ist auf diesem Host nicht erreichbar. */
         case 'betrieb_status': {
             $me = require_auth(false, 'admin');
             header('Cache-Control: no-store');
-            respond(['ok' => true] + betrieb_daten($me));
+            $nutzer = array_map(function ($u) { return ['id' => (string)$u['id'], 'name' => (string)$u['name'], 'username' => (string)$u['username'], 'active' => !empty($u['active'])]; }, users_load());
+            respond(['ok' => true] + betrieb_daten($me) + ['nutzer' => array_values($nutzer)]);
         }
 
         /* Nur lesende Diagnosen (keine Befehle auf dem Server) */

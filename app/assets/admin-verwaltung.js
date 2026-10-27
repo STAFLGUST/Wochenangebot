@@ -1,13 +1,14 @@
 /* ==========================================================================
    Wochenangebot – Eingabebereich, Verwaltung
-   Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll, System (Betrieb, Wartung, Module). Sicherheit: eigenes Modul app/module/sicherheit/. Hilfen und Zustand kommen aus admin.js
+   Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll. Sicherheit und System (Betrieb, Wartung, Module und Freigaben, seit
+   27.10.2026): eigenes Modul app/module/sicherheit/. Hilfen und Zustand kommen aus admin.js
    (window.WA, Zustand über Getter: W.me, W.offers, W.stdPublic, W.wartungSt); die Ansichten werden dort
    über W.views aufgerufen.
    ========================================================================== */
 (function () {
   'use strict';
   const W = window.WA;
-  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, renderWartungBanner, wartungBis, OSTD, may } = W;
+  const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
   // Vertraute Geräte (Browser, auf denen sich der Zugang angemeldet hat; kommen auch bei einer fremd ausgelösten Sperre durch)
   const geraeteText = (g) => `${plural(g.length, 'Gerät', 'Geräte')}: ${g.slice(0, 3).map((x) => `${x.name}, zuletzt ${dateTime(x.zuletzt)}`).join(' · ')}${g.length > 3 ? ' …' : ''}`;
@@ -1344,249 +1345,6 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
-  /* ======================= System (nur Administrator): Betriebszustand, Diagnose, Wartung, Module ======================= */
-  /* Sicherheit (Lagebild, Notfall, Firewall, Sitzungen, Dateiprüfung, Ereignisse, Einstellungen, Konten) ist seit 26.10.2026 ein
-     eigenes Modul (app/module/sicherheit/, sicherheit.dashboard-stafl.de) – hier nur noch der Hinweis mit Link, keine zweite
-     Oberfläche. Daten: betrieb_status (lib/diagnose.php betrieb_daten), Diagnose security_diag, Module module_status. */
-  let secData = null;
-  const SICHERHEIT = /(^|\.)dashboard-stafl\.de$/.test(location.hostname) ? 'https://sicherheit.dashboard-stafl.de/module/sicherheit/' : '../module/sicherheit/';
-  const LVL = { ok: 'in Ordnung', warn: 'Hinweis', bad: 'kritisch', info: 'Info' };
-  const lvlDot = (l) => `<span class="lv lv-${esc(l)}" title="${esc(LVL[l] || l)}"><span class="sr-only">${esc(LVL[l] || l)}</span></span>`;
-  function backupCard(b, card) {
-    if (!b || !b.t) return card('warn', 'Datensicherung', 'noch keine automatische Sicherung', 'Wird nach dem nächsten Server-Update täglich erstellt');
-    const age = (Date.now() - new Date(b.t).getTime()) / 3600000;
-    const when = `${dateTime(b.t)} Uhr`;
-    if (!b.ok) return card('bad', 'Datensicherung', `letzter Versuch ${esc(when)} fehlgeschlagen`, esc(b.meldung || (b.fehler ? `${b.fehler} Datei(en) fehlerhaft` : 'Server prüfen')));
-    if (b.inhalt === false) return card('warn', 'Datensicherung', `${esc(when)} · nur Archiv geprüft`, esc(b.meldung || 'Inhalt nicht geprüft'));
-    if (age > 48) return card('bad', 'Datensicherung', `letzte Sicherung ${esc(when)}`, 'Älter als 2 Tage – Server prüfen');
-    const ds = b.datensaetze ? `${fmtInt.format(b.datensaetze)} Datensätze${b.speicher === 'sqlite' ? ' (Datenbank)' : ''} · ` : '';
-    return card('ok', 'Datensicherung', `${esc(when)} · geprüft`, `${ds}${b.anzahl} Stände auf dem Server (${(b.groesse / 1024 / 1024).toFixed(1).replace('.', ',')} MB je Stand)`);
-  }
-  const mb = (n) => (n / 1024 / 1024).toFixed(1).replace('.', ',');
-  const gb = (n) => (n / 1024 / 1024 / 1024).toFixed(1).replace('.', ',');
-  /* Wartung des Eingabebereichs (modul_wartung_save, immer mit Passwortbestätigung); Verlauf aller Wartungsänderungen */
-  const BEREICH_NAME = { 'angebot.kunden': 'Angebotsseite (Kunden)', 'angebot.eingabe': 'Eingabebereich (Mitarbeiter)', alle: 'alle Bereiche (Notfallmodus)' };
-  const ZUSTAND = { normal: 'normal', wartung: 'Wartung', 'wartung geplant': 'Wartung geplant' };
-  function eingabeWartungForm(d) {
-    const w = d.wartungEingabe;
-    const verlauf = (d.wartungVerlauf || []).slice(0, 10).map((v) => `<li>${esc(dateTime(v.t))} Uhr · ${esc(BEREICH_NAME[v.bereich] || v.bereich)}: ${esc(ZUSTAND[v.alt] || v.alt)} → <strong>${esc(ZUSTAND[v.neu] || v.neu)}</strong> · ${esc(v.wer)}${v.grund ? ` · ${esc(v.grund)}` : ''}</li>`).join('');
-    const status = !w ? '' : w.geplant ? `<span class="st-warn">Geplant ab ${esc(dateTime(w.ab))} Uhr</span>` : `<span class="st-warn">Aktiv seit ${esc(dateTime(w.since))} Uhr</span>`;
-    return `<form class="gcard sec-form wartung-form${w ? ' on' : ''}" id="ew-form" autocomplete="off">
-        <h3 class="sec-h">Wartung Eingabebereich</h3>
-        <p class="hint" style="margin-top:0">Sperrt den Eingabebereich für alle Mitarbeiter außer Administratoren (z. B. für eine Datenübernahme). Kunden sehen die Angebotsseite weiter normal. Jede Änderung wird mit Grund protokolliert und muss mit Ihrem Passwort bestätigt werden.</p>
-        <div class="sec-rows">
-          <label class="fld span2"><span>Grund <small>(Pflicht, nur für Administratoren sichtbar)</small></span><input type="text" name="grund" maxlength="200" value="${esc(w ? w.grund || '' : '')}" placeholder="z. B. Datenübernahme Stammdaten"></label>
-          <label class="fld span2"><span>Hinweis für Mitarbeiter</span><textarea name="message" rows="2" maxlength="500" placeholder="Der Eingabebereich wird gerade gewartet. Bitte versuchen Sie es später erneut.">${esc(w ? w.message : '')}</textarea></label>
-          <label class="fld"><span>Beginn <small>(optional, sonst sofort)</small></span><input type="datetime-local" name="ab" value="${esc(w && w.ab ? w.ab : '')}"></label>
-          <label class="fld"><span>Voraussichtlich bis <small>(optional)</small></span><input type="datetime-local" name="until" value="${esc(w && w.until ? w.until : '')}"></label>
-        </div>
-        <div class="sec-foot wartung-foot">${w ? `${status}<button type="button" class="btn" data-ewart="save">Änderungen speichern</button><button type="button" class="btn primary" data-ewart="off">Wartung beenden</button>`
-          : '<button type="button" class="btn primary" data-ewart="on">Wartung starten bzw. planen</button>'}</div>
-        <p class="form-err" id="ew-err" role="alert"></p>
-        ${verlauf ? `<details><summary>Verlauf der Wartungen</summary><ul class="wv-list">${verlauf}</ul></details>` : ''}
-      </form>`;
-  }
-  /* Modulverwaltung (Roadmap 5): Freigabe und Tester je Bereich. Die Daten kommen aus module_status (Modulregister +
-     Laufzeit, lib/module.php); was erlaubt ist, entscheidet der Server – die Oberfläche bietet nur die dort genannten Werte an. */
-  const MV_ENTW = { geplant: 'Geplant', in_entwicklung: 'In Entwicklung', in_pruefung: 'In Prüfung', fertig: 'Fertig' };
-  const MV_FREI = { keine: 'Nicht freigegeben', test: 'Testbetrieb (nur Tester)', produktiv: 'Produktiv', deaktiviert: 'Deaktiviert' };
-  let mvDaten = null, mvWahl = '';
-  function mvBereiche() {
-    const out = [];
-    for (const m of (mvDaten && mvDaten.module) || []) for (const o of m.oberflaechen || []) out.push({ ziel: `${m.id}.${o.id}`, modul: m, o });
-    return out;
-  }
-  function mvTabelle() {
-    const rows = mvBereiche().map(({ ziel, modul, o }) => {
-      const v = o.verwaltung || {};
-      const quelle = v.laufzeit ? `<div class="sub">geändert von ${esc(v.laufzeit.von)} · ${esc(v.laufzeit.grund)}</div>` : !v.aenderbar ? '<div class="sub">nur über ein Release</div>' : '';
-      const tester = (v.tester || []).map((t) => esc(t.name) + (t.aktiv ? '' : ' (gesperrt)')).join(', ');
-      const kann = v.aenderbar || v.tester_moeglich;
-      return `<tr data-mvziel="${esc(ziel)}"${ziel === mvWahl ? ' class="sel"' : ''}><td><div class="nm">${esc(modul.name)}</div><div class="sub">${esc(o.name)}${o.art === 'extern' ? ' · extern' : ''}</div></td>
-        <td>${esc(MV_ENTW[o.entwicklung] || o.entwicklung)}</td><td>${esc(MV_FREI[o.freigabe] || o.freigabe)}${quelle}</td>
-        <td>${o.betrieb === 'wartung' ? '<span class="st-warn">Wartung</span>' : 'normal'}</td><td>${tester || '<span class="muted">—</span>'}</td>
-        <td class="act">${kann ? `<button type="button" class="btn sm" data-mv="waehlen" data-ziel="${esc(ziel)}">Ändern</button>` : ''}</td></tr>`;
-    }).join('');
-    return `<div class="tblwrap"><table class="etab mvtab"><thead><tr><th>Bereich</th><th>Entwicklung</th><th>Freigabe</th><th>Betrieb</th><th>Tester</th><th><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  }
-  function mvFormular() {
-    const b = mvBereiche().find((x) => x.ziel === mvWahl);
-    if (!b) return '';
-    const v = b.o.verwaltung || {}, tester = new Set((v.tester || []).map((t) => t.id));
-    const nutzer = ((secData && secData.users) || []).filter((u) => u.active || tester.has(u.id));
-    return `<div class="mv-form" id="mv-form">
-        <h4>${esc(b.modul.name)} · ${esc(b.o.name)}</h4>
-        <div class="sec-rows">
-          ${v.aenderbar ? `<label class="fld"><span>Freigabe</span><select name="freigabe">${(v.moeglich || []).map((f) => `<option value="${esc(f)}"${f === b.o.freigabe ? ' selected' : ''}>${esc(MV_FREI[f] || f)}</option>`).join('')}</select></label>` : `<p class="hint span2">Die Freigabe dieses Bereichs wird nur über ein Release gesteuert.</p>`}
-          <label class="fld${v.aenderbar ? '' : ' span2'}"><span>Grund <small>(Pflicht für die Freigabe, wird protokolliert)</small></span><input type="text" name="grund" maxlength="200" placeholder="z. B. Abnahme durch die Fachabteilung"></label>
-        </div>
-        ${v.tester_moeglich ? `<fieldset class="mv-tester"><legend>Tester <small>(nur sie sehen den Bereich bei „Testbetrieb“; Administratoren nur, wenn sie hier eingetragen sind)</small></legend>
-          ${nutzer.map((u) => `<label class="chk"><input type="checkbox" name="tester" value="${esc(u.id)}"${tester.has(u.id) ? ' checked' : ''}><span>${esc(u.name)} <span class="sub">${esc(u.username)}${u.active ? '' : ' · gesperrt'}</span></span></label>`).join('')}</fieldset>` : ''}
-        <div class="sec-foot">${v.aenderbar ? '<button type="button" class="btn primary" data-mv="freigabe">Freigabe speichern</button>' : ''}${v.tester_moeglich ? '<button type="button" class="btn" data-mv="tester">Tester speichern</button>' : ''}<button type="button" class="btn ghost" data-mv="schliessen">Schließen</button></div>
-        <p class="form-err" id="mv-err" role="alert"></p>
-      </div>`;
-  }
-  function mvVerlauf() {
-    const v = ((mvDaten && mvDaten.verlauf) || []).filter((x) => x.art === 'freigabe' || x.art === 'tester').slice(0, 10);
-    if (!v.length) return '';
-    return `<details><summary>Verlauf der Modulverwaltung</summary><ul class="wv-list">${v.map((x) => `<li>${esc(dateTime(x.t))} Uhr · ${esc(x.bereich)}: ${esc(x.alt)} → <strong>${esc(x.neu)}</strong> · ${esc(x.wer)}${x.grund ? ` · ${esc(x.grund)}` : ''}</li>`).join('')}</ul></details>`;
-  }
-  function mvZeichnen() {
-    const box = $('#mv-box');
-    if (!box) return;
-    box.innerHTML = `<h3 class="sec-h" id="sec-module">Module und Freigaben</h3>
-      <p class="hint" style="margin-top:0">Wer welchen Bereich nutzen darf: Der Entwicklungsstand kommt aus dem Code; die Freigabe kann hier nur innerhalb dessen geändert werden, was der Code zulässt („produktiv“ erst, wenn ein Modul als fertig ausgeliefert ist). Laufende Produktivbereiche und die Verwaltung selbst werden nur über ein Release gesteuert. Jede Änderung wird mit Grund protokolliert und muss bestätigt werden.</p>
-      ${mvTabelle()}${mvFormular()}${mvVerlauf()}`;
-  }
-  async function mvLaden() {
-    const box = $('#mv-box');
-    if (!box) return;
-    try { mvDaten = await api('module_status'); mvZeichnen(); } catch (e) { box.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
-  }
-  async function mvAktion(btn) {
-    const a = btn.dataset.mv;
-    if (a === 'waehlen') { mvWahl = btn.dataset.ziel; mvZeichnen(); const f = $('#mv-form'); if (f) f.scrollIntoView({ block: 'nearest' }); return; }
-    if (a === 'schliessen') { mvWahl = ''; mvZeichnen(); return; }
-    const f = $('#mv-form'), err = $('#mv-err');
-    err.textContent = '';
-    btn.disabled = true;
-    try {
-      if (a === 'freigabe') {
-        const r = await api('modul_freigabe_save', { body: { bereich: mvWahl, freigabe: f.querySelector('[name=freigabe]').value, grund: f.querySelector('[name=grund]').value } });
-        toast(`Freigabe gespeichert: ${MV_FREI[r.freigabe.neu] || r.freigabe.neu}.`);
-      } else if (a === 'tester') {
-        const tester = [...f.querySelectorAll('[name=tester]:checked')].map((x) => x.value);
-        await api('modul_tester_save', { body: { bereich: mvWahl, tester, grund: f.querySelector('[name=grund]').value } });
-        toast(tester.length ? `Tester gespeichert (${tester.length}).` : 'Keine Tester mehr eingetragen.');
-      }
-      await mvLaden();
-    } catch (ex) { if ($('#mv-err')) $('#mv-err').textContent = ex.message; btn.disabled = false; }
-  }
-  function wartungCard(w, card) {
-    return w ? card('warn', 'Wartungsmodus', 'aktiv – Kunden sehen einen Wartungshinweis', `seit ${esc(dateTime(w.since))} Uhr${esc(wartungBis(w))}`)
-      : card('ok', 'Wartungsmodus', 'aus – Angebotsseite normal erreichbar', '');
-  }
-  function storageCard(d, card) {
-    const st = d.storage || {};
-    return card('ok', 'Datenablage', st.mode === 'sqlite' ? `SQLite-Datenbank · ${fmtInt.format(st.documents || 0)} Datensätze` : `Dateien · ${fmtInt.format(st.documents || 0)} Datensätze`,
-      `${mb(st.bytes || 0)} MB${d.php ? ` · PHP ${esc(d.php)}` : ''}`);
-  }
-  function diskCard(k, card) {
-    if (!k || !k.free || !k.total) return card('warn', 'Speicherplatz', 'unbekannt', '');
-    const lvl = k.free < 1024 ** 3 ? 'bad' : k.free < 5 * 1024 ** 3 ? 'warn' : 'ok';
-    return card(lvl, 'Speicherplatz', `${gb(k.free)} GB frei von ${gb(k.total)} GB`, lvl === 'ok' ? '' : 'Bald aufräumen oder Speicher erweitern');
-  }
-  function mailCard(m, card) {
-    if (!m || !m.configured) return card('warn', 'E-Mail-Versand', 'nicht eingerichtet', 'Verwaltung → E-Mail');
-    return card(m.failed7 ? 'warn' : 'ok', 'E-Mail-Versand', `${fmtInt.format(m.sent7)} zugestellt in 7 Tagen`, m.failed7 ? `${fmtInt.format(m.failed7)} nicht zugestellt – Versandliste unter E-Mail prüfen` : '');
-  }
-  function ordersCard(o, card) {
-    if (!o) return '';
-    if (!o.enabled) return card('warn', 'Bestellwünsche', 'Bestellfunktion aus', 'Verwaltung → E-Mail → Bestellwünsche');
-    return card(o.failed7 ? 'warn' : 'ok', 'Bestellwünsche', `${fmtInt.format(o.n7)} in den letzten 7 Tagen`, o.failed7 ? `${o.failed7} nicht per E-Mail zugestellt` : o.last ? `zuletzt ${esc(o.lastNr || '')} am ${esc(dateTime(o.last))} Uhr` : 'noch keine');
-  }
-  function customersCard(c, card) {
-    if (!c) return '';
-    return card('ok', 'Kunden', `${fmtInt.format(c.active)} aktiv · ${fmtInt.format(c.withLogin)} mit Zugang`, c.online ? `${fmtInt.format(c.online)} gerade angemeldet` : 'niemand angemeldet');
-  }
-  function deployCard(r, card) {
-    if (!r || !r.t) return card('warn', 'Bereitstellung', 'Änderungen gehen ohne Freigabe live', 'Release-Modus noch nicht eingerichtet');
-    const sha = esc(String(r.sha || '').slice(0, 7));
-    if (!r.ok) return card('bad', 'Bereitstellung', `aktiv: ${sha} · ${esc(dateTime(r.t))} Uhr`, esc(r.meldung || 'Letztes Release fehlgeschlagen'));
-    return card('ok', 'Bereitstellung', `Release ${sha} · ${esc(dateTime(r.t))} Uhr`, 'nur freigegebene, geprüfte Versionen');
-  }
-  function notfallCard(n, card) {
-    return n ? card('bad', 'Notfallmodus', `aktiv seit ${esc(dateTime(n.seit))} Uhr`, 'Mitarbeiter ohne Administratorrolle gesperrt – beenden im Modul Sicherheit')
-      : card('ok', 'Notfallmodus', 'aus', '');
-  }
-  function sysCards(d) {
-    const card = (lvl, title, text, hint) => `<div class="sec-card ${lvl}"><span class="sec-dot"></span><div><strong>${esc(title)}</strong><span>${text}</span>${hint ? `<em>${hint}</em>` : ''}</div></div>`;
-    return [notfallCard(d.notfall, card), wartungCard(d.wartung, card), backupCard(d.backup, card), deployCard(d.deployment, card), storageCard(d, card), diskCard(d.disk, card),
-      mailCard(d.mail, card), ordersCard(d.orders, card), customersCard(d.customers, card)].join('');
-  }
-  const DIAG = [['storage', 'Datenablage prüfen', 'Lesbarkeit und Unversehrtheit aller Datensätze'], ['mail', 'E-Mail-Verbindung prüfen', 'Verbindung und Anmeldung am Mailserver, ohne E-Mail'], ['files', 'Dateien und Speicher', 'Schreibrechte, Schreibschutz, freier Speicher'], ['php', 'PHP-Umgebung', 'Version, Erweiterungen, Grenzwerte, Serverzeit']];
-  async function renderSecView() {
-    const host = $('#view-sec');
-    if (!secData) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>System wird geladen …</div>';
-    try {
-      const [d, u] = await Promise.all([api('betrieb_status'), api('users')]);
-      secData = { ...d, users: u.users || [] };
-    } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
-    const d = secData, w = d.wartung;
-    host.innerHTML = `
-      <section class="gcard sec-block sic-umzug" id="sic-umzug">
-        <div><h3 class="sec-h">${icon('shield')}Sicherheit hat ein eigenes Modul</h3>
-        <p class="hint" style="margin:0">Lagebild, Notfallmodus, Firewall und Sperren, Anmeldung und Sitzungen, Dateiprüfung, Sicherheitsereignisse, Einstellungen und privilegierte Konten finden Sie jetzt in der Sicherheitszentrale (Kachel „Sicherheit“ im Dashboard).</p></div>
-        <a class="btn primary" href="${esc(SICHERHEIT)}" id="sic-link">${icon('shield')}Sicherheit öffnen</a>
-      </section>
-      <div class="sec-grid">${sysCards(d)}</div>
-      <section id="sec-diag" class="gcard sec-block sec-sect"><h3 class="sec-h">Diagnose</h3>
-        <p class="hint" style="margin-top:0">Alle Prüfungen lesen nur – es werden keine Daten verändert und keine Befehle auf dem Server ausgeführt.</p>
-        <div class="dg-btns">${DIAG.map(([k, l, t]) => `<button type="button" class="btn" data-diag="${k}" title="${esc(t)}">${esc(l)}</button>`).join('')}</div>
-        <div id="dg-out" class="dg-out" aria-live="polite"></div>
-        <p class="form-err" id="dg-err" role="alert"></p>
-      </section>
-      <form class="gcard sec-form wartung-form${w ? ' on' : ''}" id="wartung-form" autocomplete="off">
-        <h3 class="sec-h">Wartungsmodus</h3>
-        <p class="hint" style="margin-top:0">Pausiert die Angebotsseite für Kunden (Angebot, Anmeldung, Merkliste, Bestellwünsche). Sie und alle Mitarbeiter arbeiten im Eingabebereich und auf der Angebotsseite normal weiter; Abmeldelinks aus E-Mails funktionieren weiterhin.</p>
-        ${w && w.notfall ? '<p class="st-err">Die Angebotsseite ist gerade durch den Notfallmodus gesperrt – beenden im Modul Sicherheit. Ein hier eingeschalteter Wartungsmodus bleibt danach bestehen.</p>' : ''}
-        <div class="sec-rows">
-          <label class="fld span2"><span>Hinweis für Kunden</span><textarea name="message" rows="2" maxlength="500" placeholder="Wir aktualisieren gerade unser Angebotsportal. In Kürze sind wir wieder für Sie da.">${esc(w && !w.notfall ? w.message : '')}</textarea></label>
-          <label class="fld"><span>Voraussichtlich bis <small>(optional)</small></span><input type="datetime-local" name="until" value="${esc(w && w.until ? w.until : '')}"></label>
-        </div>
-        <div class="sec-foot wartung-foot">${w && !w.notfall ? `<span class="st-warn">Aktiv seit ${esc(dateTime(w.since))} Uhr</span><button type="button" class="btn" data-wartung="save">Hinweis speichern</button><button type="button" class="btn primary" data-wartung="off">Wartungsmodus beenden</button>`
-          : '<button type="button" class="btn primary" data-wartung="on">Wartungsmodus einschalten</button>'}</div>
-        <p class="form-err" id="wartung-err" role="alert"></p>
-      </form>
-      ${eingabeWartungForm(d)}
-      <section class="gcard sec-block mv-box" id="mv-box"><div class="loading"><div class="spinner"></div>Module werden geladen …</div></section>`;
-    mvLaden();
-  }
-  async function runDiag(k, btn) {
-    const out = $('#dg-out'), err = $('#dg-err');
-    err.textContent = ''; btn.disabled = true;
-    try {
-      const r = (await api('security_diag', { body: { check: k } })).result;
-      const label = (DIAG.find((x) => x[0] === k) || [k, k])[1];
-      out.insertAdjacentHTML('afterbegin', `<div class="dg-res ${r.ok ? 'ok' : 'bad'}" data-res="${esc(k)}"><div class="dg-hd">${lvlDot(r.ok ? 'ok' : 'bad')}<strong>${esc(label)}</strong><span class="sub">${esc(timeOnly(new Date().toISOString()))} Uhr · ${r.ms} ms</span></div>
-        <table class="etab sectab"><tbody>${r.items.map((x) => `<tr><td>${lvlDot(x.level)}</td><td>${esc(x.label)}</td><td class="mono-s">${esc(x.value)}</td></tr>`).join('')}</tbody></table></div>`);
-      $$('#dg-out .dg-res').slice(6).forEach((x) => x.remove());
-    } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
-  }
-  $('#view-sec').addEventListener('click', async (e) => {
-    const db = e.target.closest('[data-diag]');
-    if (db) { runDiag(db.dataset.diag, db); return; }
-    const wb = e.target.closest('#wartung-form [data-wartung]');
-    if (wb) {
-      const f = $('#wartung-form'), a = wb.dataset.wartung, err = $('#wartung-err');
-      err.textContent = '';
-      if (a === 'on' && !(await confirmBox('Wartungsmodus einschalten?', 'Kunden sehen auf der Angebotsseite dann nur noch den Wartungshinweis und können sich nicht anmelden oder bestellen, bis Sie den Wartungsmodus wieder beenden.', 'Einschalten'))) return;
-      wb.disabled = true;
-      try {
-        const r = await api('wartung_save', { body: { active: a !== 'off', message: f.message.value, until: f.until.value } });
-        W.wartungSt = r.wartung; renderWartungBanner();
-        toast(a === 'on' ? 'Wartungsmodus eingeschaltet.' : a === 'off' ? 'Wartungsmodus beendet – die Angebotsseite ist wieder erreichbar.' : 'Hinweis gespeichert.', 4500);
-        renderSecView();
-      } catch (ex) { err.textContent = ex.message; wb.disabled = false; }
-      return;
-    }
-    const mvb = e.target.closest('#mv-box [data-mv]');
-    if (mvb) { await mvAktion(mvb); return; }
-    const eb = e.target.closest('#ew-form [data-ewart]');
-    if (eb) {
-      const f = $('#ew-form'), a = eb.dataset.ewart, err = $('#ew-err');
-      err.textContent = '';
-      if (a === 'on' && !(await confirmBox('Wartung des Eingabebereichs starten?', f.ab.value ? 'Ab dem gewählten Zeitpunkt können nur noch Administratoren im Eingabebereich arbeiten. Kunden sind nicht betroffen.' : 'Mitarbeiter ohne Administratorrechte sehen ab sofort nur noch den Wartungshinweis; offene Bearbeitungen werden unterbrochen. Kunden sind nicht betroffen.', 'Starten'))) return;
-      eb.disabled = true;
-      try {
-        const r = await api('modul_wartung_save', { body: { bereich: 'angebot.eingabe', active: a !== 'off', grund: f.grund.value, message: f.message.value, ab: f.ab.value, until: f.until.value } });
-        W.wartungEingabe = r.wartung; renderWartungBanner();
-        toast(a === 'off' ? 'Wartung beendet – der Eingabebereich ist wieder für alle freigegeben.' : r.wartung && r.wartung.geplant ? 'Wartung geplant.' : a === 'on' ? 'Wartung gestartet.' : 'Gespeichert.', 4500);
-        renderSecView();
-      } catch (ex) { err.textContent = ex.message; eb.disabled = false; }
-    }
-  });
-
   W.openRund = openRund;
 
   /* ======================= Stammdaten → Gruppenlisten (Kundengruppen, VK-Gruppen) ======================= */
@@ -1808,5 +1566,5 @@
   });
   const vtName = (nr) => VT.name(nr);
 
-  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, vertreter: VT.render, mail: renderMailView, log: renderLogView, sec: renderSecView };
+  W.views = { users: renderUsersView, orders: renderOrdersView, einkauf: renderEinkaufView, kunden: renderKundenView, gruppen: KG.render, vkgruppen: VG.render, vertreter: VT.render, mail: renderMailView, log: renderLogView };
 })();

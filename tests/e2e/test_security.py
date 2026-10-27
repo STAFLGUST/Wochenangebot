@@ -43,9 +43,7 @@ with sync_playwright() as p:
     a.on('console', lambda m: csp.append(m.text) if 'Content Security Policy' in m.text else None)
     a.on('dialog', lambda d: d.accept())
     login(a, 'admin', 'Sicheres-Passwort-1')
-    check('system tab visible for admin (Verwaltung → System)', a.locator('#vt-sec').is_visible())
-    a.click('#vt-sec'); a.wait_for_selector('.sec-grid')
-    check('system view links to the security module', a.locator('#sic-link').is_visible())
+    check('Verwaltung ohne eigene System-Ansicht (liegt im Modul Sicherheit)', a.locator('#vt-sec, #view-sec').count() == 0)
     # Sicherheit: eigenes Modul (gleiche Sitzung, eigene Seite)
     s = ctx.new_page(); s.on('pageerror', lambda e: errs.append(str(e)))
     s.goto(B + '/module/sicherheit/'); s.wait_for_selector('#sic-gesamt strong')
@@ -54,6 +52,9 @@ with sync_playwright() as p:
     s.click('#sic-tabs [data-tab="sitzungen"]'); s.wait_for_selector('#sic-sitzungen')
     check('own session listed', 'diese Sitzung' in s.inner_text('#tab-sitzungen'))
     s.screenshot(path=SH + '/security.png', full_page=True)
+    s.click('#sic-tabs [data-tab="system"]'); s.wait_for_selector('#tab-system:not([hidden]) .sic-einst')
+    check('Reiter System im Modul Sicherheit: Betrieb, Wartung, Module, Diagnose', s.locator('#tab-system .sic-karte').count() == 8
+          and s.locator('#sy-kunden, #sy-eingabe, #sy-module, #sy-diagnose').count() == 4, s.locator('#tab-system .sic-karte').count())
 
     def modul_tab(t):
         s.click(f'#sic-tabs [data-tab="{t}"]')   # lädt den Reiter neu
@@ -186,7 +187,7 @@ with sync_playwright() as p:
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()
     login(m, 'admin', 'Sicheres-Passwort-1', wait=False); m.wait_for_selector('#au-code-wrap:not([hidden])')
     next_step(); m.fill('#au-code', totp(secret)); m.click('#auth-submit'); m.wait_for_selector('tr[data-id]')
-    m.click('#vt-sec'); m.wait_for_selector('.sec-grid'); m.wait_for_timeout(200)
+    m.goto(B + '/module/sicherheit/#system'); m.wait_for_selector('#tab-system:not([hidden]) .sic-einst')
     m.screenshot(path=SH + '/security-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth')
     over = m.evaluate("""() => { const out=[]; for (const el of document.querySelectorAll('body *')) { const r=el.getBoundingClientRect(); if (r.right>392 && r.width>0 && !el.closest('.view-tabs')) out.push(el.tagName+'#'+el.id+'.'+String(el.className).slice(0,30)+' '+Math.round(r.right)); } return out.slice(0,8); }""")
@@ -202,7 +203,7 @@ with sync_playwright() as p:
     a.fill('#dlg-twofa [data-tf=code]', totp(renewed_secret)); a.click('#dlg-twofa [data-tf=enable]')
     a.wait_for_selector('#dlg-twofa .tf-codes')
     check('UI renewal produces new recovery codes', a.locator('#dlg-twofa .tf-codes code').count() == 10)
-    check('UI renewal revokes mobile session', m.evaluate("fetch('../api/?action=draft').then(r => r.status)") == 401)
+    check('UI renewal revokes mobile session', m.evaluate("u => fetch(u).then(r => r.status)", B + '/api/?action=draft') == 401)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')
 sys.exit(0 if all(res) else 1)

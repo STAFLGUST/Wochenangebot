@@ -52,7 +52,7 @@ function modul_person(?array $u, string $ziel = '', string $freigabe = ''): stri
    Entwicklungsstand „fertig“, also erst nach geprüftem und vom Inhaber freigegebenem Code). Nicht änderbar:
    - Bereiche, die laut Register schon produktiv laufen (heute Angebot: Kundenseite und Eingabebereich) – sie werden
      weiter nur über ein Release gesteuert, damit niemand die laufenden Kunden- und Mitarbeiterfunktionen abschaltet,
-   - nicht sperrbare Bereiche (Dashboard, Anmeldung, Verwaltung → System: Schutz vor Aussperrung).
+   - nicht sperrbare Bereiche (Dashboard, Anmeldung, Sicherheitszentrale mit dem Reiter System: Schutz vor Aussperrung).
    Dokument „module“: freigabe {"<modul>.<oberfläche>": {wert, grund, von, t}}, tester {"<modul>.<oberfläche>": [Nutzer-IDs]}
    (Format nur erweitert, GR-006 – ältere Fassungen ignorieren die Felder und nutzen das Register). */
 /* Dokument „module“ einmal je Anfrage lesen (die Übersicht fragt jede Oberfläche ab); nach eigenem Schreiben neu laden */
