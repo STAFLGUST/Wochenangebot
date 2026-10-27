@@ -231,12 +231,12 @@ function crm_liste(): array
         $out[] = ['key' => $id, 'art' => 'kunde', 'nr' => (string)($c['nr'] ?? ''), 'firma' => (string)($c['firma'] ?? ''), 'ansprechpartner' => (string)($c['ansprechpartner'] ?? ''),
                   'strasse' => (string)($c['strasse'] ?? ''), 'plz' => (string)($c['plz'] ?? ''), 'ort' => (string)($c['ort'] ?? ''), 'land' => (string)($c['land'] ?? ''),
                   'telefon' => (string)($c['telefon'] ?? ''), 'email' => (string)($c['email'] ?? ''), 'vertreter' => (string)($c['vertreter'] ?? ''),
-                  'vertreter2' => (string)($c['vertreter2'] ?? ''), 'gruppe' => $gruppen[(string)($c['gruppe'] ?? '')] ?? '', 'aktiv' => $aktiv, 'angebote' => $namen,
+                  'vertreter2' => (string)($c['vertreter2'] ?? ''), 'gruppe' => $gruppen[(string)($c['gruppe'] ?? '')] ?? '', 'gruppeNr' => (string)($c['gruppe'] ?? ''), 'aktiv' => $aktiv, 'angebote' => $namen,
                   'crm' => crm_blatt($blaetter[$id] ?? null, false, $aktiv), 'aktivitaeten' => $zahl[$id] ?? 0];
     }
     foreach (crm_interessenten_doc()['liste'] as $i) {
         $aktiv = !empty($i['aktiv']);
-        $row = ['key' => $i['id'], 'art' => 'interessent', 'nr' => '', 'gruppe' => '', 'aktiv' => $aktiv, 'angebote' => []];
+        $row = ['key' => $i['id'], 'art' => 'interessent', 'nr' => '', 'gruppe' => '', 'gruppeNr' => '', 'aktiv' => $aktiv, 'angebote' => []];
         foreach (CRM_INTERESSENT_FELDER as $f => $_) $row[$f] = (string)($i[$f] ?? '');
         $row['crm'] = crm_blatt($blaetter[$i['id']] ?? null, true, $aktiv);
         $row['aktivitaeten'] = $zahl[$i['id']] ?? 0;
