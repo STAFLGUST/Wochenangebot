@@ -119,6 +119,23 @@ function changes_between(?array $a, array $b): array
     $wb = isset($bm['week']) ? ($bm['week'] . '/' . ($bm['year'] ?? '')) : '';
     if ($a && $wa !== $wb) $out[] = ['k' => 'm|week', 'code' => '', 'name' => 'Kopfdaten', 'f' => 'Kalenderwoche', 'from' => $wa, 'to' => $wb];
     if ($a && (string)($am['notice'] ?? '') !== (string)($bm['notice'] ?? '')) $out[] = ['k' => 'm|notice', 'code' => '', 'name' => 'Kopfdaten', 'f' => 'Hinweis', 'from' => (string)($am['notice'] ?? ''), 'to' => (string)($bm['notice'] ?? '')];
+    // Werbung je Angebot (Überschrift und beworbene Artikel)
+    if ($a) {
+        $wA = is_array($am['werbung'] ?? null) ? $am['werbung'] : [];
+        $wB = is_array($bm['werbung'] ?? null) ? $bm['werbung'] : [];
+        $names = [];
+        foreach (array_merge($a['items'] ?? [], $b['items'] ?? []) as $it) $names[(string)($it['id'] ?? '')] = (string)($it['name'] ?? '');
+        $wtext = function ($e) use ($names) {
+            if (!is_array($e) || empty($e['artikel'])) return '';
+            $n = array_map(function ($x) use ($names) { return $names[(string)($x['id'] ?? '')] ?? '?'; }, $e['artikel']);
+            return trim((string)($e['titel'] ?? '') . ': ' . implode(' · ', $n), ': ');
+        };
+        foreach (array_unique(array_merge(array_map('strval', array_keys($wA)), array_map('strval', array_keys($wB)))) as $oid) {
+            $wf = $wtext($wA[$oid] ?? null); $wt = $wtext($wB[$oid] ?? null);
+            $same = json_encode($wA[$oid] ?? null) === json_encode($wB[$oid] ?? null);
+            if (!$same) { $def = offer_def($oid); $out[] = ['k' => "m|w:$oid", 'code' => '', 'name' => 'Werbung', 'f' => 'Werbung ' . ($def['name'] ?? $oid), 'from' => $wf ?: 'keine', 'to' => $wt ?: 'keine']; }
+        }
+    }
     $ga = []; foreach (($a['groups'] ?? []) as $g) $ga[$g['id']] = $g;
     $gb = []; foreach (($b['groups'] ?? []) as $g) $gb[$g['id']] = $g;
     foreach ($gb as $id => $g) {

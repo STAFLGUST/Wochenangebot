@@ -659,7 +659,10 @@
     const E = { meta: {}, groups: [], items: [] };
     base = base || E; theirs = theirs || E;
     const conflicts = [];
-    const meta = mergeFields(base.meta, mine.meta, theirs.meta, [], (f, mv, tv) => conflicts.push({ kind: 'meta', id: f, name: 'Kopfdaten', field: f, mine: mv, theirs: tv }));
+    const meta = mergeFields(base.meta, mine.meta, theirs.meta, ['werbung'], (f, mv, tv) => conflicts.push({ kind: 'meta', id: f, name: 'Kopfdaten', field: f, mine: mv, theirs: tv }));
+    // Werbung je Angebot getrennt abgleichen (zwei Personen bearbeiten verschiedene Angebote)
+    const wb = mergeFields((base.meta || {}).werbung, (mine.meta || {}).werbung, (theirs.meta || {}).werbung, [], (oid, mv, tv) => conflicts.push({ kind: 'meta', id: 'werbung:' + oid, name: 'Werbung', field: 'werbung', mine: mv, theirs: tv }));
+    if (Object.keys(wb).length) meta.werbung = wb;
     const groups = mergeList(base.groups, mine.groups, theirs.groups, 'group', conflicts, (b, m, t) => ({ id: m.id, ...mergeFields(b, m, t, ['id'], (f, mv, tv) => conflicts.push({ kind: 'group', id: m.id, name: m.name, field: f, mine: mv, theirs: tv })) }));
     const items = mergeList(base.items, mine.items, theirs.items, 'item', conflicts, (b, m, t) => {
       const c = (f, mv, tv) => conflicts.push({ kind: 'item', id: m.id, name: (m.code ? m.code + ' · ' : '') + m.name, field: f, mine: mv, theirs: tv });

@@ -154,6 +154,30 @@
     return `${fmtNum.format(sl.value)} €/kg${ex.length ? ' (' + ex.join(', ') + ')' : ''}`;
   };
 
+  /* Werbung je Angebot (model.meta.werbung[<Angebot>] = {titel, text?, artikel: [{id, text?}]}): Fenster in admin-werbung.js.
+     Gilt nur für das eigene Angebot; der Server liefert je Angebot nur den eigenen Eintrag aus (offer_resolve). */
+  const WERB_MAX = 12;
+  const werbungVon = (oid, m = model) => (m && m.meta && m.meta.werbung && m.meta.werbung[oid]) || null;
+  const werbAn = (it, oid = curOffer) => { const e = werbungVon(oid); return !!e && e.artikel.some((a) => a.id === it.id); };
+  /* Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server) */
+  function werbungBereinigen() {
+    const w = model && model.meta.werbung;
+    if (!w) return;
+    const byId = new Map(model.items.map((i) => [i.id, i]));
+    for (const oid of Object.keys(w)) {
+      if (!knownOffer(oid)) continue;
+      w[oid].artikel = (w[oid].artikel || []).filter((a) => { const it = byId.get(a.id); return it && inOffer(it, oid); });
+      if (!w[oid].artikel.length) delete w[oid];
+    }
+    if (!Object.keys(w).length) delete model.meta.werbung;
+  }
+  /* Angebote, deren Werbung vom veröffentlichten Stand abweicht */
+  const wChanges = () => {
+    if (!published || !model) return [];
+    const a = (published.meta && published.meta.werbung) || {}, b = model.meta.werbung || {};
+    return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((oid) => knownOffer(oid) && !C.sameModel(a[oid], b[oid]));
+  };
+
   /* ---------- API ---------- */
   async function api(action, opts = {}) {
     const headers = { 'X-CSRF-Token': csrf || '' };
@@ -797,6 +821,7 @@
   }
   function changed(opts = {}) {
     if (ro) return;
+    werbungBereinigen();
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
     renderNoPrice();
@@ -1016,9 +1041,10 @@
     if (vc.length) parts.push(`${vc.length} Angebotspreis${vc.length === 1 ? '' : 'e'} geändert`);
     if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
     if (sc.length) parts.push(`${sc.length} Sonderpreis${sc.length === 1 ? '' : 'e'} geändert`);
+    if (wChanges().length) parts.push('Werbung geändert');
     b.title = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
   }
-  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + (metaChanged() ? 1 : 0));
+  const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + wChanges().length + (metaChanged() ? 1 : 0));
   function updatePublishBtn() {
     const b = $('#btn-publish');
     const n = pendingCount();
@@ -1061,9 +1087,10 @@
     const label = it.price.label ? `<span class="was">${esc(it.price.label)}</span>` : '';
     const alts = altsHTML(it);
     const auch = followsStd(curOffer) ? [] : otherOffers(it);   // folgt dem Wochenangebot: alles gilt dort ohnehin gemeinsam
-    return `<tr data-id="${esc(it.id)}" class="${st}${matchesFilter(it) ? '' : ' hidden-row'}">
+    const werb = werbAn(it);
+    return `<tr data-id="${esc(it.id)}" class="${st}${werb ? ' e-werb' : ''}${matchesFilter(it) ? '' : ' hidden-row'}">
       <td class="e-code"><input class="in mono" data-f="code" value="${esc(it.code || '')}" placeholder="—" aria-label="Artikelnummer" maxlength="20"></td>
-      <td class="e-name"><div class="e-nmrow"><input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}</div>
+      <td class="e-name"><div class="e-nmrow"><input class="in e-nm" data-f="name" value="${esc(it.name)}" aria-label="Bezeichnung" maxlength="200">${st === 'is-new' ? '<span class="newtag">neu</span>' : ''}${werb ? `<button type="button" class="werbtag" data-act="werbung" title="Wird auf der Angebotsseite oben beworben – Werbung bearbeiten">${icon('megaphone', 'sm')}Werbung</button>` : ''}</div>
         <div class="e-attr">${it.code ? `<span class="e-codem">${esc(it.code)}</span>` : ''}<select class="in chip" data-f="category" aria-label="Fleischart">${CAT_OPTS(it.category)}</select><input class="in chip" data-f="origin" value="${esc(it.origin || '')}" list="dl-origins" placeholder="Herkunft" aria-label="Herkunft" maxlength="60" size="${Math.max(6, Math.min(16, (it.origin || 'Herkunft').length + 1))}"><select class="in chip" data-f="condition" aria-label="Zustand">${COND_OPTS(it.condition)}</select>${auch.length ? `<span class="e-auch" title="Steht auch in: ${esc(auch.map(offerShort).join(', '))} – Bezeichnung, Merkmale und Gruppe gelten dort ebenso">auch in ${auch.length === 1 ? esc(offerShort(auch[0])) : auch.length + ' weiteren'}</span>` : ''}</div></td>
       ${prevCellHTML(it)}
       ${curOffer === OSTD ? stdCellHTML(it, bad, label, was, alts) : variantCellHTML(it, st)}
@@ -1117,7 +1144,15 @@
 
   /* Gruppen mit Artikeln des gewählten Angebots (Reihenfolge und Namen der Gruppen gelten für alle Angebote) */
   const sichtbareGruppen = () => { const ids = new Set(model.items.filter((i) => inOffer(i, curOffer)).map((i) => i.groupId)); return model.groups.filter((g) => ids.has(g.id)); };
+  function renderWerbungBtn() {
+    const e = werbungVon(curOffer), n = $('#werb-n');
+    if (!n) return;
+    n.hidden = !e;
+    n.textContent = e ? String(e.artikel.length) : '';
+    $('#btn-werbung').classList.toggle('on', !!e);
+  }
   function renderGroups() {
+    renderWerbungBtn();
     const host = $('#groups');
     const mem = model.items.filter((i) => inOffer(i, curOffer));
     if (!mem.length) {
@@ -1305,6 +1340,7 @@
     const g = gcard && gById(gcard.dataset.gid);
     const tr = b.closest('tr[data-id]');
     if (act === 'item' && tr) { openItem(tr.dataset.id); return; }
+    if (act === 'werbung') { openWerbung(); return; }
     if (ro) return;
     if (act === 'sale' && tr) { openSale(tr.dataset.id); return; }
     if (act === 'remove' && tr) { ausAngebot(tr.dataset.id); return; }
@@ -1603,6 +1639,7 @@
       normalizeNames(model);
       const nm = applyMasterTo(model);
       importKundenangebote(alt, model);
+      werbungUebernehmen(alt, model);
       invalid.clear(); autoAttr.clear();
       dlgImport.close();
       renderMeta();
@@ -1615,6 +1652,23 @@
      den Artikel mit derselben Artikelnummer über; Artikel, die nur in Kundenangeboten stehen, bleiben dort erhalten. */
   const kundenEintraege = (it) => Object.entries(it.variants || {}).filter(([k]) => k !== OSTD && knownOffer(k));
   const kundenArtikel = () => (model ? model.items.filter((it) => kundenEintraege(it).some(([, v]) => v.status !== 'hidden')).length : 0);
+  /* Werbung geht beim Excel-Import auf den Artikel mit derselben Artikelnummer über (ohne Nummer: gleiche Bezeichnung) */
+  function werbungUebernehmen(alt, neu) {
+    const w = alt.meta && alt.meta.werbung;
+    if (!w) return;
+    const byId = new Map(alt.items.map((i) => [i.id, i])), out = {};
+    for (const [oid, e] of Object.entries(w)) {
+      const vergeben = new Set(), artikel = [];
+      for (const a of e.artikel || []) {
+        const o = byId.get(a.id);
+        if (!o) continue;
+        const z = neu.items.find((x) => !vergeben.has(x.id) && (o.code ? x.code && mKey(x.code) === mKey(o.code) : fold(x.name) === fold(o.name)) && inOffer(x, oid));
+        if (z) { vergeben.add(z.id); artikel.push({ ...clone(a), id: z.id }); }
+      }
+      if (artikel.length) out[oid] = { ...clone(e), artikel };
+    }
+    if (Object.keys(out).length) neu.meta.werbung = out;
+  }
   function importKundenangebote(alt, neu) {
     const byCode = draftByCode(neu), vergeben = new Set();
     const gIds = new Set(neu.groups.map((g) => g.id)), iIds = new Set(neu.items.map((i) => i.id));
@@ -2206,7 +2260,9 @@
       if (vc.length) body += sec(`Angebotspreise (${vc.length})`, `<ul class="plist">${vc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span><b class="ob-tag">${esc(offerShort(c.offer))}</b> ${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(variantShort(c.from, c.offer))} → <strong>${esc(variantShort(c.to, c.offer))}</strong></span>${rv('variant', c.id + '|' + c.offer)}</li>` : ''; }).join('')}${vc.length > 80 ? `<li><span>… und ${vc.length - 80} weitere</span><span></span></li>` : ''}</ul>`);
       const sc = sChanges();
       if (sc.length) body += sec(`Sonderpreise – solange der Vorrat reicht (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
-      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
+      const wc = wChanges();
+      if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(w.titel || window.WA.werbung.TITEL) : 'Werbung beendet'}</span><span>${w ? esc(plural(w.artikel.length, 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
+      if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
     const can = !v.errors.length;
@@ -2223,7 +2279,13 @@
   }
   /* Eine einzelne Änderung gegenüber der veröffentlichten Fassung zurücknehmen */
   function revertChange(kind, id) {
-    if (kind === 'meta') { model.meta = clone(published.meta); return; }
+    if (kind === 'meta') { const w = model.meta.werbung; model.meta = clone(published.meta); if (w) model.meta.werbung = w; else delete model.meta.werbung; return; }   // Werbung getrennt
+    if (kind === 'werbung') {
+      const p = werbungVon(id, published), w = model.meta.werbung = model.meta.werbung || {};
+      if (p) w[id] = clone(p); else delete w[id];
+      if (!Object.keys(w).length) delete model.meta.werbung;
+      return;
+    }
     if (kind === 'sale') {
       const it = model.items.find((x) => x.id === id), c = sChanges().find((x) => x.id === id);
       if (!it || !c) return;
@@ -2278,6 +2340,7 @@
     const it = model.items.find((x) => x.id === id) || published.items.find((x) => x.id === id);
     const nm = it ? `„${esc(it.code ? it.code + ' · ' : '')}${esc(it.name)}“` : '';
     const o = diff.before[id];
+    if (kind === 'werbung') return ['Werbung zurücknehmen?', `Die Werbung im Angebot <strong>${esc(offerName(id))}</strong> wird wieder auf den veröffentlichten Stand gesetzt.`];
     if (kind === 'meta') return ['Kopfdaten zurücksetzen?', `Kalenderwoche und Hinweis werden wieder auf den veröffentlichten Stand gesetzt (KW ${esc(published.meta.week)}/${esc(published.meta.year)}).`];
     if (kind === 'price') return ['Preisänderung zurücknehmen?', `Der Preis von ${nm} wird von <strong>${esc(priceShort(it.price))}</strong> wieder auf <strong>${esc(priceShort(o.price))}</strong> gesetzt.`];
     if (kind === 'added') return ['Neuen Artikel entfernen?', `${nm} wird wieder aus dem Entwurf entfernt.`];
@@ -3700,6 +3763,33 @@
     });
   }
   $('#btn-add-art').addEventListener('click', () => openArtikelwahl());
+  /* Werbung schalten: Artikel des gewählten Angebots (in der Reihenfolge des Editors) an admin-werbung.js übergeben */
+  function openWerbung() {
+    if (!model || !window.WA.werbung) return;
+    const oid = curOffer;
+    const gi = new Map(model.groups.map((g, i) => [g.id, i]));
+    const artikel = model.items.map((it, i) => ({ it, i })).filter((x) => inOffer(x.it, oid))
+      .sort((a, b) => (gi.get(a.it.groupId) ?? 1e9) - (gi.get(b.it.groupId) ?? 1e9) || a.i - b.i)
+      .map(({ it }) => {
+        const sv = C.saleFor(it, oid), p = effPrice(it, oid);
+        return { id: it.id, code: it.code || '', name: it.name, merkmale: [it.origin, it.condition !== 'unbekannt' ? C.CONDITION_LABELS[it.condition] : ''].filter(Boolean).join(' · '),
+          preis: sv != null ? 'Sonderpreis ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
+      });
+    window.WA.werbung.oeffnen({
+      angebot: offerShort(oid), eintrag: werbungVon(oid), artikel, max: WERB_MAX, ro,
+      uebernehmen(e) {
+        if (ro || oid !== curOffer) return;
+        if (!e && !werbungVon(oid)) return;
+        pushUndo();
+        const w = model.meta.werbung = model.meta.werbung || {};
+        if (e) w[oid] = e; else delete w[oid];
+        if (!Object.keys(w).length) delete model.meta.werbung;
+        changed({ render: true });
+        toast(e ? `Werbung für „${offerShort(oid)}“ übernommen (${plural(e.artikel.length, 'Artikel', 'Artikel')}) – für Kunden sichtbar nach „Veröffentlichen“.` : `Werbung für „${offerShort(oid)}“ beendet – wirksam nach „Veröffentlichen“.`, 5000);
+      },
+    });
+  }
+  $('#btn-werbung').addEventListener('click', openWerbung);
 
   /* ======================= Sonderposten (kurzes MHD, solange der Vorrat reicht) ======================= */
   /* Sonderpreis je Artikel: Grundpreis für alle Angebote, die den Artikel enthalten, je Angebot änderbar (eigener / keiner) */

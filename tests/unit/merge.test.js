@@ -80,6 +80,17 @@ const item = (m, id) => m.items.find((x) => x.id === id);
   const r = C.mergeModels(base, mine, theirs);
   check('Kopfdaten feldweise', r.model.meta.notice === 'Neu' && r.model.meta.week === 43);
 }
+{ // Werbung je Angebot getrennt abgeglichen
+  const b0 = J(base); b0.meta.werbung = { std: { titel: 'Alt', artikel: [{ id: 'a' }] } };
+  const mine = J(b0), theirs = J(b0);
+  mine.meta.werbung.std = { titel: 'Neu', artikel: [{ id: 'a' }, { id: 'b' }] };
+  theirs.meta.werbung.edeka = { titel: 'Edeka', artikel: [{ id: 'c' }] };
+  const r = C.mergeModels(b0, mine, theirs);
+  check('Werbung: eigene und fremde Angebote bleiben', r.model.meta.werbung.std.titel === 'Neu' && r.model.meta.werbung.edeka.titel === 'Edeka' && r.conflicts.length === 0, JSON.stringify(r.model.meta.werbung));
+  const t2 = J(b0); delete t2.meta.werbung;
+  const r2 = C.mergeModels(b0, J(b0), t2);
+  check('Werbung: fremdes Beenden übernommen', !r2.model.meta.werbung, JSON.stringify(r2.model.meta));
+}
 { // Gruppe gelöscht, Artikel vom anderen hineingelegt → Gruppe bleibt
   const mine = J(base), theirs = J(base);
   mine.groups = mine.groups.filter((g) => g.id !== 'g2'); mine.items = mine.items.filter((x) => x.groupId !== 'g2');
