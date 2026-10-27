@@ -93,7 +93,8 @@ with sync_playwright() as p:
     kc = k.evaluate("""(() => { const b = getComputedStyle(document.body), t = getComputedStyle(document.querySelector('#topbar'));
       return [b.backgroundColor, getComputedStyle(document.body, '::before').content, t.backdropFilter, t.backgroundColor,
               [...document.styleSheets].map((s) => s.href || '').filter((h) => /admin/.test(h)).length]; })()""")
-    check('customer page unchanged: design „Klar“, no admin stylesheet, no glass', kc == ['rgb(243, 243, 241)', 'none', 'saturate(1.6) blur(14px)', 'rgba(255, 255, 255, 0.9)', 0], kc)
+    check('customer page: own design „Liquid Glass“ (body.kseite, app.css), no admin stylesheet', kc[1] == '""' and 'blur(24px)' in kc[2] and kc[4] == 0
+          and k.evaluate("document.body.classList.contains('kseite') && !document.body.classList.contains('adm')"), kc)
     # Rückweg zum Dashboard: Antwort des Servers unter zentraler Anmeldung nachgestellt (echter Ablauf: tests/oidc/)
     def zentral(route, adresse):
         r = route.fetch(); j = r.json()

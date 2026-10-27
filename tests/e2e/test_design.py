@@ -1,5 +1,6 @@
-"""Gestaltung „Klar“ der Angebotsseite: lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs
-(Desktop) bzw. Seitenleiste (schmal), Merkliste als Spalte ab 1280 px, hell/dunkel, kein seitliches Scrollen."""
+"""Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als
+Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. Seitenleiste
+(schmal), Merkliste als Spalte ab 1280 px, hell/dunkel, kein seitliches Scrollen, Druck ohne Glas."""
 import sys
 import urllib.request
 from playwright.sync_api import sync_playwright
@@ -34,6 +35,18 @@ with sync_playwright() as pw:
     check('Geist font used', 'Geist' in d.evaluate("getComputedStyle(document.body).fontFamily"))
     check('Geist actually loaded', until(lambda: d.evaluate("document.fonts.check('14px Geist')"), 5))
     check('logo in the header (loaded, links home)', d.evaluate("(() => { const i = document.querySelector('#topbar .brand-logo'); return !!i && i.complete && i.naturalWidth > 0 && i.closest('a').getAttribute('href') === './'; })()") and d.get_attribute('#topbar .brand-logo', 'alt') == 'Standard-Fleisch')
+    g = d.evaluate("""(() => { const cs = (q) => getComputedStyle(document.querySelector(q));
+      return { kopfR: cs('#topbar').borderTopLeftRadius, kopfF: cs('#topbar').backdropFilter, kopfTop: cs('#topbar').top,
+        listR: cs('.al').borderTopLeftRadius, listF: cs('.al').backdropFilter, aktiv: cs('#modebar [aria-checked=true]').backgroundColor,
+        zeileR: cs('.al-tab tbody td').borderTopLeftRadius, qnR: cs('.qn').borderTopLeftRadius }; })()""")
+    check('Liquid Glass: schwebende Glas-Kopfzeile, Liste als Glaskarte, Kapseln, runde Zeilen',
+          g['kopfR'] == '26px' and 'blur' in g['kopfF'] and g['kopfTop'] == '10px' and g['listR'] == '30px' and 'blur' in g['listF']
+          and g['aktiv'].startswith('rgba(255, 255, 255') and g['zeileR'] == '9px' and g['qnR'] == '999px', g)
+    d.emulate_media(media='print')
+    check('Druck ohne Glas (nur Bildschirm)', d.evaluate("getComputedStyle(document.querySelector('#topbar')).borderTopLeftRadius") != '26px'
+          and d.evaluate("getComputedStyle(document.querySelector('.al')).borderTopLeftRadius") != '30px'
+          and d.evaluate("getComputedStyle(document.body, '::before').content") in ('none', 'normal', ''))
+    d.emulate_media(media='screen')
     check('filter bar: six closed dropdowns, no side column', d.locator('.fdrop').count() == 6 and d.locator('.fdrop[open]').count() == 0 and d.locator('#filters').evaluate("e => getComputedStyle(e).position") == 'static')
     check('offer view: full width, no side column', not d.is_visible('#merk'))
     d.click('#modebar [data-mode=liste]'); d.wait_for_selector('table.grid tr.row')
@@ -63,7 +76,11 @@ with sync_playwright() as pw:
 
     k = page(1440, 950, 'dark')
     bg = k.evaluate("getComputedStyle(document.body).backgroundColor")
-    check('dark mode uses dark ground', bg in ('rgb(14, 14, 13)',), bg)
+    import re as _re
+    rgb = [int(x) for x in _re.findall(r'\d+', bg)[:3]]
+    check('dark mode uses dark ground', len(rgb) == 3 and max(rgb) < 30, bg)
+    check('Liquid Glass dunkel: Kopf und Liste als Glas', 'blur' in k.evaluate("getComputedStyle(document.querySelector('#topbar')).backdropFilter")
+          and 'blur' in k.evaluate("getComputedStyle(document.querySelector('.al')).backdropFilter"))
     k.screenshot(path=SH + '/design-dunkel.png')
 
     # ── Darstellungsprüfung 10/2026: Tippflächen, Kontrast, abgeschnittener Platzhalter, Leerzustand ──
