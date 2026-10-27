@@ -2827,13 +2827,22 @@
     return [...rows.values()].map((a, idx) => {
       const key = S.normCode(a.code), price = prices.get(key), prevPrice = previous.get(key);
       a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
-      return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice,
+      return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
         incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(a.code + ' ' + a.name) };
     });
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const stockWeekLabel = (which) => stockPrices?.[which] ? `KW ${stockPrices[which].week}/${stockPrices[which].year}` : 'KW unbekannt';
   const stockPriceText = (p) => !stockPrices?.allowed ? 'keine Berechtigung' : p?.status === 'ambiguous' ? 'mehrere Preisangaben' : p?.status === 'value' ? `${stockPriceNumber.format(p.value)} €${p.label ? ' · ' + p.label : '/kg'}` : p?.status === 'request' ? 'auf Anfrage' : '—';
+  /* Nächste ETA der erfassten Zugänge: frühestes Ankunftsdatum ab heute; liegen alle in der Vergangenheit, das
+     späteste (überfällig). Ohne Datum: null. Nur Anzeige in der Spalte „Erfasster Bestand“. */
+  function naechsteEta(list) {
+    const heute = new Date().toLocaleDateString('sv-SE'), etas = list.map((d) => d.arrival).filter(Boolean).sort();
+    if (!etas.length) return null;
+    const t = etas.find((x) => x >= heute);
+    return t ? { t, alt: false } : { t: etas[etas.length - 1], alt: true };
+  }
+  const etaHTML = (a) => (a.nextEta ? `<small class="s-eta${a.nextEta.alt ? ' alt' : ''}" title="${a.nextEta.alt ? 'ETA überschritten – noch nicht eingelagert' : 'nächste erwartete Ankunft'}">ETA ${esc(mhdShort(a.nextEta.t))}</small>` : '');
   const incomingHTML = (a) => a.incoming.length ? `<ul class="st-incoming">${a.incoming.map((d) => `<li><strong>${esc(kgText(d.kg))}</strong> · ${d.arrival ? 'ETA ' + esc(dmy(d.arrival)) : 'ETA unbekannt'}${d.marke || d.lot ? ` <small>${d.marke ? esc(d.marke) + (d.lot ? ' · ' : '') : ''}${d.lot ? 'Partie ' + esc(d.lot) : ''}</small>` : ''}</li>`).join('')}</ul>` : '<span class="muted">keine Zugangsdaten</span>';
   const vkText = (p) => (!p ? '—' : p.status === 'value' ? fmtNum.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '—');
   /* Summe in ganzen Gramm (exakt, unabhängig von der Reihenfolge) */
@@ -2880,7 +2889,7 @@
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
       <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
       <td class="s-mhd ${a.cls}" data-l="Kürz. MHD">${esc(mhdShort(a.mhd))}</td><td class="s-mkg ${a.cls}" data-l="Kg kürz. MHD"><span>${mhdKgHTML(a)}</span></td>
-      <td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(a.incomingKg))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(a.totalKg))}</td>
+      <td class="s-registered" data-l="Erfasster Bestand"><span class="s-reg">${esc(kgText(a.incomingKg))}${etaHTML(a)}</span></td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(a.totalKg))}</td>
       <td class="s-incoming" data-l="Erwartete Zugänge">${print ? incomingHTML(a) : a.incoming.length ? `<button type="button" class="btn sm" data-incoming="${a.idx}" aria-haspopup="dialog" aria-label="Erwartete Zugänge für ${esc(a.name)} anzeigen">Zugänge (${a.incoming.length})</button>` : '—'}</td></tr>`;
   const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="4">${esc(label)}</td><td class="s-kg" data-l="Eingelagerter Bestand">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg" data-l="Kg kürz. MHD">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(sum(list, 'incomingKg')))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(sum(list, 'totalKg')))}</td><td class="s-incoming"></td></tr>`;
   function stockTableHTML(res, print = false) {

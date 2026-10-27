@@ -34,6 +34,9 @@ Die fette Kopfzeile folgt der Reihenfolge Artikelnummer, Bezeichnung, aktueller 
 Vorwochenpreis, eingelagerter Bestand, kürzestes MHD, kg am kürzesten MHD, erfasster Bestand,
 Gesamt verfügbar, erwartete Zugänge. Fehlende Preise erscheinen als „—“.
 Erfasster Bestand summiert die vorhandenen Zugangszeilen; ohne Zeilen sind 0 kg erfasst.
+Unter der Menge steht die **nächste ETA** (frühestes Ankunftsdatum ab heute, Format TT.MM.JJ). Liegen alle Ankunftsdaten
+in der Vergangenheit, erscheint das späteste – farbig markiert als überschritten (noch nicht eingelagert). Zeilen ohne Datum
+zählen nicht. Im Fenster „Erwartete Zugänge“ stehen Marke und Partie fett und gut lesbar unter Menge und ETA.
 Gesamt verfügbar ist die Summe beider Mengenarten, einschließlich noch nicht eingetroffener Ware.
 Diese Anzeigen beschreiben ausschließlich den letzten Import, keine garantierte Lieferbarkeit.
 Gruppen- und Gesamtsummen, Detaildialog, CSV und Druck verwenden dieselbe Berechnung.
