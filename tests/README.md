@@ -59,7 +59,7 @@ nicht fest eingetragen. **Echte Angebots-, Bestands- oder Nutzerdaten gehören n
 
 | Gruppe | Prüfungen | Schwerpunkt |
 | --- | --- | --- |
-| sys | 60 | Ersteinrichtung, Editor (freie Position über „Artikel in diese Gruppe“), Vorschau im Fenster (Entwurf, ohne eigenen Hinweis, Handy-Darstellung, neuer Tab, Schließen entlädt die Seite), Import, Veröffentlichen, Versionen, Passwort |
+| sys | 62 | Ersteinrichtung, Editor (freie Position über „Artikel in diese Gruppe“, neue Gruppe im Artikelfenster, Änderungszahl am Knopf „Veröffentlichen“), Vorschau im Fenster (Entwurf, ohne eigenen Hinweis, Handy-Darstellung, neuer Tab, Schließen entlädt die Seite), Import, Veröffentlichen, Versionen, Passwort |
 | frontend | 62 | öffentliche Seite (Tabellenansicht): Filter (Aufklappmenüs: nur eines offen, Escape, Klick daneben), Suche, Sortierung, CSV, Druck, keine internen Daten |
 | design | 35 | Gestaltung „Klar“: Schriften lokal (keine fremden Server), Kopf mit Kürzel, Filterleiste/Seitenleiste je Breite, Merkliste-Spalte ab 1280 px, dunkles Design, kein seitliches Scrollen; Darstellungsprüfung: Tippflächen am Handy ≥ 36 px (390 hell, 360 dunkel; Angebots- und Bestellansicht, Schließen-Knopf im Anmeldefenster), Platzhalter der Suche mit „…“, kleine graue Zusätze (Artikelzahl, „Nicht angegeben“) Kontrast ≥ 4,5:1 hell/dunkel, leeres Angebot mit eigenem Hinweis (kein Such-/Filtertipp), Suche ohne Treffer unverändert |
 | hist | 35 | Preisverlauf, Import alter Listen, Datendialog |

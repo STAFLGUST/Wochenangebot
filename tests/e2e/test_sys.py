@@ -45,7 +45,7 @@ with sync_playwright() as p:
     wait_saved()
     check('price formatted 24,10', row('10601').locator('input[data-f="price"]').input_value() == '24,10')
     check('row marked price change + was', 'is-price' in row('10601').get_attribute('class') and 'bisher' in row('10601').inner_text())
-    check('changes bar 1 price', '1 Preis geändert' in a.inner_text('#changes').replace('\n', ' '), a.inner_text('#changes'))
+    check('keine Änderungsleiste mehr; Aufstellung am Knopf „Veröffentlichen“', a.locator('#changes').count() == 0 and '1 Preis geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
     check('draft saved state', 'noch nicht veröffentlicht' in a.inner_text('#save-state'), a.inner_text('#save-state'))
     check('public unchanged before publish', pub_price('10601').startswith(de(preis('10601'))), pub_price('10601'))
     pv = ctx.new_page(); pv.goto(B + '/?vorschau=1#suche=10601'); pv.wait_for_selector('tr.row')
@@ -113,7 +113,7 @@ with sync_playwright() as p:
     row('10202').locator('[data-act="item"]').click(); a.wait_for_selector('#dlg-item[open]')
     a.screenshot(path=SH + '/admin-item.png')
     a.click('#dlg-item [data-ia="del"]'); a.wait_for_timeout(150)
-    check('item deleted', row('10202').count() == 0 and 'entfernt' in a.inner_text('#changes'))
+    check('item deleted', row('10202').count() == 0 and 'entfernt' in (a.get_attribute('#btn-publish', 'title') or ''))
     a.click('#btn-undo'); a.wait_for_timeout(150)
     check('undo restores item', row('10202').count() == 1)
     # delete for real another one
@@ -126,13 +126,21 @@ with sync_playwright() as p:
     a.click('#dlg-item button[type="submit"]')
     check('alt price chip shown', 'Großgebinde: 23,90' in row('10601').inner_text())
 
-    # add group
-    a.click('#btn-add-group'); a.wait_for_timeout(150)
-    f = a.locator(':focus'); f.fill('Wochenaktion'); f.press('Tab'); a.wait_for_timeout(100)
-    last = a.locator('section.gcard').last
-    last.locator('input[data-f="name"]').fill('Aktions-Rumpsteak, frisch'); last.locator('input[data-f="name"]').press('Tab')
-    last.locator('input[data-f="price"]').fill('19,90'); last.locator('input[data-f="price"]').press('Tab')
+    # neue Gruppe (ohne eigenen Knopf): freie Position, im Artikelfenster „+ Neue Gruppe …“, Gruppe benennen
+    check('kein Knopf „Gruppe“ in der Werkzeugleiste', a.locator('#btn-add-group').count() == 0)
+    a.locator('section.gcard').last.locator('[data-act="add-item"]').click(); a.wait_for_selector('#dlg-ez-pick[open] [data-pick-extra="frei"]')
+    a.click('#dlg-ez-pick [data-pick-extra="frei"]'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    a.wait_for_function("document.activeElement && document.activeElement.dataset.f === 'name'")
+    nm = a.locator(':focus'); nm.fill('Aktions-Rumpsteak, frisch'); nm.press('Tab')
+    ar = a.locator('tr[data-id]:has(input[data-f=name][value="Aktions-Rumpsteak"])')
+    ar.locator('[data-act="item"]').click(); a.wait_for_selector('#dlg-item[open]')
+    a.select_option('#item-body [name=groupId]', '__neu'); a.wait_for_selector('#dlg-item', state='hidden')
+    a.wait_for_function("document.activeElement && document.activeElement.dataset.gf === 'name'")
+    f = a.locator(':focus'); f.fill('Wochenaktion'); f.press('Tab')
+    ar.locator('input[data-f="price"]').fill('19,90'); ar.locator('input[data-f="price"]').press('Tab')
     wait_saved()
+    n_wa = a.evaluate("[...document.querySelectorAll('#groups section.gcard')].filter((g) => g.querySelector('[data-gf=name]').value === 'Wochenaktion').map((g) => g.querySelectorAll('tr[data-id]').length)")
+    check('neue Gruppe über den Artikeldialog angelegt und benannt', n_wa == [1], n_wa)
 
     # search/filter in editor – auf das erwartete Ergebnis warten statt fester Wartezeit (Filter greift verzögert)
     def sichtbar(n):

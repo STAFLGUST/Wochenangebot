@@ -181,7 +181,7 @@ with sync_playwright() as p:
     row(X['id']).locator('[data-act=remove]').click()
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
     check('✕ entfernt aus dem Wochenangebot', row(X['id']).count() == 0 and next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == X['id'])['variants'] == {'std': {'status': 'hidden'}})
-    check('change shown for Wochenangebot', 'im Wochenangebot hinzugefügt/entfernt' in a.inner_text('#changes'))
+    check('change shown for Wochenangebot', 'im Wochenangebot hinzugefügt/entfernt' in (a.get_attribute('#btn-publish', 'title') or ''))
     a.click('#btn-undo'); a.wait_for_selector(f'tr[data-id="{X["id"]}"]')
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved') || /Keine Änderungen/.test(document.querySelector('#save-state').textContent)", timeout=10000)
     # Kurzes MHD → Sonderpreis (Leiste beim Öffnen zugeklappt)
@@ -199,7 +199,7 @@ with sync_playwright() as p:
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
     sv = next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == mid).get('sale') or {}
     check('sale price set from MHD list', sv.get('value') == 7.77 and sv.get('offers') == {'edeka': {'value': 7.5}}, sv)
-    check('changes show sale price', 'Sonderpreis' in a.inner_text('#changes'))
+    check('changes show sale price', 'Sonderpreis' in (a.get_attribute('#btn-publish', 'title') or ''))
     a.screenshot(path=SH + '/restposten-editor.png')
     # Sonderposten senden (Edeka)
     a.click('#offer-bar [data-offer="edeka"]')

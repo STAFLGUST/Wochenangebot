@@ -77,7 +77,7 @@ with sync_playwright() as p:
     vi.fill('22'); vi.press('Tab'); wait_saved(a)
     check('own price saved + formatted', row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00')
     check('row marked as price change', 'is-price' in row(a, '10601').get_attribute('class'))
-    check('changes bar counts offer price', '1 Angebotspreis geändert' in re.sub(r'\s+', ' ', a.inner_text('#changes')), a.inner_text('#changes'))
+    check('Knopf „Veröffentlichen“ nennt den Angebotspreis', '1 Angebotspreis geändert' in (a.get_attribute('#btn-publish', 'title') or ''), a.get_attribute('#btn-publish', 'title'))
     check('Kopf: Angebot „folgt dem Wochenangebot“ mit Hinweis zur Umstellung', 'Folgt dem Wochenangebot' in a.inner_text('#offer-head') and a.locator('#offer-head [data-ob=umstellen]').count() == 1)
     row(a, '10823').locator('[data-act=remove]').click(); wait_saved(a)
     check('✕ entfernt nur aus diesem Angebot', row(a, '10823').count() == 0 and zahl(a, 'Edeka') == n_std - 1 and zahl(a, 'Wochenangebot') == n_std)
