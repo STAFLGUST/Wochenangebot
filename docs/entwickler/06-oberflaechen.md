@@ -390,7 +390,7 @@ Farbflächen fest dahinter (`body.adm::before` bzw. `.db-bg`/`.hr-bg`/`.crm-bg`)
 
 Die Angebotsseite (`app/index.html`, `body.kseite`) nutzt dasselbe Muster im Abschnitt „Liquid Glass“ am Ende von
 `app.css` (Inhalt und Aufbau wie im Design „Klar“): Tokens `--glas-kopf`, `--glas`, `--glas-leicht`, `--glas-karte`,
-`--glas-stark`, `--glas-fenster`, `--aus`, `--feld`, `--zebra`, `--regel`; Grund über `body.kseite::before`; Kopfzeile als
+`--glas-stark`, `--glas-fenster`, `--aus`, `--feld`, `--zebra`, `--regel`; Grund über `body.kseite::before` mit den Farbflächen des Dashboards (Blaugrau, Bernstein, Salbei – kein Rot); Kopfzeile als
 schwebende Kapsel (`.topbar` mit `top: 10px` – klebende Tabellenköpfe daher `--header-h + 18px`), Umschalter als Segment
 in einer Glaskapsel, Fleischarten/Filter/Sortierung als Kapseln, Angebotsliste `.al` als Glaskarte (30 px) mit abgerundeten
 Zeilen ohne Spaltenlinien, Fenster und Menüs als Glasfenster. Andere Seiten mit `app.css` (Eingabebereich, Dashboard,
