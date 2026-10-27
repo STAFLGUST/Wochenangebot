@@ -1982,27 +1982,22 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
 #wb-n { font-size: 12.5px; font-weight: 600; color: var(--muted); text-transform: none; letter-spacing: 0; }
 .wb-liste { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
 .wb-liste > li { display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(140px, 220px) auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--werb-line); border-radius: 12px; background: var(--werb-bg); }
-.wb-liste > li.wb-leer, .wb-treffer > li.wb-leer { display: block; border: 1px dashed var(--line); background: none; color: var(--muted); font-size: 13.5px; padding: 10px 12px; border-radius: 12px; }
+.wb-liste > li.wb-leer { display: block; border: 1px dashed var(--line); background: none; color: var(--muted); font-size: 13.5px; padding: 10px 12px; border-radius: 12px; }
 .wb-nr { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--werb); color: #fff; font-size: 12px; font-weight: 700; }
 :root[data-theme="dark"] .wb-nr { color: #1d1606; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wb-nr { color: #1d1606; } }
 .wb-a { min-width: 0; display: flex; flex-direction: column; }
-.wb-a b, .wb-treffer b { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-a small, .wb-treffer small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-a b { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-a small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-liste .wb-hin { height: 32px; font-size: 13px; border: 1px solid var(--werb-line); border-radius: 9px; background: var(--surface); padding: 0 10px; }
 .wb-liste .wb-hin:focus { border-color: var(--accent-line); box-shadow: var(--focus); }
 .wb-liste .wb-hin:disabled { background: transparent; }
 .wb-btns { display: inline-flex; gap: 2px; }
-.wb-add .search { max-width: none; }
-.wb-add .search input { height: 38px; }
-.wb-treffer { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
-.wb-treffer button { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); padding: 7px 12px; font: inherit; cursor: pointer; }
-.wb-treffer button:hover, .wb-treffer button:focus-visible { border-color: var(--werb-line); background: var(--werb-bg); }
-.wb-treffer button > span { min-width: 0; display: flex; flex-direction: column; }
-.wb-treffer button > .i { color: var(--werb); flex: none; }
 @media (max-width: 640px) {
   .wb-liste > li { grid-template-columns: 24px minmax(0, 1fr) auto; }
   .wb-liste .wb-hin { grid-column: 2 / -1; grid-row: 2; }
   .ed-toolbar #btn-werbung { flex: 0 0 auto; }
 }
 .wb-ende { color: var(--accent); }
+.wb-auswahl { width: 100%; justify-content: center; border-style: dashed; }
+.ezp-fest { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }

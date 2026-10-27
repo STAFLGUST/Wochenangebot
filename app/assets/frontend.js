@@ -265,20 +265,24 @@ function priceHTML(it) {
 }
 
 /* ---------- Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst) ----------
-   Oben ein farbiger Block mit Überschrift, Text und Karten (nur in der Gesamtansicht ohne Suche/Filter), in der Liste sind
-   die Zeilen farbig hinterlegt und gekennzeichnet. Ein Klick auf eine Karte zeigt den Artikel in der Liste. */
+   Oben ein schlichter, getönter Block wie ein Abschnitt der Liste (Überschrift, Text, Zeilen Nr. · Bezeichnung · Preis; nur in
+   der Gesamtansicht ohne Suche/Filter), in der Liste sind die Zeilen getönt und gekennzeichnet. Klick auf eine Zeile im
+   Block zeigt den Artikel in der Liste. */
 const WERB_TITEL = 'Unsere Empfehlung der Woche';
 const werbAn = (it) => typeof it.werb === 'string';
 const werbTagHTML = (it, cls) => (werbAn(it) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${icon('megaphone', 'sm')}${esc(it.werb || 'Empfehlung')}</span>` : '');
 function werbungHTML() {
   const w = DATA.werbung;
   if (!w || state.tab !== 'all' || hasFilters()) return '';
-  const karte = ({ it, text }) => `<button type="button" class="werb-karte" data-werb="${esc(it.id)}" title="In der Liste zeigen">
-      <span class="werb-hin">${esc(text || 'Empfehlung')}</span><span class="werb-name">${esc(plName(it))}</span>
-      <span class="werb-meta">${esc([it.code ? 'Art.-Nr. ' + it.code : '', it.origin, it.condition !== 'unbekannt' ? COND_LABEL[it.condition] : ''].filter(Boolean).join(' · '))}</span>
-      <span class="werb-preis">${priceHTML(it)}</span></button>`;
-  return `<section class="werb-block" aria-labelledby="werb-h"><div class="werb-kopf">${icon('megaphone')}<div><h2 id="werb-h">${esc(w.titel || WERB_TITEL)}</h2>${w.text ? `<p>${esc(w.text)}</p>` : ''}</div></div>
-    <div class="werb-karten">${w.artikel.map(karte).join('')}</div></section>`;
+  const preis = (it) => {
+    const p = it.price;
+    if (p.status !== 'value') return `<span class="werb-p werb-np">${esc(plPrice(p))}</span>`;
+    return `<span class="werb-p${it.sale ? ' werb-sale' : ''}">${it.sale && it.regular != null ? `<s>${fmtNum.format(it.regular)}</s>` : ''}${fmtNum.format(p.value)}<small>€/kg</small></span>`;
+  };
+  const zeile = ({ it, text }) => `<button type="button" class="werb-z" data-werb="${esc(it.id)}" title="In der Liste zeigen">
+      <span class="werb-nr">${esc(it.code || '')}</span><span class="werb-name">${esc(plName(it))}${text ? `<span class="werb-hin">${esc(text)}</span>` : ''}</span>${preis(it)}</button>`;
+  return `<section class="werb-block" aria-labelledby="werb-h"><div class="werb-kopf">${icon('megaphone')}<h3 id="werb-h">${esc(w.titel || WERB_TITEL)}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+    <div class="werb-zeilen">${w.artikel.map(zeile).join('')}</div></section>`;
 }
 function werbZeigen(id) {
   const el = $(`#list .row[data-id="${CSS.escape(id)}"], #list .card[data-id="${CSS.escape(id)}"]`);
