@@ -121,7 +121,10 @@ erledigt Keycloak. `me_payload()` meldet dort `zentral: true`, `bereich`, `dashb
 `max_age=0`. Die Oberflächen (`admin.js`, `dashboard.js`, `hr.js`, `crm.js`) folgen nur Adressen, die mit `/oidc/`
 beginnen, und hängen die aktuelle Seite als `target_link_uri` an; mod_auth_openidc erlaubt Rücksprünge nur auf die
 eigenen Hosts (`OIDCRedirectURLsAllowed`). Nach der Rückkehr ist `auth_time` neuer als `authAt`; `oidc_nutzer()` setzt
-damit `adminConfirmedAt` neu (Protokoll `reauth`).
+damit `adminConfirmedAt` neu (Protokoll `reauth`). Im Eingabebereich (`admin.js`) laufen **schreibende** Anfragen über ein
+eigenes Fenster: Rücksprungziel ist `admin/bestaetigt.html` (meldet „bestätigt“ und schließt sich), danach wiederholt
+`api()` die Anfrage – der Server entscheidet erneut, ob bestätigt ist. So gehen offene Dialoge (z. B. Kunde mit neuem
+Passwort, Mitarbeiterkonto) nicht verloren; vorher wurde die Seite gewechselt und die Änderung nie ausgeführt.
 
 **Abmelden:** Aktion `logout` verlangt bei bestehender Sitzung das CSRF-Token (ohne Sitzung geht sie immer), entfernt den Eintrag im Sitzungsregister, zerstört die PHP-Sitzung und liefert auf
 Keycloak-Hosts `abmelden` = `/oidc/callback?logout=https://<host>/dashboard/abgemeldet.html`. Der Browser folgt; das

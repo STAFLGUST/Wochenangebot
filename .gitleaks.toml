@@ -40,6 +40,8 @@ regexes = [
   # HR · Verknüpfung Mitarbeiterkonto (tests/e2e/test_hr.py)
   '''Urlaub-Konto-4711''',
   '''irgendwas-langes-1''',   # Anmeldeversuch für einen Mitarbeiter ohne Anmeldung (Verlauf von PR #119)
+  # Kunde mit Passwort bei abgelaufener Bestätigung (tests/oidc/test_oidc.py, Bestätigung im eigenen Fenster)
+  '''Fenster-Kundenpasswort-7''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]

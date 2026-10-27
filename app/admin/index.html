@@ -238,6 +238,16 @@
     <div class="dlg-foot"><button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary" id="reauth-submit">Bestätigen</button></div>
   </form>
 </dialog>
+<dialog class="modal" id="dlg-reauth-kc" aria-labelledby="rkc-title" aria-describedby="rkc-text" data-fest>
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="rkc-title">Kurz bestätigen</h2></div>
+    <div class="dlg-body">
+      <p id="rkc-text">Für diese Änderung bitte noch einmal bei der STAFL-Anmeldung anmelden. Das geschieht in einem eigenen Fenster – Ihre Eingaben bleiben hier erhalten und die Änderung wird danach automatisch ausgeführt.</p>
+      <p class="rkc-st" id="rkc-status" role="status"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn ghost" id="rkc-hier" hidden>Hier anmelden</button><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn" id="rkc-weiter" hidden>Angemeldet – weiter</button><button type="button" class="btn primary" id="rkc-auf">Jetzt bestätigen</button></div>
+  </div>
+</dialog>
 <dialog class="modal wide" id="dlg-order-admin" aria-labelledby="order-admin-title"></dialog>
 <!-- Bestätigung -->
 <dialog class="modal" id="dlg-of-gruppen" aria-labelledby="ofg-title"><div class="dlg" id="of-gruppen-body"></div></dialog>

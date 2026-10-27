@@ -210,8 +210,15 @@
       showEingabeWartung(data);
       throw Object.assign(new Error(data.error || 'Wartungsarbeiten.'), { status: 503, wartung: true });
     }
-    // Zentrale Anmeldung (Keycloak-Host): Bestätigung durch erneute Anmeldung bei Keycloak, danach zurück auf diese Seite
+    // Zentrale Anmeldung (Keycloak-Host): Bestätigung durch erneute Anmeldung bei Keycloak.
+    // Schreibende Aktionen (Speichern, Passwort setzen …): Anmeldung in einem eigenen Fenster, danach dieselbe Anfrage noch
+    // einmal – Dialog und Eingaben bleiben erhalten. Sonst (Seitenaufbau, Abfragen) wie bisher: ganze Seite zur Anmeldung.
     if (res.status === 403 && data?.code === 'reauth_required' && typeof data.anmelden === 'string' && data.anmelden.startsWith('/oidc/')) {
+      const versuch = opts.reauthVersuch || 0;
+      if (opts.body && versuch < 3) {
+        await bestaetigenPerFenster(data.anmelden, versuch > 0);
+        return api(action, { ...opts, reauthVersuch: versuch + 1 });
+      }
       try { if (unsaved()) await saveNow(); } catch { /* Entwurf bleibt lokal erhalten */ }
       location.assign(data.anmelden + encodeURIComponent(location.href));
       throw Object.assign(new Error(data.error || 'Bitte erneut anmelden.'), { status: 403 });
@@ -225,6 +232,62 @@
       throw Object.assign(new Error(msg), { status: res.status });
     }
     return data;
+  }
+
+  /* Bestätigung auf Keycloak-Hosts ohne Seitenwechsel: Hinweis-Dialog, Anmeldung in einem eigenen Fenster (Klick = Nutzergeste,
+     kein Popup-Blocker), Rücksprung auf admin/bestaetigt.html meldet sich per BroadcastChannel, postMessage bzw. localStorage
+     (alle nur gleicher Ursprung). Danach wiederholt api() die Anfrage – ob bestätigt ist, entscheidet allein der Server.
+     Blockiertes Fenster: Anmeldung wie bisher in diesem Fenster (Eingaben im offenen Dialog gehen dann verloren). */
+  let fensterBestaetigung = null;
+  function bestaetigenPerFenster(adresse, erneut) {
+    if (fensterBestaetigung) return fensterBestaetigung;
+    fensterBestaetigung = new Promise((resolve, reject) => {
+      const d = $('#dlg-reauth-kc'), st = $('#rkc-status'), auf = $('#rkc-auf'), weiter = $('#rkc-weiter'), hier = $('#rkc-hier');
+      let fertig = false, kanal = null;
+      const ziel = new URL('bestaetigt.html', location.href).href;
+      const ende = (fehler) => {
+        if (fertig) return;
+        fertig = true;
+        window.removeEventListener('message', onNachricht); window.removeEventListener('storage', onSpeicher);
+        try { if (kanal) kanal.close(); } catch { /* ohne BroadcastChannel */ }
+        d.removeEventListener('close', onClose);
+        auf.onclick = weiter.onclick = hier.onclick = null;
+        if (d.open) d.close();
+        fensterBestaetigung = null;
+        if (fehler) reject(fehler); else resolve();
+      };
+      const onClose = () => ende(Object.assign(new Error('Bestätigung abgebrochen. Die Änderung wurde nicht ausgeführt.'), { status: 403 }));
+      const onNachricht = (e) => { if (e.origin === location.origin && e.data && e.data.typ === 'stafl-bestaetigt') ende(); };
+      const onSpeicher = (e) => { if (e.key === 'stafl-bestaetigung' && e.newValue) ende(); };
+      try { kanal = new BroadcastChannel('stafl-bestaetigung'); kanal.onmessage = (e) => { if (e.data && e.data.typ === 'stafl-bestaetigt') ende(); }; } catch { /* älterer Browser */ }
+      window.addEventListener('message', onNachricht); window.addEventListener('storage', onSpeicher);
+      st.className = 'rkc-st' + (erneut ? ' st-warn' : '');
+      st.textContent = erneut ? 'Die Bestätigung ist noch nicht angekommen. Bitte im Anmeldefenster anmelden – danach geht es hier automatisch weiter.' : '';
+      weiter.hidden = !erneut; hier.hidden = true;
+      auf.textContent = erneut ? 'Anmeldefenster erneut öffnen' : 'Jetzt bestätigen';
+      auf.onclick = () => {
+        let w = null;
+        try { w = window.open(adresse + encodeURIComponent(ziel), 'stafl-bestaetigung', 'popup,width=520,height=760'); } catch { w = null; }
+        if (!w) {
+          st.className = 'rkc-st st-warn';
+          st.textContent = 'Das Anmeldefenster wurde vom Browser blockiert. Bitte Pop-ups für diese Seite erlauben – oder hier im Fenster anmelden (die Eingaben im offenen Dialog gehen dann verloren).';
+          hier.hidden = false;
+          return;
+        }
+        st.className = 'rkc-st';
+        st.textContent = 'Bitte im neuen Fenster anmelden. Danach schließt es sich, und Ihre Änderung wird hier automatisch ausgeführt.';
+        weiter.hidden = false;
+      };
+      weiter.onclick = () => ende();   // selbst weiter: der Server prüft die Bestätigung erneut
+      hier.onclick = async () => {
+        try { if (unsaved()) await saveNow(); } catch { /* Entwurf bleibt lokal erhalten */ }
+        location.assign(adresse + encodeURIComponent(location.href));
+      };
+      d.addEventListener('close', onClose);
+      d.showModal();
+      auf.focus();
+    });
+    return fensterBestaetigung;
   }
 
   /* Passwort nur für die Bestätigung übertragen, nicht speichern oder erneut mitsenden. */

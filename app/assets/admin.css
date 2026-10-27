@@ -2001,3 +2001,11 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
 .wb-ende { color: var(--accent); }
 .wb-auswahl { width: 100%; justify-content: center; border-style: dashed; }
 .ezp-fest { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Bestätigung über die STAFL-Anmeldung im eigenen Fenster (admin.js: bestaetigenPerFenster) */
+#dlg-reauth-kc .dlg-body p { margin: 0; }
+#dlg-reauth-kc .rkc-st:empty { display: none; }
+#dlg-reauth-kc .dlg-body .rkc-st { margin-top: 12px; font-size: 14px; color: var(--text-2); }
+#dlg-reauth-kc .dlg-foot { flex-wrap: wrap; }
+#dlg-reauth-kc #rkc-hier { margin-right: auto; }
+.bst-karte h1 { font-size: 19px; margin: 0; font-weight: 650; letter-spacing: -.015em; }

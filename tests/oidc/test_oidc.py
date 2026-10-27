@@ -108,13 +108,20 @@ class Legacy:
     def __init__(self):
         self.jar = http.cookiejar.CookieJar(); self.csrf = ''
 
-    def call(self, action, data=None):
+    def call(self, action, data=None, _erneut=True):
         h = {'Host': 'legacy.stafl.test', 'Content-Type': 'application/json', 'X-CSRF-Token': self.csrf, 'X-Forwarded-For': '198.51.100.9'}
         code, _, text = anfrage(LEGACY + '/api/?action=' + action, 'POST' if data is not None else 'GET',
                                 None if data is None else json.dumps(data).encode(), h, jar=self.jar)
         try: j = json.loads(text)
         except ValueError: j = {}
         if j.get('csrf'): self.csrf = j['csrf']
+        if action == 'login' and code == 200 and data:
+            self.pw = data.get('password')
+        # Vorbereitung über den bisherigen Zugang: Bestätigung (5 Minuten seit der Anmeldung) in langsamen Umgebungen
+        # abgelaufen → einmal mit dem Passwort bestätigen und wiederholen (Prüfungen der Bestätigung selbst laufen über Keycloak)
+        if _erneut and code == 403 and j.get('code') == 'confirmation_required' and getattr(self, 'pw', None):
+            if self.call('reauth', {'password': self.pw}, False)[0] == 200:
+                return self.call(action, data, False)
         return code, j
 
 
@@ -1120,6 +1127,47 @@ with sync_playwright() as pw:
     code, j = pg.evaluate(js.replace("'/api/", "'../api/"), ['kunde_delete', stw['csrf']])
     check('abgelaufen, Bestätigung über ein Recht: 403 „erneut anmelden“ statt Passwortabfrage', code == 403 and j.get('code') == 'reauth_required'
           and j.get('anmelden', '').startswith('/oidc/callback?iss='), (code, j))
+    # Kunde mit Startpasswort in der Verwaltung, Bestätigung abgelaufen: Bestätigung im eigenen Fenster, Kunden-Dialog und
+    # Eingaben bleiben, danach wird gespeichert – und der Kunde kommt mit dem Passwort auf der Kundenseite (bisheriger Host)
+    # hinein. Vorher: ganze Seite zur Anmeldung, Dialog weg, Passwort nie gespeichert („Benutzername oder Passwort ist nicht korrekt“).
+    t0 = time.time()
+    pg.click('#vt-kunden'); pg.wait_for_selector('#view-kunden #k-add')
+    pg.click('#k-add'); pg.wait_for_selector('#dlg-kunde[open] [name="firma"]')
+    pg.fill('#kunde-body [name="firma"]', 'Gasthaus Fenstertest')
+    pg.fill('#kunde-body [name="username"]', 'gasthaus.fenster')
+    if pg.locator('#kunde-body [name="pwmode"][value="manual"]').count():
+        pg.check('#kunde-body [name="pwmode"][value="manual"]')
+    pg.fill('#kunde-body [name="password"]', 'Fenster-Kundenpasswort-7')
+    pg.uncheck('#kunde-body [name="mustChange"]')
+    bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test')   # kann schon abgelaufen sein (Prüfung oben) – entscheidend ist der Stand
+    check('Kunde: Bestätigung in der Verwaltung nachgestellt abgelaufen', bestaetigung_stand(ctx, 'verwaltung.stafl.test') == 0, bestaetigung_stand(ctx, 'verwaltung.stafl.test'))
+    while time.time() - t0 < 2:   # max_age=0 fragt nur, wenn die letzte Anmeldung in einer früheren Sekunde lag (s. o.)
+        time.sleep(0.05)
+    pg.click('#kunde-body [type="submit"]')
+    pg.wait_for_selector('#dlg-reauth-kc[open]')
+    check('… Hinweis „Kurz bestätigen“ statt Seitenwechsel, Kunden-Dialog mit Eingaben bleibt offen',
+          pg.url.startswith(W + '/admin/') and pg.locator('#dlg-kunde[open]').count() == 1
+          and pg.input_value('#kunde-body [name="password"]') == 'Fenster-Kundenpasswort-7', pg.url)
+    pg.screenshot(path=os.path.join(SH, 'oidc_bestaetigung_fenster_1280.png'))
+    with ctx.expect_page() as _neu:
+        pg.click('#rkc-auf')
+    pop = _neu.value
+    pop.wait_for_selector('#password')
+    check('… eigenes Fenster: Keycloak verlangt erneut Passwort und zweiten Faktor', pop.url.startswith(L) and 'max_age=0' in urllib.parse.unquote(pop.url), pop.url)
+    pop.fill('#password', NUTZER['admin'][0]); pop.click('#kc-login')
+    pop.wait_for_selector('#otp'); pop.fill('#otp', totp(NUTZER['admin'][1], 1)); pop.click('#kc-login')
+    pg.wait_for_selector('#dlg-kunde', state='hidden', timeout=30000)
+    check('… danach automatisch gespeichert (Dialog zu, Hinweis „Gespeichert“)', 'Gespeichert' in pg.inner_text('#toast') and pg.locator('#dlg-reauth-kc[open]').count() == 0,
+          pg.inner_text('#toast'))
+    try:
+        pop.wait_for_event('close', timeout=10000); zu = True
+    except Exception:
+        zu = pop.is_closed()
+    check('… Anmeldefenster schließt sich selbst', zu, '' if zu else pop.url)
+    check('Protokoll: Passwort des Kunden gesetzt', any('Gasthaus Fenstertest' in str(e) and 'neu gesetzt' in str(e) for e in protokoll_roh()))
+    K = Legacy()
+    code, j = K.call('kunde_login', {'username': 'gasthaus.fenster', 'password': 'Fenster-Kundenpasswort-7'})
+    check('Kunde meldet sich auf der Kundenseite mit dem gesetzten Passwort an', code == 200 and j.get('ok'), (code, j))
     pg.goto(D + '/'); pg.wait_for_selector('#db-grid .db-tile')   # SSO auf den anderen Host
     pg.goto(A + '/oidc/callback?' + urllib.parse.urlencode({'iss': L + '/realms/mitarbeiter', 'target_link_uri': 'https://angreifer.example/'}))
     check('erneute Anmeldung leitet nie auf fremde Seiten (offene Weiterleitung)', urllib.parse.urlparse(pg.url).hostname != 'angreifer.example', pg.url)
