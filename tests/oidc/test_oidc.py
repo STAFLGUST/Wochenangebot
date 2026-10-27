@@ -684,11 +684,14 @@ with sync_playwright() as pw:
     check('Angebot: Knopf „Angebotsseite“ öffnet die Angebotsseite (nicht wieder den Editor)', ps.url == A + '/index.html' and ps.locator('#screen-editor').count() == 0
           and ps.locator('#kw-pill').count() == 1, ps.url)
     ps.close()
-    with ctx.expect_page() as _neu:
-        pa.click('#btn-preview')
-    ps = _neu.value; ps.wait_for_selector('#preview-banner:not([hidden])', timeout=30000)
-    check('Angebot: Vorschau öffnet den Entwurf auf der Angebotsseite (index.html?vorschau=1)', ps.url.startswith(A + '/index.html?vorschau=1'), ps.url)
-    ps.close()
+    # Vorschau seit 27.10.2026 als Fenster im Editor (iframe derselben Adresse) statt eines neuen Tabs
+    pa.click('#btn-preview'); pa.wait_for_selector('#dlg-vorschau[open] #pv-stage:not(.laden)', timeout=30000)
+    pa.wait_for_function("() => { const d = document.querySelector('#pv-frame').contentDocument; const l = d && d.querySelector('#list'); return !!(l && l.children.length); }", timeout=30000)
+    pv = pa.frame_locator('#pv-frame')
+    pvu = pa.eval_on_selector('#pv-frame', 'f => f.contentWindow.location.href')
+    check('Angebot: Vorschau zeigt den Entwurf der Angebotsseite im Fenster (index.html?vorschau=1, nicht den Editor)', pvu.startswith(A + '/index.html?vorschau=1&eingebettet=1')
+          and pv.locator('#screen-editor').count() == 0 and pv.locator('#preview-banner').is_hidden(), pvu)
+    pa.keyboard.press('Escape'); pa.wait_for_selector('#dlg-vorschau', state='hidden')
     # Sitzung des Dashboards auf dem anderen Host untergeschoben
     fremd = br.new_context(ignore_https_errors=True)
     fremd.add_cookies([{'name': n, 'value': c['value'], 'url': A + '/'} for n, c in k.items()])
