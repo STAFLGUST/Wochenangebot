@@ -8,6 +8,10 @@
 const { CATEGORY_ORDER, CONDITION_LABELS, PRICE_STATUS_LABELS } = window.OfferCore;
 const STORAGE = 'wochenangebot.';
 const PREVIEW = new URLSearchParams(location.search).has('vorschau');
+/* Vorschau im Fenster des Eingabebereichs (iframe, gleiche Adresse): Seite genau wie für Kunden, ohne eigenen
+   Vorschau-Hinweis und ohne „Zurück zum Eingabebereich“ – Hinweis und Schließen stehen im Fenster darüber */
+const EINGEBETTET = PREVIEW && new URLSearchParams(location.search).has('eingebettet') && window.parent !== window;
+if (EINGEBETTET) document.documentElement.classList.add('eingebettet');
 const DRUCKEN = new URLSearchParams(location.search).has('drucken');   // aus dem Eingabebereich: gleich den Druckdialog öffnen (Einzelangebote)
 /* Kundenangebot (?angebot=edeka): nur nach Anmeldung; ohne Angabe das öffentliche Wochenangebot */
 let OFFER = (() => { const v = new URLSearchParams(location.search).get('angebot') || ''; return /^[a-z0-9-]{1,40}$/.test(v) && v !== 'std' ? v : ''; })();
@@ -308,7 +312,7 @@ function renderBanner() {
     b.innerHTML = `<div class="banner-inner">${icon('info')}<p><strong>${esc(offerTitle())}</strong> – Kundenangebot, nur für angemeldete Nutzer sichtbar.</p></div>`;
     return;
   }
-  if (!PREVIEW) { b.hidden = true; return; }
+  if (!PREVIEW || EINGEBETTET) { b.hidden = true; return; }
   b.hidden = false;
   b.innerHTML = `<div class="banner-inner">${icon('info')}<p><strong>Vorschau des Entwurfs${OFFER ? ' · ' + esc(offerTitle()) : ''}</strong> – diese Fassung ist noch nicht veröffentlicht und nur für angemeldete Bearbeiter sichtbar.</p>
     <div class="banner-actions"><a class="btn sm" href="admin/">Zurück zum Eingabebereich</a></div></div>`;

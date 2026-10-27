@@ -59,11 +59,24 @@ with sync_playwright() as p:
     check('Angebotsseite öffnet die öffentliche Seite (veröffentlichter Stand, kein Editor)', ps.url.endswith('/index.html') and ps.locator('#screen-editor').count() == 0
           and ps.locator('#preview-banner').is_hidden(), ps.url)
     ps.close()
-    with ctx.expect_page() as neu:
-        a.click('#btn-preview')
-    ps = neu.value; ps.wait_for_selector('#preview-banner:not([hidden])')
-    check('Vorschau öffnet index.html?vorschau=1 mit dem Entwurf', '/index.html?vorschau=1' in ps.url, ps.url)
-    ps.close()
+    # Vorschau: Fenster im Eingabebereich mit der echten Angebotsseite (Entwurf), kein neuer Tab
+    a.click('#btn-preview'); a.wait_for_selector('#dlg-vorschau[open] #pv-stage:not(.laden)', timeout=15000)
+    src = a.get_attribute('#pv-frame', 'src') or ''
+    fr = a.frame_locator('#pv-frame')
+    fr.locator('#list').get_by_text('24,10').first.wait_for(timeout=10000)
+    check('Vorschau im Fenster: Angebotsseite mit dem Entwurf, ohne eigenen Hinweis und Rücksprung', '/index.html?vorschau=1&eingebettet=1' in src
+          and fr.locator('#preview-banner').is_hidden() and fr.locator('#screen-editor').count() == 0, src)
+    check('Vorschau: Fuß nennt unveröffentlichte Änderungen, Veröffentlichen erreichbar', 'noch nicht veröffentlicht' in a.inner_text('#pv-stand') and a.locator('#pv-publish').is_visible(), a.inner_text('#pv-stand'))
+    check('Vorschau: „Neuer Tab“ öffnet dieselbe Vorschau als eigene Seite', a.get_attribute('#pv-tab', 'href') == '../index.html?vorschau=1')
+    a.click('[data-pv-dev="mobil"]')
+    w = a.locator('#pv-frame').bounding_box()['width']
+    check('Vorschau: Darstellung Handy (390 px breit)', 380 <= w <= 410 and a.get_attribute('[data-pv-dev="mobil"]', 'aria-pressed') == 'true', w)
+    a.screenshot(path=SH + '/admin-vorschau.png')
+    a.click('[data-pv-dev="desktop"]')
+    a.click('#vorschau-body [data-close]'); a.wait_for_selector('#dlg-vorschau', state='hidden')
+    try: a.wait_for_function("document.querySelector('#pv-frame').getAttribute('src') === 'about:blank'", timeout=5000)
+    except Exception: pass
+    check('Vorschau schließen: zurück im Editor, Seite im Fenster entladen', a.locator('#view-edit').is_visible() and a.get_attribute('#pv-frame', 'src') == 'about:blank', a.get_attribute('#pv-frame', 'src'))
     a.reload(); a.wait_for_selector('tr[data-id]')
     check('draft persists after reload', row('10601').locator('input[data-f="price"]').input_value() == '24,10')
 

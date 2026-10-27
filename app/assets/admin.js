@@ -2125,6 +2125,61 @@
     toast(n ? `${plural(n, 'Artikel', 'Artikel')} aus „${offerShort(src)}“ übernommen${pct ? ` (${pct > 0 ? '+' : ''}${fmtNum.format(pct)} %)` : ''}.` : 'Keine Artikel übernommen.');
   });
 
+  /* ======================= Vorschau =======================
+     Fenster im Eingabebereich mit der echten Angebotsseite (iframe, gleiche Adresse, ?vorschau=1&eingebettet=1): Entwurf
+     des gewählten Angebots genau so, wie Kunden ihn nach dem Veröffentlichen sehen. Angebot und Darstellung (Computer/
+     Handy) umschaltbar; Schließen führt zurück in den Editor. Die Seite liest den gespeicherten Entwurf (vorher speichern). */
+  const dlgPv = $('#dlg-vorschau');
+  let pvOffer = OSTD, pvDev = store.get('vorschauGeraet', 'desktop') === 'mobil' ? 'mobil' : 'desktop';
+  const pvUrl = (oid, tab) => angebotsseite('?vorschau=1' + (tab ? '' : '&eingebettet=1') + (oid !== OSTD ? '&angebot=' + encodeURIComponent(oid) : '') + (tab ? '' : '&t=' + Date.now()));
+  function pvFuss() {
+    const n = pendingCount();
+    const pub = may('angebot.veroeffentlichen') && !ro;
+    $('#pv-stand').innerHTML = n ? `<span class="pv-dot"></span>${published ? plural(n, 'Änderung', 'Änderungen') + ' noch nicht veröffentlicht' : 'Noch nichts veröffentlicht'}`
+      : 'Keine unveröffentlichten Änderungen – entspricht der veröffentlichten Fassung';
+    const b = $('#pv-publish');
+    if (b) b.hidden = !pub || !n;
+  }
+  function pvLaden() {
+    const st = $('#pv-stage');
+    st.className = 'pv-stage ' + pvDev;
+    st.classList.add('laden');
+    const f = $('#pv-frame');
+    f.src = pvUrl(pvOffer);
+    $('#pv-tab').href = pvUrl(pvOffer, true);
+    for (const b of $$('#vorschau-body [data-pv-dev]')) b.setAttribute('aria-pressed', b.dataset.pvDev === pvDev);
+  }
+  async function openVorschau(oid) {
+    if (!model) return;
+    pvOffer = knownOffer(oid) ? oid : OSTD;
+    if (document.activeElement && document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true }));
+    const ids = [OSTD, ...offers.map((o) => o.id)];
+    $('#vorschau-body').innerHTML = `
+      <div class="dlg-head pv-head">
+        <div class="pv-t"><h2 id="pv-title">Vorschau</h2><p>Entwurf · so sehen Kunden das Angebot nach dem Veröffentlichen</p></div>
+        <label class="pv-sel"><span class="sr-only">Angebot</span><select id="pv-offer" aria-label="Angebot für die Vorschau">${ids.map((id) => `<option value="${esc(id)}"${id === pvOffer ? ' selected' : ''}>${esc(offerName(id))} (${fmtInt.format(memberCount(id))})</option>`).join('')}</select></label>
+        <div class="seg pv-dev" role="group" aria-label="Darstellung"><button type="button" data-pv-dev="desktop" aria-pressed="${pvDev === 'desktop'}">${icon('monitor', 'sm')}Computer</button><button type="button" data-pv-dev="mobil" aria-pressed="${pvDev === 'mobil'}">${icon('phone', 'sm')}Handy</button></div>
+        <a class="btn sm ghost pv-tab" id="pv-tab" href="#" target="_blank" rel="noopener" title="Vorschau in einem eigenen Tab öffnen">${icon('link', 'sm')}Neuer Tab</a>
+        <button class="btn icon ghost" type="button" data-close aria-label="Vorschau schließen">${icon('x')}</button>
+      </div>
+      <div class="pv-main"><div class="pv-stage ${pvDev} laden" id="pv-stage"><iframe id="pv-frame" title="Vorschau der Angebotsseite"></iframe><div class="pv-laden"><div class="spinner"></div>Vorschau wird geladen …</div></div></div>
+      <div class="dlg-foot pv-foot"><span class="pv-stand" id="pv-stand"></span><span class="spacer"></span>
+        <button type="button" class="btn" data-close>Zurück zum Editor</button>
+        <button type="button" class="btn primary" id="pv-publish" hidden>${icon('send')}Veröffentlichen</button></div>`;
+    $('#pv-frame').addEventListener('load', () => { const st = $('#pv-stage'); if (st) st.classList.remove('laden'); });
+    pvFuss();
+    if (!dlgPv.open) dlgPv.showModal();
+    if (unsaved()) { $('#pv-stand').textContent = 'Speichert den Entwurf …'; try { await saveNow(); } catch { /* Hinweis im Speicherstand */ } pvFuss(); }
+    pvLaden();
+  }
+  $('#vorschau-body').addEventListener('change', (e) => { if (e.target.id === 'pv-offer') { pvOffer = e.target.value; pvLaden(); } });
+  $('#vorschau-body').addEventListener('click', (e) => {
+    const d = e.target.closest('[data-pv-dev]');
+    if (d) { pvDev = d.dataset.pvDev; store.set('vorschauGeraet', pvDev); $('#pv-stage').classList.toggle('mobil', pvDev === 'mobil'); $('#pv-stage').classList.toggle('desktop', pvDev !== 'mobil'); for (const b of $$('#vorschau-body [data-pv-dev]')) b.setAttribute('aria-pressed', b.dataset.pvDev === pvDev); return; }
+    if (e.target.closest('#pv-publish')) { dlgPv.close(); setTimeout(openPublish, 0); }
+  });
+  dlgPv.addEventListener('close', () => { const f = $('#pv-frame'); if (f) f.src = 'about:blank'; });
+
   /* ======================= Veröffentlichen ======================= */
   const dlgPublish = $('#dlg-publish');
   function openPublish() {
@@ -2401,12 +2456,7 @@
   });
   $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
   $('#btn-add-group').addEventListener('click', addGroup);
-  $('#btn-preview').addEventListener('click', async () => {
-    const w = window.open('', '_blank');
-    if (unsaved()) await saveNow();
-    const u = angebotsseite('?vorschau=1' + (curOffer !== OSTD ? '&angebot=' + encodeURIComponent(curOffer) : ''));
-    if (w) w.location = u; else location.href = u;
-  });
+  $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
   /* Dialoge schließen per Klick daneben, Escape oder [data-close]. Dialoge mit data-fest (Formulare wie „Nutzer anlegen“)
      schließen nur über ihre Knöpfe – ein Klick daneben oder Escape verwirft keine Eingaben. */
@@ -2421,7 +2471,7 @@
 
   document.addEventListener('keydown', (e) => {
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !inField && !$('dialog[open]') && model) { e.preventDefault(); undo(); }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !inField && !$('dialog[open]') && model && currentView === 'edit') { e.preventDefault(); undo(); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && model && !ro) { e.preventDefault(); if (document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true })); saveNow(); }
   });
 
