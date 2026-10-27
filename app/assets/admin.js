@@ -999,29 +999,24 @@
     $('#dl-sections').innerHTML = secs.map((s) => `<option value="${esc(s)}">`).join('');
   }
 
+  /* Unveröffentlichte Änderungen: Zahl am Knopf „Veröffentlichen“, Aufstellung als Hinweis beim Darüberfahren
+     (die Leiste über dem Editor entfällt; die Einzelheiten zeigt der Dialog „Veröffentlichen“) */
   function renderChanges() {
-    const el = $('#changes');
-    if (!published) {
-      el.innerHTML = `<div class="chg has">${icon('info')}<span>Noch keine Veröffentlichung vorhanden – nach dem Veröffentlichen erscheint das Angebot auf der öffentlichen Seite.</span></div>`;
-      return;
-    }
+    const b = $('#btn-publish');
+    if (!b || !model) return;
+    if (!published) { b.title = 'Noch nichts veröffentlicht – nach dem Veröffentlichen erscheint das Angebot auf der Angebotsseite.'; return; }
     const vAll = vChanges(), sc = sChanges();
     const vh = vAll.filter((c) => c.offer === OSTD), vc = vAll.filter((c) => c.offer !== OSTD);
-    const n = diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vAll.length + sc.length + (metaChanged() ? 1 : 0);
-    if (!n) { el.innerHTML = ''; return; }
     const parts = [];
-    if (metaChanged()) parts.push(`<span class="chg-pill k-edit"><i></i>Kopfdaten geändert</span>`);
-    if (diff.priceChanged.length) parts.push(`<span class="chg-pill k-price"><i></i><b>${diff.priceChanged.length}</b> Preis${diff.priceChanged.length === 1 ? '' : 'e'} geändert</span>`);
-    if (diff.added.length) parts.push(`<span class="chg-pill k-new"><i></i><b>${diff.added.length}</b> neu</span>`);
-    if (diff.changed.length) parts.push(`<span class="chg-pill k-edit"><i></i><b>${diff.changed.length}</b> bearbeitet</span>`);
-    if (diff.removed.length) parts.push(`<span class="chg-pill k-del"><i></i><b>${diff.removed.length}</b> entfernt</span>`);
-    if (vc.length) {
-      const per = new Map(); vc.forEach((c) => per.set(c.offer, (per.get(c.offer) || 0) + 1));
-      parts.push(`<span class="chg-pill k-price" title="${esc([...per].map(([o, k]) => `${offerShort(o)}: ${k}`).join(' · '))}"><i></i><b>${vc.length}</b> Angebotspreis${vc.length === 1 ? '' : 'e'} geändert</span>`);
-    }
-    if (vh.length) parts.push(`<span class="chg-pill k-edit"><i></i><b>${vh.length}</b> im Wochenangebot hinzugefügt/entfernt</span>`);
-    if (sc.length) parts.push(`<span class="chg-pill k-price"><i></i><b>${sc.length}</b> Sonderpreis${sc.length === 1 ? '' : 'e'} geändert</span>`);
-    el.innerHTML = `<div class="chg has"><strong>Unveröffentlichte Änderungen:</strong>${parts.join('')}</div>`;
+    if (metaChanged()) parts.push('Kopfdaten geändert');
+    if (diff.priceChanged.length) parts.push(`${diff.priceChanged.length} Preis${diff.priceChanged.length === 1 ? '' : 'e'} geändert`);
+    if (diff.added.length) parts.push(`${diff.added.length} neu`);
+    if (diff.changed.length) parts.push(`${diff.changed.length} bearbeitet`);
+    if (diff.removed.length) parts.push(`${diff.removed.length} entfernt`);
+    if (vc.length) parts.push(`${vc.length} Angebotspreis${vc.length === 1 ? '' : 'e'} geändert`);
+    if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
+    if (sc.length) parts.push(`${sc.length} Sonderpreis${sc.length === 1 ? '' : 'e'} geändert`);
+    b.title = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
   }
   const pendingCount = () => (!model ? 0 : !published ? model.items.length : diff.added.length + diff.removed.length + diff.priceChanged.length + diff.changed.length + vChanges().length + sChanges().length + (metaChanged() ? 1 : 0));
   function updatePublishBtn() {
@@ -1314,7 +1309,6 @@
     if (act === 'sale' && tr) { openSale(tr.dataset.id); return; }
     if (act === 'remove' && tr) { ausAngebot(tr.dataset.id); return; }
     if (act === 'import') { pickFile(); return; }
-    if (act === 'add-group') { addGroup(); return; }
     if (act === 'add-art') { openArtikelwahl(); return; }
     if (act === 'copy') { openCopy(); return; }
     if (!g) return;
@@ -1350,18 +1344,6 @@
       : `„${it.name}“ aus „${offerShort(curOffer)}“ entfernt – andere Angebote bleiben unverändert.`, 5000);
   }
 
-  function addGroup() {
-    if (ro) return;
-    pushUndo();
-    const last = model.groups[model.groups.length - 1];
-    const g = { id: uid('g'), name: 'Neue Gruppe', section: last ? last.section : '' };
-    model.groups.push(g);
-    newItem(g.id);
-    changed({ render: true });
-    const inp = $(`[data-gid="${CSS.escape(g.id)}"] [data-gf="name"]`);
-    if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
-  }
-
   /* Kopfdaten */
   for (const [id, f] of [['#m-week', 'week'], ['#m-year', 'year'], ['#m-notice', 'notice']]) {
     $(id).addEventListener('change', (e) => {
@@ -1385,7 +1367,8 @@
     const it = iById(id);
     if (!it) return;
     itemId = id;
-    const groups = model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === it.groupId ? ' selected' : ''}>${esc(g.name)}</option>`).join('');
+    const groups = model.groups.map((g) => `<option value="${esc(g.id)}"${g.id === it.groupId ? ' selected' : ''}>${esc(g.name)}</option>`).join('')
+      + (ro ? '' : '<option value="__neu">+ Neue Gruppe …</option>');
     const sameGroup = model.items.filter((i) => i.groupId === it.groupId && inOffer(i, curOffer));
     const pos = sameGroup.indexOf(it);
     const inStd = inOffer(it, OSTD), drin = offersOf(it), eigen = explizit(it);
@@ -1446,9 +1429,17 @@
       const l = C.clean(el.value);
       if (l) it.price.label = l; else delete it.price.label;
     } else if (el.name === 'groupId') {
+      let ziel = el.value;
+      if (ziel === '__neu') {   // neue Angebotsgruppe direkt hinter der bisherigen; Name in der Gruppenüberschrift ändern
+        const alt = gById(it.groupId);
+        const g = { id: uid('g'), name: 'Neue Gruppe', section: alt ? alt.section || '' : '' };
+        model.groups.splice(alt ? model.groups.indexOf(alt) + 1 : model.groups.length, 0, g);
+        ziel = g.id;
+        neueGruppe = g.id;
+      }
       const idx = model.items.indexOf(it);
       model.items.splice(idx, 1);
-      it.groupId = el.value;
+      it.groupId = ziel;
       let last = -1;
       model.items.forEach((x, i) => { if (x.groupId === it.groupId) last = i; });
       model.items.splice(last + 1, 0, it);
@@ -1472,7 +1463,15 @@
     }
     if (JSON.stringify(model) !== snap) { undoStack.push(snap); $('#btn-undo').disabled = false; }
     changed({ render: true });
+    if (neueGruppe) {
+      const gid = neueGruppe; neueGruppe = null;
+      dlgItem.close();
+      const inp = $(`[data-gid="${CSS.escape(gid)}"] [data-gf="name"]`);
+      if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
+      toast('Neue Gruppe angelegt – jetzt den Namen eingeben.');
+    }
   });
+  let neueGruppe = null;
   dlgItem.addEventListener('click', async (e) => {
     if (e.target === dlgItem || e.target.closest('[data-close]')) { dlgItem.close(); return; }
     const b = e.target.closest('[data-ia]');
@@ -1709,8 +1708,8 @@
     const acts = [];
     if (may('sonderposten.senden')) acts.push(`<button type="button" class="btn sm ghost" data-ob="restposten" title="Sonderposten dieses Angebots per E-Mail an dessen Kunden senden">${icon('mail', 'sm')}Sonderposten senden</button>`);
     if (!ro) acts.push(`<button type="button" class="btn sm ghost" data-ob="copy" title="Artikel und Preise aus einem anderen Angebot übernehmen">${icon('copy', 'sm')}Aus anderem Angebot</button>`);
-    el.innerHTML = `<div class="oh-t"><span class="oh-art">${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</span><h2 id="oh-name">${esc(offerName(curOffer))}</h2>
-        <div class="oh-m">${pill}<span class="oh-n">${plural(n, 'Artikel', 'Artikel')}</span></div></div>
+    el.innerHTML = `<div class="oh-t"><h2 id="oh-name">${esc(offerName(curOffer))}</h2>
+        <div class="oh-m"><span class="oh-art">${curOffer === OSTD ? 'Öffentliches Angebot' : 'Kundenangebot'}</span>${pill}<span class="oh-n">${plural(n, 'Artikel', 'Artikel')}</span></div></div>
       ${acts.length ? `<div class="oh-act">${acts.join('')}</div>` : ''}
       ${followsStd(curOffer) ? `<div class="oh-folgt">${icon('info', 'sm')}<span><strong>Folgt dem Wochenangebot:</strong> Artikel des Wochenangebots erscheinen hier automatisch (ohne eigenen Preis mit dem Wochenpreis). Mit einer eigenen Artikelliste enthält das Angebot nur noch die Artikel, die Sie hier hinzufügen – andere Angebote beeinflussen es dann nicht mehr.</span>${may('angebote.verwalten') && !ro ? '<button type="button" class="btn sm" data-ob="umstellen">Auf eigene Artikelliste umstellen</button>' : ''}</div>` : ''}`;
   }
@@ -2455,7 +2454,6 @@
     if (a === 'open') { $('#send-hint').hidden = true; openSend(); }
   });
   $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
-  $('#btn-add-group').addEventListener('click', addGroup);
   $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
   /* Dialoge schließen per Klick daneben, Escape oder [data-close]. Dialoge mit data-fest (Formulare wie „Nutzer anlegen“)

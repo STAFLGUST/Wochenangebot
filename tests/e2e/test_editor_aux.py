@@ -61,11 +61,13 @@ with sync_playwright() as p:
     a.fill('#ed-q', 'Roastbeef'); a.wait_for_timeout(500)
     names = a.locator('#noprice-panel .nptab tbody td.np-name').all_inner_texts()
     check('editor search filters panel', all('roastbeef' in n.lower() for n in names), names[:5])
-    a.fill('#ed-q', ''); a.wait_for_timeout(500)
+    a.fill('#ed-q', '')
+    # erst weiter, wenn die Leiste wieder ungefiltert ist (sonst trifft der Klick eine veraltete Zeile)
+    a.wait_for_function('n => document.querySelectorAll("#noprice-panel .nptab tbody tr").length === n', arg=len(exp_np))
     # Ins Angebot übernehmen
     first = a.locator('#noprice-panel .nptab tbody tr:has([data-np=add])').first
     code = first.get_attribute('data-npcode'); name = first.locator('td.np-name').inner_text()
-    first.locator('[data-np=add]').click(); a.wait_for_selector(f'#dlg-ez-pick[open] #ezp-list [data-preis="{code}"]')
+    a.click(f'#noprice-panel .nptab tbody tr[data-npcode="{code}"] [data-np=add]'); a.wait_for_selector(f'#dlg-ez-pick[open] #ezp-list [data-preis="{code}"]')
     check('„Ins Angebot“ öffnet „Artikel hinzufügen“ mit dem Artikel markiert', a.is_checked(f'#ezp-list [data-sel="{code}"]') and a.input_value('#ezp-q') == code)
     a.fill(f'#ezp-list [data-preis="{code}"]', '9,99x'); a.click('#ezp-ok'); a.wait_for_selector('#ezp-anz .ezp-err')
     check('invalid price rejected', 'nicht lesbar' in a.inner_text('#ezp-anz'))
