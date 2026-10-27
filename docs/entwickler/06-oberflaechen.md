@@ -176,7 +176,7 @@ sonst wirft sie einen `Error` mit `status`. Zentral behandelt werden:
 | 403 `kein_modulzugang` | `zeigeKeinZugang(name)` – Seite wird verdeckt, nicht ersetzt |
 | 410 `umgezogen` | `zeigeUmgezogen(ziel)` – Hinweis, nach 1,5 s Weiterleitung |
 | 503 mit `wartung` und `bereich` | `showEingabeWartung()` – Wartungsseite für Nicht-Administratoren |
-| 403 `reauth_required` mit `anmelden` (`/oidc/…`) | ungespeicherten Entwurf sichern, dann erneute Anmeldung bei Keycloak, zurück auf dieselbe Adresse |
+| 403 `reauth_required` mit `anmelden` (`/oidc/…`) | **schreibende Anfrage** (mit `body`): Dialog `#dlg-reauth-kc` „Kurz bestätigen“, Anmeldung bei Keycloak in einem **eigenen Fenster** (`bestaetigenPerFenster`), Rücksprung auf `admin/bestaetigt.html` meldet sich per BroadcastChannel/postMessage/`storage` (nur gleicher Ursprung), danach dieselbe Anfrage noch einmal (höchstens drei Runden) – offene Dialoge und Eingaben bleiben erhalten. Blockiertes Fenster: „Hier anmelden“ wie bisher. **Sonst** (Seitenaufbau, Abfragen): ungespeicherten Entwurf sichern, erneute Anmeldung bei Keycloak im selben Fenster, zurück auf dieselbe Adresse |
 | 403 `confirmation_required` | Dialog `#dlg-reauth` (Passwort), danach **ein** automatischer Wiederholungsversuch |
 | sonst nicht `ok` | `Error(data.error)` bzw. „Serverfehler (…)“ |
 
