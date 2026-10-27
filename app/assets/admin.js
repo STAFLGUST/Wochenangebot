@@ -3674,6 +3674,44 @@
     model.groups.push(g);
     return g;
   }
+  /* Preise aus der Artikelauswahl lesen: Map(key → Preis | null) oder Fehlertext */
+  function preiseLesen(liste, preise, K) {
+    const ps = new Map();
+    for (const a of liste) {
+      const t = String(preise.get(K(a.code)) || '').trim();
+      if (!t) { ps.set(K(a.code), null); continue; }
+      const p = inputToPrice(t);
+      if (!p) return `Preis bei ${a.code} nicht lesbar – z. B. 12,50 oder „a. Anfr.“.`;
+      ps.set(K(a.code), p.status === 'none' ? null : p);
+    }
+    return ps;
+  }
+  /* Artikel der Auswahl in das gewählte Angebot aufnehmen (andere Angebote bleiben unverändert): steht der Artikel schon
+     in einem anderen Angebot, wird dieser Eintrag aufgenommen, sonst neu angelegt (Gruppe aus der VK-Gruppe).
+     Rückgabe: Map(key → Artikel-ID) */
+  function artikelAufnehmen(liste, ps, pool, K) {
+    const std = curOffer === OSTD;
+    const ids = new Map();
+    for (const a of liste) {
+      const p = ps.get(K(a.code));
+      const vorh = (pool.get(S.normCode(a.code)) || []).find((x) => !inOffer(x, curOffer));
+      if (vorh) { aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
+      const g = zielGruppe(a, true);
+      const m = masterOf(a.code);
+      const name = C.stripFrisch(C.clean((m && m.name) || a.name || a.code));
+      const it = { id: uid('n'), code: a.code, name, ...C.suggestAttributes(name, g.name, g.section || ''), groupId: g.id, price: std && p ? p : { status: 'none' }, altPrices: [] };
+      const quelle = m || a;
+      if (C.CATEGORY_ORDER.includes(quelle.category)) it.category = quelle.category;
+      if (C.CONDITIONS.includes(quelle.condition)) it.condition = quelle.condition;
+      if (quelle.origin) it.origin = quelle.origin;
+      let at = -1;
+      model.items.forEach((x, i) => { if (x.groupId === g.id) at = i; });
+      model.items.splice(at < 0 ? model.items.length : at + 1, 0, it);
+      if (!std) { nurIn(it, curOffer); aufnehmen(it, curOffer, p); }
+      ids.set(K(a.code), it.id);
+    }
+    return ids;
+  }
   async function openArtikelwahl(opt = {}) {
     if (ro || !model) return;
     awFest = opt.gruppe || null;
@@ -3725,34 +3763,10 @@
         if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
       },
       uebernehmen(liste, preise) {
-        const ps = new Map();
-        for (const a of liste) {
-          const t = String(preise.get(K(a.code)) || '').trim();
-          if (!t) { ps.set(K(a.code), null); continue; }
-          const p = inputToPrice(t);
-          if (!p) return `Preis bei ${a.code} nicht lesbar – z. B. 12,50 oder „a. Anfr.“.`;
-          ps.set(K(a.code), p.status === 'none' ? null : p);
-        }
+        const ps = preiseLesen(liste, preise, K);
+        if (typeof ps === 'string') return ps;
         pushUndo();
-        const neu = [];
-        for (const a of liste) {
-          const p = ps.get(K(a.code));
-          const vorh = (pool.get(S.normCode(a.code)) || []).find((x) => !inOffer(x, curOffer));
-          if (vorh) { aufnehmen(vorh, curOffer, p); neu.push(vorh.id); continue; }   // steht schon in einem anderen Angebot
-          const g = zielGruppe(a, true);
-          const m = masterOf(a.code);
-          const name = C.stripFrisch(C.clean((m && m.name) || a.name || a.code));
-          const it = { id: uid('n'), code: a.code, name, ...C.suggestAttributes(name, g.name, g.section || ''), groupId: g.id, price: std && p ? p : { status: 'none' }, altPrices: [] };
-          const quelle = m || a;
-          if (C.CATEGORY_ORDER.includes(quelle.category)) it.category = quelle.category;
-          if (C.CONDITIONS.includes(quelle.condition)) it.condition = quelle.condition;
-          if (quelle.origin) it.origin = quelle.origin;
-          let at = -1;
-          model.items.forEach((x, i) => { if (x.groupId === g.id) at = i; });
-          model.items.splice(at < 0 ? model.items.length : at + 1, 0, it);
-          if (!std) { nurIn(it, curOffer); aufnehmen(it, curOffer, p); }
-          neu.push(it.id);
-        }
+        const neu = [...artikelAufnehmen(liste, ps, pool, K).values()];
         changed({ render: true });
         const first = neu.map((id) => $(`tr[data-id="${CSS.escape(id)}"]`)).find(Boolean);
         if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -3764,19 +3778,89 @@
   }
   $('#btn-add-art').addEventListener('click', () => openArtikelwahl());
   /* Werbung schalten: Artikel des gewählten Angebots (in der Reihenfolge des Editors) an admin-werbung.js übergeben */
-  function openWerbung() {
-    if (!model || !window.WA.werbung) return;
-    const oid = curOffer;
+  /* Artikel eines Angebots für das Fenster „Werbung schalten“ (Reihenfolge wie im Editor) */
+  function werbKandidaten(oid) {
     const gi = new Map(model.groups.map((g, i) => [g.id, i]));
-    const artikel = model.items.map((it, i) => ({ it, i })).filter((x) => inOffer(x.it, oid))
+    return model.items.map((it, i) => ({ it, i })).filter((x) => inOffer(x.it, oid))
       .sort((a, b) => (gi.get(a.it.groupId) ?? 1e9) - (gi.get(b.it.groupId) ?? 1e9) || a.i - b.i)
       .map(({ it }) => {
         const sv = C.saleFor(it, oid), p = effPrice(it, oid);
         return { id: it.id, code: it.code || '', name: it.name, merkmale: [it.origin, it.condition !== 'unbekannt' ? C.CONDITION_LABELS[it.condition] : ''].filter(Boolean).join(' · '),
           preis: sv != null ? 'Sonderpreis ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
       });
+  }
+  /* Artikelauswahl für die Werbung (gemeinsames Fenster admin-artikelwahl.js): Filter „nur in diesem Angebot“ voreingestellt,
+     Bestand sichtbar, aber ohne Filter; beworbene Artikel vorausgewählt. Artikel, die noch nicht im Angebot stehen
+     (Filter aus), werden mit Preis aufgenommen wie bei „Artikel hinzufügen“. fertig(ids, artikel) gibt die Auswahl zurück. */
+  const werbZustand = { grp: '*', nurBestand: false, nurAngebot: true };
+  async function werbungAuswahl(oid, ids, fertig) {
+    if (ro || oid !== curOffer) return;
+    let d;
+    try { d = await ladeArtikelwahl(); } catch (ex) { toast(ex.message, 6000); return; }
+    awFest = null;
+    Object.assign(werbZustand, { grp: '*', nurAngebot: true, nurBestand: false });   // jedes Mal: alle Gruppen, nur dieses Angebot, Bestand ohne Filter
+    const K = window.WA.artikelwahl.key, std = oid === OSTD;
+    const pool = poolByCode();
+    const ohneNr = (it) => '~' + it.id;   // Positionen ohne Artikelnummer: eigener Schlüssel, ohne angezeigte Nummer
+    const byIdM = new Map(model.items.map((i) => [i.id, i]));
+    const idVon = new Map();               // Schlüssel → Artikel im Angebot (beworbene zuerst)
+    for (const id of ids) { const it = byIdM.get(id); if (it) idVon.set(K(it.code || ohneNr(it)), it.id); }
+    for (const it of model.items) if (inOffer(it, oid)) { const k = K(it.code || ohneNr(it)); if (!idVon.has(k)) idVon.set(k, it.id); }
+    const leer = d.bestand ? { kg: 0, incomingKg: 0, totalKg: 0, mhd: null, lots: [], incoming: [] } : {};
+    const art = new Map();
+    const eintrag = (a, items) => {
+      const hier = idVon.get(K(a.code)), it = hier && byIdM.get(hier), stdIt = items.find((i) => inOffer(i, OSTD));
+      return { ...a, name: (it && it.name) || (items[0] && items[0].name) || a.name, stdPrice: stdIt ? stdIt.price : null, inOffer: !!it, hier: it ? effPrice(it, oid) : null };
+    };
+    for (const a of d.articles) art.set(K(a.code), eintrag(a, pool.get(S.normCode(a.code)) || []));
+    for (const items of pool.values()) {   // Artikelnummern nur im Entwurf (ohne Stammdaten und Bestand)
+      const it = items[0];
+      if (!art.has(K(it.code))) art.set(K(it.code), eintrag({ code: it.code, name: it.name, category: it.category, origin: it.origin, condition: it.condition, vk: null, ...leer }, items));
+    }
+    for (const it of model.items) if (!it.code && inOffer(it, oid)) {
+      art.set(K(ohneNr(it)), { code: ohneNr(it), nr: '', name: it.name, category: it.category, origin: it.origin, condition: it.condition, vk: null, ...leer, stdPrice: inOffer(it, OSTD) ? it.price : null, inOffer: true, hier: effPrice(it, oid) });
+    }
+    const vorschlag = (a) => {
+      if (!std && a.stdPrice && (a.stdPrice.status === 'value' || a.stdPrice.status === 'request')) return priceToInput(a.stdPrice);
+      const h = prevOf({ code: a.code, name: a.name });
+      const pp = h ? effPrice(h, oid) : null;
+      return pp && (pp.status === 'value' || pp.status === 'request') ? priceToInput(pp) : '';
+    };
+    window.WA.artikelwahl.oeffnen({
+      artikel: art, meta: { bestand: d.bestand, angebot: { week: model.meta.week }, ek: false, vk: d.vk }, zustand: werbZustand,
+      titel: 'Artikel für die Werbung',
+      subHTML: `Werbung in <strong>${esc(offerName(oid))}</strong> · höchstens ${WERB_MAX} Artikel · Reihenfolge und Hinweise danach im Fenster „Werbung schalten“`,
+      drin: () => new Set(), angebotText: `nur in „${offerShort(oid)}“`,
+      preis: { titel: 'Preis hier', fest: (a) => (!a.inOffer ? null : !a.hier ? '' : a.hier.status === 'value' ? fmtNum.format(a.hier.value) + ' €' : a.hier.status === 'request' ? 'a. Anfr.' : '–'), vorschlag, platzhalter: () => (std ? 'ohne Preis' : 'a. Anfr.') },
+      fussText: 'Artikel, die noch nicht im Angebot stehen, werden mit dem Preis aufgenommen.',
+      max: WERB_MAX, maxText: `Höchstens ${WERB_MAX} Artikel in der Werbung – bitte Auswahl verkleinern.`,
+      okVerb: 'übernehmen', okLeer: 'Übernehmen', leerText: 'Artikel markieren, die beworben werden sollen.',
+      vorauswahl: ids.map((id) => { const it = byIdM.get(id); return it ? it.code || ohneNr(it) : null; }).filter(Boolean),
+      uebernehmen(liste, preise) {
+        if (oid !== curOffer) return true;
+        const neuL = liste.filter((a) => !a.inOffer);
+        const ps = preiseLesen(neuL, preise, K);
+        if (typeof ps === 'string') return ps;
+        let neu = new Map();
+        if (neuL.length) {
+          pushUndo();
+          neu = artikelAufnehmen(neuL, ps, pool, K);
+          changed({ render: true });
+          toast(`${plural(neuL.length, 'Artikel', 'Artikel')} in „${offerShort(oid)}“ aufgenommen – andere Angebote bleiben unverändert.`, 5000);
+        }
+        // Reihenfolge: bisher beworbene zuerst (wie gehabt), dann die neu markierten in der Reihenfolge der Auswahl
+        const aus = liste.map((a) => idVon.get(K(a.code)) || neu.get(K(a.code))).filter(Boolean);
+        fertig([...ids.filter((id) => aus.includes(id)), ...aus.filter((id) => !ids.includes(id))], werbKandidaten(oid));
+        return true;
+      },
+    });
+  }
+  function openWerbung() {
+    if (!model || !window.WA.werbung) return;
+    const oid = curOffer;
     window.WA.werbung.oeffnen({
-      angebot: offerShort(oid), eintrag: werbungVon(oid), artikel, max: WERB_MAX, ro,
+      angebot: offerShort(oid), eintrag: werbungVon(oid), artikel: werbKandidaten(oid), max: WERB_MAX, ro,
+      auswaehlen: (ids, fertig) => werbungAuswahl(oid, ids, fertig),
       uebernehmen(e) {
         if (ro || oid !== curOffer) return;
         if (!e && !werbungVon(oid)) return;

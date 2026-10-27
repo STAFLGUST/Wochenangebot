@@ -210,13 +210,21 @@ die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Der Excel-Import erset
 
 Knopf „Werbung“ in der Werkzeugleiste (Zahl = beworbene Artikel des gewählten Angebots): `openWerbung()` (`admin.js`)
 übergibt die Artikel des Angebots an das Fenster `admin-werbung.js` (`WA.werbung.oeffnen(cfg)`: Überschrift, Werbetext,
-bis zu 12 Artikel mit Reihenfolge und Hinweis; Leser nur ansehen). Gespeichert wird in `model.meta.werbung[<Angebot>]`
+bis zu 12 Artikel mit Reihenfolge und Hinweis; Leser nur ansehen). „Artikel auswählen …“ öffnet über den Rückruf
+`auswaehlen` die gemeinsame Artikelauswahl (`werbungAuswahl()`: `WA.artikelwahl.oeffnen` mit Filter „nur in diesem
+Angebot“, alle Gruppen, Bestand ohne Filter, beworbene vorausgewählt, höchstens 12; Artikel außerhalb des Angebots
+nimmt `artikelAufnehmen()` – dieselbe Funktion wie „Artikel hinzufügen“ – mit Preis auf; Positionen ohne Artikelnummer
+erscheinen mit eigenem Schlüssel ohne Nummer). Die Artikelauswahl kennt dafür `preis.fest(a)` (Preis als Text statt
+Eingabefeld) und `a.nr` (angezeigte Nummer); `spannen()` passt die colspan der Gruppen-/Detailzeilen an die sichtbaren
+Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]`
 (Entwurf, sichtbar nach „Veröffentlichen“; Rücknahme je Angebot im Veröffentlichen-Dialog). `werbungBereinigen()` nimmt
 bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; der Excel-Import überträgt die Werbung auf die
 Artikel mit derselben Nummer (`werbungUebernehmen()`); `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
 tragen `tr.e-werb` und das Kennzeichen „Werbung“. Auf der Angebotsseite (`frontend.js`, `werbungHTML()`) steht oben ein
-farbiger Block (`.werb-block`, nur ohne Suche/Filter in „Alle Artikel“), beworbene Zeilen/Kacheln tragen `.werb-an` und
-den Hinweis als Kennzeichen; ein Klick auf eine Karte zeigt die Zeile in der Liste.
+eigener Abschnitt im Aufbau der Liste (`.werb-sec`: Band `.werb-st` in der Akzentfarbe mit Überschrift und Text, darunter
+die Artikel mit `plBlockHTML(…, 'werb')` als normale Zeilen in den Spalten der Liste; Bestell- und Kachelansicht: in eigener
+Karte; nur ohne Suche/Filter in „Alle Artikel“). Beworbene Zeilen/Kacheln der Liste tragen `.werb-an` und den Hinweis
+(sonst „Empfehlung“) als Kennzeichen.
 
 ### Vorschau
 

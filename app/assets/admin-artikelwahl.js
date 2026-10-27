@@ -41,7 +41,8 @@
   /* Aufrufer und Zustand des geöffneten Fensters:
      cfg = { artikel: Map(key → Artikel), meta: { bestand, angebot, ek, vk: Map(nr → {nr, name}) }, titel, sub,
              zustand: {grp, nurBestand, nurAngebot} (bleibt beim Aufrufer erhalten), drin(): Set(key) schon enthalten,
-             drinText, angebotText (Filter „nur im …“), preis: null | {titel, vorschlag(a), platzhalter(a)},
+             drinText, angebotText (Filter „nur im …“), preis: null | {titel, vorschlag(a), platzhalter(a), fest(a)?: Text statt Eingabe},
+             Artikel optional mit nr (angezeigte Nummer, z. B. '' für Positionen ohne Artikelnummer),
              ziel: null | (a) → Text der Zielgruppe, zielHinweis, fussText, max, maxText, extra: [{id, label, icon}],
              onExtra(id), vorauswahl: [Artikelnummern], q: Suchtext beim Öffnen,
              uebernehmen(liste, preise: Map(key → Eingabe)) → true (schließen) | Fehlertext } */
@@ -131,6 +132,8 @@
   }
   function preisFeld(a, k) {
     if (!cfg.preis) return '';
+    const fest = cfg.preis.fest ? cfg.preis.fest(a) : null;   // z. B. Preis eines Artikels, der schon im Angebot steht
+    if (fest != null) return `<td class="num ezp-pr"><span class="ezp-fest">${esc(fest)}</span></td>`;
     if (!pk.sel.has(k)) return '<td class="num ezp-pr"><span class="muted">–</span></td>';
     const v = pk.preise.has(k) ? pk.preise.get(k) : cfg.preis.vorschlag(a);
     return `<td class="num ezp-pr"><input class="in num ezp-pin" data-preis="${esc(a.code)}" inputmode="decimal" value="${esc(v)}" placeholder="${esc(cfg.preis.platzhalter ? cfg.preis.platzhalter(a) : '')}" aria-label="Preis für ${esc(a.code)} in Euro je kg"></td>`;
@@ -163,9 +166,9 @@
           const eta = naechsteEta(a);
           h += `<tr class="ezp-z${sel ? ' sel' : ''}${ist ? ' drin' : ''}${auf ? ' auf' : ''}" data-code="${esc(a.code)}">
             <td class="ezp-c"><input type="checkbox" data-sel="${esc(a.code)}"${sel || ist ? ' checked' : ''}${ist ? ' disabled' : ''} aria-label="${esc(a.code + ' ' + (a.name || ''))} auswählen"></td>
-            <td class="ezp-nr">${esc(a.code)}</td>
+            <td class="ezp-nr">${esc(a.nr !== undefined ? a.nr : a.code)}</td>
             <td class="ezp-n"><span>${esc(a.name || '(ohne Bezeichnung)')}</span>${ist ? ` <span class="ez-tag ezp-drin">${esc(cfg.drinText || 'im Angebot')}</span>` : ''}${merk ? `<small>${esc(merk)}</small>` : ''}
-              ${mitB ? `<small class="ezp-mob">${cfg.preis ? esc(a.code) + ' · ' : ''}${a.totalKg > 0 ? esc(fmtKg(a.totalKg)) + ' kg verfügbar' : 'kein Bestand'}${cfg.preis && a.stdPrice ? ' · Wochenpreis ' + stdText(a.stdPrice) : ''}</small>` : ''}</td>
+              ${mitB ? `<small class="ezp-mob">${cfg.preis && (a.nr !== undefined ? a.nr : a.code) ? esc(a.nr !== undefined ? a.nr : a.code) + ' · ' : ''}${a.totalKg > 0 ? esc(fmtKg(a.totalKg)) + ' kg verfügbar' : 'kein Bestand'}${cfg.preis && a.stdPrice ? ' · Wochenpreis ' + stdText(a.stdPrice) : ''}</small>` : ''}</td>
             ${mitB ? `<td class="num ezp-kg">${a.kg > 0 ? `<b>${esc(fmtKg(a.kg))} kg</b>` : '<span class="ez-kein">kein Bestand</span>'}</td>
               <td class="num ezp-m">${a.incomingKg > 0 ? esc(fmtKg(a.incomingKg)) + ' kg' + (eta ? `<small class="ezp-eta">ETA ${esc(dm(eta))}</small>` : '') : '<span class="muted">–</span>'}</td>
               <td class="ezp-m">${a.mhd ? esc(dmy(a.mhd)) : '<span class="muted">–</span>'}</td>` : ''}
@@ -176,7 +179,17 @@
           return h;
         }).join('')}</tbody></table></div>` : '<p class="hint ezp-leer">Keine Artikel – Filter oder Suche anpassen.</p>'}
       ${zeilen.length > l.length ? `<p class="hint">… ${zeilen.length - l.length} weitere – Suche eingrenzen.</p>` : ''}`;
+    spannen();
   }
+  /* Gruppen- und Detailzeilen überspannen nur die sichtbaren Spalten: auf dem Handy blendet das Stylesheet Spalten aus –
+     ein zu großes colspan erzeugt sonst leere Spalten, die der Bezeichnung (feste Tabellenbreite) den Platz nehmen */
+  function spannen() {
+    const t = $('#ezp-list .ezp-tab');
+    if (!t) return;
+    const n = [...t.tHead.rows[0].cells].filter((c) => getComputedStyle(c).display !== 'none').length;
+    for (const td of t.querySelectorAll('tr.ezp-gr > td, tr.ezp-det > td')) td.colSpan = n;
+  }
+  addEventListener('resize', () => { if (cfg && dlg.open) spannen(); });
   const gewaehlt = () => [...cfg.artikel.values()].filter((a) => pk.sel.has(key(a.code)) && !drinSet().has(key(a.code)))
     .sort((a, b) => (!a.vk) - (!b.vk) || nat(a.vk || '', b.vk || '') || nat(a.code, b.code));
   function renderPickFoot(fehler) {

@@ -43,6 +43,8 @@ with sync_playwright() as p:
     r = post(a, 'stock_import', {'date': '2026-10-16', 'source': 'Bestand_16.10.26.XLS', 'articles': articles}); check('stock stored', r[0] == 200, r[1] if r[0] != 200 else '')
     a.reload(); a.wait_for_selector('tr[data-id]')
     a.wait_for_function("document.querySelector('#groups:not(.no-stock):not(.no-prev)') && document.querySelector('#noprice-panel:not([hidden])')", timeout=10000)
+    # Kopfzeile wird nach dem Laden von Bestand/Vorwoche nachgezogen – auf den fertigen Stand warten
+    a.wait_for_function("(() => { const t = document.querySelector('.gcard thead'); return t && t.textContent.includes('Stand 16.10.26') && t.textContent.includes('KW 42/26'); })()", timeout=10000)
     th = a.locator('.gcard').first.locator('thead').inner_text()
     check('headers: Vorwoche KW 42/26, Preis KW 43, Bestand', 'Vorwoche' in th and 'KW 42/26' in th and 'KW 43' in th and 'Bestand' in th and 'Stand 16.10.26' in th, re.sub(r'\s+', ' ', th))
     row = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
