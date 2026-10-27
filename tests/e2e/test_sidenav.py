@@ -13,8 +13,8 @@ with sync_playwright() as p:
     a = br.new_page(viewport={'width': 1711, 'height': 1000}); a.on('pageerror', lambda e: errs.append(str(e)))
     login(a, 'admin', 'Sicheres-Passwort-1'); a.wait_for_timeout(300)
     check('eigene Anmeldung (ohne zentrale Anmeldung): kein Dashboard-Knopf', a.locator('#btn-dashboard').count() == 1 and a.locator('#btn-dashboard').is_hidden())
-    boxes = [a.locator('#vt-' + v).bounding_box() for v in ['edit', 'hist', 'stock', 'master', 'users', 'log', 'sec']]
-    check('tabs stacked vertically', all(boxes[i+1]['y'] > boxes[i]['y'] and abs(boxes[i+1]['x'] - boxes[i]['x']) < 1 for i in range(6)))
+    boxes = [a.locator('#vt-' + v).bounding_box() for v in ['edit', 'hist', 'stock', 'master', 'users', 'log']]
+    check('tabs stacked vertically', all(boxes[i+1]['y'] > boxes[i]['y'] and abs(boxes[i+1]['x'] - boxes[i]['x']) < 1 for i in range(len(boxes) - 1)))
     main = a.locator('main.adm-page').bounding_box()
     check('nav left of content', boxes[0]['x'] + boxes[0]['width'] <= main['x'] + 1, (boxes[0], main['x']))
     check('Verwaltung heading for admin', a.locator('#side-admin').is_visible())
@@ -22,7 +22,7 @@ with sync_playwright() as p:
     a.mouse.wheel(0, 1500); a.wait_for_timeout(300)
     b2 = a.locator('#vt-edit').bounding_box(); tb = a.locator('#topbar').bounding_box()
     check('nav sticky under topbar', b2['y'] >= tb['height'] - 1 and b2['y'] < tb['height'] + 40, (b2['y'], tb['height']))
-    for v in ['hist', 'stock', 'master', 'users', 'log', 'sec', 'edit']:
+    for v in ['hist', 'stock', 'master', 'users', 'log', 'edit']:
         a.click('#vt-' + v); a.wait_for_timeout(250)
     check('switching views works', a.locator('#view-edit').is_visible() and a.get_attribute('#vt-edit', 'aria-selected') == 'true')
     a.click('#vt-hist'); a.wait_for_timeout(500)
@@ -140,9 +140,9 @@ with sync_playwright() as p:
     # Leser-Konto mit der frischen Anmeldung anlegen: user_save braucht eine Bestätigung jünger als 5 Minuten – mit der
     # Sitzung vom Testbeginn scheiterte das unter Last still (danach fehlte das Leser-Konto in der Liste)
     d.evaluate("async () => { const s = await (await fetch('/api/?action=status')).json(); await fetch('/api/?action=user_save', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({name:'Lea', username:'lea', role:'viewer', active:true, password:'Leserin-Zugang-11', mustChange:false})}); }")
-    d.click('#vt-sec'); d.wait_for_selector('#vt-sec[aria-selected="true"]')
-    check('1440×900: side navigation scrolls the active entry (System, last) into view', d.evaluate("document.querySelector('.side-nav').scrollHeight > document.querySelector('.side-nav').clientHeight")
-          and innen(d, '#vt-sec', '.side-nav'))
+    d.click('#vt-log'); d.wait_for_selector('#vt-log[aria-selected="true"]')
+    check('1440×900: side navigation scrolls the active entry (Protokoll, last) into view', d.evaluate("document.querySelector('.side-nav').scrollHeight > document.querySelector('.side-nav').clientHeight")
+          and innen(d, '#vt-log', '.side-nav'))
     d.click('#vt-edit'); d.wait_for_selector('#offer-bar .ob-tabs button small')
     for th in ('light', 'dark'):
         d.evaluate(f"document.documentElement.dataset.theme = '{th}'")
@@ -170,9 +170,8 @@ with sync_playwright() as p:
     # Handy mit Fingerbedienung: aktive Ansicht in der Spur sichtbar, Zielgrößen ≥ 36 px, Kontrast, Dialogkopf, Fußleisten
     h = br.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True); h.on('pageerror', lambda x: errs.append(str(x)))
     login(h, 'admin', 'Sicheres-Passwort-1')
-    h.click('#vt-sec'); h.wait_for_selector('#view-sec #sic-umzug')
-    check('390 px: active entry (System) scrolled into view in the navigation track', innen(h, '#vt-sec', '.side-tabs'))
-    check('390 px: link to the security module fits', h.evaluate("document.querySelector('#sic-link').getBoundingClientRect().right <= innerWidth"))
+    h.click('#vt-log'); h.wait_for_selector('#vt-log[aria-selected="true"]')
+    check('390 px: active entry (Protokoll, last) scrolled into view in the navigation track', innen(h, '#vt-log', '.side-tabs'))
     hs = h.evaluate("[...document.querySelectorAll('.side-tabs button')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height))")
     check('390 px touch: navigation entries at least 36 px high', hs and min(hs) >= 36, hs)
     k = h.evaluate(KONTRAST, '.side-tabs button[aria-selected="false"]:not([hidden])')
@@ -222,7 +221,7 @@ with sync_playwright() as p:
         v.evaluate("location.hash = 'users'"); v.wait_for_function("location.hash === '#users'")
         check(f'{w}px … #users in der Adresse öffnet keine Nutzerverwaltung', v.is_hidden('#view-users') and v.is_visible('#view-importe'))
         v.goto(B + '/admin/'); v.wait_for_function("!document.querySelector('#vt-users').hidden")
-        check(f'{w}px Kachel „Verwaltung“: alle Verwaltungsbereiche mit Seitenleiste', {'importe', 'users', 'log', 'sec'} <= set(v.evaluate(sichtbar_js)) and 'schutz' not in set(v.evaluate(sichtbar_js))
+        check(f'{w}px Kachel „Verwaltung“: alle Verwaltungsbereiche mit Seitenleiste', {'importe', 'users', 'log'} <= set(v.evaluate(sichtbar_js)) and not {'schutz', 'sec'} & set(v.evaluate(sichtbar_js))
               and v.is_visible('.side-nav') and v.text_content('#topbar h1') == 'Verwaltung', v.evaluate(sichtbar_js))
         v.close()
     check('no JS errors', not errs, errs)
