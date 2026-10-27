@@ -188,7 +188,7 @@
       if (f.phase && k.crm.phase !== f.phase) return false;
       if (f.vertreter && k.vertreter !== f.vertreter && k.vertreter2 !== f.vertreter) return false;
       if (!q) return true;
-      if (!k._suche) k._suche = [k.firma, k.nr, k.ort, k.plz, k.email, k.telefon, k.ansprechpartner, vName(k.vertreter), vName(k.vertreter2),
+      if (!k._suche) k._suche = [k.firma, k.nr, k.gruppe, k.gruppeNr ? 'KG ' + k.gruppeNr : '', k.ort, k.plz, k.email, k.telefon, k.ansprechpartner, vName(k.vertreter), vName(k.vertreter2),
         ...k.crm.kontakte.flatMap((p) => [p.name, p.funktion, p.telefon, p.email])].join(' ').toLocaleLowerCase('de');
       return k._suche.includes(q);
     });
@@ -201,7 +201,7 @@
       <div class="crm-titel"><h1>Kunden</h1><p>${liste.length} von ${S.d.kunden.length} · Stammdaten aus der Verwaltung, Kundenblatt im CRM</p>
         ${b ? `<button type="button" class="btn primary" data-neu-interessent>${icon('plus')}Interessent</button>` : ''}</div>
       <div class="crm-leiste">
-        <label class="crm-suche"><span class="sr-only">Suchen</span>${icon('search')}<input type="search" id="k-suche" value="${esc(f.q)}" placeholder="Firma, Kundennummer, Ort, Ansprechpartner, Telefon …"></label>
+        <label class="crm-suche"><span class="sr-only">Suchen</span>${icon('search')}<input type="search" id="k-suche" value="${esc(f.q)}" placeholder="Firma, Kundennummer, Kundengruppe, Ort, Ansprechpartner, Telefon …"></label>
         <select id="k-aktiv" aria-label="Aktiv"><option value="ja"${f.aktiv === 'ja' ? ' selected' : ''}>Nur aktive</option><option value=""${f.aktiv === '' ? ' selected' : ''}>Aktive und inaktive</option><option value="nein"${f.aktiv === 'nein' ? ' selected' : ''}>Nur inaktive</option></select>
         <select id="k-segment" aria-label="Segment">${opts(S.d.segmente, f.segment, 'Alle Segmente')}</select>
         <select id="k-phase" aria-label="Phase">${opts(S.d.phasen, f.phase, 'Alle Phasen')}</select>
@@ -210,7 +210,7 @@
       <div class="crm-tabelle-rahmen crm-glas"><table class="crm-tabelle" id="k-tabelle">
         <thead><tr><th>Kunde</th><th class="m-aus">Telefon</th><th class="m-aus">Ansprechpartner</th><th>Vertreter</th><th>Segment</th><th>Phase</th><th>Nächster Schritt</th></tr></thead>
         <tbody>${liste.slice(0, f.n).map((k) => `<tr class="${k.aktiv ? '' : 'aus'}">
-          <td>${firmaKnopf(k)} ${k.art === 'interessent' ? '<span class="crm-pille info">Interessent</span>' : ''}<div class="gedaempft">${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc([k.plz, k.ort].filter(Boolean).join(' ') || 'Ort fehlt')}</div></td>
+          <td>${firmaKnopf(k)} ${k.art === 'interessent' ? '<span class="crm-pille info">Interessent</span>' : ''}<div class="gedaempft">${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc([k.plz, k.ort].filter(Boolean).join(' ') || 'Ort fehlt')}${k.gruppe ? ' · ' + esc(k.gruppe) : ''}</div></td>
           <td class="m-aus">${zeilen(telefone(k), telLink)}</td>
           <td class="m-aus">${zeilen(namen(k))}</td>
           <td class="nw">${vName(k.vertreter) ? esc(vName(k.vertreter)) : '<span class="gedaempft">—</span>'}${k.vertreter2 ? `<div class="gedaempft">${esc(vName(k.vertreter2))}</div>` : ''}</td>
