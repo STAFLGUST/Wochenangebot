@@ -1207,7 +1207,7 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   body.kseite .al-col { padding: 0 16px; gap: 18px; }
   body.kseite .al-col:first-child { padding-left: 0; }
   body.kseite .al-col:last-child { padding-right: 0; }
-  body.kseite .al-tab { border-collapse: separate; border-spacing: 0; }
+  body.kseite .al-tab { border-collapse: separate; border-spacing: 0; --w-code: 60px; }   /* Nummernspalte breiter: Zeile innen 10 px eingerückt */
   body.kseite .al-h th { padding: 0 0 6px 10px; border-bottom: 1px solid var(--regel); font-size: 13px; }
   body.kseite .al-tab td { height: 28px; padding: 2px 6px; }
   body.kseite .al-tab td:first-child { border-radius: 9px 0 0 9px; padding-left: 10px; }
