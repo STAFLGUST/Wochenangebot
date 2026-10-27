@@ -265,32 +265,24 @@ function priceHTML(it) {
 }
 
 /* ---------- Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst) ----------
-   Oben ein schlichter, getönter Block wie ein Abschnitt der Liste (Überschrift, Text, Zeilen Nr. · Bezeichnung · Preis; nur in
-   der Gesamtansicht ohne Suche/Filter), in der Liste sind die Zeilen getönt und gekennzeichnet. Klick auf eine Zeile im
-   Block zeigt den Artikel in der Liste. */
+   Oben ein eigener Abschnitt im Aufbau der Liste: Band in der Akzentfarbe (Überschrift, Text), darunter die Artikel als
+   normale Zeilen (Nr. · Bezeichnung · Preis · Merken) in den Spalten der Liste – nur in der Gesamtansicht ohne
+   Suche/Filter. In der Liste tragen die beworbenen Zeilen ein kleines Kennzeichen (Hinweis oder „Empfehlung“). */
 const WERB_TITEL = 'Unsere Empfehlung der Woche';
 const werbAn = (it) => typeof it.werb === 'string';
-const werbTagHTML = (it, cls) => (werbAn(it) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${icon('megaphone', 'sm')}${esc(it.werb || 'Empfehlung')}</span>` : '');
-function werbungHTML() {
+const werbTagHTML = (it, cls, nurHinweis) => (werbAn(it) && (it.werb || !nurHinweis) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${esc(it.werb || 'Empfehlung')}</span>` : '');
+function werbungHTML(eigeneKarte) {
   const w = DATA.werbung;
   if (!w || state.tab !== 'all' || hasFilters()) return '';
-  const preis = (it) => {
-    const p = it.price;
-    if (p.status !== 'value') return `<span class="werb-p werb-np">${esc(plPrice(p))}</span>`;
-    return `<span class="werb-p${it.sale ? ' werb-sale' : ''}">${it.sale && it.regular != null ? `<s>${fmtNum.format(it.regular)}</s>` : ''}${fmtNum.format(p.value)}<small>€/kg</small></span>`;
-  };
-  const zeile = ({ it, text }) => `<button type="button" class="werb-z" data-werb="${esc(it.id)}" title="In der Liste zeigen">
-      <span class="werb-nr">${esc(it.code || '')}</span><span class="werb-name">${esc(plName(it))}${text ? `<span class="werb-hin">${esc(text)}</span>` : ''}</span>${preis(it)}</button>`;
-  return `<section class="werb-block" aria-labelledby="werb-h"><div class="werb-kopf">${icon('megaphone')}<h3 id="werb-h">${esc(w.titel || WERB_TITEL)}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
-    <div class="werb-zeilen">${w.artikel.map(zeile).join('')}</div></section>`;
-}
-function werbZeigen(id) {
-  const el = $(`#list .row[data-id="${CSS.escape(id)}"], #list .card[data-id="${CSS.escape(id)}"]`);
-  if (!el) { openDetail(id); return; }
-  el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  el.classList.remove('werb-blink'); void el.offsetWidth; el.classList.add('werb-blink');
-  const q = KORDER && el.querySelector('input');
-  if (q) q.focus({ preventScroll: true });
+  const host = $('#list');
+  const k = plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
+  const items = w.artikel.map((x) => x.it), per = Math.ceil(items.length / k), labels = plLabels(items);
+  const cols = [];
+  for (let i = 0; i < k; i++) cols.push(items.slice(i * per, (i + 1) * per));
+  const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, 'werb') : '');
+  const sec = `<section class="al-sec werb-sec" aria-labelledby="werb-h"><div class="al-st werb-st"><h3 id="werb-h">${icon('megaphone')}${esc(w.titel || WERB_TITEL)}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+    <div class="al-cols" style="--k:${k}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
+  return eigeneKarte ? `<div class="al werb-al">${sec}</div>` : sec;
 }
 
 /* ---------- Kopf, Kennzahlen, Navigation ---------- */
@@ -582,11 +574,11 @@ const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" wid
 /* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€ / kg“ steht über der Preisspalte. */
 function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
-  const screen = mode !== 'print';
+  const screen = mode !== 'print', werb = mode === 'werb';
   const span = 2 + cols + (screen ? 1 : 0);
-  const row = (it) => `<tr class="row${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
+  const row = (it) => `<tr class="row${werbAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
-    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag')}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
+    <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
   return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€ / kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
@@ -602,7 +594,7 @@ function renderListe(list, grouped) {
   const units = plUnits(list, grouped, Math.max(18, Math.floor((colW - 150) / 6.6)));
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
   const m = DATA.meta || {};
-  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML()}`;
+  const head = `<div class="al-head">${PL_LOGO}<div class="al-ht"><h2>${esc(m.offerName && m.offerName !== 'Wochenangebot' && !m.einzel ? m.offerName + ' · ' : '')}${esc(plTitle())}</h2><span>${stand ? 'Stand ' + esc(stand) + ' · ' : ''}Preise in € je kg</span></div></div>${werbungHTML(false)}`;
   const secs = plSections(units).map((sec) => {
     const n = sec.units.reduce((a, u) => a + u.items.length, 0);
     const cols = plBalance(sec.units, plK);
@@ -705,7 +697,7 @@ function renderEmpty() {
 
 function renderList() {
   const grouped = state.sortKey === 'offer';
-  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? werbungHTML() + renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? werbungHTML() + renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
+  $('#list').innerHTML = !current.length ? renderEmpty() : state.view === 'cards' ? werbungHTML(true) + renderCards(current, grouped) + hinweisHTML('al-note list-note') : state.view === 'table' ? werbungHTML(true) + renderTable(current, grouped) + hinweisHTML('al-note list-note') : renderListe(current, grouped);
 }
 
 function render() {
@@ -1294,8 +1286,6 @@ function bind() {
       if (a === 'tab-all') { state.tab = 'all'; render(); }
       return;
     }
-    const wk = e.target.closest('[data-werb]');
-    if (wk) { werbZeigen(wk.dataset.werb); return; }
     // Details nur über die Bezeichnung – ein Klick irgendwo in die Zeile (z. B. ins Mengenfeld) öffnet nichts
     const open = e.target.closest('[data-open]');
     if (open) openDetail(open.dataset.open);

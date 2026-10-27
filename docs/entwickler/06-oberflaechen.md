@@ -221,9 +221,10 @@ Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]`
 bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; der Excel-Import überträgt die Werbung auf die
 Artikel mit derselben Nummer (`werbungUebernehmen()`); `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
 tragen `tr.e-werb` und das Kennzeichen „Werbung“. Auf der Angebotsseite (`frontend.js`, `werbungHTML()`) steht oben ein
-dezenter, getönter Block wie ein Abschnitt der Liste (`.werb-block`: Überschrift, Text, Zeilen Nr. · Bezeichnung · Preis;
-nur ohne Suche/Filter in „Alle Artikel“), beworbene Zeilen/Kacheln tragen `.werb-an` und den Hinweis als Kennzeichen;
-ein Klick auf eine Zeile im Block zeigt die Zeile in der Liste.
+eigener Abschnitt im Aufbau der Liste (`.werb-sec`: Band `.werb-st` in der Akzentfarbe mit Überschrift und Text, darunter
+die Artikel mit `plBlockHTML(…, 'werb')` als normale Zeilen in den Spalten der Liste; Bestell- und Kachelansicht: in eigener
+Karte; nur ohne Suche/Filter in „Alle Artikel“). Beworbene Zeilen/Kacheln der Liste tragen `.werb-an` und den Hinweis
+(sonst „Empfehlung“) als Kennzeichen.
 
 ### Vorschau
 
