@@ -297,6 +297,7 @@ check('realm-aktualisieren mit stückweiser Ausgabe (wie docker compose exec): k
 THEME = os.path.join(REPO, 'deploy', 'anmeldung', 'theme', 'stafl', 'login')
 _dlog = open(os.path.join(WORK, 'design-setzen.log'), encoding='utf-8').read()
 check("Design: beim Start mit konten.sh design-setzen gesetzt (Realm ohne Design wie im Betrieb)", "gesetzt:   Anmeldeseite im Design 'stafl'" in _dlog, _dlog)
+check("Design der E-Mails: beim Start ebenfalls gesetzt (emailTheme)", "gesetzt:   E-Mails im Design 'stafl'" in _dlog, _dlog)
 
 
 def design_setzen(*args):
@@ -321,21 +322,22 @@ def anmeldeseite():
 
 _vorher = realm_jetzt()
 _r = design_setzen()
-check('design-setzen ein zweites Mal: unverändert (idempotent), auch mit stückweiser Ausgabe', _r.returncode == 0 and 'unverändert' in _r.stdout and 'Abbruch' not in _r.stderr,
+check('design-setzen ein zweites Mal: unverändert (idempotent), auch mit stückweiser Ausgabe', _r.returncode == 0 and 'unverändert: Anmeldeseite' in _r.stdout and 'unverändert: E-Mails' in _r.stdout and 'Abbruch' not in _r.stderr,
       (_r.returncode, _r.stdout, _r.stderr[-300:]))
 _r = design_setzen('standard')
 _std = realm_jetzt()
 code, _, text = anmeldeseite()
-check('Rückfall: design-setzen standard → mitgeliefertes Design von Keycloak', _r.returncode == 0 and 'gesetzt:' in _r.stdout and _std.get('loginTheme') in (None, '', 'keycloak.v2')
+check('Rückfall: design-setzen standard → mitgeliefertes Design von Keycloak (Anmeldeseite und E-Mails)', _r.returncode == 0 and 'gesetzt:' in _r.stdout and _std.get('loginTheme') in (None, '', 'keycloak.v2')
+      and _std.get('emailTheme') in (None, '', 'keycloak')
       and code == 200 and '/login/stafl/' not in text and '/login/keycloak.v2/' in text, (_r.stdout, _r.stderr[-200:], _std.get('loginTheme')))
 _r = design_setzen()
 _r2 = design_setzen()
 _nachher = realm_jetzt()
 check('design-setzen danach: wieder gesetzt, zweiter Lauf unverändert', _r.returncode == 0 and 'gesetzt:' in _r.stdout and _r2.returncode == 0 and 'unverändert' in _r2.stdout
-      and _nachher.get('loginTheme') == 'stafl', (_r.stdout, _r2.stdout, _nachher.get('loginTheme')))
+      and _nachher.get('loginTheme') == 'stafl' and _nachher.get('emailTheme') == 'stafl', (_r.stdout, _r2.stdout, _nachher.get('loginTheme'), _nachher.get('emailTheme')))
 check('design-setzen ändert nur das Design (Brute-Force-Schutz, Einmalcode-Richtlinie, Abläufe, Sitzungen unverändert)',
-      {k: v for k, v in _vorher.items() if k != 'loginTheme'} == {k: v for k, v in _nachher.items() if k != 'loginTheme'},
-      sorted(k for k in set(_vorher) | set(_nachher) if k != 'loginTheme' and _vorher.get(k) != _nachher.get(k)))
+      {k: v for k, v in _vorher.items() if k not in ('loginTheme', 'emailTheme')} == {k: v for k, v in _nachher.items() if k not in ('loginTheme', 'emailTheme')},
+      sorted(k for k in set(_vorher) | set(_nachher) if k not in ('loginTheme', 'emailTheme') and _vorher.get(k) != _nachher.get(k)))
 _r = design_setzen('irgendwas')
 check('design-setzen mit unbekanntem Wert abgelehnt', _r.returncode == 1 and 'Aufruf' in _r.stderr, (_r.returncode, _r.stderr[-200:]))
 code, _, text = anmeldeseite()
@@ -1410,8 +1412,17 @@ with sync_playwright() as pw:
     code, aus = konten('einladen', 'Eva.Einladung', 'eva@stafl.test', 'Eva', 'Einladung')
     m = warte_mail('eva@stafl.test')
     link = re.search(r'https://login\.stafl\.test:8443/realms/mitarbeiter/login-actions/action-token\?key=\S+', m['text']).group(0) if m else ''
-    check('Einladung verschickt: Mail mit Link, ohne Passwort, nur „Passwort aktualisieren“', code == 0 and link and 'Passwort aktualisieren' in m['text'] and 'Mehrfachauthentifizierung' not in m['text']
+    check('Einladung verschickt: Mail mit Link, ohne Passwort, nur „Passwort festlegen“', code == 0 and link and 'Passwort festlegen' in m['text'] and 'Mehrfachauthentifizierung' not in m['text']
           and m['von'] == 'anmeldung@stafl.test', (aus, m and m['text'][:300]))
+    check('Einladung im STAFL-Design: Betreff, Überschrift, Benutzername, Knopf mit Link, Schritte; Textfassung mit Link',
+          m and m['betreff'] == 'Ihr Zugang zur STAFL-Plattform – Passwort festlegen' and 'Ihr Zugang zur STAFL-Plattform' in m['html']
+          and 'Ihr Benutzername' in m['html'] and 'eva.einladung' in m['html'] and 'Passwort festlegen &rarr;' in m['html']
+          and 'So geht es weiter' in m['html'] and 'action-token' in m['html'] and 'Guten Tag Eva,' in m['text'] and 'Ihr Benutzername: eva.einladung' in m['text']
+          and 'Ihr Administrator hat Sie aufgefordert' not in m['text'], (m and m['betreff'], m and m['text'][:300]))
+    check('Einladung ohne Bilder und ohne nachgeladene Inhalte', m and '<img' not in m['html'].lower() and 'src=' not in m['html'].lower())
+    if m and m['html']:
+        with open(os.path.join(SH, 'oidc_einladung_mail.html'), 'w', encoding='utf-8') as _f:
+            _f.write(m['html'])
     code, aus = konten('einladen', 'eva.einladung', 'eva@stafl.test', 'Eva', 'Einladung')
     check('vorhandenes Konto nicht doppelt angelegt (Hinweis auf erneutes Senden)', code == 1 and 'gibt es schon' in aus, aus)
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
@@ -1437,7 +1448,7 @@ with sync_playwright() as pw:
     ctx.close()
     code, aus = konten('einladen', 'eva.einladung')
     m2 = warte_mail('eva@stafl.test', 2)
-    check('erneute Einladung: wieder nur „Passwort aktualisieren“', code == 0 and m2 and 'Passwort aktualisieren' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
+    check('erneute Einladung: wieder nur „Passwort festlegen“', code == 0 and m2 and 'Passwort festlegen' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
 
     # ── Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): EIN Passwort – das der zentralen Anmeldung ──
     KIM = {'eigen': 'Kim-Eigenes-Kennwort-1', 'zweit': 'Kim-Zweites-Kennwort-2'}
@@ -1477,6 +1488,30 @@ with sync_playwright() as pw:
     pg.locator('#ka').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_390.png'))
     pg.set_viewport_size({'width': 1280, 'height': 900})
     pg.click('#dlg-user [data-close]')
+    # Freischalten = Einladung: neuer Mitarbeiter mit Anmeldung und E-Mail → Konto in Keycloak und Mail zum Passwort-Festlegen
+    pg.click('#user-add'); pg.wait_for_selector('#dlg-user[open] [name="vorname"]')
+    pg.fill('#user-body [name="vorname"]', 'Lea'); pg.fill('#user-body [name="nachname"]', 'Einladung'); pg.fill('#user-body [name="email"]', 'lea@stafl.test')
+    if not pg.locator('#user-body [name="rollen"]:checked').count():
+        pg.check('#user-body [name="rollen"][value="editor"]')
+    check('Neuer Mitarbeiter (zentrale Anmeldung): Hinweis auf die Einladung statt Passwortfeld',
+          'Einladung zum Passwort-Festlegen' in pg.inner_text('#user-body') and pg.locator('#user-body [name=password]').count() == 0)
+    pg.click('#user-body [type="submit"]')
+    pg.wait_for_selector('#ka-meldung.st-ok', timeout=30000)
+    lea = nutzer_roh().get('lea-einladung', {})
+    m4 = warte_mail('lea@stafl.test')
+    check('… beim Anlegen: Konto in Keycloak angelegt und verknüpft, Einladung verschickt', bool(lea.get('oidcSub')) and 'Einladung an lea@stafl.test' in pg.inner_text('#ka-meldung')
+          and m4 and 'action-token' in m4['text'] and 'Ihr Benutzername: lea-einladung' in m4['text'] and 'Guten Tag Lea,' in m4['text'],
+          (pg.inner_text('#ka-meldung'), lea.get('username'), m4 and m4['text'][:200]))
+    check('… Zustand: Konto aktiv, noch kein Passwort (legt Lea selbst fest)', 'noch kein Passwort' in pg.inner_text('#ka-status') or 'eigenes Passwort festlegen' in pg.inner_text('#ka-status'), pg.inner_text('#ka-status'))
+    check('… Protokoll: angelegt und Einladung geschickt', any('Konto „lea-einladung“ in der zentralen Anmeldung angelegt' in str(e) for e in protokoll_roh())
+          and any('Einladung (Link zum Passwort-Festlegen) an „lea-einladung“' in str(e) for e in protokoll_roh()))
+    pg.screenshot(path=os.path.join(SH, 'oidc_einladung_verwaltung_1280.png'))
+    pg.click('#dlg-user [data-close]')
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Ole', 'nachname': 'Ohnemail', 'username': 'ole.ohnemail', 'email': '', 'rollen': ['editor'], 'active': True}])
+    ole = j.get('user', {}).get('id', '')
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': ole, 'was': 'anlegen', 'einladen': True}])
+    check('Anlegen mit Einladung ohne E-Mail: Konto angelegt, Einladung mit Hinweis abgelehnt', code == 200 and j['konto'].get('vorhanden') and not j.get('an')
+          and 'keine E-Mail-Adresse' in j.get('einladungFehler', ''), (code, j))
     c2 = br.new_context(ignore_https_errors=True); p2 = eigene_seite(c2.new_page())
     p2.goto(D + '/'); p2.wait_for_selector('#username'); p2.fill('#username', 'kim.konto'); p2.fill('#password', kim_start); p2.click('#kc-login')
     p2.wait_for_selector('#password-new')
@@ -1511,7 +1546,7 @@ with sync_playwright() as pw:
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'link'}])
     m3 = warte_mail('kim@stafl.test')
     check('Link zum Passwort-Festlegen per Mail (über Keycloak, nur „Passwort aktualisieren“)', code == 200 and j.get('an') == 'kim@stafl.test' and m3
-          and 'Passwort aktualisieren' in m3['text'] and 'action-token' in m3['text'], (code, j, m3 and m3['text'][:200]))
+          and 'Passwort festlegen' in m3['text'] and 'action-token' in m3['text'] and 'kim.konto' in m3['text'], (code, j, m3 and m3['text'][:200]))
     # Zweiter Faktor bleibt beim Zurücksetzen (Pflicht-Konten bleiben geschützt)
     erika_id = nutzer_roh()['erika']['id']
     code, j = pg.evaluate(hole, erika_id)

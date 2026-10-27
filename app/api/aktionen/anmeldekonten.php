@@ -2,7 +2,8 @@
 declare(strict_types=1);
 /* Aktionen: Konten der zentralen Anmeldung (Keycloak) aus Verwaltung → Mitarbeiter (nur Administratoren).
    anmeldekonto (lesen): Zustand des Kontos · anmeldekonto_aendern (schreibend, immer mit Bestätigung): Passwort setzen,
-   Sperre aufheben, Link zum Passwort-Festlegen per Mail, fehlendes Konto anlegen. Logik und Grenzen: lib/anmeldekonten.php.
+   Sperre aufheben, Link zum Passwort-Festlegen per Mail, fehlendes Konto anlegen (mit „einladen“ gleich samt Einladung per
+   Mail). Logik und Grenzen: lib/anmeldekonten.php.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -65,6 +66,14 @@ switch ($action) {
                     konten_anlegen($u);
                     audit('security', 'Konto „' . $u['username'] . '“ in der zentralen Anmeldung angelegt und verknüpft');
                     $u = anmeldekonto_nutzer((string)$u['id']);
+                    // Gleich die Einladung (Link zum Passwort-Festlegen) – das Konto bleibt angelegt, auch wenn der Versand scheitert
+                    if (!empty($b['einladen'])) {
+                        try {
+                            $an = konten_link($u);
+                            audit('security', 'Einladung (Link zum Passwort-Festlegen) an „' . $u['username'] . '“ geschickt (' . $an . ', ' . KONTEN_LINK_STUNDEN . ' Stunden gültig)');
+                            $antwort['an'] = $an;
+                        } catch (KontenFehler $e) { $antwort['einladungFehler'] = $e->getMessage(); }
+                    }
                 }
                 $antwort['konto'] = konten_status($u) + ['nurTemporaer' => anmeldekonto_nur_temporaer($u)];
             } catch (KontenFehler $e) { fail($e->getMessage(), $e->status); }

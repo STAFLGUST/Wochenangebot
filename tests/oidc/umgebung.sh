@@ -129,10 +129,10 @@ EOF
   chmod 644 "$OIDC_WORK/caddy/pki/authorities/local/root.crt"
   zeit "Caddy bereit"
 
-  # Plattform-Design der Anmeldeseite (im Betrieb per Volume, deploy/anmeldung/docker-compose.anmeldung.yml). Wie beim
-  # bestehenden Realm im Betrieb ist es im ersten Import noch nicht gesetzt – das übernimmt konten.sh design-setzen (unten)
+  # Plattform-Design der Anmeldeseite und der E-Mails (im Betrieb per Volume, deploy/anmeldung/docker-compose.anmeldung.yml).
+  # Wie beim bestehenden Realm im Betrieb ist es im ersten Import noch nicht gesetzt – das übernimmt konten.sh design-setzen (unten)
   ln -sfn "$REPO/deploy/anmeldung/theme/stafl" "$kc/themes/stafl"
-  python3 -c 'import json,sys; p=sys.argv[1]; r=json.load(open(p,encoding="utf-8")); r.pop("loginTheme",None); json.dump(r,open(p,"w",encoding="utf-8"),ensure_ascii=False)' \
+  python3 -c 'import json,sys; p=sys.argv[1]; r=json.load(open(p,encoding="utf-8")); r.pop("loginTheme",None); r.pop("emailTheme",None); json.dump(r,open(p,"w",encoding="utf-8"),ensure_ascii=False)' \
     "$kc/data/import/realm-mitarbeiter.json"
   "$kc/bin/kc.sh" build --db=postgres --health-enabled=true --vault=file --features-disabled=twitter-broker,identity-brokering-api >"$OIDC_WORK/keycloak-build.log" 2>&1
   zeit "Keycloak gebaut (kc.sh build)"

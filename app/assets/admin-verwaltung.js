@@ -164,7 +164,11 @@
     if (!k.eingerichtet) { st.innerHTML = `<span class="muted">${esc(k.hinweis || 'Noch nicht eingerichtet.')}</span>`; kn.innerHTML = ''; return; }
     if (!k.vorhanden) {
       st.innerHTML = `<span class="st-warn">Noch kein Konto in der zentralen Anmeldung – der Mitarbeiter kann sich nicht anmelden.</span>${k.hinweis ? `<br><span class="muted">${esc(k.hinweis)}</span>` : ''}`;
-      kn.innerHTML = k.fremd ? '' : `<button type="button" class="btn" data-ka="anlegen">${icon('plus', 'sm')}Konto anlegen</button>`;
+      // Mit E-Mail: anlegen und gleich die Einladung (Link zum Passwort-Festlegen) schicken – der übliche Weg
+      const mu = users.find((x) => x.id === editUid), mitMail = !!(mu && mu.email);
+      kn.innerHTML = k.fremd ? '' : mitMail
+        ? `<button type="button" class="btn primary" data-ka="anlegen-einladen">${icon('mail', 'sm')}Konto anlegen und Einladung senden</button><button type="button" class="btn" data-ka="anlegen">Nur anlegen</button>`
+        : `<button type="button" class="btn" data-ka="anlegen">${icon('plus', 'sm')}Konto anlegen</button><span class="hint ka-ohnemail">Für eine Einladung per Mail oben eine E-Mail-Adresse eintragen und speichern.</span>`;
       return;
     }
     t.push(k.aktiv ? '<span class="st-ok">Konto aktiv</span>' : '<span class="st-err">Konto in Keycloak gesperrt</span>');
@@ -186,8 +190,13 @@
     try { const r = await api('anmeldekonto', { query: '&id=' + encodeURIComponent(id) }); kaZeigen(r.konto); }
     catch (ex) { kaZeigen({ eingerichtet: true, fehler: ex.message }); }
   }
+  /* Meldung nach „Konto anlegen“ (mit oder ohne Einladung) */
+  const kaAngelegtText = (r) => (r.an ? `Konto angelegt und Einladung an ${r.an} geschickt (72 Stunden gültig) – der Mitarbeiter legt sein Passwort selbst fest.`
+    : r.einladungFehler ? `Konto angelegt, die Einladung wurde aber nicht verschickt: ${r.einladungFehler}`
+    : 'Konto angelegt – jetzt Passwort setzen oder den Link per Mail schicken.');
   async function kaAktion(was, knopf) {
-    const m = $('#ka-meldung'), body = { id: editUid, was };
+    const m = $('#ka-meldung'), body = { id: editUid, was: was === 'anlegen-einladen' ? 'anlegen' : was };
+    if (was === 'anlegen-einladen') body.einladen = true;
     m.textContent = ''; m.className = 'ka-meldung';
     if (was === 'passwort') {
       body.passwort = $('#user-body [name="ka_pw"]').value;
@@ -198,9 +207,9 @@
     try {
       const r = await api('anmeldekonto_aendern', { body });
       kaZeigen(r.konto);
-      m.classList.add('st-ok');
+      m.classList.add(r.einladungFehler ? 'st-warn' : 'st-ok');
       m.textContent = was === 'passwort' ? ((r.temporaer ?? body.aendern) ? 'Passwort gesetzt – bitte persönlich weitergeben; bei der ersten Anmeldung legt der Mitarbeiter ein eigenes fest.' : 'Passwort gesetzt.')
-        : was === 'link' ? `Mail mit Link an ${r.an} geschickt (${72} Stunden gültig).` : was === 'entsperren' ? 'Konto entsperrt.' : 'Konto angelegt – jetzt Passwort setzen oder den Link per Mail schicken.';
+        : was === 'link' ? `Mail mit Link an ${r.an} geschickt (${72} Stunden gültig).` : was === 'entsperren' ? 'Konto entsperrt.' : kaAngelegtText(r);
       if (was === 'passwort') { $('#ka-pw').hidden = false; $('#user-body [name="ka_pw"]').readOnly = true; $('#ka-pw [data-ka="passwort"]').hidden = true; $('#ka-pw [data-ka="gen"]').hidden = true; }
     } catch (ex) { m.textContent = ex.message; m.classList.add('form-err'); }
     if (knopf) knopf.disabled = false;
@@ -238,7 +247,7 @@
           <div class="role-pick${rollenListe().length > 3 ? ' mehr' : ''}">${rollenListe().map((r) => `<label class="role-opt"><input type="checkbox" name="rollen" value="${esc(r.id)}"${startRollen(u).includes(r.id) ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(r.name)}</strong><small>${esc(r.beschreibung || ROLE_DESC[r.id] || '')}</small></span></label>`).join('')}</div>
         </div>
         <label class="check span2" data-nurzugang><input type="checkbox" name="active"${!u || u.active || !zugang ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
-        ${zentral() ? (u && !self && zugang ? kaAbschnitt() : u ? '' : '<p class="hint span2" data-nurzugang>Das Passwort vergibt die zentrale Anmeldung: nach dem Anlegen im Abschnitt „Zentrale Anmeldung“ das Konto anlegen und ein Passwort setzen oder den Link per Mail schicken.</p>')
+        ${zentral() ? (u && !self && zugang ? kaAbschnitt() : u ? '' : '<p class="hint span2" data-nurzugang>Das Passwort legt der Mitarbeiter selbst fest: Beim Anlegen entsteht das Konto in der zentralen Anmeldung, und mit E-Mail-Adresse geht gleich eine Einladung zum Passwort-Festlegen raus.</p>')
           : self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2" data-nurzugang><span>${u && zugang ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
           <div class="pw-row"><input name="password" type="text" autocomplete="new-password" minlength="10" maxlength="200" placeholder="mindestens 10 Zeichen"${u && zugang ? '' : ' data-pflicht'}><button type="button" class="btn" data-uact="gen">Vorschlag</button></div>
         </div>`}
@@ -366,10 +375,22 @@
       editUid = r.user.id;   // ab jetzt Bearbeiten (falls die HR-Angaben scheitern, legt ein zweiter Klick keinen zweiten Mitarbeiter an)
       try { if (hrAn()) await W.hr.speichern(r.user.id, f); }
       catch (ex2) { renderUsersView(); err.textContent = 'Mitarbeiter gespeichert, Urlaubsangaben nicht: ' + ex2.message; return; }
-      if (zentral() && zugang && !u) {   // Passwort vergibt Keycloak: gleich weiter zum Abschnitt „Zentrale Anmeldung“
+      if (zentral() && zugang && (!u || u.zugang === false)) {
+        // Freigeschaltet (neu oder bisher „ohne Anmeldung“): Konto in der zentralen Anmeldung anlegen und – mit E-Mail – gleich
+        // die Einladung zum Passwort-Festlegen schicken. Scheitert das, zeigt der Abschnitt „Zentrale Anmeldung“ den Zustand.
+        let hinweis = '', klasse = 'st-ok';
+        try {
+          const k = await api('anmeldekonto_aendern', { body: { id: r.user.id, was: 'anlegen', einladen: !!r.user.email } });
+          hinweis = kaAngelegtText(k);
+          if (k.einladungFehler) klasse = 'st-warn';
+        } catch (ex3) {
+          if (ex3.status !== 409) { hinweis = `Konto in der zentralen Anmeldung nicht angelegt: ${ex3.message}`; klasse = 'form-err'; }
+        }
         await renderUsersView();
         openUser(r.user.id);
-        toast(`Mitarbeiter „${r.user.name}“ angelegt – jetzt das Konto in der zentralen Anmeldung anlegen.`);
+        const m = $('#ka-meldung');
+        if (m && hinweis) { m.textContent = hinweis; m.className = 'ka-meldung ' + klasse; m.scrollIntoView({ block: 'nearest' }); }
+        toast(`Mitarbeiter „${r.user.name}“ ${u ? 'freigeschaltet' : 'angelegt'}.${klasse === 'st-ok' && hinweis ? ' ' + hinweis : ''}`, 7000);
         return;
       }
       renderUsersView();

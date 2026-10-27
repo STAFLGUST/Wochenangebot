@@ -256,6 +256,51 @@ function mail_layout(string $title, string $bodyHtml, string $signature, string 
         . $footHtml
         . '</td></tr></table></body></html>';
 }
+/* Einladungen und Passwort-Links: gleiche Farben wie mail_layout, dazu dunkles Kopfband, große Überschrift, hervorgehobener
+   Knopf und kurze Schritte. Nur Tabellen und Inline-Stile (Outlook, Gmail, Apple Mail), keine Bilder (nichts wird
+   nachgeladen, kein Zählpixel). $schritte: kurze Texte, nummeriert untereinander (auch auf schmalen Bildschirmen lesbar). */
+function mail_layout_einladung(string $title, string $bereich, string $ueberschrift, string $bodyHtml, string $signature, string $footer, array $schritte = []): string
+{
+    $sig = nl2br(mail_h($signature));
+    $foot = mail_h($footer);
+    global $CFG;
+    $absender = mail_h((string)((mail_cfg()['fromName'] ?? '') ?: ($CFG['company'] ?? '')));
+    $st = '';
+    foreach (array_values($schritte) as $i => $s) {
+        $st .= '<tr><td width="34" valign="top" style="padding:0 0 10px;"><div style="width:24px;height:24px;line-height:24px;border-radius:12px;background:#f1e7e3;color:#7b1e2b;font-size:13px;font-weight:bold;text-align:center;">' . ($i + 1) . '</div></td>'
+            . '<td valign="top" style="padding:2px 0 10px;font-size:14px;line-height:1.45;color:#4a443e;">' . mail_h($s) . '</td></tr>';
+    }
+    return '<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>' . mail_h($title) . '</title></head>'
+        . '<body style="margin:0;padding:0;background:#f4f1ec;font-family:Arial,Helvetica,sans-serif;color:#1d1a17;">'
+        . '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">' . mail_h($ueberschrift) . '</div>'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ec;padding:28px 12px;"><tr><td align="center">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:16px;border:1px solid #e6e0d8;overflow:hidden;">'
+        . '<tr><td style="background:#1d1a17;padding:18px 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+        . '<td style="font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#ffffff;font-weight:bold;">' . $absender . '</td>'
+        . '<td align="right" style="font-size:12px;color:#c9bfb4;">' . mail_h($bereich) . '</td></tr></table></td></tr>'
+        . '<tr><td style="height:4px;background:#7b1e2b;font-size:0;line-height:0;">&nbsp;</td></tr>'
+        . '<tr><td style="padding:30px 28px 8px;"><h1 style="margin:0;font-size:24px;line-height:1.25;font-weight:bold;color:#1d1a17;">' . mail_h($ueberschrift) . '</h1></td></tr>'
+        . '<tr><td style="padding:14px 28px 6px;font-size:15px;line-height:1.6;">' . $bodyHtml . '</td></tr>'
+        . ($st !== '' ? '<tr><td style="padding:10px 28px 4px;"><div style="border-top:1px solid #eee7df;padding-top:18px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#857c72;font-weight:bold;margin-bottom:12px;">So geht es weiter</div>'
+            . '<table role="presentation" cellpadding="0" cellspacing="0">' . $st . '</table></td></tr>' : '')
+        . ($sig !== '' ? '<tr><td style="padding:12px 28px 28px;font-size:15px;line-height:1.55;color:#4a443e;">' . $sig . '</td></tr>' : '<tr><td style="height:16px;"></td></tr>')
+        . '</table>'
+        . ($foot !== '' ? '<p style="max-width:560px;margin:16px auto 0;font-size:12px;line-height:1.5;color:#857c72;">' . $foot . '</p>' : '')
+        . '</td></tr></table></body></html>';
+}
+/* Großer Knopf (Einladung): volle Breite auf schmalen Bildschirmen über max-width, sonst so breit wie der Text */
+function mail_button_gross(string $url, string $label): string
+{
+    return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 10px;"><tr><td style="border-radius:10px;background:#7b1e2b;">'
+        . '<a href="' . mail_h($url) . '" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-weight:bold;font-size:16px;letter-spacing:.01em;">' . mail_h($label) . ' &rarr;</a></td></tr></table>';
+}
+/* Hervorgehobene Angabe (z. B. Benutzerkennung) */
+function mail_feld(string $label, string $wert): string
+{
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 4px;"><tr><td style="background:#f6f3ef;border:1px solid #eee7df;border-radius:10px;padding:12px 16px;">'
+        . '<div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#857c72;margin-bottom:4px;">' . mail_h($label) . '</div>'
+        . '<div style="font-family:Menlo,Consolas,\'Courier New\',monospace;font-size:17px;font-weight:bold;color:#1d1a17;">' . mail_h($wert) . '</div></td></tr></table>';
+}
 function mail_button(string $url, string $label): string
 {
     return '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0;"><tr><td style="border-radius:8px;background:#7b1e2b;">'

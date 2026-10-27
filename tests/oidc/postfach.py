@@ -71,7 +71,9 @@ class Postfach:
                         daten += z[1:] if z.startswith(b'..') else z
                     msg = email.message_from_bytes(daten, policy=email.policy.default)
                     teil = msg.get_body(('plain',)) or msg.get_body(('html',))
+                    html = msg.get_body(('html',))
                     self.nachrichten.append({'von': von, 'an': an, 'betreff': str(msg['subject']), 'text': teil.get_content() if teil else '',
+                                             'html': html.get_content() if html else '',
                                              'roh': daten.decode('utf-8', 'replace')})
                     senden('250 queued')
                 elif up == 'RSET':

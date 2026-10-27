@@ -93,14 +93,16 @@ verweisen auf die neue Adresse (`WA_EINGABE_ADRESSE`, Standard `https://angebot.
 Notzugang bei gestörter Anmeldung: `sh deploy/notzugang.sh an` (setzt `WA_EIGENE_ANMELDUNG=an` in `.env`, erstellt die App
 neu), danach `sh deploy/notzugang.sh aus`. Rückfall auf das alte Verhalten dauerhaft: dieselbe Zeile `=an`.
 
-## Design der Anmeldeseite
+## Design der Anmeldeseite und der E-Mails
 
-Keycloak liest das Theme aus `deploy/anmeldung/theme/stafl` (Volume in `docker-compose.anmeldung.yml`, nur lesend).
-Aktiv wird es erst mit `sh deploy/anmeldung/konten.sh design-setzen` (setzt `loginTheme=stafl` im Realm „mitarbeiter“,
-idempotent, ändert sonst nichts – keine Abläufe, Richtlinien oder Clients). Neuinstallationen bekommen es schon über
+Keycloak liest das Theme aus `deploy/anmeldung/theme/stafl` (Volume in `docker-compose.anmeldung.yml`, nur lesend):
+`login/` für die Anmeldeseite, `email/` für die Einladung bzw. den Link zum Passwort-Festlegen (Vorlage `executeActions`,
+gleicher Stil wie die Plattform-Mails, keine Bilder). Aktiv wird es erst mit `sh deploy/anmeldung/konten.sh design-setzen`
+(setzt `loginTheme=stafl` und `emailTheme=stafl` im Realm „mitarbeiter“, idempotent, ändert sonst nichts – keine Abläufe,
+Richtlinien oder Clients; einmal erneut ausführen, wenn bisher nur die Anmeldeseite gesetzt war). Neuinstallationen bekommen es schon über
 `realm-mitarbeiter.json`. Der Befehl bricht ab, wenn Keycloak das Theme nicht kennt (Container noch ohne Volume: zuerst
-`docker compose … up -d keycloak`). Rückfall: `sh deploy/anmeldung/konten.sh design-setzen standard` (mitgeliefertes
-Design von Keycloak, sofort wirksam).
+`docker compose … up -d keycloak`). Rückfall: `sh deploy/anmeldung/konten.sh design-setzen standard` (mitgelieferte
+Designs von Keycloak für Anmeldeseite und E-Mails, sofort wirksam).
 
 - **Einmalcode:** Feld mit `autocomplete="one-time-code"`, Ziffernblock, Muster für 6 Ziffern und Hinweis auf die App
   „STAFL-Plattform“. Keycloak vergleicht den Code genau so, wie er ankommt – „123 456“ wäre ein Fehlversuch. Das kleine
