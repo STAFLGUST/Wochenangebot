@@ -10,6 +10,10 @@ oeffentlich = true
 # Formular-POST aus dem E-Mail-Programm (RFC 8058) – bewusst nicht „schreibend“ (kein JSON, kein CSRF-Token möglich)
 fremde_herkunft = true   # kommt vom E-Mail-Programm, nicht von unserer Seite (GR-109)
 
+[aktion.angebot_artikel]
+oberflaeche = "angebot.eingabe"
+# Artikelauswahl „Artikel hinzufügen“ im Angebot (Stammdaten, VK-Gruppe, Bestand nur mit bestand.sehen)
+
 [aktion.bestell_settings_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true

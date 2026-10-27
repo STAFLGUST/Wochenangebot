@@ -1,5 +1,5 @@
-"""Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, Kein-Bestand-Zeichen und
-Sonderposten-Mail je Angebot. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
+"""Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur
+für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
 import json
 from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
 import re
@@ -141,6 +141,24 @@ check('Wochenangebot customers get the Wochenangebot sale prices', code == 200 a
 code, r = A.call('kunden_mail_vorschau', {'type': 'restposten', 'offer': 'edeka', 'id': KE})
 check('preview of sale mail', code == 200 and '6,11' in r['html'])
 
+# --- Eigene Artikelliste (Regel „hidden“): nur Artikel mit eigenem Eintrag – Sonderposten anderer Artikel erscheinen dort
+# nicht (früher: Sonderposten in jedem Angebot mit dieser Regel); Sonderpreis gilt für die eigenen Artikel (GR-005)
+o = A.call('offers')[1]
+code, r = A.call('offers_save', {'rev': o['rev'], 'offers': [{'id': x['id'], 'name': x['name']} for x in o['offers']] + [{'id': 'metro', 'name': 'Wochenangebot Metro'}]})
+check('neues Angebot ohne Angabe der Regel: eigene Artikelliste', code == 200 and next(x for x in r['offers'] if x['id'] == 'metro').get('fallback') == 'hidden', r)
+d = A.call('draft')
+mdl = d[1]['draft'] or d[1]['published']
+for it in mdl['items']:
+    if it['id'] == IB['id']: it.setdefault('variants', {})['metro'] = {'status': 'value', 'value': 7.0}
+code, r = A.call('publish', {'model': mdl, 'revision': d[1]['revision']})
+check('Metro-Preis veröffentlicht', code == 200, r)
+KM = customer('Metro Markt', 'metro.markt', ['metro'], 'metro@example.org')
+me = offer_as('metro.markt', 'metro')
+check('Metro: nur der eigene Artikel – Sonderposten anderer Artikel fehlen', set(me) == {IB['id']}, sorted(me)[:6])
+check('Metro: Sonderpreis gilt für den eigenen Artikel, Normalpreis durchgestrichen', me[IB['id']]['price']['value'] == 6.66 and me[IB['id']].get('sale') is True and me[IB['id']].get('regular') == 7.0, me.get(IB['id']))
+code, info_m = A.call('restposten_info&offer=metro')
+check('Sonderposten-Mail Metro: nur der eigene Sonderposten', code == 200 and [x['code'] for x in info_m['items']] == [IB['code']], info_m.get('items'))
+
 # --- Oberfläche
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -154,19 +172,21 @@ with sync_playwright() as p:
     ns = row(IC['id']).locator('.nostock')
     check('red no-stock mark with hover text', ns.count() == 1 and 'Kein verfügbarer Bestand' in (ns.get_attribute('title') or ''))
     check('no red mark when stock exists', row(IA['id']).locator('.nostock').count() == 0)
-    check('Wochenangebot: hidden article shown as hidden', 'is-hidden' in row(ID['id']).locator('td.e-price').get_attribute('class') and row(ID['id']).locator('input[data-f=price]').is_disabled())
+    check('Wochenangebot: Artikel, der nicht im Wochenangebot steht, fehlt in seiner Liste', row(ID['id']).count() == 0)
     check('sale tag in row', 'Sonderpreis 5,55' in row(IA['id']).locator('.sale-tag').inner_text())
     check('sold-out sale shown as hidden', 'ohne Bestand' in row(IC['id']).locator('.sale-tag').inner_text())
     row(IA['id']).scroll_into_view_if_needed(); a.mouse.wheel(0, -120); a.screenshot(path=SH + '/restposten-zeilen.png')
-    # Auge im Wochenangebot
+    # ✕ entfernt nur aus dem Wochenangebot (andere Angebote folgen ihm hier noch, der Artikel bleibt im Entwurf)
     X = withs[3]
-    row(X['id']).locator('[data-act=v-hide]').click()
+    row(X['id']).locator('[data-act=remove]').click()
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
-    check('eye hides in Wochenangebot', A.call('draft')[1]['draft']['items'][[i['id'] for i in A.call('draft')[1]['draft']['items']].index(X['id'])]['variants'] == {'std': {'status': 'hidden'}})
-    check('change shown as hidden in Wochenangebot', 'aus-/eingeblendet' in a.inner_text('#changes'))
-    row(X['id']).locator('[data-act=v-hide]').click()
-    a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
-    # Kurzes MHD → Sonderpreis
+    check('✕ entfernt aus dem Wochenangebot', row(X['id']).count() == 0 and next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == X['id'])['variants'] == {'std': {'status': 'hidden'}})
+    check('change shown for Wochenangebot', 'im Wochenangebot hinzugefügt/entfernt' in a.inner_text('#changes'))
+    a.click('#btn-undo'); a.wait_for_selector(f'tr[data-id="{X["id"]}"]')
+    a.wait_for_function("document.querySelector('#save-state').classList.contains('saved') || /Keine Änderungen/.test(document.querySelector('#save-state').textContent)", timeout=10000)
+    # Kurzes MHD → Sonderpreis (Leiste beim Öffnen zugeklappt)
+    check('Leiste „Kurzes MHD“ zugeklappt', a.locator('#mhd-panel .np-card:not(.open)').count() == 1 and a.locator('#mhd-panel tbody tr').count() == 0)
+    a.click('#mhd-panel [data-mp=toggle]'); a.wait_for_selector('#mhd-panel .np-card.open')
     t = a.inner_text('#mhd-panel')
     check('short MHD panel', 'Kurzes MHD' in t and a.locator('#mhd-panel tbody tr').count() > 0, t[:120])
     btn = a.locator('#mhd-panel tr[data-mid]:not(:has(.sp-val)) [data-mp=sale]').first
@@ -184,7 +204,7 @@ with sync_playwright() as p:
     # Sonderposten senden (Edeka)
     a.click('#offer-bar [data-offer="edeka"]')
     check('edeka view shows own sale price', 'Sonderpreis 6,11' in row(IB['id']).locator('.sale-tag').inner_text())
-    a.click('#offer-bar [data-ob=restposten]'); a.wait_for_selector('#dlg-rest[open]')
+    a.click('#offer-head [data-ob=restposten]'); a.wait_for_selector('#dlg-rest[open]')
     t = a.inner_text('#rest-body')
     check('send dialog: items, only this offer\'s customers', 'Edeka Markt Nord' in t and 'Bela' not in t and '6,11' in t and 'unveröffentlichte' in t, t[:300])
     a.screenshot(path=SH + '/restposten-senden.png')

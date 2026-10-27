@@ -52,9 +52,10 @@ with sync_playwright() as p:
     check('meta reverted → no changes', 'Keine Änderungen' in pub_text(a), pub_text(a)[:200])
     a.click('#publish-body [data-close]')
     # neuer Artikel → entfernen
-    a.locator('[data-act=add-item]').first.click(); a.wait_for_timeout(300)
-    if a.locator('#dlg-item[open]').count(): a.fill('#item-body [name=name]', 'Testartikel Neu') if a.locator('#item-body [name=name]').count() else None; a.keyboard.press('Escape')
-    a.wait_for_timeout(300); wait_saved(a)
+    a.locator('[data-act=add-item]').first.click(); a.wait_for_selector('#dlg-ez-pick[open] [data-pick-extra="frei"]')
+    a.click('#dlg-ez-pick [data-pick-extra="frei"]'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    a.wait_for_function("document.activeElement && document.activeElement.dataset.f === 'name'"); a.keyboard.press('Tab')
+    wait_saved(a)
     open_pub(a)
     check('added listed', a.locator('#publish-body [data-rv=added]').count() == 1, pub_text(a)[:300])
     if a.locator('#publish-body [data-rv=added]').count():

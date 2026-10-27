@@ -117,31 +117,42 @@
       <button type="button" class="btn" id="hist-data"><svg class="i" aria-hidden="true"><use href="#i-history"/></svg><span>Daten</span></button>
     </div>
     <div id="view-edit">
-    <section class="meta-card" aria-label="Angebotsdaten">
-      <label class="fld sm"><span>Kalenderwoche</span><input type="number" id="m-week" min="1" max="53" inputmode="numeric"></label>
-      <label class="fld sm"><span>Jahr</span><input type="number" id="m-year" min="2000" max="2100" inputmode="numeric"></label>
-      <label class="fld grow"><span>Hinweis zum Angebot</span><input type="text" id="m-notice" maxlength="120" placeholder="z. B. Freibleibendes Angebot"></label>
-      <div class="meta-info" id="m-info"></div>
+    <div class="ed-layout">
+    <aside class="offer-bar" id="offer-bar" aria-label="Angebote" hidden></aside>
+    <div class="ed-main">
+    <section class="ed-head" aria-label="Angebot">
+      <div class="offer-head" id="offer-head"></div>
+      <div class="meta-card" aria-label="Angebotsdaten (gelten für alle Angebote)">
+        <label class="fld sm"><span>KW</span><input type="number" id="m-week" min="1" max="53" inputmode="numeric"></label>
+        <label class="fld sm"><span>Jahr</span><input type="number" id="m-year" min="2000" max="2100" inputmode="numeric"></label>
+        <label class="fld grow"><span>Hinweis zum Angebot</span><input type="text" id="m-notice" maxlength="120" placeholder="z. B. Freibleibendes Angebot"></label>
+        <div class="meta-info" id="m-info"></div>
+      </div>
     </section>
 
     <section class="send-hint" id="send-hint" role="status" hidden></section>
     <section class="changes" id="changes" aria-live="polite"></section>
 
-    <section class="offer-bar" id="offer-bar" aria-label="Angebot für die Preiseingabe" hidden></section>
+    <div class="ed-panels" id="ed-panels">
+      <section id="mhd-panel" hidden></section>
+      <section id="noprice-panel" hidden></section>
+    </div>
 
     <div class="ed-toolbar">
       <div class="search">
         <svg class="i" aria-hidden="true"><use href="#i-search"/></svg>
-        <input id="ed-q" type="search" autocomplete="off" placeholder="Artikel finden: Nummer, Bezeichnung, Herkunft …" aria-label="Artikel im Entwurf suchen">
+        <input id="ed-q" type="search" autocomplete="off" placeholder="In diesem Angebot suchen: Nummer, Bezeichnung, Herkunft …" aria-label="Artikel im Angebot suchen">
       </div>
-      <label class="check"><input type="checkbox" id="only-changes"> Nur Änderungen</label>
-      <span class="ed-hint">Preis: Zahl (23,30) · „a. Anfr.“ · leer = ohne Preis</span>
-      <button class="btn" type="button" id="btn-add-group"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Gruppe</button>
+      <label class="check ed-chip"><input type="checkbox" id="only-changes"> Nur Änderungen</label>
+      <span class="ed-hint">Preis: Zahl (23,30) · „a. Anfr.“</span>
+      <span class="ed-sp"></span>
+      <button class="btn ghost" type="button" id="btn-add-group" title="Neue Angebotsgruppe mit einer freien Position anlegen"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Gruppe</button>
+      <button class="btn primary" type="button" id="btn-add-art"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Artikel hinzufügen</button>
     </div>
 
-    <section id="mhd-panel" hidden></section>
-    <section id="noprice-panel" hidden></section>
     <div id="groups"></div>
+    </div>
+    </div>
     </div>
     <div id="view-hist" hidden></div>
     <div id="view-stock" hidden></div>
@@ -198,7 +209,6 @@
 <dialog class="modal" id="dlg-master-new" aria-labelledby="mn-title"><form class="dlg" id="master-new-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-sale" aria-labelledby="sp-title"><form class="dlg" id="sale-body" autocomplete="off"></form></dialog>
 <dialog class="modal wide" id="dlg-rest" aria-labelledby="rp-title"><div class="dlg" id="rest-body"></div></dialog>
-<dialog class="modal" id="dlg-add-stock" aria-labelledby="as-title"><form class="dlg" id="add-stock-body" autocomplete="off"></form></dialog>
 <!-- Mitarbeiter anlegen / bearbeiten -->
 <dialog class="modal" id="dlg-user" aria-labelledby="us-title" data-fest><form class="dlg" id="user-body" autocomplete="off"></form></dialog>
 <!-- Kunde anlegen / bearbeiten -->
@@ -295,6 +305,7 @@
 <script src="../assets/admin-rollen.js"></script>
 <script src="../assets/admin-import.js"></script>
 <script src="../module/hr/verwaltung-hr.js"></script>
+<script src="../assets/admin-artikelwahl.js"></script>
 <script src="../assets/admin-einzel.js"></script>
 <script src="../assets/admin-auswertung.js"></script>
 </body>

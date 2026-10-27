@@ -146,8 +146,6 @@ select.in { appearance: none; -webkit-appearance: none; cursor: pointer; padding
 .vlist .v-s { font-size: 12.5px; color: var(--muted); }
 
 @media (max-width: 1100px) {
-  .etab .e-origin { width: 130px; }
-  .etab .e-cond { width: 128px; }
   .ed-hint { display: none; }
 }
 @media (max-width: 860px) {
@@ -483,7 +481,7 @@ dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margi
    übersprungen, ~12 000 Elemente im Editor). „auto“ merkt sich die zuletzt gemessene Höhe, die Bildlaufleiste bleibt ruhig. */
 #groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px; }
 @media print { #groups > .gcard { content-visibility: visible; } }
-#noprice-panel { margin: 0 0 16px; }
+#noprice-panel { margin: 0; }
 .np-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
 .np-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 16px; cursor: pointer; }
 .np-head:focus-visible { box-shadow: var(--focus); }
@@ -676,37 +674,160 @@ body:not(.in-hist) .view-bar { display: none; }
   .side-sep { display: none; }
   .adm-shell .adm-page { padding-top: 14px; }
 }
-/* Mehrere Angebote */
-.offer-bar { margin: 14px 0 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
-.ob-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.ob-l { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-.ob-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
-.ob-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 550; cursor: pointer; }
-.ob-tabs button:hover { color: var(--text); border-color: var(--accent-line); }
-.ob-tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.ob-tabs button small { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 99px; background: rgba(127,127,127,.16); line-height: 18px; }
-.ob-tabs button[aria-selected="true"] small { background: rgba(255,255,255,.22); }
-.ob-act { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
-.ob-hint { margin: 8px 0 0; font-size: 12.5px; color: var(--text-2); }
-.ob-hint svg.i { width: 14px; height: 14px; vertical-align: -2px; }
+/* Mehrere Angebote: Angebotsliste links (schmal: Auswahl oben), Kopf des gewählten Angebots */
+.ed-layout { display: grid; grid-template-columns: 252px minmax(0, 1fr); gap: 18px; align-items: start; }
+.ed-main { min-width: 0; }
+.offer-bar { position: sticky; top: calc(var(--topbar-h, 70px) + 12px); max-height: calc(100vh - var(--topbar-h, 70px) - 24px); overflow-y: auto; scrollbar-width: thin;
+  padding: 12px 10px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
+.ob-h { display: flex; align-items: center; justify-content: space-between; padding: 2px 8px 8px; font-weight: 650; }
+.ob-h small { font-size: 12px; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ob-q { margin: 0 0 6px; }
+.ob-q input { height: 36px !important; font-size: 13.5px; }
+.ob-sec { padding: 10px 8px 4px; font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ob-tabs { display: flex; flex-direction: column; gap: 2px; }
+.ob-o, .ob-cur { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.ob-o:hover { background: var(--surface-3); }
+.ob-o[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent-line); }
+.ob-o:focus-visible, .ob-cur:focus-visible { outline: none; box-shadow: var(--focus); }
+.ob-n { min-width: 0; overflow-wrap: anywhere; line-height: 1.25; }
+.ob-n small { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.ob-z { flex: none; min-width: 26px; padding: 1px 8px; border-radius: 999px; text-align: center; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums;
+  background: var(--surface-3); color: var(--text-2); }
+.ob-o[aria-selected="true"] .ob-z { background: var(--accent); color: var(--accent-ink); }
+.ob-manage { margin: 10px 4px 2px; }
+.ed-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px 24px; padding: 16px 20px;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); }
+.offer-head { flex: 1 1 340px; min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 16px; }
+.oh-t { flex: 1 1 240px; min-width: 0; }
+.oh-art { font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.oh-t h2 { margin: 2px 0 6px; font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.oh-m { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; color: var(--text-2); }
+.oh-pill { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 650; background: var(--surface-3); color: var(--text-2); }
+.oh-pill.own { background: #e8f3ec; color: #23603f; }
+.oh-pill.folgt { background: #fdf2e2; color: #8a4b08; }
+.oh-act { display: flex; flex-wrap: wrap; gap: 4px; }
+.oh-folgt { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-radius: 14px; background: #fdf2e2; color: #5c3a0b; font-size: 13px; }
+.oh-folgt span { flex: 1 1 320px; }
+.ed-head .meta-card { flex: 0 1 470px; padding: 0; border: 0; background: none; box-shadow: none; gap: 8px 12px; }
+.ed-head .meta-card .fld.sm { width: 76px; }
+.ed-head .meta-card .fld.grow { flex: 1 1 200px; }
+.ed-head .meta-info { flex: 1 1 100%; padding: 0; font-size: 12.5px; }
+.ed-panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+.ed-panels.one { grid-template-columns: minmax(0, 1fr); }
+.ed-panels > section[hidden] { display: none; }
+.ed-panels > section:has(.np-card.open) { grid-column: 1 / -1; order: -1; }
+.ed-toolbar .ed-sp { flex: 1 1 0; }
+.ed-toolbar .ed-hint { flex: 0 1 auto; }
+@media (max-width: 1700px) { .ed-toolbar .ed-hint { display: none; } }
+.ed-chip { padding: 0 12px; height: 36px; border-radius: 999px; background: var(--surface-3); font-size: 13.5px; }
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .oh-pill.own { background: rgba(74, 170, 110, .18); color: #9fdcb5; }
+  :root:not([data-theme="light"]) :is(.oh-pill.folgt, .oh-folgt) { background: rgba(224, 144, 31, .16); color: #f3c98a; }
+}
+@media screen {
+  :root[data-theme="dark"] .oh-pill.own { background: rgba(74, 170, 110, .18); color: #9fdcb5; }
+  :root[data-theme="dark"] :is(.oh-pill.folgt, .oh-folgt) { background: rgba(224, 144, 31, .16); color: #f3c98a; }
+}
+.ob-cur { display: none; }
+.ed-empty-i { width: 30px; height: 30px; color: var(--muted); margin-bottom: 6px; }
+.ed-empty p { max-width: 520px; margin: 0 auto; }
+/* Artikelzeile: Bezeichnung mit Merkmalen als kleine Felder darunter (statt eigener Spalten) */
+.etab .e-name { min-width: 0; }
+.e-nmrow { position: relative; }
+.etab .e-nm { font-weight: 600; height: 28px; }
+.e-attr { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; padding: 0 2px 3px 6px; }
+.e-attr .in.chip { width: auto; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; line-height: 20px; color: var(--text-2); background: var(--surface-3); border-color: transparent; field-sizing: content; min-width: 3ch; }
+.e-attr select.in.chip { padding-right: 8px; }
+.e-attr input.in.chip { max-width: 150px; }
+.e-attr .in.chip:hover { border-color: var(--line-strong); }
+.e-attr .in.chip:focus { background: var(--surface); color: var(--text); }
+.e-auch { font-size: 11.5px; color: var(--muted); padding-left: 4px; white-space: nowrap; }
+.etab .e-act { width: 72px; white-space: nowrap; }
+.etab .e-act .ibtn { width: 30px; height: 30px; }
+.e-rm { opacity: .45; }
+tr:hover .e-rm, .e-rm:focus-visible { opacity: 1; }
+.e-rm:hover { color: var(--accent); background: var(--accent-soft); }
+body.ro .e-rm, body.ro #btn-add-art, body.ro .oh-act [data-ob="copy"], body.ro .ed-empty .row-actions { display: none; }
+/* Gruppenkopf: Name, darunter Bereich und VK-Gruppe */
+.ghead .g-t { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ghead .g-t .g-name { flex: none; }
+.ghead .g-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
+.ghead .g-sub .g-sec { flex: 0 1 280px; height: 26px; }
+.g-vk { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* Leisten „Kurzes MHD“ und „Bestand ohne Preis“: kompakt, Zahl vorn */
+.np-head { flex-wrap: nowrap; gap: 12px; padding: 10px 14px; min-height: 52px; }
+.np-tt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.np-card:not(.open) .np-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-head .np-badge { flex: none; font-size: 12.5px; padding: 2px 9px; }
+.mhd-card .np-badge { background: var(--sale, #c2410c); }
+/* Fenster „Artikel hinzufügen“: Preis je markiertem Artikel, Zielgruppe im Fuß */
+.ezp-tab .ezp-pr { width: 116px; }
+.ezp-tab .ezp-pin { height: 34px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; }
+.ezp-eta { display: block; font-size: 11.5px; color: var(--muted); }
+.ezp-anz { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.ezp-ziele { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.ezp-ziel { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; background: var(--surface-3); color: var(--text); font-size: 12.5px; font-weight: 600; }
+.ezp-zh { flex: 1 1 100%; font-size: 12px; color: var(--muted); }
+.ezp-err { flex: 1 1 100%; font-weight: 600; }
+body.ro .ezp-extra { display: none; }
+@media (max-width: 1280px) {
+  .ed-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .offer-bar { position: relative; top: auto; max-height: none; overflow: visible; padding: 6px; z-index: 7; }
+  .ob-cur { display: flex; min-height: 48px; }
+  .ob-cur .ob-n { font-weight: 650; font-size: 15px; flex: 1 1 auto; }
+  .ob-cur .ob-n small { font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+  .ob-chev { flex: none; color: var(--muted); transition: transform .15s; }
+  .ob-cur[aria-expanded="true"] .ob-chev { transform: rotate(180deg); }
+  .ob-list { display: none; padding: 6px 4px 4px; border-top: 1px solid var(--line); margin-top: 6px; }
+  .ob-list.open { display: block; }
+  .ob-list .ob-h { display: none; }
+  .oh-art, .oh-t h2 { display: none; }   /* Name steht schon in der Auswahl darüber */
+}
+@media (max-width: 860px) {
+  .ed-panels { grid-template-columns: minmax(0, 1fr); }
+  .ed-head { padding: 14px 16px; }
+  .ed-head .meta-card { flex: 1 1 100%; }
+  .oh-t h2 { font-size: 19px; }
+  .ed-toolbar .ed-hint { display: none; }
+}
+.e-codem { display: none; }
+@media (max-width: 560px) {
+  #groups .etab .e-code { display: none; }
+  .e-codem { display: inline; font-family: var(--mono); font-size: 11.5px; color: var(--muted); padding-right: 2px; }
+  .e-attr .in.chip:not([data-f="category"]) { display: none; }
+  .e-auch { display: none; }
+  .etab .e-act { width: 36px; }
+  .e-rm { display: none; }
+  .ed-toolbar #btn-add-group { display: none; }
+  .ed-toolbar .ed-sp { display: none; }
+  .ed-toolbar #btn-add-art { flex: 1 1 auto; justify-content: center; }
+}
+@media (max-width: 600px) {
+  .ezp-tab .ezp-pr { width: 92px; }
+  /* Mit Preisfeld: feste Spalten, Art.-Nr. und Wochenpreis stehen in der Zeile unter der Bezeichnung */
+  .ezp-tab.mit-preis { table-layout: fixed; }
+  .ezp-tab.mit-preis :is(td.ezp-p, th.ezp-wp, .ezp-nr) { display: none; }
+  .ezp-tab.mit-preis .ezp-c { width: 32px; }
+  .ezp-tab.mit-preis .ezp-pr { width: 84px; }
+  .ezp-tab.mit-preis .ezp-i { width: 40px; }
+  .ezp-tab.mit-preis .ezp-n { overflow-wrap: anywhere; }
+}
 .ob-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); margin-right: 4px; }
 .e-var .vrow { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
 .e-var .in.num { min-width: 0; }
 .e-var .in.num::placeholder { color: var(--muted); font-style: italic; }
 .e-var.own .in.num { font-weight: 650; }
-.e-var.is-hidden .in.num { text-decoration: line-through; }
 .vtog { flex: none; width: 26px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; opacity: .55; }
 .vtog:hover { opacity: 1; background: var(--surface-3); color: var(--text); }
 .vtog.on { opacity: 1; color: var(--accent); background: var(--accent-soft); }
-tr:has(.e-var.is-hidden) td:not(.e-price):not(.e-act) { opacity: .5; }
 body.ro .vtog { display: none; }
 .oftab td { vertical-align: middle; padding: 6px 8px; }
 .oftab .in { width: 100%; }
 .oftab tr.of-std td { background: var(--surface-2); }
 .oftab .act { width: 1%; text-align: right; }
 #offers-body .dlg-body > .btn { margin-top: 10px; }
-@media (max-width: 700px) { .ob-act { margin-left: 0; } .oftab th:nth-child(3), .oftab td:nth-child(3) { display: none; } }
-.e-var.is-hidden .in.num::placeholder { font-size: 11.5px; letter-spacing: -.01em; }
+@media (max-width: 700px) { .oftab th:nth-child(3), .oftab td:nth-child(3) { display: none; } }
 
 /* ---------- Kunden ---------- */
 .fld textarea { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--surface); color: var(--text); font: inherit; resize: vertical; outline: none; }
@@ -839,7 +960,7 @@ body.ro .vtog { display: none; }
 .sale-tag.off { cursor: default; background: none; color: var(--muted); font-weight: 500; padding: 0; }
 body.ro .sale-tag { cursor: default; }
 .nostock { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--nostock); color: #fff; font-size: 11.5px; font-weight: 700; cursor: help; }
-#mhd-panel { margin: 0 0 16px; }
+#mhd-panel { margin: 0; }
 .mhd-card .np-badge { background: var(--sale); color: #fff; }
 .mhd-card .sp-val { color: var(--sale); }
 .sptab { margin: 10px 0 6px; }
@@ -1694,16 +1815,17 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .sec-nav a { border-radius: 999px; border: 0; background: var(--aus); }
   body.adm .sec-nav a:hover { background: var(--glas-stark); }
 
-  /* „Preise für“: Segment-Umschalter (Pillen in einer Spur, aktive als Glas) */
-  body.adm .offer-bar { padding: 12px 16px; }
-  body.adm .ob-tabs { gap: 2px; padding: 4px; border-radius: 22px; background: var(--aus); }
-  body.adm .ob-tabs button { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-weight: 500; }
-  body.adm .ob-tabs button:hover { color: var(--text); background: rgba(255, 255, 255, .35); }
-  body.adm .ob-tabs button[aria-selected="true"] {
-    background: var(--glas-stark); color: var(--text); font-weight: 600; box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 8px rgba(0, 0, 0, .08);
-  }
-  body.adm .ob-tabs button small { background: var(--aus); color: var(--text-2); }   /* Zähler auf doppeltem Segmentgrund: Kontrast ≥ 4,5:1 */
-  body.adm .ob-tabs button[aria-selected="true"] small { background: var(--accent-soft); color: var(--accent); }
+  /* Angebotsliste links: Einträge wie die Seitenleiste (44 px), gewähltes Angebot als Glas mit Akzent */
+  body.adm .offer-bar { padding: 14px 10px; border-radius: var(--r-glas); }
+  body.adm .ob-o { border-radius: 14px; }
+  body.adm .ob-o:hover { background: var(--aus); }
+  body.adm .ob-o[aria-selected="true"] { background: var(--glas-stark); color: var(--text); box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 10px rgba(0, 0, 0, .06); }
+  body.adm .ob-o[aria-selected="true"] .ob-n { color: var(--accent); }
+  body.adm .ob-z { background: var(--aus); color: var(--text-2); }   /* Zähler: Kontrast ≥ 4,5:1 auf dem Glas */
+  body.adm .ob-o[aria-selected="true"] .ob-z { background: var(--accent); color: #fff; }
+  body.adm .ed-head { background: var(--glas-karte); border: 1px solid var(--glas-rand); box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); border-radius: var(--r-glas); padding: 18px 22px; }
+  body.adm .ed-head .meta-card { background: none; border: 0; box-shadow: none; padding: 0; border-radius: 0; }
+  body.adm .ed-chip { background: var(--aus); }
 
   /* Hinweise */
   body.adm .changes .chg { border-radius: 18px; background: var(--glas-karte); border-color: var(--glas-rand); }
@@ -1737,15 +1859,13 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 }
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
-  :root:not([data-theme="light"]) body.adm .ob-tabs button:hover { background: rgba(255, 255, 255, .06); }
   :root:not([data-theme="light"]) body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
-  :root:not([data-theme="light"]) body.adm :is(.nostock, .mhd-card .np-badge) { color: #1c1a19; }   /* helle Füllung im Dunkeln: weiße Schrift < 3:1 */
+  :root:not([data-theme="light"]) body.adm :is(.nostock, .mhd-card .np-badge, .ob-o[aria-selected="true"] .ob-z) { color: #1c1a19; }   /* helle Füllung im Dunkeln: weiße Schrift < 3:1 */
 }
 @media screen {
   :root[data-theme="dark"] body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
-  :root[data-theme="dark"] body.adm .ob-tabs button:hover { background: rgba(255, 255, 255, .06); }
   :root[data-theme="dark"] body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
-  :root[data-theme="dark"] body.adm :is(.nostock, .mhd-card .np-badge) { color: #1c1a19; }
+  :root[data-theme="dark"] body.adm :is(.nostock, .mhd-card .np-badge, .ob-o[aria-selected="true"] .ob-z) { color: #1c1a19; }
 }
 /* Mittlere Breite: Speicherstand in eigener Zeile der Kapsel */
 @media screen and (max-width: 1600px) {
@@ -1785,7 +1905,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 }
 /* Handy/Tablet mit Fingerbedienung: Bedienelemente mindestens 36 px (kleine Pillen, Segmente, Tabellenfelder) */
 @media screen and (max-width: 900px) and (pointer: coarse) {
-  body.adm :is(.adm-page, dialog) :is(.btn.sm, .seg button, .ob-tabs button, .gfoot .btn), body.adm .sec-nav a, body.adm .side-tabs button { height: 36px; }
+  body.adm :is(.adm-page, dialog) :is(.btn.sm, .seg button, .gfoot .btn), body.adm .sec-nav a, body.adm .side-tabs button { height: 36px; }
   body.adm :is(.adm-page, dialog) .ibtn { width: 36px; height: 36px; }
   body.adm .ezpos tbody td.ez-code { min-height: 30px; }   /* Einzelangebot als Karte: Bezeichnung beginnt unter dem Entfernen-Knopf */
   body.adm :is(.adm-page, dialog) :is(.in, select, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="file"]):not([type="range"])) { min-height: 36px; }

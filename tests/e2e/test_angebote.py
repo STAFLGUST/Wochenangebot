@@ -1,11 +1,13 @@
-"""Mehrere Angebote: Kundenangebote mit eigenen Preisen, Verwaltung, Übernahme, Veröffentlichen,
-Auslieferung nur an Berechtigte (Regel: Kundenpreise nie öffentlich)."""
+"""Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je Angebot (Artikel hinzufügen wie im
+Einzelangebot, entfernen nur im gewählten Angebot, Umstellung „folgt dem Wochenangebot“ → eigene Liste), Verwaltung,
+Übernahme, Excel-Import ohne Verlust der Kundenangebote, Veröffentlichen, Auslieferung nur an Berechtigte (Regel:
+Kundenpreise nie öffentlich)."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
-from umgebung import SH, storage_raw, storage_write
+from umgebung import SH, XL44, storage_raw, storage_write
 from testdaten import de, preis
 B = BASE
 res = []
@@ -37,6 +39,16 @@ def post_bestaetigt(pg, action, body):
 def row(pg, code): return pg.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])').first
 def wait_saved(pg): pg.wait_for_function("document.querySelector('#save-state').className.includes('saved') || /Keine Änderungen/.test(document.querySelector('#save-state').textContent)", timeout=8000)
 def tab(pg, label): return pg.locator(f'#offer-bar [data-offer]:has-text("{label}")').first
+def zahl(pg, label): return int(tab(pg, label).locator('.ob-z').inner_text().replace('.', ''))
+def codes(pg): return pg.locator('#groups tr[data-id] input[data-f=code]').evaluate_all('e => e.map(x => x.value)')
+def hinzufuegen(pg, q, preise):
+    """„Artikel hinzufügen“: Suche, markieren, Preis je Artikel, übernehmen"""
+    pg.click('#btn-add-art'); pg.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+    pg.fill('#ezp-q', q)
+    for code, pr in preise.items():
+        pg.wait_for_selector(f'#ezp-list tr[data-code="{code}"]'); pg.click(f'#ezp-list tr[data-code="{code}"] .ezp-n')
+        if pr is not None: pg.fill(f'#ezp-list [data-preis="{code}"]', pr)
+    pg.click('#ezp-ok'); pg.wait_for_selector('#dlg-ez-pick', state='hidden')
 def item(offer, code): return next((i for i in offer['items'] if i['code'] == code), None)
 
 P10601, P10823 = preis('10601'), preis('10823')
@@ -49,9 +61,13 @@ with sync_playwright() as p:
     a.wait_for_timeout(600); wait_saved(a)
     # sauberer Ausgangspunkt
     a.click('#btn-publish'); a.wait_for_selector('#dlg-publish[open]'); a.click('[data-ia=publish]'); a.wait_for_function("!document.querySelector('#dlg-publish').open", timeout=15000)
-    labels = a.locator('#offer-bar [data-offer]').all_inner_texts()
-    check('offer bar: Standard + 4 Kundenangebote', [re.sub(r'\d+$', '', l).strip() for l in labels] == ['Wochenangebot', 'Chefs Culinar', 'Handelshof, EFS', 'Edeka', 'Bela'], labels)
+    ids0 = a.locator('#offer-bar [data-offer]').evaluate_all('e => e.map(x => x.dataset.offer)')
+    check('Angebotsliste links: Wochenangebot + 4 Kundenangebote', ids0 == ['std', 'chefs-culinar', 'handelshof-efs', 'edeka', 'bela'], ids0)
     check('standard selected by default', a.get_attribute('#offer-bar [data-offer="std"]', 'aria-selected') == 'true')
+    n_std = len(codes(a))
+    check('Liste zeigt Artikelzahl je Angebot; bestehende Angebote folgen dem Wochenangebot', zahl(a, 'Wochenangebot') == n_std and zahl(a, 'Edeka') == n_std
+          and 'folgt dem Wochenangebot' in tab(a, 'Edeka').inner_text(), (zahl(a, 'Wochenangebot'), zahl(a, 'Edeka'), n_std))
+    check('Leisten „Kurzes MHD“/„Bestand ohne Preis“ zugeklappt (ohne Bestand: ausgeblendet)', a.locator('#ed-panels .np-card.open').count() == 0)
     # Edeka: eigene Preise
     tab(a, 'Edeka').click(); a.wait_for_timeout(200)
     th = a.locator('.gcard').first.locator('thead').inner_text()
@@ -62,9 +78,9 @@ with sync_playwright() as p:
     check('own price saved + formatted', row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00')
     check('row marked as price change', 'is-price' in row(a, '10601').get_attribute('class'))
     check('changes bar counts offer price', '1 Angebotspreis geändert' in re.sub(r'\s+', ' ', a.inner_text('#changes')), a.inner_text('#changes'))
-    check('tab shows count of own prices', tab(a, 'Edeka').inner_text().strip().endswith('1'), tab(a, 'Edeka').inner_text())
-    row(a, '10823').locator('[data-act=v-hide]').click(); wait_saved(a)
-    check('hide in this offer only', 'is-hidden' in row(a, '10823').locator('td.e-price').get_attribute('class') and row(a, '10823').locator('input[data-f=vprice]').is_disabled())
+    check('Kopf: Angebot „folgt dem Wochenangebot“ mit Hinweis zur Umstellung', 'Folgt dem Wochenangebot' in a.inner_text('#offer-head') and a.locator('#offer-head [data-ob=umstellen]').count() == 1)
+    row(a, '10823').locator('[data-act=remove]').click(); wait_saved(a)
+    check('✕ entfernt nur aus diesem Angebot', row(a, '10823').count() == 0 and zahl(a, 'Edeka') == n_std - 1 and zahl(a, 'Wochenangebot') == n_std)
     bad = row(a, '10701').locator('input[data-f=vprice]'); bad.fill('abc'); bad.press('Tab'); a.wait_for_timeout(200)
     check('invalid offer price rejected', 'invalid' in bad.get_attribute('class') and 'nicht lesbar' in a.inner_text('#toast'))
     bad.fill(''); bad.press('Tab'); wait_saved(a)
@@ -98,17 +114,77 @@ with sync_playwright() as p:
     f = actx.new_page(); f.goto(B + '/?angebot=edeka'); f.wait_for_selector('tr.row')
     check('frontend shows offer name + own price', 'Wochenangebot Edeka' in f.inner_text('#topbar h1') and '22,00' in f.inner_text('tr.row >> nth=0'), f.inner_text('#topbar h1'))
     f.screenshot(path=SH + '/angebote-frontend.png')
-    # Neues Angebot mit Regel „nicht anzeigen“
+    # Neues Angebot: eigene Artikelliste (Voreinstellung)
     a.click('[data-ob=manage]'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
     check('Angebote verwalten führt zu Stammdaten → Angebote', a.get_attribute('#vt-angebote', 'aria-selected') == 'true')
     a.click('[data-ofa=add]'); a.locator('#view-angebote [data-of=name]').last.fill('Wochenangebot Metro')
-    a.locator('#view-angebote tr[data-oi]').last.locator('[data-of=fallback]').select_option('hidden')
+    check('neues Angebot: Voreinstellung „Eigene Artikelliste“', a.locator('#view-angebote tr[data-oi]').last.locator('[data-of=fallback]').input_value() == 'hidden')
     a.click('[data-ofa=save]'); a.wait_for_selector('#toast.show:has-text("Angebote gespeichert")', timeout=8000)
-    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) #offer-bar:not([hidden])')
     check('new offer tab appears', tab(a, 'Metro').count() == 1)
-    tab(a, 'Metro').click(); a.wait_for_timeout(200)
-    check('rule hidden: placeholder ausgeblendet', row(a, '10601').locator('input[data-f=vprice]').get_attribute('placeholder') == 'ausgeblendet')
-    mi = row(a, '10601').locator('input[data-f=vprice]'); mi.fill('19,5'); mi.press('Tab'); wait_saved(a)
+    tab(a, 'Metro').click(); a.wait_for_selector('#groups .ed-empty')
+    check('eigene Artikelliste: leer, Hinweis und „Artikel hinzufügen“', 'Noch keine Artikel in diesem Angebot' in a.inner_text('#groups') and zahl(a, 'Metro') == 0
+          and 'Eigene Artikelliste' in a.inner_text('#offer-head'))
+    a.screenshot(path=SH + '/angebote-leer.png')
+    # Artikel hinzufügen (Fenster wie im Einzelangebot): Preis je Artikel, Gruppe automatisch
+    a.click('#btn-add-art'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+    check('Fenster: Ziel-Angebot im Kopf, Preisspalte „Preis hier“', 'Metro' in a.inner_text('#ez-pick-body .ezp-head') and a.locator('#ezp-angebot').count() == 1)
+    a.fill('#ezp-q', '10601'); a.wait_for_selector('#ezp-list tr[data-code="10601"]'); a.click('#ezp-list tr[data-code="10601"] .ezp-n')
+    check('markierter Artikel: Preisfeld mit Wochenpreis vorbelegt, Zielgruppe im Fuß', a.input_value('#ezp-list [data-preis="10601"]') == de(P10601) and 'landet in:' in a.inner_text('#ezp-anz'), a.inner_text('#ezp-anz'))
+    a.fill('#ezp-list [data-preis="10601"]', '19x'); a.click('#ezp-ok'); a.wait_for_selector('#ezp-anz .ezp-err')
+    check('unlesbarer Preis: Fenster bleibt offen mit Hinweis', 'nicht lesbar' in a.inner_text('#ezp-anz') and a.locator('#dlg-ez-pick[open]').count() == 1)
+    a.fill('#ezp-list [data-preis="10601"]', '19,5')
+    a.screenshot(path=SH + '/angebote-hinzufuegen.png')
+    a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden'); wait_saved(a)
+    check('übernommen: nur dieser Artikel mit eigenem Preis', codes(a) == ['10601'] and row(a, '10601').locator('input[data-f=vprice]').input_value() == '19,50' and zahl(a, 'Metro') == 1, codes(a))
+    check('andere Angebote unverändert', zahl(a, 'Wochenangebot') == n_std and zahl(a, 'Edeka') == n_std)
+    a.click('#btn-add-art'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-q'); a.fill('#ezp-q', '10601'); a.wait_for_selector('#ezp-list tr[data-code="10601"]')
+    check('bereits enthaltener Artikel nicht erneut wählbar', a.is_disabled('#ezp-list [data-sel="10601"]') and 'schon enthalten' in a.inner_text('#ezp-list tr[data-code="10601"]'))
+    # Freie Position nur in diesem Angebot
+    a.click('#dlg-ez-pick [data-pick-extra="frei"]'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    a.wait_for_function("document.activeElement && document.activeElement.dataset.f === 'name'")
+    a.keyboard.type('Metro-Spezial Testartikel'); a.keyboard.press('Tab')
+    neu = a.locator('tr[data-id]:has(input[data-f=name][value="Metro-Spezial Testartikel"])')
+    neu.locator('input[data-f=vprice]').fill('8,8'); neu.locator('input[data-f=vprice]').press('Tab'); wait_saved(a)
+    check('freie Position im Angebot', zahl(a, 'Metro') == 2 and neu.locator('input[data-f=vprice]').input_value() == '8,80')
+    check('… erscheint in keinem anderen Angebot', zahl(a, 'Wochenangebot') == n_std and zahl(a, 'Edeka') == n_std and zahl(a, 'Bela') == n_std)
+    vi = neu.locator('input[data-f=vprice]'); vi.fill(''); vi.press('Tab'); a.wait_for_timeout(200)
+    check('eigene Liste: leerer Preis wird nicht übernommen (Hinweis auf ✕)', vi.input_value() == '8,80' and '✕' in a.inner_text('#toast'))
+    # ✕: Artikel, der nur hier steht, wird gelöscht; Rückgängig holt ihn zurück
+    neu.locator('[data-act=remove]').click(); a.wait_for_selector('#toast.show:has-text("gelöscht")')
+    check('✕ in eigener Liste: nur hier → gelöscht', zahl(a, 'Metro') == 1 and 'in keinem anderen Angebot' in a.inner_text('#toast'))
+    a.click('#btn-undo'); a.wait_for_function("document.querySelectorAll('#groups tr[data-id]').length === 2"); wait_saved(a)
+    check('Rückgängig stellt die Position wieder her', zahl(a, 'Metro') == 2)
+    # Umstellen „folgt dem Wochenangebot“ → eigene Artikelliste (Edeka hat einen eigenen Preis: 10601 = 22,00)
+    tab(a, 'Edeka').click(); a.wait_for_selector('#offer-head [data-ob=umstellen]')
+    a.click('#offer-head [data-ob=umstellen]'); a.wait_for_selector('#dlg-confirm[open]')
+    t = a.inner_text('#dlg-confirm')
+    check('Umstellung: Hinweis „sofort“ und Zahl der Artikel mit eigenem Preis', 'sofort' in t and '1 Artikel' in t, t)
+    a.click('#dlg-confirm [data-v="1"]'); a.wait_for_selector('#toast.show:has-text("eigene Artikelliste")')
+    check('Edeka: eigene Artikelliste mit dem einen eigenen Artikel', codes(a) == ['10601'] and zahl(a, 'Edeka') == 1 and 'Eigene Artikelliste' in a.inner_text('#offer-head')
+          and next(o for o in get(a, 'offers')[1]['offers'] if o['id'] == 'edeka')['fallback'] == 'hidden', codes(a))
+    r = get(a, 'offer&angebot=edeka')
+    check('… Kunden sehen sofort nur noch diesen Artikel', r[0] == 200 and [i['code'] for i in r[1]['offer']['items']] == ['10601'], [i['code'] for i in r[1]['offer']['items']][:5] if r[0] == 200 else r)
+    # Aus anderem Angebot übernehmen: Wochenangebot −5 % in die eigene Liste
+    a.click('#offer-head [data-ob=copy]'); a.wait_for_selector('#dlg-offer-copy[open]')
+    a.select_option('#offer-copy-body [name=src]', 'std'); a.fill('#offer-copy-body [name=pct]', '-5'); a.click('#offer-copy-body [type=submit]'); wait_saved(a)
+    exp = round(round(P10823 * 0.95 / 0.05) * 0.05, 2)
+    check('Übernahme füllt die eigene Liste, eigener Preis bleibt', zahl(a, 'Edeka') > 100 and row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00'
+          and row(a, '10823').locator('input[data-f=vprice]').input_value() == de(exp), (zahl(a, 'Edeka'), de(exp)))
+    check('… Wochenangebot und Metro unverändert', zahl(a, 'Wochenangebot') == n_std and zahl(a, 'Metro') == 2)
+    a.click('#btn-undo'); a.wait_for_function("document.querySelectorAll('#groups tr[data-id]').length === 1"); wait_saved(a)
+    check('Übernahme mit Rückgängig zurückgenommen', zahl(a, 'Edeka') == 1)
+    # Server: Gruppe mit VK-Gruppe bleibt im Entwurf, geht nie an Kunden; neue Angebote ohne Regel = eigene Liste
+    d = get(a, 'draft')[1]; mdl = d['draft']
+    mdl['groups'][0]['vk'] = '1600'; mdl['groups'][1]['vk'] = '<b>'
+    r = post(a, 'save_draft', {'model': mdl, 'revision': d['revision']})
+    d2 = get(a, 'draft')[1]['draft']
+    check('Gruppe: VK-Gruppe gespeichert, ungültige verworfen', r[0] == 200 and d2['groups'][0].get('vk') == '1600' and 'vk' not in d2['groups'][1], d2['groups'][:2])
+    r = get(a, 'offer&angebot=edeka&draft=1')
+    check('… nicht in der Auslieferung (Vorschau Kundenangebot)', r[0] == 200 and '"vk"' not in json.dumps(r[1]), r[0])
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) #offer-bar:not([hidden])'); wait_saved(a)
+    r = get(a, 'angebot_artikel')
+    check('Artikel für „Artikel hinzufügen“: Stammdaten/Wochenangebot, ohne Einkaufspreise', r[0] == 200 and any(x['code'] == '10601' for x in r[1]['articles']) and r[1].get('ek') is False, r[0])
     # Preise übernehmen in Bela (+10 %, auf 0,05)
     tab(a, 'Bela').click(); a.click('[data-ob=copy]'); a.wait_for_selector('#dlg-offer-copy[open]')
     a.fill('#offer-copy-body [name=pct]', '10'); a.click('#offer-copy-body [type=submit]'); wait_saved(a)
@@ -121,12 +197,31 @@ with sync_playwright() as p:
     ids = {x['id']: x['name'] for x in get(a, 'offers')[1]['offers']}
     metro = next(k for k, v in ids.items() if 'Metro' in v)
     r = get(a, f'offer&angebot={metro}')
-    check('rule hidden: only own prices delivered', r[0] == 200 and [i['code'] for i in r[1]['offer']['items']] == ['10601'], len(r[1]['offer']['items']) if r[0] == 200 else r)
+    mo = r[1]['offer']['items'] if r[0] == 200 else []
+    check('eigene Artikelliste: nur ihre Artikel ausgeliefert', sorted(i['code'] or '' for i in mo) == ['', '10601'] and any(i['name'].startswith('Metro-Spezial') for i in mo)
+          and next(i for i in mo if i['code'] == '10601')['price'] == {'status': 'value', 'value': 19.5}, [(i['code'], i['name']) for i in mo] or r)
+    pubo = get(a, 'offer')[1]['offer']
+    check('… freie Position nicht im Wochenangebot', not any(i['name'].startswith('Metro-Spezial') for i in pubo['items']))
+    r = get(a, 'offer&angebot=bela')
+    check('… nicht in Angeboten, die dem Wochenangebot folgen', r[0] == 200 and not any(i['name'].startswith('Metro-Spezial') for i in r[1]['offer']['items']))
     # Vorwoche je Angebot
     tab(a, 'Edeka').click(); a.fill('#m-week', str(int(a.input_value('#m-week')) + 1)); a.press('#m-week', 'Tab'); a.wait_for_timeout(1500)
     pc = row(a, '10601').locator('td.e-prev').inner_text().strip()
     check('Vorwoche shows previous offer price', pc.startswith('22,00'), pc)
     a.fill('#m-week', str(int(a.input_value('#m-week')) - 1)); a.press('#m-week', 'Tab'); wait_saved(a)
+    # Excel-Import ersetzt nur das Wochenangebot: Kundenangebote behalten Artikel und Preise
+    tab(a, 'Wochenangebot').click(); a.wait_for_timeout(200)
+    with a.expect_file_chooser() as fc: a.click('#btn-import')
+    fc.value.set_files(XL44); a.wait_for_selector('#dlg-import [data-ia="apply"]')
+    check('Import-Vorschau: Kundenangebote bleiben erhalten', 'Kundenangebote bleiben erhalten' in a.inner_text('#dlg-import'), a.inner_text('#dlg-import')[:300])
+    a.click('#dlg-import [data-ia="apply"]'); wait_saved(a)
+    check('nach dem Import: Metro und Edeka behalten ihre Artikel', zahl(a, 'Metro') == 2 and zahl(a, 'Edeka') == 1 and a.input_value('#m-week') == '44', (zahl(a, 'Metro'), zahl(a, 'Edeka')))
+    tab(a, 'Edeka').click(); a.wait_for_timeout(200)
+    check('… eigener Preis wandert auf den importierten Artikel', row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00')
+    tab(a, 'Metro').click(); a.wait_for_timeout(200)
+    check('… Position nur im Kundenangebot bleibt', any(x.startswith('Metro-Spezial') for x in a.locator('#groups input[data-f=name]').evaluate_all('e => e.map(x => x.value)')))
+    a.click('#btn-undo'); wait_saved(a)
+    check('Import mit Rückgängig zurückgenommen', a.input_value('#m-week') != '44')
     # Rechte
     post(a, 'user_save', {'name': 'Eddi', 'username': 'eddi', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
     post(a, 'user_save', {'name': 'Vera', 'username': 'vera', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-1', 'mustChange': False})
@@ -141,6 +236,9 @@ with sync_playwright() as p:
     v = br.new_page(viewport={'width': 1440, 'height': 950}); login(v, 'vera', 'Leserin-Zugang-1')
     tv = v.locator('#offer-bar [data-offer]:has-text("Edeka")').first; tv.click(); v.wait_for_timeout(200)
     check('viewer: can switch, inputs locked, no manage', v.locator('tr[data-id] input[data-f=vprice]').first.is_disabled() and v.locator('[data-ob=manage]').count() == 0)
+    check('viewer: kein „Artikel hinzufügen“, keine Artikelauswahl (403)', not v.locator('#btn-add-art').is_visible() and get(v, 'angebot_artikel')[0] == 403
+          and not v.locator('tr[data-id] [data-act=remove]').first.is_visible())
+    check('editor: Artikelauswahl erlaubt', get(e, 'angebot_artikel')[0] == 200)
     # Admin löscht Angebot
     a.click('[data-ob=manage]'); a.wait_for_selector('#view-angebote:not([hidden]) tr[data-oi]')
     a.locator('#view-angebote tr[data-oi]:has(input[value*="Metro"]) [data-ofa=del]').click(); a.click('#dlg-confirm [data-v="1"]')

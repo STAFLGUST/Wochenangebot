@@ -49,6 +49,14 @@ switch ($action) {
             respond(['ok' => true, 'company' => $CFG['company'], 'offer' => $offer, 'fracht' => fracht_public()]);
         }
 
+        /* Artikel für „Artikel hinzufügen“ im Angebot: Stammdaten (VK-Gruppe), Wochenpreis, mit Recht „Bestand ansehen“
+           auch Bestand, Partien und erwartete Ankünfte – dieselbe Quelle wie im Einzelangebot, ohne Einkaufspreise */
+        case 'angebot_artikel': {
+            $me = require_perm('angebot.bearbeiten');
+            header('Cache-Control: no-store');
+            respond(['ok' => true] + einzel_artikel(may($me, 'bestand.sehen'), false));
+        }
+
         /* Liste der Kundenangebote (Name, Kennung, Rückfall – keine Preise): Angebot sowie Kundenverwaltung (Zuordnung) */
         case 'offers': {
             $me = require_auth();
@@ -99,7 +107,8 @@ switch ($action) {
                     $list[$i]['id'] = "$basis-$k"; $belegt["$basis-$k"] = true;
                 }
                 foreach ($list as $i => $o) {
-                    if (!array_key_exists('fallback', $o)) $list[$i]['fallback'] = ($old[$o['id']]['fallback'] ?? 'standard') === 'hidden' ? 'hidden' : 'standard';
+                    // ohne Angabe: bestehende Angebote behalten ihre Regel, neue haben eine eigene Artikelliste
+                    if (!array_key_exists('fallback', $o)) $list[$i]['fallback'] = (isset($old[$o['id']]) ? ($old[$o['id']]['fallback'] ?? 'standard') : 'hidden') === 'hidden' ? 'hidden' : 'standard';
                     // Felder, die dieser Stand nicht kennt (neuere Fassung), bleiben erhalten (GR-006); gruppen regelt der Block unten
                     if (isset($old[$o['id']])) $list[$i] += array_diff_key($old[$o['id']], array_flip(['id', 'name', 'fallback', 'gruppen']));
                 }
@@ -126,11 +135,11 @@ switch ($action) {
                 $removed = array_diff_key($old, $new);
                 if ($removed) require_perm_confirmed('angebote.loeschen', 'angebote_loeschen');
                 $d = [];
-                $FB = ['standard' => 'Standardpreis zeigen', 'hidden' => 'Artikel ausblenden'];
+                $FB = ['standard' => 'folgt dem Wochenangebot', 'hidden' => 'eigene Artikelliste'];
                 foreach ($new as $id => $o) {
-                    if (!isset($old[$id])) { $d[] = ['k' => "o$id|+", 'code' => '', 'name' => $o['name'], 'f' => 'Neues Angebot', 'from' => '', 'to' => 'ohne eigenen Preis: ' . $FB[$o['fallback']]]; continue; }
+                    if (!isset($old[$id])) { $d[] = ['k' => "o$id|+", 'code' => '', 'name' => $o['name'], 'f' => 'Neues Angebot', 'from' => '', 'to' => 'Artikelliste: ' . $FB[$o['fallback']]]; continue; }
                     if ($old[$id]['name'] !== $o['name']) $d[] = ['k' => "o$id|name", 'code' => '', 'name' => $o['name'], 'f' => 'Name', 'from' => $old[$id]['name'], 'to' => $o['name']];
-                    if (($old[$id]['fallback'] ?? 'standard') !== $o['fallback']) $d[] = ['k' => "o$id|fb", 'code' => '', 'name' => $o['name'], 'f' => 'Ohne eigenen Preis', 'from' => $FB[$old[$id]['fallback'] ?? 'standard'], 'to' => $FB[$o['fallback']]];
+                    if (($old[$id]['fallback'] ?? 'standard') !== $o['fallback']) $d[] = ['k' => "o$id|fb", 'code' => '', 'name' => $o['name'], 'f' => 'Artikelliste', 'from' => $FB[$old[$id]['fallback'] ?? 'standard'], 'to' => $FB[$o['fallback']]];
                 }
                 foreach ($new as $id => $o) if (($old[$id]['gruppen'] ?? []) !== ($o['gruppen'] ?? []) && (isset($old[$id]) || !empty($o['gruppen']))) $d[] = ['k' => "o$id|grp", 'code' => '', 'name' => $o['name'], 'f' => 'Kundengruppen', 'from' => implode(', ', $old[$id]['gruppen'] ?? []), 'to' => implode(', ', $o['gruppen'] ?? [])];
                 if ($stdNeu !== $stdAlt) $d[] = ['k' => 'ostd|grp', 'code' => '', 'name' => 'Wochenangebot', 'f' => 'Kundengruppen', 'from' => implode(', ', $stdAlt), 'to' => 'alle ohne eigenes Angebot'];
