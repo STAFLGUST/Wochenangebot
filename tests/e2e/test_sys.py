@@ -83,7 +83,11 @@ with sync_playwright() as p:
     # add item with auto attributes
     g = a.locator('section.gcard').nth(1)
     gname = g.locator('[data-gf="name"]').input_value()
-    g.locator('[data-act="add-item"]').click(); a.wait_for_timeout(150)
+    # „Artikel in diese Gruppe“ öffnet „Artikel hinzufügen“; „Freie Position“ legt eine Zeile ohne Artikelnummer an
+    g.locator('[data-act="add-item"]').click(); a.wait_for_selector('#dlg-ez-pick[open] [data-pick-extra="frei"]')
+    check('Gruppe: Fenster „Artikel hinzufügen“ mit fester Zielgruppe', gname in a.inner_text('#ez-pick-body .ezp-head') and gname in a.inner_text('#ezp-anz'))
+    a.click('#dlg-ez-pick [data-pick-extra="frei"]'); a.wait_for_selector('#dlg-ez-pick', state='hidden')
+    a.wait_for_function("document.activeElement && document.activeElement.dataset.f === 'name'")
     nm = a.locator(':focus'); nm.fill('Färse Hochrippe Testartikel, frisch'); nm.press('Tab')
     newrow = a.locator('tr.is-new').first
     newrow.locator('input[data-f="code"]').fill('19999'); newrow.locator('input[data-f="code"]').press('Tab')

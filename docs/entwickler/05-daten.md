@@ -208,7 +208,7 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 ```json
 {"meta": {"week": 2, "year": 2026, "notice": "", "title?": "…", "source?": "…", "sheetName?": "…"},
  "sections": ["Frischfleisch"],
- "groups": [{"id": "g1", "name": "Rind", "section": "Frischfleisch"}],
+ "groups": [{"id": "g1", "name": "Rind", "section": "Frischfleisch", "vk?": "1600"}],
  "items": [{
    "id": "i1", "code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE",
    "condition": "frisch", "groupId": "g1",
@@ -223,9 +223,10 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 | `category` | `CATEGORIES`: Rind, Kalb, Schwein, Lamm & Schaf, Geflügel, Knochen, Sonstiges (unbekannt → Sonstiges) |
 | `condition` | `CONDITIONS`: frisch, gefroren, frisch-gefroren, dry-aged, unbekannt |
 | `price`, `altPrices[]` | `{status: value|request|none, value?, raw?, label?}`, `value` 0 bis unter 100 000, 4 Nachkommastellen; höchstens 5 Zusatzpreise |
-| `variants?` | Kundenpreise je Angebots-ID: `{status: value|request|hidden, value?, carried?}`; unter `std` nur `{status: hidden}` = im Wochenangebot ausgeblendet; Schlüssel gelöschter Angebote fallen weg |
+| `variants?` | Einträge je Angebots-ID: `{status: value|request|hidden, value?, carried?}`; unter `std` nur `{status: hidden}` = nicht im Wochenangebot; in Angeboten mit eigener Artikelliste macht ein Eintrag `value`/`request` den Artikel zum Teil des Angebots, in Angeboten, die dem Wochenangebot folgen, blendet `hidden` ihn aus; Schlüssel gelöschter Angebote fallen weg |
 | `sale?` | Sonderpreis „solange der Vorrat reicht“: Grundpreis `value`, je Angebot abweichend `{value}` oder `{status: none}` |
 | `cell?`, `nameRaw?` | Zelladresse und Originaltext der Excel-Datei (intern) |
+| Gruppe `vk?` | VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt; `^[0-9A-Za-z._-]{1,10}$`, intern (`offer_resolve` entfernt sie); ältere Fassungen verwerfen das Feld |
 
 Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artikelnummer `^[0-9A-Za-z./-]+$`.
 `variants`, `sale` und `cell` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
@@ -233,13 +234,15 @@ Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artik
 
 **`angebote`**: Kundenangebote.
 `{"rev": 4, "offers": [{"id": "kunde-a", "name": "Wochenangebot Kunde A", "fallback": "standard", "gruppen?": ["10"]}], "stdPublic": true, "geloescht?": ["alt-id"], "updatedAt": "…", "updatedBy": "…"}`.
-`fallback`: `standard` = ohne eigenen Preis Standardpreis zeigen, `hidden` = Artikel ausblenden. `gruppen`: Kundengruppen,
+`fallback`: `hidden` = eigene Artikelliste (nur Artikel mit eigenem Eintrag in `variants`, auch Sonderposten nur dann; Voreinstellung
+für neue Angebote), `standard` = folgt dem Wochenangebot (bisher: alle Artikel des Wochenangebots, ohne eigenen Preis mit
+dem Standardpreis). `gruppen`: Kundengruppen,
 deren Kunden das Angebot ohne eigene Freischaltung sehen (je Gruppe höchstens ein Angebot). Fehlt das Dokument, gelten
 `OFFER_DEFAULTS`. Neue IDs dürfen nicht mit `e-` beginnen (Einzelangebote) und nicht nur aus Ziffern bestehen.
 `geloescht`: IDs gelöschter Angebote – sie werden nie wieder vergeben (`offers_save` hängt bei einem neuen Angebot mit
 gesperrter ID `-2`, `-3` … an), weil unter der alten ID noch Kundenpreise, Sonderpreise (veröffentlichtes Angebot,
 Historie) und direkte Freischaltungen bei Kunden stehen können; gesperrt sind auch solche Reste aus der Zeit vor dem Feld
-(`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung; Felder, die
+(`angebot_ids_mit_resten`). Fehlt `fallback` in einer Anfrage, bleibt die gespeicherte Einstellung (neue Angebote: `hidden`); Felder, die
 `offers_save` nicht kennt, bleiben erhalten (GR-006).
 
 Bestellwünsche (`bestellungen`) und Einzelangebote (`einzelangebote`): [bestell-api-v1.md](../bestell-api-v1.md),

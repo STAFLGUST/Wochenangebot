@@ -4,9 +4,13 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 /* ---------------- Mehrere Angebote ----------------
-   Das Standardangebot („Wochenangebot“) ist die Grundlage. Kundenangebote (z. B. Edeka) haben je Artikel optional
-   einen eigenen Preis in $item['variants'][<Angebots-ID>] = {status: value|request|hidden, value?, carried?}.
-   Ohne eigenen Preis gilt die Regel des Angebots: 'standard' = Standardpreis zeigen, 'hidden' = Artikel ausblenden.
+   Alle Angebote teilen sich eine Artikelliste im Entwurf; je Angebot steht fest, welche Artikel es enthält:
+   – Wochenangebot: alle Artikel außer variants.std = {status: 'hidden'} (Preis in $item['price']).
+   – Kundenangebot mit Regel 'hidden' („eigene Artikelliste“, Voreinstellung für neue Angebote): nur Artikel mit
+     eigenem Eintrag $item['variants'][<Angebots-ID>] = {status: value|request, value?, carried?}. Jedes Angebot steht
+     für sich – Artikel anderer Angebote (auch mit Sonderpreis) erscheinen dort nie.
+   – Kundenangebot mit Regel 'standard' (bisheriges Verhalten, „folgt dem Wochenangebot“): alle Artikel, ohne eigenen
+     Eintrag mit dem Standardpreis; variants[<id>] = {status: 'hidden'} blendet einen Artikel dort aus.
    Kundenpreise verlassen den Server nur aufgelöst und nur für berechtigte Nutzer (offer_resolve). */
 const OFFER_STD = 'std';
 const OFFER_DEFAULTS = [
@@ -160,8 +164,7 @@ function offer_resolve(array $m, array $def): array
             $it['price'] = $regular;
             $it['altPrices'] = [];
         } elseif (($def['fallback'] ?? 'standard') === 'hidden') {
-            if ($sale === null) continue;
-            $regular = null;
+            continue;   // eigene Artikelliste: ohne eigenen Eintrag nicht im Angebot – auch nicht mit Sonderpreis
         }
         if ($sale !== null) {
             $it['price'] = ['status' => 'value', 'value' => $sale];
@@ -174,6 +177,7 @@ function offer_resolve(array $m, array $def): array
     $used = [];
     foreach ($items as $it) $used[$it['groupId']] = true;
     $m['groups'] = array_values(array_filter($m['groups'] ?? [], function ($g) use ($used) { return isset($used[$g['id']]); }));
+    foreach ($m['groups'] as $i => $g) unset($m['groups'][$i]['vk']);   // VK-Gruppe der Angebotsgruppe ist intern
     $secs = [];
     foreach ($m['groups'] as $g) if (($g['section'] ?? '') !== '' && !in_array($g['section'], $secs, true)) $secs[] = $g['section'];
     $m['sections'] = $secs;
@@ -217,7 +221,11 @@ function clean_model($m, bool $strict): array
         $name = s($g['name'] ?? null, 200, false);
         if ($name === null) throw new InvalidArgumentException('Eine Angebotsgruppe hat keinen Namen.');
         $gids[$id] = true;
-        $groups[] = ['id' => $id, 'name' => $name, 'section' => s($g['section'] ?? '', 200) ?? ''];
+        $row = ['id' => $id, 'name' => $name, 'section' => s($g['section'] ?? '', 200) ?? ''];
+        // optional: VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt (ältere Fassungen verwerfen das Feld)
+        $vk = is_string($g['vk'] ?? null) || is_int($g['vk'] ?? null) ? trim((string)$g['vk']) : '';
+        if ($vk !== '' && preg_match('/^[0-9A-Za-z._-]{1,10}$/', $vk)) $row['vk'] = $vk;
+        $groups[] = $row;
     }
 
     $items = [];

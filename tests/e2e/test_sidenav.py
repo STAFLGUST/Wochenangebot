@@ -61,8 +61,9 @@ with sync_playwright() as p:
     check('glass: Veröffentlichen is the coloured button (bordeaux gradient)', 'linear-gradient' in css('#btn-publish', 'backgroundImage')
           and '163, 32, 47' in css('#btn-publish', 'backgroundImage') and css('#btn-publish', 'borderTopLeftRadius') == '999px')
     check('glass: other top bar buttons are neutral pills', css('#btn-preview', 'backgroundImage') == 'none' and css('#btn-preview', 'borderTopLeftRadius') == '999px')
-    check('glass: group cards 28 px, offer chips as segment track', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
-          and css('#offer-bar .ob-tabs', 'backgroundColor') != 'rgba(0, 0, 0, 0)' and css('#offer-bar .ob-tabs button[aria-selected="true"]', 'borderTopLeftRadius') == '999px')
+    check('glass: group cards 28 px, offer list a glass card with the active offer as glass entry', css('#groups .gcard', 'borderTopLeftRadius') == '28px'
+          and css('#offer-bar', 'borderTopLeftRadius') == '28px'
+          and css('#offer-bar .ob-o[aria-selected="true"]', 'borderTopLeftRadius') == '14px' and g.locator('#offer-bar .ob-o[aria-selected="true"]').bounding_box()['height'] >= 44)
     check('glass: dense table cards stay mostly opaque', float(css('#groups .gcard', 'backgroundColor').split(',')[-1].strip(' )')) >= .7, css('#groups .gcard', 'backgroundColor'))
     check('glass: price fields 10 px radius', css('#groups tr[data-id] .e-price .in.num', 'borderTopLeftRadius') == '10px')
     sticky = g.evaluate("(() => { const t = document.querySelector('#view-edit .ed-toolbar'); return [getComputedStyle(t).position, getComputedStyle(t).backgroundColor]; })()")
@@ -143,11 +144,12 @@ with sync_playwright() as p:
     d.click('#vt-log'); d.wait_for_selector('#vt-log[aria-selected="true"]')
     check('1440×900: side navigation scrolls the active entry (Protokoll, last) into view', d.evaluate("document.querySelector('.side-nav').scrollHeight > document.querySelector('.side-nav').clientHeight")
           and innen(d, '#vt-log', '.side-nav'))
-    d.click('#vt-edit'); d.wait_for_selector('#offer-bar .ob-tabs button small')
+    d.click('#vt-edit'); d.wait_for_selector('#offer-bar .ob-o .ob-z')
     for th in ('light', 'dark'):
         d.evaluate(f"document.documentElement.dataset.theme = '{th}'")
-        k = d.evaluate(KONTRAST, '#offer-bar .ob-tabs button:not([aria-selected="true"]) small')
-        check(f'{th}: counter in the „Preise für“ segment has contrast ≥ 4.5:1', k is not None and k >= 4.5, k)
+        k = [d.evaluate(KONTRAST, '#offer-bar .ob-o:not([aria-selected="true"]) .ob-z'), d.evaluate(KONTRAST, '#offer-bar .ob-o[aria-selected="true"] .ob-z'),
+             d.evaluate(KONTRAST, '#offer-bar .ob-o:not([aria-selected="true"]) .ob-n small')]
+        check(f'{th}: Artikelzahl und Hinweise in der Angebotsliste mit Kontrast ≥ 4.5:1', all(x is not None and x >= 4.5 for x in k), k)
     d.evaluate("document.documentElement.dataset.theme = 'dark'")
     d.evaluate("document.querySelector('#groups').insertAdjacentHTML('afterbegin', '<span class=\"nostock\" id=\"t-nostock\">0</span><div class=\"mhd-card\"><span class=\"np-badge\" id=\"t-badge\">65</span></div>')")
     k = [d.evaluate(KONTRAST, '#t-nostock'), d.evaluate(KONTRAST, '#t-badge')]
@@ -176,9 +178,11 @@ with sync_playwright() as p:
     check('390 px touch: navigation entries at least 36 px high', hs and min(hs) >= 36, hs)
     k = h.evaluate(KONTRAST, '.side-tabs button[aria-selected="false"]:not([hidden])')
     check('390 px: inactive navigation entries have contrast ≥ 4.5:1 on the track', k is not None and k >= 4.5, k)
-    h.click('#vt-edit'); h.wait_for_selector('#offer-bar .ob-tabs button')
-    hs = h.evaluate("[...document.querySelectorAll('#offer-bar .ob-tabs button, #offer-bar .btn.sm, #groups .gfoot .btn')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height))")
-    check('390 px touch: segment buttons and small buttons at least 36 px high', hs and min(hs) >= 36, hs)
+    h.click('#vt-edit'); h.wait_for_selector('#offer-bar .ob-cur')
+    h.click('#offer-bar .ob-cur'); h.wait_for_selector('#offer-bar .ob-list.open .ob-o')
+    hs = h.evaluate("[...document.querySelectorAll('#offer-bar .ob-cur, #offer-bar .ob-o, #offer-bar .btn.sm, #offer-head .btn.sm, #groups .gfoot .btn, #btn-add-art')].filter((e) => e.offsetParent).map((e) => Math.round(e.getBoundingClientRect().height))")
+    check('390 px touch: Angebotsauswahl, Angebote und kleine Knöpfe mindestens 36 px hoch', hs and min(hs) >= 36, hs)
+    h.click('#offer-bar .ob-cur')
     h.click('#btn-more'); h.click('#menu-more [data-act="password"]'); h.wait_for_selector('#dlg-password[open]')
     xb = h.evaluate("(() => { const b = document.querySelector('#dlg-password .dlg-head .btn.icon'); return [b.offsetWidth, b.offsetHeight]; })()")   # Layoutgröße (Öffnungsanimation skaliert)
     check('390 px: dialog close button keeps its size next to the title (≥ 36 px)', min(xb) >= 36, xb)
