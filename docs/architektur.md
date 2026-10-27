@@ -100,6 +100,8 @@ Jede Aktion steht im Aktionsregister `regeln/aktionen/<modul>.toml` (Modul, Ober
 
 Dunkle Farben (`prefers-color-scheme: dark`, `data-theme="dark"`) gelten nur für `@media screen` – der Druck ist immer hell. Druckregeln: Angebotsseite in `app.css` (`#print-root`), Eingabebereich in `admin.css` (geöffnete Ansicht bzw. offenes Fenster).
 
+Angebotsseite im Design „Liquid Glass“ (Abschnitt am Ende von `app.css`, nur `@media screen`, alle Regeln unter `body.kseite`, nur `index.html` trägt die Klasse): schwebende Glas-Kopfzeile, Umschalter als Segment, Kapseln für Fleischarten, Filter und Sortierung, Angebotsliste als Glaskarte mit abgerundeten Zeilen, Fenster als Glas; Inhalt, Aufbau und Druck unverändert.
+
 Eingabebereich im Design „Liquid Glass“ (Abschnitt am Ende von `admin.css`, nur `@media screen`, alle Regeln unter `body.adm`):
 eigene Farbwerte für Grund, Glas und Felder (`--glas`, `--glas-kopf`, `--glas-karte`, `--glas-stark`, `--glas-fenster`, `--aus`, `--feld` …),
 drei weiche Farbflächen fest hinter dem Inhalt (`body.adm::before`), Glas mit `backdrop-filter` (Kopfzeilen-Kapsel über

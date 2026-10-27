@@ -351,7 +351,7 @@ Knopf der Seite mit (Aktion `theme_save`, Feld `theme` am Mitarbeiter); die Knö
 
 | Datei | Gilt für | Inhalt |
 | --- | --- | --- |
-| `app/assets/app.css` | alle Seiten außer Rechtsseiten | Schriften (`@font-face` Geist, Geist Mono), Design-Tokens, Grundbausteine (`.btn`, `.fld`, Menü, `dialog.modal`, `.dlg-*`, `.sr-only`, Fokus), Kundenseite „Klar“, Druck der Angebotsseite (`#print-root`) |
+| `app/assets/app.css` | alle Seiten außer Rechtsseiten | Schriften (`@font-face` Geist, Geist Mono), Design-Tokens, Grundbausteine (`.btn`, `.fld`, Menü, `dialog.modal`, `.dlg-*`, `.sr-only`, Fokus), Kundenseite „Klar“ mit dem Abschnitt „Liquid Glass“ am Ende (nur `@media screen`, alles unter `body.kseite` – nur `app/index.html` trägt die Klasse), Druck der Angebotsseite (`#print-root`) |
 | `app/assets/admin.css` | nur Eingabebereich | ergänzt `app.css`; Abschnitt „Liquid Glass“ am Ende, nur `@media screen`, alles unter `body.adm`; Druck der geöffneten Ansicht/des offenen Fensters |
 | `app/assets/admin-import.css` | Eingabebereich | nur die Importzentrale |
 | `app/module/hr/verwaltung-hr.css` | Eingabebereich | HR-Teile der Verwaltung (Farben aus `admin.css`) |
@@ -388,8 +388,14 @@ Farbflächen fest dahinter (`body.adm::before` bzw. `.db-bg`/`.hr-bg`/`.crm-bg`)
 @media (prefers-reduced-transparency: reduce) { .hr-glas { background: var(--hr-deckend); backdrop-filter: none; } .hr-bg { display: none; } }
 ```
 
-Die Kundenseite bleibt im Design „Klar“ (lädt `admin.css` nicht). Einzelheiten zum Eingabebereich (Kapsel, Karten
-28 px, klebende Leisten fast deckend): [Architektur → Browser](../architektur.md#browser-appassets).
+Die Angebotsseite (`app/index.html`, `body.kseite`) nutzt dasselbe Muster im Abschnitt „Liquid Glass“ am Ende von
+`app.css` (Inhalt und Aufbau wie im Design „Klar“): Tokens `--glas-kopf`, `--glas`, `--glas-leicht`, `--glas-karte`,
+`--glas-stark`, `--glas-fenster`, `--aus`, `--feld`, `--zebra`, `--regel`; Grund über `body.kseite::before`; Kopfzeile als
+schwebende Kapsel (`.topbar` mit `top: 10px` – klebende Tabellenköpfe daher `--header-h + 18px`), Umschalter als Segment
+in einer Glaskapsel, Fleischarten/Filter/Sortierung als Kapseln, Angebotsliste `.al` als Glaskarte (30 px) mit abgerundeten
+Zeilen ohne Spaltenlinien, Fenster und Menüs als Glasfenster. Andere Seiten mit `app.css` (Eingabebereich, Dashboard,
+Module) tragen die Klasse nicht und bleiben unverändert. Einzelheiten zum Eingabebereich (Kapsel, Karten 28 px, klebende
+Leisten fast deckend): [Architektur → Browser](../architektur.md#browser-appassets).
 
 ### Symbole
 
