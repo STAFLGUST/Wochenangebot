@@ -1139,7 +1139,8 @@ with sync_playwright() as pw:
         pg.check('#kunde-body [name="pwmode"][value="manual"]')
     pg.fill('#kunde-body [name="password"]', 'Fenster-Kundenpasswort-7')
     pg.uncheck('#kunde-body [name="mustChange"]')
-    check('Kunde: Bestätigung in der Verwaltung erneut nachgestellt abgelaufen', bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test'))
+    bestaetigung_abgelaufen(ctx, 'verwaltung.stafl.test')   # kann schon abgelaufen sein (Prüfung oben) – entscheidend ist der Stand
+    check('Kunde: Bestätigung in der Verwaltung nachgestellt abgelaufen', bestaetigung_stand(ctx, 'verwaltung.stafl.test') == 0, bestaetigung_stand(ctx, 'verwaltung.stafl.test'))
     while time.time() - t0 < 2:   # max_age=0 fragt nur, wenn die letzte Anmeldung in einer früheren Sekunde lag (s. o.)
         time.sleep(0.05)
     pg.click('#kunde-body [type="submit"]')
