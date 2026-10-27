@@ -38,7 +38,8 @@ Teil mit der bisher kleinsten Summe. Die Verteilung hängt nicht davon ab, ob ei
 ## Testdaten
 
 Neue Gruppe `stock_overview`: exakte aktuelle KW/Vorwoche, Bestands- und Zugangssummen/fehlende
-Historie, Bestand und mehrere erwartete Lieferungen, fehlendes ETA, Rechte, Validierung,
+Historie, Bestand und mehrere erwartete Lieferungen, fehlendes ETA, nächste ETA unter dem erfassten Bestand
+(feste Uhr der Seite: kommende bzw. überschrittene ETA), Marke/Partie fett im Fenster, Rechte, Validierung,
 CSV/Druck, Desktop und 390 px in hell/dunkel. Synthetische Daten: `fixtures/bestand/overview.json`.
 Zusätzliche Unit-Tests: `node tests/unit/stock_prices.test.js` und `php tests/unit/stock_prices.php`
 (ISO-Jahreswechsel, Berlin-Zeit, fehlende/gelöschte Wochen, Preisbasis/Mehrdeutigkeit).

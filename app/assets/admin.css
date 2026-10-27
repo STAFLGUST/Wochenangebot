@@ -413,7 +413,15 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 }
 .st-incoming { margin: 0; padding: 0 0 0 16px; font-size: 12px; min-width: 150px; }
 .st-incoming li + li { margin-top: 5px; }
-.st-incoming small { display: block; color: var(--muted); }
+.st-incoming small { display: block; color: var(--text-2); font-weight: 600; }
+dialog .st-incoming, .dlg-body .st-incoming { font-size: 15px; }
+dialog .st-incoming li + li, .dlg-body .st-incoming li + li { margin-top: 10px; }
+dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margin-top: 2px; }   /* Marke und Partie gut lesbar */
+.stab .s-reg { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.25; }
+.stab .s-eta { font-size: 11.5px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.stab .s-eta.alt { color: #b45309; }
+@media screen { [data-theme="dark"] .stab .s-eta.alt { color: #fbbf24; } }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .stab .s-eta.alt { color: #fbbf24; } }
 .stab td.s-mhd[class*="mhd-"] { font-weight: 600; }
 .stab tr.srow { cursor: pointer; } .stab tr.srow:hover td:not([class*="mhd-"]) { background: var(--surface-2); }
 .stab tr.srow:hover td[class*="mhd-"] { filter: brightness(.94); }

@@ -48,6 +48,8 @@ check('stock permission required', N.call('stock')[0] == 403)
 with sync_playwright() as pw:
     browser = pw.chromium.launch()
     page = browser.new_page(viewport={'width':1440,'height':1000})
+    # Uhr der Seite fest auf den 23.10.2026 (Zugänge der Testdaten: 22.10. und 24.10.) – „nächste ETA“ ist datumsabhängig
+    page.clock.set_fixed_time('2026-10-23T12:00:00+02:00')
     errors = []; page.on('pageerror', lambda e: errors.append(str(e)))
     page.goto(B + '/admin/')
     page.fill('#au-user','admin'); page.fill('#pw1','Sicheres-Passwort-1'); page.click('#auth-submit')
@@ -59,8 +61,12 @@ with sync_playwright() as pw:
     check('recorded stock with unit', row('900001').locator('.s-kg').inner_text() == '12,50 kg')
     check('requested column order', [x.replace('\n', ' ') for x in page.locator('.stab thead th').all_inner_texts()] == ['Art.-Nr.', 'Art. Bezeichnung', 'Aktueller Preis KW ' + str(r['prices']['current']['week']) + '/' + str(r['prices']['current']['year']), 'Preis Vorwoche KW ' + str(r['prices']['previous']['week']) + '/' + str(r['prices']['previous']['year']), 'Eingelagerter Bestand', 'Kürz. MHD', 'Kg kürz. MHD', 'Erfasster Bestand', 'Gesamt verfügbar', 'Erwartete Zugänge'])
     check('price change removed', page.locator('.s-change, .st-price-change').count() == 0)
-    check('multiple incoming quantities summed', row('900001').locator('.s-registered').inner_text() == '50,00 kg' and row('900001').locator('.s-total-kg').inner_text() == '62,50 kg')
-    check('no incoming records means zero recorded incoming', row('900002').locator('.s-registered').inner_text() == '0,00 kg' and row('900002').locator('.s-total-kg').inner_text() == '8,00 kg')
+    kg_erfasst = lambda c: row(c).locator('.s-registered').inner_text().split('\n')[0]   # noqa: E731 – erste Zeile ohne ETA
+    check('multiple incoming quantities summed', kg_erfasst('900001') == '50,00 kg' and row('900001').locator('.s-total-kg').inner_text() == '62,50 kg')
+    check('next ETA behind recorded stock: earliest arrival from today (22.10. already past → 24.10.)', row('900001').locator('.s-eta').inner_text() == 'ETA 24.10.26'
+          and row('900001').locator('.s-eta.alt').count() == 0)
+    check('no ETA without arrival date or without deliveries', row('900005').locator('.s-eta').count() == 0 and row('900002').locator('.s-eta').count() == 0 and page.locator('tfoot .s-eta').count() == 0)
+    check('no incoming records means zero recorded incoming', kg_erfasst('900002') == '0,00 kg' and row('900002').locator('.s-total-kg').inner_text() == '8,00 kg')
     check('incoming-only total', row('900005').locator('.s-total-kg').inner_text() == '7,00 kg')
     check('footer totals', page.locator('tfoot .s-kg').inner_text() == '28,50 kg' and page.locator('tfoot .s-registered').inner_text() == '57,00 kg' and page.locator('tfoot .s-total-kg').inner_text() == '85,50 kg')
     check('bold headings', page.locator('.stab thead th').evaluate_all("els => els.every(e => +getComputedStyle(e).fontWeight >= 700)"))
@@ -68,6 +74,8 @@ with sync_playwright() as pw:
     check('deliveries collapsed to button', row('900001').locator('.s-incoming button').inner_text() == 'Zugänge (2)' and page.locator('.stab .st-incoming').count() == 0)
     row('900001').locator('[data-incoming]').click(); page.wait_for_selector('#dlg-stock-item[open]')
     check('arrival button opens focused dialog', page.locator('#sa-title').inner_text() == 'Erwartete Zugänge' and page.locator('#dlg-stock-item .st-incoming li').count() == 2 and '22.10.2026' in page.locator('#dlg-stock-item').inner_text() and '30,00 kg' in page.locator('#dlg-stock-item').inner_text() and page.locator('#dlg-stock-item .lottab').count() == 0)
+    m = page.locator('#dlg-stock-item .st-incoming small').first
+    check('dialog: brand and lot bold and readable', 'Partie TEST-A' in m.inner_text() and m.evaluate("e => +getComputedStyle(e).fontWeight >= 600 && parseFloat(getComputedStyle(e).fontSize) >= 13"))
     page.screenshot(path=os.path.join(SH, 'stock-incoming-dialog.png'))
     page.keyboard.press('Escape')
     row('900005').locator('[data-incoming]').focus(); page.keyboard.press('Enter'); page.wait_for_selector('#dlg-stock-item[open]')
@@ -94,6 +102,14 @@ with sync_playwright() as pw:
     row('900001').locator('.s-name').click(); page.wait_for_selector('#dlg-stock-item[open]')
     check('detail shows both deliveries', page.locator('#dlg-stock-item .st-incoming li').count() == 2)
     page.keyboard.press('Escape')
+    # alle Zugänge überfällig: späteste ETA, als überschritten markiert
+    spaet = browser.new_page(viewport={'width':1440,'height':900}); spaet.clock.set_fixed_time('2026-10-30T09:00:00+01:00')
+    spaet.on('pageerror', lambda e: errors.append(str(e)))
+    spaet.goto(B + '/admin/'); spaet.fill('#au-user','admin'); spaet.fill('#pw1','Sicheres-Passwort-1'); spaet.click('#auth-submit')
+    spaet.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]'); spaet.click('#vt-stock'); spaet.wait_for_selector('.stab tr.srow')
+    e = spaet.locator('.stab tr.srow').filter(has=spaet.locator('td.s-code', has_text='900001')).locator('.s-eta')
+    check('all ETAs past: latest shown and marked overdue', e.inner_text() == 'ETA 24.10.26' and 'alt' in e.get_attribute('class') and 'überschritten' in e.get_attribute('title'))
+    spaet.close()
     check('no JavaScript errors', not errors, errors)
     browser.close()
 
