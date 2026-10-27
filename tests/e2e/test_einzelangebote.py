@@ -324,8 +324,8 @@ with sync_playwright() as p:
     a.click('#ez-kunde'); a.fill('#ez-kunde', 'einzel'); a.wait_for_selector('#ez-kunde-list li[data-kid]'); a.keyboard.press('Tab')
     check('Verlassen ohne Auswahl behält den gewählten Kunden', a.input_value('#ez-kunde').startswith('Andere Kantine') and a.locator('#ez-kunde-list').is_hidden())
     # Kopfleiste: im Einzelangebot Drucken/E-Mail statt Versand des Wochenangebots
-    kl = [a.locator('#btn-send').is_hidden(), a.locator('#btn-ez-druck').is_visible(), a.locator('#btn-ez-mail').is_hidden()]
-    check('Kopfleiste im Einzelangebot: kein „An Kunden senden“, oben Drucken', all(kl), kl)   # E-Mail erst nach dem Speichern
+    kl = [a.locator('#btn-send').is_hidden(), a.locator('#btn-ez-druck').is_visible(), a.locator('#btn-ez-mail').is_hidden(), a.locator('#btn-publish').is_hidden()]
+    check('Kopfleiste im Einzelangebot: kein „An Kunden senden“, kein „Veröffentlichen“, oben Drucken', all(kl), kl)   # E-Mail erst nach dem Speichern
     check('kein Suchfeld mehr neben dem Angebot, dafür „Artikel hinzufügen“', a.locator('#ez-q').count() == 0 and a.locator('#ez-add').is_visible())
 
     # Fenster „Artikel hinzufügen“: zuerst VK-Gruppe, dann Artikel; Suche über alle Gruppen
@@ -428,13 +428,13 @@ with sync_playwright() as p:
     a.screenshot(path=SH + '/einzelangebot-mail.png')
     a.click('#dlg-einzel-mail [data-close]'); a.wait_for_selector('#dlg-einzel-mail', state='hidden')
     a.click('#ez-zurueck'); a.wait_for_selector('#view-einzel tr[data-ez]')
-    kl = [a.locator('#btn-ez-druck').is_hidden(), a.locator('#btn-send').is_hidden()]
-    check('Übersicht: oben weder Drucken noch Versand des Wochenangebots', all(kl), kl)
+    kl = [a.locator('#btn-ez-druck').is_hidden(), a.locator('#btn-send').is_hidden(), a.locator('#btn-publish').is_hidden()]
+    check('Übersicht: oben weder Drucken noch Versand oder Veröffentlichen des Wochenangebots', all(kl), kl)
     check('zurück zur Übersicht: neues Angebot gelistet', a.locator('#view-einzel tr[data-ez]').count() >= 3)
     a.screenshot(path=SH + '/einzelangebote-liste.png')
     a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])')
-    kl = [a.locator('#btn-send').is_visible(), a.locator('#btn-ez-druck').is_hidden()]
-    check('außerhalb der Einzelangebote wieder „An Kunden senden“', all(kl), kl)
+    kl = [a.locator('#btn-send').is_visible(), a.locator('#btn-ez-druck').is_hidden(), a.locator('#btn-publish').is_visible()]
+    check('außerhalb der Einzelangebote wieder „An Kunden senden“ und „Veröffentlichen“', all(kl), kl)
     a.click('#vt-einzel'); a.wait_for_selector('#view-einzel tr[data-ez]')
 
     # Alle Artikel einer Gruppe markieren und auf einmal übernehmen

@@ -206,6 +206,13 @@ Einzelangebote) mit Daten aus `angebot_artikel` (Recht `angebot.bearbeiten`, Bes
 die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Der Excel-Import ersetzt nur das Wochenangebot
 (`importKundenangebote()` übernimmt Kundeneinträge auf gleiche Artikelnummern bzw. behält Artikel nur in Kundenangeboten).
 
+### Vorschau
+
+`openVorschau(angebot)` (`admin.js`) zeigt in `#dlg-vorschau` die Angebotsseite als iframe derselben Adresse
+(`index.html?vorschau=1&eingebettet=1[&angebot=…]`, erlaubt durch `frame-ancestors 'self'`). `frontend.js` blendet im
+eingebetteten Modus (`EINGEBETTET`) den eigenen Vorschau-Hinweis aus. Vor dem Laden wird ein ungespeicherter Entwurf
+gespeichert (die Seite liest `offer&draft=1`); beim Schließen wird die Seite im iframe entladen.
+
 ### Leistung des Angebotseditors
 
 Der Editor hat bei ~280 Artikeln rund 12 000 Elemente. Deshalb zeichnet `renderGroups()` (ganzer Editor per
