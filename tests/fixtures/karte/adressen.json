@@ -1,0 +1,11 @@
+{
+  "zweck": "Erfundene Adressen (keine echten Daten) für das Adressverzeichnis der Tests: E2E-Gruppe crm (WA_ADRESSEN) und tests/unit/test_adressen.py. Aufbau: python3 deploy/karte/adressen.py --json tests/fixtures/karte/adressen.json ziel.sqlite",
+  "adressen": [
+    {"strasse": "Musterstraße", "nr": "10", "plz": "20095", "ort": "Hamburg", "lat": 53.55012, "lon": 9.99018},
+    {"strasse": "Musterstraße", "nr": "12a", "plz": "20095", "ort": "Hamburg", "lat": 53.55103, "lon": 9.99107},
+    {"strasse": "Beispielweg", "nr": "3", "plz": "20095", "ort": "Hamburg", "lat": 53.55201, "lon": 9.99203},
+    {"strasse": "Probeallee", "nr": "1", "plz": "10117", "ort": "Berlin", "lat": 52.51702, "lon": 13.38881},
+    {"strasse": "Probeallee", "nr": "7", "plz": "10117", "ort": "Berlin", "lat": 52.51744, "lon": 13.38998},
+    {"strasse": "Testgasse", "nr": "5", "plz": "80331", "ort": "München", "lat": 48.13702, "lon": 11.57549}
+  ]
+}

@@ -1,0 +1,6 @@
+# pyosmium für deploy/karte/adressen.py – nur im Container beim Laden des Adressverzeichnisses (deploy/adressen-laden.sh).
+# Fest über Prüfsummen (pip --require-hashes), ohne Abhängigkeiten installiert: requests braucht nur der hier ungenutzte
+# Replikationsteil. Räder für Python 3.12 (Image in deploy/adressen-laden.sh) auf x86_64 und aarch64.
+osmium==4.0.2 \
+    --hash=sha256:ba88f4efacda13f9c9b6acfb6e3336085f46c8253485e9d1797d7560bae0e4f5 \
+    --hash=sha256:48e0c6a5bf2044c2560ef08b2c2e33ffb763d1de39e9f7498091bdaa0708e0f2

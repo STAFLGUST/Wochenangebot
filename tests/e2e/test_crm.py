@@ -47,18 +47,18 @@ storage_write('kundengruppen', {'rev': 1, 'groups': [{'nr': '5', 'name': 'Fleisc
 
 def kunde(i, nr, firma, plz, ort, land='', aktiv=True, vt='11', vt2='', angebote=None, **extra):
     return {'id': i, 'nr': nr, 'gruppe': '5', 'vertreter': vt, 'vertreter2': vt2, 'firma': firma, 'ansprechpartner': extra.get('ap', ''),
-            'strasse': 'Musterweg 1', 'plz': plz, 'ort': ort, 'land': land, 'email': extra.get('email', ''), 'telefon': extra.get('tel', ''), 'notiz': '',
+            'strasse': extra.get('strasse', 'Musterweg 1'), 'plz': plz, 'ort': ort, 'land': land, 'email': extra.get('email', ''), 'telefon': extra.get('tel', ''), 'notiz': '',
             'angebote': angebote or [], 'active': aktiv, 'login': extra.get('login'), 'mailAngebot': True, 'created': '2026-10-01T08:00:00Z', 'changed': '2026-10-01T08:00:00Z'}
 
 
 KUNDEN = {'rev': 3, 'updatedAt': '2026-10-01T08:00:00Z', 'customers': [
-    kunde('kaaa111111111', '900001', 'Musterfleischerei Nord GmbH', '20095', 'Hamburg', ap='Frau Beispiel, Herr Test', tel='040 1234567', email='einkauf@musterfleischerei.example',
+    kunde('kaaa111111111', '900001', 'Musterfleischerei Nord GmbH', '20095', 'Hamburg', ap='Frau Beispiel, Herr Test', strasse='Musterstr. 10', tel='040 1234567', email='einkauf@musterfleischerei.example',
           angebote=['std'], login={'username': 'muster-nord', 'hash': 'platzhalter-kein-echter-hash', 'active': True}),
     kunde('kbbb222222222', '900002', 'Beispiel Catering KG', '24103', 'Kiel', vt='12', vt2='11', tel='0431 99887766'),
     kunde('kccc333333333', '900003', 'Probe Markt Ost', '1067', 'Dresden', ap='Herr Probe'),                    # PLZ ohne führende 0
     kunde('kddd444444444', '900004', 'Alpen Feinkost', '6020', 'Innsbruck', land='Österreich'),                  # Ausland: kein Kartenpunkt
     kunde('keee555555555', '900005', 'Ruhender Handel', '28195', 'Bremen', aktiv=False),
-    kunde('kfff666666666', '900006', 'Test-Gastro Süd', '80331', 'München', vt=''),
+    kunde('kfff666666666', '900006', 'Test-Gastro Süd', '80331', 'München', vt='', strasse='Testgasse 9'),   # Nummer unbekannt: Straße
 ]}
 storage_write('kunden', KUNDEN)
 kunden_vorher = storage_raw('kunden')
@@ -99,6 +99,16 @@ for a, b in (('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': '
              ('crm_interessent_save', {'firma': 'Neu GmbH'}), ('crm_export', {})):
     check(f'{a}: nur ansehen → 403', V.call(a, b)[0] == 403)
 check('crm_export: ohne Exportrecht 403 (bearbeiten genügt nicht)', Bb.call('crm_export', {})[0] == 403)
+
+# ── Genaue Lage der Anschriften (crm_karte, Adressverzeichnis lib/adressen.php; Testadressen tests/fixtures/karte/adressen.json) ──
+check('crm_karte: ohne CRM-Recht 403, ohne Anmeldung 401', O.call('crm_karte')[0] == 403 and N.call('crm_karte')[0] == 401)
+st, d = V.call('crm_karte')
+pk = d.get('punkte', {}) if st == 200 else {}
+check('crm_karte (crm.sehen): Hausnummer genau aus dem Adressverzeichnis („Musterstr. 10“ = Musterstraße 10)',
+      st == 200 and pk.get('kaaa111111111') == [53.55012, 9.99018, 'h'], (st, pk))
+check('crm_karte: unbekannte Hausnummer → Straßenmitte, unbekannte Straße/Ausland → kein Eintrag (Karte: PLZ-Mittelpunkt)',
+      (pk.get('kfff666666666') or [0, 0, ''])[2] == 's' and set(pk) == {'kaaa111111111', 'kfff666666666'}, pk)
+check('crm_karte: Stand des Verzeichnisses (Anzahl Adressen), ohne Pfade oder Dateinamen', d.get('stand', {}).get('adressen') == 6 and 'sqlite' not in json.dumps(d), d.get('stand'))
 check('Speichern nur per POST (405)', Bb.call('crm_kunde_save')[0] == 405)
 csrf = Bb.csrf; Bb.csrf = ''
 check('ohne CSRF-Token: 403', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}})[0] == 403)
@@ -298,9 +308,18 @@ with sync_playwright() as p:
     kt = pg.inner_text('#tab-karte')
     check('Karte: deutsche PLZ als Punkte (auch PLZ ohne führende 0), Ausland/ohne PLZ ohne Punkt', n_pts == 5 and pg.locator('#km-pts .pt[data-plz="01067"]').count() == 1
       and '2 ohne Kartenpunkt' in kt, (n_pts, kt[:200]))
-    pg.locator('#km-pts .pt[data-plz="20095"]').dispatch_event('click')
-    pg.wait_for_selector('#km-pop:not([hidden])')
-    check('Karte: Klick zeigt Kunden am Ort', 'Musterfleischerei Nord GmbH' in pg.inner_text('#km-pop'))
+    # Genaue Lage aus dem Adressverzeichnis: Hamburg auf Hausnummer genau, München an der Straße, übrige am PLZ-Mittelpunkt
+    pt_haus, pt_strasse = '#km-pts .pt[data-plz="a53.55012,9.99018"]', '#km-pts .pt[data-plz="a48.13702,11.57549"]'
+    check('Karte: Kunde mit bekannter Anschrift auf Hausnummer genau statt am PLZ-Mittelpunkt',
+          pg.locator(pt_haus).count() == 1 and pg.locator('#km-pts .pt[data-plz="20095"]').count() == 0 and pg.locator(pt_strasse).count() == 1)
+    check('Karte: Hinweis zur Genauigkeit (Hausnummer, Straße, Postleitzahl) mit Stand des Verzeichnisses',
+          '1 auf Hausnummer genau' in kt and '1 an der Straße' in kt and 'am Mittelpunkt der Postleitzahl' in kt and 'OpenStreetMap-Adressverzeichnis' in kt, kt[-400:])
+    pg.locator(pt_strasse).dispatch_event('click'); pg.wait_for_selector('#km-pop:not([hidden])')
+    check('Karte: Punkt an der Straße ist als solcher gekennzeichnet', 'Hausnummer nicht gefunden' in pg.inner_text('#km-pop') and 'Testgasse 9' in pg.inner_text('#km-pop'))
+    pg.locator(pt_haus).dispatch_event('click')
+    pg.wait_for_function("document.querySelector('#km-pop').textContent.includes('Musterfleischerei')")
+    pop = pg.inner_text('#km-pop')
+    check('Karte: Klick zeigt Kunden an der Anschrift', 'Musterfleischerei Nord GmbH' in pop and 'Musterstr. 10' in pop and 'nicht gefunden' not in pop, pop)
     pg.click('#km-pop [data-oeffnen]'); pg.wait_for_selector('#dlg-kunde[open]')
     check('… und öffnet das Kundenblatt', pg.text_content('#kunde-titel') == 'Musterfleischerei Nord GmbH')
     pg.click('#dlg-kunde [data-schliessen]')
