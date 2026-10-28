@@ -359,6 +359,18 @@ Eigene Dokumente, alle unter der Sperre `marketing-beitraege`:
   Ohne Dokument gelten die Grundwerte `mkt_grundwerte()`. Kennungen bleiben beim Umbenennen; neue entstehen aus dem Namen und
   belegen nie eine frühere Kennung (`mkt_liste_pruefen`).
 
+### Controlling (`module/controlling/`)
+
+Aufbau in Bereichen: gemeinsame Grundlage `controlling.php` (Liste `CONTROLLING_BEREICHE`, Monate, Zahlenprüfung), je Bereich
+eine eigene Datei mit eigenem Dokument `controlling-<bereich>`, eigenen Rechten `controlling.<bereich>_sehen/_bearbeiten` und
+Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, Liquidität); bestehende bleiben davon unberührt.
+
+- **`controlling-umsatz`** (vertraulich, `umsatz.php`): `{"rev": 7, "jahre": {"2026": {"01": {"V1": {"kg": 1250.5, "umsatz": 25000, "db": 3500}}}},
+  "vertreter": {"V1": {"name": "…", "kurz": "VV"}}, "geaendert": {"t": "…", "von": "u…", "vonName": "…"}}`. Monate als „01“–„12“,
+  Werte `null` = leer; ein Vertreter ohne Werte wird nicht gespeichert, ein Monat ohne Werte entfällt. Speichern ändert nur die
+  mitgeschickten Vertreter (aktuelle aus den Stammdaten); Werte ausgeschiedener Vertreter bleiben, ihr Name kommt aus dem
+  Schnappschuss `vertreter` (GR-106). `rev` schützt vor gleichzeitigem Überschreiben (409).
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:
@@ -391,6 +403,7 @@ diese Tabelle. Was ein Modul besitzt und liest: `python3 werkzeuge/regeln.py mod
 | CRM | `customers_load()`, `vertreter_load()`, `kundengruppen_load()`; Angebotsnamen über `customer_offers()`, `offer_def()` | Verwaltung, Angebot |
 | HR | `users_load()`, `nutzer_hat_zugang()`, `mitarbeiter_ohne_zugang_anlegen()` | Plattformkern |
 | Marketing | `users_load()`, `may()` (Verantwortliche = Mitarbeiter mit `marketing.bearbeiten`) | Plattformkern |
+| Controlling | `vertreter_load()` (Nummer, Name, Kürzel für die Umsatzstatistik) | Verwaltung |
 | Bestand (`master_save`) | `stammdaten_speichern()` (`module/verwaltung/import.php`) | Verwaltung |
 | Importzentrale | Importverträge `module/<modul>/import.php` der Eigentümer | jeweiliges Modul |
 

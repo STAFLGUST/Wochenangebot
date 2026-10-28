@@ -1,0 +1,18 @@
+# Aktionen des Moduls „controlling“: gemeinsamer Start und je Bereich eigene Aktionen controlling_<bereich>_…
+# (heute Umsatzstatistik; geplant OP-Konten, Liquidität). Erklärung der Felder: regeln/aktionen/LIESMICH.md ·
+# nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+# Oberfläche controlling.intern (in Entwicklung, ohne Freigabe; Adresse controlling.dashboard-stafl.de erst mit Freigabe
+# des Inhabers). Auf Keycloak-Hosts antworten die Aktionen nur auf ihrem Host (GR-109, lib/herkunft.php).
+
+schema = 1
+modul = "controlling"
+
+[aktion.controlling_start]
+oberflaeche = "controlling.intern"
+
+[aktion.controlling_umsatz]
+oberflaeche = "controlling.intern"
+
+[aktion.controlling_umsatz_monat_save]
+oberflaeche = "controlling.intern"
+schreibend = true

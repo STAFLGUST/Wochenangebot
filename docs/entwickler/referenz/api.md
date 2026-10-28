@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-181 Aktionen in 10 Modulen.
+184 Aktionen in 11 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -123,6 +123,14 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `marketing_kampagne_save` | `marketing.intern` | schreibend | – | Recht marketing.bearbeiten | `app/api/aktionen/marketing.php` |
 | `marketing_kommentar` | `marketing.intern` | schreibend | – | Recht marketing.bearbeiten | `app/api/aktionen/marketing.php` |
 | `marketing_start` | `marketing.intern` | lesend | – | Recht marketing.sehen | `app/api/aktionen/marketing.php` |
+
+## Controlling (`controlling`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `controlling_start` | `controlling.intern` | lesend | – | – | `app/api/aktionen/controlling.php` |
+| `controlling_umsatz` | `controlling.intern` | lesend | – | Recht controlling.umsatz_sehen | `app/api/aktionen/controlling.php` |
+| `controlling_umsatz_monat_save` | `controlling.intern` | schreibend | – | Recht controlling.umsatz_bearbeiten | `app/api/aktionen/controlling.php` |
 
 ## Verwaltung (`verwaltung`)
 

@@ -365,26 +365,29 @@ hinweise = [
 [[modul]]
 id = "controlling"
 name = "Controlling"
-beschreibung = "Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche"
+beschreibung = "Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik; geplant OP-Konten, Liquidität"
 icon = "chart"
 reihenfolge = 76
 dashboard = true
 agent = "controlling"
 abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/controlling.toml", "app/api/module/controlling/**", "app/module/controlling/**", "tests/e2e/test_controlling*.py"]
+testgruppen = ["controlling"]
+pfade = ["regeln/aktionen/controlling.toml", "app/api/aktionen/controlling.php", "app/api/module/controlling/**", "app/module/controlling/**", "tests/e2e/test_controlling*.py"]
+pfade_geplant = []
+zugang_rollen = []   # Finanzdaten: Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter)
 hinweise = [
-  "Liest Daten anderer Module nur über deren Schnittstellen (GR-101); Einkaufspreise und Margen nur mit eigenem Recht.",
-  "Kennzahlen und Quellen vor dem Bau mit dem Inhaber klären.",
+  "Aufbau in Bereichen (Auftrag des Inhabers 28.10.2026): erster Bereich Umsatzstatistik (aus dem Modulbausatz-Modul „Gust 1“), weitere folgen (OP-Konten, Liquidität …). Je Bereich eigene Datei module/controlling/<bereich>.php, Aktionen controlling_<bereich>_…, Rechte controlling.<bereich>_sehen/_bearbeiten, Dokumente controlling-<bereich>; Eintrag in CONTROLLING_BEREICHE.",
+  "Liest Daten anderer Module nur über deren Schnittstellen (GR-101; heute vertreter_load der Verwaltung); Einkaufspreise und Margen nur mit eigenem Recht.",
+  "Umsatzstatistik: Monatswerte werden von Hand erfasst (kein Import, keine Verbindung zur Warenwirtschaft); Vertreternamen als Schnappschuss, Werte ausgeschiedener Vertreter bleiben.",
+  "Live-Betrieb unter controlling.dashboard-stafl.de (Caddy, Keycloak-Client) erst mit Freigabe des Inhabers; bis dahin Testfreigabe.",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "Controlling"
   art = "intern"
-  adresse = "https://controlling.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://controlling.dashboard-stafl.de/module/controlling/"
+  entwicklung = "in_entwicklung"
   freigabe = "keine"
   sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
 

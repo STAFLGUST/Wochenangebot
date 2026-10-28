@@ -200,6 +200,13 @@ eigentuemer = "marketing"
 schutz = "intern"
 beschreibung = "Marken, Kanäle (mit Zeichengrenze und Hashtag-Empfehlung), Formate und Content-Säulen des Redaktionsplans"
 
+[[dokument]]
+name = "controlling-umsatz"
+eigentuemer = "controlling"
+schutz = "vertraulich"
+beschreibung = "Umsatzstatistik: Kg, Umsatz und Deckungsbeitrag je Jahr, Monat und Vertreter (Monatsmeldung von Hand), Versionsstand, letzte Änderung"
+historie = "Vertreternamen als Schnappschuss (GR-106): Werte ausgeschiedener Vertreter bleiben mit Namen erhalten"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]
@@ -243,7 +250,7 @@ beschreibung = "VK-Gruppen der Artikel"
 [[dokument]]
 name = "vertreter"
 eigentuemer = "verwaltung"
-leser = ["crm"]   # nur Nummer und Name über vertreter_load
+leser = ["crm", "controlling"]   # nur Nummer und Name (Controlling: auch Kürzel) über vertreter_load
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Vertreter mit Kontaktdaten"

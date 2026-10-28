@@ -28,6 +28,7 @@ Voraussetzungen und Abgrenzung:
 | HR · Urlaub | `app/module/hr/index.html` | `../../assets/theme.js`, `hr.js` | `../../assets/app.css`, `hr.css` |
 | CRM · Vertrieb | `app/module/crm/index.html` | `../../assets/theme.js`, `crm.js` | `../../assets/app.css`, `crm.css` |
 | Marketing · Redaktionsplan | `app/module/marketing/index.html` | `../../assets/theme.js`, `marketing.js` | `../../assets/app.css`, `marketing.css` |
+| Controlling | `app/module/controlling/index.html` | `../../assets/theme.js`, `controlling.js` (Grundgerüst), je Bereich ein Skript (`umsatz.js`), das sich mit `STAFL_CONTROLLING.bereich(id, { anzeigen })` anmeldet | `../../assets/app.css`, `controlling.css` |
 
 Alle Pfade sind relativ zur Seite (Rechtsseiten: absolut ab `/`). Damit funktionieren dieselben Dateien auf dem
 Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-Host.
