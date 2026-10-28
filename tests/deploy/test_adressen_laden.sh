@@ -41,24 +41,38 @@ case "\$1" in
   run) ;;
   *) echo "unerwartet: \$*" >&2; exit 9 ;;
 esac
-[ -f "$T/umwandeln-fehler" ] && exit 1
+# letzte zwei Angaben: Quelle und Ziel im Container (umwandeln in deploy/adressen-laden.sh)
+for a in "\$@"; do quelle=\$ziel; ziel=\$a; done
 daten=\$(printf '%s\n' "\$@" | grep -m1 ':/daten\$' | cut -d: -f1)
-[ -s "\$daten/adressen-quelle.osm.pbf" ] || { echo "Quelle fehlt" >&2; exit 1; }
-python3 "$REPO/deploy/karte/adressen.py" --json "$REPO/tests/fixtures/karte/adressen.json" "\$daten/adressen.neu.sqlite" 2>/dev/null
+case "\$quelle" in
+  /probe/*) [ -f "$T/probe-fehler" ] && { echo "ImportError: libexpat.so.1" >&2; exit 1; }
+            [ -s "\$(printf '%s\n' "\$@" | grep -m1 ':/probe:ro\$' | cut -d: -f1)/adressen.osm" ] || { echo "Testdaten fehlen" >&2; exit 1; } ;;
+  *) [ -f "$T/umwandeln-fehler" ] && exit 1
+     [ -s "\$daten/adressen-quelle.osm.pbf" ] || { echo "Quelle fehlt" >&2; exit 1; } ;;
+esac
+python3 "$REPO/deploy/karte/adressen.py" --json "$REPO/tests/fixtures/karte/adressen.json" "\$daten/\${ziel#/daten/}" 2>/dev/null
 STUB
 chmod +x "$T/docker" "$T/curl"
 export DOCKER="$T/docker" CURL="$T/curl" ADRESSEN_MIN=1 ADRESSEN_PLATZ_GB=0 AUS CODE
-mkdir -p "$T/i/deploy/karte" && cp "$REPO/deploy/karte/adressen.py" "$REPO/deploy/karte/requirements.txt" "$T/i/deploy/karte/" && cd "$T/i" && touch .env docker-compose.yml
+mkdir -p "$T/i/deploy/karte" "$T/i/tests/fixtures/karte" && cp "$REPO/deploy/karte/adressen.py" "$REPO/deploy/karte/requirements.txt" "$T/i/deploy/karte/" \
+  && cp "$REPO/tests/fixtures/karte/adressen.osm" "$T/i/tests/fixtures/karte/" && cd "$T/i" && touch .env docker-compose.yml
 
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" pruefen) && CODE=0 || CODE=$?
 ok "prüfen: Stand und Größe der Quelle, Prüfsumme abrufbar, freier Platz – nichts geladen" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Quelle: Mon, 26 Oct 2026 20:21:00 GMT, 0 MB" && echo "$AUS" | grep -q "Prüfsumme (MD5) der Quelle abrufbar" && ! grep -q "^run" "$T/aufrufe" && [ ! -e daten-karte/adressen.sqlite ] && [ ! -e daten-karte/adressen-quelle.osm.pbf ]'
 
 : > "$T/aufrufe"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" probe) && CODE=0 || CODE=$?
+ok "probe: Testdaten im Container umgewandelt, nichts geladen, nichts übrig" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Probe:     Umwandeln im Container funktioniert (6 Testadressen)" && grep -q "/probe/adressen.osm /daten/adressen-probe.sqlite" "$T/aufrufe" && ! grep -q -- "-o " "$T/aufrufe" && [ -z "$(ls -A daten-karte)" ]'
+touch "$T/probe-fehler"; : > "$T/aufrufe"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "laden mit kaputtem Werkzeug: Abbruch nach der Probe, vor dem Download (4,5 GB gespart)" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Probe fehlgeschlagen" && ! grep -q -- "-o " "$T/aufrufe" && [ ! -e daten-karte/adressen.sqlite ] && [ -z "$(ls -A daten-karte)" ]'
+rm -f "$T/probe-fehler"
+: > "$T/aufrufe"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
-ok "laden: Prüfsumme geprüft, Verzeichnis an seinem Platz, Stand vermerkt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Prüfsumme (MD5) stimmt" && echo "$AUS" | grep -q "6 Adressen" && [ -s daten-karte/adressen.sqlite ] && [ "$(cat daten-karte/adressen-stand.txt)" = "Mon, 26 Oct 2026 20:21:00 GMT" ]'
-ok "laden: Quelldatei und Zwischenstände danach gelöscht" '[ ! -e daten-karte/adressen-quelle.osm.pbf ] && [ ! -e daten-karte/adressen.neu.sqlite ] && [ ! -e daten-karte/adressen.neu.sqlite.arbeit ]'
+ok "laden: Probe, Prüfsumme geprüft, Verzeichnis an seinem Platz, Stand vermerkt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Probe:" && echo "$AUS" | grep -q "Prüfsumme (MD5) stimmt" && echo "$AUS" | grep -q "6 Adressen" && [ -s daten-karte/adressen.sqlite ] && [ "$(cat daten-karte/adressen-stand.txt)" = "Mon, 26 Oct 2026 20:21:00 GMT" ]'
+ok "laden: Quelldatei und Zwischenstände danach gelöscht" '[ ! -e daten-karte/adressen-quelle.osm.pbf ] && [ ! -e daten-karte/adressen-probe.sqlite ] && [ ! -e daten-karte/adressen.neu.sqlite ] && [ ! -e daten-karte/adressen.neu.sqlite.arbeit ]'
 ok "laden: Datei für den Webserver lesbar (644)" '[ "$(stat -c %a daten-karte/adressen.sqlite)" = 644 ]'
-ok "laden: Container mit fester Python-Fassung, pyosmium nur über Prüfsummen, ohne Abhängigkeiten" 'grep -q "python:3.12.14-slim-bookworm@sha256:" "$T/aufrufe" && grep -q -- "--require-hashes -r /werkzeug/requirements.txt" "$T/aufrufe" && grep -q -- "--no-deps --only-binary=:all:" "$T/aufrufe" && grep -q "deploy/karte:/werkzeug:ro" "$T/aufrufe"'
+ok "laden: volles Python-Image (libexpat für pyosmium) mit fester Fassung, pyosmium nur über Prüfsummen, ohne Abhängigkeiten" 'grep -q "python:3.12.14-bookworm@sha256:" "$T/aufrufe" && ! grep -q "slim" "$T/aufrufe" && grep -q -- "--require-hashes -r /werkzeug/requirements.txt" "$T/aufrufe" && grep -q -- "--no-deps --only-binary=:all:" "$T/aufrufe" && grep -q "deploy/karte:/werkzeug:ro" "$T/aufrufe"'
 ok "laden: Quelle Deutschland von Geofabrik samt Prüfsumme" 'grep -q "https://download.geofabrik.de/europe/germany-latest.osm.pbf.md5" "$T/aufrufe"'
 
 AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
