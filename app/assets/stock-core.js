@@ -354,7 +354,10 @@
           lot: cols.lot != null && row[cols.lot] != null ? String(row[cols.lot]).trim().slice(0, 20) : '',
           marke: marke(row),
           arrival: cols.arrival != null ? toDate(row[cols.arrival], true) : null,
-          kg: Math.round(kg * 1000) / 1000 });
+          mhd: cols.mhd != null ? toDate(row[cols.mhd], true) : null,   // wie bei den Partien (meist noch leer)
+          kolli: cols.kolli != null ? toNum(row[cols.kolli]) : null,
+          kg: Math.round(kg * 1000) / 1000,
+          ek: ekWert(cols.ek != null ? row[cols.ek] : null) });   // Einkaufspreis € je kg (nur intern)
         stats.expected++;
         continue;
       }

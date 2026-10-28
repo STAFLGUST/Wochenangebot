@@ -122,6 +122,18 @@ with sync_playwright() as p:
           and foot[5] == 'Ø ' + fmt(gew) + ' €', (foot, kg_sum, fmt(gew)))
     ek1 = a.locator('#dlg-stock-item .lottab tbody tr').first.locator('td.lot-ek').inner_text()
     check('EK-Preis in der Partiezeile', ek1 == fmt(lots[0]['ek']) + ' €' and a.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 1, ek1)
+    # Erwartete Zugänge: dieselbe Tabelle wie die Partien (Spalte ETA statt Ankunft), Kolli und EK aus der Zeile „erfasst“
+    kz = a.locator('#dlg-stock-item .zutab thead th').all_inner_texts(); kp = a.locator('#dlg-stock-item .lottab thead th').all_inner_texts()
+    zz = a.locator('#dlg-stock-item .zutab tbody tr').first.locator('td').all_inner_texts()
+    check('Zugänge: gleiche Spalten wie die Partien, ETA statt Ankunft', [x.upper() for x in kz] == [('ETA' if x.upper() == 'ANKUNFT' else x.upper()) for x in kp], (kz, kp))
+    check('Zugang 10022: Partie, ETA, MHD „—“, Kolli 8, 186,12 kg, EK 24,48 €', a.locator('#dlg-stock-item .zutab tbody tr').count() == 1
+          and zz[-5:] == ['15.10.2026', '—', '8', '186,12 kg', '24,48 €'], zz)
+    zf = a.locator('#dlg-stock-item .zutab tfoot td').all_inner_texts()
+    check('Zugänge: Summenzeile wie bei den Partien', len(zf) == len(kz) and 'Summe' in zf and '186,12 kg' in zf and 'Ø 24,48 €' in zf, zf)
+    titel = a.locator('#dlg-stock-item h3.d-h > span:first-child')
+    check('Abschnittstitel deutlich: fett, Textfarbe, ≥ 13 px', titel.count() == 3 and titel.evaluate_all(
+          "els => els.every(e => +getComputedStyle(e).fontWeight >= 700 && parseFloat(getComputedStyle(e).fontSize) >= 13 && getComputedStyle(e).color === getComputedStyle(document.body).color)"),
+          titel.all_inner_texts())
     a.screenshot(path=SH + '/stock-detail.png')
     a.set_viewport_size({'width': 390, 'height': 844})
     a.wait_for_function("getComputedStyle(document.querySelector('#dlg-stock-item .lottab th.lot-ank')).display === 'none'")
@@ -161,6 +173,7 @@ with sync_playwright() as p:
     check('Leser: keine Einkaufspreise in der Antwort', '"ek"' not in vst and '"lots"' in vst)
     v.locator('.stab tr.srow:has(td.s-code:text-is("10022"))').click(); v.wait_for_selector('#dlg-stock-item[open]')
     check('Leser: Partien mit Summe, ohne EK-Spalte', v.locator('#dlg-stock-item .lottab tfoot td').count() == 5 and v.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 0)
+    check('Leser: erwartete Zugänge ohne EK-Spalte', v.locator('#dlg-stock-item .zutab tfoot td').count() == 5 and v.locator('#dlg-stock-item .zutab th:text-is("EK-Preis")').count() == 0)
     v.keyboard.press('Escape')
     rr = v.evaluate("""async () => { const s = await (await fetch('../api/?action=status')).json();
       const r = await fetch('../api/?action=stock_import', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({date:'2026-10-16', articles:[{code:'1',name:'x',kg:1,lots:[]}]})}); return r.status; }""")

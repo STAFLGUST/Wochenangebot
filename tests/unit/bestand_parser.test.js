@@ -18,6 +18,8 @@ const check = (name, ok, info = '') => { console.log((ok ? 'PASS ' : 'FAIL ') + 
   const expected = sheets[0].grid.filter(row => row[9] === 'erfasst' && Number.isFinite(row[21]) && row[21] > 0 && /^[0-9]+$/.test(String(row[1])));
   check('erfasst: jede Lieferung separat, keine eingelagerten Partien', r.incoming.length === expected.length);
   check('erfasst: Artikel, kg und Ankunft aus J/M unverändert', r.incoming.every((d, i) => d.code === String(expected[i][1]) && Math.abs(d.kg - expected[i][21]) < .00001 && d.arrival === StockCore.toDate(expected[i][12], true)));
+  check('erfasst: MHD, Kolli und EK-Preis wie bei den Partien übernommen', r.incoming.every((d, i) => d.kolli === expected[i][18] && (expected[i][22] == null ? d.ek === null : Math.abs(d.ek - expected[i][22]) < 1e-6)
+    && d.mhd === (StockCore.toDate(expected[i][16], true) || null)) && r.incoming.some((d) => d.mhd) && r.incoming.some((d) => !d.mhd));
   check('mehrere Lieferungen pro Artikel bleiben einzeln', new Set(r.incoming.map(d => d.code)).size < r.incoming.length);
   const onlyIncoming = sheets.map(s => ({...s, grid: s.grid.filter(row => !row.includes('eingelagert'))}));
   const only = StockCore.parseStockWorkbook(onlyIncoming, 'nur-zugaenge.xls');
