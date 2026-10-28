@@ -167,9 +167,9 @@ with sync_playwright() as pw:
           sic['tag'] == 'A' and sic['href'] == '/module/sicherheit/' and sic['badge'] == 'Verfügbar' and sic['symbol'] == 'shield-lock'
           and pg.evaluate("!!document.querySelector('#i-schild') && document.querySelector('[data-modul=\"sicherheit\"] use').getAttribute('href') === '#i-schild'"), sic)
     neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
-    check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR und Marketing verfügbar, Controlling geplant ohne Verweis',
+    check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR und Marketing verfügbar, Controlling in Entwicklung ohne Verweis',
           [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and neu[2]['tag'] == 'DIV' and not neu[2]['href']
-          and [x['badge'] for x in neu] == ['Verfügbar', 'Verfügbar', 'Geplant'], neu)
+          and [x['badge'] for x in neu] == ['Verfügbar', 'Verfügbar', 'In Entwicklung'], neu)
     sym = pg.eval_on_selector_all('#db-grid .db-tile[data-modul="hr"] use, #db-grid .db-tile[data-modul="marketing"] use, #db-grid .db-tile[data-modul="controlling"] use',
                                   'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('eigene Symbole (Kalender, Megafon, Diagramm), vorhanden', [x[0] for x in sym] == ['#i-calendar', '#i-megaphone', '#i-chart'] and all(x[1] for x in sym), sym)
@@ -330,7 +330,8 @@ with sync_playwright() as pw:
     check('Wartung bleibt eigener Zustand: Wartungs-Pille, kein Absperrband', 'warn' in a['badgeCls'] and not a['band'] and not a['gesperrt'], a)
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
-    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing und Verwaltung weiter verfügbar (6 von 13)', '6 von 13' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – die Kachel fehlt Bearbeitern ganz
+    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing und Verwaltung weiter verfügbar (6 von 12, ohne Controlling)', '6 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')

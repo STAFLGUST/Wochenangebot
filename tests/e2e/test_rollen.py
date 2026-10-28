@@ -43,9 +43,9 @@ check('Übersicht: Rollen, Module und Katalog', code == 200 and [r['id'] for r i
       and {m['id'] for m in rr['module']} >= {'angebot', 'bestand', 'hr', 'verwaltung', 'import'}, code)
 ZUGANG = {p['key'] for p in rr['catalog'] if p['kind'] == 'zugang'}
 check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit']}, sorted(ZUGANG))
-check('Modulzugang gehört zum Modul, Standard: beide Standardrollen (außer Register-Feld zugang_rollen: Sicherheit ohne)',
-      all(p['modul'] == p['key'].split('.')[0] and p['default'] == ([] if p['key'] == 'sicherheit.zugang' else ['viewer', 'editor']) for p in rr['catalog'] if p['kind'] == 'zugang'))
-ZUGANG_STD = ZUGANG - {'sicherheit.zugang'}
+check('Modulzugang gehört zum Modul, Standard: beide Standardrollen (außer Register-Feld zugang_rollen: Sicherheit und Controlling ohne)',
+      all(p['modul'] == p['key'].split('.')[0] and p['default'] == ([] if p['key'] in ('sicherheit.zugang', 'controlling.zugang') else ['viewer', 'editor']) for p in rr['catalog'] if p['kind'] == 'zugang'))
+ZUGANG_STD = ZUGANG - {'sicherheit.zugang', 'controlling.zugang'}
 check('Sicherheit: Standardrollen ohne Modulzugang', 'sicherheit.zugang' not in rechte(L) and 'sicherheit.zugang' not in rechte(V))
 check('Rechte sind Modulen zugeordnet (Register)', next(p for p in rr['catalog'] if p['key'] == 'kunden.sehen')['modul'] == 'verwaltung'
       and next(p for p in rr['catalog'] if p['key'] == 'preisverlauf.sehen')['modul'] == 'angebot')
