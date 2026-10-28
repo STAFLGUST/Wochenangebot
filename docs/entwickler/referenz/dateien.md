@@ -681,6 +681,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `karte_bauen.py` | verwaltung | Baut die Landkarte für die Auswertung (app/assets/karte.json) aus Natural Earth (gemeinfrei), weitergegeben als TopoJSON im npm-Paket „world-atlas“ (ISC). |
 | `karte_stil.mjs` | plattform | – |
 | `lokal.py` | plattform | Lokaler Entwicklungsserver mit Testdaten – wie ein Testserver der E2E-Suite, aber zum Ausprobieren im Browser. python3 werkzeuge/lokal.py http://127.0.0.1:8080 mit Testdaten (tests/fixtures/data-seed) python3 … |
+| `nielsen_gebiete.py` | plattform | Nielsen-Gebiete für die CRM-Karte (app/module/crm/nielsen.json) aus den Bundesländern von Natural Earth erzeugen. |
 | `realm_produktion.py` | plattform | Realm „mitarbeiter“ für den Betrieb aus dem geprüften Test-Realm erzeugen (eine Quelle, kein Auseinanderlaufen). python3 werkzeuge/realm_produktion.py # schreibt deploy/anmeldung/realm-mitarbeiter.json python3 … |
 | `regeln.py` | plattform | Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Python-Standardbibliothek). python3 werkzeuge/regeln.py pruefen Alle Prüfungen (CI); Ausgang 1 bei Fehlern python3 werkzeuge/regeln.py betroffen … |
 | `testdaten_erzeugen.py` | plattform | Erzeugt die anonymisierten Testdaten unter tests/fixtures aus echten Originaldateien. |

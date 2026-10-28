@@ -241,6 +241,19 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-pop li:first-child { border-top: 0; }
 .crm-pop small { display: block; color: var(--crm-muted); }
 .crm-pop h3 .km-genau { font-size: 12px; font-weight: 400; margin-top: 2px; }   /* Genauigkeit des Punkts (Straße / PLZ) */
+.crm-pop li.treffer { background: var(--crm-aus); border-radius: 10px; padding-left: 8px; padding-right: 8px; }   /* gesuchter Kunde */
+/* Kartensuche: Trefferliste unter dem Suchfeld, über der Karte */
+.km-suche .km-treffer { position: absolute; z-index: 6; left: 0; right: 0; top: calc(100% + 6px); max-height: 340px; overflow: auto; padding: 6px;
+  border-radius: 16px; background: var(--crm-deckend); border: 1px solid var(--crm-linie); box-shadow: var(--crm-schatten); }
+.km-suche .km-treffer[hidden] { display: none; }
+.km-treffer-zeile { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 10px; background: none; color: var(--crm-text); font: inherit; cursor: pointer; }
+.km-treffer-zeile:hover, .km-treffer-zeile:focus-visible { background: var(--crm-aus); outline: none; }
+.km-treffer-zeile small { display: block; color: var(--crm-muted); font-size: 12px; }
+.km-treffer .crm-leer { margin: 6px 10px; }
+/* Nielsen-Gebiete in der eigenen Zeichnung (Farbe je Gebiet über --g) */
+.crm-karte-flaeche #km-flaechen path { fill: var(--g); fill-opacity: .12; fill-rule: evenodd; stroke: var(--g); stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.crm-karte-flaeche #km-flaechen path.hervor { fill-opacity: .2; stroke-width: 2.4; }
+.crm-karte-flaeche #km-flaechen-text text { fill: var(--g); font-weight: 650; text-anchor: middle; paint-order: stroke; stroke: var(--crm-deckend); stroke-linejoin: round; pointer-events: none; }
 
 /* ── Kundenblatt (Dialog) ── */
 .crm-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--crm-rand); border-radius: 26px;

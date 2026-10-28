@@ -5,7 +5,7 @@
    Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
    Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: Detailkarte mit Straßen und Gebäuden vom
    eigenen Server (../../assets/detailkarte.js, OpenStreetMap), sonst zeichnet die Seite selbst (Umrisse
-   ../../assets/karte.json); PLZ-Mittelpunkte plz.json. */
+   ../../assets/karte.json); PLZ-Mittelpunkte plz.json, Nielsen-Gebiete nielsen.json (werkzeuge/nielsen_gebiete.py). */
 'use strict';
 (() => {
   const API = '../../api/';
@@ -21,7 +21,7 @@
     d: null, tab: 'cockpit', byKey: new Map(),
     kunden: { q: '', segment: '', vertreter: '', phase: '', aktiv: 'ja', n: SEITE },
     wv: { q: '', vertreter: '', termin: 'alle', wann: [], n: SEITE, reihenfolge: null },
-    karte: { ja: true, nein: false },
+    karte: { ja: true, nein: false, gebiet: '', gebiete: false, suche: '' },
   };
 
   async function api(action, body, query = '') {
@@ -189,10 +189,14 @@
       if (f.phase && k.crm.phase !== f.phase) return false;
       if (f.vertreter && k.vertreter !== f.vertreter && k.vertreter2 !== f.vertreter) return false;
       if (!q) return true;
-      if (!k._suche) k._suche = [k.firma, k.nr, k.gruppe, k.gruppeNr ? 'KG ' + k.gruppeNr : '', k.ort, k.plz, k.email, k.telefon, k.ansprechpartner, vName(k.vertreter), vName(k.vertreter2),
-        ...k.crm.kontakte.flatMap((p) => [p.name, p.funktion, p.telefon, p.email])].join(' ').toLocaleLowerCase('de');
-      return k._suche.includes(q);
+      return suchText(k).includes(q);
     });
+  }
+  /* Durchsuchbarer Text eines Kunden (Kundenliste und Kartensuche), zwischengespeichert bis zum nächsten Laden */
+  function suchText(k) {
+    if (!k._suche) k._suche = [k.firma, k.nr, k.gruppe, k.gruppeNr ? 'KG ' + k.gruppeNr : '', k.ort, k.plz, k.email, k.telefon, k.ansprechpartner, vName(k.vertreter), vName(k.vertreter2),
+      ...k.crm.kontakte.flatMap((p) => [p.name, p.funktion, p.telefon, p.email])].join(' ').toLocaleLowerCase('de');
+    return k._suche;
   }
   function kunden() {
     const f = S.kunden, liste = kundenListe(), b = darf();
@@ -227,6 +231,7 @@
   document.addEventListener('input', (e) => {
     if (e.target.id === 'k-suche') { S.kunden.q = e.target.value; S.kunden.n = SEITE; clearTimeout(suchZeit); suchZeit = setTimeout(kunden, 150); }
     if (e.target.id === 'wv-suche') { S.wv.q = e.target.value; S.wv.n = SEITE; clearTimeout(suchZeit); suchZeit = setTimeout(() => wiedervorlagen(true), 150); }
+    if (e.target.id === 'km-suche') { S.karte.suche = e.target.value; suchTreffer(true); }
   });
 
   /* ---------- Wiedervorlagen (Anrufliste) ---------- */
@@ -323,12 +328,19 @@
   const STAEDTE = [['Hamburg', 53.55, 10.0], ['Berlin', 52.52, 13.405], ['München', 48.137, 11.575], ['Köln', 50.937, 6.96], ['Frankfurt', 50.11, 8.682],
     ['Hannover', 52.375, 9.732], ['Bremen', 53.079, 8.802], ['Kiel', 54.323, 10.123], ['Leipzig', 51.34, 12.375], ['Stuttgart', 48.776, 9.177], ['Nürnberg', 49.452, 11.077], ['Dortmund', 51.514, 7.468]];
   let geo = null, geoLaden = null, vb = null, voll = null, kmPunkte = [], detail = null, adr = null, adrZeit = 0;
+  let kmLagen = {}, kmProGebiet = {}, zielNachZeichnen = null;
   function ladeGeo() {
     if (geo) return Promise.resolve(geo);
     if (!geoLaden) {
-      geoLaden = Promise.all([fetch('../../assets/karte.json').then((r) => { if (!r.ok) throw new Error('Karte nicht geladen'); return r.json(); }),
-        fetch('plz.json').then((r) => { if (!r.ok) throw new Error('Postleitzahlen nicht geladen'); return r.json(); })])
-        .then(([k, p]) => { geo = { karte: k, plz: p.plz }; return geo; }).finally(() => { geoLaden = null; });
+      const json = (url, fehler) => fetch(url).then((r) => { if (!r.ok) throw new Error(fehler); return r.json(); });
+      geoLaden = Promise.all([json('../../assets/karte.json', 'Karte nicht geladen'), json('plz.json', 'Postleitzahlen nicht geladen'), json('nielsen.json', 'Nielsen-Gebiete nicht geladen')])
+        .then(([k, p, n]) => {
+          // kleinste Gebiete zuerst (Berlin liegt innerhalb von Nielsen VI)
+          const flaeche = (f) => (f.properties.rahmen[2] - f.properties.rahmen[0]) * (f.properties.rahmen[3] - f.properties.rahmen[1]);
+          n.features.sort((a, b) => flaeche(a) - flaeche(b));
+          geo = { karte: k, plz: p.plz, nielsen: n };
+          return geo;
+        }).finally(() => { geoLaden = null; });
     }
     return geoLaden;
   }
@@ -350,30 +362,93 @@
     if (p.length === 4 && !land) return '0' + p;
     return '';
   }
-  /* Punkte der Karte: genaue Anschrift (Hausnummer bzw. Straße, gleiche Lage = ein Punkt), sonst Mittelpunkt der PLZ.
-     id: „a<Breite>,<Länge>“ bzw. die PLZ; genau: 'haus' | 'strasse' | 'plz' */
+  /* ---------- Nielsen-Gebiete (Bundesländer zusammengefasst, nielsen.json) ---------- */
+  const NIELSEN_ORDNUNG = ['I', 'II', 'IIIa', 'IIIb', 'IV', 'V', 'VI', 'VII'];
+  const NIELSEN_FARBEN = { I: '#4a76a8', II: '#8b5c9e', IIIa: '#b97a26', IIIb: '#2f8a80', IV: '#64862a', V: '#b23b48', VI: '#527b98', VII: '#94643a' };
+  function imRing(lon, lat, ring) {
+    let drin = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) drin = !drin;
+    }
+    return drin;
+  }
+  function inFlaeche(lon, lat, g) {
+    return (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).some((p) => imRing(lon, lat, p[0]) && !p.slice(1).some((loch) => imRing(lon, lat, loch)));
+  }
+  const gebietSpeicher = new Map();
+  /* Nielsen-Gebiet eines Punkts; knapp außerhalb der vereinfachten Grenzen (Küste, Grenzorte) das nächstgelegene */
+  function gebietVon(lon, lat) {
+    const sk = lon.toFixed(4) + ',' + lat.toFixed(4);
+    if (gebietSpeicher.has(sk)) return gebietSpeicher.get(sk);
+    let g = '';
+    for (const f of geo.nielsen.features) {
+      const [x1, y1, x2, y2] = f.properties.rahmen;
+      if (lon >= x1 && lon <= x2 && lat >= y1 && lat <= y2 && inFlaeche(lon, lat, f.geometry)) { g = f.properties.id; break; }
+    }
+    if (!g && lon > 5 && lon < 16 && lat > 47 && lat < 55.2) {
+      let best = Infinity; const c = Math.cos(lat * Math.PI / 180);
+      for (const f of geo.nielsen.features) {
+        const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+        for (const p of polys) for (const [x, y] of p[0]) { const d = ((x - lon) * c) ** 2 + (y - lat) ** 2; if (d < best) { best = d; g = f.properties.id; } }
+      }
+      if (best > 0.25) g = '';   // weiter als ca. 50 km: nicht in Deutschland
+    }
+    gebietSpeicher.set(sk, g);
+    return g;
+  }
+  const gebietName = (id) => { const f = geo.nielsen.features.find((x) => x.properties.id === id); return f ? `${f.properties.name} · ${f.properties.kurz}` : ''; };
+
+  /* Lage eines Kunden: genaue Anschrift (Hausnummer bzw. Straße), sonst Mittelpunkt der PLZ, sonst null */
+  function kundenLage(k, lagen) {
+    const a = lagen[k.key];
+    if (Array.isArray(a) && isFinite(a[0]) && isFinite(a[1])) {
+      const lat = +a[0], lon = +a[1];
+      return { id: 'a' + lat.toFixed(5) + ',' + lon.toFixed(5), lat, lon, genau: a[2] === 'h' ? 'haus' : 'strasse' };
+    }
+    const p = kartenPlz(k), c = p && geo.plz[p];
+    return c ? { id: p, lat: c[0] / 1000, lon: c[1] / 1000, genau: 'plz' } : null;
+  }
+  /* Punkte der Karte: gleiche Lage = ein Punkt. id: „a<Breite>,<Länge>“ bzw. die PLZ; genau: 'haus' | 'strasse' | 'plz'.
+     proGebiet zählt alle Kunden der Auswahl aktiv/inaktiv je Nielsen-Gebiet, auch wenn ein Gebiet gewählt ist */
   function kartenPunkte(lagen) {
     const m = new Map(); let ohne = 0;
-    const zahl = { haus: 0, strasse: 0, plz: 0 };
+    const zahl = { haus: 0, strasse: 0, plz: 0 }, proGebiet = {};
     for (const k of S.d.kunden) {
       if ((k.aktiv && !S.karte.ja) || (!k.aktiv && !S.karte.nein)) continue;
-      const a = lagen[k.key];
-      let id, lat, lon, genau;
-      if (Array.isArray(a) && isFinite(a[0]) && isFinite(a[1])) {
-        lat = +a[0]; lon = +a[1]; genau = a[2] === 'h' ? 'haus' : 'strasse'; id = 'a' + lat.toFixed(5) + ',' + lon.toFixed(5);
-      } else {
-        const p = kartenPlz(k), c = p && geo.plz[p];
-        if (!c) { ohne++; continue; }
-        id = p; lat = c[0] / 1000; lon = c[1] / 1000; genau = 'plz';
+      const l = kundenLage(k, lagen);
+      if (!l) { ohne++; continue; }
+      const g = gebietVon(l.lon, l.lat);
+      proGebiet[g] = (proGebiet[g] || 0) + 1;
+      if (S.karte.gebiet && g !== S.karte.gebiet) continue;
+      zahl[l.genau]++;
+      if (!m.has(l.id)) {
+        const titel = l.genau === 'plz' ? `${l.id} ${k.ort}` : [k.strasse, [k.plz, k.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+        m.set(l.id, { plz: l.id, lat: l.lat, lon: l.lon, x: px(l.lon), y: py(l.lat), genau: l.genau, gebiet: g, titel, liste: [] });
       }
-      zahl[genau]++;
-      if (!m.has(id)) {
-        const titel = genau === 'plz' ? `${id} ${k.ort}` : [k.strasse, [k.plz, k.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-        m.set(id, { plz: id, lat, lon, x: px(lon), y: py(lat), genau, titel, liste: [] });
-      }
-      m.get(id).liste.push(k);
+      m.get(l.id).liste.push(k);
     }
-    return { punkte: [...m.values()].sort((a, b) => b.liste.length - a.liste.length), ohne, zahl };
+    return { punkte: [...m.values()].sort((a, b) => b.liste.length - a.liste.length), ohne, zahl, proGebiet };
+  }
+  /* Flächen für die Karte: alle Gebiete (Schalter) bzw. nur das gewählte, mit Farbe und Beschriftung „Nielsen I · 12 Kunden“ */
+  const dunkelModus = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+  /* Farbe heller mischen (dunkle Darstellung: Beschriftung und Linien gut lesbar) */
+  const heller = (hex, f) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - f) + 255 * f).toString(16).padStart(2, '0')).join('');
+  function gebietsFlaechen(proGebiet) {
+    const g = S.karte.gebiet, dunkel = dunkelModus();
+    return { type: 'FeatureCollection', features: geo.nielsen.features.filter((f) => S.karte.gebiete || f.properties.id === g).map((f) => {
+      const n = proGebiet[f.properties.id] || 0;
+      return { type: 'Feature', geometry: f.geometry, properties: { id: f.properties.id, farbe: dunkel ? heller(NIELSEN_FARBEN[f.properties.id] || '#5b7fa6', 0.35) : (NIELSEN_FARBEN[f.properties.id] || '#5b7fa6'), hervor: f.properties.id === g,
+        beschriftung: f.properties.beschriftung, text: `${f.properties.name}\n${n} ${n === 1 ? 'Kunde' : 'Kunden'}` } };
+    }) };
+  }
+  /* Gebiete als SVG-Pfade der eigenen Zeichnung (gleiche Projektion wie die Punkte) */
+  function gebietsPfade(sammlung) {
+    const ring = (r) => 'M' + r.map(([x, y]) => `${px(x).toFixed(1)} ${py(y).toFixed(1)}`).join('L') + 'Z';
+    return sammlung.features.map((f) => {
+      const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      return `<path class="gebiet${f.properties.hervor ? ' hervor' : ''}" data-gebiet="${esc(f.properties.id)}" d="${polys.map((p) => p.map(ring).join('')).join('')}" style="--g:${f.properties.farbe}"/>`;
+    }).join('');
   }
   function seitenVerhaeltnis(b) {
     const svg = $('#km-svg'); const r = svg && svg.clientWidth > 0 && svg.clientHeight > 0 ? svg.clientWidth / svg.clientHeight : 1.4;
@@ -387,7 +462,13 @@
     let lagen;
     try { [, lagen] = await Promise.all([ladeGeo(), ladeAdressen()]); } catch (e) { host.innerHTML = `<p class="crm-fehler">${esc(e.message)}</p>`; return; }
     if (S.tab !== 'karte') return;
-    const { punkte, ohne, zahl } = kartenPunkte(lagen.punkte);
+    kmLagen = lagen.punkte;
+    const { punkte, ohne, zahl, proGebiet } = kartenPunkte(lagen.punkte);
+    kmProGebiet = proGebiet;
+    const flaechen = gebietsFlaechen(proGebiet);
+    const gesamt = Object.values(proGebiet).reduce((a, b) => a + b, 0);
+    const gebietOptionen = [`<option value="">Alle Nielsen-Gebiete (${gesamt})</option>`].concat(geo.nielsen.features.slice().sort((a, b) => NIELSEN_ORDNUNG.indexOf(a.properties.id) - NIELSEN_ORDNUNG.indexOf(b.properties.id))
+      .map((f) => `<option value="${esc(f.properties.id)}"${S.karte.gebiet === f.properties.id ? ' selected' : ''}>${esc(f.properties.name)} · ${esc(f.properties.kurz)} (${proGebiet[f.properties.id] || 0})</option>`)).join('');
     // Kartenausschnitt der Detailkarte beim Neuzeichnen (z. B. Filter aktiv/inaktiv) behalten
     const kamera = detail ? { center: detail.map.getCenter(), zoom: detail.map.getZoom() } : null;
     if (detail) { detail.entfernen(); detail = null; }
@@ -395,9 +476,14 @@
     const n = punkte.reduce((s, p) => s + p.liste.length, 0);
     host.innerHTML = `
       <div class="crm-titel"><h1>Kunden auf der Karte</h1><p>${n} Kunden an ${punkte.length} ${zahl.haus + zahl.strasse ? 'Orten' : 'Postleitzahlen'}${ohne ? ` · ${ohne} ohne Kartenpunkt (Ausland oder PLZ fehlt)` : ''}</p></div>
-      <div class="crm-leiste"><label class="crm-check"><input type="checkbox" id="km-ja"${S.karte.ja ? ' checked' : ''}> aktive Kunden</label><label class="crm-check"><input type="checkbox" id="km-nein"${S.karte.nein ? ' checked' : ''}> inaktive Kunden</label></div>
+      <div class="crm-leiste">
+        <div class="crm-suche km-suche"><label><span class="sr-only">Kunde auf der Karte suchen</span>${icon('search')}<input type="search" id="km-suche" value="${esc(S.karte.suche)}" placeholder="Kunde suchen: Firma, Kundennummer, Ort …" autocomplete="off" aria-controls="km-treffer"></label>
+          <div class="km-treffer" id="km-treffer" role="listbox" aria-label="Treffer" hidden></div></div>
+        <select id="km-gebiet" aria-label="Nielsen-Gebiet">${gebietOptionen}</select>
+        <label class="crm-check"><input type="checkbox" id="km-gebiete"${S.karte.gebiete ? ' checked' : ''}> Gebiete zeigen</label>
+        <label class="crm-check"><input type="checkbox" id="km-ja"${S.karte.ja ? ' checked' : ''}> aktive Kunden</label><label class="crm-check"><input type="checkbox" id="km-nein"${S.karte.nein ? ' checked' : ''}> inaktive Kunden</label></div>
       <section class="crm-karte-flaeche crm-glas" aria-label="Karte der Kunden">
-        <svg id="km-svg" role="img" aria-label="Karte: ${punkte.length} Orte mit Kunden"><g id="km-land">${geo.karte.laender.map((d) => `<path d="${d}"/>`).join('')}</g><g id="km-ref"></g><g id="km-pts"></g></svg>
+        <svg id="km-svg" role="img" aria-label="Karte: ${punkte.length} Orte mit Kunden"><g id="km-land">${geo.karte.laender.map((d) => `<path d="${d}"/>`).join('')}</g><g id="km-flaechen">${gebietsPfade(flaechen)}</g><g id="km-ref"></g><g id="km-flaechen-text"></g><g id="km-pts"></g></svg>
         <div class="crm-zoom" role="group" aria-label="Kartenausschnitt">
           <button type="button" class="crm-rund" data-km="in" aria-label="Vergrößern">${icon('plus')}</button>
           <button type="button" class="crm-rund" data-km="aus" aria-label="Verkleinern">${icon('minus')}</button>
@@ -405,13 +491,15 @@
         </div>
         <div class="crm-pop" id="km-pop" hidden></div>
       </section>
-      <p class="crm-klein" id="km-fuss" style="margin-top:10px">${kartenGenauigkeit(zahl, lagen.stand)} Karte: Natural Earth; Postleitzahlen: WZB plz_geocoord (Apache 2.0).</p>`;
+      <p class="crm-klein" id="km-fuss" style="margin-top:10px">${kartenGenauigkeit(zahl, lagen.stand)} Karte: Natural Earth; Postleitzahlen: WZB plz_geocoord (Apache 2.0); Nielsen-Gebiete nach Bundesländern (Grenzen Natural Earth, vereinfacht).</p>`;
     $('#km-pts').innerHTML = punkte.map((p) => {
       const aus = p.liste.every((k) => !k.aktiv);
       return `<g class="pt${aus ? ' aus' : ''}" data-plz="${esc(p.plz)}" tabindex="0" role="button" aria-label="${esc(p.titel)}: ${p.liste.length} Kunden"><title>${esc(p.titel)} – ${esc(p.liste.slice(0, 4).map((k) => k.firma).join(', '))}${p.liste.length > 4 ? ' …' : ''}</title><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" data-n="${p.liste.length}"/>${p.liste.length > 1 ? `<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${p.liste.length > 99 ? '99+' : p.liste.length}</text>` : ''}</g>`;
     }).join('');
     $('#km-pts')._punkte = punkte;
-    if (await detailkarteZeigen(punkte, kamera)) return;
+    $('#km-flaechen')._flaechen = flaechen;
+    if (S.karte.suche) suchTreffer(false);
+    if (await detailkarteZeigen(punkte, kamera, flaechen)) { if (zielNachZeichnen) zielNachZeichnen(); return; }
     voll = seitenVerhaeltnis([px(5.2), py(55.4), px(15.8) - px(5.2), py(47) - py(55.4)]);
     vb = voll.slice();
     if (punkte.length) {
@@ -420,11 +508,12 @@
       const minW = 500; if (x1 - x0 < minW) { const c = (x0 + x1) / 2; x0 = c - minW / 2; x1 = c + minW / 2; } if (y1 - y0 < minW * .6) { const c = (y0 + y1) / 2; y0 = c - minW * .3; y1 = c + minW * .3; }
       const pw = (x1 - x0) * .18, ph = (y1 - y0) * .18; vb = seitenVerhaeltnis([x0 - pw, y0 - ph, x1 - x0 + 2 * pw, y1 - y0 + 2 * ph]);
     }
-    kartenAusschnitt();
+    if (S.karte.gebiet) gebietZeigen(S.karte.gebiet); else kartenAusschnitt();
+    if (zielNachZeichnen) zielNachZeichnen();
   }
   /* Detailkarte (Straßen, Gebäude) statt eigener Zeichnung, wenn die Kartendatei auf dem Server liegt und der Browser
      WebGL kann – sonst bleibt die Übersichtskarte. Punkte, Hinweisfeld und Knöpfe bleiben gleich. */
-  async function detailkarteZeigen(punkte, kamera) {
+  async function detailkarteZeigen(punkte, kamera, flaechen) {
     if (!window.STAFLKarte || !(await window.STAFLKarte.verfuegbar())) return false;
     const svg = $('#km-svg');
     if (S.tab !== 'karte' || !svg) return false;
@@ -438,7 +527,8 @@
       });
     } catch (e) { div.innerHTML = `<p class="crm-fehler">Karte nicht geladen: ${esc(e.message)}</p>`; return true; }
     if (!div.isConnected) { detail.entfernen(); detail = null; return true; }   // Ansicht inzwischen gewechselt
-    if (kamera) detail.map.jumpTo(kamera); else detail.passend();
+    detail.setzeGebiete(flaechen);
+    if (kamera) detail.map.jumpTo(kamera); else if (S.karte.gebiet) gebietZeigen(S.karte.gebiet); else detail.passend();
     const fuss = $('#km-fuss');
     if (fuss) fuss.textContent = fuss.textContent.replace('Karte: Natural Earth;', 'Karte: © OpenStreetMap-Mitwirkende, Protomaps;');
     return true;
@@ -467,8 +557,57 @@
     for (const c of $$('#km-pts circle')) { const n = +c.dataset.n; c.setAttribute('r', ((n > 1 ? 8 : 5.5) + Math.min(10, Math.sqrt(n) * 1.5)) * s); }
     for (const t of $$('#km-pts text')) t.setAttribute('font-size', 10 * s);
     const pts = $('#km-pts')._punkte || [];
-    const frei = (x, y) => !pts.some((p) => Math.abs(p.x - x) < 60 * s && Math.abs(p.y - y) < 14 * s);
+    const fl = $('#km-flaechen') && $('#km-flaechen')._flaechen;
+    const marken = (fl ? fl.features : []).map((f) => ({ x: px(f.properties.beschriftung[0]), y: py(f.properties.beschriftung[1]) + 7 * s }));
+    const frei = (x, y) => !pts.some((p) => Math.abs(p.x - x) < 60 * s && Math.abs(p.y - y) < 14 * s) && !marken.some((m) => Math.abs(m.x - x) < 75 * s && Math.abs(m.y - y) < 22 * s);
     $('#km-ref').innerHTML = STAEDTE.filter(([, lat, lon]) => frei(px(lon) + 26 * s, py(lat))).map(([n, lat, lon]) => `<circle cx="${px(lon)}" cy="${py(lat)}" r="${2 * s}"/><text x="${px(lon) + 5 * s}" y="${py(lat) + 3.5 * s}" font-size="${11 * s}">${n}</text>`).join('');
+    $('#km-flaechen-text').innerHTML = fl ? fl.features.map((f) => {
+      const [lon, lat] = f.properties.beschriftung, [name, anzahl] = f.properties.text.split('\n'), x = px(lon).toFixed(1);
+      return `<text x="${x}" y="${py(lat).toFixed(1)}" font-size="${12 * s}" stroke-width="${3 * s}" style="--g:${f.properties.farbe}"><tspan x="${x}">${esc(name)}</tspan><tspan x="${x}" dy="1.2em">${esc(anzahl)}</tspan></text>`;
+    }).join('') : '';
+  }
+  /* Ausschnitt eines Nielsen-Gebiets (Detailkarte bzw. eigene Zeichnung) */
+  function gebietZeigen(id) {
+    const f = geo.nielsen.features.find((x) => x.properties.id === id); if (!f) return;
+    const [x1, y1, x2, y2] = f.properties.rahmen;
+    if (detail) { detail.rahmen([x1, y1, x2, y2]); return; }
+    const w = px(x2) - px(x1), h = py(y1) - py(y2);
+    vb = seitenVerhaeltnis([px(x1) - w * .06, py(y2) - h * .06, w * 1.12, h * 1.12]);
+    kartenAusschnitt();
+  }
+  /* Schalter „Gebiete zeigen“: Flächen neu, ohne die Karte neu aufzubauen */
+  function gebieteAktualisieren() {
+    const fl = gebietsFlaechen(kmProGebiet), g = $('#km-flaechen');
+    if (g) { g.innerHTML = gebietsPfade(fl); g._flaechen = fl; }
+    if (detail) detail.setzeGebiete(fl); else kartenAusschnitt();
+  }
+  /* ---------- Kundensuche auf der Karte ---------- */
+  function suchTreffer(zeigen = true) {
+    const box = $('#km-treffer'); if (!box) return;
+    const q = S.karte.suche.trim().toLocaleLowerCase('de');
+    if (q.length < 2) { box.hidden = true; box.innerHTML = ''; return; }
+    const liste = S.d.kunden.filter((k) => suchText(k).includes(q)).slice(0, 8);
+    box.innerHTML = liste.length ? liste.map((k) => `<button type="button" role="option" class="km-treffer-zeile" data-km-kunde="${esc(k.key)}"><b>${esc(k.firma)}</b><small>${[k.nr ? 'KN ' + k.nr : '', [k.plz, k.ort].filter(Boolean).join(' '), k.art === 'interessent' ? 'Interessent' : '', k.aktiv ? '' : 'inaktiv'].filter(Boolean).map(esc).join(' · ')}</small></button>`).join('')
+      : '<p class="crm-leer">Kein Kunde gefunden.</p>';
+    box.hidden = !zeigen;
+  }
+  /* Gefundenen Kunden zeigen: Filter so stellen, dass er sichtbar ist, hinzoomen, Infokarte öffnen */
+  function zeigeKunde(key) {
+    const k = S.d.kunden.find((x) => x.key === key); if (!k) return;
+    const box = $('#km-treffer'); if (box) box.hidden = true;
+    const l = kundenLage(k, kmLagen);
+    if (!l) { toast(`${k.firma}: kein Kartenpunkt (Ausland oder PLZ fehlt).`, true); return; }
+    let neu = false;
+    if (!k.aktiv && !S.karte.nein) { S.karte.nein = true; neu = true; }
+    if (k.aktiv && !S.karte.ja) { S.karte.ja = true; neu = true; }
+    if (S.karte.gebiet && S.karte.gebiet !== gebietVon(l.lon, l.lat)) { S.karte.gebiet = ''; neu = true; }
+    const hin = () => {
+      zielNachZeichnen = null;
+      if (detail) detail.map.easeTo({ center: [l.lon, l.lat], zoom: l.genau === 'haus' ? 16.5 : l.genau === 'strasse' ? 15 : 12, duration: 500 });
+      else { const w = l.genau === 'plz' ? 60 : 30; vb = seitenVerhaeltnis([px(l.lon) - w / 2, py(l.lat) - w * .3, w, w * .6]); kartenAusschnitt(); }
+      kartenPop(l.id, key);
+    };
+    if (neu) { zielNachZeichnen = hin; karte(); } else hin();
   }
   function kartenZoom(f, cx, cy) {
     const [x, y, w, h] = vb;
@@ -477,14 +616,15 @@
     kartenAusschnitt();
   }
   function kartenPos(ev) { const svg = $('#km-svg'), r = svg.getBoundingClientRect(); return [vb[0] + (ev.clientX - r.left) / r.width * vb[2], vb[1] + (ev.clientY - r.top) / r.height * vb[3]]; }
-  function kartenPop(plz) {
+  function kartenPop(plz, kundeKey = '') {
     const p = kmPunkte.find((x) => x.plz === plz); if (!p) return;
     for (const g of $$('#km-pts .pt')) g.classList.toggle('sel', g.dataset.plz === plz);
     if (detail) detail.markiere(plz);
     const pop = $('#km-pop');
     const genau = p.genau === 'strasse' ? '<small class="km-genau">an der Straße – Hausnummer nicht gefunden</small>' : p.genau === 'plz' && adr && adr.stand ? '<small class="km-genau">Mittelpunkt der Postleitzahl</small>' : '';
-    pop.innerHTML = `<h3><span>${esc(p.titel)}${genau}</span><button type="button" class="crm-rund klein" data-km="zu" aria-label="Schließen">${icon('x')}</button></h3>
-      <ul>${p.liste.map((k) => `<li>${firmaKnopf(k)}<small>${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc(vName(k.vertreter) || 'ohne Vertreter')}${k.aktiv ? '' : ' · inaktiv'}</small></li>`).join('')}</ul>`;
+    const gebiet = p.gebiet ? `<small class="km-genau">${esc(gebietName(p.gebiet))}</small>` : '';
+    pop.innerHTML = `<h3><span>${esc(p.titel)}${genau}${gebiet}</span><button type="button" class="crm-rund klein" data-km="zu" aria-label="Schließen">${icon('x')}</button></h3>
+      <ul>${p.liste.map((k) => `<li${k.key === kundeKey ? ' class="treffer"' : ''}>${firmaKnopf(k)}<small>${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc(vName(k.vertreter) || 'ohne Vertreter')}${k.aktiv ? '' : ' · inaktiv'}</small></li>`).join('')}</ul>`;
     pop.hidden = false;
   }
   let ziehen = null;
@@ -671,6 +811,8 @@
     if (f) { S[f[0]][f[1]] = el.value; S[f[0]].n = SEITE; f[0] === 'kunden' ? kunden() : wiedervorlagen(true); return; }
     if (el.matches('[data-wann]')) { S.wv.wann = $$('[data-wann]:checked').map((x) => x.value); S.wv.n = SEITE; $('#wv-wann summary').textContent = S.wv.wann.length ? `Wann: ${S.wv.wann.length} gewählt` : 'Wann: alle'; wiedervorlagen(true); return; }
     if (el.id === 'km-ja' || el.id === 'km-nein') { S.karte[el.id === 'km-ja' ? 'ja' : 'nein'] = el.checked; karte(); }
+    if (el.id === 'km-gebiet') { S.karte.gebiet = el.value; if (detail) { detail.entfernen(); detail = null; } karte(); }   // neuer Ausschnitt: das Gebiet
+    if (el.id === 'km-gebiete') { S.karte.gebiete = el.checked; gebieteAktualisieren(); }
   });
   const zahlOderText = (v) => (typeof v === 'number' ? zahl(v) : (v ?? ''));
   function kontakteAusFormular() {
@@ -744,6 +886,9 @@
     }
     if (t.id === 'wv-wann-alle') { for (const c of $$('[data-wann]')) c.checked = false; S.wv.wann = []; $('#wv-wann summary').textContent = 'Wann: alle'; wiedervorlagen(true); return; }
     if (t.closest('#wv-neu-sortieren')) { wvReihenfolge(); wiedervorlagen(true); toast('Nach dem nächsten Anruf geordnet.'); return; }
+    const treffer = t.closest('[data-km-kunde]');
+    if (treffer) { zeigeKunde(treffer.dataset.kmKunde); return; }
+    if (!t.closest('.km-suche')) { const box = $('#km-treffer'); if (box) box.hidden = true; }
     const km = t.closest('[data-km]');
     if (km) {
       const a = km.dataset.km;
@@ -756,6 +901,19 @@
     if (t.closest('#crm-export')) { exportieren(); }
   });
   document.addEventListener('keydown', (e) => { const pt = e.target.closest && e.target.closest('#km-pts .pt'); if (pt && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); kartenPop(pt.dataset.plz); } });
+  // Kartensuche: Enter zeigt den ersten Treffer, Pfeil runter/hoch wandert durch die Treffer, Escape schließt die Liste
+  document.addEventListener('keydown', (e) => {
+    const inSuche = e.target.id === 'km-suche', zeile = e.target.closest && e.target.closest('.km-treffer-zeile');
+    if (!inSuche && !zeile) return;
+    const zeilen = $$('#km-treffer .km-treffer-zeile');
+    if (e.key === 'Escape') { $('#km-treffer').hidden = true; $('#km-suche').focus(); return; }
+    if (inSuche && e.key === 'Enter') { e.preventDefault(); suchTreffer(true); const z = $('#km-treffer .km-treffer-zeile'); if (z) zeigeKunde(z.dataset.kmKunde); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (!zeilen.length) return;
+      const i = zeile ? zeilen.indexOf(zeile) : -1, j = e.key === 'ArrowDown' ? Math.min(zeilen.length - 1, i + 1) : i - 1;
+      if (j < 0) $('#km-suche').focus(); else zeilen[j].focus();
+    }
+  });
   // Nach dem Schließen des Kundenblatts die aktuelle Ansicht mit den neuen Werten zeichnen
   $('#dlg-kunde').addEventListener('close', () => { offenKey = ''; zeichne(); });
   addEventListener('resize', () => { if (S.tab === 'karte' && vb) { vb = seitenVerhaeltnis(vb); kartenAusschnitt(); } });
