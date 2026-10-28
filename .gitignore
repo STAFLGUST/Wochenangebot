@@ -2,6 +2,7 @@
 .env
 daten/
 daten-anmeldung/
+daten-karte/
 sicherungen/
 tests/.arbeit/
 tests/.ergebnisse/

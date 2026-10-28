@@ -12,6 +12,7 @@ services:
     volumes:
       - ./dashboard:/var/www/dashboard:ro                 # Dashboard (außerhalb von app/; per Alias nur auf den Keycloak-Hosts)
       - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # nach 000-default: angebot-stafl.de bleibt Standard
+      - ./daten-karte:/var/www/karte:ro                   # Detailkarte (deploy/karte-laden.sh); fehlt sie, zeigen die Seiten die Übersichtskarte
     environment:
       OIDC_ISSUER: https://login.dashboard-stafl.de/realms/mitarbeiter
       OIDC_SECRET_DASHBOARD: ${OIDC_SECRET_DASHBOARD:?in .env setzen}

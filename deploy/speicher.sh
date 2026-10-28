@@ -4,7 +4,7 @@
 #   cd /opt/wochenangebot && sh deploy/speicher.sh              # nur anzeigen – ändert nichts
 #   cd /opt/wochenangebot && sh deploy/speicher.sh aufraeumen   # Docker-Bauzwischenspeicher und ungenutzte Images entfernen
 #
-# Nie angefasst: daten/, sicherungen/, daten-anmeldung/, Docker-Volumes (Keycloak-Datenbank, HTTPS-Zertifikate),
+# Nie angefasst: daten/, sicherungen/, daten-anmeldung/, daten-karte/ (Detailkarte, deploy/karte-laden.sh), Docker-Volumes (Keycloak-Datenbank, HTTPS-Zertifikate),
 # Container (auch angehaltene) und alle Images, die ein Container nutzt. Images „stafl-app:*“ bleiben immer erhalten –
 # darunter das gemerkte Image für den Rückfall (stafl-app:release-vorher, deploy/release-zurueck.sh).
 # Container-Protokolle sind seit der Begrenzung in den Compose-Dateien (3 × 10 MB je Dienst) klein; alte, große

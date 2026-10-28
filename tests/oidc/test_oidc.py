@@ -501,6 +501,33 @@ def eigene_seite(pg):
     return pg
 
 
+def karte_bereit(seite, sel, timeout=60000):
+    """Wartet, bis die Detailkarte in `sel` fertig gezeichnet ist (data-karte="bereit": Stil, Kacheln, keine Bewegung).
+    Per CSS-Selektor statt wait_for_function: die Content-Security-Policy der Seiten verbietet eval, mit dem Playwright
+    Bedingungen wiederholt prüft. Gibt (True, '') oder (False, Diagnose) zurück – ein Fehlschlag erscheint so als FAIL mit
+    Ursache (Konsole, fehlgeschlagene Abrufe, Zustand) statt als Abbruch."""
+    meldungen = []
+    hoeren = [('console', lambda m: meldungen.append(f'{m.type}: {m.text}'[:200]) if m.type in ('error', 'warning') else None),
+              ('requestfailed', lambda r: meldungen.append(f'abgebrochen: {r.url[-90:]} {r.failure}')),
+              ('response', lambda r: meldungen.append(f'{r.status}: {r.url[-90:]}') if r.status >= 400 else None)]
+    for art, f in hoeren:
+        seite.on(art, f)
+    try:
+        seite.wait_for_selector(sel + '[data-karte="bereit"]', timeout=timeout)
+        if seite.evaluate("(sel) => !!document.querySelector(sel).staflKarte", sel):
+            return True, ''
+        raise RuntimeError('Karte ohne Schnittstelle am Element')
+    except Exception:
+        zustand = seite.evaluate("""async (sel) => { const e = document.querySelector(sel), k = e && e.staflKarte;
+            return { element: !!e, karte: !!k, text: e ? e.textContent.slice(0, 160) : '', svg: !!document.querySelector('#km-svg, #aw-svg'),
+                     verfuegbar: window.STAFLKarte ? await window.STAFLKarte.verfuegbar() : 'keine Komponente',
+                     geladen: k ? [k.map.isStyleLoaded(), k.map.loaded(), k.map.areTilesLoaded()] : null }; }""", sel)
+        return False, f'{zustand} {meldungen[-12:]}'
+    finally:
+        for art, f in hoeren:
+            seite.remove_listener(art, f)
+
+
 def kekse(ctx, host):
     return {c['name']: c for c in ctx.cookies() if c['domain'].lstrip('.') == host}
 
@@ -876,6 +903,27 @@ with sync_playwright() as pw:
     check('CRM: Name im Kopf, kein CSV-Knopf', 'Erika Editor' in (pc.text_content('#crm-user-name') or '') and pc.is_hidden('#crm-export'), pc.text_content('#crm-user-name'))
     pc.goto(CRM + '/admin/'); pc.wait_for_selector('#crm-app:not([hidden])')
     check('CRM: Adresse /admin/ (Anmeldehinweis der Seite) führt zurück zum CRM', pc.url.startswith(CRM + '/module/crm/'), pc.url)
+    # Detailkarte (OpenStreetMap vom eigenen Server, Testauszug tests/fixtures/karte): Datei nur mit Anmeldung und nur auf den
+    # Hosts von CRM und Verwaltung; die Seite zeigt Straßen und Gebäude statt der eigenen Übersichtszeichnung
+    for nr, firma, plz, ort in (('970001', 'Karten-Test Hamburg', '20095', 'Hamburg'), ('970002', 'Karten-Test Berlin', '10117', 'Berlin')):
+        V.call('kunde_save', {'id': '', 'rev': V.call('kunden')[1].get('rev', 0), 'firma': firma, 'nr': nr, 'plz': plz, 'ort': ort, 'active': True, 'angebote': [], 'login': None})
+    pc.reload(); pc.wait_for_selector('#crm-app:not([hidden])')
+    code, kopf = pc.evaluate("fetch('/karte/karte.pmtiles', {headers: {Range: 'bytes=0-6'}}).then(async r => [r.status, await r.text()])")
+    check('Detailkarte: Datei auf dem CRM-Host mit Anmeldung als Byte-Bereich (206, PMTiles)', code == 206 and kopf == 'PMTiles', (code, kopf))
+    code, kopf, _ = anfrage(CRM + '/karte/karte.pmtiles', kopf={'Range': 'bytes=0-6', **SEITE})
+    check('Detailkarte: ohne Anmeldung nicht abrufbar (Weiterleitung zu Keycloak)', code in (302, 303, 401) and code != 206, (code, kopf.get('Location', '')[:80]))
+    check('Detailkarte: nicht auf dem Angebots-Host (404)', pa.evaluate("fetch('/karte/karte.pmtiles', {headers: {Range: 'bytes=0-6'}}).then(r => r.status)") == 404)
+    pc.click('#crm-tabs button[data-tab="karte"]')
+    ok_km, diag = karte_bereit(pc, '#km-detail')
+    n_km = pc.evaluate("document.querySelector('#km-detail').staflKarte.anzahl()") if ok_km else 0
+    check('CRM-Karte: Detailkarte (MapLibre) statt eigener Zeichnung, Kundenpunkte darauf', ok_km and pc.locator('#km-svg').count() == 0 and n_km >= 2, diag or n_km)
+    if ok_km:
+        pc.evaluate("document.querySelector('#km-detail').staflKarte.map.jumpTo({center: [9.993, 53.5506], zoom: 15.5})")
+        ok_km, diag = karte_bereit(pc, '#km-detail')
+    ebenen = pc.evaluate("(() => { const m = document.querySelector('#km-detail').staflKarte.map; const f = m.queryRenderedFeatures(); return [...new Set(f.map((x) => x.sourceLayer).filter(Boolean))]; })()") if ok_km else []
+    check('CRM-Karte: auf Straßenebene Gebäude, Straßen und Wasser aus der eigenen Kartendatei', {'buildings', 'roads', 'water'} <= set(ebenen), diag or ebenen)
+    check('CRM-Karte: Quellenangabe OpenStreetMap', ok_km and 'OpenStreetMap' in (pc.text_content('#km-detail .maplibregl-ctrl-attrib') or ''))
+    pc.screenshot(path=os.path.join(SH, 'oidc_crm_karte_1280.png'))
     # Aktion ↔ Host (GR-109): CRM-Aktionen nur auf dem CRM-Host; dort weder Eingabebereich noch HR
     for name, seite in (('Dashboard', pg), ('Angebot', pa), ('Verwaltung', pv), ('Bestand', pb), ('HR', ph)):
         code = seite.evaluate("fetch('/api/?action=crm_start').then(r => r.status)")
@@ -1170,6 +1218,10 @@ with sync_playwright() as pw:
     K = Legacy()
     code, j = K.call('kunde_login', {'username': 'gasthaus.fenster', 'password': 'Fenster-Kundenpasswort-7'})
     check('Kunde meldet sich auf der Kundenseite mit dem gesetzten Passwort an', code == 200 and j.get('ok'), (code, j))
+    # Auswertung (Verwaltung): Detailkarte vom eigenen Server statt eigener Zeichnung
+    pg.click('#vt-auswertung')
+    ok_aw, diag = karte_bereit(pg, '#aw-detail')
+    check('Auswertung: Detailkarte (MapLibre) statt eigener Zeichnung', ok_aw and pg.locator('#aw-svg').count() == 0 and 'OpenStreetMap' in (pg.text_content('#view-auswertung .aw-foot') or ''), diag)
     pg.goto(D + '/'); pg.wait_for_selector('#db-grid .db-tile')   # SSO auf den anderen Host
     pg.goto(A + '/oidc/callback?' + urllib.parse.urlencode({'iss': L + '/realms/mitarbeiter', 'target_link_uri': 'https://angreifer.example/'}))
     check('erneute Anmeldung leitet nie auf fremde Seiten (offene Weiterleitung)', urllib.parse.urlparse(pg.url).hostname != 'angreifer.example', pg.url)

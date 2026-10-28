@@ -1147,7 +1147,8 @@ body.ro .sale-tag { cursor: default; }
 .aw-pt:focus-visible circle, .aw-pt.sel circle { stroke: var(--text); stroke-width: 2.5; }
 .aw-pt text { fill: var(--accent-ink, #fff); font-weight: 650; text-anchor: middle; dominant-baseline: central; pointer-events: none; font-variant-numeric: tabular-nums; }
 .aw-pt text.aw-lbl { fill: var(--text); font-weight: 600; text-anchor: start; dominant-baseline: auto; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
-.aw-zoom { position: absolute; right: 12px; top: 12px; display: grid; gap: 6px; }
+.aw-map .aw-detail { position: absolute; inset: 0; }
+.aw-zoom { position: absolute; z-index: 2; right: 12px; top: 12px; display: grid; gap: 6px; }
 .aw-zoom .btn { background: var(--surface); box-shadow: var(--shadow-sm); }
 .aw-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; font-size: 13.5px; color: var(--text-2); box-shadow: var(--shadow-sm); text-align: center; max-width: calc(100% - 32px); }
 .aw-pop { position: absolute; z-index: 2; width: min(300px, calc(100% - 16px)); max-height: 60%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 13px; }
