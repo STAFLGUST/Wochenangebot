@@ -233,6 +233,13 @@ jobs:
         run: sh tests/deploy/test_karte_laden.sh
       - name: Adressverzeichnis laden (deploy/adressen-laden.sh, mit Platzhaltern für docker/curl)
         run: sh tests/deploy/test_adressen_laden.sh
+      - name: Adressverzeichnis – Probe im echten Container wie auf dem Server (Image, pyosmium, Umwandeln der Testdaten)
+        # Ohne Platzhalter: genau das Image und die Paketprüfsummen aus deploy/adressen-laden.sh (fing am 28.10.2026 die
+        # fehlende libexpat im slim-Image nicht ab, weil nur der Platzhalter lief)
+        run: |
+          touch .env
+          sh deploy/adressen-laden.sh probe
+          rm -f .env
       - name: Prüfungen des Release-Laufs (mit Platzhalter für gh)
         run: sh tests/deploy/test_release_pruefen.sh
       - name: Einrichtung der zentralen Anmeldung (Geheimnisse, Realm-Import)
