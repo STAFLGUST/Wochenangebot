@@ -229,9 +229,10 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-karte-flaeche .pt text { fill: #fff; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
 .crm-karte-flaeche #km-ref circle { fill: var(--crm-muted); }
 .crm-karte-flaeche #km-ref text { fill: var(--crm-muted); font-weight: 600; }
-.crm-zoom { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.crm-karte-flaeche .km-detail { position: absolute; inset: 0; background: var(--crm-meer); }
+.crm-zoom { position: absolute; z-index: 2; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 6px; }
 .crm-zoom .crm-rund { background: var(--crm-deckend); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); }
-.crm-pop { position: absolute; left: 14px; bottom: 14px; width: min(360px, calc(100% - 28px)); max-height: 46%; overflow: auto; padding: 14px 16px; border-radius: 18px;
+.crm-pop { position: absolute; z-index: 2; left: 14px; bottom: 14px; width: min(360px, calc(100% - 28px)); max-height: 46%; overflow: auto; padding: 14px 16px; border-radius: 18px;
   background: var(--crm-deckend); border: 1px solid var(--crm-rand); box-shadow: 0 16px 40px rgba(0, 0, 0, .2); font-size: 14px; }
 .crm-pop[hidden] { display: none; }
 .crm-pop h3 { margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }

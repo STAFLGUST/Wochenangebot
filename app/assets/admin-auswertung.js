@@ -1,7 +1,8 @@
 /* ==========================================================================
    Wochenangebot – Eingabebereich, Auswertung
    Karte der Kunden-Anmeldungen: ungefährer Ort (aus der IP-Adresse) je Anmeldung, Liste, Filter nach Zeitraum und Kunde.
-   Die Landkarte (app/assets/karte.json, Natural Earth) zeichnet die Seite selbst – keine fremden Kartendienste.
+   Detailkarte mit Straßen und Gebäuden vom eigenen Server (app/assets/detailkarte.js, OpenStreetMap), sonst zeichnet die
+   Seite die Landkarte selbst (app/assets/karte.json, Natural Earth) – keine fremden Kartendienste.
    ========================================================================== */
 (function () {
   'use strict';
@@ -18,6 +19,8 @@
 
   let tage = 30, kunde = '', data = null, karte = null, karteLaden = null, sel = null;
   let vb = null, full = null;   // aktueller und gesamter Kartenausschnitt [x, y, w, h]
+  let detail = null;            // Detailkarte (MapLibre), wenn die Kartendatei auf dem Server liegt
+  let aktGs = [];               // aktuelle Orte (auch ohne eigene Zeichnung)
 
   /* Web-Mercator wie werkzeuge/karte_bauen.py: 1 Einheit = 0,01 Längengrad */
   const px = (lon) => (lon + 180) * 100;
@@ -82,6 +85,7 @@
     } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     if (kunde && !data.kunden.some((k) => k.id === kunde)) kunde = '';
     sel = null;
+    if (detail) { detail.entfernen(); detail = null; }
     const list = filtered();
     const gs = gruppen(list);
     const kunden = [...data.kunden].sort((a, b) => a.firma.localeCompare(b.firma, 'de'));
@@ -116,6 +120,26 @@
     vb = fitBox(gs); full = aspect([karte.box[0], karte.box[1] + karte.box[3] * 0.08, karte.box[2], karte.box[3] * 0.8]);
     drawPoints(gs);
     applyVb();
+    detailkarteZeigen(gs);
+  }
+  /* Detailkarte (Straßen, Gebäude) statt eigener Zeichnung, wenn die Kartendatei bereitsteht und der Browser WebGL kann */
+  async function detailkarteZeigen(gs) {
+    if (!window.STAFLKarte || !(await window.STAFLKarte.verfuegbar())) return;
+    const svg = $('#aw-svg');
+    if (!svg || $('#view-auswertung').hidden) return;
+    const div = document.createElement('div');
+    div.id = 'aw-detail'; div.className = 'aw-detail'; div.setAttribute('role', 'region'); div.setAttribute('aria-label', svg.getAttribute('aria-label'));
+    svg.replaceWith(div);
+    try {
+      detail = await window.STAFLKarte.erstellen(div, {
+        punkte: gs.map((g) => ({ id: g.key, lon: g.lon, lat: g.lat, n: g.items.length })), farbe: 'rot',
+        beiKlick: (key) => openPop(key), beiBewegung: () => placePop(), beiLeerklick: () => closePop(),
+      });
+    } catch (e) { div.innerHTML = `<div class="err-box">Karte nicht geladen: ${esc(e.message)}</div>`; return; }
+    if (!div.isConnected) { detail.entfernen(); detail = null; return; }
+    detail.passend();
+    const fuss = $('#view-auswertung .aw-foot');
+    if (fuss) for (const n of fuss.childNodes) if (n.nodeType === 3 && n.textContent.includes('Karte: Natural Earth.')) n.textContent = n.textContent.replace('Karte: Natural Earth.', 'Karte: © OpenStreetMap-Mitwirkende, Protomaps.');
   }
   const firma = (kid) => { const k = data && data.kunden.find((x) => x.id === kid); return k ? k.firma : 'Kunde'; };
 
@@ -126,7 +150,7 @@
       const n = g.items.length, firmen = [...g.kids].map(firma);
       return `<g class="aw-pt${n > 1 ? ' multi' : ''}" data-aw-key="${g.key}" tabindex="0" role="button" aria-label="${esc(ortKurz(g.items[0]))}: ${esc(plural(n, 'Anmeldung', 'Anmeldungen'))}"><title>${esc(ortName(g.items[0]))} – ${esc(firmen.slice(0, 4).join(', '))}${firmen.length > 4 ? ' …' : ''} (${n})</title><circle cx="${g.x.toFixed(1)}" cy="${g.y.toFixed(1)}" data-n="${n}"/><text class="aw-lbl" data-x="${g.x.toFixed(1)}" data-y="${g.y.toFixed(1)}" data-n="${n}">${esc(ortKurz(g.items[0]))}</text>${n > 1 ? `<text x="${g.x.toFixed(1)}" y="${g.y.toFixed(1)}">${n > 99 ? '99+' : n}</text>` : ''}</g>`;
     }).join('');
-    $('#aw-pts')._gs = gs;
+    aktGs = gs;
   }
 
   /* Ausschnitt anwenden: Punktgröße, Schrift und Orientierungsstädte an den Zoom anpassen */
@@ -145,7 +169,7 @@
       t.style.display = zeigen ? '' : 'none';
     }
     const ref = $('#aw-ref');
-    const pts = ($('#aw-pts')._gs || []);
+    const pts = aktGs;
     const frei = (x, y) => !pts.some((g) => Math.abs(g.x - x) < 70 * s && Math.abs(g.y - y) < 16 * s);   // keine Beschriftung unter einem Punkt
     ref.innerHTML = vb[2] < 2600 ? STAEDTE.filter(([, lat, lon]) => frei(px(lon) + 30 * s, py(lat))).map(([n, lat, lon]) => `<circle cx="${px(lon)}" cy="${py(lat)}" r="${2.2 * s}"/><text x="${px(lon) + 5 * s}" y="${py(lat) + 3.5 * s}" font-size="${11 * s}">${n}</text>`).join('') : '';
     placePop();
@@ -171,11 +195,12 @@
 
   /* Hinweisfeld zu einem Ort */
   function openPop(key) {
-    const gs = $('#aw-pts')._gs || [];
+    const gs = aktGs;
     const g = gs.find((x) => x.key === key);
     if (!g) return;
     sel = g;
     for (const el of $$('#aw-pts .aw-pt')) el.classList.toggle('sel', el.dataset.awKey === key);
+    if (detail) detail.markiere(key);
     const pop = $('#aw-pop');
     const byK = new Map();
     for (const e of g.items) { if (!byK.has(e.kid)) byK.set(e.kid, []); byK.get(e.kid).push(e); }
@@ -184,13 +209,18 @@
     pop.hidden = false;
     placePop();
   }
-  function closePop() { sel = null; const p = $('#aw-pop'); if (p) p.hidden = true; for (const el of $$('#aw-pts .aw-pt.sel')) el.classList.remove('sel'); }
+  function closePop() { sel = null; const p = $('#aw-pop'); if (p) p.hidden = true; for (const el of $$('#aw-pts .aw-pt.sel')) el.classList.remove('sel'); if (detail) detail.markiere(null); }
   function placePop() {
     const pop = $('#aw-pop');
     if (!pop || pop.hidden || !sel) return;
-    const svg = $('#aw-svg'), wrap = svg.parentElement;
-    const sr = svg.getBoundingClientRect(), wr = wrap.getBoundingClientRect();   // SVG-Elemente haben kein offsetLeft
-    const sx = (sel.x - vb[0]) / vb[2] * sr.width + sr.left - wr.left, sy = (sel.y - vb[1]) / vb[3] * sr.height + sr.top - wr.top;
+    let wrap, sx, sy;
+    if (detail) {
+      wrap = $('#aw-detail').parentElement; [sx, sy] = detail.position(sel.lon, sel.lat);
+    } else {
+      const svg = $('#aw-svg'); wrap = svg.parentElement;
+      const sr = svg.getBoundingClientRect(), wr = wrap.getBoundingClientRect();   // SVG-Elemente haben kein offsetLeft
+      sx = (sel.x - vb[0]) / vb[2] * sr.width + sr.left - wr.left; sy = (sel.y - vb[1]) / vb[3] * sr.height + sr.top - wr.top;
+    }
     const pw = pop.offsetWidth, ph = pop.offsetHeight;
     let left = sx - pw / 2, top = sy - ph - 16;
     if (top < 8) top = sy + 16;
@@ -245,9 +275,10 @@
     const row = e.target.closest('[data-aw-pt]');
     if (row) { focusPt(row.dataset.awPt); return; }
     const a = e.target.closest('[data-aw]')?.dataset.aw;
+    if (detail && (a === 'in' || a === 'out' || a === 'fit')) { if (a === 'fit') { closePop(); detail.passend(); } else detail.zoom(a === 'in' ? 1 : -1); return; }
     if (a === 'in') zoom(0.6);
     else if (a === 'out') zoom(1 / 0.6);
-    else if (a === 'fit') { closePop(); vb = fitBox($('#aw-pts')._gs || []); applyVb(); }
+    else if (a === 'fit') { closePop(); vb = fitBox(aktGs); applyVb(); }
     else if (a === 'close') closePop();
     else if (a === 'ort') updateOrt(e.target.closest('button'));
     else if (e.target.closest('#aw-svg') && !moved) closePop();
@@ -261,8 +292,9 @@
   window.addEventListener('resize', () => { if (vb && $('#aw-svg') && !$('#view-auswertung').hidden) { vb = aspect(vb); applyVb(); } });
 
   function focusPt(key) {
-    const g = ($('#aw-pts')._gs || []).find((x) => x.key === key);
+    const g = aktGs.find((x) => x.key === key);
     if (!g) return;
+    if (detail) { detail.zentriere(g.lon, g.lat, 10); openPop(key); $('#aw-detail').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
     const w = Math.min(vb[2], 900), h = w * vb[3] / vb[2];
     vb = [g.x - w / 2, g.y - h / 2, w, h];
     applyVb();

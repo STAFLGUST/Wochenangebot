@@ -512,6 +512,7 @@ pfade = [
   "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
   "app/assets/theme.js", "app/assets/admin.css", "app/assets/admin-rollen.js", "app/assets/vendor/**",
+  "app/assets/detailkarte.js", "app/assets/karte/**",
   "app/assets/fonts/**", "app/assets/icons/**", "app/assets/logo-*",
   "Caddyfile", "docker-compose.yml", ".env.example", ".gitignore", ".gitleaks.toml", ".github/**",
   "deploy/**", "werkzeuge/**", "regeln/**", "docs/**", "AGENTS.md", "CLAUDE.md", "LIESMICH.md",

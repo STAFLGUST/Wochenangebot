@@ -1271,3 +1271,10 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 @media screen and (max-width: 380px) {
   body.kseite .modebar button svg.i { display: none; }
 }
+
+/* Detailkarte (app/assets/detailkarte.js, MapLibre): Quellenangabe und Bedienelemente im Plattform-Design */
+.detailkarte { font: inherit; }
+.detailkarte .maplibregl-ctrl-attrib { background: color-mix(in srgb, var(--surface, #fff) 86%, transparent); color: var(--text-2, #555); border-radius: 12px; font-size: 11px; }
+.detailkarte .maplibregl-ctrl-attrib a { color: inherit; }
+.detailkarte .maplibregl-ctrl-attrib-button { filter: none; }
+.detailkarte .maplibregl-canvas:focus-visible { outline: 2px solid var(--accent, #7b1e2b); outline-offset: -2px; }

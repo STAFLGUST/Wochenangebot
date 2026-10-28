@@ -192,12 +192,58 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
+| `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
 | `frontend.js` | angebot | Wochenangebot – öffentliches Frontend |
 | `legal.css` | angebot | Gestaltung der Rechtsseiten (Kontakt, Impressum, Datenschutz): eigenes kleines Stylesheet ohne app.css, hell/dunkel nach Systemeinstellung. |
 | `offer-core.js` | angebot | Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Leser (ohne externe Bibliothek) - Parser der Angebotsliste → editierbares Datenmodell - Anreicherung (Merkmale, Teilstück, Merklisten-Schlüssel … |
 | `stock-core.js` | bestand | Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest .xls (BIFF2–BIFF8, auch im OLE-Container) und .xlsx. |
 | `theme.js` | plattform | Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, wegen Content-Security-Policy) |
 | `webapp.js` | angebot | Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-Bildschirm“. |
+
+## `app/assets/karte/schrift/Noto Sans Italic/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `0-255.pbf` | plattform | – |
+| `1024-1279.pbf` | plattform | – |
+| `256-511.pbf` | plattform | – |
+| `512-767.pbf` | plattform | – |
+| `768-1023.pbf` | plattform | – |
+| `7680-7935.pbf` | plattform | – |
+| `8192-8447.pbf` | plattform | – |
+| `8448-8703.pbf` | plattform | – |
+
+## `app/assets/karte/schrift/Noto Sans Medium/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `0-255.pbf` | plattform | – |
+| `1024-1279.pbf` | plattform | – |
+| `256-511.pbf` | plattform | – |
+| `512-767.pbf` | plattform | – |
+| `768-1023.pbf` | plattform | – |
+| `7680-7935.pbf` | plattform | – |
+| `8192-8447.pbf` | plattform | – |
+| `8448-8703.pbf` | plattform | – |
+
+## `app/assets/karte/schrift/Noto Sans Regular/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `0-255.pbf` | plattform | – |
+| `1024-1279.pbf` | plattform | – |
+| `256-511.pbf` | plattform | – |
+| `512-767.pbf` | plattform | – |
+| `768-1023.pbf` | plattform | – |
+| `7680-7935.pbf` | plattform | – |
+| `8192-8447.pbf` | plattform | – |
+| `8448-8703.pbf` | plattform | – |
+
+## `app/assets/karte/sprite/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `LICENSE-tangrams.md` | plattform | – |
 
 ## `app/data/`
 
@@ -279,6 +325,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `freigabe-einspielen.sh` | plattform | Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“), prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück. |
 | `ip-freigabe-aus.php` | plattform | Offline emergency tool, also supports SQLite. |
 | `ip-freigabe-aus.sh` | plattform | Notfall: IP-Freigabe und Ländersperre ausschalten (z. |
+| `karte-laden.sh` | plattform | Detailkarte (Straßen, Gebäude, Ortsnamen) für CRM-Karte und Auswertung laden – OpenStreetMap-Daten als eine Datei auf dem eigenen Server (keine fremden Kartendienste beim Ansehen). |
 | `notfall-aus.php` | plattform | Notfallmodus beenden (Server-Werkzeug zu deploy/notfall-aus.sh) – gleicher Ablauf wie notfall_ende() in app/api/lib/notfall.php, aber ohne Anmeldung |
 | `notfall-aus.sh` | plattform | Notfallmodus beenden (Modul Sicherheit), wenn das in der Oberfläche nicht mehr geht – z. |
 | `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (angebot-stafl.de/admin/ mit eigener Anmeldung) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
@@ -364,6 +411,12 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `Dockerfile` | plattform | STAFL-Plattform – Anwendungs-Image (Roadmap 7b-4, ADR-003) Grundlage für die spätere zentrale Anmeldung: das offizielle PHP-/Apache-Image plus das Apache-Modul mod_auth_openidc (OpenID-zertifiziert, aus den … |
 | `pruefen.sh` | plattform | Prüft das Anwendungs-Image (deploy/image/Dockerfile) gegen das bisherige Grundimage – lokal mit Docker und in der CI. bash deploy/image/pruefen.sh # baut stafl-app:pruefung und vergleicht Erwartung: gleiche geladene … |
+
+## `deploy/karte/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `deutschland.geojson` | plattform | – |
 
 ## `deploy/testumgebung/`
 
@@ -479,6 +532,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_datenbank_umschalten.sh` | plattform | Test von deploy/datenbank-umschalten.sh – Vorprüfung vor Sicherung und Stopp, mit Platzhaltern für docker, sichern.sh und datenbank.py in einem Wegwerf-Ordner (keine echten Daten, kein Container). |
 | `test_freigabe.sh` | plattform | Integrationstest des Release-Modus (deploy/freigabe-einspielen.sh) – komplett lokal: eigenes Git-„origin“, GitHub-API-Ersatz, PHP-Testserver als Live-Seite, echte Datensicherung. |
 | `test_images.py` | plattform | Container-Images fest über Digest (Sicherheitsdurchsicht 26.10.2026, Befund 12): jedes fremde Image in den Compose-Dateien und im Dockerfile ist mit @sha256 festgelegt – ein Release holt so nie unbemerkt eine andere … |
+| `test_karte_laden.sh` | plattform | Test von deploy/karte-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
@@ -617,7 +671,9 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `asset_versionen.py` | plattform | Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ prüfen. |
 | `doku.py` | plattform | Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen (nur Python-Standardbibliothek). python3 werkzeuge/doku.py erzeugen docs/entwickler/referenz/*.md neu schreiben python3 werkzeuge/doku.py … |
 | `integritaet.py` | plattform | Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht. |
+| `karte_auszug.py` | plattform | Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte. |
 | `karte_bauen.py` | verwaltung | Baut die Landkarte für die Auswertung (app/assets/karte.json) aus Natural Earth (gemeinfrei), weitergegeben als TopoJSON im npm-Paket „world-atlas“ (ISC). |
+| `karte_stil.mjs` | plattform | – |
 | `lokal.py` | plattform | Lokaler Entwicklungsserver mit Testdaten – wie ein Testserver der E2E-Suite, aber zum Ausprobieren im Browser. python3 werkzeuge/lokal.py http://127.0.0.1:8080 mit Testdaten (tests/fixtures/data-seed) python3 … |
 | `realm_produktion.py` | plattform | Realm „mitarbeiter“ für den Betrieb aus dem geprüften Test-Realm erzeugen (eine Quelle, kein Auseinanderlaufen). python3 werkzeuge/realm_produktion.py # schreibt deploy/anmeldung/realm-mitarbeiter.json python3 … |
 | `regeln.py` | plattform | Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Python-Standardbibliothek). python3 werkzeuge/regeln.py pruefen Alle Prüfungen (CI); Ausgang 1 bei Fehlern python3 werkzeuge/regeln.py betroffen … |

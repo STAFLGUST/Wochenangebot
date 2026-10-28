@@ -222,6 +222,8 @@ jobs:
         run: sh tests/deploy/test_freigabe.sh
       - name: Testumgebung verwalten (mit Platzhaltern für docker/git)
         run: sh tests/deploy/test_testumgebung.sh
+      - name: Detailkarte laden (deploy/karte-laden.sh, mit Platzhaltern für docker/curl)
+        run: sh tests/deploy/test_karte_laden.sh
       - name: Prüfungen des Release-Laufs (mit Platzhalter für gh)
         run: sh tests/deploy/test_release_pruefen.sh
       - name: Einrichtung der zentralen Anmeldung (Geheimnisse, Realm-Import)

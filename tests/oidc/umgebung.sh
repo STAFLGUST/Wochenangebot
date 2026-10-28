@@ -116,6 +116,8 @@ EOF
   # ── Anwendung: Kopie von app/ und dashboard/, Testdaten aus tests/fixtures (GR-007) ──
   cp -r "$REPO/app" "$OIDC_WORK/app"; cp -r "$REPO/dashboard" "$OIDC_WORK/app/dashboard"
   rm -rf "$OIDC_WORK/app/data"; cp -r "$REPO/tests/fixtures/data-seed" "$OIDC_WORK/app/data"
+  # Detailkarte: kleiner OpenStreetMap-Auszug (Deutschland grob, Hamburger Innenstadt bis Zoomstufe 15) wie daten-karte/ im Betrieb
+  mkdir -p "$OIDC_WORK/karte"; cp "$REPO/tests/fixtures/karte/hamburg.pmtiles" "$OIDC_WORK/karte/karte.pmtiles"
   php -r 'echo "<?php http_response_code(404); exit; ?>\n" . json_encode(["hash" => password_hash($argv[1], PASSWORD_DEFAULT), "created" => "2026-10-01T00:00:00Z"]);' \
     "Sicheres-Passwort-1" > "$OIDC_WORK/app/data/admin.php"
   if [ "$ALS_ROOT" = 1 ]; then chown -R www-data "$OIDC_WORK/app/data" "$OIDC_WORK/sessions" "$OIDC_WORK/apache"; fi

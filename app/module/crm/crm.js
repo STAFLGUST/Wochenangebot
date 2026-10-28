@@ -3,8 +3,9 @@
    Kunden kommen aus den Stammdaten der Verwaltung (nur lesend); das CRM ergänzt je Kunde ein Kundenblatt (Ansprechpartner,
    Segment, Phase, Wann/Erledigt, Potenzial, nächster Schritt, Notiz), Interessenten und den Aktivitätenverlauf.
    Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
-   Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: die Karte zeichnet die Seite selbst
-   (Umrisse ../../assets/karte.json, PLZ-Mittelpunkte plz.json). */
+   Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: Detailkarte mit Straßen und Gebäuden vom
+   eigenen Server (../../assets/detailkarte.js, OpenStreetMap), sonst zeichnet die Seite selbst (Umrisse
+   ../../assets/karte.json); PLZ-Mittelpunkte plz.json. */
 'use strict';
 (() => {
   const API = '../../api/';
@@ -321,7 +322,7 @@
   const py = (lat) => { const l = Math.max(-85, Math.min(85, lat)) * Math.PI / 180; return (180 - Math.log(Math.tan(Math.PI / 4 + l / 2)) * 180 / Math.PI) * 100; };
   const STAEDTE = [['Hamburg', 53.55, 10.0], ['Berlin', 52.52, 13.405], ['München', 48.137, 11.575], ['Köln', 50.937, 6.96], ['Frankfurt', 50.11, 8.682],
     ['Hannover', 52.375, 9.732], ['Bremen', 53.079, 8.802], ['Kiel', 54.323, 10.123], ['Leipzig', 51.34, 12.375], ['Stuttgart', 48.776, 9.177], ['Nürnberg', 49.452, 11.077], ['Dortmund', 51.514, 7.468]];
-  let geo = null, geoLaden = null, vb = null, voll = null;
+  let geo = null, geoLaden = null, vb = null, voll = null, kmPunkte = [], detail = null;
   function ladeGeo() {
     if (geo) return Promise.resolve(geo);
     if (!geoLaden) {
@@ -345,7 +346,7 @@
       if ((k.aktiv && !S.karte.ja) || (!k.aktiv && !S.karte.nein)) continue;
       const p = kartenPlz(k), c = p && geo.plz[p];
       if (!c) { ohne++; continue; }
-      if (!m.has(p)) m.set(p, { plz: p, x: px(c[1] / 1000), y: py(c[0] / 1000), liste: [] });
+      if (!m.has(p)) m.set(p, { plz: p, lat: c[0] / 1000, lon: c[1] / 1000, x: px(c[1] / 1000), y: py(c[0] / 1000), liste: [] });
       m.get(p).liste.push(k);
     }
     return { punkte: [...m.values()].sort((a, b) => b.liste.length - a.liste.length), ohne };
@@ -362,6 +363,10 @@
     try { await ladeGeo(); } catch (e) { host.innerHTML = `<p class="crm-fehler">${esc(e.message)}</p>`; return; }
     if (S.tab !== 'karte') return;
     const { punkte, ohne } = kartenPunkte();
+    // Kartenausschnitt der Detailkarte beim Neuzeichnen (z. B. Filter aktiv/inaktiv) behalten
+    const kamera = detail ? { center: detail.map.getCenter(), zoom: detail.map.getZoom() } : null;
+    if (detail) { detail.entfernen(); detail = null; }
+    kmPunkte = punkte;
     const n = punkte.reduce((s, p) => s + p.liste.length, 0);
     host.innerHTML = `
       <div class="crm-titel"><h1>Kunden auf der Karte</h1><p>${n} Kunden an ${punkte.length} Postleitzahlen${ohne ? ` · ${ohne} ohne Kartenpunkt (Ausland oder PLZ fehlt)` : ''}</p></div>
@@ -381,6 +386,7 @@
       return `<g class="pt${aus ? ' aus' : ''}" data-plz="${p.plz}" tabindex="0" role="button" aria-label="${esc(p.plz)} ${esc(p.liste[0].ort)}: ${p.liste.length} Kunden"><title>${esc(p.plz)} ${esc(p.liste[0].ort)} – ${esc(p.liste.slice(0, 4).map((k) => k.firma).join(', '))}${p.liste.length > 4 ? ' …' : ''}</title><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" data-n="${p.liste.length}"/>${p.liste.length > 1 ? `<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${p.liste.length > 99 ? '99+' : p.liste.length}</text>` : ''}</g>`;
     }).join('');
     $('#km-pts')._punkte = punkte;
+    if (await detailkarteZeigen(punkte, kamera)) return;
     voll = seitenVerhaeltnis([px(5.2), py(55.4), px(15.8) - px(5.2), py(47) - py(55.4)]);
     vb = voll.slice();
     if (punkte.length) {
@@ -390,6 +396,32 @@
       const pw = (x1 - x0) * .18, ph = (y1 - y0) * .18; vb = seitenVerhaeltnis([x0 - pw, y0 - ph, x1 - x0 + 2 * pw, y1 - y0 + 2 * ph]);
     }
     kartenAusschnitt();
+  }
+  /* Detailkarte (Straßen, Gebäude) statt eigener Zeichnung, wenn die Kartendatei auf dem Server liegt und der Browser
+     WebGL kann – sonst bleibt die Übersichtskarte. Punkte, Hinweisfeld und Knöpfe bleiben gleich. */
+  async function detailkarteZeigen(punkte, kamera) {
+    if (!window.STAFLKarte || !(await window.STAFLKarte.verfuegbar())) return false;
+    const svg = $('#km-svg');
+    if (S.tab !== 'karte' || !svg) return false;
+    const div = document.createElement('div');
+    div.id = 'km-detail'; div.className = 'km-detail'; div.setAttribute('role', 'region'); div.setAttribute('aria-label', svg.getAttribute('aria-label'));
+    svg.replaceWith(div);
+    try {
+      detail = await window.STAFLKarte.erstellen(div, {
+        punkte: punkte.map((p) => ({ id: p.plz, lon: p.lon, lat: p.lat, n: p.liste.length, aus: p.liste.every((k) => !k.aktiv) })),
+        farbe: 'gruen', beiKlick: (plz) => kartenPop(plz), beiLeerklick: () => kartenPopZu(),
+      });
+    } catch (e) { div.innerHTML = `<p class="crm-fehler">Karte nicht geladen: ${esc(e.message)}</p>`; return true; }
+    if (!div.isConnected) { detail.entfernen(); detail = null; return true; }   // Ansicht inzwischen gewechselt
+    if (kamera) detail.map.jumpTo(kamera); else detail.passend();
+    const fuss = $('#tab-karte .crm-klein');
+    if (fuss) fuss.textContent = 'Punkte sind Mittelpunkte der Postleitzahl, keine Hausadressen. Karte: © OpenStreetMap-Mitwirkende, Protomaps; Postleitzahlen: WZB plz_geocoord (Apache 2.0).';
+    return true;
+  }
+  function kartenPopZu() {
+    const pop = $('#km-pop'); if (pop) pop.hidden = true;
+    for (const p of $$('#km-pts .pt')) p.classList.remove('sel');
+    if (detail) detail.markiere(null);
   }
   function kartenAusschnitt() {
     const svg = $('#km-svg'); if (!svg || !vb) return;
@@ -412,8 +444,9 @@
   }
   function kartenPos(ev) { const svg = $('#km-svg'), r = svg.getBoundingClientRect(); return [vb[0] + (ev.clientX - r.left) / r.width * vb[2], vb[1] + (ev.clientY - r.top) / r.height * vb[3]]; }
   function kartenPop(plz) {
-    const p = ($('#km-pts')._punkte || []).find((x) => x.plz === plz); if (!p) return;
+    const p = kmPunkte.find((x) => x.plz === plz); if (!p) return;
     for (const g of $$('#km-pts .pt')) g.classList.toggle('sel', g.dataset.plz === plz);
+    if (detail) detail.markiere(plz);
     const pop = $('#km-pop');
     pop.innerHTML = `<h3><span>${esc(p.plz)} ${esc(p.liste[0].ort)}</span><button type="button" class="crm-rund klein" data-km="zu" aria-label="Schließen">${icon('x')}</button></h3>
       <ul>${p.liste.map((k) => `<li>${firmaKnopf(k)}<small>${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc(vName(k.vertreter) || 'ohne Vertreter')}${k.aktiv ? '' : ' · inaktiv'}</small></li>`).join('')}</ul>`;
@@ -677,7 +710,13 @@
     if (t.id === 'wv-wann-alle') { for (const c of $$('[data-wann]')) c.checked = false; S.wv.wann = []; $('#wv-wann summary').textContent = 'Wann: alle'; wiedervorlagen(true); return; }
     if (t.closest('#wv-neu-sortieren')) { wvReihenfolge(); wiedervorlagen(true); toast('Nach dem nächsten Anruf geordnet.'); return; }
     const km = t.closest('[data-km]');
-    if (km) { const a = km.dataset.km; if (a === 'in') kartenZoom(1 / 1.6); else if (a === 'aus') kartenZoom(1.6); else if (a === 'alle') { vb = voll.slice(); kartenAusschnitt(); } else if (a === 'zu') { $('#km-pop').hidden = true; for (const p of $$('#km-pts .pt')) p.classList.remove('sel'); } return; }
+    if (km) {
+      const a = km.dataset.km;
+      if (a === 'zu') { kartenPopZu(); return; }
+      if (detail) { if (a === 'in') detail.zoom(1); else if (a === 'aus') detail.zoom(-1); else if (a === 'alle') detail.passend(); return; }
+      if (a === 'in') kartenZoom(1 / 1.6); else if (a === 'aus') kartenZoom(1.6); else if (a === 'alle') { vb = voll.slice(); kartenAusschnitt(); }
+      return;
+    }
     const pt = t.closest('#km-pts .pt'); if (pt) { kartenPop(pt.dataset.plz); return; }
     if (t.closest('#crm-export')) { exportieren(); }
   });
