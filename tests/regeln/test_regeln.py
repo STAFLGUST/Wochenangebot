@@ -373,9 +373,8 @@ class EchtesRegelwerk(unittest.TestCase):
         # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling, Sicherheit
         self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling", "sicherheit"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
-        # Controlling (in Entwicklung seit 28.10.2026), Leergut, Container-Import: nicht freigegeben; DNS besteht (25.10.2026)
-        # → 503-Platzhalter (GR-105)
-        for neu, stand in (("controlling", "in_entwicklung"), ("leergut", "geplant"), ("containerimport", "geplant")):
+        # Leergut, Container-Import: nicht freigegeben; DNS besteht (25.10.2026) → 503-Platzhalter (GR-105)
+        for neu, stand in (("leergut", "geplant"), ("containerimport", "geplant")):
             o = rw.modul(neu)["oberflaeche"][0]
             self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True)), (stand, "keine", True), neu)
         # HR: vom Inhaber am 23.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
@@ -386,6 +385,10 @@ class EchtesRegelwerk(unittest.TestCase):
         o = rw.modul("crm")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
                          ("fertig", "produktiv", True, "https://crm.dashboard-stafl.de/module/crm/"))
+        # Controlling: vom Inhaber am 28.10.2026 freigegeben (Keycloak-Client, Caddy, produktiv); Modulzugang ohne Standardrollen
+        m = rw.modul("controlling"); o = m["oberflaeche"][0]
+        self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"], m["zugang_rollen"]),
+                         ("fertig", "produktiv", True, "https://controlling.dashboard-stafl.de/module/controlling/", []))
         # Marketing: vom Inhaber am 25.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
         o = rw.modul("marketing")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),

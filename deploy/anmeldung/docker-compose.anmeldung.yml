@@ -38,6 +38,9 @@ services:
       # Sicherheit (sicherheit.dashboard-stafl.de, Stand 9): wie bei der Verwaltung – startbar vor dem Konsolenschritt
       OIDC_SECRET_SICHERHEIT: ${OIDC_SECRET_SICHERHEIT:-noch-nicht-eingerichtet}
       OIDC_CRYPTO_SICHERHEIT: ${OIDC_CRYPTO_SICHERHEIT:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
+      # Controlling (controlling.dashboard-stafl.de, Stand 10): wie bei der Verwaltung – startbar vor dem Konsolenschritt
+      OIDC_SECRET_CONTROLLING: ${OIDC_SECRET_CONTROLLING:-noch-nicht-eingerichtet}
+      OIDC_CRYPTO_CONTROLLING: ${OIDC_CRYPTO_CONTROLLING:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
       # Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): Client „konten“ nur mit Service-Account; Keycloak im
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}
@@ -49,7 +52,7 @@ services:
     networks:
       default:
         aliases:
-          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr./crm./marketing./sicherheit. – nur mit dieser Datei
+          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./controlling. – nur mit dieser Datei
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244

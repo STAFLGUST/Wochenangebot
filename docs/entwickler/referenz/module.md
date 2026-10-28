@@ -120,7 +120,7 @@ Agent: `controlling` · hängt ab von `plattform`, `verwaltung` · Testgruppen: 
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `controlling.intern` Controlling | intern | https://controlling.dashboard-stafl.de/module/controlling/ | in_entwicklung | keine |
+| `controlling.intern` Controlling | intern | https://controlling.dashboard-stafl.de/module/controlling/ | fertig | produktiv |
 
 ## Verwaltung (`verwaltung`)
 

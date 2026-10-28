@@ -36,6 +36,7 @@ os.makedirs(SH, exist_ok=True)
 PORT = 8443
 D, A, W, B, HR, CRM, MKT, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'login'))
 SIC = f'https://sicherheit.stafl.test:{PORT}'   # Modul Sicherheit (Stand 9, Freigabe des Inhabers 26.10.2026)
+CTL = f'https://controlling.stafl.test:{PORT}'   # Modul Controlling (Stand 10, Freigabe des Inhabers 28.10.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
@@ -187,7 +188,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -199,7 +200,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 9' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 10' in _log, _log[-300:])
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -230,6 +231,11 @@ check('Stand 9: Client „sicherheit“ nachträglich angelegt, Geheimnisse in .
       and GEHEIM['OIDC_SECRET_SICHERHEIT'] not in _log, _log[-500:])
 check('Client „sicherheit“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('sicherheit', {}).get('secret') not in (None, '@GEHEIM_SICHERHEIT@') and clients.get('sicherheit', {}).get('redirectUris') == [SIC + '/oidc/callback'])
+check('Stand 10: Client „controlling“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client controlling' in _log and 'erzeugt:   OIDC_SECRET_CONTROLLING in .env' in _log and 'erzeugt:   OIDC_CRYPTO_CONTROLLING in .env' in _log
+      and GEHEIM['OIDC_SECRET_CONTROLLING'] not in _log, _log[-500:])
+check('Client „controlling“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('controlling', {}).get('secret') not in (None, '@GEHEIM_CONTROLLING@') and clients.get('controlling', {}).get('redirectUris') == [CTL + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
       and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
@@ -434,7 +440,18 @@ for pfad in ('/', '/admin/', '/admin'):
     code, kopf, _ = anfrage(SIC + pfad, kopf=SEITE)
     check(f'Sicherheit {pfad}: Weiterleitung zur Sicherheitszentrale (/module/sicherheit/), kein Eingabebereich auf dem Sicherheits-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/sicherheit/'), (code, kopf.get('Location')))
-for h in (D, A, W, B, HR, CRM, MKT, SIC):
+code, kopf, _ = anfrage(CTL + '/module/controlling/', kopf=SEITE)
+check('Controlling ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['controlling']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [CTL + '/oidc/callback'], kopf.get('Location'))
+check('Controlling: Schnittstelle ohne Anmeldung 401 (auch controlling_start, controlling_umsatz)',
+      all(anfrage(CTL + '/api/?action=' + a)[0] == 401 for a in ('status', 'controlling_start', 'controlling_umsatz')))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(CTL + pfad, kopf=SEITE)
+    check(f'Controlling {pfad}: Weiterleitung zum Controlling (/module/controlling/), kein Eingabebereich auf dem Controlling-Host',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/controlling/'), (code, kopf.get('Location')))
+check('Controlling: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(CTL + '/assets/app.css')[0] == 200 and anfrage(CTL + '/dashboard/abgemeldet.html')[0] == 200)
+for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))

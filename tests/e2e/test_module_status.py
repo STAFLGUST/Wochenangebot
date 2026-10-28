@@ -44,9 +44,14 @@ gruppen = {m['id']: m['gruppe'] for m in r['module'] if m['dashboard']}
 check('Bereich je Kachel aus dem Register: Import, Verwaltung und Sicherheit unter „Verwaltung & Daten“, alle anderen Anwendungen',
       {k for k, g in gruppen.items() if g == 'verwaltung'} == {'import', 'verwaltung', 'sicherheit'} and all(g in ('anwendungen', 'verwaltung') for g in gruppen.values())
       and all(m['gruppe'] is None for m in r['module'] if not m['dashboard']), gruppen)
-for neu in ('leergut', 'containerimport', 'controlling'):
+for neu in ('leergut', 'containerimport'):
     k = mods.get(neu, {}).get('kachel') or {}
     check(f'{neu}: angelegt, aber nicht nutzbar (Status Entwicklungsstand, ohne Zugang)', k.get('status') == 'entwicklungsstand' and not k.get('zugang'), k)
+ctl = mods['controlling']
+check('Controlling freigegeben (controlling.dashboard-stafl.de, Inhaber 28.10.2026): Adresse /module/controlling/ auf dem eigenen Host; Leserin ohne Zugang (zugang_rollen = [])',
+      ctl['kachel']['ziel'] == 'controlling.intern' and ctl['kachel']['zugang'] is False and ctl['kachel']['status'] == 'verfuegbar'
+      and ctl['kachel']['adresse'] == 'https://controlling.dashboard-stafl.de/module/controlling/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(ctl, 'intern')), ctl['kachel'])
 hr = mods['hr']
 check('HR freigegeben (hr.dashboard-stafl.de, Inhaber 23.10.2026): Kachel verfügbar, Adresse /module/hr/ auf dem HR-Host',
       hr['kachel']['ziel'] == 'hr.intern' and hr['kachel']['zugang'] is True and hr['kachel']['status'] == 'verfuegbar'
