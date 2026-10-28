@@ -16,6 +16,9 @@
      Karte: setzePunkte(punkte), passend(), zoom(+1|-1), zentriere(lon, lat, zoom), position(lon, lat) → [x, y],
             markiere(id), anzahl(), groesse(), entfernen(); map (MapLibre). Am Element: element.staflKarte und
             data-karte="laedt" | "bereit" (fertig gezeichnet)
+            setzeGebiete(sammlung | null): Flächen unter den Punkten (z. B. Nielsen-Gebiete) – GeoJSON-Features mit
+              properties { farbe, hervor (true = betont), text (Beschriftung, \n erlaubt), beschriftung: [lon, lat] };
+            gebiete() → Anzahl gezeigter Flächen; rahmen([lon1, lat1, lon2, lat2]) zeigt einen Ausschnitt
    ========================================================================== */
 (function () {
   'use strict';
@@ -133,6 +136,28 @@
       'text-field': ['case', ['>', ['get', 'n'], 99], '99+', ['to-string', ['get', 'n']]],
       'text-font': ['Noto Sans Medium'], 'text-size': 11, 'text-allow-overlap': true, 'text-ignore-placement': true,
     }, paint: { 'text-color': '#ffffff' } });
+    // Flächen (Gebiete) unter den Beschriftungen der Grundkarte, ihre Namen unter den Punkten
+    const ersteSchrift = ((map.getStyle().layers || []).find((l) => l.type === 'symbol') || {}).id;
+    let gebieteDa = false, gebieteZahl = 0;
+    function setzeGebiete(sammlung) {
+      const fs = (sammlung && sammlung.features) || [];
+      gebieteZahl = fs.length;
+      const flaechen = { type: 'FeatureCollection', features: fs.map((f, i) => ({ type: 'Feature', id: i + 1, geometry: f.geometry,
+        properties: { farbe: f.properties.farbe || '#5b7fa6', hervor: f.properties.hervor ? 1 : 0 } })) };
+      const texte = { type: 'FeatureCollection', features: fs.filter((f) => f.properties.text && Array.isArray(f.properties.beschriftung)).map((f) => ({
+        type: 'Feature', geometry: { type: 'Point', coordinates: f.properties.beschriftung }, properties: { text: f.properties.text, farbe: f.properties.farbe || '#5b7fa6' } })) };
+      if (gebieteDa) { map.getSource('gebiete').setData(flaechen); map.getSource('gebiete-text').setData(texte); return; }
+      map.addSource('gebiete', { type: 'geojson', data: flaechen });
+      map.addSource('gebiete-text', { type: 'geojson', data: texte });
+      map.addLayer({ id: 'gebiete-flaeche', type: 'fill', source: 'gebiete', paint: {
+        'fill-color': ['get', 'farbe'], 'fill-opacity': ['case', ['==', ['get', 'hervor'], 1], 0.2, 0.12] } }, ersteSchrift);
+      map.addLayer({ id: 'gebiete-linie', type: 'line', source: 'gebiete', paint: {
+        'line-color': ['get', 'farbe'], 'line-width': ['case', ['==', ['get', 'hervor'], 1], 2.6, 1.2], 'line-opacity': 0.9 } }, ersteSchrift);
+      map.addLayer({ id: 'gebiete-text', type: 'symbol', source: 'gebiete-text', layout: {
+        'text-field': ['get', 'text'], 'text-font': ['Noto Sans Medium'], 'text-size': 13, 'text-line-height': 1.25 },
+        paint: { 'text-color': ['get', 'farbe'], 'text-halo-color': halo, 'text-halo-width': 1.8 } }, 'punkte-kreis');
+      gebieteDa = true;
+    }
     let markiert = null;
     const k = {
       map,
@@ -154,6 +179,9 @@
         if (i >= 0) { markiert = i + 1; map.setFeatureState({ source: 'punkte', id: markiert }, { auswahl: true }); }
       },
       anzahl() { return punkte.length; },
+      setzeGebiete,
+      gebiete() { return gebieteZahl; },
+      rahmen(b) { map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 300 }); },
       groesse() { map.resize(); },
       entfernen() { try { map.remove(); } catch (e) { /* schon entfernt */ } },
     };

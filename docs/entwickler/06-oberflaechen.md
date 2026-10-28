@@ -449,6 +449,9 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   Lage der Kunden in der CRM-Karte: `crm_karte` liefert je Kunde bzw. Interessent `[Breite, Länge, 'h'|'s']` aus dem
   Adressverzeichnis (`lib/adressen.php`); Kunden an derselben Lage bilden einen Punkt (`id` „a<Breite>,<Länge>“), ohne Eintrag
   gilt der PLZ-Mittelpunkt (`plz.json`). Der Hinweis `#km-fuss` nennt die Genauigkeit.
+  Nielsen-Gebiete: `nielsen.json` (8 Flächen mit `beschriftung` und `rahmen`), Zuordnung `gebietVon(lon, lat)` im Browser;
+  Detailkarte zeigt sie mit `setzeGebiete(sammlung)` (Flächen unter den Beschriftungen der Grundkarte), die eigene Zeichnung als
+  SVG-Pfade (`#km-flaechen`). Kartensuche `#km-suche` mit Trefferliste `#km-treffer` (Pfeiltasten, Enter, Escape).
 - `fetch` nur zur eigenen `api/` desselben Hosts (GR-109).
 - Skripte und Stylesheets **ohne** `?v=` einbinden. Die Nummern setzt der Server beim Einspielen
   (`deploy/bereitstellen.py`); `python3 werkzeuge/asset_versionen.py` prüft Einbindungen, `--zeigen` zeigt das Ergebnis.

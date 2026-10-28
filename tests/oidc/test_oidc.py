@@ -923,6 +923,11 @@ with sync_playwright() as pw:
     ebenen = pc.evaluate("(() => { const m = document.querySelector('#km-detail').staflKarte.map; const f = m.queryRenderedFeatures(); return [...new Set(f.map((x) => x.sourceLayer).filter(Boolean))]; })()") if ok_km else []
     check('CRM-Karte: auf Straßenebene Gebäude, Straßen und Wasser aus der eigenen Kartendatei', {'buildings', 'roads', 'water'} <= set(ebenen), diag or ebenen)
     check('CRM-Karte: Quellenangabe OpenStreetMap', ok_km and 'OpenStreetMap' in (pc.text_content('#km-detail .maplibregl-ctrl-attrib') or ''))
+    if ok_km:   # Nielsen-Gebiete als Flächen der Detailkarte (Schalter „Gebiete zeigen“)
+        pc.check('#km-gebiete')
+        ok_km, diag = karte_bereit(pc, '#km-detail')
+    gb = pc.evaluate("(() => { const k = document.querySelector('#km-detail').staflKarte; return [k.gebiete(), !!k.map.getLayer('gebiete-flaeche'), k.map.queryRenderedFeatures({ layers: ['gebiete-flaeche'] }).length > 0]; })()") if ok_km else None
+    check('CRM-Karte: Nielsen-Gebiete als Flächen auf der Detailkarte', bool(gb) and gb[0] == 8 and gb[1] and gb[2], diag or gb)
     pc.screenshot(path=os.path.join(SH, 'oidc_crm_karte_1280.png'))
     # Aktion ↔ Host (GR-109): CRM-Aktionen nur auf dem CRM-Host; dort weder Eingabebereich noch HR
     for name, seite in (('Dashboard', pg), ('Angebot', pa), ('Verwaltung', pv), ('Bestand', pb), ('HR', ph)):
