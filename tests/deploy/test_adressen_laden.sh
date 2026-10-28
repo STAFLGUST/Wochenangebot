@@ -11,15 +11,25 @@ printf 'PBF-TESTDATEN' > "$T/quelle"
 echo 'Mon, 26 Oct 2026 20:21:00 GMT' > "$T/stand"
 cat > "$T/curl" <<STUB
 #!/bin/sh
+# Platzhalter: -I liefert Kopfzeilen (Stand, Größe = Testdatei oder \$T/laenge) und mit -w die Adresse nach Weiterleitung
+# (\$T/weiterleitung); .md5 je nach Schalter: fehlt, nur am Ziel der Weiterleitung, falsch
 echo "\$*" >> "$T/aufrufe"
 [ -f "$T/ohne-netz" ] && exit 6
-ziel=""; url=""; kopf=0
+ziel=""; url=""; kopf=0; w=0
 while [ \$# -gt 0 ]; do
-  case "\$1" in -o) ziel=\$2; shift ;; -*I*) kopf=1 ;; http*) url=\$1 ;; esac; shift
+  case "\$1" in -o) ziel=\$2; shift ;; -w) w=1; shift ;; -*I*) kopf=1 ;; http*) url=\$1 ;; esac; shift
 done
-if [ "\$kopf" = 1 ]; then printf 'HTTP/2 200\r\nlast-modified: %s\r\ncontent-length: 4718592000\r\n\r\n' "\$(cat "$T/stand")"; exit 0; fi
+wohin=\$(cat "$T/weiterleitung" 2>/dev/null || echo "\$url")
+if [ "\$kopf" = 1 ]; then
+  printf 'HTTP/2 200\r\nlast-modified: %s\r\ncontent-length: %s\r\n\r\n' "\$(cat "$T/stand")" "\$(cat "$T/laenge" 2>/dev/null || wc -c < "$T/quelle")"
+  [ "\$w" = 1 ] && printf '\nurl_effective: %s\n' "\$wohin"
+  exit 0
+fi
 case "\$url" in
-  *.md5) if [ -f "$T/md5-falsch" ]; then echo "00000000000000000000000000000000  germany-latest.osm.pbf"; else echo "\$(md5sum < "$T/quelle" | cut -d' ' -f1)  germany-latest.osm.pbf"; fi ;;
+  *.md5)
+    [ -f "$T/md5-fehlt" ] && { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
+    [ -f "$T/md5-nur-ziel" ] && [ "\$url" != "\$wohin.md5" ] && { echo "curl: (22) The requested URL returned error: 404" >&2; exit 22; }
+    if [ -f "$T/md5-falsch" ]; then echo "00000000000000000000000000000000  germany-latest.osm.pbf"; else echo "\$(md5sum < "$T/quelle" | cut -d' ' -f1)  germany-latest.osm.pbf"; fi ;;
   *) [ -f "$T/download-fehler" ] && exit 22; cp "$T/quelle" "\$ziel" ;;
 esac
 STUB
@@ -41,11 +51,11 @@ export DOCKER="$T/docker" CURL="$T/curl" ADRESSEN_MIN=1 ADRESSEN_PLATZ_GB=0 AUS 
 mkdir -p "$T/i/deploy/karte" && cp "$REPO/deploy/karte/adressen.py" "$REPO/deploy/karte/requirements.txt" "$T/i/deploy/karte/" && cd "$T/i" && touch .env docker-compose.yml
 
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" pruefen) && CODE=0 || CODE=$?
-ok "prüfen: Stand und Größe der Quelle, freier Platz – nichts geladen" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Quelle: Mon, 26 Oct 2026 20:21:00 GMT, 4500 MB" && ! grep -q "^run" "$T/aufrufe" && [ ! -e daten-karte/adressen.sqlite ] && [ ! -e daten-karte/adressen-quelle.osm.pbf ]'
+ok "prüfen: Stand und Größe der Quelle, Prüfsumme abrufbar, freier Platz – nichts geladen" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Quelle: Mon, 26 Oct 2026 20:21:00 GMT, 0 MB" && echo "$AUS" | grep -q "Prüfsumme (MD5) der Quelle abrufbar" && ! grep -q "^run" "$T/aufrufe" && [ ! -e daten-karte/adressen.sqlite ] && [ ! -e daten-karte/adressen-quelle.osm.pbf ]'
 
 : > "$T/aufrufe"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
-ok "laden: Verzeichnis geprüft und an seinem Platz, Stand vermerkt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "6 Adressen" && [ -s daten-karte/adressen.sqlite ] && [ "$(cat daten-karte/adressen-stand.txt)" = "Mon, 26 Oct 2026 20:21:00 GMT" ]'
+ok "laden: Prüfsumme geprüft, Verzeichnis an seinem Platz, Stand vermerkt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Prüfsumme (MD5) stimmt" && echo "$AUS" | grep -q "6 Adressen" && [ -s daten-karte/adressen.sqlite ] && [ "$(cat daten-karte/adressen-stand.txt)" = "Mon, 26 Oct 2026 20:21:00 GMT" ]'
 ok "laden: Quelldatei und Zwischenstände danach gelöscht" '[ ! -e daten-karte/adressen-quelle.osm.pbf ] && [ ! -e daten-karte/adressen.neu.sqlite ] && [ ! -e daten-karte/adressen.neu.sqlite.arbeit ]'
 ok "laden: Datei für den Webserver lesbar (644)" '[ "$(stat -c %a daten-karte/adressen.sqlite)" = 644 ]'
 ok "laden: Container mit fester Python-Fassung, pyosmium nur über Prüfsummen, ohne Abhängigkeiten" 'grep -q "python:3.12.14-slim-bookworm@sha256:" "$T/aufrufe" && grep -q -- "--require-hashes -r /werkzeug/requirements.txt" "$T/aufrufe" && grep -q -- "--no-deps --only-binary=:all:" "$T/aufrufe" && grep -q "deploy/karte:/werkzeug:ro" "$T/aufrufe"'
@@ -59,7 +69,13 @@ echo 'Tue, 27 Oct 2026 20:21:00 GMT' > "$T/stand"
 touch "$T/md5-falsch"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "falsche Prüfsumme der Quelle: Abbruch, bisheriges Verzeichnis unverändert, Quelle gelöscht" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Prüfsumme der Quelle passt nicht" && [ "$(md5sum daten-karte/adressen.sqlite)" = "$alt" ] && [ ! -e daten-karte/adressen-quelle.osm.pbf ]'
-rm -f "$T/md5-falsch"; touch "$T/umwandeln-fehler"
+rm -f "$T/md5-falsch"; touch "$T/md5-fehlt"; echo 999999 > "$T/laenge"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
+ok "ohne veröffentlichte Prüfsumme und falscher Größe: Abbruch (unvollständig), bisheriges Verzeichnis bleibt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Download unvollständig" && [ "$(md5sum daten-karte/adressen.sqlite)" = "$alt" ] && [ ! -e daten-karte/adressen-quelle.osm.pbf ]'
+rm -f "$T/laenge"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh" pruefen 2>&1) && CODE=0 || CODE=$?
+ok "prüfen ohne veröffentlichte Prüfsumme: Hinweis, dass die Größe geprüft wird" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Keine Prüfsumme der Quelle abrufbar"'
+touch "$T/umwandeln-fehler"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "Umwandeln fehlgeschlagen: bisheriges Verzeichnis bleibt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "bisherige Verzeichnis bleibt" && [ "$(md5sum daten-karte/adressen.sqlite)" = "$alt" ] && [ ! -e daten-karte/adressen.neu.sqlite ]'
 rm -f "$T/umwandeln-fehler"
@@ -79,7 +95,12 @@ AUS=$(sh "$REPO/deploy/adressen-laden.sh" 2>&1) && CODE=0 || CODE=$?
 ok "ohne Docker: klarer Abbruch" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Docker ist nicht erreichbar"'
 rm -f "$T/ohne-docker"
 AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
-ok "neuer Stand: Verzeichnis ersetzt, Stand vermerkt" '[ $CODE = 0 ] && [ "$(cat daten-karte/adressen-stand.txt)" = "Tue, 27 Oct 2026 20:21:00 GMT" ]'
+ok "ohne veröffentlichte Prüfsumme (404): Größe geprüft, Verzeichnis ersetzt, Stand vermerkt" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Größe stimmt" && [ "$(cat daten-karte/adressen-stand.txt)" = "Tue, 27 Oct 2026 20:21:00 GMT" ]'
+rm -f "$T/md5-fehlt"; touch "$T/md5-nur-ziel"; echo 'https://ziel.example/europe/germany-261028.osm.pbf' > "$T/weiterleitung"
+echo 'Wed, 28 Oct 2026 02:16:18 GMT' > "$T/stand"
+AUS=$(sh "$REPO/deploy/adressen-laden.sh") && CODE=0 || CODE=$?
+ok "Quelle mit Weiterleitung: Prüfsumme neben dem Ziel gefunden und geprüft" '[ $CODE = 0 ] && echo "$AUS" | grep -q "Prüfsumme (MD5) stimmt" && grep -q "https://ziel.example/europe/germany-261028.osm.pbf.md5" "$T/aufrufe"'
+rm -f "$T/md5-nur-ziel" "$T/weiterleitung"
 
 AUS=$(sh "$REPO/deploy/adressen-laden.sh" entfernen) && CODE=0 || CODE=$?
 ok "entfernen: Verzeichnis und Stand weg" '[ $CODE = 0 ] && [ ! -e daten-karte/adressen.sqlite ] && [ ! -e daten-karte/adressen-stand.txt ]'

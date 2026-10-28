@@ -7,9 +7,9 @@
 #   cd /opt/wochenangebot && sh deploy/adressen-laden.sh           # laden bzw. aktualisieren (Download ca. 4,5 GB, Umwandeln geschätzt 20–40 Minuten)
 #   cd /opt/wochenangebot && sh deploy/adressen-laden.sh entfernen # Verzeichnis entfernen (Karte zeigt wieder PLZ-Mittelpunkte)
 #
-# Ablauf: Quelle mit Prüfsumme laden → im Container (python:3.12, pyosmium fest über Prüfsumme, deploy/karte/
-# requirements.txt) mit deploy/karte/adressen.py umwandeln → prüfen (Format, Anzahl) → neben der alten Datei
-# austauschen. Ziel: daten-karte/adressen.sqlite (geschätzt um 1 GB, nicht in den Sicherungen – jederzeit neu ladbar), im
+# Ablauf: Quelle laden und prüfen (veröffentlichte MD5-Prüfsumme, sonst Größe) → im Container (python:3.12, pyosmium
+# fest über Prüfsumme, deploy/karte/requirements.txt) mit deploy/karte/adressen.py umwandeln → prüfen (Format, Anzahl)
+# → neben der alten Datei austauschen. Ziel: daten-karte/adressen.sqlite (geschätzt um 1 GB, nicht in den Sicherungen – jederzeit neu ladbar), im
 # Anwendungs-Container nur lesend unter /var/www/karte und nie ausgeliefert (Apache gibt dort nur karte.pmtiles frei).
 # Die Quelldatei wird danach gelöscht. Kein Neustart nötig.
 set -eu
@@ -37,17 +37,28 @@ command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
 $DOCKER info >/dev/null 2>&1 || abbruch "Docker ist nicht erreichbar (als root ausführen?)."
 mkdir -p "$ZIEL"
 
-# Stand der Quelle (Last-Modified) und Größe, ohne sie zu laden
-kopf=$($CURL -sSfIL --max-time 60 "$QUELLE") || abbruch "Quelle nicht erreichbar ($QUELLE)."
-STAND=$(printf '%s\n' "$kopf" | tr -d '\r' | awk -F': ' 'tolower($1) == "last-modified" { v = $2 } END { print v }')
-GROESSE=$(printf '%s\n' "$kopf" | tr -d '\r' | awk -F': ' 'tolower($1) == "content-length" { v = $2 } END { printf "%d", v / 1048576 }')
+# Stand der Quelle (Last-Modified), Größe in Bytes und tatsächliche Adresse (nach Weiterleitungen), ohne sie zu laden
+kopf=$($CURL -sSfIL --max-time 60 -w '\nurl_effective: %{url_effective}\n' "$QUELLE") || abbruch "Quelle nicht erreichbar ($QUELLE)."
+kopfwert() { printf '%s\n' "$kopf" | tr -d '\r' | awk -F': ' -v k="$1" 'tolower($1) == k { v = $2 } END { print v }'; }
+STAND=$(kopfwert last-modified)
+BYTES=$(kopfwert content-length | tr -cd '0-9'); BYTES=${BYTES:-0}
+ADRESSE=$(kopfwert url_effective); ADRESSE=${ADRESSE:-$QUELLE}
+GROESSE=$((BYTES / 1048576))
 [ -n "$STAND" ] || STAND=unbekannt
+# Veröffentlichte MD5-Prüfsumme: neben der Datei bzw. neben dem Ziel einer Weiterleitung; leer, wenn keine abrufbar ist
+pruefsumme() {
+  for u in "$QUELLE.md5" "$ADRESSE.md5"; do
+    s=$($CURL -fsSL --max-time 60 "$u" 2>/dev/null | awk 'NR == 1 { print tolower($1) }')
+    if printf '%s' "$s" | grep -Eq '^[0-9a-f]{32}$'; then echo "$s"; return 0; fi
+  done
+}
 BISHER=$(cat "$ZIEL/adressen-stand.txt" 2>/dev/null || echo keiner)
 frei_gb=$(df -Pk "$ZIEL" | awk 'NR == 2 { printf "%d", $4 / 1048576 }')
 echo "Quelle: $STAND, ${GROESSE} MB (bisher: $BISHER) · freier Platz: ${frei_gb} GB"
 
 if [ "$MODUS" = pruefen ]; then
   [ "$frei_gb" -ge "$PLATZ_GB" ] && echo "Platz reicht (nötig mindestens ${PLATZ_GB} GB)." || echo "Zu wenig Platz: nötig mindestens ${PLATZ_GB} GB – zuerst: sh deploy/speicher.sh"
+  [ -n "$(pruefsumme)" ] && echo "Prüfsumme (MD5) der Quelle abrufbar." || echo "Keine Prüfsumme der Quelle abrufbar – beim Laden wird die Größe geprüft."
   echo "Nur geprüft – nichts geladen. Laden mit: sh deploy/adressen-laden.sh"
   exit 0
 fi
@@ -57,12 +68,20 @@ fi
 trap aufraeumen EXIT
 aufraeumen
 
-# 1. Quelle laden und mit der veröffentlichten Prüfsumme vergleichen
+# 1. Quelle laden und prüfen: mit der veröffentlichten Prüfsumme, sonst über die angekündigte Größe (das Umwandeln liest
+#    danach jeden Block der Datei; beschädigte Daten brechen dort ab)
 echo "lade:      $QUELLE …"
 $CURL -fSL --retry 3 --max-time 7200 -o "$ZIEL/adressen-quelle.osm.pbf" "$QUELLE" || abbruch "Download fehlgeschlagen – das bisherige Verzeichnis bleibt unverändert."
-soll=$($CURL -fsSL --max-time 60 "$QUELLE.md5" | awk '{ print $1 }') || abbruch "Prüfsumme der Quelle nicht abrufbar – nichts geändert."
-ist=$(md5sum "$ZIEL/adressen-quelle.osm.pbf" | awk '{ print $1 }')
-[ -n "$soll" ] && [ "$soll" = "$ist" ] || abbruch "Prüfsumme der Quelle passt nicht – nichts geändert."
+soll=$(pruefsumme)
+if [ -n "$soll" ]; then
+  ist=$(md5sum "$ZIEL/adressen-quelle.osm.pbf" | awk '{ print $1 }')
+  [ "$soll" = "$ist" ] || abbruch "Prüfsumme der Quelle passt nicht (Download beschädigt oder Quelle inzwischen erneuert) – nichts geändert, bitte noch einmal starten."
+  echo "geprüft:   Prüfsumme (MD5) stimmt"
+else
+  ist_bytes=$(wc -c < "$ZIEL/adressen-quelle.osm.pbf" | tr -cd '0-9')
+  [ "$BYTES" -gt 0 ] && [ "$ist_bytes" = "$BYTES" ] || abbruch "Download unvollständig ($ist_bytes von $BYTES Bytes) – nichts geändert, bitte noch einmal starten."
+  echo "geprüft:   Größe stimmt ($ist_bytes Bytes; keine Prüfsumme der Quelle abrufbar)"
+fi
 
 # 2. Umwandeln im Container (pyosmium fest über Prüfsumme)
 echo "wandle um: Adressen aus OpenStreetMap → daten-karte/adressen.neu.sqlite (dauert eine Weile) …"
