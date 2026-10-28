@@ -54,12 +54,11 @@ L, Bb, Z, O, N = K['lea'], K['bea'], K['zoe'], K['otto'], Client('198.51.100.20'
 # ── Register und Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['controlling']
 ob = mod['oberflaechen'][0]
-check('Register: Controlling in Entwicklung, ohne Freigabe, Adresse controlling.dashboard-stafl.de/module/controlling/', ob['entwicklung'] == 'in_entwicklung'
-      and ob['freigabe'] == 'keine' and ob['adresse'] == 'https://controlling.dashboard-stafl.de/module/controlling/', ob)
-check('ohne Freigabe: auch Administrator 404', A.call('controlling_start')[0] == 404 and A.call('controlling_umsatz')[0] == 404)
-check('keine Produktivfreigabe für ein Modul in Entwicklung (422)', A.call('modul_freigabe_save', {'bereich': 'controlling.intern', 'freigabe': 'produktiv', 'grund': 'Test'})[0] == 422)
-check('Testfreigabe gesetzt', A.call('modul_freigabe_save', {'bereich': 'controlling.intern', 'freigabe': 'test', 'grund': 'Abnahme Controlling'})[0] == 200)
-check('Tester eingetragen', A.call('modul_tester_save', {'bereich': 'controlling.intern', 'tester': [ids[x] for x in ('admin', 'lea', 'bea', 'zoe', 'otto')], 'grund': 'Abnahme'})[0] == 200)
+check('Register: Controlling fertig und produktiv (Freigabe des Inhabers 28.10.2026), Adresse controlling.dashboard-stafl.de/module/controlling/',
+      ob['entwicklung'] == 'fertig' and ob['freigabe'] == 'produktiv' and ob['adresse'] == 'https://controlling.dashboard-stafl.de/module/controlling/', ob)
+check('Kachel: verfügbar für den Administrator, Ziel controlling.intern', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True
+      and mod['kachel']['ziel'] == 'controlling.intern', mod['kachel'])
+check('produktiv ohne Testfreigabe: Administrator erreicht das Modul', A.call('controlling_start')[0] == 200 and A.call('controlling_umsatz')[0] == 200)
 
 # ── Rechte ──
 check('ohne Anmeldung: kein Zugang (401/404)', N.call('controlling_start')[0] in (401, 404) and N.call('controlling_umsatz')[0] in (401, 404))

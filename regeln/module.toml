@@ -379,7 +379,7 @@ hinweise = [
   "Aufbau in Bereichen (Auftrag des Inhabers 28.10.2026): erster Bereich Umsatzstatistik (aus dem Modulbausatz-Modul „Gust 1“), weitere folgen (OP-Konten, Liquidität …). Je Bereich eigene Datei module/controlling/<bereich>.php, Aktionen controlling_<bereich>_…, Rechte controlling.<bereich>_sehen/_bearbeiten, Dokumente controlling-<bereich>; Eintrag in CONTROLLING_BEREICHE.",
   "Liest Daten anderer Module nur über deren Schnittstellen (GR-101; heute vertreter_load der Verwaltung); Einkaufspreise und Margen nur mit eigenem Recht.",
   "Umsatzstatistik: Monatswerte werden von Hand erfasst (kein Import, keine Verbindung zur Warenwirtschaft); Vertreternamen als Schnappschuss, Werte ausgeschiedener Vertreter bleiben.",
-  "Live-Betrieb unter controlling.dashboard-stafl.de (Caddy, Keycloak-Client) erst mit Freigabe des Inhabers; bis dahin Testfreigabe.",
+  "Freigegeben (Inhaber 28.10.2026): controlling.dashboard-stafl.de mit eigenem Keycloak-Client „controlling“ (Stand 10); / und /admin/ führen zu /module/controlling/. Aktionen controlling_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Zugang trotzdem nur, wer ihn ausdrücklich erhält (zugang_rollen = []).",
 ]
 
   [[modul.oberflaeche]]
@@ -387,9 +387,9 @@ hinweise = [
   name = "Controlling"
   art = "intern"
   adresse = "https://controlling.dashboard-stafl.de/module/controlling/"
-  entwicklung = "in_entwicklung"
-  freigabe = "keine"
-  sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # Freigabe des Inhabers 28.10.2026 (Keycloak-Client, Caddy, produktiv) mit dem Merge; DNS-Eintrag controlling besteht seit 25.10.2026
+  sperrbar = true
 
 [[modul]]
 id = "verwaltung"

@@ -39,7 +39,7 @@ function herkunft_pruefen(?array $aktion, string $method): void
 
 /* Aktion ↔ Host (GR-109, ADR-003 §3): Auf einem Keycloak-Host meldet der Webserver seine Oberfläche (SetEnv
    WA_OBERFLAECHE, nie aus Kopfzeilen). Aktionen einer Oberfläche mit eigener Seite – jede Oberfläche außer dem gemeinsamen
-   Eingabebereich angebot.*, für die das Aktionsregister Aktionen führt (heute hr.intern, crm.intern, marketing.intern, sicherheit.intern) – beantwortet nur ihr eigener
+   Eingabebereich angebot.*, für die das Aktionsregister Aktionen führt (heute hr.intern, crm.intern, marketing.intern, sicherheit.intern, controlling.intern) – beantwortet nur ihr eigener
    Host. Auf einem solchen Host gibt es außer ihnen nur die Grundaktionen der Plattform, die auch während einer Wartung
    erreichbar bleiben (Status, Abmelden, Modulübersicht) – ebenso auf dem Dashboard-Host (host_nur_grundaktionen).
    Angebot, Verwaltung und Bestand teilen sich weiter den Eingabebereich (Aktionen unter angebot.eingabe). Ohne Angabe des Webservers (angebot-stafl.de, App, Testserver) gilt

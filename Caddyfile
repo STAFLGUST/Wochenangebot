@@ -97,8 +97,8 @@ login.dashboard-stafl.de {
 	respond 404
 }
 
-# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing und Sicherheit: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
-dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de {
+# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit und Controlling: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
+dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de {
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -121,7 +121,7 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 # STAFL-Plattform: vorbereitete Modul-Domains ohne öffentlich erreichbare Anwendung (GR-105).
 # Erst nach fertiger Anmeldung, Rechteprüfung und geprüfter Release-Freigabe pro Modul routen.
 # Bis dahin: keine Weiterleitung an die produktive Angebots-API oder interne Container.
-rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, leergut.dashboard-stafl.de, container-import.dashboard-stafl.de, controlling.dashboard-stafl.de, test.dashboard-stafl.de {
+rewe.dashboard-stafl.de, qs.dashboard-stafl.de, einkauf.dashboard-stafl.de, leergut.dashboard-stafl.de, container-import.dashboard-stafl.de, test.dashboard-stafl.de {
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"

@@ -156,20 +156,20 @@ with sync_playwright() as pw:
           and [x['symbol'] for x in neu2] == ['crate', 'container'], neu2)
     sym2 = pg.eval_on_selector_all('[data-modul="leergut"] use, [data-modul="containerimport"] use', 'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('Symbole Kiste und Container vorhanden', [x[0] for x in sym2] == ['#i-kiste', '#i-container'] and all(x[1] for x in sym2), sym2)
-    offen = [kid[m] for m in ('leergut', 'rewe', 'qs', 'einkauf', 'containerimport', 'controlling')]
+    offen = [kid[m] for m in ('leergut', 'rewe', 'qs', 'einkauf', 'containerimport')]
     gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 6)
-    check('Zähler: 8 von 14 Anwendungen', '8 von 14' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 5)
+    check('Zähler: 9 von 14 Anwendungen', '9 von 14' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     sic = kid['sicherheit']
     check('Sicherheit: freigegeben (Inhaber 26.10.2026), rechts neben der Verwaltung, Verweis auf die Sicherheitszentrale, eigenes Symbol',
           sic['tag'] == 'A' and sic['href'] == '/module/sicherheit/' and sic['badge'] == 'Verfügbar' and sic['symbol'] == 'shield-lock'
           and pg.evaluate("!!document.querySelector('#i-schild') && document.querySelector('[data-modul=\"sicherheit\"] use').getAttribute('href') === '#i-schild'"), sic)
     neu = [kid[m] for m in ('hr', 'marketing', 'controlling')]
-    check('neue Module HR, Marketing, Controlling: Name aus dem Register; HR und Marketing verfügbar, Controlling in Entwicklung ohne Verweis',
-          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and neu[2]['tag'] == 'DIV' and not neu[2]['href']
-          and [x['badge'] for x in neu] == ['Verfügbar', 'Verfügbar', 'In Entwicklung'], neu)
+    check('neue Module HR, Marketing, Controlling: Name aus dem Register, verfügbar; Controlling (Inhaber 28.10.2026) führt zu /module/controlling/',
+          [x['name'] for x in neu] == ['HR', 'Marketing', 'Controlling'] and neu[2]['tag'] == 'A' and neu[2]['href'] == '/module/controlling/'
+          and [x['badge'] for x in neu] == ['Verfügbar', 'Verfügbar', 'Verfügbar'], neu)
     sym = pg.eval_on_selector_all('#db-grid .db-tile[data-modul="hr"] use, #db-grid .db-tile[data-modul="marketing"] use, #db-grid .db-tile[data-modul="controlling"] use',
                                   'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('eigene Symbole (Kalender, Megafon, Diagramm), vorhanden', [x[0] for x in sym] == ['#i-calendar', '#i-megaphone', '#i-chart'] and all(x[1] for x in sym), sym)
@@ -177,7 +177,7 @@ with sync_playwright() as pw:
     check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
     gesperrt = [x for x in k if x['tag'] == 'DIV']
     check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
-          len(gesperrt) == 6 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+          len(gesperrt) == 5 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
     check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
     check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
     band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
