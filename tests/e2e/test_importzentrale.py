@@ -137,6 +137,13 @@ check('Übernahme Kunden: Ergebnis und gespeichert (ohne *-Kunde)', st == 200 an
       and '3000004' not in cs and cs['3000001'].get('login') is None, r.get('zahlen'))
 check('Protokoll: Kundenimport mit Dateiname', 'Kunden aus „api.csv“ importiert: 2 neu' in log_text(A))
 check('alte Aktion kunden_import unverändert nutzbar (Vorschau)', A.call('kunden_import', {'pruefen': True, 'rows': [{'nr': '3000001', 'firma': 'API Eins GmbH'}]})[1].get('stat', {}).get('unveraendert') == 1)
+check('Option Aktiv-Regel registriert (Standard an)', any(o['id'] == 'aktivRegel' and o['standard'] is True and '18 Monaten' in o['label'] for o in arten['kunden']['optionen']), arten['kunden']['optionen'])
+ALT = {'rows': [{'nr': '3000009', 'firma': 'Zentrale Alt GmbH', 'wawi': {'letzteRechnung': '2020-01-15', 'kreditlimit': 1000}, 'zeile': 2}], 'wawiFelder': ['letzteRechnung', 'kreditlimit']}
+st, r = K.call('import_pruefen', {'art': 'kunden', 'daten': ALT})
+check('Zentrale: Aktiv-Regel als Standard, Zeile mit Grund, Hinweis', st == 200 and r['zahlen']['neu'] == 1 and 'inaktiv: keine Rechnung seit 18 Monaten (letzte 15.01.2020)' in r['zeilen'][0]['text']
+      and any('Aktiv-Status nach der Warenwirtschaft' in h['text'] for h in r['hinweise']), (r.get('zeilen'), r.get('hinweise')))
+st, r = K.call('import_pruefen', {'art': 'kunden', 'daten': ALT, 'optionen': {'aktivRegel': False}})
+check('Zentrale: Aktiv-Regel abschaltbar', st == 200 and 'inaktiv' not in r['zeilen'][0]['text'] and not any('Aktiv-Status' in h['text'] for h in r['hinweise']), r.get('zeilen'))
 
 # ---------- Bestand (Eigentümer Bestand) über die Schnittstelle ----------
 ART = [{'code': '10601', 'name': 'Roastbeef', 'kg': 120.5, 'mhd': '2026-11-02', 'mhdKg': 20.0, 'lots': [{'lot': 'P1', 'kg': 120.5, 'mhd': '2026-11-02', 'ek': 18.68}]},
@@ -223,6 +230,8 @@ with sync_playwright() as p:
     check('Kunden-Vorschau: 6 neu, 2 Fehler (Doppelte Nummer, ohne Firma)', a.inner_text('#imp-neu') == '6' and a.inner_text('#imp-fehler') == '2' and a.inner_text('#imp-entfaellt') == '0', t[:400])
     check('Kunden-Vorschau: Zeilennummern und Text', a.locator('#imp-zeilen tr[data-imp-art="fehler"]').count() == 2 and 'mehrfach' in t and 'Firma fehlt' in t)
     check('HTML aus der Datei wird nicht ausgeführt', a.locator('#imp-zeilen b, #imp-zeilen test').count() == 0 and 'Kantine Süd <Test>' in t)
+    check('Kunden-Vorschau: Option Aktiv-Regel gewählt, Hinweise zu Aktiv-Status und Warenwirtschaft', a.locator('[data-imp-opt="aktivRegel"]').is_checked()
+          and 'Aktiv-Status nach der Warenwirtschaft' in t and 'Daten der Warenwirtschaft' in t, t[-900:])
     a.click('[data-imp-filter="fehler"]'); a.wait_for_function("document.querySelectorAll('#imp-zeilen tr[data-imp-art]').length === 2")
     check('Filter: nur Fehler', a.locator('#imp-zeilen tr[data-imp-art="neu"]').count() == 0)
     a.uncheck('[data-imp-opt="ohneStern"]'); a.wait_for_function("document.querySelector('#imp-neu') && document.querySelector('#imp-neu').textContent === '7'")
@@ -237,6 +246,7 @@ with sync_playwright() as p:
     cs = {c.get('nr'): c for c in doc('kunden')['customers']}
     check('Kunden übernommen nach Passwortbestätigung: Ergebnis', 'Import übernommen' in t and '6 neu' in t and 'Protokoll' in t, t)
     check('Kunden gespeichert (ohne *-Kunde, Umlaute)', '1000008' in cs and cs['1000008']['firma'] == 'Bäckerei Größe & Söhne' and '1000005' not in cs, sorted(cs))
+    check('Kunden gespeichert mit Daten der Warenwirtschaft (Leser der Verwaltung)', cs['1000001'].get('wawi', {}).get('kreditlimit') == 3000 and cs['1000008'].get('active') is False, cs['1000001'].get('wawi'))
     check('Protokoll: Kundenimport aus kundendaten.csv', 'Kunden aus „kundendaten.csv“ importiert: 6 neu' in log_text(A))
     a.screenshot(path=SH + '/importzentrale-ergebnis.png')
     a.click('[data-imp="ansicht"]'); a.wait_for_selector('#view-kunden:not([hidden]) tr')

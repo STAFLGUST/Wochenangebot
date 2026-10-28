@@ -34,9 +34,12 @@ function customer_offers(array $c): array
     $order = array_merge([OFFER_STD], offer_ids());   // Reihenfolge wie in der Angebotsverwaltung
     return array_values(array_filter($order, function ($o) use ($all) { return in_array($o, $all, true); }));
 }
-function customer_public(array $c): array
+/* Kunde für den Eingabebereich (ohne Passwort-Hash und Geräteschlüssel). $wawi: mit den Daten der Warenwirtschaft
+   (Umsätze, Rohgewinne, Kreditlimit … – nur für Nutzer mit „Kunden bearbeiten“, Aktion kunden). */
+function customer_public(array $c, bool $wawi = false): array
 {
     $out = $c;
+    if (!$wawi) unset($out['wawi']);
     $l = $c['login'] ?? null;
     $out['angebote'] = customer_offers($c);                 // wirksam (direkt + über Kundengruppe)
     $out['angeboteDirekt'] = customer_offers_direct($c);
