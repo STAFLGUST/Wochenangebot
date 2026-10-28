@@ -240,6 +240,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-pop li { padding: 6px 0; border-top: 1px solid var(--crm-linie); }
 .crm-pop li:first-child { border-top: 0; }
 .crm-pop small { display: block; color: var(--crm-muted); }
+.crm-pop h3 .km-genau { font-size: 12px; font-weight: 400; margin-top: 2px; }   /* Genauigkeit des Punkts (Straße / PLZ) */
 
 /* ── Kundenblatt (Dialog) ── */
 .crm-dialog { width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--crm-rand); border-radius: 26px;

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Erfundene Adressen im OpenStreetMap-Format für tests/unit/test_adressen.py (keine echten Daten):
+     Punkt-Adressen, Gebäude (Wege) mit Ecken, mehrere Nummern an einem Objekt, Objekte ohne Straße/PLZ/Ort -->
+<osm version="0.6" generator="handgeschrieben">
+  <!-- Gebäude Musterstraße 10 (Rechteck, Mitte 53.55010 / 9.99020) -->
+  <node id="1" lat="53.5500" lon="9.9900"/>
+  <node id="2" lat="53.5500" lon="9.9904"/>
+  <node id="3" lat="53.5502" lon="9.9904"/>
+  <node id="4" lat="53.5502" lon="9.9900"/>
+  <way id="100">
+    <nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><nd ref="1"/>
+    <tag k="building" v="yes"/>
+    <tag k="addr:street" v="Musterstraße"/><tag k="addr:housenumber" v="10"/>
+    <tag k="addr:postcode" v="20095"/><tag k="addr:city" v="Hamburg"/>
+  </way>
+  <!-- Punkt-Adresse mit Buchstabe und Leerzeichen -->
+  <node id="10" lat="53.5510" lon="9.9910">
+    <tag k="addr:street" v="Musterstraße"/><tag k="addr:housenumber" v="12 A"/>
+    <tag k="addr:postcode" v="20095"/><tag k="addr:city" v="Hamburg"/>
+  </node>
+  <!-- zwei Nummern an einem Objekt -->
+  <node id="11" lat="53.5520" lon="9.9920">
+    <tag k="addr:street" v="Beispielweg"/><tag k="addr:housenumber" v="3;5"/>
+    <tag k="addr:postcode" v="20095"/><tag k="addr:city" v="Hamburg"/>
+  </node>
+  <!-- ohne PLZ, nur Ort -->
+  <node id="12" lat="53.5530" lon="9.9930">
+    <tag k="addr:place" v="Am Testhof"/><tag k="addr:housenumber" v="2"/>
+    <tag k="addr:city" v="Hamburg"/>
+  </node>
+  <!-- unbrauchbar: ohne Straße; ohne PLZ und Ort; ohne Hausnummer -->
+  <node id="13" lat="53.5540" lon="9.9940">
+    <tag k="addr:housenumber" v="7"/><tag k="addr:postcode" v="20095"/>
+  </node>
+  <node id="14" lat="53.5550" lon="9.9950">
+    <tag k="addr:street" v="Musterstraße"/><tag k="addr:housenumber" v="99"/>
+  </node>
+  <node id="15" lat="53.5560" lon="9.9960">
+    <tag k="addr:street" v="Musterstraße"/><tag k="addr:postcode" v="20095"/>
+  </node>
+  <!-- Straßenname mit Abkürzung und Bindestrich in anderer PLZ -->
+  <node id="16" lat="52.5200" lon="13.4050">
+    <tag k="addr:street" v="Max-Planck-Str."/><tag k="addr:housenumber" v="4"/>
+    <tag k="addr:postcode" v="10117"/><tag k="addr:city" v="Berlin"/>
+  </node>
+</osm>

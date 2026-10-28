@@ -10,6 +10,9 @@ modul = "crm"
 [aktion.crm_start]
 oberflaeche = "crm.intern"
 
+[aktion.crm_karte]
+oberflaeche = "crm.intern"
+
 [aktion.crm_verlauf]
 oberflaeche = "crm.intern"
 

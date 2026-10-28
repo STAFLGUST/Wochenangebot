@@ -446,6 +446,9 @@ Caddy setzt auf allen Hosts `script-src 'self'` (ohne `'unsafe-inline'`), `conne
   `wait_for_selector('#km-detail[data-karte="bereit"]')`, nicht mit `wait_for_function`: die Content-Security-Policy erlaubt
   kein `eval`, mit dem Playwright Bedingungen wiederholt prüft (nur der erste Versuch läuft über die Entwicklerschnittstelle).
   Stil neu erzeugen: `node werkzeuge/karte_stil.mjs <@protomaps/basemaps>`.
+  Lage der Kunden in der CRM-Karte: `crm_karte` liefert je Kunde bzw. Interessent `[Breite, Länge, 'h'|'s']` aus dem
+  Adressverzeichnis (`lib/adressen.php`); Kunden an derselben Lage bilden einen Punkt (`id` „a<Breite>,<Länge>“), ohne Eintrag
+  gilt der PLZ-Mittelpunkt (`plz.json`). Der Hinweis `#km-fuss` nennt die Genauigkeit.
 - `fetch` nur zur eigenen `api/` desselben Hosts (GR-109).
 - Skripte und Stylesheets **ohne** `?v=` einbinden. Die Nummern setzt der Server beim Einspielen
   (`deploy/bereitstellen.py`); `python3 werkzeuge/asset_versionen.py` prüft Einbindungen, `--zeigen` zeigt das Ergebnis.
