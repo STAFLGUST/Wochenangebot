@@ -22,7 +22,7 @@ EDITOR_DEFAULT = {'angebot.bearbeiten', 'angebot.veroeffentlichen', 'angebote.ve
                   'bestellungen.sehen', 'bestellungen.bearbeiten', 'hr.antrag'}
 VIEWER_DEFAULT = {'preisverlauf.sehen', 'bestand.sehen', 'stammdaten.sehen', 'einkauf.sehen', 'hr.antrag'}   # hr.antrag: eigener Urlaub (Modul HR)
 # Modulzugang „<modul>.zugang“ je Kachel (lib/rechte.php): Standard für beide Standardrollen – alle behalten ihre Kacheln
-ZUGANG = {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung']}
+ZUGANG = {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'verwaltung']}   # Controlling, Sicherheit: zugang_rollen = []
 EDITOR_DEFAULT |= ZUGANG
 VIEWER_DEFAULT |= ZUGANG
 STOCK = {'date': '2026-10-16', 'source': 'Bestand.xls', 'articles': [{'code': '1', 'name': 'Testartikel', 'kg': 10, 'lots': []}]}

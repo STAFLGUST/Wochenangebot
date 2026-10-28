@@ -114,13 +114,13 @@ Agent: `marketing` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `m
 
 ## Controlling (`controlling`)
 
-Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche
+Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik; geplant OP-Konten, Liquidität
 
-Agent: `controlling` · hängt ab von `plattform`, `verwaltung`
+Agent: `controlling` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `controlling`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `controlling.intern` Controlling | intern | https://controlling.dashboard-stafl.de/ | geplant | keine |
+| `controlling.intern` Controlling | intern | https://controlling.dashboard-stafl.de/module/controlling/ | in_entwicklung | keine |
 
 ## Verwaltung (`verwaltung`)
 

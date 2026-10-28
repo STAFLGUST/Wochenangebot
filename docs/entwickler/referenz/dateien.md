@@ -79,6 +79,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `app.php` | plattform | Aktionen: Grunddaten für die App (iOS/Android, Ordner mobile/). |
 | `auswertung.php` | verwaltung | Aktionen: Auswertung (Karte der Kunden-Anmeldungen) und Aktualisieren der Ortsdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `bestand.php` | bestand | Aktionen: Bestand und Stammdaten Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `controlling.php` | controlling | Aktionen: Controlling (Oberfläche controlling.intern, Fachlogik in app/api/module/controlling/) Rechte (GR-103): controlling.zugang – Modul öffnen (Register, standardmäßig niemand); controlling.umsatz_sehen – … |
 | `crm.php` | crm | Aktionen: CRM · Vertrieb (Oberfläche crm.intern, Daten und Regeln in app/api/module/crm/crm.php) Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte); … |
 | `einkauf.php` | einkauf | Aktionen: Einkauf (Fehlmengen aus offenen Bestellwünschen) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `einzelangebote.php` | angebot | Aktionen: Einzelangebote (Angebot bearbeiten → Einzelangebote). |
@@ -148,6 +149,13 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `import.php` | bestand | Importvertrag des Moduls Bestand – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
+
+## `app/api/module/controlling/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `controlling.php` | controlling | Modul Controlling · gemeinsame Grundlage aller Bereiche (Umsatzstatistik; geplant |
+| `umsatz.php` | controlling | Controlling · Bereich Umsatzstatistik |
 
 ## `app/api/module/crm/`
 
@@ -269,6 +277,15 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `index.html` | angebot | Seite „Kontakt · Standard-Fleisch“ |
+
+## `app/module/controlling/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `controlling.css` | controlling | STAFL-Plattform · Controlling – Gestaltung „Liquid Glass“ wie Dashboard, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
+| `controlling.js` | controlling | STAFL-Plattform · Controlling – Grundgerüst der Seite |
+| `index.html` | controlling | Bereiche des Controllings: je Bereich ein Reiter und ein Inhalt (Skript des Bereichs, z. |
+| `umsatz.js` | controlling | STAFL-Plattform · Controlling · Bereich Umsatzstatistik |
 
 ## `app/module/crm/`
 
@@ -507,6 +524,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `LIESMICH.md` | plattform | Aktionsregister |
 | `angebot.toml` | angebot | Aktionen des Moduls „angebot“ |
 | `bestand.toml` | bestand | Aktionen des Moduls „bestand“ |
+| `controlling.toml` | controlling | Aktionen des Moduls „controlling“: gemeinsamer Start und je Bereich eigene Aktionen controlling_<bereich>_… (heute Umsatzstatistik; geplant OP-Konten, Liquidität). |
 | `crm.toml` | crm | Aktionen des Moduls „crm“ |
 | `einkauf.toml` | einkauf | Aktionen des Moduls „einkauf“ |
 | `hr.toml` | hr | Aktionen des Moduls „hr“ |
@@ -567,6 +585,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestaetigung.py` | plattform | Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einstellbar, ob das Passwort verlangt wird; feste Aktionen (Zugänge, Rechte, Sicherheit, Postfach) immer mit Bestätigung; Gültigkeitsdauer … |
 | `test_bestand_pdf.py` | bestand | Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge. |
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
+| `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – erster Bereich Umsatzstatistik. |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |
 | `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |

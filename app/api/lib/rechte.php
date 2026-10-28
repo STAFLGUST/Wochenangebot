@@ -45,6 +45,9 @@ const PERMS = [
     // Modul Sicherheit (26.10.2026): ohne Standardrollen; Einstellungen, Sperren, Sitzungen und das Beenden des Notfalls bleiben Administratoren vorbehalten
     'sicherheit.sehen'         => ['g' => 'Sicherheit', 'l' => 'Lagebild, Sicherheitsereignisse und Notfall-Zustand ansehen (nur lesen, mit IP-Adressen und Benutzernamen)', 'k' => 'sehen', 'd' => [], 'r' => ['sicherheit.zugang']],
     'sicherheit.notfall'       => ['g' => 'Sicherheit', 'l' => 'Notfallmodus auslösen (Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle werden ausgesperrt); beenden nur Administratoren', 'k' => 'machen', 'd' => [], 'r' => ['sicherheit.zugang']],
+    // Modul Controlling (28.10.2026): je Bereich eigene Rechte, ohne Standardrollen (Finanzdaten); weitere Bereiche (OP-Konten, Liquidität) folgen
+    'controlling.umsatz_sehen'      => ['g' => 'Controlling', 'l' => 'Umsatzstatistik ansehen: Kg, Umsatz, Deckungsbeitrag und Spanne je Vertreter und Monat', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.zugang']],
+    'controlling.umsatz_bearbeiten' => ['g' => 'Controlling', 'l' => 'Umsatzstatistik: Monatswerte je Vertreter erfassen und ändern', 'k' => 'machen', 'd' => [], 'r' => ['controlling.umsatz_sehen']],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · Controlling</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="controlling.css">
+</head>
+<body class="ctl">
+<div class="ctl-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="ctl-seite">
+  <header class="ctl-kopf ctl-glas">
+    <a class="stafl-zurueck" id="ctl-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <span class="ctl-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
+    <span class="ctl-modul"><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg>Controlling</span>
+    <div class="ctl-aktionen">
+      <button class="ctl-rund" id="ctl-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"></button>
+      <span class="ctl-user" id="ctl-user" hidden><span class="ctl-initialen" id="ctl-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="ctl-user-name" id="ctl-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="ctl-main">
+    <section class="ctl-hinweisbox ctl-glas" id="ctl-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Das Controlling steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="ctl-fehler" id="ctl-err" role="alert" hidden></p>
+
+    <section id="ctl-app" hidden>
+      <!-- Bereiche des Controllings: je Bereich ein Reiter und ein Inhalt (Skript des Bereichs, z. B. umsatz.js) -->
+      <nav class="ctl-bereiche stafl-streifen" id="ctl-bereiche" role="tablist" aria-label="Bereiche des Controllings"></nav>
+      <p class="ctl-leer-bereich ctl-glas" id="ctl-kein-bereich" hidden>Für Sie ist noch kein Bereich des Controllings freigeschaltet. Bitte an einen Administrator wenden.</p>
+      <div id="ctl-inhalt"></div>
+    </section>
+  </main>
+  <footer class="ctl-fuss">STAFL-Plattform · Standard-Fleisch</footer>
+</div>
+<div class="ctl-toast" id="ctl-toast" role="status" aria-live="polite"></div>
+
+<svg class="ctl-symbole" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 20.5v-4M10 20.5v-7M15 20.5v-5M20 20.5V10M4 11.5 9.5 7l4 3L19.5 4M15.5 4h4v4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+</svg>
+<script src="controlling.js"></script>
+<script src="umsatz.js"></script>
+</body>
+</html>

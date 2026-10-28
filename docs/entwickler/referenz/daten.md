@@ -22,6 +22,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `merklisten` | Angebot | vertraulich | – | verwaltung | Merklisten angemeldeter Kunden (geräteübergreifend) |
 | `versionen/*` | Angebot | intern | bestand | – | Frühere veröffentlichte Angebote (unveränderliche Schnappschüsse) – Historie: Schnappschuss je Veröffentlichung; Anzahl begrenzt (keep_versions) |
 | `bestand` | Bestand | vertraulich | angebot, einkauf | – | Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001) |
+| `controlling-umsatz` | Controlling | vertraulich | – | – | Umsatzstatistik: Kg, Umsatz und Deckungsbeitrag je Jahr, Monat und Vertreter (Monatsmeldung von Hand), Versionsstand, letzte Änderung – Historie: Vertreternamen als Schnappschuss (GR-106): Werte ausgeschiedener Vertreter bleiben mit Namen erhalten |
 | `crm-aktivitaeten` | CRM | vertraulich | – | – | Aktivitätenverlauf (Telefonat, E-Mail, Besuch, Muster, Angebot, Bestellung, Notiz) je Kunde – Historie: Firma und Kundennummer werden beim Erfassen als Schnappschuss gespeichert (GR-106); höchstens 50 000 Einträge, älteste fallen weg |
 | `crm-interessenten` | CRM | vertraulich | – | – | Interessenten ohne Kundennummer mit eigenen Adress- und Kontaktangaben (Kunden selbst pflegt die Verwaltung) |
 | `crm-kunden` | CRM | vertraulich | – | – | Kundenblätter des CRM je Kunde (Kunden-ID der Verwaltung) bzw. Interessent: Ansprechpartner, Segment, Phase, Anruf-Rhythmus und -Status, Potenzial, nächster Schritt, Wiedervorlage, Notiz |
@@ -67,7 +68,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `kundengruppen*` | Verwaltung | intern | angebot, crm | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
 | `kundensitzungen` | Verwaltung | geheim | – | angebot | Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6) |
 | `stammdaten` | Verwaltung | intern | angebot, bestand | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |
-| `vertreter*` | Verwaltung | vertraulich | crm | – | Vertreter mit Kontaktdaten |
+| `vertreter*` | Verwaltung | vertraulich | crm, controlling | – | Vertreter mit Kontaktdaten |
 | `vkgruppen*` | Verwaltung | intern | angebot, bestand | – | VK-Gruppen der Artikel |
 
 `*` Name wird im Code berechnet (z. B. je Monat oder je Angebot).
