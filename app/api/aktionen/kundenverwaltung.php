@@ -7,12 +7,13 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 switch ($action) {
         /* ---------- Kundenstammdaten (Eingabebereich, nur Administrator) ---------- */
         case 'kunden': {
-            require_perm('kunden.sehen');
+            $me = require_perm('kunden.sehen');
             header('Cache-Control: no-store');
             $d = customers_load();
             $act = [];
             foreach (ksess_prune(store_read('kundensitzungen') ?? []) as $v) $act[$v['kid']] = ($act[$v['kid']] ?? 0) + 1;
-            $list = array_map(function ($c) use ($act) { $p = customer_public($c); $p['sessions'] = $act[$c['id']] ?? 0; return $p; }, $d['customers']);
+            $wawi = may($me, 'kunden.bearbeiten');   // Daten der Warenwirtschaft (Umsätze, Kreditlimit …) nur, wer Kunden bearbeiten und importieren darf
+            $list = array_map(function ($c) use ($act, $wawi) { $p = customer_public($c, $wawi); $p['sessions'] = $act[$c['id']] ?? 0; return $p; }, $d['customers']);
             respond(['ok' => true, 'rev' => $d['rev'], 'customers' => $list]);
         }
 
@@ -91,8 +92,14 @@ switch ($action) {
                     $row['login'] = $l;
                 }
                 if (!$row['active']) $ended = $ended || ($old && !empty($old['active']));
-                // Felder, die dieser Stand nicht kennt (neuere Fassung, andere Module), bleiben erhalten (GR-006)
-                if ($old) $row += array_diff_key($old, array_flip(['abgemeldet', 'login']));
+                // Felder, die dieser Stand nicht kennt (neuere Fassung, andere Module, Daten der Warenwirtschaft „wawi“), bleiben erhalten (GR-006).
+                // Aktiv-Regel des Kundenimports (module/verwaltung/import.php): „autoInaktiv“ (vom Import deaktiviert) entfällt, sobald
+                // der Kunde aktiv ist oder der Status von Hand geändert wird – dann reaktiviert ihn ein späterer Import nicht mehr.
+                // Von Hand wieder aktiviert: „aktivVonHand“ – der Import deaktiviert ihn dann nicht erneut (bis er von Hand deaktiviert wird).
+                $ohne = ['abgemeldet', 'login'];
+                if ($old && ($row['active'] || !empty($old['active']) !== $row['active'])) $ohne[] = 'autoInaktiv';
+                if ($old && !empty($old['active']) !== $row['active']) { $ohne[] = 'aktivVonHand'; if ($row['active']) $row['aktivVonHand'] = now(); }
+                if ($old) $row += array_diff_key($old, array_flip($ohne));
                 if ($idx === null) $d['customers'][] = $row; else $d['customers'][$idx] = $row;
                 usort($d['customers'], function ($x, $y) { return strcasecmp($x['firma'], $y['firma']); });
                 $d['rev'] = (int)$d['rev'] + 1;
@@ -114,7 +121,7 @@ switch ($action) {
             if ((bool)($old['login']['active'] ?? false) !== (bool)($row['login']['active'] ?? false)) $ch[] = ['k' => "c{$row['id']}|lact", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => 'Zugang aktiv', 'from' => !empty($old['login']['active']) ? 'ja' : 'nein', 'to' => !empty($row['login']['active']) ? 'ja' : 'nein'];
             if ($pwNew) $ch[] = ['k' => "c{$row['id']}|pw", 'code' => $row['nr'], 'name' => $row['firma'], 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt' . (!empty($row['login']['mustChange']) ? ' (muss bei der ersten Anmeldung geändert werden)' : '')];
             if ($ch) audit('customers', $old ? "Kunde „{$row['firma']}“ bearbeitet" : "Kunde „{$row['firma']}“ angelegt", $ch);
-            respond(['ok' => true, 'rev' => $d['rev'], 'customer' => customer_public($row)]);
+            respond(['ok' => true, 'rev' => $d['rev'], 'customer' => customer_public($row, true)]);
         }
 
         case 'kunde_delete': {

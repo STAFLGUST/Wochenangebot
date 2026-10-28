@@ -94,10 +94,10 @@ Standardrollen mit ihrem Standardwert (`rights_roles`), Dokumente ohne `bekannt`
 (`+ array_diff_key($p, …)`), `crm_kunde_save` schreibt `array_merge($alt, $neu, …)`. So überlebt ein Feld einer neueren
 Fassung das Speichern durch eine ältere.
 
-> **Achtung, Gegenbeispiel:** `kunde_save` (`aktionen/kundenverwaltung.php`) baut den Kundensatz neu aus
-> `CUSTOMER_FIELDS` und übernimmt vom alten Satz nur `weekly`, `mailLast`, `abgemeldet` (dazu `created`, `login`).
-> Ein neues Feld am Kunden muss dort ausdrücklich übernommen werden, sonst verwirft es das nächste Speichern. Felder aus
-> `CUSTOMER_FIELDS`, die die Anfrage nicht enthält, werden leer gespeichert.
+> **Kundensatz:** `kunde_save` (`aktionen/kundenverwaltung.php`) baut den Kundensatz aus `CUSTOMER_FIELDS` neu auf und
+> hängt danach alle übrigen Felder des alten Satzes wieder an (`$row += array_diff_key($old, …)`) – so bleiben z. B. die
+> Daten der Warenwirtschaft (`wawi`) beim Speichern im Dialog erhalten. Felder aus `CUSTOMER_FIELDS`, die die Anfrage
+> nicht enthält, bleiben unverändert.
 
 **6. Typen stabil halten.** JSON-Schlüssel wie `"24"` kommen in PHP als Zahl an; `clean_variants` wandelt sie
 zurück (`$oid = (string)$oid`), sonst gingen Kundenpreise älterer Angebote mit Zahlen-ID verloren.
@@ -270,6 +270,30 @@ berechnet `customer_offers()` aus `angebote` (direkt) und der Kundengruppe.
 `kunde_save` ändert nur, was die Anfrage enthält: fehlende Felder (auch `angebote`, `active`, `mailAngebot`) bleiben,
 fehlendes `login` lässt den Zugang unverändert (entfernt wird er nur mit `login: null` oder `{remove: true}`), ein
 leerer Text leert das Feld; Felder, die dieser Stand nicht kennt, bleiben erhalten (GR-006).
+
+Aus dem Kundenimport (Kundendaten-Export der Warenwirtschaft, `kunden_import_lauf` in `module/verwaltung/import.php`):
+
+```json
+"wawi": {"alpha": "TESTFIRMA", "konto": "10001", "rgEmpf": "10002", "kondition": "1", "letzteRechnung": "2026-09-14",
+         "letzterLieferschein": "2026-09-12", "angelegtAm": "2019-02-03", "angelegtUm": "09:05", "angelegtVon": "TST",
+         "kreditlimit": 3000, "umsatzMonat": 1234.5, "rohgewinnMonat": -12.3, "umsatzJahr": 12345.67, "gln": "4000000000017",
+         "rgSperre": false, "abgabeCitti": true, "dfb": false, "mailAB": "ab@example.invalid", "weitereEmails": "…",
+         "stand": "2026-10-28T12:00:00Z"},
+"autoInaktiv": {"seit": "…", "grund": "keine Rechnung seit 18 Monaten (letzte 12.03.2024)"},
+"aktivVonHand": "…"
+```
+
+- `wawi`: alle weiteren Spalten des Exports (Felder und Typen: `KUNDEN_WAWI_FELDER`), nur nicht leere, gültige Werte;
+  `stand` = letzte Änderung durch einen Import. Ein Import setzt bzw. leert nur die Felder, deren Spalte die Datei enthält
+  (`wawiFelder`). Ausgeliefert nur an Nutzer mit `kunden.bearbeiten` (`customer_public($c, true)`), nie an CRM, Kunden,
+  E-Mail-Antworten oder ins Protokoll (dort nur die Anzahl).
+- `autoInaktiv`: vom Import deaktiviert (Aktiv-Regel: keine Rechnung, kein Lieferschein und keine Neuanlage in
+  `KUNDEN_AKTIV_MONATE` = 18 Monaten, oder „*“ in der Warenwirtschaft). Nur so gekennzeichnete Kunden aktiviert ein
+  späterer Import wieder. `kunde_save` entfernt das Kennzeichen, sobald der Kunde aktiv ist oder der Status von Hand
+  geändert wird.
+- `aktivVonHand`: von Hand wieder aktiviert (`kunde_save`, Wechsel inaktiv → aktiv); der Import deaktiviert den Kunden
+  dann nicht erneut, bis er von Hand deaktiviert wird. Kunden mit aktivem Zugang und Anmeldung in den 18 Monaten
+  bleiben ebenfalls aktiv.
 
 **`kundengruppen`**, **`vkgruppen`**, **`vertreter`**: je Liste `{"rev": 2, "groups": [{"nr": "10", "name": "…", …}], "updatedAt": "…", "updatedBy": "…"}`;
 Felder je Liste in `GRUPPEN_LISTEN` (`lib/kunden.php`): Kunden- und VK-Gruppen `name`, `klasse`, `kategorie`;

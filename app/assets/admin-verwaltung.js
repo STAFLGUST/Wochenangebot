@@ -589,7 +589,7 @@
   /* ======================= Kunden (Administrator) =======================
      Kundenstammdaten, Freischaltung der Angebote und Zugang zur Angebotsseite (Benutzername + Passwort).
      Passwörter werden nur als Hash gespeichert und nie angezeigt. */
-  let kunden = null, kundenRev = 0, kundenQ = '', kundenG = '', kundenV = '', mailSt = null;
+  let kunden = null, kundenRev = 0, kundenQ = '', kundenG = '', kundenV = '', kundenS = '', mailSt = null;
   const MAIL_TYP = { woche: 'Wochenangebot', angebot: 'Angebotslink', invite: 'Einladung', reset: 'Passwort-Link', test: 'Testmail', hinweis: 'Hinweis Abmeldung', bestellung: 'Bestellwunsch', bestellkopie: 'Kopie Bestellwunsch', restposten: 'Sonderposten', benachrichtigung: 'Benachrichtigung', einkauf: 'Einkaufsbedarf', einzelangebot: 'Einzelangebot' };
   const dlgKunde = $('#dlg-kunde');
   let editKid = null;
@@ -602,6 +602,10 @@
     return `<option value="">Alle Vertreter</option><option value="-"${kundenV === '-' ? ' selected' : ''}>Ohne Vertreter (${fmtInt.format(ohne)})</option>`
       + vs.filter((g) => n.has(g.nr) || kundenV === g.nr).map((g) => `<option value="${esc(g.nr)}"${kundenV === g.nr ? ' selected' : ''}>${esc(g.name)}${g.kurz && g.kurz !== g.name ? ` (${esc(g.kurz)})` : ''} · ${fmtInt.format(n.get(g.nr) || 0)}</option>`).join('')
       + [...n.keys()].filter((nr) => !vs.some((g) => g.nr === nr)).map((nr) => `<option value="${esc(nr)}"${kundenV === nr ? ' selected' : ''}>${esc(nr)} · nicht mehr vorhanden (${n.get(nr)})</option>`).join('');
+  }
+  function kStatusOpts() {
+    const an = kunden.filter((c) => c.active).length;
+    return `<option value="">Aktive und inaktive</option><option value="aktiv"${kundenS === 'aktiv' ? ' selected' : ''}>Nur aktive (${fmtInt.format(an)})</option><option value="inaktiv"${kundenS === 'inaktiv' ? ' selected' : ''}>Nur inaktive (${fmtInt.format(kunden.length - an)})</option>`;
   }
   function kGruppenOpts() {
     const n = new Map(); let ohne = 0;
@@ -623,6 +627,7 @@
         <div class="search">${icon('search')}<input id="k-q" type="search" autocomplete="off" placeholder="Kunden finden: Firma, Nummer, Ort, Ansprechpartner …" aria-label="Kunden suchen" value="${esc(kundenQ)}"></div>
         <label class="select k-gfilter"><span class="sr-only">Kundengruppe</span><select id="k-g" aria-label="Nach Kundengruppe filtern">${kGruppenOpts()}</select>${icon('chev', 'sm')}</label>
         <label class="select k-gfilter"><span class="sr-only">Vertreter</span><select id="k-v" aria-label="Nach Vertreter filtern">${kVertreterOpts()}</select>${icon('chev', 'sm')}</label>
+        <label class="select k-gfilter"><span class="sr-only">Status</span><select id="k-s" aria-label="Nach Status filtern">${kStatusOpts()}</select>${icon('chev', 'sm')}</label>
         <span class="ed-hint" id="k-count"></span>
         ${may('kunden.bearbeiten') ? `<button type="button" class="btn" id="k-import" title="Kundenstammdaten-Export der Warenwirtschaft (CSV) einlesen">${icon('upload')}CSV importieren</button><input type="file" id="k-file" accept=".csv,text/csv,text/plain" hidden>` : ''}
         <button type="button" class="btn" id="k-mailcfg"${isAdmin() ? '' : ' hidden'} title="E-Mail-Versand: Einstellungen, Signatur, Testmail">${icon('mail')}E-Mail${mailSt.configured ? '' : ' <span class="k-warn">nicht eingerichtet</span>'}</button>
@@ -638,6 +643,7 @@
     const list = kunden.filter((c) => {
       if (kundenG && (kundenG === '-' ? c.gruppe : c.gruppe !== kundenG)) return false;
       if (kundenV && (kundenV === '-' ? (c.vertreter || c.vertreter2) : c.vertreter !== kundenV && c.vertreter2 !== kundenV)) return false;
+      if (kundenS && (kundenS === 'aktiv') !== !!c.active) return false;
       const hay = fold([c.nr, c.firma, c.ansprechpartner, c.ort, c.plz, c.email, c.login && c.login.username, c.gruppe ? kgName(c.gruppe) : '', vtName(c.vertreter), vtName(c.vertreter2)].join(' ')); return toks.every((t) => hay.includes(t));
     });
     $('#k-count').textContent = plural(list.length, 'Kunde', 'Kunden') + (list.length !== kunden.length ? ` von ${fmtInt.format(kunden.length)}` : '') + (list.length > K_MAX ? ` – die ersten ${fmtInt.format(K_MAX)} angezeigt, Suche oder Gruppe eingrenzen` : '');
@@ -646,7 +652,7 @@
     if (!list.length) { host.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
     const st = (c) => {
       const l = c.login;
-      if (!c.active) return '<span class="st-err">Kunde inaktiv</span>';
+      if (!c.active) return `<span class="st-err">Kunde inaktiv</span>${c.autoInaktiv ? `<div class="sub" title="Vom Kundenimport gesetzt">${esc(c.autoInaktiv.grund || '')}</div>` : ''}`;
       if (!l) return '<span class="muted">kein Zugang</span>';
       if (!l.active) return '<span class="st-err">Zugang deaktiviert</span>';
       if (!l.hasPassword) return `<span class="st-warn">${l.link ? `Einladung offen bis ${esc(dmyTs(l.link.exp))}` : 'noch kein Passwort'}</span>`;
@@ -666,6 +672,7 @@
   $('#view-kunden').addEventListener('change', (e) => {
     if (e.target.id === 'k-g') { kundenG = e.target.value; renderKundenList(); return; }
     if (e.target.id === 'k-v') { kundenV = e.target.value; renderKundenList(); return; }
+    if (e.target.id === 'k-s') { kundenS = e.target.value; renderKundenList(); return; }
     if (e.target.id === 'k-file' && e.target.files[0]) { const f = e.target.files[0]; e.target.value = ''; kImportDatei(f); }
   });
   const dmyTs = (ts) => new Date(ts * 1000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -717,9 +724,11 @@
           ${fld('land', 'Land', 60, ' placeholder="Deutschland"')}
           <label class="fld span2"><span>Notiz <small class="muted">(nur intern)</small></span><textarea name="notiz" maxlength="500" rows="2">${esc(c ? c.notiz || '' : '')}</textarea></label>
           <label class="check span2"><input type="checkbox" name="active"${!c || c.active ? ' checked' : ''}> Kunde aktiv <small class="muted">(inaktive Kunden können sich nicht anmelden)</small></label>
+          ${c && !c.active && c.autoInaktiv ? `<p class="hint span2 st-warn k-autoinaktiv">Vom Kundenimport am ${esc(dateTime(c.autoInaktiv.seit))} deaktiviert: ${esc(c.autoInaktiv.grund || '')}. Mit einer neuen Rechnung wird der Kunde beim nächsten Import wieder aktiv; von Hand aktivieren geht jederzeit.</p>` : ''}
           <label class="check span2"><input type="checkbox" name="mailAngebot"${!c || c.mailAngebot !== false ? ' checked' : ''}> Wochenangebot per E-Mail erhalten <small class="muted">(nur mit Einverständnis des Kunden)</small></label>
           ${c && c.abgemeldet && c.mailAngebot === false ? `<p class="hint span2 st-warn k-abm-note">Der Kunde hat sich am ${esc(dateTime(c.abgemeldet.t))} selbst über den Link in der E-Mail abgemeldet. Die E-Mail-Adresse bleibt gespeichert.</p>` : ''}
         </div></fieldset>
+        ${c && c.wawi ? kundeWawi(c.wawi) : ''}
         <fieldset class="k-set"><legend>Freigeschaltete Angebote</legend>
           <div class="k-offers-pick">${[OSTD, ...W.offers.map((o) => o.id)].map((o) => `<label class="check"><input type="checkbox" name="angebot" value="${esc(o)}"${has(o) ? ' checked' : ''}> ${esc(offerName(o))}${o === OSTD && W.stdPublic ? ' <small class="muted">(ohnehin öffentlich)</small>' : ''}${perGruppe(o) ? ` <small class="k-viagr">${icon('users', 'sm')}${o === OSTD ? 'automatisch' : 'über Kundengruppe'}</small>` : ''}</label>`).join('')}</div>
           <p class="hint">Der Kunde sieht nach der Anmeldung diese Angebote und zusätzlich das Angebot seiner Kundengruppe (Stammdaten → Angebote); hat die Gruppe kein eigenes Angebot, automatisch das Wochenangebot. Ist mehr als eines freigeschaltet, kann er zwischen ihnen wechseln.</p>
@@ -761,6 +770,30 @@
     }
     dlgKunde.showModal();
     $('#kunde-body [name="firma"]').focus();
+  }
+  /* Daten der Warenwirtschaft (nur lesen, aus dem Kundenimport; nur mit „Kunden bearbeiten“ ausgeliefert) */
+  const fmtEur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+  const WAWI_ANZEIGE = [['alpha', 'Suchname'], ['konto', 'Konto'], ['rgEmpf', 'Rechnungsempfänger'], ['kondition', 'Kondition'], ['letzteRechnung', 'Letzte Rechnung', 'd'],
+    ['letzterLieferschein', 'Letzter Lieferschein', 'd'], ['angelegtAm', 'Angelegt', 'anlage'], ['kreditlimit', 'Kreditlimit', 'eur'], ['rgSperre', 'Rechnungssperre', 'b'], ['gln', 'GLN'],
+    ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen']];
+  const WAWI_UMSATZ = [['Monat', 'umsatzMonat', 'rohgewinnMonat'], ['Voriger Monat', 'umsatzVorigerMonat', 'rohgewinnVorigerMonat'], ['Jahr', 'umsatzJahr', 'rohgewinnJahr'],
+    ['Voriges Jahr', 'umsatzVorigesJahr', 'rohgewinnVorigesJahr'], ['Vorjahr', 'umsatzVorjahr', ''], ['Vorvorjahr', 'umsatzVorvorjahr', '']];
+  function kundeWawi(w) {
+    const wert = (k, art) => {
+      const x = w[k];
+      if (art === 'd') return dmyIso(x);
+      if (art === 'eur') return fmtEur.format(x);
+      if (art === 'b') return x ? 'ja' : 'nein';
+      if (art === 'anlage') return [dmyIso(x), w.angelegtUm ? `${w.angelegtUm} Uhr` : '', w.angelegtVon ? `von ${w.angelegtVon}` : ''].filter(Boolean).join(' ');
+      return String(x);
+    };
+    const felder = WAWI_ANZEIGE.filter(([k]) => w[k] !== undefined && w[k] !== '');
+    const ums = WAWI_UMSATZ.filter(([, u, r]) => typeof w[u] === 'number' || (r && typeof w[r] === 'number'));
+    const eur = (x) => (typeof x === 'number' ? fmtEur.format(x) : '–');
+    return `<details class="k-set k-wawi"><summary>Daten der Warenwirtschaft${w.stand ? ` <small class="muted">· Stand ${esc(dateTime(w.stand))}</small>` : ''}</summary>
+      ${felder.length ? `<dl class="k-wawi-dl">${felder.map(([k, l, art]) => `<div><dt>${l}</dt><dd>${esc(wert(k, art))}</dd></div>`).join('')}</dl>` : ''}
+      ${ums.length ? `<table class="k-wawi-ums"><thead><tr><th>Zeitraum</th><th>Umsatz</th><th>Rohgewinn</th></tr></thead><tbody>${ums.map(([l, u, r]) => `<tr><th>${l}</th><td>${eur(w[u])}</td><td>${r ? eur(w[r]) : '–'}</td></tr>`).join('')}</tbody></table>` : ''}
+      <p class="hint">Aus dem Kundendaten-Export der Warenwirtschaft (Stammdaten → Kunden → CSV importieren); hier nur zur Ansicht, geändert wird in der Warenwirtschaft.</p></details>`;
   }
   $('#kunde-body').addEventListener('change', (e) => {
     if (e.target.name === 'pwmode') { for (const el of $$('#kunde-body .k-pwfld')) el.hidden = e.target.value !== 'manual'; return; }
@@ -834,11 +867,31 @@
   });
 
   /* ---------- Kundenstammdaten aus der Warenwirtschaft importieren (CSV) ----------
-     Gelesen werden Nummer, Name1 (sonst Alpha), Strasse, PLZ, Ort, Land, Telefon, EMail und Gruppe; Umsätze, Kreditlimit,
-     Konditionen, Vertreter usw. bleiben in der Warenwirtschaft. Abgleich und Prüfung macht der Server (kunden_import). */
+     Gelesen werden Nummer, Name1 (sonst Alpha), Strasse, PLZ, Ort, Land, Telefon, EMail, Gruppe, Vertreter und Vertreter2
+     sowie alle weiteren Spalten des Kundendaten-Exports als „wawi“ (Datum → JJJJ-MM-TT, Betrag → Zahl, Ja/Nein → true/false;
+     Felder: KUNDEN_WAWI_FELDER in module/verwaltung/import.php). Abgleich, Prüfung und Aktiv-Regel macht der Server (kunden_import). */
   const dlgKI = $('#dlg-k-import');
   let kImp = null;
   const landName = (() => { let dn = null; try { dn = new Intl.DisplayNames(['de'], { type: 'region' }); } catch { /* alter Browser */ } return (c) => { const v = (c || '').trim(); if (!/^[A-Za-z]{2}$/.test(v) || !dn) return v; try { return dn.of(v.toUpperCase()) || v; } catch { return v; } }; })();
+  const MAIL_RE = /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/;
+  const wDatum = (s) => { const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : ''; };
+  const wZeit = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(s); return m ? `${m[1].padStart(2, '0')}:${m[2]}` : ''; };
+  const wBetrag = (s) => { const t = s.replace(/[^\d,.-]/g, '').replace(/\./g, '').replace(',', '.'); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : ''; };   // „-1.234,56 €“ → -1234.56 (Währungszeichen gleich welcher Kodierung)
+  const wJaNein = (s) => (/^(ja|j|x|1)$/i.test(s) ? true : /^(nein|n|0)$/i.test(s) ? false : '');
+  const wMails = (s) => [...new Set(s.split(/[;,\s]+/).filter((m) => MAIL_RE.test(m)))].join(', ');
+  const wText = (s) => s;
+  // Daten der Warenwirtschaft: Feld, Spaltenköpfe (klein, ohne Sonderzeichen), Leser
+  const KUNDE_WAWI = [
+    ['alpha', ['alpha', 'suchname', 'kurzname'], wText], ['konto', ['konto'], wText], ['rgEmpf', ['rgempf', 'rechnungsempfanger'], wText],
+    ['letzterLieferschein', ['letzterlieferschein'], wDatum], ['letzteRechnung', ['letzterechnung'], wDatum], ['kreditlimit', ['kreditlimit'], wBetrag],
+    ['kondition', ['kondition'], wText], ['mailAB', ['mailfurab'], wMails], ['mailLS', ['mailfurls'], wMails],
+    ['umsatzJahr', ['umsatzjahr'], wBetrag], ['rohgewinnJahr', ['rohgewinnjahr'], wBetrag], ['umsatzMonat', ['umsatzmonat'], wBetrag], ['rohgewinnMonat', ['rohgewinnmonat'], wBetrag],
+    ['umsatzVorigesJahr', ['umsatzvorigesjahr'], wBetrag], ['rohgewinnVorigesJahr', ['rohgewinnvorigesjahr'], wBetrag],
+    ['umsatzVorigerMonat', ['umsatzvorigermonat'], wBetrag], ['rohgewinnVorigerMonat', ['rohgewinnvorigermonat'], wBetrag],
+    ['abgabeCitti', ['abgabecitti'], wJaNein], ['umsatzVorjahr', ['umsatzvorjahr'], wBetrag], ['umsatzVorvorjahr', ['umsatzvorvorjahr'], wBetrag],
+    ['gln', ['gln'], (s) => s.replace(/\s/g, '')], ['dfb', ['dfb'], wJaNein], ['angelegtAm', ['angelegtam'], wDatum], ['angelegtUm', ['angelegtum'], wZeit],
+    ['angelegtVon', ['angelegtvon'], wText], ['rgSperre', ['rgsperre', 'rechnungssperre'], wJaNein], ['mailERechnung', ['emailerechnung'], wMails],
+  ];
   function kAusCsv(buf) {
     const rows = csvZeilen(csvText(buf));
     if (!rows.length) throw new Error('Die Datei ist leer.');
@@ -849,48 +902,63 @@
     if (i.nr < 0 || (i.firma < 0 && i.alpha < 0)) throw new Error('Spalten „Nummer“ und „Name1“ nicht gefunden. Erwartet wird der Kundendaten-Export der Warenwirtschaft (Semikolon getrennt).');
     if (i.strasse < 0 && i.email < 0 && i.gruppe < 0) throw new Error('Das ist vermutlich der Vertreter-Export. Bitte unter Stammdaten → Vertreter importieren; hier wird der Kundendaten-Export erwartet.');
     if (kopf.includes('bezeichnung1') || kopf.includes('vgrp')) throw new Error('Das ist der Artikelstammdaten-Export. Bitte unter Stammdaten → Artikelstammdaten importieren.');
-    const v = (r, k) => (i[k] >= 0 ? (r[i[k]] || '').trim().replace(/\s{2,}/g, ' ') : '');
+    const zelle = (r, j) => (j >= 0 ? (r[j] || '').trim().replace(/\s{2,}/g, ' ') : '');
+    const v = (r, k) => zelle(r, i[k]);
+    const iw = KUNDE_WAWI.map(([k, n, f]) => [k, sp(...n), f]).filter(([, j]) => j >= 0);
+    // Felder, die die Datei enthält: der Server übernimmt bzw. leert nur diese (ältere Exporte ohne Spalte lassen den Wert stehen)
+    const wawiFelder = iw.map(([k]) => k).concat(i.email >= 0 ? ['weitereEmails'] : []);
     const out = [];
     for (const [n, r] of rows.slice(1).entries()) {
       const alpha = v(r, 'alpha');
-      const mails = v(r, 'email').split(/[;,\s]+/).filter((m) => /^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/.test(m));
+      const mails = [...new Set(v(r, 'email').split(/[;,\s]+/).filter((m) => MAIL_RE.test(m)))];
+      const wawi = {};
+      for (const [k, j, f] of iw) { const w = f(zelle(r, j)); if (w !== '') wawi[k] = w; }
+      if (mails.length > 1) wawi.weitereEmails = mails.slice(1).join(', ');
       const x = { nr: v(r, 'nr'), firma: v(r, 'firma') || alpha.replace(/^\*\s*/, ''), strasse: v(r, 'strasse'), plz: v(r, 'plz'), ort: v(r, 'ort'), land: landName(v(r, 'land')),
         telefon: v(r, 'telefon'), email: mails[0] || (v(r, 'email') && !v(r, 'email').includes('@') ? '' : v(r, 'email')), gruppe: v(r, 'gruppe'), vertreter: v(r, 'vertreter'), vertreter2: v(r, 'vertreter2'), stern: alpha.startsWith('*') || v(r, 'firma').startsWith('*'),
-        zeile: n + 2 };   // Zeile in der Datei (Kopfzeile = 1) – Anzeige in der Vorschau der Importzentrale
+        wawi, zeile: n + 2 };   // Zeile in der Datei (Kopfzeile = 1) – Anzeige in der Vorschau der Importzentrale
       if (!x.nr && !x.firma) continue;
       out.push(x);
     }
     if (!out.length) throw new Error('Keine Kunden in der Datei gefunden.');
-    return out;
+    return { rows: out, wawiFelder };
   }
   async function kImportDatei(file) {
-    let rows;
-    try { rows = kAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
-    kImp = { file, rows, ohneStern: true, anlegen: true, res: null };
+    let gelesen;
+    try { gelesen = kAusCsv(await file.arrayBuffer()); } catch (ex) { toast(ex.message, 8000); return; }
+    kImp = { file, rows: gelesen.rows, wawiFelder: gelesen.wawiFelder, ohneStern: true, anlegen: true, regel: true, res: null };
     dlgKI.showModal();
     await kImportPruefen();
   }
-  const kImpRows = () => kImp.rows.filter((r) => !(kImp.ohneStern && r.stern)).map(({ stern, zeile, ...r }) => r);
+  // „stern“ geht mit: werden „*“-Kunden übernommen, setzt die Aktiv-Regel sie auf inaktiv
+  const kImpRows = () => kImp.rows.filter((r) => !(kImp.ohneStern && r.stern)).map(({ zeile, ...r }) => r);
+  const kImpBody = () => ({ rows: kImpRows(), anlegen: kImp.anlegen, aktivRegel: kImp.regel, wawiFelder: kImp.wawiFelder });
   async function kImportPruefen() {
     const body = $('#k-import-body');
     const stern = kImp.rows.filter((r) => r.stern).length;
+    const mitRechnung = kImp.wawiFelder.includes('letzteRechnung');
     const head = `<div class="dlg-head"><div><h2 id="ki-title">Kunden importieren</h2><p>${esc(kImp.file.name)} · ${plural(kImp.rows.length, 'Zeile', 'Zeilen')}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>`;
     const opts = `<div class="ki-opts">
         <label class="check"><input type="checkbox" data-ki="stern"${kImp.ohneStern ? ' checked' : ''}> Mit „*“ markierte Kunden überspringen <small class="muted">(${fmtInt.format(stern)} in der Datei – in der Warenwirtschaft als nicht mehr aktiv gekennzeichnet)</small></label>
-        <label class="check"><input type="checkbox" data-ki="anlegen"${kImp.anlegen ? ' checked' : ''}> Neue Kunden anlegen <small class="muted">(aus: nur bestehende Kunden aktualisieren)</small></label></div>`;
+        <label class="check"><input type="checkbox" data-ki="anlegen"${kImp.anlegen ? ' checked' : ''}> Neue Kunden anlegen <small class="muted">(aus: nur bestehende Kunden aktualisieren)</small></label>
+        ${mitRechnung ? `<label class="check"><input type="checkbox" data-ki="regel"${kImp.regel ? ' checked' : ''}> Kunden ohne Rechnung seit 18 Monaten auf inaktiv setzen <small class="muted">(mit neuer Rechnung wieder aktiv; von Hand deaktivierte Kunden bleiben inaktiv)</small></label>` : ''}</div>`;
     body.innerHTML = head + `<div class="dlg-body">${opts}<div class="loading"><div class="spinner"></div>Abgleich mit den vorhandenen Kunden …</div></div>`;
-    try { kImp.res = await api('kunden_import', { body: { pruefen: true, rows: kImpRows(), anlegen: kImp.anlegen } }); }
+    try { kImp.res = await api('kunden_import', { body: { pruefen: true, ...kImpBody() } }); }
     catch (ex) { body.innerHTML = head + `<div class="dlg-body">${opts}<div class="err-box">${esc(ex.message)}</div></div><div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`; return; }
     const r = kImp.res, s = r.stat;
     const nix = !s.neu && !s.aktualisiert;
     const gname = (nr) => kgName(nr) || '';
     const fremd = Object.entries(r.gruppenUnbekannt || {}), fremdV = Object.entries(r.vertreterUnbekannt || {});
+    const inaktiv = r.beispiele.inaktiv || [];
     body.innerHTML = head + `<div class="dlg-body">${opts}
-        <div class="cmp-stats"><div><span>Neu</span><strong id="ki-neu">${fmtInt.format(s.neu)}</strong></div><div><span>Aktualisiert</span><strong id="ki-akt">${fmtInt.format(s.aktualisiert)}</strong></div><div><span>Unverändert</span><strong id="ki-gleich">${fmtInt.format(s.unveraendert)}</strong></div></div>
-        ${r.beispiele.neu.length ? `<h3 class="d-h"><span>Neu</span></h3><ul class="kg-prev">${r.beispiele.neu.map((x) => `<li><span class="muted">${esc(x.nr)}</span> ${esc(x.firma)}${x.ort ? ` <span class="muted">· ${esc(x.ort)}</span>` : ''}${x.gruppe ? ` <span class="muted">· ${esc(gname(x.gruppe) || 'Gruppe ' + x.gruppe)}</span>` : ''}</li>`).join('')}${s.neu > r.beispiele.neu.length ? `<li class="muted">… und ${fmtInt.format(s.neu - r.beispiele.neu.length)} weitere</li>` : ''}</ul>` : ''}
+        <div class="cmp-stats${r.regel ? ' ki-vier' : ''}"><div><span>Neu</span><strong id="ki-neu">${fmtInt.format(s.neu)}</strong></div><div><span>Aktualisiert</span><strong id="ki-akt">${fmtInt.format(s.aktualisiert)}</strong></div><div><span>Unverändert</span><strong id="ki-gleich">${fmtInt.format(s.unveraendert)}</strong></div>${r.regel ? `<div><span>Werden inaktiv</span><strong id="ki-inaktiv">${fmtInt.format(s.inaktiv + s.neuInaktiv)}</strong></div>` : ''}</div>
+        ${(r.hinweise || []).filter((h) => h.stufe === 'warn').map((h) => `<p class="hint st-warn">${esc(h.text)}</p>`).join('')}
+        ${r.beispiele.neu.length ? `<h3 class="d-h"><span>Neu</span></h3><ul class="kg-prev">${r.beispiele.neu.map((x) => `<li><span class="muted">${esc(x.nr)}</span> ${esc(x.firma)}${x.ort ? ` <span class="muted">· ${esc(x.ort)}</span>` : ''}${x.gruppe ? ` <span class="muted">· ${esc(gname(x.gruppe) || 'Gruppe ' + x.gruppe)}</span>` : ''}${x.aktiv === false ? ' <span class="muted">· inaktiv</span>' : ''}</li>`).join('')}${s.neu > r.beispiele.neu.length ? `<li class="muted">… und ${fmtInt.format(s.neu - r.beispiele.neu.length)} weitere</li>` : ''}</ul>` : ''}
         ${r.beispiele.aktualisiert.length ? `<h3 class="d-h"><span>Aktualisiert</span></h3><ul class="kg-prev">${r.beispiele.aktualisiert.map((x) => `<li><span class="muted">${esc(x.nr)}</span> ${esc(x.firma)} <span class="muted">· ${esc(x.felder.join(', '))}</span></li>`).join('')}${s.aktualisiert > r.beispiele.aktualisiert.length ? `<li class="muted">… und ${fmtInt.format(s.aktualisiert - r.beispiele.aktualisiert.length)} weitere</li>` : ''}</ul>` : ''}
-        <p class="hint">Abgleich über die Kundennummer (bei Kunden ohne Nummer über Firma und PLZ). Bei bestehenden Kunden werden Kundengruppe, Adresse, Land und Telefon übernommen; Firma und E-Mail nur, wenn sie noch leer sind. Zugang, Freischaltungen und Notizen bleiben unverändert. Neue Kunden bekommen keinen Zugang und kein Wochenangebot per E-Mail (dafür ist ihr Einverständnis nötig); ihre Angebote ergeben sich aus der Kundengruppe. Umsätze, Kreditlimit, Konditionen und Vertreter werden nicht übernommen.</p>
+        ${inaktiv.length ? `<h3 class="d-h"><span>Werden inaktiv</span></h3><ul class="kg-prev" id="ki-inaktiv-liste">${inaktiv.map((x) => `<li><span class="muted">${esc(x.nr)}</span> ${esc(x.firma)}${x.zugang ? ' <span class="st-warn">· hat Zugang</span>' : ''}${x.mail ? ' <span class="st-warn">· bekommt Wochenangebot</span>' : ''} <span class="muted">· ${esc(x.grund)}</span></li>`).join('')}${s.inaktiv > inaktiv.length ? `<li class="muted">… und ${fmtInt.format(s.inaktiv - inaktiv.length)} weitere</li>` : ''}</ul>` : ''}
+        ${(r.hinweise || []).filter((h) => h.stufe !== 'warn').map((h) => `<p class="hint">${esc(h.text)}</p>`).join('')}
+        <p class="hint">Abgleich über die Kundennummer (bei Kunden ohne Nummer über Firma und PLZ). Bei bestehenden Kunden werden Kundengruppe, Vertreter, Adresse, Land und Telefon übernommen; Firma und E-Mail nur, wenn sie noch leer sind. Zugang, Freischaltungen und Notizen bleiben unverändert; Kunden, die nicht in der Datei stehen, auch. Neue Kunden bekommen keinen Zugang und kein Wochenangebot per E-Mail (dafür ist ihr Einverständnis nötig); ihre Angebote ergeben sich aus der Kundengruppe.</p>
         ${fremd.length ? `<p class="hint st-warn">Kundengruppe nicht in der Liste (Stammdaten → Kundengruppen), Gruppe bleibt leer: ${esc(fremd.map(([nr, n]) => `${nr} (${n})`).join(', '))}</p>` : ''}
         ${fremdV.length ? `<p class="hint st-warn">Vertreter nicht in der Liste (Stammdaten → Vertreter), Feld bleibt leer: ${esc(fremdV.map(([nr, n]) => `${nr} (${n})`).join(', '))}</p>` : ''}
         ${s.ohneFirma || s.doppelt || s.mailUngueltig || s.nichtAngelegt ? `<p class="hint" id="ki-skip">${[s.ohneFirma ? `${fmtInt.format(s.ohneFirma)} ohne Firma übersprungen` : '', s.doppelt ? `${s.doppelt}× doppelte Kundennummer übersprungen` : '', s.mailUngueltig ? `${s.mailUngueltig}× ungültige E-Mail-Adresse leer gelassen` : '', s.nichtAngelegt ? `${fmtInt.format(s.nichtAngelegt)} neue Kunden nicht angelegt` : ''].filter(Boolean).join(' · ')}</p>` : ''}
@@ -902,6 +970,7 @@
     const a = e.target.dataset.ki;
     if (a === 'stern') { kImp.ohneStern = e.target.checked; kImportPruefen(); }
     if (a === 'anlegen') { kImp.anlegen = e.target.checked; kImportPruefen(); }
+    if (a === 'regel') { kImp.regel = e.target.checked; kImportPruefen(); }
   });
   $('#k-import-body').addEventListener('click', async (e) => {
     if (e.target.closest('[data-close]')) { dlgKI.close(); return; }
@@ -909,9 +978,10 @@
     if (!b) return;
     b.disabled = true;
     try {
-      const r = await api('kunden_import', { body: { rev: kImp.res.rev, rows: kImpRows(), anlegen: kImp.anlegen, quelle: kImp.file.name } });
+      const r = await api('kunden_import', { body: { rev: kImp.res.rev, ...kImpBody(), quelle: kImp.file.name } });
       dlgKI.close();
-      toast(`Kunden übernommen: ${fmtInt.format(r.stat.neu)} neu, ${fmtInt.format(r.stat.aktualisiert)} aktualisiert.`, 5000);
+      const ina = r.stat.inaktiv + r.stat.neuInaktiv;
+      toast(`Kunden übernommen: ${fmtInt.format(r.stat.neu)} neu, ${fmtInt.format(r.stat.aktualisiert)} aktualisiert${ina ? `, ${fmtInt.format(ina)} inaktiv` : ''}${r.stat.reaktiviert ? `, ${fmtInt.format(r.stat.reaktiviert)} wieder aktiv` : ''}.`, 5000);
       kunden = null; renderKundenView();
     } catch (ex) { $('#ki-err').textContent = ex.message; b.disabled = false; if (ex.status === 409) kImportPruefen(); }
   });
@@ -1578,8 +1648,8 @@
   Object.assign(W.importLeser, {
     kunden: {
       async lesen([file]) {
-        const rows = kAusCsv(await file.arrayBuffer());
-        return { daten: { rows }, zeilen: rows.length, fehler: [], hinweise: [] };   // „*“-Kunden: Option und Hinweis vom Server
+        const { rows, wawiFelder } = kAusCsv(await file.arrayBuffer());
+        return { daten: { rows, wawiFelder }, zeilen: rows.length, fehler: [], hinweise: [] };   // „*“-Kunden, Aktiv-Regel: Optionen und Hinweise vom Server
       },
       nachher() { kunden = null; },
     },

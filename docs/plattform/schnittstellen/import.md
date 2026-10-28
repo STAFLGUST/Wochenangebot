@@ -11,7 +11,7 @@ keine Dateiformate und greift auf keine Daten zu; sie ruft nur die Funktionen de
 
 | Importart (`id`) | Datei | Leser (Browser) | Prüfung/Speichern (Server) | Recht | Eigentümer | Bisherige Stelle (bleibt) |
 | --- | --- | --- | --- | --- | --- | --- |
-| `kunden` | CSV Kundendaten-Export | `kAusCsv` (admin-verwaltung.js) | `kunden_import_lauf` | `kunden.bearbeiten` + Passwortbestätigung `kunden_import` | verwaltung | Stammdaten → Kunden, Aktion `kunden_import` |
+| `kunden` | CSV Kundendaten-Export (alle Spalten; weitere als `wawi`, `wawiFelder`) | `kAusCsv` (admin-verwaltung.js) | `kunden_import_lauf` (Optionen `ohneStern`, `anlegen`, `aktivRegel` – 18 Monate ohne Rechnung → inaktiv) | `kunden.bearbeiten` + Passwortbestätigung `kunden_import` | verwaltung | Stammdaten → Kunden, Aktion `kunden_import` |
 | `kundengruppen`, `vkgruppen`, `vertreter` | CSV Listen | `gruppenListe().ausCsv` (admin-verwaltung.js) | `gruppen_speichern` | `stammdaten.bearbeiten` | verwaltung | Stammdaten → …, Aktionen `*_save` |
 | `stammdaten` | CSV Artikelstammdaten-Export | `masterAusCsv` + `masterZusammenfuehren` (admin.js) | `stammdaten_speichern` | `stammdaten.bearbeiten` | verwaltung | Stammdaten → Artikelstammdaten, Aktion `master_save` |
 | `bestand` | WinAB-Bestandsliste .xls/.xlsx | `StockCore` (stock-core.js) über `stockAusDatei` (admin.js) | `bestand_speichern` | `bestand.importieren` | bestand | Bestand, Aktion `stock_import` |
