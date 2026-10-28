@@ -125,7 +125,8 @@ with sync_playwright() as p:
           and a.locator('#dlg-stock-item .lottab th.lot-marke').is_hidden(), passt)
     a.set_viewport_size({'width': 1440, 'height': 950}); a.keyboard.press('Escape')
     a.locator('.stab tr.srow:has(td.s-code:text-is("10601"))').click(); a.wait_for_selector('#dlg-stock-item[open]')
-    check('Pop-up: erwarteter Zugang nennt Marke und Partie', 'Lieferant Ost · Partie 900001' in a.inner_text('#dlg-stock-item'), a.inner_text('#dlg-stock-item')[:400])
+    zt = a.locator('#dlg-stock-item .zutab tbody tr').first.locator('td').all_inner_texts()
+    check('Pop-up: erwarteter Zugang nennt Marke und Partie (Spalten wie bei den Partien)', zt[:2] == ['Lieferant Ost', '900001'], zt)
     a.keyboard.press('Escape')
 
     # ---------- dezente MHD-Farben ----------

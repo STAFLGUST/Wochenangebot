@@ -34,6 +34,13 @@ for bad in (-1, 0, '12', 10000001):
 p = copy.deepcopy(payload); p['incoming'][0]['arrival'] = '2026-02-30'
 check('invalid ETA rejected', A.call('stock_import', p)[0] == 422)
 check('failed import keeps previous state', ohne_marke(A.call('stock')[1]['stock']['incoming']) == payload['incoming'])
+# Erfasste Zugänge mit MHD, Kolli und EK wie die Partien (optional; ungültige Werte entfallen, Pflichtfelder unverändert)
+p = copy.deepcopy(payload); p['incoming'][0].update({'mhd': '2026-11-30', 'kolli': 12, 'ek': 4.5}); p['incoming'][1].update({'mhd': 'bald', 'kolli': 'viele', 'ek': -1})
+check('incoming with MHD, Kolli, EK accepted', A.call('stock_import', p)[0] == 200)
+zs = A.call('stock')[1]['stock']['incoming']
+check('… stored like lots; invalid optional values dropped, no keys for missing values',
+      (zs[0]['mhd'], zs[0]['kolli'], zs[0]['ek']) == ('2026-11-30', 12, 4.5) and not {'mhd', 'kolli', 'ek'} & set(zs[1]) and not {'mhd', 'kolli', 'ek'} & set(zs[2]), zs)
+check('restore plain fixture', A.call('stock_import', payload)[0] == 200)
 check('anonymous cannot see stock or ETA', Client('198.51.100.4').call('stock')[0] == 401)
 public = json.dumps(Client('198.51.100.4').call('offer')[1])
 check('public offer contains no incoming/ETA', 'incoming' not in public and 'TEST-A' not in public and 'arrival' not in public)
@@ -41,6 +48,10 @@ assert A.call('user_save', {'id':'','name':'Test Leserin','username':'stockreade
 V = Client('198.51.100.5'); assert V.call('login', {'username':'stockreader','password':'Leserin-Zugang-1'})[0] == 200
 check('history permission respected in stock response', V.call('stock')[1]['prices'] == {'allowed':False})
 check('viewer cannot import incoming', V.call('stock_import', payload)[0] == 403)
+check('restore with EK', A.call('stock_import', {**payload, 'incoming': [{**payload['incoming'][0], 'ek': 4.5}] + payload['incoming'][1:]})[0] == 200)
+check('viewer without bestand.einkaufspreise: no EK in incoming', all('ek' not in z for z in V.call('stock')[1]['stock']['incoming'])
+      and A.call('stock')[1]['stock']['incoming'][0].get('ek') == 4.5)
+check('restore plain fixture again', A.call('stock_import', payload)[0] == 200)
 assert A.call('user_save', {'id':'','name':'Test Ohne Bestand','username':'nostock','role':'viewer','active':True,'password':'Leserin-Zugang-1','mustChange':False,'deny':['bestand.sehen']})[0] == 200
 N = Client('198.51.100.6'); assert N.call('login', {'username':'nostock','password':'Leserin-Zugang-1'})[0] == 200
 check('stock permission required', N.call('stock')[0] == 403)
@@ -73,9 +84,10 @@ with sync_playwright() as pw:
     check('missing price is dash', row('900004').locator('.s-prev').inner_text() == '—' and row('900005').locator('.s-vk').inner_text() == '—')
     check('deliveries collapsed to button', row('900001').locator('.s-incoming button').inner_text() == 'Zugänge (2)' and page.locator('.stab .st-incoming').count() == 0)
     row('900001').locator('[data-incoming]').click(); page.wait_for_selector('#dlg-stock-item[open]')
-    check('arrival button opens focused dialog', page.locator('#sa-title').inner_text() == 'Erwartete Zugänge' and page.locator('#dlg-stock-item .st-incoming li').count() == 2 and '22.10.2026' in page.locator('#dlg-stock-item').inner_text() and '30,00 kg' in page.locator('#dlg-stock-item').inner_text() and page.locator('#dlg-stock-item .lottab').count() == 0)
-    m = page.locator('#dlg-stock-item .st-incoming small').first
-    check('dialog: brand and lot bold and readable', 'Partie TEST-A' in m.inner_text() and m.evaluate("e => +getComputedStyle(e).fontWeight >= 600 && parseFloat(getComputedStyle(e).fontSize) >= 13"))
+    check('arrival button opens focused dialog', page.locator('#sa-title').inner_text() == 'Erwartete Zugänge' and page.locator('#dlg-stock-item .zutab tbody tr').count() == 2 and '22.10.2026' in page.locator('#dlg-stock-item').inner_text() and '30,00 kg' in page.locator('#dlg-stock-item').inner_text() and page.locator('#dlg-stock-item .lottab').count() == 0)
+    zk = page.locator('#dlg-stock-item .zutab thead th').all_inner_texts()
+    check('dialog: table like the stored lots (Partie, ETA, MHD, Kolli, Kg netto), lot TEST-A',
+          [x.upper() for x in zk][:5] == ['PARTIE', 'ETA', 'MHD', 'KOLLI', 'KG NETTO'] and page.locator('#dlg-stock-item .zutab tbody tr').first.locator('td').first.inner_text() == 'TEST-A', zk)
     page.screenshot(path=os.path.join(SH, 'stock-incoming-dialog.png'))
     page.keyboard.press('Escape')
     row('900005').locator('[data-incoming]').focus(); page.keyboard.press('Enter'); page.wait_for_selector('#dlg-stock-item[open]')
@@ -100,7 +112,7 @@ with sync_playwright() as pw:
     page.screenshot(path=os.path.join(SH, 'stock-incoming-mobile.png'), animations='disabled')
     page.keyboard.press('Escape')
     row('900001').locator('.s-name').click(); page.wait_for_selector('#dlg-stock-item[open]')
-    check('detail shows both deliveries', page.locator('#dlg-stock-item .st-incoming li').count() == 2)
+    check('detail shows both deliveries', page.locator('#dlg-stock-item .zutab tbody tr').count() == 2)
     page.keyboard.press('Escape')
     # alle Zugänge überfällig: späteste ETA, als überschritten markiert
     spaet = browser.new_page(viewport={'width':1440,'height':900}); spaet.clock.set_fixed_time('2026-10-30T09:00:00+01:00')

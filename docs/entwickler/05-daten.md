@@ -314,11 +314,13 @@ nicht), GTIN 8–14 Ziffern.
 {"date": "2026-01-05", "source": "bestand-test.xlsx", "importedAt": "…", "importedBy": "…",
  "articles": [{"code": "1001", "name": "Testartikel", "kg": 120.5, "mhd": "2026-02-01", "mhdKg": 40.0,
                "lots": [{"lot": "P-1", "marke": "", "arrival": "2026-01-02", "mhd": "2026-02-01", "kolli": 4, "kg": 40.0, "ek": 8.25}]}],
- "incoming": [{"code": "1002", "name": "Testartikel 2", "lot": "", "marke": "", "arrival": "2026-01-09", "kg": 300.0}]}
+ "incoming": [{"code": "1002", "name": "Testartikel 2", "lot": "", "marke": "", "arrival": "2026-01-09", "kg": 300.0,
+               "mhd?": "2026-02-20", "kolli?": 12, "ek?": 7.9}]}
 ```
 
 `ek` (Einkaufspreis €/kg) geht nur an Nutzer mit `bestand.einkaufspreise` (`stock_ohne_ek`). Nur Artikel mit Bestand
-über 0 kg werden gespeichert. Wochenpreise und Zugänge: [bestand-wochenpreise.md](../bestand-wochenpreise.md).
+über 0 kg werden gespeichert. Erwartete Zugänge (Status „erfasst“) tragen seit 28.10.2026 wie die Partien MHD, Kolli und EK –
+optional, nur wenn in der Liste vorhanden (ältere Stände ohne diese Felder bleiben gültig, GR-006). Wochenpreise und Zugänge: [bestand-wochenpreise.md](../bestand-wochenpreise.md).
 
 ### HR (`module/hr/urlaub.php`)
 

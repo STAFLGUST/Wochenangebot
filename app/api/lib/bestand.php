@@ -63,8 +63,17 @@ function clean_incoming($rows): array
         if ($kg <= 0) throw new InvalidArgumentException('Zugangsmenge muss größer als null sein.');
         $arrival = clean_date($row['arrival'] ?? null);
         if (isset($row['arrival']) && $arrival === null) throw new InvalidArgumentException('Ungültiges Ankunftsdatum im Zugang.');
-        $out[] = ['code' => $code, 'name' => s($row['name'] ?? '', 200) ?: '(ohne Bezeichnung)',
-                  'lot' => s($row['lot'] ?? '', 20) ?? '', 'marke' => s($row['marke'] ?? '', 40) ?? '', 'arrival' => $arrival, 'kg' => $kg];
+        $z = ['code' => $code, 'name' => s($row['name'] ?? '', 200) ?: '(ohne Bezeichnung)',
+              'lot' => s($row['lot'] ?? '', 20) ?? '', 'marke' => s($row['marke'] ?? '', 40) ?? '', 'arrival' => $arrival, 'kg' => $kg];
+        /* Wie bei den eingelagerten Partien (optional, nur wenn in der Liste vorhanden): MHD, Kolli, EK-Preis € je kg
+           (EK nur für Berechtigte ausgeliefert, stock_ohne_ek) */
+        $mhd = clean_date($row['mhd'] ?? null);
+        if ($mhd !== null) $z['mhd'] = $mhd;
+        $kolli = $row['kolli'] ?? null;
+        if ((is_int($kolli) || is_float($kolli)) && abs($kolli) < 1000000) $z['kolli'] = round((float)$kolli, 2);
+        $ek = $row['ek'] ?? null;
+        if ((is_int($ek) || is_float($ek)) && $ek >= 0 && $ek < 100000) $z['ek'] = round((float)$ek, 3);
+        $out[] = $z;
     }
     return $out;
 }
@@ -106,6 +115,7 @@ function stock_ohne_ek(?array $st): ?array
 {
     if (!$st) return $st;
     foreach ($st['articles'] ?? [] as $i => $a) foreach ($a['lots'] ?? [] as $j => $l) unset($st['articles'][$i]['lots'][$j]['ek']);
+    foreach ($st['incoming'] ?? [] as $i => $z) unset($st['incoming'][$i]['ek']);
     return $st;
 }
 

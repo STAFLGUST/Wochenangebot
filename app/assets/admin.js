@@ -3317,30 +3317,36 @@
     const a = stockItems()[idx];
     if (!a) return;
     $('#stock-item-body').innerHTML = `<div class="dlg-head"><div><h2 id="sa-title">Erwartete Zugänge</h2><p>${esc(a.code)} · ${esc(a.name)}</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body"><p class="hint">Status „erfasst“ · Stand ${stock.date ? esc(dmy(stock.date)) : 'unbekannt'} · noch nicht im eingelagerten Bestand enthalten.</p>${incomingHTML(a)}</div>
+      <div class="dlg-body"><p class="hint">Status „erfasst“ · Stand ${stock.date ? esc(dmy(stock.date)) : 'unbekannt'} · noch nicht im eingelagerten Bestand enthalten.</p>${lotTableHTML(a.incoming, true)}</div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`;
     dlgSA.showModal();
   }
   /* Partien eines Artikels mit Summe (Kolli, Kg netto) und – mit Recht „bestand.einkaufspreise“ – EK-Preis je Partie.
      In der Summenzeile steht beim EK der nach kg gewichtete Durchschnitt der Partien mit Preis. */
   const eur = (v) => fmtKg.format(Math.round(v * 100) / 100) + ' €';
-  function lotTableHTML(lots) {
+  /* zugang = erwartete Zugänge (Status „erfasst“): dieselbe Tabelle, Datumsspalte „ETA“ (auch am Handy sichtbar),
+     fehlendes MHD als „—“ (meist noch nicht bekannt), Klasse zutab statt lottab */
+  function lotTableHTML(lots, zugang = false, marke = null) {
     const mitEk = may('bestand.einkaufspreise');
+    const dCls = zugang ? 'lot-eta' : 'lot-ank';
+    const ohneMhd = zugang ? '<span class="muted">—</span>' : '<span class="muted">ohne MHD</span>';
+    const datum = (l) => (l.arrival ? esc(dmy(l.arrival)) : zugang ? '<span class="muted">ETA unbekannt</span>' : '—');
     const kolli = lots.filter((l) => Number.isFinite(l.kolli));
     const ekLots = lots.filter((l) => Number.isFinite(l.ek) && Number.isFinite(l.kg) && l.kg > 0);
     const ekKg = ekLots.reduce((t, l) => t + Math.round(l.kg * 1000), 0);
     const ekAvg = ekKg ? ekLots.reduce((t, l) => t + l.ek * Math.round(l.kg * 1000), 0) / ekKg : null;
-    const mitMarke = lots.some((l) => l.marke);   // Bestand vor der Marken-Spalte: Spalte weglassen
-    const row = (l) => `<tr>${mitMarke ? `<td class="lot-marke">${l.marke ? esc(l.marke) : '<span class="muted">—</span>'}</td>` : ''}<td class="ch-code">${esc(l.lot || '—')}${mitMarke && l.marke ? `<small class="lot-marke-sub">${esc(l.marke)}</small>` : ''}</td><td class="lot-ank">${l.arrival ? esc(dmy(l.arrival)) : '—'}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : '<span class="muted">ohne MHD</span>'}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
-    return `<div class="lot-scroll"><table class="etab lottab"><thead><tr>${mitMarke ? '<th class="lot-marke">Marke</th>' : ''}<th>Partie</th><th class="lot-ank">Ankunft</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
+    const mitMarke = marke ?? lots.some((l) => l.marke);   // Bestand vor der Marken-Spalte: Spalte weglassen; im Detail für beide Tabellen gleich
+    const row = (l) => `<tr>${mitMarke ? `<td class="lot-marke">${l.marke ? esc(l.marke) : '<span class="muted">—</span>'}</td>` : ''}<td class="ch-code">${esc(l.lot || '—')}${mitMarke && l.marke ? `<small class="lot-marke-sub">${esc(l.marke)}</small>` : ''}</td><td class="${dCls}">${datum(l)}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : ohneMhd}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
+    return `<div class="lot-scroll"><table class="etab ${zugang ? 'zutab' : 'lottab'}"><thead><tr>${mitMarke ? '<th class="lot-marke">Marke</th>' : ''}<th>Partie</th><th class="${dCls}">${zugang ? 'ETA' : 'Ankunft'}</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
           ${lots.map(row).join('')}
-        </tbody>${lots.length ? `<tfoot><tr class="lot-sum">${mitMarke ? '<td class="lot-marke"></td>' : ''}<td>Summe</td><td class="lot-ank"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
-        ${mitEk && lots.length && !ekLots.length ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}`;
+        </tbody>${lots.length ? `<tfoot><tr class="lot-sum">${mitMarke ? '<td class="lot-marke"></td>' : ''}<td>Summe</td><td class="${dCls}"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
+        ${mitEk && lots.length && !ekLots.length && !zugang ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}`;
   }
   function openStockItem(idx) {
     const a = stockItems()[idx];
     if (!a) return;
     const gname = (id) => (model.groups.find((g) => g.id === id) || {}).name || '';
+    const marke = a.lots.some((l) => l.marke) || a.incoming.some((d) => d.marke);   // gleiche Spalten in beiden Tabellen
     const offerTxt = a.offer.length
       ? a.offer.map((o) => `${esc(priceShort(o.price))}${o.price.label ? ' (' + esc(o.price.label) + ')' : ''} <span class="muted">· ${esc(gname(o.groupId))}</span>`).join('<br>')
       : '<span class="muted">nicht im aktuellen Angebot</span>';
@@ -3356,9 +3362,10 @@
           <div><span>Vorwoche ${esc(stockWeekLabel('previous'))}</span><strong>${esc(stockPriceText(a.prevPrice))}</strong></div>
           <div><span>Erfasster Bestand</span><strong>${esc(kgText(a.incomingKg))}</strong></div><div><span>Gesamt verfügbar</span><strong>${esc(kgText(a.totalKg))}</strong></div>
         </div>
-        <h3 class="d-h"><span>Erwartete Zugänge (Status „erfasst“)</span></h3>${incomingHTML(a)}
+        <h3 class="d-h"><span>Erwartete Zugänge (Status „erfasst“)</span><span>${plural(a.incoming.length, 'Lieferung', 'Lieferungen')}</span></h3>
+        ${a.incoming.length ? lotTableHTML(a.incoming, true, marke) : '<p class="muted" style="margin:0">keine erwarteten Zugänge</p>'}
         <h3 class="d-h"><span>Eingelagerte Partien</span><span>${plural(a.lots.length, 'Partie', 'Partien')}</span></h3>
-        ${lotTableHTML(a.lots)}
+        ${lotTableHTML(a.lots, false, marke)}
         <h3 class="d-h"><span>Im Angebot (Entwurf KW ${esc(model.meta.week || '?')})</span></h3>
         <p style="margin:0">${offerTxt}</p>
       </div>`;

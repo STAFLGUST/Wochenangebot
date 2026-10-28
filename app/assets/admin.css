@@ -418,15 +418,21 @@ dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margi
 .stab tr.wg-sum td:first-child, .stab tr.st-total td:first-child { text-align: left; }
 .stab tr.wg-gap td { height: 14px; padding: 0; border: 0; background: var(--bg); }
 .stab tr.st-total td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--text-2); border-bottom: 0; background: var(--surface-3); }
-.lottab td { padding: 6px 8px; } .lottab th { padding: 8px; }
-.lottab th.num, .lottab td.num { text-align: right; white-space: nowrap; }   /* Zahlenspalten rechtsbündig */
-.lottab tfoot td { padding: 8px; border-top: 1.5px solid var(--text); font-weight: 650; white-space: nowrap; }
-.lottab .lot-ek { white-space: nowrap; }
-.lottab .lot-marke { max-width: 160px; white-space: normal; overflow-wrap: break-word; }
+.lottab td, .zutab td { padding: 6px 8px; } .lottab th, .zutab th { padding: 8px; }
+.lottab th.num, .lottab td.num, .zutab th.num, .zutab td.num { text-align: right; white-space: nowrap; }   /* Zahlenspalten rechtsbündig */
+.lottab tfoot td, .zutab tfoot td { padding: 8px; border-top: 1.5px solid var(--text); font-weight: 650; white-space: nowrap; }
+.lottab .lot-ek, .zutab .lot-ek { white-space: nowrap; }
+.lottab .lot-marke, .zutab .lot-marke { max-width: 160px; white-space: normal; overflow-wrap: break-word; }
 .lot-marke-sub { display: none; }   /* Handy: Marke klein unter der Partienummer statt eigener Spalte */
-@media (max-width: 560px) { .lottab .lot-marke { display: none; } .lottab .lot-marke-sub { display: block; font-size: 11.5px; color: var(--muted); white-space: normal; line-height: 1.25; } }
+@media (max-width: 560px) { .lottab .lot-marke, .zutab .lot-marke { display: none; } .lottab .lot-marke-sub, .zutab .lot-marke-sub { display: block; font-size: 11.5px; color: var(--muted); white-space: normal; line-height: 1.25; } }
 .lot-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; min-width: 0; }
-@media (max-width: 560px) { .lottab td, .lottab th, .lottab tfoot td { padding: 6px 4px; font-size: 13px; } .lottab td { white-space: nowrap; } .lottab .lot-ank { display: none; } }
+@media (max-width: 560px) { .lottab td, .lottab th, .lottab tfoot td, .zutab td, .zutab th, .zutab tfoot td { padding: 6px 4px; font-size: 13px; } .lottab td, .zutab td { white-space: nowrap; } .lottab .lot-ank { display: none; } }
+/* Bestand · Artikeldetail: Abschnittstitel (Erwartete Zugänge, Eingelagerte Partien, Im Angebot) deutlich sichtbar */
+#dlg-stock-item .d-h { margin: 26px 0 10px; padding-bottom: 7px; border-bottom: 1.5px solid var(--line-strong, var(--line)); font-size: 13px; font-weight: 750; color: var(--text); }
+#dlg-stock-item .d-h { gap: 12px; }
+#dlg-stock-item .d-h > span + span { font-size: 11.5px; font-weight: 650; color: var(--muted); white-space: nowrap; }
+/* Zugänge und Partien untereinander mit denselben Spaltenbreiten (Desktop; am Handy fehlt bei den Partien die Ankunft) */
+@media (min-width: 561px) { #dlg-stock-item .lottab, #dlg-stock-item .zutab { table-layout: fixed; width: 100%; } }
 .item-stock { font-size: 13.5px; }
 @media (max-width: 700px) {
   .stab thead { display: none; }
