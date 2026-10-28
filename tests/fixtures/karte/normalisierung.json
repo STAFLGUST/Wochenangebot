@@ -1,0 +1,30 @@
+{
+  "zweck": "Gemeinsame Prüffälle der Schreibweisen-Regeln in deploy/karte/adressen.py und app/api/lib/adressen.php (tests/unit/test_adressen.py)",
+  "strasse": [
+    ["Musterstraße", "musterstrasse"],
+    ["Musterstrasse", "musterstrasse"],
+    ["Musterstr.", "musterstrasse"],
+    ["Musterstr", "musterstrasse"],
+    ["MUSTER-STRASSE", "musterstrasse"],
+    ["Max-Planck-Str.", "maxplanckstrasse"],
+    ["Straße des 17. Juni", "strassedes17juni"],
+    ["Str. des 17. Juni", "strassedes17juni"],
+    ["Am Strand", "amstrand"],
+    ["Große Bäckerstraße", "grossebaeckerstrasse"],
+    ["Rue de l'Église", "ruedeleglise"],
+    ["  Beispielweg ", "beispielweg"]
+  ],
+  "text": [
+    ["Hamburg", "hamburg"],
+    ["Frankfurt am Main", "frankfurtammain"],
+    ["Mülheim an der Ruhr", "muelheimanderruhr"],
+    ["Halle (Saale)", "hallesaale"]
+  ],
+  "nr": [
+    ["12", "12"],
+    ["12 A", "12a"],
+    ["12a", "12a"],
+    ["3-5", "3-5"],
+    ["7 / 1", "7/1"]
+  ]
+}

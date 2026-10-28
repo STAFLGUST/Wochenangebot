@@ -113,7 +113,9 @@ SUITES['rollen'] = (8790, 'data-seed', True)   # Rollen und Rechte, Modulzugang 
 SUITES['rollen_host'] = (8790, 'data-seed', True, {'WA_OBERFLAECHE': 'bestand.intern'})   # Modulzugang je Host (wie bestand.dashboard-stafl.de)
 SUITES['einheit'] = (8790, 'data-seed', True)   # einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen
 SUITES['stilllegung'] = (8790, 'data-seed', True, {'WA_EIGENE_ANMELDUNG': 'aus'})   # alter Eingabebereich angebot-stafl.de/admin/ stillgelegt
-SUITES['crm'] = (8790, 'data-seed', True)   # CRM · Vertrieb (app/module/crm/, Oberfläche crm.intern)
+# Adressverzeichnis der CRM-Karte (lib/adressen.php) aus erfundenen Testadressen, vor dem Lauf erzeugt (adressen_test)
+ADRESSEN_TEST = os.path.join(WORK, 'adressen-test.sqlite')
+SUITES['crm'] = (8790, 'data-seed', True, {'WA_ADRESSEN': ADRESSEN_TEST})   # CRM · Vertrieb (app/module/crm/, Oberfläche crm.intern)
 SUITES['marketing'] = (8790, 'data-seed', True)   # Marketing · Redaktionsplan (app/module/marketing/, Oberfläche marketing.intern)
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
@@ -331,6 +333,12 @@ def run_in(name, slot):
         wait_port(port, up=False)
 
 
+def adressen_test():
+    """Adressverzeichnis der Tests aus tests/fixtures/karte/adressen.json (deploy/karte/adressen.py, ohne pyosmium)."""
+    subprocess.run([sys.executable, os.path.join(REPO, 'deploy', 'karte', 'adressen.py'), '--json',
+                    os.path.join(FIX, 'karte', 'adressen.json'), ADRESSEN_TEST], check=True, capture_output=True)
+
+
 def main():
     try:
         teil = teil_lesen(os.environ.get('WA_TEIL', ''))
@@ -349,6 +357,7 @@ def main():
     if unknown: sys.exit('Unbekannte Testgruppe: ' + ', '.join(unknown))
     if not names: sys.exit('Keine Testgruppe ausgewählt')
     os.makedirs(WORK, exist_ok=True)
+    adressen_test()
     jobs = max(1, min(int(os.environ.get('WA_JOBS') or min(4, max(2, os.cpu_count() or 2))), len(names)))
     for i in range(jobs): SLOTS.put(i)
     t0 = time.time()

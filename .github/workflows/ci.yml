@@ -120,6 +120,11 @@ jobs:
           node tests/unit/stock_prices.test.js
       - name: Unit-Test gemeinsames Bearbeiten (Abgleich)
         run: node tests/unit/merge.test.js
+      - name: Adressverzeichnis der CRM-Karte (Aufbau mit pyosmium, Nachschlagen in PHP, gleiche Schreibweisen-Regeln)
+        run: |
+          python3 -m venv /tmp/adressen
+          /tmp/adressen/bin/pip install -q --no-deps --only-binary=:all: --require-hashes -r deploy/karte/requirements.txt
+          /tmp/adressen/bin/python tests/unit/test_adressen.py
       - name: Unit-Tests CI-Werkzeuge (Aufteilung der Testgruppen, Nachweis nach dem Merge, Paketvorrat, Entwickler-Doku)
         run: |
           python3 tests/unit/test_run_e2e_teile.py
@@ -156,7 +161,9 @@ jobs:
           echo "${TRIVY_SHA256}  /tmp/tv.tgz" | sha256sum -c -
           tar xzf /tmp/tv.tgz -C /tmp trivy
       - name: Python-Testabhängigkeiten auf bekannte Lücken prüfen
-        run: /tmp/trivy fs --scanners vuln --exit-code 1 --severity HIGH,CRITICAL tests/requirements.txt
+        run: |
+          /tmp/trivy fs --scanners vuln --exit-code 1 --severity HIGH,CRITICAL tests/requirements.txt
+          /tmp/trivy fs --scanners vuln --exit-code 1 --severity HIGH,CRITICAL deploy/karte/requirements.txt   # pyosmium (Adressverzeichnis)
       - name: Container-Images auf bekannte Lücken prüfen (Bericht)
         # Kundenseite und Caddy (docker-compose.yml) sowie Keycloak und PostgreSQL der zentralen Anmeldung; das selbst gebaute
         # Anwendungs-Image (stafl-app) prüft der Auftrag „image“ (kritisch blockiert)
@@ -224,6 +231,8 @@ jobs:
         run: sh tests/deploy/test_testumgebung.sh
       - name: Detailkarte laden (deploy/karte-laden.sh, mit Platzhaltern für docker/curl)
         run: sh tests/deploy/test_karte_laden.sh
+      - name: Adressverzeichnis laden (deploy/adressen-laden.sh, mit Platzhaltern für docker/curl)
+        run: sh tests/deploy/test_adressen_laden.sh
       - name: Prüfungen des Release-Laufs (mit Platzhalter für gh)
         run: sh tests/deploy/test_release_pruefen.sh
       - name: Einrichtung der zentralen Anmeldung (Geheimnisse, Realm-Import)

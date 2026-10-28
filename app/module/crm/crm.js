@@ -322,7 +322,7 @@
   const py = (lat) => { const l = Math.max(-85, Math.min(85, lat)) * Math.PI / 180; return (180 - Math.log(Math.tan(Math.PI / 4 + l / 2)) * 180 / Math.PI) * 100; };
   const STAEDTE = [['Hamburg', 53.55, 10.0], ['Berlin', 52.52, 13.405], ['München', 48.137, 11.575], ['Köln', 50.937, 6.96], ['Frankfurt', 50.11, 8.682],
     ['Hannover', 52.375, 9.732], ['Bremen', 53.079, 8.802], ['Kiel', 54.323, 10.123], ['Leipzig', 51.34, 12.375], ['Stuttgart', 48.776, 9.177], ['Nürnberg', 49.452, 11.077], ['Dortmund', 51.514, 7.468]];
-  let geo = null, geoLaden = null, vb = null, voll = null, kmPunkte = [], detail = null;
+  let geo = null, geoLaden = null, vb = null, voll = null, kmPunkte = [], detail = null, adr = null, adrZeit = 0;
   function ladeGeo() {
     if (geo) return Promise.resolve(geo);
     if (!geoLaden) {
@@ -332,6 +332,16 @@
     }
     return geoLaden;
   }
+  /* Genaue Lage der Anschriften (crm_karte: Adressverzeichnis auf dem Server, OpenStreetMap) – höchstens einmal pro Minute
+     neu; fehlt das Verzeichnis oder schlägt der Abruf fehl, bleibt es beim Mittelpunkt der Postleitzahl */
+  async function ladeAdressen() {
+    if (adr && Date.now() - adrZeit < 60000) return adr;
+    try {
+      const r = await api('crm_karte');
+      if (r.status === 200 && r.data.ok) { adr = { punkte: r.data.punkte || {}, stand: r.data.stand }; adrZeit = Date.now(); }
+    } catch (e) { /* ohne genaue Lage weiter */ }
+    return adr || { punkte: {}, stand: null };
+  }
   /* PLZ eines Kunden für die Karte: nur Deutschland (5-stellig; 4-stellig ohne Land = führende 0 fehlt) */
   function kartenPlz(k) {
     const land = String(k.land || '').trim().toLowerCase(), p = String(k.plz || '').replace(/\D/g, '');
@@ -340,16 +350,30 @@
     if (p.length === 4 && !land) return '0' + p;
     return '';
   }
-  function kartenPunkte() {
+  /* Punkte der Karte: genaue Anschrift (Hausnummer bzw. Straße, gleiche Lage = ein Punkt), sonst Mittelpunkt der PLZ.
+     id: „a<Breite>,<Länge>“ bzw. die PLZ; genau: 'haus' | 'strasse' | 'plz' */
+  function kartenPunkte(lagen) {
     const m = new Map(); let ohne = 0;
+    const zahl = { haus: 0, strasse: 0, plz: 0 };
     for (const k of S.d.kunden) {
       if ((k.aktiv && !S.karte.ja) || (!k.aktiv && !S.karte.nein)) continue;
-      const p = kartenPlz(k), c = p && geo.plz[p];
-      if (!c) { ohne++; continue; }
-      if (!m.has(p)) m.set(p, { plz: p, lat: c[0] / 1000, lon: c[1] / 1000, x: px(c[1] / 1000), y: py(c[0] / 1000), liste: [] });
-      m.get(p).liste.push(k);
+      const a = lagen[k.key];
+      let id, lat, lon, genau;
+      if (Array.isArray(a) && isFinite(a[0]) && isFinite(a[1])) {
+        lat = +a[0]; lon = +a[1]; genau = a[2] === 'h' ? 'haus' : 'strasse'; id = 'a' + lat.toFixed(5) + ',' + lon.toFixed(5);
+      } else {
+        const p = kartenPlz(k), c = p && geo.plz[p];
+        if (!c) { ohne++; continue; }
+        id = p; lat = c[0] / 1000; lon = c[1] / 1000; genau = 'plz';
+      }
+      zahl[genau]++;
+      if (!m.has(id)) {
+        const titel = genau === 'plz' ? `${id} ${k.ort}` : [k.strasse, [k.plz, k.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+        m.set(id, { plz: id, lat, lon, x: px(lon), y: py(lat), genau, titel, liste: [] });
+      }
+      m.get(id).liste.push(k);
     }
-    return { punkte: [...m.values()].sort((a, b) => b.liste.length - a.liste.length), ohne };
+    return { punkte: [...m.values()].sort((a, b) => b.liste.length - a.liste.length), ohne, zahl };
   }
   function seitenVerhaeltnis(b) {
     const svg = $('#km-svg'); const r = svg && svg.clientWidth > 0 && svg.clientHeight > 0 ? svg.clientWidth / svg.clientHeight : 1.4;
@@ -360,16 +384,17 @@
   async function karte() {
     const host = $('#tab-karte');
     if (!geo) host.innerHTML = '<div class="crm-titel"><h1>Karte</h1><p>Karte wird geladen …</p></div>';
-    try { await ladeGeo(); } catch (e) { host.innerHTML = `<p class="crm-fehler">${esc(e.message)}</p>`; return; }
+    let lagen;
+    try { [, lagen] = await Promise.all([ladeGeo(), ladeAdressen()]); } catch (e) { host.innerHTML = `<p class="crm-fehler">${esc(e.message)}</p>`; return; }
     if (S.tab !== 'karte') return;
-    const { punkte, ohne } = kartenPunkte();
+    const { punkte, ohne, zahl } = kartenPunkte(lagen.punkte);
     // Kartenausschnitt der Detailkarte beim Neuzeichnen (z. B. Filter aktiv/inaktiv) behalten
     const kamera = detail ? { center: detail.map.getCenter(), zoom: detail.map.getZoom() } : null;
     if (detail) { detail.entfernen(); detail = null; }
     kmPunkte = punkte;
     const n = punkte.reduce((s, p) => s + p.liste.length, 0);
     host.innerHTML = `
-      <div class="crm-titel"><h1>Kunden auf der Karte</h1><p>${n} Kunden an ${punkte.length} Postleitzahlen${ohne ? ` · ${ohne} ohne Kartenpunkt (Ausland oder PLZ fehlt)` : ''}</p></div>
+      <div class="crm-titel"><h1>Kunden auf der Karte</h1><p>${n} Kunden an ${punkte.length} ${zahl.haus + zahl.strasse ? 'Orten' : 'Postleitzahlen'}${ohne ? ` · ${ohne} ohne Kartenpunkt (Ausland oder PLZ fehlt)` : ''}</p></div>
       <div class="crm-leiste"><label class="crm-check"><input type="checkbox" id="km-ja"${S.karte.ja ? ' checked' : ''}> aktive Kunden</label><label class="crm-check"><input type="checkbox" id="km-nein"${S.karte.nein ? ' checked' : ''}> inaktive Kunden</label></div>
       <section class="crm-karte-flaeche crm-glas" aria-label="Karte der Kunden">
         <svg id="km-svg" role="img" aria-label="Karte: ${punkte.length} Orte mit Kunden"><g id="km-land">${geo.karte.laender.map((d) => `<path d="${d}"/>`).join('')}</g><g id="km-ref"></g><g id="km-pts"></g></svg>
@@ -380,10 +405,10 @@
         </div>
         <div class="crm-pop" id="km-pop" hidden></div>
       </section>
-      <p class="crm-klein" style="margin-top:10px">Punkte sind Mittelpunkte der Postleitzahl, keine Hausadressen. Karte: Natural Earth; Postleitzahlen: WZB plz_geocoord (Apache 2.0).</p>`;
+      <p class="crm-klein" id="km-fuss" style="margin-top:10px">${kartenGenauigkeit(zahl, lagen.stand)} Karte: Natural Earth; Postleitzahlen: WZB plz_geocoord (Apache 2.0).</p>`;
     $('#km-pts').innerHTML = punkte.map((p) => {
       const aus = p.liste.every((k) => !k.aktiv);
-      return `<g class="pt${aus ? ' aus' : ''}" data-plz="${p.plz}" tabindex="0" role="button" aria-label="${esc(p.plz)} ${esc(p.liste[0].ort)}: ${p.liste.length} Kunden"><title>${esc(p.plz)} ${esc(p.liste[0].ort)} – ${esc(p.liste.slice(0, 4).map((k) => k.firma).join(', '))}${p.liste.length > 4 ? ' …' : ''}</title><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" data-n="${p.liste.length}"/>${p.liste.length > 1 ? `<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${p.liste.length > 99 ? '99+' : p.liste.length}</text>` : ''}</g>`;
+      return `<g class="pt${aus ? ' aus' : ''}" data-plz="${esc(p.plz)}" tabindex="0" role="button" aria-label="${esc(p.titel)}: ${p.liste.length} Kunden"><title>${esc(p.titel)} – ${esc(p.liste.slice(0, 4).map((k) => k.firma).join(', '))}${p.liste.length > 4 ? ' …' : ''}</title><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" data-n="${p.liste.length}"/>${p.liste.length > 1 ? `<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}">${p.liste.length > 99 ? '99+' : p.liste.length}</text>` : ''}</g>`;
     }).join('');
     $('#km-pts')._punkte = punkte;
     if (await detailkarteZeigen(punkte, kamera)) return;
@@ -414,9 +439,18 @@
     } catch (e) { div.innerHTML = `<p class="crm-fehler">Karte nicht geladen: ${esc(e.message)}</p>`; return true; }
     if (!div.isConnected) { detail.entfernen(); detail = null; return true; }   // Ansicht inzwischen gewechselt
     if (kamera) detail.map.jumpTo(kamera); else detail.passend();
-    const fuss = $('#tab-karte .crm-klein');
-    if (fuss) fuss.textContent = 'Punkte sind Mittelpunkte der Postleitzahl, keine Hausadressen. Karte: © OpenStreetMap-Mitwirkende, Protomaps; Postleitzahlen: WZB plz_geocoord (Apache 2.0).';
+    const fuss = $('#km-fuss');
+    if (fuss) fuss.textContent = fuss.textContent.replace('Karte: Natural Earth;', 'Karte: © OpenStreetMap-Mitwirkende, Protomaps;');
     return true;
+  }
+  /* Hinweis unter der Karte: wie genau die Punkte liegen */
+  function kartenGenauigkeit(zahl, stand) {
+    if (!stand) return 'Punkte sind Mittelpunkte der Postleitzahl, keine Hausadressen.';
+    const teile = [];
+    if (zahl.haus) teile.push(`${zahl.haus} auf Hausnummer genau`);
+    if (zahl.strasse) teile.push(`${zahl.strasse} an der Straße (Hausnummer nicht gefunden)`);
+    if (zahl.plz) teile.push(`${zahl.plz} am Mittelpunkt der Postleitzahl`);
+    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(stand.erzeugt || '–')}).`;
   }
   function kartenPopZu() {
     const pop = $('#km-pop'); if (pop) pop.hidden = true;
@@ -448,7 +482,8 @@
     for (const g of $$('#km-pts .pt')) g.classList.toggle('sel', g.dataset.plz === plz);
     if (detail) detail.markiere(plz);
     const pop = $('#km-pop');
-    pop.innerHTML = `<h3><span>${esc(p.plz)} ${esc(p.liste[0].ort)}</span><button type="button" class="crm-rund klein" data-km="zu" aria-label="Schließen">${icon('x')}</button></h3>
+    const genau = p.genau === 'strasse' ? '<small class="km-genau">an der Straße – Hausnummer nicht gefunden</small>' : p.genau === 'plz' && adr && adr.stand ? '<small class="km-genau">Mittelpunkt der Postleitzahl</small>' : '';
+    pop.innerHTML = `<h3><span>${esc(p.titel)}${genau}</span><button type="button" class="crm-rund klein" data-km="zu" aria-label="Schließen">${icon('x')}</button></h3>
       <ul>${p.liste.map((k) => `<li>${firmaKnopf(k)}<small>${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc(vName(k.vertreter) || 'ohne Vertreter')}${k.aktiv ? '' : ' · inaktiv'}</small></li>`).join('')}</ul>`;
     pop.hidden = false;
   }

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /* Aktionen: CRM · Vertrieb (Oberfläche crm.intern, Daten und Regeln in app/api/module/crm/crm.php)
-   Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen;
+   Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte);
                     crm.bearbeiten – Kundenblätter, Interessenten und Aktivitäten erfassen;
                     crm.exportieren – Liste als CSV herunterladen.
    Kundenstammdaten liest das CRM nur (Eigentümer Verwaltung, E-1); geändert werden sie in der Verwaltung.
@@ -36,6 +36,14 @@ switch ($action) {
                      'kunden' => crm_liste(), 'vertreter' => crm_vertreter(), 'segmente' => CRM_SEGMENTE, 'phasen' => CRM_PHASEN, 'anruf' => CRM_ANRUF,
                      'arten' => CRM_ARTEN, 'rhythmen' => crm_rhythmen(), 'letzte' => array_map('crm_aktivitaet_aus', array_slice($akt, 0, 30)),
                      'statistik' => ['gesamt' => count($akt), 'jeArt' => $jeArt, 'tage30' => $tage30]]);
+        }
+
+        /* Karte: Koordinaten der Anschriften (Hausnummer bzw. Straße) aus dem Adressverzeichnis auf dem Server; ohne Eintrag
+           zeigt die Karte den PLZ-Mittelpunkt. Stand: Anzahl und Datum des Verzeichnisses oder null (nicht geladen) */
+        case 'crm_karte': {
+            require_perm('crm.sehen');
+            header('Cache-Control: no-store');
+            respond(['ok' => true, 'stand' => adressen_stand(), 'punkte' => (object)crm_karte_punkte()]);
         }
 
         /* Verlauf eines Kunden (neueste zuerst) */

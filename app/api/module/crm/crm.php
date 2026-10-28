@@ -13,6 +13,7 @@ declare(strict_types=1);
    Alle Schreibvorgänge sperren „crm-kunden“ (eine Sperre für alle drei Dokumente, keine Verklemmung).
    Rechte (GR-103): crm.sehen, crm.bearbeiten, crm.exportieren – geprüft in jeder Aktion. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+require_once __DIR__ . '/../../lib/adressen.php';   // Anschrift → Koordinate (Karte, Plattformkern)
 
 const CRM_SEGMENTE = ['Fleischerei', 'Einzelhandel', 'Cash & Carry', 'Catering', 'Gastronomie', 'Großhandel', 'Industrie', 'Sonstige', 'Nicht zugeordnet'];
 const CRM_PHASEN = ['Interessent', 'Erstkontakt', 'Muster/Probe', 'Angebot', 'Verhandlung', 'Bestandskunde', 'Verloren'];
@@ -243,6 +244,27 @@ function crm_liste(): array
         $out[] = $row;
     }
     usort($out, function ($a, $b) { return strnatcasecmp($a['firma'], $b['firma']) ?: strcmp($a['key'], $b['key']); });
+    return $out;
+}
+
+/* Karte: Koordinaten der Anschriften aus dem Adressverzeichnis des Servers (lib/adressen.php) – je Kunde bzw. Interessent
+   [Breite, Länge, 'h' | 's'] (Hausnummer bzw. Straße). Ohne Treffer, ohne Straße, im Ausland oder ohne Verzeichnis fehlt der
+   Eintrag – die Karte nimmt dann wie bisher den Mittelpunkt der Postleitzahl. Nichts wird gespeichert. */
+function crm_karte_punkte(): array
+{
+    if (!adressen_db()) return [];
+    $alle = [];
+    foreach (crm_stammkunden() as $id => $c) $alle[(string)$id] = $c;
+    foreach (crm_interessenten_doc()['liste'] as $i) $alle[(string)$i['id']] = $i;
+    $out = [];
+    foreach ($alle as $key => $e) {
+        $land = strtolower(trim((string)($e['land'] ?? '')));
+        if ($land !== '' && !in_array($land, ['d', 'de', 'deu', 'deutschland', 'germany'], true)) continue;
+        $strasse = trim((string)($e['strasse'] ?? ''));
+        if ($strasse === '') continue;
+        $p = adressen_punkt($strasse, (string)($e['plz'] ?? ''), (string)($e['ort'] ?? ''));
+        if ($p) $out[(string)$key] = [round($p['lat'], 5), round($p['lon'], 5), $p['genau'] === 'haus' ? 'h' : 's'];
+    }
     return $out;
 }
 
