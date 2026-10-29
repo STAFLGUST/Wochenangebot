@@ -33,7 +33,7 @@ Agent: `leergut` · hängt ab von `plattform` · Testgruppen: `leergut`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `leergut.intern` Leergut | intern | https://leergut.dashboard-stafl.de/module/leergut/ | in_entwicklung | keine |
+| `leergut.intern` Leergut | intern | https://leergut.dashboard-stafl.de/module/leergut/ | fertig | produktiv |
 
 ## CRM (`crm`)
 

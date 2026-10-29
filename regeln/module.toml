@@ -135,6 +135,7 @@ hinweise = [
   "Bewegungen werden nie geändert oder gelöscht, nur storniert (Status statt Löschen); Abstimmungen speichern unseren Saldo zum Stichtag als Schnappschuss (GR-106).",
   "Eigene Partnerliste im Modul (Speditionen und Kühlhäuser sind keine Lieferanten der Warenwirtschaft); keine Daten anderer Module. Spätere Verknüpfung mit Kunden-/Lieferanten-Stammdaten der Verwaltung nur über deren Schnittstellen (GR-101).",
   "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel-Liste und der Partnerauszüge über ein Datenpaket (leergut_import) in der Oberfläche.",
+  "Freigegeben mit dem Merge (Auftrag des Inhabers 29.10.2026, „DNS-Eintrag hast du ja schon“): leergut.dashboard-stafl.de mit eigenem Keycloak-Client „leergut“ (Stand 11); / und /admin/ führen zu /module/leergut/. Aktionen leergut_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „Leergut ansehen“ (ohne Standardrollen).",
 ]
 
   [[modul.oberflaeche]]
@@ -142,9 +143,9 @@ hinweise = [
   name = "Leergut"
   art = "intern"
   adresse = "https://leergut.dashboard-stafl.de/module/leergut/"
-  entwicklung = "in_entwicklung"
-  freigabe = "keine"
-  sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # mit dem Merge dieses PR durch den Inhaber (Auftrag 29.10.2026); DNS-Eintrag leergut besteht seit 25.10.2026
+  sperrbar = true
 
 [[modul]]
 id = "crm"
