@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · Leergut</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="leergut.css">
+</head>
+<body class="lg">
+<div class="lg-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="lg-seite">
+  <header class="lg-kopf lg-glas">
+    <a class="stafl-zurueck" id="lg-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <span class="lg-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
+    <span class="lg-modul"><svg class="i" aria-hidden="true"><use href="#i-kiste"/></svg>Leergut</span>
+    <div class="lg-aktionen">
+      <button class="lg-rund" id="lg-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"></button>
+      <span class="lg-user" id="lg-user" hidden><span class="lg-initialen" id="lg-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="lg-user-name" id="lg-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="lg-main">
+    <section class="lg-hinweisbox lg-glas" id="lg-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Das Leergut steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="lg-fehler" id="lg-err" role="alert" hidden></p>
+
+    <section id="lg-app" hidden>
+      <div class="lg-leiste">
+        <nav class="lg-tabs stafl-streifen" id="lg-tabs" role="tablist" aria-label="Bereiche des Leerguts">
+          <button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Übersicht</button>
+          <button type="button" role="tab" data-tab="konten" aria-selected="false">Konten</button>
+          <button type="button" role="tab" data-tab="abstimmungen" aria-selected="false">Abstimmungen</button>
+          <button type="button" role="tab" data-tab="abschreibungen" aria-selected="false">Abschreibungen</button>
+          <button type="button" role="tab" data-tab="bilanz" aria-selected="false">Bilanz</button>
+          <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" hidden>Einstellungen</button>
+        </nav>
+        <div class="lg-schnell" id="lg-schnell" hidden>
+          <button class="btn" type="button" id="lg-neu-auszug"><svg class="i" aria-hidden="true"><use href="#i-dokument"/></svg><span class="lbl">Auszug erfassen</span></button>
+          <button class="btn primary" type="button" id="lg-neu-bewegung"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span class="lbl">Bewegung buchen</span></button>
+        </div>
+      </div>
+
+      <!-- Übersicht -->
+      <section class="lg-tab" id="lg-t-uebersicht" data-tab="uebersicht">
+        <div class="lg-leer lg-glas" id="lg-u-leer" hidden>
+          <h2>Noch keine Leergutkonten</h2>
+          <p>Partner legt an, wer „Leergut verwalten“ hat – unter Einstellungen einzeln oder alle auf einmal aus dem Datenpaket der bisherigen Excel-Liste.</p>
+        </div>
+        <div class="lg-kpis" id="lg-u-kpis"></div>
+        <div class="lg-raster">
+          <section class="lg-panel lg-glas">
+            <div class="lg-panelkopf"><h2>Fristen und offene Auszüge</h2><span class="lg-hilfe">Ohne Widerspruch bis zur Frist gilt der Saldo des Partners als anerkannt.</span></div>
+            <div id="lg-u-fristen"></div>
+          </section>
+          <section class="lg-panel lg-glas">
+            <div class="lg-panelkopf"><h2>Offene Dachser-Abschreibungen</h2><button class="btn sm ghost" type="button" data-gehe="abschreibungen">Alle ansehen</button></div>
+            <div id="lg-u-abschr"></div>
+          </section>
+        </div>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf"><h2>Salden je Konto</h2><span class="lg-hilfe">+ der Partner schuldet uns · − wir schulden dem Partner</span></div>
+          <div class="lg-tabelle-wrap" id="lg-u-salden"></div>
+        </section>
+      </section>
+
+      <!-- Konten -->
+      <section class="lg-tab" id="lg-t-konten" data-tab="konten" hidden>
+        <div class="lg-konten">
+          <aside class="lg-kontoliste lg-glas">
+            <label class="sr-only" for="lg-k-suche">Partner suchen</label>
+            <input class="lg-eingabe" id="lg-k-suche" type="search" placeholder="Partner suchen …" autocomplete="off">
+            <div class="lg-filterzeile">
+              <select class="lg-eingabe" id="lg-k-art" aria-label="Art"><option value="">Alle Arten</option></select>
+              <select class="lg-eingabe" id="lg-k-firma" aria-label="Firma"><option value="">Alle Firmen</option></select>
+            </div>
+            <label class="lg-check"><input type="checkbox" id="lg-k-inaktiv"> inaktive zeigen</label>
+            <ul class="lg-liste" id="lg-k-liste"></ul>
+          </aside>
+          <section class="lg-konto" id="lg-k-detail">
+            <p class="lg-leer-text lg-glas" id="lg-k-hinweis">Bitte links ein Konto wählen.</p>
+          </section>
+        </div>
+      </section>
+
+      <!-- Abstimmungen -->
+      <section class="lg-tab" id="lg-t-abstimmungen" data-tab="abstimmungen" hidden>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf lg-panelkopf-filter">
+            <h2>Abstimmungen mit den Partnern</h2>
+            <div class="lg-filterzeile">
+              <select class="lg-eingabe" id="lg-a-status" aria-label="Status"><option value="aktiv">Offen und widersprochen</option><option value="">Alle</option></select>
+              <select class="lg-eingabe" id="lg-a-partner" aria-label="Partner"><option value="">Alle Partner</option></select>
+            </div>
+          </div>
+          <div class="lg-tabelle-wrap" id="lg-a-liste"></div>
+        </section>
+      </section>
+
+      <!-- Abschreibungen -->
+      <section class="lg-tab" id="lg-t-abschreibungen" data-tab="abschreibungen" hidden>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf lg-panelkopf-filter">
+            <h2>Dachser-Abschreibungen „lt. Empfänger“</h2>
+            <div class="lg-filterzeile">
+              <input class="lg-eingabe" id="lg-d-suche" type="search" placeholder="Kunde, Ort, Sendung …" aria-label="Suchen" autocomplete="off">
+              <select class="lg-eingabe" id="lg-d-status" aria-label="Status"><option value="offen">Offen</option><option value="">Alle</option></select>
+              <button class="btn" type="button" id="lg-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span class="lbl">Abschreibung erfassen</span></button>
+            </div>
+          </div>
+          <p class="lg-hinweis">Kunde hat bei Dachser nicht getauscht → Dachser bucht es uns ab. Prüfen (eLogistik-Portal, quittierter Lieferschein), widersprechen oder nach Rücksprache mit dem Verkauf über WinAB berechnen. Fälle, die laut Leitfaden nicht zu beachten sind, auf „Nicht zu beachten“ setzen.</p>
+          <div id="lg-d-kunden"></div>
+          <div class="lg-tabelle-wrap" id="lg-d-liste"></div>
+        </section>
+      </section>
+
+      <!-- Bilanz -->
+      <section class="lg-tab" id="lg-t-bilanz" data-tab="bilanz" hidden>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf lg-panelkopf-filter">
+            <h2>Leergut-Bilanz</h2>
+            <div class="lg-filterzeile">
+              <label class="lg-feld-inline" for="lg-b-tag">Stichtag</label>
+              <input class="lg-eingabe" id="lg-b-tag" type="date">
+              <button class="btn" type="button" id="lg-b-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span class="lbl">CSV</span></button>
+            </div>
+          </div>
+          <div class="lg-tabelle-wrap" id="lg-b-tabelle"></div>
+          <p class="lg-fussnote" id="lg-b-fuss"></p>
+        </section>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf"><h2>Inventur (eigener Bestand)</h2><button class="btn sm" type="button" id="lg-i-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Inventur erfassen</button></div>
+          <p class="lg-hinweis">Kisten im eigenen Lager zum Stichtag – aus der WinAB-Inventur (gefiltert wie im Leitfaden), dazu unbenutzte Kisten und Leergut bei Abholern.</p>
+          <div class="lg-tabelle-wrap" id="lg-i-liste"></div>
+        </section>
+      </section>
+
+      <!-- Einstellungen -->
+      <section class="lg-tab" id="lg-t-einstellungen" data-tab="einstellungen" hidden>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf"><h2>Partner</h2><button class="btn sm primary" type="button" id="lg-e-partner-neu"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Partner anlegen</button></div>
+          <div class="lg-tabelle-wrap" id="lg-e-partner"></div>
+        </section>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf"><h2>Lademittel und Werte</h2><span class="lg-hilfe">Wert je Stück für die Bewertung in der Bilanz. Lademittel werden deaktiviert, nicht gelöscht.</span></div>
+          <form id="lg-e-lm-form" novalidate>
+            <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-lm-tabelle"><thead><tr><th>Bezeichnung</th><th class="lg-zahl">Wert je Stück (€)</th><th>Aktiv</th></tr></thead><tbody id="lg-e-lm"></tbody></table></div>
+            <p class="lg-meldung" id="lg-e-lm-meldung" role="alert"></p>
+            <div class="lg-knopfreihe"><button class="btn" type="button" id="lg-e-lm-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Lademittel</button><button class="btn primary" type="submit">Speichern</button></div>
+          </form>
+        </section>
+        <section class="lg-panel lg-glas">
+          <div class="lg-panelkopf"><h2>Datenpaket übernehmen</h2><span class="lg-hilfe">Bisherige Excel-Liste und Partnerauszüge (Datei „Leergut-Datenpaket … .json“)</span></div>
+          <div class="lg-import">
+            <label class="btn" for="lg-e-datei"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Datei wählen</label>
+            <input type="file" id="lg-e-datei" accept=".json,application/json" class="sr-only">
+            <span class="lg-hilfe" id="lg-e-dateiname">Keine Datei gewählt</span>
+          </div>
+          <div id="lg-e-vorschau"></div>
+          <p class="lg-meldung" id="lg-e-import-meldung" role="alert"></p>
+          <div class="lg-knopfreihe" id="lg-e-import-knoepfe" hidden>
+            <label class="lg-check" id="lg-e-ersetzen-zeile" hidden><input type="checkbox" id="lg-e-ersetzen"> Vorhandene Daten ersetzen</label>
+            <button class="btn primary" type="button" id="lg-e-uebernehmen">Übernehmen</button>
+          </div>
+        </section>
+      </section>
+    </section>
+  </main>
+  <footer class="lg-fuss">STAFL-Plattform · Standard-Fleisch</footer>
+</div>
+<div class="lg-toast" id="lg-toast" role="status" aria-live="polite"></div>
+
+<!-- Eingabemaske: Bewegung buchen -->
+<dialog class="lg-dialog" id="dlg-bewegung" aria-labelledby="bw-titel">
+  <form id="bw-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="bw-titel">Bewegung buchen</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="lg-formraster">
+      <label>Partner<select class="lg-eingabe" id="bw-partner" required></select></label>
+      <label>Datum<input class="lg-eingabe" id="bw-datum" type="date" required></label>
+      <label>Art<select class="lg-eingabe" id="bw-typ"></select></label>
+      <label>Beleg-Nr.<input class="lg-eingabe" id="bw-beleg" maxlength="80" placeholder="Lieferschein, CMR, Palettenschein …"></label>
+    </div>
+    <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-mengentabelle lg-karten">
+      <thead><tr><th>Lademittel</th><th class="lg-zahl">Abgang<small>wir geben ab</small></th><th class="lg-zahl">Zugang<small>wir erhalten</small></th><th class="lg-zahl">Saldo danach</th></tr></thead>
+      <tbody id="bw-mengen"></tbody>
+    </table></div>
+    <label class="lg-check"><input type="checkbox" id="bw-alle"> alle Lademittel zeigen</label>
+    <label>Text<input class="lg-eingabe" id="bw-text" maxlength="500" placeholder="z. B. Anlieferung, nicht getauscht, Abholung durch …"></label>
+    <p class="lg-meldung" id="bw-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Buchen</button></div>
+  </form>
+</dialog>
+
+<!-- Eingabemaske: Auszug des Partners erfassen -->
+<dialog class="lg-dialog" id="dlg-auszug" aria-labelledby="az-titel">
+  <form id="az-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="az-titel">Auszug erfassen</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="lg-formraster">
+      <label>Partner<select class="lg-eingabe" id="az-partner" required></select></label>
+      <label>Stichtag<input class="lg-eingabe" id="az-stichtag" type="date" required></label>
+      <label>Eingang<input class="lg-eingabe" id="az-eingang" type="date"></label>
+      <label>Frist bis<input class="lg-eingabe" id="az-frist" type="date"><small class="lg-hilfe" id="az-frist-hilfe"></small></label>
+    </div>
+    <p class="lg-hinweis">Saldo so eintragen, wie er bei uns zählt: <b>+</b> der Partner schuldet uns, <b>−</b> wir schulden dem Partner. Viele Auszüge zählen umgekehrt („Ihr Guthaben“ / „unsere Forderung“) – dann einfach abtippen und <button class="btn sm ghost" type="button" id="az-umkehren">± Vorzeichen umkehren</button></p>
+    <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-mengentabelle lg-karten">
+      <thead><tr><th>Lademittel</th><th class="lg-zahl">Saldo laut Partner</th><th class="lg-zahl">Unser Saldo</th><th class="lg-zahl">Differenz</th></tr></thead>
+      <tbody id="az-mengen"></tbody>
+    </table></div>
+    <div class="lg-formraster">
+      <label>Status<select class="lg-eingabe" id="az-status"></select></label>
+      <label class="lg-breit">Quelle<input class="lg-eingabe" id="az-quelle" maxlength="200" placeholder="z. B. Mail vom 14.10., Packmittelkonto September"></label>
+    </div>
+    <label>Notiz<textarea class="lg-eingabe" id="az-notiz" rows="3" maxlength="4000" placeholder="Klärung, Widerspruch, Absprachen …"></textarea></label>
+    <ul class="lg-verlauf" id="az-verlauf"></ul>
+    <p class="lg-meldung" id="az-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Eingabemaske: Dachser-Abschreibung -->
+<dialog class="lg-dialog" id="dlg-abschr" aria-labelledby="ds-titel">
+  <form id="ds-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="ds-titel">Abschreibung erfassen</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="lg-formraster">
+      <label class="lg-breit">Empfänger (Kunde)<input class="lg-eingabe" id="ds-empfaenger" maxlength="120" required></label>
+      <label>Empfänger-Nr.<input class="lg-eingabe" id="ds-nr" maxlength="30"></label>
+      <label>Ort<input class="lg-eingabe" id="ds-ort" maxlength="80"></label>
+      <label>Auftrag vom<input class="lg-eingabe" id="ds-auftrag" type="date"></label>
+      <label>Zugestellt am<input class="lg-eingabe" id="ds-zugestellt" type="date" required></label>
+      <label>Sendungsnummer<input class="lg-eingabe" id="ds-sendung" maxlength="40"></label>
+      <label>Grund<input class="lg-eingabe" id="ds-grund" maxlength="120" placeholder="Abschreibung lt. Empfänger"></label>
+    </div>
+    <div class="lg-mengenreihe" id="ds-mengen"></div>
+    <div class="lg-formraster">
+      <label>Status<select class="lg-eingabe" id="ds-status"></select></label>
+      <label>WinAB-Auftrag / Rechnung<input class="lg-eingabe" id="ds-rechnung" maxlength="60"></label>
+    </div>
+    <label>Notiz<textarea class="lg-eingabe" id="ds-notiz" rows="2" maxlength="2000"></textarea></label>
+    <p class="lg-hilfe" id="ds-wert"></p>
+    <ul class="lg-verlauf" id="ds-verlauf"></ul>
+    <p class="lg-meldung" id="ds-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Eingabemaske: Inventur -->
+<dialog class="lg-dialog" id="dlg-inventur" aria-labelledby="iv-titel">
+  <form id="iv-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="iv-titel">Inventur erfassen</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <label class="lg-schmal">Stichtag<input class="lg-eingabe" id="iv-stichtag" type="date" required></label>
+    <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-mengentabelle lg-karten"><thead id="iv-kopf"></thead><tbody id="iv-zeilen"></tbody></table></div>
+    <button class="btn sm" type="button" id="iv-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Position</button>
+    <label>Notiz<textarea class="lg-eingabe" id="iv-notiz" rows="2" maxlength="2000"></textarea></label>
+    <p class="lg-meldung" id="iv-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Eingabemaske: Partner -->
+<dialog class="lg-dialog" id="dlg-partner" aria-labelledby="pa-titel">
+  <form id="pa-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="pa-titel">Partner anlegen</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="lg-formraster">
+      <label class="lg-breit">Name<input class="lg-eingabe" id="pa-name" maxlength="100" required></label>
+      <label>Art<select class="lg-eingabe" id="pa-art"></select></label>
+      <label>Firma<select class="lg-eingabe" id="pa-firma"></select></label>
+      <label>Konto-Nr. beim Partner<input class="lg-eingabe" id="pa-konto" maxlength="40"></label>
+      <label>Frist für Widerspruch (Tage)<input class="lg-eingabe" id="pa-frist" inputmode="numeric" maxlength="2"></label>
+      <label class="lg-breit">E-Mail für die Abstimmung<input class="lg-eingabe" id="pa-email" maxlength="300" placeholder="mehrere mit Komma"></label>
+      <label class="lg-breit">Ansprechpartner<input class="lg-eingabe" id="pa-ansprech" maxlength="200"></label>
+      <label class="lg-breit">Lieferanten über dieses Konto<input class="lg-eingabe" id="pa-lieferanten" maxlength="300" placeholder="z. B. bei Speditionen: Lieferanten, deren Ware sie bringen"></label>
+    </div>
+    <fieldset class="lg-lmwahl"><legend>Lademittel</legend><div id="pa-lm"></div></fieldset>
+    <label>Notiz<textarea class="lg-eingabe" id="pa-notiz" rows="3" maxlength="2000" placeholder="Besonderheiten, z. B. Abholzeiten, was nicht geprüft werden muss"></textarea></label>
+    <label class="lg-check"><input type="checkbox" id="pa-aktiv" checked> aktiv</label>
+    <p class="lg-meldung" id="pa-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Stornieren -->
+<dialog class="lg-dialog lg-dialog-klein" id="dlg-storno" aria-labelledby="st-titel">
+  <form id="st-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="st-titel">Bewegung stornieren</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p id="st-text"></p>
+    <label>Grund<input class="lg-eingabe" id="st-grund" maxlength="300" required placeholder="z. B. doppelt erfasst, falscher Partner"></label>
+    <p class="lg-hilfe">Die Bewegung bleibt sichtbar, zählt aber nicht mehr. Eine korrigierte Bewegung neu buchen.</p>
+    <p class="lg-meldung" id="st-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Stornieren</button></div>
+  </form>
+</dialog>
+
+<svg class="lg-symbole" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-kiste" viewBox="0 0 24 24"><rect x="3" y="10" width="18" height="10.5" rx="2"/><path d="M3 15h18M9.5 12.5h5"/><path d="M7 7.2a5.5 5.5 0 0 1 9.6-2.4"/><path d="M17 2.2v3h-3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-dokument" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
+  <symbol id="i-stift" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+</svg>
+<script src="leergut.js"></script>
+</body>
+</html>

@@ -151,8 +151,8 @@ with sync_playwright() as pw:
     check('Marketing: freigegeben (Inhaber 25.10.2026), Verweis auf den Redaktionsplan (Testserver: gleicher Host, Pfad /module/marketing/)',
           mkt['tag'] == 'A' and mkt['href'] == '/module/marketing/' and mkt['badge'] == 'Verfügbar', mkt)
     neu2 = [kid[m] for m in ('leergut', 'containerimport')]
-    check('neue Kacheln Leergut und Container-Import: Name aus dem Register, geplant, gesperrt mit Band, eigene Symbole',
-          [x['name'] for x in neu2] == ['Leergut', 'Container-Import'] and all(x['tag'] == 'DIV' and x['badge'] == 'Geplant' and x['gesperrt'] for x in neu2)
+    check('neue Kacheln Leergut (in Entwicklung) und Container-Import (geplant): Name aus dem Register, gesperrt mit Band, eigene Symbole',
+          [x['name'] for x in neu2] == ['Leergut', 'Container-Import'] and [x['badge'] for x in neu2] == ['In Entwicklung', 'Geplant'] and all(x['tag'] == 'DIV' and x['gesperrt'] for x in neu2)
           and [x['symbol'] for x in neu2] == ['crate', 'container'], neu2)
     sym2 = pg.eval_on_selector_all('[data-modul="leergut"] use, [data-modul="containerimport"] use', 'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('Symbole Kiste und Container vorhanden', [x[0] for x in sym2] == ['#i-kiste', '#i-container'] and all(x[1] for x in sym2), sym2)

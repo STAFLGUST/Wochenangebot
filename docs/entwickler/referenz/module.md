@@ -27,13 +27,13 @@ Agent: `bestand` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `sto
 
 ## Leergut (`leergut`)
 
-Leergutkonten je Kunde und Lieferant: Paletten, Kisten und Behälter – Ausgabe, Rücknahme, Salden
+Leergutkonten je Partner: Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Inventur und Bilanz
 
-Agent: `leergut` · hängt ab von `plattform`, `verwaltung`
+Agent: `leergut` · hängt ab von `plattform` · Testgruppen: `leergut`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `leergut.intern` Leergut | intern | https://leergut.dashboard-stafl.de/ | geplant | keine |
+| `leergut.intern` Leergut | intern | https://leergut.dashboard-stafl.de/module/leergut/ | in_entwicklung | keine |
 
 ## CRM (`crm`)
 

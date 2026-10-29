@@ -1,0 +1,307 @@
+{
+ "format": "stafl-leergut",
+ "version": 1,
+ "erstellt": "2026-10-29",
+ "hinweis": "Erfundene Testdaten für tests/e2e/test_leergut.py",
+ "lademittel": [
+  {
+   "id": "e2",
+   "name": "E2-Kiste",
+   "wert": 5.5
+  },
+  {
+   "id": "h1",
+   "name": "H1-Palette",
+   "wert": 36
+  },
+  {
+   "id": "eu",
+   "name": "Europalette",
+   "wert": null
+  },
+  {
+   "id": "haken",
+   "name": "Eurohaken",
+   "wert": null
+  },
+  {
+   "id": "e1",
+   "name": "E1-Kiste",
+   "wert": null
+  }
+ ],
+ "partner": [
+  {
+   "schluessel": "spedition",
+   "name": "Beispiel-Spedition",
+   "art": "spedition",
+   "mandant": "standard",
+   "kontoNr": "0815",
+   "fristTage": 14,
+   "email": "packmittel@example.invalid",
+   "lieferanten": "",
+   "lademittel": [
+    "e2",
+    "h1",
+    "eu"
+   ],
+   "notiz": "Packmittelkonto, Abschreibungen am Monatsletzten"
+  },
+  {
+   "schluessel": "schlachthof",
+   "name": "Beispiel-Schlachthof",
+   "art": "lieferant",
+   "mandant": "standard",
+   "kontoNr": "12345",
+   "fristTage": 10,
+   "email": "leergut@schlachthof.example.invalid",
+   "lademittel": [
+    "e2",
+    "h1",
+    "haken"
+   ]
+  },
+  {
+   "schluessel": "kuehlhaus",
+   "name": "Beispiel-Kühlhaus",
+   "art": "kuehlhaus",
+   "mandant": "standard",
+   "fristTage": 14,
+   "lademittel": [
+    "e2",
+    "h1",
+    "eu"
+   ]
+  },
+  {
+   "schluessel": "schwester",
+   "name": "Beispiel-Zerlegung (Schwesterfirma)",
+   "art": "lieferant",
+   "mandant": "matthies",
+   "fristTage": 7,
+   "lademittel": [
+    "e2",
+    "e1",
+    "h1"
+   ]
+  }
+ ],
+ "bewegungen": [
+  {
+   "partner": "spedition",
+   "datum": "2025-12-31",
+   "typ": "anfang",
+   "abgang": {
+    "e2": 500,
+    "h1": 40
+   },
+   "zugang": {
+    "eu": 20
+   },
+   "text": "Saldo laut Excel-Liste"
+  },
+  {
+   "partner": "spedition",
+   "datum": "2026-01-05",
+   "typ": "bewegung",
+   "abgang": {
+    "e2": 700,
+    "h1": 50
+   },
+   "zugang": {
+    "e2": 640,
+    "h1": 60
+   },
+   "beleg": "0404B0000001"
+  },
+  {
+   "partner": "spedition",
+   "datum": "2026-01-06",
+   "typ": "bewegung",
+   "abgang": {
+    "e2": 410
+   },
+   "zugang": {
+    "e2": 450,
+    "h1": 2
+   },
+   "beleg": "0404B0000002"
+  },
+  {
+   "partner": "spedition",
+   "datum": "2026-01-31",
+   "typ": "korrektur",
+   "zugang": {
+    "e2": 16
+   },
+   "text": "Abschreibung lt. Empfänger"
+  },
+  {
+   "partner": "schlachthof",
+   "datum": "2025-09-30",
+   "typ": "anfang",
+   "zugang": {
+    "e2": 300,
+    "h1": 10,
+    "haken": 80
+   }
+  },
+  {
+   "partner": "schlachthof",
+   "datum": "2026-02-02",
+   "typ": "bewegung",
+   "abgang": {
+    "e2": 120,
+    "haken": 80
+   },
+   "zugang": {
+    "e2": 150,
+    "h1": 5,
+    "haken": 80
+   },
+   "beleg": "636236"
+  },
+  {
+   "partner": "kuehlhaus",
+   "datum": "2026-01-31",
+   "typ": "anfang",
+   "abgang": {
+    "e2": 566,
+    "h1": 209
+   },
+   "zugang": {
+    "eu": 94
+   }
+  },
+  {
+   "partner": "kuehlhaus",
+   "datum": "2026-04-09",
+   "typ": "abholung",
+   "zugang": {
+    "e2": 520,
+    "h1": 53
+   },
+   "beleg": "Palettenschein 7",
+   "text": "Abholung durch Spedition"
+  },
+  {
+   "partner": "schwester",
+   "datum": "2026-02-28",
+   "typ": "anfang",
+   "zugang": {
+    "e2": 446,
+    "e1": 416,
+    "h1": 77
+   }
+  }
+ ],
+ "abstimmungen": [
+  {
+   "partner": "spedition",
+   "stichtag": "2026-01-31",
+   "eingang": "2026-02-12",
+   "saldo": {
+    "e2": 504,
+    "h1": 28,
+    "eu": -20
+   },
+   "status": "bestaetigt",
+   "quelle": "Packmittelkonto Januar"
+  },
+  {
+   "partner": "spedition",
+   "stichtag": "2026-02-28",
+   "eingang": "2026-03-12",
+   "saldo": {
+    "e2": 480,
+    "h1": 30,
+    "eu": -22
+   },
+   "status": "offen",
+   "quelle": "Packmittelkonto Februar"
+  },
+  {
+   "partner": "schlachthof",
+   "stichtag": "2026-07-31",
+   "eingang": "2026-08-17",
+   "saldo": {
+    "e2": -1139,
+    "h1": -59,
+    "haken": -239
+   },
+   "status": "offen",
+   "quelle": "Leergutkontoauszug"
+  },
+  {
+   "partner": "kuehlhaus",
+   "stichtag": "2026-02-28",
+   "eingang": "2026-03-09",
+   "saldo": {
+    "e2": 588,
+    "h1": 200,
+    "eu": -104
+   },
+   "status": "info"
+  }
+ ],
+ "abschreibungen": [
+  {
+   "zugestellt": "2026-04-08",
+   "auftrag": "2026-04-07",
+   "empfaenger": "Beispiel-Schlachterei",
+   "empfaengerNr": "46600001",
+   "ort": "Musterdorf",
+   "sendung": "04606394990",
+   "menge": {
+    "e2": 72,
+    "h1": 2
+   },
+   "grund": "R Abschreibung lt. Empfänger",
+   "status": "offen"
+  },
+  {
+   "zugestellt": "2026-01-16",
+   "auftrag": "2026-01-15",
+   "empfaenger": "Beispiel-Markt Nord",
+   "empfaengerNr": "99000001",
+   "ort": "Musterstadt",
+   "sendung": "04588393300",
+   "menge": {
+    "h1": 1
+   },
+   "grund": "R Abschreibung lt. Empfänger",
+   "status": "ignoriert",
+   "notiz": "H1 bei diesem Kunden nicht zu beachten (Leitfaden)"
+  }
+ ],
+ "inventur": [
+  {
+   "stichtag": "2026-03-31",
+   "positionen": [
+    {
+     "name": "Lager gefüllt",
+     "werte": {
+      "e2": 2289,
+      "h1": 120
+     }
+    },
+    {
+     "name": "Kisten unbenutzt",
+     "werte": {
+      "e2": 700,
+      "h1": 100,
+      "eu": 45
+     }
+    },
+    {
+     "name": "Abholer",
+     "werte": {
+      "e2": 200,
+      "h1": 30
+     }
+    }
+   ],
+   "notiz": "Werte wie in der Excel-Liste"
+  }
+ ]
+}
