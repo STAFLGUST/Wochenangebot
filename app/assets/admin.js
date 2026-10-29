@@ -3259,8 +3259,8 @@
         <div class="search">${icon('search')}<input id="st-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung … oder „MHD“" aria-label="Bestand durchsuchen" value="${esc(stockQ)}"></div>
         <span class="ed-hint" id="st-count"></span>
         <span class="st-actions">
+          ${may('bestand.mhd_senden') ? `<button type="button" class="btn primary" data-st="mhdmail" title="MHD-Liste (Artikel mit MHD bis ${esc(dmy(isoToday(14)))}) per E-Mail an den Verkauf – als Bild und Excel-Datei">${icon('mail')}MHD an Verkauf</button>` : ''}
           <button type="button" class="btn" data-st="print">${icon('print')}Drucken</button>
-          ${may('bestand.mhd_senden') ? `<button type="button" class="btn" data-st="mhdmail" title="MHD-Liste (Artikel mit MHD bis ${esc(dmy(isoToday(14)))}) per E-Mail an den Verkauf – als Bild und Excel-Datei">${icon('mail')}MHD an Verkauf</button>` : ''}
           <button type="button" class="btn" data-st="pdf" title="PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge">${icon('file')}PDF</button>
           <button type="button" class="btn" data-st="csv">${icon('download')}CSV</button>
           ${roStock ? '' : `<button type="button" class="btn primary" data-st="import">${icon('upload')}Bestand hochladen</button>`}
