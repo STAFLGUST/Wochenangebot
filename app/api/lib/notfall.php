@@ -225,7 +225,7 @@ function notfall_benachrichtigen(string $titel, array $facts): void
         try {
             if (!empty($GLOBALS['store_tx'])) return;
             $to = notify_targets('sicherheit', true);
-            if (!$to || !mail_cfg()) return;
+            if (!$to || !mail_cfg_intern()) return;
             if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
             notify_send('sicherheit', $to, [$item], 0, false, 'Notfallmodus');
         } catch (Throwable $e) {

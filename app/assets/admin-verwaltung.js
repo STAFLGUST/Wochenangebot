@@ -1013,32 +1013,8 @@
     host.innerHTML = `
       <div class="sec-grid">${status}</div>
       ${m.testumgebung ? '<div class="gcard sec-form" id="ml-testpost"><h3 class="sec-h">Testpostfach</h3><p class="hint">Testumgebung: Es werden keine E-Mails versendet. Alles, was sonst verschickt würde (Wochenangebot, Sonderposten, Bestellwünsche, Einladungen …), landet hier.</p><div id="ml-tp-list"><div class="loading"><div class="spinner"></div>wird geladen …</div></div><iframe id="ml-tp-prev" sandbox="" title="Vorschau der E-Mail" hidden></iframe></div>' : ''}
-      <form class="gcard sec-form" id="ml-form" autocomplete="off">
-        <h3 class="sec-h">Postfach für den Versand</h3>
-        <div class="ml-presets"><span class="sub">Vorlage:</span>${Object.entries(MAIL_PRESETS).map(([k, p]) => `<button type="button" class="btn sm" data-ml="preset" data-p="${k}">${esc(p.label)}</button>`).join('')}</div>
-        <div class="sec-rows">
-          <label class="fld"><span>Mailserver (SMTP)</span><input name="host" value="${esc(a.host || '')}" maxlength="253" autocapitalize="none" spellcheck="false" placeholder="z. B. smtp.hostinger.com" required></label>
-          <div class="sec-rows ml-pair">
-            <label class="fld"><span>Verschlüsselung</span><select name="secure">
-              <option value="ssl"${(a.secure || 'ssl') === 'ssl' ? ' selected' : ''}>SSL (Port 465)</option>
-              <option value="starttls"${a.secure === 'starttls' ? ' selected' : ''}>STARTTLS (Port 587)</option></select></label>
-            <label class="fld"><span>Port</span><input name="port" type="number" min="1" max="65535" value="${esc(a.port || 465)}" required></label>
-          </div>
-          <label class="fld"><span>Benutzername</span><input name="user" value="${esc(a.user || '')}" maxlength="160" autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="meist die E-Mail-Adresse des Postfachs"></label>
-          <label class="fld"><span>Passwort</span><input name="password" type="password" autocomplete="new-password" maxlength="500" placeholder="${a.password ? '•••••••• gespeichert – leer lassen = unverändert' : 'Passwort des Postfachs'}">
-            <small>Wird verschlüsselt gespeichert und nie wieder angezeigt. Bei geändertem Server oder Benutzer bitte erneut eingeben.</small></label>
-        </div>
-        <h3 class="sec-h ml-h2">Absender</h3>
-        <div class="sec-rows">
-          <label class="fld"><span>Absenderadresse</span><input name="from" type="email" value="${esc(a.from || '')}" maxlength="160" autocapitalize="none" spellcheck="false" placeholder="z. B. versand@angebot-stafl.de" required>
-            <small>Muss zum Postfach passen, sonst lehnt der Mailserver ab oder die E-Mails landen im Spam.</small></label>
-          <label class="fld"><span>Absendername</span><input name="fromName" value="${esc(a.fromName || '')}" maxlength="80" placeholder="Standard-Fleisch"></label>
-          <label class="fld"><span>Antworten an <small>(optional)</small></span><input name="replyTo" type="email" value="${esc(a.replyTo || '')}" maxlength="160" autocapitalize="none" spellcheck="false" placeholder="z. B. verkauf@standard-fleisch.de">
-            <small>Antworten der Kunden landen dort – z. B. das Postfach, das Sie täglich lesen.</small></label>
-        </div>
-        <p class="form-err" id="ml-err" role="alert"></p>
-        <div class="sec-foot ml-foot">${m.account ? `<button type="button" class="btn ghost" data-ml="remove">${icon('trash', 'sm')}Einstellungen entfernen</button>` : ''}<button type="submit" class="btn primary">${icon('check')}Speichern und Verbindung prüfen</button></div>
-      </form>
+      ${kontoForm(m, false)}
+      ${kontoForm(m, true)}
       <form class="gcard sec-form" id="ml-orders" autocomplete="off">
         <h3 class="sec-h">Bestellwünsche aus dem Portal</h3>
         <label class="check"><input type="checkbox" name="enabled"${m.orders.enabled ? ' checked' : ''}> Angemeldete Kunden können im Portal Mengen eingeben und einen Bestellwunsch senden</label>
@@ -1060,7 +1036,9 @@
       </div>
       <div class="gcard sec-form">
         <h3 class="sec-h">Testmail</h3>
-        <div class="k-test"><label class="fld grow"><span>Senden an</span><input id="ml-to" type="email" autocomplete="email" placeholder="ihre.adresse@standard-fleisch.de"></label><button type="button" class="btn" data-ml="test"${m.configured ? '' : ' disabled'}>${icon('send', 'sm')}Testmail senden</button></div>
+        <div class="k-test"><label class="fld grow"><span>Senden an</span><input id="ml-to" type="email" autocomplete="email" placeholder="ihre.adresse@standard-fleisch.de"></label>
+          <label class="fld"><span>Über</span><select id="ml-tkonto"><option value="kunden">Postfach für Kunden</option><option value="intern"${m.accountIntern ? '' : ' disabled'}>Postfach intern${m.accountIntern ? ' (' + esc(m.accountIntern.from) + ')' : ' – nicht eingerichtet'}</option></select></label>
+          <button type="button" class="btn" data-ml="test"${m.configured ? '' : ' disabled'}>${icon('send', 'sm')}Testmail senden</button></div>
         <p class="form-err" id="ml-err2" role="alert"></p>
       </div>
       <div class="gcard sec-form">
@@ -1068,6 +1046,41 @@
         ${log.length ? `<div class="ml-logwrap"><table class="ctab"><thead><tr><th>Zeit</th><th>Art</th><th>Kunde</th><th>An</th><th>Ergebnis</th></tr></thead><tbody>${log.map((x) => `<tr><td>${esc(dateTime(x.t))}</td><td>${esc(MAIL_TYP[x.typ] || x.typ)}</td><td>${esc(x.firma || '')}</td><td>${esc(x.to)}</td><td>${x.ok ? '<span class="st-ok">zugestellt</span>' : `<span class="st-err">${esc(x.error)}</span>`}</td></tr>`).join('')}</tbody></table></div>` : '<p class="sec-empty">Noch keine E-Mails versendet.</p>'}
       </div>`;
     if (m.testumgebung) renderTestpost();
+  }
+  /* Postfach-Formular: Kunden-E-Mails (id ml-form) oder interne E-Mails an Mitarbeiter (id ml-form-int, z. B. verwaltung@…) */
+  function kontoForm(m, intern) {
+    const a = (intern ? m.accountIntern : m.account) || {}, has = intern ? !!m.accountIntern : !!m.account, si = m.smtpIntern;
+    const kopf = intern
+      ? `<h3 class="sec-h">Postfach für interne E-Mails</h3>
+        <p class="hint">Für alles, was nur an Mitarbeiter geht: Zugangsdaten und Passwörter, Benachrichtigungen, Einkaufsbedarf, Bestellwünsche an das Team, Notfall und Probealarm sowie die E-Mails der zentralen Anmeldung. Kunden erhalten weiter alles über das Postfach oben.</p>
+        <p class="ml-int-st ${has ? (si && si.passError ? 'st-err' : 'st-ok') : 'sub'}">${has ? (si && si.passError ? 'Passwort muss neu eingegeben werden.' : `Eingerichtet: ${esc(a.fromName || '')} &lt;${esc(a.from)}&gt;${a.updatedAt ? ` · gespeichert ${esc(dateTime(a.updatedAt))}${a.updatedBy ? ' von ' + esc(a.updatedBy) : ''}` : ''}`) : (si ? `Noch kein eigenes Postfach – interne E-Mails gehen derzeit über ${esc(si.from)}.` : 'Noch kein eigenes Postfach – interne E-Mails gehen über das Postfach oben, sobald es eingerichtet ist.')}</p>`
+      : '<h3 class="sec-h">Postfach für Kunden-E-Mails</h3>';
+    return `<form class="gcard sec-form ml-konto" id="${intern ? 'ml-form-int' : 'ml-form'}" data-konto="${intern ? 'intern' : 'kunden'}" autocomplete="off">
+        ${kopf}
+        <div class="ml-presets"><span class="sub">Vorlage:</span>${Object.entries(MAIL_PRESETS).map(([k, p]) => `<button type="button" class="btn sm" data-ml="preset" data-p="${k}">${esc(p.label)}</button>`).join('')}</div>
+        <div class="sec-rows">
+          <label class="fld"><span>Mailserver (SMTP)</span><input name="host" value="${esc(a.host || '')}" maxlength="253" autocapitalize="none" spellcheck="false" placeholder="z. B. smtp.hostinger.com" required></label>
+          <div class="sec-rows ml-pair">
+            <label class="fld"><span>Verschlüsselung</span><select name="secure">
+              <option value="ssl"${(a.secure || 'ssl') === 'ssl' ? ' selected' : ''}>SSL (Port 465)</option>
+              <option value="starttls"${a.secure === 'starttls' ? ' selected' : ''}>STARTTLS (Port 587)</option>${a.secure === 'none' ? '<option value="none" selected>unverschlüsselt (nur lokal)</option>' : ''}</select></label>
+            <label class="fld"><span>Port</span><input name="port" type="number" min="1" max="65535" value="${esc(a.port || 465)}" required></label>
+          </div>
+          <label class="fld"><span>Benutzername</span><input name="user" value="${esc(a.user || '')}" maxlength="160" autocapitalize="none" spellcheck="false" autocomplete="off" placeholder="meist die E-Mail-Adresse des Postfachs"></label>
+          <label class="fld"><span>Passwort</span><input name="password" type="password" autocomplete="new-password" maxlength="500" placeholder="${a.password ? '•••••••• gespeichert – leer lassen = unverändert' : 'Passwort des Postfachs'}">
+            <small>Wird verschlüsselt gespeichert und nie wieder angezeigt. Bei geändertem Server oder Benutzer bitte erneut eingeben.</small></label>
+        </div>
+        <h3 class="sec-h ml-h2">Absender</h3>
+        <div class="sec-rows">
+          <label class="fld"><span>Absenderadresse</span><input name="from" type="email" value="${esc(a.from || '')}" maxlength="160" autocapitalize="none" spellcheck="false" placeholder="${intern ? 'z. B. verwaltung@dashboard-stafl.de' : 'z. B. versand@angebot-stafl.de'}" required>
+            <small>Muss zum Postfach passen, sonst lehnt der Mailserver ab oder die E-Mails landen im Spam.</small></label>
+          <label class="fld"><span>Absendername</span><input name="fromName" value="${esc(a.fromName || '')}" maxlength="80" placeholder="${intern ? 'STAFL Verwaltung' : 'Standard-Fleisch'}"></label>
+          <label class="fld"><span>Antworten an <small>(optional)</small></span><input name="replyTo" type="email" value="${esc(a.replyTo || '')}" maxlength="160" autocapitalize="none" spellcheck="false" placeholder="${intern ? 'z. B. it@standard-fleisch.de' : 'z. B. verkauf@standard-fleisch.de'}">
+            <small>${intern ? 'Antworten der Mitarbeiter landen dort.' : 'Antworten der Kunden landen dort – z. B. das Postfach, das Sie täglich lesen.'}</small></label>
+        </div>
+        <p class="form-err ml-kerr" id="${intern ? 'ml-err-int' : 'ml-err'}" role="alert"></p>
+        <div class="sec-foot ml-foot">${has ? `<button type="button" class="btn ghost" data-ml="remove">${icon('trash', 'sm')}Einstellungen entfernen</button>` : ''}<button type="submit" class="btn primary">${icon('check')}Speichern und Verbindung prüfen</button></div>
+      </form>`;
   }
   /* Fracht: frachtfrei ab … kg, Frachtanteil je Staffel; daraus entsteht der Hinweis unter dem Angebot (Bildschirm und Druck) */
   const frRow = (st) => `<div class="fr-row"><label class="fld"><span>Unter</span><span class="fr-in"><input name="fr-unter" type="number" min="1" max="100000" step="1" inputmode="numeric" value="${st ? esc(st.unter) : ''}" aria-label="Gewichtsgrenze in kg"> kg</span></label>
@@ -1125,7 +1138,7 @@
   });
   $('#view-mail').addEventListener('change', (e) => {
     if (e.target.name && e.target.name.startsWith('on-')) { const s = e.target.nextElementSibling; if (s) s.textContent = e.target.checked ? 'an' : 'aus'; }
-    if (e.target.name === 'secure') { const p = $('#ml-form [name="port"]'); if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
+    if (e.target.name === 'secure') { const p = e.target.form.elements.port; if (['465', '587', ''].includes(p.value)) p.value = e.target.value === 'ssl' ? 465 : 587; }
   });
   $('#view-mail').addEventListener('click', (e) => {
     const a = e.target.closest('[data-fr]')?.dataset.fr;
@@ -1172,11 +1185,11 @@
       } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
       return;
     }
-    if (e.target.id !== 'ml-form') return;
+    if (!e.target.classList.contains('ml-konto')) return;
     e.preventDefault();
-    const f = e.target, err = $('#ml-err'), btn = f.querySelector('[type="submit"]');
+    const f = e.target, err = f.querySelector('.ml-kerr'), btn = f.querySelector('[type="submit"]'), konto = f.dataset.konto;
     err.textContent = '';
-    const body = { host: f.host.value.trim(), port: +f.port.value, secure: f.secure.value, user: f.user.value.trim(), password: f.password.value, from: f.from.value.trim(), fromName: f.fromName.value.trim(), replyTo: f.replyTo.value.trim() };
+    const body = { konto, host: f.host.value.trim(), port: +f.port.value, secure: f.secure.value, user: f.user.value.trim(), password: f.password.value, from: f.from.value.trim(), fromName: f.fromName.value.trim(), replyTo: f.replyTo.value.trim() };
     btn.disabled = true;
     try {
       const r = await api('mail_konto_save', { body });
@@ -1184,7 +1197,7 @@
       if (r.connection.ok) toast('Gespeichert – Verbindung und Anmeldung am Mailserver erfolgreich. Jetzt eine Testmail senden.', 6000);
       else toast('Gespeichert, aber die Verbindung ist fehlgeschlagen – Details unten.', 6000);
       await renderMailView();
-      if (!r.connection.ok) $('#ml-err').textContent = 'Verbindungsprüfung: ' + r.connection.error;
+      if (!r.connection.ok) $(konto === 'intern' ? '#ml-err-int' : '#ml-err').textContent = 'Verbindungsprüfung: ' + r.connection.error;
     } catch (ex) { err.textContent = ex.message; } finally { btn.disabled = false; }
   });
   $('#view-mail').addEventListener('click', async (e) => {
@@ -1192,15 +1205,17 @@
     if (!b) return;
     const a = b.dataset.ml;
     if (a === 'preset') {
-      const p = MAIL_PRESETS[b.dataset.p], f = $('#ml-form');
+      const p = MAIL_PRESETS[b.dataset.p], f = b.closest('form');
       f.host.value = p.host; f.port.value = p.port; f.secure.value = p.secure;
       if (!f.user.value && f.from.value) f.user.value = f.from.value;
       f.user.focus();
       return;
     }
     if (a === 'remove') {
-      if (!(await confirmBox('Einstellungen entfernen?', 'Postfach, Absender und gespeichertes Passwort werden gelöscht. Danach werden – falls vorhanden – die Werte aus der Server-Datei .env verwendet, sonst ist der Versand ausgeschaltet.', 'Entfernen', true))) return;
-      try { await api('mail_konto_save', { body: { remove: true } }); toast('Postfach-Einstellungen entfernt.'); renderMailView(); } catch (ex) { $('#ml-err').textContent = ex.message; }
+      const f = b.closest('form'), konto = f.dataset.konto;
+      const txt = konto === 'intern' ? 'Postfach, Absender und gespeichertes Passwort für interne E-Mails werden gelöscht. Interne E-Mails gehen danach wieder über das Postfach für Kunden.' : 'Postfach, Absender und gespeichertes Passwort werden gelöscht. Danach werden – falls vorhanden – die Werte aus der Server-Datei .env verwendet, sonst ist der Versand ausgeschaltet.';
+      if (!(await confirmBox('Einstellungen entfernen?', txt, 'Entfernen', true))) return;
+      try { await api('mail_konto_save', { body: { konto, remove: true } }); toast('Postfach-Einstellungen entfernt.'); renderMailView(); } catch (ex) { f.querySelector('.ml-kerr').textContent = ex.message; }
       return;
     }
     if (a === 'ntest') {
@@ -1218,7 +1233,7 @@
     b.disabled = true;
     try {
       if (a === 'sig') { const r = await api('mail_save', { body: { signature: $('#ml-sig').value } }); mailSt.signature = r.signature; toast('Signatur gespeichert.'); }
-      if (a === 'test') { const to = $('#ml-to').value.trim(); await api('mail_test', { body: { to } }); toast(`Testmail an ${to} gesendet – bitte Posteingang (und Spam-Ordner) prüfen.`, 6000); await renderMailView(); $('#ml-to').value = to; }
+      if (a === 'test') { const to = $('#ml-to').value.trim(), konto = $('#ml-tkonto').value; await api('mail_test', { body: { to, konto } }); toast(`Testmail an ${to} gesendet – bitte Posteingang (und Spam-Ordner) prüfen.`, 6000); await renderMailView(); $('#ml-to').value = to; $('#ml-tkonto').value = konto; }
     } catch (ex) { err.textContent = ex.message; } finally { b.disabled = false; }
   });
 

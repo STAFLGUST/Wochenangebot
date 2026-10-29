@@ -1,7 +1,8 @@
 <?php
 /* Wird von deploy/anmeldung/konten.sh im App-Container ausgeführt (über die Standardeingabe, nicht über das Web).
  *   php -- postfach        → Zugangsdaten des Postfachs der Anwendung als JSON (Eingabebereich oder .env), nur für die
- *                            Einrichtung des Mailversands von Keycloak; das Passwort geht nur in die Datei des Keycloak-Tresors
+ *                            Einrichtung des Mailversands von Keycloak; das Passwort geht nur in die Datei des Keycloak-Tresors.
+ *                            Keycloak schreibt nur Mitarbeitern: Vorrang hat das Postfach für interne E-Mails (mail_cfg_intern).
  *   php -- nutzer <name>   → „aktiv“, „gesperrt“ oder „fehlt“: gibt es das Mitarbeiterkonto im Eingabebereich?
  * Ausgabe nur auf die Standardausgabe; nichts wird geschrieben.
  */
@@ -14,7 +15,7 @@ require $APP . '/api/mail.php';
 
 $was = (string)($argv[1] ?? '');
 if ($was === 'postfach') {
-    $c = mail_cfg();
+    $c = mail_cfg_intern();
     if ($c === null || ($c['source'] ?? '') === 'test') { fwrite(STDERR, "Im Eingabebereich ist kein E-Mail-Versand eingerichtet (Verwaltung → E-Mail).\n"); exit(2); }
     if (!empty($c['passError'])) { fwrite(STDERR, "Das gespeicherte Postfach-Passwort lässt sich nicht entschlüsseln – im Eingabebereich neu eingeben.\n"); exit(3); }
     echo json_encode(['host' => $c['host'], 'port' => (int)$c['port'], 'secure' => $c['secure'], 'user' => $c['user'], 'pass' => $c['pass'],

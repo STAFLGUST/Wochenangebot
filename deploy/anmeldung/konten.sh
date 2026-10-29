@@ -194,7 +194,7 @@ smtp = {"host": c["host"], "port": str(c["port"]), "from": c["from"], "fromDispl
         "replyTo": c["replyTo"] or "", "ssl": str(sec == "ssl").lower(), "starttls": str(sec == "starttls").lower(),
         "auth": str(bool(c["user"])).lower(), "user": c["user"] or "", "password": "${vault.smtp_password}"}
 print(json.dumps({"smtpServer": smtp}))
-print("Postfach: %s (%s), Absender %s, Quelle: %s" % (c["host"], sec, c["from"], "Eingabebereich" if c["quelle"] == "admin" else ".env"), file=sys.stderr)
+print("Postfach: %s (%s), Absender %s, Quelle: %s" % (c["host"], sec, c["from"], {"admin": "Eingabebereich", "intern": "Eingabebereich, Postfach für interne E-Mails"}.get(c["quelle"], ".env")), file=sys.stderr)
 ' "$VAULT_DIR/mitarbeiter_smtp__password") || abbruch "Postfach der Anwendung nicht lesbar (läuft die App? E-Mail im Eingabebereich eingerichtet?)."
   if [ "$(id -u)" = 0 ]; then chown -R "$KC_UID" "$VAULT_DIR"; fi
   printf '%s\n' "$einstellungen" | kc update "realms/$REALM" -f - >/dev/null

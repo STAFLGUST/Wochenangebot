@@ -68,7 +68,7 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   Konsole (`konten.sh zuruecksetzen`, nach persönlicher Prüfung).
 - **Neue Mitarbeiter:** Mitarbeiterkonto im Eingabebereich anlegen, dann `konten.sh einladen <name> <e-mail> <vorname>
   <nachname>` – Mail mit Link (72 Std.), das Passwort legt der Mitarbeiter selbst fest. Einmalig vorher
-  `konten.sh mail-einrichten <eigene-adresse>` (Postfach der Anwendung, Passwort nur im Tresor von Keycloak).
+  `konten.sh mail-einrichten <eigene-adresse>` (Postfach der Anwendung – Vorrang hat das Postfach für interne E-Mails –, Passwort nur im Tresor von Keycloak).
 - **Zweiter Faktor (seit 22.10.2026):** Pflicht für Administratoren (immer) und für Mitarbeiter, bei denen er im
   Eingabebereich vorgeschrieben ist (Sicherheitseinstellung bzw. je Nutzer); die Anwendung prüft das selbst (Claim `amr`)
   und fordert sonst die zweite Stufe bei Keycloak an, die ihn einrichten lässt. Alle anderen melden sich mit Passwort an;

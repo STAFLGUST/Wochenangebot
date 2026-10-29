@@ -129,7 +129,7 @@ function notify_mail(string $ev, array $items, int $skipped, bool $test = false)
    $inhalt: fertige E-Mail [Betreff, Text, HTML] statt der Ereignisliste (z. B. Wochenbericht des Moduls Sicherheit). */
 function notify_send(string $ev, array $to, array $items, int $skipped, bool $test, string $by, ?array $inhalt = null): array
 {
-    $cfg = mail_cfg();
+    $cfg = mail_cfg_intern();   // Benachrichtigungen gehen nur an Mitarbeiter: internes Postfach
     if (!$cfg || !$to) return [];
     [$subject, $text, $html] = $inhalt ?? notify_mail($ev, $items, $skipped, $test);
     $jobs = [];
@@ -156,7 +156,7 @@ function notify_flush(): void
         if (!empty($GLOBALS['store_tx'])) return;   // nicht gespeichert → nichts melden
         $by = [];
         foreach ($q as $it) if (notify_targets($it['ev'])) $by[$it['ev']][] = $it;
-        if (!$by || !mail_cfg()) return;
+        if (!$by || !mail_cfg_intern()) return;
         if (function_exists('fastcgi_finish_request')) fastcgi_finish_request();
         ignore_user_abort(true);
         foreach ($by as $ev => $items) {

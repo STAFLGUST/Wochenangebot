@@ -171,6 +171,12 @@ function sec_diag(string $check): array
             $it('Server', $m['host'] . ':' . $m['port'] . ' (' . strtoupper((string)$m['secure']) . ')', 'info');
             try { $s = new Smtp($m); $s->open(); $s->close(); $it('Verbindung und Anmeldung', 'erfolgreich (keine E-Mail versendet)'); }
             catch (RuntimeException $e) { $it('Verbindung und Anmeldung', $e->getMessage(), 'bad'); }
+            if (mail_account('intern')) {   // eigenes Postfach für interne E-Mails
+                $mi = mail_cfg_intern();
+                $it('Postfach intern', $mi['from'] . ' über ' . $mi['host'] . ':' . $mi['port'] . ' (' . strtoupper((string)$mi['secure']) . ')', 'info');
+                try { $s = new Smtp($mi); $s->open(); $s->close(); $it('Intern: Verbindung und Anmeldung', 'erfolgreich (keine E-Mail versendet)'); }
+                catch (RuntimeException $e) { $it('Intern: Verbindung und Anmeldung', $e->getMessage(), 'bad'); }
+            }
         }
     } elseif ($check === 'files') {
         $it('Datenordner beschreibbar', is_writable($DATA) ? 'ja' : 'nein', is_writable($DATA) ? 'ok' : 'bad');

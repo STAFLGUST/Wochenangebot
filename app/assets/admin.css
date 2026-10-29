@@ -878,6 +878,7 @@ body.ro .vtog { display: none; }
 /* E-Mail-Einstellungen */
 #view-mail .gcard { margin-bottom: 14px; }
 .ml-presets { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; flex-wrap: wrap; }
+.ml-konto .hint { margin: -4px 0 8px; } .ml-int-st { margin: 0 0 14px; font-size: 13.5px; }   /* Postfach für interne E-Mails: Zweck und Stand */
 .ml-pair { grid-template-columns: 1.4fr 1fr; gap: 14px; }
 .ml-h2 { margin-top: 20px; }
 .ml-foot { gap: 8px; margin-top: 8px; }

@@ -122,8 +122,10 @@ Designs von Keycloak für Anmeldeseite und E-Mails, sofort wirksam).
 
 ## Einladungen per Mail
 
-Einmalig `sh deploy/anmeldung/konten.sh mail-einrichten <eigene-adresse>`: Keycloak verschickt über dasselbe Postfach wie
-die Anwendung (Eingabebereich → Verwaltung → E-Mail oder `MAIL_SMTP_*` in `.env`) und schickt eine Testmail. Das
+Einmalig `sh deploy/anmeldung/konten.sh mail-einrichten <eigene-adresse>`: Keycloak verschickt über das Postfach der
+Anwendung – ist unter Verwaltung → E-Mail ein „Postfach für interne E-Mails“ eingerichtet (z. B. `verwaltung@…`), dieses,
+sonst das Postfach für Kunden-E-Mails bzw. `MAIL_SMTP_*` in `.env` – und schickt eine Testmail. Nach dem Einrichten oder
+Ändern des internen Postfachs `mail-einrichten` erneut ausführen. Das
 Postfach-Passwort liegt nur im Tresor von Keycloak (`daten-anmeldung/vault/`, nur Keycloak liest es); die Datenbank und
 ihre Sicherung enthalten nur den Verweis `${vault.smtp_password}`. Ändert sich das Postfach-Passwort oder nach einer
 Wiederherstellung auf neuem Server: `mail-einrichten` erneut ausführen.

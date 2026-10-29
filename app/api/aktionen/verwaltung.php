@@ -428,7 +428,7 @@ switch ($action) {
 
         case 'user_mail': {   // Zugangsdaten per E-Mail an den Mitarbeiter (optional mit Startpasswort)
             $me = require_admin_confirmation('user_mail');
-            $cfg = require_mail();
+            $cfg = require_mail(true);   // interne E-Mail: Postfach für interne E-Mails (z. B. verwaltung@…)
             $b = body();
             $users = users_load();
             $i = user_find($users, (string)($b['id'] ?? ''));
