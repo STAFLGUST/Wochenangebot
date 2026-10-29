@@ -49,6 +49,10 @@ const PERMS = [
     // Modul Controlling (28.10.2026): je Bereich eigene Rechte, ohne Standardrollen (Finanzdaten); weitere Bereiche (OP-Konten, Liquidität) folgen
     'controlling.umsatz_sehen'      => ['g' => 'Controlling', 'l' => 'Umsatzstatistik ansehen: Kg, Umsatz, Deckungsbeitrag und Spanne je Vertreter und Monat', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.zugang']],
     'controlling.umsatz_bearbeiten' => ['g' => 'Controlling', 'l' => 'Umsatzstatistik: Monatswerte je Vertreter erfassen und ändern', 'k' => 'machen', 'd' => [], 'r' => ['controlling.umsatz_sehen']],
+    // Modul Leergut (29.10.2026): ohne Standardrollen – Administratoren vergeben die Rechte (Salden und Werte gegenüber Partnern)
+    'leergut.sehen'            => ['g' => 'Leergut', 'l' => 'Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
+    'leergut.bearbeiten'       => ['g' => 'Leergut', 'l' => 'Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.sehen']],
+    'leergut.verwalten'        => ['g' => 'Leergut', 'l' => 'Leergut verwalten: Partner und Lademittel mit Werten pflegen, Datenpaket übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.bearbeiten']],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */

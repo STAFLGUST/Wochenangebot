@@ -373,6 +373,35 @@ Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, 
   mitgeschickten Vertreter (aktuelle aus den Stammdaten); Werte ausgeschiedener Vertreter bleiben, ihr Name kommt aus dem
   Schnappschuss `vertreter` (GR-106). `rev` schützt vor gleichzeitigem Überschreiben (409).
 
+### Leergut (`module/leergut/leergut.php`)
+
+Vorzeichen überall: **+ der Partner schuldet uns, − wir schulden dem Partner**; eine Bewegung zählt Abgang positiv, Zugang negativ.
+Mengen sind Zuordnungen Lademittel → ganze Stückzahl (`{"e2": 40, "h1": 2}`), Nullen werden nicht gespeichert.
+
+- **`leergut-stamm`**: `{"rev": 3, "lademittel": [{"id": "e2", "name": "E2-Kiste", "wert": 5.5, "aktiv": true}],
+  "partner": [{"id": "p…", "name": "…", "art": "spedition", "mandant": "standard", "kontoNr": "", "fristTage": 14, "email": "",
+  "ansprechpartner": "", "lieferanten": "", "notiz": "", "lademittel": ["e2", "h1"], "aktiv": true, "rev": 2, "erstellt": {…}, "geaendert": {…}}]}`.
+  Ohne Dokument gelten die Grundwerte `lg_grund_lademittel()` (E2 5,50 €, H1 36,00 €, übrige ohne Wert). Lademittel werden nie
+  entfernt, nur deaktiviert (sonst wären Buchungen nicht mehr lesbar); neue Kennungen entstehen aus dem Namen.
+- **`leergut-bewegungen`** (Historie): `{"rev": 9, "liste": [{"id": "b…", "partner": "p…", "datum": "2026-10-26", "typ": "bewegung",
+  "abgang": {"e2": 63}, "zugang": {}, "beleg": "", "text": "", "quelle": "hand|import", "erfasst": {"t": "…", "von": "…", "vonId": "u…"},
+  "storno": null}]}`. Nur anhängen; Stornieren setzt `storno: {t, von, vonId, grund}`, die Bewegung zählt dann nicht mehr.
+- **`leergut-abstimmungen`** (Historie): `{"liste": [{"id": "a…", "partner": "p…", "stichtag": "…", "eingang": "…", "fristBis": "…",
+  "saldo": {"e2": -15}, "status": "offen|bestaetigt|widersprochen|info", "quelle": "", "notiz": "", "eigen": {…}, "verlauf": [{t, von, was}],
+  "rev": 2, "herkunft": "import"?}]}`. `saldo` = Saldo laut Partner in unserem Vorzeichen; `eigen` = unser Saldo zum Stichtag beim
+  Speichern (Schnappschuss, GR-106). Die Oberfläche bekommt zusätzlich `eigenJetzt`, `differenz`, `ampel` und `restTage` (berechnet).
+  „Bestätigt“ im Konto ist unser Saldo bis zum Stichtag des letzten bestätigten Auszugs.
+- **`leergut-abschreibungen`**: `{"liste": [{"id": "d…", "zugestellt": "…", "auftrag": "", "empfaenger": "…", "empfaengerNr": "", "ort": "",
+  "sendung": "", "menge": {"e2": 5}, "grund": "", "status": "offen|widersprochen|berechnet|ausgeglichen|ignoriert", "rechnung": "",
+  "notiz": "", "verlauf": […], "rev": 1}]}`.
+- **`leergut-inventur`**: `{"liste": [{"id": "i…", "stichtag": "…", "positionen": [{"name": "Lager (WinAB-Inventur)", "werte": {"e2": 2289}}],
+  "notiz": "", "rev": 1}]}` – eigener Bestand für die Bilanz (letzte Inventur bis zum Stichtag).
+
+Datenpaket (`leergut_import`, nur mit `leergut.verwalten`): `{"format": "stafl-leergut", "version": 1, "lademittel": […], "partner":
+[{"schluessel": "…", "name": "…", …}], "bewegungen": [{"partner": "<schluessel>", …}], "abstimmungen": […], "abschreibungen": […],
+"inventur": […]}` – geprüft mit denselben Regeln wie die Eingabemasken; mit Fehlern wird nichts übernommen, in ein Modul mit Daten
+nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/leergut/datenpaket.json`.
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:

@@ -373,8 +373,8 @@ class EchtesRegelwerk(unittest.TestCase):
         # Startumfang (Pflichtmodule) plus die vom Inhaber angelegten Module HR, Marketing, Controlling, Sicherheit
         self.assertEqual(set(kacheln), {"angebot", "bestand", "leergut", "crm", "rewe", "qs", "einkauf", "containerimport", "import", "verwaltung", "hr", "marketing", "controlling", "sicherheit"})
         self.assertTrue(set(rw.module["dashboard"]["pflichtmodule"]) <= set(kacheln))
-        # Leergut, Container-Import: nicht freigegeben; DNS besteht (25.10.2026) → 503-Platzhalter (GR-105)
-        for neu, stand in (("leergut", "geplant"), ("containerimport", "geplant")):
+        # Leergut (in Entwicklung seit 29.10.2026), Container-Import: nicht freigegeben; DNS besteht (25.10.2026) → 503-Platzhalter (GR-105)
+        for neu, stand in (("leergut", "in_entwicklung"), ("containerimport", "geplant")):
             o = rw.modul(neu)["oberflaeche"][0]
             self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True)), (stand, "keine", True), neu)
         # HR: vom Inhaber am 23.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS

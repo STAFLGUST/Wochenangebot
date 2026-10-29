@@ -120,26 +120,29 @@ hinweise = [
 [[modul]]
 id = "leergut"
 name = "Leergut"
-beschreibung = "Leergutkonten je Kunde und Lieferant: Paletten, Kisten und Behälter – Ausgabe, Rücknahme, Salden"
+beschreibung = "Leergutkonten je Partner: Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Inventur und Bilanz"
 icon = "crate"
 reihenfolge = 25
 dashboard = true
 agent = "leergut"
-abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/leergut.toml", "app/api/module/leergut/**", "app/module/leergut/**", "tests/e2e/test_leergut*.py"]
+abhaengigkeiten = ["plattform"]
+testgruppen = ["leergut"]
+pfade = ["regeln/aktionen/leergut.toml", "app/api/aktionen/leergut.php", "app/api/module/leergut/**", "app/module/leergut/**", "tests/e2e/test_leergut*.py", "tests/fixtures/leergut/**"]
+pfade_geplant = []
 hinweise = [
-  "Angelegt auf Wunsch des Inhabers (25.10.2026) als geplante Kachel; Umfang (Leergutarten, Konten, Abgleich mit der Warenwirtschaft) vor dem Bau mit dem Inhaber klären.",
-  "Kunden und Lieferanten gehören der Verwaltung; Leergut liest sie nur über deren Funktionen (GR-101).",
+  "Auftrag des Inhabers (29.10.2026): löst die Excel-Liste „Leergut Bilanz Allgemein“ ab. Kern ist die Abstimmung mit den Partnern (Lieferanten, Speditionen, Kühlhäuser), die eigene Konten über uns führen und Auszüge mit Widerspruchsfrist schicken.",
+  "Vorzeichen wie in der Excel-Liste: + = der Partner schuldet uns, − = wir schulden; Abgang = wir geben Leergut ab, Zugang = wir erhalten Leergut.",
+  "Bewegungen werden nie geändert oder gelöscht, nur storniert (Status statt Löschen); Abstimmungen speichern unseren Saldo zum Stichtag als Schnappschuss (GR-106).",
+  "Eigene Partnerliste im Modul (Speditionen und Kühlhäuser sind keine Lieferanten der Warenwirtschaft); keine Daten anderer Module. Spätere Verknüpfung mit Kunden-/Lieferanten-Stammdaten der Verwaltung nur über deren Schnittstellen (GR-101).",
+  "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel-Liste und der Partnerauszüge über ein Datenpaket (leergut_import) in der Oberfläche.",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "Leergut"
   art = "intern"
-  adresse = "https://leergut.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://leergut.dashboard-stafl.de/module/leergut/"
+  entwicklung = "in_entwicklung"
   freigabe = "keine"
   sperrbar = true   # DNS-Eintrag besteht (25.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
 

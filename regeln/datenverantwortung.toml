@@ -207,6 +207,41 @@ schutz = "vertraulich"
 beschreibung = "Umsatzstatistik: Kg, Umsatz und Deckungsbeitrag je Jahr, Monat und Vertreter (Monatsmeldung von Hand), Versionsstand, letzte Änderung"
 historie = "Vertreternamen als Schnappschuss (GR-106): Werte ausgeschiedener Vertreter bleiben mit Namen erhalten"
 
+[[dokument]]
+name = "leergut-stamm"
+eigentuemer = "leergut"
+schutz = "intern"
+beschreibung = "Leergut: Lademittel mit Wert je Stück und Partner (Art, Firma, Konto-Nr. beim Partner, Frist, E-Mail für die Abstimmung, Lieferanten hinter einem Sammelkonto, genutzte Lademittel, aktiv)"
+
+[[dokument]]
+name = "leergut-bewegungen"
+eigentuemer = "leergut"
+schutz = "intern"
+beschreibung = "Leergut-Bewegungen je Partner: Datum, Art, Abgang/Zugang je Lademittel, Beleg, Text, Herkunft (von Hand/Datenpaket)"
+historie = "Nie geändert oder gelöscht; Fehler werden storniert (mit Grund, Name und Zeitpunkt) und neu gebucht"
+
+[[dokument]]
+name = "leergut-abstimmungen"
+eigentuemer = "leergut"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
+beschreibung = "Auszüge der Partner zum Stichtag: Saldo laut Partner, Eingang, Frist, Status (offen, bestätigt, widersprochen, zur Info), Quelle, Notiz, Verlauf"
+historie = "Unser Saldo zum Stichtag als Schnappschuss beim Erfassen (GR-106); Statuswechsel im Verlauf mit Name"
+
+[[dokument]]
+name = "leergut-abschreibungen"
+eigentuemer = "leergut"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
+beschreibung = "Dachser-Abschreibungen für nicht getauschtes Leergut unserer Kunden: Empfänger, Sendung, Mengen, Status (offen, widersprochen, berechnet, ausgeglichen, nicht zu beachten), WinAB-Auftrag, Notiz, Verlauf"
+
+[[dokument]]
+name = "leergut-inventur"
+eigentuemer = "leergut"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
+beschreibung = "Eigener Leergutbestand zum Stichtag (Positionen wie Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]

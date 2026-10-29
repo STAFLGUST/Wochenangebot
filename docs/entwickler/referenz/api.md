@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-186 Aktionen in 11 Modulen.
+198 Aktionen in 12 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -71,6 +71,23 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `stock_import` | `angebot.eingabe` | schreibend | – | Recht bestand.importieren | `app/api/aktionen/bestand.php` |
 | `stock_mhd_senden` | `angebot.eingabe` | schreibend | – | Recht bestand.mhd_senden | `app/api/aktionen/bestand.php` |
 | `stock_pdf` | `angebot.eingabe` | schreibend | – | Recht bestand.sehen | `app/api/aktionen/bestand.php` |
+
+## Leergut (`leergut`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `leergut_abschreibung_save` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
+| `leergut_abstimmung_save` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
+| `leergut_bewegung_save` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
+| `leergut_bewegung_storno` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
+| `leergut_bilanz` | `leergut.intern` | lesend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
+| `leergut_export` | `leergut.intern` | schreibend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
+| `leergut_import` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
+| `leergut_inventur_save` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
+| `leergut_konto` | `leergut.intern` | lesend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
+| `leergut_lademittel_save` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
+| `leergut_partner_save` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
+| `leergut_start` | `leergut.intern` | lesend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
 
 ## CRM (`crm`)
 

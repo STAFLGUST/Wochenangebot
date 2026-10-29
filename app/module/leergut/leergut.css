@@ -1,0 +1,282 @@
+/* STAFL-Plattform · Leergut – Gestaltung „Liquid Glass“ wie Dashboard, Controlling, HR, CRM und Marketing: warmer Grund mit
+   drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. Alle Farben als --lg-*, dunkel doppelt definiert (Gerät und
+   Wahl am Konto). Vorzeichen: + der Partner schuldet uns (grün), − wir schulden dem Partner (warm/akzent).
+   Tabellen werden unter 760 px zu Karten (data-label), damit die Seite auf dem Handy nie seitlich scrollt. */
+body.lg {
+  --lg-bg:#f4f1ee; --lg-text:#1c1a19; --lg-muted:#625c58; --lg-glass:rgba(255,255,255,.62); --lg-kopf:rgba(255,255,255,.9);
+  --lg-card:#fff; --lg-border:rgba(45,38,35,.14); --lg-line:rgba(45,38,35,.11); --lg-gloss:rgba(255,255,255,.9);
+  --lg-shadow:0 10px 34px rgba(50,34,28,.09); --lg-blob-a:#7384a7; --lg-blob-b:#e3b66f; --lg-blob-c:#6c9a7c;
+  --lg-accent:#8c1d2c; --lg-green:#347a55; --lg-green-soft:rgba(52,122,85,.12); --lg-minus:#a34a1f; --lg-minus-soft:rgba(190,96,40,.12);
+  --lg-gelb:#8a6500; --lg-gelb-soft:rgba(214,160,20,.17); --lg-rot:#a1222f; --lg-rot-soft:rgba(161,34,47,.11);
+  --lg-head-bg:rgba(230,235,230,.72); --lg-head-text:#59645c; --lg-total-bg:rgba(230,235,230,.55); --lg-chip:rgba(90,78,74,.1);
+  --lg-focus:0 0 0 3px rgba(140,29,44,.32);
+  margin:0; min-height:100vh; min-height:100dvh; background:var(--lg-bg); color:var(--lg-text); font-family:var(--font);
+}
+@media screen and (prefers-color-scheme: dark){:root:not([data-theme="light"]) body.lg{--lg-bg:#121011;--lg-text:#f5f1ee;--lg-muted:#b2aaa4;--lg-glass:rgba(39,35,35,.66);--lg-kopf:rgba(33,29,29,.95);--lg-card:#211d1d;--lg-border:rgba(255,255,255,.15);--lg-line:rgba(255,255,255,.12);--lg-gloss:rgba(255,255,255,.15);--lg-shadow:0 12px 44px rgba(0,0,0,.42);--lg-blob-a:#32486a;--lg-blob-b:#825c28;--lg-blob-c:#28533c;--lg-accent:#f0a3ae;--lg-green:#74c894;--lg-green-soft:rgba(116,200,148,.16);--lg-minus:#f0a874;--lg-minus-soft:rgba(240,168,116,.15);--lg-gelb:#f2cf6b;--lg-gelb-soft:rgba(242,207,107,.15);--lg-rot:#f59aa4;--lg-rot-soft:rgba(245,154,164,.15);--lg-head-bg:rgba(255,255,255,.11);--lg-head-text:#e1e6e1;--lg-total-bg:rgba(255,255,255,.08);--lg-chip:rgba(255,255,255,.1);--lg-focus:0 0 0 3px rgba(240,163,174,.45)}}
+@media screen{:root[data-theme="dark"] body.lg{--lg-bg:#121011;--lg-text:#f5f1ee;--lg-muted:#b2aaa4;--lg-glass:rgba(39,35,35,.66);--lg-kopf:rgba(33,29,29,.95);--lg-card:#211d1d;--lg-border:rgba(255,255,255,.15);--lg-line:rgba(255,255,255,.12);--lg-gloss:rgba(255,255,255,.15);--lg-shadow:0 12px 44px rgba(0,0,0,.42);--lg-blob-a:#32486a;--lg-blob-b:#825c28;--lg-blob-c:#28533c;--lg-accent:#f0a3ae;--lg-green:#74c894;--lg-green-soft:rgba(116,200,148,.16);--lg-minus:#f0a874;--lg-minus-soft:rgba(240,168,116,.15);--lg-gelb:#f2cf6b;--lg-gelb-soft:rgba(242,207,107,.15);--lg-rot:#f59aa4;--lg-rot-soft:rgba(245,154,164,.15);--lg-head-bg:rgba(255,255,255,.11);--lg-head-text:#e1e6e1;--lg-total-bg:rgba(255,255,255,.08);--lg-chip:rgba(255,255,255,.1);--lg-focus:0 0 0 3px rgba(240,163,174,.45)}}
+
+*{box-sizing:border-box}
+body.lg :focus-visible{outline:none;box-shadow:var(--lg-focus)}
+.lg [hidden]{display:none!important}
+.lg .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.lg-bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.lg-bg span{position:absolute;border-radius:50%;filter:blur(140px)}
+.lg-bg span:nth-child(1){width:580px;height:580px;left:-180px;top:-220px;background:var(--lg-blob-a);opacity:.16}
+.lg-bg span:nth-child(2){width:500px;height:500px;right:-130px;top:150px;background:var(--lg-blob-b);opacity:.14}
+.lg-bg span:nth-child(3){width:580px;height:580px;left:28%;bottom:-340px;background:var(--lg-blob-c);opacity:.12}
+.lg-seite{position:relative;z-index:1;max-width:1480px;margin:auto;padding:20px 24px 38px;display:flex;flex-direction:column;gap:20px;min-height:100vh;min-height:100dvh}
+.lg-glas{background:var(--lg-glass);border:1px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-gloss),var(--lg-shadow);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.lg-glas{background:var(--lg-card)}}
+.lg-main{flex:1;min-width:0}
+.lg-symbole{position:absolute;width:0;height:0;overflow:hidden}
+.lg .i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.lg input[type="checkbox"]{accent-color:var(--lg-accent);width:17px;height:17px;margin:0}
+
+/* Kopf */
+.lg-kopf{position:sticky;top:12px;z-index:5;display:flex;align-items:center;gap:14px;padding:9px 12px;border-radius:999px;background:var(--lg-kopf)}
+.lg-kopf .brand-logo{height:27px;width:auto;display:block}
+.lg-modul{display:inline-flex;align-items:center;gap:8px;padding-left:14px;border-left:1px solid var(--lg-line);font-weight:650;white-space:nowrap}
+.lg-modul .i{color:var(--lg-green)}
+.lg-aktionen{margin-left:auto;display:flex;align-items:center;gap:8px}
+.lg-rund{width:40px;height:40px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--lg-chip);color:var(--lg-text);cursor:pointer}
+.lg-user{display:flex;align-items:center;gap:8px;padding:0 12px 0 4px;height:40px;border-radius:99px;background:var(--lg-chip);font-size:13px}
+.lg-initialen{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--lg-accent);color:#fff;font-weight:700}
+.lg-user-name{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Leiste mit Reitern und Schnellaktionen */
+.lg-leiste{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 14px}
+.lg-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--lg-chip);scrollbar-width:none}
+.lg-tabs button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--lg-muted);font:inherit;font-size:14px;font-weight:650;white-space:nowrap;cursor:pointer}
+.lg-tabs button[aria-selected="true"]{background:var(--lg-card);color:var(--lg-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.lg-schnell{display:flex;gap:8px;flex-wrap:wrap}
+.lg-schnell .btn{display:inline-flex;align-items:center;gap:7px}
+.lg .btn .i{width:16px;height:16px}
+.lg .btn.sm{display:inline-flex;align-items:center;gap:6px}
+
+/* Kennzahlen */
+.lg-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.lg-kpi{min-width:0;padding:14px 16px;border-radius:18px;background:var(--lg-glass);border:1px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-gloss),var(--lg-shadow)}
+.lg-kpi span{display:block;color:var(--lg-muted);font-size:10px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.lg-kpi b{display:block;margin:5px 0 2px;font-size:23px;line-height:1.15;font-weight:760;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.lg-kpi small{color:var(--lg-muted);font-size:11px}
+.lg-kpi.warn b{color:var(--lg-rot)}
+
+/* Flächen */
+.lg-raster{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+.lg-panel{min-width:0;padding:15px;border-radius:20px;margin-bottom:12px}
+.lg-raster .lg-panel{margin-bottom:0}
+.lg-panelkopf{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.lg-panelkopf h2{margin:0;font-size:16px;font-weight:700}
+.lg-panelkopf-filter{align-items:flex-end}
+.lg-hilfe{color:var(--lg-muted);font-size:11px}
+.lg-hinweis{margin:0 0 12px;color:var(--lg-muted);font-size:12px;line-height:1.45}
+.lg-fussnote{margin:9px 0 0;color:var(--lg-muted);font-size:11px}
+.lg-leer{max-width:640px;margin:10px auto 16px;padding:24px;border-radius:22px;text-align:center}
+.lg-leer h2{margin:0 0 8px;font-size:19px}.lg-leer p{margin:0;color:var(--lg-muted)}
+.lg-leer-text{margin:0;padding:22px;border-radius:20px;color:var(--lg-muted);text-align:center}
+.lg-leerzeile{padding:14px 6px;color:var(--lg-muted);font-size:13px;text-align:center}
+
+/* Eingaben */
+.lg-eingabe{height:38px;min-width:0;padding:0 10px;border:1px solid var(--lg-border);border-radius:10px;background:var(--lg-card);color:var(--lg-text);font:inherit;font-size:13px}
+textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4}
+.lg-eingabe[aria-invalid="true"]{border-color:var(--lg-rot);box-shadow:0 0 0 2px var(--lg-rot-soft)}
+.lg-filterzeile{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lg-filterzeile select.lg-eingabe{min-width:150px}
+.lg-feld-inline{color:var(--lg-muted);font-size:12px;font-weight:650}
+.lg-check{display:inline-flex;align-items:center;gap:8px;color:var(--lg-muted);font-size:13px;cursor:pointer}
+
+/* Tabellen */
+.lg-tabelle-wrap{width:100%;overflow-x:auto}
+.lg-tabelle{width:100%;border-collapse:collapse}
+.lg-tabelle th{padding:9px 8px;background:var(--lg-head-bg);color:var(--lg-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--lg-border);white-space:nowrap;vertical-align:bottom}
+.lg-tabelle th small{display:block;font-size:9px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
+.lg-tabelle td{padding:9px 8px;border-bottom:1px solid var(--lg-line);font-size:12.5px;vertical-align:middle}
+.lg-tabelle tbody tr.lg-klick{cursor:pointer}
+.lg-tabelle tbody tr.lg-klick:hover{background:var(--lg-total-bg)}
+.lg-tabelle tfoot td,.lg-tabelle tr.lg-summe td{background:var(--lg-total-bg);font-weight:750}
+.lg-tabelle tr.lg-storniert td{color:var(--lg-muted);text-decoration:line-through;text-decoration-color:var(--lg-muted)}
+.lg-tabelle tr.lg-storniert td.lg-ohne-strich{text-decoration:none}
+.lg-zahl{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lg-name{font-weight:700}
+.lg-sub{display:block;margin-top:2px;color:var(--lg-muted);font-size:11px;font-weight:500}
+.lg-plus{color:var(--lg-green);font-weight:700}
+.lg-minus{color:var(--lg-minus);font-weight:700}
+.lg-null{color:var(--lg-muted)}
+.lg-mengen{display:flex;gap:4px 10px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.lg-mengen span{white-space:nowrap}
+.lg-mengen small{color:var(--lg-muted);font-size:10.5px;font-weight:650;margin-right:3px}
+
+/* Kennzeichen */
+.lg-chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;background:var(--lg-chip);color:var(--lg-muted);font-size:11px;font-weight:700;white-space:nowrap}
+.lg-chip.gruen,.lg-chip.s-bestaetigt,.lg-chip.s-ausgeglichen{background:var(--lg-green-soft);color:var(--lg-green)}
+.lg-chip.gelb,.lg-chip.s-offen{background:var(--lg-gelb-soft);color:var(--lg-gelb)}
+.lg-chip.rot,.lg-chip.s-widersprochen{background:var(--lg-rot-soft);color:var(--lg-rot)}
+.lg-chip.s-berechnet{background:var(--lg-minus-soft);color:var(--lg-minus)}
+.lg-chip.s-info,.lg-chip.s-ignoriert{background:var(--lg-chip);color:var(--lg-muted)}
+.lg-chip.firma{background:transparent;border:1px solid var(--lg-border)}
+
+/* Fristenliste */
+.lg-fristen{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.lg-frist{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:var(--lg-card);border:1px solid var(--lg-line);cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.lg-frist:hover{border-color:var(--lg-border)}
+.lg-frist .lg-tage{min-width:62px;text-align:center}
+.lg-frist b{display:block;font-size:13px}
+.lg-frist .lg-sub{margin:0}
+
+/* Konten: Liste links, Konto rechts */
+.lg-konten{display:grid;grid-template-columns:320px minmax(0,1fr);gap:12px;align-items:start}
+.lg-kontoliste{position:sticky;top:84px;padding:12px;border-radius:20px;display:flex;flex-direction:column;gap:8px;max-height:calc(100dvh - 110px)}
+.lg-kontoliste .lg-filterzeile{display:grid;grid-template-columns:1fr 1fr}
+.lg-kontoliste .lg-filterzeile select.lg-eingabe{min-width:0;width:100%}
+.lg-liste{list-style:none;margin:0;padding:0;overflow:auto;display:grid;gap:3px;align-content:start}
+.lg-liste button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:8px 10px;border:0;border-radius:11px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.lg-liste button:hover{background:var(--lg-total-bg)}
+.lg-liste button[aria-current="true"]{background:var(--lg-card);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.lg-liste .lg-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg-liste .lg-mengen{grid-column:1/-1;font-size:11.5px}
+.lg-liste .lg-punkt{width:9px;height:9px;border-radius:50%;align-self:center;background:transparent}
+.lg-liste .lg-punkt.rot{background:var(--lg-rot)}.lg-liste .lg-punkt.gelb{background:var(--lg-gelb)}
+.lg-liste li.lg-inaktiv .lg-name{color:var(--lg-muted);font-weight:600}
+.lg-konto{min-width:0;display:flex;flex-direction:column;gap:12px}
+.lg-kontokopf{padding:16px;border-radius:20px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.lg-kontokopf h2{margin:0 0 4px;font-size:21px;letter-spacing:-.02em}
+.lg-kontokopf .lg-meta{display:flex;gap:6px 12px;flex-wrap:wrap;color:var(--lg-muted);font-size:12px}
+.lg-kontokopf .lg-knopfreihe{margin:0}
+.lg-notiz{margin:8px 0 0;max-width:720px;color:var(--lg-muted);font-size:12.5px;white-space:pre-line}
+
+/* Saldo-Karten wie im Palettenkonto der Spedition: Gesamt · davon bestätigt · davon offen */
+.lg-salden{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.lg-saldo{padding:14px 16px;border-radius:18px}
+.lg-saldo h3{margin:0 0 8px;font-size:12px;color:var(--lg-muted);font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+.lg-saldo .lg-gross{display:block;font-size:30px;line-height:1.05;font-weight:780;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.lg-saldo dl{display:grid;grid-template-columns:1fr auto;gap:3px 10px;margin:10px 0 0;font-size:12px}
+.lg-saldo dt{color:var(--lg-muted)}.lg-saldo dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.lg-saldo .lg-wert{display:block;margin-top:4px;color:var(--lg-muted);font-size:11.5px}
+
+/* Mengeneingabe in Dialogen */
+.lg-mengentabelle td{padding:6px 8px}
+.lg-mengentabelle input.lg-eingabe{width:100%;max-width:130px;text-align:right;font-variant-numeric:tabular-nums}
+.lg-mengentabelle td.lg-zahl input.lg-eingabe{margin-left:auto;display:block}
+.lg-mengenreihe{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.lg-mengenreihe label,.lg-formraster label,.lg-dialog form>label,.lg-schmal{display:flex;flex-direction:column;gap:5px;color:var(--lg-muted);font-size:12px;font-weight:650}
+.lg-mengenreihe input{text-align:right}
+.lg-formraster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+.lg-formraster .lg-breit{grid-column:1/-1}
+.lg-schmal{max-width:220px}
+.lg-lmwahl{margin:0;padding:10px 12px;border:1px solid var(--lg-border);border-radius:12px}
+.lg-lmwahl legend{padding:0 5px;color:var(--lg-muted);font-size:12px;font-weight:650}
+.lg-lmwahl>div{display:flex;flex-wrap:wrap;gap:8px 16px}
+.lg-lmwahl .lg-check{color:var(--lg-text)}
+.lg-lm-tabelle input.lg-eingabe{width:100%}
+.lg-lm-tabelle td.lg-zahl input.lg-eingabe{max-width:140px;margin-left:auto;display:block;text-align:right}
+
+/* Dialoge */
+.lg-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--lg-border);border-radius:22px;background:var(--lg-card);color:var(--lg-text);box-shadow:0 28px 80px rgba(0,0,0,.32)}
+.lg-dialog-klein{width:min(520px,calc(100vw - 28px))}
+.lg-dialog::backdrop{background:rgba(20,16,16,.42);backdrop-filter:blur(4px)}
+.lg-dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
+.lg-dialogkopf{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.lg-dialogkopf h2{margin:0;font-size:20px}
+.lg-dialog-schliessen{width:38px;height:38px;flex:none;border:0;border-radius:50%;background:var(--lg-chip);color:var(--lg-text);font-size:24px;line-height:1;cursor:pointer}
+.lg-dialog p{margin:0}
+.lg-verlauf{list-style:none;margin:0;padding:0;display:grid;gap:3px;color:var(--lg-muted);font-size:11.5px}
+.lg-verlauf:empty{display:none}
+.lg-meldung{margin:0;color:var(--lg-rot);font-size:13px;font-weight:600}
+.lg-meldung:empty{display:none}
+.lg-meldung.ok{color:var(--lg-green)}
+.lg-knopfreihe{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+.lg-knopfreihe .lg-check{margin-right:auto}
+
+/* Import */
+.lg-import{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.lg-import label.btn{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.lg-vorschau{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0 10px}
+.lg-vorschau div{padding:10px 12px;border-radius:12px;background:var(--lg-card);border:1px solid var(--lg-line)}
+.lg-vorschau b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.lg-vorschau span{color:var(--lg-muted);font-size:11px}
+.lg-fehlerliste{margin:0 0 10px;padding-left:18px;color:var(--lg-rot);font-size:12px;max-height:220px;overflow:auto}
+
+/* Abschreibungen je Kunde */
+.lg-kunden{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.lg-kunden button{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border:1px solid var(--lg-border);border-radius:999px;background:var(--lg-card);color:var(--lg-text);font:inherit;font-size:12px;font-weight:650;cursor:pointer}
+.lg-kunden button[aria-pressed="true"]{background:var(--lg-text);color:var(--lg-bg)}
+.lg-kunden b{font-variant-numeric:tabular-nums}
+
+/* Meldungen */
+.lg-toast{position:fixed;left:50%;bottom:20px;z-index:50;transform:translate(-50%,18px);opacity:0;pointer-events:none;max-width:calc(100vw - 24px);padding:11px 16px;border-radius:999px;background:var(--lg-text);color:var(--lg-bg);font-size:13px;font-weight:600;transition:opacity .2s,transform .2s}
+.lg-toast.zeigen{opacity:1;transform:translate(-50%,0)}
+.lg-toast.fehler{background:#8c1d2c;color:#fff}
+.lg-hinweisbox{max-width:520px;margin:45px auto;padding:30px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.lg-hinweisbox h1{margin:0;font-size:24px}.lg-hinweisbox p{margin:0;color:var(--lg-muted)}
+.lg-hinweisbox .i{width:28px;height:28px;color:var(--lg-muted)}
+.lg-fehler{padding:12px 15px;border-radius:14px;background:var(--lg-rot-soft);color:var(--lg-rot);font-weight:600}
+.lg-fuss{margin-top:10px;padding:0 8px;color:var(--lg-muted);font-size:12px}
+
+@media(max-width:1100px){.lg-raster{grid-template-columns:1fr}.lg-konten{grid-template-columns:270px minmax(0,1fr)}}
+@media(max-width:860px){
+  .lg-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .lg-konten{grid-template-columns:1fr}
+  .lg-kontoliste{position:static;max-height:none}
+  .lg-liste{max-height:300px}
+}
+/* Tabellen als Karten */
+@media(max-width:760px){
+  .lg-tabelle-wrap{overflow:visible}
+  .lg-karten thead{display:none}
+  .lg-karten,.lg-karten tbody,.lg-karten tfoot{display:block}
+  .lg-karten tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;padding:9px 6px;border-bottom:1px solid var(--lg-line)}
+  .lg-karten td{display:block;padding:3px 0;border:0;min-width:0;text-align:left!important;white-space:normal}
+  .lg-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--lg-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+  .lg-karten td.lg-voll{grid-column:1/-1}
+  .lg-karten td.lg-voll::before{display:none}
+  .lg-karten td:empty{display:none}
+  .lg-karten tfoot tr,.lg-karten tr.lg-summe{background:var(--lg-total-bg);border-radius:10px}
+  .lg-mengentabelle td.lg-zahl input.lg-eingabe{margin-left:0;max-width:none}
+}
+@media(max-width:560px){
+  .lg-seite{padding:12px 12px 28px;gap:14px}
+  .lg-kopf{top:7px;gap:8px;padding:7px 9px}
+  .lg-kopf .brand-logo{height:22px}
+  .lg-modul{padding-left:8px;font-size:13px}
+  .lg-user{padding:0;background:transparent}
+  .lg-user-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .lg-initialen,.lg-rund{width:38px;height:38px}
+  .lg-leiste{margin:14px 0 10px}
+  .lg-tabs button{height:36px;padding:0 13px;font-size:13px}
+  .lg-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .lg-schnell .btn{justify-content:center}
+  .lg-kpis{gap:7px}.lg-kpi{padding:10px;border-radius:14px}.lg-kpi b{font-size:19px}.lg-kpi span{font-size:9px}
+  .lg-panel{padding:11px;border-radius:16px}
+  .lg-panelkopf h2{font-size:15px}
+  .lg-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .lg-filterzeile select.lg-eingabe,.lg-filterzeile input.lg-eingabe{min-width:0;width:100%}
+  .lg-filterzeile .btn{width:100%;justify-content:center}
+  .lg-formraster{grid-template-columns:1fr}
+  .lg-saldo .lg-gross{font-size:26px}
+  .lg-frist{grid-template-columns:auto minmax(0,1fr)}
+  .lg-frist .lg-mengen{grid-column:1/-1}
+  .lg-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:22px 22px 0 0}
+  .lg-dialog form{padding:15px}
+  .lg-knopfreihe .btn{min-height:40px}
+}
+@media(max-width:480px){body.lg .lg-kopf .brand-logo{width:30px;height:28px;object-fit:cover;object-position:left center}.lg-modul .i{display:none}}
+@media(prefers-reduced-motion:reduce){.lg-toast{transition:none}}
+.lg-tabelle tr.lg-gruppe td{padding-top:14px;background:transparent;font-size:12px;color:var(--lg-muted)}
+/* Handy: Mengen je Konto als eine Zeile statt einer Karte je Lademittel */
+.lg-nur-mobil{display:none}
+@media(max-width:760px){
+  .lg-karten td{overflow-wrap:anywhere}
+  .lg-karten td.lg-nur-mobil{display:block;grid-column:1/-1}
+  .lg-karten td.lg-mobil-weg{display:none}
+}
+@media(max-width:560px){
+  .lg-frist{grid-template-columns:minmax(0,1fr);gap:5px}
+  .lg-frist .lg-tage{min-width:0;text-align:left}
+}
+.lg-dialog form>label.lg-check{flex-direction:row;align-items:center;font-size:13px;font-weight:500}
+@media(max-width:760px){
+  .lg-mengentabelle.lg-karten tr{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
+  .lg-mengentabelle.lg-karten td.lg-zahl{text-align:right!important}
+  .lg-mengentabelle.lg-karten td[data-label]::before{text-align:left}
+}
+.lg a.btn{text-decoration:none}

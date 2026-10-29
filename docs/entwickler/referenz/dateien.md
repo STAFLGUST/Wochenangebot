@@ -90,6 +90,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen und Vertreter (Beschreibung: lib/kunden.php). |
 | `kundenportal.php` | angebot | Aktionen: Kunden auf der Angebotsseite |
 | `kundenverwaltung.php` | verwaltung | Aktionen: Kundenstammdaten (Administrator) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `leergut.php` | leergut | Aktionen: Leergut · Leergutkonten und Abstimmung (Oberfläche leergut.intern, Daten und Regeln in app/api/module/leergut/leergut.php) Rechte (GR-103): leergut.sehen – Übersicht, Konten mit Bewegungen, Abstimmungen, … |
 | `mail.php` | plattform | Aktionen: E-Mail-Versand (Administrator) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `marketing.php` | marketing | Aktionen: Marketing · Redaktionsplan (Oberfläche marketing.intern, Daten und Regeln in app/api/module/marketing/marketing.php) Rechte (GR-103): marketing.sehen – Übersicht, Kalender, Board, Liste, Kampagnen ansehen, … |
 | `module.php` | plattform | Modulübersicht (Plattformkern) |
@@ -172,6 +173,12 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `import.php` | hr | Modul HR · Übernahme der bisherigen Planungsdatei („Urlaub 2026.xlsx“, ein Blatt je Monat). |
 | `urlaub.php` | hr | Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Monatsplan). |
 | `zeiterfassung.php` | hr | Modul HR · Import „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht, .xlsx) – Importvorlage für die Urlaubstage (Entscheidung des Inhabers, 23.10.2026). |
+
+## `app/api/module/leergut/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `leergut.php` | leergut | Leergut · Leergutkonten und Abstimmung |
 
 ## `app/api/module/marketing/`
 
@@ -305,6 +312,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `index.html` | hr | Mein Urlaub |
 | `verwaltung-hr.css` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung (Mitarbeiter-Dialog, Urlaubseinstellungen, Altbestand). |
 | `verwaltung-hr.js` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbeiter |
+
+## `app/module/leergut/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `index.html` | leergut | Übersicht |
+| `leergut.css` | leergut | STAFL-Plattform · Leergut – Gestaltung „Liquid Glass“ wie Dashboard, Controlling, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
+| `leergut.js` | leergut | STAFL-Plattform · Leergut – Oberfläche der Leergutkonten |
 
 ## `app/module/marketing/`
 
@@ -529,6 +544,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `crm.toml` | crm | Aktionen des Moduls „crm“ |
 | `einkauf.toml` | einkauf | Aktionen des Moduls „einkauf“ |
 | `hr.toml` | hr | Aktionen des Moduls „hr“ |
+| `leergut.toml` | leergut | Aktionen des Moduls „leergut“ |
 | `marketing.toml` | marketing | Aktionen des Moduls „marketing“ |
 | `mobile.toml` | mobile | Aktionen des Moduls „mobile“ |
 | `plattform.toml` | plattform | Aktionen des Moduls „plattform“ |
@@ -611,6 +627,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_kunden_mail.py` | angebot | E-Mail an Kunden: Einladung mit Einmal-Link, Passwort-Link, Angebotslink, Wochenversand, Testmail. |
 | `test_kundengruppen.py` | verwaltung | Stammdaten: Navigation (Artikel, Kunden, Kundengruppen), Kundengruppen per CSV (Windows-1252/UTF-8) importieren, bearbeiten, Rechte, Zuordnung im Kunden, Protokoll. |
 | `test_kundenimport.py` | verwaltung | Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. |
+| `test_leergut.py` | leergut | Leergut (Modul leergut, Oberfläche leergut.intern unter /module/leergut/) – Leergutkonten und Abstimmung. |
 | `test_legal_pages.py` | angebot | Öffentlich erreichbar, Navigation ohne JavaScript und mobile Darstellung. |
 | `test_mail_intern.py` | plattform | Postfach für interne E-Mails (z. |
 | `test_marketing.py` | marketing | Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/). |

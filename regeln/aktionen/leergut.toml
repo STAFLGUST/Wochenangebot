@@ -1,0 +1,52 @@
+# Aktionen des Moduls „leergut“: Leergutkonten je Partner (Lieferant, Spedition, Kühlhaus, Kunde) mit Bewegungen je
+# Lademittel, Abstimmungen mit den Auszügen der Partner (Fristen), Dachser-Abschreibungen, Inventur, Bilanz zum Stichtag,
+# Stammdaten (Partner, Lademittel mit Werten) und Übernahme eines Datenpakets (bisherige Excel-Liste und Auszüge).
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "leergut"
+
+[aktion.leergut_start]
+oberflaeche = "leergut.intern"
+
+[aktion.leergut_konto]
+oberflaeche = "leergut.intern"
+
+[aktion.leergut_bilanz]
+oberflaeche = "leergut.intern"
+
+[aktion.leergut_export]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_bewegung_save]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_bewegung_storno]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_abstimmung_save]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_abschreibung_save]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_inventur_save]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_partner_save]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_lademittel_save]
+oberflaeche = "leergut.intern"
+schreibend = true
+
+[aktion.leergut_import]
+oberflaeche = "leergut.intern"
+schreibend = true
