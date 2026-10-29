@@ -93,7 +93,7 @@ reihenfolge = 20
 dashboard = true
 agent = "bestand"
 abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = ["stock", "stock_overview", "bestand_pdf", "master"]
+testgruppen = ["stock", "stock_overview", "bestand_pdf", "master", "mhd_mail"]
 pfade = [
   "regeln/aktionen/bestand.toml",
   "app/api/lib/bestand.php", "app/api/lib/bestand-pdf.php", "app/api/aktionen/bestand.php",

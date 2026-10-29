@@ -14,3 +14,7 @@ schreibend = true
 [aktion.stock_pdf]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+[aktion.stock_mhd_senden]
+oberflaeche = "angebot.eingabe"
+schreibend = true

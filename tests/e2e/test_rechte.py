@@ -18,7 +18,7 @@ def check(n, c, i=''):
 
 
 EDITOR_DEFAULT = {'angebot.bearbeiten', 'angebot.veroeffentlichen', 'angebote.verwalten', 'preisverlauf.sehen', 'preisverlauf.bearbeiten',
-                  'bestand.sehen', 'bestand.einkaufspreise', 'bestand.importieren', 'stammdaten.sehen', 'stammdaten.bearbeiten', 'einkauf.sehen', 'einkauf.melden',
+                  'bestand.sehen', 'bestand.einkaufspreise', 'bestand.importieren', 'bestand.mhd_senden', 'stammdaten.sehen', 'stammdaten.bearbeiten', 'einkauf.sehen', 'einkauf.melden',
                   'bestellungen.sehen', 'bestellungen.bearbeiten', 'hr.antrag'}
 VIEWER_DEFAULT = {'preisverlauf.sehen', 'bestand.sehen', 'stammdaten.sehen', 'einkauf.sehen', 'hr.antrag'}   # hr.antrag: eigener Urlaub (Modul HR)
 # Modulzugang „<modul>.zugang“ je Kachel (lib/rechte.php): Standard für beide Standardrollen – alle behalten ihre Kacheln
