@@ -38,10 +38,18 @@ KC_COMPOSE=${WA_KC_COMPOSE:-docker compose -f docker-compose.yml -f deploy/anmel
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
   printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s"}' \
-    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" > "$STATUS.tmp" || return 0
-  chown 33:33 "$STATUS.tmp" 2>/dev/null || true
-  chmod 644 "$STATUS.tmp"
-  mv "$STATUS.tmp" "$STATUS"
+    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" \
+    | status_schreiben
+}
+# daten/ ist im Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken. Deshalb entsteht die Datei
+# außerhalb von daten/ (Ordner des Echtbetriebs, nur root) und ersetzt den Eintrag in daten/ nur per Umbenennen
+# (folgt keinem Verweis, ersetzt ihn). Kein Schreiben, chown oder chmod auf einen Namen in daten/.
+status_schreiben() {
+  ST_TMP=$(mktemp "$BASIS/.status.XXXXXX") || return 0
+  cat > "$ST_TMP" || { rm -f "$ST_TMP"; return 0; }
+  chown 33:33 "$ST_TMP" 2>/dev/null || true
+  chmod 644 "$ST_TMP"
+  mv -fT "$ST_TMP" "$STATUS" || rm -f "$ST_TMP"
 }
 melden() { # ok|fail
   [ -n "$HC_URL" ] || return 0
