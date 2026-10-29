@@ -947,7 +947,7 @@
         <div class="sic-feld"><span>Bedrohungsliste</span><label class="sic-check"><input type="checkbox" name="feed"${F.feed ? ' checked' : ''}><span>Adressen aus der Spamhaus-DROP-Liste sperren</span></label>
           <small>${feed}</small><div><button type="button" class="btn sm" data-d="feed">${icon('download')}Jetzt aktualisieren</button></div></div>
         <label class="sic-feld">Nie sperren <small>(eine Adresse oder ein Bereich je Zeile)</small><textarea name="erlaubt" rows="2" placeholder="z. B. Büro: 80.147.24.0/24">${esc((F.erlaubt || []).join('\n'))}</textarea>
-          <small>Zusätzlich zu den freigegebenen Adressen (IP-Freigabe). Tipp: vor einem Notfall die Büroadresse eintragen.</small></label>
+          <small>Zusätzlich zu den freigegebenen Adressen (IP-Freigabe). Gesperrte Adressen erreichen auch die Anmeldeseite nicht – Tipp: die Büroadresse hier eintragen.</small></label>
         <label class="sic-feld">Mitschnitt aller Anfragen<select name="mitschnittMinuten"><option value="">${d.mitschnitt ? 'läuft bis ' + esc(sekUhr(d.mitschnitt)) : 'aus'}</option><option value="15">15 Minuten starten</option><option value="60">60 Minuten starten</option>${d.mitschnitt ? '<option value="0">beenden</option>' : ''}</select></label></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { breit: true, handler: async (a, b, form) => {
@@ -1227,7 +1227,8 @@
     const form = () => dialog(`${dKopf('IP-Freigabe', 'Eingabebereich und Anwendungen nur von bestimmten Internetadressen')}<div class="sic-dinhalt">
         <label class="sic-check"><input type="checkbox" id="ip-an"${St.ipEnabled ? ' checked' : ''}><span>IP-Freigabe einschalten – die öffentliche Angebotsseite bleibt für alle erreichbar</span></label>
         <label class="sic-feld">Freigegebene Adressen <small>(eine Adresse oder ein Bereich pro Zeile)</small><textarea id="ip-liste" rows="4" placeholder="z. B. 80.147.24.150 oder 80.147.24.0/24">${esc(St.adminIps.join('\n'))}</textarea></label>
-        <p class="sic-inline"><span class="sub">Ihre aktuelle Adresse: <strong class="mono-s">${esc(S.sec.myIp)}</strong>${S.sec.myCountry ? ` · ${esc(land(S.sec.myCountry))}` : ''}</span><button type="button" class="btn sm" data-d="meine">${icon('plus')}Hinzufügen</button></p></div>
+        <p class="sic-inline"><span class="sub">Ihre aktuelle Adresse: <strong class="mono-s">${esc(S.sec.myIp)}</strong>${S.sec.myCountry ? ` · ${esc(land(S.sec.myCountry))}` : ''}</span><button type="button" class="btn sm" data-d="meine">${icon('plus')}Hinzufügen</button></p>
+        <p class="sic-hinweis">Gilt auch schon für die Anmeldeseite der Mitarbeiter: Von anderen Adressen ist die Anmeldung nicht erreichbar.</p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { handler: async (a) => {
       const ta = $('#ip-liste', dlg);
@@ -1256,7 +1257,7 @@
           <span class="sic-knoepfe"><button type="button" class="btn sm" data-d="geo-eu">Europa</button><button type="button" class="btn sm" data-d="geo-leer">Leeren</button></span></div>
           <div class="geo-chips" id="geo-chips"></div></div>
         <div class="geo-suche"><input type="search" id="geo-q" placeholder="Land oder IP-Adresse, z. B. China, CN oder 1.0.1.1" aria-label="Land oder IP-Adresse suchen"><div class="geo-list" id="geo-list"></div></div>
-        <p class="sic-hinweis">Freigegebene Adressen sind immer erlaubt; Adressen ohne bekanntes Land werden nicht gesperrt. Ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</p></div>
+        <p class="sic-hinweis">Freigegebene Adressen sind immer erlaubt; Adressen ohne bekanntes Land werden nicht gesperrt. Gilt auch schon für die Anmeldeseite der Mitarbeiter. Ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { breit: true, fokus: '#geo-q', handler: async (a, b, form) => {
       if (a === 'geo-eu') { EUROPA.forEach((c) => g.sel.add(c)); geoAuffrischen(); return; }

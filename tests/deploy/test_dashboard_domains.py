@@ -35,9 +35,28 @@ for verboten in ("reverse_proxy", "file_server", "redir"):
 # Anmeldung: nur Realm „mitarbeiter“ und statische Dateien an Keycloak, sonst 404 (Verwaltung, Master-Realm)
 login = site("login.dashboard-stafl.de")
 assert "@anmeldung path /realms/mitarbeiter/* /resources/*" in login
-assert re.search(r"handle @anmeldung \{\s*reverse_proxy keycloak:8080\s*\}", login)
-assert login.count("reverse_proxy") == 1 and login.rstrip("}").rstrip().endswith("respond 404")
+handle = re.search(r"\thandle @anmeldung \{\n(.*?)\n\t\}\n", login, re.DOTALL)
+assert handle, "handle @anmeldung fehlt"
+innen = handle.group(1)
+assert innen.rstrip().endswith("reverse_proxy keycloak:8080"), "Keycloak muss das letzte Ziel sein"
+assert login.count("reverse_proxy") == 1 and "\trespond 404\n" in login
 assert "/admin" not in login and "master" not in login
+# Vor jeder Seite der Anmeldung prüft die Anwendung Firewall, Länder- und IP-Sperre (forward_auth, Aktion anmeldung_pruefen);
+# ausgenommen nur Dateien und die Abrufe der Anwendung selbst – nie die Seiten mit Passwort und Einmalcode
+fa = re.search(r"forward_auth @seite app-mitarbeiter:80 \{\n(.*?)\n\t\t\}", innen, re.DOTALL)
+assert fa, "forward_auth vor Keycloak fehlt"
+assert "uri /api/index.php?action=anmeldung_pruefen" in fa.group(1)
+for kopf in ("-Cookie", "-Authorization", "-Origin", "-Sec-Fetch-*"):
+    assert f"header_up {kopf}" in fa.group(1), kopf   # Browser-Cookies und Herkunftsangaben gehen nicht an die Anwendung
+assert re.search(r"@gesperrt status 403\s*handle_response @gesperrt \{\s*respond \"[^\"]+\" 403", fa.group(1))
+assert re.search(r"@fehler status 4xx 5xx\s*handle_response @fehler \{\s*respond \"[^\"]+\" 503", fa.group(1))
+seite = next(z for z in innen.splitlines() if z.strip().startswith("@seite "))
+ausgenommen = seite.split("not path", 1)[1].split()
+assert ausgenommen == ["/resources/*", "/realms/mitarbeiter/.well-known/*", "/realms/mitarbeiter/protocol/openid-connect/token",
+                       "/realms/mitarbeiter/protocol/openid-connect/token/introspect", "/realms/mitarbeiter/protocol/openid-connect/certs",
+                       "/realms/mitarbeiter/protocol/openid-connect/userinfo", "/realms/mitarbeiter/protocol/openid-connect/revoke"], ausgenommen
+assert innen.index("forward_auth") < innen.index("reverse_proxy keycloak:8080")
+assert re.search(r"handle_errors 502 503 504 \{\s*respond \"[^\"]+\" 503", login)
 
 # Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit und Controlling (freigegeben): nur über den Netzwerknamen der App mit Keycloak-Hosts
 mitarbeiter = site("dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de")
@@ -50,7 +69,7 @@ assert "app-mitarbeiter" in ergaenzung and "app-mitarbeiter" not in basis and "k
 for h in hosts + ["dashboard-stafl.de", "angebot.dashboard-stafl.de", "verwaltung.dashboard-stafl.de", "bestand.dashboard-stafl.de", "hr.dashboard-stafl.de", "crm.dashboard-stafl.de", "marketing.dashboard-stafl.de", "sicherheit.dashboard-stafl.de", "controlling.dashboard-stafl.de", "login.dashboard-stafl.de"]:
     kopfzeilen = [z for z in caddy.splitlines() if z.endswith("{") and not z.startswith(("\t", " ", "#"))]
     assert sum(1 for z in kopfzeilen if re.search(r"(?<![\w.-])" + re.escape(h) + r"(?![\w.-])", z)) == 1, h
-assert caddy.count("app-mitarbeiter:80") == 1 and caddy.count("keycloak:8080") == 1
+assert caddy.count("app-mitarbeiter:80") == 2 and caddy.count("keycloak:8080") == 1   # Mitarbeiter-Hosts und Prüfung vor der Anmeldung
 
 # HTTPS-Pflicht (HSTS, 1 Jahr) für jeden Dashboard-Host, auch für die Weiterleitung von www
 for kopf in ("login.dashboard-stafl.de", "www.dashboard-stafl.de"):
@@ -60,4 +79,4 @@ assert 'Strict-Transport-Security "max-age=31536000"' in mitarbeiter
 # Kundenportal und vorhandene Testumgebung behalten ihre separaten Routen.
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy
 assert "test.{$DOMAIN} {" in caddy
-print("OK: sechs Modul-Hosts sind 503-Platzhalter; Anmeldung, Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit und Controlling nur mit der Ergänzungsdatei.")
+print("OK: sechs Modul-Hosts sind 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit und Controlling nur mit der Ergänzungsdatei.")

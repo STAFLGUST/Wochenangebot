@@ -270,7 +270,7 @@ Keycloak-Anmeldung gibt es in der Testumgebung nicht; sie wird nur in der CI gep
 | Wartung blockiert die Arbeit | `sh deploy/wartung-aus.sh` (beendet alle Wartungen; macht kein Modul produktiv) |
 | Keycloak nicht erreichbar | `docker compose ps -a`, `docker compose up -d`; hilft das nicht: `sh deploy/notzugang.sh an` (alter Eingabebereich mit eigener Anmeldung), danach `sh deploy/notzugang.sh aus` |
 | Administrator-Passwort vergessen (alte Anmeldung) | `sh deploy/passwort-zuruecksetzen.sh <name>` (setzt auch Zwei-Faktor und Passkeys zurück); nach Datenverlust `… admin --neu` |
-| Selbst ausgesperrt (IP-Freigabe, Ländersperre) | `sh deploy/ip-freigabe-aus.sh` |
+| Selbst ausgesperrt (IP-Freigabe, Ländersperre) – auch an der Anmeldeseite | `sh deploy/ip-freigabe-aus.sh` |
 | Anmeldung bei Keycloak klappt nicht | `sh deploy/anmeldung/konten.sh pruefen <name>`, dann ggf. `entsperren` bzw. `zuruecksetzen` |
 
 Alle Notfallwerkzeuge laufen nur auf dem Server und nur durch den Inhaber.

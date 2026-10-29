@@ -174,6 +174,37 @@ code, kopf, _ = anfrage(meta.get('authorization_endpoint', L) + '?' + urllib.par
     'client_id': 'dashboard', 'response_type': 'code', 'scope': 'openid', 'redirect_uri': D + '/oidc/callback', 'state': 'x'}))
 check('Anmeldung ohne PKCE abgelehnt', code in (302, 303, 400) and ('code_challenge' in (kopf.get('Location') or '') or code == 400 or 'error=' in (kopf.get('Location') or '')), (code, kopf.get('Location')))
 
+# ── Prüfung vor der Anmeldeseite (Caddy forward_auth → Aktion anmeldung_pruefen auf dem Host login.*, apache.conf) ──
+# Firewall, Länder- und IP-Sperre des Eingabebereichs gelten schon vor Keycloak. Hier über die IP-Freigabe nachgestellt
+# (in dieser Umgebung kommt jede Anfrage von 127.0.0.1; Ländersperre und Firewall im Einzelnen: E2E-Gruppe anmeldeseite).
+ZUGRIFF = os.path.join(WORK, 'apache', 'access.log')
+_auth = meta.get('authorization_endpoint', L + '/realms/mitarbeiter/protocol/openid-connect/auth') + '?' + urllib.parse.urlencode({
+    'client_id': 'dashboard', 'response_type': 'code', 'scope': 'openid', 'redirect_uri': D + '/oidc/callback', 'state': 'x',
+    'code_challenge': 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM', 'code_challenge_method': 'S256'})
+code, _, text = anfrage(_auth, kopf={**SEITE, 'Cookie': 'probe=nicht-weitergeben'})
+_log = open(ZUGRIFF, encoding='utf-8', errors='replace').read() if os.path.exists(ZUGRIFF) else ''
+check('Anmeldeseite: vorher geprüft (anmeldung_pruefen auf dem Host der Anmeldung), dann von Keycloak ausgeliefert',
+      code == 200 and 'id="username"' in text and re.search(r'login\.stafl\.test:?\d* "GET /api/index\.php\?action=anmeldung_pruefen HTTP/1\.1" 200', _log), (code, _log[-300:]))
+_sic = os.path.join(WORK, 'app', 'data', 'sicherheit.php')
+_sic_vorher = open(_sic, encoding='utf-8').read() if os.path.exists(_sic) else None
+_sic_wert = json.loads(_sic_vorher[_sic_vorher.index('?>') + 2:].strip()) if _sic_vorher else {}
+try:
+    with open(_sic, 'w', encoding='utf-8') as f:
+        f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps({**_sic_wert, 'ipEnabled': True, 'adminIps': ['198.51.100.0/24']}))
+    code, _, text = anfrage(_auth, kopf=SEITE)
+    check('IP-Freigabe ohne diese Adresse: Anmeldeseite gesperrt (403 mit Hinweis von Caddy, nichts von Keycloak)',
+          code == 403 and 'nicht möglich' in text and 'id="username"' not in text, (code, text[:200]))
+    code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
+    check('… Abrufe der Anwendung selbst (Metadaten, Schlüssel, Token) bleiben frei', code == 200 and '"issuer"' in text, code)
+    check('… Dateien der Anmeldeseite ebenso (nicht geprüft)', anfrage(L + '/resources/nicht-vorhanden.css')[0] != 403)
+finally:
+    if _sic_vorher is None:
+        os.remove(_sic)
+    else:
+        with open(_sic, 'w', encoding='utf-8') as f:
+            f.write(_sic_vorher)
+check('… danach wieder frei', anfrage(_auth, kopf=SEITE)[0] == 200)
+
 # Einstellungen aus der Verwaltungsschnittstelle (nur lokal auf 127.0.0.1, nie über Caddy)
 code, _, text = anfrage(KC + '/realms/master/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
     'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}).encode(),

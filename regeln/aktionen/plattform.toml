@@ -204,6 +204,13 @@ wartung_frei = true
 oberflaeche = "angebot.eingabe"
 wartung_frei = true
 
+# Prüfung vor der Anmeldeseite (login.dashboard-stafl.de): Caddy fragt vor jeder Seite von Keycloak hier nach (forward_auth,
+# Caddyfile). Firewall, Ländersperre und IP-Freigabe des Eingabebereichs prüft der API-Einstieg wie bei jeder Mitarbeiter-Aktion;
+# die Aktion selbst bestätigt nur. Nur auf dem Host der Anmeldung (Apache: WA_OBERFLAECHE plattform.anmeldung, GR-109).
+[aktion.anmeldung_pruefen]
+oberflaeche = "plattform.anmeldung"
+wartung_frei = true   # Administratoren müssen sich auch während einer Wartung anmelden können (GR-107)
+
 [aktion.testpostfach]
 oberflaeche = "angebot.eingabe"
 

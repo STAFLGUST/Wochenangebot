@@ -153,6 +153,14 @@ for h in dashboard-stafl.de angebot.dashboard-stafl.de verwaltung.dashboard-staf
   c="$(code "$h" /admin/ -H 'Accept: text/html')"; case "$c" in 302|500|502|503) ok "$h: Eingabebereich nur über Keycloak ($c, ohne Keycloak hier nicht erreichbar)";; *) nein "$h Eingabebereich" "$c";; esac
   c="$(code "$h" /dashboard/abgemeldet.html)"; [ "$c" = 200 ] && ok "$h: Abmeldeseite öffentlich" || nein "$h Abmeldeseite" "$c"
 done
+# Anmeldeseite: Prüfung vor Keycloak (Caddy forward_auth, Aktion anmeldung_pruefen) – ohne OIDC, sonst nichts aus der Anwendung
+c="$(code login.dashboard-stafl.de '/api/index.php?action=anmeldung_pruefen')"; [ "$c" = 200 ] && ok "login.dashboard-stafl.de: Prüfung vor der Anmeldung erreichbar (200)" || nein "login.dashboard-stafl.de Prüfung vor der Anmeldung" "$c"
+for p in / /admin/ /assets/app.css /module/sicherheit/; do
+  c="$(code login.dashboard-stafl.de "$p")"; [ "$c" = 403 ] && ok "login.dashboard-stafl.de$p: in der Anwendung gesperrt (403)" || nein "login.dashboard-stafl.de$p" "$c"
+done
+c="$(code login.dashboard-stafl.de '/api/index.php?action=users')"; [ "$c" = 404 ] && ok "login.dashboard-stafl.de: andere Aktionen gibt es dort nicht (404)" || nein "login.dashboard-stafl.de andere Aktion" "$c"
+c="$(code dashboard-stafl.de '/api/?action=anmeldung_pruefen')"; [ "$c" = 401 ] && ok "dashboard-stafl.de: Prüfung der Anmeldeseite nicht ohne Anmeldung (401)" || nein "dashboard-stafl.de anmeldung_pruefen" "$c"
+c="$(code angebot-stafl.de '/api/?action=anmeldung_pruefen')"; [ "$c" != 200 ] && ok "angebot-stafl.de: Prüfung der Anmeldeseite nicht beantwortet ($c)" || nein "angebot-stafl.de anmeldung_pruefen" "$c"
 # Startadressen je Host (ohne Anmeldung nur die Weiterleitung, nichts aus der Anwendung): Bestand → /admin/, Import → Ansicht importe
 ziel() { curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H "Host: $1" -H 'X-Forwarded-Proto: https' "http://127.0.0.1:18090$2"; }
 case "$(ziel bestand.dashboard-stafl.de /)" in "302 "*/admin/) ok "bestand.dashboard-stafl.de: Startadresse führt in den Eingabebereich";; *) nein "bestand.dashboard-stafl.de Startadresse" "$(ziel bestand.dashboard-stafl.de /)";; esac
