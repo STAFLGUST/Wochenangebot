@@ -19,6 +19,9 @@ declare(strict_types=1);
      leergut-abschreibungen Dachser-Abschreibungen „lt. Empfänger“: Kunde, Sendung, Mengen, Status offen/widersprochen/
                             berechnet/ausgeglichen/nicht zu beachten, WinAB-Auftrag, Notiz, Verlauf
      leergut-inventur       Eigener Bestand zum Stichtag (z. B. Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz
+   Kundenkonten aus WinAB: den Bericht „Lademittelbewegungen Kunden“ liest die Oberfläche im Browser und schickt nur die
+   Belege, die den Saldo eines Kunden ändern; lg_winab_pruefen/lg_winab_abgleich gleichen sie je Beleg ab (Partner mit
+   WinAB-Kundennummer „kundenNr“, Bewegungen mit Herkunft „winab“; geänderte und ausgeglichene Belege werden storniert).
    Keine Daten anderer Module. Gespeicherte Felder, die diese Fassung nicht kennt, bleiben beim Speichern erhalten (GR-006).
    Rechte (GR-103): leergut.sehen, leergut.bearbeiten, leergut.verwalten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -29,7 +32,7 @@ const LG_TYPEN = ['bewegung' => 'Lieferung / Tausch', 'abholung' => 'Abholung / 
 const LG_ABST_STATUS = ['offen' => 'Offen', 'bestaetigt' => 'Bestätigt', 'widersprochen' => 'Widersprochen', 'info' => 'Zur Info'];
 const LG_ABSCHR_STATUS = ['offen' => 'Offen', 'widersprochen' => 'Widersprochen', 'berechnet' => 'Berechnet', 'ausgeglichen' => 'Ausgeglichen', 'ignoriert' => 'Nicht zu beachten'];
 const LG_DOKS = ['leergut-stamm', 'leergut-bewegungen', 'leergut-abstimmungen', 'leergut-abschreibungen', 'leergut-inventur'];
-const LG_MAX_PARTNER = 500;
+const LG_MAX_PARTNER = 2000;      // Lieferanten, Speditionen und Kundenkonten aus WinAB
 const LG_MAX_LADEMITTEL = 30;
 const LG_MAX_BEWEGUNGEN = 200000;
 const LG_MAX_ABSTIMMUNGEN = 20000;
@@ -38,6 +41,9 @@ const LG_MAX_INVENTUR = 2000;
 const LG_MAX_MENGE = 1000000;     // Stück je Lademittel und Buchung
 const LG_MAX_VERLAUF = 100;
 const LG_FRIST_STANDARD = 14;
+const LG_WINAB_ARTEN = ['Lieferschein', 'Gutschrift', 'Rechnung'];   // Sammelrechnungen wiederholen die Lieferscheine
+const LG_MAX_WINAB_BELEGE = 50000;
+const LG_MAX_WINAB_KUNDEN = 5000;
 
 /* ---------- Grundwerte ---------- */
 /* Lademittel der Excel-Liste; Werte je Stück laut Leitfaden (änderbar unter Einstellungen) */
@@ -198,6 +204,13 @@ function lg_partner_pruefen(array $b, ?array $alt, array $stamm): array
     $row['art'] = lg_wahl($b['art'] ?? 'lieferant', array_keys(LG_ARTEN), 'Art');
     $row['mandant'] = lg_wahl($b['mandant'] ?? 'standard', array_keys(LG_MANDANTEN), 'Firma');
     $row['kontoNr'] = lg_text($b['kontoNr'] ?? '', 40, 'Konto-Nr. beim Partner');
+    if (array_key_exists('kundenNr', $b) || !isset($row['kundenNr'])) {   // ohne Angabe bleibt die gespeicherte Nummer
+        $nr = lg_text($b['kundenNr'] ?? '', 12, 'WinAB-Kundennummer');
+        if ($nr !== '' && !preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('WinAB-Kundennummer: bitte nur Ziffern.');
+        foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') === $nr)
+            throw new InvalidArgumentException("Die WinAB-Kundennummer $nr gehört schon zu „{$p['name']}“.");
+        $row['kundenNr'] = $nr;
+    }
     $frist = $b['fristTage'] ?? LG_FRIST_STANDARD;
     $row['fristTage'] = ($frist === '' || $frist === null) ? 0 : lg_ganz($frist, 'Frist', false);
     if ($row['fristTage'] > 90) throw new InvalidArgumentException('Frist: höchstens 90 Tage.');
@@ -491,4 +504,119 @@ function lg_paket_pruefen($p, array $me): array
     $zahlen = ['lademittel' => count($stamm['lademittel']), 'partner' => count($stamm['partner'])];
     foreach ($docs as $k => $l) $zahlen[$k] = count($l);
     return ['stamm' => $stamm, 'docs' => $docs, 'zahlen' => $zahlen, 'fehler' => $fehler];
+}
+
+/* ---------- WinAB-Bericht „Lademittelbewegungen Kunden“ ----------
+   Die Oberfläche liest den Bericht im Browser und schickt { bericht: {datei, von, bis, datum}, kunden: [{nr, name}],
+   belege: [{kd, art, beleg, datum, abgang, zugang}] } – nur Lieferscheine, Gutschriften und Einzelrechnungen
+   (Sammelrechnungen wiederholen die Lieferscheine), nur Lademittel des Moduls (Karton ist kein Leergut) und nur Belege,
+   die den Saldo ändern (Abgang ≠ Zugang). Vorzeichen wie im Modul: Abgang = an den Kunden, Zugang = vom Kunden zurück.
+   „bis“ ist das Berichtsdatum (der Bericht nennt sonst „bis 31.12.2078“). */
+function lg_winab_pruefen($b, array $stamm): array
+{
+    $ber = is_array($b['bericht'] ?? null) ? $b['bericht'] : [];
+    $von = lg_datum($ber['von'] ?? '', 'Zeitraum von');
+    $bis = lg_datum($ber['bis'] ?? '', 'Zeitraum bis');
+    if ($bis < $von) throw new InvalidArgumentException('Zeitraum: „bis“ liegt vor „von“.');
+    $bericht = ['datei' => lg_text($ber['datei'] ?? '', 120, 'Datei'), 'von' => $von, 'bis' => $bis];
+    $kunden = [];
+    $kl = $b['kunden'] ?? [];
+    if (!is_array($kl) || count($kl) > LG_MAX_WINAB_KUNDEN) throw new InvalidArgumentException('Kundenliste fehlt oder ist zu lang.');
+    foreach (array_values($kl) as $i => $k) {
+        $nr = is_array($k) ? (string)($k['nr'] ?? '') : '';
+        if (!preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('Kunde ' . ($i + 1) . ': ungültige Kundennummer.');
+        $name = lg_text($k['name'] ?? '', 100, 'Kundenname');
+        $kunden[$nr] = $name !== '' ? $name : 'Kunde';
+    }
+    $bl = $b['belege'] ?? [];
+    if (!is_array($bl) || count($bl) > LG_MAX_WINAB_BELEGE) throw new InvalidArgumentException('Belegliste fehlt oder ist zu lang (höchstens ' . LG_MAX_WINAB_BELEGE . ').');
+    $lm = lg_ids($stamm['lademittel']);
+    $belege = []; $fehler = []; $ohneWirkung = 0;
+    foreach (array_values($bl) as $i => $x) {
+        try {
+            if (!is_array($x)) throw new InvalidArgumentException('ungültige Angaben');
+            $kd = (string)($x['kd'] ?? '');
+            if (!isset($kunden[$kd])) throw new InvalidArgumentException('Kundennummer „' . mb_substr($kd, 0, 20) . '“ fehlt in der Kundenliste');
+            $art = lg_wahl($x['art'] ?? '', LG_WINAB_ARTEN, 'Belegart');
+            $nr = lg_text(is_scalar($x['beleg'] ?? null) ? (string)$x['beleg'] : '', 30, 'Belegnr.');
+            if ($nr === '') throw new InvalidArgumentException('Belegnr. fehlt');
+            $datum = lg_datum($x['datum'] ?? '', 'Datum');
+            if ($datum < $von || $datum > $bis) throw new InvalidArgumentException("Datum $datum liegt außerhalb des Berichtszeitraums");
+            $ab = lg_mengen($x['abgang'] ?? [], $lm, 'Abgang', false);
+            $zu = lg_mengen($x['zugang'] ?? [], $lm, 'Zugang', false);
+            if (!lg_ohne_null(lg_delta(['abgang' => $ab, 'zugang' => $zu]))) { $ohneWirkung++; continue; }
+            $key = "$kd|$art|$nr";
+            if (isset($belege[$key])) throw new InvalidArgumentException("$art $nr ist doppelt");
+            $belege[$key] = ['kd' => $kd, 'art' => $art, 'beleg' => $nr, 'datum' => $datum, 'abgang' => $ab, 'zugang' => $zu];
+        } catch (InvalidArgumentException $e) { if (count($fehler) < 200) $fehler[] = ['zeile' => $i + 1, 'text' => $e->getMessage()]; }
+    }
+    return ['bericht' => $bericht, 'kunden' => $kunden, 'belege' => $belege, 'fehler' => $fehler, 'ohneWirkung' => $ohneWirkung];
+}
+/* Abgleich je Beleg (Kunde, Belegart, Belegnr.) im Berichtszeitraum: neu → buchen, gleich → nichts, geändert → alten
+   stornieren und neu buchen, nicht mehr im Bericht (ausgeglichen) → stornieren. Bewegungen außerhalb des Zeitraums, von
+   Kunden, die der Bericht nicht nennt, und von Hand gebuchte bleiben unberührt. Die Kundenliste enthält alle Kunden
+   des Berichts, auch solche ohne saldowirksamen Beleg. Kunden ohne Konto bekommen eins (Art Kunde, Name mit Kundennummer). */
+function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
+{
+    $heute = date('d.m.Y');
+    $nachNr = [];
+    foreach ($stamm['partner'] as $i => $p) if ((string)($p['kundenNr'] ?? '') !== '') $nachNr[(string)$p['kundenNr']] = $i;
+    $namen = [];
+    foreach ($stamm['partner'] as $p) $namen[mb_strtolower((string)$p['name'])] = true;
+    $genutzt = [];
+    foreach ($w['belege'] as $b) foreach (array_merge(array_keys($b['abgang']), array_keys($b['zugang'])) as $l) $genutzt[$b['kd']][$l] = true;
+    $neuKunden = [];
+    foreach (array_keys($genutzt) as $kd) {
+        $kd = (string)$kd;
+        if (isset($nachNr[$kd])) continue;
+        $name = rtrim(mb_substr($w['kunden'][$kd], 0, 84)) . ' (' . $kd . ')';
+        $basis = $name; $n = 2;
+        while (isset($namen[mb_strtolower($name)])) $name = $basis . ' ' . $n++;
+        $namen[mb_strtolower($name)] = true;
+        $lms = array_values(array_filter(lg_ids($stamm['lademittel']), function ($l) use ($genutzt, $kd) { return isset($genutzt[$kd][$l]) || in_array($l, ['e2', 'h1'], true); }));
+        $stamm['partner'][] = ['id' => lg_id('p'), 'name' => $name, 'art' => 'kunde', 'mandant' => 'standard', 'kontoNr' => '', 'kundenNr' => $kd,
+            'fristTage' => 0, 'email' => '', 'ansprechpartner' => '', 'lieferanten' => '', 'lademittel' => $lms, 'aktiv' => true, 'quelle' => 'winab',
+            'notiz' => 'Aus dem WinAB-Bericht „Lademittelbewegungen Kunden“ angelegt. Salden ab ' . date('d.m.Y', strtotime($w['bericht']['von'])) . ' – ältere Stände liegen in WinAB nicht vor.',
+            'erstellt' => lg_wer($me), 'rev' => 1, 'geaendert' => lg_wer($me)];
+        $nachNr[$kd] = count($stamm['partner']) - 1;
+        $neuKunden[] = $name;
+    }
+    if (count($stamm['partner']) > LG_MAX_PARTNER) throw new InvalidArgumentException('Zu viele Partner (höchstens ' . LG_MAX_PARTNER . ').');
+    $alt = [];
+    foreach ($bew as $i => $b) {
+        $k = $b['winab'] ?? null;
+        if (($b['quelle'] ?? '') !== 'winab' || !empty($b['storno']) || !is_array($k)) continue;
+        if ($b['datum'] < $w['bericht']['von'] || $b['datum'] > $w['bericht']['bis']) continue;
+        if (!isset($w['kunden'][(string)$k['kd']])) continue;   // Kunde nicht im Bericht (z. B. auf einzelne Kunden gefiltert): nicht anfassen
+        $alt[$k['kd'] . '|' . $k['art'] . '|' . $k['beleg']] = $i;
+    }
+    $z = ['kunden' => count($neuKunden), 'neu' => 0, 'gleich' => 0, 'geaendert' => 0, 'ausgeglichen' => 0, 'ohneWirkung' => $w['ohneWirkung']];
+    $offenAb = date('Y-m-d', strtotime($w['bericht']['bis'] . ' 12:00:00 UTC') - 3 * 86400);
+    foreach ($w['belege'] as $key => $b) {
+        $pid = $stamm['partner'][$nachNr[$b['kd']]]['id'];
+        if (isset($alt[$key])) {
+            $i = $alt[$key]; unset($alt[$key]);
+            $a = $bew[$i];
+            if ($a['partner'] === $pid && $a['datum'] === $b['datum'] && (array)$a['abgang'] == $b['abgang'] && (array)$a['zugang'] == $b['zugang']) { $z['gleich']++; continue; }
+            $bew[$i]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: Beleg geändert"];
+            $z['geaendert']++;
+        } else $z['neu']++;
+        $text = 'Aus WinAB („Lademittelbewegungen Kunden“' . ($w['bericht']['datei'] !== '' ? ', ' . $w['bericht']['datei'] : '') . ')';
+        if ($b['datum'] >= $offenAb && !$b['zugang']) $text .= ' – zum Berichtsdatum noch nicht zurück';
+        $bew[] = ['id' => lg_id('b'), 'partner' => $pid, 'datum' => $b['datum'], 'typ' => $b['art'] === 'Gutschrift' ? 'abholung' : 'bewegung',
+                  'abgang' => $b['abgang'], 'zugang' => $b['zugang'], 'beleg' => $b['art'] . ' ' . $b['beleg'], 'text' => $text,
+                  'quelle' => 'winab', 'winab' => ['kd' => $b['kd'], 'art' => $b['art'], 'beleg' => $b['beleg']], 'erfasst' => lg_wer($me), 'storno' => null];
+    }
+    foreach ($alt as $i) { $bew[$i]['storno'] = lg_wer($me) + ['grund' => "WinAB-Abgleich vom $heute: Beleg ausgeglichen oder nicht mehr im Bericht"]; $z['ausgeglichen']++; }
+    // Saldo aller Kundenkonten mit WinAB-Nummer nach dem Abgleich
+    $kundenIds = [];
+    foreach ($stamm['partner'] as $p) if ((string)($p['kundenNr'] ?? '') !== '') $kundenIds[$p['id']] = true;
+    $summe = []; $mitSaldo = 0;
+    foreach (lg_nach_partner($bew) as $pid => $l) {
+        if (!isset($kundenIds[$pid])) continue;
+        $s = lg_saldo_bis($l, '');
+        if ($s) { $mitSaldo++; lg_addiere($summe, $s); }
+    }
+    $z['konten'] = $mitSaldo;
+    return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe)];
 }

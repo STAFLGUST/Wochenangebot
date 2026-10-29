@@ -9,12 +9,17 @@ Differenz zum eigenen Saldo zum Stichtag, Schnappschuss, Status mit Verlauf, ver
 bestätigter Stand und „davon offen“ je Konto); Dachser-Abschreibungen (Fehlerfälle, Status mit Verlauf); Inventur;
 Bilanz zum Stichtag (je Firma, Inventur, Wert, unvollständige Werte); CSV (BOM, keine Formeln, Protokoll); Lademittel
 (umbenennen, Wert, neu, nicht entfernbar, deaktivieren); Datenpaket (Rechte, Vorschau mit Fehlern je Zeile, nichts
-übernommen bei Fehlern, nur in leeres Modul oder mit „ersetzen“, Schnappschuss); Protokoll; Oberfläche (Übersicht,
+übernommen bei Fehlern, nur in leeres Modul oder mit „ersetzen“, Schnappschuss); WinAB-Bericht „Lademittelbewegungen Kunden“
+(Rechte, Fehler je Beleg, Vorschau schreibt nichts, Kundenkonten mit Nummer im Namen, Kundennummer am Partner eindeutig und
+nur Ziffern, Vorzeichen, Gutschrift als Abholung, erneuter Bericht unverändert, geändert → storniert und neu, fehlend →
+ausgeglichen, nur Zeitraum und Kunden des Berichts; in der Oberfläche eine erfundene .XLS im WinAB-Aufbau: Sammelrechnungen,
+Karton, Offerten und reiner Tausch weggelassen, Kunden zusammengefasst in Übersicht und Bilanz); Protokoll; Oberfläche (Übersicht,
 Konto mit Saldo-Karten und Journal, Eingabemasken für Bewegung, Auszug, Abschreibung, Inventur, Partner, Lademittel,
 Import der Datei, nur ansehen; 1280 und 390 px, hell und dunkel, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
 import json
 import os
+import tempfile
 
 from playwright.sync_api import sync_playwright
 
@@ -248,11 +253,150 @@ abst = [a for a in s['abstimmungen'] if a['partner'] == namen['Beispiel-Speditio
 check('Abstimmungen aus dem Paket mit Schnappschuss und Herkunft', abst and all(a.get('herkunft') == 'import' and isinstance(a['eigen'], dict) for a in abst), abst[:1])
 check('Bewegungen aus dem Paket: Herkunft „import“', all(b['quelle'] == 'import' for b in L.call('leergut_konto&partner=' + namen['Beispiel-Spedition'])[1]['bewegungen']))
 
+# ── WinAB-Bericht „Lademittelbewegungen Kunden“ ──
+# Erfundener Bericht im Aufbau des WinAB-Exports (BIFF wie die echte .XLS): Kopf je Kunde und Lademittel, Bewegungen,
+# Summenzeilen, Sammelwerte oben, Auswertungszeitraum unten. Die Oberfläche liest ihn im Browser; die API-Prüfungen
+# schicken dieselben Belege als JSON.
+WLM = {1: 'E2 Kisten', 2: 'H1 Paletten', 4: 'Euro-Paletten', 5: 'Karton'}
+WZEILEN = [  # Kd.-Nr., Name, Lademittel, Belegnr., Belegart, Datum (TTMMJJJJ), Bewegungsart, Menge
+    (9100001, 'Testkunde Nord GmbH', 1, 500001, 'Lieferschein', 2032026, 'Abgang', -10),
+    (9100001, 'Testkunde Nord GmbH', 1, 500001, 'Lieferschein', 2032026, 'Zugang', 4),
+    (9100001, 'Testkunde Nord GmbH', 1, 900001, 'Sammelrechnun', 6032026, 'Abgang', -10),
+    (9100001, 'Testkunde Nord GmbH', 1, 500002, 'Lieferschein', 9032026, 'Abgang', -5),
+    (9100001, 'Testkunde Nord GmbH', 1, 500002, 'Lieferschein', 9032026, 'Zugang', 5),
+    (9100001, 'Testkunde Nord GmbH', 2, 500001, 'Lieferschein', 2032026, 'Abgang', -1),
+    (9100001, 'Testkunde Nord GmbH', 5, 500001, 'Lieferschein', 2032026, 'Abgang', -3),
+    (9100002, 'Testkunde Süd', 1, 600001, 'Gutschrift', 1042026, 'Zugang', 7),
+    (9100002, 'Testkunde Süd', 1, 700001, 'Rechnung', 2042026, 'Abgang', -2),
+    (9100002, 'Testkunde Süd', 1, None, 'Offerte', 3042026, 'Zugang', 2),
+    (9100003, 'Testkunde Nord GmbH', 1, 500010, 'Lieferschein', 15102026, 'Abgang', -3),
+    (9100004, 'Nur Tausch KG', 4, 500020, 'Lieferschein', 5052026, 'Abgang', -2),
+    (9100004, 'Nur Tausch KG', 4, 500020, 'Lieferschein', 5052026, 'Zugang', 2),
+]
+
+
+def winab_xls(zeilen=WZEILEN, stand='15.10.2026', titel='Lademittelbewegungen Kunden'):
+    """BIFF-Datei (Datensätze BOF, LABEL, NUMBER, EOF wie im WinAB-Export) aus den Bewegungszeilen."""
+    import struct
+    reihen = [{0: 'Standard Fleisch HH', 7: titel, 21: 'Datum:' + stand},
+              {1: 'Kunden-Nr.', 3: 'Name', 8: 'Belegnr.', 9: 'Belegart', 14: 'Datum', 16: 'Bewegungsart', 19: 'Menge'}]
+    for nr, wert in ((1, -12), (5, 348)):   # Sammelwerte oben (nur zur Information)
+        reihen += [{1: 'Hinweis: Ein Minuswert bedeutet,'}, {13: 'Summe', 17: 'Lademittel', 18: nr, 20: wert}, {1: 'dass mehr Lademittel an den Kunden abgegeben wie zurückgenommen wurden.'}]
+    bloecke = {}
+    for z in zeilen:
+        bloecke.setdefault((z[0], z[2]), []).append(z)
+    for (kd, lmnr), zz in bloecke.items():
+        reihen += [{2: kd, 3: zz[0][1], 10: 'Lademittel', 11: lmnr, 12: WLM[lmnr]}, {}, {}]
+        for z in zz:
+            reihen.append({k: v for k, v in {2: z[0], 3: z[1], 8: z[3], 9: z[4], 14: z[5], 16: z[6], 20: z[7]}.items() if v is not None})
+        reihen += [{1: 'Hinweis: Ein Minuswert bedeutet,'}, {13: 'Summe', 17: 'Lademittel', 18: lmnr, 20: sum(z[7] for z in zz)},
+                   {1: 'dass mehr Lademittel an den Kunden abgegeben wie zurückgenommen wurden.'}]
+    reihen += [{}, {0: 'Auswertungszeitraum', 4: 1012026, 5: 'bis', 6: 31122078}, {0: 'Sätze Gesamt:   99'}]
+    out = bytearray(struct.pack('<HHHH', 0x0809, 4, 0, 0x10))
+    for r, zellen in enumerate(reihen):
+        for c, v in sorted(zellen.items()):
+            if isinstance(v, str):
+                t = v.encode('cp1252')
+                out += struct.pack('<HHHH', 0x0004, 8 + len(t), r, c) + b'\0\0\0' + bytes([len(t)]) + t
+            else:
+                out += struct.pack('<HHHH', 0x0003, 15, r, c) + b'\0\0\0' + struct.pack('<d', float(v))
+    out += struct.pack('<HH', 0x000a, 0)
+    return bytes(out)
+
+
+WB = {'bericht': {'datei': 'Lademittel_Test.XLS', 'von': '2026-01-01', 'bis': '2026-10-15', 'datum': '2026-10-15'},
+      'kunden': [{'nr': '9100001', 'name': 'Testkunde Nord GmbH'}, {'nr': '9100002', 'name': 'Testkunde Süd'},
+                 {'nr': '9100003', 'name': 'Testkunde Nord GmbH'}, {'nr': '9100004', 'name': 'Nur Tausch KG'}],
+      'belege': [{'kd': '9100001', 'art': 'Lieferschein', 'beleg': '500001', 'datum': '2026-03-02', 'abgang': {'e2': 10, 'h1': 1}, 'zugang': {'e2': 4}},
+                 {'kd': '9100001', 'art': 'Lieferschein', 'beleg': '500002', 'datum': '2026-03-09', 'abgang': {'e2': 5}, 'zugang': {'e2': 5}},
+                 {'kd': '9100002', 'art': 'Gutschrift', 'beleg': '600001', 'datum': '2026-04-01', 'abgang': {}, 'zugang': {'e2': 7}},
+                 {'kd': '9100002', 'art': 'Rechnung', 'beleg': '700001', 'datum': '2026-04-02', 'abgang': {'e2': 2}, 'zugang': {}},
+                 {'kd': '9100003', 'art': 'Lieferschein', 'beleg': '500010', 'datum': '2026-10-15', 'abgang': {'e2': 3}, 'zugang': {}}]}
+
+
+def wb(**aend):
+    x = json.loads(json.dumps(WB)); x.update(aend); return x
+
+
+check('WinAB: buchen-Recht reicht nicht (403), nur ansehen 403, ohne Anmeldung kein Zugang',
+      Bb.call('leergut_winab_import', {**WB, 'vorschau': True})[0] == 403 and L.call('leergut_winab_import', {**WB, 'vorschau': True})[0] == 403
+      and N.call('leergut_winab_import', {**WB, 'vorschau': True})[0] in (401, 403, 404))
+for name, b in (('„bis“ vor „von“', wb(bericht={**WB['bericht'], 'von': '2026-11-01'})), ('Datum ungültig', wb(bericht={**WB['bericht'], 'bis': '2026-02-30'})),
+                ('Kundennummer mit Buchstaben', wb(kunden=[{'nr': '10A', 'name': 'X'}])), ('Kundenliste fehlt', wb(kunden='alle'))):
+    st, r = V.call('leergut_winab_import', {**b, 'vorschau': True})
+    check(f'WinAB: {name} → 422', st == 422 and r.get('error'), (st, r))
+schlecht = wb(belege=WB['belege'] + [{'kd': '1009999', 'art': 'Lieferschein', 'beleg': '1', 'datum': '2026-05-01', 'abgang': {'e2': 1}},
+                                     {'kd': '9100001', 'art': 'Sammelrechnung', 'beleg': '2', 'datum': '2026-05-01', 'abgang': {'e2': 1}},
+                                     {'kd': '9100001', 'art': 'Lieferschein', 'beleg': '3', 'datum': '2026-10-20', 'abgang': {'e2': 1}},
+                                     {'kd': '9100001', 'art': 'Lieferschein', 'beleg': '500001', 'datum': '2026-03-02', 'abgang': {'e2': 1}},
+                                     {'kd': '9100001', 'art': 'Lieferschein', 'beleg': '4', 'datum': '2026-05-01', 'abgang': {'karton': 1}},
+                                     {'kd': '9100001', 'art': 'Lieferschein', 'beleg': '5', 'datum': '2026-05-01', 'abgang': {'e2': -1}}])
+st, r = V.call('leergut_winab_import', {**schlecht, 'vorschau': True})
+texte = [f['text'] for f in r.get('fehler', [])]
+check('WinAB-Vorschau: Fehler je Beleg (Kunde fehlt, Sammelrechnung, außerhalb des Zeitraums, doppelt, Karton, negativ)', st == 200 and len(texte) == 6
+      and 'fehlt in der Kundenliste' in texte[0] and 'Belegart' in texte[1] and 'außerhalb' in texte[2] and 'doppelt' in texte[3] and [f['zeile'] for f in r['fehler']][:1] == [6], r)
+n_p = len(V.call('leergut_start')[1]['partner'])
+st, r = V.call('leergut_winab_import', schlecht)
+check('WinAB mit Fehlern übernehmen → 422, nichts angelegt', st == 422 and r.get('fehler') and len(V.call('leergut_start')[1]['partner']) == n_p, (st, r.get('error')))
+
+# Kunde, der schon von Hand angelegt ist: die WinAB-Kundennummer verknüpft ihn
+st, r = V.call('leergut_partner_save', {'name': 'Testkunde Süd (von Hand)', 'art': 'kunde', 'kundenNr': '9100002', 'lademittel': ['e2']})
+hand = r.get('partner', {})
+check('Partner mit WinAB-Kundennummer', st == 200 and hand.get('kundenNr') == '9100002', r)
+check('WinAB-Kundennummer: nur Ziffern (422)', V.call('leergut_partner_save', {'name': 'Kunde X', 'art': 'kunde', 'kundenNr': '12-34', 'lademittel': ['e2']})[0] == 422)
+st, r = V.call('leergut_partner_save', {'name': 'Kunde Y', 'art': 'kunde', 'kundenNr': '9100002', 'lademittel': ['e2']})
+check('WinAB-Kundennummer doppelt → 422 mit Namen', st == 422 and 'Testkunde Süd (von Hand)' in r.get('error', ''), r)
+st, r = V.call('leergut_partner_save', {'id': hand['id'], 'rev': hand['rev'], 'name': hand['name'], 'art': 'kunde', 'lademittel': ['e2'], 'notiz': 'ohne Nummer gesendet'})
+check('Partner ändern ohne Kundennummer im Aufruf: Nummer bleibt', st == 200 and r['partner']['kundenNr'] == '9100002', r)
+
+st, r = V.call('leergut_winab_import', {**WB, 'vorschau': True})
+z = r.get('zahlen', {})
+check('WinAB-Vorschau: 2 neue Kundenkonten, 4 neue Belege, 1 ohne Wirkung, Saldo danach', st == 200 and not r['fehler'] and z.get('kunden') == 2 and z['neu'] == 4
+      and z['gleich'] == 0 and z['ohneWirkung'] == 1 and r['summe'] == {'e2': 4, 'h1': 1} and z['konten'] == 3, r)
+check('WinAB-Vorschau schreibt nichts', len(V.call('leergut_start')[1]['partner']) == n_p + 1 and not any(b.get('quelle') == 'winab' for b in V.call('leergut_konto&partner=' + hand['id'])[1]['bewegungen']))
+st, r = V.call('leergut_winab_import', WB)
+check('WinAB übernommen', st == 200 and r['zahlen']['neu'] == 4 and sorted(r['neueKunden']) == ['Testkunde Nord GmbH (9100001)', 'Testkunde Nord GmbH (9100003)'], r)
+s = V.call('leergut_start')[1]
+wk = {p['kundenNr']: p for p in s['partner'] if p.get('kundenNr')}
+salden = {x['id']: x['saldo'] for x in s['konten']}
+check('WinAB: Kundenkonten mit Kundennummer im Namen (gleiche Namen unterscheidbar), Art Kunde, Herkunft winab', set(wk) == {'9100001', '9100002', '9100003'}
+      and wk['9100001']['name'] == 'Testkunde Nord GmbH (9100001)' and wk['9100003']['name'] == 'Testkunde Nord GmbH (9100003)'
+      and all(wk[k]['art'] == 'kunde' and wk[k]['quelle'] == 'winab' and wk[k]['mandant'] == 'standard' for k in ('9100001', '9100003')), wk)
+check('WinAB: Salden – Abgang an den Kunden +, Rückgabe −, Gutschrift/Rechnung, nur Tausch zählt nicht', salden[wk['9100001']['id']] == {'e2': 6, 'h1': 1}
+      and salden[wk['9100002']['id']] == {'e2': -5} and salden[wk['9100003']['id']] == {'e2': 3} and '9100004' not in wk, {k: salden[p['id']] for k, p in wk.items()})
+check('WinAB: von Hand angelegter Kunde bleibt von Hand (nur verknüpft)', wk['9100002']['id'] == hand['id'] and wk['9100002'].get('quelle') != 'winab')
+kb = V.call('leergut_konto&partner=' + wk['9100001']['id'])[1]['bewegungen']
+gs = [b for b in V.call('leergut_konto&partner=' + hand['id'])[1]['bewegungen'] if b['beleg'] == 'Gutschrift 600001']
+off = V.call('leergut_konto&partner=' + wk['9100003']['id'])[1]['bewegungen']
+check('WinAB-Buchung: Beleg mit Art, Herkunft, Schlüssel, Abgang und Zugang getrennt', len(kb) == 1 and kb[0]['beleg'] == 'Lieferschein 500001' and kb[0]['quelle'] == 'winab'
+      and kb[0]['winab'] == {'kd': '9100001', 'art': 'Lieferschein', 'beleg': '500001'} and kb[0]['abgang'] == {'e2': 10, 'h1': 1} and kb[0]['zugang'] == {'e2': 4}
+      and 'Lademittel_Test.XLS' in kb[0]['text'], kb)
+check('WinAB: Gutschrift als Abholung, Lieferschein am Berichtsdatum „noch nicht zurück“', len(gs) == 1 and gs[0]['typ'] == 'abholung'
+      and 'noch nicht zurück' in off[0]['text'] and 'noch nicht zurück' not in kb[0]['text'], (gs, off))
+st, r = V.call('leergut_winab_import', WB)
+check('WinAB erneut: alles unverändert, keine neuen Konten', st == 200 and r['zahlen']['gleich'] == 4 and r['zahlen']['neu'] == 0 and r['zahlen']['kunden'] == 0
+      and len(V.call('leergut_start')[1]['partner']) == n_p + 3, r)
+for name, b, erw in (('Zeitraum ab 01.06.: frühere Belege bleiben', wb(bericht={**WB['bericht'], 'von': '2026-06-01'}, belege=WB['belege'][4:]), {'gleich': 1, 'ausgeglichen': 0}),
+                     ('nur Kunde 9100003 im Bericht: andere bleiben', wb(kunden=WB['kunden'][2:3], belege=WB['belege'][4:]), {'gleich': 1, 'ausgeglichen': 0}),
+                     ('Kunde 9100001 ohne Belege im Bericht: ausgeglichen', wb(kunden=WB['kunden'][::2], belege=WB['belege'][4:]), {'gleich': 1, 'ausgeglichen': 1})):
+    st, r = V.call('leergut_winab_import', {**b, 'vorschau': True})
+    check(f'WinAB-Vorschau {name}', st == 200 and all(r['zahlen'][k] == n for k, n in erw.items()), r.get('zahlen'))
+geaendert = wb(belege=[{**WB['belege'][0], 'abgang': {'e2': 12, 'h1': 1}}] + WB['belege'][1:3] + WB['belege'][4:])
+st, r = V.call('leergut_winab_import', geaendert)
+check('WinAB geändert: Beleg geändert → storniert und neu, fehlender Beleg → ausgeglichen', st == 200 and r['zahlen']['geaendert'] == 1 and r['zahlen']['ausgeglichen'] == 1
+      and r['zahlen']['gleich'] == 2 and r['zahlen']['neu'] == 0, r)
+kb = V.call('leergut_konto&partner=' + wk['9100001']['id'])[1]['bewegungen']
+re_ = [b for b in V.call('leergut_konto&partner=' + hand['id'])[1]['bewegungen'] if b['beleg'] == 'Rechnung 700001']
+check('WinAB geändert: alter Beleg storniert mit Grund, neuer gebucht, Saldo neu', len(kb) == 2 and 'Beleg geändert' in kb[0]['storno']['grund'] and kb[1]['abgang'] == {'e2': 12, 'h1': 1}
+      and not kb[1]['storno'] and re_ and 'ausgeglichen' in re_[0]['storno']['grund']
+      and {x['id']: x['saldo'] for x in V.call('leergut_start')[1]['konten']}[hand['id']] == {'e2': -7}, (kb, re_))
+
 # ── Protokoll ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
-check('Protokoll: Buchung, Storno, Abstimmung, Export, Datenpaket', all(t in log for t in ('Leergut: Bewegung gebucht – Test-Spedition Nord', 'Leergut: Bewegung storniert',
-      'Leergut: Abstimmung Test-Spedition Nord zum 2026-01-31 gespeichert (Widersprochen)', 'Leergut: Bilanz zum 2026-02-28 als CSV', 'Leergut: Datenpaket übernommen (vorhandene Daten ersetzt)')))
-check('Protokoll ohne Notizen und Belegnummern', 'LS-1001' not in log and 'nicht verbucht' not in log)
+check('Protokoll: Buchung, Storno, Abstimmung, Export, Datenpaket, WinAB', all(t in log for t in ('Leergut: Bewegung gebucht – Test-Spedition Nord', 'Leergut: Bewegung storniert',
+      'Leergut: Abstimmung Test-Spedition Nord zum 2026-01-31 gespeichert (Widersprochen)', 'Leergut: Bilanz zum 2026-02-28 als CSV', 'Leergut: Datenpaket übernommen (vorhandene Daten ersetzt)',
+      'Leergut: WinAB-Kundenbewegungen 2026-01-01 bis 2026-10-15 abgeglichen – 2 neue Kundenkonten, 4 neue Belege')))
+check('Protokoll ohne Notizen, Belegnummern und Kundennamen', 'LS-1001' not in log and 'nicht verbucht' not in log and '500001' not in log and 'Testkunde Nord' not in log)
 
 
 # ── Oberfläche ──
@@ -419,6 +563,68 @@ with sync_playwright() as p:
     nach = V.call('leergut_start')[1]
     check('Oberfläche: Datenpaket übernommen (UI-Daten ersetzt)', {x['name'] for x in nach['partner']} == {x['name'] for x in PAKET['partner']} and nach['lademittel'][0]['wert'] == 5.5)
     SP = {x['name']: x['id'] for x in nach['partner']}['Beispiel-Spedition']   # neue Kennungen nach dem Ersetzen
+
+    # WinAB-Bericht (.XLS) – liest der Browser, abgleichen macht der Server
+    xls = os.path.join(tempfile.mkdtemp(), 'Lademittel_Test.XLS')
+    with open(xls, 'wb') as f:
+        f.write(winab_xls())
+    n_p = len(nach['partner'])
+    pg.click('#lg-tabs [data-tab="einstellungen"]')
+    check('Einstellungen: ohne WinAB-Kunden kein Schalter dafür', pg.is_hidden('#lg-e-kunden-zeile'))
+    pg.set_input_files('#lg-w-datei', xls)
+    pg.wait_for_selector('#lg-w-knoepfe:not([hidden])')
+    vor = text(pg, '#lg-w-vorschau')
+    kachel = lambda k: pg.inner_text(f'#lg-w-vorschau [data-z="{k}"] b')
+    check('WinAB-Vorschau: 4 Kunden im Bericht, 4 Belege mit Wirkung, 3 neue Konten, 4 neue Belege', [kachel(k) for k in ('kunden', 'belege', 'neuKd', 'neu', 'gleich')] == ['4', '4', '3', '4', '0'], vor)
+    check('WinAB-Vorschau: Zeitraum bis Berichtsdatum, weggelassen (Sammelrechnung, Karton, Offerte, nur Tausch), Saldo, Gesamtwert nur zur Information',
+          'Zeitraum 01.01.2026 bis 15.10.2026' in vor and '1 Zeile aus Sammelrechnungen' in vor and '1 Kartonzeile,' in vor and '1 × Offerte' in vor
+          and '2 Belege ohne Wirkung' in vor and '(3 mit Saldo)' in vor and 'E2 Kisten −12 · Karton +348' in vor, vor)
+    check('WinAB-Vorschau schreibt nichts', len(V.call('leergut_start')[1]['partner']) == n_p)
+    pg.screenshot(path=os.path.join(SH, 'leergut_winab_1280.png'), full_page=True)
+    pg.click('#lg-w-uebernehmen')
+    pg.wait_for_function("(document.querySelector('#lg-w-meldung')?.textContent || '').startsWith('Übernommen')")
+    check('WinAB aus der Oberfläche übernommen', 'Übernommen: 3 neue Kundenkonten, 4 neue Belege, 0 geändert, 0 ausgeglichen.' in text(pg, '#lg-w-meldung'), text(pg, '#lg-w-meldung'))
+    s = V.call('leergut_start')[1]
+    wk = {p['kundenNr']: p for p in s['partner'] if p.get('kundenNr')}
+    salden = {x['id']: x['saldo'] for x in s['konten']}
+    check('Oberfläche: WinAB-Salden wie aus dem Bericht berechnet', {k: salden[p['id']] for k, p in wk.items()} == {'9100001': {'e2': 6, 'h1': 1}, '9100002': {'e2': -5}, '9100003': {'e2': 3}}
+          and wk['9100002']['name'] == 'Testkunde Süd (9100002)', wk)
+    pg.wait_for_selector('#lg-e-kunden-zeile:not([hidden])')
+    check('Einstellungen: WinAB-Kunden zunächst ausgeblendet, Schalter mit Anzahl', 'Testkunde' not in text(pg, '#lg-e-partner') and '(3)' in text(pg, '#lg-e-kunden-zeile'))
+    pg.check('#lg-e-kunden')
+    check('Einstellungen: WinAB-Kunden einblenden, mit Kundennummer', 'Testkunde Nord GmbH (9100003)' in text(pg, '#lg-e-partner') and 'WinAB-Kd. 9100003' in text(pg, '#lg-e-partner'))
+    pg.set_input_files('#lg-w-datei', xls)
+    pg.wait_for_function("(document.querySelector('#lg-w-meldung')?.textContent || '').includes('nichts Neues')")
+    check('WinAB derselbe Bericht noch einmal: nichts Neues, kein Übernehmen-Knopf', pg.is_hidden('#lg-w-knoepfe') and kachel('gleich') == '4')
+    kaputt = os.path.join(os.path.dirname(xls), 'falsch.XLS')
+    with open(kaputt, 'wb') as f:
+        f.write(winab_xls(titel='Lademittelbewegungen Lieferanten'))
+    pg.set_input_files('#lg-w-datei', kaputt)
+    pg.wait_for_function("(document.querySelector('#lg-w-meldung')?.textContent || '').includes('nicht der WinAB-Bericht')")
+    check('WinAB: falscher Bericht wird erkannt', pg.is_hidden('#lg-w-knoepfe') and not text(pg, '#lg-w-vorschau'))
+    pg.click('#lg-tabs [data-tab="uebersicht"]')
+    zeile = text(pg, '#lg-u-salden tr[data-kunden]')
+    check('Übersicht: Kunden aus WinAB in einer Zeile mit Summe', 'Kunden aus WinAB' in zeile and '3 von 3 Kundenkonten mit Saldo' in zeile and '+4' in zeile
+          and 'Testkunde' not in text(pg, '#lg-u-salden'), zeile)
+    pg.click('#lg-u-salden tr[data-kunden]')
+    pg.wait_for_selector('#lg-tabs [data-tab="konten"][aria-selected="true"]')
+    check('Übersicht → Konten mit Filter Kunde', pg.input_value('#lg-k-art') == 'kunde' and pg.locator('#lg-k-liste [data-konto]').count() == 3)
+    pg.fill('#lg-k-suche', '9100003')
+    check('Konten: Suche nach WinAB-Kundennummer', pg.locator('#lg-k-liste [data-konto]').count() == 1)
+    pg.click(f'#lg-k-liste [data-konto="{wk["9100003"]["id"]}"]'); pg.wait_for_selector('.lg-saldo')
+    pg.wait_for_function("(document.querySelector('#lg-k-detail')?.textContent || '').includes('WinAB-Kd. 9100003')")
+    check('Konto: WinAB-Kundennummer und Herkunft der Buchung', 'Lieferschein 500010' in text(pg, '#lg-k-detail') and 'noch nicht zurück' in text(pg, '#lg-k-detail'))
+    pg.screenshot(path=os.path.join(SH, 'leergut_winab_konto_1280.png'), full_page=True)
+    pg.fill('#lg-k-suche', '')
+    pg.click('#lg-tabs [data-tab="einstellungen"]')
+    pg.click(f'#lg-e-partner [data-partner="{wk["9100001"]["id"]}"]'); pg.wait_for_selector('#dlg-partner[open]')
+    check('Partner-Dialog: WinAB-Kundennummer', pg.input_value('#pa-kdnr') == '9100001')
+    pg.fill('#pa-kdnr', '9100003'); pg.click('#pa-form [type="submit"]'); pg.wait_for_selector('#pa-meldung:not(:empty)')
+    check('Partner-Dialog: Kundennummer doppelt gemeldet', 'gehört schon' in text(pg, '#pa-meldung'))
+    pg.click('#dlg-partner [data-schliessen]'); zu(pg, '#dlg-partner')
+    pg.click('#lg-tabs [data-tab="bilanz"]')   # die Bilanz von vorhin zeigt noch die Kunden aus dem API-Teil
+    pg.wait_for_function("(document.querySelector('#lg-b-tabelle tr[data-kunden]')?.textContent || '').includes('(3 Konten)')")
+    check('Bilanz: Kunden aus WinAB in einer Zeile (CSV bleibt je Konto)', 'Kunden aus WinAB (3 Konten)' in text(pg, '#lg-b-tabelle') and 'Testkunde' not in text(pg, '#lg-b-tabelle'))
     ctx.close()
 
     # Nur ansehen: Handy und dunkel

@@ -29,7 +29,7 @@ Agent: `bestand` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `sto
 
 Leergutkonten je Partner: Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Inventur und Bilanz
 
-Agent: `leergut` · hängt ab von `plattform` · Testgruppen: `leergut`
+Agent: `leergut` · hängt ab von `plattform`, `bestand` · Testgruppen: `leergut`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

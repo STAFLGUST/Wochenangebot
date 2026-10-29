@@ -2,7 +2,9 @@
    Reiter über location.hash („#konten/<partner>“), Hell/Dunkel am Konto (theme.js).
    Ansichten: Übersicht (Fristen, offene Abschreibungen, Salden), Konten (Saldo wie im Palettenkonto der Spedition:
    gesamt · davon bestätigt · davon offen, Bewegungen mit laufendem Saldo), Abstimmungen, Dachser-Abschreibungen,
-   Bilanz zum Stichtag mit CSV und Inventur, Einstellungen (Partner, Lademittel, Datenpaket).
+   Bilanz zum Stichtag mit CSV und Inventur, Einstellungen (Partner, Lademittel, WinAB-Kundenbericht, Datenpaket).
+   WinAB-Bericht „Lademittelbewegungen Kunden“ (.XLS): liest der Browser mit StockCore (stock-core.js), abgleichen und buchen
+   macht der Server; Kundenkonten aus WinAB stehen in Übersicht und Bilanz zusammengefasst in einer Zeile.
    Eingabemasken: Bewegung buchen, Auszug erfassen/bearbeiten, Abschreibung, Inventur, Partner, Lademittel, Storno.
    Vorzeichen überall: + der Partner schuldet uns, − wir schulden dem Partner (Abgang +, Zugang −).
    Rechte prüft der Server bei jeder Aktion (GR-103); ausgeblendete Knöpfe sind nur Anzeige. Kein Inline-Skript (CSP). */
@@ -87,6 +89,7 @@
   const partnerSub = (p) => [S.d.arten[p.art] || p.art, mehrereFirmen() ? S.d.mandanten[p.mandant] : ''].filter(Boolean).join(' · ');
   const nachName = (a, b) => String(a.name).localeCompare(String(b.name), 'de', { sensitivity: 'base' });
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
+  const istWinab = (p) => !!(p && p.quelle === 'winab');   // beim WinAB-Import angelegtes Kundenkonto
 
   /* Rückweg zum Dashboard auf der echten Adresse */
   if (/(^|\.)dashboard-stafl\.de$/.test(location.hostname)) $('#lg-zurueck').href = 'https://dashboard-stafl.de/';
@@ -192,9 +195,12 @@
         ${kunden.slice(0, 8).map(([name, k]) => `<tr class="lg-klick" data-kunde="${esc(name)}"><td class="lg-name lg-voll">${esc(name)}</td><td class="lg-zahl" data-label="Fälle">${zahl(k.n)}</td><td data-label="Menge">${mengen(k.m, { vorzeichen: false })}</td></tr>`).join('')}</tbody></table>`
       : '<p class="lg-leerzeile">Keine offenen Abschreibungen.</p>';
 
-    // Salden je Konto
-    const konten = d.partner.filter((p) => p.aktiv || !leerMap(obj(S.kmap.get(p.id)?.saldo))).sort(nachName);
-    const ids = new Set();
+    // Salden je Konto (Kundenkonten aus WinAB zusammengefasst in einer Zeile)
+    const konten = d.partner.filter((p) => !istWinab(p) && (p.aktiv || !leerMap(obj(S.kmap.get(p.id)?.saldo)))).sort(nachName);
+    const wk = d.partner.filter(istWinab), wSaldo = {};
+    let wMit = 0;
+    wk.forEach((p) => { const s = obj(S.kmap.get(p.id)?.saldo); if (!leerMap(s)) wMit++; for (const [k, n] of Object.entries(s)) wSaldo[k] = (wSaldo[k] || 0) + n; });
+    const ids = new Set(Object.keys(wSaldo).filter((k) => wSaldo[k]));
     konten.forEach((p) => Object.keys(obj(S.kmap.get(p.id)?.saldo)).forEach((k) => ids.add(k)));
     if (!ids.size) { ids.add('e2'); ids.add('h1'); }
     const lms = sortiertLm(ids);
@@ -208,12 +214,19 @@
         <td data-label="Letzte Abstimmung">${la ? `${esc(datum(la.stichtag))} ${statusChip(la.status, d.abstStatus)}` : '<span class="lg-null">—</span>'}</td>
         <td data-label="Differenz laut Partner">${la ? (leerMap(la.differenz) ? '<span class="lg-null">keine</span>' : mengen(la.differenz)) : ''}</td></tr>`;
     });
-    $('#lg-u-salden').innerHTML = konten.length ? `<table class="lg-tabelle lg-karten"><thead><tr><th>Konto</th>${lms.map((id) => `<th class="lg-zahl">${esc(kurz(id))}</th>`).join('')}<th>Letzte Abstimmung</th><th>Differenz laut Partner</th></tr></thead>
+    if (wk.length) {
+      lms.forEach((id) => { summe[id] = (summe[id] || 0) + (wSaldo[id] || 0); });
+      zeilen.push(`<tr class="lg-klick" data-kunden="1"><td class="lg-voll"><span class="lg-name">Kunden aus WinAB</span><span class="lg-sub">${zahl(wMit)} von ${zahl(wk.length)} Kundenkonten mit Saldo</span></td>
+        ${lms.map((id) => `<td class="lg-zahl lg-mobil-weg">${wSaldo[id] ? vzHtml(wSaldo[id]) : '<span class="lg-null">·</span>'}</td>`).join('')}
+        <td class="lg-nur-mobil" data-label="Saldo">${mengen(wSaldo, { leer: 'ausgeglichen' })}</td><td data-label="Letzte Abstimmung"><span class="lg-null">—</span></td><td></td></tr>`);
+    }
+    $('#lg-u-salden').innerHTML = konten.length || wk.length ? `<table class="lg-tabelle lg-karten"><thead><tr><th>Konto</th>${lms.map((id) => `<th class="lg-zahl">${esc(kurz(id))}</th>`).join('')}<th>Letzte Abstimmung</th><th>Differenz laut Partner</th></tr></thead>
       <tbody>${zeilen.join('')}</tbody><tfoot><tr><td class="lg-voll">Summe aller Konten</td>${lms.map((id) => `<td class="lg-zahl lg-mobil-weg">${vzHtml(summe[id] || 0)}</td>`).join('')}<td class="lg-nur-mobil lg-voll">${mengen(summe, { leer: 'ausgeglichen' })}</td><td></td><td></td></tr></tfoot></table>`
       : '<p class="lg-leerzeile">Noch keine Konten.</p>';
   }
   $('#lg-u-fristen').addEventListener('click', (ev) => { const b = ev.target.closest('[data-abst]'); if (b) oeffneAuszug({ id: b.dataset.abst }); });
-  $('#lg-u-salden').addEventListener('click', (ev) => { const r = ev.target.closest('[data-konto]'); if (r) zeigeTab('konten', r.dataset.konto); });
+  const zeigeKunden = () => { $('#lg-k-art').value = 'kunde'; renderKontoliste(); zeigeTab('konten'); window.scrollTo({ top: 0 }); };
+  $('#lg-u-salden').addEventListener('click', (ev) => { if (ev.target.closest('[data-kunden]')) { zeigeKunden(); return; } const r = ev.target.closest('[data-konto]'); if (r) zeigeTab('konten', r.dataset.konto); });
   $('#lg-u-abschr').addEventListener('click', (ev) => { const r = ev.target.closest('[data-kunde]'); if (r) { S.kunde = r.dataset.kunde; $('#lg-d-status').value = 'offen'; renderAbschreibungen(); zeigeTab('abschreibungen'); } });
 
   /* ---------- Konten ---------- */
@@ -230,7 +243,7 @@
     const q = $('#lg-k-suche').value.trim().toLocaleLowerCase('de-DE');
     const art = $('#lg-k-art').value, firma = $('#lg-k-firma').value, inaktiv = $('#lg-k-inaktiv').checked;
     const liste = S.d.partner.filter((p) => (inaktiv || p.aktiv) && (!art || p.art === art) && (!firma || p.mandant === firma)
-      && (!q || [p.name, p.kontoNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q))).sort(nachName);
+      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q))).sort(nachName);
     $('#lg-k-liste').innerHTML = liste.length ? liste.map((p) => {
       const k = S.kmap.get(p.id) || {};
       const punkt = k.ueberfaellig ? 'rot' : k.abstimmungenOffen ? 'gelb' : '';
@@ -266,7 +279,7 @@
     const p = k.partner, ko = S.kmap.get(id) || {}, lms = kontoLms(p, k.bewegungen);
     const best = ko.bestaetigt, la = ko.letzteAbstimmung;
     const meta = [`<span class="lg-chip">${esc(S.d.arten[p.art] || p.art)}</span>`, `<span class="lg-chip firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</span>`,
-      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '',
+      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '',
       p.fristTage ? `<span>Widerspruch binnen ${zahl(p.fristTage)} Tagen</span>` : '<span>ohne Widerspruchsfrist</span>',
       p.ansprechpartner ? `<span>${esc(p.ansprechpartner)}</span>` : '',
       p.email ? `<a href="mailto:${esc(p.email.replace(/\s/g, ''))}">${esc(p.email)}</a>` : ''].filter(Boolean).join('');
@@ -293,7 +306,7 @@
       <div class="lg-salden">${karten || '<p class="lg-leer-text lg-glas">Noch keine Bewegungen.</p>'}</div>
       <p class="lg-hilfe">„Bestätigt“ ist unser Saldo bis zum Stichtag des letzten bestätigten Auszugs, „offen“ alles danach. + der Partner schuldet uns · − wir schulden dem Partner.</p>
       <section class="lg-panel lg-glas"><div class="lg-panelkopf"><h2>Abstimmungen</h2></div>${abstTabelle(k.abstimmungen, false)}</section>
-      <section class="lg-panel lg-glas"><div class="lg-panelkopf"><h2>Bewegungen</h2><span class="lg-hilfe">${zahl(k.bewegungen.filter((b) => !b.storno).length)} Buchungen${ko.letzteBewegung ? ', zuletzt am ' + esc(datum(ko.letzteBewegung)) : ''}</span></div>${bewegungsTabelle(k, lms)}</section>`;
+      <section class="lg-panel lg-glas"><div class="lg-panelkopf"><h2>Bewegungen</h2><span class="lg-hilfe">${((n) => `${zahl(n)} ${n === 1 ? 'Buchung' : 'Buchungen'}`)(k.bewegungen.filter((b) => !b.storno).length)}${ko.letzteBewegung ? ', zuletzt am ' + esc(datum(ko.letzteBewegung)) : ''}</span></div>${bewegungsTabelle(k, lms)}</section>`;
   }
   function saldoMail(p, ko) {
     const s = obj(ko.saldo);
@@ -395,7 +408,13 @@
     const zelle = (m, id) => { const n = obj(m)[id] || 0; return `<td class="lg-zahl lg-mobil-weg">${n ? vzHtml(n) : '<span class="lg-null">·</span>'}</td>`; };
     const mobil = (m) => `<td class="lg-nur-mobil" data-label="Saldo">${mengen(m, { leer: 'ausgeglichen' })}</td>`;
     const zeile = (titel, m, e, cls = 'lg-summe') => `<tr class="${cls}"><td class="lg-voll" colspan="2">${titel}</td>${lms.map((id) => zelle(m, id)).join('')}${mobil(m)}<td class="lg-zahl" data-label="Wert">${euro(e.betrag)}${e.vollstaendig ? '' : '*'}</td><td></td></tr>`;
-    const nach = [...b.zeilen].sort((x, y) => (x.mandant === y.mandant ? 0 : x.mandant === 'standard' ? -1 : 1) || String(x.name).localeCompare(y.name, 'de'));
+    const einzeln = b.zeilen.filter((z) => !istWinab(S.pmap.get(z.partner))), wz = {};
+    b.zeilen.filter((z) => istWinab(S.pmap.get(z.partner))).forEach((z) => {
+      const g = wz[z.mandant] = wz[z.mandant] || { partner: '', kunden: true, name: '', n: 0, art: 'kunde', mandant: z.mandant, saldo: {}, abstimmung: null };
+      g.n++; for (const [k, n] of Object.entries(obj(z.saldo))) g.saldo[k] = (g.saldo[k] || 0) + n;
+    });
+    Object.values(wz).forEach((g) => { g.name = `Kunden aus WinAB (${zahl(g.n)} Konten)`; g.euro = euroVon(g.saldo); einzeln.push(g); });
+    const nach = einzeln.sort((x, y) => (x.mandant === y.mandant ? 0 : x.mandant === 'standard' ? -1 : 1) || String(x.name).localeCompare(y.name, 'de'));
     let html = '', letzte = null;
     for (const z of nach) {
       if (mehr && z.mandant !== letzte) {
@@ -403,7 +422,7 @@
         html += `<tr class="lg-gruppe"><td class="lg-voll" colspan="${lms.length + 4}"><b>${esc(S.d.mandanten[z.mandant] || z.mandant)}</b></td></tr>`;
         letzte = z.mandant;
       }
-      html += `<tr class="lg-klick" data-konto="${esc(z.partner)}"><td class="lg-voll"><span class="lg-name">${esc(z.name)}</span></td><td data-label="Art">${esc(S.d.arten[z.art] || z.art)}</td>
+      html += `<tr class="lg-klick" ${z.kunden ? 'data-kunden="1"' : `data-konto="${esc(z.partner)}"`}><td class="lg-voll"><span class="lg-name">${esc(z.name)}</span></td><td data-label="Art">${esc(S.d.arten[z.art] || z.art)}</td>
         ${lms.map((id) => zelle(z.saldo, id)).join('')}${mobil(z.saldo)}<td class="lg-zahl" data-label="Wert">${z.euro.betrag ? euro(z.euro.betrag) + (z.euro.vollstaendig ? '' : '*') : '—'}</td>
         <td data-label="Letzte Abstimmung">${z.abstimmung ? esc(datum(z.abstimmung.stichtag)) + ' ' + statusChip(z.abstimmung.status, S.d.abstStatus) : '<span class="lg-null">—</span>'}</td></tr>`;
     }
@@ -419,7 +438,7 @@
   }
   const euroVon = (m) => { let e = 0, v = true; for (const [k, n] of Object.entries(obj(m))) { const w = lm(k).wert; if (w === null || w === undefined) v = false; else e += n * w; } return { betrag: Math.round(e * 100) / 100, vollstaendig: v }; };
   $('#lg-b-tag').addEventListener('change', ladeBilanz);
-  $('#lg-b-tabelle').addEventListener('click', (ev) => { const r = ev.target.closest('[data-konto]'); if (r) zeigeTab('konten', r.dataset.konto); });
+  $('#lg-b-tabelle').addEventListener('click', (ev) => { if (ev.target.closest('[data-kunden]')) { zeigeKunden(); return; } const r = ev.target.closest('[data-konto]'); if (r) zeigeTab('konten', r.dataset.konto); });
   $('#lg-b-csv').addEventListener('click', async () => {
     const tag = $('#lg-b-tag').value || S.d.heute;
     let res;
@@ -445,9 +464,11 @@
 
   /* ---------- Einstellungen ---------- */
   function renderEinstellungen() {
-    const liste = [...S.d.partner].sort((a, b) => (a.aktiv === b.aktiv ? 0 : a.aktiv ? -1 : 1) || nachName(a, b));
+    const nWinab = S.d.partner.filter(istWinab).length;
+    $('#lg-e-kunden-zeile').hidden = !nWinab; $('#lg-e-kunden-text').textContent = `Kundenkonten aus WinAB zeigen (${zahl(nWinab)})`;
+    const liste = S.d.partner.filter((p) => $('#lg-e-kunden').checked || !istWinab(p)).sort((a, b) => (a.aktiv === b.aktiv ? 0 : a.aktiv ? -1 : 1) || nachName(a, b));
     $('#lg-e-partner').innerHTML = liste.length ? `<table class="lg-tabelle lg-karten"><thead><tr><th>Name</th><th>Art</th><th>Firma</th><th class="lg-zahl">Frist</th><th>E-Mail</th><th>Lademittel</th><th></th></tr></thead><tbody>
-      ${liste.map((p) => `<tr class="lg-klick" data-partner="${esc(p.id)}"><td class="lg-voll"><span class="lg-name">${esc(p.name)}</span>${p.kontoNr ? `<span class="lg-sub">Konto-Nr. ${esc(p.kontoNr)}</span>` : ''}</td>
+      ${liste.map((p) => `<tr class="lg-klick" data-partner="${esc(p.id)}"><td class="lg-voll"><span class="lg-name">${esc(p.name)}</span>${p.kontoNr || p.kundenNr ? `<span class="lg-sub">${[p.kontoNr ? 'Konto-Nr. ' + esc(p.kontoNr) : '', p.kundenNr ? 'WinAB-Kd. ' + esc(p.kundenNr) : ''].filter(Boolean).join(' · ')}</span>` : ''}</td>
         <td data-label="Art">${esc(S.d.arten[p.art] || p.art)}</td><td data-label="Firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</td>
         <td class="lg-zahl" data-label="Frist">${p.fristTage ? zahl(p.fristTage) + ' Tage' : '—'}</td><td data-label="E-Mail">${esc(p.email) || '—'}</td>
         <td data-label="Lademittel">${(p.lademittel || []).map((id) => esc(kurz(id))).join(', ')}</td><td>${p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>'}</td></tr>`).join('')}</tbody></table>`
@@ -458,6 +479,7 @@
     <td class="lg-zahl" data-label="Wert je Stück (€)"><input class="lg-eingabe" data-f="wert" inputmode="decimal" maxlength="10" value="${l.wert === null || l.wert === undefined ? '' : esc(Number(l.wert).toFixed(2).replace('.', ','))}" aria-label="Wert je Stück in Euro" placeholder="ohne Wert"></td>
     <td data-label="Aktiv"><input type="checkbox" data-f="aktiv" ${l.aktiv !== false ? 'checked' : ''} aria-label="aktiv"></td></tr>`;
   $('#lg-e-partner-neu').addEventListener('click', () => oeffnePartner(''));
+  $('#lg-e-kunden').addEventListener('change', renderEinstellungen);
   $('#lg-e-partner').addEventListener('click', (ev) => { const r = ev.target.closest('[data-partner]'); if (r) oeffnePartner(r.dataset.partner); });
   $('#lg-e-lm-plus').addEventListener('click', () => { $('#lg-e-lm').insertAdjacentHTML('beforeend', lmZeile({ name: '', wert: null, aktiv: true })); $('#lg-e-lm tr:last-child input').focus(); });
   $('#lg-e-lm-form').addEventListener('submit', async (ev) => {
@@ -509,6 +531,150 @@
     S.kontoId = '';
     await neuLaden();
     zeigeTab('uebersicht');
+  });
+
+  /* ---------- WinAB-Bericht „Lademittelbewegungen Kunden“ (.XLS) ----------
+     Der Browser liest den Bericht (StockCore, wie die Bestandsliste) und erkennt die Zeilen an ihrem Inhalt, nicht an
+     festen Spalten: Kopf je Kunde und Lademittel („Lademittel“, Nr., Name), Bewegungen (Kd.-Nr., Name, Belegnr.,
+     Belegart, Datum TTMMJJJJ, Zugang/Abgang, Menge), Summenzeilen, Berichtsdatum und Auswertungszeitraum.
+     Übernommen werden Lieferscheine, Gutschriften und Rechnungen. Sammelrechnungen wiederholen die Lieferscheine,
+     Offerten bewegen nichts, Karton ist kein Leergut. Den Abgleich (neu, gleich, geändert, ausgeglichen) macht der Server. */
+  const WINAB_ARTEN = ['Lieferschein', 'Gutschrift', 'Rechnung'];
+  const normName = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '');
+  function winabLm(name) {
+    const n = normName(name);
+    if (n.includes('karton')) return '-';
+    const gleich = S.d.lademittel.find((l) => normName(l.name) === n);
+    if (gleich) return gleich.id;
+    const id = n.startsWith('e2') ? 'e2' : n.startsWith('e1') ? 'e1' : n.startsWith('h1') ? 'h1' : n.includes('europalette') ? 'eu'
+      : n.includes('kübel') || n.includes('kuebel') ? 'kuebel' : n.includes('haken') ? 'haken' : '';
+    return id && S.d.lademittel.some((l) => l.id === id) ? id : '';
+  }
+  function winabDatum(v) {
+    let j, m, t;
+    if (typeof v === 'number' && Number.isInteger(v) && v >= 1010000 && v <= 31129999) { const s = String(v).padStart(8, '0'); [t, m, j] = [s.slice(0, 2), s.slice(2, 4), s.slice(4)]; }
+    else { const x = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(v ?? '').trim()); if (!x) return ''; [, t, m, j] = x; }
+    const d = new Date(Date.UTC(+j, +m - 1, +t));
+    return d.getUTCFullYear() === +j && d.getUTCMonth() === +m - 1 && d.getUTCDate() === +t ? d.toISOString().slice(0, 10) : '';
+  }
+  function leseWinab(sheets, datei) {
+    const kunden = new Map(), belege = new Map(), lmNamen = new Map(), fehlerListe = [];
+    const info = { zeilen: 0, sammel: 0, karton: 0, andere: {}, unbekannt: {}, ohneBeleg: 0, ohneWirkung: 0, sammelwert: [] };
+    let titel = false, stand = '', von = '', bis = '', block = null;
+    const fehlerhaft = (i, text) => { if (fehlerListe.length < 20) fehlerListe.push(`Zeile ${i + 1}: ${text}`); };
+    for (const sh of sheets) sh.grid.forEach((r, i) => {
+      const z = [];
+      (r || []).forEach((v) => { if (typeof v === 'string') { v = v.replace(/\s+/g, ' ').trim(); if (v) z.push(v); } else if (typeof v === 'number') z.push(v); });
+      if (!z.length) return;
+      if (z.includes('Lademittelbewegungen Kunden')) titel = true;
+      const dz = z.find((v) => typeof v === 'string' && /^Datum:\s*\d/.test(v));
+      if (dz && !stand) stand = winabDatum(dz.replace(/^Datum:\s*/, ''));
+      const iA = z.indexOf('Auswertungszeitraum');
+      if (iA >= 0) { von = winabDatum(z[iA + 1]); const iB = z.indexOf('bis', iA); bis = iB > 0 ? winabDatum(z[iB + 1]) : ''; return; }
+      if (z.includes('Bewegungsart')) return;   // Spaltenkopf
+      const iS = z.indexOf('Summe');
+      if (iS >= 0 && z[iS + 1] === 'Lademittel') { if (!block && !kunden.size) info.sammelwert.push({ nr: z[iS + 2], wert: typeof z[iS + 3] === 'number' ? z[iS + 3] : 0 }); block = null; return; }
+      const iL = z.indexOf('Lademittel'), iK = z.findIndex((v) => typeof v === 'number');
+      if (iL > 0 && typeof z[iL + 1] === 'number' && iK >= 0 && iK < iL) {
+        const kd = String(z[iK]), name = z.slice(iK + 1, iL).filter((v) => typeof v === 'string').join(' ');
+        if (!/^\d{1,12}$/.test(kd)) { fehlerhaft(i, 'Kundennummer nicht lesbar'); block = null; return; }
+        lmNamen.set(z[iL + 1], String(z[iL + 2] || ''));
+        block = { kd, nr: z[iL + 1], lm: winabLm(z[iL + 2]), lmName: String(z[iL + 2] || 'Lademittel ' + z[iL + 1]) };
+        if (!kunden.get(kd)) kunden.set(kd, name);
+        return;
+      }
+      const iB = z.findIndex((v) => v === 'Zugang' || v === 'Abgang');
+      if (iB < 3) return;   // Hinweise, Seitenköpfe
+      info.zeilen++;
+      const menge = z[iB + 1], tag = winabDatum(z[iB - 1]), art = String(z[iB - 2]), kd = String(z[iK]);
+      if (!block) { fehlerhaft(i, 'Bewegung ohne Kopfzeile „Lademittel“'); return; }
+      if (kd !== block.kd) { fehlerhaft(i, `Kundennummer ${kd} passt nicht zur Kopfzeile (${block.kd})`); return; }
+      if (typeof menge !== 'number' || !Number.isInteger(menge)) { fehlerhaft(i, 'Menge nicht lesbar'); return; }
+      if (!tag) { fehlerhaft(i, 'Datum nicht lesbar'); return; }
+      if (/^sammel/i.test(art)) { info.sammel++; return; }
+      if (!WINAB_ARTEN.includes(art)) { info.andere[art] = (info.andere[art] || 0) + 1; return; }
+      if (block.lm === '-') { info.karton++; return; }
+      if (!block.lm) { info.unbekannt[block.lmName] = (info.unbekannt[block.lmName] || 0) + 1; return; }
+      const bn = iB - 3 > iK ? z[iB - 3] : '';
+      if (bn === '' || typeof bn !== 'number') { info.ohneBeleg++; return; }
+      const key = `${kd}|${art}|${bn}`;
+      const b = belege.get(key) || { kd, art, beleg: String(bn), datum: tag, abgang: {}, zugang: {} };
+      if (tag < b.datum) b.datum = tag;
+      const seite = z[iB] === 'Abgang' ? b.abgang : b.zugang;
+      seite[block.lm] = (seite[block.lm] || 0) + Math.abs(menge);
+      belege.set(key, b);
+    });
+    if (!titel) throw new Error('Das ist nicht der WinAB-Bericht „Lademittelbewegungen Kunden“.');
+    if (!von || !bis) throw new Error('Der Auswertungszeitraum am Ende des Berichts fehlt – bitte den vollständigen Bericht verwenden.');
+    if (fehlerListe.length) throw new Error('Der Bericht hat nicht das erwartete Format. ' + fehlerListe.slice(0, 5).join(' · '));
+    if (stand && stand < bis) bis = stand;   // WinAB nennt „bis 31.12.2078“; gebucht ist bis zum Berichtsdatum
+    const liste = [];
+    for (const b of belege.values()) {
+      for (const s of [b.abgang, b.zugang]) for (const k of Object.keys(s)) if (!s[k]) delete s[k];
+      if (leerMap(delta(b))) info.ohneWirkung++; else liste.push(b);
+    }
+    info.sammelwert = info.sammelwert.map((x) => ({ name: lmNamen.get(x.nr) || 'Lademittel ' + x.nr, wert: x.wert }));
+    return { bericht: { datei: String(datei || '').slice(0, 120), von, bis, datum: stand }, kunden: [...kunden].map(([nr, name]) => ({ nr, name: name || 'Kunde ' + nr })), belege: liste, info };
+  }
+  function zeigeWinabVorschau(w, r) {
+    const z = r.zahlen, inf = w.info;
+    const anz = (n, eins, mehr) => (n ? `${zahl(n)} ${n === 1 ? eins : mehr}` : '');
+    const weg = [anz(inf.sammel, 'Zeile aus Sammelrechnungen', 'Zeilen aus Sammelrechnungen'), anz(inf.karton, 'Kartonzeile', 'Kartonzeilen'),
+      ...Object.entries(inf.andere).map(([a, n]) => `${zahl(n)} × ${a}`), anz(inf.ohneBeleg, 'Zeile ohne Belegnr.', 'Zeilen ohne Belegnr.'),
+      anz(inf.ohneWirkung, 'Beleg ohne Wirkung', 'Belege ohne Wirkung') + (inf.ohneWirkung ? ' (gleich viel abgegeben wie zurückgenommen)' : '')].filter(Boolean);
+    const unb = Object.entries(inf.unbekannt);
+    const kacheln = [['kunden', w.kunden.length, 'Kunden im Bericht'], ['belege', w.belege.length, 'Belege mit Wirkung'], ['neuKd', z.kunden, 'Neue Kundenkonten'],
+      ['neu', z.neu, 'Neue Belege'], ['gleich', z.gleich, 'Unverändert'], ['geaendert', z.geaendert, 'Geändert'], ['ausgeglichen', z.ausgeglichen, 'Ausgeglichen']];
+    $('#lg-w-vorschau').innerHTML = `<div class="lg-vorschau">${kacheln.map(([k, n, t]) => `<div data-z="${k}"><b>${zahl(n)}</b><span>${t}</span></div>`).join('')}</div>
+      <p class="lg-hinweis">Bericht vom ${esc(datum(w.bericht.datum || w.bericht.bis))} · übernommen wird der Zeitraum ${esc(datum(w.bericht.von))} bis ${esc(datum(w.bericht.bis))}.${weg.length ? ' Weggelassen: ' + esc(weg.join(', ')) + '.' : ''}</p>
+      ${unb.length ? `<p class="lg-meldung">Nicht übernommen, weil das Lademittel im Modul fehlt: ${esc(unb.map(([n, c]) => `${n} (${zahl(c)} Zeilen)`).join(', '))}. Unter „Lademittel“ anlegen und den Bericht erneut wählen.</p>` : ''}
+      ${z.geaendert || z.ausgeglichen ? `<p class="lg-meldung">${zahl(z.geaendert + z.ausgeglichen)} schon übernommene Belege werden storniert${z.geaendert ? ' und neu gebucht' : ''}, weil WinAB sie geändert hat oder sie nicht mehr im Bericht stehen. Den Bericht deshalb immer für alle Lademittel ziehen.</p>` : ''}
+      <p class="lg-wsumme">Saldo aller Kundenkonten aus WinAB danach (${zahl(z.konten)} mit Saldo): ${mengen(r.summe, { leer: 'ausgeglichen' })}</p>
+      ${inf.sammelwert.length ? `<p class="lg-hinweis">Nur zur Information – Gesamtwert oben im WinAB-Bericht (WinAB-Vorzeichen, Minus = mehr an Kunden abgegeben als zurückgenommen): ${esc(inf.sammelwert.map((x) => `${x.name} ${vz(x.wert)}`).join(' · '))}</p>` : ''}`;
+  }
+  $('#lg-w-datei').addEventListener('change', async (ev) => {
+    const f = ev.target.files[0], m = $('#lg-w-meldung');
+    S.winab = null; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-knoepfe').hidden = true; m.textContent = ''; m.className = 'lg-meldung';
+    if (!f) return;
+    $('#lg-w-dateiname').textContent = f.name;
+    ev.target.value = '';
+    if (f.size > 40 * 1024 * 1024) { m.textContent = 'Die Datei ist zu groß (höchstens 40 MB).'; return; }
+    let w;
+    try {
+      const b = new Uint8Array(await f.arrayBuffer());
+      if (b[0] === 0x50 && b[1] === 0x4b && !window.OfferCore) throw new Error('Bitte den Bericht so verwenden, wie WinAB ihn speichert (.XLS) – .xlsx wird hier nicht gelesen.');
+      w = leseWinab(await window.StockCore.readStockWorkbook(b.buffer), f.name);
+    } catch (e) { m.textContent = e && e.message ? e.message : 'Die Datei konnte nicht gelesen werden.'; return; }
+    if (!w.belege.length && !w.kunden.length) { m.textContent = 'Im Bericht stehen keine Kundenbewegungen.'; return; }
+    m.className = 'lg-meldung ok'; m.textContent = 'Bericht gelesen – Abgleich wird geprüft …';
+    const r = await api('leergut_winab_import', { bericht: w.bericht, kunden: w.kunden, belege: w.belege, vorschau: true });
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    m.className = 'lg-meldung'; m.textContent = '';
+    if (r.status !== 200 || !r.data.ok) { m.textContent = fehlerText(r, 'Der Bericht konnte nicht geprüft werden'); return; }
+    if ((r.data.fehler || []).length) {
+      $('#lg-w-vorschau').innerHTML = `<p class="lg-meldung">${zahl(r.data.fehler.length)} Fehler – nichts übernommen:</p><ul class="lg-fehlerliste">${r.data.fehler.map((x) => `<li>Beleg ${zahl(x.zeile)}: ${esc(x.text)}</li>`).join('')}</ul>`;
+      return;
+    }
+    zeigeWinabVorschau(w, r.data);
+    const z = r.data.zahlen;
+    if (!z.kunden && !z.neu && !z.geaendert && !z.ausgeglichen) { m.className = 'lg-meldung ok'; m.textContent = 'Alles schon übernommen – es gibt nichts Neues.'; return; }
+    S.winab = w;
+    $('#lg-w-knoepfe').hidden = false;
+  });
+  $('#lg-w-uebernehmen').addEventListener('click', async (ev) => {
+    const w = S.winab, m = $('#lg-w-meldung');
+    if (!w) return;
+    ev.target.disabled = true;
+    const r = await api('leergut_winab_import', { bericht: w.bericht, kunden: w.kunden, belege: w.belege });
+    ev.target.disabled = false;
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { m.className = 'lg-meldung'; m.textContent = fehlerText(r, 'Übernehmen fehlgeschlagen'); return; }
+    S.winab = null; $('#lg-w-knoepfe').hidden = true; $('#lg-w-vorschau').innerHTML = ''; $('#lg-w-dateiname').textContent = 'Keine Datei gewählt';
+    const z = r.data.zahlen;
+    m.className = 'lg-meldung ok';
+    m.textContent = `Übernommen: ${zahl(z.kunden)} neue Kundenkonten, ${zahl(z.neu)} neue Belege, ${zahl(z.geaendert)} geändert, ${zahl(z.ausgeglichen)} ausgeglichen.`;
+    toast('WinAB-Bericht übernommen');
+    await neuLaden();
   });
 
   /* ---------- Eingabemasken: gemeinsame Hilfen ---------- */
@@ -766,7 +932,7 @@
     $('#pa-titel').textContent = p ? `Partner ${p.name}` : 'Partner anlegen';
     $('#pa-name').value = p ? p.name : ''; $('#pa-art').innerHTML = optionen(S.d.arten, p ? p.art : 'lieferant');
     $('#pa-firma').innerHTML = optionen(S.d.mandanten, p ? p.mandant : 'standard');
-    $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
+    $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-kdnr').value = p ? (p.kundenNr || '') : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
     $('#pa-email').value = p ? p.email : ''; $('#pa-ansprech').value = p ? p.ansprechpartner : ''; $('#pa-lieferanten').value = p ? p.lieferanten : '';
     $('#pa-notiz').value = p ? p.notiz : ''; $('#pa-aktiv').checked = p ? !!p.aktiv : true;
     const gewaehlt = new Set(p ? p.lademittel : ['e2', 'h1']);
@@ -777,7 +943,7 @@
   $('#pa-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const p = S.edit.partner;
-    const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, fristTage: $('#pa-frist').value.trim(),
+    const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, kundenNr: $('#pa-kdnr').value.trim(), fristTage: $('#pa-frist').value.trim(),
       email: $('#pa-email').value, ansprechpartner: $('#pa-ansprech').value, lieferanten: $('#pa-lieferanten').value, notiz: $('#pa-notiz').value,
       lademittel: $$('#pa-lm input:checked').map((x) => x.value), aktiv: $('#pa-aktiv').checked };
     if (p) { body.id = p.id; body.rev = p.rev; }
