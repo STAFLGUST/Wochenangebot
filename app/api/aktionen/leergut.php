@@ -4,7 +4,7 @@ declare(strict_types=1);
    app/api/module/leergut/leergut.php)
    Rechte (GR-103): leergut.sehen – Übersicht, Konten mit Bewegungen, Abstimmungen, Abschreibungen, Bilanz, CSV;
                     leergut.bearbeiten – Bewegungen buchen und stornieren, Auszüge erfassen und Status setzen,
-                                         Abschreibungen und Inventur erfassen und ändern;
+                                         Abschreibungen und Inventur erfassen und ändern, Dachser-Liste einlesen;
                     leergut.verwalten – Partner und Lademittel (Werte) pflegen, Datenpaket übernehmen.
    Gleichzeitiges Bearbeiten: Abstimmungen, Abschreibungen und Inventur tragen „rev“; ein veralteter Stand bekommt 409.
    Bewegungen werden nie geändert oder gelöscht, nur storniert (Status statt Löschen) – auch beim WinAB-Abgleich.
@@ -185,6 +185,38 @@ switch ($action) {
             });
             audit('leergut', 'Leergut: Abschreibung ' . $d['empfaenger'] . ' vom ' . $d['zugestellt'] . ' gespeichert (' . LG_ABSCHR_STATUS[$d['status']] . ')');
             respond(['ok' => true, 'abschreibung' => $d]);
+        }
+
+        /* Dachser-Liste „Unterkonto-Vorspediteur“ (Text der Mail oder .eml) einlesen: Vorschau schreibt nichts; übernommen
+           werden neue Fälle und fehlende Lademittel offener Fälle, Abweichungen werden nur gemeldet (lg_dachser_abgleich) */
+        case 'leergut_dachser_import': {
+            $me = require_perm('leergut.bearbeiten', true);
+            $b = body();
+            $text = is_string($b['text'] ?? null) ? $b['text'] : '';
+            if (trim($text) === '') fail('Bitte den Text der Mail „Infos von Fa. DACHSER“ einfügen oder die Mail als Datei wählen.', 422);
+            if (strlen($text) > LG_MAX_DACHSER_TEXT) fail('Der Text ist zu lang (höchstens 2 MB).', 422);
+            $vorschau = !empty($b['vorschau']);
+            $klar = lg_mail_text($text);
+            $l = lg_dachser_lesen($klar, lg_stamm());
+            if ($l['fehler']) {
+                if ($vorschau) respond(['ok' => true, 'fehler' => $l['fehler']]);
+                respond(['ok' => false, 'error' => 'Die Liste enthält unlesbare Zeilen – nichts übernommen.', 'fehler' => $l['fehler']], 422);
+            }
+            if (!$l['zeilen']) fail('Im Text steht keine Dachser-Liste mit Abschreibungen „lt. Empfänger“.', 422);
+            $erg = with_lock('leergut-bewegungen', function () use ($l, $me, $vorschau) {
+                $doc = lg_doc('leergut-abschreibungen');
+                [$liste, $z, $abw, $summe, $doppelt] = lg_dachser_abgleich($l, $doc['liste'], $me);
+                if (count($liste) > LG_MAX_ABSCHREIBUNGEN) fail('Zu viele Abschreibungen.', 422);
+                if (!$vorschau && ($z['neu'] || $z['ergaenzt'])) { $doc['liste'] = $liste; lg_schreiben('leergut-abschreibungen', $doc); }
+                return ['zahlen' => $z, 'abweichend' => $abw, 'summe' => $summe, 'doppelt' => $doppelt];
+            });
+            if (!$vorschau) {
+                $z = $erg['zahlen'];
+                audit('leergut', 'Leergut: Dachser-Liste' . ($l['per'] !== '' ? ' per ' . $l['per'] : '') . ' eingelesen – ' . $z['neu'] . ' neue Abschreibungen, '
+                    . $z['ergaenzt'] . ' ergänzt, ' . $z['schon'] . ' schon erfasst, ' . $z['abweichend'] . ' abweichend');
+            }
+            respond(['ok' => true, 'fehler' => [], 'per' => $l['per'], 'konto' => $l['konto'], 'saldo' => $l['saldo'], 'unbekannt' => $l['unbekannt'],
+                     'text' => $klar !== str_replace("\r\n", "\n", $text) ? $klar : null] + $erg);   // gespeicherte Mail: lesbarer Text für das Eingabefeld
         }
 
         /* Inventur (eigener Bestand zum Stichtag) erfassen oder ändern */

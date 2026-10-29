@@ -24,6 +24,7 @@ declare(strict_types=1);
    WinAB-Kundennummer „kundenNr“, Bewegungen mit Herkunft „winab“; geänderte und ausgeglichene Belege werden storniert).
    Erste/letzte Lieferung und letzte Rückgabe laut Bericht (auch aus reinem Tausch) stehen am Partner (Feld „winab“) und
    fließen in „Leergut bei Kunden“ und die Abholliste (lg_kunden_leergut, lg_csv_kunden) ein.
+   Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“): lg_mail_text, lg_dachser_lesen, lg_dachser_abgleich.
    Keine Daten anderer Module. Gespeicherte Felder, die diese Fassung nicht kennt, bleiben beim Speichern erhalten (GR-006).
    Rechte (GR-103): leergut.sehen, leergut.bearbeiten, leergut.verwalten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -698,4 +699,161 @@ function lg_winab_abgleich(array $w, array $stamm, array $bew, array $me): array
     }
     $z['konten'] = $mitSaldo;
     return [$stamm, $bew, $z, $neuKunden, lg_ohne_null($summe)];
+}
+
+/* ---------- Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ----------
+   Dachser schickt monatlich die Abschreibungen „lt. Empfänger“ als Text: je Fall Auftragsdatum, Empfänger-Nr., Empfänger
+   (20 Zeichen), Ort, Zustelldatum, Anzahl, Packmittel, Kennzeichen, Grund und Sendungsnummer; am Ende den Saldo je
+   Packmittel „zu Gunsten DA“. Eingefügt wird der Text der Mail oder die gespeicherte Mail (.eml). */
+const LG_MAX_DACHSER_TEXT = 2000000;
+
+/* Text einer gespeicherten Mail (.eml): erster text/plain-Teil (sonst text/html ohne Auszeichnung), Transfer-Kodierung
+   und Zeichensatz aufgelöst. Ohne Mailkopf (eingefügter Text) bleibt der Text unverändert. */
+function lg_mail_text(string $roh, int $tiefe = 0): string
+{
+    $roh = str_replace("\r\n", "\n", $roh);
+    $teile = explode("\n\n", $roh, 2);
+    if ($tiefe > 6 || count($teile) < 2 || !preg_match('/^(mime-version|content-type)\s*:/im', $teile[0])) return $roh;
+    $kopf = preg_replace("/\n[ \t]+/", ' ', $teile[0]);
+    $feld = function (string $n) use ($kopf) { return preg_match('/^' . $n . '\s*:\s*(.*)$/im', $kopf, $m) ? trim($m[1]) : ''; };
+    $typ = $feld('content-type');
+    $rumpf = $teile[1];
+    if (preg_match('/^multipart\//i', $typ) && preg_match('/boundary\s*=\s*"?([^";\s]+)"?/i', $typ, $b)) {
+        $html = '';
+        foreach (array_slice(explode('--' . $b[1], $rumpf), 1) as $teil) {
+            if (strncmp($teil, '--', 2) === 0) break;
+            $teil = ltrim($teil, "\n");
+            $t = lg_mail_text(preg_match('/^(mime-version|content-type)\s*:/im', explode("\n\n", $teil, 2)[0]) ? $teil : "Content-Type: text/plain\n\n" . $teil, $tiefe + 1);
+            if (preg_match('/^content-type\s*:\s*text\/html/im', explode("\n\n", $teil, 2)[0])) { if ($html === '') $html = $t; continue; }
+            if (trim($t) !== '' && !preg_match('/^content-type\s*:\s*(image|application)\//im', explode("\n\n", $teil, 2)[0])) return $t;
+        }
+        return $html;
+    }
+    $kod = strtolower($feld('content-transfer-encoding'));
+    if ($kod === 'quoted-printable') $rumpf = quoted_printable_decode(str_replace("\n", "\r\n", $rumpf));
+    elseif ($kod === 'base64') $rumpf = (string)base64_decode(preg_replace('/\s+/', '', $rumpf));
+    $rumpf = str_replace("\r\n", "\n", $rumpf);
+    $cs = preg_match('/charset\s*=\s*"?([A-Za-z0-9_\-:.]+)"?/i', $typ, $c) ? strtoupper($c[1]) : '';
+    if ($cs !== '' && $cs !== 'UTF-8' && $cs !== 'US-ASCII') {
+        try { $rumpf = mb_convert_encoding($rumpf, 'UTF-8', $cs === 'ISO-8859-1' ? 'Windows-1252' : $cs); } catch (Throwable $e) { /* unbekannter Zeichensatz: wie geliefert */ }
+    }
+    if (!mb_check_encoding($rumpf, 'UTF-8')) $rumpf = mb_convert_encoding($rumpf, 'UTF-8', 'Windows-1252');
+    if (preg_match('/^text\/html/i', $typ)) $rumpf = html_entity_decode(strip_tags(preg_replace('/<br\s*\/?>|<\/(p|div|tr)>/i', "\n", $rumpf)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    return $rumpf;
+}
+
+/* Datum „1.09.26“ / „30.09.2026“ → ISO */
+function lg_dachser_datum(string $d): string
+{
+    if (!preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})$/', $d, $m)) return '';
+    $j = strlen($m[3]) === 2 ? 2000 + (int)$m[3] : (int)$m[3];
+    return checkdate((int)$m[2], (int)$m[1], $j) ? sprintf('%04d-%02d-%02d', $j, $m[2], $m[1]) : '';
+}
+
+/* Liest die Liste: Fälle je Zeile, Stichtag(e), Saldo laut Dachser; Zeilen, die wie ein Fall aussehen, aber nicht lesbar
+   sind, kommen als Fehler zurück. Packmittel ohne Lademittel im Modul (z. B. Gitterbox) werden gezählt, nicht übernommen. */
+function lg_dachser_lesen(string $text, array $stamm): array
+{
+    $lm = lg_ids($stamm['lademittel']);
+    $pm = function (string $code) use ($lm, $stamm) {
+        $c = strtolower($code);
+        if (in_array($c, $lm, true)) return $c;
+        foreach (['eu' => ['eu', 'ep', 'fp'], 'e2' => ['e2'], 'h1' => ['h1'], 'e1' => ['e1']] as $id => $codes) if (in_array($c, $codes, true) && in_array($id, $lm, true)) return $id;
+        return '';
+    };
+    $zeilen = []; $fehler = []; $unbekannt = []; $saldo = []; $per = []; $konto = '';
+    $auftrag = ''; $empf = null; $imSaldo = false; $erwarteEmpf = false;
+    foreach (explode("\n", str_replace(["\r", "\f"], ['', ''], $text)) as $i => $z) {
+        if (preg_match('/Unterkonto-Vorspediteur\s+(\S+)/u', $z, $m)) { $konto = $m[1]; $imSaldo = false; continue; }
+        if (preg_match('/^\s*per\s+(\d{1,2}\.\d{2}\.\d{2,4})\b/u', $z, $m)) { $d = lg_dachser_datum($m[1]); if ($d !== '') $per[$d] = true; continue; }
+        if (preg_match('/Unterkonto\s+Saldo\s+per\s+(\d{1,2}\.\d{2}\.\d{2,4})/u', $z, $m)) { $imSaldo = true; $d = lg_dachser_datum($m[1]); if ($d !== '') $per[$d] = true; continue; }
+        if ($imSaldo && preg_match('/^\s*([A-Z0-9]{2,3})\s+(-?\d+)\s+zu\s+Gunsten\s+(\S+)/u', $z, $m)) {
+            $id = $pm($m[1]); $n = (int)$m[2] * (stripos($m[3], 'DA') === 0 ? 1 : -1);
+            if ($id !== '') $saldo[$id] = ($saldo[$id] ?? 0) + $n;   // Packmittel ohne Lademittel: schon bei den Fällen gezählt
+            continue;
+        }
+        if (preg_match('/^\s*(\d{1,2}\.\d{2}\.\d{2})\s+(-?\d{1,5})\s+([A-Z0-9]{2,3})\s+([A-Z0-9])\s+(.+?)\s+(\d{8,14})\s*$/u', $z, $m)) {
+            $zug = lg_dachser_datum($m[1]);
+            if ($zug === '') { if (count($fehler) < 50) $fehler[] = ['zeile' => $i + 1, 'text' => 'Zustelldatum „' . $m[1] . '“ nicht lesbar']; continue; }
+            if ($empf === null) { if (count($fehler) < 50) $fehler[] = ['zeile' => $i + 1, 'text' => 'Fall ohne Empfänger (Sendung ' . $m[6] . ')']; continue; }
+            $id = $pm($m[3]);
+            if ($id === '') { $unbekannt[$m[3]] = ($unbekannt[$m[3]] ?? 0) + 1; continue; }
+            $zeilen[] = ['auftrag' => $auftrag, 'zugestellt' => $zug, 'empfaengerNr' => $empf['nr'], 'empfaenger' => $empf['name'], 'ort' => $empf['ort'],
+                         'lm' => $id, 'menge' => (int)$m[2], 'kz' => $m[4], 'grund' => trim($m[5]), 'sendung' => $m[6]];
+            continue;
+        }
+        if (preg_match('/^\s*(\d{1,2}\.\d{2}\.\d{2})\s+(\d{5,10})\s+\S/u', $z, $m)) { $auftrag = lg_dachser_datum($m[1]); $empf = null; $erwarteEmpf = true; continue; }
+        if ($erwarteEmpf && preg_match('/^\s{4,}(\d{5,10})\s+(\S.*)$/u', $z, $m)) {   // Empfänger: die Zeile direkt nach dem Absender
+            $erwarteEmpf = false;
+            $t = preg_split('/\s{2,}/u', trim($m[2]));
+            $schoen = function (string $s) { return preg_match('/\p{Ll}/u', $s) ? $s : mb_convert_case(mb_strtolower($s), MB_CASE_TITLE, 'UTF-8'); };
+            $empf = ['nr' => $m[1], 'name' => $schoen(trim($t[0])), 'ort' => $schoen(trim(implode(' ', array_slice($t, 1))))];
+        }
+    }
+    ksort($per);
+    return ['konto' => $konto, 'per' => $per ? array_key_last($per) : '', 'zeilen' => $zeilen, 'saldo' => lg_ohne_null($saldo), 'unbekannt' => $unbekannt, 'fehler' => $fehler];
+}
+
+/* Abgleich mit den erfassten Abschreibungen über die Sendungsnummer: je Sendung ein Fall (Mengen je Lademittel addiert).
+   Neu → anlegen (REWE nur mit H1: „Nicht zu beachten“ laut Leitfaden); Lademittel schon erfasst → nichts (abweichende
+   Menge wird gemeldet, nicht geändert); fehlt einem offenen Fall ein Lademittel → ergänzen (mit Verlauf), sonst neuer Fall. */
+function lg_dachser_abgleich(array $l, array $liste, array $me): array
+{
+    $gruppen = [];
+    foreach ($l['zeilen'] as $z) {
+        $g = &$gruppen[$z['sendung']];
+        if (!$g) $g = ['zugestellt' => $z['zugestellt'], 'auftrag' => $z['auftrag'], 'empfaenger' => $z['empfaenger'], 'empfaengerNr' => $z['empfaengerNr'],
+                       'ort' => $z['ort'], 'sendung' => $z['sendung'], 'menge' => [], 'kz' => [], 'grund' => $z['grund']];
+        $g['menge'][$z['lm']] = ($g['menge'][$z['lm']] ?? 0) + $z['menge'];
+        $g['kz'][$z['kz']] = true;
+        if ($z['zugestellt'] < $g['zugestellt']) $g['zugestellt'] = $z['zugestellt'];
+        unset($g);
+    }
+    $nachSendung = [];
+    foreach ($liste as $i => $a) if (($a['sendung'] ?? '') !== '') $nachSendung[(string)$a['sendung']][] = $i;
+    $z = ['zeilen' => count($l['zeilen']), 'sendungen' => count($gruppen), 'neu' => 0, 'ergaenzt' => 0, 'schon' => 0, 'abweichend' => 0, 'ignoriert' => 0];
+    $abw = []; $quelle = 'Dachser-Liste' . ($l['per'] !== '' ? ' per ' . date('d.m.Y', strtotime($l['per'] . ' 12:00:00')) : '');
+    foreach ($gruppen as $sendung => $g) {
+        $sendung = (string)$sendung;
+        $fehlt = []; $hatAbw = false;
+        foreach ($g['menge'] as $id => $n) {
+            $bei = null;
+            foreach ($nachSendung[$sendung] ?? [] as $i) if (isset($liste[$i]['menge'][$id])) { $bei = $i; break; }
+            if ($bei === null) { $fehlt[$id] = $n; continue; }
+            if ((int)$liste[$bei]['menge'][$id] !== $n) {
+                $hatAbw = true;
+                if (count($abw) < 50) $abw[] = ['sendung' => $sendung, 'empfaenger' => $g['empfaenger'], 'lm' => $id, 'erfasst' => (int)$liste[$bei]['menge'][$id], 'dachser' => $n];
+            }
+        }
+        if (!$fehlt) { $z[$hatAbw ? 'abweichend' : 'schon']++; continue; }   // je Sendung genau eine Zahl: neu, ergänzt, abweichend oder schon erfasst
+        $offen = null;
+        foreach ($nachSendung[$sendung] ?? [] as $i) if (($liste[$i]['status'] ?? 'offen') === 'offen') { $offen = $i; break; }
+        if ($offen !== null) {
+            foreach ($fehlt as $id => $n) $liste[$offen]['menge'][$id] = $n;
+            lg_verlauf($liste[$offen], $me, 'Menge aus der ' . $quelle . ' ergänzt: ' . implode(', ', array_map(function ($id, $n) { return strtoupper($id) . ' ' . $n; }, array_keys($fehlt), $fehlt)));
+            $liste[$offen]['rev'] = (int)($liste[$offen]['rev'] ?? 0) + 1;
+            $liste[$offen]['geaendert'] = lg_wer($me);
+            $z['ergaenzt']++;
+            continue;
+        }
+        $rewe = stripos($g['empfaenger'], 'rewe') !== false && array_keys($fehlt) === ['h1'];
+        $d = ['id' => lg_id('d'), 'zugestellt' => $g['zugestellt'], 'auftrag' => $g['auftrag'], 'empfaenger' => mb_substr($g['empfaenger'], 0, 120),
+              'empfaengerNr' => mb_substr($g['empfaengerNr'], 0, 30), 'ort' => mb_substr($g['ort'], 0, 80), 'sendung' => $sendung, 'menge' => $fehlt,
+              'grund' => mb_substr($g['grund'] . ' (Kz. ' . implode('/', array_keys($g['kz'])) . ')', 0, 120), 'status' => $rewe ? 'ignoriert' : 'offen',
+              'rechnung' => '', 'notiz' => $rewe ? 'H1-Abschreibungen bei REWE laut Leitfaden nicht zu beachten.' : '', 'quelle' => 'dachser',
+              'erfasst' => lg_wer($me), 'verlauf' => [], 'rev' => 1, 'geaendert' => lg_wer($me)];
+        lg_verlauf($d, $me, 'erfasst aus der ' . $quelle . ($rewe ? ' (Nicht zu beachten)' : ''));
+        $liste[] = $d;
+        $nachSendung[$sendung][] = count($liste) - 1;
+        $z['neu']++;
+        if ($rewe) $z['ignoriert']++;
+    }
+    $summe = []; $anz = []; $doppelt = [];
+    foreach ($l['zeilen'] as $r) {
+        $summe[$r['lm']] = ($summe[$r['lm']] ?? 0) + $r['menge'];
+        $k = $r['sendung'] . '|' . $r['lm'];
+        if (($anz[$k] = ($anz[$k] ?? 0) + 1) === 2 && count($doppelt) < 50) $doppelt[] = ['sendung' => $r['sendung'], 'empfaenger' => $r['empfaenger'], 'lm' => $r['lm']];
+    }
+    $z['doppelt'] = count($doppelt);
+    return [$liste, $z, $abw, lg_ohne_null($summe), $doppelt];
 }

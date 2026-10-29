@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-199 Aktionen in 12 Modulen.
+200 Aktionen in 12 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -81,6 +81,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `leergut_bewegung_save` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
 | `leergut_bewegung_storno` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
 | `leergut_bilanz` | `leergut.intern` | lesend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
+| `leergut_dachser_import` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |
 | `leergut_export` | `leergut.intern` | schreibend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
 | `leergut_import` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
 | `leergut_inventur_save` | `leergut.intern` | schreibend | – | Recht leergut.bearbeiten | `app/api/aktionen/leergut.php` |

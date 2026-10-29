@@ -251,6 +251,8 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
   .lg-filterzeile select.lg-eingabe,.lg-filterzeile input.lg-eingabe{min-width:0;width:100%}
   .lg-filterzeile .btn{width:100%;justify-content:center}
+  .lg-filterzeile>*{min-width:0}
+  .lg-panelkopf-filter .lg-filterzeile .btn{grid-column:1/-1}   /* lange Knopftexte (Dachser-Liste, Abschreibung) über die ganze Breite */
   .lg-formraster{grid-template-columns:1fr}
   .lg-saldo .lg-gross{font-size:26px}
   .lg-frist{grid-template-columns:auto minmax(0,1fr)}
@@ -287,3 +289,5 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-liste .lg-listwert{grid-column:1/-1;font-size:11.5px;color:var(--lg-muted);font-variant-numeric:tabular-nums}
 #lg-u-kunden td .lg-chip{margin-left:4px}
 .lg-kontoliste .lg-filterzeile .lg-check{min-width:0}
+/* Dachser-Liste: Text der Mail in fester Breite */
+textarea.lg-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;white-space:pre;overflow-wrap:normal;overflow-x:auto}

@@ -54,3 +54,7 @@ schreibend = true
 [aktion.leergut_winab_import]
 oberflaeche = "leergut.intern"
 schreibend = true
+
+[aktion.leergut_dachser_import]
+oberflaeche = "leergut.intern"
+schreibend = true

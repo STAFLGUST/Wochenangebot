@@ -122,6 +122,7 @@
             <div class="lg-filterzeile">
               <input class="lg-eingabe" id="lg-d-suche" type="search" placeholder="Kunde, Ort, Sendung …" aria-label="Suchen" autocomplete="off">
               <select class="lg-eingabe" id="lg-d-status" aria-label="Status"><option value="offen">Offen</option><option value="">Alle</option></select>
+              <button class="btn" type="button" id="lg-d-dachser" hidden><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="lbl">Dachser-Liste einlesen</span></button>
               <button class="btn" type="button" id="lg-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg><span class="lbl">Abschreibung erfassen</span></button>
             </div>
           </div>
@@ -269,6 +270,19 @@
     <ul class="lg-verlauf" id="ds-verlauf"></ul>
     <p class="lg-meldung" id="ds-meldung" role="alert"></p>
     <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Eingabemaske: Dachser-Liste einlesen -->
+<dialog class="lg-dialog" id="dlg-dachser" aria-labelledby="dl-titel">
+  <form id="dl-form" novalidate>
+    <div class="lg-dialogkopf"><h2 id="dl-titel">Dachser-Liste einlesen</h2><button class="lg-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p class="lg-hinweis">Die Mail „Infos von Fa. DACHSER“ öffnen, den ganzen Text kopieren und hier einfügen – oder die gespeicherte Mail (.eml) wählen. Neue Fälle werden angelegt, schon erfasste übersprungen, fehlende Lademittel offener Fälle ergänzt; abweichende Mengen werden nur gemeldet.</p>
+    <label>Text der Mail<textarea class="lg-eingabe lg-mono" id="dl-text" rows="9" spellcheck="false" autocomplete="off" placeholder="Unterkonto-Vorspediteur 404/… per …"></textarea></label>
+    <div class="lg-import"><label class="btn" for="dl-datei"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Mail als Datei wählen</label><input type="file" id="dl-datei" accept=".eml,.txt,message/rfc822,text/plain" class="sr-only"><span class="lg-hilfe" id="dl-dateiname"></span></div>
+    <div id="dl-vorschau"></div>
+    <p class="lg-meldung" id="dl-meldung" role="alert"></p>
+    <div class="lg-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn" type="button" id="dl-pruefen">Prüfen</button><button class="btn primary" type="submit" id="dl-uebernehmen" disabled>Übernehmen</button></div>
   </form>
 </dialog>
 

@@ -398,7 +398,8 @@ Mengen sind Zuordnungen Lademittel → ganze Stückzahl (`{"e2": 40, "h1": 2}`),
   „Bestätigt“ im Konto ist unser Saldo bis zum Stichtag des letzten bestätigten Auszugs.
 - **`leergut-abschreibungen`**: `{"liste": [{"id": "d…", "zugestellt": "…", "auftrag": "", "empfaenger": "…", "empfaengerNr": "", "ort": "",
   "sendung": "", "menge": {"e2": 5}, "grund": "", "status": "offen|widersprochen|berechnet|ausgeglichen|ignoriert", "rechnung": "",
-  "notiz": "", "verlauf": […], "rev": 1}]}`.
+  "notiz": "", "verlauf": […], "rev": 1, "quelle": "dachser"?}]}`. `quelle: "dachser"` = aus der Dachser-Liste (`leergut_dachser_import`,
+  Recht `leergut.bearbeiten`, Text der Mail oder .eml in `text`, `vorschau: true` schreibt nichts); abgeglichen über `sendung`.
 - **`leergut-inventur`**: `{"liste": [{"id": "i…", "stichtag": "…", "positionen": [{"name": "Lager (WinAB-Inventur)", "werte": {"e2": 2289}}],
   "notiz": "", "rev": 1}]}` – eigener Bestand für die Bilanz (letzte Inventur bis zum Stichtag).
 
