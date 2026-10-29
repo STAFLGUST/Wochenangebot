@@ -19,7 +19,7 @@ Agent: `angebot` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgr
 
 Lagerbestände, Partien/Chargen, MHD, Warenbewegungen, Bestandsauswertungen
 
-Agent: `bestand` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `stock`, `stock_overview`, `bestand_pdf`, `master`
+Agent: `bestand` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `stock`, `stock_overview`, `bestand_pdf`, `master`, `mhd_mail`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

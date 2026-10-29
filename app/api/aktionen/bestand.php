@@ -41,6 +41,44 @@ switch ($action) {
             exit;
         }
 
+        /* MHD-Liste an den Verkauf (Knopf im Bestand): Liste und Excel vom Server, Bild der Liste aus dem Browser (nur Darstellung);
+           an die Empfänger der Benachrichtigung „MHD-Liste an den Verkauf“ über das Postfach für interne E-Mails */
+        case 'stock_mhd_senden': {
+            $me = require_perm('bestand.mhd_senden', true);
+            $b = body();
+            $st = store_read('bestand');
+            if (!$st) fail('Es ist noch kein Bestand übernommen.', 404);
+            require_once __DIR__ . '/../lib/bestand-mhd.php';
+            $l = mhd_liste($st, may($me, 'preisverlauf.sehen'));
+            if (!$l['zeilen']) fail('Kein Artikel mit MHD in den nächsten 14 Tagen oder bereits abgelaufen – es gibt nichts zu senden.', 422);
+            // Das Bild zeigt genau diese Liste: Abgleich mit den Artikelnummern aus dem Browser (sonst neu laden)
+            $codes = $b['codes'] ?? null;
+            $soll = array_column($l['zeilen'], 'code'); sort($soll, SORT_STRING);
+            $ist = is_array($codes) && array_is_list($codes) && count($codes) <= 5000 ? array_map('strval', $codes) : null;
+            if ($ist !== null) sort($ist, SORT_STRING);
+            if ($ist !== $soll) fail('Die MHD-Liste hat sich inzwischen geändert (neuer Bestand oder neuer Tag). Bitte die Seite neu laden und erneut senden.', 409);
+            $to = notify_targets('mhd');
+            if (!$to) fail('Für „MHD-Liste an den Verkauf“ sind noch keine Empfänger eingetragen. Ein Administrator legt sie unter Verwaltung → E-Mail → Benachrichtigungen fest.', 409);
+            $png = mhd_bild_pruefen($b['bild'] ?? null);
+            $notiz = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['notiz'] ?? '')) ?? '')), 0, 1000);
+            $cfg = require_mail(true);   // nur an Mitarbeiter: Postfach für interne E-Mails
+            [$subject, $text, $html, $anhaenge] = mhd_mail($l, $png, $notiz, $me, $st);
+            @set_time_limit(60);
+            $jobs = array_map(function ($a) use ($subject, $text, $html, $anhaenge) { return ['to' => $a, 'name' => '', 'subject' => $subject, 'text' => $text, 'html' => $html, 'anhaenge' => $anhaenge]; }, $to);
+            $res = mail_send_many($cfg, $jobs);
+            $ergebnis = [];
+            foreach ($jobs as $k => $j) $ergebnis[] = ['to' => $j['to'], 'ok' => !empty($res[$k]['ok']), 'error' => $res[$k]['error'] ?? ''];
+            with_lock('mailversand', function () use ($ergebnis, $me) {
+                $log = store_read('mailversand') ?? [];
+                foreach ($ergebnis as $e) $log[] = ['t' => now(), 'typ' => 'mhd', 'kid' => '', 'firma' => 'MHD-Liste', 'to' => $e['to'], 'ok' => $e['ok'], 'error' => $e['error'], 'by' => $me['name']];
+                store_write('mailversand', array_slice($log, -3000));
+            });
+            $ok = array_values(array_filter($ergebnis, function ($e) { return $e['ok']; }));
+            audit('stock', 'MHD-Liste (' . count($l['zeilen']) . ' Artikel) an den Verkauf ' . ($ok ? 'gesendet an ' . implode(', ', array_column($ok, 'to')) : 'nicht zugestellt'));
+            if (!$ok) fail('MHD-Liste nicht versendet: ' . ($ergebnis[0]['error'] ?: 'Versandfehler'), 502);
+            respond(['ok' => true, 'artikel' => count($l['zeilen']), 'results' => $ergebnis]);
+        }
+
         case 'stock_import': {
             $me = require_perm('bestand.importieren', true);
             $b = body();

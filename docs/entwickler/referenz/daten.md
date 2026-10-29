@@ -48,7 +48,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `mail-schluessel*` | Plattformkern | geheim | – | – | Schlüssel für das Postfach-Passwort – nie in Sicherungen (Konstante MAIL_KEY_STORE) |
 | `mailkonto` | Plattformkern | geheim | – | – | Postfach-Zugang (Passwort verschlüsselt) |
 | `mailkonto-intern` | Plattformkern | geheim | – | – | Postfach-Zugang für interne E-Mails an Mitarbeiter, z. B. verwaltung@… (Passwort verschlüsselt; ohne Eintrag gilt mailkonto) |
-| `mailversand` | Plattformkern | vertraulich | – | angebot, einkauf | Versandaufträge und Versandprotokoll aller E-Mails |
+| `mailversand` | Plattformkern | vertraulich | – | angebot, einkauf, bestand | Versandaufträge und Versandprotokoll aller E-Mails |
 | `module` | Plattformkern | intern | dashboard, verwaltung | – | Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis), Freigabe aus der Modulverwaltung (innerhalb des Entwicklungsstands im Code), Tester und Verlauf der Änderungen (lib/module.php) – Historie: Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, Grund, Beginn, bis) zusätzlich zum Protokoll |
 | `nutzer` | Plattformkern | geheim | angebot, hr, marketing | hr | Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte |
 | `oidc-abmeldungen` | Plattformkern | intern | – | – | Beendete Sitzungen der zentralen Anmeldung (Keycloak-Sitzung bzw. Mitarbeiter → Zeitpunkt, höchstens 11 Stunden): weiter erst nach erneuter Anmeldung bei Keycloak |

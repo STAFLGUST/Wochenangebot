@@ -416,7 +416,7 @@ beschreibung = "Bündelungsstand der Benachrichtigungen"
 [[dokument]]
 name = "mailversand"
 eigentuemer = "plattform"
-schreiber = ["angebot", "einkauf"]   # über die Versandfunktionen (Bestellwünsche, Kunden-E-Mails, Einkaufsmeldung)
+schreiber = ["angebot", "einkauf", "bestand"]   # über die Versandfunktionen (Bestellwünsche, Kunden-E-Mails, Einkaufsmeldung, MHD-Liste an den Verkauf)
 schutz = "vertraulich"
 beschreibung = "Versandaufträge und Versandprotokoll aller E-Mails"
 

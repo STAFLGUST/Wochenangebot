@@ -37,6 +37,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `preisverlauf.bearbeiten` | Angebot | Preisverlauf | bearbeiten | Alte Angebotslisten hochladen und löschen | Bearbeiter | `preisverlauf.sehen` |
 | `bestand.sehen` | Bestand | Bestand | sehen | Bestand mit Mengen und MHD ansehen | Nur ansehen, Bearbeiter | – |
 | `bestand.einkaufspreise` | Bestand | Bestand | sehen | Einkaufspreise (EK) der Partien im Bestand ansehen | Bearbeiter | `bestand.sehen` |
+| `bestand.mhd_senden` | Bestand | Bestand | bearbeiten | MHD-Liste per E-Mail an den Verkauf senden | Bearbeiter | `bestand.sehen` |
 | `bestand.importieren` | Bestand | Bestand | bearbeiten | Bestandsliste hochladen | Bearbeiter | `bestand.sehen` |
 | `stammdaten.sehen` | Verwaltung | Stammdaten | sehen | Stammdaten ansehen | Nur ansehen, Bearbeiter | – |
 | `stammdaten.bearbeiten` | Verwaltung | Stammdaten | bearbeiten | Stammdaten bearbeiten | Bearbeiter | `stammdaten.sehen` |

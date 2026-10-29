@@ -14,6 +14,7 @@ const NOTIFY_EVENTS = [
     'bestellung' => ['label' => 'Neuer Bestellwunsch', 'text' => 'Ein angemeldeter Kunde sendet einen Bestellwunsch über das Portal (mit allen Positionen).', 'fest' => true, 'pause' => 0],
     'sicherheit' => ['label' => 'Sicherheitsereignisse', 'text' => 'Anmeldesperre nach Fehlversuchen, Administrator-Anmeldung von neuem Gerät, Passwort in Datenleck, Änderungen an Nutzern und Rollen, Zwei-Faktor, Sicherheitseinstellungen, Wartungsmodus.', 'fest' => false, 'pause' => 600],
     'einkauf' => ['label' => 'Einkaufsbedarf', 'text' => 'Fehlmengen aus offenen Bestellwünschen – auf Knopfdruck im Bereich „Einkauf“ (Bearbeiter und Administratoren).', 'fest' => false, 'pause' => 0, 'manuell' => true],
+    'mhd' => ['label' => 'MHD-Liste an den Verkauf', 'text' => 'Artikel mit MHD in den nächsten 14 Tagen (oder abgelaufen) – auf Knopfdruck im Bestand („MHD an Verkauf“), als Bild in der E-Mail und Excel-Datei im Anhang.', 'fest' => false, 'pause' => 0, 'manuell' => true],
     'abmeldung' => ['label' => 'Abmeldung vom Wochenangebot', 'text' => 'Ein Kunde bestellt das Wochenangebot per E-Mail ab oder wieder an.', 'fest' => false, 'pause' => 0, 'ersatz' => true],
 ];
 const NOTIFY_MAX_TO = 5;

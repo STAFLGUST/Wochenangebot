@@ -84,6 +84,7 @@ SUITES['vertreter'] = SUITES['bestellung']
 SUITES['sicherheit_freigaben'] = SUITES['bestellung']
 SUITES['schutz'] = SUITES['bestellung']
 SUITES['nutzer_anlegen'] = SUITES['bestellung']
+SUITES['mhd_mail'] = SUITES['bestellung']   # MHD-Liste an den Verkauf (Test-Mailserver)
 SUITES['mail_intern'] = SUITES['bestellung']   # Postfach für interne E-Mails (zweiter Test-Mailserver)
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
@@ -138,7 +139,7 @@ GEWICHT = {
     'fehlerpruefung': 14, 'kundengruppen': 13, 'importzentrale': 13, 'versand': 12, 'kundenimport': 12,
     'sicherheit_druck': 11, 'angebotsliste': 11, 'stock_overview': 11, 'sicherheit_it': 10, 'auswertung': 9,
     'benachrichtigung': 9, 'vertreter': 9, 'admin_confirmation': 8, 'einkauf': 8, 'wartung': 7,
-    'order_management_ui': 7, 'nutzer_anlegen': 7, 'mail_intern': 5, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
+    'order_management_ui': 7, 'nutzer_anlegen': 7, 'mhd_mail': 6, 'mail_intern': 5, 'auth_hardening': 7, 'web_app': 7, 'dashboard': 6,
     'passwortpruefung': 6, 'bestaetigung': 6, 'geo_ip': 6, 'integritaet': 6, 'sitzung_cookie': 6, 'design': 5,
     'testumgebung': 5, 'modul_wartung': 5, 'bestand_pdf': 5, 'modulverwaltung': 4, 'order_outbox_ui': 4,
     'admin_confirmation_ui': 4, 'herkunft': 4, 'legal_pages': 2, 'order_outbox': 1, 'order_management': 1,

@@ -37,9 +37,9 @@ check('no mail before notifications are configured', not smtp.messages, [m['subj
 # ---------- Einstellungen ----------
 code, st = A.call('mail_status')
 n = st['notify']
-check('status lists the events', [e['key'] for e in n['events']] == ['bestellung', 'sicherheit', 'einkauf', 'abmeldung'], n)
-check('defaults: no recipients; security off; unsubscribe notice on (to reply address)', all(not e['to'] for e in n['events']) and [e['on'] for e in n['events']] == [False, False, True, True] and n['events'][3]['ersatz'] == 'verkauf@example.org' and n['events'][2]['manuell'], n)
-check('order event is fixed', [e['fest'] for e in n['events']] == [True, False, False, False])
+check('status lists the events', [e['key'] for e in n['events']] == ['bestellung', 'sicherheit', 'einkauf', 'mhd', 'abmeldung'], n)
+check('defaults: no recipients; security off; unsubscribe notice on (to reply address)', all(not e['to'] for e in n['events']) and [e['on'] for e in n['events']] == [False, False, True, True, True] and n['events'][4]['ersatz'] == 'verkauf@example.org' and n['events'][2]['manuell'] and n['events'][3]['manuell'], n)
+check('order event is fixed', [e['fest'] for e in n['events']] == [True, False, False, False, False])
 check('editor cannot change notifications', E.call('benachrichtigung_save', {'events': {'sicherheit': {'on': True, 'to': 'x@example.org'}}})[0] == 403)
 check('editor cannot send test', E.call('benachrichtigung_test', {'event': 'sicherheit'})[0] == 403)
 check('editor cannot read mail settings', E.call('mail_status')[0] == 403)
@@ -143,7 +143,7 @@ with sync_playwright() as pw:
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')
     a.fill('#au-user', 'admin'); a.fill('#pw1', PW); a.click('#auth-submit'); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     a.click('#vt-mail'); a.wait_for_selector('#ml-notify .nt-row')
-    check('card shows four events', a.locator('#ml-notify .nt-row').count() == 4)
+    check('card shows five events (incl. MHD-Liste)', a.locator('#ml-notify .nt-row').count() == 5)
     check('purchasing row has no switch (on demand)', a.locator('#ml-notify [name=on-einkauf]').count() == 0 and 'Knopf' in a.inner_text('#ml-notify [data-ev=einkauf]'))
     check('order row shows fixed state and recipients', a.input_value('#ml-notify [name=to-bestellung]') == 'bestellung@example.org, Verkauf@example.org' and a.locator('#ml-notify [name=on-bestellung]').count() == 0)
     check('order form shows where recipients are set', 'Benachrichtigungen' in a.inner_text('#ml-orders .ml-oto'))

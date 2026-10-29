@@ -134,7 +134,8 @@ function mail_addr(string $email, string $name = ''): string
     $n = preg_match('/^[A-Za-z0-9 .\'-]*$/', $n) ? '"' . $n . '"' : mail_enc_header($n);
     return $n . ' <' . $email . '>';
 }
-/* Vollständige Nachricht (Text + HTML), optional mit Anhängen [{name, type, data}] (dann multipart/mixed) */
+/* Vollständige Nachricht (Text + HTML), optional mit Anhängen [{name, type, data, cid?}] (dann multipart/mixed);
+   mit 'cid' eingebettet (multipart/related, im HTML als src="cid:…") statt angehängt */
 function mail_build(array $cfg, string $to, string $toName, string $subject, string $text, string $html, array $extra = [], array $anhaenge = []): string
 {
     $b = 'wa' . bin2hex(random_bytes(12));
@@ -156,13 +157,25 @@ function mail_build(array $cfg, string $to, string $toName, string $subject, str
     };
     $alt = $part('text/plain', $text) . $part('text/html', $html) . "--$b--\r\n";
     if (!$anhaenge) return implode("\r\n", $h) . "\r\n\r\n" . $alt;
-    $body = "--$m\r\nContent-Type: multipart/alternative; boundary=\"$b\"\r\n\r\n" . $alt;
-    foreach ($anhaenge as $a) {
+    $kodiert = function (array $a, string $disp) {
         $name = preg_replace('/[^A-Za-z0-9._-]/', '_', (string)$a['name']) ?: 'anhang';
         $type = preg_match('#^[a-z]+/[a-z0-9.+-]+$#', (string)$a['type']) ? $a['type'] : 'application/octet-stream';
-        $body .= "--$m\r\nContent-Type: $type; name=\"$name\"\r\nContent-Disposition: attachment; filename=\"$name\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
-               . rtrim(chunk_split(base64_encode((string)$a['data']), 76, "\r\n")) . "\r\n";
+        $cid = $disp === 'inline' ? "Content-ID: <{$a['cid']}>\r\n" : '';
+        return "Content-Type: $type; name=\"$name\"\r\n{$cid}Content-Disposition: $disp; filename=\"$name\"\r\nContent-Transfer-Encoding: base64\r\n\r\n"
+             . rtrim(chunk_split(base64_encode((string)$a['data']), 76, "\r\n")) . "\r\n";
+    };
+    /* Eingebettete Bilder (Anhang mit 'cid', im HTML als src="cid:…"): Text/HTML und Bilder als multipart/related */
+    $inline = array_values(array_filter($anhaenge, function ($a) { return isset($a['cid']) && preg_match('/^[A-Za-z0-9._-]{1,60}$/', (string)$a['cid']); }));
+    $anhaenge = array_values(array_filter($anhaenge, function ($a) use ($inline) { return !in_array($a, $inline, true); }));
+    $inhalt = "Content-Type: multipart/alternative; boundary=\"$b\"\r\n\r\n" . $alt;
+    if ($inline) {
+        $r = 'wr' . bin2hex(random_bytes(12));
+        $rel = "--$r\r\n" . $inhalt;
+        foreach ($inline as $a) $rel .= "--$r\r\n" . $kodiert($a, 'inline');
+        $inhalt = "Content-Type: multipart/related; type=\"multipart/alternative\"; boundary=\"$r\"\r\n\r\n" . $rel . "--$r--\r\n";
     }
+    $body = "--$m\r\n" . $inhalt;
+    foreach ($anhaenge as $a) $body .= "--$m\r\n" . $kodiert($a, 'attachment');
     return implode("\r\n", $h) . "\r\n\r\n" . $body . "--$m--\r\n";
 }
 

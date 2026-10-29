@@ -111,6 +111,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `auswertung.php` | verwaltung | Auswertung: Anmeldeorte der Kunden (ungefährer Ort aus der IP-Adresse, ort.php). |
 | `benachrichtigung.php` | plattform | Benachrichtigungen an Mitarbeiter (E-Mail): welche Ereignisse an wen gehen, legt der Administrator fest. |
 | `bereitschaft.php` | plattform | Bereitschaft für den Ernstfall (Oberfläche |
+| `bestand-mhd.php` | plattform | Modul Bestand · MHD-Liste an den Verkauf: dieselbe Liste wie die Suche „MHD“ im Bestand (kürzestes MHD bis heute + 14 Tage, früheste zuerst), als Excel-Datei (ohne PHP-Erweiterung „zip“, unkomprimiertes ZIP) und … |
 | `bestand-pdf.php` | bestand | Bestand als PDF (Verwaltung → Bestand → „PDF“) |
 | `bestand.php` | bestand | Bestandsliste und Stammdaten |
 | `diagnose.php` | plattform | Sicherheit für IT-Administratoren |
@@ -614,6 +615,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_mail_intern.py` | plattform | Postfach für interne E-Mails (z. |
 | `test_marketing.py` | marketing | Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/). |
 | `test_master.py` | verwaltung | Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe). |
+| `test_mhd_mail.py` | plattform | Bestand → „MHD an Verkauf“: die MHD-Liste (Suche „MHD“: kürzestes MHD bis heute + 14 Tage) per E-Mail an die Empfänger der Benachrichtigung „MHD-Liste an den Verkauf“ – Bild der Liste eingebettet (cid), Excel-Datei … |
 | `test_modul_wartung.py` | plattform | Wartung je Oberfläche (GR-107) |
 | `test_module_status.py` | plattform | Modulzustand zur Laufzeit (GR-102) |
 | `test_modulverwaltung.py` | plattform | Modulverwaltung (Roadmap 5, GR-102) |
