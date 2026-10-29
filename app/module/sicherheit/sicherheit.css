@@ -334,13 +334,37 @@ button.sic-karte:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 
 .geo-wahl { display: flex; flex-direction: column; gap: 8px; }
 .geo-kopf { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .geo-kopf .sic-knoepfe { margin-left: auto; }
-.geo-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+.geo-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; max-height: 126px; overflow: auto; }   /* höchstens vier Reihen, dann blättern */
 .geo-chips .sic-chip { background: var(--sic-bad-bg); }
-.geo-suche input { width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 11px; border-radius: 11px; border: 1px solid var(--sic-linie); background: var(--sic-bg); color: inherit; font: inherit; }
-.geo-list { max-height: 240px; overflow: auto; margin-top: 6px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2px 10px; }
-.geo-opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 13.5px; cursor: pointer; }
+/* Schnellauswahl: Kontinente und Gruppen (voll = alle Länder gewählt, teil = einige) */
+.geo-gruppen { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-radius: 14px; background: var(--sic-aus); }
+.geo-gzeile { display: flex; align-items: baseline; gap: 10px; }
+.geo-glabel { flex: none; width: 82px; font-size: 12.5px; font-weight: 600; color: var(--sic-muted); }
+.geo-gknoepfe { display: flex; flex-wrap: wrap; gap: 6px; }
+.geo-gk { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--sic-linie); background: var(--sic-deckend);
+  color: inherit; font: inherit; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.geo-gk:hover { border-color: var(--sic-modul); }
+.geo-gk:focus-visible { outline: none; box-shadow: var(--sic-fokus); }
+.geo-gzahl { font-family: var(--mono); font-size: 11.5px; color: var(--sic-muted); }
+.geo-gk.teil { border-color: var(--sic-modul); }
+.geo-gk.teil .geo-gzahl { color: var(--sic-modul); }
+.geo-gk.voll { background: var(--sic-modul); border-color: var(--sic-modul); color: #fff; }
+.geo-gk.voll .geo-gzahl { color: rgba(255, 255, 255, .85); }
+.geo-ghinweis { margin: 0; font-size: 12px; }
+.geo-suche #geo-q { width: 100%; box-sizing: border-box; min-height: 38px; padding: 7px 11px; border-radius: 11px; border: 1px solid var(--sic-linie); background: var(--sic-bg); color: inherit; font: inherit; }
+/* Liste nach Kontinenten: Überschrift bleibt beim Blättern stehen */
+.geo-list { max-height: 300px; overflow: auto; margin-top: 6px; border: 1px solid var(--sic-linie); border-radius: 12px; }
+.geo-abschnitt + .geo-abschnitt { border-top: 1px solid var(--sic-linie); }
+.geo-akopf { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; gap: 10px; margin: 0; padding: 7px 12px; background: var(--sic-deckend);
+  font-size: 12.5px; font-weight: 650; letter-spacing: .02em; }
+.geo-akopf .sub { font-weight: 400; letter-spacing: 0; }
+.geo-aliste { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0 8px; padding: 2px 6px 8px; }
+.geo-opt { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 13.5px; cursor: pointer; min-width: 0; }
 .geo-opt:hover { background: var(--sic-aus); }
-.geo-opt .sub { margin-left: auto; }
+.geo-opt input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--sic-modul); }
+.geo-opt .geo-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.geo-opt .sub { margin-left: auto; font-family: var(--mono); font-size: 11.5px; }
+.geo-list > .sic-leer { padding: 14px; }
 
 /* ── Bereitschaft: Probealarm-Band, Leitfaden, Übungen, Wochenbericht ── */
 .sic-probeband { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 12px 16px; border-radius: 20px; background: var(--sic-warn-bg); color: var(--sic-warn); border: 1px solid rgba(224, 155, 45, .35); }
@@ -563,7 +587,9 @@ button.lf-marke:hover { background: var(--sic-bad-bg); }
   .sic-modul-zusatz { display: none; }
   .sic-tabelle { font-size: 13px; }
   .sic-tabelle td, .sic-tabelle th { padding: 7px 6px; }
-  .geo-list { grid-template-columns: 1fr; }
+  .geo-aliste { grid-template-columns: 1fr 1fr; }
+  .geo-gzeile { flex-direction: column; gap: 5px; }
+  .geo-glabel { width: auto; }
   .br-raster { grid-template-columns: 1fr; }
   .lf-ed-kontakt { grid-template-columns: 1fr 1fr; padding: 10px; border-radius: 14px; background: var(--sic-aus); }
   .lf-ed-kontakt .sic-rund { grid-column: 2; justify-self: end; }

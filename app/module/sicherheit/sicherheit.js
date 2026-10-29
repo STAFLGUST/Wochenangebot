@@ -41,12 +41,16 @@
   const punkt = (l) => `<span class="sic-punkt ${esc(l)}" title="${esc(STUFE[l] || l)}"><span class="sr-only">${esc(STUFE[l] || l)}</span></span>`;
   const DAUER = { 10: '10 Minuten', 60: '1 Stunde', 360: '6 Stunden', 1440: '1 Tag', 10080: '7 Tage' };
   const IDLE = [[15, '15 Minuten'], [30, '30 Minuten'], [60, '1 Stunde'], [120, '2 Stunden'], [240, '4 Stunden'], [480, '8 Stunden'], [720, '12 Stunden']];
-  const EUROPA = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK', 'CH', 'GB', 'NO', 'IS', 'LI'];
+  /* Ländergruppen der Ländersperre (laendergruppen.json): Kontinente und Gruppen wie EU, NATO, BRICS – nur Auswahlhilfe im
+     Dialog, gespeichert werden die einzelnen Länder. Fehlt die Datei, bleibt die Auswahl Land für Land. */
+  let laenderGruppen = null;
+  const gruppenLaden = () => (laenderGruppen ||= fetch('laendergruppen.json', { cache: 'no-cache', credentials: 'same-origin' })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null));
   const IP_RE = /^(\d{1,3}(\.\d{1,3}){3}|[0-9a-f:]*:[0-9a-f:.]+)$/i;
   const NOTFALL_ENTWURF = 'sic-notfall-entwurf';
 
   const S = { me: null, csrf: '', rechte: {}, lage: null, sec: null, fw: null, datei: null, ev: null, konten: null, system: null, module: null, tab: '',
-    fwFilter: '', fwLetzte: 0, fwTimer: 0, evF: { tage: 7, art: '', q: '' }, geo: { sel: new Set(), q: '', ip: null } };
+    fwFilter: '', fwLetzte: 0, fwTimer: 0, evF: { tage: 7, art: '', q: '' }, geo: { sel: new Set(), q: '', ip: null, gruppen: [], kontinente: [] } };
 
   /* ---------- Schnittstelle ---------- */
   class ApiFehler extends Error { constructor(msg, status, data) { super(msg); this.status = status; this.data = data || {}; } }
@@ -1243,10 +1247,20 @@
     } });
     form();
   }
-  /* Ländersperre mit Auswahl (Suche nach Land oder IP-Adresse) */
-  function geoDialog() {
+  /* Ländersperre mit Auswahl: Schnellauswahl nach Kontinent und Gruppe (ein Klick wählt alle, ein zweiter keines), Liste nach
+     Kontinenten gegliedert, Suche nach Land oder IP-Adresse */
+  async function geoDialog() {
+    const G = await gruppenLaden();
     const St = S.sec.settings, g = S.geo;
     g.sel = new Set(St.geoCountries || []); g.q = ''; g.ip = null;
+    const bekannt = new Set(S.sec.geoCountries || []);
+    g.gruppen = G ? [...G.kontinente, ...G.gruppen].map((x) => ({ ...x, laender: x.laender.filter((c) => bekannt.has(c)) })) : [];
+    g.kontinente = G ? g.gruppen.slice(0, G.kontinente.length) : [];
+    const knopf = (x) => `<button type="button" class="geo-gk" data-d="geo-gruppe" data-g="${esc(x.id)}" aria-pressed="false" title="${esc(x.titel || x.name)} – ${x.laender.length} Länder">${esc(x.name)}<span class="geo-gzahl"></span></button>`;
+    const schnell = G ? `<div class="geo-gruppen" id="geo-gruppen" role="group" aria-label="Schnellauswahl">
+          <div class="geo-gzeile"><span class="geo-glabel">Kontinente</span><div class="geo-gknoepfe">${g.kontinente.map(knopf).join('')}</div></div>
+          <div class="geo-gzeile"><span class="geo-glabel">Gruppen</span><div class="geo-gknoepfe">${g.gruppen.slice(g.kontinente.length).map(knopf).join('')}</div></div>
+          <p class="sub geo-ghinweis">Ein Klick wählt alle Länder der Gruppe aus, ein zweiter nimmt sie wieder heraus. Stand der Gruppen: ${esc(datum(G.stand + 'T12:00:00Z'))}.</p></div>` : '';
     dialog(`${dKopf('Ländersperre', 'Zugriffe aus bestimmten Ländern abweisen')}<div class="sic-dinhalt geo-box" id="geo-box">
         <label class="sic-check"><input type="checkbox" name="geoEnabled"${St.geoEnabled ? ' checked' : ''}><span>Ländersperre einschalten</span></label>
         <div class="sic-inline"><label class="sic-check"><input type="radio" name="geoMode" value="block"${St.geoMode !== 'allow' ? ' checked' : ''}><span>ausgewählte Länder sperren</span></label>
@@ -1254,13 +1268,20 @@
           <label>gilt für <select name="geoScope"><option value="admin"${St.geoScope !== 'all' ? ' selected' : ''}>den Eingabebereich</option><option value="all"${St.geoScope === 'all' ? ' selected' : ''}>die ganze Seite</option></select></label></div>
         <p class="geo-me" id="geo-me"></p>
         <div class="geo-wahl"><div class="geo-kopf"><strong id="geo-sel-label">Gesperrte Länder</strong><span class="sub" id="geo-count"></span>
-          <span class="sic-knoepfe"><button type="button" class="btn sm" data-d="geo-eu">Europa</button><button type="button" class="btn sm" data-d="geo-leer">Leeren</button></span></div>
+          <span class="sic-knoepfe"><button type="button" class="btn sm" data-d="geo-leer">Leeren</button></span></div>
           <div class="geo-chips" id="geo-chips"></div></div>
+        ${schnell}
         <div class="geo-suche"><input type="search" id="geo-q" placeholder="Land oder IP-Adresse, z. B. China, CN oder 1.0.1.1" aria-label="Land oder IP-Adresse suchen"><div class="geo-list" id="geo-list"></div></div>
         <p class="sic-hinweis">Freigegebene Adressen sind immer erlaubt; Adressen ohne bekanntes Land werden nicht gesperrt. Gilt auch schon für die Anmeldeseite der Mitarbeiter. Ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { breit: true, fokus: '#geo-q', handler: async (a, b, form) => {
-      if (a === 'geo-eu') { EUROPA.forEach((c) => g.sel.add(c)); geoAuffrischen(); return; }
+      if (a === 'geo-gruppe') {
+        const x = g.gruppen.find((y) => y.id === b.dataset.g);
+        if (!x) return;
+        const alle = x.laender.every((c) => g.sel.has(c));
+        x.laender.forEach((c) => (alle ? g.sel.delete(c) : g.sel.add(c)));
+        dFehler(''); geoAuffrischen(); return;
+      }
       if (a === 'geo-leer') { g.sel.clear(); geoAuffrischen(); return; }
       if (a === 'geo-weg') { g.sel.delete(b.dataset.cc); geoAuffrischen(); return; }
       if (a !== 'submit') return;
@@ -1287,8 +1308,19 @@
       return `<label class="geo-opt geo-iphit"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(g.ip.ip)}</span> → ${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     }
     const q = g.q.toLowerCase();
-    const alle = (S.sec.geoCountries || []).filter((c) => !q || c.toLowerCase() === q || land(c).toLowerCase().includes(q)).sort(landSort);
-    return alle.length ? alle.map((c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}> <span>${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`).join('') : leer('Kein Land gefunden.');
+    const passt = (c) => !q || c.toLowerCase() === q || land(c).toLowerCase().includes(q);
+    const opt = (c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}><span class="geo-name">${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
+    const bekannt = S.sec.geoCountries || [];
+    // nach Kontinenten gegliedert; Länder ohne Zuordnung (neuere Länderliste des Servers) unter „Weitere“
+    const zugeordnet = new Set(g.kontinente.flatMap((k) => k.laender));
+    const abschnitte = g.kontinente.length ? [...g.kontinente, { id: 'weitere', name: 'Weitere', laender: bekannt.filter((c) => !zugeordnet.has(c)) }] : [{ id: 'alle', name: '', laender: bekannt }];
+    const html = abschnitte.map((k) => {
+      const l = k.laender.filter(passt).sort(landSort);
+      if (!l.length) return '';
+      const n = k.laender.filter((c) => g.sel.has(c)).length;
+      return `<section class="geo-abschnitt" data-geo-teil="${esc(k.id)}">${k.name ? `<h4 class="geo-akopf">${esc(k.name)}<span class="sub">${n ? `${n} von ${k.laender.length} ausgewählt` : `${k.laender.length} ${k.laender.length === 1 ? 'Land' : 'Länder'}`}</span></h4>` : ''}<div class="geo-aliste">${l.map(opt).join('')}</div></section>`;
+    }).join('');
+    return html || leer('Kein Land gefunden.');
   }
   function geoAuffrischen() {
     const g = S.geo, f = $('#geo-box', dlg);
@@ -1302,7 +1334,17 @@
     me.className = 'geo-me' + (gesperrt ? ' bad' : '');
     me.innerHTML = mc ? `Sie greifen gerade aus <strong>${esc(land(mc))}</strong> zu${gesperrt ? ' – mit dieser Auswahl würden Sie sich aussperren.' : '.'}` : 'Ihr Land ist nicht bekannt (interne Adresse) – Sie werden nicht gesperrt.';
     $('#geo-sel-label', dlg).textContent = allow ? 'Erlaubte Länder' : 'Gesperrte Länder';
-    $('#geo-list', dlg).innerHTML = geoListe();
+    // Schnellauswahl: alle Länder der Gruppe gewählt (voll), einige (teil) oder keines
+    for (const k of $$('#geo-gruppen [data-g]', dlg)) {
+      const x = g.gruppen.find((y) => y.id === k.dataset.g);
+      const n = x ? x.laender.filter((c) => g.sel.has(c)).length : 0, ges = x ? x.laender.length : 0;
+      k.classList.toggle('voll', ges > 0 && n === ges); k.classList.toggle('teil', n > 0 && n < ges);
+      k.setAttribute('aria-pressed', ges > 0 && n === ges ? 'true' : 'false');
+      k.querySelector('.geo-gzahl').textContent = n && n < ges ? `${n}/${ges}` : String(ges);
+    }
+    const liste = $('#geo-list', dlg), oben = liste.scrollTop;
+    liste.innerHTML = geoListe();
+    liste.scrollTop = oben;   // Auswahl in der Liste: an derselben Stelle bleiben
   }
   let geoTimer = 0;
   dlg.addEventListener('input', (e) => {

@@ -597,7 +597,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_fehlerpruefung.py` | angebot | Regressionstests der Design- und Fehlerprüfung |
 | `test_frontend.py` | angebot | search |
 | `test_gemeinsam.py` | angebot | Mehrere Mitarbeiter bearbeiten den Entwurf gleichzeitig |
-| `test_geo.py` | plattform | Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste, Suche, Selbstaussperr-Schutz, Zusammenfassung, Statistik (Firewall & Sperren). |
+| `test_geo.py` | plattform | Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste nach Kontinenten, Schnellauswahl (Kontinente, EU, EWR, DACH, Nachbarn, NATO, G7, BRICS), Suche, … |
 | `test_geo_ip.py` | plattform | Testgruppe geo_ip: IP-Suche der Ländersperre (Modul Sicherheit, Dialog Ländersperre) – IPv4/IPv6 einem Land zuordnen, Hinweise, nur für Administratoren. |
 | `test_geraete.py` | plattform | Vertraute Geräte: Ein Browser, auf dem sich ein Zugang schon erfolgreich angemeldet hat, kommt auch während einer fremd ausgelösten Kontosperre mit dem richtigen Passwort durch (Mitarbeiter mit und ohne Zwei-Faktor, … |
 | `test_herkunft.py` | plattform | Herkunftsprüfung im API-Einstieg (GR-109, lib/herkunft.php): nur Anfragen von der eigenen Seite. `Sec-Fetch-Site` same-site/cross-site → 403 (auch von Nachbar-Subdomains wie test.angebot-stafl.de); bei Anfragen außer … |
