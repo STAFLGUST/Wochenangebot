@@ -132,7 +132,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-liste button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:8px 10px;border:0;border-radius:11px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .lg-liste button:hover{background:var(--lg-total-bg)}
 .lg-liste button[aria-current="true"]{background:var(--lg-card);box-shadow:0 1px 4px rgba(0,0,0,.1)}
-.lg-liste .lg-name{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lg-liste .lg-name{font-size:13px;overflow-wrap:anywhere}
 .lg-liste .lg-mengen{grid-column:1/-1;font-size:11.5px}
 .lg-liste .lg-punkt{width:9px;height:9px;border-radius:50%;align-self:center;background:transparent}
 .lg-liste .lg-punkt.rot{background:var(--lg-rot)}.lg-liste .lg-punkt.gelb{background:var(--lg-gelb)}
@@ -283,3 +283,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 /* WinAB-Import: Vorschau */
 #lg-w-vorschau p{margin:0 0 8px}
 .lg-wsumme{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 8px;font-size:13px}
+/* Leergut bei Kunden; Kontoliste nach Wert */
+.lg-liste .lg-listwert{grid-column:1/-1;font-size:11.5px;color:var(--lg-muted);font-variant-numeric:tabular-nums}
+#lg-u-kunden td .lg-chip{margin-left:4px}
+.lg-kontoliste .lg-filterzeile .lg-check{min-width:0}

@@ -382,7 +382,9 @@ Mengen sind Zuordnungen Lademittel → ganze Stückzahl (`{"e2": 40, "h1": 2}`),
   "partner": [{"id": "p…", "name": "…", "art": "spedition", "mandant": "standard", "kontoNr": "", "kundenNr": "", "fristTage": 14, "email": "",
   "ansprechpartner": "", "lieferanten": "", "notiz": "", "lademittel": ["e2", "h1"], "aktiv": true, "rev": 2, "erstellt": {…}, "geaendert": {…},
   "quelle": "import|winab"?}]}`. `kundenNr` = WinAB-Kundennummer (nur Ziffern, eindeutig; ohne Angabe beim Ändern bleibt sie), `quelle: "winab"` =
-  beim WinAB-Import angelegt (Name „Name (Kd.-Nr.)“, Art `kunde`).
+  beim WinAB-Import angelegt (Name „Name (Kd.-Nr.)“, Art `kunde`). `winab` (nach einem WinAB-Bericht):
+  `{"ersteLieferung": "…", "letzteLieferung": "…", "letzteRueckgabe": "…", "bis": "<Berichtsdatum>"}` – laut Bericht, auch aus reinem Tausch
+  (Belege ohne Wirkung auf den Saldo werden nicht gebucht); spätere Berichte führen es fort (erste = früheste, letzte = späteste Angabe).
   Ohne Dokument gelten die Grundwerte `lg_grund_lademittel()` (E2 5,50 €, H1 36,00 €, übrige ohne Wert). Lademittel werden nie
   entfernt, nur deaktiviert (sonst wären Buchungen nicht mehr lesbar); neue Kennungen entstehen aus dem Namen.
 - **`leergut-bewegungen`** (Historie): `{"rev": 9, "liste": [{"id": "b…", "partner": "p…", "datum": "2026-10-26", "typ": "bewegung",
@@ -407,7 +409,8 @@ nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `t
 
 WinAB-Bericht (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: true` schreibt nichts): `{"bericht": {"datei": "…", "von": "2026-01-01",
 "bis": "<Berichtsdatum>"}, "kunden": [{"nr": "9100001", "name": "…"}], "belege": [{"kd": "9100001", "art": "Lieferschein|Gutschrift|Rechnung",
-"beleg": "500001", "datum": "…", "abgang": {"e2": 21}, "zugang": {"e2": 20}}]}` – `kunden` nennt alle Kunden des Berichts. Abgleich je
+"beleg": "500001", "datum": "…", "abgang": {"e2": 21}, "zugang": {"e2": 20}}]}` – `kunden` nennt alle Kunden des Berichts
+(je Kunde optional `ersteLieferung`, `letzteLieferung`, `letzteRueckgabe` im Berichtszeitraum). Abgleich je
 Kunde, Belegart und Belegnr. nur im Zeitraum und für diese Kunden; geänderte Belege werden storniert und neu gebucht, fehlende storniert
 (Grund „WinAB-Abgleich vom …“). Der Bericht bleibt im Browser; gespeichert werden nur die Buchungen.
 

@@ -71,12 +71,23 @@ switch ($action) {
             respond(['ok' => true, 'bilanz' => lg_bilanz($tag, lg_stamm(), lg_doc('leergut-bewegungen')['liste'], lg_doc('leergut-abstimmungen')['liste'], lg_doc('leergut-inventur')['liste'])]);
         }
 
-        /* Bilanz zum Stichtag als CSV (Excel), im Protokoll vermerkt */
+        /* Bilanz zum Stichtag oder „Leergut bei Kunden“ (Abholliste, liste = kunden) als CSV (Excel), im Protokoll vermerkt */
         case 'leergut_export': {
             require_perm('leergut.sehen', true);
             $b = body();
-            $tag = lg_datum($b['stichtag'] ?? date('Y-m-d'), 'Stichtag');
             $stamm = lg_stamm();
+            if (lg_wahl($b['liste'] ?? 'bilanz', ['bilanz', 'kunden'], 'Liste') === 'kunden') {
+                $heute = date('Y-m-d');
+                $zeilen = lg_kunden_leergut($stamm, lg_doc('leergut-bewegungen')['liste'], $heute);
+                audit('leergut', 'Leergut: Leergut bei Kunden als CSV heruntergeladen (' . count($zeilen) . ' Kunden)');
+                header('Content-Type: text/csv; charset=utf-8');
+                header('Content-Disposition: attachment; filename="Leergut-Kunden_' . $heute . '.csv"');
+                header('Cache-Control: private, no-store');
+                header('X-Content-Type-Options: nosniff');
+                echo lg_csv_kunden($zeilen, $stamm);
+                exit;
+            }
+            $tag = lg_datum($b['stichtag'] ?? date('Y-m-d'), 'Stichtag');
             $bil = lg_bilanz($tag, $stamm, lg_doc('leergut-bewegungen')['liste'], lg_doc('leergut-abstimmungen')['liste'], lg_doc('leergut-inventur')['liste']);
             audit('leergut', 'Leergut: Bilanz zum ' . $tag . ' als CSV heruntergeladen (' . count($bil['zeilen']) . ' Konten)');
             header('Content-Type: text/csv; charset=utf-8');
