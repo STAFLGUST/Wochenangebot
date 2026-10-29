@@ -1,0 +1,22 @@
+{
+ "stand": "2026-10-29",
+ "quelle": "Kontinente: übliche Zuordnung (pycountry-convert, Liste nach Wikipedia), Zypern zu Europa, nicht erfasste Gebiete von Hand; Gruppen: Mitgliederlisten Stand Oktober 2026 (EU 27, EWR 30, NATO 32, G7, BRICS ohne Saudi-Arabien – Mitgliedschaft nicht bestätigt). Nur eine Auswahlhilfe in Sicherheit → Ländersperre; gespeichert werden die einzelnen Länder.",
+ "kontinente": [
+  {"id": "europa", "name": "Europa", "laender": ["AD", "AL", "AT", "AX", "BA", "BE", "BG", "BY", "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FO", "FR", "GB", "GG", "GI", "GR", "HR", "HU", "IE", "IM", "IS", "IT", "JE", "LI", "LT", "LU", "LV", "MC", "MD", "ME", "MK", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "RU", "SE", "SI", "SJ", "SK", "SM", "UA", "VA", "XK"]},
+  {"id": "asien", "name": "Asien", "laender": ["AE", "AF", "AM", "AZ", "BD", "BH", "BN", "BT", "CC", "CN", "CX", "GE", "HK", "ID", "IL", "IN", "IO", "IQ", "IR", "JO", "JP", "KG", "KH", "KP", "KR", "KW", "KZ", "LA", "LB", "LK", "MM", "MN", "MO", "MV", "MY", "NP", "OM", "PH", "PK", "PS", "QA", "SA", "SG", "SY", "TH", "TJ", "TL", "TM", "TR", "TW", "UZ", "VN", "YE"]},
+  {"id": "afrika", "name": "Afrika", "laender": ["AO", "BF", "BI", "BJ", "BW", "CD", "CF", "CG", "CI", "CM", "CV", "DJ", "DZ", "EG", "EH", "ER", "ET", "GA", "GH", "GM", "GN", "GQ", "GW", "KE", "KM", "LR", "LS", "LY", "MA", "MG", "ML", "MR", "MU", "MW", "MZ", "NA", "NE", "NG", "RE", "RW", "SC", "SD", "SH", "SL", "SN", "SO", "SS", "ST", "SZ", "TD", "TG", "TN", "TZ", "UG", "YT", "ZA", "ZM", "ZW"]},
+  {"id": "nordamerika", "name": "Nordamerika", "laender": ["AG", "AI", "AW", "BB", "BL", "BM", "BQ", "BS", "BZ", "CA", "CR", "CU", "CW", "DM", "DO", "GD", "GL", "GP", "GT", "HN", "HT", "JM", "KN", "KY", "LC", "MF", "MQ", "MS", "MX", "NI", "PA", "PM", "PR", "SV", "SX", "TC", "TT", "US", "VC", "VG", "VI"]},
+  {"id": "suedamerika", "name": "Südamerika", "laender": ["AR", "BO", "BR", "CL", "CO", "EC", "FK", "GF", "GS", "GY", "PE", "PY", "SR", "UY", "VE"]},
+  {"id": "ozeanien", "name": "Ozeanien", "laender": ["AS", "AU", "CK", "FJ", "FM", "GU", "KI", "MH", "MP", "NC", "NF", "NR", "NU", "NZ", "PF", "PG", "PN", "PW", "SB", "TK", "TO", "TV", "UM", "VU", "WF", "WS"]},
+  {"id": "antarktis", "name": "Antarktis", "laender": ["AQ", "BV", "HM", "TF"]}
+ ],
+ "gruppen": [
+  {"id": "eu", "name": "EU", "titel": "Europäische Union (27 Mitgliedstaaten)", "laender": ["AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK"]},
+  {"id": "ewr", "name": "EWR", "titel": "Europäischer Wirtschaftsraum: EU, Island, Liechtenstein, Norwegen", "laender": ["AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU", "IE", "IS", "IT", "LI", "LT", "LU", "LV", "MT", "NL", "NO", "PL", "PT", "RO", "SE", "SI", "SK"]},
+  {"id": "dach", "name": "DACH", "titel": "Deutschland, Österreich, Schweiz", "laender": ["AT", "CH", "DE"]},
+  {"id": "nachbarn", "name": "Deutschland + Nachbarn", "titel": "Deutschland und seine neun Nachbarländer", "laender": ["AT", "BE", "CH", "CZ", "DE", "DK", "FR", "LU", "NL", "PL"]},
+  {"id": "nato", "name": "NATO", "titel": "NATO-Mitglieder (32)", "laender": ["AL", "BE", "BG", "CA", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GB", "GR", "HR", "HU", "IS", "IT", "LT", "LU", "LV", "ME", "MK", "NL", "NO", "PL", "PT", "RO", "SE", "SI", "SK", "TR", "US"]},
+  {"id": "g7", "name": "G7", "titel": "G7: Deutschland, Frankreich, Italien, Japan, Kanada, Vereinigtes Königreich, USA", "laender": ["CA", "DE", "FR", "GB", "IT", "JP", "US"]},
+  {"id": "brics", "name": "BRICS", "titel": "BRICS-Mitglieder: Brasilien, Russland, Indien, China, Südafrika, Ägypten, Äthiopien, Iran, VAE, Indonesien (Saudi-Arabien nicht enthalten – Mitgliedschaft nicht bestätigt)", "laender": ["AE", "BR", "CN", "EG", "ET", "ID", "IN", "IR", "RU", "ZA"]}
+ ]
+}

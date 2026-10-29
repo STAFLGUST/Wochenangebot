@@ -1,5 +1,6 @@
-"""Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste, Suche, Selbstaussperr-Schutz,
-Zusammenfassung, Statistik (Firewall & Sperren)."""
+"""Testgruppe geo: Ländersperre im Modul Sicherheit (Einstellungen → Ländersperre, Dialog) – Länderliste nach Kontinenten,
+Schnellauswahl (Kontinente, EU, EWR, DACH, Nachbarn, NATO, G7, BRICS), Suche, Selbstaussperr-Schutz, Zusammenfassung,
+Statistik (Firewall & Sperren). Dazu die Daten der Schnellauswahl (app/module/sicherheit/laendergruppen.json)."""
 import sys
 from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
@@ -28,6 +29,16 @@ def geo_dialog(pg):
     pg.click('[data-e="e-geo"]'); pg.wait_for_selector('#sic-dlg[open] #geo-box')
 def ja(pg):
     pg.click('#sic-dlg .sic-dfuss [type=submit]')
+# ---------- Daten der Schnellauswahl: jedes Land der Länderliste genau einem Kontinent, Gruppen nur aus bekannten Ländern ----------
+GRUPPEN = json.load(open(os.path.join(REPO, 'app', 'module', 'sicherheit', 'laendergruppen.json'), encoding='utf-8'))
+LAENDER = re.findall(r"'([A-Z]{2})'", re.search(r"const GEO_COUNTRIES = \[(.*?)\];", open(os.path.join(REPO, 'app', 'api', 'geo.php'), encoding='utf-8').read(), re.S).group(1))
+_kont = [c for k in GRUPPEN['kontinente'] for c in k['laender']]
+check('Ländergruppen: jedes Land genau einem Kontinent', sorted(_kont) == sorted(LAENDER) and len(_kont) == len(set(_kont)), sorted(set(LAENDER) ^ set(_kont)))
+_g = {x['id']: set(x['laender']) for x in GRUPPEN['gruppen']}
+check('Ländergruppen: nur bekannte Länder, Größen stimmen (EU 27, EWR 30, NATO 32, G7 7, BRICS 10, DACH 3, Nachbarn 10)',
+      all(v <= set(LAENDER) for v in _g.values()) and [len(_g[k]) for k in ('eu', 'ewr', 'nato', 'g7', 'brics', 'dach', 'nachbarn')] == [27, 30, 32, 7, 10, 3, 10]
+      and _g['ewr'] == _g['eu'] | {'IS', 'LI', 'NO'} and _g['dach'] == {'DE', 'AT', 'CH'} and 'DE' in _g['nachbarn'] and 'SA' not in _g['brics'], {k: len(v) for k, v in _g.items()})
+check('Ländergruppen: EU-Länder liegen in Europa', _g['eu'] <= set(next(k['laender'] for k in GRUPPEN['kontinente'] if k['id'] == 'europa')))
 BASE = {'twofa': 'off', 'idleMinutes': 480, 'pwMin': 10, 'pwComplex': False, 'lockAfter': 10, 'lockMinutes': 15, 'ipEnabled': False, 'adminIps': []}
 
 with sync_playwright() as p:
@@ -49,6 +60,33 @@ with sync_playwright() as p:
     check('chips show selection', 'China' in a.inner_text('#geo-chips') and 'Russland' in a.inner_text('#geo-chips') and '2 ausgewählt' in a.inner_text('#geo-count'))
     a.click('#geo-chips [data-cc=RU]'); a.wait_for_function("!document.querySelector('#geo-chips').textContent.includes('Russland')")
     check('chip remove', 'Russland' not in a.inner_text('#geo-chips') and not a.locator('#geo-list [data-geo-cc=RU]').is_checked())
+    # Schnellauswahl und Liste nach Kontinenten
+    a.fill('#geo-q', ''); a.wait_for_selector('#geo-list [data-geo-teil="suedamerika"]')
+    check('Schnellauswahl: Kontinente und Gruppen', a.eval_on_selector_all('#geo-gruppen [data-g]', 'l => l.map(e => e.dataset.g)')
+          == ['europa', 'asien', 'afrika', 'nordamerika', 'suedamerika', 'ozeanien', 'antarktis', 'eu', 'ewr', 'dach', 'nachbarn', 'nato', 'g7', 'brics'])
+    check('Liste nach Kontinenten gegliedert, Zähler je Kontinent', a.locator('#geo-list .geo-abschnitt').count() == 7 and '1 von 53 ausgewählt' in a.inner_text('#geo-list [data-geo-teil="asien"] .geo-akopf'),
+          a.inner_text('#geo-list [data-geo-teil="asien"] .geo-akopf'))
+    box = a.locator('#geo-list .geo-opt input').first.bounding_box()
+    check('Auswahlkästchen in normaler Größe (nicht über die ganze Spalte)', box and box['width'] <= 20 and box['height'] <= 20, box)
+    a.click('#geo-gruppen [data-g="eu"]'); a.wait_for_selector('#geo-gruppen [data-g="eu"].voll')
+    check('EU mit einem Klick: alle 27 dazu (mit China 28), Knopf gedrückt', '28 ausgewählt' in a.inner_text('#geo-count') and a.get_attribute('#geo-gruppen [data-g="eu"]', 'aria-pressed') == 'true'
+          and a.locator('#geo-chips .sic-chip').count() == 28, a.inner_text('#geo-count'))
+    check('teilweise gewählte Gruppe gekennzeichnet (NATO, Zahl)', a.locator('#geo-gruppen [data-g="nato"].teil').count() == 1 and '/32' in a.inner_text('#geo-gruppen [data-g="nato"]')
+          and '27 von 53 ausgewählt' in a.inner_text('#geo-list [data-geo-teil="europa"] .geo-akopf'), a.inner_text('#geo-gruppen [data-g="nato"]'))
+    a.emulate_media(color_scheme='dark')
+    a.screenshot(path=SH + '/geo-gruppen-dunkel.png')
+    a.emulate_media(color_scheme='light')
+    a.click('#geo-gruppen [data-g="eu"]'); a.wait_for_selector('#geo-gruppen [data-g="eu"]:not(.voll)')
+    check('zweiter Klick nimmt die Gruppe wieder heraus (China bleibt)', '1 ausgewählt' in a.inner_text('#geo-count') and 'China' in a.inner_text('#geo-chips'))
+    a.click('#geo-gruppen [data-g="suedamerika"]'); a.wait_for_function("document.querySelector('#geo-count').textContent.startsWith('16')")
+    a.click('#geo-gruppen [data-g="brics"]'); a.wait_for_function("document.querySelector('#geo-count').textContent.startsWith('24')")
+    check('Kontinent und Gruppe kombinierbar (Südamerika 15 + China + BRICS ohne Doppelte = 24)', '24 ausgewählt' in a.inner_text('#geo-count'), a.inner_text('#geo-count'))
+    a.fill('#geo-q', 'brasil'); a.wait_for_function("document.querySelectorAll('#geo-list .geo-opt').length === 1")
+    check('Suche zeigt den Treffer unter seinem Kontinent', a.locator('#geo-list .geo-abschnitt').count() == 1 and 'Südamerika' in a.inner_text('#geo-list')
+          and a.locator('#geo-list [data-geo-cc=BR]').is_checked())
+    a.screenshot(path=SH + '/geo-gruppen.png')
+    a.click('#sic-dlg [data-d="geo-leer"]'); a.fill('#geo-q', 'china'); a.check('#geo-list [data-geo-cc=CN]'); a.fill('#geo-q', '')
+    check('Leeren nimmt alles heraus, Gruppen wieder ohne Auswahl', '1 ausgewählt' in a.inner_text('#geo-count') and a.locator('#geo-gruppen .geo-gk.voll').count() == 0)
     # leere Auswahl → Fehler
     a.click('#sic-dlg [data-d="geo-leer"]'); a.check('#geo-box [name=geoEnabled]'); ja(a); a.wait_for_selector('#d-err:not(:empty)')
     check('empty selection rejected', 'mindestens ein Land' in a.inner_text('#d-err'))
@@ -139,6 +177,10 @@ with sync_playwright() as p:
     login(m, 'admin', 'Sicheres-Passwort-1'); geo_dialog(m)
     shot(m.locator('#sic-dlg'), SH + '/geo-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
+    breit = m.evaluate("(() => { const d = document.querySelector('#geo-box'); return d.scrollWidth - d.clientWidth; })()")
+    check('mobil: Schnellauswahl und Liste ohne seitliches Scrollen im Dialog', breit <= 1 and m.locator('#geo-gruppen [data-g="eu"]').is_visible(), breit)
+    m.locator('#geo-gruppen').scroll_into_view_if_needed()
+    m.screenshot(path=SH + '/geo-gruppen-mobil.png')
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')
