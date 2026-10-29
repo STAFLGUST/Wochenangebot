@@ -291,6 +291,15 @@ Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed), `mail_layo
   Eingabebereich gespeicherte Postfach (Dokument `mailkonto`, Passwort `passEnc` mit libsodium verschlüsselt,
   Schlüssel im Dokument `mail-schluessel`, nie in Sicherungen, nie in Antworten); sonst die Umgebungsvariablen
   `MAIL_*` (3.10). In der Testumgebung ohne beides: Pseudo-Postfach `testpostfach`.
+- **Zwei Postfächer (seit 29.10.2026):** `mail_cfg()` ist das Postfach für Kunden-E-Mails. Für E-Mails, die nur an
+  Mitarbeiter gehen, gibt es optional ein eigenes Postfach (Dokument `mailkonto-intern`, z. B. `verwaltung@…`, gleiche
+  Felder und Verschlüsselung). `mail_cfg_intern()` liefert es, ohne Eintrag das Kunden-Postfach; `require_mail(true)`
+  entsprechend. **Intern** sind: Zugangsdaten an Mitarbeiter (`user_mail`), Benachrichtigungen (`notify_send`),
+  Einkaufsbedarf, Bestellwünsche an das Team (`order_outbox`, Art `bestellung`), Abmelde-Hinweise, Notfall und
+  Probealarm/Wochenbericht des Moduls Sicherheit sowie die E-Mails der zentralen Anmeldung (`konten.sh mail-einrichten`
+  liest über `app-abfrage.php postfach` das interne Postfach). Alles an Kunden (Wochenangebot, Einladungen, Passwort-Links,
+  Einzelangebote, Sonderposten, Bestellkopie) bleibt beim Kunden-Postfach. Neue Funktionen, die nur Mitarbeitern
+  schreiben, nehmen `mail_cfg_intern()`.
 - **Versand:** `mail_send_many($cfg, $jobs)` (`lib/kundenmail.php`) verschickt Aufträge `{to, name, subject, text,
   html, headers?, anhaenge?}` und liefert je Auftrag `{ok, error?}`. In der Testumgebung legt `testpost_ablegen` die
   Nachrichten nur im Dokument `testpostfach` ab (die letzten 100); `Smtp` verweigert dort den Aufbau.

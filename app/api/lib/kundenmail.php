@@ -11,9 +11,10 @@ function mail_settings(): array
     $d = store_read('mailvorlage');
     return is_array($d) ? $d + ['signature' => ''] : ['signature' => "Mit freundlichen Grüßen\n" . $CFG['company']];
 }
-function require_mail(): array
+/* $intern: E-Mail nur an Mitarbeiter → internes Postfach (ohne eigenes: Kunden-Postfach), mail_cfg_intern() */
+function require_mail(bool $intern = false): array
 {
-    $m = mail_cfg();
+    $m = $intern ? mail_cfg_intern() : mail_cfg();
     if (!$m) fail('Der E-Mail-Versand ist noch nicht eingerichtet (Zugangsdaten des Postfachs in .env auf dem Server).', 409);
     if (!mail_base_url()) fail('Die Adresse der Angebotsseite für Links fehlt (DOMAIN bzw. WA_URL in .env).', 409);
     return $m;
@@ -92,8 +93,9 @@ function abmelde_melden(array $c, bool $ab, string $via): void
     $who = ['username' => 'kunde:' . ($c['login']['username'] ?? $c['id']), 'name' => $c['firma'], 'role' => 'kunde'];
     $txt = $ab ? 'Kunde hat sich vom Wochenangebot per E-Mail abgemeldet' . ($via === '1klick' ? ' (Ein-Klick im E-Mail-Programm)' : '') : 'Kunde hat sich wieder für das Wochenangebot per E-Mail angemeldet';
     audit('kunde_abmeldung', $txt, [['k' => "c{$c['id']}|mailAngebot", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Wochenangebot per E-Mail', 'from' => $ab ? 'ja' : 'nein', 'to' => $ab ? 'nein' : 'ja']], $who);
-    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht
-    $cfg = mail_cfg();
+    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht;
+    // geht über das interne Postfach
+    $cfg = mail_cfg_intern();
     if (!$cfg || !mail_base_url()) return;
     $targets = notify_targets('abmeldung');
     if (!$targets) return;

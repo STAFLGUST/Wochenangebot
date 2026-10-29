@@ -11,7 +11,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $mit = may($me, 'bestellungen.sehen');
             $send = may($me, 'einkauf.melden');
-            respond(['ok' => true, 'canSend' => $send, 'recipients' => $send ? count(notify_targets('einkauf')) : null, 'mail' => (bool)mail_cfg() && (bool)mail_base_url()] + einkauf_bedarf($mit));
+            respond(['ok' => true, 'canSend' => $send, 'recipients' => $send ? count(notify_targets('einkauf')) : null, 'mail' => (bool)mail_cfg_intern() && (bool)mail_base_url()] + einkauf_bedarf($mit));
         }
 
         /* Einkauf per E-Mail benachrichtigen (Bearbeiter): ausgewählte oder alle Fehlmengen */
@@ -26,7 +26,7 @@ switch ($action) {
             if (!$items) fail($codes === null ? 'Derzeit gibt es keine Fehlmengen.' : 'Bitte mindestens einen Artikel mit Fehlmenge auswählen.', 422);
             $to = notify_targets('einkauf');
             if (!$to) fail('Für „Einkaufsbedarf“ sind noch keine Empfänger eingetragen. Ein Administrator legt sie unter Verwaltung → E-Mail → Benachrichtigungen fest.', 409);
-            $cfg = require_mail();
+            $cfg = require_mail(true);   // nur an Mitarbeiter: internes Postfach
             [$subject, $text, $html] = einkauf_mail($items, $bed['stock'], $note, $me['name']);
             $jobs = array_map(function ($a) use ($subject, $text, $html) { return ['to' => $a, 'name' => '', 'subject' => $subject, 'text' => $text, 'html' => $html]; }, $to);
             $res = mail_send_many($cfg, $jobs);

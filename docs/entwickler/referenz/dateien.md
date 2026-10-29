@@ -611,6 +611,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_kundengruppen.py` | verwaltung | Stammdaten: Navigation (Artikel, Kunden, Kundengruppen), Kundengruppen per CSV (Windows-1252/UTF-8) importieren, bearbeiten, Rechte, Zuordnung im Kunden, Protokoll. |
 | `test_kundenimport.py` | verwaltung | Stammdaten → Angebote mit Kundengruppen (Freischaltung über die Gruppe), Import der Kundenstammdaten aus der Warenwirtschaft (CSV, alle Spalten, Aktiv-Regel 18 Monate) und Passwort-Auswahl im Kunden-Dialog. |
 | `test_legal_pages.py` | angebot | Öffentlich erreichbar, Navigation ohne JavaScript und mobile Darstellung. |
+| `test_mail_intern.py` | plattform | Postfach für interne E-Mails (z. |
 | `test_marketing.py` | marketing | Marketing · Redaktionsplan (Modul marketing, Oberfläche marketing.intern unter /module/marketing/). |
 | `test_master.py` | verwaltung | Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkunft, Zustand, VK-Gruppe). |
 | `test_modul_wartung.py` | plattform | Wartung je Oberfläche (GR-107) |

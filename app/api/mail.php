@@ -15,6 +15,12 @@
  *   MAIL_REPLY_TO      optional: Antworten an diese Adresse
  *   MAIL_SMTP_CAFILE   optional: eigene Zertifizierungsstelle (nur für interne Server/Tests)
  *   WA_URL             optional: Adresse der Seite für Links; sonst https://DOMAIN
+ *
+ * Zwei Postfächer (seit 29.10.2026): das Postfach für Kunden-E-Mails (oben, Dokument „mailkonto“ oder .env) und optional
+ * ein eigenes Postfach für interne E-Mails (Dokument „mailkonto-intern“, nur im Eingabebereich), z. B.
+ * verwaltung@dashboard-stafl.de. Intern = alles, was nur an Mitarbeiter geht: Zugangsdaten, Benachrichtigungen,
+ * Einkaufsbedarf, Bestellwünsche an das Team, Notfall/Probealarm und die E-Mails der zentralen Anmeldung (Keycloak).
+ * Ohne eigenes internes Postfach gilt das Kunden-Postfach (mail_cfg_intern() fällt darauf zurück).
  */
 declare(strict_types=1);
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }
@@ -51,11 +57,36 @@ function mail_decrypt(string $enc): ?string
     $p = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), $key);
     return $p === false ? null : $p;
 }
-/* Im Eingabebereich gespeichertes Postfach (oder null) */
-function mail_account(): ?array
+/* Im Eingabebereich gespeichertes Postfach (oder null); $konto 'kunden' (Standard) oder 'intern' */
+const MAIL_KONTEN = ['kunden' => 'mailkonto', 'intern' => 'mailkonto-intern'];
+function mail_account(string $konto = 'kunden'): ?array
 {
-    $a = store_read('mailkonto');
+    $a = $konto === 'intern' ? store_read('mailkonto-intern') : store_read('mailkonto');
     return is_array($a) && !empty($a['host']) && !empty($a['from']) ? $a : null;
+}
+/* Versanddaten aus einem gespeicherten Postfach (Passwort entschlüsselt; passError, wenn das nicht geht) */
+function mail_cfg_aus_konto(array $a, string $source): array
+{
+    global $CFG;
+    $pass = isset($a['passEnc']) && $a['passEnc'] !== '' ? mail_decrypt((string)$a['passEnc']) : '';
+    return [
+        'host' => (string)$a['host'], 'port' => (int)$a['port'], 'secure' => (string)$a['secure'],
+        'user' => (string)($a['user'] ?? ''), 'pass' => (string)$pass, 'passError' => $pass === null,
+        'from' => (string)$a['from'], 'fromName' => mail_clean_header((string)($a['fromName'] ?? '') ?: (string)$CFG['company']),
+        'replyTo' => (string)($a['replyTo'] ?? ''), 'cafile' => env_str('MAIL_SMTP_CAFILE'), 'source' => $source,
+    ];
+}
+/* Anzeige eines gespeicherten Postfachs für die Verwaltung – nie das Passwort, nur ob eines gespeichert ist */
+function mail_konto_view(?array $a): ?array
+{
+    return $a ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '',
+                 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null;
+}
+/* Versand für interne E-Mails (nur an Mitarbeiter): eigenes Postfach, sonst das Kunden-Postfach (oder null) */
+function mail_cfg_intern(): ?array
+{
+    $a = mail_account('intern');
+    return $a ? mail_cfg_aus_konto($a, 'intern') : mail_cfg();
 }
 /* Mail-Konfiguration oder null, wenn der Versand nicht eingerichtet ist */
 function mail_cfg(): ?array
@@ -66,15 +97,7 @@ function mail_cfg(): ?array
                 'fromName' => (string)$CFG['company'], 'replyTo' => '', 'cafile' => '', 'source' => 'test'];
     }
     $a = mail_account();
-    if ($a) {
-        $pass = isset($a['passEnc']) && $a['passEnc'] !== '' ? mail_decrypt((string)$a['passEnc']) : '';
-        return [
-            'host' => (string)$a['host'], 'port' => (int)$a['port'], 'secure' => (string)$a['secure'],
-            'user' => (string)($a['user'] ?? ''), 'pass' => (string)$pass, 'passError' => $pass === null,
-            'from' => (string)$a['from'], 'fromName' => mail_clean_header((string)($a['fromName'] ?? '') ?: (string)$CFG['company']),
-            'replyTo' => (string)($a['replyTo'] ?? ''), 'cafile' => env_str('MAIL_SMTP_CAFILE'), 'source' => 'admin',
-        ];
-    }
+    if ($a) return mail_cfg_aus_konto($a, 'admin');
     $host = env_str('MAIL_SMTP_HOST');
     $from = env_str('MAIL_FROM');
     if ($host === '' || $from === '' || filter_var($from, FILTER_VALIDATE_EMAIL) === false) return null;

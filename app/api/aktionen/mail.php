@@ -21,7 +21,9 @@ switch ($action) {
             $last = array_slice(store_read('mailversand') ?? [], -200);
             respond(['ok' => true, 'configured' => (bool)$m && (bool)mail_base_url(), 'baseUrl' => mail_base_url(),
                      'smtp' => $m ? ['host' => $m['host'], 'port' => $m['port'], 'secure' => $m['secure'], 'user' => $m['user'], 'from' => $m['from'], 'fromName' => $m['fromName'], 'replyTo' => $m['replyTo'], 'password' => $m['pass'] !== '', 'passError' => $m['passError'], 'source' => $m['source']] : null,
-                     'account' => ($a = mail_account()) ? ['host' => $a['host'], 'port' => (int)$a['port'], 'secure' => $a['secure'], 'user' => $a['user'] ?? '', 'from' => $a['from'], 'fromName' => $a['fromName'] ?? '', 'replyTo' => $a['replyTo'] ?? '', 'password' => !empty($a['passEnc']), 'updatedAt' => $a['updatedAt'] ?? null, 'updatedBy' => $a['updatedBy'] ?? ''] : null,
+                     'account' => mail_konto_view(mail_account()),
+                     'accountIntern' => mail_konto_view(mail_account('intern')),
+                     'smtpIntern' => ($mi = mail_cfg_intern()) ? ['from' => $mi['from'], 'fromName' => $mi['fromName'], 'host' => $mi['host'], 'passError' => $mi['passError'], 'source' => $mi['source']] : null,
                      'envConfigured' => env_str('MAIL_SMTP_HOST') !== '' && env_str('MAIL_FROM') !== '', 'orders' => order_settings(), 'notify' => notify_view(), 'sodium' => function_exists('sodium_crypto_secretbox'),
                      'signature' => mail_settings()['signature'], 'week' => mail_week(), 'log' => array_reverse($last), 'testumgebung' => testumgebung(),
                      'fracht' => fracht_settings(), 'frachtHinweis' => fracht_hinweis()]);
@@ -61,7 +63,7 @@ switch ($action) {
             $me = require_auth(true, 'admin');
             $ev = (string)(body()['event'] ?? '');
             if (!isset(NOTIFY_EVENTS[$ev])) fail('Unbekanntes Ereignis.', 422);
-            require_mail();
+            require_mail(true);
             $to = notify_targets($ev, true);
             if (!$to) fail('Für dieses Ereignis sind noch keine Empfänger gespeichert.', 422);
             $items = [['ev' => $ev, 'title' => 'Test: ' . NOTIFY_EVENTS[$ev]['label'], 'facts' => [['Ausgelöst von', $me['name']]], 't' => now()]];
@@ -81,9 +83,15 @@ switch ($action) {
         case 'mail_konto_save': {
             $me = require_admin_confirmation('mail_konto_save');
             $b = body();
-            $old = mail_account();
+            /* konto: 'kunden' (Standard, Postfach für Kunden-E-Mails) oder 'intern' (Postfach für interne E-Mails, z. B. verwaltung@…) */
+            $konto = (string)($b['konto'] ?? 'kunden');
+            if (!isset(MAIL_KONTEN[$konto])) fail('Unbekanntes Postfach.', 422);
+            $intern = $konto === 'intern';
+            $was = $intern ? 'Postfach für interne E-Mails' : 'Postfach';
+            $kp = $intern ? 'mail-intern' : 'mail';   // Schlüssel im Protokoll
+            $old = mail_account($konto);
             if (!empty($b['remove'])) {
-                if ($old) { store_write('mailkonto', ['removed' => now()]); audit('mail', 'Postfach-Einstellungen entfernt', [['k' => 'mail|konto', 'code' => '', 'name' => 'E-Mail', 'f' => 'Postfach', 'from' => $old['user'] . ' @ ' . $old['host'], 'to' => 'entfernt']]); }
+                if ($old) { $intern ? store_write('mailkonto-intern', ['removed' => now()]) : store_write('mailkonto', ['removed' => now()]); audit('mail', "$was: Einstellungen entfernt", [['k' => "$kp|konto", 'code' => '', 'name' => 'E-Mail', 'f' => $was, 'from' => $old['user'] . ' @ ' . $old['host'], 'to' => 'entfernt']]); }
                 respond(['ok' => true]);
             }
             $host = strtolower(trim((string)($b['host'] ?? '')));
@@ -109,17 +117,18 @@ switch ($action) {
                 try { $enc = mail_encrypt($pw); } catch (RuntimeException $e) { fail($e->getMessage(), 500); }
             }
             $new = ['host' => $host, 'port' => $port, 'secure' => $secure, 'user' => $user, 'passEnc' => $enc, 'from' => $from, 'fromName' => $name, 'replyTo' => $reply, 'updatedAt' => now(), 'updatedBy' => $me['name']];
-            store_write('mailkonto', $new);
+            $intern ? store_write('mailkonto-intern', $new) : store_write('mailkonto', $new);
             $ch = [];
+            $nm = $intern ? 'E-Mail intern' : 'E-Mail';
             foreach (['host' => 'Mailserver', 'port' => 'Port', 'secure' => 'Verschlüsselung', 'user' => 'Benutzer', 'from' => 'Absenderadresse', 'fromName' => 'Absendername', 'replyTo' => 'Antwortadresse'] as $f => $lab) {
                 $from0 = $old ? (string)($old[$f] ?? '') : ''; $to0 = (string)$new[$f];
-                if ($from0 !== $to0) $ch[] = ['k' => "mail|$f", 'code' => '', 'name' => 'E-Mail', 'f' => $lab, 'from' => $from0, 'to' => $to0];
+                if ($from0 !== $to0) $ch[] = ['k' => "$kp|$f", 'code' => '', 'name' => $nm, 'f' => $lab, 'from' => $from0, 'to' => $to0];
             }
-            if ($pw !== '') $ch[] = ['k' => 'mail|pw', 'code' => '', 'name' => 'E-Mail', 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt'];
-            if ($ch) audit('mail', $old ? 'Postfach-Einstellungen geändert' : 'Postfach für den E-Mail-Versand eingerichtet', $ch);
+            if ($pw !== '') $ch[] = ['k' => "$kp|pw", 'code' => '', 'name' => $nm, 'f' => 'Passwort', 'from' => '', 'to' => 'neu gesetzt'];
+            if ($ch) audit('mail', $intern ? ($old ? 'Postfach für interne E-Mails geändert' : 'Postfach für interne E-Mails eingerichtet') : ($old ? 'Postfach-Einstellungen geändert' : 'Postfach für den E-Mail-Versand eingerichtet'), $ch);
             // Verbindung und Anmeldung gleich prüfen (ohne E-Mail zu senden)
             $conn = ['ok' => true];
-            try { $t = new Smtp(mail_cfg()); $t->open(); $t->close(); } catch (RuntimeException $e) { $conn = ['ok' => false, 'error' => $e->getMessage()]; }
+            try { $t = new Smtp($intern ? mail_cfg_intern() : mail_cfg()); $t->open(); $t->close(); } catch (RuntimeException $e) { $conn = ['ok' => false, 'error' => $e->getMessage()]; }
             respond(['ok' => true, 'connection' => $conn]);
         }
 
@@ -135,19 +144,20 @@ switch ($action) {
 
         case 'mail_test': {
             $me = require_admin_confirmation('mail_test');
-            $cfg = require_mail();
+            $intern = (string)(body()['konto'] ?? 'kunden') === 'intern';   // über das Postfach für interne E-Mails
+            $cfg = require_mail($intern);
             $to = trim((string)(body()['to'] ?? ''));
             if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) fail('Bitte eine gültige E-Mail-Adresse angeben.', 422);
-            $sub = 'Testnachricht aus dem Angebotsportal';
-            $txt = "Diese Testnachricht bestätigt, dass der E-Mail-Versand des Angebotsportals funktioniert.
+            $sub = $intern ? 'Testnachricht: interne E-Mails der STAFL-Plattform' : 'Testnachricht aus dem Angebotsportal';
+            $txt = ($intern ? "Diese Testnachricht bestätigt, dass interne E-Mails (an Mitarbeiter) über {$cfg['from']} versendet werden." : "Diese Testnachricht bestätigt, dass der E-Mail-Versand des Angebotsportals funktioniert.") . "
 
 Ausgelöst von: {$me['name']}
 ";
-            $html = mail_layout($sub, '<p style="margin:0 0 14px;">Diese Testnachricht bestätigt, dass der E-Mail-Versand des Angebotsportals funktioniert.</p><p style="margin:0;color:#857c72;font-size:13px;">Ausgelöst von: ' . mail_h($me['name']) . '</p>', mail_settings()['signature'], '');
+            $html = mail_layout($sub, '<p style="margin:0 0 14px;">' . mail_h(strtok($txt, "\n")) . '</p><p style="margin:0;color:#857c72;font-size:13px;">Ausgelöst von: ' . mail_h($me['name']) . '</p>', mail_settings()['signature'], '');
             $r = mail_send_many($cfg, [['to' => $to, 'name' => '', 'subject' => $sub, 'text' => $txt, 'html' => $html]])[0];
-            with_lock('mailversand', function () use ($to, $r, $me) {
+            with_lock('mailversand', function () use ($to, $r, $me, $intern) {
                 $l = store_read('mailversand') ?? [];
-                $l[] = ['t' => now(), 'typ' => 'test', 'kid' => '', 'firma' => '', 'to' => $to, 'ok' => $r['ok'], 'error' => $r['error'] ?? '', 'by' => $me['name']];
+                $l[] = ['t' => now(), 'typ' => 'test', 'kid' => '', 'firma' => $intern ? 'Postfach intern' : '', 'to' => $to, 'ok' => $r['ok'], 'error' => $r['error'] ?? '', 'by' => $me['name']];
                 store_write('mailversand', array_slice($l, -3000));
             });
             if (!$r['ok']) fail('Testmail nicht versendet: ' . $r['error'], 502);

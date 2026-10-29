@@ -217,7 +217,7 @@ ohne SSH-Tunnel. Benutzernamen wie im Eingabebereich.
 | `sperren <name>` / `entsperren <name>` | deaktivieren und überall abmelden / Sperre (auch nach Fehlversuchen) aufheben |
 | `pruefen <name>` | nur lesend: Ursachen von Anmeldeproblemen |
 | `liste` | Konten anzeigen |
-| `mail-einrichten [<adresse>]` | Mailversand von Keycloak über das Postfach der Anwendung, Testmail |
+| `mail-einrichten [<adresse>]` | Mailversand von Keycloak über das Postfach der Anwendung (Vorrang: Postfach für interne E-Mails), Testmail |
 | `design-setzen [standard]` | Anmeldeseite im Plattform-Design bzw. Rückfall auf Standard |
 | `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients; Stand 8: Client `konten` für die Verwaltung; Stand 9: Client `sicherheit`; Stand 10: Client `controlling`) |
 

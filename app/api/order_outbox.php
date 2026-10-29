@@ -72,7 +72,7 @@ function order_outbox_send(string $nr, ?string $jobId = null, ?int $expected = n
             if (!$claimed) continue;
             $j = $claimed['job']; $o = $claimed['order'];
             try {
-                $cfg = mail_cfg();
+                $cfg = $j['kind'] === 'bestellung' ? mail_cfg_intern() : mail_cfg();   // an das Team: internes Postfach; Kopie an den Kunden: Kunden-Postfach
                 if (!$cfg) throw new RuntimeException('E-Mail-Versand ist nicht eingerichtet.');
                 if ($j['kind'] === 'bestellung' && filter_var($o['kunde']['email'] ?? '', FILTER_VALIDATE_EMAIL)) $cfg['replyTo'] = $o['kunde']['email'];
                 $result = mail_send_many($cfg, [$j])[0];

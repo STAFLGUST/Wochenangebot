@@ -434,6 +434,12 @@ schutz = "geheim"
 beschreibung = "Postfach-Zugang (Passwort verschlüsselt)"
 
 [[dokument]]
+name = "mailkonto-intern"
+eigentuemer = "plattform"
+schutz = "geheim"
+beschreibung = "Postfach-Zugang für interne E-Mails an Mitarbeiter, z. B. verwaltung@… (Passwort verschlüsselt; ohne Eintrag gilt mailkonto)"
+
+[[dokument]]
 name = "mail-schluessel"
 eigentuemer = "plattform"
 schutz = "geheim"

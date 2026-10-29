@@ -140,7 +140,7 @@ function probe_pruefung(): array
     $p = [];
     $add = function (string $k, string $stufe, string $titel, string $text, string $hinweis = '') use (&$p) { $p[] = compact('k', 'stufe', 'titel', 'text', 'hinweis'); };
     $to = notify_targets('sicherheit', true);
-    $cfg = mail_cfg();
+    $cfg = mail_cfg_intern();
     if (!$to) $add('meldung', 'bad', 'Benachrichtigung im Ernstfall', 'Keine Empfänger für Sicherheitsereignisse eingetragen – ein Notfall würde niemandem gemeldet.', 'Verwaltung → E-Mail → Benachrichtigungen → Sicherheitsereignisse.');
     elseif (!$cfg) $add('meldung', 'bad', 'Benachrichtigung im Ernstfall', 'Postfach für den E-Mail-Versand nicht eingerichtet.', 'Verwaltung → E-Mail → Postfach.');
     else $add('meldung', 'ok', 'Benachrichtigung im Ernstfall', 'an ' . implode(', ', $to));
@@ -181,7 +181,7 @@ function probe_ausloesen(array $me): array
     $t = now();
     $to = notify_targets('sicherheit', true);
     $mail = ['an' => count($to), 'ok' => 0, 'fehler' => ''];
-    if ($to && mail_cfg()) {
+    if ($to && mail_cfg_intern()) {
         $offen = array_values(array_filter($punkte, function ($x) { return in_array($x['stufe'], ['warn', 'bad'], true); }));
         $zeilen = [['Ausgelöst von', $me['name'] . ' (' . $me['username'] . ')'], ['Zeit', date('d.m.Y, H:i', strtotime($t)) . ' Uhr'],
                    ['Bereitschaft', $ok . ' von ' . count($wertbar) . ' Prüfpunkten in Ordnung']];
@@ -249,7 +249,7 @@ function bericht_anzeige(): array
 {
     $e = bericht_einstellungen();
     $e['empfaenger'] = notify_targets('sicherheit', true);
-    $e['postfach'] = (bool)mail_cfg();
+    $e['postfach'] = (bool)mail_cfg_intern();
     $e['tage'] = BERICHT_TAGE;
     $e['naechster'] = $e['an'] ? bericht_naechster($e) : null;
     return $e;
@@ -413,7 +413,7 @@ function bericht_senden(?array $me, bool $auto): array
     $to = notify_targets('sicherheit', true);
     if (!$me && !$to) { bericht_vermerken(['t' => now(), 'auto' => true, 'von' => '', 'an' => 0, 'ok' => 0, 'fehler' => 'keine Empfänger eingetragen']); return []; }
     if (!$to) fail('Keine Empfänger für Sicherheitsereignisse eingetragen (Verwaltung → E-Mail → Benachrichtigungen).', 422);
-    if (!mail_cfg()) {
+    if (!mail_cfg_intern()) {
         if ($me) fail('Das Postfach für den E-Mail-Versand ist nicht eingerichtet.', 422);
         bericht_vermerken(['t' => now(), 'auto' => true, 'von' => '', 'an' => count($to), 'ok' => 0, 'fehler' => 'Postfach nicht eingerichtet']);
         return [];
