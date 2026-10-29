@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-198 Aktionen in 12 Modulen.
+199 Aktionen in 12 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -88,6 +88,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `leergut_lademittel_save` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
 | `leergut_partner_save` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
 | `leergut_start` | `leergut.intern` | lesend | – | Recht leergut.sehen | `app/api/aktionen/leergut.php` |
+| `leergut_winab_import` | `leergut.intern` | schreibend | – | Recht leergut.verwalten | `app/api/aktionen/leergut.php` |
 
 ## CRM (`crm`)
 

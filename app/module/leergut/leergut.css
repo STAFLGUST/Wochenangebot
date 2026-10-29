@@ -280,3 +280,6 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-mengentabelle.lg-karten td[data-label]::before{text-align:left}
 }
 .lg a.btn{text-decoration:none}
+/* WinAB-Import: Vorschau */
+#lg-w-vorschau p{margin:0 0 8px}
+.lg-wsumme{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:4px 0 8px;font-size:13px}

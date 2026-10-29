@@ -7,7 +7,7 @@ declare(strict_types=1);
                                          Abschreibungen und Inventur erfassen und ändern;
                     leergut.verwalten – Partner und Lademittel (Werte) pflegen, Datenpaket übernehmen.
    Gleichzeitiges Bearbeiten: Abstimmungen, Abschreibungen und Inventur tragen „rev“; ein veralteter Stand bekommt 409.
-   Bewegungen werden nie geändert oder gelöscht, nur storniert (Status statt Löschen).
+   Bewegungen werden nie geändert oder gelöscht, nur storniert (Status statt Löschen) – auch beim WinAB-Abgleich.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -234,6 +234,37 @@ switch ($action) {
             });
             audit('leergut', 'Leergut: Lademittel und Werte gespeichert');
             respond(['ok' => true, 'lademittel' => $lm]);
+        }
+
+        /* WinAB-Bericht „Lademittelbewegungen Kunden“ abgleichen: vorschau (nichts gespeichert) oder übernehmen */
+        case 'leergut_winab_import': {
+            $me = require_perm('leergut.verwalten', true);
+            $b = body();
+            $vorschau = !empty($b['vorschau']);
+            $erg = with_lock('leergut-bewegungen', function () use ($b, $me, $vorschau) {
+                $stamm = lg_stamm();
+                $w = lg_winab_pruefen($b, $stamm);
+                if ($w['fehler']) return ['fehler' => $w['fehler']];
+                $doc = lg_doc('leergut-bewegungen');
+                [$stamm, $bew, $z, $neu, $summe] = lg_winab_abgleich($w, $stamm, $doc['liste'], $me);
+                if (count($bew) > LG_MAX_BEWEGUNGEN) fail('Zu viele Bewegungen.', 422);
+                if (!$vorschau) {
+                    lg_schreiben('leergut-stamm', $stamm);
+                    $doc['liste'] = $bew;
+                    lg_schreiben('leergut-bewegungen', $doc);
+                }
+                return ['fehler' => [], 'zahlen' => $z, 'neueKunden' => array_slice($neu, 0, 50), 'summe' => $summe, 'bericht' => $w['bericht']];
+            });
+            if ($erg['fehler']) {
+                if ($vorschau) respond(['ok' => true, 'fehler' => $erg['fehler']]);
+                respond(['ok' => false, 'error' => 'Der Bericht enthält Fehler – nichts übernommen.', 'fehler' => $erg['fehler']], 422);
+            }
+            if (!$vorschau) {
+                $z = $erg['zahlen']; $ber = $erg['bericht'];
+                audit('leergut', 'Leergut: WinAB-Kundenbewegungen ' . $ber['von'] . ' bis ' . $ber['bis'] . ' abgeglichen – ' . $z['kunden'] . ' neue Kundenkonten, '
+                    . $z['neu'] . ' neue Belege, ' . $z['geaendert'] . ' geändert, ' . $z['ausgeglichen'] . ' ausgeglichen');
+            }
+            respond(['ok' => true] + $erg);
         }
 
         /* Datenpaket prüfen (vorschau) und übernehmen – nur in ein leeres Modul oder mit „ersetzen“ */

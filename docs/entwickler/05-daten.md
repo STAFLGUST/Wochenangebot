@@ -379,13 +379,16 @@ Vorzeichen überall: **+ der Partner schuldet uns, − wir schulden dem Partner*
 Mengen sind Zuordnungen Lademittel → ganze Stückzahl (`{"e2": 40, "h1": 2}`), Nullen werden nicht gespeichert.
 
 - **`leergut-stamm`**: `{"rev": 3, "lademittel": [{"id": "e2", "name": "E2-Kiste", "wert": 5.5, "aktiv": true}],
-  "partner": [{"id": "p…", "name": "…", "art": "spedition", "mandant": "standard", "kontoNr": "", "fristTage": 14, "email": "",
-  "ansprechpartner": "", "lieferanten": "", "notiz": "", "lademittel": ["e2", "h1"], "aktiv": true, "rev": 2, "erstellt": {…}, "geaendert": {…}}]}`.
+  "partner": [{"id": "p…", "name": "…", "art": "spedition", "mandant": "standard", "kontoNr": "", "kundenNr": "", "fristTage": 14, "email": "",
+  "ansprechpartner": "", "lieferanten": "", "notiz": "", "lademittel": ["e2", "h1"], "aktiv": true, "rev": 2, "erstellt": {…}, "geaendert": {…},
+  "quelle": "import|winab"?}]}`. `kundenNr` = WinAB-Kundennummer (nur Ziffern, eindeutig; ohne Angabe beim Ändern bleibt sie), `quelle: "winab"` =
+  beim WinAB-Import angelegt (Name „Name (Kd.-Nr.)“, Art `kunde`).
   Ohne Dokument gelten die Grundwerte `lg_grund_lademittel()` (E2 5,50 €, H1 36,00 €, übrige ohne Wert). Lademittel werden nie
   entfernt, nur deaktiviert (sonst wären Buchungen nicht mehr lesbar); neue Kennungen entstehen aus dem Namen.
 - **`leergut-bewegungen`** (Historie): `{"rev": 9, "liste": [{"id": "b…", "partner": "p…", "datum": "2026-10-26", "typ": "bewegung",
-  "abgang": {"e2": 63}, "zugang": {}, "beleg": "", "text": "", "quelle": "hand|import", "erfasst": {"t": "…", "von": "…", "vonId": "u…"},
-  "storno": null}]}`. Nur anhängen; Stornieren setzt `storno: {t, von, vonId, grund}`, die Bewegung zählt dann nicht mehr.
+  "abgang": {"e2": 63}, "zugang": {}, "beleg": "", "text": "", "quelle": "hand|import|winab", "erfasst": {"t": "…", "von": "…", "vonId": "u…"},
+  "storno": null, "winab": {"kd": "9100001", "art": "Lieferschein", "beleg": "500001"}?}]}`. `winab` (nur bei `quelle: "winab"`) ist der
+  Schlüssel für den Abgleich mit dem nächsten Bericht. Nur anhängen; Stornieren setzt `storno: {t, von, vonId, grund}`, die Bewegung zählt dann nicht mehr.
 - **`leergut-abstimmungen`** (Historie): `{"liste": [{"id": "a…", "partner": "p…", "stichtag": "…", "eingang": "…", "fristBis": "…",
   "saldo": {"e2": -15}, "status": "offen|bestaetigt|widersprochen|info", "quelle": "", "notiz": "", "eigen": {…}, "verlauf": [{t, von, was}],
   "rev": 2, "herkunft": "import"?}]}`. `saldo` = Saldo laut Partner in unserem Vorzeichen; `eigen` = unser Saldo zum Stichtag beim
@@ -401,6 +404,12 @@ Datenpaket (`leergut_import`, nur mit `leergut.verwalten`): `{"format": "stafl-l
 [{"schluessel": "…", "name": "…", …}], "bewegungen": [{"partner": "<schluessel>", …}], "abstimmungen": […], "abschreibungen": […],
 "inventur": […]}` – geprüft mit denselben Regeln wie die Eingabemasken; mit Fehlern wird nichts übernommen, in ein Modul mit Daten
 nur mit `ersetzen`. Echte Pakete liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/leergut/datenpaket.json`.
+
+WinAB-Bericht (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: true` schreibt nichts): `{"bericht": {"datei": "…", "von": "2026-01-01",
+"bis": "<Berichtsdatum>"}, "kunden": [{"nr": "9100001", "name": "…"}], "belege": [{"kd": "9100001", "art": "Lieferschein|Gutschrift|Rechnung",
+"beleg": "500001", "datum": "…", "abgang": {"e2": 21}, "zugang": {"e2": 20}}]}` – `kunden` nennt alle Kunden des Berichts. Abgleich je
+Kunde, Belegart und Belegnr. nur im Zeitraum und für diese Kunden; geänderte Belege werden storniert und neu gebucht, fehlende storniert
+(Grund „WinAB-Abgleich vom …“). Der Bericht bleibt im Browser; gespeichert werden nur die Buchungen.
 
 ## 5.4 Datenverantwortung (GR-101)
 
