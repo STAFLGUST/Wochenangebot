@@ -145,7 +145,7 @@ with sync_playwright() as p:
     a.evaluate("document.documentElement.dataset.theme = 'light'")
 
     # ---------- PDF ----------
-    check('Knopf „PDF“ bei „Drucken“ (dazwischen ggf. „MHD an Verkauf“)', a.locator('.st-actions [data-st=print] ~ [data-st=pdf]').count() == 1)
+    check('Knopf „PDF“ nach „Drucken“', a.locator('.st-actions [data-st=print] ~ [data-st=pdf]').count() == 1)
     with a.expect_download() as dl: a.click('[data-st=pdf]')
     raw = open(dl.value.path(), 'rb').read()
     text, farben = pdf_text(raw)

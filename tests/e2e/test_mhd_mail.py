@@ -127,8 +127,9 @@ with sync_playwright() as p:
     a = br.new_page(viewport={'width': 1440, 'height': 950})
     anmelden(a, 'erika', 'Editor-Zugang-77')
     knopf = a.locator('[data-st=mhdmail]')
-    check('Knopf „MHD an Verkauf“ neben „Drucken“', knopf.count() == 1 and 'MHD an Verkauf' in knopf.inner_text()
-          and a.evaluate("document.querySelector('[data-st=mhdmail]').previousElementSibling.dataset.st") == 'print')
+    check('Knopf „MHD an Verkauf“ links vor „Drucken“, im Design von „Bestand hochladen“', knopf.count() == 1 and 'MHD an Verkauf' in knopf.inner_text()
+          and a.evaluate("document.querySelector('[data-st=mhdmail]').nextElementSibling.dataset.st") == 'print'
+          and a.evaluate("document.querySelector('[data-st=mhdmail]').className") == a.evaluate("document.querySelector('[data-st=import]').className") == 'btn primary')
     a.fill('#st-q', 'MHD'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 3")
     a.screenshot(path=os.path.join(SH, 'mhd-mail-1440.png'))
     n0 = len(smtp.messages)
