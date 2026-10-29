@@ -66,6 +66,12 @@
             <div id="lg-u-abschr"></div>
           </section>
         </div>
+        <section class="lg-panel lg-glas" id="lg-u-kunden-panel" hidden>
+          <div class="lg-panelkopf"><h2>Leergut bei Kunden</h2>
+            <div class="lg-filterzeile"><button class="btn sm" type="button" id="lg-u-kunden-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Abholliste (CSV)</button><button class="btn sm ghost" type="button" id="lg-u-kunden-alle">Alle Kunden</button></div></div>
+          <p class="lg-hinweis" id="lg-u-kunden-sum"></p>
+          <div class="lg-tabelle-wrap" id="lg-u-kunden"></div>
+        </section>
         <section class="lg-panel lg-glas">
           <div class="lg-panelkopf"><h2>Salden je Konto</h2><span class="lg-hilfe">+ der Partner schuldet uns · − wir schulden dem Partner</span></div>
           <div class="lg-tabelle-wrap" id="lg-u-salden"></div>
@@ -82,7 +88,10 @@
               <select class="lg-eingabe" id="lg-k-art" aria-label="Art"><option value="">Alle Arten</option></select>
               <select class="lg-eingabe" id="lg-k-firma" aria-label="Firma"><option value="">Alle Firmen</option></select>
             </div>
-            <label class="lg-check"><input type="checkbox" id="lg-k-inaktiv"> inaktive zeigen</label>
+            <div class="lg-filterzeile">
+              <label class="lg-check"><input type="checkbox" id="lg-k-inaktiv"> inaktive zeigen</label>
+              <select class="lg-eingabe" id="lg-k-sort" aria-label="Sortierung"><option value="">nach Name</option><option value="wert">nach Wert</option></select>
+            </div>
             <ul class="lg-liste" id="lg-k-liste"></ul>
           </aside>
           <section class="lg-konto" id="lg-k-detail">

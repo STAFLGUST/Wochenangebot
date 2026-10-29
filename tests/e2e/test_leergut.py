@@ -13,10 +13,13 @@ Bilanz zum Stichtag (je Firma, Inventur, Wert, unvollständige Werte); CSV (BOM,
 (Rechte, Fehler je Beleg, Vorschau schreibt nichts, Kundenkonten mit Nummer im Namen, Kundennummer am Partner eindeutig und
 nur Ziffern, Vorzeichen, Gutschrift als Abholung, erneuter Bericht unverändert, geändert → storniert und neu, fehlend →
 ausgeglichen, nur Zeitraum und Kunden des Berichts; in der Oberfläche eine erfundene .XLS im WinAB-Aufbau: Sammelrechnungen,
-Karton, Offerten und reiner Tausch weggelassen, Kunden zusammengefasst in Übersicht und Bilanz); Protokoll; Oberfläche (Übersicht,
+Karton, Offerten und reiner Tausch weggelassen, Kunden zusammengefasst in Übersicht und Bilanz); Leergut bei Kunden (letzte
+Lieferung und Rückgabe aus Buchungen und Bericht, unbekannt bei älteren WinAB-Buchungen, frühere Berichte bleiben gültig,
+Abholliste als CSV mit Rechten, Übersicht nach Wert mit Ampel, Konten nach Wert); Protokoll; Oberfläche (Übersicht,
 Konto mit Saldo-Karten und Journal, Eingabemasken für Bewegung, Auszug, Abschreibung, Inventur, Partner, Lademittel,
 Import der Datei, nur ansehen; 1280 und 390 px, hell und dunkel, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
+import datetime
 import json
 import os
 import tempfile
@@ -391,11 +394,54 @@ check('WinAB geändert: alter Beleg storniert mit Grund, neuer gebucht, Saldo ne
       and not kb[1]['storno'] and re_ and 'ausgeglichen' in re_[0]['storno']['grund']
       and {x['id']: x['saldo'] for x in V.call('leergut_start')[1]['konten']}[hand['id']] == {'e2': -7}, (kb, re_))
 
+# ── Leergut bei Kunden: letzte Lieferung und Rückgabe, Abholliste ──
+s = V.call('leergut_start')[1]
+ko = {x['id']: x for x in s['konten']}
+check('Konto: letzte Lieferung aus den Buchungen; WinAB-Buchungen ohne Angaben aus dem Bericht → letzte Rückgabe unbekannt',
+      ko[wk['9100001']['id']]['letzteAbgabe'] == '2026-03-02' and ko[wk['9100001']['id']]['rueckgabeUnbekannt'] is True and ko[hand['id']]['rueckgabeUnbekannt'] is True
+      and ko[namen['Beispiel-Spedition']]['rueckgabeUnbekannt'] is False, ko[wk['9100001']['id']])
+WBD = wb(kunden=[{**WB['kunden'][0], 'ersteLieferung': '2026-03-02', 'letzteLieferung': '2026-03-09', 'letzteRueckgabe': '2026-03-09'},
+                 {**WB['kunden'][1], 'ersteLieferung': '2026-04-02', 'letzteLieferung': '2026-04-02', 'letzteRueckgabe': '2026-04-01'},
+                 {**WB['kunden'][2], 'ersteLieferung': '2026-10-15', 'letzteLieferung': '2026-10-15', 'letzteRueckgabe': ''}, WB['kunden'][3]],
+         belege=geaendert['belege'])
+st, r = V.call('leergut_winab_import', {**WBD, 'vorschau': True})
+check('WinAB-Vorschau: Lieferung/Rückgabe laut Bericht für 3 Konten, Belege unverändert', st == 200 and r['zahlen']['daten'] == 3 and r['zahlen']['gleich'] == 3
+      and r['zahlen']['neu'] == 0 and r['zahlen']['ausgeglichen'] == 0, r.get('zahlen'))
+st, r = V.call('leergut_winab_import', wb(kunden=[{**WBD['kunden'][0], 'letzteRueckgabe': '2026-10-20'}] + WBD['kunden'][1:], belege=geaendert['belege'], vorschau=True))
+check('WinAB: Rückgabe nach dem Berichtsdatum → 422', st == 422 and 'außerhalb' in r.get('error', ''), r)
+check('WinAB: Lieferdaten übernommen', V.call('leergut_winab_import', WBD)[0] == 200)
+s = V.call('leergut_start')[1]
+ko = {x['id']: x for x in s['konten']}; pa = {p['id']: p for p in s['partner']}
+check('Konto: Lieferung und Rückgabe laut Bericht (auch aus reinem Tausch), nicht mehr unbekannt',
+      ko[wk['9100001']['id']]['letzteAbgabe'] == '2026-03-09' and ko[wk['9100001']['id']]['letzteRueckgabe'] == '2026-03-09' and ko[wk['9100001']['id']]['rueckgabeUnbekannt'] is False
+      and ko[wk['9100003']['id']]['letzteRueckgabe'] == '' and ko[wk['9100003']['id']]['ersteAbgabe'] == '2026-10-15'
+      and pa[wk['9100001']['id']]['winab'] == {'ersteLieferung': '2026-03-02', 'letzteLieferung': '2026-03-09', 'letzteRueckgabe': '2026-03-09', 'bis': '2026-10-15'}, pa[wk['9100001']['id']].get('winab'))
+st, r = V.call('leergut_winab_import', wb(kunden=[{**WBD['kunden'][0], 'ersteLieferung': '2026-01-05', 'letzteRueckgabe': '2026-02-01'}] + WBD['kunden'][1:], belege=geaendert['belege']))
+pw = {p['id']: p for p in V.call('leergut_start')[1]['partner']}[wk['9100001']['id']]['winab']
+check('WinAB: älterer Bericht – früheste erste Lieferung, späteste Rückgabe bleibt', st == 200 and r['zahlen']['daten'] == 1 and pw['ersteLieferung'] == '2026-01-05' and pw['letzteRueckgabe'] == '2026-03-09', (r.get('zahlen'), pw))
+st, r = V.call('leergut_winab_import', {**WBD, 'vorschau': True})
+check('WinAB: derselbe Bericht noch einmal – keine geänderten Lieferdaten', st == 200 and r['zahlen']['daten'] == 0, r.get('zahlen'))
+
+check('Abholliste: ohne Anmeldung kein Zugang, ohne Leergut-Recht 403, unbekannte Liste 422',
+      N.call('leergut_export', {'liste': 'kunden'})[0] in (401, 403, 404) and O.call('leergut_export', {'liste': 'kunden'})[0] == 403
+      and L.call('leergut_export', {'liste': 'kreditoren'})[0] == 422)
+st, _, raw = L.call('leergut_export', {'liste': 'kunden'}, raw=True)
+zeilen_csv = raw.lstrip('﻿').rstrip('\r\n').split('\r\n')
+heute_api = datetime.date.fromisoformat(s['heute'])
+tage = lambda iso: str((heute_api - datetime.date.fromisoformat(iso)).days)
+check('Abholliste (CSV): BOM, nur Kunden mit Saldo, nach Wert, Kundennummer, Lieferung/Rückgabe, Tage ohne Rückgabe nur bei Schuld',
+      st == 200 and raw.startswith('﻿') and zeilen_csv == [
+          '"Kunde";"WinAB-Kd.-Nr.";"Firma";"E2-Kiste";"H1-Palette";"Wert €";"Letzte Lieferung";"Letzte Rückgabe";"Ohne Rückgabe seit (Tage)"',
+          f'"Testkunde Nord GmbH (9100001)";"9100001";"Standard-Fleisch";"8";"1";"80,00";"09.03.2026";"09.03.2026";"{tage("2026-03-09")}"',
+          f'"Testkunde Nord GmbH (9100003)";"9100003";"Standard-Fleisch";"3";"";"16,50";"15.10.2026";"";"{tage("2026-10-15")}"',
+          '"Testkunde Süd (von Hand)";"9100002";"Standard-Fleisch";"-7";"";"-38,50";"02.04.2026";"01.04.2026";""'], zeilen_csv)
+
 # ── Protokoll ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: Buchung, Storno, Abstimmung, Export, Datenpaket, WinAB', all(t in log for t in ('Leergut: Bewegung gebucht – Test-Spedition Nord', 'Leergut: Bewegung storniert',
       'Leergut: Abstimmung Test-Spedition Nord zum 2026-01-31 gespeichert (Widersprochen)', 'Leergut: Bilanz zum 2026-02-28 als CSV', 'Leergut: Datenpaket übernommen (vorhandene Daten ersetzt)',
-      'Leergut: WinAB-Kundenbewegungen 2026-01-01 bis 2026-10-15 abgeglichen – 2 neue Kundenkonten, 4 neue Belege')))
+      'Leergut: WinAB-Kundenbewegungen 2026-01-01 bis 2026-10-15 abgeglichen – 2 neue Kundenkonten, 4 neue Belege',
+      'Leergut: Leergut bei Kunden als CSV heruntergeladen (3 Kunden)')))
 check('Protokoll ohne Notizen, Belegnummern und Kundennamen', 'LS-1001' not in log and 'nicht verbucht' not in log and '500001' not in log and 'Testkunde Nord' not in log)
 
 
@@ -606,9 +652,36 @@ with sync_playwright() as p:
     zeile = text(pg, '#lg-u-salden tr[data-kunden]')
     check('Übersicht: Kunden aus WinAB in einer Zeile mit Summe', 'Kunden aus WinAB' in zeile and '3 von 3 Kundenkonten mit Saldo' in zeile and '+4' in zeile
           and 'Testkunde' not in text(pg, '#lg-u-salden'), zeile)
+    # Leergut bei Kunden (Übersicht): nach Wert, Lieferung/Rückgabe laut Bericht, Ampel, Abholliste
+    heute_d = datetime.date.fromisoformat(HEUTE)
+    t1, t3 = (heute_d - datetime.date(2026, 3, 9)).days, (heute_d - datetime.date(2026, 10, 15)).days
+    ampel = lambda t: 'rot' if t >= 60 else 'gelb' if t >= 30 else 'gruen'
+    reihen = pg.locator('#lg-u-kunden tbody tr')
+    namen_k = [reihen.nth(i).locator('.lg-name').inner_text() for i in range(reihen.count())]
+    check('Leergut bei Kunden: alle Kundenkonten mit Saldo, nach Wert', namen_k == ['Testkunde Nord GmbH (9100001)', 'Testkunde Nord GmbH (9100003)', 'Testkunde Süd (9100002)'], namen_k)
+    r1, r2, r3 = (text(pg, f'#lg-u-kunden tbody tr:nth-child({i})') for i in (1, 2, 3))
+    check('Leergut bei Kunden: letzte Rückgabe laut Bericht (auch aus reinem Tausch) mit Ampel', '69,00 €' in r1 and '09.03.2026' in r1 and f'seit {t1} Tagen' in r1
+          and pg.locator(f'#lg-u-kunden tbody tr:nth-child(1) .lg-chip.{ampel(t1)}').count() == 1, r1)
+    check('Leergut bei Kunden: ohne Rückgabe seit der ersten Lieferung, Schuld von uns ohne Ampel', 'noch nie' in r2 and '15.10.2026' in r2
+          and pg.locator(f'#lg-u-kunden tbody tr:nth-child(2) .lg-chip.{ampel(t3)}').count() == 1 and pg.locator('#lg-u-kunden tbody tr:nth-child(3) .lg-chip').count() == 0
+          and '01.04.2026' in r3, (r2, r3))
+    summe_k = text(pg, '#lg-u-kunden-sum')
+    check('Leergut bei Kunden: Summe der Kunden, die uns schulden', summe_k.startswith('2 Kunden haben Leergut von uns im Wert von 85,50 €')
+          and (f'{(t1 >= 60) + (t3 >= 60)} seit mindestens 60 Tagen' in summe_k if t1 >= 60 or t3 >= 60 else True), summe_k)
+    with pg.expect_download() as dl:
+        pg.click('#lg-u-kunden-csv')
+    abhol = open(dl.value.path(), encoding='utf-8-sig').read().splitlines()
+    check('Abholliste aus der Oberfläche (Dateiname, nach Wert)', dl.value.suggested_filename == f'Leergut-Kunden_{HEUTE}.csv' and abhol[1].startswith('"Testkunde Nord GmbH (9100001)"'), abhol[:2])
+    pg.screenshot(path=os.path.join(SH, 'leergut_kunden_1280.png'), full_page=True)
     pg.click('#lg-u-salden tr[data-kunden]')
     pg.wait_for_selector('#lg-tabs [data-tab="konten"][aria-selected="true"]')
     check('Übersicht → Konten mit Filter Kunde', pg.input_value('#lg-k-art') == 'kunde' and pg.locator('#lg-k-liste [data-konto]').count() == 3)
+    liste_k = [pg.locator('#lg-k-liste [data-konto] .lg-name').nth(i).inner_text() for i in range(3)]
+    check('Konten: Kunden nach Wert sortiert, mit Wert', pg.input_value('#lg-k-sort') == 'wert' and liste_k[0] == 'Testkunde Nord GmbH (9100001)'
+          and liste_k[2] == 'Testkunde Süd (9100002)' and '69,00 €' in text(pg, '#lg-k-liste'), liste_k)
+    pg.select_option('#lg-k-sort', '')
+    check('Konten: wieder nach Name', [pg.locator('#lg-k-liste [data-konto] .lg-name').nth(i).inner_text() for i in range(3)][1] == 'Testkunde Nord GmbH (9100003)'
+          and '69,00 €' not in text(pg, '#lg-k-liste'))
     pg.fill('#lg-k-suche', '9100003')
     check('Konten: Suche nach WinAB-Kundennummer', pg.locator('#lg-k-liste [data-konto]').count() == 1)
     pg.click(f'#lg-k-liste [data-konto="{wk["9100003"]["id"]}"]'); pg.wait_for_selector('.lg-saldo')
