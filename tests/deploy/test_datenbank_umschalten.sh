@@ -30,7 +30,7 @@ PY
 }
 lauf() { AUS=$(cd "$T/i" && sh deploy/datenbank-umschalten.sh "$@" 2>&1) && CODE=0 || CODE=$?; }
 # chown auf 33:33 braucht root – im Test als normaler Nutzer: chown durch Platzhalter ersetzen
-mkdir "$T/bin"; printf '#!/bin/sh\nexit 0\n' > "$T/bin/chown"; chmod +x "$T/bin/chown"; export PATH="$T/bin:$PATH"
+mkdir "$T/bin"; printf '#!/bin/sh\necho "chown $*" >> "%s/aufrufe"\nexit 0\n' "$T" > "$T/bin/chown"; chmod +x "$T/bin/chown"; export PATH="$T/bin:$PATH"
 
 neu; touch "$T/i/daten/.sqlite-active"; mkdir "$T/i/daten/.sqlite"
 lauf migrate
@@ -47,10 +47,23 @@ ok "Rückfall ohne aktives SQLite: nichts zu tun, kein Stopp" '[ $CODE = 0 ] && 
 
 neu
 lauf migrate
-ok "Umschalten: Sicherung, Prüfung im Container, Stopp, Übernahme, Start in dieser Reihenfolge" '[ $CODE = 0 ] && [ "$(cut -d" " -f1-3 "$T/aufrufe" | tr "\n" "|")" = "sichern --jetzt|docker compose exec|docker compose stop|datenbank migrate daten|docker compose start|" ]'
+ok "Umschalten: Sicherung, Prüfung im Container, Stopp, Übernahme, Start in dieser Reihenfolge" '[ $CODE = 0 ] && [ "$(grep -v "^chown " "$T/aufrufe" | cut -d" " -f1-3 | tr "\n" "|")" = "sichern --jetzt|docker compose exec|docker compose stop|datenbank migrate daten|docker compose start|" ]'
 ok "Umschalten: Rechte des Datenbankordners" '[ "$(stat -c %a "$T/i/daten/.sqlite")" = 700 ] && [ "$(stat -c %a "$T/i/daten/.sqlite/store.sqlite")" = 600 ]'
+# daten/ ist im Container beschreibbar: Eigentümer nur für echte Dateien, nie für das Ziel eines Verweises (-h, -type f)
+echo x > "$T/opfer.php"; ln -s "$T/opfer.php" "$T/i/daten/verweis.php"; echo '{}' > "$T/i/daten/echt.php"
 lauf rollback
 ok "Rückfall bei aktivem SQLite: läuft durch" '[ $CODE = 0 ] && grep -q "datenbank rollback daten --offline" "$T/aufrufe" && [ ! -f "$T/i/daten/.sqlite-active" ]'
+ok "Rückfall: chown nur ohne Verweise zu folgen, Verweis ausgelassen" 'grep -q "^chown -h 33:33 daten/.storage.lock" "$T/aufrufe" && grep "^chown -h 33:33 .*daten/echt.php" "$T/aufrufe" | grep -qv verweis.php'
+
+neu
+cat > "$T/i/deploy/datenbank.py" <<PY
+import os, pathlib, sys
+d = pathlib.Path(sys.argv[2]); os.symlink('$T/opfer-ordner', d / '.sqlite'); (d / '.sqlite-active').write_text('1\\n')
+PY
+mkdir -p "$T/opfer-ordner"; touch "$T/opfer-ordner/store.sqlite"; chmod 644 "$T/opfer-ordner/store.sqlite"
+lauf migrate
+ok "Umschalten: Datenbankordner als Verweis → Abbruch ohne chown/chmod, App bleibt gestoppt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Unerwarteter Eintrag" \
+  && [ "$(stat -c %a "$T/opfer-ordner/store.sqlite")" = 644 ] && ! grep -q "chown -R" "$T/aufrufe" && ! grep -q "compose start" "$T/aufrufe"'
 
 neu; touch "$T/fehler"
 lauf migrate

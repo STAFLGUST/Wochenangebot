@@ -38,6 +38,10 @@ Läuft die Testumgebung nicht, ist nur `test.<Domain>` nicht erreichbar.
 - `WA_TESTUMGEBUNG=1`: E-Mails gehen nie an einen Mailserver (auch nicht, wenn dort ein Postfach eingetragen wird),
   sondern ins Testpostfach (die letzten 100).
 - Keine Zugangsdaten oder Daten des Echtbetriebs werden übernommen (nur `DOMAIN` für die Adresse).
+- Code eines eingespielten Zweigs läuft nur im Test-Container, nie auf dem Server: Versionsnummern und Prüfliste setzt
+  das Werkzeug des Echtbetriebs (`deploy/bereitstellen.py --verzeichnis`, freigegebener Stand) im Programmordner des
+  Zweigs, als root nur mit den Rechten von `www-data` (`setpriv`). Das `deploy/bereitstellen.py` des Zweigs wird nie
+  ausgeführt – ein nicht freigegebener Zweig käme sonst mit root-Rechten an `.env`, Daten und Docker.
 
 ## Hinweis für Wartungsarbeiten
 

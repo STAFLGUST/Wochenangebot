@@ -22,9 +22,20 @@ APP_VERSION=$(envwert STAFL_APP_VERSION)
 APP_BILD="stafl-app:${APP_VERSION:-lokal}"   # Name wie in der Ergänzungsdatei: stafl-app:${STAFL_APP_VERSION:-lokal}
 BILD_VORHER=stafl-app:release-vorher
 
-VORHER=$(python3 -c "import json; t=open('daten/deployment.php').read(); print(json.loads(t[t.index(chr(10))+1:]).get('vorher',''))" 2>/dev/null || true)
-printf '%s' "$VORHER" | grep -qE '^[0-9a-f]{40}$' || { echo "Kein vorheriger Stand bekannt."; exit 1; }
+# Vorheriger Stand aus .release-vorher (schreibt nur freigabe-einspielen.sh als root). daten/deployment.php ist im
+# Container beschreibbar und wird nur als Übergang gelesen (Releases vor dieser Datei), dann nur ein Vorgänger von HEAD.
 JETZT=$(git rev-parse HEAD)
+if [ -f .release-vorher ] && [ ! -L .release-vorher ]; then
+  VORHER=$(head -n 1 .release-vorher)
+else
+  VORHER=$(python3 -c "import json; t=open('daten/deployment.php').read(); print(json.loads(t[t.index(chr(10))+1:]).get('vorher',''))" 2>/dev/null || true)
+  if printf '%s' "$VORHER" | grep -qE '^[0-9a-f]{40}$' && [ "$VORHER" != "$JETZT" ]; then
+    git merge-base --is-ancestor "$VORHER" "$JETZT" 2>/dev/null \
+      || { echo "Vorheriger Stand $VORHER ist kein Vorgänger des aktiven Stands – kein Rückfall. Bitte von Hand prüfen."; exit 1; }
+    echo "Hinweis: .release-vorher fehlt – vorheriger Stand aus daten/deployment.php ($VORHER), bitte vor dem Fortsetzen prüfen."
+  fi
+fi
+printf '%s' "$VORHER" | grep -qE '^[0-9a-f]{40}$' || { echo "Kein vorheriger Stand bekannt."; exit 1; }
 [ "$VORHER" != "$JETZT" ] || { echo "Vorheriger Stand ist bereits aktiv."; exit 0; }
 # Nach einem automatischen Rückfall steht der abgelehnte Release als „vorher“ im Status – nie dorthin wechseln
 if [ "$VORHER" = "$(cat .release-abgelehnt 2>/dev/null)" ]; then

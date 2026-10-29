@@ -46,11 +46,18 @@ ok "Zu kurzes Passwort abgelehnt" '! run passwort < "$T/in" >/dev/null 2>&1 && [
 ok "Einspielen ohne Zweig abgelehnt" '! run einspielen >/dev/null 2>&1'
 ok "Einspielen mit ungültigem Namen abgelehnt" '! run einspielen "../x" >/dev/null 2>&1 && ! run einspielen "-x" >/dev/null 2>&1 && ! run einspielen "a b" >/dev/null 2>&1'
 ok "Unbekannter Zweig abgelehnt" '! run einspielen gibtsnicht >/dev/null 2>&1'
-mkdir -p "$T/test/src/deploy"   # Platzhalter: Bereitstellung des eingespielten Stands (Versionsnummern, Prüfliste)
-printf 'import os\nopen(os.environ["LOG"], "a").write("bereitstellen " + os.path.dirname(os.path.abspath(__file__)) + "\\n")\n' > "$T/test/src/deploy/bereitstellen.py"
+# Platzhalter: Bereitstellungswerkzeug des Echtbetriebs (protokolliert Aufruf und Nutzer) und ein Zweig, dessen eigenes
+# deploy/bereitstellen.py nie laufen darf (Code eines nicht freigegebenen Zweigs auf dem Server)
+mkdir -p "$T/test/src/deploy" "$T/test/src/app"
+printf 'import os, sys\nopen("%s", "a").write("bereitstellen-echtbetrieb uid=%%d %%s\\n" %% (os.getuid(), " ".join(sys.argv[1:])))\n' "$LOG" > "$T/prod/deploy/bereitstellen.py"
+printf 'open("%s", "a").write("ZWEIG-CODE-AUSGEFUEHRT\\n")\n' "$LOG" > "$T/test/src/deploy/bereitstellen.py"
+if [ "$(id -u)" = 0 ]; then chmod 755 "$T"; : > "$LOG"; chmod 666 "$LOG"; fi   # als root läuft das Werkzeug als uid 33
 : > "$LOG"; run einspielen feature/neu > "$T/out" 2>&1
 ok "Einspielen: nur Zweig des eigenen Repositorys" 'grep -q "fetch -q origin +refs/heads/feature/neu:refs/remotes/origin/feature/neu" "$LOG" && grep -q "checkout -q --detach origin/feature/neu" "$LOG"'
-ok "Einspielen: Versionsnummern und Prüfliste aus dem eingespielten Stand, vor dem Neustart" 'awk "/checkout -q --detach/{c=NR} /^bereitstellen /{b=NR} /up -d --force-recreate/{u=NR} END{exit !(c && b && u && c < b && b < u)}" "$LOG" && grep -qx "bereitstellen $T/test/src/deploy" "$LOG"'
+ok "Einspielen: Code des Zweigs wird nie auf dem Server ausgeführt" '! grep -q ZWEIG-CODE-AUSGEFUEHRT "$LOG"'
+ok "Einspielen: Werkzeug des Echtbetriebs bearbeitet nur den Programmordner des Zweigs, vor dem Neustart" 'awk "/checkout -q --detach/{c=NR} /^bereitstellen-echtbetrieb /{b=NR} /up -d --force-recreate/{u=NR} END{exit !(c && b && u && c < b && b < u)}" "$LOG" \
+  && grep -q "^bereitstellen-echtbetrieb .* --verzeichnis $T/test/src/app\$" "$LOG"'
+ok "Einspielen: als root nie mit root-Rechten (nur www-data)" '[ "$(id -u)" != 0 ] || grep -q "^bereitstellen-echtbetrieb uid=33 " "$LOG"'
 ok "Einspielen: Testdaten bleiben" '[ -f "$T/test/daten/angebot.php" ]'
 ok "Einspielen: Container neu erstellt (übernimmt Netzwechsel)" 'grep -q "up -d --force-recreate" "$LOG"'
 echo extra > "$T/test/daten/notiz.php"
