@@ -1,6 +1,6 @@
 """Leergut (Modul leergut, Oberfläche leergut.intern unter /module/leergut/) – Leergutkonten und Abstimmung.
 
-Geprüft: Register (in Entwicklung, ohne Freigabe; Freigabe nur als Test mit Testern); Rechte serverseitig (GR-103): ohne
+Geprüft: Register (fertig und produktiv unter leergut.dashboard-stafl.de, Kachel verfügbar, ohne Testfreigabe erreichbar); Rechte serverseitig (GR-103): ohne
 Anmeldung, ohne Leergut-Recht, nur ansehen, buchen, verwalten; ohne CSRF, GET auf schreibende Aktion; Grundwerte der
 Lademittel (E2 5,50 €, H1 36,00 €); Partner (Pflichtfelder, doppelt, Art, Firma, Frist, E-Mail, Lademittel, ändern mit
 Stand, veralteter Stand 409, deaktivieren); Bewegungen (Fehlerfälle, Vorzeichen Abgang +/Zugang −, Sortierung, stornieren
@@ -50,12 +50,10 @@ L, Bb, V, O, N = K['lea'], K['bea'], K['vera'], K['otto'], Client('198.51.100.20
 # ── Register und Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['leergut']
 ob = mod['oberflaechen'][0]
-check('Register: Leergut in Entwicklung, ohne Freigabe, Adresse leergut.dashboard-stafl.de/module/leergut/', ob['entwicklung'] == 'in_entwicklung'
-      and ob['freigabe'] == 'keine' and ob['adresse'] == 'https://leergut.dashboard-stafl.de/module/leergut/', ob)
-check('ohne Freigabe: auch Administrator 404', A.call('leergut_start')[0] == 404)
-check('keine Produktivfreigabe für ein Modul in Entwicklung (422)', A.call('modul_freigabe_save', {'bereich': 'leergut.intern', 'freigabe': 'produktiv', 'grund': 'Test'})[0] == 422)
-check('Testfreigabe gesetzt', A.call('modul_freigabe_save', {'bereich': 'leergut.intern', 'freigabe': 'test', 'grund': 'Abnahme Leergut'})[0] == 200)
-check('Tester eingetragen', A.call('modul_tester_save', {'bereich': 'leergut.intern', 'tester': [ids[x] for x in ('admin', 'lea', 'bea', 'vera', 'otto')], 'grund': 'Abnahme'})[0] == 200)
+check('Register: Leergut fertig und produktiv (Auftrag des Inhabers 29.10.2026), Adresse leergut.dashboard-stafl.de/module/leergut/',
+      ob['entwicklung'] == 'fertig' and ob['freigabe'] == 'produktiv' and ob['adresse'] == 'https://leergut.dashboard-stafl.de/module/leergut/', ob)
+check('Kachel: verfügbar, Ziel leergut.intern', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True and mod['kachel']['ziel'] == 'leergut.intern', mod['kachel'])
+check('produktiv ohne Testfreigabe: Administrator erreicht das Modul', A.call('leergut_start')[0] == 200)
 
 # ── Rechte ──
 check('ohne Anmeldung: kein Zugang (401/404)', N.call('leergut_start')[0] in (401, 404))
