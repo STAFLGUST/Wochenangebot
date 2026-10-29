@@ -136,6 +136,7 @@ hinweise = [
   "Eigene Partnerliste im Modul (Speditionen und Kühlhäuser sind keine Lieferanten der Warenwirtschaft); keine Daten anderer Module. Spätere Verknüpfung mit Kunden-/Lieferanten-Stammdaten der Verwaltung nur über deren Schnittstellen (GR-101).",
   "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel-Liste und der Partnerauszüge über ein Datenpaket (leergut_import) in der Oberfläche.",
   "Kundenkonten aus WinAB (Auftrag des Inhabers 29.10.2026): der Bericht „Lademittelbewegungen Kunden“ (.XLS) wird im Browser gelesen und je Beleg abgeglichen (leergut_winab_import). Sammelrechnungen weglassen (wiederholen die Lieferscheine), Karton ist kein Leergut, Kundenkonten starten am 01.01.2026 bei 0 (WinAB hat keine älteren Stände); Übersicht und Bilanz fassen diese Konten in einer Zeile zusammen.",
+  "Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) per Text oder .eml einlesen (leergut_dachser_import): ein Fall je Sendung, nichts Erfasstes wird überschrieben; REWE-Fälle nur mit H1 laut Leitfaden „Nicht zu beachten“ (wie beim Datenpaket).",
   "Freigegeben mit dem Merge (Auftrag des Inhabers 29.10.2026, „DNS-Eintrag hast du ja schon“): leergut.dashboard-stafl.de mit eigenem Keycloak-Client „leergut“ (Stand 11); / und /admin/ führen zu /module/leergut/. Aktionen leergut_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „Leergut ansehen“ (ohne Standardrollen).",
 ]
 

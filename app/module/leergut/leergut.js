@@ -2,7 +2,8 @@
    Reiter über location.hash („#konten/<partner>“), Hell/Dunkel am Konto (theme.js).
    Ansichten: Übersicht (Fristen, offene Abschreibungen, Leergut bei Kunden mit Abholliste, Salden), Konten (nach Name
    oder Wert; Saldo wie im Palettenkonto der Spedition:
-   gesamt · davon bestätigt · davon offen, Bewegungen mit laufendem Saldo), Abstimmungen, Dachser-Abschreibungen,
+   gesamt · davon bestätigt · davon offen, Bewegungen mit laufendem Saldo), Abstimmungen, Dachser-Abschreibungen (mit
+   „Dachser-Liste einlesen“: Text oder .eml, der Server liest und gleicht ab),
    Bilanz zum Stichtag mit CSV und Inventur, Einstellungen (Partner, Lademittel, WinAB-Kundenbericht, Datenpaket).
    WinAB-Bericht „Lademittelbewegungen Kunden“ (.XLS): liest der Browser mit StockCore (stock-core.js), abgleichen und buchen
    macht der Server; Kundenkonten aus WinAB stehen in Übersicht und Bilanz zusammengefasst in einer Zeile.
@@ -165,6 +166,7 @@
     $('#lg-tabs [data-tab="einstellungen"]').hidden = !darf('verwalten');
     $('#lg-schnell').hidden = !darf('bearbeiten') || !S.d.partner.some((p) => p.aktiv);
     $('#lg-d-neu').hidden = !darf('bearbeiten');
+    $('#lg-d-dachser').hidden = !darf('bearbeiten');
     $('#lg-i-neu').hidden = !darf('bearbeiten');
     renderUebersicht(); renderKontoliste(); renderAbstimmungen(); renderAbschreibungen(); renderInventur();
     if (darf('verwalten')) renderEinstellungen();
@@ -428,6 +430,64 @@
   $('#lg-d-kunden').addEventListener('click', (ev) => { const b = ev.target.closest('[data-kunde]'); if (b) { S.kunde = S.kunde === b.dataset.kunde ? '' : b.dataset.kunde; renderAbschreibungen(); } });
   $('#lg-d-liste').addEventListener('click', (ev) => { const r = ev.target.closest('[data-abschr]'); if (r && darf('bearbeiten')) oeffneAbschreibung(r.dataset.abschr); });
   $('#lg-d-neu').addEventListener('click', () => oeffneAbschreibung(''));
+
+  /* Dachser-Liste einlesen: Text der Mail oder .eml → Vorschau (Server liest und gleicht ab) → übernehmen */
+  const gleicheMengen = (a, b) => { const x = obj(a), y = obj(b); return Object.keys({ ...x, ...y }).every((k) => (x[k] || 0) === (y[k] || 0)); };
+  function dachserZuruecksetzen() { S.dachser = null; $('#dl-uebernehmen').disabled = true; $('#dl-vorschau').innerHTML = ''; $('#dl-meldung').textContent = ''; $('#dl-meldung').className = 'lg-meldung'; }
+  $('#lg-d-dachser').addEventListener('click', () => { $('#dl-text').value = ''; $('#dl-dateiname').textContent = ''; dachserZuruecksetzen(); oeffne($('#dlg-dachser')); $('#dl-text').focus(); });
+  $('#dl-text').addEventListener('input', () => { $('#dl-dateiname').textContent = ''; dachserZuruecksetzen(); });
+  $('#dl-datei').addEventListener('change', async (ev) => {
+    const f = ev.target.files[0]; ev.target.value = '';
+    if (!f) return;
+    dachserZuruecksetzen();
+    if (f.size > 2 * 1024 * 1024) { $('#dl-meldung').textContent = 'Die Datei ist zu groß (höchstens 2 MB).'; return; }
+    const b = new Uint8Array(await f.arrayBuffer());
+    let t;
+    try { t = new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { t = new TextDecoder('windows-1252').decode(b); }
+    $('#dl-text').value = t; $('#dl-dateiname').textContent = f.name;
+    dachserPruefen();
+  });
+  async function dachserPruefen() {
+    const text = $('#dl-text').value, m = $('#dl-meldung');
+    dachserZuruecksetzen();
+    if (!text.trim()) { m.textContent = 'Bitte zuerst den Text der Mail einfügen oder die Mail als Datei wählen.'; return; }
+    $('#dl-pruefen').disabled = true;
+    const r = await api('leergut_dachser_import', { text, vorschau: true });
+    $('#dl-pruefen').disabled = false;
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { m.textContent = fehlerText(r, 'Die Liste konnte nicht geprüft werden'); return; }
+    const d = r.data;
+    if (d.fehler.length) { $('#dl-vorschau').innerHTML = `<p class="lg-meldung">${zahl(d.fehler.length)} unlesbare Zeilen – nichts übernommen:</p><ul class="lg-fehlerliste">${d.fehler.map((x) => `<li>Zeile ${zahl(x.zeile)}: ${esc(x.text)}</li>`).join('')}</ul>`; return; }
+    if (d.text) $('#dl-text').value = d.text;   // gespeicherte Mail (.eml): lesbarer Text statt Mailquelltext
+    const z = d.zahlen, lmName = (id) => esc(kurz(id));
+    const kacheln = [['zeilen', z.zeilen, 'Zeilen in der Liste'], ['sendungen', z.sendungen, 'Sendungen'], ['neu', z.neu, 'Neu'], ['ergaenzt', z.ergaenzt, 'Ergänzt'],
+      ['schon', z.schon, 'Schon erfasst'], ['abweichend', z.abweichend, 'Andere Menge']];
+    const saldoOk = !leerMap(d.saldo) && gleicheMengen(d.summe, d.saldo);
+    $('#dl-vorschau').innerHTML = `<div class="lg-vorschau">${kacheln.map(([k, n, t]) => `<div data-z="${k}"><b>${zahl(n)}</b><span>${t}</span></div>`).join('')}</div>
+      <p class="lg-wsumme">Summe der Liste${d.per ? ' per ' + esc(datum(d.per)) : ''}: ${mengen(d.summe, { vorzeichen: false })}
+        ${leerMap(d.saldo) ? '<span class="lg-chip">ohne Saldo laut Dachser</span>' : saldoOk ? '<span class="lg-chip gruen">stimmt mit dem Saldo laut Dachser überein</span>'
+          : `<span class="lg-chip rot">Saldo laut Dachser: ${esc(Object.entries(d.saldo).map(([k, n]) => kurz(k) + ' ' + zahl(n)).join(' · '))}</span>`}</p>
+      ${z.ignoriert ? `<p class="lg-hinweis">${zahl(z.ignoriert)} ${z.ignoriert === 1 ? 'neuer Fall' : 'neue Fälle'} bei REWE nur mit H1 – laut Leitfaden „Nicht zu beachten“.</p>` : ''}
+      ${d.doppelt.length ? `<p class="lg-meldung">Mehrfach in der Liste – Dachser rechnet sie mehrfach ab, ggf. widersprechen:</p><ul class="lg-fehlerliste">${d.doppelt.map((x) => `<li>Sendung ${esc(x.sendung)} (${esc(x.empfaenger)}): ${lmName(x.lm)}</li>`).join('')}</ul>` : ''}
+      ${d.abweichend.length ? `<p class="lg-meldung">Andere Menge als erfasst – nicht geändert, bitte prüfen:</p><ul class="lg-fehlerliste">${d.abweichend.map((x) => `<li>Sendung ${esc(x.sendung)} (${esc(x.empfaenger)}): erfasst ${lmName(x.lm)} ${zahl(x.erfasst)}, laut Dachser ${zahl(x.dachser)}</li>`).join('')}</ul>` : ''}
+      ${Object.keys(obj(d.unbekannt)).length ? `<p class="lg-meldung">Nicht übernommen, weil das Packmittel im Modul fehlt: ${esc(Object.entries(d.unbekannt).map(([k, n]) => `${k} (${zahl(n)})`).join(', '))}.</p>` : ''}`;
+    if (!z.neu && !z.ergaenzt) { m.className = 'lg-meldung ok'; m.textContent = 'Alles schon erfasst – es gibt nichts Neues.'; return; }
+    S.dachser = d.text || text; $('#dl-uebernehmen').disabled = false;
+  }
+  $('#dl-pruefen').addEventListener('click', dachserPruefen);
+  $('#dl-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!S.dachser) return;
+    const knopf = $('#dl-uebernehmen'), m = $('#dl-meldung');
+    knopf.disabled = true;
+    const r = await api('leergut_dachser_import', { text: S.dachser });
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { knopf.disabled = false; m.className = 'lg-meldung'; m.textContent = fehlerText(r, 'Übernehmen fehlgeschlagen'); return; }
+    const z = r.data.zahlen;
+    $('#dlg-dachser').close();
+    toast(`Dachser-Liste übernommen: ${zahl(z.neu)} neu, ${zahl(z.ergaenzt)} ergänzt`);
+    await neuLaden();
+  });
 
   /* ---------- Bilanz und Inventur ---------- */
   async function ladeBilanz() {

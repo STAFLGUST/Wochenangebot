@@ -15,7 +15,9 @@ nur Ziffern, Vorzeichen, Gutschrift als Abholung, erneuter Bericht unverändert,
 ausgeglichen, nur Zeitraum und Kunden des Berichts; in der Oberfläche eine erfundene .XLS im WinAB-Aufbau: Sammelrechnungen,
 Karton, Offerten und reiner Tausch weggelassen, Kunden zusammengefasst in Übersicht und Bilanz); Leergut bei Kunden (letzte
 Lieferung und Rückgabe aus Buchungen und Bericht, unbekannt bei älteren WinAB-Buchungen, frühere Berichte bleiben gültig,
-Abholliste als CSV mit Rechten, Übersicht nach Wert mit Ampel, Konten nach Wert); Protokoll; Oberfläche (Übersicht,
+Abholliste als CSV mit Rechten, Übersicht nach Wert mit Ampel, Konten nach Wert); Dachser-Liste „Unterkonto-Vorspediteur“
+(Rechte, Fälle je Sendung, REWE nur H1, mehrfach, unbekanntes Packmittel, Summe = Saldo laut Dachser, schon erfasst, ergänzt,
+andere Menge, abgeschlossener Fall, .eml mit quoted-printable/ISO-8859-1, unlesbares Datum; Dialog mit Datei, 390 px); Protokoll; Oberfläche (Übersicht,
 Konto mit Saldo-Karten und Journal, Eingabemasken für Bewegung, Auszug, Abschreibung, Inventur, Partner, Lademittel,
 Import der Datei, nur ansehen; 1280 und 390 px, hell und dunkel, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
@@ -436,12 +438,97 @@ check('Abholliste (CSV): BOM, nur Kunden mit Saldo, nach Wert, Kundennummer, Lie
           f'"Testkunde Nord GmbH (9100003)";"9100003";"Standard-Fleisch";"3";"";"16,50";"15.10.2026";"";"{tage("2026-10-15")}"',
           '"Testkunde Süd (von Hand)";"9100002";"Standard-Fleisch";"-7";"";"-38,50";"02.04.2026";"01.04.2026";""'], zeilen_csv)
 
+# ── Dachser-Liste „Unterkonto-Vorspediteur“ (Mail „Infos von Fa. DACHSER“) ──
+# Erfundene Liste im Aufbau der Dachser-Mail: Seitenkopf mit Anschrift, je Fall drei Zeilen, Saldo „zu Gunsten DA“.
+def dachser_liste(faelle, per='31.10.26', saldo=None, seiten=2):
+    kopf = lambda s: [f'\f      Unterkonto-Vorspediteur          404/09999999      UK                     Seite:   {s}',
+                      f'      per   {per}     Letzter Abschluss: 30.09.2026                          14.11.2026', '',
+                      '                                                       DACHSER SE', '         TESTKUNDE GMBH', '         TESTSTR. 1', '',
+                      '         20000 TESTSTADT', '', '      ' + '-' * 84, '      Auft.Dat  Absender                                                SendungsNr.',
+                      '                Empfänger', '      Zust.Dat  Anz   PM  Grund', '      ' + '-' * 84]
+    z = kopf(1)
+    for i, (auf, nr, name, ort, zug, anz, pm, kz, sendung) in enumerate(faelle):
+        if seiten > 1 and i == len(faelle) // 2:
+            z += kopf(2)
+        z += [f'      {auf:>8}  09999999  TESTKUNDE GMBH        TESTSTADT', f'                {nr}  {name:<20}  {ort}', '',
+              f'      {zug:>8}  {anz:>5} {pm}  {kz}  Abschreibung lt. Empfänger                 {sendung}', '      ' + '-' * 84]
+    if saldo is not None:
+        z += ['', f'      Unterkonto Saldo per {per[:6]}20{per[6:]}             - - -  Einzeldarstellung  - - -',
+              '                                                   Einweg Schrott K-Eigen   Sonst']
+        z += [f'      {pm:<2}   {n:>4}   zu Gunsten DA 404                                           {n:>5}' for pm, n in saldo.items()]
+        z += ['', '      Dieser Saldo wird von uns auf Ihr Packmittelkonto 09999999 umgebucht.']
+    return '\n'.join(z) + '\n'
+
+
+def als_mail(text):
+    """Gespeicherte Mail (.eml) wie vom Dachser-Mailprogramm: quoted-printable, ISO-8859-1, umgebrochene Zeilen."""
+    import quopri
+    rumpf = quopri.encodestring(text.replace('\n', '\r\n').encode('iso-8859-1')).decode('ascii')
+    return ('From: <packmittel@example.invalid>\r\nSubject: Infos von Fa. DACHSER\r\nMIME-Version: 1.0\r\nContent-Type: text/plain;\r\n charset="iso-8859-1"\r\n'
+            'Content-Transfer-Encoding: quoted-printable\r\n\r\n' + rumpf)
+
+
+DF = [('2.10.26', '09900001', 'TESTMARKT NORD GMBH', 'MUSTERSTADT', '3.10.26', 12, 'E2', 'R', '09900000001'),
+      ('2.10.26', '09900001', 'TESTMARKT NORD GMBH', 'MUSTERSTADT', '3.10.26', 2, 'H1', 'R', '09900000001'),
+      ('5.10.26', '09900002', 'REWE TESTMARKT OHG', 'TESTHAUSEN', '6.10.26', 1, 'H1', 'R', '09900000002'),
+      ('6.10.26', '09900003', 'FLEISCHEREI PROBE', 'BEISPIELORT', '7.10.26', 4, 'E2', 'K', '09900000003'),
+      ('6.10.26', '09900003', 'FLEISCHEREI PROBE', 'BEISPIELORT', '7.10.26', 4, 'E2', 'K', '09900000003'),
+      ('8.10.26', '09900004', 'GITTER UND CO', 'ORT', '9.10.26', 2, 'GB', 'R', '09900000004'),
+      ('9.10.26', '09900005', 'BÄCKEREI MÜLLER', 'KÖLN', '10.10.26', 1, 'E2', 'R', '09900000005'),
+      ('7.04.26', '46600001', 'BEISPIEL-SCHLACHTEREI', 'MUSTERDORF', '8.04.26', 72, 'E2', 'R', '04606394990')]
+DL = dachser_liste(DF, saldo={'E2': 93, 'H1': 3, 'GB': 2})
+abschr = lambda: Bb.call('leergut_start')[1]['abschreibungen']
+nach_sendung = lambda: {d['sendung']: d for d in abschr()}
+check('Dachser-Liste: nur ansehen 403, ohne Anmeldung kein Zugang', L.call('leergut_dachser_import', {'text': DL, 'vorschau': True})[0] == 403
+      and N.call('leergut_dachser_import', {'text': DL, 'vorschau': True})[0] in (401, 403, 404))
+check('Dachser-Liste: leerer Text 422, Text ohne Liste 422', Bb.call('leergut_dachser_import', {'text': '  ', 'vorschau': True})[0] == 422
+      and 'keine Dachser-Liste' in Bb.call('leergut_dachser_import', {'text': 'Hallo, anbei die Liste.', 'vorschau': True})[1].get('error', ''))
+n_d = len(abschr())
+st, r = Bb.call('leergut_dachser_import', {'text': DL, 'vorschau': True})
+z = r.get('zahlen', {})
+check('Dachser-Vorschau: Zeilen, Sendungen, neu, schon erfasst, REWE nur H1, mehrfach, unbekanntes Packmittel, Summe = Saldo laut Dachser',
+      st == 200 and r['per'] == '2026-10-31' and r['konto'] == '404/09999999' and z == {'zeilen': 7, 'sendungen': 5, 'neu': 4, 'ergaenzt': 0, 'schon': 1, 'abweichend': 0, 'ignoriert': 1, 'doppelt': 1}
+      and r['summe'] == {'e2': 93, 'h1': 3} and r['saldo'] == {'e2': 93, 'h1': 3} and r['unbekannt'] == {'GB': 1}
+      and r['doppelt'] == [{'sendung': '09900000003', 'empfaenger': 'Fleischerei Probe', 'lm': 'e2'}] and r['text'] is None, r)
+check('Dachser-Vorschau schreibt nichts', len(abschr()) == n_d)
+st, r = Bb.call('leergut_dachser_import', {'text': DL})
+ns = nach_sendung()
+d1, d2, d3, d5 = (ns.get(f'0990000000{i}', {}) for i in (1, 2, 3, 5))
+check('Dachser übernommen: je Sendung ein Fall mit allen Lademitteln, Felder aus der Liste, Herkunft und Verlauf',
+      st == 200 and r['zahlen']['neu'] == 4 and len(abschr()) == n_d + 4 and d1.get('menge') == {'e2': 12, 'h1': 2} and d1['empfaenger'] == 'Testmarkt Nord Gmbh'
+      and d1['empfaengerNr'] == '09900001' and d1['ort'] == 'Musterstadt' and d1['auftrag'] == '2026-10-02' and d1['zugestellt'] == '2026-10-03'
+      and d1['grund'] == 'Abschreibung lt. Empfänger (Kz. R)' and d1['status'] == 'offen' and d1['quelle'] == 'dachser'
+      and 'Dachser-Liste per 31.10.2026' in d1['verlauf'][0]['was'] and d1['erfasst']['von'] == 'Bea Buchen', d1)
+check('Dachser: REWE nur mit H1 → „Nicht zu beachten“, mehrfach genannte Menge addiert, Umlaute', d2.get('status') == 'ignoriert' and 'REWE' in d2.get('notiz', '')
+      and d3.get('menge') == {'e2': 8} and d3['grund'].endswith('(Kz. K)') and d5.get('empfaenger') == 'Bäckerei Müller' and d5['ort'] == 'Köln'
+      and '09900000004' not in ns and ns['04606394990']['menge'] == {'e2': 72, 'h1': 2}, (d2, d3, d5))
+st, r = Bb.call('leergut_dachser_import', {'text': DL, 'vorschau': True})
+check('Dachser: dieselbe Liste noch einmal – alles schon erfasst', st == 200 and r['zahlen']['neu'] == 0 and r['zahlen']['schon'] == 5 and r['zahlen']['ergaenzt'] == 0, r.get('zahlen'))
+st, r = Bb.call('leergut_dachser_import', {'text': als_mail(DL), 'vorschau': True})
+check('Dachser: gespeicherte Mail (.eml, quoted-printable, ISO-8859-1) – lesbarer Text zurück', st == 200 and r['zahlen']['schon'] == 5 and r['zahlen']['neu'] == 0
+      and 'Unterkonto-Vorspediteur' in (r.get('text') or '') and 'BÄCKEREI MÜLLER' in r['text'] and 'Content-Transfer-Encoding' not in r['text'], r.get('zahlen'))
+DL2 = dachser_liste([('6.10.26', '09900003', 'FLEISCHEREI PROBE', 'BEISPIELORT', '7.10.26', 1, 'H1', 'K', '09900000003'),
+                     ('2.10.26', '09900001', 'TESTMARKT NORD GMBH', 'MUSTERSTADT', '3.10.26', 10, 'E2', 'R', '09900000001'),
+                     ('5.10.26', '09900002', 'REWE TESTMARKT OHG', 'TESTHAUSEN', '6.10.26', 3, 'E2', 'R', '09900000002')], per='30.11.26', seiten=1)
+st, r = Bb.call('leergut_dachser_import', {'text': DL2})
+ns = nach_sendung(); neu2 = [d for d in abschr() if d['sendung'] == '09900000002']
+check('Dachser: fehlendes Lademittel eines offenen Falls ergänzt, andere Menge nur gemeldet, abgeschlossener Fall → neuer Fall',
+      st == 200 and r['zahlen'] == {'zeilen': 3, 'sendungen': 3, 'neu': 1, 'ergaenzt': 1, 'schon': 0, 'abweichend': 1, 'ignoriert': 0, 'doppelt': 0}
+      and r['abweichend'] == [{'sendung': '09900000001', 'empfaenger': 'Testmarkt Nord Gmbh', 'lm': 'e2', 'erfasst': 12, 'dachser': 10}]
+      and ns['09900000003']['menge'] == {'e2': 8, 'h1': 1} and 'ergänzt: H1 1' in ns['09900000003']['verlauf'][-1]['was'] and ns['09900000001']['menge'] == {'e2': 12, 'h1': 2}
+      and len(neu2) == 2 and {d['status'] for d in neu2} == {'ignoriert', 'offen'} and [d['menge'] for d in neu2 if d['status'] == 'offen'] == [{'e2': 3}], (r.get('zahlen'), neu2))
+kaputt = DL2.replace('      7.10.26      1 H1', '     31.02.26      1 H1')
+st, r = Bb.call('leergut_dachser_import', {'text': kaputt, 'vorschau': True})
+st2, r2 = Bb.call('leergut_dachser_import', {'text': kaputt})
+check('Dachser: unlesbares Datum → Fehler mit Zeile, Übernehmen 422', st == 200 and len(r['fehler']) == 1 and 'Zustelldatum' in r['fehler'][0]['text'] and st2 == 422, (r, st2))
+
 # ── Protokoll ──
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: Buchung, Storno, Abstimmung, Export, Datenpaket, WinAB', all(t in log for t in ('Leergut: Bewegung gebucht – Test-Spedition Nord', 'Leergut: Bewegung storniert',
       'Leergut: Abstimmung Test-Spedition Nord zum 2026-01-31 gespeichert (Widersprochen)', 'Leergut: Bilanz zum 2026-02-28 als CSV', 'Leergut: Datenpaket übernommen (vorhandene Daten ersetzt)',
       'Leergut: WinAB-Kundenbewegungen 2026-01-01 bis 2026-10-15 abgeglichen – 2 neue Kundenkonten, 4 neue Belege',
-      'Leergut: Leergut bei Kunden als CSV heruntergeladen (3 Kunden)')))
+      'Leergut: Leergut bei Kunden als CSV heruntergeladen (3 Kunden)',
+      'Leergut: Dachser-Liste per 2026-10-31 eingelesen – 4 neue Abschreibungen, 0 ergänzt, 1 schon erfasst, 0 abweichend')))
 check('Protokoll ohne Notizen, Belegnummern und Kundennamen', 'LS-1001' not in log and 'nicht verbucht' not in log and '500001' not in log and 'Testkunde Nord' not in log)
 
 
@@ -569,6 +656,31 @@ with sync_playwright() as p:
     check('Oberfläche: Abschreibung erfasst und ausgeglichen', len(d) == 1 and d[0]['menge'] == {'e2': 5} and d[0]['status'] == 'ausgeglichen' and d[0]['rechnung'] == 'WA-77', d)
     pg.wait_for_function("!(document.querySelector('#lg-d-liste')?.textContent || '').includes('UI-Kunde')")
     check('Abschreibungen: Filter „Offen“ blendet ausgeglichene aus', 'UI-Kunde' not in text(pg, '#lg-d-liste'))
+
+    # Dachser-Liste einlesen: gespeicherte Mail wählen → lesbarer Text, Vorschau, übernehmen
+    eml = os.path.join(tempfile.mkdtemp(), 'Infos von Fa. DACHSER.eml')
+    with open(eml, 'w', encoding='ascii', newline='') as f:
+        f.write(als_mail(dachser_liste([('20.10.26', '09900011', 'UI-MARKT SÜD', 'TESTSTADT', '21.10.26', 6, 'E2', 'R', '09900000011'),
+                                        ('20.10.26', '09900011', 'UI-MARKT SÜD', 'TESTSTADT', '21.10.26', 1, 'H1', 'R', '09900000011'),
+                                        ('22.10.26', '09900012', 'UI-FLEISCHEREI', 'MUSTERHAUSEN', '23.10.26', 3, 'E2', 'E', '09900000012')], saldo={'E2': 9, 'H1': 1})))
+    pg.click('#lg-d-dachser'); pg.wait_for_selector('#dlg-dachser[open]')
+    pg.click('#dl-pruefen')
+    check('Dachser-Dialog: ohne Text Hinweis', 'einfügen' in text(pg, '#dl-meldung') and pg.is_disabled('#dl-uebernehmen'))
+    pg.set_input_files('#dl-datei', eml)
+    pg.wait_for_selector('#dl-vorschau .lg-vorschau')
+    vor = text(pg, '#dl-vorschau')
+    check('Dachser-Dialog: Mail gelesen (lesbarer Text), Vorschau mit neuen Fällen und Saldo-Abgleich',
+          'Unterkonto-Vorspediteur' in pg.input_value('#dl-text') and 'quoted-printable' not in pg.input_value('#dl-text') and 'UI-MARKT SÜD' in pg.input_value('#dl-text')
+          and pg.inner_text('#dl-vorschau [data-z="neu"] b') == '2' and pg.inner_text('#dl-vorschau [data-z="zeilen"] b') == '3'
+          and 'stimmt mit dem Saldo laut Dachser überein' in vor and pg.is_enabled('#dl-uebernehmen'), vor)
+    pg.screenshot(path=os.path.join(SH, 'leergut_dachser_1280.png'))
+    pg.fill('#dl-text', pg.input_value('#dl-text') + ' ')
+    check('Dachser-Dialog: Text geändert → erst wieder prüfen', pg.is_disabled('#dl-uebernehmen') and not text(pg, '#dl-vorschau'))
+    pg.click('#dl-pruefen'); pg.wait_for_selector('#dl-uebernehmen:not([disabled])')
+    pg.click('#dl-uebernehmen'); zu(pg, '#dlg-dachser')
+    pg.wait_for_function("(document.querySelector('#lg-d-liste')?.textContent || '').includes('Ui-Markt Süd')")
+    neu_d = [d for d in V.call('leergut_start')[1]['abschreibungen'] if d['sendung'] in ('09900000011', '09900000012')]
+    check('Oberfläche: Dachser-Liste übernommen (2 Fälle, E2 und H1 in einem Fall)', len(neu_d) == 2 and {tuple(sorted(d['menge'].items())) for d in neu_d} == {(('e2', 6), ('h1', 1)), (('e2', 3),)}, neu_d)
 
     # Bilanz, Inventur, CSV
     pg.click('#lg-tabs [data-tab="bilanz"]'); pg.wait_for_selector('#lg-b-tabelle table')
@@ -698,6 +810,16 @@ with sync_playwright() as p:
     pg.click('#lg-tabs [data-tab="bilanz"]')   # die Bilanz von vorhin zeigt noch die Kunden aus dem API-Teil
     pg.wait_for_function("(document.querySelector('#lg-b-tabelle tr[data-kunden]')?.textContent || '').includes('(3 Konten)')")
     check('Bilanz: Kunden aus WinAB in einer Zeile (CSV bleibt je Konto)', 'Kunden aus WinAB (3 Konten)' in text(pg, '#lg-b-tabelle') and 'Testkunde' not in text(pg, '#lg-b-tabelle'))
+    ctx.close()
+
+    # Buchen am Handy: Abschreibungen mit beiden Knöpfen, Dachser-Dialog
+    ctx, pg = anmelden('bea', 'Buchung-Konto-34', '198.51.100.11', 390, 'light', 844)
+    pg.click('#lg-tabs [data-tab="abschreibungen"]'); pg.wait_for_selector('#lg-d-dachser:not([hidden])')
+    check('390px buchen: Abschreibungen mit „Dachser-Liste einlesen“ ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.click('#lg-d-dachser'); pg.wait_for_selector('#dlg-dachser[open]')
+    pg.fill('#dl-text', DL); pg.click('#dl-pruefen'); pg.wait_for_selector('#dl-vorschau .lg-vorschau')
+    check('390px: Dachser-Dialog mit Vorschau passt in die Breite', pg.evaluate("(() => { const d = document.querySelector('#dlg-dachser'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
+    pg.screenshot(path=os.path.join(SH, 'leergut_dachser_390.png'))
     ctx.close()
 
     # Nur ansehen: Handy und dunkel
