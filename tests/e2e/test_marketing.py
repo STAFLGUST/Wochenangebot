@@ -390,6 +390,9 @@ with sync_playwright() as p:
     pg.click('#mkt-tabs button[data-tab="kalender"]'); pg.wait_for_selector('.mkt-agenda')
     check('390 px: Kalender als Tagesliste, ohne seitliches Scrollen', pg.evaluate("document.documentElement.scrollWidth") <= 390)
     pg.screenshot(path=os.path.join(SH, 'marketing_kalender_390.png'), full_page=True)
+    # Die Tagesliste zeigt nur den laufenden Monat; die Testbeiträge liegen 1–6 Tage nach heute, am Monatsende also im nächsten
+    if pg.locator('.mkt-agenda .mkt-chip').count() == 0:
+        pg.click('[data-kal="vor"]'); pg.wait_for_selector('.mkt-agenda .mkt-chip')
     pg.click('.mkt-agenda .mkt-chip >> nth=0'); pg.wait_for_selector('#dlg-beitrag[open]')
     check('390 px: Beitrag passt in die Breite', pg.evaluate("document.querySelector('#dlg-beitrag').scrollWidth <= document.querySelector('#dlg-beitrag').clientWidth + 1"))
     pg.screenshot(path=os.path.join(SH, 'marketing_beitrag_390.png'), full_page=False)

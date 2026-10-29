@@ -124,8 +124,9 @@ Server aus dem eingespielten (also freigegebenen, CI-geprüften) Commit:
 
 ## Notfall-Rückfall von Hand (`deploy/release-zurueck.sh`)
 
-`sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten Release zurück (`vorher` in
-`daten/deployment.php`); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt.
+`sh /opt/wochenangebot/deploy/release-zurueck.sh` geht auf den Stand vor dem letzten Release zurück (`.release-vorher`
+im Installationsordner, nur root; `daten/deployment.php` ist im Container änderbar und nur Anzeige – fehlt
+`.release-vorher` noch (Releases vor dieser Datei), gilt dessen `vorher` nur, wenn es ein Vorgänger des aktiven Stands ist); Daten bleiben unverändert, der zurückgenommene Stand wird nicht erneut automatisch eingespielt.
 Danach Versionsnummern und Prüfliste des zurückgeholten Stands (`deploy/bereitstellen.py`). Container und Image wie beim
 automatischen Rückfall:
 

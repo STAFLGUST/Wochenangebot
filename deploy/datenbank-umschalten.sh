@@ -35,13 +35,17 @@ if ! python3 deploy/datenbank.py "$AKTION" daten --offline; then
   echo "Die Sicherung von eben liegt in sicherungen/. Anleitung: docs/datenbank.md" >&2
   exit 1
 fi
-chown 33:33 daten/.storage.lock
+# Eigentümer setzen, ohne Verweisen zu folgen: daten/ ist im Container beschreibbar (-h und -type f: nie das Ziel
+# eines dort angelegten Verweises; chmod nur auf echte Ordner/Dateien, die datenbank.py eben angelegt hat)
+chown -h 33:33 daten/.storage.lock
 if [ "$AKTION" = migrate ]; then
-  chown -R 33:33 daten/.sqlite
+  [ -d daten/.sqlite ] && [ ! -L daten/.sqlite ] && [ -f daten/.sqlite/store.sqlite ] && [ ! -L daten/.sqlite/store.sqlite ] \
+    || { echo "Unerwarteter Eintrag in daten/.sqlite – Anwendung bleibt gestoppt, bitte prüfen." >&2; exit 1; }
+  chown -R -h 33:33 daten/.sqlite
   chmod 700 daten/.sqlite
   chmod 600 daten/.sqlite/store.sqlite
 else
-  find daten -name '*.php' -exec chown 33:33 {} +
+  find daten -type f -name '*.php' -exec chown -h 33:33 {} +
 fi
 $DOCKER compose start app
 echo "Speicher umgeschaltet. Anmeldung, Kundenangebot, Entwurf und Bestellwunsch jetzt prüfen."
