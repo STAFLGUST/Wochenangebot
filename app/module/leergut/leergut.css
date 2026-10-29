@@ -279,3 +279,4 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-mengentabelle.lg-karten td.lg-zahl{text-align:right!important}
   .lg-mengentabelle.lg-karten td[data-label]::before{text-align:left}
 }
+.lg a.btn{text-decoration:none}
