@@ -157,6 +157,7 @@ enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 5
 | Ort | Inhalt |
 | --- | --- |
 | `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus (nur root) |
+| `.release-vorher`, `.release-abgelehnt` | Stand vor dem letzten Release (Notfall-Rückfall) bzw. abgelehnter Release (nur root) |
 | `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Status von Sicherung und Deployment, `mail-schluessel.php` (nicht in Sicherungen) |
 | `daten-anmeldung/` | Realm-Import, Tresor `vault/` (Postfach-Passwort für Keycloak, nicht gesichert), während der Einrichtung `einrichtung.env` |
 | `daten-karte/` | Detailkarte `karte.pmtiles` (OpenStreetMap, Deutschland bis Zoomstufe 15, ca. 5–6 GB) und `stand.txt`, Adressverzeichnis `adressen.sqlite` (geschätzt um 1 GB) und `adressen-stand.txt`; im Anwendungs-Container nur lesend unter `/var/www/karte`, nicht gesichert (jederzeit neu ladbar) |
@@ -171,7 +172,7 @@ enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 5
 | `aktualisieren.sh` | Bereitstellung sicherstellen, im Release-Modus `freigabe-einspielen.sh` | systemd-Timer |
 | `release-modus-einrichten.sh` | Release-Modus einschalten (`.release-modus`, Token prüfen) | Inhaber, einmalig |
 | `freigabe-einspielen.sh` | freigegebenes Release einspielen, Healthcheck, automatischer Rückfall | `aktualisieren.sh` |
-| `bereitstellen.py` | Versionsnummern und Prüfliste aus dem aktiven Commit; `--pruefen` nur prüfen | Einspiel- und Rückfallskripte, `testumgebung.sh`, `run_e2e.py` |
+| `bereitstellen.py` | Versionsnummern und Prüfliste aus dem aktiven Commit; `--pruefen` nur prüfen; `--verzeichnis` für einen Programmordner | Einspiel- und Rückfallskripte, `testumgebung.sh` (Werkzeug des Echtbetriebs, als `www-data`), `run_e2e.py` |
 | `release-zurueck.sh` | Notfall-Rückfall auf den Stand vor dem letzten Release | Inhaber |
 | `sichern.sh` | Datensicherung mit Probeentpacken, inkl. Keycloak-Datenbank; `--jetzt` sofort | Timer `wochenangebot-sicherung` bzw. `aktualisieren.sh` (1×/Tag), Release |
 | `sicherung-einrichten.sh` | eigener Sicherungs-Timer (täglich 02:30) | Inhaber, einmalig |
@@ -191,6 +192,11 @@ enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 5
 | `anmeldung/konten.sh` | Keycloak-Konten und Realm verwalten (siehe unten) | Inhaber |
 | `anmeldung/ruecksicherung-probe.sh` | Rücksicherung der Keycloak-Datenbank in eine Probedatenbank üben | Inhaber |
 | `anmeldung/pruefen.sh`, `image/pruefen.sh` | Betriebskonfiguration bzw. Image mit Docker prüfen | CI („Anwendungs-Image prüfen“) |
+
+`daten/` ist im App-Container beschreibbar. Skripte, die als root laufen, schreiben dort deshalb nie direkt: Statusdateien
+(`sicherung.php`, `deployment.php`) entstehen im Installationsordner und ersetzen den Eintrag nur per Umbenennen, `chown`
+nur mit `-h` bzw. für echte Dateien (`find -type f`); Angaben, denen root folgt (vorheriger Stand für den Rückfall), stehen
+in root-Dateien außerhalb (`.release-vorher`). Code eines Testzweigs läuft nie auf dem Server (`testumgebung.sh`).
 
 Die PHP-Notfallwerkzeuge laufen im App-Container als `www-data` (`docker compose exec -T -u www-data app php …`), damit
 Datenbank-Journal und Sperrdateien nicht root gehören.
