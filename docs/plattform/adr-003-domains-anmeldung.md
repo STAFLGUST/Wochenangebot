@@ -100,6 +100,8 @@ bewegliche Teile) und Ory Hydra (Anmeldung und Passkey-Prüfung blieben Eigenbau
 - Nur OIDC; SAML, dynamische Client-Registrierung, Token-Austausch, LDAP und Selbstregistrierung aus.
 - Verwaltungsoberfläche auf eigenem Host (`hostname-admin`) **nicht öffentlich** (nur über SSH-Tunnel oder freigegebene IP);
   Caddy liefert auf `login.dashboard-stafl.de` nur `/realms/…` und `/resources/…` aus, `/admin` nie.
+- Vor jeder Seite der Anmeldung prüft die Anwendung Firewall-Sperren, Ländersperre und IP-Freigabe des Eingabebereichs
+  (Caddy `forward_auth`, Aktion `anmeldung_pruefen`, seit 29.10.2026) – gesperrte Adressen sehen Keycloak gar nicht.
 - Weitergeleitete Kopfzeilen (`X-Forwarded-*`) setzt nur Caddy; Keycloak vertraut nur dem Proxy.
 - Clients: vertraulich, PKCE Pflicht, exakte Weiterleitungsadressen, keine Wildcards, kurze Token-Laufzeiten.
 - Brute-Force-Schutz an, Passwort-Hash nach aktueller Empfehlung, Passkey oder zweiter Faktor Pflicht.

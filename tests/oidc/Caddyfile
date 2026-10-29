@@ -18,9 +18,33 @@ login.stafl.test {
 	tls internal
 	@anmeldung path /realms/mitarbeiter/* /resources/*
 	handle @anmeldung {
+		# Vor jeder Seite der Anmeldung: Firewall-Sperren, Ländersperre und IP-Freigabe des Eingabebereichs – die Anwendung prüft
+		# wie bei jeder Mitarbeiter-Aktion (Aktion anmeldung_pruefen, Einstellungen unter Sicherheit). Nicht geprüft: Dateien der
+		# Anmeldeseite und die Abrufe der Anwendung selbst (Metadaten, Schlüssel, Token – vom Server, nicht vom Browser).
+		# Cookies und Herkunftsangaben des Browsers gehen nicht an die Anwendung; Keycloak bekommt die Anfrage unverändert.
+		@seite not path /resources/* /realms/mitarbeiter/.well-known/* /realms/mitarbeiter/protocol/openid-connect/token /realms/mitarbeiter/protocol/openid-connect/token/introspect /realms/mitarbeiter/protocol/openid-connect/certs /realms/mitarbeiter/protocol/openid-connect/userinfo /realms/mitarbeiter/protocol/openid-connect/revoke
+		forward_auth @seite 127.0.0.1:{$APACHE_PORT} {
+			uri /api/index.php?action=anmeldung_pruefen
+			header_up -Cookie
+			header_up -Authorization
+			header_up -Origin
+			header_up -Sec-Fetch-*
+			@gesperrt status 403
+			handle_response @gesperrt {
+				respond "Die Anmeldung ist von hier aus nicht möglich (Länder- oder Adresssperre)." 403
+			}
+			@fehler status 4xx 5xx
+			handle_response @fehler {
+				respond "Die Anmeldung ist gerade nicht erreichbar. Bitte später erneut versuchen." 503
+			}
+		}
 		reverse_proxy 127.0.0.1:{$KC_PORT}
 	}
 	respond 404
+	# Anwendung oder Keycloak nicht erreichbar (z. B. kurz während eines Releases)
+	handle_errors 502 503 504 {
+		respond "Die Anmeldung ist gerade nicht erreichbar. Bitte später erneut versuchen." 503
+	}
 }
 
 # Anwendungen: jede auf eigenem Host, eigene Sitzung (GR-108)

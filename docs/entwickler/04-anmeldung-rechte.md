@@ -71,6 +71,26 @@ Apache verlangt auf jedem Mitarbeiter-Host `Require valid-user`; unter `/api/` m
 Weiterleitung. Ohne Anmeldung erreicht eine API-Anfrage PHP also gar nicht. Frei sind nur
 `/dashboard/abgemeldet.html`, `/dashboard/dashboard.css` und `/assets/`.
 
+### Prüfung vor der Anmeldeseite
+
+Firewall-Sperren, Ländersperre und IP-Freigabe des Eingabebereichs gelten schon vor Keycloak: Caddy fragt vor jeder Seite
+von `login.dashboard-stafl.de` die Anwendung (`forward_auth` im `Caddyfile`, Aktion `anmeldung_pruefen`). Die Anfrage geht
+an einen eigenen Host der Anwendung (`login.dashboard-stafl.de` in `apache-oidc.conf`: `WA_OIDC=1`,
+`WA_OBERFLAECHE=plattform.anmeldung`, ohne OIDC, dort nur `/api/index.php`). Der API-Einstieg prüft wie bei jeder
+Mitarbeiter-Aktion (4.3, Schritt 5); die Aktion selbst bestätigt nur (`wartung_frei`, damit sich Administratoren auch in
+einer Wartung anmelden können). Gesperrt → Caddy antwortet 403 mit Hinweis, Anwendung nicht erreichbar → 503 – Keycloak
+bekommt die Anfrage dann nicht.
+
+- Nicht geprüft: Dateien der Anmeldeseite (`/resources/`) und die Abrufe der Anwendung selbst (Metadaten, Schlüssel, Token,
+  Benutzerinfo – vom Server, nicht vom Browser); die Liste steht im `Caddyfile` und in `tests/deploy/test_dashboard_domains.py`.
+- An die Anwendung gehen weder Cookies noch `Authorization`, `Origin` oder `Sec-Fetch-*` des Browsers (`header_up`);
+  Keycloak bekommt die ursprüngliche Anfrage unverändert.
+- Anders als in der Anwendung gibt es vor Keycloak keine Ausnahme für angemeldete Mitarbeiter (`fw_mitarbeiter`): eine von
+  der Firewall gesperrte Adresse erreicht die Anmeldung nicht. Büroadressen deshalb unter „Nie sperren“ eintragen.
+- Ausgesperrt (IP-Freigabe, Ländersperre): `sh deploy/ip-freigabe-aus.sh` (Server).
+- Tests: Gruppe `anmeldeseite` (Prüfungen im Einzelnen), `tests/oidc/` (Weg über Caddy und Keycloak),
+  `deploy/anmeldung/pruefen.sh` (Host in Apache), `tests/deploy/test_dashboard_domains.py` (Caddy-Block).
+
 ```mermaid
 sequenceDiagram
   participant B as Browser
@@ -203,7 +223,7 @@ Reihenfolge in `app/api/index.php` (Eigenschaften der Aktion aus `lib/aktionen-l
    genau `Schema://Host` sein. Ausnahme nur `fremde_herkunft` (heute `abmelden1`, RFC 8058). Abweisungen zählen nicht
    für die Firewall.
 2. `host_pruefen()` (GR-109, nur auf Keycloak-Hosts): Aktionen einer Oberfläche mit eigener Seite (heute `hr.intern`,
-   `crm.intern`, `marketing.intern`) gibt es nur auf ihrem Host; auf einem solchen Host gibt es sonst nur Plattform-Aktionen mit
+   `crm.intern`, `marketing.intern`, `plattform.anmeldung`) gibt es nur auf ihrem Host; auf einem solchen Host gibt es sonst nur Plattform-Aktionen mit
    `wartung_frei` (Status, Abmelden, Modulübersicht). Sonst 404. Ebenso auf dem Dashboard-Host (`dashboard.start`,
    `host_nur_grundaktionen`): dort nur diese Grundaktionen. Angebot, Verwaltung und Bestand teilen sich die Aktionen von
    `angebot.eingabe`.

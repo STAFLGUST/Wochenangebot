@@ -21,6 +21,14 @@ switch ($action) {
                      'umgezogen' => eigene_anmeldung_stillgelegt() ? eingabe_adresse() : null]);
         }
 
+        /* Prüfung vor der Anmeldeseite (Caddy forward_auth vor Keycloak, Host login.dashboard-stafl.de): Bis hierher hat der
+           API-Einstieg Firewall-Sperren, Ländersperre und IP-Freigabe des Eingabebereichs geprüft (403) – ist die Anfrage
+           angekommen, darf die Seite der Anmeldung angezeigt werden. Keine Sitzung, keine Daten, nichts gespeichert. */
+        case 'anmeldung_pruefen': {
+            header('Cache-Control: no-store');
+            respond(['ok' => true]);
+        }
+
         case 'wartung_save': {
             $me = require_admin_confirmation('wartung_save');
             $b = body();

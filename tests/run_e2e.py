@@ -113,6 +113,8 @@ SUITES['rollen'] = (8790, 'data-seed', True)   # Rollen und Rechte, Modulzugang 
 SUITES['rollen_host'] = (8790, 'data-seed', True, {'WA_OBERFLAECHE': 'bestand.intern'})   # Modulzugang je Host (wie bestand.dashboard-stafl.de)
 SUITES['einheit'] = (8790, 'data-seed', True)   # einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen
 SUITES['stilllegung'] = (8790, 'data-seed', True, {'WA_EIGENE_ANMELDUNG': 'aus'})   # alter Eingabebereich angebot-stafl.de/admin/ stillgelegt
+# Host der Anmeldeseite in der Anwendung (wie login.dashboard-stafl.de in apache-oidc.conf): Prüfung vor Keycloak (Caddy forward_auth)
+SUITES['anmeldeseite'] = (8790, 'data-seed', True, {'WA_OIDC': '1', 'WA_OIDC_ISSUER': 'https://login.example/realms/mitarbeiter', 'WA_OBERFLAECHE': 'plattform.anmeldung', 'WA_EIGENE_ANMELDUNG': 'aus'})
 # Adressverzeichnis der CRM-Karte (lib/adressen.php) aus erfundenen Testadressen, vor dem Lauf erzeugt (adressen_test)
 ADRESSEN_TEST = os.path.join(WORK, 'adressen-test.sqlite')
 SUITES['crm'] = (8790, 'data-seed', True, {'WA_ADRESSEN': ADRESSEN_TEST})   # CRM · Vertrieb (app/module/crm/, Oberfläche crm.intern)
@@ -143,6 +145,7 @@ GEWICHT = {
     'hr': 60,   # gemessen lokal (Oktober 2026), noch ohne CI-Median
     'hr_uebersicht': 15,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'stilllegung': 8,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'anmeldeseite': 5,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'crm': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'sicherheit_modul': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'notfall': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median

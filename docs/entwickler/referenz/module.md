@@ -163,7 +163,7 @@ Agent: `mobile` · hängt ab von `angebot`, `plattform` · Testgruppen: `app_api
 
 Anmeldung, Sitzungen, Rechte, Sicherheit, Speicherschicht, E-Mail, Protokoll, Betrieb, CI und Regelwerk
 
-Agent: `plattform` · Testgruppen: `einheit`, `rollen`, `rollen_host`, `stilllegung`, `users`, `nutzer_anlegen`, `auth_hardening`, `security`, `passkeys`, `geraete`, `passwortpruefung`, `admin_confirmation`, `admin_confirmation_ui`, `bestaetigung`, `geo`, `geo_ip`, `schutz`, `sicherheit_it`, `sicherheit_freigaben`, `sicherheit_druck`, `integritaet`, `storage`, `benachrichtigung`, `rechte`, `testumgebung`, `app_api`, `sitzung_cookie`, `herkunft`, `modulverwaltung`, `oidc_kern`, `oidc_dashboard`, `anmeldebremse`, `aktionsregister`, `module_status`, `modul_wartung`, `protokoll`
+Agent: `plattform` · Testgruppen: `einheit`, `rollen`, `rollen_host`, `stilllegung`, `anmeldeseite`, `users`, `nutzer_anlegen`, `auth_hardening`, `security`, `passkeys`, `geraete`, `passwortpruefung`, `admin_confirmation`, `admin_confirmation_ui`, `bestaetigung`, `geo`, `geo_ip`, `schutz`, `sicherheit_it`, `sicherheit_freigaben`, `sicherheit_druck`, `integritaet`, `storage`, `benachrichtigung`, `rechte`, `testumgebung`, `app_api`, `sitzung_cookie`, `herkunft`, `modulverwaltung`, `oidc_kern`, `oidc_dashboard`, `anmeldebremse`, `aktionsregister`, `module_status`, `modul_wartung`, `protokoll`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

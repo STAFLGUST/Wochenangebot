@@ -48,6 +48,8 @@ for a, b in (('crm_start', None), ('crm_kunde_save', {'key': 'kx', 'felder': {'s
 for a, b in (('marketing_start', None), ('marketing_beitrag_save', {'felder': {'titel': 'x'}}), ('marketing_export', {})):
     code, r = P.call(a, b)
     check(f'Marketing-Aktion auf fremdem Host: {a} → 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
+code, r = P.call('anmeldung_pruefen')
+check('Prüfung vor der Anmeldeseite nur auf deren Host: hier 404', code == 404 and 'Adresse' in r.get('error', ''), (code, r))
 check('Aktionen des Eingabebereichs hier weiter wie bisher (status 200, users 401)', P.call('status')[0] == 200 and P.call('users')[0] == 401)
 F2 = Client('198.51.100.32')
 F2.headers = {'WA_OBERFLAECHE': 'hr.intern', 'WA-OBERFLAECHE': 'hr.intern'}
