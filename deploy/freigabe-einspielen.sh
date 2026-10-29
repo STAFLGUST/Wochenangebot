@@ -53,8 +53,13 @@ GUARD='<?php http_response_code(404); exit; ?>'
 api() { curl -fsS -m 20 -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API/repos/$REPO/$1"; }
 melden() { [ -n "$HC_URL" ] || return 0; if [ "$1" = ok ]; then curl -fsS -m 10 --retry 3 "$HC_URL" >/dev/null 2>&1 || true; else curl -fsS -m 10 --retry 3 "$HC_URL/fail" >/dev/null 2>&1 || true; fi; }
 status() { # ok sha vorher lauf meldung
-  printf '%s\n{"t":"%s","ok":%s,"sha":"%s","vorher":"%s","lauf":"%s","meldung":"%s"}' "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" > "$STATUS.tmp"
-  chown 33:33 "$STATUS.tmp" 2>/dev/null || true; chmod 644 "$STATUS.tmp"; mv "$STATUS.tmp" "$STATUS"
+  # Vorheriger Stand für den Notfall-Rückfall (release-zurueck.sh) nur in einer root-Datei außerhalb von daten/:
+  # daten/deployment.php kann der Container ändern und ist nur Anzeige
+  printf '%s\n' "$3" > "$BASIS/.release-vorher.tmp" && mv -f "$BASIS/.release-vorher.tmp" "$BASIS/.release-vorher"
+  # daten/ ist im Container beschreibbar: Datei außerhalb anlegen und nur per Umbenennen ersetzen (folgt keinem Verweis)
+  ST_TMP=$(mktemp "$BASIS/.status.XXXXXX") || return 0
+  printf '%s\n{"t":"%s","ok":%s,"sha":"%s","vorher":"%s","lauf":"%s","meldung":"%s"}' "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" > "$ST_TMP"
+  chown 33:33 "$ST_TMP" 2>/dev/null || true; chmod 644 "$ST_TMP"; mv -fT "$ST_TMP" "$STATUS" || rm -f "$ST_TMP"
 }
 angebot_ok() { # Angebots-API antwortet: öffentlich (200, ok:true), mit der Aufforderung zur Anmeldung, wenn das
   # Wochenangebot nur für Kunden sichtbar ist (401), oder mit dem Hinweis auf den Wartungsmodus (503, wartung:true)

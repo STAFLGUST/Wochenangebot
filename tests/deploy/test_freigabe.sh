@@ -78,6 +78,7 @@ lauf; ok "kein Release: nichts passiert" '[ "$(kopf)" = "$A_SHA" ]'
 
 printf '{"release":"%s","ci_ok":["%s"]}' "$G_SHA" "$G_SHA" > "$T/state.json"
 lauf; ok "freigegebener Commit geht live" '[ "$(kopf)" = "$G_SHA" ] && [ "$(st ok)" = True ]'
+ok "vorheriger Stand für den Notfall-Rückfall in .release-vorher (root, außerhalb von daten/)" '[ "$(cat "$B/.release-vorher")" = "$A_SHA" ] && [ "$(st vorher)" = "$A_SHA" ] && [ -z "$(ls -A "$B" | grep "^\.status\.")" ]'
 ok "nach erfolgreichem Release: nur hängende Images aufgeräumt" 'grep -qx "docker image prune -f" "$T/out.txt" && ! grep -qE "^docker (system|volume|container)|prune .*(-a|--all|--volumes|--filter)" "$T/out.txt"'
 ok "vor dem Release gesichert" '[ -n "$(ls "$B"/sicherungen/daten-*.tar.gz 2>/dev/null)" ]'
 lauf; ok "erneuter Lauf: keine Änderung" '[ "$(kopf)" = "$G_SHA" ]'
@@ -105,8 +106,14 @@ ok "Notfall-Rückfall nach automatischem Rückfall: nie auf den abgelehnten Rele
 git -C "$B" reset -q --hard "$G_SHA"   # Ausgangslage der folgenden Prüfungen unabhängig vom Ergebnis oben
 
 rm -f "$B/.release-abgelehnt"
+# daten/ ist im Container beschreibbar: dort angelegte Verweise dürfen den Status (root) nie auf andere Dateien umlenken
+echo ORIGINAL > "$T/opfer"; chmod 600 "$T/opfer"; rm -f "$B/daten/deployment.php"
+ln -s "$T/opfer" "$B/daten/deployment.php"; ln -s "$T/opfer2" "$B/daten/deployment.php.tmp"
 printf '{"release":"%s","ci_ok":["%s"]}' "$X_SHA" "$G_SHA" > "$T/state.json"
 lauf || true; ok "Release ohne erfolgreiche CI abgelehnt" '[ "$(kopf)" = "$G_SHA" ] && grep -q "ohne erfolgreiche CI" "$T/out.txt"'
+ok "Status folgt keinem Verweis in daten/ (Ziel unverändert, Verweis ersetzt)" '[ "$(cat "$T/opfer")" = ORIGINAL ] && [ "$(stat -c %a "$T/opfer")" = 600 ] && [ ! -e "$T/opfer2" ] \
+  && [ ! -L "$B/daten/deployment.php" ] && grep -q "ohne erfolgreiche CI" "$B/daten/deployment.php"'
+rm -f "$B/daten/deployment.php.tmp"
 
 printf '{"release":"%s","ci_ok":["%s"]}' "$N_SHA" "$N_SHA" > "$T/state.json"
 lauf || true; ok "Commit außerhalb von main abgelehnt" '[ "$(kopf)" = "$G_SHA" ] && grep -q "nicht auf main" "$T/out.txt"'
@@ -224,6 +231,7 @@ ok "Image und Ergänzungsdatei geändert: gebaut, alle Container neu erstellt" '
 zurueck_lage() { # aktiv vorher: Lage wie nach einem erfolgreichen Release von <vorher> auf <aktiv>
   git -C "$B" reset -q --hard "$1"
   printf '%s\n{"ok":true,"sha":"%s","vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$1" "$2" > "$B/daten/deployment.php"
+  printf '%s\n' "$2" > "$B/.release-vorher"
   rm -f "$B/.release-abgelehnt"
 }
 ZC_SHA=$(commit rueck-ergaenzung x "echo '# rueck' >> '$T/src/deploy/anmeldung/docker-compose.anmeldung.yml'")
@@ -233,6 +241,13 @@ zurueck_lage "$ZC_SHA" "$E_SHA"; zurueck || true
 ok "Notfall-Rückfall, Ergänzungsdatei unterscheidet sich: alle Container neu erstellt" '[ "$(kopf)" = "$E_SHA" ] && grep -qx "compose up -d --force-recreate" "$T/out.txt" \
   && ! grep -qE "^(docker|compose build)" "$T/out.txt" && [ "$(cat "$B/.release-abgelehnt")" = "$ZC_SHA" ]'
 zurueck || true; ok "Notfall-Rückfall erneut: nichts mehr zu tun" '[ "$(kopf)" = "$E_SHA" ] && grep -q "bereits aktiv" "$T/out.txt"'
+# Ziel des Notfall-Rückfalls nur aus .release-vorher – daten/deployment.php kann der Container ändern
+zurueck_lage "$ZC_SHA" "$E_SHA"; printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$X_SHA" > "$B/daten/deployment.php"; zurueck || true
+ok "Notfall-Rückfall: Ziel aus .release-vorher, verändertes daten/deployment.php ohne Wirkung" '[ "$(kopf)" = "$E_SHA" ]'
+zurueck_lage "$ZC_SHA" "$E_SHA"; rm -f "$B/.release-vorher"; printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$N_SHA" > "$B/daten/deployment.php"; RC=0; zurueck || RC=$?
+ok "Übergang ohne .release-vorher: Stand aus daten/deployment.php nur, wenn Vorgänger des aktiven Stands" '[ "$RC" != 0 ] && [ "$(kopf)" = "$ZC_SHA" ] && grep -q "kein Vorgänger" "$T/out.txt"'
+zurueck_lage "$ZC_SHA" "$E_SHA"; rm -f "$B/.release-vorher"; zurueck || true
+ok "Übergang ohne .release-vorher: Vorgänger aus daten/deployment.php mit Hinweis" '[ "$(kopf)" = "$E_SHA" ] && grep -q ".release-vorher fehlt" "$T/out.txt"'
 zurueck_lage "$ZI_SHA" "$ZC_SHA"; zurueck || true
 ok "Notfall-Rückfall, Image unterscheidet sich: gemerktes Image wieder aktiv, nur die App neu erstellt" '[ "$(kopf)" = "$ZC_SHA" ] \
   && grep -qx "docker tag stafl-app:release-vorher stafl-app:lokal" "$T/out.txt" && grep -qx "compose up -d --force-recreate app" "$T/out.txt" \
@@ -305,6 +320,7 @@ printf '{"release":"%s","ci_ok":["%s"]}' "$L_SHA" "$L_SHA" > "$T/state.json"
 lauf || true
 ok "SQLite: inkompatiblen Release vor Codewechsel abweisen" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
 printf '%s\n{"vorher":"%s"}' '<?php http_response_code(404); exit; ?>' "$L_SHA" > "$B/daten/deployment.php"
+printf '%s\n' "$L_SHA" > "$B/.release-vorher"
 sh "$B/deploy/release-zurueck.sh" > "$T/out.txt" 2>&1 || true
 ok "SQLite: auch manueller Code-Rückfall ist gesperrt" '[ "$(kopf)" = "$H_SHA" ] && grep -q "SQLite aktiv" "$T/out.txt"'
 

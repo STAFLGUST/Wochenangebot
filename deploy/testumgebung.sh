@@ -38,6 +38,21 @@ daten_neu() {
   chown -R 33:33 "$ZIEL/daten" 2>/dev/null || true   # www-data im Container
 }
 
+# Versionsnummern und Prüfliste für den Programmordner des eingespielten Zweigs. Nie Code des Zweigs auf dem Server
+# ausführen: Ein Zweig ist nicht freigegeben und liefe hier neben dem Echtbetrieb (.env, Daten, Docker). Deshalb
+# bearbeitet das Werkzeug des Echtbetriebs (freigegebener Stand) nur die Dateien unter src/app – als root nur mit den
+# Rechten von www-data (uid 33), damit Verweise im Zweig auf Dateien außerhalb nichts überschreiben können.
+bereitstellen_test() {
+  [ -f "$PROD/deploy/bereitstellen.py" ] && [ -d "$ZIEL/src/app" ] || return 1
+  if [ "$(id -u)" != 0 ]; then
+    python3 -I "$PROD/deploy/bereitstellen.py" --verzeichnis "$ZIEL/src/app"
+    return
+  fi
+  command -v setpriv >/dev/null || { echo "Hinweis: setpriv fehlt – Bereitstellung übersprungen (läuft nie als root)"; return 1; }
+  chown -R -h 33:33 "$ZIEL/src/app"   # -h: nur die Verweise selbst, nie ihr Ziel
+  setpriv --reuid=33 --regid=33 --clear-groups python3 -I "$PROD/deploy/bereitstellen.py" --verzeichnis "$ZIEL/src/app"
+}
+
 passwort_setzen() {
   printf 'Benutzername für die Testumgebung [test]: '
   read -r NUTZER
@@ -84,10 +99,8 @@ case "${1:-}" in
     # Nur Zweige des eigenen Repositorys (keine fremden Forks)
     git -C "$ZIEL/src" fetch -q origin "+refs/heads/$ZWEIG:refs/remotes/origin/$ZWEIG" || fehler "Zweig '$ZWEIG' nicht gefunden."
     git -C "$ZIEL/src" checkout -q --detach "origin/$ZWEIG"
-    # Versionsnummern und Prüfliste aus dem eingespielten Stand (wie im Echtbetrieb; ältere Stände bringen beides mit)
-    if [ -f "$ZIEL/src/deploy/bereitstellen.py" ]; then
-      python3 "$ZIEL/src/deploy/bereitstellen.py" || echo "Hinweis: Bereitstellung unvollständig (Versionsnummern/Prüfliste)"
-    fi
+    # Versionsnummern und Prüfliste: Werkzeug des Echtbetriebs, nie das des Zweigs (bereitstellen_test)
+    bereitstellen_test || echo "Hinweis: Bereitstellung unvollständig (Versionsnummern/Prüfliste)"
     edge_pruefen
     vorlagen_kopieren
     dc up -d --force-recreate   # übernimmt auch geänderte Netz-/Umgebungseinstellungen
