@@ -379,6 +379,47 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-dp-fuss{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--qm-line);padding-top:12px}
 .qm-dp-schliessen{display:none}
 
+/* Dokumentenablage: Dateiliste, Feld zum Ziehen und Ablegen, Fortschritt */
+.qm-ablage{display:flex;flex-direction:column;gap:8px;min-width:0}
+.qm-ablage>h3,.qm-ablage-titel{display:flex;align-items:center;gap:6px}
+.qm-ablage-titel{font-size:12.5px}
+.qm-ablage>h3 .i,.qm-ablage-titel .i{width:15px;height:15px;color:var(--qm-muted)}
+.qm-dateien{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--qm-line);border-radius:12px;background:var(--qm-card);overflow:hidden}
+.qm-datei{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:0 6px;padding:7px 6px 7px 10px;border-bottom:1px solid var(--qm-line)}
+.qm-datei:last-child{border-bottom:0}
+.qm-datei-name{display:flex;align-items:center;gap:7px;min-width:0;padding:2px 0;border:0;background:none;color:var(--qm-blau);font:inherit;font-size:13px;font-weight:650;text-align:left;cursor:pointer}
+.qm-datei-name .i{width:16px;height:16px}
+.qm-datei-name span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qm-datei-name:hover span{text-decoration:underline}
+.qm-dateien .qm-datei>.qm-sub{grid-column:1;margin:0;padding-left:23px}
+.qm-datei-weg{grid-column:2;grid-row:1/3;width:32px;height:32px;border:0;border-radius:50%;background:transparent;color:var(--qm-muted);font-size:19px;line-height:1;cursor:pointer}
+.qm-datei-weg:hover{background:var(--qm-rot-soft);color:var(--qm-rot)}
+.qm-drop{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1.5px dashed var(--qm-border);border-radius:14px;color:var(--qm-muted);font-size:12px;cursor:pointer;transition:border-color .15s,background-color .15s}
+.qm-drop>.i{width:24px;height:24px;color:var(--qm-green)}
+.qm-drop>span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.qm-drop b{color:var(--qm-text);font-size:13px}
+.qm-drop u{color:var(--qm-blau);text-underline-offset:2px}
+.qm-drop small{font-size:inherit}
+.qm-drop:hover,.qm-zieht .qm-drop{border-color:var(--qm-green);background:var(--qm-green-soft)}
+.qm-drop.drueber{border-style:solid;border-color:var(--qm-green);background:var(--qm-green-soft);box-shadow:0 0 0 3px var(--qm-green-soft)}
+.qm-drop.klein{gap:8px;padding:6px 10px;border-radius:10px}
+.qm-drop.klein>.i{width:16px;height:16px}
+.qm-drop.klein>span{flex-direction:row;flex-wrap:wrap;gap:0 6px}
+.qm-drop.klein b{font-size:12px}
+.qm-laden{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.qm-laden li{display:grid;grid-template-columns:minmax(0,1fr) 84px 64px;gap:8px;align-items:center}
+.qm-laden span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qm-laden progress{width:100%;height:6px;accent-color:var(--qm-green)}
+.qm-laden small{color:var(--qm-muted);text-align:right}
+.qm-laden li.fertig small{color:var(--qm-green);font-weight:650}
+.qm-laden li.fehler{grid-template-columns:minmax(0,1fr);gap:1px;padding:6px 9px;border-radius:10px;background:var(--qm-rot-soft)}
+.qm-laden li.fehler progress{display:none}
+.qm-laden li.fehler small{color:var(--qm-rot);text-align:left}
+.qm-entfernt summary{font-size:11.5px}
+.qm-version .qm-version-dateien{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;margin-top:2px}
+.qm-anz{display:inline-flex;align-items:center;gap:2px;vertical-align:-2px}
+.qm-anz .i{width:13px;height:13px}
+
 /* Handbuch: Kopf mit Ziel */
 .qm-hb-kopf{flex-wrap:wrap}
 .qm-hb-titel{display:flex;flex-direction:column;gap:2px}
@@ -478,6 +519,7 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
   .qm-schritte{grid-template-columns:1fr}
   .qm-version{grid-template-columns:34px 80px minmax(0,1fr)}
   .qm-version .qm-chip{grid-column:1/-1;justify-self:start}
+  .qm-laden li{grid-template-columns:minmax(0,1fr) 64px 44px}
   .qm-kapitelstand{grid-template-columns:1fr}
   .qm-m-kopf .qm-filterzeile{grid-template-columns:1fr}
   .qm-aufgabe{grid-template-columns:auto minmax(0,1fr)}

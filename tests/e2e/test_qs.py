@@ -647,8 +647,8 @@ with sync_playwright() as p:
     check('Übersicht: Entwurf von Quinn zum Prüfen', 'Entwurf von Quinn QMB' in text(pg, '#qm-u-aufgaben') and 'Prüfen' in text(pg, '#qm-u-aufgaben'))
     pg.click('#qm-u-aufgaben .qm-aufgabe[data-dok]'); pg.wait_for_selector('#qm-dk [data-schritt="pruefen_freigeben"]')
     pg.click('#qm-dk [data-schritt="pruefen_freigeben"]'); toast(pg, 'Version 3 freigegeben')
-    pg.wait_for_function("document.querySelectorAll('#qm-dk .qm-version').length === 3")
-    check('Seitenleiste aktualisiert: drei Versionen, Version 3 gültig, Ablauf beendet', 'Version 3 gültig' in text(pg, '#qm-dk .qm-chips') and pg.locator('#qm-dk .qm-schritte').count() == 0)
+    pg.wait_for_function("document.querySelector('#qm-dk .qm-chips').textContent.includes('Version 3 gültig')")   # Toast kommt vor dem Neuladen
+    check('Seitenleiste aktualisiert: drei Versionen, Version 3 gültig, Ablauf beendet', pg.locator('#qm-dk .qm-version').count() == 3 and 'Version 3 gültig' in text(pg, '#qm-dk .qm-chips') and pg.locator('#qm-dk .qm-schritte').count() == 0)
     ctx.close()
 
     # Kai (nur „Kontrollen durchführen“, Kürzel QV): eigene Kontrolle am Handy

@@ -83,6 +83,7 @@
               <select class="qm-eingabe" id="qm-d-kapitel" aria-label="Kapitel"></select>
               <select class="qm-eingabe" id="qm-d-art" aria-label="Art"></select>
               <button class="btn sm" type="button" id="qm-d-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Dokumentenliste</button>
+              <button class="btn sm" type="button" id="qm-d-zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Ablage (ZIP)</button>
               <button class="btn sm primary" type="button" id="qm-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Dokument anlegen</button>
             </div>
             <div class="qm-pillen" id="qm-d-zustand" role="group" aria-label="Zustand"></div>
@@ -201,6 +202,7 @@
   <footer class="qm-fuss">STAFL-Plattform · Standard-Fleisch · QM-System nach IFS Wholesale</footer>
 </div>
 <div class="qm-toast" id="qm-toast" role="status" aria-live="polite"></div>
+<input type="file" id="qm-datei-wahl" multiple class="sr-only" tabindex="-1" aria-hidden="true">
 <datalist id="qm-kuerzel"></datalist>
 
 <!-- Eingabemaske: Dokument anlegen / Angaben ändern -->
@@ -354,6 +356,18 @@
 </dialog>
 
 <!-- Grund abfragen (zurückgeben, verwerfen, einziehen, überprüft, Nachweis stornieren) -->
+<dialog class="qm-dialog qm-dialog-klein" id="dlg-ablage" aria-labelledby="az-titel">
+  <form id="az-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="az-titel">Dokumentenablage herunterladen</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p>Ein ZIP-Archiv im Aufbau <b>QM-System / Kapitel / Dokument</b> mit den Dateien der jeweils gültigen Version und der Dokumentenliste (CSV). Es wird beim Herunterladen neu erstellt.</p>
+    <label class="qm-feld">Kapitel<select class="qm-eingabe" id="az-kapitel"></select></label>
+    <label class="qm-check"><input type="checkbox" id="az-alle"> auch ältere Versionen, Entwürfe und eingezogene Dokumente</label>
+    <p class="qm-hilfe" id="az-umfang"></p>
+    <p class="qm-meldung" id="az-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Herunterladen</button></div>
+  </form>
+</dialog>
+
 <dialog class="qm-dialog qm-dialog-klein" id="dlg-grund" aria-labelledby="gr-titel">
   <form id="gr-form" novalidate>
     <div class="qm-dialogkopf"><h2 id="gr-titel">Grund</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
@@ -377,6 +391,7 @@
   <symbol id="i-stift" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
   <symbol id="i-lupe" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
   <symbol id="i-haken" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-klammer" viewBox="0 0 24 24"><path d="m20.5 11.5-8.4 8.4a5.2 5.2 0 0 1-7.4-7.4l8.6-8.6a3.5 3.5 0 0 1 4.9 4.9l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></symbol>
   <symbol id="i-dokument" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
   <symbol id="i-klemmbrett" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5M9 11h6M9 15h4"/></symbol>
   <symbol id="i-blitz" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>

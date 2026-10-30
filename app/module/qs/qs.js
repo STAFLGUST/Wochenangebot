@@ -17,7 +17,7 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'einstellungen'];
   const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-  const S = { csrf: '', d: null, tab: 'uebersicht', kap: '', zustand: '', ansicht: 'tafel', toast: 0, paket: null, dok: '', pruefung: '', edit: {}, grund: null };
+  const S = { csrf: '', d: null, tab: 'uebersicht', kap: '', zustand: '', ansicht: 'tafel', toast: 0, paket: null, dok: '', pruefung: '', edit: {}, grund: null, laden: null, wahl: null };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data, json } ---------- */
   async function api(action, body, query = '') {
@@ -100,6 +100,7 @@
     $('#qm-m-neu').hidden = !darf('bearbeiten');
     $('#qm-h-neu').hidden = !darf('freigeben');
     $('#qm-p-neu').hidden = !darf('freigeben');
+    $('#qm-datei-wahl').accept = (d.ablage ? d.ablage.arten : []).map((e) => '.' + e).join(',');
     const gel = d.dokumente.filter((x) => istGelenkt(x) && x.zustand !== 'eingezogen').length;
     $('#qm-unterzeile').textContent = `IFS Wholesale · ${zahl(d.kapitel.length)} Kapitel · ${zahl(gel)} gelenkte Dokumente · ${zahl(d.handbuch.filter((a) => !a.entfallen).length)} Handbuch-Abschnitte · ${zahl(d.pruefungen.filter((p) => p.aktiv).length)} Prüfungen`;
   }
@@ -267,10 +268,10 @@
         kapAlt = x.kapitel; const k = S.d.kapitel.find((y) => y.id === x.kapitel) || {};
         html += `<tr class="qm-gruppe"><td colspan="6"><b>${esc(kapitelText(x.kapitel))}</b>${k.zustaendig ? ` <span class="qm-sub">Zuständig ${esc(k.zustaendig)}${k.vertreter ? ' · Vertreter ' + esc(k.vertreter) : ''}</span>` : ''}</td></tr>`;
       }
-      const g = gueltige(x);
+      const g = gueltige(x), nd = aktiv(istGelenkt(x) ? (g ? g.dateien : []) : x.dateien).length;
       html += `<tr class="qm-klick${x.zustand === 'eingezogen' ? ' qm-aus' : ''}${x.id === S.dok ? ' qm-gewaehlt' : ''}" data-dok="${esc(x.id)}">
         <td class="qm-nr qm-mobil-weg" data-label="Nr.">${esc(x.nr) || '<span class="qm-null">—</span>'}</td>
-        <td class="qm-voll" data-label="Titel"><span class="qm-name">${x.nr ? `<span class="qm-nur-mobil">${esc(x.nr)} · </span>` : ''}${esc(x.titel)}</span><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.ablage && !istGelenkt(x) ? ' · ' + esc(x.ablage) : ''}</span></td>
+        <td class="qm-voll" data-label="Titel"><span class="qm-name">${x.nr ? `<span class="qm-nur-mobil">${esc(x.nr)} · </span>` : ''}${esc(x.titel)}</span><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.ablage && !istGelenkt(x) ? ' · ' + esc(x.ablage) : ''}${nd ? ` · <span class="qm-anz" title="${nd === 1 ? '1 Datei' : nd + ' Dateien'} in der Ablage">${icon('klammer')}${zahl(nd)}</span>` : ''}</span></td>
         <td class="qm-zahl" data-label="Version">${g ? esc(g.nr) : '—'}</td>
         <td data-label="Freigabe">${g && g.datum ? esc(datum(g.datum)) : '—'}</td>
         <td data-label="Status">${zustandChip(x)}</td>
@@ -281,22 +282,210 @@
   ['#qm-d-suche', '#qm-d-kapitel', '#qm-d-art'].forEach((s) => $(s).addEventListener('input', renderDokumente));
   $('#qm-d-zustand').addEventListener('click', (ev) => { const b = ev.target.closest('[data-zustand]'); if (b) { S.zustand = b.dataset.zustand; renderDokumente(); } });
   $('#qm-d-csv').addEventListener('click', () => ladeCsv('dokumente', `QM-Dokumentenliste_${S.d.heute}.csv`));
+  $('#qm-d-zip').addEventListener('click', oeffneExport);
   $('#qm-d-neu').addEventListener('click', () => oeffneDokForm(''));
 
   /* Dokument in der Seitenleiste (unter 1100 px als Blatt von unten) */
   function oeffneDok(id) {
     if (!S.d.dokumente.some((x) => x.id === id)) return;
+    if (S.laden && S.laden.fertig && S.laden.dok !== id) S.laden = null;
     S.dok = id;
     if (S.tab !== 'dokumente') zeigeTab('dokumente');
     renderDokumente(); renderDok();
     $('#qm-dk').scrollTop = 0;
   }
-  function schliesseDok() { S.dok = ''; renderDok(); renderDokumente(); }
+  function schliesseDok() { S.dok = ''; if (S.laden && S.laden.fertig) S.laden = null; renderDok(); renderDokumente(); }
+
+  /* ---------- Dokumentenablage (Server: qs_datei_hochladen, qs_datei, qs_datei_entfernen, qs_ablage_export) ----------
+     Gelenkte Dokumente tragen Dateien je Version, Ordner und externe Dokumente am Dokument. Ablegen und Entfernen im
+     Entwurf mit „bearbeiten“ (zählt für das 4-Augen-Prinzip), an freigegebenen Versionen nur mit „freigeben“ (nachtragen,
+     entfernen mit Grund); in der Prüfung nur ansehen. Die Regeln prüft der Server – hier nur, was angeboten wird. */
+  const aktiv = (l) => (l || []).filter((f) => !f.entfernt);
+  const groesseText = (n) => (n >= 1048576 ? `${(n / 1048576).toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB` : `${zahl(Math.max(1, Math.round(n / 1024)))} KB`);
+  function ablageOffen(x, v) {
+    if (x.eingezogen || !darf('bearbeiten')) return false;
+    if (!istGelenkt(x)) return !v;
+    if (!v) return false;
+    if (v.status === 'entwurf') return true;
+    return ['freigegeben', 'ersetzt'].includes(v.status) && darf('freigeben');
+  }
+  function dateiListe(x, v, leer) {
+    const alle = (v ? v.dateien : x.dateien) || [], da = aktiv(alle), weg = alle.filter((f) => f.entfernt), offen = ablageOffen(x, v);
+    let h = da.length ? `<ul class="qm-dateien">${da.map((f) => `<li class="qm-datei"><button class="qm-datei-name" type="button" data-datei="${esc(f.id)}" title="${esc(f.name)} herunterladen">${icon('dokument')}<span>${esc(f.name)}</span></button>`
+      + `<span class="qm-sub">${esc(groesseText(f.groesse))}${f.hochgeladen ? ` · ${esc(f.hochgeladen.von)} · ${esc(datum(String(f.hochgeladen.t).slice(0, 10)))}` : ''}${f.nachgetragen ? ' · nachgetragen' : ''}</span>`
+      + `${offen ? `<button class="qm-datei-weg" type="button" data-datei-weg="${esc(f.id)}" aria-label="${esc(f.name)} entfernen" title="Entfernen">×</button>` : ''}</li>`).join('')}</ul>`
+      : (leer ? `<p class="qm-hilfe">${esc(leer)}</p>` : '');
+    if (weg.length) h += `<details class="qm-details qm-entfernt"><summary>${weg.length === 1 ? '1 Datei entfernt' : zahl(weg.length) + ' Dateien entfernt'}</summary><ul class="qm-verlauf">${weg.map((f) => `<li><s>${esc(f.name)}</s> · ${esc(zeitpunkt(f.entfernt.t))} · ${esc(f.entfernt.von)}: ${esc(f.entfernt.grund)}</li>`).join('')}</ul></details>`;
+    return h;
+  }
+  function ablageZone(x, v, text, klein = false) {
+    if (!ablageOffen(x, v)) return '';
+    const a = S.d.ablage || { arten: [], max: 0 }, mb = zahl(Math.round(a.max / 1048576));
+    return `<div class="qm-drop${klein ? ' klein' : ''}" role="button" tabindex="0" data-drop="${esc(v ? v.id : '')}" aria-label="${esc(text)}: Dateien hierher ziehen oder auswählen"`
+      + ` title="Erlaubt: ${esc(a.arten.join(', '))} – bis ${mb} MB je Datei">${icon(klein ? 'plus' : 'upload')}`
+      + `<span><b>${esc(text)}</b><span>hierher ziehen oder <u>auswählen</u><small> · bis ${mb} MB je Datei</small></span></span></div>`;
+  }
+  const ladenText = (e) => e.fehler || (e.fertig ? 'abgelegt' : e.empfangen ? `${Math.round(100 * e.empfangen / e.groesse)} %` : 'wartet');
+  function ladenHtml(x, vid) {
+    const L = S.laden;
+    if (!L || L.dok !== x.id || L.version !== vid) return '';
+    return `<ul class="qm-laden" aria-live="polite">${L.liste.map((e, i) => `<li data-laden="${i}" class="${e.fehler ? 'fehler' : e.fertig ? 'fertig' : ''}"><span title="${esc(e.name)}">${esc(e.name)}</span><progress max="${e.groesse}" value="${e.empfangen}"></progress><small>${esc(ladenText(e))}</small></li>`).join('')}</ul>`;
+  }
+  function ladenAktualisieren(i) {
+    const e = S.laden && S.laden.liste[i], li = $(`#qm-dk [data-laden="${i}"]`);
+    if (!e || !li) return;
+    li.className = e.fehler ? 'fehler' : e.fertig ? 'fertig' : '';
+    $('progress', li).value = e.empfangen; $('small', li).textContent = ladenText(e);
+  }
+  const alsBase64 = (blob) => new Promise((ok, nein) => {
+    const r = new FileReader();
+    r.onload = () => { const t = String(r.result); ok(t.slice(t.indexOf(',') + 1)); };
+    r.onerror = () => nein(r.error);
+    r.readAsDataURL(blob);
+  });
+  async function pruefsumme(f) {   // SHA-256 (nur in sicheren Kontexten verfügbar; sonst prüft der Server nur die Größe)
+    try {
+      if (!window.crypto || !crypto.subtle) return '';
+      return [...new Uint8Array(await crypto.subtle.digest('SHA-256', await f.arrayBuffer()))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch { return ''; }
+  }
+  /* Dateien nacheinander in Teilen hochladen (der API-Einstieg nimmt nur JSON bis 6 MB an) */
+  async function hochladen(dateien, vid) {
+    const x = S.d.dokumente.find((y) => y.id === S.dok), a = S.d.ablage;
+    if (!x || !a || !dateien || !dateien.length) return;
+    if (S.laden && !S.laden.fertig) { toast('Bitte warten, bis die laufenden Dateien abgelegt sind.', true); return; }
+    const liste = [...dateien].map((f) => {
+      const ext = f.name.includes('.') ? f.name.split('.').pop().toLowerCase() : '';
+      const fehler = !a.arten.includes(ext) ? (ext ? `Dateiart „.${ext}“ nicht erlaubt.` : 'Dateiart nicht erlaubt (ohne Endung).') : !f.size ? 'Die Datei ist leer.' : f.size > a.max ? `Zu groß (höchstens ${zahl(Math.round(a.max / 1048576))} MB).` : '';
+      return { datei: f, name: f.name, groesse: f.size || 1, empfangen: 0, fehler, fertig: false };
+    });
+    S.laden = { dok: x.id, version: vid, liste, fertig: false };
+    renderDok();
+    let ok = 0;
+    for (let i = 0; i < liste.length; i++) {
+      const e = liste[i];
+      if (e.fehler) continue;
+      const f = e.datei, sha = await pruefsumme(f);
+      let upload = '', teil = 0, pos = 0;
+      for (;;) {
+        const stueck = f.slice(pos, pos + a.teil);
+        let daten;
+        try { daten = await alsBase64(stueck); } catch { e.fehler = 'Die Datei ist nicht lesbar.'; break; }
+        const r = await api('qs_datei_hochladen', { dokument: x.id, version: vid, name: f.name, groesse: f.size, sha256: sha, upload, teil, daten });
+        if (r.status === 401) { S.laden = null; zeigeAnmeldung(); return; }
+        if (r.status !== 200 || !r.data.ok) { e.fehler = fehlerText(r, 'Hochladen fehlgeschlagen'); break; }
+        pos += stueck.size; teil++; e.empfangen = pos;
+        if (r.data.fertig) { e.fertig = true; ok++; break; }
+        upload = r.data.upload;
+        ladenAktualisieren(i);
+      }
+      ladenAktualisieren(i);
+    }
+    S.laden.fertig = true;
+    const fehl = liste.filter((e) => e.fehler);
+    if (!fehl.length) S.laden = null;
+    if (ok) await neuLaden(); else renderDok();
+    if (!fehl.length) toast(ok === 1 ? 'Datei abgelegt' : `${zahl(ok)} Dateien abgelegt`);
+    else toast(fehl.length === 1 ? `${fehl[0].name}: ${fehl[0].fehler}` : `${zahl(fehl.length)} Dateien nicht abgelegt – Gründe in der Liste.`, true);
+  }
+  function waehleDateien(vid) { S.wahl = vid; const i = $('#qm-datei-wahl'); i.value = ''; i.click(); }
+  $('#qm-datei-wahl').addEventListener('change', (ev) => { const f = [...ev.target.files]; ev.target.value = ''; if (f.length && S.wahl !== null) hochladen(f, S.wahl); });
+  function dateiOrt(x, id) {
+    for (const f of x.dateien || []) if (f.id === id) return { f, v: null };
+    for (const v of x.versionen || []) for (const f of v.dateien || []) if (f.id === id) return { f, v };
+    return null;
+  }
+  function speichereDatei(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.append(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  async function herunterladen(id) {
+    const x = S.d.dokumente.find((y) => y.id === S.dok), ort = x ? dateiOrt(x, id) : null;
+    let res;
+    try { res = await fetch(API + '?action=qs_datei&id=' + encodeURIComponent(id), { credentials: 'same-origin', cache: 'no-store' }); } catch { toast('Keine Verbindung zum Server.', true); return; }
+    if (res.status === 401) { zeigeAnmeldung(); return; }
+    if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* keine JSON-Antwort */ } toast(d.error || `Herunterladen fehlgeschlagen (${res.status}).`, true); return; }
+    speichereDatei(await res.blob(), ort ? ort.f.name : 'Datei');
+  }
+  async function entferneDatei(id) {
+    const x = S.d.dokumente.find((y) => y.id === S.dok), ort = x ? dateiOrt(x, id) : null;
+    if (!ort) return;
+    const entwurf = !!ort.v && ort.v.status === 'entwurf';
+    const g = await frageGrund('Datei entfernen', entwurf ? `„${ort.f.name}“ wird aus dem Entwurf gelöscht.`
+      : `„${ort.f.name}“ wird nicht mehr angeboten und nicht mehr exportiert. Sie bleibt mit Grund als „entfernt“ vermerkt.`, entwurf ? 'Grund (optional)' : 'Grund', !entwurf);
+    if (g === null) return;
+    const r = await api('qs_datei_entfernen', { datei: id, rev: x.rev, grund: g });
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Entfernen fehlgeschlagen'), true); if (r.status === 409) await neuLaden(); return; }
+    if (S.laden && S.laden.fertig) S.laden = null;
+    toast('Datei entfernt'); await neuLaden();
+  }
+  /* Ziehen und Ablegen: Felder hervorheben, sobald Dateien über die Seite gezogen werden; daneben nichts im Browser öffnen */
+  const hatDateien = (ev) => !!ev.dataTransfer && [...(ev.dataTransfer.types || [])].includes('Files');
+  const imFeld = (ev) => (ev.target && ev.target.closest ? ev.target.closest('.qm-drop') : null);
+  let ziehen = 0;
+  window.addEventListener('dragenter', (ev) => { if (hatDateien(ev)) { ziehen++; document.body.classList.add('qm-zieht'); } });
+  window.addEventListener('dragleave', (ev) => { if (hatDateien(ev) && --ziehen <= 0) { ziehen = 0; document.body.classList.remove('qm-zieht'); } });
+  window.addEventListener('dragover', (ev) => {
+    if (!hatDateien(ev)) return;
+    ev.preventDefault();
+    const z = imFeld(ev);
+    ev.dataTransfer.dropEffect = z ? 'copy' : 'none';
+    $$('.qm-drop.drueber').forEach((d) => { if (d !== z) d.classList.remove('drueber'); });
+    if (z) z.classList.add('drueber');
+  });
+  window.addEventListener('drop', (ev) => {
+    if (!hatDateien(ev)) return;
+    ev.preventDefault();
+    ziehen = 0; document.body.classList.remove('qm-zieht');
+    const z = imFeld(ev);
+    $$('.qm-drop.drueber').forEach((d) => d.classList.remove('drueber'));
+    if (z && $('#qm-dk').contains(z)) hochladen(ev.dataTransfer.files, z.dataset.drop);
+  });
+  $('#qm-dk').addEventListener('keydown', (ev) => { const z = imFeld(ev); if (z && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); waehleDateien(z.dataset.drop); } });
+
+  /* Export der Ablage als ZIP: der Server erstellt das Archiv erst beim Herunterladen (direkt in die Antwort) */
+  function exportUmfang(kap, alle) {
+    let n = 0, b = 0;
+    const dazu = (l) => aktiv(l).forEach((f) => { n++; b += f.groesse || 0; });
+    for (const x of S.d.dokumente) {
+      if ((kap && x.kapitel !== kap) || (x.eingezogen && !alle)) continue;
+      dazu(x.dateien);
+      for (const v of x.versionen || []) if (v.status === 'freigegeben' || (alle && v.status !== 'verworfen')) dazu(v.dateien);
+    }
+    return { n, b };
+  }
+  function exportHinweis() {
+    const { n, b } = exportUmfang($('#az-kapitel').value, $('#az-alle').checked);
+    $('#az-umfang').textContent = n ? `${n === 1 ? '1 Datei' : zahl(n) + ' Dateien'} · ${groesseText(b)} und die Dokumentenliste` : 'Noch keine Dateien – das Archiv enthält nur die Dokumentenliste.';
+  }
+  function oeffneExport() {
+    $('#az-kapitel').innerHTML = kapitelOptionen($('#qm-d-kapitel').value, 'Alle Kapitel');
+    exportHinweis();
+    oeffne($('#dlg-ablage'));
+  }
+  $('#az-kapitel').addEventListener('change', exportHinweis);
+  $('#az-alle').addEventListener('change', exportHinweis);
+  $('#az-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const kap = $('#az-kapitel').value, q = (kap ? '&kapitel=' + encodeURIComponent(kap) : '') + ($('#az-alle').checked ? '&alle=1' : '');
+    const a = document.createElement('a');
+    a.href = API + '?action=qs_ablage_export' + q; a.download = '';
+    document.body.append(a); a.click(); a.remove();
+    $('#dlg-ablage').close();
+    toast('Das ZIP wird erstellt und heruntergeladen …');
+  });
+
   function renderDok() {
     const p = $('#qm-dk'), x = S.d.dokumente.find((y) => y.id === S.dok);
+    // Ungespeicherte Stichworte des Entwurfs über ein Neuzeichnen retten (z. B. nach dem Ablegen einer Datei)
+    const ae = $('#dk-aend', p), ag = $('#dk-grund', p);
+    const merk = x && ae && ag && !ae.readOnly && p.dataset.dok === x.id ? { ver: p.dataset.ver, a: ae.value, a0: ae.defaultValue, g: ag.value, g0: ag.defaultValue } : null;
     $('#qm-d-raster').classList.toggle('mit-panel', !!x);
     p.hidden = !x;
-    if (!x) { S.dok = ''; p.innerHTML = ''; return; }
+    if (!x) { S.dok = ''; p.innerHTML = ''; p.dataset.dok = ''; return; }
     const o = offene(x), g = gueltige(x), gelenkt = istGelenkt(x), u = x.ueberpruefung;
     const chips = [];
     if (g) chips.push(chip(`Version ${g.nr} gültig${g.datum ? ' seit ' + datum(g.datum) : ''}`, 'gruen'));
@@ -318,6 +507,8 @@
           <label class="qm-breit">Änderungen<input class="qm-eingabe" id="dk-aend" maxlength="2000" value="${esc(o.aenderungen)}"${kannEdit ? '' : ' readonly'}></label>
           <label class="qm-breit">Änderungsgrund<input class="qm-eingabe" id="dk-grund" maxlength="1000" value="${esc(o.grund)}"${kannEdit ? '' : ' readonly'}></label>
         </div>
+        <div class="qm-ablage"><b class="qm-ablage-titel">${icon('klammer')}Dateien zu Version ${naechsteVersion(x)}</b>${dateiListe(x, o, 'Noch keine Dateien.')}${ablageZone(x, o, 'Dateien ablegen')}${ladenHtml(x, o.id)}
+          ${o.status === 'entwurf' && darf('freigeben') && !eigen(o) && ablageOffen(x, o) ? '<p class="qm-hilfe">Wer im Entwurf Dateien ablegt oder entfernt, zählt als Bearbeiter und kann ihn danach nicht mehr prüfen (4-Augen-Prinzip).</p>' : ''}</div>
         ${o.status === 'pruefung' && darf('freigeben') && eigen(o) ? '<p class="qm-hilfe">Sie haben diesen Entwurf erstellt oder geändert – prüfen muss eine andere Person (4-Augen-Prinzip).</p>' : ''}
         ${o.status !== 'entwurf' && !darf('freigeben') ? '<p class="qm-hilfe">Wartet auf Prüfung und Freigabe durch QMB oder Geschäftsführung.</p>' : ''}
         <div class="qm-knopfreihe">${kannEdit ? '<button class="btn" type="button" data-schritt="verwerfen">Verwerfen</button><button class="btn" type="button" data-schritt="speichern">Entwurf speichern</button><button class="btn primary" type="button" data-schritt="einreichen">Zur Prüfung geben</button>' : ''}${darf('freigeben') && o.status !== 'entwurf' ? '<button class="btn" type="button" data-schritt="zurueck">Zurückgeben</button>' : ''}${darf('freigeben') && o.status === 'pruefung' && !eigen(o) ? '<button class="btn" type="button" data-schritt="pruefen">Nur prüfen</button><button class="btn primary" type="button" data-schritt="pruefen_freigeben">Prüfen und freigeben</button>' : ''}${darf('freigeben') && o.status === 'geprueft' ? '<button class="btn primary" type="button" data-schritt="freigeben">Freigeben</button>' : ''}</div>
@@ -330,20 +521,29 @@
     }
     const vers = [...(x.versionen || [])].reverse();
     const versHtml = !gelenkt ? '<p class="qm-hilfe">Ordner und externe Dokumente stehen nur im Register – ohne Versionen.</p>'
-      : vers.length ? `<div class="qm-versionen">${vers.map((v) => `<div class="qm-version${['ersetzt', 'verworfen'].includes(v.status) ? ' qm-aus' : ''}"><b>${esc(v.nr || naechsteVersion(x))}</b><span>${esc(datum(v.datum)) || '—'}</span><span>${beteiligte(v)}</span>${chip(S.d.verStatus[v.status] || v.status, { freigegeben: 'gruen', entwurf: 'gelb', pruefung: 'blau', geprueft: 'blau' }[v.status] || '')}${v.aenderungen || v.grund ? `<span class="qm-sub">${esc(v.aenderungen)}${v.grund ? ' – ' + esc(v.grund) : ''}</span>` : ''}</div>`).join('')}</div>`
+      : vers.length ? `<div class="qm-versionen">${vers.map((v) => `<div class="qm-version${['ersetzt', 'verworfen'].includes(v.status) ? ' qm-aus' : ''}"><b>${esc(v.nr || naechsteVersion(x))}</b><span>${esc(datum(v.datum)) || '—'}</span><span>${beteiligte(v)}</span>${chip(S.d.verStatus[v.status] || v.status, { freigegeben: 'gruen', entwurf: 'gelb', pruefung: 'blau', geprueft: 'blau' }[v.status] || '')}${v.aenderungen || v.grund ? `<span class="qm-sub">${esc(v.aenderungen)}${v.grund ? ' – ' + esc(v.grund) : ''}</span>` : ''}${['ersetzt', 'verworfen'].includes(v.status) && ((v.dateien || []).length || ablageOffen(x, v)) ? `<div class="qm-version-dateien">${dateiListe(x, v, '')}${ablageZone(x, v, 'Datei nachtragen', true)}${ladenHtml(x, v.id)}</div>` : ''}</div>`).join('')}</div>`
         : '<p class="qm-hilfe">Noch keine Version.</p>';
+    const ablage = !gelenkt ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien</h3>${dateiListe(x, null, 'Noch keine Dateien.')}${ablageZone(x, null, 'Dateien ablegen')}${ladenHtml(x, '')}</section>`
+      : g ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien · Version ${esc(g.nr)}</h3>${dateiListe(x, g, 'Zur gültigen Version liegen keine Dateien.')}${ablageZone(x, g, 'Datei nachtragen')}${ladenHtml(x, g.id)}</section>` : '';
     p.innerHTML = `<div class="qm-dp-kopf"><div><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.nr ? ' · ' + esc(x.nr) : ''}</span><h2>${esc(x.titel)}</h2></div><button class="qm-dialog-schliessen" type="button" data-dk="schliessen" aria-label="Dokument schließen">×</button></div>
       <div class="qm-chips">${chips.join('')}</div>
       <dl class="qm-dl"><dt>Kapitel</dt><dd>${esc(kapitelText(x.kapitel))}</dd><dt>Zuständig</dt><dd>${zust}</dd>${x.ablage ? `<dt>Ablage</dt><dd>${link(x.ablage)}</dd>` : ''}${x.notiz ? `<dt>Notiz</dt><dd>${esc(x.notiz)}</dd>` : ''}${x.ueberprueft ? `<dt>Überprüft</dt><dd>${esc(datum(x.ueberprueft.t.slice(0, 10)))} · ${esc(x.ueberprueft.von)}${x.ueberprueft.notiz ? ' – ' + esc(x.ueberprueft.notiz) : ''}</dd>` : ''}${x.eingezogen ? `<dt>Eingezogen</dt><dd>${esc(zeitpunkt(x.eingezogen.t))} · ${esc(x.eingezogen.von)}: ${esc(x.eingezogen.grund)}</dd>` : ''}</dl>
+      ${ablage}
       ${karte}
       <section><h3 class="qm-zwischen">Versionen</h3>${versHtml}</section>
       ${(x.verlauf || []).length ? `<details class="qm-details"><summary>Verlauf</summary><ul class="qm-verlauf">${x.verlauf.slice().reverse().map((l) => `<li>${esc(zeitpunkt(l.t))} · ${esc(l.von)}: ${esc(l.was)}</li>`).join('')}</ul></details>` : ''}
       <p class="qm-meldung" id="dk-meldung" role="alert"></p>
       <div class="qm-dp-fuss">${darf('bearbeiten') ? `<button class="btn" type="button" data-schritt="angaben">${icon('stift')}Angaben ändern</button>` : ''}${darf('freigeben') && (vers.length || !gelenkt) ? (x.eingezogen ? '<button class="btn" type="button" data-schritt="wieder">Wieder gültig machen</button>' : '<button class="btn" type="button" data-schritt="einziehen">Einziehen</button>') : ''}</div>`;
+    p.dataset.dok = x.id; p.dataset.ver = o ? o.id : '';
+    const ne = $('#dk-aend', p), ng = $('#dk-grund', p);
+    if (merk && ne && ng && !ne.readOnly && merk.ver === p.dataset.ver) { if (merk.a !== merk.a0) ne.value = merk.a; if (merk.g !== merk.g0) ng.value = merk.g; }
   }
   const dokBody = (x) => ({ kapitel: x.kapitel, art: x.art, nr: x.nr, titel: x.titel, ablage: x.ablage, zustaendig: x.zustaendig, vertreter: x.vertreter, notiz: x.notiz });
   $('#qm-dk').addEventListener('click', async (ev) => {
     if (ev.target.closest('[data-dk="schliessen"]')) { schliesseDok(); return; }
+    const dl = ev.target.closest('[data-datei]'); if (dl) { herunterladen(dl.dataset.datei); return; }
+    const weg = ev.target.closest('[data-datei-weg]'); if (weg) { entferneDatei(weg.dataset.dateiWeg); return; }
+    const z = imFeld(ev); if (z) { waehleDateien(z.dataset.drop); return; }
     const b = ev.target.closest('[data-schritt]'); if (!b) return;
     const x = S.d.dokumente.find((y) => y.id === S.dok); if (!x) return;
     const s = b.dataset.schritt;
@@ -781,9 +981,10 @@
     if (r.status !== 200 || !r.data.ok) { $('#qm-e-meldung').textContent = fehlerText(r, 'Prüfen fehlgeschlagen'); return; }
     const z = r.data.zahlen, namen = { kapitel: 'Kapitel', personen: 'Personen', dokumente: 'Dokumente', versionen: 'Versionen', handbuch: 'Handbuch-Abschnitte', pruefungen: 'Prüfungen', massnahmen: 'Maßnahmen' };
     $('#qm-e-vorschau').innerHTML = `<div class="qm-vorschau">${Object.entries(namen).map(([k, n]) => `<div><b>${zahl(z[k] || 0)}</b><span>${esc(n)}</span></div>`).join('')}</div>`
-      + (r.data.fehler.length ? `<p class="qm-meldung">${zahl(r.data.fehler.length)} Fehler – so wird nichts übernommen:</p><ul class="qm-fehlerliste">${r.data.fehler.map((x) => `<li>${esc(x.teil)} ${esc(x.zeile)}: ${esc(x.text)}</li>`).join('')}</ul>` : '<p class="qm-meldung ok">Keine Fehler gefunden.</p>');
+      + (r.data.fehler.length ? `<p class="qm-meldung">${zahl(r.data.fehler.length)} Fehler – so wird nichts übernommen:</p><ul class="qm-fehlerliste">${r.data.fehler.map((x) => `<li>${esc(x.teil)} ${esc(x.zeile)}: ${esc(x.text)}</li>`).join('')}</ul>`
+        : r.data.dateien ? `<p class="qm-meldung">In der Dokumentenablage liegen schon ${zahl(r.data.dateien)} Dateien – ein Datenpaket kann die Dokumente nicht mehr ersetzen.</p>` : '<p class="qm-meldung ok">Keine Fehler gefunden.</p>');
     $('#qm-e-ersetzen-z').hidden = r.data.leer; $('#qm-e-ersetzen').checked = false;
-    if (!r.data.fehler.length) { S.paket = paket; $('#qm-e-uebernehmen').disabled = false; }
+    if (!r.data.fehler.length && !r.data.dateien) { S.paket = paket; $('#qm-e-uebernehmen').disabled = false; }
   });
   $('#qm-e-uebernehmen').addEventListener('click', async () => {
     if (!S.paket) return;
@@ -834,10 +1035,7 @@
     } catch { toast('Keine Verbindung zum Server.', true); return; }
     if (res.status === 401) { zeigeAnmeldung(); return; }
     if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* keine JSON-Antwort */ } toast(d.error || `CSV konnte nicht erstellt werden (${res.status}).`, true); return; }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(await res.blob()); a.download = dateiname;
-    document.body.append(a); a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    speichereDatei(await res.blob(), dateiname);
   }
 
   /* ---------- Start ---------- */

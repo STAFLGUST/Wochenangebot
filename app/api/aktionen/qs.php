@@ -12,6 +12,9 @@ declare(strict_types=1);
                                    verwerfen oder wieder öffnen;
                     qs.verwalten – Kapitel, Personen (Kürzel, Verknüpfung mit Mitarbeitern) und Einstellungen pflegen,
                                    Datenpaket übernehmen.
+   Dokumentenablage (lib/dateiablage.php): Dateien herunterladen und als ZIP exportieren mit qs.sehen; im Entwurf und an
+   Ordnern/externen Dokumenten ablegen und entfernen mit qs.bearbeiten; zu freigegebenen Versionen nachtragen und entfernen
+   (nur vermerkt, mit Grund) mit qs.freigeben – Regeln in qs_ablage_stelle().
    Gleichzeitiges Bearbeiten: Dokumente, Abschnitte, Prüfungen und Maßnahmen tragen „rev“; ein veralteter Stand bekommt 409.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -65,7 +68,7 @@ switch ($action) {
                      'pruefungen' => qs_pruefungen_aus(qs_doc('qs-pruefplan')['liste'], $nachweise, $heute),
                      'nachweise' => array_slice($nachweise, 0, QS_START_NACHWEISE), 'nachweiseGesamt' => count($nachweise),
                      'massnahmen' => array_map(function ($m) use ($heute) { return qs_massnahme_aus($m, $heute); }, qs_doc('qs-massnahmen')['liste']),
-                     'leer' => qs_leer()]);
+                     'leer' => qs_leer(), 'ablage' => qs_ablage_einstellungen()]);
         }
 
         /* Dokumentenliste, Prüfplan oder Maßnahmen als CSV (Excel), im Protokoll vermerkt */
@@ -229,6 +232,123 @@ switch ($action) {
             });
             audit('qs', 'QM-System: ' . qs_dok_name($d) . ' – ' . $text);
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
+        }
+
+        /* Datei ablegen – in Teilen (lib/dateiablage.php): dokument, version ('' bei Ordnern/externen Dokumenten), name,
+           groesse, sha256, upload ('' beim ersten Teil), teil, daten (Base64). Vor dem ersten Teil und beim Eintragen prüft
+           qs_ablage_stelle(), ob hier abgelegt werden darf. Antwort: fertig=false mit upload, bis der letzte Teil da ist. */
+        case 'qs_datei_hochladen': {
+            $me = require_perm('qs.bearbeiten', true);
+            require_once __DIR__ . '/../lib/dateiablage.php';
+            $b = body();
+            $dok = is_string($b['dokument'] ?? null) ? $b['dokument'] : ''; $ver = is_string($b['version'] ?? null) ? $b['version'] : '';
+            if (($b['upload'] ?? '') === '') { $doc = qs_doc('qs-dokumente'); qs_ablage_stelle($doc['liste'][qs_dokument_index($doc, $dok)], $ver, $me, 'hochladen'); }
+            $r = ablage_teil('qs', (string)$me['id'], ['dokument' => $dok, 'version' => $ver], $b);
+            if (!$r['fertig']) respond(['ok' => true, 'fertig' => false, 'upload' => $r['upload'], 'empfangen' => $r['empfangen']]);
+            $datei = $r['datei'];
+            // Scheitert das Eintragen (fail/Ausnahme), bleibt keine verwaiste Datei zurück
+            $eingetragen = false;
+            register_shutdown_function(function () use (&$eingetragen, $datei) { if (!$eingetragen) { try { ablage_entfernen('qs', $datei['id']); } catch (Throwable $e) { /* bleibt liegen */ } } });
+            $d = with_lock('qs-dokumente', function () use ($dok, $ver, $me, $datei) {
+                $doc = qs_doc('qs-dokumente');
+                $i = qs_dokument_index($doc, $dok);
+                $d = $doc['liste'][$i];
+                $vi = qs_ablage_stelle($d, $ver, $me, 'hochladen');
+                $f = ['id' => $datei['id'], 'name' => $datei['name'], 'art' => $datei['art'], 'mime' => $datei['mime'], 'groesse' => $datei['groesse'],
+                      'sha256' => $datei['sha256'], 'hochgeladen' => qs_wer($me)];
+                if ($vi === null) {
+                    $d['dateien'] = is_array($d['dateien'] ?? null) ? array_values($d['dateien']) : [];
+                    $d['dateien'][] = $f;
+                    qs_verlauf($d, $me, 'Datei abgelegt: ' . $datei['name']);
+                } else {
+                    $v = $d['versionen'][$vi];
+                    $v['dateien'] = is_array($v['dateien'] ?? null) ? array_values($v['dateien']) : [];
+                    if ($v['status'] === 'entwurf') {
+                        if (!in_array((string)$me['id'], array_map('strval', (array)($v['bearbeiter'] ?? [])), true)) $v['bearbeiter'][] = (string)$me['id'];   // 4-Augen-Prinzip
+                        qs_verlauf($v, $me, 'Datei abgelegt: ' . $datei['name']);
+                    } else {
+                        $f['nachgetragen'] = true;
+                        qs_verlauf($v, $me, 'Datei nachgetragen: ' . $datei['name']);
+                        qs_verlauf($d, $me, 'Datei zu Version ' . ($v['nr'] ?? '?') . ' nachgetragen: ' . $datei['name']);
+                    }
+                    $v['dateien'][] = $f;
+                    $d['versionen'][$vi] = $v;
+                }
+                return qs_dok_ablegen($doc, $i, $d, $me);
+            });
+            $eingetragen = true;
+            audit('qs', 'QM-System: Datei für ' . qs_dok_name($d) . ' abgelegt (' . round($datei['groesse'] / 1024) . ' KB)');
+            respond(['ok' => true, 'fertig' => true, 'datei' => $datei['id'], 'dokument' => qs_dok_antwort($d)]);
+        }
+
+        /* Datei entfernen: im Entwurf und an Ordnern/externen Dokumenten (qs.bearbeiten) – im Entwurf endgültig gelöscht;
+           bei Ordnern/externen Dokumenten und freigegebenen Versionen (qs.freigeben) nur als „entfernt“ vermerkt (mit Grund),
+           die Datei bleibt in der Ablage */
+        case 'qs_datei_entfernen': {
+            $me = require_perm('qs.bearbeiten', true);
+            require_once __DIR__ . '/../lib/dateiablage.php';
+            $b = body();
+            [$d, $name, $loeschen] = with_lock('qs-dokumente', function () use ($b, $me) {
+                $doc = qs_doc('qs-dokumente');
+                $ort = qs_datei_finden($doc['liste'], is_string($b['datei'] ?? null) ? $b['datei'] : '');
+                if ($ort === null) fail('Datei nicht gefunden.', 404);
+                [$i, $vi, $k] = $ort;
+                $d = $doc['liste'][$i];
+                qs_rev_pruefen($b, $d, 'Das Dokument');
+                qs_ablage_stelle($d, $vi === null ? '' : (string)$d['versionen'][$vi]['id'], $me, 'entfernen');
+                $f = $vi === null ? $d['dateien'][$k] : $d['versionen'][$vi]['dateien'][$k];
+                if (!empty($f['entfernt'])) fail('Die Datei ist schon entfernt.', 409);
+                $entwurf = $vi !== null && $d['versionen'][$vi]['status'] === 'entwurf';
+                $grund = qs_text($b['grund'] ?? '', 500, 'Grund');
+                if (!$entwurf && $grund === '') throw new InvalidArgumentException('Bitte einen Grund angeben – die Datei bleibt als „entfernt“ vermerkt.');
+                if ($entwurf) {
+                    $v = $d['versionen'][$vi];
+                    array_splice($v['dateien'], $k, 1);
+                    if (!in_array((string)$me['id'], array_map('strval', (array)($v['bearbeiter'] ?? [])), true)) $v['bearbeiter'][] = (string)$me['id'];
+                    qs_verlauf($v, $me, 'Datei entfernt: ' . $f['name']);
+                    $d['versionen'][$vi] = $v;
+                } else {
+                    $f['entfernt'] = qs_wer($me) + ['grund' => $grund];
+                    if ($vi === null) { $d['dateien'][$k] = $f; qs_verlauf($d, $me, 'Datei entfernt: ' . $f['name'] . ' – ' . $grund); }
+                    else {
+                        $d['versionen'][$vi]['dateien'][$k] = $f;
+                        qs_verlauf($d['versionen'][$vi], $me, 'Datei entfernt: ' . $f['name'] . ' – ' . $grund);
+                        qs_verlauf($d, $me, 'Datei aus Version ' . ($d['versionen'][$vi]['nr'] ?? '?') . ' entfernt: ' . $f['name'] . ' – ' . $grund);
+                    }
+                }
+                return [qs_dok_ablegen($doc, $i, $d, $me), (string)$f['name'], $entwurf ? (string)$f['id'] : ''];
+            });
+            if ($loeschen !== '') ablage_entfernen('qs', $loeschen);   // erst nach dem Speichern: im Fehlerfall bleibt die Datei
+            audit('qs', 'QM-System: Datei aus ' . qs_dok_name($d) . ($loeschen !== '' ? ' gelöscht (Entwurf)' : ' entfernt (vermerkt)'));
+            respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
+        }
+
+        /* Datei herunterladen (GET, id) – immer als Download; entfernte Dateien nicht */
+        case 'qs_datei': {
+            require_perm('qs.sehen');
+            require_once __DIR__ . '/../lib/dateiablage.php';
+            $liste = qs_doc('qs-dokumente')['liste'];
+            $ort = qs_datei_finden($liste, is_string($_GET['id'] ?? null) ? $_GET['id'] : '');
+            if ($ort === null) fail('Datei nicht gefunden.', 404);
+            [$i, $vi, $k] = $ort;
+            $f = $vi === null ? $liste[$i]['dateien'][$k] : $liste[$i]['versionen'][$vi]['dateien'][$k];
+            if (!empty($f['entfernt'])) fail('Die Datei wurde entfernt.', 404);
+            ablage_senden('qs', (string)$f['id'], (string)$f['name'], (string)($f['mime'] ?? ''));
+        }
+
+        /* Ablage als ZIP (GET): „QM-System/<Kapitel>/<Dokument>/<Datei>“ mit der Dokumentenliste; kapitel = nur ein Kapitel,
+           alle=1 = auch ältere Versionen, Entwürfe und eingezogene Dokumente. Im Protokoll vermerkt. */
+        case 'qs_ablage_export': {
+            require_perm('qs.sehen');
+            require_once __DIR__ . '/../lib/dateiablage.php';
+            $stamm = qs_stamm();
+            $kapitel = is_string($_GET['kapitel'] ?? null) ? $_GET['kapitel'] : '';
+            if ($kapitel !== '') qs_kapitel_pruefen($kapitel, $stamm);
+            $alle = ($_GET['alle'] ?? '') === '1';
+            $heute = qs_heute();
+            $e = qs_ablage_eintraege(qs_doc('qs-dokumente')['liste'], $stamm, $kapitel, $alle, $heute);
+            audit('qs', 'QM-System: Dokumentenablage als ZIP heruntergeladen (' . (count($e) - 1) . ' Dateien' . ($kapitel !== '' ? ', Kapitel ' . $kapitel : '') . ($alle ? ', mit älteren Versionen' : '') . ')');
+            ablage_zip_senden('QM-System_' . ($kapitel !== '' ? ablage_zip_pfad($kapitel) . '_' : '') . $heute . '.zip', $e);
         }
 
         /* Abschnitt des QM-Handbuchs anlegen (ohne id) oder ändern (id + rev): jede inhaltliche Änderung mit Grund in der
@@ -428,10 +548,12 @@ switch ($action) {
             $b = body();
             $erg = qs_paket_pruefen($b['paket'] ?? null, $me);
             $leer = qs_leer();
-            if (!empty($b['vorschau'])) respond(['ok' => true, 'zahlen' => $erg['zahlen'], 'fehler' => $erg['fehler'], 'leer' => $leer]);
+            $dateien = qs_dateien_zahl(qs_doc('qs-dokumente')['liste']);
+            if (!empty($b['vorschau'])) respond(['ok' => true, 'zahlen' => $erg['zahlen'], 'fehler' => $erg['fehler'], 'leer' => $leer, 'dateien' => $dateien]);
             if ($erg['fehler']) respond(['ok' => false, 'error' => 'Das Datenpaket enthält Fehler – nichts übernommen.', 'fehler' => $erg['fehler']], 422);
             with_lock('qs-dokumente', function () use ($erg, $b) {
                 if (!qs_leer() && empty($b['ersetzen'])) fail('Im QM-System sind schon Daten. Zum Ersetzen „Vorhandene Daten ersetzen“ wählen.', 409);
+                if ($n = qs_dateien_zahl(qs_doc('qs-dokumente')['liste'])) fail("In der Dokumentenablage liegen schon $n Dateien – ein Datenpaket kann die Dokumente dann nicht mehr ersetzen (die Dateien gingen verloren).", 409);
                 $alt = qs_stamm();
                 $stamm = $erg['stamm']; $stamm['rev'] = $alt['rev']; $stamm['einstellungen'] = $alt['einstellungen'];
                 qs_schreiben('qs-stamm', $stamm);

@@ -117,6 +117,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand-mhd.php` | plattform | Modul Bestand · MHD-Liste an den Verkauf: dieselbe Liste wie die Suche „MHD“ im Bestand (kürzestes MHD bis heute + 14 Tage, früheste zuerst), als Excel-Datei (ohne PHP-Erweiterung „zip“, unkomprimiertes ZIP) und … |
 | `bestand-pdf.php` | bestand | Bestand als PDF (Verwaltung → Bestand → „PDF“) |
 | `bestand.php` | bestand | Bestandsliste und Stammdaten |
+| `dateiablage.php` | plattform | Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien eines Moduls (z. |
 | `diagnose.php` | plattform | Sicherheit für IT-Administratoren |
 | `einkauf.php` | einkauf | Einkauf: Fehlmengen aus offenen Bestellwünschen gegenüber der zuletzt übernommenen Bestandsliste. |
 | `einzelangebote.php` | angebot | Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Einzelangebote). |
@@ -682,6 +683,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_passwortpruefung.py` | plattform | Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst auf AUX_PORT): standardmäßig aus; eingeschaltet werden betroffene Passwörter beim Festlegen abgelehnt (Mitarbeiter, Kunden), bestehende bei der … |
 | `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
+| `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
 | `test_restposten.py` | angebot | Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. |
 | `test_revert.py` | angebot | sauberer Ausgangspunkt: einmal veröffentlichen |

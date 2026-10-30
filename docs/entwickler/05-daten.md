@@ -20,7 +20,10 @@ Anfrage:
 
 Auch bei SQLite bleiben drei **Seitendateien** Dateien (`STORE_SIDECARS`): `mail-schluessel` (Schlüssel des
 Postfach-Passworts), `sicherung` und `deployment` (Statusdateien der Skripte). Außerhalb der Speicherschicht liegen die
-Länder- und Ortsdatenbank (`geo/`).
+Länder- und Ortsdatenbank (`geo/`) und die **Dateiablage** (`daten/dateien/`, `lib/dateiablage.php`): hochgeladene Dateien
+der Module als `<bereich>/<xx>/<id>.bin` – in beiden Speicherarten im Dateisystem, nie als `*.php` (die Werkzeuge für
+Sicherungsprüfung und Umschalten behandeln nur `*.php` als Dokumente); unvollständige Uploads unter `dateien/.teile/*.tmp`
+(nicht gesichert, nach 24 h entfernt). Die Metadaten (Name, Größe, SHA-256, wer, wann) stehen im Dokument des Moduls.
 
 Die SQLite-Ablage übernimmt die Dokumente **unverändert** als JSON – es gibt keine Tabellen je Kunde oder Artikel. Für den
 Code ist die Speicherart daher unsichtbar; jede Änderung muss in beiden Arten funktionieren (die E2E-Suite läuft in
@@ -35,7 +38,8 @@ Timer ruft `aktualisieren.sh` sie höchstens einmal am Tag auf; sofort: `--jetzt
 `sicherungen/` im Projektordner, nur für root lesbar. Jede Sicherung wird probeweise entpackt und geprüft; bei SQLite
 über die Backup-API (konsistenter Schnappschuss). Nicht gesichert wird `mail-schluessel` – nach einer Wiederherstellung
 auf neuem Server das Postfach-Passwort neu eingeben. Läuft Keycloak, wird dessen Datenbank zusätzlich gesichert. Status
-im Dokument `sicherung` (Anzeige unter „Sicherheit“).
+im Dokument `sicherung` (Anzeige unter „Sicherheit“). Die Dateiablage `daten/dateien/` ist Teil des Archivs – mit
+hochgeladenen Dateien wächst die Sicherung entsprechend.
 
 ## 5.2 Formate nur erweitern (GR-006)
 
@@ -470,6 +474,11 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   vorige gültige Version wird `ersetzt`. Wer in `bearbeiter` steht, prüft nicht (4-Augen-Prinzip, serverseitig). Die Antwort ergänzt
   `zustand` (`gueltig|entwurf|pruefung|ohne|eingezogen|register`) und `ueberpruefung` (`{"seit", "faelligAb", "faellig"}` – seit der
   letzten Freigabe bzw. `ueberprueft`, nach `ueberpruefungMonate`).
+  **Dokumentenablage** (optional, seit Bauabschnitt 2): `dateien: [{"id": "<20 Hex>", "name", "art": "pdf|docx|…", "mime", "groesse",
+  "sha256", "hochgeladen": {"t", "von", "vonId"}, "nachgetragen": true?, "entfernt": {"t", "von", "vonId", "grund"}?}]` je Version
+  (gelenkt) bzw. am Dokument (Ordner, extern); die Datei selbst liegt in der Dateiablage (Bereich `qs`). Im Entwurf (`qs.bearbeiten`,
+  wer ablegt oder löscht, kommt in `bearbeiter`) wird endgültig gelöscht; sonst nur `entfernt` vermerkt (freigegebene/ersetzte Versionen
+  nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 50 Dateien je Stelle.
 - **`qs-handbuch`**: `{"id": "h…", "rev", "kapitel", "pos", "nr": "2.0.14", "titel", "text", "verweise": ["1.3-L02 HACCP-Analyse"], "ifs",
   "zustaendig", "vertreter", "entfallen": {…}|null, "aenderungen": [{"datum", "was", "grund", "von"}]}`. Ein Abschnitt „Ziel“ steht in der
   Oberfläche als Einleitung des Kapitels.
@@ -493,7 +502,8 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
 Datenpaket (`qs_import`, nur mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
 "dokumente": [{… , "versionen": [{"nr", "datum", "aenderungen", "grund", "erstellt", "geprueft", "freigegeben"}]}], "handbuch", "pruefungen",
 "massnahmen"}` – die höchste Version gilt, ältere sind `ersetzt`; Verknüpfungen mit Mitarbeitern und Zuweisungen enthält das Paket nicht.
-Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (Einstellungen bleiben, Nachweise werden geleert). Echte Pakete
+Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (Einstellungen bleiben, Nachweise werden geleert); sobald in
+der Dokumentenablage Dateien liegen, gar nicht mehr (409 – die Dateien gingen sonst verloren; die Vorschau nennt `dateien`). Echte Pakete
 liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/qs/datenpaket.json`.
 
 ## 5.4 Datenverantwortung (GR-101)
