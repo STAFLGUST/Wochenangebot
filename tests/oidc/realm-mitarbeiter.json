@@ -405,6 +405,39 @@
       }
     },
     {
+      "clientId": "qs",
+      "baseUrl": "https://qs.stafl.test:8443/module/qs/",
+      "name": "Qualitätssicherung",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "@GEHEIM_QS@",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "https://qs.stafl.test:8443/oidc/callback"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://qs.stafl.test:8443/dashboard/abgemeldet.html",
+        "backchannel.logout.url": "https://qs.stafl.test:8443/oidc/callback?logout=backchannel",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "true",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "use.refresh.tokens": "false",
+        "minimum.acr.value": "mfa",
+        "default.acr.values": "mfa"
+      }
+    },
+    {
       "clientId": "sicherheit",
       "baseUrl": "https://sicherheit.stafl.test:8443/module/sicherheit/",
       "name": "Sicherheit",

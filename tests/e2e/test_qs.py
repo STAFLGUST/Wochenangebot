@@ -1,7 +1,7 @@
 """Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System: Dokumentenlenkung, QM-Handbuch,
 Prüfplan, Maßnahmen.
 
-Geprüft: Register (in Entwicklung, ohne Freigabe auch Administrator 404, keine Produktivfreigabe, Testfreigabe mit Testern);
+Geprüft: Register (fertig und produktiv unter qs.dashboard-stafl.de, Kachel verfügbar, keine Testfreigabe über die Modulverwaltung, ohne Tester-Eintrag erreichbar);
 Rechte serverseitig (GR-103): ohne Anmeldung, ohne QM-Recht, ansehen, Kontrollen durchführen, bearbeiten, freigeben, verwalten;
 ohne CSRF, GET auf schreibende Aktion; Kapitel, Personen mit Verknüpfung zu Mitarbeitern (unbekannt, doppelt), Einstellung
 „Überprüfung fällig nach“ (6–120 Monate); Dokumente (Pflichtfelder, Nr. eindeutig, Ablage nur Pfad oder http(s), neues
@@ -87,14 +87,14 @@ L, Be, Q, F, V, O, KA, N = K['lisa'], K['bernd'], K['quinn'], K['fritz'], K['ver
 # ── Register und Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['qs']
 ob = {o['id']: o for o in mod['oberflaechen']}
-check('Register: Qualitätssicherung in Entwicklung, ohne Freigabe, Adresse qs.dashboard-stafl.de/module/qs/',
-      mod['name'] == 'Qualitätssicherung' and ob['intern']['entwicklung'] == 'in_entwicklung' and ob['intern']['freigabe'] == 'keine'
+check('Register: Qualitätssicherung fertig und produktiv (Entscheidung des Inhabers 30.10.2026), Adresse qs.dashboard-stafl.de/module/qs/',
+      mod['name'] == 'Qualitätssicherung' and ob['intern']['entwicklung'] == 'fertig' and ob['intern']['freigabe'] == 'produktiv'
       and ob['intern']['adresse'] == 'https://qs.dashboard-stafl.de/module/qs/', (mod['name'], ob['intern']))
+check('Kachel: verfügbar, Ziel qs.intern', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True and mod['kachel']['ziel'] == 'qs.intern', mod['kachel'])
 check('QS-Portal (extern) bleibt geplant und gesperrt', ob['portal']['art'] == 'extern' and ob['portal']['entwicklung'] == 'geplant' and not ob['portal']['zugang'])
-check('ohne Freigabe: auch Administrator 404', A.call('qs_start')[0] == 404)
-check('keine Produktivfreigabe für ein Modul in Entwicklung (422)', A.call('modul_freigabe_save', {'bereich': 'qs.intern', 'freigabe': 'produktiv', 'grund': 'Test'})[0] == 422)
-check('Testfreigabe gesetzt', A.call('modul_freigabe_save', {'bereich': 'qs.intern', 'freigabe': 'test', 'grund': 'Abnahme QM-System'})[0] == 200)
-check('Tester eingetragen', A.call('modul_tester_save', {'bereich': 'qs.intern', 'tester': [ids[x] for x in ('admin', 'lisa', 'bernd', 'quinn', 'fritz', 'vera', 'otto', 'kai')], 'grund': 'Abnahme'})[0] == 200)
+st, r = A.call('modul_freigabe_save', {'bereich': 'qs.intern', 'freigabe': 'test', 'grund': 'Test'})
+check('Produktivbereich: keine Testfreigabe über die Modulverwaltung (nur über ein Release)', st == 422, (st, r))
+check('produktiv ohne Tester-Eintrag: Administrator und Mitarbeiter mit QM-Recht erreichen das Modul', A.call('qs_start')[0] == 200 and L.call('qs_start')[0] == 200)
 
 # ── Rechte ──
 check('ohne Anmeldung: kein Zugang (401/404)', N.call('qs_start')[0] in (401, 404))

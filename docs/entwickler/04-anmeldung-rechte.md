@@ -30,7 +30,8 @@ Alle Mitarbeiter-Hosts sind dieselbe PHP-Anwendung. Welcher Bereich ein Host ist
 | `controlling.dashboard-stafl.de` | eigene Seite `/module/controlling/` (`/admin` → dorthin) | `controlling.intern` | Client `controlling` |
 | `leergut.dashboard-stafl.de` | eigene Seite `/module/leergut/` (`/admin` → dorthin) | `leergut.intern` | Client `leergut` |
 | `rewe.dashboard-stafl.de` | eigene Seite `/module/rewe/` (`/admin` → dorthin) | `rewe.intern` | Client `rewe` |
-| `qs.`, `einkauf.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
+| `qs.dashboard-stafl.de` | eigene Seite `/module/qs/` (`/admin` → dorthin) | `qs.intern` | Client `qs` |
+| `einkauf.`, `container-import.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
 
 Jeder Mitarbeiter-VirtualHost setzt außerdem `WA_OIDC 1`, `WA_OIDC_ISSUER` (Realm `mitarbeiter`) und
 `WA_OIDC_ACR mfa`. Caddy leitet die Mitarbeiter-Hosts an `app-mitarbeiter:80`; dieses Ziel gibt es nur mit
