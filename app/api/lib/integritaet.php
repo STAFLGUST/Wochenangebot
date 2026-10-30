@@ -3,7 +3,8 @@ declare(strict_types=1);
 /* Dateiprüfung (wie ein Datei-Scanner gegen Schadcode): vergleicht die Programmdateien mit der Prüfliste der
    freigegebenen Fassung (integritaet-liste.php, beim Einspielen aus dem freigegebenen Commit erzeugt von
    deploy/bereitstellen.py; Wert = SHA-256 oder bei HTML-Seiten [mit, ohne Versionsnummern]), meldet unbekannte Dateien,
-   prüft den Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners) und sucht in unbekannten bzw.
+   prüft den Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners; Dateien der Dateiablage
+   data/dateien/<bereich>/<xx>/<id>.bin sind erwartet) und sucht in unbekannten bzw.
    veränderten Dateien und in gespeicherten Daten nach typischen Mustern von Hintertüren, Schadcode und Link-Spam.
    Dazu eine Übersicht der Komponenten (PHP, SQLite, OpenSSL, eingebundene Bibliotheken). Nur lesend, keine Dienste
    im Internet; es werden nie Dateiinhalte ausgegeben. Ergebnis im Dokument „integritaet“ (letzter Lauf + Verlauf). */
@@ -44,6 +45,9 @@ function integritaet_proxy_ok(?string $t): bool
     foreach ($j as $x) if (!is_string($x) || filter_var($x, FILTER_VALIDATE_IP) === false) return false;
     return true;
 }
+/* Dateiablage (lib/dateiablage.php): hochgeladene Dateien der Module unter data/dateien/<bereich>/<xx>/<id>.bin – erwartet;
+   nie ausgeführt (data/ liefert der Webserver nicht aus), Inhalt beliebig (PDF, Word …), daher nicht nach Mustern durchsucht */
+const INTEGRITAET_ABLAGE = '~^dateien/[a-z][a-z0-9-]{1,30}/[a-z0-9]{2}/[a-z0-9]{12,40}\\.bin$~';
 const INTEGRITAET_AUSFUEHRBAR = '~\.(?:php\d?|phtml|phar|pht|phps|inc|cgi|pl|py|sh|bash|shtml)$|(?:^|/)\.(?:htaccess|htpasswd|user\.ini)$~i';
 /* Muster: [Bezeichnung, regulärer Ausdruck, Stufe, Dateiarten (php = PHP-Dateien, web = JS/HTML/SVG, conf = .htaccess/.user.ini,
    daten = gespeicherte Dokumente)]. Die Ausdrücke sind so geschrieben, dass sie nicht auf diese Datei selbst passen. */
@@ -184,6 +188,7 @@ function integritaet_pruefen(): array
             $path = 'data/' . $rel;
             if (substr($base, -4) === '.tmp' || ($base[0] === '.' && substr($base, -5) === '.lock') || $rel === '.sqlite-active') continue;   // Zwischendateien, Sperren, Schalter
             $n++; $c['checked']++;
+            if (preg_match(INTEGRITAET_ABLAGE, $rel)) continue;   // Dateiablage der Module
             if (substr($base, -4) === '.php') {
                 $fh = @fopen($f->getPathname(), 'rb'); $head = $fh ? (string)fread($fh, 128) : ''; if ($fh) fclose($fh);
                 if ($rel === 'index.php') {
