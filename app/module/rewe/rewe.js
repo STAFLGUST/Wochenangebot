@@ -14,7 +14,7 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TABS = ['woche', 'maerkte', 'zuweisung', 'abschluss', 'einstellungen'];
   const S = {
-    csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, offenSeg: new Set(), busy: new Set(),
+    csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: false,
     maerkte: null, mSuche: '', mLw: '', mKauf: '', akteId: '', akte: null, aKw: '', abschluss: null,
     zAuswahl: new Set(), zSuche: '', zWer: '', zLw: '', zKauf: '', paket: null, edit: null, notizMarkt: '', toast: 0,
   };
@@ -135,6 +135,9 @@
   }
   const nichtFaellig = (m) => !m.antwort && !m.dauerFaellig && m.dauer && m.dauer.rhythmus > 0 && m.dauerNaechste && !S.offenSeg.has(m.id);
   const erledigt = (m) => !!m.antwort || nichtFaellig(m);
+  // Gerade beantwortete Märkte bleiben im Filter „Offen“ stehen (Mengen nachtragen), bis der Filter neu gewählt oder die Woche gewechselt wird
+  const zeigen = (m) => S.filter === 'alle' || (S.filter === 'offen' ? !erledigt(m) || S.sichtbar.has(m.id) : erledigt(m));
+  const neuAnsehen = () => { S.offenSeg.clear(); S.sichtbar.clear(); };
   function renderWoche() {
     const w = S.woche; if (!w) return;
     const eigen = !w.wer;
@@ -154,10 +157,11 @@
       <div class="rw-kpi"><span>Bestellt</span><b>${best.length} <small>Märkte</small></b><small>${esc(mengenText(mengen) || 'noch nichts')}</small></div>
       <div class="rw-kpi"><span>Daueraufträge zu bestätigen</span><b>${dauerOffen}</b><small>fällig nach Rhythmus</small></div>
       <div class="rw-kpi${wv.length ? ' warn' : ''}"><span>Wiedervorlagen fällig</span><b>${wv.length}</b><small>${esc(wv.slice(0, 3).map((m) => m.ort).join(' · ') || '–')}</small></div>`;
+    bestelltHtml(w, best, mengen);
     $$('#rw-w-filter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === S.filter)));
     const q = S.suche.trim().toLocaleLowerCase('de-DE');
     const html = w.gruppen.map((g) => {
-      const zeilen = g.maerkte.filter((m) => passt(m, q) && (S.filter === 'alle' || (S.filter === 'offen' ? !erledigt(m) : erledigt(m))));
+      const zeilen = g.maerkte.filter((m) => passt(m, q) && zeigen(m));
       const offen = g.maerkte.filter((m) => !erledigt(m)).length;
       const faellig = g.maerkte.filter((m) => !m.antwort && m.dauerFaellig && m.darfAntworten);
       return `<section class="rw-gruppe rw-glas" data-gruppe="${esc(g.id)}">
@@ -172,6 +176,31 @@
     }).join('');
     $('#rw-w-gruppen').innerHTML = (html || `<div class="rw-leer rw-glas"><h2>Keine Märkte in dieser Liste</h2><p>${darf('verwalten') ? 'Märkte weisen Sie unter „Zuweisung“ zu.' : 'Die Leitung weist Ihnen Märkte zu.'}</p></div>`) + ruhendHtml(w.ruhend || [], q);
   }
+  /* Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile */
+  function bestelltHtml(w, best, mengen) {
+    const el = $('#rw-w-bestellt');
+    el.hidden = !best.length;
+    if (!best.length) { el.innerHTML = ''; return; }
+    const ob = best.filter((m) => m.antwort.ohneBerechnung).length;
+    el.innerHTML = `<details class="rw-panel rw-glas rw-bestellt"${S.bestelltZu ? '' : ' open'}>
+      <summary class="rw-panelkopf"><h2>Bestellungen ${esc(kwKurz(w.kw))}${w.wer ? ' · ' + esc(w.werName) : ''}</h2>
+        <span class="rw-sub">${best.length} ${best.length === 1 ? 'Markt' : 'Märkte'} · ${esc(mengenText(mengen))}${ob ? ` · ${ob} ohne Berechnung` : ''}</span></summary>
+      <ul class="rw-bliste">${best.map((m) => `<li><button type="button" class="rw-beintrag" data-zeige="${esc(m.id)}">
+        <span class="rw-bort">${esc(m.ort)}<span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : ''].filter(Boolean).join(' · '))}</span></span>
+        <span class="rw-sub">${esc(m.lieferwegName || 'ohne Lieferweg')}${w.wer === '*' && m.zustaendigName ? ' · ' + esc(m.zustaendigName) : ''}</span>
+        <span class="rw-bmenge">${esc(mengenText(m.antwort.mengen))}${m.antwort.ohneBerechnung ? ' <span class="rw-chip gelb">ohne Berechnung</span>' : ''}${m.antwort.nachtrag ? ' <span class="rw-chip akzent">Nachtrag</span>' : ''}</span>
+      </button></li>`).join('')}</ul></details>`;
+  }
+  $('#rw-w-bestellt').addEventListener('toggle', (ev) => { if (ev.target.matches('details')) S.bestelltZu = !ev.target.open; }, true);
+  $('#rw-w-bestellt').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-zeige]'); if (!b) return;
+    const id = b.dataset.zeige;
+    S.sichtbar.add(id);
+    if (S.suche) { S.suche = ''; $('#rw-w-suche').value = ''; }
+    renderWoche();
+    const z = $(`.rw-zeile[data-id="${CSS.escape(id)}"]`);
+    if (z) { z.scrollIntoView({ behavior: 'smooth', block: 'center' }); z.classList.add('blink'); setTimeout(() => z.classList.remove('blink'), 1600); }
+  });
   function zelleHtml(v) {
     const t = `${kwKurz(v.kw)}: ${v.status ? S.d.antworten[v.status] + (v.menge ? ' ' + v.menge : '') : 'nicht abgefragt'}`;
     if (v.status === 'bestellt') return `<i class="rw-z b" title="${esc(t)}">${v.menge}</i>`;
@@ -209,7 +238,7 @@
       if (a) antwort += `<input class="rw-eingabe rw-notizfeld" data-notiz="${esc(m.id)}" maxlength="300" value="${esc(a.notiz)}" placeholder="Notiz zur Woche (optional)" aria-label="Notiz zur Woche ${esc(m.ort)}"${dis}>`;
     }
     const meta = a ? `<span class="rw-sub">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span> ' : ''}${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span>` : '';
-    return `<div class="rw-zeile${erledigt(m) ? ' erledigt' : ''}" data-id="${esc(m.id)}">
+    return `<div class="rw-zeile${erledigt(m) ? ' erledigt' : ''}${S.sichtbar.has(m.id) && S.filter === 'offen' && erledigt(m) ? ' gerade' : ''}" data-id="${esc(m.id)}">
       <div class="rw-c-markt"><span class="rw-mname">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : ''].filter(Boolean).join(' · '))}</span></div>
       <div class="rw-c-hinweise rw-hinweise">${chips.join('')}</div>
       <div class="rw-c-verlauf rw-zellen" role="img" aria-label="Verlauf der letzten acht Wochen">${m.verlauf.map(zelleHtml).join('')}</div>
@@ -243,6 +272,7 @@
     if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Speichern fehlgeschlagen'), true); renderWoche(); return; }
     m.antwort = r.data.antwort;
     S.offenSeg.delete(id);
+    S.sichtbar.add(id);   // Zeile bleibt stehen (Mengen, Notiz), auch im Filter „Offen“
     renderWoche();
   }
   $('#rw-w-gruppen').addEventListener('click', async (ev) => {
@@ -282,12 +312,12 @@
     if (t.dataset.notiz) sende(t.dataset.notiz, { notiz: t.value.trim() });
     else if (t.dataset.ob) sende(t.dataset.ob, { ohneBerechnung: t.checked });
   });
-  $('#rw-w-zurueck').addEventListener('click', () => { S.kw = kwPlus(S.kw, -1); S.offenSeg.clear(); zeigeTab('woche', S.kw); });
-  $('#rw-w-vor').addEventListener('click', () => { S.kw = kwPlus(S.kw, 1); S.offenSeg.clear(); zeigeTab('woche', S.kw); });
-  $('#rw-w-heute').addEventListener('click', () => { S.kw = S.d.abfrage; S.offenSeg.clear(); zeigeTab('woche', S.kw); });
-  $('#rw-w-wer').addEventListener('change', (ev) => { S.wer = ev.target.value; S.offenSeg.clear(); ladeWoche(); });
+  $('#rw-w-zurueck').addEventListener('click', () => { S.kw = kwPlus(S.kw, -1); neuAnsehen(); zeigeTab('woche', S.kw); });
+  $('#rw-w-vor').addEventListener('click', () => { S.kw = kwPlus(S.kw, 1); neuAnsehen(); zeigeTab('woche', S.kw); });
+  $('#rw-w-heute').addEventListener('click', () => { S.kw = S.d.abfrage; neuAnsehen(); zeigeTab('woche', S.kw); });
+  $('#rw-w-wer').addEventListener('change', (ev) => { S.wer = ev.target.value; neuAnsehen(); ladeWoche(); });
   $('#rw-w-suche').addEventListener('input', (ev) => { S.suche = ev.target.value; renderWoche(); });
-  $('#rw-w-filter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-f]'); if (b) { S.filter = b.dataset.f; renderWoche(); } });
+  $('#rw-w-filter').addEventListener('click', (ev) => { const b = ev.target.closest('[data-f]'); if (b) { S.filter = b.dataset.f; S.sichtbar.clear(); renderWoche(); } });
 
   /* ================= Märkte und Marktakte ================= */
   async function ladeMaerkte() {

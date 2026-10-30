@@ -330,6 +330,28 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
 .rw-zkopf{background:var(--rw-head-bg);color:var(--rw-head-text);font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
 .rw-zeile{border-top:1px solid var(--rw-line);background:var(--rw-card)}
 .rw-zeile.erledigt{background:transparent}
+.rw-zeile.gerade{box-shadow:inset 3px 0 0 var(--rw-green);background:var(--rw-card)}   /* gerade beantwortet, bleibt im Filter „Offen“ stehen */
+.rw-zeile.blink{animation:rw-blink 1.6s ease-out}
+@keyframes rw-blink{0%,55%{background:var(--rw-green-soft)}100%{background:var(--rw-card)}}
+/* Bestellungen der Woche */
+.rw-bestellt>summary{cursor:pointer;list-style:none;margin-bottom:0}
+.rw-bestellt>summary::-webkit-details-marker{display:none}
+.rw-bestellt>summary h2::before{content:"▸";display:inline-block;margin-right:7px;color:var(--rw-muted);transition:transform .15s}
+.rw-bestellt[open]>summary h2::before{transform:rotate(90deg)}
+.rw-bestellt[open]>summary{margin-bottom:10px}
+.rw-bliste{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rw-beintrag{width:100%;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.3fr);gap:12px;align-items:center;padding:9px 12px;border-radius:12px;
+  border:1px solid var(--rw-border);background:var(--rw-card);color:var(--rw-text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.rw-beintrag:hover{border-color:var(--rw-green)}
+.rw-beintrag:focus-visible{outline:2px solid var(--rw-focus);outline-offset:2px}
+.rw-bort{display:flex;flex-direction:column;min-width:0;font-weight:700}
+.rw-bort .rw-sub{font-weight:400;font-size:11px}
+.rw-bmenge{font-weight:650;font-variant-numeric:tabular-nums}
+@media(max-width:700px){
+  .rw-beintrag{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px}
+  .rw-beintrag>.rw-sub{grid-column:1/-1;grid-row:2}
+  .rw-bmenge{text-align:right}
+}
 .rw-mname{font-weight:700;font-size:14px;overflow-wrap:anywhere}
 .rw-zeile .rw-sub{font-size:12px}
 .rw-hinweise{display:flex;gap:5px;flex-wrap:wrap;min-width:0}
