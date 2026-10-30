@@ -284,7 +284,17 @@
     $('#kal-legende').innerHTML = (voll ? art('U', 'Urlaub') + art('K', 'Krank') + art('G', 'Gleittag') + art('X', 'freier Tag')
       + '<span><b class="hr-art U offen">U?</b>beantragt</span>' : art('A', 'abwesend'))
       + f('', 'Wochenende', 'background:var(--hr-wochenende)') + f('', 'Feiertag', 'background:var(--hr-feiertag)')
-      + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)');
+      + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)')
+      + f('', 'Heute', 'background:var(--hr-heute);box-shadow:inset 2px 0 0 var(--hr-akzent-ink),inset -2px 0 0 var(--hr-akzent-ink)');
+  }
+  /* Spalte „heute“ in den sichtbaren Bereich holen (am Handy scrollt die Tabelle waagerecht): nur wenn sie verdeckt ist,
+     dann mittig rechts neben die festen Namen */
+  function heuteSichtbar() {
+    const th = $('#kal-plan thead th.heute'), box = $('#kal-plan').parentElement, name = $('#kal-plan thead th.name');
+    if (!th || !box || box.scrollWidth <= box.clientWidth) return;
+    const links = name ? name.offsetWidth : 0, sicht = box.clientWidth - links;
+    if (th.offsetLeft - links >= box.scrollLeft && th.offsetLeft + th.offsetWidth <= box.scrollLeft + box.clientWidth) return;
+    box.scrollLeft = Math.max(0, th.offsetLeft - links - (sicht - th.offsetWidth) / 2);
   }
   /* Ansicht „Monat“ oder „± 2 Wochen“ um einen Tag (Standard heute, Pfeile verschieben um eine Woche) und Filter nach
      Abteilungen. Beides merkt sich nur dieser Browser (Bequemlichkeit, keine Berechtigung – der Server liefert
@@ -341,7 +351,13 @@
     zeigeKalender();
   }
   /* Abteilung als durchgehender Balken über die ganze Breite; Name bleibt beim seitlichen Wischen links stehen (Kalender und Übersicht) */
-  const abtZeile = (abt, n, spalten) => `<tr class="abt"><th colspan="${spalten}" scope="rowgroup"><span>${esc(abt || 'Ohne Abteilung')}<small>${n}</small></span></th></tr>`;
+  // Abteilungsbalken; im Kalender mit der Spalte „heute“ (Index ab 0 nach der Namensspalte) geteilt, damit die Heute-Säule durchläuft
+  const abtZeile = (abt, n, spalten, heute = -1) => {
+    const titel = `<span>${esc(abt || 'Ohne Abteilung')}<small>${n}</small></span>`;
+    if (heute < 0) return `<tr class="abt"><th colspan="${spalten}" scope="rowgroup">${titel}</th></tr>`;
+    const rest = spalten - heute - 2;
+    return `<tr class="abt"><th colspan="${heute + 1}" scope="rowgroup">${titel}</th><td class="heute" aria-hidden="true"></td>${rest > 0 ? `<th class="rest" colspan="${rest}" aria-hidden="true"></th>` : ''}</tr>`;
+  };
   function kalFilter(alle) {
     const aktiv = S.kal.abt;
     const knopf = (wert, text, an) => `<button type="button" class="hr-chip" data-abt="${esc(wert)}" aria-pressed="${an}">${esc(text)}</button>`;
@@ -358,10 +374,12 @@
     const kl = (t) => (t.feiertag ? 'ft' : t.wochenende ? 'we' : t.ferien ? 'fe' : '');
     const neuerMonat = (t, i) => zeitraum && i > 0 && t.tag === 1;   // Monatswechsel im Zeitraum: Trennlinie und „1.11.“
     let html = '<thead><tr><th class="name" scope="col">Mitarbeiter</th>' + m.tage.map((t, i) =>
-      `<th scope="col" class="${kl(t)}${t.sperre ? ' sp' : ''}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}" title="${esc([de(t.datum), t.feiertag, t.sperre ? 'Urlaubssperre' : ''].filter(Boolean).join(' · '))}"><small>${t.wt}</small>${neuerMonat(t, i) ? `1.${t.datum.slice(5, 7)}.` : t.tag}</th>`).join('') + '</tr></thead><tbody>';
+      `<th scope="col" class="${kl(t)}${t.sperre ? ' sp' : ''}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}" title="${esc([de(t.datum), t.datum === heute ? 'heute' : '', t.feiertag, t.sperre ? 'Urlaubssperre' : ''].filter(Boolean).join(' · '))}"${t.datum === heute ? ' aria-current="date"' : ''}>`
+      + (t.datum === heute ? `<small>Heute</small><span class="hr-heute-tag">${neuerMonat(t, i) ? `1.${t.datum.slice(5, 7)}.` : t.tag}</span>` : `<small>${t.wt}</small>${neuerMonat(t, i) ? `1.${t.datum.slice(5, 7)}.` : t.tag}`) + '</th>').join('') + '</tr></thead><tbody>';
+    const heuteSpalte = m.tage.findIndex((t) => t.datum === heute);
     let abt = null;
     for (const p of personen) {
-      if (p.abteilung !== abt) { abt = p.abteilung; html += abtZeile(abt, personen.filter((x) => x.abteilung === abt).length, m.tage.length + 1); }
+      if (p.abteilung !== abt) { abt = p.abteilung; html += abtZeile(abt, personen.filter((x) => x.abteilung === abt).length, m.tage.length + 1, heuteSpalte); }
       html += `<tr class="${p.ich ? 'ich' : ''}"><th class="name" scope="row" title="${esc(p.name)}">${esc(p.name)}</th>` + m.tage.map((t, i) => {
         const k = p.tage[t.datum] || '';
         const offen = k.endsWith('?'), code = offen ? k.slice(0, -1) : k;
@@ -373,6 +391,7 @@
     }
     if (!m.personen.length) html += `<tr><td class="name" colspan="${m.tage.length + 1}">Noch keine Mitarbeiter angelegt.</td></tr>`;
     $('#kal-plan').innerHTML = html + '</tbody>';
+    heuteSichtbar();
   }
   $('#tab-kalender').addEventListener('click', async (e) => {
     const k = S.kal;

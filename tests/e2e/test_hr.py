@@ -998,8 +998,11 @@ with sync_playwright() as p:
       const fertig = () => { if (cur && Number(cur.querySelector('small').textContent) !== n) ok = false; };
       for (const r of rows) { if (r.classList.contains('abt')) { fertig(); cur = r; n = 0; } else n++; }
       fertig();
-      const th = document.querySelector('#kal-plan tr.abt th'), name = document.querySelector('#kal-plan tbody th.name');
-      return { ok, volle: th.colSpan === spalten && Math.abs(th.getBoundingClientRect().width - document.querySelector('#kal-plan').getBoundingClientRect().width) < 2,
+      // Balken = alle Zellen der Zeile (im Monat mit „heute“ geteilt: Titel · Heute-Säule · Rest), zusammen volle Breite in der Balkenfarbe
+      const tr = document.querySelector('#kal-plan tr.abt'), th = tr.querySelector('th'), name = document.querySelector('#kal-plan tbody th.name');
+      const zellen = [...tr.children], breite = zellen.reduce((s, c) => s + c.getBoundingClientRect().width, 0);
+      return { ok, volle: zellen.reduce((s, c) => s + c.colSpan, 0) === spalten && Math.abs(breite - document.querySelector('#kal-plan').getBoundingClientRect().width) < 2
+                 && zellen.every((c) => getComputedStyle(c).backgroundColor === getComputedStyle(th).backgroundColor),
                farbe: getComputedStyle(th).backgroundColor !== getComputedStyle(name).backgroundColor };
     })()''')
     check('Kalender: Abteilung als Balken über die volle Breite, abgesetzte Farbe, Anzahl der Mitarbeiter', balken['ok'] and balken['volle'] and balken['farbe'], balken)
@@ -1030,6 +1033,20 @@ with sync_playwright() as p:
     wechsel = von_.month != bis_.month
     check('± 2 Wochen: Einträge aus beiden Monaten (wie der Server je Monat), Trennlinie am Monatswechsel', ui == erwartet and (ui > 0 or not wechsel)
           and pg.locator('#kal-plan thead th.mstart').count() == (1 if wechsel else 0), (ui, erwartet, wechsel))
+    # Heute-Säule (Inhaber 30.10.2026): Kopf „Heute“ mit Datum im Kreis, Kanten durch alle Zeilen und Abteilungsbalken, Legende
+    hs = pg.evaluate('''() => {
+      const th = document.querySelector('#kal-plan thead th.heute'), abt = [...document.querySelectorAll('#kal-plan tr.abt')];
+      const breite = (tr) => [...tr.children].reduce((s, c) => s + (c.colSpan || 1), 0);
+      const td = document.querySelector('#kal-plan tbody tr:not(.abt) td.heute');
+      return { aktuell: th.getAttribute('aria-current'), klein: th.querySelector('small').textContent, kreis: th.querySelector('.hr-heute-tag').textContent,
+               abtHeute: abt.every((tr) => tr.querySelectorAll('td.heute').length === 1 && breite(tr) === 30), kante: getComputedStyle(td).boxShadow,
+               monat: (document.querySelector('#kal-plan thead th.mstart') ? getComputedStyle(document.querySelector('#kal-plan thead th.mstart')).borderLeftColor : '') };
+    }''')
+    check('Heute-Säule: Kopf „Heute“ mit Datum im Kreis (aria-current), Kanten in jeder Zeile, Abteilungsbalken durchlaufend',
+          hs['aktuell'] == 'date' and hs['klein'] == 'Heute' and hs['kreis'] in (str(heute_.day), f'1.{heute_.month:02d}.') and hs['abtHeute']
+          and hs['kante'].count('inset') == 2, hs)
+    check('Monatswechsel neutral grau (Bordeaux nur für „heute“), Legende nennt „Heute“', (not wechsel or hs['monat'] == 'rgba(28, 26, 25, 0.28)')
+          and 'Heute' in pg.text_content('#kal-legende'), hs['monat'])
     pg.screenshot(path=os.path.join(SH, 'hr_kalender_2wochen_1280.png'), full_page=True)
     pg.emulate_media(color_scheme='dark')
     pg.screenshot(path=os.path.join(SH, 'hr_kalender_1280_dunkel.png'), full_page=True)
@@ -1116,6 +1133,10 @@ with sync_playwright() as p:
         check(f'{breite}px: Kalender ohne Gründe (nur „abwesend“ in der Legende)', 'Krank' not in pg.text_content('#kal-legende') and 'abwesend' in pg.text_content('#kal-legende'))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_{breite}.png'), full_page=True)
         pg.click('#kal-modus [data-modus="zeitraum"]'); pg.wait_for_function("document.querySelectorAll('#kal-plan thead th').length === 30")
+        sichtbar = pg.evaluate('''() => { const th = document.querySelector('#kal-plan thead th.heute'), box = document.querySelector('#kal-plan').parentElement;
+          const n = document.querySelector('#kal-plan thead th.name').getBoundingClientRect(), r = th.getBoundingClientRect(), b = box.getBoundingClientRect();
+          return r.left >= n.right - 1 && r.right <= b.right + 1; }''')
+        check(f'{breite}px: Spalte „heute“ ohne Wischen sichtbar (rechts neben den Namen)', sichtbar)
         check(f'{breite}px: ± 2 Wochen und Filter auch für Mitarbeiter, Seite ohne waagerechtes Scrollen', pg.locator('#kal-filter [data-abt]').count() > 1
               and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_2wochen_{breite}.png'), full_page=True)
