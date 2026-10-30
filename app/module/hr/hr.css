@@ -27,6 +27,9 @@ body.hr {
   --hr-feiertag: rgba(255, 192, 0, .38);
   --hr-ferien: rgba(112, 173, 71, .16);
   --hr-sperre: #d1342f;
+  --hr-abt: #e9e3dd;                            /* Abteilungsbalken (deckend) */
+  --hr-zeile-hover: rgba(140, 29, 44, .06);     /* Zeile unter dem Mauszeiger */
+  --hr-heute: rgba(140, 29, 44, .07);           /* Spalte „heute“ */
   --hr-u: #2f6fb0; --hr-u-bg: rgba(47, 111, 176, .14);
   --hr-k: #a8323f; --hr-k-bg: rgba(168, 50, 63, .13);
   --hr-g: #8a5a00; --hr-g-bg: rgba(226, 165, 74, .26);
@@ -44,6 +47,7 @@ body.hr {
     --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
     --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
     --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
+    --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .09);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
     --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
@@ -58,6 +62,7 @@ body.hr {
     --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
     --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
     --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
+    --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .09);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
     --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
@@ -185,12 +190,34 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; border-right: 1px solid var(--hr-linie); }
 .hr-plan thead .name { z-index: 3; }
 .hr-plan tr.ich .name { font-weight: 700; color: var(--hr-akzent-ink); }
-.hr-plan tr.abt th { position: sticky; left: 0; text-align: left; padding: 10px 12px 4px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--hr-muted); background: transparent; border-bottom: 0; }
+/* Abteilung: dunklerer Balken über die volle Breite mit Akzentkante und Anzahl; der Name wandert beim Wischen mit */
+.hr-plan tr.abt th, .hr-ueb tr.abt th { height: 30px; padding: 0; text-align: left; background: var(--hr-abt); box-shadow: inset 4px 0 0 var(--hr-akzent);
+  border-top: 1px solid var(--hr-linie); border-bottom: 1px solid var(--hr-linie); }
+.hr-plan tr.abt th > span, .hr-ueb tr.abt th > span { position: sticky; left: 0; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--hr-text); }
+.hr-plan tr.abt small, .hr-ueb tr.abt small { min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--hr-muted); background: var(--hr-deckend); }
+.hr-plan tbody tr:not(.abt):hover > * { background-image: linear-gradient(var(--hr-zeile-hover), var(--hr-zeile-hover)); }   /* Zeile beim Überfahren verfolgen */
+.hr-plan td.heute, .hr-plan thead th.heute { background-image: linear-gradient(var(--hr-heute), var(--hr-heute)); }
 .hr-plan .we { background: var(--hr-wochenende); }
 .hr-plan .ft { background: var(--hr-feiertag); }
 .hr-plan .fe { background: var(--hr-ferien); }
 .hr-plan thead th.sp { box-shadow: inset 0 -3px 0 var(--hr-sperre); }
-.hr-plan thead th.heute { color: var(--hr-akzent-ink); }
+.hr-plan th.mstart, .hr-plan td.mstart { border-left: 2px solid var(--hr-akzent); }   /* Monatswechsel in „± 2 Wochen“ */
+/* Kalender: „Heute“, Umschalter Monat / ± 2 Wochen, Filter nach Abteilungen */
+.hr-heute { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--hr-aus); color: var(--hr-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.hr-heute:hover { background: var(--hr-aus-hover); }
+.hr-modus { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--hr-aus); }
+.hr-modus button { height: 30px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--hr-muted); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.hr-modus button[aria-pressed="true"] { background: var(--hr-reiter-aktiv); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.hr-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.hr-chips:empty { display: none; }
+.hr-chip-titel { margin-right: 4px; font-size: 13px; color: var(--hr-muted); }
+.hr-chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--hr-linie); background: var(--hr-glass); color: var(--hr-text); font: inherit; font-size: 13px; cursor: pointer; }
+.hr-chip:hover { background: var(--hr-aus-hover); }
+.hr-chip[aria-pressed="true"] { background: var(--hr-akzent); border-color: var(--hr-akzent); color: #fff; }
+.hr-heute:focus-visible, .hr-modus button:focus-visible, .hr-chip:focus-visible { outline: none; box-shadow: var(--hr-fokus); }
+.hr-plan thead th.heute { color: var(--hr-akzent-ink); font-weight: 700; }
 .hr-plan td.klick { cursor: pointer; }
 .hr-plan td.klick:hover { box-shadow: inset 0 0 0 2px var(--hr-akzent); }
 .hr-plan td .hr-art { min-width: 22px; height: 22px; }
@@ -207,7 +234,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-tabelle .gedaempft { color: var(--hr-muted); }
 /* Urlaubsübersicht: Abteilungsgruppen, Rest hervorgehoben, Summenzeile */
 .hr-ueb th.name, .hr-ueb tbody th { text-align: left; font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--hr-text); background: none; position: static; }
-.hr-ueb tr.abt th { padding-top: 16px; font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; color: var(--hr-muted); }
+
 .hr-ueb td.rest { font-weight: 700; }
 .hr-ueb td.rest.minus { color: var(--hr-fehler); }
 .hr-ueb small { font-size: 11px; }

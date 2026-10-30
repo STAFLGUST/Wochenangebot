@@ -80,9 +80,15 @@
           <button type="button" class="hr-rund klein" data-monat="-1" aria-label="Vorheriger Monat"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
           <h1 id="kal-titel">Kalender</h1>
           <button type="button" class="hr-rund klein" data-monat="1" aria-label="Nächster Monat"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+          <button type="button" class="hr-heute" id="kal-heute">Heute</button>
+          <div class="hr-modus" id="kal-modus" role="group" aria-label="Zeitraum">
+            <button type="button" data-modus="monat" aria-pressed="true">Monat</button>
+            <button type="button" data-modus="zeitraum" aria-pressed="false">± 2 Wochen</button>
+          </div>
           <button type="button" class="btn" id="kal-eintragen" data-verwalten hidden>Abwesenheit eintragen</button>
         </div>
         <p class="hr-meldung" id="kal-meldung" role="status"></p>
+        <div class="hr-chips" id="kal-filter" role="group" aria-label="Abteilungen filtern"></div>
         <div class="hr-legende" id="kal-legende"></div>
         <div class="hr-plan-rahmen hr-glas"><table class="hr-plan" id="kal-plan"></table></div>
       </div>
