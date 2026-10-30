@@ -505,6 +505,12 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   "wirksamkeit": {"t", "von", "vonId", "notiz"}|null, "pruefung": "p…|", "nachweisId": "n…|", "erfasst", "geaendert", "verlauf"}` – Aufbau
   des IFS-Maßnahmenplans; `wirksam`/`verworfen` nur mit `qs.freigeben` und Notiz.
 
+Audit-Bericht (`qs_bericht`, `qs_bericht_excel`, GET `von`/`bis`, höchstens zwei Jahre, endet spätestens heute; `module/qs/bericht.php`)
+liest nur: Kalender-Intervalle je Periode wie die Fälligkeit (gezählt im Monat des Periodenendes; eine Periode zählt, wenn sie zum
+Stichtag `bis` vorbei ist oder schon einen Nachweis hat; Nachweise nach dem Stichtag zählen nicht), längere Intervalle als Fristenkette
+(`eingehalten|verspaetet|ueberfaellig|offen|nie`), Abweichungen mit Maßnahme, Maßnahmen (bis zum Stichtag erfasst, im Zeitraum offen oder
+abgeschlossen; Status Stand heute), Freigaben/Überprüfungen/Einziehungen und Handbuch-Änderungen im Zeitraum. Excel ohne Formeln.
+
 Datenpaket (`qs_import`, nur mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
 "dokumente": [{… , "versionen": [{"nr", "datum", "aenderungen", "grund", "erstellt", "geprueft", "freigegeben"}]}], "handbuch", "pruefungen",
 "massnahmen"}` – die höchste Version gilt, ältere sind `ersetzt`; Verknüpfungen mit Mitarbeitern und Zuweisungen enthält das Paket nicht.

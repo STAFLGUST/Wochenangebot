@@ -2,7 +2,7 @@
    warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. Alle Farben als --qm-*, dunkel doppelt
    definiert (Gerät und Wahl am Konto). Ampeln: grün = gültig/in Ordnung, gelb = bald fällig/in Arbeit, rot = überfällig.
    Tabellen werden unter 760 px zu Karten (data-label), damit die Seite auf dem Handy nie seitlich scrollt.
-   Druck: nur das Handbuch (Kapitel mit Abschnitten), ohne Kopf, Reiter und Knöpfe. */
+   Druck: das Handbuch (Kapitel mit Abschnitten) bzw. der Audit-Bericht (A4 quer), ohne Kopf, Reiter und Knöpfe. */
 body.qm {
   --qm-bg:#f4f1ee; --qm-text:#1c1a19; --qm-muted:#625c58; --qm-glass:rgba(255,255,255,.62); --qm-kopf:rgba(255,255,255,.9);
   --qm-card:#fff; --qm-border:rgba(45,38,35,.14); --qm-line:rgba(45,38,35,.11); --qm-gloss:rgba(255,255,255,.9);
@@ -298,7 +298,8 @@ mark{background:var(--qm-gelb-soft);color:inherit;border-radius:3px}
 /* Druck: nur das Handbuch */
 @media print{
   body.qm{background:#fff;color:#000}
-  .qm-bg,.qm-kopf,.qm-leiste,.qm-kapitelliste,.qm-fuss,.qm-toast,.qm-hb-kopf .qm-filterzeile,.qm-abschnitt .btn,.qm-tab:not(#qm-t-handbuch){display:none!important}
+  body.qm>.qm-seite:not(#print-root){display:block!important}   /* app.css blendet beim Druck alles außer #print-root aus */
+  .qm-bg,.qm-kopf,.qm-leiste,.qm-kapitelliste,.qm-fuss,.qm-toast,.qm-hb-kopf .qm-filterzeile,.qm-abschnitt .btn,.qm-tab:not(#qm-t-handbuch):not(#qm-t-bericht){display:none!important}
   .qm-seite{padding:0;max-width:none}
   .qm-handbuch{display:block}
   .qm-glas{background:#fff!important;box-shadow:none!important;border:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
@@ -542,3 +543,54 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
   .qm-aufgabe>.qm-chip{grid-column:2;justify-self:start}
 }
 @media print{.qm-titelzeile,.qm-dokpanel{display:none!important}}
+
+/* ---------- Audit-Bericht ---------- */
+.qm-b-feld{display:flex;align-items:center;gap:6px;color:var(--qm-muted);font-size:12px;font-weight:650}
+.qm-b-feld .qm-eingabe{min-width:0}
+.qm-b-steuer .qm-meldung{margin-top:8px}
+.qm-b-kopf{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-radius:20px;margin-bottom:12px}
+.qm-b-kopf h2{margin:3px 0 4px;font-size:22px;line-height:1.2;letter-spacing:-.02em;font-weight:760}
+.qm-b-kopf .qm-hilfe{margin:0}
+.qm-b-logo{height:30px;width:auto;flex:none}
+.qm-b-kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.qm-b-kpis .qm-kpi b{font-size:26px}
+.qm-b-abschnitt h3{margin:0;font-size:16px;font-weight:700}
+.qm-b-abschnitt .qm-panelkopf .qm-hilfe{margin:2px 0 0}
+.qm-b-unter{margin:16px 0 6px;font-size:13px;font-weight:700}
+.qm-b-unter:first-child{margin-top:0}
+.qm-b-matrix{min-width:max-content}
+.qm-b-matrix th.qm-b-mon,.qm-b-matrix td.qm-b-mon{text-align:center;padding:7px 3px;min-width:46px}
+.qm-b-matrix th.qm-b-mon small{display:block}
+.qm-b-matrix td.qm-b-titel{min-width:230px;max-width:320px}
+.qm-b-matrix td.qm-b-gesamt{white-space:nowrap}
+.qm-b-legende{margin:8px 2px 0}
+@media screen{   /* Prüfungen bleiben beim seitlichen Scrollen der Monate stehen */
+  .qm-b-matrix th:first-child,.qm-b-matrix td.qm-b-titel{position:sticky;left:0;z-index:1;background:var(--qm-card)}
+  .qm-b-matrix th:first-child{background:linear-gradient(var(--qm-head-bg),var(--qm-head-bg)),var(--qm-card)}
+}
+@media(max-width:560px){
+  .qm-b-feld{display:grid;gap:3px}
+  .qm-b-kopf{align-items:flex-start;padding:13px}
+  .qm-b-kopf h2{font-size:18px}
+  .qm-b-logo{display:none}
+  .qm-b-kpis .qm-kpi b{font-size:19px}
+  .qm-b-matrix td.qm-b-titel{min-width:150px;max-width:170px}
+}
+@page bericht{size:A4 landscape;margin:11mm}
+@media print{
+  .qm-bericht{page:bericht;-webkit-print-color-adjust:exact;print-color-adjust:exact;font-size:11px}
+  #qm-t-bericht .qm-b-steuer{display:none!important}
+  .qm-b-kopf{padding:0 0 8px;border-bottom:2px solid #8c1d2c!important;border-radius:0}
+  .qm-b-kpis{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+  .qm-b-kpis .qm-kpi{padding:8px 10px;border:1px solid #ccc;box-shadow:none;background:#fff}
+  .qm-b-kpis .qm-kpi b{font-size:18px}
+  .qm-b-abschnitt{padding:8px 0;border-radius:0;break-inside:auto}
+  .qm-b-abschnitt .qm-panelkopf{break-after:avoid}
+  .qm-plan-wrap,.qm-bericht .qm-tabelle-wrap{overflow:visible}
+  .qm-bericht .qm-tabelle tr{break-inside:avoid}
+  .qm-bericht .qm-tabelle th{background:#eef0ec}
+  .qm-b-matrix{min-width:0;width:100%}
+  .qm-b-matrix th.qm-b-mon,.qm-b-matrix td.qm-b-mon{min-width:0;padding:4px 1px}
+  .qm-b-matrix td.qm-b-titel{min-width:0}
+  .qm-b-matrix .qm-quote{min-width:0;padding:1px 3px;font-size:9px}
+}

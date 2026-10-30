@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-234 Aktionen in 14 Modulen.
+236 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -129,6 +129,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | --- | --- | --- | --- | --- | --- |
 | `qs_ablage_export` | `qs.intern` | lesend | – | Recht qs.sehen | `app/api/aktionen/qs.php` |
 | `qs_abschnitt_save` | `qs.intern` | schreibend | – | Recht qs.freigeben | `app/api/aktionen/qs.php` |
+| `qs_bericht` | `qs.intern` | lesend | – | – | `app/api/aktionen/qs.php` |
+| `qs_bericht_excel` | `qs.intern` | lesend | – | Recht qs.sehen | `app/api/aktionen/qs.php` |
 | `qs_datei` | `qs.intern` | lesend | – | Recht qs.sehen | `app/api/aktionen/qs.php` |
 | `qs_datei_entfernen` | `qs.intern` | schreibend | – | Recht qs.bearbeiten | `app/api/aktionen/qs.php` |
 | `qs_datei_hochladen` | `qs.intern` | schreibend | – | Recht qs.bearbeiten | `app/api/aktionen/qs.php` |

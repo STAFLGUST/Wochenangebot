@@ -42,6 +42,7 @@
           <button type="button" role="tab" data-tab="handbuch" aria-selected="false">Handbuch</button>
           <button type="button" role="tab" data-tab="pruefplan" aria-selected="false">Prüfplan</button>
           <button type="button" role="tab" data-tab="massnahmen" aria-selected="false">Maßnahmen</button>
+          <button type="button" role="tab" data-tab="bericht" aria-selected="false">Audit</button>
           <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" hidden>Einstellungen</button>
         </nav>
       </div>
@@ -157,6 +158,27 @@
       </section>
 
       <!-- Einstellungen -->
+      <!-- Audit-Bericht -->
+      <section class="qm-tab" id="qm-t-bericht" data-tab="bericht" hidden>
+        <section class="qm-panel qm-glas qm-b-steuer">
+          <div class="qm-panelkopf qm-panelkopf-filter">
+            <div><h2>Audit-Bericht</h2><p class="qm-hilfe">Für das IFS-Audit: Erfüllung des Prüfplans je Monat, Versäumnisse, Abweichungen, Maßnahmen und Dokumentenlenkung eines Zeitraums (höchstens zwei Jahre).</p></div>
+            <form class="qm-filterzeile" id="qm-b-form" novalidate>
+              <select class="qm-eingabe" id="qm-b-zeitraum" aria-label="Zeitraum">
+                <option value="12">Letzte 12 Monate</option><option value="jahr">Laufendes Jahr</option><option value="vorjahr">Vorjahr</option><option value="frei">Frei wählen</option>
+              </select>
+              <label class="qm-b-feld"><span>Von</span><input class="qm-eingabe" type="date" id="qm-b-von" required></label>
+              <label class="qm-b-feld"><span>Bis</span><input class="qm-eingabe" type="date" id="qm-b-bis" required></label>
+              <button class="btn sm primary" type="submit" id="qm-b-los">Bericht erstellen</button>
+              <button class="btn sm" type="button" id="qm-b-druck" disabled><svg class="i" aria-hidden="true"><use href="#i-druck"/></svg>Drucken / PDF</button>
+              <button class="btn sm" type="button" id="qm-b-excel" disabled><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Excel</button>
+            </form>
+          </div>
+          <p class="qm-meldung" id="qm-b-meldung" role="alert"></p>
+        </section>
+        <article class="qm-bericht" id="qm-b-bericht" aria-live="polite"></article>
+      </section>
+
       <section class="qm-tab" id="qm-t-einstellungen" data-tab="einstellungen" hidden>
         <section class="qm-panel qm-glas">
           <div class="qm-panelkopf"><h2>Personen und Kürzel</h2><button class="btn sm" type="button" id="qm-e-person-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Person</button></div>

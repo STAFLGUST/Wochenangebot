@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 /* Aktionen: QM-System (Oberfläche qs.intern, Daten und Regeln in app/api/module/qs/qs.php)
-   Rechte (GR-103): qs.sehen – Übersicht, Dokumente mit Versionen, Handbuch, Prüfplan mit Nachweisen, Maßnahmen, CSV;
+   Rechte (GR-103): qs.sehen – Übersicht, Dokumente mit Versionen, Handbuch, Prüfplan mit Nachweisen, Maßnahmen, CSV,
+                              Audit-Bericht (Ansicht und Excel);
                     qs.nachweis – Kontrollen durchführen: Nachweise für die eigenen (zugewiesenen) Prüfungen erfassen,
                                   eigene Nachweise stornieren;
                     qs.bearbeiten – Dokumente anlegen, Entwürfe schreiben, zur Prüfung geben, verwerfen; Nachweise aller
@@ -397,6 +398,31 @@ switch ($action) {
             $e = qs_ablage_eintraege(qs_doc('qs-dokumente')['liste'], $stamm, $kapitel, $alle, $heute);
             audit('qs', 'QM-System: Dokumentenablage als ZIP heruntergeladen (' . (count($e) - 1) . ' Dateien' . ($kapitel !== '' ? ', Kapitel ' . $kapitel : '') . ($alle ? ', mit älteren Versionen' : '') . ')');
             ablage_zip_senden('QM-System_' . ($kapitel !== '' ? ablage_zip_pfad($kapitel) . '_' : '') . $heute . '.zip', $e);
+        }
+
+        /* Audit-Bericht (GET von, bis): Prüfplan je Monat, Versäumnisse und Fristen, Abweichungen, Maßnahmen, Dokumentenlenkung
+           und Handbuch-Änderungen eines Zeitraums (module/qs/bericht.php); qs_bericht_excel liefert dasselbe als Excel und
+           vermerkt es im Protokoll. Nur lesen. */
+        case 'qs_bericht':
+        case 'qs_bericht_excel': {
+            $me = require_perm('qs.sehen');
+            header('Cache-Control: no-store');
+            require_once __DIR__ . '/../module/qs/bericht.php';
+            $heute = qs_heute();
+            [$von, $bis] = qs_bericht_zeitraum($_GET['von'] ?? '', $_GET['bis'] ?? '', $heute);
+            $namen = []; foreach (qs_mitarbeiter() as $m) $namen[$m['id']] = $m['name'];
+            $b = qs_bericht_daten(qs_stamm(), qs_doc('qs-dokumente')['liste'], qs_doc('qs-handbuch')['liste'], qs_doc('qs-pruefplan')['liste'],
+                                  qs_doc('qs-nachweise')['liste'], qs_doc('qs-massnahmen')['liste'], $namen, $von, $bis, $heute);
+            if ($action === 'qs_bericht') respond(['ok' => true, 'erstellt' => ['t' => now(), 'von' => (string)$me['name']]] + $b);
+            $xlsx = qs_bericht_xlsx($b, (string)$me['name']);
+            audit('qs', 'QM-System: Audit-Bericht ' . qs_de($von) . ' – ' . qs_de($bis) . ' als Excel heruntergeladen');
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="QM-Audit-Bericht_' . $von . '_' . $bis . '.xlsx"');
+            header('Content-Length: ' . strlen($xlsx));
+            header('Cache-Control: private, no-store');
+            header('X-Content-Type-Options: nosniff');
+            echo $xlsx;
+            exit;
         }
 
         /* Abschnitt des QM-Handbuchs anlegen (ohne id) oder ändern (id + rev): jede inhaltliche Änderung mit Grund in der
