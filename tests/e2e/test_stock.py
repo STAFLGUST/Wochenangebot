@@ -184,22 +184,53 @@ with sync_playwright() as p:
     A = Client('198.51.100.40'); A.call('login', {'username': 'admin', 'password': 'Sicheres-Passwort-1'})
     check('VK-Gruppen gespeichert', A.call('vkgruppen_save', {'rev': A.call('vkgruppen')[1]['rev'], 'groups': [{'nr': '1100', 'name': 'Rind frisch (Test)'}, {'nr': '1200', 'name': 'Färse (Test)'}]})[0] == 200)
     stamm = {'10000': ('Oberschale aus Stammdaten', '1100'), '10001': ('Oberschale JB aus Stammdaten', '1100'), '10002': ('Oberschale Färse aus Stammdaten', '1200')}
-    st_, r_ = A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [{'code': c, 'name': n, 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch', 'vkGruppe': g} for c, (n, g) in stamm.items()]})
-    check('Artikelstammdaten gespeichert', st_ == 200, r_)
     roh = {x[0]: x for x in master}
+    # Merkmale (Fleischart · Herkunft · Zustand, Entscheidung Inhaber 30.10.2026): ein Artikel nur mit Merkmalen (Name wie in
+    # der Bestandsliste, „Dry Aged“ steht nicht im Namen) und einer ganz ohne Merkmale (Sonstiges, unbekannt, ohne Herkunft)
+    im_bestand = {x['code'] for x in A.call('stock')[1]['stock']['articles']}
+    frei = [c for c, x in roh.items() if c in im_bestand and c not in stamm and not any(w in x[1].lower() for w in ('oberschale', 'dry', 'schwein', 'aus stammdaten'))]
+    c_dry, c_ohne = frei[0], frei[1]
+    extra = [{'code': c_dry, 'name': ' '.join(roh[c_dry][1].split()), 'category': 'Schwein', 'origin': 'DE', 'condition': 'dry-aged'},
+             {'code': c_ohne, 'name': ' '.join(roh[c_ohne][1].split()), 'category': 'Sonstiges', 'condition': 'unbekannt'}]
+    st_, r_ = A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [{'code': c, 'name': n, 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch', 'vkGruppe': g} for c, (n, g) in stamm.items()] + extra})
+    check('Artikelstammdaten gespeichert', st_ == 200, r_)
     sj = A.call('stock')[1]['stock']
     s1 = next(x for x in sj['articles'] if x['code'] == '10000')
+    sx = lambda c: next(x for x in sj['articles'] if x['code'] == c)   # noqa: E731
+    check('API: Merkmale aus den Stammdaten (Fleischart · Herkunft · Zustand, Sonstiges/unbekannt/leer weggelassen)', s1.get('merkmale') == 'Rind · AR · frisch'
+          and sx(c_dry).get('merkmale') == 'Schwein · DE · Dry Aged' and 'nameImport' not in sx(c_dry) and 'merkmale' not in sx(c_ohne),
+          [s1.get('merkmale'), sx(c_dry).get('merkmale'), sx(c_ohne).get('merkmale')])
+    soll = {**{c: 'Rind · AR · frisch' for c in stamm}, c_dry: 'Schwein · DE · Dry Aged'}
+    check('API: ohne Stammdatensatz keine Merkmale; Zugänge tragen dieselben Merkmale wie der Artikel', all(x.get('merkmale') == soll.get(x['code']) for x in sj['articles'] + sj['incoming']),
+          [(x['code'], x.get('merkmale')) for x in sj['articles'] + sj['incoming'] if x.get('merkmale') != soll.get(x['code'])][:5])
+    check('gespeicherter Bestand ohne Merkmale (nur beim Lesen ergänzt)', 'merkmale' not in storage_raw('bestand'))
     check('API: Bezeichnung und VK-Gruppe aus den Stammdaten, Name der Bestandsliste als nameImport', s1['name'] == 'Oberschale aus Stammdaten' and s1['nameImport'] == roh['10000'][1]
           and s1['vk'] == '1100' and sj['vkgruppen'] == {'1100': 'Rind frisch (Test)', '1200': 'Färse (Test)'}, {k: s1.get(k) for k in ('name', 'nameImport', 'vk')})
     check('API: ohne Stammdatensatz bleibt der Name der Bestandsliste', all(x['name'] == ' '.join(roh[x['code']][1].split()) and 'nameImport' not in x and 'vk' not in x for x in sj['articles'] if x['code'] in roh and x['code'] not in stamm))
     check('gespeicherter Bestand unverändert (Name der Bestandsliste)', roh['10000'][1] in storage_raw('bestand') and 'aus Stammdaten' not in storage_raw('bestand'))
     a.click('#vt-edit'); a.wait_for_selector('tr[data-id]'); a.click('#vt-stock'); a.wait_for_selector('.stab tr.srow')
     zeile = lambda c: a.locator(f'.stab tr.srow:has(td.s-code:text-is("{c}"))')   # noqa: E731
-    check('Liste: Bezeichnung aus den Stammdaten, Name der Bestandsliste im Hinweis', zeile('10000').locator('td.s-name').inner_text() == 'Oberschale aus Stammdaten'
+    name_txt = lambda c: zeile(c).locator('td.s-name').evaluate('td => td.firstChild.textContent')   # noqa: E731
+    check('Liste: Bezeichnung aus den Stammdaten, Name der Bestandsliste im Hinweis', name_txt('10000') == 'Oberschale aus Stammdaten'
           and roh['10000'][1] in zeile('10000').locator('td.s-name').get_attribute('title'))
+    unter = zeile('10000').locator('.s-merk').evaluate("e => { const r = document.createRange(); r.selectNodeContents(e.parentElement.firstChild); return e.getBoundingClientRect().top >= r.getBoundingClientRect().bottom - 1; }")
+    check('Liste: Merkmale als zweite Zeile unter der Bezeichnung (auch im Hinweis), ohne Merkmale keine Zeile', zeile('10000').locator('.s-merk').inner_text() == 'Rind · AR · frisch' and unter
+          and 'Rind · AR · frisch' in zeile('10000').locator('td.s-name').get_attribute('title') and zeile(c_dry).locator('.s-merk').inner_text() == 'Schwein · DE · Dry Aged'
+          and zeile(c_ohne).locator('.s-merk').count() == 0, unter)
+    a.fill('#st-q', 'dry aged'); a.wait_for_function(f"[...document.querySelectorAll('.stab tr.srow td.s-code')].some((t) => t.textContent === '{c_dry}')")
+    check('Suche findet auch die Merkmale („dry aged“ steht nur in den Stammdaten)', name_txt(c_dry) == ' '.join(roh[c_dry][1].split()))
+    a.fill('#st-q', '10000'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 1")
+    zeile('10000').locator('td.s-name').click(); a.wait_for_selector('#dlg-stock-item[open] h2')
+    check('Artikeldetail: Merkmale unter dem Titel', a.inner_text('#dlg-stock-item h2') == 'Oberschale aus Stammdaten' and a.inner_text('#dlg-stock-item .s-merk-d') == 'Rind · AR · frisch')
+    a.keyboard.press('Escape'); a.wait_for_function("!document.querySelector('#dlg-stock-item').open")
+    with a.expect_download() as dl: a.click('[data-st=csv]')
+    zeilen_csv = open(dl.value.path(), encoding='utf-8-sig').read().splitlines()
+    check('CSV: Bezeichnung mit Merkmalen („Name · Fleischart · Herkunft · Zustand“)', len(zeilen_csv) == 2 and zeilen_csv[1].split(';')[1].strip('"') == 'Oberschale aus Stammdaten · Rind · AR · frisch', zeilen_csv[1:])
     a.fill('#st-q', 'aus Stammdaten'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 3")
+    a.screenshot(path=SH + '/stock-merkmale.png')
+    a.emulate_media(color_scheme='dark'); a.screenshot(path=SH + '/stock-merkmale-dunkel.png'); a.emulate_media(color_scheme='light')
     a.fill('#st-q', roh['10002'][1]); a.wait_for_function("[...document.querySelectorAll('.stab tr.srow td.s-code')].some((t) => t.textContent === '10002')")
-    check('Suche findet auch den Namen der Bestandsliste', zeile('10002').locator('td.s-name').inner_text() == 'Oberschale Färse aus Stammdaten')
+    check('Suche findet auch den Namen der Bestandsliste', name_txt('10002') == 'Oberschale Färse aus Stammdaten')
     a.fill('#st-q', ''); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length >= 283")
     gesamt = a.locator('.stab tr.srow').count()
     check('jede Überschrift mit Trichter (10 Spalten)', a.locator('.stab thead [data-sfilter]').count() == 10)
@@ -253,7 +284,8 @@ with sync_playwright() as p:
     check('Gesamtsumme im Fenster = Gesamtsumme der Liste', a.inner_text('#dlg-stock-vk tfoot td.s-kg') == a.inner_text('.stab tfoot .s-kg'))
     check('Gruppen zugeklappt', a.locator('#dlg-stock-vk tr.vk-a:visible').count() == 0)
     a.click('#dlg-stock-vk [data-vkauf="1100"]'); a.wait_for_function("document.querySelectorAll('#dlg-stock-vk tbody[data-vk=\"1100\"] tr.vk-a:not([hidden])').length === 2")
-    check('Aufklappen zeigt die Artikel mit Bezeichnung aus den Stammdaten', 'Oberschale aus Stammdaten' in a.inner_text('#dlg-stock-vk tbody[data-vk="1100"]')
+    check('Aufklappen zeigt die Artikel mit Bezeichnung und Merkmalen aus den Stammdaten', 'Oberschale aus Stammdaten' in a.inner_text('#dlg-stock-vk tbody[data-vk="1100"]')
+          and a.locator('#dlg-stock-vk tbody[data-vk="1100"] tr.vk-a .s-merk').all_inner_texts() == ['Rind · AR · frisch'] * 2
           and a.get_attribute('#dlg-stock-vk [data-vkauf="1100"]', 'aria-expanded') == 'true')
     a.select_option('#vk-sort', 'totalKg'); a.wait_for_function("document.querySelector('#vk-sort').value === 'totalKg'")
     a.screenshot(path=SH + '/stock-vkgruppen.png')
@@ -268,11 +300,13 @@ with sync_playwright() as p:
     login(m, 'admin', 'Sicheres-Passwort-1'); m.click('#vt-stock'); m.wait_for_selector('.stab'); m.wait_for_timeout(200)
     m.screenshot(path=SH + '/stock-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
+    check('Handy: Merkmale unter der Bezeichnung sichtbar', m.locator('.stab tr.srow:has(td.s-code:text-is("10000")) .s-merk').is_visible())
     m.click('[data-st=filter]'); m.wait_for_selector('#dlg-stock-filter[open]')
     m.fill('#dlg-stock-filter input[data-fk=name]', 'aus Stammdaten'); m.wait_for_function("document.querySelector('#sf-zahl').textContent === '3 Artikel'")
     m.screenshot(path=SH + '/stock-filter-mobil.png')
     m.click('#dlg-stock-filter .dlg-foot [data-close]'); m.wait_for_function("!document.querySelector('#dlg-stock-filter').open")
     check('Handy: Filter über den Knopf „Filter“, Zahl am Knopf', m.locator('.stab tr.srow').count() == 3 and m.inner_text('#st-fzahl') == '1')
+    m.screenshot(path=SH + '/stock-merkmale-mobil.png')
     m.click('[data-st=vk]'); m.wait_for_selector('#dlg-stock-vk[open] tbody[data-vk]')
     m.screenshot(path=SH + '/stock-vkgruppen-mobil.png')
     check('Handy: VK-Gruppen ohne waagerechtes Scrollen', m.evaluate('document.documentElement.scrollWidth') <= 390

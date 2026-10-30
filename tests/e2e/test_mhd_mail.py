@@ -110,6 +110,8 @@ check('Excel: genau die MHD-Liste, früheste zuerst (ohne MHD in 30 Tagen, ohne 
 check('Excel: Name sicher (kein HTML), Mengen als Zahlen, Summen als Formel', '&lt;b&gt;fett&lt;/b&gt;' in blatt and '<v>120.25</v>' in blatt and '<v>25.5</v>' in blatt and '<f>SUM(' in blatt)
 check('Excel: Kopf mit Preisen der Wochen (Absender darf Preisverlauf sehen) und ETA', 'Aktueller Preis KW' in blatt and 'Nächste ETA' in blatt and 'Erfasster Bestand' in blatt)
 check('Bezeichnung aus den Stammdaten in Excel und Text (statt Name der Bestandsliste)', 'Bald aus Stammdaten' in blatt and 'Bald aus Stammdaten' in m['text'] and 'Test Bald' not in m['text'])
+check('Excel und Text: Merkmale aus den Stammdaten hinter der Bezeichnung („Name · Fleischart · Herkunft · Zustand“)', 'Bald aus Stammdaten · Rind · AR · frisch' in blatt
+      and 'Bald aus Stammdaten · Rind · AR · frisch' in m['text'])
 check('Text: Liste und Hinweis auf den Anhang', '700002' in m['text'] and 'Excel-Datei im Anhang' in m['text'] and 'davon 1 bereits abgelaufen' in m['text'])
 check('über das interne Postfach (ohne eigenes: Kunden-Postfach, angebot@)', m['from'] == 'angebot@example.org')
 check('Versandprotokoll: Typ „mhd“ je Empfänger', storage_raw('mailversand').count('"typ":"mhd"') + storage_raw('mailversand').count('"typ": "mhd"') == 2)

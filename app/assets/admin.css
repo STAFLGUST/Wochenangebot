@@ -386,6 +386,11 @@ body.ro .meta-card input:disabled, body.ro #item-body input:disabled, body.ro #i
 .stab .s-name { white-space: nowrap; padding-left: 4px; }
 .stab th.s-code { font-family: inherit; font-size: 11.5px; color: var(--text); }
 .stab td.s-name { padding-right: 18px; }
+/* Merkmale aus den Stammdaten (Fleischart · Herkunft · Zustand) als zweite Zeile unter der Bezeichnung, im Fenster
+   „VK-Gruppen“ dahinter und im Artikeldetail unter dem Titel (Server: bestand_merkmale()) */
+.stab td.s-name .s-merk { display: block; margin-top: 1px; font-size: 11.5px; line-height: 1.25; font-weight: 400; color: var(--muted); }
+.vktab tr.vk-a .s-merk { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.dlg-head p.s-merk-d { margin-top: 2px; color: var(--text-2); }
 .stab .s-vk, .stab .s-kg, .stab .s-mkg, .stab .s-registered, .stab .s-total-kg { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab .s-mhd { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stab td.s-mkg { font-weight: 700; }
