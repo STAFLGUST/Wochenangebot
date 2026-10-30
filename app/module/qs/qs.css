@@ -417,6 +417,11 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-laden li.fehler small{color:var(--qm-rot);text-align:left}
 .qm-entfernt summary{font-size:11.5px}
 .qm-version .qm-version-dateien{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;margin-top:2px}
+/* Vorlagen (Bauabschnitt 3) */
+.qm-platzhalter{color:var(--qm-blau);font-weight:600}
+.qm-vorlagenkarte h3 .i{width:16px;height:16px;color:var(--qm-green)}
+.qm-vorlagenkarte .qm-hilfe{font-size:12px;line-height:1.55}
+.qm-karte>.qm-check{font-size:12.5px;align-items:flex-start}
 .qm-anz{display:inline-flex;align-items:center;gap:2px;vertical-align:-2px}
 .qm-anz .i{width:13px;height:13px}
 

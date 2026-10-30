@@ -94,21 +94,38 @@ switch ($action) {
         }
 
         /* Dokument anlegen (ohne id; gelenkte Arten bekommen gleich einen Entwurf) oder Angaben ändern (id + rev);
-           Einziehen und wieder gültig machen nur mit „qs.freigeben“ (offene Entwürfe werden dabei verworfen) */
+           Einziehen und wieder gültig machen nur mit „qs.freigeben“ (offene Entwürfe werden dabei verworfen).
+           Nummernstruktur „<Kapitel>-<Art><Nr.>“ für A, F, L, E (leer = nächste freie). vorlage = Kennung einer Vorlage (Art V):
+           ihre Word-/Excel-Dateien werden mit Nr., Titel usw. ausgefüllt und liegen im ersten Entwurf (module/qs/vorlagen.php). */
         case 'qs_dokument_save': {
             $me = require_perm('qs.bearbeiten', true);
             $b = body();
-            [$d, $was] = with_lock('qs-dokumente', function () use ($b, $me) {
+            $vorlage = is_string($b['vorlage'] ?? null) ? $b['vorlage'] : '';
+            if ($vorlage !== '') require_once __DIR__ . '/../module/qs/vorlagen.php';
+            $erzeugt = []; $fertig = false;
+            if ($vorlage !== '') qs_erzeugte_aufraeumen($erzeugt, $fertig);
+            [$d, $was] = with_lock('qs-dokumente', function () use ($b, $me, $vorlage, &$erzeugt) {
                 $stamm = qs_stamm(); $doc = qs_doc('qs-dokumente');
                 $id = (string)($b['id'] ?? ''); $alt = null; $i = null;
                 if ($id !== '') { $i = qs_dokument_index($doc, $id); $alt = $doc['liste'][$i]; qs_rev_pruefen($b, $alt, 'Das Dokument'); }
                 elseif (count($doc['liste']) >= QS_MAX_DOKUMENTE) fail('Zu viele Dokumente.', 422);
-                $d = qs_dokument_pruefen($b, $alt, $stamm, $doc['liste']);
+                if ($vorlage !== '' && $alt !== null) throw new InvalidArgumentException('Eine Vorlage gilt nur beim Anlegen.');
+                $d = qs_dokument_pruefen($b, $alt, $stamm, $doc['liste'], true);
                 $was = 'gespeichert';
                 if ($alt === null) {
                     $d = ['id' => qs_id('d')] + $d + ['erstellt' => qs_wer($me), 'quelle' => 'hand', 'verlauf' => []];
                     qs_verlauf($d, $me, 'angelegt');
                     if (in_array($d['art'], QS_GELENKT, true)) $d['versionen'][] = qs_entwurf($me, qs_text($b['aenderungen'] ?? '', 2000, 'Änderungen') ?: 'Neu angelegt', qs_text($b['grund'] ?? '', 1000, 'Änderungsgrund'));
+                    if ($vorlage !== '') {
+                        if (!in_array($d['art'], QS_NR_STRUKTUR, true)) throw new InvalidArgumentException('Aus einer Vorlage entstehen Arbeitsanweisungen, Formblätter, Listen und Excel-Dokumente.');
+                        $vi = null;
+                        foreach ($doc['liste'] as $k => $x) if (($x['id'] ?? '') === $vorlage) $vi = $k;
+                        if ($vi === null) throw new InvalidArgumentException('Die Vorlage gibt es nicht (mehr).');
+                        $vd = $doc['liste'][$vi];
+                        $d['versionen'][0]['dateien'] = qs_vorlage_anwenden($vd, $d, $stamm, $me, $erzeugt);
+                        qs_verlauf($d['versionen'][0], $me, 'aus Vorlage „' . $vd['nr'] . '“ erzeugt');
+                        qs_verlauf($d, $me, 'aus Vorlage „' . $vd['nr'] . '“ erzeugt');
+                    }
                     $was = 'angelegt';
                 } else {
                     foreach (['nr', 'titel', 'kapitel', 'art', 'ablage', 'zustaendig', 'vertreter'] as $f)
@@ -135,15 +152,21 @@ switch ($action) {
                 $d = qs_dok_ablegen($doc, $i, $d, $me);
                 return [$d, $was];
             });
-            audit('qs', 'QM-System: Dokument ' . qs_dok_name($d) . ' ' . $was);
+            $fertig = true;
+            audit('qs', 'QM-System: Dokument ' . qs_dok_name($d) . ' ' . $was . ($erzeugt ? ' (aus Vorlage)' : ''));
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
 
-        /* Entwurf einer neuen Version anlegen oder ändern (Änderungen und Änderungsgrund, Handbuch 2.0.11) */
+        /* Entwurf einer neuen Version anlegen oder ändern (Änderungen und Änderungsgrund, Handbuch 2.0.11);
+           dateien=true beim Beginn einer Überarbeitung: Dateien der gültigen Version (Rohfassung mit Platzhaltern) als Kopie übernehmen */
         case 'qs_version_save': {
             $me = require_perm('qs.bearbeiten', true);
             $b = body();
-            $d = with_lock('qs-dokumente', function () use ($b, $me) {
+            $uebernehmen = !empty($b['dateien']);
+            if ($uebernehmen) require_once __DIR__ . '/../module/qs/vorlagen.php';
+            $erzeugt = []; $fertig = false;
+            if ($uebernehmen) qs_erzeugte_aufraeumen($erzeugt, $fertig);
+            $d = with_lock('qs-dokumente', function () use ($b, $me, $uebernehmen, &$erzeugt) {
                 $doc = qs_doc('qs-dokumente');
                 $i = qs_dokument_index($doc, $b['dokument'] ?? '');
                 $d = $doc['liste'][$i];
@@ -166,11 +189,17 @@ switch ($action) {
                     $d['versionen'][$o] = $v;
                 } else {
                     if (count($d['versionen']) >= QS_MAX_VERSIONEN) fail('Zu viele Versionen.', 422);
-                    $d['versionen'][] = qs_entwurf($me, $aend, $grund);
+                    $neu = qs_entwurf($me, $aend, $grund);
+                    if ($uebernehmen && $gueltig !== null && ($f = qs_dateien_uebernehmen($d['versionen'][$gueltig], $me, $erzeugt))) {
+                        $neu['dateien'] = $f;
+                        qs_verlauf($neu, $me, 'Dateien aus Version ' . ($d['versionen'][$gueltig]['nr'] ?? '?') . ' übernommen (' . count($f) . ')');
+                    }
+                    $d['versionen'][] = $neu;
                     qs_verlauf($d, $me, 'Überarbeitung begonnen');
                 }
                 return qs_dok_ablegen($doc, $i, $d, $me);
             });
+            $fertig = true;
             audit('qs', 'QM-System: Entwurf für ' . qs_dok_name($d) . ' gespeichert');
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
@@ -185,7 +214,9 @@ switch ($action) {
                        'pruefen_freigeben' => 'qs.freigeben', 'ueberprueft' => 'qs.freigeben'];
             if (!isset($rechte[$schritt])) { require_perm('qs.bearbeiten', true); fail('Unbekannter Schritt.', 422); }
             $me = require_perm($rechte[$schritt], true);
-            [$d, $text] = with_lock('qs-dokumente', function () use ($b, $me, $schritt) {
+            $erzeugt = []; $fertig = false;
+            if (in_array($schritt, ['freigeben', 'pruefen_freigeben'], true)) { require_once __DIR__ . '/../module/qs/vorlagen.php'; qs_erzeugte_aufraeumen($erzeugt, $fertig); }
+            [$d, $text] = with_lock('qs-dokumente', function () use ($b, $me, $schritt, &$erzeugt) {
                 $doc = qs_doc('qs-dokumente');
                 $i = qs_dokument_index($doc, $b['dokument'] ?? '');
                 $d = $doc['liste'][$i];
@@ -223,6 +254,7 @@ switch ($action) {
                     $g = qs_ver_index($d, ['freigegeben']);
                     if ($g !== null) { $d['versionen'][$g]['status'] = 'ersetzt'; qs_verlauf($d['versionen'][$g], $me, "ersetzt durch Version $nr"); }
                     $v['status'] = 'freigegeben'; $v['nr'] = $nr; $v['datum'] = qs_heute(); $v['freigegeben'] = qs_wer($me);
+                    qs_lenkung_eintragen($d, $v, qs_stamm(), $me, $erzeugt);   // Version, Datum, Kürzel in Word-/Excel-Dateien
                     qs_verlauf($v, $me, "freigegeben als Version $nr");
                     qs_verlauf($d, $me, "Version $nr freigegeben");
                     $text = "Version $nr freigegeben";
@@ -230,6 +262,7 @@ switch ($action) {
                 $d['versionen'][$o] = $v;
                 return [qs_dok_ablegen($doc, $i, $d, $me), $text];
             });
+            $fertig = true;
             audit('qs', 'QM-System: ' . qs_dok_name($d) . ' – ' . $text);
             respond(['ok' => true, 'dokument' => qs_dok_antwort($d)]);
         }
@@ -240,6 +273,7 @@ switch ($action) {
         case 'qs_datei_hochladen': {
             $me = require_perm('qs.bearbeiten', true);
             require_once __DIR__ . '/../lib/dateiablage.php';
+            require_once __DIR__ . '/../module/qs/vorlagen.php';
             $b = body();
             $dok = is_string($b['dokument'] ?? null) ? $b['dokument'] : ''; $ver = is_string($b['version'] ?? null) ? $b['version'] : '';
             if (($b['upload'] ?? '') === '') { $doc = qs_doc('qs-dokumente'); qs_ablage_stelle($doc['liste'][qs_dokument_index($doc, $dok)], $ver, $me, 'hochladen'); }
@@ -249,13 +283,18 @@ switch ($action) {
             // Scheitert das Eintragen (fail/Ausnahme), bleibt keine verwaiste Datei zurück
             $eingetragen = false;
             register_shutdown_function(function () use (&$eingetragen, $datei) { if (!$eingetragen) { try { ablage_entfernen('qs', $datei['id']); } catch (Throwable $e) { /* bleibt liegen */ } } });
-            $d = with_lock('qs-dokumente', function () use ($dok, $ver, $me, $datei) {
+            // Word/Excel in gelenkten Dokumenten: enthaltene Platzhalter merken (Anzeige; die Freigabe füllt sie aus)
+            $platzhalter = isset(QS_OFFICE[$datei['art']]) && $ver !== '' ? qs_office_platzhalter((string)ablage_lesen('qs', $datei['id']), $datei['art']) : null;
+            $erzeugt = []; $fertig = false;
+            qs_erzeugte_aufraeumen($erzeugt, $fertig);
+            $d = with_lock('qs-dokumente', function () use ($dok, $ver, $me, $datei, $platzhalter, &$erzeugt) {
                 $doc = qs_doc('qs-dokumente');
                 $i = qs_dokument_index($doc, $dok);
                 $d = $doc['liste'][$i];
                 $vi = qs_ablage_stelle($d, $ver, $me, 'hochladen');
                 $f = ['id' => $datei['id'], 'name' => $datei['name'], 'art' => $datei['art'], 'mime' => $datei['mime'], 'groesse' => $datei['groesse'],
                       'sha256' => $datei['sha256'], 'hochgeladen' => qs_wer($me)];
+                if ($platzhalter) $f['platzhalter'] = $platzhalter;
                 if ($vi === null) {
                     $d['dateien'] = is_array($d['dateien'] ?? null) ? array_values($d['dateien']) : [];
                     $d['dateien'][] = $f;
@@ -268,17 +307,19 @@ switch ($action) {
                         qs_verlauf($v, $me, 'Datei abgelegt: ' . $datei['name']);
                     } else {
                         $f['nachgetragen'] = true;
+                        $f = qs_lenkung_datei($d, $v, $f, qs_stamm(), $me, $erzeugt);   // freigegebene Version: Lenkungsangaben gleich eintragen
                         qs_verlauf($v, $me, 'Datei nachgetragen: ' . $datei['name']);
                         qs_verlauf($d, $me, 'Datei zu Version ' . ($v['nr'] ?? '?') . ' nachgetragen: ' . $datei['name']);
                     }
                     $v['dateien'][] = $f;
                     $d['versionen'][$vi] = $v;
                 }
-                return qs_dok_ablegen($doc, $i, $d, $me);
+                return [qs_dok_ablegen($doc, $i, $d, $me), (string)$f['id']];
             });
-            $eingetragen = true;
+            [$d, $dateiId] = $d;
+            $eingetragen = true; $fertig = true;
             audit('qs', 'QM-System: Datei für ' . qs_dok_name($d) . ' abgelegt (' . round($datei['groesse'] / 1024) . ' KB)');
-            respond(['ok' => true, 'fertig' => true, 'datei' => $datei['id'], 'dokument' => qs_dok_antwort($d)]);
+            respond(['ok' => true, 'fertig' => true, 'datei' => $dateiId, 'dokument' => qs_dok_antwort($d)]);
         }
 
         /* Datei entfernen: im Entwurf und an Ordnern/externen Dokumenten (qs.bearbeiten) – im Entwurf endgültig gelöscht;

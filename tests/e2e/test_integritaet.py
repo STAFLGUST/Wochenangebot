@@ -1,5 +1,5 @@
 """Dateiprüfung (Sicherheit → Dateiprüfung): Programmdateien gegen die Prüfliste (verändert, fehlt, unbekannt),
-Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners), auffällige Muster in Dateien und
+Datenordner (Sperrzeile, ausführbare Dateien, Schutz des Datenbankordners, Dateiablage), auffällige Muster in Dateien und
 gespeicherten Daten, Komponenten, Rechte, Speichern, automatische Prüfung, Benachrichtigung, Oberfläche.
 Der Testserver läuft aus einer Kopie von app/ – nur diese Kopie wird verändert."""
 import json
@@ -232,6 +232,23 @@ with open(HT, 'w') as f: f.write('Options -Indexes\n')
 I = by_path(run(A)[1])
 check('data: .htaccess without a block is critical', I.get('data/.htaccess', {}).get('stufe') == 'kritisch', I.get('data/.htaccess'))
 os.remove(HT); os.remove(PX)
+
+# ---------- Dateiablage (lib/dateiablage.php): hochgeladene Dateien sind erwartet, andere Dateien dort nicht (Befund 30.10.2026) ----------
+AB = os.path.join(DATA, 'dateien', 'qs', 'ab')
+os.makedirs(AB, exist_ok=True); os.makedirs(os.path.join(DATA, 'dateien', '.teile'), exist_ok=True)
+with open(os.path.join(AB, 'ab12cd34ef56ab78cd90.bin'), 'wb') as f: f.write(b'%PDF-1.4 erfundene Datei <?php eval($_GET[1]); ?>')
+with open(os.path.join(DATA, 'dateien', '.teile', 'f' * 24 + '.tmp'), 'wb') as f: f.write(b'Teil')
+code, r = run(A)
+check('data: files of the Dateiablage (.bin) and unfinished uploads are no finding', code == 200 and r['result']['ok'] and r['result']['items'] == [], r['result']['items'][:5])
+with open(os.path.join(AB, 'werkzeug.php'), 'w') as f: f.write('<?php system($_GET["c"]);')
+with open(os.path.join(AB, 'notiz.txt'), 'w') as f: f.write('x')
+with open(os.path.join(AB, 'ab12cd34ef56ab78cd90.bin.phtml'), 'w') as f: f.write('x')
+I = by_path(run(A)[1])
+check('data: PHP file inside the Dateiablage is critical', I.get('data/dateien/qs/ab/werkzeug.php', {}).get('stufe') == 'kritisch', I.get('data/dateien/qs/ab/werkzeug.php'))
+check('data: other names inside the Dateiablage are reported', I.get('data/dateien/qs/ab/notiz.txt', {}).get('stufe') == 'hinweis'
+      and I.get('data/dateien/qs/ab/ab12cd34ef56ab78cd90.bin.phtml', {}).get('stufe') == 'kritisch', [I.get('data/dateien/qs/ab/notiz.txt'), I.get('data/dateien/qs/ab/ab12cd34ef56ab78cd90.bin.phtml')])
+shutil.rmtree(os.path.join(DATA, 'dateien'))
+check('data: clean again after the Dateiablage checks', run(A)[1]['result']['ok'])
 
 # ---------- HTML-Seiten: mit und ohne Versionsnummern zulässig, jede andere Abweichung nicht ----------
 SEITE = os.path.join(APP, 'index.html')
