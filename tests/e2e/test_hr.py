@@ -10,7 +10,8 @@ Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmig
 die Plattform“ (Verwaltung → Urlaub, Standard an; aus: Server lehnt Anträge ab, Formular ausgeblendet), Übernahme der bisherigen
 Excel-Planung über die Importzentrale (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx), Abwesenheiten aus der
 Zeiterfassung (Importvorlage, tests/fixtures/hr/Abwesenheitsbericht_Muster.xlsx: Personalnummer, Schreibweisen, vom Urlaub
-abgezogene Krankheit, Ersetzen, veralteter Stand) und die Oberflächen
+abgezogene Krankheit – zählt hier nie gegen den Urlaub –, Ersetzen, veralteter Stand), Korrektur melden (Mitarbeiter → Personalstelle,
+nie die eigene erledigen), Mini-Kalender „Mein Jahr“ und die Oberflächen
 (HR-Seite, Verwaltung → Mitarbeiter und Urlaub; Desktop, 390 px).
 """
 import datetime as dt
@@ -652,6 +653,61 @@ st2, r2 = F.call('hr_antrag', {'von': iso(JUN + dt.timedelta(days=3)), 'bis': is
 check('wieder eingeschaltet: Antrag möglich, Protokoll', st == 200 and r['antraege'] is True and st2 == 200
       and 'Urlaubsanträge über die Plattform eingeschaltet' in json.dumps(A.call('log')[1], ensure_ascii=False), (st2, r2))
 assert F.call('hr_antrag_zurueckziehen', {'id': r2['eintrag']['id']})[0] == 200   # keine offenen Anträge für die folgenden Prüfungen
+
+# ── Krankheit zählt nie gegen den Urlaub (Inhaber 30.10.2026) – auch mit „vom Urlaub abgezogen“ aus der Zeiterfassung ──
+vorher_k = konto_f()
+ab = dokument('hr-abwesenheiten')
+ab['eintraege'].append({'id': 'kabzug', 'person': PF, 'art': 'K', 'von': iso(JUN + dt.timedelta(days=8)), 'bis': iso(JUN + dt.timedelta(days=9)),
+                        'status': 'genehmigt', 'notiz': '', 'quelle': 'zeiterfassung', 'urlaubAbzug': True})
+ab['rev'] = ab.get('rev', 0) + 1
+storage_write('hr-abwesenheiten', ab)
+k = konto_f()
+check('Krank (auch „vom Urlaub abgezogen“) ändert das Urlaubskonto nicht', (k['genommen'], k['geplant'], k['rest']) == (vorher_k['genommen'], vorher_k['geplant'], vorher_k['rest']), (vorher_k, k))
+check('… Hinweis bleibt für die Personalstelle sichtbar', next(e for e in P.call(f'hr_verwaltung&jahr={Y}')[1]['eintraege'] if e['id'] == 'kabzug')['urlaubAbzug'] is True)
+
+# ── Korrektur melden (Mitarbeiter → Personalstelle, Inhaber 30.10.2026) ──
+KF = next(e for e in F.call(f'hr_start&jahr={Y}')[1]['eintraege'] if e['art'] == 'K' and e['von'] == iso(JUN + dt.timedelta(days=7)))
+fremd = next(e for e in P.call(f'hr_verwaltung&jahr={Y}')[1]['eintraege'] if e['person'] != PF)
+check('Korrektur: ohne Anmeldung 401, nicht im Urlaubsplan 409', N.call('hr_korrektur', {'text': 'Bitte prüfen'})[0] == 401
+      and O.call('hr_korrektur', {'text': 'Bitte prüfen'})[0] == 409)
+check('Korrektur: Text zu kurz, ungültiges Datum, Ende vor Beginn 422', F.call('hr_korrektur', {'text': 'x'})[0] == 422
+      and F.call('hr_korrektur', {'text': 'Bitte prüfen', 'von': f'{Y}-13-01'})[0] == 422
+      and F.call('hr_korrektur', {'text': 'Bitte prüfen', 'von': iso(JUN), 'bis': iso(JUN - dt.timedelta(days=1))})[0] == 422)
+check('Korrektur: Eintrag einer anderen Person 404', F.call('hr_korrektur', {'text': 'Bitte prüfen', 'eintrag': fremd['id']})[0] == 404)
+st, r = F.call('hr_korrektur', {'text': 'Am Tag war ich nicht krank, sondern im Urlaub.', 'von': KF['von'], 'bis': KF['bis'], 'eintrag': KF['id']})
+check('Korrektur zu einem eigenen Eintrag gemeldet (offen)', st == 200 and r['meldung']['status'] == 'offen' and r['meldung']['eintrag'] == KF['id'] and r['meldung']['von'] == KF['von'], (st, r))
+K1 = r['meldung']['id']
+st, r = F.call('hr_korrektur', {'text': 'Mein Übertrag aus dem Vorjahr fehlt.'})
+check('Korrektur ohne Zeitraum gemeldet', st == 200 and r['meldung']['von'] is None, (st, r))
+K2 = r['meldung']['id']
+s_ = F.call(f'hr_start&jahr={Y}')[1]
+check('Start: eigene Meldungen (neueste zuerst), keine Zahl für Mitarbeiter ohne Personalrecht', [m['id'] for m in s_['korrekturen']][:2] == [K2, K1] and s_['korrekturenOffen'] is None, s_.get('korrekturen'))
+check('Start der Personalstelle: Zahl offener Meldungen', P.call('hr_start')[1]['korrekturenOffen'] == 2)
+check('Erledigen: ohne Personalrecht 403', E.call('hr_korrektur_erledigt', {'id': K1})[0] == 403 and L.call('hr_korrektur_erledigt', {'id': K1})[0] == 403)
+kv = {m['id']: m for m in P.call(f'hr_verwaltung&jahr={Y}')[1]['korrekturen']}
+check('Personalstelle sieht die Meldungen mit Name, Text und Bezug', kv[K1]['name'] == 'Fritz Frist' and 'nicht krank' in kv[K1]['text'] and kv[K1]['eigen'] is False and K2 in kv, kv.get(K1))
+st, r = P.call('hr_korrektur_erledigt', {'id': K1, 'antwort': 'Auf Urlaub korrigiert.'})
+check('Personalstelle erledigt mit Antwort', st == 200 and r['meldung']['status'] == 'erledigt' and r['meldung']['erledigt']['antwort'] == 'Auf Urlaub korrigiert.', (st, r))
+check('… nochmal erledigen 409, unbekannt 404', P.call('hr_korrektur_erledigt', {'id': K1})[0] == 409 and P.call('hr_korrektur_erledigt', {'id': 'kgibtsnicht'})[0] == 404)
+m1 = next(m for m in F.call('hr_start')[1]['korrekturen'] if m['id'] == K1)
+check('… Mitarbeiter sieht „erledigt“ und die Antwort', m1['status'] == 'erledigt' and m1['erledigt']['antwort'] == 'Auf Urlaub korrigiert.' and 'byId' not in m1['erledigt'], m1)
+kd = dokument('hr-korrekturen')
+kd['meldungen'].append({'id': 'kpaul', 'person': ids['paul'], 'text': 'Eigene Meldung', 'status': 'offen', 'erfasst': {'t': '2026-10-30T08:00:00Z', 'by': 'Paul Personal', 'byId': ids['paul']}})
+kd['rev'] = kd.get('rev', 0) + 1
+storage_write('hr-korrekturen', kd)
+check('Vier-Augen-Prinzip: eigene Meldung erledigt nicht die Personalstelle selbst (403), eine andere Person schon',
+      P.call('hr_korrektur_erledigt', {'id': 'kpaul'})[0] == 403 and next(m for m in P.call('hr_verwaltung')[1]['korrekturen'] if m['id'] == 'kpaul')['eigen'] is True
+      and A.call('hr_korrektur_erledigt', {'id': 'kpaul'})[0] == 200)
+log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: Meldung und Erledigung ohne den Text', 'HR: Korrektur gemeldet' in log_ and 'HR: Korrekturmeldung erledigt (Fritz Frist)' in log_ and 'nicht krank' not in log_)
+offen_f = 1
+while True:
+    st, r = F.call('hr_korrektur', {'text': f'Meldung {offen_f}'})
+    if st != 200: break
+    offen_f += 1
+check('höchstens 20 offene Meldungen je Person (429)', st == 429 and offen_f == 20, (st, offen_f))
+for m in P.call('hr_verwaltung')[1]['korrekturen']:   # aufräumen: alle offenen erledigen
+    if m['status'] == 'offen': assert P.call('hr_korrektur_erledigt', {'id': m['id']})[0] == 200
 rev = P.call('mitarbeiter_hr')[1]['rev']
 hr(ids['fritz'], aktiv=False)
 
@@ -756,7 +812,7 @@ with sync_playwright() as p:
         ('Erika Editor', 'K', '2025-02-10', '2025-02-14', False, 'genehmigt'), ('Erika Editor', 'U', '2025-03-24', '2025-03-28', False, 'genehmigt'),
         ('Hans Neumann', 'U', '2025-02-27', '2025-03-04', False, 'genehmigt')], ze)
     kk = {p_['name']: p_['konto'] for p_ in r['personen']}
-    check('Konto: „Krank ohne AU / vom Urlaub abgezogen“ zählt als Urlaub, Krank mit AU nicht', kk['Bernd Muster']['genommen'] == 1 and kk['Erika Editor']['genommen'] == 5
+    check('Konto: Krankheit zählt nie gegen den Urlaub – auch „Krank ohne AU / vom Urlaub abgezogen“ nicht (Inhaber 30.10.2026), Hinweis bleibt gespeichert', kk['Bernd Muster']['genommen'] == 0 and kk['Erika Editor']['genommen'] == 5
           and kk['Hans Neumann']['genommen'] == 4, {k: kk[k]['genommen'] for k in ('Bernd Muster', 'Erika Editor', 'Hans Neumann')})
     check('Übernommen: Planung (K 20.–21.01.) unverändert', any(e['name'] == 'Bernd Muster' and e['art'] == 'K' and e['von'] == '2025-01-20' and e['quelle'] == 'import' for e in r['eintraege']))
     pm = {p_['name']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen']}
@@ -787,12 +843,12 @@ with sync_playwright() as p:
           and 'ähnlich: Anna Beispiel' in z4[('neu', 'Anna Beispiel')]['text']
           and not any(z['art'] == 'geaendert' and z['name'] == 'Anna Beispiel' for z in v4['zeilen']), (st, sorted(z4)))
 
-    # Personalstelle ändert die Art: „vom Urlaub abgezogen“ entfällt
+    # Personalstelle ändert die Art: der Hinweis „vom Urlaub abgezogen“ entfällt
     eb = next(e for e in r['eintraege'] if e['quelle'] == 'zeiterfassung' and e['name'] == 'Bernd Muster')
     st, x = P.call('hr_eintrag_save', {'id': eb['id'], 'person': eb['person'], 'art': 'G', 'von': eb['von'], 'bis': eb['bis']})
     r = P.call('hr_verwaltung&jahr=2025')[1]
     eb2 = next(e for e in r['eintraege'] if e['id'] == eb['id'])
-    check('Art geändert: zählt nicht mehr gegen den Urlaub', st == 200 and eb2['urlaubAbzug'] is False and {p_['name']: p_['konto'] for p_ in r['personen']}['Bernd Muster']['genommen'] == 0, (st, x, eb2))
+    check('Art geändert: Hinweis „vom Urlaub abgezogen“ entfällt, zählt weiter nicht gegen den Urlaub', st == 200 and eb2['urlaubAbzug'] is False and {p_['name']: p_['konto'] for p_ in r['personen']}['Bernd Muster']['genommen'] == 0, (st, x, eb2))
 
     # ── Verwaltung → Mitarbeiter (Personalstelle ohne Administratorrechte): nur HR-Angaben ──
     pg.click('#vt-users'); pg.wait_for_selector('#view-users tr[data-hr-uid]')
@@ -1011,6 +1067,8 @@ with sync_playwright() as p:
     ctx.close()
 
     # Mitarbeiterin: Mein Urlaub, Antrag in der Oberfläche, Desktop und Handy
+    KRANK_UI = montag(Y, 11, 3)
+    assert P.call('hr_eintrag_save', {'person': PE, 'art': 'K', 'von': iso(KRANK_UI), 'bis': iso(KRANK_UI + dt.timedelta(days=1))})[0] == 200
     for breite in (1280, 390):
         ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite)
         pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
@@ -1035,6 +1093,25 @@ with sync_playwright() as p:
             check('Vorschau: 5 Tage Urlaub', '5 Tage' in pg.text_content('#antrag-tage'), pg.text_content('#antrag-tage'))
             pg.click('#antrag-senden'); pg.wait_for_selector('#antrag-meldung.ok')
             check('Oberfläche: Antrag gestellt, in der Liste', 'beantragt' in pg.text_content('#mein-liste'))
+            # Liste nur Urlaub; Krank steht im Mini-Kalender „Mein Jahr“
+            check('Liste „Mein Urlaub und Anträge“: nur Urlaub, keine Krankheit', pg.locator('#mein-liste .hr-art.K').count() == 0 and pg.locator('#mein-liste .hr-art.U').count() > 0)
+            check('Mini-Kalender: 12 Monate, Krank-Tage und beantragter Urlaub markiert', pg.locator('#mini-kalender .hr-mini-monat').count() == 12
+                  and pg.locator(f'#mini-kalender button.t.K[data-korr-tag="{iso(KRANK_UI)}"]').count() == 1
+                  and pg.locator(f'#mini-kalender button.t.U.offen[data-korr-tag="{iso(tag_)}"]').count() == 1)
+            pg.click(f'#mini-kalender button.t.K[data-korr-tag="{iso(KRANK_UI)}"]'); pg.wait_for_selector('#dlg-korrektur[open]')
+            check('Klick auf einen Tag: „Korrektur melden“ mit Bezug und Zeitraum', 'Krank' in pg.text_content('#korrektur-bezug')
+                  and pg.input_value('#korrektur-von') == iso(KRANK_UI) and pg.input_value('#korrektur-bis') == iso(KRANK_UI + dt.timedelta(days=1)))
+            pg.click('#korrektur-senden'); pg.wait_for_selector('#korrektur-meldung.fehler')
+            check('ohne Text: Hinweis im Dialog, nichts gesendet', pg.is_visible('#dlg-korrektur') and not E.call('hr_start')[1]['korrekturen'])
+            pg.fill('#korrektur-text', 'Am zweiten Tag war ich wieder im Büro.')
+            pg.screenshot(path=os.path.join(SH, 'hr_korrektur_dialog_1280.png'))
+            pg.click('#korrektur-senden'); pg.wait_for_selector('#korrektur-info.ok')
+            check('Oberfläche: Korrektur gesendet, unter „Meine Korrekturmeldungen“ offen', pg.is_visible('#korrektur-eigene') and 'offen' in pg.text_content('#korrektur-liste')
+                  and 'wieder im Büro' in pg.text_content('#korrektur-liste'))
+            pg.screenshot(path=os.path.join(SH, 'hr_mein_jahr_1280.png'), full_page=True)
+            pg.evaluate("document.documentElement.setAttribute('data-theme', 'dark')"); pg.wait_for_function('getComputedStyle(document.body).backgroundColor === "rgb(18, 16, 17)"')
+            pg.screenshot(path=os.path.join(SH, 'hr_mein_jahr_1280_dunkel.png'), full_page=True)
+            pg.evaluate("document.documentElement.setAttribute('data-theme', 'light')")
         pg.click('[data-tab="kalender"]'); pg.wait_for_selector('#kal-plan tbody tr')
         check(f'{breite}px: Kalender ohne Gründe (nur „abwesend“ in der Legende)', 'Krank' not in pg.text_content('#kal-legende') and 'abwesend' in pg.text_content('#kal-legende'))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_{breite}.png'), full_page=True)
@@ -1043,6 +1120,22 @@ with sync_playwright() as p:
               and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_2wochen_{breite}.png'), full_page=True)
         ctx.close()
+
+    # Personalstelle: Korrekturmeldung unter „Anträge“ erledigen (Desktop, dann Handy-Ansicht)
+    ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
+    pg.goto(B + '/module/hr/#antraege'); pg.wait_for_selector('#korrekturen-liste [data-korr] [data-korr-erledigt]')
+    check('Personalstelle: Korrekturmeldung mit Name und Text, Zahl am Reiter', 'Erika Editor' in pg.text_content('#korrekturen-liste')
+          and 'wieder im Büro' in pg.text_content('#korrekturen-liste') and pg.text_content('#korr-zahl') == '1' and int(pg.text_content('#hr-offen') or 0) >= 1)
+    pg.screenshot(path=os.path.join(SH, 'hr_korrekturen_personalstelle_1280.png'), full_page=True)
+    karte = pg.locator('#korrekturen-liste [data-korr]', has=pg.locator('[data-korr-erledigt]')).first
+    karte.locator('input').fill('Eintrag auf einen Tag gekürzt.')
+    karte.locator('[data-korr-erledigt]').click(); pg.wait_for_function('!document.querySelector("#korrekturen-liste [data-korr-erledigt]")')
+    check('Oberfläche: erledigt, Antwort beim Mitarbeiter', 'Eintrag auf einen Tag gekürzt.' in pg.text_content('#korrekturen-liste')
+          and any(m['erledigt'] and m['erledigt']['antwort'] == 'Eintrag auf einen Tag gekürzt.' for m in E.call('hr_start')[1]['korrekturen']))
+    pg.set_viewport_size({'width': 390, 'height': 844})
+    check('390px Personalstelle: Korrekturmeldungen ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.screenshot(path=os.path.join(SH, 'hr_korrekturen_personalstelle_390.png'), full_page=True)
+    ctx.close()
 
     # produktiv: jeder Mitarbeiter sieht die normale Seite (otto war nie Tester)
     ctx, pg = anmelden('otto', 'Ohne-Zugang-77', '198.51.100.6')

@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
-/* Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Monatsplan).
-   Eigene Dokumente (regeln/datenverantwortung.toml): hr-personal, hr-abwesenheiten, hr-einstellungen.
+/* Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Korrekturmeldungen, Monatsplan).
+   Eigene Dokumente (regeln/datenverantwortung.toml): hr-personal, hr-abwesenheiten, hr-einstellungen, hr-korrekturen.
    Mitarbeiterkonten liest das Modul nur über users_load() des Plattformkerns (Verknüpfung Person ↔ Anmeldung).
 
    Fachliche Regeln (mit dem Inhaber abgestimmt, Oktober 2026):
@@ -17,7 +17,13 @@ declare(strict_types=1);
    - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“).
    - Urlaubsanträge über die Plattform lassen sich ein- und ausschalten (Inhaber 30.10.2026, Verwaltung → Urlaub,
      hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
-     Eintragen durch die Personalstelle, Entscheiden und Zurückziehen offener Anträge bleiben. */
+     Eintragen durch die Personalstelle, Entscheiden und Zurückziehen offener Anträge bleiben.
+   - Krankheit zählt nie gegen den Urlaub (Inhaber 30.10.2026) – auch nicht „Krank ohne AU“, das die Zeiterfassung vom
+     Urlaub abzieht (urlaubAbzug bleibt gespeichert und ist für die Personalstelle nur ein Hinweis). Das Urlaubskonto
+     zählt nur Urlaub (U).
+   - Korrektur melden (Inhaber 30.10.2026): Mitarbeiter melden einen Fehler in ihren Einträgen mit Text und optional
+     Zeitraum; die Personalstelle sieht die Meldungen unter „Anträge“ und erledigt sie (mit Antwort, nie die eigene).
+     Gespeichert im eigenen Dokument hr-korrekturen (nur die Person selbst und hr.verwalten). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag'];
@@ -509,8 +515,8 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
     $frei = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id']) continue;
-        // Urlaub; dazu Abwesenheiten, die laut Zeiterfassung vom Urlaub abgezogen werden („Krank ohne AU“)
-        if (($e['art'] !== 'U' && empty($e['urlaubAbzug'])) || !in_array($e['status'], HR_AKTIV, true)) continue;
+        // nur Urlaub – Krankheit nie, auch nicht mit urlaubAbzug aus der Zeiterfassung (Inhaber 30.10.2026)
+        if ($e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true)) continue;
         foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) {
             if ($e['status'] === 'beantragt') { $u['beantragt']++; continue; }
             $u[$d <= $heute ? 'genommen' : 'geplant']++;
@@ -606,6 +612,32 @@ function hr_abwesenheiten_schreiben(array $d): void
     if (count($d['eintraege']) > HR_MAX_EINTRAEGE) throw new InvalidArgumentException('Zu viele Einträge.');
     store_write('hr-abwesenheiten', ['rev' => $d['rev'] + 1, 'eintraege' => array_values($d['eintraege'])]);
 }
+/* ---------------- Korrekturmeldungen (Dokument hr-korrekturen) ----------------
+   {rev, meldungen: [{id, person, von?, bis?, eintrag?, text, status: offen|erledigt, erfasst: {t, by, byId},
+   erledigt?: {t, by, antwort}}]} – nie gelöscht; sichtbar nur für die Person selbst und die Personalstelle. */
+const HR_MAX_KORREKTUREN = 5000;
+const HR_MAX_KORREKTUREN_OFFEN = 20;          // je Person gleichzeitig offen
+function hr_korrekturen(): array
+{
+    $d = store_read('hr-korrekturen') ?? [];
+    return ['rev' => (int)($d['rev'] ?? 0), 'meldungen' => array_values(array_filter((array)($d['meldungen'] ?? []), function ($m) {
+        return is_array($m) && isset($m['id'], $m['person'], $m['text'], $m['status']);
+    }))];
+}
+function hr_korrekturen_schreiben(array $d): void
+{
+    if (count($d['meldungen']) > HR_MAX_KORREKTUREN) throw new InvalidArgumentException('Zu viele Korrekturmeldungen.');
+    store_write('hr-korrekturen', ['rev' => $d['rev'] + 1, 'meldungen' => array_values($d['meldungen'])]);
+}
+/* Meldung für die Ausgabe (Person selbst oder Personalstelle); $p: Person der Meldung (für den Namen), sonst „ehemalig“ */
+function hr_korrektur_aus(array $m, ?array $p): array
+{
+    return ['id' => $m['id'], 'person' => $m['person'], 'name' => $p ? hr_name($p) : 'ehemaliger Mitarbeiter',
+            'von' => $m['von'] ?? null, 'bis' => $m['bis'] ?? null, 'eintrag' => $m['eintrag'] ?? null, 'text' => (string)$m['text'],
+            'status' => $m['status'] === 'erledigt' ? 'erledigt' : 'offen', 'erfasst' => $m['erfasst'] ?? null,
+            'erledigt' => isset($m['erledigt']) ? ['t' => $m['erledigt']['t'] ?? null, 'by' => $m['erledigt']['by'] ?? '', 'antwort' => (string)($m['erledigt']['antwort'] ?? '')] : null];
+}
+
 function hr_personal_schreiben(array $d): void
 {
     if (count($d['personen']) > HR_MAX_PERSONEN) throw new InvalidArgumentException('Zu viele Mitarbeiter.');

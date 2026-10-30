@@ -69,10 +69,25 @@
               <button class="btn primary" type="submit" id="antrag-senden">Antrag stellen</button>
             </form>
             <div class="hr-karte hr-glas">
-              <h2>Meine Einträge</h2>
+              <h2>Mein Urlaub und Anträge</h2>
               <ul class="hr-liste" id="mein-liste"></ul>
             </div>
           </div>
+          <!-- Jahresübersicht aller eigenen Abwesenheiten (auch Krank, Gleittag, freie Tage) und „Korrektur melden“ -->
+          <section class="hr-karte hr-glas hr-mini-karte" aria-labelledby="mini-titel">
+            <div class="hr-mini-kopf">
+              <h2 id="mini-titel">Mein Jahr</h2>
+              <button type="button" class="btn" id="korrektur-neu">Korrektur melden</button>
+            </div>
+            <p class="hr-klein">Alle Ihre Abwesenheiten. Stimmt etwas nicht? Tag anklicken oder „Korrektur melden“ – die Meldung geht an die Personalstelle.</p>
+            <div class="hr-legende" id="mini-legende"></div>
+            <div class="hr-mini" id="mini-kalender"></div>
+            <p class="hr-meldung" id="korrektur-info" role="status"></p>
+            <div id="korrektur-eigene" hidden>
+              <h3>Meine Korrekturmeldungen</h3>
+              <ul class="hr-liste" id="korrektur-liste"></ul>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -103,6 +118,9 @@
           <a class="btn" data-verwalten hidden data-verwaltung-link="urlaub" href="../../admin/#urlaub">Urlaubssperren und Ferien</a>
         </div>
         <div class="hr-antraege" id="antraege-liste"></div>
+        <!-- Korrekturmeldungen der Mitarbeiter (nur Personalstelle) -->
+        <div class="hr-jahr klein" data-verwalten hidden><h2>Korrekturmeldungen <span class="hr-zahl" id="korr-zahl" hidden></span></h2></div>
+        <div class="hr-antraege" id="korrekturen-liste" data-verwalten hidden></div>
         <div class="hr-jahr klein" data-verwalten hidden>
           <button type="button" class="hr-rund klein" data-jahr="-1" aria-label="Vorheriges Jahr"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
           <h2 id="eintraege-titel">Alle Einträge</h2>
@@ -164,6 +182,22 @@
       <button type="button" class="btn" data-schliessen>Abbrechen</button>
       <button type="submit" class="btn primary" id="eintrag-speichern">Speichern</button>
     </div>
+  </form>
+</dialog>
+
+<!-- Korrektur melden (Mitarbeiter) -->
+<dialog class="hr-dialog" id="dlg-korrektur" aria-labelledby="dlg-korrektur-titel">
+  <form method="dialog" id="korrektur-form" novalidate>
+    <h2 id="dlg-korrektur-titel">Korrektur melden</h2>
+    <p class="hr-klein" id="korrektur-bezug" hidden></p>
+    <div class="hr-felder zwei">
+      <label><span>Von <span class="opt">(optional)</span></span><input type="date" id="korrektur-von"></label>
+      <label><span>Bis <span class="opt">(optional)</span></span><input type="date" id="korrektur-bis"></label>
+    </div>
+    <label>Was stimmt nicht?<textarea id="korrektur-text" maxlength="500" rows="4" required placeholder="z. B. „Am 10.09. war ich nicht krank, sondern im Urlaub.“"></textarea></label>
+    <p class="hr-klein">Die Meldung sieht nur die Personalstelle. Sie bekommen hier eine Antwort, sobald sie erledigt ist.</p>
+    <p class="hr-meldung" id="korrektur-meldung" role="status"></p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn primary" id="korrektur-senden">Meldung senden</button></div>
   </form>
 </dialog>
 

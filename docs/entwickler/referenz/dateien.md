@@ -171,7 +171,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `export.php` | hr | Modul HR · Excel-Export für den Steuerberater: ein Blatt je Monat in Aufbau und Gestaltung der bisherigen Planungsdatei „Urlaub 2026“ (Legende, Monatstitel, Wochentage, Tageszahlen, Abteilungen senkrecht, Kürzel … |
 | `import.php` | hr | Modul HR · Übernahme der bisherigen Planungsdatei („Urlaub 2026.xlsx“, ein Blatt je Monat). |
-| `urlaub.php` | hr | Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Monatsplan). |
+| `urlaub.php` | hr | Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Korrekturmeldungen, Monatsplan). |
 | `zeiterfassung.php` | hr | Modul HR · Import „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht, .xlsx) – Importvorlage für die Urlaubstage (Entscheidung des Inhabers, 23.10.2026). |
 
 ## `app/api/module/leergut/`
@@ -308,7 +308,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `hr.css` | hr | STAFL-Plattform · HR · Urlaub – Gestaltung wie das Dashboard („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf und Karten. |
-| `hr.js` | hr | STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag (ausblendbar |
+| `hr.js` | hr | STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, nie Krankheit), Urlaubsantrag (ausblendbar |
 | `index.html` | hr | Mein Urlaub |
 | `verwaltung-hr.css` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung (Mitarbeiter-Dialog, Urlaubseinstellungen, Altbestand). |
 | `verwaltung-hr.js` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbeiter |

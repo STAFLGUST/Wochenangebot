@@ -4,7 +4,8 @@ declare(strict_types=1);
    Urlaubstage (Entscheidung des Inhabers, 23.10.2026). Der Bericht enthält je Mitarbeiter eine Kopfzeile (Vorname,
    Nachname, Mitarbeiternummer, Abteilung) und darunter die Abwesenheiten (Name der Abwesenheit, Abwesenheitsvergütung,
    Start-/Enddatum, Dauer). Übernommen werden Urlaub (U) und Krankheit (K); Feiertage berechnet die Plattform selbst.
-   „Krank ohne AU“ mit „Abgezogen vom Urlaub“ zählt wie in der Zeiterfassung gegen den Urlaubsanspruch (urlaubAbzug).
+   „Krank ohne AU“ mit „Abgezogen vom Urlaub“ wird als Krank mit dem Hinweis urlaubAbzug übernommen; gegen den
+   Urlaubsanspruch zählt Krankheit hier nie (Inhaber 30.10.2026, hr_konto).
 
    Zuordnung: zuerst über die Personalnummer (HR-Angabe „personalnummer“), sonst über den Namen; unbekannte Namen werden
    Mitarbeiter ohne Anmeldung (mit Personalnummer und Abteilung). Erneute Übernahme ersetzt die zuvor aus der
@@ -205,7 +206,7 @@ function hr_zeit_vorschau(array $e, array $me): array
     foreach ($proPerson as $pid => $arten) {
         $n['neu']++;
         $t = [];
-        foreach (['U' => 'Urlaub', 'K' => 'Krank', 'K!' => 'Krank (vom Urlaub abgezogen)', 'G' => 'Gleittag'] as $k => $txt) if (!empty($arten[$k])) $t[] = "$txt {$arten[$k]} " . ($arten[$k] === 1 ? 'Tag' : 'Tage');
+        foreach (['U' => 'Urlaub', 'K' => 'Krank', 'K!' => 'Krank (in der Zeiterfassung vom Urlaub abgezogen)', 'G' => 'Gleittag'] as $k => $txt) if (!empty($arten[$k])) $t[] = "$txt {$arten[$k]} " . ($arten[$k] === 1 ? 'Tag' : 'Tage');
         $z[] = ['art' => 'neu', 'schluessel' => 'Abwesenheiten', 'name' => $namen[$pid] ?? $pid, 'text' => implode(' · ', $t)];
     }
     if ($pl['alt']) { $n['entfaellt'] += count($pl['alt']); $z[] = ['art' => 'entfaellt', 'schluessel' => 'Abwesenheiten', 'name' => 'frühere Übernahme', 'text' => count($pl['alt']) . ' Einträge der letzten Übernahme aus der Zeiterfassung werden ersetzt']; }

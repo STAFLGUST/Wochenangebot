@@ -44,8 +44,15 @@ switch ($action) {
             if ($genehmigen || $verwalten) $offen = count(array_filter($abw['eintraege'], function ($e) use ($genehmigen, $personal, $me) {
                 return $e['status'] === 'beantragt' && (!$genehmigen || !hr_eigen($personal, $me, $e));
             }));
+            // Korrekturmeldungen: eigene (neueste zuerst); Personalstelle zusätzlich die Zahl offener, die sie erledigen kann (ohne eigene)
+            $korr = hr_korrekturen()['meldungen'];
+            $eigeneIds = hr_eigene_ids($personal, $me);
+            $meine = array_reverse(array_values(array_filter($korr, function ($m) use ($eigeneIds) { return isset($eigeneIds[$m['person']]); })));   // umgekehrt + stabile Sortierung: gleiche Sekunde → neueste zuerst
+            usort($meine, function ($a, $b) { return strcmp($b['erfasst']['t'] ?? '', $a['erfasst']['t'] ?? ''); });
+            $korrOffen = $verwalten ? count(array_filter($korr, function ($m) use ($eigeneIds) { return $m['status'] === 'offen' && !isset($eigeneIds[$m['person']]); })) : null;
             respond(['ok' => true, 'jahr' => $jahr, 'heute' => hr_heute(), 'name' => $me['name'], 'verwalten' => $verwalten, 'genehmigen' => $genehmigen, 'uebersicht' => $uebersicht, 'neuVerknuepft' => $neuVerknuepft,
-                     'offen' => $offen,
+                     'offen' => $offen, 'korrekturenOffen' => $korrOffen,
+                     'korrekturen' => array_map(function ($m) use ($ich) { return hr_korrektur_aus($m, $ich); }, array_slice($meine, 0, 30)),
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis'],
@@ -134,6 +141,69 @@ switch ($action) {
             respond(['ok' => true]);
         }
 
+        /* Korrektur melden: Fehler in den eigenen Einträgen oder im Urlaubskonto an die Personalstelle melden.
+           Text Pflicht, Zeitraum und Bezug auf einen eigenen Eintrag optional. Das Protokoll enthält den Text nicht. */
+        case 'hr_korrektur': {
+            $me = require_perm('hr.antrag', true);
+            $b = body();
+            $text = s($b['text'] ?? '', 500) ?? '';
+            if (mb_strlen($text) < 3) fail('Bitte kurz beschreiben, was nicht stimmt.', 422);
+            $von = null; $bis = null;
+            if (($b['von'] ?? '') !== '' || ($b['bis'] ?? '') !== '') {
+                $von = hr_datum($b['von'] ?? null); $bis = hr_datum(($b['bis'] ?? '') !== '' ? $b['bis'] : ($b['von'] ?? null));
+                if (!$von || !$bis) fail('Bitte ein gültiges Datum wählen oder den Zeitraum leer lassen.', 422);
+                if ($bis < $von) fail('Das Ende liegt vor dem Beginn.', 422);
+            }
+            $eintragId = s($b['eintrag'] ?? '', 40) ?? '';
+            $m = with_lock('hr-korrekturen', function () use ($me, $text, $von, $bis, $eintragId) {
+                $personal = hr_personal();
+                $ich = hr_ich($personal, $me);
+                if (!$ich) fail('Ihr Konto ist noch keinem Mitarbeiter zugeordnet. Bitte an die Personalstelle wenden.', 409);
+                if ($eintragId !== '') {
+                    $gef = null;
+                    foreach (hr_abwesenheiten()['eintraege'] as $e) if ($e['id'] === $eintragId) { $gef = $e; break; }
+                    if (!$gef || $gef['person'] !== $ich['id']) fail('Eintrag nicht gefunden.', 404);
+                }
+                $k = hr_korrekturen();
+                $offen = count(array_filter($k['meldungen'], function ($x) use ($ich) { return $x['person'] === $ich['id'] && $x['status'] === 'offen'; }));
+                if ($offen >= HR_MAX_KORREKTUREN_OFFEN) fail('Sie haben schon ' . $offen . ' offene Meldungen. Bitte warten, bis die Personalstelle sie bearbeitet hat.', 429);
+                $m = ['id' => hr_neue_id('k'), 'person' => $ich['id'], 'text' => $text, 'status' => 'offen',
+                      'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]]
+                     + ($von !== null ? ['von' => $von, 'bis' => $bis] : []) + ($eintragId !== '' ? ['eintrag' => $eintragId] : []);
+                $k['meldungen'][] = $m;
+                hr_korrekturen_schreiben($k);
+                return hr_korrektur_aus($m, $ich);
+            });
+            audit('hr', 'HR: Korrektur gemeldet' . ($m['von'] ? ' (' . hr_zeitraum_text($m['von'], $m['bis']) . ')' : ''));
+            respond(['ok' => true, 'meldung' => $m]);
+        }
+
+        /* Korrekturmeldung erledigen (Personalstelle) – mit optionaler Antwort für den Mitarbeiter; nie die eigene Meldung */
+        case 'hr_korrektur_erledigt': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $id = s($b['id'] ?? '', 40) ?? '';
+            $antwort = s($b['antwort'] ?? '', 300) ?? '';
+            $m = with_lock('hr-korrekturen', function () use ($me, $id, $antwort) {
+                $personal = hr_personal(); $k = hr_korrekturen();
+                foreach ($k['meldungen'] as &$m) {
+                    if ($m['id'] !== $id) continue;
+                    if (hr_eigene_person($personal, $me, $m['person'])) fail('Ihre eigene Meldung erledigt eine andere Person der Personalstelle.', 403);
+                    if ($m['status'] !== 'offen') fail('Diese Meldung ist bereits erledigt.', 409);
+                    $m['status'] = 'erledigt';
+                    $m['erledigt'] = ['t' => now(), 'by' => $me['name'], 'byId' => $me['id'], 'antwort' => $antwort];
+                    $kopie = $m;
+                    unset($m);
+                    hr_korrekturen_schreiben($k);
+                    return $kopie;
+                }
+                fail('Meldung nicht gefunden.', 404);
+            });
+            $p = hr_personen_index(hr_personal())[$m['person']] ?? null;
+            audit('hr', 'HR: Korrekturmeldung erledigt (' . ($p ? hr_name($p) : 'ehemaliger Mitarbeiter') . ')');
+            respond(['ok' => true, 'meldung' => hr_korrektur_aus($m, $p)]);
+        }
+
         /* Personalstelle: Mitarbeiter mit Konten, offene Anträge, alle Einträge des Jahres, Einstellungen */
         case 'hr_verwaltung': {
             $me = require_perm('hr.verwalten');
@@ -149,7 +219,15 @@ switch ($action) {
             }
             $offen = hr_offene_antraege($personal, $abw, $me);
             usort($eintraege, function ($a, $b) { return [$a['von'], $a['name']] <=> [$b['von'], $b['name']]; });
-            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'heute' => hr_heute(),
+            // Korrekturmeldungen: alle offenen und die in den letzten 60 Tagen erledigten (offene zuerst, dann neueste)
+            $grenze = gmdate('Y-m-d', time() - 60 * 86400);
+            $korr = array_reverse(array_values(array_filter(hr_korrekturen()['meldungen'], function ($m) use ($grenze) {
+                return $m['status'] === 'offen' || substr((string)($m['erledigt']['t'] ?? ''), 0, 10) >= $grenze;
+            })));
+            usort($korr, function ($a, $b) { return [$a['status'] === 'offen' ? 0 : 1, $b['erfasst']['t'] ?? ''] <=> [$b['status'] === 'offen' ? 0 : 1, $a['erfasst']['t'] ?? '']; });
+            $eigeneIds = hr_eigene_ids($personal, $me);
+            $korrAus = array_map(function ($m) use ($idx, $eigeneIds) { return hr_korrektur_aus($m, $idx[$m['person']] ?? null) + ['eigen' => isset($eigeneIds[$m['person']])]; }, $korr);
+            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'heute' => hr_heute(), 'korrekturen' => $korrAus,
                      'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
                      'offen' => $offen, 'eintraege' => $eintraege, 'sperren' => $einst['sperren'], 'ferien' => $einst['ferien'], 'arten' => HR_ARTEN]);
         }

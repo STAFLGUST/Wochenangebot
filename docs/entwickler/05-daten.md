@@ -332,10 +332,15 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag. `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `personalstelle`, `zeiterfassung`; optional `geaendert`,
-  `urlaubAbzug` (Krankheit vom Urlaub abgezogen). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
+  `urlaubAbzug` (in der Zeiterfassung vom Urlaub abgezogene Krankheit – nur Hinweis für die Personalstelle; Krankheit
+  zählt in `hr_konto` nie gegen den Urlaub, Inhaber 30.10.2026). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G) untereinander und freie Tage (X) untereinander – ein freier Tag in
   einer Urlaubswoche zählt dort nur nicht mit.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
+- **`hr-korrekturen`**: `{"rev": 2, "meldungen": [{"id": "k0123456789ab", "person": "u…", "von": "2026-09-09", "bis": "2026-09-11", "eintrag": "a…", "text": "…", "status": "offen", "erfasst": {"t": "…", "by": "…", "byId": "u…"}, "erledigt": {"t": "…", "by": "…", "byId": "u…", "antwort": "…"}}]}` –
+  Korrekturmeldungen der Mitarbeiter („Korrektur melden“, Aktion `hr_korrektur`; `von`/`bis`/`eintrag` optional,
+  höchstens 20 offene je Person). Die Personalstelle erledigt sie (`hr_korrektur_erledigt`, nie die eigene); Meldungen
+  werden nie gelöscht. Sichtbar nur für die Person selbst und `hr.verwalten`; das Protokoll enthält den Text nicht.
 
 ### CRM (`module/crm/crm.php`)
 

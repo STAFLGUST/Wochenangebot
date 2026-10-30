@@ -156,7 +156,14 @@ historie = "Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornier
 name = "hr-einstellungen"
 eigentuemer = "hr"
 schutz = "intern"
-beschreibung = "Urlaubssperren, Ferienzeiträume und Verfallstag des Resturlaubs (uebertragBis, MM-TT; fehlt: 31.03.) der Urlaubsverwaltung"
+beschreibung = "Urlaubssperren, Ferienzeiträume, Verfallstag des Resturlaubs (uebertragBis, MM-TT; fehlt: 31.03.) und Schalter „Urlaubsanträge über die Plattform“ (antraege; fehlt: an) der Urlaubsverwaltung"
+
+[[dokument]]
+name = "hr-korrekturen"
+eigentuemer = "hr"
+schutz = "vertraulich"
+beschreibung = "Korrekturmeldungen der Mitarbeiter zu ihren Einträgen bzw. ihrem Urlaubskonto (Text, optional Zeitraum und Eintrag) mit Status und Antwort der Personalstelle; sichtbar nur für die Person selbst und die Personalstelle (hr.verwalten), Protokoll ohne Text"
+historie = "Meldungen werden nie gelöscht: Erledigen ändert nur den Status (mit Zeitpunkt, Person und Antwort)"
 
 # ───────────── CRM ─────────────
 
