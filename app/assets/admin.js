@@ -4614,7 +4614,7 @@
       const st = stockOf(e.code);
       return `<tr data-mcode="${esc(e.code)}">
         <td class="m-code">${esc(e.code)}</td>
-        <td class="m-name"><input class="in" data-mf="name" value="${esc(e.name)}" maxlength="200" aria-label="Bezeichnung">${st && fold(st.name) !== fold(e.name) ? `<div class="m-winab" title="Bezeichnung in WinAB / Bestandsliste">WinAB: ${esc(st.name)}</div>` : ''}</td>
+        <td class="m-name"><input class="in" data-mf="name" value="${esc(e.name)}" maxlength="200" aria-label="Bezeichnung">${st && fold(st.nameImport || st.name) !== fold(e.name) ? `<div class="m-winab" title="Bezeichnung in WinAB / Bestandsliste">WinAB: ${esc(st.nameImport || st.name)}</div>` : ''}</td>
         <td class="m-cat"><select class="in" data-mf="category" aria-label="Fleischart">${CAT_OPTS(e.category)}</select></td>
         <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
         <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
@@ -4816,9 +4816,10 @@
     if (e.target.name !== 'code') return;
     const f = e.currentTarget.elements, st = stockOf(e.target.value.trim());
     if (st && !f.name.value) {
-      const n = C.stripFrisch(st.name);
+      const winab = st.nameImport || st.name;   // Name der Bestandsliste (der Server setzt sonst die Stammdaten-Bezeichnung ein)
+      const n = C.stripFrisch(winab);
       f.name.value = n;
-      const sug = C.suggestAttributes(st.name, '', '');
+      const sug = C.suggestAttributes(winab, '', '');
       f.category.value = sug.category; f.condition.value = sug.condition; if (sug.origin) f.origin.value = sug.origin;
     }
   });
