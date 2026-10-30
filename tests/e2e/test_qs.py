@@ -148,7 +148,7 @@ csrf = Be.csrf; Be.csrf = ''
 check('Dokument ohne CSRF: 403', Be.call('qs_dokument_save', D1)[0] == 403)
 Be.csrf = csrf
 check('schreibende Aktion per GET: 405', Be.call('qs_dokument_save')[0] == 405)
-for name, b in (('ohne Titel', {'titel': ''}), ('ohne Nr. (gelenkt)', {'nr': ''}), ('Kapitel unbekannt', {'kapitel': '9.9'}), ('ohne Kapitel', {'kapitel': ''}),
+for name, b in (('ohne Titel', {'titel': ''}), ('Nr. nicht nach der Struktur', {'nr': '1.4-X01'}), ('Kapitel unbekannt', {'kapitel': '9.9'}), ('ohne Kapitel', {'kapitel': ''}),
                 ('Art unbekannt', {'art': 'Z'}), ('Ablage javascript:', {'ablage': 'javascript:alert(1)'}), ('Ablage mit Umbruch', {'ablage': 'a\nb'}),
                 ('Titel zu lang', {'titel': 'x' * 201})):
     st, r = Be.call('qs_dokument_save', {**D1, **b})

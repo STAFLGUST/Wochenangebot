@@ -309,10 +309,21 @@
     if (v.status === 'entwurf') return true;
     return ['freigegeben', 'ersetzt'].includes(v.status) && darf('freigeben');
   }
+  /* Herkunft und Platzhalter einer Datei (Bauabschnitt 3: Vorlagen, Lenkungsangaben bei der Freigabe) */
+  const platzhalterText = (l) => (l || []).map((k) => ((S.d.ablage || {}).platzhalter || {})[k] || k).join(', ');
+  function dateiHerkunft(f, v) {
+    const t = [];
+    if (f.vorlage) t.push(`aus ${esc(f.vorlage.nr)}`);
+    if (f.uebernommen) t.push(`aus Version ${esc(f.uebernommen)}`);
+    if (f.ausgefuellt) t.push('Lenkungsangaben eingetragen');
+    else if ((f.platzhalter || []).length && (!v || ['entwurf', 'pruefung', 'geprueft'].includes(v.status)))
+      t.push(`<span class="qm-platzhalter" title="Platzhalter in der Datei">{{…}} ${esc(platzhalterText(f.platzhalter))}</span>`);
+    return t.length ? ' · ' + t.join(' · ') : '';
+  }
   function dateiListe(x, v, leer) {
     const alle = (v ? v.dateien : x.dateien) || [], da = aktiv(alle), weg = alle.filter((f) => f.entfernt), offen = ablageOffen(x, v);
     let h = da.length ? `<ul class="qm-dateien">${da.map((f) => `<li class="qm-datei"><button class="qm-datei-name" type="button" data-datei="${esc(f.id)}" title="${esc(f.name)} herunterladen">${icon('dokument')}<span>${esc(f.name)}</span></button>`
-      + `<span class="qm-sub">${esc(groesseText(f.groesse))}${f.hochgeladen ? ` · ${esc(f.hochgeladen.von)} · ${esc(datum(String(f.hochgeladen.t).slice(0, 10)))}` : ''}${f.nachgetragen ? ' · nachgetragen' : ''}</span>`
+      + `<span class="qm-sub">${esc(groesseText(f.groesse))}${f.hochgeladen ? ` · ${esc(f.hochgeladen.von)} · ${esc(datum(String(f.hochgeladen.t).slice(0, 10)))}` : ''}${f.nachgetragen ? ' · nachgetragen' : ''}${dateiHerkunft(f, v)}</span>`
       + `${offen ? `<button class="qm-datei-weg" type="button" data-datei-weg="${esc(f.id)}" aria-label="${esc(f.name)} entfernen" title="Entfernen">×</button>` : ''}</li>`).join('')}</ul>`
       : (leer ? `<p class="qm-hilfe">${esc(leer)}</p>` : '');
     if (weg.length) h += `<details class="qm-details qm-entfernt"><summary>${weg.length === 1 ? '1 Datei entfernt' : zahl(weg.length) + ' Dateien entfernt'}</summary><ul class="qm-verlauf">${weg.map((f) => `<li><s>${esc(f.name)}</s> · ${esc(zeitpunkt(f.entfernt.t))} · ${esc(f.entfernt.von)}: ${esc(f.entfernt.grund)}</li>`).join('')}</ul></details>`;
@@ -508,6 +519,7 @@
           <label class="qm-breit">Änderungsgrund<input class="qm-eingabe" id="dk-grund" maxlength="1000" value="${esc(o.grund)}"${kannEdit ? '' : ' readonly'}></label>
         </div>
         <div class="qm-ablage"><b class="qm-ablage-titel">${icon('klammer')}Dateien zu Version ${naechsteVersion(x)}</b>${dateiListe(x, o, 'Noch keine Dateien.')}${ablageZone(x, o, 'Dateien ablegen')}${ladenHtml(x, o.id)}
+          ${aktiv(o.dateien).some((f) => (f.platzhalter || []).length) && nrStruktur(x.art) ? '<p class="qm-hilfe qm-lenkung">Bei der Freigabe trägt das System Version, Freigabedatum und Kürzel in die Platzhalter der Word-/Excel-Dateien ein.</p>' : ''}
           ${o.status === 'entwurf' && darf('freigeben') && !eigen(o) && ablageOffen(x, o) ? '<p class="qm-hilfe">Wer im Entwurf Dateien ablegt oder entfernt, zählt als Bearbeiter und kann ihn danach nicht mehr prüfen (4-Augen-Prinzip).</p>' : ''}</div>
         ${o.status === 'pruefung' && darf('freigeben') && eigen(o) ? '<p class="qm-hilfe">Sie haben diesen Entwurf erstellt oder geändert – prüfen muss eine andere Person (4-Augen-Prinzip).</p>' : ''}
         ${o.status !== 'entwurf' && !darf('freigeben') ? '<p class="qm-hilfe">Wartet auf Prüfung und Freigabe durch QMB oder Geschäftsführung.</p>' : ''}
@@ -517,18 +529,24 @@
       karte = `<section class="qm-karte"><h3>Überarbeiten</h3><p class="qm-hilfe">Änderungen und Grund in Stichworten (Handbuch 2.0.11). Die Versionsnummer zählt erst mit der Freigabe hoch.</p>
         <div class="qm-formraster"><label class="qm-breit">Änderungen<input class="qm-eingabe" id="dk-aend" maxlength="2000" placeholder="z. B. Ablauf ergänzt"></label>
         <label class="qm-breit">Änderungsgrund<input class="qm-eingabe" id="dk-grund" maxlength="1000" placeholder="z. B. Internes Audit"></label></div>
+        ${g && aktiv(g.dateien).length ? `<label class="qm-check"><input type="checkbox" id="dk-dateien" checked> Dateien der Version ${esc(g.nr)} übernehmen (${zahl(aktiv(g.dateien).length)}) – mit ihren Platzhaltern</label>` : ''}
         <div class="qm-knopfreihe">${darf('freigeben') && g ? '<button class="btn" type="button" data-schritt="ueberprueft">Ohne Änderung überprüft</button>' : ''}<button class="btn primary" type="button" data-schritt="neu">Überarbeitung beginnen</button></div></section>`;
     }
     const vers = [...(x.versionen || [])].reverse();
     const versHtml = !gelenkt ? '<p class="qm-hilfe">Ordner und externe Dokumente stehen nur im Register – ohne Versionen.</p>'
       : vers.length ? `<div class="qm-versionen">${vers.map((v) => `<div class="qm-version${['ersetzt', 'verworfen'].includes(v.status) ? ' qm-aus' : ''}"><b>${esc(v.nr || naechsteVersion(x))}</b><span>${esc(datum(v.datum)) || '—'}</span><span>${beteiligte(v)}</span>${chip(S.d.verStatus[v.status] || v.status, { freigegeben: 'gruen', entwurf: 'gelb', pruefung: 'blau', geprueft: 'blau' }[v.status] || '')}${v.aenderungen || v.grund ? `<span class="qm-sub">${esc(v.aenderungen)}${v.grund ? ' – ' + esc(v.grund) : ''}</span>` : ''}${['ersetzt', 'verworfen'].includes(v.status) && ((v.dateien || []).length || ablageOffen(x, v)) ? `<div class="qm-version-dateien">${dateiListe(x, v, '')}${ablageZone(x, v, 'Datei nachtragen', true)}${ladenHtml(x, v.id)}</div>` : ''}</div>`).join('')}</div>`
         : '<p class="qm-hilfe">Noch keine Version.</p>';
+    const vorlageKarte = x.art === 'V' && !x.eingezogen ? `<section class="qm-karte qm-vorlagenkarte"><h3>${icon('dokument')}Vorlage für neue Dokumente</h3>
+      <p class="qm-hilfe">„Dokument anlegen“ mit dieser Vorlage kopiert die Word-/Excel-Datei der gültigen Version und füllt die Platzhalter {{Nr}}, {{Titel}}, {{Kapitel}}, {{Art}}, {{Zuständig}}, {{Vertreter}} aus.
+      {{Version}}, {{Datum}}, {{Erstellt}}, {{Geprüft}}, {{Freigegeben}}, {{Änderungen}} und {{Grund}} trägt die Freigabe des neuen Dokuments ein. Platzhalter wie {{Nr}} einfach als Text in Kopf- oder Fußzeile bzw. Zelle schreiben.</p>
+      ${vorlageNutzbar(x) ? '' : '<p class="qm-meldung">Noch nicht nutzbar: Es braucht eine freigegebene Version mit einer Word- oder Excel-Datei (.docx, .dotx, .xlsx, .xltx, .xlsm).</p>'}</section>` : '';
     const ablage = !gelenkt ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien</h3>${dateiListe(x, null, 'Noch keine Dateien.')}${ablageZone(x, null, 'Dateien ablegen')}${ladenHtml(x, '')}</section>`
       : g ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien · Version ${esc(g.nr)}</h3>${dateiListe(x, g, 'Zur gültigen Version liegen keine Dateien.')}${ablageZone(x, g, 'Datei nachtragen')}${ladenHtml(x, g.id)}</section>` : '';
     p.innerHTML = `<div class="qm-dp-kopf"><div><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.nr ? ' · ' + esc(x.nr) : ''}</span><h2>${esc(x.titel)}</h2></div><button class="qm-dialog-schliessen" type="button" data-dk="schliessen" aria-label="Dokument schließen">×</button></div>
       <div class="qm-chips">${chips.join('')}</div>
       <dl class="qm-dl"><dt>Kapitel</dt><dd>${esc(kapitelText(x.kapitel))}</dd><dt>Zuständig</dt><dd>${zust}</dd>${x.ablage ? `<dt>Ablage</dt><dd>${link(x.ablage)}</dd>` : ''}${x.notiz ? `<dt>Notiz</dt><dd>${esc(x.notiz)}</dd>` : ''}${x.ueberprueft ? `<dt>Überprüft</dt><dd>${esc(datum(x.ueberprueft.t.slice(0, 10)))} · ${esc(x.ueberprueft.von)}${x.ueberprueft.notiz ? ' – ' + esc(x.ueberprueft.notiz) : ''}</dd>` : ''}${x.eingezogen ? `<dt>Eingezogen</dt><dd>${esc(zeitpunkt(x.eingezogen.t))} · ${esc(x.eingezogen.von)}: ${esc(x.eingezogen.grund)}</dd>` : ''}</dl>
       ${ablage}
+      ${vorlageKarte}
       ${karte}
       <section><h3 class="qm-zwischen">Versionen</h3>${versHtml}</section>
       ${(x.verlauf || []).length ? `<details class="qm-details"><summary>Verlauf</summary><ul class="qm-verlauf">${x.verlauf.slice().reverse().map((l) => `<li>${esc(zeitpunkt(l.t))} · ${esc(l.von)}: ${esc(l.was)}</li>`).join('')}</ul></details>` : ''}
@@ -550,7 +568,10 @@
     $('#dk-meldung').textContent = '';
     if (s === 'angaben') { oeffneDokForm(x.id); return; }
     let action = 'qs_version_schritt', body = { dokument: x.id, rev: x.rev, schritt: s }, ok = '';
-    if (s === 'speichern' || s === 'neu') { action = 'qs_version_save'; body = { dokument: x.id, rev: x.rev, aenderungen: $('#dk-aend').value, grund: $('#dk-grund').value }; ok = s === 'neu' ? 'Überarbeitung begonnen' : 'Entwurf gespeichert'; }
+    if (s === 'speichern' || s === 'neu') {
+      action = 'qs_version_save'; body = { dokument: x.id, rev: x.rev, aenderungen: $('#dk-aend').value, grund: $('#dk-grund').value }; ok = s === 'neu' ? 'Überarbeitung begonnen' : 'Entwurf gespeichert';
+      if (s === 'neu' && $('#dk-dateien') && $('#dk-dateien').checked) body.dateien = true;
+    }
     else if (s === 'einziehen' || s === 'wieder') {
       let grund = '';
       if (s === 'einziehen') { grund = await frageGrund('Dokument einziehen', `„${x.nr} ${x.titel}“ wird ungültig. Offene Entwürfe werden verworfen; alle Versionen bleiben einsehbar.`, 'Grund', true); if (grund === null) return; }
@@ -583,7 +604,26 @@
   });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && S.dok && !$('dialog[open]')) schliesseDok(); });
 
-  /* Dokument anlegen / Angaben ändern – Nummer nach der Struktur „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08) */
+  /* Dokument anlegen / Angaben ändern – Nummer nach der Struktur „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); der Server
+     prüft sie und vergibt die nächste freie, wenn das Feld leer bleibt (oder noch den Vorschlag enthält). Neue Dokumente der
+     Arten A, F, L, E können aus einer Vorlage (Art V mit freigegebener Word-/Excel-Datei) entstehen. */
+  const nrStruktur = (art) => ((S.d.ablage || {}).nrStruktur || []).includes(art);
+  const officeDateien = (v) => aktiv(v && v.dateien).filter((f) => ((S.d.ablage || {}).office || []).includes(f.art));
+  const vorlageNutzbar = (x) => x.art === 'V' && !x.eingezogen && officeDateien(gueltige(x)).length > 0;
+  function vorlagePasst(x, art) {   // „Vorlage F“ bzw. Titel mit „Formblatt“ passt zur Art F
+    const name = (S.d.arten[art] || '').toLocaleLowerCase('de-DE');
+    return new RegExp(`(^|\\s)${art}$`, 'i').test(x.nr || '') || (name && `${x.titel}`.toLocaleLowerCase('de-DE').includes(name));
+  }
+  function dfVorlagen() {
+    const art = $('#df-art').value, neu = !S.edit.dok, liste = S.d.dokumente.filter(vorlageNutzbar);
+    const z = $('#df-vorlage-z'), sel = $('#df-vorlage');
+    z.hidden = !neu || !nrStruktur(art) || !liste.length;
+    if (z.hidden) { sel.innerHTML = ''; return; }
+    const alt = sel.dataset.art === art ? sel.value : null, passend = liste.find((x) => vorlagePasst(x, art));
+    sel.innerHTML = '<option value="">— ohne Vorlage —</option>' + liste.sort((a, b) => natCmp(a.nr, b.nr)).map((x) => `<option value="${esc(x.id)}">${esc(x.nr)} · ${esc(x.titel)}</option>`).join('');
+    sel.value = alt !== null ? alt : (passend ? passend.id : '');
+    sel.dataset.art = art;
+  }
   function naechsteNr(kap, art) {
     if (!kap || !S.d.gelenkt.includes(art)) return '';
     const re = new RegExp('^' + kap.replace(/\./g, '\\.') + '-' + art + '(\\d+)', 'i');
@@ -600,31 +640,45 @@
     $('#df-titel-in').value = x ? x.titel : ''; $('#df-ablage').value = x ? x.ablage : '';
     $('#df-zust').value = x ? x.zustaendig : ''; $('#df-vertr').value = x ? x.vertreter : ''; $('#df-notiz').value = x ? x.notiz : ''; $('#df-aend').value = '';
     $('#df-aend-z').hidden = !!x;
+    $('#df-vorlage').dataset.art = '';
     dfHilfe();
     oeffne($('#dlg-dokform'));
     $('#df-titel-in').focus();
   }
   function dfHilfe() {
-    const art = $('#df-art').value, x = S.edit.dok;
+    const art = $('#df-art').value, x = S.edit.dok, kap = $('#df-kapitel').value, nr = $('#df-nr');
+    dfVorlagen();
+    const mitVorlage = !$('#df-vorlage-z').hidden && $('#df-vorlage').value;
     $('#df-hilfe').textContent = S.d.gelenkt.includes(art)
-      ? (x ? 'Inhaltliche Änderungen laufen über „Überarbeiten“ (neue Version mit Prüfung und Freigabe).' : 'Ein neues gelenktes Dokument startet als Entwurf; gültig wird es erst mit Prüfung und Freigabe. Die Nummer folgt der Struktur Kapitel-Art-laufende Nummer.')
+      ? (x ? 'Inhaltliche Änderungen laufen über „Überarbeiten“ (neue Version mit Prüfung und Freigabe).'
+        : 'Ein neues gelenktes Dokument startet als Entwurf; gültig wird es erst mit Prüfung und Freigabe.'
+          + (nrStruktur(art) ? ' Die Nummer folgt der Struktur Kapitel-Art-laufende Nummer; leer gelassen vergibt das System die nächste freie.' : '')
+          + (mitVorlage ? ' Die Datei der Vorlage liegt danach mit Nr., Titel und Kapitel im Entwurf; Version, Freigabedatum und Kürzel trägt die Freigabe ein.' : ''))
       : 'Ordner und externe Dokumente stehen nur im Register (ohne Versionen und Freigabe).';
+    nr.placeholder = art === 'V' ? 'z. B. Vorlage F' : nrStruktur(art) && kap ? `automatisch (${naechsteNr(kap, art)})` : '';
     if (!x) {
-      const nr = $('#df-nr'), v = naechsteNr($('#df-kapitel').value, art);
+      const v = nrStruktur(art) ? naechsteNr(kap, art) : '';
       if (!nr.value || nr.value === nr.dataset.vorschlag) { nr.value = v; nr.dataset.vorschlag = v; }
+    } else if (nrStruktur(art)) {   // Kapitel oder Art geändert: neue Nummer nach der Struktur, zurück: alte Nummer
+      const v = kap === x.kapitel && art === x.art ? x.nr : naechsteNr(kap, art);
+      if (!nr.value || nr.value === nr.dataset.vorschlag || nr.value === x.nr) { nr.value = v; nr.dataset.vorschlag = v === x.nr ? '' : v; }
     }
   }
   ['#df-art', '#df-kapitel'].forEach((s) => $(s).addEventListener('input', dfHilfe));
+  $('#df-vorlage').addEventListener('change', dfHilfe);
   $('#df-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const x = S.edit.dok;
-    const body = { kapitel: $('#df-kapitel').value, art: $('#df-art').value, nr: $('#df-nr').value, titel: $('#df-titel-in').value, ablage: $('#df-ablage').value,
-      zustaendig: $('#df-zust').value, vertreter: $('#df-vertr').value, notiz: $('#df-notiz').value };
+    const nr = $('#df-nr'), nrWert = nr.value.trim();
+    // unveränderter Vorschlag: leer schicken – der Server vergibt die nächste freie Nummer (auch wenn jemand gleichzeitig anlegt)
+    const body = { kapitel: $('#df-kapitel').value, art: $('#df-art').value, nr: nrStruktur($('#df-art').value) && nr.dataset.vorschlag && nrWert === nr.dataset.vorschlag ? '' : nrWert,
+      titel: $('#df-titel-in').value, ablage: $('#df-ablage').value, zustaendig: $('#df-zust').value, vertreter: $('#df-vertr').value, notiz: $('#df-notiz').value };
     if (x) { body.id = x.id; body.rev = x.rev; } else body.aenderungen = $('#df-aend').value;
+    if (!x && !$('#df-vorlage-z').hidden && $('#df-vorlage').value) body.vorlage = $('#df-vorlage').value;
     const d = await senden(ev.target, 'qs_dokument_save', body);
     if (!d) return;
     $('#dlg-dokform').close();
-    toast(x ? 'Angaben gespeichert' : 'Dokument angelegt');
+    toast(x ? 'Angaben gespeichert' : body.vorlage ? `${d.dokument.nr} aus Vorlage angelegt` : `${d.dokument.nr || 'Dokument'} angelegt`);
     await neuLaden();
     oeffneDok(d.dokument.id);
   });
