@@ -75,6 +75,11 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `rewe.alle` | REWE | REWE | sehen | Alle REWE-Listen sehen (mit „bearbeiten“ auch für andere abfragen, z. B. Vertretung) | – | `rewe.sehen` |
 | `rewe.verwalten` | REWE | REWE | bearbeiten | REWE verwalten: Märkte anlegen, Zuweisung und Lieferweg ab KW, Lieferwege und Artikel, Excel-Listen übernehmen | – | `rewe.bearbeiten`, `rewe.alle` |
 | `rewe.exportieren` | REWE | REWE | bearbeiten | REWE-Wochenabschluss: Bestellungen aller Listen, Excel für WinAB, „in WinAB erfasst“ | – | `rewe.alle` |
+| `qs.sehen` | Qualitätssicherung | Qualitätssicherung | sehen | QM-System ansehen: Dokumente mit Versionen, QM-Handbuch, Prüfplan mit Nachweisen, Maßnahmen, CSV | – | – |
+| `qs.nachweis` | Qualitätssicherung | Qualitätssicherung | bearbeiten | Kontrollen durchführen: Nachweise für die eigenen (zugewiesenen) Prüfungen erfassen | – | `qs.sehen` |
+| `qs.bearbeiten` | Qualitätssicherung | Qualitätssicherung | bearbeiten | QM-System bearbeiten: Dokumente anlegen und überarbeiten (Entwurf, zur Prüfung geben), Nachweise aller Prüfungen erfassen und stornieren, Maßnahmen erfassen | – | `qs.nachweis` |
+| `qs.freigeben` | Qualitätssicherung | Qualitätssicherung | bearbeiten | QM-System prüfen und freigeben (QMB, Geschäftsführung): Dokumente prüfen, freigeben, einziehen, als überprüft vermerken (nie eigene Entwürfe prüfen), Handbuch und Prüfplan ändern, Maßnahmen als wirksam abschließen | – | `qs.bearbeiten` |
+| `qs.verwalten` | Qualitätssicherung | Qualitätssicherung | bearbeiten | QM-System verwalten: Kapitel, Personen (Kürzel und Verknüpfung mit Mitarbeitern) und Einstellungen pflegen, Datenpaket übernehmen | – | `qs.bearbeiten` |
 | `auswertung.sehen` | Verwaltung | Verwaltung | sehen | Auswertung: Karte der Kunden-Anmeldungen ansehen | – | `kunden.sehen` |
 
 ## Nur Administratoren

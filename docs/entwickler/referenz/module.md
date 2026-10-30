@@ -57,13 +57,13 @@ Agent: `rewe` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `rewe`
 
 ## Qualitätssicherung (`qs`)
 
-QS nach IFS Wholesale – jetzt nur technische Grundlage, Fachlogik ist ein eigenes späteres Projekt
+QM-System nach IFS Wholesale: gelenkte Dokumente mit Freigabe, QM-Handbuch, Prüfplan mit Nachweisen und Versäumnissen, Maßnahmen
 
-Agent: `qs` · hängt ab von `plattform`, `verwaltung`, `bestand`
+Agent: `qs` · hängt ab von `plattform`, `hr` · Testgruppen: `qs`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `qs.intern` QS-Verwaltung | intern | https://qs.dashboard-stafl.de/ | geplant | keine |
+| `qs.intern` QS-Verwaltung | intern | https://qs.dashboard-stafl.de/module/qs/ | in_entwicklung | keine |
 | `qs.portal` QS-Portal (Kunden, Lieferanten, Prüfer) | extern | https://qs-stafl.de/ | geplant | keine |
 
 ## Einkauf (`einkauf`)

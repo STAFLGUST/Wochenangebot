@@ -1,0 +1,486 @@
+/* STAFL-Plattform · QM-System – Gestaltung „Liquid Glass“ wie Dashboard, Leergut, Controlling, HR, CRM und Marketing:
+   warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. Alle Farben als --qm-*, dunkel doppelt
+   definiert (Gerät und Wahl am Konto). Ampeln: grün = gültig/in Ordnung, gelb = bald fällig/in Arbeit, rot = überfällig.
+   Tabellen werden unter 760 px zu Karten (data-label), damit die Seite auf dem Handy nie seitlich scrollt.
+   Druck: nur das Handbuch (Kapitel mit Abschnitten), ohne Kopf, Reiter und Knöpfe. */
+body.qm {
+  --qm-bg:#f4f1ee; --qm-text:#1c1a19; --qm-muted:#625c58; --qm-glass:rgba(255,255,255,.62); --qm-kopf:rgba(255,255,255,.9);
+  --qm-card:#fff; --qm-border:rgba(45,38,35,.14); --qm-line:rgba(45,38,35,.11); --qm-gloss:rgba(255,255,255,.9);
+  --qm-shadow:0 10px 34px rgba(50,34,28,.09); --qm-blob-a:#7384a7; --qm-blob-b:#e3b66f; --qm-blob-c:#6c9a7c;
+  --qm-accent:#8c1d2c; --qm-green:#347a55; --qm-green-soft:rgba(52,122,85,.12); --qm-minus:#a34a1f; --qm-minus-soft:rgba(190,96,40,.12);
+  --qm-blau:#2f5d8a;--qm-blau-soft:rgba(47,93,138,.12);--qm-gelb:#8a6500; --qm-gelb-soft:rgba(214,160,20,.17); --qm-rot:#a1222f; --qm-rot-soft:rgba(161,34,47,.11);
+  --qm-head-bg:rgba(230,235,230,.72); --qm-head-text:#59645c; --qm-total-bg:rgba(230,235,230,.55); --qm-chip:rgba(90,78,74,.1);
+  --qm-focus:0 0 0 3px rgba(140,29,44,.32);
+  margin:0; min-height:100vh; min-height:100dvh; background:var(--qm-bg); color:var(--qm-text); font-family:var(--font);
+}
+@media screen and (prefers-color-scheme: dark){:root:not([data-theme="light"]) body.qm{--qm-bg:#121011;--qm-text:#f5f1ee;--qm-muted:#b2aaa4;--qm-glass:rgba(39,35,35,.66);--qm-kopf:rgba(33,29,29,.95);--qm-card:#211d1d;--qm-border:rgba(255,255,255,.15);--qm-line:rgba(255,255,255,.12);--qm-gloss:rgba(255,255,255,.15);--qm-shadow:0 12px 44px rgba(0,0,0,.42);--qm-blob-a:#32486a;--qm-blob-b:#825c28;--qm-blob-c:#28533c;--qm-accent:#f0a3ae;--qm-green:#74c894;--qm-green-soft:rgba(116,200,148,.16);--qm-minus:#f0a874;--qm-minus-soft:rgba(240,168,116,.15);--qm-blau:#9cc3ec;--qm-blau-soft:rgba(156,195,236,.15);--qm-gelb:#f2cf6b;--qm-gelb-soft:rgba(242,207,107,.15);--qm-rot:#f59aa4;--qm-rot-soft:rgba(245,154,164,.15);--qm-head-bg:rgba(255,255,255,.11);--qm-head-text:#e1e6e1;--qm-total-bg:rgba(255,255,255,.08);--qm-chip:rgba(255,255,255,.1);--qm-focus:0 0 0 3px rgba(240,163,174,.45)}}
+@media screen{:root[data-theme="dark"] body.qm{--qm-bg:#121011;--qm-text:#f5f1ee;--qm-muted:#b2aaa4;--qm-glass:rgba(39,35,35,.66);--qm-kopf:rgba(33,29,29,.95);--qm-card:#211d1d;--qm-border:rgba(255,255,255,.15);--qm-line:rgba(255,255,255,.12);--qm-gloss:rgba(255,255,255,.15);--qm-shadow:0 12px 44px rgba(0,0,0,.42);--qm-blob-a:#32486a;--qm-blob-b:#825c28;--qm-blob-c:#28533c;--qm-accent:#f0a3ae;--qm-green:#74c894;--qm-green-soft:rgba(116,200,148,.16);--qm-minus:#f0a874;--qm-minus-soft:rgba(240,168,116,.15);--qm-blau:#9cc3ec;--qm-blau-soft:rgba(156,195,236,.15);--qm-gelb:#f2cf6b;--qm-gelb-soft:rgba(242,207,107,.15);--qm-rot:#f59aa4;--qm-rot-soft:rgba(245,154,164,.15);--qm-head-bg:rgba(255,255,255,.11);--qm-head-text:#e1e6e1;--qm-total-bg:rgba(255,255,255,.08);--qm-chip:rgba(255,255,255,.1);--qm-focus:0 0 0 3px rgba(240,163,174,.45)}}
+
+*{box-sizing:border-box}
+body.qm :focus-visible{outline:none;box-shadow:var(--qm-focus)}
+.qm [hidden]{display:none!important}
+.qm .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.qm-bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.qm-bg span{position:absolute;border-radius:50%;filter:blur(140px)}
+.qm-bg span:nth-child(1){width:580px;height:580px;left:-180px;top:-220px;background:var(--qm-blob-a);opacity:.16}
+.qm-bg span:nth-child(2){width:500px;height:500px;right:-130px;top:150px;background:var(--qm-blob-b);opacity:.14}
+.qm-bg span:nth-child(3){width:580px;height:580px;left:28%;bottom:-340px;background:var(--qm-blob-c);opacity:.12}
+.qm-seite{position:relative;z-index:1;max-width:1480px;margin:auto;padding:20px 24px 38px;display:flex;flex-direction:column;gap:20px;min-height:100vh;min-height:100dvh}
+.qm-glas{background:var(--qm-glass);border:1px solid var(--qm-border);box-shadow:inset 0 1px 0 var(--qm-gloss),var(--qm-shadow);-webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%)}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.qm-glas{background:var(--qm-card)}}
+.qm-main{flex:1;min-width:0}
+.qm-symbole{position:absolute;width:0;height:0;overflow:hidden}
+.qm .i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.qm input[type="checkbox"]{accent-color:var(--qm-accent);width:17px;height:17px;margin:0}
+
+/* Kopf */
+.qm-kopf{position:sticky;top:12px;z-index:5;display:flex;align-items:center;gap:14px;padding:9px 12px;border-radius:999px;background:var(--qm-kopf)}
+.qm-kopf .brand-logo{height:27px;width:auto;display:block}
+.qm-modul{display:inline-flex;align-items:center;gap:8px;padding-left:14px;border-left:1px solid var(--qm-line);font-weight:650;white-space:nowrap}
+.qm-modul .i{color:var(--qm-green)}
+.qm-aktionen{margin-left:auto;display:flex;align-items:center;gap:8px}
+.qm-rund{width:40px;height:40px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--qm-chip);color:var(--qm-text);cursor:pointer}
+.qm-user{display:flex;align-items:center;gap:8px;padding:0 12px 0 4px;height:40px;border-radius:99px;background:var(--qm-chip);font-size:13px}
+.qm-initialen{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--qm-accent);color:#fff;font-weight:700}
+.qm-user-name{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Leiste mit Reitern und Schnellaktionen */
+.qm-leiste{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:22px 0 14px}
+.qm-tabs{display:flex;gap:4px;width:max-content;max-width:100%;overflow:auto;padding:4px;border-radius:999px;background:var(--qm-chip);scrollbar-width:none}
+.qm-tabs button{height:38px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--qm-muted);font:inherit;font-size:14px;font-weight:650;white-space:nowrap;cursor:pointer}
+.qm-tabs button[aria-selected="true"]{background:var(--qm-card);color:var(--qm-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.qm-schnell{display:flex;gap:8px;flex-wrap:wrap}
+.qm-schnell .btn{display:inline-flex;align-items:center;gap:7px}
+.qm .btn .i{width:16px;height:16px}
+.qm .btn.sm{display:inline-flex;align-items:center;gap:6px}
+
+/* Kennzahlen */
+.qm-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.qm-kpi{min-width:0;padding:14px 16px;border-radius:18px;background:var(--qm-glass);border:1px solid var(--qm-border);box-shadow:inset 0 1px 0 var(--qm-gloss),var(--qm-shadow)}
+.qm-kpi span{display:block;color:var(--qm-muted);font-size:10px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
+.qm-kpi b{display:block;margin:5px 0 2px;font-size:23px;line-height:1.15;font-weight:760;letter-spacing:-.03em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.qm-kpi small{color:var(--qm-muted);font-size:11px}
+.qm-kpi.warn b{color:var(--qm-rot)}
+
+/* Flächen */
+.qm-raster{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;margin-bottom:12px}
+.qm-panel{min-width:0;padding:15px;border-radius:20px;margin-bottom:12px}
+.qm-raster .qm-panel{margin-bottom:0}
+.qm-panelkopf{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.qm-panelkopf h2{margin:0;font-size:16px;font-weight:700}
+.qm-panelkopf-filter{align-items:flex-end}
+.qm-hilfe{color:var(--qm-muted);font-size:11px}
+.qm-hinweis{margin:0 0 12px;color:var(--qm-muted);font-size:12px;line-height:1.45}
+.qm-fussnote{margin:9px 0 0;color:var(--qm-muted);font-size:11px}
+.qm-leer{max-width:640px;margin:10px auto 16px;padding:24px;border-radius:22px;text-align:center}
+.qm-leer h2{margin:0 0 8px;font-size:19px}.qm-leer p{margin:0;color:var(--qm-muted)}
+.qm-leer-text{margin:0;padding:22px;border-radius:20px;color:var(--qm-muted);text-align:center}
+.qm-leerzeile{padding:14px 6px;color:var(--qm-muted);font-size:13px;text-align:center}
+
+/* Eingaben */
+.qm-eingabe{height:38px;min-width:0;padding:0 10px;border:1px solid var(--qm-border);border-radius:10px;background:var(--qm-card);color:var(--qm-text);font:inherit;font-size:13px}
+textarea.qm-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4}
+.qm-eingabe[aria-invalid="true"]{border-color:var(--qm-rot);box-shadow:0 0 0 2px var(--qm-rot-soft)}
+.qm-filterzeile{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qm-filterzeile select.qm-eingabe{min-width:150px}
+.qm-feld-inline{color:var(--qm-muted);font-size:12px;font-weight:650}
+.qm-check{display:inline-flex;align-items:center;gap:8px;color:var(--qm-muted);font-size:13px;cursor:pointer}
+
+/* Tabellen */
+.qm-tabelle-wrap{width:100%;overflow-x:auto}
+.qm-tabelle{width:100%;border-collapse:collapse}
+.qm-tabelle th{padding:9px 8px;background:var(--qm-head-bg);color:var(--qm-head-text);text-align:left;font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase;border-bottom:1px solid var(--qm-border);white-space:nowrap;vertical-align:bottom}
+.qm-tabelle th small{display:block;font-size:9px;font-weight:600;letter-spacing:0;text-transform:none;opacity:.85}
+.qm-tabelle td{padding:9px 8px;border-bottom:1px solid var(--qm-line);font-size:12.5px;vertical-align:middle}
+.qm-tabelle tbody tr.qm-klick{cursor:pointer}
+.qm-tabelle tbody tr.qm-klick:hover{background:var(--qm-total-bg)}
+.qm-tabelle tfoot td,.qm-tabelle tr.qm-summe td{background:var(--qm-total-bg);font-weight:750}
+.qm-tabelle tr.qm-storniert td{color:var(--qm-muted);text-decoration:line-through;text-decoration-color:var(--qm-muted)}
+.qm-tabelle tr.qm-storniert td.qm-ohne-strich{text-decoration:none}
+.qm-zahl{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.qm-name{font-weight:700}
+.qm-sub{display:block;margin-top:2px;color:var(--qm-muted);font-size:11px;font-weight:500}
+.qm-null{color:var(--qm-muted)}
+
+/* Kennzeichen */
+.qm-chip{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;background:var(--qm-chip);color:var(--qm-muted);font-size:11px;font-weight:700;white-space:nowrap}
+/* Kennzeichen-Farben: siehe unten (Zustände des QM-Systems) */
+.qm-chip.gruen{background:var(--qm-green-soft);color:var(--qm-green)}
+.qm-chip.gelb{background:var(--qm-gelb-soft);color:var(--qm-gelb)}
+.qm-chip.rot{background:var(--qm-rot-soft);color:var(--qm-rot)}
+.qm-chip.blau{background:var(--qm-blau-soft);color:var(--qm-blau)}
+/* Handbuch: Kapitel links, Abschnitte rechts */
+.qm-handbuch{display:grid;grid-template-columns:300px minmax(0,1fr);gap:12px;align-items:start}
+.qm-kapitelliste{position:sticky;top:84px;padding:12px;border-radius:20px;display:flex;flex-direction:column;gap:8px;max-height:calc(100dvh - 110px)}
+.qm-liste{list-style:none;margin:0;padding:0;overflow:auto;display:grid;gap:3px;align-content:start}
+.qm-liste button{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:8px 10px;border:0;border-radius:11px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.qm-liste button:hover{background:var(--qm-total-bg)}
+.qm-liste button[aria-current="true"]{background:var(--qm-card);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.qm-liste .qm-name{font-size:13px;overflow-wrap:anywhere}
+.qm-notiz{margin:8px 0 0;max-width:720px;color:var(--qm-muted);font-size:12.5px;white-space:pre-line}
+
+/* Eingabemasken */
+.qm-formraster label,.qm-dialog form>label,.qm-schmal{display:flex;flex-direction:column;gap:5px;color:var(--qm-muted);font-size:12px;font-weight:650}
+.qm-formraster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+.qm-formraster .qm-breit{grid-column:1/-1}
+.qm-schmal{max-width:220px}
+
+/* Dialoge */
+.qm-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--qm-border);border-radius:22px;background:var(--qm-card);color:var(--qm-text);box-shadow:0 28px 80px rgba(0,0,0,.32)}
+.qm-dialog-klein{width:min(520px,calc(100vw - 28px))}
+.qm-dialog::backdrop{background:rgba(20,16,16,.42);backdrop-filter:blur(4px)}
+.qm-dialog form{padding:18px;display:flex;flex-direction:column;gap:12px}
+.qm-dialogkopf{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.qm-dialogkopf h2{margin:0;font-size:20px}
+.qm-dialog-schliessen{width:38px;height:38px;flex:none;border:0;border-radius:50%;background:var(--qm-chip);color:var(--qm-text);font-size:24px;line-height:1;cursor:pointer}
+.qm-dialog p{margin:0}
+.qm-verlauf{list-style:none;margin:0;padding:0;display:grid;gap:3px;color:var(--qm-muted);font-size:11.5px}
+.qm-verlauf:empty{display:none}
+.qm-meldung{margin:0;color:var(--qm-rot);font-size:13px;font-weight:600}
+.qm-meldung:empty{display:none}
+.qm-meldung.ok{color:var(--qm-green)}
+.qm-knopfreihe{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+.qm-knopfreihe .qm-check{margin-right:auto}
+
+/* Import */
+.qm-import{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.qm-import label.btn{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.qm-vorschau{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:6px 0 10px}
+.qm-vorschau div{padding:10px 12px;border-radius:12px;background:var(--qm-card);border:1px solid var(--qm-line)}
+.qm-vorschau b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+.qm-vorschau span{color:var(--qm-muted);font-size:11px}
+.qm-fehlerliste{margin:0 0 10px;padding-left:18px;color:var(--qm-rot);font-size:12px;max-height:220px;overflow:auto}
+
+/* Meldungen */
+.qm-toast{position:fixed;left:50%;bottom:20px;z-index:50;transform:translate(-50%,18px);opacity:0;pointer-events:none;max-width:calc(100vw - 24px);padding:11px 16px;border-radius:999px;background:var(--qm-text);color:var(--qm-bg);font-size:13px;font-weight:600;transition:opacity .2s,transform .2s}
+.qm-toast.zeigen{opacity:1;transform:translate(-50%,0)}
+.qm-toast.fehler{background:#8c1d2c;color:#fff}
+.qm-hinweisbox{max-width:520px;margin:45px auto;padding:30px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.qm-hinweisbox h1{margin:0;font-size:24px}.qm-hinweisbox p{margin:0;color:var(--qm-muted)}
+.qm-hinweisbox .i{width:28px;height:28px;color:var(--qm-muted)}
+.qm-fehler{padding:12px 15px;border-radius:14px;background:var(--qm-rot-soft);color:var(--qm-rot);font-weight:600}
+.qm-fuss{margin-top:10px;padding:0 8px;color:var(--qm-muted);font-size:12px}
+
+@media(max-width:1100px){.qm-raster{grid-template-columns:1fr}.qm-handbuch{grid-template-columns:250px minmax(0,1fr)}}
+@media(max-width:860px){
+  .qm-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .qm-handbuch{grid-template-columns:1fr}
+  .qm-kapitelliste{position:static;max-height:none}
+  .qm-liste{max-height:300px}
+}
+/* Tabellen als Karten */
+@media(max-width:760px){
+  .qm-tabelle-wrap{overflow:visible}
+  .qm-karten thead{display:none}
+  .qm-karten,.qm-karten tbody,.qm-karten tfoot{display:block}
+  .qm-karten tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 10px;padding:9px 6px;border-bottom:1px solid var(--qm-line)}
+  .qm-karten td{display:block;padding:3px 0;border:0;min-width:0;text-align:left!important;white-space:normal}
+  .qm-karten td[data-label]::before{content:attr(data-label);display:block;color:var(--qm-muted);font-size:9.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+  .qm-karten td.qm-voll{grid-column:1/-1}
+  .qm-karten td.qm-voll::before{display:none}
+  .qm-karten td:empty{display:none}
+  .qm-karten tfoot tr,.qm-karten tr.qm-summe{background:var(--qm-total-bg);border-radius:10px}
+  }
+@media(max-width:560px){
+  .qm-seite{padding:12px 12px 28px;gap:14px}
+  .qm-kopf{top:7px;gap:8px;padding:7px 9px}
+  .qm-kopf .brand-logo{height:22px}
+  .qm-modul{padding-left:8px;font-size:13px}
+  .qm-user{padding:0;background:transparent}
+  .qm-user-name{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .qm-initialen,.qm-rund{width:38px;height:38px}
+  .qm-leiste{margin:14px 0 10px}
+  .qm-tabs button{height:36px;padding:0 13px;font-size:13px}
+  .qm-schnell{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .qm-schnell .btn{justify-content:center}
+  .qm-kpis{gap:7px}.qm-kpi{padding:10px;border-radius:14px}.qm-kpi b{font-size:19px}.qm-kpi span{font-size:9px}
+  .qm-panel{padding:11px;border-radius:16px}
+  .qm-panelkopf h2{font-size:15px}
+  .qm-filterzeile{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .qm-filterzeile select.qm-eingabe,.qm-filterzeile input.qm-eingabe{min-width:0;width:100%}
+  .qm-filterzeile .btn{width:100%;justify-content:center}
+  .qm-filterzeile>*{min-width:0}
+  .qm-panelkopf-filter .qm-filterzeile .btn{grid-column:1/-1}   /* lange Knopftexte (Dachser-Liste, Abschreibung) über die ganze Breite */
+  .qm-formraster{grid-template-columns:1fr}
+  .qm-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:22px 22px 0 0}
+  .qm-dialog form{padding:15px}
+  .qm-knopfreihe .btn{min-height:40px}
+}
+@media(max-width:480px){body.qm .qm-kopf .brand-logo{width:30px;height:28px;object-fit:cover;object-position:left center}.qm-modul .i{display:none}}
+@media(prefers-reduced-motion:reduce){.qm-toast{transition:none}}
+
+/* ---------- QM-System ---------- */
+.qm a{color:var(--qm-accent)}
+.qm a.btn{text-decoration:none;color:inherit}
+.qm-suche{min-width:220px}
+.qm-tabelle tr.qm-gruppe td{padding:14px 8px 6px;background:transparent;border-bottom:1px solid var(--qm-border)}
+.qm-tabelle tr.qm-gruppe b{font-size:13px}
+.qm-tabelle tr.qm-gruppe .qm-sub{display:inline;margin-left:8px}
+.qm-tabelle tr.qm-aus td{color:var(--qm-muted)}
+.qm-nr{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
+.qm-kurz{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:520px}
+.qm-wer{display:inline-flex;gap:4px;flex-wrap:wrap}
+.qm-wer abbr{text-decoration:none;cursor:help;padding:1px 6px;border-radius:6px;background:var(--qm-chip);font-size:11px;font-weight:700}
+
+/* Arbeitslisten der Übersicht */
+.qm-aufgaben{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.qm-aufgabe{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:9px 11px;border-radius:12px;background:var(--qm-card);border:1px solid var(--qm-line);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.qm-aufgabe:hover{border-color:var(--qm-border)}
+.qm-aufgabe b{display:block;font-size:13px;overflow-wrap:anywhere}
+.qm-aufgabe .qm-sub{margin:2px 0 0}
+
+/* Handbuch */
+.qm-kapitelliste .qm-eingabe{width:100%}
+.qm-liste button{grid-template-columns:auto minmax(0,1fr) auto}
+.qm-liste .qm-kapnr{font-weight:750;font-variant-numeric:tabular-nums;color:var(--qm-muted);min-width:30px}
+.qm-liste .qm-anzahl{color:var(--qm-muted);font-size:11px;font-variant-numeric:tabular-nums}
+.qm-handbuch-text{min-width:0;display:flex;flex-direction:column;gap:12px}
+.qm-hb-kopf{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin:0}
+.qm-hb-kopf h2{margin:0 0 3px;font-size:20px;letter-spacing:-.02em}
+.qm-hb-kopf p{margin:0}
+.qm-abschnitt{padding:15px 16px;border-radius:18px}
+.qm-abschnitt+.qm-abschnitt{margin-top:10px}
+.qm-abschnitt header{display:flex;align-items:baseline;gap:10px;justify-content:space-between;flex-wrap:wrap}
+.qm-abschnitt h3{margin:0;font-size:15px}
+.qm-abschnitt h3 .qm-nr{margin-right:8px;color:var(--qm-muted)}
+.qm-abschnitt .qm-text{margin:8px 0 0;font-size:13.5px;line-height:1.55;white-space:pre-line;overflow-wrap:anywhere}
+.qm-abschnitt.qm-entfallen{opacity:.6}
+.qm-abschnitt.qm-entfallen h3{text-decoration:line-through}
+.qm-kapitelkopf{margin:16px 4px 6px;font-size:17px}
+.qm-kapitelkopf:first-child{margin-top:4px}
+.qm-verweise{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.qm-verweis{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:2px 10px;border:1px solid var(--qm-border);border-radius:999px;background:var(--qm-card);color:var(--qm-text);font:inherit;font-size:11.5px;font-weight:650}
+button.qm-verweis{cursor:pointer}
+button.qm-verweis:hover{border-color:var(--qm-accent)}
+.qm-abschnitt footer{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px;color:var(--qm-muted);font-size:11.5px}
+mark{background:var(--qm-gelb-soft);color:inherit;border-radius:3px}
+
+/* Dialoge des QM-Systems */
+.qm-dialog-mittel{width:min(640px,calc(100vw - 28px))}
+.qm-dialogkopf .qm-sub{margin:0 0 2px}
+.qm-meta{display:flex;flex-wrap:wrap;gap:6px 14px;color:var(--qm-muted);font-size:12.5px}
+.qm-meta b{color:var(--qm-text);font-weight:650}
+.qm-zwischen{margin:6px 0 0;font-size:14px}
+.qm-karte{padding:13px 14px;border-radius:14px;background:var(--qm-total-bg);border:1px solid var(--qm-line);display:flex;flex-direction:column;gap:9px}
+.qm-karte h3{margin:0;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.qm-karte .qm-formraster{gap:8px 12px}
+.qm-karte .qm-knopfreihe{justify-content:flex-start}
+.qm-details summary{cursor:pointer;color:var(--qm-muted);font-size:12.5px;font-weight:650}
+.qm-details[open] summary{margin-bottom:6px}
+.qm-felder{display:grid;grid-template-columns:minmax(120px,auto) minmax(0,1fr);gap:6px 14px;margin:0;font-size:13px}
+.qm-felder dt{color:var(--qm-muted);font-weight:650}
+.qm-felder dd{margin:0;white-space:pre-line;overflow-wrap:anywhere}
+.qm-wahl{margin:0;padding:8px 12px;border:1px solid var(--qm-border);border-radius:12px;display:flex;gap:8px 20px;flex-wrap:wrap}
+.qm-wahl legend{padding:0 5px;color:var(--qm-muted);font-size:12px;font-weight:650}
+.qm-wahl .qm-check{color:var(--qm-text)}
+.qm-dialog label>.qm-hilfe{font-weight:500}
+.qm-edit td{padding:5px 6px}
+.qm-edit input.qm-eingabe{width:100%;min-width:0}
+.qm-edit td.qm-eng{width:96px}
+#nw-massn-z{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:12px;background:var(--qm-rot-soft)}
+#nw-massn-z[hidden]{display:none}
+
+@media(max-width:560px){
+  .qm-suche{min-width:0}
+  .qm-felder{grid-template-columns:1fr}
+  .qm-felder dd{margin-bottom:4px}
+  .qm-aufgabe{grid-template-columns:minmax(0,1fr)}
+  .qm-hb-kopf .qm-filterzeile{width:100%}
+}
+@media(max-width:760px){
+  .qm-karten td{overflow-wrap:anywhere}
+  .qm-karten tr.qm-gruppe{display:block;padding:12px 4px 4px;border-bottom:0}
+  .qm-karten tr.qm-gruppe td{display:block;padding:0;border:0}
+  .qm-edit.qm-karten tr{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .qm-edit td.qm-eng{width:auto}
+}
+
+/* Druck: nur das Handbuch */
+@media print{
+  body.qm{background:#fff;color:#000}
+  .qm-bg,.qm-kopf,.qm-leiste,.qm-kapitelliste,.qm-fuss,.qm-toast,.qm-hb-kopf .qm-filterzeile,.qm-abschnitt .btn,.qm-tab:not(#qm-t-handbuch){display:none!important}
+  .qm-seite{padding:0;max-width:none}
+  .qm-handbuch{display:block}
+  .qm-glas{background:#fff!important;box-shadow:none!important;border:0!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+  .qm-abschnitt{break-inside:avoid;padding:8px 0;border-bottom:1px solid #ccc!important;border-radius:0}
+  .qm-verweis{border:1px solid #999}
+}
+.qm-formraster label.qm-check,.qm-dialog form>label.qm-check{flex-direction:row;align-items:center;font-size:13px;font-weight:500}
+.qm-formraster label.qm-check{align-self:end;min-height:38px}
+.qm .qm-eingabe{font-weight:450}
+/* Handy: Dokumenten-Nr. vor dem Titel statt eigener Zeile */
+.qm-nur-mobil{display:none}
+@media(max-width:760px){
+  .qm-karten td.qm-mobil-weg{display:none}
+  .qm-nur-mobil{display:inline}
+}
+
+/* ---------- Gestaltung nach dem Designvorschlag (30.10.2026) ---------- */
+.qm-titelzeile{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin:22px 0 16px}
+.qm-titel h1{margin:0;font-size:30px;line-height:1.15;letter-spacing:-.03em;font-weight:760}
+.qm-titel p{margin:3px 0 0;color:var(--qm-muted);font-size:13px}
+.qm-zeile{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch;margin-bottom:12px}
+.qm-zeile>.qm-panel{margin-bottom:0}
+.qm-breit-flex{flex:999 1 560px;min-width:0}
+.qm-schmal-flex{flex:1 1 380px;min-width:0}
+.qm-kpis{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.qm-kpi b{font-size:30px}
+.qm-kpi.gelb b{color:var(--qm-gelb)}
+.qm-kpi small{font-size:12px}
+button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
+.qm-legende{display:flex;gap:6px 14px;flex-wrap:wrap;color:var(--qm-muted);font-size:12px}
+.qm-legende span{display:inline-flex;align-items:center;gap:6px}
+.qm-farbe{display:inline-block;width:10px;height:10px;border-radius:3px}
+.qm-farbe.gruen{background:var(--qm-green)}.qm-farbe.gelb{background:#e0b84a}
+
+/* Aufgaben */
+.qm-aufgabe{grid-template-columns:auto minmax(0,1fr) auto}
+.qm-aufgabe .qm-symbol{width:38px;height:38px;border-radius:11px;display:grid;place-items:center}
+.qm-symbol.blau{background:var(--qm-blau-soft);color:var(--qm-blau)}.qm-symbol.gruen{background:var(--qm-green-soft);color:var(--qm-green)}
+.qm-symbol.gelb{background:var(--qm-gelb-soft);color:var(--qm-gelb)}.qm-symbol.rot{background:var(--qm-rot-soft);color:var(--qm-rot)}
+
+/* Stand je Kapitel */
+.qm-kapitelstand{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 22px}
+.qm-kapitelstand button{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:4px 10px;padding:8px 6px;border:0;border-bottom:1px solid var(--qm-line);background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.qm-kapitelstand button:hover{background:var(--qm-total-bg)}
+.qm-kapitelstand .qm-kapnr{font-weight:750;color:var(--qm-muted);font-variant-numeric:tabular-nums}
+.qm-kapitelstand .qm-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qm-kapitelstand small{font-size:12px;color:var(--qm-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.qm-balken{grid-column:2/4;height:7px;border-radius:99px;background:var(--qm-chip);overflow:hidden;display:flex}
+.qm-balken i{display:block;height:100%}.qm-balken i.gruen{background:var(--qm-green)}.qm-balken i.gelb{background:#e0b84a}
+
+/* Dokumente: Liste und Seitenleiste */
+.qm-dokumente{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start}
+.qm-dokumente.mit-panel{grid-template-columns:minmax(0,1fr) minmax(380px,460px)}
+.qm-dokliste{margin:0;display:flex;flex-direction:column;gap:12px}
+.qm-pillen{display:flex;gap:6px;flex-wrap:wrap}
+.qm-pillen button{height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--qm-border);background:var(--qm-card);color:var(--qm-text);font:inherit;font-size:12.5px;font-weight:650;cursor:pointer;white-space:nowrap}
+.qm-pillen button[aria-pressed="true"]{background:var(--qm-text);color:var(--qm-bg);border-color:var(--qm-text)}
+.qm-pillen button.gelb{color:var(--qm-gelb)}.qm-pillen button.gelb[aria-pressed="true"]{color:var(--qm-bg)}
+.qm-tabelle tbody tr.qm-gewaehlt td{background:var(--qm-blau-soft)}
+.qm-dokpanel{position:sticky;top:84px;padding:18px;border-radius:22px;background:var(--qm-kopf);max-height:calc(100dvh - 100px);overflow:auto;display:flex;flex-direction:column;gap:14px}
+.qm-dokpanel h2{margin:0;font-size:22px;letter-spacing:-.02em}
+.qm-dp-kopf{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.qm-chips{display:flex;gap:6px;flex-wrap:wrap}
+.qm-chips .qm-chip{height:24px;font-size:12px}
+.qm-dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px 14px;margin:0;font-size:13px}
+.qm-dl dt{color:var(--qm-muted)}.qm-dl dd{margin:0;overflow-wrap:anywhere}
+.qm-schritte{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.qm-schritte li{display:flex;flex-direction:column;gap:4px;min-width:0}
+.qm-schritte li::before{content:"";height:4px;border-radius:99px;background:var(--qm-chip)}
+.qm-schritte li.fertig::before{background:var(--qm-green)}.qm-schritte li.jetzt::before{background:var(--qm-blau)}
+.qm-schritte b{font-size:12.5px}.qm-schritte li.fertig b{color:var(--qm-green)}.qm-schritte li.jetzt b{color:var(--qm-blau)}.qm-schritte li.offen b{color:var(--qm-muted)}
+.qm-schritte span{color:var(--qm-muted);font-size:11.5px}
+.qm-versionen{display:flex;flex-direction:column}
+.qm-version{display:grid;grid-template-columns:40px 88px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--qm-line);font-size:13px}
+.qm-version:last-child{border-bottom:0}
+.qm-version.qm-aus{color:var(--qm-muted)}
+.qm-version .qm-sub{grid-column:3/5;margin:0}
+.qm-dp-fuss{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--qm-line);padding-top:12px}
+.qm-dp-schliessen{display:none}
+
+/* Handbuch: Kopf mit Ziel */
+.qm-hb-kopf{flex-wrap:wrap}
+.qm-hb-titel{display:flex;flex-direction:column;gap:2px}
+.qm-ueber{color:var(--qm-muted);font-size:12px;font-weight:650;letter-spacing:.05em;text-transform:uppercase}
+.qm-hb-titel h2{font-size:26px;letter-spacing:-.025em}
+.qm-ziel{flex-basis:100%;margin:6px 0 0;padding:12px 14px;border-radius:14px;background:var(--qm-total-bg);font-size:14px;line-height:1.6;white-space:pre-line}
+.qm-abschnitt .qm-text{font-size:14px;line-height:1.6}
+.qm-verweis svg{width:14px;height:14px;color:var(--qm-accent)}
+
+/* Prüfplan: Jahresplan */
+.qm-plan-wrap{width:100%;overflow-x:auto}
+.qm-plan{min-width:1060px;display:flex;flex-direction:column}
+.qm-plan-zeile{display:grid;grid-template-columns:270px repeat(12,minmax(0,1fr)) 150px 104px;align-items:center;gap:0 2px;padding:7px 6px;border-bottom:1px solid var(--qm-line)}
+.qm-plan-zeile.kopf{background:var(--qm-head-bg);border-radius:10px;border-bottom:0;color:var(--qm-head-text);font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase}
+.qm-plan-zeile.kopf span{text-align:center}.qm-plan-zeile.kopf span:first-child{text-align:left}
+.qm-plan-zeile.kopf .heute{color:var(--qm-accent)}
+.qm-plan-zeile.qm-klick{cursor:pointer}.qm-plan-zeile.qm-klick:hover{background:var(--qm-total-bg)}
+.qm-plan-zeile.qm-aus{opacity:.55}
+.qm-plan-titel{display:flex;flex-direction:column;min-width:0}
+.qm-plan-titel b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qm-plan-titel span{color:var(--qm-muted);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qm-zelle{display:grid;place-items:center;height:30px;border-radius:6px}
+.qm-zelle.heute{background:rgba(140,29,44,.06)}
+.qm-pm{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:800;font-style:normal}
+.qm-pm.ok{background:var(--qm-green-soft);color:var(--qm-green)}
+.qm-pm.abw{background:var(--qm-minus-soft);color:var(--qm-minus)}
+.qm-pm.ueber{background:var(--qm-rot);color:#fff}
+.qm-pm.plan{width:14px;height:14px;border:2px solid #8d857f;background:transparent}
+.qm-quote{display:inline-block;min-width:38px;padding:1px 6px;border-radius:999px;font-size:10.5px;font-weight:750;font-style:normal;text-align:center;font-variant-numeric:tabular-nums;background:var(--qm-chip);color:var(--qm-muted)}
+.qm-quote.gruen{background:var(--qm-green-soft);color:var(--qm-green)}.qm-quote.gelb{background:var(--qm-gelb-soft);color:var(--qm-gelb)}.qm-quote.rot{background:var(--qm-rot-soft);color:var(--qm-rot)}
+.qm-bedarf{grid-column:2/14;height:24px;border-radius:999px;background:var(--qm-chip);color:var(--qm-muted);font-size:11.5px;font-weight:600;display:flex;align-items:center;padding:0 12px}
+.qm-plan-zeile .btn{justify-self:end}
+.qm-legende-plan{margin:0 0 10px}
+.qm-legende-plan .qm-pm,.qm-legende-plan .qm-quote{transform:scale(.85)}
+
+/* Segmente (Ergebnis, Ansicht) */
+.qm-segment{display:inline-grid;grid-auto-flow:column;gap:4px;padding:4px;border-radius:12px;background:var(--qm-chip)}
+.qm-segment-voll{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.qm-segment button{min-height:34px;padding:0 14px;border:0;border-radius:9px;background:transparent;color:var(--qm-muted);font:inherit;font-size:13px;font-weight:650;cursor:pointer}
+.qm-segment button[aria-pressed="true"]{background:var(--qm-card);color:var(--qm-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.qm-segment button[data-ergebnis="abweichung"][aria-pressed="true"]{color:var(--qm-minus)}
+.qm-segment-voll button{min-height:40px}
+.qm-massnahmebox{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;background:var(--qm-minus-soft)}
+.qm-massnahmebox[hidden]{display:none}
+.qm-feld{display:flex;flex-direction:column;gap:5px;color:var(--qm-muted);font-size:12px;font-weight:650}
+.qm-mitarbeiterwahl{flex-direction:column;align-items:stretch}
+.qm-mitarbeiterwahl #pf-ausfuehrende{display:flex;flex-wrap:wrap;gap:6px 16px;max-height:180px;overflow:auto}
+
+/* Maßnahmen: Tafel */
+.qm-m-kopf{margin-bottom:12px}
+.qm-ablauf{list-style:none;margin:0 0 12px;padding:12px 16px;border-radius:16px;display:flex;gap:8px 18px;flex-wrap:wrap;color:var(--qm-muted);font-size:12.5px;font-weight:600}
+.qm-ablauf li+li::before{content:"→ ";color:var(--qm-muted)}
+.qm-tafel{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;align-items:start}
+.qm-spalte{padding:12px;border-radius:20px;background:var(--qm-glass);border:1px solid var(--qm-line);display:flex;flex-direction:column;gap:10px}
+.qm-spalte.blass{opacity:.75}
+.qm-spalte h2{margin:0;font-size:14px;display:flex;align-items:center;gap:8px}
+.qm-spalte h2 i{width:9px;height:9px;border-radius:50%}
+.qm-spaltenkopf{display:flex;justify-content:space-between;align-items:center;padding:2px 4px}
+.qm-spaltenkopf small{color:var(--qm-muted);font-weight:700}
+.qm-mkarte{padding:12px 13px;border-radius:14px;background:var(--qm-card);border:1px solid var(--qm-line);box-shadow:0 4px 14px rgba(50,34,28,.06);display:flex;flex-direction:column;gap:7px;cursor:pointer;text-align:left;color:inherit;font:inherit;width:100%}
+.qm-mkarte:hover{border-color:var(--qm-border)}
+.qm-mkarte .qm-mk-kopf{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--qm-muted);font-weight:700}
+.qm-mkarte b{font-size:13.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.qm-mkarte .qm-mk-fuss{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.qm-avatar{min-width:28px;height:28px;padding:0 6px;border-radius:999px;display:inline-grid;place-items:center;background:var(--qm-chip);font-size:11px;font-weight:800}
+.qm-leer-spalte{color:var(--qm-muted);font-size:12px;padding:6px 4px}
+.qm-dialog-gross{width:min(1000px,calc(100vw - 28px))}
+.qm-abschnittfeld{margin:0;padding:12px 14px;border:1px solid var(--qm-border);border-radius:14px}
+.qm-abschnittfeld legend{padding:0 6px;font-size:13px;font-weight:700;color:var(--qm-text)}
+.qm-raster3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.qm-raster3 .qm-zwei{grid-column:span 2}
+
+/* Aufgaben in schmalen Spalten: Status unter den Text; Plan-Status ohne Überlauf; Kartenkopf einzeilig */
+.qm-schmal-flex .qm-aufgabe{grid-template-columns:auto minmax(0,1fr)}
+.qm-schmal-flex .qm-aufgabe>.qm-chip{grid-column:2;justify-self:start}
+.qm-plan-zeile .qm-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qm-mkarte .qm-mk-kopf span:last-child{text-align:right;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@media(max-width:1100px){
+  .qm-dokumente.mit-panel{grid-template-columns:minmax(0,1fr)}
+  .qm-dokpanel{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:40;max-height:88dvh;border-radius:22px 22px 0 0;box-shadow:0 -18px 50px rgba(0,0,0,.25)}
+  .qm-dp-schliessen{display:grid}
+}
+@media(max-width:760px){
+  .qm-raster3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .qm-raster3 .qm-zwei{grid-column:1/-1}
+  .qm-titel h1{font-size:24px}
+  /* Prüfplan am Handy: Liste statt Jahresraster (Verlauf in der Prüfung) */
+  .qm-plan{min-width:0}
+  .qm-plan-zeile{grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;padding:10px 4px}
+  .qm-plan-zeile.kopf,.qm-plan-zeile .qm-zelle,.qm-plan-zeile .qm-bedarf,.qm-legende-plan{display:none}
+  .qm-plan-titel{grid-column:1/-1}
+  .qm-plan-titel b,.qm-plan-titel span{white-space:normal}
+}
+@media(max-width:560px){
+  .qm-raster3{grid-template-columns:1fr}
+  .qm-schritte{grid-template-columns:1fr}
+  .qm-version{grid-template-columns:34px 80px minmax(0,1fr)}
+  .qm-version .qm-chip{grid-column:1/-1;justify-self:start}
+  .qm-kapitelstand{grid-template-columns:1fr}
+  .qm-m-kopf .qm-filterzeile{grid-template-columns:1fr}
+  .qm-aufgabe{grid-template-columns:auto minmax(0,1fr)}
+  .qm-aufgabe>.qm-chip{grid-column:2;justify-self:start}
+}
+@media print{.qm-titelzeile,.qm-dokpanel{display:none!important}}

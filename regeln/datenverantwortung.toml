@@ -276,6 +276,53 @@ schutz = "vertraulich"
 beschreibung = "REWE-Marktakte: Notizen, Telefonate, Besuche, Reklamationen, Ware ohne Berechnung, Wiedervorlagen (erledigt mit Namen) und Änderungen (Kaufbereitschaft, Dauerauftrag, Zuweisung, Lieferweg)"
 historie = "Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wird gelöscht"
 
+# ───────────── QM-System (IFS Wholesale) ─────────────
+
+[[dokument]]
+name = "qs-stamm"
+eigentuemer = "qs"
+schutz = "intern"
+beschreibung = "QM-System: Kapitel (Nummer, Titel, Zuständig, Vertreter, aktiv), Personen mit Kürzel, Name, Funktion, verknüpftem Mitarbeiter (Kennung) und aktiv, Einstellungen (Überprüfung der Dokumente nach Monaten)"
+
+[[dokument]]
+name = "qs-dokumente"
+eigentuemer = "qs"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
+beschreibung = "Gelenkte Dokumente (Nummer, Kapitel, Art, Titel, Ablage, Zuständig, Vertreter, eingezogen, ohne Änderung überprüft) mit Versionen: Nummer, Freigabedatum, Änderungen, Änderungsgrund, Status Entwurf/in Prüfung/geprüft/freigegeben/ersetzt/verworfen, erstellt/geprüft/freigegeben, Verlauf"
+historie = "Versionen werden nie gelöscht: eine neue Freigabe setzt die vorige auf „ersetzt“; Namen und Kürzel als Schnappschuss (GR-106)"
+
+[[dokument]]
+name = "qs-handbuch"
+eigentuemer = "qs"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
+beschreibung = "QM-Handbuch: Abschnitte je Kapitel (Nummer, Prozessschritt, „Worauf kommt es an“, Verweise „Wo? Womit?“, IFS-Bezug, Zuständig, Vertreter, entfallen) mit Änderungen (Datum, was, Grund, von)"
+historie = "Abschnitte werden nicht gelöscht, sondern als entfallen markiert; jede Änderung mit Grund in der Änderungsliste"
+
+[[dokument]]
+name = "qs-pruefplan"
+eigentuemer = "qs"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
+beschreibung = "Prüfplan: Prüfungen je Kapitel mit Durchführung, Intervall, ab wann, Sollwert, Maßnahme bei Abweichung, Wo? Womit?, Zuständig, Vertreter, ausführende Mitarbeiter (Kennungen), aktiv, Verlauf"
+
+[[dokument]]
+name = "qs-nachweise"
+eigentuemer = "qs"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
+beschreibung = "Nachweise des Prüfplans: Prüfung, Datum, Ergebnis (in Ordnung/Abweichung), Bemerkung, durchgeführt von, verknüpfte Maßnahme, erfasst, Storno"
+historie = "Nie geändert oder gelöscht; Fehler werden storniert (mit Grund, Name und Zeitpunkt) und neu erfasst"
+
+[[dokument]]
+name = "qs-massnahmen"
+eigentuemer = "qs"
+schutz = "intern"
+dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
+beschreibung = "Maßnahmen im Aufbau des IFS-Maßnahmenplans: Nummer je Jahr, Quelle (Audit, Prüfung, Reklamation …), Bezug, Kapitel, IFS-Anforderung und Bewertung, Feststellung, Korrektur (verantwortlich, Frist, erledigt, Nachweis), Ursache, Korrekturmaßnahme, Zuständig, Frist, umgesetzt am, Status, Freigabe durch den Auditor, Wirksamkeitsprüfung, Verlauf"
+historie = "Statuswechsel im Verlauf mit Name; Abschluss als wirksam mit Datum, Name und Notiz"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]
@@ -335,7 +382,7 @@ beschreibung = "Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP)"
 [[dokument]]
 name = "nutzer"
 eigentuemer = "plattform"
-leser = ["angebot", "hr", "marketing"]   # marketing: wählbare Verantwortliche (Kennung, Name, Recht marketing.bearbeiten); angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
+leser = ["angebot", "hr", "marketing", "qs"]   # qs: Mitarbeiter für Kürzel und Zuweisung von Prüfungen (Kennung, Name, Zugang); marketing: wählbare Verantwortliche (Kennung, Name, Recht marketing.bearbeiten); angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
 schreiber = ["hr"]   # nur über mitarbeiter_ohne_zugang_anlegen (lib/nutzer.php): Mitarbeiter ohne Anmeldung (zugang: false) für den Urlaubsplan
 schutz = "geheim"
 beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Passkeys, vertraute Geräte"

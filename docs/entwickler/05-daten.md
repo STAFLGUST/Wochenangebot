@@ -451,6 +451,51 @@ Datenpaket (`rewe_import`, nur mit `rewe.verwalten`, `vorschau: true` schreibt n
 Nutzer-ID). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team bleibt). Echte Pakete liegen nie
 im Repository (GR-007); Beispiel: `tests/fixtures/rewe/datenpaket.json`.
 
+### Qualitätssicherung · QM-System (`module/qs/qs.php`, in Entwicklung)
+
+Löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis, Managementsystem, Prüfungen). Alle Listen-Dokumente haben die Form
+`{"rev": N, "liste": [...]}`; jeder Eintrag hat einen eigenen Stand `rev` (veralteter Stand → 409 `konflikt`). Alle Schreibvorgänge
+laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (Schnappschuss, GR-106); Namen in `erstellt`, `geprueft`,
+`freigegeben`, `verlauf` sind Schnappschüsse `{"t", "von", "vonId"}`.
+
+- **`qs-stamm`**: `{"rev", "kapitel": [{"id": "1.4", "titel", "zustaendig", "vertreter", "aktiv"}], "personen": [{"id": "<Kürzel>", "name",
+  "funktion", "mitarbeiter": "<Nutzer-ID>|", "aktiv"}], "einstellungen": {"ueberpruefungMonate": 36}}`. Ein Mitarbeiter ist mit höchstens
+  einem Kürzel verknüpft; verwendete Kapitel werden nur deaktiviert.
+- **`qs-dokumente`**: `{"id": "d…", "rev", "kapitel", "art": "A|F|L|E|V|X|O", "nr": "1.4-F08", "titel", "ablage": "<Pfad>|https://…",
+  "zustaendig", "vertreter", "notiz", "eingezogen": {"t", "von", "vonId", "grund"}|null, "ueberprueft": {"t", "von", "vonId", "notiz"}?,
+  "versionen": [{"id": "v…", "nr": 3|null, "datum": "JJJJ-MM-TT|", "status": "entwurf|pruefung|geprueft|freigegeben|ersetzt|verworfen",
+  "aenderungen", "grund", "erstellt", "bearbeiter": ["<Nutzer-ID>"], "geprueft", "freigegeben", "kuerzel": {"erstellt", "geprueft",
+  "freigegeben"}|null, "quelle": "hand|paket", "verlauf": […]}], "verlauf": […]}`. Gelenkt sind A, F, L, E, V; Ordner (O) und externe
+  Dokumente (X) haben keine Versionen. Die Versionsnummer entsteht erst bei der Freigabe (höchste + 1), `datum` = Freigabetag; die
+  vorige gültige Version wird `ersetzt`. Wer in `bearbeiter` steht, prüft nicht (4-Augen-Prinzip, serverseitig). Die Antwort ergänzt
+  `zustand` (`gueltig|entwurf|pruefung|ohne|eingezogen|register`) und `ueberpruefung` (`{"seit", "faelligAb", "faellig"}` – seit der
+  letzten Freigabe bzw. `ueberprueft`, nach `ueberpruefungMonate`).
+- **`qs-handbuch`**: `{"id": "h…", "rev", "kapitel", "pos", "nr": "2.0.14", "titel", "text", "verweise": ["1.3-L02 HACCP-Analyse"], "ifs",
+  "zustaendig", "vertreter", "entfallen": {…}|null, "aenderungen": [{"datum", "was", "grund", "von"}]}`. Ein Abschnitt „Ziel“ steht in der
+  Oberfläche als Einleitung des Kapitels.
+- **`qs-pruefplan`**: `{"id": "p…", "rev", "kapitel", "titel", "beschreibung", "intervall": "arbeitstaeglich|taeglich|woechentlich|monatlich|
+  quartal|halbjahr|jaehrlich|zweijaehrlich|dreijaehrlich|anlass", "start": "JJJJ-MM-TT|", "womit", "sollwert", "massnahme", "zustaendig",
+  "vertreter", "ausfuehrende": ["<Nutzer-ID>"], "aktiv", "verlauf"}`. Die Antwort ergänzt `faellig`: Kalender-Intervalle (`art: kalender`)
+  zählen jede vergangene Periode ohne Nachweis als versäumt (`versaeumt` neueste zuerst, `versaeumtAnzahl`, `quote` über 30 Tage / 12 Wochen /
+  12 Monate, `offen` = laufende Periode ohne Nachweis); arbeitstäglich = Mo–Fr ohne Hamburger Feiertage (`hr_feiertag`). Rollende Intervalle
+  (`art: rollend`) rechnen ab dem letzten Nachweis, sonst ab `start`, sonst sofort fällig. `monate` = die letzten 6 Monate und der laufende
+  (`{"m", "faellig", "erfuellt", "abweichung"}`).
+- **`qs-nachweise`**: `{"id": "n…", "pruefung", "datum", "ergebnis": "io|abweichung", "bemerkung", "durch", "massnahme": "m…|", "erfasst",
+  "storno": {"t", "von", "vonId", "grund"}|null}` – nie geändert oder gelöscht. Mit nur `qs.nachweis` nur für zugewiesene Prüfungen
+  (`ausfuehrende` oder eigenes Kürzel als Zuständig/Vertreter) und nur eigene stornieren.
+- **`qs-massnahmen`**: `{"id": "m…", "nr": "2026-001", "rev", "quelle": "intern|extern|kunde|behoerde|pruefung|reklamation|review|sonstige", "bezug", "kapitel",
+  "anforderung", "bewertung": "|A|B|C|D|Major|KO", "anforderungText", "feststellung", "korrektur", "korrekturVerantwortlich",
+  "korrekturFrist", "korrekturErledigt", "nachweisDoku", "ursache", "massnahme", "zustaendig", "frist", "erledigtAm",
+  "status": "offen|in_arbeit|umgesetzt|wirksam|verworfen", "freigabeVon", "freigabeDatum", "freigabeNotiz",
+  "wirksamkeit": {"t", "von", "vonId", "notiz"}|null, "pruefung": "p…|", "nachweisId": "n…|", "erfasst", "geaendert", "verlauf"}` – Aufbau
+  des IFS-Maßnahmenplans; `wirksam`/`verworfen` nur mit `qs.freigeben` und Notiz.
+
+Datenpaket (`qs_import`, nur mit `qs.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-qs", "version": 1, "kapitel", "personen",
+"dokumente": [{… , "versionen": [{"nr", "datum", "aenderungen", "grund", "erstellt", "geprueft", "freigegeben"}]}], "handbuch", "pruefungen",
+"massnahmen"}` – die höchste Version gilt, ältere sind `ersetzt`; Verknüpfungen mit Mitarbeitern und Zuweisungen enthält das Paket nicht.
+Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (Einstellungen bleiben, Nachweise werden geleert). Echte Pakete
+liegen nie im Repository (GR-007); Beispiel: `tests/fixtures/qs/datenpaket.json`.
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:
