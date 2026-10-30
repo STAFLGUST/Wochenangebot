@@ -1,5 +1,6 @@
 /* STAFL-Plattform · HR · Urlaub
-   Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag, eigene Einträge, Abwesenheitskalender (Kollegen nur „abwesend“).
+   Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag (ausblendbar: Verwaltung → Urlaub, Schalter „Urlaubsanträge über die
+   Plattform“), eigene Einträge, Abwesenheitskalender (Kollegen nur „abwesend“).
    Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
    Personalstelle (Recht hr.verwalten): Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
@@ -121,6 +122,11 @@
       + wert('Genommen', k.genommen)
       + wert('Geplant', k.geplant)
       + wert('Beantragt', k.beantragt);
+    // Urlaubsanträge ausgeschaltet (Verwaltung → Urlaub): Formular ausblenden, Hinweis zeigen – der Server lehnt Anträge ohnehin ab
+    const antraege = d.antraege !== false;
+    $('#antrag').hidden = !antraege;
+    $('#antrag-aus').hidden = antraege;
+    $('#mein-spalten').classList.toggle('ohne-antrag', !antraege);
     const sel = $('#antrag-vertretung'), alt = sel.value;
     sel.innerHTML = '<option value="">– keine –</option>' + d.kollegen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     sel.value = alt;
@@ -173,10 +179,11 @@
     const b = e.target.closest('[data-zurueck]');
     if (!b) return;
     b.disabled = true;
+    const ziel = () => ($('#antrag').hidden ? $('#mein-info') : $('#antrag-meldung'));   // ohne Antragsformular: Meldung über dem Konto
     const r = await api('hr_antrag_zurueckziehen', { id: b.dataset.zurueck });
-    if (r.status !== 200) { b.disabled = false; meldung($('#antrag-meldung'), fehlerText(r, 'Zurückziehen fehlgeschlagen')); return; }
+    if (r.status !== 200) { b.disabled = false; meldung(ziel(), fehlerText(r, 'Zurückziehen fehlgeschlagen')); return; }
     await ladeStart();
-    meldung($('#antrag-meldung'), 'Antrag zurückgezogen.', 'ok');
+    meldung(ziel(), 'Antrag zurückgezogen.', 'ok');
   });
   // Jahr wechseln (Mein Urlaub, Anträge, Mitarbeiter teilen das Jahr)
   $('#hr-app').addEventListener('click', async (e) => {

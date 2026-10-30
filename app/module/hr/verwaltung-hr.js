@@ -2,7 +2,7 @@
    - Verwaltung → Mitarbeiter: HR-Angaben je Mitarbeiter (Abteilung, Position, Arbeitstage, im Urlaubsplan, Urlaubsanspruch
      und Übertrag je Jahr) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
-   - Verwaltung → Urlaub: Urlaubssperren und Ferien.
+   - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren, Ferien, Verfallstag des Resturlaubs.
    - Verwaltung → Import: Leser „Urlaubsplanung (Excel)“ und „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
    Alle Rechte prüft der Server (hr.verwalten, GR-103); hier ist nur die Anzeige. Wird von admin/index.html nach
    admin.js, admin-verwaltung.js und admin-import.js geladen. */
@@ -190,7 +190,15 @@
     const host = $('#view-urlaub');
     host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Wird geladen …</div>';
     try { await laden(); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
-    host.innerHTML = `<form class="gcard hr-einst" id="hr-einst">
+    const an = daten.antraege !== false;
+    host.innerHTML = `<section class="gcard hr-einst hr-antraege-karte">
+      <div class="hr-antraege-kopf"><h3 class="sec-h">Urlaubsanträge über die Plattform</h3>
+        <label class="rl-schalter"><input type="checkbox" role="switch" id="hr-antraege"${an ? ' checked' : ''} aria-describedby="hr-antraege-hint">
+        <span class="rl-schalter-t" id="hr-antraege-t">${an ? 'Eingeschaltet' : 'Ausgeschaltet'}</span></label></div>
+      <p class="hint" id="hr-antraege-hint">Ausgeschaltet sehen Mitarbeiter in der Urlaubsverwaltung kein Antragsformular mehr und können keinen Urlaub beantragen.
+        Urlaubskonto, Kalender und das Eintragen durch die Personalstelle bleiben; offene Anträge können weiter entschieden oder zurückgezogen werden. Wirkt sofort.</p>
+      <p class="form-err" id="hr-antraege-err" role="alert"></p></section>
+    <form class="gcard hr-einst" id="hr-einst">
       <h3 class="sec-h">Urlaubssperren</h3><p class="hint">In diesen Zeiträumen können Mitarbeiter keinen Urlaub beantragen; die Personalstelle kann weiter eintragen.</p>
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
@@ -225,6 +233,21 @@
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }
+  });
+  // Schalter „Urlaubsanträge über die Plattform“: speichert sofort; bei einem Fehler springt er zurück
+  document.addEventListener('change', async (e) => {
+    if (e.target.id !== 'hr-antraege') return;
+    const sw = e.target, an = sw.checked;
+    sw.disabled = true; $('#hr-antraege-err').textContent = '';
+    try {
+      const r = await api('hr_antraege_save', { body: { an } });
+      if (daten) daten.antraege = r.antraege;
+      $('#hr-antraege-t').textContent = r.antraege ? 'Eingeschaltet' : 'Ausgeschaltet';
+      toast(r.antraege ? 'Urlaubsanträge eingeschaltet.' : 'Urlaubsanträge ausgeschaltet.');
+    } catch (ex) {
+      sw.checked = !an;
+      $('#hr-antraege-err').textContent = ex.message;
+    } finally { sw.disabled = false; }
   });
   W.views.urlaub = renderUrlaub;
 

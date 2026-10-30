@@ -14,7 +14,10 @@ declare(strict_types=1);
      Urlaub, hr_uebertrag_bis), soweit er bis dahin nicht genommen ist.
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
      und die Personalstelle.
-   - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“). */
+   - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“).
+   - Urlaubsanträge über die Plattform lassen sich ein- und ausschalten (Inhaber 30.10.2026, Verwaltung → Urlaub,
+     hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
+     Eintragen durch die Personalstelle, Entscheiden und Zurückziehen offener Anträge bleiben. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag'];
@@ -209,7 +212,9 @@ function hr_einstellungen(): array
     $d = store_read('hr-einstellungen') ?? [];
     $z = function ($l) { return array_values(array_filter((array)$l, function ($x) { return is_array($x) && hr_datum($x['von'] ?? null) && hr_datum($x['bis'] ?? null); })); };
     return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $z($d['sperren'] ?? []), 'ferien' => $z($d['ferien'] ?? []),
-            'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS];
+            'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS,
+            // Urlaubsanträge über die Plattform: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
+            'antraege' => ($d['antraege'] ?? true) !== false];
 }
 
 /* ---------------- Verfallstag des Resturlaubs aus dem Vorjahr ----------------

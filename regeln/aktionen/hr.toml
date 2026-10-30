@@ -69,3 +69,8 @@ schreibend = true
 [aktion.hr_einstellungen_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+# Schalter „Urlaubsanträge über die Plattform“ (Verwaltung → Urlaub, sofort wirksam; hr-einstellungen.antraege)
+[aktion.hr_antraege_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true

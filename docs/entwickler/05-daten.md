@@ -335,7 +335,7 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `urlaubAbzug` (Krankheit vom Urlaub abgezogen). Überschneidungen (`hr_kollision`) gelten nur zwischen aktiven
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G) untereinander und freie Tage (X) untereinander – ein freier Tag in
   einer Urlaubswoche zählt dort nur nicht mit.
-- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31"}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03.
+- **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
 
 ### CRM (`module/crm/crm.php`)
 

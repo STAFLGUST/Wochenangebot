@@ -25,6 +25,11 @@
 .hr-einst .hint { margin: 0; }
 .hr-einst > .btn { align-self: flex-start; }
 .hr-einst .hr-verfall { max-width: 220px; }   /* Verfallstag des Resturlaubs */
+/* Schalter „Urlaubsanträge über die Plattform“ (eigene Karte über den Einstellungen, Schalterform aus admin.css .rl-schalter) */
+.hr-antraege-karte { margin-bottom: 16px; }
+.hr-antraege-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.hr-antraege-kopf .sec-h { margin: 0; }
+.hr-antraege-karte .form-err:empty { display: none; }
 .hr-zr { display: grid; grid-template-columns: 1fr 1fr 1.4fr auto; gap: 8px; align-items: center; margin-bottom: 6px; }
 .hr-zr input { height: 38px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text); font: inherit; min-width: 0; }
 .utab td.num, .utab th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
