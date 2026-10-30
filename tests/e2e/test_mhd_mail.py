@@ -83,6 +83,9 @@ check('PNG zu klein → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bi
 check('kein Base64 → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bild': '%%%'})[0] == 422)
 
 # ---------- Versand ----------
+# Bezeichnung aus den Artikelstammdaten (Liste, Excel, Text); gespeicherter Bestand bleibt wie importiert
+check('Stammdaten mit eigener Bezeichnung gespeichert', A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [
+      {'code': '700002', 'name': 'Bald aus Stammdaten', 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch'}]})[0] == 200)
 n0 = len(smtp.messages)
 code, r = E.call('stock_mhd_senden', {**GUT, 'codes': list(reversed(IN_LISTE))})
 check('gesendet (Reihenfolge der Nummern egal), Ergebnis je Empfänger', code == 200 and r['artikel'] == 3 and [x['to'] for x in r['results']] == ['verkauf@example.org', 'leitung@example.org']
@@ -106,6 +109,7 @@ codes = re.findall(r'<t xml:space="preserve">(70000\d)</t>', blatt)
 check('Excel: genau die MHD-Liste, früheste zuerst (ohne MHD in 30 Tagen, ohne Artikel ohne MHD)', codes == IN_LISTE, codes)
 check('Excel: Name sicher (kein HTML), Mengen als Zahlen, Summen als Formel', '&lt;b&gt;fett&lt;/b&gt;' in blatt and '<v>120.25</v>' in blatt and '<v>25.5</v>' in blatt and '<f>SUM(' in blatt)
 check('Excel: Kopf mit Preisen der Wochen (Absender darf Preisverlauf sehen) und ETA', 'Aktueller Preis KW' in blatt and 'Nächste ETA' in blatt and 'Erfasster Bestand' in blatt)
+check('Bezeichnung aus den Stammdaten in Excel und Text (statt Name der Bestandsliste)', 'Bald aus Stammdaten' in blatt and 'Bald aus Stammdaten' in m['text'] and 'Test Bald' not in m['text'])
 check('Text: Liste und Hinweis auf den Anhang', '700002' in m['text'] and 'Excel-Datei im Anhang' in m['text'] and 'davon 1 bereits abgelaufen' in m['text'])
 check('über das interne Postfach (ohne eigenes: Kunden-Postfach, angebot@)', m['from'] == 'angebot@example.org')
 check('Versandprotokoll: Typ „mhd“ je Empfänger', storage_raw('mailversand').count('"typ":"mhd"') + storage_raw('mailversand').count('"typ": "mhd"') == 2)
