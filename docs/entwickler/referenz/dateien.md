@@ -194,6 +194,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `qs.php` | qs | Qualitätssicherung · QM-System (IFS Wholesale) |
+| `vorlagen.php` | qs | Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien (Bauabschnitt 3, nur bei Bedarf geladen von app/api/aktionen/qs.php). |
 
 ## `app/api/module/rewe/`
 
@@ -684,6 +685,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
+| `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
 | `test_restposten.py` | angebot | Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. |
 | `test_revert.py` | angebot | sauberer Ausgangspunkt: einmal veröffentlichen |
