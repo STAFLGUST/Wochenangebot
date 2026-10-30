@@ -178,7 +178,7 @@ function mhd_xlsx(array $l, string $titel): string
     ]);
 }
 
-/* Bild der Liste aus dem Browser prüfen (nur PNG, Größe begrenzt). Rückgabe: PNG-Daten. */
+/* Bild der Liste aus dem Browser prüfen (nur PNG, Größe begrenzt; der Browser zeichnet in drei- oder zweifacher Auflösung). Rückgabe: PNG-Daten. */
 function mhd_bild_pruefen($b64): string
 {
     if (!is_string($b64) || $b64 === '') fail('Das Bild der MHD-Liste fehlt.', 422);
@@ -187,12 +187,13 @@ function mhd_bild_pruefen($b64): string
     $png = base64_decode($b64, true);
     if ($png === false || strncmp($png, "\x89PNG\r\n\x1a\n", 8) !== 0) fail('Das Bild der MHD-Liste ist ungültig.', 422);
     $info = @getimagesizefromstring($png);
-    if (!$info || $info[2] !== IMAGETYPE_PNG || $info[0] < 100 || $info[0] > 4000 || $info[1] < 50 || $info[1] > 30000) fail('Das Bild der MHD-Liste ist ungültig.', 422);
+    if (!$info || $info[2] !== IMAGETYPE_PNG || $info[0] < 100 || $info[0] > 6000 || $info[1] < 50 || $info[1] > 30000) fail('Das Bild der MHD-Liste ist ungültig.', 422);
     return $png;
 }
 
-/* E-Mail an den Verkauf: Text, HTML mit eingebettetem Bild (cid), Excel im Anhang. Rückgabe [Betreff, Text, HTML, Anhänge, Dateiname] */
-function mhd_mail(array $l, string $png, string $notiz, array $me, array $st): array
+/* E-Mail an den Verkauf: Text, HTML mit eingebettetem Bild (cid), Excel im Anhang. Rückgabe [Betreff, Text, HTML, Anhänge, Dateiname]
+   $breite: Anzeigebreite des Bilds in CSS-Pixeln (vom Browser, 1:1 wie in der Anwendung); 0 = unbekannt (ältere Oberfläche). */
+function mhd_mail(array $l, string $png, string $notiz, array $me, array $st, int $breite = 0): array
 {
     global $CFG;
     $datum = date('d.m.Y', strtotime($l['heute']));
@@ -214,13 +215,15 @@ function mhd_mail(array $l, string $png, string $notiz, array $me, array $st): a
     $kopf = '<p style="margin:0 0 6px;">Hallo,</p><p style="margin:0 0 14px;">anbei die MHD-Liste vom <strong>' . mail_h($datum) . '</strong> (Bestand vom ' . mail_h($bestand) . '): <strong>' . $n . ' Artikel</strong> mit MHD bis ' . mail_h($bis)
         . ($abgl ? ', davon <strong style="color:#8f1d14;">' . $abgl . ' bereits abgelaufen</strong>' : '') . '; ' . mail_h($kgT) . ' mit dem kürzesten MHD.</p>'
         . ($notiz !== '' ? '<p style="margin:0 0 14px;padding:10px 12px;background:#f4f1ec;border-radius:8px;"><strong>Hinweis von ' . mail_h($me['name']) . ':</strong><br>' . nl2br(mail_h($notiz)) . '</p>' : '');
-    $bildHtml = '<img src="cid:mhd-liste" alt="MHD-Liste vom ' . mail_h($datum) . '" width="100%" style="display:block;width:100%;max-width:1100px;height:auto;border:1px solid #e6e0d8;border-radius:6px;">';
+    /* Originalgröße (Schrift wie in der Anwendung), in schmalen Fenstern verkleinert; die feste Breite gilt für Outlook (ohne max-width) */
+    $bw = $breite >= 600 && $breite <= 2000 ? $breite : 1100;
+    $bildHtml = '<img src="cid:mhd-liste" alt="MHD-Liste vom ' . mail_h($datum) . '" width="' . $bw . '" style="display:block;width:100%;max-width:' . $bw . 'px;height:auto;border:1px solid #e6e0d8;border-radius:6px;">';
     $fuss = '<p style="margin:14px 0 0;color:#857c72;font-size:13px;">Die vollständige Liste steht als Excel-Datei im Anhang (' . mail_h($datei) . ').<br>Gesendet von ' . mail_h($me['name']) . ' über die STAFL-Plattform (Bestand). Intern – nicht an Kunden weitergeben.</p>';
-    /* Eigene, breite Hülle: das Bild braucht mehr Platz als die 560 px der Standardvorlage */
+    /* Eigene, breite Hülle: das Bild braucht mehr Platz als die 560 px der Standardvorlage (Bild + Innenabstand) */
     $html = '<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' . mail_h($subject) . '</title></head>'
         . '<body style="margin:0;padding:0;background:#f4f1ec;font-family:Arial,Helvetica,sans-serif;color:#1d1a17;">'
         . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f1ec;padding:20px 8px;"><tr><td align="center">'
-        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:1140px;background:#ffffff;border-radius:12px;border:1px solid #e6e0d8;">'
+        . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:' . ($bw + 40) . 'px;background:#ffffff;border-radius:12px;border:1px solid #e6e0d8;">'
         . '<tr><td style="padding:20px 20px 0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#7b1e2b;font-weight:bold;">' . mail_h((string)($CFG['company'] ?? '')) . ' · MHD-Liste</td></tr>'
         . '<tr><td style="padding:10px 20px 20px;font-size:15px;line-height:1.55;">' . $kopf . $bildHtml . $fuss . '</td></tr></table></td></tr></table></body></html>';
     $anhaenge = [

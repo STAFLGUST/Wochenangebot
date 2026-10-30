@@ -62,7 +62,7 @@ switch ($action) {
             $png = mhd_bild_pruefen($b['bild'] ?? null);
             $notiz = mb_substr(trim(str_replace("\r", '', preg_replace('/[\x00-\x08\x0b-\x1f]/u', '', (string)($b['notiz'] ?? '')) ?? '')), 0, 1000);
             $cfg = require_mail(true);   // nur an Mitarbeiter: Postfach für interne E-Mails
-            [$subject, $text, $html, $anhaenge] = mhd_mail($l, $png, $notiz, $me, $st);
+            [$subject, $text, $html, $anhaenge] = mhd_mail($l, $png, $notiz, $me, $st, (int)($b['breite'] ?? 0));
             @set_time_limit(60);
             $jobs = array_map(function ($a) use ($subject, $text, $html, $anhaenge) { return ['to' => $a, 'name' => '', 'subject' => $subject, 'text' => $text, 'html' => $html, 'anhaenge' => $anhaenge]; }, $to);
             $res = mail_send_many($cfg, $jobs);
