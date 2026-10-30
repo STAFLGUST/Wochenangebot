@@ -1,6 +1,6 @@
 """REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordisposition Dry Aged für REWE-Märkte.
 
-Geprüft: Register (in Prüfung, ohne Freigabe kein Zugang, Testfreigabe nur für eingetragene Tester); Rechte serverseitig (GR-103):
+Geprüft: Register (fertig und produktiv unter rewe.dashboard-stafl.de, Kachel verfügbar, ohne Testfreigabe erreichbar); Rechte serverseitig (GR-103):
 ohne Anmeldung, ohne REWE-Recht, nur ansehen, bearbeiten (nur eigene Märkte, fremde wie nicht vorhanden), alle Listen, verwalten,
 Wochenabschluss (Recht oder Team des Moduls); ohne CSRF, GET auf schreibende Aktion; Grundwerte (Direktbelieferung mit Bestellschluss
 Freitag früh, Artikel Roastbeef/Filetkopf/Vac. Set); Lieferwege und Artikel (Pflichtfelder, doppelt, nicht entfernbar, WinAB-Nummer);
@@ -59,7 +59,7 @@ NUTZER = (('lena', 'Lena Leitung', 'editor', 'Leitung-Konto-11', {'grant': ['rew
           ('lea', 'Lea Lesen', 'viewer', 'Leserin-Konto-44', {'grant': ['rewe.sehen']}),
           ('sabi', 'Sabi Summe', 'editor', 'Summe-Konto-55', {'grant': ['rewe.bearbeiten']}),
           ('otto', 'Otto Ohne', 'editor', 'Ohne-Konto-66', {}),
-          ('nina', 'Nina Nichttester', 'editor', 'Nicht-Konto-77', {'grant': ['rewe.bearbeiten']}))
+          ('nina', 'Nina Neu', 'editor', 'Nicht-Konto-77', {'grant': ['rewe.bearbeiten']}))
 for u, n, r, p, extra in NUTZER:
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r, 'active': True, 'password': p, 'mustChange': False, **extra})
     assert st == 200, r_
@@ -69,18 +69,13 @@ for i, (u, _, _, p, _) in enumerate(NUTZER):
     K[u] = Client(f'198.51.100.{10 + i}'); K[u].call('login', {'username': u, 'password': p})
 LE, M, E, L, SA, O, NI, N = K['lena'], K['mark'], K['evi'], K['lea'], K['sabi'], K['otto'], K['nina'], Client('198.51.100.30')
 
-# ── Register und Testfreigabe ──
+# ── Register und Freigabe ──
 mod = {m['id']: m for m in A.call('module_status')[1]['module']}['rewe']
 ob = mod['oberflaechen'][0]
-check('Register: REWE in Prüfung, nicht freigegeben, Adresse rewe.dashboard-stafl.de/module/rewe/',
-      ob['entwicklung'] == 'in_pruefung' and ob['freigabe'] == 'keine' and ob['adresse'] == 'https://rewe.dashboard-stafl.de/module/rewe/', ob)
-check('ohne Freigabe: auch der Administrator ohne Zugang (404)', A.call('rewe_start')[0] == 404)
-st, r = A.call('modul_freigabe_save', {'bereich': 'rewe.intern', 'freigabe': 'test', 'grund': 'Test REWE'})
-check('Testfreigabe gesetzt', st == 200, (st, r))
-tester = [ids[u] for u in ('admin', 'lena', 'mark', 'evi', 'lea', 'sabi', 'otto')]
-st, r = A.call('modul_tester_save', {'bereich': 'rewe.intern', 'tester': tester, 'grund': 'Test REWE'})
-check('Tester eingetragen', st == 200, (st, r))
-check('nicht eingetragen: kein Zugang (404), auch mit REWE-Recht', NI.call('rewe_start')[0] == 404)
+check('Register: REWE fertig und produktiv (Auftrag des Inhabers 30.10.2026), Adresse rewe.dashboard-stafl.de/module/rewe/',
+      ob['entwicklung'] == 'fertig' and ob['freigabe'] == 'produktiv' and ob['adresse'] == 'https://rewe.dashboard-stafl.de/module/rewe/', ob)
+check('Kachel: verfügbar, Ziel rewe.intern', mod['kachel']['status'] == 'verfuegbar' and mod['kachel']['zugang'] is True and mod['kachel']['ziel'] == 'rewe.intern', mod['kachel'])
+check('produktiv ohne Testfreigabe: Administrator und Mitarbeiter mit REWE-Recht erreichen das Modul', A.call('rewe_start')[0] == 200 and NI.call('rewe_start')[0] == 200)
 
 # ── Rechte ──
 check('ohne Anmeldung: kein Zugang (401/404)', N.call('rewe_start')[0] in (401, 404))

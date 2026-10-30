@@ -44,6 +44,9 @@ services:
       # Leergut (leergut.dashboard-stafl.de, Stand 11): wie bei der Verwaltung – startbar vor dem Konsolenschritt
       OIDC_SECRET_LEERGUT: ${OIDC_SECRET_LEERGUT:-noch-nicht-eingerichtet}
       OIDC_CRYPTO_LEERGUT: ${OIDC_CRYPTO_LEERGUT:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
+      # REWE (rewe.dashboard-stafl.de, Stand 12): wie bei der Verwaltung – startbar vor dem Konsolenschritt
+      OIDC_SECRET_REWE: ${OIDC_SECRET_REWE:-noch-nicht-eingerichtet}
+      OIDC_CRYPTO_REWE: ${OIDC_CRYPTO_REWE:-${OIDC_CRYPTO_ANGEBOT:?in .env setzen}}
       # Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): Client „konten“ nur mit Service-Account; Keycloak im
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}
@@ -55,7 +58,7 @@ services:
     networks:
       default:
         aliases:
-          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./controlling./leergut. – nur mit dieser Datei
+          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./controlling./leergut./rewe. – nur mit dieser Datei
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244

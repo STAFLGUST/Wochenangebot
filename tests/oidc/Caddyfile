@@ -48,7 +48,7 @@ login.stafl.test {
 }
 
 # Anwendungen: jede auf eigenem Host, eigene Sitzung (GR-108)
-dashboard.stafl.test, angebot.stafl.test, verwaltung.stafl.test, bestand.stafl.test, hr.stafl.test, crm.stafl.test, marketing.stafl.test, sicherheit.stafl.test, controlling.stafl.test, leergut.stafl.test {
+dashboard.stafl.test, angebot.stafl.test, verwaltung.stafl.test, bestand.stafl.test, hr.stafl.test, crm.stafl.test, marketing.stafl.test, sicherheit.stafl.test, controlling.stafl.test, leergut.stafl.test, rewe.stafl.test {
 	tls internal
 	reverse_proxy 127.0.0.1:{$APACHE_PORT}
 }

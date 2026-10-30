@@ -17,7 +17,6 @@ def site(kopf):
 
 
 hosts = [
-    "rewe.dashboard-stafl.de",
     "qs.dashboard-stafl.de",
     "einkauf.dashboard-stafl.de",
     "container-import.dashboard-stafl.de",
@@ -57,15 +56,15 @@ assert ausgenommen == ["/resources/*", "/realms/mitarbeiter/.well-known/*", "/re
 assert innen.index("forward_auth") < innen.index("reverse_proxy keycloak:8080")
 assert re.search(r"handle_errors 502 503 504 \{\s*respond \"[^\"]+\" 503", login)
 
-# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling und Leergut (freigegeben): nur über den Netzwerknamen der App mit Keycloak-Hosts
-mitarbeiter = site("dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de, leergut.dashboard-stafl.de")
+# Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut und REWE (freigegeben): nur über den Netzwerknamen der App mit Keycloak-Hosts
+mitarbeiter = site("dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de, leergut.dashboard-stafl.de, rewe.dashboard-stafl.de")
 assert re.findall(r"reverse_proxy (\S+)", mitarbeiter) == ["app-mitarbeiter:80"]
 assert "respond @private 404" in mitarbeiter and "Strict-Transport-Security" in mitarbeiter
 assert "form-action 'self' https://login.dashboard-stafl.de" in mitarbeiter
 assert "app-mitarbeiter" in ergaenzung and "app-mitarbeiter" not in basis and "keycloak" not in basis
 
 # Kein anderer Siteblock erwähnt die Anmelde-Hosts; jeder Dashboard-Host genau einmal
-for h in hosts + ["dashboard-stafl.de", "angebot.dashboard-stafl.de", "verwaltung.dashboard-stafl.de", "bestand.dashboard-stafl.de", "hr.dashboard-stafl.de", "crm.dashboard-stafl.de", "marketing.dashboard-stafl.de", "sicherheit.dashboard-stafl.de", "controlling.dashboard-stafl.de", "leergut.dashboard-stafl.de", "login.dashboard-stafl.de"]:
+for h in hosts + ["dashboard-stafl.de", "angebot.dashboard-stafl.de", "verwaltung.dashboard-stafl.de", "bestand.dashboard-stafl.de", "hr.dashboard-stafl.de", "crm.dashboard-stafl.de", "marketing.dashboard-stafl.de", "sicherheit.dashboard-stafl.de", "controlling.dashboard-stafl.de", "leergut.dashboard-stafl.de", "rewe.dashboard-stafl.de", "login.dashboard-stafl.de"]:
     kopfzeilen = [z for z in caddy.splitlines() if z.endswith("{") and not z.startswith(("\t", " ", "#"))]
     assert sum(1 for z in kopfzeilen if re.search(r"(?<![\w.-])" + re.escape(h) + r"(?![\w.-])", z)) == 1, h
 assert caddy.count("app-mitarbeiter:80") == 2 and caddy.count("keycloak:8080") == 1   # Mitarbeiter-Hosts und Prüfung vor der Anmeldung
@@ -78,4 +77,4 @@ assert 'Strict-Transport-Security "max-age=31536000"' in mitarbeiter
 # Kundenportal und vorhandene Testumgebung behalten ihre separaten Routen.
 assert "{$DOMAIN}, www.{$DOMAIN} {" in caddy
 assert "test.{$DOMAIN} {" in caddy
-print("OK: fünf Modul-Hosts sind 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling und Leergut nur mit der Ergänzungsdatei.")
+print("OK: vier Modul-Hosts sind 503-Platzhalter; Anmeldung (mit Prüfung vor jeder Seite), Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut und REWE nur mit der Ergänzungsdatei.")

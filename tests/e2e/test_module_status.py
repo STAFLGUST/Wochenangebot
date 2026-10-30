@@ -51,6 +51,11 @@ check('Leergut freigegeben (leergut.dashboard-stafl.de, Auftrag des Inhabers 29.
       lg['kachel']['ziel'] == 'leergut.intern' and lg['kachel']['zugang'] is True and lg['kachel']['status'] == 'verfuegbar'
       and lg['kachel']['adresse'] == 'https://leergut.dashboard-stafl.de/module/leergut/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(lg, 'intern')), lg['kachel'])
+rw = mods['rewe']
+check('REWE freigegeben (rewe.dashboard-stafl.de, Auftrag des Inhabers 30.10.2026): Kachel verfügbar, Adresse /module/rewe/ auf dem eigenen Host',
+      rw['kachel']['ziel'] == 'rewe.intern' and rw['kachel']['zugang'] is True and rw['kachel']['status'] == 'verfuegbar'
+      and rw['kachel']['adresse'] == 'https://rewe.dashboard-stafl.de/module/rewe/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(rw, 'intern')), rw['kachel'])
 ctl = mods['controlling']
 check('Controlling freigegeben (controlling.dashboard-stafl.de, Inhaber 28.10.2026): Adresse /module/controlling/ auf dem eigenen Host; Leserin ohne Zugang (zugang_rollen = [])',
       ctl['kachel']['ziel'] == 'controlling.intern' and ctl['kachel']['zugang'] is False and ctl['kachel']['status'] == 'verfuegbar'
@@ -92,7 +97,7 @@ check('Marketing freigegeben (marketing.dashboard-stafl.de, Inhaber 25.10.2026):
       mkt['kachel']['ziel'] == 'marketing.intern' and mkt['kachel']['zugang'] is True and mkt['kachel']['status'] == 'verfuegbar'
       and mkt['kachel']['adresse'] == 'https://marketing.dashboard-stafl.de/module/marketing/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(mkt, 'intern')), mkt['kachel'])
-for mid in ('rewe', 'qs', 'einkauf'):
+for mid in ('qs', 'einkauf'):
     k = mods[mid]['kachel']
     check(f'{mid}: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)
 qs = mods['qs']
