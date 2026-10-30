@@ -195,7 +195,7 @@ hinweise = [
   "Antworten des Inhabers (Notion, 30.10.2026): 1 Stück = 1 Kolli (ganzes Roastbeef Dry Aged); KW = Lieferwoche, Bestellschluss in der Regel Freitag früh der Vorwoche (je Lieferweg änderbar); Eingabe in WinAB von Hand, immer Einzelaufträge (eine Auftragsnummer je Markt im Excel); Filetkopf gehört ins Excel; Lagerwechsel eines Marktes mit „ab KW“ änderbar; Famila gehört nicht ins Modul; die Märkte sind WinAB-Kunden (Name und Anschrift aus dem Kundenstamm der Verwaltung über die Kd.-Nr.); Team-Zuweisung im Modul (alle Listen, Wochenabschluss); ruhende Märkte als eigene Liste; Ansprechpartner und Notizen bleiben im REWE-Modul, nicht im CRM sichtbar.",
   "Zuständigkeit und Lieferweg tragen eine „ab KW“-Historie (Lagerwechsel, Vertretung); jede Antwort speichert Lieferweg und Zuständigkeit als Schnappschuss (GR-106). „Eigene Märkte“ prüft der Server je Markt und KW (GR-103), fremde Märkte ohne rewe.alle sind wie nicht vorhanden (404).",
   "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel-Listen über ein Datenpaket (rewe_import) in der Oberfläche; die Listen werden dabei Mitarbeitern zugeordnet.",
-  "Noch nicht produktiv: eigene Adresse rewe.dashboard-stafl.de bleibt 503-Platzhalter (GR-105), Keycloak-Client und produktive Freigabe nur mit Freigabe des Inhabers. Testen über die Modulverwaltung (Testfreigabe mit eingetragenen Testern).",
+  "Freigegeben mit dem Merge (Auftrag des Inhabers 30.10.2026 nach dem Merge von #210: „am Ende nur konten.sh realm-aktualisieren“): rewe.dashboard-stafl.de mit eigenem Keycloak-Client „rewe“ (Stand 12); / und /admin/ führen zu /module/rewe/. Aktionen rewe_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „REWE ansehen“ (ohne Standardrollen). DNS-Eintrag rewe besteht seit 21.10.2026.",
 ]
 
   [[modul.oberflaeche]]
@@ -203,8 +203,8 @@ hinweise = [
   name = "REWE"
   art = "intern"
   adresse = "https://rewe.dashboard-stafl.de/module/rewe/"
-  entwicklung = "in_pruefung"
-  freigabe = "keine"
+  entwicklung = "fertig"
+  freigabe = "produktiv"   # mit dem Merge dieses PR durch den Inhaber (Auftrag 30.10.2026); DNS-Eintrag rewe besteht seit 21.10.2026
   sperrbar = true
 
 [[modul]]

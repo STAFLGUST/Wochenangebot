@@ -53,7 +53,7 @@ Agent: `rewe` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `rewe`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `rewe.intern` REWE | intern | https://rewe.dashboard-stafl.de/module/rewe/ | in_pruefung | keine |
+| `rewe.intern` REWE | intern | https://rewe.dashboard-stafl.de/module/rewe/ | fertig | produktiv |
 
 ## Qualitätssicherung (`qs`)
 

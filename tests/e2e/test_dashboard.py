@@ -157,12 +157,15 @@ with sync_playwright() as pw:
           and [x['symbol'] for x in neu2] == ['crate', 'container'], neu2)
     sym2 = pg.eval_on_selector_all('[data-modul="leergut"] use, [data-modul="containerimport"] use', 'e => e.map(x => [x.getAttribute("href"), !!document.querySelector(x.getAttribute("href"))])')
     check('Symbole Kiste und Container vorhanden', [x[0] for x in sym2] == ['#i-kiste', '#i-container'] and all(x[1] for x in sym2), sym2)
-    offen = [kid[m] for m in ('rewe', 'qs', 'einkauf', 'containerimport')]
+    rw = kid['rewe']
+    check('REWE: freigegeben (Auftrag des Inhabers 30.10.2026), Verweis auf das REWE-Modul (Testserver: Pfad /module/rewe/)',
+          rw['tag'] == 'A' and rw['href'] == '/module/rewe/' and rw['badge'] == 'Verfügbar', rw)
+    offen = [kid[m] for m in ('qs', 'einkauf', 'containerimport')]
     gesperrt = [x for x in offen if x['tag'] != 'DIV' or x['href']]
     check('alle anderen Kacheln ohne Verweis (nicht freigegeben)', not gesperrt, gesperrt)
     check('nicht freigegebene Module zeigen ihren Entwicklungsstand', all(x['badge'] in ('Geplant', 'In Entwicklung', 'In Prüfung', 'In Vorbereitung') for x in offen), [x['badge'] for x in k])
-    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 4)
-    check('Zähler: 10 von 14 Anwendungen', '10 von 14' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('gesperrte Kacheln als deaktiviert gekennzeichnet', pg.locator('#db-grid .db-tile.off[aria-disabled="true"]').count() == 3)
+    check('Zähler: 11 von 14 Anwendungen', '11 von 14' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     sic = kid['sicherheit']
     check('Sicherheit: freigegeben (Inhaber 26.10.2026), rechts neben der Verwaltung, Verweis auf die Sicherheitszentrale, eigenes Symbol',
           sic['tag'] == 'A' and sic['href'] == '/module/sicherheit/' and sic['badge'] == 'Verfügbar' and sic['symbol'] == 'shield-lock'
@@ -178,7 +181,7 @@ with sync_playwright() as pw:
     check('Nutzer-Chip mit Initialen', pg.text_content('#db-initialen') == 'AD', pg.text_content('#db-initialen'))
     gesperrt = [x for x in k if x['tag'] == 'DIV']
     check('Absperrband auf jeder nicht nutzbaren Kachel (Text „Im Bau · Bald verfügbar“, nur Anzeige)',
-          len(gesperrt) == 4 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
+          len(gesperrt) == 3 and all(x['gesperrt'] and 'Im Bau' in x['band'] and 'Bald verfügbar' in x['band'] and x['bandVersteckt'] == 'true' for x in gesperrt), gesperrt)
     check('kein Absperrband auf verfügbaren Kacheln', all(not x['band'] and not x['gesperrt'] for x in k if x['tag'] == 'A'))
     check('Status-Pille „Verfügbar“ grün markiert', all('ok' in x['badgeCls'] for x in k if x['badge'] == 'Verfügbar'))
     band = pg.evaluate("""(() => { const s = getComputedStyle(document.querySelector('.db-band > span')), b = getComputedStyle(document.querySelector('.db-band'));
@@ -332,7 +335,7 @@ with sync_playwright() as pw:
     check('Bearbeiter: Initialen „EE“', pg.text_content('#db-initialen') == 'EE', pg.text_content('#db-initialen'))
     check('Bearbeiter: Wartungshinweis als Text (kein HTML)', 'Kurz weg <img' in a['hint'] and a['bilder'] == 0 and not pg.evaluate('window.__xss'), a)
     # Controlling: Modulzugang standardmäßig niemand (Finanzdaten, 28.10.2026) – die Kachel fehlt Bearbeitern ganz
-    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing, Leergut und Verwaltung weiter verfügbar (7 von 12, ohne Controlling)', '7 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Bearbeiter: Bestand, Import, HR, CRM, Marketing, Leergut, REWE und Verwaltung weiter verfügbar (8 von 12, ohne Controlling)', '8 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     pg.screenshot(path=os.path.join(SH, 'dashboard_wartung_bearbeiter.png'), full_page=True)
     ctx.close()
     ctx, pg = anmelden(br, 'admin', PW, '198.51.100.44')

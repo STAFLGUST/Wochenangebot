@@ -38,6 +38,7 @@ D, A, W, B, HR, CRM, MKT, L = (f'https://{h}.stafl.test:{PORT}' for h in ('dashb
 SIC = f'https://sicherheit.stafl.test:{PORT}'   # Modul Sicherheit (Stand 9, Freigabe des Inhabers 26.10.2026)
 CTL = f'https://controlling.stafl.test:{PORT}'   # Modul Controlling (Stand 10, Freigabe des Inhabers 28.10.2026)
 LG = f'https://leergut.stafl.test:{PORT}'   # Modul Leergut (Stand 11, Auftrag des Inhabers 29.10.2026)
+RW = f'https://rewe.stafl.test:{PORT}'   # Modul REWE (Stand 12, Auftrag des Inhabers 30.10.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
@@ -220,7 +221,7 @@ check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter/clients', kopf={'Authorization': 'Bearer ' + tok})
 clients = {c['clientId']: c for c in (json.loads(text) if text.startswith('[') else [])}
-for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling', 'leergut'):
+for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marketing', 'sicherheit', 'controlling', 'leergut', 'rewe'):
     c = clients.get(cid, {})
     check(f'Client {cid}: vertraulich, nur Code-Ablauf, PKCE S256, exakte Weiterleitung, kein CORS',
           c.get('publicClient') is False and c.get('directAccessGrantsEnabled') is False and c.get('implicitFlowEnabled') is False
@@ -232,7 +233,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 11' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 12' in _log, _log[-300:])
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -273,6 +274,11 @@ check('Stand 11: Client „leergut“ nachträglich angelegt, Geheimnisse in .en
       and GEHEIM['OIDC_SECRET_LEERGUT'] not in _log, _log[-500:])
 check('Client „leergut“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
       clients.get('leergut', {}).get('secret') not in (None, '@GEHEIM_LEERGUT@') and clients.get('leergut', {}).get('redirectUris') == [LG + '/oidc/callback'])
+check('Stand 12: Client „rewe“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige)',
+      'angelegt:  Client rewe' in _log and 'erzeugt:   OIDC_SECRET_REWE in .env' in _log and 'erzeugt:   OIDC_CRYPTO_REWE in .env' in _log
+      and GEHEIM['OIDC_SECRET_REWE'] not in _log, _log[-500:])
+check('Client „rewe“: Geheimnis aus .env übernommen, kein Platzhalter, Rücksprung nur auf den eigenen Host',
+      clients.get('rewe', {}).get('secret') not in (None, '@GEHEIM_REWE@') and clients.get('rewe', {}).get('redirectUris') == [RW + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
       and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
@@ -499,7 +505,18 @@ for pfad in ('/', '/admin/', '/admin'):
     check(f'Leergut {pfad}: Weiterleitung zum Leergut (/module/leergut/), kein Eingabebereich auf dem Leergut-Host',
           code == 302 and (kopf.get('Location') or '').endswith('/module/leergut/'), (code, kopf.get('Location')))
 check('Leergut: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(LG + '/assets/app.css')[0] == 200 and anfrage(LG + '/dashboard/abgemeldet.html')[0] == 200)
-for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL, LG):
+code, kopf, _ = anfrage(RW + '/module/rewe/', kopf=SEITE)
+check('REWE ohne Anmeldung → Keycloak, eigener Client und eigene Rücksprungadresse',
+      code in (302, 303) and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('client_id') == ['rewe']
+      and urllib.parse.parse_qs(urllib.parse.urlparse(kopf.get('Location') or '').query).get('redirect_uri') == [RW + '/oidc/callback'], kopf.get('Location'))
+check('REWE: Schnittstelle ohne Anmeldung 401 (auch rewe_start, rewe_woche)',
+      all(anfrage(RW + '/api/?action=' + a)[0] == 401 for a in ('status', 'rewe_start', 'rewe_woche')))
+for pfad in ('/', '/admin/', '/admin'):
+    code, kopf, _ = anfrage(RW + pfad, kopf=SEITE)
+    check(f'REWE {pfad}: Weiterleitung zum REWE-Modul (/module/rewe/), kein Eingabebereich auf dem REWE-Host',
+          code == 302 and (kopf.get('Location') or '').endswith('/module/rewe/'), (code, kopf.get('Location')))
+check('REWE: Stylesheets ohne Anmeldung (Abmeldeseite)', anfrage(RW + '/assets/app.css')[0] == 200 and anfrage(RW + '/dashboard/abgemeldet.html')[0] == 200)
+for h in (D, A, W, B, HR, CRM, MKT, SIC, CTL, LG, RW):
     code, kopf, text = anfrage(h + '/oidc/callback?' + urllib.parse.urlencode({'state': 'abgelaufen-oder-fremder-tab', 'code': 'x'}), kopf=SEITE)
     check(f'Rückkehr von der Anmeldung ohne passenden Zustand ({h.split("//")[1].split(".")[0]}): Weiterleitung zum Host statt „Bad Request“',
           code in (302, 303) and (kopf.get('Location') or '').startswith(h + '/'), (code, kopf.get('Location'), text[:80]))
@@ -727,8 +744,8 @@ with sync_playwright() as pw:
           and pg.locator('[data-modul="controlling"]').count() == 0)
     check('Kachel Verwaltung verfügbar (freigegeben)', pg.text_content('[data-modul="verwaltung"] .db-badge') == 'Verfügbar'
           and pg.get_attribute('[data-modul="verwaltung"]', 'href') is not None, pg.text_content('[data-modul="verwaltung"] .db-badge'))
-    check('Kacheln Bestand, Import, HR, CRM, Marketing und Leergut verfügbar (freigegeben), 8 von 12', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
-          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr', 'crm', 'marketing', 'leergut')) and '8 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
+    check('Kacheln Bestand, Import, HR, CRM, Marketing, Leergut und REWE verfügbar (freigegeben), 9 von 12', all(pg.text_content(f'[data-modul="{m}"] .db-badge') == 'Verfügbar'
+          and pg.get_attribute(f'[data-modul="{m}"]', 'href') for m in ('bestand', 'import', 'hr', 'crm', 'marketing', 'leergut', 'rewe')) and '9 von 12' in pg.text_content('#db-sub'), pg.text_content('#db-sub'))
     check('Kachel HR führt zur Urlaubsverwaltung (Testserver: Pfad /module/hr/)', pg.get_attribute('[data-modul="hr"]', 'href') == '/module/hr/', pg.get_attribute('[data-modul="hr"]', 'href'))
     check('Kachel CRM führt zum CRM (Testserver: Pfad /module/crm/)', pg.get_attribute('[data-modul="crm"]', 'href') == '/module/crm/', pg.get_attribute('[data-modul="crm"]', 'href'))
     check('Kachel Marketing führt zum Redaktionsplan (Testserver: Pfad /module/marketing/)', pg.get_attribute('[data-modul="marketing"]', 'href') == '/module/marketing/',

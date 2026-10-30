@@ -260,21 +260,22 @@ def run(name):
 ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')], 'sicherheit_modul': [('dashboard', 'dashboard')]}
 
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
-# prüfen, stellt die Gruppe zwei noch nicht freigegebene Module in ihrer App-Kopie weiter (REWE: in Prüfung – steht seit
-# Oktober 2026 schon so im Register –, Einkauf: fertig; Bestand ist seit Phase 1 produktiv). Nur die Kopie im Testordner.
-REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung'), ("'einkauf' => [", 'fertig')]}
+# prüfen, braucht die Gruppe ein Modul „in Prüfung“ ohne Freigabe und ein fertiges, nicht freigegebenes Modul. Dafür stellt sie
+# in ihrer App-Kopie REWE zurück auf „in Prüfung“ (produktiv seit 30.10.2026) und Einkauf auf „fertig“. Nur die Kopie im Testordner.
+REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung', 'keine'), ("'einkauf' => [", 'fertig')]}
 
 
 def register_anpassen(app, aenderungen):
     pfad = os.path.join(app, 'api', 'lib', 'module-liste.php')
     with open(pfad, encoding='utf-8') as f:
         zeilen = f.read().split('\n')
-    for anfang, stand in aenderungen:
+    for anfang, stand, *freigabe in aenderungen:
         i = next(n for n, z in enumerate(zeilen) if z.strip().startswith(anfang))
-        if f"'entwicklung' => '{stand}'" in zeilen[i]:   # Register steht schon auf dem Testzustand (z. B. REWE in Prüfung)
-            continue
-        assert "'entwicklung' => 'geplant'" in zeilen[i], anfang
-        zeilen[i] = zeilen[i].replace("'entwicklung' => 'geplant'", f"'entwicklung' => '{stand}'", 1)
+        alt = re.search(r"'entwicklung' => '(\w+)'", zeilen[i]).group(1)
+        assert alt in ('geplant', stand) or freigabe, (anfang, alt)
+        zeilen[i] = zeilen[i].replace(f"'entwicklung' => '{alt}'", f"'entwicklung' => '{stand}'", 1)
+        if freigabe:   # Freigabe zurücknehmen (z. B. produktives Modul als „in Prüfung“ ohne Freigabe)
+            zeilen[i] = re.sub(r"'freigabe' => '\w+'", f"'freigabe' => '{freigabe[0]}'", zeilen[i], count=1)
     with open(pfad, 'w', encoding='utf-8', newline='\n') as f:
         f.write('\n'.join(zeilen))
 
