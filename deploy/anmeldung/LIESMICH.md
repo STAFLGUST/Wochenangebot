@@ -8,7 +8,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | Datei | Inhalt |
 | --- | --- |
 | `docker-compose.anmeldung.yml` | Ergänzung zu `docker-compose.yml`: App mit dem Image aus `deploy/image` (mod_auth_openidc), Keycloak 26.8.1 und eigene PostgreSQL 17 – fest über Digest; Keycloak nur auf `127.0.0.1:8180`, Datenbank nur im internen Netz |
-| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de`, `sicherheit.dashboard-stafl.de` (`/` und `/admin/` → `/module/sicherheit/`), `controlling.dashboard-stafl.de` (`/` und `/admin/` → `/module/controlling/`), `leergut.dashboard-stafl.de` (`/` und `/admin/` → `/module/leergut/`), `rewe.dashboard-stafl.de` (`/` und `/admin/` → `/module/rewe/`) (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
+| `apache-oidc.conf` | Keycloak-Hosts `dashboard-stafl.de`, `angebot.dashboard-stafl.de`, `verwaltung.dashboard-stafl.de` (dort `/import/` → Importzentrale), `bestand.dashboard-stafl.de`, `hr.dashboard-stafl.de`, `sicherheit.dashboard-stafl.de` (`/` und `/admin/` → `/module/sicherheit/`), `controlling.dashboard-stafl.de` (`/` und `/admin/` → `/module/controlling/`), `leergut.dashboard-stafl.de` (`/` und `/admin/` → `/module/leergut/`), `rewe.dashboard-stafl.de` (`/` und `/admin/` → `/module/rewe/`), `qs.dashboard-stafl.de` (`/` und `/admin/` → `/module/qs/`) (`/` und `/admin/` → `/module/hr/`) , `crm.dashboard-stafl.de` (`/` und `/admin/` → `/module/crm/`) und `marketing.dashboard-stafl.de` (`/` und `/admin/` → `/module/marketing/`) (wie `tests/oidc/apache.conf`); je Host eigener Client, eigene Sitzung und `WA_OBERFLAECHE`; als `sites-enabled/zz-…` eingebunden, damit `angebot-stafl.de` Standard-Host bleibt |
 | `realm-mitarbeiter.json` | Realm für den Betrieb, **erzeugt** von `werkzeuge/realm_produktion.py` aus dem Test-Realm (ohne Testnutzer, Geheimnisse als Platzhalter) – nicht von Hand ändern |
 | `pruefen.sh` | Prüfung mit Docker (CI-Auftrag „Anwendungs-Image prüfen“) |
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
@@ -81,6 +81,9 @@ Stand 11 (29.10.2026, Auftrag des Inhabers): Client `leergut` für `leergut.dash
 
 Stand 12 (30.10.2026, Auftrag des Inhabers): Client `rewe` für `rewe.dashboard-stafl.de` (Modul REWE · Vordisposition Dry Aged) – gleiches
 Vorgehen (`OIDC_SECRET_REWE`/`OIDC_CRYPTO_REWE`, danach `docker compose up -d app`). Der DNS-Eintrag `rewe` besteht seit 21.10.2026.
+
+Stand 13 (30.10.2026, Entscheidung des Inhabers „gleich produktiv“): Client `qs` für `qs.dashboard-stafl.de` (Modul Qualitätssicherung ·
+QM-System) – gleiches Vorgehen (`OIDC_SECRET_QS`/`OIDC_CRYPTO_QS`, danach `docker compose up -d app`). Der DNS-Eintrag `qs` besteht seit 21.10.2026.
 Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
 Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt

@@ -455,7 +455,7 @@ Datenpaket (`rewe_import`, nur mit `rewe.verwalten`, `vorschau: true` schreibt n
 Nutzer-ID). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team bleibt). Echte Pakete liegen nie
 im Repository (GR-007); Beispiel: `tests/fixtures/rewe/datenpaket.json`.
 
-### Qualitätssicherung · QM-System (`module/qs/qs.php`, in Entwicklung)
+### Qualitätssicherung · QM-System (`module/qs/qs.php`, produktiv seit 30.10.2026)
 
 Löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis, Managementsystem, Prüfungen). Alle Listen-Dokumente haben die Form
 `{"rev": N, "liste": [...]}`; jeder Eintrag hat einen eigenen Stand `rev` (veralteter Stand → 409 `konflikt`). Alle Schreibvorgänge

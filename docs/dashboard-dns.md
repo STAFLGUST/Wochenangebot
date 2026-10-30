@@ -26,4 +26,4 @@ zu welchem Host gehört, steht jetzt in `regeln/module.toml`; die CI prüft Cadd
 Stand 25.10.2026 (Übersicht der DNS-Verwaltung vom Inhaber): CNAME → `dashboard-stafl.de` für `www`, `angebot`, `login`,
 `verwaltung`, `bestand`, `hr`, `crm`, `marketing`, `rewe`, `qs`, `einkauf`, `controlling`, `leergut`, `container-import` und
 `test`; A-Eintrag `@` zum VPS. Freigegeben (über Keycloak): `angebot`, `verwaltung`, `bestand`, `hr`, `crm`, `marketing`, später `sicherheit` (26.10.), `controlling` (28.10.)
-`leergut` (29.10.2026) und `rewe` (30.10.2026). 503-Platzhalter bis zur Freigabe (GR-105): `qs`, `einkauf`, `container-import`, `test`.
+`leergut` (29.10.2026), `rewe` (30.10.2026) und `qs` (Qualitätssicherung, Entscheidung des Inhabers 30.10.2026). 503-Platzhalter bis zur Freigabe (GR-105): `einkauf`, `container-import`, `test`.

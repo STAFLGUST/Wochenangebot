@@ -384,6 +384,12 @@ class EchtesRegelwerk(unittest.TestCase):
         o = rw.modul("rewe")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
                          ("fertig", "produktiv", True, "https://rewe.dashboard-stafl.de/module/rewe/"))
+        # Qualitätssicherung: Entscheidung des Inhabers 30.10.2026 „gleich produktiv“ (Keycloak-Client, Caddy, produktiv mit dem Merge);
+        # das QS-Portal (extern) bleibt geplant und ohne Freigabe
+        oq = {x["id"]: x for x in rw.modul("qs")["oberflaeche"]}
+        self.assertEqual((oq["intern"]["entwicklung"], oq["intern"]["freigabe"], oq["intern"].get("dns", True), oq["intern"]["adresse"]),
+                         ("fertig", "produktiv", True, "https://qs.dashboard-stafl.de/module/qs/"))
+        self.assertEqual((oq["portal"]["entwicklung"], oq["portal"]["freigabe"]), ("geplant", "keine"))
         # HR: vom Inhaber am 23.10.2026 freigegeben (DNS, Keycloak-Client, Caddy, produktiv) – eigener Host mit DNS
         o = rw.modul("hr")["oberflaeche"][0]
         self.assertEqual((o["entwicklung"], o["freigabe"], o.get("dns", True), o["adresse"]),
@@ -415,7 +421,7 @@ class EchtesRegelwerk(unittest.TestCase):
         for mid in ("bestand", "crm", "rewe", "qs", "einkauf", "verwaltung"):
             for o in rw.modul(mid).get("oberflaeche", []):
                 # Roadmap 10a: Verwaltung unter eigener Adresse; Phase 1 Bestand/Import: bestand.dashboard-stafl.de und Importzentrale
-                if (mid, o["id"]) in (("verwaltung", "verwaltung"), ("verwaltung", "import"), ("bestand", "intern"), ("crm", "intern"), ("rewe", "intern")):
+                if (mid, o["id"]) in (("verwaltung", "verwaltung"), ("verwaltung", "import"), ("bestand", "intern"), ("crm", "intern"), ("rewe", "intern"), ("qs", "intern")):
                     self.assertEqual((o["entwicklung"], o["freigabe"]), ("fertig", "produktiv"))
                     continue
                 self.assertEqual(o["freigabe"], "keine", f"{mid}.{o['id']}")

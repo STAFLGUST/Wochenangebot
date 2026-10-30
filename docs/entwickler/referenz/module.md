@@ -63,7 +63,7 @@ Agent: `qs` · hängt ab von `plattform`, `hr` · Testgruppen: `qs`, `qs_ablage`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `qs.intern` QS-Verwaltung | intern | https://qs.dashboard-stafl.de/module/qs/ | in_entwicklung | keine |
+| `qs.intern` QS-Verwaltung | intern | https://qs.dashboard-stafl.de/module/qs/ | fertig | produktiv |
 | `qs.portal` QS-Portal (Kunden, Lieferanten, Prüfer) | extern | https://qs-stafl.de/ | geplant | keine |
 
 ## Einkauf (`einkauf`)

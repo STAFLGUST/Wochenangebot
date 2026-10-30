@@ -56,6 +56,11 @@ check('REWE freigegeben (rewe.dashboard-stafl.de, Auftrag des Inhabers 30.10.202
       rw['kachel']['ziel'] == 'rewe.intern' and rw['kachel']['zugang'] is True and rw['kachel']['status'] == 'verfuegbar'
       and rw['kachel']['adresse'] == 'https://rewe.dashboard-stafl.de/module/rewe/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(rw, 'intern')), rw['kachel'])
+qs = mods['qs']
+check('Qualitätssicherung freigegeben (qs.dashboard-stafl.de, Entscheidung des Inhabers 30.10.2026): Kachel verfügbar, Adresse /module/qs/ auf dem eigenen Host',
+      qs['kachel']['ziel'] == 'qs.intern' and qs['kachel']['zugang'] is True and qs['kachel']['status'] == 'verfuegbar'
+      and qs['kachel']['adresse'] == 'https://qs.dashboard-stafl.de/module/qs/'
+      and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(qs, 'intern')), qs['kachel'])
 ctl = mods['controlling']
 check('Controlling freigegeben (controlling.dashboard-stafl.de, Inhaber 28.10.2026): Adresse /module/controlling/ auf dem eigenen Host; Leserin ohne Zugang (zugang_rollen = [])',
       ctl['kachel']['ziel'] == 'controlling.intern' and ctl['kachel']['zugang'] is False and ctl['kachel']['status'] == 'verfuegbar'
@@ -97,11 +102,10 @@ check('Marketing freigegeben (marketing.dashboard-stafl.de, Inhaber 25.10.2026):
       mkt['kachel']['ziel'] == 'marketing.intern' and mkt['kachel']['zugang'] is True and mkt['kachel']['status'] == 'verfuegbar'
       and mkt['kachel']['adresse'] == 'https://marketing.dashboard-stafl.de/module/marketing/'
       and (lambda o: o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv')(ob(mkt, 'intern')), mkt['kachel'])
-for mid in ('qs', 'einkauf'):
-    k = mods[mid]['kachel']
-    check(f'{mid}: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)
-qs = mods['qs']
-check('QS-Portal extern, QS-Verwaltung intern – beide gesperrt', ob(qs, 'portal')['art'] == 'extern' and ob(qs, 'intern')['art'] == 'intern' and not ob(qs, 'portal')['zugang'] and not ob(qs, 'intern')['zugang'])
+k = mods['einkauf']['kachel']
+check('einkauf: noch nicht freigegeben → kein Zugang (Entwicklungsstand)', k['zugang'] is False and k['status'] == 'entwicklungsstand', k)
+check('QS-Portal extern (geplant, gesperrt), QS-Verwaltung intern (freigegeben)', ob(qs, 'portal')['art'] == 'extern' and ob(qs, 'intern')['art'] == 'intern'
+      and ob(qs, 'portal')['entwicklung'] == 'geplant' and not ob(qs, 'portal')['zugang'] and ob(qs, 'intern')['zugang'])
 check('Anmelde-Oberfläche (Keycloak) und Dashboard freigegeben (Inbetriebnahme Schritt 6)', all(o['entwicklung'] == 'fertig' and o['freigabe'] == 'produktiv' for o in (ob(mods['plattform'], 'anmeldung'), ob(mods['dashboard'], 'start'))))
 roh = json.dumps(r, ensure_ascii=False)
 check('keine Entwickler-Interna in der Antwort (Pfade, Agenten, Testgruppen)', not any(w in roh for w in ('"pfade"', '"agent"', '"testgruppen"', 'app/api/', 'tests/e2e')))

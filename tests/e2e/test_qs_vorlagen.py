@@ -128,8 +128,7 @@ K = {}
 for i, (u, _, _, p, _) in enumerate(NUTZER):
     K[u] = Client(f'198.51.100.{10 + i}'); K[u].call('login', {'username': u, 'password': p})
 L, Be, Q, F, V = K['lisa'], K['bernd'], K['quinn'], K['fritz'], K['vera']
-check('Testfreigabe und Tester', A.call('modul_freigabe_save', {'bereich': 'qs.intern', 'freigabe': 'test', 'grund': 'Abnahme Vorlagen'})[0] == 200
-      and A.call('modul_tester_save', {'bereich': 'qs.intern', 'tester': [ids[x] for x in ('admin', 'lisa', 'bernd', 'quinn', 'fritz', 'vera')], 'grund': 'Abnahme'})[0] == 200)
+check('QM-System produktiv: erreichbar ohne Testfreigabe und Tester-Eintrag', L.call('qs_start')[0] == 200)
 
 # Datenpaket (erfunden) mit einer Altnummer, die nicht der Struktur folgt
 paket = json.load(open(PAKET_DATEI, encoding='utf-8'))
