@@ -481,7 +481,7 @@ laufen unter der Sperre `qs-dokumente`. Zuständig/Vertreter sind **Kürzel** (S
   nur mit `qs.freigeben`, mit Grund). In Prüfung, verworfen oder eingezogen: keine Änderung (409); höchstens 50 Dateien je Stelle.
   **Vorlagen und Lenkungsangaben** (seit Bauabschnitt 3, `module/qs/vorlagen.php`): Datei-Einträge optional mit `platzhalter: ["version", …]`
   (bekannte, noch offene Platzhalter in Word/Excel), `vorlage: {"dokument", "nr", "version"}` (aus einer Vorlage erzeugt), `uebernommen: N`
-  (Kopie aus Version N), `roh: "<id>"` und `ausgefuellt: {"t", "felder"}` (bei der Freigabe bzw. beim Nachtragen ausgefüllte Fassung; `roh` ist
+  (Kopie aus Version N), `roh: "<id>"`, `sha256Roh` (Prüfsumme der Rohfassung) und `ausgefuellt: {"t", "felder"}` (bei der Freigabe bzw. beim Nachtragen ausgefüllte Fassung; `roh` ist
   die Rohfassung mit Platzhaltern, sie bleibt in der Ablage und wird bei „Dateien übernehmen“ kopiert). Vorlagen (Art V) werden nie ausgefüllt.
   **Nummernstruktur:** Arten A, F, L, E heißen `<Kapitel>-<Art><2–3 Ziffern>`; beim Anlegen und bei Änderung von Nummer, Kapitel oder Art
   prüft `qs_dokument_save` sie (leer = nächste freie, höchste vorhandene + 1 – auch eingezogene zählen); das Datenpaket prüft sie nicht.

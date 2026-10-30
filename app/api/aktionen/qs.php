@@ -268,7 +268,8 @@ switch ($action) {
         }
 
         /* Datei ablegen – in Teilen (lib/dateiablage.php): dokument, version ('' bei Ordnern/externen Dokumenten), name,
-           groesse, sha256, upload ('' beim ersten Teil), teil, daten (Base64). Vor dem ersten Teil und beim Eintragen prüft
+           groesse, sha256, upload ('' beim ersten Teil), teil, daten (Base64); nurNeu=true (Sammel-Ablage): liegt derselbe Inhalt
+           (SHA-256) dort schon, antwortet der erste Teil mit doppelt=true und nichts wird abgelegt. Vor dem ersten Teil und beim Eintragen prüft
            qs_ablage_stelle(), ob hier abgelegt werden darf. Antwort: fertig=false mit upload, bis der letzte Teil da ist. */
         case 'qs_datei_hochladen': {
             $me = require_perm('qs.bearbeiten', true);
@@ -276,7 +277,13 @@ switch ($action) {
             require_once __DIR__ . '/../module/qs/vorlagen.php';
             $b = body();
             $dok = is_string($b['dokument'] ?? null) ? $b['dokument'] : ''; $ver = is_string($b['version'] ?? null) ? $b['version'] : '';
-            if (($b['upload'] ?? '') === '') { $doc = qs_doc('qs-dokumente'); qs_ablage_stelle($doc['liste'][qs_dokument_index($doc, $dok)], $ver, $me, 'hochladen'); }
+            if (($b['upload'] ?? '') === '') {
+                $doc = qs_doc('qs-dokumente'); $dd = $doc['liste'][qs_dokument_index($doc, $dok)];
+                $vi = qs_ablage_stelle($dd, $ver, $me, 'hochladen');
+                // nurNeu (Sammel-Ablage): gleicher Inhalt liegt schon an dieser Stelle → nichts hochladen, Kennung der vorhandenen Datei
+                if (!empty($b['nurNeu']) && ($gleich = qs_datei_gleich($dd, $vi, strtolower((string)($b['sha256'] ?? '')))) !== null)
+                    respond(['ok' => true, 'fertig' => true, 'doppelt' => true, 'datei' => $gleich]);
+            }
             $r = ablage_teil('qs', (string)$me['id'], ['dokument' => $dok, 'version' => $ver], $b);
             if (!$r['fertig']) respond(['ok' => true, 'fertig' => false, 'upload' => $r['upload'], 'empfangen' => $r['empfangen']]);
             $datei = $r['datei'];
