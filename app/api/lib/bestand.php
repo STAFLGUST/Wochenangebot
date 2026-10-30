@@ -122,7 +122,24 @@ function stock_ohne_ek(?array $st): ?array
 /* Bezeichnung und VK-Gruppe aus den Artikelstammdaten (Eigentümer Verwaltung, hier nur lesen – regeln/datenverantwortung.toml).
    Gilt für Ansicht, Druck, PDF, CSV und MHD-Mail; gespeichert bleibt der Bestand unverändert (Name aus der Importdatei).
    Ohne Stammdatensatz oder mit leerer Bezeichnung bleibt der Name der Importdatei. „nameImport“ nur, wenn er abweicht
-   (Suche findet beide). Rückgabe zusätzlich „vkgruppen“: Nummer → Bezeichnung der verwendeten VK-Gruppen. */
+   (Suche findet beide). „merkmale“: Fleischart · Herkunft · Zustand aus dem Stammsatz (bestand_merkmale(), nur wenn
+   etwas bekannt ist) – die Ansicht zeigt sie unter der Bezeichnung, PDF, CSV und MHD-Mail daneben (Entscheidung Inhaber
+   30.10.2026: „Nacken schier“ und „Lachs“ allein sind nicht eindeutig). Rückgabe zusätzlich „vkgruppen“: Nummer →
+   Bezeichnung der verwendeten VK-Gruppen. */
+const BESTAND_ZUSTAND = ['frisch' => 'frisch', 'gefroren' => 'gefroren', 'frisch-gefroren' => 'frisch/gefroren', 'dry-aged' => 'Dry Aged'];
+function bestand_merkmale(array $s): string
+{
+    $kat = trim((string)($s['category'] ?? ''));
+    $teile = [$kat === 'Sonstiges' ? '' : $kat, trim((string)($s['origin'] ?? '')), BESTAND_ZUSTAND[(string)($s['condition'] ?? '')] ?? ''];
+    return implode(' · ', array_values(array_filter($teile, fn($t) => $t !== '')));
+}
+/* Bezeichnung mit Merkmalen in einer Zeile (Excel und Text der MHD-Mail; die CSV der Ansicht setzt sie genauso zusammen):
+   „Lachs · Schwein · DE · frisch“ */
+function bestand_bezeichnung(array $a): string
+{
+    $m = trim((string)($a['merkmale'] ?? ''));
+    return (string)($a['name'] ?? '') . ($m !== '' ? ' · ' . $m : '');
+}
 function bestand_mit_stammdaten(?array $st): ?array
 {
     if (!$st) return $st;
@@ -135,6 +152,8 @@ function bestand_mit_stammdaten(?array $st): ?array
         if (!$s) return $x;
         $name = trim((string)($s['name'] ?? ''));
         if ($name !== '' && $name !== (string)($x['name'] ?? '')) { $x['nameImport'] = (string)($x['name'] ?? ''); $x['name'] = $name; }
+        $merk = bestand_merkmale($s);
+        if ($merk !== '') $x['merkmale'] = $merk;
         $vk = trim((string)($s['vkGruppe'] ?? ''));
         if ($vk !== '') { $x['vk'] = $vk; $genutzt[$vk] = true; }
         return $x;

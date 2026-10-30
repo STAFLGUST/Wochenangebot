@@ -37,7 +37,8 @@ function mhd_preis_text(?array $p): string
     while (substr($v, -1) === '0' && strlen($v) - strpos($v, ',') > 3) $v = substr($v, 0, -1);
     return $v . ' €' . (!empty($p['label']) ? ' · ' . $p['label'] : '/kg');
 }
-/* Die MHD-Liste: [heute, bis, zeilen[{code, name, kg, mhd, mhdKg, stufe, erfasst, gesamt, eta, preis, vorwoche}], preise(bool), wochen] */
+/* Die MHD-Liste: [heute, bis, zeilen[{code, name, kg, mhd, mhdKg, stufe, erfasst, gesamt, eta, preis, vorwoche}], preise(bool), wochen]
+   „name“ ist die Bezeichnung mit Merkmalen (bestand_bezeichnung(): „Lachs · Schwein · DE · frisch“) für Excel und Text. */
 function mhd_liste(array $st, bool $mitPreisen, ?DateTimeImmutable $jetzt = null): array
 {
     $jetzt = ($jetzt ?? new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->setTimezone(new DateTimeZone('Europe/Berlin'));
@@ -59,7 +60,7 @@ function mhd_liste(array $st, bool $mitPreisen, ?DateTimeImmutable $jetzt = null
         $eta = null;
         foreach ($etas as $e) if ($e >= $heute) { $eta = $e; break; }
         if ($eta === null && $etas) $eta = end($etas);
-        $zeilen[] = ['code' => (string)$a['code'], 'name' => (string)$a['name'], 'kg' => (float)$a['kg'], 'mhd' => $mhd, 'mhdKg' => (float)($a['mhdKg'] ?? 0),
+        $zeilen[] = ['code' => (string)$a['code'], 'name' => bestand_bezeichnung($a), 'kg' => (float)$a['kg'], 'mhd' => $mhd, 'mhdKg' => (float)($a['mhdKg'] ?? 0),
                      'stufe' => mhd_stufe($mhd, $heute), 'erfasst' => $erfasst / 1000, 'gesamt' => ((int)round((float)$a['kg'] * 1000) + $erfasst) / 1000, 'eta' => $eta,
                      'preis' => $mitPreisen ? mhd_preis_text($akt[$k] ?? null) : null, 'vorwoche' => $mitPreisen ? mhd_preis_text($vor[$k] ?? null) : null];
     }

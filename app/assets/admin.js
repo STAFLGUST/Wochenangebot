@@ -3154,20 +3154,24 @@
     }
     return m;
   }
+  /* Merkmale aus den Stammdaten (Fleischart · Herkunft · Zustand, Server: bestand_merkmale()) – in der Liste als zweite Zeile
+     unter der Bezeichnung, in CSV und Dialogen als „Lachs · Schwein · DE · frisch“ (wie Excel/Text der MHD-Mail) */
+  const merkHTML = (a) => (a.merkmale ? `<small class="s-merk">${esc(a.merkmale)}</small>` : '');
+  const bezeichnungLang = (a) => `${a.name || ''}${a.merkmale ? ' · ' + a.merkmale : ''}`;
   function stockItems() {
     const prices = S.weekPriceMap(stockPrices?.current), previous = S.weekPriceMap(stockPrices?.previous);
     const offers = offerPriceMap();
     const rows = new Map(stock.articles.map((a) => [S.normCode(a.code), { ...a, incoming: [] }]));
     for (const delivery of (stock.incoming || [])) {
       const key = S.normCode(delivery.code);
-      if (!rows.has(key)) rows.set(key, { code: delivery.code, name: delivery.name, kg: null, mhd: null, mhdKg: null, lots: [], incoming: [] });
+      if (!rows.has(key)) rows.set(key, { code: delivery.code, name: delivery.name, merkmale: delivery.merkmale, kg: null, mhd: null, mhdKg: null, lots: [], incoming: [] });
       rows.get(key).incoming.push(delivery);
     }
     return [...rows.values()].map((a, idx) => {
       const key = S.normCode(a.code), price = prices.get(key), prevPrice = previous.get(key);
       a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
       return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
-        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''}`) };
+        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''} ${a.merkmale || ''}`) };
     });
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -3235,7 +3239,7 @@
   ];
   const ST_SPK = Object.fromEntries(ST_SP.map((s) => [s.key, s]));
   const MHD_STUFEN = [['mhd-past', 'abgelaufen'], ['mhd-0-4', 'heute – 4 Tage'], ['mhd-5-7', '5 – 7 Tage'], ['mhd-8-14', '8 – 14 Tage'], ['spaeter', 'später'], ['ohne', 'ohne MHD']];
-  const fWert = { code: (a) => a.code, name: (a) => `${a.name} ${a.nameImport || ''}`, vk: (a) => a.price, prev: (a) => a.prevPrice, kg: (a) => a.kg, mhd: (a) => a.mhd,
+  const fWert = { code: (a) => a.code, name: (a) => `${a.name} ${a.nameImport || ''} ${a.merkmale || ''}`, vk: (a) => a.price, prev: (a) => a.prevPrice, kg: (a) => a.kg, mhd: (a) => a.mhd,
     mhdKg: (a) => a.mhdKg, incomingKg: (a) => a.incomingKg, totalKg: (a) => a.totalKg, zugaenge: (a) => a.incoming.length };
   const preisZahl = (p) => (p && p.status === 'value' && Number.isFinite(p.value) ? p.value : null);
   const imBereich = (v, f) => (f.min == null || (v != null && v >= f.min)) && (f.max == null || (v != null && v <= f.max));
@@ -3389,7 +3393,7 @@
       const l = gruppen.get(k), offen = vkOffen.has(k), titel = k ? `${k} · ${namen[k] || 'VK-Gruppe ' + k}` : 'Ohne VK-Gruppe';
       return `<tbody class="vk-g${offen ? ' offen' : ''}" data-vk="${esc(k)}"><tr class="vk-h"><th scope="rowgroup"><button type="button" class="vk-auf" data-vkauf="${esc(k)}" aria-expanded="${offen}">`
         + `<span class="vk-pfeil" aria-hidden="true">▸</span><span class="vk-titel">${esc(titel)}</span><small>${fmtInt.format(l.length)} Artikel</small></button></th>${zellen(l)}</tr>`
-        + l.map((a) => `<tr class="vk-a"${offen ? '' : ' hidden'}><td><span class="vk-nr">${esc(a.code)}</span>${esc(a.name)}</td>${zellen([a], a)}</tr>`).join('') + '</tbody>';
+        + l.map((a) => `<tr class="vk-a"${offen ? '' : ' hidden'}><td><span class="vk-nr">${esc(a.code)}</span>${esc(a.name)}${merkHTML(a)}</td>${zellen([a], a)}</tr>`).join('') + '</tbody>';
     }).join('');
     $('#stock-vk-body').innerHTML = `<div class="dlg-head"><div><h2 id="sv-title">Bestand nach VK-Gruppen</h2><p>Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'} · ${fmtInt.format(res.list.length)} Artikel in ${fmtInt.format(keys.length)} ${keys.length === 1 ? 'Gruppe' : 'Gruppen'}${stockQ || Object.keys(stockFilter).length ? ' · Auswahl aus Suche und Filter' : ''} · VK-Gruppe laut Artikelstammdaten</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
@@ -3429,7 +3433,7 @@
   };
   const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete Zugänge', print)}</tr>`;
   const stockRow = (a, print = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
-      <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}</td>
+      <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}${a.merkmale ? ` · ${esc(a.merkmale)}` : ''}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}${merkHTML(a)}</td>
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
       <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
@@ -3533,7 +3537,7 @@
   function openStockIncoming(idx) {
     const a = stockItems()[idx];
     if (!a) return;
-    $('#stock-item-body').innerHTML = `<div class="dlg-head"><div><h2 id="sa-title">Erwartete Zugänge</h2><p>${esc(a.code)} · ${esc(a.name)}</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+    $('#stock-item-body').innerHTML = `<div class="dlg-head"><div><h2 id="sa-title">Erwartete Zugänge</h2><p>${esc(a.code)} · ${esc(bezeichnungLang(a))}</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body"><p class="hint">Status „erfasst“ · Stand ${stock.date ? esc(dmy(stock.date)) : 'unbekannt'} · noch nicht im eingelagerten Bestand enthalten.</p>${lotTableHTML(a.incoming, true)}</div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`;
     dlgSA.showModal();
@@ -3568,7 +3572,7 @@
       ? a.offer.map((o) => `${esc(priceShort(o.price))}${o.price.label ? ' (' + esc(o.price.label) + ')' : ''} <span class="muted">· ${esc(gname(o.groupId))}</span>`).join('<br>')
       : '<span class="muted">nicht im aktuellen Angebot</span>';
     $('#stock-item-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="sa-title">${esc(a.name)}</h2><p>Art.-Nr. ${esc(a.code)} · ${esc(a.wg.label)} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</p></div>
+      <div class="dlg-head"><div><h2 id="sa-title">${esc(a.name)}</h2>${a.merkmale ? `<p class="s-merk-d">${esc(a.merkmale)}</p>` : ''}<p>Art.-Nr. ${esc(a.code)} · ${esc(a.wg.label)} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         <div class="cmp-stats hstats">
@@ -3677,7 +3681,7 @@
     const q = csvCell;
     const n2 = (v) => (v == null || !Number.isFinite(v) ? '' : fmtKg.format(v).replace(/\./g, ''));
     const lines = [['Art.-Nr.', 'Bezeichnung', `Aktuell ${stockWeekLabel('current')}`, `Vorwoche ${stockWeekLabel('previous')}`, 'Eingelagerter Bestand kg', 'Kürz. MHD', 'Kg kürz. MHD', 'Erfasster Bestand kg', 'Gesamt verfügbar kg', 'Erwartete Zugänge (Menge kg / ETA / Partie)', 'Warengruppe', 'Bestand vom'].map(q).join(';')];
-    for (const a of res.list) lines.push([a.code, a.name, stockPriceText(a.price), stockPriceText(a.prevPrice), n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), n2(a.incomingKg), n2(a.totalKg), a.incoming.map((d) => `${n2(d.kg)} kg / ${d.arrival ? dmy(d.arrival) : 'ETA unbekannt'} / ${d.lot || '—'}`).join(' | '), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
+    for (const a of res.list) lines.push([a.code, bezeichnungLang(a), stockPriceText(a.price), stockPriceText(a.prevPrice), n2(a.kg), mhdShort(a.mhd).replace('—', ''), n2(a.mhdKg), n2(a.incomingKg), n2(a.totalKg), a.incoming.map((d) => `${n2(d.kg)} kg / ${d.arrival ? dmy(d.arrival) : 'ETA unbekannt'} / ${d.lot || '—'}`).join(' | '), a.wg.label, stock.date ? dmy(stock.date) : ''].map(q).join(';'));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const el = document.createElement('a');
     el.href = URL.createObjectURL(blob);
@@ -3727,7 +3731,7 @@
      bei sehr langen Listen in doppelter (Größengrenzen des Servers: lib/bestand-mhd.php). Rückgabe { bild, breite }. */
   function mhdBild(list) {
     const preise = !!stockPrices?.allowed, ZH = 32, KH = 46, RAND = 18;
-    const sp = [['Art.-Nr.', 80, 'l', (a) => a.code], ['Bezeichnung', 340, 'l', (a) => a.name]];
+    const sp = [['Art.-Nr.', 80, 'l', (a) => a.code], ['Bezeichnung', 340, 'l', (a) => a.name, false, (a) => a.merkmale]];
     if (preise) sp.push([`Aktueller Preis ${stockWeekLabel('current')}`, 120, 'r', (a) => stockPriceText(a.price)], [`Preis Vorwoche ${stockWeekLabel('previous')}`, 120, 'r', (a) => stockPriceText(a.prevPrice)]);
     sp.push(['Eingelagerter Bestand', 118, 'r', (a) => kgText(a.kg)], ['Kürz. MHD', 86, 'c', (a) => mhdShort(a.mhd), true], ['Kg kürz. MHD', 124, 'r', (a) => (a.cls === 'mhd-past' ? '\u2620 ' : '') + kgText(a.mhdKg), true],
       ['Erfasster Bestand', 118, 'r', (a) => kgText(a.incomingKg)], ['Nächste ETA', 84, 'c', (a) => (a.nextEta ? mhdShort(a.nextEta.t) : '—')], ['Gesamt verfügbar', 118, 'r', (a) => kgText(a.totalKg)]);
@@ -3761,11 +3765,14 @@
     y += KH;
     list.forEach((a, i) => {
       x = RAND;
-      for (const [, w, ausr, wert, mhd] of sp) {
+      for (const [, w, ausr, wert, mhd, merk] of sp) {
         const f = mhd && MHD_FARBE[a.cls];
         if (f) { g.fillStyle = f[0]; g.fillRect(x, y, w, ZH); }
         g.fillStyle = f ? f[1] : '#1b1a18'; g.font = `${f ? 700 : 400} 14px ${FONT}`;
         text(wert(a), x, w, y + ZH / 2, ausr);
+        // Merkmale aus den Stammdaten grau hinter der Bezeichnung, soweit Platz ist
+        const nb = merk && merk(a) ? Math.min(g.measureText(String(wert(a) ?? '')).width, w - 12) : 0, rest = w - 22 - nb;
+        if (nb && rest > 30) { g.fillStyle = '#77716a'; g.font = `400 12.5px ${FONT}`; text(merk(a), x + nb + 10, rest + 12, y + ZH / 2, 'l'); }
         x += w;
       }
       g.fillStyle = '#e4e2de'; g.fillRect(RAND, y + ZH - 1, breite - 2 * RAND, 1);

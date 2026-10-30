@@ -51,6 +51,13 @@ Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lief
   Ohne Stammdatensatz oder bei leerer Bezeichnung bleibt der Name der Liste. Der Server setzt die Bezeichnung beim Lesen
   ein (`bestand_mit_stammdaten()` in `lib/bestand.php`). Gespeichert bleibt der Bestand wie importiert. Der Name der Liste
   steht als `nameImport` in der Antwort, im Hinweis der Bezeichnung und in der Suche.
+- **Merkmale** (Entscheidung Inhaber 30.10.2026): Fleischart, Herkunft und Zustand aus dem Stammsatz, damit kurze Namen wie
+  „Nacken schier“ oder „Lachs“ eindeutig sind – z. B. „Schwein · DE · frisch“. „Sonstiges“, „nicht angegeben“ und eine
+  leere Herkunft entfallen; ohne Stammsatz gibt es keine Merkmale. In der Liste (auch Druck und Handy) stehen sie als
+  zweite, graue Zeile unter der Bezeichnung, im Fenster „VK-Gruppen“ dahinter, im Artikel-Fenster unter dem Titel; im PDF
+  und im Bild der MHD-Mail grau hinter der Bezeichnung; in CSV, Excel und Text der MHD-Mail als „Lachs · Schwein · DE ·
+  frisch“. Suche und Filter „Art. Bezeichnung“ finden auch die Merkmale. Der Server bildet sie an einer Stelle
+  (`bestand_merkmale()` in `lib/bestand.php`); gespeichert wird nichts davon.
 - **Spaltenfilter:** Jede Überschrift hat einen Trichter. Er öffnet ein Fenster zum Sortieren (auf- oder absteigend)
   und zum Filtern:
   - Art.-Nr. und Bezeichnung: enthält (mehrere Wörter = alle).
@@ -79,7 +86,7 @@ Jeder Preiseintrag enthält ausschließlich `code` und `price`, niemals Kundenpr
 Ohne `preisverlauf.sehen` kommt nur `prices: {allowed: false}`; die Oberfläche zeigt fehlende Berechtigung.
 
 `GET stock` und die Antwort von `POST stock_import` enthalten je Artikel und Zugang die Bezeichnung aus den Stammdaten
-(`name`), bei Abweichung `nameImport` und `vk`, dazu `vkgruppen` (Nummer → Name). `POST stock_pdf` nimmt optional `filter`
+(`name`), bei Abweichung `nameImport`, dazu `vk` und `merkmale` (nur wenn bekannt), außerdem `vkgruppen` (Nummer → Name). `POST stock_pdf` nimmt optional `filter`
 (Text der aktiven Spaltenfilter für die Überschrift, höchstens 160 Zeichen).
 
 `POST stock_import` behält `bestand.importieren`, POST/JSON und CSRF-Prüfung. Optionales `incoming`
