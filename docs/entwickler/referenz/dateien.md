@@ -84,7 +84,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `einkauf.php` | einkauf | Aktionen: Einkauf (Fehlmengen aus offenen Bestellwünschen) Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `einzelangebote.php` | angebot | Aktionen: Einzelangebote (Angebot bearbeiten → Einzelangebote). |
 | `entwurf.php` | angebot | Aktionen: Entwurf, gemeinsames Bearbeiten, Veröffentlichen, Versionen Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
-| `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“); hr.genehmigen – Urlaubsanträge … |
+| `hr.php` | hr | Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet), Abwesenheitskalender (nur … |
 | `importzentrale.php` | verwaltung | Aktionen: Importzentrale (Verwaltung → Import; Ablauf und Prüfungen: module/verwaltung/importzentrale.php) GET import_arten Importarten, für die der angemeldete Nutzer das Recht hat (Anzeige ist keine Berechtigung) … |
 | `integritaet.php` | plattform | Aktion: Dateiprüfung (lib/integritaet.php) – nur Administratoren. |
 | `kundengruppen.php` | verwaltung | Aktionen: Listen der Stammdaten – Kundengruppen, VK-Gruppen und Vertreter (Beschreibung: lib/kunden.php). |
@@ -308,7 +308,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `hr.css` | hr | STAFL-Plattform · HR · Urlaub – Gestaltung wie das Dashboard („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf und Karten. |
-| `hr.js` | hr | STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag, eigene Einträge, Abwesenheitskalender (Kollegen nur „abwesend“). |
+| `hr.js` | hr | STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag (ausblendbar |
 | `index.html` | hr | Mein Urlaub |
 | `verwaltung-hr.css` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung (Mitarbeiter-Dialog, Urlaubseinstellungen, Altbestand). |
 | `verwaltung-hr.js` | hr | STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbeiter |

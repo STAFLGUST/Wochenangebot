@@ -133,6 +133,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 
 /* ── Karten, Formulare ── */
 .hr-spalten { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
+.hr-spalten.ohne-antrag { grid-template-columns: minmax(0, 1fr); }   /* Urlaubsanträge ausgeschaltet: nur „Meine Einträge“ */
+#antrag-aus { margin: 0 0 20px; }
+#antrag-aus a { color: inherit; font-weight: 600; margin-left: 4px; }
 .hr-karte { padding: 22px; border-radius: 26px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .hr-karte.schmal { max-width: 620px; }
 .hr-karte p { margin: 0; }
