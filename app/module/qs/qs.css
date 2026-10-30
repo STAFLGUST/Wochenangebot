@@ -417,6 +417,17 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
 .qm-laden li.fehler small{color:var(--qm-rot);text-align:left}
 .qm-entfernt summary{font-size:11.5px}
 .qm-version .qm-version-dateien{grid-column:1/-1;display:flex;flex-direction:column;gap:6px;margin-top:2px}
+/* Sammel-Ablage */
+.qm-sa-drop{cursor:default;flex-wrap:wrap}
+.qm-drop>.qm-sa-knoepfe{display:flex;flex-direction:row;gap:6px;margin-left:auto;flex-wrap:wrap}
+.qm-sa-liste{max-height:min(52vh,560px);overflow:auto;border:1px solid var(--qm-line);border-radius:14px}
+.qm-sa-tabelle td{vertical-align:top}
+.qm-sa-tabelle td.qm-sa-an{width:28px}
+.qm-sa-tabelle td.qm-sa-status{white-space:nowrap}
+.qm-sa-tabelle .qm-chip{white-space:normal;height:auto;min-height:22px;padding-top:3px;padding-bottom:3px;line-height:1.25}
+.qm-sa-wahl{min-width:220px;height:34px;font-size:12.5px}
+.qm-sa-fortschritt{width:100%;height:8px;accent-color:var(--qm-green)}
+@media(max-width:760px){.qm-sa-tabelle tr{grid-template-columns:28px minmax(0,1fr)}.qm-sa-tabelle td.qm-sa-an{grid-row:1/4}.qm-sa-wahl{min-width:0;width:100%}}
 /* Vorlagen (Bauabschnitt 3) */
 .qm-platzhalter{color:var(--qm-blau);font-weight:600}
 .qm-vorlagenkarte h3 .i{width:16px;height:16px;color:var(--qm-green)}

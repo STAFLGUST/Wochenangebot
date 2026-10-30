@@ -477,6 +477,14 @@ function qs_datei_finden(array $liste, string $id): ?array
     }
     return null;
 }
+/* Liegt an dieser Stelle (Version bzw. Dokument) schon eine aktive Datei mit diesem Inhalt (SHA-256, auch Rohfassung)? Kennung oder null */
+function qs_datei_gleich(array $d, ?int $vi, string $sha): ?string
+{
+    if (!preg_match('/^[0-9a-f]{64}$/D', $sha)) return null;
+    foreach (qs_dateien_aktiv($vi === null ? ($d['dateien'] ?? []) : ($d['versionen'][$vi]['dateien'] ?? [])) as $f)
+        if (hash_equals($sha, (string)($f['sha256'] ?? '')) || hash_equals($sha, (string)($f['sha256Roh'] ?? ''))) return (string)$f['id'];
+    return null;
+}
 function qs_dateien_zahl(array $liste): int
 {
     $n = 0;

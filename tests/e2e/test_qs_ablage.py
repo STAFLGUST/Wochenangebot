@@ -24,6 +24,8 @@ import hashlib
 import io
 import json
 import os
+import shutil
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -63,8 +65,21 @@ def docx(text):
     return b.getvalue()
 
 
+def docx_w(text):   # mit Absatz und Textstück (wie Word), damit Platzhalter erkannt werden
+    b = io.BytesIO()
+    with zipfile.ZipFile(b, 'w') as z:
+        z.writestr('[Content_Types].xml', '<Types/>')
+        z.writestr('word/document.xml', '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'
+                   + text + '</w:t></w:r></w:p></w:body></w:document>')
+    return b.getvalue()
+
+
 XLS = b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1' + b'\0' * 504
 PNG = b'\x89PNG\r\n\x1a\n' + b'\0\0\0\rIHDR' + b'\0' * 20
+
+
+def aktiv_(liste):
+    return [f for f in liste or [] if not f.get('entfernt')]
 
 
 def blob_pfad(did):
@@ -377,6 +392,31 @@ st, r, _ = hochladen(Be, D1, V3, 'Danach.pdf', pdf('danach'))
 check('verworfene Version: Hochladen gesperrt (409)', st == 409, r)
 check('ZIP mit „alle“: verworfene Version nicht enthalten', not any('Entwurf3' in n for n in zip_lesen(roh(L, 'qs_ablage_export&alle=1')[2])[1]))
 
+# ── Sammel-Ablage: nurNeu legt denselben Inhalt an derselben Stelle nicht doppelt ab ──
+V2 = dok(D1)['versionen'][1]['id']
+
+
+def nur_neu(cli, dok_, ver, name, inhalt):
+    return cli.call('qs_datei_hochladen', {'dokument': dok_, 'version': ver, 'name': name, 'groesse': len(inhalt), 'sha256': hashlib.sha256(inhalt).hexdigest(),
+                                           'upload': '', 'teil': 0, 'daten': base64.b64encode(inhalt).decode(), 'nurNeu': True})
+
+
+vorher = len(dok(D1)['versionen'][1]['dateien'])
+ablauf = [f for f in dok(D1)['versionen'][1]['dateien'] if f['name'] == 'Ablauf.docx'][0]
+ABLAUF = roh(L, 'qs_datei&id=' + ablauf['id'])[2]   # genau die abgelegten Bytes (ZIP-Zeitstempel ändern sich je Aufruf)
+st, r = nur_neu(Q, D1, V2, 'Ablauf (Kopie).docx', ABLAUF)
+check('nurNeu: gleicher Inhalt → doppelt, vorhandene Datei, nichts abgelegt', st == 200 and r.get('doppelt') is True and r.get('datei') == ablauf['id']
+      and len(dok(D1)['versionen'][1]['dateien']) == vorher, r)
+st, r = nur_neu(Q, D1, V2, 'Neu.pdf', pdf('wirklich neu'))
+check('nurNeu: neuer Inhalt wird abgelegt', st == 200 and r.get('fertig') and not r.get('doppelt') and len(dok(D1)['versionen'][1]['dateien']) == vorher + 1, r)
+check('nurNeu: Rechte und Zustand werden trotzdem geprüft (Bearbeiter an gültiger Version 403)', nur_neu(Be, D1, V2, 'x.docx', ABLAUF)[0] == 403)
+roh_aushang = docx_w('Aushang {{Version}}')
+st, r = nur_neu(Q, D1, V2, 'Aushang.docx', roh_aushang)
+aus = [f for f in r['dokument']['versionen'][1]['dateien'] if f['id'] == r.get('datei')][0] if st == 200 else {}
+check('Nachtragen mit Platzhalter: ausgefüllt, Prüfsumme der Rohfassung gemerkt', aus.get('roh') and aus.get('sha256Roh') == hashlib.sha256(roh_aushang).hexdigest(), aus)
+st, r = nur_neu(Q, D1, V2, 'Aushang.docx', roh_aushang)
+check('nurNeu erkennt auch die Rohfassung einer ausgefüllten Datei', st == 200 and r.get('doppelt') is True, r)
+
 # ── Datenpaket, Speicherung, Protokoll ──
 paket = json.load(open(PAKET_DATEI, encoding='utf-8'))
 st, r = V.call('qs_import', {'paket': paket, 'vorschau': True})
@@ -503,7 +543,8 @@ with sync_playwright() as p:
         ctx, pg = anmelden(user, pw, '198.51.100.10' if user == 'lisa' else '198.51.100.11', breite, thema, 844 if breite < 500 else 900)
         oeffne_dok(pg, D2 if user == 'bernd' else D1)
         if user == 'lisa':
-            check(f'{breite}px {thema}: nur ansehen – Dateien ladbar, keine Ablagefelder, kein Entfernen', pg.locator('#qm-dk .qm-datei-name').count() > 0
+            check(f'{breite}px {thema}: nur ansehen – Dateien ladbar, keine Ablagefelder, kein Entfernen, keine Sammel-Ablage', pg.locator('#qm-dk .qm-datei-name').count() > 0
+                  and pg.is_hidden('#qm-d-sammel')
                   and pg.locator('#qm-dk .qm-drop').count() == 0 and pg.locator('#qm-dk [data-datei-weg]').count() == 0)
         else:
             check(f'{breite}px {thema}: Entwurf mit Ablagefeld und Entfernen', pg.locator('#qm-dk .qm-drop').count() == 1 and pg.locator('#qm-dk [data-datei-weg]').count() == 2)
@@ -515,6 +556,97 @@ with sync_playwright() as p:
             check(f'{breite}px {thema}: Export-Dialog ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
             pg.screenshot(path=os.path.join(SH, f'qs_ablage_export_{breite}_{thema}.png'))
         ctx.close()
+
+    # Sammel-Ablage: Ordner „QM-System“ und ZIP (Quinn, Freigaberecht)
+    tmp = tempfile.mkdtemp(prefix='qs-sammel-')
+    QMS = os.path.join(tmp, 'QM-System')
+    DATEIEN = {'1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/1.4-F01 Probenahmeprotokoll Scan.pdf': pdf('Scan'),
+               '1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/Ablauf Kopie.docx': ABLAUF,
+               '1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/_ältere Versionen/Version 1/Protokoll.pdf': klein,
+               '1.4 Qualitätssicherung/1.4-F02 Reinigungsplan/Reinigungsplan Anlage.pdf': pdf('Anlage'),
+               '1.4 Qualitätssicherung/1.4-F02 Reinigungsplan/Plan.pdf': pdf('Plan'),
+               '2.1 Einkauf - Wareneingang/Lieferantenzertifikate/Zertifikat C.pdf': pdf('Zertifikat C'),
+               '2.1 Einkauf - Wareneingang/Massenablage/Beleg 99.txt': b'Beleg 99\n',
+               'Sonstiges/Notiz zur Probenahme.txt': 'Notiz: Probenahme am Rind\n'.encode(),
+               'Sonstiges/setup.exe': b'MZ' + b'\0' * 50, 'Sonstiges/leer.pdf': b'', 'Dokumentenliste.csv': b'Nr;Titel\n', '.DS_Store': b'\0\0'}
+    for pfad_, inhalt in DATEIEN.items():
+        os.makedirs(os.path.dirname(os.path.join(QMS, pfad_)), exist_ok=True)
+        with open(os.path.join(QMS, pfad_), 'wb') as f_:
+            f_.write(inhalt)
+
+    def sa_status():
+        return pg.evaluate("Object.fromEntries([...document.querySelectorAll('#sa-liste tr[data-sa]')].map(t => [t.querySelector('.qm-name').textContent, t.querySelector('.qm-sa-status').textContent.trim()]))")
+
+    def sa_zahl(n):
+        return pg.evaluate("n => { const d = [...document.querySelectorAll('#sa-zahlen div')].find(x => x.querySelector('span').textContent === n); return d ? Number(d.querySelector('b').textContent.replace(/\\./g, '')) : -1; }", n)
+
+    ctx, pg = anmelden('quinn', 'Freigabe-Konto-56', '198.51.100.12')
+    check('Sammel-Ablage: Knopf mit Bearbeitungsrecht', pg.is_visible('#qm-d-sammel'))
+    pg.click('#qm-d-sammel'); pg.wait_for_selector('#dlg-sammel[open]')
+    pg.set_input_files('#sa-ordner', QMS)
+    pg.wait_for_selector('#sa-liste tr[data-sa]')
+    st_ = sa_status()
+    check('Ordner gelesen: alle Dateien mit Zuordnung', len(st_) == len(DATEIEN), st_)
+    check('Zuordnung über die Nr. im Ordnernamen: gültige Version bzw. Entwurf', st_.get('1.4-F01 Probenahmeprotokoll Scan.pdf') == 'wird abgelegt'
+          and st_.get('Reinigungsplan Anlage.pdf') == 'wird abgelegt' and 'gültige Version 2' in text(pg, '#sa-liste tr:has-text("Scan.pdf")')
+          and 'Entwurf' in text(pg, '#sa-liste tr:has-text("Reinigungsplan Anlage.pdf")'), st_)
+    check('Ordner-Dokument über den Ordnernamen, eingezogenes gesperrt', st_.get('Zertifikat C.pdf') == 'wird abgelegt' and 'Lieferantenzertifikate' in text(pg, '#sa-liste tr:has-text("Zertifikat C.pdf")')
+          and st_.get('Beleg 99.txt') == 'Dokument eingezogen', st_)
+    check('übersprungen: ältere Version, Export-Datei, Systemdatei, Dateiart, leer; gleicher Name und Größe schon abgelegt', st_.get('Protokoll.pdf', '').startswith('ältere Version')
+          and st_.get('Dokumentenliste.csv') == 'Datei eines Exports' and st_.get('.DS_Store') == 'Systemdatei' and st_.get('setup.exe') == 'Dateiart nicht erlaubt'
+          and st_.get('leer.pdf') == 'leer' and st_.get('Plan.pdf') == 'schon abgelegt' and st_.get('Notiz zur Probenahme.txt') == 'nicht zugeordnet', st_)
+    check('Zahlen: 12 Dateien, 4 abzulegen, 1 nicht zugeordnet', (sa_zahl('Dateien'), sa_zahl('abzulegen'), sa_zahl('nicht zugeordnet')) == (12, 4, 1))
+    w = pg.locator('#sa-liste tr:has-text("Notiz zur Probenahme.txt") .qm-sa-wahl')
+    w.fill('1.4-F01 · Probenahmeprotokoll (1.4)'); w.dispatch_event('change')
+    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('5 ')")
+    check('von Hand zugeordnet: 5 abzulegen', 'von Hand' in text(pg, '#sa-liste tr:has-text("Notiz zur Probenahme.txt")'), text(pg, '#sa-liste tr:has-text("Notiz zur Probenahme.txt")'))
+    pg.click('#sa-filter [data-sa-filter="uebersprungen"]')
+    check('Filter „Übersprungen“', pg.locator('#sa-liste tr[data-sa]').count() == 6, sa_status())
+    pg.click('#sa-filter [data-sa-filter=""]')
+    pg.screenshot(path=os.path.join(SH, 'qs_sammel_vorschau_1280.png'))
+    pg.click('#sa-los')
+    pg.wait_for_function("document.querySelector('#sa-meldung').textContent.includes('abgelegt')")
+    st_ = sa_status()
+    check('abgelegt: 4 neue, gleicher Inhalt unter anderem Namen „schon abgelegt“', text(pg, '#sa-meldung').startswith('4 Dateien abgelegt')
+          and [st_.get(n) for n in ('1.4-F01 Probenahmeprotokoll Scan.pdf', 'Reinigungsplan Anlage.pdf', 'Zertifikat C.pdf', 'Notiz zur Probenahme.txt', 'Ablauf Kopie.docx')]
+          == ['abgelegt'] * 4 + ['schon abgelegt'], (text(pg, '#sa-meldung'), st_))
+    n1 = [f['name'] for f in aktiv_(dok(D1)['versionen'][1]['dateien'])]
+    check('Server: Dateien an den richtigen Stellen', '1.4-F01 Probenahmeprotokoll Scan.pdf' in n1 and 'Notiz zur Probenahme.txt' in n1 and 'Ablauf Kopie.docx' not in n1
+          and 'Reinigungsplan Anlage.pdf' in [f['name'] for f in dok(D2)['versionen'][0]['dateien']] and 'Zertifikat C.pdf' in [f['name'] for f in dok(O1)['dateien']]
+          and not any(f['name'] == 'Beleg 99.txt' for f in dok(O2)['dateien']), n1)
+    pg.screenshot(path=os.path.join(SH, 'qs_sammel_fertig_1280.png'))
+    pg.eval_on_selector('#sa-ordner', 'e => { e.value = ""; }')
+    pg.set_input_files('#sa-ordner', QMS)
+    pg.wait_for_function("document.querySelector('#sa-los').textContent.startsWith('1 ')")
+    st_ = sa_status()
+    check('derselbe Ordner noch einmal: gleicher Name und Größe „schon abgelegt“, nur die umbenannte Kopie bliebe (der Server erkennt sie)',
+          sa_zahl('abzulegen') == 1 and st_.get('Zertifikat C.pdf') == 'schon abgelegt' and st_.get('Notiz zur Probenahme.txt') == 'nicht zugeordnet'
+          and st_.get('Ablauf Kopie.docx') == 'wird abgelegt', st_)
+    zp = os.path.join(tmp, 'QM-System.zip')
+    with zipfile.ZipFile(zp, 'w', zipfile.ZIP_DEFLATED) as z_:
+        z_.writestr('QM-System/1.4 Qualitätssicherung/1.4-F01 Probenahmeprotokoll/Prüfbericht Mai.pdf', pdf('Mai', 200000))
+        z_.writestr('QM-System/1.4 Qualitätssicherung/1.4-F02 Reinigungsplan/Plan.pdf', pdf('Plan'))
+    pg.set_input_files('#sa-zip', zp)
+    pg.wait_for_function("document.querySelectorAll('#sa-liste tr[data-sa]').length === 2")
+    st_ = sa_status()
+    check('ZIP gelesen (UTF-8-Namen): neue Datei bereit, vorhandene erkannt', st_ == {'Prüfbericht Mai.pdf': 'wird abgelegt', 'Plan.pdf': 'schon abgelegt'}, st_)
+    pg.click('#sa-los')
+    pg.wait_for_function("document.querySelector('#sa-meldung').textContent.includes('abgelegt')")
+    pm_ = [f for f in dok(D1)['versionen'][1]['dateien'] if f['name'] == 'Prüfbericht Mai.pdf']
+    check('ZIP: entpackt und abgelegt, Inhalt gleich', pm_ and roh(L, 'qs_datei&id=' + pm_[0]['id'])[2] == pdf('Mai', 200000), pm_)
+    pg.click('#dlg-sammel .qm-knopfreihe [data-sa-zu]'); pg.wait_for_selector('#dlg-sammel', state='hidden')
+    ctx.close()
+    ctx, pg = anmelden('bernd', 'Bearbeit-Konto-34', '198.51.100.11', 390, 'dark', 844)
+    pg.click('#qm-d-sammel'); pg.wait_for_selector('#dlg-sammel[open]')
+    pg.set_input_files('#sa-ordner', QMS)
+    pg.wait_for_selector('#sa-liste tr[data-sa]')
+    st_ = sa_status()
+    check('ohne Freigaberecht: gültige Version gesperrt, Entwurf möglich', st_.get('1.4-F01 Probenahmeprotokoll Scan.pdf', '').startswith('nur mit Freigaberecht')
+          and st_.get('Reinigungsplan Anlage.pdf') == 'schon abgelegt', st_)
+    check('390px dunkel: Sammel-Ablage ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.screenshot(path=os.path.join(SH, 'qs_sammel_390_dark.png'))
+    ctx.close()
+    shutil.rmtree(tmp, ignore_errors=True)
     br.close()
 check('keine JavaScript-Fehler', not fehler, fehler)
 

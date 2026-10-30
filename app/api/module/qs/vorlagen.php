@@ -280,7 +280,7 @@ function qs_lenkung_datei(array $d, array &$v, array $f, array $stamm, array $me
     if ($r['ersetzt'] === 0) return $f;
     $abl = ablage_ablegen('qs', $r['daten']);
     $erzeugt[] = $abl['id'];
-    $neu = array_merge($f, ['id' => $abl['id'], 'groesse' => $abl['groesse'], 'sha256' => $abl['sha256'], 'roh' => (string)$f['id'],
+    $neu = array_merge($f, ['id' => $abl['id'], 'groesse' => $abl['groesse'], 'sha256' => $abl['sha256'], 'roh' => (string)$f['id'], 'sha256Roh' => (string)($f['sha256'] ?? ''),
                             'ausgefuellt' => ['t' => now(), 'felder' => $r['ersetzt']]]);
     unset($neu['platzhalter']);
     return $neu;

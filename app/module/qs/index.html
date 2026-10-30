@@ -84,6 +84,7 @@
               <select class="qm-eingabe" id="qm-d-art" aria-label="Art"></select>
               <button class="btn sm" type="button" id="qm-d-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Dokumentenliste</button>
               <button class="btn sm" type="button" id="qm-d-zip"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Ablage (ZIP)</button>
+              <button class="btn sm" type="button" id="qm-d-sammel" hidden><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Sammel-Ablage</button>
               <button class="btn sm primary" type="button" id="qm-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Dokument anlegen</button>
             </div>
             <div class="qm-pillen" id="qm-d-zustand" role="group" aria-label="Zustand"></div>
@@ -366,6 +367,26 @@
     <p class="qm-hilfe" id="az-umfang"></p>
     <p class="qm-meldung" id="az-meldung" role="alert"></p>
     <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Herunterladen</button></div>
+  </form>
+</dialog>
+
+<dialog class="qm-dialog qm-dialog-gross" id="dlg-sammel" aria-labelledby="sa-titel">
+  <form id="sa-form" novalidate>
+    <div class="qm-dialogkopf"><div><span class="qm-sub">Dokumentenablage</span><h2 id="sa-titel">Sammel-Ablage</h2></div><button class="qm-dialog-schliessen" type="button" data-sa-zu aria-label="Schließen">×</button></div>
+    <p class="qm-hilfe">Den ganzen Ordner „QM-System“ (oder ein ZIP davon) hierher ziehen. Zugeordnet wird über die Dokumenten-Nr. im Datei- oder Ordnernamen (z. B. „1.4-F08 …“), Dateien in einem Ordner mit dem Titel eines Ordner-Dokuments diesem. Gelenkte Dokumente bekommen die Datei zur gültigen Version (nur mit Freigaberecht), sonst zum Entwurf. Dieselbe Datei wird nicht doppelt abgelegt – die Ablage lässt sich also gefahrlos wiederholen.</p>
+    <div class="qm-drop qm-sa-drop" id="sa-drop"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span><b>Ordner oder ZIP hierher ziehen</b><span>oder auswählen:</span></span>
+      <span class="qm-sa-knoepfe"><button class="btn sm" type="button" id="sa-ordner-knopf">Ordner wählen</button><button class="btn sm" type="button" id="sa-zip-knopf">ZIP wählen</button></span></div>
+    <input type="file" id="sa-ordner" webkitdirectory multiple class="sr-only" tabindex="-1" aria-hidden="true">
+    <input type="file" id="sa-zip" accept=".zip,application/zip" class="sr-only" tabindex="-1" aria-hidden="true">
+    <datalist id="sa-dokumente"></datalist>
+    <div id="sa-ergebnis" hidden>
+      <div class="qm-vorschau" id="sa-zahlen"></div>
+      <div class="qm-pillen" id="sa-filter" role="group" aria-label="Auswahl"></div>
+      <div class="qm-tabelle-wrap qm-sa-liste" id="sa-liste"></div>
+      <progress id="sa-fortschritt" class="qm-sa-fortschritt" hidden></progress>
+    </div>
+    <p class="qm-meldung" id="sa-meldung" role="status"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-sa-zu>Schließen</button><button class="btn" type="button" id="sa-stopp" hidden>Abbrechen</button><button class="btn primary" type="submit" id="sa-los" disabled>Dateien ablegen</button></div>
   </form>
 </dialog>
 
