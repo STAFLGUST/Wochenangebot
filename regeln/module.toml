@@ -216,11 +216,12 @@ reihenfolge = 50
 dashboard = true
 agent = "qs"
 abhaengigkeiten = ["plattform", "hr"]
-testgruppen = ["qs"]
+testgruppen = ["qs", "qs_ablage"]
 pfade = ["regeln/aktionen/qs.toml", "app/api/aktionen/qs.php", "app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py", "tests/fixtures/qs/**"]
 pfade_geplant = []
 hinweise = [
-  "Auftrag des Inhabers (30.10.2026): Bau des QM-Systems begonnen; löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis = Dokumentenlenkung, Managementsystem = QM-Handbuch, Prüfungen = Prüfplan) und die Maßnahmenpläne der Audits. Kachelname bleibt vorerst „Qualitätssicherung“. Dateiablage mit Export (Abschnitt 2) und Dokumente aus Vorlagen erzeugen (Abschnitt 3) folgen in eigenen PRs.",
+  "Auftrag des Inhabers (30.10.2026): Bau des QM-Systems begonnen; löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis = Dokumentenlenkung, Managementsystem = QM-Handbuch, Prüfungen = Prüfplan) und die Maßnahmenpläne der Audits. Kachelname bleibt vorerst „Qualitätssicherung“. Dokumentenablage mit ZIP-Export (Abschnitt 2) gebaut; Dokumente aus Vorlagen erzeugen (Abschnitt 3) folgt in eigenem PR.",
+  "Dokumentenablage (Abschnitt 2): Dateien je Version gelenkter Dokumente bzw. am Ordner/externen Dokument, gespeichert über die Dateiablage des Plattformkerns (lib/dateiablage.php, Bereich „qs“, data/dateien/qs/), Metadaten im eigenen Dokument qs-dokumente. Ablegen im Entwurf mit „qs.bearbeiten“ (zählt als Bearbeiter, 4-Augen-Prinzip), in der Prüfung nur ansehen, an freigegebenen Versionen nachtragen/entfernen nur mit „qs.freigeben“ und Grund; außerhalb von Entwürfen wird nichts gelöscht, nur als entfernt vermerkt. ZIP „QM-System/<Kapitel>/<Dokument>/…“ entsteht nur beim Herunterladen. Ein Datenpaket ersetzt die Dokumente nicht mehr, sobald Dateien abgelegt sind.",
   "Dokumentenlenkung nach Handbuch 1.1 (2.0.9–2.0.17): Version zählt mit jeder Freigabe um 1 hoch, Datum = Freigabedatum; Erstellung/Überarbeitung und Prüfung durch zwei verschiedene Personen (4-Augen-Prinzip, serverseitig), Freigabe nur mit „qs.freigeben“. Ältere Versionen bleiben einsehbar (ersetzt), nichts wird gelöscht. Überprüfung fällig nach 36 Monaten (Einstellung) seit Freigabe bzw. „ohne Änderung überprüft“.",
   "Prüfplan (Entscheidung Inhaber 30.10.2026): täglich heißt täglich – tägliche, wöchentliche und monatliche Prüfungen folgen dem Kalender, jede Periode ohne Nachweis zählt als versäumt; Prüfungen sind Mitarbeitern zugewiesen, „qs.nachweis“ erlaubt nur Nachweise der eigenen Prüfungen. Nachweise werden nie geändert oder gelöscht, nur storniert (mit Grund).",
   "Personen (Kürzel, Name, Funktion) sind mit Mitarbeitern der Plattform verknüpft – gelesen nur über users_load des Plattformkerns (Kennung, Name, Zugang), keine Daten anderer Module. Feiertage über hr_feiertag (Modul HR). Kürzel in Versionen, Abschnitten und Maßnahmen sind Schnappschüsse (GR-106).",
@@ -596,7 +597,7 @@ pfade = ["app/api/lib/nutzer.php", "app/api/lib/rechte.php", "app/api/lib/sicher
 
 [[koordination]]
 bereich = "Speicherschicht, Datenformate und Migrationen"
-pfade = ["app/api/storage.php", "deploy/datenbank.py", "deploy/datenbank-umschalten.sh", "regeln/datenverantwortung.toml"]
+pfade = ["app/api/storage.php", "app/api/lib/dateiablage.php", "deploy/datenbank.py", "deploy/datenbank-umschalten.sh", "regeln/datenverantwortung.toml"]
 
 [[koordination]]
 bereich = "Gemeinsamer API-Einstieg"

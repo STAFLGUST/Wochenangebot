@@ -27,6 +27,11 @@ declare(strict_types=1);
      qs-massnahmen  Maßnahmen mit Nummer je Jahr, IFS-Feldern, Status und Wirksamkeitsprüfung
    Gelesen (Eigentümer Plattform, über users_load): Mitarbeiter für die Verknüpfung mit Kürzeln und die Zuweisung von
    Prüfungen (nur Kennung, Name, Zugang). Feiertage über hr_feiertag() des Moduls HR.
+   Dokumentenablage (Dateien, lib/dateiablage.php, Bereich „qs“): gelenkte Dokumente tragen Dateien je Version
+   (versionen[].dateien), Ordner und externe Dokumente am Dokument (dateien). Im Entwurf legt ab und entfernt, wer bearbeiten
+   darf (er gilt damit als Bearbeiter – 4-Augen-Prinzip); in Prüfung und verworfen ist nichts änderbar; zu einer
+   freigegebenen oder ersetzten Version trägt nur „qs.freigeben“ Dateien nach (z. B. die bisherige Datei aus dem Ordner
+   „QM-System“). Außerhalb des Entwurfs wird nie gelöscht, nur „entfernt“ vermerkt (mit Grund; die Datei bleibt erhalten).
    Zuständig/Vertreter sind Kürzel (Schnappschuss, GR-106). Gespeicherte Felder, die diese Fassung nicht kennt, bleiben beim
    Speichern erhalten (GR-006). Rechte (GR-103): qs.sehen, qs.nachweis, qs.bearbeiten, qs.freigeben, qs.verwalten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -65,6 +70,7 @@ const QS_MAX_AENDERUNGEN = 200;
 const QS_MAX_VERLAUF = 100;
 const QS_MAX_VERWEISE = 20;
 const QS_START_NACHWEISE = 5000;   // qs_start liefert die neuesten Nachweise (Fälligkeiten rechnet der Server aus allen)
+const QS_MAX_DATEIEN = 50;         // aktive Dateien je Version bzw. je Ordner/externem Dokument
 
 /* ---------- Laden und Schreiben ---------- */
 function qs_stamm(): array
@@ -321,6 +327,8 @@ function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle): 
     $row['art'] = qs_wahl($b['art'] ?? ($alt['art'] ?? 'F'), array_keys(QS_ARTEN), 'Art');
     if ($alt !== null && ($alt['art'] ?? '') !== $row['art'] && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true) && !empty($alt['versionen']))
         throw new InvalidArgumentException('Ein Dokument mit Versionen kann nicht zu einem Ordner oder externen Dokument werden (und umgekehrt).');
+    if ($alt !== null && in_array($alt['art'] ?? '', QS_GELENKT, true) !== in_array($row['art'], QS_GELENKT, true) && qs_dateien_aktiv($alt['dateien'] ?? []))
+        throw new InvalidArgumentException('In der Ablage des Dokuments liegen Dateien – es kann nicht zu einem gelenkten Dokument werden.');
     $row['kapitel'] = qs_kapitel_pruefen($b['kapitel'] ?? '', $stamm);
     $row['nr'] = qs_text($b['nr'] ?? '', 40, 'Dokumenten-Nr.');
     if (strpos($row['nr'], "\n") !== false) throw new InvalidArgumentException('Dokumenten-Nr.: bitte ohne Zeilenumbruch.');
@@ -393,6 +401,86 @@ function qs_entwurf(array $me, string $aenderungen, string $grund): array
           'erstellt' => qs_wer($me), 'bearbeiter' => [(string)$me['id']], 'geprueft' => null, 'freigegeben' => null, 'kuerzel' => null, 'quelle' => 'hand', 'verlauf' => []];
     qs_verlauf($v, $me, 'Entwurf erstellt');
     return $v;
+}
+
+/* ---------- Dokumentenablage ---------- */
+function qs_dateien_aktiv($liste): array
+{
+    return array_values(array_filter(is_array($liste) ? $liste : [], function ($f) { return is_array($f) && empty($f['entfernt']); }));
+}
+/* Darf $me an dieser Stelle (Dokument, Version-ID oder '' für Ordner/externe Dokumente) Dateien ablegen bzw. entfernen?
+   Rückgabe: Index der Version oder null (Ablage am Dokument); sonst fail(). */
+function qs_ablage_stelle(array $d, string $ver, array $me, string $was): ?int
+{
+    if (!empty($d['eingezogen'])) fail('Das Dokument ist eingezogen – die Ablage ist geschlossen.', 409);
+    if (!in_array($d['art'] ?? '', QS_GELENKT, true)) {
+        if ($ver !== '') fail('Ordner und externe Dokumente haben keine Versionen.', 422);
+        if ($was === 'hochladen' && count(qs_dateien_aktiv($d['dateien'] ?? [])) >= QS_MAX_DATEIEN) fail('Zu viele Dateien (höchstens ' . QS_MAX_DATEIEN . ').', 422);
+        return null;
+    }
+    $vi = null;
+    foreach ((array)($d['versionen'] ?? []) as $i => $v) if (($v['id'] ?? '') === $ver && $ver !== '') $vi = $i;
+    if ($vi === null) fail('Version nicht gefunden.', 404);
+    $st = (string)$d['versionen'][$vi]['status'];
+    if (in_array($st, ['pruefung', 'geprueft'], true)) fail('Die Überarbeitung liegt zur Prüfung vor – Dateien lassen sich nur im Entwurf ändern (zurückgeben lassen).', 409);
+    if ($st === 'verworfen') fail('Die Version ist verworfen.', 409);
+    if (in_array($st, ['freigegeben', 'ersetzt'], true) && !may($me, 'qs.freigeben'))
+        fail('Dateien einer freigegebenen Version trägt nur nach oder entfernt, wer prüfen und freigeben darf.', 403);
+    if ($was === 'hochladen' && count(qs_dateien_aktiv($d['versionen'][$vi]['dateien'] ?? [])) >= QS_MAX_DATEIEN) fail('Zu viele Dateien (höchstens ' . QS_MAX_DATEIEN . ').', 422);
+    return $vi;
+}
+/* Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle */
+function qs_ablage_einstellungen(): array
+{
+    require_once __DIR__ . '/../../lib/dateiablage.php';
+    return ['arten' => array_keys(ABLAGE_ARTEN), 'max' => ABLAGE_DATEI_MAX, 'teil' => ABLAGE_TEIL_MAX, 'dateien' => QS_MAX_DATEIEN];
+}
+/* Datei in allen Dokumenten suchen: [Dokument-Index, Version-Index oder null, Datei-Index] oder null */
+function qs_datei_finden(array $liste, string $id): ?array
+{
+    if (!preg_match('/^[a-z0-9]{12,40}$/D', $id)) return null;
+    foreach ($liste as $i => $d) {
+        foreach ((array)($d['dateien'] ?? []) as $k => $f) if (($f['id'] ?? '') === $id) return [$i, null, $k];
+        foreach ((array)($d['versionen'] ?? []) as $j => $v) foreach ((array)($v['dateien'] ?? []) as $k => $f) if (($f['id'] ?? '') === $id) return [$i, $j, $k];
+    }
+    return null;
+}
+function qs_dateien_zahl(array $liste): int
+{
+    $n = 0;
+    foreach ($liste as $d) {
+        $n += count(qs_dateien_aktiv($d['dateien'] ?? []));
+        foreach ((array)($d['versionen'] ?? []) as $v) $n += count(qs_dateien_aktiv($v['dateien'] ?? []));
+    }
+    return $n;
+}
+/* Einträge für den ZIP-Export „QM-System/<Kapitel>/<Dokument>/<Datei>“: gültige Version (bzw. Dateien von Ordnern und
+   externen Dokumenten); mit $alle zusätzlich ältere Versionen und offene Entwürfe in Unterordnern. Eingezogene Dokumente
+   nur mit $alle (Ordner „_eingezogen“). Dazu die Dokumentenliste als CSV. */
+function qs_ablage_eintraege(array $dokumente, array $stamm, string $kapitel, bool $alle, string $heute): array
+{
+    $kt = []; foreach ($stamm['kapitel'] as $k) $kt[(string)$k['id']] = (string)$k['titel'];
+    $wurzel = 'QM-System';
+    $e = [];
+    $gewaehlt = array_values(array_filter($dokumente, function ($d) use ($kapitel) { return $kapitel === '' || (string)$d['kapitel'] === $kapitel; }));
+    usort($gewaehlt, function ($a, $b) { return qs_nat_cmp((string)$a['kapitel'], (string)$b['kapitel']) ?: strnatcasecmp((string)$a['nr'], (string)$b['nr']); });
+    foreach ($gewaehlt as $d) {
+        $eingezogen = !empty($d['eingezogen']);
+        if ($eingezogen && !$alle) continue;
+        $kap = ablage_zip_pfad(trim($d['kapitel'] . ' ' . ($kt[$d['kapitel']] ?? '')));
+        $ordner = $wurzel . '/' . ($eingezogen ? '_eingezogen/' : '') . $kap . '/' . ablage_zip_pfad(trim(($d['nr'] !== '' ? $d['nr'] . ' ' : '') . $d['titel']));
+        foreach (qs_dateien_aktiv($d['dateien'] ?? []) as $f) $e[] = ['pfad' => $ordner . '/' . ablage_zip_pfad((string)$f['name']), 'bereich' => 'qs', 'id' => (string)$f['id']];
+        foreach ((array)($d['versionen'] ?? []) as $v) {
+            $st = (string)($v['status'] ?? '');
+            if ($st === 'freigegeben') $unter = '';
+            elseif (!$alle || $st === 'verworfen') continue;
+            elseif ($st === 'ersetzt') $unter = '/_ältere Versionen/Version ' . ($v['nr'] ?? '?');
+            else $unter = '/_Entwurf';
+            foreach (qs_dateien_aktiv($v['dateien'] ?? []) as $f) $e[] = ['pfad' => $ordner . $unter . '/' . ablage_zip_pfad((string)$f['name']), 'bereich' => 'qs', 'id' => (string)$f['id']];
+        }
+    }
+    array_unshift($e, ['pfad' => $wurzel . '/Dokumentenliste.csv', 'inhalt' => qs_csv_dokumente($gewaehlt, $stamm, $heute)]);
+    return $e;
 }
 
 /* ---------- Handbuch ---------- */

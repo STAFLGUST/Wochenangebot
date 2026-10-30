@@ -59,7 +59,7 @@ Agent: `rewe` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `rewe`
 
 QM-System nach IFS Wholesale: gelenkte Dokumente mit Freigabe, QM-Handbuch, Prüfplan mit Nachweisen und Versäumnissen, Maßnahmen
 
-Agent: `qs` · hängt ab von `plattform`, `hr` · Testgruppen: `qs`
+Agent: `qs` · hängt ab von `plattform`, `hr` · Testgruppen: `qs`, `qs_ablage`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
