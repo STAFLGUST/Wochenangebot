@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /* Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/)
-   Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge, Abwesenheitskalender (nur „abwesend“);
+   Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet), Abwesenheitskalender (nur „abwesend“);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
                     hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
                     hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Export, Übernahme.
@@ -48,7 +48,8 @@ switch ($action) {
                      'offen' => $offen,
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
-                     'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis']]);
+                     'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis'],
+                     'antraege' => $einst['antraege']]);
         }
 
         /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
@@ -80,6 +81,8 @@ switch ($action) {
             $notiz = s($b['notiz'] ?? '', 300) ?? '';
             $res = with_lock('hr-abwesenheiten', function () use ($me, $von, $bis, $notiz, $b) {
                 $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
+                // ausgeschaltet in Verwaltung → Urlaub: der Server lehnt ab, auch wenn eine Seite den Antrag noch zeigt (GR-103)
+                if (!$einst['antraege']) fail('Urlaubsanträge werden derzeit nicht über die Plattform gestellt. Bitte an die Personalstelle wenden.', 409);
                 $ich = hr_ich($personal, $me);
                 if (!$ich) fail('Ihr Konto ist noch keinem Mitarbeiter zugeordnet. Bitte an die Personalstelle wenden.', 409);
                 if ($von < hr_heute()) fail('Urlaub kann nur für heute oder später beantragt werden. Vergangene Tage trägt die Personalstelle ein.', 422);
@@ -245,7 +248,7 @@ switch ($action) {
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
-            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => $einst['uebertragBis'],
+            respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => $einst['uebertragBis'], 'antraege' => $einst['antraege'],
                      'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
                      'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']]);
         }
@@ -370,6 +373,22 @@ switch ($action) {
             audit('hr', 'HR: Urlaubssperren und Ferien gespeichert (' . count($sperren) . ' Sperren, ' . count($ferien) . ' Ferienzeiträume)');
             if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');
             respond(['ok' => true, 'sperren' => $sperren, 'ferien' => $ferien, 'uebertragBis' => hr_uebertrag_bis(true)]);
+        }
+
+        /* Urlaubsanträge über die Plattform ein- oder ausschalten (Schalter in Verwaltung → Urlaub, sofort wirksam).
+           Ändert nur das Feld antraege in hr-einstellungen; Sperren, Ferien und Verfallstag bleiben. */
+        case 'hr_antraege_save': {
+            $me = require_perm('hr.verwalten', true);
+            $an = body()['an'] ?? null;
+            if (!is_bool($an)) fail('Bitte „an“ (ja/nein) angeben.', 422);
+            $vorher = with_lock('hr-einstellungen', function () use ($an) {
+                $d = store_read('hr-einstellungen') ?? [];
+                $alt = ($d['antraege'] ?? true) !== false;
+                if ($alt !== $an) store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'antraege' => $an]));
+                return $alt;
+            });
+            if ($vorher !== $an) audit('hr', 'HR: Urlaubsanträge über die Plattform ' . ($an ? 'eingeschaltet' : 'ausgeschaltet'));
+            respond(['ok' => true, 'antraege' => $an]);
         }
 
         /* Excel für den Steuerberater: ausgewählte Monate eines Jahres im Aufbau der Urlaubsplanung */

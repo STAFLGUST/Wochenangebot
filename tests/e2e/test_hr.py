@@ -6,7 +6,8 @@ Geprüft: Freigabe (produktiv seit 23.10.2026: jeder Mitarbeiter mit hr.antrag, 
 zuweisbares Recht, nie der eigene Antrag und nie eigene Abwesenheiten – auch nicht als Administrator; serverseitig – GR-103), Antrag → Genehmigung/Ablehnung/Zurückziehen, Grenzfälle (Vergangenheit,
 Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.03. und Verfall, 4-Tage-Woche,
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
-Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmigte Einträge), Übernahme der bisherigen
+Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmigte Einträge), Schalter „Urlaubsanträge über
+die Plattform“ (Verwaltung → Urlaub, Standard an; aus: Server lehnt Anträge ab, Formular ausgeblendet), Übernahme der bisherigen
 Excel-Planung über die Importzentrale (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx), Abwesenheiten aus der
 Zeiterfassung (Importvorlage, tests/fixtures/hr/Abwesenheitsbericht_Muster.xlsx: Personalnummer, Schreibweisen, vom Urlaub
 abgezogene Krankheit, Ersetzen, veralteter Stand) und die Oberflächen
@@ -618,6 +619,39 @@ check('Speichern ohne Verfallstag lässt ihn unverändert', st == 200 and r['ueb
 check('Änderung im Protokoll', 'Verfallstag Resturlaub auf 30.04. geändert' in json.dumps(A.call('log')[1], ensure_ascii=False))
 st, r = P.call('hr_einstellungen_save', {**einst, 'uebertragBis': '03-31'})
 check('Rückweg auf 31.03.', st == 200 and r['uebertragBis'] == '03-31' and konto_f()['verfaellt'] == 5, r)
+
+# ── Schalter „Urlaubsanträge über die Plattform“ (Verwaltung → Urlaub; Inhaber 30.10.2026, Standard an) ──
+F = Client('198.51.100.31'); assert F.call('login', {'username': 'fritz', 'password': 'Urlaub-Konto-4711'})[0] == 200
+JUN = montag(Y, 6, 2)
+check('Standard: Urlaubsanträge eingeschaltet (Start und Verwaltung)', F.call('hr_start')[1]['antraege'] is True and P.call('mitarbeiter_hr')[1]['antraege'] is True)
+st, r = F.call('hr_antrag', {'von': iso(JUN), 'bis': iso(JUN + dt.timedelta(days=1))})
+check('… Antrag möglich', st == 200, (st, r))
+OFFEN_F = r['eintrag']['id']
+check('Schalter: ohne Personalrecht 403, ohne Anmeldung 401', L.call('hr_antraege_save', {'an': False})[0] == 403 and E.call('hr_antraege_save', {'an': False})[0] == 403
+      and N.call('hr_antraege_save', {'an': False})[0] == 401)
+check('Schalter: nur ja/nein (422)', all(P.call('hr_antraege_save', b)[0] == 422 for b in ({}, {'an': 'nein'}, {'an': 0}, {'an': None})))
+einst_vorher = dokument('hr-einstellungen')
+st, r = P.call('hr_antraege_save', {'an': False})
+check('Personalstelle schaltet Urlaubsanträge aus', st == 200 and r['antraege'] is False, (st, r))
+check('… Start und Verwaltung melden „aus“', F.call('hr_start')[1]['antraege'] is False and P.call('mitarbeiter_hr')[1]['antraege'] is False)
+einst_nachher = dokument('hr-einstellungen')
+check('… Sperren, Ferien und Verfallstag bleiben unverändert (nur das Feld antraege, GR-006)',
+      {k: v_ for k, v_ in einst_nachher.items() if k not in ('rev', 'antraege')} == {k: v_ for k, v_ in einst_vorher.items() if k not in ('rev', 'antraege')}
+      and einst_nachher['antraege'] is False, (einst_vorher, einst_nachher))
+st, r = F.call('hr_antrag', {'von': iso(JUN + dt.timedelta(days=3)), 'bis': iso(JUN + dt.timedelta(days=3))})
+check('ausgeschaltet: neuer Antrag 409 mit Hinweis auf die Personalstelle (serverseitig, GR-103)', st == 409 and 'nicht über die Plattform' in r.get('error', ''), (st, r))
+check('… nichts gespeichert', not [e for e in dokument('hr-abwesenheiten')['eintraege'] if e['person'] == PF and e['von'] == iso(JUN + dt.timedelta(days=3))])
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'K', 'von': iso(JUN + dt.timedelta(days=7)), 'bis': iso(JUN + dt.timedelta(days=7))})
+check('… Personalstelle trägt weiter ein', st == 200, (st, r))
+check('… offener Antrag lässt sich weiter zurückziehen', F.call('hr_antrag_zurueckziehen', {'id': OFFEN_F})[0] == 200)
+check('… Sperren und Ferien speichern schaltet nicht wieder ein', P.call('hr_einstellungen_save', einst)[0] == 200 and F.call('hr_start')[1]['antraege'] is False)
+check('… nochmal „aus“: kein doppelter Protokolleintrag', P.call('hr_antraege_save', {'an': False})[0] == 200
+      and json.dumps(A.call('log')[1], ensure_ascii=False).count('Urlaubsanträge über die Plattform ausgeschaltet') == 1)
+st, r = P.call('hr_antraege_save', {'an': True})
+st2, r2 = F.call('hr_antrag', {'von': iso(JUN + dt.timedelta(days=3)), 'bis': iso(JUN + dt.timedelta(days=3))})
+check('wieder eingeschaltet: Antrag möglich, Protokoll', st == 200 and r['antraege'] is True and st2 == 200
+      and 'Urlaubsanträge über die Plattform eingeschaltet' in json.dumps(A.call('log')[1], ensure_ascii=False), (st2, r2))
+assert F.call('hr_antrag_zurueckziehen', {'id': r2['eintrag']['id']})[0] == 200   # keine offenen Anträge für die folgenden Prüfungen
 rev = P.call('mitarbeiter_hr')[1]['rev']
 hr(ids['fritz'], aktiv=False)
 
@@ -784,11 +818,29 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
     v_ = P.call('mitarbeiter_hr')[1]
     assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31'})[0] == 200
+    # Schalter „Urlaubsanträge über die Plattform“: sofort wirksam, ohne „Speichern“
+    check('Verwaltung → Urlaub: Schalter „Urlaubsanträge“ eingeschaltet', pg.is_checked('#hr-antraege') and pg.text_content('#hr-antraege-t') == 'Eingeschaltet')
+    pg.click('#hr-antraege'); pg.wait_for_function('document.querySelector("#hr-antraege-t").textContent === "Ausgeschaltet" && !document.querySelector("#hr-antraege").disabled')
+    check('Oberfläche: Urlaubsanträge per Schalter ausgeschaltet', P.call('mitarbeiter_hr')[1]['antraege'] is False and not pg.is_checked('#hr-antraege'))
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_antraege_aus_1280.png'), full_page=True)
     ctx.close()
+    # Mitarbeiterin sieht kein Antragsformular, sondern den Hinweis (Desktop und Handy)
+    for breite in (1280, 390):
+        ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite)
+        pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
+        check(f'{breite}px: Urlaubsanträge aus – Formular ausgeblendet, Hinweis sichtbar, „Meine Einträge“ bleibt',
+              pg.is_hidden('#antrag') and pg.is_visible('#antrag-aus') and 'Personalstelle' in pg.text_content('#antrag-aus')
+              and pg.is_hidden('#antrag-aus a') and pg.is_visible('#mein-liste')
+              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        pg.screenshot(path=os.path.join(SH, f'hr_mein_antraege_aus_{breite}.png'), full_page=True)
+        ctx.close()
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5', 390)
     pg.goto(B + '/admin/#urlaub'); pg.wait_for_selector('#hr-uebertrag-bis')
-    check('390px Verwaltung → Urlaub: Verfallstag ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    check('390px Verwaltung → Urlaub: Verfallstag und Schalter ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+          and pg.is_visible('#hr-antraege-t') and pg.text_content('#hr-antraege-t') == 'Ausgeschaltet')
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_390.png'), full_page=True)
+    pg.click('#hr-antraege'); pg.wait_for_function('document.querySelector("#hr-antraege-t").textContent === "Eingeschaltet" && !document.querySelector("#hr-antraege").disabled')
+    check('Oberfläche: Urlaubsanträge wieder eingeschaltet', P.call('mitarbeiter_hr')[1]['antraege'] is True and pg.is_checked('#hr-antraege'))
     ctx.close()
 
     # ── Verwaltung → Mitarbeiter: Eintrag ohne Mitarbeiter einzeln zuordnen (abweichender Name) ──
