@@ -63,7 +63,8 @@ function qs_werte_lenkung(array $d, array $v, array $stamm): array
 }
 
 /* ---------- ZIP lesen und schreiben (Office Open XML) ---------- */
-/* Einträge in Reihenfolge: name → [methode, crc, komp, roh, flags, daten (gepackt)] oder null, wenn kein lesbares ZIP */
+/* Einträge in Reihenfolge: name → [methode, crc, komp, roh, flags, pos (Beginn der gepackten Daten in $z)] oder null, wenn kein
+   lesbares ZIP. Die Daten selbst bleiben in $z (kein zweites Exemplar im Speicher). */
 function qs_zip_lesen(string $z): ?array
 {
     $n = strlen($z);
@@ -85,24 +86,25 @@ function qs_zip_lesen(string $z): ?array
         $l = $c['local'];
         if (substr($z, $l, 4) !== "PK\x03\x04") return null;
         $lh = unpack('vnamelen/vextralen', substr($z, $l + 26, 4));
-        $daten = substr($z, $l + 30 + $lh['namelen'] + $lh['extralen'], $c['komp']);
-        if (strlen($daten) !== $c['komp']) return null;
-        $aus[$name] = ['methode' => $c['methode'], 'crc' => $c['crc'], 'komp' => $c['komp'], 'roh' => $c['roh'], 'flags' => $c['flags'] & 0x0800, 'daten' => $daten];
+        $start = $l + 30 + $lh['namelen'] + $lh['extralen'];
+        if ($start + $c['komp'] > $n) return null;
+        $aus[$name] = ['methode' => $c['methode'], 'crc' => $c['crc'], 'komp' => $c['komp'], 'roh' => $c['roh'], 'flags' => $c['flags'] & 0x0800, 'pos' => $start];
     }
     return $aus;
 }
 /* Inhalt eines Eintrags entpacken (Grenze gegen ZIP-Bomben, Prüfsumme) oder null */
-function qs_zip_inhalt(array $e): ?string
+function qs_zip_inhalt(string $z, array $e): ?string
 {
     if ($e['roh'] > QS_ZIP_TEIL_MAX) return null;
-    if ($e['methode'] === 0) $t = $e['daten'];
+    $daten = substr($z, $e['pos'], $e['komp']);
+    if ($e['methode'] === 0) $t = $daten;
     elseif ($e['roh'] === 0) $t = '';
-    else { $t = @gzinflate($e['daten'], $e['roh']); if ($t === false) return null; }
+    else { $t = @gzinflate($daten, $e['roh']); if ($t === false) return null; }
     if (strlen($t) !== $e['roh'] || crc32($t) !== $e['crc']) return null;
     return $t;
 }
-/* ZIP schreiben: Einträge wie von qs_zip_lesen; mit 'neu' => Inhalt wird neu gepackt, sonst unverändert übernommen */
-function qs_zip_bauen(array $eintraege): string
+/* ZIP schreiben: Einträge wie von qs_zip_lesen (gepackte Daten aus $z); mit 'neu' => Inhalt neu gepackt, sonst unverändert übernommen */
+function qs_zip_bauen(array $eintraege, string $z): string
 {
     $t = getdate();
     $zeit = ($t['hours'] << 11) | ($t['minutes'] << 5) | intdiv($t['seconds'], 2);
@@ -114,7 +116,7 @@ function qs_zip_bauen(array $eintraege): string
             $roh = (string)$e['neu'];
             $gepackt = gzdeflate($roh, 6);
             $e = ['methode' => 8, 'crc' => crc32($roh), 'roh' => strlen($roh), 'daten' => $gepackt, 'komp' => strlen($gepackt), 'flags' => $e['flags'] ?? 0];
-        }
+        } else $e['daten'] = substr($z, $e['pos'], $e['komp']);
         $flags = (preg_match('/[^\x20-\x7e]/', $name) ? 0x0800 : 0) | ($e['flags'] ?? 0);
         $kopf = "PK\x03\x04" . pack('vvvvvVVVvv', 20, $flags, $e['methode'], $zeit, $datum, $e['crc'], $e['komp'], $e['roh'], strlen($name), 0) . $name;
         $verz .= "PK\x01\x02" . pack('vvvvvvVVVvvvvvVV', 20, 20, $flags, $e['methode'], $zeit, $datum, $e['crc'], $e['komp'], $e['roh'], strlen($name), 0, 0, 0, 0, 0, strlen($aus)) . $name;
@@ -210,7 +212,7 @@ function qs_office_fuellen(string $daten, string $art, array $werte, bool $alsDo
         $blatt = $typ === 'excel' && preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name);
         $typen = $alsDokument && $name === '[Content_Types].xml';
         if (!$word && !$strings && !$blatt && !$typen) continue;
-        $xml = qs_zip_inhalt($e);
+        $xml = qs_zip_inhalt($daten, $e);
         if ($xml === null) return null;
         $vorher = $n; $neu = $xml;
         if ($word) $neu = qs_xml_ersetzen($xml, 'w:p', 'w:t', $werte, $offen, $n);
@@ -220,7 +222,7 @@ function qs_office_fuellen(string $daten, string $art, array $werte, bool $alsDo
         if ($neu !== $xml) { $z[$name]['neu'] = $neu; $geaendert = true; }
         elseif ($n !== $vorher) $geaendert = true;
     }
-    return ['daten' => $geaendert ? qs_zip_bauen($z) : $daten, 'ersetzt' => $n, 'offen' => array_values(array_intersect(array_keys(QS_PLATZHALTER_TEXT), array_keys($offen)))];
+    return ['daten' => $geaendert ? qs_zip_bauen($z, $daten) : $daten, 'ersetzt' => $n, 'offen' => array_values(array_intersect(array_keys(QS_PLATZHALTER_TEXT), array_keys($offen)))];
 }
 /* Welche bekannten Platzhalter enthält die Datei? (für die Anzeige im Entwurf) – Liste der Felder oder null */
 function qs_office_platzhalter(string $daten, string $art): ?array
