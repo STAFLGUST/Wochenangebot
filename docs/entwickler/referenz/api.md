@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-203 Aktionen in 12 Modulen.
+218 Aktionen in 13 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -102,6 +102,26 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `crm_kunde_save` | `crm.intern` | schreibend | – | Recht crm.bearbeiten | `app/api/aktionen/crm.php` |
 | `crm_start` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |
 | `crm_verlauf` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |
+
+## REWE (`rewe`)
+
+| Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
+| --- | --- | --- | --- | --- | --- |
+| `rewe_abschluss` | `rewe.intern` | lesend | – | – | `app/api/aktionen/rewe.php` |
+| `rewe_antwort` | `rewe.intern` | schreibend | – | Recht rewe.bearbeiten | `app/api/aktionen/rewe.php` |
+| `rewe_dauer_uebernehmen` | `rewe.intern` | schreibend | – | Recht rewe.bearbeiten | `app/api/aktionen/rewe.php` |
+| `rewe_erfasst` | `rewe.intern` | schreibend | – | – | `app/api/aktionen/rewe.php` |
+| `rewe_export` | `rewe.intern` | schreibend | – | – | `app/api/aktionen/rewe.php` |
+| `rewe_import` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
+| `rewe_maerkte` | `rewe.intern` | lesend | – | Recht rewe.sehen | `app/api/aktionen/rewe.php` |
+| `rewe_markt` | `rewe.intern` | lesend | – | Recht rewe.sehen | `app/api/aktionen/rewe.php` |
+| `rewe_markt_save` | `rewe.intern` | schreibend | – | Recht rewe.bearbeiten | `app/api/aktionen/rewe.php` |
+| `rewe_notiz_save` | `rewe.intern` | schreibend | – | Recht rewe.bearbeiten | `app/api/aktionen/rewe.php` |
+| `rewe_stamm_save` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
+| `rewe_start` | `rewe.intern` | lesend | – | Recht rewe.sehen | `app/api/aktionen/rewe.php` |
+| `rewe_team_save` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
+| `rewe_woche` | `rewe.intern` | lesend | – | Recht rewe.sehen | `app/api/aktionen/rewe.php` |
+| `rewe_zuweisen` | `rewe.intern` | schreibend | – | Recht rewe.verwalten | `app/api/aktionen/rewe.php` |
 
 ## Einkauf (`einkauf`)
 

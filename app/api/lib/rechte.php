@@ -53,6 +53,12 @@ const PERMS = [
     'leergut.sehen'            => ['g' => 'Leergut', 'l' => 'Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
     'leergut.bearbeiten'       => ['g' => 'Leergut', 'l' => 'Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.sehen']],
     'leergut.verwalten'        => ['g' => 'Leergut', 'l' => 'Leergut verwalten: Partner und Lademittel mit Werten pflegen, Datenpaket übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.bearbeiten']],
+    // Modul REWE (30.10.2026): ohne Standardrollen – Administratoren vergeben die Rechte (Kundenkontakte und Mengen der Märkte)
+    'rewe.sehen'               => ['g' => 'REWE', 'l' => 'REWE: eigene Liste und Akten der eigenen Märkte ansehen (Wochenverlauf, Notizen)', 'k' => 'sehen', 'd' => [], 'r' => []],
+    'rewe.bearbeiten'          => ['g' => 'REWE', 'l' => 'REWE: eigene Märkte abfragen (Bestellungen der Woche), Notizen, Wiedervorlagen, Kaufbereitschaft, Dauerauftrag, Ansprechpartner', 'k' => 'machen', 'd' => [], 'r' => ['rewe.sehen']],
+    'rewe.alle'                => ['g' => 'REWE', 'l' => 'Alle REWE-Listen sehen (mit „bearbeiten“ auch für andere abfragen, z. B. Vertretung)', 'k' => 'sehen', 'd' => [], 'r' => ['rewe.sehen']],
+    'rewe.verwalten'           => ['g' => 'REWE', 'l' => 'REWE verwalten: Märkte anlegen, Zuweisung und Lieferweg ab KW, Lieferwege und Artikel, Excel-Listen übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['rewe.bearbeiten', 'rewe.alle']],
+    'rewe.exportieren'         => ['g' => 'REWE', 'l' => 'REWE-Wochenabschluss: Bestellungen aller Listen, Excel für WinAB, „in WinAB erfasst“', 'k' => 'machen', 'd' => [], 'r' => ['rewe.alle']],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */

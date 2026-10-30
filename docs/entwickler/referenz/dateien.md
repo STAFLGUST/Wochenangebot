@@ -96,6 +96,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `module.php` | plattform | Modulübersicht (Plattformkern) |
 | `passkey.php` | plattform | Aktionen: Passkeys (WebAuthn) – eigene Passkeys verwalten, Anmeldung mit Passkey Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `preisverlauf.php` | angebot | Aktionen: Preisverlauf Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
+| `rewe.php` | rewe | Aktionen: REWE · Vordisposition Dry Aged (Oberfläche rewe.intern, Daten und Regeln in app/api/module/rewe/rewe.php, Wochenabschluss und Excel in app/api/module/rewe/export.php) Rechte (GR-103): rewe.sehen – eigene … |
 | `schutz.php` | plattform | Schutzzentrale (Verwaltung → Schutz, nur Administratoren) |
 | `sicherheit.php` | sicherheit | Aktionen des Moduls Sicherheit (Oberfläche sicherheit.intern, sicherheit.dashboard-stafl.de; docs/plattform/modul-sicherheit.md) |
 | `verwaltung.php` | plattform | Aktionen: Sicherheit, Länder-/IP-Sperre, Sitzungen (Oberfläche Modul Sicherheit), Betriebszustand, Nutzer, Protokoll Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit … |
@@ -185,6 +186,13 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `marketing.php` | marketing | Marketing · Redaktionsplan |
+
+## `app/api/module/rewe/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `export.php` | rewe | REWE · Wochenabschluss und Excel für die Warenwirtschaft (Aktionen rewe_abschluss, rewe_export, rewe_erfasst). rw_abschluss: alle Bestellungen einer KW über alle Listen – Zeilen je Markt und Artikel, Summen je … |
+| `rewe.php` | rewe | REWE · Vordisposition Dry Aged |
 
 ## `app/api/module/verwaltung/`
 
@@ -328,6 +336,14 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `index.html` | marketing | Beitrag |
 | `marketing.css` | marketing | STAFL-Plattform · Marketing · Redaktionsplan – Gestaltung wie Dashboard, HR und CRM („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten, Kalender und Board. |
 | `marketing.js` | marketing | STAFL-Plattform · Marketing · Redaktionsplan Social-Media-Inhalte planen, produzieren, freigeben und veröffentlichen |
+
+## `app/module/rewe/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `index.html` | rewe | Meine Woche |
+| `rewe.css` | rewe | STAFL-Plattform · REWE – Gestaltung „Liquid Glass“ wie Leergut, Dashboard, Controlling, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
+| `rewe.js` | rewe | STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged |
 
 ## `app/module/sicherheit/`
 
@@ -548,6 +564,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `marketing.toml` | marketing | Aktionen des Moduls „marketing“ |
 | `mobile.toml` | mobile | Aktionen des Moduls „mobile“ |
 | `plattform.toml` | plattform | Aktionen des Moduls „plattform“ |
+| `rewe.toml` | rewe | Aktionen des Moduls „rewe“ |
 | `sicherheit.toml` | sicherheit | Aktionen des Moduls „sicherheit“ |
 | `verwaltung.toml` | verwaltung | Aktionen des Moduls „verwaltung“ |
 
@@ -651,6 +668,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
 | `test_restposten.py` | angebot | Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. |
 | `test_revert.py` | angebot | sauberer Ausgangspunkt: einmal veröffentlichen |
+| `test_rewe.py` | rewe | REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordisposition Dry Aged für REWE-Märkte. |
 | `test_rollen.py` | plattform | Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Modulzugang „<modul>.zugang“ je Rolle, mehrere Rollen je Mitarbeiter, Standardrollen unverändert, Durchsetzung auf dem Server (GR-103), … |
 | `test_rollen_host.py` | plattform | Modulzugang je Host: der Testserver meldet sich wie bestand.dashboard-stafl.de (WA_OBERFLAECHE=bestand.intern). |
 | `test_schutz.py` | plattform | Schutzzentrale (Verwaltung → Schutz) |

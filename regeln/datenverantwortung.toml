@@ -249,6 +249,33 @@ schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
 beschreibung = "Eigener Leergutbestand zum Stichtag (Positionen wie Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz"
 
+[[dokument]]
+name = "rewe-stamm"
+eigentuemer = "rewe"
+schutz = "intern"
+beschreibung = "REWE: Lieferwege (Zentrallager oder Direktbelieferung, Bestellschluss) und Artikel (Name, Einheit, WinAB-Artikelnummer)"
+
+[[dokument]]
+name = "rewe-maerkte"
+eigentuemer = "rewe"
+schutz = "vertraulich"
+beschreibung = "REWE-Märkte: Kd.-Nr. (WinAB), REWE-Marktnummer, Anschrift, Telefon, Ansprechpartner, Kaufbereitschaft, Dauerauftrag, Abfragetag, Hinweis; Zuständigkeit und Lieferweg mit „ab KW“-Historie"
+historie = "Zuständigkeit und Lieferweg werden nie überschrieben, sondern ab einer KW fortgeschrieben; Änderungen stehen mit Namen in rewe-verlauf"
+
+[[dokument]]
+name = "rewe-wochen/*"
+eigentuemer = "rewe"
+schutz = "vertraulich"
+beschreibung = "REWE-Wochenabfrage je ISO-Jahr: Antwort je Markt und KW (bestellt mit Mengen je Artikel, kein Bedarf, nicht erreicht, Pause), ohne Berechnung, Notiz, wer/wann, Herkunft; Wochenabschluss (exportiert, in WinAB erfasst)"
+historie = "Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schnappschuss (GR-106); Änderungen nach dem Export sind als Nachtrag gekennzeichnet"
+
+[[dokument]]
+name = "rewe-verlauf"
+eigentuemer = "rewe"
+schutz = "vertraulich"
+beschreibung = "REWE-Marktakte: Notizen, Telefonate, Besuche, Reklamationen, Ware ohne Berechnung, Wiedervorlagen (erledigt mit Namen) und Änderungen (Kaufbereitschaft, Dauerauftrag, Zuweisung, Lieferweg)"
+historie = "Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wird gelöscht"
+
 # ───────────── Verwaltung: zentrale Stammdaten ─────────────
 
 [[dokument]]
@@ -261,7 +288,7 @@ beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, V
 [[dokument]]
 name = "kunden"
 eigentuemer = "verwaltung"
-leser = ["angebot", "crm"]   # CRM: nur lesend über customers_load (E-1)
+leser = ["angebot", "crm", "rewe"]   # CRM und REWE: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.)
 schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
 schutz = "vertraulich"
 beschreibung = "Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003)"

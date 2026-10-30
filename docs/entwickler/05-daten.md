@@ -420,6 +420,37 @@ WinAB-Bericht (`leergut_winab_import`, nur mit `leergut.verwalten`, `vorschau: t
 Kunde, Belegart und Belegnr. nur im Zeitraum und für diese Kunden; geänderte Belege werden storniert und neu gebucht, fehlende storniert
 (Grund „WinAB-Abgleich vom …“). Der Bericht bleibt im Browser; gespeichert werden nur die Buchungen.
 
+### REWE (`module/rewe/rewe.php`, in Prüfung)
+
+Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Mengen sind Zuordnungen Artikel → ganze Stückzahl
+(`{"rb": 2, "fk": 1}`, 1 Stück = 1 Kolli). Alle Schreibvorgänge laufen unter der Sperre `rewe-maerkte`.
+
+- **`rewe-stamm`**: `{"rev": 2, "lieferwege": [{"id": "l…|direkt", "name": "…", "art": "lager|direkt", "bestellschluss": "Freitag früh der Vorwoche",
+  "aktiv": true}], "artikel": [{"id": "rb", "name": "Roastbeef Dry Aged", "einheit": "Stück", "nr": "<WinAB-Artikelnummer>", "aktiv": true}],
+  "team": {"u…": {"alle": true, "export": false}}}`. Ohne Dokument gelten Direktbelieferung und die Artikel Roastbeef, Filetkopf, Vac. Set.
+  Lieferwege und Artikel werden nie entfernt, nur deaktiviert. `team` ist die Zuweisung im Modul („alle Listen“, „Wochenabschluss“)
+  und wirkt zusätzlich zu den Rechten `rewe.alle` und `rewe.exportieren`.
+- **`rewe-maerkte`**: `{"rev": 5, "liste": [{"id": "m…", "rev": 3, "kdNr": "<WinAB-Kd.-Nr.>", "reweNr": "", "name": "…", "strasse": "", "plz": "",
+  "ort": "…", "region": "", "telefon": "", "kauf": "regelmaessig|gelegentlich|interessiert|kein_interesse|ruhend|ausgelistet",
+  "zustaendig": [{"ab": "2026-01", "nutzer": "u…|"}], "lieferweg": [{"ab": "2026-01", "id": "l…"}], "dauer": {"rhythmus": 0-4,
+  "mengen": {…}, "ab": "JJJJ-WW", "pauseBis": ""}, "abfragetag": "mo…fr|", "ansprechpartner": [{"name": "…", "rolle": "", "telefon": "",
+  "email": ""}], "hinweis": "", "erstellt": {…}, "geaendert": {…}}]}`. `zustaendig` und `lieferweg` sind „ab KW“-Historien (gilt der
+  letzte Eintrag mit `ab` ≤ KW). Steht die Kd.-Nr. im Kundenstamm der Verwaltung, kommen Name, Anschrift und Telefon von dort.
+- **`rewe-wochen/<Jahr>`** (ein Dokument je ISO-Jahr): `{"rev": 9, "maerkte": {"m…": {"45": {"s": "bestellt|kein|ne|pause", "m": {"rb": 2},
+  "ob": true?, "n": "<Notiz>"?, "lw": "l…", "zu": "u…", "zuName": "…", "q": "hand|dauer|excel", "r": 2, "t": "…", "von": "…", "vonId": "u…",
+  "nachtrag": true?}}}, "abschluss": {"45": {"exportiert": {"t", "von", "vonId", "zeilen", "stueck"}, "erfasst": {"t", "von", "vonId"}}}}`.
+  `lw`, `zu` und `zuName` sind der Schnappschuss beim Antworten (GR-106); `r` schützt vor gleichzeitigem Überschreiben (409);
+  `nachtrag` = nach dem Excel-Export geändert.
+- **`rewe-verlauf`**: `{"rev": 4, "liste": [{"id": "n…", "markt": "m…", "art": "notiz|telefonat|besuch|reklamation|ohne_berechnung|system",
+  "text": "…", "wv": "JJJJ-MM-TT|", "erledigt": {"t", "von"}|null, "q": "hand|datenpaket", "t": "…", "von": "…", "vonId": "u…"}]}` – `system`
+  schreibt nur der Server (Anlage, Kaufbereitschaft, Dauerauftrag, Zuweisung).
+
+Datenpaket (`rewe_import`, nur mit `rewe.verwalten`, `vorschau: true` schreibt nichts): `{"format": "stafl-rewe", "version": 1,
+"lieferwege": [{"id", "name", "art", "bestellschluss"?}], "artikel"?: […], "maerkte": [{"kdNr", "name", …, "zustaendig": [{"ab", "liste"}],
+"lieferweg": [{"ab", "id"}], "wochen": {"JJJJ-WW": {"s", "m", "n"}}, "notizen": [{"art", "text"}]}]}` plus `zuordnung` (Listenname →
+Nutzer-ID). Mit Fehlern wird nichts übernommen, in ein Modul mit Daten nur mit `ersetzen` (das Team bleibt). Echte Pakete liegen nie
+im Repository (GR-007); Beispiel: `tests/fixtures/rewe/datenpaket.json`.
+
 ## 5.4 Datenverantwortung (GR-101)
 
 Jedes Dokument hat **genau einen Eigentümer** (ein Modul). Eingetragen in `regeln/datenverantwortung.toml`:

@@ -181,23 +181,29 @@ hinweise = [
 [[modul]]
 id = "rewe"
 name = "REWE"
-beschreibung = "Eigenständiger Fachbereich REWE – Anforderungen werden separat definiert"
+beschreibung = "Vordisposition Dry Aged: Wochenabfrage der REWE-Märkte je Mitarbeiter, Marktakte mit Verlauf, Zuweisung und Excel für WinAB"
 icon = "store"
 reihenfolge = 40
 dashboard = true
 agent = "rewe"
-abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/rewe.toml", "app/api/module/rewe/**", "app/module/rewe/**", "tests/e2e/test_rewe*.py"]
-hinweise = ["Keine fachlichen Annahmen über REWE-Prozesse treffen, bis die Anforderungen vorliegen."]
+abhaengigkeiten = ["plattform", "verwaltung"]   # Mitarbeiter (users_load) und Kundenstamm (customers_load) der Verwaltung, nur lesend
+testgruppen = ["rewe"]
+pfade = ["regeln/aktionen/rewe.toml", "app/api/aktionen/rewe.php", "app/api/module/rewe/**", "app/module/rewe/**", "tests/e2e/test_rewe*.py", "tests/fixtures/rewe/**"]
+pfade_geplant = []
+hinweise = [
+  "Auftrag des Inhabers (30.10.2026): löst die Excel-Listen „Vordispo Rewe …“ ab. Jeder Mitarbeiter hat seine eigene Liste, die der Inhaber zuweist; Listen nach REWE-Zentrallagern und Direktbelieferung sortiert; je Markt Verlauf, Kaufbereitschaft und Notizen („fast wie ein CRM“); Excel der Verkäufe einer Woche für die Eingabe in der Warenwirtschaft.",
+  "Antworten des Inhabers (Notion, 30.10.2026): 1 Stück = 1 Kolli (ganzes Roastbeef Dry Aged); KW = Lieferwoche, Bestellschluss in der Regel Freitag früh der Vorwoche (je Lieferweg änderbar); Eingabe in WinAB von Hand, immer Einzelaufträge (eine Auftragsnummer je Markt im Excel); Filetkopf gehört ins Excel; Lagerwechsel eines Marktes mit „ab KW“ änderbar; Famila gehört nicht ins Modul; die Märkte sind WinAB-Kunden (Name und Anschrift aus dem Kundenstamm der Verwaltung über die Kd.-Nr.); Team-Zuweisung im Modul (alle Listen, Wochenabschluss); ruhende Märkte als eigene Liste; Ansprechpartner und Notizen bleiben im REWE-Modul, nicht im CRM sichtbar.",
+  "Zuständigkeit und Lieferweg tragen eine „ab KW“-Historie (Lagerwechsel, Vertretung); jede Antwort speichert Lieferweg und Zuständigkeit als Schnappschuss (GR-106). „Eigene Märkte“ prüft der Server je Markt und KW (GR-103), fremde Märkte ohne rewe.alle sind wie nicht vorhanden (404).",
+  "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel-Listen über ein Datenpaket (rewe_import) in der Oberfläche; die Listen werden dabei Mitarbeitern zugeordnet.",
+  "Noch nicht produktiv: eigene Adresse rewe.dashboard-stafl.de bleibt 503-Platzhalter (GR-105), Keycloak-Client und produktive Freigabe nur mit Freigabe des Inhabers. Testen über die Modulverwaltung (Testfreigabe mit eingetragenen Testern).",
+]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "REWE"
   art = "intern"
-  adresse = "https://rewe.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://rewe.dashboard-stafl.de/module/rewe/"
+  entwicklung = "in_pruefung"
   freigabe = "keine"
   sperrbar = true
 
