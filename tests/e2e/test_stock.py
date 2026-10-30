@@ -6,6 +6,8 @@ from playwright.sync_api import sync_playwright
 B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 from testdaten import de, preis, preise, artikel, bestand_kg
+from kunden_hilfe import Client
+from umgebung import storage_raw
 SC = FIX + '/bestand'
 XLS = SC + '/bestand.xls'
 res = []
@@ -178,11 +180,103 @@ with sync_playwright() as p:
     rr = v.evaluate("""async () => { const s = await (await fetch('../api/?action=status')).json();
       const r = await fetch('../api/?action=stock_import', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':s.csrf}, body: JSON.stringify({date:'2026-10-16', articles:[{code:'1',name:'x',kg:1,lots:[]}]})}); return r.status; }""")
     check('viewer cannot import stock (403)', rr == 403, rr)
+    # ---------- Bezeichnung aus den Artikelstammdaten, VK-Gruppen, Spaltenfilter ----------
+    A = Client('198.51.100.40'); A.call('login', {'username': 'admin', 'password': 'Sicheres-Passwort-1'})
+    check('VK-Gruppen gespeichert', A.call('vkgruppen_save', {'rev': A.call('vkgruppen')[1]['rev'], 'groups': [{'nr': '1100', 'name': 'Rind frisch (Test)'}, {'nr': '1200', 'name': 'Färse (Test)'}]})[0] == 200)
+    stamm = {'10000': ('Oberschale aus Stammdaten', '1100'), '10001': ('Oberschale JB aus Stammdaten', '1100'), '10002': ('Oberschale Färse aus Stammdaten', '1200')}
+    st_, r_ = A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [{'code': c, 'name': n, 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch', 'vkGruppe': g} for c, (n, g) in stamm.items()]})
+    check('Artikelstammdaten gespeichert', st_ == 200, r_)
+    roh = {x[0]: x for x in master}
+    sj = A.call('stock')[1]['stock']
+    s1 = next(x for x in sj['articles'] if x['code'] == '10000')
+    check('API: Bezeichnung und VK-Gruppe aus den Stammdaten, Name der Bestandsliste als nameImport', s1['name'] == 'Oberschale aus Stammdaten' and s1['nameImport'] == roh['10000'][1]
+          and s1['vk'] == '1100' and sj['vkgruppen'] == {'1100': 'Rind frisch (Test)', '1200': 'Färse (Test)'}, {k: s1.get(k) for k in ('name', 'nameImport', 'vk')})
+    check('API: ohne Stammdatensatz bleibt der Name der Bestandsliste', all(x['name'] == ' '.join(roh[x['code']][1].split()) and 'nameImport' not in x and 'vk' not in x for x in sj['articles'] if x['code'] in roh and x['code'] not in stamm))
+    check('gespeicherter Bestand unverändert (Name der Bestandsliste)', roh['10000'][1] in storage_raw('bestand') and 'aus Stammdaten' not in storage_raw('bestand'))
+    a.click('#vt-edit'); a.wait_for_selector('tr[data-id]'); a.click('#vt-stock'); a.wait_for_selector('.stab tr.srow')
+    zeile = lambda c: a.locator(f'.stab tr.srow:has(td.s-code:text-is("{c}"))')   # noqa: E731
+    check('Liste: Bezeichnung aus den Stammdaten, Name der Bestandsliste im Hinweis', zeile('10000').locator('td.s-name').inner_text() == 'Oberschale aus Stammdaten'
+          and roh['10000'][1] in zeile('10000').locator('td.s-name').get_attribute('title'))
+    a.fill('#st-q', 'aus Stammdaten'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 3")
+    a.fill('#st-q', roh['10002'][1]); a.wait_for_function("[...document.querySelectorAll('.stab tr.srow td.s-code')].some((t) => t.textContent === '10002')")
+    check('Suche findet auch den Namen der Bestandsliste', zeile('10002').locator('td.s-name').inner_text() == 'Oberschale Färse aus Stammdaten')
+    a.fill('#st-q', ''); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length >= 283")
+    gesamt = a.locator('.stab tr.srow').count()
+    check('jede Überschrift mit Trichter (10 Spalten)', a.locator('.stab thead [data-sfilter]').count() == 10)
+    # Text: Bezeichnung enthält
+    a.click('.stab th [data-sfilter=name]'); a.wait_for_selector('#st-pop:not([hidden]) input[data-ff=q]')
+    a.fill('#st-pop input[data-ff=q]', 'oberschale'); a.wait_for_function("document.querySelector('.stab th.s-name .st-fbtn.on')")
+    namen = a.locator('.stab tr.srow td.s-name').all_inner_texts()
+    check('Filter Bezeichnung: nur passende Zeilen, Trichter hervorgehoben, Leiste mit Filter', namen and all('oberschale' in n.lower() for n in namen) and len(namen) < gesamt
+          and 'Art. Bezeichnung enthält „oberschale“' in a.inner_text('.st-fleiste'), len(namen))
+    a.click('#st-pop [data-pop=zu]'); a.wait_for_selector('#st-pop', state='hidden')
+    # Zahlenbereich: Eingelagerter Bestand ab 300 kg, Summe = gezeigte Zeilen
+    a.click('.stab th [data-sfilter=kg]'); a.fill('#st-pop input[data-ff=min]', '300')
+    erwart = [x for x in master if 'oberschale' in x[1].lower() and x[2] >= 300 and x[0] not in stamm] + [x for x in master if x[0] in stamm and 'oberschale' in stamm[x[0]][0].lower() and x[2] >= 300]
+    a.wait_for_function(f"document.querySelectorAll('.stab tr.srow').length === {len(erwart)}")
+    check('Filter Zahlenbereich (UND mit Bezeichnung), Gesamtsumme der gefilterten Zeilen', a.inner_text('.stab tfoot .s-kg') == fmt(dsum(x[2] for x in erwart)) + ' kg', (a.inner_text('.stab tfoot .s-kg'), len(erwart)))
+    a.keyboard.press('Escape'); a.wait_for_selector('#st-pop', state='hidden')
+    # Sortieren aus dem Fenster
+    a.click('.stab th [data-sfilter=totalKg]'); a.click('#st-pop [data-pop=ab]'); a.wait_for_function("document.querySelector('.stab th.s-total-kg').getAttribute('aria-sort') === 'descending'")
+    a.click('#st-pop [data-pop=zu]')
+    check('Sortieren aus dem Filterfenster (absteigend)', a.get_attribute('.stab th.s-total-kg', 'aria-sort') == 'descending')
+    a.screenshot(path=SH + '/stock-filter.png')
+    a.click('.stab th [data-sfilter=mhd]'); a.wait_for_selector('#st-pop:not([hidden])')
+    a.emulate_media(color_scheme='dark'); a.screenshot(path=SH + '/stock-filter-dunkel.png'); a.emulate_media(color_scheme='light')
+    a.click('#st-pop [data-pop=zu]')
+    # Filter einzeln entfernen, dann MHD-Stufe und Zugänge
+    a.click('.st-fleiste [data-fweg=kg]'); a.wait_for_function("!document.querySelector('.stab th.s-kg .st-fbtn.on')")
+    a.click('.st-fleiste [data-fweg="*"]'); a.wait_for_function(f"document.querySelectorAll('.stab tr.srow').length === {gesamt}")
+    check('„Alle Filter entfernen“: alle Artikel, keine Leiste', a.locator('.st-fleiste').count() == 0)
+    a.click('.stab th [data-sfilter=mhd]'); a.check('#st-pop input[data-ff=stufe][value="ohne"]')
+    a.wait_for_function("document.querySelectorAll('.stab tr.srow').length > 0 && [...document.querySelectorAll('.stab tr.srow td.s-mhd')].every((t) => t.textContent === '—')")
+    ohne = a.locator('.stab tr.srow').count()
+    check('Filter MHD „ohne MHD“: nur Zeilen ohne MHD', ohne == len([x for x in master if not x[3]]) + a.evaluate("fetch('../api/?action=stock').then(r => r.json()).then(j => new Set(j.stock.incoming.map(z => z.code).filter(c => !j.stock.articles.some(x => x.code === c))).size)"), ohne)
+    a.click('#st-pop [data-pop=leeren]'); a.click('#st-pop [data-pop=zu]')
+    a.click('.stab th [data-sfilter=zugaenge]'); a.select_option('#st-pop select[data-ff=art]', 'mit')
+    a.wait_for_function("document.querySelectorAll('.stab tr.srow').length > 0 && [...document.querySelectorAll('.stab tr.srow td.s-incoming')].every((t) => t.querySelector('[data-incoming]'))")
+    check('Filter Zugänge „nur mit“: jede Zeile mit Zugängen', a.locator('.stab tr.srow').count() < gesamt)
+    a.click('#st-pop [data-pop=zu]')
+    with ctx.expect_page() as pp: a.click('[data-st=print]')
+    pr = pp.value; pr.wait_for_load_state()
+    check('Druck: gefilterte Auswahl, Filter in der Überschrift, ohne Trichter', 'Filter: Erwartete Zugänge: mit Zugängen' in pr.inner_text('h1') and pr.locator('tr.srow').count() == a.locator('.stab tr.srow').count()
+          and pr.locator('svg').count() == 0, pr.inner_text('h1'))
+    pr.close()
+    a.click('.st-fleiste [data-fweg="*"]'); a.wait_for_function(f"document.querySelectorAll('.stab tr.srow').length === {gesamt}")
+    # Fenster „VK-Gruppen“
+    a.click('[data-st=vk]'); a.wait_for_selector('#dlg-stock-vk[open] tbody[data-vk]')
+    gr = a.eval_on_selector_all('#dlg-stock-vk tbody[data-vk]', "els => els.map((e) => [e.dataset.vk, e.querySelector('.vk-auf').textContent, e.querySelectorAll('tr.vk-a').length])")
+    check('VK-Gruppen: 1100 (2 Artikel), 1200 (1), „Ohne VK-Gruppe“ zuletzt', [g[0] for g in gr] == ['1100', '1200', ''] and gr[0][2] == 2 and gr[1][2] == 1 and 'Rind frisch (Test)' in gr[0][1]
+          and 'Ohne VK-Gruppe' in gr[2][1] and gr[2][2] == gesamt - 3, gr)
+    kg1100 = a.inner_text('#dlg-stock-vk tbody[data-vk="1100"] tr.vk-h td.s-kg')
+    check('VK-Gruppe 1100: Summe des eingelagerten Bestands', kg1100 == fmt(dsum([roh['10000'][2], roh['10001'][2]])) + ' kg', kg1100)
+    check('Gesamtsumme im Fenster = Gesamtsumme der Liste', a.inner_text('#dlg-stock-vk tfoot td.s-kg') == a.inner_text('.stab tfoot .s-kg'))
+    check('Gruppen zugeklappt', a.locator('#dlg-stock-vk tr.vk-a:visible').count() == 0)
+    a.click('#dlg-stock-vk [data-vkauf="1100"]'); a.wait_for_function("document.querySelectorAll('#dlg-stock-vk tbody[data-vk=\"1100\"] tr.vk-a:not([hidden])').length === 2")
+    check('Aufklappen zeigt die Artikel mit Bezeichnung aus den Stammdaten', 'Oberschale aus Stammdaten' in a.inner_text('#dlg-stock-vk tbody[data-vk="1100"]')
+          and a.get_attribute('#dlg-stock-vk [data-vkauf="1100"]', 'aria-expanded') == 'true')
+    a.select_option('#vk-sort', 'totalKg'); a.wait_for_function("document.querySelector('#vk-sort').value === 'totalKg'")
+    a.screenshot(path=SH + '/stock-vkgruppen.png')
+    a.keyboard.press('Escape'); a.wait_for_function("!document.querySelector('#dlg-stock-vk').open")
+    a.click('.stab th [data-sfilter=name]'); a.fill('#st-pop input[data-ff=q]', 'aus Stammdaten'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 3")
+    a.keyboard.press('Escape'); a.click('[data-st=vk]'); a.wait_for_selector('#dlg-stock-vk[open] tbody[data-vk]')
+    check('VK-Gruppen: nur die gefilterte Auswahl (ohne „Ohne VK-Gruppe“)', a.eval_on_selector_all('#dlg-stock-vk tbody[data-vk]', 'els => els.map((e) => e.dataset.vk)') == ['1100', '1200'])
+    a.keyboard.press('Escape'); a.click('.st-fleiste [data-fweg="*"]')
     # Mobil
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()
+    m.on('pageerror', lambda e: errs.append('m: ' + str(e)))
     login(m, 'admin', 'Sicheres-Passwort-1'); m.click('#vt-stock'); m.wait_for_selector('.stab'); m.wait_for_timeout(200)
     m.screenshot(path=SH + '/stock-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
+    m.click('[data-st=filter]'); m.wait_for_selector('#dlg-stock-filter[open]')
+    m.fill('#dlg-stock-filter input[data-fk=name]', 'aus Stammdaten'); m.wait_for_function("document.querySelector('#sf-zahl').textContent === '3 Artikel'")
+    m.screenshot(path=SH + '/stock-filter-mobil.png')
+    m.click('#dlg-stock-filter .dlg-foot [data-close]'); m.wait_for_function("!document.querySelector('#dlg-stock-filter').open")
+    check('Handy: Filter über den Knopf „Filter“, Zahl am Knopf', m.locator('.stab tr.srow').count() == 3 and m.inner_text('#st-fzahl') == '1')
+    m.click('[data-st=vk]'); m.wait_for_selector('#dlg-stock-vk[open] tbody[data-vk]')
+    m.screenshot(path=SH + '/stock-vkgruppen-mobil.png')
+    check('Handy: VK-Gruppen ohne waagerechtes Scrollen', m.evaluate('document.documentElement.scrollWidth') <= 390
+          and m.evaluate("(() => { const d = document.querySelector('#dlg-stock-vk'); return d.scrollWidth <= d.clientWidth + 1; })()"))
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

@@ -460,6 +460,78 @@ dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margi
 .stab th .sort-btn:focus-visible { box-shadow: var(--focus); }
 .stab th .sort-btn.on { color: var(--accent); }
 .stab th .sort-ind { display: inline-block; width: 0; margin-left: 2px; font-size: 9px; vertical-align: 1px; overflow: visible; white-space: nowrap; }
+/* Bestand · Spaltenfilter: Trichter neben jeder Überschrift, Fenster zum Sortieren/Filtern, Leiste der aktiven Filter */
+/* Trichter in der oberen rechten Ecke der Überschrift (nimmt keine Spaltenbreite; Überschriften sind zweizeilig) */
+.stab thead th { position: relative; padding-top: 14px; }
+.stab th .st-th { display: inline; }
+.stab th .st-fbtn { all: unset; cursor: pointer; position: absolute; top: 2px; right: 1px; display: grid; place-items: center; width: 17px; height: 17px; border-radius: 5px; color: var(--muted); opacity: .7; }
+.stab thead th:hover .st-fbtn, .stab th .st-fbtn:focus-visible { opacity: 1; }
+.stab th .st-fbtn:hover { color: var(--text); background: var(--surface-3); }
+.stab th .st-fbtn:focus-visible { box-shadow: var(--focus); }
+.stab th .st-fbtn.on { color: #fff; background: var(--accent); opacity: 1; }
+.stab th .st-fbtn.on svg.i { fill: currentColor; }
+.stab th .st-fbtn svg.i.sm { width: 12px; height: 12px; }
+.st-pop { position: fixed; z-index: 60; width: 280px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; display: grid; gap: 10px; padding: 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px rgba(20, 12, 10, .18); font-size: 13px; }
+.st-pop[hidden] { display: none; }
+body.adm .st-pop { background: var(--glas-fenster, var(--surface)); border-color: var(--glas-rand, var(--line)); -webkit-backdrop-filter: var(--glas-filter, none); backdrop-filter: var(--glas-filter, none); }   /* wie Menüs: Glas, fast deckend */
+.st-pop-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.st-pop-sort { display: flex; gap: 6px; }
+.st-pop-sort .btn { flex: 1; justify-content: center; }
+.st-pop-sort .btn.on, .st-pop .btn.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+.st-pop-fuss { display: flex; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px solid var(--line); }
+.st-pop input[type="search"], .st-pop select, .st-falle input[type="search"], .st-falle select { width: 100%; height: 34px; }
+.st-pop-feld, .st-falle section { display: grid; gap: 8px; }
+.st-fzeile { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.st-fz { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.st-fz > span { color: var(--muted); font-size: 12px; }
+.st-fz input { width: 100%; min-width: 0; height: 32px; }
+.st-fz em { font-style: normal; color: var(--muted); font-size: 12px; }
+.st-fstufen { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-fstufen label { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; font-size: 12.5px; }
+.st-fstufen label input { margin: 0; }
+.st-falle { display: grid; gap: 16px; }
+.st-falle h3 { margin: 0; font-size: 13px; font-weight: 700; }
+#dlg-stock-filter .dlg-foot { align-items: center; }
+#dlg-stock-filter .dlg-foot .hint { margin-left: auto; }
+.st-fleiste { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; }
+.st-fleiste > span { color: var(--muted); }
+.st-fchip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.st-fchip:hover { background: var(--surface-2); }
+.st-filterknopf .st-fzahl:not(:empty) { margin-left: 4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; }
+/* Bestand · Fenster „VK-Gruppen“ */
+dialog.modal.st-vk { width: min(1100px, calc(100vw - 32px)); }
+.vk-werkzeug { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.vk-werkzeug .vk-sort { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.vk-werkzeug .vk-sort select { height: 32px; }
+.vk-scroll { overflow-x: auto; }
+.vktab { width: 100%; }
+.vktab th.vk-g-t { text-align: left; }
+.vktab tr.vk-h th, .vktab tr.vk-h td { font-weight: 700; border-top: 1px solid var(--line-strong, var(--line)); }
+.vktab tr.vk-h th, .vktab tr.vk-h td:not([class*="mhd-"]) { background: var(--surface-2); }
+.vktab tr.vk-h th { text-align: left; padding: 0; box-shadow: inset 3px 0 0 var(--accent); }
+.vktab .vk-auf { all: unset; cursor: pointer; display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 13px; }
+.vktab .vk-auf:focus-visible { box-shadow: var(--focus); }
+.vktab .vk-auf small { font-weight: 500; color: var(--muted); font-size: 12px; }
+.vktab .vk-pfeil { display: inline-block; width: 12px; transition: transform .15s; color: var(--muted); }
+.vktab tbody.offen .vk-pfeil { transform: rotate(90deg); }
+.vktab tr.vk-a td:first-child { padding-left: 30px; white-space: nowrap; }
+.vktab .vk-nr { display: inline-block; min-width: 54px; font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.vktab tfoot td:first-child { text-align: left; }
+@media (max-width: 700px) {
+  .vktab thead { display: table-header-group; }
+  .vktab tr.st-total { display: table-row; }
+  .vktab tr.st-total td { display: table-cell; padding: 6px 8px; border-top: 2px solid var(--text-2); }
+  .vktab tr.st-total td[data-l]::before { content: none; }
+  .vktab tr.vk-a td:first-child { white-space: normal; padding-left: 14px; }
+  .vktab th:nth-child(3), .vktab td.s-mhd, .vktab th:nth-child(5), .vktab td.s-registered { display: none; }
+  .vk-werkzeug .vk-sort { margin-left: 0; width: 100%; }
+  .vktab .vk-auf { display: grid; grid-template-columns: 12px 1fr; gap: 0 8px; }
+  .vktab .vk-auf small { grid-column: 2; }
+  .vktab tr.vk-h th { min-width: 140px; }
+}
+@media (max-width: 640px) { dialog.modal.st-vk { width: 100vw; max-width: 100vw; } }
+@media (max-width: 480px) { .vktab th:nth-child(4), .vktab td.s-mkg { display: none; } .vktab td, .vktab th { padding-left: 6px; padding-right: 6px; } }
 
 /* ---------- Angebot: Vorwoche, Bestand, Bestand ohne Preis ---------- */
 .etab .e-prev { width: 92px; text-align: right; white-space: nowrap; }

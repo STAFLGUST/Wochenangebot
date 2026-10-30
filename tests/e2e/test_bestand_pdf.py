@@ -186,6 +186,13 @@ check('ungültige Auswahl: 422', A.call('stock_pdf', {'rows': [{'c': '<script>'}
 st, body = pdf_roh(A, {'rows': [{'g': 'Leere Gruppe'}, {'c': '424242'}, {'g': 'Rindfleisch, frisch'}, {'c': '10913'}]})
 tx, _ = pdf_text(body)
 check('unbekannte Artikel und leere Gruppen werden ausgelassen', st == 200 and 'Leere Gruppe' not in tx and 'Testfilet, Färse, frisch' in tx and '424242' not in tx, tx[:12])
+# Bezeichnung aus den Artikelstammdaten (Bestandsliste bleibt gespeichert wie importiert), Filter in der Überschrift
+check('Stammdaten mit eigener Bezeichnung gespeichert', A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [
+      {'code': '10913', 'name': 'Filetköpfe aus Stammdaten', 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch'}]})[0] == 200)
+st, body = pdf_roh(A, {'rows': [{'g': 'Rindfleisch, frisch'}, {'c': '10913'}], 'q': 'Filet', 'filter': 'Gesamt verfügbar ab 10 kg'})
+tx, _ = pdf_text(body)
+check('PDF: Bezeichnung aus den Stammdaten, Filter in der Überschrift', st == 200 and 'Filetköpfe aus Stammdaten' in tx and 'Testfilet, Färse, frisch' not in tx
+      and any('Filter: Gesamt verfügbar ab 10 kg' in x for x in tx), [x for x in tx if 'Filter' in x or 'Stammdaten' in x][:4])
 G = Client('198.51.100.6'); G.call('login', {'username': 'admin', 'password': PW}); G.csrf = ''
 check('ohne CSRF-Schutzwert: abgewiesen', G.call('stock_pdf', {'rows': []})[0] == 403)
 check('keine JavaScript-Fehler', not errors, errors)

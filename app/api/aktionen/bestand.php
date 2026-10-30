@@ -8,7 +8,7 @@ switch ($action) {
         case 'stock': {
             $me = require_perm('bestand.sehen');
             header('Cache-Control: no-store');
-            $st = store_read('bestand');
+            $st = bestand_mit_stammdaten(store_read('bestand'));   // Bezeichnung und VK-Gruppe aus den Stammdaten
             respond(['ok' => true, 'stock' => may($me, 'bestand.einkaufspreise') ? $st : stock_ohne_ek($st),
                      'prices' => may($me, 'preisverlauf.sehen') ? stock_week_prices() : ['allowed' => false]]);
         }
@@ -30,9 +30,10 @@ switch ($action) {
             }
             $mhd = !empty($b['mhd']);
             $q = s($b['q'] ?? '', 60) ?? '';
-            $zusatz = $mhd ? ' – MHD bis ' . date('d.m.Y', strtotime('+14 days')) : ($q !== '' ? ' – Suche „' . $q . '“' : '');
+            $filter = s($b['filter'] ?? '', 160) ?? '';   // Spaltenfilter der Ansicht (nur Text für die Überschrift)
+            $zusatz = ($mhd ? ' – MHD bis ' . date('d.m.Y', strtotime('+14 days')) : ($q !== '' ? ' – Suche „' . $q . '“' : '')) . ($filter !== '' ? ' – Filter: ' . $filter : '');
             require_once __DIR__ . '/../lib/bestand-pdf.php';
-            $pdf = stock_pdf($st, $zeilen, $zusatz);
+            $pdf = stock_pdf(bestand_mit_stammdaten($st), $zeilen, $zusatz);
             header('Content-Type: application/pdf');
             header('Content-Disposition: attachment; filename="' . stock_pdf_name($st, $mhd ? 'MHD' : ($q !== '' ? 'Auswahl' : '')) . '"');
             header('Cache-Control: private, no-store');
@@ -49,7 +50,7 @@ switch ($action) {
             $st = store_read('bestand');
             if (!$st) fail('Es ist noch kein Bestand übernommen.', 404);
             require_once __DIR__ . '/../lib/bestand-mhd.php';
-            $l = mhd_liste($st, may($me, 'preisverlauf.sehen'));
+            $l = mhd_liste(bestand_mit_stammdaten($st), may($me, 'preisverlauf.sehen'));
             if (!$l['zeilen']) fail('Kein Artikel mit MHD in den nächsten 14 Tagen oder bereits abgelaufen – es gibt nichts zu senden.', 422);
             // Das Bild zeigt genau diese Liste: Abgleich mit den Artikelnummern aus dem Browser (sonst neu laden)
             $codes = $b['codes'] ?? null;
@@ -86,6 +87,7 @@ switch ($action) {
             $articles = clean_stock($b, count($incoming) > 0);
             // Speichern und Protokoll: bestand_speichern() im Importvertrag des Moduls (module/bestand/import.php, auch für die Importzentrale)
             $st = bestand_speichern(clean_date($b['date'] ?? null), s($b['source'] ?? '', 200) ?? '', $articles, $incoming, $me);
+            $st = bestand_mit_stammdaten($st);
             respond(['ok' => true, 'stock' => may($me, 'bestand.einkaufspreise') ? $st : stock_ohne_ek($st)]);
         }
 

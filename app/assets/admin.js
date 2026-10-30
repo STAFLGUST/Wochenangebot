@@ -3167,7 +3167,7 @@
       const key = S.normCode(a.code), price = prices.get(key), prevPrice = previous.get(key);
       a.incoming.sort((x, y) => (x.arrival || '9999').localeCompare(y.arrival || '9999'));
       return { ...a, idx, wg: S.warengruppe(a.code), offer: offers.get(key) || [], price, prevPrice, nextEta: naechsteEta(a.incoming),
-        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(a.code + ' ' + a.name) };
+        incomingKg: sum(a.incoming, 'kg'), totalKg: (a.kg ?? 0) + sum(a.incoming, 'kg'), cls: mhdClass(a.mhd), _hay: fold(`${a.code} ${a.name} ${a.nameImport || ''}`) };
     });
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -3191,7 +3191,8 @@
   let stockSort = store.get('stockSort', null);   // { key, dir } oder null = Standard
   const byCode = (a, b) => a.code.localeCompare(b.code, 'de', { numeric: true });
   const vkNum = (a) => (a.price && a.price.status === 'value' ? a.price.value : null);
-  const SORT_GET = { code: null, name: (a) => a.name, vk: vkNum, kg: (a) => a.kg, incomingKg: (a) => a.incomingKg, totalKg: (a) => a.totalKg, mhd: (a) => a.mhd, mhdKg: (a) => a.mhdKg };
+  const SORT_GET = { code: null, name: (a) => a.name, vk: vkNum, prev: (a) => (a.prevPrice && a.prevPrice.status === 'value' ? a.prevPrice.value : null), kg: (a) => a.kg,
+    incomingKg: (a) => a.incomingKg, totalKg: (a) => a.totalKg, mhd: (a) => a.mhd, mhdKg: (a) => a.mhdKg, zugaenge: (a) => a.incoming.length || null };
   function colCompare(a, b) {
     if (!stockSort) return 0;
     const { key, dir } = stockSort;
@@ -3201,7 +3202,7 @@
     return dir * (typeof va === 'string' ? va.localeCompare(vb, 'de', { numeric: true }) : va - vb);
   }
   function stockResult(q) {
-    const all = stockItems();
+    const all = stockItems().filter(filterPasst);
     if (isMhdQuery(q)) {
       const lim = isoToday(14);
       const list = all.filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => colCompare(a, b) || a.mhd.localeCompare(b.mhd) || byCode(a, b));
@@ -3216,14 +3217,219 @@
     for (const a of list) { const g = groups[groups.length - 1]; if (g && g.label === a.wg.label) g.items.push(a); else groups.push({ label: a.wg.label, items: [a] }); }
     return { flat: false, list, groups };
   }
-  const sortTh = (key, cls, label) => {
-    const on = stockSort && stockSort.key === key;
-    const dir = on ? (stockSort.dir > 0 ? 'ascending' : 'descending') : 'none';
-    return `<th class="${cls}" aria-sort="${dir}"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button></th>`;
+  /* ---------- Spaltenfilter (Trichter an jeder Überschrift; am Handy über den Knopf „Filter“) ----------
+     Text enthält · Zahlenbereich (kg) · Preis (mit/ohne, Bereich) · MHD (Stufen wie die Legende, Zeitraum) · Zugänge (mit/ohne).
+     Gelten zusätzlich zur Suche für Liste, Summen, Druck, PDF, CSV und das Fenster „VK-Gruppen“; nur für diese Sitzung. */
+  let stockFilter = {};
+  const ST_SP = [
+    { key: 'code', titel: 'Art.-Nr.', typ: 'text', ph: 'z. B. 106' },
+    { key: 'name', titel: 'Art. Bezeichnung', typ: 'text', ph: 'z. B. Filet Färse' },
+    { key: 'vk', titel: 'Aktueller Preis', typ: 'preis' },
+    { key: 'prev', titel: 'Preis Vorwoche', typ: 'preis' },
+    { key: 'kg', titel: 'Eingelagerter Bestand', typ: 'zahl' },
+    { key: 'mhd', titel: 'Kürz. MHD', typ: 'mhd' },
+    { key: 'mhdKg', titel: 'Kg kürz. MHD', typ: 'zahl' },
+    { key: 'incomingKg', titel: 'Erfasster Bestand', typ: 'zahl' },
+    { key: 'totalKg', titel: 'Gesamt verfügbar', typ: 'zahl' },
+    { key: 'zugaenge', titel: 'Erwartete Zugänge', typ: 'zugang' },
+  ];
+  const ST_SPK = Object.fromEntries(ST_SP.map((s) => [s.key, s]));
+  const MHD_STUFEN = [['mhd-past', 'abgelaufen'], ['mhd-0-4', 'heute – 4 Tage'], ['mhd-5-7', '5 – 7 Tage'], ['mhd-8-14', '8 – 14 Tage'], ['spaeter', 'später'], ['ohne', 'ohne MHD']];
+  const fWert = { code: (a) => a.code, name: (a) => `${a.name} ${a.nameImport || ''}`, vk: (a) => a.price, prev: (a) => a.prevPrice, kg: (a) => a.kg, mhd: (a) => a.mhd,
+    mhdKg: (a) => a.mhdKg, incomingKg: (a) => a.incomingKg, totalKg: (a) => a.totalKg, zugaenge: (a) => a.incoming.length };
+  const preisZahl = (p) => (p && p.status === 'value' && Number.isFinite(p.value) ? p.value : null);
+  const imBereich = (v, f) => (f.min == null || (v != null && v >= f.min)) && (f.max == null || (v != null && v <= f.max));
+  function filterPasst(a) {
+    for (const [k, f] of Object.entries(stockFilter)) {
+      const typ = ST_SPK[k].typ, v = fWert[k](a);
+      if (typ === 'text') { const h = fold(String(v)); if (!fold(f.q).split(/\s+/).filter(Boolean).every((t) => h.includes(t))) return false; }
+      if (typ === 'zahl' && !imBereich(v == null || !Number.isFinite(v) ? null : kg2(v), f)) return false;
+      if (typ === 'preis') { const n = preisZahl(v); if ((f.art === 'mit' && n == null) || (f.art === 'ohne' && n != null) || !imBereich(n, f)) return false; }
+      if (typ === 'mhd') {
+        if (f.stufen && f.stufen.length && !f.stufen.includes(!a.mhd ? 'ohne' : (a.cls || 'spaeter'))) return false;
+        if ((f.von && !(a.mhd && a.mhd >= f.von)) || (f.bis && !(a.mhd && a.mhd <= f.bis))) return false;
+      }
+      if (typ === 'zugang' && ((f.art === 'mit' && !v) || (f.art === 'ohne' && v))) return false;
+    }
+    return true;
+  }
+  /* Kurztext eines Filters (Leiste, Druck, PDF) */
+  function filterText(k) {
+    const f = stockFilter[k], s = ST_SPK[k];
+    if (!f) return '';
+    const zahl = (v) => fmtNum.format(v), bereich = (e) => (f.min != null && f.max != null ? `${zahl(f.min)} – ${zahl(f.max)}${e}` : f.min != null ? `ab ${zahl(f.min)}${e}` : `bis ${zahl(f.max)}${e}`);
+    if (s.typ === 'text') return `${s.titel} enthält „${f.q}“`;
+    if (s.typ === 'zahl') return `${s.titel} ${bereich(' kg')}`;
+    if (s.typ === 'preis') return `${s.titel}: ${[f.art === 'mit' ? 'mit Preis' : f.art === 'ohne' ? 'ohne Preis' : '', f.min != null || f.max != null ? bereich(' €') : ''].filter(Boolean).join(', ')}`;
+    if (s.typ === 'mhd') return `${s.titel}: ${[(f.stufen || []).map((x) => MHD_STUFEN.find((m) => m[0] === x)[1]).join(', '), f.von || f.bis ? `${f.von ? 'ab ' + mhdShort(f.von) : ''}${f.von && f.bis ? ' ' : ''}${f.bis ? 'bis ' + mhdShort(f.bis) : ''}` : ''].filter(Boolean).join('; ')}`;
+    return `${s.titel}: ${f.art === 'mit' ? 'mit Zugängen' : 'ohne Zugänge'}`;
+  }
+  const filterAlle = () => Object.keys(stockFilter).map(filterText).join(' · ');
+  /* Eingaben eines Filters → gespeicherter Filter (leer = kein Filter) */
+  function filterLesen(k, host) {
+    const s = ST_SPK[k], w = (f) => host.querySelector(`[data-fk="${k}"][data-ff="${f}"]`);
+    const zahl = (f) => { const v = w(f)?.value.trim().replace(',', '.'); return v === '' || v == null || !Number.isFinite(Number(v)) ? null : Number(v); };
+    let f = null;
+    if (s.typ === 'text') { const q = w('q').value.trim(); if (q) f = { q }; }
+    if (s.typ === 'zahl') { const min = zahl('min'), max = zahl('max'); if (min != null || max != null) f = { min, max }; }
+    if (s.typ === 'preis') { const art = w('art').value, min = zahl('min'), max = zahl('max'); if (art || min != null || max != null) f = { art, min, max }; }
+    if (s.typ === 'mhd') {
+      const stufen = [...host.querySelectorAll(`[data-fk="${k}"][data-ff="stufe"]:checked`)].map((x) => x.value), von = w('von').value, bis = w('bis').value;
+      if (stufen.length || von || bis) f = { stufen, von, bis };
+    }
+    if (s.typ === 'zugang') { const art = w('art').value; if (art) f = { art }; }
+    if (f) stockFilter[k] = f; else delete stockFilter[k];
+  }
+  /* Eingabefelder eines Filters (Fenster am Kopf und Filterdialog am Handy) */
+  function filterFelder(k) {
+    const s = ST_SPK[k], f = stockFilter[k] || {}, a = (ff) => `data-fk="${k}" data-ff="${ff}"`;
+    const num = (ff, ph, e) => `<label class="st-fz"><span>${ph}</span><input type="number" inputmode="decimal" step="any" min="0" ${a(ff)} value="${f[ff] ?? ''}" aria-label="${esc(s.titel)} ${ph}"><em>${e}</em></label>`;
+    const art = (opts) => `<select ${a('art')} aria-label="${esc(s.titel)}">${opts.map(([v, t]) => `<option value="${v}"${(f.art || '') === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`;
+    if (s.typ === 'text') return `<input type="search" ${a('q')} value="${esc(f.q || '')}" placeholder="enthält … (${esc(s.ph)})" aria-label="${esc(s.titel)} enthält" autocomplete="off">`;
+    if (s.typ === 'zahl') return `<div class="st-fzeile">${num('min', 'von', 'kg')}${num('max', 'bis', 'kg')}</div>`;
+    if (s.typ === 'preis') return `${art([['', 'alle Artikel'], ['mit', 'nur mit Preis'], ['ohne', 'nur ohne Preis']])}<div class="st-fzeile">${num('min', 'von', '€')}${num('max', 'bis', '€')}</div>`;
+    if (s.typ === 'mhd') return `<div class="st-fstufen">${MHD_STUFEN.map(([v, t]) => `<label class="${v.startsWith('mhd-') ? v : ''}"><input type="checkbox" ${a('stufe')} value="${v}"${(f.stufen || []).includes(v) ? ' checked' : ''}>${v === 'mhd-past' ? SKULL : ''}${t}</label>`).join('')}</div>
+      <div class="st-fzeile"><label class="st-fz"><span>ab</span><input type="date" ${a('von')} value="${f.von || ''}" aria-label="MHD ab"></label><label class="st-fz"><span>bis</span><input type="date" ${a('bis')} value="${f.bis || ''}" aria-label="MHD bis"></label></div>`;
+    return art([['', 'alle Artikel'], ['mit', 'nur mit erwarteten Zugängen'], ['ohne', 'nur ohne erwartete Zugänge']]);
+  }
+  /* Fenster am Spaltenkopf: Sortieren und Filtern */
+  const stPop = document.createElement('div');
+  stPop.className = 'st-pop'; stPop.id = 'st-pop'; stPop.hidden = true; stPop.setAttribute('role', 'dialog');
+  document.body.appendChild(stPop);
+  function stPopZeigen(k, btn) {
+    const s = ST_SPK[k], on = stockSort && stockSort.key === k;
+    stPop.dataset.key = k;
+    stPop.setAttribute('aria-label', `Sortieren und Filtern: ${s.titel}`);
+    stPop.innerHTML = `<div class="st-pop-kopf"><strong>${esc(s.titel)}</strong><button type="button" class="btn icon ghost sm" data-pop="zu" aria-label="Schließen">${icon('x', 'sm')}</button></div>
+      <div class="st-pop-sort"><button type="button" class="btn sm${on && stockSort.dir > 0 ? ' on' : ''}" data-pop="auf">▲ Aufsteigend</button><button type="button" class="btn sm${on && stockSort.dir < 0 ? ' on' : ''}" data-pop="ab">▼ Absteigend</button></div>
+      <div class="st-pop-feld">${filterFelder(k)}</div>
+      <div class="st-pop-fuss"><button type="button" class="btn sm ghost" data-pop="leeren"${stockFilter[k] ? '' : ' disabled'}>Filter entfernen</button><button type="button" class="btn sm primary" data-pop="zu">Fertig</button></div>`;
+    stPop.hidden = false;
+    stPopPlatz(btn);
+    stPop.querySelector('input, select')?.focus();
+  }
+  /* Lage am Trichter der Spalte; nach dem Neuzeichnen (kürzere Liste, Seite rollt nach) neu ausrichten statt schließen */
+  function stPopPlatz(btn) {
+    const b = btn || $(`#st-list [data-sfilter="${stPop.dataset.key}"]`);
+    if (!b) { stPopZu(false); return; }
+    const r = b.getBoundingClientRect(), w = stPop.offsetWidth;
+    if (r.bottom < 0 || r.top > innerHeight) { stPopZu(false); return; }
+    stPop.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - 8)) + 'px';
+    stPop.style.top = Math.max(8, Math.min(r.bottom + 6, innerHeight - Math.min(stPop.offsetHeight, innerHeight - 16) - 8)) + 'px';
+  }
+  function stPopZu(fokus) {
+    if (stPop.hidden) return;
+    const k = stPop.dataset.key;
+    stPop.hidden = true;
+    if (fokus) $(`#st-list [data-sfilter="${k}"]`)?.focus();
+  }
+  let stFTimer = null;
+  const filterNeu = (k, host, sofort) => {
+    clearTimeout(stFTimer);
+    stFTimer = setTimeout(() => {
+      filterLesen(k, host);
+      renderStockList();
+      if (!stPop.hidden) stPopPlatz();
+      const leer = stPop.querySelector('[data-pop="leeren"]'); if (leer && !stPop.hidden) leer.disabled = !stockFilter[k];
+    }, sofort ? 0 : 200);
   };
-  const stockHead = () => `<tr>${sortTh('code', 's-code', 'Art.-Nr.')}${sortTh('name', 's-name', 'Art. Bezeichnung')}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`)}<th>Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}</th>${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand')}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD')}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD')}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand')}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar')}<th>Erwartete Zugänge</th></tr>`;
+  stPop.addEventListener('input', (e) => { const el = e.target.closest('[data-fk]'); if (el) filterNeu(el.dataset.fk, stPop, el.type === 'checkbox' || el.tagName === 'SELECT'); });
+  stPop.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pop]');
+    if (!b) return;
+    const k = stPop.dataset.key, p = b.dataset.pop;
+    if (p === 'zu') { stPopZu(true); return; }
+    if (p === 'leeren') { delete stockFilter[k]; renderStockList(); stPopZeigen(k, $(`#st-list [data-sfilter="${k}"]`) || b); return; }
+    stockSort = { key: k, dir: p === 'auf' ? 1 : -1 };
+    store.set('stockSort', stockSort);
+    renderStockList();
+    stPopZeigen(k, $(`#st-list [data-sfilter="${k}"]`) || b);
+  });
+  stPop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); stPopZu(true); } if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); filterNeu(stPop.dataset.key, stPop, true); stPopZu(true); } });
+  document.addEventListener('mousedown', (e) => { if (!stPop.hidden && !stPop.contains(e.target) && !e.target.closest('[data-sfilter]')) stPopZu(false); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !stPop.hidden && !stPop.contains(e.target)) stPopZu(true); });
+  addEventListener('resize', () => { if (!stPop.hidden) stPopPlatz(); });
+  addEventListener('scroll', () => { if (!stPop.hidden) stPopPlatz(); }, { passive: true });
+  /* Alle Filter in einem Fenster (Handy: Spaltenköpfe sind ausgeblendet; am Desktop als Überblick) */
+  const dlgSF = $('#dlg-stock-filter');
+  function openStockFilter() {
+    $('#stock-filter-body').innerHTML = `<div class="dlg-head"><div><h2 id="sf-title">Filter</h2><p>Gilt für Liste, Summen, Druck, PDF, CSV und „VK-Gruppen“.</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body st-falle">${ST_SP.map((s) => `<section><h3>${esc(s.titel)}</h3>${filterFelder(s.key)}</section>`).join('')}</div>
+      <div class="dlg-foot"><button type="button" class="btn ghost" data-sf="leeren">Alle Filter entfernen</button><span id="sf-zahl" class="hint"></span><button type="button" class="btn primary" data-close>Fertig</button></div>`;
+    sfZahl();
+    dlgSF.showModal();
+  }
+  const sfZahl = () => { const z = $('#sf-zahl'); if (z) z.textContent = `${fmtInt.format(stockResult(stockQ).list.length)} Artikel`; };
+  dlgSF.addEventListener('input', (e) => { const el = e.target.closest('[data-fk]'); if (el) { clearTimeout(stFTimer); stFTimer = setTimeout(() => { filterLesen(el.dataset.fk, dlgSF); renderStockList(); sfZahl(); }, 200); } });
+  dlgSF.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { dlgSF.close(); return; }
+    if (e.target.closest('[data-sf="leeren"]')) { stockFilter = {}; renderStockList(); openStockFilter(); }
+  });
+  const filterLeiste = () => {
+    const ks = Object.keys(stockFilter);
+    return ks.length ? `<div class="st-fleiste" role="group" aria-label="Aktive Filter"><span>Filter:</span>${ks.map((k) => `<button type="button" class="st-fchip" data-fweg="${k}" title="Filter entfernen">${esc(filterText(k))}${icon('x', 'sm')}</button>`).join('')}<button type="button" class="link-btn" data-fweg="*">Alle Filter entfernen</button></div>` : '';
+  };
+
+  /* ---------- Fenster „VK-Gruppen“: aktuelle Auswahl (Suche und Filter) je VK-Gruppe der Artikelstammdaten ---------- */
+  const dlgSV = $('#dlg-stock-vk');
+  const vkOffen = new Set();
+  let vkSort = 'nr';
+  function openStockVk() {
+    const res = stockResult(stockQ), namen = stock.vkgruppen || {};
+    const gruppen = new Map();
+    for (const a of res.list) { const k = a.vk || ''; if (!gruppen.has(k)) gruppen.set(k, []); gruppen.get(k).push(a); }
+    const keys = [...gruppen.keys()].sort((x, y) => (x === '') - (y === '') || (vkSort === 'nr' ? x.localeCompare(y, 'de', { numeric: true })
+      : sum(gruppen.get(y), vkSort) - sum(gruppen.get(x), vkSort) || x.localeCompare(y, 'de', { numeric: true })));
+    const fruehestes = (l) => l.map((a) => a.mhd).filter(Boolean).sort()[0] || null;
+    const zellen = (l, art) => { const m = art ? art.mhd : fruehestes(l), c = mhdClass(m);
+      return `<td class="s-kg">${esc(kgText(art ? art.kg : sum(l, 'kg')))}</td><td class="s-mhd ${c}">${esc(mhdShort(m))}</td><td class="s-mkg ${c}">${esc(kgText(art ? art.mhdKg : sum(l, 'mhdKg')))}</td>`
+        + `<td class="s-registered">${esc(kgText(art ? art.incomingKg : sum(l, 'incomingKg')))}</td><td class="s-total-kg">${esc(kgText(art ? art.totalKg : sum(l, 'totalKg')))}</td>`; };
+    const ohneVk = gruppen.has('') && gruppen.size === 1;
+    const body = keys.map((k) => {
+      const l = gruppen.get(k), offen = vkOffen.has(k), titel = k ? `${k} · ${namen[k] || 'VK-Gruppe ' + k}` : 'Ohne VK-Gruppe';
+      return `<tbody class="vk-g${offen ? ' offen' : ''}" data-vk="${esc(k)}"><tr class="vk-h"><th scope="rowgroup"><button type="button" class="vk-auf" data-vkauf="${esc(k)}" aria-expanded="${offen}">`
+        + `<span class="vk-pfeil" aria-hidden="true">▸</span><span class="vk-titel">${esc(titel)}</span><small>${fmtInt.format(l.length)} Artikel</small></button></th>${zellen(l)}</tr>`
+        + l.map((a) => `<tr class="vk-a"${offen ? '' : ' hidden'}><td><span class="vk-nr">${esc(a.code)}</span>${esc(a.name)}</td>${zellen([a], a)}</tr>`).join('') + '</tbody>';
+    }).join('');
+    $('#stock-vk-body').innerHTML = `<div class="dlg-head"><div><h2 id="sv-title">Bestand nach VK-Gruppen</h2><p>Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'} · ${fmtInt.format(res.list.length)} Artikel in ${fmtInt.format(keys.length)} ${keys.length === 1 ? 'Gruppe' : 'Gruppen'}${stockQ || Object.keys(stockFilter).length ? ' · Auswahl aus Suche und Filter' : ''} · VK-Gruppe laut Artikelstammdaten</p></div><button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
+      <div class="dlg-body">
+        ${ohneVk ? '<p class="hint">Den Artikeln ist noch keine VK-Gruppe zugeordnet (Verwaltung → Artikelstammdaten).</p>' : ''}
+        <div class="vk-werkzeug"><button type="button" class="btn sm" data-vkalle="1">Alle aufklappen</button><button type="button" class="btn sm" data-vkalle="0">Alle zuklappen</button>
+          <label class="vk-sort">Reihenfolge <select id="vk-sort"><option value="nr"${vkSort === 'nr' ? ' selected' : ''}>VK-Gruppe (Nummer)</option><option value="totalKg"${vkSort === 'totalKg' ? ' selected' : ''}>Gesamt verfügbar</option><option value="kg"${vkSort === 'kg' ? ' selected' : ''}>Eingelagerter Bestand</option><option value="mhdKg"${vkSort === 'mhdKg' ? ' selected' : ''}>Kg kürz. MHD</option></select></label></div>
+        <div class="vk-scroll"><table class="stab vktab"><thead><tr><th class="vk-g-t">VK-Gruppe / Artikel</th><th>Eingelagerter<br>Bestand</th><th>Kürz.<br>MHD</th><th>Kg kürz.<br>MHD</th><th>Erfasster<br>Bestand</th><th>Gesamt<br>verfügbar</th></tr></thead>
+        ${body}<tfoot><tr class="st-total"><td>Gesamtsumme</td>${zellen(res.list).replace(/<td class="s-mhd[^"]*">[^<]*<\/td>/, '<td class="s-mhd"></td>')}</tr></tfoot></table></div>
+      </div>
+      <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`;
+    if (!dlgSV.open) dlgSV.showModal();
+  }
+  dlgSV.addEventListener('click', (e) => {
+    if (e.target.closest('[data-close]')) { dlgSV.close(); return; }
+    const auf = e.target.closest('[data-vkauf]');
+    if (auf) {
+      const k = auf.dataset.vkauf, tb = auf.closest('tbody'), offen = !vkOffen.has(k);
+      if (offen) vkOffen.add(k); else vkOffen.delete(k);
+      tb.classList.toggle('offen', offen); auf.setAttribute('aria-expanded', String(offen));
+      for (const tr of tb.querySelectorAll('tr.vk-a')) tr.hidden = !offen;
+      return;
+    }
+    const alle = e.target.closest('[data-vkalle]');
+    if (alle) {
+      vkOffen.clear();
+      if (alle.dataset.vkalle === '1') for (const tb of dlgSV.querySelectorAll('tbody[data-vk]')) vkOffen.add(tb.dataset.vk);
+      openStockVk();
+    }
+  });
+  dlgSV.addEventListener('change', (e) => { if (e.target.id === 'vk-sort') { vkSort = e.target.value; openStockVk(); } });
+  const sortTh = (key, cls, label, print) => {
+    const on = stockSort && stockSort.key === key, f = stockFilter[key];
+    const dir = on ? (stockSort.dir > 0 ? 'ascending' : 'descending') : 'none';
+    if (print) return `<th class="${cls}">${label}</th>`;
+    return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${dir}"><span class="st-th"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button>`
+      + `<button type="button" class="st-fbtn${f ? ' on' : ''}" data-sfilter="${key}" aria-haspopup="dialog" aria-label="Sortieren und Filtern: ${esc(ST_SPK[key].titel)}${f ? ' (Filter aktiv)' : ''}" title="${f ? esc(filterText(key)) : 'Sortieren und Filtern'}">${icon('filter', 'sm')}</button></span></th>`;
+  };
+  const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete Zugänge', print)}</tr>`;
   const stockRow = (a, print = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
-      <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}">${esc(a.name)}</td>
+      <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}</td>
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
       <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
@@ -3236,7 +3442,7 @@
     let body;
     if (res.flat) body = `<tbody>${rows(res.list)}</tbody>`;
     else body = res.groups.map((g, i) => `<tbody class="wg">${i ? '<tr class="wg-gap" aria-hidden="true"><td colspan="10"></td></tr>' : ''}<tr class="wg-h"><td colspan="10">${esc(g.label)}</td></tr>${rows(g.items)}${totalRow('Summe ' + g.label, g.items, 'wg-sum')}</tbody>`).join('');
-    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead()}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
+    return `<table class="stab${res.flat ? ' flat' : ''}"><thead>${stockHead(print)}</thead>${body}<tfoot>${totalRow('Gesamtsumme', res.list, 'st-total')}</tfoot></table>`;
   }
   const legendHTML = () => `<div class="mhd-legend" aria-label="MHD-Kennzeichnung"><span class="mhd-past">${SKULL} abgelaufen</span><span class="mhd-0-4">heute – 4 Tage</span><span class="mhd-5-7">5 – 7 Tage</span><span class="mhd-8-14">8 – 14 Tage</span></div>`;
 
@@ -3259,6 +3465,8 @@
         <div class="search">${icon('search')}<input id="st-q" type="search" autocomplete="off" placeholder="Nummer, Bezeichnung … oder „MHD“" aria-label="Bestand durchsuchen" value="${esc(stockQ)}"></div>
         <span class="ed-hint" id="st-count"></span>
         <span class="st-actions">
+          <button type="button" class="btn" data-st="vk" title="Aktuelle Auswahl je VK-Gruppe der Artikelstammdaten (mit Summen)" aria-haspopup="dialog">${icon('list')}VK-Gruppen</button>
+          <button type="button" class="btn st-filterknopf" data-st="filter" aria-haspopup="dialog">${icon('filter')}Filter<span class="st-fzahl" id="st-fzahl"></span></button>
           ${may('bestand.mhd_senden') ? `<button type="button" class="btn primary" data-st="mhdmail" title="MHD-Liste (Artikel mit MHD bis ${esc(dmy(isoToday(14)))}) per E-Mail an den Verkauf – als Bild und Excel-Datei">${icon('mail')}MHD an Verkauf</button>` : ''}
           <button type="button" class="btn" data-st="print">${icon('print')}Drucken</button>
           <button type="button" class="btn" data-st="pdf" title="PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge">${icon('file')}PDF</button>
@@ -3273,17 +3481,22 @@
     const host = $('#st-list');
     if (!host || !stock) return;
     const res = stockResult(stockQ);
-    const mq = isMhdQuery(stockQ);
+    const mq = isMhdQuery(stockQ), nf = Object.keys(stockFilter).length;
     $('#st-count').innerHTML = mq
-      ? `<strong>${fmtInt.format(res.list.length)}</strong> Artikel mit MHD bis ${esc(dmy(isoToday(14)))} (früheste zuerst)`
-      : `<strong>${fmtInt.format(res.list.length)}</strong> von ${fmtInt.format(stockItems().length)} Artikeln${stockQ ? '' : ' · Tipp: „MHD“ eingeben'}`;
-    host.innerHTML = res.list.length ? `<div class="gcard st-card">${stockTableHTML(res)}</div>`
-      : `<div class="ed-empty"><h3>Keine Treffer</h3><p>${mq ? 'Kein Artikel mit MHD in den nächsten 14 Tagen oder bereits abgelaufen.' : 'Kein Artikel, dessen Nummer oder Bezeichnung zum Suchbegriff passt.'}</p></div>`;
+      ? `<strong>${fmtInt.format(res.list.length)}</strong> Artikel mit MHD bis ${esc(dmy(isoToday(14)))} (früheste zuerst)${nf ? ' · gefiltert' : ''}`
+      : `<strong>${fmtInt.format(res.list.length)}</strong> von ${fmtInt.format(stockItems().length)} Artikeln${nf ? ' · gefiltert' : stockQ ? '' : ' · Tipp: „MHD“ eingeben'}`;
+    const fz = $('#st-fzahl'); if (fz) fz.textContent = nf ? String(nf) : '';
+    host.innerHTML = filterLeiste() + (res.list.length ? `<div class="gcard st-card">${stockTableHTML(res)}</div>`
+      : `<div class="ed-empty"><h3>Keine Treffer</h3><p>${nf ? 'Kein Artikel passt zu Suche und Filtern.' : mq ? 'Kein Artikel mit MHD in den nächsten 14 Tagen oder bereits abgelaufen.' : 'Kein Artikel, dessen Nummer oder Bezeichnung zum Suchbegriff passt.'}</p></div>`);
   }
   $('#view-stock').addEventListener('input', (e) => {
     if (e.target.id === 'st-q') { clearTimeout(qTimer); qTimer = setTimeout(() => { stockQ = e.target.value.trim(); renderStockList(); }, 120); }
   });
   $('#view-stock').addEventListener('click', (e) => {
+    const fb = e.target.closest('[data-sfilter]');
+    if (fb) { if (!stPop.hidden && stPop.dataset.key === fb.dataset.sfilter) stPopZu(false); else stPopZeigen(fb.dataset.sfilter, fb); return; }
+    const weg = e.target.closest('[data-fweg]');
+    if (weg) { if (weg.dataset.fweg === '*') stockFilter = {}; else delete stockFilter[weg.dataset.fweg]; stPopZu(false); renderStockList(); $('#st-q')?.focus(); return; }
     const sb = e.target.closest('[data-ssort]');
     if (sb) {
       const key = sb.dataset.ssort;
@@ -3302,6 +3515,8 @@
       if (a === 'import') { if (!roStock) $('#stock-file-input').click(); }
       if (a === 'print') printStock();
       if (a === 'mhdmail') mhdAnVerkauf(b);
+      if (a === 'vk') openStockVk();
+      if (a === 'filter') openStockFilter();
       if (a === 'pdf') stockPDF(b);
       if (a === 'csv') stockCSV();
       return;
@@ -3466,7 +3681,7 @@
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const el = document.createElement('a');
     el.href = URL.createObjectURL(blob);
-    el.download = `Bestand_${stock.date || isoToday()}${isMhdQuery(stockQ) ? '_MHD' : stockQ ? '_Auswahl' : ''}.csv`;
+    el.download = `Bestand_${stock.date || isoToday()}${isMhdQuery(stockQ) ? '_MHD' : stockQ || Object.keys(stockFilter).length ? '_Auswahl' : ''}.csv`;
     document.body.appendChild(el); el.click(); el.remove();
     setTimeout(() => URL.revokeObjectURL(el.href), 2000);
   }
@@ -3481,7 +3696,7 @@
     if (btn) btn.disabled = true;
     try {
       const r = await fetch(API + '?action=stock_pdf', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf || '' }, body: JSON.stringify({ rows, q: isMhdQuery(stockQ) ? '' : stockQ, mhd: isMhdQuery(stockQ) }) });
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf || '' }, body: JSON.stringify({ rows, q: isMhdQuery(stockQ) ? '' : stockQ, mhd: isMhdQuery(stockQ), filter: filterAlle().slice(0, 160) }) });
       if (r.status === 401) { showAuth('expired'); return; }
       if (!r.ok || !(r.headers.get('Content-Type') || '').includes('application/pdf')) {
         let msg = `PDF konnte nicht erstellt werden (${r.status}).`;
@@ -3590,7 +3805,7 @@
     const res = stockResult(stockQ);
     const w = window.open('', '_blank');
     if (!w) { toast('Druckfenster wurde blockiert – bitte Pop-ups für diese Seite erlauben.'); return; }
-    const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}`;
+    const title = `Bestand vom ${stock.date ? dmy(stock.date) : '?'}${isMhdQuery(stockQ) ? ` – MHD bis ${dmy(isoToday(14))}` : stockQ ? ` – Suche „${stockQ}“` : ''}${Object.keys(stockFilter).length ? ` – Filter: ${filterAlle()}` : ''}`;
     w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(title)}</title><style>
       @page { size: A4 landscape; margin: 10mm; }
       * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
