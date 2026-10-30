@@ -29,7 +29,8 @@ body.hr {
   --hr-sperre: #d1342f;
   --hr-abt: #e9e3dd;                            /* Abteilungsbalken (deckend) */
   --hr-zeile-hover: rgba(140, 29, 44, .06);     /* Zeile unter dem Mauszeiger */
-  --hr-heute: rgba(140, 29, 44, .07);           /* Spalte „heute“ */
+  --hr-heute: rgba(140, 29, 44, .10);           /* Spalte „heute“ (Heute-Säule: Tönung, Kanten in --hr-akzent-ink) */
+  --hr-monat: rgba(28, 26, 25, .28);            /* Monatswechsel in „± 2 Wochen“ – neutral, Bordeaux bedeutet nur „heute“ */
   --hr-u: #2f6fb0; --hr-u-bg: rgba(47, 111, 176, .14);
   --hr-k: #a8323f; --hr-k-bg: rgba(168, 50, 63, .13);
   --hr-g: #8a5a00; --hr-g-bg: rgba(226, 165, 74, .26);
@@ -47,7 +48,7 @@ body.hr {
     --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
     --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
     --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
-    --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .09);
+    --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .14); --hr-monat: rgba(255, 255, 255, .28);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
     --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
@@ -62,7 +63,7 @@ body.hr {
     --hr-ok: #5fd08f; --hr-ok-bg: rgba(95, 208, 143, .14); --hr-warn: #f3c98a; --hr-warn-bg: rgba(224, 144, 31, .16);
     --hr-fehler: #f0a3ae; --hr-fehler-bg: rgba(224, 129, 144, .12);
     --hr-wochenende: rgba(255, 255, 255, .07); --hr-feiertag: rgba(255, 192, 0, .22); --hr-ferien: rgba(112, 173, 71, .14); --hr-sperre: #f07a74;
-    --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .09);
+    --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .14); --hr-monat: rgba(255, 255, 255, .28);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
     --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
@@ -245,11 +246,19 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   font-size: 11px; font-weight: 600; letter-spacing: 0; color: var(--hr-muted); background: var(--hr-deckend); }
 .hr-plan tbody tr:not(.abt):hover > * { background-image: linear-gradient(var(--hr-zeile-hover), var(--hr-zeile-hover)); }   /* Zeile beim Überfahren verfolgen */
 .hr-plan td.heute, .hr-plan thead th.heute { background-image: linear-gradient(var(--hr-heute), var(--hr-heute)); }
+/* Heute-Säule: getönte Spalte mit Kanten links und rechts durch alle Zeilen (auch Abteilungsbalken), im Kopf „Heute“ und Datum im Kreis */
+.hr-plan .heute { box-shadow: inset 2px 0 0 var(--hr-akzent-ink), inset -2px 0 0 var(--hr-akzent-ink); }
+.hr-plan tbody tr:not(.abt):hover > .heute { background-image: linear-gradient(var(--hr-heute), var(--hr-heute)), linear-gradient(var(--hr-zeile-hover), var(--hr-zeile-hover)); }
+.hr-plan thead th.heute small { color: var(--hr-akzent-ink); font-size: 9.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.hr-plan thead th.heute .hr-heute-tag { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-top: 2px; border-radius: 50%; background: var(--hr-akzent); color: #fff; font-weight: 700; }
+.hr-plan tr.abt td.heute { height: 30px; padding: 0; background-color: var(--hr-abt); border-top: 1px solid var(--hr-linie); }
+.hr-plan tr.abt th.rest { box-shadow: none; }
 .hr-plan .we { background: var(--hr-wochenende); }
 .hr-plan .ft { background: var(--hr-feiertag); }
 .hr-plan .fe { background: var(--hr-ferien); }
 .hr-plan thead th.sp { box-shadow: inset 0 -3px 0 var(--hr-sperre); }
-.hr-plan th.mstart, .hr-plan td.mstart { border-left: 2px solid var(--hr-akzent); }   /* Monatswechsel in „± 2 Wochen“ */
+.hr-plan thead th.sp.heute { box-shadow: inset 2px 0 0 var(--hr-akzent-ink), inset -2px 0 0 var(--hr-akzent-ink), inset 0 -3px 0 var(--hr-sperre); }
+.hr-plan th.mstart, .hr-plan td.mstart { border-left: 2px solid var(--hr-monat); }   /* Monatswechsel in „± 2 Wochen“ (neutral) */
 /* Kalender: „Heute“, Umschalter Monat / ± 2 Wochen, Filter nach Abteilungen */
 .hr-heute { height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--hr-aus); color: var(--hr-text); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .hr-heute:hover { background: var(--hr-aus-hover); }
