@@ -24,6 +24,15 @@ schreibend = true
 oberflaeche = "hr.intern"
 schreibend = true
 
+# Korrektur melden (Mitarbeiter, hr.antrag) und erledigen (Personalstelle, hr.verwalten) – Dokument hr-korrekturen
+[aktion.hr_korrektur]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_korrektur_erledigt]
+oberflaeche = "hr.intern"
+schreibend = true
+
 [aktion.hr_verwaltung]
 oberflaeche = "hr.intern"
 

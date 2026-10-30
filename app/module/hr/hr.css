@@ -179,6 +179,49 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-art.G { background: var(--hr-g-bg); color: var(--hr-g); }
 .hr-art.X, .hr-art.x { background: var(--hr-x-bg); color: var(--hr-x); }
 .hr-art.A { background: var(--hr-a-bg); color: var(--hr-a); }
+.hr-pille.offen { background: var(--hr-warn-bg); color: var(--hr-warn); }
+.hr-pille.erledigt { background: var(--hr-ok-bg); color: var(--hr-ok); }
+.hr textarea { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--hr-linie); background: var(--hr-deckend); color: var(--hr-text);
+  font: inherit; font-size: 15px; font-weight: 400; box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; }
+
+/* ── Mein Jahr: Mini-Kalender mit allen eigenen Abwesenheiten (Farben wie die Kürzel) ── */
+.hr-mini-karte { margin-top: 20px; }
+.hr-mini-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.hr-mini-kopf h2 { margin: 0; }
+.hr-mini-karte .hr-klein, .hr-mini-karte .hr-legende { margin: 0; }
+.hr-mini { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 18px 22px; }
+.hr-mini-monat h3 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+.hr-mini-tage { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.hr-mini-tage .wt { color: var(--hr-muted); font-size: 10.5px; font-weight: 600; text-align: center; padding-bottom: 2px; }
+.hr-mini-tage .t { display: grid; place-items: center; height: 24px; border-radius: 6px; color: var(--hr-text); background: none; border: 0; padding: 0; font: inherit; }
+.hr-mini-tage .t.we { color: var(--hr-muted); background: var(--hr-wochenende); }
+.hr-mini-tage .t.ft { background: var(--hr-feiertag); }
+.hr-mini-tage .t.U { background: var(--hr-u-bg); color: var(--hr-u); font-weight: 700; }
+.hr-mini-tage .t.K { background: var(--hr-k-bg); color: var(--hr-k); font-weight: 700; }
+.hr-mini-tage .t.G { background: var(--hr-g-bg); color: var(--hr-g); font-weight: 700; }
+.hr-mini-tage .t.X { background: var(--hr-x-bg); color: var(--hr-x); }
+.hr-mini-tage .t.offen { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }   /* beantragt: nur umrandet */
+.hr-mini-tage .t.heute { outline: 2px solid var(--hr-akzent-ink); outline-offset: -2px; }
+.hr-mini-tage button.t { cursor: pointer; }
+.hr-mini-tage button.t:hover { filter: brightness(.95); box-shadow: inset 0 0 0 1.5px currentColor; }
+.hr-mini-tage button.t:focus-visible { outline: none; box-shadow: var(--hr-fokus); }
+#korrektur-eigene h3 { margin: 4px 0 0; font-size: 15px; }
+#korrektur-liste .text { flex-basis: 100%; font-size: 14px; }
+#korrektur-liste .gedaempft, .hr-korr .gedaempft { color: var(--hr-muted); font-size: 13px; }
+/* Personalstelle: Korrekturmeldungen (Karten wie offene Anträge) */
+.hr-korr { padding: 18px 20px; border-radius: 22px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.hr-korr h3 { margin: 0; font-size: 17px; }
+.hr-korr .zeitraum { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; font-weight: 600; }
+.hr-korr p { margin: 0; }
+.hr-korr-hinweis { padding: 8px 12px; font-size: 13px; border-radius: 12px; border: 1px dashed currentColor; color: var(--hr-muted); }
+#korrekturen-liste { margin-bottom: 8px; }
+.hr-korr .text { font-size: 14px; white-space: pre-wrap; }
+.hr-korr .antwort-zeile { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.hr-korr .antwort-zeile input { flex: 1 1 180px; }
+.hr-voll { grid-column: 1 / -1; }
+.hr-korr-erledigt { padding: 4px 4px 0; }
+.hr-korr-erledigt summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--hr-muted); padding: 4px 0; }
+.hr-korr-erledigt .hr-liste li { gap: 8px 12px; }
 
 /* ── Monatsplan ── */
 .hr-legende { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; font-size: 13px; color: var(--hr-muted); }
@@ -334,6 +377,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-wert.haupt b { font-size: 34px; }
   .hr-karte { padding: 18px; border-radius: 22px; }
   .hr-felder.zwei { grid-template-columns: 1fr; }
+  .hr-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+  .hr-mini-tage { font-size: 10.5px; gap: 1px; }
+  .hr-mini-tage .t { height: 21px; border-radius: 5px; }
   .hr-plan .name { min-width: 120px; max-width: 130px; padding: 0 8px; }
   .hr-zeitraum { grid-template-columns: 1fr 1fr; }
   .hr-filter { margin-left: 0; }

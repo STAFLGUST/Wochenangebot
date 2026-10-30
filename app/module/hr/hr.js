@@ -1,9 +1,10 @@
 /* STAFL-Plattform · HR · Urlaub
-   Mitarbeiter: eigenes Urlaubskonto, Urlaubsantrag (ausblendbar: Verwaltung → Urlaub, Schalter „Urlaubsanträge über die
-   Plattform“), eigene Einträge, Abwesenheitskalender (Kollegen nur „abwesend“).
+   Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, nie Krankheit), Urlaubsantrag (ausblendbar: Verwaltung → Urlaub, Schalter
+   „Urlaubsanträge über die Plattform“), Liste „Mein Urlaub und Anträge“ (nur Urlaub), Mini-Kalender „Mein Jahr“ mit allen
+   eigenen Abwesenheiten und „Korrektur melden“ (geht an die Personalstelle), Abwesenheitskalender (Kollegen nur „abwesend“).
    Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
-   Personalstelle (Recht hr.verwalten): Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
+   Personalstelle (Recht hr.verwalten): Korrekturmeldungen erledigen (mit Antwort, nie die eigene), Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
    Mitarbeiter mit Anspruch und Übertrag, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung,
    Urlaubssperren und Ferien. Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Bereiche sind nur
    Anzeige. Kein Inline-Skript (Content-Security-Policy). */
@@ -99,8 +100,8 @@
     for (const el of $$('[data-verwalten]')) el.hidden = !r.data.verwalten;
     for (const el of $$('[data-antraege]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
     for (const el of $$('[data-uebersicht]')) el.hidden = !r.data.uebersicht;
-    const offen = $('#hr-offen');
-    offen.hidden = !r.data.offen; offen.textContent = r.data.offen || '';
+    const offen = $('#hr-offen'), n = (r.data.offen || 0) + (r.data.korrekturenOffen || 0);   // Anträge und Korrekturmeldungen (Personalstelle)
+    offen.hidden = !n; offen.textContent = n || '';
     zeigeMein();
     return true;
   }
@@ -130,7 +131,8 @@
     const sel = $('#antrag-vertretung'), alt = sel.value;
     sel.innerHTML = '<option value="">– keine –</option>' + d.kollegen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     sel.value = alt;
-    const liste = d.eintraege.filter((e) => (e.art === 'U' || e.status === 'genehmigt') && e.von <= `${d.jahr}-12-31` && e.bis >= `${d.jahr}-01-01`);
+    // Liste: nur Urlaub und Anträge – Krank, Gleittag und freie Tage stehen im Mini-Kalender „Mein Jahr“
+    const liste = d.eintraege.filter((e) => e.art === 'U' && e.von <= `${d.jahr}-12-31` && e.bis >= `${d.jahr}-01-01`);
     $('#mein-liste').innerHTML = liste.length ? liste.map((e) => {
       const zurueck = e.art === 'U' && (e.status === 'beantragt' || (e.status === 'genehmigt' && e.von > d.heute));
       const ent = e.entscheidung && e.status !== 'genehmigt' && e.entscheidung.grund ? `Grund: ${e.entscheidung.grund}` : '';
@@ -138,9 +140,90 @@
         <span class="zeitraum">${esc(zeitraum(e.von, e.bis))}</span><span>${esc(tageText(e.tage))}</span>
         <span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span>
         ${zurueck ? `<button type="button" class="btn" data-zurueck="${esc(e.id)}">Zurückziehen</button>` : ''}
-        ${e.notiz || ent || e.urlaubAbzug ? `<span class="mehr">${esc([e.urlaubAbzug ? 'vom Urlaub abgezogen' : '', e.notiz, ent].filter(Boolean).join(' · '))}</span>` : ''}</li>`;
-    }).join('') : `<li class="leer">Keine Einträge in ${d.jahr}.</li>`;
+        ${e.notiz || ent ? `<span class="mehr">${esc([e.notiz, ent].filter(Boolean).join(' · '))}</span>` : ''}</li>`;
+    }).join('') : `<li class="leer">Kein Urlaub in ${d.jahr}.</li>`;
     antragTage();
+    zeigeMiniKalender();
+    zeigeKorrekturen();
+  }
+
+  /* ---------- Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten ----------
+     Tage wie im Urlaubskonto: U, K, G nur an Arbeitstagen der Person (ohne Feiertage und freie Tage), freie Tage (x)
+     an jedem Tag des Zeitraums. Beantragt = umrandet. Tage mit Eintrag sind Knöpfe: Klick öffnet „Korrektur melden“. */
+  const WT_JS = [7, 1, 2, 3, 4, 5, 6];   // Date.getDay() → ISO-Wochentag
+  function zeigeMiniKalender() {
+    const d = S.start, jahr = d.jahr, ft = d.feiertage || {}, arbeit = new Set((d.ich && d.ich.arbeitstage) || [1, 2, 3, 4, 5]);
+    const tag = {};   // Datum → { art, offen, id }
+    const aktiv = d.eintraege.filter((e) => e.status === 'genehmigt' || e.status === 'beantragt');
+    const jeden = (e, f) => { for (let x = ausIso(e.von), ende = ausIso(e.bis); x <= ende; x.setDate(x.getDate() + 1)) { const s = iso(x); if (s.startsWith(String(jahr))) f(s, x); } };
+    for (const e of aktiv.filter((x) => x.art === 'X')) jeden(e, (s) => { tag[s] = { art: 'X', offen: false, id: e.id }; });
+    for (const e of aktiv.filter((x) => x.art !== 'X')) jeden(e, (s, x) => {
+      if (!arbeit.has(WT_JS[x.getDay()]) || ft[s] || (tag[s] && tag[s].art === 'X')) return;
+      tag[s] = { art: e.art, offen: e.status === 'beantragt', id: e.id };
+    });
+    const titel = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag' };
+    const leg = (stil, t) => `<span><i style="${stil}"></i>${t}</span>`;
+    $('#mini-legende').innerHTML = leg('background:var(--hr-u-bg)', 'Urlaub') + leg('background:var(--hr-k-bg)', 'Krank') + leg('background:var(--hr-g-bg)', 'Gleittag')
+      + leg('background:var(--hr-x-bg)', 'freier Tag') + leg('box-shadow:inset 0 0 0 1.5px var(--hr-u)', 'beantragt')
+      + leg('background:var(--hr-feiertag)', 'Feiertag') + leg('background:var(--hr-wochenende)', 'Wochenende');
+    $('#mini-kalender').innerHTML = MONATE.map((mn, m) => {
+      const erster = new Date(jahr, m, 1), tage = new Date(jahr, m + 1, 0).getDate();
+      let h = WT.map((w) => `<span class="wt" aria-hidden="true">${w[0]}</span>`).join('') + '<span></span>'.repeat(WT_JS[erster.getDay()] - 1);
+      for (let t = 1; t <= tage; t++) {
+        const dt = new Date(jahr, m, t), s = iso(dt), x = tag[s], we = WT_JS[dt.getDay()] > 5;
+        const cls = ['t', we ? 'we' : '', ft[s] ? 'ft' : '', x ? x.art : '', x && x.offen ? 'offen' : '', s === d.heute ? 'heute' : ''].filter(Boolean).join(' ');
+        const info = [de(s), ft[s] || '', x ? titel[x.art] + (x.offen ? ' (beantragt)' : '') : ''].filter(Boolean).join(' · ');
+        h += x ? `<button type="button" class="${cls}" data-korr-tag="${s}" data-korr-eintrag="${esc(x.id)}" title="${esc(info)} – Korrektur melden" aria-label="${esc(info)}, Korrektur melden">${t}</button>`
+          : `<span class="${cls}" title="${esc(info)}">${t}</span>`;
+      }
+      return `<div class="hr-mini-monat"><h3>${mn}</h3><div class="hr-mini-tage">${h}</div></div>`;
+    }).join('');
+  }
+  $('#mini-kalender').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-korr-eintrag]');
+    if (!b) return;
+    const ein = S.start.eintraege.find((x) => x.id === b.dataset.korrEintrag);
+    korrekturDialog(ein ? { von: ein.von, bis: ein.bis, eintrag: ein, tag: b.dataset.korrTag } : { von: b.dataset.korrTag, bis: b.dataset.korrTag });
+  });
+
+  /* ---------- Korrektur melden (an die Personalstelle) ---------- */
+  function korrekturDialog(v = {}) {
+    const dlg = $('#dlg-korrektur');
+    dlg.dataset.eintrag = v.eintrag ? v.eintrag.id : '';
+    $('#korrektur-von').value = v.von || ''; $('#korrektur-bis').value = v.bis || '';
+    $('#korrektur-text').value = '';
+    const bezug = $('#korrektur-bezug');
+    bezug.hidden = !v.eintrag;
+    bezug.textContent = v.eintrag ? `Eintrag: ${v.eintrag.artText} ${zeitraum(v.eintrag.von, v.eintrag.bis)} (${STATUS[v.eintrag.status] || v.eintrag.status})` : '';
+    meldung($('#korrektur-meldung'), '');
+    dlg.showModal();
+    $('#korrektur-text').focus();
+  }
+  $('#korrektur-neu').addEventListener('click', () => korrekturDialog());
+  $('#korrektur-text').addEventListener('input', () => meldung($('#korrektur-meldung'), ''));   // Hinweis gilt nach der Eingabe nicht mehr
+  $('#korrektur-von').addEventListener('change', () => { if (!$('#korrektur-bis').value || $('#korrektur-bis').value < $('#korrektur-von').value) $('#korrektur-bis').value = $('#korrektur-von').value; });
+  $('#korrektur-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const m = $('#korrektur-meldung');
+    const b = { text: $('#korrektur-text').value.trim(), von: $('#korrektur-von').value, bis: $('#korrektur-bis').value, eintrag: $('#dlg-korrektur').dataset.eintrag || '' };
+    if (b.text.length < 3) { meldung(m, 'Bitte kurz beschreiben, was nicht stimmt.'); $('#korrektur-text').focus(); return; }
+    if (b.von && b.bis && b.bis < b.von) { meldung(m, 'Das Ende liegt vor dem Beginn.'); return; }
+    $('#korrektur-senden').disabled = true;
+    const r = await api('hr_korrektur', b);
+    $('#korrektur-senden').disabled = false;
+    if (r.status !== 200) { meldung(m, fehlerText(r, 'Die Meldung konnte nicht gesendet werden')); return; }
+    $('#dlg-korrektur').close();
+    await ladeStart();
+    meldung($('#korrektur-info'), 'Danke – Ihre Meldung ist bei der Personalstelle.', 'ok');
+  });
+  function zeigeKorrekturen() {
+    const l = S.start.korrekturen || [];
+    $('#korrektur-eigene').hidden = !l.length;
+    $('#korrektur-liste').innerHTML = l.map((k) => `<li><span class="hr-pille ${esc(k.status)}">${k.status === 'erledigt' ? 'erledigt' : 'offen'}</span>
+      <span class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</span>
+      <span class="gedaempft">gemeldet am ${esc(k.erfasst ? new Date(k.erfasst.t).toLocaleDateString('de-DE') : '')}</span>
+      <span class="text">${esc(k.text)}</span>
+      ${k.erledigt ? `<span class="mehr">Personalstelle${k.erledigt.antwort ? ': ' + esc(k.erledigt.antwort) : ' hat die Meldung erledigt.'}</span>` : ''}</li>`).join('');
   }
 
   /* Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server) */
@@ -360,7 +443,8 @@
   }
   // Zahl am Reiter: entscheidbare Anträge (ohne eigene); ohne Genehmigungsrecht alle offenen
   function zahlOffen() {
-    const n = S.offen.filter((a) => !(S.start && S.start.genehmigen) || !a.eigen).length;
+    const korr = S.verw && S.verw.korrekturen ? S.verw.korrekturen.filter((k) => k.status === 'offen' && !k.eigen).length : 0;
+    const n = S.offen.filter((a) => !(S.start && S.start.genehmigen) || !a.eigen).length + korr;
     const offen = $('#hr-offen');
     offen.hidden = !n; offen.textContent = n || '';
   }
@@ -384,6 +468,7 @@
       </article>`;
     }).join('') : '<p class="hr-leer hr-glas">Keine offenen Anträge.</p>';
     if (!S.start || !S.start.verwalten || !S.verw) return;   // „Alle Einträge“ nur für die Personalstelle
+    zeigeKorrekturenVerwaltung();
     const v = S.verw;
     $('#eintraege-titel').textContent = `Alle Einträge ${v.jahr}`;
     const sel = $('#eintraege-person'), alt = sel.value;
@@ -398,11 +483,41 @@
     $('#eintraege-tabelle').innerHTML = '<thead><tr><th>Mitarbeiter</th><th>Art</th><th>Zeitraum</th><th class="zahl">Tage</th><th>Status</th><th>Notiz / Entscheidung</th><th></th></tr></thead><tbody>'
       + (l.length ? l.map((e) => `<tr><td>${esc(e.name)}${ehemalig.has(e.person) ? ' <span class="gedaempft">(ehemalig)</span>' : ''}</td><td><span class="hr-art ${esc(e.art)}">${esc(e.art === 'X' ? 'x' : e.art)}</span> ${esc(e.artText)}</td>
         <td>${esc(zeitraum(e.von, e.bis))}</td><td class="zahl">${esc(zahl(e.tage))}</td><td><span class="hr-pille ${esc(e.status)}">${esc(STATUS[e.status] || e.status)}</span></td>
-        <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'vom Urlaub abgezogen' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : ''].filter(Boolean).join(' · '))}</td>
+        <td class="gedaempft">${esc([e.notiz, e.entscheidung && e.entscheidung.grund, e.urlaubAbzug ? 'in der Zeiterfassung vom Urlaub abgezogen (zählt hier nicht)' : '', e.quelle === 'import' ? 'aus Excel übernommen' : '', e.quelle === 'zeiterfassung' ? 'aus der Zeiterfassung' : ''].filter(Boolean).join(' · '))}</td>
         <td>${e.status === 'genehmigt' && !e.eigen ? `<button type="button" class="btn" data-bearbeiten="${esc(e.id)}">Ändern</button>` : ''}</td></tr>`).join('')
         : '<tr><td colspan="7" class="gedaempft">Keine Einträge.</td></tr>') + '</tbody>';
   }
   $('#eintraege-person').addEventListener('change', zeigeEintraege);
+
+  /* Korrekturmeldungen der Mitarbeiter (Personalstelle): offene mit Antwortfeld und „Erledigt“, zuletzt erledigte gedämpft */
+  function zeigeKorrekturenVerwaltung() {
+    const l = S.verw.korrekturen || [], offenL = l.filter((k) => k.status === 'offen'), erl = l.filter((k) => k.status !== 'offen').slice(0, 20);
+    const offen = offenL.filter((k) => !k.eigen).length;
+    $('#korr-zahl').hidden = !offen; $('#korr-zahl').textContent = offen || '';
+    const gemeldet = (k) => `gemeldet am ${esc(k.erfasst ? new Date(k.erfasst.t).toLocaleDateString('de-DE') : '')}`;
+    $('#korrekturen-liste').innerHTML = (offenL.length ? offenL.map((k) => `<article class="hr-korr hr-glas" data-korr="${esc(k.id)}">
+        <h3>${esc(k.name)}</h3>
+        <div class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</div>
+        <p class="text">${esc(k.text)}</p>
+        <span class="gedaempft">${gemeldet(k)}</span>
+        ${k.eigen ? '<p class="hr-korr-hinweis">Ihre eigene Meldung – sie erledigt eine andere Person der Personalstelle.</p>'
+          : `<div class="antwort-zeile"><input type="text" maxlength="300" placeholder="Antwort (optional, sieht der Mitarbeiter)" aria-label="Antwort an ${esc(k.name)}"><button type="button" class="btn primary" data-korr-erledigt>Erledigt</button></div>`}
+      </article>`).join('') : '<p class="hr-klein hr-voll" id="korr-leer">Keine offenen Korrekturmeldungen.</p>')
+      // zuletzt erledigte (60 Tage, höchstens 20) zugeklappt und kompakt
+      + (erl.length ? `<details class="hr-korr-erledigt hr-voll"><summary>Zuletzt erledigt (${erl.length})</summary><ul class="hr-liste">${erl.map((k) => `<li>
+          <span class="hr-pille erledigt">erledigt</span><b>${esc(k.name)}</b><span class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</span>
+          <span class="gedaempft">${gemeldet(k)} · erledigt von ${esc(k.erledigt ? k.erledigt.by : '')}</span>
+          <span class="mehr">${esc(k.text)}${k.erledigt && k.erledigt.antwort ? ' → ' + esc(k.erledigt.antwort) : ''}</span></li>`).join('')}</ul></details>` : '');
+  }
+  $('#korrekturen-liste').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-korr-erledigt]');
+    if (!b) return;
+    const karte = b.closest('[data-korr]');
+    b.disabled = true;
+    const r = await api('hr_korrektur_erledigt', { id: karte.dataset.korr, antwort: $('input', karte).value.trim() });
+    if (r.status !== 200) { b.disabled = false; alertKarte(karte, fehlerText(r, 'Erledigen fehlgeschlagen')); return; }
+    await ladeVerwaltung();
+  });
   $('#eintraege-tabelle').addEventListener('click', (e) => {
     const b = e.target.closest('[data-bearbeiten]');
     if (b) eintragDialog(S.verw.eintraege.find((x) => x.id === b.dataset.bearbeiten));
