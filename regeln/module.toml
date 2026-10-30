@@ -210,28 +210,32 @@ hinweise = [
 [[modul]]
 id = "qs"
 name = "Qualitätssicherung"
-beschreibung = "QS nach IFS Wholesale – jetzt nur technische Grundlage, Fachlogik ist ein eigenes späteres Projekt"
+beschreibung = "QM-System nach IFS Wholesale: gelenkte Dokumente mit Freigabe, QM-Handbuch, Prüfplan mit Nachweisen und Versäumnissen, Maßnahmen"
 icon = "shield-check"
 reihenfolge = 50
 dashboard = true
 agent = "qs"
-abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
-testgruppen = []
-pfade = []
-pfade_geplant = ["regeln/aktionen/qs.toml", "app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py"]
+abhaengigkeiten = ["plattform", "hr"]
+testgruppen = ["qs"]
+pfade = ["regeln/aktionen/qs.toml", "app/api/aktionen/qs.php", "app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py", "tests/fixtures/qs/**"]
+pfade_geplant = []
 hinweise = [
-  "Keine QS-Fachlogik vor dem separaten QS-Auftrag implementieren (Master-Auftrag Abschnitt 6.2).",
-  "Externe QS-Nutzer (Kunden, Lieferanten, Prüfer) erhalten nie Zugang zur Mitarbeiterplattform (GR-104).",
+  "Auftrag des Inhabers (30.10.2026): Bau des QM-Systems begonnen; löst die Excel „QM-System“ ab (Blätter Inhaltsverzeichnis = Dokumentenlenkung, Managementsystem = QM-Handbuch, Prüfungen = Prüfplan) und die Maßnahmenpläne der Audits. Kachelname bleibt vorerst „Qualitätssicherung“. Dateiablage mit Export (Abschnitt 2) und Dokumente aus Vorlagen erzeugen (Abschnitt 3) folgen in eigenen PRs.",
+  "Dokumentenlenkung nach Handbuch 1.1 (2.0.9–2.0.17): Version zählt mit jeder Freigabe um 1 hoch, Datum = Freigabedatum; Erstellung/Überarbeitung und Prüfung durch zwei verschiedene Personen (4-Augen-Prinzip, serverseitig), Freigabe nur mit „qs.freigeben“. Ältere Versionen bleiben einsehbar (ersetzt), nichts wird gelöscht. Überprüfung fällig nach 36 Monaten (Einstellung) seit Freigabe bzw. „ohne Änderung überprüft“.",
+  "Prüfplan (Entscheidung Inhaber 30.10.2026): täglich heißt täglich – tägliche, wöchentliche und monatliche Prüfungen folgen dem Kalender, jede Periode ohne Nachweis zählt als versäumt; Prüfungen sind Mitarbeitern zugewiesen, „qs.nachweis“ erlaubt nur Nachweise der eigenen Prüfungen. Nachweise werden nie geändert oder gelöscht, nur storniert (mit Grund).",
+  "Personen (Kürzel, Name, Funktion) sind mit Mitarbeitern der Plattform verknüpft – gelesen nur über users_load des Plattformkerns (Kennung, Name, Zugang), keine Daten anderer Module. Feiertage über hr_feiertag (Modul HR). Kürzel in Versionen, Abschnitten und Maßnahmen sind Schnappschüsse (GR-106).",
+  "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel und der Maßnahmenpläne über ein Datenpaket (qs_import) in der Oberfläche.",
+  "Externe QS-Nutzer (Kunden, Lieferanten, Prüfer) erhalten nie Zugang zur Mitarbeiterplattform (GR-104); das QS-Portal ist ein eigener späterer Abschnitt.",
 ]
 
   [[modul.oberflaeche]]
   id = "intern"
   name = "QS-Verwaltung"
   art = "intern"
-  adresse = "https://qs.dashboard-stafl.de/"
-  entwicklung = "geplant"
+  adresse = "https://qs.dashboard-stafl.de/module/qs/"
+  entwicklung = "in_entwicklung"
   freigabe = "keine"
-  sperrbar = true
+  sperrbar = true   # DNS-Eintrag besteht (21.10.2026); bis zur Freigabe 503-Platzhalter (GR-105)
 
   [[modul.oberflaeche]]
   id = "portal"

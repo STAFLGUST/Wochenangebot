@@ -124,6 +124,7 @@ SUITES['marketing'] = (8790, 'data-seed', True)   # Marketing · Redaktionsplan 
 SUITES['controlling'] = (8790, 'data-seed', True)   # Controlling · Umsatzstatistik (app/module/controlling/, Oberfläche controlling.intern)
 SUITES['leergut'] = (8790, 'data-seed', True)   # Leergut · Leergutkonten und Abstimmung (app/module/leergut/, Oberfläche leergut.intern)
 SUITES['rewe'] = (8790, 'data-seed', True)   # REWE · Vordisposition Dry Aged (app/module/rewe/, Oberfläche rewe.intern)
+SUITES['qs'] = (8790, 'data-seed', True)   # QM-System (app/module/qs/, Oberfläche qs.intern): Dokumentenlenkung, Handbuch, Prüfplan, Maßnahmen
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
 SUITES['sicherheit_bereitschaft'] = SUITES['bestellung']   # Leitfaden, Probealarm, Wochenbericht, ungenutzte Zugänge (lib/bereitschaft.php); Test-Mailserver
@@ -158,6 +159,7 @@ GEWICHT = {
     'controlling': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'leergut': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rewe': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'qs': 35,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }

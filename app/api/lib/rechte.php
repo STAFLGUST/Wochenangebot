@@ -59,6 +59,12 @@ const PERMS = [
     'rewe.alle'                => ['g' => 'REWE', 'l' => 'Alle REWE-Listen sehen (mit „bearbeiten“ auch für andere abfragen, z. B. Vertretung)', 'k' => 'sehen', 'd' => [], 'r' => ['rewe.sehen']],
     'rewe.verwalten'           => ['g' => 'REWE', 'l' => 'REWE verwalten: Märkte anlegen, Zuweisung und Lieferweg ab KW, Lieferwege und Artikel, Excel-Listen übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['rewe.bearbeiten', 'rewe.alle']],
     'rewe.exportieren'         => ['g' => 'REWE', 'l' => 'REWE-Wochenabschluss: Bestellungen aller Listen, Excel für WinAB, „in WinAB erfasst“', 'k' => 'machen', 'd' => [], 'r' => ['rewe.alle']],
+    // Modul Qualitätssicherung · QM-System (30.10.2026): ohne Standardrollen – Administratoren bündeln die Rechte in eigenen Rollen (z. B. QMB, QM-Kontrollen Lager)
+    'qs.sehen'                 => ['g' => 'Qualitätssicherung', 'l' => 'QM-System ansehen: Dokumente mit Versionen, QM-Handbuch, Prüfplan mit Nachweisen, Maßnahmen, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
+    'qs.nachweis'              => ['g' => 'Qualitätssicherung', 'l' => 'Kontrollen durchführen: Nachweise für die eigenen (zugewiesenen) Prüfungen erfassen', 'k' => 'machen', 'd' => [], 'r' => ['qs.sehen']],
+    'qs.bearbeiten'            => ['g' => 'Qualitätssicherung', 'l' => 'QM-System bearbeiten: Dokumente anlegen und überarbeiten (Entwurf, zur Prüfung geben), Nachweise aller Prüfungen erfassen und stornieren, Maßnahmen erfassen', 'k' => 'machen', 'd' => [], 'r' => ['qs.nachweis']],
+    'qs.freigeben'             => ['g' => 'Qualitätssicherung', 'l' => 'QM-System prüfen und freigeben (QMB, Geschäftsführung): Dokumente prüfen, freigeben, einziehen, als überprüft vermerken (nie eigene Entwürfe prüfen), Handbuch und Prüfplan ändern, Maßnahmen als wirksam abschließen', 'k' => 'machen', 'd' => [], 'r' => ['qs.bearbeiten']],
+    'qs.verwalten'             => ['g' => 'Qualitätssicherung', 'l' => 'QM-System verwalten: Kapitel, Personen (Kürzel und Verknüpfung mit Mitarbeitern) und Einstellungen pflegen, Datenpaket übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['qs.bearbeiten']],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */

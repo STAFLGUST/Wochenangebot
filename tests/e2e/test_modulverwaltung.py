@@ -63,7 +63,7 @@ for name, b, wort in (
         ('Sicherheitszentrale (Reiter System) nicht änderbar (Aussperrschutz)', {'bereich': 'sicherheit.intern', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
         ('frühere Oberfläche Verwaltung → System gibt es nicht mehr', {'bereich': 'verwaltung.system', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Unbekannt'),
         ('Dashboard nicht änderbar (Aussperrschutz)', {'bereich': 'dashboard.start', 'freigabe': 'deaktiviert', 'grund': 'Test'}, 'Aussperrung'),
-        ('geplanter Code: keine Testfreigabe', {'bereich': 'qs.intern', 'freigabe': 'test', 'grund': 'Test'}, 'Entwicklungsstand'),
+        ('geplanter Code: keine Testfreigabe', {'bereich': 'containerimport.intern', 'freigabe': 'test', 'grund': 'Test'}, 'Entwicklungsstand'),
         ('Code in Prüfung: nicht produktiv', {'bereich': 'rewe.intern', 'freigabe': 'produktiv', 'grund': 'Test'}, 'fertig'),
         ('unbekannte Freigabe', {'bereich': 'rewe.intern', 'freigabe': 'irgendwie', 'grund': 'Test'}, 'Unbekannte'),
         ('ohne Grund', {'bereich': 'rewe.intern', 'freigabe': 'test', 'grund': ' '}, 'Grund')):
@@ -154,7 +154,7 @@ with sync_playwright() as pw:
             pg.keyboard.press('Escape'); pg.wait_for_selector('#sic-dlg', state='hidden')
             check('Produktivbereich und Sicherheitszentrale: ohne „Ändern“', pg.locator('#sy-module [data-sy="modul"][data-ziel="angebot.eingabe"], #sy-module [data-sy="modul"][data-ziel="sicherheit.intern"], #sy-module [data-sy="modul"][data-ziel="dashboard.start"]').count() == 0
                   and pg.locator('#sy-module tr[data-mvziel="sicherheit.intern"]').count() == 1)
-            pg.click('#sy-module tr[data-mvziel="qs.intern"] td:first-child'); pg.wait_for_selector('#sic-dlg[open] #mv-freigabe')
+            pg.click('#sy-module tr[data-mvziel="containerimport.intern"] td:first-child'); pg.wait_for_selector('#sic-dlg[open] #mv-freigabe')
             check('Zeile anklicken öffnet den Dialog; geplanter Bereich: nur „nicht freigegeben“ oder „deaktiviert“', pg.eval_on_selector_all('#mv-freigabe option', 'os => os.map(o => o.value)') == ['keine', 'deaktiviert'])
             pg.screenshot(path=os.path.join(SH, 'modulverwaltung-formular-1280.png'), full_page=False)
         ctx.close()

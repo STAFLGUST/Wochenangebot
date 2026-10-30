@@ -31,6 +31,7 @@ Voraussetzungen und Abgrenzung:
 | Controlling | `app/module/controlling/index.html` | `../../assets/theme.js`, `controlling.js` (Grundgerüst), je Bereich ein Skript (`umsatz.js`), das sich mit `STAFL_CONTROLLING.bereich(id, { anzeigen })` anmeldet | `../../assets/app.css`, `controlling.css` |
 | Leergut | `app/module/leergut/index.html` | `../../assets/theme.js`, `../../assets/stock-core.js` (WinAB-Bericht lesen), `leergut.js` | `../../assets/app.css`, `leergut.css` |
 | REWE · Vordisposition | `app/module/rewe/index.html` | `../../assets/theme.js`, `rewe.js` | `../../assets/app.css`, `rewe.css` (Gestaltung wie Leergut, Präfix `rw-`) |
+| Qualitätssicherung · QM-System | `app/module/qs/index.html` | `../../assets/theme.js`, `qs.js` | `../../assets/app.css`, `qs.css` (Gestaltung „Liquid Glass“ nach dem Designvorschlag, Präfix `qm-`; Dokument-Seitenleiste unter 1100 px als Blatt von unten, Prüfplan unter 760 px als Liste) |
 
 Alle Pfade sind relativ zur Seite (Rechtsseiten: absolut ab `/`). Damit funktionieren dieselben Dateien auf dem
 Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-Host.

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · Qualitätssicherung</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="qs.css">
+</head>
+<body class="qm">
+<div class="qm-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="qm-seite">
+  <header class="qm-kopf qm-glas">
+    <a class="stafl-zurueck" id="qm-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <span class="qm-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
+    <span class="qm-modul"><svg class="i" aria-hidden="true"><use href="#i-schild"/></svg>Qualitätssicherung</span>
+    <div class="qm-aktionen">
+      <button class="qm-rund" id="qm-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"></button>
+      <span class="qm-user" id="qm-user" hidden><span class="qm-initialen" id="qm-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="qm-user-name" id="qm-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="qm-main">
+    <section class="qm-hinweisbox qm-glas" id="qm-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Die Qualitätssicherung steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="qm-fehler" id="qm-err" role="alert" hidden></p>
+
+    <section id="qm-app" hidden>
+      <div class="qm-titelzeile">
+        <div class="qm-titel"><h1>QM-System</h1><p id="qm-unterzeile"></p></div>
+        <nav class="qm-tabs stafl-streifen" id="qm-tabs" role="tablist" aria-label="Bereiche des QM-Systems">
+          <button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Übersicht</button>
+          <button type="button" role="tab" data-tab="dokumente" aria-selected="false">Dokumente</button>
+          <button type="button" role="tab" data-tab="handbuch" aria-selected="false">Handbuch</button>
+          <button type="button" role="tab" data-tab="pruefplan" aria-selected="false">Prüfplan</button>
+          <button type="button" role="tab" data-tab="massnahmen" aria-selected="false">Maßnahmen</button>
+          <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" hidden>Einstellungen</button>
+        </nav>
+      </div>
+
+      <!-- Übersicht -->
+      <section class="qm-tab" id="qm-t-uebersicht" data-tab="uebersicht">
+        <div class="qm-leer qm-glas" id="qm-u-leer" hidden>
+          <h2>Das QM-System ist noch leer</h2>
+          <p>Kapitel, Personen und die bisherige Excel „QM-System“ übernimmt, wer „QM-System verwalten“ hat – unter Einstellungen als Datenpaket oder einzeln.</p>
+        </div>
+        <div class="qm-kpis" id="qm-u-kpis"></div>
+        <div class="qm-zeile">
+          <section class="qm-panel qm-glas qm-breit-flex">
+            <div class="qm-panelkopf"><h2>Ihre Aufgaben</h2><span class="qm-hilfe">Entwurf → Prüfung → Freigabe · geprüft wird nie vom Ersteller</span></div>
+            <div id="qm-u-aufgaben"></div>
+          </section>
+          <section class="qm-panel qm-glas qm-schmal-flex">
+            <div class="qm-panelkopf"><h2>Fällige Prüfungen</h2><button class="btn sm ghost" type="button" data-gehe="pruefplan">Prüfplan</button></div>
+            <div id="qm-u-faellig"></div>
+          </section>
+        </div>
+        <section class="qm-panel qm-glas">
+          <div class="qm-panelkopf"><h2>Stand der Dokumente je Kapitel</h2>
+            <span class="qm-legende"><span><i class="qm-farbe gruen"></i>aktuell</span><span><i class="qm-farbe gelb"></i>Überprüfung fällig</span></span></div>
+          <div class="qm-kapitelstand" id="qm-u-kapitel"></div>
+        </section>
+        <section class="qm-panel qm-glas">
+          <div class="qm-panelkopf"><h2>Offene Maßnahmen</h2><button class="btn sm ghost" type="button" data-gehe="massnahmen">Alle Maßnahmen</button></div>
+          <div class="qm-tabelle-wrap" id="qm-u-massn"></div>
+        </section>
+      </section>
+
+      <!-- Dokumente -->
+      <section class="qm-tab" id="qm-t-dokumente" data-tab="dokumente" hidden>
+        <div class="qm-dokumente" id="qm-d-raster">
+          <section class="qm-panel qm-glas qm-dokliste">
+            <div class="qm-filterzeile">
+              <input class="qm-eingabe qm-suche" id="qm-d-suche" type="search" placeholder="Nr. oder Titel suchen" aria-label="Dokumente suchen">
+              <select class="qm-eingabe" id="qm-d-kapitel" aria-label="Kapitel"></select>
+              <select class="qm-eingabe" id="qm-d-art" aria-label="Art"></select>
+              <button class="btn sm" type="button" id="qm-d-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Dokumentenliste</button>
+              <button class="btn sm primary" type="button" id="qm-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Dokument anlegen</button>
+            </div>
+            <div class="qm-pillen" id="qm-d-zustand" role="group" aria-label="Zustand"></div>
+            <div class="qm-tabelle-wrap" id="qm-d-liste"></div>
+          </section>
+          <aside class="qm-dokpanel qm-glas" id="qm-dk" aria-label="Dokument" hidden></aside>
+        </div>
+      </section>
+
+      <!-- Handbuch -->
+      <section class="qm-tab" id="qm-t-handbuch" data-tab="handbuch" hidden>
+        <div class="qm-handbuch">
+          <aside class="qm-kapitelliste qm-glas">
+            <input class="qm-eingabe" id="qm-h-suche" type="search" placeholder="Im Handbuch suchen" aria-label="Im Handbuch suchen">
+            <ul class="qm-liste" id="qm-h-kapitel"></ul>
+            <label class="qm-check"><input type="checkbox" id="qm-h-entfallen"> entfallene Abschnitte zeigen</label>
+          </aside>
+          <section class="qm-handbuch-text">
+            <div class="qm-panel qm-glas qm-hb-kopf">
+              <div class="qm-hb-titel"><span class="qm-ueber" id="qm-h-ueber"></span><h2 id="qm-h-titel">QM-Handbuch</h2><p class="qm-hilfe" id="qm-h-meta"></p></div>
+              <div class="qm-filterzeile">
+                <button class="btn sm" type="button" id="qm-h-druck"><svg class="i" aria-hidden="true"><use href="#i-druck"/></svg>Drucken / PDF</button>
+                <button class="btn sm primary" type="button" id="qm-h-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Abschnitt</button>
+              </div>
+              <p class="qm-ziel" id="qm-h-ziel" hidden></p>
+            </div>
+            <div id="qm-h-abschnitte"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- Prüfplan -->
+      <section class="qm-tab" id="qm-t-pruefplan" data-tab="pruefplan" hidden>
+        <section class="qm-panel qm-glas">
+          <div class="qm-panelkopf qm-panelkopf-filter">
+            <div><h2>Jahresplan der Prüfungen</h2><p class="qm-hilfe" id="qm-p-unter"></p></div>
+            <div class="qm-filterzeile">
+              <select class="qm-eingabe" id="qm-p-kapitel" aria-label="Kapitel"></select>
+              <label class="qm-check"><input type="checkbox" id="qm-p-meine"> nur meine</label>
+              <label class="qm-check"><input type="checkbox" id="qm-p-faellig"> nur fällige</label>
+              <label class="qm-check"><input type="checkbox" id="qm-p-inaktiv"> inaktive</label>
+              <button class="btn sm" type="button" id="qm-p-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Prüfplan</button>
+              <button class="btn sm primary" type="button" id="qm-p-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Prüfung anlegen</button>
+            </div>
+          </div>
+          <div class="qm-legende qm-legende-plan">
+            <span><i class="qm-pm ok">✓</i>in Ordnung</span><span><i class="qm-pm abw">!</i>Abweichung</span><span><i class="qm-pm ueber">!</i>versäumt / überfällig</span>
+            <span><i class="qm-pm plan"></i>geplant</span><span><i class="qm-quote">18/21</i>erfüllte Tage bzw. Wochen im Monat</span>
+          </div>
+          <div class="qm-plan-wrap" id="qm-p-liste"></div>
+        </section>
+      </section>
+
+      <!-- Maßnahmen -->
+      <section class="qm-tab" id="qm-t-massnahmen" data-tab="massnahmen" hidden>
+        <div class="qm-panelkopf qm-panelkopf-filter qm-m-kopf">
+          <div class="qm-filterzeile">
+            <div class="qm-segment" role="group" aria-label="Ansicht"><button type="button" data-ansicht="tafel" aria-pressed="true">Tafel</button><button type="button" data-ansicht="liste" aria-pressed="false">Liste</button></div>
+            <input class="qm-eingabe qm-suche" id="qm-m-suche" type="search" placeholder="Suchen" aria-label="Maßnahmen suchen">
+            <select class="qm-eingabe" id="qm-m-bezug" aria-label="Audit / Bezug"></select>
+            <select class="qm-eingabe" id="qm-m-status" aria-label="Status"></select>
+          </div>
+          <div class="qm-filterzeile">
+            <button class="btn sm" type="button" id="qm-m-csv"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Maßnahmenplan</button>
+            <button class="btn sm primary" type="button" id="qm-m-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Maßnahme erfassen</button>
+          </div>
+        </div>
+        <ol class="qm-ablauf qm-glas" aria-label="Ablauf einer Korrekturmaßnahme"><li>1 Feststellung</li><li>2 Korrektur (sofort)</li><li>3 Ursache (5-Why / 8M)</li><li>4 Korrekturmaßnahme</li><li>5 Wirksamkeitsprüfung durch den QMB</li></ol>
+        <div id="qm-m-liste"></div>
+      </section>
+
+      <!-- Einstellungen -->
+      <section class="qm-tab" id="qm-t-einstellungen" data-tab="einstellungen" hidden>
+        <section class="qm-panel qm-glas">
+          <div class="qm-panelkopf"><h2>Personen und Kürzel</h2><button class="btn sm" type="button" id="qm-e-person-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Person</button></div>
+          <p class="qm-hinweis">Kürzel wie im bisherigen Inhaltsverzeichnis. Mit einem Mitarbeiter verknüpft, sieht er seine Dokumente, Kontrollen und Maßnahmen unter „Ihre Aufgaben“. Was jemand darf, legen die Rechte in Verwaltung → Rollen und Rechte fest (z. B. eine Rolle „QMB“ mit „QM-System prüfen und freigeben“, eine Rolle „QM-Kontrollen“ mit „Kontrollen durchführen“).</p>
+          <form id="qm-e-person-form" novalidate>
+            <div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten qm-edit"><thead><tr><th>Kürzel</th><th>Name</th><th>Funktion</th><th>Mitarbeiter</th><th>aktiv</th></tr></thead><tbody id="qm-e-personen"></tbody></table></div>
+            <p class="qm-meldung" id="qm-e-person-meldung" role="alert"></p>
+            <div class="qm-knopfreihe"><button class="btn primary" type="submit">Personen speichern</button></div>
+          </form>
+        </section>
+        <div class="qm-zeile">
+          <section class="qm-panel qm-glas qm-breit-flex">
+            <div class="qm-panelkopf"><h2>Kapitel</h2><button class="btn sm" type="button" id="qm-e-kapitel-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Kapitel</button></div>
+            <form id="qm-e-kapitel-form" novalidate>
+              <div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten qm-edit"><thead><tr><th>Nr.</th><th>Titel</th><th>Zuständig</th><th>Vertreter</th><th>aktiv</th></tr></thead><tbody id="qm-e-kapitel"></tbody></table></div>
+              <p class="qm-meldung" id="qm-e-kapitel-meldung" role="alert"></p>
+              <div class="qm-knopfreihe"><button class="btn primary" type="submit">Kapitel speichern</button></div>
+            </form>
+          </section>
+          <section class="qm-panel qm-glas qm-schmal-flex">
+            <div class="qm-panelkopf"><h2>Überprüfung der Dokumente</h2></div>
+            <form id="qm-e-einst-form" novalidate>
+              <label class="qm-feld">Überprüfung fällig nach (Monaten)<input class="qm-eingabe" id="qm-e-monate" inputmode="numeric" maxlength="3"></label>
+              <p class="qm-hilfe">Gezählt ab der letzten Freigabe bzw. „ohne Änderung überprüft“. Standard 36 Monate.</p>
+              <p class="qm-meldung" id="qm-e-einst-meldung" role="alert"></p>
+              <div class="qm-knopfreihe"><button class="btn primary" type="submit">Speichern</button></div>
+            </form>
+          </section>
+        </div>
+        <section class="qm-panel qm-glas">
+          <div class="qm-panelkopf"><h2>Datenpaket übernehmen</h2><span class="qm-hilfe">Bisherige Excel „QM-System“ und Maßnahmenpläne als Datenpaket (.json)</span></div>
+          <p class="qm-hinweis">Das Datenpaket enthält Kapitel, Personen, Dokumente mit Versionen, das Handbuch, den Prüfplan und Maßnahmen. Erst prüfen: die Vorschau zeigt Anzahl und Fehler je Eintrag; übernommen wird nur ein fehlerfreies Paket – ganz oder gar nicht. Verknüpfungen mit Mitarbeitern und Zuweisungen von Prüfungen danach hier bzw. im Prüfplan setzen.</p>
+          <div class="qm-import"><label class="btn" for="qm-e-datei"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Datenpaket wählen</label><input type="file" id="qm-e-datei" accept=".json,application/json" class="sr-only"><span class="qm-hilfe" id="qm-e-dateiname"></span></div>
+          <div id="qm-e-vorschau"></div>
+          <div class="qm-knopfreihe">
+            <label class="qm-check" id="qm-e-ersetzen-z" hidden><input type="checkbox" id="qm-e-ersetzen"> Vorhandene Daten ersetzen (alle Dokumente, Abschnitte, Prüfungen, Nachweise und Maßnahmen)</label>
+            <button class="btn primary" type="button" id="qm-e-uebernehmen" disabled>Übernehmen</button>
+          </div>
+          <p class="qm-meldung" id="qm-e-meldung" role="alert"></p>
+        </section>
+      </section>
+    </section>
+  </main>
+  <footer class="qm-fuss">STAFL-Plattform · Standard-Fleisch · QM-System nach IFS Wholesale</footer>
+</div>
+<div class="qm-toast" id="qm-toast" role="status" aria-live="polite"></div>
+<datalist id="qm-kuerzel"></datalist>
+
+<!-- Eingabemaske: Dokument anlegen / Angaben ändern -->
+<dialog class="qm-dialog" id="dlg-dokform" aria-labelledby="df-titel">
+  <form id="df-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="df-titel">Dokument anlegen</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="qm-formraster">
+      <label>Kapitel<select class="qm-eingabe" id="df-kapitel" required></select></label>
+      <label>Art<select class="qm-eingabe" id="df-art"></select></label>
+      <label>Dokumenten-Nr.<input class="qm-eingabe" id="df-nr" maxlength="40" placeholder="z. B. 1.4-F08"></label>
+      <label>Zuständig<input class="qm-eingabe" id="df-zust" maxlength="40" list="qm-kuerzel"></label>
+      <label class="qm-breit">Titel<input class="qm-eingabe" id="df-titel-in" maxlength="200" required></label>
+      <label>Vertreter<input class="qm-eingabe" id="df-vertr" maxlength="40" list="qm-kuerzel"></label>
+      <label>Ablage<input class="qm-eingabe" id="df-ablage" maxlength="500" placeholder="Ordner im QM-System oder https://…"></label>
+      <label class="qm-breit" id="df-aend-z">Änderungen (erste Version)<input class="qm-eingabe" id="df-aend" maxlength="2000" placeholder="Neu angelegt"></label>
+      <label class="qm-breit">Notiz<textarea class="qm-eingabe" id="df-notiz" rows="2" maxlength="2000"></textarea></label>
+    </div>
+    <p class="qm-hilfe" id="df-hilfe"></p>
+    <p class="qm-meldung" id="df-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Handbuch: Abschnitt -->
+<dialog class="qm-dialog" id="dlg-abschnitt" aria-labelledby="ab-titel">
+  <form id="ab-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="ab-titel">Abschnitt</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="qm-formraster">
+      <label>Kapitel<select class="qm-eingabe" id="ab-kapitel" required></select></label>
+      <label>Nummer<input class="qm-eingabe" id="ab-nr" maxlength="20" placeholder="z. B. 2.0.14"></label>
+      <label class="qm-breit">Prozessschritt<input class="qm-eingabe" id="ab-titel-in" maxlength="200" required></label>
+      <label class="qm-breit">Worauf kommt es an?<textarea class="qm-eingabe" id="ab-text" rows="9" maxlength="20000"></textarea></label>
+      <label class="qm-breit">Wo? Womit? <span class="qm-hilfe">(je Zeile ein Verweis, z. B. „1.3-L02 HACCP-Analyse“)</span><textarea class="qm-eingabe" id="ab-verweise" rows="3" maxlength="6000"></textarea></label>
+      <label>IFS-Bezug<input class="qm-eingabe" id="ab-ifs" maxlength="60"></label>
+      <label>Zuständig<input class="qm-eingabe" id="ab-zust" maxlength="40" list="qm-kuerzel"></label>
+      <label>Vertreter<input class="qm-eingabe" id="ab-vertr" maxlength="40" list="qm-kuerzel"></label>
+      <label class="qm-check" id="ab-entfallen-z"><input type="checkbox" id="ab-entfallen"> entfallen</label>
+      <label class="qm-breit">Änderung (Stichworte)<input class="qm-eingabe" id="ab-aend" maxlength="1000" placeholder="z. B. Neu angelegt, Ablauf ergänzt"></label>
+      <label class="qm-breit">Änderungsgrund<input class="qm-eingabe" id="ab-grund" maxlength="1000" placeholder="z. B. IFS Internes Audit / Anpassung IFS Wholesale v3"></label>
+    </div>
+    <details class="qm-details" id="ab-aenderungen-z"><summary>Bisherige Änderungen</summary><ul class="qm-verlauf" id="ab-aenderungen"></ul></details>
+    <p class="qm-meldung" id="ab-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Prüfplan: Prüfung ansehen (mit Nachweisen und Versäumnissen) -->
+<dialog class="qm-dialog" id="dlg-pruefung" aria-labelledby="pr-titel">
+  <form method="dialog" novalidate>
+    <div class="qm-dialogkopf"><div><span class="qm-sub" id="pr-kapitel"></span><h2 id="pr-titel">Prüfung</h2></div><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="qm-meta" id="pr-meta"></div>
+    <dl class="qm-felder" id="pr-felder"></dl>
+    <div id="pr-versaeumt"></div>
+    <h3 class="qm-zwischen">Nachweise</h3>
+    <div class="qm-tabelle-wrap" id="pr-nachweise"></div>
+    <div class="qm-knopfreihe" id="pr-knoepfe"></div>
+  </form>
+</dialog>
+
+<!-- Prüfplan: Prüfung anlegen/ändern -->
+<dialog class="qm-dialog" id="dlg-pruefform" aria-labelledby="pf-titel">
+  <form id="pf-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="pf-titel">Prüfung anlegen</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="qm-formraster">
+      <label>Kapitel<select class="qm-eingabe" id="pf-kapitel" required></select></label>
+      <label>Intervall<select class="qm-eingabe" id="pf-intervall"></select></label>
+      <label class="qm-breit">Prüfung<input class="qm-eingabe" id="pf-titel-in" maxlength="200" required></label>
+      <label class="qm-breit">Frequenz / Durchführung<textarea class="qm-eingabe" id="pf-beschr" rows="3" maxlength="4000"></textarea></label>
+      <label>Ab wann (erste Fälligkeit)<input class="qm-eingabe" id="pf-start" type="date"></label>
+      <label>Wo? Womit?<input class="qm-eingabe" id="pf-womit" maxlength="500"></label>
+      <label class="qm-breit">Sollwert<textarea class="qm-eingabe" id="pf-soll" rows="2" maxlength="2000"></textarea></label>
+      <label class="qm-breit">Maßnahme bei Abweichung<textarea class="qm-eingabe" id="pf-massn" rows="2" maxlength="2000"></textarea></label>
+      <label>Zuständig (Kürzel)<input class="qm-eingabe" id="pf-zust" maxlength="40" list="qm-kuerzel"></label>
+      <label>Vertreter (Kürzel)<input class="qm-eingabe" id="pf-vertr" maxlength="40" list="qm-kuerzel"></label>
+    </div>
+    <fieldset class="qm-wahl qm-mitarbeiterwahl"><legend>Durchführung durch (Mitarbeiter)</legend><input class="qm-eingabe" id="pf-ma-suche" type="search" placeholder="Mitarbeiter suchen" aria-label="Mitarbeiter suchen"><div id="pf-ausfuehrende"></div></fieldset>
+    <label class="qm-check"><input type="checkbox" id="pf-aktiv" checked> aktiv</label>
+    <p class="qm-meldung" id="pf-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Prüfplan: Nachweis erfassen -->
+<dialog class="qm-dialog qm-dialog-mittel" id="dlg-nachweis" aria-labelledby="nw-titel">
+  <form id="nw-form" novalidate>
+    <div class="qm-dialogkopf"><div><span class="qm-sub" id="nw-unter">Nachweis erfassen</span><h2 id="nw-titel">Prüfung</h2></div><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p class="qm-hilfe" id="nw-soll"></p>
+    <div class="qm-formraster">
+      <label>Datum<input class="qm-eingabe" id="nw-datum" type="date" required></label>
+      <label>Durchgeführt von<input class="qm-eingabe" id="nw-durch" maxlength="100" list="qm-kuerzel"></label>
+    </div>
+    <div class="qm-segment qm-segment-voll" role="group" aria-label="Ergebnis">
+      <button type="button" data-ergebnis="io" aria-pressed="true">In Ordnung</button><button type="button" data-ergebnis="abweichung" aria-pressed="false">Abweichung</button>
+    </div>
+    <label class="qm-feld">Bemerkung<textarea class="qm-eingabe" id="nw-bem" rows="3" maxlength="4000" placeholder="bei Abweichung: was wurde festgestellt?"></textarea></label>
+    <div class="qm-massnahmebox" id="nw-massn-z" hidden>
+      <label class="qm-check" id="nw-massn-l"><input type="checkbox" id="nw-massn" checked> Maßnahme anlegen</label>
+      <p class="qm-hilfe" id="nw-massn-hinweis" hidden>Die Abweichung bleibt im Nachweis festgehalten. Eine Maßnahme legt an, wer „QM-System bearbeiten“ hat (z. B. der QMB).</p>
+      <div class="qm-formraster" id="nw-massn-felder">
+        <label class="qm-breit">Korrektur (Sofortmaßnahme)<input class="qm-eingabe" id="nw-korr" maxlength="4000"></label>
+        <label class="qm-breit">Korrekturmaßnahme<input class="qm-eingabe" id="nw-km" maxlength="4000"></label>
+        <label>Zuständig<input class="qm-eingabe" id="nw-mzust" maxlength="40" list="qm-kuerzel"></label>
+        <label>Frist<input class="qm-eingabe" id="nw-frist" type="date"></label>
+      </div>
+    </div>
+    <p class="qm-hilfe">Nachweise werden nie geändert oder gelöscht – Fehler werden mit Grund storniert und bleiben sichtbar. Ein Nachweis für einen früheren Tag erscheint als „nachgetragen“.</p>
+    <p class="qm-meldung" id="nw-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Nachweis speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Maßnahme (Aufbau des IFS-Maßnahmenplans) -->
+<dialog class="qm-dialog qm-dialog-gross" id="dlg-massnahme" aria-labelledby="ms-titel">
+  <form id="ms-form" novalidate>
+    <div class="qm-dialogkopf"><div><span class="qm-sub" id="ms-nr"></span><h2 id="ms-titel">Maßnahme erfassen</h2></div><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <fieldset class="qm-abschnittfeld"><legend>Bezug</legend><div class="qm-formraster qm-raster3">
+      <label>Quelle<select class="qm-eingabe" id="ms-quelle"></select></label>
+      <label class="qm-zwei">Bezug / Audit<input class="qm-eingabe" id="ms-bezug" maxlength="200" placeholder="z. B. Internes Audit 2026"></label>
+      <label>Kapitel<select class="qm-eingabe" id="ms-kapitel"></select></label>
+      <label>IFS-Anforderung<input class="qm-eingabe" id="ms-anf" maxlength="20" placeholder="z. B. 4.8.2"></label>
+      <label>Bewertung<select class="qm-eingabe" id="ms-bewertung"></select></label>
+      <label class="qm-breit">Anforderung (Text)<textarea class="qm-eingabe" id="ms-anftext" rows="2" maxlength="4000"></textarea></label>
+      <label class="qm-breit">Feststellung / Erklärung des Auditors<textarea class="qm-eingabe" id="ms-fest" rows="3" maxlength="6000" required></textarea></label>
+    </div></fieldset>
+    <fieldset class="qm-abschnittfeld"><legend>Korrektur (Sofortmaßnahme)</legend><div class="qm-formraster qm-raster3">
+      <label class="qm-breit">Korrektur<textarea class="qm-eingabe" id="ms-korr" rows="2" maxlength="4000"></textarea></label>
+      <label>Verantwortlich<input class="qm-eingabe" id="ms-kverant" maxlength="100" list="qm-kuerzel"></label>
+      <label>Bis wann<input class="qm-eingabe" id="ms-kfrist" type="date"></label>
+      <label>Erledigt am<input class="qm-eingabe" id="ms-kerl" type="date"></label>
+      <label class="qm-breit">Nachweisart / Dokumente<input class="qm-eingabe" id="ms-nachweis" maxlength="2000"></label>
+    </div></fieldset>
+    <fieldset class="qm-abschnittfeld"><legend>Korrekturmaßnahme</legend><div class="qm-formraster qm-raster3">
+      <label class="qm-breit">Ursache (5-Why / 8M)<textarea class="qm-eingabe" id="ms-ursache" rows="2" maxlength="4000"></textarea></label>
+      <label class="qm-breit">Korrekturmaßnahme<textarea class="qm-eingabe" id="ms-km" rows="2" maxlength="6000"></textarea></label>
+      <label>Zuständig<input class="qm-eingabe" id="ms-zust" maxlength="100" list="qm-kuerzel"></label>
+      <label>Frist<input class="qm-eingabe" id="ms-frist" type="date"></label>
+      <label>Umgesetzt am<input class="qm-eingabe" id="ms-erl" type="date"></label>
+      <label>Status<select class="qm-eingabe" id="ms-status"></select></label>
+      <label class="qm-zwei" id="ms-notiz-z" hidden><span id="ms-notiz-l">Wirksamkeitsprüfung: wie geprüft, Ergebnis</span><textarea class="qm-eingabe" id="ms-notiz" rows="2" maxlength="2000"></textarea></label>
+    </div></fieldset>
+    <fieldset class="qm-abschnittfeld"><legend>Freigabe (Auditor)</legend><div class="qm-formraster qm-raster3">
+      <label>Freigabe durch<input class="qm-eingabe" id="ms-fvon" maxlength="100"></label>
+      <label>Freigabedatum<input class="qm-eingabe" id="ms-fdatum" type="date"></label>
+      <label>Notiz<input class="qm-eingabe" id="ms-fnotiz" maxlength="2000"></label>
+    </div></fieldset>
+    <p class="qm-hilfe" id="ms-wirksam"></p>
+    <details class="qm-details"><summary>Verlauf</summary><ul class="qm-verlauf" id="ms-verlauf"></ul></details>
+    <p class="qm-meldung" id="ms-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit" id="ms-speichern">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Grund abfragen (zurückgeben, verwerfen, einziehen, überprüft, Nachweis stornieren) -->
+<dialog class="qm-dialog qm-dialog-klein" id="dlg-grund" aria-labelledby="gr-titel">
+  <form id="gr-form" novalidate>
+    <div class="qm-dialogkopf"><h2 id="gr-titel">Grund</h2><button class="qm-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p id="gr-text"></p>
+    <label class="qm-feld"><span id="gr-label">Grund</span><textarea class="qm-eingabe" id="gr-grund" rows="3" maxlength="500"></textarea></label>
+    <p class="qm-meldung" id="gr-meldung" role="alert"></p>
+    <div class="qm-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit" id="gr-ok">OK</button></div>
+  </form>
+</dialog>
+
+<svg class="qm-symbole" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-schild" viewBox="0 0 24 24"><path d="M12 3 5 6v5.5c0 4.3 2.9 8.1 7 9.5 4.1-1.4 7-5.2 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
+  <symbol id="i-druck" viewBox="0 0 24 24"><path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/></symbol>
+  <symbol id="i-stift" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="i-lupe" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-haken" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-dokument" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-klemmbrett" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5M9 11h6M9 15h4"/></symbol>
+  <symbol id="i-blitz" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></symbol>
+</svg>
+<script src="qs.js"></script>
+</body>
+</html>
