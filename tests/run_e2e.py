@@ -306,6 +306,8 @@ def run_in(name, slot):
     BEREITSTELLEN.verzeichnis(pathlib.Path(app))   # wie der Server: ?v=… setzen, Prüfliste erzeugen
     for quelle, ziel in ZUSATZ.get(name, ()):   # Oberflächen außerhalb der Dokumentwurzel nur für ihre Gruppe einblenden
         shutil.copytree(os.path.join(REPO, quelle), os.path.join(app, ziel))
+        if quelle == BEREITSTELLEN.ZUSATZ == ziel:   # Dashboard wie auf dem Server mit Versionsnummern
+            BEREITSTELLEN.zusatz_verzeichnis(pathlib.Path(app))
     if name in REGISTER_TEST:
         register_anpassen(app, REGISTER_TEST[name])
     data = os.path.join(app, 'data')

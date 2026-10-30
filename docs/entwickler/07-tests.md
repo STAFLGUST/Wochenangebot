@@ -29,7 +29,7 @@ Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintra
    `deploy/bereitstellen.py` (`verzeichnis()`) wie beim Einspielen auf dem Server: Versionsnummern `?v=…` setzen und die
    Prüfliste der Dateiprüfung erzeugen.
 2. **Zusatz-Oberflächen** (`ZUSATZ`): Oberflächen außerhalb von `app/` werden nur für ihre Gruppe in die Kopie
-   eingeblendet, z. B. `dashboard/` für die Gruppen `dashboard` und `rollen`.
+   eingeblendet, z. B. `dashboard/` für die Gruppen `dashboard` und `rollen` – wie auf dem Server mit Versionsnummern.
 3. **Testzustand des Modulregisters** (`REGISTER_TEST`): einzelne Gruppen stellen in *ihrer Kopie* von
    `app/api/lib/module-liste.php` geplante Module auf einen anderen Entwicklungsstand (derzeit `modulverwaltung`).
    Das Register im Code bleibt unverändert.
@@ -105,7 +105,8 @@ Eintrag. Lokal nachstellen, was ein CI-Teil ausführt: `WA_TEIL=2/3 python3 test
   (`kcadm`) in einem Wegwerf-Ordner. Beispiele: `test_freigabe.sh` (Release-Modus mit eigenem Git-„origin“,
   GitHub-API-Ersatz `github_stub.py` und PHP-Testserver als Live-Seite), `test_sichern.sh`, `test_release_pruefen.sh`,
   `test_testumgebung.sh`, `test_notzugang.sh`, `test_konten_pruefen.sh`, `test_anmeldung_einrichten.sh`,
-  `test_datenbank.py` (Migration, Parallelzugriffe, Wiederherstellung), `test_dashboard_domains.py`, `test_images.py` (Images fest über Digest).
+  `test_datenbank.py` (Migration, Parallelzugriffe, Wiederherstellung), `test_dashboard_domains.py`, `test_images.py` (Images fest über Digest),
+  `test_zwischenspeichern.py` (Browser-Zwischenspeicher mit echtem Caddy, braucht Docker).
   `test_sqlite_http.sh` braucht Docker (echtes `php:8.3-apache`).
 
 ### Keycloak Ende-zu-Ende (`tests/oidc/`)

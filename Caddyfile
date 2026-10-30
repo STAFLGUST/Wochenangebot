@@ -1,3 +1,32 @@
+# Browser-Zwischenspeicher für alle Anwendungs-Hosts (import zwischenspeichern public|private: public nur auf den
+# öffentlichen Seiten, sonst nur im Browser des Nutzers, nie in fremden Zwischenspeichern). Ohne diese Regeln fragt der
+# Browser bei jeder Datei nach („no-cache“ in den Blöcken) – bei jedem Seitenaufruf eine Anfrage je Skript und Stylesheet.
+# – Skripte und Stylesheets mit Inhalts-Prüfsumme in der Adresse (?v=…, setzt deploy/bereitstellen.py beim Einspielen in
+#   alle Seiten unter app/ und dashboard/) ändern sich nie: ein Jahr ohne Rückfrage – eine neue Fassung hat eine neue Adresse.
+# – Schriften, Symbole und Logos (ohne ?v=, ändern sich selten): einen Tag ohne Rückfrage; eine neue Fassung erscheint
+#   spätestens am nächsten Tag. Kartendateien und Bibliotheken unter assets/vendor/ (lädt detailkarte.js) fragen weiter nach.
+# – Nur erfolgreiche Antworten (2xx, 304): eine Weiterleitung zur Anmeldung, „401“ oder ein Fehler wird nie gespeichert.
+# Geprüft mit echtem Caddy: tests/deploy/test_zwischenspeichern.py.
+(zwischenspeichern) {
+	@versioniert {
+		path *.js *.css
+		not path /api/*
+		query v=*
+	}
+	header @versioniert {
+		Cache-Control "{args[0]}, max-age=31536000, immutable"
+		match status 2xx 304
+	}
+	@statisch {
+		path /assets/fonts/* /assets/icons/* /assets/*.png
+		not query v=*
+	}
+	header @statisch {
+		Cache-Control "{args[0]}, max-age=86400"
+		match status 2xx 304
+	}
+}
+
 # HTTPS-Zertifikat wird automatisch geholt und verlängert (Let's Encrypt)
 {$DOMAIN}, www.{$DOMAIN} {
 	# IP-Sperre ist ausgeschaltet – die Seite ist öffentlich erreichbar.
@@ -27,13 +56,8 @@
 		-Server
 		-X-Powered-By
 	}
-	# Skripte und Stylesheets mit Inhalts-Prüfsumme in der Adresse (?v=…, werkzeuge/asset_versionen.py) ändern sich nie:
-	# ein Jahr zwischenspeichern – eine neue Fassung hat eine neue Adresse. Alles andere fragt weiter nach („no-cache“).
-	@versioniert {
-		path /assets/*
-		query v=*
-	}
-	header @versioniert >Cache-Control "public, max-age=31536000, immutable"
+	# Versionierte Skripte/Stylesheets ein Jahr, Schriften und Logos einen Tag (Abschnitt „zwischenspeichern“ oben)
+	import zwischenspeichern public
 	@private path /data /data/*
 	respond @private 404
 	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
@@ -60,13 +84,8 @@ test.{$DOMAIN} {
 		-Server
 		-X-Powered-By
 	}
-	# Skripte und Stylesheets mit Inhalts-Prüfsumme in der Adresse (?v=…, werkzeuge/asset_versionen.py) ändern sich nie:
-	# ein Jahr zwischenspeichern – eine neue Fassung hat eine neue Adresse. Alles andere fragt weiter nach („no-cache“).
-	@versioniert {
-		path /assets/*
-		query v=*
-	}
-	header @versioniert >Cache-Control "public, max-age=31536000, immutable"
+	# wie im Echtbetrieb, aber nur im Browser (Zugang mit Passwort)
+	import zwischenspeichern private
 	@private path /data /data/*
 	respond @private 404
 	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
@@ -137,6 +156,9 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 		-Server
 		-X-Powered-By
 	}
+	# Versionierte Skripte/Stylesheets ein Jahr, Schriften und Logos einen Tag – nur im Browser, nur erfolgreiche Antworten
+	# (eine Weiterleitung zur Anmeldung wird nie gespeichert; Abschnitt „zwischenspeichern“ oben)
+	import zwischenspeichern private
 	@private path /data /data/*
 	respond @private 404
 	reverse_proxy app-mitarbeiter:80

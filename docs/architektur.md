@@ -9,8 +9,10 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 ## Laufzeit
 
 - **Server:** Hostinger-VPS, Docker Compose: `php:8.3-apache` (Ordner `app/` nur lesend, Daten in `daten/` →
-  `/var/www/html/data`) und Caddy davor (HTTPS, Sicherheits- und Cache-Header, `Caddyfile`; versionierte Skripte/Stylesheets `/assets/…?v=…` ein Jahr `immutable`, alles andere `no-cache`; die Nummern setzt der
-  Server beim Einspielen, siehe „Bereitstellung“).
+  `/var/www/html/data`) und Caddy davor (HTTPS, Sicherheits- und Cache-Header, `Caddyfile`; Abschnitt `zwischenspeichern` für alle Anwendungs-Hosts:
+  versionierte Skripte/Stylesheets `…?v=…` ein Jahr `immutable` – auf der Angebotsseite `public`, sonst `private` –, Schriften,
+  Symbole und Logos einen Tag, nur erfolgreiche Antworten, alles andere `no-cache`; die Nummern setzt der Server beim
+  Einspielen, siehe „Bereitstellung“).
 - **Anwendungs-Image (vorbereitet, nicht im Betrieb):** `deploy/image/Dockerfile` = `php:8.3-apache` (fest über Digest) plus
   mod_auth_openidc, installiert, aber nicht geladen – Voraussetzung für die zentrale Anmeldung (ADR-003). Die CI baut es
   und prüft mit `deploy/image/pruefen.sh`, dass es sich ohne Konfiguration genau wie das Grundimage verhält
@@ -26,7 +28,8 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
   (`deploy/freigabe-einspielen.sh`: Prüfung, Healthcheck, automatischer Rückfall).
 - **Bereitstellung** (`deploy/bereitstellen.py`): nach jedem Codewechsel (Release, Rückfall, Testumgebung, Einrichtung; zusätzlich
   bei jedem Lauf von `aktualisieren.sh`, falls etwas fehlt) aus den Git-Objekten genau des aktiven Commits: Versionsnummern
-  `?v=<SHA-256 des Inhalts, 10 Zeichen>` in den HTML-Seiten und die Prüfliste `app/api/lib/integritaet-liste.php`. Beides
+  `?v=<SHA-256 des Inhalts, 10 Zeichen>` für jede eigene `.js`/`.css` in den HTML-Seiten unter `app/` (Angebotsseite,
+  Eingabebereich, Modulseiten) und im Dashboard (`dashboard/`, nicht in der Prüfliste) und die Prüfliste `app/api/lib/integritaet-liste.php`. Beides
   steht nicht im Repository (keine Merge-Konflikte mehr). Ohne Nummer lädt der Browser mit Rückfrage (`no-cache`) – nie
   eine veraltete Kopie. Ältere Stände, die Liste und Nummern noch selbst enthalten, bleiben unverändert (Rückfall).
 - **Testumgebung:** `test.<Domain>` → Container `app-test` in `/opt/wochenangebot-test` (`deploy/testumgebung.sh`,

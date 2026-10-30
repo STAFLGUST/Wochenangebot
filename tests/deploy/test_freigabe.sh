@@ -88,6 +88,13 @@ vnr() { python3 -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'r
 seite() { curl -fsS "http://127.0.0.1:$WEB_PORT/$1"; }
 ok "Release: Seiten mit Versionsnummer = Prüfsumme der ausgelieferten Datei (wie früher im Repository)" 'seite "" | grep -q "assets/frontend.js?v=$(vnr frontend.js)\"" \
   && seite admin/ | grep -q "assets/admin.js?v=$(vnr admin.js)\"" && ! git -C "$B" show HEAD:app/index.html | grep -q "?v="'
+vnrp() { python3 -c "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest()[:10])" "$B/$1"; }
+ok "Release: auch Modulseiten (eigene Skripte relativ zur Seite) und Dashboard (neben app/, nicht in der Prüfliste)" \
+  'seite module/qs/ | grep -q "src=\"qs.js?v=$(vnrp app/module/qs/qs.js)\"" && seite module/qs/ | grep -q "href=\"qs.css?v=$(vnrp app/module/qs/qs.css)\"" \
+   && seite module/qs/ | grep -q "href=\"../../assets/app.css?v=$(vnr app.css)\"" \
+   && grep -q "src=\"dashboard.js?v=$(vnrp dashboard/dashboard.js)\"" "$B/dashboard/index.html" \
+   && grep -q "href=\"../assets/app.css?v=$(vnr app.css)\"" "$B/dashboard/index.html" \
+   && ! git -C "$B" show HEAD:dashboard/index.html | grep -q "?v=" && ! grep -q "dashboard/" "$LISTE"'
 ok "Release: Prüfliste aus genau diesem Commit, nicht im Repository" 'grep -q "aus Commit $G_SHA" "$LISTE" && head -1 "$LISTE" | grep -q "http_response_code(404)" \
   && [ -z "$(git -C "$B" status --porcelain -- app/api/lib)" ] && python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
 
@@ -294,6 +301,11 @@ python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1
 ok "fehlende Liste und Nummern nachgeholt (identisch)" 'cmp -s "$LISTE" "$T/liste.vorher" && seite "" | grep -q "frontend.js?v=$(vnr frontend.js)\"" && grep -q "Bereitgestellt für" "$T/out.txt"'
 python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1
 ok "erneuter Aufruf ohne Abweichung: schreibt nichts, meldet nichts" '[ ! -s "$T/out.txt" ]'
+# Dashboard neben app/: Abweichungen dort lassen Prüfliste und Seiten unter app/ unberührt
+mv "$B/dashboard/index.html" "$T/dashboard-index.weg"; rm "$LISTE"; RC=0; python3 "$B/deploy/bereitstellen.py" > "$T/out.txt" 2>&1 || RC=$?
+ok "Dashboard-Seite fehlt: Prüfliste trotzdem geschrieben, Abweichung gemeldet" '[ "$RC" = 1 ] && cmp -s "$LISTE" "$T/liste.vorher" && grep -q "dashboard/index.html: fehlt" "$T/out.txt"'
+mv "$T/dashboard-index.weg" "$B/dashboard/index.html"
+ok "Dashboard wieder vollständig: Prüfung ohne Abweichung" 'python3 "$B/deploy/bereitstellen.py" --pruefen >/dev/null'
 ok "aktualisieren.sh holt die Bereitstellung vor dem Release-Modus nach" 'awk "!b && /^ *python3 deploy.bereitstellen.py/{b=NR} /^ *exec sh deploy.freigabe-einspielen.sh/{f=NR} END{exit !(b && f && b < f)}" "$B/deploy/aktualisieren.sh"'
 # Übergang: Stand mit Liste und Nummern im Repository (vor der Umstellung) ↔ Stand ohne
 ALT_SHA=$(commit alt-mit-liste x "cd '$T/src' && python3 deploy/bereitstellen.py --verzeichnis app >/dev/null && git add -f app/api/lib/integritaet-liste.php")

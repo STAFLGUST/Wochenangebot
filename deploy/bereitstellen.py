@@ -6,10 +6,12 @@ beim Einspielen aus genau dem aktiven Commit erzeugt – dem Commit, den der Rel
 CI grün, auf main). Gelesen wird aus den Git-Objekten dieses Commits, nicht aus dem Arbeitsordner: eine vor oder
 während des Einspielens veränderte oder hinzugefügte Datei wird so nie als „freigegeben“ übernommen.
 
-1. Versionsnummern: Jede Einbindung von assets/….js|css in einer HTML-Seite unter app/ bekommt ?v=<SHA-256 des
-   Inhalts, 10 Zeichen> – dieselbe Nummer wie früher von werkzeuge/asset_versionen.py. Caddy speichert Adressen mit
-   ?v= ein Jahr („immutable“), alles andere nur mit Rückfrage („no-cache“). Fehlt die Nummer (z. B. direkt nach
-   „git reset“ oder wenn dieses Skript nicht lief), lädt der Browser also trotzdem immer die aktuelle Fassung.
+1. Versionsnummern: Jede Einbindung einer eigenen .js- oder .css-Datei (src/href, relativ oder ab /, nie fremde
+   Adressen) in einer HTML-Seite unter app/ – Angebotsseite, Eingabebereich und Modulseiten – und im Dashboard
+   (dashboard/, im Betrieb unter /dashboard/ neben app/) bekommt ?v=<SHA-256 des Inhalts, 10 Zeichen>. Caddy speichert
+   Adressen mit ?v= ein Jahr („immutable“, auf den Mitarbeiter-Hosts nur im Browser), alles andere nur mit Rückfrage
+   („no-cache“). Fehlt die Nummer (z. B. direkt nach „git reset“ oder wenn dieses Skript nicht lief), lädt der Browser
+   also trotzdem immer die aktuelle Fassung.
    Eine Seite wird nur überschrieben, wenn sie genau dem Commit entspricht (ohne oder mit Nummern); eine anders
    veränderte Seite bleibt unangetastet, damit die Dateiprüfung sie meldet.
 2. Prüfliste app/api/lib/integritaet-liste.php (Pfad unter app/ => SHA-256) für Sicherheit → Dateiprüfung. HTML-Seiten
@@ -35,8 +37,10 @@ import sys
 from pathlib import Path
 
 WURZEL = Path(__file__).resolve().parent.parent
+ZUSATZ = 'dashboard'   # Seiten außerhalb von app/, im Betrieb unter /dashboard/ (Alias, apache-oidc.conf) – nicht in der Prüfliste
 LISTE = 'api/lib/integritaet-liste.php'            # relativ zu app/
-REF = re.compile(r'''(?P<attr>(?:src|href)=")(?P<pfad>(?:\.\./|/)?assets/[^"?#]+\.(?:js|css))(?:\?v=[^"#]*)?"''')
+# Eigene Skripte und Stylesheets: relativ (qs.js, ../../assets/app.css) oder ab / – keine Adressen mit Schema oder //
+REF = re.compile(r'''(?P<attr>(?:src|href)=")(?P<pfad>(?![a-zA-Z][a-zA-Z0-9+.-]*:|//)[^"?#]+\.(?:js|css))(?:\?v=[^"#]*)?"''')
 REF_B = re.compile(REF.pattern.encode())
 KOPF = ("<?php if (!defined('WA_API')) { http_response_code(404); exit; }\n"
         "/* Prüfliste der ausgelieferten Dateien (Pfad unter app/ => SHA-256) für die Dateiprüfung.\n"
@@ -97,6 +101,18 @@ def bereitstellung(dateien: dict) -> tuple:
     return seiten, liste, fehlend
 
 
+def zusatz_seiten(dateien: dict, zusatz: dict) -> tuple:
+    """Seiten des Dashboards stempeln. zusatz: Pfad unter dashboard/ → Inhalt; Einbindungen werden wie im Browser
+    aufgelöst (/dashboard/ liegt neben app/: ../assets/app.css → assets/app.css). Ergebnis: (Pfad unter dashboard/ →
+    gestempelt, fehlend)."""
+    alle = {**dateien, **{ZUSATZ + '/' + k: v for k, v in zusatz.items()}}
+    fehlend, seiten = [], {}
+    for k in sorted(zusatz):
+        if ist_seite(k):
+            seiten[k] = stempeln(ZUSATZ + '/' + k, zusatz[k], alle, fehlend)
+    return seiten, fehlend
+
+
 def php_text(s: str) -> str:
     return "'" + s.replace('\\', '\\\\').replace("'", "\\'") + "'"
 
@@ -136,16 +152,18 @@ def git(*args, eingabe=None) -> bytes:
     return subprocess.run(['git', '-C', str(WURZEL), *args], input=eingabe, capture_output=True, check=True).stdout
 
 
-def commit_dateien(commit: str) -> dict:
-    """Pfad unter app/ → Inhalt aller normalen Dateien des Commits (ohne Verweise und Untermodule)."""
+def commit_dateien(commit: str, ordner: str = 'app') -> dict:
+    """Pfad unter <ordner>/ → Inhalt aller normalen Dateien des Commits (ohne Verweise und Untermodule)."""
     eintraege = []
-    for z in git('ls-tree', '-r', '-z', '--full-tree', commit, '--', 'app').split(b'\0'):
+    for z in git('ls-tree', '-r', '-z', '--full-tree', commit, '--', ordner).split(b'\0'):
         if not z:
             continue
         kopf, pfad = z.split(b'\t', 1)
         modus, art, sha = kopf.split(b' ')
         if art == b'blob' and modus in (b'100644', b'100755'):
-            eintraege.append((pfad.decode('utf-8')[len('app/'):], sha.decode()))
+            eintraege.append((pfad.decode('utf-8')[len(ordner) + 1:], sha.decode()))
+    if not eintraege:
+        return {}
     roh = git('cat-file', '--batch', eingabe=''.join(s + '\n' for _, s in eintraege).encode())
     dateien, pos = {}, 0
     for rel, sha in eintraege:
@@ -197,6 +215,27 @@ def server(nur_pruefen: bool) -> int:
         else:
             schreiben(app / LISTE, soll)
             geschrieben.append(LISTE)
+    # Dashboard (neben app/) erst nach der Prüfliste: ein Fehler hier lässt Seiten und Prüfliste unter app/ unberührt
+    try:
+        zusatz = commit_dateien(commit, ZUSATZ)
+        zseiten, zfehlend = zusatz_seiten(dateien, zusatz)
+        for f in zfehlend:
+            print(f'Hinweis: {f} – Einbindung bleibt ohne Versionsnummer')
+        for k, gestempelt in zseiten.items():
+            pfad = WURZEL / ZUSATZ / k
+            ist = lesen(pfad)
+            if ist == gestempelt:
+                continue
+            if ist == zusatz[k]:
+                if not nur_pruefen:
+                    schreiben(pfad, gestempelt, pfad.stat().st_mode & 0o777)
+                    geschrieben.append(f'{ZUSATZ}/{k}')
+                else:
+                    abweichend.append(f'{ZUSATZ}/{k}: ohne Versionsnummern')
+            else:
+                abweichend.append(f'{ZUSATZ}/{k}: {"fehlt" if ist is None else "weicht vom Commit ab"}')
+    except (OSError, subprocess.CalledProcessError) as e:
+        abweichend.append(f'{ZUSATZ}/: nicht bereitgestellt ({e})')
     if geschrieben:
         print(f'Bereitgestellt für {commit[:12]}: ' + ', '.join(geschrieben))
     if abweichend:
@@ -233,6 +272,20 @@ def verzeichnis(app: Path, quelle: str = 'einer Arbeitskopie') -> int:
         if inhalt != dateien[rel]:
             schreiben(app / rel, inhalt, (app / rel).stat().st_mode & 0o777)
     schreiben(app / LISTE, liste_php(liste, quelle))
+    for f in fehlend:
+        print(f'Hinweis: {f}')
+    return 1 if fehlend else 0
+
+
+def zusatz_verzeichnis(app: Path) -> int:
+    """Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln."""
+    vorsilbe = ZUSATZ + '/'
+    dateien = ordner_dateien(app)
+    zusatz = {k[len(vorsilbe):]: v for k, v in dateien.items() if k.startswith(vorsilbe)}
+    seiten, fehlend = zusatz_seiten({k: v for k, v in dateien.items() if not k.startswith(vorsilbe)}, zusatz)
+    for k, inhalt in seiten.items():
+        if inhalt != zusatz[k]:
+            schreiben(app / ZUSATZ / k, inhalt, (app / ZUSATZ / k).stat().st_mode & 0o777)
     for f in fehlend:
         print(f'Hinweis: {f}')
     return 1 if fehlend else 0
