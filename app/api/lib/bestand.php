@@ -119,6 +119,34 @@ function stock_ohne_ek(?array $st): ?array
     return $st;
 }
 
+/* Bezeichnung und VK-Gruppe aus den Artikelstammdaten (Eigentümer Verwaltung, hier nur lesen – regeln/datenverantwortung.toml).
+   Gilt für Ansicht, Druck, PDF, CSV und MHD-Mail; gespeichert bleibt der Bestand unverändert (Name aus der Importdatei).
+   Ohne Stammdatensatz oder mit leerer Bezeichnung bleibt der Name der Importdatei. „nameImport“ nur, wenn er abweicht
+   (Suche findet beide). Rückgabe zusätzlich „vkgruppen“: Nummer → Bezeichnung der verwendeten VK-Gruppen. */
+function bestand_mit_stammdaten(?array $st): ?array
+{
+    if (!$st) return $st;
+    $m = [];
+    foreach ((store_read('stammdaten')['articles'] ?? []) as $a) if (is_array($a) && isset($a['code'])) $m[code_key((string)$a['code'])] = $a;
+    $genutzt = [];
+    $setze = function ($x) use ($m, &$genutzt) {
+        if (!is_array($x)) return $x;
+        $s = $m[code_key((string)($x['code'] ?? ''))] ?? null;
+        if (!$s) return $x;
+        $name = trim((string)($s['name'] ?? ''));
+        if ($name !== '' && $name !== (string)($x['name'] ?? '')) { $x['nameImport'] = (string)($x['name'] ?? ''); $x['name'] = $name; }
+        $vk = trim((string)($s['vkGruppe'] ?? ''));
+        if ($vk !== '') { $x['vk'] = $vk; $genutzt[$vk] = true; }
+        return $x;
+    };
+    $st['articles'] = array_map($setze, $st['articles'] ?? []);
+    $st['incoming'] = array_map($setze, $st['incoming'] ?? []);
+    $namen = [];
+    if ($genutzt) foreach (gruppen_load('vkgruppen')['groups'] as $g) if (isset($genutzt[(string)($g['nr'] ?? '')])) $namen[(string)$g['nr']] = (string)($g['name'] ?? '');
+    $st['vkgruppen'] = (object)$namen;
+    return $st;
+}
+
 /* ---------------- Stammdaten ---------------- */
 
 function code_key(string $c): string { return ctype_digit($c) ? (ltrim($c, '0') === '' ? '0' : ltrim($c, '0')) : strtoupper($c); }

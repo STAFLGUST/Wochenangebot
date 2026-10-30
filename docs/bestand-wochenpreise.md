@@ -44,12 +44,43 @@ Zugänge werden in der Übersicht nur
 als Button mit Anzahl gezeigt. Er öffnet einen Dialog mit den einzelnen Mengen und ETAs;
 Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lieferdetails.
 
+## Bezeichnung aus den Stammdaten, Spaltenfilter, VK-Gruppen
+
+- **Bezeichnung:** Angezeigt wird die Bezeichnung aus den Artikelstammdaten (Verwaltung → Artikelstammdaten), nicht der
+  Name aus der WinAB-Liste. Das gilt für Liste, Artikel-Fenster, Druck, PDF, CSV und die MHD-Mail (Bild, Excel, Text).
+  Ohne Stammdatensatz oder bei leerer Bezeichnung bleibt der Name der Liste. Der Server setzt die Bezeichnung beim Lesen
+  ein (`bestand_mit_stammdaten()` in `lib/bestand.php`). Gespeichert bleibt der Bestand wie importiert. Der Name der Liste
+  steht als `nameImport` in der Antwort, im Hinweis der Bezeichnung und in der Suche.
+- **Spaltenfilter:** Jede Überschrift hat einen Trichter. Er öffnet ein Fenster zum Sortieren (auf- oder absteigend)
+  und zum Filtern:
+  - Art.-Nr. und Bezeichnung: enthält (mehrere Wörter = alle).
+  - Preise: mit oder ohne Preis, Bereich in €.
+  - Mengen: Bereich in kg.
+  - Kürz. MHD: Stufen wie die Legende, „später“, „ohne MHD“ und ein Zeitraum.
+  - Erwartete Zugänge: mit oder ohne.
+
+  Filter verschiedener Spalten gelten zusammen (UND) und zusätzlich zur Suche. Die aktiven Filter stehen als Leiste über
+  der Tabelle; jeder einzeln oder alle lassen sich entfernen. Sie gelten für Summen, Druck (Überschrift „Filter: …“),
+  PDF, CSV und „VK-Gruppen“, nur für diese Sitzung. Am Handy sind die Überschriften ausgeblendet; der Knopf „Filter“
+  zeigt alle Filter in einem Fenster (am Desktop ebenso).
+- **VK-Gruppen:** Der Knopf „VK-Gruppen“ öffnet ein Fenster mit der aktuellen Auswahl je VK-Gruppe der Artikelstammdaten.
+  - Je Gruppe stehen die Summen von eingelagertem Bestand, Kg kürz. MHD, erfasstem Bestand und Gesamt verfügbar sowie
+    das früheste MHD (farbig wie in der Liste).
+  - Die Gruppen sind aufklappbar und zeigen dann ihre Artikel. Artikel ohne Gruppe stehen unter „Ohne VK-Gruppe“, ganz unten.
+  - Reihenfolge: VK-Gruppe (Nummer), Gesamt verfügbar, eingelagerter Bestand oder Kg kürz. MHD.
+  - Die VK-Gruppe und die Namen der verwendeten Gruppen liefert `GET stock` (`vk` je Artikel, `vkgruppen`). Das Recht
+    „Stammdaten ansehen“ ist dafür nicht nötig; der Bestand liest Stammdaten und VK-Gruppen nur (`regeln/datenverantwortung.toml`).
+
 ## Schnittstelle und Rechte
 
 `GET stock` bleibt nur mit `bestand.sehen` verfügbar. Das zusätzliche Antwortfeld `prices` enthält
 `allowed`, `current`, `previous`; je Woche `week`, `year`, `available`, `source`, `origin`, `items`.
 Jeder Preiseintrag enthält ausschließlich `code` und `price`, niemals Kundenpreisvarianten.
 Ohne `preisverlauf.sehen` kommt nur `prices: {allowed: false}`; die Oberfläche zeigt fehlende Berechtigung.
+
+`GET stock` und die Antwort von `POST stock_import` enthalten je Artikel und Zugang die Bezeichnung aus den Stammdaten
+(`name`), bei Abweichung `nameImport` und `vk`, dazu `vkgruppen` (Nummer → Name). `POST stock_pdf` nimmt optional `filter`
+(Text der aktiven Spaltenfilter für die Überschrift, höchstens 160 Zeichen).
 
 `POST stock_import` behält `bestand.importieren`, POST/JSON und CSRF-Prüfung. Optionales `incoming`
 ist eine Liste mit höchstens 20.000 Lieferungen. Artikelnummer, positive endliche kg-Menge (max.
