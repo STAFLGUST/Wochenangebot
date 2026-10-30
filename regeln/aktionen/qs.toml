@@ -1,7 +1,8 @@
 # Aktionen des Moduls „qs“ (QM-System nach IFS Wholesale): gelenkte Dokumente mit Versionen und Freigabe nach dem
 # 4-Augen-Prinzip, QM-Handbuch (Abschnitte je Kapitel), Prüfplan mit Nachweisen und Fälligkeiten, Korrekturmaßnahmen,
 # Stammdaten (Kapitel, Personen mit Kürzel), CSV-Listen, Übernahme eines Datenpakets (bisherige Excel „QM-System“) und
-# Dokumentenablage (Dateien je Version, in Teilen hochladen, herunterladen, ZIP-Export – lib/dateiablage.php).
+# Dokumentenablage (Dateien je Version, in Teilen hochladen, herunterladen, ZIP-Export – lib/dateiablage.php) und
+# Audit-Bericht eines Zeitraums (Ansicht und Excel – module/qs/bericht.php).
 # Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
 
 schema = 1
@@ -66,4 +67,10 @@ schreibend = true
 oberflaeche = "qs.intern"
 
 [aktion.qs_ablage_export]
+oberflaeche = "qs.intern"
+
+[aktion.qs_bericht]
+oberflaeche = "qs.intern"
+
+[aktion.qs_bericht_excel]
 oberflaeche = "qs.intern"

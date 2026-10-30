@@ -96,7 +96,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `module.php` | plattform | Modulübersicht (Plattformkern) |
 | `passkey.php` | plattform | Aktionen: Passkeys (WebAuthn) – eigene Passkeys verwalten, Anmeldung mit Passkey Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
 | `preisverlauf.php` | angebot | Aktionen: Preisverlauf Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). |
-| `qs.php` | qs | Aktionen: QM-System (Oberfläche qs.intern, Daten und Regeln in app/api/module/qs/qs.php) Rechte (GR-103): qs.sehen – Übersicht, Dokumente mit Versionen, Handbuch, Prüfplan mit Nachweisen, Maßnahmen, CSV; qs.nachweis … |
+| `qs.php` | qs | Aktionen: QM-System (Oberfläche qs.intern, Daten und Regeln in app/api/module/qs/qs.php) Rechte (GR-103): qs.sehen – Übersicht, Dokumente mit Versionen, Handbuch, Prüfplan mit Nachweisen, Maßnahmen, CSV, … |
 | `rewe.php` | rewe | Aktionen: REWE · Vordisposition Dry Aged (Oberfläche rewe.intern, Daten und Regeln in app/api/module/rewe/rewe.php, Wochenabschluss und Excel in app/api/module/rewe/export.php) Rechte (GR-103): rewe.sehen – eigene … |
 | `schutz.php` | plattform | Schutzzentrale (Verwaltung → Schutz, nur Administratoren) |
 | `sicherheit.php` | sicherheit | Aktionen des Moduls Sicherheit (Oberfläche sicherheit.intern, sicherheit.dashboard-stafl.de; docs/plattform/modul-sicherheit.md) |
@@ -193,6 +193,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `bericht.php` | qs | QM-System · Audit-Bericht (Aktionen qs_bericht, qs_bericht_excel) |
 | `qs.php` | qs | Qualitätssicherung · QM-System (IFS Wholesale) |
 | `vorlagen.php` | qs | Qualitätssicherung · Vorlagen und Lenkungsangaben in Word- und Excel-Dateien (Bauabschnitt 3, nur bei Bedarf geladen von app/api/aktionen/qs.php). |
 
@@ -685,6 +686,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |
+| `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
 | `test_restposten.py` | angebot | Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. |

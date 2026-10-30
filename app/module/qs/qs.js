@@ -5,7 +5,9 @@
    Zustandsfilter, Seitenleiste mit Versionen, Ablauf Entwurf → Prüfung → Freigabe und Überprüfung), Handbuch (Kapitel mit
    Ziel, Abschnitte mit Verweisen, Suche, Drucken), Prüfplan (Jahresplan 6 Monate zurück, 5 voraus: erfüllte Tage/Wochen,
    Nachweise, Versäumnisse, geplante Fälligkeiten; Nachweis erfassen; Maßnahme aus einer Abweichung), Maßnahmen (Tafel
-   offen → in Arbeit → umgesetzt → wirksam oder Liste; Eingabemaske im Aufbau des IFS-Maßnahmenplans), Einstellungen
+   offen → in Arbeit → umgesetzt → wirksam oder Liste; Eingabemaske im Aufbau des IFS-Maßnahmenplans), Audit (Bericht eines
+   Zeitraums für das IFS-Audit aus qs_bericht: Prüfplan je Monat, Versäumnisse und Fristen, Abweichungen, Maßnahmen,
+   Dokumentenlenkung, Handbuch-Änderungen; Drucken/PDF über den Browser, Excel aus qs_bericht_excel), Einstellungen
    (Personen mit Kürzel und Mitarbeiter, Kapitel, Überprüfungsfrist, Datenpaket).
    Rechte und 4-Augen-Prinzip prüft der Server bei jeder Aktion (GR-103); ausgeblendete Knöpfe sind nur Anzeige.
    Kein Inline-Skript (CSP). */
@@ -15,10 +17,10 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'einstellungen'];
+  const TABS = ['uebersicht', 'dokumente', 'handbuch', 'pruefplan', 'massnahmen', 'bericht', 'einstellungen'];
   const MONATE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
   const S = { csrf: '', d: null, tab: 'uebersicht', kap: '', zustand: '', ansicht: 'tafel', toast: 0, paket: null, dok: '', pruefung: '', edit: {}, grund: null, laden: null, wahl: null,
-    sammel: { eintraege: [], filter: '', laeuft: false, abbrechen: false } };
+    sammel: { eintraege: [], filter: '', laeuft: false, abbrechen: false }, bericht: null, berichtLaeuft: false };
 
   /* ---------- Aufruf der API: wirft nie, liefert { status, data, json } ---------- */
   async function api(action, body, query = '') {
@@ -88,6 +90,7 @@
     $$('#qm-tabs [role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
     $$('.qm-tab').forEach((x) => { x.hidden = x.dataset.tab !== tab; });
     history.replaceState(null, '', '#' + tab);
+    if (tab === 'bericht' && !S.bericht && !S.berichtLaeuft) erstelleBericht();
   }
   $('#qm-tabs').addEventListener('click', (ev) => { const b = ev.target.closest('[role="tab"]'); if (b) zeigeTab(b.dataset.tab); });
   window.addEventListener('hashchange', () => { if (S.d) { const t = location.hash.slice(1).split('/')[0]; if (t !== S.tab) zeigeTab(t || 'uebersicht'); } });
@@ -1277,6 +1280,159 @@
     toast(`Datenpaket übernommen – ${zahl(r.data.zahlen.dokumente)} Dokumente, ${zahl(r.data.zahlen.handbuch)} Abschnitte, ${zahl(r.data.zahlen.pruefungen)} Prüfungen, ${zahl(r.data.zahlen.massnahmen || 0)} Maßnahmen`);
     await neuLaden();
   });
+
+  /* ---------- Audit-Bericht ---------- */
+  function berichtZeitraum(art) {
+    const heute = S.d.heute, j = Number(heute.slice(0, 4));
+    if (art === 'jahr') return [`${j}-01-01`, heute];
+    if (art === 'vorjahr') return [`${j - 1}-01-01`, `${j - 1}-12-31`];
+    return [plusMonate(heute.slice(0, 7), -11) + '-01', heute];   // letzte 12 Monate einschließlich des laufenden
+  }
+  function zeitraumSetzen() {
+    const art = $('#qm-b-zeitraum').value;
+    if (art === 'frei') return;
+    const [von, bis] = berichtZeitraum(art);
+    $('#qm-b-von').value = von; $('#qm-b-bis').value = bis;
+  }
+  $('#qm-b-zeitraum').addEventListener('change', () => { zeitraumSetzen(); if ($('#qm-b-zeitraum').value !== 'frei') erstelleBericht(); });
+  ['#qm-b-von', '#qm-b-bis'].forEach((s) => $(s).addEventListener('input', () => { $('#qm-b-zeitraum').value = 'frei'; }));
+  async function erstelleBericht() {
+    if (!$('#qm-b-von').value || !$('#qm-b-bis').value) zeitraumSetzen();
+    const m = $('#qm-b-meldung');
+    m.textContent = ''; m.className = 'qm-meldung';
+    S.berichtLaeuft = true; $('#qm-b-los').disabled = true;
+    const r = await api('qs_bericht', null, `&von=${encodeURIComponent($('#qm-b-von').value)}&bis=${encodeURIComponent($('#qm-b-bis').value)}`);
+    S.berichtLaeuft = false; $('#qm-b-los').disabled = false;
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) {
+      m.textContent = fehlerText(r, 'Der Bericht konnte nicht erstellt werden');
+      if (r.status === 422) ['#qm-b-von', '#qm-b-bis'].forEach((s) => $(s).setAttribute('aria-invalid', 'true'));
+      return;
+    }
+    ['#qm-b-von', '#qm-b-bis'].forEach((s) => $(s).removeAttribute('aria-invalid'));
+    S.bericht = r.data;
+    renderBericht();
+  }
+  $('#qm-b-form').addEventListener('submit', (ev) => { ev.preventDefault(); erstelleBericht(); });
+  $('#qm-b-druck').addEventListener('click', () => window.print());
+  $('#qm-b-excel').addEventListener('click', async () => {
+    const b = S.bericht; if (!b) return;
+    let res;
+    try { res = await fetch(API + '?action=qs_bericht_excel&von=' + encodeURIComponent(b.von) + '&bis=' + encodeURIComponent(b.bis), { credentials: 'same-origin', cache: 'no-store' }); }
+    catch { toast('Keine Verbindung zum Server.', true); return; }
+    if (res.status === 401) { zeigeAnmeldung(); return; }
+    if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* keine JSON-Antwort */ } toast(d.error || `Excel konnte nicht erstellt werden (${res.status}).`, true); return; }
+    speichereDatei(await res.blob(), `QM-Audit-Bericht_${b.von}_${b.bis}.xlsx`);
+  });
+  const prozent = (x) => (x === null || x === undefined ? '—' : `${String(Math.round(x * 1000) / 10).replace('.', ',')} %`);
+  const quoteFarbe = (e, f) => { const fehlt = f - e; return fehlt === 0 ? 'gruen' : e > 0 && fehlt <= Math.max(1, Math.floor(f / 10)) ? 'gelb' : 'rot'; };
+  const B_MAX_BEREICHE = 12;
+  const B_STATUS = { eingehalten: ['eingehalten', 'gruen'], verspaetet: ['verspätet', 'gelb'], ueberfaellig: ['überfällig', 'rot'], offen: ['fällig am Stichtag', 'gelb'], nie: ['noch nie geprüft', 'rot'] };
+  const B_VORGANG = { freigabe: 'Freigabe', ueberprueft: 'Überprüft ohne Änderung', eingezogen: 'Eingezogen' };
+  const bKap = (id) => { const t = S.bericht.kapitel[id] || ''; return id ? `${id}${t ? ' ' + t : ''}` : ''; };
+  const bPeriode = (iv, k) => (iv === 'woechentlich' ? `KW ${Number(k.split('-W')[1])}/${k.slice(0, 4)}` : iv === 'monatlich' ? `${MONATE[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}` : datum(k));
+  const bAbschnitt = (titel, sub, inhalt) => `<section class="qm-panel qm-glas qm-b-abschnitt"><div class="qm-panelkopf"><div><h3>${esc(titel)}</h3>${sub ? `<p class="qm-hilfe">${esc(sub)}</p>` : ''}</div></div>${inhalt}</section>`;
+  const bKpi = (titel, wert, sub, farbe = '') => `<div class="qm-kpi ${farbe}"><span>${esc(titel)}</span><b>${esc(wert)}</b><small>${esc(sub)}</small></div>`;
+  const bLeer = (text) => `<p class="qm-leerzeile">${esc(text)}</p>`;
+  const bPruefung = (p) => `<b>${esc(p.titel)}</b><span class="qm-sub">${esc(p.kapitel + ' · ' + ivKurz(p.intervall))}</span>`;
+  function bMatrix(b) {
+    if (!b.pruefungen.length) return bLeer('Im Zeitraum gibt es keine Prüfungen.');
+    const kopf = `<tr><th>Prüfung</th>${b.monate.map((m) => `<th class="qm-b-mon">${esc(MONATE[Number(m.slice(5, 7)) - 1])}<small>${m.slice(0, 4)}</small></th>`).join('')}<th>Gesamt</th></tr>`;
+    const zeilen = b.pruefungen.map((p) => {
+      const sub = [p.kapitel, ivKurz(p.intervall) + (p.art === 'inaktiv' ? ' · inaktiv' : ''), p.zustaendig ? 'Zuständig ' + p.zustaendig : '', p.ausfuehrende.join(', ')].filter(Boolean).join(' · ');
+      const zellen = b.monate.map((m) => {
+        const c = p.monate[m] || {};
+        if (p.art === 'kalender') return `<td class="qm-b-mon">${c.f ? `<i class="qm-quote ${quoteFarbe(c.e, c.f)}" title="${c.e} von ${c.f} erfüllt">${c.e}/${c.f}</i>` : ''}</td>`;
+        return `<td class="qm-b-mon">${c.n ? `<i class="qm-pm ok" title="${c.n} Nachweis(e)">${c.n > 1 ? c.n : '✓'}</i>` : ''}</td>`;
+      }).join('');
+      let gesamt;
+      if (p.art === 'kalender') gesamt = p.faellig ? `${chip(`${p.erfuellt}/${p.faellig}`, quoteFarbe(p.erfuellt, p.faellig))}<span class="qm-sub">${prozent(p.erfuellt / p.faellig)}${p.versaeumt ? ` · ${zahl(p.versaeumt)} versäumt` : ''}</span>` : '<span class="qm-sub">noch nicht fällig</span>';
+      else if (p.art === 'rollend') {
+        const bewertet = p.fristen.filter((f) => f.status !== 'offen'), ok = bewertet.filter((f) => f.status === 'eingehalten').length;
+        const farbe = bewertet.some((f) => f.status === 'ueberfaellig' || f.status === 'nie') ? 'rot' : bewertet.some((f) => f.status === 'verspaetet') ? 'gelb' : 'gruen';
+        gesamt = bewertet.length ? `${chip(`${ok}/${bewertet.length} Fristen`, farbe)}` : '<span class="qm-sub">keine Frist im Zeitraum</span>';
+      } else gesamt = `<span class="qm-sub">${zahl(p.nachweise)} Nachweise</span>`;
+      return `<tr><td class="qm-b-titel"><b>${esc(p.titel)}</b><span class="qm-sub">${esc(sub)}</span></td>${zellen}<td class="qm-b-gesamt">${gesamt}</td></tr>`;
+    }).join('');
+    return `<div class="qm-plan-wrap"><table class="qm-tabelle qm-b-matrix"><thead>${kopf}</thead><tbody>${zeilen}</tbody></table></div>
+      <p class="qm-hilfe qm-b-legende">Täglich, wöchentlich und monatlich: erfüllte von fälligen Perioden im Monat ihres Endes (täglich = jeder Arbeitstag Mo–Fr ohne Hamburger Feiertage); die laufende Periode zählt erst mit Nachweis. Sonst: Nachweise im Monat.</p>`;
+  }
+  function bVersaeumnisse(b) {
+    const z = [];
+    for (const p of b.pruefungen) {
+      if (p.bereiche.length) {   // je Prüfung eine Zeile; alle Bereiche einzeln stehen in der Excel
+        const txt = p.bereiche.slice(0, B_MAX_BEREICHE).map(([a, e]) => (a === e ? bPeriode(p.intervall, a) : bPeriode(p.intervall, a) + ' – ' + bPeriode(p.intervall, e))).join(' · ')
+          + (p.bereiche.length > B_MAX_BEREICHE ? ` · … und ${zahl(p.bereiche.length - B_MAX_BEREICHE)} weitere (vollständig in der Excel)` : '');
+        z.push(`<tr><td class="qm-voll" data-label="Prüfung">${bPruefung(p)}</td><td data-label="Art">${chip('versäumt', 'rot')}</td><td class="qm-voll" data-label="Zeitraum">${esc(txt)}</td><td data-label="Anzahl">${zahl(p.versaeumt)}</td></tr>`);
+      }
+      for (const f of p.fristen.filter((x) => x.status !== 'eingehalten')) {
+        const [text, farbe] = B_STATUS[f.status];
+        const wann = f.status === 'nie' ? 'ohne Nachweis und ohne erste Fälligkeit' : `fällig ${datum(f.faellig)}${f.erledigt ? ', erledigt ' + datum(f.erledigt) : ''}`;
+        z.push(`<tr><td class="qm-voll" data-label="Prüfung">${bPruefung(p)}</td><td data-label="Art">${chip(text, farbe)}</td><td data-label="Frist">${esc(wann)}</td><td data-label="Tage">${f.tage === null ? '' : esc(zahl(f.tage) + ' Tage')}</td></tr>`);
+      }
+    }
+    return z.length ? `<div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten"><thead><tr><th>Prüfung</th><th>Art</th><th>Zeitraum bzw. Frist</th><th>Anzahl / Tage</th></tr></thead><tbody>${z.join('')}</tbody></table></div>`
+      : bLeer('Keine Versäumnisse: alle fälligen Prüfungen sind fristgerecht nachgewiesen.');
+  }
+  function bAbweichungen(b) {
+    if (!b.abweichungen.length) return bLeer('Keine Abweichungen im Zeitraum.');
+    return `<div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten"><thead><tr><th>Datum</th><th>Prüfung</th><th>Feststellung</th><th>Durchgeführt von</th><th>Maßnahme</th></tr></thead><tbody>${b.abweichungen.map((a) => `<tr>
+      <td data-label="Datum">${esc(datum(a.datum))}</td><td data-label="Prüfung"><b>${esc(a.pruefung)}</b><span class="qm-sub">${esc(a.kapitel)}</span></td>
+      <td class="qm-voll" data-label="Feststellung">${esc(a.bemerkung)}</td><td data-label="Durchgeführt von">${esc(a.durch)}</td>
+      <td data-label="Maßnahme">${a.massnahme ? `${esc(a.massnahme.nr)} ${massnStatusChip(a.massnahme)}` : '<span class="qm-null">—</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function bMassnahmen(b) {
+    if (!b.massnahmen.length) return bLeer('Keine Maßnahmen im Zeitraum.');
+    return `<div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten"><thead><tr><th>Nr.</th><th>Feststellung</th><th>Quelle</th><th>Zuständig</th><th>Frist</th><th>Status</th><th>Abgeschlossen</th></tr></thead><tbody>${b.massnahmen.map((m) => `<tr>
+      <td class="qm-nr" data-label="Nr.">${esc(m.nr)}</td>
+      <td class="qm-voll" data-label="Feststellung">${esc(m.feststellung)}${m.massnahme ? `<span class="qm-sub">${esc(m.massnahme)}</span>` : ''}</td>
+      <td data-label="Quelle">${esc(S.d.quellen[m.quelle] || m.quelle)}${m.bewertung ? ' ' + chip(m.bewertung) : ''}</td><td data-label="Zuständig">${esc(m.zustaendig) || '<span class="qm-null">—</span>'}</td>
+      <td data-label="Frist">${m.frist ? (m.ueberfaellig ? chip(datum(m.frist), 'rot') : esc(datum(m.frist))) : '<span class="qm-null">—</span>'}</td>
+      <td data-label="Status">${massnStatusChip(m)}</td><td data-label="Abgeschlossen">${esc(datum(m.abgeschlossen))}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function bDokumente(b) {
+    const v = b.dokumente.vorgaenge, f = b.dokumente.faellig;
+    const vt = v.length ? `<div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten"><thead><tr><th>Datum</th><th>Vorgang</th><th>Dokument</th><th>Version</th><th>Änderung bzw. Notiz</th><th>erstellt · geprüft · freigegeben</th></tr></thead><tbody>${v.map((x) => `<tr>
+      <td data-label="Datum">${esc(datum(x.datum))}</td><td data-label="Vorgang">${chip(B_VORGANG[x.vorgang], x.vorgang === 'eingezogen' ? '' : 'gruen')}</td>
+      <td class="qm-voll" data-label="Dokument"><b>${esc(x.nr)}</b> ${esc(x.titel)}<span class="qm-sub">${esc(bKap(x.kapitel))}</span></td>
+      <td data-label="Version">${esc(x.version || '')}</td><td class="qm-voll" data-label="Änderung">${esc(x.vorgang === 'freigabe' ? [x.aenderungen, x.grund].filter(Boolean).join(' · ') : x.notiz)}</td>
+      <td data-label="Beteiligt">${esc(x.vorgang === 'freigabe' ? [x.erstellt, x.geprueft, x.freigegeben].map((k) => k || '—').join(' · ') : x.von)}</td></tr>`).join('')}</tbody></table></div>`
+      : bLeer('Im Zeitraum wurde kein Dokument freigegeben, überprüft oder eingezogen.');
+    const ft = f.length ? `<div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten"><thead><tr><th>Dokument</th><th>Kapitel</th><th>Freigegeben bzw. überprüft</th><th>Überprüfung fällig seit</th></tr></thead><tbody>${f.map((x) => `<tr>
+      <td class="qm-voll" data-label="Dokument"><b>${esc(x.nr)}</b> ${esc(x.titel)}</td><td data-label="Kapitel">${esc(bKap(x.kapitel))}</td>
+      <td data-label="Freigegeben">${esc(datum(x.seit)) || '<span class="qm-null">—</span>'}</td><td data-label="Fällig seit">${chip(datum(x.faelligAb) || 'fällig', 'gelb')}</td></tr>`).join('')}</tbody></table></div>`
+      : bLeer('Kein gültiges Dokument ist zur Überprüfung fällig.');
+    return `<h4 class="qm-b-unter">Freigaben, Überprüfungen und Einziehungen im Zeitraum</h4>${vt}<h4 class="qm-b-unter">Überprüfung fällig (Stand ${esc(datum(b.heute))})</h4>${ft}`;
+  }
+  function bHandbuch(b) {
+    if (!b.handbuch.length) return bLeer('Keine Änderungen am QM-Handbuch im Zeitraum.');
+    return `<div class="qm-tabelle-wrap"><table class="qm-tabelle qm-karten"><thead><tr><th>Datum</th><th>Abschnitt</th><th>Änderung</th><th>Grund</th><th>von</th></tr></thead><tbody>${b.handbuch.map((x) => `<tr>
+      <td data-label="Datum">${esc(datum(x.datum))}</td><td class="qm-voll" data-label="Abschnitt"><b>${esc(x.nr)}</b> ${esc(x.titel)}<span class="qm-sub">${esc(bKap(x.kapitel))}</span></td>
+      <td class="qm-voll" data-label="Änderung">${esc(x.was)}</td><td data-label="Grund">${esc(x.grund)}</td><td data-label="von">${esc(x.von)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  function renderBericht() {
+    const b = S.bericht, el = $('#qm-b-bericht');
+    $('#qm-b-druck').disabled = !b; $('#qm-b-excel').disabled = !b;
+    if (!b) { el.innerHTML = ''; return; }
+    const k = b.kennzahlen, p = k.pruefplan, m = k.massnahmen, d = k.dokumente;
+    const bewertet = p.fristen - p.offen;
+    el.innerHTML = `<header class="qm-b-kopf qm-glas"><div><span class="qm-ueber">QM-System · IFS Wholesale</span><h2>Audit-Bericht ${esc(datum(b.von))} – ${esc(datum(b.bis))}</h2>
+        <p class="qm-hilfe">Erstellt ${esc(zeitpunkt(b.erstellt.t))} von ${esc(b.erstellt.von)} · Status von Dokumenten und Maßnahmen: Stand ${esc(datum(b.heute))} · Nachweise nach dem Stichtag zählen nicht</p></div>
+        <img class="qm-b-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></header>
+      <div class="qm-kpis qm-b-kpis">
+        ${bKpi('Prüfplan erfüllt', prozent(p.quote), p.faellig ? `${zahl(p.erfuellt)} von ${zahl(p.faellig)} Perioden · ${zahl(p.versaeumt)} versäumt` : 'keine täglichen, wöchentlichen oder monatlichen Prüfungen fällig', p.versaeumt ? 'warn' : '')}
+        ${bKpi('Fristen längerer Intervalle', bewertet ? `${zahl(p.eingehalten)} von ${zahl(bewertet)}` : '—', `${zahl(p.verspaetet)} verspätet · ${zahl(p.ueberfaellig + p.nie)} überfällig bzw. nie geprüft`, p.ueberfaellig + p.nie ? 'warn' : p.verspaetet ? 'gelb' : '')}
+        ${bKpi('Abweichungen', zahl(p.abweichungen), `bei ${zahl(p.nachweise)} Nachweisen · ${zahl(p.storniert)} storniert`, p.abweichungen ? 'gelb' : '')}
+        ${bKpi('Maßnahmen offen', zahl(m.offen), `${zahl(m.ueberfaellig)} über der Frist · ${zahl(m.erfasst)} neu · ${zahl(m.abgeschlossen)} wirksam abgeschlossen`, m.ueberfaellig ? 'warn' : '')}
+        ${bKpi('Gültige Dokumente', zahl(d.gueltig), `${zahl(d.freigaben)} ${d.freigaben === 1 ? 'Freigabe' : 'Freigaben'} im Zeitraum · ${zahl(d.faellig)} Überprüfung fällig`, d.faellig ? 'gelb' : '')}
+      </div>
+      ${bAbschnitt('Prüfplan je Monat', `${zahl(p.pruefungen)} aktive Prüfungen · ${zahl(p.nachweise)} Nachweise im Zeitraum`, bMatrix(b))}
+      ${bAbschnitt('Versäumnisse und Fristen', 'Versäumte Perioden als zusammenhängende Bereiche; längere Intervalle mit verspäteter, überfälliger oder fehlender Prüfung', bVersaeumnisse(b))}
+      ${bAbschnitt('Abweichungen', 'Nachweise mit Ergebnis „Abweichung“ und die zugehörige Maßnahme', bAbweichungen(b))}
+      ${bAbschnitt('Maßnahmen', 'Im Zeitraum offene, neu erfasste oder abgeschlossene Maßnahmen · Status Stand ' + datum(b.heute), bMassnahmen(b))}
+      ${bAbschnitt('Dokumentenlenkung', `${zahl(d.freigaben)} ${d.freigaben === 1 ? 'Freigabe' : 'Freigaben'} · ${zahl(d.ueberprueft)} ohne Änderung überprüft · ${zahl(d.eingezogen)} eingezogen · ${zahl(d.inArbeit)} in Überarbeitung oder Prüfung · ${zahl(d.ohneFreigabe)} noch nie freigegeben`, bDokumente(b))}
+      ${bAbschnitt('QM-Handbuch', `${zahl(k.handbuch)} Änderungen im Zeitraum`, bHandbuch(b))}`;
+  }
 
   /* ---------- Eingabemasken: gemeinsame Hilfen ---------- */
   $$('.qm-dialog').forEach((dlg) => dlg.addEventListener('click', (ev) => { if (ev.target.closest('[data-schliessen]')) dlg.close(); }));

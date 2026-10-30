@@ -216,7 +216,7 @@ reihenfolge = 50
 dashboard = true
 agent = "qs"
 abhaengigkeiten = ["plattform", "hr"]
-testgruppen = ["qs", "qs_ablage", "qs_vorlagen"]
+testgruppen = ["qs", "qs_ablage", "qs_vorlagen", "qs_bericht"]
 pfade = ["regeln/aktionen/qs.toml", "app/api/aktionen/qs.php", "app/api/module/qs/**", "app/module/qs/**", "tests/e2e/test_qs*.py", "tests/fixtures/qs/**"]
 pfade_geplant = []
 hinweise = [
@@ -228,6 +228,7 @@ hinweise = [
   "Personen (Kürzel, Name, Funktion) sind mit Mitarbeitern der Plattform verknüpft – gelesen nur über users_load des Plattformkerns (Kennung, Name, Zugang), keine Daten anderer Module. Feiertage über hr_feiertag (Modul HR). Kürzel in Versionen, Abschnitten und Maßnahmen sind Schnappschüsse (GR-106).",
   "Echte Daten nie ins Repository (GR-007): Übernahme der bisherigen Excel und der Maßnahmenpläne über ein Datenpaket (qs_import) in der Oberfläche.",
   "Externe QS-Nutzer (Kunden, Lieferanten, Prüfer) erhalten nie Zugang zur Mitarbeiterplattform (GR-104); das QS-Portal ist ein eigener späterer Abschnitt.",
+  "Audit-Bericht (Wahl des Inhabers 30.10.2026): Auswertung eines Zeitraums (höchstens zwei Jahre) für das IFS-Audit – nur lesen, mit „QM-System ansehen“; Ansicht mit Drucken/PDF und Excel (module/qs/bericht.php, qs_bericht, qs_bericht_excel).",
   "Freigegeben mit dem Merge (Entscheidung des Inhabers 30.10.2026 „gleich produktiv“, ohne vorherige Testfreigabe): qs.dashboard-stafl.de mit eigenem Keycloak-Client „qs“ (Stand 13); / und /admin/ führen zu /module/qs/. Aktionen qs_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Modulzugang wie üblich für die Standardrollen; Inhalte erst mit „QM-System ansehen“ (ohne Standardrollen). Das QS-Portal (extern) bleibt geplant. DNS-Eintrag qs besteht seit 21.10.2026.",
 ]
 

@@ -36,6 +36,7 @@ declare(strict_types=1);
    „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); leer = nächste freie Nummer (nie wiederverwendet, auch nicht von eingezogenen).
    Vorlagen und Lenkungsangaben (module/qs/vorlagen.php): neue Dokumente aus einer Vorlage (Art V), Platzhalter in Word/Excel,
    Lenkungsangaben bei der Freigabe, Übernahme der Dateien in eine Überarbeitung.
+   Audit-Bericht (module/qs/bericht.php): Auswertung eines Zeitraums aus denselben Dokumenten, nur lesen.
    Zuständig/Vertreter sind Kürzel (Schnappschuss, GR-106). Gespeicherte Felder, die diese Fassung nicht kennt, bleiben beim
    Speichern erhalten (GR-006). Rechte (GR-103): qs.sehen, qs.nachweis, qs.bearbeiten, qs.freigeben, qs.verwalten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -244,8 +245,8 @@ function qs_monatstage(int $j, int $m): int { return (int)qs_dt(sprintf('%04d-%0
 function qs_plus_monate(string $d, int $monate): string
 {
     $x = qs_dt($d);
-    $j = (int)$x->format('Y'); $m = (int)$x->format('n') + $monate; $t = (int)$x->format('j');
-    $j += intdiv($m - 1, 12); $m = ($m - 1) % 12 + 1;
+    $i = (int)$x->format('Y') * 12 + (int)$x->format('n') - 1 + $monate;   // Monate seit Jahr 0 (auch rückwärts über den Jahreswechsel)
+    $j = intdiv($i, 12); $m = $i % 12 + 1; $t = (int)$x->format('j');
     return sprintf('%04d-%02d-%02d', $j, $m, min($t, qs_monatstage($j, $m)));
 }
 function qs_tage_bis(string $von, string $bis): int { return (int)round((qs_dt($bis)->getTimestamp() - qs_dt($von)->getTimestamp()) / 86400); }
