@@ -3507,21 +3507,25 @@
      Der Browser zeichnet das Bild für die E-Mail; Excel, Zahlen und Empfänger kommen vom Server. */
   const mhdListe = () => { const lim = isoToday(14); return stockItems().filter((a) => a.mhd && a.mhd <= lim).sort((a, b) => a.mhd.localeCompare(b.mhd) || byCode(a, b)); };
   const MHD_FARBE = { 'mhd-past': ['#d9d6d2', '#1f1d1a'], 'mhd-0-4': ['#fbe0dd', '#8f1d14'], 'mhd-5-7': ['#fde7d3', '#7a3209'], 'mhd-8-14': ['#fbf0c9', '#6b4a05'] };
+  /* Bild für die E-Mail: Schrift wie in der Anwendung (14 px), Spalten knapp, damit das Bild in der E-Mail in Originalgröße
+     (Breite = Rückgabe „breite“, CSS-Pixel) gut lesbar ist; gezeichnet in dreifacher Auflösung (scharf beim Vergrößern),
+     bei sehr langen Listen in doppelter (Größengrenzen des Servers: lib/bestand-mhd.php). Rückgabe { bild, breite }. */
   function mhdBild(list) {
-    const preise = !!stockPrices?.allowed, S2 = 2, ZH = 30, KH = 44, RAND = 18;
-    const sp = [['Art.-Nr.', 74, 'l', (a) => a.code], ['Bezeichnung', 320, 'l', (a) => a.name]];
-    if (preise) sp.push([`Aktueller Preis ${stockWeekLabel('current')}`, 150, 'r', (a) => stockPriceText(a.price)], [`Preis Vorwoche ${stockWeekLabel('previous')}`, 150, 'r', (a) => stockPriceText(a.prevPrice)]);
-    sp.push(['Eingelagerter Bestand', 124, 'r', (a) => kgText(a.kg)], ['Kürz. MHD', 96, 'c', (a) => mhdShort(a.mhd), true], ['Kg kürz. MHD', 124, 'r', (a) => (a.cls === 'mhd-past' ? '\u2620 ' : '') + kgText(a.mhdKg), true],
-      ['Erfasster Bestand', 124, 'r', (a) => kgText(a.incomingKg)], ['Nächste ETA', 96, 'c', (a) => (a.nextEta ? mhdShort(a.nextEta.t) : '—')], ['Gesamt verfügbar', 124, 'r', (a) => kgText(a.totalKg)]);
-    const breite = RAND * 2 + sp.reduce((s, c) => s + c[1], 0), kopfH = 70, hoehe = kopfH + KH + (list.length + 1) * ZH + RAND;
-    const cv = document.createElement('canvas'); cv.width = breite * S2; cv.height = hoehe * S2;
-    const g = cv.getContext('2d'); g.scale(S2, S2);
+    const preise = !!stockPrices?.allowed, ZH = 32, KH = 46, RAND = 18;
+    const sp = [['Art.-Nr.', 80, 'l', (a) => a.code], ['Bezeichnung', 340, 'l', (a) => a.name]];
+    if (preise) sp.push([`Aktueller Preis ${stockWeekLabel('current')}`, 120, 'r', (a) => stockPriceText(a.price)], [`Preis Vorwoche ${stockWeekLabel('previous')}`, 120, 'r', (a) => stockPriceText(a.prevPrice)]);
+    sp.push(['Eingelagerter Bestand', 118, 'r', (a) => kgText(a.kg)], ['Kürz. MHD', 86, 'c', (a) => mhdShort(a.mhd), true], ['Kg kürz. MHD', 124, 'r', (a) => (a.cls === 'mhd-past' ? '\u2620 ' : '') + kgText(a.mhdKg), true],
+      ['Erfasster Bestand', 118, 'r', (a) => kgText(a.incomingKg)], ['Nächste ETA', 84, 'c', (a) => (a.nextEta ? mhdShort(a.nextEta.t) : '—')], ['Gesamt verfügbar', 118, 'r', (a) => kgText(a.totalKg)]);
+    const breite = RAND * 2 + sp.reduce((s, c) => s + c[1], 0), kopfH = 74, hoehe = kopfH + KH + (list.length + 1) * ZH + RAND;
+    const S = hoehe * 3 <= 30000 && breite * hoehe * 9 <= 32e6 ? 3 : 2;
+    const cv = document.createElement('canvas'); cv.width = breite * S; cv.height = hoehe * S;
+    const g = cv.getContext('2d'); g.scale(S, S);
     const FONT = '-apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     g.fillStyle = '#ffffff'; g.fillRect(0, 0, breite, hoehe);
-    g.fillStyle = '#1b1a18'; g.font = `700 17px ${FONT}`; g.textBaseline = 'middle';
-    g.fillText(`${company ? company + ' · ' : ''}MHD-Liste vom ${dmy(isoToday())}`, RAND, 24);
-    g.fillStyle = '#666'; g.font = `13px ${FONT}`;
-    g.fillText(`${list.length} Artikel mit MHD bis ${dmy(isoToday(14))} (früheste zuerst) · Bestand vom ${stock.date ? dmy(stock.date) : '?'} · intern – nicht zur Weitergabe`, RAND, 48);
+    g.fillStyle = '#1b1a18'; g.font = `700 19px ${FONT}`; g.textBaseline = 'middle';
+    g.fillText(`${company ? company + ' · ' : ''}MHD-Liste vom ${dmy(isoToday())}`, RAND, 26);
+    g.fillStyle = '#666'; g.font = `13.5px ${FONT}`;
+    g.fillText(`${list.length} Artikel mit MHD bis ${dmy(isoToday(14))} (früheste zuerst) · Bestand vom ${stock.date ? dmy(stock.date) : '?'} · intern – nicht zur Weitergabe`, RAND, 52);
     const text = (s, x, w, y, ausr) => {
       let t = String(s ?? '');
       if (g.measureText(t).width > w - 12) { while (t.length > 1 && g.measureText(t + '…').width > w - 12) t = t.slice(0, -1); t += '…'; }
@@ -3531,7 +3535,7 @@
     // Kopfzeile (zweizeilig umbrochen)
     let x = RAND, y = kopfH;
     g.fillStyle = '#f3f1ee'; g.fillRect(RAND, y, breite - 2 * RAND, KH);
-    g.fillStyle = '#1b1a18'; g.font = `700 12px ${FONT}`;
+    g.fillStyle = '#1b1a18'; g.font = `700 12.5px ${FONT}`;
     for (const [t, w, ausr] of sp) {
       const worte = t.split(' '), zeilen = [];
       for (const wo of worte) { const z = zeilen[zeilen.length - 1]; if (z && g.measureText(z + ' ' + wo).width < w - 12) zeilen[zeilen.length - 1] = z + ' ' + wo; else zeilen.push(wo); }
@@ -3545,7 +3549,7 @@
       for (const [, w, ausr, wert, mhd] of sp) {
         const f = mhd && MHD_FARBE[a.cls];
         if (f) { g.fillStyle = f[0]; g.fillRect(x, y, w, ZH); }
-        g.fillStyle = f ? f[1] : '#1b1a18'; g.font = `${f ? 700 : 400} 13px ${FONT}`;
+        g.fillStyle = f ? f[1] : '#1b1a18'; g.font = `${f ? 700 : 400} 14px ${FONT}`;
         text(wert(a), x, w, y + ZH / 2, ausr);
         x += w;
       }
@@ -3555,14 +3559,14 @@
     // Gesamtsumme
     g.fillStyle = '#f3f1ee'; g.fillRect(RAND, y, breite - 2 * RAND, ZH);
     g.fillStyle = '#333'; g.fillRect(RAND, y, breite - 2 * RAND, 1.5);
-    x = RAND; g.fillStyle = '#1b1a18'; g.font = `700 13px ${FONT}`;
+    x = RAND; g.fillStyle = '#1b1a18'; g.font = `700 14px ${FONT}`;
     const summe = { 'Eingelagerter Bestand': 'kg', 'Kg kürz. MHD': 'mhdKg', 'Erfasster Bestand': 'incomingKg', 'Gesamt verfügbar': 'totalKg' };
     for (const [t, w, ausr] of sp) {
       if (t === 'Art.-Nr.') text('Gesamtsumme', x, 300, y + ZH / 2, 'l');
       else if (summe[t]) text(kgText(sum(list, summe[t])), x, w, y + ZH / 2, ausr);
       x += w;
     }
-    return cv.toDataURL('image/png');
+    return { bild: cv.toDataURL('image/png'), breite };
   }
   async function mhdAnVerkauf(btn) {
     const list = mhdListe();
@@ -3570,7 +3574,7 @@
     if (!(await confirmBox('MHD-Liste an den Verkauf senden?', `${esc(fmtInt.format(list.length))} Artikel mit MHD bis ${esc(dmy(isoToday(14)))} gehen als Bild in der E-Mail und als Excel-Datei im Anhang an die Empfänger, die unter Verwaltung → E-Mail → Benachrichtigungen („MHD-Liste an den Verkauf“) eingetragen sind.`, 'Senden'))) return;
     if (btn) btn.disabled = true;
     try {
-      const r = await api('stock_mhd_senden', { body: { codes: list.map((a) => a.code), bild: mhdBild(list) } });
+      const r = await api('stock_mhd_senden', { body: { codes: list.map((a) => a.code), ...mhdBild(list) } });
       const bad = r.results.filter((x) => !x.ok);
       toast(`MHD-Liste (${fmtInt.format(r.artikel)} Artikel) gesendet an ${r.results.filter((x) => x.ok).map((x) => x.to).join(', ')}${bad.length ? ` – nicht zugestellt: ${bad.map((x) => x.to).join(', ')}` : ''}.`, 7000);
     } catch (e) {

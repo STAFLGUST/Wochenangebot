@@ -111,6 +111,17 @@ check('über das interne Postfach (ohne eigenes: Kunden-Postfach, angebot@)', m[
 check('Versandprotokoll: Typ „mhd“ je Empfänger', storage_raw('mailversand').count('"typ":"mhd"') + storage_raw('mailversand').count('"typ": "mhd"') == 2)
 code, r, raw = A.call('log', raw=True)
 check('Protokoll: MHD-Liste gesendet', 'MHD-Liste (3 Artikel) an den Verkauf gesendet an verkauf@example.org' in raw)
+check('ohne Breitenangabe (ältere Oberfläche): Bild höchstens 1100 px wie bisher', 'width="1100"' in m['html'] and 'max-width:1100px' in m['html'])
+n0 = len(smtp.messages)
+code, r = E.call('stock_mhd_senden', {**GUT, 'breite': 99999})
+until(lambda: len(smtp.messages) >= n0 + 2)
+check('Breite außerhalb 600–2000 px wird ignoriert (1100 px)', code == 200 and 'width="1100"' in smtp.messages[n0]['html'], code)
+n0 = len(smtp.messages)
+code, r = E.call('stock_mhd_senden', {'codes': IN_LISTE, 'breite': 1344, 'bild': base64.b64encode(png(6000, 60)).decode()})
+until(lambda: len(smtp.messages) >= n0 + 2)
+check('Bild bis 6000 px breit (dreifache Auflösung), Anzeigebreite aus der Oberfläche', code == 200 and 'width="1344"' in smtp.messages[n0]['html']
+      and 'max-width:1344px' in smtp.messages[n0]['html'] and 'max-width:1384px' in smtp.messages[n0]['html'], code)
+check('Bild breiter als 6000 px → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bild': base64.b64encode(png(6001, 60)).decode()})[0] == 422)
 
 # ---------- Oberfläche ----------
 with sync_playwright() as p:
@@ -143,7 +154,22 @@ with sync_playwright() as p:
     with open(os.path.join(SH, 'mhd-mail-bild.png'), 'wb') as f:
         f.write(bild)
     breite, hoehe = struct.unpack('>II', bild[16:24])
-    check('Bild aus der Oberfläche: PNG in doppelter Auflösung, Höhe passt zu 3 Zeilen', bild[:8] == b'\x89PNG\r\n\x1a\n' and breite >= 2400 and 400 <= hoehe <= 800, (breite, hoehe))
+    # Ansicht der E-Mail: Bild in Originalgröße wie in der Anwendung, im schmalen Fenster verkleinert
+    html = smtp.messages[n0]['html']
+    w = re.search(r'<img src="cid:mhd-liste"[^>]*? width="(\d+)"', html)
+    w = int(w.group(1)) if w else 0
+    check('Bild aus der Oberfläche: PNG in dreifacher Auflösung, Höhe passt zu 3 Zeilen', bild[:8] == b'\x89PNG\r\n\x1a\n' and 1000 <= w <= 1400 and breite == 3 * w and 600 <= hoehe <= 1000, (w, breite, hoehe))
+    check('E-Mail: feste Breite in Pixeln (Outlook), sonst höchstens Originalgröße', f'max-width:{w}px' in html and 'width:100%' in html, html[:300])
+    ansicht = br.new_page(viewport={'width': 1440, 'height': 950})
+    ansicht.set_content(html.replace('cid:mhd-liste', 'data:image/png;base64,' + base64.b64encode(bild).decode()))
+    ansicht.wait_for_function("document.querySelector('img').complete && document.querySelector('img').naturalWidth > 0")
+    ansicht.screenshot(path=os.path.join(SH, 'mhd-mail-ansicht-1440.png'))
+    check('E-Mail bei 1440 px: Bild in Originalgröße (Schrift so groß wie in der Anwendung)', abs(ansicht.evaluate("document.querySelector('img').getBoundingClientRect().width") - w) < 1)
+    ansicht.set_viewport_size({'width': 390, 'height': 844})
+    check('E-Mail bei 390 px: Bild passt in die Breite', ansicht.evaluate("document.querySelector('img').getBoundingClientRect().right") <= 390
+          and ansicht.evaluate('document.documentElement.scrollWidth') <= 390)
+    ansicht.screenshot(path=os.path.join(SH, 'mhd-mail-ansicht-390.png'))
+    ansicht.close()
     # Gleiche Liste unabhängig von der aktuellen Suche
     a.fill('#st-q', 'Test Später'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 1")
     n0 = len(smtp.messages)
