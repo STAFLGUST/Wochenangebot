@@ -1,0 +1,62 @@
+# Aktionen des Moduls „rewe“: Vordisposition Dry Aged für REWE-Märkte – Wochenabfrage je Mitarbeiter (gruppiert nach
+# Zentrallager und Direktbelieferung), Marktakte mit Verlauf, Notizen und Wiedervorlagen, Zuweisung und Lieferweg ab KW,
+# Wochenabschluss mit Excel für die Erfassung in WinAB, Lieferwege und Artikel, Übernahme der bisherigen Excel-Listen.
+# Erklärung der Felder: regeln/aktionen/LIESMICH.md · nach Änderungen: python3 werkzeuge/regeln.py erzeugen
+
+schema = 1
+modul = "rewe"
+
+[aktion.rewe_start]
+oberflaeche = "rewe.intern"
+
+[aktion.rewe_woche]
+oberflaeche = "rewe.intern"
+
+[aktion.rewe_maerkte]
+oberflaeche = "rewe.intern"
+
+[aktion.rewe_markt]
+oberflaeche = "rewe.intern"
+
+[aktion.rewe_antwort]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_dauer_uebernehmen]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_markt_save]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_notiz_save]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_zuweisen]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_stamm_save]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_abschluss]
+oberflaeche = "rewe.intern"
+
+[aktion.rewe_export]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_erfasst]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_import]
+oberflaeche = "rewe.intern"
+schreibend = true
+
+[aktion.rewe_team_save]
+oberflaeche = "rewe.intern"
+schreibend = true

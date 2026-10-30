@@ -70,8 +70,12 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `testpostfach` | Plattformkern | vertraulich | – | angebot | Abgefangene E-Mails der Testumgebung (WA_TESTUMGEBUNG=1) |
 | `verkehr` | Plattformkern | intern | – | – | Live-Verkehr (Ringpuffer) der Schutzzentrale |
 | `wartung` | Plattformkern | intern | – | – | Heutiger globaler Wartungsmodus der Angebotsseite (nur Kundenfunktionen) |
+| `rewe-maerkte` | REWE | vertraulich | – | – | REWE-Märkte: Kd.-Nr. (WinAB), REWE-Marktnummer, Anschrift, Telefon, Ansprechpartner, Kaufbereitschaft, Dauerauftrag, Abfragetag, Hinweis; Zuständigkeit und Lieferweg mit „ab KW“-Historie – Historie: Zuständigkeit und Lieferweg werden nie überschrieben, sondern ab einer KW fortgeschrieben; Änderungen stehen mit Namen in rewe-verlauf |
+| `rewe-stamm` | REWE | intern | – | – | REWE: Lieferwege (Zentrallager oder Direktbelieferung, Bestellschluss) und Artikel (Name, Einheit, WinAB-Artikelnummer) |
+| `rewe-verlauf` | REWE | vertraulich | – | – | REWE-Marktakte: Notizen, Telefonate, Besuche, Reklamationen, Ware ohne Berechnung, Wiedervorlagen (erledigt mit Namen) und Änderungen (Kaufbereitschaft, Dauerauftrag, Zuweisung, Lieferweg) – Historie: Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wird gelöscht |
+| `rewe-wochen/*` | REWE | vertraulich | – | – | REWE-Wochenabfrage je ISO-Jahr: Antwort je Markt und KW (bestellt mit Mengen je Artikel, kein Bedarf, nicht erreicht, Pause), ohne Berechnung, Notiz, wer/wann, Herkunft; Wochenabschluss (exportiert, in WinAB erfasst) – Historie: Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schnappschuss (GR-106); Änderungen nach dem Export sind als Nachtrag gekennzeichnet |
 | `anmeldeorte` | Verwaltung | vertraulich | – | – | Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP) |
-| `kunden` | Verwaltung | vertraulich | angebot, crm | angebot, plattform | Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003) |
+| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe | angebot, plattform | Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003) |
 | `kundengruppen*` | Verwaltung | intern | angebot, crm | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
 | `kundensitzungen` | Verwaltung | geheim | – | angebot | Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6) |
 | `stammdaten` | Verwaltung | intern | angebot, bestand | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |

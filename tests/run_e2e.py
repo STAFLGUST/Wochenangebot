@@ -123,6 +123,7 @@ SUITES['crm'] = (8790, 'data-seed', True, {'WA_ADRESSEN': ADRESSEN_TEST})   # CR
 SUITES['marketing'] = (8790, 'data-seed', True)   # Marketing · Redaktionsplan (app/module/marketing/, Oberfläche marketing.intern)
 SUITES['controlling'] = (8790, 'data-seed', True)   # Controlling · Umsatzstatistik (app/module/controlling/, Oberfläche controlling.intern)
 SUITES['leergut'] = (8790, 'data-seed', True)   # Leergut · Leergutkonten und Abstimmung (app/module/leergut/, Oberfläche leergut.intern)
+SUITES['rewe'] = (8790, 'data-seed', True)   # REWE · Vordisposition Dry Aged (app/module/rewe/, Oberfläche rewe.intern)
 SUITES['sicherheit_modul'] = SUITES['bestellung']   # Modul Sicherheit (app/module/sicherheit/, Oberfläche sicherheit.intern); Test-Mailserver
 SUITES['notfall'] = SUITES['bestellung']   # Notfallmodus (lib/notfall.php): Kunden-Wartung, Aussperren, Sitzungen, Mailsperre, Firewall
 SUITES['sicherheit_bereitschaft'] = SUITES['bestellung']   # Leitfaden, Probealarm, Wochenbericht, ungenutzte Zugänge (lib/bereitschaft.php); Test-Mailserver
@@ -156,6 +157,7 @@ GEWICHT = {
     'marketing': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'controlling': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'leergut': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'rewe': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'protokoll': 6,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rollen': 20, 'rollen_host': 8, 'einheit': 90,   # geschätzt (Oktober 2026), noch ohne CI-Median
 }
@@ -258,8 +260,8 @@ def run(name):
 ZUSATZ = {'dashboard': [('dashboard', 'dashboard')], 'einheit': [('dashboard', 'dashboard')], 'rollen': [('dashboard', 'dashboard')], 'sicherheit_modul': [('dashboard', 'dashboard')]}
 
 # Testzustand des Modulregisters für einzelne Gruppen: um Testfreigabe und Produktivfreigabe der Modulverwaltung zu
-# prüfen, stellt die Gruppe zwei noch geplante Module in ihrer App-Kopie weiter (REWE: in Prüfung, Einkauf: fertig;
-# Bestand ist seit Phase 1 produktiv). Nur die Kopie im Testordner; das Register im Code bleibt unverändert.
+# prüfen, stellt die Gruppe zwei noch nicht freigegebene Module in ihrer App-Kopie weiter (REWE: in Prüfung – steht seit
+# Oktober 2026 schon so im Register –, Einkauf: fertig; Bestand ist seit Phase 1 produktiv). Nur die Kopie im Testordner.
 REGISTER_TEST = {'modulverwaltung': [("'rewe' => [", 'in_pruefung'), ("'einkauf' => [", 'fertig')]}
 
 
@@ -269,6 +271,8 @@ def register_anpassen(app, aenderungen):
         zeilen = f.read().split('\n')
     for anfang, stand in aenderungen:
         i = next(n for n, z in enumerate(zeilen) if z.strip().startswith(anfang))
+        if f"'entwicklung' => '{stand}'" in zeilen[i]:   # Register steht schon auf dem Testzustand (z. B. REWE in Prüfung)
+            continue
         assert "'entwicklung' => 'geplant'" in zeilen[i], anfang
         zeilen[i] = zeilen[i].replace("'entwicklung' => 'geplant'", f"'entwicklung' => '{stand}'", 1)
     with open(pfad, 'w', encoding='utf-8', newline='\n') as f:

@@ -70,6 +70,11 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `leergut.sehen` | Leergut | Leergut | sehen | Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV | – | – |
 | `leergut.bearbeiten` | Leergut | Leergut | bearbeiten | Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen | – | `leergut.sehen` |
 | `leergut.verwalten` | Leergut | Leergut | bearbeiten | Leergut verwalten: Partner und Lademittel mit Werten pflegen, Datenpaket übernehmen | – | `leergut.bearbeiten` |
+| `rewe.sehen` | REWE | REWE | sehen | REWE: eigene Liste und Akten der eigenen Märkte ansehen (Wochenverlauf, Notizen) | – | – |
+| `rewe.bearbeiten` | REWE | REWE | bearbeiten | REWE: eigene Märkte abfragen (Bestellungen der Woche), Notizen, Wiedervorlagen, Kaufbereitschaft, Dauerauftrag, Ansprechpartner | – | `rewe.sehen` |
+| `rewe.alle` | REWE | REWE | sehen | Alle REWE-Listen sehen (mit „bearbeiten“ auch für andere abfragen, z. B. Vertretung) | – | `rewe.sehen` |
+| `rewe.verwalten` | REWE | REWE | bearbeiten | REWE verwalten: Märkte anlegen, Zuweisung und Lieferweg ab KW, Lieferwege und Artikel, Excel-Listen übernehmen | – | `rewe.bearbeiten`, `rewe.alle` |
+| `rewe.exportieren` | REWE | REWE | bearbeiten | REWE-Wochenabschluss: Bestellungen aller Listen, Excel für WinAB, „in WinAB erfasst“ | – | `rewe.alle` |
 | `auswertung.sehen` | Verwaltung | Verwaltung | sehen | Auswertung: Karte der Kunden-Anmeldungen ansehen | – | `kunden.sehen` |
 
 ## Nur Administratoren

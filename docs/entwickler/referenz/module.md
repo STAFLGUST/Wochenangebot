@@ -47,13 +47,13 @@ Agent: `crm` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `crm`
 
 ## REWE (`rewe`)
 
-Eigenständiger Fachbereich REWE – Anforderungen werden separat definiert
+Vordisposition Dry Aged: Wochenabfrage der REWE-Märkte je Mitarbeiter, Marktakte mit Verlauf, Zuweisung und Excel für WinAB
 
-Agent: `rewe` · hängt ab von `plattform`, `verwaltung`
+Agent: `rewe` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `rewe`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
-| `rewe.intern` REWE | intern | https://rewe.dashboard-stafl.de/ | geplant | keine |
+| `rewe.intern` REWE | intern | https://rewe.dashboard-stafl.de/module/rewe/ | in_pruefung | keine |
 
 ## Qualitätssicherung (`qs`)
 

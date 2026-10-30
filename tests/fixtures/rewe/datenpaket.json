@@ -1,0 +1,197 @@
+{
+ "format": "stafl-rewe",
+ "version": 1,
+ "erstellt": "2026-10-30",
+ "hinweis": "Erfundene Testdaten für tests/e2e/test_rewe.py",
+ "lieferwege": [
+  {
+   "id": "nordlager",
+   "name": "Zentrallager Nordheim",
+   "art": "lager",
+   "bestellschluss": "Freitag früh der Vorwoche"
+  },
+  {
+   "id": "suedlager",
+   "name": "Zentrallager Südhausen",
+   "art": "lager"
+  },
+  {
+   "id": "direkt",
+   "name": "Direktbelieferung",
+   "art": "direkt"
+  }
+ ],
+ "maerkte": [
+  {
+   "kdNr": "1799101",
+   "reweNr": "40000001",
+   "name": "REWE Testmarkt Am Hafen",
+   "strasse": "Hafenweg 1",
+   "plz": "20001",
+   "ort": "Beispielstadt",
+   "region": "Nord",
+   "kauf": "regelmaessig",
+   "hinweis": "Nur gereifte Ware",
+   "telefon": "0400 000001",
+   "ansprechpartner": [
+    {
+     "name": "Frau Test",
+     "rolle": "Metzgerei"
+    }
+   ],
+   "dauer": {
+    "rhythmus": 2,
+    "mengen": {
+     "rb": 1,
+     "fk": 1
+    },
+    "ab": "2026-02"
+   },
+   "zustaendig": [
+    {
+     "ab": "2025-01",
+     "liste": "Liste A"
+    }
+   ],
+   "lieferweg": [
+    {
+     "ab": "2025-01",
+     "id": "nordlager"
+    }
+   ],
+   "wochen": {
+    "2025-50": {
+     "s": "bestellt",
+     "m": {
+      "rb": 1
+     }
+    },
+    "2025-51": {
+     "s": "kein"
+    },
+    "2026-02": {
+     "s": "bestellt",
+     "m": {
+      "rb": 1,
+      "fk": 1
+     }
+    },
+    "2026-03": {
+     "s": "kein"
+    },
+    "2026-04": {
+     "s": "bestellt",
+     "m": {
+      "rb": 2
+     },
+     "n": "nachbestellt"
+    },
+    "2026-05": {
+     "s": "ne"
+    },
+    "2026-06": {
+     "s": "pause",
+     "n": "Umbau"
+    }
+   },
+   "notizen": [
+    {
+     "art": "notiz",
+     "text": "aus Excel: Besonderheit Testmarkt"
+    }
+   ]
+  },
+  {
+   "kdNr": "1799102",
+   "name": "",
+   "strasse": "Feldweg 2",
+   "plz": "20002",
+   "ort": "Musterdorf",
+   "kauf": "gelegentlich",
+   "zustaendig": [
+    {
+     "ab": "2025-01",
+     "liste": "Liste B"
+    },
+    {
+     "ab": "2026-42",
+     "liste": "Liste A"
+    }
+   ],
+   "lieferweg": [
+    {
+     "ab": "2025-01",
+     "id": "suedlager"
+    },
+    {
+     "ab": "2026-42",
+     "id": "nordlager"
+    }
+   ],
+   "wochen": {
+    "2026-40": {
+     "s": "bestellt",
+     "m": {
+      "rb": 1
+     }
+    },
+    "2026-41": {
+     "s": "kein"
+    },
+    "2026-42": {
+     "s": "bestellt",
+     "m": {
+      "rb": 1
+     }
+    }
+   }
+  },
+  {
+   "kdNr": "1799103",
+   "strasse": "Ruhestraße 3",
+   "plz": "20003",
+   "ort": "Stillhausen",
+   "kauf": "ruhend",
+   "zustaendig": [
+    {
+     "ab": "2025-01",
+     "liste": "Liste B"
+    }
+   ],
+   "lieferweg": [
+    {
+     "ab": "2025-01",
+     "id": "direkt"
+    }
+   ],
+   "wochen": {
+    "2024-10": {
+     "s": "bestellt",
+     "m": {
+      "rb": 1
+     }
+    }
+   }
+  },
+  {
+   "kdNr": "1799104",
+   "strasse": "Neuer Weg 4",
+   "plz": "20004",
+   "ort": "Neustadt",
+   "kauf": "interessiert",
+   "zustaendig": [
+    {
+     "ab": "2026-01",
+     "liste": "Liste C"
+    }
+   ],
+   "lieferweg": [
+    {
+     "ab": "2026-01",
+     "id": "direkt"
+    }
+   ],
+   "wochen": {}
+  }
+ ]
+}

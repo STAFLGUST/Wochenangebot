@@ -36,7 +36,7 @@ Versionsnummern wie auf dem Server), Testdaten aus `tests/fixtures/data-seed`, D
 | `/` | Kundenseite mit dem Wochenangebot |
 | `/admin/` | Eingabebereich (lokal mit Passwort-Anmeldung; in Produktion über Keycloak) |
 | `/dashboard/` | Mitarbeiter-Dashboard |
-| `/module/hr/`, `/module/crm/`, `/module/marketing/`, `/module/controlling/`, `/module/leergut/` | Modulseiten HR, CRM, Marketing, Controlling und Leergut |
+| `/module/hr/`, `/module/crm/`, `/module/marketing/`, `/module/controlling/`, `/module/leergut/`, `/module/rewe/` | Modulseiten HR, CRM, Marketing, Controlling, Leergut und REWE (REWE in Prüfung: nur mit Testfreigabe für eingetragene Tester) |
 
 Lokal fehlt die zentrale Anmeldung über Keycloak (sie läuft nur in der CI-Testumgebung `tests/oidc/`, siehe
 [07 Tests](07-tests.md)); deshalb gibt es lokal einen Bereich-Host nicht, und alle Ansichten erscheinen in einem

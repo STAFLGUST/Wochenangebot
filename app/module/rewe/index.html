@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<title>STAFL-Plattform · REWE</title>
+<link rel="icon" href="../../assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+<script src="../../assets/theme.js"></script>
+<link rel="stylesheet" href="../../assets/app.css">
+<link rel="stylesheet" href="rewe.css">
+</head>
+<body class="rw">
+<div class="rw-bg" aria-hidden="true"><span></span><span></span><span></span></div>
+<div class="rw-seite">
+  <header class="rw-kopf rw-glas">
+    <a class="stafl-zurueck" id="rw-zurueck" href="../../dashboard/" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard"><svg class="i" aria-hidden="true"><use href="#i-back"/></svg><span class="lbl">Dashboard</span></a>
+    <span class="rw-marke"><img class="brand-logo" src="../../assets/logo-standard-fleisch-kopf.png" width="428" height="96" alt="Standard-Fleisch"></span>
+    <span class="rw-modul"><svg class="i" aria-hidden="true"><use href="#i-store"/></svg>REWE</span>
+    <div class="rw-aktionen">
+      <button class="rw-rund" id="rw-theme" type="button" aria-label="Dunkles Design einschalten" title="Hell / Dunkel"></button>
+      <span class="rw-user" id="rw-user" hidden><span class="rw-initialen" id="rw-initialen" aria-hidden="true"></span><span class="sr-only">Angemeldet als </span><span class="rw-user-name" id="rw-user-name"></span></span>
+    </div>
+  </header>
+
+  <main class="rw-main">
+    <section class="rw-hinweisbox rw-glas" id="rw-login" hidden>
+      <svg class="i" aria-hidden="true"><use href="#i-lock"/></svg>
+      <h1>Bitte anmelden</h1>
+      <p>Die REWE-Abfrage steht nach der Anmeldung als Mitarbeiter zur Verfügung.</p>
+      <a class="btn primary" href="../../admin/">Zur Anmeldung</a>
+    </section>
+    <p class="rw-fehler" id="rw-err" role="alert" hidden></p>
+
+    <section id="rw-app" hidden>
+      <div class="rw-leiste">
+        <nav class="rw-tabs stafl-streifen" id="rw-tabs" role="tablist" aria-label="Bereiche der REWE-Abfrage">
+          <button type="button" role="tab" data-tab="woche" aria-selected="true">Meine Woche</button>
+          <button type="button" role="tab" data-tab="maerkte" aria-selected="false">Märkte</button>
+          <button type="button" role="tab" data-tab="zuweisung" aria-selected="false" hidden>Zuweisung</button>
+          <button type="button" role="tab" data-tab="abschluss" aria-selected="false" hidden>Wochenabschluss</button>
+          <button type="button" role="tab" data-tab="einstellungen" aria-selected="false" hidden>Einstellungen</button>
+        </nav>
+      </div>
+
+      <!-- Meine Woche -->
+      <section class="rw-tab" id="rw-t-woche" data-tab="woche">
+        <div class="rw-wkopf">
+          <div class="rw-kwnav">
+            <button class="rw-rund" type="button" id="rw-w-zurueck" aria-label="Vorige Woche"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+            <h1 id="rw-w-titel">Meine Woche</h1>
+            <button class="rw-rund" type="button" id="rw-w-vor" aria-label="Nächste Woche"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+            <button class="btn sm ghost" type="button" id="rw-w-heute" hidden>Diese Woche</button>
+            <p id="rw-w-sub"></p>
+          </div>
+          <div class="rw-filter">
+            <label class="sr-only" for="rw-w-wer">Liste</label>
+            <select class="rw-eingabe" id="rw-w-wer" hidden></select>
+            <label class="sr-only" for="rw-w-suche">Markt suchen</label>
+            <input class="rw-eingabe" id="rw-w-suche" type="search" placeholder="Ort, Straße oder Kd.-Nr.">
+            <div class="rw-seg" id="rw-w-filter" role="group" aria-label="Filter">
+              <button type="button" data-f="alle" aria-pressed="false">Alle</button>
+              <button type="button" data-f="offen" aria-pressed="true">Offen</button>
+              <button type="button" data-f="erledigt" aria-pressed="false">Erledigt</button>
+            </div>
+          </div>
+        </div>
+        <div class="rw-kpis" id="rw-w-kpis"></div>
+        <div id="rw-w-gruppen"></div>
+        <div class="rw-legende" aria-label="Legende">
+          <span><i class="rw-z b">1</i>bestellt (Stück)</span><span><i class="rw-z">–</i>kein Bedarf</span><span><i class="rw-z n">ne</i>nicht erreicht</span>
+          <span><i class="rw-z p">P</i>Pause</span><span><i class="rw-z o"></i>nicht abgefragt</span>
+        </div>
+      </section>
+
+      <!-- Märkte und Marktakte -->
+      <section class="rw-tab" id="rw-t-maerkte" data-tab="maerkte" hidden>
+        <div id="rw-m-liste">
+          <section class="rw-panel rw-glas">
+            <div class="rw-panelkopf rw-panelkopf-filter">
+              <h2>Märkte <span class="rw-sub" id="rw-m-anzahl"></span></h2>
+              <div class="rw-filterzeile">
+                <label class="sr-only" for="rw-m-suche">Markt suchen</label>
+                <input class="rw-eingabe" id="rw-m-suche" type="search" placeholder="Ort, Straße, Kd.- oder REWE-Nr.">
+                <label class="sr-only" for="rw-m-lw">Lieferweg</label><select class="rw-eingabe" id="rw-m-lw"></select>
+                <label class="sr-only" for="rw-m-kauf">Kaufbereitschaft</label><select class="rw-eingabe" id="rw-m-kauf"></select>
+                <button class="btn primary sm" type="button" id="rw-m-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Markt anlegen</button>
+              </div>
+            </div>
+            <div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten rw-markttabelle" id="rw-m-tabelle"></table></div>
+          </section>
+        </div>
+        <div id="rw-akte" hidden></div>
+      </section>
+
+      <!-- Zuweisung -->
+      <section class="rw-tab" id="rw-t-zuweisung" data-tab="zuweisung" hidden>
+        <div class="rw-kpis" id="rw-z-personen"></div>
+        <div class="rw-bulk" id="rw-z-bulk" hidden>
+          <b id="rw-z-anzahl"></b>
+          <label>Zuständig<select class="rw-eingabe" id="rw-z-nutzer"></select></label>
+          <label>Lieferweg<select class="rw-eingabe" id="rw-z-lw"></select></label>
+          <label>gültig ab KW<input class="rw-eingabe" id="rw-z-ab" maxlength="7" size="8" placeholder="JJJJ-WW"></label>
+          <button class="btn" type="button" id="rw-z-los">Übernehmen</button>
+        </div>
+        <section class="rw-panel rw-glas">
+          <div class="rw-panelkopf rw-panelkopf-filter">
+            <h2>Listen und Zuweisung</h2>
+            <div class="rw-filterzeile">
+              <label class="sr-only" for="rw-z-suche">Markt suchen</label>
+              <input class="rw-eingabe" id="rw-z-suche" type="search" placeholder="Ort, Straße, Kd.-Nr.">
+              <label class="sr-only" for="rw-z-fwer">Zuständig</label><select class="rw-eingabe" id="rw-z-fwer"></select>
+              <label class="sr-only" for="rw-z-flw">Lieferweg</label><select class="rw-eingabe" id="rw-z-flw"></select>
+              <label class="sr-only" for="rw-z-fkauf">Kaufbereitschaft</label><select class="rw-eingabe" id="rw-z-fkauf"></select>
+            </div>
+          </div>
+          <p class="rw-hinweis">Änderungen gelten ab der gewählten Kalenderwoche; frühere Wochen behalten Zuständigkeit und Lieferweg im Verlauf.</p>
+          <div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten rw-markttabelle" id="rw-z-tabelle"></table></div>
+        </section>
+      </section>
+
+      <!-- Wochenabschluss -->
+      <section class="rw-tab" id="rw-t-abschluss" data-tab="abschluss" hidden>
+        <div class="rw-wkopf">
+          <div class="rw-kwnav">
+            <button class="rw-rund" type="button" id="rw-a-zurueck" aria-label="Vorige Woche"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+            <h1 id="rw-a-titel">Wochenabschluss</h1>
+            <button class="rw-rund" type="button" id="rw-a-vor" aria-label="Nächste Woche"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+            <p id="rw-a-sub"></p>
+          </div>
+          <div class="rw-filter">
+            <button class="btn" type="button" id="rw-a-erfasst"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg><span>In WinAB erfasst</span></button>
+            <button class="btn primary" type="button" id="rw-a-export"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg>Excel für WinAB erstellen</button>
+          </div>
+        </div>
+        <div id="rw-a-inhalt"></div>
+      </section>
+
+      <!-- Einstellungen -->
+      <section class="rw-tab" id="rw-t-einstellungen" data-tab="einstellungen" hidden>
+        <div class="rw-leer rw-glas" id="rw-e-leer" hidden>
+          <h2>Noch keine Märkte</h2>
+          <p>Die bisherigen Vordispo-Listen kommen als Datenpaket herein (unten), einzelne Märkte unter „Märkte“ → „Markt anlegen“.</p>
+        </div>
+        <div class="rw-raster eins">
+          <section class="rw-panel rw-glas">
+            <div class="rw-panelkopf"><h2>Lieferwege</h2><button class="btn sm ghost" type="button" id="rw-e-lw-neu"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Lieferweg</button></div>
+            <p class="rw-hinweis">REWE-Zentrallager und Direktbelieferung. Die Wochenliste ist danach gruppiert. Nicht mehr genutzte Lieferwege deaktivieren.</p>
+            <div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten" id="rw-e-lw"></table></div>
+          </section>
+          <section class="rw-panel rw-glas">
+            <div class="rw-panelkopf"><h2>Artikel</h2><button class="btn sm ghost" type="button" id="rw-e-art-neu"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Artikel</button></div>
+            <p class="rw-hinweis">Die WinAB-Artikelnummer erscheint im Excel für die Warenwirtschaft.</p>
+            <div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten" id="rw-e-art"></table></div>
+          </section>
+        </div>
+        <div class="rw-knopfreihe"><p class="rw-meldung" id="rw-e-meldung" role="alert"></p><button class="btn primary" type="button" id="rw-e-speichern">Lieferwege und Artikel speichern</button></div>
+        <section class="rw-panel rw-glas">
+          <div class="rw-panelkopf"><h2>Datenpaket der Vordispo-Listen</h2></div>
+          <p class="rw-hinweis">Übernimmt Märkte, Wochenverlauf, Daueraufträge und Notizen der bisherigen Excel-Listen. Jede Liste wird einem Mitarbeiter mit „REWE ansehen“ zugeordnet. Erst Vorschau, dann übernehmen.</p>
+          <div class="rw-import">
+            <label class="btn" for="rw-e-datei"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg>Datei wählen (.json)</label>
+            <input type="file" id="rw-e-datei" accept=".json,application/json" hidden>
+            <span class="rw-hilfe" id="rw-e-dateiname"></span>
+          </div>
+          <div id="rw-e-vorschau"></div>
+        </section>
+      </section>
+    </section>
+  </main>
+  <p class="rw-fuss">REWE · Vordisposition Dry Aged · Antworten werden sofort gespeichert und mit Name und Zeit protokolliert.</p>
+</div>
+<div class="rw-toast" id="rw-toast" role="status" aria-live="polite"></div>
+
+<!-- Markt anlegen / bearbeiten -->
+<dialog class="rw-dialog" id="dlg-markt" aria-labelledby="mk-titel">
+  <form id="mk-form" novalidate>
+    <div class="rw-dialogkopf"><h2 id="mk-titel">Markt</h2><button class="rw-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <fieldset class="rw-lmwahl" id="mk-stamm"><legend>Stammdaten</legend>
+      <div class="rw-formraster">
+        <label class="rw-breit">Name<input class="rw-eingabe" id="mk-name" maxlength="100" placeholder="z. B. REWE Musterstadt"></label>
+        <label>Kd.-Nr. (WinAB)<input class="rw-eingabe" id="mk-kdnr" inputmode="numeric" maxlength="10"></label>
+        <label>REWE-Marktnummer<input class="rw-eingabe" id="mk-rewenr" inputmode="numeric" maxlength="10"></label>
+        <label class="rw-breit">Straße<input class="rw-eingabe" id="mk-strasse" maxlength="100"></label>
+        <label>PLZ<input class="rw-eingabe" id="mk-plz" inputmode="numeric" maxlength="5"></label>
+        <label>Ort<input class="rw-eingabe" id="mk-ort" maxlength="80"></label>
+        <label>Region<input class="rw-eingabe" id="mk-region" maxlength="40" placeholder="z. B. Nord, Mitte"></label>
+        <label id="mk-lw-feld">Lieferweg<select class="rw-eingabe" id="mk-lw"></select></label>
+        <label id="mk-zu-feld">Zuständig<select class="rw-eingabe" id="mk-zu"></select></label>
+      </div>
+    </fieldset>
+    <div class="rw-formraster">
+      <label>Kaufbereitschaft<select class="rw-eingabe" id="mk-kauf"></select></label>
+      <label>Abfragetag<select class="rw-eingabe" id="mk-tag"></select></label>
+      <label class="rw-breit">Telefon<input class="rw-eingabe" id="mk-telefon" maxlength="120"></label>
+    </div>
+    <fieldset class="rw-lmwahl"><legend>Dauerauftrag</legend>
+      <div class="rw-formraster">
+        <label>Rhythmus<select class="rw-eingabe" id="mk-rhythmus"></select></label>
+        <label>ab KW<input class="rw-eingabe" id="mk-dab" maxlength="7" placeholder="JJJJ-WW"></label>
+        <label>Pause bis KW<input class="rw-eingabe" id="mk-dpause" maxlength="7" placeholder="leer = keine Pause"></label>
+      </div>
+      <div class="rw-mengenreihe" id="mk-dmengen"></div>
+    </fieldset>
+    <fieldset class="rw-lmwahl"><legend>Ansprechpartner</legend>
+      <div id="mk-kontakte" class="rw-kontaktliste"></div>
+      <button class="btn sm ghost" type="button" id="mk-kontakt-neu"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Ansprechpartner</button>
+    </fieldset>
+    <label>Hinweis<textarea class="rw-eingabe" id="mk-hinweis" rows="3" maxlength="1000" placeholder="z. B. nur gereifte Ware, vorher anrufen"></textarea></label>
+    <p class="rw-meldung" id="mk-meldung" role="alert"></p>
+    <div class="rw-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<!-- Notiz / Wiedervorlage -->
+<dialog class="rw-dialog rw-dialog-klein" id="dlg-notiz" aria-labelledby="nz-titel">
+  <form id="nz-form" novalidate>
+    <div class="rw-dialogkopf"><h2 id="nz-titel">Notiz</h2><button class="rw-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <div class="rw-formraster">
+      <label>Art<select class="rw-eingabe" id="nz-art"></select></label>
+      <label>Wiedervorlage<input class="rw-eingabe" id="nz-wv" type="date"></label>
+    </div>
+    <label>Text<textarea class="rw-eingabe" id="nz-text" rows="4" maxlength="2000" required placeholder="z. B. möchte ab KW 47 wieder wöchentlich, Vac. Set probieren"></textarea></label>
+    <p class="rw-meldung" id="nz-meldung" role="alert"></p>
+    <div class="rw-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
+  </form>
+</dialog>
+
+<svg class="rw-symbole" aria-hidden="true">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-links" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
+  <symbol id="i-rechts" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>
+  <symbol id="i-store" viewBox="0 0 24 24"><path d="M4.4 4h15.2L21 9H3z"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0M4.8 11.6V20h14.4v-8.4M10 20v-4.5h4V20"/></symbol>
+  <symbol id="i-lager" viewBox="0 0 24 24"><path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-8h10v8M7 17h10"/></symbol>
+  <symbol id="i-lkw" viewBox="0 0 24 24"><path d="M2 6h11v10H2z"/><path d="M13 9h5l3 3v4h-8z"/><circle cx="6.5" cy="18" r="1.8"/><circle cx="17.5" cy="18" r="1.8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></symbol>
+  <symbol id="i-stift" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="i-telefon" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></symbol>
+  <symbol id="i-notiz" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></symbol>
+</svg>
+<script src="rewe.js"></script>
+</body>
+</html>
