@@ -32,6 +32,10 @@ declare(strict_types=1);
    darf (er gilt damit als Bearbeiter – 4-Augen-Prinzip); in Prüfung und verworfen ist nichts änderbar; zu einer
    freigegebenen oder ersetzten Version trägt nur „qs.freigeben“ Dateien nach (z. B. die bisherige Datei aus dem Ordner
    „QM-System“). Außerhalb des Entwurfs wird nie gelöscht, nur „entfernt“ vermerkt (mit Grund; die Datei bleibt erhalten).
+   Nummernstruktur (Anlegen und Ändern in der Oberfläche): Arbeitsanweisungen, Formblätter, Listen und Excel-Dokumente heißen
+   „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); leer = nächste freie Nummer (nie wiederverwendet, auch nicht von eingezogenen).
+   Vorlagen und Lenkungsangaben (module/qs/vorlagen.php): neue Dokumente aus einer Vorlage (Art V), Platzhalter in Word/Excel,
+   Lenkungsangaben bei der Freigabe, Übernahme der Dateien in eine Überarbeitung.
    Zuständig/Vertreter sind Kürzel (Schnappschuss, GR-106). Gespeicherte Felder, die diese Fassung nicht kennt, bleiben beim
    Speichern erhalten (GR-006). Rechte (GR-103): qs.sehen, qs.nachweis, qs.bearbeiten, qs.freigeben, qs.verwalten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -71,6 +75,7 @@ const QS_MAX_VERLAUF = 100;
 const QS_MAX_VERWEISE = 20;
 const QS_START_NACHWEISE = 5000;   // qs_start liefert die neuesten Nachweise (Fälligkeiten rechnet der Server aus allen)
 const QS_MAX_DATEIEN = 50;         // aktive Dateien je Version bzw. je Ordner/externem Dokument
+const QS_NR_STRUKTUR = ['A', 'F', 'L', 'E'];   // Nummer „<Kapitel>-<Art><laufende Nr.>“ (z. B. 1.4-F08); Vorlagen „V“ heißen frei (z. B. „Vorlage F“)
 
 /* ---------- Laden und Schreiben ---------- */
 function qs_stamm(): array
@@ -321,7 +326,9 @@ function qs_kapitel_benutzt(): array
 }
 
 /* ---------- Dokumente und Versionen ---------- */
-function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle): array
+/* $struktur: Nummernstruktur durchsetzen (Anlegen und Ändern in der Oberfläche; nicht beim Datenpaket aus der Excel) –
+   neue Dokumente der Arten A, F, L, E und geänderte Nummern, Kapitel oder Arten folgen „<Kapitel>-<Art><Nr.>“, leer = nächste freie */
+function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle, bool $struktur = false): array
 {
     $row = $alt ?? [];
     $row['art'] = qs_wahl($b['art'] ?? ($alt['art'] ?? 'F'), array_keys(QS_ARTEN), 'Art');
@@ -333,7 +340,10 @@ function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle): 
     $row['nr'] = qs_text($b['nr'] ?? '', 40, 'Dokumenten-Nr.');
     if (strpos($row['nr'], "\n") !== false) throw new InvalidArgumentException('Dokumenten-Nr.: bitte ohne Zeilenumbruch.');
     $gelenkt = in_array($row['art'], QS_GELENKT, true);
-    if ($gelenkt && $row['nr'] === '') throw new InvalidArgumentException('Bitte eine Dokumenten-Nr. angeben (z. B. „1.4-F08“).');
+    if ($struktur && in_array($row['art'], QS_NR_STRUKTUR, true) && ($alt === null || $row['nr'] !== (string)($alt['nr'] ?? '')
+            || $row['kapitel'] !== (string)($alt['kapitel'] ?? '') || $row['art'] !== (string)($alt['art'] ?? '')))
+        $row['nr'] = qs_nr_struktur($row['nr'], $row['kapitel'], $row['art'], $alle, $alt);
+    if ($gelenkt && $row['nr'] === '') throw new InvalidArgumentException($row['art'] === 'V' ? 'Bitte eine Bezeichnung angeben (z. B. „Vorlage F“).' : 'Bitte eine Dokumenten-Nr. angeben (z. B. „1.4-F08“).');
     if ($row['nr'] !== '') foreach ($alle as $d) if (($alt === null || $d['id'] !== $alt['id']) && mb_strtolower((string)($d['nr'] ?? '')) === mb_strtolower($row['nr']))
         throw new InvalidArgumentException("Die Dokumenten-Nr. „{$row['nr']}“ gibt es schon.");
     $row['titel'] = qs_text($b['titel'] ?? '', 200, 'Titel');
@@ -346,6 +356,27 @@ function qs_dokument_pruefen(array $b, ?array $alt, array $stamm, array $alle): 
     if (!array_key_exists('eingezogen', $row)) $row['eingezogen'] = null;
     if (!array_key_exists('ueberprueft', $row)) $row['ueberprueft'] = null;
     return $row;
+}
+/* ---------- Nummernstruktur ---------- */
+function qs_nr_naechste(array $alle, string $kap, string $art, ?array $ohne = null): string
+{
+    $re = '/^' . preg_quote($kap, '/') . '-' . $art . '(\d+)/i';
+    $max = 0;
+    foreach ($alle as $d) {
+        if ($ohne !== null && ($d['id'] ?? '') === ($ohne['id'] ?? null)) continue;
+        if (preg_match($re, (string)($d['nr'] ?? ''), $m)) $max = max($max, (int)$m[1]);
+    }
+    if ($max >= 999) throw new InvalidArgumentException("Im Kapitel $kap ist keine Nummer der Art $art mehr frei.");
+    return $kap . '-' . $art . str_pad((string)($max + 1), 2, '0', STR_PAD_LEFT);
+}
+/* Nummer prüfen bzw. vergeben (leer = nächste freie); Art in Großbuchstaben */
+function qs_nr_struktur(string $nr, string $kap, string $art, array $alle, ?array $alt): string
+{
+    if ($nr === '') return qs_nr_naechste($alle, $kap, $art, $alt);
+    if (!preg_match('/^' . preg_quote($kap, '/') . '-' . $art . '(\d{2,3})$/iD', $nr, $m))
+        throw new InvalidArgumentException('Die Dokumenten-Nr. folgt der Struktur Kapitel-Art-laufende Nummer – hier z. B. „' . qs_nr_naechste($alle, $kap, $art, $alt)
+            . '“. Leer lassen: dann vergibt das System die nächste freie Nummer.');
+    return $kap . '-' . $art . $m[1];
 }
 function qs_dokument_index(array $doc, $id): int
 {
@@ -432,8 +463,9 @@ function qs_ablage_stelle(array $d, string $ver, array $me, string $was): ?int
 /* Einstellungen für die Oberfläche: erlaubte Dateiendungen, Höchstgröße je Datei und je Teilstück, Dateien je Stelle */
 function qs_ablage_einstellungen(): array
 {
-    require_once __DIR__ . '/../../lib/dateiablage.php';
-    return ['arten' => array_keys(ABLAGE_ARTEN), 'max' => ABLAGE_DATEI_MAX, 'teil' => ABLAGE_TEIL_MAX, 'dateien' => QS_MAX_DATEIEN];
+    require_once __DIR__ . '/vorlagen.php';
+    return ['arten' => array_keys(ABLAGE_ARTEN), 'max' => ABLAGE_DATEI_MAX, 'teil' => ABLAGE_TEIL_MAX, 'dateien' => QS_MAX_DATEIEN,
+            'office' => array_keys(QS_OFFICE), 'platzhalter' => QS_PLATZHALTER_TEXT, 'nrStruktur' => QS_NR_STRUKTUR];
 }
 /* Datei in allen Dokumenten suchen: [Dokument-Index, Version-Index oder null, Datei-Index] oder null */
 function qs_datei_finden(array $liste, string $id): ?array

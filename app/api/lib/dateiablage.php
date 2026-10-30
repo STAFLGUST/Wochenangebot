@@ -10,6 +10,8 @@ declare(strict_types=1);
    Hochladen in Teilen: der API-Einstieg nimmt nur JSON bis 6 MB an – ablage_teil() sammelt Teile (Base64, je höchstens
    ABLAGE_TEIL_MAX Bytes) eines Uploads unter data/dateien/.teile/, prüft beim letzten Teil Größe, SHA-256 und Dateiart
    (Endung und Dateikopf passen zusammen) und legt die Datei ab. Ein Upload gehört dem Nutzer, der ihn begonnen hat.
+   Vom Server erzeugte Dateien (z. B. aus einer Vorlage ausgefüllt) legt ablage_ablegen() ab, ablage_kopieren() kopiert eine Datei
+   unter neuer Kennung (z. B. in eine neue Version), ablage_lesen() liefert den Inhalt.
    ZIP-Export: ablage_zip_senden() schreibt ein ZIP (Methode „stored“, UTF-8-Namen) direkt in die Antwort – ohne die
    PHP-Erweiterung „zip“ und ohne das ganze Archiv im Speicher zu halten. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -179,8 +181,37 @@ function ablage_upload_verwerfen(string $upload): void
     @unlink("$o/$upload.tmp"); @unlink("$o/$upload-meta.tmp");
 }
 
-/* ---------- Lesen, Entfernen, Ausliefern ---------- */
+/* ---------- Lesen, Ablegen, Kopieren, Entfernen, Ausliefern ---------- */
 function ablage_vorhanden(string $bereich, string $id): bool { return is_file(ablage_pfad($bereich, $id)); }
+/* Inhalt lesen (z. B. eine Vorlage zum Ausfüllen) oder null, wenn die Datei fehlt */
+function ablage_lesen(string $bereich, string $id): ?string
+{
+    $p = ablage_pfad($bereich, $id);
+    if (!is_file($p) || filesize($p) > ABLAGE_DATEI_MAX) return null;
+    $t = file_get_contents($p);
+    return $t === false ? null : $t;
+}
+/* Vom Server erzeugten Inhalt (z. B. eine ausgefüllte Vorlage) als neue Datei ablegen: ['id', 'groesse', 'sha256'] */
+function ablage_ablegen(string $bereich, string $inhalt): array
+{
+    if ($inhalt === '' || strlen($inhalt) > ABLAGE_DATEI_MAX) throw new InvalidArgumentException('Die erzeugte Datei ist leer oder zu groß (höchstens ' . (int)(ABLAGE_DATEI_MAX / 1048576) . ' MB).');
+    $id = ablage_neue_id();
+    $ziel = ablage_pfad($bereich, $id);
+    if (!is_dir(dirname($ziel)) && !@mkdir(dirname($ziel), 0775, true) && !is_dir(dirname($ziel))) throw new RuntimeException('Ablage nicht beschreibbar');
+    if (file_put_contents("$ziel.tmp", $inhalt, LOCK_EX) !== strlen($inhalt) || !@rename("$ziel.tmp", $ziel)) { @unlink("$ziel.tmp"); throw new RuntimeException('Ablage nicht beschreibbar'); }
+    return ['id' => $id, 'groesse' => strlen($inhalt), 'sha256' => hash('sha256', $inhalt)];
+}
+/* Datei unter neuer Kennung kopieren (z. B. in eine neue Version): ['id', 'groesse', 'sha256'] oder null, wenn sie fehlt */
+function ablage_kopieren(string $bereich, string $id): ?array
+{
+    $q = ablage_pfad($bereich, $id);
+    if (!is_file($q)) return null;
+    $neu = ablage_neue_id();
+    $ziel = ablage_pfad($bereich, $neu);
+    if (!is_dir(dirname($ziel)) && !@mkdir(dirname($ziel), 0775, true) && !is_dir(dirname($ziel))) throw new RuntimeException('Ablage nicht beschreibbar');
+    if (!@copy($q, "$ziel.tmp") || !@rename("$ziel.tmp", $ziel)) { @unlink("$ziel.tmp"); throw new RuntimeException('Ablage nicht beschreibbar'); }
+    return ['id' => $neu, 'groesse' => (int)filesize($ziel), 'sha256' => (string)hash_file('sha256', $ziel)];
+}
 function ablage_entfernen(string $bereich, string $id): void
 {
     $p = ablage_pfad($bereich, $id);
