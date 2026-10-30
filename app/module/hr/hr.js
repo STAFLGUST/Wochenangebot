@@ -196,48 +196,135 @@
       + f('', 'Wochenende', 'background:var(--hr-wochenende)') + f('', 'Feiertag', 'background:var(--hr-feiertag)')
       + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)');
   }
+  /* Ansicht „Monat“ oder „± 2 Wochen“ um einen Tag (Standard heute, Pfeile verschieben um eine Woche) und Filter nach
+     Abteilungen. Beides merkt sich nur dieser Browser (Bequemlichkeit, keine Berechtigung – der Server liefert
+     unverändert je Monat, hr_monat). Der Zeitraum entsteht aus den betroffenen Monaten (höchstens zwei). */
+  const KAL_SPEICHER = 'hr.kalender';
+  const plusTage = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(KAL_SPEICHER) || '{}');
+      S.kal.modus = v.modus === 'zeitraum' ? 'zeitraum' : 'monat';
+      S.kal.abt = new Set(Array.isArray(v.abt) ? v.abt.filter((a) => typeof a === 'string') : []);
+    } catch { S.kal.modus = 'monat'; S.kal.abt = new Set(); }
+  })();
+  const kalMerken = () => { try { localStorage.setItem(KAL_SPEICHER, JSON.stringify({ modus: S.kal.modus, abt: [...S.kal.abt] })); } catch { /* ohne Speicher */ } };
+  const heuteIso = () => (S.start ? S.start.heute : iso(new Date()));
+  /* Monatsdaten zu einem Plan zusammenführen: Tage im Zeitraum, Mitarbeiter je Abteilung in der Reihenfolge des Servers,
+     Kürzel je Datum (der Server liefert je Monat Kürzel je Tag des Monats) */
+  function kalZusammen(daten, von, bis) {
+    const tage = daten.flatMap((d) => d.tage).filter((t) => !von || (t.datum >= von && t.datum <= bis));
+    const gruppen = new Map(), personen = new Map();
+    for (const d of daten) {
+      const vor = `${d.jahr}-${String(d.monat).padStart(2, '0')}-`;
+      for (const p of d.personen) {
+        let x = personen.get(p.id);
+        if (!x) {
+          x = { ...p, tage: {} }; personen.set(p.id, x);
+          if (!gruppen.has(p.abteilung)) gruppen.set(p.abteilung, []);
+          gruppen.get(p.abteilung).push(x);
+        }
+        for (const [tag, k] of Object.entries(p.tage || {})) x.tage[vor + String(tag).padStart(2, '0')] = k;
+      }
+    }
+    return { voll: !!daten[0].voll, tage, personen: [...gruppen.values()].flat() };
+  }
   async function ladeKalender() {
-    const { jahr, monat } = S.kal;
-    $('#kal-titel').textContent = `${MONATE[monat - 1]} ${jahr}`;
-    const r = await api('hr_monat', null, `&jahr=${jahr}&monat=${monat}`);
-    if (r.status !== 200) { $('#kal-plan').innerHTML = `<tbody><tr><td class="name">${esc(fehlerText(r, 'Kalender nicht verfügbar'))}</td></tr></tbody>`; return; }
-    S.monat = r.data;
-    if (r.data.voll && (!S.verw || S.verw.jahr !== jahr)) await ladeVerwaltung(jahr);
+    const k = S.kal, zeitraum = k.modus === 'zeitraum';
+    let von = null, bis = null, monate = [[k.jahr, k.monat]];
+    if (zeitraum) {
+      if (!k.mitte) k.mitte = heuteIso();
+      von = plusTage(k.mitte, -14); bis = plusTage(k.mitte, 14);
+      k.jahr = Number(k.mitte.slice(0, 4)); k.monat = Number(k.mitte.slice(5, 7));
+      monate = [];
+      for (let j = Number(von.slice(0, 4)), m = Number(von.slice(5, 7)); `${j}-${String(m).padStart(2, '0')}` <= bis.slice(0, 7); m === 12 ? (m = 1, j++) : m++) monate.push([j, m]);
+    }
+    $('#kal-titel').textContent = zeitraum ? `${von.slice(0, 4) === bis.slice(0, 4) ? de(von).slice(0, 6) : de(von)} – ${de(bis)}` : `${MONATE[k.monat - 1]} ${k.jahr}`;
+    for (const b of $$('#kal-modus button')) b.setAttribute('aria-pressed', String(b.dataset.modus === k.modus));
+    $('[data-monat="-1"]').setAttribute('aria-label', zeitraum ? 'Eine Woche zurück' : 'Vorheriger Monat');
+    $('[data-monat="1"]').setAttribute('aria-label', zeitraum ? 'Eine Woche vor' : 'Nächster Monat');
+    const rs = await Promise.all(monate.map(([j, m]) => api('hr_monat', null, `&jahr=${j}&monat=${m}`)));
+    const fehl = rs.find((r) => r.status !== 200);
+    if (fehl) { $('#kal-filter').innerHTML = ''; $('#kal-plan').innerHTML = `<tbody><tr><td class="name">${esc(fehlerText(fehl, 'Kalender nicht verfügbar'))}</td></tr></tbody>`; return; }
+    S.monat = kalZusammen(rs.map((r) => r.data), von, bis);
+    if (S.monat.voll && (!S.verw || S.verw.jahr !== k.jahr)) await ladeVerwaltung(k.jahr);
     zeigeKalender();
   }
+  /* Abteilung als durchgehender Balken über die ganze Breite; Name bleibt beim seitlichen Wischen links stehen (Kalender und Übersicht) */
+  const abtZeile = (abt, n, spalten) => `<tr class="abt"><th colspan="${spalten}" scope="rowgroup"><span>${esc(abt || 'Ohne Abteilung')}<small>${n}</small></span></th></tr>`;
+  function kalFilter(alle) {
+    const aktiv = S.kal.abt;
+    const knopf = (wert, text, an) => `<button type="button" class="hr-chip" data-abt="${esc(wert)}" aria-pressed="${an}">${esc(text)}</button>`;
+    $('#kal-filter').innerHTML = alle.length < 2 ? '' : `<span class="hr-chip-titel">Abteilungen</span>${knopf('*', 'Alle', !aktiv.size)}`
+      + alle.map((a) => knopf(a, a || 'Ohne Abteilung', aktiv.has(a))).join('');
+  }
   function zeigeKalender() {
-    const m = S.monat, heute = S.start ? S.start.heute : iso(new Date());
+    const m = S.monat, heute = heuteIso(), zeitraum = S.kal.modus === 'zeitraum';
     kalLegende(m.voll);
+    const alle = [...new Set(m.personen.map((p) => p.abteilung))];
+    for (const a of [...S.kal.abt]) if (!alle.includes(a)) S.kal.abt.delete(a);   // entfallene Abteilungen vergessen
+    kalFilter(alle);
+    const personen = m.personen.filter((p) => !S.kal.abt.size || S.kal.abt.has(p.abteilung));
     const kl = (t) => (t.feiertag ? 'ft' : t.wochenende ? 'we' : t.ferien ? 'fe' : '');
-    let html = '<thead><tr><th class="name" scope="col">Mitarbeiter</th>' + m.tage.map((t) =>
-      `<th scope="col" class="${kl(t)}${t.sperre ? ' sp' : ''}${t.datum === heute ? ' heute' : ''}" title="${esc([de(t.datum), t.feiertag, t.sperre ? 'Urlaubssperre' : ''].filter(Boolean).join(' · '))}"><small>${t.wt}</small>${t.tag}</th>`).join('') + '</tr></thead><tbody>';
+    const neuerMonat = (t, i) => zeitraum && i > 0 && t.tag === 1;   // Monatswechsel im Zeitraum: Trennlinie und „1.11.“
+    let html = '<thead><tr><th class="name" scope="col">Mitarbeiter</th>' + m.tage.map((t, i) =>
+      `<th scope="col" class="${kl(t)}${t.sperre ? ' sp' : ''}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}" title="${esc([de(t.datum), t.feiertag, t.sperre ? 'Urlaubssperre' : ''].filter(Boolean).join(' · '))}"><small>${t.wt}</small>${neuerMonat(t, i) ? `1.${t.datum.slice(5, 7)}.` : t.tag}</th>`).join('') + '</tr></thead><tbody>';
     let abt = null;
-    for (const p of m.personen) {
-      if (p.abteilung !== abt) { abt = p.abteilung; html += `<tr class="abt"><th colspan="${m.tage.length + 1}">${esc(abt || 'Ohne Abteilung')}</th></tr>`; }
-      html += `<tr class="${p.ich ? 'ich' : ''}"><th class="name" scope="row" title="${esc(p.name)}">${esc(p.name)}</th>` + m.tage.map((t) => {
-        const k = p.tage[t.tag] || '';
+    for (const p of personen) {
+      if (p.abteilung !== abt) { abt = p.abteilung; html += abtZeile(abt, personen.filter((x) => x.abteilung === abt).length, m.tage.length + 1); }
+      html += `<tr class="${p.ich ? 'ich' : ''}"><th class="name" scope="row" title="${esc(p.name)}">${esc(p.name)}</th>` + m.tage.map((t, i) => {
+        const k = p.tage[t.datum] || '';
         const offen = k.endsWith('?'), code = offen ? k.slice(0, -1) : k;
         const titel = code === 'A' ? 'abwesend' : code === 'x' ? 'freier Tag' : (ART[code] || '') + (offen ? ' (beantragt)' : '');
         const inhalt = code ? `<span class="hr-art ${esc(code)}${offen ? ' offen' : ''}" title="${esc(titel)}">${esc(code === 'A' ? '•' : code)}</span>` : '';
         const klick = m.voll && !p.ich && !t.wochenende && !t.feiertag;   // eigene Abwesenheiten trägt eine andere Person ein
-        return `<td class="${kl(t)}${klick ? ' klick' : ''}"${klick ? ` data-person="${esc(p.id)}" data-datum="${t.datum}"` : ''}>${inhalt}</td>`;
+        return `<td class="${kl(t)}${t.datum === heute ? ' heute' : ''}${neuerMonat(t, i) ? ' mstart' : ''}${klick ? ' klick' : ''}"${klick ? ` data-person="${esc(p.id)}" data-datum="${t.datum}"` : ''}>${inhalt}</td>`;
       }).join('') + '</tr>';
     }
     if (!m.personen.length) html += `<tr><td class="name" colspan="${m.tage.length + 1}">Noch keine Mitarbeiter angelegt.</td></tr>`;
     $('#kal-plan').innerHTML = html + '</tbody>';
   }
-  $('#tab-kalender').addEventListener('click', (e) => {
+  $('#tab-kalender').addEventListener('click', async (e) => {
+    const k = S.kal;
     const b = e.target.closest('[data-monat]');
     if (b) {
-      let { jahr, monat } = S.kal;
-      monat += Number(b.dataset.monat);
-      if (monat < 1) { monat = 12; jahr--; } else if (monat > 12) { monat = 1; jahr++; }
-      S.kal = { jahr, monat };
+      if (k.modus === 'zeitraum') k.mitte = plusTage(k.mitte || heuteIso(), 7 * Number(b.dataset.monat));
+      else {
+        k.monat += Number(b.dataset.monat);
+        if (k.monat < 1) { k.monat = 12; k.jahr--; } else if (k.monat > 12) { k.monat = 1; k.jahr++; }
+      }
       ladeKalender();
+      return;
+    }
+    if (e.target.closest('#kal-heute')) {
+      const h = heuteIso();
+      k.mitte = h; k.jahr = Number(h.slice(0, 4)); k.monat = Number(h.slice(5, 7));
+      ladeKalender();
+      return;
+    }
+    const mo = e.target.closest('#kal-modus button[data-modus]');
+    if (mo) {
+      if (mo.dataset.modus === k.modus) return;
+      k.modus = mo.dataset.modus;
+      if (k.modus === 'zeitraum') k.mitte = heuteIso();   // ± 2 Wochen beginnt immer bei heute
+      kalMerken();
+      ladeKalender();
+      return;
+    }
+    const ch = e.target.closest('#kal-filter [data-abt]');
+    if (ch) {
+      const a = ch.dataset.abt;
+      if (a === '*') k.abt.clear();
+      else if (k.abt.has(a)) k.abt.delete(a);
+      else k.abt.add(a);
+      kalMerken();
+      zeigeKalender();
       return;
     }
     const td = e.target.closest('td[data-person]');
     if (td && S.verw) {
+      const j = Number(td.dataset.datum.slice(0, 4));
+      if (S.verw.jahr !== j) await ladeVerwaltung(j);   // Zeitraum über den Jahreswechsel
       const ein = S.verw.eintraege.find((x) => x.person === td.dataset.person && x.von <= td.dataset.datum && td.dataset.datum <= x.bis && ['genehmigt', 'beantragt'].includes(x.status));
       if (ein && ein.status === 'beantragt') { zeigeTab('antraege'); return; }
       eintragDialog(ein || { person: td.dataset.person, von: td.dataset.datum, bis: td.dataset.datum, art: 'U' });
@@ -414,7 +501,7 @@
     let html = `<thead><tr><th scope="col">Mitarbeiter</th>${SP.map(([, t]) => `<th scope="col" class="zahl">${t}</th>`).join('')}</tr></thead><tbody>`;
     let abt = null;
     for (const z of zeilen) {
-      if (z.abteilung !== abt) { abt = z.abteilung; html += `<tr class="abt"><th colspan="${SP.length + 1}" scope="rowgroup">${esc(abt || 'Ohne Abteilung')}</th></tr>`; }
+      if (z.abteilung !== abt) { abt = z.abteilung; html += abtZeile(abt, zeilen.filter((x) => x.abteilung === abt).length, SP.length + 1); }
       html += `<tr><th scope="row" class="name">${esc(z.name)}</th>${SP.map(([k]) => zelle(z, k)).join('')}</tr>`;
     }
     if (!zeilen.length) html += `<tr><td colspan="${SP.length + 1}" class="gedaempft">Keine Mitarbeiter im Urlaubsplan.</td></tr>`;

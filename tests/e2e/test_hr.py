@@ -874,13 +874,68 @@ with sync_playwright() as p:
     pg.click('.hr-antrag [data-genehmigen]'); pg.wait_for_selector('.hr-leer')
     check('Oberfläche: Antrag genehmigt, keine offenen mehr', P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen'] == [])
 
-    # Kalender der Personalstelle: Eintrag per Klick
+    # Kalender der Personalstelle: Krankheit über den Monatswechsel nahe heute (für „± 2 Wochen“)
+    heute_ = dt.date.today()
+    grenze = dt.date(heute_.year + (heute_.month == 12), heute_.month % 12 + 1, 1)   # erster Tag des nächsten Monats
+    if (grenze - heute_).days > 14: grenze = heute_.replace(day=1)
+    PO = PE   # aktiv im Urlaubsplan, ohne Einträge in diesen Wochen
+    st, r = P.call('hr_eintrag_save', {'person': PO, 'art': 'K', 'von': iso(grenze - dt.timedelta(days=3)), 'bis': iso(grenze + dt.timedelta(days=3))})
+    check('Krankheit über den Monatswechsel eingetragen', st == 200, r)
     pg.click('[data-tab="kalender"]'); pg.wait_for_selector('#kal-plan tbody tr')
     pg.screenshot(path=os.path.join(SH, 'hr_kalender_1280.png'), full_page=True)
+    # Abteilungen als durchgehender, dunklerer Balken mit Anzahl
+    balken = pg.evaluate('''(() => {
+      const rows = [...document.querySelectorAll('#kal-plan tbody tr')], spalten = document.querySelectorAll('#kal-plan thead th').length;
+      let ok = true, cur = null, n = 0;
+      const fertig = () => { if (cur && Number(cur.querySelector('small').textContent) !== n) ok = false; };
+      for (const r of rows) { if (r.classList.contains('abt')) { fertig(); cur = r; n = 0; } else n++; }
+      fertig();
+      const th = document.querySelector('#kal-plan tr.abt th'), name = document.querySelector('#kal-plan tbody th.name');
+      return { ok, volle: th.colSpan === spalten && Math.abs(th.getBoundingClientRect().width - document.querySelector('#kal-plan').getBoundingClientRect().width) < 2,
+               farbe: getComputedStyle(th).backgroundColor !== getComputedStyle(name).backgroundColor };
+    })()''')
+    check('Kalender: Abteilung als Balken über die volle Breite, abgesetzte Farbe, Anzahl der Mitarbeiter', balken['ok'] and balken['volle'] and balken['farbe'], balken)
+    # Filter nach Abteilungen (mehrere wählbar, merkt sich der Browser)
+    baender = lambda: pg.eval_on_selector_all('#kal-plan tr.abt th > span', 'e => e.map((x) => x.firstChild.textContent)')   # noqa: E731
+    alle_abt = baender()
+    check('Filter: „Alle“ und je Abteilung ein Knopf', pg.locator('#kal-filter [data-abt]').count() == len(alle_abt) + 1 and pg.get_attribute('#kal-filter [data-abt="*"]', 'aria-pressed') == 'true', alle_abt)
+    pg.click('#kal-filter [data-abt="Lager"]'); pg.wait_for_function("document.querySelectorAll('#kal-plan tr.abt').length === 1")
+    check('Filter: nur Lager', baender() == ['Lager'] and pg.get_attribute('#kal-filter [data-abt="Lager"]', 'aria-pressed') == 'true'
+          and pg.get_attribute('#kal-filter [data-abt="*"]', 'aria-pressed') == 'false', baender())
+    pg.click('#kal-filter [data-abt="Verwaltung"]'); pg.wait_for_function("document.querySelectorAll('#kal-plan tr.abt').length === 2")
+    pg.reload(); pg.wait_for_selector('#kal-plan tr.abt')
+    check('Filter: Lager und Verwaltung, nach Neuladen erhalten', sorted(baender()) == ['Lager', 'Verwaltung'], baender())
+    pg.click('#kal-filter [data-abt="*"]'); pg.wait_for_function(f"document.querySelectorAll('#kal-plan tr.abt').length === {len(alle_abt)}")
+    check('Filter: „Alle“ zeigt wieder alle Abteilungen', baender() == alle_abt)
+    # Ansicht „± 2 Wochen“: heute in der Mitte, über den Monatswechsel, Pfeile je eine Woche
+    erster = lambda: pg.get_attribute('#kal-plan thead th:nth-child(2)', 'title')[:10]   # noqa: E731
+    de_ = lambda d: d.strftime('%d.%m.%Y')   # noqa: E731
+    pg.click('#kal-modus [data-modus="zeitraum"]'); pg.wait_for_function("document.querySelectorAll('#kal-plan thead th').length === 30")
+    check('± 2 Wochen: 29 Tage, beginnt 14 Tage vor heute, heute in der Mitte', erster() == de_(heute_ - dt.timedelta(days=14))
+          and pg.evaluate("[...document.querySelectorAll('#kal-plan thead th')].findIndex((th) => th.classList.contains('heute'))") == 15, erster())
+    von_, bis_ = heute_ - dt.timedelta(days=14), heute_ + dt.timedelta(days=14)
+    erwartet = 0
+    for j, m in sorted({(von_.year, von_.month), (bis_.year, bis_.month)}):
+        zeile = next(p_ for p_ in P.call(f'hr_monat&jahr={j}&monat={m}')[1]['personen'] if p_['id'] == PO)
+        erwartet += sum(1 for tag, k in zeile['tage'].items() if k == 'K' and von_ <= dt.date(j, m, int(tag)) <= bis_)
+    ui = pg.evaluate(f"document.querySelector('#kal-plan td[data-person=\"{PO}\"]').closest('tr').querySelectorAll('.hr-art.K').length")
+    wechsel = von_.month != bis_.month
+    check('± 2 Wochen: Einträge aus beiden Monaten (wie der Server je Monat), Trennlinie am Monatswechsel', ui == erwartet and (ui > 0 or not wechsel)
+          and pg.locator('#kal-plan thead th.mstart').count() == (1 if wechsel else 0), (ui, erwartet, wechsel))
+    pg.screenshot(path=os.path.join(SH, 'hr_kalender_2wochen_1280.png'), full_page=True)
     pg.emulate_media(color_scheme='dark')
     pg.screenshot(path=os.path.join(SH, 'hr_kalender_1280_dunkel.png'), full_page=True)
     check('dunkles Design: dunkler Grund', pg.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(18, 16, 17)', pg.evaluate('getComputedStyle(document.body).backgroundColor'))
     pg.emulate_media(color_scheme='light')
+    pg.click('#tab-kalender [data-monat="1"]'); pg.wait_for_function(f"document.querySelector('#kal-plan thead th:nth-child(2)').title.startsWith('{de_(heute_ - dt.timedelta(days=7))}')")
+    check('± 2 Wochen: Pfeil verschiebt um eine Woche', erster() == de_(heute_ - dt.timedelta(days=7)))
+    pg.click('#kal-heute'); pg.wait_for_function(f"document.querySelector('#kal-plan thead th:nth-child(2)').title.startsWith('{de_(heute_ - dt.timedelta(days=14))}')")
+    pg.reload(); pg.wait_for_selector('#kal-plan tbody tr')
+    check('„Heute“ zurück zur Mitte, Ansicht nach Neuladen erhalten', pg.locator('#kal-plan thead th').count() == 30 and erster() == de_(heute_ - dt.timedelta(days=14)))
+    pg.click('#kal-modus [data-modus="monat"]')
+    tage_monat = ((dt.date(heute_.year + (heute_.month == 12), heute_.month % 12 + 1, 1)) - heute_.replace(day=1)).days
+    pg.wait_for_function(f"document.querySelectorAll('#kal-plan thead th').length === {tage_monat + 1}")
+    check('zurück zur Monatsansicht (aktueller Monat)', erster() == de_(heute_.replace(day=1)))
     pg.click('#kal-eintragen'); pg.wait_for_selector('#dlg-eintrag[open]')
     pg.select_option('#eintrag-person', PA); pg.select_option('#eintrag-art', 'G')
     gtag = montag(Y, 3, 2) + dt.timedelta(days=1)   # Dienstag im März (keine Feiertage)
@@ -931,6 +986,10 @@ with sync_playwright() as p:
         pg.click('[data-tab="kalender"]'); pg.wait_for_selector('#kal-plan tbody tr')
         check(f'{breite}px: Kalender ohne Gründe (nur „abwesend“ in der Legende)', 'Krank' not in pg.text_content('#kal-legende') and 'abwesend' in pg.text_content('#kal-legende'))
         pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_{breite}.png'), full_page=True)
+        pg.click('#kal-modus [data-modus="zeitraum"]'); pg.wait_for_function("document.querySelectorAll('#kal-plan thead th').length === 30")
+        check(f'{breite}px: ± 2 Wochen und Filter auch für Mitarbeiter, Seite ohne waagerechtes Scrollen', pg.locator('#kal-filter [data-abt]').count() > 1
+              and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        pg.screenshot(path=os.path.join(SH, f'hr_kalender_mitarbeiter_2wochen_{breite}.png'), full_page=True)
         ctx.close()
 
     # produktiv: jeder Mitarbeiter sieht die normale Seite (otto war nie Tester)
