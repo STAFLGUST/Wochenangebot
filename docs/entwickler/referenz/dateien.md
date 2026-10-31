@@ -13,7 +13,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `.gitleaks.toml` | plattform | Secret-Scan (gitleaks) |
 | `AGENTS.md` | plattform | Arbeitsregeln für Entwickler und KI-Agenten |
 | `CLAUDE.md` | plattform | Hinweis für Claude-Sitzungen |
-| `Caddyfile` | plattform | HTTPS-Zertifikat wird automatisch geholt und verlängert (Let's Encrypt) |
+| `Caddyfile` | plattform | Browser-Zwischenspeicher für alle Anwendungs-Hosts (import zwischenspeichern public\|private: public nur auf den öffentlichen Seiten, sonst nur im Browser des Nutzers, nie in fremden Zwischenspeichern). |
 | `LIESMICH.md` | plattform | Wochenangebot – angebot-stafl.de |
 | `docker-compose.yml` | plattform | Wochenangebot – Start: docker compose up -d |
 
@@ -615,6 +615,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |
 | `test_sqlite_http.sh` | plattform | Exercise real production PHP image and Apache, not the built-in test server. |
 | `test_testumgebung.sh` | plattform | Test der Testumgebung-Verwaltung (deploy/testumgebung.sh) mit Platzhaltern für docker und git – ohne Server. |
+| `test_zwischenspeichern.py` | plattform | Browser-Zwischenspeicher (Caddyfile, Abschnitt „zwischenspeichern“) mit echtem Caddy in der Fassung des Betriebs. |
 
 ## `tests/e2e/`
 
@@ -755,7 +756,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
-| `asset_versionen.py` | plattform | Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ prüfen. |
+| `asset_versionen.py` | plattform | Einbindungen der Skripte und Stylesheets in den HTML-Seiten unter app/ und dashboard/ prüfen. |
 | `doku.py` | plattform | Nachschlageteil der Entwickler-Dokumentation aus dem Code erzeugen und prüfen (nur Python-Standardbibliothek). python3 werkzeuge/doku.py erzeugen docs/entwickler/referenz/*.md neu schreiben python3 werkzeuge/doku.py … |
 | `integritaet.py` | plattform | Prüfliste der Dateiprüfung (app/api/lib/integritaet-liste.php): prüfen, dass sie NICHT im Repository steht. |
 | `karte_auszug.py` | plattform | Kleiner Ausschnitt aus einer Protomaps-Basiskarte (PMTiles, OpenStreetMap-Daten, ODbL) – für Testdaten und lokale Vorschau der Detailkarte. |

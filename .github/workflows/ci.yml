@@ -89,6 +89,8 @@ jobs:
             -e ALLOWED_IPS=0.0.0.0/0 \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
             "$CADDY_IMAGE" caddy validate --config /etc/caddy/Caddyfile
+      - name: Browser-Zwischenspeicher mit echtem Caddy (Weiterleitungen und Fehler nie gespeichert)
+        run: python3 tests/deploy/test_zwischenspeichern.py
       - name: Container-Images fest über Digest
         run: python3 tests/deploy/test_images.py
       - name: Dashboard-Domains nur als geschützte Platzhalter

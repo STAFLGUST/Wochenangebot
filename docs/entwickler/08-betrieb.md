@@ -48,6 +48,8 @@ den Release vorlegt.
 2. JavaScript-Syntax (`node --check` für `app/assets/`, `app/assets/vendor/`, `dashboard/`, `tests/unit/`)
 3. Shell-Skripte (`shellcheck --severity=warning` für `deploy/` und `tests/deploy/`)
 4. Caddy-Konfiguration mit echtem Parser (`caddy validate` mit derselben Caddy-Fassung wie in `docker-compose.yml`, ohne Netz)
+   und Browser-Zwischenspeicher mit echtem Caddy (`tests/deploy/test_zwischenspeichern.py`: Abschnitt `zwischenspeichern`
+   vor einer Nachbildung der Anwendung – Weiterleitung zur Anmeldung, 401 und 404 nie gespeichert)
    und Container-Images fest über Digest (`tests/deploy/test_images.py`: alle fremden Images mit `@sha256`, gleiches PHP-Grundimage
    für Kundenseite, Anwendungs-Image und Testumgebung, CI lädt und scannt dieselben Fassungen)
 5. Dashboard-Domains nur als geschützte Platzhalter (`tests/deploy/test_dashboard_domains.py`, GR-105; HSTS 1 Jahr je Host)
@@ -143,7 +145,7 @@ Ein VPS mit Docker Compose; Installationsordner `/opt/wochenangebot` (Git-Checko
 
 | Dienst | Herkunft | Aufgabe |
 | --- | --- | --- |
-| `caddy` | `docker-compose.yml`, Image `caddy:2`, Konfiguration `Caddyfile` | einziger öffentlicher Eingang (Ports 80/443), TLS-Zertifikate, Sicherheits-Header, Zwischenspeichern versionierter Dateien; leitet an `app`, `app-mitarbeiter`, `keycloak` bzw. `app-test` weiter; nicht freigegebene Dashboard-Hosts als 503-Platzhalter (GR-105) |
+| `caddy` | `docker-compose.yml`, Image `caddy:2`, Konfiguration `Caddyfile` | einziger öffentlicher Eingang (Ports 80/443), TLS-Zertifikate, Sicherheits-Header, Browser-Zwischenspeicher (Abschnitt `zwischenspeichern`); leitet an `app`, `app-mitarbeiter`, `keycloak` bzw. `app-test` weiter; nicht freigegebene Dashboard-Hosts als 503-Platzhalter (GR-105) |
 | `app` | `docker-compose.yml`; mit Ergänzungsdatei Image `stafl-app` aus `deploy/image/` (PHP 8.3, Apache, mod_auth_openidc) | die Anwendung; `app/` nur lesend, `daten/` als Datenordner; mit Ergänzungsdatei zusätzlich `dashboard/` und `apache-oidc.conf` (Keycloak-Hosts) und Netzwerkname `app-mitarbeiter` |
 | `keycloak` | `deploy/anmeldung/docker-compose.anmeldung.yml` (Version und Digest fest) | Mitarbeiteranmeldung, Realm `mitarbeiter`; Verwaltung nur auf `127.0.0.1:8180`; öffentlich über Caddy nur `/realms/mitarbeiter/` und `/resources/` |
 | `keycloak-db` | ebenda, PostgreSQL 17 (Digest fest) | Datenbank nur für Keycloak, internes Netz `anmeldung` |
@@ -151,6 +153,19 @@ Ein VPS mit Docker Compose; Installationsordner `/opt/wochenangebot` (Git-Checko
 
 Die Ergänzungsdatei ist aktiv, wenn `.env` `COMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml`
 enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 502, nie mit der Anwendung ohne Anmeldung.
+
+**Browser-Zwischenspeicher** (`Caddyfile`, Abschnitt `zwischenspeichern`, in jedem Block der Anwendung eingebunden):
+
+| Datei | Speicherzeit im Browser |
+| --- | --- |
+| Skripte und Stylesheets mit `?v=…` (alle Seiten unter `app/` und `dashboard/`, Nummern von `deploy/bereitstellen.py`) | ein Jahr ohne Rückfrage (`immutable`); neue Fassung = neue Adresse |
+| Schriften, Symbole, Logos (`/assets/fonts/`, `/assets/icons/`, `/assets/*.png`) | ein Tag ohne Rückfrage; ein neues Logo erscheint spätestens am nächsten Tag (sofort: neuer Dateiname) |
+| Seiten, Schnittstelle, Bibliotheken unter `assets/vendor/`, Kartendaten | wie bisher: Rückfrage bei jedem Aufruf (`no-cache`) bzw. eigene Angabe der Anwendung |
+
+Auf der Angebotsseite `public`, auf allen anderen Hosts `private` (nur der Browser des Nutzers, nie fremde
+Zwischenspeicher). Gespeichert werden nur erfolgreiche Antworten (2xx, 304): eine Weiterleitung zur Anmeldung, „401“
+oder „404“ nie – sonst bliebe eine Seite nach abgelaufener Sitzung ein Jahr kaputt. Geprüft mit echtem Caddy in der CI
+(`tests/deploy/test_zwischenspeichern.py`).
 
 **Datenorte auf dem Server** (alle nicht im Repository):
 

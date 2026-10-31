@@ -328,9 +328,13 @@ check('Caddy: HTTPS-Pflicht (HSTS) 1 Jahr, auch für alle Subdomains, ohne prelo
       and not any('preload' in z for z in cf_haupt.splitlines() if 'Strict-Transport-Security' in z))
 cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
 bloecke = cf.split('test.{$DOMAIN} {')
-check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, alles andere weiter „no-cache“ – Echtbetrieb und Testumgebung',
-      len(bloecke) == 2 and all('@versioniert {\n\t\tpath /assets/*\n\t\tquery v=*\n\t}' in b and 'header @versioniert >Cache-Control "public, max-age=31536000, immutable"' in b
-                               and '?Cache-Control "no-cache"' in b for b in bloecke))
+abschnitt = cf.split('(zwischenspeichern) {', 1)[-1].split('\n}\n', 1)[0]
+# Verhalten mit echtem Caddy (Weiterleitungen und Fehler nie gespeichert): tests/deploy/test_zwischenspeichern.py
+check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, nur erfolgreiche Antworten, alles andere weiter „no-cache“ – Echtbetrieb und Testumgebung',
+      len(bloecke) == 2 and '@versioniert {\n\t\tpath *.js *.css\n\t\tnot path /api/*\n\t\tquery v=*\n\t}' in abschnitt
+      and 'Cache-Control "{args[0]}, max-age=31536000, immutable"\n\t\tmatch status 2xx 304' in abschnitt
+      and '\timport zwischenspeichern public\n' in bloecke[0] and '\timport zwischenspeichern private\n' in bloecke[1].split('\n}\n', 1)[0]
+      and all('?Cache-Control "no-cache"' in b for b in bloecke))
 
 # ---------- Oberfläche: Hinweis im Code-Schritt bei gesperrtem Zugang ----------
 storage_write('sicherheit', {**sec, 'ipEnabled': False, 'lockAfter': 3, 'lockMinutes': 5})
