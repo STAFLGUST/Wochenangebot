@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-7 Dateien, 151 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 176 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/crm.php`
 
@@ -82,6 +82,15 @@ _CRM · Vertrieb: Daten und Regeln des Moduls „crm“ (Oberfläche crm.intern,
 - `crm_mhd_artikel(code, liste)` – Artikel mit MHD-Angaben (aus der MHD-Liste) bzw. Name aus den Umsatzdaten
 - `crm_schluessel_menge()` – Alle gültigen Schlüssel (Kunden der Verwaltung und Interessenten) mit [Firma, Kundennummer, aktiv] – einmal gelesen statt je Schlüssel …
 - `crm_mhd_schritt(a)` – Text des nächsten Schritts für die Wiedervorlage („MHD-Ware anbieten: Rinderhüfte (40100), MHD 06.11.“)
+
+## `app/api/module/crm/einzelangebot.php`
+
+_CRM · Einzelangebot beim Kunden (Auftrag des Inhabers 01.11.2026): im Kunden-Pop-up Einzelangebote des Kunden ansehen, anlegen, bearbeiten, im Portal freigeben, als PDF ansehen und per E-Mail senden – wie in der …_
+
+- `crm_einzel_recht(art, write)` – Recht prüfen: einzelangebote.<sehen\|bearbeiten> und CRM ansehen
+- `crm_einzel_kunde(key)` – Kunde der Verwaltung zum Schlüssel (Interessenten haben keine Einzelangebote)
+- `crm_einzel_von(c, id)` – Einzelangebot dieses Kunden (sonst 404 – auch wenn es einem anderen Kunden gehört)
+- `crm_einzel_artikel(me)` – Artikel für die Suche: Nummer, Name, Fleischart, Wochenpreis, im Angebot, Bestand (nur mit bestand.sehen) – ohne Partien und EK
 
 ## `app/module/crm/cockpit.js`
 
@@ -246,11 +255,49 @@ _STAFL-Plattform · CRM · Vertrieb Cockpit, Kunden, Wiedervorlagen (Anruf-Rhyth
 
 **Klicks**
 
+- `kuSchliessenOk()`
 - `exportieren()`
 
 **Start**
 
 - `laden()`
+
+## `app/module/crm/einzelangebot.js`
+
+_STAFL-Plattform · CRM · Einzelangebot beim Kunden (Kunden-Pop-up, Reiter „Angebote“; Auftrag des Inhabers 01.11.2026) Wie in der Angebotsübersicht des Eingabebereichs_
+
+- `zahl(v, art)` – Zahl aus deutscher Eingabe („12,50“, „1.234,5“; bei Mengen auch „1.200“ = 1200) – wie im Eingabebereich
+- `statusPille(a)`
+- `summen(pos)` – Summe der Positionen mit Menge und Preis (wie der Server: Cent je kg × kg)
+
+**Laden**
+
+- `liste()`
+- `oeffnen(id, weiter)`
+- `artikelLaden()`
+
+**Zeichnen**
+
+- `zeichnen()`
+- `listeHtml()`
+- `positionZeile(p, i)`
+- `editor()`
+- `mailForm()`
+- `meldung(t, art)`
+- `geaendert()`
+
+**Artikelsuche**
+
+- `suchTreffer()`
+- `hinzufuegen(a)`
+
+**Speichern, Status, Löschen, E-Mail**
+
+- `speichern()`
+- `nachLaden()`
+- `status(s)`
+- `loeschen()`
+- `senden(f)`
 
 ## `app/module/crm/mhd-ware.js`
 

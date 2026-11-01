@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 586 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+41 Dateien, 593 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -47,6 +47,16 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 - `einzel_summe(e)` – Summen (Positionen mit Menge und Preis)
 - `einzel_view(e, kunden)` – Ansicht für den Eingabebereich (mit Kundenname)
 - `einzel_kunden_map()`
+
+**Schnittstelle für Eingabebereich und CRM (regeln/datenverantwortung.toml: CRM liest und schreibt nur hierüber)**
+
+- `einzel_liste(kid)` – Liste ohne Positionen (mit Anzahl), zuletzt geändert zuerst – alle bzw. nur die eines Kunden ($kid)
+- `einzel_holen(id)` – Ein Einzelangebot (Rohdaten) oder null
+- `einzel_speichern(b, me)` – Anlegen ($b['id'] leer: neue Nummer E-JJJJ-0001) oder ändern (mit revision, sonst 409); Protokoll; Ansicht zurück
+- `einzel_status_setzen(b, me)` – Status setzen: entwurf, freigegeben (Portal, braucht Positionen und Gültigkeit), zurueckgezogen; Ansicht zurück
+- `einzel_entfernen(id)` – Löschen (mit Protokoll)
+- `einzel_mail(b, me, cfg)` – Per E-Mail an den Kunden ($b: id, note, format liste\|pdf); Versand im Verlauf des Angebots und im Protokoll; Ansicht zurück.
+- `einzel_pdf_senden(e)` – PDF eines Einzelangebots ausliefern (Vorschau des E-Mail-Anhangs) – beendet die Anfrage
 
 **Portal**
 
@@ -890,6 +900,8 @@ _Einzelangebote (Angebot bearbeiten → Einzelangebote)_
 **Bestellwunsch**
 
 **E-Mail**
+
+**E-Mail aus dem CRM (Kunden-Pop-up, Reiter „Angebote“: crm_einzel_senden, gleiche Funktion und Bestätigung)**
 
 - `pdf_inhalt(data)` – Text der Seiteninhalte (FlateDecode) eines PDF, als Windows-1252 gelesen.
 - `hole(cl, action)`

@@ -3,7 +3,8 @@
    Kunden kommen aus den Stammdaten der Verwaltung (nur lesend); das CRM ergänzt je Kunde ein Kundenblatt (Ansprechpartner,
    Segment, Phase, Wann/Erledigt, Potenzial, nächster Schritt, Notiz), Interessenten und den Aktivitätenverlauf.
    Reiter „MHD-Ware“ (Artikel kurz vor Ablauf und ihre Käufer, Recht crm.mhd_ware) in mhd-ware.js; Cockpit (Mein Cockpit,
-   Master-Cockpit) und der Reiter „Übersicht“ im Kunden-Pop-up mit Umsätzen und Signalen in cockpit.js.
+   Master-Cockpit) und der Reiter „Übersicht“ im Kunden-Pop-up mit Umsätzen und Signalen in cockpit.js; Reiter „Angebote“
+   (Einzelangebot beim Kunden, Rechte einzelangebote.*) in einzelangebot.js.
    Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
    Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: Detailkarte mit Straßen und Gebäuden vom
    eigenen Server (../../assets/detailkarte.js, OpenStreetMap), sonst zeichnet die Seite selbst (Umrisse
@@ -705,13 +706,14 @@
   }
   /* Kunden-Pop-up mit den Reitern Übersicht (Umsätze und Signale, cockpit.js – nur Kunden mit Kundennummer), Kundenblatt
      (Stammdaten, Ansprechpartner, Vertrieb) und Verlauf (Aktivität protokollieren, Verlauf) */
-  const KU_REITER = [['uebersicht', 'Übersicht'], ['kundenblatt', 'Kundenblatt'], ['verlauf', 'Verlauf']];
+  const KU_REITER = [['uebersicht', 'Übersicht'], ['kundenblatt', 'Kundenblatt'], ['angebote', 'Angebote'], ['verlauf', 'Verlauf']];
   let kuTab = 'uebersicht';
   const verlaufSpeicher = new Map();
   const mitUmsatz = (k) => k.art === 'kunde' && !!k.nr && !!window.STAFL_CRM_COCKPIT;
+  const mitAngeboten = (k) => k.art === 'kunde' && !!S.d.rechte.einzel && !!window.STAFL_CRM_EINZEL;   // Einzelangebote nur für Kunden der Stammdaten
   function kuReiter(k) {
     const n = verlaufSpeicher.has(k.key) ? verlaufSpeicher.get(k.key).length : k.aktivitaeten;
-    return KU_REITER.filter(([id]) => id !== 'uebersicht' || mitUmsatz(k))
+    return KU_REITER.filter(([id]) => (id !== 'uebersicht' || mitUmsatz(k)) && (id !== 'angebote' || mitAngeboten(k)))
       .map(([id, name]) => `<button type="button" role="tab" data-ku-tab="${id}" aria-selected="${id === kuTab}">${name}${id === 'verlauf' && n ? ` <span class="crm-zahl">${n}</span>` : ''}</button>`).join('');
   }
   function kuTabZeigen(tab) {
@@ -719,11 +721,13 @@
     for (const b of $$('#kunde-reiter [data-ku-tab]')) b.setAttribute('aria-selected', String(b.dataset.kuTab === tab));
     for (const p of $$('#kunde-inhalt [data-ku-panel]')) p.hidden = p.dataset.kuPanel !== tab;
     $('#kunde-inhalt').scrollTop = 0;
+    const k = S.byKey.get(offenKey);
+    if (tab === 'angebote' && k && mitAngeboten(k)) window.STAFL_CRM_EINZEL.zeichne($('#kunde-inhalt [data-ku-panel="angebote"]'), offenKey, CK);
   }
   async function oeffne(key, tab) {
     const k = S.byKey.get(key); if (!k) return;
     if (tab) kuTab = tab; else if (offenKey !== key) kuTab = mitUmsatz(k) ? 'uebersicht' : 'kundenblatt';
-    if (kuTab === 'uebersicht' && !mitUmsatz(k)) kuTab = 'kundenblatt';
+    if ((kuTab === 'uebersicht' && !mitUmsatz(k)) || (kuTab === 'angebote' && !mitAngeboten(k))) kuTab = 'kundenblatt';
     offenKey = key;
     const b = darf();
     $('#kunde-kicker').textContent = [k.art === 'interessent' ? 'Interessent' : (k.nr ? 'Kunde ' + k.nr : 'Kunde'), k.crm.segment !== 'Nicht zugeordnet' ? k.crm.segment : '', k.crm.phase].filter(Boolean).join(' · ');
@@ -765,6 +769,7 @@
         </div>
       </section>
       </div>
+      <div data-ku-panel="angebote" class="crm-ku-panel" role="tabpanel" hidden></div>
       <div data-ku-panel="verlauf" class="crm-ku-panel" role="tabpanel" hidden>
       ${b ? `<section class="crm-abschnitt">
         <div class="crm-abschnitt-kopf"><h3>Aktivität protokollieren</h3></div>
@@ -925,7 +930,7 @@
     if (t.closest('[data-neu-interessent]')) { interessentDialog(); return; }
     if (t.closest('[data-interessent-bearbeiten]')) { interessentDialog(S.byKey.get(offenKey)); return; }
     const mehr = t.closest('[data-mehr]'); if (mehr) { if (mehr.dataset.mehr === 'kunden') { S.kunden.n += SEITE; kunden(); } else { S.wv.n += SEITE; wiedervorlagen(true); } return; }
-    if (t.closest('[data-schliessen]')) { t.closest('dialog').close(); return; }
+    if (t.closest('[data-schliessen]')) { if (t.closest('#dlg-kunde') && !kuSchliessenOk()) return; t.closest('dialog').close(); return; }
     if (t.closest('[data-kontakt-neu]')) { $('#kontakte').insertAdjacentHTML('beforeend', kontaktZeile()); $('#kontakte [data-kontakt]:last-child input').focus(); return; }
     if (t.closest('[data-kontakt-weg]')) { t.closest('[data-kontakt]').remove(); return; }
     if (t.closest('[data-kontakte-speichern]')) {
@@ -965,6 +970,17 @@
       if (j < 0) $('#km-suche').focus(); else zeilen[j].focus();
     }
   });
+  /* Kunden-Pop-up schließen: ein ungespeichertes Einzelangebot erst nach einem zweiten Versuch verwerfen */
+  let kuWarnung = false;
+  function kuSchliessenOk() {
+    const ez = window.STAFL_CRM_EINZEL;
+    if (!ez || !ez.ungespeichert()) return true;
+    if (kuWarnung) { kuWarnung = false; ez.verwerfen(); return true; }
+    kuWarnung = true; kuTabZeigen('angebote');
+    toast('Das Einzelangebot ist nicht gespeichert – erneut schließen verwirft die Änderungen.', true);
+    return false;
+  }
+  $('#dlg-kunde').addEventListener('cancel', (e) => { if (!kuSchliessenOk()) e.preventDefault(); });
   // Nach dem Schließen des Kundenblatts die aktuelle Ansicht mit den neuen Werten zeichnen
   $('#dlg-kunde').addEventListener('close', () => { offenKey = ''; zeichne(); });
   addEventListener('resize', () => { if (S.tab === 'karte' && vb) { vb = seitenVerhaeltnis(vb); kartenAusschnitt(); } });
@@ -1007,6 +1023,9 @@
     $('#crm-login').hidden = true; $('#crm-app').hidden = false;
     const tab = location.hash.slice(1);
     zeigeTab($(`#crm-tabs button[data-tab="${CSS.escape(tab)}"]:not([hidden])`) ? tab : 'cockpit');
+    // Zurück von der Bestätigung bei Keycloak (E-Mail eines Einzelangebots): Kunden-Pop-up mit dem Angebot wieder öffnen
+    const weiter = window.STAFL_CRM_EINZEL && window.STAFL_CRM_EINZEL.fortsetzen();
+    if (weiter && S.byKey.has(weiter)) oeffne(weiter, 'angebote');
   }
   themaKnopf();
   laden().catch(() => fehler('Keine Verbindung zum Server.'));

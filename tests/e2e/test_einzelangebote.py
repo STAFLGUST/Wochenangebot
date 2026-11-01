@@ -1,6 +1,6 @@
 """Einzelangebote (Angebot bearbeiten → Einzelangebote): Angebot für genau einen Kunden. Rechte, Prüfung, Artikelsuche mit
 Bestand (eingelagert, erfasst, gesamt verfügbar) und Wochenangebotspreis, Freigabe im Portal, Bestellwunsch mit Preisen
-vom Server, Zurückziehen, Ablauf, E-Mail (Test-Mailserver), Oberfläche mit Abweichungspunkt, Druck und Portalansicht.
+vom Server, Zurückziehen, Ablauf, E-Mail (Test-Mailserver, auch aus dem CRM über crm_einzel_senden), Oberfläche mit Abweichungspunkt, Druck und Portalansicht.
 Nur synthetische Testdaten; es werden keine echten E-Mails versendet."""
 import json
 import re
@@ -211,6 +211,25 @@ check('E-Mail enthält keinen Bestand und keinen Wochenpreis', '25,54' not in bo
 log = doc('mailversand') or []
 check('E-Mail im Versandprotokoll (Typ Einzelangebot)', 'einzelangebot' in json.dumps(log), str(log)[:200])
 check('ohne Wahl: Format „Liste“ vermerkt, kein Anhang', r['angebot']['gesendet'][-1].get('format') == 'liste' and not list(m['msg'].iter_attachments()))
+
+# ---------- E-Mail aus dem CRM (Kunden-Pop-up, Reiter „Angebote“: crm_einzel_senden, gleiche Funktion und Bestätigung) ----------
+A.call('user_save', {'username': 'vera', 'name': 'Vera Vertrieb', 'role': 'viewer', 'active': True, 'password': 'Weg-Kennwort-42', 'mustChange': False,
+                     'grant': ['crm.sehen', 'einzelangebote.bearbeiten']})
+V = Client('198.51.100.5'); assert V.call('login', {'username': 'vera', 'password': 'Weg-Kennwort-42'})[0] == 200
+bestaetigung_ablaufen(V)
+check('CRM: E-Mail ohne Passwortbestätigung → Bestätigung verlangt', (lambda x: x[0] == 403 and x[1].get('code') == 'confirmation_required')(V.call('crm_einzel_senden', {'key': kid, 'id': e1['id']})))
+check('CRM: Passwortbestätigung möglich', V.call('reauth', {'password': 'Weg-Kennwort-42'})[0] == 200)
+check('CRM: Einzelangebot über das Pop-up eines anderen Kunden → 404', V.call('crm_einzel_senden', {'key': kid2, 'id': e1['id']})[0] == 404)
+check('CRM: ohne „CRM ansehen“ → 403 (auch nach Bestätigung)', E.call('crm_einzel_senden', {'key': kid, 'id': e1['id']})[0] == 403)
+n0 = len(smtp.messages)
+st, r = V.call('crm_einzel_senden', {'key': kid, 'id': e1['id'], 'note': 'Aus dem CRM.'})
+check('CRM: E-Mail gesendet und am Angebot vermerkt', st == 200 and r['angebot']['gesendet'][-1]['ok'] and r['angebot']['gesendet'][-1]['format'] == 'liste'
+      and len(r['angebot']['gesendet']) == 2, r.get('angebot', {}).get('gesendet'))
+until(lambda: len(smtp.messages) > n0)
+m = smtp.messages[-1] if len(smtp.messages) > n0 else {}
+body = (m.get('text') or '') + (m.get('html') or '')
+check('CRM: E-Mail an die Adresse des Kunden mit Positionen und Nachricht', m and 'kantine.einzel@example.org' in m.get('to', []) and e1['nr'] in m.get('subject', '')
+      and '24,50 €/kg' in body and 'Aus dem CRM.' in body, {k: m.get(k) for k in ('to', 'subject')})
 
 
 def pdf_inhalt(data):
