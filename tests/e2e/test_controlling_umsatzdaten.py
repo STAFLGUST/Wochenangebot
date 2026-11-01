@@ -9,9 +9,11 @@ Python berechnet = Server = Browser), Sortierung, Werte, fremder Mitarbeiter, fe
 Tage bleiben), Monat ohne Umsätze im Zeitraum entfällt, Zwischenablage aufgeräumt (auch alte Reste), Importverlauf,
 Protokoll ohne Beträge; Auswertung: Summen je Vertreter, Kundengruppe, Kunde, Artikelgruppe, Fleischart, Artikel, Monat,
 Quartal, Jahr, KW gegen unabhängig gerechnete Werte, Filter (auch „ohne“), Vorjahr (im laufenden Monat bis zum gleichen
-Tag), ungültige Anfragen; Oberfläche: Import im Browser mit dem Leser des Controllings (Fortschritt, Ergebnis), Reiter
-Auswertung zuerst, Kennzahlen, Filter mit Suche, eine Ebene tiefer per Klick, Sortierung, CSV, Monatsmeldung weiter
-erreichbar; 1280 und 390 px, hell und dunkel, keine JavaScript-Fehler. Nur synthetische Testdaten.
+Tag), ungültige Anfragen; Pop-up-Details (controlling_umsatz_detail): Kunden und Artikel mit letztem Kauf, Liefertage des
+Kunden, Vorjahr, Filter der Seite, Rechte; Oberfläche: Import im Browser mit dem Leser des Controllings (Fortschritt,
+Ergebnis), Reiter Auswertung zuerst, Leiste, Kennzahlen, Rangliste, Pop-ups (Vertreter → Kunde → zurück, Suche, Lieferungen,
+„Als Filter übernehmen“), Suche öffnet Pop-ups, Filter-Pop-up, alle Spalten mit Sortierung, CSV, Monatsmeldung weiter
+erreichbar; 1280 und 390 px (Pop-up als Blatt von unten), hell und dunkel, keine JavaScript-Fehler. Nur synthetische Testdaten.
 """
 import datetime as dt
 import hashlib
@@ -389,6 +391,76 @@ check('Standard: laufendes Jahr bis zum letzten Monat mit Daten, nach Monat', st
 st, r = A.call('controlling_umsatz')
 check('Monatsmeldung weiß von den Umsatzdaten (Reiter Auswertung zuerst)', st == 200 and r['umsatzdaten'] == {'vorhanden': True})
 
+# ── Pop-ups: Detail eines Merkmals (controlling_umsatz_detail) ──
+def detail(cl, **q):
+    return cl.call('controlling_umsatz_detail&' + urllib.parse.urlencode(q))
+
+
+def letzte(pos, von, bis, nach, filt=None):
+    """Letzter Tag mit berechneter Position je Kunde bzw. Artikel (unabhängig gerechnet)"""
+    out = {}
+    for d, k, a, ko, m, p, b, ek in pos:
+        mo = d.strftime('%Y-%m')
+        if b is None or mo < von or mo > bis:
+            continue
+        merk = {'kunde': k, 'artikel': a, **INFO_K[k], **INFO_A[a]}
+        if filt and any(merk[f] not in w for f, w in filt.items()):
+            continue
+        out[merk[nach]] = max(out.get(merk[nach], ''), d.isoformat())
+    return out
+
+
+V1 = {'vertreter': {'V1'}}
+st, r = detail(SAM, dim='vertreter', wert='V1', von='2025-01', bis='2025-12', vj='0')
+kun = {z['nr']: z['werte']['umsatz'] for z in r.get('kunden', [])}
+art = {z['nr']: z['werte']['umsatz'] for z in r.get('artikel', [])}
+check('Detail Vertreter: Kunden und Artikel wie unabhängig gerechnet', st == 200 and kun == erwartet(POS_JETZT, '2025-01', '2025-12', 'kunde', V1)
+      and art == erwartet(POS_JETZT, '2025-01', '2025-12', 'artikel', V1) and r['name'] == 'V1 – Vera Vertrieb', (st, r.get('error'), kun))
+check('Detail Vertreter: Summe, Anzahl Kunden und Artikel, Monatsreihe', r['summe']['umsatz'] == sum(kun.values()) and r['summe']['kunden'] == len(kun)
+      and r['summe']['artikel'] == len(art) and len(r['monate']) == 12 and sum(m['werte']['umsatz'] for m in r['monate']) == r['summe']['umsatz'] and r['summeVj'] is None)
+check('Detail Vertreter: letzter Kauf je Kunde und Artikel', {z['nr']: z['zuletzt'] for z in r['kunden']} == letzte(POS_JETZT, '2025-01', '2025-12', 'kunde', V1)
+      and {z['nr']: z['zuletzt'] for z in r['artikel']} == letzte(POS_JETZT, '2025-01', '2025-12', 'artikel', V1) and 'tage' not in r)
+check('Detail: Kunden zuerst nach Umsatz, Leergut nicht als Artikel', [z['werte']['umsatz'] for z in r['kunden']] == sorted(kun.values(), reverse=True) and '1' not in art)
+check('Detail ohne EK-Recht: keine Einkaufswerte', r['ek'] is False and '"ek":' not in json.dumps(r).replace('"ek": false', '') and '"umsatzEk"' not in json.dumps(r))
+K1 = {'kunde': {'2000001'}}
+st, r = detail(SAM, dim='kunde', wert='2000001', von='2025-01', bis='2025-12', vj='0')
+tage = {}
+for d, k, a, ko, m, p, b, ek in POS_JETZT:
+    if k == '2000001' and b is not None and d.year == 2025:
+        tage[d.isoformat()] = tage.get(d.isoformat(), 0) + cent(b)
+check('Detail Kunde: seine Artikel mit letztem Kauf wie unabhängig gerechnet', st == 200 and {z['nr']: z['werte']['umsatz'] for z in r['artikel']} == erwartet(POS_JETZT, '2025-01', '2025-12', 'artikel', K1)
+      and {z['nr']: z['zuletzt'] for z in r['artikel']} == letzte(POS_JETZT, '2025-01', '2025-12', 'artikel', K1) and 'kunden' not in r, (st, r.get('error')))
+check('Detail Kunde: Liefertage (neueste zuerst) mit Umsatz je Tag', {t['tag']: t['werte']['umsatz'] for t in r['tage']} == tage
+      and [t['tag'] for t in r['tage']] == sorted(tage, reverse=True) and r['summe']['zuletzt'] == max(tage))
+check('Detail Kunde: Name, Vertreter und Kundengruppe aus den Stammdaten', r['name'] == 'Gasthaus Eiche' and r['kunde'] == {'vertreter': 'Vera Vertrieb', 'gruppe': 'Gastronomie', 'ort': '20095 Hamburg'}, r.get('kunde'))
+st, r = detail(SAM, dim='kunde', wert='2000001', von='2026-01', bis='2026-10')
+vj_soll = erwartet(POS_JETZT, '2025-01', '2025-10', 'artikel', K1, bis_tag=letzter.day if letzter.day < 31 else None)
+check('Detail Kunde mit Vorjahr: Vorjahr je Artikel (Oktober bis zum gleichen Tag)', st == 200 and {z['nr']: z['vj']['umsatz'] for z in r['artikel'] if z['vj']} == vj_soll
+      and r['summeVj']['umsatz'] == sum(vj_soll.values()), (st, r.get('error')))
+check('Detail Kunde mit Vorjahr: Liefertage nur im Zeitraum', all(t['tag'] >= '2026-01-01' for t in r['tage']))
+st, r = detail(SAM, dim='kunde', wert='2000001', von='2025-01', bis='2025-12', vj='0', fa='Rind', k='2000003')
+check('Detail: Filter der Seite gelten weiter, das Merkmal ersetzt den gleichen Filter', st == 200 and {z['nr'] for z in r['artikel']} == set(erwartet(POS_JETZT, '2025-01', '2025-12', 'artikel', {'kunde': {'2000001'}, 'fleischart': {'Rind'}}))
+      and r['wert'] == '2000001', (st, r.get('error'), [z['nr'] for z in r.get('artikel', [])]))
+A1 = {'artikel': {'40100'}}
+st, r = detail(SAM, dim='artikel', wert='40100', von='2025-01', bis='2025-12', vj='0')
+check('Detail Artikel: seine Käufer mit Menge und letztem Kauf', st == 200 and {z['nr']: z['werte']['umsatz'] for z in r['kunden']} == erwartet(POS_JETZT, '2025-01', '2025-12', 'kunde', A1)
+      and {z['nr']: z['zuletzt'] for z in r['kunden']} == letzte(POS_JETZT, '2025-01', '2025-12', 'kunde', A1) and 'artikel' not in r and r['name'] == 'Rinderhüfte', (st, r.get('error')))
+st, r = detail(SAM, dim='vertreter', wert='_', von='2025-01', bis='2025-12', vj='0')
+check('Detail „ohne Vertreter“', st == 200 and r['name'] == 'ohne Vertreter' and {z['nr'] for z in r['kunden']} == set(erwartet(POS_JETZT, '2025-01', '2025-12', 'kunde', {'vertreter': {'_'}})))
+st, r = detail(SAM, dim='kunde', wert='2000005', von='2025-01', bis='2025-12', vj='0')
+check('Detail Kunde ohne Stammsatz: Nummer als Name', st == 200 and r['name'] == 'Kunde 2000005' and r['kunde'] is None)
+st, r = detail(EKA, dim='kundengruppe', wert='10', von='2025-01', bis='2025-12', vj='0')
+check('Detail mit EK-Recht: EK-Wert je Kunde', st == 200 and r['ek'] is True and all('ek' in z['werte'] for z in r['kunden']) and 'ek' in r['summe'])
+for cl, wer in ((EDE, 'nur controlling.umsatz_ek'), (BEA, 'nur bestand.einkaufspreise')):
+    st, r = detail(cl, dim='kundengruppe', wert='10', von='2025-01', bis='2025-12', vj='0')
+    check(f'Detail {wer}: keine Einkaufswerte (GR-008)', st == 200 and r['ek'] is False and 'ek' not in r['summe'] and all('ek' not in z['werte'] for z in r['kunden']), (st, r.get('ek')))
+for q, text in (({'dim': 'irgendwas', 'wert': '1'}, 'Merkmal'), ({'dim': 'kunde', 'wert': ''}, 'Wert'), ({'dim': 'kunde', 'wert': '2000001;DROP'}, 'Wert'),
+                ({'dim': 'kunde', 'wert': '2000001', 'von': '2026-13'}, 'Zeitraum')):
+    st, r = detail(SAM, **q)
+    check(f'Detail: ungültige Anfrage {q}: 422', st == 422 and text in r.get('error', ''), (st, r))
+check('Detail ohne Recht: 403', detail(OLAF, dim='kunde', wert='2000001')[0] == 403)
+check('Detail ohne Anmeldung: 401/404', Client('198.51.100.97').call('controlling_umsatz_detail&dim=kunde&wert=2000001')[0] in (401, 404))
+
 # ── Oberfläche: Import im Browser, Auswertung ──
 CSV = os.path.join(WORK, 'Umsatz-Browser.csv')
 POS_D = positionen(dt.date(2026, 9, 1), dt.date(2026, 10, 30), faktor=1.5)
@@ -425,6 +497,10 @@ with sync_playwright() as p:
     pg.screenshot(path=SH + '/controlling-umsatzdaten-import-ergebnis.png')
     ctx.close()
 
+    def offen(dim):
+        pg.wait_for_selector(f'#ctl-ua-dialog[open] .ctl-ud[data-dim="{dim}"]')
+        return pg.text_content('#ctl-ua-dialog')
+
     for breite, thema in ((1280, 'light'), (390, 'dark')):
         ctx = br.new_context(viewport={'width': breite, 'height': 900}, color_scheme=thema, accept_downloads=True)
         pg = ctx.new_page()
@@ -433,46 +509,111 @@ with sync_playwright() as p:
         pg.goto(BASE + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
         pg.fill('#au-user', 'admin'); pg.fill('#pw1', PW); pg.click('#auth-submit'); pg.wait_for_selector('#screen-editor:not([hidden])')
         pg.goto(BASE + '/module/controlling/#umsatz')
-        pg.wait_for_selector('#ctl-ua-zeilen tr')
+        pg.wait_for_selector('#ctl-ua-rang li')
         check(f'{breite}px {thema}: Reiter Auswertung zuerst (Daten importiert)', pg.get_attribute('#ctl-u-tabs [data-tab="auswertung"]', 'aria-selected') == 'true'
               and pg.is_visible('#ctl-u-auswertung') and pg.is_hidden('#ctl-u-uebersicht'))
         kpi = pg.text_content('#ctl-ua-kpis')
         check(f'{breite}px {thema}: Kennzahlen mit DB und Spanne (Administrator)', 'Umsatz' in kpi and 'Deckungsbeitrag' in kpi and 'Spanne' in kpi and 'zum Vorjahr' in kpi, kpi)
         check(f'{breite}px {thema}: Stand der Daten', f'Umsätze der Warenwirtschaft vom {ERSTER:%d.%m.%Y} bis {LETZTER:%d.%m.%Y}' in pg.inner_text('#ctl-ua-stand'), pg.inner_text('#ctl-ua-stand'))
         check(f'{breite}px {thema}: Monatsverlauf als Balken mit Vorjahreslinie', pg.locator('#ctl-ua-diagramm rect.ctl-ua-balken').count() == 10 and pg.locator('#ctl-ua-diagramm polyline').count() == 1)
-        pg.select_option('#ctl-ua-nach', 'vertreter')
-        pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Nach Vertreter'")
-        zeilen = pg.locator('#ctl-ua-zeilen tr').all_inner_texts()
-        check(f'{breite}px {thema}: nach Vertreter – drei Zeilen (V1, V2, ohne)', len(zeilen) == 3 and any('Vera Vertrieb' in z for z in zeilen) and any('ohne Vertreter' in z for z in zeilen), zeilen)
-        pg.click('#ctl-ua-zeilen tr[data-tiefer="V1"]')
-        pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Nach Kunde'")
-        kunden = pg.locator('#ctl-ua-zeilen tr').all_inner_texts()
-        check(f'{breite}px {thema}: Klick auf Vertreter → seine Kunden, Filter als Chip', len(kunden) == 2 and any('Gasthaus Eiche' in z for z in kunden)
-              and 'Vertreter: V1 – Vera Vertrieb' in pg.inner_text('#ctl-ua-chips'), kunden)
-        pg.click('#ctl-ua-zeilen tr[data-tiefer="2000001"]')
-        pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Nach Artikel'")
-        check(f'{breite}px {thema}: Klick auf Kunde → seine Artikel', any('Rinderhüfte' in z for z in pg.locator('#ctl-ua-zeilen tr').all_inner_texts()))
+        check(f'{breite}px {thema}: Leiste – Zeitraum „Dieses Jahr“, Filter-Knopf, Suche', pg.get_attribute('#ctl-ua-zeit [data-zeit="jahr"]', 'aria-pressed') == 'true'
+              and pg.is_visible('#ctl-ua-filterknopf') and pg.is_visible('#ctl-ua-suche') and pg.is_hidden('#ctl-ua-eigen'))
+        rang = pg.locator('#ctl-ua-rang li').all_inner_texts()
+        check(f'{breite}px {thema}: Rangliste zuerst nach Kundengruppen (Gastronomie, Großhandel, ohne)', pg.text_content('#ctl-ua-titel') == 'Rangliste · Kundengruppe' and len(rang) == 3
+              and any('Gastronomie' in z for z in rang) and any('ohne Kundengruppe' in z for z in rang), rang)
+        check(f'{breite}px {thema}: Größte Veränderungen zum Vorjahr', pg.is_visible('#ctl-ua-veraenderung-panel') and pg.locator('#ctl-ua-veraenderung [data-zeile]').count() >= 1)
+        pg.click('#ctl-ua-nach [data-nach="vertreter"]')
+        pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Rangliste · Vertreter'")
+        rang = pg.locator('#ctl-ua-rang li').all_inner_texts()
+        check(f'{breite}px {thema}: Rangliste nach Vertreter – drei Zeilen (V1, V2, ohne)', len(rang) == 3 and any('Vera Vertrieb' in z for z in rang) and any('ohne Vertreter' in z for z in rang), rang)
+        wert_v1 = pg.text_content('#ctl-ua-rang [data-zeile="V1"] .ctl-ua-rangwert')
+        pg.click('#ctl-ua-rang [data-zeile="V1"]')
+        t = offen('vertreter')
+        check(f'{breite}px {thema}: Klick auf Vertreter öffnet Pop-up mit seinen Kunden und Artikeln', 'Vera Vertrieb' in pg.text_content('#ctl-ua-d-titel')
+              and pg.locator('#ctl-ua-dialog [data-ud-oeffnen="kunde"]').count() == 2 and 'Gasthaus Eiche' in t and 'Meistgekaufte Artikel' in t
+              and pg.locator('#ctl-ua-dialog [data-ud-diagramm] rect').count() == 10, t[:300])
+        check(f'{breite}px {thema}: Pop-up-Umsatz = Zeile der Rangliste, Seite bleibt stehen', wert_v1 in pg.text_content('#ctl-ua-dialog .ctl-ud-kpi')
+              and pg.text_content('#ctl-ua-titel') == 'Rangliste · Vertreter', (wert_v1, pg.text_content('#ctl-ua-dialog .ctl-ud-kpi')))
+        if breite == 1280:
+            pg.screenshot(path=SH + f'/controlling-umsatz-popup-vertreter-{breite}-{thema}.png')
+        pg.click('#ctl-ua-dialog [data-ud-oeffnen="kunde"][data-wert="2000001"]')
+        t = offen('kunde')
+        check(f'{breite}px {thema}: Klick auf Kunde → Kunden-Pop-up mit seinen Artikeln', pg.text_content('#ctl-ua-d-titel') == 'Gasthaus Eiche' and 'Rinderhüfte' in t
+              and 'Letzter Kauf' in t and 'Liefertage' in t and pg.is_visible('#ctl-ua-dialog [data-ud-zurueck]'), t[:300])
+        pg.fill('#ctl-ua-dialog [data-ud-suche]', 'hüfte')
+        pg.wait_for_function("document.querySelectorAll('#ctl-ua-dialog button.ctl-ud-zeile.artikel').length === 1")
+        check(f'{breite}px {thema}: Artikel des Kunden suchen', 'Rinderhüfte' in pg.text_content('#ctl-ua-dialog button.ctl-ud-zeile.artikel')
+              and pg.evaluate("document.activeElement.matches('[data-ud-suche]')"))
+        pg.click('#ctl-ua-dialog [data-ud-reiter="lieferungen"]')
+        pg.wait_for_selector('#ctl-ua-dialog .ctl-ud-zeile.tage:not(.kopf)')
+        check(f'{breite}px {thema}: Reiter Lieferungen mit Liefertagen', pg.locator('#ctl-ua-dialog .ctl-ud-zeile.tage:not(.kopf)').count() > 3)
+        if breite == 390:
+            dw = pg.evaluate("(() => { const d = document.querySelector('#ctl-ua-dialog'); return [d.getBoundingClientRect().width, d.scrollWidth, d.getBoundingClientRect().bottom]; })()")
+            check('390px: Pop-up als Blatt von unten, volle Breite, ohne waagerechtes Scrollen', abs(dw[0] - 390) <= 1 and dw[1] <= 391 and abs(dw[2] - 900) <= 1, dw)
+            pg.click('#ctl-ua-dialog [data-ud-reiter="artikel"]')
+            pg.wait_for_selector('#ctl-ua-dialog button.ctl-ud-zeile.artikel')
+            pg.screenshot(path=SH + f'/controlling-umsatz-popup-kunde-{breite}-{thema}.png')
+        else:
+            pg.click('#ctl-ua-dialog [data-ud-reiter="artikel"]')
+            pg.wait_for_selector('#ctl-ua-dialog button.ctl-ud-zeile.artikel')
+            pg.screenshot(path=SH + f'/controlling-umsatz-popup-kunde-{breite}-{thema}.png')
+        pg.click('#ctl-ua-dialog [data-ud-zurueck]')
+        offen('vertreter')
+        pg.click('#ctl-ua-dialog [data-ud-filter]')
+        pg.wait_for_function("!document.querySelector('#ctl-ua-dialog').open && document.querySelector('#ctl-ua-filterzahl').textContent === '1'")
+        pg.wait_for_function("document.querySelectorAll('#ctl-ua-rang li').length === 1")
+        check(f'{breite}px {thema}: „Als Filter übernehmen“ setzt den Filter der Seite', 'Vertreter: V1 – Vera Vertrieb' in pg.inner_text('#ctl-ua-chips'), pg.inner_text('#ctl-ua-chips'))
         if breite == 1280:
             pg.screenshot(path=SH + f'/controlling-umsatzdaten-{breite}-{thema}.png', full_page=True)
             with pg.expect_download() as dl:
                 pg.click('#ctl-ua-csv')
             text = open(dl.value.path(), encoding='utf-8-sig').read()
-            check('CSV: Kopf, Zeilen, deutsche Zahlen', text.startswith('"Artikel";"Nummer";"Umsatz €"') and 'Rinderhüfte' in text and re.search(r'"\d+,\d{2}"', text), text[:200])
+            check('CSV: Kopf, Zeilen, deutsche Zahlen', text.startswith('"Vertreter";"Nummer";"Umsatz €"') and 'Vera Vertrieb' in text and re.search(r'"\d+,\d{2}"', text), text[:200])
+        pg.click('#ctl-ua-zuruecksetzen')
+        pg.wait_for_function("document.querySelector('#ctl-ua-filterzahl').hidden && document.querySelectorAll('#ctl-ua-rang li').length === 3")
+        pg.click('#ctl-ua-nach [data-nach="kunde"]')
+        pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Rangliste · Kunde'")
+        pg.click('#ctl-ua-ansicht [data-ansicht="tabelle"]')
+        pg.wait_for_selector('#ctl-ua-zeilen tr[data-zeile]')
+        kopf = pg.text_content('#ctl-ua-kopf')
+        check(f'{breite}px {thema}: Ansicht „Alle Spalten“ mit DB und Spanne', 'Menge' in kopf and 'DB' in kopf and 'Spanne' in kopf and pg.locator('#ctl-ua-zeilen tr').count() == 5, kopf)
+        if breite == 1280:
             pg.click('#ctl-ua-kopf [data-sort="name"]')
             pg.wait_for_function("document.querySelector('#ctl-ua-kopf [data-sort=\"name\"]').textContent.endsWith('↑')")
             namen = pg.locator('#ctl-ua-zeilen .ctl-ua-name').all_inner_texts()
             check('Sortierung nach Name (aufsteigend)', namen == sorted(namen, key=str.lower), namen)
-            pg.click('#ctl-ua-kopf [data-sort="umsatz"]')
-            pg.wait_for_function("document.querySelector('#ctl-ua-kopf [data-sort=\"umsatz\"]').textContent.endsWith('↓')")
+        pg.click('#ctl-ua-ansicht [data-ansicht="rang"]')
+        pg.wait_for_selector('#ctl-ua-rang li')
+        # Suche öffnet das Pop-up
+        pg.fill('#ctl-ua-suche', 'kantine')
+        pg.wait_for_function("document.querySelectorAll('#ctl-ua-treffer [role=\"option\"]').length === 1")
+        pg.press('#ctl-ua-suche', 'Enter')
+        offen('kunde')
+        check(f'{breite}px {thema}: Suche nach Kunde öffnet sein Pop-up', pg.text_content('#ctl-ua-d-titel') == 'Kantine Süd')
+        pg.keyboard.press('Escape')
+        pg.wait_for_function("!document.querySelector('#ctl-ua-dialog').open")
+        pg.fill('#ctl-ua-suche', '40300')
+        pg.wait_for_function("[...document.querySelectorAll('#ctl-ua-treffer [role=\"option\"]')].some((o) => o.textContent.includes('Kalbsrücken'))")
+        pg.click('#ctl-ua-treffer [role="option"]:has-text("Kalbsrücken")')
+        t = offen('artikel')
+        check(f'{breite}px {thema}: Suche nach Artikelnummer → Pop-up „Wer kauft diesen Artikel?“', 'Wer kauft diesen Artikel?' in t and pg.locator('#ctl-ua-dialog [data-ud-oeffnen="kunde"]').count() >= 3, t[:200])
+        pg.click('#ctl-ua-dialog .dlg-head [data-schliessen]')
+        pg.wait_for_function("!document.querySelector('#ctl-ua-dialog').open")
+        # Filter im Pop-up
+        pg.click('#ctl-ua-filterknopf')
+        pg.wait_for_selector('#ctl-ua-filterdialog[open]')
+        pg.click('#ctl-ua-filterdialog [data-fchip="fa"][data-wert="Rind"]')
+        pg.fill('#ctl-ua-filterdialog [data-ftoken="k"]', 'eiche')
+        pg.click('#ctl-ua-filterdialog [data-tokdazu="k"][data-wert="2000001"]')
+        check(f'{breite}px {thema}: Filter-Pop-up – Auswahl erst mit „Anwenden“', pg.text_content('#ctl-ua-fanwenden') == '2 Filter anwenden' and pg.is_hidden('#ctl-ua-filterzahl'))
+        if breite == 390:
+            pg.screenshot(path=SH + f'/controlling-umsatz-filter-{breite}-{thema}.png')
+        pg.click('#ctl-ua-fanwenden')
+        pg.wait_for_function("!document.querySelector('#ctl-ua-filterdialog').open && document.querySelector('#ctl-ua-filterzahl').textContent === '2'")
+        pg.wait_for_function("document.querySelectorAll('#ctl-ua-rang li').length === 1")
+        check(f'{breite}px {thema}: Filter angewandt (Fleischart und Kunde als Chips)', 'Fleischart: Rind' in pg.inner_text('#ctl-ua-chips') and 'Gasthaus Eiche' in pg.inner_text('#ctl-ua-rang'))
         pg.click('#ctl-ua-zuruecksetzen')
-        pg.wait_for_function("document.querySelector('#ctl-ua-zuruecksetzen').hidden")
-        pg.select_option('#ctl-ua-nach', 'kunde')
-        pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Nach Kunde'")
-        pg.click('[data-filter="k"] summary'); pg.fill('[data-suche="k"]', 'kantine')
-        pg.wait_for_function("document.querySelectorAll('[data-optionen=\"k\"] label').length === 1")
-        pg.check('[data-optionen="k"] input[data-wert="2000003"]')
-        pg.wait_for_function("document.querySelectorAll('#ctl-ua-zeilen tr').length === 1")
-        check(f'{breite}px {thema}: Kundenfilter mit Suche', 'Kantine Süd' in pg.inner_text('#ctl-ua-zeilen'))
+        pg.wait_for_function("document.querySelector('#ctl-ua-filterzahl').hidden")
         bw = pg.evaluate('document.documentElement.scrollWidth')
         check(f'{breite}px {thema}: kein waagerechtes Scrollen der Seite', bw <= breite + 1, bw)
         if breite == 390:
@@ -481,15 +622,19 @@ with sync_playwright() as p:
         check(f'{breite}px {thema}: Monatsmeldung weiter erreichbar', pg.is_visible('#ctl-u-uebersicht') and pg.url.endswith('#umsatz/uebersicht'))
         ctx.close()
 
-    # nur ansehen: keine EK-Spalten
+    # nur ansehen: keine EK-Spalten, auch nicht im Pop-up
     ctx = br.new_context(viewport={'width': 1280, 'height': 900})
     pg = ctx.new_page()
     pg.on('pageerror', lambda e: errors.append(str(e)))
     pg.goto(BASE + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
     pg.fill('#au-user', 'sam'); pg.fill('#pw1', 'Sehen-Konto-34'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
-    pg.goto(BASE + '/module/controlling/#umsatz'); pg.wait_for_selector('#ctl-ua-zeilen tr')
+    pg.goto(BASE + '/module/controlling/#umsatz'); pg.wait_for_selector('#ctl-ua-rang li')
+    pg.click('#ctl-ua-ansicht [data-ansicht="tabelle"]'); pg.wait_for_selector('#ctl-ua-zeilen tr[data-zeile]')
     kopf = pg.text_content('#ctl-ua-kopf')
     check('nur ansehen: ohne DB und Spanne', 'DB' not in kopf and 'Spanne' not in kopf and 'Deckungsbeitrag' not in pg.text_content('#ctl-ua-kpis'), kopf)
+    pg.click('#ctl-ua-zeilen tr[data-zeile="10"]')
+    t = offen('kundengruppe')
+    check('nur ansehen: Pop-up ohne Deckungsbeitrag, mit Ø Preis', 'Deckungsbeitrag' not in t and 'Ø Preis' in t and 'Gastronomie' in pg.text_content('#ctl-ua-d-titel'), t[:200])
     ctx.close()
     br.close()
 check('keine JavaScript-Fehler', not errors, errors[:3])

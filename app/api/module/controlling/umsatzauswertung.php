@@ -241,6 +241,126 @@ function umsatz_auswertung(array $q, array $me): array
             'monate' => $monate, 'zeilen' => array_slice($out, 0, UMSATZ_ZEILEN_MAX), 'zeilenGesamt' => count($out), 'rev' => $index['rev']];
 }
 
+/* ---------- Detail für die Pop-ups der Umsatzstatistik ----------
+   Ein Vertreter, eine Kundengruppe, ein Kunde, eine Artikelgruppe, eine Fleischart oder ein Artikel: Kennzahlen mit Vorjahr,
+   Monatsreihe, Kunden und Artikel (je mit letztem Kauf im Zeitraum oder Vorjahr), beim Kunden auch seine Liefertage.
+   Die Filter der Seite gelten weiter; das gewählte Merkmal ersetzt einen Filter desselben Merkmals. Je Zeitraum eine Lesung
+   je Monat (Summen für Kunden, Artikel und Tage in einem Durchgang). */
+const UMSATZ_DETAIL = ['vertreter', 'kundengruppe', 'kunde', 'vkgruppe', 'fleischart', 'artikel'];
+
+function umsatz_detail_addieren(array &$r, array $z, ?string $datum): void
+{
+    if ($z[9] === 1) {
+        $r['umsatz'] += $z[5]; $r['menge'] += $z[4]; $r['kolli'] += $z[3]; $r['pos'] += $z[8]; $r['ek'] += $z[6]; $r['umsatzEk'] += $z[7];
+        if ($datum !== null && ($r['zuletzt'] === null || $datum > $r['zuletzt'])) $r['zuletzt'] = $datum;
+    } else {
+        $r['posOhne'] += $z[8]; $r['mengeOhne'] += $z[4];
+    }
+}
+
+/* Summen eines Zeitraums je Monat, Kunde, Artikel und (auf Wunsch) Liefertag; $verschieben/$bisTag wie umsatz_zaehlen() */
+function umsatz_detail_zaehlen(array $a, array $index, string $von, string $bis, int $verschieben, ?int $bisTag, bool $mitTagen): array
+{
+    $o = ['reihe' => [], 'kunden' => [], 'artikel' => [], 'tage' => []];
+    $ok = [];
+    foreach (umsatzdaten_monatsfolge($von, $bis) as $m) {
+        if (!isset($index['monate'][$m])) continue;
+        $mZiel = umsatz_monat_plus($m, 12 * $verschieben);
+        $grenze = $m === $bis && $bisTag !== null ? $bisTag : 31;
+        $zr = $o['reihe'][$mZiel] ?? umsatz_leer();
+        foreach (umsatzdaten_monat($m) as $z) {
+            if ($z[0] > $grenze) continue;
+            $ka = $z[1] . "\0" . $z[2];
+            if (!isset($ok[$ka])) {
+                $ok[$ka] = true;
+                foreach ($a['filter'] as $dim => $erlaubt) if (!isset($erlaubt[umsatz_merkmal($dim, $z[1], $z[2])])) { $ok[$ka] = false; break; }
+            }
+            if (!$ok[$ka]) continue;
+            $datum = $m . '-' . str_pad((string)$z[0], 2, '0', STR_PAD_LEFT);
+            umsatz_detail_addieren($zr, $z, null);
+            $o['kunden'][$z[1]] ??= umsatz_leer() + ['zuletzt' => null];
+            umsatz_detail_addieren($o['kunden'][$z[1]], $z, $datum);
+            $o['artikel'][$z[2]] ??= umsatz_leer() + ['zuletzt' => null];
+            umsatz_detail_addieren($o['artikel'][$z[2]], $z, $datum);
+            if ($mitTagen && $z[9] === 1) {
+                $o['tage'][$datum] ??= umsatz_leer() + ['zuletzt' => null];
+                umsatz_detail_addieren($o['tage'][$datum], $z, null);
+            }
+        }
+        $o['reihe'][$mZiel] = $zr;
+    }
+    return $o;
+}
+
+/* Liste der Kunden bzw. Artikel des Details: umsatzstärkste zuerst, nur mit berechneten Positionen (sonst nur Leergut) */
+function umsatz_detail_liste(string $nach, array $jetzt, ?array $vj, bool $ek): array
+{
+    $out = [];
+    foreach (array_keys($jetzt + ($vj ?? [])) as $nr) {
+        $nr = (string)$nr;
+        $w = $jetzt[$nr] ?? null; $wv = $vj[$nr] ?? null;
+        if (($w['pos'] ?? 0) === 0 && ($wv['pos'] ?? 0) === 0) continue;
+        [$name, $sub] = umsatz_bezeichnung($nach, $nr);
+        $zuletzt = max((string)($w['zuletzt'] ?? ''), (string)($wv['zuletzt'] ?? ''));
+        $out[] = ['nr' => $nr, 'name' => $name, 'sub' => $sub, 'werte' => umsatz_werte($w ?? umsatz_leer(), $ek),
+                  'vj' => $vj !== null && $wv ? umsatz_werte($wv, $ek) : null, 'zuletzt' => $zuletzt !== '' ? $zuletzt : null];
+    }
+    usort($out, fn($x, $y) => $y['werte']['umsatz'] <=> $x['werte']['umsatz'] ?: ($y['vj']['umsatz'] ?? 0) <=> ($x['vj']['umsatz'] ?? 0) ?: strnatcasecmp($x['name'], $y['name']));
+    return $out;
+}
+
+function umsatz_detail(array $q, array $me): array
+{
+    $index = umsatzdaten_index();
+    $stand = umsatzdaten_stand($index);
+    $a = umsatz_anfrage(['nach' => 'monat'] + $q, $stand);
+    $dim = (string)($q['dim'] ?? '');
+    if (!in_array($dim, UMSATZ_DETAIL, true)) throw new InvalidArgumentException('Unbekanntes Merkmal.');
+    $wert = (string)($q['wert'] ?? '');
+    if ($wert !== UMSATZ_OHNE && !preg_match('#^[0-9A-Za-z._/-]{1,20}$#u', $wert) && !($dim === 'fleischart' && in_array($wert, CATEGORIES, true)))
+        throw new InvalidArgumentException('Ungültiger Wert.');
+    $a['filter'][$dim] = [$wert => true];
+    $ek = umsatz_darf_ek($me);
+    $letzter = $stand['bis'];
+    $bisTag = $letzter && substr($letzter, 0, 7) === $a['bis'] && (int)substr($letzter, 8, 2) < umsatzdaten_tage($a['bis']) ? (int)substr($letzter, 8, 2) : null;
+    $vjVon = umsatz_monat_plus($a['von'], -12); $vjBis = umsatz_monat_plus($a['bis'], -12);
+    $jetzt = umsatz_detail_zaehlen($a, $index, $a['von'], $a['bis'], 0, null, $dim === 'kunde');
+    $vj = $a['vj'] ? umsatz_detail_zaehlen($a, $index, $vjVon, $vjBis, 1, $bisTag, false) : null;
+
+    $zaehle = fn(array $l) => count(array_filter($l, fn($r) => $r['pos'] > 0));
+    $zuletzt = null;
+    foreach ([$jetzt['kunden'], $vj['kunden'] ?? []] as $l) foreach ($l as $r) if ($r['zuletzt'] !== null && ($zuletzt === null || $r['zuletzt'] > $zuletzt)) $zuletzt = $r['zuletzt'];
+    $summe = umsatz_summe($jetzt['reihe']);
+    $monate = [];
+    foreach (umsatzdaten_monatsfolge($a['von'], $a['bis']) as $m)
+        $monate[] = ['monat' => $m, 'werte' => umsatz_werte($jetzt['reihe'][$m] ?? umsatz_leer(), $ek), 'vj' => $vj !== null && isset($vj['reihe'][$m]) ? umsatz_werte($vj['reihe'][$m], $ek) : null];
+    [$name, $sub] = umsatz_bezeichnung($dim, $wert);
+    $o = ['ok' => true, 'dim' => $dim, 'wert' => $wert, 'name' => $name, 'sub' => $sub,
+          'anfrage' => ['von' => $a['von'], 'bis' => $a['bis'], 'vj' => $a['vj']],
+          'vorjahr' => $a['vj'] ? ['von' => $vjVon, 'bis' => $vjBis, 'bisTag' => $bisTag] : null, 'ek' => $ek,
+          'summe' => umsatz_werte($summe, $ek) + ['kunden' => $zaehle($jetzt['kunden']), 'artikel' => $zaehle($jetzt['artikel']), 'zuletzt' => $zuletzt],
+          'summeVj' => $vj !== null ? umsatz_werte(umsatz_summe($vj['reihe']), $ek) + ['kunden' => $zaehle($vj['kunden']), 'artikel' => $zaehle($vj['artikel'])] : null,
+          'monate' => $monate, 'rev' => $index['rev']];
+    if ($dim === 'kunde') {
+        $c = umsatz_kunde($wert);
+        $s = umsatz_stamm();
+        $o['kunde'] = $c ? ['vertreter' => $c['vertreter'] !== '' ? (string)($s['vertreter'][$c['vertreter']]['name'] ?? $c['vertreter']) : '',
+                            'gruppe' => $c['gruppe'] !== '' ? (string)($s['kundengruppen'][$c['gruppe']]['name'] ?? $c['gruppe']) : '', 'ort' => $c['ort']] : null;
+        $tage = [];
+        foreach ($jetzt['tage'] as $t => $r) $tage[] = ['tag' => (string)$t, 'werte' => umsatz_werte($r, $ek)];
+        usort($tage, fn($x, $y) => strcmp($y['tag'], $x['tag']));
+        $o['tage'] = $tage;
+    } else {
+        $l = umsatz_detail_liste('kunde', $jetzt['kunden'], $vj['kunden'] ?? null, $ek);
+        $o['kunden'] = array_slice($l, 0, UMSATZ_ZEILEN_MAX); $o['kundenGesamt'] = count($l);
+    }
+    if ($dim !== 'artikel') {
+        $l = umsatz_detail_liste('artikel', $jetzt['artikel'], $vj['artikel'] ?? null, $ek);
+        $o['artikel'] = array_slice($l, 0, UMSATZ_ZEILEN_MAX); $o['artikelGesamt'] = count($l);
+    }
+    return $o;
+}
+
 /* Grunddaten der Auswertung: Stand der Daten, Rechte, Auswahllisten (nur Nummern und Namen) */
 function umsatz_grunddaten(array $me): array
 {
