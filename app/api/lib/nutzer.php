@@ -47,7 +47,20 @@ function user_public(array $u): array
             'twofa' => !empty($u['totp']), 'twofaPflicht' => !empty($u['twofaPflicht']), 'passkeys' => count((array)($u['passkeys'] ?? [])), 'lockedUntil' => (int)($u['lockedUntil'] ?? 0) > time() ? (int)$u['lockedUntil'] : null,
             'geraete' => function_exists('geraete_public') ? geraete_public($u) : [],
             'grant' => array_values((array)($u['grant'] ?? [])), 'deny' => array_values((array)($u['deny'] ?? [])),
+            'vertreter' => (string)($u['vertreter'] ?? ''),
             'perms' => function_exists('user_perms') ? user_perms($u) : []];
+}
+/* Vertreter eines Mitarbeiters (Feld „vertreter“, CRM „Mein Cockpit“: seine Kunden = Vertreter oder Vertreter 2): Nummer aus
+   Stammdaten → Vertreter oder leer. Eine gespeicherte Nummer, die es dort nicht mehr gibt (z. B. nach einem Import), bleibt
+   speicherbar; neu gewählt werden nur vorhandene. */
+function nutzer_vertreter($v, string $alt): string
+{
+    if ($v !== null && !is_string($v)) throw new InvalidArgumentException('Ungültiger Vertreter.');
+    $v = trim((string)$v);
+    if ($v === '' || $v === $alt) return $v;
+    if (!preg_match('/^[0-9A-Za-z._-]{1,10}$/', $v) || !in_array($v, array_map(fn($g) => (string)($g['nr'] ?? ''), vertreter_load()['groups']), true))
+        throw new InvalidArgumentException('Diesen Vertreter gibt es nicht. Vertreter werden unter Stammdaten → Vertreter gepflegt.');
+    return $v;
 }
 /* Ersteinrichtung im Browser nur auf einem wirklich leeren System – nie, wenn Nutzerdaten
    vorhanden, aber nicht lesbar sind, und nie auf dem Produktivserver (WA_INSTALLED=1). */

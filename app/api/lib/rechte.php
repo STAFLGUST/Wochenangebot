@@ -6,8 +6,8 @@ declare(strict_types=1);
    Gespeichert: Dokument „rechte“ (Rechte je Rolle) und je Nutzer „grant“/„deny“ (Ausnahmen). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-/* Schlüssel => Bereich, Bezeichnung, Art (sehen|machen), Standard-Rollen, setzt voraus.
-   Die Standards entsprechen dem bisherigen festen Rollenmodell. */
+/* Schlüssel => Bereich, Bezeichnung, Art (sehen|machen), Standard-Rollen, setzt voraus; optional „e“ = Standard an auch in
+   eigenen Rollen (siehe rights_roles). Die Standards entsprechen dem bisherigen festen Rollenmodell. */
 const PERMS = [
     'angebot.bearbeiten'       => ['g' => 'Angebot', 'l' => 'Entwurf bearbeiten (Preise, Artikel, Excel-Import, frühere Version laden)', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebot.veroeffentlichen' => ['g' => 'Angebot', 'l' => 'Angebot veröffentlichen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
@@ -31,6 +31,12 @@ const PERMS = [
     'crm.bearbeiten'           => ['g' => 'CRM', 'l' => 'CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
     'crm.exportieren'          => ['g' => 'CRM', 'l' => 'CRM-Liste mit Kontaktdaten als CSV herunterladen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
     'crm.mhd_ware'             => ['g' => 'CRM', 'l' => 'MHD-Ware: Artikel kurz vor Ablauf und ihre Käufer ansehen (Mengen, Liefertage, letzter Kauf aus den Umsatzdaten – keine Preise)', 'k' => 'sehen', 'd' => [], 'r' => ['crm.sehen']],
+    // Cockpit je Verkäufer (Auftrag des Inhabers 01.11.2026): Master-Cockpit nur mit eigenem Recht. Umsätze in € und Mengen in kg aus
+    // den Umsatzdaten sind einzeln abschaltbar und für die Standardrollen an („Standard an“) – sie wirken nur zusammen mit
+    // „CRM ansehen“ und setzen es bewusst nicht voraus (sonst bekäme jeder Mitarbeiter über die Standardrolle das CRM).
+    'crm.master'               => ['g' => 'CRM', 'l' => 'CRM: Master-Cockpit – alle Vertreter im Vergleich, Umschalter zur Verkäufer-Ansicht jedes Vertreters (Geschäftsführung)', 'k' => 'sehen', 'd' => [], 'r' => ['crm.sehen']],
+    'crm.umsatz_euro'          => ['g' => 'CRM', 'l' => 'CRM: Umsätze in € im Cockpit und im Kunden-Pop-up sehen (aus den Umsatzdaten, ohne Einkaufswerte; wirkt nur mit „CRM ansehen“)', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => [], 'e' => true],
+    'crm.umsatz_kg'            => ['g' => 'CRM', 'l' => 'CRM: Mengen in kg im Cockpit und im Kunden-Pop-up sehen (aus den Umsatzdaten; wirkt nur mit „CRM ansehen“)', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => [], 'e' => true],
     'marketing.sehen'          => ['g' => 'Marketing', 'l' => 'Redaktionsplan ansehen: Beiträge, Kalender, Board, Kampagnen, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
     'marketing.bearbeiten'     => ['g' => 'Marketing', 'l' => 'Beiträge und Kampagnen anlegen und ändern, kommentieren, zur Freigabe geben', 'k' => 'machen', 'd' => [], 'r' => ['marketing.sehen']],
     'marketing.freigeben'      => ['g' => 'Marketing', 'l' => 'Beiträge freigeben (veröffentlichungsbereit) und zurückstufen', 'k' => 'machen', 'd' => [], 'r' => ['marketing.bearbeiten']],
@@ -143,12 +149,16 @@ function rollen_text(array $u): string { return implode(', ', array_map('rolle_n
 /* Rechte je Rolle (Standardrollen gespeichert oder Standard, dazu die eigenen Rollen).
    „bekannt“ (Dokument „rechte“) = Katalog beim letzten Speichern: Rechte, die danach neu hinzukamen, bekommen die
    Standardrollen mit ihrem Standardwert – sonst verlöre z. B. jeder Mitarbeiter mit dem neuen Modulzugang alle Kacheln.
-   Ältere Dokumente ohne „bekannt“ kannten genau PERMS (der Modulzugang ist dort neu). */
+   Ältere Dokumente ohne „bekannt“ kannten genau PERMS (der Modulzugang ist dort neu) – außer den Rechten mit „e“, die erst
+   danach dazukamen. Rechte mit „e“ (Standard an auch in eigenen Rollen, z. B. CRM: Umsätze in € und Mengen in kg) gelten
+   zusätzlich in jeder eigenen Rolle, bis ein Administrator die Rolle gespeichert hat („bekannt“ der Rolle, rolle_save) –
+   danach zählt nur noch seine Auswahl. */
 function rights_roles(): array
 {
     $d = store_read('rechte') ?? [];
     $kat = perms_katalog();
-    $bekannt = is_array($d['bekannt'] ?? null) ? $d['bekannt'] : array_keys(PERMS);
+    $fuerAlle = array_keys(array_filter(PERMS, fn($p) => !empty($p['e'])));
+    $bekannt = is_array($d['bekannt'] ?? null) ? $d['bekannt'] : array_values(array_diff(array_keys(PERMS), $fuerAlle));
     $out = [];
     foreach (PERM_ROLES as $r) {
         $std = array_keys(array_filter($kat, fn($p) => in_array($r, $p['d'], true)));
@@ -157,7 +167,11 @@ function rights_roles(): array
             $out[$r] = rights_close(array_values(array_unique(array_merge(rights_clean($d['roles'][$r]), $neu))));
         } else $out[$r] = $std;
     }
-    foreach (rollen_eigene() as $id => $rl) $out[$id] = rights_close(rights_clean((array)($rl['rechte'] ?? [])));
+    foreach (rollen_eigene() as $id => $rl) {
+        $kennt = is_array($rl['bekannt'] ?? null) ? $rl['bekannt'] : [];
+        $dazu = array_values(array_filter($fuerAlle, fn($k) => !in_array($k, $kennt, true)));
+        $out[$id] = rights_close(rights_clean(array_merge((array)($rl['rechte'] ?? []), $dazu)));
+    }
     return $out;
 }
 function rights_clean(array $list): array { return array_values(array_unique(array_intersect(array_keys(perms_katalog()), array_map('strval', $list)))); }
@@ -274,7 +288,7 @@ function modul_zugang_durchsetzen(?array $aktion): void
 function rights_catalog(): array
 {
     $out = [];
-    foreach (perms_katalog() as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m']];
+    foreach (perms_katalog() as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m'], 'eigene' => !empty($p['e'])];
     return $out;
 }
 /* Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter */

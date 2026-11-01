@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-101 Dateien, 896 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+101 Dateien, 898 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -370,6 +370,7 @@ _Mitarbeiter-Zugänge und Passwortregeln_
 - `user_find(users, id)`
 - `nutzer_hat_zugang(u)` – Mitarbeiter ohne Anmeldung (z. B. Lager): gehört zur Mitarbeiterliste (Urlaubsplanung), kann sich aber nicht anmelden – immer deaktiviert, unbrauchbares …
 - `user_public(u)`
+- `nutzer_vertreter(v, alt)` – Vertreter eines Mitarbeiters (Feld „vertreter“, CRM „Mein Cockpit“: seine Kunden = Vertreter oder Vertreter 2): Nummer aus Stammdaten → Vertreter oder leer.
 - `setup_allowed()` – Ersteinrichtung im Browser nur auf einem wirklich leeren System – nie, wenn Nutzerdaten vorhanden, aber nicht lesbar sind, und nie auf dem Produktivserver …
 - `dummy_kosten(hashes)`
 - `dummy_verify(pw, hashes)`
@@ -1123,7 +1124,10 @@ _Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/v
 
 _Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Modulzugang „<modul>.zugang“ je Rolle, mehrere Rollen je Mitarbeiter, Standardrollen unverändert, Durchsetzung auf dem Server (GR-103), …_
 
+> Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour (Stammdaten → Vertreter); nur synthetische Daten.
+
 - `check(n, c, i)`
+- `dokument(name)`
 - `anmelden(user, pw)`
 
 **Katalog und Standard**
@@ -1133,6 +1137,10 @@ _Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Mod
 **Rolle zuordnen**
 
 **Mehrere Rollen**
+
+**CRM: Master-Cockpit, Umsätze in €, Mengen in kg (Auftrag des Inhabers 01.11.2026)**
+
+**Vertreter im CRM am Mitarbeiter (Feld „vertreter“)**
 
 **Standardrolle ändern, Modulzugang entziehen**
 

@@ -18,7 +18,7 @@
   /* ======================= Mitarbeiter (Administrator; Personalstelle: nur HR-Angaben) =======================
      Mitarbeiter = Nutzer der Plattform. Auch Kollegen ohne Anmeldung (z. B. Lager) sind Mitarbeiter („ohne Anmeldung“)
      – für die Urlaubsverwaltung. HR-Angaben (Abteilung, Arbeitstage, Urlaubsanspruch) kommen aus app/module/hr/verwaltung-hr.js (W.hr). */
-  let users = null, rights = null, twofaModus = 'off';
+  let users = null, rights = null, twofaModus = 'off', vertreterListe = [];
   const ROLE_DESC = {
     admin: 'Alle Rechte, dazu Mitarbeiter und Rechte, Sicherheit und E-Mail-Einstellungen',
     editor: 'Rechte laut Tabelle „Rollen und Rechte“ (Standard: Angebot bearbeiten und veröffentlichen, Bestellungen, Bestand)',
@@ -39,7 +39,7 @@
     const host = $('#view-users');
     if (!isAdmin()) { if (W.hr) W.hr.renderNurHr(host); return; }   // Personalstelle: nur HR-Angaben
     if (!users) host.innerHTML = '<div class="loading" style="justify-content:center;padding:48px 0"><div class="spinner"></div>Mitarbeiter werden geladen …</div>';
-    try { [users, rights] = await Promise.all([api('users').then((r) => { twofaModus = r.twofaModus || 'off'; return r.users; }), api('rechte'), hrAn() ? W.hr.laden().catch(() => null) : null]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
+    try { [users, rights] = await Promise.all([api('users').then((r) => { twofaModus = r.twofaModus || 'off'; vertreterListe = r.vertreter || []; return r.users; }), api('rechte'), hrAn() ? W.hr.laden().catch(() => null) : null]); } catch (e) { host.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; return; }
     const order = { admin: 0, editor: 1, viewer: 2 };
     const aktivRang = (u) => (u.active ? 2 : u.zugang === false ? 1 : 0);
     const list = users.slice().sort((a, b) => (aktivRang(b) - aktivRang(a)) || (u0(a) - u0(b)) || (order[a.role] ?? 3) - (order[b.role] ?? 3) || a.name.localeCompare(b.name, 'de'));
@@ -224,6 +224,14 @@
     kaAktion(a, k);
   });
 
+  /* Vertreter im CRM: mit der Zuordnung zeigt das CRM „Mein Cockpit“ mit seinen Kunden (Vertreter oder Vertreter 2) */
+  function vertreterFeld(u) {
+    const akt = u ? u.vertreter || '' : '';
+    if (!vertreterListe.length && !akt) return '';
+    const bekannt = vertreterListe.some((v) => v.nr === akt);
+    return `<label class="fld span2" data-nurzugang title="Das CRM zeigt „Mein Cockpit“ mit den Kunden, bei denen dieser Vertreter als Vertreter oder Vertreter 2 hinterlegt ist."><span>Vertreter im CRM <small class="muted">(für „Mein Cockpit“)</small></span>
+      <select name="vertreter"><option value="">– keiner –</option>${akt && !bekannt ? `<option value="${esc(akt)}" selected>${esc(akt)} (nicht mehr in den Stammdaten)</option>` : ''}${vertreterListe.map((v) => `<option value="${esc(v.nr)}"${v.nr === akt ? ' selected' : ''}>${esc(v.nr)} – ${esc(v.name)}</option>`).join('')}</select></label>`;
+  }
   let unameManuell = false, fertigInfo = null;
   function openUser(id) {
     const u = id ? users.find((x) => x.id === id) : null;
@@ -246,6 +254,7 @@
         <div class="fld span2" data-nurzugang><span>Rollen <small class="muted">(mehrere möglich – die Rechte addieren sich)</small></span>
           <div class="role-pick${rollenListe().length > 3 ? ' mehr' : ''}">${rollenListe().map((r) => `<label class="role-opt"><input type="checkbox" name="rollen" value="${esc(r.id)}"${startRollen(u).includes(r.id) ? ' checked' : ''}${self ? ' disabled' : ''}><span><strong>${esc(r.name)}</strong><small>${esc(r.beschreibung || ROLE_DESC[r.id] || '')}</small></span></label>`).join('')}</div>
         </div>
+        ${vertreterFeld(u)}
         <label class="check span2" data-nurzugang><input type="checkbox" name="active"${!u || u.active || !zugang ? ' checked' : ''}${self ? ' disabled' : ''}> Zugang aktiv${self ? ' <span class="muted">(eigener Zugang)</span>' : ''}</label>
         ${zentral() ? (u && !self && zugang ? kaAbschnitt() : u ? '' : '<p class="hint span2" data-nurzugang>Das Passwort legt der Mitarbeiter selbst fest: Beim Anlegen entsteht das Konto in der zentralen Anmeldung, und mit E-Mail-Adresse geht gleich eine Einladung zum Passwort-Festlegen raus.</p>')
           : self ? '<p class="hint span2">Das eigene Passwort ändern Sie über „Passwort ändern“ im Menü.</p>' : `<div class="fld span2" data-nurzugang><span>${u && zugang ? 'Neues Passwort setzen <small class="muted">(leer lassen = unverändert)</small>' : 'Passwort'}</span>
@@ -367,6 +376,7 @@
       if (!body.rollen.length) { err.textContent = 'Bitte mindestens eine Rolle wählen.'; return; }
     }
     if (f.twofaPflicht && !f.twofaPflicht.disabled) body.twofaPflicht = f.twofaPflicht.checked;   // gesperrt = unverändert
+    if (f.vertreter) body.vertreter = f.vertreter.value;   // ohne Feld (keine Vertreter in den Stammdaten) bleibt er unverändert
     if ($('#ur-list [data-ur]')) { body.grant = $$('#ur-list [data-ur]').filter((x) => x.value === 'grant').map((x) => x.dataset.ur); body.deny = $$('#ur-list [data-ur]').filter((x) => x.value === 'deny').map((x) => x.dataset.ur); }
     const btn = f.querySelector('[type="submit"]');
     btn.disabled = true;

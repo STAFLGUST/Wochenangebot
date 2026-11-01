@@ -25,6 +25,9 @@ VIEWER_DEFAULT = {'preisverlauf.sehen', 'bestand.sehen', 'stammdaten.sehen', 'ei
 ZUGANG = {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'verwaltung']}   # Controlling, Sicherheit: zugang_rollen = []
 EDITOR_DEFAULT |= ZUGANG
 VIEWER_DEFAULT |= ZUGANG
+# CRM: Umsätze in € und Mengen in kg – Standard an (Inhaber 01.11.2026), wirken nur zusammen mit „CRM ansehen“ (ohne Standardrolle)
+EDITOR_DEFAULT |= {'crm.umsatz_euro', 'crm.umsatz_kg'}
+VIEWER_DEFAULT |= {'crm.umsatz_euro', 'crm.umsatz_kg'}
 STOCK = {'date': '2026-10-16', 'source': 'Bestand.xls', 'articles': [{'code': '1', 'name': 'Testartikel', 'kg': 10, 'lots': []}]}
 
 smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
