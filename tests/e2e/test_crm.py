@@ -12,6 +12,14 @@ Reiter „MHD-Ware“ (Recht crm.mhd_ware): MHD-Liste des Bestands ohne Preise (
 anderem Artikel, Wiedervorlage (Recht bearbeiten und MHD-Ware, Text vom Server, Notiz im Verlauf, nicht doppelt, eigener Schritt
 nie gekürzt, frühere Wiedervorlage bleibt, vorgezogene im Protokoll, Grenzen), Rechte; Oberfläche mit Farben, Zeitraum, Vertreter, „kauft regelmäßig“, Auswahl, Kundenblatt, 1280/390 px.
 Nur synthetische Testdaten.
+
+Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour; Kundengruppe 5 Fleischereien Nord. Kunden 900001 Musterfleischerei Nord
+(Hamburg, Kundenzugang, Angebot std), 900002 Beispiel Catering (Kiel, Vertreter 12 und 11), 900003 Probe Markt Ost (Dresden,
+PLZ ohne führende 0), 900004 Alpen Feinkost (Österreich, kein Kartenpunkt), 900005 Ruhender Handel (inaktiv), 900006 Test-Gastro
+Süd (ohne Vertreter). Nutzer: verena (sehen), bert (bearbeiten), xena (bearbeiten und exportieren), otto (ohne Recht), nora
+(sehen); für die MHD-Ware mia (sehen und MHD-Ware) und max (bearbeiten und MHD-Ware). MHD-Ware: Bestand relativ zu heute
+(700001 abgelaufen, 700002 in 3 Tagen, 700003 in 10 Tagen, 700004 in 30 Tagen = nicht in der Liste) und Umsatzzeilen ROH
+relativ zu heute (Käufe vor 10/40/70/120/200 Tagen für 3/6/12 Monate, Gutschrift, ohne Berechnung, Kunde 999999 ohne Stammsatz).
 """
 import datetime as dt
 import json

@@ -14,6 +14,16 @@ Kunden, Vorjahr, Filter der Seite, Rechte; Oberfläche: Import im Browser mit de
 Ergebnis), Reiter Auswertung zuerst, Leiste, Kennzahlen, Rangliste, Pop-ups (Vertreter → Kunde → zurück, Suche, Lieferungen,
 „Als Filter übernehmen“), Suche öffnet Pop-ups, Filter-Pop-up, alle Spalten mit Sortierung, CSV, Monatsmeldung weiter
 erreichbar; 1280 und 390 px (Pop-up als Blatt von unten), hell und dunkel, keine JavaScript-Fehler. Nur synthetische Testdaten.
+
+Testdaten: Vertreter V1 Vera Vertrieb, V2 Viktor Verkauf; Kundengruppen 10 Gastronomie, 20 Großhandel; Artikelgruppen 100 Rind
+und Kalb, 200 Schwein. Kunden 2000001 Gasthaus Eiche (V1, 10), 2000002 Handel Nord (V1, 20), 2000003 Kantine Süd (V2, 10),
+2000004 Imbiss Ohne (ohne Vertreter und Gruppe), 2000005 ohne Stammsatz; Artikel 40100 Rinderhüfte, 40200 Schweinenacken,
+40300 Kalbsrücken, 40400 ohne Stammsatz, 1 E2-Kiste (Leergut, ohne Berechnung). Positionen zufällig mit festem Startwert
+(positionen(): rund 4 % Gutschriften, 15 % ohne EK, 2 % doppelt). Importe nacheinander: POS_A 02.01.2025–30.10.2026; POS_B
+ersetzt 10.–20.10.2026 (Menge ×2, ohne 2000005); POS_C ersetzt März 2025 durch ein Drittel, April 2025 entfällt; POS_E ersetzt
+Juni 2026 (2000004 nur eine Gutschrift = verloren, 2000003 nur jede vierte Position); im Browser POS_D 01.09.–30.10.2026
+(Menge ×1,5). POS_JETZT ist jeweils der gespeicherte Stand – Grundlage aller unabhängigen Rechnungen (erwartet(), letzte(),
+kaeufer(), abc_soll()). Nutzer: ina (importieren), sam (ansehen), eka (beide EK-Rechte), ede und bea (je nur eines), olaf (ohne).
 """
 import datetime as dt
 import hashlib
@@ -33,10 +43,12 @@ res = []
 
 
 def check(n, c, i=''):
+    """Prüfung festhalten und als PASS/FAIL ausgeben (bei FAIL mit Ist-Wert)."""
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)[:500]) if i and not c else ''))
 
 
 def dokument(name):
+    """Gespeichertes Dokument direkt aus der Speicherschicht (None = fehlt)."""
     raw = storage_raw(name)
     if not raw:
         return None
@@ -71,6 +83,7 @@ def de(v, stellen):
 
 
 def positionen(von, bis, faktor=1.0, ohne_kunden=()):
+    """Zufällige Positionen (Datum, Kunde, Artikel, Kolli, Menge, Preis, Betrag, EK) an Werktagen; Gutschriften, ohne EK, doppelt, Leergut."""
     out = []
     d = von
     while d <= bis:
@@ -95,6 +108,7 @@ def positionen(von, bis, faktor=1.0, ohne_kunden=()):
 
 
 def csv_text(pos, kaputt=0):
+    """Kundenumsatztabelle wie aus der Warenwirtschaft (Belegköpfe, Leerzeile, kaputt = Zeilen mit ungültigem Datum)."""
     z = ['"Kunde";"Datum";"Artikel";"Kolli";"Menge";"Preis";"Gesamtbetrag";"EKPreis"']
     for d, k, a, ko, m, p, b, ek in pos:
         datum = d.strftime('%d.%m.%Y')
@@ -109,10 +123,12 @@ def csv_text(pos, kaputt=0):
 
 
 def cent(v):
+    """Euro → Cent (gerundet)."""
     return int(round(v * 100))
 
 
 def milli(v):
+    """Menge → Tausendstel (gerundet)."""
     return int(round(v * 1000))
 
 
@@ -190,14 +206,17 @@ UP = 'a' * 32
 
 
 def pruefen(cl, daten, upload=UP, **extra):
+    """Vorschau des Imports (import_pruefen)."""
     return cl.call('import_pruefen', {'art': 'umsatzdaten', 'daten': daten, 'quelle': 'Umsatz-Test.csv', 'upload': upload, **extra})
 
 
 def teil(cl, monat, daten, upload=UP):
+    """Einen Monat als Teil übertragen (import_teil)."""
     return cl.call('import_teil', {'art': 'umsatzdaten', 'upload': upload, 'schluessel': monat, 'daten': daten, 'quelle': 'Umsatz-Test.csv'})
 
 
 def uebernehmen(cl, daten, stand, upload=UP):
+    """Import übernehmen (import_uebernehmen)."""
     return cl.call('import_uebernehmen', {'art': 'umsatzdaten', 'daten': daten, 'quelle': 'Umsatz-Test.csv', 'upload': upload, 'stand': stand})
 
 
@@ -342,11 +361,13 @@ check('Grunddaten ohne Beträge', 'umsatz' not in json.dumps(g['stand']))
 
 
 def auswertung(cl, **q):
+    """controlling_umsatz_auswertung mit Anfrage q → (Status, Antwort)."""
     st, r = cl.call('controlling_umsatz_auswertung&' + urllib.parse.urlencode(q))
     return st, r
 
 
 def je(r):
+    """Umsatz je Zeile der Rangliste {Schlüssel: Cent}."""
     return {z['schluessel']: z['werte']['umsatz'] for z in r['zeilen']}
 
 
@@ -496,6 +517,7 @@ check('Monatsmeldung weiß von den Umsatzdaten (Reiter Auswertung zuerst)', st =
 
 # ── Pop-ups: Detail eines Merkmals (controlling_umsatz_detail) ──
 def detail(cl, **q):
+    """controlling_umsatz_detail (Pop-up) mit Anfrage q → (Status, Antwort)."""
     return cl.call('controlling_umsatz_detail&' + urllib.parse.urlencode(q))
 
 
@@ -605,6 +627,7 @@ with sync_playwright() as p:
     ctx.close()
 
     def offen(dim):
+        """Warten, bis das Pop-up des Merkmals offen ist; liefert seinen Text."""
         pg.wait_for_selector(f'#ctl-ua-dialog[open] .ctl-ud[data-dim="{dim}"]')
         return pg.text_content('#ctl-ua-dialog')
 

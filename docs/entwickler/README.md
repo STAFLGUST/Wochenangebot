@@ -30,6 +30,7 @@ lokal starten, verstehen, wo was liegt, sicher erweitern, testen und über den R
 | [Speicher-Dokumente](referenz/daten.md) | jedes Dokument mit Eigentümer, Schutzstufe, erlaubten Lesern/Schreibern |
 | [Module](referenz/module.md) | Module, Oberflächen, Adressen, Entwicklungs- und Freigabestand |
 | [Dateien](referenz/dateien.md) | jede Datei mit Modul und Kurzbeschreibung aus ihrem Kopfkommentar |
+| [Funktionen je Modul](referenz/funktionen/README.md) | Abschnitte und Funktionen jeder Code-Datei mit Parametern und Kurzbeschreibung, bei Testdateien die Testdaten-Übersicht – erst hier nachsehen, dann gezielt lesen |
 
 Die Referenz schreibt `python3 werkzeuge/doku.py erzeugen`; **die CI lehnt jeden Pull Request ab**, bei dem sie nicht zum
 Code passt oder eine Code-Datei keinen beschreibenden Kopfkommentar hat (`python3 werkzeuge/doku.py pruefen`).
@@ -49,7 +50,8 @@ Code passt oder eine Code-Datei keinen beschreibenden Kopfkommentar hat (`python
 
 Jede Änderung am Code bringt ihre Dokumentation im selben Pull Request mit (Definition of Done in `AGENTS.md`):
 
-1. `python3 werkzeuge/doku.py erzeugen` – Referenz neu schreiben (die CI prüft das).
+1. `python3 werkzeuge/doku.py erzeugen` – Referenz neu schreiben (die CI prüft das; nötig auch bei neuen, umbenannten oder
+   anders kommentierten Funktionen – Zeilennummern stehen bewusst nicht darin).
 2. Neue Datei → Kopfkommentar, dessen erster Satz sagt, was die Datei tut (die CI prüft das).
 3. Geändertes Verhalten → das passende Kapitel hier anpassen (Ablauf, Regeln, Beispiele, Anleitungen) und
    `docs/architektur.md` bzw. `LIESMICH.md`, wo betroffen. Prüfer achten im Pull Request darauf (Kästchen in der Vorlage).

@@ -49,6 +49,10 @@ prüfen, Tippflächen ≥ 36 px, Kontrast ≥ 4,5 : 1. Gemeinsame Bausteine in `
 
 - **Jede Datei beginnt mit einem Kopfkommentar**, dessen erster Satz sagt, was sie tut – daraus entsteht die
   [Dateikarte](referenz/dateien.md); die CI lehnt Dateien ohne ab (`werkzeuge/doku.py pruefen`).
+- **Funktionen:** Kommentar direkt über die Funktion (ohne Leerzeile; Python: Docstring), erster Satz = was sie tut bzw.
+  liefert. Abschnitte großer Dateien als eigene Zeile `/* ---------- Name ---------- */` (Python: `# ──── Name ────`).
+  Beides ergibt die [Funktionsübersicht je Modul](referenz/funktionen/README.md) – die Karte, mit der man eine große Datei
+  versteht, ohne sie ganz zu lesen.
 - Kommentare erklären das **Warum** (Regel, Sicherheitsgrund, Rückfallverhalten), Regeln mit Kennung (`GR-103`).
 - **Dokumentationspflicht:** Jede Änderung bringt ihre Dokumentation im selben Pull Request mit – Referenz neu
   erzeugen (`python3 werkzeuge/doku.py erzeugen`), betroffene Kapitel in `docs/entwickler/`, `docs/architektur.md`

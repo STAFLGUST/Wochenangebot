@@ -181,6 +181,11 @@ sys.exit(0 if all(res) else 1)
 - Eine Ausnahme bricht die Gruppe ab und wird als `Traceback` gemeldet. Prüfungen der Form `check(…, True)` nach einem
   `wait_for_selector` sind nur indirekt – lieber die Bedingung selbst prüfen.
 - Namen der Prüfungen sagen, was erwartet wird („Leser: Einkaufspreis weder in der Antwort noch in der Tabelle“).
+- **Testdaten-Übersicht:** Größere Testdateien (eigene Stammdaten, mehrere Importe, besondere Monate oder Nutzer) tragen im
+  Kopfkommentar einen Absatz, der mit `Testdaten:` beginnt – welche Kunden, Artikel, Nutzer und Sonderfälle es gibt und
+  welche Variable den aktuellen Stand hält. Er erscheint in der [Funktionsübersicht](referenz/funktionen/README.md) des
+  Moduls über den Hilfsfunktionen der Datei; so muss niemand die ganze Datei lesen, um einen Test zu ergänzen. Hilfsfunktionen
+  bekommen einen Docstring (erster Satz = was sie liefern). Beispiel: `tests/e2e/test_controlling_umsatzdaten.py`.
 
 ### API-Tests mit `Client`
 
