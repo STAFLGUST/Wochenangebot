@@ -30,6 +30,7 @@ const PERMS = [
     'crm.sehen'                => ['g' => 'CRM', 'l' => 'CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung', 'k' => 'sehen', 'd' => [], 'r' => []],
     'crm.bearbeiten'           => ['g' => 'CRM', 'l' => 'CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
     'crm.exportieren'          => ['g' => 'CRM', 'l' => 'CRM-Liste mit Kontaktdaten als CSV herunterladen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
+    'crm.mhd_ware'             => ['g' => 'CRM', 'l' => 'MHD-Ware: Artikel kurz vor Ablauf und ihre Käufer ansehen (Mengen, Liefertage, letzter Kauf aus den Umsatzdaten – keine Preise)', 'k' => 'sehen', 'd' => [], 'r' => ['crm.sehen']],
     'marketing.sehen'          => ['g' => 'Marketing', 'l' => 'Redaktionsplan ansehen: Beiträge, Kalender, Board, Kampagnen, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
     'marketing.bearbeiten'     => ['g' => 'Marketing', 'l' => 'Beiträge und Kampagnen anlegen und ändern, kommentieren, zur Freigabe geben', 'k' => 'machen', 'd' => [], 'r' => ['marketing.sehen']],
     'marketing.freigeben'      => ['g' => 'Marketing', 'l' => 'Beiträge freigeben (veröffentlichungsbereit) und zurückstufen', 'k' => 'machen', 'd' => [], 'r' => ['marketing.bearbeiten']],

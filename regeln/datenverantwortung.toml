@@ -127,7 +127,7 @@ beschreibung = "Signatur der Kunden-E-Mails"
 [[dokument]]
 name = "bestand"
 eigentuemer = "bestand"
-leser = ["angebot", "einkauf"]
+leser = ["angebot", "einkauf", "crm"]   # crm: nur die MHD-Liste ohne Preise über mhd_liste_ohne_preise() (lib/bestand-mhd.php), Reiter „MHD-Ware“
 schutz = "vertraulich"
 beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001)"
 
@@ -210,6 +210,7 @@ beschreibung = "Marken, Kanäle (mit Zeichengrenze und Hashtag-Empfehlung), Form
 [[dokument]]
 name = "controlling-umsatzdaten"
 eigentuemer = "controlling"
+leser = ["crm"]   # nur über umsatzdaten_kaeufer()/umsatzdaten_artikelliste(): Käufer eines Artikels mit Menge, Liefertagen, letztem Kauf – nie Beträge
 schutz = "vertraulich"
 dynamisch = true   # Name als Konstante UMSATZDATEN (module/controlling/umsatzdaten.php)
 beschreibung = "Umsatzdaten der Warenwirtschaft – Verzeichnis: Monate mit Prüfsumme und Kennzahlen, Kunden- und Artikelnummern mit Umsatz, Importverlauf (Zeitraum, wer, wann, Monate neu/geändert/entfallen)"
@@ -218,6 +219,7 @@ historie = "Importierte Umsätze bleiben, wie sie in der Datei standen; Zuordnun
 [[dokument]]
 name = "controlling-umsatzdaten/*"
 eigentuemer = "controlling"
+leser = ["crm"]   # wie controlling-umsatzdaten: nur über die Schnittstelle des Controllings, ohne Beträge
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Umsatzdaten je Monat (JJJJ-MM): Kunde, Artikel und Tag mit Kolli, Menge, Umsatz, EK-Wert, Umsatz mit EK, Positionen, berechnet/ohne Berechnung"

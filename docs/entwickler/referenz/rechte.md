@@ -50,6 +50,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `crm.sehen` | CRM | CRM | sehen | CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung | – | – |
 | `crm.bearbeiten` | CRM | CRM | bearbeiten | CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen | – | `crm.sehen` |
 | `crm.exportieren` | CRM | CRM | bearbeiten | CRM-Liste mit Kontaktdaten als CSV herunterladen | – | `crm.sehen` |
+| `crm.mhd_ware` | CRM | CRM | sehen | MHD-Ware: Artikel kurz vor Ablauf und ihre Käufer ansehen (Mengen, Liefertage, letzter Kauf aus den Umsatzdaten – keine Preise) | – | `crm.sehen` |
 | `marketing.sehen` | Marketing | Marketing | sehen | Redaktionsplan ansehen: Beiträge, Kalender, Board, Kampagnen, CSV | – | – |
 | `marketing.bearbeiten` | Marketing | Marketing | bearbeiten | Beiträge und Kampagnen anlegen und ändern, kommentieren, zur Freigabe geben | – | `marketing.sehen` |
 | `marketing.freigeben` | Marketing | Marketing | bearbeiten | Beiträge freigeben (veröffentlichungsbereit) und zurückstufen | – | `marketing.bearbeiten` |

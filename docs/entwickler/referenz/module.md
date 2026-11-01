@@ -39,7 +39,7 @@ Agent: `leergut` · hängt ab von `plattform`, `bestand` · Testgruppen: `leergu
 
 Ansprechpartner, Kundenbeziehungen, Aktivitäten, Vorgänge, Vertriebsinformationen
 
-Agent: `crm` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `crm`
+Agent: `crm` · hängt ab von `plattform`, `verwaltung`, `bestand`, `controlling` · Testgruppen: `crm`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |

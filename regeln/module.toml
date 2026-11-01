@@ -157,7 +157,7 @@ icon = "users"
 reihenfolge = 30
 dashboard = true
 agent = "crm"
-abhaengigkeiten = ["plattform", "verwaltung"]
+abhaengigkeiten = ["plattform", "verwaltung", "bestand", "controlling"]
 testgruppen = ["crm"]
 pfade = ["regeln/aktionen/crm.toml", "app/api/aktionen/crm.php", "app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
 pfade_geplant = []
@@ -166,6 +166,7 @@ hinweise = [
   "CRM pflegt eigene Kundenblätter (crm-kunden: Ansprechpartner, Segment, Phase, Anruf-Rhythmus, Potenzial, Wiedervorlage, Notiz), Interessenten ohne Kundennummer (crm-interessenten) und den Aktivitätenverlauf (crm-aktivitaeten, Schnappschuss von Firma und Kundennummer, GR-106).",
   "Vorlage: Vertriebs-CRM-Musterdatei (Oktober 2026) – Cockpit, Kunden, Karte, Wiedervorlagen, Pipeline, Auswertung. Echte Daten der Musterdatei gehören nicht ins Repository (GR-007).",
   "Rechte crm.sehen, crm.bearbeiten, crm.exportieren ohne Standardrollen (Kontaktdaten): Administratoren vergeben sie unter Verwaltung → Rollen und Rechte; der Modulzugang crm.zugang allein zeigt keine Kundendaten.",
+  "Reiter „MHD-Ware“ (Auftrag des Inhabers 01.11.2026, Recht crm.mhd_ware): Artikel kurz vor Ablauf aus der MHD-Liste des Bestands (Farben wie dort) und die Kunden, die sie gekauft haben (Standard: letzte 3 Monate). Liest nur über Schnittstellen der Eigentümer: mhd_liste_ohne_preise() (Bestand, ohne Preise) und umsatzdaten_kaeufer() (Controlling: Menge, Liefertage, letzter Kauf – keine Beträge).",
   "Freigegeben (Inhaber 23.10.2026): crm.dashboard-stafl.de mit eigenem Keycloak-Client „crm“ (Stand 6); / und /admin/ führen zu /module/crm/. Aktionen crm_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden.",
 ]
 
