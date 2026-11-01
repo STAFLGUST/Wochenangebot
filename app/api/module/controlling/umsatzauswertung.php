@@ -339,7 +339,8 @@ function umsatz_auswertung(array $q, array $me): array
 
 /* ---------- Detail für die Pop-ups der Umsatzstatistik ----------
    Ein Vertreter, eine Kundengruppe, ein Kunde, eine Artikelgruppe, eine Fleischart oder ein Artikel: Kennzahlen mit Vorjahr,
-   Monatsreihe, Kunden und Artikel (je mit letztem Kauf im Zeitraum oder Vorjahr), beim Kunden auch seine Liefertage.
+   Monatsreihe, Kunden und Artikel (je mit letztem Kauf im Zeitraum oder Vorjahr), beim Kunden auch seine Liefertage und je Artikel
+   Umsatz und Menge aller Kunden („vergleich“, für den Ø Preis aller Kunden – Preisspiegel).
    Kauf = berechnete Position mit Menge > 0: Gutschriften zählen in Umsatz und Menge, aber nicht als Kauf oder Liefertag.
    Die Filter der Seite gelten weiter; das gewählte Merkmal ersetzt einen Filter desselben Merkmals. Je Zeitraum eine Lesung
    je Monat (Summen für Kunden, Artikel und Tage in einem Durchgang). */
@@ -358,11 +359,15 @@ function umsatz_detail_addieren(array &$r, array $z, ?string $datum): void
     }
 }
 
-/* Summen eines Zeitraums je Monat, Kunde, Artikel und (auf Wunsch) Liefertag; $verschieben/$bisTag wie umsatz_zaehlen() */
-function umsatz_detail_zaehlen(array $a, array $index, string $von, string $bis, int $verschieben, ?int $bisTag, bool $mitTagen): array
+/* Summen eines Zeitraums je Monat, Kunde, Artikel und (auf Wunsch) Liefertag; $verschieben/$bisTag wie umsatz_zaehlen().
+   $vergleichOhne (Preisspiegel): zusätzlich Umsatz und Menge je Artikel über alle Zeilen, die die übrigen Filter erfüllen –
+   ohne den Filter dieses Merkmals (beim Kunden: Ø Preis aller Kunden je Artikel). */
+function umsatz_detail_zaehlen(array $a, array $index, string $von, string $bis, int $verschieben, ?int $bisTag, bool $mitTagen, ?string $vergleichOhne = null): array
 {
-    $o = ['reihe' => [], 'kunden' => [], 'artikel' => [], 'tage' => []];
-    $ok = [];
+    $o = ['reihe' => [], 'kunden' => [], 'artikel' => [], 'tage' => [], 'vergleich' => []];
+    $ok = []; $okOhne = [];
+    $eigen = $vergleichOhne !== null ? ($a['filter'][$vergleichOhne] ?? null) : null;
+    $uebrige = $vergleichOhne !== null ? array_diff_key($a['filter'], [$vergleichOhne => true]) : $a['filter'];
     foreach (umsatzdaten_monatsfolge($von, $bis) as $m) {
         if (!isset($index['monate'][$m])) continue;
         $mZiel = umsatz_monat_plus($m, 12 * $verschieben);
@@ -372,8 +377,14 @@ function umsatz_detail_zaehlen(array $a, array $index, string $von, string $bis,
             if ($z[0] > $grenze) continue;
             $ka = $z[1] . "\0" . $z[2];
             if (!isset($ok[$ka])) {
-                $ok[$ka] = true;
-                foreach ($a['filter'] as $dim => $erlaubt) if (!isset($erlaubt[umsatz_merkmal($dim, $z[1], $z[2])])) { $ok[$ka] = false; break; }
+                $okOhne[$ka] = true;
+                foreach ($uebrige as $dim => $erlaubt) if (!isset($erlaubt[umsatz_merkmal($dim, $z[1], $z[2])])) { $okOhne[$ka] = false; break; }
+                $ok[$ka] = $okOhne[$ka] && ($vergleichOhne === null || $eigen === null || isset($eigen[umsatz_merkmal($vergleichOhne, $z[1], $z[2])]));
+            }
+            if ($vergleichOhne !== null && $okOhne[$ka] && $z[9] === 1) {
+                $v = &$o['vergleich'][$z[2]];
+                $v['umsatz'] = ($v['umsatz'] ?? 0) + $z[5]; $v['menge'] = ($v['menge'] ?? 0) + $z[4];
+                unset($v);
             }
             if (!$ok[$ka]) continue;
             $datum = $m . '-' . str_pad((string)$z[0], 2, '0', STR_PAD_LEFT);
@@ -424,7 +435,7 @@ function umsatz_detail(array $q, array $me): array
     $letzter = $stand['bis'];
     $bisTag = $letzter && substr($letzter, 0, 7) === $a['bis'] && (int)substr($letzter, 8, 2) < umsatzdaten_tage($a['bis']) ? (int)substr($letzter, 8, 2) : null;
     $vjVon = umsatz_monat_plus($a['von'], -12); $vjBis = umsatz_monat_plus($a['bis'], -12);
-    $jetzt = umsatz_detail_zaehlen($a, $index, $a['von'], $a['bis'], 0, null, $dim === 'kunde');
+    $jetzt = umsatz_detail_zaehlen($a, $index, $a['von'], $a['bis'], 0, null, $dim === 'kunde', $dim === 'kunde' ? 'kunde' : null);
     $vj = $a['vj'] ? umsatz_detail_zaehlen($a, $index, $vjVon, $vjBis, 1, $bisTag, false) : null;
 
     $zaehle = fn(array $l) => count(array_filter($l, fn($r) => $r['pos'] > 0));
@@ -456,6 +467,9 @@ function umsatz_detail(array $q, array $me): array
     }
     if ($dim !== 'artikel') {
         $l = umsatz_detail_liste('artikel', $jetzt['artikel'], $vj['artikel'] ?? null, $ek);
+        if ($dim === 'kunde')   // Preisspiegel: Umsatz und Menge des Artikels über alle Kunden (übrige Filter der Seite gelten)
+            foreach ($l as &$z) $z['vergleich'] = isset($jetzt['vergleich'][$z['nr']]) ? ['umsatz' => $jetzt['vergleich'][$z['nr']]['umsatz'], 'menge' => $jetzt['vergleich'][$z['nr']]['menge']] : null;
+        unset($z);
         $o['artikel'] = array_slice($l, 0, UMSATZ_ZEILEN_MAX); $o['artikelGesamt'] = count($l);
     }
     return $o;

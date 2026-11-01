@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-12 Dateien, 163 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+12 Dateien, 165 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/module/controlling/controlling.php`
 
@@ -52,7 +52,7 @@ _Controlling · Umsatzauswertung aus den importierten Umsatzdaten (module/contro
 **Detail für die Pop-ups der Umsatzstatistik**
 
 - `umsatz_detail_addieren(r, z, datum)`
-- `umsatz_detail_zaehlen(a, index, von, bis, verschieben, bisTag, mitTagen)` – Summen eines Zeitraums je Monat, Kunde, Artikel und (auf Wunsch) Liefertag; $verschieben/$bisTag wie umsatz_zaehlen()
+- `umsatz_detail_zaehlen(a, index, von, bis, verschieben, bisTag, mitTagen, vergleichOhne)` – Summen eines Zeitraums je Monat, Kunde, Artikel und (auf Wunsch) Liefertag; $verschieben/$bisTag wie umsatz_zaehlen().
 - `umsatz_detail_liste(nach, jetzt, vj, ek)` – Liste der Kunden bzw. Artikel des Details: umsatzstärkste zuerst, nur mit berechneten Positionen (sonst nur Leergut)
 - `umsatz_detail(q, me)`
 
@@ -197,6 +197,7 @@ _STAFL-Plattform · Controlling · Umsatzstatistik_
 - `kundenListe()` – Kunden einer Gruppe bzw. Käufer eines Artikels (mit EK-Recht mit DB je Kunde)
 - `artikelBalken()` – Meistgekaufte Artikel (Gruppe, Vertreter …)
 - `kundeArtikel()` – Kunde: seine Artikel
+- `preisniveau(liste)` – Preisniveau des Kunden: was er gezahlt hat gegenüber dem Ø Preis aller Kunden für dieselben Mengen (nur Artikel mit Menge)
 - `kundeLieferungen()`
 - `zeichne()`
 - `zeichneListe()` – Nur die Liste neu zeichnen (Suche, alle anzeigen, Reiter) – Eingabefeld behält den Fokus
@@ -278,4 +279,5 @@ _Controlling · Umsatzdaten der Warenwirtschaft_
 - `pausen_gleich(r, soll)` – Antwort der Bestellpausen = unabhängig gerechnet (Monatsumsatz auf 1 Cent genau), Reihenfolge nach Monatsumsatz
 - `detail(cl, **q)` – controlling_umsatz_detail (Pop-up) mit Anfrage q → (Status, Antwort).
 - `letzte(pos, von, bis, nach, filt)` – Letzter Kauf (berechnete Position mit Menge > 0, keine Gutschrift) je Kunde bzw. Artikel (unabhängig gerechnet)
+- `summe_je_artikel(pos, von, bis, filt)` – Umsatz (Cent) und Menge (Tausendstel) je Artikel über alle Kunden – Vergleichsgrundlage des Preisspiegels
 - `offen(dim)` – Warten, bis das Pop-up des Merkmals offen ist; liefert seinen Text.

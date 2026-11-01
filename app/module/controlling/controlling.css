@@ -245,3 +245,10 @@ body.ctl{--ctl-abc-b:#8a5d00;--ctl-abc-b-soft:rgba(176,124,20,.14);--ctl-neu:#2f
 .ctl-ua-pausewert{flex:none;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.ctl-ua-pausewert b{display:block}
 .ctl-ua-pausen-leer{margin:6px 0 0}
 .ctl-ua-marke.pause{background:var(--ctl-abc-b-soft);color:var(--ctl-abc-b)}
+
+/* Preisspiegel in den Pop-ups: Ø Preis je Käufer bzw. je Artikel mit Abweichung vom Ø (unter Ø rot, darüber grün) */
+.ctl-ud-zeile.mit-menge.mit-preis{grid-template-columns:minmax(0,1fr) 80px 104px 92px 74px 86px 16px}
+.ctl-ud-zeile.mit-menge.mit-preis.mit-ek{grid-template-columns:minmax(0,1fr) 74px 100px 90px 92px 54px 72px 82px 16px}
+.ctl-ud-preis small,.ctl-ud-preisabw{display:block;font-size:11px;font-weight:650;color:var(--ctl-muted);white-space:nowrap}
+.ctl-ud-preisabw.minus{color:var(--ctl-accent)}.ctl-ud-preisabw.plus{color:var(--ctl-green)}
+.ctl-ud-preisniveau{margin:-4px 0 10px;color:var(--ctl-muted);font-size:12px}.ctl-ud-preisniveau b{font-size:13px}
