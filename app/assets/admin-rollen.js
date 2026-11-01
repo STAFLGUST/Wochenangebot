@@ -26,7 +26,9 @@
     const r = id ? rolle(id) : null;
     const q = kopie ? rolle(kopie) : null;
     entwurf = r ? { id: r.id, name: r.name, beschreibung: r.beschreibung || '', rechte: new Set(r.rechte), art: r.art }
-      : { id: '', name: q ? `${q.name} (Kopie)` : '', beschreibung: q && q.art === 'eigen' ? q.beschreibung : '', rechte: new Set(q ? (q.art === 'fest' ? kat().map((p) => p.key) : q.rechte) : []), art: 'eigen' };
+      : { id: '', name: q ? `${q.name} (Kopie)` : '', beschreibung: q && q.art === 'eigen' ? q.beschreibung : '',
+        // neue Rolle: Rechte mit „Standard an auch in eigenen Rollen“ vorgewählt (z. B. CRM: Umsätze in €, Mengen in kg)
+        rechte: new Set(q ? (q.art === 'fest' ? kat().map((p) => p.key) : q.rechte) : kat().filter((p) => p.eigene).map((p) => p.key)), art: 'eigen' };
     geaendert = !r;
   }
 

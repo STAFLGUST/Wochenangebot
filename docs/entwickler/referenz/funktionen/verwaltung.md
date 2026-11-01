@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 189 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 190 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -172,6 +172,7 @@ _Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden,
 - `kaZeigen(k)`
 - `kaLaden(id)`
 - `kaAktion(was, knopf)`
+- `vertreterFeld(u)` – Vertreter im CRM: mit der Zuordnung zeigt das CRM „Mein Cockpit“ mit seinen Kunden (Vertreter oder Vertreter 2)
 - `openUser(id)`
 - `zugangZeigen()` – Mit/ohne Anmeldung: Felder für Anmeldung, Rolle, Passwort, zweiten Faktor und Rechte nur mit Anmeldung
 - `zeigeFertig(u, pw, neu)` – Nach dem Anlegen (bzw. neuem Passwort): Zusammenfassung und „Zugangsdaten per E-Mail senden“

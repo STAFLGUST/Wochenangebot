@@ -1,15 +1,21 @@
 """Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Modulzugang „<modul>.zugang“ je Rolle,
 mehrere Rollen je Mitarbeiter, Standardrollen unverändert, Durchsetzung auf dem Server (GR-103), Protokoll und die
 Oberfläche (Verwaltung → Rollen und Rechte, Mitarbeiterdialog, Dashboard ohne Kacheln ohne Zugang).
+CRM-Rechte „Master-Cockpit“ (ohne Standard) und „Umsätze in €“/„Mengen in kg“ (Standard an, auch in eigenen und älteren
+gespeicherten Rollen, einzeln abschaltbar, ohne CRM-Zugang zu geben) und das Feld „Vertreter im CRM“ am Mitarbeiter
+(nur vorhandene Vertreter, Rückfall/ältere Oberfläche, Protokoll, Mitarbeiterdialog).
+
+Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour (Stammdaten → Vertreter); nur synthetische Daten.
 
 Der Testserver hat keinen eigenen Host (kein WA_OBERFLAECHE): gesperrt wird nach der Oberfläche der Aktion – HR-Aktionen
 (hr.intern) brauchen „hr.zugang“, der gemeinsame Eingabebereich (angebot.eingabe) regelt die Sichtbarkeit über die
 Einzelrechte. Die Sperre je Host prüft die Gruppe „rollen_host“ (WA_OBERFLAECHE=bestand.intern).
 """
+import json
 import sys
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
-from umgebung import SH
+from umgebung import SH, storage_raw, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -17,6 +23,15 @@ res = []
 
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
+
+
+def dokument(name):
+    raw = storage_raw(name)
+    if not raw:
+        return None
+    if raw.startswith('<?php'):
+        raw = raw.split('\n', 1)[1]
+    return json.loads(raw)
 
 
 A = Client('198.51.100.2')
@@ -109,6 +124,61 @@ code, r = A.call('bestellungen')
 check('Bestellungen zuweisen: alle mit Bearbeitungsrecht (statt Rollenname)', code == 200 and {a['id'] for a in r['assignees']} >= {uid['vera'], uid['admin']}
       and uid['lars'] not in {a['id'] for a in r['assignees']}, r.get('assignees'))
 
+# ---------- CRM: Master-Cockpit, Umsätze in €, Mengen in kg (Auftrag des Inhabers 01.11.2026) ----------
+EK = {'crm.umsatz_euro', 'crm.umsatz_kg'}
+kat = {p['key']: p for p in A.call('rechte')[1]['catalog']}
+check('Katalog: Master-Cockpit ohne Standardrolle, setzt „CRM ansehen“ voraus', kat['crm.master']['default'] == [] and kat['crm.master']['requires'] == ['crm.sehen']
+      and kat['crm.master']['eigene'] is False and kat['crm.master']['modul'] == 'crm', kat.get('crm.master'))
+check('Katalog: CRM € und kg Standard an (Standardrollen und eigene Rollen), ohne Voraussetzung',
+      all(kat[k]['default'] == ['viewer', 'editor'] and kat[k]['requires'] == [] and kat[k]['eigene'] is True and kat[k]['modul'] == 'crm' for k in EK), [kat.get(k) for k in EK])
+check('Standardrolle: € und kg an – „CRM ansehen“ und Master kommen dadurch nicht dazu', EK <= rechte(V) and 'crm.sehen' not in rechte(V) and 'crm.master' not in rechte(V), sorted(rechte(V)))
+check('Eigene Rolle mit dem neuen Katalog gespeichert: nur die gewählten Rechte (Lager ohne € und kg)', not (EK & rechte(L)), sorted(rechte(L)))
+rollen_vorher, rechte_vorher = dokument('rollen'), dokument('rechte')
+# Daten von vor den neuen Rechten (Rückfall/Bestand): eigene Rolle und Rollenrechte ohne „bekannt“
+alt = json.loads(json.dumps(rollen_vorher))
+for r_ in alt['eigene'].values():
+    r_.pop('bekannt', None)
+storage_write('rollen', alt)
+check('Eigene Rolle von früher (ohne „bekannt“): € und kg an, sonst unverändert', rechte(L) == {'bestand.zugang', 'bestand.einkaufspreise', 'bestand.sehen'} | EK, sorted(rechte(L)))
+storage_write('rechte', {'roles': {r_: [k for k in rechte_vorher['roles'][r_] if k not in EK] for r_ in ('viewer', 'editor')}})
+rr = A.call('rechte')[1]['roles']
+check('Rollenrechte von früher (ohne „bekannt“): € und kg für beide Standardrollen an', EK <= set(rr['viewer']) and EK <= set(rr['editor']) and EK <= rechte(V), rr)
+code, r = A.call('rolle_save', {'id': LAGER, 'name': 'Lager', 'rechte': ['bestand.zugang', 'bestand.einkaufspreise', 'crm.umsatz_kg']})
+check('Eigene Rolle gespeichert: abgewähltes € bleibt aus, gewähltes kg an', code == 200 and 'crm.umsatz_euro' not in rechte(L) and 'crm.umsatz_kg' in rechte(L)
+      and 'crm.umsatz_euro' in (next(x for x in dokument('rollen')['eigene'].values() if x['name'] == 'Lager').get('bekannt') or []), sorted(rechte(L)))
+code, r = A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'grant': ['crm.master'], 'deny': ['crm.umsatz_euro']})
+check('Je Mitarbeiter: € verboten, kg bleibt; Master erlaubt ergänzt „CRM ansehen“', code == 200 and 'crm.umsatz_euro' not in rechte(V) and {'crm.umsatz_kg', 'crm.master', 'crm.sehen'} <= rechte(V), sorted(rechte(V)))
+A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'grant': [], 'deny': []})
+A.call('rolle_save', {'id': LAGER, 'name': 'Lager', 'rechte': sorted(lg['rechte'])})
+storage_write('rechte', rechte_vorher)
+check('Zustand wiederhergestellt', rechte(L) == set(lg['rechte']) and EK <= rechte(V) and 'crm.sehen' not in rechte(V))
+
+# ---------- Vertreter im CRM am Mitarbeiter (Feld „vertreter“) ----------
+storage_write('vertreter', {'rev': 1, 'groups': [{'nr': '11', 'name': 'Vera Vertrieb', 'kurz': 'VV', 'telefon': '', 'plz': '', 'ort': '', 'land': ''},
+                                                 {'nr': '12', 'name': 'Tom Tour', 'kurz': 'TT', 'telefon': '', 'plz': '', 'ort': '', 'land': ''}]})
+code, r = A.call('users')
+check('Mitarbeiterliste: Vertreter zur Auswahl (Nummer und Name), Feld je Mitarbeiter', code == 200 and r['vertreter'] == [{'nr': '11', 'name': 'Vera Vertrieb'}, {'nr': '12', 'name': 'Tom Tour'}]
+      and all(u_['vertreter'] == '' for u_ in r['users']), r.get('vertreter'))
+check('Mitarbeiterliste nur für Administratoren', V.call('users')[0] == 403)
+code, r = A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'vertreter': '11'})
+check('Vertreter zugeordnet', code == 200 and r['user']['vertreter'] == '11' and next(x for x in dokument('nutzer')['users'] if x['id'] == uid['vera'])['vertreter'] == '11', r.get('user', {}).get('vertreter'))
+check('Unbekannter Vertreter → 422', A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'vertreter': '99'})[0] == 422)
+check('Ungültige Angabe (Liste, Sonderzeichen) → 422', A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'vertreter': ['11']})[0] == 422
+      and A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'vertreter': '1;1'})[0] == 422)
+check('Ältere Oberfläche (ohne Feld): Vertreter bleibt', A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True})[1]['user']['vertreter'] == '11')
+storage_write('vertreter', {'rev': 2, 'groups': [{'nr': '12', 'name': 'Tom Tour', 'kurz': 'TT', 'telefon': '', 'plz': '', 'ort': '', 'land': ''}]})
+code, r = A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'vertreter': '11'})
+check('Vertreter nicht mehr in den Stammdaten (z. B. nach Import): gespeicherte Nummer bleibt speicherbar', code == 200 and r['user']['vertreter'] == '11', (code, r.get('error')))
+check('… aber nicht neu wählbar', A.call('user_save', {'id': uid['lars'], 'name': 'Lars Lager', 'rollen': [LAGER], 'active': True, 'vertreter': '11'})[0] == 422)
+code, r = A.call('user_save', {'id': '', 'name': 'Tim Tour', 'username': 'tim', 'rollen': ['viewer'], 'active': True, 'password': 'Tour-Zugang-4711', 'mustChange': False, 'vertreter': '12'})
+check('Neuer Mitarbeiter mit Vertreter', code == 200 and r['user']['vertreter'] == '12', r)
+code, r = A.call('user_save', {'id': uid['vera'], 'name': 'Vera Vertrieb', 'rollen': ['editor', PERS], 'active': True, 'vertreter': ''})
+check('Zuordnung entfernt (Feld gelöscht)', code == 200 and r['user']['vertreter'] == '' and 'vertreter' not in next(x for x in dokument('nutzer')['users'] if x['id'] == uid['vera']))
+log = json.dumps(A.call('log')[1].get('entries') or [], ensure_ascii=False)
+check('Protokoll: Vertreter (CRM) mit Nummer und Name', 'Vertreter (CRM)' in log and '12 – Tom Tour' in log, log[:300])
+storage_write('vertreter', {'rev': 3, 'groups': [{'nr': '11', 'name': 'Vera Vertrieb', 'kurz': 'VV', 'telefon': '', 'plz': '', 'ort': '', 'land': ''},
+                                                 {'nr': '12', 'name': 'Tom Tour', 'kurz': 'TT', 'telefon': '', 'plz': '', 'ort': '', 'land': ''}]})
+
 # ---------- Standardrolle ändern, Modulzugang entziehen ----------
 code, r = A.call('rolle_save', {'id': 'editor', 'name': 'Vertrieb Innendienst', 'rechte': sorted(set(next(x for x in A.call('rechte')[1]['rollen'] if x['id'] == 'editor')['rechte']) - {'hr.zugang'})})
 check('Standardrolle umbenannt, Rechte geändert', code == 200 and next(x for x in r['rollen'] if x['id'] == 'editor')['name'] == 'Vertrieb Innendienst', r)
@@ -148,6 +218,9 @@ with sync_playwright() as pw:
     a.screenshot(path=SH + '/rollen-desktop.png', full_page=True)
     # Neue Rolle über die Oberfläche
     a.click('[data-rl-akt="neu"]'); a.wait_for_selector('#rl-name:focus')
+    check('UI: neue Rolle mit „CRM: Umsätze in €“ und „Mengen in kg“ vorgewählt (Standard an)', a.is_checked('[data-rl-key="crm.umsatz_euro"]') and a.is_checked('[data-rl-key="crm.umsatz_kg"]')
+          and not a.is_checked('[data-rl-key="crm.master"]'))
+    a.uncheck('[data-rl-key="crm.umsatz_euro"]')
     a.fill('#rl-name', 'Einkauf')
     a.check('[data-rl-key="einkauf.melden"]')
     check('UI: Recht hakt seine Voraussetzung an', a.is_checked('[data-rl-key="einkauf.sehen"]'))
@@ -160,7 +233,7 @@ with sync_playwright() as pw:
     check('UI: Voraussetzung weg → abhängiges Recht weg', not a.is_checked('[data-rl-key="bestand.einkaufspreise"]'))
     a.click('[data-rl-akt="speichern"]'); a.wait_for_selector('#view-rollen .rl-item.on:has-text("Einkauf")')
     ek = next(x for x in A.call('rechte')[1]['rollen'] if x['name'] == 'Einkauf')
-    check('UI: Rolle gespeichert', set(ek['rechte']) == {'einkauf.zugang', 'einkauf.sehen', 'einkauf.melden', 'bestand.zugang'}, ek)
+    check('UI: Rolle gespeichert (abgewähltes € bleibt aus)', set(ek['rechte']) == {'einkauf.zugang', 'einkauf.sehen', 'einkauf.melden', 'bestand.zugang', 'crm.umsatz_kg'}, ek)
     # Wechsel mit ungespeicherten Änderungen fragt nach
     a.fill('#rl-name', 'Einkauf Hamburg')
     a.click('#view-rollen .rl-item:has-text("Lager Nord")'); a.wait_for_selector('#dlg-confirm[open]')
@@ -181,6 +254,9 @@ with sync_playwright() as pw:
     a.click('#vt-users'); a.wait_for_selector(f'[data-uedit="{uid["paula"]}"]')
     check('UI: Mitarbeiterliste zeigt Rollennamen', 'Lager' in a.inner_text(f'#view-users tr[data-uid="{uid["lars"]}"]'))
     a.click(f'[data-uedit="{uid["paula"]}"]'); a.wait_for_selector('#dlg-user[open] [name="rollen"]')
+    vt_opt = a.eval_on_selector_all('#dlg-user [name="vertreter"] option', 'os => os.map((o) => o.textContent)')
+    check('UI: Feld „Vertreter im CRM“ mit den Vertretern der Stammdaten', vt_opt == ['– keiner –', '11 – Vera Vertrieb', '12 – Tom Tour'], vt_opt)
+    a.select_option('#dlg-user [name="vertreter"]', '12')
     a.check(f'#dlg-user [name="rollen"][value="{PERS}"]')
     a.check('#dlg-user [name="rollen"][value="admin"]')
     check('UI: Administrator wählt die anderen Rollen ab', not a.is_checked(f'#dlg-user [name="rollen"][value="{PERS}"]') and a.locator('#ur-box').is_hidden())
@@ -189,7 +265,7 @@ with sync_playwright() as pw:
     a.screenshot(path=SH + '/rollen-mitarbeiter.png')
     a.click('#dlg-user button[type=submit]'); a.wait_for_selector('#dlg-user', state='hidden')
     pu = next(x for x in A.call('users')[1]['users'] if x['username'] == 'paula')
-    check('UI: zwei Rollen gespeichert', set(pu['rollen']) == {'viewer', PERS} and pu['role'] == 'viewer', pu)
+    check('UI: zwei Rollen und Vertreter gespeichert', set(pu['rollen']) == {'viewer', PERS} and pu['role'] == 'viewer' and pu['vertreter'] == '12', pu)
     # schmal
     a.set_viewport_size({'width': 390, 'height': 844})
     a.click('#vt-rollen'); a.wait_for_selector('#view-rollen .rl-item.on')

@@ -51,6 +51,9 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `crm.bearbeiten` | CRM | CRM | bearbeiten | CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen | – | `crm.sehen` |
 | `crm.exportieren` | CRM | CRM | bearbeiten | CRM-Liste mit Kontaktdaten als CSV herunterladen | – | `crm.sehen` |
 | `crm.mhd_ware` | CRM | CRM | sehen | MHD-Ware: Artikel kurz vor Ablauf und ihre Käufer ansehen (Mengen, Liefertage, letzter Kauf aus den Umsatzdaten – keine Preise) | – | `crm.sehen` |
+| `crm.master` | CRM | CRM | sehen | CRM: Master-Cockpit – alle Vertreter im Vergleich, Umschalter zur Verkäufer-Ansicht jedes Vertreters (Geschäftsführung) | – | `crm.sehen` |
+| `crm.umsatz_euro` | CRM | CRM | sehen | CRM: Umsätze in € im Cockpit und im Kunden-Pop-up sehen (aus den Umsatzdaten, ohne Einkaufswerte; wirkt nur mit „CRM ansehen“) | Nur ansehen, Bearbeiter | – |
+| `crm.umsatz_kg` | CRM | CRM | sehen | CRM: Mengen in kg im Cockpit und im Kunden-Pop-up sehen (aus den Umsatzdaten; wirkt nur mit „CRM ansehen“) | Nur ansehen, Bearbeiter | – |
 | `marketing.sehen` | Marketing | Marketing | sehen | Redaktionsplan ansehen: Beiträge, Kalender, Board, Kampagnen, CSV | – | – |
 | `marketing.bearbeiten` | Marketing | Marketing | bearbeiten | Beiträge und Kampagnen anlegen und ändern, kommentieren, zur Freigabe geben | – | `marketing.sehen` |
 | `marketing.freigeben` | Marketing | Marketing | bearbeiten | Beiträge freigeben (veröffentlichungsbereit) und zurückstufen | – | `marketing.bearbeiten` |

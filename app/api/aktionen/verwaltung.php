@@ -160,7 +160,9 @@ switch ($action) {
         case 'users': {
             require_auth(false, 'admin');
             header('Cache-Control: no-store');
-            respond(['ok' => true, 'users' => array_map('user_public', users_load()), 'twofaModus' => sec()['twofa']]);
+            // Vertreter (Nummer, Name) für das Feld „Vertreter (CRM)“ im Mitarbeiter
+            $vt = array_map(fn($g) => ['nr' => (string)($g['nr'] ?? ''), 'name' => (string)($g['name'] ?? '')], vertreter_load()['groups']);
+            respond(['ok' => true, 'users' => array_map('user_public', users_load()), 'twofaModus' => sec()['twofa'], 'vertreter' => $vt]);
         }
 
         /* Nutzerrechte: Rollen, Rechte je Rolle und Übersicht je Nutzer (Administrator) */
@@ -240,7 +242,8 @@ switch ($action) {
                     $dok['namen'] = $namen;
                 } else {
                     $e = is_array($dok['eigene'] ?? null) ? $dok['eigene'] : [];
-                    $e[$id] = ['name' => $name, 'beschreibung' => $besch, 'rechte' => $rechte,
+                    // „bekannt“: Katalog beim Speichern – Rechte mit „Standard an auch in eigenen Rollen“ gelten danach nur noch, wenn gewählt
+                    $e[$id] = ['name' => $name, 'beschreibung' => $besch, 'rechte' => $rechte, 'bekannt' => array_keys($kat),
                                'erstellt' => $e[$id]['erstellt'] ?? now(), 'von' => $e[$id]['von'] ?? $me['name'], 'geaendert' => now(), 'geaendertVon' => $me['name']];
                     $dok['eigene'] = $e;
                 }
@@ -315,6 +318,9 @@ switch ($action) {
                 $deny = rights_clean(is_array($b['deny'] ?? null) ? $b['deny'] : []);
                 $grant = array_values(array_diff(rights_clean(is_array($b['grant'] ?? null) ? $b['grant'] : []), $deny));
                 $lbl = function (array $ks) { return implode(', ', array_map(function ($k) { return perms_katalog()[$k]['l'] ?? $k; }, $ks)); };
+                // Vertreter im CRM (optional; ohne Angabe – ältere Oberfläche – bleibt er unverändert)
+                $hasVt = array_key_exists('vertreter', $b);
+                $vtName = function (string $nr) { if ($nr === '') return ''; foreach (vertreter_load()['groups'] as $g) if ((string)($g['nr'] ?? '') === $nr) return $nr . ' – ' . (string)($g['name'] ?? ''); return $nr; };
                 // Zwei-Faktor-Pflicht je Nutzer (optional; ohne Angabe – ältere Oberfläche – bleibt sie unverändert)
                 $hasPflicht = array_key_exists('twofaPflicht', $b);
                 $pflicht = !empty($b['twofaPflicht']);
@@ -330,6 +336,8 @@ switch ($action) {
                     if (!$zugang) { $u['zugang'] = false; $pflicht = false; }
                     foreach (['vorname', 'nachname', 'email'] as $f) if ($person[$f] !== '') $u[$f] = $person[$f];
                     if ($pflicht) $u['twofaPflicht'] = true;
+                    $vt = $hasVt ? nutzer_vertreter($b['vertreter'], '') : '';
+                    if ($vt !== '') $u['vertreter'] = $vt;
                     if ($hasRights && $role !== 'admin') { if ($grant) $u['grant'] = $grant; if ($deny) $u['deny'] = $deny; }
                     if ($weitere) $u['rollen'] = $weitere;
                     $users[] = $u;
@@ -340,6 +348,7 @@ switch ($action) {
                     if (!empty($u['grant'])) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $uname, 'f' => 'Zusätzlich erlaubt', 'from' => '', 'to' => $lbl($u['grant'])];
                     if (!empty($u['deny'])) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $uname, 'f' => 'Verboten', 'from' => '', 'to' => $lbl($u['deny'])];
                     if ($pflicht) $d[] = ['k' => 'u|2fapflicht', 'code' => '', 'name' => $uname, 'f' => 'Zwei-Faktor-Pflicht', 'from' => '', 'to' => 'ja'];
+                    if ($vt !== '') $d[] = ['k' => 'u|vertreter', 'code' => '', 'name' => $uname, 'f' => 'Vertreter (CRM)', 'from' => '', 'to' => $vtName($vt)];
                     return [$u, 'Mitarbeiter „' . $uname . '“ (' . $name . ') ' . ($zugang ? 'angelegt' : 'ohne Anmeldung angelegt'), $d];
                 }
                 $i = user_find($users, $id);
@@ -381,6 +390,12 @@ switch ($action) {
                     if ($deny) $users[$i]['deny'] = $deny;
                     if ($og != $grant) $d[] = ['k' => 'u|grant', 'code' => '', 'name' => $old['username'], 'f' => 'Zusätzlich erlaubt', 'from' => $lbl($og), 'to' => $lbl($grant)];
                     if ($od != $deny) $d[] = ['k' => 'u|deny', 'code' => '', 'name' => $old['username'], 'f' => 'Verboten', 'from' => $lbl($od), 'to' => $lbl($deny)];
+                }
+                if ($hasVt) {
+                    $altVt = (string)($old['vertreter'] ?? '');
+                    $vt = nutzer_vertreter($b['vertreter'], $altVt);
+                    if ($vt !== '') $users[$i]['vertreter'] = $vt; else unset($users[$i]['vertreter']);
+                    if ($vt !== $altVt) $d[] = ['k' => 'u|vertreter', 'code' => '', 'name' => $old['username'], 'f' => 'Vertreter (CRM)', 'from' => $vtName($altVt), 'to' => $vtName($vt)];
                 }
                 if ($hasPflicht && $pflicht !== !empty($old['twofaPflicht'])) {
                     if ($pflicht) $users[$i]['twofaPflicht'] = true; else unset($users[$i]['twofaPflicht']);

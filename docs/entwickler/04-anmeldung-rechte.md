@@ -285,7 +285,13 @@ wer bearbeiten darf, darf auch sehen) → `deny` abziehen → alles entfernen, d
 
 **Katalog** (`perms_katalog`): `PERMS` plus `<modul>.zugang` für jedes Modul mit Kachel im Modulregister (Standard:
 beide Standardrollen). Neue Rechte, die nach dem letzten Speichern dazukamen, bekommen die Standardrollen mit ihrem
-Standardwert (`bekannt`), damit z. B. ein neuer Modulzugang niemandem die Kacheln nimmt.
+Standardwert (`bekannt`), damit z. B. ein neuer Modulzugang niemandem die Kacheln nimmt. Rechte mit `'e' => true`
+(„Standard an auch in eigenen Rollen“, z. B. `crm.umsatz_euro`, `crm.umsatz_kg`) gelten zusätzlich in jeder eigenen Rolle,
+bis ein Administrator sie gespeichert hat (`bekannt` der Rolle, `rolle_save`); neue eigene Rollen haben sie vorgewählt.
+
+**Vertreter am Mitarbeiter** (Feld `vertreter`, `user_save`, Prüfung `nutzer_vertreter`): Nummer aus Stammdaten →
+Vertreter. Das CRM zeigt damit „Mein Cockpit“ mit den Kunden dieses Vertreters (Vertreter oder Vertreter 2). Ohne das
+Feld in der Anfrage (ältere Oberfläche) bleibt es unverändert; eine nicht mehr vorhandene Nummer bleibt speicherbar.
 
 **Prüfen in einer Aktion**
 
