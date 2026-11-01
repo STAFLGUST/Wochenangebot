@@ -3,7 +3,9 @@
    Kunden (Suche, Klick → Kunde) und meistgekaufte Artikel (Klick → Artikel). Ein Kunde: Kennzahlen mit letztem Kauf und
    Liefertagen, Reiter „Artikel“ (Suche, Menge, Umsatz, Ø Preis, ± Vorjahr, zuletzt; „nicht mehr gekauft“ = im Vorjahr ja, jetzt
    nicht) und „Lieferungen“. Ein Artikel: seine Käufer. „Zurück“ führt zum vorigen Pop-up, „Als Filter übernehmen“ setzt den
-   Filter der Seite. Listen sortierbar nach Umsatz, Menge, DB oder Spanne (höchste/niedrigste zuerst; Vorgabe = Kennzahl
+   Filter der Seite. Preisspiegel: beim Artikel Ø Preis je Käufer mit Abweichung vom Ø aller Käufer, beim Kunden je Artikel die
+   Abweichung vom Ø aller Kunden (Server: „vergleich“) und sein Preisniveau. Listen sortierbar nach Umsatz, Menge, DB, Spanne
+   oder Ø Preis (höchste/niedrigste zuerst; Vorgabe = Kennzahl
    der Rangliste), z. B. die Artikel eines Kunden oder die Käufer eines Artikels nach DB. Daten: controlling_umsatz_detail mit
    Zeitraum und Filtern der Seite (umsatz-auswertung.js, Schnittstelle „kontext“); EK-Werte und DB nur, wenn der Server sie
    liefert (controlling.umsatz_ek und bestand.einkaufspreise). */
@@ -50,7 +52,7 @@
     const k = [kachel('Umsatz', F.euroKachel(s.umsatz), v ? F.deltaHtml(s.umsatz, v.umsatz) + ' zum Vorjahr' : '', F.euro(s.umsatz)),
       kachel('Menge', F.menge(s.menge), v ? F.deltaHtml(s.menge, v.menge) + ' zum Vorjahr' : '')];
     if (d.ek) k.push(kachel('DB', F.euroKachel(F.db(s)), `${esc(F.pct(F.spanne(s)))}${v ? ' · ' + F.ppHtml(F.spanne(s), F.spanne(v)) + ' zum VJ' : ''}`, F.euro(F.db(s))));
-    else k.push(kachel('Ø Preis', F.preis(s), v ? `Vorjahr ${esc(F.preis(v))}` : ''));
+    if (!d.ek || d.dim === 'artikel') k.push(kachel('Ø Preis', F.preis(s), v ? `Vorjahr ${esc(F.preis(v))}` : ''));   // beim Artikel immer (Preisspiegel)
     if (d.dim === 'kunde') {
       const tage = d.tage || [];
       const rhythmus = tage.length > 1 ? Math.max(1, Math.round(tageSeit(tage[tage.length - 1].tag) - tageSeit(tage[0].tag)) / (tage.length - 1)) : null;
@@ -69,7 +71,7 @@
 
   /* Sortierung der Listen: Kennzahl (DB nur mit EK-Werten) und Richtung */
   function sortierwahl() {
-    const opt = Object.entries(F.RANG).filter(([, k]) => !k.ek || D.d.ek);
+    const opt = Object.entries(F.RANG).filter(([, k]) => !k.ek || D.d.ek).concat(Object.entries(F.RANG_POPUP));   // dazu Ø Preis (nur Pop-ups)
     return `<div class="ctl-ud-sortierung"><label>Sortiert nach <select data-ud-rang>${opt.map(([id, k]) => `<option value="${id}"${id === D.rang ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
       <button type="button" class="ctl-ua-richtung" data-ud-richtung aria-pressed="${D.auf}">${D.auf ? '↑ niedrigste zuerst' : '↓ höchste zuerst'}</button></div>`;
   }
@@ -78,21 +80,21 @@
   const ekZellen = (w) => `<span class="ctl-zahl${F.db(w) < 0 ? ' ctl-ua-negativ' : ''}" data-label="DB">${esc(F.euro(F.db(w)))}</span><span class="ctl-zahl" data-label="Spanne">${esc(F.pct(F.spanne(w)))}</span>`;
   /* Kunden einer Gruppe bzw. Käufer eines Artikels (mit EK-Recht mit DB je Kunde) */
   function kundenListe() {
-    const d = D.d, alle = geordnet(d.kunden.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), mitMenge = d.dim === 'artikel', k = F.RANG[D.rang];
-    const cls = `${mitMenge ? ' mit-menge' : ''}${d.ek ? ' mit-ek' : ''}`;
-    const kopf = `<div class="ctl-ud-zeile kopf${cls}" aria-hidden="true"><span>Kunde</span>${mitMenge ? '<span>Menge</span>' : ''}<span>Umsatz</span>${d.ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span><span></span></div>`;
+    const d = D.d, alle = geordnet(d.kunden.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), mitMenge = d.dim === 'artikel', k = F.rangKennzahl(D.rang);
+    const cls = `${mitMenge ? ' mit-menge mit-preis' : ''}${d.ek ? ' mit-ek' : ''}`;   // Artikel: mit Ø Preis je Käufer (Preisspiegel)
+    const kopf = `<div class="ctl-ud-zeile kopf${cls}" aria-hidden="true"><span>Kunde</span>${mitMenge ? '<span>Menge</span>' : ''}<span>Umsatz</span>${mitMenge ? '<span>Ø Preis</span>' : ''}${d.ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span><span></span></div>`;
     return `<section class="ctl-ud-teil" aria-label="${d.dim === 'artikel' ? 'Käufer dieses Artikels' : 'Kunden'}">
       <div class="ctl-ud-teilkopf"><h3>${d.dim === 'artikel' ? 'Wer kauft diesen Artikel?' : 'Kunden'} <small>${esc(F.ganz(d.kundenGesamt))}</small></h3>${suchfeld('Kunde suchen')}</div>
       ${alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile${cls}" data-ud-oeffnen="kunde" data-wert="${esc(z.nr)}">
         <span class="ctl-ud-name"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span>${mitMenge ? `<span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>` : ''}
-        <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b>${d.ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
+        <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b>${mitMenge ? `<span class="ctl-zahl ctl-ud-preis" data-label="Ø Preis" title="Ø aller Käufer: ${esc(F.preis(d.summe))}">${esc(F.preis(z.werte))}${F.preisAbwHtml(F.preisAbweichung(z.werte, d.summe))}</span>` : ''}${d.ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
         <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '–'}</span>${F.ICON.weiter}</button>`).join('')
         + (alle.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" data-ud-alle>Alle ${esc(F.ganz(alle.length))} anzeigen</button>` : '')
       : '<p class="ctl-hilfe">Keine Kunden für diese Suche.</p>'}</section>`;
   }
   /* Meistgekaufte Artikel (Gruppe, Vertreter …) */
   function artikelBalken() {
-    const d = D.d, k = F.RANG[D.rang], l = geordnet(d.artikel.filter((z) => z.werte.pos > 0)), max = Math.max(1e-9, ...l.map((z) => Math.abs(k.wert(z.werte) || 0)));
+    const d = D.d, k = F.rangKennzahl(D.rang), l = geordnet(d.artikel.filter((z) => z.werte.pos > 0)), max = Math.max(1e-9, ...l.map((z) => Math.abs(k.wert(z.werte) || 0)));
     const zeigen = D.alle ? l : l.slice(0, ARTIKEL_ANFANG);
     return `<section class="ctl-ud-teil" aria-label="Artikel"><div class="ctl-ud-teilkopf"><h3>Artikel nach ${esc(k.name)} <small>${esc(F.ganz(l.length))}</small></h3></div>
       ${zeigen.map((z, i) => { const w = k.wert(z.werte); return `${trenner(zeigen, i)}<button type="button" class="ctl-ud-artikel" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">
@@ -102,21 +104,34 @@
   }
   /* Kunde: seine Artikel */
   function kundeArtikel() {
-    const d = D.d, gekauft = d.artikel.filter((z) => z.kaeufe > 0), alle = geordnet(gekauft.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), k = F.RANG[D.rang];   // gekauft = Kauf im Zeitraum (keine reine Gutschrift)
+    const d = D.d, gekauft = d.artikel.filter((z) => z.kaeufe > 0), alle = geordnet(gekauft.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), k = F.rangKennzahl(D.rang);   // gekauft = Kauf im Zeitraum (keine reine Gutschrift)
     const verloren = d.vorjahr ? d.artikel.filter((z) => !(z.kaeufe > 0) && z.vj && z.vj.umsatz > 0).slice(0, 12) : [];
     const ek = d.ek;
     const kopf = `<div class="ctl-ud-zeile kopf artikel${ek ? ' mit-ek' : ''}" aria-hidden="true"><span>Artikel</span><span>Menge</span><span>Umsatz</span><span>Ø Preis</span>${ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span></div>`;
     return (verloren.length ? `<div class="ctl-ud-verloren" role="note"><b>Nicht mehr gekauft – im Vorjahr ja, in diesem Zeitraum nicht</b>
         <div>${verloren.map((z) => `<button type="button" class="ctl-ud-verlchip" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">${esc(z.name)} <small>VJ ${esc(F.euroKurz(z.vj.umsatz))}</small></button>`).join('')}</div>
         <small>Ansatz fürs nächste Gespräch mit dem Kunden.</small></div>` : '')
-      + `<div class="ctl-ud-teilkopf"><h3>Gekaufte Artikel <small>${esc(F.ganz(gekauft.length))}</small></h3>${suchfeld('Artikel dieses Kunden suchen')}</div>`
+      + `<div class="ctl-ud-teilkopf"><h3>Gekaufte Artikel <small>${esc(F.ganz(gekauft.length))}</small></h3>${suchfeld('Artikel dieses Kunden suchen')}</div>${preisniveau(gekauft)}`
       + (alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile artikel${ek ? ' mit-ek' : ''}" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">
           <span class="ctl-ud-name"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span><span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>
-          <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b><span class="ctl-zahl" data-label="Ø Preis">${esc(F.preis(z.werte))}</span>
+          <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b><span class="ctl-zahl ctl-ud-preis" data-label="Ø Preis"${z.vergleich ? ` title="Ø aller Kunden: ${esc(F.preis(z.vergleich))}"` : ''}>${esc(F.preis(z.werte))}${F.preisAbwHtml(F.preisAbweichung(z.werte, z.vergleich))}</span>
           ${ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
           <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '–'}</span></button>`).join('')
         + (alle.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" data-ud-alle>Alle ${esc(F.ganz(alle.length))} anzeigen</button>` : '')
       : '<p class="ctl-hilfe">Keine Artikel für diese Suche.</p>');
+  }
+  /* Preisniveau des Kunden: was er gezahlt hat gegenüber dem Ø Preis aller Kunden für dieselben Mengen (nur Artikel mit Menge) */
+  function preisniveau(liste) {
+    let ist = 0, soll = 0, unter = 0, n = 0;
+    liste.forEach((z) => {
+      const p = F.preisWert(z.vergleich);
+      if (p === null || p <= 0 || !(z.werte.menge > 0)) return;
+      ist += z.werte.umsatz; soll += z.werte.menge * p; n++;
+      if (F.preisAbweichung(z.werte, z.vergleich) < -0.0005) unter++;
+    });
+    if (!n || soll <= 0) return '';
+    const q = (ist - soll) / soll;
+    return `<p class="ctl-ud-preisniveau" data-ud-preisniveau>Preisniveau: <b class="ctl-ua-delta${Math.abs(q) < 0.0005 ? '' : q < 0 ? ' minus' : ' plus'}">${q < 0 ? '−' : '+'}${esc(F.pct(Math.abs(q)))}</b> zum Ø aller Kunden für dieselben Mengen · bei ${esc(F.ganz(unter))} von ${esc(F.ganz(n))} Artikeln unter dem Ø</p>`;
   }
   function kundeLieferungen() {
     const t = D.d.tage || [];
@@ -171,9 +186,13 @@
     const l = geordnet(d.dim === 'kunde' ? d.artikel : d.kunden);
     const was = d.dim === 'kunde' ? 'Artikel' : 'Kunde';
     F.csvLaden(`${d.dim === 'kunde' ? 'Artikel von' : d.dim === 'artikel' ? 'Käufer von' : 'Kunden von'} ${name} ${d.anfrage.von} bis ${d.anfrage.bis}.csv`,
-      [[was, 'Nummer', 'Umsatz €', ...(d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Positionen', 'Zuletzt', ...(d.ek ? ['DB €', 'Spanne %'] : [])],
+      [[was, 'Nummer', 'Umsatz €', ...(d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Positionen', 'Zuletzt', ...(d.ek ? ['DB €', 'Spanne %'] : []),
+        'Ø Preis €', ...(d.dim === 'kunde' ? ['Ø Preis aller Kunden €'] : d.dim === 'artikel' ? ['± Ø aller Käufer %'] : [])],
         ...l.map((z) => [z.name, z.nr, zahl(z.werte.umsatz / 100, 2), ...(d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3), zahl(z.werte.pos, 0),
-          z.zuletzt ? F.tag(z.zuletzt) : '', ...(d.ek ? [zahl(F.db(z.werte) / 100, 2), F.spanne(z.werte) === null ? '' : zahl(F.spanne(z.werte) * 100, 1)] : [])])]);
+          z.zuletzt ? F.tag(z.zuletzt) : '', ...(d.ek ? [zahl(F.db(z.werte) / 100, 2), F.spanne(z.werte) === null ? '' : zahl(F.spanne(z.werte) * 100, 1)] : []),
+          F.preisWert(z.werte) === null ? '' : zahl(F.preisWert(z.werte) * 10, 2),
+          ...(d.dim === 'kunde' ? [F.preisWert(z.vergleich) === null ? '' : zahl(F.preisWert(z.vergleich) * 10, 2)]
+            : d.dim === 'artikel' ? [F.preisAbweichung(z.werte, d.summe) === null ? '' : zahl(F.preisAbweichung(z.werte, d.summe) * 100, 1)] : [])])]);
   }
   function verbinden(dlg) {
     dlg.addEventListener('click', (ev) => {

@@ -55,13 +55,24 @@
     db: { name: 'DB', ek: true, wert: (w) => db(w), text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(db(w), vj ? db(vj) : 0) },
     spanne: { name: 'Spanne', ek: true, wert: (w) => spanne(w), text: (v) => pct(v), kurz: (v) => pct(v), delta: (w, vj) => ppHtml(spanne(w), vj ? spanne(vj) : null) },
   };
+  /* Ø Preis (Cent je Tausendstel; × 1000 = Cent je Mengeneinheit) – zusätzliche Sortierung nur in den Pop-ups (die Rangliste der
+     Seite ordnet der Server nach UMSATZ_RANG) */
+  const preisWert = (w) => (w && w.menge ? w.umsatz / w.menge : null);
+  const RANG_POPUP = {
+    preis: { name: 'Ø Preis', wert: (w) => preisWert(w), text: (v) => euro(Math.round(v * 1000)), kurz: (v) => euro(Math.round(v * 1000)), delta: (w, vj) => deltaHtml(preisWert(w), vj ? preisWert(vj) : null) },
+  };
+  const rangKennzahl = (id) => RANG[id] || RANG_POPUP[id] || RANG.umsatz;
+  /* Preisspiegel: Abweichung des Ø Preises vom Vergleichspreis (Ø aller Käufer bzw. aller Kunden) als Anteil; unter Ø = negativ */
+  const preisAbweichung = (w, vergleich) => { const a = preisWert(w), b = preisWert(vergleich); return a === null || b === null || b <= 0 ? null : (a - b) / b; };
+  const preisAbwHtml = (q) => (q === null ? '' : `<small class="ctl-ud-preisabw${Math.abs(q) < 0.0005 ? '' : q < 0 ? ' minus' : ' plus'}">${q < 0 ? '−' : '+'}${pct(Math.abs(q))} zum Ø</small>`);
   const RANG_ANTEIL_MIN = 0.001, RANG_CENT_MIN = 10000;   // wie der Server: Spanne erst ab 0,1 % des Umsatzes mit EK (mind. 100 €)
   /* Liste nach Kennzahl ordnen (für die Pop-ups; die Rangliste der Seite ordnet der Server); setzt z.klein bei Spanne */
   function rangSortieren(liste, rang, auf) {
-    const k = RANG[rang] || RANG.umsatz;
+    const k = rangKennzahl(rang);
     const schwelle = rang === 'spanne' ? Math.max(RANG_CENT_MIN, Math.round(liste.reduce((s, z) => s + (z.werte.umsatzEk || 0), 0) * RANG_ANTEIL_MIN)) : null;
+    const vergleich = (a, b) => { const x = k.wert(a.werte), y = k.wert(b.werte); if (x === null || y === null) return (x === null) - (y === null); return auf ? x - y : y - x; };   // ohne Wert immer ans Ende
     return liste.map((z) => ({ ...z, klein: rang === 'spanne' ? (k.wert(z.werte) === null || z.werte.umsatzEk < schwelle) : false }))
-      .sort((a, b) => (a.klein - b.klein) || ((x, y) => (auf ? x - y : y - x))(k.wert(a.werte) ?? -Infinity, k.wert(b.werte) ?? -Infinity) || (b.werte.umsatz - a.werte.umsatz) || a.name.localeCompare(b.name, 'de'));
+      .sort((a, b) => (a.klein - b.klein) || vergleich(a, b) || (b.werte.umsatz - a.werte.umsatz) || a.name.localeCompare(b.name, 'de'));
   }
   /* CSV mit Semikolon und BOM (Excel), Zahlen deutsch ohne Tausenderpunkt; Texte, die Excel als Formel lesen würde
      (=, +, @, Tab, „-“ ohne Ziffer), beginnen mit einem Apostroph (CSV-Injection) – negative Zahlen bleiben Zahlen */
@@ -102,7 +113,8 @@
     zurueck: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></svg>',
     zu: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   };
-  C.umsatzFormat = { NF, euro, euroKachel, euroKurz, menge, ganz, pct, quote, preis, db, spanne, monatsname, tag, plusMonate, delta, deltaHtml, ppHtml, RANG, rangSortieren, zahl, csvLaden, monatsSvg, ICON, MONATSNAMEN };
+  C.umsatzFormat = { NF, euro, euroKachel, euroKurz, menge, ganz, pct, quote, preis, db, spanne, monatsname, tag, plusMonate, delta, deltaHtml, ppHtml, RANG, RANG_POPUP, rangKennzahl, rangSortieren,
+                     preisWert, preisAbweichung, preisAbwHtml, zahl, csvLaden, monatsSvg, ICON, MONATSNAMEN };
 
   const OHNE = '_';
   /* Filter: Kennung in der Anfrage → Liste der Grunddaten, Bezeichnung, Merkmal (dim) */

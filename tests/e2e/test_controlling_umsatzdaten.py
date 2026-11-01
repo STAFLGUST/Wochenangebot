@@ -9,7 +9,7 @@ Python berechnet = Server = Browser), Sortierung, Werte, fremder Mitarbeiter, fe
 Tage bleiben), Monat ohne Umsätze im Zeitraum entfällt, Zwischenablage aufgeräumt (auch alte Reste), Importverlauf,
 Protokoll ohne Beträge; Auswertung: Summen je Vertreter, Kundengruppe, Kunde, Artikelgruppe, Fleischart, Artikel, Monat,
 Quartal, Jahr, KW gegen unabhängig gerechnete Werte, Filter (auch „ohne“), Vorjahr (im laufenden Monat bis zum gleichen
-Tag), ungültige Anfragen; Bestellpausen (Stammkunden mit ungewöhnlich langer Pause, unabhängig gerechnet, Filter, Stichtag, Rechte); Pop-up-Details (controlling_umsatz_detail): Kunden und Artikel mit letztem Kauf, Liefertage des
+Tag), ungültige Anfragen; Bestellpausen (Stammkunden mit ungewöhnlich langer Pause, unabhängig gerechnet, Filter, Stichtag, Rechte); Pop-up-Details (controlling_umsatz_detail): Kunden und Artikel mit letztem Kauf, Preisspiegel (Ø Preis aller Kunden je Artikel), Liefertage des
 Kunden, Vorjahr, Filter der Seite, Rechte; Oberfläche: Import im Browser mit dem Leser des Controllings (Fortschritt,
 Ergebnis), Reiter Auswertung zuerst, Leiste, Kennzahlen, Rangliste, Pop-ups (Vertreter → Kunde → zurück, Suche, Lieferungen,
 „Als Filter übernehmen“), Suche öffnet Pop-ups, Filter-Pop-up, alle Spalten mit Sortierung, CSV, Monatsmeldung weiter
@@ -629,6 +629,32 @@ vj_soll = erwartet(POS_JETZT, '2025-01', '2025-10', 'artikel', K1, bis_tag=letzt
 check('Detail Kunde mit Vorjahr: Vorjahr je Artikel (Oktober bis zum gleichen Tag)', st == 200 and {z['nr']: z['vj']['umsatz'] for z in r['artikel'] if z['vj']} == vj_soll
       and r['summeVj']['umsatz'] == sum(vj_soll.values()), (st, r.get('error')))
 check('Detail Kunde mit Vorjahr: Liefertage nur im Zeitraum', all(t['tag'] >= '2026-01-01' for t in r['tage']))
+
+
+def summe_je_artikel(pos, von, bis, filt=None):
+    """Umsatz (Cent) und Menge (Tausendstel) je Artikel über alle Kunden – Vergleichsgrundlage des Preisspiegels"""
+    out = {}
+    for d, k, a, ko, m, p, b, ek in pos:
+        mo = d.strftime('%Y-%m')
+        if b is None or mo < von or mo > bis:
+            continue
+        merk = {'kunde': k, 'artikel': a, **INFO_K[k], **INFO_A[a]}
+        if filt and any(merk[f] not in w for f, w in filt.items()):
+            continue
+        e = out.setdefault(a, {'umsatz': 0, 'menge': 0}); e['umsatz'] += cent(b); e['menge'] += milli(m)
+    return out
+
+
+st, r = detail(SAM, dim='kunde', wert='2000001', von='2025-01', bis='2025-12', vj='0')
+alle_art = summe_je_artikel(POS_JETZT, '2025-01', '2025-12')
+check('Preisspiegel: Kunden-Pop-up liefert je Artikel Umsatz und Menge aller Kunden (unabhängig gerechnet)', st == 200 and r['artikel']
+      and all(z['vergleich'] == alle_art[z['nr']] for z in r['artikel']), [(z['nr'], z.get('vergleich'), alle_art.get(z['nr'])) for z in r.get('artikel', [])])
+st, r = detail(SAM, dim='kunde', wert='2000001', von='2025-01', bis='2025-12', vj='0', fa='Rind', k='2000003')
+alle_art = summe_je_artikel(POS_JETZT, '2025-01', '2025-12', {'fleischart': {'Rind'}})
+check('Preisspiegel: übrige Filter der Seite gelten, der Kundenfilter nicht', st == 200 and r['artikel'] and all(z['vergleich'] == alle_art[z['nr']] for z in r['artikel']),
+      [(z['nr'], z.get('vergleich')) for z in r.get('artikel', [])])
+st, r = detail(SAM, dim='artikel', wert='40100', von='2025-01', bis='2025-12', vj='0')
+check('Preisspiegel: Vergleichswerte nur im Kunden-Pop-up', st == 200 and all('vergleich' not in z for z in r['kunden']))
 st, r = detail(SAM, dim='kunde', wert='2000001', von='2025-01', bis='2025-12', vj='0', fa='Rind', k='2000003')
 check('Detail: Filter der Seite gelten weiter, das Merkmal ersetzt den gleichen Filter', st == 200 and {z['nr'] for z in r['artikel']} == set(erwartet(POS_JETZT, '2025-01', '2025-12', 'artikel', {'kunde': {'2000001'}, 'fleischart': {'Rind'}}))
       and r['wert'] == '2000001', (st, r.get('error'), [z['nr'] for z in r.get('artikel', [])]))
@@ -732,6 +758,8 @@ with sync_playwright() as p:
         t = offen('kunde')
         check(f'{breite}px {thema}: Klick auf Kunde → Kunden-Pop-up mit seinen Artikeln', pg.text_content('#ctl-ua-d-titel') == 'Gasthaus Eiche' and 'Rinderhüfte' in t
               and 'Letzter Kauf' in t and 'Liefertage' in t and pg.is_visible('#ctl-ua-dialog [data-ud-zurueck]'), t[:300])
+        check(f'{breite}px {thema}: Kunden-Pop-up – Preisniveau und Ø Preis je Artikel zum Ø aller Kunden', 'Preisniveau' in pg.text_content('#ctl-ua-dialog [data-ud-preisniveau]')
+              and pg.locator('#ctl-ua-dialog button.ctl-ud-zeile.artikel .ctl-ud-preisabw').count() >= 3, pg.text_content('#ctl-ua-dialog .ctl-ud-reiterinhalt')[:300])
         pg.fill('#ctl-ua-dialog [data-ud-suche]', 'hüfte')
         pg.wait_for_function("document.querySelectorAll('#ctl-ua-dialog button.ctl-ud-zeile.artikel').length === 1")
         check(f'{breite}px {thema}: Artikel des Kunden suchen', 'Rinderhüfte' in pg.text_content('#ctl-ua-dialog button.ctl-ud-zeile.artikel')
@@ -870,6 +898,21 @@ with sync_playwright() as p:
         pg.click('#ctl-ua-treffer [role="option"]:has-text("Kalbsrücken")')
         t = offen('artikel')
         check(f'{breite}px {thema}: Suche nach Artikelnummer → Pop-up „Wer kauft diesen Artikel?“', 'Wer kauft diesen Artikel?' in t and pg.locator('#ctl-ua-dialog [data-ud-oeffnen="kunde"]').count() >= 3, t[:200])
+        # Preisspiegel: Käufer nach Ø Preis, günstigster zuerst
+        pg.select_option('#ctl-ua-dialog [data-ud-rang]', 'preis')
+        pg.wait_for_function("document.querySelector('#ctl-ua-dialog [data-ud-rang]').value === 'preis'")
+        pg.click('#ctl-ua-dialog [data-ud-richtung]')
+        pg.wait_for_function("document.querySelector('#ctl-ua-dialog [data-ud-richtung]').getAttribute('aria-pressed') === 'true'")
+        art = A.call('controlling_umsatz_detail&' + urllib.parse.urlencode({'von': f'{LETZTER.year}-01', 'bis': LETZTER.strftime('%Y-%m'), 'dim': 'artikel', 'wert': '40300'}))[1]
+        soll = [z['nr'] for z in sorted([z for z in art['kunden'] if z['werte']['menge'] > 0], key=lambda z: z['werte']['umsatz'] / z['werte']['menge'])]
+        ist = pg.eval_on_selector_all('#ctl-ua-dialog button.ctl-ud-zeile[data-ud-oeffnen="kunde"]', 'els => els.map((e) => e.dataset.wert)')
+        check(f'{breite}px {thema}: Artikel-Pop-up – Ø Preis je Käufer mit Abweichung vom Ø, sortierbar nach Ø Preis (günstigster zuerst)', ist[:len(soll)] == soll
+              and 'Ø Preis' in pg.text_content('#ctl-ua-dialog .ctl-ud-zeile.kopf') and pg.locator('#ctl-ua-dialog .ctl-ud-preisabw').count() >= 3
+              and 'Ø Preis' in pg.text_content('#ctl-ua-dialog .ctl-ud-kpis'), (ist, soll))
+        if breite == 390:
+            pg.screenshot(path=SH + f'/controlling-umsatz-preisspiegel-{breite}-{thema}.png')
+        elif breite == 1280:
+            pg.screenshot(path=SH + f'/controlling-umsatz-preisspiegel-{breite}-{thema}.png')
         pg.click('#ctl-ua-dialog .dlg-head [data-schliessen]')
         pg.wait_for_function("!document.querySelector('#ctl-ua-dialog').open")
         # Filter im Pop-up
@@ -935,7 +978,7 @@ with sync_playwright() as p:
     pg.click('#ctl-ua-zeilen tr[data-zeile="10"]')
     t = offen('kundengruppe')
     check('nur ansehen: Pop-up ohne DB und Spanne, mit Ø Preis, Sortierung ohne DB', 'DB' not in t and 'Spanne' not in t and 'Ø Preis' in t and 'Gastronomie' in pg.text_content('#ctl-ua-d-titel')
-          and pg.eval_on_selector_all('#ctl-ua-dialog [data-ud-rang] option', 'els => els.map((e) => e.value)') == ['umsatz', 'menge'], t[:200])
+          and pg.eval_on_selector_all('#ctl-ua-dialog [data-ud-rang] option', 'els => els.map((e) => e.value)') == ['umsatz', 'menge', 'preis'], t[:200])
     # gemerkte Ansicht mit DB und unbekannten Filterwerten: ohne EK-Recht Umsatz, nur vorhandene Filterwerte
     pg.evaluate("""localStorage.setItem('controlling.umsatz.ansicht.sam', JSON.stringify({ v: 1, nach: 'kunde', rang: 'db', auf: true, vj: true, ansicht: 'rang', kennzahl: 'db',
                    zeit: 'eigen', von: '2026-06', bis: '2026-06', filter: { k: ['9999999', '2000001', '2000004'], v: ['V9'] }, nur: 'verloren' }))""")
