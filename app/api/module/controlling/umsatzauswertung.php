@@ -244,6 +244,7 @@ function umsatz_auswertung(array $q, array $me): array
 /* ---------- Detail für die Pop-ups der Umsatzstatistik ----------
    Ein Vertreter, eine Kundengruppe, ein Kunde, eine Artikelgruppe, eine Fleischart oder ein Artikel: Kennzahlen mit Vorjahr,
    Monatsreihe, Kunden und Artikel (je mit letztem Kauf im Zeitraum oder Vorjahr), beim Kunden auch seine Liefertage.
+   Kauf = berechnete Position mit Menge > 0: Gutschriften zählen in Umsatz und Menge, aber nicht als Kauf oder Liefertag.
    Die Filter der Seite gelten weiter; das gewählte Merkmal ersetzt einen Filter desselben Merkmals. Je Zeitraum eine Lesung
    je Monat (Summen für Kunden, Artikel und Tage in einem Durchgang). */
 const UMSATZ_DETAIL = ['vertreter', 'kundengruppe', 'kunde', 'vkgruppe', 'fleischart', 'artikel'];
@@ -252,7 +253,10 @@ function umsatz_detail_addieren(array &$r, array $z, ?string $datum): void
 {
     if ($z[9] === 1) {
         $r['umsatz'] += $z[5]; $r['menge'] += $z[4]; $r['kolli'] += $z[3]; $r['pos'] += $z[8]; $r['ek'] += $z[6]; $r['umsatzEk'] += $z[7];
-        if ($datum !== null && ($r['zuletzt'] === null || $datum > $r['zuletzt'])) $r['zuletzt'] = $datum;
+        if ($datum !== null && $z[4] > 0) {   // Kauf (keine Gutschrift): Tage mit Kauf und letzter Kauf
+            if ($r['zuletzt'] === null || $datum > $r['zuletzt']) $r['zuletzt'] = $datum;
+            if (($r['_tag'] ?? null) !== $datum) { $r['kaeufe']++; $r['_tag'] = $datum; }
+        }
     } else {
         $r['posOhne'] += $z[8]; $r['mengeOhne'] += $z[4];
     }
@@ -278,13 +282,13 @@ function umsatz_detail_zaehlen(array $a, array $index, string $von, string $bis,
             if (!$ok[$ka]) continue;
             $datum = $m . '-' . str_pad((string)$z[0], 2, '0', STR_PAD_LEFT);
             umsatz_detail_addieren($zr, $z, null);
-            $o['kunden'][$z[1]] ??= umsatz_leer() + ['zuletzt' => null];
+            $o['kunden'][$z[1]] ??= umsatz_leer() + ['zuletzt' => null, 'kaeufe' => 0];
             umsatz_detail_addieren($o['kunden'][$z[1]], $z, $datum);
-            $o['artikel'][$z[2]] ??= umsatz_leer() + ['zuletzt' => null];
+            $o['artikel'][$z[2]] ??= umsatz_leer() + ['zuletzt' => null, 'kaeufe' => 0];
             umsatz_detail_addieren($o['artikel'][$z[2]], $z, $datum);
             if ($mitTagen && $z[9] === 1) {
-                $o['tage'][$datum] ??= umsatz_leer() + ['zuletzt' => null];
-                umsatz_detail_addieren($o['tage'][$datum], $z, null);
+                $o['tage'][$datum] ??= umsatz_leer() + ['zuletzt' => null, 'kaeufe' => 0];
+                umsatz_detail_addieren($o['tage'][$datum], $z, $datum);
             }
         }
         $o['reihe'][$mZiel] = $zr;
@@ -303,7 +307,7 @@ function umsatz_detail_liste(string $nach, array $jetzt, ?array $vj, bool $ek): 
         [$name, $sub] = umsatz_bezeichnung($nach, $nr);
         $zuletzt = max((string)($w['zuletzt'] ?? ''), (string)($wv['zuletzt'] ?? ''));
         $out[] = ['nr' => $nr, 'name' => $name, 'sub' => $sub, 'werte' => umsatz_werte($w ?? umsatz_leer(), $ek),
-                  'vj' => $vj !== null && $wv ? umsatz_werte($wv, $ek) : null, 'zuletzt' => $zuletzt !== '' ? $zuletzt : null];
+                  'vj' => $vj !== null && $wv ? umsatz_werte($wv, $ek) : null, 'zuletzt' => $zuletzt !== '' ? $zuletzt : null, 'kaeufe' => (int)($w['kaeufe'] ?? 0)];
     }
     usort($out, fn($x, $y) => $y['werte']['umsatz'] <=> $x['werte']['umsatz'] ?: ($y['vj']['umsatz'] ?? 0) <=> ($x['vj']['umsatz'] ?? 0) ?: strnatcasecmp($x['name'], $y['name']));
     return $out;
@@ -347,7 +351,7 @@ function umsatz_detail(array $q, array $me): array
         $o['kunde'] = $c ? ['vertreter' => $c['vertreter'] !== '' ? (string)($s['vertreter'][$c['vertreter']]['name'] ?? $c['vertreter']) : '',
                             'gruppe' => $c['gruppe'] !== '' ? (string)($s['kundengruppen'][$c['gruppe']]['name'] ?? $c['gruppe']) : '', 'ort' => $c['ort']] : null;
         $tage = [];
-        foreach ($jetzt['tage'] as $t => $r) $tage[] = ['tag' => (string)$t, 'werte' => umsatz_werte($r, $ek)];
+        foreach ($jetzt['tage'] as $t => $r) if ($r['kaeufe'] > 0) $tage[] = ['tag' => (string)$t, 'werte' => umsatz_werte($r, $ek)];   // nur Tage mit Kauf
         usort($tage, fn($x, $y) => strcmp($y['tag'], $x['tag']));
         $o['tage'] = $tage;
     } else {

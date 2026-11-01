@@ -397,11 +397,11 @@ def detail(cl, **q):
 
 
 def letzte(pos, von, bis, nach, filt=None):
-    """Letzter Tag mit berechneter Position je Kunde bzw. Artikel (unabhängig gerechnet)"""
+    """Letzter Kauf (berechnete Position mit Menge > 0, keine Gutschrift) je Kunde bzw. Artikel (unabhängig gerechnet)"""
     out = {}
     for d, k, a, ko, m, p, b, ek in pos:
         mo = d.strftime('%Y-%m')
-        if b is None or mo < von or mo > bis:
+        if b is None or m <= 0 or mo < von or mo > bis:
             continue
         merk = {'kunde': k, 'artikel': a, **INFO_K[k], **INFO_A[a]}
         if filt and any(merk[f] not in w for f, w in filt.items()):
@@ -424,12 +424,16 @@ check('Detail: Kunden zuerst nach Umsatz, Leergut nicht als Artikel', [z['werte'
 check('Detail ohne EK-Recht: keine Einkaufswerte', r['ek'] is False and '"ek":' not in json.dumps(r).replace('"ek": false', '') and '"umsatzEk"' not in json.dumps(r))
 K1 = {'kunde': {'2000001'}}
 st, r = detail(SAM, dim='kunde', wert='2000001', von='2025-01', bis='2025-12', vj='0')
-tage = {}
+tage, kauftage, je_art = {}, set(), {}
 for d, k, a, ko, m, p, b, ek in POS_JETZT:
     if k == '2000001' and b is not None and d.year == 2025:
         tage[d.isoformat()] = tage.get(d.isoformat(), 0) + cent(b)
+        if m > 0:
+            kauftage.add(d.isoformat()); je_art.setdefault(a, set()).add(d.isoformat())
+tage = {t: v for t, v in tage.items() if t in kauftage}   # Liefertage: nur Tage mit Kauf (Gutschrift allein ist keiner)
 check('Detail Kunde: seine Artikel mit letztem Kauf wie unabhängig gerechnet', st == 200 and {z['nr']: z['werte']['umsatz'] for z in r['artikel']} == erwartet(POS_JETZT, '2025-01', '2025-12', 'artikel', K1)
       and {z['nr']: z['zuletzt'] for z in r['artikel']} == letzte(POS_JETZT, '2025-01', '2025-12', 'artikel', K1) and 'kunden' not in r, (st, r.get('error')))
+check('Detail Kunde: Käufe je Artikel = Tage mit Menge > 0 (Gutschrift zählt nicht)', {z['nr']: z['kaeufe'] for z in r['artikel'] if z['kaeufe']} == {a: len(t) for a, t in je_art.items()}, r.get('artikel', [])[:2])
 check('Detail Kunde: Liefertage (neueste zuerst) mit Umsatz je Tag', {t['tag']: t['werte']['umsatz'] for t in r['tage']} == tage
       and [t['tag'] for t in r['tage']] == sorted(tage, reverse=True) and r['summe']['zuletzt'] == max(tage))
 check('Detail Kunde: Name, Vertreter und Kundengruppe aus den Stammdaten', r['name'] == 'Gasthaus Eiche' and r['kunde'] == {'vertreter': 'Vera Vertrieb', 'gruppe': 'Gastronomie', 'ort': '20095 Hamburg'}, r.get('kunde'))

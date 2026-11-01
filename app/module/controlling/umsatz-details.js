@@ -88,8 +88,8 @@
   }
   /* Kunde: seine Artikel */
   function kundeArtikel() {
-    const d = D.d, gekauft = d.artikel.filter((z) => z.werte.pos > 0), alle = gekauft.filter(passt), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG);
-    const verloren = d.vorjahr ? d.artikel.filter((z) => z.werte.pos === 0 && z.vj && z.vj.umsatz > 0).slice(0, 12) : [];
+    const d = D.d, gekauft = d.artikel.filter((z) => z.kaeufe > 0), alle = gekauft.filter(passt), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG);   // gekauft = Kauf im Zeitraum (keine reine Gutschrift)
+    const verloren = d.vorjahr ? d.artikel.filter((z) => !(z.kaeufe > 0) && z.vj && z.vj.umsatz > 0).slice(0, 12) : [];
     const ek = d.ek;
     const kopf = `<div class="ctl-ud-zeile kopf artikel${ek ? ' mit-ek' : ''}" aria-hidden="true"><span>Artikel</span><span>Menge</span><span>Umsatz</span><span>Ø Preis</span>${ek ? '<span>Spanne</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span></div>`;
     return (verloren.length ? `<div class="ctl-ud-verloren" role="note"><b>Nicht mehr gekauft – im Vorjahr ja, in diesem Zeitraum nicht</b>

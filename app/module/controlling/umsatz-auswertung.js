@@ -37,10 +37,12 @@
     if (d === null) return jetzt && vor === 0 ? '<span class="ctl-ua-delta plus">neu</span>' : '<span class="ctl-ua-delta">–</span>';
     return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : ''}${pct(d)}</span>`;
   };
-  /* CSV mit Semikolon und BOM (Excel), Zahlen deutsch ohne Tausenderpunkt */
+  /* CSV mit Semikolon und BOM (Excel), Zahlen deutsch ohne Tausenderpunkt; Texte, die Excel als Formel lesen würde
+     (=, +, @, Tab, „-“ ohne Ziffer), beginnen mit einem Apostroph (CSV-Injection) – negative Zahlen bleiben Zahlen */
   const zahl = (v, d) => (v === null || v === undefined ? '' : NF(d).format(v).replace(/\./g, ''));
+  const zelle = (x) => { let s = String(x ?? '').replace(/[\r\n]+/g, ' '); if (/^[=+@\t]/.test(s) || /^-(?![\d,])/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
   function csvLaden(datei, zeilen) {
-    const text = '﻿' + zeilen.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n') + '\r\n';
+    const text = '\ufeff' + zeilen.map((r) => r.map(zelle).join(';')).join('\r\n') + '\r\n';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
     a.download = datei.replace(/[\\/:*?"<>|]+/g, ' ');
