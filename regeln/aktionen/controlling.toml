@@ -21,3 +21,7 @@ oberflaeche = "controlling.intern"
 [aktion.controlling_umsatz_auswertung]
 oberflaeche = "controlling.intern"
 
+# Pop-ups der Umsatzauswertung (Kundengruppe, Vertreter, Kunde mit seinen Artikeln, Artikel mit seinen Käufern …)
+[aktion.controlling_umsatz_detail]
+oberflaeche = "controlling.intern"
+
