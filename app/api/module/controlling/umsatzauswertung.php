@@ -13,7 +13,8 @@ declare(strict_types=1);
    so, wie sie importiert wurden. Nummern ohne Stammsatz erscheinen mit ihrer Nummer, „ohne …“ steht als Wert „_“.
    Rangliste (nicht bei Zeit): Kennzahl und Richtung, ABC-Analyse der Kennzahl und mit Vorjahr „neu“ (Kauf jetzt, nicht im
    Vorjahr) bzw. „verloren“ (Kauf im Vorjahr, jetzt nicht) je Zeile – auf Wunsch nur diese Zeilen (nur=neu|verloren).
-   Kauf = berechnete Position mit Menge > 0 (eine Gutschrift allein ist kein Kauf). */
+   Kauf = berechnete Position mit Menge > 0 (eine Gutschrift allein ist kein Kauf). Bestellpausen: Stammkunden, die ungewöhnlich
+   lange nichts gekauft haben (umsatz_pausen, Aktion controlling_umsatz_pausen). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const UMSATZ_GLIEDERUNG = ['monat' => 'Monat', 'quartal' => 'Quartal', 'jahr' => 'Jahr', 'kw' => 'Kalenderwoche', 'vertreter' => 'Vertreter',
@@ -458,6 +459,76 @@ function umsatz_detail(array $q, array $me): array
         $o['artikel'] = array_slice($l, 0, UMSATZ_ZEILEN_MAX); $o['artikelGesamt'] = count($l);
     }
     return $o;
+}
+
+/* ---------- Bestellpausen (Frühwarnung) ----------
+   Stammkunden = mindestens UMSATZ_PAUSE_KAUFTAGE Tage mit Kauf in den UMSATZ_PAUSE_TAGE Tagen bis zum Stichtag (Ende des gewählten
+   Zeitraums, höchstens der letzte Tag mit Daten). Auffällig, wenn die Pause seit dem letzten Kauf mindestens UMSATZ_PAUSE_FAKTOR-mal
+   so lang ist wie der übliche Abstand (Ø zwischen erstem und letztem Kauftag), länger als jede frühere Pause im Fenster (sonst
+   wären Kunden, die in Schüben kaufen, ständig auffällig) und mindestens UMSATZ_PAUSE_MIN_TAGE Tage. Kauf = berechnete Position mit
+   Menge > 0. Die Filter der Seite gelten (z. B. nur Rind: „kauft sonst alle 7 Tage Rind“). Reihenfolge nach dem üblichen
+   Monatsumsatz (Umsatz je Kauftag × Kauftage im Monat), höchster zuerst. Keine Einkaufswerte (GR-008). */
+const UMSATZ_PAUSE_TAGE = 182;
+const UMSATZ_PAUSE_KAUFTAGE = 4;
+const UMSATZ_PAUSE_FAKTOR = 2;
+const UMSATZ_PAUSE_MIN_TAGE = 7;
+const UMSATZ_PAUSE_MAX = 200;
+
+/* Tageszahl eines Datums (für Abstände in Tagen) */
+function umsatz_tagnummer(string $datum): int { return intdiv((int)gmmktime(12, 0, 0, (int)substr($datum, 5, 2), (int)substr($datum, 8, 2), (int)substr($datum, 0, 4)), 86400); }
+
+/* Stammkunden mit auffälliger Bestellpause zum Stichtag; Anfrage wie die Auswertung (von, bis, Filter) */
+function umsatz_pausen(array $q): array
+{
+    $index = umsatzdaten_index();
+    $stand = umsatzdaten_stand($index);
+    $a = umsatz_anfrage(['nach' => 'kunde'] + array_diff_key($q, ['nur' => true]), $stand);
+    $regel = ['tage' => UMSATZ_PAUSE_TAGE, 'kauftage' => UMSATZ_PAUSE_KAUFTAGE, 'faktor' => UMSATZ_PAUSE_FAKTOR, 'minTage' => UMSATZ_PAUSE_MIN_TAGE];
+    if (!$stand['bis']) return ['ok' => true, 'stichtag' => null, 'von' => null, 'stammkunden' => 0, 'zeilen' => [], 'gesamt' => 0, 'regel' => $regel, 'rev' => $index['rev']];
+    $stichtag = min($a['bis'] . '-' . sprintf('%02d', umsatzdaten_tage($a['bis'])), (string)$stand['bis']);
+    $ende = umsatz_tagnummer($stichtag);
+    $beginn = $ende - UMSATZ_PAUSE_TAGE + 1;
+    $vonDatum = gmdate('Y-m-d', $beginn * 86400);
+    $tage = []; $umsatz = []; $ok = [];
+    foreach (umsatzdaten_monatsfolge(substr($vonDatum, 0, 7), substr($stichtag, 0, 7)) as $m) {
+        if (!isset($index['monate'][$m])) continue;
+        $basis = umsatz_tagnummer($m . '-01') - 1;
+        foreach (umsatzdaten_monat($m) as $z) {
+            if ($z[9] !== 1) continue;
+            $t = $basis + $z[0];
+            if ($t < $beginn || $t > $ende) continue;
+            $ka = $z[1] . "\0" . $z[2];
+            if ($a['filter']) {
+                if (!isset($ok[$ka])) {
+                    $ok[$ka] = true;
+                    foreach ($a['filter'] as $dim => $erlaubt) if (!isset($erlaubt[umsatz_merkmal($dim, $z[1], $z[2])])) { $ok[$ka] = false; break; }
+                }
+                if (!$ok[$ka]) continue;
+            }
+            $umsatz[$z[1]] = ($umsatz[$z[1]] ?? 0) + $z[5];
+            if ($z[4] > 0) $tage[$z[1]][$t] = true;
+        }
+    }
+    $stamm = 0; $out = [];
+    foreach ($tage as $nr => $set) {
+        $nr = (string)$nr;
+        $n = count($set);
+        if ($n < UMSATZ_PAUSE_KAUFTAGE) continue;
+        $stamm++;
+        $liste = array_keys($set);
+        sort($liste);
+        $laengste = 0;
+        for ($i = 1; $i < $n; $i++) $laengste = max($laengste, $liste[$i] - $liste[$i - 1]);
+        $mittel = ($liste[$n - 1] - $liste[0]) / ($n - 1);
+        $pause = $ende - $liste[$n - 1];
+        if ($pause < UMSATZ_PAUSE_MIN_TAGE || $pause < UMSATZ_PAUSE_FAKTOR * $mittel || $pause <= $laengste) continue;
+        [$name, $sub] = umsatz_bezeichnung('kunde', $nr);
+        $out[] = ['nr' => $nr, 'name' => $name, 'sub' => $sub, 'letzter' => gmdate('Y-m-d', $liste[$n - 1] * 86400), 'pause' => $pause,
+                  'abstand' => round($mittel, 1), 'laengste' => $laengste, 'kauftage' => $n, 'umsatzMonat' => (int)round(($umsatz[$nr] ?? 0) / $n * 30.4375 / $mittel)];
+    }
+    usort($out, fn($x, $y) => $y['umsatzMonat'] <=> $x['umsatzMonat'] ?: $y['pause'] <=> $x['pause'] ?: strcmp($x['nr'], $y['nr']));
+    return ['ok' => true, 'stichtag' => $stichtag, 'von' => $vonDatum, 'stammkunden' => $stamm, 'zeilen' => array_slice($out, 0, UMSATZ_PAUSE_MAX),
+            'gesamt' => count($out), 'regel' => $regel, 'rev' => $index['rev']];
 }
 
 /* Grunddaten der Auswertung: Stand der Daten, Rechte, Auswahllisten (nur Nummern und Namen) */

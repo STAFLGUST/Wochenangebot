@@ -15,7 +15,7 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
 | [HR](hr.md) | `hr` | 9 | 149 |
 | [Marketing](marketing.md) | `marketing` | 4 | 76 |
-| [Controlling](controlling.md) | `controlling` | 12 | 156 |
+| [Controlling](controlling.md) | `controlling` | 12 | 163 |
 | [Verwaltung](verwaltung.md) | `verwaltung` | 17 | 189 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 105 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 25 |

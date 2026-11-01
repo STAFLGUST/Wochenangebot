@@ -25,3 +25,7 @@ oberflaeche = "controlling.intern"
 [aktion.controlling_umsatz_detail]
 oberflaeche = "controlling.intern"
 
+# Bestellpausen: Stammkunden, die ungewöhnlich lange nichts gekauft haben (Frühwarnung der Umsatzstatistik)
+[aktion.controlling_umsatz_pausen]
+oberflaeche = "controlling.intern"
+

@@ -4,8 +4,9 @@
    die Suche nach Kunde, Artikel oder Gruppe; darunter Kennzahlen, die Rangliste (Vertreter, Kundengruppen, Kunden, Artikelgruppen,
    Artikel; weitere Gliederungen nach Fleischart und Zeit) nach Umsatz, Menge, Rohmarge oder Rohmarge % – höchste oder niedrigste
    zuerst (Reihenfolge vom Server, Rohmarge nur mit EK-Recht) –, ABC-Analyse der Kennzahl (Kennzeichen je Zeile, A/B/C zum
-   Eingrenzen), mit Vorjahr „Alle · Neu · Verloren“ (Auswahl rechnet der Server), alle Spalten auf Wunsch, Monatsverlauf und die
-   größten Veränderungen zum Vorjahr in der gewählten Kennzahl. Die Ansicht (Gliederung, Kennzahl, Zeitraum, Filter …) merkt
+   Eingrenzen), mit Vorjahr „Alle · Neu · Verloren“ (Auswahl rechnet der Server), alle Spalten auf Wunsch, Monatsverlauf,
+   Bestellpausen (Stammkunden, die ungewöhnlich lange nichts gekauft haben – controlling_umsatz_pausen, Frühwarnung vor
+   „verloren“) und die größten Veränderungen zum Vorjahr in der gewählten Kennzahl. Die Ansicht (Gliederung, Kennzahl, Zeitraum, Filter …) merkt
    sich der Browser je Mitarbeiter (localStorage, nur Bedienkomfort – fehlt der Speicher, gilt die Standardansicht). Rohmarge = Umsatz mit EK − EK-Wert (früher „DB“). Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
    die Seite bleibt stehen. Daten: controlling_umsatz_daten (Stand, Auswahllisten) und controlling_umsatz_auswertung (Summen),
    gerechnet wird auf dem Server. Einkaufswerte und Rohmarge liefert er nur mit controlling.umsatz_ek und
@@ -121,10 +122,11 @@
                      fleischart: ['Fleischart', 'Fleischarten'], artikel: ['Artikel', 'Artikel'] };
   const anzahlText = (n, nach) => `${ganz(n)} ${(MEHRZAHL[nach] || ['Zeile', 'Zeilen'])[n === 1 ? 0 : 1]}`;
   const ABC_TEXT = { A: 'die größten, die zusammen 80 %', B: 'die nächsten bis 95 %', C: 'der Rest (unter 5 %)' };
+  const PAUSEN_ANFANG = 6;   // Bestellpausen: zuerst die sechs mit dem höchsten Monatsumsatz
   const NUR_LEER = { neu: 'Nichts neu: alles, was jetzt gekauft wurde, gab es auch im Vorjahreszeitraum.', verloren: 'Nichts verloren: alles aus dem Vorjahreszeitraum wurde auch jetzt gekauft.' };
 
   const S = { box: null, g: null, von: '', bis: '', nach: 'kundengruppe', rang: 'umsatz', auf: false, vj: true, filter: {}, sort: null, d: null, laden: 0, kennzahl: 'umsatz', ansicht: 'rang', rangAlle: false,
-              eigen: false, zeit: 'jahr', nur: '', abc: '', entwurf: null, fsuche: {}, treffer: [], aktiv: -1 };
+              eigen: false, zeit: 'jahr', nur: '', abc: '', entwurf: null, fsuche: {}, treffer: [], aktiv: -1, pausen: null, pausenAnfrage: '', pausenNr: 0, pausenAlle: false };
   FILTER.forEach((f) => { S.filter[f.id] = new Set(); S.fsuche[f.id] = ''; });
 
   const optionen = (f) => {
@@ -174,6 +176,8 @@
           <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf"><div><h2>Monatsverlauf</h2><p class="ctl-hilfe" id="ctl-ua-verlauf-hinweis"></p></div>
             <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge</option>${S.g.rechte.ek ? '<option value="db">Rohmarge</option>' : ''}</select></div></div>
             <div class="ctl-diagramm ctl-ua-diagramm" id="ctl-ua-diagramm"></div></section>
+          <section class="ctl-panel ctl-glas ctl-ua-pausen" id="ctl-ua-pausen-panel" aria-labelledby="ctl-ua-pausen-titel" hidden><div class="ctl-panelkopf"><div><h2 id="ctl-ua-pausen-titel">Bestellpausen <span class="ctl-ua-zahl" id="ctl-ua-pausen-zahl" hidden></span></h2>
+            <p class="ctl-hilfe" id="ctl-ua-pausen-hinweis"></p></div></div><div id="ctl-ua-pausen"></div></section>
           <section class="ctl-panel ctl-glas ctl-ua-veraenderung" id="ctl-ua-veraenderung-panel" hidden><div class="ctl-panelkopf"><div><h2>Größte Veränderungen zum Vorjahr</h2><p class="ctl-hilfe" id="ctl-ua-veraenderung-hinweis"></p></div></div>
             <div id="ctl-ua-veraenderung"></div></section>
         </aside>
@@ -291,6 +295,36 @@
     if (!S.d.abc || !S.d.abc[S.abc] || !S.d.abc[S.abc].anzahl) S.abc = '';
     zeichne();
     merken();
+    pausenLaden();
+  }
+  /* Bestellpausen zum Ende des Zeitraums mit den Filtern der Seite – nur neu laden, wenn sich Zeitraum oder Filter ändern */
+  async function pausenLaden() {
+    const q = anfrage({ vj: '1' });
+    if (q === S.pausenAnfrage) return;
+    S.pausenAnfrage = q;
+    const nr = ++S.pausenNr;
+    const r = await C.api('controlling_umsatz_pausen', null, q);
+    if (nr !== S.pausenNr) return;
+    S.pausen = r.status === 200 && r.data.ok ? r.data : null;   // Fehler zeigt die Auswertung selbst; die Liste fehlt dann nur
+    if (!S.pausen) S.pausenAnfrage = '';
+    S.pausenAlle = false;
+    zeichnePausen();
+  }
+  const abstandText = (t) => (t < 3 ? NF(1).format(t) : ganz(Math.round(t)));
+  function zeichnePausen() {
+    const p = S.pausen, panel = $('#ctl-ua-pausen-panel', S.box);
+    panel.hidden = !p || !p.stichtag;
+    if (panel.hidden) return;
+    $('#ctl-ua-pausen-zahl', S.box).hidden = !p.gesamt; $('#ctl-ua-pausen-zahl', S.box).textContent = ganz(p.gesamt);
+    $('#ctl-ua-pausen-hinweis', S.box).textContent = `Stammkunden (mind. ${p.regel.kauftage} Kauftage in ${Math.round(p.regel.tage / 30.4)} Monaten), die mehr als doppelt so lange wie üblich nichts gekauft haben · Stand ${tag(p.stichtag)}`;
+    const zeigen = S.pausenAlle ? p.zeilen : p.zeilen.slice(0, PAUSEN_ANFANG);
+    $('#ctl-ua-pausen', S.box).innerHTML = p.zeilen.length ? zeigen.map((z) => `<button type="button" class="ctl-ua-veraend ctl-ua-pause" data-pause="${esc(z.nr)}"
+        title="${esc(`${z.name}: letzter Kauf ${tag(z.letzter)} · ${z.kauftage} Kauftage · längste frühere Pause ${z.laengste} Tage`)}">
+        <span><b>${esc(z.name)}</b><small>seit ${esc(ganz(z.pause))} Tagen nichts · sonst alle ${esc(abstandText(z.abstand))} Tage</small></span>
+        <span class="ctl-ua-pausewert"><b>${esc(euroKurz(z.umsatzMonat))}</b><small>üblich je Monat</small></span></button>`).join('')
+      + (p.zeilen.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" id="ctl-ua-pausen-alle">Alle ${ganz(p.zeilen.length)} anzeigen</button>` : '')
+      + (p.gesamt > p.zeilen.length ? `<p class="ctl-hilfe">Angezeigt: ${ganz(p.zeilen.length)} von ${ganz(p.gesamt)} (die mit dem höchsten Monatsumsatz).</p>` : '')
+      : `<p class="ctl-hilfe ctl-ua-pausen-leer">Keine auffälligen Pausen – ${esc(anzahlText(p.stammkunden, 'kunde'))} kaufen im üblichen Rhythmus.</p>`;
   }
   function vjText() {
     const v = S.d.vorjahr;
@@ -507,6 +541,7 @@
       S.filter[f.id] = new Set([wert]); zeichneFilter(); laden();
     },
     vjText: () => (S.d ? vjText() : ''),
+    pause: (nr) => (S.pausen ? S.pausen.zeilen.find((z) => z.nr === nr) || null : null),   // Bestellpause des Kunden (gleiche Filter und gleicher Zeitraum)
   };
   function details(dim, wert) { if (C.umsatzDetails) C.umsatzDetails.oeffnen(dim, wert, kontext); }
 
@@ -568,6 +603,9 @@
       if (so) { const id = so.dataset.sort; S.sort = S.sort && S.sort.id === id ? { id, ab: !S.sort.ab } : { id, ab: id !== 'name' }; zeichneListe(); return; }
       if (ev.target.closest('#ctl-ua-csv')) { if (S.d) csv(); return; }
       if (ev.target.closest('#ctl-ua-rang-alle')) { S.rangAlle = true; zeichneListe(); return; }
+      const pause = ev.target.closest('[data-pause]');
+      if (pause) { details('kunde', pause.dataset.pause); return; }
+      if (ev.target.closest('#ctl-ua-pausen-alle')) { S.pausenAlle = true; zeichnePausen(); return; }
       const z = ev.target.closest('[data-zeile]');
       if (z && S.d) zeileGewaehlt(z.dataset.zeile);
     });
