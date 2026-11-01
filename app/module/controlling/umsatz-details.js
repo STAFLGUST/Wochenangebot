@@ -3,9 +3,9 @@
    Kunden (Suche, Klick → Kunde) und meistgekaufte Artikel (Klick → Artikel). Ein Kunde: Kennzahlen mit letztem Kauf und
    Liefertagen, Reiter „Artikel“ (Suche, Menge, Umsatz, Ø Preis, ± Vorjahr, zuletzt; „nicht mehr gekauft“ = im Vorjahr ja, jetzt
    nicht) und „Lieferungen“. Ein Artikel: seine Käufer. „Zurück“ führt zum vorigen Pop-up, „Als Filter übernehmen“ setzt den
-   Filter der Seite. Listen sortierbar nach Umsatz, Menge, Rohmarge oder Rohmarge % (höchste/niedrigste zuerst; Vorgabe = Kennzahl
-   der Rangliste), z. B. die Artikel eines Kunden oder die Käufer eines Artikels nach Rohmarge. Daten: controlling_umsatz_detail mit
-   Zeitraum und Filtern der Seite (umsatz-auswertung.js, Schnittstelle „kontext“); EK-Werte und Rohmarge nur, wenn der Server sie
+   Filter der Seite. Listen sortierbar nach Umsatz, Menge, DB oder Spanne (höchste/niedrigste zuerst; Vorgabe = Kennzahl
+   der Rangliste), z. B. die Artikel eines Kunden oder die Käufer eines Artikels nach DB. Daten: controlling_umsatz_detail mit
+   Zeitraum und Filtern der Seite (umsatz-auswertung.js, Schnittstelle „kontext“); EK-Werte und DB nur, wenn der Server sie
    liefert (controlling.umsatz_ek und bestand.einkaufspreise). */
 'use strict';
 (() => {
@@ -49,7 +49,7 @@
     const d = D.d, s = d.summe, v = d.summeVj;
     const k = [kachel('Umsatz', F.euroKachel(s.umsatz), v ? F.deltaHtml(s.umsatz, v.umsatz) + ' zum Vorjahr' : '', F.euro(s.umsatz)),
       kachel('Menge', F.menge(s.menge), v ? F.deltaHtml(s.menge, v.menge) + ' zum Vorjahr' : '')];
-    if (d.ek) k.push(kachel('Rohmarge', F.euroKachel(F.db(s)), `${esc(F.pct(F.spanne(s)))}${v ? ' · ' + F.ppHtml(F.spanne(s), F.spanne(v)) + ' zum VJ' : ''}`, F.euro(F.db(s))));
+    if (d.ek) k.push(kachel('DB', F.euroKachel(F.db(s)), `${esc(F.pct(F.spanne(s)))}${v ? ' · ' + F.ppHtml(F.spanne(s), F.spanne(v)) + ' zum VJ' : ''}`, F.euro(F.db(s))));
     else k.push(kachel('Ø Preis', F.preis(s), v ? `Vorjahr ${esc(F.preis(v))}` : ''));
     if (d.dim === 'kunde') {
       const tage = d.tage || [];
@@ -67,20 +67,20 @@
   const passt = (z) => { const q = D.suche.trim().toLocaleLowerCase('de-DE'); return !q || z.name.toLocaleLowerCase('de-DE').includes(q) || z.nr.toLocaleLowerCase('de-DE').includes(q); };
   const suchfeld = (platzhalter) => `<label class="ctl-ud-suche">${F.ICON.suche}<input type="search" data-ud-suche value="${esc(D.suche)}" placeholder="${esc(platzhalter)}" aria-label="${esc(platzhalter)}"></label>`;
 
-  /* Sortierung der Listen: Kennzahl (Rohmarge nur mit EK-Werten) und Richtung */
+  /* Sortierung der Listen: Kennzahl (DB nur mit EK-Werten) und Richtung */
   function sortierwahl() {
     const opt = Object.entries(F.RANG).filter(([, k]) => !k.ek || D.d.ek);
     return `<div class="ctl-ud-sortierung"><label>Sortiert nach <select data-ud-rang>${opt.map(([id, k]) => `<option value="${id}"${id === D.rang ? ' selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
       <button type="button" class="ctl-ua-richtung" data-ud-richtung aria-pressed="${D.auf}">${D.auf ? '↑ niedrigste zuerst' : '↓ höchste zuerst'}</button></div>`;
   }
   const geordnet = (l) => F.rangSortieren(l, D.rang, D.auf);
-  const trenner = (l, i) => (l[i].klein && (i === 0 || !l[i - 1].klein) ? '<p class="ctl-ud-trenner">Wenig Umsatz mit Einkaufspreis – Rohmarge % wenig aussagekräftig</p>' : '');
-  const ekZellen = (w) => `<span class="ctl-zahl${F.db(w) < 0 ? ' ctl-ua-negativ' : ''}" data-label="Rohmarge">${esc(F.euro(F.db(w)))}</span><span class="ctl-zahl" data-label="Rohmarge %">${esc(F.pct(F.spanne(w)))}</span>`;
-  /* Kunden einer Gruppe bzw. Käufer eines Artikels (mit EK-Recht mit Rohmarge je Kunde) */
+  const trenner = (l, i) => (l[i].klein && (i === 0 || !l[i - 1].klein) ? '<p class="ctl-ud-trenner">Wenig Umsatz mit Einkaufspreis – Spanne wenig aussagekräftig</p>' : '');
+  const ekZellen = (w) => `<span class="ctl-zahl${F.db(w) < 0 ? ' ctl-ua-negativ' : ''}" data-label="DB">${esc(F.euro(F.db(w)))}</span><span class="ctl-zahl" data-label="Spanne">${esc(F.pct(F.spanne(w)))}</span>`;
+  /* Kunden einer Gruppe bzw. Käufer eines Artikels (mit EK-Recht mit DB je Kunde) */
   function kundenListe() {
     const d = D.d, alle = geordnet(d.kunden.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), mitMenge = d.dim === 'artikel', k = F.RANG[D.rang];
     const cls = `${mitMenge ? ' mit-menge' : ''}${d.ek ? ' mit-ek' : ''}`;
-    const kopf = `<div class="ctl-ud-zeile kopf${cls}" aria-hidden="true"><span>Kunde</span>${mitMenge ? '<span>Menge</span>' : ''}<span>Umsatz</span>${d.ek ? '<span>Rohmarge</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span><span></span></div>`;
+    const kopf = `<div class="ctl-ud-zeile kopf${cls}" aria-hidden="true"><span>Kunde</span>${mitMenge ? '<span>Menge</span>' : ''}<span>Umsatz</span>${d.ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span><span></span></div>`;
     return `<section class="ctl-ud-teil" aria-label="${d.dim === 'artikel' ? 'Käufer dieses Artikels' : 'Kunden'}">
       <div class="ctl-ud-teilkopf"><h3>${d.dim === 'artikel' ? 'Wer kauft diesen Artikel?' : 'Kunden'} <small>${esc(F.ganz(d.kundenGesamt))}</small></h3>${suchfeld('Kunde suchen')}</div>
       ${alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile${cls}" data-ud-oeffnen="kunde" data-wert="${esc(z.nr)}">
@@ -105,7 +105,7 @@
     const d = D.d, gekauft = d.artikel.filter((z) => z.kaeufe > 0), alle = geordnet(gekauft.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), k = F.RANG[D.rang];   // gekauft = Kauf im Zeitraum (keine reine Gutschrift)
     const verloren = d.vorjahr ? d.artikel.filter((z) => !(z.kaeufe > 0) && z.vj && z.vj.umsatz > 0).slice(0, 12) : [];
     const ek = d.ek;
-    const kopf = `<div class="ctl-ud-zeile kopf artikel${ek ? ' mit-ek' : ''}" aria-hidden="true"><span>Artikel</span><span>Menge</span><span>Umsatz</span><span>Ø Preis</span>${ek ? '<span>Rohmarge</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span></div>`;
+    const kopf = `<div class="ctl-ud-zeile kopf artikel${ek ? ' mit-ek' : ''}" aria-hidden="true"><span>Artikel</span><span>Menge</span><span>Umsatz</span><span>Ø Preis</span>${ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span></div>`;
     return (verloren.length ? `<div class="ctl-ud-verloren" role="note"><b>Nicht mehr gekauft – im Vorjahr ja, in diesem Zeitraum nicht</b>
         <div>${verloren.map((z) => `<button type="button" class="ctl-ud-verlchip" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">${esc(z.name)} <small>VJ ${esc(F.euroKurz(z.vj.umsatz))}</small></button>`).join('')}</div>
         <small>Ansatz fürs nächste Gespräch mit dem Kunden.</small></div>` : '')
@@ -171,7 +171,7 @@
     const l = geordnet(d.dim === 'kunde' ? d.artikel : d.kunden);
     const was = d.dim === 'kunde' ? 'Artikel' : 'Kunde';
     F.csvLaden(`${d.dim === 'kunde' ? 'Artikel von' : d.dim === 'artikel' ? 'Käufer von' : 'Kunden von'} ${name} ${d.anfrage.von} bis ${d.anfrage.bis}.csv`,
-      [[was, 'Nummer', 'Umsatz €', ...(d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Positionen', 'Zuletzt', ...(d.ek ? ['Rohmarge €', 'Rohmarge %'] : [])],
+      [[was, 'Nummer', 'Umsatz €', ...(d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Positionen', 'Zuletzt', ...(d.ek ? ['DB €', 'Spanne %'] : [])],
         ...l.map((z) => [z.name, z.nr, zahl(z.werte.umsatz / 100, 2), ...(d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3), zahl(z.werte.pos, 0),
           z.zuletzt ? F.tag(z.zuletzt) : '', ...(d.ek ? [zahl(F.db(z.werte) / 100, 2), F.spanne(z.werte) === null ? '' : zahl(F.spanne(z.werte) * 100, 1)] : [])])]);
   }
