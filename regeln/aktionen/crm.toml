@@ -13,6 +13,13 @@ oberflaeche = "crm.intern"
 [aktion.crm_karte]
 oberflaeche = "crm.intern"
 
+# Mein Cockpit / Master-Cockpit und Übersicht im Kunden-Pop-up (Umsätze aus dem Controlling, € und kg je nach Recht)
+[aktion.crm_cockpit]
+oberflaeche = "crm.intern"
+
+[aktion.crm_kunde_umsatz]
+oberflaeche = "crm.intern"
+
 [aktion.crm_verlauf]
 oberflaeche = "crm.intern"
 

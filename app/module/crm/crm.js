@@ -2,7 +2,8 @@
    Cockpit, Kunden, Wiedervorlagen (Anruf-Rhythmus), Pipeline, Karte und Auswertung – nach der Vertriebs-CRM-Musterdatei.
    Kunden kommen aus den Stammdaten der Verwaltung (nur lesend); das CRM ergänzt je Kunde ein Kundenblatt (Ansprechpartner,
    Segment, Phase, Wann/Erledigt, Potenzial, nächster Schritt, Notiz), Interessenten und den Aktivitätenverlauf.
-   Reiter „MHD-Ware“ (Artikel kurz vor Ablauf und ihre Käufer, Recht crm.mhd_ware) in mhd-ware.js.
+   Reiter „MHD-Ware“ (Artikel kurz vor Ablauf und ihre Käufer, Recht crm.mhd_ware) in mhd-ware.js; Cockpit (Mein Cockpit,
+   Master-Cockpit) und der Reiter „Übersicht“ im Kunden-Pop-up mit Umsätzen und Signalen in cockpit.js.
    Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
    Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: Detailkarte mit Straßen und Gebäuden vom
    eigenen Server (../../assets/detailkarte.js, OpenStreetMap), sonst zeichnet die Seite selbst (Umrisse
@@ -20,7 +21,7 @@
   let csrf = '';
   const S = {
     d: null, tab: 'cockpit', byKey: new Map(),
-    kunden: { q: '', segment: '', vertreter: '', phase: '', aktiv: 'ja', n: SEITE },
+    kunden: { q: '', segment: '', vertreter: '', phase: '', aktiv: 'ja', signal: false, n: SEITE },
     wv: { q: '', vertreter: '', termin: 'alle', wann: [], n: SEITE, reihenfolge: null },
     karte: { ja: true, nein: false, gebiet: '', gebiete: false, suche: '' },
   };
@@ -148,51 +149,25 @@
     return r.data.kunde;
   }
 
-  /* ---------- Cockpit ---------- */
+  /* ---------- Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit ---------- */
   function kpi(titel, w, zusatz = '', cls = '') { return `<div class="crm-wert crm-glas ${cls}"><span>${esc(titel)}</span><b>${esc(w)}</b>${zusatz ? `<small>${esc(zusatz)}</small>` : ''}</div>`; }
+  /* Hilfsfunktionen des CRM für cockpit.js (Cockpit und Übersicht im Kunden-Pop-up) */
+  const CK = { api, esc, icon, toast, fehlerText, de, deZeit, vName, firmaKnopf, telefone, telLink, tageBis, heuteAnrufen, darf,
+    daten: () => S.d, kunde: (key) => S.byKey.get(key), heute: () => S.d.heute, offen: () => offenKey, letzteAktivitaeten: (key) => kuAktivitaeten(key),
+    kundenAlle: () => { S.kunden.vertreter = ''; S.kunden.signal = false; S.kunden.n = SEITE; zeigeTab('kunden'); } };
   function cockpit() {
-    const K = S.d.kunden, aktiv = K.filter((k) => k.aktiv && k.art === 'kunde').length;
-    const offen = K.filter((k) => OFFEN_PHASEN.includes(k.crm.phase) && k.aktiv);
-    const wv = K.filter((k) => k.crm.naechsterSchritt && k.crm.wiedervorlage).sort((a, b) => a.crm.wiedervorlage.localeCompare(b.crm.wiedervorlage));
-    const anrufe = K.filter((k) => heuteAnrufen(k) && k.crm.anrufStatus !== 'Erledigt');
-    const nInt = K.filter((k) => k.art === 'interessent').length;
-    const balken = S.d.phasen.slice(0, 6).map((p) => [p, K.filter((k) => k.crm.phase === p).length]);
-    const max = Math.max(1, ...balken.map((b) => b[1]));
-    $('#tab-cockpit').innerHTML = `
-      <div class="crm-titel"><h1>Vertrieb im Überblick</h1><p>Kunden aus den Stammdaten, Wiedervorlagen, Aktivitäten und Verkaufschancen.</p></div>
-      <div class="crm-kpis">
-        ${kpi('Aktive Kunden', aktiv, `${K.length - nInt} Kunden in den Stammdaten${nInt ? ` · ${nInt} Interessenten` : ''}`)}
-        ${kpi('Heute anrufen', anrufe.length, 'laut „Wann“, noch nicht erledigt', anrufe.length ? 'akzent' : '')}
-        ${kpi('Wiedervorlagen fällig', faellig().length, `${wv.length} terminiert`, faellig().length ? 'warn' : '')}
-        ${kpi('Offene Chancen', offen.length, 'Interessent bis Verhandlung')}
-        ${kpi('DB-Potenzial', geld(offen.reduce((n, k) => n + db(k), 0)), 'kg × DB/kg der offenen Chancen')}
-      </div>
-      <div class="crm-raster">
-        <section class="crm-karte crm-glas"><div class="crm-karte-kopf"><h3>Als Nächstes dran</h3><button type="button" class="btn" data-gehe="wiedervorlagen">Alle Wiedervorlagen</button></div>
-          ${wv.length ? `<ul class="crm-zeilen">${wv.slice(0, 8).map((k) => `<li><div class="was"><b>${esc(k.crm.naechsterSchritt)}</b>${firmaKnopf(k)}<small>${esc(vName(k.vertreter) || 'ohne Vertreter')}</small></div><span class="wann${tageBis(k.crm.wiedervorlage) < 0 ? ' ueber' : ''}">${de(k.crm.wiedervorlage)}</span></li>`).join('')}</ul>`
-            : '<p class="crm-leer">Noch keine Wiedervorlagen. Im Kundenblatt den nächsten Schritt mit Datum planen.</p>'}
-        </section>
-        <section class="crm-karte crm-glas"><div class="crm-karte-kopf"><h3>Heute anrufen</h3><button type="button" class="btn" data-gehe="wiedervorlagen" data-termin="heute">Liste öffnen</button></div>
-          ${anrufe.length ? `<ul class="crm-zeilen">${anrufe.slice(0, 8).map((k) => `<li><div class="was">${firmaKnopf(k)}<small>${esc(namen(k).slice(0, 2).join(', ') || '—')}</small></div><span class="wann">${telefone(k)[0] ? telLink(telefone(k)[0]) : ''}</span></li>`).join('')}</ul>${anrufe.length > 8 ? `<p class="crm-klein">und ${anrufe.length - 8} weitere</p>` : ''}`
-            : '<p class="crm-leer">Für heute stehen keine offenen Anrufe an.</p>'}
-        </section>
-        <section class="crm-karte crm-glas"><h3>Verkaufsprozess</h3>
-          ${balken.map(([p, n]) => `<div class="crm-balken"><span>${esc(p)}</span><div class="spur"><i style="width:${n ? Math.max(3, n / max * 100) : 0}%"></i></div><b>${n}</b></div>`).join('')}
-          <p class="crm-klein">Kunden aus den Stammdaten starten als Bestandskunden, neue Interessenten als Interessent. Die Phase lässt sich im Kundenblatt oder in der Pipeline ändern.</p>
-        </section>
-        <section class="crm-karte crm-glas"><h3>Letzte Aktivitäten</h3>
-          ${S.d.letzte.length ? `<ul class="crm-zeilen">${S.d.letzte.slice(0, 6).map((a) => `<li><div class="was">${S.byKey.has(a.key) ? `<button type="button" class="crm-firma" data-oeffnen="${esc(a.key)}">${esc(a.art)} · ${esc(S.byKey.get(a.key).firma)}</button>` : `<b>${esc(a.art)} · ${esc(a.firma)}</b>`}<small>${esc(deZeit(a.at))} · ${esc(a.von)}${a.notiz ? ' · ' + esc(a.notiz) : ''}</small></div></li>`).join('')}</ul>`
-            : '<p class="crm-leer">Der Verlauf beginnt mit dem ersten protokollierten Telefonat, Besuch oder Angebot.</p>'}
-        </section>
-      </div>`;
+    if (window.STAFL_CRM_COCKPIT) window.STAFL_CRM_COCKPIT.zeichne($('#tab-cockpit'), CK);
+    else $('#tab-cockpit').innerHTML = '<p class="crm-fehler">Das Cockpit konnte nicht geladen werden.</p>';
   }
+  const signalListe = () => (window.STAFL_CRM_COCKPIT ? window.STAFL_CRM_COCKPIT.signale() : new Map());
 
   /* ---------- Kunden ---------- */
+  const aktivPasst = (k) => !((S.kunden.aktiv === 'ja' && !k.aktiv) || (S.kunden.aktiv === 'nein' && k.aktiv));
   function kundenListe() {
-    const f = S.kunden, q = f.q.toLocaleLowerCase('de').trim();
+    const f = S.kunden, q = f.q.toLocaleLowerCase('de').trim(), sig = f.signal ? signalListe() : null;
     return S.d.kunden.filter((k) => {
-      if (f.aktiv === 'ja' && !k.aktiv) return false;
-      if (f.aktiv === 'nein' && k.aktiv) return false;
+      if (!aktivPasst(k)) return false;
+      if (sig && !sig.has(k.key)) return false;
       if (f.segment && k.crm.segment !== f.segment) return false;
       if (f.phase && k.crm.phase !== f.phase) return false;
       if (f.vertreter && k.vertreter !== f.vertreter && k.vertreter2 !== f.vertreter) return false;
@@ -207,12 +182,17 @@
     return k._suche;
   }
   function kunden() {
-    const f = S.kunden, liste = kundenListe(), b = darf();
+    const f = S.kunden, liste = kundenListe(), b = darf(), sig = signalListe(), ich = S.d.ich;
     const host = $('#tab-kunden');
+    const nMein = ich ? S.d.kunden.filter((k) => aktivPasst(k) && (k.vertreter === ich || k.vertreter2 === ich)).length : 0;
+    const chips = `<div class="crm-chips" role="group" aria-label="Auswahl">${ich ? `<button type="button" data-k-chip="mein" aria-pressed="${f.vertreter === ich && !f.signal}">Meine Kunden <b>${nMein}</b></button>` : ''}
+      <button type="button" data-k-chip="alle" aria-pressed="${!f.vertreter && !f.signal}">Alle <b>${S.d.kunden.filter(aktivPasst).length}</b></button>
+      ${sig.size ? `<button type="button" data-k-chip="signal" aria-pressed="${f.signal}">Mit Signal <b>${sig.size}</b></button>` : ''}</div>`;
     const fokus = document.activeElement && document.activeElement.id === 'k-suche' ? document.activeElement.selectionStart : null;
     host.innerHTML = `
       <div class="crm-titel"><h1>Kunden</h1><p>${liste.length} von ${S.d.kunden.length} · Stammdaten aus der Verwaltung, Kundenblatt im CRM</p>
         ${b ? `<button type="button" class="btn primary" data-neu-interessent>${icon('plus')}Interessent</button>` : ''}</div>
+      ${chips}
       <div class="crm-leiste">
         <label class="crm-suche"><span class="sr-only">Suchen</span>${icon('search')}<input type="search" id="k-suche" value="${esc(f.q)}" placeholder="Firma, Kundennummer, Kundengruppe, Ort, Ansprechpartner, Telefon …"></label>
         <select id="k-aktiv" aria-label="Aktiv"><option value="ja"${f.aktiv === 'ja' ? ' selected' : ''}>Nur aktive</option><option value=""${f.aktiv === '' ? ' selected' : ''}>Aktive und inaktive</option><option value="nein"${f.aktiv === 'nein' ? ' selected' : ''}>Nur inaktive</option></select>
@@ -220,17 +200,17 @@
         <select id="k-phase" aria-label="Phase">${opts(S.d.phasen, f.phase, 'Alle Phasen')}</select>
         <select id="k-vertreter" aria-label="Vertreter">${vOpts(f.vertreter)}</select>
       </div>
-      <div class="crm-tabelle-rahmen crm-glas"><table class="crm-tabelle" id="k-tabelle">
+      <div class="crm-tabelle-rahmen crm-glas crm-karten-rahmen"><table class="crm-tabelle crm-karten" id="k-tabelle">
         <thead><tr><th>Kunde</th><th class="m-aus">Telefon</th><th class="m-aus">Ansprechpartner</th><th>Vertreter</th><th>Segment</th><th>Phase</th><th>Nächster Schritt</th></tr></thead>
-        <tbody>${liste.slice(0, f.n).map((k) => `<tr class="${k.aktiv ? '' : 'aus'}">
-          <td>${firmaKnopf(k)} ${k.art === 'interessent' ? '<span class="crm-pille info">Interessent</span>' : ''}<div class="gedaempft">${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc([k.plz, k.ort].filter(Boolean).join(' ') || 'Ort fehlt')}${k.gruppe ? ' · ' + esc(k.gruppe) : ''}</div></td>
+        <tbody>${liste.slice(0, f.n).map((k) => { const s_ = sig.get(k.key); return `<tr class="${k.aktiv ? '' : 'aus'}">
+          <td class="kunde">${firmaKnopf(k)} ${k.art === 'interessent' ? '<span class="crm-pille info">Interessent</span>' : ''}${s_ ? ` <span class="crm-pille ${s_.art === 'neu' ? 'ok' : 'warn'}">${esc(window.STAFL_CRM_COCKPIT.signalKurz(s_))}</span>` : ''}<div class="gedaempft">${k.nr ? 'KN ' + esc(k.nr) + ' · ' : ''}${esc([k.plz, k.ort].filter(Boolean).join(' ') || 'Ort fehlt')}${k.gruppe ? ' · ' + esc(k.gruppe) : ''}</div></td>
           <td class="m-aus">${zeilen(telefone(k), telLink)}</td>
           <td class="m-aus">${zeilen(namen(k))}</td>
-          <td class="nw">${vName(k.vertreter) ? esc(vName(k.vertreter)) : '<span class="gedaempft">—</span>'}${k.vertreter2 ? `<div class="gedaempft">${esc(vName(k.vertreter2))}</div>` : ''}</td>
-          <td>${b ? `<select data-feld="segment" data-key="${esc(k.key)}" aria-label="Segment ${esc(k.firma)}">${opts(S.d.segmente, k.crm.segment, null)}</select>` : esc(k.crm.segment)}</td>
-          <td>${b ? `<select data-feld="phase" data-key="${esc(k.key)}" aria-label="Phase ${esc(k.firma)}">${opts(S.d.phasen, k.crm.phase, null)}</select>` : esc(k.crm.phase)}</td>
-          <td>${k.crm.naechsterSchritt ? `<span class="${tageBis(k.crm.wiedervorlage) < 0 ? 'crm-ueber' : ''}">${esc(k.crm.naechsterSchritt)}</span><div class="gedaempft">${k.crm.wiedervorlage ? de(k.crm.wiedervorlage) : ''}</div>` : '<span class="gedaempft">—</span>'}</td>
-        </tr>`).join('') || '<tr><td colspan="7" class="crm-leer">Keine Kunden gefunden.</td></tr>'}</tbody></table>
+          <td class="nw vt" data-label="Vertreter">${vName(k.vertreter) ? esc(vName(k.vertreter)) : '<span class="gedaempft">—</span>'}${k.vertreter2 ? `<div class="gedaempft">${esc(vName(k.vertreter2))}</div>` : ''}</td>
+          <td data-label="Segment">${b ? `<select data-feld="segment" data-key="${esc(k.key)}" aria-label="Segment ${esc(k.firma)}">${opts(S.d.segmente, k.crm.segment, null)}</select>` : esc(k.crm.segment)}</td>
+          <td data-label="Phase">${b ? `<select data-feld="phase" data-key="${esc(k.key)}" aria-label="Phase ${esc(k.firma)}">${opts(S.d.phasen, k.crm.phase, null)}</select>` : esc(k.crm.phase)}</td>
+          <td class="schritt" data-label="Nächster Schritt">${k.crm.naechsterSchritt ? `<span class="${tageBis(k.crm.wiedervorlage) < 0 ? 'crm-ueber' : ''}">${esc(k.crm.naechsterSchritt)}</span><div class="gedaempft">${k.crm.wiedervorlage ? de(k.crm.wiedervorlage) : ''}</div>` : '<span class="gedaempft">—</span>'}</td>
+        </tr>`; }).join('') || '<tr><td colspan="7" class="crm-leer">Keine Kunden gefunden.</td></tr>'}</tbody></table>
         ${liste.length > f.n ? `<div class="crm-mehr"><button type="button" class="btn" data-mehr="kunden">Weitere ${Math.min(SEITE, liste.length - f.n)} anzeigen (${liste.length - f.n} übrig)</button></div>` : ''}
       </div>`;
     if (fokus !== null) { const i = $('#k-suche'); i.focus(); i.setSelectionRange(fokus, fokus); }
@@ -278,18 +258,18 @@
     const zeile = (k) => {
       const st = k.crm.anrufStatus, ak = k.crm.anrufAktiv ? 'Ja' : 'Nein';
       return `<tr class="${k.crm.anrufAktiv ? '' : 'aus'}">
-        <td>${b ? sel(k, 'anrufAktiv', `<option value="Ja"${ak === 'Ja' ? ' selected' : ''}>Ja</option><option value="Nein"${ak === 'Nein' ? ' selected' : ''}>Nein</option>`, 'Aktiv', 'st-' + ak) : esc(ak)}</td>
+        <td class="aktiv" data-label="Aktiv">${b ? sel(k, 'anrufAktiv', `<option value="Ja"${ak === 'Ja' ? ' selected' : ''}>Ja</option><option value="Nein"${ak === 'Nein' ? ' selected' : ''}>Nein</option>`, 'Aktiv', 'st-' + ak) : esc(ak)}</td>
         <td class="kunde">${firmaKnopf(k)}${k.art === 'interessent' ? ' <span class="crm-pille info">Interessent</span>' : ''}${k.nr ? `<div class="gedaempft">KN ${esc(k.nr)}</div>` : ''}${k.crm.naechsterSchritt ? `<div class="gedaempft${tageBis(k.crm.wiedervorlage) < 0 ? ' crm-ueber' : ''}">${esc(k.crm.naechsterSchritt)}${k.crm.wiedervorlage ? ' · ' + de(k.crm.wiedervorlage) : ''}</div>` : ''}</td>
         <td class="m-aus">${zeilen(namen(k))}</td>
-        <td>${zeilen(telefone(k), telLink)}</td>
+        <td class="tel" data-label="Telefon">${zeilen(telefone(k), telLink)}</td>
         <td class="m-aus l-aus">${esc(k.angebote.join(', ') || '—')}</td>
         <td class="nw m-aus">${esc(vName(k.vertreter) || '—')}${k.vertreter2 ? `<div class="gedaempft">${esc(vName(k.vertreter2))}</div>` : ''}</td>
-        <td class="wann">${b ? sel(k, 'rhythmus1', opts(rh.slice(1), k.crm.rhythmus1, '— Wann —'), 'Wann') + sel(k, 'rhythmus2', opts(rh.slice(1), k.crm.rhythmus2, '— Wann 2 —'), 'Wann 2')
+        <td class="wann" data-label="Wann / Wann 2">${b ? sel(k, 'rhythmus1', opts(rh.slice(1), k.crm.rhythmus1, '— Wann —'), 'Wann') + sel(k, 'rhythmus2', opts(rh.slice(1), k.crm.rhythmus2, '— Wann 2 —'), 'Wann 2')
           : esc(k.crm.rhythmus1 || '—') + (k.crm.rhythmus2 ? `<div class="gedaempft">${esc(k.crm.rhythmus2)}</div>` : '')}</td>
-        <td>${b ? sel(k, 'anrufStatus', opts(S.d.anruf, st, null), 'Erledigt', 'st-' + st) : `<span class="crm-pille ${st === 'Erledigt' ? 'ok' : st === 'Nochmal' ? 'warn' : 'fehler'}">${esc(st)}</span>`}</td>
+        <td class="erledigt" data-label="Erledigt">${b ? sel(k, 'anrufStatus', opts(S.d.anruf, st, null), 'Erledigt', 'st-' + st) : `<span class="crm-pille ${st === 'Erledigt' ? 'ok' : st === 'Nochmal' ? 'warn' : 'fehler'}">${esc(st)}</span>`}</td>
       </tr>`;
     };
-    const tabelle = `<table class="crm-tabelle" id="wv-tabelle"><thead><tr><th>Aktiv</th><th>Kunde</th><th class="m-aus">Ansprechpartner</th><th>Telefon</th><th class="m-aus l-aus">Angebot</th><th class="m-aus">Vertreter</th><th>Wann / Wann 2</th><th>Erledigt</th></tr></thead>
+    const tabelle = `<table class="crm-tabelle crm-karten" id="wv-tabelle"><thead><tr><th>Aktiv</th><th>Kunde</th><th class="m-aus">Ansprechpartner</th><th>Telefon</th><th class="m-aus l-aus">Angebot</th><th class="m-aus">Vertreter</th><th>Wann / Wann 2</th><th>Erledigt</th></tr></thead>
       <tbody>${liste.slice(0, f.n).map(zeile).join('') || '<tr><td colspan="8" class="crm-leer">Keine Kunden für diese Auswahl.</td></tr>'}</tbody></table>
       ${liste.length > f.n ? `<div class="crm-mehr"><button type="button" class="btn" data-mehr="wv">Weitere ${Math.min(SEITE, liste.length - f.n)} anzeigen (${liste.length - f.n} übrig)</button></div>` : ''}`;
     if (nurTabelle && $('#wv-rahmen')) { $('#wv-rahmen').innerHTML = tabelle; $('#wv-anzahl').textContent = `${liste.length} von ${S.d.kunden.length} Kunden`; return; }
@@ -308,7 +288,7 @@
         <select id="wv-vertreter" aria-label="Vertreter">${vOpts(f.vertreter)}</select>
         ${b ? '<button type="button" class="btn" id="wv-neu-sortieren" title="Liste neu nach dem nächsten Anruf ordnen">Neu ordnen</button>' : ''}
       </div>
-      <div class="crm-tabelle-rahmen crm-glas" id="wv-rahmen">${tabelle}</div>
+      <div class="crm-tabelle-rahmen crm-glas crm-karten-rahmen" id="wv-rahmen">${tabelle}</div>
       <p class="crm-klein" style="margin-top:10px">Änderungen werden sofort gespeichert. Die Reihenfolge bleibt beim Bearbeiten stehen – „Neu ordnen“ sortiert nach dem nächsten Anruf.</p>`;
   }
 
@@ -723,14 +703,41 @@
       ${dd('Ansprechpartner (Stammdaten)', esc(k.ansprechpartner), true)}
     </dl>`;
   }
-  async function oeffne(key) {
+  /* Kunden-Pop-up mit den Reitern Übersicht (Umsätze und Signale, cockpit.js – nur Kunden mit Kundennummer), Kundenblatt
+     (Stammdaten, Ansprechpartner, Vertrieb) und Verlauf (Aktivität protokollieren, Verlauf) */
+  const KU_REITER = [['uebersicht', 'Übersicht'], ['kundenblatt', 'Kundenblatt'], ['verlauf', 'Verlauf']];
+  let kuTab = 'uebersicht';
+  const verlaufSpeicher = new Map();
+  const mitUmsatz = (k) => k.art === 'kunde' && !!k.nr && !!window.STAFL_CRM_COCKPIT;
+  function kuReiter(k) {
+    const n = verlaufSpeicher.has(k.key) ? verlaufSpeicher.get(k.key).length : k.aktivitaeten;
+    return KU_REITER.filter(([id]) => id !== 'uebersicht' || mitUmsatz(k))
+      .map(([id, name]) => `<button type="button" role="tab" data-ku-tab="${id}" aria-selected="${id === kuTab}">${name}${id === 'verlauf' && n ? ` <span class="crm-zahl">${n}</span>` : ''}</button>`).join('');
+  }
+  function kuTabZeigen(tab) {
+    kuTab = tab;
+    for (const b of $$('#kunde-reiter [data-ku-tab]')) b.setAttribute('aria-selected', String(b.dataset.kuTab === tab));
+    for (const p of $$('#kunde-inhalt [data-ku-panel]')) p.hidden = p.dataset.kuPanel !== tab;
+    $('#kunde-inhalt').scrollTop = 0;
+  }
+  async function oeffne(key, tab) {
     const k = S.byKey.get(key); if (!k) return;
+    if (tab) kuTab = tab; else if (offenKey !== key) kuTab = mitUmsatz(k) ? 'uebersicht' : 'kundenblatt';
+    if (kuTab === 'uebersicht' && !mitUmsatz(k)) kuTab = 'kundenblatt';
     offenKey = key;
     const b = darf();
+    $('#kunde-kicker').textContent = [k.art === 'interessent' ? 'Interessent' : (k.nr ? 'Kunde ' + k.nr : 'Kunde'), k.crm.segment !== 'Nicht zugeordnet' ? k.crm.segment : '', k.crm.phase].filter(Boolean).join(' · ');
     $('#kunde-titel').textContent = k.firma || 'Kunde';
-    $('#kunde-sub').textContent = [k.art === 'interessent' ? 'Interessent' : (k.nr ? 'KN ' + k.nr : 'Kunde'), vName(k.vertreter) || 'ohne Vertreter', k.crm.geaendert ? `zuletzt geändert ${deZeit(k.crm.geaendert)} von ${k.crm.geaendertVon}` : ''].filter(Boolean).join(' · ');
+    $('#kunde-sub').textContent = [[k.strasse, [k.plz, k.ort].filter(Boolean).join(' ')].filter(Boolean).join(', '), vName(k.vertreter) ? 'Vertreter ' + vName(k.vertreter) : 'ohne Vertreter',
+      k.crm.geaendert ? `zuletzt geändert ${deZeit(k.crm.geaendert)} von ${k.crm.geaendertVon}` : ''].filter(Boolean).join(' · ');
+    const tel = telefone(k)[0];
+    $('#kunde-aktionen').innerHTML = (tel ? `<a class="btn" href="tel:${esc(tel.replace(/[^\d+]/g, ''))}">${icon('phone')}<span>${esc(tel)}</span></a>` : '')
+      + (b ? `<button type="button" class="btn primary" data-ku-tab="verlauf" data-ku-fokus>${icon('plus')}<span>Aktivität</span></button>` : '');
+    $('#kunde-reiter').innerHTML = kuReiter(k);
     const rh = S.d.rhythmen;
     $('#kunde-inhalt').innerHTML = `
+      <div data-ku-panel="uebersicht" class="crm-ku-panel" role="tabpanel" hidden></div>
+      <div data-ku-panel="kundenblatt" class="crm-ku-panel" role="tabpanel" hidden>
       <section class="crm-abschnitt">
         <div class="crm-abschnitt-kopf"><h3>${k.art === 'interessent' ? 'Adresse des Interessenten' : 'Stammdaten'}</h3>
           ${k.art === 'interessent' ? (b ? '<button type="button" class="btn" data-interessent-bearbeiten>Adresse bearbeiten</button>' : '')
@@ -757,6 +764,8 @@
           <label class="breit">Gesprächsnotiz / Bedarf<textarea data-blatt="notiz" maxlength="2000"${b ? '' : ' disabled'}>${esc(k.crm.notiz)}</textarea></label>
         </div>
       </section>
+      </div>
+      <div data-ku-panel="verlauf" class="crm-ku-panel" role="tabpanel" hidden>
       ${b ? `<section class="crm-abschnitt">
         <div class="crm-abschnitt-kopf"><h3>Aktivität protokollieren</h3></div>
         <form class="crm-felder vier" id="akt-form" novalidate>
@@ -771,19 +780,32 @@
       <section class="crm-abschnitt">
         <div class="crm-abschnitt-kopf"><h3>Verlauf</h3><span class="crm-klein" id="verlauf-zahl"></span></div>
         <ul class="crm-verlauf" id="verlauf"><li class="crm-leer">Verlauf wird geladen …</li></ul>
-      </section>`;
+      </section>
+      </div>`;
+    kuTabZeigen(kuTab);
     const dlg = $('#dlg-kunde');
     if (!dlg.open) dlg.showModal();
     ladeVerlauf(key);
+    if (mitUmsatz(k)) window.STAFL_CRM_COCKPIT.uebersicht($('#kunde-inhalt [data-ku-panel="uebersicht"]'), key, CK);
   }
   async function ladeVerlauf(key) {
     const r = await api('crm_verlauf', null, '&key=' + encodeURIComponent(key));
     if (offenKey !== key || !$('#verlauf')) return;
     if (r.status !== 200) { $('#verlauf').innerHTML = `<li class="crm-leer">${esc(fehlerText(r, 'Verlauf nicht geladen'))}</li>`; return; }
     const l = r.data.aktivitaeten;
+    verlaufSpeicher.set(key, l);
     $('#verlauf-zahl').textContent = l.length ? `${l.length} ${l.length === 1 ? 'Eintrag' : 'Einträge'}` : '';
-    $('#verlauf').innerHTML = l.length ? l.map((a) => `<li><time>${esc(deZeit(a.at))}</time><div><b>${esc(a.art)}</b>${a.notiz ? ' · ' + esc(a.notiz) : ''}<small>${esc(a.von)}${a.naechster ? ` · Nächster Schritt: ${esc(a.naechster)}${a.faellig ? ' bis ' + de(a.faellig) : ''}` : ''}</small></div></li>`).join('')
-      : '<li class="crm-leer">Noch keine Aktivitäten protokolliert.</li>';
+    $('#verlauf').innerHTML = l.length ? l.map(verlaufZeile).join('') : '<li class="crm-leer">Noch keine Aktivitäten protokolliert.</li>';
+    const k = S.byKey.get(key); if (k) $('#kunde-reiter').innerHTML = kuReiter(k);
+    kuAktivitaeten(key);
+  }
+  const verlaufZeile = (a) => `<li><time>${esc(deZeit(a.at))}</time><div><b>${esc(a.art)}</b>${a.notiz ? ' · ' + esc(a.notiz) : ''}<small>${esc(a.von)}${a.naechster ? ` · Nächster Schritt: ${esc(a.naechster)}${a.faellig ? ' bis ' + de(a.faellig) : ''}` : ''}</small></div></li>`;
+  /* Übersicht: die letzten drei Aktivitäten (aus dem geladenen Verlauf) */
+  function kuAktivitaeten(key) {
+    const ziel = $('#ku-akt'), l = verlaufSpeicher.get(key);
+    if (!ziel || !l || offenKey !== key) return;
+    ziel.innerHTML = l.length ? l.slice(0, 3).map((a) => `<li><div class="was"><b>${esc(a.art)}${a.notiz ? ' · ' + esc(a.notiz) : ''}</b><small>${esc(deZeit(a.at))} · ${esc(a.von)}</small></div></li>`).join('')
+      : '<li class="crm-leer">Noch keine Aktivitäten.</li>';
   }
   function blattStatus(text, art = '') { const s = $('#blatt-status'); if (s) { s.textContent = text; s.className = 'crm-status ' + art; } }
   /* Änderung eines Feldes im Kundenblatt speichern */
@@ -841,6 +863,7 @@
       S.d.letzte.unshift(r.data.aktivitaet); S.d.letzte = S.d.letzte.slice(0, 30);
       S.d.statistik.gesamt++; S.d.statistik.tage30++; S.d.statistik.jeArt[r.data.aktivitaet.art] = (S.d.statistik.jeArt[r.data.aktivitaet.art] || 0) + 1;
       toast('Aktivität protokolliert.');
+      verlaufSpeicher.delete(key);
       oeffne(key);
       return;
     }
@@ -878,6 +901,26 @@
   document.addEventListener('click', async (e) => {
     const t = e.target;
     const o = t.closest('[data-oeffnen]'); if (o) { oeffne(o.dataset.oeffnen); return; }
+    const kt = t.closest('[data-ku-tab]');
+    if (kt) { kuTabZeigen(kt.dataset.kuTab); if (kt.hasAttribute('data-ku-fokus')) { const i = $('#akt-notiz'); if (i) i.focus(); } return; }
+    if (t.closest('[data-ku-erledigt]')) {
+      const k = await speichereFelder(offenKey, { naechsterSchritt: '', wiedervorlage: '' });
+      if (k) { toast('Nächster Schritt erledigt.'); oeffne(offenKey); }
+      return;
+    }
+    if (t.closest('[data-ku-verschieben]')) { const v = $('.crm-ku-verschieben'); if (v) { v.hidden = !v.hidden; if (!v.hidden) $('#ku-wv').focus(); } return; }
+    if (t.closest('[data-ku-wv-speichern]')) {
+      const d = $('#ku-wv').value; if (!d) return;
+      const k = await speichereFelder(offenKey, { wiedervorlage: d });
+      if (k) { toast('Wiedervorlage verschoben.'); oeffne(offenKey); }
+      return;
+    }
+    const chip = t.closest('[data-k-chip]');
+    if (chip) {
+      const w = chip.dataset.kChip;
+      S.kunden.signal = w === 'signal'; S.kunden.vertreter = w === 'mein' ? S.d.ich : ''; S.kunden.n = SEITE;
+      kunden(); return;
+    }
     const g = t.closest('[data-gehe]'); if (g) { if (g.dataset.termin) { S.wv.termin = g.dataset.termin; S.wv.n = SEITE; } zeigeTab(g.dataset.gehe); return; }
     if (t.closest('[data-neu-interessent]')) { interessentDialog(); return; }
     if (t.closest('[data-interessent-bearbeiten]')) { interessentDialog(S.byKey.get(offenKey)); return; }
@@ -960,6 +1003,7 @@
     if (r.status === 401) { zeigeAnmeldung(r.json ? '' : './'); return; }
     if (r.status !== 200 || !r.data.ok) { fehler(fehlerText(r, 'Das CRM konnte nicht geladen werden')); return; }
     setzeDaten(r.data);
+    if (r.data.ich) S.kunden.vertreter = r.data.ich;   // Verkäufer: Kundenliste zuerst mit seinen Kunden (Auswahl „Alle“ daneben)
     $('#crm-login').hidden = true; $('#crm-app').hidden = false;
     const tab = location.hash.slice(1);
     zeigeTab($(`#crm-tabs button[data-tab="${CSS.escape(tab)}"]:not([hidden])`) ? tab : 'cockpit');
