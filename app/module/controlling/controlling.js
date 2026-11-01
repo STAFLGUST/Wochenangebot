@@ -9,7 +9,7 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const S = { csrf: '', bereiche: [], aktiv: null, geladen: new Set(), toast: 0 };
+  const S = { csrf: '', bereiche: [], aktiv: null, geladen: new Set(), toast: 0, nutzer: '' };
   const bereichsModule = {};
 
   /* Aufruf der API: wirft nie, liefert { status, data, json } */
@@ -86,6 +86,7 @@
     S.csrf = st.data.csrf || '';
     if (window.STAFL_THEME) { window.STAFL_THEME.konto(st.data.user, S.csrf, API); themaKnopf(); }
     const name = st.data.user ? (st.data.user.name || st.data.user.username || '') : '';
+    S.nutzer = st.data.user ? String(st.data.user.username || st.data.user.id || '') : '';   // für gemerkte Ansichten je Mitarbeiter (nur im Browser)
     $('#ctl-user').hidden = false; $('#ctl-user-name').textContent = name; $('#ctl-initialen').textContent = initialen(name);
     const r = await api('controlling_start');
     if (r.status === 404) { fehler('Das Controlling ist für Sie noch nicht freigegeben.'); return; }
@@ -105,6 +106,7 @@
   window.STAFL_CONTROLLING = {
     bereich(id, modul) { bereichsModule[id] = modul; },
     api, esc, toast, fehlerText, zeigeAnmeldung,
+    get nutzer() { return S.nutzer; },
     hashSetzen(teil) { history.replaceState(null, '', '#' + S.aktiv + (teil ? '/' + teil : '')); },
   };
   themaKnopf();

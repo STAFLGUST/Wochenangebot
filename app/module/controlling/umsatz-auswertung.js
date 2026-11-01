@@ -3,8 +3,10 @@
    Zeitraum, „mit Vorjahr“, Knopf „Filter“ (Pop-up mit Vertreter, Kundengruppe, Artikelgruppe, Fleischart, Kunden, Artikel) und
    die Suche nach Kunde, Artikel oder Gruppe; darunter Kennzahlen, die Rangliste (Vertreter, Kundengruppen, Kunden, Artikelgruppen,
    Artikel; weitere Gliederungen nach Fleischart und Zeit) nach Umsatz, Menge, Rohmarge oder Rohmarge % – höchste oder niedrigste
-   zuerst (Reihenfolge vom Server, Rohmarge nur mit EK-Recht) –, alle Spalten auf Wunsch, Monatsverlauf und die größten
-   Veränderungen zum Vorjahr in der gewählten Kennzahl. Rohmarge = Umsatz mit EK − EK-Wert (früher „DB“). Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
+   zuerst (Reihenfolge vom Server, Rohmarge nur mit EK-Recht) –, ABC-Analyse der Kennzahl (Kennzeichen je Zeile, A/B/C zum
+   Eingrenzen), mit Vorjahr „Alle · Neu · Verloren“ (Auswahl rechnet der Server), alle Spalten auf Wunsch, Monatsverlauf und die
+   größten Veränderungen zum Vorjahr in der gewählten Kennzahl. Die Ansicht (Gliederung, Kennzahl, Zeitraum, Filter …) merkt
+   sich der Browser je Mitarbeiter (localStorage, nur Bedienkomfort – fehlt der Speicher, gilt die Standardansicht). Rohmarge = Umsatz mit EK − EK-Wert (früher „DB“). Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
    die Seite bleibt stehen. Daten: controlling_umsatz_daten (Stand, Auswahllisten) und controlling_umsatz_auswertung (Summen),
    gerechnet wird auf dem Server. Einkaufswerte und Rohmarge liefert er nur mit controlling.umsatz_ek und
    bestand.einkaufspreise; hier werden sie nur ein- oder ausgeblendet. Beträge in Cent, Mengen in Tausendstel.
@@ -115,9 +117,14 @@
   const WEITERE = [['fleischart', 'Fleischart'], ['monat', 'Monat'], ['quartal', 'Quartal'], ['jahr', 'Jahr'], ['kw', 'Kalenderwoche']];
   const ZEITLICH = ['monat', 'quartal', 'jahr', 'kw'];
   const RANG_ANFANG = 50;   // Rangliste: zuerst die 50 umsatzstärksten, Rest auf Klick
+  const MEHRZAHL = { vertreter: ['Vertreter', 'Vertreter'], kundengruppe: ['Kundengruppe', 'Kundengruppen'], kunde: ['Kunde', 'Kunden'], vkgruppe: ['Artikelgruppe', 'Artikelgruppen'],
+                     fleischart: ['Fleischart', 'Fleischarten'], artikel: ['Artikel', 'Artikel'] };
+  const anzahlText = (n, nach) => `${ganz(n)} ${(MEHRZAHL[nach] || ['Zeile', 'Zeilen'])[n === 1 ? 0 : 1]}`;
+  const ABC_TEXT = { A: 'die größten, die zusammen 80 %', B: 'die nächsten bis 95 %', C: 'der Rest (unter 5 %)' };
+  const NUR_LEER = { neu: 'Nichts neu: alles, was jetzt gekauft wurde, gab es auch im Vorjahreszeitraum.', verloren: 'Nichts verloren: alles aus dem Vorjahreszeitraum wurde auch jetzt gekauft.' };
 
   const S = { box: null, g: null, von: '', bis: '', nach: 'kundengruppe', rang: 'umsatz', auf: false, vj: true, filter: {}, sort: null, d: null, laden: 0, kennzahl: 'umsatz', ansicht: 'rang', rangAlle: false,
-              eigen: false, entwurf: null, fsuche: {}, treffer: [], aktiv: -1 };
+              eigen: false, zeit: 'jahr', nur: '', abc: '', entwurf: null, fsuche: {}, treffer: [], aktiv: -1 };
   FILTER.forEach((f) => { S.filter[f.id] = new Set(); S.fsuche[f.id] = ''; });
 
   const optionen = (f) => {
@@ -155,9 +162,13 @@
               <label class="ctl-sr" for="ctl-ua-nach-mehr">Weitere Gliederung</label><select id="ctl-ua-nach-mehr"><option value="">Weitere …</option>${WEITERE.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('')}</select></div>
             <div class="ctl-ua-rangwahl ctl-ua-kennzahlwahl"><span class="ctl-ua-wahllabel" id="ctl-ua-rang-label">Sortiert nach</span><div class="ctl-seg" role="group" aria-labelledby="ctl-ua-rang-label" id="ctl-ua-rangnach">${Object.entries(RANG).filter(([, k]) => !k.ek || S.g.rechte.ek).map(([id, k]) => `<button type="button" data-rang="${id}">${esc(k.name)}</button>`).join('')}</div>
               <button type="button" class="ctl-ua-richtung" id="ctl-ua-richtung" aria-pressed="false" title="Reihenfolge umkehren"></button></div></div>
+          <div class="ctl-ua-rangfilter" id="ctl-ua-rangfilter" hidden>
+            <div class="ctl-seg klein" role="group" aria-label="Vergleich zum Vorjahr" id="ctl-ua-nur"></div>
+            <div class="ctl-ua-abc" role="group" aria-labelledby="ctl-ua-abc-label" id="ctl-ua-abc"></div></div>
+          <p class="ctl-hilfe ctl-ua-nurhinweis" id="ctl-ua-nurhinweis" hidden></p>
           <div id="ctl-ua-liste" class="ctl-ua-liste"></div>
           <div class="ctl-ua-rangfuss"><div class="ctl-seg klein" role="group" aria-label="Darstellung" id="ctl-ua-ansicht"><button type="button" data-ansicht="rang">Rangliste</button><button type="button" data-ansicht="tabelle">Alle Spalten</button></div>
-            <span class="ctl-hilfe" id="ctl-ua-klickhinweis"></span><button type="button" class="btn sm" id="ctl-ua-csv">CSV</button></div>
+            <span class="ctl-hilfe" id="ctl-ua-klickhinweis"></span><button type="button" class="ctl-ua-link" id="ctl-ua-standard" hidden title="Ihre Ansicht bleibt in diesem Browser gespeichert. Hier zurück zur Standardansicht.">Standardansicht</button><button type="button" class="btn sm" id="ctl-ua-csv">CSV</button></div>
           <p class="ctl-fussnote" id="ctl-ua-fussnote"></p></section>
         <aside class="ctl-ua-seite">
           <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf"><div><h2>Monatsverlauf</h2><p class="ctl-hilfe" id="ctl-ua-verlauf-hinweis"></p></div>
@@ -269,7 +280,7 @@
   async function laden() {
     const nr = ++S.laden;
     $('#ctl-ua-liste', S.box).classList.add('laedt');
-    const r = await C.api('controlling_umsatz_auswertung', null, anfrage({ nach: S.nach, rang: S.rang, auf: S.auf ? '1' : '0' }));
+    const r = await C.api('controlling_umsatz_auswertung', null, anfrage({ nach: S.nach, rang: S.rang, auf: S.auf ? '1' : '0', ...(S.nur ? { nur: S.nur } : {}) }));
     if (nr !== S.laden) return;
     $('#ctl-ua-liste', S.box).classList.remove('laedt');
     if (r.status === 401) { C.zeigeAnmeldung(); return; }
@@ -277,7 +288,9 @@
     if (r.status !== 200 || !r.data.ok) { fehler.hidden = false; fehler.textContent = C.fehlerText(r, 'Die Auswertung konnte nicht geladen werden'); return; }
     fehler.hidden = true;
     S.d = r.data;
+    if (!S.d.abc || !S.d.abc[S.abc] || !S.d.abc[S.abc].anzahl) S.abc = '';
     zeichne();
+    merken();
   }
   function vjText() {
     const v = S.d.vorjahr;
@@ -323,6 +336,7 @@
     }
     if (S.d.anfrage.nach !== 'kunde') s.push({ id: 'kunden', name: 'Kunden', wert: (z) => z.werte.kunden, text: (z) => ganz(z.werte.kunden) });
     s.push({ id: 'pos', name: 'Positionen', wert: (z) => z.werte.pos, text: (z) => ganz(z.werte.pos) });
+    if (S.d.abc && S.d.anfrage.nur !== 'verloren') s.push({ id: 'abc', name: 'ABC', wert: (z) => z.abc || null, text: (z) => z.abc || '–' });
     return s;
   }
   function sortiert() {
@@ -340,7 +354,13 @@
       return S.sort.ab ? -c : c;
     });
   }
+  /* Angezeigte Zeilen: Sortierung der Tabelle, dazu die gewählte ABC-Klasse (nur in der Bedienung, ohne neue Anfrage) */
+  const abcAktiv = () => (S.abc && S.d.abc && !S.d.anfrage.nur ? S.abc : '');
+  const sichtbar = () => { const z = sortiert(), k = abcAktiv(); return k ? z.filter((x) => x.abc === k) : z; };
   const gliederungName = (id) => { const g = S.g.gliederungen.find((x) => x.id === id); return g ? g.name : id; };
+  /* Kennzeichen „neu“/„verloren“ vor dem Zusatz der Zeile (nur in „Alle“ – sonst steht es schon in der Auswahl) */
+  const marke = (z) => (z.wechsel && !S.d.anfrage.nur ? `<span class="ctl-ua-marke ${z.wechsel}" title="${z.wechsel === 'neu' ? 'Im Vorjahreszeitraum nicht gekauft' : 'Im Vorjahreszeitraum gekauft, jetzt nicht'}">${z.wechsel}</span>` : '');
+  const abcMarke = (z) => (z.abc && S.d.anfrage.nur !== 'verloren' ? `<i class="ctl-ua-abcmarke" data-abc="${z.abc}" title="${z.abc}: ${esc(ABC_TEXT[z.abc])} – nach ${esc(RANG[S.d.anfrage.rang || 'umsatz'].name)}">${z.abc}</i>` : '');
   /* Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Rohmarge % zur Rohmarge …) */
   function rangNebenwert(w, rang) {
     if (rang === 'menge') return euro(w.umsatz);
@@ -349,36 +369,65 @@
     return '';
   }
   function zeichneRangliste() {
-    const nach = S.d.anfrage.nach, zeitlich = ZEITLICH.includes(nach), zeilen = sortiert(), rang = S.d.anfrage.rang || 'umsatz', k = RANG[rang];
-    const max = Math.max(1e-9, ...zeilen.map((z) => Math.abs(k.wert(z.werte) || 0)));
-    const summe = k.wert(S.d.summe);
+    const nach = S.d.anfrage.nach, zeitlich = ZEITLICH.includes(nach), rang = S.d.anfrage.rang || 'umsatz', k = RANG[rang], nur = S.d.anfrage.nur || '';
+    const vjModus = nur === 'verloren', basis = (z) => (vjModus && z.vj ? z.vj : z.werte);   // verloren: Werte des Vorjahrs
+    const alle = sortiert(), platz = new Map();
+    let n = 0;
+    alle.forEach((z) => { if (!z.klein) platz.set(z.schluessel, ++n); });
+    const zeilen = sichtbar();
+    const max = Math.max(1e-9, ...zeilen.map((z) => Math.abs(k.wert(basis(z)) || 0)));
+    const summe = k.wert(vjModus ? S.d.summeVj : S.d.summe);
     const zeigen = S.rangAlle ? zeilen : zeilen.slice(0, RANG_ANFANG);
-    const kopf = `<div class="ctl-ua-rangzeile ctl-ua-rangkopfzeile" aria-hidden="true"><span>${zeitlich ? '' : '#'}</span><span>${esc(gliederungName(nach))}</span><span>${rang === 'spanne' ? '' : 'Anteil'}</span><span>${esc(k.name)}</span><span>${S.d.vorjahr ? '± Vorjahr' : ''}</span><span></span></div>`;
-    let nr = 0, kleinKopf = false;
-    $('#ctl-ua-liste', S.box).innerHTML = zeilen.length ? `${kopf}<ol class="ctl-ua-rang${zeitlich ? ' zeitlich' : ''}" id="ctl-ua-rang" data-rang="${rang}">${zeigen.map((z) => {
-      const w = k.wert(z.werte), neben = rangNebenwert(z.werte, rang);
+    const kopf = `<div class="ctl-ua-rangzeile ctl-ua-rangkopfzeile" aria-hidden="true"><span>${zeitlich ? '' : '#'}</span><span>${esc(gliederungName(nach))}</span><span>${rang === 'spanne' ? '' : 'Anteil'}</span><span>${esc(k.name)}${vjModus ? ' Vorjahr' : ''}</span><span>${S.d.vorjahr ? '± Vorjahr' : ''}</span><span></span></div>`;
+    let kleinKopf = false;
+    $('#ctl-ua-liste', S.box).innerHTML = zeilen.length ? `${kopf}<ol class="ctl-ua-rang${zeitlich ? ' zeitlich' : ''}" id="ctl-ua-rang" data-rang="${rang}" data-nur="${nur}">${zeigen.map((z) => {
+      const w = k.wert(basis(z)), neben = vjModus ? `im Vorjahr${z.werte.umsatz ? ` · jetzt ${euro(z.werte.umsatz)}` : ''}` : rangNebenwert(z.werte, rang);
       const trenner = z.klein && !kleinKopf ? (kleinKopf = true, `<li class="ctl-ua-rangtrenner">Wenig Umsatz mit Einkaufspreis (unter ${esc(euro(S.d.rangSchwelle))}) – Rohmarge % wenig aussagekräftig</li>`) : '';
-      return `${trenner}<li${z.klein ? ' class="klein"' : ''}><button type="button" class="ctl-ua-rangzeile" data-zeile="${esc(z.schluessel)}">
-        <span class="ctl-ua-rangnr">${zeitlich || z.klein ? '' : ++nr}</span><span class="ctl-ua-rangname"><b class="ctl-ua-name">${esc(z.name)}</b>${z.sub ? `<small class="ctl-ua-sub">${esc(z.sub)}</small>` : ''}</span>
+      const sub = marke(z) + (z.sub ? esc(z.sub) : '');
+      return `${trenner}<li${z.klein ? ' class="klein"' : ''}><button type="button" class="ctl-ua-rangzeile" data-zeile="${esc(z.schluessel)}"${z.abc ? ` data-abc="${z.abc}"` : ''}>
+        <span class="ctl-ua-rangnr">${zeitlich || z.klein ? '' : platz.get(z.schluessel)}${abcMarke(z)}</span><span class="ctl-ua-rangname"><b class="ctl-ua-name">${esc(z.name)}</b>${sub ? `<small class="ctl-ua-sub">${sub}</small>` : ''}</span>
         <span class="ctl-ua-rangbalken"><span class="ctl-ua-spur${w < 0 ? ' minus' : ''}"><span style="width:${Math.min(100, (Math.abs(w || 0) / max) * 100).toFixed(1)}%"></span></span><small>${rang === 'spanne' ? '' : esc(pct(quote(w, summe)))}</small></span>
         <span class="ctl-ua-rangwert"><b class="${w < 0 ? 'ctl-ua-negativ' : ''}">${esc(w === null ? '–' : k.text(w))}</b>${neben ? `<small>${esc(neben)}</small>` : ''}</span>
-        <span class="ctl-ua-rangdelta">${S.d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>${ICON.weiter}</button></li>`;
+        <span class="ctl-ua-rangdelta">${vjModus ? '<span class="ctl-ua-delta minus">verloren</span>' : S.d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>${ICON.weiter}</button></li>`;
     }).join('')}</ol>`
         + (zeilen.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" id="ctl-ua-rang-alle">Alle ${ganz(zeilen.length)} anzeigen</button>` : '')
-      : '<p class="ctl-empty">Keine Umsätze für diese Auswahl.</p>';
+      : `<p class="ctl-empty">${esc(NUR_LEER[nur] || 'Keine Umsätze für diese Auswahl.')}</p>`;
+  }
+  /* Auswahl über der Rangliste: Alle · Neu · Verloren (mit Vorjahr, nicht bei Zeit) und ABC-Analyse der Kennzahl */
+  function zeichneRangfilter() {
+    const nach = S.d.anfrage.nach, nur = S.d.anfrage.nur || '', w = S.d.wechsel, abc = S.d.abc, rang = RANG[S.d.anfrage.rang || 'umsatz'];
+    const nurBox = $('#ctl-ua-nur', S.box), abcBox = $('#ctl-ua-abc', S.box);
+    nurBox.hidden = !w;
+    if (w) {
+      const knopf = (id, name, zahl, titel) => `<button type="button" data-nur="${id}" aria-pressed="${nur === id}"${zahl === 0 && nur !== id ? ' disabled' : ''}${titel ? ` title="${esc(titel)}"` : ''}>${esc(name)}${zahl === null ? '' : ` <span class="ctl-ua-nurzahl">${ganz(zahl)}</span>`}</button>`;
+      nurBox.innerHTML = knopf('', 'Alle', null) + knopf('neu', 'Neu', w.neu.anzahl, 'Jetzt gekauft, im Vorjahreszeitraum nicht') + knopf('verloren', 'Verloren', w.verloren.anzahl, 'Im Vorjahreszeitraum gekauft, jetzt nicht');
+    }
+    const abcZeigen = !!abc && !nur;
+    abcBox.hidden = !abcZeigen;
+    if (abcZeigen) {
+      const aktiv = abcAktiv();
+      abcBox.innerHTML = `<span class="ctl-ua-wahllabel" id="ctl-ua-abc-label">ABC nach ${esc(rang.name)}</span>` + ['A', 'B', 'C'].map((x) => `<button type="button" data-abc="${x}" aria-pressed="${aktiv === x}"${abc[x].anzahl ? '' : ' disabled'}
+        title="${x}: ${esc(ABC_TEXT[x])} der ${esc(rang.name)} – ${esc(anzahlText(abc[x].anzahl, nach))}, ${esc(pct(abc[x].anteil))}. Klick zeigt nur diese."><b>${x}</b> ${ganz(abc[x].anzahl)} <small>${esc(pct(abc[x].anteil))}</small></button>`).join('');
+    }
+    $('#ctl-ua-rangfilter', S.box).hidden = !w && !abcZeigen;
+    const hinweis = $('#ctl-ua-nurhinweis', S.box);
+    hinweis.hidden = !nur && !abcAktiv();
+    if (nur === 'neu') hinweis.textContent = `Neu gegenüber dem Vorjahreszeitraum: ${anzahlText(w.neu.anzahl, nach)} mit ${euro(w.neu.umsatz)} Umsatz.`;
+    else if (nur === 'verloren') hinweis.textContent = `Im Vorjahreszeitraum gekauft, jetzt nicht: ${anzahlText(w.verloren.anzahl, nach)} mit ${euro(w.verloren.umsatzVj)} Umsatz im Vorjahr. Werte der Liste aus dem Vorjahr.`;
+    else if (abcAktiv()) hinweis.textContent = `Nur ${abcAktiv()}: ${ABC_TEXT[abcAktiv()]} der ${rang.name} – ${anzahlText(abc[abcAktiv()].anzahl, nach)}.`;
   }
   function zeichneTabelle() {
     const nach = S.d.anfrage.nach, sp = spalten();
     const pfeil = (id) => (S.sort && S.sort.id === id ? (S.sort.ab ? ' ↓' : ' ↑') : '');
-    const zeilen = sortiert();
+    const zeilen = sichtbar();
     const s = S.d.summe, summe = { name: 'Summe', werte: s, vj: S.d.summeVj };
     $('#ctl-ua-liste', S.box).innerHTML = `<div class="ctl-ua-tabwrap"><table class="ctl-tabelle ctl-ua-tabelle">
       <thead id="ctl-ua-kopf"><tr><th><button type="button" class="ctl-ua-sort" data-sort="name">${esc(gliederungName(nach))}${pfeil('name')}</button></th>${sp.map((x) => `<th class="ctl-zahl"><button type="button" class="ctl-ua-sort" data-sort="${x.id}">${esc(x.name)}${pfeil(x.id)}</button></th>`).join('')}</tr></thead>
       <tbody id="ctl-ua-zeilen">${zeilen.length ? zeilen.map((z) => `<tr class="ctl-ua-klick" tabindex="0" data-zeile="${esc(z.schluessel)}">
-        <td class="ctl-rep"><span class="ctl-ua-name">${esc(z.name)}</span>${z.sub ? `<span class="ctl-ua-sub">${esc(z.sub)}</span>` : ''}</td>
+        <td class="ctl-rep"><span class="ctl-ua-name">${esc(z.name)}</span>${z.sub || marke(z) ? `<span class="ctl-ua-sub">${marke(z)}${esc(z.sub)}</span>` : ''}</td>
         ${sp.map((x) => `<td class="ctl-zahl" data-label="${esc(x.name)}">${x.html ? x.html(z) : esc(x.text(z))}</td>`).join('')}</tr>`).join('')
-      : `<tr><td colspan="${sp.length + 1}" class="ctl-empty">Keine Umsätze für diese Auswahl.</td></tr>`}</tbody>
-      <tfoot id="ctl-ua-fuss">${zeilen.length ? `<tr class="ctl-total"><td class="ctl-rep">Summe</td>${sp.map((x) => `<td class="ctl-zahl">${x.id === 'anteil' ? '100,0 %' : x.html ? x.html(summe) : esc(x.text(summe))}</td>`).join('')}</tr>` : ''}</tfoot></table></div>`;
+      : `<tr><td colspan="${sp.length + 1}" class="ctl-empty">${esc(NUR_LEER[S.d.anfrage.nur] || 'Keine Umsätze für diese Auswahl.')}</td></tr>`}</tbody>
+      <tfoot id="ctl-ua-fuss">${zeilen.length && !S.d.anfrage.nur && !abcAktiv() ? `<tr class="ctl-total"><td class="ctl-rep">Summe</td>${sp.map((x) => `<td class="ctl-zahl">${x.id === 'anteil' ? '100,0 %' : x.html ? x.html(summe) : esc(x.text(summe))}</td>`).join('')}</tr>` : ''}</tfoot></table></div>`;
   }
   /* Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Rohmarge % → Rohmarge
      in Euro; nur Merkmale, nicht Zeit) */
@@ -389,7 +438,7 @@
     panel.hidden = !z.length;
     if (!z.length) return;
     const plus = z.filter((y) => y.d > 0).sort((a, b) => b.d - a.d).slice(0, 3), minus = z.filter((y) => y.d < 0).sort((a, b) => a.d - b.d).slice(0, 3);
-    $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · ${k.name}${rang === 'menge' ? '' : ' in Euro'}`;
+    $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · ${k.name}${rang === 'menge' ? '' : ' in Euro'}${S.d.anfrage.nur ? ` · nur ${S.d.anfrage.nur}` : ''}`;
     $('#ctl-ua-veraenderung', S.box).innerHTML = plus.concat(minus).map(({ x, d }) => `<button type="button" class="ctl-ua-veraend" data-zeile="${esc(x.schluessel)}">
         <span><b>${esc(x.name)}</b><small>${x.vj && k.wert(x.vj) ? `${esc(k.kurz(k.wert(x.vj)))} → ${esc(k.kurz(k.wert(x.werte)))}` : `im Vorjahr ohne ${esc(k.name)}`}</small></span>
         <b class="ctl-ua-delta ${d > 0 ? 'plus' : 'minus'}">${d > 0 ? '+' : '−'}${esc(k.kurz(Math.abs(d)))}</b></button>`).join('');
@@ -406,6 +455,7 @@
     $('#ctl-ua-titel', S.box).textContent = `Rangliste · ${gliederungName(nach)}`;
     $('#ctl-ua-tabelle-hinweis', S.box).textContent = `${monatsname(S.d.anfrage.von)} – ${monatsname(S.d.anfrage.bis)}${S.d.vorjahr ? ' · ' + vjText() : ''}`;
     $('#ctl-ua-klickhinweis', S.box).textContent = ZEITLICH.includes(nach) ? (nach === 'kw' ? '' : 'Klick auf eine Zeile wählt diesen Zeitraum.') : 'Klick auf eine Zeile öffnet die Details im Pop-up.';
+    zeichneRangfilter();
     if (S.ansicht === 'tabelle') zeichneTabelle(); else zeichneRangliste();
     const s = S.d.summe;
     const mehr = S.d.zeilenGesamt > S.d.zeilen.length ? `Angezeigt: ${ganz(S.d.zeilen.length)} von ${ganz(S.d.zeilenGesamt)} Zeilen (die ersten nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}). ` : '';
@@ -416,7 +466,8 @@
     const m = S.g.stand.monate, letzter = m[m.length - 1], j = letzter.slice(0, 4);
     const vor = { jahr: [`${j}-01`, letzter], vorjahr: [`${Number(j) - 1}-01`, `${Number(j) - 1}-12`], 12: [plusMonate(letzter, -11), letzter], alles: [m[0], letzter] };
     const begrenzt = ([v, b]) => [v < m[0] ? m[0] : v, b > letzter ? letzter : b];
-    let aktiv = S.eigen ? 'eigen' : Object.keys(vor).find((k) => { const [v, b] = begrenzt(vor[k]); return v === S.von && b === S.bis; }) || 'eigen';
+    const aktiv = S.eigen ? 'eigen' : Object.keys(vor).find((k) => { const [v, b] = begrenzt(vor[k]); return v === S.von && b === S.bis; }) || 'eigen';
+    S.zeit = aktiv;
     $$('#ctl-ua-zeit [data-zeit]', S.box).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.zeit === aktiv)));
     $('#ctl-ua-eigen', S.box).hidden = aktiv !== 'eigen';
     return vor;
@@ -432,8 +483,8 @@
     if (S.von > S.bis) S.von = S.bis;
     $('#ctl-ua-von', S.box).value = S.von; $('#ctl-ua-bis', S.box).value = S.bis;
   }
-  function gliederung(nach) { S.nach = nach; S.sort = null; S.rangAlle = false; laden(); }
-  function rangliste(rang, auf) { S.rang = rang; S.auf = auf; S.sort = null; S.rangAlle = false; laden(); }
+  function gliederung(nach) { S.nach = nach; S.sort = null; S.rangAlle = false; S.abc = ''; if (ZEITLICH.includes(nach)) S.nur = ''; laden(); }
+  function rangliste(rang, auf) { if (rang !== S.rang) S.abc = ''; S.rang = rang; S.auf = auf; S.sort = null; S.rangAlle = false; laden(); }
   /* Klick auf eine Zeile: Merkmal → Pop-up; Monat/Quartal/Jahr → dieser Zeitraum */
   function zeileGewaehlt(schluessel) {
     const nach = S.d.anfrage.nach;
@@ -441,8 +492,8 @@
     if (nach === 'kw') return;
     S.eigen = false;
     if (nach === 'monat') { zeitraum(schluessel, schluessel); S.nach = 'kundengruppe'; }
-    else if (nach === 'jahr') { zeitraum(`${schluessel}-01`, `${schluessel}-12`); S.nach = 'monat'; }
-    else { const j = schluessel.slice(0, 4), q = Number(schluessel.slice(6)); zeitraum(`${j}-${String(q * 3 - 2).padStart(2, '0')}`, `${j}-${String(q * 3).padStart(2, '0')}`); S.nach = 'monat'; }
+    else if (nach === 'jahr') { zeitraum(`${schluessel}-01`, `${schluessel}-12`); S.nach = 'monat'; S.nur = ''; }
+    else { const j = schluessel.slice(0, 4), q = Number(schluessel.slice(6)); zeitraum(`${j}-${String(q * 3 - 2).padStart(2, '0')}`, `${j}-${String(q * 3).padStart(2, '0')}`); S.nach = 'monat'; S.nur = ''; }
     S.sort = null; laden();
   }
   /* Pop-up: Schnittstelle zu umsatz-details.js */
@@ -461,17 +512,21 @@
 
   function csv() {
     const gl = gliederungName(S.d.anfrage.nach);
-    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'Rohmarge €', 'Rohmarge %'] : [])];
-    const zeilen = sortiert().map((z) => [z.name, z.schluessel, zahl(z.werte.umsatz / 100, 2), ...(S.d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3),
+    const mitAbc = !!S.d.abc && S.d.anfrage.nur !== 'verloren', mitWechsel = !!S.d.wechsel, nur = S.d.anfrage.nur;
+    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'Rohmarge €', 'Rohmarge %'] : []),
+      ...(mitAbc ? [`ABC nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}`] : []), ...(mitWechsel ? ['Vergleich zum Vorjahr'] : [])];
+    const zeilen = sichtbar().map((z) => [z.name, z.schluessel, zahl(z.werte.umsatz / 100, 2), ...(S.d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3),
       zahl(z.werte.kolli, 0), zahl(z.werte.pos, 0), zahl(z.werte.kunden, 0),
-      ...(S.d.ek ? [zahl(z.werte.ek / 100, 2), zahl(z.werte.umsatzEk / 100, 2), zahl(db(z.werte) / 100, 2), spanne(z.werte) === null ? '' : zahl(spanne(z.werte) * 100, 1)] : [])]);
-    csvLaden(`Umsatz nach ${gl} ${S.d.anfrage.von} bis ${S.d.anfrage.bis}.csv`, [kopf, ...zeilen]);
+      ...(S.d.ek ? [zahl(z.werte.ek / 100, 2), zahl(z.werte.umsatzEk / 100, 2), zahl(db(z.werte) / 100, 2), spanne(z.werte) === null ? '' : zahl(spanne(z.werte) * 100, 1)] : []),
+      ...(mitAbc ? [z.abc || ''] : []), ...(mitWechsel ? [z.wechsel || ''] : [])]);
+    const teil = nur ? ` ${nur}` : abcAktiv() ? ` ${abcAktiv()}` : '';
+    csvLaden(`Umsatz nach ${gl}${teil} ${S.d.anfrage.von} bis ${S.d.anfrage.bis}.csv`, [kopf, ...zeilen]);
   }
   function verbinden() {
     const b = S.box;
     $('#ctl-ua-von', b).addEventListener('change', () => { S.eigen = true; zeitraum($('#ctl-ua-von', b).value, S.bis < $('#ctl-ua-von', b).value ? $('#ctl-ua-von', b).value : S.bis); laden(); });
     $('#ctl-ua-bis', b).addEventListener('change', () => { S.eigen = true; zeitraum(S.von > $('#ctl-ua-bis', b).value ? $('#ctl-ua-bis', b).value : S.von, $('#ctl-ua-bis', b).value); laden(); });
-    $('#ctl-ua-vj', b).addEventListener('change', () => { S.vj = $('#ctl-ua-vj', b).checked; laden(); });
+    $('#ctl-ua-vj', b).addEventListener('change', () => { S.vj = $('#ctl-ua-vj', b).checked; if (!S.vj) S.nur = ''; laden(); });
     $('#ctl-ua-zeit', b).addEventListener('click', (ev) => {
       const k = ev.target.closest('[data-zeit]'); if (!k) return;
       if (k.dataset.zeit === 'eigen') { S.eigen = true; zeichneZeitraum(); $('#ctl-ua-von', b).focus(); return; }
@@ -483,7 +538,10 @@
     $('#ctl-ua-nach-mehr', b).addEventListener('change', () => { const v = $('#ctl-ua-nach-mehr', b).value; if (v) gliederung(v); });
     $('#ctl-ua-rangnach', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-rang]'); if (k && k.dataset.rang !== S.rang) rangliste(k.dataset.rang, false); });
     $('#ctl-ua-richtung', b).addEventListener('click', () => rangliste(S.rang, !S.auf));
-    $('#ctl-ua-ansicht', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-ansicht]'); if (k && S.d) { S.ansicht = k.dataset.ansicht; zeichneListe(); } });
+    $('#ctl-ua-ansicht', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-ansicht]'); if (k && S.d) { S.ansicht = k.dataset.ansicht; zeichneListe(); merken(); } });
+    $('#ctl-ua-nur', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-nur]'); if (k && !k.disabled && S.d && k.dataset.nur !== (S.d.anfrage.nur || '')) { S.nur = k.dataset.nur; S.abc = ''; S.rangAlle = false; laden(); } });
+    $('#ctl-ua-abc', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-abc]'); if (k && !k.disabled && S.d) { S.abc = S.abc === k.dataset.abc ? '' : k.dataset.abc; S.rangAlle = false; zeichneListe(); } });
+    $('#ctl-ua-standard', b).addEventListener('click', standardansicht);
     $('#ctl-ua-filterknopf', b).addEventListener('click', filterDialog);
     filterVerbinden();
     const feld = $('#ctl-ua-suche', b);
@@ -514,7 +572,52 @@
       if (z && S.d) zeileGewaehlt(z.dataset.zeile);
     });
     b.addEventListener('keydown', (ev) => { const z = ev.target.closest('tr[data-zeile]'); if (z && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); zeileGewaehlt(z.dataset.zeile); } });
-    $('#ctl-ua-kennzahl', b).addEventListener('change', () => { S.kennzahl = $('#ctl-ua-kennzahl', b).value; if (S.d) zeichneVerlauf(); });
+    $('#ctl-ua-kennzahl', b).addEventListener('change', () => { S.kennzahl = $('#ctl-ua-kennzahl', b).value; if (S.d) { zeichneVerlauf(); merken(); } });
+  }
+
+  /* ---------- Ansicht merken (je Mitarbeiter im Browser; nur Bedienkomfort, ohne Speicher gilt die Standardansicht) ---------- */
+  const STANDARD = { nach: 'kundengruppe', rang: 'umsatz', auf: false, vj: true, ansicht: 'rang', kennzahl: 'umsatz', zeit: 'jahr', von: '', bis: '', filter: {}, nur: '' };
+  const speicherName = () => `controlling.umsatz.ansicht.${C.nutzer || ''}`;
+  function ansichtJetzt() {
+    const filter = {};
+    FILTER.forEach((f) => { if (S.filter[f.id].size) filter[f.id] = [...S.filter[f.id]]; });
+    const eigen = S.zeit === 'eigen';
+    return { nach: S.nach, rang: S.rang, auf: S.auf, vj: S.vj, ansicht: S.ansicht, kennzahl: S.kennzahl, zeit: S.zeit, von: eigen ? S.von : '', bis: eigen ? S.bis : '', filter, nur: S.nur };
+  }
+  function merken() {
+    const a = ansichtJetzt(), standard = JSON.stringify(a) === JSON.stringify(STANDARD);
+    try { if (standard) localStorage.removeItem(speicherName()); else localStorage.setItem(speicherName(), JSON.stringify({ v: 1, ...a })); } catch { /* ohne Speicher */ }
+    $('#ctl-ua-standard', S.box).hidden = standard;
+  }
+  /* Gemerkte Ansicht übernehmen – nur gültige Werte (Gliederung, Kennzahl mit Recht, vorhandene Filterwerte, Monate mit Daten) */
+  function gemerktUebernehmen() {
+    let a = null;
+    try { a = JSON.parse(localStorage.getItem(speicherName()) || 'null'); } catch { a = null; }
+    const m = S.g.stand.monate, letzter = m[m.length - 1];
+    zeitraum(`${letzter.slice(0, 4)}-01`, letzter);
+    if (!a || typeof a !== 'object' || a.v !== 1) return;
+    if (HAUPT.concat(WEITERE).some(([id]) => id === a.nach)) S.nach = a.nach;
+    if (RANG[a.rang] && (!RANG[a.rang].ek || S.g.rechte.ek)) S.rang = a.rang;
+    S.auf = a.auf === true; S.vj = a.vj !== false;
+    if (a.ansicht === 'rang' || a.ansicht === 'tabelle') S.ansicht = a.ansicht;
+    if (a.kennzahl === 'umsatz' || a.kennzahl === 'menge' || (a.kennzahl === 'db' && S.g.rechte.ek)) S.kennzahl = a.kennzahl;
+    FILTER.forEach((f) => {
+      const erlaubt = new Set(optionen(f).map((o) => o.nr)), werte = a.filter && Array.isArray(a.filter[f.id]) ? a.filter[f.id] : [];
+      S.filter[f.id] = new Set(werte.filter((x) => typeof x === 'string' && erlaubt.has(x)));
+    });
+    if ((a.nur === 'neu' || a.nur === 'verloren') && S.vj && !ZEITLICH.includes(S.nach)) S.nur = a.nur;
+    const monat = (x) => typeof x === 'string' && /^\d{4}-\d{2}$/.test(x);
+    if (a.zeit === 'eigen' && monat(a.von) && monat(a.bis) && a.von <= a.bis) { S.eigen = true; zeitraum(a.von, a.bis); }
+    else if (['vorjahr', '12', 'alles'].includes(a.zeit)) { const [von, bis] = zeichneZeitraum()[a.zeit]; zeitraum(von, bis); }
+    $('#ctl-ua-vj', S.box).checked = S.vj; $('#ctl-ua-kennzahl', S.box).value = S.kennzahl;
+  }
+  function standardansicht() {
+    Object.assign(S, { nach: STANDARD.nach, rang: STANDARD.rang, auf: false, vj: true, ansicht: 'rang', kennzahl: 'umsatz', nur: '', abc: '', sort: null, rangAlle: false, eigen: false });
+    FILTER.forEach((f) => S.filter[f.id].clear());
+    const m = S.g.stand.monate, letzter = m[m.length - 1];
+    zeitraum(`${letzter.slice(0, 4)}-01`, letzter);
+    $('#ctl-ua-vj', S.box).checked = true; $('#ctl-ua-kennzahl', S.box).value = 'umsatz';
+    zeichneFilter(); laden();
   }
 
   async function anzeigen(box) {
@@ -531,10 +634,9 @@
       return;
     }
     box.innerHTML = geruest();
-    const st = S.g.stand, letzter = st.monate[st.monate.length - 1];
-    const imp = st.importe[0];
+    const st = S.g.stand, imp = st.importe[0];
     $('#ctl-ua-stand', box).textContent = `Umsätze der Warenwirtschaft vom ${tag(st.von)} bis ${tag(st.bis)}${imp ? ` · letzter Import ${new Date(imp.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${imp.vonName ? ' (' + imp.vonName + ')' : ''}` : ''}`;
-    zeitraum(`${letzter.slice(0, 4)}-01`, letzter);
+    gemerktUebernehmen();
     verbinden(); zeichneFilter();
     await laden();
   }
