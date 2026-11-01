@@ -3,7 +3,8 @@ declare(strict_types=1);
 /* Aktionen: CRM · Vertrieb (Oberfläche crm.intern, Daten und Regeln in app/api/module/crm/crm.php)
    Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte);
                     crm.bearbeiten – Kundenblätter, Interessenten und Aktivitäten erfassen;
-                    crm.exportieren – Liste als CSV herunterladen.
+                    crm.exportieren – Liste als CSV herunterladen;
+                    crm.mhd_ware – Reiter „MHD-Ware“: Artikel kurz vor Ablauf und ihre Käufer (Wiedervorlage dazu zusätzlich crm.bearbeiten).
    Kundenstammdaten liest das CRM nur (Eigentümer Verwaltung, E-1); geändert werden sie in der Verwaltung.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -32,7 +33,7 @@ switch ($action) {
             $jeArt = array_fill_keys(CRM_ARTEN, 0); $tage30 = 0; $seit = gmdate('Y-m-d\TH:i:s\Z', time() - 30 * 86400);
             foreach ($akt as $a) { if (isset($jeArt[$a['art']])) $jeArt[$a['art']]++; if ($a['at'] >= $seit) $tage30++; }
             respond(['ok' => true, 'heute' => date('Y-m-d'), 'name' => $me['name'],
-                     'rechte' => ['bearbeiten' => may($me, 'crm.bearbeiten'), 'exportieren' => may($me, 'crm.exportieren'), 'stammdaten' => may($me, 'kunden.bearbeiten')],
+                     'rechte' => ['bearbeiten' => may($me, 'crm.bearbeiten'), 'exportieren' => may($me, 'crm.exportieren'), 'stammdaten' => may($me, 'kunden.bearbeiten'), 'mhd' => may($me, 'crm.mhd_ware')],
                      'kunden' => crm_liste(), 'vertreter' => crm_vertreter(), 'segmente' => CRM_SEGMENTE, 'phasen' => CRM_PHASEN, 'anruf' => CRM_ANRUF,
                      'arten' => CRM_ARTEN, 'rhythmen' => crm_rhythmen(), 'letzte' => array_map('crm_aktivitaet_aus', array_slice($akt, 0, 30)),
                      'statistik' => ['gesamt' => count($akt), 'jeArt' => $jeArt, 'tage30' => $tage30]]);
@@ -135,6 +136,72 @@ switch ($action) {
             });
             audit('crm', $res['neu'] ? 'CRM: Interessent angelegt' : 'CRM: Interessent geändert');
             respond(['ok' => true, 'kunde' => crm_eintrag($res['id'])]);
+        }
+
+        /* MHD-Ware: Artikel der MHD-Liste des Bestands (ohne Preise) mit der Zahl ihrer Käufer im Zeitraum (?monate=3|6|12) und die
+           Artikel der Umsatzdaten für die Suche nach einem anderen Artikel */
+        case 'crm_mhd': {
+            $me = require_perm('crm.mhd_ware');
+            header('Cache-Control: no-store');
+            $monate = crm_mhd_monate($_GET['monate'] ?? null);
+            $l = crm_mhd_liste();
+            [$von, $bis] = crm_mhd_zeitraum($monate, $l['heute']);
+            $k = umsatzdaten_kaeufer(array_column($l['zeilen'], 'code'), $von, $bis);
+            $artikel = array_map(function ($a) use ($k) { return $a + ['kaeufer' => count($k['artikel'][$a['code']] ?? [])]; }, $l['zeilen']);
+            $alle = [];
+            foreach (umsatzdaten_artikelliste() as $nr => $name) $alle[] = ['nr' => (string)$nr, 'name' => $name];
+            respond(['ok' => true, 'heute' => $l['heute'], 'bestand' => $l['stand'], 'umsatzBis' => $k['stand'], 'monate' => $monate, 'von' => $von, 'bis' => $bis,
+                     'artikel' => $artikel, 'alle' => $alle, 'rechte' => ['bearbeiten' => may($me, 'crm.bearbeiten'), 'exportieren' => may($me, 'crm.exportieren')]]);
+        }
+
+        /* MHD-Ware: Käufer eines Artikels im Zeitraum (?artikel=…&monate=3|6|12) – Menge, Käufe (Liefertage), letzter Kauf, Schlüssel
+           des Kundenblatts; keine Beträge */
+        case 'crm_mhd_kaeufer': {
+            require_perm('crm.mhd_ware');
+            header('Cache-Control: no-store');
+            $code = crm_artikel_code($_GET['artikel'] ?? '');
+            $monate = crm_mhd_monate($_GET['monate'] ?? null);
+            $l = crm_mhd_liste();
+            [$von, $bis] = crm_mhd_zeitraum($monate, $l['heute']);
+            $artikel = crm_mhd_artikel($code, $l);
+            $k = umsatzdaten_kaeufer([$code], $von, $bis);
+            $keys = crm_key_je_nr();
+            $kaeufer = array_map(function ($x) use ($keys) { return $x + ['key' => $keys[code_key($x['kunde'])] ?? null]; }, $k['artikel'][$code] ?? []);
+            usort($kaeufer, function ($a, $b) { return strcmp((string)$b['zuletzt'], (string)$a['zuletzt']) ?: $b['kaeufe'] <=> $a['kaeufe'] ?: strcmp($a['kunde'], $b['kunde']); });
+            respond(['ok' => true, 'artikel' => $artikel, 'monate' => $monate, 'von' => $von, 'bis' => $bis, 'umsatzBis' => $k['stand'], 'kaeufer' => $kaeufer]);
+        }
+
+        /* MHD-Ware: Wiedervorlage für ausgewählte Käufer – nächster Schritt „MHD-Ware anbieten: …“ (vor einen bestehenden Schritt
+           gesetzt, nicht doppelt) und Wiedervorlage am gewählten Tag (eine frühere bleibt). Artikelname und MHD nimmt der Server
+           aus MHD-Liste bzw. Umsatzdaten, nie aus dem Browser. */
+        case 'crm_mhd_wiedervorlage': {
+            $me = require_perm('crm.bearbeiten', true);
+            if (!may($me, 'crm.mhd_ware')) fail('Dafür fehlt Ihnen die Berechtigung „CRM: MHD-Ware“.', 403);
+            $b = body();
+            $code = crm_artikel_code($b['artikel'] ?? '');
+            $datum = crm_datum($b['datum'] ?? '', 'Wiedervorlage');
+            if ($datum === '') $datum = date('Y-m-d');
+            $roh = $b['kunden'] ?? null;
+            if (!is_array($roh) || !array_is_list($roh) || !$roh) fail('Bitte mindestens einen Kunden auswählen.', 422);
+            if (count($roh) > CRM_MHD_MAX_KUNDEN) fail('Höchstens ' . CRM_MHD_MAX_KUNDEN . ' Kunden auf einmal.', 422);
+            $keys = array_values(array_unique(array_map('crm_key_param', $roh)));
+            $schritt = crm_mhd_schritt(crm_mhd_artikel($code, crm_mhd_liste()));
+            $n = with_lock('crm-kunden', function () use ($keys, $schritt, $datum, $me) {
+                $doc = crm_kunden_doc();
+                foreach ($keys as $key) {
+                    $alt = $doc['eintraege'][$key] ?? [];
+                    $altSchritt = (string)($alt['naechsterSchritt'] ?? '');
+                    $neu = str_starts_with($altSchritt, $schritt) ? $altSchritt : mb_substr($schritt . ($altSchritt !== '' ? ' · ' . $altSchritt : ''), 0, 160);
+                    $altWv = (string)($alt['wiedervorlage'] ?? '');
+                    $doc['eintraege'][$key] = array_merge($alt, ['naechsterSchritt' => $neu, 'wiedervorlage' => $altWv !== '' && $altWv < $datum ? $altWv : $datum,
+                                                                 'geaendert' => now(), 'geaendertVon' => $me['name']]);
+                }
+                crm_schreiben('crm-kunden', $doc);
+                return count($keys);
+            });
+            audit('crm', 'CRM: Wiedervorlage für MHD-Ware (' . $n . ($n === 1 ? ' Kunde)' : ' Kunden)'));
+            $set = array_flip($keys);
+            respond(['ok' => true, 'anzahl' => $n, 'kunden' => array_values(array_filter(crm_liste(), function ($e) use ($set) { return isset($set[$e['key']]); }))]);
         }
 
         /* Liste als CSV (Excel) – nur mit eigenem Recht, im Protokoll vermerkt */

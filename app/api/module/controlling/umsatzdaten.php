@@ -317,3 +317,50 @@ function umsatzdaten_stand(array $index): array
         'neu' => (int)($i['neu'] ?? 0), 'geaendert' => (int)($i['geaendert'] ?? 0), 'entfallen' => (int)($i['entfallen'] ?? 0)], array_slice($index['importe'], 0, 10));
     return ['rev' => $index['rev'], 'monate' => $monate, 'von' => $erster, 'bis' => $letzter, 'importe' => $importe];
 }
+
+/* ---------- Schnittstelle für andere Module (GR-101; Leser „crm“ in regeln/datenverantwortung.toml) ----------
+   Nur Mengen, Liefertage und letzter Kauf – nie Beträge oder Einkaufswerte. Zuordnung über Kunden- und Artikelnummern. */
+
+/* Käufer von Artikeln vom Tag $von bis $bis (JJJJ-MM-TT): je Artikel und Kunde Menge (Tausendstel, berechnete Positionen
+   einschließlich Gutschriften), Käufe (Liefertage mit Menge > 0) und letzter Kauf; dazu der letzte Tag mit Umsatzdaten. */
+function umsatzdaten_kaeufer(array $artikel, string $von, string $bis): array
+{
+    $soll = [];   // Artikelnummer (wie code_key: ohne führende Nullen) => angefragte Schreibweise
+    foreach ($artikel as $a) $soll[code_key((string)$a)] = (string)$a;
+    $index = umsatzdaten_index();
+    $je = []; $ck = [];
+    if ($soll && umsatzdaten_datum($von) === $von && umsatzdaten_datum($bis) === $bis && $von <= $bis) {
+        foreach (umsatzdaten_monatsfolge(substr($von, 0, 7), substr($bis, 0, 7)) as $m) {
+            if (!isset($index['monate'][$m])) continue;
+            foreach (umsatzdaten_monat($m) as $z) {
+                if ($z[9] !== 1) continue;
+                $a = $ck[$z[2]] ??= code_key((string)$z[2]);
+                if (!isset($soll[$a])) continue;
+                $tag = $m . '-' . str_pad((string)$z[0], 2, '0', STR_PAD_LEFT);
+                if ($tag < $von || $tag > $bis) continue;
+                $k = $je[$a][$z[1]] ?? ['menge' => 0, 'kaeufe' => 0, 'zuletzt' => null];
+                $k['menge'] += $z[4];
+                if ($z[4] > 0) { $k['kaeufe']++; if ($k['zuletzt'] === null || $tag > $k['zuletzt']) $k['zuletzt'] = $tag; }
+                $je[$a][$z[1]] = $k;
+            }
+        }
+    }
+    $out = [];
+    foreach ($soll as $a => $wie) {
+        $l = [];
+        foreach ($je[$a] ?? [] as $kunde => $w) if ($w['kaeufe'] > 0) $l[] = ['kunde' => (string)$kunde] + $w;
+        $out[$wie] = $l;
+    }
+    return ['stand' => umsatzdaten_stand($index)['bis'], 'artikel' => $out];
+}
+
+/* Artikel in den Umsatzdaten mit Namen aus den Artikelstammdaten (Nummer => Name; ohne Stammsatz „Artikel <Nr>“) */
+function umsatzdaten_artikelliste(): array
+{
+    $out = [];
+    foreach (umsatzdaten_index()['artikel'] as $nr) {
+        $x = umsatz_artikel((string)$nr);
+        $out[(string)$nr] = $x && $x['name'] !== '' ? $x['name'] : 'Artikel ' . $nr;
+    }
+    return $out;
+}

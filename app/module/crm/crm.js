@@ -2,6 +2,7 @@
    Cockpit, Kunden, Wiedervorlagen (Anruf-Rhythmus), Pipeline, Karte und Auswertung – nach der Vertriebs-CRM-Musterdatei.
    Kunden kommen aus den Stammdaten der Verwaltung (nur lesend); das CRM ergänzt je Kunde ein Kundenblatt (Ansprechpartner,
    Segment, Phase, Wann/Erledigt, Potenzial, nächster Schritt, Notiz), Interessenten und den Aktivitätenverlauf.
+   Reiter „MHD-Ware“ (Artikel kurz vor Ablauf und ihre Käufer, Recht crm.mhd_ware) in mhd-ware.js.
    Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Knöpfe sind nur Anzeige.
    Kein Inline-Skript (Content-Security-Policy), keine fremden Kartendienste: Detailkarte mit Straßen und Gebäuden vom
    eigenen Server (../../assets/detailkarte.js, OpenStreetMap), sonst zeichnet die Seite selbst (Umrisse
@@ -117,7 +118,13 @@
   function zeichne() {
     const n = faellig().length;
     $('#crm-faellig').hidden = !n; $('#crm-faellig').textContent = n || '';
-    ({ cockpit, kunden, wiedervorlagen, pipeline, karte, auswertung })[S.tab]();
+    ({ cockpit, kunden, wiedervorlagen, pipeline, karte, auswertung, mhd })[S.tab]();
+  }
+  /* Reiter „MHD-Ware“ (mhd-ware.js, Recht crm.mhd_ware): Hilfsfunktionen des CRM für das Skript des Reiters */
+  function mhd() {
+    if (!window.STAFL_CRM_MHD) return;
+    window.STAFL_CRM_MHD.zeichne($('#tab-mhd'), { api, esc, icon, toast, fehlerText, de, vOpts, firmaKnopf, zeilen, telefone, telLink, vName,
+      daten: () => S.d, ersetze, neuZeichnen: zeichne });
   }
 
   /* ---------- Daten ---------- */
@@ -125,6 +132,7 @@
     S.d = d;
     S.byKey = new Map(d.kunden.map((k) => [k.key, k]));
     $('#crm-export').hidden = !d.rechte.exportieren;
+    $('#crm-tabs [data-tab="mhd"]').hidden = !d.rechte.mhd;
   }
   /* Eintrag nach dem Speichern ersetzen (Server liefert den ganzen Eintrag zurück) */
   function ersetze(k) {
@@ -954,7 +962,7 @@
     setzeDaten(r.data);
     $('#crm-login').hidden = true; $('#crm-app').hidden = false;
     const tab = location.hash.slice(1);
-    zeigeTab($(`#crm-tabs button[data-tab="${CSS.escape(tab)}"]`) ? tab : 'cockpit');
+    zeigeTab($(`#crm-tabs button[data-tab="${CSS.escape(tab)}"]:not([hidden])`) ? tab : 'cockpit');
   }
   themaKnopf();
   laden().catch(() => fehler('Keine Verbindung zum Server.'));

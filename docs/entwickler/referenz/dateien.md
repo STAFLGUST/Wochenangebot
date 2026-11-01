@@ -325,6 +325,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `crm.css` | crm | STAFL-Plattform · CRM · Vertrieb – Gestaltung wie Dashboard und HR („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten und Tabellen. |
 | `crm.js` | crm | STAFL-Plattform · CRM · Vertrieb Cockpit, Kunden, Wiedervorlagen (Anruf-Rhythmus), Pipeline, Karte und Auswertung – nach der Vertriebs-CRM-Musterdatei. |
 | `index.html` | crm | Kundenblatt |
+| `mhd-ware.js` | crm | STAFL-Plattform · CRM · Reiter „MHD-Ware“ (Auftrag des Inhabers 01.11.2026): links die Artikel kurz vor Ablauf aus der MHD-Liste des Bestands – in denselben Farben wie dort (abgelaufen, 0–4, 5–7, 8–14 Tage) –, rechts … |
 
 ## `app/module/hr/`
 

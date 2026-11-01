@@ -359,3 +359,76 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 /* Feinschliff (Durchsicht 25.10.2026): Kopfzeile beim Scrollen deckend, Häkchen und Auswahlpunkte in der Markenfarbe */
 .crm-kopf.crm-glas { background: var(--crm-kopf-glas); }
 .crm input[type="checkbox"], .crm input[type="radio"] { accent-color: var(--crm-akzent); }
+
+/* ── Reiter „MHD-Ware“ (mhd-ware.js): Artikel kurz vor Ablauf in den Farben der MHD-Liste des Bestands (admin.css: dezent
+   getönter Grund, kräftige Schrift, Kontrast ≥ 7:1, dunkel eigene Töne) und ihre Käufer ── */
+body.crm { --crm-mhd-vorbei-bg: #d9d6d2; --crm-mhd-vorbei-fg: #1f1d1a; --crm-mhd-rot-bg: #fbe0dd; --crm-mhd-rot-fg: #8f1d14; --crm-mhd-orange-bg: #fde7d3; --crm-mhd-orange-fg: #7a3209;
+  --crm-mhd-gelb-bg: #fbf0c9; --crm-mhd-gelb-fg: #6b4a05; }
+@media screen and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) body.crm { --crm-mhd-vorbei-bg: #3a3936; --crm-mhd-vorbei-fg: #e8e5e0; --crm-mhd-rot-bg: rgba(229,83,75,.20); --crm-mhd-rot-fg: #f6b8b2;
+  --crm-mhd-orange-bg: rgba(232,128,52,.18); --crm-mhd-orange-fg: #f5c79e; --crm-mhd-gelb-bg: rgba(214,170,40,.15); --crm-mhd-gelb-fg: #ecd68d; } }
+@media screen { :root[data-theme="dark"] body.crm { --crm-mhd-vorbei-bg: #3a3936; --crm-mhd-vorbei-fg: #e8e5e0; --crm-mhd-rot-bg: rgba(229,83,75,.20); --crm-mhd-rot-fg: #f6b8b2;
+  --crm-mhd-orange-bg: rgba(232,128,52,.18); --crm-mhd-orange-fg: #f5c79e; --crm-mhd-gelb-bg: rgba(214,170,40,.15); --crm-mhd-gelb-fg: #ecd68d; } }
+.crm-tabs button[hidden] { display: none; }
+.crm-mhd { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.crm-mhd-links, .crm-mhd-rechts-teil { border-radius: 22px; padding: 16px; min-width: 0; }
+.crm-mhd-legende { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.crm-mhd-marke { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 7px; font-size: 12px; font-weight: 700; white-space: nowrap; background: var(--crm-aus); color: var(--crm-text); }
+.crm-mhd-marke.vorbei { background: var(--crm-mhd-vorbei-bg); color: var(--crm-mhd-vorbei-fg); }
+.crm-mhd-marke.rot { background: var(--crm-mhd-rot-bg); color: var(--crm-mhd-rot-fg); }
+.crm-mhd-marke.orange { background: var(--crm-mhd-orange-bg); color: var(--crm-mhd-orange-fg); }
+.crm-mhd-marke.gelb { background: var(--crm-mhd-gelb-bg); color: var(--crm-mhd-gelb-fg); }
+.crm-mhd-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.crm-mhd-artikel { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px 11px 14px; border: 1px solid var(--crm-linie); border-left-width: 5px; border-radius: 14px;
+  background: var(--crm-deckend); color: var(--crm-text); font: inherit; text-align: left; cursor: pointer; }
+.crm-mhd-artikel.vorbei { border-left-color: var(--crm-mhd-vorbei-fg); } .crm-mhd-artikel.rot { border-left-color: var(--crm-mhd-rot-fg); }
+.crm-mhd-artikel.orange { border-left-color: var(--crm-mhd-orange-fg); } .crm-mhd-artikel.gelb { border-left-color: var(--crm-mhd-gelb-fg); }
+.crm-mhd-artikel:hover { background: var(--crm-aus); }
+.crm-mhd-artikel[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--crm-akzent) inset; }
+.crm-mhd-name { min-width: 0; } .crm-mhd-name b, .crm-mhd-name small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.crm-mhd-name b { font-size: 14px; } .crm-mhd-name small, .crm-mhd-rechts small { color: var(--crm-muted); font-size: 12px; }
+.crm-mhd-rechts { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.crm-mhd-suchzeile { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--crm-linie); }
+.crm-mhd-suchzeile .crm-suche { max-width: none; }
+.crm-mhd-treffer { display: flex; flex-direction: column; margin-top: 6px; border-radius: 12px; overflow: hidden; border: 1px solid var(--crm-linie); }
+.crm-mhd-treffer button { min-height: 40px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--crm-linie); background: var(--crm-deckend); color: var(--crm-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.crm-mhd-treffer button:last-child { border-bottom: 0; } .crm-mhd-treffer button:hover, .crm-mhd-treffer button[aria-pressed="true"] { background: var(--crm-aus); }
+.crm-mhd-treffer small { color: var(--crm-muted); }
+.crm-mhd-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.crm-mhd-kopf h2 { margin: 0; font-size: 21px; letter-spacing: -.02em; } .crm-mhd-kopf h2 small { color: var(--crm-muted); font-weight: 500; font-size: 15px; }
+.crm-mhd-kopf p { margin: 6px 0 0; color: var(--crm-muted); font-size: 13px; }
+.crm-mhd-wahl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.crm-mhd-wahl select { height: 36px; width: auto; max-width: 220px; border-radius: 10px; font-size: 13px; }
+.crm-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--crm-aus); }
+.crm-seg button { height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--crm-muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.crm-seg button[aria-pressed="true"] { background: var(--crm-reiter-aktiv); color: var(--crm-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.crm .crm-mhd-check { display: inline-flex; flex-direction: row; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 500; color: var(--crm-text); white-space: nowrap; }
+.crm .crm-mhd-check input { width: 18px; height: 18px; margin: 0; }
+.crm-mhd-werte { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.crm-mhd-werte div { padding: 10px 12px; border-radius: 14px; background: var(--crm-aus); min-width: 0; }
+.crm-mhd-werte span { display: block; color: var(--crm-muted); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.crm-mhd-werte b { display: block; margin-top: 3px; font-size: 18px; font-variant-numeric: tabular-nums; }
+.crm-mhd-hinweis { margin: 0 0 10px; color: var(--crm-muted); font-size: 12.5px; }
+.crm-mhd-tabelle .crm-mhd-zahl { text-align: right; font-variant-numeric: tabular-nums; }
+.crm-mhd-wahlspalte { width: 34px; } .crm-mhd-wahlspalte input { width: 18px; height: 18px; margin: 0; }
+.crm-mhd-schritt { margin-top: 3px; }
+.crm-mhd-rechts-teil .crm-tabelle-rahmen { max-height: 60vh; }
+.crm-mhd-fuss { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--crm-linie); font-size: 14px; }
+.crm .crm-mhd-datum { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; white-space: nowrap; font-size: 13px; color: var(--crm-muted); } .crm-mhd-datum input { height: 38px; width: auto; }
+@media (max-width: 1000px) { .crm-mhd { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .crm-mhd-links, .crm-mhd-rechts-teil { padding: 12px; border-radius: 18px; }
+  .crm-mhd-werte { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crm-mhd-wahl, .crm-mhd-wahl .crm-seg { width: 100%; } .crm-mhd-wahl .crm-seg button { flex: 1; } .crm-mhd-wahl select { flex: 1; min-width: 0; }
+  .crm-mhd-fuss .btn { width: 100%; } .crm-mhd-fuss .crm-platz { display: none; }
+  .crm-mhd-wahl select { max-width: none; }
+  .crm-mhd-rechts-teil .crm-tabelle-rahmen { max-height: none; overflow: visible; }
+  .crm-mhd-tabelle thead { display: none; }
+  .crm-mhd-tabelle, .crm-mhd-tabelle tbody { display: block; }
+  .crm-mhd-tabelle tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 12px; padding: 12px 2px; border-bottom: 1px solid var(--crm-linie); }
+  .crm-mhd-tabelle.mit-wahl tr { grid-template-columns: 30px repeat(3, minmax(0, 1fr)); }
+  .crm-mhd-tabelle td { display: block; padding: 0; border: 0; text-align: left !important; }
+  .crm-mhd-tabelle td.crm-mhd-wahlspalte { grid-row: 1 / span 3; width: auto; }
+  .crm-mhd-tabelle td.crm-mhd-kunde, .crm-mhd-tabelle td.crm-mhd-tel { grid-column: -4 / -1; }
+  .crm-mhd-tabelle td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-mhd-tabelle td.crm-mhd-tel::before { display: none; }
+}

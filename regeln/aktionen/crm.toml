@@ -31,3 +31,14 @@ schreibend = true
 [aktion.crm_export]
 oberflaeche = "crm.intern"
 schreibend = true
+
+# Reiter „MHD-Ware“ (Recht crm.mhd_ware): MHD-Liste des Bestands und Käufer aus den Umsatzdaten (ohne Preise und Beträge)
+[aktion.crm_mhd]
+oberflaeche = "crm.intern"
+
+[aktion.crm_mhd_kaeufer]
+oberflaeche = "crm.intern"
+
+[aktion.crm_mhd_wiedervorlage]
+oberflaeche = "crm.intern"
+schreibend = true

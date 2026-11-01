@@ -7,6 +7,10 @@ Antwort); Kundenblatt (nur mitgeschickte Felder, gleichzeitiges Bearbeiten versc
 Aktivitäten (Letzter Kontakt, nächster Schritt, Bestellung → letzter Auftrag, Schnappschuss von Firma/Kundennummer nach
 GR-106); Interessenten; CSV-Export (Recht, BOM, keine Formeln); Protokoll ohne Kontaktdaten und Notizen; Oberfläche
 (Cockpit, Kunden, Kundenblatt, Wiedervorlagen, Pipeline, Karte, Auswertung, hell/dunkel; Desktop und 390 px).
+Reiter „MHD-Ware“ (Recht crm.mhd_ware): MHD-Liste des Bestands ohne Preise (Reihenfolge, Stufen), Käufer aus den Umsatzdaten
+(Zeitraum 3/6/12 Monate, Liefertage, Gutschrift, ohne Berechnung zählt nicht, Kunde ohne Stammsatz, keine Beträge), Suche nach
+anderem Artikel, Wiedervorlage (Recht bearbeiten und MHD-Ware, Text vom Server, nicht doppelt, frühere Wiedervorlage bleibt,
+Grenzen), Rechte; Oberfläche mit Farben, Zeitraum, Vertreter, „kauft regelmäßig“, Auswahl, Kundenblatt, 1280/390 px.
 Nur synthetische Testdaten.
 """
 import datetime as dt
@@ -17,7 +21,7 @@ import sys
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, storage_raw, storage_write
+from umgebung import SH, storage_raw, storage_sqlite, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -94,7 +98,7 @@ check('ohne Anmeldung: 401', N.call('crm_start')[0] == 401 and N.call('crm_kunde
 # ── Rechte (GR-103) ──
 check('Tester ohne CRM-Recht: 403', O.call('crm_start')[0] == 403 and O.call('crm_verlauf&key=kaaa111111111')[0] == 403)
 st, d = V.call('crm_start')
-check('crm.sehen: Start ok, ohne Bearbeiten/Export', st == 200 and d['rechte'] == {'bearbeiten': False, 'exportieren': False, 'stammdaten': False}, d.get('rechte'))
+check('crm.sehen: Start ok, ohne Bearbeiten/Export', st == 200 and d['rechte'] == {'bearbeiten': False, 'exportieren': False, 'stammdaten': False, 'mhd': False}, d.get('rechte'))
 for a, b in (('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}}), ('crm_aktivitaet', {'key': 'kaaa111111111', 'art': 'Telefonat', 'notiz': 'x'}),
              ('crm_interessent_save', {'firma': 'Neu GmbH'}), ('crm_export', {})):
     check(f'{a}: nur ansehen → 403', V.call(a, b)[0] == 403)
@@ -114,7 +118,7 @@ csrf = Bb.csrf; Bb.csrf = ''
 check('ohne CSRF-Token: 403', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}})[0] == 403)
 Bb.csrf = csrf
 st, d = A.call('crm_start')
-check('Administrator: alle Rechte inkl. Stammdaten-Verweis', st == 200 and d['rechte'] == {'bearbeiten': True, 'exportieren': True, 'stammdaten': True}, d.get('rechte'))
+check('Administrator: alle Rechte inkl. Stammdaten-Verweis', st == 200 and d['rechte'] == {'bearbeiten': True, 'exportieren': True, 'stammdaten': True, 'mhd': True}, d.get('rechte'))
 
 # ── Kunden aus den Stammdaten (nur lesend) ──
 st, d = Bb.call('crm_start')
@@ -408,6 +412,141 @@ with sync_playwright() as p:
     pg.click('#dlg-kunde [data-schliessen]')
     pg.click('#crm-tabs button[data-tab="karte"]'); pg.wait_for_selector('#km-pts .pt')
     pg.screenshot(path=os.path.join(SH, 'crm_karte_390.png'), full_page=False)
+    ctx.close()
+    br.close()
+
+# ── Reiter „MHD-Ware“: MHD-Liste des Bestands und Käufer aus den Umsatzdaten ──
+heute_d = dt.date.today()
+tag = lambda n: (heute_d + dt.timedelta(days=n)).isoformat()   # noqa: E731
+st, r = A.call('stock_import', {'date': heute_d.isoformat(), 'source': 'Test-MHD.xls', 'articles': [
+    {'code': '700001', 'name': 'Test Abgelaufen', 'kg': 40.0, 'mhd': tag(-2), 'mhdKg': 15.5, 'lots': []},
+    {'code': '700002', 'name': 'Test Bald <b>fett</b>', 'kg': 120.25, 'mhd': tag(3), 'mhdKg': 60.0, 'lots': []},
+    {'code': '700003', 'name': 'Test Zwei Wochen', 'kg': 80.0, 'mhd': tag(10), 'mhdKg': 80.0, 'lots': []},
+    {'code': '700004', 'name': 'Test Später', 'kg': 300.0, 'mhd': tag(30), 'mhdKg': 300.0, 'lots': []}], 'incoming': []})
+check('MHD-Ware: Bestand mit MHD relativ zu heute übernommen', st == 200, r)
+# Umsatzzeilen [Tag, Kunde, Artikel, Kolli, Menge (Tausendstel), Umsatz (Cent), EK, Umsatz mit EK, Positionen, berechnet]
+ROH = [(-10, '900001', '700002', 50000, 1), (-40, '900001', '700002', 30000, 1), (-70, '900001', '700002', 20000, 1), (-10, '900001', '700002', 3000, 0),
+       (-20, '900002', '700002', 10000, 1), (-15, '900002', '700002', -2000, 1), (-120, '900003', '700002', 5000, 1), (-5, '999999', '700002', 7000, 1),
+       (-3, '900003', '700001', 4000, 1), (-8, '900002', '40100', 9000, 1), (-200, '900001', '700003', 1000, 1)]
+MON = {}
+for d_, k_, a_, m_, b_ in ROH:
+    t_ = heute_d + dt.timedelta(days=d_)
+    MON.setdefault(t_.strftime('%Y-%m'), []).append([t_.day, k_, a_, 1, m_, 123456 if b_ else 0, 0, 0, 1, b_])
+if not storage_sqlite():
+    os.makedirs(os.path.join(os.environ['UDATA'], 'controlling-umsatzdaten'), exist_ok=True)
+for m_, z_ in MON.items():
+    z_.sort(key=lambda r_: (r_[0], r_[1], r_[2], r_[9]))
+    storage_write('controlling-umsatzdaten/' + m_, {'monat': m_, 'hash': '0' * 64, 'zeilen': z_})
+storage_write('controlling-umsatzdaten', {'rev': 1, 'monate': {m_: {'hash': '0' * 64, 'zeilen': len(z_), 'ersterTag': z_[0][0], 'letzterTag': z_[-1][0]} for m_, z_ in sorted(MON.items())},
+                                          'kunden': ['900001', '900002', '900003', '999999'], 'artikel': ['40100', '700001', '700002', '700003'], 'importe': []})
+for u, n, r_, p_, extra in (('mia', 'Mia MHD', 'viewer', 'Mhd-Zugang-41', {'grant': ['crm.sehen', 'crm.mhd_ware']}),
+                            ('max', 'Max Vertrieb', 'editor', 'Weg-Kennwort-42', {'grant': ['crm.bearbeiten', 'crm.mhd_ware']})):
+    st, r = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r_, 'active': True, 'password': p_, 'mustChange': False, **extra})
+    assert st == 200, r
+MIA = Client('198.51.100.21'); MIA.call('login', {'username': 'mia', 'password': 'Mhd-Zugang-41'})
+MAX = Client('198.51.100.22'); MAX.call('login', {'username': 'max', 'password': 'Weg-Kennwort-42'})
+katalog = {x['key']: x for x in A.call('rechte')[1].get('catalog', [])}
+check('Recht „CRM: MHD-Ware“ im Katalog (ohne Standardrolle, setzt CRM ansehen voraus)', katalog.get('crm.mhd_ware', {}).get('default') == [] and katalog['crm.mhd_ware'].get('requires') == ['crm.sehen'], katalog.get('crm.mhd_ware'))
+check('MHD-Ware: crm_start meldet das Recht', MIA.call('crm_start')[1]['rechte']['mhd'] is True and V.call('crm_start')[1]['rechte']['mhd'] is False)
+for wer, cl in (('nur CRM ansehen', V), ('ohne CRM-Recht', O), ('CRM bearbeiten ohne MHD-Ware', Bb)):
+    check(f'MHD-Ware {wer}: 403', cl.call('crm_mhd')[0] == 403 and cl.call('crm_mhd_kaeufer&artikel=700002')[0] == 403)
+check('MHD-Ware ohne Anmeldung: 401', N.call('crm_mhd')[0] == 401)
+st, d = MIA.call('crm_mhd')
+art = {a['code']: a for a in d.get('artikel', [])}
+check('MHD-Liste: Artikel bis heute + 14 Tage, früheste zuerst, Stufen wie im Bestand', st == 200 and [a['code'] for a in d['artikel']] == ['700001', '700002', '700003']
+      and [a['stufe'] for a in d['artikel']] == ['abgelaufen', '0-4', '8-14'] and art['700002']['mhdKg'] == 60.0, d.get('artikel'))
+check('MHD-Liste: Zahl der Käufer in den letzten 3 Monaten (ohne Berechnung zählt nicht)', {c: a['kaeufer'] for c, a in art.items()} == {'700001': 1, '700002': 3, '700003': 0}
+      and d['monate'] == 3 and d['bis'] == heute_d.isoformat(), {c: a['kaeufer'] for c, a in art.items()})
+check('MHD-Liste ohne Preise und Beträge', 'preis' not in json.dumps(d) and 'umsatz"' not in json.dumps(d).replace('umsatzBis"', '') and '123456' not in json.dumps(d))
+check('MHD-Liste: Artikel der Umsatzdaten für die Suche', {a['nr'] for a in d['alle']} == {'40100', '700001', '700002', '700003'})
+check('MHD-Liste 6 Monate: ein Käufer mehr, ungültiger Zeitraum → 3 Monate', {a['code']: a['kaeufer'] for a in MIA.call('crm_mhd&monate=6')[1]['artikel']}['700002'] == 4
+      and MIA.call('crm_mhd&monate=99')[1]['monate'] == 3)
+st, k = MIA.call('crm_mhd_kaeufer&artikel=700002')
+kk = {x['kunde']: x for x in k.get('kaeufer', [])}
+check('Käufer: neuester Kauf zuerst, Kunde ohne Stammsatz ohne Kundenblatt', st == 200 and [x['kunde'] for x in k['kaeufer']] == ['999999', '900001', '900002']
+      and kk['999999']['key'] is None and kk['900001']['key'] == 'kaaa111111111', k.get('kaeufer'))
+check('Käufer: Käufe = Liefertage, Menge mit Gutschrift, letzter Kauf', kk['900001']['kaeufe'] == 3 and kk['900001']['menge'] == 100000 and kk['900001']['zuletzt'] == tag(-10)
+      and kk['900002']['kaeufe'] == 1 and kk['900002']['menge'] == 8000 and kk['900002']['zuletzt'] == tag(-20), kk)
+check('Käufer: Artikel mit MHD aus der Liste, keine Beträge', k['artikel']['mhd'] == tag(3) and k['artikel']['stufe'] == '0-4' and '123456' not in json.dumps(k) and 'umsatz"' not in json.dumps(k).replace('umsatzBis"', ''))
+st, k = MIA.call('crm_mhd_kaeufer&artikel=40100&monate=12')
+check('Käufer eines anderen Artikels (nicht in der MHD-Liste)', st == 200 and [x['kunde'] for x in k['kaeufer']] == ['900002'] and k['artikel']['mhd'] is None, k)
+check('Käufer: ungültiger Artikel → 422', MIA.call('crm_mhd_kaeufer&artikel=' + 'x%3By')[0] == 422)
+WV = {'artikel': '700002', 'kunden': ['kccc333333333', 'kfff666666666'], 'datum': tag(2)}
+check('Wiedervorlage: nur mit CRM bearbeiten → 403', MIA.call('crm_mhd_wiedervorlage', WV)[0] == 403)
+check('Wiedervorlage: nur mit MHD-Ware → 403', Bb.call('crm_mhd_wiedervorlage', WV)[0] == 403)
+Bb.call('crm_kunde_save', {'key': 'kfff666666666', 'felder': {'naechsterSchritt': 'Rückruf', 'wiedervorlage': tag(1)}})
+st, r = MAX.call('crm_mhd_wiedervorlage', WV)
+blatt = (dokument('crm-kunden') or {}).get('eintraege', {})
+soll = f'MHD-Ware anbieten: Test Bald <b>fett</b> (700002), MHD {tag(3)[8:10]}.{tag(3)[5:7]}.'
+check('Wiedervorlage angelegt: Text vom Server (Artikel, Nummer, MHD), Datum', st == 200 and r['anzahl'] == 2 and blatt['kccc333333333']['naechsterSchritt'] == soll
+      and blatt['kccc333333333']['wiedervorlage'] == tag(2) and len(r['kunden']) == 2, (st, r.get('error'), blatt.get('kccc333333333')))
+check('Wiedervorlage: bestehender Schritt bleibt dahinter, frühere Wiedervorlage bleibt', blatt['kfff666666666']['naechsterSchritt'] == soll + ' · Rückruf'
+      and blatt['kfff666666666']['wiedervorlage'] == tag(1), blatt.get('kfff666666666'))
+MAX.call('crm_mhd_wiedervorlage', WV)
+blatt = dokument('crm-kunden')['eintraege']
+check('Wiedervorlage erneut: Schritt nicht doppelt', blatt['kfff666666666']['naechsterSchritt'] == soll + ' · Rückruf' and blatt['kccc333333333']['naechsterSchritt'] == soll)
+for b_, code_ in (({**WV, 'kunden': []}, 422), ({**WV, 'kunden': ['kunbekannt99']}, 404), ({**WV, 'datum': '2026-02-30'}, 422), ({**WV, 'artikel': 'a;b'}, 422),
+                  ({**WV, 'kunden': ['kccc333333333'] * 301}, 422)):
+    check(f'Wiedervorlage ungültig → {code_}', MAX.call('crm_mhd_wiedervorlage', b_)[0] == code_)
+log = [e for e in (dokument('protokoll/' + dt.datetime.now(dt.timezone.utc).strftime('%Y-%m')) or []) if e.get('a') == 'crm' and 'MHD-Ware' in e.get('s', '')]
+check('Wiedervorlage im Protokoll (Anzahl, ohne Kunden)', any(e['s'] == 'CRM: Wiedervorlage für MHD-Ware (2 Kunden)' for e in log) and 'Probe Markt' not in json.dumps(log, ensure_ascii=False), log[-2:])
+
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    for breite, thema in ((1280, 'light'), (390, 'dark')):
+        ctx = br.new_context(viewport={'width': breite, 'height': 900}, extra_http_headers={'X-Forwarded-For': '198.51.100.22'}, locale='de-DE', timezone_id='Europe/Berlin', color_scheme=thema)
+        pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e))); pg.on('console', lambda m: fehler.append(m.text) if m.type == 'error' else None)
+        pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+        pg.fill('#au-user', 'max'); pg.fill('#pw1', 'Weg-Kennwort-42'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+        pg.goto(B + '/module/crm/#mhd'); pg.wait_for_selector('#mhd-liste [data-mhd-artikel]')
+        pg.wait_for_selector('#mhd-tabelle tbody tr')
+        check(f'{breite}px: Reiter MHD-Ware sichtbar, Artikel in den Farben der MHD-Liste', pg.is_visible('#crm-tabs [data-tab="mhd"]') and pg.locator('#mhd-liste .crm-mhd-artikel').count() == 3
+              and pg.get_attribute('#mhd-liste .crm-mhd-artikel >> nth=0', 'class').endswith('vorbei') and 'rot' in pg.get_attribute('#mhd-liste .crm-mhd-artikel >> nth=1', 'class')
+              and '<b>fett</b>' in pg.text_content('#mhd-liste'))
+        check(f'{breite}px: zuerst der dringendste Artikel mit seinen Käufern', pg.get_attribute('#mhd-liste .crm-mhd-artikel >> nth=0', 'aria-pressed') == 'true' and pg.locator('#mhd-tabelle tbody tr').count() == 1)
+        pg.click('#mhd-liste [data-mhd-artikel="700002"]')
+        pg.wait_for_function("document.querySelectorAll('#mhd-tabelle tbody tr').length === 3")
+        t = pg.text_content('#mhd-kaeufer')
+        check(f'{breite}px: Käufer mit Telefon und Kunde ohne Stammsatz', '040 1234567' in t and 'nicht in den Kundenstammdaten' in t and 'Musterfleischerei Nord GmbH' in t and '€' not in t, t[:300])
+        pg.click('[data-mhd-monate="6"]')
+        pg.wait_for_function("document.querySelectorAll('#mhd-tabelle tbody tr').length === 4")
+        check(f'{breite}px: 6 Monate – ein Käufer mehr', 'Probe Markt Ost' in pg.text_content('#mhd-tabelle'))
+        pg.select_option('#mhd-vertreter', '12')
+        pg.wait_for_function("document.querySelectorAll('#mhd-tabelle tbody tr').length === 1")
+        check(f'{breite}px: Filter Vertreter', 'Beispiel Catering KG' in pg.text_content('#mhd-tabelle'))
+        pg.select_option('#mhd-vertreter', '')
+        pg.check('#mhd-regel')
+        pg.wait_for_function("document.querySelectorAll('#mhd-tabelle tbody tr').length === 1")
+        check(f'{breite}px: „kauft regelmäßig“ (ab 3 Käufen)', 'Musterfleischerei Nord GmbH' in pg.text_content('#mhd-tabelle'))
+        pg.uncheck('#mhd-regel')
+        pg.wait_for_function("document.querySelectorAll('#mhd-tabelle tbody tr').length === 4")
+        if breite == 1280:
+            pg.screenshot(path=os.path.join(SH, 'crm_mhd_1280.png'), full_page=True)
+            pg.check('[data-mhd-wahl="kbbb222222222"]')
+            check('Auswahl zählt, Knopf aktiv', pg.text_content('#mhd-gewaehlt') == '1 Kunde ausgewählt' and pg.is_enabled('#mhd-wv'))
+            pg.click('#mhd-wv')
+            pg.wait_for_function("document.querySelector('#crm-toast').textContent.includes('Wiedervorlage für 1 Kunden angelegt')")
+            pg.wait_for_selector('#mhd-tabelle .crm-mhd-schritt')
+            check('Wiedervorlage über die Oberfläche: Schritt in der Zeile', 'MHD-Ware anbieten' in pg.text_content('#mhd-tabelle'))
+            pg.fill('#mhd-suche', '40100')
+            pg.click('.crm-mhd-treffer [data-mhd-artikel="40100"]')
+            pg.wait_for_function("document.querySelector('#mhd-kaeufer h2') && document.querySelector('#mhd-kaeufer h2').textContent.includes('40100')")
+            pg.wait_for_selector('#mhd-tabelle tbody tr')
+            check('Suche nach anderem Artikel: seine Käufer', 'Nicht in der MHD-Liste' in pg.text_content('#mhd-kaeufer') and 'Beispiel Catering KG' in pg.text_content('#mhd-tabelle'))
+            pg.click('#mhd-tabelle button[data-oeffnen="kbbb222222222"]'); pg.wait_for_selector('#dlg-kunde[open]')
+            check('Kundenblatt aus der Käuferliste', 'Beispiel Catering KG' in pg.text_content('#kunde-titel'))
+            pg.click('#dlg-kunde [data-schliessen]')
+        else:
+            bw = pg.evaluate('document.documentElement.scrollWidth')
+            check('390px dunkel: MHD-Ware ohne seitliches Scrollen der Seite', bw <= 390, bw)
+            pg.screenshot(path=os.path.join(SH, 'crm_mhd_390.png'), full_page=True)
+        ctx.close()
+    ctx = br.new_context(viewport={'width': 1280, 'height': 900}, extra_http_headers={'X-Forwarded-For': '198.51.100.3'})
+    pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
+    pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+    pg.fill('#au-user', 'verena'); pg.fill('#pw1', 'Leserin-Zugang-1'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+    pg.goto(B + '/module/crm/#mhd'); pg.wait_for_selector('#crm-app:not([hidden])')
+    check('ohne Recht MHD-Ware: Reiter ausgeblendet, Start im Cockpit', pg.is_hidden('#crm-tabs [data-tab="mhd"]') and pg.is_visible('#tab-cockpit'))
     ctx.close()
     br.close()
 

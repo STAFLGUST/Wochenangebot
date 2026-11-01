@@ -314,3 +314,50 @@ function crm_csv(array $liste, array $vertreter): string
     }
     return "\xEF\xBB\xBF" . implode("\r\n", $zeilen) . "\r\n";
 }
+
+/* ---------- MHD-Ware: Artikel kurz vor Ablauf und ihre Käufer (Recht crm.mhd_ware, Auftrag des Inhabers 01.11.2026) ----------
+   MHD-Liste über die Schnittstelle des Bestands (mhd_liste_ohne_preise: Artikel, MHD, Stufe, kg – keine Preise), Käufer über
+   die Schnittstelle des Controllings (umsatzdaten_kaeufer: Menge, Liefertage, letzter Kauf – keine Beträge); beide nur lesend
+   (regeln/datenverantwortung.toml). Zuordnung zum Kundenblatt über die Kundennummer der Verwaltung. */
+const CRM_MHD_MONATE = [3, 6, 12];   // Zeitraum der Käuferliste, Standard 3 Monate (Inhaber 01.11.2026)
+const CRM_MHD_MAX_KUNDEN = 300;      // Wiedervorlage für höchstens so viele Kunden auf einmal
+
+function crm_mhd_monate($v): int { $n = (int)($v ?? 3); return in_array($n, CRM_MHD_MONATE, true) ? $n : 3; }
+/* Zeitraum „letzte n Monate“ bis heute (einschließlich) */
+function crm_mhd_zeitraum(int $monate, string $heute): array
+{
+    $h = new DateTimeImmutable($heute . 'T12:00:00');
+    return [$h->modify("-$monate months")->modify('+1 day')->format('Y-m-d'), $h->format('Y-m-d')];
+}
+function crm_mhd_liste(): array
+{
+    require_once __DIR__ . '/../../lib/bestand-mhd.php';
+    return mhd_liste_ohne_preise();
+}
+function crm_artikel_code($v): string
+{
+    $c = is_string($v) ? trim($v) : '';
+    if (!preg_match('#^[0-9A-Za-z._/-]{1,20}$#', $c)) fail('Bitte einen gültigen Artikel wählen.', 422);
+    return $c;
+}
+/* Kundennummer (ohne führende Nullen) → Schlüssel des Kundenblatts */
+function crm_key_je_nr(): array
+{
+    $o = [];
+    foreach (crm_stammkunden() as $id => $c) { $nr = trim((string)($c['nr'] ?? '')); if ($nr !== '') $o[code_key($nr)] = $id; }
+    return $o;
+}
+/* Artikel mit MHD-Angaben (aus der MHD-Liste) bzw. Name aus den Umsatzdaten */
+function crm_mhd_artikel(string $code, array $liste): array
+{
+    foreach ($liste['zeilen'] as $a) if (code_key($a['code']) === code_key($code)) return ['nr' => $a['code'], 'name' => $a['name'], 'mhd' => $a['mhd'], 'stufe' => $a['stufe'], 'mhdKg' => $a['mhdKg'], 'kg' => $a['kg']];
+    $namen = umsatzdaten_artikelliste();
+    $name = null;
+    foreach ($namen as $nr => $n) if (code_key((string)$nr) === code_key($code)) { $name = $n; break; }
+    return ['nr' => $code, 'name' => $name ?? 'Artikel ' . $code, 'mhd' => null, 'stufe' => '', 'mhdKg' => null, 'kg' => null];
+}
+/* Text des nächsten Schritts für die Wiedervorlage („MHD-Ware anbieten: Rinderhüfte (40100), MHD 06.11.“) */
+function crm_mhd_schritt(array $a): string
+{
+    return 'MHD-Ware anbieten: ' . $a['name'] . ' (' . $a['nr'] . ')' . ($a['mhd'] ? ', MHD ' . substr($a['mhd'], 8, 2) . '.' . substr($a['mhd'], 5, 2) . '.' : '');
+}

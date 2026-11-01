@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-238 Aktionen in 14 Modulen.
+241 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -100,6 +100,9 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `crm_interessent_save` | `crm.intern` | schreibend | – | Recht crm.bearbeiten | `app/api/aktionen/crm.php` |
 | `crm_karte` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |
 | `crm_kunde_save` | `crm.intern` | schreibend | – | Recht crm.bearbeiten | `app/api/aktionen/crm.php` |
+| `crm_mhd` | `crm.intern` | lesend | – | Recht crm.mhd_ware | `app/api/aktionen/crm.php` |
+| `crm_mhd_kaeufer` | `crm.intern` | lesend | – | Recht crm.mhd_ware | `app/api/aktionen/crm.php` |
+| `crm_mhd_wiedervorlage` | `crm.intern` | schreibend | – | Recht crm.bearbeiten | `app/api/aktionen/crm.php` |
 | `crm_start` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |
 | `crm_verlauf` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |
 
