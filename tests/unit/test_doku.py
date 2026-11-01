@@ -4,7 +4,9 @@
 
 Prüft: erste Aussage des Kopfkommentars je Dateiart (PHP, JS, CSS, Python, Shell, HTML, Markdown), lange Kommentare,
 fehlende Kommentare, welche Dateien einen Kopf brauchen, Maskierung in Tabellen, und dass die Referenz alle Aktionen,
-Rechte, Dokumente und Module des Regelwerks enthält und stabil erzeugt wird.
+Rechte, Dokumente und Module des Regelwerks enthält und stabil erzeugt wird; Funktionsübersicht: Funktionen, Parameter und
+Kommentar je Sprache (PHP, JavaScript, Python), Abschnitte, Kopfkommentar und Leerzeile zählen nicht, lokale Hilfen und
+Testfälle weggelassen, Abkürzungen kürzen nicht, Absatz „Testdaten:“, eine Datei je Modul, veraltete Datei wird gemeldet.
 """
 import os
 import sys
@@ -56,7 +58,8 @@ ok('Tabellenzellen maskiert', doku.md('a | b\nc') == 'a \\| b c')
 
 rw = rg.laden()
 ref = doku.alle(rw)
-ok('fünf Referenzdateien', sorted(ref) == sorted(f'docs/entwickler/referenz/{n}.md' for n in ('api', 'rechte', 'daten', 'module', 'dateien')))
+ok('fünf Referenzdateien und die Funktionsübersicht', sorted(k for k in ref if '/funktionen/' not in k) == sorted(f'docs/entwickler/referenz/{n}.md' for n in ('api', 'rechte', 'daten', 'module', 'dateien'))
+   and 'docs/entwickler/referenz/funktionen/README.md' in ref and 'docs/entwickler/referenz/funktionen/plattform.md' in ref)
 akt = rg.aktionen_tabelle(rw)
 ok('API: jede Aktion des Registers', all(f'| `{a}` |' in ref['docs/entwickler/referenz/api.md'] for a in akt), len(akt))
 ok('Rechte: jedes Recht aus PERMS und Modulzugang', all(f"`{p['key']}`" in ref['docs/entwickler/referenz/rechte.md'] for p in doku.perms_aus_code(REPO))
@@ -65,6 +68,98 @@ ok('Daten: jedes Dokument', all(f"`{x['name']}" in ref['docs/entwickler/referenz
 ok('Module: jedes Modul', all(f"(`{m['id']}`)" in ref['docs/entwickler/referenz/module.md'] for m in rw.modulliste))
 ok('stabil: zweimal erzeugt = gleich', ref == doku.alle(rg.laden()))
 ok('Dateikarte enthält den API-Einstieg mit Beschreibung', '| `index.php` | plattform | API-Einstieg' in ref['docs/entwickler/referenz/dateien.md'])
+
+# Funktionsübersicht
+with tempfile.TemporaryDirectory() as d:
+    d = Path(d)
+    (d / 'a.php').write_text("""<?php
+/* Kopf: diese Datei tut etwas. */
+function kopf_folgt(): void {}
+
+/* Kunden lesen bzw. Artikel zählen. Zweiter Satz. */
+function lesen(array $q, ?string $nr = null, int &...$rest): array { return []; }
+// Zeilenkommentar zur Funktion
+function zeile(\\Foo $x,
+               bool $y = true): int { return 1; }
+
+/* ---------- Abschnitt Detail ---------- */
+/* Kommentar mit Leerzeile davor */
+
+function ohne(): void {}
+if (true) {
+    function eingerueckt(): void {}
+}
+""", encoding='utf-8')
+    f = doku.funktionen(d / 'a.php')
+    ok('PHP: Funktionen in Reihenfolge, Abschnitt dazwischen', [e[1] for e in f] == ['kopf_folgt', 'lesen', 'zeile', 'Abschnitt Detail', 'ohne', 'eingerueckt'], f)
+    ok('PHP: Kopfkommentar der Datei gehört nicht zur ersten Funktion', f[0] == ('funktion', 'kopf_folgt', '', ''), f[0])
+    ok('PHP: Parameter ohne Typen und Vorgaben, erster Satz, „bzw.“ kürzt nicht', f[1] == ('funktion', 'lesen', 'q, nr, ...rest', 'Kunden lesen bzw. Artikel zählen.'), f[1])
+    ok('PHP: Zeilenkommentar, Parameter über zwei Zeilen', f[2] == ('funktion', 'zeile', 'x, y', 'Zeilenkommentar zur Funktion'), f[2])
+    ok('PHP: Leerzeile trennt Kommentar und Funktion', f[4] == ('funktion', 'ohne', '', ''), f[4])
+    (d / 'b.js').write_text("""/* Kopf der Seite. */
+'use strict';
+(() => {
+  /* ---------- Laden ---------- */
+  /* Daten holen und zeichnen */
+  async function laden(nr, { still } = {}, liste = []) {
+    function lokal() {}
+  }
+  function zeichne() {}
+})();
+""", encoding='utf-8')
+    f = doku.funktionen(d / 'b.js')
+    ok('JavaScript: async, Vorgaben und Zerlegung, lokale Hilfen weggelassen', f == [('abschnitt', 'Laden'), ('funktion', 'laden', 'nr, {…}, liste', 'Daten holen und zeichnen'),
+                                                                                      ('funktion', 'zeichne', '', '')], f)
+    (d / 'tests').mkdir()
+    (d / 'tests' / 'c.py').write_text('''"""Prüft etwas.
+
+Geprüft: viel.
+
+Testdaten: Kunde 1 und Kunde 2,
+Artikel 40100.
+
+Weiter.
+"""
+
+
+class K:
+    def methode(self, a: int = 1, *rest, **kw) -> None:
+        """Methode mit Docstring. Mehr."""
+
+
+def test_etwas():
+    pass
+
+
+def hilfe(x):
+    """
+    Docstring über
+    mehrere Zeilen.
+    """
+''', encoding='utf-8')
+    f = doku.funktionen(d / 'tests' / 'c.py')
+    ok('Python: self weg, Docstring (auch mehrzeilig), Testfälle weggelassen', f == [('funktion', 'methode', 'a, *rest, **kw', 'Methode mit Docstring.'),
+                                                                                  ('funktion', 'hilfe', 'x', 'Docstring über mehrere Zeilen.')], f)
+    ok('Absatz „Testdaten:“ aus dem Kopfkommentar', doku.testdaten_absatz(d / 'tests' / 'c.py') == 'Testdaten: Kunde 1 und Kunde 2, Artikel 40100.',
+       doku.testdaten_absatz(d / 'tests' / 'c.py'))
+    (d / 'leer.js').write_text('/* Nur Daten. */\nconst x = 1;\n', encoding='utf-8')
+    ok('Datei ohne Funktionen erscheint nicht', doku.funktionen(d / 'leer.js') == [])
+ok('Kurztext: höchstens 160 Zeichen', len(doku._kurz('Wort ' * 100)) <= 160 and doku._kurz('Wort ' * 100).endswith('…'))
+fu = {k: v for k, v in ref.items() if '/funktionen/' in k}
+ok('Funktionsübersicht: eine Datei je Modul mit Funktionen, alle in der Übersicht verlinkt', all(f'({Path(k).name})' in fu['docs/entwickler/referenz/funktionen/README.md']
+   for k in fu if not k.endswith('README.md')) and len(fu) >= 10)
+ok('Funktionsübersicht: Funktion mit Kommentar und Testdaten-Absatz', '- `umsatz_abc(zeilen, rang)` – ABC-Klasse je Zeile' in fu['docs/entwickler/referenz/funktionen/controlling.md']
+   and '> Testdaten: Vertreter V1 Vera Vertrieb' in fu['docs/entwickler/referenz/funktionen/controlling.md'])
+ok('Funktionsübersicht ohne Zeilennummern', not any(':' + str(n) + ')' in v for v in fu.values() for n in (10, 100)))
+alt = REPO / 'docs/entwickler/referenz/funktionen/veraltet-test.md'
+try:
+    alt.write_text('# alt\n', encoding='utf-8')
+    import io, contextlib  # noqa: E401,E402
+    with contextlib.redirect_stdout(io.StringIO()) as aus:
+        rc = doku.main(['pruefen'])
+    ok('pruefen meldet eine veraltete Datei der Funktionsübersicht', rc == 1 and 'veraltet-test.md gehört zu keinem Modul' in aus.getvalue(), aus.getvalue()[-300:])
+finally:
+    alt.unlink(missing_ok=True)
 
 # Während einer Zusammenführung mit Konflikt listet git jede Stufe einer Datei einzeln – die Dateiliste bleibt eindeutig
 import subprocess  # noqa: E402

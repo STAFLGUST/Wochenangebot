@@ -11,6 +11,10 @@ Quellen (nie von Hand in der Referenz ändern, sondern dort):
   daten.md    regeln/datenverantwortung.toml
   module.md   regeln/module.toml
   dateien.md  versionierte Dateien mit Modul (regeln/module.toml) und erster Zeile ihres Kopfkommentars
+  funktionen/<modul>.md  Funktionsübersicht je Modul: Abschnitte und Funktionen jeder Code-Datei in Reihenfolge, mit
+              Parametern und der ersten Aussage des Kommentars direkt darüber (Python: Docstring); bei Testdateien
+              dazu der Absatz „Testdaten:“ aus dem Kopfkommentar. Ohne Zeilennummern, damit sie nur bei neuen,
+              umbenannten oder anders kommentierten Funktionen neu erzeugt werden muss.
 
 Die erklärenden Kapitel (docs/entwickler/0*.md) pflegt, wer den Code ändert (AGENTS.md, Definition of Done).
 """
@@ -312,27 +316,235 @@ def dateien_md(rw, liste: list) -> str:
     return "\n".join(z).rstrip() + "\n"
 
 
+# ─────────────────────────────── Funktionen ───────────────────────────────
+# Karte für Entwickler und Agenten: wo steht was in einer großen Datei, ohne sie ganz zu lesen.
+
+FUNK_ENDUNGEN = {".php": "php", ".js": "js", ".py": "py"}
+FUNK_ORTE = ("app/", "dashboard/", "deploy/", "werkzeuge/", "tests/", ".github/scripts/", "mobile/")
+FUNK_EINRUECKUNG = {"php": 4, "js": 2, "py": 8}   # tiefer liegende Funktionen sind lokale Hilfen (JS: Ebene der IIFE)
+FUNK_RE = {
+    "php": re.compile(r"^(\s*)(?:(?:public|private|protected|static|final|abstract)\s+)*function\s+&?([A-Za-z_]\w*)\s*\("),
+    "js": re.compile(r"^(\s*)(?:export\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*\("),
+    "py": re.compile(r"^(\s*)(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\("),
+}
+ABSCHNITT_RE = re.compile(r"^(\s*)(?:/\*+|//|#)\s*[-─━=]{3,}\s*(.+?)\s*[-─━=]{3,}\s*(?:\*+/)?\s*$")
+FUNK_TEXT_MAX = 160
+ABKUERZUNGEN = {"bzw", "ggf", "inkl", "evtl", "usw", "vgl", "etc", "bspw", "sog", "max", "min", "mind", "abs", "ca", "nr", "z.b", "d.h", "u.a", "o.ä"}
+
+
+def _kurz(roh: str) -> str:
+    """Erste Aussage eines Funktionskommentars (bis zum ersten Satzende, Abkürzungen wie „bzw.“ zählen nicht),
+    höchstens FUNK_TEXT_MAX Zeichen."""
+    s = re.sub(r"\s+", " ", re.sub(r"^\s*(?:\*+|//+|#+)", "", roh, flags=re.M)).strip(" *-")
+    for m in re.finditer(r"[.!?](?=\s+[A-ZÄÖÜ(„`$])", s):
+        wort = re.search(r"(\S*)$", s[:m.start()]).group(1).lower()
+        if m.start() >= 10 and len(wort) > 2 and wort not in ABKUERZUNGEN:
+            s = s[:m.start() + 1]
+            break
+    return s if len(s) <= FUNK_TEXT_MAX else s[:FUNK_TEXT_MAX - 2].rsplit(" ", 1)[0] + " …"
+
+
+def _parameter(sprache: str, zeilen: list, i: int, start: int) -> tuple:
+    """Parameternamen ohne Typen und Vorgaben, dazu der Index der Zeile mit der schließenden Klammer."""
+    text, tiefe, j, roh = zeilen[i][start:], 1, i, ""
+    while True:
+        for ch in text:
+            if ch in "([{":
+                tiefe += 1
+            elif ch in ")]}":
+                tiefe -= 1
+                if tiefe == 0:
+                    break
+            roh += ch
+        if tiefe == 0 or j >= i + 12 or j + 1 >= len(zeilen):
+            break
+        j += 1
+        text = " " + zeilen[j]
+    teile, tiefe, akt = [], 0, ""
+    for ch in roh:   # an Kommas der obersten Ebene trennen
+        if ch in "([{":
+            tiefe += 1
+        elif ch in ")]}":
+            tiefe -= 1
+        if ch == "," and tiefe == 0:
+            teile.append(akt); akt = ""
+        else:
+            akt += ch
+    teile.append(akt)
+    namen = []
+    for t in (x.strip() for x in teile):
+        if not t:
+            continue
+        if sprache == "php":
+            m = re.search(r"(&?\.\.\.)?\$(\w+)", t)
+            name = ("..." if m and m.group(1) and "..." in m.group(1) else "") + m.group(2) if m else t
+        elif sprache == "py":
+            name = re.split(r"\s*[:=]", t, maxsplit=1)[0].strip()
+            if name in ("self", "cls"):
+                continue
+        else:
+            name = "{…}" if t.startswith("{") else "[…]" if t.startswith("[") else re.split(r"\s*=", t, maxsplit=1)[0].strip()
+        namen.append(name)
+    return ", ".join(namen), j
+
+
+def _kommentar_davor(zeilen: list, i: int, sprache: str) -> str:
+    """Kommentar direkt über Zeile i (Block- oder Zeilenkommentar); der Kopfkommentar der Datei zählt nicht."""
+    j = i - 1
+    if j < 0 or not zeilen[j].strip():
+        return ""   # Leerzeile: Kommentar gehört nicht zur Funktion
+    z = zeilen[j].strip()
+    if sprache != "py" and z.endswith("*/"):
+        k = j
+        while k >= 0 and "/*" not in zeilen[k] and j - k < 40:
+            k -= 1
+        if k < 0 or "/*" not in zeilen[k] or k <= 1 or ABSCHNITT_RE.match(zeilen[k]):
+            return ""
+        block = "\n".join(zeilen[k:j + 1])
+        return block[block.find("/*") + 2:block.rfind("*/")]
+    zeichen = "#" if sprache == "py" else "//"
+    teile = []
+    while j >= 0 and zeilen[j].strip().startswith(zeichen) and not ABSCHNITT_RE.match(zeilen[j]):
+        teile.insert(0, zeilen[j].strip()[len(zeichen):])
+        j -= 1
+    return " ".join(teile) if teile and j + 1 > 1 else ""   # Zeilen 1–2: Kopfkommentar der Datei
+
+
+def _docstring(zeilen: list, j: int) -> str:
+    """Docstring in der Zeile nach der Signatur (Python)."""
+    k = j + 1
+    if k >= len(zeilen):
+        return ""
+    s = zeilen[k].strip()
+    for q in ('"""', "'''"):
+        if s.startswith(q):
+            rest = s[3:]
+            if q in rest:
+                return rest[:rest.find(q)]
+            teile = [rest]
+            for z in zeilen[k + 1:k + 20]:
+                if q in z:
+                    teile.append(z[:z.find(q)])
+                    break
+                teile.append(z)
+            return " ".join(teile)
+    return ""
+
+
+def funktionen(pfad: Path) -> list:
+    """Abschnitte ('abschnitt', Text) und Funktionen ('funktion', Name, Parameter, Text) einer Datei in Reihenfolge."""
+    sprache = FUNK_ENDUNGEN.get(pfad.suffix.lower())
+    try:
+        zeilen = pfad.read_text(encoding="utf-8").splitlines()
+    except (UnicodeDecodeError, OSError):
+        return []
+    out, rx, tief = [], FUNK_RE[sprache], FUNK_EINRUECKUNG[sprache]
+    for i, zeile in enumerate(zeilen):
+        a = ABSCHNITT_RE.match(zeile)
+        if a and len(a.group(1)) <= tief and i > 1 and re.search(r"[A-Za-zÄÖÜäöü]", a.group(2)):
+            out.append(("abschnitt", a.group(2).strip(" *")))
+            continue
+        m = rx.match(zeile)
+        if not m or len(m.group(1)) > tief:
+            continue
+        name = m.group(2)
+        if sprache == "py" and "tests" in pfad.parts and name.startswith("test_"):
+            continue   # einzelne Testfälle: Namen sagen genug
+        param, ende = _parameter(sprache, zeilen, i, m.end())
+        text = _docstring(zeilen, ende) if sprache == "py" else ""
+        text = text or _kommentar_davor(zeilen, i, sprache)
+        out.append(("funktion", name, param, _kurz(text)))
+    while out and out[-1][0] == "abschnitt":   # Abschnitte ohne Funktion am Ende weglassen
+        out.pop()
+    return out if any(e[0] == "funktion" for e in out) else []
+
+
+def testdaten_absatz(pfad: Path) -> str:
+    """Absatz „Testdaten:“ aus dem Kopfkommentar einer Testdatei ('' = keiner)."""
+    try:
+        text = pfad.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return ""
+    m = re.match(r'(?:#![^\n]*\n)?\s*(?:"""|\'\'\')(.*?)(?:"""|\'\'\')', text, re.S)
+    if not m:
+        return ""
+    t = re.search(r"(?:^|\n)\s*(Testdaten:.*?)(?:\n\s*\n|$)", m.group(1), re.S)
+    return re.sub(r"\s+", " ", t.group(1)).strip() if t else ""
+
+
+def funktionen_md(rw, liste: list) -> dict:
+    """Je Modul eine Datei funktionen/<modul>.md und eine Übersicht funktionen/README.md."""
+    module = {m["id"]: m for m in rw.modulliste}
+    je_modul: dict = {}
+    for p in liste:
+        if Path(p).suffix.lower() not in FUNK_ENDUNGEN or not p.startswith(FUNK_ORTE) or p.startswith(OHNE_KOPF) or p.endswith("-liste.php"):
+            continue
+        eintraege = funktionen(rw.wurzel / p)
+        if eintraege:
+            mid = rg.eigentuemer(rw, p)[0] or "ohne-modul"
+            je_modul.setdefault(mid, []).append((p, eintraege))
+    out, uebersicht = {}, []
+    reihe = sorted(je_modul, key=lambda x: (module.get(x, {}).get("reihenfolge", 999), x))
+    for mid in reihe:
+        name = module.get(mid, {}).get("name", mid)
+        anzahl = sum(1 for _, e in je_modul[mid] for x in e if x[0] == "funktion")
+        z = [f"# Funktionen: {md(name)} (`{mid}`)", "", KOPF.format(quelle="Funktionen und Kommentare im Code").strip(), "",
+             f"{len(je_modul[mid])} Dateien, {anzahl} Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. "
+             "Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: "
+             "[README.md](README.md).", ""]
+        for p, eintraege in sorted(je_modul[mid]):
+            z += [f"## `{p}`", ""]
+            kopf = kopfkommentar(rw.wurzel / p)
+            if kopf:
+                z += [f"_{md(kopf)}_", ""]
+            td = testdaten_absatz(rw.wurzel / p) if p.startswith("tests/") else ""
+            if td:
+                z += [f"> {md(td)}", ""]
+            for e in eintraege:
+                if e[0] == "abschnitt":
+                    z += ["", f"**{md(e[1])}**", ""]
+                else:
+                    z.append(f"- `{e[1]}({md(e[2])})`" + (f" – {md(e[3])}" if e[3] else ""))
+            z.append("")
+        out[f"{ZIEL}/funktionen/{mid}.md"] = re.sub(r"\n{3,}", "\n\n", "\n".join(z)).rstrip() + "\n"
+        uebersicht.append(f"| [{md(name)}]({mid}.md) | `{mid}` | {len(je_modul[mid])} | {anzahl} |")
+    out[f"{ZIEL}/funktionen/README.md"] = "\n".join(
+        ["# Referenz: Funktionen je Modul", "", KOPF.format(quelle="Funktionen und Kommentare im Code").strip(), "",
+         "Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (PHP, JavaScript, Python) mit Parametern "
+         "und Kurzbeschreibung – um eine große Datei zu verstehen, ohne sie ganz zu lesen. Keine Zeilennummern: neu erzeugen "
+         "muss nur, wer Funktionen hinzufügt, umbenennt oder ihren Kommentar ändert. Kommentar direkt über die Funktion "
+         "schreiben (ohne Leerzeile), erste Aussage = was sie tut. Testdateien zeigen zusätzlich ihren Absatz „Testdaten:“ "
+         "aus dem Kopfkommentar ([../../07-tests.md](../../07-tests.md)).", "",
+         "| Modul | Kennung | Dateien | Funktionen |", "| --- | --- | --- | --- |"] + uebersicht) + "\n"
+    return out
+
+
 def alle(rw) -> dict:
     liste = rg.dateien(rw.wurzel)
     return {f"{ZIEL}/api.md": api_md(rw), f"{ZIEL}/rechte.md": rechte_md(rw), f"{ZIEL}/daten.md": daten_md(rw),
-            f"{ZIEL}/module.md": module_md(rw), f"{ZIEL}/dateien.md": dateien_md(rw, liste)}
+            f"{ZIEL}/module.md": module_md(rw), f"{ZIEL}/dateien.md": dateien_md(rw, liste), **funktionen_md(rw, liste)}
 
 
 def main(argv=None) -> int:
     befehl = (argv or sys.argv[1:] or ["pruefen"])[0]
     rw = rg.laden()
     soll = alle(rw)
+    alt = sorted(str(p.relative_to(WURZEL)) for p in (WURZEL / ZIEL / "funktionen").glob("*.md") if str(p.relative_to(WURZEL)) not in soll)
     if befehl == "erzeugen":
         for pfad, inhalt in soll.items():
             ziel = WURZEL / pfad
             ziel.parent.mkdir(parents=True, exist_ok=True)
             ziel.write_text(inhalt, encoding="utf-8")
-        print("geschrieben: " + ", ".join(soll))
+        for pfad in alt:   # Modul ohne Funktionen mehr (umbenannt, entfernt)
+            (WURZEL / pfad).unlink()
+        n = sum(1 for p in soll if "/funktionen/" in p)
+        print("geschrieben: " + ", ".join(p for p in soll if "/funktionen/" not in p) + f" und {n} Dateien in {ZIEL}/funktionen/"
+              + (f"; entfernt: {', '.join(alt)}" if alt else ""))
         return 0
     if befehl != "pruefen":
         print(__doc__)
         return 2
-    fehler = []
+    fehler = [f"{p} gehört zu keinem Modul mit Funktionen mehr – `python3 werkzeuge/doku.py erzeugen` entfernt sie" for p in alt]
     for pfad, inhalt in soll.items():
         ist = (WURZEL / pfad).read_text(encoding="utf-8") if (WURZEL / pfad).is_file() else None
         if ist != inhalt:

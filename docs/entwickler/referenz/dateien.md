@@ -545,6 +545,27 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `module.md` | plattform | Referenz: Module und Oberflächen |
 | `rechte.md` | plattform | Referenz: Rechte |
 
+## `docs/entwickler/referenz/funktionen/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `README.md` | plattform | Referenz: Funktionen je Modul |
+| `angebot.md` | plattform | Funktionen: Angebot (`angebot`) |
+| `bestand.md` | plattform | Funktionen: Bestand (`bestand`) |
+| `controlling.md` | plattform | Funktionen: Controlling (`controlling`) |
+| `crm.md` | plattform | Funktionen: CRM (`crm`) |
+| `dashboard.md` | plattform | Funktionen: Dashboard (`dashboard`) |
+| `einkauf.md` | plattform | Funktionen: Einkauf (`einkauf`) |
+| `hr.md` | plattform | Funktionen: HR (`hr`) |
+| `leergut.md` | plattform | Funktionen: Leergut (`leergut`) |
+| `marketing.md` | plattform | Funktionen: Marketing (`marketing`) |
+| `mobile.md` | plattform | Funktionen: App (iOS/Android) (`mobile`) |
+| `plattform.md` | plattform | Funktionen: Plattformkern (`plattform`) |
+| `qs.md` | plattform | Funktionen: Qualitätssicherung (`qs`) |
+| `rewe.md` | plattform | Funktionen: REWE (`rewe`) |
+| `sicherheit.md` | plattform | Funktionen: Sicherheit (`sicherheit`) |
+| `verwaltung.md` | plattform | Funktionen: Verwaltung (`verwaltung`) |
+
 ## `docs/plattform/`
 
 | Datei | Modul | Inhalt |
