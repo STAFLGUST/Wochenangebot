@@ -56,11 +56,13 @@
   <footer class="crm-fuss">STAFL-Plattform · Standard-Fleisch · Kundenstammdaten aus der Verwaltung</footer>
 </div>
 
-<!-- Kundenblatt -->
-<dialog class="crm-dialog breit" id="dlg-kunde" aria-labelledby="kunde-titel">
+<!-- Kunden-Pop-up: Übersicht (cockpit.js), Kundenblatt, Verlauf -->
+<dialog class="crm-dialog breit crm-ku" id="dlg-kunde" aria-labelledby="kunde-titel">
   <div class="crm-dkopf">
-    <div><h2 id="kunde-titel">Kunde</h2><p id="kunde-sub"></p></div>
-    <button type="button" class="crm-rund klein" data-schliessen aria-label="Kundenblatt schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    <div class="crm-dkopf-text"><span class="crm-ck-kicker" id="kunde-kicker"></span><h2 id="kunde-titel">Kunde</h2><p id="kunde-sub"></p></div>
+    <div class="crm-dkopf-aktionen" id="kunde-aktionen"></div>
+    <button type="button" class="crm-rund klein crm-dkopf-zu" data-schliessen aria-label="Kunden-Pop-up schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+    <div class="crm-seg crm-ku-reiter" id="kunde-reiter" role="tablist" aria-label="Ansicht des Kunden"></div>
   </div>
   <div class="crm-dinhalt" id="kunde-inhalt"></div>
 </dialog>
@@ -113,6 +115,7 @@
 </svg>
 <script src="../../assets/detailkarte.js"></script>
 <script src="mhd-ware.js"></script>
+<script src="cockpit.js"></script>
 <script src="crm.js"></script>
 </body>
 </html>

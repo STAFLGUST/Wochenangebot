@@ -11,9 +11,11 @@ declare(strict_types=1);
      crm-aktivitaeten  Verlauf: Telefonat, E-Mail, Besuch, Muster, Angebot, Bestellung, Notiz – mit Schnappschuss von
                        Firma und Kundennummer (GR-106: spätere Stammdatenänderungen ändern den Verlauf nicht)
    Alle Schreibvorgänge sperren „crm-kunden“ (eine Sperre für alle drei Dokumente, keine Verklemmung).
-   Rechte (GR-103): crm.sehen, crm.bearbeiten, crm.exportieren – geprüft in jeder Aktion. */
+   Rechte (GR-103): crm.sehen, crm.bearbeiten, crm.exportieren, crm.mhd_ware, crm.master, crm.umsatz_euro, crm.umsatz_kg –
+   geprüft in jeder Aktion (Cockpit und Umsätze: cockpit.php). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require_once __DIR__ . '/../../lib/adressen.php';   // Anschrift → Koordinate (Karte, Plattformkern)
+require_once __DIR__ . '/cockpit.php';               // Mein Cockpit, Master-Cockpit, Übersicht im Kunden-Pop-up
 
 const CRM_SEGMENTE = ['Fleischerei', 'Einzelhandel', 'Cash & Carry', 'Catering', 'Gastronomie', 'Großhandel', 'Industrie', 'Sonstige', 'Nicht zugeordnet'];
 const CRM_PHASEN = ['Interessent', 'Erstkontakt', 'Muster/Probe', 'Angebot', 'Verhandlung', 'Bestandskunde', 'Verloren'];

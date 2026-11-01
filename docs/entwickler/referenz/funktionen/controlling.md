@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-12 Dateien, 165 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+13 Dateien, 178 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/module/controlling/controlling.php`
 
@@ -16,6 +16,23 @@ _Modul Controlling · gemeinsame Grundlage aller Bereiche (Umsatzstatistik; gepl
 _Importvertrag des Controllings – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md)._
 
 - `import_arten_controlling()`
+
+## `app/api/module/controlling/kundenbild.php`
+
+_Controlling · Kundenbild – Schnittstelle für das CRM (GR-101; Leser „crm“ in regeln/datenverantwortung.toml)._
+
+- `kundenbild_datum(t)` – Tagnummer → Datum (JJJJ-MM-TT)
+- `kundenbild_vorjahr(d)` – Gleicher Tag ein Jahr früher (29.02. → 28.02.)
+- `kundenbild_lesen(nur, mitArtikeln)` – Umsatzzeilen der zwei Jahre bis zum Stand zusammenfassen – je Kunde und (auf Wunsch) je Kunde und Artikel.
+- `kundenbild_tage(set, von, bis)` – Kauftage (Tagnummern, aufsteigend) eines Bereichs
+- `kundenbild_signale(k, L)` – Signale eines Kunden (Liste): pause, weniger, weg (Artikel), neu – mit Zahlen (Cent bzw. Tausendstel kg); das CRM blendet aus, was der Mitarbeiter nicht …
+- `kundenbild_erster(tage, L)` – Erster Kauf, wenn er „neu“ ist: in den letzten 91 Tagen, die 365 Tage davor kein Kauf – und die Daten reichen so weit zurück (sonst wäre jeder Kunde am …
+- `kundenbild_artikel_name(nr)` – Name und Fleischart eines Artikels aus den Artikelstammdaten (ohne Stammsatz „Artikel <Nr>“)
+- `kundenbild_artikel_weg(k, L)` – Artikel, die der Kunde nicht mehr kauft (Regel oben), meistgekaufte (Umsatz der 365 Tage) zuerst
+- `kundenbild_monate(stand)` – Monate (JJJJ-MM) der letzten 12 Monate bis zum Monat des Stands
+- `kundenbild_zusammenfassung(k, L, mitSignalen)` – Kennzahlen eines Kunden für Cockpit und Liste: Fenster als [Umsatz, Menge], 12 Monate, letzter Kauf, Kauftage, Signale
+- `kundenbild_kunden(nur)` – Cockpit: alle Kunden bzw. nur $nur (Kundennummern) mit Kennzahlen und Signalen.
+- `kundenbild_kunde(nr)` – Kunden-Pop-up: ein Kunde mit Kennzahlen (365 Tage mit Vorjahr), Monaten mit Vorjahr, Rhythmus, Preisniveau, Top-Artikeln und „Auffällig bei Artikeln“ (nicht …
 
 ## `app/api/module/controlling/umsatz.php`
 
@@ -59,6 +76,7 @@ _Controlling · Umsatzauswertung aus den importierten Umsatzdaten (module/contro
 **Bestellpausen (Frühwarnung)**
 
 - `umsatz_tagnummer(datum)` – Tageszahl eines Datums (für Abstände in Tagen)
+- `umsatz_pause_pruefen(tage, ende)` – Bestellpause eines Kunden zum Tag $ende (Regel oben; auch Schnittstelle für das CRM, module/controlling/kundenbild.php).
 - `umsatz_pausen(q)` – Stammkunden mit auffälliger Bestellpause zum Stichtag; Anfrage wie die Auswertung (von, bis, Filter)
 - `umsatz_grunddaten(me)` – Grunddaten der Auswertung: Stand der Daten, Rechte, Auswahllisten (nur Nummern und Namen)
 
