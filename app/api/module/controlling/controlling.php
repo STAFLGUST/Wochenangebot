@@ -10,7 +10,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* Bereiche in Anzeigereihenfolge: Kennung => Name, Recht zum Ansehen, Recht zum Bearbeiten (oder null) */
 const CONTROLLING_BEREICHE = [
-    'umsatz' => ['name' => 'Umsatzstatistik', 'sehen' => 'controlling.umsatz_sehen', 'bearbeiten' => 'controlling.umsatz_bearbeiten'],
+    'umsatz' => ['name' => 'Umsatzstatistik', 'sehen' => 'controlling.umsatz_sehen', 'bearbeiten' => null],   // Werte nur aus dem Import (01.11.2026)
 ];
 
 const CONTROLLING_MONATE = ['01' => 'Januar', '02' => 'Februar', '03' => 'März', '04' => 'April', '05' => 'Mai', '06' => 'Juni',
@@ -33,23 +33,4 @@ function controlling_jahr($v): string
     $j = filter_var($v, FILTER_VALIDATE_INT);
     if ($j === false || $j < 2000 || $j > 2100) throw new InvalidArgumentException('Bitte ein Jahr zwischen 2000 und 2100 angeben.');
     return (string)$j;
-}
-
-/* Monat „01“–„12“ (auch 1–12 als Zahl) */
-function controlling_monat($v): string
-{
-    $m = is_int($v) || (is_string($v) && preg_match('/^\d{1,2}$/', $v)) ? sprintf('%02d', (int)$v) : '';
-    if (!isset(CONTROLLING_MONATE[$m])) throw new InvalidArgumentException('Bitte einen gültigen Monat auswählen.');
-    return $m;
-}
-
-/* Betrag oder Menge: Zahl oder leer (null); $negativ: negative Werte erlaubt (z. B. Deckungsbeitrag) */
-function controlling_zahl($wert, int $nachkomma, bool $negativ, string $was): ?float
-{
-    if ($wert === null || $wert === '') return null;
-    if (!is_int($wert) && !is_float($wert) && !(is_string($wert) && is_numeric($wert))) throw new InvalidArgumentException("$was: bitte nur Zahlen oder ein leeres Feld.");
-    $z = (float)$wert;
-    if (!is_finite($z) || abs($z) > 1e12) throw new InvalidArgumentException("$was: Zahl ungültig oder zu groß.");
-    if (!$negativ && $z < 0) throw new InvalidArgumentException("$was darf nicht negativ sein.");
-    return round($z, $nachkomma);
 }

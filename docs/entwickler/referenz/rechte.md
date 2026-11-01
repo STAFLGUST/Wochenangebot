@@ -65,8 +65,7 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `protokoll.sehen` | Verwaltung | Verwaltung | sehen | Protokoll ansehen | – | – |
 | `sicherheit.sehen` | Sicherheit | Sicherheit | sehen | Lagebild, Sicherheitsereignisse und Notfall-Zustand ansehen (nur lesen, mit IP-Adressen und Benutzernamen) | – | `sicherheit.zugang` |
 | `sicherheit.notfall` | Sicherheit | Sicherheit | bearbeiten | Notfallmodus auslösen (Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle werden ausgesperrt); beenden nur Administratoren | – | `sicherheit.zugang` |
-| `controlling.umsatz_sehen` | Controlling | Controlling | sehen | Umsatzstatistik ansehen: Kg, Umsatz, Deckungsbeitrag und Spanne je Vertreter und Monat | – | `controlling.zugang` |
-| `controlling.umsatz_bearbeiten` | Controlling | Controlling | bearbeiten | Umsatzstatistik: Monatswerte je Vertreter erfassen und ändern | – | `controlling.umsatz_sehen` |
+| `controlling.umsatz_sehen` | Controlling | Controlling | sehen | Umsatzstatistik ansehen: Monatsmeldung je Vertreter und Auswertung nach Kunde und Artikel (aus den importierten Umsatzdaten) | – | `controlling.zugang` |
 | `controlling.umsatz_ek` | Controlling | Controlling | sehen | Umsatzauswertung: Einkaufswerte, Deckungsbeitrag und Spanne je Kunde, Artikel und Gruppe sehen (nur zusammen mit „Einkaufspreise (EK) … ansehen“, GR-008) | – | `controlling.umsatz_sehen` |
 | `controlling.umsatz_importieren` | Controlling | Controlling | bearbeiten | Umsatzdaten der Warenwirtschaft importieren (Verwaltung → Import, Kundenumsatztabelle) | – | `controlling.umsatz_sehen` |
 | `leergut.sehen` | Leergut | Leergut | sehen | Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV | – | – |
