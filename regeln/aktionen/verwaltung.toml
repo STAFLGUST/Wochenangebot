@@ -31,6 +31,10 @@ oberflaeche = "angebot.eingabe"
 oberflaeche = "angebot.eingabe"
 schreibend = true
 
+[aktion.import_teil]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
 [aktion.import_uebernehmen]
 oberflaeche = "angebot.eingabe"
 schreibend = true

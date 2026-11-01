@@ -143,6 +143,7 @@ require __DIR__ . '/lib/herkunft.php';
 require __DIR__ . '/module/verwaltung/import.php';
 require __DIR__ . '/module/bestand/import.php';
 require __DIR__ . '/module/angebot/import.php';
+require __DIR__ . '/module/controlling/import.php';
 require __DIR__ . '/module/verwaltung/importzentrale.php';
 /* Fachmodule mit eigener Oberfläche */
 require __DIR__ . '/module/hr/urlaub.php';
@@ -153,6 +154,8 @@ require __DIR__ . '/module/crm/crm.php';
 require __DIR__ . '/module/marketing/marketing.php';
 require __DIR__ . '/module/controlling/controlling.php';
 require __DIR__ . '/module/controlling/umsatz.php';
+require __DIR__ . '/module/controlling/umsatzdaten.php';
+require __DIR__ . '/module/controlling/umsatzauswertung.php';
 require __DIR__ . '/module/leergut/leergut.php';
 require __DIR__ . '/module/rewe/rewe.php';
 require __DIR__ . '/module/rewe/export.php';

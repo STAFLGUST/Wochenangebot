@@ -391,14 +391,15 @@ reihenfolge = 76
 dashboard = true
 agent = "controlling"
 abhaengigkeiten = ["plattform", "verwaltung"]
-testgruppen = ["controlling"]
+testgruppen = ["controlling", "controlling_umsatzdaten"]
 pfade = ["regeln/aktionen/controlling.toml", "app/api/aktionen/controlling.php", "app/api/module/controlling/**", "app/module/controlling/**", "tests/e2e/test_controlling*.py"]
 pfade_geplant = []
 zugang_rollen = []   # Finanzdaten: Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter)
 hinweise = [
   "Aufbau in Bereichen (Auftrag des Inhabers 28.10.2026): erster Bereich Umsatzstatistik (aus dem Modulbausatz-Modul „Gust 1“), weitere folgen (OP-Konten, Liquidität …). Je Bereich eigene Datei module/controlling/<bereich>.php, Aktionen controlling_<bereich>_…, Rechte controlling.<bereich>_sehen/_bearbeiten, Dokumente controlling-<bereich>; Eintrag in CONTROLLING_BEREICHE.",
-  "Liest Daten anderer Module nur über deren Schnittstellen (GR-101; heute vertreter_load der Verwaltung); Einkaufspreise und Margen nur mit eigenem Recht.",
-  "Umsatzstatistik: Monatswerte werden von Hand erfasst (kein Import, keine Verbindung zur Warenwirtschaft); Vertreternamen als Schnappschuss, Werte ausgeschiedener Vertreter bleiben.",
+  "Liest Daten anderer Module nur über deren Schnittstellen (GR-101: vertreter_load/gruppen_load, customers_load und Artikelstammdaten der Verwaltung, nur lesend); Einkaufspreise und Margen nur mit eigenem Recht (controlling.umsatz_ek, zusätzlich bestand.einkaufspreise nach GR-008).",
+  "Umsatzstatistik, Reiter Monatsmeldung: Monatswerte je Vertreter von Hand erfasst; Vertreternamen als Schnappschuss, Werte ausgeschiedener Vertreter bleiben.",
+  "Umsatzstatistik, Reiter Auswertung (01.11.2026): Umsatzdaten der Warenwirtschaft (Kundenumsatztabelle) über die Importzentrale, Importart „umsatzdaten“ in Teilen (module/controlling/import.php, umsatzdaten.php; Leser app/module/controlling/umsatz-import.js im Eingabebereich). Der Zeitraum der Datei ersetzt die gespeicherten Umsätze dieses Zeitraums. Auswertung umsatzauswertung.php: Zuordnung zu Vertreter, Kundengruppe, Artikelgruppe nach heutigen Stammdaten.",
   "Freigegeben (Inhaber 28.10.2026): controlling.dashboard-stafl.de mit eigenem Keycloak-Client „controlling“ (Stand 10); / und /admin/ führen zu /module/controlling/. Aktionen controlling_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden. Zugang trotzdem nur, wer ihn ausdrücklich erhält (zugang_rollen = []).",
 ]
 

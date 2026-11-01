@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-236 Aktionen in 14 Modulen.
+239 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -196,6 +196,8 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | --- | --- | --- | --- | --- | --- |
 | `controlling_start` | `controlling.intern` | lesend | – | – | `app/api/aktionen/controlling.php` |
 | `controlling_umsatz` | `controlling.intern` | lesend | – | Recht controlling.umsatz_sehen | `app/api/aktionen/controlling.php` |
+| `controlling_umsatz_auswertung` | `controlling.intern` | lesend | – | Recht controlling.umsatz_sehen | `app/api/aktionen/controlling.php` |
+| `controlling_umsatz_daten` | `controlling.intern` | lesend | – | Recht controlling.umsatz_sehen | `app/api/aktionen/controlling.php` |
 | `controlling_umsatz_monat_save` | `controlling.intern` | schreibend | – | Recht controlling.umsatz_bearbeiten | `app/api/aktionen/controlling.php` |
 
 ## Verwaltung (`verwaltung`)
@@ -205,6 +207,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `auswertung` | `angebot.eingabe` | lesend | – | Recht auswertung.sehen | `app/api/aktionen/auswertung.php` |
 | `import_arten` | `angebot.eingabe` | lesend | – | angemeldet | `app/api/aktionen/importzentrale.php` |
 | `import_pruefen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
+| `import_teil` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
 | `import_uebernehmen` | `angebot.eingabe` | schreibend | – | – | `app/api/aktionen/importzentrale.php` |
 | `kunde_delete` | `angebot.eingabe` | schreibend | – | Recht kunden.bearbeiten + Bestätigung | `app/api/aktionen/kundenverwaltung.php` |
 | `kunde_save` | `angebot.eingabe` | schreibend | – | Recht kunden.bearbeiten + Bestätigung | `app/api/aktionen/kundenverwaltung.php` |

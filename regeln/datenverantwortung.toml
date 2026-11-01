@@ -215,6 +215,28 @@ beschreibung = "Umsatzstatistik: Kg, Umsatz und Deckungsbeitrag je Jahr, Monat u
 historie = "Vertreternamen als Schnappschuss (GR-106): Werte ausgeschiedener Vertreter bleiben mit Namen erhalten"
 
 [[dokument]]
+name = "controlling-umsatzdaten"
+eigentuemer = "controlling"
+schutz = "vertraulich"
+dynamisch = true   # Name als Konstante UMSATZDATEN (module/controlling/umsatzdaten.php)
+beschreibung = "Umsatzdaten der Warenwirtschaft – Verzeichnis: Monate mit Prüfsumme und Kennzahlen, Kunden- und Artikelnummern mit Umsatz, Importverlauf (Zeitraum, wer, wann, Monate neu/geändert/entfallen)"
+historie = "Importierte Umsätze bleiben, wie sie in der Datei standen; Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe erst in der Auswertung nach heutigen Stammdaten"
+
+[[dokument]]
+name = "controlling-umsatzdaten/*"
+eigentuemer = "controlling"
+schutz = "vertraulich"
+dynamisch = true
+beschreibung = "Umsatzdaten je Monat (JJJJ-MM): Kunde, Artikel und Tag mit Kolli, Menge, Umsatz, EK-Wert, Umsatz mit EK, Positionen, berechnet/ohne Berechnung"
+
+[[dokument]]
+name = "controlling-umsatzteile/*"
+eigentuemer = "controlling"
+schutz = "vertraulich"
+dynamisch = true
+beschreibung = "Zwischenablage eines Umsatzdaten-Imports (je Importlauf und Monat), gelöscht mit der Übernahme bzw. nach einem Tag"
+
+[[dokument]]
 name = "leergut-stamm"
 eigentuemer = "leergut"
 schutz = "intern"
@@ -328,14 +350,14 @@ historie = "Statuswechsel im Verlauf mit Name; Abschluss als wirksam mit Datum, 
 [[dokument]]
 name = "stammdaten"
 eigentuemer = "verwaltung"
-leser = ["angebot", "bestand"]   # master_save (aktionen/bestand.php) speichert über stammdaten_speichern() der Verwaltung
+leser = ["angebot", "bestand", "controlling"]   # master_save (aktionen/bestand.php) speichert über stammdaten_speichern() der Verwaltung; Controlling: Artikelname, VK-Gruppe, Fleischart der Umsatzauswertung
 schutz = "intern"
 beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN)"
 
 [[dokument]]
 name = "kunden"
 eigentuemer = "verwaltung"
-leser = ["angebot", "crm", "rewe"]   # CRM und REWE: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.)
+leser = ["angebot", "crm", "rewe", "controlling"]   # CRM, REWE und Controlling: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.); Controlling: Firma, Ort, Vertreter, Kundengruppe der Umsatzauswertung
 schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
 schutz = "vertraulich"
 beschreibung = "Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003)"
@@ -350,7 +372,7 @@ beschreibung = "Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdiens
 [[dokument]]
 name = "kundengruppen"
 eigentuemer = "verwaltung"
-leser = ["angebot", "crm"]
+leser = ["angebot", "crm", "controlling"]   # Controlling: Nummer und Name über gruppen_load (Umsatzauswertung)
 schutz = "intern"
 dynamisch = true
 beschreibung = "Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php)"
@@ -358,7 +380,7 @@ beschreibung = "Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php)"
 [[dokument]]
 name = "vkgruppen"
 eigentuemer = "verwaltung"
-leser = ["angebot", "bestand"]
+leser = ["angebot", "bestand", "controlling"]   # Controlling: Nummer und Name über gruppen_load (Umsatzauswertung)
 schutz = "intern"
 dynamisch = true
 beschreibung = "VK-Gruppen der Artikel"
@@ -366,7 +388,7 @@ beschreibung = "VK-Gruppen der Artikel"
 [[dokument]]
 name = "vertreter"
 eigentuemer = "verwaltung"
-leser = ["crm", "controlling"]   # nur Nummer und Name (Controlling: auch Kürzel) über vertreter_load
+leser = ["crm", "controlling"]   # nur Nummer und Name (Controlling: auch Kürzel) über vertreter_load bzw. gruppen_load
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Vertreter mit Kontaktdaten"

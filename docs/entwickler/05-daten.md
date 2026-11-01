@@ -381,6 +381,21 @@ Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, 
   Werte `null` = leer; ein Vertreter ohne Werte wird nicht gespeichert, ein Monat ohne Werte entfällt. Speichern ändert nur die
   mitgeschickten Vertreter (aktuelle aus den Stammdaten); Werte ausgeschiedener Vertreter bleiben, ihr Name kommt aus dem
   Schnappschuss `vertreter` (GR-106). `rev` schützt vor gleichzeitigem Überschreiben (409).
+- **`controlling-umsatzdaten`** (vertraulich, `umsatzdaten.php`): Verzeichnis der Umsatzdaten aus der Warenwirtschaft
+  `{"rev": 3, "monate": {"2026-10": {"hash": "<SHA-256>", "zeilen": 7012, "pos": 5900, "umsatz": 41234567, "menge": 3456789, "posOhne": 1800,
+  "kunden": 620, "artikel": 540, "ersterTag": 1, "letzterTag": 30}}, "kunden": ["…"], "artikel": ["…"], "importe": [{"t": "…", "vonName": "…",
+  "quelle": "KundenUmsatz.csv", "zeitraum": ["2022-01-03", "2026-10-30"], "neu": 1, "geaendert": 1, "entfallen": 0, "unveraendert": 56}], "geaendert": {…}}`.
+  Beträge in Cent, Mengen in Tausendstel; höchstens 50 Einträge im Importverlauf.
+- **`controlling-umsatzdaten/<JJJJ-MM>`** (vertraulich): `{"monat": "2026-10", "hash": "…", "zeilen": [[Tag, "Kunde", "Artikel", Kolli, Menge,
+  Umsatz, EK-Wert, Umsatz mit EK, Positionen, berechnet], …]}` – je Kunde, Artikel und Tag eine Zeile, getrennt nach berechnet (mit
+  Gesamtbetrag) und ohne Berechnung (z. B. Leergut; zählt nicht zu Menge und Umsatz). Sortiert nach Tag, Kunde, Artikel, berechnet;
+  `hash` = SHA-256 von JSON der Zeilen (gleich im Browser), Grundlage des Vergleichs beim nächsten Import.
+- **`controlling-umsatzteile/<Kennung>-<JJJJ-MM>`** (vertraulich): Zwischenablage eines Imports bis zur Übernahme (mit Mitarbeiter
+  und Prüfsumme); gelöscht mit der Übernahme bzw. nach einem Tag.
+- **Import:** Der Zeitraum der Datei (erster bis letzter Tag) ersetzt die gespeicherten Umsätze dieses Zeitraums; Monate davor und
+  danach bleiben, Randmonate behalten ihre Tage außerhalb. Verglichen wird je Monat über `hash`, übertragen werden nur neue und
+  geänderte Monate – dieselbe Datei erneut ändert nichts. Die Auswertung ordnet Vertreter, Kundengruppe, Artikelgruppe und Fleischart
+  nach den heutigen Stammdaten zu (die Datei enthält keine Zuordnung); die Umsatzzeilen selbst bleiben unverändert.
 
 ### Leergut (`module/leergut/leergut.php`)
 
@@ -550,7 +565,7 @@ diese Tabelle. Was ein Modul besitzt und liest: `python3 werkzeuge/regeln.py mod
 | CRM | `customers_load()`, `vertreter_load()`, `kundengruppen_load()`; Angebotsnamen über `customer_offers()`, `offer_def()` | Verwaltung, Angebot |
 | HR | `users_load()`, `nutzer_hat_zugang()`, `mitarbeiter_ohne_zugang_anlegen()` | Plattformkern |
 | Marketing | `users_load()`, `may()` (Verantwortliche = Mitarbeiter mit `marketing.bearbeiten`) | Plattformkern |
-| Controlling | `vertreter_load()` (Nummer, Name, Kürzel für die Umsatzstatistik) | Verwaltung |
+| Controlling | `vertreter_load()`, `gruppen_load()` (Kundengruppen, VK-Gruppen), `customers_load()` (Firma, Ort, Vertreter, Kundengruppe), Artikelstammdaten (Name, VK-Gruppe, Fleischart) – nur lesend für Umsatzstatistik und Umsatzauswertung | Verwaltung |
 | Bestand (`master_save`) | `stammdaten_speichern()` (`module/verwaltung/import.php`) | Verwaltung |
 | Importzentrale | Importverträge `module/<modul>/import.php` der Eigentümer | jeweiliges Modul |
 

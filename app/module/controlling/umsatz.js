@@ -2,7 +2,8 @@
    Kennzahlen, Vertretertabelle mit Anteilen, Monatsvergleich (Balken/Linie) und Datenpflege im Dialog (Recht
    controlling.umsatz_bearbeiten). Daten: Aktion controlling_umsatz; Monate „01“–„12“, Werte je Vertreter-Nummer.
    Ausgeschiedene Vertreter (nicht mehr in den Stammdaten) bleiben mit ihren Werten in der Auswertung, erfasst werden nur
-   aktuelle. Grundlage: Modul „Gust 1“ aus dem Modulbausatz. Meldet sich bei controlling.js an (STAFL_CONTROLLING.bereich). */
+   aktuelle. Grundlage: Modul „Gust 1“ aus dem Modulbausatz. Meldet sich bei controlling.js an (STAFL_CONTROLLING.bereich).
+   Reiter „Auswertung“ (Umsätze aus der Warenwirtschaft): umsatz-auswertung.js – zuerst geöffnet, sobald Daten importiert sind. */
 'use strict';
 (() => {
   const C = window.STAFL_CONTROLLING;
@@ -39,14 +40,15 @@
   /* ---------- Gerüst des Bereichs ---------- */
   const GERUEST = `
     <div class="ctl-intro"><div><p class="ctl-eyebrow">Vertrieb · Kennzahlen</p><h1>Umsatzstatistik</h1>
-      <p class="ctl-intro-text">Umsatz, Deckungsbeitrag und Kg nach Vertreter und Zeitraum.</p></div><p class="ctl-notiz ctl-stand" id="ctl-u-stand"></p></div>
-    <nav class="ctl-tabs stafl-streifen" id="ctl-u-tabs" role="tablist" aria-label="Umsatzstatistik"><button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Übersicht</button><button type="button" role="tab" data-tab="datenpflege" aria-selected="false" hidden>Datenpflege</button></nav>
+      <p class="ctl-intro-text">Umsätze aus der Warenwirtschaft nach Vertreter, Kunde und Artikel – dazu die Monatsmeldung je Vertreter.</p></div><p class="ctl-notiz ctl-stand" id="ctl-u-stand"></p></div>
+    <nav class="ctl-tabs stafl-streifen" id="ctl-u-tabs" role="tablist" aria-label="Umsatzstatistik"><button type="button" role="tab" data-tab="auswertung" aria-selected="false">Auswertung</button><button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Monatsmeldung</button><button type="button" role="tab" data-tab="datenpflege" aria-selected="false" hidden>Datenpflege</button></nav>
     <section class="ctl-filterzeile" id="ctl-u-filter" aria-label="Filter">
       <label for="ctl-u-jahr">Jahr</label><select id="ctl-u-jahr"></select>
       <details class="ctl-filter" id="ctl-u-zeitfilter"><summary id="ctl-u-zeitfilter-titel">Alle Monate</summary><div class="ctl-filterliste" id="ctl-u-monatsoptionen"></div></details>
       <details class="ctl-filter" id="ctl-u-vertreterfilter"><summary id="ctl-u-vertreterfilter-titel">Alle Vertreter</summary><div class="ctl-filterliste" id="ctl-u-vertreteroptionen"></div></details>
       <label class="ctl-visuellabel" for="ctl-u-kennzahl">Vergleich</label><select id="ctl-u-kennzahl"><option value="umsatz">Umsatz im Vergleich</option><option value="db">DB im Vergleich</option><option value="kg">Kg im Vergleich</option><option value="spanne">Spanne im Vergleich</option></select>
     </section>
+    <section id="ctl-u-auswertung" hidden></section>
     <section id="ctl-u-uebersicht">
       <div class="ctl-kpis" id="ctl-u-kpis" aria-live="polite"></div>
       <section class="ctl-panel ctl-glas ctl-tabellenpanel"><div class="ctl-panelkopf"><div><h2 id="ctl-u-tabelle-titel">Vertreter</h2><p class="ctl-hilfe" id="ctl-u-anteil-hinweis"></p></div></div>
@@ -181,10 +183,13 @@
     $('#ctl-u-stand').textContent = g && g.t ? `Zuletzt geändert: ${new Date(g.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${g.vonName ? ' · ' + g.vonName : ''}` : 'Noch keine Werte erfasst.';
   }
   function zeigeTab(tab) {
-    S.tab = tab === 'datenpflege' && S.rechte.bearbeiten ? 'datenpflege' : 'uebersicht';
+    if (!tab) tab = S.mitDaten ? 'auswertung' : 'uebersicht';   // ohne Angabe: Auswertung, sobald Umsatzdaten importiert sind
+    S.tab = tab === 'datenpflege' && S.rechte.bearbeiten ? 'datenpflege' : tab === 'auswertung' ? 'auswertung' : 'uebersicht';
     $$('#ctl-u-tabs [role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
     $('#ctl-u-uebersicht').hidden = S.tab !== 'uebersicht'; $('#ctl-u-filter').hidden = S.tab !== 'uebersicht'; $('#ctl-u-datenpflege').hidden = S.tab !== 'datenpflege';
-    C.hashSetzen(S.tab === 'uebersicht' ? '' : S.tab);
+    $('#ctl-u-auswertung').hidden = S.tab !== 'auswertung'; $('#ctl-u-stand').hidden = S.tab === 'auswertung';
+    if (S.tab === 'auswertung' && !S.auswertungGeladen && C.umsatzAuswertung) { S.auswertungGeladen = true; C.umsatzAuswertung.anzeigen($('#ctl-u-auswertung')); }
+    C.hashSetzen(S.tab === (S.mitDaten ? 'auswertung' : 'uebersicht') ? '' : S.tab);
   }
 
   /* ---------- Datenpflege ---------- */
@@ -251,6 +256,7 @@
     box.innerHTML = GERUEST;
     setzeDaten(r.data);
     S.rechte.bearbeiten = !!r.data.rechte.bearbeiten;
+    S.mitDaten = !!(r.data.umsatzdaten && r.data.umsatzdaten.vorhanden);
     S.monate = new Set(MONATE().map((m) => m.nr));
     const gespeichert = Object.keys(S.d.jahre || {}).filter((y) => /^\d{4}$/.test(y)).sort();
     if (gespeichert.length) S.jahr = gespeichert[gespeichert.length - 1];

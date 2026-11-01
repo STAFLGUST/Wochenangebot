@@ -13,6 +13,14 @@ oberflaeche = "controlling.intern"
 [aktion.controlling_umsatz]
 oberflaeche = "controlling.intern"
 
+# Umsatzauswertung aus den importierten Umsatzdaten (Import: Importart „umsatzdaten“ der Importzentrale, deren Wartung
+# über controlling_umsatz_daten an dieser Oberfläche hängt)
+[aktion.controlling_umsatz_daten]
+oberflaeche = "controlling.intern"
+
+[aktion.controlling_umsatz_auswertung]
+oberflaeche = "controlling.intern"
+
 [aktion.controlling_umsatz_monat_save]
 oberflaeche = "controlling.intern"
 schreibend = true
