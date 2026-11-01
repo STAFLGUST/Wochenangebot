@@ -9,8 +9,8 @@ GR-106); Interessenten; CSV-Export (Recht, BOM, keine Formeln); Protokoll ohne K
 (Cockpit, Kunden, Kundenblatt, Wiedervorlagen, Pipeline, Karte, Auswertung, hell/dunkel; Desktop und 390 px).
 Reiter „MHD-Ware“ (Recht crm.mhd_ware): MHD-Liste des Bestands ohne Preise (Reihenfolge, Stufen), Käufer aus den Umsatzdaten
 (Zeitraum 3/6/12 Monate, Liefertage, Gutschrift, ohne Berechnung zählt nicht, Kunde ohne Stammsatz, keine Beträge), Suche nach
-anderem Artikel, Wiedervorlage (Recht bearbeiten und MHD-Ware, Text vom Server, nicht doppelt, frühere Wiedervorlage bleibt,
-Grenzen), Rechte; Oberfläche mit Farben, Zeitraum, Vertreter, „kauft regelmäßig“, Auswahl, Kundenblatt, 1280/390 px.
+anderem Artikel, Wiedervorlage (Recht bearbeiten und MHD-Ware, Text vom Server, Notiz im Verlauf, nicht doppelt, eigener Schritt
+nie gekürzt, frühere Wiedervorlage bleibt, vorgezogene im Protokoll, Grenzen), Rechte; Oberfläche mit Farben, Zeitraum, Vertreter, „kauft regelmäßig“, Auswahl, Kundenblatt, 1280/390 px.
 Nur synthetische Testdaten.
 """
 import datetime as dt
@@ -482,9 +482,24 @@ check('Wiedervorlage angelegt: Text vom Server (Artikel, Nummer, MHD), Datum', s
       and blatt['kccc333333333']['wiedervorlage'] == tag(2) and len(r['kunden']) == 2, (st, r.get('error'), blatt.get('kccc333333333')))
 check('Wiedervorlage: bestehender Schritt bleibt dahinter, frühere Wiedervorlage bleibt', blatt['kfff666666666']['naechsterSchritt'] == soll + ' · Rückruf'
       and blatt['kfff666666666']['wiedervorlage'] == tag(1), blatt.get('kfff666666666'))
+akt = lambda key: [a_ for a_ in dokument('crm-aktivitaeten')['liste'] if a_['key'] == key and a_['notiz'] == soll]   # noqa: E731
+check('Wiedervorlage: Notiz im Verlauf mit Schnappschuss (Firma, Nummer), letzter Kontakt unverändert', len(akt('kccc333333333')) == 1 and akt('kccc333333333')[0]['art'] == 'Notiz'
+      and akt('kccc333333333')[0]['nr'] == '900003' and akt('kccc333333333')[0]['firma'] == 'Probe Markt Ost' and not blatt['kccc333333333'].get('letzterKontakt'), akt('kccc333333333'))
 MAX.call('crm_mhd_wiedervorlage', WV)
 blatt = dokument('crm-kunden')['eintraege']
-check('Wiedervorlage erneut: Schritt nicht doppelt', blatt['kfff666666666']['naechsterSchritt'] == soll + ' · Rückruf' and blatt['kccc333333333']['naechsterSchritt'] == soll)
+check('Wiedervorlage erneut: Schritt und Notiz nicht doppelt', blatt['kfff666666666']['naechsterSchritt'] == soll + ' · Rückruf' and blatt['kccc333333333']['naechsterSchritt'] == soll
+      and len(akt('kccc333333333')) == 1 and len(akt('kfff666666666')) == 1)
+lang = 'Langer eigener Schritt ' + 'x' * 120
+Bb.call('crm_kunde_save', {'key': 'kddd444444444', 'felder': {'naechsterSchritt': lang}})
+st, r = MAX.call('crm_mhd_wiedervorlage', {**WV, 'kunden': ['kddd444444444'], 'datum': tag(5)})
+blatt = dokument('crm-kunden')['eintraege']
+check('Wiedervorlage: langer eigener Schritt bleibt ungekürzt, Hinweis steht im Verlauf', st == 200 and blatt['kddd444444444']['naechsterSchritt'] == lang
+      and blatt['kddd444444444']['wiedervorlage'] == tag(5) and len(akt('kddd444444444')) == 1, (st, blatt.get('kddd444444444')))
+st, r = MAX.call('crm_mhd_wiedervorlage', {**WV, 'kunden': ['kfff666666666'], 'datum': tag(0)})
+blatt = dokument('crm-kunden')['eintraege']
+eintrag = [e for e in (dokument('protokoll/' + dt.datetime.now(dt.timezone.utc).strftime('%Y-%m')) or []) if e.get('s') == 'CRM: Wiedervorlage für MHD-Ware (1 Kunde)'][-1:]
+check('Wiedervorlage früher: Datum vorgezogen, alter Wert im Protokoll', st == 200 and blatt['kfff666666666']['wiedervorlage'] == tag(0)
+      and any(x.get('f') == 'Wiedervorlage am' and x.get('from') == tag(1) and x.get('to') == tag(0) for x in (eintrag[0].get('d', []) if eintrag else [])), eintrag)
 for b_, code_ in (({**WV, 'kunden': []}, 422), ({**WV, 'kunden': ['kunbekannt99']}, 404), ({**WV, 'datum': '2026-02-30'}, 422), ({**WV, 'artikel': 'a;b'}, 422),
                   ({**WV, 'kunden': ['kccc333333333'] * 301}, 422)):
     check(f'Wiedervorlage ungültig → {code_}', MAX.call('crm_mhd_wiedervorlage', b_)[0] == code_)

@@ -323,11 +323,14 @@ const CRM_MHD_MONATE = [3, 6, 12];   // Zeitraum der Käuferliste, Standard 3 Mo
 const CRM_MHD_MAX_KUNDEN = 300;      // Wiedervorlage für höchstens so viele Kunden auf einmal
 
 function crm_mhd_monate($v): int { $n = (int)($v ?? 3); return in_array($n, CRM_MHD_MONATE, true) ? $n : 3; }
-/* Zeitraum „letzte n Monate“ bis heute (einschließlich) */
+/* Zeitraum „letzte n Monate“ bis heute (einschließlich): Beginn am Tag nach dem gleichen Tag n Monate früher – am Monatsende
+   ohne Überlauf (31.05. → ab 01.03., nicht ab 04.03.) */
 function crm_mhd_zeitraum(int $monate, string $heute): array
 {
     $h = new DateTimeImmutable($heute . 'T12:00:00');
-    return [$h->modify("-$monate months")->modify('+1 day')->format('Y-m-d'), $h->format('Y-m-d')];
+    $m = $h->modify('first day of this month')->modify("-$monate months");
+    $start = $m->setDate((int)$m->format('Y'), (int)$m->format('m'), min((int)$h->format('d'), (int)$m->format('t')));
+    return [$start->modify('+1 day')->format('Y-m-d'), $h->format('Y-m-d')];
 }
 function crm_mhd_liste(): array
 {
@@ -355,6 +358,15 @@ function crm_mhd_artikel(string $code, array $liste): array
     $name = null;
     foreach ($namen as $nr => $n) if (code_key((string)$nr) === code_key($code)) { $name = $n; break; }
     return ['nr' => $code, 'name' => $name ?? 'Artikel ' . $code, 'mhd' => null, 'stufe' => '', 'mhdKg' => null, 'kg' => null];
+}
+/* Alle gültigen Schlüssel (Kunden der Verwaltung und Interessenten) mit [Firma, Kundennummer, aktiv] – einmal gelesen statt
+   je Schlüssel (crm_firma_nr/crm_ist_aktiv lesen bei jedem Aufruf neu) */
+function crm_schluessel_menge(): array
+{
+    $o = [];
+    foreach (crm_stammkunden() as $id => $c) $o[(string)$id] = [(string)($c['firma'] ?? ''), (string)($c['nr'] ?? ''), !empty($c['active'])];
+    foreach (crm_interessenten_doc()['liste'] as $i) $o[(string)$i['id']] = [(string)($i['firma'] ?? ''), '', !empty($i['aktiv'])];
+    return $o;
 }
 /* Text des nächsten Schritts für die Wiedervorlage („MHD-Ware anbieten: Rinderhüfte (40100), MHD 06.11.“) */
 function crm_mhd_schritt(array $a): string

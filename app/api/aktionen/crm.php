@@ -171,9 +171,11 @@ switch ($action) {
             respond(['ok' => true, 'artikel' => $artikel, 'monate' => $monate, 'von' => $von, 'bis' => $bis, 'umsatzBis' => $k['stand'], 'kaeufer' => $kaeufer]);
         }
 
-        /* MHD-Ware: Wiedervorlage für ausgewählte Käufer – nächster Schritt „MHD-Ware anbieten: …“ (vor einen bestehenden Schritt
-           gesetzt, nicht doppelt) und Wiedervorlage am gewählten Tag (eine frühere bleibt). Artikelname und MHD nimmt der Server
-           aus MHD-Liste bzw. Umsatzdaten, nie aus dem Browser. */
+        /* MHD-Ware: Wiedervorlage für ausgewählte Käufer. Je Kunde eine Notiz „MHD-Ware anbieten: …“ im Verlauf (einmal je Artikel
+           und MHD, Schnappschuss von Firma und Nummer, GR-106) und die Wiedervorlage am gewählten Tag (eine frühere bleibt).
+           Der nächste Schritt wird nie gekürzt oder überschrieben: leer → der Hinweis; sonst wird der Hinweis nur vorangestellt,
+           wenn beides zusammen in 160 Zeichen passt (sonst steht er nur im Verlauf). Artikelname und MHD nimmt der Server aus
+           MHD-Liste bzw. Umsatzdaten, nie aus dem Browser. Protokoll wie beim Kundenblatt (Wiedervorlage mit altem Wert). */
         case 'crm_mhd_wiedervorlage': {
             $me = require_perm('crm.bearbeiten', true);
             if (!may($me, 'crm.mhd_ware')) fail('Dafür fehlt Ihnen die Berechtigung „CRM: MHD-Ware“.', 403);
@@ -184,22 +186,42 @@ switch ($action) {
             $roh = $b['kunden'] ?? null;
             if (!is_array($roh) || !array_is_list($roh) || !$roh) fail('Bitte mindestens einen Kunden auswählen.', 422);
             if (count($roh) > CRM_MHD_MAX_KUNDEN) fail('Höchstens ' . CRM_MHD_MAX_KUNDEN . ' Kunden auf einmal.', 422);
-            $keys = array_values(array_unique(array_map('crm_key_param', $roh)));
+            $gueltig = crm_schluessel_menge();
+            $keys = [];
+            foreach ($roh as $k) {
+                $k = is_string($k) ? trim($k) : '';
+                if (!preg_match('/^[A-Za-z0-9_-]{1,40}$/', $k) || !isset($gueltig[$k])) fail('Kunde nicht gefunden.', 404);
+                $keys[$k] = true;
+            }
+            $keys = array_keys($keys);
             $schritt = crm_mhd_schritt(crm_mhd_artikel($code, crm_mhd_liste()));
-            $n = with_lock('crm-kunden', function () use ($keys, $schritt, $datum, $me) {
+            [$n, $d] = with_lock('crm-kunden', function () use ($keys, $schritt, $datum, $me, $gueltig) {
                 $doc = crm_kunden_doc();
+                $akt = crm_aktivitaeten_doc();
+                $notiert = [];
+                foreach ($akt['liste'] as $a) if (($a['notiz'] ?? '') === $schritt) $notiert[$a['key']] = true;
+                $d = [];
                 foreach ($keys as $key) {
                     $alt = $doc['eintraege'][$key] ?? [];
                     $altSchritt = (string)($alt['naechsterSchritt'] ?? '');
-                    $neu = str_starts_with($altSchritt, $schritt) ? $altSchritt : mb_substr($schritt . ($altSchritt !== '' ? ' · ' . $altSchritt : ''), 0, 160);
+                    $kombi = $schritt . ' · ' . $altSchritt;
+                    $neuSchritt = $altSchritt === '' ? $schritt : (str_contains($altSchritt, $schritt) || mb_strlen($kombi) > 160 ? $altSchritt : $kombi);
                     $altWv = (string)($alt['wiedervorlage'] ?? '');
-                    $doc['eintraege'][$key] = array_merge($alt, ['naechsterSchritt' => $neu, 'wiedervorlage' => $altWv !== '' && $altWv < $datum ? $altWv : $datum,
-                                                                 'geaendert' => now(), 'geaendertVon' => $me['name']]);
+                    $neu = ['naechsterSchritt' => $neuSchritt, 'wiedervorlage' => $altWv !== '' && $altWv <= $datum ? $altWv : $datum];
+                    [$firma, $nr, $istAktiv] = $gueltig[$key];
+                    $d = array_merge($d, crm_protokoll_aenderungen($key, $nr, crm_blatt($alt, $key[0] === 'i', $istAktiv), $neu));
+                    if ($neu['naechsterSchritt'] !== $altSchritt || $neu['wiedervorlage'] !== $altWv)
+                        $doc['eintraege'][$key] = array_merge($alt, $neu, ['geaendert' => now(), 'geaendertVon' => $me['name']]);
+                    if (!isset($notiert[$key]))
+                        $akt['liste'][] = ['id' => crm_id('a'), 'key' => $key, 'art' => 'Notiz', 'notiz' => $schritt, 'naechster' => '', 'faellig' => $neu['wiedervorlage'],
+                                           'at' => now(), 'von' => $me['name'], 'vonId' => $me['id'], 'firma' => $firma, 'nr' => $nr];   // Schnappschuss (GR-106)
                 }
+                if (count($akt['liste']) > CRM_MAX_AKTIVITAETEN) $akt['liste'] = array_slice($akt['liste'], -CRM_MAX_AKTIVITAETEN);
+                crm_schreiben('crm-aktivitaeten', $akt);
                 crm_schreiben('crm-kunden', $doc);
-                return count($keys);
+                return [count($keys), $d];
             });
-            audit('crm', 'CRM: Wiedervorlage für MHD-Ware (' . $n . ($n === 1 ? ' Kunde)' : ' Kunden)'));
+            audit('crm', 'CRM: Wiedervorlage für MHD-Ware (' . $n . ($n === 1 ? ' Kunde)' : ' Kunden)'), $d);   // eigener Eintrag mit den Änderungen (Wiedervorlage mit altem Wert)
             $set = array_flip($keys);
             respond(['ok' => true, 'anzahl' => $n, 'kunden' => array_values(array_filter(crm_liste(), function ($e) use ($set) { return isset($set[$e['key']]); }))]);
         }
