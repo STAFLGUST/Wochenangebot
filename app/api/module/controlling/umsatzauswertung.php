@@ -10,7 +10,10 @@ declare(strict_types=1);
    verlassen diese Werte den Server nicht (GR-103).
    Zuordnung zu Vertreter (Hauptvertreter des Kunden), Kundengruppe, Artikelgruppe und Fleischart nach den heutigen
    Stammdaten der Verwaltung (nur lesend: customers_load, gruppen_load, Artikelstammdaten); die Umsatzzeilen selbst bleiben
-   so, wie sie importiert wurden. Nummern ohne Stammsatz erscheinen mit ihrer Nummer, „ohne …“ steht als Wert „_“. */
+   so, wie sie importiert wurden. Nummern ohne Stammsatz erscheinen mit ihrer Nummer, „ohne …“ steht als Wert „_“.
+   Rangliste (nicht bei Zeit): Kennzahl und Richtung, ABC-Analyse der Kennzahl und mit Vorjahr „neu“ (Kauf jetzt, nicht im
+   Vorjahr) bzw. „verloren“ (Kauf im Vorjahr, jetzt nicht) je Zeile – auf Wunsch nur diese Zeilen (nur=neu|verloren).
+   Kauf = berechnete Position mit Menge > 0 (eine Gutschrift allein ist kein Kauf). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 const UMSATZ_GLIEDERUNG = ['monat' => 'Monat', 'quartal' => 'Quartal', 'jahr' => 'Jahr', 'kw' => 'Kalenderwoche', 'vertreter' => 'Vertreter',
@@ -26,6 +29,12 @@ const UMSATZ_OHNE = '_';   // Filter- und Gliederungswert für „ohne Vertreter
 const UMSATZ_RANG = ['umsatz', 'menge', 'db', 'spanne'];
 const UMSATZ_RANG_ANTEIL_MIN = 0.001;
 const UMSATZ_RANG_CENT_MIN = 10000;
+/* ABC-Analyse: die größten Zeilen, die zusammen 80 % der Kennzahl bringen, sind A, bis 95 % B, der Rest C (die Zeile, mit der die
+   Grenze überschritten wird, gehört noch zur oberen Klasse). Grundlage ist die Summe der positiven Werte; Zeilen mit Wert ≤ 0
+   sind C. Nur für Summen (Umsatz, Menge, Rohmarge) – Rohmarge % ist kein Anteil. */
+const UMSATZ_ABC = ['A' => 0.8, 'B' => 0.95];
+const UMSATZ_ABC_RANG = ['umsatz', 'menge', 'db'];
+const UMSATZ_NUR = ['', 'neu', 'verloren'];
 
 /* Stammdaten für Zuordnung und Namen (nur lesend, Eigentümer Verwaltung) */
 function umsatz_stamm(): array
@@ -87,7 +96,11 @@ function umsatz_anfrage(array $q, array $stand): array
     }
     $rang = (string)($q['rang'] ?? 'umsatz');
     if (!in_array($rang, UMSATZ_RANG, true)) throw new InvalidArgumentException('Unbekannte Kennzahl der Rangliste.');
-    return ['von' => $von, 'bis' => $bis, 'nach' => $nach, 'vj' => ($q['vj'] ?? '1') !== '0', 'filter' => $filter, 'rang' => $rang, 'auf' => ($q['auf'] ?? '0') === '1'];
+    $vj = ($q['vj'] ?? '1') !== '0';
+    $nur = (string)($q['nur'] ?? '');
+    if (!in_array($nur, UMSATZ_NUR, true)) throw new InvalidArgumentException('Unbekannte Auswahl der Rangliste (neu oder verloren).');
+    if ($nur !== '' && (!$vj || in_array($nach, UMSATZ_ZEITLICH, true))) throw new InvalidArgumentException('Neu und verloren gibt es nur mit Vorjahr und nicht bei einer Gliederung nach Zeit.');
+    return ['von' => $von, 'bis' => $bis, 'nach' => $nach, 'vj' => $vj, 'filter' => $filter, 'rang' => $rang, 'auf' => ($q['auf'] ?? '0') === '1', 'nur' => $nur];
 }
 
 function umsatz_monat_plus(string $m, int $n): string
@@ -140,12 +153,13 @@ function umsatz_zaehlen(array $a, array $index, string $von, string $bis, int $v
                 if (!$ok[$ka]) continue;
             }
             $g = $gMonat ?? ($zeitlich ? ($gTag[$z[0]] ??= umsatz_zeitschluessel('kw', $m, $z[0], $verschieben)) : ($gk[$ka] ??= umsatz_merkmal($a['nach'], $z[1], $z[2])));
-            if (!isset($ziel[$g])) $ziel[$g] = umsatz_leer() + ['kunden' => []];
+            if (!isset($ziel[$g])) $ziel[$g] = umsatz_leer() + ['kunden' => [], 'kauf' => false];
             $r = &$ziel[$g];   // Verweis: die Kundenliste der Zeile wird nicht je Zeile kopiert
             if ($z[9] === 1) {
                 $r['umsatz'] += $z[5]; $r['menge'] += $z[4]; $r['kolli'] += $z[3]; $r['pos'] += $z[8]; $r['ek'] += $z[6]; $r['umsatzEk'] += $z[7];
                 $zr['umsatz'] += $z[5]; $zr['menge'] += $z[4]; $zr['kolli'] += $z[3]; $zr['pos'] += $z[8]; $zr['ek'] += $z[6]; $zr['umsatzEk'] += $z[7];
                 $r['kunden'][$z[1]] = true; $kunden[$z[1]] = true; $artikel[$z[2]] = true;
+                if ($z[4] > 0) $r['kauf'] = true;   // Kauf (keine Gutschrift) – für „neu“ und „verloren“
             } else {
                 $r['posOhne'] += $z[8]; $r['mengeOhne'] += $z[4]; $zr['posOhne'] += $z[8]; $zr['mengeOhne'] += $z[4];
             }
@@ -220,12 +234,14 @@ function umsatz_rang_wert(array $w, string $rang): int|float|null
     return $w['umsatz'];
 }
 /* Zeilen nach der Kennzahl ordnen (höchste zuerst, $auf: niedrigste zuerst); Rohmarge %: Zeilen unter der Schwelle (Umsatz mit EK)
-   und ohne Umsatz mit EK am Ende (Merkmal „klein“). Gleichstand: Umsatz, dann Name. */
-function umsatz_rang_sortieren(array &$zeilen, string $rang, bool $auf, ?int $schwelle): void
+   und ohne Umsatz mit EK am Ende (Merkmal „klein“). Gleichstand: Umsatz, dann Name. $basis = 'vj': nach den Vorjahreswerten
+   (verlorene Zeilen haben jetzt keine). */
+function umsatz_rang_sortieren(array &$zeilen, string $rang, bool $auf, ?int $schwelle, string $basis = 'werte'): void
 {
     foreach ($zeilen as &$z) {
-        $z['rangWert'] = umsatz_rang_wert($z['werte'], $rang);
-        if ($rang === 'spanne') $z['klein'] = $z['rangWert'] === null || $z['werte']['umsatzEk'] < $schwelle;
+        $w = $z[$basis] ?? $z['werte'];
+        $z['rangWert'] = umsatz_rang_wert($w, $rang); $z['rangUmsatz'] = $w['umsatz'];
+        if ($rang === 'spanne') $z['klein'] = $z['rangWert'] === null || $w['umsatzEk'] < $schwelle;
     }
     unset($z);
     usort($zeilen, function ($x, $y) use ($auf) {
@@ -233,10 +249,34 @@ function umsatz_rang_sortieren(array &$zeilen, string $rang, bool $auf, ?int $sc
         if ($k) return $k;
         $a = $x['rangWert'] ?? PHP_INT_MIN; $b = $y['rangWert'] ?? PHP_INT_MIN;
         $c = $auf ? $a <=> $b : $b <=> $a;
-        return $c ?: $y['werte']['umsatz'] <=> $x['werte']['umsatz'] ?: strnatcasecmp($x['name'], $y['name']);
+        return $c ?: $y['rangUmsatz'] <=> $x['rangUmsatz'] ?: strnatcasecmp($x['name'], $y['name']);
     });
-    foreach ($zeilen as &$z) unset($z['rangWert']);
+    foreach ($zeilen as &$z) unset($z['rangWert'], $z['rangUmsatz']);
     unset($z);
+}
+
+/* ABC-Klasse je Zeile (Feld „abc“) und Zusammenfassung [A|B|C => [anzahl, anteil]]; null, wenn die Kennzahl keine Summe ist */
+function umsatz_abc(array &$zeilen, string $rang): ?array
+{
+    if (!in_array($rang, UMSATZ_ABC_RANG, true) || !$zeilen) return null;
+    $reihe = $zeilen;
+    umsatz_rang_sortieren($reihe, $rang, false, null);
+    $gesamt = 0;
+    foreach ($reihe as $z) $gesamt += max(0, umsatz_rang_wert($z['werte'], $rang));
+    $o = ['A' => ['anzahl' => 0, 'wert' => 0], 'B' => ['anzahl' => 0, 'wert' => 0], 'C' => ['anzahl' => 0, 'wert' => 0]];
+    $klasse = []; $kum = 0;
+    foreach ($reihe as $z) {
+        $v = umsatz_rang_wert($z['werte'], $rang);
+        $vorher = $gesamt > 0 ? $kum / $gesamt : 1.0;
+        $k = $v <= 0 ? 'C' : ($vorher < UMSATZ_ABC['A'] ? 'A' : ($vorher < UMSATZ_ABC['B'] ? 'B' : 'C'));
+        $kum += max(0, $v);
+        $klasse[$z['schluessel']] = $k; $o[$k]['anzahl']++; $o[$k]['wert'] += max(0, $v);
+    }
+    foreach ($zeilen as &$z) $z['abc'] = $klasse[$z['schluessel']];
+    unset($z);
+    foreach ($o as &$x) { $x['anteil'] = $gesamt > 0 ? $x['wert'] / $gesamt : 0.0; unset($x['wert']); }
+    unset($x);
+    return $o;
 }
 
 /* Auswertung: Gliederung mit Vorjahr, Monatsreihe, Summen */
@@ -262,22 +302,34 @@ function umsatz_auswertung(array $q, array $me): array
     // Merkmale nur mit Positionen ohne Berechnung (z. B. Leergut) erscheinen nicht als eigene Zeile – sie stehen in der Summe
     if (!$zeitlich) $schluessel = array_values(array_filter($schluessel, fn($k) => ($zeilen[$k]['pos'] ?? 0) > 0 || ($zeilenVj[$k]['pos'] ?? 0) > 0));
     $out = [];
+    $vergleich = $a['vj'] && !$zeitlich;   // „neu“ und „verloren“ nur mit Vorjahr und nicht bei Zeit
+    $wechsel = $vergleich ? ['neu' => ['anzahl' => 0, 'umsatz' => 0], 'verloren' => ['anzahl' => 0, 'umsatzVj' => 0]] : null;
     foreach ($schluessel as $k) {
         $k = (string)$k;
         [$name, $sub] = umsatz_bezeichnung($a['nach'], $k);
-        $out[] = ['schluessel' => $k, 'name' => $name, 'sub' => $sub, 'werte' => umsatz_werte($zeilen[$k] ?? umsatz_leer() + ['kunden' => []], $ek),
-                  'vj' => $a['vj'] && isset($zeilenVj[$k]) ? umsatz_werte($zeilenVj[$k], $ek) : null];
+        $z = ['schluessel' => $k, 'name' => $name, 'sub' => $sub, 'werte' => umsatz_werte($zeilen[$k] ?? umsatz_leer() + ['kunden' => []], $ek),
+              'vj' => $a['vj'] && isset($zeilenVj[$k]) ? umsatz_werte($zeilenVj[$k], $ek) : null];
+        if ($vergleich) {
+            $kauf = !empty($zeilen[$k]['kauf']); $kaufVj = !empty($zeilenVj[$k]['kauf']);
+            if ($kauf && !$kaufVj) { $z['wechsel'] = 'neu'; $wechsel['neu']['anzahl']++; $wechsel['neu']['umsatz'] += $z['werte']['umsatz']; }
+            elseif ($kaufVj && !$kauf) { $z['wechsel'] = 'verloren'; $wechsel['verloren']['anzahl']++; $wechsel['verloren']['umsatzVj'] += $z['vj']['umsatz']; }
+        }
+        $out[] = $z;
     }
-    $schwelle = null;
+    $schwelle = null; $abc = null;
     if ($zeitlich) usort($out, fn($x, $y) => strcmp($x['schluessel'], $y['schluessel']));
     else {
-        if ($a['rang'] === 'spanne') $schwelle = max(UMSATZ_RANG_CENT_MIN, (int)round($summe['umsatzEk'] * UMSATZ_RANG_ANTEIL_MIN));
-        umsatz_rang_sortieren($out, $a['rang'], $a['auf'], $schwelle);
+        $abc = umsatz_abc($out, $a['rang']);   // über alle Zeilen der Auswahl, vor „nur neu/verloren“ und vor dem Kürzen
+        if ($a['nur'] !== '') $out = array_values(array_filter($out, fn($z) => ($z['wechsel'] ?? '') === $a['nur']));
+        $basis = $a['nur'] === 'verloren' ? 'vj' : 'werte';
+        if ($a['rang'] === 'spanne') $schwelle = max(UMSATZ_RANG_CENT_MIN, (int)round(($basis === 'vj' ? $summeVj : $summe)['umsatzEk'] * UMSATZ_RANG_ANTEIL_MIN));
+        umsatz_rang_sortieren($out, $a['rang'], $a['auf'], $schwelle, $basis);
     }
     $monate = [];
     foreach (umsatzdaten_monatsfolge($a['von'], $a['bis']) as $m)
         $monate[] = ['monat' => $m, 'werte' => umsatz_werte($reihe[$m] ?? umsatz_leer(), $ek), 'vj' => $a['vj'] && isset($reiheVj[$m]) ? umsatz_werte($reiheVj[$m], $ek) : null];
-    return ['ok' => true, 'anfrage' => ['von' => $a['von'], 'bis' => $a['bis'], 'nach' => $a['nach'], 'vj' => $a['vj'], 'rang' => $a['rang'], 'auf' => $a['auf']], 'rangSchwelle' => $schwelle,
+    return ['ok' => true, 'anfrage' => ['von' => $a['von'], 'bis' => $a['bis'], 'nach' => $a['nach'], 'vj' => $a['vj'], 'rang' => $a['rang'], 'auf' => $a['auf'], 'nur' => $a['nur']],
+            'rangSchwelle' => $schwelle, 'abc' => $abc, 'wechsel' => $wechsel,
             'vorjahr' => $a['vj'] ? ['von' => $vjVon, 'bis' => $vjBis, 'bisTag' => $bisTag] : null, 'ek' => $ek,
             'summe' => umsatz_werte($summe + ['kunden' => count($kunden)], $ek) + ['artikel' => count($artikel)],
             'summeVj' => $a['vj'] ? umsatz_werte($summeVj + ['kunden' => count($kundenVj)], $ek) + ['artikel' => count($artikelVj)] : null,
@@ -360,7 +412,7 @@ function umsatz_detail(array $q, array $me): array
 {
     $index = umsatzdaten_index();
     $stand = umsatzdaten_stand($index);
-    $a = umsatz_anfrage(['nach' => 'monat'] + $q, $stand);
+    $a = umsatz_anfrage(['nach' => 'monat'] + array_diff_key($q, ['nur' => true]), $stand);   // „nur neu/verloren“ gilt nur für die Rangliste
     $dim = (string)($q['dim'] ?? '');
     if (!in_array($dim, UMSATZ_DETAIL, true)) throw new InvalidArgumentException('Unbekanntes Merkmal.');
     $wert = (string)($q['wert'] ?? '');

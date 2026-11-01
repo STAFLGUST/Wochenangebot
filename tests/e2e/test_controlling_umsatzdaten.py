@@ -316,6 +316,19 @@ check('alte Reste der Zwischenablage aufgeräumt', storage_raw(REST) is None)
 check('Importverlauf: neueste zuerst', [i['quelle'] for i in idx['importe']][:3] == ['Umsatz-Test.csv'] * 3 and idx['importe'][0]['entfallen'] == 1 and len(idx['importe']) == 3)
 POS_JETZT = [p for p in POS_AB if not (p[0].year == 2025 and p[0].month in (3, 4))] + POS_C
 
+# ── Juni 2026 neu: Kunde 2000004 nur mit einer Gutschrift (kein Kauf → „verloren“), Kunde 2000003 mit einem Viertel (ABC) ──
+JUNI = [p for p in POS_JETZT if p[0].year == 2026 and p[0].month == 6]
+POS_E = [p for p in JUNI if p[1] not in ('2000003', '2000004')] + [p for p in JUNI if p[1] == '2000003'][::4]
+POS_E.append((dt.date(2026, 6, 15), '2000004', '40100', 1, -12.5, 8.4, -105.0, 7.1))
+DATEN_E, TEILE_E = lesen(POS_E)
+DATEN_E['zeitraum'] = {'von': '2026-06-01', 'bis': '2026-06-30'}
+st, v = pruefen(INA, DATEN_E, upload='9' * 32)
+assert st == 200 and v['teile'] == ['2026-06'], (st, v)
+assert teil(INA, '2026-06', TEILE_E['2026-06'], upload='9' * 32)[0] == 200
+st, u = uebernehmen(INA, DATEN_E, v['stand'], upload='9' * 32)
+check('Juni 2026 ersetzt (Testdaten für neu/verloren und ABC)', st == 200 and u['zahlen']['geaendert'] == 1, (st, u))
+POS_JETZT = [p for p in POS_JETZT if not (p[0].year == 2026 and p[0].month == 6)] + POS_E
+
 # ── Auswertung (Server) ──
 check('Auswertung ohne Recht: 403', OLAF.call('controlling_umsatz_auswertung')[0] == 403 and OLAF.call('controlling_umsatz_daten')[0] == 403)
 check('Auswertung ohne Anmeldung: 401/404', Client('198.51.100.98').call('controlling_umsatz_auswertung')[0] in (401, 404))
@@ -404,6 +417,70 @@ for cl, wer in ((SAM, 'nur ansehen'), (EDE, 'nur controlling.umsatz_ek'), (BEA, 
     check(f'Rangliste nach Rohmarge {wer}: 403 (auch die Reihenfolge verriete die Rohmarge, GR-008)', auswertung(cl, nach='kunde', rang='db')[0] == 403
           and auswertung(cl, nach='kunde', rang='spanne')[0] == 403)
 check('Rangliste: unbekannte Kennzahl → 422', auswertung(EKA, rang='marge')[0] == 422)
+
+
+# ABC-Analyse und Vergleich zum Vorjahr (neu/verloren) – unabhängig gerechnet
+def kaeufer(pos, von, bis, dim):
+    """Merkmale mit Kauf (berechnete Position mit Menge > 0) im Zeitraum"""
+    return {{'kunde': k, 'artikel': a, **INFO_K[k], **INFO_A[a]}[dim] for d, k, a, ko, m, p, b, ek in pos
+            if b is not None and m > 0 and von <= d.strftime('%Y-%m') <= bis}
+
+
+def abc_soll(werte):
+    """A: die größten bis 80 % (die Zeile über der Grenze zählt noch mit), B bis 95 %, Rest C; Werte ≤ 0 sind C"""
+    gesamt, kum, out = sum(v for v in werte.values() if v > 0), 0, {}
+    for k in sorted(werte, key=lambda k: -werte[k]):
+        vorher = kum / gesamt if gesamt else 1
+        out[k] = 'C' if werte[k] <= 0 else 'A' if vorher < 0.8 else 'B' if vorher < 0.95 else 'C'
+        kum += max(0, werte[k])
+    return out
+
+
+JUNI_JETZT, JUNI_VJ = kaeufer(POS_JETZT, '2026-06', '2026-06', 'kunde'), kaeufer(POS_JETZT, '2025-06', '2025-06', 'kunde')
+st, r = auswertung(SAM, von='2026-06', bis='2026-06', nach='kunde')
+wechsel = {z['schluessel']: z.get('wechsel') for z in r.get('zeilen', [])}
+soll = {k: 'neu' if k in JUNI_JETZT - JUNI_VJ else 'verloren' if k in JUNI_VJ - JUNI_JETZT else None for k in JUNI_JETZT | JUNI_VJ}
+check('neu/verloren je Kunde wie unabhängig gerechnet (Juni: nur Gutschrift = kein Kauf = verloren)', st == 200 and wechsel == soll and soll['2000004'] == 'verloren'
+      and r['wechsel']['neu']['anzahl'] == len(JUNI_JETZT - JUNI_VJ) and r['wechsel']['verloren']['anzahl'] == len(JUNI_VJ - JUNI_JETZT), (st, r.get('error'), wechsel, soll))
+umsatz_juni = erwartet(POS_JETZT, '2026-06', '2026-06', 'kunde')
+abc_juni = abc_soll(umsatz_juni)
+check('ABC nach Umsatz je Kunde wie unabhängig gerechnet (A, B und C)', {z['schluessel']: z.get('abc') for z in r['zeilen']} == abc_juni and abc_juni['2000004'] == 'C'
+      and len(set(abc_juni.values())) >= 2 and {x: r['abc'][x]['anzahl'] for x in 'ABC'} == {x: list(abc_juni.values()).count(x) for x in 'ABC'}
+      and abs(r['abc']['A']['anteil'] - sum(v for k, v in umsatz_juni.items() if abc_juni[k] == 'A') / sum(v for v in umsatz_juni.values() if v > 0)) < 1e-9
+      and r['abc']['A']['anteil'] >= 0.8, (r.get('abc'), abc_juni))
+vj_juni = erwartet(POS_JETZT, '2025-06', '2025-06', 'kunde')
+verloren = sorted(JUNI_VJ - JUNI_JETZT, key=lambda k: -vj_juni[k])
+st, r = auswertung(SAM, von='2026-06', bis='2026-06', nach='kunde', nur='verloren')
+check('nur verloren: nur diese Zeilen, nach Vorjahresumsatz geordnet, Summe des Vorjahrs', st == 200 and [z['schluessel'] for z in r['zeilen']] == verloren and r['zeilenGesamt'] == len(verloren)
+      and r['wechsel']['verloren']['umsatzVj'] == sum(vj_juni[k] for k in verloren) and r['anfrage']['nur'] == 'verloren' and '"umsatzEk"' not in json.dumps(r), (st, r.get('error'), [z['schluessel'] for z in r.get('zeilen', [])]))
+st, r = auswertung(EKA, von='2026-06', bis='2026-06', nach='kunde', nur='verloren', rang='menge', auf='1')
+check('nur verloren nach Menge (niedrigste zuerst): Reihenfolge nach der Vorjahresmenge', st == 200 and [z['vj']['menge'] for z in r['zeilen']] == sorted(z['vj']['menge'] for z in r['zeilen']), (st, r.get('error')))
+st, r = auswertung(SAM, von='2026-04', bis='2026-04', nach='artikel', nur='neu')
+april = kaeufer(POS_JETZT, '2026-04', '2026-04', 'artikel')
+check('nur neu: April 2026 (Vorjahresmonat ohne Daten) – alle gekauften Artikel neu, ABC über die ganze Auswahl', st == 200 and {z['schluessel'] for z in r['zeilen']} == april
+      and r['wechsel'] == {'neu': {'anzahl': len(april), 'umsatz': sum(erwartet(POS_JETZT, '2026-04', '2026-04', 'artikel').values())}, 'verloren': {'anzahl': 0, 'umsatzVj': 0}}
+      and {z['schluessel']: z['abc'] for z in r['zeilen']} == abc_soll(erwartet(POS_JETZT, '2026-04', '2026-04', 'artikel')), (st, r.get('error'), r.get('wechsel')))
+st, r = auswertung(SAM, von='2026-04', bis='2026-04', nach='artikel', nur='verloren')
+check('nur verloren ohne Treffer: leere Liste', st == 200 and r['zeilen'] == [] and r['zeilenGesamt'] == 0)
+db_juni = {}
+for d, k, a, ko, m, p, b, ek in POS_JETZT:
+    if b is not None and ek is not None and d.year == 2026 and d.month == 6:
+        db_juni[k] = db_juni.get(k, 0) + cent(b) - int(round(milli(m) * int(round(ek * 10000)) / 100000))
+for k in umsatz_juni:
+    db_juni.setdefault(k, 0)
+st, r = auswertung(EKA, von='2026-06', bis='2026-06', nach='kunde', rang='db')
+check('ABC nach Rohmarge (mit EK-Recht) wie unabhängig gerechnet', st == 200 and {z['schluessel']: z['abc'] for z in r['zeilen']} == abc_soll(db_juni), (st, r.get('error'), r.get('abc')))
+st, r = auswertung(EKA, von='2026-06', bis='2026-06', nach='kunde', rang='spanne')
+check('ABC nicht bei Rohmarge % (kein Anteil)', st == 200 and r['abc'] is None and all('abc' not in z for z in r['zeilen']))
+st, r = auswertung(SAM, von='2026-06', bis='2026-06', nach='monat')
+check('Zeit: weder ABC noch neu/verloren', st == 200 and r['abc'] is None and r['wechsel'] is None and all('wechsel' not in z and 'abc' not in z for z in r['zeilen']))
+st, r = auswertung(SAM, von='2026-06', bis='2026-06', nach='kunde', vj='0')
+check('ohne Vorjahr: ABC ja, neu/verloren nein', st == 200 and r['abc'] is not None and r['wechsel'] is None and all('wechsel' not in z for z in r['zeilen']))
+for q, text in (({'nur': 'weg'}, 'neu oder verloren'), ({'nur': 'neu', 'vj': '0', 'nach': 'kunde'}, 'nur mit Vorjahr'), ({'nur': 'verloren', 'nach': 'monat'}, 'nur mit Vorjahr')):
+    st, r = auswertung(SAM, **q)
+    check(f'neu/verloren ungültig {q}: 422', st == 422 and text in r.get('error', ''), (st, r))
+st, r = SAM.call('controlling_umsatz_detail&' + urllib.parse.urlencode({'dim': 'kunde', 'wert': '2000001', 'nur': 'neu'}))
+check('Pop-up-Detail übergeht „nur“ (gilt nur für die Rangliste)', st == 200 and r['name'] == 'Gasthaus Eiche', (st, r.get('error')))
 for cl, wer in ((EDE, 'nur controlling.umsatz_ek'), (BEA, 'nur bestand.einkaufspreise')):
     st, r = auswertung(cl, von='2025-01', bis='2025-12', nach='artikel', vj='0')
     check(f'{wer}: keine Einkaufswerte (GR-008, beide Rechte nötig)', st == 200 and r['ek'] is False and 'ek' not in r['summe'] and '"umsatzEk"' not in json.dumps(r) and all('ek' not in z['werte'] for z in r['zeilen']) and cl.call('controlling_umsatz_daten')[1]['rechte']['ek'] is False, (st, r.get('ek')))
@@ -413,7 +490,7 @@ for q, text in (({'von': '2026-13'}, 'Zeitraum'), ({'von': '2026-05', 'bis': '20
     st, r = auswertung(SAM, **q)
     check(f'ungültige Anfrage {q}: 422', st == 422 and text in r.get('error', ''), (st, r))
 st, r = auswertung(SAM)
-check('Standard: laufendes Jahr bis zum letzten Monat mit Daten, nach Monat', st == 200 and r['anfrage'] == {'von': '2026-01', 'bis': '2026-10', 'nach': 'monat', 'vj': True, 'rang': 'umsatz', 'auf': False})
+check('Standard: laufendes Jahr bis zum letzten Monat mit Daten, nach Monat', st == 200 and r['anfrage'] == {'von': '2026-01', 'bis': '2026-10', 'nach': 'monat', 'vj': True, 'rang': 'umsatz', 'auf': False, 'nur': ''})
 st, r = A.call('controlling_umsatz')
 check('Monatsmeldung weiß von den Umsatzdaten (Reiter Auswertung zuerst)', st == 200 and r['umsatzdaten'] == {'vorhanden': True})
 
@@ -651,6 +728,36 @@ with sync_playwright() as p:
             pg.screenshot(path=SH + f'/controlling-umsatz-rangliste-rohmarge-{breite}-{thema}.png', full_page=True)
         pg.click('#ctl-ua-rangnach [data-rang="umsatz"]')
         pg.wait_for_selector('#ctl-ua-rang[data-rang="umsatz"]')
+        # ABC-Analyse und Neu/Verloren (Juni 2026: Kunde 2000004 nur mit Gutschrift)
+        pg.click('#ctl-ua-zeit [data-zeit="eigen"]')
+        pg.select_option('#ctl-ua-von', '2026-06')
+        pg.select_option('#ctl-ua-bis', '2026-06')
+        pg.wait_for_function("document.querySelector('#ctl-ua-tabelle-hinweis').textContent.startsWith('Juni 2026 – Juni 2026') && !document.querySelector('#ctl-ua-liste').classList.contains('laedt')")
+        juni = auswertung(A, von='2026-06', bis='2026-06', nach='kunde')[1]
+        abc_ist = pg.eval_on_selector_all('#ctl-ua-rang li > button[data-zeile]', 'els => Object.fromEntries(els.map((e) => [e.dataset.zeile, e.dataset.abc || null]))')
+        check(f'{breite}px {thema}: ABC-Kennzeichen je Kunde wie der Server, Auswahl A/B/C mit Anzahl', abc_ist == {z['schluessel']: z.get('abc') for z in juni['zeilen']}
+              and pg.locator('#ctl-ua-rang .ctl-ua-abcmarke').count() == len(juni['zeilen']) and 'ABC nach Umsatz' in pg.text_content('#ctl-ua-abc')
+              and pg.text_content('#ctl-ua-abc [data-abc="A"]').startswith(f"A {juni['abc']['A']['anzahl']}"), (abc_ist, pg.text_content('#ctl-ua-abc')))
+        check(f'{breite}px {thema}: Kennzeichen „verloren“ in der Zeile, Zahlen an Neu/Verloren', pg.is_visible('#ctl-ua-rang [data-zeile="2000004"] .ctl-ua-marke.verloren')
+              and pg.text_content('#ctl-ua-nur [data-nur="verloren"]') == f"Verloren {juni['wechsel']['verloren']['anzahl']}", pg.text_content('#ctl-ua-nur'))
+        pg.click('#ctl-ua-abc [data-abc="A"]')
+        pg.wait_for_function("document.querySelector('#ctl-ua-abc [data-abc=\"A\"]').getAttribute('aria-pressed') === 'true'")
+        check(f'{breite}px {thema}: Klick auf A zeigt nur die A-Kunden (Platz bleibt)', set(reihe()) == {z['schluessel'] for z in juni['zeilen'] if z.get('abc') == 'A'}
+              and pg.is_visible('#ctl-ua-nurhinweis') and pg.text_content('#ctl-ua-rang .ctl-ua-rangnr').startswith('1'), reihe())
+        pg.click('#ctl-ua-abc [data-abc="A"]')
+        pg.wait_for_function(f"document.querySelectorAll('#ctl-ua-rang li > button').length === {len(juni['zeilen'])}")
+        pg.click('#ctl-ua-nur [data-nur="verloren"]')
+        pg.wait_for_selector('#ctl-ua-rang[data-nur="verloren"]')
+        soll = [z['schluessel'] for z in auswertung(A, von='2026-06', bis='2026-06', nach='kunde', nur='verloren')[1]['zeilen']]
+        check(f'{breite}px {thema}: Verloren – nur Kunden ohne Kauf im Juni, Werte aus dem Vorjahr, ohne ABC', reihe() == soll and '2000004' in soll
+              and 'Umsatz Vorjahr' in pg.text_content('.ctl-ua-rangkopfzeile') and 'Im Vorjahreszeitraum gekauft, jetzt nicht' in pg.inner_text('#ctl-ua-nurhinweis')
+              and pg.is_hidden('#ctl-ua-abc') and 'verloren' in pg.text_content('#ctl-ua-rang .ctl-ua-rangdelta'), (reihe(), soll))
+        pg.screenshot(path=SH + f'/controlling-umsatz-verloren-{breite}-{thema}.png', full_page=breite == 1280)
+        pg.click('#ctl-ua-nur [data-nur=""]')
+        pg.wait_for_selector('#ctl-ua-rang[data-nur=""]')
+        pg.screenshot(path=SH + f'/controlling-umsatz-abc-{breite}-{thema}.png', full_page=breite == 1280)
+        pg.click('#ctl-ua-zeit [data-zeit="jahr"]')
+        pg.wait_for_function("document.querySelector('#ctl-ua-tabelle-hinweis').textContent.startsWith('Januar 2026') && !document.querySelector('#ctl-ua-liste').classList.contains('laedt')")
         # Suche öffnet das Pop-up
         pg.fill('#ctl-ua-suche', 'kantine')
         pg.wait_for_function("document.querySelectorAll('#ctl-ua-treffer [role=\"option\"]').length === 1")
@@ -685,6 +792,32 @@ with sync_playwright() as p:
         check(f'{breite}px {thema}: kein waagerechtes Scrollen der Seite', bw <= breite + 1, bw)
         if breite == 390:
             pg.screenshot(path=SH + f'/controlling-umsatzdaten-{breite}-{thema}.png', full_page=True)
+        if breite == 1280:
+            # Ansicht merken: nach dem Neuladen gleiche Gliederung, Kennzahl, Zeitraum und Filter; „Standardansicht“ setzt zurück
+            fertig = "!document.querySelector('#ctl-ua-liste').classList.contains('laedt')"
+            pg.click('#ctl-ua-nach [data-nach="artikel"]')
+            pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Rangliste · Artikel'")
+            pg.click('#ctl-ua-rangnach [data-rang="menge"]')
+            pg.wait_for_selector('#ctl-ua-rang[data-rang="menge"]')
+            pg.click('#ctl-ua-zeit [data-zeit="12"]')
+            pg.wait_for_function("document.querySelector('#ctl-ua-zeit [data-zeit=\"12\"]').getAttribute('aria-pressed') === 'true' && " + fertig)
+            pg.click('#ctl-ua-filterknopf'); pg.wait_for_selector('#ctl-ua-filterdialog[open]')
+            pg.click('#ctl-ua-filterdialog [data-fchip="v"][data-wert="V1"]'); pg.click('#ctl-ua-fanwenden')
+            pg.wait_for_function("document.querySelector('#ctl-ua-filterzahl').textContent === '1' && " + fertig)
+            schluessel = lambda: pg.evaluate("Object.keys(localStorage).filter((k) => k.startsWith('controlling.umsatz.ansicht'))")   # noqa: E731
+            check('Ansicht merken: im Browser je Mitarbeiter gespeichert, „Standardansicht“ sichtbar', schluessel() == ['controlling.umsatz.ansicht.admin'] and pg.is_visible('#ctl-ua-standard'), schluessel())
+            pg.reload(); pg.wait_for_selector('#ctl-ua-rang li')
+            pg.wait_for_function(fertig)
+            check('Ansicht merken: nach dem Neuladen Artikel, Menge, 12 Monate und Filter Vertreter V1', pg.text_content('#ctl-ua-titel') == 'Rangliste · Artikel'
+                  and pg.get_attribute('#ctl-ua-rangnach [data-rang="menge"]', 'aria-pressed') == 'true' and pg.get_attribute('#ctl-ua-zeit [data-zeit="12"]', 'aria-pressed') == 'true'
+                  and 'Vertreter: V1 – Vera Vertrieb' in pg.inner_text('#ctl-ua-chips') and pg.get_attribute('#ctl-ua-rang', 'data-rang') == 'menge', pg.inner_text('#ctl-ua-chips'))
+            pg.click('#ctl-ua-standard')
+            pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Rangliste · Kundengruppe' && document.querySelector('#ctl-ua-filterzahl').hidden && " + fertig)
+            check('Standardansicht: Kundengruppen, Umsatz, dieses Jahr, ohne Filter – nichts mehr gespeichert', pg.get_attribute('#ctl-ua-zeit [data-zeit="jahr"]', 'aria-pressed') == 'true'
+                  and pg.get_attribute('#ctl-ua-rangnach [data-rang="umsatz"]', 'aria-pressed') == 'true' and pg.is_hidden('#ctl-ua-standard') and schluessel() == [], schluessel())
+            pg.evaluate("localStorage.setItem('controlling.umsatz.ansicht.admin', '{kaputt')")
+            pg.reload(); pg.wait_for_selector('#ctl-ua-rang li')
+            check('Ansicht merken: unlesbarer Speicher → Standardansicht', pg.text_content('#ctl-ua-titel') == 'Rangliste · Kundengruppe')
         pg.click('#ctl-u-tabs [data-tab="uebersicht"]')
         check(f'{breite}px {thema}: Monatsmeldung weiter erreichbar', pg.is_visible('#ctl-u-uebersicht') and pg.url.endswith('#umsatz/uebersicht'))
         ctx.close()
@@ -704,6 +837,15 @@ with sync_playwright() as p:
     t = offen('kundengruppe')
     check('nur ansehen: Pop-up ohne Rohmarge, mit Ø Preis, Sortierung ohne Rohmarge', 'Rohmarge' not in t.replace('Sortiert nach', '') and 'Ø Preis' in t and 'Gastronomie' in pg.text_content('#ctl-ua-d-titel')
           and pg.eval_on_selector_all('#ctl-ua-dialog [data-ud-rang] option', 'els => els.map((e) => e.value)') == ['umsatz', 'menge'], t[:200])
+    # gemerkte Ansicht mit Rohmarge und unbekannten Filterwerten: ohne EK-Recht Umsatz, nur vorhandene Filterwerte
+    pg.evaluate("""localStorage.setItem('controlling.umsatz.ansicht.sam', JSON.stringify({ v: 1, nach: 'kunde', rang: 'db', auf: true, vj: true, ansicht: 'rang', kennzahl: 'db',
+                   zeit: 'eigen', von: '2026-06', bis: '2026-06', filter: { k: ['9999999', '2000001', '2000004'], v: ['V9'] }, nur: 'verloren' }))""")
+    pg.reload(); pg.wait_for_selector('#ctl-ua-rang[data-nur="verloren"]')
+    st, r = auswertung(SAM, von='2026-06', bis='2026-06', nach='kunde', k='2000001,2000004', nur='verloren', auf='1')
+    check('nur ansehen: gemerkte Rohmarge wird zu Umsatz, unbekannte Filterwerte entfallen, Zeitraum und Verloren bleiben', pg.get_attribute('#ctl-ua-rangnach [data-rang="umsatz"]', 'aria-pressed') == 'true'
+          and pg.get_attribute('#ctl-ua-nur [data-nur="verloren"]', 'aria-pressed') == 'true' and pg.text_content('#ctl-ua-filterzahl') == '2'
+          and pg.eval_on_selector('#ctl-ua-kennzahl', 'e => e.value') == 'umsatz' and pg.eval_on_selector_all('#ctl-ua-rang li > button[data-zeile]', 'els => els.map((e) => e.dataset.zeile)') == [z['schluessel'] for z in r['zeilen']],
+          (pg.inner_text('#ctl-ua-chips'), r.get('zeilen')))
     ctx.close()
     br.close()
 check('keine JavaScript-Fehler', not errors, errors[:3])
