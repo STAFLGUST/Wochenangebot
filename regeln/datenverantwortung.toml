@@ -78,6 +78,8 @@ beschreibung = "Bewusst gelöschte Wochen des Preisverlaufs"
 [[dokument]]
 name = "einzelangebote"
 eigentuemer = "angebot"
+leser = ["crm"]       # nur über die Funktionen des Angebots (lib/einzelangebote.php): Einzelangebote eines Kunden im Kunden-Pop-up
+schreiber = ["crm"]   # ebenso nur über einzel_speichern/einzel_status_setzen/einzel_loeschen/einzel_mail – Rechte einzelangebote.* wie im Eingabebereich
 schutz = "vertraulich"
 beschreibung = "Einzelangebote für genau einen Kunden (E-JJJJ-0001)"
 
