@@ -69,6 +69,17 @@ function mhd_liste(array $st, bool $mitPreisen, ?DateTimeImmutable $jetzt = null
             'wochen' => $wp ? ['KW ' . $wp['current']['week'] . '/' . $wp['current']['year'], 'KW ' . $wp['previous']['week'] . '/' . $wp['previous']['year']] : null];
 }
 
+/* Schnittstelle für andere Module (GR-101; Leser „crm“ in regeln/datenverantwortung.toml, CRM-Reiter „MHD-Ware“): die heutige
+   MHD-Liste ohne Preise und Einkaufswerte – Artikelnummer, Bezeichnung, kürzestes MHD, Stufe (Farbe wie im Bestand), kg mit
+   kürzestem MHD und kg gesamt; ohne übernommenen Bestand eine leere Liste. */
+function mhd_liste_ohne_preise(?DateTimeImmutable $jetzt = null): array
+{
+    $st = store_read('bestand');
+    $l = $st ? mhd_liste(bestand_mit_stammdaten($st), false, $jetzt) : null;
+    return ['heute' => $l['heute'] ?? date('Y-m-d'), 'bis' => $l['bis'] ?? null, 'stand' => is_array($st) && !empty($st['date']) ? (string)$st['date'] : null,
+            'zeilen' => array_map(fn($a) => ['code' => $a['code'], 'name' => $a['name'], 'mhd' => $a['mhd'], 'stufe' => $a['stufe'], 'mhdKg' => $a['mhdKg'], 'kg' => $a['kg']], $l['zeilen'] ?? [])];
+}
+
 /* ---------------- Excel (Office Open XML, ein Blatt) ---------------- */
 
 function mhd_zip(array $dateien): string
