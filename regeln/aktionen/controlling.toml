@@ -21,6 +21,3 @@ oberflaeche = "controlling.intern"
 [aktion.controlling_umsatz_auswertung]
 oberflaeche = "controlling.intern"
 
-[aktion.controlling_umsatz_monat_save]
-oberflaeche = "controlling.intern"
-schreibend = true

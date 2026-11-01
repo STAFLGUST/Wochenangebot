@@ -1,13 +1,14 @@
-"""Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – erster Bereich Umsatzstatistik.
+"""Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – Bereich Umsatzstatistik, Reiter
+Monatsmeldung: Kg, Umsatz und DB je Vertreter und Monat aus den importierten Umsatzdaten (keine Erfassung von Hand mehr).
 
-Geprüft: Register (in Entwicklung, ohne Freigabe, Modulzugang standardmäßig niemand), Freigabe nur als Test mit Testern;
-Rechte serverseitig (GR-103): ohne Anmeldung, ohne Modulzugang, Modulzugang ohne Bereichsrecht (keine Bereiche, Umsatz 403),
-nur ansehen, bearbeiten; ohne CSRF, GET auf schreibende Aktion; Eingaben (Jahr, Monat 01–12, Zahlen, negative Kg/Umsatz,
-negativer DB erlaubt, unbekannte/doppelte Vertreter, leere Liste); Speichern (Monat als „MM“, leere Vertreter nicht
-gespeichert, nur mitgeschickte Vertreter ändern sich, Sortierung der Monate, veralteter Stand 409); ausgeschiedene Vertreter
-(bleiben mit Werten und Namen aus dem Schnappschuss, nicht mehr erfassbar); Protokoll ohne Beträge; Oberfläche (Bereiche,
-Kennzahlen, Anteile, Liniendiagramm, Datenpflege im Dialog, nur ansehen, kein Bereich; 1280 und 390 px, hell und dunkel,
-keine JavaScript-Fehler). Nur synthetische Testdaten.
+Geprüft: Register (fertig, produktiv, Modulzugang standardmäßig niemand); Rechte serverseitig (GR-103): ohne Anmeldung,
+ohne Modulzugang, Modulzugang ohne Bereichsrecht (keine Bereiche, Umsatz 403), Ansehen; frühere Erfassung entfernt (Aktion
+und Recht gibt es nicht mehr); Werte je Monat und Vertreter aus den Umsatzdaten (Hauptvertreter des Kunden, „ohne Vertreter“,
+Nummer nicht in den Stammdaten, ohne Berechnung zählt nicht), Jahr wählbar (jüngstes vorausgewählt, ungültiges Jahr 422),
+DB nur mit controlling.umsatz_ek und bestand.einkaufspreise (GR-008); Vertreter aus den Stammdaten entfernt → Werte bleiben
+mit Nummer; Oberfläche (Reiter Auswertung und Monatsmeldung, kein Reiter Datenpflege, Kennzahlen, Anteile, Liniendiagramm,
+Jahreswechsel, Hinweis ohne EK-Recht, kein Bereich; 1280 und 390 px, hell und dunkel, keine JavaScript-Fehler).
+Nur synthetische Testdaten.
 """
 import datetime as dt
 import json
@@ -16,7 +17,7 @@ import os
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, storage_raw
+from umgebung import SH, storage_raw, storage_sqlite, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -39,7 +40,7 @@ def dokument(name):
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
 NUTZER = (('lea', 'Lea Lesen', 'viewer', 'Leserin-Konto-12', {'grant': ['controlling.umsatz_sehen']}),
-          ('bea', 'Bea Bearbeiten', 'editor', 'Pflege-Konto-34', {'grant': ['controlling.umsatz_bearbeiten']}),
+          ('bea', 'Bea Einkauf', 'viewer', 'Pflege-Konto-34', {'grant': ['controlling.umsatz_ek', 'bestand.einkaufspreise']}),
           ('zoe', 'Zoe Zugang', 'editor', 'Zugang-Konto-56', {'grant': ['controlling.zugang']}),
           ('otto', 'Otto Ohne', 'editor', 'Ohne-Konto-78', {}))
 for u, n, r, p, extra in NUTZER:
@@ -70,76 +71,66 @@ st, r = L.call('controlling_start')
 check('Ansehen-Recht: Bereich Umsatzstatistik ohne Bearbeiten (Modulzugang als Voraussetzung)', st == 200
       and r['bereiche'] == [{'id': 'umsatz', 'name': 'Umsatzstatistik', 'bearbeiten': False}], (st, r))
 st, r = Bb.call('controlling_start')
-check('Bearbeiten-Recht: Bereich mit Bearbeiten', st == 200 and r['bereiche'] == [{'id': 'umsatz', 'name': 'Umsatzstatistik', 'bearbeiten': True}], r)
+check('EK-Recht: Bereich ohne Bearbeiten (Werte nur aus dem Import)', st == 200 and r['bereiche'] == [{'id': 'umsatz', 'name': 'Umsatzstatistik', 'bearbeiten': False}], r)
+check('frühere Erfassung von Hand entfernt: Aktion unbekannt, Recht nicht mehr im Katalog', A.call('controlling_umsatz_monat_save', {'rev': 0})[0] == 404
+      and 'controlling.umsatz_bearbeiten' not in json.dumps(A.call('rechte')[1], ensure_ascii=False) and 'controlling.umsatz_sehen' in json.dumps(A.call('rechte')[1], ensure_ascii=False))
 check('Administrator: alle Bereiche', [b['id'] for b in A.call('controlling_start')[1]['bereiche']] == ['umsatz'])
 
-# ── Vertreter (Stammdaten der Verwaltung) ──
+# ── Stammdaten und importierte Umsatzdaten (synthetisch, direkt gespeichert wie nach einem Import) ──
 rev_v = A.call('vertreter')[1].get('rev', 0)
 st, r = A.call('vertreter_save', {'rev': rev_v, 'groups': [{'nr': 'V1', 'name': 'Vera Vertrieb', 'kurz': 'VV'}, {'nr': 'V2', 'name': 'Viktor Verkauf'},
                                                            {'nr': '7', 'name': 'Sieben Test', 'kurz': 'ST'}, {'nr': 'V10', 'name': 'Zehn Test'}]})
 check('Vertreter in den Stammdaten angelegt', st == 200, r)
 rev_v = r.get('rev', rev_v + 1)
+storage_write('kunden', {'rev': 1, 'customers': [{'id': 'k1', 'nr': 'K1', 'firma': 'Eins', 'vertreter': 'V1', 'active': True, 'angebote': []},
+                                                  {'id': 'k2', 'nr': 'K2', 'firma': 'Zwei', 'vertreter': 'V2', 'active': True, 'angebote': []},
+                                                  {'id': 'k3', 'nr': 'K3', 'firma': 'Drei ohne Vertreter', 'vertreter': '', 'active': True, 'angebote': []},
+                                                  {'id': 'k4', 'nr': 'K4', 'firma': 'Vier', 'vertreter': 'V99', 'active': True, 'angebote': []}]})
+# Zeile: [Tag, Kunde, Artikel, Kolli, Menge (1/1000), Umsatz (Cent), EK-Wert (Cent), Umsatz mit EK (Cent), Positionen, berechnet]
+MONATE_D = {'2026-01': [[5, 'K1', 'A1', 10, 1250500, 2500000, 2150000, 2500000, 3, 1], [5, 'K1', 'L1', 0, 20000, 0, 0, 0, 2, 0],
+                        [6, 'K2', 'A1', 4, 400000, 1200000, 1140000, 1200000, 2, 1], [7, 'K3', 'A2', 1, 50000, 100000, 0, 0, 1, 1],
+                        [8, 'K4', 'A2', 1, 25000, 50000, 40000, 50000, 1, 1], [9, 'K9', 'A2', 1, 10000, 30000, 20000, 30000, 1, 1]],
+            '2026-02': [[3, 'K1', 'A1', 1, 100000, 100000, 90000, 100000, 1, 1]],
+            '2025-12': [[1, 'K1', 'A1', 2, 800000, 2000000, 1800000, 2000000, 2, 1]]}
+if not storage_sqlite():
+    os.makedirs(os.path.join(os.environ['UDATA'], 'controlling-umsatzdaten'), exist_ok=True)
+for m, z in MONATE_D.items():
+    storage_write('controlling-umsatzdaten/' + m, {'monat': m, 'hash': '0' * 64, 'zeilen': z})
+storage_write('controlling-umsatzdaten', {'rev': 1, 'monate': {m: {'hash': '0' * 64, 'zeilen': len(z), 'pos': 1, 'umsatz': 1, 'menge': 1, 'posOhne': 0, 'kunden': 1, 'artikel': 1,
+                                                                   'ersterTag': z[0][0], 'letzterTag': z[-1][0]} for m, z in sorted(MONATE_D.items())},
+                                          'kunden': ['K1', 'K2', 'K3', 'K4', 'K9'], 'artikel': ['A1', 'A2', 'L1'],
+                                          'importe': [{'t': '2026-11-01T10:00:00Z', 'vonName': 'Ina Import', 'quelle': 'Test.csv', 'zeitraum': ['2025-12-01', '2026-02-03']}]})
+
 st, d = L.call('controlling_umsatz')
-check('Umsatzstatistik leer, Vertreter aus den Stammdaten (natürliche Sortierung), Monate 01–12', st == 200 and d['rev'] == 0 and d['jahre'] == {}
-      and [v['nr'] for v in d['vertreter']] == ['7', 'V1', 'V2', 'V10'] and all(v['aktiv'] for v in d['vertreter'])
-      and [m['nr'] for m in d['monate']] == [f'{i:02d}' for i in range(1, 13)] and d['monate'][2]['name'] == 'März' and d['rechte'] == {'bearbeiten': False}, d)
-check('Anzeige mit Kürzel, sonst Name', {v['nr']: v['anzeige'] for v in d['vertreter']}['V1'] == 'V1 – VV' and {v['nr']: v['anzeige'] for v in d['vertreter']}['V2'] == 'V2 – Viktor Verkauf')
-
-# ── Eingaben ──
-JAN = [{'vertreterNr': 'V1', 'kg': 1250.5, 'umsatz': 25000, 'db': 3500}, {'vertreterNr': 'V2', 'kg': '400', 'umsatz': '10000.5', 'db': -200},
-       {'vertreterNr': '7', 'kg': None, 'umsatz': '', 'db': None}]
-save = lambda c, b, **kw: c.call('controlling_umsatz_monat_save', {'rev': 0, 'jahr': 2026, 'monat': '01', 'werte': JAN, **b}, **kw)   # noqa: E731
-check('nur ansehen: Speichern 403', save(L, {})[0] == 403)
-csrf = Bb.csrf; Bb.csrf = ''
-check('ohne CSRF: 403', save(Bb, {})[0] == 403)
-Bb.csrf = csrf
-check('schreibende Aktion per GET: 405', Bb.call('controlling_umsatz_monat_save')[0] == 405)
-for name, b in (('Jahr 1999', {'jahr': 1999}), ('Jahr als Text', {'jahr': 'zwanzig'}), ('Monat 13', {'monat': '13'}), ('Monat „Januar“', {'monat': 'Januar'}),
-                ('negative Kg', {'werte': [{'vertreterNr': 'V1', 'kg': -1}]}), ('negativer Umsatz', {'werte': [{'vertreterNr': 'V1', 'umsatz': -5}]}),
-                ('Text statt Zahl', {'werte': [{'vertreterNr': 'V1', 'umsatz': 'viel'}]}), ('unbekannter Vertreter', {'werte': [{'vertreterNr': 'V99', 'kg': 1}]}),
-                ('doppelter Vertreter', {'werte': [{'vertreterNr': 'V1', 'kg': 1}, {'vertreterNr': 'V1', 'kg': 2}]}), ('leere Werteliste', {'werte': []}),
-                ('zu große Zahl', {'werte': [{'vertreterNr': 'V1', 'umsatz': 1e13}]})):
-    st, r = save(Bb, b)
-    check(f'Eingabe: {name} → 422', st == 422 and r.get('error'), (st, r))
-check('nach abgewiesenen Eingaben nichts gespeichert', Bb.call('controlling_umsatz')[1]['rev'] == 0)
-
-# ── Speichern ──
-st, d = save(Bb, {})
 jan = d['jahre'].get('2026', {}).get('01', {}) if st == 200 else {}
-check('Januar gespeichert: Werte je Vertreter, Zahlen gerundet, negativer DB erlaubt, leerer Vertreter nicht gespeichert', st == 200 and d['rev'] == 1
-      and jan.get('V1') == {'kg': 1250.5, 'umsatz': 25000, 'db': 3500} and jan.get('V2') == {'kg': 400, 'umsatz': 10000.5, 'db': -200} and '7' not in jan, d)
-check('letzte Änderung mit Name', d.get('geaendert', {}).get('vonName') == 'Bea Bearbeiten')
-check('veralteter Stand: 409', save(Bb, {'monat': '02'})[0] == 409)
-st, d = Bb.call('controlling_umsatz_monat_save', {'rev': 1, 'jahr': 2026, 'monat': 2, 'werte': [{'vertreterNr': 'V1', 'umsatz': 1000}]})
-check('Monat als Zahl 2 → „02“', st == 200 and d['jahre']['2026'].get('02') == {'V1': {'kg': None, 'umsatz': 1000, 'db': None}}, d)
-st, d = Bb.call('controlling_umsatz_monat_save', {'rev': 2, 'jahr': 2026, 'monat': '01', 'werte': [{'vertreterNr': 'V2', 'umsatz': 12000, 'db': 600}]})
-check('nur mitgeschickte Vertreter ändern sich (V1 im Januar bleibt)', st == 200 and d['jahre']['2026']['01']['V1']['umsatz'] == 25000
-      and d['jahre']['2026']['01']['V2'] == {'kg': None, 'umsatz': 12000, 'db': 600}, d)
-st, d = Bb.call('controlling_umsatz_monat_save', {'rev': 3, 'jahr': 2026, 'monat': '10', 'werte': [{'vertreterNr': 'V10', 'kg': 5, 'umsatz': 99, 'db': 9}]})
-check('Monate sortiert (01, 02, 10)', st == 200 and list(d['jahre']['2026']) == ['01', '02', '10'], list(d['jahre'].get('2026', {})))
-st, d = Bb.call('controlling_umsatz_monat_save', {'rev': 4, 'jahr': 2026, 'monat': '10', 'werte': [{'vertreterNr': 'V10', 'kg': None, 'umsatz': None, 'db': None}]})
-check('alle Werte eines Monats geleert → Monat entfällt', st == 200 and '10' not in d['jahre']['2026'], d['jahre'])
-st, d = Bb.call('controlling_umsatz_monat_save', {'rev': 5, 'jahr': 2025, 'monat': '12', 'werte': [{'vertreterNr': 'V1', 'umsatz': 20000, 'db': 2000}]})
-check('Vorjahr gespeichert', st == 200 and d['jahre']['2025']['12']['V1']['umsatz'] == 20000)
+check('Monatsmeldung aus den Umsatzdaten: jüngstes Jahr, Werte je Hauptvertreter, ohne Berechnung zählt nicht', st == 200 and d['jahr'] == '2026' and d['jahreListe'] == ['2026', '2025']
+      and jan.get('V1') == {'kg': 1250.5, 'umsatz': 25000, 'db': None} and jan.get('V2') == {'kg': 400, 'umsatz': 12000, 'db': None}, d)
+check('Kunden ohne Vertreter und ohne Stammsatz unter „ohne Vertreter“, Nummer nicht in den Stammdaten eigene Zeile', jan.get('_', {}).get('umsatz') == 1300 and jan.get('V99', {}).get('umsatz') == 500, jan)
+check('Monate sortiert, leere Monate fehlen', list(d['jahre']['2026']) == ['01', '02'])
+check('Vertreterliste: Stammdaten (natürlich sortiert), dann Nummern ohne Stammsatz, „ohne Vertreter“ zuletzt', [v['nr'] for v in d['vertreter']] == ['7', 'V1', 'V2', 'V10', 'V99', '_']
+      and {v['nr']: v['anzeige'] for v in d['vertreter']}['V1'] == 'V1 – VV' and {v['nr']: v['anzeige'] for v in d['vertreter']}['V2'] == 'V2 – Viktor Verkauf'
+      and {v['nr']: v['anzeige'] for v in d['vertreter']}['V99'] == 'Vertreter V99 (nicht in den Stammdaten)' and d['vertreter'][-1]['anzeige'] == 'ohne Vertreter', d['vertreter'])
+check('Monate 01–12, Stand des letzten Imports, Rechte ohne EK', [m['nr'] for m in d['monate']] == [f'{i:02d}' for i in range(1, 13)] and d['monate'][2]['name'] == 'März'
+      and d['geaendert'] == {'t': '2026-11-01T10:00:00Z', 'vonName': 'Ina Import'} and d['rechte'] == {'ek': False, 'importieren': False} and d['umsatzdaten'] == {'vorhanden': True}, d)
+st, d = Bb.call('controlling_umsatz')
+jan = d['jahre']['2026']['01']
+check('mit controlling.umsatz_ek und bestand.einkaufspreise: DB = Umsatz mit EK − EK-Wert', d['rechte']['ek'] is True and jan['V1']['db'] == 3500 and jan['V2']['db'] == 600
+      and jan['_']['db'] == 100 and jan['V99']['db'] == 100, jan)
+st, d = L.call('controlling_umsatz&jahr=2025')
+check('Jahr wählbar: 2025', st == 200 and d['jahr'] == '2025' and d['jahre']['2025']['12']['V1'] == {'kg': 800, 'umsatz': 20000, 'db': None}, d.get('jahre'))
+st, d = L.call('controlling_umsatz&jahr=2024')
+check('Jahr ohne Umsatzdaten: leer', st == 200 and d['jahre'] == {} and d['jahr'] == '2024')
+check('ungültiges Jahr: 422', L.call('controlling_umsatz&jahr=1999')[0] == 422 and L.call('controlling_umsatz&jahr=abc')[0] == 422)
 
-# ── Ausgeschiedener Vertreter (nicht mehr in den Stammdaten) ──
+# ── Vertreter aus den Stammdaten entfernt: Werte bleiben mit Nummer ──
 st, r = A.call('vertreter_save', {'rev': rev_v, 'groups': [{'nr': 'V1', 'name': 'Vera Vertrieb', 'kurz': 'VV'}, {'nr': '7', 'name': 'Sieben Test', 'kurz': 'ST'},
                                                            {'nr': 'V10', 'name': 'Zehn Test'}]})
 check('V2 aus den Stammdaten entfernt', st == 200, r)
 st, d = L.call('controlling_umsatz')
 v2 = next((v for v in d['vertreter'] if v['nr'] == 'V2'), None)
-check('ausgeschiedener Vertreter bleibt mit Werten und Namen aus dem Schnappschuss (am Ende der Liste)', v2 is not None and v2['aktiv'] is False
-      and v2['anzeige'] == 'V2 – Viktor Verkauf (ausgeschieden)' and d['vertreter'][-1]['nr'] == 'V2' and d['jahre']['2026']['01']['V2']['umsatz'] == 12000, d['vertreter'])
-check('ausgeschiedenen Vertreter erfassen: 422', Bb.call('controlling_umsatz_monat_save', {'rev': d['rev'], 'jahr': 2026, 'monat': '03', 'werte': [{'vertreterNr': 'V2', 'kg': 1}]})[0] == 422)
-st, d = Bb.call('controlling_umsatz_monat_save', {'rev': d['rev'], 'jahr': 2026, 'monat': '01', 'werte': [{'vertreterNr': 'V1', 'kg': 1250.5, 'umsatz': 25000, 'db': 3500}]})
-check('Januar neu gespeichert: Werte des ausgeschiedenen Vertreters bleiben', st == 200 and d['jahre']['2026']['01'].get('V2', {}).get('umsatz') == 12000, d['jahre'])
-
-# ── Protokoll und Datenverantwortung ──
-log = dokument('protokoll/' + dt.datetime.now(dt.timezone.utc).strftime('%Y-%m')) or []
-txt = json.dumps([e for e in log if e.get('a') == 'controlling'], ensure_ascii=False)
-check('Protokoll: Monat und Jahr, keine Beträge', 'Umsatzstatistik: Monatswerte Januar 2026 gespeichert' in txt and '25000' not in txt and '12000' not in txt and '1250' not in txt, txt[:300])
-doc = dokument('controlling-umsatz') or {}
-check('eigenes Dokument mit Namens-Schnappschuss (GR-106)', doc.get('vertreter', {}).get('V2', {}).get('name') == 'Viktor Verkauf' and doc.get('rev') == d['rev'], doc.get('vertreter'))
+check('entfernter Vertreter bleibt mit seinen Umsätzen (Nummer, nicht aktiv)', v2 is not None and v2['aktiv'] is False and v2['anzeige'] == 'Vertreter V2 (nicht in den Stammdaten)'
+      and d['jahre']['2026']['01']['V2']['umsatz'] == 12000, d['vertreter'])
+check('kein Dokument der früheren Erfassung angelegt', dokument('controlling-umsatz') is None)
 
 # ── Oberfläche ──
 with sync_playwright() as p:
@@ -160,39 +151,34 @@ with sync_playwright() as p:
         return ctx, pg
 
     ctx, pg = anmelden('bea', 'Pflege-Konto-34', '198.51.100.11')
-    pg.wait_for_selector('#ctl-u-kpis .ctl-kpi')
-    check('Bereich Umsatzstatistik aktiv, Adresse #umsatz', pg.get_attribute('#ctl-bereiche [data-bereich="umsatz"]', 'aria-selected') == 'true' and pg.url.endswith('#umsatz'))
-    check('Jahr 2026 vorausgewählt (jüngstes mit Werten)', pg.input_value('#ctl-u-jahr') == '2026')
+    pg.wait_for_selector('#ctl-u-tabs [data-tab="auswertung"][aria-selected="true"]')
+    check('Bereich Umsatzstatistik aktiv, mit Umsatzdaten zuerst Reiter Auswertung, Adresse #umsatz', pg.get_attribute('#ctl-bereiche [data-bereich="umsatz"]', 'aria-selected') == 'true'
+          and pg.url.endswith('#umsatz'))
+    check('kein Reiter Datenpflege mehr', pg.locator('#ctl-u-tabs [data-tab="datenpflege"]').count() == 0 and pg.locator('#ctl-u-dialog').count() == 0)
+    pg.click('#ctl-u-tabs [data-tab="uebersicht"]'); pg.wait_for_selector('#ctl-u-kpis .ctl-kpi')
+    check('Reiter Monatsmeldung, Adresse #umsatz/uebersicht, Jahr 2026 vorausgewählt', pg.url.endswith('#umsatz/uebersicht') and pg.input_value('#ctl-u-jahr') == '2026'
+          and [o for o in pg.locator('#ctl-u-jahr option').all_inner_texts()] == ['2026', '2025'])
     kpi = text(pg, '#ctl-u-kpis')
-    check('Kennzahlen: Umsatz und DB des Jahres', '38.000,00 €' in kpi and '4.100,00 €' in kpi, kpi)
+    check('Kennzahlen: Umsatz und DB des Jahres aus den Umsatzdaten', '39.800,00 €' in kpi and '4.400,00 €' in kpi, kpi)
     zeilen = text(pg, '#ctl-u-vertreterzeilen')
-    check('Anteile berechnet (V1 26.000 von 38.000 € = 68,42 %)', '68,42 %' in zeilen and 'V2 – Viktor Verkauf (ausgeschieden)' in zeilen, zeilen[:500])
+    check('Anteile berechnet (V1 26.000 von 39.800 € = 65,33 %), ohne Vertreter und Nummer ohne Stammsatz als Zeilen', '65,33 %' in zeilen and 'ohne Vertreter' in zeilen
+          and 'Vertreter V2 (nicht in den Stammdaten)' in zeilen, zeilen[:600])
+    check('Stand: aus den importierten Umsatzdaten mit letztem Import', 'importierten Umsatzdaten' in text(pg, '#ctl-u-stand') and 'Ina Import' in text(pg, '#ctl-u-stand'))
     pg.select_option('#ctl-u-diagrammart', 'linie'); pg.wait_for_selector('#ctl-u-diagramm polyline')
     check('Liniendiagramm', pg.locator('#ctl-u-diagramm svg[role="img"]').count() == 1)
     pg.click('#ctl-u-vertreterfilter summary'); pg.uncheck('#ctl-u-vertreteroptionen [data-vertreter="V2"]')
-    pg.wait_for_function("!document.querySelector('#ctl-u-vertreterzeilen').textContent.includes('ausgeschieden')")
-    check('Vertreterfilter wirkt auf Kennzahlen', '26.000,00 €' in text(pg, '#ctl-u-kpis'), text(pg, '#ctl-u-kpis'))
+    pg.wait_for_function("!document.querySelector('#ctl-u-vertreterzeilen').textContent.includes('V2')")
+    check('Vertreterfilter wirkt auf Kennzahlen', '27.800,00 €' in text(pg, '#ctl-u-kpis'), text(pg, '#ctl-u-kpis'))
     pg.screenshot(path=os.path.join(SH, 'controlling_umsatz_1280.png'), full_page=True)
-    pg.click('#ctl-u-tabs [data-tab="datenpflege"]')
-    check('Reiter Datenpflege, Adresse #umsatz/datenpflege', pg.is_visible('#ctl-u-datenpflege') and pg.url.endswith('#umsatz/datenpflege'))
-    pg.fill('#ctl-u-pflege-jahr', '2026'); pg.select_option('#ctl-u-pflege-monat', '03')
-    pg.click('#ctl-u-bearbeiten'); pg.wait_for_selector('#ctl-u-dialog[open]')
-    check('Dialog: nur aktuelle Vertreter', pg.locator('#ctl-u-editorzeilen tr').count() == 3 and 'Viktor' not in pg.inner_text('#ctl-u-editorzeilen'))
-    pg.fill('#ctl-u-editorzeilen [data-rep="V1"][data-feld="umsatz"]', 'abc'); pg.click('#ctl-u-form [type="submit"]')
-    pg.wait_for_selector('#ctl-u-meldung:not(:empty)')
-    check('Dialog: Text statt Zahl wird vor dem Senden gemeldet', 'Zahlen' in pg.inner_text('#ctl-u-meldung'))
-    pg.fill('#ctl-u-editorzeilen [data-rep="V1"][data-feld="umsatz"]', '1.234,50'); pg.fill('#ctl-u-editorzeilen [data-rep="V1"][data-feld="db"]', '234,5')
-    pg.wait_for_function("document.querySelector('#ctl-u-editorzeilen [data-spanne=\"V1\"]').textContent.includes('19')")
-    check('Dialog: Spanne rechnet mit (234,5 ÷ 1.234,5 = 19,00 %)', '19,00 %' in text(pg, '#ctl-u-editorzeilen [data-spanne="V1"]'))
-    pg.screenshot(path=os.path.join(SH, 'controlling_datenpflege_1280.png'))
-    pg.click('#ctl-u-form [type="submit"]'); pg.wait_for_selector('#ctl-u-dialog[open]', state='hidden')
-    check('Oberfläche: März gespeichert (deutsche Schreibweise)', Bb.call('controlling_umsatz')[1]['jahre']['2026']['03']['V1'] == {'kg': None, 'umsatz': 1234.5, 'db': 234.5})
+    pg.select_option('#ctl-u-jahr', '2025')
+    pg.wait_for_function("document.querySelector('#ctl-u-kpis').textContent.includes('20.000,00')")
+    check('Jahreswechsel lädt 2025 vom Server', '20.000,00 €' in text(pg, '#ctl-u-kpis') and pg.input_value('#ctl-u-jahr') == '2025')
     ctx.close()
 
     for breite, thema in ((390, 'light'), (390, 'dark'), (1280, 'dark')):
         ctx, pg = anmelden('lea', 'Leserin-Konto-12', '198.51.100.10', breite, thema)
-        pg.wait_for_selector('#ctl-u-kpis .ctl-kpi')
-        check(f'{breite}px {thema}: nur ansehen (kein Reiter Datenpflege)', pg.is_hidden('#ctl-u-tabs [data-tab="datenpflege"]'))
+        pg.wait_for_selector('#ctl-u-tabs [data-tab="uebersicht"]'); pg.click('#ctl-u-tabs [data-tab="uebersicht"]'); pg.wait_for_selector('#ctl-u-kpis .ctl-kpi')
+        check(f'{breite}px {thema}: ohne EK-Recht DB leer mit Hinweis', 'DB und Spanne nur mit den Rechten' in text(pg, '#ctl-u-fussnote') and '–' in text(pg, '#ctl-u-kpis'))
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         if thema == 'dark':
             check(f'{breite}px: dunkler Grund', pg.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(18, 16, 17)')

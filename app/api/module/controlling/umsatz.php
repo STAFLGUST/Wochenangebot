@@ -1,82 +1,84 @@
 <?php
 declare(strict_types=1);
-/* Controlling · Bereich Umsatzstatistik: Kg, Umsatz und Deckungsbeitrag je Vertreter und Monat (Monatsmeldung von Hand),
-   ausgewertet in der Oberfläche (Kennzahlen, Anteile, Spanne = DB ÷ Umsatz, Monatsvergleich).
-   Dokument „controlling-umsatz“ (vertraulich): { rev, jahre: { "JJJJ": { "MM": { "<Vertreter-Nr>": { kg, umsatz, db } } } },
-   vertreter: { "<Nr>": { name, kurz } } (Schnappschuss der Namen, GR-106), geaendert }.
-   Vertreter kommen aus den Stammdaten der Verwaltung (vertreter_load, nur lesend, GR-101). Wer dort entfällt, behält seine
-   gespeicherten Werte und erscheint weiter in der Auswertung („ausgeschieden“); erfassen lassen sich nur aktuelle Vertreter. */
+/* Controlling · Bereich Umsatzstatistik, Reiter „Monatsmeldung“: Kg, Umsatz und Deckungsbeitrag je Vertreter und Monat eines
+   Jahres – gerechnet aus den importierten Umsatzdaten der Warenwirtschaft (module/controlling/umsatzdaten.php), nicht mehr
+   von Hand erfasst (Auftrag des Inhabers 01.11.2026: „nur durch die importierten Daten“). Die Oberfläche (umsatz.js) zeigt
+   Kennzahlen, Anteile, Spanne = DB ÷ Umsatz und den Monatsvergleich.
+   Vertreter = Hauptvertreter des Kunden nach den heutigen Stammdaten der Verwaltung (wie in der Auswertung); Kunden ohne
+   Vertreter bzw. ohne Stammsatz stehen unter „ohne Vertreter“, Nummern, die nicht mehr in den Stammdaten stehen, mit Nummer.
+   Kg = Menge der berechneten Positionen; DB nur mit controlling.umsatz_ek und bestand.einkaufspreise (GR-008), sonst leer.
+   Das frühere Dokument „controlling-umsatz“ (Monatsmeldung von Hand) wird nicht mehr gelesen oder geschrieben. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-/* Gespeichertes Dokument mit Standardwerten; unbekannte (neuere) Felder bleiben erhalten (GR-006) */
-function controlling_umsatz_doc(): array
+/* Jahre mit importierten Umsätzen (neueste zuerst) */
+function controlling_umsatz_jahre(array $index): array
 {
-    $d = store_read('controlling-umsatz') ?? [];
-    return ['rev' => (int)($d['rev'] ?? 0), 'jahre' => is_array($d['jahre'] ?? null) ? $d['jahre'] : [],
-            'vertreter' => is_array($d['vertreter'] ?? null) ? $d['vertreter'] : [], 'geaendert' => $d['geaendert'] ?? null] + $d;
+    $j = array_values(array_unique(array_map(fn($m) => substr((string)$m, 0, 4), array_keys($index['monate']))));
+    rsort($j, SORT_STRING);
+    return $j;
 }
 
-/* Aktuelle Vertreter aus den Stammdaten: Nummer → Name, Kürzel */
-function controlling_umsatz_stammvertreter(): array
+/* Vertreter für die Oberfläche: aktuelle aus den Stammdaten, dazu Nummern mit Umsatz, die dort nicht (mehr) stehen,
+   und „ohne Vertreter“ (Nummer „_“), wenn es Umsätze ohne Vertreter gibt */
+function controlling_umsatz_vertreter(array $mitUmsatz): array
 {
+    $stamm = umsatz_stamm()['vertreter'];
     $out = [];
-    foreach ((array)(vertreter_load()['groups'] ?? []) as $v) {
-        if (!is_array($v)) continue;
-        $nr = trim((string)($v['nr'] ?? ''));
-        if ($nr === '') continue;
-        $out[$nr] = ['name' => trim((string)($v['name'] ?? '')), 'kurz' => trim((string)($v['kurz'] ?? ''))];
+    foreach ($stamm as $nr => $v) {
+        $name = trim((string)($v['name'] ?? '')); $kurz = trim((string)($v['kurz'] ?? ''));
+        $out[] = ['nr' => (string)$nr, 'name' => $name, 'kurz' => $kurz, 'aktiv' => true, 'anzeige' => $nr . ' – ' . ($kurz !== '' ? $kurz : ($name !== '' ? $name : $nr))];
     }
-    return $out;
-}
-
-/* Vertreter für die Oberfläche: aktuelle aus den Stammdaten, dazu ausgeschiedene mit gespeicherten Werten (Name aus dem Schnappschuss) */
-function controlling_umsatz_vertreter(array $doc): array
-{
-    $stamm = controlling_umsatz_stammvertreter();
-    $mitWerten = [];
-    foreach ($doc['jahre'] as $monate) foreach ((array)$monate as $werte) foreach (array_keys((array)$werte) as $nr) $mitWerten[(string)$nr] = true;
-    $out = [];
-    foreach ($stamm + array_fill_keys(array_keys($mitWerten), null) as $nr => $v) {
+    foreach (array_keys($mitUmsatz) as $nr) {
         $nr = (string)$nr;
-        $aktiv = isset($stamm[$nr]);
-        $v = $aktiv ? $stamm[$nr] : (is_array($doc['vertreter'][$nr] ?? null) ? $doc['vertreter'][$nr] : ['name' => '', 'kurz' => '']);
-        $name = (string)($v['name'] ?? ''); $kurz = (string)($v['kurz'] ?? '');
-        $out[] = ['nr' => $nr, 'name' => $name, 'kurz' => $kurz, 'aktiv' => $aktiv,
-                  'anzeige' => $nr . ' – ' . ($kurz !== '' ? $kurz : ($name !== '' ? $name : $nr)) . ($aktiv ? '' : ' (ausgeschieden)')];
+        if (isset($stamm[$nr]) || $nr === UMSATZ_OHNE) continue;
+        $out[] = ['nr' => $nr, 'name' => '', 'kurz' => '', 'aktiv' => false, 'anzeige' => "Vertreter $nr (nicht in den Stammdaten)"];
     }
     usort($out, fn($a, $b) => $a['aktiv'] === $b['aktiv'] ? strnatcasecmp($a['nr'], $b['nr']) : ($a['aktiv'] ? -1 : 1));   // aktuelle zuerst
+    if (isset($mitUmsatz[UMSATZ_OHNE])) $out[] = ['nr' => UMSATZ_OHNE, 'name' => '', 'kurz' => '', 'aktiv' => false, 'anzeige' => 'ohne Vertreter'];
     return $out;
 }
 
-/* Monatsmeldung prüfen: Jahr, Monat und Werte je aktuellem Vertreter. Nicht mitgeschickte Vertreter behalten ihre Werte. */
-function controlling_umsatz_eingabe(array $b): array
+/* Kg, Umsatz und DB je Monat und Vertreter eines Jahres aus den Umsatzdaten: { "MM": { "<Vertreter>": { kg, umsatz, db } } } */
+function controlling_umsatz_jahr(array $index, string $jahr, bool $ek): array
 {
-    $jahr = controlling_jahr($b['jahr'] ?? null);
-    $monat = controlling_monat($b['monat'] ?? null);
-    $stamm = controlling_umsatz_stammvertreter();
-    if (!$stamm) throw new InvalidArgumentException('Es sind keine Vertreter in den Stammdaten eingetragen (Verwaltung → Vertreter).');
-    $eingaben = $b['werte'] ?? null;
-    if (!is_array($eingaben) || !array_is_list($eingaben) || !$eingaben || count($eingaben) > 500) throw new InvalidArgumentException('Keine Werte übermittelt.');
-    $werte = [];
-    foreach ($eingaben as $e) {
-        if (!is_array($e)) throw new InvalidArgumentException('Ein Vertreterdatensatz ist ungültig.');
-        $nr = s($e['vertreterNr'] ?? '', 40, false);
-        if ($nr === null || !isset($stamm[$nr])) throw new InvalidArgumentException('Unbekannter Vertreter „' . ($nr ?? '') . '“ – nur Vertreter aus den Stammdaten.');
-        if (isset($werte[$nr])) throw new InvalidArgumentException("Vertreter $nr ist doppelt eingetragen.");
-        $werte[$nr] = ['kg' => controlling_zahl($e['kg'] ?? null, 3, false, "Vertreter $nr: Kg"),
-                       'umsatz' => controlling_zahl($e['umsatz'] ?? null, 2, false, "Vertreter $nr: Umsatz"),
-                       'db' => controlling_zahl($e['db'] ?? null, 2, true, "Vertreter $nr: DB")];
+    $summe = [];   // Monat → Vertreter → [Menge, Umsatz, EK-Wert, Umsatz mit EK]
+    $vertreter = [];   // Vertreter je Kunde (zwischengespeichert)
+    foreach (array_keys($index['monate']) as $m) {
+        $m = (string)$m;
+        if (substr($m, 0, 4) !== $jahr) continue;
+        $mm = substr($m, 5, 2);
+        foreach (umsatzdaten_monat($m) as $z) {
+            if ($z[9] !== 1) continue;   // ohne Berechnung (z. B. Leergut) zählt nicht
+            $v = $vertreter[$z[1]] ??= umsatz_merkmal('vertreter', $z[1], $z[2]);
+            $s = &$summe[$mm][$v];
+            $s ??= [0, 0, 0, 0];
+            $s[0] += $z[4]; $s[1] += $z[5]; $s[2] += $z[6]; $s[3] += $z[7];
+            unset($s);
+        }
     }
-    return ['jahr' => $jahr, 'monat' => $monat, 'werte' => $werte, 'stamm' => $stamm];
+    $out = [];
+    ksort($summe, SORT_STRING);
+    foreach ($summe as $mm => $je) {
+        ksort($je, SORT_NATURAL);
+        foreach ($je as $v => $s) $out[(string)$mm][(string)$v] = ['kg' => round($s[0] / 1000, 3), 'umsatz' => round($s[1] / 100, 2), 'db' => $ek ? round(($s[3] - $s[2]) / 100, 2) : null];
+    }
+    return $out;
 }
 
-/* Antwort für die Oberfläche */
-function controlling_umsatz_antwort(array $me): array
+/* Antwort für die Oberfläche: ein Jahr (Anfrage ?jahr=JJJJ, sonst das jüngste mit Umsatzdaten) */
+function controlling_umsatz_antwort(array $me, $jahrRoh = null): array
 {
-    $d = controlling_umsatz_doc();
+    $index = umsatzdaten_index();
+    $jahre = controlling_umsatz_jahre($index);
+    $jahr = $jahrRoh !== null && $jahrRoh !== '' ? controlling_jahr($jahrRoh) : ($jahre[0] ?? date('Y'));
+    $ek = umsatz_darf_ek($me);
+    $werte = controlling_umsatz_jahr($index, $jahr, $ek);
+    $mitUmsatz = [];
+    foreach ($werte as $je) foreach (array_keys($je) as $v) $mitUmsatz[(string)$v] = true;
     $monate = [];
     foreach (CONTROLLING_MONATE as $nr => $name) $monate[] = ['nr' => sprintf('%02d', $nr), 'name' => $name];   // „10“–„12“ sind in PHP Zahlenschlüssel
-    return ['ok' => true, 'rev' => $d['rev'], 'jahre' => (object)$d['jahre'], 'monate' => $monate, 'vertreter' => controlling_umsatz_vertreter($d),
-            'geaendert' => $d['geaendert'], 'rechte' => ['bearbeiten' => may($me, 'controlling.umsatz_bearbeiten')],
-            'umsatzdaten' => ['vorhanden' => (bool)umsatzdaten_index()['monate']]];   // Reiter „Auswertung“ zuerst, wenn importiert
+    $g = $index['importe'][0] ?? null;
+    return ['ok' => true, 'rev' => $index['rev'], 'jahr' => $jahr, 'jahreListe' => $jahre, 'jahre' => (object)($werte ? [$jahr => $werte] : []), 'monate' => $monate,
+            'vertreter' => controlling_umsatz_vertreter($mitUmsatz), 'geaendert' => $g ? ['t' => $g['t'] ?? null, 'vonName' => $g['vonName'] ?? ''] : null,
+            'rechte' => ['ek' => $ek, 'importieren' => may($me, 'controlling.umsatz_importieren')], 'umsatzdaten' => ['vorhanden' => (bool)$index['monate']]];
 }

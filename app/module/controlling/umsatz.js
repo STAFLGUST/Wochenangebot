@@ -1,8 +1,8 @@
-/* STAFL-Plattform · Controlling · Bereich Umsatzstatistik: Kg, Umsatz, Deckungsbeitrag und Spanne je Vertreter und Monat –
-   Kennzahlen, Vertretertabelle mit Anteilen, Monatsvergleich (Balken/Linie) und Datenpflege im Dialog (Recht
-   controlling.umsatz_bearbeiten). Daten: Aktion controlling_umsatz; Monate „01“–„12“, Werte je Vertreter-Nummer.
-   Ausgeschiedene Vertreter (nicht mehr in den Stammdaten) bleiben mit ihren Werten in der Auswertung, erfasst werden nur
-   aktuelle. Grundlage: Modul „Gust 1“ aus dem Modulbausatz. Meldet sich bei controlling.js an (STAFL_CONTROLLING.bereich).
+/* STAFL-Plattform · Controlling · Bereich Umsatzstatistik, Reiter „Monatsmeldung“: Kg, Umsatz, Deckungsbeitrag und Spanne je
+   Vertreter und Monat eines Jahres – Kennzahlen, Vertretertabelle mit Anteilen, Monatsvergleich (Balken/Linie). Die Werte
+   rechnet der Server aus den importierten Umsatzdaten (Aktion controlling_umsatz&jahr=JJJJ, keine Erfassung von Hand mehr);
+   DB und Spanne nur mit den Rechten für Einkaufswerte (sonst leer). Grundlage: Modul „Gust 1“ aus dem Modulbausatz.
+   Meldet sich bei controlling.js an (STAFL_CONTROLLING.bereich).
    Reiter „Auswertung“ (Umsätze aus der Warenwirtschaft): umsatz-auswertung.js – zuerst geöffnet, sobald Daten importiert sind. */
 'use strict';
 (() => {
@@ -18,16 +18,12 @@
   const summe = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) : null; };
   const schnitt = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; };
   const quote = (teil, ganz) => ist(teil) && ist(ganz) && Number(ganz) !== 0 ? Number(teil) / Number(ganz) : null;
-  const eingabe = (n, d = 2) => !ist(n) ? '' : new Intl.NumberFormat('de-DE', { useGrouping: false, maximumFractionDigits: d }).format(Number(n));
-  /* „1.234,5“, „1234,5“, „1234.5“ → Zahl; leer → null; sonst NaN */
-  const zahlLesen = (s) => { let x = String(s ?? '').trim().replace(/\s/g, ''); if (!x) return null; if (x.includes(',') && x.includes('.')) x = x.replace(/\./g, '').replace(',', '.'); else if (x.includes(',')) x = x.replace(',', '.'); const n = Number(x); return Number.isFinite(n) ? n : NaN; };
   const KENNZAHL = { umsatz: 'Umsatz', db: 'DB', kg: 'Kg', spanne: 'Spanne' };
 
   const S = { box: null, d: null, rechte: {}, jahr: String(new Date().getFullYear()), monate: new Set(), vertreter: new Set(), kennzahl: 'umsatz', tab: 'uebersicht' };
   const MONATE = () => S.d ? S.d.monate : [];
   const monatsname = (nr) => (MONATE().find((m) => m.nr === nr) || { name: nr }).name;
   const reps = () => S.d ? S.d.vertreter : [];
-  const aktiveReps = () => reps().filter((r) => r.aktiv);
   const gewMonate = () => MONATE().map((m) => m.nr).filter((nr) => S.monate.has(nr));
   const gewReps = () => reps().filter((r) => S.vertreter.has(r.nr));
   const monatsdaten = (jahr, monat) => (S.d && S.d.jahre && S.d.jahre[jahr] && S.d.jahre[jahr][monat]) || {};
@@ -41,7 +37,7 @@
   const GERUEST = `
     <div class="ctl-intro"><div><p class="ctl-eyebrow">Vertrieb · Kennzahlen</p><h1>Umsatzstatistik</h1>
       <p class="ctl-intro-text">Umsätze aus der Warenwirtschaft nach Vertreter, Kunde und Artikel – dazu die Monatsmeldung je Vertreter.</p></div><p class="ctl-notiz ctl-stand" id="ctl-u-stand"></p></div>
-    <nav class="ctl-tabs stafl-streifen" id="ctl-u-tabs" role="tablist" aria-label="Umsatzstatistik"><button type="button" role="tab" data-tab="auswertung" aria-selected="false">Auswertung</button><button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Monatsmeldung</button><button type="button" role="tab" data-tab="datenpflege" aria-selected="false" hidden>Datenpflege</button></nav>
+    <nav class="ctl-tabs stafl-streifen" id="ctl-u-tabs" role="tablist" aria-label="Umsatzstatistik"><button type="button" role="tab" data-tab="auswertung" aria-selected="false">Auswertung</button><button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Monatsmeldung</button></nav>
     <section class="ctl-filterzeile" id="ctl-u-filter" aria-label="Filter">
       <label for="ctl-u-jahr">Jahr</label><select id="ctl-u-jahr"></select>
       <details class="ctl-filter" id="ctl-u-zeitfilter"><summary id="ctl-u-zeitfilter-titel">Alle Monate</summary><div class="ctl-filterliste" id="ctl-u-monatsoptionen"></div></details>
@@ -53,7 +49,7 @@
       <div class="ctl-kpis" id="ctl-u-kpis" aria-live="polite"></div>
       <section class="ctl-panel ctl-glas ctl-tabellenpanel"><div class="ctl-panelkopf"><div><h2 id="ctl-u-tabelle-titel">Vertreter</h2><p class="ctl-hilfe" id="ctl-u-anteil-hinweis"></p></div></div>
         <div class="ctl-tabelle-wrap"><table class="ctl-tabelle ctl-vertretertabelle"><thead><tr><th>Vertreter</th><th class="ctl-zahl">Kg</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Umsatz</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">DB</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Spanne</th><th>Vergleich</th></tr></thead><tbody id="ctl-u-vertreterzeilen"></tbody></table></div>
-        <p class="ctl-fussnote">Spanne = DB ÷ Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.</p>
+        <p class="ctl-fussnote" id="ctl-u-fussnote">Spanne = DB ÷ Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.</p>
       </section>
       <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf ctl-monatskopf"><div><h2>Monatsvergleich</h2><p class="ctl-hilfe" id="ctl-u-diagrammhinweis"></p></div>
           <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-u-monatskennzahl">Kennzahl</label><select id="ctl-u-monatskennzahl"><option value="umsatz">Umsatz</option><option value="db">DB</option><option value="kg">Kg</option><option value="spanne">Spanne</option></select>
@@ -62,29 +58,19 @@
         <div class="ctl-tabelle-wrap ctl-monatstabelle-wrap"><table class="ctl-tabelle ctl-monatstabelle"><thead><tr><th>Monat</th><th class="ctl-zahl">Kg</th><th class="ctl-zahl">Umsatz</th><th class="ctl-zahl">DB</th><th class="ctl-zahl">Spanne</th><th>Status</th></tr></thead><tbody id="ctl-u-monatszeilen"></tbody></table></div>
       </section>
     </section>
-    <section id="ctl-u-datenpflege" hidden><section class="ctl-panel ctl-glas"><div class="ctl-panelkopf"><div><h2>Monatswerte pflegen</h2><p class="ctl-hilfe">Kg, Umsatz und DB je Vertreter eintragen. Die Spanne wird automatisch berechnet.</p></div></div>
-      <div class="ctl-pflegeauswahl"><label>Jahr<input type="number" id="ctl-u-pflege-jahr" min="2000" max="2100" inputmode="numeric"></label><label>Monat<select id="ctl-u-pflege-monat"></select></label>
-        <button type="button" class="btn primary" id="ctl-u-bearbeiten">Monatswerte bearbeiten</button>
-        <p class="ctl-hilfe">Leere Felder bleiben leer. Ein neues Jahr erscheint nach dem ersten Speichern in der Jahresauswahl. Vertreter kommen aus den Stammdaten (Verwaltung → Vertreter).</p></div></section></section>
-    <dialog class="ctl-dialog" id="ctl-u-dialog" aria-labelledby="ctl-u-dialog-titel"><form id="ctl-u-form" novalidate>
-      <div class="ctl-dialogkopf"><div><p class="ctl-eyebrow">Datenpflege</p><h2 id="ctl-u-dialog-titel">Monatswerte bearbeiten</h2></div><button type="button" class="ctl-dialog-schliessen" data-schliessen aria-label="Schließen">×</button></div>
-      <div class="ctl-dialogauswahl"><label>Jahr<input type="number" id="ctl-u-dialog-jahr" min="2000" max="2100" inputmode="numeric"></label><label>Monat<select id="ctl-u-dialog-monat"></select></label></div>
-      <div class="ctl-tabelle-wrap ctl-editor-wrap"><table class="ctl-tabelle ctl-editortabelle"><thead><tr><th>Vertreter</th><th>Kg</th><th>Umsatz €</th><th>DB €</th><th>Spanne</th></tr></thead><tbody id="ctl-u-editorzeilen"></tbody><tfoot id="ctl-u-editorfuss"></tfoot></table></div>
-      <p class="ctl-meldung" id="ctl-u-meldung" role="status"></p>
-      <div class="ctl-dialogknopfe"><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn primary">Speichern</button></div>
-    </form></dialog>`;
+`;
 
   /* ---------- Filter ---------- */
+  /* Jahre mit importierten Umsätzen (ohne Daten: das laufende Jahr) */
   function jahre() {
-    const gespeichert = Object.keys((S.d && S.d.jahre) || {}).filter((y) => /^\d{4}$/.test(y));
-    return [...new Set([...gespeichert, String(new Date().getFullYear()), S.jahr])].sort((a, b) => Number(b) - Number(a));
+    const liste = (S.d && S.d.jahreListe) || [];
+    return [...new Set([...liste, S.jahr])].filter((y) => /^\d{4}$/.test(y)).sort((a, b) => Number(b) - Number(a));
   }
   function zeichneJahre() {
     const liste = jahre();
     if (!liste.includes(S.jahr)) S.jahr = liste[0];
     $('#ctl-u-jahr').innerHTML = liste.map((y) => `<option value="${esc(y)}">${esc(y)}</option>`).join('');
     $('#ctl-u-jahr').value = S.jahr;
-    $('#ctl-u-pflege-jahr').value = S.jahr;
   }
   function zeichneMonatsfilter() {
     const alle = S.monate.size === MONATE().length, gew = gewMonate();
@@ -180,60 +166,19 @@
     const monate = gewMonate(), auswahl = gewReps();
     zeichneKennzahlen(monate, auswahl); zeichneVertreter(monate, auswahl); zeichneMonate(monate, auswahl);
     const g = S.d.geaendert;
-    $('#ctl-u-stand').textContent = g && g.t ? `Zuletzt geändert: ${new Date(g.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${g.vonName ? ' · ' + g.vonName : ''}` : 'Noch keine Werte erfasst.';
+    $('#ctl-u-stand').textContent = g && g.t ? `Aus den importierten Umsatzdaten · letzter Import ${new Date(g.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${g.vonName ? ' · ' + g.vonName : ''}`
+      : 'Noch keine Umsatzdaten importiert (Verwaltung → Import → „Umsätze je Kunde und Artikel“).';
+    $('#ctl-u-fussnote').textContent = 'Kg, Umsatz und DB aus den importierten Umsatzdaten (berechnete Positionen); Vertreter = Hauptvertreter des Kunden nach den heutigen Stammdaten. Spanne = DB ÷ Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.'
+      + (S.d.rechte && S.d.rechte.ek ? '' : ' DB und Spanne nur mit den Rechten „Umsatzauswertung: Einkaufswerte …“ und „Einkaufspreise (EK) ansehen“.');
   }
   function zeigeTab(tab) {
     if (!tab) tab = S.mitDaten ? 'auswertung' : 'uebersicht';   // ohne Angabe: Auswertung, sobald Umsatzdaten importiert sind
-    S.tab = tab === 'datenpflege' && S.rechte.bearbeiten ? 'datenpflege' : tab === 'auswertung' ? 'auswertung' : 'uebersicht';
+    S.tab = tab === 'auswertung' ? 'auswertung' : 'uebersicht';
     $$('#ctl-u-tabs [role="tab"]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === S.tab)));
-    $('#ctl-u-uebersicht').hidden = S.tab !== 'uebersicht'; $('#ctl-u-filter').hidden = S.tab !== 'uebersicht'; $('#ctl-u-datenpflege').hidden = S.tab !== 'datenpflege';
+    $('#ctl-u-uebersicht').hidden = S.tab !== 'uebersicht'; $('#ctl-u-filter').hidden = S.tab !== 'uebersicht';
     $('#ctl-u-auswertung').hidden = S.tab !== 'auswertung'; $('#ctl-u-stand').hidden = S.tab === 'auswertung';
     if (S.tab === 'auswertung' && !S.auswertungGeladen && C.umsatzAuswertung) { S.auswertungGeladen = true; C.umsatzAuswertung.anzeigen($('#ctl-u-auswertung')); }
     C.hashSetzen(S.tab === (S.mitDaten ? 'auswertung' : 'uebersicht') ? '' : S.tab);
-  }
-
-  /* ---------- Datenpflege ---------- */
-  function editorZeilen(jahr, monat) {
-    const daten = monatsdaten(String(jahr), monat);
-    $('#ctl-u-editorzeilen').innerHTML = aktiveReps().map((r) => {
-      const x = daten[r.nr] || {}, feld = (k, d, titel) => `<td data-label="${titel}"><input aria-label="${esc(r.anzeige)} ${titel}" inputmode="decimal" value="${esc(eingabe(x[k], d))}" data-rep="${esc(r.nr)}" data-feld="${k}"></td>`;
-      return `<tr><td data-label="Vertreter">${esc(r.anzeige)}</td>${feld('kg', 3, 'Kg')}${feld('umsatz', 2, 'Umsatz €')}${feld('db', 2, 'DB €')}<td data-label="Spanne" class="ctl-zahl" data-spanne="${esc(r.nr)}">${esc(pct(quote(x.db, x.umsatz)))}</td></tr>`;
-    }).join('') || '<tr><td colspan="5" class="ctl-empty">Es sind keine Vertreter in den Stammdaten eingetragen (Verwaltung → Vertreter).</td></tr>';
-    editorFuss();
-  }
-  const feldWert = (nr, k) => { const el = $(`#ctl-u-editorzeilen [data-rep="${CSS.escape(nr)}"][data-feld="${k}"]`); const n = el ? zahlLesen(el.value) : null; return Number.isFinite(n) ? n : null; };
-  function editorFuss() {
-    const s = { kg: [], umsatz: [], db: [] };
-    aktiveReps().forEach((r) => {
-      ['kg', 'umsatz', 'db'].forEach((k) => { const v = feldWert(r.nr, k); if (v !== null) s[k].push(v); });
-      const zelle = $(`#ctl-u-editorzeilen [data-spanne="${CSS.escape(r.nr)}"]`);
-      if (zelle) zelle.textContent = pct(quote(feldWert(r.nr, 'db'), feldWert(r.nr, 'umsatz')));
-    });
-    $('#ctl-u-editorfuss').innerHTML = `<tr class="ctl-total"><td data-label="Vertreter">Summe</td><td data-label="Kg" class="ctl-zahl">${esc(kg(summe(s.kg)))}</td><td data-label="Umsatz €" class="ctl-zahl">${esc(euro(summe(s.umsatz)))}</td><td data-label="DB €" class="ctl-zahl">${esc(euro(summe(s.db)))}</td><td data-label="Spanne" class="ctl-zahl">${esc(pct(quote(summe(s.db), summe(s.umsatz))))}</td></tr>`;
-  }
-  function editorOeffnen() {
-    if (!S.rechte.bearbeiten) return;
-    $('#ctl-u-dialog-jahr').value = $('#ctl-u-pflege-jahr').value || S.jahr;
-    $('#ctl-u-dialog-monat').value = $('#ctl-u-pflege-monat').value || '01';
-    editorZeilen($('#ctl-u-dialog-jahr').value, $('#ctl-u-dialog-monat').value);
-    $('#ctl-u-meldung').textContent = '';
-    $('#ctl-u-dialog').showModal();
-  }
-  async function speichern(ev) {
-    ev.preventDefault();
-    const jahr = Number($('#ctl-u-dialog-jahr').value), monat = $('#ctl-u-dialog-monat').value;
-    if (!Number.isInteger(jahr) || jahr < 2000 || jahr > 2100) { $('#ctl-u-meldung').textContent = 'Bitte ein Jahr zwischen 2000 und 2100 eingeben.'; return; }
-    const falsch = $$('#ctl-u-editorzeilen [data-feld]').find((el) => Number.isNaN(zahlLesen(el.value)));
-    if (falsch) { $('#ctl-u-meldung').textContent = `Bitte nur Zahlen eingeben (${falsch.getAttribute('aria-label')}).`; falsch.focus(); return; }
-    const werte = aktiveReps().map((r) => ({ vertreterNr: r.nr, kg: feldWert(r.nr, 'kg'), umsatz: feldWert(r.nr, 'umsatz'), db: feldWert(r.nr, 'db') }));
-    const r = await C.api('controlling_umsatz_monat_save', { rev: S.d.rev, jahr, monat, werte });
-    if (r.status === 409) { await neuLaden(); editorZeilen(jahr, monat); $('#ctl-u-meldung').textContent = 'Die Statistik wurde inzwischen geändert. Bitte die Werte prüfen und erneut speichern.'; return; }
-    if (r.status === 401) { $('#ctl-u-dialog').close(); C.zeigeAnmeldung(); return; }
-    if (r.status !== 200 || !r.data.ok) { $('#ctl-u-meldung').textContent = C.fehlerText(r, 'Speichern fehlgeschlagen'); return; }
-    S.d = r.data; S.jahr = String(jahr);
-    $('#ctl-u-pflege-monat').value = monat;
-    zeichneJahre(); zeichneMonatsfilter(); zeichneVertreterfilter(); zeichneUebersicht();
-    $('#ctl-u-dialog').close(); C.toast(`Monatswerte ${monatsname(monat)} ${jahr} gespeichert.`);
   }
 
   /* ---------- Laden ---------- */
@@ -243,9 +188,15 @@
     S.vertreter = S.vertreter.size ? new Set([...S.vertreter].filter((nr) => vorhanden.has(nr))) : new Set(vorhanden);
     if (!S.vertreter.size) S.vertreter = new Set(vorhanden);
   }
-  async function neuLaden() {
-    const r = await C.api('controlling_umsatz');
-    if (r.status === 200 && r.data.ok) { setzeDaten(r.data); zeichneJahre(); zeichneMonatsfilter(); zeichneVertreterfilter(); zeichneUebersicht(); }
+  /* Ein Jahr vom Server laden (die Werte rechnet der Server aus den Umsatzdaten) */
+  async function jahrLaden(jahr) {
+    $('#ctl-u-uebersicht').classList.add('laedt');
+    const r = await C.api('controlling_umsatz', null, '&jahr=' + encodeURIComponent(jahr));
+    $('#ctl-u-uebersicht').classList.remove('laedt');
+    if (r.status === 401) { C.zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { C.toast(C.fehlerText(r, 'Das Jahr konnte nicht geladen werden'), true); return; }
+    setzeDaten(r.data); S.jahr = r.data.jahr;
+    zeichneJahre(); zeichneVertreterfilter(); zeichneUebersicht();
   }
   async function anzeigen(box, rechte, tab) {
     S.box = box; S.rechte = rechte;
@@ -255,19 +206,13 @@
     if (r.status !== 200 || !r.data.ok) { box.innerHTML = `<p class="ctl-fehler" role="alert">${esc(C.fehlerText(r, 'Die Umsatzstatistik konnte nicht geladen werden'))}</p>`; return; }
     box.innerHTML = GERUEST;
     setzeDaten(r.data);
-    S.rechte.bearbeiten = !!r.data.rechte.bearbeiten;
     S.mitDaten = !!(r.data.umsatzdaten && r.data.umsatzdaten.vorhanden);
     S.monate = new Set(MONATE().map((m) => m.nr));
-    const gespeichert = Object.keys(S.d.jahre || {}).filter((y) => /^\d{4}$/.test(y)).sort();
-    if (gespeichert.length) S.jahr = gespeichert[gespeichert.length - 1];
-    const monatsoptionen = MONATE().map((m) => `<option value="${esc(m.nr)}">${esc(m.name)}</option>`).join('');
-    $('#ctl-u-pflege-monat').innerHTML = monatsoptionen; $('#ctl-u-dialog-monat').innerHTML = monatsoptionen;
-    $('#ctl-u-pflege-monat').value = String(new Date().getMonth() + 1).padStart(2, '0');
-    $('#ctl-u-tabs [data-tab="datenpflege"]').hidden = !S.rechte.bearbeiten;
+    S.jahr = r.data.jahr;   // jüngstes Jahr mit Umsatzdaten
     zeichneJahre(); zeichneMonatsfilter(); zeichneVertreterfilter(); zeichneUebersicht();
 
     $('#ctl-u-tabs').addEventListener('click', (ev) => { const b = ev.target.closest('[role="tab"]'); if (b) zeigeTab(b.dataset.tab); });
-    $('#ctl-u-jahr').addEventListener('change', () => { S.jahr = $('#ctl-u-jahr').value; $('#ctl-u-pflege-jahr').value = S.jahr; zeichneUebersicht(); });
+    $('#ctl-u-jahr').addEventListener('change', () => jahrLaden($('#ctl-u-jahr').value));
     $('#ctl-u-monatsoptionen').addEventListener('change', (ev) => {
       const c = ev.target.closest('input[type="checkbox"]'); if (!c) return;
       if (c.hasAttribute('data-alle-monate')) S.monate = c.checked ? new Set(MONATE().map((m) => m.nr)) : new Set();
@@ -284,13 +229,6 @@
     $('#ctl-u-kennzahl').addEventListener('change', () => { S.kennzahl = $('#ctl-u-kennzahl').value; zeichneUebersicht(); });
     $('#ctl-u-monatskennzahl').addEventListener('change', zeichneUebersicht);
     $('#ctl-u-diagrammart').addEventListener('change', zeichneUebersicht);
-    $('#ctl-u-bearbeiten').addEventListener('click', editorOeffnen);
-    const neuZeilen = () => editorZeilen($('#ctl-u-dialog-jahr').value, $('#ctl-u-dialog-monat').value);
-    $('#ctl-u-dialog-jahr').addEventListener('change', neuZeilen);
-    $('#ctl-u-dialog-monat').addEventListener('change', neuZeilen);
-    $('#ctl-u-editorzeilen').addEventListener('input', () => { editorFuss(); $('#ctl-u-meldung').textContent = ''; });
-    $('#ctl-u-form').addEventListener('submit', speichern);
-    $('#ctl-u-dialog').addEventListener('click', (ev) => { if (ev.target.closest('[data-schliessen]')) $('#ctl-u-dialog').close(); });
     zeigeTab(tab);
   }
 
