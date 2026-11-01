@@ -122,6 +122,7 @@ ADRESSEN_TEST = os.path.join(WORK, 'adressen-test.sqlite')
 SUITES['crm'] = (8790, 'data-seed', True, {'WA_ADRESSEN': ADRESSEN_TEST})   # CRM · Vertrieb (app/module/crm/, Oberfläche crm.intern)
 SUITES['marketing'] = (8790, 'data-seed', True)   # Marketing · Redaktionsplan (app/module/marketing/, Oberfläche marketing.intern)
 SUITES['controlling'] = (8790, 'data-seed', True)   # Controlling · Umsatzstatistik (app/module/controlling/, Oberfläche controlling.intern)
+SUITES['controlling_umsatzdaten'] = (8790, 'data-seed', True)   # Controlling · Umsatzdaten der Warenwirtschaft: Import in Teilen, Umsatzauswertung
 SUITES['leergut'] = (8790, 'data-seed', True)   # Leergut · Leergutkonten und Abstimmung (app/module/leergut/, Oberfläche leergut.intern)
 SUITES['rewe'] = (8790, 'data-seed', True)   # REWE · Vordisposition Dry Aged (app/module/rewe/, Oberfläche rewe.intern)
 SUITES['qs'] = (8790, 'data-seed', True)   # QM-System (app/module/qs/, Oberfläche qs.intern): Dokumentenlenkung, Handbuch, Prüfplan, Maßnahmen
@@ -160,6 +161,7 @@ GEWICHT = {
     'sicherheit_bereitschaft': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'marketing': 45,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'controlling': 25,   # geschätzt (Oktober 2026), noch ohne CI-Median
+    'controlling_umsatzdaten': 45,   # geschätzt (November 2026), noch ohne CI-Median
     'leergut': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'rewe': 40,   # geschätzt (Oktober 2026), noch ohne CI-Median
     'qs': 35,   # geschätzt (Oktober 2026), noch ohne CI-Median

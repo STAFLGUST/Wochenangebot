@@ -5,6 +5,8 @@
    Daten-Eigentümer). Die Datei liest der Leser des Eigentümers (window.WA.importLeser – aus admin.js bzw.
    admin-verwaltung.js, dieselben Leser wie beim Import an Ort und Stelle); hier wird nur einheitlich geprüft, ob Dateityp,
    Kodierung und Inhalt überhaupt passen. Vorschau und Übernahme macht der Server (import_pruefen, import_uebernehmen).
+   Große Dateien (Importart „inTeilen“): Der Leser liefert zusätzlich Teile; die Vorschau nennt die nötigen, die werden vor
+   der Übernahme einzeln geschickt (import_teil) – jede Anfrage bleibt klein, übernommen wird erst mit import_uebernehmen.
    Vertrag: docs/plattform/schnittstellen/import.md
    ========================================================================== */
 (function () {
@@ -14,10 +16,13 @@
 
   /* Nur für die Anzeige des Menüpunkts (die Rechte prüft der Server je Importart, GR-103): Rechte der registrierten
      Importarten. Der Test „importzentrale“ prüft, dass die Liste zu import_arten passt. */
-  const RECHTE = ['kunden.bearbeiten', 'stammdaten.bearbeiten', 'bestand.importieren', 'preisverlauf.bearbeiten', 'angebot.bearbeiten', 'hr.verwalten'];
+  const RECHTE = ['kunden.bearbeiten', 'stammdaten.bearbeiten', 'bestand.importieren', 'preisverlauf.bearbeiten', 'angebot.bearbeiten', 'hr.verwalten',
+    'controlling.umsatz_importieren'];
   W.importSichtbar = () => RECHTE.some((p) => may(p));
 
-  const MAX_BYTES = 30 * 1024 * 1024;
+  const maxBytes = (art) => (art.maxMb || 30) * 1024 * 1024;   // je Importart (Server: maxMb, Standard 30 MB)
+  /* Kennung eines Importlaufs mit Teilen: 32 Hex-Zeichen, zufällig */
+  const neueKennung = () => [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, '0')).join('');
   const ART_LABEL = { neu: 'Neu', geaendert: 'Geändert', entfaellt: 'Entfällt', fehler: 'Fehler' };
   const SCHRITTE = ['Importart', 'Datei', 'Vorschau', 'Ergebnis'];
   let arten = null;        // Importarten des Nutzers (Server)
@@ -40,7 +45,7 @@
     const ext = endung(file.name);
     if (!art.dateien.includes(ext)) throw new Error(`Falsche Datei: „${file.name}“ – erwartet wird ${art.kodierung || typText(art)}.`);
     if (file.size === 0) throw new Error(`Die Datei „${file.name}“ ist leer.`);
-    if (file.size > MAX_BYTES) throw new Error(`Die Datei „${file.name}“ ist größer als 30 MB.`);
+    if (file.size > maxBytes(art)) throw new Error(`Die Datei „${file.name}“ ist größer als ${art.maxMb || 30} MB.`);
     const kopf = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
     if (ext === 'csv') {
       if (istZip(kopf) || istOle(kopf)) throw new Error(`Falsche Datei: „${file.name}“ ist eine Excel-Datei, erwartet wird CSV (${art.kodierung}). In Excel „Speichern unter → CSV (Trennzeichen-getrennt)“ wählen.`);
@@ -162,7 +167,20 @@
 
   /* ---------- Ablauf ---------- */
   function datenAnfrage() {
-    return { art: lauf.art.id, daten: lauf.gelesen.daten, quelle: lauf.quelle, optionen: lauf.optionen };
+    return { art: lauf.art.id, daten: lauf.gelesen.daten, quelle: lauf.quelle, optionen: lauf.optionen, ...(lauf.upload ? { upload: lauf.upload } : {}) };
+  }
+  /* Teile, die die Vorschau für die Übernahme verlangt, einzeln schicken (Fortschritt im Knopf) */
+  async function teileSenden(l, btn) {
+    const liste = (l.vorschau && l.vorschau.teile) || [];
+    const vorrat = (l.gelesen && l.gelesen.teile) || {};
+    for (let i = 0; i < liste.length; i++) {
+      const k = liste[i];
+      if (!(k in vorrat)) throw Object.assign(new Error(`Teil „${k}“ fehlt in der gelesenen Datei. Bitte die Datei erneut wählen.`), { status: 422 });
+      btn.textContent = `Übertrage ${i + 1} von ${liste.length} …`;
+      await api('import_teil', { body: { art: l.art.id, upload: l.upload, schluessel: k, daten: vorrat[k], quelle: l.quelle } });
+      if (lauf !== l) return false;
+    }
+    return true;
   }
   async function lesen() {
     const l = lauf;
@@ -201,6 +219,8 @@
     const l = lauf;
     l.busy = true; btn.disabled = true;
     try {
+      if (l.art.inTeilen && !(await teileSenden(l, btn))) return;
+      if (l.art.inTeilen) btn.textContent = 'Wird übernommen …';
       const r = await api('import_uebernehmen', { body: { ...datenAnfrage(), stand: l.vorschau.stand } });
       if (lauf !== l) return;
       l.ergebnis = r; l.schritt = 'fertig';
@@ -214,13 +234,14 @@
       if (ex.status === 409) { toast(ex.message + ' Die Vorschau wurde neu geladen.', 7000); await lesen(); return; }
       if (ex.wartung || ex.status === 401) return;
       btn.disabled = false;
+      if (l.art.inTeilen) btn.innerHTML = `${icon('check')}Übernehmen`;
       const e = $('#imp-err'); if (e) e.textContent = ex.message;
     }
   }
   function starten(art, files) {
     if (!files.length) return;
     lauf = { art, dateien: art.mehrere ? files : files.slice(0, 1), quelle: files.length === 1 ? files[0].name : files.map((f) => f.name).join(', ').slice(0, 200),
-      optionen: {}, gelesen: null, vorschau: null, ergebnis: null, schritt: 'lesen', filter: 'alle', busy: false };
+      optionen: {}, gelesen: null, vorschau: null, ergebnis: null, schritt: 'lesen', filter: 'alle', busy: false, upload: art.inTeilen ? neueKennung() : '' };
     lesen();
   }
   function zurListe() { lauf = null; render(); }

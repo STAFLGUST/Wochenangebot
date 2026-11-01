@@ -42,3 +42,40 @@ body.ctl {
   .ctl-diagrammfilter select{max-width:none;width:100%}
 }
 @media(max-width:560px){.ctl-monatstabelle tr.ctl-ohne-daten{display:none}}   /* Handy: leere Monate nur in den Balken, nicht als eigene Karte */
+
+/* ── Umsatzstatistik · Reiter „Auswertung“ (umsatz-auswertung.js): Umsätze aus der Warenwirtschaft ── */
+.ctl-ua-stand{margin:0 0 12px}
+.ctl-ua-filter{margin-bottom:8px}.ctl-ua-filter .ctl-filter summary.aktiv{border-color:var(--ctl-accent);color:var(--ctl-accent)}
+.ctl-ua-schnell{display:flex;gap:6px;flex-wrap:wrap}
+.ctl-ua-chip{height:32px;padding:0 12px;border:1px solid var(--ctl-border);border-radius:999px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}
+.ctl-ua-chip.aktiv{border-color:var(--ctl-accent);color:var(--ctl-accent)}
+.ctl-ua-chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}.ctl-ua-chips:empty{display:none}
+.ctl-ua-check{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 4px;color:var(--ctl-text)!important;font-size:13px!important}
+.ctl-ua-liste{width:300px;max-height:340px}.ctl-filterliste input.ctl-ua-suche{width:100%;height:34px;margin:0 0 6px;padding:0 10px;border:1px solid var(--ctl-border);border-radius:8px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:13px}
+.ctl-ua-kpis.mit-ek{grid-template-columns:repeat(6,minmax(0,1fr))}.ctl-ua-kpis b{font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl-ua-delta{font-weight:700}.ctl-ua-delta.plus{color:var(--ctl-green)}.ctl-ua-delta.minus{color:var(--ctl-accent)}
+.ctl-ua-svgwrap{width:100%;overflow-x:auto}.ctl-ua-svg{display:block;height:190px}
+#ctl-ua-zuruecksetzen[hidden]{display:none}
+.ctl-ua-balken{fill:var(--ctl-bar)}.ctl-ua-achse{fill:var(--ctl-muted);font-size:10px}
+.ctl-ua-vjlinie{fill:none;stroke:var(--ctl-text);stroke-width:1.5;stroke-dasharray:4 3;opacity:.6}.ctl-ua-vjpunkt{fill:var(--ctl-text);opacity:.6}
+.ctl-ua-legende-vj{display:inline-block;width:18px;border-top:2px dashed var(--ctl-text);opacity:.6;vertical-align:middle}
+.ctl-ua-tabwrap{width:100%;overflow:auto;max-height:70vh;border-radius:10px}
+.ctl-ua-tabelle thead th{position:sticky;top:0;z-index:2}
+.ctl-ua-tabelle th:first-child,.ctl-ua-tabelle td:first-child{position:sticky;left:0;z-index:1;background:var(--ctl-card);min-width:200px;max-width:340px}
+.ctl-ua-tabelle thead th:first-child{z-index:3;background:var(--ctl-head-bg)}
+.ctl-ua-tabelle td,.ctl-ua-tabelle th{white-space:nowrap}.ctl-ua-tabelle td:first-child{white-space:normal}
+.ctl-ua-sort{border:0;background:none;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;padding:0}
+.ctl-ua-name{display:block;font-weight:650}.ctl-ua-sub{display:block;color:var(--ctl-muted);font-size:11px}
+.ctl-ua-klick{cursor:pointer}.ctl-ua-klick:hover td{background:var(--ctl-total-bg)}
+#ctl-ua-zeilen.laedt{opacity:.45;transition:opacity .2s}
+.ctl-ua-leer{max-width:640px}.ctl-ua-leer h2{margin:0 0 8px;font-size:17px}
+@media(max-width:1100px){.ctl-ua-kpis.mit-ek{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){
+  .ctl-ua-filter{grid-template-columns:1fr 1fr}.ctl-ua-filter>label[for="ctl-ua-von"],.ctl-ua-filter>label[for="ctl-ua-bis"]{display:none}
+  .ctl-ua-schnell,.ctl-ua-check{grid-column:1/-1}.ctl-ua-kpis.mit-ek{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ctl-ua-liste{width:min(300px,calc(100vw - 30px))}
+  .ctl-ua-tabelle th:first-child,.ctl-ua-tabelle td:first-child{min-width:150px;max-width:180px}
+  .ctl-tabellenpanel .ctl-panelkopf{display:block}.ctl-ua-gliederung{display:grid;grid-template-columns:1fr auto;margin-top:8px}.ctl-ua-gliederung select{max-width:none;width:100%;font-size:13px}
+  .ctl-filterliste.ctl-ua-liste{left:auto;right:0}
+  .ctl-ua-filter .ctl-filter:nth-of-type(odd) .ctl-filterliste{left:0;right:auto}
+}

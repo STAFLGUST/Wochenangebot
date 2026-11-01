@@ -160,7 +160,10 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `controlling.php` | controlling | Modul Controlling · gemeinsame Grundlage aller Bereiche (Umsatzstatistik; geplant |
+| `import.php` | controlling | Importvertrag des Controllings – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
 | `umsatz.php` | controlling | Controlling · Bereich Umsatzstatistik |
+| `umsatzauswertung.php` | controlling | Controlling · Umsatzauswertung aus den importierten Umsatzdaten (module/controlling/umsatzdaten.php). |
+| `umsatzdaten.php` | controlling | Controlling · Umsatzdaten aus der Warenwirtschaft (Kundenumsatztabelle |
 
 ## `app/api/module/crm/`
 
@@ -311,6 +314,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `controlling.css` | controlling | STAFL-Plattform · Controlling – Gestaltung „Liquid Glass“ wie Dashboard, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
 | `controlling.js` | controlling | STAFL-Plattform · Controlling – Grundgerüst der Seite |
 | `index.html` | controlling | Bereiche des Controllings: je Bereich ein Reiter und ein Inhalt (Skript des Bereichs, z. |
+| `umsatz-auswertung.js` | controlling | STAFL-Plattform · Controlling · Umsatzstatistik, Reiter „Auswertung“ |
+| `umsatz-import.js` | controlling | STAFL-Plattform · Controlling · Leser der Importart „umsatzdaten“ (Verwaltung → Import, window.WA.importLeser). |
 | `umsatz.js` | controlling | STAFL-Plattform · Controlling · Bereich Umsatzstatistik |
 
 ## `app/module/crm/`
@@ -641,6 +646,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_bestand_pdf.py` | bestand | Bestand: Marke je Partie (Spalte E der WinAB-Liste, Überschrift „Marke“ eine Spalte rechts davon), dezente MHD-Farben (hell/dunkel) und PDF ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge. |
 | `test_bestellung.py` | angebot | Bestellwunsch aus dem Portal |
 | `test_controlling.py` | controlling | Controlling (Modul controlling, Oberfläche controlling.intern unter /module/controlling/) – erster Bereich Umsatzstatistik. |
+| `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |
 | `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |

@@ -77,5 +77,6 @@ function controlling_umsatz_antwort(array $me): array
     $monate = [];
     foreach (CONTROLLING_MONATE as $nr => $name) $monate[] = ['nr' => sprintf('%02d', $nr), 'name' => $name];   // „10“–„12“ sind in PHP Zahlenschlüssel
     return ['ok' => true, 'rev' => $d['rev'], 'jahre' => (object)$d['jahre'], 'monate' => $monate, 'vertreter' => controlling_umsatz_vertreter($d),
-            'geaendert' => $d['geaendert'], 'rechte' => ['bearbeiten' => may($me, 'controlling.umsatz_bearbeiten')]];
+            'geaendert' => $d['geaendert'], 'rechte' => ['bearbeiten' => may($me, 'controlling.umsatz_bearbeiten')],
+            'umsatzdaten' => ['vorhanden' => (bool)umsatzdaten_index()['monate']]];   // Reiter „Auswertung“ zuerst, wenn importiert
 }

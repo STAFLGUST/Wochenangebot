@@ -23,6 +23,9 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `versionen/*` | Angebot | intern | bestand | – | Frühere veröffentlichte Angebote (unveränderliche Schnappschüsse) – Historie: Schnappschuss je Veröffentlichung; Anzahl begrenzt (keep_versions) |
 | `bestand` | Bestand | vertraulich | angebot, einkauf | – | Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001) |
 | `controlling-umsatz` | Controlling | vertraulich | – | – | Umsatzstatistik: Kg, Umsatz und Deckungsbeitrag je Jahr, Monat und Vertreter (Monatsmeldung von Hand), Versionsstand, letzte Änderung – Historie: Vertreternamen als Schnappschuss (GR-106): Werte ausgeschiedener Vertreter bleiben mit Namen erhalten |
+| `controlling-umsatzdaten*` | Controlling | vertraulich | – | – | Umsatzdaten der Warenwirtschaft – Verzeichnis: Monate mit Prüfsumme und Kennzahlen, Kunden- und Artikelnummern mit Umsatz, Importverlauf (Zeitraum, wer, wann, Monate neu/geändert/entfallen) – Historie: Importierte Umsätze bleiben, wie sie in der Datei standen; Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe erst in der Auswertung nach heutigen Stammdaten |
+| `controlling-umsatzdaten/**` | Controlling | vertraulich | – | – | Umsatzdaten je Monat (JJJJ-MM): Kunde, Artikel und Tag mit Kolli, Menge, Umsatz, EK-Wert, Umsatz mit EK, Positionen, berechnet/ohne Berechnung |
+| `controlling-umsatzteile/**` | Controlling | vertraulich | – | – | Zwischenablage eines Umsatzdaten-Imports (je Importlauf und Monat), gelöscht mit der Übernahme bzw. nach einem Tag |
 | `crm-aktivitaeten` | CRM | vertraulich | – | – | Aktivitätenverlauf (Telefonat, E-Mail, Besuch, Muster, Angebot, Bestellung, Notiz) je Kunde – Historie: Firma und Kundennummer werden beim Erfassen als Schnappschuss gespeichert (GR-106); höchstens 50 000 Einträge, älteste fallen weg |
 | `crm-interessenten` | CRM | vertraulich | – | – | Interessenten ohne Kundennummer mit eigenen Adress- und Kontaktangaben (Kunden selbst pflegt die Verwaltung) |
 | `crm-kunden` | CRM | vertraulich | – | – | Kundenblätter des CRM je Kunde (Kunden-ID der Verwaltung) bzw. Interessent: Ansprechpartner, Segment, Phase, Anruf-Rhythmus und -Status, Potenzial, nächster Schritt, Wiedervorlage, Notiz |
@@ -81,11 +84,11 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `rewe-verlauf` | REWE | vertraulich | – | – | REWE-Marktakte: Notizen, Telefonate, Besuche, Reklamationen, Ware ohne Berechnung, Wiedervorlagen (erledigt mit Namen) und Änderungen (Kaufbereitschaft, Dauerauftrag, Zuweisung, Lieferweg) – Historie: Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wird gelöscht |
 | `rewe-wochen/*` | REWE | vertraulich | – | – | REWE-Wochenabfrage je ISO-Jahr: Antwort je Markt und KW (bestellt mit Mengen je Artikel, kein Bedarf, nicht erreicht, Pause), ohne Berechnung, Notiz, wer/wann, Herkunft; Wochenabschluss (exportiert, in WinAB erfasst) – Historie: Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schnappschuss (GR-106); Änderungen nach dem Export sind als Nachtrag gekennzeichnet |
 | `anmeldeorte` | Verwaltung | vertraulich | – | – | Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP) |
-| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe | angebot, plattform | Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003) |
-| `kundengruppen*` | Verwaltung | intern | angebot, crm | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
+| `kunden` | Verwaltung | vertraulich | angebot, crm, rewe, controlling | angebot, plattform | Kundenstammdaten und Kundenzugänge des Portals (Passwort nur als Hash, GR-003) |
+| `kundengruppen*` | Verwaltung | intern | angebot, crm, controlling | – | Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php) |
 | `kundensitzungen` | Verwaltung | geheim | – | angebot | Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6) |
-| `stammdaten` | Verwaltung | intern | angebot, bestand | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |
+| `stammdaten` | Verwaltung | intern | angebot, bestand, controlling | – | Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN) |
 | `vertreter*` | Verwaltung | vertraulich | crm, controlling | – | Vertreter mit Kontaktdaten |
-| `vkgruppen*` | Verwaltung | intern | angebot, bestand | – | VK-Gruppen der Artikel |
+| `vkgruppen*` | Verwaltung | intern | angebot, bestand, controlling | – | VK-Gruppen der Artikel |
 
 `*` Name wird im Code berechnet (z. B. je Monat oder je Angebot).

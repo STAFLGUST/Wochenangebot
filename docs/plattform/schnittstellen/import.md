@@ -20,6 +20,7 @@ keine Dateiformate und greift auf keine Daten zu; sie ruft nur die Funktionen de
 | `urlaubsplanung` | Excel-Urlaubsplanung (ein Blatt je Monat) | `importLeser.urlaubsplanung` (app/module/hr/verwaltung-hr.js, OfferCore-Excel-Leser) | `hr_import_vorschau`/`hr_import_uebernehmen` (unbekannte Namen → Mitarbeiter ohne Anmeldung über `mitarbeiter_ohne_zugang_anlegen`) | `hr.verwalten` | hr | – (bis Oktober 2026 im HR-Bereich „Mitarbeiter“) |
 | `zeiterfassung` | Abwesenheitsbericht der Zeiterfassung (.xlsx, Importvorlage für Urlaub und Krankheit) | `importLeser.zeiterfassung` (app/module/hr/verwaltung-hr.js, erstes Blatt) | `hr_zeit_vorschau`/`hr_zeit_uebernehmen` (Personalnummer, sonst Name; Option `abteilungen`; ersetzt frühere Übernahme im Zeitraum) | `hr.verwalten` | hr | – |
 | `angebot_preise` | CSV Artikelpreise | `preiseAusCsv` (admin.js) | Entwurf (`save_draft`) | `angebot.bearbeiten`, `angebote.verwalten` | angebot | Stammdaten → Angebote „Preise importieren“ – Ablauf `editor` |
+| `umsatzdaten` | CSV Kundenumsatztabelle der Warenwirtschaft (Kunde, Datum, Artikel, Kolli, Menge, Preis, Gesamtbetrag, EKPreis; bis 200 MB) | `importLeser.umsatzdaten` (app/module/controlling/umsatz-import.js): je Kunde, Artikel und Tag zusammengefasst, je Monat ein Teil mit Prüfsumme | `umsatzdaten_import_vorschau` / `_teil` / `_uebernehmen` (module/controlling/umsatzdaten.php): Zeitraum der Datei ersetzt den gespeicherten Zeitraum, nur geänderte Monate werden übertragen | `controlling.umsatz_importieren` | controlling | – (neu, November 2026) |
 
 Nicht aufgenommen: Import der Schutz-Einstellungen (`fw_import`, Plattformkern, nur Administratoren) – das ist eine
 Konfigurationsdatei dieser Anwendung, kein Datenimport aus einem Fremdsystem; er bleibt in der Schutzzentrale.
@@ -43,6 +44,8 @@ Datei `app/api/module/<modul>/import.php`, geladen von `app/api/index.php`, Modu
 | `ablauf` | nein | `zentrale` (Standard) oder `editor` |
 | `optionen` | nein | `[{id, typ: schalter|datum, label, standard?, pflicht?}]` – die Zentrale übergibt nur diese, mit Standardwert |
 | `mehrere`, `bestaetigung`, `ansicht` | nein | mehrere Dateien; Schlüssel der Passwortbestätigung (Katalog `BESTAETIGUNG`); Ansicht für „… öffnen“ |
+| `teile` | nein | große Datei in Teilen: Funktionsname `f(array $eingabe, array $nutzer): void` für einen Teil (Zwischenablage des Eigentümers); nur Ablauf `zentrale` |
+| `maxMb` | nein | Größe einer Datei in MB (Prüfung im Browser): Standard 30, mit `teile` bis 200 |
 
 `$eingabe` = vom Leser gelieferte `daten` plus `art`, `quelle` (Dateiname), `optionen`, `stand`. Rückgabe von Vorschau
 und Übernahme (gleiche Form):
@@ -54,16 +57,24 @@ hinweise [{ stufe: info|warn, text }]
 stand    Revision/Kennung des gespeicherten Stands
 ```
 
+Zusätzlich bei Importarten mit `teile`: die Vorschau liefert `teile` = Liste der Kennungen (höchstens 2000, `[A-Za-z0-9_-]{1,40}`),
+die der Eigentümer für die Übernahme braucht (z. B. nur geänderte Monate), und `$eingabe` enthält `upload` (Kennung des Importlaufs,
+32 Hex-Zeichen, vom Browser zufällig gewählt). Vor der Übernahme schickt der Browser jeden verlangten Teil einzeln mit `import_teil`
+(`$eingabe` = `art`, `upload`, `schluessel`, `daten`, `quelle`; je Anfrage höchstens 6 MB); der Eigentümer prüft ihn und legt ihn
+unter Kennung und Mitarbeiter ab. Die Übernahme prüft zuerst, ob alle Teile vollständig da sind (sonst 422, nichts geschrieben),
+übernimmt dann und räumt die Zwischenablage auf.
+
 Die Übernahme bekommt `stand` aus der Vorschau zurück und weist mit **409** ab, wenn sich die Daten inzwischen geändert
 haben. Sie schreibt das **Protokoll** (gleiche Einträge wie die bisherige Aktion). Die bisherigen Aktionen rufen dieselben
 Speicherfunktionen auf – je Importart gibt es genau eine Prüf- und Speicherlogik.
 
 ## Vertrag des Lesers (Browser)
 
-`window.WA.importLeser[<id>] = { lesen(dateien) → { daten, zeilen, fehler: [{zeile?, schluessel?, datei?, text}], hinweise, optionen? }, nachher() }`
+`window.WA.importLeser[<id>] = { lesen(dateien) → { daten, zeilen, fehler: [{zeile?, schluessel?, datei?, text}], hinweise, optionen?, teile? }, nachher() }`
+(`teile` nur bei Importarten mit Teilen: Kennung → Daten des Teils; bleibt im Browser, bis die Vorschau ihn verlangt)
 – registriert in der Datei, in der der Leser heute schon für den Import an Ort und Stelle läuft (admin.js,
 admin-verwaltung.js). Wirft der Leser, ist die Datei unlesbar oder falsch (Meldung wird angezeigt, nichts übernommen).
-Vor dem Leser prüft die Zentrale einheitlich Endung, leere Datei, Größe (30 MB), Excel statt CSV, UTF-16 statt
+Vor dem Leser prüft die Zentrale einheitlich Endung, leere Datei, Größe (30 MB bzw. `maxMb`), Excel statt CSV, UTF-16 statt
 UTF-8/Windows-1252 und Excel-Kennung.
 
 ## Aktionen der Zentrale
@@ -72,7 +83,8 @@ UTF-8/Windows-1252 und Excel-Kennung.
 | --- | --- | --- |
 | `import_arten` | GET | Importarten des Nutzers (nur mit Recht), mit Wartungszustand |
 | `import_pruefen` | POST | `{ art, daten, quelle, optionen }` → Vorschau |
-| `import_uebernehmen` | POST | wie oben plus `stand` → Übernahme (ggf. Passwortbestätigung) |
+| `import_teil` | POST | nur Importarten mit `teile`: `{ art, upload, schluessel, daten, quelle }` → Zwischenablage des Eigentümers (gleiche Prüfungen wie die Vorschau) |
+| `import_uebernehmen` | POST | wie oben plus `stand` (und `upload`) → Übernahme (ggf. Passwortbestätigung) |
 
 Heute auf der Oberfläche `angebot.eingabe` registriert (`regeln/aktionen/verwaltung.toml`); mit der Freigabe von
 `verwaltung.import` ziehen sie dorthin um.

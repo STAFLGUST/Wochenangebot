@@ -8,17 +8,22 @@ declare(strict_types=1);
    Funktion import_arten_<modul>()). Die Zentrale ruft nur dessen Vorschau- und Übernahmefunktion auf und prüft vorher
    einheitlich: Anmeldung, Recht der Importart (GR-103), Wartung der Oberfläche, zu der die Importaktion des Eigentümers
    gehört (GR-107), und – falls registriert – die Passwortbestätigung. Vertrag: docs/plattform/schnittstellen/import.md.
-   Aktionen: aktionen/importzentrale.php (import_arten, import_pruefen, import_uebernehmen). */
+   Große Dateien (Registrierung „teile“): Der Leser liefert neben den Daten der Vorschau einzelne Teile; die Vorschau nennt,
+   welche Teile der Eigentümer für die Übernahme braucht, der Browser schickt sie vorher einzeln (import_teil, je Anfrage
+   höchstens 6 MB), der Eigentümer legt sie in seiner Zwischenablage ab und übernimmt erst mit import_uebernehmen.
+   Aktionen: aktionen/importzentrale.php (import_arten, import_pruefen, import_teil, import_uebernehmen). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 /* Module mit Importvertrag, in dieser Reihenfolge angezeigt. Neuer Eigentümer: Datei module/<id>/import.php mit
    import_arten_<id>(), in api/index.php laden und hier eintragen. */
-const IMPORT_EIGENTUEMER = ['verwaltung', 'bestand', 'angebot', 'hr'];
+const IMPORT_EIGENTUEMER = ['verwaltung', 'bestand', 'angebot', 'hr', 'controlling'];
 const IMPORT_ZEILEN_MAX = 500;              // Zeilen der Vorschau, die an den Browser gehen (Zahlen zählen immer alle)
 const IMPORT_DATEITYPEN = ['csv', 'xls', 'xlsx', 'xlsm'];
 const IMPORT_ABLAEUFE = ['zentrale', 'editor'];
 const IMPORT_OPTIONSTYPEN = ['schalter', 'datum'];
 const IMPORT_ZEILENARTEN = ['neu', 'geaendert', 'entfaellt', 'fehler'];
+const IMPORT_MB = 30;                       // Größe einer Datei (Prüfung im Browser); Importarten mit Teilen dürfen mehr („maxMb“, bis 200)
+const IMPORT_TEILE_MAX = 2000;              // Teile, die eine Vorschau für die Übernahme anfordern darf
 
 /* Alle registrierten Importarten (id → Eintrag mit Standardwerten). Ungültige Registrierungen sind ein Programmfehler
    und fallen im Test „importzentrale“ auf; sie werden nie stillschweigend angeboten. */
@@ -29,12 +34,15 @@ function import_registry(): array
     $reg = [];
     foreach (IMPORT_EIGENTUEMER as $m) {
         foreach (('import_arten_' . $m)() as $id => $a) {
-            $a += ['beschreibung' => '', 'ablauf' => 'zentrale', 'optionen' => [], 'mehrere' => false, 'bestaetigung' => '', 'ansicht' => '', 'kodierung' => ''];
+            $a += ['beschreibung' => '', 'ablauf' => 'zentrale', 'optionen' => [], 'mehrere' => false, 'bestaetigung' => '', 'ansicht' => '', 'kodierung' => '',
+                   'teile' => '', 'maxMb' => IMPORT_MB];
             $a['eigentuemer'] = $m;
             $a['recht'] = (array)$a['recht'];
             if (isset($reg[$id]) || !preg_match('/^[a-z][a-z0-9_]{1,30}$/', (string)$id) || !$a['recht'] || !isset(AKTIONEN[$a['aktion'] ?? ''])
                 || !in_array($a['ablauf'], IMPORT_ABLAEUFE, true) || array_diff($a['dateien'] ?? [], IMPORT_DATEITYPEN) || empty($a['dateien'])
-                || ($a['ablauf'] === 'zentrale' && (!is_callable($a['vorschau'] ?? null) || !is_callable($a['uebernahme'] ?? null)))) {
+                || ($a['ablauf'] === 'zentrale' && (!is_callable($a['vorschau'] ?? null) || !is_callable($a['uebernahme'] ?? null)))
+                || ($a['teile'] !== '' && ($a['ablauf'] !== 'zentrale' || !is_callable($a['teile'])))
+                || !is_int($a['maxMb']) || $a['maxMb'] < 1 || $a['maxMb'] > ($a['teile'] !== '' ? 200 : IMPORT_MB)) {
                 throw new LogicException("Importart „{$id}“ ist ungültig registriert.");
             }
             foreach ($a['optionen'] as $o) if (!in_array($o['typ'] ?? '', IMPORT_OPTIONSTYPEN, true)) throw new LogicException("Importart „{$id}“: unbekannte Option.");
@@ -59,7 +67,7 @@ function import_art_anzeige(string $id, array $a, array $me): array
     return ['id' => $id, 'name' => $a['name'], 'beschreibung' => $a['beschreibung'], 'eigentuemer' => $a['eigentuemer'],
             'eigentuemerName' => MODULE[$a['eigentuemer']]['name'] ?? $a['eigentuemer'], 'dateien' => array_values($a['dateien']),
             'kodierung' => $a['kodierung'], 'mehrere' => (bool)$a['mehrere'], 'ablauf' => $a['ablauf'], 'ansicht' => $a['ansicht'],
-            'bestaetigung' => $a['bestaetigung'] !== '', 'optionen' => array_values($a['optionen']),
+            'bestaetigung' => $a['bestaetigung'] !== '', 'optionen' => array_values($a['optionen']), 'maxMb' => $a['maxMb'], 'inTeilen' => $a['teile'] !== '',
             'verfuegbar' => $z === null || $z['zugang'], 'wartung' => $z !== null && $z['betrieb'] === 'wartung'];
 }
 
@@ -91,16 +99,26 @@ function import_ergebnis(array $r): array
     usort($zeilen, function ($x, $y) use ($rang) { return [$rang[$x['art']], $x['zeile'] ?? PHP_INT_MAX] <=> [$rang[$y['art']], $y['zeile'] ?? PHP_INT_MAX]; });
     $h = [];
     foreach ((is_array($r['hinweise'] ?? null) ? $r['hinweise'] : []) as $x) if (is_array($x) && is_string($x['text'] ?? null)) $h[] = ['stufe' => ($x['stufe'] ?? '') === 'warn' ? 'warn' : 'info', 'text' => $x['text']];
+    $teile = [];   // Teile, die der Browser vor der Übernahme schicken soll (nur Kennungen, Reihenfolge des Eigentümers)
+    foreach ((is_array($r['teile'] ?? null) ? $r['teile'] : []) as $k) if (is_string($k) && preg_match('/^[A-Za-z0-9_-]{1,40}$/', $k)) $teile[$k] = true;
+    if (count($teile) > IMPORT_TEILE_MAX) throw new LogicException('Zu viele Teile für eine Übernahme.');
     return ['zahlen' => $n, 'zeilen' => array_slice($zeilen, 0, IMPORT_ZEILEN_MAX), 'zeilenGesamt' => count($zeilen), 'hinweise' => $h,
-            'stand' => is_int($r['stand'] ?? null) || is_string($r['stand'] ?? null) ? $r['stand'] : null];
+            'stand' => is_int($r['stand'] ?? null) || is_string($r['stand'] ?? null) ? $r['stand'] : null, 'teile' => array_keys($teile)];
 }
 
-/* Vorschau oder Übernahme einer Importart. Anfrage: art, daten (vom Leser des Eigentümers), quelle (Dateiname), optionen,
-   stand (Übernahme: Stand aus der Vorschau – der Eigentümer weist mit 409 ab, wenn sich die Daten inzwischen geändert haben). */
-function import_ausfuehren(bool $uebernehmen): array
+/* Kennung eines Importlaufs (vom Browser zufällig gewählt, 32 Hex-Zeichen) – nur bei Importarten mit Teilen nötig */
+function import_upload($v, bool $pflicht): string
+{
+    $u = is_string($v) ? $v : '';
+    if ($u === '' && !$pflicht) return '';
+    if (!preg_match('/^[a-f0-9]{32}$/', $u)) fail('Ungültige Kennung des Imports. Bitte die Datei erneut wählen.', 422);
+    return $u;
+}
+
+/* Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Ablauf, Wartung */
+function import_vorbereiten(array $b): array
 {
     $me = require_auth(true);
-    $b = body();
     $id = (string)($b['art'] ?? '');
     $a = import_registry()[$id] ?? null;
     if (!$a) fail('Unbekannte Importart.', 404);
@@ -108,6 +126,29 @@ function import_ausfuehren(bool $uebernehmen): array
     if ($a['ablauf'] !== 'zentrale') fail('Dieser Import läuft im Angebotseditor (Vorschau und Rückgängig dort).', 422);
     // Wartung der Oberfläche, zu der die Importaktion des Eigentümers gehört (GR-107): wie bei der Aktion selbst (503)
     modul_durchsetzen(AKTIONEN[$a['aktion']]);
+    return [$me, $id, $a];
+}
+
+/* Ein Teil einer großen Datei an den Eigentümer (Zwischenablage). Anfrage: art, upload, schluessel, daten, quelle. */
+function import_teil_ausfuehren(): array
+{
+    $b = body();
+    [$me, $id, $a] = import_vorbereiten($b);
+    if ($a['teile'] === '') fail('Diese Importart wird nicht in Teilen übertragen.', 422);
+    $k = is_string($b['schluessel'] ?? null) ? $b['schluessel'] : '';
+    if (!preg_match('/^[A-Za-z0-9_-]{1,40}$/', $k)) fail('Ungültiger Teil.', 422);
+    $e = ['art' => $id, 'upload' => import_upload($b['upload'] ?? null, true), 'schluessel' => $k,
+          'daten' => is_array($b['daten'] ?? null) ? $b['daten'] : [], 'quelle' => s($b['quelle'] ?? '', 200) ?? ''];
+    ($a['teile'])($e, $me);
+    return ['art' => $id, 'schluessel' => $k];
+}
+
+/* Vorschau oder Übernahme einer Importart. Anfrage: art, daten (vom Leser des Eigentümers), quelle (Dateiname), optionen,
+   stand (Übernahme: Stand aus der Vorschau – der Eigentümer weist mit 409 ab, wenn sich die Daten inzwischen geändert haben). */
+function import_ausfuehren(bool $uebernehmen): array
+{
+    $b = body();
+    [$me, $id, $a] = import_vorbereiten($b);
     if ($uebernehmen && !array_key_exists('stand', $b)) fail('Bitte zuerst die Vorschau laden.', 422);
     if ($uebernehmen && $a['bestaetigung'] !== '') $me = require_perm_confirmed($a['recht'][0], $a['bestaetigung']);
     $e = is_array($b['daten'] ?? null) ? $b['daten'] : [];
@@ -115,6 +156,7 @@ function import_ausfuehren(bool $uebernehmen): array
     $e['quelle'] = s($b['quelle'] ?? '', 200) ?? '';
     $e['optionen'] = import_optionen($a, $b['optionen'] ?? null);
     $e['stand'] = $b['stand'] ?? null;
+    $e['upload'] = import_upload($b['upload'] ?? null, $a['teile'] !== '');   // Importlauf, zu dem die geschickten Teile gehören
     $r = import_ergebnis(($a[$uebernehmen ? 'uebernahme' : 'vorschau'])($e, $me));
     return ['art' => $id, 'pruefen' => !$uebernehmen] + $r;
 }

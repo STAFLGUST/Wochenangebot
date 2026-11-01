@@ -49,6 +49,9 @@ const PERMS = [
     // Modul Controlling (28.10.2026): je Bereich eigene Rechte, ohne Standardrollen (Finanzdaten); weitere Bereiche (OP-Konten, Liquidität) folgen
     'controlling.umsatz_sehen'      => ['g' => 'Controlling', 'l' => 'Umsatzstatistik ansehen: Kg, Umsatz, Deckungsbeitrag und Spanne je Vertreter und Monat', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.zugang']],
     'controlling.umsatz_bearbeiten' => ['g' => 'Controlling', 'l' => 'Umsatzstatistik: Monatswerte je Vertreter erfassen und ändern', 'k' => 'machen', 'd' => [], 'r' => ['controlling.umsatz_sehen']],
+    // Umsatzdaten der Warenwirtschaft (01.11.2026): Auswertung mit umsatz_sehen; Einkaufswerte und Deckungsbeitrag je Kunde/Artikel nur mit eigenem Recht
+    'controlling.umsatz_ek'         => ['g' => 'Controlling', 'l' => 'Umsatzauswertung: Einkaufswerte, Deckungsbeitrag und Spanne je Kunde, Artikel und Gruppe sehen (nur zusammen mit „Einkaufspreise (EK) … ansehen“, GR-008)', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.umsatz_sehen']],
+    'controlling.umsatz_importieren' => ['g' => 'Controlling', 'l' => 'Umsatzdaten der Warenwirtschaft importieren (Verwaltung → Import, Kundenumsatztabelle)', 'k' => 'machen', 'd' => [], 'r' => ['controlling.umsatz_sehen']],
     // Modul Leergut (29.10.2026): ohne Standardrollen – Administratoren vergeben die Rechte (Salden und Werte gegenüber Partnern)
     'leergut.sehen'            => ['g' => 'Leergut', 'l' => 'Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
     'leergut.bearbeiten'       => ['g' => 'Leergut', 'l' => 'Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.sehen']],
