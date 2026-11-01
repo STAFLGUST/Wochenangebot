@@ -2,10 +2,11 @@
    Verwaltung → Import, Importart „Umsätze je Kunde und Artikel“). Aufbau nach dem Designvorschlag vom 01.11.2026: oben nur
    Zeitraum, „mit Vorjahr“, Knopf „Filter“ (Pop-up mit Vertreter, Kundengruppe, Artikelgruppe, Fleischart, Kunden, Artikel) und
    die Suche nach Kunde, Artikel oder Gruppe; darunter Kennzahlen, die Rangliste (Vertreter, Kundengruppen, Kunden, Artikelgruppen,
-   Artikel; weitere Gliederungen nach Fleischart und Zeit) mit allen Spalten auf Wunsch, Monatsverlauf und die größten
-   Veränderungen zum Vorjahr. Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
+   Artikel; weitere Gliederungen nach Fleischart und Zeit) nach Umsatz, Menge, Rohmarge oder Rohmarge % – höchste oder niedrigste
+   zuerst (Reihenfolge vom Server, Rohmarge nur mit EK-Recht) –, alle Spalten auf Wunsch, Monatsverlauf und die größten
+   Veränderungen zum Vorjahr in der gewählten Kennzahl. Rohmarge = Umsatz mit EK − EK-Wert (früher „DB“). Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
    die Seite bleibt stehen. Daten: controlling_umsatz_daten (Stand, Auswahllisten) und controlling_umsatz_auswertung (Summen),
-   gerechnet wird auf dem Server. Einkaufswerte, DB und Spanne liefert er nur mit controlling.umsatz_ek und
+   gerechnet wird auf dem Server. Einkaufswerte und Rohmarge liefert er nur mit controlling.umsatz_ek und
    bestand.einkaufspreise; hier werden sie nur ein- oder ausgeblendet. Beträge in Cent, Mengen in Tausendstel.
    Meldet sich bei controlling.js an (STAFL_CONTROLLING.umsatzAuswertung, Formate in STAFL_CONTROLLING.umsatzFormat). */
 'use strict';
@@ -37,6 +38,28 @@
     if (d === null) return jetzt && vor === 0 ? '<span class="ctl-ua-delta plus">neu</span>' : '<span class="ctl-ua-delta">–</span>';
     return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : ''}${pct(d)}</span>`;
   };
+  /* Veränderung in Prozentpunkten (Rohmarge %) */
+  const ppHtml = (jetzt, vor) => {
+    if (jetzt === null || vor === null || vor === undefined) return '<span class="ctl-ua-delta">–</span>';
+    const d = (jetzt - vor) * 100;
+    if (Math.abs(d) < 0.05) return '<span class="ctl-ua-delta">±0,0 Pp</span>';
+    return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : '−'}${NF(1).format(Math.abs(d))} Pp</span>`;
+  };
+  /* Kennzahlen der Ranglisten (Seite und Pop-ups): Wert, Text, Veränderung zum Vorjahr; Rohmarge nur mit EK-Werten */
+  const RANG = {
+    umsatz: { name: 'Umsatz', wert: (w) => w.umsatz, text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(w.umsatz, vj ? vj.umsatz : 0) },
+    menge: { name: 'Menge', wert: (w) => w.menge, text: (v) => menge(v), kurz: (v) => menge(v), delta: (w, vj) => deltaHtml(w.menge, vj ? vj.menge : 0) },
+    db: { name: 'Rohmarge', ek: true, wert: (w) => db(w), text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(db(w), vj ? db(vj) : 0) },
+    spanne: { name: 'Rohmarge %', ek: true, wert: (w) => spanne(w), text: (v) => pct(v), kurz: (v) => pct(v), delta: (w, vj) => ppHtml(spanne(w), vj ? spanne(vj) : null) },
+  };
+  const RANG_ANTEIL_MIN = 0.001, RANG_CENT_MIN = 10000;   // wie der Server: Rohmarge % erst ab 0,1 % des Umsatzes mit EK (mind. 100 €)
+  /* Liste nach Kennzahl ordnen (für die Pop-ups; die Rangliste der Seite ordnet der Server); setzt z.klein bei Rohmarge % */
+  function rangSortieren(liste, rang, auf) {
+    const k = RANG[rang] || RANG.umsatz;
+    const schwelle = rang === 'spanne' ? Math.max(RANG_CENT_MIN, Math.round(liste.reduce((s, z) => s + (z.werte.umsatzEk || 0), 0) * RANG_ANTEIL_MIN)) : null;
+    return liste.map((z) => ({ ...z, klein: rang === 'spanne' ? (k.wert(z.werte) === null || z.werte.umsatzEk < schwelle) : false }))
+      .sort((a, b) => (a.klein - b.klein) || ((x, y) => (auf ? x - y : y - x))(k.wert(a.werte) ?? -Infinity, k.wert(b.werte) ?? -Infinity) || (b.werte.umsatz - a.werte.umsatz) || a.name.localeCompare(b.name, 'de'));
+  }
   /* CSV mit Semikolon und BOM (Excel), Zahlen deutsch ohne Tausenderpunkt; Texte, die Excel als Formel lesen würde
      (=, +, @, Tab, „-“ ohne Ziffer), beginnen mit einem Apostroph (CSV-Injection) – negative Zahlen bleiben Zahlen */
   const zahl = (v, d) => (v === null || v === undefined ? '' : NF(d).format(v).replace(/\./g, ''));
@@ -76,7 +99,7 @@
     zurueck: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></svg>',
     zu: '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
   };
-  C.umsatzFormat = { NF, euro, euroKachel, euroKurz, menge, ganz, pct, quote, preis, db, spanne, monatsname, tag, plusMonate, delta, deltaHtml, zahl, csvLaden, monatsSvg, ICON, MONATSNAMEN };
+  C.umsatzFormat = { NF, euro, euroKachel, euroKurz, menge, ganz, pct, quote, preis, db, spanne, monatsname, tag, plusMonate, delta, deltaHtml, ppHtml, RANG, rangSortieren, zahl, csvLaden, monatsSvg, ICON, MONATSNAMEN };
 
   const OHNE = '_';
   /* Filter: Kennung in der Anfrage → Liste der Grunddaten, Bezeichnung, Merkmal (dim) */
@@ -93,7 +116,7 @@
   const ZEITLICH = ['monat', 'quartal', 'jahr', 'kw'];
   const RANG_ANFANG = 50;   // Rangliste: zuerst die 50 umsatzstärksten, Rest auf Klick
 
-  const S = { box: null, g: null, von: '', bis: '', nach: 'kundengruppe', vj: true, filter: {}, sort: null, d: null, laden: 0, kennzahl: 'umsatz', ansicht: 'rang', rangAlle: false,
+  const S = { box: null, g: null, von: '', bis: '', nach: 'kundengruppe', rang: 'umsatz', auf: false, vj: true, filter: {}, sort: null, d: null, laden: 0, kennzahl: 'umsatz', ansicht: 'rang', rangAlle: false,
               eigen: false, entwurf: null, fsuche: {}, treffer: [], aktiv: -1 };
   FILTER.forEach((f) => { S.filter[f.id] = new Set(); S.fsuche[f.id] = ''; });
 
@@ -129,14 +152,16 @@
         <section class="ctl-panel ctl-glas ctl-ua-rangpanel" aria-labelledby="ctl-ua-titel">
           <div class="ctl-panelkopf ctl-ua-rangkopf"><div><h2 id="ctl-ua-titel">Rangliste</h2><p class="ctl-hilfe" id="ctl-ua-tabelle-hinweis"></p></div>
             <div class="ctl-ua-rangwahl"><div class="ctl-seg" role="group" aria-label="Rangliste nach" id="ctl-ua-nach">${HAUPT.map(([id, n]) => `<button type="button" data-nach="${id}">${esc(n)}</button>`).join('')}</div>
-              <label class="ctl-sr" for="ctl-ua-nach-mehr">Weitere Gliederung</label><select id="ctl-ua-nach-mehr"><option value="">Weitere …</option>${WEITERE.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('')}</select></div></div>
+              <label class="ctl-sr" for="ctl-ua-nach-mehr">Weitere Gliederung</label><select id="ctl-ua-nach-mehr"><option value="">Weitere …</option>${WEITERE.map(([id, n]) => `<option value="${id}">${esc(n)}</option>`).join('')}</select></div>
+            <div class="ctl-ua-rangwahl ctl-ua-kennzahlwahl"><span class="ctl-ua-wahllabel" id="ctl-ua-rang-label">Sortiert nach</span><div class="ctl-seg" role="group" aria-labelledby="ctl-ua-rang-label" id="ctl-ua-rangnach">${Object.entries(RANG).filter(([, k]) => !k.ek || S.g.rechte.ek).map(([id, k]) => `<button type="button" data-rang="${id}">${esc(k.name)}</button>`).join('')}</div>
+              <button type="button" class="ctl-ua-richtung" id="ctl-ua-richtung" aria-pressed="false" title="Reihenfolge umkehren"></button></div></div>
           <div id="ctl-ua-liste" class="ctl-ua-liste"></div>
           <div class="ctl-ua-rangfuss"><div class="ctl-seg klein" role="group" aria-label="Darstellung" id="ctl-ua-ansicht"><button type="button" data-ansicht="rang">Rangliste</button><button type="button" data-ansicht="tabelle">Alle Spalten</button></div>
             <span class="ctl-hilfe" id="ctl-ua-klickhinweis"></span><button type="button" class="btn sm" id="ctl-ua-csv">CSV</button></div>
           <p class="ctl-fussnote" id="ctl-ua-fussnote"></p></section>
         <aside class="ctl-ua-seite">
           <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf"><div><h2>Monatsverlauf</h2><p class="ctl-hilfe" id="ctl-ua-verlauf-hinweis"></p></div>
-            <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge</option>${S.g.rechte.ek ? '<option value="db">Deckungsbeitrag</option>' : ''}</select></div></div>
+            <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge</option>${S.g.rechte.ek ? '<option value="db">Rohmarge</option>' : ''}</select></div></div>
             <div class="ctl-diagramm ctl-ua-diagramm" id="ctl-ua-diagramm"></div></section>
           <section class="ctl-panel ctl-glas ctl-ua-veraenderung" id="ctl-ua-veraenderung-panel" hidden><div class="ctl-panelkopf"><div><h2>Größte Veränderungen zum Vorjahr</h2><p class="ctl-hilfe" id="ctl-ua-veraenderung-hinweis"></p></div></div>
             <div id="ctl-ua-veraenderung"></div></section>
@@ -244,7 +269,7 @@
   async function laden() {
     const nr = ++S.laden;
     $('#ctl-ua-liste', S.box).classList.add('laedt');
-    const r = await C.api('controlling_umsatz_auswertung', null, anfrage({ nach: S.nach }));
+    const r = await C.api('controlling_umsatz_auswertung', null, anfrage({ nach: S.nach, rang: S.rang, auf: S.auf ? '1' : '0' }));
     if (nr !== S.laden) return;
     $('#ctl-ua-liste', S.box).classList.remove('laedt');
     if (r.status === 401) { C.zeigeAnmeldung(); return; }
@@ -268,8 +293,9 @@
       ['Kunden', ganz(s.kunden), `${ganz(s.artikel)} Artikel · ${ganz(s.pos)} Positionen`],
     ];
     if (S.d.ek) {
-      k.push(['Deckungsbeitrag', euroKachel(db(s)), v ? deltaHtml(db(s), db(v)) + ' zum Vorjahr' : '', euro(db(s))]);
-      k.push(['Spanne', pct(spanne(s)), `EK für ${pct(quote(s.umsatzEk, s.umsatz))} des Umsatzes`]);
+      k.push(['Rohmarge', euroKachel(db(s)), v ? deltaHtml(db(s), db(v)) + ' zum Vorjahr' : '', euro(db(s))]);
+      k.push(['Rohmarge %', pct(spanne(s)), v ? ppHtml(spanne(s), spanne(v)) + ' zum Vorjahr' : `EK für ${esc(pct(quote(s.umsatzEk, s.umsatz)))} des Umsatzes`,
+        `${pct(spanne(s))} – Einkaufspreise liegen für ${pct(quote(s.umsatzEk, s.umsatz))} des Umsatzes vor`]);
     }
     $('#ctl-ua-kpis', S.box).classList.toggle('mit-ek', !!S.d.ek);
     $('#ctl-ua-kpis', S.box).innerHTML = k.map(([n, w, sub, voll]) => `<div class="ctl-kpi ctl-glas"><span>${esc(n)}</span><b title="${esc(voll || w)}">${esc(w)}</b><small>${sub}</small></div>`).join('');
@@ -279,7 +305,7 @@
     $('#ctl-ua-diagramm', S.box).innerHTML = `<div class="ctl-ua-svgwrap">${monatsSvg(S.d.monate, S.kennzahl, !!S.d.vorjahr, platz)}</div>`;
     $('#ctl-ua-verlauf-hinweis', S.box).innerHTML = `Balken: ${esc(monatsname(S.d.anfrage.von))} – ${esc(monatsname(S.d.anfrage.bis))}${S.d.vorjahr ? ' · <span class="ctl-ua-legende-vj"></span> Vorjahr' : ''}`;
   }
-  /* Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne DB und Spanne) */
+  /* Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne Rohmarge) */
   function spalten() {
     const s = [
       { id: 'umsatz', name: 'Umsatz', wert: (z) => z.werte.umsatz, text: (z) => euro(z.werte.umsatz) },
@@ -292,8 +318,8 @@
     s.push({ id: 'menge', name: 'Menge', wert: (z) => z.werte.menge, text: (z) => menge(z.werte.menge) });
     s.push({ id: 'preis', name: 'Ø Preis', wert: (z) => (z.werte.menge ? z.werte.umsatz / z.werte.menge : null), text: (z) => preis(z.werte) });
     if (S.d.ek) {
-      s.push({ id: 'db', name: 'DB', wert: (z) => db(z.werte), text: (z) => euro(db(z.werte)) });
-      s.push({ id: 'spanne', name: 'Spanne', wert: (z) => spanne(z.werte), text: (z) => pct(spanne(z.werte)) });
+      s.push({ id: 'db', name: 'Rohmarge', wert: (z) => db(z.werte), text: (z) => euro(db(z.werte)) });
+      s.push({ id: 'spanne', name: 'Rohmarge %', wert: (z) => spanne(z.werte), text: (z) => pct(spanne(z.werte)) });
     }
     if (S.d.anfrage.nach !== 'kunde') s.push({ id: 'kunden', name: 'Kunden', wert: (z) => z.werte.kunden, text: (z) => ganz(z.werte.kunden) });
     s.push({ id: 'pos', name: 'Positionen', wert: (z) => z.werte.pos, text: (z) => ganz(z.werte.pos) });
@@ -315,15 +341,29 @@
     });
   }
   const gliederungName = (id) => { const g = S.g.gliederungen.find((x) => x.id === id); return g ? g.name : id; };
+  /* Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Rohmarge % zur Rohmarge …) */
+  function rangNebenwert(w, rang) {
+    if (rang === 'menge') return euro(w.umsatz);
+    if (rang === 'db') return `${pct(spanne(w))} von ${euroKurz(w.umsatzEk)}`;
+    if (rang === 'spanne') return `${euro(db(w))} von ${euroKurz(w.umsatzEk)}`;
+    return '';
+  }
   function zeichneRangliste() {
-    const nach = S.d.anfrage.nach, zeitlich = ZEITLICH.includes(nach), zeilen = sortiert();
-    const max = Math.max(1, ...zeilen.map((z) => z.werte.umsatz));
+    const nach = S.d.anfrage.nach, zeitlich = ZEITLICH.includes(nach), zeilen = sortiert(), rang = S.d.anfrage.rang || 'umsatz', k = RANG[rang];
+    const max = Math.max(1e-9, ...zeilen.map((z) => Math.abs(k.wert(z.werte) || 0)));
+    const summe = k.wert(S.d.summe);
     const zeigen = S.rangAlle ? zeilen : zeilen.slice(0, RANG_ANFANG);
-    const kopf = `<div class="ctl-ua-rangzeile ctl-ua-rangkopfzeile" aria-hidden="true"><span>${zeitlich ? '' : '#'}</span><span>${esc(gliederungName(nach))}</span><span>Anteil</span><span>Umsatz</span><span>${S.d.vorjahr ? '± Vorjahr' : ''}</span><span></span></div>`;
-    $('#ctl-ua-liste', S.box).innerHTML = zeilen.length ? `${kopf}<ol class="ctl-ua-rang${zeitlich ? ' zeitlich' : ''}" id="ctl-ua-rang">${zeigen.map((z, i) => `<li><button type="button" class="ctl-ua-rangzeile" data-zeile="${esc(z.schluessel)}">
-        <span class="ctl-ua-rangnr">${zeitlich ? '' : i + 1}</span><span class="ctl-ua-rangname"><b class="ctl-ua-name">${esc(z.name)}</b>${z.sub ? `<small class="ctl-ua-sub">${esc(z.sub)}</small>` : ''}</span>
-        <span class="ctl-ua-rangbalken"><span class="ctl-ua-spur"><span style="width:${Math.max(0, (z.werte.umsatz / max) * 100).toFixed(1)}%"></span></span><small>${esc(pct(quote(z.werte.umsatz, S.d.summe.umsatz)))}</small></span>
-        <b class="ctl-ua-rangwert">${esc(euro(z.werte.umsatz))}</b><span class="ctl-ua-rangdelta">${S.d.vorjahr ? deltaHtml(z.werte.umsatz, z.vj ? z.vj.umsatz : 0) : ''}</span>${ICON.weiter}</button></li>`).join('')}</ol>`
+    const kopf = `<div class="ctl-ua-rangzeile ctl-ua-rangkopfzeile" aria-hidden="true"><span>${zeitlich ? '' : '#'}</span><span>${esc(gliederungName(nach))}</span><span>${rang === 'spanne' ? '' : 'Anteil'}</span><span>${esc(k.name)}</span><span>${S.d.vorjahr ? '± Vorjahr' : ''}</span><span></span></div>`;
+    let nr = 0, kleinKopf = false;
+    $('#ctl-ua-liste', S.box).innerHTML = zeilen.length ? `${kopf}<ol class="ctl-ua-rang${zeitlich ? ' zeitlich' : ''}" id="ctl-ua-rang" data-rang="${rang}">${zeigen.map((z) => {
+      const w = k.wert(z.werte), neben = rangNebenwert(z.werte, rang);
+      const trenner = z.klein && !kleinKopf ? (kleinKopf = true, `<li class="ctl-ua-rangtrenner">Wenig Umsatz mit Einkaufspreis (unter ${esc(euro(S.d.rangSchwelle))}) – Rohmarge % wenig aussagekräftig</li>`) : '';
+      return `${trenner}<li${z.klein ? ' class="klein"' : ''}><button type="button" class="ctl-ua-rangzeile" data-zeile="${esc(z.schluessel)}">
+        <span class="ctl-ua-rangnr">${zeitlich || z.klein ? '' : ++nr}</span><span class="ctl-ua-rangname"><b class="ctl-ua-name">${esc(z.name)}</b>${z.sub ? `<small class="ctl-ua-sub">${esc(z.sub)}</small>` : ''}</span>
+        <span class="ctl-ua-rangbalken"><span class="ctl-ua-spur${w < 0 ? ' minus' : ''}"><span style="width:${Math.min(100, (Math.abs(w || 0) / max) * 100).toFixed(1)}%"></span></span><small>${rang === 'spanne' ? '' : esc(pct(quote(w, summe)))}</small></span>
+        <span class="ctl-ua-rangwert"><b class="${w < 0 ? 'ctl-ua-negativ' : ''}">${esc(w === null ? '–' : k.text(w))}</b>${neben ? `<small>${esc(neben)}</small>` : ''}</span>
+        <span class="ctl-ua-rangdelta">${S.d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>${ICON.weiter}</button></li>`;
+    }).join('')}</ol>`
         + (zeilen.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" id="ctl-ua-rang-alle">Alle ${ganz(zeilen.length)} anzeigen</button>` : '')
       : '<p class="ctl-empty">Keine Umsätze für diese Auswahl.</p>';
   }
@@ -340,31 +380,37 @@
       : `<tr><td colspan="${sp.length + 1}" class="ctl-empty">Keine Umsätze für diese Auswahl.</td></tr>`}</tbody>
       <tfoot id="ctl-ua-fuss">${zeilen.length ? `<tr class="ctl-total"><td class="ctl-rep">Summe</td>${sp.map((x) => `<td class="ctl-zahl">${x.id === 'anteil' ? '100,0 %' : x.html ? x.html(summe) : esc(x.text(summe))}</td>`).join('')}</tr>` : ''}</tfoot></table></div>`;
   }
-  /* Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in Euro (nur Merkmale, nicht Zeit) */
+  /* Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Rohmarge % → Rohmarge
+     in Euro; nur Merkmale, nicht Zeit) */
   function zeichneVeraenderung() {
     const panel = $('#ctl-ua-veraenderung-panel', S.box), nach = S.d.anfrage.nach;
-    const z = S.d.vorjahr && !ZEITLICH.includes(nach) ? S.d.zeilen.map((x) => ({ x, d: x.werte.umsatz - (x.vj ? x.vj.umsatz : 0) })).filter((y) => y.d !== 0) : [];
+    const rang = S.d.anfrage.rang === 'spanne' ? 'db' : (S.d.anfrage.rang || 'umsatz'), k = RANG[rang];
+    const z = S.d.vorjahr && !ZEITLICH.includes(nach) ? S.d.zeilen.map((x) => ({ x, d: k.wert(x.werte) - (x.vj ? k.wert(x.vj) : 0) })).filter((y) => y.d !== 0) : [];
     panel.hidden = !z.length;
     if (!z.length) return;
     const plus = z.filter((y) => y.d > 0).sort((a, b) => b.d - a.d).slice(0, 3), minus = z.filter((y) => y.d < 0).sort((a, b) => a.d - b.d).slice(0, 3);
-    $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · Umsatz in Euro`;
+    $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · ${k.name}${rang === 'menge' ? '' : ' in Euro'}`;
     $('#ctl-ua-veraenderung', S.box).innerHTML = plus.concat(minus).map(({ x, d }) => `<button type="button" class="ctl-ua-veraend" data-zeile="${esc(x.schluessel)}">
-        <span><b>${esc(x.name)}</b><small>${x.vj && x.vj.umsatz ? `${esc(euroKurz(x.vj.umsatz))} → ${esc(euroKurz(x.werte.umsatz))}` : 'im Vorjahr ohne Umsatz'}</small></span>
-        <b class="ctl-ua-delta ${d > 0 ? 'plus' : 'minus'}">${d > 0 ? '+' : '−'}${esc(euroKurz(Math.abs(d)))}</b></button>`).join('');
+        <span><b>${esc(x.name)}</b><small>${x.vj && k.wert(x.vj) ? `${esc(k.kurz(k.wert(x.vj)))} → ${esc(k.kurz(k.wert(x.werte)))}` : `im Vorjahr ohne ${esc(k.name)}`}</small></span>
+        <b class="ctl-ua-delta ${d > 0 ? 'plus' : 'minus'}">${d > 0 ? '+' : '−'}${esc(k.kurz(Math.abs(d)))}</b></button>`).join('');
   }
   function zeichneListe() {
     const nach = S.d.anfrage.nach;
     $$('#ctl-ua-nach [data-nach]', S.box).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.nach === nach)));
     $('#ctl-ua-nach-mehr', S.box).value = WEITERE.some(([id]) => id === nach) ? nach : '';
     $$('#ctl-ua-ansicht [data-ansicht]', S.box).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ansicht === S.ansicht)));
+    const rang = S.d.anfrage.rang || 'umsatz', auf = !!S.d.anfrage.auf;
+    $$('#ctl-ua-rangnach [data-rang]', S.box).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.rang === rang)));
+    const ri = $('#ctl-ua-richtung', S.box);
+    ri.setAttribute('aria-pressed', String(auf)); ri.textContent = auf ? '↑ niedrigste zuerst' : '↓ höchste zuerst'; ri.hidden = ZEITLICH.includes(nach);
     $('#ctl-ua-titel', S.box).textContent = `Rangliste · ${gliederungName(nach)}`;
     $('#ctl-ua-tabelle-hinweis', S.box).textContent = `${monatsname(S.d.anfrage.von)} – ${monatsname(S.d.anfrage.bis)}${S.d.vorjahr ? ' · ' + vjText() : ''}`;
     $('#ctl-ua-klickhinweis', S.box).textContent = ZEITLICH.includes(nach) ? (nach === 'kw' ? '' : 'Klick auf eine Zeile wählt diesen Zeitraum.') : 'Klick auf eine Zeile öffnet die Details im Pop-up.';
     if (S.ansicht === 'tabelle') zeichneTabelle(); else zeichneRangliste();
     const s = S.d.summe;
-    const mehr = S.d.zeilenGesamt > S.d.zeilen.length ? `Angezeigt: ${ganz(S.d.zeilen.length)} von ${ganz(S.d.zeilenGesamt)} Zeilen (die umsatzstärksten). ` : '';
+    const mehr = S.d.zeilenGesamt > S.d.zeilen.length ? `Angezeigt: ${ganz(S.d.zeilen.length)} von ${ganz(S.d.zeilenGesamt)} Zeilen (die ersten nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}). ` : '';
     const ohne = s.posOhne ? `Zusätzlich ${ganz(s.posOhne)} Positionen ohne Berechnung (z. B. Leergut, Menge ${menge(s.mengeOhne)}) – nicht in Menge und Umsatz. ` : '';
-    $('#ctl-ua-fussnote', S.box).textContent = `${mehr}${ohne}Menge und Ø Preis je Mengeneinheit der Warenwirtschaft. Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe nach den heutigen Stammdaten.${S.d.ek ? ' DB = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Spanne = DB ÷ deren Umsatz.' : ''}`;
+    $('#ctl-ua-fussnote', S.box).textContent = `${mehr}${ohne}Menge und Ø Preis je Mengeneinheit der Warenwirtschaft. Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe nach den heutigen Stammdaten.${S.d.ek ? ' Rohmarge = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Rohmarge % = Rohmarge ÷ deren Umsatz.' : ''}`;
   }
   function zeichneZeitraum() {
     const m = S.g.stand.monate, letzter = m[m.length - 1], j = letzter.slice(0, 4);
@@ -387,6 +433,7 @@
     $('#ctl-ua-von', S.box).value = S.von; $('#ctl-ua-bis', S.box).value = S.bis;
   }
   function gliederung(nach) { S.nach = nach; S.sort = null; S.rangAlle = false; laden(); }
+  function rangliste(rang, auf) { S.rang = rang; S.auf = auf; S.sort = null; S.rangAlle = false; laden(); }
   /* Klick auf eine Zeile: Merkmal → Pop-up; Monat/Quartal/Jahr → dieser Zeitraum */
   function zeileGewaehlt(schluessel) {
     const nach = S.d.anfrage.nach;
@@ -403,6 +450,7 @@
     get dialog() { return $('#ctl-ua-dialog', S.box); },
     get grunddaten() { return S.g; },
     anfrage, filterText,
+    get rang() { return S.rang; }, get auf() { return S.auf; },
     filterSetzen(dim, wert) {
       const f = FILTER.find((x) => x.nach === dim); if (!f) return;
       S.filter[f.id] = new Set([wert]); zeichneFilter(); laden();
@@ -413,7 +461,7 @@
 
   function csv() {
     const gl = gliederungName(S.d.anfrage.nach);
-    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'DB €', 'Spanne %'] : [])];
+    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'Rohmarge €', 'Rohmarge %'] : [])];
     const zeilen = sortiert().map((z) => [z.name, z.schluessel, zahl(z.werte.umsatz / 100, 2), ...(S.d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3),
       zahl(z.werte.kolli, 0), zahl(z.werte.pos, 0), zahl(z.werte.kunden, 0),
       ...(S.d.ek ? [zahl(z.werte.ek / 100, 2), zahl(z.werte.umsatzEk / 100, 2), zahl(db(z.werte) / 100, 2), spanne(z.werte) === null ? '' : zahl(spanne(z.werte) * 100, 1)] : [])]);
@@ -433,6 +481,8 @@
     });
     $('#ctl-ua-nach', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-nach]'); if (k) gliederung(k.dataset.nach); });
     $('#ctl-ua-nach-mehr', b).addEventListener('change', () => { const v = $('#ctl-ua-nach-mehr', b).value; if (v) gliederung(v); });
+    $('#ctl-ua-rangnach', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-rang]'); if (k && k.dataset.rang !== S.rang) rangliste(k.dataset.rang, false); });
+    $('#ctl-ua-richtung', b).addEventListener('click', () => rangliste(S.rang, !S.auf));
     $('#ctl-ua-ansicht', b).addEventListener('click', (ev) => { const k = ev.target.closest('[data-ansicht]'); if (k && S.d) { S.ansicht = k.dataset.ansicht; zeichneListe(); } });
     $('#ctl-ua-filterknopf', b).addEventListener('click', filterDialog);
     filterVerbinden();
@@ -477,7 +527,7 @@
     if (!S.g.stand.monate.length) {
       box.innerHTML = `<section class="ctl-panel ctl-glas ctl-ua-leer"><h2>Noch keine Umsatzdaten</h2><p class="ctl-hilfe">Die Kundenumsatztabelle der Warenwirtschaft wird unter
         <strong>Verwaltung → Import → „Umsätze je Kunde und Artikel“</strong> hochgeladen${S.g.rechte.importieren ? '' : ' (Recht „Umsatzdaten importieren“, bitte an einen Administrator wenden)'}.
-        Danach stehen hier Umsatz, Menge${S.g.rechte.ek ? ', Deckungsbeitrag' : ''} und Vorjahresvergleich nach Vertreter, Kundengruppe, Kunde, Artikelgruppe und Artikel bereit.</p></section>`;
+        Danach stehen hier Umsatz, Menge${S.g.rechte.ek ? ', Rohmarge' : ''} und Vorjahresvergleich nach Vertreter, Kundengruppe, Kunde, Artikelgruppe und Artikel bereit.</p></section>`;
       return;
     }
     box.innerHTML = geruest();
