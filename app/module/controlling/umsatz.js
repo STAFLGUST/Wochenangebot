@@ -1,7 +1,7 @@
-/* STAFL-Plattform · Controlling · Bereich Umsatzstatistik, Reiter „Monatsmeldung“: Kg, Umsatz, Rohmarge und Rohmarge % je
+/* STAFL-Plattform · Controlling · Bereich Umsatzstatistik, Reiter „Monatsmeldung“: Kg, Umsatz, DB und Spanne je
    Vertreter und Monat eines Jahres – Kennzahlen, Vertretertabelle mit Anteilen, Monatsvergleich (Balken/Linie). Die Werte
    rechnet der Server aus den importierten Umsatzdaten (Aktion controlling_umsatz&jahr=JJJJ, keine Erfassung von Hand mehr);
-   Rohmarge (= Umsatz mit EK − EK-Wert, früher „DB“) und Rohmarge % (früher „Spanne“) nur mit den Rechten für Einkaufswerte (sonst leer). Grundlage: Modul „Gust 1“ aus dem Modulbausatz.
+   DB (= Umsatz mit EK − EK-Wert) und Spanne nur mit den Rechten für Einkaufswerte (sonst leer). Grundlage: Modul „Gust 1“ aus dem Modulbausatz.
    Meldet sich bei controlling.js an (STAFL_CONTROLLING.bereich).
    Reiter „Auswertung“ (Umsätze aus der Warenwirtschaft): umsatz-auswertung.js – zuerst geöffnet, sobald Daten importiert sind. */
 'use strict';
@@ -18,7 +18,7 @@
   const summe = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) : null; };
   const schnitt = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; };
   const quote = (teil, ganz) => ist(teil) && ist(ganz) && Number(ganz) !== 0 ? Number(teil) / Number(ganz) : null;
-  const KENNZAHL = { umsatz: 'Umsatz', db: 'Rohmarge', kg: 'Kg', spanne: 'Rohmarge %' };
+  const KENNZAHL = { umsatz: 'Umsatz', db: 'DB', kg: 'Kg', spanne: 'Spanne' };
 
   const S = { box: null, d: null, rechte: {}, jahr: String(new Date().getFullYear()), monate: new Set(), vertreter: new Set(), kennzahl: 'umsatz', tab: 'uebersicht' };
   const MONATE = () => S.d ? S.d.monate : [];
@@ -42,20 +42,20 @@
       <label for="ctl-u-jahr">Jahr</label><select id="ctl-u-jahr"></select>
       <details class="ctl-filter" id="ctl-u-zeitfilter"><summary id="ctl-u-zeitfilter-titel">Alle Monate</summary><div class="ctl-filterliste" id="ctl-u-monatsoptionen"></div></details>
       <details class="ctl-filter" id="ctl-u-vertreterfilter"><summary id="ctl-u-vertreterfilter-titel">Alle Vertreter</summary><div class="ctl-filterliste" id="ctl-u-vertreteroptionen"></div></details>
-      <label class="ctl-visuellabel" for="ctl-u-kennzahl">Vergleich</label><select id="ctl-u-kennzahl"><option value="umsatz">Umsatz im Vergleich</option><option value="db">Rohmarge im Vergleich</option><option value="kg">Kg im Vergleich</option><option value="spanne">Rohmarge % im Vergleich</option></select>
+      <label class="ctl-visuellabel" for="ctl-u-kennzahl">Vergleich</label><select id="ctl-u-kennzahl"><option value="umsatz">Umsatz im Vergleich</option><option value="db">DB im Vergleich</option><option value="kg">Kg im Vergleich</option><option value="spanne">Spanne im Vergleich</option></select>
     </section>
     <section id="ctl-u-auswertung" hidden></section>
     <section id="ctl-u-uebersicht">
       <div class="ctl-kpis" id="ctl-u-kpis" aria-live="polite"></div>
       <section class="ctl-panel ctl-glas ctl-tabellenpanel"><div class="ctl-panelkopf"><div><h2 id="ctl-u-tabelle-titel">Vertreter</h2><p class="ctl-hilfe" id="ctl-u-anteil-hinweis"></p></div></div>
-        <div class="ctl-tabelle-wrap"><table class="ctl-tabelle ctl-vertretertabelle"><thead><tr><th>Vertreter</th><th class="ctl-zahl">Kg</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Umsatz</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Rohmarge</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Rohmarge %</th><th>Vergleich</th></tr></thead><tbody id="ctl-u-vertreterzeilen"></tbody></table></div>
-        <p class="ctl-fussnote" id="ctl-u-fussnote">Rohmarge % = Rohmarge ÷ gesamter Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.</p>
+        <div class="ctl-tabelle-wrap"><table class="ctl-tabelle ctl-vertretertabelle"><thead><tr><th>Vertreter</th><th class="ctl-zahl">Kg</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Umsatz</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">DB</th><th class="ctl-anteil">Anteil</th><th class="ctl-zahl">Spanne</th><th>Vergleich</th></tr></thead><tbody id="ctl-u-vertreterzeilen"></tbody></table></div>
+        <p class="ctl-fussnote" id="ctl-u-fussnote">Spanne = DB ÷ gesamter Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.</p>
       </section>
       <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf ctl-monatskopf"><div><h2>Monatsvergleich</h2><p class="ctl-hilfe" id="ctl-u-diagrammhinweis"></p></div>
-          <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-u-monatskennzahl">Kennzahl</label><select id="ctl-u-monatskennzahl"><option value="umsatz">Umsatz</option><option value="db">Rohmarge</option><option value="kg">Kg</option><option value="spanne">Rohmarge %</option></select>
+          <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-u-monatskennzahl">Kennzahl</label><select id="ctl-u-monatskennzahl"><option value="umsatz">Umsatz</option><option value="db">DB</option><option value="kg">Kg</option><option value="spanne">Spanne</option></select>
           <label class="ctl-visuellabel" for="ctl-u-diagrammart">Diagramm</label><select id="ctl-u-diagrammart"><option value="balken">Balken</option><option value="linie">Linie</option></select></div></div>
         <div class="ctl-diagramm" id="ctl-u-diagramm"></div>
-        <div class="ctl-tabelle-wrap ctl-monatstabelle-wrap"><table class="ctl-tabelle ctl-monatstabelle"><thead><tr><th>Monat</th><th class="ctl-zahl">Kg</th><th class="ctl-zahl">Umsatz</th><th class="ctl-zahl">Rohmarge</th><th class="ctl-zahl">Rohmarge %</th><th>Status</th></tr></thead><tbody id="ctl-u-monatszeilen"></tbody></table></div>
+        <div class="ctl-tabelle-wrap ctl-monatstabelle-wrap"><table class="ctl-tabelle ctl-monatstabelle"><thead><tr><th>Monat</th><th class="ctl-zahl">Kg</th><th class="ctl-zahl">Umsatz</th><th class="ctl-zahl">DB</th><th class="ctl-zahl">Spanne</th><th>Status</th></tr></thead><tbody id="ctl-u-monatszeilen"></tbody></table></div>
       </section>
     </section>
 `;
@@ -88,7 +88,7 @@
   /* ---------- Übersicht ---------- */
   function zeichneKennzahlen(monate, auswahl) {
     const t = gesamt(monate, auswahl), text = zeitraumText(monate);
-    $('#ctl-u-kpis').innerHTML = [['Kg', kg(t.kg)], ['Umsatz', euro(t.umsatz)], ['Rohmarge', euro(t.db)], ['Rohmarge %', pct(t.spanne)]]
+    $('#ctl-u-kpis').innerHTML = [['Kg', kg(t.kg)], ['Umsatz', euro(t.umsatz)], ['DB', euro(t.db)], ['Spanne', pct(t.spanne)]]
       .map(([n, v]) => `<div class="ctl-kpi ctl-glas"><span>${esc(n)}</span><b>${esc(v)}</b><small>${esc(text)}</small></div>`).join('');
   }
   function zeichneVertreter(monate, auswahl) {
@@ -105,14 +105,14 @@
       const vergleich = k === 'spanne' ? z.spanne : z[anteil];
       const breite = ist(z[k]) ? Math.max(0, Math.min(100, Math.abs(Number(z[k])) / max * 100)) : 0;
       return `<tr><td class="ctl-rep" data-label="Vertreter">${esc(z.name)}</td><td class="ctl-zahl" data-label="Kg">${esc(kg(z.kg))}</td><td class="ctl-anteil">${esc(pct(z.anteilKg))}</td>
-        <td class="ctl-zahl" data-label="Umsatz">${esc(euro(z.umsatz))}</td><td class="ctl-anteil">${esc(pct(z.anteilUmsatz))}</td><td class="ctl-zahl" data-label="Rohmarge">${esc(euro(z.db))}</td>
-        <td class="ctl-anteil">${esc(pct(z.anteilDb))}</td><td class="ctl-zahl" data-label="Rohmarge %">${esc(pct(z.spanne))}</td>
+        <td class="ctl-zahl" data-label="Umsatz">${esc(euro(z.umsatz))}</td><td class="ctl-anteil">${esc(pct(z.anteilUmsatz))}</td><td class="ctl-zahl" data-label="DB">${esc(euro(z.db))}</td>
+        <td class="ctl-anteil">${esc(pct(z.anteilDb))}</td><td class="ctl-zahl" data-label="Spanne">${esc(pct(z.spanne))}</td>
         <td data-label="${esc(KENNZAHL[k])} im Vergleich"><div class="ctl-barlabel"><span>${ist(z[k]) ? esc(pct(vergleich)) : 'Keine Daten'}</span></div><progress max="100" value="${breite}" aria-label="${esc(KENNZAHL[k])} ${esc(pct(vergleich))}"></progress></td></tr>`;
     });
     if (!zeilen.length) html.push(`<tr><td class="ctl-empty" colspan="9">${monate.length ? 'Bitte mindestens einen Vertreter auswählen.' : 'Bitte Monate auswählen.'}</td></tr>`);
     html.push(`<tr class="ctl-total"><td data-label="Vertreter">Summe</td><td class="ctl-zahl" data-label="Kg">${esc(kg(t.kg))}</td><td class="ctl-anteil">${ist(t.kg) ? '100,00 %' : '–'}</td>
-      <td class="ctl-zahl" data-label="Umsatz">${esc(euro(t.umsatz))}</td><td class="ctl-anteil">${ist(t.umsatz) ? '100,00 %' : '–'}</td><td class="ctl-zahl" data-label="Rohmarge">${esc(euro(t.db))}</td>
-      <td class="ctl-anteil">${ist(t.db) ? '100,00 %' : '–'}</td><td class="ctl-zahl" data-label="Rohmarge %">${esc(pct(t.spanne))}</td><td></td></tr>`);
+      <td class="ctl-zahl" data-label="Umsatz">${esc(euro(t.umsatz))}</td><td class="ctl-anteil">${ist(t.umsatz) ? '100,00 %' : '–'}</td><td class="ctl-zahl" data-label="DB">${esc(euro(t.db))}</td>
+      <td class="ctl-anteil">${ist(t.db) ? '100,00 %' : '–'}</td><td class="ctl-zahl" data-label="Spanne">${esc(pct(t.spanne))}</td><td></td></tr>`);
     $('#ctl-u-vertreterzeilen').innerHTML = html.join('');
   }
   const monatsstatus = (monat, auswahl) => !auswahl.length ? 'Keine Vertreter ausgewählt'
@@ -153,7 +153,7 @@
       const top = Math.max(1, ...summen.map((z) => Math.abs(Number(z[k]) || 0)));
       $('#ctl-u-diagramm').innerHTML = `<div class="ctl-balkenliste">${summen.map((z) => { const b = ist(z[k]) ? Math.max(0, Math.min(100, Math.abs(Number(z[k])) / top * 100)) : 0; const status = monatsstatus(z.monat, auswahl); return `<div class="ctl-monatsbalken"><div class="ctl-monatsname">${esc(monatsname(z.monat))}<small>${esc(status)}</small></div><progress max="100" value="${b}" aria-label="${esc(monatsname(z.monat))} ${esc(anzeige(k, z[k]))}"></progress><div class="ctl-monatswert">${esc(anzeige(k, z[k]))}</div></div>`; }).join('')}</div>`;
     }
-    const zeile = (titel, z, status = '', klasse = '') => `<tr${klasse ? ` class="${klasse}"` : ''}><td class="ctl-rep" data-label="Monat">${esc(titel)}</td><td class="ctl-zahl" data-label="Kg">${esc(kg(z.kg))}</td><td class="ctl-zahl" data-label="Umsatz">${esc(euro(z.umsatz))}</td><td class="ctl-zahl" data-label="Rohmarge">${esc(euro(z.db))}</td><td class="ctl-zahl" data-label="Rohmarge %">${esc(pct(z.spanne))}</td><td data-label="Status">${esc(status)}</td></tr>`;
+    const zeile = (titel, z, status = '', klasse = '') => `<tr${klasse ? ` class="${klasse}"` : ''}><td class="ctl-rep" data-label="Monat">${esc(titel)}</td><td class="ctl-zahl" data-label="Kg">${esc(kg(z.kg))}</td><td class="ctl-zahl" data-label="Umsatz">${esc(euro(z.umsatz))}</td><td class="ctl-zahl" data-label="DB">${esc(euro(z.db))}</td><td class="ctl-zahl" data-label="Spanne">${esc(pct(z.spanne))}</td><td data-label="Status">${esc(status)}</td></tr>`;
     let html = monate.length ? summen.map((t) => { const st = monatsstatus(t.monat, auswahl); return zeile(`${monatsname(t.monat)} ${S.jahr}`, t, st, st === 'Daten vorhanden' ? '' : 'ctl-ohne-daten'); }).join('') : '<tr><td colspan="6" class="ctl-empty">Bitte Monate auswählen.</td></tr>';
     if (monate.length > 1) {
       html += zeile(monate.length === MONATE().length ? 'Jahr gesamt' : 'Zeitraum gesamt', gesamt(monate, auswahl), '', 'ctl-total');
@@ -168,8 +168,8 @@
     const g = S.d.geaendert;
     $('#ctl-u-stand').textContent = g && g.t ? `Aus den importierten Umsatzdaten · letzter Import ${new Date(g.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}${g.vonName ? ' · ' + g.vonName : ''}`
       : 'Noch keine Umsatzdaten importiert (Verwaltung → Import → „Umsätze je Kunde und Artikel“).';
-    $('#ctl-u-fussnote').textContent = 'Kg, Umsatz und Rohmarge aus den importierten Umsatzdaten (berechnete Positionen); Vertreter = Hauptvertreter des Kunden nach den heutigen Stammdaten. Rohmarge = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Rohmarge % = Rohmarge ÷ gesamter Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.'
-      + (S.d.rechte && S.d.rechte.ek ? '' : ' Rohmarge und Rohmarge % nur mit den Rechten „Umsatzauswertung: Einkaufswerte …“ und „Einkaufspreise (EK) ansehen“.');
+    $('#ctl-u-fussnote').textContent = 'Kg, Umsatz und DB aus den importierten Umsatzdaten (berechnete Positionen); Vertreter = Hauptvertreter des Kunden nach den heutigen Stammdaten. DB = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Spanne = DB ÷ gesamter Umsatz. Anteile beziehen sich auf die Summe der ausgewählten Vertreter im gewählten Zeitraum.'
+      + (S.d.rechte && S.d.rechte.ek ? '' : ' DB und Spanne nur mit den Rechten „Umsatzauswertung: Einkaufswerte …“ und „Einkaufspreise (EK) ansehen“.');
   }
   function zeigeTab(tab) {
     if (!tab) tab = S.mitDaten ? 'auswertung' : 'uebersicht';   // ohne Angabe: Auswertung, sobald Umsatzdaten importiert sind

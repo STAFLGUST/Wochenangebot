@@ -44,8 +44,8 @@ _Controlling · Umsatzauswertung aus den importierten Umsatzdaten (module/contro
 - `umsatz_bezeichnung(nach, k)` – Name und Zusatz einer Zeile der Gliederung
 - `umsatz_darf_ek(me)` – Einkaufswerte und Deckungsbeitrag: eigenes Recht des Controllings UND das EK-Recht (GR-008)
 - `umsatz_werte(r, ek)` – Kennzahlen für die Antwort: ohne EK-Recht ohne EK-Wert und Umsatz mit EK
-- `umsatz_rang_wert(w, rang)` – Wert einer Zeile für die Rangliste (null: keine Rohmarge %, weil kein Umsatz mit EK)
-- `umsatz_rang_sortieren(zeilen, rang, auf, schwelle, basis)` – Zeilen nach der Kennzahl ordnen (höchste zuerst, $auf: niedrigste zuerst); Rohmarge %: Zeilen unter der Schwelle (Umsatz mit EK) und ohne Umsatz mit EK am …
+- `umsatz_rang_wert(w, rang)` – Wert einer Zeile für die Rangliste (null: keine Spanne, weil kein Umsatz mit EK)
+- `umsatz_rang_sortieren(zeilen, rang, auf, schwelle, basis)` – Zeilen nach der Kennzahl ordnen (höchste zuerst, $auf: niedrigste zuerst); Spanne: Zeilen unter der Schwelle (Umsatz mit EK) und ohne Umsatz mit EK am Ende …
 - `umsatz_abc(zeilen, rang)` – ABC-Klasse je Zeile (Feld „abc“) und Zusammenfassung [A\|B\|C => [anzahl, anteil]]; null, wenn die Kennzahl keine Summe ist
 - `umsatz_auswertung(q, me)` – Auswertung: Gliederung mit Vorjahr, Monatsreihe, Summen
 
@@ -124,7 +124,7 @@ _STAFL-Plattform · Controlling · Umsatzstatistik, Reiter „Auswertung“_
 
 **Formate (auch für die Pop-ups)**
 
-- `rangSortieren(liste, rang, auf)` – Liste nach Kennzahl ordnen (für die Pop-ups; die Rangliste der Seite ordnet der Server); setzt z.klein bei Rohmarge %
+- `rangSortieren(liste, rang, auf)` – Liste nach Kennzahl ordnen (für die Pop-ups; die Rangliste der Seite ordnet der Server); setzt z.klein bei Spanne
 - `csvLaden(datei, zeilen)`
 - `monatsSvg(mon, k, mitVj, platz, H)` – Monatsbalken (Umsatz, Menge oder DB) mit Vorjahrespunkten als SVG – Seite und Pop-up
 
@@ -154,13 +154,13 @@ _STAFL-Plattform · Controlling · Umsatzstatistik, Reiter „Auswertung“_
 - `vjText()`
 - `zeichneKennzahlen()`
 - `zeichneVerlauf()`
-- `spalten()` – Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne Rohmarge)
+- `spalten()` – Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne DB)
 - `sortiert()`
-- `rangNebenwert(w, rang)` – Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Rohmarge % zur Rohmarge …)
+- `rangNebenwert(w, rang)` – Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Spanne zum DB …)
 - `zeichneRangliste()`
 - `zeichneRangfilter()` – Auswahl über der Rangliste: Alle · Neu · Verloren (mit Vorjahr, nicht bei Zeit) und ABC-Analyse der Kennzahl
 - `zeichneTabelle()`
-- `zeichneVeraenderung()` – Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Rohmarge % → Rohmarge in Euro; nur Merkmale, nicht Zeit)
+- `zeichneVeraenderung()` – Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Spanne → DB in Euro; nur Merkmale, nicht Zeit)
 - `zeichneListe()`
 - `zeichneZeitraum()`
 - `zeichne()`
@@ -193,8 +193,8 @@ _STAFL-Plattform · Controlling · Umsatzstatistik_
 
 - `kachel(name, wert, sub, voll)`
 - `kennzahlen()`
-- `sortierwahl()` – Sortierung der Listen: Kennzahl (Rohmarge nur mit EK-Werten) und Richtung
-- `kundenListe()` – Kunden einer Gruppe bzw. Käufer eines Artikels (mit EK-Recht mit Rohmarge je Kunde)
+- `sortierwahl()` – Sortierung der Listen: Kennzahl (DB nur mit EK-Werten) und Richtung
+- `kundenListe()` – Kunden einer Gruppe bzw. Käufer eines Artikels (mit EK-Recht mit DB je Kunde)
 - `artikelBalken()` – Meistgekaufte Artikel (Gruppe, Vertreter …)
 - `kundeArtikel()` – Kunde: seine Artikel
 - `kundeLieferungen()`

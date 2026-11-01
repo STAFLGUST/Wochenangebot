@@ -192,7 +192,7 @@ button.ctl-ud-zeile{cursor:pointer}button.ctl-ud-zeile:hover{background:var(--ct
 }
 #ctl-u-uebersicht.laedt{opacity:.45;transition:opacity .2s}   /* Monatsmeldung: anderes Jahr wird geladen */
 
-/* Rangliste nach Kennzahl (Umsatz, Menge, Rohmarge, Rohmarge %) und Richtung; Sortierung in den Pop-ups */
+/* Rangliste nach Kennzahl (Umsatz, Menge, DB, Spanne) und Richtung; Sortierung in den Pop-ups */
 .ctl-ua-kennzahlwahl{flex-basis:100%;justify-content:flex-end}
 .ctl-ua-wahllabel{color:var(--ctl-muted);font-size:12px;font-weight:650}
 .ctl-ua-richtung{height:34px;padding:0 12px;border:1px solid var(--ctl-border);border-radius:10px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:12px;font-weight:650;white-space:nowrap;cursor:pointer}

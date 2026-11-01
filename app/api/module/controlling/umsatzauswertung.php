@@ -24,15 +24,15 @@ const UMSATZ_FILTER = ['v' => 'vertreter', 'kg' => 'kundengruppe', 'k' => 'kunde
 const UMSATZ_ZEILEN_MAX = 2000;
 const UMSATZ_MONATE_MAX = 120;
 const UMSATZ_OHNE = '_';   // Filter- und Gliederungswert für „ohne Vertreter“, „ohne Kundengruppe“ …
-/* Kennzahl der Rangliste: Umsatz, Menge, Rohmarge (€ = Umsatz mit EK − EK-Wert) oder Rohmarge % (÷ Umsatz mit EK); die beiden
-   Rohmargen nur mit EK-Recht (GR-008 – auch die Reihenfolge allein verriete sie). Für Rohmarge % kommen Zeilen mit wenig Umsatz
+/* Kennzahl der Rangliste: Umsatz, Menge, DB (€ = Umsatz mit EK − EK-Wert) oder Spanne (÷ Umsatz mit EK); DB und Spanne
+   nur mit EK-Recht (GR-008 – auch die Reihenfolge allein verriete sie). Für Spanne kommen Zeilen mit wenig Umsatz
    mit EK (unter 0,1 % der Summe, mindestens 100 €) ans Ende, sonst stünden Einzelpositionen mit Zufallsspannen oben. */
 const UMSATZ_RANG = ['umsatz', 'menge', 'db', 'spanne'];
 const UMSATZ_RANG_ANTEIL_MIN = 0.001;
 const UMSATZ_RANG_CENT_MIN = 10000;
 /* ABC-Analyse: die größten Zeilen, die zusammen 80 % der Kennzahl bringen, sind A, bis 95 % B, der Rest C (die Zeile, mit der die
    Grenze überschritten wird, gehört noch zur oberen Klasse). Grundlage ist die Summe der positiven Werte; Zeilen mit Wert ≤ 0
-   sind C. Nur für Summen (Umsatz, Menge, Rohmarge) – Rohmarge % ist kein Anteil. */
+   sind C. Nur für Summen (Umsatz, Menge, DB) – Spanne ist kein Anteil. */
 const UMSATZ_ABC = ['A' => 0.8, 'B' => 0.95];
 const UMSATZ_ABC_RANG = ['umsatz', 'menge', 'db'];
 const UMSATZ_NUR = ['', 'neu', 'verloren'];
@@ -224,7 +224,7 @@ function umsatz_werte(array $r, bool $ek): array
     return $o;
 }
 
-/* Wert einer Zeile für die Rangliste (null: keine Rohmarge %, weil kein Umsatz mit EK) */
+/* Wert einer Zeile für die Rangliste (null: keine Spanne, weil kein Umsatz mit EK) */
 function umsatz_rang_wert(array $w, string $rang): int|float|null
 {
     switch ($rang) {
@@ -234,7 +234,7 @@ function umsatz_rang_wert(array $w, string $rang): int|float|null
     }
     return $w['umsatz'];
 }
-/* Zeilen nach der Kennzahl ordnen (höchste zuerst, $auf: niedrigste zuerst); Rohmarge %: Zeilen unter der Schwelle (Umsatz mit EK)
+/* Zeilen nach der Kennzahl ordnen (höchste zuerst, $auf: niedrigste zuerst); Spanne: Zeilen unter der Schwelle (Umsatz mit EK)
    und ohne Umsatz mit EK am Ende (Merkmal „klein“). Gleichstand: Umsatz, dann Name. $basis = 'vj': nach den Vorjahreswerten
    (verlorene Zeilen haben jetzt keine). */
 function umsatz_rang_sortieren(array &$zeilen, string $rang, bool $auf, ?int $schwelle, string $basis = 'werte'): void
@@ -287,7 +287,7 @@ function umsatz_auswertung(array $q, array $me): array
     $stand = umsatzdaten_stand($index);
     $a = umsatz_anfrage($q, $stand);
     $ek = umsatz_darf_ek($me);
-    if (in_array($a['rang'], ['db', 'spanne'], true) && !$ek) fail('Die Rangliste nach Rohmarge sehen nur Mitarbeiter, die auch die Einkaufswerte sehen dürfen.', 403);
+    if (in_array($a['rang'], ['db', 'spanne'], true) && !$ek) fail('Die Rangliste nach DB oder Spanne sehen nur Mitarbeiter, die auch die Einkaufswerte sehen dürfen.', 403);
     // Endet der Zeitraum im Monat des letzten Datentags, endet das Vorjahr am gleichen Tag (gleicher Stand)
     $letzter = $stand['bis'];
     $bisTag = $letzter && substr($letzter, 0, 7) === $a['bis'] && (int)substr($letzter, 8, 2) < umsatzdaten_tage($a['bis']) ? (int)substr($letzter, 8, 2) : null;

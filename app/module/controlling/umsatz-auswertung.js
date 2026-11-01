@@ -2,14 +2,14 @@
    Verwaltung → Import, Importart „Umsätze je Kunde und Artikel“). Aufbau nach dem Designvorschlag vom 01.11.2026: oben nur
    Zeitraum, „mit Vorjahr“, Knopf „Filter“ (Pop-up mit Vertreter, Kundengruppe, Artikelgruppe, Fleischart, Kunden, Artikel) und
    die Suche nach Kunde, Artikel oder Gruppe; darunter Kennzahlen, die Rangliste (Vertreter, Kundengruppen, Kunden, Artikelgruppen,
-   Artikel; weitere Gliederungen nach Fleischart und Zeit) nach Umsatz, Menge, Rohmarge oder Rohmarge % – höchste oder niedrigste
-   zuerst (Reihenfolge vom Server, Rohmarge nur mit EK-Recht) –, ABC-Analyse der Kennzahl (Kennzeichen je Zeile, A/B/C zum
+   Artikel; weitere Gliederungen nach Fleischart und Zeit) nach Umsatz, Menge, DB oder Spanne – höchste oder niedrigste
+   zuerst (Reihenfolge vom Server, DB nur mit EK-Recht) –, ABC-Analyse der Kennzahl (Kennzeichen je Zeile, A/B/C zum
    Eingrenzen), mit Vorjahr „Alle · Neu · Verloren“ (Auswahl rechnet der Server), alle Spalten auf Wunsch, Monatsverlauf,
    Bestellpausen (Stammkunden, die ungewöhnlich lange nichts gekauft haben – controlling_umsatz_pausen, Frühwarnung vor
    „verloren“) und die größten Veränderungen zum Vorjahr in der gewählten Kennzahl. Die Ansicht (Gliederung, Kennzahl, Zeitraum, Filter …) merkt
-   sich der Browser je Mitarbeiter (localStorage, nur Bedienkomfort – fehlt der Speicher, gilt die Standardansicht). Rohmarge = Umsatz mit EK − EK-Wert (früher „DB“). Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
+   sich der Browser je Mitarbeiter (localStorage, nur Bedienkomfort – fehlt der Speicher, gilt die Standardansicht). DB = Umsatz mit EK − EK-Wert. Klick auf eine Zeile oder einen Suchtreffer öffnet die Details im Pop-up (umsatz-details.js) –
    die Seite bleibt stehen. Daten: controlling_umsatz_daten (Stand, Auswahllisten) und controlling_umsatz_auswertung (Summen),
-   gerechnet wird auf dem Server. Einkaufswerte und Rohmarge liefert er nur mit controlling.umsatz_ek und
+   gerechnet wird auf dem Server. Einkaufswerte und DB liefert er nur mit controlling.umsatz_ek und
    bestand.einkaufspreise; hier werden sie nur ein- oder ausgeblendet. Beträge in Cent, Mengen in Tausendstel.
    Meldet sich bei controlling.js an (STAFL_CONTROLLING.umsatzAuswertung, Formate in STAFL_CONTROLLING.umsatzFormat). */
 'use strict';
@@ -41,22 +41,22 @@
     if (d === null) return jetzt && vor === 0 ? '<span class="ctl-ua-delta plus">neu</span>' : '<span class="ctl-ua-delta">–</span>';
     return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : ''}${pct(d)}</span>`;
   };
-  /* Veränderung in Prozentpunkten (Rohmarge %) */
+  /* Veränderung in Prozentpunkten (Spanne) */
   const ppHtml = (jetzt, vor) => {
     if (jetzt === null || vor === null || vor === undefined) return '<span class="ctl-ua-delta">–</span>';
     const d = (jetzt - vor) * 100;
     if (Math.abs(d) < 0.05) return '<span class="ctl-ua-delta">±0,0 Pp</span>';
     return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : '−'}${NF(1).format(Math.abs(d))} Pp</span>`;
   };
-  /* Kennzahlen der Ranglisten (Seite und Pop-ups): Wert, Text, Veränderung zum Vorjahr; Rohmarge nur mit EK-Werten */
+  /* Kennzahlen der Ranglisten (Seite und Pop-ups): Wert, Text, Veränderung zum Vorjahr; DB nur mit EK-Werten */
   const RANG = {
     umsatz: { name: 'Umsatz', wert: (w) => w.umsatz, text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(w.umsatz, vj ? vj.umsatz : 0) },
     menge: { name: 'Menge', wert: (w) => w.menge, text: (v) => menge(v), kurz: (v) => menge(v), delta: (w, vj) => deltaHtml(w.menge, vj ? vj.menge : 0) },
-    db: { name: 'Rohmarge', ek: true, wert: (w) => db(w), text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(db(w), vj ? db(vj) : 0) },
-    spanne: { name: 'Rohmarge %', ek: true, wert: (w) => spanne(w), text: (v) => pct(v), kurz: (v) => pct(v), delta: (w, vj) => ppHtml(spanne(w), vj ? spanne(vj) : null) },
+    db: { name: 'DB', ek: true, wert: (w) => db(w), text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(db(w), vj ? db(vj) : 0) },
+    spanne: { name: 'Spanne', ek: true, wert: (w) => spanne(w), text: (v) => pct(v), kurz: (v) => pct(v), delta: (w, vj) => ppHtml(spanne(w), vj ? spanne(vj) : null) },
   };
-  const RANG_ANTEIL_MIN = 0.001, RANG_CENT_MIN = 10000;   // wie der Server: Rohmarge % erst ab 0,1 % des Umsatzes mit EK (mind. 100 €)
-  /* Liste nach Kennzahl ordnen (für die Pop-ups; die Rangliste der Seite ordnet der Server); setzt z.klein bei Rohmarge % */
+  const RANG_ANTEIL_MIN = 0.001, RANG_CENT_MIN = 10000;   // wie der Server: Spanne erst ab 0,1 % des Umsatzes mit EK (mind. 100 €)
+  /* Liste nach Kennzahl ordnen (für die Pop-ups; die Rangliste der Seite ordnet der Server); setzt z.klein bei Spanne */
   function rangSortieren(liste, rang, auf) {
     const k = RANG[rang] || RANG.umsatz;
     const schwelle = rang === 'spanne' ? Math.max(RANG_CENT_MIN, Math.round(liste.reduce((s, z) => s + (z.werte.umsatzEk || 0), 0) * RANG_ANTEIL_MIN)) : null;
@@ -174,7 +174,7 @@
           <p class="ctl-fussnote" id="ctl-ua-fussnote"></p></section>
         <aside class="ctl-ua-seite">
           <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf"><div><h2>Monatsverlauf</h2><p class="ctl-hilfe" id="ctl-ua-verlauf-hinweis"></p></div>
-            <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge</option>${S.g.rechte.ek ? '<option value="db">Rohmarge</option>' : ''}</select></div></div>
+            <div class="ctl-diagrammfilter"><label class="ctl-visuellabel" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge</option>${S.g.rechte.ek ? '<option value="db">DB</option>' : ''}</select></div></div>
             <div class="ctl-diagramm ctl-ua-diagramm" id="ctl-ua-diagramm"></div></section>
           <section class="ctl-panel ctl-glas ctl-ua-pausen" id="ctl-ua-pausen-panel" aria-labelledby="ctl-ua-pausen-titel" hidden><div class="ctl-panelkopf"><div><h2 id="ctl-ua-pausen-titel">Bestellpausen <span class="ctl-ua-zahl" id="ctl-ua-pausen-zahl" hidden></span></h2>
             <p class="ctl-hilfe" id="ctl-ua-pausen-hinweis"></p></div></div><div id="ctl-ua-pausen"></div></section>
@@ -340,8 +340,8 @@
       ['Kunden', ganz(s.kunden), `${ganz(s.artikel)} Artikel · ${ganz(s.pos)} Positionen`],
     ];
     if (S.d.ek) {
-      k.push(['Rohmarge', euroKachel(db(s)), v ? deltaHtml(db(s), db(v)) + ' zum Vorjahr' : '', euro(db(s))]);
-      k.push(['Rohmarge %', pct(spanne(s)), v ? ppHtml(spanne(s), spanne(v)) + ' zum Vorjahr' : `EK für ${esc(pct(quote(s.umsatzEk, s.umsatz)))} des Umsatzes`,
+      k.push(['DB', euroKachel(db(s)), v ? deltaHtml(db(s), db(v)) + ' zum Vorjahr' : '', euro(db(s))]);
+      k.push(['Spanne', pct(spanne(s)), v ? ppHtml(spanne(s), spanne(v)) + ' zum Vorjahr' : `EK für ${esc(pct(quote(s.umsatzEk, s.umsatz)))} des Umsatzes`,
         `${pct(spanne(s))} – Einkaufspreise liegen für ${pct(quote(s.umsatzEk, s.umsatz))} des Umsatzes vor`]);
     }
     $('#ctl-ua-kpis', S.box).classList.toggle('mit-ek', !!S.d.ek);
@@ -352,7 +352,7 @@
     $('#ctl-ua-diagramm', S.box).innerHTML = `<div class="ctl-ua-svgwrap">${monatsSvg(S.d.monate, S.kennzahl, !!S.d.vorjahr, platz)}</div>`;
     $('#ctl-ua-verlauf-hinweis', S.box).innerHTML = `Balken: ${esc(monatsname(S.d.anfrage.von))} – ${esc(monatsname(S.d.anfrage.bis))}${S.d.vorjahr ? ' · <span class="ctl-ua-legende-vj"></span> Vorjahr' : ''}`;
   }
-  /* Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne Rohmarge) */
+  /* Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne DB) */
   function spalten() {
     const s = [
       { id: 'umsatz', name: 'Umsatz', wert: (z) => z.werte.umsatz, text: (z) => euro(z.werte.umsatz) },
@@ -365,8 +365,8 @@
     s.push({ id: 'menge', name: 'Menge', wert: (z) => z.werte.menge, text: (z) => menge(z.werte.menge) });
     s.push({ id: 'preis', name: 'Ø Preis', wert: (z) => (z.werte.menge ? z.werte.umsatz / z.werte.menge : null), text: (z) => preis(z.werte) });
     if (S.d.ek) {
-      s.push({ id: 'db', name: 'Rohmarge', wert: (z) => db(z.werte), text: (z) => euro(db(z.werte)) });
-      s.push({ id: 'spanne', name: 'Rohmarge %', wert: (z) => spanne(z.werte), text: (z) => pct(spanne(z.werte)) });
+      s.push({ id: 'db', name: 'DB', wert: (z) => db(z.werte), text: (z) => euro(db(z.werte)) });
+      s.push({ id: 'spanne', name: 'Spanne', wert: (z) => spanne(z.werte), text: (z) => pct(spanne(z.werte)) });
     }
     if (S.d.anfrage.nach !== 'kunde') s.push({ id: 'kunden', name: 'Kunden', wert: (z) => z.werte.kunden, text: (z) => ganz(z.werte.kunden) });
     s.push({ id: 'pos', name: 'Positionen', wert: (z) => z.werte.pos, text: (z) => ganz(z.werte.pos) });
@@ -395,7 +395,7 @@
   /* Kennzeichen „neu“/„verloren“ vor dem Zusatz der Zeile (nur in „Alle“ – sonst steht es schon in der Auswahl) */
   const marke = (z) => (z.wechsel && !S.d.anfrage.nur ? `<span class="ctl-ua-marke ${z.wechsel}" title="${z.wechsel === 'neu' ? 'Im Vorjahreszeitraum nicht gekauft' : 'Im Vorjahreszeitraum gekauft, jetzt nicht'}">${z.wechsel}</span>` : '');
   const abcMarke = (z) => (z.abc && S.d.anfrage.nur !== 'verloren' ? `<i class="ctl-ua-abcmarke" data-abc="${z.abc}" title="${z.abc}: ${esc(ABC_TEXT[z.abc])} – nach ${esc(RANG[S.d.anfrage.rang || 'umsatz'].name)}">${z.abc}</i>` : '');
-  /* Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Rohmarge % zur Rohmarge …) */
+  /* Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Spanne zum DB …) */
   function rangNebenwert(w, rang) {
     if (rang === 'menge') return euro(w.umsatz);
     if (rang === 'db') return `${pct(spanne(w))} von ${euroKurz(w.umsatzEk)}`;
@@ -416,7 +416,7 @@
     let kleinKopf = false;
     $('#ctl-ua-liste', S.box).innerHTML = zeilen.length ? `${kopf}<ol class="ctl-ua-rang${zeitlich ? ' zeitlich' : ''}" id="ctl-ua-rang" data-rang="${rang}" data-nur="${nur}">${zeigen.map((z) => {
       const w = k.wert(basis(z)), neben = vjModus ? `im Vorjahr${z.werte.umsatz ? ` · jetzt ${euro(z.werte.umsatz)}` : ''}` : rangNebenwert(z.werte, rang);
-      const trenner = z.klein && !kleinKopf ? (kleinKopf = true, `<li class="ctl-ua-rangtrenner">Wenig Umsatz mit Einkaufspreis (unter ${esc(euro(S.d.rangSchwelle))}) – Rohmarge % wenig aussagekräftig</li>`) : '';
+      const trenner = z.klein && !kleinKopf ? (kleinKopf = true, `<li class="ctl-ua-rangtrenner">Wenig Umsatz mit Einkaufspreis (unter ${esc(euro(S.d.rangSchwelle))}) – Spanne wenig aussagekräftig</li>`) : '';
       const sub = marke(z) + (z.sub ? esc(z.sub) : '');
       return `${trenner}<li${z.klein ? ' class="klein"' : ''}><button type="button" class="ctl-ua-rangzeile" data-zeile="${esc(z.schluessel)}"${z.abc ? ` data-abc="${z.abc}"` : ''}>
         <span class="ctl-ua-rangnr">${zeitlich || z.klein ? '' : platz.get(z.schluessel)}${abcMarke(z)}</span><span class="ctl-ua-rangname"><b class="ctl-ua-name">${esc(z.name)}</b>${sub ? `<small class="ctl-ua-sub">${sub}</small>` : ''}</span>
@@ -463,7 +463,7 @@
       : `<tr><td colspan="${sp.length + 1}" class="ctl-empty">${esc(NUR_LEER[S.d.anfrage.nur] || 'Keine Umsätze für diese Auswahl.')}</td></tr>`}</tbody>
       <tfoot id="ctl-ua-fuss">${zeilen.length && !S.d.anfrage.nur && !abcAktiv() ? `<tr class="ctl-total"><td class="ctl-rep">Summe</td>${sp.map((x) => `<td class="ctl-zahl">${x.id === 'anteil' ? '100,0 %' : x.html ? x.html(summe) : esc(x.text(summe))}</td>`).join('')}</tr>` : ''}</tfoot></table></div>`;
   }
-  /* Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Rohmarge % → Rohmarge
+  /* Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Spanne → DB
      in Euro; nur Merkmale, nicht Zeit) */
   function zeichneVeraenderung() {
     const panel = $('#ctl-ua-veraenderung-panel', S.box), nach = S.d.anfrage.nach;
@@ -494,7 +494,7 @@
     const s = S.d.summe;
     const mehr = S.d.zeilenGesamt > S.d.zeilen.length ? `Angezeigt: ${ganz(S.d.zeilen.length)} von ${ganz(S.d.zeilenGesamt)} Zeilen (die ersten nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}). ` : '';
     const ohne = s.posOhne ? `Zusätzlich ${ganz(s.posOhne)} Positionen ohne Berechnung (z. B. Leergut, Menge ${menge(s.mengeOhne)}) – nicht in Menge und Umsatz. ` : '';
-    $('#ctl-ua-fussnote', S.box).textContent = `${mehr}${ohne}Menge und Ø Preis je Mengeneinheit der Warenwirtschaft. Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe nach den heutigen Stammdaten.${S.d.ek ? ' Rohmarge = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Rohmarge % = Rohmarge ÷ deren Umsatz.' : ''}`;
+    $('#ctl-ua-fussnote', S.box).textContent = `${mehr}${ohne}Menge und Ø Preis je Mengeneinheit der Warenwirtschaft. Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe nach den heutigen Stammdaten.${S.d.ek ? ' DB = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Spanne = DB ÷ deren Umsatz.' : ''}`;
   }
   function zeichneZeitraum() {
     const m = S.g.stand.monate, letzter = m[m.length - 1], j = letzter.slice(0, 4);
@@ -548,7 +548,7 @@
   function csv() {
     const gl = gliederungName(S.d.anfrage.nach);
     const mitAbc = !!S.d.abc && S.d.anfrage.nur !== 'verloren', mitWechsel = !!S.d.wechsel, nur = S.d.anfrage.nur;
-    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'Rohmarge €', 'Rohmarge %'] : []),
+    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'DB €', 'Spanne %'] : []),
       ...(mitAbc ? [`ABC nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}`] : []), ...(mitWechsel ? ['Vergleich zum Vorjahr'] : [])];
     const zeilen = sichtbar().map((z) => [z.name, z.schluessel, zahl(z.werte.umsatz / 100, 2), ...(S.d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3),
       zahl(z.werte.kolli, 0), zahl(z.werte.pos, 0), zahl(z.werte.kunden, 0),
@@ -668,7 +668,7 @@
     if (!S.g.stand.monate.length) {
       box.innerHTML = `<section class="ctl-panel ctl-glas ctl-ua-leer"><h2>Noch keine Umsatzdaten</h2><p class="ctl-hilfe">Die Kundenumsatztabelle der Warenwirtschaft wird unter
         <strong>Verwaltung → Import → „Umsätze je Kunde und Artikel“</strong> hochgeladen${S.g.rechte.importieren ? '' : ' (Recht „Umsatzdaten importieren“, bitte an einen Administrator wenden)'}.
-        Danach stehen hier Umsatz, Menge${S.g.rechte.ek ? ', Rohmarge' : ''} und Vorjahresvergleich nach Vertreter, Kundengruppe, Kunde, Artikelgruppe und Artikel bereit.</p></section>`;
+        Danach stehen hier Umsatz, Menge${S.g.rechte.ek ? ', DB' : ''} und Vorjahresvergleich nach Vertreter, Kundengruppe, Kunde, Artikelgruppe und Artikel bereit.</p></section>`;
       return;
     }
     box.innerHTML = geruest();
