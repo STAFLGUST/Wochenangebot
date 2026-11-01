@@ -36,4 +36,12 @@ switch ($action) {
             header('Cache-Control: no-store');
             respond(umsatz_auswertung($_GET, $me));
         }
+
+        /* Pop-up der Umsatzstatistik: ?dim=vertreter|kundengruppe|kunde|vkgruppe|fleischart|artikel&wert=… mit Zeitraum, Vorjahr und
+           den Filtern der Seite – Kennzahlen, Monate, Kunden und Artikel mit letztem Kauf, beim Kunden die Liefertage */
+        case 'controlling_umsatz_detail': {
+            $me = require_perm('controlling.umsatz_sehen');
+            header('Cache-Control: no-store');
+            respond(umsatz_detail($_GET, $me));
+        }
 }

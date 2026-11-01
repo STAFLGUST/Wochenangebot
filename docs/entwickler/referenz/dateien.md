@@ -315,6 +315,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `controlling.js` | controlling | STAFL-Plattform · Controlling – Grundgerüst der Seite |
 | `index.html` | controlling | Bereiche des Controllings: je Bereich ein Reiter und ein Inhalt (Skript des Bereichs, z. |
 | `umsatz-auswertung.js` | controlling | STAFL-Plattform · Controlling · Umsatzstatistik, Reiter „Auswertung“ |
+| `umsatz-details.js` | controlling | STAFL-Plattform · Controlling · Umsatzstatistik |
 | `umsatz-import.js` | controlling | STAFL-Plattform · Controlling · Leser der Importart „umsatzdaten“ (Verwaltung → Import, window.WA.importLeser). |
 | `umsatz.js` | controlling | STAFL-Plattform · Controlling · Bereich Umsatzstatistik, Reiter „Monatsmeldung“ |
 
