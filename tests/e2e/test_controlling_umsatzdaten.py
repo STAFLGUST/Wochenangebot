@@ -378,6 +378,32 @@ check('mit EK-Recht: EK-Wert und Umsatz mit EK je Artikel wie unabhängig gerech
       and {z['schluessel']: [z['werte']['ek'], z['werte']['umsatzEk']] for z in r['zeilen']} == ek_soll, (st, r.get('error')))
 st, g = EKA.call('controlling_umsatz_daten')
 check('Grunddaten mit EK-Recht', g['rechte']['ek'] is True)
+# Rangliste nach Kennzahl: Rohmarge (€ und %) je Kunde, höchste oder niedrigste zuerst – Reihenfolge vom Server
+roh = {}
+for d, k, a, ko, m, p, b, ek in POS_JETZT:
+    if b is not None and d.year == 2025:
+        e = roh.setdefault(k, [0, 0, 0, 0]); e[2] += cent(b); e[3] += milli(m)
+        if ek is not None:
+            e[0] += int(round(milli(m) * int(round(ek * 10000)) / 100000)); e[1] += cent(b)
+db_soll = {k: e[1] - e[0] for k, e in roh.items()}
+st, r = auswertung(EKA, von='2025-01', bis='2025-12', nach='kunde', vj='0', rang='db')
+check('Rangliste nach Rohmarge: Kunden in absteigender Rohmarge (unabhängig gerechnet)', st == 200 and [z['schluessel'] for z in r['zeilen']] == sorted(db_soll, key=lambda k: -db_soll[k])
+      and r['anfrage']['rang'] == 'db' and r['anfrage']['auf'] is False, (st, r.get('error'), [z['schluessel'] for z in r.get('zeilen', [])], db_soll))
+st, r = auswertung(EKA, von='2025-01', bis='2025-12', nach='kunde', vj='0', rang='db', auf='1')
+check('Rangliste nach Rohmarge, niedrigste zuerst', st == 200 and [z['schluessel'] for z in r['zeilen']] == sorted(db_soll, key=lambda k: db_soll[k]) and r['anfrage']['auf'] is True)
+st, r = auswertung(EKA, von='2025-01', bis='2025-12', nach='artikel', vj='0', rang='spanne')
+sp = {z['schluessel']: (z['werte']['umsatzEk'] - z['werte']['ek']) / z['werte']['umsatzEk'] for z in r.get('zeilen', []) if z['werte'].get('umsatzEk')}
+gross = [z['schluessel'] for z in r.get('zeilen', []) if not z.get('klein')]
+check('Rangliste nach Rohmarge %: Artikel absteigend, wenig Umsatz mit EK (Schwelle) am Ende', st == 200 and gross == sorted(gross, key=lambda k: -sp[k])
+      and r['rangSchwelle'] >= 10000 and all(z['werte']['umsatzEk'] < r['rangSchwelle'] for z in r['zeilen'] if z.get('klein'))
+      and [z.get('klein', False) for z in r['zeilen']] == sorted([z.get('klein', False) for z in r['zeilen']]), (st, r.get('error'), gross, sp))
+st, r = auswertung(SAM, von='2025-01', bis='2025-12', nach='kunde', vj='0', rang='menge')
+check('Rangliste nach Menge (ohne EK-Recht erlaubt)', st == 200 and [z['werte']['menge'] for z in r['zeilen']] == sorted([z['werte']['menge'] for z in r['zeilen']], reverse=True)
+      and r.get('rangSchwelle') is None, (st, r.get('error')))
+for cl, wer in ((SAM, 'nur ansehen'), (EDE, 'nur controlling.umsatz_ek'), (BEA, 'nur bestand.einkaufspreise')):
+    check(f'Rangliste nach Rohmarge {wer}: 403 (auch die Reihenfolge verriete die Rohmarge, GR-008)', auswertung(cl, nach='kunde', rang='db')[0] == 403
+          and auswertung(cl, nach='kunde', rang='spanne')[0] == 403)
+check('Rangliste: unbekannte Kennzahl → 422', auswertung(EKA, rang='marge')[0] == 422)
 for cl, wer in ((EDE, 'nur controlling.umsatz_ek'), (BEA, 'nur bestand.einkaufspreise')):
     st, r = auswertung(cl, von='2025-01', bis='2025-12', nach='artikel', vj='0')
     check(f'{wer}: keine Einkaufswerte (GR-008, beide Rechte nötig)', st == 200 and r['ek'] is False and 'ek' not in r['summe'] and '"umsatzEk"' not in json.dumps(r) and all('ek' not in z['werte'] for z in r['zeilen']) and cl.call('controlling_umsatz_daten')[1]['rechte']['ek'] is False, (st, r.get('ek')))
@@ -387,7 +413,7 @@ for q, text in (({'von': '2026-13'}, 'Zeitraum'), ({'von': '2026-05', 'bis': '20
     st, r = auswertung(SAM, **q)
     check(f'ungültige Anfrage {q}: 422', st == 422 and text in r.get('error', ''), (st, r))
 st, r = auswertung(SAM)
-check('Standard: laufendes Jahr bis zum letzten Monat mit Daten, nach Monat', st == 200 and r['anfrage'] == {'von': '2026-01', 'bis': '2026-10', 'nach': 'monat', 'vj': True})
+check('Standard: laufendes Jahr bis zum letzten Monat mit Daten, nach Monat', st == 200 and r['anfrage'] == {'von': '2026-01', 'bis': '2026-10', 'nach': 'monat', 'vj': True, 'rang': 'umsatz', 'auf': False})
 st, r = A.call('controlling_umsatz')
 check('Monatsmeldung weiß von den Umsatzdaten (Reiter Auswertung zuerst)', st == 200 and r['umsatzdaten'] == {'vorhanden': True})
 
@@ -517,7 +543,7 @@ with sync_playwright() as p:
         check(f'{breite}px {thema}: Reiter Auswertung zuerst (Daten importiert)', pg.get_attribute('#ctl-u-tabs [data-tab="auswertung"]', 'aria-selected') == 'true'
               and pg.is_visible('#ctl-u-auswertung') and pg.is_hidden('#ctl-u-uebersicht'))
         kpi = pg.text_content('#ctl-ua-kpis')
-        check(f'{breite}px {thema}: Kennzahlen mit DB und Spanne (Administrator)', 'Umsatz' in kpi and 'Deckungsbeitrag' in kpi and 'Spanne' in kpi and 'zum Vorjahr' in kpi, kpi)
+        check(f'{breite}px {thema}: Kennzahlen mit Rohmarge und Rohmarge % (Administrator)', 'Umsatz' in kpi and 'Rohmarge' in kpi and 'Rohmarge %' in kpi and 'zum Vorjahr' in kpi and 'Pp' in kpi, kpi)
         check(f'{breite}px {thema}: Stand der Daten', f'Umsätze der Warenwirtschaft vom {ERSTER:%d.%m.%Y} bis {LETZTER:%d.%m.%Y}' in pg.inner_text('#ctl-ua-stand'), pg.inner_text('#ctl-ua-stand'))
         check(f'{breite}px {thema}: Monatsverlauf als Balken mit Vorjahreslinie', pg.locator('#ctl-ua-diagramm rect.ctl-ua-balken').count() == 10 and pg.locator('#ctl-ua-diagramm polyline').count() == 1)
         check(f'{breite}px {thema}: Leiste – Zeitraum „Dieses Jahr“, Filter-Knopf, Suche', pg.get_attribute('#ctl-ua-zeit [data-zeit="jahr"]', 'aria-pressed') == 'true'
@@ -534,7 +560,7 @@ with sync_playwright() as p:
         pg.click('#ctl-ua-rang [data-zeile="V1"]')
         t = offen('vertreter')
         check(f'{breite}px {thema}: Klick auf Vertreter öffnet Pop-up mit seinen Kunden und Artikeln', 'Vera Vertrieb' in pg.text_content('#ctl-ua-d-titel')
-              and pg.locator('#ctl-ua-dialog [data-ud-oeffnen="kunde"]').count() == 2 and 'Gasthaus Eiche' in t and 'Meistgekaufte Artikel' in t
+              and pg.locator('#ctl-ua-dialog [data-ud-oeffnen="kunde"]').count() == 2 and 'Gasthaus Eiche' in t and 'Artikel nach Umsatz' in t
               and pg.locator('#ctl-ua-dialog [data-ud-diagramm] rect').count() == 10, t[:300])
         check(f'{breite}px {thema}: Pop-up-Umsatz = Zeile der Rangliste, Seite bleibt stehen', wert_v1 in pg.text_content('#ctl-ua-dialog .ctl-ud-kpi')
               and pg.text_content('#ctl-ua-titel') == 'Rangliste · Vertreter', (wert_v1, pg.text_content('#ctl-ua-dialog .ctl-ud-kpi')))
@@ -580,7 +606,7 @@ with sync_playwright() as p:
         pg.click('#ctl-ua-ansicht [data-ansicht="tabelle"]')
         pg.wait_for_selector('#ctl-ua-zeilen tr[data-zeile]')
         kopf = pg.text_content('#ctl-ua-kopf')
-        check(f'{breite}px {thema}: Ansicht „Alle Spalten“ mit DB und Spanne', 'Menge' in kopf and 'DB' in kopf and 'Spanne' in kopf and pg.locator('#ctl-ua-zeilen tr').count() == 5, kopf)
+        check(f'{breite}px {thema}: Ansicht „Alle Spalten“ mit Rohmarge und Rohmarge %', 'Menge' in kopf and 'Rohmarge' in kopf and 'Rohmarge %' in kopf and pg.locator('#ctl-ua-zeilen tr').count() == 5, kopf)
         if breite == 1280:
             pg.click('#ctl-ua-kopf [data-sort="name"]')
             pg.wait_for_function("document.querySelector('#ctl-ua-kopf [data-sort=\"name\"]').textContent.endsWith('↑')")
@@ -588,6 +614,43 @@ with sync_playwright() as p:
             check('Sortierung nach Name (aufsteigend)', namen == sorted(namen, key=str.lower), namen)
         pg.click('#ctl-ua-ansicht [data-ansicht="rang"]')
         pg.wait_for_selector('#ctl-ua-rang li')
+        # Rangliste nach Rohmarge: Reihenfolge wie die API, Richtung umkehren, Rohmarge % mit Prozentpunkten
+        jahr = {'von': f'{LETZTER.year}-01', 'bis': LETZTER.strftime('%Y-%m'), 'nach': 'kunde'}
+        reihe = lambda: pg.eval_on_selector_all('#ctl-ua-rang li > button[data-zeile]', 'els => els.map((e) => e.dataset.zeile)')   # noqa: E731
+        pg.click('#ctl-ua-rangnach [data-rang="db"]')
+        pg.wait_for_selector('#ctl-ua-rang[data-rang="db"]')
+        soll = [z['schluessel'] for z in auswertung(A, **jahr, rang='db')[1]['zeilen']]
+        check(f'{breite}px {thema}: Rangliste Kunden nach Rohmarge – Reihenfolge des Servers, Wert und Rohmarge % je Zeile', reihe() == soll
+              and 'Rohmarge' in pg.text_content('.ctl-ua-rangkopfzeile') and ' von ' in pg.text_content('#ctl-ua-rang .ctl-ua-rangwert small'), (reihe(), soll))
+        pg.click('#ctl-ua-richtung')
+        pg.wait_for_function("document.querySelector('#ctl-ua-richtung').getAttribute('aria-pressed') === 'true' && document.querySelector('#ctl-ua-rang')")
+        soll = [z['schluessel'] for z in auswertung(A, **jahr, rang='db', auf='1')[1]['zeilen']]
+        check(f'{breite}px {thema}: Rohmarge – niedrigste zuerst', reihe() == soll and 'niedrigste' in pg.text_content('#ctl-ua-richtung'), (reihe(), soll))
+        pg.click('#ctl-ua-rangnach [data-rang="spanne"]')
+        pg.wait_for_selector('#ctl-ua-rang[data-rang="spanne"]')
+        check(f'{breite}px {thema}: Rohmarge % – wieder höchste zuerst, Veränderung in Prozentpunkten', pg.get_attribute('#ctl-ua-richtung', 'aria-pressed') == 'false'
+              and 'Pp' in pg.text_content('#ctl-ua-rang') and reihe() == [z['schluessel'] for z in auswertung(A, **jahr, rang='spanne')[1]['zeilen']])
+        pg.click('#ctl-ua-rangnach [data-rang="db"]')
+        pg.wait_for_selector('#ctl-ua-rang[data-rang="db"]')
+        pg.click('#ctl-ua-rang [data-zeile="2000001"]')
+        offen('kunde')
+        det = A.call('controlling_umsatz_detail&' + urllib.parse.urlencode({**jahr, 'dim': 'kunde', 'wert': '2000001'}))[1]
+        soll = [z['name'] for z in sorted([z for z in det['artikel'] if z['kaeufe']], key=lambda z: -(z['werte']['umsatzEk'] - z['werte']['ek']))]
+        ist = pg.eval_on_selector_all('#ctl-ua-dialog button.ctl-ud-zeile.artikel .ctl-ud-name b', 'els => els.map((e) => e.textContent)')
+        check(f'{breite}px {thema}: Pop-up Kunde – Artikel nach Rohmarge (Vorgabe aus der Rangliste), Rohmarge-Spalten', pg.eval_on_selector('#ctl-ua-dialog [data-ud-rang]', 'e => e.value') == 'db'
+              and ist == soll and 'Rohmarge' in pg.text_content('#ctl-ua-dialog .ctl-ud-zeile.kopf'), (ist, soll))
+        if breite == 1280:
+            pg.screenshot(path=SH + f'/controlling-umsatz-rohmarge-kunde-{breite}-{thema}.png')
+        pg.select_option('#ctl-ua-dialog [data-ud-rang]', 'menge')
+        pg.wait_for_function("document.querySelector('#ctl-ua-dialog [data-ud-rang]').value === 'menge'")
+        soll = [z['name'] for z in sorted([z for z in det['artikel'] if z['kaeufe']], key=lambda z: -z['werte']['menge'])]
+        check(f'{breite}px {thema}: Pop-up – Artikel nach Menge umsortiert', pg.eval_on_selector_all('#ctl-ua-dialog button.ctl-ud-zeile.artikel .ctl-ud-name b', 'els => els.map((e) => e.textContent)') == soll)
+        pg.keyboard.press('Escape')
+        pg.wait_for_function("!document.querySelector('#ctl-ua-dialog').open")
+        if breite == 1280:
+            pg.screenshot(path=SH + f'/controlling-umsatz-rangliste-rohmarge-{breite}-{thema}.png', full_page=True)
+        pg.click('#ctl-ua-rangnach [data-rang="umsatz"]')
+        pg.wait_for_selector('#ctl-ua-rang[data-rang="umsatz"]')
         # Suche öffnet das Pop-up
         pg.fill('#ctl-ua-suche', 'kantine')
         pg.wait_for_function("document.querySelectorAll('#ctl-ua-treffer [role=\"option\"]').length === 1")
@@ -635,10 +698,12 @@ with sync_playwright() as p:
     pg.goto(BASE + '/module/controlling/#umsatz'); pg.wait_for_selector('#ctl-ua-rang li')
     pg.click('#ctl-ua-ansicht [data-ansicht="tabelle"]'); pg.wait_for_selector('#ctl-ua-zeilen tr[data-zeile]')
     kopf = pg.text_content('#ctl-ua-kopf')
-    check('nur ansehen: ohne DB und Spanne', 'DB' not in kopf and 'Spanne' not in kopf and 'Deckungsbeitrag' not in pg.text_content('#ctl-ua-kpis'), kopf)
+    check('nur ansehen: ohne Rohmarge (Tabelle, Kennzahlen, Auswahl der Rangliste)', 'Rohmarge' not in kopf and 'Rohmarge' not in pg.text_content('#ctl-ua-kpis')
+          and pg.locator('#ctl-ua-rangnach [data-rang]').count() == 2 and pg.locator('#ctl-ua-rangnach [data-rang="db"]').count() == 0, kopf)
     pg.click('#ctl-ua-zeilen tr[data-zeile="10"]')
     t = offen('kundengruppe')
-    check('nur ansehen: Pop-up ohne Deckungsbeitrag, mit Ø Preis', 'Deckungsbeitrag' not in t and 'Ø Preis' in t and 'Gastronomie' in pg.text_content('#ctl-ua-d-titel'), t[:200])
+    check('nur ansehen: Pop-up ohne Rohmarge, mit Ø Preis, Sortierung ohne Rohmarge', 'Rohmarge' not in t.replace('Sortiert nach', '') and 'Ø Preis' in t and 'Gastronomie' in pg.text_content('#ctl-ua-d-titel')
+          and pg.eval_on_selector_all('#ctl-ua-dialog [data-ud-rang] option', 'els => els.map((e) => e.value)') == ['umsatz', 'menge'], t[:200])
     ctx.close()
     br.close()
 check('keine JavaScript-Fehler', not errors, errors[:3])
