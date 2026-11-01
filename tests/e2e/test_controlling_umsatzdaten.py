@@ -9,7 +9,7 @@ Python berechnet = Server = Browser), Sortierung, Werte, fremder Mitarbeiter, fe
 Tage bleiben), Monat ohne Umsätze im Zeitraum entfällt, Zwischenablage aufgeräumt (auch alte Reste), Importverlauf,
 Protokoll ohne Beträge; Auswertung: Summen je Vertreter, Kundengruppe, Kunde, Artikelgruppe, Fleischart, Artikel, Monat,
 Quartal, Jahr, KW gegen unabhängig gerechnete Werte, Filter (auch „ohne“), Vorjahr (im laufenden Monat bis zum gleichen
-Tag), ungültige Anfragen; Pop-up-Details (controlling_umsatz_detail): Kunden und Artikel mit letztem Kauf, Liefertage des
+Tag), ungültige Anfragen; Bestellpausen (Stammkunden mit ungewöhnlich langer Pause, unabhängig gerechnet, Filter, Stichtag, Rechte); Pop-up-Details (controlling_umsatz_detail): Kunden und Artikel mit letztem Kauf, Liefertage des
 Kunden, Vorjahr, Filter der Seite, Rechte; Oberfläche: Import im Browser mit dem Leser des Controllings (Fortschritt,
 Ergebnis), Reiter Auswertung zuerst, Leiste, Kennzahlen, Rangliste, Pop-ups (Vertreter → Kunde → zurück, Suche, Lieferungen,
 „Als Filter übernehmen“), Suche öffnet Pop-ups, Filter-Pop-up, alle Spalten mit Sortierung, CSV, Monatsmeldung weiter
@@ -502,6 +502,68 @@ for q, text in (({'nur': 'weg'}, 'neu oder verloren'), ({'nur': 'neu', 'vj': '0'
     check(f'neu/verloren ungültig {q}: 422', st == 422 and text in r.get('error', ''), (st, r))
 st, r = SAM.call('controlling_umsatz_detail&' + urllib.parse.urlencode({'dim': 'kunde', 'wert': '2000001', 'nur': 'neu'}))
 check('Pop-up-Detail übergeht „nur“ (gilt nur für die Rangliste)', st == 200 and r['name'] == 'Gasthaus Eiche', (st, r.get('error')))
+
+
+# Bestellpausen (Frühwarnung) – unabhängig gerechnet
+def pausen_soll(pos, stichtag, filt=None):
+    """Stammkunden (≥ 4 Kauftage in 182 Tagen bis zum Stichtag) mit Pause ≥ 7 Tage, ≥ 2 × Ø Abstand und länger als jede frühere Pause"""
+    beginn = stichtag - dt.timedelta(days=181)
+    tage, umsatz = {}, {}
+    for d, k, a, ko, m, p, b, ek in pos:
+        if b is None or d < beginn or d > stichtag:
+            continue
+        merk = {'kunde': k, 'artikel': a, **INFO_K[k], **INFO_A[a]}
+        if filt and any(merk[f] not in w for f, w in filt.items()):
+            continue
+        umsatz[k] = umsatz.get(k, 0) + cent(b)
+        if m > 0:
+            tage.setdefault(k, set()).add(d)
+    stamm, out = 0, {}
+    for k, t in tage.items():
+        t = sorted(t)
+        if len(t) < 4:
+            continue
+        stamm += 1
+        mittel = (t[-1] - t[0]).days / (len(t) - 1)
+        laengste = max((t[i + 1] - t[i]).days for i in range(len(t) - 1))
+        pause = (stichtag - t[-1]).days
+        if pause >= 7 and pause >= 2 * mittel and pause > laengste:
+            out[k] = {'letzter': t[-1].isoformat(), 'pause': pause, 'laengste': laengste, 'kauftage': len(t), 'umsatzMonat': umsatz[k] / len(t) * 30.4375 / mittel}
+    return stamm, out
+
+
+def pausen(cl, **q):
+    """controlling_umsatz_pausen mit Anfrage q → (Status, Antwort)"""
+    return cl.call('controlling_umsatz_pausen&' + urllib.parse.urlencode(q))
+
+
+def pausen_gleich(r, soll):
+    """Antwort der Bestellpausen = unabhängig gerechnet (Monatsumsatz auf 1 Cent genau), Reihenfolge nach Monatsumsatz"""
+    ist = {z['nr']: z for z in r.get('zeilen', [])}
+    return (set(ist) == set(soll) and all(ist[k][f] == soll[k][f] for k in soll for f in ('letzter', 'pause', 'laengste', 'kauftage'))
+            and all(abs(ist[k]['umsatzMonat'] - soll[k]['umsatzMonat']) <= 1 for k in soll)
+            and [z['umsatzMonat'] for z in r['zeilen']] == sorted((z['umsatzMonat'] for z in r['zeilen']), reverse=True))
+
+
+stamm, soll = pausen_soll(POS_JETZT, dt.date(2026, 6, 30))
+st, r = pausen(SAM, von='2026-06', bis='2026-06')
+check('Bestellpausen Juni 2026: Stammkunden und auffällige Pausen wie unabhängig gerechnet (Imbiss Ohne nur mit Gutschrift)', st == 200 and r['stichtag'] == '2026-06-30'
+      and r['von'] == '2025-12-31' and r['stammkunden'] == stamm and '2000004' in soll and pausen_gleich(r, soll) and r['gesamt'] == len(soll), (st, r.get('error'), r.get('zeilen'), soll))
+check('Bestellpausen: Name und Zusatz aus den Stammdaten, Regel in der Antwort, keine Einkaufswerte', any(z['name'] == 'Imbiss Ohne' for z in r['zeilen'])
+      and r['regel'] == {'tage': 182, 'kauftage': 4, 'faktor': 2, 'minTage': 7} and '"ek"' not in json.dumps(r) and 'umsatzEk' not in json.dumps(r))
+for filt, q in (({'vertreter': {'V1'}}, {'v': 'V1'}), ({'artikel': {'40100'}}, {'a': '40100'}), ({'kunde': {'2000004', '2000001'}}, {'k': '2000004,2000001'})):
+    stamm, soll = pausen_soll(POS_JETZT, dt.date(2026, 6, 30), filt)
+    st, r = pausen(SAM, von='2026-01', bis='2026-06', **q)
+    check(f'Bestellpausen mit Filter {q} wie unabhängig gerechnet', st == 200 and r['stammkunden'] == stamm and pausen_gleich(r, soll), (st, r.get('error'), r.get('zeilen'), soll))
+stamm, soll = pausen_soll(POS_JETZT, LETZTER)
+st, r = pausen(EKA, von='2026-01', bis='2026-10')
+check('Bestellpausen bis zum letzten Tag mit Daten (Stichtag = Stand), auch mit EK-Recht ohne Einkaufswerte', st == 200 and r['stichtag'] == LETZTER.isoformat() and pausen_gleich(r, soll)
+      and 'umsatzEk' not in json.dumps(r), (st, r.get('error'), r.get('stichtag')))
+stamm, soll = pausen_soll(POS_JETZT, dt.date(2025, 12, 31))
+st, r = pausen(SAM, von='2025-01', bis='2025-12')
+check('Bestellpausen zum Ende des Vorjahres', st == 200 and r['stichtag'] == '2025-12-31' and r['stammkunden'] == stamm and pausen_gleich(r, soll), (st, r.get('error')))
+check('Bestellpausen ohne Recht 403, ohne Anmeldung 401/404, ungültiger Zeitraum 422', pausen(OLAF)[0] == 403 and Client('198.51.100.96').call('controlling_umsatz_pausen')[0] in (401, 404)
+      and pausen(SAM, von='2026-13')[0] == 422)
 for cl, wer in ((EDE, 'nur controlling.umsatz_ek'), (BEA, 'nur bestand.einkaufspreise')):
     st, r = auswertung(cl, von='2025-01', bis='2025-12', nach='artikel', vj='0')
     check(f'{wer}: keine Einkaufswerte (GR-008, beide Rechte nötig)', st == 200 and r['ek'] is False and 'ek' not in r['summe'] and '"umsatzEk"' not in json.dumps(r) and all('ek' not in z['werte'] for z in r['zeilen']) and cl.call('controlling_umsatz_daten')[1]['rechte']['ek'] is False, (st, r.get('ek')))
@@ -763,6 +825,20 @@ with sync_playwright() as p:
               and pg.text_content('#ctl-ua-abc [data-abc="A"]').startswith(f"A {juni['abc']['A']['anzahl']}"), (abc_ist, pg.text_content('#ctl-ua-abc')))
         check(f'{breite}px {thema}: Kennzeichen „verloren“ in der Zeile, Zahlen an Neu/Verloren', pg.is_visible('#ctl-ua-rang [data-zeile="2000004"] .ctl-ua-marke.verloren')
               and pg.text_content('#ctl-ua-nur [data-nur="verloren"]') == f"Verloren {juni['wechsel']['verloren']['anzahl']}", pg.text_content('#ctl-ua-nur'))
+        pg.wait_for_selector('#ctl-ua-pausen [data-pause="2000004"]')
+        p_soll = pausen(A, von='2026-06', bis='2026-06')[1]
+        check(f'{breite}px {thema}: Bestellpausen – Liste wie der Server, Imbiss Ohne mit „seit … Tagen nichts“, Stand 30.06.2026',
+              pg.eval_on_selector_all('#ctl-ua-pausen [data-pause]', 'els => els.map((e) => e.dataset.pause)') == [z['nr'] for z in p_soll['zeilen']][:6]
+              and 'seit' in pg.text_content('#ctl-ua-pausen [data-pause="2000004"]') and 'Stand 30.06.2026' in pg.text_content('#ctl-ua-pausen-hinweis')
+              and pg.text_content('#ctl-ua-pausen-zahl') == str(p_soll['gesamt']), pg.text_content('#ctl-ua-pausen-panel'))
+        if breite == 390:
+            pg.locator('#ctl-ua-pausen-panel').screenshot(path=SH + f'/controlling-umsatz-pausen-{breite}-{thema}.png')
+        pg.click('#ctl-ua-pausen [data-pause="2000004"]')
+        offen('kunde')
+        check(f'{breite}px {thema}: Klick auf eine Bestellpause öffnet den Kunden mit Hinweis „Bestellpause“', pg.text_content('#ctl-ua-d-titel') == 'Imbiss Ohne'
+              and 'Bestellpause' in pg.text_content('#ctl-ua-dialog .ctl-ud-kpis'), pg.text_content('#ctl-ua-dialog .ctl-ud-kpis'))
+        pg.keyboard.press('Escape')
+        pg.wait_for_function("!document.querySelector('#ctl-ua-dialog').open")
         pg.click('#ctl-ua-abc [data-abc="A"]')
         pg.wait_for_function("document.querySelector('#ctl-ua-abc [data-abc=\"A\"]').getAttribute('aria-pressed') === 'true'")
         check(f'{breite}px {thema}: Klick auf A zeigt nur die A-Kunden (Platz bleibt)', set(reihe()) == {z['schluessel'] for z in juni['zeilen'] if z.get('abc') == 'A'}

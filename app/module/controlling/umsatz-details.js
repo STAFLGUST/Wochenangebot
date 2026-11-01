@@ -54,7 +54,9 @@
     if (d.dim === 'kunde') {
       const tage = d.tage || [];
       const rhythmus = tage.length > 1 ? Math.max(1, Math.round(tageSeit(tage[tage.length - 1].tag) - tageSeit(tage[0].tag)) / (tage.length - 1)) : null;
-      k.push(kachel('Letzter Kauf', s.zuletzt ? F.tag(s.zuletzt) : '–', s.zuletzt ? esc(seitText(s.zuletzt)) : 'im Zeitraum keiner'));
+      const pause = D.ctx && D.ctx.pause ? D.ctx.pause(d.wert) : null;   // aus der Liste „Bestellpausen“ der Seite
+      k.push(kachel('Letzter Kauf', s.zuletzt ? F.tag(s.zuletzt) : '–', pause ? `<span class="ctl-ua-marke pause">Bestellpause</span>seit ${esc(F.ganz(pause.pause))} Tagen`
+        : s.zuletzt ? esc(seitText(s.zuletzt)) : 'im Zeitraum keiner'));
       k.push(kachel('Liefertage', F.ganz(tage.length), rhythmus ? `etwa alle ${esc(F.ganz(Math.round(rhythmus)))} Tage` : ''));
     } else {
       const dk = v ? s.kunden - v.kunden : null;

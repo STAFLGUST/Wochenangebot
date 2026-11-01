@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-12 Dateien, 156 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+12 Dateien, 163 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/module/controlling/controlling.php`
 
@@ -55,6 +55,11 @@ _Controlling · Umsatzauswertung aus den importierten Umsatzdaten (module/contro
 - `umsatz_detail_zaehlen(a, index, von, bis, verschieben, bisTag, mitTagen)` – Summen eines Zeitraums je Monat, Kunde, Artikel und (auf Wunsch) Liefertag; $verschieben/$bisTag wie umsatz_zaehlen()
 - `umsatz_detail_liste(nach, jetzt, vj, ek)` – Liste der Kunden bzw. Artikel des Details: umsatzstärkste zuerst, nur mit berechneten Positionen (sonst nur Leergut)
 - `umsatz_detail(q, me)`
+
+**Bestellpausen (Frühwarnung)**
+
+- `umsatz_tagnummer(datum)` – Tageszahl eines Datums (für Abstände in Tagen)
+- `umsatz_pausen(q)` – Stammkunden mit auffälliger Bestellpause zum Stichtag; Anfrage wie die Auswertung (von, bis, Filter)
 - `umsatz_grunddaten(me)` – Grunddaten der Auswertung: Stand der Daten, Rechte, Auswahllisten (nur Nummern und Namen)
 
 ## `app/api/module/controlling/umsatzdaten.php`
@@ -144,6 +149,8 @@ _STAFL-Plattform · Controlling · Umsatzstatistik, Reiter „Auswertung“_
 **Laden und Zeichnen**
 
 - `laden()`
+- `pausenLaden()` – Bestellpausen zum Ende des Zeitraums mit den Filtern der Seite – nur neu laden, wenn sich Zeitraum oder Filter ändern
+- `zeichnePausen()`
 - `vjText()`
 - `zeichneKennzahlen()`
 - `zeichneVerlauf()`
@@ -266,6 +273,9 @@ _Controlling · Umsatzdaten der Warenwirtschaft_
 - `je(r)` – Umsatz je Zeile der Rangliste {Schlüssel: Cent}.
 - `kaeufer(pos, von, bis, dim)` – Merkmale mit Kauf (berechnete Position mit Menge > 0) im Zeitraum
 - `abc_soll(werte)` – A: die größten bis 80 % (die Zeile über der Grenze zählt noch mit), B bis 95 %, Rest C; Werte ≤ 0 sind C
+- `pausen_soll(pos, stichtag, filt)` – Stammkunden (≥ 4 Kauftage in 182 Tagen bis zum Stichtag) mit Pause ≥ 7 Tage, ≥ 2 × Ø Abstand und länger als jede frühere Pause
+- `pausen(cl, **q)` – controlling_umsatz_pausen mit Anfrage q → (Status, Antwort)
+- `pausen_gleich(r, soll)` – Antwort der Bestellpausen = unabhängig gerechnet (Monatsumsatz auf 1 Cent genau), Reihenfolge nach Monatsumsatz
 - `detail(cl, **q)` – controlling_umsatz_detail (Pop-up) mit Anfrage q → (Status, Antwort).
 - `letzte(pos, von, bis, nach, filt)` – Letzter Kauf (berechnete Position mit Menge > 0, keine Gutschrift) je Kunde bzw. Artikel (unabhängig gerechnet)
 - `offen(dim)` – Warten, bis das Pop-up des Merkmals offen ist; liefert seinen Text.

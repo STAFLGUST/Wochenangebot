@@ -44,4 +44,9 @@ switch ($action) {
             header('Cache-Control: no-store');
             respond(umsatz_detail($_GET, $me));
         }
+        case 'controlling_umsatz_pausen': {
+            require_perm('controlling.umsatz_sehen');
+            header('Cache-Control: no-store');
+            respond(umsatz_pausen($_GET));
+        }
 }

@@ -237,3 +237,11 @@ body.ctl{--ctl-abc-b:#8a5d00;--ctl-abc-b-soft:rgba(176,124,20,.14);--ctl-neu:#2f
   .ctl-ua-rangzeile:not(.ctl-ua-rangkopfzeile) .ctl-ua-rangnr{grid-row:1/span 2}
   .ctl-ua-rangfuss .ctl-hilfe{order:9;flex-basis:100%}#ctl-ua-standard{margin-left:auto}
 }
+
+/* Bestellpausen: Stammkunden, die ungewöhnlich lange nichts gekauft haben (Seitenspalte und Kennzahl im Kunden-Pop-up) */
+.ctl-ua-pausen[hidden]{display:none}
+.ctl-ua-pausen h2{display:flex;align-items:center;gap:8px}
+.ctl-ua-pause>span:first-child{min-width:0}.ctl-ua-pause>span:first-child b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctl-ua-pausewert{flex:none;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.ctl-ua-pausewert b{display:block}
+.ctl-ua-pausen-leer{margin:6px 0 0}
+.ctl-ua-marke.pause{background:var(--ctl-abc-b-soft);color:var(--ctl-abc-b)}
