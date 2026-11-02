@@ -29,3 +29,15 @@ oberflaeche = "controlling.intern"
 [aktion.controlling_umsatz_pausen]
 oberflaeche = "controlling.intern"
 
+
+# Bestandsverlauf: Tagesstände des Bestands (Schnittstelle bestand_verlauf_index/_tag) mit dem Absatz aus den Umsatzdaten –
+# Entwicklung, Reichweite und Umschlag je Artikel, Artikelgruppe und Fleischart (module/controlling/bestand.php)
+[aktion.controlling_bestand_daten]
+oberflaeche = "controlling.intern"
+
+[aktion.controlling_bestand]
+oberflaeche = "controlling.intern"
+
+# Pop-up: ein Artikel bzw. eine Gruppe mit jeder Liste des Zeitraums
+[aktion.controlling_bestand_detail]
+oberflaeche = "controlling.intern"

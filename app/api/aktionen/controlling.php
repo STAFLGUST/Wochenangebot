@@ -3,7 +3,8 @@ declare(strict_types=1);
 /* Aktionen: Controlling (Oberfläche controlling.intern, Fachlogik in app/api/module/controlling/)
    Rechte (GR-103): controlling.zugang – Modul öffnen (Register, standardmäßig niemand);
                     controlling.umsatz_sehen – Umsatzstatistik (Monatsmeldung und Auswertung) ansehen; controlling.umsatz_ek – Einkaufswerte und Deckungsbeitrag der Auswertung (nur zusammen mit bestand.einkaufspreise, GR-008); controlling.umsatz_importieren –
-                    Umsatzdaten über die Importzentrale (Verwaltung → Import, module/controlling/import.php).
+                    Umsatzdaten über die Importzentrale (Verwaltung → Import, module/controlling/import.php);
+                    controlling.bestand_sehen – Bestandsverlauf; controlling.bestand_ek – dessen Lagerwert (nur mit bestand.einkaufspreise).
    Neue Bereiche (OP-Konten, Liquidität …) bekommen eigene Aktionen controlling_<bereich>_… mit eigenen Rechten.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -48,5 +49,24 @@ switch ($action) {
             require_perm('controlling.umsatz_sehen');
             header('Cache-Control: no-store');
             respond(umsatz_pausen($_GET));
+        }
+
+        /* Bestandsverlauf (module/controlling/bestand.php): Grunddaten (Stand, Rechte, Auswahllisten), Auswertung
+           (?tage=30|90|365 oder von/bis, nach=artikel|vkgruppe|fleischart, Filter ag, fa, a) und Detail (?dim=…&wert=…) –
+           Lagerwert nur mit controlling.bestand_ek und bestand.einkaufspreise (GR-008) */
+        case 'controlling_bestand_daten': {
+            $me = require_perm('controlling.bestand_sehen');
+            header('Cache-Control: no-store');
+            respond(ctl_bestand_grunddaten($me));
+        }
+        case 'controlling_bestand': {
+            $me = require_perm('controlling.bestand_sehen');
+            header('Cache-Control: no-store');
+            respond(ctl_bestand_auswertung($_GET, $me));
+        }
+        case 'controlling_bestand_detail': {
+            $me = require_perm('controlling.bestand_sehen');
+            header('Cache-Control: no-store');
+            respond(ctl_bestand_detail($_GET, $me));
         }
 }
