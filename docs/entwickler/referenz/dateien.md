@@ -161,6 +161,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `controlling.php` | controlling | Modul Controlling · gemeinsame Grundlage aller Bereiche (Umsatzstatistik; geplant |
 | `import.php` | controlling | Importvertrag des Controllings – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
+| `kundenbild.php` | controlling | Controlling · Kundenbild – Schnittstelle für das CRM (GR-101; Leser „crm“ in regeln/datenverantwortung.toml). |
 | `umsatz.php` | controlling | Controlling · Bereich Umsatzstatistik, Reiter „Monatsmeldung“ |
 | `umsatzauswertung.php` | controlling | Controlling · Umsatzauswertung aus den importierten Umsatzdaten (module/controlling/umsatzdaten.php). |
 | `umsatzdaten.php` | controlling | Controlling · Umsatzdaten aus der Warenwirtschaft (Kundenumsatztabelle |
@@ -169,6 +170,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `cockpit.php` | crm | CRM · Mein Cockpit, Master-Cockpit und die Übersicht im Kunden-Pop-up (Auftrag des Inhabers 01.11.2026). |
 | `crm.php` | crm | CRM · Vertrieb: Daten und Regeln des Moduls „crm“ (Oberfläche crm.intern, Aktionen in app/api/aktionen/crm.php) Kundenstammdaten (Nummer, Firma, Anschrift, Telefon, E-Mail, Vertreter, Gruppe, aktiv) gehören der … |
 
 ## `app/api/module/hr/`
@@ -323,9 +325,10 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `cockpit.js` | crm | STAFL-Plattform · CRM · Cockpit (Auftrag des Inhabers 01.11.2026) |
 | `crm.css` | crm | STAFL-Plattform · CRM · Vertrieb – Gestaltung wie Dashboard und HR („Liquid Glass“): heller Grund mit weichen Farbflächen, Glasflächen für Kopf, Karten und Tabellen. |
 | `crm.js` | crm | STAFL-Plattform · CRM · Vertrieb Cockpit, Kunden, Wiedervorlagen (Anruf-Rhythmus), Pipeline, Karte und Auswertung – nach der Vertriebs-CRM-Musterdatei. |
-| `index.html` | crm | Kundenblatt |
+| `index.html` | crm | Kunden-Pop-up: Übersicht (cockpit.js), Kundenblatt, Verlauf |
 | `mhd-ware.js` | crm | STAFL-Plattform · CRM · Reiter „MHD-Ware“ (Auftrag des Inhabers 01.11.2026): links die Artikel kurz vor Ablauf aus der MHD-Liste des Bestands – in denselben Farben wie dort (abgelaufen, 0–4, 5–7, 8–14 Tage) –, rechts … |
 
 ## `app/module/hr/`

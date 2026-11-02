@@ -11,7 +11,11 @@ Reiter „MHD-Ware“ (Recht crm.mhd_ware): MHD-Liste des Bestands ohne Preise (
 (Zeitraum 3/6/12 Monate, Liefertage, Gutschrift, ohne Berechnung zählt nicht, Kunde ohne Stammsatz, keine Beträge), Suche nach
 anderem Artikel, Wiedervorlage (Recht bearbeiten und MHD-Ware, Text vom Server, Notiz im Verlauf, nicht doppelt, eigener Schritt
 nie gekürzt, frühere Wiedervorlage bleibt, vorgezogene im Protokoll, Grenzen), Rechte; Oberfläche mit Farben, Zeitraum, Vertreter, „kauft regelmäßig“, Auswahl, Kundenblatt, 1280/390 px.
-Nur synthetische Testdaten.
+Cockpit (crm_cockpit) und Übersicht im Kunden-Pop-up (crm_kunde_umsatz): Mein Cockpit (Vertreter am Mitarbeiter, Vertreter 2 zählt),
+Master-Cockpit (crm.master: Vergleich, Ansicht je Vertreter, ohne Vertreter, Umsatz ohne Stammsatz), Summen gegen die Testzeilen,
+Signale (Bestellpause = Regel der Umsatzstatistik, kauft weniger, Artikel weg, neu), Rechte € und kg einzeln (nichts davon in der
+Antwort), nie EK/DB/Spanne; Oberfläche (Umschalter, Vertreter-Auswahl, Pop-up-Reiter, Kundenliste „Meine Kunden · Alle · Mit
+Signal“, Handy-Karten, dunkel). Nur synthetische Testdaten.
 
 Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour; Kundengruppe 5 Fleischereien Nord. Kunden 900001 Musterfleischerei Nord
 (Hamburg, Kundenzugang, Angebot std), 900002 Beispiel Catering (Kiel, Vertreter 12 und 11), 900003 Probe Markt Ost (Dresden,
@@ -20,10 +24,14 @@ Süd (ohne Vertreter). Nutzer: verena (sehen), bert (bearbeiten), xena (bearbeit
 (sehen); für die MHD-Ware mia (sehen und MHD-Ware) und max (bearbeiten und MHD-Ware). MHD-Ware: Bestand relativ zu heute
 (700001 abgelaufen, 700002 in 3 Tagen, 700003 in 10 Tagen, 700004 in 30 Tagen = nicht in der Liste) und Umsatzzeilen ROH
 relativ zu heute (Käufe vor 10/40/70/120/200 Tagen für 3/6/12 Monate, Gutschrift, ohne Berechnung, Kunde 999999 ohne Stammsatz).
+Cockpit: Umsatzzeilen über zwei Jahre bis zum Stand (heute − 2), wöchentlich: 900001 kauft 40100 seit 70 Tagen nicht mehr, 900002
+seit 35 Tagen nichts (Bestellpause), 900003 kauft −50 % zum Vorjahr, 900006 neu (vor 20 Tagen), 999999 ohne Stammsatz, Leergut;
+EK-Werte als Erkennungszahl (777777/888888). Nutzer vv (Vertreter 11), gf (Master), vk (nur kg), vn (ohne € und kg).
 """
 import datetime as dt
 import json
 import os
+import re
 import sys
 
 from playwright.sync_api import sync_playwright
@@ -106,7 +114,8 @@ check('ohne Anmeldung: 401', N.call('crm_start')[0] == 401 and N.call('crm_kunde
 # ── Rechte (GR-103) ──
 check('Tester ohne CRM-Recht: 403', O.call('crm_start')[0] == 403 and O.call('crm_verlauf&key=kaaa111111111')[0] == 403)
 st, d = V.call('crm_start')
-check('crm.sehen: Start ok, ohne Bearbeiten/Export', st == 200 and d['rechte'] == {'bearbeiten': False, 'exportieren': False, 'stammdaten': False, 'mhd': False}, d.get('rechte'))
+check('crm.sehen: Start ok, ohne Bearbeiten/Export; Umsätze in € und Mengen in kg Standard an, kein Master-Cockpit', st == 200
+      and d['rechte'] == {'bearbeiten': False, 'exportieren': False, 'stammdaten': False, 'mhd': False, 'euro': True, 'kg': True, 'master': False} and d['ich'] == '', d.get('rechte'))
 for a, b in (('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}}), ('crm_aktivitaet', {'key': 'kaaa111111111', 'art': 'Telefonat', 'notiz': 'x'}),
              ('crm_interessent_save', {'firma': 'Neu GmbH'}), ('crm_export', {})):
     check(f'{a}: nur ansehen → 403', V.call(a, b)[0] == 403)
@@ -126,7 +135,8 @@ csrf = Bb.csrf; Bb.csrf = ''
 check('ohne CSRF-Token: 403', Bb.call('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}})[0] == 403)
 Bb.csrf = csrf
 st, d = A.call('crm_start')
-check('Administrator: alle Rechte inkl. Stammdaten-Verweis', st == 200 and d['rechte'] == {'bearbeiten': True, 'exportieren': True, 'stammdaten': True, 'mhd': True}, d.get('rechte'))
+check('Administrator: alle Rechte inkl. Stammdaten-Verweis und Master-Cockpit', st == 200
+      and d['rechte'] == {'bearbeiten': True, 'exportieren': True, 'stammdaten': True, 'mhd': True, 'euro': True, 'kg': True, 'master': True}, d.get('rechte'))
 
 # ── Kunden aus den Stammdaten (nur lesend) ──
 st, d = Bb.call('crm_start')
@@ -244,8 +254,10 @@ with sync_playwright() as p:
         return ctx, pg
 
     ctx, pg = anmelden('bert', 'Bearbeiter-Zugang-1', '198.51.100.4')
+    pg.wait_for_selector('#tab-cockpit .crm-ck-kpis')
     kp = pg.inner_text('#tab-cockpit')
-    check('Cockpit: Kennzahlen, Wiedervorlage fällig, letzte Aktivität', 'Aktive Kunden' in kp and 'Angebot nachfassen' in kp and 'Muster schicken' in kp and 'Erstgespräch vor Ort' in kp, kp[:500])
+    check('Cockpit ohne zugeordneten Vertreter: Hinweis, Kennzahlen, Heute dran (Wiedervorlagen), letzte Aktivität, keine Umsätze', 'Aktive Kunden' in kp
+          and 'Angebot nachfassen' in kp and 'Muster schicken' in kp and 'Erstgespräch vor Ort' in kp and 'kein Vertreter zugeordnet' in kp and '€' not in kp, kp[:500])
     check('Reiter Wiedervorlagen mit Zahl der fälligen', pg.text_content('#crm-faellig').strip() == '2', pg.text_content('#crm-faellig'))
     pg.screenshot(path=os.path.join(SH, 'crm_cockpit_1280.png'), full_page=True)
 
@@ -270,8 +282,12 @@ with sync_playwright() as p:
     check('Segment direkt in der Tabelle gespeichert', dokument('crm-kunden')['eintraege']['kfff666666666']['segment'] == 'Gastronomie')
     pg.screenshot(path=os.path.join(SH, 'crm_kunden_1280.png'), full_page=False)
 
-    # Kundenblatt
-    pg.click('#k-tabelle button[data-oeffnen="kaaa111111111"]'); pg.wait_for_selector('#dlg-kunde[open] #verlauf li')
+    # Kunden-Pop-up: Übersicht (ohne Umsatzdaten: Hinweis), Kundenblatt, Verlauf
+    pg.click('#k-tabelle button[data-oeffnen="kaaa111111111"]'); pg.wait_for_selector('#dlg-kunde[open] [data-ku-panel="uebersicht"]:not([hidden])')
+    pg.wait_for_function("document.querySelector('[data-ku-panel=\"uebersicht\"]').textContent.includes('Noch keine Umsatzdaten')")
+    check('Pop-up: Reiter Übersicht · Kundenblatt · Verlauf, Übersicht zuerst (ohne Umsatzdaten mit Hinweis)', [t.strip() for t in pg.eval_on_selector_all('#kunde-reiter [data-ku-tab]', 'b => b.map((x) => x.childNodes[0].textContent)')] == ['Übersicht', 'Kundenblatt', 'Verlauf']
+          and 'nächster schritt' in pg.inner_text('[data-ku-panel="uebersicht"]').lower() and 'Angebot nachfassen' in pg.inner_text('[data-ku-panel="uebersicht"]'))
+    pg.click('#kunde-reiter [data-ku-tab="kundenblatt"]'); pg.wait_for_selector('#kunde-inhalt [data-ku-panel="kundenblatt"]:not([hidden])')
     inh = pg.inner_text('#kunde-inhalt')
     check('Kundenblatt: Stammdaten aus der Verwaltung (nur lesend)', '900001' in inh and 'Fleischereien Nord' in inh and 'Vera Vertrieb' in inh and 'Wochenangebot' in inh
           and 'Pflege in der Verwaltung' in inh and pg.locator('#kunde-inhalt .crm-stamm input').count() == 0, inh[:300])
@@ -286,6 +302,8 @@ with sync_playwright() as p:
     zeile.locator('[data-k="name"]').fill('Dora Disponentin'); zeile.locator('[data-k="telefon"]').fill('040 7654321')
     pg.click('[data-kontakte-speichern]'); pg.wait_for_function("document.querySelector('#blatt-status').textContent === 'Ansprechpartner gespeichert.'")
     check('Ansprechpartner im Kundenblatt hinzugefügt', dokument('crm-kunden')['eintraege']['kaaa111111111']['kontakte'][0]['name'] == 'Dora Disponentin')
+    pg.click('#kunde-aktionen [data-ku-tab="verlauf"]'); pg.wait_for_selector('#dlg-kunde[open] #verlauf li')
+    check('Knopf „Aktivität“ im Kopf öffnet den Verlauf mit dem Eingabefeld', pg.evaluate("document.activeElement.id") == 'akt-notiz')
     pg.select_option('#akt-art', 'Besuch'); pg.fill('#akt-notiz', 'Kühlhaus besichtigt'); pg.fill('#akt-naechster', 'Preise schicken')
     pg.click('#akt-speichern'); pg.wait_for_function("document.querySelector('#verlauf') && document.querySelector('#verlauf').textContent.includes('Kühlhaus besichtigt')")
     check('Aktivität im Kundenblatt protokolliert, Verlauf aktualisiert', 'Preise schicken' in pg.inner_text('#verlauf') and 'Bert Bearbeiter' in pg.inner_text('#verlauf'))
@@ -408,13 +426,20 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'crm_cockpit_390.png'), full_page=True)
     pg.click('#crm-tabs button[data-tab="wiedervorlagen"]'); pg.wait_for_selector('#wv-tabelle')
     check('390 px: Wiedervorlagen ohne seitliches Scrollen der Seite', pg.evaluate("document.documentElement.scrollWidth") <= 390)
+    check('390 px: Wiedervorlagen als Karten – nichts abgeschnitten oder innen seitlich verschoben', pg.is_hidden('#wv-tabelle thead')
+          and pg.evaluate("[...document.querySelectorAll('#wv-tabelle tbody tr')].every((t) => t.scrollWidth <= t.clientWidth + 1 && getComputedStyle(t).display === 'grid')")
+          and pg.evaluate("document.querySelector('#wv-rahmen').scrollWidth <= document.querySelector('#wv-rahmen').clientWidth + 1"))
     pg.screenshot(path=os.path.join(SH, 'crm_wiedervorlagen_390.png'), full_page=False)
     pg.click('#crm-tabs button[data-tab="kunden"]'); pg.wait_for_selector('#k-tabelle')
     pg.fill('#k-suche', 'fleischereien'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length === 5")
     check('390 px: Kunden mit Kundengruppe ohne seitliches Scrollen der Seite', pg.evaluate("document.documentElement.scrollWidth") <= 390)
+    check('390 px: Kundenliste als Karten (Firma, Segment, Phase, Vertreter, nächster Schritt) ohne inneres Seitwärtsscrollen', pg.is_hidden('#k-tabelle thead')
+          and pg.evaluate("[...document.querySelectorAll('#k-tabelle tbody tr')].every((t) => t.scrollWidth <= t.clientWidth + 1 && getComputedStyle(t).display === 'grid')")
+          and pg.evaluate("document.querySelector('#k-tabelle').scrollWidth <= document.querySelector('#k-tabelle').parentElement.clientWidth + 1"))
     pg.screenshot(path=os.path.join(SH, 'crm_kunden_390.png'), full_page=False)
     pg.fill('#k-suche', ''); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length > 5")
-    pg.click('#k-tabelle button[data-oeffnen="kaaa111111111"]'); pg.wait_for_selector('#dlg-kunde[open] #verlauf li')
+    pg.click('#k-tabelle button[data-oeffnen="kaaa111111111"]'); pg.wait_for_selector('#dlg-kunde[open] [data-ku-panel="uebersicht"]:not([hidden])')
+    pg.click('#kunde-reiter [data-ku-tab="kundenblatt"]'); pg.wait_for_selector('#kunde-inhalt [data-ku-panel="kundenblatt"]:not([hidden])')
     check('390 px: Kundenblatt passt in die Breite', pg.evaluate("document.querySelector('#dlg-kunde').scrollWidth <= document.querySelector('#dlg-kunde').clientWidth + 1"))
     pg.screenshot(path=os.path.join(SH, 'crm_kundenblatt_390.png'), full_page=False)
     pg.click('#dlg-kunde [data-schliessen]')
@@ -570,6 +595,234 @@ with sync_playwright() as p:
     pg.fill('#au-user', 'verena'); pg.fill('#pw1', 'Leserin-Zugang-1'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
     pg.goto(B + '/module/crm/#mhd'); pg.wait_for_selector('#crm-app:not([hidden])')
     check('ohne Recht MHD-Ware: Reiter ausgeblendet, Start im Cockpit', pg.is_hidden('#crm-tabs [data-tab="mhd"]') and pg.is_visible('#tab-cockpit'))
+    ctx.close()
+    br.close()
+
+# ── Cockpit je Verkäufer, Master-Cockpit und Übersicht im Kunden-Pop-up (Umsätze über das Controlling, Inhaber 01.11.2026) ──
+# Umsatzzeilen relativ zum Stand E (= heute − 2): wöchentliche Käufe über zwei Jahre (t = Tage vor E)
+E = heute_d - dt.timedelta(days=2)
+ZEILEN = []   # (Datum, Kunde, Artikel, Menge in Tausendstel kg, Umsatz in Cent, berechnet)
+for t in range(0, 729, 7):
+    ZEILEN.append((t, '900001', '700002', 50000, 60000, 1))                        # 12 €/kg, jede Woche
+    if t >= 70:
+        ZEILEN.append((t, '900001', '40100', 5000, 10000, 1))                      # seit 70 Tagen nicht mehr → „Artikel weg“
+    if t >= 30:
+        ZEILEN.append((t, '900002', '700002', 30000, 30000, 1))                    # seit 35 Tagen nichts → Bestellpause
+    ZEILEN.append((t, '900003', '700002', 25000 if t <= 90 else 50000, 25000 if t <= 90 else 50000, 1))   # 10 €/kg, −50 % → kauft weniger
+    if t % 14 == 0:
+        ZEILEN.append((t, '999999', '700002', 10000, 10000, 1))                    # ohne Kundenstammsatz
+for t in (20, 13, 6):
+    ZEILEN.append((t, '900006', '700003', 10000, 15000, 1))                        # erster Kauf vor 20 Tagen → neu
+ZEILEN.append((0, '900001', '90000', 99000, 0, 0))                                  # Leergut ohne Berechnung: zählt nie
+MON = {}
+for t_, k_, a_, m_, u_, b_ in ZEILEN:
+    d_ = E - dt.timedelta(days=t_)
+    MON.setdefault(d_.strftime('%Y-%m'), []).append([d_.day, k_, a_, 1, m_, u_, 777777 if b_ else 0, 888888 if b_ else 0, 1, b_])
+for m_, z_ in MON.items():
+    z_.sort(key=lambda r_: (r_[0], r_[1], r_[2], r_[9]))
+    storage_write('controlling-umsatzdaten/' + m_, {'monat': m_, 'hash': '0' * 64, 'zeilen': z_})
+storage_write('controlling-umsatzdaten', {'rev': 2, 'monate': {m_: {'hash': '0' * 64, 'zeilen': len(z_), 'ersterTag': z_[0][0], 'letzterTag': z_[-1][0]} for m_, z_ in sorted(MON.items())},
+                                          'kunden': ['900001', '900002', '900003', '900006', '999999'], 'artikel': ['40100', '700002', '700003', '90000'], 'importe': []})
+
+
+def vj(d_):
+    try:
+        return d_.replace(year=d_.year - 1)
+    except ValueError:
+        return d_.replace(year=d_.year - 1, day=28)
+
+
+def summe(kunden, von, bis):
+    u = m = 0
+    for t_, k_, a_, m_, u_, b_ in ZEILEN:
+        d_ = E - dt.timedelta(days=t_)
+        if b_ and k_ in kunden and von <= d_ <= bis:
+            u += u_; m += m_
+    return {'umsatz': u, 'menge': m}
+
+
+J365 = (E - dt.timedelta(days=364), E)
+MONAT = (E.replace(day=1), E)
+VJMONAT = (vj(E).replace(day=1), vj(E))
+VERA = {'900001', '900002', '900003'}   # Vertreter 11 oder Vertreter 2 = 11 (900004/900005 ohne Umsätze)
+for u, n, r_, p_, extra in (('vv', 'Vera Verkauf', 'viewer', 'Editor-Zugang-77', {'grant': ['crm.sehen'], 'vertreter': '11'}),
+                            ('gf', 'Gesa Führung', 'editor', 'Konto-Passwort-9', {'grant': ['crm.master']}),
+                            ('vk', 'Karl Kilo', 'viewer', 'Merk-Kennwort-31', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro'], 'vertreter': '11'}),
+                            ('vn', 'Nina Ohnezahl', 'viewer', 'Weg-Kennwort-42', {'grant': ['crm.sehen'], 'deny': ['crm.umsatz_euro', 'crm.umsatz_kg'], 'vertreter': '11'})):
+    st, r = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r_, 'active': True, 'password': p_, 'mustChange': False, **extra})
+    assert st == 200, r
+VV = Client('198.51.100.31'); VV.call('login', {'username': 'vv', 'password': 'Editor-Zugang-77'})
+GF = Client('198.51.100.32'); GF.call('login', {'username': 'gf', 'password': 'Konto-Passwort-9'})
+VK = Client('198.51.100.33'); VK.call('login', {'username': 'vk', 'password': 'Merk-Kennwort-31'})
+VN = Client('198.51.100.34'); VN.call('login', {'username': 'vn', 'password': 'Weg-Kennwort-42'})
+st, d = VV.call('crm_start')
+check('crm_start: eigener Vertreter und Rechte € und kg, kein Master', st == 200 and d['ich'] == '11' and d['rechte']['euro'] and d['rechte']['kg'] and not d['rechte']['master'])
+check('Cockpit ohne Anmeldung 401, ohne CRM-Recht 403', N.call('crm_cockpit')[0] == 401 and O.call('crm_cockpit')[0] == 403 and O.call('crm_kunde_umsatz&key=kaaa111111111')[0] == 403)
+st, c = VV.call('crm_cockpit')
+z = c.get('kennzahlen') or {}
+sig = {(x['nr'], x['art']): x for x in c.get('signale', [])}
+check('Mein Cockpit: Ansicht des eigenen Vertreters (Vertreter oder Vertreter 2), Stand = letzter Tag der Umsatzdaten', st == 200 and c['ansicht'] == 'vertreter' and c['vertreter'] == '11'
+      and c['stand'] == E.isoformat() and z['kunden'] == 4 and z['mitKauf'] == 3, (st, c.get('ansicht'), c.get('stand'), z.get('kunden')))
+check('Mein Cockpit: 365 Tage, Monat und Vorjahresmonat bis zum Stand = Summe der eigenen Kunden (ohne Leergut)', z['j365'] == summe(VERA, *J365) and z['monat'] == summe(VERA, *MONAT)
+      and z['vjMonat'] == summe(VERA, *VJMONAT) and z['jahr'] == summe(VERA, dt.date(E.year, 1, 1), E), (z.get('j365'), summe(VERA, *J365)))
+check('Signale: Bestellpause (gleiche Regel wie die Umsatzstatistik) mit üblichem Monatsumsatz', ('900002', 'pause') in sig and sig[('900002', 'pause')]['pause'] == 35
+      and sig[('900002', 'pause')]['abstand'] == 7 and sig[('900002', 'pause')]['umsatzMonat'] > 0 and sig[('900002', 'pause')]['key'] == 'kbbb222222222', sig.get(('900002', 'pause')))
+w3 = sig.get(('900003', 'weniger'), {})
+check('Signale: kauft weniger – 3 Monate −50 % Menge zum Vorjahr, vor allem der Artikel', w3.get('anteil') == -0.5 and w3.get('basis') == 'vorjahr'
+      and w3.get('vorAllem', {}).get('nr') == '700002' and w3.get('menge') == 13 * 25000, w3)
+wg = sig.get(('900001', 'weg'), {})
+check('Signale: Artikel nicht mehr gekauft (40100 seit 70 Tagen, sonst wöchentlich), Kunde kauft weiter', wg.get('anzahl') == 1 and wg['artikel'][0]['nr'] == '40100'
+      and wg['artikel'][0]['pause'] == 70 and wg['artikel'][0]['abstand'] == 7, wg)
+check('Signale: nur eigene Kunden (neuer Kunde ohne Vertreter fehlt), nie Kunden ohne Stammsatz', not any(k_ in ('900006', '999999') for k_, _ in sig) and ('900001', 'weniger') not in sig, sorted(sig))
+check('Top-Kunden: nach Umsatz, mit 12 Monaten und letztem Kauf', [t_['nr'] for t_ in c['top']] == ['900001', '900003', '900002'] and c['top'][0]['j365'] == summe({'900001'}, *J365) and len(c['top'][0]['reihe']) == 12
+      and c['top'][1]['zuletzt'] == E.isoformat() and c['top'][2]['zuletzt'] == (E - dt.timedelta(days=35)).isoformat(), [t_['nr'] for t_ in c['top']])
+roh = json.dumps(c)
+check('Cockpit ohne Einkaufswerte, DB oder Spanne', '777777' not in roh and '888888' not in roh and '"ek' not in roh.lower() and 'spanne' not in roh.lower())
+check('Verkäufer ohne Master: andere Vertreter und Master → 403', VV.call('crm_cockpit&vertreter=12')[0] == 403 and VV.call('crm_cockpit&vertreter=alle')[0] == 403
+      and VV.call('crm_cockpit&vertreter=_')[0] == 403 and VV.call('crm_cockpit&vertreter=11')[0] == 200)
+st, c = V.call('crm_cockpit')
+check('ohne zugeordneten Vertreter und ohne Master: Ansicht „ohne“ – keine Zahlen', st == 200 and c['ansicht'] == 'ohne' and c['kennzahlen'] is None and c['signale'] == [] and c['top'] == []
+      and V.call('crm_cockpit&vertreter=11')[0] == 403)
+st, c = GF.call('crm_cockpit')
+z = c.get('kennzahlen') or {}
+vg = {x['nr']: x for x in c.get('vergleich') or []}
+ALLE = {'900001', '900002', '900003', '900006', '999999'}
+check('Master-Cockpit (crm.master, ohne eigenen Vertreter): alle Kunden inkl. Umsatz ohne Stammsatz', st == 200 and c['ansicht'] == 'master' and z['j365'] == summe(ALLE, *J365)
+      and z['ohneStammsatz'] == 1 and z['kunden'] == 5, (st, c.get('ansicht'), z))
+check('Master: Vertreter im Vergleich – Kunden mit zwei Vertretern zählen bei beiden, „ohne Vertreter“', set(vg) == {'11', '12', '_'} and vg['11']['j365'] == summe(VERA, *J365)
+      and vg['12']['j365'] == summe({'900002'}, *J365) and vg['_']['j365'] == summe({'900006'}, *J365) and vg['11']['kunden'] == 4 and vg['_']['kunden'] == 1
+      and vg['11']['signale'] == {'pause': 1, 'weniger': 2, 'weg': 1, 'neu': 0} and vg['_']['signale']['neu'] == 1 and vg['11']['monat'] == summe(VERA, *MONAT), vg)
+check('Master: Signal „neu dabei“ (erster Kauf vor 20 Tagen, 3 Lieferungen)', any(x['nr'] == '900006' and x['art'] == 'neu' and x['erster'] == (E - dt.timedelta(days=20)).isoformat() and x['kauftage'] == 3 for x in c['signale']))
+st, c = GF.call('crm_cockpit&vertreter=12')
+check('Master: Ansicht eines Vertreters (12: nur Beispiel Catering)', st == 200 and c['ansicht'] == 'vertreter' and c['vertreter'] == '12' and c['kennzahlen']['j365'] == summe({'900002'}, *J365)
+      and c['vergleich'] is None and {x['nr'] for x in c['signale']} == {'900002'})
+st, c = GF.call('crm_cockpit&vertreter=_')
+check('Master: Kunden ohne Vertreter', st == 200 and c['ansicht'] == 'ohne_vertreter' and c['kennzahlen']['j365'] == summe({'900006'}, *J365))
+check('Master: unbekannter Vertreter 404, ungültige Angabe 422', GF.call('crm_cockpit&vertreter=99')[0] == 404 and GF.call('crm_cockpit&vertreter=' + 'a%3Bb')[0] == 422)
+check('Administrator: Master-Cockpit', A.call('crm_cockpit')[1].get('ansicht') == 'master')
+st, c = VK.call('crm_cockpit')
+roh = json.dumps(c)
+check('Nur kg (€ verboten): keine Umsätze im Cockpit, Mengen ja, Top-Kunden nach Menge', st == 200 and '"umsatz' not in roh and c['kennzahlen']['j365'] == {'menge': summe(VERA, *J365)['menge']}
+      and [t_['nr'] for t_ in c['top']] == ['900001', '900003', '900002'] and 'mengeMonat' in json.dumps([x for x in c['signale'] if x['art'] == 'pause']), roh[:300])
+st, c = VN.call('crm_cockpit')
+roh = json.dumps(c)
+check('Ohne € und kg: Signale ja (mit Prozent), aber keine Beträge, Mengen oder Rangliste', st == 200 and '"umsatz' not in roh and '"menge' not in roh and c['top'] == []
+      and c['kennzahlen']['j365'] == {} and any(x['art'] == 'weniger' and x['anteil'] == -0.5 for x in c['signale']), roh[:300])
+# Übersicht im Kunden-Pop-up
+st, u = VV.call('crm_kunde_umsatz&key=kaaa111111111')
+k = u.get('kunde') or {}
+art = {a['nr']: a for a in k.get('artikel', [])}
+check('Pop-up: 365 Tage mit Vorjahr, letzter Kauf, Rhythmus (alle 7 Tage, Wochentag)', st == 200 and k['w']['j365'] == summe({'900001'}, *J365)
+      and k['w']['v365'] == summe({'900001'}, E - dt.timedelta(days=729), E - dt.timedelta(days=365)) and k['zuletzt'] == E.isoformat()
+      and k['rhythmus']['abstand'] == 7 and k['rhythmus']['wochentage'] == [E.isoweekday()], (st, k.get('w'), k.get('rhythmus')))
+check('Pop-up: 12 Monate mit Vorjahr', len(k['monate']) == 12 and k['monate'][-1]['monat'] == E.strftime('%Y-%m') and k['monate'][-1]['jetzt']['umsatz'] > 0)
+check('Pop-up: Top-Artikel mit Vorjahr und Ø Preis aller Kunden (Cent je kg), Leergut nicht dabei', list(art) == ['700002', '40100'] and art['700002']['j365']['menge'] > 0
+      and 0 < art['700002']['preisAlle'] < 1200 and '90000' not in art, k.get('artikel'))
+check('Pop-up: Preisniveau – zahlt mehr als der Ø aller Kunden', k['preisniveau'] is not None and k['preisniveau'] > 0, k.get('preisniveau'))
+check('Pop-up: Auffällig – Artikel 40100 nicht mehr gekauft', [a['nr'] for a in k['auffaellig']['weg']] == ['40100'] and k['auffaellig']['weniger'] == [] and k['signale'][0]['art'] == 'weg')
+st, u = VV.call('crm_kunde_umsatz&key=kccc333333333')
+k = u.get('kunde') or {}
+check('Pop-up: Signal „kauft weniger“ und Artikel „kauft weniger“ (−50 %)', any(x['art'] == 'weniger' for x in k['signale']) and k['auffaellig']['weniger'][0]['nr'] == '700002'
+      and k['auffaellig']['weniger'][0]['anteil'] == -0.5, k.get('auffaellig'))
+st, u = VV.call('crm_kunde_umsatz&key=kfff666666666')
+k = u.get('kunde') or {}
+check('Pop-up: neuer Kunde – Signal und Artikel „neu“ (auch für Kunden anderer Vertreter sichtbar)', st == 200 and [x['art'] for x in k['signale']] == ['neu'] and k['auffaellig']['neu'][0]['nr'] == '700003')
+check('Pop-up: Kunde ohne Umsätze, Interessent', VV.call('crm_kunde_umsatz&key=kddd444444444')[1]['kunde'] is None and VV.call('crm_kunde_umsatz&key=' + INT['key'])[1]['kunde'] is None
+      and VV.call('crm_kunde_umsatz&key=k-gibt-es-nicht')[0] == 404)
+st, u = VK.call('crm_kunde_umsatz&key=kaaa111111111')
+roh = json.dumps(u)
+check('Pop-up nur kg: keine Umsätze, kein Preis, kein Preisniveau', st == 200 and '"umsatz' not in roh and u['kunde']['preisniveau'] is None and all(a['preisAlle'] is None for a in u['kunde']['artikel']))
+st, u = VN.call('crm_kunde_umsatz&key=kaaa111111111')
+roh = json.dumps(u)
+check('Pop-up ohne € und kg: Artikel und Signale ohne Zahlen', st == 200 and '"umsatz' not in roh and '"menge' not in roh and u['kunde']['artikel'][0]['nr'] == '700002' and '777777' not in roh)
+roh = json.dumps(VV.call('crm_kunde_umsatz&key=kaaa111111111')[1])
+check('Pop-up ohne Einkaufswerte, DB oder Spanne', '777777' not in roh and '888888' not in roh and '"ek' not in roh.lower())
+st, pz = A.call('controlling_umsatz_pausen&bis=' + E.strftime('%Y-%m'))
+check('Umsatzstatistik: Bestellpausen mit derselben Regel (gemeinsame Funktion) – Beispiel Catering', st == 200 and [x['nr'] for x in pz['zeilen']] == ['900002'] and pz['zeilen'][0]['pause'] == 35, pz)
+
+with sync_playwright() as p:
+    br = p.chromium.launch()
+
+    def seite(user, pw, ip, breite=1280, thema='light'):
+        ctx = br.new_context(viewport={'width': breite, 'height': 900}, extra_http_headers={'X-Forwarded-For': ip}, locale='de-DE', timezone_id='Europe/Berlin', color_scheme=thema)
+        pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e))); pg.on('console', lambda m: fehler.append(m.text) if m.type == 'error' else None)
+        pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+        pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+        pg.goto(B + '/module/crm/'); pg.wait_for_selector('#tab-cockpit .crm-ck-kpis')
+        return ctx, pg
+
+    ctx, pg = seite('vv', 'Editor-Zugang-77', '198.51.100.31')
+    t = pg.inner_text('#tab-cockpit')
+    tl = t.lower()   # Überschriften und Kennzeichen erscheinen in Großbuchstaben (CSS)
+    check('UI Mein Cockpit: Titel, Vertreter, Umsatz und Menge des Monats mit Vorjahr, Signale', 'Mein Cockpit' in t and 'vertreter 11' in tl and 'vera vertrieb' in tl
+          and f'Umsatz {["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"][E.month - 1]}' in t and 'zum Vorjahr' in t, t[:600])
+    check('UI Heute dran: Bestellpause mit Anrufen-Knopf', 'BESTELLPAUSE' in t.upper() and 'seit 35 Tagen nichts' in t and pg.locator('#tab-cockpit .crm-ck-liste li.h a.crm-ck-tel').count() >= 1)
+    check('UI Signale: kauft weniger, nicht mehr gekauft', 'kauft weniger' in tl and 'Probe Markt Ost' in t and '−50,0 %' in t and 'artikel nicht mehr gekauft' in tl and 'seit 10 Wochen nicht mehr' in t, t[:900])
+    check('UI Top-Kunden mit 12-Monats-Balken', pg.locator('#tab-cockpit .crm-ck-top .crm-ck-zeile:not(.kopf)').count() == 3 and pg.locator('#tab-cockpit .crm-ck-balken').first.locator('i').count() == 12)
+    check('UI ohne Master: kein Umschalter', pg.locator('[data-ck-wahl]').count() == 0)
+    pg.screenshot(path=os.path.join(SH, 'crm_mein_cockpit_1280.png'), full_page=True)
+    pg.click('#tab-cockpit .crm-ck-top button[data-oeffnen="kaaa111111111"]')
+    pg.wait_for_selector('#dlg-kunde[open] .crm-ku-kpis')
+    ue = pg.inner_text('[data-ku-panel="uebersicht"]')
+    check('UI Pop-up Übersicht: Umsatz/Menge 12 Monate, Ø Preis zum Ø, letzter Kauf, Rhythmus', 'umsatz 12 monate' in ue.lower() and 'menge 12 monate' in ue.lower() and 'zum Ø aller Kunden' in ue
+          and 'alle 7 Tage' in ue and 'letzter kauf' in ue.lower(), ue[:500])
+    check('UI Pop-up: Monatsbalken mit Vorjahr, Top-Artikel, nicht mehr gekauft', pg.locator('.crm-ku-saeule').count() == 12 and 'top-artikel' in ue.lower() and 'nicht mehr gekauft' in ue.lower()
+          and 'Artikel 40100' in ue, ue[:900])
+    check('UI Pop-up: Kunde passt in den Dialog (kein seitliches Scrollen)', pg.evaluate("document.querySelector('#dlg-kunde').scrollWidth <= document.querySelector('#dlg-kunde').clientWidth + 1"))
+    pg.screenshot(path=os.path.join(SH, 'crm_kunde_uebersicht_1280.png'), full_page=False)
+    pg.click('#dlg-kunde [data-schliessen]')
+    pg.click('#tab-cockpit button[data-oeffnen="kccc333333333"]')
+    pg.wait_for_selector('#dlg-kunde[open] .crm-ku-hinweis.minus')
+    check('UI Pop-up: Hinweis „kauft weniger“ oben', 'kauft weniger' in pg.inner_text('.crm-ku-hinweise').lower() and '−50,0 % Menge' in pg.inner_text('.crm-ku-hinweise'))
+    pg.click('#dlg-kunde [data-schliessen]')
+    pg.click('#crm-tabs button[data-tab="kunden"]'); pg.wait_for_selector('#k-tabelle')
+    check('UI Kunden: zuerst die eigenen Kunden, Auswahl Meine Kunden · Alle · Mit Signal', pg.get_attribute('[data-k-chip="mein"]', 'aria-pressed') == 'true'
+          and pg.locator('#k-tabelle tbody tr').count() == 4 and pg.is_visible('[data-k-chip="signal"]'))
+    pg.click('[data-k-chip="signal"]'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length === 3")
+    check('UI Kunden „Mit Signal“: Kennzeichen in der Liste', 'Bestellpause' in pg.inner_text('#k-tabelle') and 'kauft weniger' in pg.inner_text('#k-tabelle'))
+    pg.click('[data-k-chip="alle"]'); pg.wait_for_function("document.querySelectorAll('#k-tabelle tbody tr').length > 4")
+    ctx.close()
+
+    ctx, pg = seite('gf', 'Konto-Passwort-9', '198.51.100.32')
+    t = pg.inner_text('#tab-cockpit')
+    check('UI Master-Cockpit: Vertrieb gesamt, Vertreter im Vergleich, auffällige Kunden, Kunden ohne Vertreter', 'Vertrieb gesamt' in t and 'vertreter im vergleich' in t.lower()
+          and '11 – Vera Vertrieb' in t and 'ohne Vertreter' in t and 'auffällige kunden' in t.lower() and pg.get_attribute('[data-ck-wahl="alle"]', 'aria-pressed') == 'true', t[:600])
+    pg.screenshot(path=os.path.join(SH, 'crm_master_cockpit_1280.png'), full_page=True)
+    pg.click('#tab-cockpit .crm-ck-vergleich button[data-ck-wahl="12"]')
+    pg.wait_for_function("document.querySelector('#tab-cockpit h1').textContent.includes('Tom Tour')")
+    check('UI Master: „Ansicht öffnen“ zeigt die Verkäufer-Ansicht des Vertreters', 'Beispiel Catering' in pg.inner_text('#tab-cockpit') and pg.is_visible('#ck-vertreter')
+          and pg.input_value('#ck-vertreter') == '12')
+    pg.select_option('#ck-vertreter', '11'); pg.wait_for_function("document.querySelector('#tab-cockpit h1').textContent.includes('Vera Vertrieb')")
+    check('UI Master: Vertreter-Auswahl', 'Probe Markt Ost' in pg.inner_text('#tab-cockpit'))
+    pg.click('[data-ck-wahl="alle"]'); pg.wait_for_function("document.querySelector('#tab-cockpit h1').textContent === 'Vertrieb gesamt'")
+    pg.click('[data-ck-modus="vertreter"]'); pg.wait_for_function("document.querySelector('#tab-cockpit h1').textContent.startsWith('Cockpit ·')")
+    check('UI Master: Umschalter Verkäufer-Ansicht', pg.is_visible('#ck-vertreter'))
+    ctx.close()
+
+    ctx, pg = seite('vn', 'Weg-Kennwort-42', '198.51.100.34')
+    t = pg.inner_text('#tab-cockpit')
+    t = pg.inner_text('#tab-cockpit .crm-ck-kpis') + pg.inner_text('#tab-cockpit .crm-ck-raster >> nth=0')   # ohne Notizen der Aktivitäten (frei getippt)
+    check('UI ohne € und kg: Kennzahlen, Heute dran und Signale ohne Beträge und Mengen', '€' not in t and not re.search(r'\d\s?(kg|t)\b', t) and 'kauft weniger' in t.lower(),
+          [t[max(0, m_.start() - 40):m_.end() + 10] for m_ in re.finditer(r'€|\d\s?(kg|t)\b', t)][:5])
+    pg.click('#tab-cockpit button[data-oeffnen="kccc333333333"]'); pg.wait_for_selector('#dlg-kunde[open] .crm-ku-kpis')
+    ue = pg.inner_text('[data-ku-panel="uebersicht"]')
+    check('UI Pop-up ohne € und kg: keine Zahlen, Hinweis', '€' not in ue and 'ausgeblendet' in ue and 'top-artikel' in ue.lower(), ue[:400])
+    ctx.close()
+
+    ctx, pg = seite('vv', 'Editor-Zugang-77', '198.51.100.31', breite=390, thema='dark')
+    bw = pg.evaluate('document.documentElement.scrollWidth')
+    check('390 px dunkel: Mein Cockpit ohne seitliches Scrollen', bw <= 390, bw)
+    pg.screenshot(path=os.path.join(SH, 'crm_mein_cockpit_390.png'), full_page=True)
+    pg.click('#tab-cockpit .crm-ck-top button[data-oeffnen="kaaa111111111"]'); pg.wait_for_selector('#dlg-kunde[open] .crm-ku-kpis')
+    check('390 px: Pop-up passt in die Breite', pg.evaluate("document.querySelector('#dlg-kunde').scrollWidth <= document.querySelector('#dlg-kunde').clientWidth + 1"))
+    pg.screenshot(path=os.path.join(SH, 'crm_kunde_uebersicht_390.png'), full_page=False)
+    pg.click('#dlg-kunde [data-schliessen]')
+    pg.click('#crm-tabs button[data-tab="kunden"]'); pg.wait_for_selector('#k-tabelle')
+    pg.screenshot(path=os.path.join(SH, 'crm_kunden_karten_390.png'), full_page=False)
+    ctx.close()
+    ctx, pg = seite('gf', 'Konto-Passwort-9', '198.51.100.32', breite=390)
+    check('390 px: Master-Cockpit ohne seitliches Scrollen (Vergleich als Karten)', pg.evaluate('document.documentElement.scrollWidth') <= 390 and pg.is_hidden('.crm-ck-vergleich thead'))
+    pg.screenshot(path=os.path.join(SH, 'crm_master_cockpit_390.png'), full_page=True)
     ctx.close()
     br.close()
 

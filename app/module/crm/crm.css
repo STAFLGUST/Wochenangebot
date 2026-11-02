@@ -432,3 +432,179 @@ body.crm { --crm-mhd-vorbei-bg: #d9d6d2; --crm-mhd-vorbei-fg: #1f1d1a; --crm-mhd
   .crm-mhd-tabelle td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
   .crm-mhd-tabelle td.crm-mhd-tel::before { display: none; }
 }
+
+/* ── Cockpit (cockpit.js): Mein Cockpit, Master-Cockpit mit Umschalter (Auftrag des Inhabers 01.11.2026) ── */
+.crm-ck-titel { align-items: flex-end; }
+.crm-ck-titel p { margin-top: 6px; }
+.crm-ck-kicker { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--crm-modul); }
+.crm-ck-wahl { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.crm-ck-wahl select { width: auto; min-width: 220px; height: 38px; border-radius: 12px; font-size: 14px; }
+.crm-ck-vtwahl { flex-direction: row !important; }
+.crm-ck-vtwahl[hidden] { display: none !important; }
+.crm-ck-kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.crm-ck-d { font-style: normal; font-weight: 650; }
+.crm-ck-d.plus { color: var(--crm-ok); }
+.crm-ck-d.minus { color: var(--crm-fehler); }
+.crm-wert.warn small { color: var(--crm-warn); }
+.crm-ck-hinweis { margin: 0 0 16px; padding: 12px 16px; border-radius: 16px; font-size: 14px; color: var(--crm-text); }
+.crm-ck-raster { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; margin-bottom: 20px; }
+.crm-ck-raster.eins { grid-template-columns: minmax(0, 1fr); }
+.crm-ck-spalte { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.crm-ck-spalte .crm-ck-hinweis { margin: 0; }
+.crm-ck-art { flex: none; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.crm-ck-art.wv { background: var(--crm-info-bg); color: var(--crm-info); }
+.crm-ck-art.anruf, .crm-ck-art.neu { background: var(--crm-ok-bg); color: var(--crm-ok); }
+.crm-ck-art.pause { background: var(--crm-warn-bg); color: var(--crm-warn); }
+.crm-ck-art.weniger { background: var(--crm-fehler-bg); color: var(--crm-fehler); }
+.crm-ck-art.weg { background: var(--crm-aus); color: var(--crm-text); }
+.crm-ck-liste .wann.ueber, .crm-ck-liste .wert.minus { color: var(--crm-fehler); }
+.crm-ck-liste .wann.warn, .crm-ck-liste .wert.warn { color: var(--crm-warn); }
+.crm-ck-liste .wert.plus { color: var(--crm-ok); }
+.crm-ck-liste .wert { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crm-ck-liste .was small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.crm-ck-vt { font-size: 12px; color: var(--crm-muted); white-space: nowrap; }
+.crm-ck-tel { width: 34px; height: 34px; flex: none; }
+a.crm-ck-tel { color: var(--crm-text); }
+.crm-ck-gruppe h4 { margin: 12px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--crm-muted); }
+.crm-ck-tabelle { display: flex; flex-direction: column; font-size: 14px; }
+.crm-ck-zeile { display: grid; grid-template-columns: var(--ck-spalten); gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--crm-linie); }
+.crm-ck-zeile.kopf { border-top: 0; padding-top: 2px; font-size: 11.5px; font-weight: 650; color: var(--crm-muted); text-transform: uppercase; letter-spacing: .04em; }
+.crm-ck-zeile .kunde { min-width: 0; }
+.crm-ck-zeile .kunde .crm-firma { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-ck-zeile .kunde small { display: block; color: var(--crm-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-ck-zeile .zahl { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crm-ck-balken { display: inline-flex; align-items: flex-end; gap: 2px; height: 26px; }
+.crm-ck-balken i { width: 5px; border-radius: 2px; background: var(--crm-balken); opacity: .85; }
+.crm-ck-balken i.lauf { opacity: .4; }
+.crm-ck-vergleich { margin-bottom: 20px; }
+.crm-ck-vergleich .crm-tabelle-rahmen { max-height: none; border-radius: 16px; }
+.crm-tabelle th.zahl, .crm-tabelle td.zahl { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Auswahl über der Kundenliste: Meine Kunden · Alle · Mit Signal */
+.crm-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: -6px 0 12px; }
+.crm-chips button { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--crm-linie); background: var(--crm-deckend); color: var(--crm-text); font: inherit; font-size: 13.5px; cursor: pointer; }
+.crm-chips button b { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.crm-chips button[aria-pressed="true"] { background: var(--crm-text); border-color: var(--crm-text); color: var(--crm-bg); }
+
+/* ── Kunden-Pop-up: Kopf mit Reitern, Übersicht ── */
+.crm-ku .crm-dkopf { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px 12px; align-items: start; padding-bottom: 12px; }
+.crm-dkopf-text { min-width: 0; }
+.crm-dkopf-text .crm-ck-kicker { color: var(--crm-muted); }
+.crm-dkopf-aktionen { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.crm-dkopf-aktionen .btn { height: 38px; display: inline-flex; align-items: center; text-decoration: none; }
+.crm-ku-reiter { grid-column: 1 / -1; justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.crm-ku-reiter button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; }
+.crm-ku-reiter button[aria-selected="true"] { background: var(--crm-reiter-aktiv); color: var(--crm-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.crm-ku-reiter .crm-zahl { background: var(--crm-muted); }
+.crm-ku-panel { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.crm-ku-panel[hidden] { display: none; }
+.crm-ku-panel .crm-ck-hinweis { margin: 0; background: var(--crm-aus); }
+.crm-ku-hinweise { display: flex; flex-direction: column; gap: 8px; }
+.crm-ku-hinweis { display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: 14px; font-size: 14px; }
+.crm-ku-hinweis > b { flex: none; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.crm-ku-hinweis.warn { background: var(--crm-warn-bg); } .crm-ku-hinweis.warn > b { color: var(--crm-warn); }
+.crm-ku-hinweis.minus { background: var(--crm-fehler-bg); } .crm-ku-hinweis.minus > b { color: var(--crm-fehler); }
+.crm-ku-hinweis.plus { background: var(--crm-ok-bg); } .crm-ku-hinweis.plus > b { color: var(--crm-ok); }
+.crm-ku-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 0; }
+.crm-ku-kpis .crm-wert { padding: 12px 14px; border-radius: 16px; background: var(--crm-aus); border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.crm-ku-kpis .crm-wert b { font-size: 21px; }
+.crm-ku-monate { padding: 14px 16px; border-radius: 16px; background: var(--crm-aus); }
+.crm-ku-monate-kopf { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+.crm-ku-legende { display: inline-flex; align-items: center; gap: 6px; color: var(--crm-muted); font-size: 12px; }
+.crm-ku-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-left: 8px; }
+.crm-ku-legende i.jetzt, .crm-ku-saeule i.jetzt { background: var(--crm-balken); }
+.crm-ku-legende i.vj, .crm-ku-saeule i.vj { background: var(--crm-muted); opacity: .4; }
+.crm-ku-saeulen { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.crm-ku-saeule { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; font-size: 11px; color: var(--crm-muted); }
+.crm-ku-saeule .spur { width: 100%; height: 96px; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.crm-ku-saeule .spur i { display: block; width: 42%; min-height: 1px; border-radius: 3px 3px 0 0; }
+.crm-ku-saeule i.jetzt.lauf { opacity: .5; }
+.crm-ku-raster { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.crm-ku-raster.drei { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.crm-ku-teil { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.crm-ku-teil h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--crm-muted); }
+.crm-ku-teilkopf { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.crm-ku-artikel { max-height: none; border-radius: 14px; border: 1px solid var(--crm-linie); }
+.crm-ku-artikel td small { display: block; color: var(--crm-muted); font-size: 12px; font-weight: 400; }
+.crm-ku-auff { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--crm-aus); }
+.crm-ku-auff + .crm-ku-auff { margin-top: 8px; }
+.crm-ku-auff h4 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.crm-ku-auff.weg h4 { color: var(--crm-warn); } .crm-ku-auff.minus h4 { color: var(--crm-fehler); } .crm-ku-auff.plus h4 { color: var(--crm-ok); }
+.crm-ku-auff div b { display: block; font-size: 14px; }
+.crm-ku-auff div small { color: var(--crm-muted); font-size: 12.5px; }
+#ku-schritt { gap: 6px; }
+.crm-ku-schritt { font-size: 15px; }
+.crm-ku-teil > div:not(.crm-knoepfe):not(.crm-ku-verschieben):not(.crm-ku-auff):not(.crm-ku-teilkopf):not(.crm-tabelle-rahmen) { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--crm-linie); font-size: 14px; }
+.crm-ku-teil > div a { color: inherit; white-space: nowrap; }
+.crm-ku-verschieben { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.crm-ku-verschieben[hidden] { display: none; }
+.crm-ku-verschieben input { width: auto; }
+.crm-ku-akt { align-self: flex-start; margin-top: 4px; }
+.crm-ku-teil .crm-knoepfe { margin-top: 2px; }
+.crm-ku-fuss { margin-top: -6px; }
+
+@media (max-width: 1100px) {
+  .crm-ck-raster, .crm-ku-raster, .crm-ku-raster.drei { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .crm-ck-wahl { width: 100%; margin-left: 0; }
+  .crm-ck-wahl .crm-seg, .crm-ck-vtwahl { width: 100%; }
+  .crm-ck-wahl .crm-seg button { flex: 1; }
+  .crm-ck-wahl select { width: 100%; min-width: 0; }
+  .crm-ck-wahl > .btn { width: 100%; }
+  .crm-ck-kpis, .crm-ku-kpis { grid-template-columns: 1fr 1fr; }
+  .crm-kpis.crm-ck-kpis .crm-wert:nth-child(5) { grid-column: auto; }
+  .crm-ck-kpis .crm-wert:last-child:nth-child(odd), .crm-ku-kpis .crm-wert:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  /* Heute dran: Art und Zeitpunkt oben, Kunde darunter, Anrufen rechts */
+  .crm-ck-liste li.h { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "art wann tel" "was was tel"; gap: 4px 10px; align-items: center; }
+  .crm-ck-liste li.h .crm-ck-art { grid-area: art; justify-self: start; }
+  .crm-ck-liste li.h .wann { grid-area: wann; justify-self: end; }
+  .crm-ck-liste li.h .was { grid-area: was; }
+  .crm-ck-liste li.h .crm-ck-tel { grid-area: tel; }
+  .crm-ck-liste li.s { flex-wrap: wrap; }
+  .crm-ck-liste li.s .was { flex-basis: calc(100% - 110px); }
+  /* Master „Auffällige Kunden“: Art und Wert oben, Kunde darunter, Vertreter klein */
+  .crm-ck-liste li.s.mit-art { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; }
+  .crm-ck-liste li.s.mit-art .crm-ck-art { grid-column: 1; grid-row: 1; justify-self: start; }
+  .crm-ck-liste li.s.mit-art .wert { grid-column: 2; grid-row: 1; }
+  .crm-ck-liste li.s.mit-art .was { grid-column: 1 / -1; }
+  .crm-ck-liste li.s.mit-art .crm-ck-vt { grid-column: 1 / -1; font-size: 11.5px; }
+  /* Top-Kunden als Zeilen: Kunde oben, Werte darunter */
+  .crm-ck-zeile.kopf { display: none; }
+  .crm-ck-zeile { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .crm-ck-zeile .kunde { flex-basis: 100%; }
+  .crm-ck-zeile [data-label]::before { content: attr(data-label) " "; color: var(--crm-muted); font-size: 11px; font-weight: 600; }
+  .crm-ck-zeile .spark::before { display: none; }
+  /* Tabellen des Cockpits und des Pop-ups als Karten */
+  .crm-ck-karten thead { display: none; }
+  .crm-ck-karten, .crm-ck-karten tbody { display: block; }
+  .crm-ck-karten tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; padding: 10px 12px; border-bottom: 1px solid var(--crm-linie); }
+  .crm-ck-karten td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; min-width: 0; white-space: normal; }
+  .crm-ck-karten td.name, .crm-ck-karten td.knopf { grid-column: 1 / -1; }
+  .crm-ck-vergleich .crm-ck-karten tr { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .crm-ck-karten td.knopf .btn { width: 100%; }
+  .crm-ck-karten td[data-label]::before { content: attr(data-label); display: block; color: var(--crm-muted); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-ck-karten tbody tr:hover td { background: none; }
+  /* Kundenliste und Wiedervorlagen als Karten statt enger Tabelle */
+  .crm-karten-rahmen { max-height: none; overflow: visible; border-radius: 0; background: transparent; border: 0; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .crm-karten thead { display: none; }
+  .crm-karten, .crm-karten tbody { display: block; }
+  .crm-karten tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin-bottom: 10px; padding: 12px 14px; border-radius: 18px; background: var(--crm-deckend); border: 1px solid var(--crm-linie); }
+  .crm-karten td { display: block; min-width: 0; padding: 0 !important; border: 0; overflow-wrap: anywhere; }
+  .crm-karten tbody tr:hover td { background: none; }
+  .crm-karten td.kunde { grid-column: 1 / -1; order: -1; min-width: 0 !important; }
+  .crm-karten td.kunde .crm-firma { max-width: 100%; }
+  .crm-karten td.crm-leer { grid-column: 1 / -1; }
+  .crm-karten td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 3px; color: var(--crm-muted); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+  .crm-karten select, .crm-tabelle.crm-karten td.wann select { width: 100%; max-width: none; height: 38px; }
+  #k-tabelle td.vt { order: 1; } #k-tabelle td.schritt { order: 2; }
+  #wv-tabelle td.aktiv { order: 1; } #wv-tabelle td.wann { order: 2; grid-column: 1 / -1; } #wv-tabelle td.erledigt { order: 3; }
+  /* Kunden-Pop-up */
+  .crm-ku .crm-dkopf { grid-template-columns: minmax(0, 1fr) auto; }
+  .crm-ku .crm-dkopf-zu { grid-column: 2; grid-row: 1; }
+  .crm-ku .crm-dkopf-aktionen { grid-column: 1 / -1; justify-content: stretch; }
+  .crm-ku .crm-dkopf-aktionen .btn { flex: 1; justify-content: center; }
+  .crm-ku-saeule .spur { height: 64px; }
+  .crm-ku-saeulen { gap: 3px; }
+  .crm-ku-saeule span { font-size: 9.5px; }
+}

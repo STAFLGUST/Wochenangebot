@@ -4,7 +4,9 @@ declare(strict_types=1);
    Rechte (GR-103): crm.sehen – Kunden, Kundenblätter, Wiedervorlagen, Pipeline, Auswertung, Karte ansehen (crm_karte);
                     crm.bearbeiten – Kundenblätter, Interessenten und Aktivitäten erfassen;
                     crm.exportieren – Liste als CSV herunterladen;
-                    crm.mhd_ware – Reiter „MHD-Ware“: Artikel kurz vor Ablauf und ihre Käufer (Wiedervorlage dazu zusätzlich crm.bearbeiten).
+                    crm.mhd_ware – Reiter „MHD-Ware“: Artikel kurz vor Ablauf und ihre Käufer (Wiedervorlage dazu zusätzlich crm.bearbeiten);
+                    crm.master – Master-Cockpit und Ansicht anderer Vertreter; crm.umsatz_euro / crm.umsatz_kg – Umsätze in € bzw.
+                    Mengen in kg im Cockpit und im Kunden-Pop-up (module/crm/cockpit.php).
    Kundenstammdaten liest das CRM nur (Eigentümer Verwaltung, E-1); geändert werden sie in der Verwaltung.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -32,11 +34,29 @@ switch ($action) {
             usort($akt, function ($a, $b) { return strcmp($b['at'], $a['at']); });
             $jeArt = array_fill_keys(CRM_ARTEN, 0); $tage30 = 0; $seit = gmdate('Y-m-d\TH:i:s\Z', time() - 30 * 86400);
             foreach ($akt as $a) { if (isset($jeArt[$a['art']])) $jeArt[$a['art']]++; if ($a['at'] >= $seit) $tage30++; }
-            respond(['ok' => true, 'heute' => date('Y-m-d'), 'name' => $me['name'],
-                     'rechte' => ['bearbeiten' => may($me, 'crm.bearbeiten'), 'exportieren' => may($me, 'crm.exportieren'), 'stammdaten' => may($me, 'kunden.bearbeiten'), 'mhd' => may($me, 'crm.mhd_ware')],
+            respond(['ok' => true, 'heute' => date('Y-m-d'), 'name' => $me['name'], 'ich' => (string)($me['vertreter'] ?? ''),
+                     'rechte' => ['bearbeiten' => may($me, 'crm.bearbeiten'), 'exportieren' => may($me, 'crm.exportieren'), 'stammdaten' => may($me, 'kunden.bearbeiten'), 'mhd' => may($me, 'crm.mhd_ware')]
+                                 + crm_zahlrechte($me),
                      'kunden' => crm_liste(), 'vertreter' => crm_vertreter(), 'segmente' => CRM_SEGMENTE, 'phasen' => CRM_PHASEN, 'anruf' => CRM_ANRUF,
                      'arten' => CRM_ARTEN, 'rhythmen' => crm_rhythmen(), 'letzte' => array_map('crm_aktivitaet_aus', array_slice($akt, 0, 30)),
                      'statistik' => ['gesamt' => count($akt), 'jeArt' => $jeArt, 'tage30' => $tage30]]);
+        }
+
+        /* Cockpit: Mein Cockpit (eigener Vertreter) bzw. mit crm.master das Master-Cockpit (?vertreter=alle) oder die Ansicht eines
+           Vertreters (?vertreter=<Nummer>, „_“ = Kunden ohne Vertreter) – Zahlen nur mit crm.umsatz_euro bzw. crm.umsatz_kg */
+        case 'crm_cockpit': {
+            $me = require_perm('crm.sehen');
+            header('Cache-Control: no-store');
+            $w = $_GET['vertreter'] ?? null;
+            if ($w !== null && (!is_string($w) || !preg_match('/^[0-9A-Za-z._-]{0,10}$/', $w))) fail('Ungültiger Vertreter.', 422);
+            respond(crm_cockpit($me, $w));
+        }
+
+        /* Kunden-Pop-up, Reiter „Übersicht“: Umsätze, Signale und Artikel eines Kunden aus den Umsatzdaten (wie das Cockpit nach Rechten) */
+        case 'crm_kunde_umsatz': {
+            $me = require_perm('crm.sehen');
+            header('Cache-Control: no-store');
+            respond(crm_kunde_umsatz($me, crm_key_param($_GET['key'] ?? '')));
         }
 
         /* Karte: Koordinaten der Anschriften (Hausnummer bzw. Straße) aus dem Adressverzeichnis auf dem Server; ohne Eintrag
