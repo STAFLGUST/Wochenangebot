@@ -160,6 +160,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `bestand.php` | controlling | Controlling · Bereich Bestandsverlauf (Auftrag des Inhabers 02.11.2026) |
 | `controlling.php` | controlling | Modul Controlling · gemeinsame Grundlage aller Bereiche (Umsatzstatistik; geplant |
 | `import.php` | controlling | Importvertrag des Controllings – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
 | `kundenbild.php` | controlling | Controlling · Kundenbild – Schnittstelle für das CRM (GR-101; Leser „crm“ in regeln/datenverantwortung.toml). |
@@ -315,6 +316,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `bestand.js` | controlling | STAFL-Plattform · Controlling · Bereich Bestandsverlauf (Designvorschlag 02.11.2026) |
 | `controlling.css` | controlling | STAFL-Plattform · Controlling – Gestaltung „Liquid Glass“ wie Dashboard, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
 | `controlling.js` | controlling | STAFL-Plattform · Controlling – Grundgerüst der Seite |
 | `index.html` | controlling | Bereiche des Controllings: je Bereich ein Reiter und ein Inhalt (Skript des Bereichs, z. |

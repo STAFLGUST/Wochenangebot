@@ -11,6 +11,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 /* Bereiche in Anzeigereihenfolge: Kennung => Name, Recht zum Ansehen, Recht zum Bearbeiten (oder null) */
 const CONTROLLING_BEREICHE = [
     'umsatz' => ['name' => 'Umsatzstatistik', 'sehen' => 'controlling.umsatz_sehen', 'bearbeiten' => null],   // Werte nur aus dem Import (01.11.2026)
+    'bestand' => ['name' => 'Bestandsverlauf', 'sehen' => 'controlling.bestand_sehen', 'bearbeiten' => null],   // aus den Tagesständen des Bestands (02.11.2026, bestand.php)
 ];
 
 const CONTROLLING_MONATE = ['01' => 'Januar', '02' => 'Februar', '03' => 'März', '04' => 'April', '05' => 'Mai', '06' => 'Juni',
@@ -34,3 +35,6 @@ function controlling_jahr($v): string
     if ($j === false || $j < 2000 || $j > 2100) throw new InvalidArgumentException('Bitte ein Jahr zwischen 2000 und 2100 angeben.');
     return (string)$j;
 }
+
+/* Bereich Bestandsverlauf (eigene Datei; die Funktionen werden erst beim Aufruf einer Aktion gebraucht) */
+require_once __DIR__ . '/bestand.php';

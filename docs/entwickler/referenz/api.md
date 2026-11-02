@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-252 Aktionen in 14 Modulen.
+255 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -206,6 +206,9 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 
 | Aktion | Oberfläche | Art | Kennzeichen | Prüfung im Code | Datei |
 | --- | --- | --- | --- | --- | --- |
+| `controlling_bestand` | `controlling.intern` | lesend | – | Recht controlling.bestand_sehen | `app/api/aktionen/controlling.php` |
+| `controlling_bestand_daten` | `controlling.intern` | lesend | – | Recht controlling.bestand_sehen | `app/api/aktionen/controlling.php` |
+| `controlling_bestand_detail` | `controlling.intern` | lesend | – | Recht controlling.bestand_sehen | `app/api/aktionen/controlling.php` |
 | `controlling_start` | `controlling.intern` | lesend | – | – | `app/api/aktionen/controlling.php` |
 | `controlling_umsatz` | `controlling.intern` | lesend | – | Recht controlling.umsatz_sehen | `app/api/aktionen/controlling.php` |
 | `controlling_umsatz_auswertung` | `controlling.intern` | lesend | – | Recht controlling.umsatz_sehen | `app/api/aktionen/controlling.php` |
