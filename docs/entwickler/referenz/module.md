@@ -114,7 +114,7 @@ Agent: `marketing` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `m
 
 ## Controlling (`controlling`)
 
-Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik; geplant OP-Konten, Liquidität
+Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik, Bestandsverlauf, Arbeitszeit; geplant OP-Konten, Liquidität
 
 Agent: `controlling` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgruppen: `controlling`, `controlling_umsatzdaten`
 

@@ -252,6 +252,21 @@ dynamisch = true
 beschreibung = "Zwischenablage eines Umsatzdaten-Imports (je Importlauf und Monat), gelöscht mit der Übernahme bzw. nach einem Tag"
 
 [[dokument]]
+name = "controlling-arbeitszeit"
+eigentuemer = "controlling"
+schutz = "vertraulich"
+dynamisch = true   # Name als Konstante ARBEITSZEIT (module/controlling/arbeitszeit.php)
+beschreibung = "Arbeitszeit aus dem Zeitbericht der Zeiterfassung – Verzeichnis: Mitarbeiter (Schlüssel, Name, Personalnummer, Abteilung), gespeicherte Jahre mit Zeitraum, Importverlauf (Zeitraum, Datei, wer, wann, Tage neu/geändert/entfallen); Personaldaten"
+historie = "Importierte Tage bleiben, wie sie im Zeitbericht standen; ein neuer Import ersetzt nur den Zeitraum seiner Datei"
+
+[[dokument]]
+name = "controlling-arbeitszeit/*"
+eigentuemer = "controlling"
+schutz = "vertraulich"
+dynamisch = true
+beschreibung = "Arbeitszeit je Jahr (JJJJ): je Mitarbeiter und Tag Soll, Ist, Abwesenheit (nur Stunden, ohne Grund), Pause, Saldo laut Zeiterfassung, Stempel (Kommen/Gehen) und erkannte Stempelfehler; Personaldaten"
+
+[[dokument]]
 name = "leergut-stamm"
 eigentuemer = "leergut"
 schutz = "intern"

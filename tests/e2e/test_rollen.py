@@ -66,7 +66,8 @@ check('Katalog: Erklärung je Recht (HR), sonst leer – Bezeichnungen in Alltag
 STUFEN_ERWARTET = {'voll': {'angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten', 'crm.master',
                               'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
                               'marketing.freigeben', 'marketing.verwalten'},
-                   'sensibel': {'bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'hr.verwalten',
+                   'sensibel': {'bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',
+                                'controlling.arbeitszeit_importieren', 'hr.verwalten',
                                 'kunden.bearbeiten', 'sicherheit.notfall'}}
 check('Katalog: Stufe je Recht für die Darstellung (Zugang, Art „sehen“ → Ansehen, „machen“ → Bearbeiten, Voll, Sensibel)',
       all(p['stufe'] == ('zugang' if p['kind'] == 'zugang' else 'sensibel' if p['key'] in STUFEN_ERWARTET['sensibel'] else 'voll' if p['key'] in STUFEN_ERWARTET['voll']
