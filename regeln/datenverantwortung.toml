@@ -134,6 +134,24 @@ schutz = "vertraulich"
 beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001)"
 
 [[dokument]]
+name = "bestand-verlauf"
+eigentuemer = "bestand"
+leser = ["controlling"]   # nur über bestand_verlauf_index()/bestand_verlauf_tag() (module/bestand/verlauf.php); Lagerwert zum EK nur mit controlling.bestand_ek und bestand.einkaufspreise (GR-008)
+schutz = "vertraulich"
+dynamisch = true   # Name als Konstante BESTAND_VERLAUF (module/bestand/verlauf.php)
+beschreibung = "Bestandsverlauf – Verzeichnis: je Tag die Summen (kg eingelagert, erwartete Zugänge, Lagerwert zum EK, Artikel, Partien) und die Herkunft (Datei, wer, wann)"
+historie = "Tagesstand beim Hochladen der Bestandsliste (Schnappschuss); erneutes Hochladen für denselben Tag ersetzt ihn, frühere Tage bleiben"
+
+[[dokument]]
+name = "bestand-verlauf/*"
+eigentuemer = "bestand"
+leser = ["controlling"]   # wie bestand-verlauf: nur über die Schnittstelle des Bestands
+schutz = "vertraulich"
+dynamisch = true   # BESTAND_VERLAUF . "/" . Datum
+beschreibung = "Bestandsverlauf je Tag (JJJJ-MM-TT): je Artikel kg eingelagert, erwartete Zugänge, Lagerwert zum EK, kg mit EK, Partien und Bezeichnung"
+historie = "Schnappschuss des Tages; spätere Stammdatenänderungen ändern ihn nicht (GR-106)"
+
+[[dokument]]
 name = "einkauf-meldungen"
 eigentuemer = "einkauf"
 schutz = "intern"

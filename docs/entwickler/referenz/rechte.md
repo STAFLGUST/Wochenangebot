@@ -72,6 +72,8 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `controlling.umsatz_sehen` | Controlling | Controlling | sehen | Umsatzstatistik ansehen: Monatsmeldung je Vertreter und Auswertung nach Kunde und Artikel (aus den importierten Umsatzdaten) | – | `controlling.zugang` |
 | `controlling.umsatz_ek` | Controlling | Controlling | sehen | Umsatzauswertung: Einkaufswerte, Deckungsbeitrag und Spanne je Kunde, Artikel und Gruppe sehen (nur zusammen mit „Einkaufspreise (EK) … ansehen“, GR-008) | – | `controlling.umsatz_sehen` |
 | `controlling.umsatz_importieren` | Controlling | Controlling | bearbeiten | Umsatzdaten der Warenwirtschaft importieren (Verwaltung → Import, Kundenumsatztabelle) | – | `controlling.umsatz_sehen` |
+| `controlling.bestand_sehen` | Controlling | Controlling | sehen | Bestandsverlauf ansehen: Bestand in kg je Tag, Entwicklung, Reichweite und Umschlag je Artikel und Gruppe (aus den hochgeladenen Bestandslisten) | – | `controlling.zugang` |
+| `controlling.bestand_ek` | Controlling | Controlling | sehen | Bestandsverlauf: Lagerwert zum Einkaufspreis sehen (nur zusammen mit „Einkaufspreise (EK) … ansehen“, GR-008) | – | `controlling.bestand_sehen` |
 | `leergut.sehen` | Leergut | Leergut | sehen | Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV | – | – |
 | `leergut.bearbeiten` | Leergut | Leergut | bearbeiten | Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen | – | `leergut.sehen` |
 | `leergut.verwalten` | Leergut | Leergut | bearbeiten | Leergut verwalten: Partner und Lademittel mit Werten pflegen, Datenpaket übernehmen | – | `leergut.bearbeiten` |
