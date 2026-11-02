@@ -56,7 +56,7 @@ with sync_playwright() as p:
     cls = first.locator('tr.srow td.s-mhd').evaluate_all("els => els.map(e => [e.className.includes('mhd-'), e.textContent])")
     flags = [c[0] for c in cls]
     marked = [c[1] for c in cls if c[0]]
-    iso = lambda s: '20' + s[6:8] + s[3:5] + s[0:2]
+    iso = lambda s: s[6:10] + s[3:5] + s[0:2]   # TT.MM.JJJJ wie überall
     check('marked MHD first, earliest first', flags == sorted(flags, reverse=True) and [iso(x) for x in marked] == sorted(iso(x) for x in marked), cls[:8])
     # Preis aus Angebot
     r = a.locator('.stab tr.srow:has(td.s-code:text-is("10601"))')
@@ -124,15 +124,15 @@ with sync_playwright() as p:
     check('Summenzeile: Kolli, Kg netto, Ø EK gewichtet', len(foot) == 6 and foot[0] == 'Summe' and foot[3] == str(int(sum(l['kolli'] for l in lots))) and foot[4] == kg_sum
           and foot[5] == 'Ø ' + fmt(gew) + ' €/kg', (foot, kg_sum, fmt(gew)))
     ek1 = a.locator('#dlg-stock-item .lottab tbody tr').first.locator('td.lot-ek').inner_text()
-    check('EK-Preis in der Partiezeile', ek1 == fmt(lots[0]['ek']) + ' €' and a.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 1, ek1)
+    check('EK-Preis in der Partiezeile', ek1 == fmt(lots[0]['ek']) + ' €/kg' and a.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 1, ek1)
     # Erwartete Zugänge: dieselbe Tabelle wie die Partien (Spalte ETA statt Ankunft), Kolli und EK aus der Zeile „erfasst“
     kz = a.locator('#dlg-stock-item .zutab thead th').all_inner_texts(); kp = a.locator('#dlg-stock-item .lottab thead th').all_inner_texts()
     zz = a.locator('#dlg-stock-item .zutab tbody tr').first.locator('td').all_inner_texts()
     check('Zugänge: gleiche Spalten wie die Partien, ETA statt Ankunft', [x.upper() for x in kz] == [('ETA' if x.upper() == 'ANKUNFT' else x.upper()) for x in kp], (kz, kp))
-    check('Zugang 10022: Partie, ETA, MHD „—“, Kolli 8, 186,12 kg, EK 24,48 €', a.locator('#dlg-stock-item .zutab tbody tr').count() == 1
-          and zz[-5:] == ['15.10.2026', '—', '8', '186,12 kg', '24,48 €'], zz)
+    check('Zugang 10022: Partie, ETA, MHD „—“, Kolli 8, 186,12 kg, EK 24,48 €/kg', a.locator('#dlg-stock-item .zutab tbody tr').count() == 1
+          and zz[-5:] == ['15.10.2026', '—', '8', '186,12 kg', '24,48 €/kg'], zz)
     zf = a.locator('#dlg-stock-item .zutab tfoot td').all_inner_texts()
-    check('Zugänge: Summenzeile wie bei den Partien', len(zf) == len(kz) and 'Summe' in zf and '186,12 kg' in zf and 'Ø 24,48 €' in zf, zf)
+    check('Zugänge: Summenzeile wie bei den Partien', len(zf) == len(kz) and 'Summe' in zf and '186,12 kg' in zf and 'Ø 24,48 €/kg' in zf, zf)
     titel = a.locator('#dlg-stock-item h3.d-h > span:first-child')
     check('Abschnittstitel deutlich: fett, Textfarbe, ≥ 13 px', titel.count() == 3 and titel.evaluate_all(
           "els => els.every(e => +getComputedStyle(e).fontWeight >= 700 && parseFloat(getComputedStyle(e).fontSize) >= 13 && getComputedStyle(e).color === getComputedStyle(document.body).color)"),

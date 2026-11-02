@@ -31,10 +31,10 @@ const store = {
   del(k) { try { localStorage.removeItem(STORAGE + k); } catch { /* ignore */ } },
 };
 
-/* Zahlen und Einheiten einheitlich auf allen Seiten (app/assets/format.js): Preise mindestens 2 Nachkommastellen, mehr nur,
-   wenn der Preis sie wirklich hat (nie still runden); Beträge immer 2; Mengen bis 2 ohne Endnullen. */
+/* Zahlen und Einheiten einheitlich auf allen Seiten (app/assets/format.js): Preise und Beträge mit 2 Nachkommastellen –
+   wie Bestellwunsch, E-Mail und Abrechnung (Cent). */
 const F = window.STAFL_FORMAT;
-const fmtNum = { format: (v) => F.zahl(v, 2, 4) };
+const fmtNum = { format: (v) => F.zahl(v, 2, 2) };
 const fmtInt = new Intl.NumberFormat('de-DE');
 const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 const dmy = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };

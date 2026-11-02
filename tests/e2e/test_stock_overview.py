@@ -74,7 +74,7 @@ with sync_playwright() as pw:
     check('price change removed', page.locator('.s-change, .st-price-change').count() == 0)
     kg_erfasst = lambda c: row(c).locator('.s-registered').inner_text().split('\n')[0]   # noqa: E731 – erste Zeile ohne ETA
     check('multiple incoming quantities summed', kg_erfasst('900001') == '50,00 kg' and row('900001').locator('.s-total-kg').inner_text() == '62,50 kg')
-    check('next ETA behind recorded stock: earliest arrival from today (22.10. already past → 24.10.)', row('900001').locator('.s-eta').inner_text() == 'ETA 24.10.26'
+    check('next ETA behind recorded stock: earliest arrival from today (22.10. already past → 24.10.)', row('900001').locator('.s-eta').inner_text() == 'ETA 24.10.2026'
           and row('900001').locator('.s-eta.alt').count() == 0)
     check('no ETA without arrival date or without deliveries', row('900005').locator('.s-eta').count() == 0 and row('900002').locator('.s-eta').count() == 0 and page.locator('tfoot .s-eta').count() == 0)
     check('no incoming records means zero recorded incoming', kg_erfasst('900002') == '0,00 kg' and row('900002').locator('.s-total-kg').inner_text() == '8,00 kg')
@@ -120,7 +120,7 @@ with sync_playwright() as pw:
     spaet.goto(B + '/admin/'); spaet.fill('#au-user','admin'); spaet.fill('#pw1','Sicheres-Passwort-1'); spaet.click('#auth-submit')
     spaet.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]'); spaet.click('#vt-stock'); spaet.wait_for_selector('.stab tr.srow')
     e = spaet.locator('.stab tr.srow').filter(has=spaet.locator('td.s-code', has_text='900001')).locator('.s-eta')
-    check('all ETAs past: latest shown and marked overdue', e.inner_text() == 'ETA 24.10.26' and 'alt' in e.get_attribute('class') and 'überschritten' in e.get_attribute('title'))
+    check('all ETAs past: latest shown and marked overdue', e.inner_text() == 'ETA 24.10.2026' and 'alt' in e.get_attribute('class') and 'überschritten' in e.get_attribute('title'))
     spaet.close()
     check('no JavaScript errors', not errors, errors)
     browser.close()

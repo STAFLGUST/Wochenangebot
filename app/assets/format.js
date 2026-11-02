@@ -5,7 +5,7 @@
    Regeln (docs/entwickler/10-konventionen.md, geprüft in der Testgruppe „einheit“):
    - Beträge immer mit 2 Nachkommastellen und „€“: 1.234,50 €. In Kennzahl-Kacheln erst ab 100 Mio. kurz (123,46 Mio. €,
      voller Wert im Tooltip).
-   - Preise je kg: 12,35 €/kg – mindestens 2 Nachkommastellen, mehr nur, wenn der Preis sie wirklich hat (nie still runden).
+   - Preise je kg: 12,35 €/kg – immer 2 Nachkommastellen, wie Bestellwunsch, E-Mail und Abrechnung (4,125 → 4,13).
    - Mengen immer in kg (nie t) mit 2 Nachkommastellen (1.782,50 kg – wie Bestand, Lieferschein und PDF, untereinander
      bündig); Summen in Auswertungen und Kennzahlen (Controlling, CRM) ab 100 kg ganz (1.783 kg).
    - Prozent mit 1 Nachkommastelle: 12,3 %; Veränderungen mit Vorzeichen +12,3 % / −12,3 % / ±0,0 %; Prozentpunkte „Pp“.
@@ -27,13 +27,18 @@
     var n = typeof v === 'number' ? v : s.indexOf(',') >= 0 ? Number(s.replace(/\./g, '').replace(',', '.')) : Number(s);
     return Number.isFinite(n) ? n : null;
   }
+  /* Kaufmännisch runden wie der Server (PHP round): 12,345 → 12,35, auch wenn die Binärzahl knapp darunter liegt */
+  function runden(n, stellen) {
+    var r = Number(Math.round(Number(n + 'e' + stellen)) + 'e-' + stellen);
+    return Number.isFinite(r) ? r : n;
+  }
   /* Zahl mit min…max Nachkommastellen, echtes Minus; -0 wird 0 */
   function zahl(v, min, max) {
     var n = wert(v);
     if (n === null) return LEER;
     if (min === undefined) min = 0;
     if (max === undefined) max = Math.max(min, 2);
-    var s = nf(min, max).format(Math.abs(n));
+    var s = nf(min, max).format(runden(Math.abs(n), max));
     return (n < 0 && s.replace(/[0,.]/g, '') !== '' ? MINUS : '') + s;
   }
   function mitEinheit(s, einheit) { return s === LEER ? LEER : s + NB + einheit; }
@@ -43,7 +48,7 @@
     if (n !== null && Math.abs(n) >= 1e8) return mitEinheit(zahl(n / 1e6, 2, 2) + NB + 'Mio.', '€');
     return euro(v);
   }
-  function euroKg(v) { return mitEinheit(zahl(v, 2, 4), '€/kg'); }
+  function euroKg(v) { return mitEinheit(zahl(v, 2, 2), '€/kg'); }
   function kg(v) { return mitEinheit(zahl(v, 2, 2), 'kg'); }
   function kgSumme(v) { var n = wert(v); return n === null ? LEER : mitEinheit(zahl(n, 0, Math.abs(n) >= 100 ? 0 : 1), 'kg'); }
   /* Anteil als Bruch (0,123 → 12,3 %) */

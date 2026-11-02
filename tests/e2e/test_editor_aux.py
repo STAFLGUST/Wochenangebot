@@ -44,9 +44,9 @@ with sync_playwright() as p:
     a.reload(); a.wait_for_selector('tr[data-id]')
     a.wait_for_function("document.querySelector('#groups:not(.no-stock):not(.no-prev)') && document.querySelector('#noprice-panel:not([hidden])')", timeout=10000)
     # Kopfzeile wird nach dem Laden von Bestand/Vorwoche nachgezogen – auf den fertigen Stand warten
-    a.wait_for_function("(() => { const t = document.querySelector('.gcard thead'); return t && t.textContent.includes('Stand 16.10.26') && t.textContent.includes('KW 42/26'); })()", timeout=10000)
+    a.wait_for_function("(() => { const t = document.querySelector('.gcard thead'); return t && t.textContent.includes('Stand 16.10.2026') && t.textContent.includes('KW 42/2026'); })()", timeout=10000)
     th = a.locator('.gcard').first.locator('thead').inner_text()
-    check('headers: Vorwoche KW 42/26, Preis KW 43, Bestand', 'Vorwoche' in th and 'KW 42/26' in th and 'KW 43' in th and 'Bestand' in th and 'Stand 16.10.26' in th, re.sub(r'\s+', ' ', th))
+    check('headers: Vorwoche KW 42/2026, Preis KW 43, Bestand', 'Vorwoche' in th and 'KW 42/2026' in th and 'KW 43' in th and 'Bestand' in th and 'Stand 16.10.2026' in th, re.sub(r'\s+', ' ', th))
     row = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
     check('10601 Vorwoche (Preis − 0,40) with +0,40', row.locator('td.e-prev').inner_text().replace('\n', ' ') == de(round(preis('10601') - 0.4, 2)) + ' +0,40', row.locator('td.e-prev').inner_text())
     check('10601 Bestand aus Bestandsliste', row.locator('td.e-stock').inner_text().strip() == de(bestand_kg('10601')), row.locator('td.e-stock').inner_text())

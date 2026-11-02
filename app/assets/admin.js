@@ -2618,7 +2618,7 @@
   const wkLabel = (w) => `KW ${w.week}`;   // Achse des Diagramms (kurz); im Text immer wkLong
   const wkLong = (w) => `KW ${w.week}/${w.year}`;
   const numVal = (p) => (p && p.price && p.price.status === 'value' ? p.price.value : null);
-  const fmtDelta = (d) => F.differenz(d, '€/kg', 2, 4);
+  const fmtDelta = (d) => F.differenz(d, '€/kg', 2, 2);
 
   /* Artikel-Schlüssel über alle Wochen: Artikelnummer; bei mehrfach vergebenen Nummern zusätzlich Bezeichnung + Gruppe */
   function seriesKey(it, dup) {
@@ -3434,7 +3434,7 @@
     return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${dir}"><span class="st-th"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button>`
       + `<button type="button" class="st-fbtn${f ? ' on' : ''}" data-sfilter="${key}" aria-haspopup="dialog" aria-label="Sortieren und Filtern: ${esc(ST_SPK[key].titel)}${f ? ' (Filter aktiv)' : ''}" title="${f ? esc(filterText(key)) : 'Sortieren und Filtern'}">${icon('filter', 'sm')}</button></span></th>`;
   };
-  const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete Zugänge', print)}</tr>`;
+  const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Menge kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete<br>Zugänge', print)}</tr>`;
   const stockRow = (a, print = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
       <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}${a.merkmale ? ` · ${esc(a.merkmale)}` : ''}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}${merkHTML(a)}</td>
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
@@ -3874,7 +3874,7 @@
     const n = fold(C.stripFrisch(it.name));
     return list.find((x) => fold(C.stripFrisch(x.name)) === n) || list.find((x) => x.price && x.price.status === 'value') || list[0];
   }
-  const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${String(prevWeek.year).slice(2)}` : '');
+  const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${prevWeek.year}` : '');   // KW 42/2026 wie überall
   function auxHeadHTML() {
     return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche €/kg<small>${esc(prevLabel())}</small></th>`
       + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`

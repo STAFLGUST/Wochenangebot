@@ -22,7 +22,7 @@ Alle Seiten formatieren über **`window.STAFL_FORMAT`** aus `app/assets/format.j
 | --- | --- | --- |
 | Betrag | `euro(v)` | `1.234,50 €` – immer 2 Nachkommastellen |
 | Betrag in einer Kennzahl-Kachel | `euroKachel(v)` | wie `euro`, erst ab 100 Mio. kurz: `123,46 Mio. €` (voller Wert im Tooltip) |
-| Preis je kg | `euroKg(v)` | `12,35 €/kg` – mindestens 2 Nachkommastellen, mehr nur, wenn der Preis sie hat (nie still runden) |
+| Preis je kg | `euroKg(v)` | `12,35 €/kg` – immer 2 Nachkommastellen, wie Bestellwunsch, E-Mail und Abrechnung (4,125 → 4,13) |
 | Menge | `kg(v)` | `1.782,50 kg` – immer kg (nie „t“), 2 Nachkommastellen wie Bestand und PDF |
 | Menge als Summe (Auswertung, Kachel) | `kgSumme(v)` | `1.783 kg` ab 100 kg ganz, darunter bis 1 Nachkommastelle |
 | Anteil | `prozent(anteil)` | `12,3 %` (Eingabe als Bruch 0,123) |

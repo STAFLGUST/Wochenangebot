@@ -178,7 +178,7 @@ with sync_playwright() as p:
     check('Kennzahlen: Umsatz und DB des Jahres aus den Umsatzdaten (Bezeichnungen DB und Spanne wie in der Auswertung)', '39.800,00 €' in kpi and '4.400,00 €' in kpi
           and re.search(r'\bDB\b', kpi) and 'spanne' in kpi.lower() and 'rohmarge' not in kpi.lower() and 'spanne' in text(pg, '.ctl-vertretertabelle thead').lower(), kpi)
     zeilen = text(pg, '#ctl-u-vertreterzeilen')
-    check('Anteile berechnet (V1 26.000 von 39.800 € = 65,33 %), ohne Vertreter und Nummer ohne Stammsatz als Zeilen', '65,33 %' in zeilen and 'ohne Vertreter' in zeilen
+    check('Anteile berechnet (V1 26.000 von 39.800 € = 65,3 %, Prozent mit 1 Stelle wie überall), ohne Vertreter und Nummer ohne Stammsatz als Zeilen', '65,3 %' in zeilen and 'ohne Vertreter' in zeilen
           and 'Vertreter V2 (nicht in den Stammdaten)' in zeilen, zeilen[:600])
     check('Stand: aus den importierten Umsatzdaten mit letztem Import', 'importierten Umsatzdaten' in text(pg, '#ctl-u-stand') and 'Ina Import' in text(pg, '#ctl-u-stand'))
     pg.select_option('#ctl-u-diagrammart', 'linie'); pg.wait_for_selector('#ctl-u-diagramm polyline')
@@ -349,15 +349,15 @@ with sync_playwright() as p:
     ctx, pg = anmelden('bernd', 'Lagerwert-Konto-91', '198.51.100.31')
     check('Oberfläche: Bereich Bestandsverlauf aktiv (#bestand)', pg.get_attribute('#ctl-bereiche [data-bereich="bestand"]', 'aria-selected') == 'true' and pg.url.endswith('#bestand'))
     kpi = text(pg, '#ctl-b-kpis')
-    check('Kennzahlen: Bestand, Reichweite, Umschlag, Lagerwert (EK)', '310 kg' in kpi and '31 Tage' in kpi and '0,5 ×' in kpi and '1.500 €' in kpi and 'lagerwert' in kpi.lower()
+    check('Kennzahlen: Bestand, Reichweite, Umschlag, Lagerwert (EK)', '310 kg' in kpi and '31 Tage' in kpi and '0,5 ×' in kpi and '1.500,00 €' in kpi and 'lagerwert' in kpi.lower()
           and '1 lange am Lager, 1 knapp' in kpi, kpi)
     check('Stand: jüngste Liste und letzter Tag mit Umsatzdaten', '29.10.2026' in text(pg, '#ctl-b-stand') and '20.10.2026' in text(pg, '#ctl-b-stand'))
     check('Diagramm: ein Punkt je Liste, ein Balken je Tag mit Absatz', pg.locator('#ctl-b-diagramm .ctl-b-punkt').count() == 3 and pg.locator('#ctl-b-diagramm .ctl-b-balken').count() == 3)
     zeilen = pg.locator('#ctl-b-zeilen > li')
     check('Liste: drei Artikel mit Hinweisen', zeilen.count() == 3 and 'Nacken Test' in zeilen.nth(0).inner_text() and 'lange am Lager' in zeilen.nth(0).inner_text()
-          and 'kein Absatz' in zeilen.nth(1).inner_text() and 'knapp' in zeilen.nth(2).inner_text() and '1.500 €' in text(pg, '#ctl-b-zeilen'), text(pg, '#ctl-b-zeilen')[:500])
+          and 'kein Absatz' in zeilen.nth(1).inner_text() and 'knapp' in zeilen.nth(2).inner_text() and '1.500,00 €' in text(pg, '#ctl-b-zeilen'), text(pg, '#ctl-b-zeilen')[:500])
     pg.click('#ctl-b-wert [data-wert="ekWert"]'); pg.wait_for_selector('#ctl-b-wert [data-wert="ekWert"][aria-pressed="true"]')
-    check('Diagramm wahlweise Lagerwert (ohne Absatzbalken)', '1.500 €' in text(pg, '#ctl-b-diagramm') and pg.locator('#ctl-b-diagramm .ctl-b-balken').count() == 0)
+    check('Diagramm wahlweise Lagerwert (ohne Absatzbalken)', '1.500,00 €' in text(pg, '#ctl-b-diagramm') and pg.locator('#ctl-b-diagramm .ctl-b-balken').count() == 0)
     pg.select_option('#ctl-b-sort', 'reichweiteAuf')
     check('Sortierung: kürzeste Reichweite zuerst, ohne Reichweite ans Ende', 'Hüfte Test' in zeilen.nth(0).inner_text() and 'Unbekannt Test' in zeilen.nth(2).inner_text())
     pg.fill('#ctl-b-suche', 'hüfte')

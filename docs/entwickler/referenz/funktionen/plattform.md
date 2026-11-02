@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 936 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+103 Dateien, 937 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -717,6 +717,7 @@ _Zahlen, Beträge, Mengen, Prozente und Datum – EIN Format für alle Seiten de
 
 - `nf(min, max)`
 - `wert(v)`
+- `runden(n, stellen)` – Kaufmännisch runden wie der Server (PHP round): 12,345 → 12,35, auch wenn die Binärzahl knapp darunter liegt
 - `zahl(v, min, max)` – Zahl mit min…max Nachkommastellen, echtes Minus; -0 wird 0
 - `mitEinheit(s, einheit)`
 - `euro(v)`
