@@ -86,6 +86,21 @@ const PERMS = [
     'qs.verwalten'             => ['g' => 'Qualitätssicherung', 'l' => 'QM-System verwalten: Kapitel, Personen (Kürzel und Verknüpfung mit Mitarbeitern) und Einstellungen pflegen, Datenpaket übernehmen', 'k' => 'machen', 'd' => [], 'r' => ['qs.bearbeiten']],
     'auswertung.sehen'         => ['g' => 'Verwaltung', 'l' => 'Auswertung: Karte der Kunden-Anmeldungen ansehen', 'k' => 'sehen', 'd' => [], 'r' => ['kunden.sehen']],
 ];
+/* Darstellung in Verwaltung → Rollen und Rechte (nur Anzeige, keine Prüfung – durchgesetzt wird weiter je Aktion mit
+   require_perm, GR-103). Die Oberfläche fasst die Rechte eines Moduls zu Stufen zusammen: Ansehen (Art „sehen“),
+   Bearbeiten (Art „machen“), Voll (zusätzlich freigeben, verwalten, löschen: PERMS_STUFE_VOLL). Sensible Rechte
+   (PERMS_SENSIBEL: Einkaufswerte, Kontaktdaten-Export, Personaldaten, Kundenzugänge, Notfall) gehören zu keiner Stufe und
+   werden einzeln freigegeben. PERMS_VORSCHAU: Vorschau-Bild je Recht (admin-rollen-vorschau.js, nur Beispieldaten);
+   der Modulzugang zeigt immer die Kachel. Gespeichert wird weiter nur die Liste der Rechte – Stufen sind nicht gespeichert
+   (GR-006, keine Migration). Neue Rechte ohne Eintrag erscheinen nach ihrer Art (Auftrag des Inhabers 02.11.2026). */
+const PERMS_STUFE_VOLL = ['angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten',
+    'crm.master', 'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
+    'marketing.freigeben', 'marketing.verwalten'];
+const PERMS_SENSIBEL = ['bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'hr.verwalten',
+    'kunden.bearbeiten', 'sicherheit.notfall'];
+const PERMS_VORSCHAU = ['bestand.sehen' => 'bestand', 'bestand.einkaufspreise' => 'ek', 'bestand.importieren' => 'import', 'bestand.mhd_senden' => 'mhd',
+    'angebot.veroeffentlichen' => 'veroeffentlichen', 'crm.umsatz_euro' => 'umsatz', 'crm.exportieren' => 'export', 'controlling.umsatz_ek' => 'spanne',
+    'controlling.bestand_ek' => 'lagerwert', 'hr.genehmigen' => 'genehmigen', 'kunden.bearbeiten' => 'kundenzugang', 'sicherheit.notfall' => 'notfall'];
 /* Fest den Administratoren vorbehalten (nur zur Anzeige in der Rechte-Übersicht) */
 const PERMS_ADMIN_ONLY = ['Mitarbeiter (Anmeldung) und Rechte verwalten', 'Sicherheit und Wartungsmodus', 'E-Mail-Postfach, Signatur und Benachrichtigungen'];
 /* Standardrollen (Rechte im Dokument „rechte“, wie bisher). Eigene Rollen stehen im Dokument „rollen“ (siehe unten). */
@@ -298,7 +313,13 @@ function modul_zugang_durchsetzen(?array $aktion): void
 function rights_catalog(): array
 {
     $out = [];
-    foreach (perms_katalog() as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m'], 'eigene' => !empty($p['e']), 'hilfe' => (string)($p['h'] ?? '')];
+    foreach (perms_katalog() as $k => $p) {
+        // Stufe und Vorschau nur für die Darstellung (siehe PERMS_STUFE_VOLL); Felder nur ergänzt, ältere Oberflächen ignorieren sie
+        $stufe = $p['k'] === 'zugang' ? 'zugang' : (in_array($k, PERMS_SENSIBEL, true) ? 'sensibel'
+            : (in_array($k, PERMS_STUFE_VOLL, true) ? 'voll' : ($p['k'] === 'sehen' ? 'ansehen' : 'bearbeiten')));
+        $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m'], 'eigene' => !empty($p['e']), 'hilfe' => (string)($p['h'] ?? ''),
+                  'stufe' => $stufe, 'sensibel' => $stufe === 'sensibel', 'vorschau' => $p['k'] === 'zugang' ? 'kachel' : (string)(PERMS_VORSCHAU[$k] ?? '')];
+    }
     return $out;
 }
 /* Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter */

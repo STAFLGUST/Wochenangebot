@@ -4,6 +4,8 @@ Oberfläche (Verwaltung → Rollen und Rechte, Mitarbeiterdialog, Dashboard ohne
 CRM-Rechte „Master-Cockpit“ (ohne Standard) und „Umsätze in €“/„Mengen in kg“ (Standard an, auch in eigenen und älteren
 gespeicherten Rollen, einzeln abschaltbar, ohne CRM-Zugang zu geben) und das Feld „Vertreter im CRM“ am Mitarbeiter
 (nur vorhandene Vertreter, Rückfall/ältere Oberfläche, Protokoll, Mitarbeiterdialog).
+Neues Design (02.11.2026): Stufen je Modul (Kein · Ansehen · Bearbeiten · Voll, „Angepasst“), sensible Rechte einzeln,
+Vorschau-Bilder (Beispieldaten), „Auf einen Blick“, Rollen vergleichen mit „Was darf …?“, 390 px mit aufklappbaren Modulen.
 
 Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour (Stammdaten → Vertreter); nur synthetische Daten.
 
@@ -61,6 +63,20 @@ KAT = {p['key']: p for p in rr['catalog']}
 check('Katalog: Erklärung je Recht (HR), sonst leer – Bezeichnungen in Alltagssprache', all(len(KAT[k]['hilfe']) > 80 for k in ('hr.antrag', 'hr.verwalten', 'hr.genehmigen', 'hr.uebersicht'))
       and KAT['bestand.sehen']['hilfe'] == '' and KAT['hr.verwalten']['label'] == 'Personalstelle: Urlaubsverwaltung pflegen'
       and 'nie für sich selbst' in KAT['hr.verwalten']['hilfe'] and 'nie den Grund' in KAT['hr.antrag']['hilfe'], {k: KAT[k]['label'] for k in KAT if k.startswith('hr.')})
+STUFEN_ERWARTET = {'voll': {'angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten', 'crm.master',
+                              'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
+                              'marketing.freigeben', 'marketing.verwalten'},
+                   'sensibel': {'bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'hr.verwalten',
+                                'kunden.bearbeiten', 'sicherheit.notfall'}}
+check('Katalog: Stufe je Recht für die Darstellung (Zugang, Art „sehen“ → Ansehen, „machen“ → Bearbeiten, Voll, Sensibel)',
+      all(p['stufe'] == ('zugang' if p['kind'] == 'zugang' else 'sensibel' if p['key'] in STUFEN_ERWARTET['sensibel'] else 'voll' if p['key'] in STUFEN_ERWARTET['voll']
+                         else 'ansehen' if p['kind'] == 'sehen' else 'bearbeiten') and p['sensibel'] == (p['stufe'] == 'sensibel') for p in rr['catalog'])
+      and STUFEN_ERWARTET['voll'] | STUFEN_ERWARTET['sensibel'] <= set(KAT), {p['key']: p['stufe'] for p in rr['catalog'] if p['stufe'] in ('voll', 'sensibel')})
+check('Katalog: Umsätze in € bleibt ein normales Recht (Standard an, Entscheidung Inhaber 01.11.2026)', KAT['crm.umsatz_euro']['stufe'] == 'ansehen')
+check('Katalog: Vorschau-Bild je wichtigem Recht, Modulzugang zeigt die Kachel',
+      all(p['vorschau'] == 'kachel' for p in rr['catalog'] if p['kind'] == 'zugang') and KAT['bestand.einkaufspreise']['vorschau'] == 'ek'
+      and KAT['sicherheit.notfall']['vorschau'] == 'notfall' and KAT['angebot.bearbeiten']['vorschau'] == '' and len({p['vorschau'] for p in rr['catalog']} - {''}) == 13,
+      sorted({p['vorschau'] for p in rr['catalog']}))
 check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit']}, sorted(ZUGANG))
 check('Modulzugang gehört zum Modul, Standard: beide Standardrollen (außer Register-Feld zugang_rollen: Sicherheit und Controlling ohne)',
       all(p['modul'] == p['key'].split('.')[0] and p['default'] == ([] if p['key'] in ('sicherheit.zugang', 'controlling.zugang') else ['viewer', 'editor']) for p in rr['catalog'] if p['kind'] == 'zugang'))
@@ -102,6 +118,9 @@ assert A.call('user_save', {'id': '', 'name': 'Kurt Kunde', 'username': 'kurt', 
 K = anmelden('kurt', 'Kunden-Zugang-88')
 check('Kundenverwaltung ohne Modulzugang Angebot: Liste der Kundenangebote (Namen) ja, Entwurf und Kundenpreise nein',
       K.call('offers')[0] == 200 and K.call('draft')[0] == 403 and K.call('offer&angebot=' + OID)[0] == 403)
+uid['kurt'] = next(u_['id'] for u_ in A.call('users')[1]['users'] if u_['username'] == 'kurt')
+check('Ausnahme je Mitarbeiter (für „Was darf …?“)', A.call('user_save', {'id': uid['kurt'], 'name': 'Kurt Kunde', 'rollen': [KS], 'active': True, 'grant': ['einkauf.sehen'], 'deny': []})[0] == 200
+      and 'einkauf.sehen' in rechte(K))
 code, r = L.call('hr_start')
 check('Ohne HR-Zugang: HR gesperrt (Server)', code == 403 and r.get('code') == 'kein_modulzugang' and r.get('modul') == 'hr', r)
 ms = {m['id']: m for m in L.call('module_status')[1]['module']}
@@ -217,48 +236,113 @@ with sync_playwright() as pw:
     a = seite('admin', PW)
     a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     a.click('#vt-rollen'); a.wait_for_selector('#view-rollen .rl-item.on')
-    check('UI: Rollenliste mit Standard- und eigenen Rollen', a.locator('#view-rollen .rl-item').count() == 7
+    check('UI: Rollenliste mit Standard- und eigenen Rollen, gruppiert', a.locator('#view-rollen .rl-item').count() == 7 and a.locator('#view-rollen .rl-gruppe').count() == 3
           and 'Vertrieb Innendienst' in a.inner_text('#view-rollen .rl-liste') and 'Lager Nord' in a.inner_text('#view-rollen .rl-liste'))
+    check('UI: je Modul eine Zeile mit Stufe, „Auf einen Blick“ mit jeder Kachel; bis 1500 px alle Module zugeklappt',
+          a.locator('#view-rollen .rl-zeile[data-rl-modul]').count() >= len(ZUGANG) and a.locator('#view-rollen .rl-kachel').count() == len(ZUGANG)
+          and a.locator('#rl-detail').count() == 0)
+    a.wait_for_function("() => document.getAnimations().every((x) => x.playState !== 'running')")
     a.screenshot(path=SH + '/rollen-desktop.png', full_page=True)
     # Neue Rolle über die Oberfläche
     a.click('[data-rl-akt="neu"]'); a.wait_for_selector('#rl-name:focus')
-    check('UI: neue Rolle mit „CRM: Umsätze in €“ und „Mengen in kg“ vorgewählt (Standard an)', a.is_checked('[data-rl-key="crm.umsatz_euro"]') and a.is_checked('[data-rl-key="crm.umsatz_kg"]')
-          and not a.is_checked('[data-rl-key="crm.master"]'))
-    a.uncheck('[data-rl-key="crm.umsatz_euro"]')
+    a.click('.rl-zeile[data-rl-modul="crm"] .rl-z-kopf'); a.wait_for_selector('#rl-detail [data-rl-key="crm.umsatz_euro"]')
+    check('UI: neue Rolle mit „CRM: Umsätze in €“ und „Mengen in kg“ vorgewählt (Standard an)', a.is_checked('#rl-detail [data-rl-key="crm.umsatz_euro"]')
+          and a.is_checked('#rl-detail [data-rl-key="crm.umsatz_kg"]') and not a.is_checked('#rl-detail [data-rl-key="crm.master"]'))
+    check('UI: Modul ohne Zugang mit einzelnen Rechten heißt „Angepasst“', 'Angepasst' in a.inner_text('.rl-zeile[data-rl-modul="crm"]'))
+    a.uncheck('#rl-detail [data-rl-key="crm.umsatz_euro"]')
     a.fill('#rl-name', 'Einkauf')
-    a.check('[data-rl-key="einkauf.melden"]')
-    check('UI: Recht hakt seine Voraussetzung an', a.is_checked('[data-rl-key="einkauf.sehen"]'))
-    hr_text = a.inner_text('[data-rl-modul="hr"] .rl-rechte')
-    check('UI: HR-Rechte mit Erklärung und Voraussetzung, andere Module unverändert', a.locator('[data-rl-modul="hr"] .rl-hilfe').count() == 4
-          and 'sieht die Gründe' in hr_text and 'Setzt „Eigenen Urlaub und Gleittage beantragen“ voraus' in hr_text
-          and a.locator('[data-rl-modul="einkauf"] .rl-hilfe').count() == 0, hr_text[:300])
-    a.locator('[data-rl-modul="hr"]').screenshot(path=SH + '/rollen-hr-erklaerung.png')
-    check('UI: ohne Modulzugang abgeblendet mit Hinweis', 'zu' in a.get_attribute('[data-rl-modul="einkauf"]', 'class') and a.is_visible('[data-rl-modul="einkauf"] .rl-mod-hinw'))
-    a.click('[data-rl-key="einkauf.zugang"]')
-    check('UI: Schalter öffnet das Modul', a.is_checked('[data-rl-key="einkauf.zugang"]') and 'zu' not in a.get_attribute('[data-rl-modul="einkauf"]', 'class').split())
-    a.check('[data-rl-key="bestand.zugang"]'); a.check('[data-rl-key="bestand.sehen"]')
-    a.uncheck('[data-rl-key="bestand.sehen"]')
-    a.check('[data-rl-key="bestand.einkaufspreise"]'); a.uncheck('[data-rl-key="bestand.sehen"]')
-    check('UI: Voraussetzung weg → abhängiges Recht weg', not a.is_checked('[data-rl-key="bestand.einkaufspreise"]'))
-    a.click('[data-rl-akt="speichern"]'); a.wait_for_selector('#view-rollen .rl-item.on:has-text("Einkauf")')
+    gedrueckt = lambda m, st, ort='z': a.get_attribute(f'[data-rl-stufe="{m}:{st}"][data-ort="{ort}"]', 'aria-pressed') == 'true'
+    an = lambda k: a.is_checked(f'#rl-detail [data-rl-key="{k}"]')
+    a.click('[data-rl-stufe="einkauf:bearbeiten"][data-ort="z"]'); a.wait_for_selector('#rl-detail [data-rl-key="einkauf.melden"]:checked')
+    check('UI: Stufe „Bearbeiten“ schaltet Zugang und alle Rechte des Moduls ein, Details zeigen das Modul',
+          an('einkauf.zugang') and an('einkauf.sehen') and an('einkauf.melden') and gedrueckt('einkauf', 'bearbeiten') and gedrueckt('einkauf', 'bearbeiten', 'd'))
+    check('UI: Fokus bleibt auf der gewählten Stufe', a.evaluate('document.activeElement.dataset.rlStufe') == 'einkauf:bearbeiten')
+    check('UI: Einkauf hat keine Stufe „Voll“ („–“)', a.locator('[data-rl-stufe="einkauf:voll"]').count() == 0 and a.locator('.rl-zeile[data-rl-modul="einkauf"] .rl-st-leer').count() == 1)
+    a.click('[data-rl-stufe="einkauf:ansehen"][data-ort="d"]'); a.wait_for_selector('#rl-detail [data-rl-key="einkauf.melden"]:not(:checked)')
+    check('UI: Stufe „Ansehen“: nur lesen', an('einkauf.sehen') and not an('einkauf.melden') and gedrueckt('einkauf', 'ansehen'))
+    a.click('[data-rl-stufe="einkauf:bearbeiten"][data-ort="d"]'); a.wait_for_selector('#rl-detail [data-rl-key="einkauf.melden"]:checked')
+    a.click('[data-rl-stufe="bestand:ansehen"][data-ort="z"]'); a.wait_for_selector('#rl-detail [data-rl-key="bestand.sehen"]:checked')
+    check('UI: sensibles Recht bleibt bei „Ansehen“ aus', not an('bestand.einkaufspreise') and 'sensibel aus' in a.inner_text('.rl-zeile[data-rl-modul="bestand"]'))
+    a.check('#rl-detail [data-rl-key="bestand.einkaufspreise"]')
+    check('UI: sensibles Recht einzeln an – Stufe bleibt „Ansehen“', gedrueckt('bestand', 'ansehen') and 'sensibel an' in a.inner_text('.rl-zeile[data-rl-modul="bestand"]'))
+    a.click('[data-rl-stufe="bestand:bearbeiten"][data-ort="d"]'); a.wait_for_selector('#rl-detail [data-rl-key="bestand.importieren"]:checked')
+    check('UI: Stufenwechsel ändert sensible Rechte nicht', an('bestand.einkaufspreise') and an('bestand.mhd_senden'))
+    a.click('[data-rl-stufe="bestand:kein"][data-ort="d"]'); a.wait_for_selector('#rl-detail [data-rl-key="bestand.sehen"]:not(:checked)')
+    check('UI: „Kein Zugang“ schaltet alles im Modul aus, auch sensible Rechte', a.locator('#rl-detail [data-rl-key]:checked').count() == 0)
+    a.check('#rl-detail [data-rl-key="bestand.einkaufspreise"]')
+    check('UI: Recht schaltet seine Voraussetzung ein', an('bestand.sehen'))
+    a.uncheck('#rl-detail [data-rl-key="bestand.sehen"]')
+    check('UI: Voraussetzung weg → abhängiges Recht weg', not an('bestand.einkaufspreise'))
+    # Vorschau-Bilder (Beispieldaten, markiert, was das Recht freischaltet)
+    a.click('#rl-detail [data-rl-vorschau="bestand.einkaufspreise"]'); a.wait_for_selector('#rl-detail figure.rv[data-rv="ek"]')
+    vt = a.inner_text('#rl-detail .rl-v')
+    check('UI: Vorschau zeigt die markierte EK-Spalte mit Beispieldaten und sagt, dass die Rolle sie nicht sieht',
+          'EK €/kg' in vt and 'Beispieldaten' in vt and 'derzeit nicht' in vt and a.locator('#rl-detail .rl-v .rv-mark').count() == 1
+          and a.get_attribute('#rl-detail [data-rl-vorschau="bestand.einkaufspreise"]', 'aria-expanded') == 'true', vt[:200])
+    a.locator('#rl-detail .rl-r[data-rl-recht="bestand.einkaufspreise"]').screenshot(path=SH + '/rollen-vorschau-ek.png')
+    a.screenshot(path=SH + '/rollen-desktop-offen.png', full_page=True)
+    arten = sorted({p['vorschau'] for p in KAT.values() if p['vorschau']})
+    fehlt = a.evaluate("arten => arten.filter((x) => !WA.rollenVorschau(x, 'Test', 'boxes').includes('rv-mark'))", arten)
+    check('UI: zu jedem Vorschau-Eintrag im Katalog gibt es ein Bild mit Markierung', not fehlt and len(arten) == 13, fehlt)
+    a.click('#rl-detail [data-rl-vorschau="bestand.einkaufspreise"]'); a.wait_for_selector('#rl-detail figure.rv', state='detached')
+    # HR: Erklärungen, keine Stufe „Ansehen“
+    a.click('.rl-zeile[data-rl-modul="hr"] .rl-z-kopf'); a.wait_for_selector('#rl-detail [data-rl-key="hr.antrag"]')
+    hr_text = a.inner_text('#rl-detail')
+    check('UI: HR-Rechte mit Erklärung und Voraussetzung, andere Module unverändert', a.locator('#rl-detail .rl-hilfe').count() == 4
+          and 'sieht die Gründe' in hr_text and 'Setzt „Eigenen Urlaub und Gleittage beantragen“ voraus' in hr_text, hr_text[:300])
+    check('UI: HR ohne Stufe „Ansehen“, Personalstelle unter „Sensibel“', a.locator('[data-rl-stufe="hr:ansehen"]').count() == 0
+          and a.locator('#rl-detail .rl-abschn.sens [data-rl-key="hr.verwalten"]').count() == 1)
+    a.locator('#rl-detail').screenshot(path=SH + '/rollen-hr-erklaerung.png')
+    check('UI: „Auf einen Blick“: Einkauf „Bearbeiten“, HR ohne Zugang, Zahlen', 'Bearbeiten' in a.inner_text('.rl-kachel[data-rl-oeffnen="einkauf"]')
+          and 'kein zugang' in a.inner_text('.rl-kachel[data-rl-oeffnen="hr"]').lower() and 'von %d Modulen' % len(ZUGANG) in a.inner_text('.rl-blick'))
+    check('UI: Stand zeigt die neue Rolle', 'Neue Rolle' in a.inner_text('#rl-stand'))
+    a.click('[data-rl-akt="speichern"]'); a.wait_for_selector('#view-rollen .rl-item.on[data-rl-wahl]:has-text("Einkauf")')
+    a.wait_for_function("() => document.querySelector('#rl-stand').textContent.includes('Alles gespeichert')")
     ek = next(x for x in A.call('rechte')[1]['rollen'] if x['name'] == 'Einkauf')
-    check('UI: Rolle gespeichert (abgewähltes € bleibt aus)', set(ek['rechte']) == {'einkauf.zugang', 'einkauf.sehen', 'einkauf.melden', 'bestand.zugang', 'crm.umsatz_kg'}, ek)
+    check('UI: Rolle gespeichert (abgewähltes € bleibt aus)', set(ek['rechte']) == {'einkauf.zugang', 'einkauf.sehen', 'einkauf.melden', 'crm.umsatz_kg'}, ek)
+    check('UI: nach dem Speichern alles gespeichert', 'Alles gespeichert' in a.inner_text('#rl-stand'))
     # Wechsel mit ungespeicherten Änderungen fragt nach
     a.fill('#rl-name', 'Einkauf Hamburg')
+    check('UI: ungespeicherte Änderung sichtbar (Stand, Liste)', 'nicht gespeichert' in a.inner_text('#rl-stand') and 'geändert' in a.inner_text('#view-rollen .rl-item.on'))
     a.click('#view-rollen .rl-item:has-text("Lager Nord")'); a.wait_for_selector('#dlg-confirm[open]')
     check('UI: ungespeicherte Änderungen werden nicht stillschweigend verworfen', 'verwerfen' in a.inner_text('#dlg-confirm'))
     a.click('#dlg-confirm [data-v="0"]'); a.wait_for_selector('#dlg-confirm:not([open])', state='attached')
     check('UI: nach Abbrechen bleibt die Rolle gewählt', 'Einkauf' in a.inner_text('#view-rollen .rl-item.on'))
-    a.click('[data-rl-akt="verwerfen"]')
+    a.click('[data-rl-akt="verwerfen"]'); a.wait_for_function("() => document.querySelector('#rl-name').value === 'Einkauf'")
     # Rolle löschen (ohne Mitarbeiter)
     a.click('#view-rollen .rl-item:has-text("Lager Nord")'); a.wait_for_selector('#view-rollen .rl-item.on:has-text("Lager Nord")')
     a.click('[data-rl-akt="loeschen"]'); a.wait_for_selector('#dlg-confirm[open]')
     a.click('#dlg-confirm [data-v="1"]')
     a.wait_for_function("() => !document.querySelector('#view-rollen .rl-liste').textContent.includes('Lager Nord')")
     check('UI: Rolle gelöscht', all(x['name'] != 'Lager Nord' for x in A.call('rechte')[1]['rollen']))
+    # Rollen vergleichen, „Was darf …?“
+    a.click('[data-rl-akt="vergleich"]'); a.wait_for_selector('#view-rollen .rl-mx')
+    rollen_ui = A.call('rechte')[1]['rollen']
+    check('UI: Vergleich mit allen Rollen und Modulen', a.locator('.rl-mx thead th').count() == 1 + len(rollen_ui)
+          and a.locator('.rl-mx tbody tr').count() >= len(ZUGANG)
+          and 'Alle Rechte' in a.inner_text('.rl-mx tbody tr:first-child'))
+    check('UI: nur Kachel offen, darin keine Rechte → „Nur Zugang“ (Standardrolle, Leergut)', a.inner_text('[data-rl-zelle="viewer|leergut"]').strip() == 'Nur Zugang'
+          and a.inner_text('[data-rl-zelle="viewer|bestand"]').strip() == 'Ansehen', a.inner_text('[data-rl-zelle="viewer|leergut"]'))
+    a.select_option('#rl-person', uid['kurt']); a.wait_for_function("() => document.querySelector('.rl-was').textContent.includes('Kurt Kunde hat')")
+    was = a.inner_text('.rl-was')
+    check('UI: „Was darf …?“ nennt Rollen, Ergebnis je Modul und persönliche Ausnahmen', 'Kundenservice' in was and 'Ausnahmen' in was
+          and '+ Einkauf (Fehlmengen) ansehen' in was and a.locator('.rl-mx th.mein').count() == 1, was[:300])
+    a.locator('.rl-vergleich').screenshot(path=SH + '/rollen-vergleich.png')
+    a.click('[data-rl-zelle="viewer|bestand"]'); a.wait_for_selector('#view-rollen .rl-item.on[data-rl-wahl="viewer"]')
+    check('UI: Klick auf eine Zelle öffnet Rolle und Modul', a.is_visible('#rl-detail [data-rl-key="bestand.sehen"]') and a.is_checked('#rl-detail [data-rl-key="bestand.sehen"]'))
+    # breit (ab 1501 px): Rechte des Moduls daneben
+    a.set_viewport_size({'width': 1700, 'height': 1000}); a.wait_for_selector('aside#rl-detail [data-rl-key="bestand.sehen"]')
+    check('UI breit: Rechte des gewählten Moduls in der Seitenleiste, keine aufgeklappte Zeile', a.locator('.rl-zeile-det').count() == 0
+          and 'on' in a.get_attribute('.rl-zeile[data-rl-modul="bestand"]', 'class').split())
+    a.click('.rl-zeile[data-rl-modul="crm"] .rl-z-kopf'); a.wait_for_selector('aside#rl-detail [data-rl-key="crm.sehen"]')
+    check('UI breit: Zeile wählen zeigt deren Rechte daneben', a.is_visible('aside#rl-detail [data-rl-stufe="crm:voll"]'))
+    a.screenshot(path=SH + '/rollen-breit.png', full_page=True)
+    a.set_viewport_size({'width': 1440, 'height': 950}); a.wait_for_selector('aside#rl-detail', state='detached')
     # Administrator: fest, nichts änderbar
     a.click('#view-rollen .rl-item[data-rl-wahl="admin"]'); a.wait_for_selector('#rl-name[disabled]')
-    check('UI: Administrator fest (alles angehakt, gesperrt)', a.locator('#view-rollen [data-rl-key]:not([disabled])').count() == 0 and not a.is_visible('[data-rl-akt="speichern"]'))
+    check('UI: Administrator fest (alles an, gesperrt)', a.locator('#view-rollen [data-rl-key]:not([disabled])').count() == 0
+          and a.locator('#view-rollen [data-rl-stufe]:not([disabled])').count() == 0 and a.locator('#view-rollen [data-rl-key]:not(:checked)').count() == 0
+          and not a.is_visible('[data-rl-akt="speichern"]'))
     # Mitarbeiterdialog: mehrere Rollen
     a.click('#vt-users'); a.wait_for_selector(f'[data-uedit="{uid["paula"]}"]')
     check('UI: Mitarbeiterliste zeigt Rollennamen', 'Lager' in a.inner_text(f'#view-users tr[data-uid="{uid["lars"]}"]'))
@@ -278,8 +362,17 @@ with sync_playwright() as pw:
     # schmal
     a.set_viewport_size({'width': 390, 'height': 844})
     a.click('#vt-rollen'); a.wait_for_selector('#view-rollen .rl-item.on')
+    check('390 px: keine Seitenleiste, Rechte höchstens eines Moduls unter seiner Zeile', a.locator('aside#rl-detail').count() == 0 and a.locator('.rl-zeile-det').count() <= 1)
+    if a.locator('.rl-zeile[data-rl-modul="bestand"].on').count():
+        a.click('.rl-zeile[data-rl-modul="bestand"] .rl-z-kopf'); a.wait_for_selector('.rl-zeile-det', state='detached')
+    a.click('.rl-zeile[data-rl-modul="bestand"] .rl-z-kopf'); a.wait_for_selector('.rl-zeile-det [data-rl-key="bestand.sehen"]')
+    check('390 px: Rechte direkt unter der Zeile', a.get_attribute('.rl-zeile[data-rl-modul="bestand"] .rl-z-kopf', 'aria-expanded') == 'true'
+          and a.locator('.rl-zeile-det .rl-stufen button').count() >= 3)
+    a.click('.rl-zeile-det [data-rl-vorschau="bestand.einkaufspreise"]'); a.wait_for_selector('.rl-zeile-det figure.rv')
     a.screenshot(path=SH + '/rollen-390.png', full_page=True)
     check('390 px: kein waagerechtes Scrollen', a.evaluate('document.documentElement.scrollWidth') <= 390)
+    a.click('.rl-zeile[data-rl-modul="bestand"] .rl-z-kopf'); a.wait_for_selector('.rl-zeile-det', state='detached')
+    check('390 px: erneut tippen klappt zu', a.get_attribute('.rl-zeile[data-rl-modul="bestand"] .rl-z-kopf', 'aria-expanded') == 'false')
     a.set_viewport_size({'width': 1440, 'height': 950}); a.emulate_media(color_scheme='dark')
     a.click('#view-rollen .rl-item:has-text("Personalstelle")'); a.wait_for_selector('#view-rollen .rl-item.on:has-text("Personalstelle")')
     a.screenshot(path=SH + '/rollen-dunkel.png')
