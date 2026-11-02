@@ -4,7 +4,8 @@
 Der Abschnitt wird unverändert aus dem Caddyfile übernommen und vor einer Nachbildung der Anwendung geprüft (geschützte
 Seiten leiten zur Anmeldung um, Schnittstelle mit eigener Angabe, Kartendatei mit eigener Angabe, sonst Dateien):
 - Skripte und Stylesheets mit ?v= ein Jahr („immutable“), auf den Mitarbeiter-Hosts nur im Browser („private“)
-- Schriften, Symbole und Logos ohne ?v= einen Tag, Bibliotheken unter assets/vendor/ und Seiten weiter „no-cache“
+- Schriften, Symbole und Logos ohne ?v= einen Tag, Bibliotheken unter assets/vendor/ und Seiten weiter „private, no-cache“
+  (nie in fremden Zwischenspeichern wie bunny.net – dort nur, was ausdrücklich „public“ ist)
 - nie gespeichert: Weiterleitung zur Anmeldung, 401, 404 – auch wenn die Adresse ?v= trägt
 - eigene Angaben der Anwendung (Kartendatei, Schnittstelle) bleiben unberührt; Nachfrage (304) behält die Regel
 Dazu statisch: welcher Block welchen Zwischenspeicher bekommt (öffentliche Seite „public“, alle anderen „private“,
@@ -54,7 +55,7 @@ def import_von(kopf):
 mitarbeiter = next((k for k in alle if k.startswith("dashboard-stafl.de,")), "")
 soll = {"{$DOMAIN}, www.{$DOMAIN}": ["public"], "test.{$DOMAIN}": ["private"], mitarbeiter: ["private"]}
 for kopf, art in soll.items():
-    check(f"{kopf[:40]}: zwischenspeichern {art[0]}, sonst „no-cache“", import_von(kopf) == art and '?Cache-Control "no-cache"' in alle.get(kopf, ""),
+    check(f"{kopf[:40]}: zwischenspeichern {art[0]}, sonst „private, no-cache“", import_von(kopf) == art and '?Cache-Control "private, no-cache"' in alle.get(kopf, ""),
           import_von(kopf))
 andere = [k for k in alle if not k.startswith("(") and k not in soll and "import zwischenspeichern" in alle[k]]
 check("Platzhalter, Anmeldung und Weiterleitungen ohne Zwischenspeicher-Regeln", not andere, andere)
@@ -99,7 +100,7 @@ for port, art in ((8080, "private"), (8090, "public")):
 :{port} {{
 	encode zstd gzip
 	header {{
-		?Cache-Control "no-cache"
+		?Cache-Control "private, no-cache"
 		-Server
 	}}
 	import zwischenspeichern {art}
@@ -151,14 +152,14 @@ try:
         ("/assets/app.css?v=abc", 200, JAHR, "Stylesheet mit ?v= ein Jahr, nur im Browser"),
         ("/module/qs/qs.js?v=1a2b", 200, JAHR, "Skript einer Modulseite mit ?v= ein Jahr"),
         ("/dashboard/dashboard.js?v=1a2b", 200, JAHR, "Skript des Dashboards mit ?v= ein Jahr"),
-        ("/assets/app.css", 200, "no-cache", "ohne ?v= weiter mit Rückfrage"),
-        ("/assets/vendor/maplibre/x.js", 200, "no-cache", "Bibliothek ohne ?v= (lädt detailkarte.js) mit Rückfrage"),
+        ("/assets/app.css", 200, "private, no-cache", "ohne ?v= weiter mit Rückfrage"),
+        ("/assets/vendor/maplibre/x.js", 200, "private, no-cache", "Bibliothek ohne ?v= (lädt detailkarte.js) mit Rückfrage"),
         ("/assets/fonts/f.woff2", 200, TAG, "Schrift einen Tag"),
         ("/assets/icons/i.png", 200, TAG, "Symbol einen Tag"),
         ("/assets/logo.png", 200, TAG, "Logo einen Tag"),
-        ("/index.html", 200, "no-cache", "Seite mit Rückfrage"),
-        ("/module/geschuetzt/x.js?v=1a2b", 302, "no-cache", "Weiterleitung zur Anmeldung nie gespeichert (auch mit ?v=)"),
-        ("/assets/fehlt.css?v=1a2b", 404, "no-cache", "fehlende Datei nie gespeichert"),
+        ("/index.html", 200, "private, no-cache", "Seite mit Rückfrage"),
+        ("/module/geschuetzt/x.js?v=1a2b", 302, "private, no-cache", "Weiterleitung zur Anmeldung nie gespeichert (auch mit ?v=)"),
+        ("/assets/fehlt.css?v=1a2b", 404, "private, no-cache", "fehlende Datei nie gespeichert"),
         ("/api/geschlossen/x.js?v=1", 401, "no-store", "Schnittstelle ohne Anmeldung (401) behält „no-store“"),
         ("/api/x.js?v=1", 200, "no-store", "Schnittstelle behält „no-store“ (nie als Skript gespeichert)"),
         ("/karte/k.pmtiles", 200, "private, max-age=3600, no-transform", "Kartendatei behält die Angabe der Anwendung"),
@@ -171,8 +172,8 @@ try:
     check("Nachfrage nach einem Tag (304) behält die Speicherzeit", ist[:2] == (304, TAG), ist[:2])
     for pfad, code, cc, text in (("/assets/app.css?v=abc", 200, "public, max-age=31536000, immutable", "Stylesheet mit ?v= ein Jahr"),
                                  ("/assets/fonts/f.woff2", 200, "public, max-age=86400", "Schrift einen Tag"),
-                                 ("/module/geschuetzt/x.js?v=1a2b", 302, "no-cache", "Weiterleitung nie gespeichert"),
-                                 ("/assets/app.css", 200, "no-cache", "ohne ?v= mit Rückfrage")):
+                                 ("/module/geschuetzt/x.js?v=1a2b", 302, "private, no-cache", "Weiterleitung nie gespeichert"),
+                                 ("/assets/app.css", 200, "private, no-cache", "ohne ?v= mit Rückfrage")):
         ist = abruf(OEFF, pfad)
         check(f"Öffentliche Seite {pfad}: {text}", ist[:2] == (code, cc), ist[:2])
 finally:

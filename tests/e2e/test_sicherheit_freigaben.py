@@ -330,11 +330,11 @@ cf = open(os.path.join(REPO, 'Caddyfile'), encoding='utf-8').read()
 bloecke = cf.split('test.{$DOMAIN} {')
 abschnitt = cf.split('(zwischenspeichern) {', 1)[-1].split('\n}\n', 1)[0]
 # Verhalten mit echtem Caddy (Weiterleitungen und Fehler nie gespeichert): tests/deploy/test_zwischenspeichern.py
-check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, nur erfolgreiche Antworten, alles andere weiter „no-cache“ – Echtbetrieb und Testumgebung',
+check('Caddy: versionierte Skripte/Stylesheets (?v=…) ein Jahr zwischenspeichern, nur erfolgreiche Antworten, alles andere weiter „no-cache“ und nie in fremden Zwischenspeichern („private“) – Echtbetrieb und Testumgebung',
       len(bloecke) == 2 and '@versioniert {\n\t\tpath *.js *.css\n\t\tnot path /api/*\n\t\tquery v=*\n\t}' in abschnitt
       and 'Cache-Control "{args[0]}, max-age=31536000, immutable"\n\t\tmatch status 2xx 304' in abschnitt
       and '\timport zwischenspeichern public\n' in bloecke[0] and '\timport zwischenspeichern private\n' in bloecke[1].split('\n}\n', 1)[0]
-      and all('?Cache-Control "no-cache"' in b for b in bloecke))
+      and all('?Cache-Control "private, no-cache"' in b for b in bloecke))
 
 # ---------- Oberfläche: Hinweis im Code-Schritt bei gesperrtem Zugang ----------
 storage_write('sicherheit', {**sec, 'ipEnabled': False, 'lockAfter': 3, 'lockMinutes': 5})

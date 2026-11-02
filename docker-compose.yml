@@ -40,6 +40,9 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       ALLOWED_IPS: ${ALLOWED_IPS:-0.0.0.0/0}
+      # bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“; docs/bunny-cdn.md) – leer = wie bisher ohne CDN
+      CDN_SCHLUESSEL: ${CDN_SCHLUESSEL:-}
+      CDN_PFLICHT: ${CDN_PFLICHT:-0}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data            # HTTPS-Zertifikate

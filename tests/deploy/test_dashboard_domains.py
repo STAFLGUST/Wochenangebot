@@ -35,7 +35,9 @@ assert "@anmeldung path /realms/mitarbeiter/* /resources/*" in login
 handle = re.search(r"\thandle @anmeldung \{\n(.*?)\n\t\}\n", login, re.DOTALL)
 assert handle, "handle @anmeldung fehlt"
 innen = handle.group(1)
-assert innen.rstrip().endswith("reverse_proxy keycloak:8080"), "Keycloak muss das letzte Ziel sein"
+# Keycloak als letztes Ziel; Besucher-IP wie bei der Anwendung (bunny.net, Abschnitt „cdn“), Schlüssel nie weiter
+assert re.search(r"\treverse_proxy keycloak:8080 \{\n\t\t\theader_up X-Forwarded-For \{besucher_ip\}\n\t\t\theader_up -X-Stafl-Cdn\n\t\t\}$", innen.rstrip()), \
+    "Keycloak muss das letzte Ziel sein"
 assert login.count("reverse_proxy") == 1 and "\trespond 404\n" in login
 assert "/admin" not in login and "master" not in login
 # Vor jeder Seite der Anmeldung prüft die Anwendung Firewall, Länder- und IP-Sperre (forward_auth, Aktion anmeldung_pruefen);
