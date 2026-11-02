@@ -4,8 +4,11 @@ declare(strict_types=1);
    Die Bestandsliste aus WinAB (CSV, sonst .xls/.xlsx) liest der Leser des Moduls im Browser (app/assets/stock-core.js). Hier prüft
    der Server die gelesenen Partien (clean_stock, clean_incoming in lib/bestand.php), vergleicht sie mit dem gespeicherten
    Bestand (Vorschau) und ersetzt ihn (Übernahme, mit Protokoll). Die bisherige Aktion stock_import nutzt bestand_speichern().
-   Wird von api/index.php geladen; schreibt nur das eigene Dokument „bestand“. Einkaufspreise erscheinen nie in der Vorschau. */
+   Wird von api/index.php geladen; schreibt nur die eigenen Dokumente „bestand“ und den Bestandsverlauf (module/bestand/verlauf.php).
+   Einkaufspreise erscheinen nie in der Vorschau. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
+
+require_once __DIR__ . '/verlauf.php';
 
 function import_arten_bestand(): array
 {
@@ -24,6 +27,9 @@ function bestand_speichern(?string $date, string $source, array $articles, array
     foreach ($articles as $a) $total += $a['kg'];
     $st = ['date' => $date, 'source' => $source, 'importedAt' => now(), 'importedBy' => $me['name'], 'articles' => $articles, 'incoming' => $incoming];
     store_write('bestand', $st);
+    // Tagesstand für den Bestandsverlauf (Controlling); ein Fehler dort hält die Übernahme des Bestands nicht auf
+    try { bestand_verlauf_schreiben($date, $articles, $incoming, $source, $me); }
+    catch (Throwable $e) { error_log('Bestandsverlauf nicht gespeichert: ' . $e->getMessage()); }
     audit('stock', 'Bestand übernommen: ' . ($st['source'] ?: 'Datei') . ($date ? ' – Stand ' . date('d.m.Y', strtotime($date)) : '') . ', ' . count($articles) . ' Artikel, ' . number_format($total, 2, ',', '.') . ' kg eingelagert, ' . count($incoming) . ' erwartete Zugänge');
     return $st;
 }

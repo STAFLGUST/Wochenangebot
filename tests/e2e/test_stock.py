@@ -331,6 +331,34 @@ with sync_playwright() as p:
           and sorted(x['code'] for x in b['articles']) == ['00001', '10601', '10823', '60100'] and hu['kg'] == 1782.5 and hu['mhd'] == '2026-11-18'
           and hu['lots'][0]['marke'] == 'Weide Nord' and hu['lots'][0]['ek'] == 10.75 and len(b['incoming']) == 2, (b['source'], b['date'], [x['code'] for x in b['articles']]))
     check('CSV: Bezeichnung mit Anführungszeichen und Umlaut in der Liste', 'Testhüfte "Premium", frisch' in a.inner_text('.stab'))
+    # ── Bestandsverlauf: Tagesstand je Übernahme (Daten des Bestands, Auswertung später im Controlling) ──
+    def doc_(name):
+        raw = storage_raw(name)
+        return json.loads(raw.split('\n', 1)[1] if raw and raw.startswith('<?php') else raw) if raw else None
+    vz = doc_('bestand-verlauf') or {}
+    t2 = (vz.get('tage') or {}).get('2026-11-02', {})
+    check('Verlauf: Verzeichnis mit Tagesständen (Excel 16.10., CSV 02.11.), Summen und Herkunft', '2026-10-16' in vz.get('tage', {}) and t2.get('kg') == 2652.3
+          and t2.get('zugang') == 620 and t2.get('artikel') == 4 and t2.get('partien') == 5 and t2.get('ekWert') == 26687.4 and t2.get('ekKg') == 2652.3
+          and t2.get('quelle') == 'bestand.csv' and t2.get('von') and list(vz['tage']) == sorted(vz['tage']), t2)
+    tag = doc_('bestand-verlauf/2026-11-02') or {}
+    ar = tag.get('artikel', {})
+    check('Verlauf: Tagesstand je Artikel [kg, Zugang, Lagerwert zum EK, kg mit EK, Partien] und Bezeichnung', tag.get('felder') == ['kg', 'zugang', 'ekWert', 'ekKg', 'partien']
+          and ar.get('10601') == [1782.5, 0, 19246.4, 1782.5, 2] and ar.get('10823') == [41.6, 120, 482.56, 41.6, 1] and ar.get('60100', [0, 0])[1] == 500
+          and ar.get('00001', [None])[0] == 27.95 and tag.get('namen', {}).get('10601') == 'Testhüfte "Premium", frisch', ar)
+    xls_tag = doc_('bestand-verlauf/2026-10-16') or {}
+    check('Verlauf: früherer Tag bleibt erhalten (Excel-Liste vom 16.10.)', len(xls_tag.get('artikel', {})) >= 283 and xls_tag.get('quelle') == 'bestand.xls', (len(xls_tag.get('artikel', {})), xls_tag.get('quelle')))
+    VA = Client('198.51.100.77'); VA.call('login', {'username': 'admin', 'password': 'Sicheres-Passwort-1'})
+    st_, _ = VA.call('stock_import', {'date': '2026-11-02', 'source': 'nochmal.csv', 'articles': [{'code': '10601', 'name': 'Testhüfte', 'kg': 10, 'mhd': None, 'mhdKg': None,
+                     'lots': [{'lot': 'P1', 'kg': 10, 'ek': 9.5, 'mhd': None, 'arrival': None, 'kolli': 1, 'marke': ''}]}], 'incoming': []})
+    vz2 = doc_('bestand-verlauf') or {}
+    check('Verlauf: erneute Übernahme für denselben Tag ersetzt den Tagesstand (kein zweiter Eintrag)', st_ == 200 and len(vz2.get('tage', {})) == len(vz.get('tage', {}))
+          and vz2['tage']['2026-11-02']['kg'] == 10 and vz2['tage']['2026-11-02']['quelle'] == 'nochmal.csv' and vz2['tage']['2026-11-02']['ekWert'] == 95
+          and (doc_('bestand-verlauf/2026-11-02') or {}).get('artikel') == {'10601': [10, 0, 95, 10, 1]}, vz2.get('tage', {}).get('2026-11-02'))
+    st_, _ = VA.call('stock_import', {'date': '2026-11-03', 'source': 'morgen.csv', 'articles': [{'code': '10601', 'name': 'Testhüfte', 'kg': 12, 'mhd': None, 'mhdKg': None,
+                     'lots': [{'lot': 'P1', 'kg': 12, 'mhd': None, 'arrival': None, 'kolli': 1, 'marke': ''}]}], 'incoming': []})
+    vz3 = doc_('bestand-verlauf') or {}
+    check('Verlauf: neuer Tag kommt dazu, ohne EK-Preis Lagerwert 0', st_ == 200 and len(vz3['tage']) == len(vz2['tage']) + 1 and vz3['tage']['2026-11-03']['kg'] == 12
+          and vz3['tage']['2026-11-03']['ekWert'] == 0 and vz3['tage']['2026-11-03']['ekKg'] == 0)
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')
