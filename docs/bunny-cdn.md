@@ -92,7 +92,9 @@ Datei: bunny → Zone → „Purge Cache“.
 3. **Zertifikate bei bunny** (damit HTTPS ab der ersten Minute gilt):
    - Mit DNS-Prüfung **vor** der Umstellung, ohne Ausfall: Je Adresse liefert bunny einen TXT-Eintrag
      `_acme-challenge.<adresse>` (API `requestExternalDnsCertificate`). Diese Einträge bei Hostinger anlegen und danach
-     abschließen (`completeExternalDnsCertificate`). TXT-Einträge ändern nichts am Betrieb.
+     abschließen (`completeExternalDnsCertificate`). TXT-Einträge ändern nichts am Betrieb. Nach der Umstellung (Schritt 4)
+     die `_acme-challenge`-Einträge wieder löschen: bunny verlängert die Zertifikate danach selbst über HTTP (in der API
+     steht je Adresse `CertificateProvisionType: 1` = HTTP-01).
    - Oder direkt nach der Umstellung einer Adresse: Zone → Hostnames → „Activate SSL“. Bis dahin gibt es für wenige Minuten
      einen Zertifikatsfehler; wegen HSTS kommt man dann nicht auf die Seite. Diesen Weg nur für Platzhalter und Test nehmen.
 4. **DNS bei Hostinger umstellen** – Adresse für Adresse, die TTL vorher auf 300 s senken:
@@ -108,7 +110,10 @@ Datei: bunny → Zone → „Purge Cache“.
    | `angebot-stafl.de` (Hauptdomain, `@`) | CNAME `@` (ALIAS) | `stafl-kunde.b-cdn.net` |
 
    Den bisherigen A-Eintrag der Adresse dabei ersetzen. **MX, SPF/DKIM/DMARC und sonstige TXT-Einträge (E-Mail) nicht
-   ändern.**
+   ändern.** Vorher die Zone sichern (Hostinger legt bei jeder Änderung zusätzlich eine Momentaufnahme an).
+   Die Unteradressen zeigen bisher per CNAME auf die Hauptdomain – deshalb erst alle Unteradressen umstellen, die
+   Hauptdomain zuletzt. Per Hostinger-API: erst den A-Eintrag löschen, dann sofort den ALIAS setzen (ein CNAME/ALIAS
+   neben einem A-Eintrag ist ungültig, auch wenn die Prüfung der API ihn annimmt).
 5. **Je Adresse prüfen:**
    - `curl -sI https://<adresse>/` → `server: BunnyCDN-…` und `stafl-cdn: erkannt`
    - Sicherheit → Lagebild bzw. Verwaltung → Sicherheit: „Ihre Adresse“ ist die eigene, nicht die von bunny
@@ -121,11 +126,16 @@ Datei: bunny → Zone → „Purge Cache“.
    `docker compose up -d caddy`. Gegenprobe von einem anderen Rechner:
    `curl -sk --resolve angebot-stafl.de:443:<Server-IP> https://angebot-stafl.de/` → 403.
 8. **bunny-API-Schlüssel zurücksetzen** (Account → API → Reset), falls er für die Einrichtung weitergegeben wurde. Das
-   bunny-Konto braucht eine Zwei-Faktor-Anmeldung: Wer das Konto hat, kann den gesamten Verkehr umleiten.
+   bunny-Konto braucht eine Zwei-Faktor-Anmeldung: Wer das Konto hat, kann den gesamten Verkehr umleiten. Ebenso einen
+   für die Umstellung angelegten **Hostinger-API-Token löschen** (hPanel → Profil → API): Er erlaubt DNS-Änderungen.
+
+Hinweis: Bei der 503-Platzhalterseite setzt bunny `Cache-Control: no-cache` statt `no-store` (bunny speichert Fehlerseiten
+nicht). Bei allen anderen Antworten bleibt der Kopf des Servers unverändert (geprüft am 02.11.2026).
 
 ## 4. Rückfall
 
-- **Sofort:** Die DNS-Einträge wieder als A-Eintrag auf `<Server-IP>` setzen (TTL 300 s, wirkt in Minuten) und
+- **Sofort:** Die DNS-Einträge wieder als A-Eintrag auf `<Server-IP>` setzen (TTL 300 s, wirkt in Minuten; alternativ die
+  Hostinger-Momentaufnahme von vor der Umstellung wiederherstellen) und
   `CDN_PFLICHT=0` setzen, dann `docker compose up -d caddy`.
 - **Abschnitt `cdn` außer Kraft:** `CDN_SCHLUESSEL=` leeren, dann `docker compose up -d caddy`. Der Server verhält sich dann wie
   vor der Umstellung.
