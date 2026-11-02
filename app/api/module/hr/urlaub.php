@@ -8,8 +8,13 @@ declare(strict_types=1);
    - Genehmigung durch Personen mit dem zuweisbaren Recht hr.genehmigen (Inhaber 25.10.2026, eigene Rolle), nicht mehr
      automatisch durch die Personalstelle (hr.verwalten). Niemand entscheidet über den eigenen Antrag und niemand trägt
      sich selbst Abwesenheiten ein – auch Administratoren nicht (Vier-Augen-Prinzip, hr_eigen).
-     Mitarbeiter beantragen nur Urlaub.
-   - Krank (K), Gleittag (G) und freie Tage (X) trägt nur die Personalstelle ein.
+     Mitarbeiter beantragen Urlaub und – soweit ihr Gleittage-Konto reicht – Gleittage (Inhaber 02.11.2026).
+   - Krank (K) und freie Tage (X) trägt nur die Personalstelle ein, Gleittage (G) auch sie.
+   - Gleittage-Konto (Inhaber 02.11.2026): die Personalstelle gewährt Mitarbeitern Gleittage als Zusatztage (Anzahl, Grund;
+     gespeichert je Person in hr-personal „gleittage“, Rücknahme als Storno). Konto je Jahr: Übertrag + gewährt − genommen −
+     geplant = Rest; der Rest geht unbegrenzt ins Folgejahr (kein Verfall). Das Konto beginnt mit der ersten Gewährung –
+     Gleittage davor zählen nicht. Ein Gleittag-Antrag braucht genug verfügbaren Rest; die Personalstelle trägt auch darüber
+     hinaus ein (dann Hinweis).
    - Resturlaub wird ins Folgejahr übertragen und verfällt am Verfallstag (Standard 31.03., einstellbar in Verwaltung →
      Urlaub, hr_uebertrag_bis), soweit er bis dahin nicht genommen ist.
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
@@ -115,8 +120,8 @@ function hr_person_norm(array $p): array
     return ['id' => (string)($p['id'] ?? ''), 'vorname' => (string)($p['vorname'] ?? ''), 'nachname' => (string)($p['nachname'] ?? ''),
             'abteilung' => (string)($p['abteilung'] ?? ''), 'pos' => (int)($p['pos'] ?? 0), 'nutzer' => isset($p['nutzer']) && $p['nutzer'] !== '' ? (string)$p['nutzer'] : null,
             'arbeitstage' => $at ?: [1, 2, 3, 4, 5], 'aktiv' => !array_key_exists('aktiv', $p) || (bool)$p['aktiv'], 'jahre' => $jahre,
-            'personalnummer' => trim((string)($p['personalnummer'] ?? '')),
-            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'geaendert']));
+            'personalnummer' => trim((string)($p['personalnummer'] ?? '')), 'gleittage' => hr_gleit_norm($p['gleittage'] ?? []),
+            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'geaendert']));
 }
 function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
 
@@ -461,6 +466,7 @@ function hr_offene_antraege(array $personal, array $abw, array $me): array
         $aus = hr_eintrag_aus($e, $p, $freiJe[$e['person']] ??= hr_freie_tage($abw['eintraege'], $e['person']));
         $kj = (int)substr($e['von'], 0, 4);
         $aus['konto'] = hr_konto($p, $abw['eintraege'], $kj);
+        if ($e['art'] === 'G') $aus['gleitKonto'] = hr_gleit_konto($p, $abw['eintraege'], $kj);   // Gleittag-Antrag: Rest des Gleittage-Kontos
         // Tage des Antrags im Jahr des Kontos (über den Jahreswechsel zählt der Rest im Folgejahr)
         $aus['tageImJahr'] = count(hr_tage($p, $e['von'], $e['bis'], "$kj-01-01", "$kj-12-31", $freiJe[$e['person']]));
         $aus['vertretungName'] = $e['vertretung'] && isset($idx[$e['vertretung']]) ? hr_name($idx[$e['vertretung']]) : null;
@@ -542,6 +548,122 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
             'rest' => $rest, 'verfuegbar' => $rest - $u['beantragt'], 'rest_jahresende' => $restEnde];
 }
 
+/* ---------------- Gleittage-Konto (Inhaber 02.11.2026) ----------------
+   Gewährung: {id, tage (halbe Tage, −50 … 50, nicht 0), grund, am (JJJJ-MM-TT), t, von, vonId, storniert: null|{t, by, grund}}.
+   Negative Gewährungen sind Korrekturen. Stornierte zählen nicht, bleiben aber sichtbar. */
+const HR_GLEIT_MAX = 50;            // höchstens so viele Tage je Gewährung (auch als Korrektur)
+const HR_GLEIT_GEWAEHRUNGEN = 500;  // je Person
+
+function hr_gleit_norm($l): array
+{
+    $out = [];
+    foreach (is_array($l) ? $l : [] as $g) {
+        if (!is_array($g) || !is_numeric($g['tage'] ?? null) || !hr_datum($g['am'] ?? null)) continue;
+        $out[] = ['id' => (string)($g['id'] ?? ''), 'tage' => (float)$g['tage'], 'grund' => (string)($g['grund'] ?? ''), 'am' => (string)$g['am'],
+                  't' => $g['t'] ?? null, 'von' => (string)($g['von'] ?? ''), 'vonId' => (string)($g['vonId'] ?? ''),
+                  'storniert' => is_array($g['storniert'] ?? null) ? $g['storniert'] : null] + $g;
+    }
+    return $out;
+}
+
+/* Wirksame Gewährungen und Beginn des Kontos (Tag der ersten wirksamen Gewährung) */
+function hr_gleit_wirksam(array $p): array { return array_values(array_filter($p['gleittage'] ?? [], function ($g) { return $g['storniert'] === null; })); }
+function hr_gleit_beginn(array $p): ?string
+{
+    $b = null;
+    foreach (hr_gleit_wirksam($p) as $g) if ($b === null || $g['am'] < $b) $b = $g['am'];
+    return $b;
+}
+
+/* Gleittage-Konto einer Person für ein Jahr: Übertrag (Rest des Vorjahres, ohne Verfall) + gewährt − genommen − geplant = Rest;
+   verfügbar = Rest − beantragt. Gezählt werden genehmigte bzw. beantragte Gleittage (G) an Arbeitstagen ab Beginn des Kontos. */
+function hr_gleit_konto(array $p, array $eintraege, int $jahr, ?string $heute = null): array
+{
+    $heute = $heute ?? hr_heute();
+    $beginn = hr_gleit_beginn($p);
+    $leer = ['jahr' => $jahr, 'aktiv' => false, 'beginn' => $beginn, 'uebertrag' => 0.0, 'gewaehrt' => 0.0, 'genommen' => 0, 'geplant' => 0, 'beantragt' => 0,
+             'rest' => 0.0, 'verfuegbar' => 0.0];
+    if ($beginn === null || $jahr < (int)substr($beginn, 0, 4)) return $leer;
+    $wirksam = hr_gleit_wirksam($p);
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    $rest = 0.0; $k = $leer;
+    for ($j = (int)substr($beginn, 0, 4); $j <= $jahr; $j++) {
+        $k = ['jahr' => $j, 'aktiv' => true, 'beginn' => $beginn, 'uebertrag' => $rest, 'gewaehrt' => 0.0, 'genommen' => 0, 'geplant' => 0, 'beantragt' => 0];
+        foreach ($wirksam as $g) if ((int)substr($g['am'], 0, 4) === $j) $k['gewaehrt'] += $g['tage'];
+        $ab = max($beginn, "$j-01-01");
+        foreach ($eintraege as $e) {
+            if ($e['person'] !== $p['id'] || ($e['art'] ?? '') !== 'G' || !in_array($e['status'], HR_AKTIV, true)) continue;
+            foreach (hr_tage($p, $e['von'], $e['bis'], $ab, "$j-12-31", $frei) as $d) {
+                if ($e['status'] === 'beantragt') $k['beantragt']++;
+                else $k[$d <= $heute ? 'genommen' : 'geplant']++;
+            }
+        }
+        $rest = $k['uebertrag'] + $k['gewaehrt'] - $k['genommen'] - $k['geplant'];
+        $k['rest'] = $rest; $k['verfuegbar'] = $rest - $k['beantragt'];
+    }
+    return $k;
+}
+
+/* Gewährungen für die Ausgabe (neueste zuerst); $voll: mit Kennung der gewährenden Person (nur Personalstelle) */
+function hr_gleit_aus(array $p, bool $voll = false): array
+{
+    $l = array_map(function ($g) use ($voll) {
+        $o = ['id' => $g['id'], 'tage' => $g['tage'], 'grund' => $g['grund'], 'am' => $g['am'], 'von' => $g['von'],
+              'storniert' => $g['storniert'] ? ['t' => $g['storniert']['t'] ?? null, 'by' => (string)($g['storniert']['by'] ?? ''), 'grund' => (string)($g['storniert']['grund'] ?? '')] : null];
+        return $voll ? $o + ['t' => $g['t']] : $o;
+    }, array_reverse($p['gleittage'] ?? []));   // gespeichert in der Reihenfolge der Gewährung: neueste zuerst
+    usort($l, function ($a, $b) { return $b['am'] <=> $a['am']; });     // stabil: am selben Tag bleibt die neueste vorn
+    return $l;
+}
+
+/* Gleittage gewähren oder eine Gewährung stornieren (Personalstelle, nie für sich selbst). $b: person, tage, grund – oder
+   person, id, stornieren, grund. Gibt die geänderte Person (Rohdaten) zurück. */
+function hr_gleittage_setzen(array $b, array $me): array
+{
+    return with_lock('hr-personal', function () use ($b, $me) {
+        $personal = hr_personal();
+        $p = hr_personen_index($personal)[(string)($b['person'] ?? '')] ?? null;
+        if (!$p) fail('Bitte einen Mitarbeiter wählen.', 422);
+        if (hr_eigene_person($personal, $me, $p['id'])) fail('Eigene Gleittage gewährt eine andere Person der Personalstelle.', 403);
+        if (!empty($p['altbestand']) || $p['nutzer'] === null) fail('Gleittage lassen sich nur Mitarbeitern im Urlaubsplan gewähren.', 422);
+        $roh = hr_personal_roh();
+        $i = null;
+        foreach ($roh['personen'] as $k => $e) if ($e['nutzer'] === $p['nutzer']) { $i = $k; break; }
+        $jetzt = now();
+        if (!empty($b['stornieren'])) {
+            if ($i === null) fail('Gewährung nicht gefunden.', 404);
+            $id = (string)($b['id'] ?? '');
+            foreach ($roh['personen'][$i]['gleittage'] as &$g) {
+                if ($g['id'] !== $id) continue;
+                if ($g['storniert'] !== null) fail('Diese Gewährung ist bereits storniert.', 409);
+                $g['storniert'] = ['t' => $jetzt, 'by' => $me['name'], 'byId' => $me['id'], 'grund' => s($b['grund'] ?? '', 200) ?? ''];
+                unset($g);
+                hr_personal_schreiben($roh);
+                return [$roh['personen'][$i], 'storniert'];
+            }
+            fail('Gewährung nicht gefunden.', 404);
+        }
+        if (!$p['aktiv']) fail('Gleittage lassen sich nur Mitarbeitern im Urlaubsplan gewähren.', 422);
+        $t = $b['tage'] ?? null;
+        if (!is_numeric($t) || (float)$t == 0.0 || abs((float)$t) > HR_GLEIT_MAX || fmod((float)$t * 2, 1.0) != 0.0)
+            fail('Bitte die Anzahl in ganzen oder halben Tagen angeben (höchstens ' . HR_GLEIT_MAX . ', negativ zum Korrigieren).', 422);
+        $grund = trim(s($b['grund'] ?? '', 200) ?? '');
+        if ((float)$t < 0 && $grund === '') fail('Bitte bei einer Korrektur (negative Anzahl) einen Grund angeben.', 422);
+        if ($i === null) {
+            $users = users_load();
+            $ui = user_find($users, (string)$p['nutzer']);
+            if ($ui === null) fail('Mitarbeiter nicht gefunden.', 404);
+            hr_angaben_setzen($roh, (string)$p['nutzer'], [], $users[$ui]);
+            $i = array_key_last($roh['personen']);
+        }
+        if (count($roh['personen'][$i]['gleittage']) >= HR_GLEIT_GEWAEHRUNGEN) fail('Zu viele Gewährungen für diesen Mitarbeiter.', 422);
+        $roh['personen'][$i]['gleittage'][] = ['id' => hr_neue_id('g'), 'tage' => (float)$t, 'grund' => $grund, 'am' => hr_heute(), 't' => $jetzt,
+                                               'von' => $me['name'], 'vonId' => $me['id'], 'storniert' => null];
+        hr_personal_schreiben($roh);
+        return [$roh['personen'][$i], 'gewährt'];   // die neue Gewährung ist die letzte der Liste
+    });
+}
+
 /* ---------------- Urlaubsübersicht (Recht hr.uebersicht oder hr.verwalten) ----------------
    Je Mitarbeiter im Urlaubsplan nur Summen eines Jahres: Urlaubskonto (hr_konto) und genehmigte Arbeitstage je Art
    (Krank, Gleittag). Keine Zeiträume, Notizen, Gründe oder Entscheidungen – Krankheitstage sind Gesundheitsdaten und
@@ -556,6 +678,11 @@ function hr_tage_je_art(array $p, array $eintraege, int $jahr): array
     }
     return $n;
 }
+/* Gleittage-Konto in der Übersicht: gewährt (mit Übertrag) und Rest – ohne Konto beides leer */
+function hr_gleit_summen(array $k): array
+{
+    return ['gleitGewaehrt' => $k['aktiv'] ? $k['uebertrag'] + $k['gewaehrt'] : null, 'gleitRest' => $k['aktiv'] ? $k['rest'] : null];
+}
 function hr_uebersicht(int $jahr): array
 {
     $abw = hr_abwesenheiten()['eintraege'];
@@ -566,7 +693,7 @@ function hr_uebersicht(int $jahr): array
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'],
                      'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'],
                      'genommen' => $k['genommen'], 'geplant' => $k['geplant'], 'beantragt' => $k['beantragt'], 'rest' => $k['rest'],
-                     'krank' => $t['K'], 'gleittage' => $t['G']];
+                     'krank' => $t['K'], 'gleittage' => $t['G']] + hr_gleit_summen(hr_gleit_konto($p, $abw, $jahr));
     }
     return $zeilen;
 }

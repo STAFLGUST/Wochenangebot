@@ -13,7 +13,7 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [REWE](rewe.md) | `rewe` | 5 | 127 |
 | [Qualitätssicherung](qs.md) | `qs` | 9 | 249 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [HR](hr.md) | `hr` | 9 | 143 |
+| [HR](hr.md) | `hr` | 9 | 156 |
 | [Marketing](marketing.md) | `marketing` | 4 | 76 |
 | [Controlling](controlling.md) | `controlling` | 15 | 213 |
 | [Verwaltung](verwaltung.md) | `verwaltung` | 17 | 195 |

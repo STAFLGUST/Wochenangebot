@@ -75,3 +75,8 @@ schreibend = true
 [aktion.hr_antraege_save]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+# Gleittage gewähren oder eine Gewährung stornieren (Personalstelle; Gleittage-Konto, Inhaber 02.11.2026)
+[aktion.hr_gleittage_save]
+oberflaeche = "hr.intern"
+schreibend = true
