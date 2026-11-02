@@ -21,7 +21,7 @@
   /* Nur für die Anzeige des Menüpunkts (die Rechte prüft der Server je Importart, GR-103): Rechte der registrierten
      Importarten. Der Test „importzentrale“ prüft, dass die Liste zu import_arten passt. */
   const RECHTE = ['kunden.bearbeiten', 'stammdaten.bearbeiten', 'bestand.importieren', 'preisverlauf.bearbeiten', 'angebot.bearbeiten', 'hr.verwalten',
-    'controlling.umsatz_importieren'];
+    'controlling.umsatz_importieren', 'controlling.arbeitszeit_importieren'];
   W.importSichtbar = () => RECHTE.some((p) => may(p));
 
   const maxBytes = (art) => (art.maxMb || 30) * 1024 * 1024;   // je Importart (Server: maxMb, Standard 30 MB)

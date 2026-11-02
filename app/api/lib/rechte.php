@@ -68,6 +68,10 @@ const PERMS = [
     // Lagerwert zum EK nur mit eigenem Recht und zusätzlich bestand.einkaufspreise (GR-008)
     'controlling.bestand_sehen'     => ['g' => 'Controlling', 'l' => 'Bestandsverlauf ansehen: Bestand in kg je Tag, Entwicklung, Reichweite und Umschlag je Artikel und Gruppe (aus den hochgeladenen Bestandslisten)', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.zugang']],
     'controlling.bestand_ek'        => ['g' => 'Controlling', 'l' => 'Bestandsverlauf: Lagerwert zum Einkaufspreis sehen (nur zusammen mit „Einkaufspreise (EK) … ansehen“, GR-008)', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.bestand_sehen']],
+    // Bereich Arbeitszeit (02.11.2026): Zeitbericht der Zeiterfassung (Personaldaten mit Namen) – Soll, Ist, Saldo je Mitarbeiter
+    // und Abteilung, Stempelfehler; ohne Standardrollen, sensibel (einzeln freigeben)
+    'controlling.arbeitszeit_sehen' => ['g' => 'Controlling', 'l' => 'Arbeitszeit ansehen: Soll, Ist und Saldo je Mitarbeiter und Abteilung, Stempelfehler (aus dem importierten Zeitbericht der Zeiterfassung, Personaldaten mit Namen)', 'k' => 'sehen', 'd' => [], 'r' => ['controlling.zugang']],
+    'controlling.arbeitszeit_importieren' => ['g' => 'Controlling', 'l' => 'Zeitbericht der Zeiterfassung importieren (Verwaltung → Import)', 'k' => 'machen', 'd' => [], 'r' => ['controlling.arbeitszeit_sehen']],
     // Modul Leergut (29.10.2026): ohne Standardrollen – Administratoren vergeben die Rechte (Salden und Werte gegenüber Partnern)
     'leergut.sehen'            => ['g' => 'Leergut', 'l' => 'Leergutkonten ansehen: Salden, Bewegungen, Abstimmungen mit Fristen, Dachser-Abschreibungen, Bilanz, CSV', 'k' => 'sehen', 'd' => [], 'r' => []],
     'leergut.bearbeiten'       => ['g' => 'Leergut', 'l' => 'Leergut buchen: Bewegungen buchen und stornieren, Auszüge erfassen und bestätigen/widersprechen, Abschreibungen und Inventur pflegen', 'k' => 'machen', 'd' => [], 'r' => ['leergut.sehen']],
@@ -96,7 +100,8 @@ const PERMS = [
 const PERMS_STUFE_VOLL = ['angebot.veroeffentlichen', 'angebote.loeschen', 'wochenangebot.senden', 'sonderposten.senden', 'leergut.verwalten',
     'crm.master', 'rewe.alle', 'rewe.verwalten', 'rewe.exportieren', 'qs.freigeben', 'qs.verwalten', 'hr.genehmigen', 'hr.uebersicht',
     'marketing.freigeben', 'marketing.verwalten'];
-const PERMS_SENSIBEL = ['bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'hr.verwalten',
+const PERMS_SENSIBEL = ['bestand.einkaufspreise', 'crm.exportieren', 'controlling.umsatz_ek', 'controlling.bestand_ek', 'controlling.arbeitszeit_sehen',
+    'controlling.arbeitszeit_importieren', 'hr.verwalten',
     'kunden.bearbeiten', 'sicherheit.notfall'];
 const PERMS_VORSCHAU = ['bestand.sehen' => 'bestand', 'bestand.einkaufspreise' => 'ek', 'bestand.importieren' => 'import', 'bestand.mhd_senden' => 'mhd',
     'angebot.veroeffentlichen' => 'veroeffentlichen', 'crm.umsatz_euro' => 'umsatz', 'crm.exportieren' => 'export', 'controlling.umsatz_ek' => 'spanne',

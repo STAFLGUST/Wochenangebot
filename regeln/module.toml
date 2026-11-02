@@ -388,7 +388,7 @@ hinweise = [
 [[modul]]
 id = "controlling"
 name = "Controlling"
-beschreibung = "Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik; geplant OP-Konten, Liquidität"
+beschreibung = "Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik, Bestandsverlauf, Arbeitszeit; geplant OP-Konten, Liquidität"
 icon = "chart"
 reihenfolge = 76
 dashboard = true
@@ -399,6 +399,7 @@ pfade = ["regeln/aktionen/controlling.toml", "app/api/aktionen/controlling.php",
 pfade_geplant = []
 zugang_rollen = []   # Finanzdaten: Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter)
 hinweise = [
+  "Bereich Arbeitszeit (Auftrag des Inhabers 02.11.2026): Zeitbericht der Zeiterfassung (.xlsx) über die Importzentrale, Importart „zeitbericht“ (Eigentümer Controlling, Dokumente controlling-arbeitszeit, vertraulich); Auswertung Soll, Ist und Saldo je Mitarbeiter (mit Namen) und Abteilung mit den Werten der Zeiterfassung; Tage mit Stempelfehlern (Kommen oder Gehen fehlt, Kommen = Gehen, unplausibel lange, ohne Stempel und ohne Abwesenheit) werden markiert, aufgelistet und nicht in den bereinigten Saldo gerechnet – nie geschätzt. Abwesenheitsgründe (Urlaub, Krankheit) werden nicht gespeichert, nur die Stunden. Rechte controlling.arbeitszeit_sehen und _importieren (sensibel, ohne Standardrollen).",
   "Bereich Bestandsverlauf (Auftrag des Inhabers 02.11.2026): der Bestand speichert bei jedem Hochladen der Bestandsliste einen Tagesstand je Artikel (bestand-verlauf, Eigentümer Bestand); das Controlling liest ihn nur über bestand_verlauf_index()/bestand_verlauf_tag() und wertet aus: Entwicklung über die Zeit, Reichweite und Umschlag (mit den eigenen Umsatzdaten), je Artikel und Gruppe. Rechte controlling.bestand_sehen, Lagerwert zum EK nur mit controlling.bestand_ek und bestand.einkaufspreise.",
   "Aufbau in Bereichen (Auftrag des Inhabers 28.10.2026): erster Bereich Umsatzstatistik (aus dem Modulbausatz-Modul „Gust 1“), weitere folgen (OP-Konten, Liquidität …). Je Bereich eigene Datei module/controlling/<bereich>.php, Aktionen controlling_<bereich>_…, Rechte controlling.<bereich>_sehen/_bearbeiten, Dokumente controlling-<bereich>; Eintrag in CONTROLLING_BEREICHE.",
   "Liest Daten anderer Module nur über deren Schnittstellen (GR-101: vertreter_load/gruppen_load, customers_load und Artikelstammdaten der Verwaltung, nur lesend); Einkaufspreise und Margen nur mit eigenem Recht (controlling.umsatz_ek, zusätzlich bestand.einkaufspreise nach GR-008).",
