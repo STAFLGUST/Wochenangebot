@@ -137,6 +137,15 @@ auf Modulseiten am Handy (≤ 480 px) nur das Bildzeichen. **Zurück-Knopf** `.s
 Rand weich aus, solange in diese Richtung noch etwas folgt. **Hell/Dunkel am Konto** (`theme.js`, Aktion `theme_save`,
 Feld `theme` am Mitarbeiter): jeder Host hat eigenen Browser-Speicher (GR-108), daher übernimmt jede Seite nach dem Status
 die Wahl des Kontos (`STAFL_THEME.konto(user, csrf, api)`), und jeder Wechsel über den Knopf der Seite wird am Konto gespeichert.
+**Einfache Darstellung** (02.11.2026, für Remote-Desktop/VM ohne Grafikkarte): `theme.js` setzt vor dem ersten Zeichnen
+`data-darstellung="einfach"` an `<html>` – nach der Wahl am Konto (Feld `darstellung`: `einfach` | `effekte` | leer =
+automatisch; Status `user.darstellung`, `theme_save {darstellung}`) oder automatisch, wenn „Transparenz reduzieren“ an ist
+oder der Browser ohne Grafikkarte zeichnet (WebGL fehlt, nur mit großem Leistungsverlust oder als Software-Renderer;
+Ergebnis je Host 7 Tage im Browser, unter Automatisierung keine Erkennung). `app.css` schaltet dann für alle Seiten
+Unschärfe (`backdrop-filter`), Hintergrund-Farbflächen (`.db-bg`, `.ctl-bg` …, `body.kseite::before`), Übergänge und
+Animationen ab, `admin.css` macht das Glas des Eingabebereichs deckend. Schnittstelle: `STAFL_DARSTELLUNG` (einfach,
+automatisch, wahl, konto, setzen), Umschalten mit Speichern über `STAFL_THEME.darstellung(einfach)`; Knopf (Blitz) im Dashboard.
+Neue Seiten mit eigener Hintergrund-Farbfläche tragen deren Klasse in die Liste in `app.css` ein.
 
 Schriften liegen in `app/assets/fonts/` (Geist, Geist Mono; Lizenz daneben), eingebunden in `app.css`. Kein Build-Schritt. Skripte und Stylesheets werden in den HTML-Seiten **ohne** `?v=` eingebunden; Versionsnummern und Prüfliste der Dateiprüfung erzeugt der Server beim Einspielen (`deploy/bereitstellen.py`). Die CI prüft, dass alle Einbindungen existieren und keine Nummern bzw. keine Prüfliste im Repository stehen (`werkzeuge/asset_versionen.py`, `werkzeuge/integritaet.py`); `--zeigen` zeigt, was der Server erzeugen würde.
 

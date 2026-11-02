@@ -7,6 +7,9 @@ Verwaltung, Bestand, HR, CRM, Abmeldeseite, Hinweis „Kein Zugang“): je hell/
 - derselbe Zurück-Knopf „Dashboard“ (Maße, Rundung, Schrift, Symbol) auf jeder Modulseite, Ziel = Dashboard,
 - Hell/Dunkel gilt für das Konto auf jedem Host: die Wahl wird am Mitarbeiterkonto gespeichert (Aktion theme_save) und
   von jeder Seite nach der Anmeldung übernommen.
+- Einfache Darstellung für Remote-Desktop (02.11.2026): automatisch, wenn der Browser ohne Grafikkarte zeichnet (unter
+  Automatisierung nur mit abgeschaltetem navigator.webdriver), Knopf im Dashboard, Wahl am Konto (theme_save „darstellung“)
+  gilt auf jedem Host; dann keine Unschärfe, keine Farbflächen, keine Übergänge.
 Bildschirmfotos: tests/.ergebnisse/einheit-*.png (Bestandsaufnahme für die Durchsicht).
 """
 import json
@@ -156,6 +159,50 @@ with sync_playwright() as pw:
     pg.wait_for_function("() => document.documentElement.dataset.theme === 'light'")
     check('CRM übernimmt Hell vom Konto', pg.get_attribute('#crm-theme', 'aria-label') == 'Dunkles Design einschalten')
     ctx.close()
+    # Einfache Darstellung (Remote-Desktop, 02.11.2026)
+    OHNE_GLAS = "() => [...document.querySelectorAll('*')].filter((e) => { const s = getComputedStyle(e); return s.backdropFilter && s.backdropFilter !== 'none'; }).length"
+    ctx, pg = neue_seite(1280, False)
+    pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
+    check('Einfache Darstellung: unter Automatisierung keine Erkennung – Glas wie bisher', pg.get_attribute('html', 'data-darstellung') is None
+          and pg.evaluate(OHNE_GLAS) > 0 and pg.get_attribute('#db-darstellung', 'aria-pressed') == 'false' and pg.is_hidden('#db-darstellung-hinweis'))
+    with pg.expect_response(lambda r: 'action=theme_save' in r.url) as antwort:
+        pg.click('#db-darstellung')
+    st = A.call('status')[1]['user']
+    check('Dashboard: Knopf schaltet die einfache Darstellung ein und speichert sie am Konto (Hell/Dunkel bleibt)', antwort.value.status == 200
+          and pg.get_attribute('html', 'data-darstellung') == 'einfach' and pg.get_attribute('#db-darstellung', 'aria-pressed') == 'true'
+          and st.get('darstellung') == 'einfach' and st.get('theme') == 'light', st)
+    check('Einfach: keine Unschärfe, keine Farbflächen, keine Übergänge, Hinweis „Ihre Wahl“', pg.evaluate(OHNE_GLAS) == 0
+          and pg.evaluate("getComputedStyle(document.querySelector('.db-bg')).display") == 'none'
+          and pg.evaluate("getComputedStyle(document.querySelector('.db-tile')).transitionDuration") == '0s' and 'Ihre Wahl' in pg.inner_text('#db-darstellung-hinweis'))
+    pg.screenshot(path=f'{SH}/einheit-dashboard-einfach-1280.png')
+    ctx.close()
+    ctx, pg = neue_seite(1280, False)   # frischer Browser: Wahl kommt vom Konto
+    pg.wait_for_function("() => document.documentElement.dataset.darstellung === 'einfach'")
+    check('Eingabebereich übernimmt die einfache Darstellung vom Konto (ohne Glas, ohne Farbflächen)', pg.evaluate(OHNE_GLAS) == 0
+          and pg.evaluate("getComputedStyle(document.body, '::before').display") == 'none')
+    pg.evaluate('localStorage.clear()')
+    pg.goto(B + '/module/hr/'); pg.wait_for_selector('#hr-app:not([hidden])')
+    pg.wait_for_function("() => document.documentElement.dataset.darstellung === 'einfach'")
+    check('HR übernimmt sie vom Konto', pg.evaluate(OHNE_GLAS) == 0 and pg.evaluate("getComputedStyle(document.querySelector('.hr-bg')).display") == 'none')
+    pg.screenshot(path=f'{SH}/einheit-hr-einfach-1280.png')
+    pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
+    with pg.expect_response(lambda r: 'action=theme_save' in r.url):
+        pg.click('#db-darstellung')
+    check('Ausschalten: entspricht der Erkennung dieses Geräts → wieder „automatisch“', pg.get_attribute('html', 'data-darstellung') is None
+          and A.call('status')[1]['user'].get('darstellung') == '')
+    ctx.close()
+    ctx, pg = neue_seite(1280, False)
+    ctx.add_init_script("Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false })")   # wie ein normaler Browser
+    pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
+    check('Automatisch: Browser ohne Grafikkarte (Software-Darstellung) → einfach, mit Hinweis', pg.get_attribute('html', 'data-darstellung') == 'einfach'
+          and 'automatisch' in pg.inner_text('#db-darstellung-hinweis') and '"software":true' in (pg.evaluate("localStorage.getItem('stafl.grafik')") or ''))
+    with pg.expect_response(lambda r: 'action=theme_save' in r.url):
+        pg.click('#db-darstellung')
+    check('Automatisch erkannt, aber ausgeschaltet → „Effekte“ am Konto', pg.get_attribute('html', 'data-darstellung') is None
+          and A.call('status')[1]['user'].get('darstellung') == 'effekte' and pg.evaluate(OHNE_GLAS) > 0)
+    ctx.close()
+    check('Einfache Darstellung: ungültiger Wert und leere Anfrage abgewiesen', A.call('theme_save', {'darstellung': 'bunt'})[0] == 422 and A.call('theme_save', {})[0] == 422)
+    check('Zurück auf „automatisch“', A.call('theme_save', {'darstellung': ''})[0] == 200 and A.call('status')[1]['user'].get('darstellung') == '')
     check('Ungültige Darstellung abgewiesen', A.call('theme_save', {'theme': 'pink'})[0] == 422)
     check('Ohne Anmeldung nicht speicherbar', Client('198.51.100.77').call('theme_save', {'theme': 'dark'})[0] in (401, 403))
     check('Zurück auf „wie das Gerät“', A.call('theme_save', {'theme': ''})[0] == 200 and A.call('status')[1]['user'].get('theme') == '')

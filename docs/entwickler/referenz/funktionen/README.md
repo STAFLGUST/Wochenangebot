@@ -18,6 +18,6 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Controlling](controlling.md) | `controlling` | 15 | 213 |
 | [Verwaltung](verwaltung.md) | `verwaltung` | 17 | 195 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 105 |
-| [Dashboard](dashboard.md) | `dashboard` | 2 | 25 |
+| [Dashboard](dashboard.md) | `dashboard` | 2 | 26 |
 | [App (iOS/Android)](mobile.md) | `mobile` | 2 | 8 |
-| [Plattformkern](plattform.md) | `plattform` | 101 | 898 |
+| [Plattformkern](plattform.md) | `plattform` | 101 | 903 |

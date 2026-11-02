@@ -95,6 +95,9 @@ body.db .db-kopf .brand-logo { height: 28px; width: auto; object-fit: initial; }
 .db-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .db-rund { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--db-aus); color: var(--db-text); cursor: pointer; transition: background .15s; }
 .db-rund:hover, .db-abmelden:hover { background: var(--db-aus-hover); }
+.db-rund[aria-pressed="true"] { background: var(--db-akzent); color: #fff; }   /* einfache Darstellung an */
+.db-darstellung-hinweis { margin: 6px 0 0; font-size: 14px; color: var(--db-muted); }
+.db-darstellung-hinweis[hidden] { display: none; }
 .db-user { display: flex; align-items: center; gap: 10px; height: 40px; min-width: 0; padding: 0 14px 0 4px; border-radius: 999px; background: var(--db-aus); font-size: 14px; font-weight: 500; }
 .db-user[hidden] { display: none; }
 .db-initialen { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--db-akzent); color: #fff; font-size: 13px; font-weight: 600; letter-spacing: .02em; }

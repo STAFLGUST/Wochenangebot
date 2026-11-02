@@ -1,7 +1,61 @@
 /* Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, wegen Content-Security-Policy) */
+
+/* Einfache Darstellung (Auftrag des Inhabers 02.11.2026): für Remote-Desktop (RDP) und virtuelle Maschinen ohne Grafikkarte.
+   Dort zeichnet der Browser mit dem Prozessor – Unschärfe (backdrop-filter, „Glas“), weiche Farbflächen und Bewegungen kosten
+   bei jedem Scrollen ein Vielfaches und lassen sich über RDP schlecht übertragen. data-darstellung="einfach" an <html> schaltet
+   sie für alle Seiten ab (app.css, admin.css). Vor dem ersten Zeichnen:
+     - Wahl am Konto (STAFL_THEME.konto aus dem Status: user.darstellung 'einfach' | 'effekte' | '' = automatisch), je Host im
+       Browser gemerkt, damit die Seite nicht erst mit Glas erscheint;
+     - sonst automatisch: Systemeinstellung „Transparenz reduzieren“ oder der Browser zeichnet ohne Grafikkarte (WebGL nur in
+       Software bzw. gar nicht). Die Erkennung läuft je Host höchstens einmal in 7 Tagen; unter Automatisierung
+       (navigator.webdriver, z. B. die Tests) nicht – dort gilt die Wahl am Konto. */
+(function () {
+  var root = document.documentElement, K_WAHL = 'stafl.darstellung', K_GRAFIK = 'stafl.grafik', GUELTIG = 7 * 864e5;
+  function lesen(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function schreiben(k, v) { try { if (v === null || v === '') localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ohne Speicher */ } }
+  /* Zeichnet der Browser ohne Grafikkarte? (WebGL nicht verfügbar, nur mit großem Leistungsverlust oder als Software-Renderer) */
+  function softwareGrafik() {
+    try {
+      var c = document.createElement('canvas');
+      var gl = c.getContext('webgl', { failIfMajorPerformanceCaveat: true }) || c.getContext('experimental-webgl', { failIfMajorPerformanceCaveat: true });
+      if (!gl) return true;
+      var info = gl.getExtension('WEBGL_debug_renderer_info');
+      var name = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || '') : '';
+      var weg = gl.getExtension('WEBGL_lose_context');
+      if (weg) weg.loseContext();
+      return /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(name);
+    } catch (e) { return false; }
+  }
+  var auto = null;
+  function automatisch() {
+    if (auto !== null) return auto;
+    try { if (window.matchMedia && matchMedia('(prefers-reduced-transparency: reduce)').matches) return (auto = true); } catch (e) { /* alte Browser */ }
+    if (navigator.webdriver) return (auto = false);
+    var g = lesen(K_GRAFIK);
+    if (!g || typeof g.software !== 'boolean' || !(Date.now() - (g.t || 0) < GUELTIG)) { g = { software: softwareGrafik(), t: Date.now() }; schreiben(K_GRAFIK, g); }
+    return (auto = g.software);
+  }
+  var wahl = lesen(K_WAHL);
+  if (wahl !== 'einfach' && wahl !== 'effekte') wahl = '';
+  function anwenden() {
+    var einfach = wahl === 'einfach' || (wahl === '' && automatisch());
+    if (einfach) root.setAttribute('data-darstellung', 'einfach'); else root.removeAttribute('data-darstellung');
+    try { document.dispatchEvent(new CustomEvent('stafl-darstellung', { detail: { einfach: einfach, wahl: wahl } })); } catch (e) { /* alte Browser */ }
+  }
+  anwenden();
+  window.STAFL_DARSTELLUNG = {
+    einfach: function () { return root.getAttribute('data-darstellung') === 'einfach'; },
+    automatisch: automatisch,
+    wahl: function () { return wahl; },
+    /* Wahl vom Konto übernehmen (ohne zu speichern) */
+    konto: function (w) { w = w === 'einfach' || w === 'effekte' ? w : ''; if (w === wahl) return; wahl = w; schreiben(K_WAHL, wahl); anwenden(); },
+    /* Umschalten auf diesem Gerät: entspricht die neue Darstellung der Erkennung, gilt wieder „automatisch“ (''). Gibt die Wahl zurück. */
+    setzen: function (einfach) { wahl = !!einfach === automatisch() ? '' : (einfach ? 'einfach' : 'effekte'); schreiben(K_WAHL, wahl); anwenden(); return wahl; },
+  };
+})();
 try { var t = localStorage.getItem('wochenangebot.theme'); if (t) { t = JSON.parse(t); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } } catch (e) { /* ignorieren */ }
 
-/* Hell/Dunkel gilt für das Mitarbeiterkonto auf jedem Host der Plattform (Dashboard, Angebot, Verwaltung, Bestand, HR, CRM).
+/* Hell/Dunkel (und die einfache Darstellung) gilt für das Mitarbeiterkonto auf jedem Host der Plattform (Dashboard, Angebot, Verwaltung, Bestand, HR, CRM).
    Jeder Host hat eigenen Browser-Speicher (eigene Subdomain, keine gemeinsamen Cookies – GR-108); deshalb steht die Wahl am
    Konto (Aktion theme_save) und jede Seite übernimmt sie nach der Anmeldung aus dem Status:
      STAFL_THEME.konto(user, csrf, api)   – nach dem Status-Abruf (user.theme: 'light' | 'dark' | '' = wie das Gerät)
@@ -38,12 +92,25 @@ try { var t = localStorage.getItem('wochenangebot.theme'); if (t) { t = JSON.par
       if (!user) return;
       var wert = user.theme === 'dark' || user.theme === 'light' ? user.theme : '';
       ziel = { csrf: csrf || '', api: api || '../api/', theme: wert };
+      if (window.STAFL_DARSTELLUNG) window.STAFL_DARSTELLUNG.konto(user.darstellung);   // einfache Darstellung am Konto
       // Konto ohne eigene Wahl: bisherige Wahl dieses Browsers übernehmen und am Konto speichern (einmalig)
       var hier = root.getAttribute('data-theme') || '';
       if (!wert && hier) { ziel.theme = hier; merken(hier); return; }
       if (wert !== hier) setzen(wert);
     },
     setzen: setzen,
+    /* Einfache Darstellung umschalten und am Konto speichern (gilt dann auf jedem Host); gibt die Wahl zurück */
+    darstellung: function (einfach) {
+      if (!window.STAFL_DARSTELLUNG) return '';
+      var w = window.STAFL_DARSTELLUNG.setzen(einfach);
+      if (ziel && ziel.csrf) {
+        try {
+          fetch(ziel.api + '?action=theme_save', { method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': ziel.csrf }, body: JSON.stringify({ darstellung: w }) }).catch(function () { /* bleibt in diesem Browser */ });
+        } catch (e) { /* ignorieren */ }
+      }
+      return w;
+    },
   };
 })();
 

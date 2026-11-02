@@ -1753,7 +1753,10 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
    Spezifität des Selektors) */
 @media screen and (prefers-reduced-transparency: reduce) {
   :root body.adm.adm.adm { --glas: var(--surface); --glas-kopf: var(--surface); --glas-karte: var(--surface); --glas-stark: var(--surface-3); --glas-fenster: var(--surface); --glas-filter: none; --feld: var(--surface); }
-}
+}/* Einfache Darstellung (Remote-Desktop, theme.js): deckende Flächen ohne Unschärfe und ohne Farbflächen im Grund – wie oben */
+:root[data-darstellung="einfach"] body.adm.adm.adm { --glas: var(--surface); --glas-kopf: var(--surface); --glas-karte: var(--surface); --glas-stark: var(--surface-3); --glas-fenster: var(--surface); --glas-filter: none; --feld: var(--surface); }
+:root[data-darstellung="einfach"] body.adm::before { display: none !important; }
+
 
 @media screen {
   /* Grund: drei sehr weiche Farbflächen, fest hinter dem Inhalt (kein Rot) */

@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-101 Dateien, 898 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+101 Dateien, 903 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -692,6 +692,11 @@ _STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Ser
 
 _Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, wegen Content-Security-Policy)_
 
+- `lesen(k)`
+- `schreiben(k, v)`
+- `softwareGrafik()` – Zeichnet der Browser ohne Grafikkarte?
+- `automatisch()`
+- `anwenden()`
 - `lokal(wert)`
 - `setzen(wert)`
 - `merken(wert)`

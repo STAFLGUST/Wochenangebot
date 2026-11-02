@@ -324,21 +324,36 @@ switch ($action) {
             respond(oidc_modus() ? ['ok' => true, 'abmelden' => oidc_abmelde_adresse()] : ['ok' => true]);
         }
 
-        /* Hell/Dunkel am eigenen Konto (Anzeige-Einstellung): gilt auf jedem Host der Plattform, weil jede Seite sie nach der
-           Anmeldung aus dem Status übernimmt (theme.js). '' = wie das Gerät. Nur der eigene Datensatz, kein Protokoll nötig. */
+        /* Anzeige-Einstellungen am eigenen Konto: gelten auf jedem Host der Plattform, weil jede Seite sie nach der Anmeldung
+           aus dem Status übernimmt (theme.js). „theme“: Hell/Dunkel ('' = wie das Gerät); „darstellung“ (02.11.2026): einfache
+           Darstellung für Remote-Desktop ('einfach', 'effekte', '' = automatisch erkennen). Je Aufruf eines oder beide Felder.
+           Nur der eigene Datensatz, kein Protokoll nötig. */
         case 'theme_save': {
             $me = require_auth(true);
-            $t = body()['theme'] ?? null;
-            if (!is_string($t) || !in_array($t, ['light', 'dark', ''], true)) fail('Ungültige Darstellung.', 422);
-            with_lock('nutzer', function () use ($me, $t) {
+            $b = body();
+            $felder = [];
+            if (array_key_exists('theme', $b)) {
+                if (!is_string($b['theme']) || !in_array($b['theme'], ['light', 'dark', ''], true)) fail('Ungültige Darstellung.', 422);
+                $felder['theme'] = $b['theme'];
+            }
+            if (array_key_exists('darstellung', $b)) {
+                if (!is_string($b['darstellung']) || !in_array($b['darstellung'], ['einfach', 'effekte', ''], true)) fail('Ungültige Darstellung.', 422);
+                $felder['darstellung'] = $b['darstellung'];
+            }
+            if (!$felder) fail('Ungültige Darstellung.', 422);
+            with_lock('nutzer', function () use ($me, $felder) {
                 $users = users_load();
                 $i = user_find($users, $me['id']);
                 if ($i === null) fail('Bitte erneut anmelden.', 401);
-                if (($users[$i]['theme'] ?? '') === $t) return;
-                if ($t === '') unset($users[$i]['theme']); else $users[$i]['theme'] = $t;
-                users_save($users);
+                $neu = false;
+                foreach ($felder as $k => $v) {
+                    if (($users[$i][$k] ?? '') === $v) continue;
+                    if ($v === '') unset($users[$i][$k]); else $users[$i][$k] = $v;
+                    $neu = true;
+                }
+                if ($neu) users_save($users);
             });
-            respond(['ok' => true, 'theme' => $t]);
+            respond(['ok' => true] + $felder);
         }
         case 'change_password': {
             $me = current_user();
