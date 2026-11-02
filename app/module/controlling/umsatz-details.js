@@ -179,15 +179,15 @@
   function csv() {
     const d = D.d, zahl = F.zahl, name = d.name.replace(/^\S+ – /, '');
     if (d.dim === 'kunde' && D.reiter === 'lieferungen') {
-      F.csvLaden(`Lieferungen ${name} ${d.anfrage.von} bis ${d.anfrage.bis}.csv`, [['Liefertag', 'Positionen', 'Menge', 'Umsatz €'],
+      F.csvLaden(`Lieferungen ${name} ${d.anfrage.von} bis ${d.anfrage.bis}.csv`, [['Liefertag', 'Positionen', 'Menge kg', 'Umsatz €'],
         ...(d.tage || []).map((t) => [F.tag(t.tag), zahl(t.werte.pos, 0), zahl(t.werte.menge / 1000, 3), zahl(t.werte.umsatz / 100, 2)])]);
       return;
     }
     const l = geordnet(d.dim === 'kunde' ? d.artikel : d.kunden);
     const was = d.dim === 'kunde' ? 'Artikel' : 'Kunde';
     F.csvLaden(`${d.dim === 'kunde' ? 'Artikel von' : d.dim === 'artikel' ? 'Käufer von' : 'Kunden von'} ${name} ${d.anfrage.von} bis ${d.anfrage.bis}.csv`,
-      [[was, 'Nummer', 'Umsatz €', ...(d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Positionen', 'Zuletzt', ...(d.ek ? ['DB €', 'Spanne %'] : []),
-        'Ø Preis €', ...(d.dim === 'kunde' ? ['Ø Preis aller Kunden €'] : d.dim === 'artikel' ? ['± Ø aller Käufer %'] : [])],
+      [[was, 'Nummer', 'Umsatz €', ...(d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge kg', 'Positionen', 'Zuletzt', ...(d.ek ? ['DB €', 'Spanne %'] : []),
+        'Ø Preis €/kg', ...(d.dim === 'kunde' ? ['Ø Preis aller Kunden €/kg'] : d.dim === 'artikel' ? ['± Ø aller Käufer %'] : [])],
         ...l.map((z) => [z.name, z.nr, zahl(z.werte.umsatz / 100, 2), ...(d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3), zahl(z.werte.pos, 0),
           z.zuletzt ? F.tag(z.zuletzt) : '', ...(d.ek ? [zahl(F.db(z.werte) / 100, 2), F.spanne(z.werte) === null ? '' : zahl(F.spanne(z.werte) * 100, 1)] : []),
           F.preisWert(z.werte) === null ? '' : zahl(F.preisWert(z.werte) * 10, 2),

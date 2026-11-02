@@ -732,6 +732,11 @@ with sync_playwright() as p:
               and pg.is_visible('#ctl-u-auswertung') and pg.is_hidden('#ctl-u-uebersicht'))
         kpi = pg.text_content('#ctl-ua-kpis')
         check(f'{breite}px {thema}: Kennzahlen mit DB und Spanne (Administrator)', 'Umsatz' in kpi and 'DB' in (kpi) and 'Spanne' in kpi and 'Rohmarge' not in kpi and 'zum Vorjahr' in kpi and 'Pp' in kpi, kpi)
+        karten = pg.eval_on_selector_all('#ctl-ua-kpis .ctl-kpi', 'es => es.map((e) => e.innerText.replace(/\\s+/g, " "))')
+        check(f'{breite}px {thema}: Menge immer in kg, Ø Preis in €/kg (Kennzahlen, Hinweis unter der Liste, Monatsverlauf)', 'Menge in kg, Ø Preis in € je kg' in pg.text_content('#ctl-ua-fussnote')
+              and 'Mengeneinheit' not in pg.text_content('#ctl-ua-fussnote') and pg.text_content('#ctl-ua-kennzahl option[value="menge"]') == 'Menge (kg)')
+        check(f'{breite}px {thema}: vier Kennzahlen – Umsatz, Menge mit Ø Preis, DB mit Spanne, Kunden', len(karten) == 4 and karten[0].lower().startswith('umsatz')
+              and 'Ø Preis' in karten[1] and ' kg' in karten[1] and '€/kg' in karten[1] and 'Spanne' in karten[2] and 'Pp' in karten[2] and karten[3].lower().startswith('kunden') and 'Artikel' in karten[3], karten)
         check(f'{breite}px {thema}: Stand der Daten (kurz, Herkunft im Hinweis)', f'Daten vom {ERSTER:%d.%m.%Y} bis {LETZTER:%d.%m.%Y} · Import' in pg.inner_text('#ctl-ua-stand')
               and 'Warenwirtschaft' in (pg.get_attribute('#ctl-ua-stand', 'title') or ''), pg.inner_text('#ctl-ua-stand'))
         check(f'{breite}px {thema}: einfacher Kopf – eine Bereichsleiste nur bei mehreren Bereichen, Überschrift mit Reitern in einer Zeile', pg.is_hidden('#ctl-bereiche')
@@ -915,6 +920,9 @@ with sync_playwright() as p:
         check(f'{breite}px {thema}: Artikel-Pop-up – Ø Preis je Käufer mit Abweichung vom Ø, sortierbar nach Ø Preis (günstigster zuerst)', ist[:len(soll)] == soll
               and 'Ø Preis' in pg.text_content('#ctl-ua-dialog .ctl-ud-zeile.kopf') and pg.locator('#ctl-ua-dialog .ctl-ud-preisabw').count() >= 3
               and 'Ø Preis' in pg.text_content('#ctl-ua-dialog .ctl-ud-kpis'), (ist, soll))
+        check(f'{breite}px {thema}: Artikel-Pop-up – Menge in kg, Ø Preis in €/kg', ' kg' in pg.text_content('#ctl-ua-dialog .ctl-ud-kpis')
+              and pg.eval_on_selector_all('#ctl-ua-dialog button.ctl-ud-zeile .ctl-ud-preis', 'es => es.length > 0 && es.every((e) => e.textContent.includes("€/kg"))')
+              and pg.eval_on_selector_all('#ctl-ua-dialog button.ctl-ud-zeile [data-label="Menge"]', 'es => es.length > 0 && es.every((e) => /kg$/.test(e.textContent.trim()))'))
         if breite == 390:
             pg.screenshot(path=SH + f'/controlling-umsatz-preisspiegel-{breite}-{thema}.png')
         elif breite == 1280:
@@ -980,6 +988,7 @@ with sync_playwright() as p:
     pg.click('#ctl-ua-ansicht [data-ansicht="tabelle"]'); pg.wait_for_selector('#ctl-ua-zeilen tr[data-zeile]')
     kopf = pg.text_content('#ctl-ua-kopf')
     check('nur ansehen: ohne DB und Spanne (Tabelle, Kennzahlen, Auswahl der Rangliste)', 'DB' not in kopf and 'Spanne' not in kopf and 'DB' not in pg.text_content('#ctl-ua-kpis') and 'Spanne' not in pg.text_content('#ctl-ua-kpis')
+          and pg.locator('#ctl-ua-kpis .ctl-kpi').count() == 3 and 'Ø Preis' in pg.text_content('#ctl-ua-kpis')
           and pg.locator('#ctl-ua-rangnach [data-rang]').count() == 2 and pg.locator('#ctl-ua-rangnach [data-rang="db"]').count() == 0, kopf)
     pg.click('#ctl-ua-zeilen tr[data-zeile="10"]')
     t = offen('kundengruppe')

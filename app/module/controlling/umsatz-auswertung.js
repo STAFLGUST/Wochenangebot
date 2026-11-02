@@ -26,11 +26,12 @@
   const euro = (cent) => cent === null || cent === undefined ? '–' : new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cent / 100);
   const euroKachel = (cent) => (cent !== null && Math.abs(cent) >= 1e10 ? NF(2).format(cent / 1e8) + ' Mio. €' : euro(cent));   // ab 100 Mio. € kurz (voller Wert im Hinweis)
   const euroKurz = (cent) => Math.abs(cent) >= 1e8 ? NF(1).format(cent / 1e8) + ' Mio. €' : Math.abs(cent) >= 1e5 ? NF(0).format(cent / 1e5) + ' Tsd. €' : euro(cent);
-  const menge = (milli) => milli === null || milli === undefined ? '–' : NF(Math.abs(milli) < 100000 ? 1 : 0).format(milli / 1000);
+  /* Menge ist immer kg (Auftrag des Inhabers 02.11.2026): Werte mit Einheit, Ø Preis in € je kg */
+  const menge = (milli) => milli === null || milli === undefined ? '–' : NF(Math.abs(milli) < 100000 ? 1 : 0).format(milli / 1000) + ' kg';
   const ganz = (n) => n === null || n === undefined ? '–' : NF(0).format(n);
   const pct = (q) => q === null || !Number.isFinite(q) ? '–' : new Intl.NumberFormat('de-DE', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(q);
   const quote = (a, b) => (b ? a / b : null);
-  const preis = (w) => (w && w.menge ? euro(Math.round((w.umsatz / w.menge) * 1000)) : '–');   // € je Mengeneinheit
+  const preis = (w) => (w && w.menge ? euro(Math.round((w.umsatz / w.menge) * 1000)) + '/kg' : '–');   // € je kg
   const db = (w) => (w && 'ek' in w ? w.umsatzEk - w.ek : null);
   const spanne = (w) => (w && 'ek' in w ? quote(w.umsatzEk - w.ek, w.umsatzEk) : null);
   const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -57,7 +58,7 @@
     db: { name: 'DB', ek: true, wert: (w) => db(w), text: (v) => euro(v), kurz: (v) => euroKurz(v), delta: (w, vj) => deltaHtml(db(w), vj ? db(vj) : 0) },
     spanne: { name: 'Spanne', ek: true, wert: (w) => spanne(w), text: (v) => pct(v), kurz: (v) => pct(v), delta: (w, vj) => ppHtml(spanne(w), vj ? spanne(vj) : null) },
   };
-  /* Ø Preis (Cent je Tausendstel; × 1000 = Cent je Mengeneinheit) – zusätzliche Sortierung nur in den Pop-ups (die Rangliste der
+  /* Ø Preis (Cent je Gramm; × 1000 = Cent je kg) – zusätzliche Sortierung nur in den Pop-ups (die Rangliste der
      Seite ordnet der Server nach UMSATZ_RANG) */
   const preisWert = (w) => (w && w.menge ? w.umsatz / w.menge : null);
   const RANG_POPUP = {
@@ -96,7 +97,7 @@
     const W = Math.max(mon.length * 34, Math.round(platz)), unten = 24, oben = 10, hoehe = H - unten - oben, breite = W / mon.length;   // so breit wie die Fläche; bei vielen Monaten waagerecht blättern
     const y = (v) => oben + hoehe - (Math.max(0, v) / max) * hoehe;
     const fmt = k === 'menge' ? menge : euroKurz;
-    let svg = `<svg class="ctl-ua-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${k === 'menge' ? 'Menge' : k === 'db' ? 'Deckungsbeitrag' : 'Umsatz'} je Monat${mitVj ? ' mit Vorjahr' : ''}">`;
+    let svg = `<svg class="ctl-ua-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${k === 'menge' ? 'Menge in kg' : k === 'db' ? 'Deckungsbeitrag' : 'Umsatz'} je Monat${mitVj ? ' mit Vorjahr' : ''}">`;
     mon.forEach((m, i) => {
       const x = i * breite, b = Math.min(56, Math.max(6, breite * 0.56)), v = werte[i];
       svg += `<g><title>${esc(monatsname(m.monat))}: ${esc(fmt(v))}${vj[i] !== null ? ` · Vorjahr ${esc(fmt(vj[i]))}` : ''}</title>`
@@ -189,7 +190,7 @@
           <p class="ctl-fussnote" id="ctl-ua-tabelle-hinweis"></p><p class="ctl-fussnote" id="ctl-ua-fussnote"></p></section>
         <aside class="ctl-ua-seite">
           <section class="ctl-panel ctl-glas ctl-monatspanel"><div class="ctl-panelkopf"><div><h2>Monatsverlauf</h2><p class="ctl-hilfe" id="ctl-ua-verlauf-hinweis"></p></div>
-            <div class="ctl-diagrammfilter"><label class="ctl-sr" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge</option>${S.g.rechte.ek ? '<option value="db">DB</option>' : ''}</select></div></div>
+            <div class="ctl-diagrammfilter"><label class="ctl-sr" for="ctl-ua-kennzahl">Kennzahl</label><select id="ctl-ua-kennzahl"><option value="umsatz">Umsatz</option><option value="menge">Menge (kg)</option>${S.g.rechte.ek ? '<option value="db">DB</option>' : ''}</select></div></div>
             <div class="ctl-diagramm ctl-ua-diagramm" id="ctl-ua-diagramm"></div></section>
           <section class="ctl-panel ctl-glas ctl-ua-pausen" id="ctl-ua-pausen-panel" aria-labelledby="ctl-ua-pausen-titel" hidden><div class="ctl-panelkopf"><div><h2 id="ctl-ua-pausen-titel">Bestellpausen <span class="ctl-ua-zahl" id="ctl-ua-pausen-zahl" hidden></span></h2>
             <p class="ctl-hilfe" id="ctl-ua-pausen-hinweis"></p></div></div><div id="ctl-ua-pausen"></div></section>
@@ -348,19 +349,19 @@
     if (!v) return '';
     return `Vorjahr: ${monatsname(v.von)} – ${monatsname(v.bis)}${v.bisTag ? ` (bis ${v.bisTag}. wie im laufenden Monat)` : ''}`;
   }
+  /* Vier Kennzahlen (ohne EK-Recht drei): Umsatz, Menge mit Ø Preis, DB mit Spanne, Kunden – Einzelheiten im Hinweis */
   function zeichneKennzahlen() {
     const s = S.d.summe, v = S.d.summeVj;
     const k = [
       ['Umsatz', euroKachel(s.umsatz), v ? deltaHtml(s.umsatz, v.umsatz) + ' zum Vorjahr' : '', euro(s.umsatz)],
-      ['Menge', menge(s.menge), v ? deltaHtml(s.menge, v.menge) + ' zum Vorjahr' : ''],
-      ['Ø Preis', preis(s), v ? `Vorjahr ${esc(preis(v))}` : ''],
-      ['Kunden', ganz(s.kunden), `${ganz(s.artikel)} Artikel`, `${ganz(s.kunden)} Kunden · ${ganz(s.artikel)} Artikel · ${ganz(s.pos)} Positionen`],
+      ['Menge', menge(s.menge), [v ? deltaHtml(s.menge, v.menge) : '', `Ø Preis ${esc(preis(s))}`].filter(Boolean).join(' · '),
+        `${menge(s.menge)} · Ø Preis ${preis(s)}${v ? ` (Vorjahr ${preis(v)})` : ''}`],
     ];
     if (S.d.ek) {
-      k.push(['DB', euroKachel(db(s)), v ? deltaHtml(db(s), db(v)) + ' zum Vorjahr' : '', euro(db(s))]);
-      k.push(['Spanne', pct(spanne(s)), v ? ppHtml(spanne(s), spanne(v)) + ' zum Vorjahr' : `EK für ${esc(pct(quote(s.umsatzEk, s.umsatz)))} des Umsatzes`,
-        `${pct(spanne(s))} – Einkaufspreise liegen für ${pct(quote(s.umsatzEk, s.umsatz))} des Umsatzes vor`]);
+      k.push(['DB', euroKachel(db(s)), [v ? deltaHtml(db(s), db(v)) : '', `Spanne ${esc(pct(spanne(s)))}${v ? ' ' + ppHtml(spanne(s), spanne(v)) : ''}`].filter(Boolean).join(' · '),
+        `${euro(db(s))} · Spanne ${pct(spanne(s))} – Einkaufspreise liegen für ${pct(quote(s.umsatzEk, s.umsatz))} des Umsatzes vor`]);
     }
+    k.push(['Kunden', ganz(s.kunden), `${ganz(s.artikel)} Artikel`, `${ganz(s.kunden)} Kunden · ${ganz(s.artikel)} Artikel · ${ganz(s.pos)} Positionen`]);
     $('#ctl-ua-kpis', S.box).classList.toggle('mit-ek', !!S.d.ek);
     $('#ctl-ua-kpis', S.box).innerHTML = k.map(([n, w, sub, voll]) => `<div class="ctl-kpi ctl-glas"><span>${esc(n)}</span><b title="${esc(voll || w)}">${esc(w)}</b><small>${sub}</small></div>`).join('');
   }
@@ -490,7 +491,7 @@
     panel.hidden = !z.length;
     if (!z.length) return;
     const plus = z.filter((y) => y.d > 0).sort((a, b) => b.d - a.d).slice(0, 3), minus = z.filter((y) => y.d < 0).sort((a, b) => a.d - b.d).slice(0, 3);
-    $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · ${k.name}${rang === 'menge' ? '' : ' in Euro'}${S.d.anfrage.nur ? ` · nur ${S.d.anfrage.nur}` : ''}`;
+    $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · ${k.name}${rang === 'menge' ? ' in kg' : ' in Euro'}${S.d.anfrage.nur ? ` · nur ${S.d.anfrage.nur}` : ''}`;
     $('#ctl-ua-veraenderung', S.box).innerHTML = plus.concat(minus).map(({ x, d }) => `<button type="button" class="ctl-ua-veraend" data-zeile="${esc(x.schluessel)}">
         <span><b>${esc(x.name)}</b><small>${x.vj && k.wert(x.vj) ? `${esc(k.kurz(k.wert(x.vj)))} → ${esc(k.kurz(k.wert(x.werte)))}` : `im Vorjahr ohne ${esc(k.name)}`}</small></span>
         <b class="ctl-ua-delta ${d > 0 ? 'plus' : 'minus'}">${d > 0 ? '+' : '−'}${esc(k.kurz(Math.abs(d)))}</b></button>`).join('');
@@ -512,7 +513,7 @@
     const s = S.d.summe;
     const mehr = S.d.zeilenGesamt > S.d.zeilen.length ? `Angezeigt: ${ganz(S.d.zeilen.length)} von ${ganz(S.d.zeilenGesamt)} Zeilen (die ersten nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}). ` : '';
     const ohne = s.posOhne ? `Zusätzlich ${ganz(s.posOhne)} Positionen ohne Berechnung (z. B. Leergut, Menge ${menge(s.mengeOhne)}) – nicht in Menge und Umsatz. ` : '';
-    $('#ctl-ua-fussnote', S.box).textContent = `${mehr}${ohne}Menge und Ø Preis je Mengeneinheit der Warenwirtschaft. Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe nach den heutigen Stammdaten.${S.d.ek ? ' DB = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Spanne = DB ÷ deren Umsatz.' : ''}`;
+    $('#ctl-ua-fussnote', S.box).textContent = `${mehr}${ohne}Menge in kg, Ø Preis in € je kg. Zuordnung zu Vertreter, Kundengruppe und Artikelgruppe nach den heutigen Stammdaten.${S.d.ek ? ' DB = Umsatz − EK-Wert der Positionen mit Einkaufspreis, Spanne = DB ÷ deren Umsatz.' : ''}`;
   }
   function zeichneZeitraum() {
     const m = S.g.stand.monate, letzter = m[m.length - 1], j = letzter.slice(0, 4);
@@ -566,7 +567,7 @@
   function csv() {
     const gl = gliederungName(S.d.anfrage.nach);
     const mitAbc = !!S.d.abc && S.d.anfrage.nur !== 'verloren', mitWechsel = !!S.d.wechsel, nur = S.d.anfrage.nur;
-    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'DB €', 'Spanne %'] : []),
+    const kopf = [gl, 'Nummer', 'Umsatz €', ...(S.d.vorjahr ? ['Umsatz Vorjahr €'] : []), 'Menge kg', 'Kolli', 'Positionen', 'Kunden', ...(S.d.ek ? ['EK-Wert €', 'Umsatz mit EK €', 'DB €', 'Spanne %'] : []),
       ...(mitAbc ? [`ABC nach ${RANG[S.d.anfrage.rang || 'umsatz'].name}`] : []), ...(mitWechsel ? ['Vergleich zum Vorjahr'] : [])];
     const zeilen = sichtbar().map((z) => [z.name, z.schluessel, zahl(z.werte.umsatz / 100, 2), ...(S.d.vorjahr ? [z.vj ? zahl(z.vj.umsatz / 100, 2) : ''] : []), zahl(z.werte.menge / 1000, 3),
       zahl(z.werte.kolli, 0), zahl(z.werte.pos, 0), zahl(z.werte.kunden, 0),
