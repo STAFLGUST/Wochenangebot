@@ -12,6 +12,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 const CONTROLLING_BEREICHE = [
     'umsatz' => ['name' => 'Umsatzstatistik', 'sehen' => 'controlling.umsatz_sehen', 'bearbeiten' => null],   // Werte nur aus dem Import (01.11.2026)
     'bestand' => ['name' => 'Bestandsverlauf', 'sehen' => 'controlling.bestand_sehen', 'bearbeiten' => null],   // aus den Tagesständen des Bestands (02.11.2026, bestand.php)
+    'arbeitszeit' => ['name' => 'Arbeitszeit', 'sehen' => 'controlling.arbeitszeit_sehen', 'bearbeiten' => null],   // aus dem Zeitbericht der Zeiterfassung (02.11.2026, arbeitszeit.php)
 ];
 
 const CONTROLLING_MONATE = ['01' => 'Januar', '02' => 'Februar', '03' => 'März', '04' => 'April', '05' => 'Mai', '06' => 'Juni',
@@ -38,3 +39,5 @@ function controlling_jahr($v): string
 
 /* Bereich Bestandsverlauf (eigene Datei; die Funktionen werden erst beim Aufruf einer Aktion gebraucht) */
 require_once __DIR__ . '/bestand.php';
+/* Bereich Arbeitszeit (Zeitbericht der Zeiterfassung, Import über die Importzentrale) */
+require_once __DIR__ . '/arbeitszeit.php';

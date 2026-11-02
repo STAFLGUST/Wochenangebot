@@ -340,3 +340,49 @@ button.ctl-b-zeile:hover{background:var(--ctl-green-soft)}
   .ctl-b-tabelle th{white-space:normal;vertical-align:bottom}.ctl-b-tabelle th,.ctl-b-tabelle td{padding-left:6px;padding-right:6px}
   .ctl-b-kpis .ctl-kpi b{font-size:18px}
 }
+
+/* ---------- Bereich Arbeitszeit (arbeitszeit.js) ---------- */
+.ctl-az-monate{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}.ctl-az-monate label,.ctl-az-abt{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ctl-muted)}
+.ctl-az-monate input,.ctl-az-abt select,.ctl-az-fehlerwahl select{height:36px;padding:0 8px;border:1px solid var(--ctl-border);border-radius:10px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:13px}
+.ctl-kpi.minus b{color:var(--ctl-accent)}.ctl-kpi.warn{background:var(--ctl-b-amber-bg)}.ctl-kpi.warn span,.ctl-kpi.warn small{color:var(--ctl-b-amber)}
+.ctl-az-kpis.klein{margin-bottom:12px}.ctl-az-kpis.klein .ctl-kpi b{font-size:18px}
+.ctl-az-monate-liste{list-style:none;margin:0;padding:0}
+.ctl-az-mon{display:grid;grid-template-columns:80px minmax(60px,1fr) 90px 140px 90px;gap:10px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--ctl-line);font-size:13px}
+.ctl-az-mon .zahl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.ctl-az-mon .leise,.ctl-az-zeile .leise{color:var(--ctl-muted)}
+.ctl-az-spur{position:relative;height:10px;border-radius:5px;background:var(--ctl-track);overflow:hidden}
+.ctl-az-spur i{position:absolute;top:0;bottom:0;left:0;width:var(--w);border-radius:5px;background:var(--ctl-green)}.ctl-az-spur i.neg{background:var(--ctl-accent)}
+#ctl-az-listenbox{width:100%;overflow-x:auto}
+.ctl-az-liste{list-style:none;margin:0;padding:0;min-width:940px}.ctl-az-liste>li{border-bottom:1px solid var(--ctl-line)}
+.ctl-az-zeile{width:100%;min-width:940px;display:grid;grid-template-columns:minmax(190px,1.6fr) 80px 80px 96px 110px 120px 120px 16px;gap:12px;align-items:center;min-height:50px;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:var(--ctl-text);font:inherit;font-size:13px;text-align:left}
+.ctl-az-zeile.abt{grid-template-columns:minmax(190px,1.6fr) 90px 90px 90px 120px 120px 110px}
+.ctl-az-zeile.fehler{grid-template-columns:110px minmax(150px,1.2fr) minmax(170px,1.3fr) minmax(130px,1fr) 70px 70px 100px}
+button.ctl-az-zeile{cursor:pointer}button.ctl-az-zeile:hover{background:var(--ctl-green-soft)}
+.ctl-az-zeilenkopf{min-height:0;padding:9px 10px;background:var(--ctl-head-bg);color:var(--ctl-head-text);font-size:11px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
+.ctl-az-zeile .zahl{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.ctl-az-zeile .saldo.neg b{color:var(--ctl-accent)}
+.ctl-az-zeile .name{display:flex;flex-direction:column;gap:2px;min-width:0}.ctl-az-zeile .name b{overflow-wrap:anywhere}.ctl-az-zeile .name small{color:var(--ctl-muted);font-size:11px;font-weight:600}
+.ctl-az-zeile .marken{display:flex;flex-wrap:wrap;gap:4px}.ctl-az-zeile .stempel{color:var(--ctl-muted);font-variant-numeric:tabular-nums}
+.ctl-az-zeile .pfeil{color:var(--ctl-muted)}.ctl-az-zeile .pfeil .i{width:16px;height:16px}
+.ctl-az-marke{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:99px;background:var(--ctl-b-amber-bg);color:var(--ctl-b-amber);font-size:11px;font-weight:700;white-space:nowrap}
+.ctl-az-marke.stark{background:var(--ctl-b-knapp-bg);color:var(--ctl-accent)}.ctl-az-marke.leise{background:var(--ctl-b-ohne-bg);color:var(--ctl-muted)}
+.ctl-az-fehlerwahl{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ctl-az-anzahl{margin-top:10px}
+.ctl-az-tage tr.fehler td{background:var(--ctl-b-amber-bg)}.ctl-az-tage tr.laufend td{color:var(--ctl-muted)}.ctl-az-tage td{white-space:nowrap}
+.ctl-az-dlg .ctl-tabelle-wrap{max-height:380px;overflow:auto;border-radius:10px}.ctl-az-dlg .ctl-tabelle th{position:sticky;top:0}
+.ctl-az-dlg .dlg-foot{display:flex;justify-content:flex-end;margin-top:12px}
+@media(max-width:850px){
+  .ctl-az-liste,.ctl-az-zeile,.ctl-az-zeile.abt,.ctl-az-zeile.fehler{min-width:0}
+  .ctl-az-zeilenkopf{display:none!important}
+  .ctl-az-zeile,.ctl-az-zeile.abt,.ctl-az-zeile.fehler{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:11px 4px;border-radius:8px}
+  .ctl-az-zeile .name{flex:1 1 calc(100% - 140px)}.ctl-az-zeile .saldo{margin-left:auto;font-size:14px}
+  .ctl-az-zeile .zahl[data-label]:not(.saldo),.ctl-az-zeile .stempel,.ctl-az-zeile>span[data-label="Tag"]{color:var(--ctl-muted);font-size:12px;text-align:left}
+  .ctl-az-zeile .zahl[data-label]:not(.saldo)::before{content:attr(data-label) ' '}
+  .ctl-az-zeile.fehler>span[data-label="Tag"]{flex:1 1 100%;font-weight:700;color:var(--ctl-text)}.ctl-az-zeile .marken{flex:1 1 100%}
+  .ctl-az-zeile .pfeil{display:none}
+  .ctl-az-mon{grid-template-columns:62px minmax(40px,1fr) 76px;gap:6px}.ctl-az-mon .zahl.leise{display:none}
+}
+@media(max-width:560px){
+  .ctl-az-monate{width:100%}.ctl-az-monate label{flex:1}.ctl-az-monate input{flex:1;min-width:0}.ctl-az-abt{width:100%}.ctl-az-abt select{flex:1;min-width:0;height:44px}
+  .ctl-az-fehlerwahl select{flex:1;height:44px}
+  .ctl-az-tage th,.ctl-az-tage td{padding-left:5px;padding-right:5px;font-size:12px}.ctl-az-tage th:nth-child(5),.ctl-az-tage td:nth-child(5){display:none}
+  .ctl-az-tage td{white-space:normal}.ctl-az-tage td:first-child,.ctl-az-tage td.zahl{white-space:nowrap}
+}

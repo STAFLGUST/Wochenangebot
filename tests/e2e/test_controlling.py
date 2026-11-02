@@ -14,17 +14,26 @@ Lagerartikel im Zeitraum (führende Null, ohne Berechnung, vor dem Zeitraum), Re
 Absatz, Gliederung nach Artikelgruppe und Fleischart, Filter, Detail, 422 bei ungültiger Anfrage; Lagerwert nur mit
 controlling.bestand_ek und bestand.einkaufspreise (GR-008); Oberfläche mit Diagramm, Sortierung, Suche, CSV, Pop-up, Filter,
 eigener Zeitraum, ohne EK-Recht kein Lagerwert (1280 und 390 px, hell und dunkel).
+Bereich Arbeitszeit (02.11.2026): Rechte controlling.arbeitszeit_sehen / _importieren (Umsatz-Recht genügt nicht); Import des
+Zeitberichts über die Importzentrale (synthetische .xlsx, Leser im Browser): Folgezeilen mit weiteren Stempeln, unlesbare und
+doppelte Zeilen, Stempelfehler (Kommen/Gehen fehlt, Kommen = Gehen, unplausibel lang, ohne Stempel, Saldo passt nicht) markiert
+und nicht im bereinigten Saldo, heutiger Tag „laufend“, Abteilung des jüngsten Tages, Gründe von Abwesenheiten nicht gespeichert;
+Auswertung je Monat, Mitarbeiter und Abteilung, Filter, Fehlerliste, Pop-up; neuer Import ersetzt nur seinen Zeitraum, 409 bei
+veraltetem Stand, 422 bei falscher Datei oder Anfrage; Oberfläche mit Ansichten, Fehlerart, CSV, Pop-up (1280 und 390 px).
 Nur synthetische Testdaten.
 """
 import datetime as dt
+import hashlib
 import json
 import os
 import re
+from datetime import date
 
+import openpyxl
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, storage_raw, storage_sqlite, storage_write
+from umgebung import SH, WORK, storage_raw, storage_sqlite, storage_write
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -81,7 +90,7 @@ st, r = Bb.call('controlling_start')
 check('EK-Recht: Bereich ohne Bearbeiten (Werte nur aus dem Import)', st == 200 and r['bereiche'] == [{'id': 'umsatz', 'name': 'Umsatzstatistik', 'bearbeiten': False}], r)
 check('frühere Erfassung von Hand entfernt: Aktion unbekannt, Recht nicht mehr im Katalog', A.call('controlling_umsatz_monat_save', {'rev': 0})[0] == 404
       and 'controlling.umsatz_bearbeiten' not in json.dumps(A.call('rechte')[1], ensure_ascii=False) and 'controlling.umsatz_sehen' in json.dumps(A.call('rechte')[1], ensure_ascii=False))
-check('Administrator: alle Bereiche (Umsatzstatistik, Bestandsverlauf)', [b['id'] for b in A.call('controlling_start')[1]['bereiche']] == ['umsatz', 'bestand'])
+check('Administrator: alle Bereiche (Umsatzstatistik, Bestandsverlauf, Arbeitszeit)', [b['id'] for b in A.call('controlling_start')[1]['bereiche']] == ['umsatz', 'bestand', 'arbeitszeit'])
 
 # ── Stammdaten und importierte Umsatzdaten (synthetisch, direkt gespeichert wie nach einem Import) ──
 rev_v = A.call('vertreter')[1].get('rev', 0)
@@ -409,5 +418,242 @@ with sync_playwright() as p:
         pg.screenshot(path=os.path.join(SH, f'controlling_bestand_{breite}_{thema}.png'), full_page=True)
         ctx.close()
     br.close()
+# ── Bereich Arbeitszeit: Zeitbericht der Zeiterfassung (synthetisch) ──
+AZ_NUTZER = (('aron', 'Aron Arbeitszeit', 'Arbeitszeit-Konto-21', ['controlling.arbeitszeit_sehen']),
+             ('ida', 'Ida Import', 'Zeitimport-Konto-22', ['controlling.arbeitszeit_importieren']))
+AZ_PW = {u: pw for u, _, pw, _ in AZ_NUTZER}
+for u, n, pw, grant in AZ_NUTZER:
+    st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': pw, 'mustChange': False, 'grant': grant})
+    assert st == 200, r_
+AR = Client('198.51.100.40'); AR.call('login', {'username': 'aron', 'password': AZ_PW['aron']})
+ID = Client('198.51.100.41'); ID.call('login', {'username': 'ida', 'password': AZ_PW['ida']})
+pid = lambda q: 'p' + hashlib.sha256(q.encode()).hexdigest()[:12]   # noqa: E731  Schlüssel wie arbeitszeit.php
+P_ANNA, P_BERND, P_CARLA = pid('n:101'), pid('n:102'), pid('m:carla ohnenr')
+
+KOPF = ['Vorname', 'Nachname', 'Datum', 'Hinein', 'In Origin', 'Hinaus', 'Out Origin', 'Dauer', 'Projekt', 'Mitarbeiternummer', 'Zweite Mitarbeiternr.', 'Geplant',
+        'Gearbeitete Stunden', 'Geplante Pause', 'Pause', 'Saldo', 'Abwesenheit', 'Remarks', 'Buchungsstandort', 'Department', 'Comments']
+
+
+def az_zeile(vor, nach, datum, k, g, soll, ist, saldo, nr='', abt='', abw='00:00', pause='00:00', bemerkung=''):
+    return [vor, nach, datum, k, 'RFID' if k else '', g, 'RFID' if g else '', '', '', nr or None, None, soll, ist, '00:30', pause, saldo, abw, bemerkung or None, 'Werk', abt, '']
+
+
+folge = lambda k, g: ['', '', '', k, 'RFID', g, 'RFID', '', '', None, None, '', '', '', '', '', '', None, '', '', '']   # noqa: E731  weiterer Stempel des Vortags
+heute = date.today()
+ZB = [KOPF,
+      az_zeile('Anna', 'Muster', '01-09-2026', '06:00', '14:30', '08:00', '08:00', '00:00', '101', 'Zerlegung', pause='00:30'),
+      az_zeile('Anna', 'Muster', '02-09-2026', '06:00', '15:30', '08:00', '09:00', '01:00', '101', 'Zerlegung'),
+      az_zeile('Anna', 'Muster', '03-09-2026', '06:00', '', '08:00', '00:00', '-08:00', '101', 'Zerlegung'),                      # Gehen fehlt
+      az_zeile('Anna', 'Muster', '04-09-2026', '06:00', '10:00', '08:00', '08:00', '00:00', '101', 'Zerlegung'), folge('10:30', '14:30'),
+      az_zeile('Anna', 'Muster', '05-09-2026', '', '', '00:00', '00:00', '00:00', '101', 'Zerlegung'),                             # Samstag: kein Soll
+      az_zeile('Anna', 'Muster', '01-10-2026', '', '', '08:00', '00:00', '00:00', '101', 'Zerlegung', abw='08:00', bemerkung='Urlaub'),
+      az_zeile('Anna', 'Muster', '02-10-2026', '06:00', '06:00', '08:00', '00:00', '-08:00', '101', 'Zerlegung'),                  # Kommen = Gehen
+      az_zeile('Anna', 'Muster', '05-10-2026', '06:00', '14:00', '08:00', '08:00', '00:00', '101', 'Zerlegung'),
+      az_zeile('Anna', 'Muster', heute.strftime('%d-%m-%Y'), '06:00', '', '08:00', '00:00', '-08:00', '101', 'Zerlegung'),       # heute: laufend
+      az_zeile('Bernd', 'Beispiel', '01-09-2026', '', '', '08:00', '00:00', '-08:00', '102', 'Zerlegung'),                         # ohne Stempel
+      az_zeile('Bernd', 'Beispiel', '02-09-2026', '22:00', '12:00', '08:00', '14:00', '06:00', '102', 'Versand'),                  # unplausibel lang
+      az_zeile('Bernd', 'Beispiel', '03-09-2026', '07:00', '15:00', '08:00', '07:30', '-00:30', '102', 'Versand'),
+      az_zeile('Bernd', 'Beispiel', '04-09-2026', '07:00', '15:00', '08:00', '08:00', '02:00', '102', 'Versand'),                  # Saldo passt nicht
+      az_zeile('Carla', 'Ohnenr', '02-09-2026', '', '14:00', '04:00', '04:00', '00:00'),                                           # Kommen fehlt
+      az_zeile('Carla', 'Ohnenr', '03-09-2026', '08:00', '12:00', '04:00', '04:00', '00:00'),
+      az_zeile('Carla', 'Ohnenr', '03-09-2026', '08:00', '12:00', '04:00', '04:00', '00:00'),                                      # doppelt
+      az_zeile('Dora', 'Defekt', 'gestern', '08:00', '12:00', '04:00', '04:00', '00:00'),                                          # Datum unlesbar
+      az_zeile('Emil', 'Fehl', '03-09-2026', '25:30', '12:00', '04:00', '04:00', '00:00')]                                         # Uhrzeit unlesbar
+os.makedirs(WORK, exist_ok=True)
+DATEI = os.path.join(WORK, 'Zeitbericht_Test.xlsx')
+wb = openpyxl.Workbook(); ws = wb.active; ws.title = 'Zeitbericht'
+for z in ZB:
+    ws.append(z)
+wb.save(DATEI)
+DZ = {'blaetter': [{'name': 'Zeitbericht', 'grid': ZB}]}
+
+
+def zb(cl, daten=DZ, stand=None):
+    b = {'art': 'zeitbericht', 'daten': daten, 'quelle': 'Zeitbericht_Test.xlsx', 'optionen': {}}
+    if stand is not None:
+        b['stand'] = stand
+    return cl.call('import_uebernehmen' if stand is not None else 'import_pruefen', b)
+
+
+check('Arbeitszeit: eigenes Recht – Umsatz-Recht genügt nicht (Bereich fehlt, 403)', 'arbeitszeit' not in [b['id'] for b in L.call('controlling_start')[1]['bereiche']]
+      and L.call('controlling_arbeitszeit')[0] == 403 and L.call('controlling_arbeitszeit_daten')[0] == 403 and Z.call('controlling_arbeitszeit')[0] == 403)
+check('Arbeitszeit: ohne Anmeldung kein Zugang', N.call('controlling_arbeitszeit')[0] in (401, 404) and N.call('controlling_arbeitszeit_detail&p=' + P_ANNA)[0] in (401, 404))
+st, r = AR.call('controlling_start')
+check('Ansehen-Recht: nur Bereich Arbeitszeit (Modulzugang als Voraussetzung)', st == 200 and r['bereiche'] == [{'id': 'arbeitszeit', 'name': 'Arbeitszeit', 'bearbeiten': False}], r)
+st, r = AR.call('controlling_arbeitszeit_daten')
+check('vor dem ersten Import: leer, kein Importrecht', st == 200 and r['stand']['bis'] is None and r['personen'] == [] and r['rechte'] == {'importieren': False}
+      and r['grenzen'] == {'lang': 720} and set(r['fehlerarten']) == {'kommen', 'gehen', 'null', 'lang', 'ohne', 'saldo'}, r)
+check('Import: nur mit controlling.arbeitszeit_importieren (403), Importart nur für Berechtigte', zb(AR)[0] == 403 and zb(L)[0] == 403
+      and 'zeitbericht' not in [a['id'] for a in AR.call('import_arten')[1].get('arten', [])] and 'zeitbericht' in [a['id'] for a in ID.call('import_arten')[1]['arten']])
+st, r = zb(ID, {'blaetter': [{'name': 'x', 'grid': [['Artikel', 'Preis'], ['A', 1]]}]})
+check('andere Datei: 422 mit Hinweis', st == 422 and 'kein Zeitbericht' in r.get('error', ''), (st, r))
+check('leere Datei und zu viele Zeilen: 422', zb(ID, {'blaetter': []})[0] == 422 and zb(ID, {'blaetter': [{'name': 'x', 'grid': [KOPF] + [[]] * 60001}]})[0] == 422)
+st, v = zb(ID)
+hw = ' '.join(h['text'] for h in v.get('hinweise', []))
+fz = [z for z in v.get('zeilen', []) if z['art'] == 'fehler']
+check('Vorschau: 15 Tage neu (einer davon heute), 3 Zeilen nicht lesbar (doppelt, Datum, Uhrzeit)', st == 200 and v['zahlen'] == {'neu': 15, 'geaendert': 0, 'entfaellt': 0, 'unveraendert': 0, 'fehler': 3}
+      and sorted(z['zeile'] for z in fz) == [18, 19, 20] and any('doppelt' in z['text'] for z in fz) and any('Datum' in z['text'] for z in fz) and any('Uhrzeit' in z['text'] for z in fz), (st, v))
+check('Vorschau: Stempelfehler je Art, laufender Tag, ohne Mitarbeiternummer, Abwesenheitsgründe nicht gespeichert',
+      '6 Tage mit Stempelfehlern' in hw and 'nichts wird geschätzt' in hw and '1 Tag ab heute gilt' in hw and '1 Mitarbeiter ohne Mitarbeiternummer' in hw and 'nicht gespeichert' in hw
+      and v['hinweise'][0]['stufe'] == 'warn', hw)
+check('Vorschau schreibt nichts', dokument('controlling-arbeitszeit') is None)
+STAND0 = v['stand']
+
+with sync_playwright() as p:
+    br = p.chromium.launch()
+
+    def text(pg, sel):
+        return pg.inner_text(sel).replace('\xa0', ' ').replace(' ', ' ')
+
+    def neu(breite=1280, thema='light', ip='198.51.100.42'):
+        ctx = br.new_context(viewport={'width': breite, 'height': 900 if breite > 500 else 844}, extra_http_headers={'X-Forwarded-For': ip}, locale='de-DE',
+                             timezone_id='Europe/Berlin', color_scheme=thema, accept_downloads=True)
+        pg = ctx.new_page()
+        pg.on('pageerror', lambda e: fehler.append(str(e)))
+        pg.on('console', lambda m: fehler.append(m.text) if m.type == 'error' and 'Failed to load resource' not in m.text else None)
+        return ctx, pg
+
+    # Import in der Oberfläche (Importzentrale, Leser im Browser)
+    ctx, pg = neu(ip='198.51.100.43')
+    pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+    pg.fill('#au-user', 'ida'); pg.fill('#pw1', AZ_PW['ida']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+    pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="zeitbericht"]')
+    check('Importzentrale: Importart „Arbeitszeit (Zeitbericht)“ für den Importberechtigten', 'Zeitbericht' in pg.text_content('#view-importe .imp-art[data-art="zeitbericht"]'))
+    pg.set_input_files('#view-importe input[data-imp-datei="zeitbericht"]', DATEI)
+    pg.wait_for_selector('#imp-neu', timeout=20000)
+    txt = text(pg, '#view-importe')
+    check('Oberfläche: Vorschau aus der Excel-Datei (Leser liest das erste Blatt wie die Zeiterfassung)', 'Stempelfehlern' in txt and 'Anna Muster' in txt and 'doppelt' in txt, txt[:600])
+    pg.click('#imp-ok'); pg.wait_for_selector('#imp-ergebnis')
+    ctx.close()
+
+    idx = dokument('controlling-arbeitszeit')
+    jahr = dokument('controlling-arbeitszeit/2026') or {'tage': {}}
+    check('übernommen: Index mit Mitarbeitern, Jahr, Import (Zeitraum bis heute)', idx and idx['rev'] == STAND0 + 1 and set(idx['personen']) == {P_ANNA, P_BERND, P_CARLA}
+          and idx['importe'][0]['von'] == '2026-09-01' and idx['importe'][0]['bis'] == heute.isoformat() and idx['importe'][0]['neu'] == 15 and idx['importe'][0]['wer'] == 'Ida Import', idx)
+    check('Abteilung = jüngste Angabe; ohne Nummer über den Namen', idx['personen'][P_BERND] == {'name': 'Bernd Beispiel', 'nr': '102', 'abt': 'Versand'}
+          and idx['personen'][P_CARLA] == {'name': 'Carla Ohnenr', 'nr': '', 'abt': ''}, idx['personen'])
+    tg = jahr['tage'] if heute.year == 2026 else {**jahr['tage'], **(dokument(f'controlling-arbeitszeit/{heute.year}') or {'tage': {}})['tage']}
+    check('gespeicherter Tag: Minuten, Stempel mit Folgezeile, Fehlercodes, laufend', tg[P_ANNA + '|2026-09-04'] == [480, 480, 0, 0, 0, [['06:00', '10:00'], ['10:30', '14:30']], [], 0]
+          and tg[P_ANNA + '|2026-09-03'][6] == ['gehen'] and tg[P_ANNA + '|2026-10-02'][6] == ['null'] and tg[P_BERND + '|2026-09-01'][6] == ['ohne']
+          and tg[P_BERND + '|2026-09-02'][6] == ['lang'] and tg[P_BERND + '|2026-09-04'][6] == ['saldo'] and tg[P_CARLA + '|2026-09-02'][6] == ['kommen']
+          and tg[P_ANNA + '|' + heute.isoformat()][6:] == [[], 1], {k[-10:]: t for k, t in tg.items() if k.startswith(P_ANNA)})
+    check('Gründe von Abwesenheiten nicht gespeichert (nur Stunden)', 'Urlaub' not in json.dumps(jahr) and 'Urlaub' not in json.dumps(idx) and tg[P_ANNA + '|2026-10-01'][2] == 480)
+
+    st, r = AR.call('controlling_arbeitszeit&von=2026-09&bis=2026-10')
+    s, pp = r.get('summe', {}), {x['id']: x for x in r.get('personen', [])}
+    check('Summe: bereinigt nur Tage ohne Stempelfehler, laut Zeiterfassung alle Tage', st == 200 and s['sollOk'] == 3120 and s['istOk'] == 2670 and s['abwOk'] == 480 and s['saldoOk'] == 30
+          and s['saldo'] == -930 and s['saldoFehler'] == -960 and s['fehlerTage'] == 6 and s['ohne'] == 1 and s['tage'] == 14 and s['tageOk'] == 8 and s['laufend'] == 0, s)
+    check('je Mitarbeiter (nach Name)', [x['name'] for x in r['personen']] == ['Anna Muster', 'Bernd Beispiel', 'Carla Ohnenr']
+          and (pp[P_ANNA]['saldoOk'], pp[P_ANNA]['saldo'], pp[P_ANNA]['fehlerTage'], pp[P_ANNA]['arbeitstage']) == (60, -900, 2, 7)
+          and (pp[P_BERND]['saldoOk'], pp[P_BERND]['saldoFehler'], pp[P_BERND]['fehlerTage']) == (-30, 0, 3) and pp[P_CARLA]['abt'] == '', r.get('personen'))
+    check('je Monat', [(m['m'], m['saldoOk'], m['fehlerTage']) for m in r['monate']] == [('2026-09', 30, 5), ('2026-10', 0, 1)], r.get('monate'))
+    check('je Abteilung, „ohne Abteilung“ zuletzt', [(a['id'], a['personen']) for a in r['abteilungen']] == [('Versand', 1), ('Zerlegung', 1), ('_', 1)]
+          and r['abteilungen'][2]['name'] == 'ohne Abteilung', r.get('abteilungen'))
+    check('Stempelfehler-Liste: jüngste zuerst, mit Stempeln', [(f['d'][5:], f['p'], f['fehler']) for f in r['fehler']] == [
+        ('10-02', P_ANNA, ['null']), ('09-04', P_BERND, ['saldo']), ('09-03', P_ANNA, ['gehen']), ('09-02', P_BERND, ['lang']), ('09-02', P_CARLA, ['kommen']), ('09-01', P_BERND, ['ohne'])]
+          and r['fehlerGesamt'] == 6 and r['fehler'][2]['stempel'] == [['06:00', None]], r.get('fehler'))
+    st, r = AR.call('controlling_arbeitszeit&von=2026-09&bis=2026-10&abt=Versand')
+    check('Filter Abteilung', st == 200 and [x['name'] for x in r['personen']] == ['Bernd Beispiel'] and r['summe']['saldoOk'] == -30)
+    st, r = AR.call('controlling_arbeitszeit&von=2026-09&bis=2026-10&abt=_')
+    check('Filter „ohne Abteilung“', st == 200 and [x['name'] for x in r['personen']] == ['Carla Ohnenr'])
+    st, r = AR.call('controlling_arbeitszeit_detail&p=' + P_ANNA + '&von=2026-09&bis=' + heute.strftime('%Y-%m'))
+    check('Pop-up: alle Tage des Mitarbeiters (neueste zuerst), heute „laufend“ ohne Fehler, zählt nicht', st == 200 and r['person']['name'] == 'Anna Muster' and len(r['tage']) == 9
+          and r['tage'][0]['d'] == heute.isoformat() and r['tage'][0]['laufend'] is True and r['tage'][0]['fehler'] == [] and r['summe']['laufend'] == 1 and r['summe']['saldoOk'] == 60, r.get('tage', [])[:1])
+    check('ungültige Anfragen: 422', all(AR.call(q)[0] == 422 for q in ('controlling_arbeitszeit&von=2026-13', 'controlling_arbeitszeit&von=2026-10&bis=2026-09',
+                                                                          'controlling_arbeitszeit&von=2023-01&bis=2026-01', 'controlling_arbeitszeit_detail&p=' + 'p' + '0' * 12,
+                                                                          'controlling_arbeitszeit_detail&p=../x')))
+    st, r = AR.call('controlling_arbeitszeit_daten')
+    check('Grunddaten: Stand bis heute, Abteilungen, Mitarbeiter', st == 200 and r['stand']['bis'] == heute.isoformat() and r['abteilungen'] == ['Versand', 'Zerlegung']
+          and len(r['personen']) == 3 and r['stand']['importe'][0]['wer'] == 'Ida Import', r)
+
+    # Oberfläche Arbeitszeit
+    ctx, pg = neu()
+    pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+    pg.fill('#au-user', 'aron'); pg.fill('#pw1', AZ_PW['aron']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+    pg.goto(B + '/module/controlling/#arbeitszeit'); pg.wait_for_selector('#ctl-az-kpis .ctl-kpi')
+    pg.fill('#ctl-az-von', '2026-09'); pg.fill('#ctl-az-bis', '2026-10'); pg.dispatch_event('#ctl-az-bis', 'change')
+    pg.wait_for_function("document.querySelector('#ctl-az-kpis') && document.querySelector('#ctl-az-kpis').textContent.includes('52:00')")
+    kpi = text(pg, '#ctl-az-kpis')
+    check('Kennzahlen: Soll, Ist, Saldo bereinigt und laut Zeiterfassung, Stempelfehler', '52:00' in kpi and '44:30' in kpi and '+0:30' in kpi and '−15:30' in kpi and '6 Tage' in kpi
+          and 'ohne jeden Stempel' in kpi, kpi)
+    check('Monatsverlauf: zwei Monate', pg.locator('#ctl-az-verlauf .ctl-az-mon').count() == 2 and 'Sep 2026' in text(pg, '#ctl-az-verlauf'))
+    zl = pg.locator('#ctl-az-zeilen > li')
+    check('Mitarbeiterliste: drei, „lückenhaft“ bei vielen Stempelfehlern (Bernd, Carla), nicht bei Anna', zl.count() == 3 and 'lückenhaft' not in zl.nth(0).inner_text()
+          and 'lückenhaft' in zl.nth(1).inner_text() and 'lückenhaft' in zl.nth(2).inner_text() and 'ohne Nummer' in zl.nth(2).inner_text(), text(pg, '#ctl-az-zeilen'))
+    pg.select_option('#ctl-az-sort', 'fehlerTage')
+    check('Sortierung: meiste Stempelfehler zuerst', 'Bernd Beispiel' in zl.nth(0).inner_text())
+    pg.fill('#ctl-az-suche', '102')
+    pg.wait_for_function("document.querySelectorAll('#ctl-az-zeilen > li').length === 1")
+    check('Suche nach Nummer', 'Bernd Beispiel' in text(pg, '#ctl-az-zeilen'))
+    pg.fill('#ctl-az-suche', '')
+    pg.wait_for_function("document.querySelectorAll('#ctl-az-zeilen > li').length === 3")
+    with pg.expect_download() as dl:
+        pg.click('#ctl-az-csv')
+    inhalt = open(dl.value.path(), encoding='utf-8-sig').read()
+    check('CSV der Mitarbeiter (Stunden dezimal)', 'Saldo bereinigt Std.' in inhalt and 'Anna Muster' in inhalt and '"1,00"' in inhalt, inhalt[:300])
+    pg.click('#ctl-az-zeilen [data-p="' + P_ANNA + '"]')
+    pg.wait_for_selector('#ctl-az-dialog[open] #ctl-az-tage tbody tr')
+    check('Pop-up: Tage mit Stempeln, Fehlertage markiert', pg.locator('#ctl-az-tage tbody tr').count() == 8 and pg.locator('#ctl-az-tage tbody tr.fehler').count() == 2
+          and '06:00–10:00, 10:30–14:30' in text(pg, '#ctl-az-tage') and 'Gehen fehlt' in text(pg, '#ctl-az-tage'), text(pg, '#ctl-az-dialog')[:600])
+    pg.wait_for_function("document.getAnimations().every((a) => a.playState !== 'running')")
+    pg.screenshot(path=os.path.join(SH, 'controlling_arbeitszeit_detail_1280.png'))
+    pg.click('#ctl-az-dialog [data-zu]')
+    pg.click('#ctl-az-ansicht [data-ansicht="abteilungen"]')
+    pg.wait_for_function("document.querySelector('#ctl-az-listenbox').textContent.includes('ohne Abteilung')")
+    check('Ansicht Abteilungen', pg.locator('#ctl-az-listenbox .ctl-az-liste > li').count() == 3 and 'Versand' in text(pg, '#ctl-az-listenbox'))
+    pg.click('#ctl-az-ansicht [data-ansicht="fehler"]')
+    pg.wait_for_selector('#ctl-az-fehlerliste')
+    check('Ansicht Stempelfehler: sechs Tage mit Fehlerart', pg.locator('#ctl-az-fehlerliste > li').count() == 6 and 'Kommen = Gehen' in text(pg, '#ctl-az-fehlerliste'))
+    pg.select_option('#ctl-az-art', 'ohne')
+    pg.wait_for_function("document.querySelectorAll('#ctl-az-fehlerliste > li').length === 1")
+    check('Filter Fehlerart „ohne Stempel“', 'Bernd Beispiel' in text(pg, '#ctl-az-fehlerliste') and 'kein Stempel' in text(pg, '#ctl-az-fehlerliste'))
+    with pg.expect_download() as dl:
+        pg.click('#ctl-az-csv')
+    inhalt = open(dl.value.path(), encoding='utf-8-sig').read()
+    check('CSV der Stempelfehler (gefiltert)', inhalt.count('\n') in (1, 2) and 'kein Stempel, keine Abwesenheit' in inhalt, inhalt)
+    pg.select_option('#ctl-az-art', '')
+    pg.select_option('#ctl-az-abt', 'Versand')
+    pg.wait_for_function("document.querySelectorAll('#ctl-az-fehlerliste > li').length === 3")
+    check('Filter Abteilung in der Oberfläche', 'Anna' not in text(pg, '#ctl-az-fehlerliste'))
+    pg.select_option('#ctl-az-abt', '')
+    pg.wait_for_function("document.querySelectorAll('#ctl-az-fehlerliste > li').length === 6")
+    pg.click('#ctl-az-ansicht [data-ansicht="personen"]'); pg.wait_for_selector('#ctl-az-zeilen')
+    pg.screenshot(path=os.path.join(SH, 'controlling_arbeitszeit_1280.png'), full_page=True)
+    ctx.close()
+
+    for breite, thema in ((390, 'light'), (390, 'dark'), (1280, 'dark')):
+        ctx, pg = neu(breite, thema, '198.51.100.44')
+        pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+        pg.fill('#au-user', 'aron'); pg.fill('#pw1', AZ_PW['aron']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+        pg.goto(B + '/module/controlling/#arbeitszeit'); pg.wait_for_selector('#ctl-az-kpis .ctl-kpi')
+        pg.fill('#ctl-az-von', '2026-09'); pg.fill('#ctl-az-bis', '2026-10'); pg.dispatch_event('#ctl-az-bis', 'change')
+        pg.wait_for_function("document.querySelector('#ctl-az-kpis').textContent.includes('52:00')")
+        check(f'{breite}px {thema}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        if breite == 390:
+            pg.click('#ctl-az-zeilen [data-p="' + P_BERND + '"]'); pg.wait_for_selector('#ctl-az-dialog[open] #ctl-az-tage tbody tr')
+            pg.wait_for_function("document.getAnimations().every((a) => a.playState !== 'running')")
+            pg.screenshot(path=os.path.join(SH, f'controlling_arbeitszeit_detail_{breite}_{thema}.png'))
+            pg.click('#ctl-az-dialog [data-zu]')
+            pg.click('#ctl-az-ansicht [data-ansicht="fehler"]'); pg.wait_for_selector('#ctl-az-fehlerliste')
+            check(f'{breite}px {thema}: Stempelfehler-Liste ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        pg.screenshot(path=os.path.join(SH, f'controlling_arbeitszeit_{breite}_{thema}.png'), full_page=True)
+        ctx.close()
+    br.close()
+
+# neuer Import ersetzt nur seinen Zeitraum; veralteter Stand 409
+STAND1 = dokument('controlling-arbeitszeit')['rev']
+D2 = {'blaetter': [{'name': 'Zeitbericht', 'grid': [KOPF, az_zeile('Anna', 'Muster', '01-09-2026', '06:00', '14:30', '08:00', '08:00', '00:00', '101', 'Zerlegung', pause='00:30'),
+                                                    az_zeile('Anna', 'Muster', '02-09-2026', '06:00', '15:00', '08:00', '08:30', '00:30', '101', 'Zerlegung')]}]}
+st, v = zb(ID, D2)
+check('zweiter Import, Vorschau: Zeitraum 01.–02.09., ein Tag geändert, einer gleich, drei entfallen (mit Warnung)', st == 200
+      and v['zahlen'] == {'neu': 0, 'geaendert': 1, 'entfaellt': 3, 'unveraendert': 1, 'fehler': 0} and '3 gespeicherte Tage' in ' '.join(h['text'] for h in v['hinweise']), v)
+check('veralteter Stand: 409, nichts geschrieben', zb(ID, D2, STAND0)[0] == 409 and dokument('controlling-arbeitszeit')['rev'] == STAND1)
+st, r = zb(ID, D2, v['stand'])
+check('zweiter Import übernommen', st == 200 and r['zahlen']['entfaellt'] == 3 and r['stand'] == STAND1 + 1, (st, r))
+st, r = AR.call('controlling_arbeitszeit&von=2026-09&bis=2026-10')
+check('nur der Zeitraum der Datei ersetzt: Tage davor/danach bleiben', st == 200 and r['fehlerGesamt'] == 3
+      and {(f['d'], f['p']) for f in r['fehler']} == {('2026-10-02', P_ANNA), ('2026-09-04', P_BERND), ('2026-09-03', P_ANNA)}
+      and {x['id']: x['saldoOk'] for x in r['personen']}[P_ANNA] == 30, r.get('fehler'))
+
 check('keine JavaScript-Fehler', not fehler, fehler)
 print(f'{sum(res)}/{len(res)} passed')
