@@ -96,7 +96,7 @@
     if (r.status !== 200 || !r.data.ok) { fehler(fehlerText(r, 'Das Controlling konnte nicht geladen werden')); return; }
     S.bereiche = r.data.bereiche || [];
     $('#ctl-bereiche').innerHTML = S.bereiche.map((b) => `<button type="button" role="tab" data-bereich="${esc(b.id)}" aria-selected="false">${esc(b.name)}</button>`).join('');
-    $('#ctl-bereiche').hidden = S.bereiche.length === 0;
+    $('#ctl-bereiche').hidden = S.bereiche.length <= 1;   // ein Bereich: die Leiste wiederholte nur die Überschrift
     $('#ctl-kein-bereich').hidden = S.bereiche.length > 0;
     $('#ctl-login').hidden = true; $('#ctl-app').hidden = false;
     await zeigeBereich(hashTeile()[0]);

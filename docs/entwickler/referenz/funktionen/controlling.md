@@ -170,7 +170,7 @@ _STAFL-Plattform · Controlling · Umsatzstatistik, Reiter „Auswertung“_
 - `pausenLaden()` – Bestellpausen zum Ende des Zeitraums mit den Filtern der Seite – nur neu laden, wenn sich Zeitraum oder Filter ändern
 - `zeichnePausen()`
 - `vjText()`
-- `zeichneKennzahlen()`
+- `zeichneKennzahlen()` – Vier Kennzahlen (ohne EK-Recht drei): Umsatz, Menge mit Ø Preis, DB mit Spanne, Kunden – Einzelheiten im Hinweis
 - `zeichneVerlauf()`
 - `spalten()` – Spalten der Tabelle „Alle Spalten“ (ohne EK-Recht ohne DB)
 - `sortiert()`
