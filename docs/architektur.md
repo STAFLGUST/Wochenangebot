@@ -11,8 +11,9 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 - **Server:** Hostinger-VPS, Docker Compose: `php:8.3-apache` (Ordner `app/` nur lesend, Daten in `daten/` →
   `/var/www/html/data`) und Caddy davor (HTTPS, Sicherheits- und Cache-Header, `Caddyfile`; Abschnitt `zwischenspeichern` für alle Anwendungs-Hosts:
   versionierte Skripte/Stylesheets `…?v=…` ein Jahr `immutable` – auf der Angebotsseite `public`, sonst `private` –, Schriften,
-  Symbole und Logos einen Tag, nur erfolgreiche Antworten, alles andere `no-cache`; die Nummern setzt der Server beim
-  Einspielen, siehe „Bereitstellung“).
+  Symbole und Logos einen Tag, nur erfolgreiche Antworten, alles andere `private, no-cache`; die Nummern setzt der Server beim
+  Einspielen, siehe „Bereitstellung“). Davor optional **bunny.net** als CDN (Abschnitt `cdn`: Besucher-IP nur mit
+  Schlüssel, Sperre direkter Zugriffe mit `CDN_PFLICHT=1`; Einrichtung `docs/bunny-cdn.md`).
 - **Anwendungs-Image (vorbereitet, nicht im Betrieb):** `deploy/image/Dockerfile` = `php:8.3-apache` (fest über Digest) plus
   mod_auth_openidc, installiert, aber nicht geladen – Voraussetzung für die zentrale Anmeldung (ADR-003). Die CI baut es
   und prüft mit `deploy/image/pruefen.sh`, dass es sich ohne Konfiguration genau wie das Grundimage verhält

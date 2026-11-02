@@ -521,6 +521,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand-wochenpreise.md` | bestand | Bestand: Wochenpreise und erwartete Zugänge |
 | `bestell-api-v1.md` | angebot | Bestell-API, Antwortformat 1 |
 | `bestell-mailversand.md` | angebot | Versandaufträge für Bestellwünsche |
+| `bunny-cdn.md` | plattform | bunny.net vor dem Server |
 | `dashboard-dns.md` | plattform | STAFL-Dashboard: DNS und Caddy-Vorbereitung |
 | `datenbank.md` | plattform | SQLite-Datenablage (Schema 1) |
 | `rechtliche-seiten.md` | angebot | Kontakt, Impressum und Datenschutz |

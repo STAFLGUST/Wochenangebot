@@ -160,18 +160,26 @@ enthält (Inbetriebnahme Schritt 5). Ohne sie antworten die Keycloak-Hosts mit 5
 | --- | --- |
 | Skripte und Stylesheets mit `?v=…` (alle Seiten unter `app/` und `dashboard/`, Nummern von `deploy/bereitstellen.py`) | ein Jahr ohne Rückfrage (`immutable`); neue Fassung = neue Adresse |
 | Schriften, Symbole, Logos (`/assets/fonts/`, `/assets/icons/`, `/assets/*.png`) | ein Tag ohne Rückfrage; ein neues Logo erscheint spätestens am nächsten Tag (sofort: neuer Dateiname) |
-| Seiten, Schnittstelle, Bibliotheken unter `assets/vendor/`, Kartendaten | wie bisher: Rückfrage bei jedem Aufruf (`no-cache`) bzw. eigene Angabe der Anwendung |
+| Seiten, Schnittstelle, Bibliotheken unter `assets/vendor/`, Kartendaten | Rückfrage bei jedem Aufruf (`private, no-cache`, nie in fremden Zwischenspeichern) bzw. eigene Angabe der Anwendung |
 
 Auf der Angebotsseite `public`, auf allen anderen Hosts `private` (nur der Browser des Nutzers, nie fremde
 Zwischenspeicher). Gespeichert werden nur erfolgreiche Antworten (2xx, 304): eine Weiterleitung zur Anmeldung, „401“
 oder „404“ nie – sonst bliebe eine Seite nach abgelaufener Sitzung ein Jahr kaputt. Geprüft mit echtem Caddy in der CI
 (`tests/deploy/test_zwischenspeichern.py`).
 
+**bunny.net (CDN) vor dem Server** (`Caddyfile`, Abschnitt `cdn`, in jedem Site-Block eingebunden; Einrichtung und Reihenfolge:
+[docs/bunny-cdn.md](../bunny-cdn.md)): Mit `CDN_SCHLUESSEL` in `.env` gilt die Besucher-IP von bunny (`X-Real-IP`) nur bei
+genau diesem Schlüssel im Kopf `X-Stafl-Cdn`. Caddy gibt sie als `X-Forwarded-For` an Anwendung und Keycloak weiter
+(`{besucher_ip}`), den Schlüssel nie. `CDN_PFLICHT=1` sperrt direkte Zugriffe (403) außer vom Server selbst (private Adressen).
+Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_proxy`, `forward_auth`) braucht
+`header_up X-Forwarded-For {besucher_ip}` und `header_up -X-Stafl-Cdn`, jeder neue Site-Block `import cdn` – das prüft
+`tests/deploy/test_cdn.py` mit echtem Caddy.
+
 **Datenorte auf dem Server** (alle nicht im Repository):
 
 | Ort | Inhalt |
 | --- | --- |
-| `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus (nur root) |
+| `.env` | Domain, Mail-Zugang, Geheimnisse der Anmeldung, Token für den Release-Modus, Schlüssel für bunny.net (`CDN_SCHLUESSEL`, `CDN_PFLICHT`) (nur root) |
 | `.release-vorher`, `.release-abgelehnt` | Stand vor dem letzten Release (Notfall-Rückfall) bzw. abgelehnter Release (nur root) |
 | `daten/` | Geschäftsdaten (Dateien oder `daten/.sqlite/store.sqlite`), Dateiablage `daten/dateien/` (hochgeladene Dateien, z. B. QM-Dokumente; in der Sicherung enthalten), Status von Sicherung und Deployment, `mail-schluessel.php` (nicht in Sicherungen) |
 | `daten-anmeldung/` | Realm-Import, Tresor `vault/` (Postfach-Passwort für Keycloak, nicht gesichert), während der Einrichtung `einrichtung.env` |
