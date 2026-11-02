@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-253 Aktionen in 14 Modulen.
+251 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -178,8 +178,6 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `hr_eintrag_save` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_entscheiden` | `hr.intern` | schreibend | – | Recht hr.genehmigen | `app/api/aktionen/hr.php` |
 | `hr_export` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
-| `hr_import_pruefen` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
-| `hr_import_uebernehmen` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_korrektur` | `hr.intern` | schreibend | – | Recht hr.antrag | `app/api/aktionen/hr.php` |
 | `hr_korrektur_erledigt` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_monat` | `hr.intern` | lesend | – | Recht hr.antrag | `app/api/aktionen/hr.php` |

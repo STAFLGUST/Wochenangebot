@@ -487,13 +487,4 @@ switch ($action) {
             exit;
         }
 
-        /* Übernahme der bisherigen Excel-Urlaubsplanung: Vorschau und Übernahme */
-        case 'hr_import_pruefen': {
-            $me = require_perm('hr.verwalten', true);
-            respond(['ok' => true] + hr_import_vorschau(body(), $me));
-        }
-        case 'hr_import_uebernehmen': {
-            $me = require_perm('hr.verwalten', true);
-            respond(['ok' => true] + hr_import_uebernehmen(body(), $me));
-        }
 }

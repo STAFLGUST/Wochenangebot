@@ -130,7 +130,7 @@ veraltet. Teilskripte folgen alle demselben Muster:
 })();
 ```
 
-Weitere Anknüpfungspunkte: `W.importLeser.<art>` (Leser für die Importzentrale, z. B. `urlaubsplanung` in
+Weitere Anknüpfungspunkte: `W.importLeser.<art>` (Leser für die Importzentrale, z. B. `zeiterfassung` in
 `verwaltung-hr.js`), `W.importSichtbar` (`admin-import.js`), `W.hr` (`verwaltung-hr.js`, von
 `admin-verwaltung.js` genutzt), `W.csvZeilen`/`W.csvText` (`admin-verwaltung.js`).
 

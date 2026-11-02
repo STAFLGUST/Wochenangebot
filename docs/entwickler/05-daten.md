@@ -145,7 +145,7 @@ Die Felder sind aus den Prüf- und Schreibfunktionen ermittelt; `?` = optional (
 | --- | --- |
 | `role` | Hauptrolle: `viewer`, `editor`, `admin` oder eigene Rolle `r<8 hex>` |
 | `rollen?` | weitere Rollen (nie `admin`), Rechte addieren sich |
-| `zugang?` | nur `false` = Mitarbeiter ohne Anmeldung (z. B. Lager, Urlaubsplanung); dann immer `active: false` |
+| `zugang?` | nur `false` = Mitarbeiter ohne Anmeldung (z. B. Lager, Zeiterfassung); dann immer `active: false` |
 | `sv` | Sitzungsversion; Erhöhen beendet alle Sitzungen (Passwort, zweiter Faktor, Passkeys) |
 | `grant?`, `deny?` | Rechte-Ausnahmen je Nutzer; `deny` hat Vorrang |
 | `totp?`, `totpLast?`, `recovery?` | Authenticator-App (Geheimnis, letzter Zeitschritt, Hashes der Wiederherstellungscodes) |
