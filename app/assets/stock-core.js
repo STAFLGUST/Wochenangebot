@@ -1,6 +1,8 @@
 /* ==========================================================================
    Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“)
-   Liest .xls (BIFF2–BIFF8, auch im OLE-Container) und .xlsx.
+   Liest die CSV-Ausgabe (Semikolon, Windows-1252 oder UTF-8; Spalten „Art. Nr.“, „Bezeichnung“, „Marke“, „EK Gruppe“,
+   „VK Gruppe“, „Status“, „Ankunft“, „Partie“, „MHD“, „Kolli“, „netto“, „EK Preis“ – seit 02.11.2026 die übliche Datei)
+   sowie wie bisher .xls (BIFF2–BIFF8, auch im OLE-Container) und .xlsx.
    Berücksichtigt werden nur Zeilen mit Status „eingelagert“.
    Je Artikel: verfügbare Menge (Summe netto), frühestes MHD, Menge zum frühesten MHD.
    ========================================================================== */
@@ -203,14 +205,49 @@
     return sheets;
   }
 
-  async function readStockWorkbook(buffer) {
+  /* ======================= .csv (WinAB-Bestandsliste als CSV) ======================= */
+  /* Zeilen und Zellen: Semikolon, Anführungszeichen (verdoppelt im Text), Zeilenende CRLF oder LF */
+  function csvRows(text) {
+    const rows = []; let row = [], cell = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+      if (ch === '"') q = true;
+      else if (ch === ';') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter((r) => r.some((c) => c.trim() !== ''));
+  }
+  /* Zelle wie in Excel: leer → null, deutsche Dezimalzahl („27,950“, „1.234,5“) → Zahl; Ziffernfolgen ohne Komma
+     (Artikelnummer, Partie, Gruppen – führende Nullen bleiben) und Datumsangaben („TT.MM.JJJJ“) bleiben Text */
+  const DEZIMAL = /^-?(\d{1,3}(\.\d{3})+|\d+),\d+$/;
+  function csvZelle(v) {
+    const s = v.trim();
+    if (s === '') return null;
+    return DEZIMAL.test(s) ? Number(s.replace(/\./g, '').replace(',', '.')) : v;
+  }
+  function readStockCsv(buffer) {
+    const b = new Uint8Array(buffer);
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(b); } catch { text = new TextDecoder('windows-1252').decode(b); }
+    const grid = csvRows(text.replace(/^\uFEFF/, '')).map((r) => r.map(csvZelle));
+    if (!grid.length) throw new Error('Die Datei ist leer.');
+    return [{ name: 'CSV', grid }];
+  }
+  const istText = (b) => { const k = b.subarray(0, 4096); return !k.includes(0) && k.includes(0x3b); };   // ohne Nullbytes, mit „;“
+
+  /* Datei lesen: .csv nach Name oder Inhalt (Text mit Semikolon), sonst Excel (.xlsx, .xls) */
+  async function readStockWorkbook(buffer, fileName) {
     const b = new Uint8Array(buffer);
     if (b.length < 8) throw new Error('Die Datei ist leer.');
     if (b[0] === 0x50 && b[1] === 0x4b) return root.OfferCore.xlsxReadWorkbook(buffer);
     if (u32(b, 0) === 0xe011cfd0 && u32(b, 4) === 0xe11ab1a1) return biffSheets(cfbStream(b));
     const t = u16(b, 0);
     if ([0x0009, 0x0209, 0x0409, 0x0809].includes(t)) return biffSheets(b);
-    throw new Error('Die Datei ist keine Excel-Datei (.xls oder .xlsx).');
+    if (/\.csv$/i.test(String(fileName || '')) || istText(b)) return readStockCsv(buffer);
+    throw new Error('Die Datei ist weder eine CSV-Datei noch eine Excel-Datei (.xls oder .xlsx).');
   }
 
   /* ======================= Bestandsliste auswerten ======================= */

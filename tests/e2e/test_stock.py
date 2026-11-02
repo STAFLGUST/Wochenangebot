@@ -10,6 +10,7 @@ from kunden_hilfe import Client
 from umgebung import storage_raw
 SC = FIX + '/bestand'
 XLS = SC + '/bestand.xls'
+CSV = SC + '/bestand.csv'   # CSV-Ausgabe der Bestandsliste (synthetisch, Windows-1252)
 res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
@@ -311,6 +312,25 @@ with sync_playwright() as p:
     m.screenshot(path=SH + '/stock-vkgruppen-mobil.png')
     check('Handy: VK-Gruppen ohne waagerechtes Scrollen', m.evaluate('document.documentElement.scrollWidth') <= 390
           and m.evaluate("(() => { const d = document.querySelector('#dlg-stock-vk'); return d.scrollWidth <= d.clientWidth + 1; })()"))
+    # CSV-Ausgabe der Bestandsliste (übliche Datei seit 02.11.2026) im Bestand hochladen
+    a.click('#vt-stock'); a.wait_for_selector('.stab')
+    with a.expect_file_chooser() as fc: a.click('#view-stock [data-st=import]')
+    fc.value.set_files(CSV)
+    a.wait_for_selector('#dlg-stock-import [data-si=apply]', timeout=20000)
+    t = a.inner_text('#dlg-stock-import')
+    check('CSV: Vorschau mit 4 Artikeln, 2.652,30 kg, 5 Partien, 2 Zugänge, anderer Status und Etiketten genannt', re.search(r'artikel mit bestand\s*4', t, re.I) and '2.652,30' in t
+          and '5 Partien' in t and '2 erwartete Zugänge' in t and '„verkauft“' in t and 'Etiketten' in t, re.sub(r'\s+', ' ', t)[:400])
+    check('CSV: Bestandsdatum = Tag des Hochladens (heute), nur als Info, keine Warnung', a.input_value('#si-date') == today.isoformat() and 'Tag des Hochladens' in t
+          and a.locator('#dlg-stock-import .issues li.warn').count() == 0)
+    a.screenshot(path=SH + '/stock-import-csv.png')
+    a.fill('#si-date', '2026-11-02'); a.click('#dlg-stock-import [data-si=apply]')
+    a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 4", timeout=10000)
+    b = json.loads(storage_raw('bestand').split('\n', 1)[1] if storage_raw('bestand').startswith('<?php') else storage_raw('bestand'))
+    hu = next(x for x in b['articles'] if x['code'] == '10601')
+    check('CSV übernommen: Quelle, Datum, Artikel mit Partien (Marke, EK nur intern), Zugänge', b['source'] == 'bestand.csv' and b['date'] == '2026-11-02'
+          and sorted(x['code'] for x in b['articles']) == ['00001', '10601', '10823', '60100'] and hu['kg'] == 1782.5 and hu['mhd'] == '2026-11-18'
+          and hu['lots'][0]['marke'] == 'Weide Nord' and hu['lots'][0]['ek'] == 10.75 and len(b['incoming']) == 2, (b['source'], b['date'], [x['code'] for x in b['articles']]))
+    check('CSV: Bezeichnung mit Anführungszeichen und Umlaut in der Liste', 'Testhüfte "Premium", frisch' in a.inner_text('.stab'))
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')
