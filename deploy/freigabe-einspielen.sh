@@ -33,6 +33,10 @@ API=${WA_API:-https://api.github.com}
 DOMAIN=$(envwert DOMAIN)
 HEALTH_URL=${WA_HEALTH_URL:-https://$DOMAIN}
 HEALTH_HOST=${WA_HEALTH_HOST:-$DOMAIN:443:127.0.0.1}
+# bunny vor dem Server (docs/bunny-cdn.md): Mit CDN_PFLICHT=1 nimmt Caddy auch Abrufe vom Server selbst nur mit dem Schlüssel an.
+# Die Prüfung schickt ihn wie bunny mit – über die Konfiguration auf der Standardeingabe, nicht in der Prozessliste.
+CDN_KEY=$(envwert CDN_SCHLUESSEL)
+pruefabruf() { if [ -n "$CDN_KEY" ]; then printf 'header = "X-Stafl-Cdn: %s"\n' "$CDN_KEY" | curl -K - "$@"; else curl "$@"; fi; }
 COMPOSE=${WA_COMPOSE:-docker compose}
 DOCKER=${WA_DOCKER:-docker}
 ANMELDUNG_COMPOSE=deploy/anmeldung/docker-compose.anmeldung.yml
@@ -63,7 +67,7 @@ status() { # ok sha vorher lauf meldung
 }
 angebot_ok() { # Angebots-API antwortet: öffentlich (200, ok:true), mit der Aufforderung zur Anmeldung, wenn das
   # Wochenangebot nur für Kunden sichtbar ist (401), oder mit dem Hinweis auf den Wartungsmodus (503, wartung:true)
-  ANT=$(curl -sS -m 5 --resolve "$HEALTH_HOST" -w '\n%{http_code}' "$HEALTH_URL/api/?action=offer" 2>/dev/null) || return 1
+  ANT=$(pruefabruf -sS -m 5 --resolve "$HEALTH_HOST" -w '\n%{http_code}' "$HEALTH_URL/api/?action=offer" 2>/dev/null) || return 1
   CODE=$(printf '%s' "$ANT" | tail -n 1)
   { [ "$CODE" = 200 ] && printf '%s' "$ANT" | grep -q '"ok":true'; } || { [ "$CODE" = 401 ] && printf '%s' "$ANT" | grep -q '"ok":false'; } \
     || { [ "$CODE" = 503 ] && printf '%s' "$ANT" | grep -q '"wartung":true'; }   # Wartungsmodus eingeschaltet
@@ -73,10 +77,10 @@ gesund() { # Status-API, Angebot, Startseite und Eingabebereich wie ein Besucher
   sleep 3
   i=0; gut=0
   while [ $i -lt 20 ]; do
-    if curl -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/api/?action=status" 2>/dev/null | grep -q '"ok":true' \
+    if pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/api/?action=status" 2>/dev/null | grep -q '"ok":true' \
       && angebot_ok \
-      && curl -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/" 2>/dev/null | grep -q 'assets/frontend.js' \
-      && curl -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/admin/" 2>/dev/null | grep -q 'assets/admin.js'; then
+      && pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/" 2>/dev/null | grep -q 'assets/frontend.js' \
+      && pruefabruf -fsS -m 5 --resolve "$HEALTH_HOST" "$HEALTH_URL/admin/" 2>/dev/null | grep -q 'assets/admin.js'; then
       gut=$((gut + 1)); [ $gut -ge 2 ] && return 0
     else
       gut=0

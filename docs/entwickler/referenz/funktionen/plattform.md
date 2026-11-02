@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-102 Dateien, 918 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+102 Dateien, 919 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -825,6 +825,7 @@ _bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in d
 - `caddy_start(kennung, umgebung, netzwerk, port)`
 - `ip(name)`
 - `abruf(ziel, pfad, kopf)` – Abruf aus dem Besucher-Container (öffentliche Adresse): (Status, Antwortköpfe, Inhalt).
+- `vom_server(kopf)`
 
 ## `tests/deploy/test_dashboard_domains.py`
 

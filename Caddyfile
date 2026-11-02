@@ -33,12 +33,15 @@
 #   die von bunny gemeldete Besucher-IP (X-Real-IP), sonst wie bisher die Adresse der Verbindung – wer bunny umgeht, kann die
 #   Besucher-IP nicht fälschen. Anwendung und Keycloak bekommen sie als X-Forwarded-For ({besucher_ip} in jedem
 #   reverse_proxy/forward_auth), den Schlüssel selbst nie (header_up -X-Stafl-Cdn).
-# – CDN_PFLICHT=1 (erst nach der DNS-Umstellung): nur noch Anfragen über bunny und vom Server selbst (private Adressen, z. B.
-#   die Prüfung nach dem Einspielen). Ohne gültigen Schlüssel bleibt die Sperre aus – sonst wäre alles gesperrt.
+# – Die Besucher-IP von bunny (X-Real-IP) gilt nur, wenn sie genau eine IP-Adresse ist (sonst die Adresse der Verbindung).
+# – CDN_PFLICHT=1 (erst nach der DNS-Umstellung): nur noch Anfragen über bunny (mit Schlüssel) und aus dem Caddy-Container
+#   selbst (127.0.0.1). Auch der Server selbst braucht den Schlüssel: Über die Docker-Weiterleitung erscheinen Abrufe vom
+#   Server – und Besucher über IPv6 – mit einer privaten Adresse, daher keine Ausnahme für private Netze. Die Prüfung nach dem
+#   Einspielen schickt den Schlüssel mit (deploy/freigabe-einspielen.sh). Ohne gültigen Schlüssel bleibt die Sperre aus.
 #   Let's-Encrypt-Prüfungen beantwortet Caddy vor allen Regeln; die Zertifikate verlängern sich auch über bunny.
 # Geprüft mit echtem Caddy: tests/deploy/test_cdn.py.
 (cdn) {
-	@cdn expression `{header.X-Stafl-Cdn} == "{$CDN_SCHLUESSEL}" && "{$CDN_SCHLUESSEL}".matches("^[A-Za-z0-9]{32,128}$")`
+	@cdn expression `{header.X-Stafl-Cdn} == "{$CDN_SCHLUESSEL}" && "{$CDN_SCHLUESSEL}".matches("^[A-Za-z0-9]{32,128}$") && ({header.X-Real-IP}.matches("^([0-9]{1,3}[.]){3}[0-9]{1,3}$") || {header.X-Real-IP}.matches("^[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}$"))`
 	vars @cdn ueber_cdn 1
 	map {vars.ueber_cdn} {besucher_ip} {
 		1 {header.X-Real-IP}
@@ -48,7 +51,7 @@
 	header @cdn Stafl-Cdn "erkannt"
 	@direkt {
 		expression `"{$CDN_PFLICHT}" == "1" && "{$CDN_SCHLUESSEL}".matches("^[A-Za-z0-9]{32,128}$") && {header.X-Stafl-Cdn} != "{$CDN_SCHLUESSEL}"`
-		not remote_ip private_ranges
+		not remote_ip 127.0.0.1/8 ::1
 	}
 	handle @direkt {
 		respond "Diese Adresse ist nur über das Content-Delivery-Netz erreichbar." 403
