@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-8 Dateien, 49 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+8 Dateien, 52 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
@@ -47,7 +47,7 @@ _Importvertrag des Moduls Bestand – Schnittstelle zur Importzentrale (docs/pla
 
 ## `app/assets/stock-core.js`
 
-_Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest .xls (BIFF2–BIFF8, auch im OLE-Container) und .xlsx._
+_Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest die CSV-Ausgabe (Semikolon, Windows-1252 oder UTF-8; Spalten „Art._
 
 **Warengruppen nach Artikelnummer**
 
@@ -61,7 +61,13 @@ _Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“)
 - `rk(v)`
 - `cfbStream(b)` – OLE-/CFB-Container: Datenstrom „Workbook“ bzw. „Book“ herauslösen
 - `biffSheets(b)` – BIFF-Datensätze in Tabellenraster umsetzen
-- `readStockWorkbook(buffer)`
+
+**.csv (WinAB-Bestandsliste als CSV)**
+
+- `csvRows(text)` – Zeilen und Zellen: Semikolon, Anführungszeichen (verdoppelt im Text), Zeilenende CRLF oder LF
+- `csvZelle(v)`
+- `readStockCsv(buffer)`
+- `readStockWorkbook(buffer, fileName)` – Datei lesen: .csv nach Name oder Inhalt (Text mit Semikolon), sonst Excel (.xlsx, .xls)
 
 **Bestandsliste auswerten**
 

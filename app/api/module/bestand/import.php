@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /* Importvertrag des Moduls Bestand – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md).
-   Die Bestandsliste aus WinAB (.xls/.xlsx) liest der Leser des Moduls im Browser (app/assets/stock-core.js). Hier prüft
+   Die Bestandsliste aus WinAB (CSV, sonst .xls/.xlsx) liest der Leser des Moduls im Browser (app/assets/stock-core.js). Hier prüft
    der Server die gelesenen Partien (clean_stock, clean_incoming in lib/bestand.php), vergleicht sie mit dem gespeicherten
    Bestand (Vorschau) und ersetzt ihn (Übernahme, mit Protokoll). Die bisherige Aktion stock_import nutzt bestand_speichern().
    Wird von api/index.php geladen; schreibt nur das eigene Dokument „bestand“. Einkaufspreise erscheinen nie in der Vorschau. */
@@ -10,8 +10,8 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 function import_arten_bestand(): array
 {
     return [
-        'bestand' => ['name' => 'Bestand', 'kurz' => 'Partieliste aus WinAB – ersetzt den Bestand', 'beschreibung' => 'Bestandsliste aus WinAB („Partieliste … verfügbar“) mit Art.-Nr., Bezeichnung, Status, MHD und netto. Ersetzt den bisherigen Bestand.',
-            'recht' => ['bestand.importieren'], 'aktion' => 'stock_import', 'dateien' => ['xls', 'xlsx'], 'kodierung' => 'Excel-Datei (.xls oder .xlsx)',
+        'bestand' => ['name' => 'Bestand', 'kurz' => 'Bestandsliste aus WinAB – ersetzt den Bestand', 'beschreibung' => 'Bestandsliste aus WinAB („Partieliste … verfügbar“) als CSV mit den Spalten Art. Nr., Bezeichnung, Marke, EK Gruppe, VK Gruppe, Status, Ankunft, Partie, MHD, Kolli, netto, EK Preis – oder wie bisher als Excel-Datei. Eingelagerte Partien bilden den Bestand, erfasste Partien die erwarteten Zugänge. Ersetzt den bisherigen Bestand.',
+            'recht' => ['bestand.importieren'], 'aktion' => 'stock_import', 'dateien' => ['csv', 'xls', 'xlsx'], 'kodierung' => 'CSV, Semikolon getrennt (Windows-1252 oder UTF-8), oder Excel (.xls, .xlsx)',
             'ansicht' => 'stock', 'vorschau' => 'bestand_import_vorschau', 'uebernahme' => 'bestand_import_uebernehmen',
             'optionen' => [['id' => 'datum', 'typ' => 'datum', 'label' => 'Bestandsdatum', 'pflicht' => true]]],
     ];

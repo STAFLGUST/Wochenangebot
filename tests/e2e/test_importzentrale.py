@@ -27,6 +27,7 @@ GRUPPEN_CSV = FIX + '/kundengruppen/kundengruppen.csv'
 ARTIKEL_CSV = FIX + '/stammdaten/artikelstammdaten.csv'
 VK_CSV = FIX + '/stammdaten/vkgruppen.csv'
 BESTAND_XLS = FIX + '/bestand/bestand.xls'
+BESTAND_CSV = FIX + '/bestand/bestand.csv'   # CSV-Ausgabe der Bestandsliste (synthetisch)
 KW = [FIX + '/angebote/Wochenangebot KW 37 2026.xlsx', FIX + '/angebote/Wochenangebot KW 38 2026.xlsx']
 res = []
 
@@ -90,10 +91,10 @@ check('große Dateien nur mit Teilen: Umsatzdaten in Teilen bis 200 MB, alle and
 zentrale = open(os.path.join(REPO, 'app/api/module/verwaltung/importzentrale.php'), encoding='utf-8').read() + open(os.path.join(REPO, 'app/api/aktionen/importzentrale.php'), encoding='utf-8').read()
 check('Zentrale liest und schreibt selbst keine Daten (nur über den Eigentümer)', not re.search(r'store_(read|write|delete|names)\(|with_lock\(', zentrale))
 check('Zentrale liest keine Dateiformate selbst (Leser beim Eigentümer)', not re.search(r'csvZeilen|parseStockWorkbook|parseOfferWorkbook|xlsxReadWorkbook|TextDecoder', open(os.path.join(REPO, 'app/assets/admin-import.js'), encoding='utf-8').read().split('/* ---------- Darstellung')[1]))
-check('Dateitypen und Optionen angegeben', arten['kunden']['dateien'] == ['csv'] and arten['bestand']['dateien'] == ['xls', 'xlsx'] and arten['preisverlauf']['mehrere'] is True
+check('Dateitypen und Optionen angegeben', arten['kunden']['dateien'] == ['csv'] and arten['bestand']['dateien'] == ['csv', 'xls', 'xlsx'] and arten['preisverlauf']['mehrere'] is True
       and arten['kunden']['bestaetigung'] is True and [o['id'] for o in arten['bestand']['optionen']] == ['datum'] and arten['angebot_excel']['ablauf'] == 'editor', arten['kunden'])
 check('Kurztext je Importart (eine Zeile in der Liste, höchstens 60 Zeichen), ausführliche Beschreibung bleibt', all(0 < len(a['kurz']) <= 60 and len(a['beschreibung']) > len(a['kurz']) for a in arten.values())
-      and arten['bestand']['kurz'] == 'Partieliste aus WinAB – ersetzt den Bestand', {k: a['kurz'] for k, a in arten.items()})
+      and arten['bestand']['kurz'] == 'Bestandsliste aus WinAB – ersetzt den Bestand', {k: a['kurz'] for k, a in arten.items()})
 check('keine internen Funktionsnamen an den Browser', 'vorschau' not in json.dumps(r) and 'uebernahme' not in json.dumps(r))
 
 # ---------- Rechte: Anzeige und Prüfung je Importart (GR-103) ----------
@@ -209,7 +210,7 @@ with sync_playwright() as p:
     check('Liste: alle Importarten, nach Bereich gruppiert', a.locator('#view-importe .imp-art').count() == len(ALLE) and [g for g, _ in gruppen] == ['Stammdaten', 'Angebot und Bestand', 'Personal', 'Controlling']
           and dict(gruppen)['Stammdaten'] == ['kunden', 'kundengruppen', 'vertreter', 'stammdaten', 'vkgruppen'] and 'bestand' in dict(gruppen)['Angebot und Bestand'], gruppen)
     zb = a.inner_text('#view-importe .imp-art[data-art="bestand"]')
-    check('Zeile: Name, Kurztext (ganze Beschreibung im Hinweis), Dateiart, Knopf', 'Partieliste aus WinAB' in zb and a.text_content('.imp-art[data-art="bestand"] .imp-format') == 'Excel'
+    check('Zeile: Name, Kurztext (ganze Beschreibung im Hinweis), Dateiart, Knopf', 'Bestandsliste aus WinAB' in zb and a.text_content('.imp-art[data-art="bestand"] .imp-format') == 'CSV / Excel'
           and a.text_content('.imp-art[data-art="kunden"] .imp-format') == 'CSV' and 'WinAB' in (a.get_attribute('.imp-art[data-art="bestand"] p', 'title') or '')
           and a.locator('.imp-art[data-art="kunden"] .imp-schloss').count() == 1 and a.locator('.imp-art[data-art="bestand"] .imp-schloss').count() == 0
           and a.locator('[data-imp-waehlen="preisverlauf"]').inner_text() == 'Dateien wählen' and a.locator('[data-imp-editor="angebot_excel"]').count() == 1, zb)
@@ -274,6 +275,11 @@ with sync_playwright() as p:
     ziehen('.imp-hinweis', [FIX + '/kunden/vertreter.csv']); a.wait_for_selector('#imp-titel')
     check('Datei neben die Zeilen, Fenster offen: geht in den offenen Import', 'Vertreter importieren' in a.inner_text('#imp-titel'))
     a.click('[data-imp="liste"]'); a.wait_for_selector('.imp-art[data-art="kunden"]')
+    ziehen('.imp-art[data-art="bestand"]', [BESTAND_CSV]); a.wait_for_selector('#imp-neu')
+    tb = a.inner_text('#view-importe')
+    check('Bestand als CSV (Ablage auf „Bestand“): Vorschau mit 4 Artikeln, Hinweis ohne Datum, Datum heute vorgeschlagen', 'Bestand importieren' in a.inner_text('#imp-titel')
+          and 'Kein Datum in der Datei' in tb and a.input_value('[data-imp-opt="datum"]') == __import__('datetime').date.today().isoformat() and 'verkauft' in tb, tb[:500])
+    a.click('[data-imp="liste"]'); a.wait_for_selector('.imp-art[data-art="kunden"]')
     check('neben die Liste fallen gelassen: Browser öffnet die Datei nicht', ziehen('#side-admin', [GRUPPEN_CSV]) is True and a.locator('#imp-titel').count() == 0)
 
     def datei(art, pfad):
@@ -298,7 +304,7 @@ with sync_playwright() as p:
     a.click('[data-imp="liste"]'); datei('vkgruppen', NUR_KOPF_CSV)
     check('Datei nur mit Leerzeilen gilt als leer', 'leer' in fehler_text())
     a.click('[data-imp="liste"]'); datei('bestand', KUNDEN_CSV)
-    check('CSV statt Bestandsliste erkannt', 'Falsche Datei' in fehler_text())
+    check('andere CSV statt Bestandsliste erkannt (keine Partien mit Status „eingelagert“)', 'Keine Bestandszeilen' in fehler_text())
     check('Fehlerfälle: nichts übernommen', doc('vkgruppen') is None and doc('bestand')['source'] == 'parallel.xls')
     a.screenshot(path=SH + '/importzentrale-fehler.png')
 

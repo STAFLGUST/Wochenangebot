@@ -3609,7 +3609,7 @@
   /* Bestandsliste lesen (Leser des Moduls Bestand: stock-core.js) – hier und in der Importzentrale */
   async function stockAusDatei(file) {
     if (file.size > 30 * 1024 * 1024) throw new Error('Die Datei ist größer als 30 MB.');
-    const r = S.parseStockWorkbook(await S.readStockWorkbook(await file.arrayBuffer()), file.name);
+    const r = S.parseStockWorkbook(await S.readStockWorkbook(await file.arrayBuffer(), file.name), file.name);
     if (!r.articles.length && !r.incoming.length) throw new Error('Keine eingelagerten Partien oder erwarteten Zugänge gefunden.');
     return r;
   }
@@ -3641,16 +3641,16 @@
           <label class="fld" style="max-width:220px"><span>Bestandsdatum</span><input type="date" id="si-date" value="${esc(r.date || isoToday())}" required></label>
           <ul class="issues">
             <li class="info"><span class="lvl">Info</span><span>Berücksichtigt: ${fmtInt.format(r.stats.stored)} Partien mit Status „eingelagert“ und ${fmtInt.format(r.stats.expected)} erwartete Zugänge mit Status „erfasst“ (separat, nicht im Bestand).${other ? ` Nicht berücksichtigt: ${other}.` : ''}</span></li>
-            ${r.stats.skipped ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer übersprungen (z. B. „Etiketten“).</span></li>` : ''}
+            ${r.stats.skipped ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).</span></li>` : ''}
             ${r.stats.noMhd ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.</span></li>` : ''}
-            ${!r.date ? '<li class="warn"><span class="lvl">Prüfen</span><span>Kein Datum in der Datei gefunden – bitte Bestandsdatum eintragen.</span></li>' : ''}
+            ${!r.date ? '<li class="warn"><span class="lvl">Prüfen</span><span>Kein Datum in der Datei gefunden (die CSV-Datei enthält keines) – vorgeschlagen ist heute, bitte prüfen.</span></li>' : ''}
             ${stock ? `<li class="info"><span class="lvl">Info</span><span>Ersetzt den bisherigen Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'} (${fmtInt.format(stock.articles.length)} Artikel).</span></li>` : ''}
           </ul>
           <p class="hint">Mengen und MHD sind nur im Eingabebereich sichtbar, nicht auf der öffentlichen Angebotsseite.</p>
         </div>
         <div class="dlg-foot"><button type="button" class="btn" data-si="again">Andere Datei</button><span class="spacer"></span><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-si="apply">${icon('check')}Bestand übernehmen</button></div>`;
     } catch (ex) {
-      $('#stock-import-body').innerHTML = `${head('Bestandsliste nicht lesbar', esc(file.name))}<div class="dlg-body"><div class="err-box">${esc(ex.message || String(ex))}</div><p class="hint">Erwartet wird die Bestandsliste aus WinAB (.xls oder .xlsx) mit den Spalten Art.-Nr., Bezeichnung, Status, MHD und netto.</p></div>
+      $('#stock-import-body').innerHTML = `${head('Bestandsliste nicht lesbar', esc(file.name))}<div class="dlg-body"><div class="err-box">${esc(ex.message || String(ex))}</div><p class="hint">Erwartet wird die Bestandsliste aus WinAB als CSV (Semikolon getrennt) oder Excel (.xls, .xlsx) mit den Spalten Art. Nr., Bezeichnung, Status, MHD und netto.</p></div>
         <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button><button type="button" class="btn primary" data-si="again">Andere Datei wählen</button></div>`;
     }
   }
@@ -4884,9 +4884,9 @@
         const r = await stockAusDatei(file);
         const other = Object.entries(r.stats.other).map(([k, v]) => `${fmtInt.format(v)} × „${k}“`).join(', ');
         const hinweise = [];
-        if (!r.date) hinweise.push({ stufe: 'warn', text: 'Kein Datum in der Datei gefunden – bitte das Bestandsdatum prüfen.' });
+        if (!r.date) hinweise.push({ stufe: 'warn', text: 'Kein Datum in der Datei gefunden (die CSV-Datei enthält keines) – vorgeschlagen ist heute, bitte das Bestandsdatum prüfen.' });
         if (other) hinweise.push({ stufe: 'info', text: `Nicht berücksichtigt (anderer Status): ${other}.` });
-        if (r.stats.skipped) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer übersprungen (z. B. „Etiketten“).` });
+        if (r.stats.skipped) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).` });
         if (r.stats.noMhd) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.` });
         return { daten: { articles: r.articles, incoming: r.incoming }, zeilen: r.stats.rows, fehler: [], hinweise, optionen: { datum: r.date || isoToday() } };
       },

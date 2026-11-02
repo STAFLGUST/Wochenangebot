@@ -237,7 +237,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `frontend.js` | angebot | Wochenangebot – öffentliches Frontend |
 | `legal.css` | angebot | Gestaltung der Rechtsseiten (Kontakt, Impressum, Datenschutz): eigenes kleines Stylesheet ohne app.css, hell/dunkel nach Systemeinstellung. |
 | `offer-core.js` | angebot | Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Leser (ohne externe Bibliothek) - Parser der Angebotsliste → editierbares Datenmodell - Anreicherung (Merkmale, Teilstück, Merklisten-Schlüssel … |
-| `stock-core.js` | bestand | Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest .xls (BIFF2–BIFF8, auch im OLE-Container) und .xlsx. |
+| `stock-core.js` | bestand | Bestand – Einlesen der WinAB-Bestandsliste („Partieliste … verfügbar“) Liest die CSV-Ausgabe (Semikolon, Windows-1252 oder UTF-8; Spalten „Art. |
 | `theme.js` | plattform | Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, wegen Content-Security-Policy) |
 | `webapp.js` | angebot | Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-Bildschirm“. |
 
