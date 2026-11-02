@@ -116,7 +116,7 @@ Agent: `marketing` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `m
 
 Kennzahlen, Auswertungen und Berichte für Geschäftsführung und Bereiche: Umsatzstatistik; geplant OP-Konten, Liquidität
 
-Agent: `controlling` · hängt ab von `plattform`, `verwaltung` · Testgruppen: `controlling`, `controlling_umsatzdaten`
+Agent: `controlling` · hängt ab von `plattform`, `verwaltung`, `bestand` · Testgruppen: `controlling`, `controlling_umsatzdaten`
 
 | Oberfläche | Art | Adresse | Entwicklung | Freigabe |
 | --- | --- | --- | --- | --- |
