@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 /* Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/)
-   Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet), Abwesenheitskalender (nur „abwesend“);
+   Rechte (GR-103): hr.antrag – eigener Urlaub und Gleittage, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet; Gleittage nur mit Rest
+                    auf dem Gleittage-Konto), Abwesenheitskalender (nur „abwesend“);
                     hr.genehmigen – Urlaubsanträge genehmigen/ablehnen, nie die eigenen (zuweisbar, z. B. eigene Rolle);
                     hr.uebersicht – Urlaubsübersicht aller Mitarbeiter, nur Summen inkl. Krank-/Gleittage (hr.verwalten sieht sie auch);
-                    hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Export, Übernahme.
+                    hr.verwalten – Personalstelle: Einträge K/G/U/freie Tage (nicht für sich selbst), Mitarbeiter, Gleittage gewähren
+                    (hr_gleittage_save, nicht für sich selbst), Export, Übernahme.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
@@ -19,7 +21,8 @@ function hr_jahr_param($v): int
 /* Angaben einer Person für die Personalstelle */
 function hr_person_aus(array $p, array $eintraege, int $jahr): array
 {
-    return $p + ['name' => hr_name($p), 'konto' => hr_konto($p, $eintraege, $jahr)];
+    return array_merge($p, ['name' => hr_name($p), 'konto' => hr_konto($p, $eintraege, $jahr), 'gleitKonto' => hr_gleit_konto($p, $eintraege, $jahr),
+                            'gleittage' => hr_gleit_aus($p, true)]);
 }
 
 switch ($action) {
@@ -55,6 +58,7 @@ switch ($action) {
                      'korrekturen' => array_map(function ($m) use ($ich) { return hr_korrektur_aus($m, $ich); }, array_slice($meine, 0, 30)),
                      'ich' => $ich ? ['id' => $ich['id'], 'name' => hr_name($ich), 'abteilung' => $ich['abteilung'], 'arbeitstage' => $ich['arbeitstage']] : null,
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
+                     'gleitKonto' => $ich ? hr_gleit_konto($ich, $abw['eintraege'], $jahr) : null, 'gleittage' => $ich ? hr_gleit_aus($ich) : [],
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis'],
                      'antraege' => $einst['antraege']]);
         }
@@ -80,13 +84,16 @@ switch ($action) {
             respond(['ok' => true, 'voll' => may($me, 'hr.verwalten')] + hr_monat($jahr, $monat, $me, may($me, 'hr.verwalten')));
         }
 
-        /* Urlaubsantrag stellen (eigene Person) */
+        /* Antrag stellen (eigene Person): Urlaub (art U, Standard) oder Gleittag (art G, nur soweit das Gleittage-Konto reicht) */
         case 'hr_antrag': {
             $me = require_perm('hr.antrag', true);
             $b = body();
             [$von, $bis] = hr_zeitraum_pruefen($b);
+            $art = (string)($b['art'] ?? 'U');
+            if (!in_array($art, ['U', 'G'], true)) fail('Beantragen lassen sich Urlaub und Gleittage.', 422);
+            if ($art === 'G' && substr($von, 0, 4) !== substr($bis, 0, 4)) fail('Gleittage bitte je Kalenderjahr beantragen.', 422);
             $notiz = s($b['notiz'] ?? '', 300) ?? '';
-            $res = with_lock('hr-abwesenheiten', function () use ($me, $von, $bis, $notiz, $b) {
+            $res = with_lock('hr-abwesenheiten', function () use ($me, $von, $bis, $notiz, $b, $art) {
                 $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
                 // ausgeschaltet in Verwaltung → Urlaub: der Server lehnt ab, auch wenn eine Seite den Antrag noch zeigt (GR-103)
                 if (!$einst['antraege']) fail('Urlaubsanträge werden derzeit nicht über die Plattform gestellt. Bitte an die Personalstelle wenden.', 409);
@@ -95,6 +102,11 @@ switch ($action) {
                 if ($von < hr_heute()) fail('Urlaub kann nur für heute oder später beantragt werden. Vergangene Tage trägt die Personalstelle ein.', 422);
                 $tage = hr_tage($ich, $von, $bis, null, null, hr_freie_tage($abw['eintraege'], $ich['id']));
                 if (!$tage) fail('Im gewählten Zeitraum liegen keine Arbeitstage (Wochenende, Feiertag oder freier Tag).', 422);
+                if ($art === 'G') {
+                    $gk = hr_gleit_konto($ich, $abw['eintraege'], (int)substr($von, 0, 4));
+                    if (!$gk['aktiv']) fail('Sie haben noch keine Gleittage. Gleittage gewährt die Personalstelle.', 409);
+                    if (count($tage) > $gk['verfuegbar']) fail('Dafür reicht Ihr Gleittage-Konto nicht: verfügbar ' . str_replace('.', ',', (string)max(0, $gk['verfuegbar'])) . ' Tage, beantragt ' . count($tage) . '.', 409);
+                }
                 if ($s = hr_ueberschneidung($einst['sperren'], $von, $bis)) fail('Im Zeitraum ' . hr_zeitraum_text($s['von'], $s['bis']) . ' gilt eine Urlaubssperre' . ($s['text'] !== '' ? ' (' . $s['text'] . ')' : '') . '.', 422);
                 if ($k = hr_kollision($abw['eintraege'], $ich['id'], $von, $bis, null, 'U')) fail('Für ' . hr_zeitraum_text($k['von'], $k['bis']) . ' gibt es bereits einen Eintrag.', 409);
                 $vert = null;
@@ -103,17 +115,17 @@ switch ($action) {
                     if (!$vp || !$vp['aktiv'] || $vp['id'] === $ich['id']) fail('Bitte eine gültige Vertretung wählen.', 422);
                     $vert = $vp['id'];
                 }
-                $e = ['id' => hr_neue_id('a'), 'person' => $ich['id'], 'art' => 'U', 'von' => $von, 'bis' => $bis, 'status' => 'beantragt', 'notiz' => $notiz,
+                $e = ['id' => hr_neue_id('a'), 'person' => $ich['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'status' => 'beantragt', 'notiz' => $notiz,
                       'vertretung' => $vert, 'quelle' => 'antrag', 'erfasst' => ['t' => now(), 'by' => $me['name'], 'byId' => $me['id']]];
                 $abw['eintraege'][] = $e;
                 hr_abwesenheiten_schreiben($abw);
                 $jahr = (int)substr($von, 0, 4);
-                return [$e, $ich, count($tage), hr_konto($ich, $abw['eintraege'], $jahr), hr_freie_tage($abw['eintraege'], $ich['id'])];
+                return [$e, $ich, count($tage), hr_konto($ich, $abw['eintraege'], $jahr), hr_freie_tage($abw['eintraege'], $ich['id']), hr_gleit_konto($ich, $abw['eintraege'], $jahr)];
             });
-            [$e, $ich, $n, $konto, $frei] = $res;
-            audit('hr', 'HR: Urlaub beantragt ' . hr_zeitraum_text($e['von'], $e['bis']) . " ($n Arbeitstage)");
-            respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto,
-                     'hinweis' => $konto['verfuegbar'] < 0 ? 'Der Antrag übersteigt Ihren Resturlaub um ' . (-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.' : null]);
+            [$e, $ich, $n, $konto, $frei, $gleit] = $res;
+            audit('hr', 'HR: ' . ($e['art'] === 'G' ? 'Gleittag' : 'Urlaub') . ' beantragt ' . hr_zeitraum_text($e['von'], $e['bis']) . " ($n Arbeitstage)");
+            respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto, 'gleitKonto' => $gleit,
+                     'hinweis' => $e['art'] === 'U' && $konto['verfuegbar'] < 0 ? 'Der Antrag übersteigt Ihren Resturlaub um ' . (-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.' : null]);
         }
 
         /* Eigenen Antrag zurückziehen (offen oder genehmigt, solange er noch nicht begonnen hat) */
@@ -125,7 +137,7 @@ switch ($action) {
                 $ich = hr_ich($personal, $me);
                 foreach ($abw['eintraege'] as &$e) {
                     if ($e['id'] !== $id) continue;
-                    if (!$ich || $e['person'] !== $ich['id'] || $e['art'] !== 'U') break;
+                    if (!$ich || $e['person'] !== $ich['id'] || !in_array($e['art'], ['U', 'G'], true)) break;
                     if (!in_array($e['status'], HR_AKTIV, true)) fail('Dieser Antrag ist bereits erledigt.', 409);
                     if ($e['status'] === 'genehmigt' && $e['von'] <= hr_heute()) fail('Begonnener Urlaub kann nur die Personalstelle ändern.', 409);
                     $e['status'] = 'zurueckgezogen';
@@ -137,7 +149,7 @@ switch ($action) {
                 }
                 fail('Antrag nicht gefunden.', 404);
             });
-            audit('hr', 'HR: Urlaubsantrag zurückgezogen ' . hr_zeitraum_text($e['von'], $e['bis']));
+            audit('hr', 'HR: ' . ($e['art'] === 'G' ? 'Gleittag-Antrag' : 'Urlaubsantrag') . ' zurückgezogen ' . hr_zeitraum_text($e['von'], $e['bis']));
             respond(['ok' => true]);
         }
 
@@ -264,7 +276,7 @@ switch ($action) {
                 }
                 fail('Antrag nicht gefunden.', 404);
             });
-            audit('hr', 'HR: Urlaubsantrag ' . ($p ? hr_name($p) : '') . ' ' . hr_zeitraum_text($e['von'], $e['bis']) . ' ' . $ent);
+            audit('hr', 'HR: ' . (($e['art'] ?? 'U') === 'G' ? 'Gleittag-Antrag ' : 'Urlaubsantrag ') . ($p ? hr_name($p) : '') . ' ' . hr_zeitraum_text($e['von'], $e['bis']) . ' ' . $ent);
             respond(['ok' => true, 'status' => $e['status']]);
         }
 
@@ -311,12 +323,36 @@ switch ($action) {
                     $abw['eintraege'][$i] = $e;
                 }
                 hr_abwesenheiten_schreiben($abw);
-                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id'])];
+                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id']), $abw['eintraege']];
             });
-            [$e, $p, $was, $frei] = $res;
+            [$e, $p, $was, $frei, $alle] = $res;
             // Protokoll ohne Art der Abwesenheit (Krankheit ist ein Gesundheitsdatum)
             audit('hr', 'HR: Abwesenheit ' . ($p ? hr_name($p) : '') . ' ' . hr_zeitraum_text($e['von'], $e['bis']) . ' ' . $was);
-            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null]);
+            // Gleittag über das Gleittage-Konto hinaus: erlaubt (Personalstelle), aber mit Hinweis
+            $hinweis = null;
+            if ($p && $e['art'] === 'G' && $e['status'] !== 'storniert') {
+                $gk = hr_gleit_konto($p, $alle, (int)substr($e['von'], 0, 4));
+                if (!$gk['aktiv']) $hinweis = hr_name($p) . ' hat noch kein Gleittage-Konto – der Gleittag zählt erst, wenn Gleittage gewährt sind.';
+                elseif ($gk['rest'] < 0) $hinweis = 'Das Gleittage-Konto von ' . hr_name($p) . ' steht damit bei ' . str_replace('.', ',', (string)$gk['rest']) . ' Tagen.';
+            }
+            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null, 'hinweis' => $hinweis]);
+        }
+
+        /* Gleittage gewähren ({person, tage, grund}; negative Anzahl = Korrektur mit Grund) oder eine Gewährung stornieren
+           ({person, id, stornieren: true, grund}) – Personalstelle, nie für sich selbst. Antwort: Konto und Gewährungen der Person. */
+        case 'hr_gleittage_save': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            $jahr = hr_jahr_param($b['jahr'] ?? null);
+            [$roh, $was] = hr_gleittage_setzen($b, $me);
+            $personal = hr_personal(); $abw = hr_abwesenheiten();
+            $p = null;
+            foreach ($personal['personen'] as $x) if ($x['nutzer'] === $roh['nutzer']) $p = $x;
+            if (!$p) fail('Mitarbeiter nicht gefunden.', 404);
+            $tage = $was === 'gewährt' ? end($roh['gleittage'])['tage'] : null;
+            audit('hr', 'HR: Gleittage ' . hr_name($p) . ' ' . ($was === 'gewährt' ? ($tage > 0 ? '+' : '') . str_replace('.', ',', (string)$tage) . ' gewährt' : 'Gewährung storniert'));   // ohne Grund
+            respond(['ok' => true, 'rev' => $personal['rev'], 'person' => $p['id'], 'neu' => $was === 'gewährt' ? end($roh['gleittage'])['id'] : null,
+                     'gleitKonto' => hr_gleit_konto($p, $abw['eintraege'], $jahr), 'gleittage' => hr_gleit_aus($p, true)]);
         }
 
         /* Verwaltung → Mitarbeiter: HR-Angaben aller Mitarbeiter mit Urlaubskonto, Urlaubssperren, Ferien (Personalstelle).

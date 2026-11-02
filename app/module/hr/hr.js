@@ -1,4 +1,6 @@
 /* STAFL-Plattform · HR · Urlaub
+   Gleittage-Konto (02.11.2026): Personalstelle gewährt Gleittage (Übersicht → „Gleittage gewähren“), Mitarbeiter sehen Rest und
+   Gewährungen und beantragen Gleittage wie Urlaub (nur soweit der Rest reicht), Genehmiger sehen den Gleittage-Rest.
    Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, nie Krankheit), Urlaubsantrag (ausblendbar: Verwaltung → Urlaub, Schalter
    „Urlaubsanträge über die Plattform“), Liste „Mein Urlaub und Anträge“ (nur Urlaub), Mini-Kalender „Mein Jahr“ mit allen
    eigenen Abwesenheiten und „Korrektur melden“ (geht an die Personalstelle), Abwesenheitskalender (Kollegen nur „abwesend“).
@@ -20,7 +22,7 @@
   const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag' };
   const STATUS = { beantragt: 'beantragt', genehmigt: 'genehmigt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen', storniert: 'storniert' };
   let csrf = '';
-  const S = { offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
+  const S = { art: 'U', gleit: null, offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
 
   async function api(action, body, query = '') {
     let res;
@@ -123,6 +125,7 @@
       + wert('Genommen', k.genommen)
       + wert('Geplant', k.geplant)
       + wert('Beantragt', k.beantragt);
+    zeigeGleitMein();
     // Urlaubsanträge ausgeschaltet (Verwaltung → Urlaub): Formular ausblenden, Hinweis zeigen – der Server lehnt Anträge ohnehin ab
     const antraege = d.antraege !== false;
     $('#antrag').hidden = !antraege;
@@ -131,10 +134,10 @@
     const sel = $('#antrag-vertretung'), alt = sel.value;
     sel.innerHTML = '<option value="">– keine –</option>' + d.kollegen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     sel.value = alt;
-    // Liste: nur Urlaub und Anträge – Krank, Gleittag und freie Tage stehen im Mini-Kalender „Mein Jahr“
-    const liste = d.eintraege.filter((e) => e.art === 'U' && e.von <= `${d.jahr}-12-31` && e.bis >= `${d.jahr}-01-01`);
+    // Liste: Urlaub, Gleittage und Anträge – Krank und freie Tage stehen im Mini-Kalender „Mein Jahr“
+    const liste = d.eintraege.filter((e) => (e.art === 'U' || e.art === 'G') && e.von <= `${d.jahr}-12-31` && e.bis >= `${d.jahr}-01-01`);
     $('#mein-liste').innerHTML = liste.length ? liste.map((e) => {
-      const zurueck = e.art === 'U' && (e.status === 'beantragt' || (e.status === 'genehmigt' && e.von > d.heute));
+      const zurueck = (e.art === 'U' || e.art === 'G') && (e.status === 'beantragt' || (e.status === 'genehmigt' && e.von > d.heute));
       const ent = e.entscheidung && e.status !== 'genehmigt' && e.entscheidung.grund ? `Grund: ${e.entscheidung.grund}` : '';
       return `<li><span class="hr-art ${esc(e.art)}" title="${esc(e.artText)}">${esc(e.art === 'X' ? 'x' : e.art)}</span>
         <span class="zeitraum">${esc(zeitraum(e.von, e.bis))}</span><span>${esc(tageText(e.tage))}</span>
@@ -142,10 +145,34 @@
         ${zurueck ? `<button type="button" class="btn" data-zurueck="${esc(e.id)}">Zurückziehen</button>` : ''}
         ${e.notiz || ent ? `<span class="mehr">${esc([e.notiz, ent].filter(Boolean).join(' · '))}</span>` : ''}</li>`;
     }).join('') : `<li class="leer">Kein Urlaub in ${d.jahr}.</li>`;
+    artSetzen(S.art);
     antragTage();
     zeigeMiniKalender();
     zeigeKorrekturen();
   }
+
+  /* ---------- Gleittage-Konto des Mitarbeiters: Rest, gewährt, genommen und die Gewährungen ---------- */
+  const vorzeichen = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + zahl(Math.abs(n));
+  function zeigeGleitMein() {
+    const d = S.start, g = d.gleitKonto, box = $('#mein-gleit');
+    const aktiv = !!(g && g.aktiv);
+    box.hidden = !aktiv;
+    $('#antrag-art').hidden = !aktiv;
+    if (!aktiv) { if (S.art === 'G') S.art = 'U'; return; }
+    const gew = (d.gleittage || []).filter((x) => !x.storniert).slice(0, 5);
+    box.innerHTML = `<div class="hr-gleit-kopf"><span>Gleittage ${esc(String(g.jahr))}</span><b class="${g.rest < 0 ? 'minus' : ''}">${esc(tageText(g.rest))} Rest</b>
+      <small>${[g.uebertrag ? `${zahl(g.uebertrag)} aus dem Vorjahr` : '', `${zahl(g.gewaehrt)} gewährt`, `${zahl(g.genommen)} genommen`, g.geplant ? `${zahl(g.geplant)} geplant` : '', g.beantragt ? `${zahl(g.beantragt)} beantragt` : ''].filter(Boolean).map(esc).join(' · ')}</small></div>
+      ${gew.length ? `<ul class="hr-gleit-gew">${gew.map((x) => `<li><b>${esc(vorzeichen(x.tage))}</b> am ${esc(de(x.am))}${x.grund ? ` – ${esc(x.grund)}` : ''}</li>`).join('')}</ul>` : ''}`;
+  }
+  function artSetzen(art) {
+    const g = S.start && S.start.gleitKonto;
+    S.art = art === 'G' && g && g.aktiv ? 'G' : 'U';
+    $$('#antrag-art [data-art]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.art === S.art)));
+    $('#antrag-titel').textContent = S.art === 'G' ? 'Gleittag beantragen' : 'Urlaub beantragen';
+    $('[data-antrag-von]').textContent = S.art === 'G' ? 'Erster Gleittag' : 'Erster Urlaubstag';
+    $('[data-antrag-bis]').textContent = S.art === 'G' ? 'Letzter Gleittag' : 'Letzter Urlaubstag';
+  }
+  $('#antrag-art').addEventListener('click', (e) => { const b = e.target.closest('[data-art]'); if (b) { artSetzen(b.dataset.art); antragTage(); } });
 
   /* ---------- Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten ----------
      Tage wie im Urlaubskonto: U, K, G nur an Arbeitstagen der Person (ohne Feiertage und freie Tage), freie Tage (x)
@@ -238,6 +265,12 @@
       const w = ((t.getDay() + 6) % 7) + 1;
       if (d.ich.arbeitstage.includes(w) && !(d.feiertage || {})[iso(t)]) n++;
     }
+    const g = d.gleitKonto;
+    if (n && S.art === 'G') {
+      const frei = g ? g.verfuegbar : 0;
+      out.textContent = `${n === 1 ? '1 Gleittag' : `${zahl(n)} Gleittage`}${n > frei ? ` – Ihr Gleittage-Konto reicht nur für ${tageText(Math.max(0, frei))}` : ` (noch ${tageText(frei)} frei)`}`;
+      return;
+    }
     out.textContent = n ? `${tageText(n)} Urlaub` : 'Im Zeitraum liegen keine Arbeitstage.';
   }
   $('#antrag-von').addEventListener('change', () => { if (!$('#antrag-bis').value || $('#antrag-bis').value < $('#antrag-von').value) $('#antrag-bis').value = $('#antrag-von').value; antragTage(); });
@@ -246,14 +279,15 @@
   $('#antrag').addEventListener('submit', async (e) => {
     e.preventDefault();
     const m = $('#antrag-meldung');
-    const b = { von: $('#antrag-von').value, bis: $('#antrag-bis').value, vertretung: $('#antrag-vertretung').value, notiz: $('#antrag-notiz').value };
-    if (!b.von || !b.bis) { meldung(m, 'Bitte ersten und letzten Urlaubstag angeben.'); return; }
+    const b = { art: S.art, von: $('#antrag-von').value, bis: $('#antrag-bis').value, vertretung: $('#antrag-vertretung').value, notiz: $('#antrag-notiz').value };
+    if (!b.von || !b.bis) { meldung(m, S.art === 'G' ? 'Bitte ersten und letzten Gleittag angeben.' : 'Bitte ersten und letzten Urlaubstag angeben.'); return; }
     if (b.bis < b.von) { meldung(m, ''); $('#antrag-bis').focus(); return; }   // der Hinweis unter den Daten sagt es schon
     $('#antrag-senden').disabled = true;
     const r = await api('hr_antrag', b);
     $('#antrag-senden').disabled = false;
     if (r.status !== 200) { meldung(m, fehlerText(r, 'Der Antrag konnte nicht gestellt werden')); return; }
     $('#antrag').reset();
+    S.art = 'U';
     await ladeStart();
     meldung($('#antrag-meldung'), r.data.hinweis ? 'Antrag gestellt. ' + r.data.hinweis : 'Antrag gestellt – er wird jetzt geprüft.', r.data.hinweis ? 'warn' : 'ok');
   });
@@ -473,11 +507,13 @@
   function zeigeAntraege() {
     const darf = !!(S.start && S.start.genehmigen);
     $('#antraege-liste').innerHTML = S.offen.length ? S.offen.map((a) => {
-      const nach = a.konto.rest - (a.tageImJahr ?? a.tage);   // Konto des Beginnjahres: nur die Tage in diesem Jahr
+      const gleit = a.art === 'G' && a.gleitKonto;
+      const k = gleit ? a.gleitKonto : a.konto;
+      const nach = k.rest - (a.tageImJahr ?? a.tage);   // Konto des Beginnjahres: nur die Tage in diesem Jahr
       return `<article class="hr-antrag hr-glas" data-id="${esc(a.id)}">
-        <h3>${esc(a.name)}</h3>
+        <h3>${esc(a.name)}${a.art === 'G' ? ' <span class="hr-pille gleit">Gleittag</span>' : ''}</h3>
         <div class="zeitraum">${esc(zeitraum(a.von, a.bis))} · ${esc(tageText(a.tage))}</div>
-        <dl><dt>Resturlaub ${a.tageImJahr != null && a.tageImJahr < a.tage ? esc(String(a.konto.jahr)) + ' ' : ''}danach</dt><dd${nach < 0 ? ' style="color:var(--hr-fehler);font-weight:700"' : ''}>${esc(tageText(nach))} (von ${esc(zahl(a.konto.rest))})</dd>
+        <dl><dt>${gleit ? 'Gleittage' : 'Resturlaub'} ${a.tageImJahr != null && a.tageImJahr < a.tage ? esc(String(k.jahr)) + ' ' : ''}danach</dt><dd${nach < 0 ? ' style="color:var(--hr-fehler);font-weight:700"' : ''}>${esc(tageText(nach))} (von ${esc(zahl(k.rest))})</dd>
         ${a.vertretungName ? `<dt>Vertretung</dt><dd>${esc(a.vertretungName)}</dd>` : ''}
         ${a.kollegen.length ? `<dt>Gleichzeitig weg</dt><dd>${esc(a.kollegen.join(', '))}</dd>` : ''}
         ${a.notiz ? `<dt>Notiz</dt><dd>${esc(a.notiz)}</dd>` : ''}
@@ -606,7 +642,8 @@
       von: $('#eintrag-von').value, bis: $('#eintrag-bis').value, notiz: $('#eintrag-notiz').value };
     const r = await api('hr_eintrag_save', b);
     if (r.status !== 200) { meldung($('#eintrag-meldung'), fehlerText(r, 'Speichern fehlgeschlagen')); return; }
-    nachEintrag();
+    await nachEintrag();
+    meldung($('#eintraege-meldung'), r.data.hinweis || '', 'warn');   // z. B. Gleittag über das Gleittage-Konto hinaus
   });
   $('#eintrag-storno').addEventListener('click', async () => {
     const r = await api('hr_eintrag_save', { id: $('#dlg-eintrag').dataset.id, stornieren: true });
@@ -627,7 +664,7 @@
     zeigeUebersicht();
   }
   // Rest zuerst: die wichtigste Zahl ist auf dem Handy ohne Scrollen sichtbar
-  const SP = [['rest', 'Rest'], ['anspruch', 'Anspruch'], ['uebertrag', 'Übertrag'], ['genommen', 'Genommen'], ['geplant', 'Geplant'], ['beantragt', 'Beantragt'], ['krank', 'Krank'], ['gleittage', 'Gleittage']];
+  const SP = [['rest', 'Rest'], ['anspruch', 'Anspruch'], ['uebertrag', 'Übertrag'], ['genommen', 'Genommen'], ['geplant', 'Geplant'], ['beantragt', 'Beantragt'], ['krank', 'Krank'], ['gleittage', 'Gleittage'], ['gleitRest', 'Gleittage-Rest']];
   function zeigeUebersicht() {
     const f = $('#ueb-abteilung').value;
     const zeilen = S.ueb.zeilen.filter((z) => !f || z.abteilung === f);
@@ -636,6 +673,10 @@
       if (k === 'uebertrag' && (z.verfallen > 0 || z.verfaellt > 0)) {
         const t = z.verfallen > 0 ? `${tageText(z.verfallen)} verfallen` : `${tageText(z.verfaellt)} verfallen nach dem ${(S.ueb.uebertragBis || '03-31').split('-').reverse().join('.')}.`;
         return `<td class="zahl" title="${esc(t)}">${esc(zahl(v))}<small class="gedaempft"> (${esc(z.verfallen > 0 ? '−' + zahl(z.verfallen) : zahl(z.verfaellt) + '!')})</small></td>`;
+      }
+      if (k === 'gleitRest') {
+        const t = v === null || v === undefined ? '<span class="gedaempft">–</span>' : `<span class="${v < 0 ? 'minus' : ''}">${esc(zahl(v))}</span>`;
+        return `<td class="zahl gleit">${S.start && S.start.verwalten && !(S.start.ich && S.start.ich.id === z.id) ? `<button type="button" class="hr-gleit-zelle" data-gleit="${esc(z.id)}" aria-label="Gleittage von ${esc(z.name)}">${t}</button>` : t}</td>`;
       }
       return `<td class="zahl${k === 'rest' ? ' rest' + (v < 0 ? ' minus' : '') : ''}">${v ? esc(zahl(v)) : '<span class="gedaempft">0</span>'}</td>`;
     };
@@ -649,11 +690,71 @@
     html += '</tbody>';
     if (zeilen.length > 1) {
       const sum = (k) => zeilen.reduce((a, z) => a + Number(z[k] || 0), 0);
-      html += `<tfoot><tr><th scope="row">Summe (${zeilen.length})</th>${SP.map(([k]) => `<td class="zahl">${esc(zahl(sum(k)))}</td>`).join('')}</tr></tfoot>`;
+      html += `<tfoot><tr><th scope="row">Summe (${zeilen.length})</th>${SP.map(([k]) => `<td class="zahl">${k === 'gleitRest' && !zeilen.some((z) => z.gleitRest !== null) ? '–' : esc(zahl(sum(k)))}</td>`).join('')}</tr></tfoot>`;
     }
     $('#ueb-tabelle').innerHTML = html;
   }
   $('#ueb-abteilung').addEventListener('change', zeigeUebersicht);
+
+  /* ---------- Gleittage gewähren (Personalstelle) ----------
+     Daten der Personen (Konto, Gewährungen) aus hr_verwaltung des Übersichtsjahres; der Server prüft Recht und Vier-Augen-Prinzip. */
+  async function gleitOeffnen(person) {
+    const dlg = $('#dlg-gleit');
+    meldung($('#gleit-meldung'), '');
+    $('#gleit-konto').innerHTML = ''; $('#gleit-liste').innerHTML = '';
+    if (!dlg.open) dlg.showModal();
+    const r = await api('hr_verwaltung', null, '&jahr=' + S.ujahr);
+    if (r.status !== 200) { meldung($('#gleit-meldung'), fehlerText(r, 'Mitarbeiter nicht verfügbar')); return; }
+    const ich = S.start && S.start.ich ? S.start.ich.id : '';
+    S.gleit = { jahr: r.data.jahr, personen: r.data.personen.filter((p) => p.aktiv && !p.altbestand && p.id !== ich) };
+    const sel = $('#gleit-person');
+    sel.innerHTML = '<option value="">– bitte wählen –</option>' + S.gleit.personen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+    sel.value = person && S.gleit.personen.some((p) => p.id === person) ? person : '';
+    $('#gleit-tage').value = '1'; $('#gleit-grund').value = '';
+    gleitZeigen();
+    (sel.value ? $('#gleit-tage') : sel).focus();
+  }
+  function gleitZeigen() {
+    const p = S.gleit && S.gleit.personen.find((x) => x.id === $('#gleit-person').value);
+    $('#gleit-speichern').disabled = !p;
+    if (!p) { $('#gleit-konto').innerHTML = ''; $('#gleit-liste').innerHTML = '<li class="leer">Bitte einen Mitarbeiter wählen.</li>'; return; }
+    const g = p.gleitKonto;
+    $('#gleit-konto').innerHTML = g.aktiv
+      ? wert(`Rest ${g.jahr}`, g.rest, 'haupt' + (g.rest < 0 ? ' minus' : '')) + wert('Aus dem Vorjahr', g.uebertrag) + wert('Gewährt', g.gewaehrt) + wert('Genommen', g.genommen + g.geplant, '', g.geplant ? `davon ${zahl(g.geplant)} geplant` : '')
+      : '<p class="hr-klein">Noch keine Gleittage gewährt – das Konto beginnt mit der ersten Gewährung.</p>';
+    const l = p.gleittage || [];
+    $('#gleit-liste').innerHTML = l.length ? l.map((x) => `<li class="${x.storniert ? 'storniert' : ''}"><b>${esc(vorzeichen(x.tage))}</b><span>am ${esc(de(x.am))} · ${esc(x.von)}${x.grund ? ` – ${esc(x.grund)}` : ''}${x.storniert ? ` · storniert von ${esc(x.storniert.by)}` : ''}</span>
+      ${x.storniert ? '' : `<button type="button" class="btn" data-gleit-storno="${esc(x.id)}">Stornieren</button>`}</li>`).join('') : '<li class="leer">Noch keine Gewährung.</li>';
+  }
+  async function gleitSpeichern(body) {
+    const r = await api('hr_gleittage_save', { ...body, person: $('#gleit-person').value, jahr: S.gleit.jahr });
+    if (r.status !== 200) { meldung($('#gleit-meldung'), fehlerText(r, 'Speichern fehlgeschlagen')); return false; }
+    const p = S.gleit.personen.find((x) => x.id === r.data.person);
+    if (p) { p.gleitKonto = r.data.gleitKonto; p.gleittage = r.data.gleittage; }
+    gleitZeigen();
+    if (S.ueb) ladeUebersicht();
+    return true;
+  }
+  $('#ueb-gleit').addEventListener('click', () => gleitOeffnen(''));
+  $('#gleit-person').addEventListener('change', () => { meldung($('#gleit-meldung'), ''); gleitZeigen(); });
+  $('#gleit-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const tage = Number($('#gleit-tage').value), grund = $('#gleit-grund').value.trim();
+    if (!tage || Math.round(tage * 2) !== tage * 2) { meldung($('#gleit-meldung'), 'Bitte die Anzahl in ganzen oder halben Tagen angeben.'); return; }
+    if (tage < 0 && !grund) { meldung($('#gleit-meldung'), 'Bitte bei einer Korrektur einen Grund angeben.'); return; }
+    $('#gleit-speichern').disabled = true;
+    const ok = await gleitSpeichern({ tage, grund });
+    $('#gleit-speichern').disabled = false;
+    if (ok) { $('#gleit-grund').value = ''; meldung($('#gleit-meldung'), `${tageText(Math.abs(tage))} ${tage > 0 ? 'gewährt' : 'abgezogen'}.`, 'ok'); }
+  });
+  $('#gleit-liste').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-gleit-storno]');
+    if (!b) return;
+    b.disabled = true;
+    if (await gleitSpeichern({ id: b.dataset.gleitStorno, stornieren: true })) meldung($('#gleit-meldung'), 'Gewährung storniert.', 'ok');
+    else b.disabled = false;
+  });
+  $('#ueb-tabelle').addEventListener('click', (e) => { const b = e.target.closest('[data-gleit]'); if (b) gleitOeffnen(b.dataset.gleit); });
   $('#tab-uebersicht').addEventListener('click', (e) => {
     const b = e.target.closest('[data-ujahr]');
     if (!b) return;

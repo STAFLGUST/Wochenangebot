@@ -53,14 +53,18 @@
         <p class="hr-hinweis" id="mein-ohne" hidden>Ihr Konto ist noch keinem Mitarbeiter der Urlaubsverwaltung zugeordnet. Bitte an die Personalstelle wenden.</p>
         <div id="mein-inhalt">
           <div class="hr-konto" id="mein-konto"></div>
+          <div class="hr-gleit hr-glas" id="mein-gleit" hidden></div>
           <p class="hr-hinweis" id="antrag-aus" hidden>Urlaubsanträge werden derzeit nicht über die Plattform gestellt. Bitte wenden Sie sich an die Personalstelle.
             <a data-verwalten hidden data-verwaltung-link="urlaub" href="../../admin/#urlaub">Einschalten in Verwaltung → Urlaub</a></p>
           <div class="hr-spalten" id="mein-spalten">
             <form class="hr-karte hr-glas" id="antrag" novalidate>
-              <h2>Urlaub beantragen</h2>
+              <h2 id="antrag-titel">Urlaub beantragen</h2>
+              <div class="hr-seg" id="antrag-art" role="group" aria-label="Art des Antrags" hidden>
+                <button type="button" data-art="U" aria-pressed="true">Urlaub</button><button type="button" data-art="G" aria-pressed="false">Gleittag</button>
+              </div>
               <div class="hr-felder zwei">
-                <label>Erster Urlaubstag<input type="date" id="antrag-von" required></label>
-                <label>Letzter Urlaubstag<input type="date" id="antrag-bis" required></label>
+                <label><span data-antrag-von>Erster Urlaubstag</span><input type="date" id="antrag-von" required></label>
+                <label><span data-antrag-bis>Letzter Urlaubstag</span><input type="date" id="antrag-bis" required></label>
               </div>
               <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
               <label><span>Vertretung <span class="opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
@@ -127,6 +131,7 @@
           <button type="button" class="hr-rund klein" data-jahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
           <label class="hr-filter">Mitarbeiter<select id="eintraege-person"><option value="">alle</option></select></label>
         </div>
+        <p class="hr-meldung" id="eintraege-meldung" role="status"></p>
         <div class="hr-tabelle-rahmen hr-glas" data-verwalten hidden><table class="hr-tabelle" id="eintraege-tabelle"></table></div>
       </div>
 
@@ -137,8 +142,9 @@
           <h1 id="ueb-titel">Urlaubsübersicht</h1>
           <button type="button" class="hr-rund klein" data-ujahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
           <label class="hr-filter">Abteilung<select id="ueb-abteilung"><option value="">alle</option></select></label>
+          <button type="button" class="btn primary hr-gleit-knopf" id="ueb-gleit" data-verwalten hidden>Gleittage gewähren</button>
         </div>
-        <p class="hr-klein">Arbeitstage je Mitarbeiter im Urlaubsplan. Genommen bis heute, geplant ab morgen (genehmigt), beantragt noch offen. Krank und Gleittage: genehmigte Arbeitstage im Jahr.</p>
+        <p class="hr-klein">Arbeitstage je Mitarbeiter im Urlaubsplan. Genommen bis heute, geplant ab morgen (genehmigt), beantragt noch offen. Krank und Gleittage: genehmigte Arbeitstage im Jahr. Gleittage-Rest: Konto der gewährten Gleittage (geht ins Folgejahr mit).</p>
         <div class="hr-tabelle-rahmen hr-glas"><table class="hr-tabelle hr-ueb" id="ueb-tabelle"></table></div>
       </div>
 
@@ -182,6 +188,24 @@
       <button type="button" class="btn" data-schliessen>Abbrechen</button>
       <button type="submit" class="btn primary" id="eintrag-speichern">Speichern</button>
     </div>
+  </form>
+</dialog>
+
+<!-- Gleittage gewähren (Personalstelle): Konto, neue Gewährung, bisherige Gewährungen mit Storno -->
+<dialog class="hr-dialog hr-dialog-gleit" id="dlg-gleit" aria-labelledby="dlg-gleit-titel">
+  <form method="dialog" id="gleit-form" novalidate>
+    <h2 id="dlg-gleit-titel">Gleittage gewähren</h2>
+    <label>Mitarbeiter<select id="gleit-person" required></select></label>
+    <div class="hr-konto klein" id="gleit-konto"></div>
+    <div class="hr-felder zwei">
+      <label>Anzahl Tage<input type="number" id="gleit-tage" step="0.5" min="-50" max="50" value="1" required></label>
+      <label><span>Grund <span class="opt">(sieht der Mitarbeiter)</span></span><input type="text" id="gleit-grund" maxlength="200" placeholder="z. B. Inventur am Samstag"></label>
+    </div>
+    <p class="hr-klein">Gewährte Gleittage sind Zusatztage: der Mitarbeiter kann sie beantragen, der Rest geht ins nächste Jahr mit. Negative Anzahl = Korrektur (mit Grund).</p>
+    <p class="hr-meldung" id="gleit-meldung" role="status"></p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Schließen</button><button type="submit" class="btn primary" id="gleit-speichern">Gewähren</button></div>
+    <h3 class="hr-gleit-h">Bisher gewährt</h3>
+    <ul class="hr-liste" id="gleit-liste"></ul>
   </form>
 </dialog>
 
