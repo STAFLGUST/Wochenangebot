@@ -27,8 +27,37 @@
 	}
 }
 
+# bunny.net (Content-Delivery-Netz) vor dem Server – Einrichtung: docs/bunny-cdn.md. Wirkt erst mit CDN_SCHLUESSEL in
+# .env (32–128 Buchstaben/Ziffern, z. B. „openssl rand -hex 32“); ohne gültigen Schlüssel bleibt alles wie bisher.
+# – bunny setzt bei jeder Anfrage den Kopf „X-Stafl-Cdn“ mit diesem Schlüssel (Edge Rule „Set Request Header“). Nur dann gilt
+#   die von bunny gemeldete Besucher-IP (X-Real-IP), sonst wie bisher die Adresse der Verbindung – wer bunny umgeht, kann die
+#   Besucher-IP nicht fälschen. Anwendung und Keycloak bekommen sie als X-Forwarded-For ({besucher_ip} in jedem
+#   reverse_proxy/forward_auth), den Schlüssel selbst nie (header_up -X-Stafl-Cdn).
+# – CDN_PFLICHT=1 (erst nach der DNS-Umstellung): nur noch Anfragen über bunny und vom Server selbst (private Adressen, z. B.
+#   die Prüfung nach dem Einspielen). Ohne gültigen Schlüssel bleibt die Sperre aus – sonst wäre alles gesperrt.
+#   Let's-Encrypt-Prüfungen beantwortet Caddy vor allen Regeln; die Zertifikate verlängern sich auch über bunny.
+# Geprüft mit echtem Caddy: tests/deploy/test_cdn.py.
+(cdn) {
+	@cdn expression `{header.X-Stafl-Cdn} == "{$CDN_SCHLUESSEL}" && "{$CDN_SCHLUESSEL}".matches("^[A-Za-z0-9]{32,128}$")`
+	vars @cdn ueber_cdn 1
+	map {vars.ueber_cdn} {besucher_ip} {
+		1 {header.X-Real-IP}
+		default {remote_host}
+	}
+	# Zur Kontrolle nach der Umstellung (Anleitung): bunny und Server kennen denselben Schlüssel
+	header @cdn Stafl-Cdn "erkannt"
+	@direkt {
+		expression `"{$CDN_PFLICHT}" == "1" && "{$CDN_SCHLUESSEL}".matches("^[A-Za-z0-9]{32,128}$") && {header.X-Stafl-Cdn} != "{$CDN_SCHLUESSEL}"`
+		not remote_ip private_ranges
+	}
+	handle @direkt {
+		respond "Diese Adresse ist nur über das Content-Delivery-Netz erreichbar." 403
+	}
+}
+
 # HTTPS-Zertifikat wird automatisch geholt und verlängert (Let's Encrypt)
 {$DOMAIN}, www.{$DOMAIN} {
+	import cdn
 	# IP-Sperre ist ausgeschaltet – die Seite ist öffentlich erreichbar.
 	# Wieder einschalten: die beiden folgenden Zeilen entkommentieren (ALLOWED_IPS in .env).
 	# @fremd not remote_ip {$ALLOWED_IPS}
@@ -52,7 +81,8 @@
 		Cross-Origin-Resource-Policy "same-origin"
 		# Browser fragen bei jeder Datei kurz nach, ob es eine neue Fassung gibt (Antwort meist „unverändert“).
 		# Verhindert veraltete Skripte nach einem Release. Eigene Angaben der Anwendung bleiben unberührt.
-		?Cache-Control "no-cache"
+		# „private“: Seiten und Schnittstelle nie in fremden Zwischenspeichern (bunny.net speichert nur ausdrücklich „public“).
+		?Cache-Control "private, no-cache"
 		-Server
 		-X-Powered-By
 	}
@@ -63,13 +93,17 @@
 	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
 	@falle path /wp-login.php /xmlrpc.php /wp-admin /wp-admin/* /wp-content/* /wp-includes/* /.env /.env.* /.git /.git/* /phpmyadmin* /pma/* /myadmin* /vendor/phpunit/* /cgi-bin/* /.aws/* /server-status /actuator* /admin.php /administrator/* /boaform/* /HNAP1*
 	rewrite @falle /api/index.php?action=waf_probe&p={path}
-	reverse_proxy app:80
+	reverse_proxy app:80 {
+		header_up X-Forwarded-For {besucher_ip}
+		header_up -X-Stafl-Cdn
+	}
 }
 
 # Testumgebung: test.<Domain> → Container „app-test“ (Ordner /opt/wochenangebot-test, deploy/testumgebung.sh).
 # Nur Testdaten, Zugang zusätzlich per Passwort (Apache im Test-Container), keine Suchmaschinen.
 # Läuft der Test-Container nicht, antwortet nur diese Adresse mit einem Fehler – der Echtbetrieb ist unberührt.
 test.{$DOMAIN} {
+	import cdn
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -80,7 +114,7 @@ test.{$DOMAIN} {
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "same-origin"
 		X-Robots-Tag "noindex, nofollow"
-		?Cache-Control "no-cache"
+		?Cache-Control "private, no-cache"
 		-Server
 		-X-Powered-By
 	}
@@ -91,7 +125,10 @@ test.{$DOMAIN} {
 	# Falle: typische Pfade von Angriffswerkzeugen (diese Seite hat keine davon) → Firewall zählt und sperrt automatisch
 	@falle path /wp-login.php /xmlrpc.php /wp-admin /wp-admin/* /wp-content/* /wp-includes/* /.env /.env.* /.git /.git/* /phpmyadmin* /pma/* /myadmin* /vendor/phpunit/* /cgi-bin/* /.aws/* /server-status /actuator* /admin.php /administrator/* /boaform/* /HNAP1*
 	rewrite @falle /api/index.php?action=waf_probe&p={path}
-	reverse_proxy app-test:80
+	reverse_proxy app-test:80 {
+		header_up X-Forwarded-For {besucher_ip}
+		header_up -X-Stafl-Cdn
+	}
 }
 
 # STAFL-Plattform: zentrale Anmeldung (ADR-003, docs/plattform/inbetriebnahme-anmeldung.md Schritt 6).
@@ -101,6 +138,7 @@ test.{$DOMAIN} {
 
 # Keycloak: nur der Realm „mitarbeiter“ und statische Dateien; Verwaltung und Master-Realm nie öffentlich
 login.dashboard-stafl.de {
+	import cdn
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -118,6 +156,8 @@ login.dashboard-stafl.de {
 		@seite not path /resources/* /realms/mitarbeiter/.well-known/* /realms/mitarbeiter/protocol/openid-connect/token /realms/mitarbeiter/protocol/openid-connect/token/introspect /realms/mitarbeiter/protocol/openid-connect/certs /realms/mitarbeiter/protocol/openid-connect/userinfo /realms/mitarbeiter/protocol/openid-connect/revoke
 		forward_auth @seite app-mitarbeiter:80 {
 			uri /api/index.php?action=anmeldung_pruefen
+			header_up X-Forwarded-For {besucher_ip}
+			header_up -X-Stafl-Cdn
 			header_up -Cookie
 			header_up -Authorization
 			header_up -Origin
@@ -131,7 +171,10 @@ login.dashboard-stafl.de {
 				respond "Die Anmeldung ist gerade nicht erreichbar. Bitte später erneut versuchen." 503
 			}
 		}
-		reverse_proxy keycloak:8080
+		reverse_proxy keycloak:8080 {
+			header_up X-Forwarded-For {besucher_ip}
+			header_up -X-Stafl-Cdn
+		}
 	}
 	respond 404
 	# Anwendung oder Keycloak nicht erreichbar (z. B. kurz während eines Releases)
@@ -142,6 +185,7 @@ login.dashboard-stafl.de {
 
 # Dashboard, Mitarbeiter-Eingabe, Verwaltung, Bestand, HR, CRM, Marketing, Sicherheit, Controlling, Leergut, REWE und Qualitätssicherung: dieselbe Anwendung, je Host eigener Client und eigene Sitzung (GR-108)
 dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, bestand.dashboard-stafl.de, hr.dashboard-stafl.de, crm.dashboard-stafl.de, marketing.dashboard-stafl.de, sicherheit.dashboard-stafl.de, controlling.dashboard-stafl.de, leergut.dashboard-stafl.de, rewe.dashboard-stafl.de, qs.dashboard-stafl.de {
+	import cdn
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -152,7 +196,7 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
 		Cross-Origin-Resource-Policy "same-origin"
 		X-Robots-Tag "noindex, nofollow"
-		?Cache-Control "no-cache"
+		?Cache-Control "private, no-cache"
 		-Server
 		-X-Powered-By
 	}
@@ -161,13 +205,17 @@ dashboard-stafl.de, angebot.dashboard-stafl.de, verwaltung.dashboard-stafl.de, b
 	import zwischenspeichern private
 	@private path /data /data/*
 	respond @private 404
-	reverse_proxy app-mitarbeiter:80
+	reverse_proxy app-mitarbeiter:80 {
+		header_up X-Forwarded-For {besucher_ip}
+		header_up -X-Stafl-Cdn
+	}
 }
 
 # STAFL-Plattform: vorbereitete Modul-Domains ohne öffentlich erreichbare Anwendung (GR-105).
 # Erst nach fertiger Anmeldung, Rechteprüfung und geprüfter Release-Freigabe pro Modul routen.
 # Bis dahin: keine Weiterleitung an die produktive Angebots-API oder interne Container.
 einkauf.dashboard-stafl.de, container-import.dashboard-stafl.de, test.dashboard-stafl.de {
+	import cdn
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"
@@ -182,6 +230,7 @@ einkauf.dashboard-stafl.de, container-import.dashboard-stafl.de, test.dashboard-
 
 # Die WWW-Adresse des Dashboards dient nur als Weiterleitung auf den zentralen Einstieg.
 www.dashboard-stafl.de {
+	import cdn
 	header Strict-Transport-Security "max-age=31536000"
 	redir https://dashboard-stafl.de{uri} 308
 }

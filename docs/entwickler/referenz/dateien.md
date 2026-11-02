@@ -521,6 +521,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand-wochenpreise.md` | bestand | Bestand: Wochenpreise und erwartete Zugänge |
 | `bestell-api-v1.md` | angebot | Bestell-API, Antwortformat 1 |
 | `bestell-mailversand.md` | angebot | Versandaufträge für Bestellwünsche |
+| `bunny-cdn.md` | plattform | bunny.net vor dem Server |
 | `dashboard-dns.md` | plattform | STAFL-Dashboard: DNS und Caddy-Vorbereitung |
 | `datenbank.md` | plattform | SQLite-Datenablage (Schema 1) |
 | `rechtliche-seiten.md` | angebot | Kontakt, Impressum und Datenschutz |
@@ -639,6 +640,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_adressen_laden.sh` | plattform | Test von deploy/adressen-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_altdateien.sh` | plattform | Test von deploy/altdateien.sh (Altdateien nach der Umschaltung auf SQLite) – echtes deploy/datenbank.py in einem Wegwerf-Ordner mit synthetischen Datensätzen, Platzhalter nur für die Sicherung (keine echten Daten, … |
 | `test_anmeldung_einrichten.sh` | plattform | Test von deploy/anmeldung/einrichten.sh (Schritt 2 der Inbetriebnahme) – in einem Wegwerf-Ordner, ohne Docker. |
+| `test_cdn.py` | plattform | bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in der Fassung des Betriebs. |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
 | `test_datenbank.py` | plattform | Real PHP/SQLite, independent SQL inspection, migration failure and restore tests. |
 | `test_datenbank_umschalten.sh` | plattform | Test von deploy/datenbank-umschalten.sh – Vorprüfung vor Sicherung und Stopp, mit Platzhaltern für docker, sichern.sh und datenbank.py in einem Wegwerf-Ordner (keine echten Daten, kein Container). |

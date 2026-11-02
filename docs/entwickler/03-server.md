@@ -353,7 +353,7 @@ bzw. des IPv6-/64-Netzes, `client_key`); Grenzen aus `config.php` (`max_attempts
 | Herkunft, Host | `lib/herkunft.php` | GR-109, Schritte 6–7 |
 | Firewall, Schutzzentrale | `lib/firewall.php`, `aktionen/schutz.php` | Sperrliste (`sperrliste`), Muster, Fehlerbremse (400/404/405/415 je Adresse in 5 Minuten, `fehlerLimit`), automatische Sperre, Bedrohungsliste Spamhaus DROP (`bedrohungsliste`), Live-Verkehr (`verkehr`, 500 Einträge), Falle `waf_probe` |
 | Länder-, IP-Sperre | `lib/sicherheit.php`, `geo.php` | Einstellungen im Dokument `sicherheit` (`geoEnabled`, `geoMode` block/allow, `geoCountries`, `geoScope` admin/all, `ipEnabled`, `adminIps`); Länderdatenbank `geo/laender.dat.php` |
-| Besucher-IP | `client_ip()` | `X-Forwarded-For` nur von vertrauten Proxys (`WA_TRUSTED_PROXIES`), letzter Eintrag |
+| Besucher-IP | `client_ip()` | `X-Forwarded-For` nur von vertrauten Proxys (`WA_TRUSTED_PROXIES`), letzter Eintrag; hinter bunny.net setzt Caddy dort die Besucher-IP von bunny ein – nur mit gültigem Schlüssel (Abschnitt `cdn`, `docs/bunny-cdn.md`) |
 | Sitzung, CSRF, Bestätigung, Keycloak | `lib/sitzung.php`, `lib/oidc.php` | [Kapitel 4](04-anmeldung-rechte.md) |
 | Dateiprüfung | `lib/integritaet.php` | Programmdateien gegen die beim Einspielen erzeugte Prüfliste |
 | Diagnose | `lib/diagnose.php` | nur lesend, für Administratoren |
