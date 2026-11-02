@@ -694,7 +694,7 @@ with sync_playwright() as p:
     pg.fill('#au-user', 'ina'); pg.fill('#pw1', 'Import-Konto-12'); pg.click('#auth-submit')
     pg.wait_for_selector('#vt-importe:not([hidden])')
     pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="umsatzdaten"]')
-    check('Importzentrale: Importart des Controllings mit Eigentümer', 'Controlling' in pg.text_content('#view-importe .imp-art[data-art="umsatzdaten"] .imp-eig')
+    check('Importzentrale: Importart des Controllings in der Gruppe „Controlling“', pg.text_content('#view-importe .imp-gruppe:has(.imp-art[data-art="umsatzdaten"]) h2') == 'Controlling'
           and 'in Teilen' not in pg.text_content('#view-importe .imp-art[data-art="umsatzdaten"]'), pg.locator('#view-importe .imp-art').all_text_contents())
     pg.set_input_files('#view-importe input[data-imp-datei="umsatzdaten"]', CSV)
     pg.wait_for_selector('#imp-geaendert')

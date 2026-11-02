@@ -34,7 +34,7 @@ function import_registry(): array
     $reg = [];
     foreach (IMPORT_EIGENTUEMER as $m) {
         foreach (('import_arten_' . $m)() as $id => $a) {
-            $a += ['beschreibung' => '', 'ablauf' => 'zentrale', 'optionen' => [], 'mehrere' => false, 'bestaetigung' => '', 'ansicht' => '', 'kodierung' => '',
+            $a += ['beschreibung' => '', 'kurz' => '', 'ablauf' => 'zentrale', 'optionen' => [], 'mehrere' => false, 'bestaetigung' => '', 'ansicht' => '', 'kodierung' => '',
                    'teile' => '', 'maxMb' => IMPORT_MB];
             $a['eigentuemer'] = $m;
             $a['recht'] = (array)$a['recht'];
@@ -64,7 +64,7 @@ function import_art_anzeige(string $id, array $a, array $me): array
 {
     [$modul, $ob] = array_pad(explode('.', (string)AKTIONEN[$a['aktion']]['oberflaeche'], 2), 2, '');
     $z = modul_zustand($modul, $ob, $me);
-    return ['id' => $id, 'name' => $a['name'], 'beschreibung' => $a['beschreibung'], 'eigentuemer' => $a['eigentuemer'],
+    return ['id' => $id, 'name' => $a['name'], 'kurz' => (string)$a['kurz'], 'beschreibung' => $a['beschreibung'], 'eigentuemer' => $a['eigentuemer'],
             'eigentuemerName' => MODULE[$a['eigentuemer']]['name'] ?? $a['eigentuemer'], 'dateien' => array_values($a['dateien']),
             'kodierung' => $a['kodierung'], 'mehrere' => (bool)$a['mehrere'], 'ablauf' => $a['ablauf'], 'ansicht' => $a['ansicht'],
             'bestaetigung' => $a['bestaetigung'] !== '', 'optionen' => array_values($a['optionen']), 'maxMb' => $a['maxMb'], 'inTeilen' => $a['teile'] !== '',

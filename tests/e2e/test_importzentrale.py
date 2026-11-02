@@ -6,6 +6,7 @@ in der Anzeige, Wartung der Oberfläche (503, Administratoren arbeiten weiter), 
 (Verwaltung, mit Passwortbestätigung) und Bestand (anderer Eigentümer), Kundengruppen, Artikelstammdaten und Preisverlauf
 über die Oberfläche, Fehlerfälle (falsche Datei, falsche Kodierung, leere Datei, veralteter Stand), Protokoll, keine
 Einkaufspreise in der Vorschau, Bildschirmfotos Desktop und 390 px. Nur Testdaten aus tests/fixtures."""
+import base64
 import json
 import os
 import re
@@ -91,6 +92,8 @@ check('Zentrale liest und schreibt selbst keine Daten (nur über den Eigentümer
 check('Zentrale liest keine Dateiformate selbst (Leser beim Eigentümer)', not re.search(r'csvZeilen|parseStockWorkbook|parseOfferWorkbook|xlsxReadWorkbook|TextDecoder', open(os.path.join(REPO, 'app/assets/admin-import.js'), encoding='utf-8').read().split('/* ---------- Darstellung')[1]))
 check('Dateitypen und Optionen angegeben', arten['kunden']['dateien'] == ['csv'] and arten['bestand']['dateien'] == ['xls', 'xlsx'] and arten['preisverlauf']['mehrere'] is True
       and arten['kunden']['bestaetigung'] is True and [o['id'] for o in arten['bestand']['optionen']] == ['datum'] and arten['angebot_excel']['ablauf'] == 'editor', arten['kunden'])
+check('Kurztext je Importart (eine Zeile in der Liste, höchstens 60 Zeichen), ausführliche Beschreibung bleibt', all(0 < len(a['kurz']) <= 60 and len(a['beschreibung']) > len(a['kurz']) for a in arten.values())
+      and arten['bestand']['kurz'] == 'Partieliste aus WinAB – ersetzt den Bestand', {k: a['kurz'] for k, a in arten.items()})
 check('keine internen Funktionsnamen an den Browser', 'vorschau' not in json.dumps(r) and 'uebernahme' not in json.dumps(r))
 
 # ---------- Rechte: Anzeige und Prüfung je Importart (GR-103) ----------
@@ -202,8 +205,67 @@ with sync_playwright() as p:
     y = lambda s: a.locator(s).bounding_box()['y']   # noqa: E731
     check('Navigation: Import als erster Punkt unter Verwaltung', a.locator('#vt-importe').is_visible() and y('#side-admin') < y('#vt-importe') < y('#vt-orders'))
     a.click('#vt-importe'); a.wait_for_selector('#view-importe .imp-art[data-art="kunden"]')
-    check('Liste: alle Importarten mit Eigentümer', a.locator('#view-importe .imp-art').count() == len(ALLE) and a.text_content('#view-importe .imp-art[data-art="bestand"] .imp-eig') == 'Bestand')
+    gruppen = a.eval_on_selector_all('#view-importe .imp-gruppe', 'gs => gs.map((g) => [g.querySelector("h2").textContent, [...g.querySelectorAll(".imp-art")].map((x) => x.dataset.art)])')
+    check('Liste: alle Importarten, nach Bereich gruppiert', a.locator('#view-importe .imp-art').count() == len(ALLE) and [g for g, _ in gruppen] == ['Stammdaten', 'Angebot und Bestand', 'Personal', 'Controlling']
+          and dict(gruppen)['Stammdaten'] == ['kunden', 'kundengruppen', 'vertreter', 'stammdaten', 'vkgruppen'] and 'bestand' in dict(gruppen)['Angebot und Bestand'], gruppen)
+    zb = a.inner_text('#view-importe .imp-art[data-art="bestand"]')
+    check('Zeile: Name, Kurztext (ganze Beschreibung im Hinweis), Dateiart, Knopf', 'Partieliste aus WinAB' in zb and a.text_content('.imp-art[data-art="bestand"] .imp-format') == 'Excel'
+          and a.text_content('.imp-art[data-art="kunden"] .imp-format') == 'CSV' and 'WinAB' in (a.get_attribute('.imp-art[data-art="bestand"] p', 'title') or '')
+          and a.locator('.imp-art[data-art="kunden"] .imp-schloss').count() == 1 and a.locator('.imp-art[data-art="bestand"] .imp-schloss').count() == 0
+          and a.locator('[data-imp-waehlen="preisverlauf"]').inner_text() == 'Dateien wählen' and a.locator('[data-imp-editor="angebot_excel"]').count() == 1, zb)
+    check('eine Zeile je Import (Desktop)', a.evaluate("[...document.querySelectorAll('#view-importe .imp-art')].every((z) => z.getBoundingClientRect().height < 70)"))
+    check('Hinweis unten: Passwortbestätigung, CSV-Zeichensatz, .xls beim Bestand', 'mit Passwortbestätigung' in a.inner_text('.imp-hinweis') and 'Windows-1252' in a.inner_text('.imp-hinweis')
+          and 'Bestand auch .xls' in a.inner_text('.imp-hinweis'), a.inner_text('.imp-hinweis'))
     a.screenshot(path=SH + '/importzentrale-liste.png', full_page=True)
+
+    # ---------- Drag & Drop (Datei auf einen Import oder in die Ablagefläche) ----------
+    def ziehen(sel, pfade, arten_=('dragenter', 'dragover', 'drop')):
+        dateien = [[os.path.basename(x), base64.b64encode(open(x, 'rb').read()).decode()] for x in pfade]
+        return a.evaluate('''([sel, dateien, arten]) => {
+          const dt = new DataTransfer();
+          for (const [name, b64] of dateien) dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], name));
+          const el = document.querySelector(sel); let verhindert = null;
+          for (const t of arten) { const ev = new DragEvent(t, { bubbles: true, cancelable: true, dataTransfer: dt }); el.dispatchEvent(ev); if (t === 'drop') verhindert = ev.defaultPrevented; }
+          return verhindert;
+        }''', [sel, dateien, list(arten_)])
+    ziehen('.imp-art[data-art="kundengruppen"] .imp-text', [GRUPPEN_CSV], ('dragenter', 'dragover'))
+    check('Ziehen: Ablagefläche hervorgehoben, Import unter dem Zeiger markiert', a.evaluate("document.querySelector('#view-importe').classList.contains('imp-ziehen')")
+          and a.locator('.imp-art[data-art="kundengruppen"].imp-ueber').count() == 1 and a.locator('.imp-ueber').count() == 1)
+    a.evaluate("document.querySelector('#view-importe').dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null }))")
+    check('… beim Verlassen zurückgesetzt', a.locator('.imp-ueber').count() == 0 and not a.evaluate("document.querySelector('#view-importe').classList.contains('imp-ziehen')"))
+    ziehen('.imp-art[data-art="kundengruppen"]', [GRUPPEN_CSV]); a.wait_for_selector('#imp-neu')
+    check('Datei auf „Kundengruppen“ abgelegt: Vorschau dieses Imports', 'Kundengruppen importieren' in a.inner_text('#imp-titel') and 'kundengruppen.csv' in a.inner_text('#view-importe .imp-kopf'))
+    a.click('[data-imp="liste"]'); a.wait_for_selector('#imp-ablage')
+    ziehen('.imp-art[data-art="kunden"]', [BESTAND_XLS]); a.wait_for_selector('#imp-fehler')
+    check('falsche Datei auf einen Import: Hinweis im Ablauf, nichts übernommen', 'Falsche Datei' in a.inner_text('#imp-fehler'))
+    a.click('[data-imp="liste"]'); a.wait_for_selector('#imp-ablage')
+    ziehen('#imp-ablage', [GRUPPEN_CSV]); a.wait_for_selector('#imp-wahl [data-imp-wahl]')
+    wahl = a.eval_on_selector_all('#imp-wahl [data-imp-wahl]', 'bs => bs.map((b) => b.dataset.impWahl)')
+    check('CSV in die Ablagefläche: Auswahl nur der passenden Importe (CSV, Ablauf der Zentrale)', sorted(wahl) == ['kunden', 'kundengruppen', 'stammdaten', 'umsatzdaten', 'vertreter', 'vkgruppen']
+          and '„kundengruppen.csv“ – welcher Import?' in a.inner_text('#imp-wahl'), wahl)
+    a.screenshot(path=SH + '/importzentrale-auswahl.png', full_page=True)
+    a.click('[data-imp="wahl-ab"]'); a.wait_for_selector('#imp-ablage')
+    check('Auswahl abbrechen: wieder die Ablagefläche', a.locator('#imp-wahl').count() == 0)
+    with a.expect_file_chooser() as fc:
+        a.click('#imp-ablage')
+    fc.value.set_files(GRUPPEN_CSV); a.wait_for_selector('#imp-wahl [data-imp-wahl="kundengruppen"]')
+    a.click('#imp-wahl [data-imp-wahl="kundengruppen"]'); a.wait_for_selector('#imp-neu')
+    check('Ablagefläche angeklickt, Datei gewählt, Import gewählt: Vorschau', 'Kundengruppen importieren' in a.inner_text('#imp-titel'))
+    ziehen('#view-importe', [ARTIKEL_CSV]); a.wait_for_function("document.querySelector('#view-importe .imp-kopf') && document.querySelector('#view-importe .imp-kopf').textContent.includes('artikelstammdaten.csv')")
+    a.wait_for_selector('#imp-neu, #imp-fehler')
+    check('Datei in die Vorschau gezogen: ersetzt die Datei desselben Imports', 'Kundengruppen importieren' in a.inner_text('#imp-titel'))
+    a.click('[data-imp="liste"]'); a.wait_for_selector('#imp-ablage')
+    ziehen('#imp-ablage', [BESTAND_XLS]); a.wait_for_selector('#imp-titel')
+    check('.xls in die Ablagefläche: nur ein passender Import (Bestand) – startet sofort', 'Bestand importieren' in a.inner_text('#imp-titel'))
+    a.click('[data-imp="liste"]'); a.wait_for_selector('#imp-ablage')
+    pdf = os.path.join(WORK, 'importzentrale-brief.pdf')
+    open(pdf, 'wb').write(b'%PDF-1.4 Test')
+    ziehen('#imp-ablage', [pdf]); a.wait_for_function("document.querySelector('#toast').textContent.includes('gibt es keinen Import')")
+    check('unpassende Datei: Hinweis, keine Auswahl', a.locator('#imp-wahl').count() == 0 and '.csv' in a.text_content('#toast'))
+    ziehen('#imp-ablage', KW); a.wait_for_selector('#imp-titel')
+    check('mehrere Excel-Dateien: nur der Preisverlauf passt – startet sofort', 'Preisverlauf' in a.inner_text('#imp-titel') and '2 Dateien' in a.inner_text('#view-importe .imp-kopf'))
+    a.click('[data-imp="liste"]'); a.wait_for_selector('#imp-ablage')
+    check('neben die Liste fallen gelassen: Browser öffnet die Datei nicht', ziehen('#side-admin', [GRUPPEN_CSV]) is True and a.locator('#imp-ablage').count() == 1)
 
     def datei(art, pfad):
         a.set_input_files(f'#view-importe input[data-imp-datei="{art}"]', pfad)
@@ -324,6 +386,9 @@ with sync_playwright() as p:
     m.fill('#au-user', 'admin'); m.fill('#pw1', PW); m.click('#auth-submit'); m.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
     m.click('#vt-importe'); m.wait_for_selector('#view-importe .imp-art')
     check('390 px: Liste ohne waagerechtes Scrollen', m.evaluate('document.documentElement.scrollWidth') <= 390)
+    kb = m.locator('[data-imp-waehlen="kunden"]').bounding_box()
+    check('390 px: runder Knopf je Import (44 px, Name im Knopftext für Screenreader)', abs(kb['width'] - 44) < 1 and abs(kb['height'] - 44) < 1
+          and m.get_attribute('[data-imp-waehlen="kunden"]', 'aria-label') == 'Datei wählen: Kunden', kb)
     m.screenshot(path=SH + '/importzentrale-390-liste.png', full_page=True)
     m.set_input_files('#view-importe input[data-imp-datei="kunden"]', KUNDEN_CSV); m.wait_for_selector('#imp-neu')
     check('390 px: Vorschau ohne waagerechtes Scrollen', m.evaluate('document.documentElement.scrollWidth') <= 390, m.evaluate('document.documentElement.scrollWidth'))

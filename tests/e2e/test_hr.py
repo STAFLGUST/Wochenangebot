@@ -727,7 +727,7 @@ with sync_playwright() as p:
     # ── Verwaltung → Import: bisherige Excel-Planung (Importzentrale, Personalstelle ohne Administratorrechte) ──
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
     pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="urlaubsplanung"]')
-    check('Importzentrale: Importart „Urlaubsplanung“ für die Personalstelle', 'HR' in pg.text_content('#view-importe .imp-art[data-art="urlaubsplanung"]'))
+    check('Importzentrale: Importart „Urlaubsplanung“ für die Personalstelle', pg.text_content('#view-importe .imp-gruppe:has(.imp-art[data-art="urlaubsplanung"]) h2') == 'Personal')
     pg.set_input_files('#view-importe input[data-imp-datei="urlaubsplanung"]', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
     pg.wait_for_selector('#imp-neu', timeout=20000)
     txt = pg.inner_text('#view-importe')

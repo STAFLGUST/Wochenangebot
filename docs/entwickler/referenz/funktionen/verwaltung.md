@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 190 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 195 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -134,6 +134,8 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 **Darstellung**
 
 - `schritte(n)`
+- `zeileHTML(a)`
+- `ablageHTML()` – Ablagefläche oben; nach dem Ablegen ohne eindeutigen Import: Auswahl der passenden Importe
 - `renderListe()`
 - `kopf(titel)`
 - `optionenHTML()`
@@ -153,6 +155,11 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 - `uebernehmen(btn)`
 - `starten(art, files)`
 - `zurListe()`
+
+**Drag & Drop: auf einen Import ziehen oder in die Ablagefläche (bzw. dort auswählen)**
+
+- `ablegen(files, art)`
+- `ziehenAus()`
 - `render()`
 
 ## `app/assets/admin-verwaltung.js`
@@ -265,6 +272,9 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b): eine Stelle für alle Impo
 
 **Oberfläche**
 
+**Drag & Drop (Datei auf einen Import oder in die Ablagefläche)**
+
+- `ziehen(sel, pfade, arten_)`
 - `datei(art, pfad)`
 - `fehler_text()`
 - `sicht(user)` – Anzeige je Recht (Menüpunkt passt zur Liste des Servers)

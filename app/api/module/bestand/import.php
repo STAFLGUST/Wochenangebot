@@ -10,7 +10,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 function import_arten_bestand(): array
 {
     return [
-        'bestand' => ['name' => 'Bestand', 'beschreibung' => 'Bestandsliste aus WinAB („Partieliste … verfügbar“) mit Art.-Nr., Bezeichnung, Status, MHD und netto. Ersetzt den bisherigen Bestand.',
+        'bestand' => ['name' => 'Bestand', 'kurz' => 'Partieliste aus WinAB – ersetzt den Bestand', 'beschreibung' => 'Bestandsliste aus WinAB („Partieliste … verfügbar“) mit Art.-Nr., Bezeichnung, Status, MHD und netto. Ersetzt den bisherigen Bestand.',
             'recht' => ['bestand.importieren'], 'aktion' => 'stock_import', 'dateien' => ['xls', 'xlsx'], 'kodierung' => 'Excel-Datei (.xls oder .xlsx)',
             'ansicht' => 'stock', 'vorschau' => 'bestand_import_vorschau', 'uebernahme' => 'bestand_import_uebernehmen',
             'optionen' => [['id' => 'datum', 'typ' => 'datum', 'label' => 'Bestandsdatum', 'pflicht' => true]]],
