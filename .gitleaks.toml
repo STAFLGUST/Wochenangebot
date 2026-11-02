@@ -42,6 +42,9 @@ regexes = [
   '''irgendwas-langes-1''',   # Anmeldeversuch für einen Mitarbeiter ohne Anmeldung (Verlauf von PR #119)
   # Kunde mit Passwort bei abgelaufener Bestätigung (tests/oidc/test_oidc.py, Bestätigung im eigenen Fenster)
   '''Fenster-Kundenpasswort-7''',
+  # Controlling · Arbeitszeit (tests/e2e/test_controlling.py; Verlauf von PR #252)
+  '''Arbeitszeit-Konto-21''',
+  '''Zeitimport-Konto-22''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]
