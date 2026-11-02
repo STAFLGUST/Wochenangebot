@@ -419,12 +419,14 @@ with sync_playwright() as p:
         ctx.close()
     br.close()
 # ── Bereich Arbeitszeit: Zeitbericht der Zeiterfassung (synthetisch) ──
-for u, n, pw, grant in (('aron', 'Aron Arbeitszeit', 'Arbeitszeit-Konto-21', ['controlling.arbeitszeit_sehen']),
-                        ('ida', 'Ida Import', 'Zeitimport-Konto-22', ['controlling.arbeitszeit_importieren'])):
+AZ_NUTZER = (('aron', 'Aron Arbeitszeit', 'Arbeitszeit-Konto-21', ['controlling.arbeitszeit_sehen']),
+             ('ida', 'Ida Import', 'Zeitimport-Konto-22', ['controlling.arbeitszeit_importieren']))
+AZ_PW = {u: pw for u, _, pw, _ in AZ_NUTZER}
+for u, n, pw, grant in AZ_NUTZER:
     st, r_ = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': 'viewer', 'active': True, 'password': pw, 'mustChange': False, 'grant': grant})
     assert st == 200, r_
-AR = Client('198.51.100.40'); AR.call('login', {'username': 'aron', 'password': 'Arbeitszeit-Konto-21'})
-ID = Client('198.51.100.41'); ID.call('login', {'username': 'ida', 'password': 'Zeitimport-Konto-22'})
+AR = Client('198.51.100.40'); AR.call('login', {'username': 'aron', 'password': AZ_PW['aron']})
+ID = Client('198.51.100.41'); ID.call('login', {'username': 'ida', 'password': AZ_PW['ida']})
 pid = lambda q: 'p' + hashlib.sha256(q.encode()).hexdigest()[:12]   # noqa: E731  Schlüssel wie arbeitszeit.php
 P_ANNA, P_BERND, P_CARLA = pid('n:101'), pid('n:102'), pid('m:carla ohnenr')
 
@@ -514,7 +516,7 @@ with sync_playwright() as p:
     # Import in der Oberfläche (Importzentrale, Leser im Browser)
     ctx, pg = neu(ip='198.51.100.43')
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
-    pg.fill('#au-user', 'ida'); pg.fill('#pw1', 'Zeitimport-Konto-22'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+    pg.fill('#au-user', 'ida'); pg.fill('#pw1', AZ_PW['ida']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
     pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="zeitbericht"]')
     check('Importzentrale: Importart „Arbeitszeit (Zeitbericht)“ für den Importberechtigten', 'Zeitbericht' in pg.text_content('#view-importe .imp-art[data-art="zeitbericht"]'))
     pg.set_input_files('#view-importe input[data-imp-datei="zeitbericht"]', DATEI)
@@ -567,7 +569,7 @@ with sync_playwright() as p:
     # Oberfläche Arbeitszeit
     ctx, pg = neu()
     pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
-    pg.fill('#au-user', 'aron'); pg.fill('#pw1', 'Arbeitszeit-Konto-21'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+    pg.fill('#au-user', 'aron'); pg.fill('#pw1', AZ_PW['aron']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
     pg.goto(B + '/module/controlling/#arbeitszeit'); pg.wait_for_selector('#ctl-az-kpis .ctl-kpi')
     pg.fill('#ctl-az-von', '2026-09'); pg.fill('#ctl-az-bis', '2026-10'); pg.dispatch_event('#ctl-az-bis', 'change')
     pg.wait_for_function("document.querySelector('#ctl-az-kpis') && document.querySelector('#ctl-az-kpis').textContent.includes('52:00')")
@@ -622,7 +624,7 @@ with sync_playwright() as p:
     for breite, thema in ((390, 'light'), (390, 'dark'), (1280, 'dark')):
         ctx, pg = neu(breite, thema, '198.51.100.44')
         pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
-        pg.fill('#au-user', 'aron'); pg.fill('#pw1', 'Arbeitszeit-Konto-21'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+        pg.fill('#au-user', 'aron'); pg.fill('#pw1', AZ_PW['aron']); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
         pg.goto(B + '/module/controlling/#arbeitszeit'); pg.wait_for_selector('#ctl-az-kpis .ctl-kpi')
         pg.fill('#ctl-az-von', '2026-09'); pg.fill('#ctl-az-bis', '2026-10'); pg.dispatch_event('#ctl-az-bis', 'change')
         pg.wait_for_function("document.querySelector('#ctl-az-kpis').textContent.includes('52:00')")
