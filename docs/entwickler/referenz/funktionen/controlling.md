@@ -2,7 +2,25 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-13 Dateien, 178 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+15 Dateien, 213 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+
+## `app/api/module/controlling/bestand.php`
+
+_Controlling · Bereich Bestandsverlauf (Auftrag des Inhabers 02.11.2026)_
+
+- `ctl_bestand_darf_ek(me)`
+- `ctl_bestand_tagnr(d)`
+- `ctl_bestand_datum(n)`
+- `ctl_bestand_gueltig(v)`
+- `ctl_bestand_merkmal(dim, code)` – Merkmal eines Artikels (Nummer wie in der Bestandsliste) für Filter und Gliederung
+- `ctl_bestand_anfrage(q, tage)` – Anfrage prüfen: Zeitraum (tage=30\|90\|365 oder von/bis), Gliederung, Filter
+- `ctl_bestand_umsatz_bis(index)` – Letzter Tag mit Umsatzdaten (JJJJ-MM-TT) oder null
+- `ctl_bestand_bezeichnung(nach, key, code, listenname)` – Bezeichnung einer Zeile: Artikel nach den Stammdaten (sonst Name aus der Liste), Gruppen mit Namen
+- `ctl_bestand_kennzahlen(r, listen, absatz, absatzTage, ek)` – Kennzahlen aus den Summen einer Zeile (bzw. aller Zeilen)
+- `ctl_bestand_spark(kg, n)` – Mini-Verlauf: höchstens CTL_BESTAND_SPARK Punkte, gleichmäßig über die Listen
+- `ctl_bestand_auswertung(q, me)` – Auswertung (Aktion controlling_bestand): Stand, Zeitraum, Summen, Tagesreihen und Zeilen der Gliederung
+- `ctl_bestand_detail(q, me)` – Detail (Aktion controlling_bestand_detail): ein Artikel, eine Artikelgruppe oder Fleischart (?dim=…&wert=…) im Zeitraum der Seite – Kennzahlen und je Liste …
+- `ctl_bestand_grunddaten(me)` – Grunddaten (Aktion controlling_bestand_daten): Stand des Verlaufs, Rechte, Auswahllisten für die Filter (nur Nummern und Namen)
 
 ## `app/api/module/controlling/controlling.php`
 
@@ -114,6 +132,53 @@ _Controlling · Umsatzdaten aus der Warenwirtschaft (Kundenumsatztabelle_
 
 - `umsatzdaten_kaeufer(artikel, von, bis)` – Käufer von Artikeln vom Tag $von bis $bis (JJJJ-MM-TT): je Artikel und Kunde Menge (Tausendstel, berechnete Positionen einschließlich Gutschriften), Käufe …
 - `umsatzdaten_artikelliste()` – Artikel in den Umsatzdaten mit Namen aus den Artikelstammdaten (Nummer => Name; ohne Stammsatz „Artikel <Nr>“)
+
+## `app/module/controlling/bestand.js`
+
+_STAFL-Plattform · Controlling · Bereich Bestandsverlauf (Designvorschlag 02.11.2026)_
+
+**Formate**
+
+**Diagramm: Bestand je Liste (Linie, Punkte), darunter Absatz je Tag (Balken)**
+
+- `schritt(spanne)`
+- `diagramm(reihe, absatzReihe, z, wert, breite, H)`
+- `spark(werte)`
+
+**Gerüst**
+
+- `anfrage(extra)`
+- `laden()`
+
+**Darstellung**
+
+- `standText()`
+- `kachel(name, wert, sub, extra)`
+- `kennzahlen()`
+- `entwicklung()`
+- `sichtbareZeilen()`
+- `zeilenHtml()`
+- `liste()`
+- `zeichne()`
+- `diagrammZeichnen()`
+- `chips()`
+
+**Filter (Pop-up)**
+
+- `filterOeffnen()`
+
+**Detail (Pop-up)**
+
+- `detailOeffnen(key)`
+- `detailZeichnen(dlg)`
+
+**CSV der Liste**
+
+- `csv()`
+
+**Ereignisse**
+
+- `verbinden()`
 
 ## `app/module/controlling/controlling.js`
 
@@ -269,6 +334,8 @@ _Controlling (Modul controlling, Oberfläche controlling.intern unter /module/co
 - `dokument(name)`
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel)`
+- `text(pg, sel)`
+- `anmelden(user, pw, ip, breite, thema, hoehe)`
 
 ## `tests/e2e/test_controlling_umsatzdaten.py`
 
