@@ -56,7 +56,9 @@ ABGESCHNITTEN = r'''() => {
     if (verdeckt && s.whiteSpace !== 'nowrap' && e.scrollHeight > e.clientHeight + 2 && e.clientHeight > 0 && s.webkitLineClamp === 'none' && !e.title) out.push('hoehe ' + name + ` ${e.scrollHeight}>${e.clientHeight}`);
     const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect();
     // teilweise sichtbar am Rand (ganz außerhalb = eingeklappte Leiste); waagerecht scrollende Leisten laufen weich aus (.stafl-streifen)
-    if (b.width && ((b.right > W + 1 && b.left < W) || (b.left < -1 && b.right > 0)) && !e.closest('.stafl-streifen, [class*="scroll"], .tblwrap, .rm-wrap, table')) out.push('rand ' + name + ` ${Math.round(b.left)}..${Math.round(b.right)}/${W}`);
+    // bewusst gekürzt (verdeckter Überlauf mit vollem Text im Tooltip): der Text liegt nur rechnerisch hinter dem Rand
+    const gekuerzt = verdeckt && (e.title || e.closest('[title]'));
+    if (b.width && !gekuerzt && ((b.right > W + 1 && b.left < W) || (b.left < -1 && b.right > 0)) && !e.closest('.stafl-streifen, [class*="scroll"], .tblwrap, .rm-wrap, table')) out.push('rand ' + name + ` ${Math.round(b.left)}..${Math.round(b.right)}/${W}`);
   }
   return [...new Set(out)].slice(0, 12);
 }'''

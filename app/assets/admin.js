@@ -2582,21 +2582,22 @@
   $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
   $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
-  /* Dialoge schließen per Escape oder [data-close] – nie per Klick daneben (theme.js, alle Seiten) und nicht, solange
-     gespeichert wird (data-busy). Fenster mit Eingaben (data-fest, z. B. „Nutzer anlegen“): Wurde etwas eingetippt und noch
-     nicht gespeichert, schließt erst der zweite Versuch und verwirft die Eingaben – der erste zeigt einen Hinweis (wie im CRM). */
+  /* Dialoge schließen per Escape oder [data-close] („Abbrechen“, Kreuz) – nie per Klick daneben (theme.js, alle Seiten) und
+     nicht, solange gespeichert wird (data-busy). Fenster mit Eingaben (data-fest, z. B. „Nutzer anlegen“): Wurde etwas
+     eingetippt und noch nicht gespeichert, schließt Escape erst beim zweiten Mal – das erste zeigt einen Hinweis (Escape
+     schließt sonst leicht versehentlich, z. B. beim Zuklappen einer Auswahlliste). „Abbrechen“ und Kreuz schließen sofort. */
   for (const d of $$('dialog')) {
     d.addEventListener('input', (e) => { if (d.dataset.fest !== undefined && e.target.matches('textarea, select, input:not([type=checkbox]):not([type=radio])')) d.dataset.geaendert = '1'; });
     d.addEventListener('close', () => { delete d.dataset.geaendert; delete d.dataset.warnung; });
-    const darfZu = () => {
+    const darfZu = (perEscape) => {
       if (d.dataset.busy) return false;
-      if (d.dataset.fest === undefined || !d.dataset.geaendert || d.dataset.warnung) return true;
+      if (!perEscape || d.dataset.fest === undefined || !d.dataset.geaendert || d.dataset.warnung) return true;
       d.dataset.warnung = '1';
-      toast('Die Eingaben sind noch nicht gespeichert – erneut schließen verwirft sie.');
+      toast('Die Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.');
       return false;
     };
     d.addEventListener('click', (e) => { if (e.target.closest('[data-close]') && d.id !== 'dlg-confirm' && darfZu()) d.close(); });
-    d.addEventListener('cancel', (e) => { if (!darfZu()) e.preventDefault(); });
+    d.addEventListener('cancel', (e) => { if (!darfZu(true)) e.preventDefault(); });
   }
 
   document.addEventListener('keydown', (e) => {

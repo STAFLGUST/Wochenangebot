@@ -269,9 +269,9 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
   des Browsers, sondern im eigenen Fenster (Eingabebereich `confirmBox`, Kundenseite `frage()`, Module ihr `frage()`).
 - Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Escape oder ein Element mit
   `data-close` schließt, nicht während `data-busy` (Speichern läuft). Mit `data-fest` (z. B. `#dlg-user`) schützt das Fenster
-  getippte Eingaben: Sind sie noch nicht gespeichert, zeigt der erste Versuch (Escape oder Schließen) den Hinweis „Die Eingaben
-  sind noch nicht gespeichert – erneut schließen verwirft sie.“, erst der zweite schließt (wie das Kundenblatt im CRM). Nach
-  dem Speichern `delete d.dataset.geaendert` setzen. Dialoge, die ein Skript erst später erzeugt, erhalten die Verdrahtung
+  getippte Eingaben vor einem versehentlichen Escape: Sind sie noch nicht gespeichert, zeigt das erste Escape den Hinweis „Die
+  Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.“, erst das zweite schließt. „Abbrechen“ und Kreuz
+  schließen sofort (bewusste Entscheidung). Nach dem Speichern `delete d.dataset.geaendert` setzen. Dialoge, die ein Skript erst später erzeugt, erhalten die Verdrahtung
   nicht – deshalb neue Dialoge als leeres Gerüst ins HTML schreiben.
 - `confirmBox(title, html, okLabel, danger)` → `Promise<boolean>` über `#dlg-confirm`. Der Text wird als HTML
   eingesetzt: Werte vorher mit `esc()` maskieren.
