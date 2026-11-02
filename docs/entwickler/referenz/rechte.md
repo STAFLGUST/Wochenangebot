@@ -43,10 +43,10 @@ Für jedes Modul mit Kachel entsteht `<modul>.zugang` (lib/rechte.php, `perms_ka
 | `stammdaten.bearbeiten` | Verwaltung | Stammdaten | bearbeiten | Stammdaten bearbeiten | Bearbeiter | `stammdaten.sehen` |
 | `einkauf.sehen` | Einkauf | Einkauf | sehen | Einkauf (Fehlmengen) ansehen | Nur ansehen, Bearbeiter | – |
 | `einkauf.melden` | Einkauf | Einkauf | bearbeiten | Einkauf per E-Mail benachrichtigen | Bearbeiter | `einkauf.sehen` |
-| `hr.antrag` | HR | HR | bearbeiten | Eigenen Urlaub beantragen, Abwesenheitskalender ansehen (nur „abwesend“) | Nur ansehen, Bearbeiter | – |
-| `hr.verwalten` | HR | HR | bearbeiten | Personalstelle: Abwesenheiten mit Grund eintragen (nicht für sich selbst), Mitarbeiter, Excel-Export | – | `hr.antrag` |
-| `hr.genehmigen` | HR | HR | bearbeiten | Urlaubsanträge genehmigen oder ablehnen (nie den eigenen) | – | `hr.antrag` |
-| `hr.uebersicht` | HR | HR | sehen | Urlaubsübersicht aller Mitarbeiter: Anspruch, genommen, geplant, Rest, Krank- und Gleittage (nur Anzahl) | – | `hr.antrag` |
+| `hr.antrag` | HR | HR | bearbeiten | Eigenen Urlaub und Gleittage beantragen | Nur ansehen, Bearbeiter | – |
+| `hr.verwalten` | HR | HR | bearbeiten | Personalstelle: Urlaubsverwaltung pflegen | – | – |
+| `hr.genehmigen` | HR | HR | bearbeiten | Anträge genehmigen oder ablehnen | – | – |
+| `hr.uebersicht` | HR | HR | sehen | Urlaubsübersicht aller Mitarbeiter ansehen (nur Zahlen) | – | – |
 | `crm.sehen` | CRM | CRM | sehen | CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung | – | – |
 | `crm.bearbeiten` | CRM | CRM | bearbeiten | CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen | – | `crm.sehen` |
 | `crm.exportieren` | CRM | CRM | bearbeiten | CRM-Liste mit Kontaktdaten als CSV herunterladen | – | `crm.sehen` |

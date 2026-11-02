@@ -3,7 +3,8 @@
    Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle: welche Module sie öffnen darf (Modulzugang
    „<modul>.zugang“) und was sie darin sehen und bearbeiten darf. Gespeichert wird nur auf dem Server (rolle_save,
    rolle_loeschen); dort werden Rechte, Voraussetzungen und Modulzugang auch durchgesetzt (GR-103) – diese Seite zeigt
-   und sammelt nur die Auswahl. Daten: Aktion „rechte“ (rollen, module, catalog).
+   und sammelt nur die Auswahl. Daten: Aktion „rechte“ (rollen, module, catalog). Rechte mit Erklärung im Katalog („hilfe“)
+   zeigen sie unter der Bezeichnung, dazu die Voraussetzung (02.11.2026).
    ========================================================================== */
 (function () {
   'use strict';
@@ -45,9 +46,14 @@
     }).join('') + (wahl === '' ? `<button type="button" class="rl-item on" aria-pressed="true"><span class="rl-item-n">${esc(entwurf.name || 'Neue Rolle')}</span><span class="rl-item-m">noch nicht gespeichert</span></button>` : '');
   }
 
+  /* Ein Recht: Art, Bezeichnung, darunter (falls im Katalog) die Erklärung, was es genau erlaubt, und welches Recht es
+     voraussetzt (wird beim Anhaken mit eingeschaltet – mitVoraussetzungen) */
   function rechtZeile(p, an, gesperrt) {
     const art = p.kind === 'sehen' ? '<span class="rm-k rm-sehen">sehen</span>' : '<span class="rm-k rm-machen">bearbeiten</span>';
-    return `<label class="rl-recht"><input type="checkbox" data-rl-key="${esc(p.key)}"${an ? ' checked' : ''}${gesperrt ? ' disabled' : ''}>${art}<span>${esc(p.label)}</span></label>`;
+    const voraus = (p.requires || []).map((k) => recht(k)).filter((r) => r.label && r.kind !== 'zugang').map((r) => `„${r.label}“`);
+    const mehr = (p.hilfe ? `<small class="rl-hilfe">${esc(p.hilfe)}</small>` : '')
+      + (p.hilfe && voraus.length ? `<small class="rl-voraus">Setzt ${esc(voraus.join(' und '))} voraus – wird mit angehakt.</small>` : '');
+    return `<label class="rl-recht${p.hilfe ? ' mit-hilfe' : ''}"><input type="checkbox" data-rl-key="${esc(p.key)}"${an ? ' checked' : ''}${gesperrt ? ' disabled' : ''}>${art}<span class="rl-recht-t"><span>${esc(p.label)}</span>${mehr}</span></label>`;
   }
 
   function modulHTML(m, fest) {

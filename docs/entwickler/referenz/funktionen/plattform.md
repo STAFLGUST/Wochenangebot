@@ -668,7 +668,7 @@ _Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Adminis
 
 - `neuerEntwurf(id, kopie)`
 - `listeHTML()`
-- `rechtZeile(p, an, gesperrt)`
+- `rechtZeile(p, an, gesperrt)` – Ein Recht: Art, Bezeichnung, darunter (falls im Katalog) die Erklärung, was es genau erlaubt, und welches Recht es voraussetzt (wird beim Anhaken mit …
 - `modulHTML(m, fest)`
 - `detailHTML()`
 - `zeichnen()`
