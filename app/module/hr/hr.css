@@ -402,3 +402,37 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-kopf.hr-glas { background: var(--hr-kopf-glas); }
 .hr input[type="checkbox"], .hr input[type="radio"] { accent-color: var(--hr-akzent); }
 .hr a.btn { text-decoration: none; }   /* Knöpfe als Verweis ohne Unterstreichung */
+
+/* ── Gleittage-Konto (02.11.2026): Streifen unter dem Urlaubskonto, Umschalter Urlaub/Gleittag im Antrag, Spalte und Dialog
+   „Gleittage gewähren“ der Personalstelle ── */
+.hr-gleit { display: flex; align-items: center; justify-content: space-between; gap: 10px 24px; flex-wrap: wrap; padding: 14px 18px; border-radius: 22px; margin: -8px 0 20px; }
+.hr-gleit-kopf { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.hr-gleit-kopf span { font-size: 13px; color: var(--hr-muted); font-weight: 650; }
+.hr-gleit-kopf b { font-size: 22px; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.hr-gleit-kopf b.minus { color: var(--hr-fehler); }
+.hr-gleit-kopf small { font-size: 13px; color: var(--hr-muted); }
+.hr-gleit-gew { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--hr-muted); }
+.hr-gleit-gew b { color: var(--hr-text); font-variant-numeric: tabular-nums; }
+.hr-seg { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 12px; border-radius: 12px; background: var(--hr-aus); }
+.hr-seg[hidden] { display: none; }
+.hr-seg button { height: 38px; padding: 0 16px; border: 0; border-radius: 9px; background: transparent; color: var(--hr-muted); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.hr-seg button[aria-pressed="true"] { background: var(--hr-deckend); color: var(--hr-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.hr-pille.gleit { background: var(--hr-g-bg); color: var(--hr-g); vertical-align: middle; margin-left: 6px; }
+.hr-ueb td.gleit .minus { color: var(--hr-fehler); font-weight: 700; }
+.hr-gleit-zelle { min-width: 44px; min-height: 32px; padding: 2px 8px; border: 1px solid var(--hr-linie); border-radius: 8px; background: transparent; color: inherit; font: inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.hr-gleit-zelle:hover { background: var(--hr-aus-hover); }
+.hr-dialog-gleit { width: min(640px, calc(100vw - 32px)); }
+.hr-konto.klein { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 4px 0 14px; }
+.hr-konto.klein .hr-wert { padding: 10px 12px; border-radius: 14px; background: var(--hr-aus); }
+.hr-konto.klein .hr-wert b, .hr-konto.klein .hr-wert.haupt b { font-size: 22px; }
+.hr-gleit-h { margin: 18px 0 4px; font-size: 15px; }
+#gleit-liste li { gap: 6px 10px; padding: 9px 0; }
+#gleit-liste li b { min-width: 34px; font-variant-numeric: tabular-nums; }
+#gleit-liste li span { flex: 1 1 200px; font-size: 13px; color: var(--hr-muted); }
+#gleit-liste li.storniert b, #gleit-liste li.storniert span { text-decoration: line-through; opacity: .7; }
+@media (max-width: 560px) {
+  .hr-gleit { padding: 12px 14px; margin-top: -2px; }
+  .hr-seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .hr-konto.klein { grid-template-columns: 1fr 1fr; }
+  .hr-ueb .hr-gleit-knopf, .hr-jahr .hr-gleit-knopf { width: 100%; margin-left: 0; }
+}

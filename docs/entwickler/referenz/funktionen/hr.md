@@ -2,11 +2,11 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 143 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 156 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
-_Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet), Abwesenheitskalender (nur …_
+_Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/module/hr/) Rechte (GR-103): hr.antrag – eigener Urlaub und Gleittage, Anträge (nur wenn in Verwaltung → Urlaub eingeschaltet; Gleittage nur …_
 
 - `hr_jahr_param(v)` – Jahr aus der Anfrage (Standard: aktuelles Jahr)
 - `hr_person_aus(p, eintraege, jahr)` – Angaben einer Person für die Personalstelle
@@ -106,9 +106,19 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_anspruch(p, jahr)` – Anspruch eines Jahres: Eintrag des Jahres, sonst der letzte frühere Eintrag (gleichbleibender Anspruch)
 - `hr_konto(p, eintraege, jahr, heute, tiefe)` – Urlaubskonto einer Person für ein Jahr.
 
+**Gleittage-Konto (Inhaber 02.11.2026)**
+
+- `hr_gleit_norm(l)`
+- `hr_gleit_wirksam(p)` – Wirksame Gewährungen und Beginn des Kontos (Tag der ersten wirksamen Gewährung)
+- `hr_gleit_beginn(p)`
+- `hr_gleit_konto(p, eintraege, jahr, heute)` – Gleittage-Konto einer Person für ein Jahr: Übertrag (Rest des Vorjahres, ohne Verfall) + gewährt − genommen − geplant = Rest; verfügbar = Rest − beantragt.
+- `hr_gleit_aus(p, voll)` – Gewährungen für die Ausgabe (neueste zuerst); $voll: mit Kennung der gewährenden Person (nur Personalstelle)
+- `hr_gleittage_setzen(b, me)` – Gleittage gewähren oder eine Gewährung stornieren (Personalstelle, nie für sich selbst).
+
 **Urlaubsübersicht (Recht hr.uebersicht oder hr.verwalten)**
 
 - `hr_tage_je_art(p, eintraege, jahr)`
+- `hr_gleit_summen(k)` – Gleittage-Konto in der Übersicht: gewährt (mit Übertrag) und Rest – ohne Konto beides leer
 - `hr_uebersicht(jahr)`
 
 **Einträge (Anträge und Eintragungen der Personalstelle)**
@@ -146,7 +156,7 @@ _Modul HR · Import „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsberic
 
 ## `app/module/hr/hr.js`
 
-_STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, nie Krankheit), Urlaubsantrag (ausblendbar_
+_STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `api(action, body, query)`
 
@@ -170,6 +180,11 @@ _STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, 
 - `ladeStart()`
 - `wert(titel, n, cls, zusatz)`
 - `zeigeMein()`
+
+**Gleittage-Konto des Mitarbeiters: Rest, gewährt, genommen und die Gewährungen**
+
+- `zeigeGleitMein()`
+- `artSetzen(art)`
 
 **Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten**
 
@@ -213,6 +228,12 @@ _STAFL-Plattform · HR · Urlaub Mitarbeiter: eigenes Urlaubskonto (nur Urlaub, 
 
 - `ladeUebersicht()`
 - `zeigeUebersicht()`
+
+**Gleittage gewähren (Personalstelle)**
+
+- `gleitOeffnen(person)`
+- `gleitZeigen()`
+- `gleitSpeichern(body)`
 
 **Export**
 
@@ -275,4 +296,5 @@ _HR · Urlaubsübersicht aller Mitarbeiter (Recht hr.uebersicht, Personalstelle 
 - `iso(d)`
 - `hr(uid, **werte)`
 - `eintrag(person, art, von, bis, notiz)` – ── Daten (Personalstelle trägt ein, Lena beantragt) ──
+- `gewaehren(tage, grund, person, wer)`
 - `anmelden(user, pw, ip, breite)`

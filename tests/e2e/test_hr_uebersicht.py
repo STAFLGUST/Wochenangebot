@@ -5,7 +5,12 @@ hr.uebersicht öffnet keine Personalstellen-Aktionen), Recht im Katalog (zuweisb
 Mitarbeiter (Anspruch, genommen/geplant/beantragt, Rest, Krank- und Gleittage nur genehmigt und nur Arbeitstage –
 4-Tage-Woche, Feiertage, freie Tage), nur Mitarbeiter im Urlaubsplan, Datenschutz (keine Zeiträume, Notizen, Gründe in
 der Antwort), Oberfläche (Reiter nur mit Recht, Jahr wechseln, Abteilungsfilter, Summenzeile; Desktop, 390 px, dunkel).
-Nur Testdaten.
+Gleittage-Konto (Inhaber 02.11.2026): ohne Gewährung kein Konto und kein Gleittag-Antrag; Gewähren nur Personalstelle (nicht für
+sich selbst, nicht für Mitarbeiter außerhalb des Urlaubsplans), halbe Tage, Korrektur nur mit Grund, Storno; Konto ab der ersten
+Gewährung, Rest unbegrenzt ins Folgejahr, genehmigte/beantragte Gleittage zählen; Antrag nur bis zum verfügbaren Rest und je
+Kalenderjahr, Zurückziehen; Personalstelle trägt auch darüber hinaus ein (Hinweis); Übersicht mit Gleittage-Rest; Gründe nur für
+Person und Personalstelle, Protokoll ohne Grund; Oberfläche (Streifen „Gleittage“, Umschalter im Antrag, Dialog „Gleittage
+gewähren“, Spalte in der Übersicht). Nur Testdaten.
 """
 import datetime as dt
 import json
@@ -121,6 +126,69 @@ check('anderes Jahr: Konto ohne Einträge', all(x['krank'] == 0 and x['geplant']
 log = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll ohne Art der Abwesenheit (Krankheit)', not re.search(r'HR:[^"]*Krank', log) and 'Arztbesuch' not in log)
 
+# ── Gleittage-Konto (Inhaber 02.11.2026) ──
+J0 = dt.date.today().year
+check('ohne Gewährung: kein Gleittage-Konto in der Übersicht', all(x['gleitRest'] is None and x['gleitGewaehrt'] is None for x in U.call('hr_uebersicht&jahr=' + str(Y))[1]['zeilen']))
+st, r = L.call('hr_start&jahr=' + str(Y))
+check('ohne Gewährung: Konto inaktiv, Gleittag-Antrag 409', st == 200 and r['gleitKonto']['aktiv'] is False and r['gleittage'] == []
+      and L.call('hr_antrag', {'art': 'G', 'von': iso(AUG + dt.timedelta(days=14)), 'bis': iso(AUG + dt.timedelta(days=14))})[0] == 409, r.get('gleitKonto'))
+check('unbekannte Antragsart: 422', L.call('hr_antrag', {'art': 'K', 'von': iso(AUG + dt.timedelta(days=14)), 'bis': iso(AUG + dt.timedelta(days=14))})[0] == 422)
+check('Gewähren nur Personalstelle (403), ohne Anmeldung 401', L.call('hr_gleittage_save', {'person': PL, 'tage': 2})[0] == 403
+      and U.call('hr_gleittage_save', {'person': PL, 'tage': 2})[0] == 403 and N.call('hr_gleittage_save', {'person': PL, 'tage': 2})[0] == 401)
+
+
+def gewaehren(tage, grund='', person=None, wer=None):
+    return (wer or P).call('hr_gleittage_save', {'person': person or PL, 'tage': tage, 'grund': grund})
+
+
+st, r = gewaehren(3, 'Inventur Test')
+k = r.get('gleitKonto', {})
+check('3 Tage gewährt: Konto beginnt heute, Rest 3', st == 200 and k.get('aktiv') is True and k.get('gewaehrt') == 3 and k.get('rest') == 3
+      and k.get('beginn') == iso(dt.date.today()) and r['gleittage'][0]['grund'] == 'Inventur Test' and r['gleittage'][0]['von'] == 'Paul Personal', r)
+st, r = gewaehren(0.5)
+HALB = r['neu']
+check('halber Tag gewährt: Rest 3,5', st == 200 and r['gleitKonto']['rest'] == 3.5, r.get('gleitKonto'))
+check('ungültige Anzahl (0, Viertel, über 50): 422', gewaehren(0)[0] == 422 and gewaehren(0.25)[0] == 422 and gewaehren(51)[0] == 422 and gewaehren('x')[0] == 422)
+check('Korrektur (negativ) nur mit Grund', gewaehren(-1)[0] == 422 and gewaehren(-1, 'Korrektur Test')[1]['gleitKonto']['rest'] == 2.5)
+st, r = P.call('hr_gleittage_save', {'person': PL, 'id': HALB, 'stornieren': True})
+check('Storno: zählt nicht mehr, bleibt sichtbar', st == 200 and r['gleitKonto']['rest'] == 2 and any(g['id'] == HALB and g['storniert'] for g in r['gleittage']), r.get('gleitKonto'))
+check('Storno doppelt 409, unbekannt 404', P.call('hr_gleittage_save', {'person': PL, 'id': HALB, 'stornieren': True})[0] == 409
+      and P.call('hr_gleittage_save', {'person': PL, 'id': 'gibt-es-nicht', 'stornieren': True})[0] == 404)
+check('nie für sich selbst (403), nicht außerhalb des Urlaubsplans (422), unbekannt (422)', gewaehren(1, person=ids['paul'])[0] == 403
+      and gewaehren(1, person=ids['admin'])[0] == 422 and gewaehren(1, person='u-gibt-es-nicht')[0] == 422)
+st, r = L.call('hr_start&jahr=' + str(Y))
+g = r['gleitKonto']
+check(f'Folgejahr: Rest 2 übertragen, Gleittag im März geplant → Rest 1', g['aktiv'] and g['uebertrag'] == 2 and g['gewaehrt'] == 0 and g['geplant'] == 1 and g['rest'] == 1 and g['verfuegbar'] == 1, g)
+check('Mitarbeiter sieht seine Gewährungen mit Grund (auch stornierte), ohne interne Kennungen', sorted(x['tage'] for x in r['gleittage']) == [-1, 0.5, 3]
+      and 'Inventur Test' in json.dumps(r['gleittage'], ensure_ascii=False) and 'vonId' not in json.dumps(r) and all('t' not in x for x in r['gleittage']), r['gleittage'])
+G1 = AUG + dt.timedelta(days=14)
+check('Antrag über den Rest hinaus: 409 mit verfügbarer Zahl', (lambda s: s[0] == 409 and 'verfügbar 1' in s[1]['error'])(L.call('hr_antrag', {'art': 'G', 'von': iso(G1), 'bis': iso(G1 + dt.timedelta(days=1))})))
+check('Gleittag über den Jahreswechsel: 422', L.call('hr_antrag', {'art': 'G', 'von': f'{Y}-12-31', 'bis': f'{Y + 1}-01-04'})[0] == 422)
+st, r = L.call('hr_antrag', {'art': 'G', 'von': iso(G1), 'bis': iso(G1)})
+GA = r.get('eintrag', {}).get('id')
+check('Gleittag beantragt: Art G, beantragt, verfügbar 0', st == 200 and r['eintrag']['art'] == 'G' and r['eintrag']['status'] == 'beantragt' and r['gleitKonto']['beantragt'] == 1
+      and r['gleitKonto']['verfuegbar'] == 0 and r['hinweis'] is None, r)
+check('weiterer Gleittag: 409 (Rest schon beantragt)', L.call('hr_antrag', {'art': 'G', 'von': iso(G1 + dt.timedelta(days=1)), 'bis': iso(G1 + dt.timedelta(days=1))})[0] == 409)
+offen = [a for a in P.call('hr_verwaltung&jahr=' + str(Y))[1]['offen'] if a['id'] == GA]
+check('Personalstelle/Genehmiger sehen den Gleittage-Rest am Antrag', offen and offen[0]['art'] == 'G' and offen[0]['gleitKonto']['rest'] == 1, offen)
+check('Gleittag-Antrag zurückziehen', L.call('hr_antrag_zurueckziehen', {'id': GA})[0] == 200 and L.call('hr_start&jahr=' + str(Y))[1]['gleitKonto']['verfuegbar'] == 1)
+OKT = montag(Y, 10)
+st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'G', 'von': iso(OKT), 'bis': iso(OKT + dt.timedelta(days=1))})
+check('Personalstelle trägt auch über das Konto hinaus ein – mit Hinweis', st == 200 and 'steht damit bei -1 Tagen' in (r.get('hinweis') or ''), r)
+P.call('hr_eintrag_save', {'id': r['eintrag']['id'], 'stornieren': True})
+st, r = P.call('hr_eintrag_save', {'person': PA, 'art': 'G', 'von': iso(OKT), 'bis': iso(OKT)})
+check('… ohne Konto: Hinweis „noch kein Gleittage-Konto“', st == 200 and 'noch kein Gleittage-Konto' in (r.get('hinweis') or ''), r)
+P.call('hr_eintrag_save', {'id': r['eintrag']['id'], 'stornieren': True})
+st, r, raw = U.call('hr_uebersicht&jahr=' + str(Y), raw=True)
+z = {x['id']: x for x in r['zeilen']}
+check('Übersicht: Gleittage-Rest und gewährt (mit Übertrag), ohne Konto leer, ohne Gründe', z[PL]['gleitRest'] == 1 and z[PL]['gleitGewaehrt'] == 2 and z[PA]['gleitRest'] is None
+      and 'Inventur' not in raw and 'Korrektur Test' not in raw, (z[PL], z[PA]))
+check('Übersicht laufendes Jahr: 2 gewährt, Rest 2', (lambda zz: zz['gleitGewaehrt'] == 2 and zz['gleitRest'] == 2)({x['id']: x for x in U.call('hr_uebersicht&jahr=' + str(J0))[1]['zeilen']}[PL]))
+v = {x['id']: x for x in P.call('hr_verwaltung&jahr=' + str(J0))[1]['personen']}
+check('Personalstelle: Konto und Gewährungen je Mitarbeiter', v[PL]['gleitKonto']['rest'] == 2 and len(v[PL]['gleittage']) == 3 and v[PA]['gleitKonto']['aktiv'] is False)
+log = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: Gewährung mit Anzahl, ohne Grund', 'Gleittage Lena Leser +3 gewährt' in log and 'Gewährung storniert' in log and 'Inventur Test' not in log and 'Korrektur Test' not in log)
+
 # ── Oberfläche ──
 fehler = []
 with sync_playwright() as p:
@@ -158,6 +226,61 @@ with sync_playwright() as p:
     ctx, pg = anmelden('lena', 'Leser-Zugang-77', '198.51.100.4')
     pg.goto(B + '/module/hr/#uebersicht'); pg.wait_for_selector('#mein-konto .hr-wert')
     check('ohne Recht: Reiter ausgeblendet, Adresse #uebersicht führt zu „Mein Urlaub“', not pg.is_visible('[data-tab="uebersicht"]') and pg.is_visible('#tab-mein'))
+    ctx.close()
+
+    # Gleittage: Übersicht nur lesend (hr.uebersicht), Gewähren (Personalstelle), Mitarbeiter beantragt
+    ctx, pg = anmelden('uwe', 'Personal-Zugang-77', '198.51.100.6')
+    pg.goto(B + '/module/hr/#uebersicht'); pg.wait_for_selector('#ueb-tabelle thead')
+    check('Übersicht (nur ansehen): Spalte Gleittage-Rest, kein Gewähren', 'Gleittage-Rest' in pg.text_content('#ueb-tabelle thead') and not pg.is_visible('#ueb-gleit')
+          and pg.locator('#ueb-tabelle [data-gleit]').count() == 0)
+    ctx.close()
+    for breite in (1280, 390):
+        ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5', breite)
+        pg.goto(B + '/module/hr/#uebersicht'); pg.wait_for_selector(f'#ueb-tabelle [data-gleit="{PL}"]')
+        if breite == 1280:
+            pg.click('#ueb-gleit'); pg.wait_for_selector('#dlg-gleit[open] #gleit-person option[value="' + PL + '"]', state='attached')
+            check('Dialog „Gleittage gewähren“: ohne eigene Person, ohne Mitarbeiter außerhalb des Urlaubsplans', pg.locator(f'#gleit-person option[value="{ids["paul"]}"]').count() == 0
+                  and pg.locator(f'#gleit-person option[value="{ids["admin"]}"]').count() == 0)
+            pg.select_option('#gleit-person', PL); pg.wait_for_selector('#gleit-konto .hr-wert')
+            pg.fill('#gleit-tage', '1'); pg.fill('#gleit-grund', 'UI-Test Samstag'); pg.click('#gleit-speichern')
+            pg.wait_for_function("document.querySelector('#gleit-liste').textContent.includes('UI-Test Samstag')")
+            check('Gewährt über den Dialog: Meldung, Liste und Konto aktualisiert (Rest 3)', 'gewährt' in pg.text_content('#gleit-meldung')
+                  and pg.text_content('#gleit-konto .hr-wert.haupt b').strip() == '3', pg.text_content('#gleit-konto'))
+            pg.wait_for_function("document.getAnimations().every((a) => a.playState !== 'running')")
+            pg.screenshot(path=os.path.join(SH, 'hr_gleittage_dialog_1280.png'))
+            pg.click('#dlg-gleit [data-schliessen]')
+        pg.click(f'#ueb-tabelle [data-gleit="{PL}"]'); pg.wait_for_selector('#dlg-gleit[open] #gleit-liste li button')
+        check(f'{breite}px: Klick auf den Gleittage-Rest öffnet den Mitarbeiter', pg.input_value('#gleit-person') == PL
+              and pg.evaluate("(() => { const d = document.querySelector('#dlg-gleit'); return d.scrollWidth <= d.clientWidth + 1; })()"))
+        pg.wait_for_function("document.getAnimations().every((a) => a.playState !== 'running')")
+        pg.screenshot(path=os.path.join(SH, f'hr_gleittage_dialog_{breite}.png'))
+        pg.click('#dlg-gleit [data-schliessen]')
+        ctx.close()
+    for breite in (1280, 390):
+        ctx, pg = anmelden('lena', 'Leser-Zugang-77', '198.51.100.4', breite)
+        pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
+        pg.click('#tab-mein [data-jahr="1"]'); pg.wait_for_function(f"document.querySelector('#mein-titel').textContent.includes('{Y}')")
+        pg.wait_for_selector('#mein-gleit:not([hidden])')
+        gl = pg.text_content('#mein-gleit')
+        check(f'{breite}px: Streifen Gleittage mit Rest und Gewährungen', '2 Tage Rest' in gl and 'aus dem Vorjahr' in gl, gl)
+        check(f'{breite}px: Umschalter Urlaub/Gleittag im Antrag', pg.is_visible('#antrag-art'))
+        if breite == 1280:
+            pg.click('#antrag-art [data-art="G"]')
+            check('Gleittag gewählt: Überschrift und Felder', pg.text_content('#antrag-titel') == 'Gleittag beantragen' and 'Erster Gleittag' in pg.text_content('#antrag'))
+            G2 = montag(Y, 9)
+            pg.fill('#antrag-von', iso(G2)); pg.dispatch_event('#antrag-von', 'change')
+            pg.wait_for_function("document.querySelector('#antrag-tage').textContent.includes('Gleittag')")
+            check('Rechnung: 1 Gleittag, noch frei', 'noch 2 Tage frei' in pg.text_content('#antrag-tage'), pg.text_content('#antrag-tage'))
+            pg.click('#antrag-senden')
+            pg.wait_for_function("document.querySelector('#mein-liste').textContent.includes('beantragt') && document.querySelector('#mein-liste .hr-art.G')")
+            check('Gleittag-Antrag gestellt: in der Liste mit Zurückziehen', pg.locator('#mein-liste li:has(.hr-art.G) [data-zurueck]').count() >= 1)
+        pg.screenshot(path=os.path.join(SH, f'hr_gleittage_mein_{breite}.png'), full_page=True)
+        check(f'{breite}px: kein waagerechtes Scrollen (Mein Urlaub mit Gleittagen)', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        ctx.close()
+    ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
+    pg.goto(B + '/module/hr/#antraege'); pg.wait_for_selector('#antraege-liste .hr-antrag')
+    pg.wait_for_function("document.querySelector('#antraege-liste').textContent.includes('Gleittag')")
+    check('Anträge: Gleittag mit Gleittage-Rest danach', 'Gleittage' in pg.text_content('#antraege-liste') and 'danach' in pg.text_content('#antraege-liste'))
     ctx.close()
     br.close()
 check('keine JavaScript-Fehler', not fehler, fehler)
