@@ -277,8 +277,8 @@ with sync_playwright() as p:
     a.click('[data-imp="liste"]'); a.wait_for_selector('.imp-art[data-art="kunden"]')
     ziehen('.imp-art[data-art="bestand"]', [BESTAND_CSV]); a.wait_for_selector('#imp-neu')
     tb = a.inner_text('#view-importe')
-    check('Bestand als CSV (Ablage auf „Bestand“): Vorschau mit 4 Artikeln, Hinweis ohne Datum, Datum heute vorgeschlagen', 'Bestand importieren' in a.inner_text('#imp-titel')
-          and 'Kein Datum in der Datei' in tb and a.input_value('[data-imp-opt="datum"]') == __import__('datetime').date.today().isoformat() and 'verkauft' in tb, tb[:500])
+    check('Bestand als CSV (Ablage auf „Bestand“): Vorschau, Bestandsdatum = Tag des Hochladens (heute)', 'Bestand importieren' in a.inner_text('#imp-titel')
+          and 'Tag des Hochladens' in tb and a.input_value('[data-imp-opt="datum"]') == __import__('datetime').date.today().isoformat() and 'verkauft' in tb, tb[:500])
     a.click('[data-imp="liste"]'); a.wait_for_selector('.imp-art[data-art="kunden"]')
     check('neben die Liste fallen gelassen: Browser öffnet die Datei nicht', ziehen('#side-admin', [GRUPPEN_CSV]) is True and a.locator('#imp-titel').count() == 0)
 

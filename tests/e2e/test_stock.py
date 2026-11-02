@@ -320,7 +320,8 @@ with sync_playwright() as p:
     t = a.inner_text('#dlg-stock-import')
     check('CSV: Vorschau mit 4 Artikeln, 2.652,30 kg, 5 Partien, 2 Zugänge, anderer Status und Etiketten genannt', re.search(r'artikel mit bestand\s*4', t, re.I) and '2.652,30' in t
           and '5 Partien' in t and '2 erwartete Zugänge' in t and '„verkauft“' in t and 'Etiketten' in t, re.sub(r'\s+', ' ', t)[:400])
-    check('CSV: kein Datum in der Datei – heute vorgeschlagen, Hinweis', a.input_value('#si-date') == today.isoformat() and 'Kein Datum in der Datei' in t)
+    check('CSV: Bestandsdatum = Tag des Hochladens (heute), nur als Info, keine Warnung', a.input_value('#si-date') == today.isoformat() and 'Tag des Hochladens' in t
+          and a.locator('#dlg-stock-import .issues li.warn').count() == 0)
     a.screenshot(path=SH + '/stock-import-csv.png')
     a.fill('#si-date', '2026-11-02'); a.click('#dlg-stock-import [data-si=apply]')
     a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 4", timeout=10000)

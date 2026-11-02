@@ -3643,7 +3643,7 @@
             <li class="info"><span class="lvl">Info</span><span>Berücksichtigt: ${fmtInt.format(r.stats.stored)} Partien mit Status „eingelagert“ und ${fmtInt.format(r.stats.expected)} erwartete Zugänge mit Status „erfasst“ (separat, nicht im Bestand).${other ? ` Nicht berücksichtigt: ${other}.` : ''}</span></li>
             ${r.stats.skipped ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).</span></li>` : ''}
             ${r.stats.noMhd ? `<li class="info"><span class="lvl">Info</span><span>${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.</span></li>` : ''}
-            ${!r.date ? '<li class="warn"><span class="lvl">Prüfen</span><span>Kein Datum in der Datei gefunden (die CSV-Datei enthält keines) – vorgeschlagen ist heute, bitte prüfen.</span></li>' : ''}
+            ${!r.date ? '<li class="info"><span class="lvl">Info</span><span>Bestandsdatum: heute – die Liste gilt für den Tag des Hochladens (die Datei enthält kein Datum).</span></li>' : ''}
             ${stock ? `<li class="info"><span class="lvl">Info</span><span>Ersetzt den bisherigen Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'} (${fmtInt.format(stock.articles.length)} Artikel).</span></li>` : ''}
           </ul>
           <p class="hint">Mengen und MHD sind nur im Eingabebereich sichtbar, nicht auf der öffentlichen Angebotsseite.</p>
@@ -4884,7 +4884,7 @@
         const r = await stockAusDatei(file);
         const other = Object.entries(r.stats.other).map(([k, v]) => `${fmtInt.format(v)} × „${k}“`).join(', ');
         const hinweise = [];
-        if (!r.date) hinweise.push({ stufe: 'warn', text: 'Kein Datum in der Datei gefunden (die CSV-Datei enthält keines) – vorgeschlagen ist heute, bitte das Bestandsdatum prüfen.' });
+        if (!r.date) hinweise.push({ stufe: 'info', text: 'Bestandsdatum: heute – die Liste gilt für den Tag des Hochladens (die Datei enthält kein Datum).' });
         if (other) hinweise.push({ stufe: 'info', text: `Nicht berücksichtigt (anderer Status): ${other}.` });
         if (r.stats.skipped) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.skipped)} Zeilen ohne gültige Artikelnummer oder Menge übersprungen (z. B. „Etiketten“).` });
         if (r.stats.noMhd) hinweise.push({ stufe: 'info', text: `${fmtInt.format(r.stats.noMhd)} eingelagerte Partien ohne MHD – zählen zur verfügbaren Menge, nicht zum kürzesten MHD.` });
