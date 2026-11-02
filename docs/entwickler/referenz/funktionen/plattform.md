@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-101 Dateien, 903 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+101 Dateien, 913 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -664,15 +664,38 @@ _Shared persistence for HTTP and maintenance tools._
 
 ## `app/assets/admin-rollen.js`
 
-_Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle: welche Module sie öffnen darf (Modulzugang „<modul>.zugang“) und …_
+_Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle und Modul eine Stufe (Kein Zugang · Ansehen · Bearbeiten · Voll), …_
+
+**Module und Stufen**
+
+- `stufeVon(set, mid)` – Stufe eines Moduls aus einer Rechteliste; „angepasst“, wenn sie keiner Stufe entspricht (sensible Rechte zählen nicht), „nurzugang“, wenn nur die Kachel …
+- `stufeSetzen(mid, st)`
+
+**Entwurf**
 
 - `neuerEntwurf(id, kopie)`
+- `aenderungen()`
+
+**Bausteine**
+
+- `stufenHTML(m, gross)`
 - `listeHTML()`
-- `rechtZeile(p, an, gesperrt)` – Ein Recht: Art, Bezeichnung, darunter (falls im Katalog) die Erklärung, was es genau erlaubt, und welches Recht es voraussetzt (wird beim Anhaken mit …
-- `modulHTML(m, fest)`
-- `detailHTML()`
+- `kopfHTML()`
+- `blickHTML(aktiv)`
+- `zeilenHTML(aktiv)`
+- `rechtHTML(p, m)` – Ein Recht: Schalter, Bezeichnung, Erklärung (falls im Katalog), Voraussetzung, Vorschau-Bild
+- `detailHTML(m)`
+
+**Rollen vergleichen**
+
+- `vergleichHTML()`
+
+**Zeichnen**
+
+- `aktivesModul()`
 - `zeichnen()`
-- `markieren()`
+- `neuZeichnen(fokus, ersatz)` – Neu zeichnen und den Fokus auf dem bedienten Element halten (Tastatur, Bildschirmleser)
+- `standAktualisieren()`
 - `weiterOhneSpeichern()`
 - `laden(id)`
 
@@ -1124,6 +1147,7 @@ _Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/v
 - `check(n, c, i)`
 - `login(user, pw)`
 - `page(user, password, w)`
+- `modul(m)`
 
 ## `tests/e2e/test_rollen.py`
 

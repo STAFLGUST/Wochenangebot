@@ -71,7 +71,10 @@ Abschnitt „Koordination“.
 3. Wichtig: Ein neues Recht mit Standardrollen in `d` bekommen auch Standardrollen, deren Rechte bereits gespeichert
    sind (`rechte.bekannt` in `rights_roles()`); mit leerem `d` bekommt es zunächst niemand außer Administratoren.
 4. Server: `require_perm('<recht>')` in jeder Aktion, die es braucht. Oberfläche: `may('<recht>')`.
-5. Die Verwaltung („Rollen und Rechte“) zeigt das Recht automatisch unter seinem Modul. Tests: Rechte-Gruppe des
+5. Die Verwaltung („Rollen und Rechte“) zeigt das Recht automatisch unter seinem Modul – in der Stufe nach seiner Art
+   (`sehen` → Ansehen, `machen` → Bearbeiten). Gehört es zu „Voll“ (freigeben, verwalten, löschen) oder ist es sensibel
+   (Einkaufswerte, Personaldaten, Export von Kontaktdaten …), den Schlüssel in `PERMS_STUFE_VOLL` bzw. `PERMS_SENSIBEL`
+   eintragen; ein Vorschau-Bild über `PERMS_VORSCHAU` und `admin-rollen-vorschau.js` (nur Beispieldaten). Tests: Rechte-Gruppe des
    Moduls plus `rechte`/`rollen`, falls Standards betroffen sind. Referenz: [Rechte](referenz/rechte.md).
 
 ## Ein neues Speicher-Dokument

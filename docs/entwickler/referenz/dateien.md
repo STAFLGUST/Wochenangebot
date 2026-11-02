@@ -228,7 +228,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-einzel.js` | angebot | Wochenangebot – Eingabebereich, Einzelangebote (Angebot je Kunde) Kunde über eine Suche wählen (Firma, Kundennummer, Ort, Ansprechpartner …). |
 | `admin-import.css` | verwaltung | Eingabebereich – Importzentrale (Verwaltung → Import, admin-import.js) Nutzt die Farben und Bausteine von app.css/admin.css; hier nur die eigenen Teile. |
 | `admin-import.js` | verwaltung | Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadmap 10b) Ein Ablauf für alle Importe |
-| `admin-rollen.js` | plattform | Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle: welche Module sie öffnen darf (Modulzugang „<modul>.zugang“) und … |
+| `admin-rollen-vorschau.js` | plattform | Wochenangebot – Verwaltung → Rollen und Rechte |
+| `admin-rollen.js` | plattform | Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle und Modul eine Stufe (Kein Zugang · Ansehen · Bearbeiten · Voll), … |
 | `admin-verwaltung.js` | verwaltung | Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll. |
 | `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Überschrift, optionaler Werbetext und bis zu 12 Artikel des gewählten Angebots (Reihenfolge, je Artikel ein … |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |

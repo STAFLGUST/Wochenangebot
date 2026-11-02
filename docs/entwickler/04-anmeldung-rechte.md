@@ -289,6 +289,14 @@ Standardwert (`bekannt`), damit z. B. ein neuer Modulzugang niemandem die Kachel
 („Standard an auch in eigenen Rollen“, z. B. `crm.umsatz_euro`, `crm.umsatz_kg`) gelten zusätzlich in jeder eigenen Rolle,
 bis ein Administrator sie gespeichert hat (`bekannt` der Rolle, `rolle_save`); neue eigene Rollen haben sie vorgewählt.
 
+**Darstellung in Verwaltung → Rollen und Rechte** (nur Anzeige, nie Prüfung): `rights_catalog()` liefert je Recht
+zusätzlich `stufe` (`zugang` | `ansehen` | `bearbeiten` | `voll` | `sensibel`), `sensibel` und `vorschau`. Die Stufe
+ergibt sich aus der Art (`sehen` → Ansehen, `machen` → Bearbeiten), `PERMS_STUFE_VOLL` (freigeben, verwalten, löschen)
+und `PERMS_SENSIBEL` (Einkaufswerte, Kontaktdaten-Export, Personaldaten, Kundenzugänge, Notfall – gehören zu keiner Stufe,
+werden einzeln vergeben). `PERMS_VORSCHAU` ordnet einem Recht ein Vorschau-Bild zu (`app/assets/admin-rollen-vorschau.js`,
+fest gezeichnete Beispieldaten). Die Oberfläche fasst damit je Modul zu „Kein Zugang · Ansehen · Bearbeiten · Voll“
+zusammen (sonst „Angepasst“ bzw. „Nur Zugang“); gespeichert wird weiter nur die Liste der Rechte (`rolle_save`).
+
 **Vertreter am Mitarbeiter** (Feld `vertreter`, `user_save`, Prüfung `nutzer_vertreter`): Nummer aus Stammdaten →
 Vertreter. Das CRM zeigt damit „Mein Cockpit“ mit den Kunden dieses Vertreters (Vertreter oder Vertreter 2). Ohne das
 Feld in der Anfrage (ältere Oberfläche) bleibt es unverändert; eine nicht mehr vorhandene Nummer bleibt speicherbar.
