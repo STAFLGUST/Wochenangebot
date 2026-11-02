@@ -393,12 +393,13 @@ icon = "chart"
 reihenfolge = 76
 dashboard = true
 agent = "controlling"
-abhaengigkeiten = ["plattform", "verwaltung"]
+abhaengigkeiten = ["plattform", "verwaltung", "bestand"]
 testgruppen = ["controlling", "controlling_umsatzdaten"]
 pfade = ["regeln/aktionen/controlling.toml", "app/api/aktionen/controlling.php", "app/api/module/controlling/**", "app/module/controlling/**", "tests/e2e/test_controlling*.py"]
 pfade_geplant = []
 zugang_rollen = []   # Finanzdaten: Modulzugang standardmäßig nur Administratoren; anderen nur ausdrücklich (Rollen/Mitarbeiter)
 hinweise = [
+  "Bereich Bestandsverlauf (Auftrag des Inhabers 02.11.2026): der Bestand speichert bei jedem Hochladen der Bestandsliste einen Tagesstand je Artikel (bestand-verlauf, Eigentümer Bestand); das Controlling liest ihn nur über bestand_verlauf_index()/bestand_verlauf_tag() und wertet aus: Entwicklung über die Zeit, Reichweite und Umschlag (mit den eigenen Umsatzdaten), je Artikel und Gruppe. Rechte controlling.bestand_sehen, Lagerwert zum EK nur mit controlling.bestand_ek und bestand.einkaufspreise.",
   "Aufbau in Bereichen (Auftrag des Inhabers 28.10.2026): erster Bereich Umsatzstatistik (aus dem Modulbausatz-Modul „Gust 1“), weitere folgen (OP-Konten, Liquidität …). Je Bereich eigene Datei module/controlling/<bereich>.php, Aktionen controlling_<bereich>_…, Rechte controlling.<bereich>_sehen/_bearbeiten, Dokumente controlling-<bereich>; Eintrag in CONTROLLING_BEREICHE.",
   "Liest Daten anderer Module nur über deren Schnittstellen (GR-101: vertreter_load/gruppen_load, customers_load und Artikelstammdaten der Verwaltung, nur lesend); Einkaufspreise und Margen nur mit eigenem Recht (controlling.umsatz_ek, zusätzlich bestand.einkaufspreise nach GR-008).",
   "Umsatzstatistik, Reiter Monatsmeldung: seit 01.11.2026 aus den importierten Umsatzdaten gerechnet (Auftrag des Inhabers: Werte nur aus dem Import); die Erfassung von Hand (Datenpflege, controlling-umsatz, controlling.umsatz_bearbeiten) ist entfernt.",
