@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-8 Dateien, 52 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 58 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
@@ -44,6 +44,19 @@ _Importvertrag des Moduls Bestand – Schnittstelle zur Importzentrale (docs/pla
 - `bestand_import_vorschau(e, me)`
 - `bestand_stand(st)` – Kennung des gespeicherten Bestands für die Übernahme (ändert sich mit jedem Speichern, auch innerhalb einer Sekunde)
 - `bestand_import_uebernehmen(e, me)`
+
+## `app/api/module/bestand/verlauf.php`
+
+_Modul Bestand · Bestandsverlauf (Auftrag des Inhabers 02.11.2026): bei jedem Übernehmen der Bestandsliste (Bestand → Bestandsliste hochladen, Aktion stock_import, Importzentrale) wird ein Tagesstand gespeichert – je …_
+
+- `bestand_verlauf_stand(articles, incoming)` – Tagesstand aus der übernommenen Bestandsliste: artikel[code] = [kg, zugang, ekWert, ekKg, partien], namen[code]
+- `bestand_verlauf_summen(stand)` – Summen eines Tagesstands für das Verzeichnis
+- `bestand_verlauf_schreiben(datum, articles, incoming, quelle, me)` – Tagesstand speichern (ersetzt einen früheren desselben Tags); ohne gültiges Datum: heute
+
+**Schnittstelle für das Controlling (nur lesen; enthält Lagerwerte zum EK – der Aufrufer prüft die Rechte)**
+
+- `bestand_verlauf_index()` – Verzeichnis: Datum => Summen (kg, zugang, ekWert, ekKg, artikel, partien) und Herkunft (quelle, um, von), aufsteigend
+- `bestand_verlauf_tag(datum)` – Tagesstand eines Tags oder null: datum, quelle, um, von, felder, artikel[code] = [kg, zugang, ekWert, ekKg, partien], namen
 
 ## `app/assets/stock-core.js`
 
@@ -98,6 +111,10 @@ _Summen exakt (Dezimal) und kaufmännisch gerundet wie die Anzeige – Gleitkomm
 - `login(pg, user, pw)`
 - `unmarked_codes()` – Sortierung per Spaltenkopf
 - `marked_first()`
+
+**Bezeichnung aus den Artikelstammdaten, VK-Gruppen, Spaltenfilter**
+
+- `doc_(name)` – ── Bestandsverlauf: Tagesstand je Übernahme (Daten des Bestands, Auswertung später im Controlling) ──
 
 ## `tests/e2e/test_stock_overview.py`
 

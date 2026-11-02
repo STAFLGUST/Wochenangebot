@@ -377,6 +377,9 @@ with sync_playwright() as p:
     a.click('#imp-ok'); a.wait_for_selector('#imp-ergebnis')
     b = doc('bestand')
     check('Bestand übernommen (Quelle, gewähltes Datum, 283 Artikel)', b['source'] == 'bestand.xls' and b['date'] == '2026-10-15' and len(b['articles']) == 283, (b['source'], b['date'], len(b['articles'])))
+    vz = (doc('bestand-verlauf') or {}).get('tage', {})
+    check('Bestand über die Importzentrale: Tagesstand im Bestandsverlauf (gewähltes Datum)', vz.get('2026-10-15', {}).get('quelle') == 'bestand.xls'
+          and vz['2026-10-15']['artikel'] == 283 and len((doc('bestand-verlauf/2026-10-15') or {}).get('artikel', {})) >= 283, vz.get('2026-10-15'))
     a.click('[data-imp="ansicht"]'); a.wait_for_selector('.stab', timeout=10000)
     check('Ergebnis führt zum Bestand (neu geladen)', '15.10.2026' in a.inner_text('#view-stock'))
 

@@ -154,6 +154,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `import.php` | bestand | Importvertrag des Moduls Bestand – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
+| `verlauf.php` | bestand | Modul Bestand · Bestandsverlauf (Auftrag des Inhabers 02.11.2026): bei jedem Übernehmen der Bestandsliste (Bestand → Bestandsliste hochladen, Aktion stock_import, Importzentrale) wird ein Tagesstand gespeichert – je … |
 
 ## `app/api/module/controlling/`
 
