@@ -36,7 +36,8 @@ Datei `app/api/module/<modul>/import.php`, geladen von `app/api/index.php`, Modu
 
 | Feld | Pflicht | Bedeutung |
 | --- | --- | --- |
-| `name`, `beschreibung` | ja | Anzeige |
+| `name`, `beschreibung` | ja | Anzeige (die ausführliche Beschreibung als Hinweis beim Darüberfahren) |
+| `kurz` | nein | eine Zeile für die Liste der Zentrale (bis etwa 45 Zeichen, höchstens 60); fehlt sie, steht dort die Beschreibung |
 | `recht` | ja | Liste der Rechte (alle nötig, GR-103); die Zentrale zeigt die Art nur Berechtigten und prüft serverseitig (403) |
 | `aktion` | ja | registrierte Importaktion des Eigentümers (`regeln/aktionen/<modul>.toml`); deren Oberfläche entscheidet über Wartung (GR-107, 503) |
 | `dateien`, `kodierung` | ja | erlaubte Endungen (`csv`, `xls`, `xlsx`, `xlsm`) und Text für die Anzeige |

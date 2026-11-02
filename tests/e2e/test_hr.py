@@ -727,7 +727,7 @@ with sync_playwright() as p:
     # ── Verwaltung → Import: bisherige Excel-Planung (Importzentrale, Personalstelle ohne Administratorrechte) ──
     ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
     pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="urlaubsplanung"]')
-    check('Importzentrale: Importart „Urlaubsplanung“ für die Personalstelle', 'HR' in pg.text_content('#view-importe .imp-art[data-art="urlaubsplanung"]'))
+    check('Importzentrale: Importart „Urlaubsplanung“ für die Personalstelle', pg.text_content('#view-importe .imp-gruppe:has(.imp-art[data-art="urlaubsplanung"]) h2') == 'Personal')
     pg.set_input_files('#view-importe input[data-imp-datei="urlaubsplanung"]', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
     pg.wait_for_selector('#imp-neu', timeout=20000)
     txt = pg.inner_text('#view-importe')
@@ -865,11 +865,15 @@ with sync_playwright() as p:
     pg.click('[data-plus="hr-ferien"]')
     zr = pg.locator('#hr-ferien .hr-zr').nth(1).locator('input')
     zr.nth(0).fill(f'{Y}-10-05'); zr.nth(1).fill(f'{Y}-10-16'); zr.nth(2).fill('Herbstferien')
-    pg.click('#hr-einst [type="submit"]'); pg.wait_for_function('document.querySelectorAll("#hr-ferien .hr-zr").length === 2 && !document.querySelector("#hr-einst-err").textContent')
+    with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url) as antwort:   # auf die Antwort warten, nicht nur auf die Zeilen
+        pg.click('#hr-einst [type="submit"]')
+    check('Verwaltung → Urlaub: Speichern ohne Fehler', antwort.value.status == 200 and not pg.text_content('#hr-einst-err'), antwort.value.status)
     check('Verwaltung → Urlaub: Ferien gespeichert', len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
     check('Verwaltung → Urlaub: Verfallstag vorbelegt (31.03.)', pg.input_value('#hr-uebertrag-bis').endswith('-03-31') and '31.03.' in pg.text_content('#hr-uebertrag-anzeige'))
     pg.fill('#hr-uebertrag-bis', f'{Y}-04-15')
-    pg.click('#hr-einst [type="submit"]'); pg.wait_for_function('document.querySelector("#hr-uebertrag-anzeige") && document.querySelector("#hr-uebertrag-anzeige").textContent.includes("15.04.")')
+    with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url):
+        pg.click('#hr-einst [type="submit"]')
+    pg.wait_for_function('document.querySelector("#hr-uebertrag-anzeige") && document.querySelector("#hr-uebertrag-anzeige").textContent.includes("15.04.")')
     check('Oberfläche: Verfallstag 15.04. gespeichert, Ferien bleiben', P.call('mitarbeiter_hr')[1]['uebertragBis'] == '04-15' and len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
     v_ = P.call('mitarbeiter_hr')[1]

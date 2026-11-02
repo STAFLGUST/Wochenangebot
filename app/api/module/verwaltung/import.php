@@ -14,23 +14,23 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 function import_arten_verwaltung(): array
 {
     $csv = ['dateien' => ['csv'], 'kodierung' => 'CSV, UTF-8 oder Windows-1252, Semikolon getrennt'];
-    $liste = function (string $liste, string $name, string $beschreibung, string $ansicht) use ($csv): array {
-        return $csv + ['name' => $name, 'beschreibung' => $beschreibung, 'recht' => ['stammdaten.bearbeiten'], 'aktion' => $liste . '_save',
+    $liste = function (string $liste, string $name, string $beschreibung, string $ansicht, string $kurz) use ($csv): array {
+        return $csv + ['name' => $name, 'kurz' => $kurz, 'beschreibung' => $beschreibung, 'recht' => ['stammdaten.bearbeiten'], 'aktion' => $liste . '_save',
                        'ansicht' => $ansicht, 'vorschau' => 'gruppen_import_vorschau', 'uebernahme' => 'gruppen_import_uebernehmen'];
     };
     return [
-        'kunden' => $csv + ['name' => 'Kunden', 'beschreibung' => 'Kundendaten-Export der Warenwirtschaft: Nummer, Name1, Adresse, Telefon, E-Mail, Kundengruppe, Vertreter und alle weiteren Spalten (Umsätze, Kreditlimit, letzte Rechnung …).',
+        'kunden' => $csv + ['name' => 'Kunden', 'kurz' => 'Kundendaten-Export der Warenwirtschaft', 'beschreibung' => 'Kundendaten-Export der Warenwirtschaft: Nummer, Name1, Adresse, Telefon, E-Mail, Kundengruppe, Vertreter und alle weiteren Spalten (Umsätze, Kreditlimit, letzte Rechnung …).',
             'recht' => ['kunden.bearbeiten'], 'aktion' => 'kunden_import', 'bestaetigung' => 'kunden_import', 'ansicht' => 'kunden',
             'vorschau' => 'kunden_import_vorschau', 'uebernahme' => 'kunden_import_uebernehmen',
             'optionen' => [['id' => 'ohneStern', 'typ' => 'schalter', 'label' => 'Mit „*“ markierte Kunden überspringen (in der Warenwirtschaft nicht mehr aktiv)', 'standard' => true],
                            ['id' => 'anlegen', 'typ' => 'schalter', 'label' => 'Neue Kunden anlegen (aus: nur bestehende Kunden aktualisieren)', 'standard' => true],
                            ['id' => 'aktivRegel', 'typ' => 'schalter', 'label' => 'Kunden ohne Rechnung seit ' . KUNDEN_AKTIV_MONATE . ' Monaten auf inaktiv setzen (mit neuer Rechnung wieder aktiv)', 'standard' => true]]],
-        'kundengruppen' => $liste('kundengruppen', 'Kundengruppen', 'Liste der Kundengruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'gruppen'),
-        'vertreter' => $liste('vertreter', 'Vertreter', 'Vertreter-Export der Warenwirtschaft: Nummer, Alpha, Name1, Land, PLZ, Ort, Telefon.', 'vertreter'),
-        'stammdaten' => $csv + ['name' => 'Artikelstammdaten', 'beschreibung' => 'Artikelstammdaten-Export der Warenwirtschaft: Nummer, Bezeichnung1, Bezeichnung2, VGrp, GTIN. Neue Artikel werden angelegt, bestehende um VK-Gruppe und GTIN ergänzt.',
+        'kundengruppen' => $liste('kundengruppen', 'Kundengruppen', 'Liste der Kundengruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'gruppen', 'Nummer, Bezeichnung, Klasse, Kategorie'),
+        'vertreter' => $liste('vertreter', 'Vertreter', 'Vertreter-Export der Warenwirtschaft: Nummer, Alpha, Name1, Land, PLZ, Ort, Telefon.', 'vertreter', 'Nummer, Name, Ort, Telefon'),
+        'stammdaten' => $csv + ['name' => 'Artikelstammdaten', 'kurz' => 'Neue Artikel, VK-Gruppe und GTIN', 'beschreibung' => 'Artikelstammdaten-Export der Warenwirtschaft: Nummer, Bezeichnung1, Bezeichnung2, VGrp, GTIN. Neue Artikel werden angelegt, bestehende um VK-Gruppe und GTIN ergänzt.',
             'recht' => ['stammdaten.bearbeiten'], 'aktion' => 'master_save', 'ansicht' => 'master',
             'vorschau' => 'stammdaten_import_vorschau', 'uebernahme' => 'stammdaten_import_uebernehmen'],
-        'vkgruppen' => $liste('vkgruppen', 'VK-Gruppen', 'Liste der VK-Gruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'vkgruppen'),
+        'vkgruppen' => $liste('vkgruppen', 'VK-Gruppen', 'Liste der VK-Gruppen aus der Warenwirtschaft: Nummer, Bezeichnung, Klasse, Kategorie.', 'vkgruppen', 'Nummer, Bezeichnung, Klasse, Kategorie'),
     ];
 }
 

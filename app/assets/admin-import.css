@@ -2,7 +2,7 @@
    Eingabebereich – Importzentrale (Verwaltung → Import, admin-import.js)
    Nutzt die Farben und Bausteine von app.css/admin.css; hier nur die eigenen Teile.
    ========================================================================== */
-.imp-intro { margin: 4px 0 16px; max-width: 760px; color: var(--text-2); font-size: 14px; }
+.imp-intro { margin: 4px 0 14px; max-width: 760px; color: var(--text-2); font-size: 14px; }
 .imp-schritte { display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; margin: 0 0 18px; padding: 0; font-size: 12.5px; color: var(--muted); counter-reset: s; }
 .imp-schritte li { counter-increment: s; display: flex; align-items: center; gap: 6px; }
 .imp-schritte li::before { content: counter(s); display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-strong); font-size: 11px; font-weight: 600; }
@@ -10,13 +10,50 @@
 .imp-schritte li[aria-current="step"]::before { background: var(--text); border-color: var(--text); color: var(--surface); }
 .imp-schritte li.fertig::before { content: "✓"; color: var(--c-fresh); border-color: var(--c-fresh); }
 
-.imp-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.imp-art { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
-.imp-art h3 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
-.imp-art p { margin: 0; font-size: 13px; color: var(--text-2); }
-.imp-art .imp-typ { font-size: 12px; color: var(--muted); }
-.imp-art .imp-aktion { margin-top: auto; padding-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.imp-eig { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+/* Liste: Gruppen nach Bereich, eine Zeile je Import (Name, Kurztext, Dateiart, Knopf) */
+.imp-liste { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.imp-gruppe { flex: 1 1 440px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.imp-gruppe h2 { margin: 0; padding: 13px 16px 9px; font-size: 11.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.imp-art { border-top: 1px solid var(--line); transition: background-color .12s; }
+.imp-zeile { display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 16px; }
+.imp-art[data-ablage] .imp-zeile { cursor: pointer; }
+.imp-art[data-ablage]:not(.offen) .imp-zeile:hover { background: var(--surface-2); }
+.imp-art .imp-text { flex: 1 1 auto; min-width: 0; }
+.imp-art h3 { margin: 0; font-size: 14.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.imp-art .imp-text p { margin: 2px 0 0; font-size: 12.5px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imp-schloss { display: inline-flex; color: var(--muted); }
+.imp-format { flex: 0 0 auto; min-width: 46px; box-sizing: border-box; padding: 3px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); font-size: 11.5px; font-weight: 500; text-align: center; }
+.imp-art .imp-aktion { flex: 0 0 auto; width: 172px; display: flex; justify-content: flex-end; }
+.imp-art .imp-aktion .btn { width: 100%; justify-content: center; }
+.imp-art .imp-editor { background: var(--surface-2); }
+#view-importe .imp-art .imp-aktion .btn.imp-auf { background: var(--text); border-color: var(--text); color: var(--surface); }
+.imp-hinweis { margin: 12px 2px 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.imp-hinweis .i { vertical-align: -2px; margin-right: 4px; }
+
+/* Ablagefenster unter dem angeklickten Import: Datei hineinziehen oder auswählen */
+.imp-art.offen { background: var(--surface-2); }
+.imp-fenster { padding: 0 16px 16px; }
+.imp-ablage { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 16px; border: 1.5px dashed var(--accent); border-radius: var(--r-lg);
+  background: var(--accent-soft); text-align: center; transition: box-shadow .12s; }
+.imp-ablage > .i { width: 22px; height: 22px; padding: 11px; border-radius: 50%; background: var(--surface); color: var(--accent); box-sizing: content-box; }
+.imp-ablage b { font-size: 14.5px; }
+.imp-ablage span { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+.imp-ablage small { max-width: 460px; font-size: 12px; line-height: 1.45; color: var(--text-2); overflow-wrap: anywhere; }
+
+/* Drag & Drop: Ziel unter dem Zeiger */
+#view-importe .imp-art.imp-ueber { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+#view-importe .imp-art.imp-ueber .imp-ablage { box-shadow: 0 0 0 3px var(--accent-line); }
+
+@media (max-width: 640px) {
+  .imp-gruppe { flex-basis: 100%; }
+  .imp-zeile { padding: 9px 10px 9px 14px; }
+  .imp-art .imp-text p { white-space: normal; }
+  .imp-art .imp-aktion { width: auto; }
+  #view-importe .imp-art .imp-aktion .btn { width: 44px; height: 44px; padding: 0; border-radius: 50%; }
+  .imp-art .imp-knopftext { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .imp-fenster { padding: 0 10px 12px; }
+  .imp-ablage { padding: 16px 12px; }
+}
 
 .imp-kopf { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
 .imp-kopf h2 { margin: 0; font-size: 19px; }

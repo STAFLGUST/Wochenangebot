@@ -105,11 +105,11 @@ function hr_import_zeitraeume(array $tage): array
 function import_arten_hr(): array
 {
     return [
-        'urlaubsplanung' => ['name' => 'Urlaubsplanung (Excel)', 'beschreibung' => 'Bisherige Planung „Urlaub 2026.xlsx“: ein Blatt je Monat, Namen in Spalte C, U/K/G/x je Tag. Unbekannte Namen werden Mitarbeiter ohne Anmeldung; erneute Übernahme ersetzt die zuvor übernommenen Einträge desselben Jahres.',
+        'urlaubsplanung' => ['name' => 'Urlaubsplanung (Excel)', 'kurz' => 'Bisherige Excel-Planung', 'beschreibung' => 'Bisherige Planung „Urlaub 2026.xlsx“: ein Blatt je Monat, Namen in Spalte C, U/K/G/x je Tag. Unbekannte Namen werden Mitarbeiter ohne Anmeldung; erneute Übernahme ersetzt die zuvor übernommenen Einträge desselben Jahres.',
             'recht' => ['hr.verwalten'], 'aktion' => 'hr_import_uebernehmen', 'dateien' => ['xlsx'], 'kodierung' => 'Excel-Arbeitsmappe (.xlsx)',
             'vorschau' => 'hr_import_vorschau', 'uebernahme' => 'hr_import_uebernehmen'],
         // Importvorlage für Urlaubs- und Krankheitstage (Entscheidung 23.10.2026): Abwesenheitsbericht der Zeiterfassung
-        'zeiterfassung' => ['name' => 'Abwesenheiten aus der Zeiterfassung', 'beschreibung' => 'Abwesenheitsbericht der Zeiterfassung (.xlsx, je Mitarbeiter eine Kopfzeile mit Mitarbeiternummer und darunter Urlaub/Krank/Feiertag). Zuordnung über die Personalnummer, sonst über den Namen; unbekannte Mitarbeiter werden ohne Anmeldung angelegt. Erneute Übernahme ersetzt die zuvor aus der Zeiterfassung übernommenen Einträge im Zeitraum des Berichts.',
+        'zeiterfassung' => ['name' => 'Abwesenheiten aus der Zeiterfassung', 'kurz' => 'Urlaub, krank, Feiertag aus der Zeiterfassung', 'beschreibung' => 'Abwesenheitsbericht der Zeiterfassung (.xlsx, je Mitarbeiter eine Kopfzeile mit Mitarbeiternummer und darunter Urlaub/Krank/Feiertag). Zuordnung über die Personalnummer, sonst über den Namen; unbekannte Mitarbeiter werden ohne Anmeldung angelegt. Erneute Übernahme ersetzt die zuvor aus der Zeiterfassung übernommenen Einträge im Zeitraum des Berichts.',
             'recht' => ['hr.verwalten'], 'aktion' => 'hr_import_uebernehmen', 'dateien' => ['xlsx'], 'kodierung' => 'Excel-Arbeitsmappe (.xlsx)',
             'optionen' => [['id' => 'abteilungen', 'typ' => 'schalter', 'label' => 'Abteilungen aus der Zeiterfassung übernehmen', 'standard' => false]],
             'vorschau' => 'hr_zeit_vorschau', 'uebernahme' => 'hr_zeit_uebernehmen'],

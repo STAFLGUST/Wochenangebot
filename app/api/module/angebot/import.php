@@ -14,12 +14,12 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 function import_arten_angebot(): array
 {
     return [
-        'preisverlauf' => ['name' => 'Preisverlauf (frühere Angebotslisten)', 'beschreibung' => 'Excel-Angebotslisten früherer Wochen; jede Datei wird eine Woche im Preisverlauf. Das aktuelle Angebot bleibt unverändert.',
+        'preisverlauf' => ['name' => 'Preisverlauf (frühere Angebotslisten)', 'kurz' => 'Frühere Angebotslisten, je Datei eine Woche', 'beschreibung' => 'Excel-Angebotslisten früherer Wochen; jede Datei wird eine Woche im Preisverlauf. Das aktuelle Angebot bleibt unverändert.',
             'recht' => ['preisverlauf.bearbeiten'], 'aktion' => 'history_import', 'dateien' => ['xlsx', 'xlsm'], 'kodierung' => 'Excel-Arbeitsmappe (.xlsx)', 'mehrere' => true,
             'ansicht' => 'hist', 'vorschau' => 'preisverlauf_import_vorschau', 'uebernahme' => 'preisverlauf_import_uebernehmen'],
-        'angebot_excel' => ['name' => 'Wochenangebot (Excel)', 'beschreibung' => 'Excel-Angebotsliste der Woche. Ersetzt den Entwurf; prüfen, anpassen und veröffentlichen im Angebotseditor.',
+        'angebot_excel' => ['name' => 'Wochenangebot (Excel)', 'kurz' => 'Angebotsliste der Woche als Entwurf', 'beschreibung' => 'Excel-Angebotsliste der Woche. Ersetzt den Entwurf; prüfen, anpassen und veröffentlichen im Angebotseditor.',
             'recht' => ['angebot.bearbeiten'], 'aktion' => 'save_draft', 'dateien' => ['xlsx', 'xlsm'], 'kodierung' => 'Excel-Arbeitsmappe (.xlsx)', 'ablauf' => 'editor', 'ansicht' => 'edit'],
-        'angebot_preise' => ['name' => 'Artikelpreise (CSV)', 'beschreibung' => 'Artikelpreise der Warenwirtschaft in den Entwurf: ohne Kundengruppe ins Wochenangebot, mit Kundengruppe ins Angebot der Gruppe. Unter Stammdaten → Angebote.',
+        'angebot_preise' => ['name' => 'Artikelpreise (CSV)', 'kurz' => 'Preise in den Entwurf, auch je Kundengruppe', 'beschreibung' => 'Artikelpreise der Warenwirtschaft in den Entwurf: ohne Kundengruppe ins Wochenangebot, mit Kundengruppe ins Angebot der Gruppe. Unter Stammdaten → Angebote.',
             'recht' => ['angebot.bearbeiten', 'angebote.verwalten'], 'aktion' => 'save_draft', 'dateien' => ['csv'], 'kodierung' => 'CSV, UTF-8 oder Windows-1252, Semikolon getrennt', 'ablauf' => 'editor', 'ansicht' => 'angebote'],
     ];
 }
