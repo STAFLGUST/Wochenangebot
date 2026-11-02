@@ -8,8 +8,8 @@ Wochenende, Überschneidung, Urlaubssperre), Urlaubskonto mit Übertrag bis 31.0
 Datenschutz im Kalender (Kollegen sehen nur „abwesend“, nie Art, Notiz oder offene Anträge; Protokoll ohne Art),
 Excel-Export für den Steuerberater (Aufbau der bisherigen Planung, nur genehmigte Einträge), Schalter „Urlaubsanträge über
 die Plattform“ (Verwaltung → Urlaub, Standard an; aus: Server lehnt Anträge ab, Formular ausgeblendet), Übernahme der bisherigen
-Excel-Planung über die Importzentrale (synthetische Datei tests/fixtures/hr/Urlaub_Muster_2025.xlsx), Abwesenheiten aus der
-Zeiterfassung (Importvorlage, tests/fixtures/hr/Abwesenheitsbericht_Muster.xlsx: Personalnummer, Schreibweisen, vom Urlaub
+Excel-Planung entfällt (Auftrag des Inhabers 02.11.2026: nicht mehr nötig – Importart und Aktionen fehlen, frühere Einträge
+bleiben), Abwesenheiten aus der Zeiterfassung (Importvorlage, tests/fixtures/hr/Abwesenheitsbericht_Muster.xlsx: Personalnummer, Schreibweisen, vom Urlaub
 abgezogene Krankheit – zählt hier nie gegen den Urlaub –, Ersetzen, veralteter Stand), Korrektur melden (Mitarbeiter → Personalstelle,
 nie die eigene erledigen), Mini-Kalender „Mein Jahr“ und die Oberflächen
 (HR-Seite, Verwaltung → Mitarbeiter und Urlaub; Desktop, 390 px).
@@ -96,7 +96,7 @@ check('ohne Anmeldung: 401', N.call('hr_start')[0] == 401 and N.call('hr_verwalt
 check('Mitarbeiter ohne Personalrecht: hr_verwaltung 403', L.call('hr_verwaltung')[0] == 403 and E.call('hr_verwaltung')[0] == 403 and L.call('mitarbeiter_hr')[0] == 403)
 for a, b in (('hr_entscheiden', {'id': 'x', 'entscheidung': 'genehmigt'}), ('hr_eintrag_save', {'person': 'x', 'art': 'K', 'von': iso(FEB), 'bis': iso(FEB)}),
              ('mitarbeiter_hr_save', {'nutzer': 'x', 'rev': 0}), ('hr_export', {'jahr': Y, 'monate': [2]}), ('hr_einstellungen_save', {'sperren': []}),
-             ('hr_personal_uebernehmen', {}), ('hr_import_pruefen', {'daten': {'blaetter': []}})):
+             ('hr_personal_uebernehmen', {})):
     check(f'{a}: ohne Personalrecht 403', L.call(a, b)[0] == 403)
 check('hr_offen: ohne „Urlaub genehmigen“ 403', L.call('hr_offen')[0] == 403 and E.call('hr_offen')[0] == 403 and N.call('hr_offen')[0] == 401)
 check('hr_start: Rechte-Hinweise für die Oberfläche', E.call('hr_start')[1]['genehmigen'] is False and P.call('hr_start')[1]['genehmigen'] is True)
@@ -536,18 +536,11 @@ st, _ = zimp(P, True, v['stand'])
 check('… eine andere Person übernimmt die Zeile', st == 200 and len(ze('Pia Personal')) == 1 and len(ze('Quentin Quer')) == 1)
 st, v = zimp(PI)
 check('… eigene frühere Übernahme wird bei erneutem Import nicht ersetzt', st == 200 and v['zahlen']['entfaellt'] == 1, v['zahlen'])
-# Excel-Planung (Monatsblatt im Aufbau der Planung)
-tage = list(range(1, 31))
-def zeile(pos, abt, name, tag): return [pos, abt, name] + ['U' if t == tag else None for t in tage]
-DP = {'blaetter': [{'name': f'November {Y}', 'grid': [[None], [None], ['Pos.', None, 'November'] + tage,
-                                                       zeile(1, 'Personal', 'Pia Personal', NOV.day + 7), zeile(2, 'Personal', 'Quentin Quer', NOV.day + 8)]}]}
-st, v = PI.call('import_pruefen', {'art': 'urlaubsplanung', 'daten': DP, 'quelle': 'plan.xlsx', 'optionen': {}})
-eig = [z for z in v.get('zeilen', []) if z['name'] == 'Pia Personal' and z['art'] == 'fehler']
-neu = [z['name'] for z in v.get('zeilen', []) if z['art'] == 'neu' and z['schluessel'].startswith('Einträge')]
-check('Excel-Planung: eigene Zeile markiert, Rest wird übernommen', st == 200 and eig and 'eigene Person' in eig[0]['text'] and neu == ['Quentin Quer'], (st, v.get('zeilen'), v.get('error')))
-st, _ = PI.call('import_uebernehmen', {'art': 'urlaubsplanung', 'daten': DP, 'quelle': 'plan.xlsx', 'optionen': {}, 'stand': v['stand']})
-imp = lambda name: [e for e in P.call('hr_verwaltung&jahr=' + str(Y))[1]['eintraege'] if e['name'] == name and e['quelle'] == 'import']
-check('… übernommen: Quentin ja, eigene nicht', st == 200 and len(imp('Quentin Quer')) == 1 and imp('Pia Personal') == [], (imp('Quentin Quer'), imp('Pia Personal')))
+# Excel-Planung (Urlaubsplanung) gibt es nicht mehr: weder als Importart noch als Aktion
+weg = (PI.call('import_pruefen', {'art': 'urlaubsplanung', 'daten': {'blaetter': []}}), P.call('hr_import_pruefen', {'daten': {'blaetter': []}})[0],
+       P.call('hr_import_uebernehmen', {'daten': {'blaetter': []}})[0], [x['id'] for x in P.call('import_arten')[1]['arten']])
+check('Excel-Planung entfernt: Importart unbekannt (404), Aktionen hr_import_* unbekannt (404), nicht in der Importzentrale',
+      weg[0][0] == 404 and 'Importart' in weg[0][1].get('error', '') and weg[1] == 404 and weg[2] == 404 and 'urlaubsplanung' not in weg[3] and 'zeiterfassung' in weg[3], weg)
 # Protokoll: Vorgänge der Urlaubsverwaltung ohne „HR verwalten“ nur als Vorgang
 st, r = OL.call('log')
 hr_e = [e for e in r.get('entries', []) if e.get('a') == 'hr']
@@ -711,7 +704,7 @@ for m in P.call('hr_verwaltung')[1]['korrekturen']:   # aufräumen: alle offenen
 rev = P.call('mitarbeiter_hr')[1]['rev']
 hr(ids['fritz'], aktiv=False)
 
-# ── Übernahme der Excel-Planung (synthetische Datei) im Browser ──
+# ── Oberfläche: Testdaten 2025, Zeiterfassung, Verwaltung (im Browser) ──
 fehler = []
 with sync_playwright() as p:
     br = p.chromium.launch()
@@ -724,45 +717,30 @@ with sync_playwright() as p:
         pg.wait_for_selector('#screen-auth', state='hidden')
         return ctx, pg
 
-    # ── Verwaltung → Import: bisherige Excel-Planung (Importzentrale, Personalstelle ohne Administratorrechte) ──
-    ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
-    pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="urlaubsplanung"]')
-    check('Importzentrale: Importart „Urlaubsplanung“ für die Personalstelle', pg.text_content('#view-importe .imp-gruppe:has(.imp-art[data-art="urlaubsplanung"]) h2') == 'Personal')
-    pg.set_input_files('#view-importe input[data-imp-datei="urlaubsplanung"]', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
-    pg.wait_for_selector('#imp-neu', timeout=20000)
-    txt = pg.inner_text('#view-importe')
-    check('Vorschau: neue Mitarbeiter ohne Anmeldung, unbekanntes Kürzel, regelmäßige freie Tage', 'Anna Beispiel' in txt and 'ohne Anmeldung' in txt and '„S“ (1×)' in txt
-          and 'Dieter Test (meist Fr)' in txt, txt[:600])
-    pg.screenshot(path=os.path.join(SH, 'hr_import_1280.png'), full_page=True)
-    pg.click('#imp-ok'); pg.wait_for_selector('#imp-ergebnis')
-    st, r = P.call('hr_verwaltung&jahr=2025')
-    namen = {p_['name']: p_ for p_ in r['personen']}
-    anzahl_personen = len(r['personen'])
-    imp = [e for e in r['eintraege'] if e['quelle'] == 'import']
-    check('Übernommen: Mitarbeiter mit Abteilung (verbundene Zellen fortgeführt)', namen.get('Emil Lager', {}).get('abteilung') == 'Lager' and namen.get('Bernd Muster', {}).get('abteilung') == 'Verwaltung'
-          and namen.get('Carla Probe', {}).get('abteilung') == 'Verwaltung', {k: v['abteilung'] for k, v in namen.items()})
+    # ── Testdaten 2025 (früher aus der Excel-Planung): Mitarbeiter ohne Anmeldung mit Abteilung und Position, Einträge der Personalstelle ──
+    for vor, nach, abt_, pos_ in (('Anna', 'Beispiel', 'GF', 1), ('Bernd', 'Muster', 'Verwaltung', 2), ('Carla', 'Probe', 'Verwaltung', 3),
+                                  ('Dieter', 'Test', 'Lager', 4), ('Emil', 'Lager', 'Lager', 5)):
+        st, r_ = A.call('user_save', {'id': '', 'vorname': vor, 'nachname': nach, 'role': 'editor', 'active': True, 'zugang': False})
+        assert st == 200, r_
+        rev = P.call('mitarbeiter_hr')[1]['rev']
+        hr(r_['user']['id'], abteilung=abt_, pos=pos_, aktiv=True)
     nutzer = {u['name']: u for u in A.call('users')[1]['users']}
-    check('Übernommen: unbekannte Namen sind jetzt Mitarbeiter ohne Anmeldung', all(nutzer.get(n, {}).get('zugang') is False for n in ('Anna Beispiel', 'Emil Lager', 'Dieter Test')), list(nutzer))
-    arten = sorted((e['name'], e['art'], e['von'], e['bis']) for e in imp if e['art'] != 'X')
-    check('Übernommen: Zeiträume zusammengefasst', arten == [('Anna Beispiel', 'U', '2025-01-13', '2025-01-17'), ('Bernd Muster', 'K', '2025-01-20', '2025-01-21'),
-                                                          ('Carla Probe', 'G', '2025-01-31', '2025-01-31'), ('Carla Probe', 'U', '2025-02-03', '2025-02-04')], arten)
-    check('Übernommen: freie Tage „x“ als einzelne Tage', len([e for e in imp if e['art'] == 'X']) == 9 and all(e['status'] == 'genehmigt' for e in imp))
-    # erneute Übernahme ersetzt (keine Doppelten, Namen jetzt bekannt)
-    pg.click('[data-imp="liste"]'); pg.wait_for_selector('#view-importe input[data-imp-datei="urlaubsplanung"]', state='attached')
-    pg.set_input_files('#view-importe input[data-imp-datei="urlaubsplanung"]', os.path.join(FIX, 'hr', 'Urlaub_Muster_2025.xlsx'))
-    pg.wait_for_selector('#imp-neu', timeout=20000)
-    check('erneute Übernahme: frühere Einträge werden ersetzt, keine neuen Mitarbeiter', '13 Einträge der letzten Übernahme werden ersetzt' in pg.inner_text('#view-importe')
-          and 'ohne Anmeldung' not in pg.inner_text('#imp-zeilen'), pg.inner_text('#view-importe')[:400])
-    pg.click('#imp-ok'); pg.wait_for_selector('#imp-ergebnis')
-    r = P.call('hr_verwaltung&jahr=2025')[1]
-    check('… keine doppelten Einträge oder Mitarbeiter', len([e for e in r['eintraege'] if e['quelle'] == 'import']) == 13 and len(r['personen']) == anzahl_personen, (len(r['eintraege']), len(r['personen'])))
+    for name, art, von, bis in (('Anna Beispiel', 'U', '2025-01-13', '2025-01-17'), ('Bernd Muster', 'K', '2025-01-20', '2025-01-21'),
+                                ('Carla Probe', 'G', '2025-01-31', '2025-01-31'), ('Carla Probe', 'U', '2025-02-03', '2025-02-04')):
+        st, r_ = P.call('hr_eintrag_save', {'person': nutzer[name]['id'], 'art': art, 'von': von, 'bis': bis})
+        assert st == 200, (name, r_)
+    anzahl_personen = len(P.call('hr_verwaltung&jahr=2025')[1]['personen'])
     k26 = {p_['name']: p_['konto'] for p_ in P.call('hr_verwaltung&jahr=2026')[1]['personen']}
+    ctx, pg = anmelden('paul', 'Personal-Zugang-77', '198.51.100.5')
+    pg.click('#vt-importe'); pg.wait_for_selector('#view-importe .imp-art[data-art="zeiterfassung"]')
+    check('Importzentrale (Personalstelle): Abwesenheiten aus der Zeiterfassung unter „Personal“, keine Urlaubsplanung mehr',
+          pg.text_content('#view-importe .imp-gruppe:has(.imp-art[data-art="zeiterfassung"]) h2') == 'Personal' and pg.locator('.imp-art[data-art="urlaubsplanung"]').count() == 0)
     check('ohne bekannten Anspruch im Vorjahr kein (negativer) automatischer Übertrag', k26['Anna Beispiel']['uebertrag'] == 0, k26['Anna Beispiel'])
     abt = [p_['abteilung'] for p_ in P.call(f'hr_monat&jahr={Y}&monat=1')[1]['personen']]
     bloecke = [x for i, x in enumerate(abt) if i == 0 or abt[i - 1] != x]
     check('Kalender: jede Abteilung ein Block (Reihenfolge nach Position)', len(bloecke) == len(set(bloecke)) and bloecke[0] == 'GF', abt)
 
-    # ── Abwesenheiten aus der Zeiterfassung (Importvorlage, synthetischer Abwesenheitsbericht passend zur Planung 2025) ──
+    # ── Abwesenheiten aus der Zeiterfassung (Importvorlage, synthetischer Abwesenheitsbericht passend zu den Testdaten 2025) ──
     BERICHT = os.path.join(FIX, 'hr', 'Abwesenheitsbericht_Muster.xlsx')
     wsb = openpyxl.load_workbook(BERICHT).active
     D = {'blaetter': [{'name': wsb.title, 'grid': [[(v - dt.datetime(1899, 12, 30)).days if isinstance(v, dt.datetime) else v for v in z]
@@ -793,7 +771,7 @@ with sync_playwright() as p:
     st, v2 = zeit(P, abteilungen=True)
     check('Option Abteilungen: Abteilung aus der Zeiterfassung als Änderung', any(z['art'] == 'geaendert' and z['name'] == 'Anna Beispiel' and 'Abteilung Geschäftsführung' in z['text'] for z in v2['zeilen']), v2['zeilen'][:6])
     # Übernahme in der Oberfläche (Importzentrale)
-    pg.click('[data-imp="liste"]'); pg.wait_for_selector('#view-importe input[data-imp-datei="zeiterfassung"]', state='attached')
+    pg.click('#vt-importe'); pg.wait_for_selector('#view-importe input[data-imp-datei="zeiterfassung"]', state='attached')
     check('Importzentrale: Importart „Abwesenheiten aus der Zeiterfassung“', 'Zeiterfassung' in pg.text_content('#view-importe .imp-art[data-art="zeiterfassung"]'))
     pg.set_input_files('#view-importe input[data-imp-datei="zeiterfassung"]', BERICHT)
     pg.wait_for_selector('#imp-neu', timeout=20000)
@@ -814,7 +792,7 @@ with sync_playwright() as p:
     kk = {p_['name']: p_['konto'] for p_ in r['personen']}
     check('Konto: Krankheit zählt nie gegen den Urlaub – auch „Krank ohne AU / vom Urlaub abgezogen“ nicht (Inhaber 30.10.2026), Hinweis bleibt gespeichert', kk['Bernd Muster']['genommen'] == 0 and kk['Erika Editor']['genommen'] == 5
           and kk['Hans Neumann']['genommen'] == 4, {k: kk[k]['genommen'] for k in ('Bernd Muster', 'Erika Editor', 'Hans Neumann')})
-    check('Übernommen: Planung (K 20.–21.01.) unverändert', any(e['name'] == 'Bernd Muster' and e['art'] == 'K' and e['von'] == '2025-01-20' and e['quelle'] == 'import' for e in r['eintraege']))
+    check('Eintrag der Personalstelle (K 20.–21.01.) unverändert', any(e['name'] == 'Bernd Muster' and e['art'] == 'K' and e['von'] == '2025-01-20' and e['quelle'] == 'personalstelle' for e in r['eintraege']))
     pm = {p_['name']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen']}
     check('Übernommen: Personalnummern gespeichert, neue Mitarbeiter mit Abteilung, bestehende Abteilung unverändert (Option aus)',
           [pm[n]['personalnummer'] for n in ('Anna Beispiel', 'Bernd Muster', 'Carla Probe', 'Erika Editor', 'Hans Neumann', 'Ina Ohnenummer')] == ['101', '102', '103', '104', '105', '']

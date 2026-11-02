@@ -51,14 +51,6 @@ schreibend = true
 oberflaeche = "hr.intern"
 schreibend = true
 
-[aktion.hr_import_pruefen]
-oberflaeche = "hr.intern"
-schreibend = true
-
-[aktion.hr_import_uebernehmen]
-oberflaeche = "hr.intern"
-schreibend = true
-
 # Verwaltung → Mitarbeiter und Urlaubseinstellungen (Personalstelle): im Eingabebereich der Verwaltung, nicht auf dem HR-Host
 [aktion.mitarbeiter_hr]
 oberflaeche = "angebot.eingabe"

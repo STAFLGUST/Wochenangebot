@@ -74,10 +74,10 @@ ids = lambda cl: sorted(a['id'] for a in cl.call('import_arten')[1].get('arten',
 # ---------- Registrierung: jede Importart gehört dem Daten-Eigentümer ----------
 st, r = A.call('import_arten')
 arten = {a['id']: a for a in r.get('arten', [])}
-ALLE = ['angebot_excel', 'angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'umsatzdaten', 'urlaubsplanung', 'vertreter', 'vkgruppen', 'zeiterfassung']
+ALLE = ['angebot_excel', 'angebot_preise', 'bestand', 'kunden', 'kundengruppen', 'preisverlauf', 'stammdaten', 'umsatzdaten', 'vertreter', 'vkgruppen', 'zeiterfassung']
 check('Administrator sieht alle heutigen Importe', st == 200 and sorted(arten) == ALLE, sorted(arten))
 EIG = {'kunden': 'verwaltung', 'kundengruppen': 'verwaltung', 'vkgruppen': 'verwaltung', 'vertreter': 'verwaltung', 'stammdaten': 'verwaltung',
-       'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_excel': 'angebot', 'angebot_preise': 'angebot', 'urlaubsplanung': 'hr', 'zeiterfassung': 'hr',
+       'bestand': 'bestand', 'preisverlauf': 'angebot', 'angebot_excel': 'angebot', 'angebot_preise': 'angebot', 'zeiterfassung': 'hr',
        'umsatzdaten': 'controlling'}
 check('Eigentümer je Importart wie in der Datenverantwortung', all(arten[k]['eigentuemer'] == v for k, v in EIG.items()), {k: a['eigentuemer'] for k, a in arten.items()})
 daten = tomllib.load(open(os.path.join(REPO, 'regeln/datenverantwortung.toml'), 'rb'))
@@ -99,7 +99,7 @@ check('keine internen Funktionsnamen an den Browser', 'vorschau' not in json.dum
 # ---------- Rechte: Anzeige und Prüfung je Importart (GR-103) ----------
 check('ohne Anmeldung 401', Client().call('import_arten')[0] == 401 and Client().call('import_pruefen', {'art': 'kunden'})[0] == 401)
 check('Leser: keine Importart', ids(L) == [])
-check('Bearbeiter: alles außer Kunden-, HR- und Controlling-Importen (kein Kunden-/Personal-/Controllingrecht)', ids(E) == [x for x in ALLE if x not in ('kunden', 'urlaubsplanung', 'zeiterfassung', 'umsatzdaten')], ids(E))
+check('Bearbeiter: alles außer Kunden-, HR- und Controlling-Importen (kein Kunden-/Personal-/Controllingrecht)', ids(E) == [x for x in ALLE if x not in ('kunden', 'zeiterfassung', 'umsatzdaten')], ids(E))
 check('Teil: ohne Anmeldung 401, ohne Recht 403, Importart ohne Teile 422', Client().call('import_teil', {'art': 'umsatzdaten'})[0] == 401
       and E.call('import_teil', {'art': 'umsatzdaten', 'upload': 'a' * 32, 'schluessel': '2026-01', 'daten': {}})[0] == 403
       and A.call('import_teil', {'art': 'stammdaten', 'upload': 'a' * 32, 'schluessel': 'x', 'daten': {}})[0] == 422

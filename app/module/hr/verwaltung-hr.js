@@ -3,7 +3,7 @@
      und Übertrag je Jahr) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
    - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren, Ferien, Verfallstag des Resturlaubs.
-   - Verwaltung → Import: Leser „Urlaubsplanung (Excel)“ und „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
+   - Verwaltung → Import: Leser „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
    Alle Rechte prüft der Server (hr.verwalten, GR-103); hier ist nur die Anzeige. Wird von admin/index.html nach
    admin.js, admin-verwaltung.js und admin-import.js geladen. */
 (function () {
@@ -251,18 +251,8 @@
   });
   W.views.urlaub = renderUrlaub;
 
-  /* ---------- Importzentrale: Leser „Urlaubsplanung (Excel)“ ---------- */
+  /* ---------- Importzentrale ---------- */
   W.importLeser = W.importLeser || {};
-  W.importLeser.urlaubsplanung = {
-    async lesen(files) {
-      const f = files[0];
-      const blaetter = await window.OfferCore.xlsxReadWorkbook(await f.arrayBuffer());
-      // nur die Zellen, die der Server braucht: Zeilen bis 300, Spalten bis 40
-      const daten_ = { blaetter: blaetter.map((b) => ({ name: b.name, grid: b.grid.slice(0, 300).map((z) => Array.from({ length: Math.min(z.length, 40) }, (_, i) => z[i] ?? null)) })) };
-      return { daten: daten_, zeilen: blaetter.length, fehler: [], hinweise: [] };
-    },
-    nachher() { daten = null; },
-  };
 
   /* ---------- Importzentrale: Leser „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht) ---------- */
   W.importLeser.zeiterfassung = {
