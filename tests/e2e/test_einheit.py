@@ -1,5 +1,6 @@
 """Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot,
-Verwaltung, Bestand, HR, CRM, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
+Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit –, Abmeldeseite,
+Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
 
 - kein waagerechtes Scrollen, kein abgeschnittener Text (Text breiter als sein Kasten bei verdecktem Überlauf, Text
   außerhalb des Bildschirms) – Ausnahmen nur für bewusst gekürzte Zellen mit vollem Text im Tooltip (title),
@@ -10,6 +11,8 @@ Verwaltung, Bestand, HR, CRM, Abmeldeseite, Hinweis „Kein Zugang“): je hell/
 - Einfache Darstellung für Remote-Desktop (02.11.2026): automatisch, wenn der Browser ohne Grafikkarte zeichnet (unter
   Automatisierung nur mit abgeschaltetem navigator.webdriver), Knopf im Dashboard, Wahl am Konto (theme_save „darstellung“)
   gilt auf jedem Host; dann keine Unschärfe, keine Farbflächen, keine Übergänge.
+- Fenster (<dialog>) auf jeder Seite gleich (02.11.2026): ein Klick daneben schließt nie, Escape schließt; Hinweise (Toasts)
+  erscheinen über einem offenen Fenster, nicht dahinter.
 Bildschirmfotos: tests/.ergebnisse/einheit-*.png (Bestandsaufnahme für die Durchsicht).
 """
 import json
@@ -90,7 +93,13 @@ with sync_playwright() as pw:
               ('verwaltung', 'verwaltung.verwaltung', '/admin/', '#screen-editor:not([hidden])', ['master', 'kunden', 'users', 'rollen', 'log']),
               ('bestand', 'bestand.intern', '/admin/', '#view-stock:not([hidden])', ['stock']),
               ('hr', None, '/module/hr/', '#hr-app:not([hidden])', []),
-              ('crm', None, '/module/crm/', '#crm-app:not([hidden])', [])]
+              ('crm', None, '/module/crm/', '#crm-app:not([hidden])', []),
+              ('controlling', None, '/module/controlling/', '#ctl-app:not([hidden])', []),
+              ('leergut', None, '/module/leergut/', '#lg-app:not([hidden])', []),
+              ('marketing', None, '/module/marketing/', '#mkt-app:not([hidden])', []),
+              ('qs', None, '/module/qs/', '#qm-app:not([hidden])', []),
+              ('rewe', None, '/module/rewe/', '#rw-app:not([hidden])', []),
+              ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', [])]
     zurueck = {}
     for breite in (1440, 390):
         for dunkel in (False, True):
@@ -118,6 +127,46 @@ with sync_playwright() as pw:
                     zurueck.setdefault(breite, {})[name] = zr
                     check(f'{name} {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'] and (zr['href'].rstrip('/').endswith('dashboard') or zr['href'] == 'https://dashboard-stafl.de/'), zr)
             ctx.close()
+    # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
+    # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
+    # Stelle außerhalb geklickt (am Handy füllen manche Fenster den Bildschirm – dann nur Escape).
+    FENSTER_AUF = r'''(id) => { const d = document.getElementById(id); if (!d || d.open) return null; d.showModal();
+      const r = d.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+      const p = [[4, 4], [W - 4, 4], [4, H - 4], [W - 4, H - 4], [W / 2, 4], [W / 2, H - 4], [4, H / 2]]
+        .find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom);
+      return p || 'voll'; }'''
+    OFFEN = "id => document.getElementById(id).open"
+    # Hinweise (Toasts) liegen über einem offenen Fenster (oberste Ebene, theme.js) – sonst lägen sie unter dem unscharfen Hintergrund
+    TOAST_OBEN = r'''async () => { const t = document.querySelector('[role="status"].toast, [role="status"][class*="-toast"]');
+      const d = document.querySelector('dialog[id]:not([open])'); if (!t || !d) return 'ohne';
+      let neu = 0; const f = (e) => { if (e.newState === 'open') neu++; }; t.addEventListener('toggle', f);
+      d.showModal(); await new Promise((r) => setTimeout(r, 80)); t.removeEventListener('toggle', f); d.close();
+      return t.matches(':popover-open') && neu > 0; }'''
+    for breite in (1440, 390):
+        ctx, pg = neue_seite(breite, False)
+        for name, bereich, pfad, warte, _ in SEITEN + [('kundenseite', None, '/', 'html[data-bereit="1"]', [])]:
+            pg.unroute('**/api/?action=status*')
+            if bereich: als_bereich(pg, bereich)
+            pg.goto(B + pfad); pg.wait_for_selector(warte, timeout=20000)
+            ids = pg.evaluate("[...document.querySelectorAll('dialog[id]')].map((d) => d.id)")
+            if breite == 1440:
+                oben = pg.evaluate(TOAST_OBEN)
+                check(f'{name}: Hinweise (Toast) erscheinen über einem offenen Fenster', oben in (True, 'ohne'), oben)
+            per_klick, nicht_esc = [], []
+            for i in ids:
+                p = pg.evaluate(FENSTER_AUF, i)
+                if p is None:
+                    continue
+                if p != 'voll':
+                    pg.mouse.click(p[0], p[1])
+                    if not pg.evaluate(OFFEN, i):
+                        per_klick.append(i); continue
+                pg.keyboard.press('Escape')
+                if pg.evaluate(OFFEN, i):
+                    nicht_esc.append(i); pg.evaluate("id => document.getElementById(id).close()", i)
+            check(f'{name} {breite} px: Klick neben ein Fenster schließt es nicht ({len(ids)} Fenster)', not per_klick, per_klick)
+            check(f'{name} {breite} px: Escape schließt jedes Fenster', not nicht_esc, nicht_esc)
+        ctx.close()
     # Seiten ohne Mitarbeiteranmeldung: Abmeldeseite, Kundenseite, Rechtsseiten – Logo im Dunkeln weiß, nichts abgeschnitten
     for breite in (1440, 390):
         for dunkel in (False, True):

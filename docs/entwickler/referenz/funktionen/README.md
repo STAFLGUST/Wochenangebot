@@ -6,7 +6,7 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
-| [Angebot](angebot.md) | `angebot` | 41 | 593 |
+| [Angebot](angebot.md) | `angebot` | 41 | 594 |
 | [Bestand](bestand.md) | `bestand` | 9 | 58 |
 | [Leergut](leergut.md) | `leergut` | 4 | 106 |
 | [CRM](crm.md) | `crm` | 9 | 176 |
@@ -20,4 +20,4 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 105 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 26 |
 | [App (iOS/Android)](mobile.md) | `mobile` | 2 | 8 |
-| [Plattformkern](plattform.md) | `plattform` | 102 | 918 |
+| [Plattformkern](plattform.md) | `plattform` | 102 | 920 |

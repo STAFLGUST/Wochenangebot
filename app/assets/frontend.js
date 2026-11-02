@@ -24,6 +24,19 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const plural = (n, one, many) => `${fmtInt.format(n)} ${n === 1 ? one : many}`;
+/* Rückfrage im eigenen Fenster statt Browser-Dialog (gleiches Aussehen wie alle Fenster). Escape oder „Abbrechen“ = nein;
+   der Fokus steht auf „Abbrechen“, damit Enter nichts löscht. */
+function frage(titel, text, ja) {
+  const d = $('#dlg-frage');
+  $('#fr-titel').textContent = titel; $('#fr-text').textContent = text; $('#fr-ja').textContent = ja;
+  return new Promise((ok) => {
+    const fertig = (w) => { d.removeEventListener('click', klick); d.removeEventListener('close', zu); if (d.open) d.close(); ok(w); };
+    const klick = (e) => { const b = e.target.closest('[data-antwort]'); if (b) fertig(b.dataset.antwort === 'ja'); };
+    const zu = () => fertig(false);
+    d.addEventListener('click', klick); d.addEventListener('close', zu);
+    d.showModal(); $('#fr-nein').focus();
+  });
+}
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem(STORAGE + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -1295,7 +1308,7 @@ function bind() {
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (a === 'fav-print') openPrint('fav');
     if (a === 'fav-csv') exportCSV(favItems(), 'Merkliste');
-    if (a === 'fav-clear' && confirm('Alle Artikel von der Merkliste entfernen?')) { favs.clear(); saveFavs(); updateFavCount(); render(); }
+    if (a === 'fav-clear') frage('Merkliste leeren?', 'Alle Artikel von der Merkliste entfernen?', 'Entfernen').then((ja) => { if (ja) { favs.clear(); saveFavs(); updateFavCount(); render(); } });
     if (a === 'fav-prune' && !(DATA.meta && DATA.meta.einzel)) { favs = new Set([...favs].filter((k) => DATA.items.some((i) => i.key === k))); saveFavs(); updateFavCount(); render(); }
   });
 
@@ -1338,7 +1351,6 @@ function bind() {
   for (const d of $$('dialog')) {
     if (d.id.startsWith('dlg-kunde') || d.id === 'dlg-order') continue;   // eigene Behandlung in bindKunde()/bindOrder()
     d.addEventListener('click', (e) => {
-      if (e.target === d) d.close();
       if (e.target.closest('[data-close]')) d.close();
     });
   }
@@ -1555,11 +1567,11 @@ function bindOrder() {
   $('#orderbar').addEventListener('click', (e) => {
     const a = e.target.closest('[data-order]')?.dataset.order;
     if (a === 'open') openOrder();
-    if (a === 'clear' && confirm('Alle Mengen aus dem Bestellwunsch entfernen?')) { cart.clear(); saveCart(); render(); }
+    if (a === 'clear') frage('Bestellwunsch leeren?', 'Alle Mengen aus dem Bestellwunsch entfernen?', 'Entfernen').then((ja) => { if (ja) { cart.clear(); saveCart(); render(); } });
   });
   const d = $('#dlg-order');
   d.addEventListener('click', (e) => {
-    if (e.target === d || e.target.closest('[data-close]')) { d.close(); return; }
+    if (e.target.closest('[data-close]')) { d.close(); return; }
     const b = e.target.closest('[data-order]');
     if (!b) return;
     if (b.dataset.order === 'rm') { setQty(b.dataset.id, 0); for (const el of $$(`#list .qty[data-qty="${CSS.escape(b.dataset.id)}"]`)) el.value = ''; b.closest('tr').remove(); refreshOrderDialog(); }
@@ -1601,7 +1613,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-customer-order],[data-customer-orders-page]');
   if (b) openCustomerOrders(Number(b.dataset.customerOrdersPage || 0), b.dataset.customerOrder || '');
   const d = $('#dlg-customer-orders');
-  if (d && (e.target === d || e.target.closest('#dlg-customer-orders [data-close]'))) d.close();
+  if (d && e.target.closest('#dlg-customer-orders [data-close]')) d.close();
 });
 
 /* ---------- Kunden-Anmeldung ----------
@@ -1727,11 +1739,11 @@ function bindKunde() {
     } catch (ex) { $('#kl-err').textContent = ex.message; f.password.value = ''; f.password.focus(); }
     finally { btn.disabled = false; }
   });
-  dl.addEventListener('click', (e) => { if (e.target === dl || e.target.closest('[data-close]')) dl.close(); });
+  dl.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dl.close(); });
   dp.addEventListener('cancel', (e) => { if (dp.dataset.forced) e.preventDefault(); });
   dp.addEventListener('click', (e) => {
     if (e.target.closest('#kp-cancel')) { if (dp.dataset.forced) kundeLogout(); else dp.close(); return; }
-    if (!dp.dataset.forced && (e.target === dp || e.target.closest('[data-close]'))) dp.close();
+    if (!dp.dataset.forced && e.target.closest('[data-close]')) dp.close();
   });
   $('#kp-form').addEventListener('submit', async (e) => {
     e.preventDefault();

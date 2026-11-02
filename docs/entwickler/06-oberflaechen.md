@@ -262,12 +262,23 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
 - Alle Fenster sind native `<dialog class="modal">` (breit: `modal wide`) **in `admin/index.html`**, Inhalt als
   `<div class="dlg">` bzw. `<form class="dlg">` mit `.dlg-head`, `.dlg-body`, `.dlg-foot` (Formen in `app.css`).
   Geöffnet mit `showModal()`.
-- Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Klick daneben, Escape oder ein
-  Element mit `data-close` schließt; mit `data-fest` (z. B. `#dlg-user`) nur die eigenen Knöpfe. Dialoge, die ein Skript
-  erst später erzeugt, erhalten das nicht – deshalb neue Dialoge als leeres Gerüst ins HTML schreiben.
+- **Regel für alle Seiten (Inhaber, 02.11.2026):** Ein Klick neben ein Fenster schließt es **nie** – geschlossen wird mit
+  Escape, dem Schließen-Knopf (`data-close`) oder den Knöpfen des Fensters. Das setzt `theme.js` für jede Seite zentral durch
+  (Erfassungsphase am `window`, auch für später erzeugte Fenster); Seiten schreiben dafür keinen eigenen Code. Geprüft von der
+  Testgruppe `einheit` für jedes `<dialog>` jeder Seite (Klick daneben, Escape). Rückfragen nie mit `confirm()`/`alert()`
+  des Browsers, sondern im eigenen Fenster (Eingabebereich `confirmBox`, Kundenseite `frage()`, Module ihr `frage()`).
+- Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Escape oder ein Element mit
+  `data-close` schließt, nicht während `data-busy` (Speichern läuft). Mit `data-fest` (z. B. `#dlg-user`) schützt das Fenster
+  getippte Eingaben: Sind sie noch nicht gespeichert, zeigt der erste Versuch (Escape oder Schließen) den Hinweis „Die Eingaben
+  sind noch nicht gespeichert – erneut schließen verwirft sie.“, erst der zweite schließt (wie das Kundenblatt im CRM). Nach
+  dem Speichern `delete d.dataset.geaendert` setzen. Dialoge, die ein Skript erst später erzeugt, erhalten die Verdrahtung
+  nicht – deshalb neue Dialoge als leeres Gerüst ins HTML schreiben.
 - `confirmBox(title, html, okLabel, danger)` → `Promise<boolean>` über `#dlg-confirm`. Der Text wird als HTML
   eingesetzt: Werte vorher mit `esc()` maskieren.
-- `toast(msg, ms = 3200)` → `#toast` (`role="status"`, `aria-live="polite"`).
+- `toast(msg, ms = 3200)` → `#toast` (`role="status"`, `aria-live="polite"`). Jeder Toast einer Seite (`[role=status]`
+  mit Klasse `toast` bzw. `…-toast`) liegt als Popover in der obersten Ebene; `theme.js` holt ihn beim Öffnen eines Fensters
+  erneut nach oben, damit er nicht hinter dem unscharfen Hintergrund verschwindet (Prüfung in `einheit`). Neue Toasts
+  deshalb mit `role="status"` und einer Klasse auf `-toast`, unsichtbar über `opacity: 0; pointer-events: none`.
 - `aria-labelledby` jedes Dialogs zeigt auf die `<h2>` im Kopf.
 
 ### Seitenleiste

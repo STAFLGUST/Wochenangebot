@@ -310,7 +310,7 @@
     const tops = (L.topIps || []).map((x, i) => `<tr class="sic-klick" data-topip="${i}" tabindex="0"><td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="sic-pille bad">gesperrt</span>' : ''}</td>
       <td class="num-s"><span class="ip-n"><span class="ip-balken" style="--anteil:${Math.max(6, Math.round((x.n / maxIp) * 100))}%"></span>${zahl(x.n)}</span></td><td>${x.cc ? esc(land(x.cc)) : '<span class="sub">unbekannt</span>'}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
     const evl = L.ereignisse.map((e, i) => `<li><button type="button" data-lev="${i}"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span>
-      <span class="ev-text"><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(EV_ART[e.art] || e.art)}${e.n ? ' · ' + esc(e.n) : ''} · ${esc(datum(e.t))}</span></span></button></li>`).join('');
+      <span class="ev-text"><span class="sic-nm" title="${esc(e.s)}">${esc(e.s)}</span><span class="sub">${esc(EV_ART[e.art] || e.art)}${e.n ? ' · ' + esc(e.n) : ''} · ${esc(datum(e.t))}</span></span></button></li>`).join('');
     host.innerHTML = `
       <div class="sic-oben">
         <div class="sic-gesamt sic-glas" id="sic-gesamt"></div>
@@ -531,7 +531,7 @@
     ].join('')}</div>` : '';
     const seit = n ? Date.parse(n.seit) : 0;
     const evNf = n && r.lage ? (r.lage.ereignisse || []).filter((e) => Date.parse(e.t) >= seit) : [];
-    const nfVerlauf = n && r.rechte.sehen ? block('Verlauf dieses Notfalls', evNf.length ? `<ul class="sic-evliste">${evNf.map((e) => `<li><span class="ev-zeile"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span><span class="ev-text"><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(e.n || e.u || '')}</span></span></span></li>`).join('')}</ul>
+    const nfVerlauf = n && r.rechte.sehen ? block('Verlauf dieses Notfalls', evNf.length ? `<ul class="sic-evliste">${evNf.map((e) => `<li><span class="ev-zeile"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span><span class="ev-text"><span class="sic-nm" title="${esc(e.s)}">${esc(e.s)}</span><span class="sub">${esc(e.n || e.u || '')}</span></span></span></li>`).join('')}</ul>
       <button type="button" class="btn sm" data-geh="ereignisse">Alle Ereignisse</button>` : leer('Seit Beginn des Notfalls noch keine weiteren Ereignisse.')) : '';
     host.innerHTML = `${hero}${n ? lf + kacheln : ''}
       <div class="sic-zwei">

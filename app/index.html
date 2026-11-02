@@ -222,6 +222,13 @@
 <dialog class="modal wide" id="dlg-compare" aria-labelledby="cmp-title"><div class="dlg" id="compare-body"></div></dialog>
 <div class="orderbar" id="orderbar" hidden></div>
 <dialog class="modal wide" id="dlg-order" aria-labelledby="or-title"><div class="dlg" id="order-body"></div></dialog>
+<dialog class="modal" id="dlg-frage" aria-labelledby="fr-titel" aria-describedby="fr-text">
+  <div class="dlg">
+    <div class="dlg-head"><div><h2 id="fr-titel">Wirklich?</h2></div></div>
+    <div class="dlg-body"><p id="fr-text"></p></div>
+    <div class="dlg-foot"><button class="btn" type="button" id="fr-nein" data-antwort="nein">Abbrechen</button><button class="btn primary" type="button" id="fr-ja" data-antwort="ja">OK</button></div>
+  </div>
+</dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="print-root"></div>
 

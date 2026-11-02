@@ -55,6 +55,46 @@
 })();
 try { var t = localStorage.getItem('wochenangebot.theme'); if (t) { t = JSON.parse(t); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } } catch (e) { /* ignorieren */ }
 
+/* Fenster (<dialog>) auf allen Seiten gleich (Vorgabe des Inhabers 02.11.2026): Ein Klick neben das Fenster schließt es nie –
+   geschlossen wird mit Escape, dem Schließen-Knopf oder den Knöpfen des Fensters. Läuft als Erstes (Erfassungsphase am
+   window, dieses Skript lädt vor allen anderen) und gilt damit auch für Fenster, die ein Skript erst später erzeugt. Ein
+   Klick mit dem Ziel <dialog> selbst ist immer einer daneben (Hintergrund) oder auf den leeren Rand, nie auf Inhalt. */
+window.addEventListener('click', function (e) {
+  var d = e.target;
+  if (d && d.nodeName === 'DIALOG' && d.open) e.stopImmediatePropagation();
+}, true);
+
+/* Hinweise (Toasts) über offenen Fenstern lesbar: Ein Fenster aus showModal() liegt in der obersten Ebene, alles andere
+   darunter hinter dem abgedunkelten, unscharfen Hintergrund – ein Hinweis wie „Gespeichert“ wäre dort kaum lesbar. Deshalb
+   liegt jeder Toast der Seite ([role=status] mit Klasse „toast“ bzw. „…-toast“) als Popover (manual: kein Schließen per
+   Escape oder Klick) ebenfalls in der obersten Ebene und wird beim Öffnen eines Fensters erneut nach oben geholt. Sichtbar
+   oder unsichtbar bleibt er wie bisher über die Klassen der Seite (opacity, pointer-events: none); app.css setzt die
+   Popover-Vorgaben des Browsers zurück. Ohne Popover-Unterstützung bleibt alles wie bisher. */
+(function () {
+  if (typeof HTMLElement === 'undefined' || typeof HTMLElement.prototype.showPopover !== 'function') return;
+  var SEL = '[role="status"].toast, [role="status"][class*="-toast"]';
+  function oben() {
+    var t = document.querySelectorAll(SEL);
+    for (var i = 0; i < t.length; i++) {
+      var el = t[i];
+      try {
+        if (!el.hasAttribute('popover')) { el.setAttribute('popover', 'manual'); el.setAttribute('data-stafl-oben', ''); }
+        if (el.matches(':popover-open')) el.hidePopover();
+        el.showPopover();
+      } catch (e) { /* älterer Browser: Toast bleibt, wo er war */ }
+    }
+  }
+  function start() {
+    oben();
+    try {
+      new MutationObserver(function (m) {
+        for (var i = 0; i < m.length; i++) { var d = m[i].target; if (d.nodeName === 'DIALOG' && d.open) { oben(); return; } }
+      }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    } catch (e) { /* ohne Beobachter */ }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+
 /* Hell/Dunkel (und die einfache Darstellung) gilt für das Mitarbeiterkonto auf jedem Host der Plattform (Dashboard, Angebot, Verwaltung, Bestand, HR, CRM).
    Jeder Host hat eigenen Browser-Speicher (eigene Subdomain, keine gemeinsamen Cookies – GR-108); deshalb steht die Wahl am
    Konto (Aktion theme_save) und jede Seite übernimmt sie nach der Anmeldung aus dem Status:

@@ -1572,7 +1572,7 @@
   });
   let neueGruppe = null;
   dlgItem.addEventListener('click', async (e) => {
-    if (e.target === dlgItem || e.target.closest('[data-close]')) { dlgItem.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgItem.close(); return; }
     const b = e.target.closest('[data-ia]');
     if (!b) return;
     if (ro && b.dataset.ia !== 'hist-open') return;
@@ -1689,7 +1689,7 @@
       <div class="dlg-foot"><button type="button" class="btn" data-ia="again">Andere Datei</button><span class="spacer"></span><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ia="apply">${icon('check')}Als Entwurf übernehmen</button></div>`;
   }
   dlgImport.addEventListener('click', (e) => {
-    if (e.target === dlgImport || e.target.closest('[data-close]')) { dlgImport.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgImport.close(); return; }
     const a = e.target.closest('[data-ia]')?.dataset.ia;
     if (a === 'again') pickFile();
     if (a === 'apply' && pending) {
@@ -2411,7 +2411,7 @@
     return ['Artikel wiederherstellen?', `${nm} wird wieder in den Entwurf aufgenommen – mit dem zuletzt veröffentlichten Preis ${esc(priceShort(it.price))}.`];
   }
   dlgPublish.addEventListener('click', async (e) => {
-    if (e.target === dlgPublish || e.target.closest('[data-close]')) { dlgPublish.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgPublish.close(); return; }
     const r = e.target.closest('[data-rv]');
     if (r) {
       const [title, text] = revertText(r.dataset.rv, r.dataset.rid);
@@ -2472,7 +2472,7 @@
     }
   }
   dlgVer.addEventListener('click', async (e) => {
-    if (e.target === dlgVer || e.target.closest('[data-close]')) { dlgVer.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgVer.close(); return; }
     const b = e.target.closest('[data-ver]');
     if (!b) return;
     try {
@@ -2582,15 +2582,21 @@
   $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
   $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
-  /* Dialoge schließen per Klick daneben, Escape oder [data-close]. Dialoge mit data-fest (Formulare wie „Nutzer anlegen“)
-     schließen nur über ihre Knöpfe – ein Klick daneben oder Escape verwirft keine Eingaben. */
+  /* Dialoge schließen per Escape oder [data-close] – nie per Klick daneben (theme.js, alle Seiten) und nicht, solange
+     gespeichert wird (data-busy). Fenster mit Eingaben (data-fest, z. B. „Nutzer anlegen“): Wurde etwas eingetippt und noch
+     nicht gespeichert, schließt erst der zweite Versuch und verwirft die Eingaben – der erste zeigt einen Hinweis (wie im CRM). */
   for (const d of $$('dialog')) {
-    d.addEventListener('click', (e) => {
-      const daneben = e.target === d;
-      if (daneben && d.dataset.fest !== undefined) return;
-      if (daneben || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm' && !d.dataset.busy) d.close(); }
-    });
-    d.addEventListener('cancel', (e) => { if (d.dataset.fest !== undefined) e.preventDefault(); });
+    d.addEventListener('input', (e) => { if (d.dataset.fest !== undefined && e.target.matches('textarea, select, input:not([type=checkbox]):not([type=radio])')) d.dataset.geaendert = '1'; });
+    d.addEventListener('close', () => { delete d.dataset.geaendert; delete d.dataset.warnung; });
+    const darfZu = () => {
+      if (d.dataset.busy) return false;
+      if (d.dataset.fest === undefined || !d.dataset.geaendert || d.dataset.warnung) return true;
+      d.dataset.warnung = '1';
+      toast('Die Eingaben sind noch nicht gespeichert – erneut schließen verwirft sie.');
+      return false;
+    };
+    d.addEventListener('click', (e) => { if (e.target.closest('[data-close]') && d.id !== 'dlg-confirm' && darfZu()) d.close(); });
+    d.addEventListener('cancel', (e) => { if (!darfZu()) e.preventDefault(); });
   }
 
   document.addEventListener('keydown', (e) => {
@@ -2883,7 +2889,7 @@
   }
   $('#hist-data').addEventListener('click', () => { if (!hist) return; renderHistData(); dlgHD.showModal(); });
   dlgHD.addEventListener('click', async (e) => {
-    if (e.target === dlgHD || e.target.closest('[data-close]')) { dlgHD.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgHD.close(); return; }
     if (e.target.closest('[data-hd="upload"]')) { dlgHD.close(); $('#hist-file-input').click(); return; }
     const del = e.target.closest('[data-hdel]');
     if (!del || roHist) return;
@@ -3084,7 +3090,7 @@
     renderHistImport();
   });
   dlgHI.addEventListener('click', async (e) => {
-    if (e.target === dlgHI || e.target.closest('[data-close]')) { dlgHI.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgHI.close(); return; }
     const a = e.target.closest('[data-hi]')?.dataset.hi;
     if (a === 'more') { $('#hist-file-input').click(); return; }
     if (a !== 'save') return;

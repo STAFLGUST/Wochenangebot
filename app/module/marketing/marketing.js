@@ -626,7 +626,7 @@
     }
     return f;
   }
-  const geaendert = () => darfBearbeiten() && JSON.stringify(sammle()) !== S.schnappschuss;
+  const geaendert = () => darfBearbeiten() && S.schnappschuss !== '' && JSON.stringify(sammle()) !== S.schnappschuss;
   function oeffne(id, vorgabe) {
     const e = id ? beitrag(id) : null;
     if (id && !e) return;
@@ -708,7 +708,7 @@
     if (e.key === 'Enter' && ['bt-link-url', 'bt-link-titel'].includes(e.target.id)) { e.preventDefault(); $('#bt-link-add').click(); }
   });
   dlg.addEventListener('cancel', (e) => { if (geaendert()) { e.preventDefault(); $('#bt-verwerfen').hidden = false; } });
-  dlg.addEventListener('close', () => { S.offen = null; zeichne(); });
+  dlg.addEventListener('close', () => { S.offen = null; S.schnappschuss = ''; zeichne(); });
   function schliessen() { if (geaendert()) { $('#bt-verwerfen').hidden = false; $('#bt-verwerfen-nein').focus(); return; } dlg.close(); }
   async function kommentieren() {
     const text = $('#bt-kommentar').value.trim(), e = beitrag(S.offen);
