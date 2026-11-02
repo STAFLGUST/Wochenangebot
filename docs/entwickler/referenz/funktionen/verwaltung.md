@@ -135,7 +135,7 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 
 - `schritte(n)`
 - `zeileHTML(a)`
-- `ablageHTML()` – Ablagefläche oben; nach dem Ablegen ohne eindeutigen Import: Auswahl der passenden Importe
+- `umschalten(id)` – Ablagefenster auf- bzw. zuklappen (immer nur eines offen)
 - `renderListe()`
 - `kopf(titel)`
 - `optionenHTML()`
@@ -156,7 +156,7 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 - `starten(art, files)`
 - `zurListe()`
 
-**Drag & Drop: auf einen Import ziehen oder in die Ablagefläche (bzw. dort auswählen)**
+**Drag & Drop: auf einen Import oder in sein Ablagefenster ziehen**
 
 - `ablegen(files, art)`
 - `ziehenAus()`
@@ -272,7 +272,7 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b): eine Stelle für alle Impo
 
 **Oberfläche**
 
-**Drag & Drop (Datei auf einen Import oder in die Ablagefläche)**
+**Ablagefenster je Import und Drag & Drop**
 
 - `ziehen(sel, pfade, arten_)`
 - `datei(art, pfad)`

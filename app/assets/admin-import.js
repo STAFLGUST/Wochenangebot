@@ -8,8 +8,9 @@
    Große Dateien (Importart „inTeilen“): Der Leser liefert zusätzlich Teile; die Vorschau nennt die nötigen, die werden vor
    der Übernahme einzeln geschickt (import_teil) – jede Anfrage bleibt klein, übernommen wird erst mit import_uebernehmen.
    Liste: Gruppen nach Bereich (Stammdaten, Angebot und Bestand, Personal, Controlling), je Import eine Zeile (Kurztext „kurz“).
-   Drag & Drop: Datei auf eine Zeile → dieser Import; in die Ablagefläche (oder dort gewählt) → passende Importe nach Endung,
-   einer startet sofort, sonst Auswahl; auf eine Vorschau gezogen → ersetzt die Datei desselben Imports.
+   Klick auf einen Import klappt darunter sein Ablagefenster auf (Datei hineinziehen oder auswählen, Beschreibung, Format);
+   immer nur eines offen. Drag & Drop: Datei auf eine Zeile oder ins offene Fenster → dieser Import; auf eine Vorschau
+   gezogen → ersetzt die Datei desselben Imports.
    Vertrag: docs/plattform/schnittstellen/import.md
    ========================================================================== */
 (function () {
@@ -30,7 +31,7 @@
   const SCHRITTE = ['Importart', 'Datei', 'Vorschau', 'Ergebnis'];
   let arten = null;        // Importarten des Nutzers (Server)
   let lauf = null;         // { art, dateien, quelle, gelesen, optionen, vorschau, ergebnis, schritt, fehler, filter, busy }
-  let wahl = null;         // nach dem Ablegen ohne eindeutigen Import: { dateien, kandidaten } – Auswahl in der Liste
+  let offen = '';          // Importart mit aufgeklapptem Ablagefenster (Liste)
   const view = () => $('#view-importe');
 
   /* ---------- Einheitliche Vorprüfung der Datei (Dateityp, Kodierung, leer) – vor dem Leser des Eigentümers ---------- */
@@ -73,30 +74,32 @@
   const formatName = (art) => (art.dateien.includes('csv') ? 'CSV' : 'Excel');
   const darfAblegen = (art) => art.verfuegbar && art.ablauf === 'zentrale';
   function zeileHTML(a) {
+    const auf = offen === a.id && darfAblegen(a);
     const knopf = !a.verfuegbar ? `<span class="st-warn">${a.wartung ? 'Pausiert: Wartungsarbeiten' : 'Nicht verfügbar'}</span>`
       : a.ablauf === 'editor' ? `<button type="button" class="btn sm imp-editor" data-imp-editor="${esc(a.id)}" aria-label="Im Angebotseditor öffnen: ${esc(a.name)}"><span class="imp-knopftext">Im Angebotseditor</span>${icon('link', 'sm')}</button>`
-      : `<button type="button" class="btn sm" data-imp-waehlen="${esc(a.id)}" aria-label="${a.mehrere ? 'Dateien' : 'Datei'} wählen: ${esc(a.name)}">${icon('upload', 'sm')}<span class="imp-knopftext">${a.mehrere ? 'Dateien wählen' : 'Datei wählen'}</span></button>
+      : `<button type="button" class="btn sm${auf ? ' imp-auf' : ''}" data-imp-waehlen="${esc(a.id)}" aria-expanded="${auf}" aria-controls="imp-f-${esc(a.id)}"
+           aria-label="${auf ? 'Schließen' : (a.mehrere ? 'Dateien' : 'Datei') + ' wählen'}: ${esc(a.name)}">${icon(auf ? 'up' : 'upload', 'sm')}<span class="imp-knopftext">${auf ? 'Schließen' : a.mehrere ? 'Dateien wählen' : 'Datei wählen'}</span></button>
          <input type="file" hidden data-imp-datei="${esc(a.id)}" accept="${esc(a.dateien.map((d) => '.' + d).join(','))}"${a.mehrere ? ' multiple' : ''}>`;
-    return `<div class="imp-art" data-art="${esc(a.id)}"${darfAblegen(a) ? ' data-ablage="1"' : ''}>
-        <div class="imp-text"><h3>${esc(a.name)}${a.bestaetigung ? `<span class="imp-schloss" title="Übernahme mit Passwortbestätigung" role="img" aria-label="Übernahme mit Passwortbestätigung">${icon('lock', 'sm')}</span>` : ''}</h3>
+    const fenster = auf ? `<div class="imp-fenster" id="imp-f-${esc(a.id)}" role="group" aria-label="${esc(a.name)}: Datei ablegen">
+        <div class="imp-ablage">${icon('upload')}
+          <b>${a.mehrere ? 'Dateien' : 'Datei'} hierher ziehen</b>
+          <span>oder <button type="button" class="btn sm primary" data-imp-auswahl="${esc(a.id)}">${a.mehrere ? 'Dateien auswählen' : 'Datei auswählen'}</button></span>
+          <small>${esc(a.beschreibung)} · ${esc(a.kodierung || typText(a))}${a.mehrere ? ' · mehrere Dateien möglich' : ''}${a.bestaetigung ? ' · Übernahme mit Passwortbestätigung' : ''}</small>
+        </div></div>` : '';
+    return `<div class="imp-art${auf ? ' offen' : ''}" data-art="${esc(a.id)}"${darfAblegen(a) ? ' data-ablage="1"' : ''}>
+        <div class="imp-zeile"><div class="imp-text"><h3>${esc(a.name)}${a.bestaetigung ? `<span class="imp-schloss" title="Übernahme mit Passwortbestätigung" role="img" aria-label="Übernahme mit Passwortbestätigung">${icon('lock', 'sm')}</span>` : ''}</h3>
           <p title="${esc(a.beschreibung)}">${esc(a.kurz || a.beschreibung)}</p></div>
         <span class="imp-format" title="${esc(a.kodierung || typText(a))}${a.mehrere ? ' · mehrere Dateien möglich' : ''}">${formatName(a)}</span>
-        <div class="imp-aktion">${knopf}</div>
+        <div class="imp-aktion">${knopf}</div></div>${fenster}
       </div>`;
   }
-  /* Ablagefläche oben; nach dem Ablegen ohne eindeutigen Import: Auswahl der passenden Importe */
-  function ablageHTML() {
-    if (wahl) {
-      const name = wahl.dateien.length === 1 ? `„${wahl.dateien[0].name}“` : plural(wahl.dateien.length, 'Datei', 'Dateien');
-      return `<div class="imp-wahl" role="group" aria-labelledby="imp-wahl-t" id="imp-wahl">
-        <p id="imp-wahl-t"><b>${esc(name)}</b> – welcher Import?</p>
-        <div class="imp-wahl-knoepfe">${wahl.kandidaten.map((a) => `<button type="button" class="btn sm" data-imp-wahl="${esc(a.id)}">${esc(a.name)}</button>`).join('')}
-          <button type="button" class="btn sm ghost" data-imp="wahl-ab">Abbrechen</button></div></div>`;
-    }
-    if (!arten.some(darfAblegen)) return '';
-    const endungen = [...new Set(arten.filter(darfAblegen).flatMap((a) => a.dateien))];
-    return `<button type="button" class="imp-ablage" id="imp-ablage" data-imp="ablage">${icon('upload')}<span><b>Datei hierher ziehen</b> oder auswählen – der passende Import wird erkannt bzw. zur Wahl angeboten</span></button>
-      <input type="file" hidden id="imp-ablage-datei" multiple accept="${esc(endungen.map((d) => '.' + d).join(','))}">`;
+  /* Ablagefenster auf- bzw. zuklappen (immer nur eines offen) */
+  function umschalten(id) {
+    offen = offen === id ? '' : id;
+    renderListe();
+    const z = offen && view().querySelector(`.imp-art[data-art="${offen}"]`);
+    if (z) { z.scrollIntoView({ block: 'nearest' }); z.querySelector('[data-imp-auswahl]')?.focus(); }
+    else view().querySelector(`[data-imp-waehlen="${id}"]`)?.focus();
   }
   function renderListe() {
     const h = view();
@@ -107,15 +110,10 @@
       if (!gruppen.has(g)) gruppen.set(g, []);
       gruppen.get(g).push(a);
     }
-    const xls = arten.filter((a) => a.dateien.includes('xls')).map((a) => a.name);
-    const hinweis = [arten.some((a) => a.bestaetigung) ? `${icon('lock', 'sm')}mit Passwortbestätigung` : '',
-      arten.some((a) => a.dateien.includes('csv')) ? 'CSV: Semikolon getrennt, Zeichensatz (UTF-8 oder Windows-1252) wird erkannt' : '',
-      arten.some((a) => formatName(a) === 'Excel') ? `Excel: .xlsx${xls.length ? ` (${esc(xls.join(', '))} auch .xls)` : ''}` : ''].filter(Boolean);
-    h.innerHTML = `<p class="imp-intro">Datei wählen oder hierher ziehen – die Vorschau zeigt vor dem Übernehmen, was neu ist, sich ändert oder entfällt. Jede Übernahme steht im Protokoll.</p>
-      ${ablageHTML()}
+    h.innerHTML = `<p class="imp-intro">Import anklicken und die Datei hineinziehen oder auswählen – die Vorschau zeigt vor dem Übernehmen, was neu ist, sich ändert oder entfällt. Jede Übernahme steht im Protokoll.</p>
       <div class="imp-liste">${[...gruppen].map(([g, liste]) => `<section class="imp-gruppe" aria-labelledby="imp-g-${esc(liste[0].id)}">
         <h2 id="imp-g-${esc(liste[0].id)}">${esc(g)}</h2>${liste.map(zeileHTML).join('')}</section>`).join('')}</div>
-      ${hinweis.length ? `<p class="imp-hinweis">${hinweis.join(' · ')}</p>` : ''}`;
+      ${arten.some((a) => a.bestaetigung) ? `<p class="imp-hinweis">${icon('lock', 'sm')}Übernahme mit Passwortbestätigung</p>` : ''}`;
   }
 
   function kopf(titel) {
@@ -277,32 +275,18 @@
   }
   function starten(art, files) {
     if (!files.length) return;
-    wahl = null;
+    offen = '';
     lauf = { art, dateien: art.mehrere ? files : files.slice(0, 1), quelle: files.length === 1 ? files[0].name : files.map((f) => f.name).join(', ').slice(0, 200),
       optionen: {}, gelesen: null, vorschau: null, ergebnis: null, schritt: 'lesen', filter: 'alle', busy: false, upload: art.inTeilen ? neueKennung() : '' };
     lesen();
   }
   function zurListe() { lauf = null; render(); }
 
-  /* ---------- Drag & Drop: auf einen Import ziehen oder in die Ablagefläche (bzw. dort auswählen) ---------- */
-  /* Passende Importe für die Dateien: Ablauf der Zentrale, verfügbar, jede Endung erlaubt, mehrere Dateien nur wo vorgesehen */
-  const passend = (art, files) => darfAblegen(art) && files.every((f) => art.dateien.includes(endung(f.name))) && (files.length === 1 || art.mehrere);
+  /* ---------- Drag & Drop: auf einen Import oder in sein Ablagefenster ziehen ---------- */
   function ablegen(files, art) {
     if (!files.length) return;
-    if (art) { starten(art, files); return; }   // auf einen Import gezogen: falsche Dateien meldet die Vorprüfung im Ablauf
-    const k = arten.filter((a) => passend(a, files));
-    if (!k.length) {
-      const erlaubt = [...new Set(arten.filter(darfAblegen).flatMap((a) => a.dateien))].map((d) => '.' + d).join(', ');
-      toast(files.length > 1 && files.every((f) => arten.some((a) => passend(a, [f])))
-        ? 'Mehrere Dateien auf einmal gehen nur beim Preisverlauf – bitte eine Datei ablegen.'
-        : `Für „${files.find((f) => !arten.some((a) => passend(a, [f])))?.name || files[0].name}“ gibt es keinen Import (möglich: ${erlaubt}).`, 6000);
-      return;
-    }
-    if (k.length === 1) { starten(k[0], files); return; }
-    wahl = { dateien: files, kandidaten: k };
-    renderListe();
-    $('#imp-wahl-t')?.scrollIntoView({ block: 'nearest' });
-    view().querySelector('[data-imp-wahl]')?.focus();
+    if (!art) { toast(offen ? 'Bitte die Datei ins Ablagefenster ziehen.' : 'Bitte die Datei auf einen Import ziehen – oder den Import anklicken.', 5000); return; }
+    starten(art, files);   // falsche Dateien meldet die Vorprüfung im Ablauf
   }
   const mitDateien = (e) => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
   function ziehenAus() {
@@ -320,10 +304,16 @@
 
   const host = view();
   host.addEventListener('click', (e) => {
-    const wa = e.target.closest('[data-imp-wahl]');
-    if (wa && wahl) { const art = arten.find((x) => x.id === wa.dataset.impWahl); if (art) starten(art, wahl.dateien); return; }
     const w = e.target.closest('[data-imp-waehlen]');
-    if (w) { host.querySelector(`input[data-imp-datei="${w.dataset.impWaehlen}"]`).click(); return; }
+    if (w) { umschalten(w.dataset.impWaehlen); return; }
+    const au = e.target.closest('[data-imp-auswahl]');
+    if (au) { host.querySelector(`input[data-imp-datei="${au.dataset.impAuswahl}"]`).click(); return; }
+    /* Klick auf die Zeile selbst (nicht auf Knöpfe, Links oder ins Fenster): wie der Knopf */
+    const zl = !lauf && e.target.closest('.imp-zeile');
+    if (zl && !e.target.closest('button, a, input')) {
+      const z = zl.closest('.imp-art[data-ablage]');
+      if (z) { umschalten(z.dataset.art); return; }
+    }
     const ed = e.target.closest('[data-imp-editor]');
     if (ed) {
       const a = arten.find((x) => x.id === ed.dataset.impEditor);
@@ -338,14 +328,14 @@
     if (!b) return;
     const act = b.dataset.imp;
     if (act === 'liste') { zurListe(); return; }
-    if (act === 'ablage') { $('#imp-ablage-datei')?.click(); return; }
-    if (act === 'wahl-ab') { wahl = null; renderListe(); return; }
-    if (act === 'andere' && lauf) { const art = lauf.art; lauf = null; wahl = null; renderListe(); host.querySelector(`input[data-imp-datei="${art.id}"]`)?.click(); return; }
+    if (act === 'andere' && lauf) { const art = lauf.art; lauf = null; offen = ''; renderListe(); host.querySelector(`input[data-imp-datei="${art.id}"]`)?.click(); return; }
     if (act === 'ok' && lauf && lauf.vorschau) { uebernehmen(b); return; }
     if (act === 'ansicht' && lauf) { const v = lauf.art.ansicht; lauf = null; setView(v); }
   });
+  host.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && offen && !lauf) { e.preventDefault(); umschalten(offen); }
+  });
   host.addEventListener('change', (e) => {
-    if (e.target.id === 'imp-ablage-datei') { const files = [...e.target.files]; e.target.value = ''; ablegen(files, null); return; }
     const inp = e.target.closest('input[data-imp-datei]');
     if (inp) {
       const files = [...inp.files]; inp.value = '';
@@ -369,7 +359,7 @@
     e.dataTransfer.dropEffect = frei ? 'copy' : 'none';
     if (!frei) return;
     host.classList.add('imp-ziehen');
-    const ziel = lauf ? null : e.target.closest('.imp-art[data-ablage], #imp-ablage');
+    const ziel = lauf ? null : e.target.closest('.imp-art[data-ablage]');
     host.querySelectorAll('.imp-ueber').forEach((x) => { if (x !== ziel) x.classList.remove('imp-ueber'); });
     if (ziel) ziel.classList.add('imp-ueber');
   });
@@ -389,7 +379,7 @@
     if (!files.length) return;
     if (lauf) { if (!lauf.busy && lauf.schritt !== 'lesen') { const art = lauf.art; lauf = null; starten(art, files); } return; }
     const zeile = e.target.closest('.imp-art[data-ablage]');
-    ablegen(files, zeile ? arten.find((x) => x.id === zeile.dataset.art) : null);
+    ablegen(files, arten.find((x) => x.id === (zeile ? zeile.dataset.art : offen)) || null);   // neben eine Zeile: ins offene Fenster
   });
 
   W.views.importe = render;   // Ansicht „importe“ (nicht „import“: #vt-import ist der Importknopf der Vertreter)
