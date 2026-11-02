@@ -15,7 +15,10 @@ Cockpit (crm_cockpit) und Übersicht im Kunden-Pop-up (crm_kunde_umsatz): Mein C
 Master-Cockpit (crm.master: Vergleich, Ansicht je Vertreter, ohne Vertreter, Umsatz ohne Stammsatz), Summen gegen die Testzeilen,
 Signale (Bestellpause = Regel der Umsatzstatistik, kauft weniger, Artikel weg, neu), Rechte € und kg einzeln (nichts davon in der
 Antwort), nie EK/DB/Spanne; Oberfläche (Umschalter, Vertreter-Auswahl, Pop-up-Reiter, Kundenliste „Meine Kunden · Alle · Mit
-Signal“, Handy-Karten, dunkel). Nur synthetische Testdaten.
+Signal“, Handy-Karten, dunkel). Einzelangebot beim Kunden (crm_einzel_*): Rechte (einzelangebote.sehen/bearbeiten und crm.sehen),
+Kunde aus dem Pop-up, fremde Angebote 404, gleiche Prüfungen und Protokoll wie im Eingabebereich, Freigabe, PDF, Löschen, Bestätigung
+beim Versand; Oberfläche (Reiter „Angebote“, Artikelsuche, Summe, Speichern, Freigabe, Warnung beim Schließen, 1280/390 px).
+Nur synthetische Testdaten.
 
 Testdaten: Vertreter 11 Vera Vertrieb, 12 Tom Tour; Kundengruppe 5 Fleischereien Nord. Kunden 900001 Musterfleischerei Nord
 (Hamburg, Kundenzugang, Angebot std), 900002 Beispiel Catering (Kiel, Vertreter 12 und 11), 900003 Probe Markt Ost (Dresden,
@@ -36,6 +39,7 @@ import sys
 
 from playwright.sync_api import sync_playwright
 
+from auth_helpers import expire_session
 from kunden_hilfe import Client, B
 from umgebung import SH, storage_raw, storage_sqlite, storage_write
 
@@ -115,7 +119,8 @@ check('ohne Anmeldung: 401', N.call('crm_start')[0] == 401 and N.call('crm_kunde
 check('Tester ohne CRM-Recht: 403', O.call('crm_start')[0] == 403 and O.call('crm_verlauf&key=kaaa111111111')[0] == 403)
 st, d = V.call('crm_start')
 check('crm.sehen: Start ok, ohne Bearbeiten/Export; Umsätze in € und Mengen in kg Standard an, kein Master-Cockpit', st == 200
-      and d['rechte'] == {'bearbeiten': False, 'exportieren': False, 'stammdaten': False, 'mhd': False, 'euro': True, 'kg': True, 'master': False} and d['ich'] == '', d.get('rechte'))
+      and d['rechte'] == {'bearbeiten': False, 'exportieren': False, 'stammdaten': False, 'mhd': False, 'euro': True, 'kg': True, 'master': False, 'einzel': False, 'einzelBearbeiten': False}
+      and d['ich'] == '', d.get('rechte'))
 for a, b in (('crm_kunde_save', {'key': 'kaaa111111111', 'felder': {'segment': 'Catering'}}), ('crm_aktivitaet', {'key': 'kaaa111111111', 'art': 'Telefonat', 'notiz': 'x'}),
              ('crm_interessent_save', {'firma': 'Neu GmbH'}), ('crm_export', {})):
     check(f'{a}: nur ansehen → 403', V.call(a, b)[0] == 403)
@@ -136,7 +141,7 @@ check('ohne CSRF-Token: 403', Bb.call('crm_kunde_save', {'key': 'kaaa111111111',
 Bb.csrf = csrf
 st, d = A.call('crm_start')
 check('Administrator: alle Rechte inkl. Stammdaten-Verweis und Master-Cockpit', st == 200
-      and d['rechte'] == {'bearbeiten': True, 'exportieren': True, 'stammdaten': True, 'mhd': True, 'euro': True, 'kg': True, 'master': True}, d.get('rechte'))
+      and d['rechte'] == {'bearbeiten': True, 'exportieren': True, 'stammdaten': True, 'mhd': True, 'euro': True, 'kg': True, 'master': True, 'einzel': True, 'einzelBearbeiten': True}, d.get('rechte'))
 
 # ── Kunden aus den Stammdaten (nur lesend) ──
 st, d = Bb.call('crm_start')
@@ -824,6 +829,98 @@ with sync_playwright() as p:
     check('390 px: Master-Cockpit ohne seitliches Scrollen (Vergleich als Karten)', pg.evaluate('document.documentElement.scrollWidth') <= 390 and pg.is_hidden('.crm-ck-vergleich thead'))
     pg.screenshot(path=os.path.join(SH, 'crm_master_cockpit_390.png'), full_page=True)
     ctx.close()
+    br.close()
+
+# ── Einzelangebot beim Kunden (Kunden-Pop-up, Reiter „Angebote“; Funktionen des Angebots, Rechte einzelangebote.*) ──
+for u, n, r_, p_, extra in (('ea', 'Anna Angebot', 'viewer', 'Max-Zugang-12345', {'grant': ['crm.sehen', 'einzelangebote.bearbeiten']}),
+                            ('es', 'Sven Sehen', 'viewer', 'Zweiter-Zugang-4711', {'grant': ['crm.sehen', 'einzelangebote.sehen']}),
+                            ('ko', 'Kai Ohne', 'viewer', 'Dritter-Zugang-4712', {'grant': ['einzelangebote.bearbeiten']})):
+    st, r = A.call('user_save', {'id': '', 'name': n, 'username': u, 'role': r_, 'active': True, 'password': p_, 'mustChange': False, **extra})
+    assert st == 200, r
+EA = Client('198.51.100.41'); EA.call('login', {'username': 'ea', 'password': 'Max-Zugang-12345'})
+ES = Client('198.51.100.42'); ES.call('login', {'username': 'es', 'password': 'Zweiter-Zugang-4711'})
+KO = Client('198.51.100.43'); KO.call('login', {'username': 'ko', 'password': 'Dritter-Zugang-4712'})
+st, d = EA.call('crm_start')
+check('crm_start: Rechte für Einzelangebote', d['rechte']['einzel'] is True and d['rechte']['einzelBearbeiten'] is True and ES.call('crm_start')[1]['rechte']['einzelBearbeiten'] is False)
+check('Einzelangebote im CRM: ohne Recht „Einzelangebote ansehen“ 403, ohne „CRM ansehen“ 403, ohne Anmeldung 401', VV.call('crm_einzel_liste&key=kaaa111111111')[0] == 403
+      and KO.call('crm_einzel_liste&key=kaaa111111111')[0] == 403 and KO.call('crm_einzel_save', {'key': 'kaaa111111111', 'positions': []})[0] == 403 and N.call('crm_einzel_liste&key=kaaa111111111')[0] == 401)
+st, d = EA.call('crm_einzel_liste&key=kaaa111111111')
+check('Liste eines Kunden: leer, E-Mail und Portalzugang des Kunden', st == 200 and d['liste'] == [] and d['email'] == 'einkauf@musterfleischerei.example' and d['portal'] is True and d['bearbeiten'] is True, d)
+check('Interessent und unbekannter Kunde: keine Einzelangebote (404)', EA.call('crm_einzel_liste&key=' + INT['key'])[0] == 404 and EA.call('crm_einzel_liste&key=kzzz999999999')[0] == 404)
+st, d = EA.call('crm_einzel_artikel')
+roh = json.dumps(d)
+art = {a['code']: a for a in d.get('articles', [])}
+check('Artikelsuche: Artikel mit Wochenpreis und Bestand, ohne Partien und Einkaufspreise', st == 200 and art.get('700002', {}).get('kg') == 120.25 and art['10000']['inOffer'] is True
+      and art['10000']['stdPrice']['value'] > 0 and '"lots"' not in roh and '"ek"' not in roh and '"incoming"' not in roh, roh[:300])
+check('Artikelsuche nur mit „bearbeiten“', ES.call('crm_einzel_artikel')[0] == 403)
+POS = [{'code': '700002', 'name': 'Test Bald', 'qty': 25, 'price': 12.5, 'notiz': 'frisch'}, {'code': '', 'name': 'Sonderposten nach Absprache', 'qty': None, 'price': None, 'notiz': ''}]
+st, r = EA.call('crm_einzel_save', {'key': 'kaaa111111111', 'kid': 'kbbb222222222', 'titel': 'Angebot KW 46', 'gueltigBis': tag(7), 'hinweis': 'Wie besprochen.', 'positions': POS})
+ez = r.get('angebot', {})
+check('Einzelangebot im CRM angelegt: Nummer, Kunde aus dem Pop-up (mitgeschickter Kunde ignoriert), Summe', st == 200 and re.match(r'^E-\d{4}-\d{4}$', ez.get('nr', ''))
+      and ez['kid'] == 'kaaa111111111' and ez['firma'] == 'Musterfleischerei Nord GmbH' and ez['summen'] == {'kg': 25.0, 'summe': 312.5} and ez['status'] == 'entwurf', (st, r))
+check('… erscheint in der Angebotsübersicht des Eingabebereichs (gleiche Daten)', any(x['id'] == ez['id'] and x['firma'] == 'Musterfleischerei Nord GmbH' for x in A.call('einzel_liste')[1]['list']))
+check('… nur in der Liste dieses Kunden', [x['id'] for x in EA.call('crm_einzel_liste&key=kaaa111111111')[1]['liste']] == [ez['id']] and EA.call('crm_einzel_liste&key=kbbb222222222')[1]['liste'] == [])
+check('Einzelangebot eines anderen Kunden: nicht über dessen Pop-up (404)', EA.call('crm_einzel_detail&key=kbbb222222222&id=' + ez['id'])[0] == 404
+      and EA.call('crm_einzel_save', {'key': 'kbbb222222222', 'id': ez['id'], 'revision': ez['revision'], 'positions': POS})[0] == 404
+      and EA.call('crm_einzel_status', {'key': 'kbbb222222222', 'id': ez['id'], 'revision': ez['revision'], 'status': 'freigegeben'})[0] == 404
+      and EA.call('crm_einzel_loeschen', {'key': 'kbbb222222222', 'id': ez['id']})[0] == 404)
+check('nur ansehen: Liste, Einzelangebot und PDF ja, Speichern nein', ES.call('crm_einzel_detail&key=kaaa111111111&id=' + ez['id'])[0] == 200
+      and ES.call('crm_einzel_save', {'key': 'kaaa111111111', 'positions': POS})[0] == 403 and ES.call('crm_einzel_status', {'key': 'kaaa111111111', 'id': ez['id'], 'revision': 1, 'status': 'freigegeben'})[0] == 403)
+st, _, pdf = ES.call('crm_einzel_pdf&key=kaaa111111111&id=' + ez['id'], raw=True)
+check('PDF des Einzelangebots', st == 200 and pdf.startswith('%PDF'), (st, pdf[:20]))
+for name_, pos_, code_ in (('Position ohne Bezeichnung', [{'name': '', 'qty': 1, 'price': 1}], 422), ('negative Menge', [{'name': 'X', 'qty': -2, 'price': 1}], 422),
+                            ('Preis keine Zahl', [{'name': 'X', 'qty': 1, 'price': 'viel'}], 422)):
+    check(f'Prüfung beim Angebot: {name_} → {code_}', EA.call('crm_einzel_save', {'key': 'kaaa111111111', 'positions': pos_})[0] == code_)
+check('Änderung mit altem Stand → 409', EA.call('crm_einzel_save', {'key': 'kaaa111111111', 'id': ez['id'], 'revision': 99, 'positions': POS})[0] == 409)
+st, r = EA.call('crm_einzel_status', {'key': 'kaaa111111111', 'id': ez['id'], 'revision': ez['revision'], 'status': 'freigegeben'})
+check('Im Portal freigegeben (für den Kunden sichtbar)', st == 200 and r['angebot']['status'] == 'freigegeben' and r['angebot']['sichtbar'] is True, r)
+expire_session(next(c.value for h in EA.http.handlers if hasattr(h, 'cookiejar') for c in h.cookiejar if c.name == 'WA_ADMIN'))   # Bestätigung beim Anmelden abgelaufen
+check('E-Mail aus dem CRM verlangt die Bestätigung (Schlüssel einzel_senden)', (lambda x: x[0] == 403 and x[1].get('code') == 'confirmation_required')(EA.call('crm_einzel_senden', {'key': 'kaaa111111111', 'id': ez['id']})))
+st, r = EA.call('crm_einzel_save', {'key': 'kaaa111111111', 'positions': [{'name': 'Wegwerf', 'qty': 1, 'price': 1}]})
+st2, _ = EA.call('crm_einzel_loeschen', {'key': 'kaaa111111111', 'id': r['angebot']['id']})
+check('Löschen im CRM', st == 200 and st2 == 200 and all(x['id'] != r['angebot']['id'] for x in A.call('einzel_liste')[1]['list']))
+log = json.dumps([e for e in (dokument('protokoll/' + dt.datetime.now(dt.timezone.utc).strftime('%Y-%m')) or []) if e.get('a') == 'einzelangebot'], ensure_ascii=False)
+check('Protokoll wie im Eingabebereich (angelegt, freigegeben, gelöscht)', f'Einzelangebot {ez["nr"]} für „Musterfleischerei Nord GmbH“ angelegt' in log and f'Einzelangebot {ez["nr"]} im Portal freigegeben' in log and 'gelöscht' in log, log[:300])
+
+with sync_playwright() as p:
+    br = p.chromium.launch()
+    for breite in (1280, 390):
+        ctx = br.new_context(viewport={'width': breite, 'height': 900}, extra_http_headers={'X-Forwarded-For': '198.51.100.41'}, locale='de-DE', timezone_id='Europe/Berlin')
+        pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
+        # erwartet: 403 „Bestätigung nötig“ beim Versand (meldet der Browser als Ladefehler)
+        pg.on('console', lambda m: fehler.append(m.text) if m.type == 'error' and '403 (Forbidden)' not in m.text else None)
+        pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
+        pg.fill('#au-user', 'ea'); pg.fill('#pw1', 'Max-Zugang-12345'); pg.click('#auth-submit'); pg.wait_for_selector('#screen-auth', state='hidden')
+        pg.goto(B + '/module/crm/#kunden'); pg.wait_for_selector('#k-tabelle')
+        pg.click('#k-tabelle button[data-oeffnen="kaaa111111111"]'); pg.wait_for_selector('#dlg-kunde[open]')
+        pg.click('#kunde-reiter [data-ku-tab="angebote"]'); pg.wait_for_selector('.crm-ez-liste [data-ez-oeffnen]')
+        check(f'{breite}px: Reiter „Angebote“ mit dem Einzelangebot des Kunden', ez['nr'] in pg.inner_text('[data-ku-panel="angebote"]') and 'Im Portal' in pg.inner_text('.crm-ez-liste'))
+        pg.click('[data-ez="neu"]'); pg.wait_for_selector('#ez-suche')
+        pg.fill('#ez-suche', '700002'); pg.wait_for_selector('#ez-treffer [data-ez-treffer]')
+        check(f'{breite}px: Artikelsuche mit Treffer', '700002' in pg.inner_text('#ez-treffer'))
+        pg.click('#ez-treffer [data-ez-treffer="0"]'); pg.wait_for_selector('tr[data-pos="0"]')
+        pg.fill('tr[data-pos="0"] [data-p="qty"]', '12,5'); pg.fill('tr[data-pos="0"] [data-p="price"]', '13,90'); pg.fill('[data-k="titel"]', f'Test UI {breite}')
+        pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('173,75')")
+        check(f'{breite}px: Summe aus Menge × Preis', '12,5 kg' in pg.inner_text('.crm-ez-summe'))
+        if breite == 1280:
+            pg.click('#dlg-kunde [data-schliessen]'); pg.wait_for_selector('#crm-toast.zeigen')
+            check('Schließen mit ungespeichertem Einzelangebot: Warnung, Pop-up bleibt offen', pg.is_visible('#dlg-kunde') and 'nicht gespeichert' in pg.text_content('#crm-toast'))
+        pg.click('[data-ez="speichern"]'); pg.wait_for_function("document.querySelector('.crm-ez-titel h3').textContent.startsWith('E-')")
+        nr = pg.text_content('.crm-ez-titel h3')
+        check(f'{breite}px: gespeichert mit Nummer', nr.startswith('E-') and any(x['nr'] == nr and x['kid'] == 'kaaa111111111' and x['titel'] == f'Test UI {breite}' for x in A.call('einzel_liste')[1]['list']), nr)
+        pg.click('[data-ez-status="freigegeben"]'); pg.wait_for_selector('[data-ez-status="entwurf"]')
+        check(f'{breite}px: im Portal freigegeben', 'Im Portal' in pg.inner_text('.crm-ez-kopf'))
+        if breite == 390:
+            check('390 px: Editor ohne seitliches Scrollen im Pop-up', pg.evaluate("document.querySelector('#dlg-kunde').scrollWidth <= document.querySelector('#dlg-kunde').clientWidth + 1"))
+        pg.screenshot(path=os.path.join(SH, f'crm_einzelangebot_{breite}.png'), full_page=False)
+        pg.click('[data-ez="mail"]'); pg.wait_for_selector('#ez-mail')
+        expire_session(next(c['value'] for c in ctx.cookies() if c['name'].endswith('WA_ADMIN')))
+        pg.click('#ez-senden'); pg.wait_for_selector('#ez-mail [name="pw"]')
+        check(f'{breite}px: E-Mail – Bestätigung mit Passwort im Formular', 'Passwort' in pg.inner_text('#ez-mail'))
+        pg.click('[data-ez="liste"]'); pg.wait_for_selector('.crm-ez-liste')
+        check(f'{breite}px: zurück zur Liste – neues Angebot steht oben', nr in pg.inner_text('.crm-ez-liste li:first-child'))
+        pg.click('#dlg-kunde [data-schliessen]'); pg.wait_for_selector('#dlg-kunde', state='hidden')
+        ctx.close()
     br.close()
 
 check('keine JavaScript-Fehler', not fehler, fehler)

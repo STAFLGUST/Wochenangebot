@@ -6,7 +6,7 @@ Aufruf: `/api/?action=<aktion>` (GET lesend, POST mit JSON und `X-CSRF-Token` sc
 
 Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST schreibt); **Kennzeichen** – öffentlich (ohne Mitarbeiteranmeldung), Kunden-Wartung, wartungsfrei, fremde Herkunft, eigene Anmeldung (siehe [regeln/aktionen/LIESMICH.md](../../../regeln/aktionen/LIESMICH.md)).
 
-245 Aktionen in 14 Modulen.
+253 Aktionen in 14 Modulen.
 
 ## Angebot (`angebot`)
 
@@ -97,6 +97,14 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | --- | --- | --- | --- | --- | --- |
 | `crm_aktivitaet` | `crm.intern` | schreibend | – | Recht crm.bearbeiten | `app/api/aktionen/crm.php` |
 | `crm_cockpit` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |
+| `crm_einzel_artikel` | `crm.intern` | lesend | – | – | `app/api/aktionen/crm.php` |
+| `crm_einzel_detail` | `crm.intern` | lesend | – | – | `app/api/aktionen/crm.php` |
+| `crm_einzel_liste` | `crm.intern` | lesend | – | – | `app/api/aktionen/crm.php` |
+| `crm_einzel_loeschen` | `crm.intern` | schreibend | – | – | `app/api/aktionen/crm.php` |
+| `crm_einzel_pdf` | `crm.intern` | lesend | – | – | `app/api/aktionen/crm.php` |
+| `crm_einzel_save` | `crm.intern` | schreibend | – | – | `app/api/aktionen/crm.php` |
+| `crm_einzel_senden` | `crm.intern` | schreibend | – | Recht einzelangebote.bearbeiten + Bestätigung | `app/api/aktionen/crm.php` |
+| `crm_einzel_status` | `crm.intern` | schreibend | – | – | `app/api/aktionen/crm.php` |
 | `crm_export` | `crm.intern` | schreibend | – | Recht crm.exportieren | `app/api/aktionen/crm.php` |
 | `crm_interessent_save` | `crm.intern` | schreibend | – | Recht crm.bearbeiten | `app/api/aktionen/crm.php` |
 | `crm_karte` | `crm.intern` | lesend | – | Recht crm.sehen | `app/api/aktionen/crm.php` |

@@ -20,6 +20,35 @@ oberflaeche = "crm.intern"
 [aktion.crm_kunde_umsatz]
 oberflaeche = "crm.intern"
 
+# Einzelangebot beim Kunden (Rechte einzelangebote.* wie im Eingabebereich, Funktionen des Angebots in lib/einzelangebote.php)
+[aktion.crm_einzel_liste]
+oberflaeche = "crm.intern"
+
+[aktion.crm_einzel_detail]
+oberflaeche = "crm.intern"
+
+[aktion.crm_einzel_pdf]
+oberflaeche = "crm.intern"
+
+[aktion.crm_einzel_artikel]
+oberflaeche = "crm.intern"
+
+[aktion.crm_einzel_save]
+oberflaeche = "crm.intern"
+schreibend = true
+
+[aktion.crm_einzel_status]
+oberflaeche = "crm.intern"
+schreibend = true
+
+[aktion.crm_einzel_loeschen]
+oberflaeche = "crm.intern"
+schreibend = true
+
+[aktion.crm_einzel_senden]
+oberflaeche = "crm.intern"
+schreibend = true
+
 [aktion.crm_verlauf]
 oberflaeche = "crm.intern"
 

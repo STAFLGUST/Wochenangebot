@@ -16,6 +16,7 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 require_once __DIR__ . '/../../lib/adressen.php';   // Anschrift → Koordinate (Karte, Plattformkern)
 require_once __DIR__ . '/cockpit.php';               // Mein Cockpit, Master-Cockpit, Übersicht im Kunden-Pop-up
+require_once __DIR__ . '/einzelangebot.php';         // Einzelangebot beim Kunden (über die Funktionen des Angebots)
 
 const CRM_SEGMENTE = ['Fleischerei', 'Einzelhandel', 'Cash & Carry', 'Catering', 'Gastronomie', 'Großhandel', 'Industrie', 'Sonstige', 'Nicht zugeordnet'];
 const CRM_PHASEN = ['Interessent', 'Erstkontakt', 'Muster/Probe', 'Angebot', 'Verhandlung', 'Bestandskunde', 'Verloren'];

@@ -6,7 +6,8 @@ declare(strict_types=1);
                     crm.exportieren – Liste als CSV herunterladen;
                     crm.mhd_ware – Reiter „MHD-Ware“: Artikel kurz vor Ablauf und ihre Käufer (Wiedervorlage dazu zusätzlich crm.bearbeiten);
                     crm.master – Master-Cockpit und Ansicht anderer Vertreter; crm.umsatz_euro / crm.umsatz_kg – Umsätze in € bzw.
-                    Mengen in kg im Cockpit und im Kunden-Pop-up (module/crm/cockpit.php).
+                    Mengen in kg im Cockpit und im Kunden-Pop-up (module/crm/cockpit.php);
+                    einzelangebote.sehen / .bearbeiten (wie im Eingabebereich) – Einzelangebote beim Kunden (module/crm/einzelangebot.php).
    Kundenstammdaten liest das CRM nur (Eigentümer Verwaltung, E-1); geändert werden sie in der Verwaltung.
    Wird von api/index.php im globalen Gültigkeitsbereich eingebunden; jede Aktion endet mit respond()/fail(). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -36,7 +37,7 @@ switch ($action) {
             foreach ($akt as $a) { if (isset($jeArt[$a['art']])) $jeArt[$a['art']]++; if ($a['at'] >= $seit) $tage30++; }
             respond(['ok' => true, 'heute' => date('Y-m-d'), 'name' => $me['name'], 'ich' => (string)($me['vertreter'] ?? ''),
                      'rechte' => ['bearbeiten' => may($me, 'crm.bearbeiten'), 'exportieren' => may($me, 'crm.exportieren'), 'stammdaten' => may($me, 'kunden.bearbeiten'), 'mhd' => may($me, 'crm.mhd_ware')]
-                                 + crm_zahlrechte($me),
+                                 + crm_zahlrechte($me) + ['einzel' => may($me, 'einzelangebote.sehen'), 'einzelBearbeiten' => may($me, 'einzelangebote.bearbeiten')],
                      'kunden' => crm_liste(), 'vertreter' => crm_vertreter(), 'segmente' => CRM_SEGMENTE, 'phasen' => CRM_PHASEN, 'anruf' => CRM_ANRUF,
                      'arten' => CRM_ARTEN, 'rhythmen' => crm_rhythmen(), 'letzte' => array_map('crm_aktivitaet_aus', array_slice($akt, 0, 30)),
                      'statistik' => ['gesamt' => count($akt), 'jeArt' => $jeArt, 'tage30' => $tage30]]);
@@ -57,6 +58,60 @@ switch ($action) {
             $me = require_perm('crm.sehen');
             header('Cache-Control: no-store');
             respond(crm_kunde_umsatz($me, crm_key_param($_GET['key'] ?? '')));
+        }
+
+        /* Einzelangebote eines Kunden (Kunden-Pop-up, Reiter „Angebote“) – Liste ohne Positionen, dazu E-Mail und Portalzugang des Kunden */
+        case 'crm_einzel_liste': {
+            $me = crm_einzel_recht('sehen');
+            header('Cache-Control: no-store');
+            $c = crm_einzel_kunde($_GET['key'] ?? '');
+            respond(['ok' => true, 'liste' => einzel_liste((string)$c['id']), 'email' => (string)($c['email'] ?? ''), 'portal' => !empty($c['login']['active']),
+                     'bearbeiten' => may($me, 'einzelangebote.bearbeiten'), 'heute' => date('Y-m-d')]);
+        }
+        case 'crm_einzel_detail': {
+            crm_einzel_recht('sehen');
+            header('Cache-Control: no-store');
+            $c = crm_einzel_kunde($_GET['key'] ?? '');
+            respond(['ok' => true, 'angebot' => einzel_view(crm_einzel_von($c, $_GET['id'] ?? ''), einzel_kunden_map()), 'fracht' => fracht_hinweis()]);
+        }
+        case 'crm_einzel_pdf': {
+            crm_einzel_recht('sehen');
+            einzel_pdf_senden(crm_einzel_von(crm_einzel_kunde($_GET['key'] ?? ''), $_GET['id'] ?? ''));
+        }
+        case 'crm_einzel_artikel': {
+            $me = crm_einzel_recht('bearbeiten');
+            header('Cache-Control: no-store');
+            respond(['ok' => true] + crm_einzel_artikel($me));
+        }
+        /* Anlegen oder ändern: der Kunde kommt aus dem Schlüssel (ein mitgeschickter Kunde wird ignoriert) */
+        case 'crm_einzel_save': {
+            $me = crm_einzel_recht('bearbeiten', true);
+            $b = body();
+            $c = crm_einzel_kunde($b['key'] ?? '');
+            if (is_string($b['id'] ?? null) && $b['id'] !== '') crm_einzel_von($c, $b['id']);
+            respond(['ok' => true, 'angebot' => einzel_speichern(['kid' => (string)$c['id']] + $b, $me)]);
+        }
+        case 'crm_einzel_status': {
+            $me = crm_einzel_recht('bearbeiten', true);
+            $b = body();
+            crm_einzel_von(crm_einzel_kunde($b['key'] ?? ''), $b['id'] ?? '');
+            respond(['ok' => true, 'angebot' => einzel_status_setzen($b, $me)]);
+        }
+        case 'crm_einzel_loeschen': {
+            crm_einzel_recht('bearbeiten', true);
+            $b = body();
+            $e = crm_einzel_von(crm_einzel_kunde($b['key'] ?? ''), $b['id'] ?? '');
+            einzel_entfernen($e['id']);
+            respond(['ok' => true]);
+        }
+        /* Per E-Mail an den Kunden – mit derselben Bestätigung wie im Eingabebereich (Schlüssel einzel_senden) */
+        case 'crm_einzel_senden': {
+            $me = require_perm_confirmed('einzelangebote.bearbeiten', 'einzel_senden');
+            if (!may($me, 'crm.sehen')) fail('Dafür fehlt Ihnen die Berechtigung „CRM ansehen“.', 403);
+            $b = body();
+            crm_einzel_von(crm_einzel_kunde($b['key'] ?? ''), $b['id'] ?? '');
+            $cfg = require_mail();
+            respond(['ok' => true, 'angebot' => einzel_mail($b, $me, $cfg)]);
         }
 
         /* Karte: Koordinaten der Anschriften (Hausnummer bzw. Straße) aus dem Adressverzeichnis auf dem Server; ohne Eintrag

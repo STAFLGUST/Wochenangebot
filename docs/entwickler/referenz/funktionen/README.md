@@ -6,10 +6,10 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
-| [Angebot](angebot.md) | `angebot` | 41 | 586 |
+| [Angebot](angebot.md) | `angebot` | 41 | 593 |
 | [Bestand](bestand.md) | `bestand` | 8 | 49 |
 | [Leergut](leergut.md) | `leergut` | 4 | 106 |
-| [CRM](crm.md) | `crm` | 7 | 151 |
+| [CRM](crm.md) | `crm` | 9 | 176 |
 | [REWE](rewe.md) | `rewe` | 5 | 127 |
 | [Qualitätssicherung](qs.md) | `qs` | 9 | 249 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
