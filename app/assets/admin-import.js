@@ -71,7 +71,7 @@
   }
   /* Gruppen der Liste nach dem Eigentümer der Daten (unbekannte Bereiche: eigene Gruppe mit ihrem Namen) */
   const GRUPPE = { verwaltung: 'Stammdaten', bestand: 'Angebot und Bestand', angebot: 'Angebot und Bestand', hr: 'Personal', controlling: 'Controlling' };
-  const formatName = (art) => (art.dateien.includes('csv') ? 'CSV' : 'Excel');
+  const formatName = (art) => [art.dateien.includes('csv') ? 'CSV' : '', art.dateien.some((d) => d !== 'csv') ? 'Excel' : ''].filter(Boolean).join(' / ');
   const darfAblegen = (art) => art.verfuegbar && art.ablauf === 'zentrale';
   function zeileHTML(a) {
     const auf = offen === a.id && darfAblegen(a);
