@@ -1278,3 +1278,23 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 .detailkarte .maplibregl-ctrl-attrib a { color: inherit; }
 .detailkarte .maplibregl-ctrl-attrib-button { filter: none; }
 .detailkarte .maplibregl-canvas:focus-visible { outline: 2px solid var(--accent, #7b1e2b); outline-offset: -2px; }
+
+/* ==========================================================================
+   Einfache Darstellung (Auftrag des Inhabers 02.11.2026) – für Remote-Desktop (RDP) und virtuelle Maschinen ohne
+   Grafikkarte. Dort zeichnet der Browser mit dem Prozessor: Unschärfe hinter Glasflächen (backdrop-filter) muss bei jeder
+   Bewegung neu berechnet werden (gemessen auf dem Dashboard bei 1920 × 1080 in Software-Darstellung: rund 54 ms statt
+   17 ms je Bild), weiche Farbflächen und Übergänge vergrößern zudem, was RDP übertragen muss. theme.js setzt
+   data-darstellung="einfach" an <html> (Wahl am Konto oder automatisch erkannt); hier gilt es für alle Seiten:
+   keine Unschärfe, keine Farbflächen im Hintergrund, keine Übergänge und Animationen. Glasflächen bleiben leicht
+   durchscheinend, liegen aber auf einfarbigem Grund – das zeichnet und überträgt sich wie eine deckende Fläche.
+   ========================================================================== */
+:root[data-darstellung="einfach"] *, :root[data-darstellung="einfach"] *::before, :root[data-darstellung="einfach"] *::after,
+:root[data-darstellung="einfach"] ::backdrop {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+/* Hintergrund-Farbflächen der Seiten (Dashboard und Module) und der Grund der Angebotsseite */
+:root[data-darstellung="einfach"] :is(.db-bg, .ctl-bg, .crm-bg, .hr-bg, .lg-bg, .mkt-bg, .qm-bg, .rw-bg, .sic-bg) { display: none !important; }
+:root[data-darstellung="einfach"] body.kseite::before { display: none !important; }
+/* Angebotsseite: Glas deckend wie bei „Transparenz reduzieren“ */
+:root[data-darstellung="einfach"] body.kseite.kseite.kseite { --glas-kopf: var(--surface); --glas: var(--surface); --glas-leicht: var(--surface-3); --glas-karte: var(--surface); --glas-fenster: var(--surface); --glas-filter: none; --feld: var(--surface); }

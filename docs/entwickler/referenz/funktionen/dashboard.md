@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-2 Dateien, 25 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+2 Dateien, 26 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `dashboard/dashboard.js`
 
@@ -26,6 +26,7 @@ _STAFL-Plattform · Dashboard Kacheln kommen ausschließlich aus dem Modulregist
 - `laden()`
 - `notfallHinweis(n)` – Notfallmodus (Modul Sicherheit): Hinweis über den Kacheln – Einzelheiten nur für Administratoren und Berechtigte
 - `themaKnopf()`
+- `darstellungKnopf()` – Einfache Darstellung (theme.js): an/aus, gespeichert am Konto; Hinweis unter der Begrüßung, solange sie an ist
 
 ## `tests/e2e/test_dashboard.py`
 

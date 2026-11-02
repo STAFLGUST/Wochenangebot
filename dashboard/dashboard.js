@@ -1,7 +1,9 @@
 /* STAFL-Plattform · Dashboard
    Kacheln kommen ausschließlich aus dem Modulregister (Aktion module_status, regeln/module.toml) – keine fest
    programmierte Liste. Der Status je Kachel ist nur Anzeige; ob eine Anwendung nutzbar ist und welche Rechte gelten,
-   entscheidet der Server bei jeder Aktion (GR-102, GR-103). Kein Inline-Skript (Content-Security-Policy). */
+   entscheidet der Server bei jeder Aktion (GR-102, GR-103). Kein Inline-Skript (Content-Security-Policy).
+   Knopf „Einfache Darstellung“ (Blitz, neben Hell/Dunkel): für Remote-Desktop ohne Glas und Bewegung – Wahl am Konto, sonst
+   automatisch erkannt (theme.js). */
 'use strict';
 (() => {
   const API = '../api/';
@@ -233,6 +235,26 @@
     try { localStorage.setItem('wochenangebot.theme', JSON.stringify(neu)); } catch { /* ohne Speicher */ }
     themaKnopf();
   });
+  /* Einfache Darstellung (theme.js): an/aus, gespeichert am Konto; Hinweis unter der Begrüßung, solange sie an ist */
+  function darstellungKnopf() {
+    const D = window.STAFL_DARSTELLUNG, b = $('#db-darstellung');
+    if (!D) { b.hidden = true; return; }
+    const an = D.einfach();
+    b.setAttribute('aria-pressed', String(an));
+    b.setAttribute('aria-label', an ? 'Einfache Darstellung ausschalten' : 'Einfache Darstellung einschalten (für Remote-Desktop)');
+    b.title = an ? 'Einfache Darstellung ist an – Effekte wieder einschalten' : 'Einfache Darstellung für Remote-Desktop einschalten';
+    const h = $('#db-darstellung-hinweis');
+    h.hidden = !an;
+    h.textContent = !an ? '' : D.wahl() === 'einfach' ? 'Einfache Darstellung ist an (Ihre Wahl) – ruhiger und flüssiger, z. B. über Remote-Desktop.'
+      : 'Einfache Darstellung ist an – automatisch, weil dieser Computer ohne Grafikkarte zeichnet (z. B. Remote-Desktop).';
+  }
+  $('#db-darstellung').addEventListener('click', () => {
+    const neu = !window.STAFL_DARSTELLUNG.einfach();
+    if (window.STAFL_THEME) window.STAFL_THEME.darstellung(neu); else window.STAFL_DARSTELLUNG.setzen(neu);
+    darstellungKnopf();
+  });
+  document.addEventListener('stafl-darstellung', darstellungKnopf);
+
   $('#db-logout').addEventListener('click', async () => {
     const r = await api('logout', {});
     // Zentrale Anmeldung (Keycloak-Host): auch bei Keycloak abmelden – beendet die Anmeldung für alle Anwendungen
@@ -241,5 +263,6 @@
   });
 
   themaKnopf();
+  darstellungKnopf();
   laden().catch(() => fehler('Keine Verbindung zum Server.'));
 })();
