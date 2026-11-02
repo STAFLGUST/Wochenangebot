@@ -133,6 +133,7 @@ with sync_playwright() as p:
     t = a.inner_text('#user-body')
     check('Abschluss: Mitarbeiter angelegt mit Benutzername, Startpasswort, E-Mail, Mail-Knopf', 'Mitarbeiter angelegt' in t and 'lena-lager' in t and pw in t and 'lena.lager@example.org' in t
           and a.locator('#user-body [data-uact="sendmail"]').is_visible() and a.is_checked('#us-mitpw'), t[:300])
+    a.wait_for_selector('.utab tr:has-text("lena-lager")', timeout=10000)   # Liste wird nach dem Speichern neu gezeichnet
     check('Liste schon aktualisiert', a.locator('.utab tr:has-text("lena-lager")').count() == 1)
     a.mouse.click(30, 30)
     check('Abschluss bleibt bei Klick daneben offen', a.evaluate("document.querySelector('#dlg-user').open"))
