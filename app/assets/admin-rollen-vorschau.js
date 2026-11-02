@@ -96,7 +96,7 @@
     const f = BILDER[art];
     if (!f) return '';
     const [pfad, alt, inhalt] = f(modul || '', symbol || '');
-    return `<figure class="rv" role="img" aria-label="Vorschau: ${esc(alt)}" data-rv="${esc(art)}">
+    return `<figure class="rv" role="img" aria-label="Vorschau: ${esc(alt)}" title="Vorschau: ${esc(alt)}" data-rv="${esc(art)}">
       <figcaption class="rv-kopf"><b>${esc(art === 'kachel' ? `${pfad} › ${modul}` : pfad)}</b><span>Beispieldaten</span></figcaption>
       <div class="rv-body">${inhalt}</div></figure>`;
   };

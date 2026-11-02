@@ -262,7 +262,7 @@
           const z = zugangKey(m.id);
           const st = z && !set.has(z) ? 'kein' : stufeVon(set, m.id);
           const s = zaehlen(set, m.id).sensAn;
-          return `<span class="${st === 'kein' ? 'aus' : ''}"><i style="--f:${symbol(m).farbe}"></i><b>${esc(m.name)}</b><em class="st-${st}">${esc(STUFE_TEXT[st])}${s ? ` · ${s} sensibel` : ''}</em></span>`;
+          return `<span class="${st === 'kein' ? 'aus' : ''}" title="${esc(m.name)}: ${esc(STUFE_TEXT[st])}"><i style="--f:${symbol(m).farbe}"></i><b>${esc(m.name)}</b><em class="st-${st}">${esc(STUFE_TEXT[st])}${s ? ` · ${s} sensibel` : ''}</em></span>`;
         }).join('')}</div>
         ${ausn.length ? `<div class="rl-ausn"><b>Ausnahmen nur für diesen Mitarbeiter:</b>${ausn.map(([k, t]) => `<span class="${k}">${esc(t)}</span>`).join('')}</div>` : ''}`;
     }
