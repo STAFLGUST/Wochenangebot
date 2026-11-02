@@ -45,7 +45,7 @@ body.ctl {
 /* ── Umsatzstatistik · Reiter „Auswertung“ (umsatz-auswertung.js, Pop-ups umsatz-details.js; Designvorschlag 01.11.2026):
    oben eine ruhige Leiste (Zeitraum, Vorjahr, Filter-Knopf, Suche), darunter Kennzahlen, Rangliste und Monatsverlauf;
    Filter und Details als Pop-up (am Handy von unten, app.css). ── */
-.ctl-ua-stand{margin:0 0 12px}
+.ctl-ua-stand{margin:-4px 0 10px}
 .ctl-seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:12px;background:rgba(90,78,74,.09)}
 .ctl-seg button{height:34px;padding:0 13px;border:0;border-radius:9px;background:transparent;color:var(--ctl-muted);font:inherit;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
 .ctl-seg button[aria-pressed="true"],.ctl-seg button[aria-selected="true"]{background:var(--ctl-card);color:var(--ctl-text);font-weight:680;box-shadow:0 1px 3px rgba(0,0,0,.1)}
@@ -71,31 +71,31 @@ body.ctl {
 .ctl-ua-chip.aktiv{border-color:rgba(140,29,44,.35);background:rgba(140,29,44,.06);color:var(--ctl-accent)}
 .ctl-ua-link{border:0;background:none;padding:4px 2px;color:var(--ctl-accent);font:inherit;font-size:12px;font-weight:650;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .ctl-ua-mehr{display:block;margin:10px auto 0;font-size:13px}
-.ctl-ua-kpis.mit-ek{grid-template-columns:repeat(6,minmax(0,1fr))}.ctl-ua-kpis b{font-size:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl-ua-kpis.mit-ek{grid-template-columns:repeat(6,minmax(0,1fr))}.ctl-ua-kpis .ctl-kpi{padding:11px 14px;border-radius:16px}.ctl-ua-kpis b{margin:3px 0 1px;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ctl-ua-delta{font-weight:700}.ctl-ua-delta.plus{color:var(--ctl-green)}.ctl-ua-delta.minus{color:var(--ctl-accent)}
 .ctl-ua-raster{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,380px);gap:12px;align-items:start}
 .ctl-ua-seite{display:flex;flex-direction:column;gap:12px;min-width:0}.ctl-ua-seite .ctl-panel{margin:0}
-.ctl-ua-rangkopf{flex-wrap:wrap;align-items:flex-start}.ctl-ua-rangwahl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctl-ua-rangkopf{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin-bottom:10px}.ctl-ua-rangwahl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .ctl-ua-liste{min-width:0}.ctl-ua-liste.laedt{opacity:.45;transition:opacity .2s}
-.ctl-ua-rang{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
-.ctl-ua-rangzeile{width:100%;display:grid;grid-template-columns:28px minmax(0,1fr) minmax(90px,150px) 150px 78px 18px;gap:12px;align-items:center;padding:9px 10px;border:0;border-radius:12px;background:transparent;color:var(--ctl-text);font:inherit;text-align:left;cursor:pointer}
-button.ctl-ua-rangzeile:hover{background:var(--ctl-total-bg)}.ctl-ua-rang li:first-child .ctl-ua-rangzeile{background:var(--ctl-green-soft)}
+.ctl-ua-rang{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}.ctl-ua-rang>li+li{border-top:1px solid var(--ctl-line)}
+.ctl-ua-rangzeile{width:100%;display:grid;grid-template-columns:48px minmax(0,1fr) minmax(90px,170px) 150px 78px 16px;gap:12px;align-items:center;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:var(--ctl-text);font:inherit;text-align:left;cursor:pointer}
+button.ctl-ua-rangzeile:hover{background:var(--ctl-total-bg)}
 .ctl-ua-rangkopfzeile{cursor:default;padding:0 10px 8px;border-bottom:1px solid var(--ctl-line);border-radius:0;color:var(--ctl-muted);font-size:10px;font-weight:750;letter-spacing:.06em;text-transform:uppercase}
 .ctl-ua-rangkopfzeile span:nth-child(4),.ctl-ua-rangkopfzeile span:nth-child(5){text-align:right}
 .ctl-ua-rangnr{color:var(--ctl-muted);font-weight:600;font-variant-numeric:tabular-nums}
-.ctl-ua-rangname{min-width:0}.ctl-ua-rangname b,.ctl-ua-rangname small{display:block;overflow:hidden;text-overflow:ellipsis}
-.ctl-ua-rangname b{font-size:14px;white-space:nowrap}.ctl-ua-rangname small{color:var(--ctl-muted);font-size:12px;white-space:nowrap}
+.ctl-ua-rangname{min-width:0;display:flex;align-items:baseline;gap:8px;overflow:hidden}.ctl-ua-rangname b,.ctl-ua-rangname small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctl-ua-rangname b{flex:0 0 auto;max-width:100%;font-size:14px}.ctl-ua-rangname small{flex:1 1 0;min-width:0;color:var(--ctl-muted);font-size:12px}   /* Name zuerst, Zusatz kürzt sich */
 .ctl-ua-rangbalken{display:flex;align-items:center;gap:8px;min-width:0}.ctl-ua-rangbalken small{width:46px;text-align:right;color:var(--ctl-muted);font-size:11px;font-variant-numeric:tabular-nums}
 .ctl-ua-spur{flex:1;display:block;height:8px;border-radius:99px;background:var(--ctl-track);overflow:hidden}.ctl-ua-spur>span{display:block;height:100%;border-radius:99px;background:var(--ctl-bar)}
 .ctl-ua-rangwert{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:0}.ctl-ua-rangwert b{display:block}.ctl-ua-rangwert small{display:block;color:var(--ctl-muted);font-size:11px;overflow:hidden;text-overflow:ellipsis}.ctl-ua-rangdelta{text-align:right;font-size:13px;white-space:nowrap}
 .ctl-ua-rangzeile .i{color:var(--ctl-muted);width:16px;height:16px}
-.ctl-ua-rang.zeitlich .ctl-ua-rangzeile{grid-template-columns:0 minmax(0,1fr) minmax(90px,150px) 150px 78px 18px}
+.ctl-ua-rang.zeitlich .ctl-ua-rangzeile{grid-template-columns:0 minmax(0,1fr) minmax(90px,170px) 150px 78px 16px}
 .ctl-ua-rangfuss{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--ctl-line)}.ctl-ua-rangfuss .ctl-hilfe{flex:1;margin:0}
 .ctl-ua-svgwrap{width:100%;overflow-x:auto}.ctl-ua-svg{display:block}
 .ctl-ua-balken{fill:var(--ctl-bar)}.ctl-ua-achse{fill:var(--ctl-muted);font-size:10px}
 .ctl-ua-vjlinie{fill:none;stroke:var(--ctl-text);stroke-width:1.5;stroke-dasharray:4 3;opacity:.6}.ctl-ua-vjpunkt{fill:var(--ctl-text);opacity:.6}
 .ctl-ua-legende-vj{display:inline-block;width:18px;border-top:2px dashed var(--ctl-text);opacity:.6;vertical-align:middle}
-.ctl-ua-veraend{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px;padding:9px 11px;border:0;border-radius:11px;background:rgba(90,78,74,.05);color:var(--ctl-text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.ctl-ua-veraend{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:4px;padding:7px 10px;border:0;border-radius:11px;background:rgba(90,78,74,.05);color:var(--ctl-text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
 .ctl-ua-veraend:hover{background:var(--ctl-total-bg)}.ctl-ua-veraend small{display:block;color:var(--ctl-muted);font-size:11px}.ctl-ua-veraend>b{white-space:nowrap}
 .ctl-ua-veraenderung[hidden]{display:none}
 .ctl-ua-tabwrap{width:100%;overflow:auto;max-height:70vh;border-radius:10px}
@@ -193,9 +193,9 @@ button.ctl-ud-zeile{cursor:pointer}button.ctl-ud-zeile:hover{background:var(--ct
 #ctl-u-uebersicht.laedt{opacity:.45;transition:opacity .2s}   /* Monatsmeldung: anderes Jahr wird geladen */
 
 /* Rangliste nach Kennzahl (Umsatz, Menge, DB, Spanne) und Richtung; Sortierung in den Pop-ups */
-.ctl-ua-kennzahlwahl{flex-basis:100%;justify-content:flex-end}
+.ctl-ua-kennzahlwahl{margin-left:auto;justify-content:flex-end;gap:6px}
 .ctl-ua-wahllabel{color:var(--ctl-muted);font-size:12px;font-weight:650}
-.ctl-ua-richtung{height:34px;padding:0 12px;border:1px solid var(--ctl-border);border-radius:10px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:12px;font-weight:650;white-space:nowrap;cursor:pointer}
+.ctl-ua-richtung{height:36px;padding:0 11px;border:1px solid var(--ctl-border);border-radius:10px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:12px;font-weight:650;white-space:nowrap;cursor:pointer}
 .ctl-ua-richtung[aria-pressed="true"]{border-color:var(--ctl-accent);color:var(--ctl-accent)}.ctl-ua-richtung[hidden]{display:none}
 .ctl-ua-spur.minus>span{background:var(--ctl-accent)}.ctl-ua-negativ{color:var(--ctl-accent)}
 .ctl-ua-rangtrenner{margin:10px 0 2px;padding:8px 10px 4px;border-top:1px dashed var(--ctl-line);color:var(--ctl-muted);font-size:11px;font-weight:650}
@@ -216,25 +216,26 @@ button.ctl-ud-zeile{cursor:pointer}button.ctl-ud-zeile:hover{background:var(--ct
 body.ctl{--ctl-abc-b:#8a5d00;--ctl-abc-b-soft:rgba(176,124,20,.14);--ctl-neu:#2f6690;--ctl-neu-soft:rgba(47,102,144,.12);--ctl-verloren-soft:rgba(140,29,44,.1)}
 @media screen and (prefers-color-scheme: dark){:root:not([data-theme="light"]) body.ctl{--ctl-abc-b:#e5b85c;--ctl-abc-b-soft:rgba(229,184,92,.16);--ctl-neu:#8fc0e8;--ctl-neu-soft:rgba(143,192,232,.16);--ctl-verloren-soft:rgba(240,163,174,.15)}}
 @media screen{:root[data-theme="dark"] body.ctl{--ctl-abc-b:#e5b85c;--ctl-abc-b-soft:rgba(229,184,92,.16);--ctl-neu:#8fc0e8;--ctl-neu-soft:rgba(143,192,232,.16);--ctl-verloren-soft:rgba(240,163,174,.15)}}
-.ctl-ua-rangfilter{display:flex;align-items:center;justify-content:space-between;gap:8px 14px;flex-wrap:wrap;margin:2px 0 10px}.ctl-ua-rangfilter[hidden]{display:none}
+.ctl-ua-rangfilter{display:flex;align-items:center;justify-content:flex-start;gap:8px 12px;flex-wrap:wrap;margin:0 0 10px}.ctl-ua-rangfilter[hidden]{display:none}.ctl-ua-rangfilter .ctl-seg[hidden]{display:none}
 .ctl-seg button:disabled{opacity:.45;cursor:default}
 .ctl-ua-nurzahl{display:inline-block;min-width:18px;margin-left:3px;padding:0 5px;border-radius:999px;background:var(--ctl-track);font-size:11px;line-height:17px;font-variant-numeric:tabular-nums;text-align:center}
 .ctl-ua-abc{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}.ctl-ua-abc[hidden]{display:none}
-.ctl-ua-abc button{height:30px;padding:0 10px 0 6px;border:1px solid var(--ctl-border);border-radius:999px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:12px;font-weight:650;white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums}
+.ctl-ua-abc button{height:30px;padding:0 9px 0 5px;border:1px solid var(--ctl-border);border-radius:999px;background:var(--ctl-card);color:var(--ctl-text);font:inherit;font-size:12px;font-weight:650;white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums}
 .ctl-ua-abc button small{margin-left:2px;color:var(--ctl-muted);font-size:11px;font-weight:600}
 .ctl-ua-abc button b,.ctl-ua-abcmarke{display:inline-grid;place-items:center;width:18px;height:18px;margin-right:3px;border-radius:6px;font-size:10px;font-style:normal;font-weight:800;vertical-align:middle}
 .ctl-ua-abc button[aria-pressed="true"]{border-color:var(--ctl-text);box-shadow:inset 0 0 0 1px var(--ctl-text)}.ctl-ua-abc button:disabled{opacity:.45;cursor:default}
 .ctl-ua-abc button[data-abc="A"] b,.ctl-ua-abcmarke[data-abc="A"]{background:var(--ctl-green-soft);color:var(--ctl-green)}
 .ctl-ua-abc button[data-abc="B"] b,.ctl-ua-abcmarke[data-abc="B"]{background:var(--ctl-abc-b-soft);color:var(--ctl-abc-b)}
 .ctl-ua-abc button[data-abc="C"] b,.ctl-ua-abcmarke[data-abc="C"]{background:var(--ctl-track);color:var(--ctl-muted)}
-.ctl-ua-rangnr{display:flex;flex-direction:column;align-items:flex-start;gap:4px}.ctl-ua-rangnr .ctl-ua-abcmarke{margin:0}
+.ctl-ua-rangnr{display:flex;flex-direction:row-reverse;justify-content:flex-end;align-items:center;gap:6px}.ctl-ua-rangnr .ctl-ua-abcmarke{margin:0}
 .ctl-ua-marke{display:inline-block;margin-right:6px;padding:0 6px;border-radius:999px;font-size:10px;font-weight:750;line-height:16px;letter-spacing:.04em;text-transform:uppercase;vertical-align:1px}
 .ctl-ua-marke.neu{background:var(--ctl-neu-soft);color:var(--ctl-neu)}.ctl-ua-marke.verloren{background:var(--ctl-verloren-soft);color:var(--ctl-accent)}
 .ctl-ua-nurhinweis{margin:-4px 0 10px}.ctl-ua-nurhinweis[hidden]{display:none}
 #ctl-ua-standard[hidden]{display:none}
 @media(max-width:560px){
   .ctl-ua-rangfilter>.ctl-seg{width:100%}.ctl-ua-rangfilter>.ctl-seg button{flex:1 1 auto;padding:0 6px}
-  .ctl-ua-rangzeile:not(.ctl-ua-rangkopfzeile) .ctl-ua-rangnr{grid-row:1/span 2}
+  .ctl-ua-rangzeile:not(.ctl-ua-rangkopfzeile) .ctl-ua-rangnr{grid-row:1/span 2;flex-direction:column;align-items:flex-start;gap:4px}
+  .ctl-ua-rangname{display:block}.ctl-ua-kennzahlwahl{margin-left:0}
   .ctl-ua-rangfuss .ctl-hilfe{order:9;flex-basis:100%}#ctl-ua-standard{margin-left:auto}
 }
 
@@ -252,3 +253,8 @@ body.ctl{--ctl-abc-b:#8a5d00;--ctl-abc-b-soft:rgba(176,124,20,.14);--ctl-neu:#2f
 .ctl-ud-preis small,.ctl-ud-preisabw{display:block;font-size:11px;font-weight:650;color:var(--ctl-muted);white-space:nowrap}
 .ctl-ud-preisabw.minus{color:var(--ctl-accent)}.ctl-ud-preisabw.plus{color:var(--ctl-green)}
 .ctl-ud-preisniveau{margin:-4px 0 10px;color:var(--ctl-muted);font-size:12px}.ctl-ud-preisniveau b{font-size:13px}
+
+/* Kopf der Umsatzstatistik (vereinfacht 02.11.2026): Überschrift, Reiter Auswertung · Monatsmeldung und Stand in einer Zeile */
+.ctl-u-kopf{display:flex;align-items:center;justify-content:flex-start;gap:10px 18px;flex-wrap:wrap;margin:22px 0 14px}
+.ctl-u-kopf h1{font-size:26px}.ctl-u-kopf .ctl-tabs{margin:0}.ctl-u-kopf .ctl-stand{margin:0 0 0 auto}
+@media(max-width:560px){.ctl-u-kopf{margin:14px 0 10px;gap:8px 12px}.ctl-u-kopf h1{font-size:22px}.ctl-u-kopf .ctl-stand{margin:0;flex-basis:100%;text-align:left}}

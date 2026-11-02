@@ -35,9 +35,9 @@
 
   /* ---------- Gerüst des Bereichs ---------- */
   const GERUEST = `
-    <div class="ctl-intro"><div><p class="ctl-eyebrow">Vertrieb · Kennzahlen</p><h1>Umsatzstatistik</h1>
-      <p class="ctl-intro-text">Umsätze aus der Warenwirtschaft nach Vertreter, Kunde und Artikel – dazu die Monatsmeldung je Vertreter.</p></div><p class="ctl-notiz ctl-stand" id="ctl-u-stand"></p></div>
-    <nav class="ctl-tabs stafl-streifen" id="ctl-u-tabs" role="tablist" aria-label="Umsatzstatistik"><button type="button" role="tab" data-tab="auswertung" aria-selected="false">Auswertung</button><button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Monatsmeldung</button></nav>
+    <div class="ctl-intro ctl-u-kopf"><h1>Umsatzstatistik</h1>
+      <nav class="ctl-tabs stafl-streifen" id="ctl-u-tabs" role="tablist" aria-label="Umsatzstatistik"><button type="button" role="tab" data-tab="auswertung" aria-selected="false">Auswertung</button><button type="button" role="tab" data-tab="uebersicht" aria-selected="true">Monatsmeldung</button></nav>
+      <p class="ctl-notiz ctl-stand" id="ctl-u-stand"></p></div>
     <section class="ctl-filterzeile" id="ctl-u-filter" aria-label="Filter">
       <label for="ctl-u-jahr">Jahr</label><select id="ctl-u-jahr"></select>
       <details class="ctl-filter" id="ctl-u-zeitfilter"><summary id="ctl-u-zeitfilter-titel">Alle Monate</summary><div class="ctl-filterliste" id="ctl-u-monatsoptionen"></div></details>

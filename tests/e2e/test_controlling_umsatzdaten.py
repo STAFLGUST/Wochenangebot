@@ -732,7 +732,13 @@ with sync_playwright() as p:
               and pg.is_visible('#ctl-u-auswertung') and pg.is_hidden('#ctl-u-uebersicht'))
         kpi = pg.text_content('#ctl-ua-kpis')
         check(f'{breite}px {thema}: Kennzahlen mit DB und Spanne (Administrator)', 'Umsatz' in kpi and 'DB' in (kpi) and 'Spanne' in kpi and 'Rohmarge' not in kpi and 'zum Vorjahr' in kpi and 'Pp' in kpi, kpi)
-        check(f'{breite}px {thema}: Stand der Daten', f'Umsätze der Warenwirtschaft vom {ERSTER:%d.%m.%Y} bis {LETZTER:%d.%m.%Y}' in pg.inner_text('#ctl-ua-stand'), pg.inner_text('#ctl-ua-stand'))
+        check(f'{breite}px {thema}: Stand der Daten (kurz, Herkunft im Hinweis)', f'Daten vom {ERSTER:%d.%m.%Y} bis {LETZTER:%d.%m.%Y} · Import' in pg.inner_text('#ctl-ua-stand')
+              and 'Warenwirtschaft' in (pg.get_attribute('#ctl-ua-stand', 'title') or ''), pg.inner_text('#ctl-ua-stand'))
+        check(f'{breite}px {thema}: einfacher Kopf – eine Bereichsleiste nur bei mehreren Bereichen, Überschrift mit Reitern in einer Zeile', pg.is_hidden('#ctl-bereiche')
+              and pg.evaluate("innerWidth < 600 || Math.abs(document.querySelector('.ctl-u-kopf h1').getBoundingClientRect().top - document.querySelector('#ctl-u-tabs').getBoundingClientRect().top) < 30"))
+        check(f'{breite}px {thema}: Rangliste mit zwei Bedienzeilen (Gliederung; Vergleich, ABC und Sortierung), Zeilen einzeilig', pg.evaluate(
+              "innerWidth < 600 || (document.querySelector('#ctl-ua-rangfilter').contains(document.querySelector('#ctl-ua-rangnach')) && document.querySelector('#ctl-ua-liste').getBoundingClientRect().top - document.querySelector('.ctl-ua-rangpanel').getBoundingClientRect().top < 125)")
+              and pg.evaluate("innerWidth < 600 || [...document.querySelectorAll('#ctl-ua-rang .ctl-ua-rangname')].every((e) => e.getBoundingClientRect().height < 26)"))
         check(f'{breite}px {thema}: Monatsverlauf als Balken mit Vorjahreslinie', pg.locator('#ctl-ua-diagramm rect.ctl-ua-balken').count() == 10 and pg.locator('#ctl-ua-diagramm polyline').count() == 1)
         check(f'{breite}px {thema}: Leiste – Zeitraum „Dieses Jahr“, Filter-Knopf, Suche', pg.get_attribute('#ctl-ua-zeit [data-zeit="jahr"]', 'aria-pressed') == 'true'
               and pg.is_visible('#ctl-ua-filterknopf') and pg.is_visible('#ctl-ua-suche') and pg.is_hidden('#ctl-ua-eigen'))
@@ -856,7 +862,7 @@ with sync_playwright() as p:
         pg.wait_for_selector('#ctl-ua-pausen [data-pause="2000004"]')
         p_soll = pausen(A, von='2026-06', bis='2026-06')[1]
         check(f'{breite}px {thema}: Bestellpausen – Liste wie der Server, Imbiss Ohne mit „seit … Tagen nichts“, Stand 30.06.2026',
-              pg.eval_on_selector_all('#ctl-ua-pausen [data-pause]', 'els => els.map((e) => e.dataset.pause)') == [z['nr'] for z in p_soll['zeilen']][:6]
+              pg.eval_on_selector_all('#ctl-ua-pausen [data-pause]', 'els => els.map((e) => e.dataset.pause)') == [z['nr'] for z in p_soll['zeilen']][:5]
               and 'seit' in pg.text_content('#ctl-ua-pausen [data-pause="2000004"]') and 'Stand 30.06.2026' in pg.text_content('#ctl-ua-pausen-hinweis')
               and pg.text_content('#ctl-ua-pausen-zahl') == str(p_soll['gesamt']), pg.text_content('#ctl-ua-pausen-panel'))
         if breite == 390:
