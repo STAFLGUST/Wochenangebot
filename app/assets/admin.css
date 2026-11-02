@@ -206,6 +206,20 @@ body.in-einzel #btn-send, body.in-einzel #send-hint, body.in-einzel #btn-publish
 .hitab td { padding: 6px 8px; }
 .hitab .in.num { width: 76px; border-color: var(--line); }
 .hitab .hi-file { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Preise importieren: Kundengruppe am Handy unter dem Angebot statt als eigene Spalte */
+.ofptab .ofp-gr { display: none; }
+@media (max-width: 560px) { .ofptab th:nth-child(2), .ofptab .ofp-grs { display: none; } .ofptab .ofp-gr { display: block; color: var(--muted); font-size: 12px; } .ofptab td, .ofptab th { padding-left: 6px; padding-right: 6px; } }
+/* Alte Angebote hochladen am Handy: Datei über die ganze Breite, darunter KW, Jahr, Artikel und Status – ohne seitliches Scrollen */
+@media (max-width: 560px) {
+  .hitab thead { display: none; }
+  .hitab, .hitab tbody { display: block; }
+  .hitab tr { display: grid; grid-template-columns: 64px 84px minmax(0, 1fr); gap: 4px 10px; align-items: end; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .hitab td { padding: 0; border: 0; min-width: 0; }
+  .hitab .hi-file { grid-column: 1 / -1; max-width: none; font-weight: 600; }
+  .hitab .hi-st { grid-column: 1 / -1; }
+  .hitab .in.num { width: 100%; }
+  .hitab td[data-l]::before { content: attr(data-l); display: block; margin-bottom: 2px; color: var(--muted); font-size: 11px; font-weight: 600; text-align: left; }
+}
 .st-ok { color: var(--c-fresh); font-weight: 600; }
 .st-warn { color: var(--c-aged); font-weight: 600; }
 .st-err { color: var(--accent); font-weight: 600; }
@@ -1145,6 +1159,8 @@ body.ro .sale-tag { cursor: default; }
 @media (max-width: 860px) { .adm-top #btn-publish { width: auto; min-width: 36px; padding: 0 9px; gap: 6px; } }
 @media (max-width: 480px) { .adm-top .brand > div:not(.brand-mark) { display: none; } }
 /* Angebots-Host am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – das Logo läge sonst verdeckt darunter */
+/* Angebot am Handy mit Zurück-Knopf: Zurück-Knopf und sechs Aktionen füllen die Zeile – ohne Logo, sonst läge es unter
+   „Rückgängig“ (Durchsicht 03.11.2026) */
 @media (max-width: 480px) { body.adm:not(.bereich-verwaltung):not(.bereich-bestand):not(.bereich-import) .adm-top .brand:has(.stafl-zurueck:not([hidden])) .brand-logo { display: none; } }
 
 /* Rollen und Rechte (admin-rollen.js, Bilder: admin-rollen-vorschau.js): links die Rollen, rechts Rollenkopf, „Auf einen

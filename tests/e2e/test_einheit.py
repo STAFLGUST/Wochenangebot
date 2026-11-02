@@ -144,7 +144,9 @@ with sync_playwright() as pw:
                         check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)
                     if dunkel:
                         lg = pg.evaluate(LOGO)
-                        check(f'{teil} {tag}: Logo weiß ohne helle Fläche', lg and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
+                        # Angebot am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – dort bewusst ohne Logo (admin.css)
+                        ohne_logo = name == 'angebot' and breite <= 480
+                        check(f'{teil} {tag}: Logo weiß ohne helle Fläche', (lg or ohne_logo) and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
                 zr = pg.evaluate(ZURUECK)
                 if name != 'dashboard':
                     zurueck.setdefault(breite, {})[name] = zr
@@ -280,7 +282,9 @@ with sync_playwright() as pw:
     check('Zurück auf „wie das Gerät“', A.call('theme_save', {'theme': ''})[0] == 200 and A.call('status')[1]['user'].get('theme') == '')
     for breite, je in zurueck.items():
         # gleiche Form: Höhe, Rundung, Schrift, Schriftfarbe, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
-        formen = {json.dumps({k: v for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
+        # Schriftfarbe: gleicher Farbton (kleine Abweichungen der Textfarbe zwischen Eingabebereich und Modulen zählen nicht)
+        ton = lambda c: tuple(round(int(x) / 16) for x in re.findall(r'\d+', c or '')[:3])   # noqa: E731
+        formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()

@@ -292,9 +292,11 @@ with sync_playwright() as p:
     ctx, pg = anmelden('lena', 'Leser-Zugang-77', '198.51.100.4', 1280)
     pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
     pg.click('#tab-mein [data-jahr="1"]'); pg.wait_for_selector('#mein-liste li:has(.hr-art.G) [data-zurueck]')
+    ZAHL_G = "[...document.querySelectorAll('#mein-liste li')].filter((li) => li.querySelector('.hr-art.G') && li.querySelector('[data-zurueck]')).length"
+    vorher = pg.evaluate(ZAHL_G)
     pg.click('#mein-liste li:has(.hr-art.G) [data-zurueck]'); pg.wait_for_selector('#dlg-frage[open]')
     pg.click('#fr-ja')
-    pg.wait_for_function("!document.querySelector('#mein-liste li .hr-art.G') || ![...document.querySelectorAll('#mein-liste li')].some((li) => li.querySelector('.hr-art.G') && li.querySelector('[data-zurueck]'))")
+    pg.wait_for_function(f"({ZAHL_G}) === {vorher - 1}")
     check('Zurückziehen bestätigt: Gleittag-Antrag zurückgezogen', 'zurückgezogen' in (pg.text_content('#antrag-meldung') + pg.text_content('#mein-info')))
     ctx.close()
     br.close()

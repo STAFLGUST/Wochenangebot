@@ -2152,7 +2152,7 @@
           <label class="check"><input type="checkbox" data-ofp="anlegen"${ofImp.anlegen ? ' checked' : ''}${fehlt.length > platz ? ' disabled' : ''}> Für ${fehlt.length === 1 ? 'diese Kundengruppe ein Angebot' : `diese ${fehlt.length} Kundengruppen je ein Angebot`} anlegen <small class="muted">(„Wochenangebot &lt;Gruppe&gt;“ mit eigener Artikelliste: die Artikel mit Preis aus der Datei)</small></label>
           ${fehlt.length > platz ? `<p class="hint">Es sind höchstens ${OFFER_MAX_UI} Angebote möglich.</p>` : ''}</div>` : ''}
         <table class="etab ofptab"><thead><tr><th>Angebot</th><th>Kundengruppe</th><th class="num-s">Preise</th><th class="num-s">geändert</th><th class="num-s">neu</th></tr></thead><tbody>
-          ${ziele.map(([z, v]) => `<tr data-ofp-ziel="${esc(z)}"><td>${esc(name(z))}</td><td class="sub">${esc(gruppenVon(z))}</td><td class="num-s">${fmtInt.format(v.preise)}</td><td class="num-s">${fmtInt.format(v.geaendert)}</td><td class="num-s">${fmtInt.format(v.neu)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Keine Preise zuzuordnen.</td></tr>'}
+          ${ziele.map(([z, v]) => `<tr data-ofp-ziel="${esc(z)}"><td>${esc(name(z))}<small class="ofp-gr">${esc(gruppenVon(z))}</small></td><td class="sub ofp-grs">${esc(gruppenVon(z))}</td><td class="num-s">${fmtInt.format(v.preise)}</td><td class="num-s">${fmtInt.format(v.geaendert)}</td><td class="num-s">${fmtInt.format(v.neu)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Keine Preise zuzuordnen.</td></tr>'}
         </tbody></table>
         <p class="hint">Eingetragen wird in den Entwurf – erst mit „Veröffentlichen“ sehen die Kunden die Preise. Preise, die nicht in der Datei stehen, bleiben unverändert.${plan.nichtIm.size ? ` ${plural(plan.nichtIm.size, 'Artikelnummer steht', 'Artikelnummern stehen')} nicht im Angebot und ${plan.nichtIm.size === 1 ? 'wird' : 'werden'} übersprungen.` : ''}${ofImp.data.leer ? ` ${fmtInt.format(ofImp.data.leer)} Zeilen ohne Preis übersprungen.` : ''}${ofImp.data.fehler ? ` ${ofImp.data.fehler} unlesbare Preise übersprungen.` : ''}${plan.konflikt ? ` ${plan.konflikt}× unterschiedliche Preise für denselben Artikel im selben Angebot (mehrere Gruppen) – der erste gilt.` : ''}</p>
         <p class="kerr" id="ofp-err" role="alert">${esc(err)}</p>
@@ -3072,9 +3072,9 @@
       else st = `<span class="st-ok">neu</span>${en.warn ? ` <span class="muted">· ${en.warn} Hinweis${en.warn === 1 ? '' : 'e'}</span>` : ''}`;
       const editable = en.status === 'ok';
       return `<tr data-i="${i}"><td class="hi-file" title="${esc(en.file.name)}">${esc(en.file.name)}</td>
-        <td><input class="in num" data-hf="week" type="number" min="1" max="53" value="${esc(en.week ?? '')}" aria-label="Kalenderwoche"${editable ? '' : ' disabled'}></td>
-        <td><input class="in num" data-hf="year" type="number" min="2000" max="2100" value="${esc(en.year ?? '')}" aria-label="Jahr"${editable ? '' : ' disabled'}></td>
-        <td class="num">${en.items ? fmtInt.format(en.items.length) : ''}</td><td>${st}</td></tr>`;
+        <td data-l="KW"><input class="in num" data-hf="week" type="number" min="1" max="53" value="${esc(en.week ?? '')}" aria-label="Kalenderwoche"${editable ? '' : ' disabled'}></td>
+        <td data-l="Jahr"><input class="in num" data-hf="year" type="number" min="2000" max="2100" value="${esc(en.year ?? '')}" aria-label="Jahr"${editable ? '' : ' disabled'}></td>
+        <td class="num" data-l="Artikel">${en.items ? fmtInt.format(en.items.length) : ''}</td><td class="hi-st">${st}</td></tr>`;
     }).join('');
     const busy = hiEntries.some((en) => en.status === 'lesen' || en.status === 'speichert');
     $('#hist-import-body').innerHTML = `
