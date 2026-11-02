@@ -739,8 +739,8 @@ with sync_playwright() as p:
               and 'Ø Preis' in karten[1] and ' kg' in karten[1] and '€/kg' in karten[1] and 'Spanne' in karten[2] and 'Pp' in karten[2] and karten[3].lower().startswith('kunden') and 'Artikel' in karten[3], karten)
         check(f'{breite}px {thema}: Stand der Daten (kurz, Herkunft im Hinweis)', f'Daten vom {ERSTER:%d.%m.%Y} bis {LETZTER:%d.%m.%Y} · Import' in pg.inner_text('#ctl-ua-stand')
               and 'Warenwirtschaft' in (pg.get_attribute('#ctl-ua-stand', 'title') or ''), pg.inner_text('#ctl-ua-stand'))
-        check(f'{breite}px {thema}: einfacher Kopf – Bereichsleiste beim Administrator mit beiden Bereichen (Umsatzstatistik, Bestandsverlauf), Überschrift mit Reitern in einer Zeile',
-              pg.is_visible('#ctl-bereiche') and pg.locator('#ctl-bereiche [role="tab"]').count() == 2
+        check(f'{breite}px {thema}: einfacher Kopf – Bereichsleiste beim Administrator mit allen drei Bereichen (Umsatzstatistik, Bestandsverlauf, Arbeitszeit), Überschrift mit Reitern in einer Zeile',
+              pg.is_visible('#ctl-bereiche') and pg.locator('#ctl-bereiche [role="tab"]').count() == 3
               and pg.evaluate("innerWidth < 600 || Math.abs(document.querySelector('.ctl-u-kopf h1').getBoundingClientRect().top - document.querySelector('#ctl-u-tabs').getBoundingClientRect().top) < 30"))
         check(f'{breite}px {thema}: Rangliste mit zwei Bedienzeilen (Gliederung; Vergleich, ABC und Sortierung), Zeilen einzeilig', pg.evaluate(
               "innerWidth < 600 || (document.querySelector('#ctl-ua-rangfilter').contains(document.querySelector('#ctl-ua-rangnach')) && document.querySelector('#ctl-ua-liste').getBoundingClientRect().top - document.querySelector('.ctl-ua-rangpanel').getBoundingClientRect().top < 125)")
