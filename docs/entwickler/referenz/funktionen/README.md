@@ -9,13 +9,13 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Angebot](angebot.md) | `angebot` | 41 | 586 |
 | [Bestand](bestand.md) | `bestand` | 8 | 49 |
 | [Leergut](leergut.md) | `leergut` | 4 | 106 |
-| [CRM](crm.md) | `crm` | 5 | 109 |
+| [CRM](crm.md) | `crm` | 7 | 151 |
 | [REWE](rewe.md) | `rewe` | 5 | 127 |
 | [Qualitätssicherung](qs.md) | `qs` | 9 | 249 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
 | [HR](hr.md) | `hr` | 9 | 149 |
 | [Marketing](marketing.md) | `marketing` | 4 | 76 |
-| [Controlling](controlling.md) | `controlling` | 12 | 165 |
+| [Controlling](controlling.md) | `controlling` | 13 | 178 |
 | [Verwaltung](verwaltung.md) | `verwaltung` | 17 | 190 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 105 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 25 |

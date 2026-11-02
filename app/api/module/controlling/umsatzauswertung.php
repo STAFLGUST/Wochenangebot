@@ -491,6 +491,21 @@ const UMSATZ_PAUSE_MAX = 200;
 /* Tageszahl eines Datums (für Abstände in Tagen) */
 function umsatz_tagnummer(string $datum): int { return intdiv((int)gmmktime(12, 0, 0, (int)substr($datum, 5, 2), (int)substr($datum, 8, 2), (int)substr($datum, 0, 4)), 86400); }
 
+/* Bestellpause eines Kunden zum Tag $ende (Regel oben; auch Schnittstelle für das CRM, module/controlling/kundenbild.php).
+   $tage: Tagnummern mit Kauf in den UMSATZ_PAUSE_TAGE Tagen bis $ende, aufsteigend. null = kein Stammkunde; sonst
+   auffaellig, pause, mittel (üblicher Abstand), laengste (frühere Pause), kauftage, letzter (Tagnummer). */
+function umsatz_pause_pruefen(array $tage, int $ende): ?array
+{
+    $n = count($tage);
+    if ($n < UMSATZ_PAUSE_KAUFTAGE) return null;
+    $laengste = 0;
+    for ($i = 1; $i < $n; $i++) $laengste = max($laengste, $tage[$i] - $tage[$i - 1]);
+    $mittel = ($tage[$n - 1] - $tage[0]) / ($n - 1);
+    $pause = $ende - $tage[$n - 1];
+    return ['auffaellig' => $pause >= UMSATZ_PAUSE_MIN_TAGE && $pause >= UMSATZ_PAUSE_FAKTOR * $mittel && $pause > $laengste,
+            'pause' => $pause, 'mittel' => $mittel, 'laengste' => $laengste, 'kauftage' => $n, 'letzter' => $tage[$n - 1]];
+}
+
 /* Stammkunden mit auffälliger Bestellpause zum Stichtag; Anfrage wie die Auswertung (von, bis, Filter) */
 function umsatz_pausen(array $q): array
 {
@@ -526,19 +541,16 @@ function umsatz_pausen(array $q): array
     $stamm = 0; $out = [];
     foreach ($tage as $nr => $set) {
         $nr = (string)$nr;
-        $n = count($set);
-        if ($n < UMSATZ_PAUSE_KAUFTAGE) continue;
-        $stamm++;
         $liste = array_keys($set);
         sort($liste);
-        $laengste = 0;
-        for ($i = 1; $i < $n; $i++) $laengste = max($laengste, $liste[$i] - $liste[$i - 1]);
-        $mittel = ($liste[$n - 1] - $liste[0]) / ($n - 1);
-        $pause = $ende - $liste[$n - 1];
-        if ($pause < UMSATZ_PAUSE_MIN_TAGE || $pause < UMSATZ_PAUSE_FAKTOR * $mittel || $pause <= $laengste) continue;
+        $p = umsatz_pause_pruefen($liste, $ende);
+        if ($p === null) continue;
+        $stamm++;
+        if (!$p['auffaellig']) continue;
         [$name, $sub] = umsatz_bezeichnung('kunde', $nr);
-        $out[] = ['nr' => $nr, 'name' => $name, 'sub' => $sub, 'letzter' => gmdate('Y-m-d', $liste[$n - 1] * 86400), 'pause' => $pause,
-                  'abstand' => round($mittel, 1), 'laengste' => $laengste, 'kauftage' => $n, 'umsatzMonat' => (int)round(($umsatz[$nr] ?? 0) / $n * 30.4375 / $mittel)];
+        $out[] = ['nr' => $nr, 'name' => $name, 'sub' => $sub, 'letzter' => gmdate('Y-m-d', $p['letzter'] * 86400), 'pause' => $p['pause'],
+                  'abstand' => round($p['mittel'], 1), 'laengste' => $p['laengste'], 'kauftage' => $p['kauftage'],
+                  'umsatzMonat' => (int)round(($umsatz[$nr] ?? 0) / $p['kauftage'] * 30.4375 / $p['mittel'])];
     }
     usort($out, fn($x, $y) => $y['umsatzMonat'] <=> $x['umsatzMonat'] ?: $y['pause'] <=> $x['pause'] ?: strcmp($x['nr'], $y['nr']));
     return ['ok' => true, 'stichtag' => $stichtag, 'von' => $vonDatum, 'stammkunden' => $stamm, 'zeilen' => array_slice($out, 0, UMSATZ_PAUSE_MAX),
