@@ -432,7 +432,7 @@ dialog .st-incoming small, .dlg-body .st-incoming small { font-size: 14px; margi
 @media (max-width: 560px) { .lottab .lot-marke, .zutab .lot-marke { display: none; } .lottab .lot-marke-sub, .zutab .lot-marke-sub { display: block; font-size: 11.5px; color: var(--muted); white-space: normal; line-height: 1.25; } }
 .lot-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; min-width: 0; }
 @media (max-width: 560px) { .lottab td, .lottab th, .lottab tfoot td, .zutab td, .zutab th, .zutab tfoot td { padding: 6px 4px; font-size: 13px; } .lottab td, .zutab td { white-space: nowrap; } .lottab .lot-ank { display: none; } }
-@media (max-width: 560px) { .lottab .lot-ek, .zutab .lot-ek { white-space: normal; } }   /* EK „34,80 €/kg“ darf am Handy vor der Einheit umbrechen */
+@media (max-width: 560px) { .lottab td.lot-ek, .zutab td.lot-ek { white-space: normal; } }   /* EK „34,80 €/kg“ darf am Handy vor der Einheit umbrechen */
 /* Bestand · Artikeldetail: Abschnittstitel (Erwartete Zugänge, Eingelagerte Partien, Im Angebot) deutlich sichtbar */
 #dlg-stock-item .d-h { margin: 26px 0 10px; padding-bottom: 7px; border-bottom: 1.5px solid var(--line-strong, var(--line)); font-size: 13px; font-weight: 750; color: var(--text); }
 #dlg-stock-item .d-h { gap: 12px; }
