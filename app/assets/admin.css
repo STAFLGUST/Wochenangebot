@@ -1173,6 +1173,10 @@ body.ro .sale-tag { cursor: default; }
 .rl-recht input { flex: none; width: 17px; height: 17px; margin: 1px 0 0; accent-color: var(--accent); }
 .rl-recht .rm-k { flex: none; min-width: 66px; margin: 1px 0 0; }
 .rl-recht.fest { cursor: default; color: var(--text-2); }
+.rl-recht-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.rl-recht.mit-hilfe { padding: 6px 0 8px; }
+.rl-hilfe { font-size: 12.5px; line-height: 1.45; color: var(--text-2); }
+.rl-voraus { font-size: 12px; line-height: 1.4; color: var(--text-2); font-style: italic; }
 .rl-fest-i { flex: none; width: 17px; text-align: center; font-weight: 700; color: var(--c-fresh); }
 .rl-mod.zu { background: var(--surface-2, var(--surface)); }
 .rl-mod.zu .rl-rechte { opacity: .55; }

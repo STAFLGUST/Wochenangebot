@@ -7,7 +7,9 @@ declare(strict_types=1);
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
 /* Schlüssel => Bereich, Bezeichnung, Art (sehen|machen), Standard-Rollen, setzt voraus; optional „e“ = Standard an auch in
-   eigenen Rollen (siehe rights_roles). Die Standards entsprechen dem bisherigen festen Rollenmodell. */
+   eigenen Rollen (siehe rights_roles), optional „h“ = Erklärung in Alltagssprache, was das Recht genau erlaubt (und was nicht) –
+   erscheint in Verwaltung → Rollen und Rechte unter der Bezeichnung (Auftrag des Inhabers 02.11.2026: „was das genau bedeutet“).
+   Die Standards entsprechen dem bisherigen festen Rollenmodell. */
 const PERMS = [
     'angebot.bearbeiten'       => ['g' => 'Angebot', 'l' => 'Entwurf bearbeiten (Preise, Artikel, Excel-Import, frühere Version laden)', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebot.veroeffentlichen' => ['g' => 'Angebot', 'l' => 'Angebot veröffentlichen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
@@ -23,10 +25,14 @@ const PERMS = [
     'stammdaten.bearbeiten'    => ['g' => 'Stammdaten', 'l' => 'Stammdaten bearbeiten', 'k' => 'machen', 'd' => ['editor'], 'r' => ['stammdaten.sehen']],
     'einkauf.sehen'            => ['g' => 'Einkauf', 'l' => 'Einkauf (Fehlmengen) ansehen', 'k' => 'sehen', 'd' => ['viewer', 'editor'], 'r' => []],
     'einkauf.melden'           => ['g' => 'Einkauf', 'l' => 'Einkauf per E-Mail benachrichtigen', 'k' => 'machen', 'd' => ['editor'], 'r' => ['einkauf.sehen']],
-    'hr.antrag'                => ['g' => 'HR', 'l' => 'Eigenen Urlaub beantragen, Abwesenheitskalender ansehen (nur „abwesend“)', 'k' => 'machen', 'd' => ['viewer', 'editor'], 'r' => []],
-    'hr.verwalten'             => ['g' => 'HR', 'l' => 'Personalstelle: Abwesenheiten mit Grund eintragen (nicht für sich selbst), Mitarbeiter, Excel-Export', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag']],
-    'hr.genehmigen'            => ['g' => 'HR', 'l' => 'Urlaubsanträge genehmigen oder ablehnen (nie den eigenen)', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag']],
-    'hr.uebersicht'            => ['g' => 'HR', 'l' => 'Urlaubsübersicht aller Mitarbeiter: Anspruch, genommen, geplant, Rest, Krank- und Gleittage (nur Anzahl)', 'k' => 'sehen', 'd' => [], 'r' => ['hr.antrag']],
+    'hr.antrag'                => ['g' => 'HR', 'l' => 'Eigenen Urlaub und Gleittage beantragen', 'k' => 'machen', 'd' => ['viewer', 'editor'], 'r' => [],
+                                   'h' => 'Für jeden Mitarbeiter. Sieht nur sich selbst: eigenes Urlaubs- und Gleittage-Konto und eigene Einträge. Kann Urlaub und Gleittage beantragen, zurückziehen und Fehler an die Personalstelle melden. Im Kalender sieht er bei Kollegen nur „abwesend“ – nie den Grund. Geht erst, wenn die Personalstelle ihn im Urlaubsplan zugeordnet hat.'],
+    'hr.verwalten'             => ['g' => 'HR', 'l' => 'Personalstelle: Urlaubsverwaltung pflegen', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag'],
+                                   'h' => 'Für die Personalstelle. Trägt für Kollegen Urlaub, Krank, Gleittage und freie Tage ein (nie für sich selbst) und sieht die Gründe. Pflegt Urlaubsanspruch und Arbeitstage, gewährt Gleittage, erledigt Korrekturmeldungen, stellt Sperren, Ferien und Verfallstag ein, Export für den Steuerberater und Import aus der Zeiterfassung. Genehmigen ist ein eigenes Recht.'],
+    'hr.genehmigen'            => ['g' => 'HR', 'l' => 'Anträge genehmigen oder ablehnen', 'k' => 'machen', 'd' => [], 'r' => ['hr.antrag'],
+                                   'h' => 'Für Vorgesetzte. Sieht offene Urlaubs- und Gleittag-Anträge mit dem Rest des Mitarbeiters, der Vertretung und wer aus der Abteilung gleichzeitig fehlt – und genehmigt oder lehnt ab. Nie den eigenen Antrag. Krankheiten sieht er nicht.'],
+    'hr.uebersicht'            => ['g' => 'HR', 'l' => 'Urlaubsübersicht aller Mitarbeiter ansehen (nur Zahlen)', 'k' => 'sehen', 'd' => [], 'r' => ['hr.antrag'],
+                                   'h' => 'Nur ansehen. Je Mitarbeiter und Jahr die Zahlen: Urlaub (Anspruch, genommen, geplant, Rest), Anzahl der Krank- und Gleittage und der Gleittage-Rest. Keine Zeiträume, Gründe oder Notizen.'],
     'crm.sehen'                => ['g' => 'CRM', 'l' => 'CRM ansehen: Kunden mit Ansprechpartnern, Wiedervorlagen, Pipeline, Aktivitäten, Auswertung', 'k' => 'sehen', 'd' => [], 'r' => []],
     'crm.bearbeiten'           => ['g' => 'CRM', 'l' => 'CRM bearbeiten: Kundenblätter, Ansprechpartner, Interessenten, Aktivitäten erfassen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
     'crm.exportieren'          => ['g' => 'CRM', 'l' => 'CRM-Liste mit Kontaktdaten als CSV herunterladen', 'k' => 'machen', 'd' => [], 'r' => ['crm.sehen']],
@@ -292,7 +298,7 @@ function modul_zugang_durchsetzen(?array $aktion): void
 function rights_catalog(): array
 {
     $out = [];
-    foreach (perms_katalog() as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m'], 'eigene' => !empty($p['e'])];
+    foreach (perms_katalog() as $k => $p) $out[] = ['key' => $k, 'group' => $p['g'], 'label' => $p['l'], 'kind' => $p['k'], 'requires' => $p['r'], 'default' => $p['d'], 'modul' => $p['m'], 'eigene' => !empty($p['e']), 'hilfe' => (string)($p['h'] ?? '')];
     return $out;
 }
 /* Rollenübersicht für die Verwaltung (Administrator): Rechte, Name, Anzahl Mitarbeiter */

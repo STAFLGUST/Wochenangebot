@@ -57,6 +57,10 @@ code, rr = A.call('rechte')
 check('Übersicht: Rollen, Module und Katalog', code == 200 and [r['id'] for r in rr['rollen']] == ['admin', 'viewer', 'editor']
       and {m['id'] for m in rr['module']} >= {'angebot', 'bestand', 'hr', 'verwaltung', 'import'}, code)
 ZUGANG = {p['key'] for p in rr['catalog'] if p['kind'] == 'zugang'}
+KAT = {p['key']: p for p in rr['catalog']}
+check('Katalog: Erklärung je Recht (HR), sonst leer – Bezeichnungen in Alltagssprache', all(len(KAT[k]['hilfe']) > 80 for k in ('hr.antrag', 'hr.verwalten', 'hr.genehmigen', 'hr.uebersicht'))
+      and KAT['bestand.sehen']['hilfe'] == '' and KAT['hr.verwalten']['label'] == 'Personalstelle: Urlaubsverwaltung pflegen'
+      and 'nie für sich selbst' in KAT['hr.verwalten']['hilfe'] and 'nie den Grund' in KAT['hr.antrag']['hilfe'], {k: KAT[k]['label'] for k in KAT if k.startswith('hr.')})
 check('Modulzugang für jede Kachel des Registers', ZUGANG == {f'{m}.zugang' for m in ['angebot', 'bestand', 'leergut', 'crm', 'rewe', 'qs', 'einkauf', 'containerimport', 'import', 'hr', 'marketing', 'controlling', 'verwaltung', 'sicherheit']}, sorted(ZUGANG))
 check('Modulzugang gehört zum Modul, Standard: beide Standardrollen (außer Register-Feld zugang_rollen: Sicherheit und Controlling ohne)',
       all(p['modul'] == p['key'].split('.')[0] and p['default'] == ([] if p['key'] in ('sicherheit.zugang', 'controlling.zugang') else ['viewer', 'editor']) for p in rr['catalog'] if p['kind'] == 'zugang'))
@@ -224,6 +228,11 @@ with sync_playwright() as pw:
     a.fill('#rl-name', 'Einkauf')
     a.check('[data-rl-key="einkauf.melden"]')
     check('UI: Recht hakt seine Voraussetzung an', a.is_checked('[data-rl-key="einkauf.sehen"]'))
+    hr_text = a.inner_text('[data-rl-modul="hr"] .rl-rechte')
+    check('UI: HR-Rechte mit Erklärung und Voraussetzung, andere Module unverändert', a.locator('[data-rl-modul="hr"] .rl-hilfe').count() == 4
+          and 'sieht die Gründe' in hr_text and 'Setzt „Eigenen Urlaub und Gleittage beantragen“ voraus' in hr_text
+          and a.locator('[data-rl-modul="einkauf"] .rl-hilfe').count() == 0, hr_text[:300])
+    a.locator('[data-rl-modul="hr"]').screenshot(path=SH + '/rollen-hr-erklaerung.png')
     check('UI: ohne Modulzugang abgeblendet mit Hinweis', 'zu' in a.get_attribute('[data-rl-modul="einkauf"]', 'class') and a.is_visible('[data-rl-modul="einkauf"] .rl-mod-hinw'))
     a.click('[data-rl-key="einkauf.zugang"]')
     check('UI: Schalter öffnet das Modul', a.is_checked('[data-rl-key="einkauf.zugang"]') and 'zu' not in a.get_attribute('[data-rl-modul="einkauf"]', 'class').split())
