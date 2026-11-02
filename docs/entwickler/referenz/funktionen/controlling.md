@@ -2,7 +2,49 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-15 Dateien, 213 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 257 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+
+## `app/api/module/controlling/arbeitszeit.php`
+
+_Controlling · Bereich Arbeitszeit (Auftrag des Inhabers 02.11.2026)_
+
+**Werte lesen**
+
+- `az_minuten(v)` – „HH:MM“ bzw. „-HH:MM“ (auch über 24 Stunden) oder Excel-Bruchteil eines Tages → Minuten; leer → null; ungültig → false
+- `az_uhrzeit(v)` – Uhrzeit eines Stempels „HH:MM“ (00:00–23:59) bzw. Excel-Bruchteil → „HH:MM“; leer → null; ungültig → false
+- `az_datum(v)` – Datum „TT-MM-JJJJ“, „TT.MM.JJJJ“, „JJJJ-MM-TT“ oder Excel-Seriennummer → „JJJJ-MM-TT“; ungültig → null
+- `az_text(v, max)`
+- `az_person_id(nr, name)` – Schlüssel eines Mitarbeiters: Personalnummer, sonst Name (klein) – als kurze, unveränderliche Kennung
+- `az_fehler(t)` – Stempelfehler eines Tages (ohne „laufend“)
+
+**Zeitbericht lesen (Importzentrale: daten = { blaetter: [{ name, grid }] })**
+
+- `az_zeitbericht(e)` – Ergebnis: tage (Schlüssel „pid\|JJJJ-MM-TT“ → Tag), personen (pid → name, nr, abt), von, bis, fehler (Zeilen), zeilen (gelesen)
+- `az_tag_speichern(t, laufend)` – Gespeicherte Form eines Tages: [Soll, Ist, Abwesenheit, Pause, Saldo, Stempel, Fehler, laufend] (Minuten)
+
+**Speicher**
+
+- `az_index()`
+- `az_jahr_lesen(jahr)`
+- `az_tag(d)`
+- `az_anzahl(n)`
+- `az_stunden(min)`
+- `az_vergleich(in)` – Vergleich Datei ↔ gespeichert im Zeitraum der Datei: je Tag neu/geaendert/unveraendert, gespeicherte Tage ohne Gegenstück entfallen
+
+**Importzentrale**
+
+- `arbeitszeit_import_vorschau(e, me)`
+- `arbeitszeit_import_uebernehmen(e, me)`
+
+**Auswertung**
+
+- `az_grunddaten(me)` – Grunddaten: Stand, Jahre, Abteilungen, Mitarbeiter (für Filter und Suche), Fehlerarten
+- `az_anfrage(q, index)` – Anfrage: von/bis „JJJJ-MM“ (Standard: Jahr des jüngsten Tages), abt (kommagetrennt, „_“ = ohne Abteilung), p (Mitarbeiter)
+- `az_tage(a, index)` – Tage des Zeitraums mit Filter: liefert [pid, datum, tag]
+- `az_leer()`
+- `az_addieren(s, t)`
+- `az_auswertung(q, me)` – Auswertung: Summen, Monate, je Mitarbeiter, je Abteilung, Stempelfehler (alle Werte in Minuten)
+- `az_detail(q, me)` – Pop-up: alle Tage eines Mitarbeiters im Zeitraum (?p=…&von&bis)
 
 ## `app/api/module/controlling/bestand.php`
 
@@ -132,6 +174,44 @@ _Controlling · Umsatzdaten aus der Warenwirtschaft (Kundenumsatztabelle_
 
 - `umsatzdaten_kaeufer(artikel, von, bis)` – Käufer von Artikeln vom Tag $von bis $bis (JJJJ-MM-TT): je Artikel und Kunde Menge (Tausendstel, berechnete Positionen einschließlich Gutschriften), Käufe …
 - `umsatzdaten_artikelliste()` – Artikel in den Umsatzdaten mit Namen aus den Artikelstammdaten (Nummer => Name; ohne Stammsatz „Artikel <Nr>“)
+
+## `app/module/controlling/arbeitszeit.js`
+
+_STAFL-Plattform · Controlling · Bereich Arbeitszeit (Auftrag des Inhabers 02.11.2026)_
+
+**Formate (Werte in Minuten)**
+
+**Gerüst**
+
+- `anfrage(extra)`
+- `laden()`
+
+**Darstellung**
+
+- `standText()`
+- `kachel(name, wert, sub, extra)`
+- `kennzahlen()`
+- `verlauf()`
+- `sortiert(liste)`
+- `personenHtml()`
+- `abteilungenHtml()`
+- `fehlerHtml()`
+- `liste()`
+- `zeichne()`
+- `listeNeu()`
+
+**Pop-up: Tage eines Mitarbeiters**
+
+- `detailOeffnen(pid)`
+
+**CSV der Liste**
+
+- `csv()`
+
+**Ereignisse**
+
+- `letzterMonat()` – jüngster vollständig importierter Monat: endet der Zeitbericht vor dem Monatsende, der Monat davor
+- `verbinden()`
 
 ## `app/module/controlling/bestand.js`
 
@@ -336,6 +416,10 @@ _Controlling (Modul controlling, Oberfläche controlling.intern unter /module/co
 - `anmelden(user, pw, ip, breite, thema, hoehe, ziel)`
 - `text(pg, sel)`
 - `anmelden(user, pw, ip, breite, thema, hoehe)`
+- `az_zeile(vor, nach, datum, k, g, soll, ist, saldo, nr, abt, abw, pause, bemerkung)`
+- `zb(cl, daten, stand)`
+- `text(pg, sel)`
+- `neu(breite, thema, ip)`
 
 ## `tests/e2e/test_controlling_umsatzdaten.py`
 

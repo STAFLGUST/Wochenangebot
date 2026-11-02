@@ -41,3 +41,15 @@ oberflaeche = "controlling.intern"
 # Pop-up: ein Artikel bzw. eine Gruppe mit jeder Liste des Zeitraums
 [aktion.controlling_bestand_detail]
 oberflaeche = "controlling.intern"
+
+# Arbeitszeit: Zeitbericht der Zeiterfassung (Import: Importart „zeitbericht“ der Importzentrale, deren Wartung über
+# controlling_arbeitszeit_daten an dieser Oberfläche hängt) – Soll, Ist, Saldo, Stempelfehler (module/controlling/arbeitszeit.php)
+[aktion.controlling_arbeitszeit_daten]
+oberflaeche = "controlling.intern"
+
+[aktion.controlling_arbeitszeit]
+oberflaeche = "controlling.intern"
+
+# Pop-up: alle Tage eines Mitarbeiters im Zeitraum
+[aktion.controlling_arbeitszeit_detail]
+oberflaeche = "controlling.intern"

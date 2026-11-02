@@ -160,6 +160,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `arbeitszeit.php` | controlling | Controlling · Bereich Arbeitszeit (Auftrag des Inhabers 02.11.2026) |
 | `bestand.php` | controlling | Controlling · Bereich Bestandsverlauf (Auftrag des Inhabers 02.11.2026) |
 | `controlling.php` | controlling | Modul Controlling · gemeinsame Grundlage aller Bereiche (Umsatzstatistik; geplant |
 | `import.php` | controlling | Importvertrag des Controllings – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). |
@@ -317,6 +318,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
+| `arbeitszeit-import.js` | controlling | STAFL-Plattform · Controlling · Leser der Importart „zeitbericht“ (Verwaltung → Import, window.WA.importLeser). |
+| `arbeitszeit.js` | controlling | STAFL-Plattform · Controlling · Bereich Arbeitszeit (Auftrag des Inhabers 02.11.2026) |
 | `bestand.js` | controlling | STAFL-Plattform · Controlling · Bereich Bestandsverlauf (Designvorschlag 02.11.2026) |
 | `controlling.css` | controlling | STAFL-Plattform · Controlling – Gestaltung „Liquid Glass“ wie Dashboard, HR, CRM und Marketing: warmer Grund mit drei weichen Farbflächen, Glasflächen, kein Rot im Hintergrund. |
 | `controlling.js` | controlling | STAFL-Plattform · Controlling – Grundgerüst der Seite |
