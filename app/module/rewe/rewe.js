@@ -44,7 +44,7 @@
   const obj = (m) => (m && typeof m === 'object' && !Array.isArray(m) ? m : {});   // PHP liefert leere Zuordnungen als []
   const zahl = (n) => Number(n).toLocaleString('de-DE');
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
-  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
+  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
 
   /* ---------- Kalenderwochen (ISO, „JJJJ-WW“) ---------- */

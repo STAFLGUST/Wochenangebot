@@ -82,7 +82,7 @@
   function kundenListe() {
     const d = D.d, alle = geordnet(d.kunden.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), mitMenge = d.dim === 'artikel', k = F.rangKennzahl(D.rang);
     const cls = `${mitMenge ? ' mit-menge mit-preis' : ''}${d.ek ? ' mit-ek' : ''}`;   // Artikel: mit Ø Preis je Käufer (Preisspiegel)
-    const kopf = `<div class="ctl-ud-zeile kopf${cls}" aria-hidden="true"><span>Kunde</span>${mitMenge ? '<span>Menge</span>' : ''}<span>Umsatz</span>${mitMenge ? '<span>Ø Preis</span>' : ''}${d.ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span><span></span></div>`;
+    const kopf = `<div class="ctl-ud-zeile kopf${cls}" aria-hidden="true"><span>Kunde</span>${mitMenge ? '<span>Menge</span>' : ''}<span>Umsatz</span>${mitMenge ? '<span>Ø Preis</span>' : ''}${d.ek ? '<span>DB</span><span>Spanne</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span><span></span></div>`;
     return `<section class="ctl-ud-teil" aria-label="${d.dim === 'artikel' ? 'Käufer dieses Artikels' : 'Kunden'}">
       <div class="ctl-ud-teilkopf"><h3>${d.dim === 'artikel' ? 'Wer kauft diesen Artikel?' : 'Kunden'} <small>${esc(F.ganz(d.kundenGesamt))}</small></h3>${suchfeld('Kunde suchen')}</div>
       ${alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile${cls}" data-ud-oeffnen="kunde" data-wert="${esc(z.nr)}">
@@ -107,7 +107,7 @@
     const d = D.d, gekauft = d.artikel.filter((z) => z.kaeufe > 0), alle = geordnet(gekauft.filter(passt)), zeigen = D.alle ? alle : alle.slice(0, LISTE_ANFANG), k = F.rangKennzahl(D.rang);   // gekauft = Kauf im Zeitraum (keine reine Gutschrift)
     const verloren = d.vorjahr ? d.artikel.filter((z) => !(z.kaeufe > 0) && z.vj && z.vj.umsatz > 0).slice(0, 12) : [];
     const ek = d.ek;
-    const kopf = `<div class="ctl-ud-zeile kopf artikel${ek ? ' mit-ek' : ''}" aria-hidden="true"><span>Artikel</span><span>Menge</span><span>Umsatz</span><span>Ø Preis</span>${ek ? '<span>DB</span><span>%</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span></div>`;
+    const kopf = `<div class="ctl-ud-zeile kopf artikel${ek ? ' mit-ek' : ''}" aria-hidden="true"><span>Artikel</span><span>Menge</span><span>Umsatz</span><span>Ø Preis</span>${ek ? '<span>DB</span><span>Spanne</span>' : ''}<span>${d.vorjahr ? '± VJ' : ''}</span><span>Zuletzt</span></div>`;
     return (verloren.length ? `<div class="ctl-ud-verloren" role="note"><b>Nicht mehr gekauft – im Vorjahr ja, in diesem Zeitraum nicht</b>
         <div>${verloren.map((z) => `<button type="button" class="ctl-ud-verlchip" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">${esc(z.name)} <small>VJ ${esc(F.euroKurz(z.vj.umsatz))}</small></button>`).join('')}</div>
         <small>Ansatz fürs nächste Gespräch mit dem Kunden.</small></div>` : '')

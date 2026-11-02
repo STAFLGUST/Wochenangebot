@@ -44,8 +44,8 @@
     const p = (price - std.value) / std.value * 100;
     const r = Math.round(p);
     const cls = Math.abs(p) < 1 ? 'ab-gleich' : p < -10 ? 'ab-stark' : p < 0 ? 'ab-unter' : 'ab-ueber';
-    const txt = Math.abs(p) < 1 ? 'wie Wochenpreis' : `${Math.abs(r)} % ${p < 0 ? 'unter' : 'über'} Wochenpreis`;
-    return `<span class="ez-abw ${cls}" title="${esc(txt)}" data-abw="${r}"><i></i>${Math.abs(p) < 1 ? '±0 %' : (p < 0 ? '−' : '+') + Math.abs(r) + ' %'}</span>`;
+    const txt = Math.abs(p) < 1 ? 'wie Wochenpreis' : `${window.STAFL_FORMAT.prozent(Math.abs(p) / 100)} ${p < 0 ? 'unter' : 'über'} Wochenpreis`;
+    return `<span class="ez-abw ${cls}" title="${esc(txt)}" data-abw="${r}"><i></i>${Math.abs(p) < 1 ? '±0,0 %' : window.STAFL_FORMAT.veraenderung(p / 100)}</span>`;
   }
   const { stdText, bestandHTML } = W.artikelwahl;   // Wochenpreis- und Bestandsanzeige wie im Auswahlfenster
 

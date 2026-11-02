@@ -70,7 +70,7 @@ with sync_playwright() as pw:
         return page.locator('.stab tr.srow').filter(has=page.locator('td.s-code', has_text=code))
     check('current and previous prices visible', '12,00' in row('900001').locator('.s-vk').inner_text() and '10,00' in row('900001').locator('.s-prev').inner_text())
     check('recorded stock with unit', row('900001').locator('.s-kg').inner_text() == '12,50 kg')
-    check('requested column order', [x.replace('\n', ' ') for x in page.locator('.stab thead th').all_inner_texts()] == ['Art.-Nr.', 'Art. Bezeichnung', 'Aktueller Preis KW ' + str(r['prices']['current']['week']) + '/' + str(r['prices']['current']['year']), 'Preis Vorwoche KW ' + str(r['prices']['previous']['week']) + '/' + str(r['prices']['previous']['year']), 'Eingelagerter Bestand', 'Kürz. MHD', 'Kg kürz. MHD', 'Erfasster Bestand', 'Gesamt verfügbar', 'Erwartete Zugänge'])
+    check('requested column order', [x.replace('\n', ' ') for x in page.locator('.stab thead th').all_inner_texts()] == ['Art.-Nr.', 'Art. Bezeichnung', 'Aktueller Preis KW ' + str(r['prices']['current']['week']) + '/' + str(r['prices']['current']['year']), 'Preis Vorwoche KW ' + str(r['prices']['previous']['week']) + '/' + str(r['prices']['previous']['year']), 'Eingelagerter Bestand', 'Kürz. MHD', 'Menge kürz. MHD', 'Erfasster Bestand', 'Gesamt verfügbar', 'Erwartete Zugänge'])
     check('price change removed', page.locator('.s-change, .st-price-change').count() == 0)
     kg_erfasst = lambda c: row(c).locator('.s-registered').inner_text().split('\n')[0]   # noqa: E731 – erste Zeile ohne ETA
     check('multiple incoming quantities summed', kg_erfasst('900001') == '50,00 kg' and row('900001').locator('.s-total-kg').inner_text() == '62,50 kg')
@@ -86,8 +86,8 @@ with sync_playwright() as pw:
     row('900001').locator('[data-incoming]').click(); page.wait_for_selector('#dlg-stock-item[open]')
     check('arrival button opens focused dialog', page.locator('#sa-title').inner_text() == 'Erwartete Zugänge' and page.locator('#dlg-stock-item .zutab tbody tr').count() == 2 and '22.10.2026' in page.locator('#dlg-stock-item').inner_text() and '30,00 kg' in page.locator('#dlg-stock-item').inner_text() and page.locator('#dlg-stock-item .lottab').count() == 0)
     zk = page.locator('#dlg-stock-item .zutab thead th').all_inner_texts()
-    check('dialog: table like the stored lots (Partie, ETA, MHD, Kolli, Kg netto), lot TEST-A',
-          [x.upper() for x in zk][:5] == ['PARTIE', 'ETA', 'MHD', 'KOLLI', 'KG NETTO'] and page.locator('#dlg-stock-item .zutab tbody tr').first.locator('td').first.inner_text() == 'TEST-A', zk)
+    check('dialog: table like the stored lots (Partie, ETA, MHD, Kolli, Netto), lot TEST-A',
+          [x.upper() for x in zk][:5] == ['PARTIE', 'ETA', 'MHD', 'KOLLI', 'NETTO'] and page.locator('#dlg-stock-item .zutab tbody tr').first.locator('td').first.inner_text() == 'TEST-A', zk)
     page.screenshot(path=os.path.join(SH, 'stock-incoming-dialog.png'))
     page.keyboard.press('Escape')
     row('900005').locator('[data-incoming]').focus(); page.keyboard.press('Enter'); page.wait_for_selector('#dlg-stock-item[open]')

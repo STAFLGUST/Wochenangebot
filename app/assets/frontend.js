@@ -31,9 +31,11 @@ const store = {
   del(k) { try { localStorage.removeItem(STORAGE + k); } catch { /* ignore */ } },
 };
 
-const fmtNum = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });   // wie Bestellwunsch, E-Mail und Abrechnung (Cent)
+/* Zahlen und Einheiten einheitlich auf allen Seiten (app/assets/format.js): Preise mindestens 2 Nachkommastellen, mehr nur,
+   wenn der Preis sie wirklich hat (nie still runden); Beträge immer 2; Mengen bis 2 ohne Endnullen. */
+const F = window.STAFL_FORMAT;
+const fmtNum = { format: (v) => F.zahl(v, 2, 4) };
 const fmtInt = new Intl.NumberFormat('de-DE');
-const fmtPct = new Intl.NumberFormat('de-DE', { style: 'percent', maximumFractionDigits: 0 });
 const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 const dmy = (iso) => { const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
 const dm = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
@@ -291,7 +293,7 @@ const bisText = (m) => (m.gueltigBis ? 'gültig bis ' + String(m.gueltigBis).spl
 const kwKurz = (m) => (m.einzel ? bisText(m) : `KW ${m.week ?? '?'}/${m.year ?? '?'}`);
 function renderStatic() {
   const m = DATA.meta;
-  const kw = m.einzel ? esc(bisText(m)) : m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm"> · ${esc(m.year)}</span>` : ''}` : 'KW ?';
+  const kw = m.einzel ? esc(bisText(m)) : m.week ? `KW ${esc(m.week)}${m.year ? `<span class="opt-sm">/${esc(m.year)}</span>` : ''}` : 'KW ?';
   renderStaticTitle();   // Fenstertitel (bei Einzelangeboten „gültig bis …“ statt Kalenderwoche)
   if (OFFER) { const h = $('#topbar h1'); if (h && h.firstChild && h.firstChild.nodeType === 3) h.firstChild.textContent = offerTitle() + ' '; }
   $('#company').textContent = COMPANY;
@@ -363,9 +365,9 @@ function buildFilters() {
   const span = DATA.minPrice != null ? `Spanne im Angebot: ${fmtNum.format(DATA.minPrice)} – ${fmtNum.format(DATA.maxPrice)} €/kg` : '';
   parts.splice(4, 0, fdrop('price', 'Preis je kg', `<fieldset class="facet"><legend>Preis je kg</legend>
     <div class="range">
-      <div class="field"><input id="pmin" inputmode="decimal" autocomplete="off" placeholder="von" aria-label="Mindestpreis in Euro je Kilogramm" value="${state.min != null ? fmtNum.format(state.min) : ''}"><span class="unit">€</span></div>
+      <div class="field"><input id="pmin" inputmode="decimal" autocomplete="off" placeholder="von" aria-label="Mindestpreis in Euro je Kilogramm" value="${state.min != null ? fmtNum.format(state.min) : ''}"><span class="unit">€/kg</span></div>
       <span aria-hidden="true">–</span>
-      <div class="field"><input id="pmax" inputmode="decimal" autocomplete="off" placeholder="bis" aria-label="Höchstpreis in Euro je Kilogramm" value="${state.max != null ? fmtNum.format(state.max) : ''}"><span class="unit">€</span></div>
+      <div class="field"><input id="pmax" inputmode="decimal" autocomplete="off" placeholder="bis" aria-label="Höchstpreis in Euro je Kilogramm" value="${state.max != null ? fmtNum.format(state.max) : ''}"><span class="unit">€/kg</span></div>
     </div><p class="hint" id="price-hint" data-default="${esc(span)}">${esc(span)}</p></fieldset>`));
   $('#filters-body').innerHTML = parts.join('');
   syncDrops();
@@ -396,7 +398,7 @@ function updateFacetUI() {
   const dp = $('.fdrop[data-fd="price"]');
   if (dp) {
     dp.classList.toggle('on', state.min != null || state.max != null);
-    dp.querySelector('.fd-val').textContent = state.min != null || state.max != null ? `${state.min != null ? fmtNum.format(state.min) : '…'}–${state.max != null ? fmtNum.format(state.max) : '…'} €` : '';
+    dp.querySelector('.fd-val').textContent = state.min != null || state.max != null ? `${state.min != null ? fmtNum.format(state.min) : '…'} – ${state.max != null ? fmtNum.format(state.max) : '…'} €/kg` : '';
   }
   const n = activeFilterCount();
   $('#btn-reset').disabled = !n;
@@ -412,7 +414,7 @@ function describeFilters() {
   const parts = [];
   if (state.q.trim()) parts.push(`Suche „${state.q.trim()}“`);
   for (const f of FACETS) if (state[f.set].size) parts.push(`${f.label}: ${[...state[f.set]].map((v) => optionLabel(f, v)).join(', ')}`);
-  if (state.min != null || state.max != null) parts.push(`Preis ${state.min != null ? fmtNum.format(state.min) : '…'}–${state.max != null ? fmtNum.format(state.max) : '…'} €/kg`);
+  if (state.min != null || state.max != null) parts.push(`Preis ${state.min != null ? fmtNum.format(state.min) : '…'} – ${state.max != null ? fmtNum.format(state.max) : '…'} €/kg`);
   if (state.tab === 'fav') parts.unshift('Merkliste');
   return parts.join(' · ');
 }
@@ -493,7 +495,7 @@ function renderTable(list, grouped) {
    Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
    sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
 const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '–');
-const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? ' – ' + m.year : ''}` : 'Angebot'); };
+const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot'); };
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
 const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
 /* Preisspalten einer Gruppe: Zusatzpreise links, Hauptpreis rechts – wie in der Druckliste (Flugware | Schiffsware) */
@@ -571,7 +573,7 @@ function plSections(units) {
   return out;
 }
 const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
-/* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€ / kg“ steht über der Preisspalte. */
+/* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€/kg“ steht über der Preisspalte. */
 function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
   const screen = mode !== 'print', werb = mode === 'werb';
@@ -581,7 +583,7 @@ function plBlockHTML(b, mode) {
     <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
   const cg = `<colgroup><col class="w-code"><col>${labels.map(() => '<col class="w-price">').join('')}${screen ? '<col class="w-fav">' : ''}</colgroup>`;
-  return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€ / kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
+  return `<div class="al-grp"><table class="al-tab">${cg}<thead><tr class="al-h"><th colspan="${span}" scope="colgroup"><div class="al-hin"><span class="al-gt">${u.title}${cont ? ' <span class="al-cont">Forts.</span>' : ''}</span><span class="al-eh">€/kg</span>${screen ? '<span class="al-fh" aria-hidden="true"></span>' : ''}</div></th></tr>
     ${cols > 1 ? `<tr class="al-sub"><th colspan="2"></th>${labels.map((l) => `<th>${esc(l)}</th>`).join('')}${screen ? '<th></th>' : ''}</tr>` : ''}</thead>
     <tbody>${items.map(row).join('')}</tbody></table></div>`;
 }
@@ -916,9 +918,9 @@ function renderCompare(sets = validCompareSets()) {
         <label>Teilstück<span class="select"><select id="cmp-cut">${cuts.map((s) => `<option value="${esc(s.cut)}"${s.cut === cmpSel.cut ? ' selected' : ''}>${esc(s.cut)} (${s.list.length})</option>`).join('')}</select>${icon('chev', 'sm')}</span></label>
       </div>
       <div class="cmp-stats">
-        <div><span>Günstigste</span><strong>${fmtNum.format(lo)} €</strong></div>
-        <div><span>Teuerste</span><strong>${fmtNum.format(hi)} €</strong></div>
-        <div><span>Spanne</span><strong>${fmtNum.format(hi - lo)} €</strong></div>
+        <div><span>Günstigste</span><strong>${fmtNum.format(lo)} €/kg</strong></div>
+        <div><span>Teuerste</span><strong>${fmtNum.format(hi)} €/kg</strong></div>
+        <div><span>Spanne</span><strong>${fmtNum.format(hi - lo)} €/kg</strong></div>
       </div>
       ${cmpListHTML(set.list, null)}
       <p class="hint">Preise je kg laut Angebotsliste. Positionen unterscheiden sich teils in Zuschnitt, Gewichtsklasse, Qualität oder Zustand – bitte Bezeichnung beachten.</p>
@@ -956,7 +958,7 @@ function buildPrint({ scope, layout, grouped }) {
   const scopeText = scope === 'all' ? 'Gesamtes Angebot' : scope === 'fav' ? 'Merkliste' : (describeFilters() || 'Gesamtes Angebot');
   const stand = PUBLISHED_AT ? new Date(PUBLISHED_AT).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : today();   // wie in der Angebotsliste: Stand der Veröffentlichung
   const head = `<header class="p-head">${PL_LOGO.replace('class="al-logo"', 'class="al-logo p-logo"')}
-      <div class="p-ht"><h1 class="p-title">${esc(offerTitle())} <span>${m.einzel ? esc(bisText(m)) : `KW ${esc(m.week ?? '?')} / ${esc(m.year ?? '?')}`}</span></h1>
+      <div class="p-ht"><h1 class="p-title">${esc(offerTitle())} <span>${m.einzel ? esc(bisText(m)) : `KW ${esc(m.week ?? '?')}/${esc(m.year ?? '?')}`}</span></h1>
         <div class="p-sub">${esc(m.notice || 'Angebot')}${m.einzel && m.nr ? ' ' + esc(m.nr) : ''}${m.einzel && m.kunde ? ' für ' + esc(m.kunde) : ''}${m.weekStart ? ` · Angebotswoche ${dm(m.weekStart)}–${dmy(m.weekEnd)}` : ''} · Preise in € je kg · „–“ = ohne Preisangabe</div></div>
       <div class="p-meta"><strong>${esc(scopeText)}</strong><br>${plural(list.length, 'Position', 'Positionen')}<br>Stand: ${esc(stand)}</div>
     </header>`;
@@ -1030,7 +1032,7 @@ function exportCSV(list, suffix) {
     const p = it.price;
     lines.push([
       it.code || '', it.name, it.category, it.origin || '', it.group, it.section, COND_LABEL[it.condition], it.features.join(', '),
-      p.status === 'value' ? fmtNum.format(p.value) : '',
+      p.status === 'value' ? String(p.value).replace('.', ',') : '',
       (p.label ? p.label + ': ' : '') + PRICE_STATUS_LABELS[p.status],
       it.altPrices.map((a) => `${a.label}: ${priceShort(a)}`).join(' | '),
       m.einzel ? (m.gueltigBis ? String(m.gueltigBis).split('-').reverse().join('.') : '') : m.week ? `KW ${m.week}/${m.year ?? ''}` : '',
@@ -1454,10 +1456,10 @@ function openOrder() {
   const min = new Date().toLocaleDateString('sv-SE');   // heutiges Datum in Ortszeit (toISOString wäre UTC – kurz nach Mitternacht „gestern“)
   $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Bestellwunsch prüfen</h2><p>${esc(offerTitle())}${m.einzel ? ` · ${esc(bisText(m))}` : m.week ? ` · KW ${esc(m.week)}/${esc(m.year || '')}` : ''} · ${esc(KUNDE.firma)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
     <div class="dlg-body">
-      <table class="otab"><thead><tr><th>Artikel</th><th class="r">Menge kg</th><th class="r">Preis €/kg</th><th class="r">Summe</th><th></th></tr></thead><tbody>
+      <table class="otab"><thead><tr><th>Artikel</th><th class="r">Menge kg</th><th class="r">Preis</th><th class="r">Summe</th><th></th></tr></thead><tbody>
       ${orderLines().map(({ it, q }) => `<tr><td><div class="o-name">${esc(it.name)}</div><div class="sub">${esc([it.code, it.group].filter(Boolean).join(' · '))}</div></td>
         <td class="r"><input class="qty" type="text" inputmode="decimal" data-qty="${esc(it.id)}" value="${fmtQty.format(q)}" aria-label="Menge in kg: ${esc(it.name)}"></td>
-        <td class="r">${it.price.status === 'value' ? fmtEur.format(it.price.value) : '<span class="muted">auf Anfrage</span>'}</td>
+        <td class="r">${it.price.status === 'value' ? fmtNum.format(it.price.value) + ' €/kg' : '<span class="muted">auf Anfrage</span>'}</td>
         <td class="r o-sum" data-sum="${esc(it.id)}">${it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'}</td>
         <td class="r"><button type="button" class="ibtn" data-order="rm" data-id="${esc(it.id)}" aria-label="Position entfernen: ${esc(it.name)}">${icon('x', 'sm')}</button></td></tr>`).join('')}
       </tbody><tfoot id="or-foot">${orderFootHTML(t)}</tfoot></table>
@@ -1584,7 +1586,7 @@ async function openCustomerOrders(offset = 0, nr = '') {
         <p class="muted">${esc(o.angebotName || '')} · eingegangen am ${esc(custDate(o.t))}${o.termin ? ' · Wunschtermin ' + esc(dmy(o.termin)) : ''}${o.referenz ? ' · Ihre Referenz ' + esc(o.referenz) : ''}</p>
         ${o.bemerkung ? `<p class="co-note">${esc(o.bemerkung)}</p>` : ''}
         <table class="co-tab"><thead><tr><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
-        ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtQty.format(p.qty)} kg</td><td class="r">${p.price == null ? 'a. Anfr.' : fmtEur.format(p.price) + ' €'}</td><td class="r">${p.sum == null ? '–' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
+        ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtQty.format(p.qty)} kg</td><td class="r">${p.price == null ? 'auf Anfrage' : fmtNum.format(p.price) + ' €/kg'}</td><td class="r">${p.sum == null ? '–' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
         </tbody><tfoot><tr><td colspan="3"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr><td colspan="3">Frachtanteil (unter ${fmtQty.format(o.fracht.unter)} kg)</td><td class="r">${fmtEur.format(o.fracht.kosten)} €</td></tr><tr><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total + o.fracht.kosten)} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;

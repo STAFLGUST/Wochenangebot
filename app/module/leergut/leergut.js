@@ -50,7 +50,7 @@
   const vzKlasse = (n) => (n > 0 ? 'lg-plus' : n < 0 ? 'lg-minus' : 'lg-null');
   const vzHtml = (n) => `<span class="${vzKlasse(n)}">${vz(n)}</span>`;
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
-  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
+  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const euro = (n) => Number(n).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
   const lm = (id) => (S.d.lademittel.find((l) => l.id === id) || { id, name: id, wert: null });
   const kurz = (id) => KURZ[id] || lm(id).name;

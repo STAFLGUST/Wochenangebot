@@ -13,6 +13,28 @@ Gewohnheiten, die den Code lesbar und sicher halten.
 - Fehlermeldungen sagen, was zu tun ist („Bitte erneut anmelden.“, „Dafür fehlt Ihnen die Berechtigung. Bitte an
   einen Administrator wenden.“).
 
+## Zahlen und Einheiten (Vorgabe des Inhabers 02.11.2026: „überall gleich“)
+
+Alle Seiten formatieren über **`window.STAFL_FORMAT`** aus `app/assets/format.js` (lädt jede Seite direkt nach
+`theme.js`); keine eigenen Formatierer mehr in Modulen. Geprüft in der Testgruppe `einheit`.
+
+| Größe | Funktion | Ausgabe |
+| --- | --- | --- |
+| Betrag | `euro(v)` | `1.234,50 €` – immer 2 Nachkommastellen |
+| Betrag in einer Kennzahl-Kachel | `euroKachel(v)` | wie `euro`, erst ab 100 Mio. kurz: `123,46 Mio. €` (voller Wert im Tooltip) |
+| Preis je kg | `euroKg(v)` | `12,35 €/kg` – mindestens 2 Nachkommastellen, mehr nur, wenn der Preis sie hat (nie still runden) |
+| Menge | `kg(v)` | `1.782,50 kg` – immer kg (nie „t“), 2 Nachkommastellen wie Bestand und PDF |
+| Menge als Summe (Auswertung, Kachel) | `kgSumme(v)` | `1.783 kg` ab 100 kg ganz, darunter bis 1 Nachkommastelle |
+| Anteil | `prozent(anteil)` | `12,3 %` (Eingabe als Bruch 0,123) |
+| Veränderung | `veraenderung(anteil)`, `pp(anteil)`, `differenz(v, einheit)` | `+12,3 %`, `−5,0 %`, `±0,0 %`; `+1,2 Pp`; `+0,50 €/kg` |
+| Datum | `datum(d)`, `datumZeit(d)`, `kw(w, j)` | `02.11.2026`, `02.11.2026, 14:05`, `KW 45/2026` (Diagrammachse kurz `KW 45`) |
+
+- Minus als echtes Minuszeichen `−`, zwischen Zahl und Einheit ein Leerzeichen; fehlender Wert `—`, Null ist ein Wert.
+- **Tabellen:** Die Einheit steht am Wert, nicht im Spaltenkopf („Menge“, „Preis“, „Summe“). Ausnahme: Eingabespalten und
+  dichte Bearbeitungstabellen (Editor) – dort steht sie im Kopf („Preis €/kg“, „Menge kg“) und nicht zusätzlich in der Zelle.
+- Beschriftungen ausgeschrieben: „Menge“ statt „Kg“, „auf Anfrage“ (nur die gedruckte Angebotsliste kürzt „a. Anfr.“).
+- **CSV und Excel** bleiben maschinenlesbar: Zahl ohne Tausenderpunkt und ohne Einheit, die Einheit im Spaltenkopf.
+
 ## Namen
 
 | Was | Muster | Beispiel |

@@ -22,7 +22,7 @@ with sync_playwright() as pw:
     check('sections as headings', pg.locator('.al-st').count() == 4 and 'Eigene Zerlegung' in pg.locator('.al-st').first.inner_text(), pg.locator('.al-st').count())
     check('one block per group, every article exactly once', pg.locator('.al-grp').count() >= 30 and pg.locator('.al tr.row').count() == 276
           and len(set(pg.eval_on_selector_all('.al tr.row', 'rs => rs.map(r => r.dataset.id)'))) == 276, (pg.locator('.al-grp').count(), pg.locator('.al tr.row').count()))
-    check('group header with € / kg over the price column and a rule', '€ / kg' in pg.locator('.al-h .al-eh').first.inner_text()
+    check('group header with €/kg over the price column and a rule', '€/kg' in pg.locator('.al-h .al-eh').first.inner_text()
           and pg.evaluate("parseFloat(getComputedStyle(document.querySelector('.al-h th')).borderBottomWidth)") >= 1)
     check('brand in quotes highlighted', pg.locator('.al-h .al-brand').first.inner_text() == '„Fleischmeister“')
     row = pg.locator('.al tr.row').first

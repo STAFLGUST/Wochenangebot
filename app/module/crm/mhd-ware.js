@@ -6,9 +6,9 @@
    crm_mhd_kaeufer (Recht crm.mhd_ware, geprüft auf dem Server). Wird von crm.js aufgerufen (window.STAFL_CRM_MHD.zeichne). */
 'use strict';
 (() => {
-  const NF1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
-  const kg = (milli) => (milli === null || milli === undefined ? '—' : NF1.format(milli / 1000) + ' kg');
-  const kgZahl = (v) => (v === null || v === undefined ? '—' : NF1.format(v) + ' kg');
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
+  const kg = (milli) => (milli === null || milli === undefined ? '—' : F.kg(milli / 1000));   // wie im Bestand: 12,50 kg
+  const kgZahl = (v) => (v === null || v === undefined ? '—' : F.kg(v));
   const STUFE = { abgelaufen: ['vorbei', 'abgelaufen'], '0-4': ['rot', '0–4 Tage'], '5-7': ['orange', '5–7 Tage'], '8-14': ['gelb', '8–14 Tage'] };
   const REGELMAESSIG = 3;   // ab so vielen Käufen im Zeitraum „kauft regelmäßig“
   const M = { d: null, monate: 3, wahl: '', k: null, vertreter: '', regel: false, auswahl: new Set(), suche: '', ladenListe: 0, ladenKaeufer: 0, fehler: '', host: null, c: null };

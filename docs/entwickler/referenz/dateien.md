@@ -238,6 +238,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
 | `bestaetigt.js` | angebot | Rücksprungseite der Bestätigung im eigenen Fenster (admin/bestaetigt.html): meldet dem Eingabebereich, dass die erneute Anmeldung bei der STAFL-Anmeldung abgeschlossen ist, und schließt das Fenster. |
 | `detailkarte.js` | plattform | STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Server Gemeinsame Kartenkomponente für die CRM-Karte und die Auswertung der Verwaltung. |
+| `format.js` | plattform | Zahlen, Beträge, Mengen, Prozente und Datum – EIN Format für alle Seiten der Plattform (Auftrag des Inhabers 02.11.2026 |
 | `frontend.js` | angebot | Wochenangebot – öffentliches Frontend |
 | `legal.css` | angebot | Gestaltung der Rechtsseiten (Kontakt, Impressum, Datenschutz): eigenes kleines Stylesheet ohne app.css, hell/dunkel nach Systemeinstellung. |
 | `offer-core.js` | angebot | Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Leser (ohne externe Bibliothek) - Parser der Angebotsliste → editierbares Datenmodell - Anreicherung (Merkmale, Teilstück, Merklisten-Schlüssel … |

@@ -248,7 +248,7 @@
     $('#korrektur-eigene').hidden = !l.length;
     $('#korrektur-liste').innerHTML = l.map((k) => `<li><span class="hr-pille ${esc(k.status)}">${k.status === 'erledigt' ? 'erledigt' : 'offen'}</span>
       <span class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</span>
-      <span class="gedaempft">gemeldet am ${esc(k.erfasst ? new Date(k.erfasst.t).toLocaleDateString('de-DE') : '')}</span>
+      <span class="gedaempft">gemeldet am ${esc(k.erfasst ? window.STAFL_FORMAT.datum(k.erfasst.t) : '')}</span>
       <span class="text">${esc(k.text)}</span>
       ${k.erledigt ? `<span class="mehr">Personalstelle${k.erledigt.antwort ? ': ' + esc(k.erledigt.antwort) : ' hat die Meldung erledigt.'}</span>` : ''}</li>`).join('');
   }
@@ -517,7 +517,7 @@
         ${a.vertretungName ? `<dt>Vertretung</dt><dd>${esc(a.vertretungName)}</dd>` : ''}
         ${a.kollegen.length ? `<dt>Gleichzeitig weg</dt><dd>${esc(a.kollegen.join(', '))}</dd>` : ''}
         ${a.notiz ? `<dt>Notiz</dt><dd>${esc(a.notiz)}</dd>` : ''}
-        <dt>Beantragt</dt><dd>${esc(a.erfasst ? new Date(a.erfasst.t).toLocaleDateString('de-DE') : '')}</dd></dl>
+        <dt>Beantragt</dt><dd>${esc(a.erfasst ? window.STAFL_FORMAT.datum(a.erfasst.t) : '')}</dd></dl>
         ${darf && !a.eigen ? '<div class="knoepfe"><button type="button" class="btn primary" data-genehmigen>Genehmigen</button><button type="button" class="btn gefahr" data-ablehnen>Ablehnen</button></div>'
           : `<p class="hr-hinweis">${a.eigen ? 'Ihr eigener Antrag – darüber entscheidet eine andere Person mit dem Recht „Urlaub genehmigen“.' : 'Die Entscheidung trifft eine Person mit dem Recht „Urlaub genehmigen“.'}</p>`}
       </article>`;
@@ -549,7 +549,7 @@
     const l = S.verw.korrekturen || [], offenL = l.filter((k) => k.status === 'offen'), erl = l.filter((k) => k.status !== 'offen').slice(0, 20);
     const offen = offenL.filter((k) => !k.eigen).length;
     $('#korr-zahl').hidden = !offen; $('#korr-zahl').textContent = offen || '';
-    const gemeldet = (k) => `gemeldet am ${esc(k.erfasst ? new Date(k.erfasst.t).toLocaleDateString('de-DE') : '')}`;
+    const gemeldet = (k) => `gemeldet am ${esc(k.erfasst ? window.STAFL_FORMAT.datum(k.erfasst.t) : '')}`;
     $('#korrekturen-liste').innerHTML = (offenL.length ? offenL.map((k) => `<article class="hr-korr hr-glas" data-korr="${esc(k.id)}">
         <h3>${esc(k.name)}</h3>
         <div class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</div>

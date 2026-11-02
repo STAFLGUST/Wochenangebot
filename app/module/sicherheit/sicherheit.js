@@ -843,7 +843,7 @@
   const FILTER = [['', 'Alle'], ['gesperrt', 'Abgewiesen'], ['anmeldung', 'Anmeldungen'], ['fehler', 'Fehler']];
   const fwSchluessel = (e) => [e.t, e.ip, e.m, e.q, e.st, e.why, e.ua, e.u, e.n || 1].join('\u0001');
   const fwKlasse = (e) => (/^(Gesperrt|Firewall|Falle)/.test(e.why || '') || e.st === 403 ? 'bad' : e.st >= 400 || /fehlgeschlagen/.test(e.why || '') ? 'warn' : 'ok');
-  const fwZeile = (e) => `<tr class="fw-row ${fwKlasse(e)}"><td class="num-s">${esc(sekUhr(e.t))}<div class="sub">${esc(new Date(e.t * 1000).toLocaleDateString('de-DE'))}</div></td>
+  const fwZeile = (e) => `<tr class="fw-row ${fwKlasse(e)}"><td class="num-s">${esc(sekUhr(e.t))}<div class="sub">${esc(window.STAFL_FORMAT.datum(new Date(e.t * 1000)))}</div></td>
     <td class="mono-s">${esc(e.ip)}${e.cc ? `<div class="sub">${esc(land(e.cc))}</div>` : ''}</td>
     <td><span class="sic-st">${e.st || '—'}</span> ${esc(e.why || 'Anfrage')}${e.n > 1 ? ` <span class="sub">(${zahl(e.n)}×)</span>` : ''}<div class="sub mono-s fw-q">${esc(e.m || '')} ${esc(e.q || '')}</div></td>
     <td class="fw-ua">${esc(geraet(e.ua))}${e.u ? `<div class="sub">${esc(e.u)}</div>` : ''}</td>
@@ -1476,8 +1476,8 @@
   const MV_FREI = { keine: 'Nicht freigegeben', test: 'Testbetrieb (nur Tester)', produktiv: 'Produktiv', deaktiviert: 'Deaktiviert' };
   const DIAG = [['storage', 'Datenablage prüfen', 'Lesbarkeit und Unversehrtheit aller Datensätze'], ['mail', 'E-Mail-Verbindung prüfen', 'Verbindung und Anmeldung am Mailserver, ohne E-Mail'],
     ['files', 'Dateien und Speicher', 'Schreibrechte, Schreibschutz, freier Speicher'], ['php', 'PHP-Umgebung', 'Version, Erweiterungen, Grenzwerte, Serverzeit']];
-  const mbZahl = (n) => (n / 1024 / 1024).toFixed(1).replace('.', ',');
-  const gbZahl = (n) => (n / 1024 ** 3).toFixed(1).replace('.', ',');
+  const mbZahl = (n) => window.STAFL_FORMAT.zahl(n / 1024 / 1024, 1, 1);
+  const gbZahl = (n) => window.STAFL_FORMAT.zahl(n / 1024 ** 3, 1, 1);
   const syBis = (w) => (w && w.until ? `${esc(zeit(w.until))} Uhr` : '<span class="sub">offen</span>');
   let syDiag = [];   // letzte Diagnosen (neueste zuerst, nur Anzeige)
   async function systemTab() {

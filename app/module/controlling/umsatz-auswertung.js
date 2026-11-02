@@ -23,13 +23,15 @@
 
   /* ---------- Formate (auch für die Pop-ups) ---------- */
   const NF = (d) => new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
-  const euro = (cent) => cent === null || cent === undefined ? '–' : new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cent / 100);
-  const euroKachel = (cent) => (cent !== null && Math.abs(cent) >= 1e10 ? NF(2).format(cent / 1e8) + ' Mio. €' : euro(cent));   // ab 100 Mio. € kurz (voller Wert im Hinweis)
-  const euroKurz = (cent) => Math.abs(cent) >= 1e8 ? NF(1).format(cent / 1e8) + ' Mio. €' : Math.abs(cent) >= 1e5 ? NF(0).format(cent / 1e5) + ' Tsd. €' : euro(cent);
+  /* Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js); hier in Cent bzw. Tausendstel kg */
+  const F = window.STAFL_FORMAT;
+  const euro = (cent) => cent === null || cent === undefined ? '–' : F.euro(cent / 100);
+  const euroKachel = (cent) => cent === null || cent === undefined ? '–' : F.euroKachel(cent / 100);   // ab 100 Mio. € kurz (voller Wert im Hinweis)
+  const euroKurz = (cent) => Math.abs(cent) >= 1e8   // nur Achsen und Balken der Diagramme ? NF(1).format(cent / 1e8) + ' Mio. €' : Math.abs(cent) >= 1e5 ? NF(0).format(cent / 1e5) + ' Tsd. €' : euro(cent);
   /* Menge ist immer kg (Auftrag des Inhabers 02.11.2026): Werte mit Einheit, Ø Preis in € je kg */
-  const menge = (milli) => milli === null || milli === undefined ? '–' : NF(Math.abs(milli) < 100000 ? 1 : 0).format(milli / 1000) + ' kg';
+  const menge = (milli) => milli === null || milli === undefined ? '–' : F.kgSumme(milli / 1000);
   const ganz = (n) => n === null || n === undefined ? '–' : NF(0).format(n);
-  const pct = (q) => q === null || !Number.isFinite(q) ? '–' : new Intl.NumberFormat('de-DE', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(q);
+  const pct = (q) => q === null || !Number.isFinite(q) ? '–' : F.prozent(q);
   const quote = (a, b) => (b ? a / b : null);
   const preis = (w) => (w && w.menge ? euro(Math.round((w.umsatz / w.menge) * 1000)) + '/kg' : '–');   // € je kg
   const db = (w) => (w && 'ek' in w ? w.umsatzEk - w.ek : null);
@@ -42,7 +44,7 @@
   const deltaHtml = (jetzt, vor) => {
     const d = delta(jetzt, vor);
     if (d === null) return jetzt && vor === 0 ? '<span class="ctl-ua-delta plus">neu</span>' : '<span class="ctl-ua-delta">–</span>';
-    return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${d >= 0 ? '+' : ''}${pct(d)}</span>`;
+    return `<span class="ctl-ua-delta ${d >= 0 ? 'plus' : 'minus'}">${F.veraenderung(d)}</span>`;
   };
   /* Veränderung in Prozentpunkten (Spanne) */
   const ppHtml = (jetzt, vor) => {
@@ -339,7 +341,7 @@
     $('#ctl-ua-pausen', S.box).innerHTML = p.zeilen.length ? zeigen.map((z) => `<button type="button" class="ctl-ua-veraend ctl-ua-pause" data-pause="${esc(z.nr)}"
         title="${esc(`${z.name}: letzter Kauf ${tag(z.letzter)} · ${z.kauftage} Kauftage · längste frühere Pause ${z.laengste} Tage`)}">
         <span><b>${esc(z.name)}</b><small>seit ${esc(ganz(z.pause))} Tagen nichts · sonst alle ${esc(abstandText(z.abstand))} Tage</small></span>
-        <span class="ctl-ua-pausewert"><b>${esc(euroKurz(z.umsatzMonat))}</b><small>üblich je Monat</small></span></button>`).join('')
+        <span class="ctl-ua-pausewert"><b>${esc(euro(z.umsatzMonat))}</b><small>üblich je Monat</small></span></button>`).join('')
       + (p.zeilen.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" id="ctl-ua-pausen-alle">Alle ${ganz(p.zeilen.length)} anzeigen</button>` : '')
       + (p.gesamt > p.zeilen.length ? `<p class="ctl-hilfe">Angezeigt: ${ganz(p.zeilen.length)} von ${ganz(p.gesamt)} (die mit dem höchsten Monatsumsatz).</p>` : '')
       : `<p class="ctl-hilfe ctl-ua-pausen-leer">Keine auffälligen Pausen – ${esc(anzahlText(p.stammkunden, 'kunde'))} kaufen im üblichen Rhythmus.</p>`;
@@ -416,8 +418,8 @@
   /* Zweite Angabe unter dem Wert: was zur Kennzahl gehört (Umsatz zur Menge, Spanne zum DB …) */
   function rangNebenwert(w, rang) {
     if (rang === 'menge') return euro(w.umsatz);
-    if (rang === 'db') return `${pct(spanne(w))} von ${euroKurz(w.umsatzEk)}`;
-    if (rang === 'spanne') return `${euro(db(w))} von ${euroKurz(w.umsatzEk)}`;
+    if (rang === 'db') return `${pct(spanne(w))} von ${euro(w.umsatzEk)}`;
+    if (rang === 'spanne') return `${euro(db(w))} von ${euro(w.umsatzEk)}`;
     return '';
   }
   function zeichneRangliste() {
@@ -480,7 +482,7 @@
         <td class="ctl-rep"><span class="ctl-ua-name">${esc(z.name)}</span>${z.sub || marke(z) ? `<span class="ctl-ua-sub">${marke(z)}${esc(z.sub)}</span>` : ''}</td>
         ${sp.map((x) => `<td class="ctl-zahl" data-label="${esc(x.name)}">${x.html ? x.html(z) : esc(x.text(z))}</td>`).join('')}</tr>`).join('')
       : `<tr><td colspan="${sp.length + 1}" class="ctl-empty">${esc(NUR_LEER[S.d.anfrage.nur] || 'Keine Umsätze für diese Auswahl.')}</td></tr>`}</tbody>
-      <tfoot id="ctl-ua-fuss">${zeilen.length && !S.d.anfrage.nur && !abcAktiv() ? `<tr class="ctl-total"><td class="ctl-rep">Summe</td>${sp.map((x) => `<td class="ctl-zahl">${x.id === 'anteil' ? '100,0 %' : x.html ? x.html(summe) : esc(x.text(summe))}</td>`).join('')}</tr>` : ''}</tfoot></table></div>`;
+      <tfoot id="ctl-ua-fuss">${zeilen.length && !S.d.anfrage.nur && !abcAktiv() ? `<tr class="ctl-total"><td class="ctl-rep">Summe</td>${sp.map((x) => `<td class="ctl-zahl">${x.id === 'anteil' ? pct(1) : x.html ? x.html(summe) : esc(x.text(summe))}</td>`).join('')}</tr>` : ''}</tfoot></table></div>`;
   }
   /* Größte Veränderungen: je drei Zeilen mit dem größten Plus und Minus in der Kennzahl der Rangliste (Spanne → DB
      in Euro; nur Merkmale, nicht Zeit) */
@@ -692,7 +694,7 @@
     }
     box.innerHTML = geruest();
     const st = S.g.stand, imp = st.importe[0];
-    $('#ctl-ua-stand', box).textContent = `Daten vom ${tag(st.von)} bis ${tag(st.bis)}${imp ? ` · Import ${new Date(imp.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`;
+    $('#ctl-ua-stand', box).textContent = `Daten vom ${tag(st.von)} bis ${tag(st.bis)}${imp ? ` · Import ${F.datumZeit(imp.t)}` : ''}`;
     $('#ctl-ua-stand', box).title = `Umsätze der Warenwirtschaft${imp && imp.vonName ? ` · letzter Import von ${imp.vonName}` : ''}`;
     gemerktUebernehmen();
     verbinden(); zeichneFilter();

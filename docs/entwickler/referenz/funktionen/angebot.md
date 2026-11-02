@@ -70,7 +70,7 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 
 **PDF im Design der Angebotsansicht (A4 quer, drei Spalten)**
 
-- `einzel_pdf(e, c)` – Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€ / kg“, Zebrastreifen, Seitenzahlen.
+- `einzel_pdf(e, c)` – Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen.
 - `plural_de(n, eins, viele)`
 - `einzel_pdf_name(e)`
 
@@ -493,7 +493,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `stockAusDatei(file)` – Bestandsliste lesen (Leser des Moduls Bestand: stock-core.js) – hier und in der Importzentrale
 - `stockImportFile(file)`
 - `stockCSV()` – CSV (aktuelle Auswahl)
-- `stockPDF(btn)` – PDF zum Weitergeben (Server, lib/bestand-pdf.php): nur Art.-Nr., Bezeichnung, eingelagerter Bestand, kürzestes MHD, Kg kürz.
+- `stockPDF(btn)` – PDF zum Weitergeben (Server, lib/bestand-pdf.php): nur Art.-Nr., Bezeichnung, eingelagerter Bestand, kürzestes MHD, Menge kürz.
 
 **MHD-Liste an den Verkauf (Server: stock_mhd_senden, lib/bestand-mhd.php)**
 

@@ -47,7 +47,7 @@
 
   /* ---------- Formate und Hilfen ---------- */
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
-  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
+  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const zahl = (n) => Number(n).toLocaleString('de-DE');
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
   const natCmp = (a, b) => String(a).localeCompare(String(b), 'de', { numeric: true, sensitivity: 'base' });
@@ -1324,7 +1324,7 @@
     if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* keine JSON-Antwort */ } toast(d.error || `Excel konnte nicht erstellt werden (${res.status}).`, true); return; }
     speichereDatei(await res.blob(), `QM-Audit-Bericht_${b.von}_${b.bis}.xlsx`);
   });
-  const prozent = (x) => (x === null || x === undefined ? '—' : `${String(Math.round(x * 1000) / 10).replace('.', ',')} %`);
+  const prozent = (x) => (x === null || x === undefined ? '—' : window.STAFL_FORMAT.prozent(x));   // 12,3 % wie überall
   const quoteFarbe = (e, f) => { const fehlt = f - e; return fehlt === 0 ? 'gruen' : e > 0 && fehlt <= Math.max(1, Math.floor(f / 10)) ? 'gelb' : 'rot'; };
   const B_MAX_BEREICHE = 12;
   const B_STATUS = { eingehalten: ['eingehalten', 'gruen'], verspaetet: ['verspätet', 'gelb'], ueberfaellig: ['überfällig', 'rot'], offen: ['fällig am Stichtag', 'gelb'], nie: ['noch nie geprüft', 'rot'] };

@@ -7,7 +7,8 @@
 'use strict';
 (() => {
   const NF2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const NFKG = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
+  const NFKG = { format: (v) => F.zahl(v, 2, 2) };   // Menge in kg (Einheit steht daneben)
   const STATUS = { entwurf: ['Entwurf', 'info'], freigegeben: ['Im Portal', 'ok'], zurueckgezogen: ['Zurückgezogen', ''] };
   const MERK = 'crm.einzel.senden';   // nach der Bestätigung bei Keycloak: Versand fortsetzen (nur sessionStorage, keine Geheimnisse)
   const E = { key: '', host: null, c: null, daten: null, ed: null, fracht: [], dirty: false, artikel: null, treffer: [], verwerfen: false, loeschen: false, mail: false, pw: false, weiter: null };
@@ -88,10 +89,10 @@
     const std = a && a.stdPrice && a.stdPrice.status === 'value' ? a.stdPrice.value : null;
     const pr = zahl(p.price);
     const abw = std && pr > 0 ? (pr - std) / std * 100 : null;
-    const info = [p.code, std ? `Wochenpreis ${euro(std)}` : '', a && a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).join(' · ');
+    const info = [p.code, std ? `Wochenpreis ${F.euroKg(std)}` : '', a && a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).join(' · ');
     return `<tr data-pos="${i}"><td class="name"><input type="text" data-p="name" maxlength="200" value="${c.esc(p.name)}" aria-label="Bezeichnung"${dis}><small>${c.esc(info || 'freie Position')}</small></td>
       <td data-label="Menge kg"><input type="text" inputmode="decimal" data-p="qty" value="${c.esc(p.qty)}" aria-label="Menge in kg" placeholder="kg"${dis}></td>
-      <td data-label="Preis €/kg"><input type="text" inputmode="decimal" data-p="price" value="${c.esc(p.price)}" aria-label="Preis in € je kg" placeholder="auf Anfrage"${dis}>${abw !== null && Math.abs(abw) >= 1 ? `<small class="crm-ck-d ${abw < 0 ? 'minus' : 'plus'}">${abw < 0 ? '−' : '+'}${Math.round(Math.abs(abw))} % zum Wochenpreis</small>` : ''}</td>
+      <td data-label="Preis €/kg"><input type="text" inputmode="decimal" data-p="price" value="${c.esc(p.price)}" aria-label="Preis in € je kg" placeholder="auf Anfrage"${dis}>${abw !== null && Math.abs(abw) >= 1 ? `<small class="crm-ck-d ${abw < 0 ? 'minus' : 'plus'}">${F.veraenderung(abw / 100)} zum Wochenpreis</small>` : ''}</td>
       <td data-label="Notiz"><input type="text" data-p="notiz" maxlength="200" value="${c.esc(p.notiz || '')}" aria-label="Notiz"${dis}></td>
       <td class="knopf">${b ? `<button type="button" class="crm-rund klein" data-ez-weg="${i}" aria-label="Position entfernen">${c.icon('x')}</button>` : ''}</td></tr>`;
   }
@@ -151,7 +152,7 @@
     if (q.length < 2 || !E.artikel) { box.hidden = true; box.innerHTML = ''; return; }
     E.treffer = E.artikel.filter((a) => fold(a.code + ' ' + a.name).includes(q)).slice(0, 8);
     box.innerHTML = E.treffer.length ? E.treffer.map((a, i) => `<button type="button" role="option" data-ez-treffer="${i}"><b>${E.c.esc(a.name || 'Artikel ' + a.code)}</b>
-      <small>${[a.code, a.stdPrice && a.stdPrice.status === 'value' ? 'Wochenpreis ' + euro(a.stdPrice.value) : a.inOffer ? 'im Wochenangebot' : '', a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).map(E.c.esc).join(' · ')}</small></button>`).join('')
+      <small>${[a.code, a.stdPrice && a.stdPrice.status === 'value' ? 'Wochenpreis ' + F.euroKg(a.stdPrice.value) : a.inOffer ? 'im Wochenangebot' : '', a.totalKg !== undefined ? `Bestand ${NFKG.format(a.totalKg)} kg` : ''].filter(Boolean).map(E.c.esc).join(' · ')}</small></button>`).join('')
       : '<p class="crm-leer">Kein Artikel gefunden.</p>';
     box.hidden = false;
   }

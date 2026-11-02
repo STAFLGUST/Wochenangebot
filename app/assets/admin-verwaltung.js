@@ -8,6 +8,7 @@
 (function () {
   'use strict';
   const W = window.WA;
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
   const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
   // Vertraute Geräte (Browser, auf denen sich der Zugang angemeldet hat; kommen auch bei einer fremd ausgelösten Sperre durch)
@@ -429,7 +430,7 @@
           <td class="ord-nr"><div class="nm">${esc(o.nr)}</div><div class="sub">${esc(dateTime(o.t))}</div></td>
           <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div>${o.mailPending ? `<div class="ord-mobile-mail form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</div>` : ''}</td>
           <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
-          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}${o.fracht && o.fracht.kosten ? ' + Fracht' : ''}</div></td>
+          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(F.euro(o.total))}${o.onRequest ? ' + auf Anfrage' : ''}${o.fracht && o.fracht.kosten ? ' + Fracht' : ''}</div></td>
           <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
           <td class="ord-mail">${orderMail(o.delivery, o.mailPending)}${o.mailPending ? `<br><span class="form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</span>` : ''}</td>
         </tr>`).join('');
@@ -445,9 +446,7 @@
     } catch (e) { host.innerHTML = `<div class="err-box" role="alert">${esc(e.message)}</div><button type="button" class="btn" data-orders-reload>Erneut laden</button>`; }
   }
   /* ======================= Einkauf: Fehlmengen offener Bestellwünsche (alle Mitarbeiter; Melden ab Bearbeiter) ======================= */
-  const fmtQty = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 });
-  const eur2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });   // Preise wie im Portal und in der E-Mail (Cent)
-  const qty = (v) => fmtQty.format(v) + ' kg';
+  const qty = (v) => F.kg(v);
   let ekSel = null, ekData = null;
   async function renderEinkaufView() {
     const host = $('#view-einkauf');
@@ -537,8 +536,8 @@
         </div>
         ${o.bemerkung ? `<p class="ord-note"><strong>Bemerkung des Kunden:</strong> ${esc(o.bemerkung)}</p>` : ''}
         <table class="etab ordpos"><thead><tr><th>Art.-Nr.</th><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
-          ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(qty(p.qty))}</td><td class="r">${p.price == null ? 'auf Anfrage' : esc(eur2.format(p.price)) + ' €'}</td><td class="r">${p.sum == null ? '–' : esc(fmtNum.format(p.sum)) + ' €'}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td class="ord-nr"></td><td><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(qty(o.totalQty || 0))}</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td class="ord-nr"></td><td colspan="3">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(fmtNum.format(o.fracht.kosten))} €</td></tr><tr><td class="ord-nr"></td><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(fmtNum.format(o.total + o.fracht.kosten))} €</strong></td></tr>` : ''}</tfoot></table>
+          ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(qty(p.qty))}</td><td class="r">${p.price == null ? 'auf Anfrage' : esc(F.euroKg(p.price))}</td><td class="r">${p.sum == null ? '–' : esc(F.euro(p.sum))}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td class="ord-nr"></td><td><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(qty(o.totalQty || 0))}</td><td></td><td class="r"><strong>${esc(F.euro(o.total))}</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td class="ord-nr"></td><td colspan="3">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(F.euro(o.fracht.kosten))}</td></tr><tr><td class="ord-nr"></td><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(F.euro(o.total + o.fracht.kosten))}</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <section class="ord-outbox"><h3>E-Mail-Versand</h3>
           <p class="hint">Erfolgreich bedeutet: vom Mailserver angenommen. Bei einem Verbindungsabbruch kann eine E-Mail trotz fehlender Bestätigung angekommen sein. Vor erneutem Versand bitte prüfen.</p>
@@ -782,7 +781,7 @@
     $('#kunde-body [name="firma"]').focus();
   }
   /* Daten der Warenwirtschaft (nur lesen, aus dem Kundenimport; nur mit „Kunden bearbeiten“ ausgeliefert) */
-  const fmtEur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+  const fmtEur = { format: (x) => F.euro(x) };
   const WAWI_ANZEIGE = [['alpha', 'Suchname'], ['konto', 'Konto'], ['rgEmpf', 'Rechnungsempfänger'], ['kondition', 'Kondition'], ['letzteRechnung', 'Letzte Rechnung', 'd'],
     ['letzterLieferschein', 'Letzter Lieferschein', 'd'], ['angelegtAm', 'Angelegt', 'anlage'], ['kreditlimit', 'Kreditlimit', 'eur'], ['rgSperre', 'Rechnungssperre', 'b'], ['gln', 'GLN'],
     ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen']];

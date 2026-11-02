@@ -7,8 +7,6 @@
 'use strict';
 (() => {
   const NF0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
-  const NF1 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const NF2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   const MON_KURZ = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
   const WOCHENTAGE = ['', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -16,11 +14,11 @@
 
   /* ---------- Zahlen (Umsatz in Cent, Menge in Tausendstel kg) ---------- */
   const da = (v) => v !== undefined && v !== null;
-  const minus = (x, f) => (x < 0 ? '−' : '') + f(Math.abs(x));   // echtes Minuszeichen wie bei den Prozenten
-  const euro = (c) => (!da(c) ? '—' : minus(c, (a) => (a >= 1e8 ? NF2.format(a / 1e8) + ' Mio. €' : NF0.format(Math.round(a / 100)) + ' €')));
-  const kg = (m) => (!da(m) ? '—' : minus(m, (a) => (a >= 1e6 ? NF1.format(a / 1e6) + ' t' : NF0.format(Math.round(a / 1000)) + ' kg')));
-  const preis = (c, m) => (!da(c) || !m ? '—' : NF2.format(c * 10 / m) + ' €/kg');
-  const prozent = (x) => (!da(x) ? '' : (x > 0.0005 ? '+' : x < -0.0005 ? '−' : '±') + NF1.format(Math.abs(x) * 100) + ' %');
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
+  const euro = (c) => (!da(c) ? '—' : F.euroKachel(c / 100));            // Cent → 1.234,50 € (ab 100 Mio. kurz)
+  const kg = (m) => (!da(m) ? '—' : F.kgSumme(m / 1000));                   // Tausendstel kg → 1.235 kg (immer kg, nie t)
+  const preis = (c, m) => (!da(c) || !m ? '—' : F.euroKg(Math.round(c * 1000 / m) / 100));
+  const prozent = (x) => (!da(x) ? '' : F.veraenderung(x));
   const veraend = (j, v) => (!da(j) || !da(v) || v <= 0 ? null : (j - v) / v);
   const richtung = (x) => (!da(x) ? '' : x > 0.0005 ? 'plus' : x < -0.0005 ? 'minus' : '');
   const plural = (n, eins, viele) => `${NF0.format(n)} ${n === 1 ? eins : viele}`;

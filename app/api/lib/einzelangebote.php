@@ -345,7 +345,7 @@ function einzel_artikel(bool $mitBestand, bool $mitEk = false): array
 }
 
 /* ---------- PDF im Design der Angebotsansicht (A4 quer, drei Spalten) ---------- */
-/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€ / kg“, Zebrastreifen, Seitenzahlen.
+/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen.
    Nur Positionen, Preise, Mengen und Hinweise – nie Bestand, Partien oder Einkaufspreise (Regel 7). */
 function einzel_pdf(array $e, ?array $c): string
 {
@@ -426,7 +426,7 @@ function einzel_pdf(array $e, ?array $c): string
                 $hy = $top($pi) + 11;
                 $cont = $pi > 0 || $ci > 0;
                 $pdf->text($x + 3, $hy, $fit($titel, 9.2, $colW - 60 - ($cont ? Pdf::width(' (Forts.)', 9.2, true) : 0), true) . ($cont ? ' (Forts.)' : ''), 9.2, true);
-                $pdf->text($x + $colW - 4, $hy, '€ / kg', 8, true, '#111111', 'r');
+                $pdf->text($x + $colW - 4, $hy, '€/kg', 8, true, '#111111', 'r');
                 $pdf->line($x, $hy + 4.5, $x + $colW, $hy + 4.5, 1.1);
             }
             foreach ($items as $it) {

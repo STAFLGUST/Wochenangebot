@@ -122,7 +122,7 @@ with sync_playwright() as p:
     kg_sum = fmt(dsum(l['kg'] for l in lots)) + ' kg'
     gew = sum(Decimal(str(l['ek'])) * Decimal(str(l['kg'])) for l in lots) / dsum(l['kg'] for l in lots)
     check('Summenzeile: Kolli, Kg netto, Ø EK gewichtet', len(foot) == 6 and foot[0] == 'Summe' and foot[3] == str(int(sum(l['kolli'] for l in lots))) and foot[4] == kg_sum
-          and foot[5] == 'Ø ' + fmt(gew) + ' €', (foot, kg_sum, fmt(gew)))
+          and foot[5] == 'Ø ' + fmt(gew) + ' €/kg', (foot, kg_sum, fmt(gew)))
     ek1 = a.locator('#dlg-stock-item .lottab tbody tr').first.locator('td.lot-ek').inner_text()
     check('EK-Preis in der Partiezeile', ek1 == fmt(lots[0]['ek']) + ' €' and a.locator('#dlg-stock-item .lottab th:text-is("EK-Preis")').count() == 1, ek1)
     # Erwartete Zugänge: dieselbe Tabelle wie die Partien (Spalte ETA statt Ankunft), Kolli und EK aus der Zeile „erfasst“
