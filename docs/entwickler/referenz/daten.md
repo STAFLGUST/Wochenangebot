@@ -12,7 +12,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `anwesenheit` | Angebot | intern | – | – | Wer bearbeitet gerade den Entwurf (gemeinsames Bearbeiten) |
 | `bestellung` | Angebot | intern | – | plattform | Einstellungen der Bestellfunktion (an/aus, Empfänger) |
 | `bestellungen` | Angebot | vertraulich | einkauf, plattform | – | Bestellwünsche der Kunden (Bestell-API v1) mit Verlauf – Historie: Positionen, Preise, Firma und Angebotswoche werden beim Absenden als Schnappschuss gespeichert |
-| `einzelangebote` | Angebot | vertraulich | – | – | Einzelangebote für genau einen Kunden (E-JJJJ-0001) |
+| `einzelangebote` | Angebot | vertraulich | crm | crm | Einzelangebote für genau einen Kunden (E-JJJJ-0001) |
 | `entwurf` | Angebot | intern | – | – | Bearbeitungsstand des nächsten Wochenangebots (gemeinsames Bearbeiten mit Revisionen) |
 | `entwurf-stand` | Angebot | intern | – | – | Revisionszähler des Entwurfs |
 | `fracht` | Angebot | intern | – | – | Frachtregel (Staffeln, Hinweis unter dem Angebot) |

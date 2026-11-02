@@ -157,7 +157,7 @@ icon = "users"
 reihenfolge = 30
 dashboard = true
 agent = "crm"
-abhaengigkeiten = ["plattform", "verwaltung", "bestand", "controlling"]
+abhaengigkeiten = ["plattform", "verwaltung", "bestand", "controlling", "angebot"]
 testgruppen = ["crm"]
 pfade = ["regeln/aktionen/crm.toml", "app/api/aktionen/crm.php", "app/api/module/crm/**", "app/module/crm/**", "tests/e2e/test_crm*.py"]
 pfade_geplant = []
@@ -168,6 +168,7 @@ hinweise = [
   "Rechte crm.sehen, crm.bearbeiten, crm.exportieren ohne Standardrollen (Kontaktdaten): Administratoren vergeben sie unter Verwaltung → Rollen und Rechte; der Modulzugang crm.zugang allein zeigt keine Kundendaten.",
   "Reiter „MHD-Ware“ (Auftrag des Inhabers 01.11.2026, Recht crm.mhd_ware): Artikel kurz vor Ablauf aus der MHD-Liste des Bestands (Farben wie dort) und die Kunden, die sie gekauft haben (Standard: letzte 3 Monate). Liest nur über Schnittstellen der Eigentümer: mhd_liste_ohne_preise() (Bestand, ohne Preise) und umsatzdaten_kaeufer() (Controlling: Menge, Liefertage, letzter Kauf – keine Beträge).",
   "Cockpit je Verkäufer (Auftrag des Inhabers 01.11.2026): „Mein Cockpit“ zeigt die Kunden des Vertreters, der dem Mitarbeiter in der Verwaltung zugeordnet ist (Feld „vertreter“ am Nutzer; seine Kunden = Vertreter oder Vertreter 2), das Master-Cockpit (Recht crm.master, Administratoren immer) alle Vertreter mit Umschalter zur Verkäufer-Ansicht. Umsätze in € (crm.umsatz_euro) und Mengen in kg (crm.umsatz_kg) sind einzeln abschaltbar, Standard an. Zahlen und Signale (Bestellpause, kauft weniger, Artikel nicht mehr gekauft, neu) kommen über Funktionen des Controllings – DB und Spanne bleiben im Controlling.",
+  "Einzelangebot beim Kunden (Auftrag des Inhabers 01.11.2026): im Kunden-Pop-up Einzelangebote des Kunden ansehen, anlegen, bearbeiten, im Portal freigeben, als PDF ansehen und per E-Mail senden – wie in der Angebotsübersicht, mit denselben Rechten einzelangebote.sehen/einzelangebote.bearbeiten (dazu crm.sehen) und über die Funktionen des Angebots (lib/einzelangebote.php); Daten bleiben im Dokument „einzelangebote“ des Angebots.",
   "Freigegeben (Inhaber 23.10.2026): crm.dashboard-stafl.de mit eigenem Keycloak-Client „crm“ (Stand 6); / und /admin/ führen zu /module/crm/. Aktionen crm_* nur auf diesem Host (GR-109, lib/herkunft.php), dort außer ihnen nur Status und Abmelden.",
 ]
 
