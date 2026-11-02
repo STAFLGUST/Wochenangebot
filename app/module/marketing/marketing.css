@@ -151,8 +151,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-felder.vier { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .mkt-felder .breit { grid-column: 1 / -1; }
 .mkt .btn { border-radius: 999px; }
-.mkt .btn.primary { background: var(--mkt-akzent); border-color: var(--mkt-akzent); color: #fff; }
-.mkt .btn.primary:hover { background: #6e1622; border-color: #6e1622; }
+/* Hauptknopf: gemeinsame Farbe aus app.css (hell Bordeaux, dunkel Rosa mit dunkler Schrift) wie in allen Modulen */
 .mkt .btn.gefahr { color: var(--mkt-fehler); }
 .mkt .btn .i { margin-right: 6px; }
 .mkt-meldung { font-size: 14px; margin: 0; }
@@ -204,6 +203,10 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 .mkt-dialog.breit { width: min(1040px, calc(100vw - 32px)); }
 .mkt-dialog::backdrop { background: rgba(20, 16, 16, .38); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .mkt-dialog > form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+/* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
+.mkt-dialog > form > .mkt-knoepfe:last-child{ position:sticky; bottom:0; z-index:2; margin:0 -24px -24px; padding:8px 24px 24px; background:var(--mkt-deckend) }
+.mkt-fkopf { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }   /* Titel mit × in einfachen Formularfenstern */
+.mkt-fkopf h2 { margin: 0; }
 .mkt-dkopf { position: sticky; top: 0; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px 14px;
   background: var(--mkt-deckend); border-bottom: 1px solid var(--mkt-linie); }
 .mkt-dkopf h2 { margin: 0 0 4px; font-size: 21px; }
@@ -276,6 +279,7 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
   .mkt-dkopf { padding: 16px 16px 12px; }
   .mkt-dinhalt { padding: 14px 16px 20px; }
   .mkt-dialog > form { padding: 18px; }
+  .mkt-dialog > form > .mkt-knoepfe:last-child{ margin:0 -18px -18px; padding:8px 18px calc(18px + env(safe-area-inset-bottom)) }
   .mkt-verlauf li { grid-template-columns: 1fr; gap: 2px; }
   .mkt-balken { grid-template-columns: minmax(0, 1fr) 32px; row-gap: 4px; }
   .mkt-balken > span:first-child { grid-column: 1 / -1; }   /* Handy: Beschriftung über dem Balken statt umbrochen daneben */
@@ -498,3 +502,19 @@ body.mkt .mkt-kopf .brand-logo { height: 28px; width: auto; }
 /* Feinschliff (Durchsicht 25.10.2026): Kopfzeile beim Scrollen deckend, Häkchen und Auswahlpunkte in der Markenfarbe */
 .mkt-kopf.mkt-glas { background: var(--mkt-kopf-glas); }
 .mkt input[type="checkbox"], .mkt input[type="radio"] { accent-color: var(--mkt-akzent); }
+/* Einstellungen am Handy: Name über die ganze Breite, darunter Farbe bzw. Zeichen/Hashtags, aktiv und Entfernen –
+   die Spaltentitel stehen über der zweiten Zeile (Formate bleiben einzeilig) */
+@media (max-width: 560px) {
+  .mkt-einst-kopf, .mkt-einst-zeile { grid-template-columns: minmax(0, 1fr) 36px 36px; gap: 6px 8px; }
+  .mkt-einst-kopf.kanal, .mkt-einst-zeile.kanal { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px 36px; }
+  .mkt-einst-zeile > [data-k="name"] { grid-column: 1 / -1; }
+  .mkt-einst-kopf > :first-child { display: none; }
+  [data-liste="formate"] .mkt-einst-zeile > [data-k="name"] { grid-column: auto; }
+  [data-liste="formate"] .mkt-einst-kopf > :first-child { display: block; }
+  .mkt-einst-zeile { padding: 8px 0; border-bottom: 1px solid var(--mkt-linie); }
+  .mkt-einst-zeile:last-child { border-bottom: 0; }
+}
+/* Fenster am Handy als Blatt von unten – wie in Controlling, Leergut, QS, REWE und Sicherheit */
+@media (max-width: 560px) {
+  .mkt-dialog:not(.breit) { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; }
+}

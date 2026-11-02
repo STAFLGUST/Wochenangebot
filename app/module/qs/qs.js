@@ -1067,7 +1067,8 @@
         <td data-label="Maßnahme">${m ? `<button class="qm-verweis" type="button" data-massn-auf="${esc(m.id)}">${esc(m.nr)}</button>` : '—'}</td>
         <td class="qm-ohne-strich" data-label="">${!n.storno && (darf('bearbeiten') || (darf('nachweis') && eigenN)) ? `<button class="btn sm ghost" type="button" data-storno="${esc(n.id)}">Stornieren</button>` : ''}</td></tr>`;
     }).join('')}</tbody></table>${S.d.nachweiseGesamt > S.d.nachweise.length ? '<p class="qm-hilfe">Ältere Nachweise sind hier nicht aufgeführt.</p>' : ''}` : '<p class="qm-hilfe">Noch keine Nachweise.</p>';
-    $('#pr-knoepfe').innerHTML = `${darf('freigeben') ? `<button class="btn" type="button" data-pr="aendern">${icon('stift')}Ändern</button>` : ''}${darfNachweis(p) ? '<button class="btn primary" type="button" data-pr="nachweis">Nachweis erfassen</button>' : ''}<button class="btn" type="button" data-schliessen>Schließen</button>`;
+    // Reihenfolge wie in allen Fenstern: Nebenaktion, „Schließen“, Hauptaktion ganz rechts
+    $('#pr-knoepfe').innerHTML = `${darf('freigeben') ? `<button class="btn" type="button" data-pr="aendern">${icon('stift')}Ändern</button>` : ''}<button class="btn" type="button" data-schliessen>Schließen</button>${darfNachweis(p) ? '<button class="btn primary" type="button" data-pr="nachweis">Nachweis erfassen</button>' : ''}`;
   }
   $('#dlg-pruefung').addEventListener('click', async (ev) => {
     const b = ev.target.closest('[data-pr]');

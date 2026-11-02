@@ -354,7 +354,9 @@
       d.addEventListener('close', onClose);
       $('#confirm-body').onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) done(b.dataset.v === '1'); };
       d.showModal();
-      $('#confirm-body .btn.primary').focus();
+      // Bei Löschen, Verwerfen u. Ä. steht der Fokus auf „Abbrechen“ – ein versehentliches Enter löst nichts aus
+      const gefaehrlich = danger || /lösch|entfern|verwerf|zurücksetz|sperr|beend|deaktiv|widerruf|überschreib/i.test(okLabel);
+      $(gefaehrlich ? '#confirm-body [data-v="0"]' : '#confirm-body .btn.primary').focus();
     });
   }
 
@@ -3978,6 +3980,7 @@
           ${toks.length ? `<tfoot><tr><td colspan="7" class="muted">${plural(list.length, 'Treffer', 'Treffer')} zur Suche · ${esc(kgText(kg))}</td></tr></tfoot>` : ''}</table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Alle Artikel mit eingelagertem Bestand haben in diesem Angebot einen Preis.'}</p>`) : ''}
     </div>`;
+    for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
     panelLayout();
   }
   /* Beide Leisten nebeneinander; eine aufgeklappte Leiste nimmt die volle Breite ein */
@@ -4374,6 +4377,7 @@
       ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Kg verfüg.</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Keine Artikel mit kurzem oder überschrittenem MHD im Bestand.'}</p>`) : ''}
     </div>`;
+    for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
     panelLayout();
   }
   $('#mhd-panel').addEventListener('click', (e) => {
@@ -4632,7 +4636,7 @@
         <td class="m-cat"><select class="in" data-mf="category" aria-label="Fleischart">${CAT_OPTS(e.category)}</select></td>
         <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
         <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
-        <td class="m-vk"><input class="in" data-mf="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" aria-label="VK-Gruppe"><div class="m-vkname${e.vkGruppe && !vkName(e.vkGruppe) ? ' st-warn' : ''}">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</div></td>
+        <td class="m-vk"><input class="in" data-mf="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" aria-label="VK-Gruppe"><div class="m-vkname${e.vkGruppe && !vkName(e.vkGruppe) ? ' st-warn' : ''}" title="${e.vkGruppe ? esc(vkName(e.vkGruppe) || '') : ''}">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</div></td>
         <td class="m-offer">${offerStatus(e, by)}</td>
         <td class="m-act">${roMaster ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
       </tr>`;
@@ -4664,7 +4668,7 @@
       if (nr && (!/^[0-9A-Za-z._-]{1,10}$/.test(nr) || (vkg.length && !vkgMap.has(nr)))) { el.value = ent.vkGruppe || ''; toast(`Die VK-Gruppe „${nr}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`, 6000); return; }
       if (nr) ent.vkGruppe = nr; else delete ent.vkGruppe;
       el.value = nr;
-      const nm = tr.querySelector('.m-vkname'); nm.textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; nm.classList.toggle('st-warn', !!nr && !vkName(nr));
+      const nm = tr.querySelector('.m-vkname'); nm.textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; nm.title = nr ? vkName(nr) || '' : ''; nm.classList.toggle('st-warn', !!nr && !vkName(nr));
     }
     else ent[f] = el.value;
     tr.querySelector('.m-offer').innerHTML = offerStatus(ent, draftByCode());

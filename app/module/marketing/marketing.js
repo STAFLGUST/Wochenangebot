@@ -217,7 +217,7 @@
     </article>`;
   }
   function zeile(e, wann) {
-    return `<li><span class="mkt-punkt" style="--marke:${esc(markenFarbe(e))}"></span><div class="was"><button type="button" class="mkt-titelknopf" data-oeffnen="${esc(e.id)}">${esc(e.titel)}</button>
+    return `<li><span class="mkt-punkt" style="--marke:${esc(markenFarbe(e))}"></span><div class="was"><button type="button" class="mkt-titelknopf" data-oeffnen="${esc(e.id)}" title="${esc(e.titel)}">${esc(e.titel)}</button>
       <small>${esc([nameVon(marke(e.marke), e.marke), e.kanaele.map(kanalKurz).join(', '), e.verantwortlichName].filter(Boolean).join(' · '))}</small></div>${wann}</li>`;
   }
   function kpi(titel, w, zusatz = '', cls = '', ziel = '') {
@@ -387,7 +387,7 @@
   function boardInhalt() {
     const spalten = [...ABLAUF, ...(S.f.verworfen ? ['verworfen'] : [])];
     const B = S.d.beitraege.filter((e) => passt(e, true));
-    return `<div class="mkt-board">${spalten.map((s) => {
+    return `<div class="mkt-board stafl-streifen">${spalten.map((s) => {
       let liste = B.filter((e) => e.status === s).sort((a, b) => (a.veroeffentlichung || '9').localeCompare(b.veroeffentlichung || '9'));
       const gesamt = liste.length;
       if (s === 'veroeffentlicht') liste = liste.sort((a, b) => (b.veroeffentlichung || '').localeCompare(a.veroeffentlichung || '')).slice(0, 20);

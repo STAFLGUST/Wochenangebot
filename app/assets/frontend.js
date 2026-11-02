@@ -23,6 +23,9 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+/* Aufklappmenü (rechtsbündig am Knopf) ganz im Bild halten: am Handy steht der Knopf oft weiter links, das Menü ragte sonst
+   über den linken Rand hinaus */
+const menuImBild = (m) => { m.style.right = ''; const l = m.getBoundingClientRect().left; if (l < 8) m.style.right = `${Math.round(l - 8)}px`; };
 const plural = (n, one, many) => `${fmtInt.format(n)} ${n === 1 ? one : many}`;
 /* Rückfrage im eigenen Fenster statt Browser-Dialog (gleiches Aussehen wie alle Fenster). Escape oder „Abbrechen“ = nein;
    der Fokus steht auf „Abbrechen“, damit Enter nichts löscht. */
@@ -583,7 +586,8 @@ function plSections(units) {
   for (const u of units) { if (!out.length || out[out.length - 1].name !== u.section) out.push({ name: u.section, units: [] }); out[out.length - 1].units.push(u); }
   return out;
 }
-const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
+// großes Logo nur in der Aushang-Ansicht: dort zuerst laden (statt Vorabladen im HTML, das in anderen Ansichten ungenutzt bliebe)
+const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" fetchpriority="high" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
 /* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€ / kg“ steht über der Preisspalte. */
 function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
@@ -1323,7 +1327,7 @@ function bind() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', updateThemeBtn);
 
   const menuBtn = $('#btn-more'), menu = $('#menu-more');
-  const setMenu = (open) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', open); if (open) menu.querySelector('button').focus(); };
+  const setMenu = (open) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', open); if (open) { menuImBild(menu); menu.querySelector('button').focus(); } };
   menuBtn.addEventListener('click', () => setMenu(menu.hidden));
   document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('.menu-wrap')) setMenu(false); });
   menu.addEventListener('keydown', (e) => {
@@ -1600,11 +1604,11 @@ async function openCustomerOrders(offset = 0, nr = '') {
         </tbody><tfoot><tr><td colspan="3"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr><td colspan="3">Frachtanteil (unter ${fmtQty.format(o.fracht.unter)} kg)</td><td class="r">${fmtEur.format(o.fracht.kosten)} €</td></tr><tr><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total + o.fracht.kosten)} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;
-      foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn primary" type="button" data-close>Schließen</button>`;
+      foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn" type="button" data-close>Schließen</button>`;
     } else {
       body = r.orders.length ? `<ul class="co-list">${r.orders.map((o) => `<li><button type="button" data-customer-order="${esc(o.nr)}"><span><strong>${esc(o.nr)}</strong><span class="muted">${esc(custDate(o.t))} · ${plural(o.positionCount, 'Position', 'Positionen')} · ${fmtEur.format(o.total)} €</span></span>${custState(o.workflow)}</button></li>`).join('')}</ul>`
         : '<p class="muted">Sie haben noch keine Bestellwünsche über das Portal gesendet.</p>';
-      foot = (r.total > r.limit ? `<span class="left"><button class="btn sm" type="button" data-customer-orders-page="${Math.max(0, offset - r.limit)}"${offset === 0 ? ' disabled' : ''}>Zurück</button><button class="btn sm" type="button" data-customer-orders-page="${offset + r.limit}"${offset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></span>` : '') + '<button class="btn primary" type="button" data-close>Schließen</button>';
+      foot = (r.total > r.limit ? `<span class="left"><button class="btn sm" type="button" data-customer-orders-page="${Math.max(0, offset - r.limit)}"${offset === 0 ? ' disabled' : ''}>Zurück</button><button class="btn sm" type="button" data-customer-orders-page="${offset + r.limit}"${offset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></span>` : '') + '<button class="btn" type="button" data-close>Schließen</button>';
     }
     d.innerHTML = `<div class="dlg">${head(nr ? '' : `${plural(r.total, 'Vorgang', 'Vorgänge')}`)}<div class="dlg-body">${body}</div><div class="dlg-foot">${foot}</div></div>`;
   } catch (e) { d.innerHTML = `<div class="dlg">${head('')}<div class="dlg-body"><div class="err-box" role="alert">${esc(e.message)}</div></div><div class="dlg-foot"><button class="btn" type="button" data-close>Schließen</button></div></div>`; }
@@ -1711,7 +1715,7 @@ function bindKunde() {
     if (e.target.closest('#btn-kunde-login, [data-kact="login"]')) { openKundeLogin(); return; }
     const kb = e.target.closest('#btn-kunde');
     const km = $('#menu-kunde');
-    if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) km.querySelector('button').focus(); return; }
+    if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) { menuImBild(km); km.querySelector('button').focus(); } return; }
     if (km && !km.hidden && !e.target.closest('#kunde-slot')) { km.hidden = true; $('#btn-kunde').setAttribute('aria-expanded', 'false'); }
     const sw = e.target.closest('[data-kswitch]');
     if (sw) { location.href = setOfferParam(sw.dataset.kswitch).toString(); return; }

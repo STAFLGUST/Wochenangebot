@@ -23,7 +23,7 @@ Voraussetzungen und Abgrenzung:
 | Kundenseite (Wochenangebot) | `app/index.html` | `theme.js` (im `<head>`), `offer-core.js`, `frontend.js`, `webapp.js` | `app.css` |
 | Web-App | `app/manifest.json`, `app/sw.js` | `webapp.js` registriert `sw.js` (nur im sicheren Kontext) | – |
 | Rechtsseiten | `app/kontakt/`, `app/impressum/`, `app/datenschutz/` (je `index.html`) | `/assets/theme.js` | `legal.css` (ohne `app.css`, Systemschrift) |
-| Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen-vorschau.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-werbung.js`, `admin-einzel.js`, `admin-auswertung.js`, `admin-schutz.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
+| Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen-vorschau.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-werbung.js`, `admin-einzel.js`, `admin-auswertung.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
 | Dashboard | `dashboard/index.html`, `dashboard/abgemeldet.html` | `../assets/theme.js`, `dashboard.js` | `../assets/app.css`, `dashboard.css` |
 | HR · Urlaub | `app/module/hr/index.html` | `../../assets/theme.js`, `hr.js` | `../../assets/app.css`, `hr.css` |
 | CRM · Vertrieb | `app/module/crm/index.html` | `../../assets/theme.js`, `mhd-ware.js` (Reiter MHD-Ware, `window.STAFL_CRM_MHD`, von `crm.js` mit dessen Hilfsfunktionen aufgerufen), `cockpit.js` (Mein Cockpit, Master-Cockpit und Reiter „Übersicht“ im Kunden-Pop-up, `window.STAFL_CRM_COCKPIT`, ebenso von `crm.js` aufgerufen), `einzelangebot.js` (Reiter „Angebote“ im Kunden-Pop-up: Einzelangebote des Kunden, `window.STAFL_CRM_EINZEL`, von `crm.js` aufgerufen), `crm.js` | `../../assets/app.css`, `crm.css` |
@@ -126,7 +126,7 @@ veraltet. Teilskripte folgen alle demselben Muster:
   const W = window.WA;
   const { $, api, esc, icon, toast, confirmBox } = W;
   /* … */
-  W.views.schutz = laden;          // Ansicht „schutz“ (admin-schutz.js)
+  W.views.beispiel = laden;        // Ansicht „beispiel“ (eigene Datei admin-beispiel.js)
 })();
 ```
 
@@ -151,7 +151,7 @@ eingebunden werden und darf `W.views` nur ergänzen. `setView` ruft Ansichten nu
 
 ```js
 const BEREICH_VIEWS = {
-  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'],
+  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
   'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
   'bestand.intern': ['stock'],
   'verwaltung.import': ['importe'],
@@ -267,6 +267,22 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
   (Erfassungsphase am `window`, auch für später erzeugte Fenster); Seiten schreiben dafür keinen eigenen Code. Geprüft von der
   Testgruppe `einheit` für jedes `<dialog>` jeder Seite (Klick daneben, Escape). Rückfragen nie mit `confirm()`/`alert()`
   des Browsers, sondern im eigenen Fenster (Eingabebereich `confirmBox`, Kundenseite `frage()`, Module ihr `frage()`).
+- **Einheitliche Bedienung (Durchsicht 03.11.2026), gilt für alle Seiten und Module:**
+  - Jedes Fenster hat oben rechts ein × mit `aria-label` „…schließen“ (Testgruppe `einheit` prüft jedes fest im HTML
+    stehende Fenster). Ausnahmen: reine Rückfragen (`dlg-frage`, `dlg-confirm`: nur Abbrechen/Ja) und Pflichtfenster mit
+    `data-pflicht` (Passwort über den Link aus der E-Mail).
+  - Knopfreihe: Nebenaktionen links, „Abbrechen“/„Schließen“, die Hauptaktion (`btn primary`) ganz rechts. „Schließen“ ist
+    nie ein Hauptknopf. Die Knopfreihe am Ende eines Formularfensters bleibt beim Scrollen sichtbar (`position: sticky`).
+  - Hauptknopf überall in der gemeinsamen Farbe aus `app.css` (hell Bordeaux, dunkel Rosa mit dunkler Schrift); Initialen
+    im Kopf immer auf Bordeaux (`#8c1d2c`).
+  - Am Handy (≤ 560 px) öffnen Fenster als Blatt von unten (volle Breite, oben gerundet).
+  - Folgenreiche Schritte (Löschen, Zurückziehen, Verwerfen) fragen im eigenen Fenster nach; der Fokus liegt auf „Abbrechen“,
+    Escape heißt „nein“.
+  - Aufklappmenüs aus `<details>` bekommen `data-menue`: `theme.js` schließt sie mit Escape (Fokus zurück auf den Titel)
+    und bei einem Klick außerhalb. Menüs aus Knöpfen bleiben ganz im Bild (Kundenseite: `menuImBild`).
+  - Gekürzte Texte (`text-overflow: ellipsis`) tragen den vollen Text im `title`; Platzhalter langer Felder enden mit „…“
+    (`app.css`, gilt für alle Seiten).
+  - Einzahl/Mehrzahl immer passend („1 Markt“, „3 Märkte“).
 - Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Escape oder ein Element mit
   `data-close` schließt, nicht während `data-busy` (Speichern läuft). Mit `data-fest` (z. B. `#dlg-user`) schützt das Fenster
   getippte Eingaben vor einem versehentlichen Escape: Sind sie noch nicht gespeichert, zeigt das erste Escape den Hinweis „Die

@@ -64,6 +64,44 @@ window.addEventListener('click', function (e) {
   if (d && d.nodeName === 'DIALOG' && d.open) e.stopImmediatePropagation();
 }, true);
 
+/* Aufklappmenüs aus <details data-menue> (Filter „Monate“, „Vertreter“, „Wann“) bedienen sich wie jedes Menü: Escape
+   schließt (Fokus zurück auf den Titel), ein Klick außerhalb ebenso. Ein Klick auf ein Element, das die Seite inzwischen
+   neu gezeichnet hat (nicht mehr im Dokument), zählt nicht als „außerhalb“. */
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  var m = document.querySelector('details[data-menue][open]');
+  if (!m) return;
+  m.open = false;
+  var s = m.querySelector('summary');
+  if (s) s.focus();
+  e.preventDefault();
+});
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  if (!t || !t.isConnected) return;
+  var offen = document.querySelectorAll('details[data-menue][open]');
+  for (var i = 0; i < offen.length; i++) if (!offen[i].contains(t)) offen[i].open = false;
+});
+
+/* Fokus im Fenster: Manche Fenster setzen ihren Inhalt erst nach showModal() – dann stünde der Fokus außerhalb (Tastatur und
+   Bildschirmleser fänden das Fenster nicht). Steht er nach dem Öffnen nicht im Fenster, geht er auf das erste bedienbare
+   Element darin (sonst auf das Fenster selbst). Einen Fokus, den die Seite selbst setzt, lässt das unberührt. */
+(function () {
+  if (typeof HTMLDialogElement === 'undefined' || !HTMLDialogElement.prototype.showModal) return;
+  var orig = HTMLDialogElement.prototype.showModal;
+  var ZIEL = '[autofocus], input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+  HTMLDialogElement.prototype.showModal = function () {
+    var d = this, r = orig.apply(this, arguments);
+    var pruefen = function () {
+      if (!d.open || d.contains(document.activeElement)) return;
+      var z = d.querySelector(ZIEL);
+      if (z) z.focus(); else { if (!d.hasAttribute('tabindex')) d.setAttribute('tabindex', '-1'); d.focus(); }
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(pruefen); else setTimeout(pruefen, 0);
+    return r;
+  };
+})();
+
 /* Hinweise (Toasts) über offenen Fenstern lesbar: Ein Fenster aus showModal() liegt in der obersten Ebene, alles andere
    darunter hinter dem abgedunkelten, unscharfen Hintergrund – ein Hinweis wie „Gespeichert“ wäre dort kaum lesbar. Deshalb
    liegt jeder Toast der Seite ([role=status] mit Klasse „toast“ bzw. „…-toast“) als Popover (manual: kein Schließen per

@@ -12,10 +12,14 @@ Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
   Automatisierung nur mit abgeschaltetem navigator.webdriver), Knopf im Dashboard, Wahl am Konto (theme_save „darstellung“)
   gilt auf jedem Host; dann keine Unschärfe, keine Farbflächen, keine Übergänge.
 - Fenster (<dialog>) auf jeder Seite gleich (02.11.2026): ein Klick daneben schließt nie, Escape schließt; Hinweise (Toasts)
-  erscheinen über einem offenen Fenster, nicht dahinter.
+  erscheinen über einem offenen Fenster, nicht dahinter; jedes fest geschriebene Fenster hat oben rechts ein × („Schließen“) –
+  ausgenommen reine Rückfragen (Ja/Abbrechen).
 Bildschirmfotos: tests/.ergebnisse/einheit-*.png (Bestandsaufnahme für die Durchsicht).
 """
+import glob
 import json
+import os
+import re
 import sys
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
@@ -28,6 +32,20 @@ res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
 
+
+# Jedes fest im HTML stehende Fenster hat ein × (Knopf mit „…schließen“ als Beschriftung); per Skript gefüllte Fenster prüft
+# die Durchsicht am Bild, reine Rückfragen (dlg-frage, dlg-confirm) haben nur Ja/Abbrechen, Pflichtfenster (data-pflicht) keins
+APP = os.path.join(os.path.dirname(__file__), '..', '..', 'app')
+ohne_x = []
+for datei in glob.glob(os.path.join(APP, '**', 'index.html'), recursive=True):
+    for m in re.finditer(r'<dialog\b([^>]*)>(.*?)</dialog>', open(datei, encoding='utf-8').read(), re.S):
+        dlg_id = (re.search(r'\bid="([^"]+)"', m.group(1)) or [None, ''])[1]
+        inhalt = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        if not inhalt or re.search(r'frage|confirm', dlg_id) or 'data-pflicht' in m.group(1):
+            continue
+        if not re.search(r'<button[^>]*aria-label="[^"]*[Ss]chließen"', m.group(2)):
+            ohne_x.append(os.path.relpath(datei, APP) + '#' + dlg_id)
+check('Fenster mit festem Inhalt haben ein × zum Schließen', not ohne_x, ohne_x)
 
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
@@ -67,7 +85,7 @@ LOGO = r'''() => [...document.querySelectorAll('img[src*="logo-standard-fleisch"
   const s = getComputedStyle(e); return { bg: s.backgroundColor, filter: s.filter, src: e.getAttribute('src').split('/').pop() }; })'''
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   return { h: Math.round(r.height), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
-           icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight }; }'''
+           icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -121,6 +139,9 @@ with sync_playwright() as pw:
                     weg = pg.evaluate(ABGESCHNITTEN)
                     check(f'{teil} {tag}: kein abgeschnittener Text', not weg, weg)
                     check(f'{teil} {tag}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth') <= breite)
+                    if not dunkel:
+                        ohne = pg.evaluate("[...document.querySelectorAll('input[placeholder]')].filter((e) => e.offsetParent && getComputedStyle(e).textOverflow !== 'ellipsis').map((e) => e.id || e.name || e.placeholder).slice(0, 6)")
+                        check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)
                     if dunkel:
                         lg = pg.evaluate(LOGO)
                         check(f'{teil} {tag}: Logo weiß ohne helle Fläche', lg and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
@@ -258,8 +279,8 @@ with sync_playwright() as pw:
     check('Ohne Anmeldung nicht speicherbar', Client('198.51.100.77').call('theme_save', {'theme': 'dark'})[0] in (401, 403))
     check('Zurück auf „wie das Gerät“', A.call('theme_save', {'theme': ''})[0] == 200 and A.call('status')[1]['user'].get('theme') == '')
     for breite, je in zurueck.items():
-        # gleiche Form: Höhe, Rundung, Schrift, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
-        formen = {json.dumps({k: v for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text')}, sort_keys=True) for z in je.values()}
+        # gleiche Form: Höhe, Rundung, Schrift, Schriftfarbe, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
+        formen = {json.dumps({k: v for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()

@@ -285,7 +285,7 @@
       <dl class="sic-dl"><dt>Vorgang</dt><dd class="mono-s">${esc(e.a)}</dd><dt>Benutzer</dt><dd>${esc(e.n || '—')}${e.u ? ` <span class="sub">${esc(e.u)}</span>` : ''}</dd>
         <dt>Rolle</dt><dd>${esc(e.r || '—')}</dd><dt>IP-Adresse</dt><dd class="mono-s">${esc(e.ip || '—')}</dd></dl>
       ${det ? `<table class="sic-tabelle klein"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${det}</tbody></table>` : ''}</div>
-      ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`, { breit: !!det });
+      ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`, { breit: !!det });
   }
 
   /* ======================= Lagebild ======================= */
@@ -668,7 +668,7 @@
           <div><strong>${w === 'ok' ? 'Bereit für den Ernstfall' : w === 'warn' ? 'Bereit, mit Lücken' : 'Lücken mit Handlungsbedarf'}</strong>
           <span>${p.mail.ok ? `Test-Meldung an ${plural(p.mail.ok, 'Empfänger', 'Empfänger')} zugestellt` : `Test-Meldung nicht zugestellt${p.mail.fehler ? ` – ${esc(p.mail.fehler)}` : ''}`}</span></div></div>
         <ul class="pb-punkte">${punkte}</ul><h4>Gesehen</h4>${gesehen}</div>
-      ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`, { breit: true });
+      ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`, { breit: true });
   }
   function dauerText(a, b) {
     const s = Math.max(0, (new Date(b) - new Date(a)) / 1000);
@@ -727,7 +727,7 @@
     dialog(`${dKopf('Notfall vom ' + datum(v.seit), `${esc(zeit(v.seit))} – ${esc(zeit(v.bis))} Uhr · ${esc(dauerText(v.seit, v.bis))}`)}<div class="sic-dinhalt"><dl class="sic-dl">
       <dt>Grund</dt><dd>${esc(v.grund)}</dd><dt>ausgelöst von</dt><dd>${esc(v.von)}</dd><dt>beendet von</dt><dd>${esc(v.beendetVon)}</dd>${v.notiz ? `<dt>Notiz</dt><dd>${esc(v.notiz)}</dd>` : ''}
       <dt>Sitzungen beendet</dt><dd>${zahl(w.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(w.kundenSitzungen)} Kunden</dd><dt>Firewall</dt><dd>${esc(w.firewall || '—')}</dd>
-      <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl>${haken}</div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+      <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl>${haken}</div>${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
   }
   /* Auslösen in Schritten: 1 Wirkung → 2 Grund, Optionen, Bestätigungswort → 3 Bestätigung (Passwort bzw. erneute Anmeldung) */
   function notfallAuslosen(entwurf = null) {
@@ -833,7 +833,7 @@
       const r = await aufruf('sicherheit_notfall_aus', { body: { firewall: !!($('#nf-zurueck', dlg) || {}).checked, notiz: $('#nf-notiz', dlg).value } });
       dialog(`${dKopf('Notfall beendet', `Dauer ${esc(r.ende.dauer)}`)}<div class="sic-dinhalt"><dl class="sic-dl"><dt>Einstellungen</dt><dd>${esc(r.ende.einstellungen)}</dd></dl>
           <p class="sic-hinweis">Alle Mitarbeiter können wieder arbeiten; die Angebotsseite ist wieder erreichbar (sofern keine Wartung von Hand eingeschaltet ist).</p></div>
-        ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+        ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
       toast('Notfallmodus beendet.');
       await notfallTab();
     } });
@@ -1049,7 +1049,7 @@
       daten: 'Auffälligkeit im Datenordner. Herkunft prüfen.' };
     dialog(`${dKopf('Befund der Dateiprüfung', esc(IP_ART[x.art] || x.art))}<div class="sic-dinhalt"><dl class="sic-dl">
       <dt>Datei</dt><dd class="mono-s sic-pfad">${esc(x.path)}</dd><dt>Stufe</dt><dd>${punkt(IP_STUFE[x.stufe] || 'info')} ${esc(x.stufe)}</dd><dt>Befund</dt><dd>${esc(x.text)}</dd>
-      ${x.signatur ? `<dt>Muster</dt><dd><strong>${esc(x.signatur)}</strong></dd>` : ''}</dl><p class="sic-hinweis">${esc(RAT[x.art] || '')}</p></div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+      ${x.signatur ? `<dt>Muster</dt><dd><strong>${esc(x.signatur)}</strong></dd>` : ''}</dl><p class="sic-hinweis">${esc(RAT[x.art] || '')}</p></div>${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
   }
 
   /* ======================= Ereignisse ======================= */
@@ -1309,7 +1309,7 @@
     }
     const q = g.q.toLowerCase();
     const passt = (c) => !q || c.toLowerCase() === q || land(c).toLowerCase().includes(q);
-    const opt = (c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}><span class="geo-name">${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
+    const opt = (c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}><span class="geo-name" title="${esc(land(c))}">${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     const bekannt = S.sec.geoCountries || [];
     // nach Kontinenten gegliedert; Länder ohne Zuordnung (neuere Länderliste des Servers) unter „Weitere“
     const zugeordnet = new Set(g.kontinente.flatMap((k) => k.laender));
@@ -1452,7 +1452,7 @@
           ${k.mustChange ? '<dt>Passwort</dt><dd>muss beim nächsten Anmelden geändert werden</dd>' : ''}${k.lockedUntil ? `<dt>Sperre</dt><dd><span class="sic-pille bad">bis ${esc(uhr(new Date(k.lockedUntil * 1000).toISOString()))} Uhr</span></dd>` : ''}</dl>
         ${k.admin ? '<p class="sic-hinweis">Administratoren haben alle Rechte, auch Notfall beenden, Einstellungen und Zugänge.</p>' : `<h4>Sicherheitsrelevante Rechte</h4><ul class="sic-rechte">${k.rechte.map((r) => `<li><span class="mono-s">${esc(r.key)}</span> ${esc(r.label)}</li>`).join('')}</ul>`}
         <h4>Sitzungen <span class="sub">${zahl(k.sitzungen.length)}</span></h4>${sitz ? `<table class="sic-tabelle klein"><tbody>${sitz}</tbody></table>` : leer('Keine aktive Sitzung.')}</div>
-      ${dFuss(`<a class="btn" href="${VERWALTUNG}#users">${icon('extern')}In der Verwaltung</a>${k.lockedUntil ? '<button type="button" class="btn" data-d="entsperren">Entsperren</button>' : ''}${k.sitzungen.some((s) => !s.current) ? '<button type="button" class="btn gefahr" data-d="alle">Alle Sitzungen beenden</button>' : ''}<button type="button" class="btn primary" data-d="zu">Schließen</button>`)}`,
+      ${dFuss(`<a class="btn" href="${VERWALTUNG}#users">${icon('extern')}In der Verwaltung</a>${k.lockedUntil ? '<button type="button" class="btn" data-d="entsperren">Entsperren</button>' : ''}${k.sitzungen.some((s) => !s.current) ? '<button type="button" class="btn gefahr" data-d="alle">Alle Sitzungen beenden</button>' : ''}<button type="button" class="btn" data-d="zu">Schließen</button>`)}`,
     { breit: true, handler: async (a, b) => {
       if (a === 'ende') { await aufruf('session_end', { body: { sid: b.dataset.sid } }); toast('Sitzung beendet.'); }
       else if (a === 'alle') { await aufruf('session_end', { body: { uid: k.id } }); toast('Sitzungen beendet.'); }

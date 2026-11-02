@@ -231,7 +231,7 @@
 <!-- Erneute Passwortbestätigung für sensible Verwaltungsaktionen -->
 <dialog class="modal" id="dlg-reauth" aria-labelledby="reauth-title" aria-describedby="reauth-description">
   <form class="dlg" id="reauth-form">
-    <div class="dlg-head"><h2 id="reauth-title">Verwaltungsaktion bestätigen</h2></div>
+    <div class="dlg-head"><div><h2 id="reauth-title">Verwaltungsaktion bestätigen</h2></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="dlg-body">
       <p id="reauth-description">Bitte geben Sie Ihr aktuelles Passwort ein. Damit bestätigen Sie sensible Verwaltungsaktionen für die nächsten fünf Minuten in dieser Sitzung.</p>
       <label class="fld"><span>Aktuelles Passwort</span><input id="reauth-password" name="current-password" type="password" autocomplete="current-password" required maxlength="200"></label>
@@ -242,7 +242,7 @@
 </dialog>
 <dialog class="modal" id="dlg-reauth-kc" aria-labelledby="rkc-title" aria-describedby="rkc-text" data-fest>
   <div class="dlg">
-    <div class="dlg-head"><h2 id="rkc-title">Kurz bestätigen</h2></div>
+    <div class="dlg-head"><div><h2 id="rkc-title">Kurz bestätigen</h2></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <div class="dlg-body">
       <p id="rkc-text">Für diese Änderung bitte noch einmal bei der STAFL-Anmeldung anmelden. Das geschieht in einem eigenen Fenster – Ihre Eingaben bleiben hier erhalten und die Änderung wird danach automatisch ausgeführt.</p>
       <p class="rkc-st" id="rkc-status" role="status"></p>
