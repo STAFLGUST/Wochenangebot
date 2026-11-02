@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 149 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 143 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -34,16 +34,11 @@ _Modul HR · Excel-Export für den Steuerberater: ein Blatt je Monat in Aufbau u
 
 ## `app/api/module/hr/import.php`
 
-_Modul HR · Übernahme der bisherigen Planungsdatei („Urlaub 2026.xlsx“, ein Blatt je Monat)._
+_Modul HR · Importe für die Importzentrale (Verwaltung → Import, docs/plattform/schnittstellen/import.md)_
 
-- `hr_import_monat(blatt)` – Monat und Jahr eines Blatts: Datum in K2 (Excel-Seriennummer), sonst aus dem Blattnamen („Okt. '26“, „Januar ´26“)
-- `hr_import_lesen(e)` – Datei lesen: Mitarbeiter (in Reihenfolge) und Kürzel je Datum
 - `hr_import_zeitraeume(tage)` – Kürzel zu Zeiträumen zusammenfassen: aufeinanderfolgende Arbeitstage (Mo–Fr ohne Feiertage) mit gleichem Kürzel
-- `import_arten_hr()` – Importart für die Importzentrale (Verwaltung → Import, docs/plattform/schnittstellen/import.md).
-- `hr_import_planen(e, me)` – $me: wer übernimmt – Zeilen der eigenen Person werden nicht übernommen und ihre früheren Einträge nicht ersetzt (Vier-Augen-Prinzip: eigene Abwesenheiten …
-- `hr_import_stand(personal, abw, mitarbeiter)`
-- `hr_import_vorschau(e, me)`
-- `hr_import_uebernehmen(e, me)`
+- `import_arten_hr()` – Importart für die Importzentrale (Verwaltung → Import).
+- `hr_import_stand(personal, abw, mitarbeiter)` – Stand der HR-Daten für Vorschau und Übernahme (veralteter Stand → 409)
 
 ## `app/api/module/hr/urlaub.php`
 
@@ -268,7 +263,6 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `person_zeile(v, n)`
 - `urlaub(d1, d2)`
 - `zimp(cl, uebernehmen, stand)`
-- `zeile(pos, abt, name, tag)`
 - `anmelden(user, pw, ip, breite)`
 - `zeit(cl, uebernehmen, stand, **opt)`
 

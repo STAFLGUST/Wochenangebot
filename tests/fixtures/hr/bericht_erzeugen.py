@@ -2,7 +2,7 @@
 (Importvorlage für Urlaubs- und Krankheitstage): Kopfzeile 1 (Vorname, Nachname, Name (Abwesenheit), Abwesenheitsvergütung,
 Startdatum, Enddatum, Dauer, Mitarbeiternummer, Zweite Mitarbeiternummer, Abteilung, Standort, Gesamt); je Mitarbeiter eine
 Zeile mit Namen, Nummer (Text), Abteilung und Gesamtstunden, darunter die Abwesenheiten mit Datum (Format dd-MM-yyyy).
-Nur erfundene Namen (GR-007). Passt zu Urlaub_Muster_2025.xlsx (gleiche Namen, Jahr 2025).
+Nur erfundene Namen (GR-007). Passt zu den Testdaten 2025 in tests/e2e/test_hr.py (gleiche Namen).
 
     python3 tests/fixtures/hr/bericht_erzeugen.py
 """
