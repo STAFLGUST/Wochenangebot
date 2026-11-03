@@ -906,3 +906,4 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
 }
 
 require_once __DIR__ . '/mail.php';   // E-Mails der Urlaubsverwaltung (Erinnerung, Monatsübersicht, Steuerberater)
+require_once __DIR__ . '/planung.php';   // Jahresplanung (Vorplanung des nächsten Jahres, Konflikte, Jahresübersicht)
