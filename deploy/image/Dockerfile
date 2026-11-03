@@ -15,9 +15,11 @@ RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends libapache2-mod-auth-openidc; \
     # Sicherheitskorrekturen aus den Debian-Quellen, die das festgelegte Grundimage noch nicht enthält
-    # (libbrotli1: CVE-2026-111497, behoben in 1.1.0-2+deb13u1) – entfällt mit dem nächsten Digest des Grundimages
-    apt-get install -y --no-install-recommends --only-upgrade libbrotli1; \
+    # (libbrotli1: CVE-2026-111497, behoben in 1.1.0-2+deb13u1; linux-libc-dev – Kernel-Kopfdateien, im Grundimage für
+    # docker-php-ext-install: CVE-2026-99083, behoben in 6.12.115-2) – entfällt mit dem nächsten Digest des Grundimages
+    apt-get install -y --no-install-recommends --only-upgrade libbrotli1 linux-libc-dev; \
     dpkg --compare-versions "$(dpkg-query -W -f='${Version}' libbrotli1)" ge 1.1.0-2+deb13u1; \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' linux-libc-dev)" ge 6.12.115-2; \
     rm -rf /var/lib/apt/lists/*; \
     # nicht aktivieren: geladen wird das Modul erst durch die Konfiguration eines Keycloak-Hosts
     rm -f /etc/apache2/mods-enabled/auth_openidc.load /etc/apache2/mods-enabled/auth_openidc.conf; \
