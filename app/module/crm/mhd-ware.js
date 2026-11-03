@@ -9,7 +9,7 @@
   const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
   const kg = (milli) => (milli === null || milli === undefined ? '—' : F.kg(milli / 1000));   // wie im Bestand: 12,50 kg
   const kgZahl = (v) => (v === null || v === undefined ? '—' : F.kg(v));
-  const STUFE = { abgelaufen: ['vorbei', 'abgelaufen'], '0-4': ['rot', '0–4 Tage'], '5-7': ['orange', '5–7 Tage'], '8-14': ['gelb', '8–14 Tage'] };
+  const STUFE = { abgelaufen: ['vorbei', 'abgelaufen'], '0-4': ['rot', 'heute – 4 Tage'], '5-7': ['orange', '5 – 7 Tage'], '8-14': ['gelb', '8 – 14 Tage'] };
   const REGELMAESSIG = 3;   // ab so vielen Käufen im Zeitraum „kauft regelmäßig“
   const M = { d: null, monate: 3, wahl: '', k: null, vertreter: '', regel: false, auswahl: new Set(), suche: '', ladenListe: 0, ladenKaeufer: 0, fehler: '', host: null, c: null };
 
@@ -76,7 +76,7 @@
         <div class="crm-mhd-wahl"><div class="crm-seg" role="group" aria-label="Zeitraum">${[3, 6, 12].map((n) => `<button type="button" data-mhd-monate="${n}" aria-pressed="${n === M.monate}">${n} Monate</button>`).join('')}</div>
           <select id="mhd-vertreter" aria-label="Vertreter">${c.vOpts(M.vertreter)}</select>
           <label class="crm-mhd-check"><input type="checkbox" id="mhd-regel"${M.regel ? ' checked' : ''}> kauft regelmäßig (ab ${REGELMAESSIG} Käufen)</label></div></div>
-      <div class="crm-mhd-werte">${[['Käufer', String(alle.length)], ['Davon regelmäßig', String(regel)], ['Menge gekauft', kg(menge)], ['Zuletzt gekauft', zuletzt ? c.de(zuletzt) : '—']]
+      <div class="crm-mhd-werte">${[['Käufer', String(alle.length)], ['Davon regelmäßig', String(regel)], ['Menge gekauft', menge === null || menge === undefined ? '—' : F.kgSumme(menge / 1000)], ['Zuletzt gekauft', zuletzt ? c.de(zuletzt) : '—']]
         .map(([n, w]) => `<div><span>${c.esc(n)}</span><b>${c.esc(w)}</b></div>`).join('')}</div>
       <p class="crm-mhd-hinweis">Käufe vom ${c.de(M.k.von)} bis ${c.de(M.k.bis)} laut Umsatzdaten der Warenwirtschaft${M.k.umsatzBis ? ` (Stand ${c.de(M.k.umsatzBis)})` : ''} – ohne Preise.</p>
       ${zeilen.length ? `<div class="crm-tabelle-rahmen"><table class="crm-tabelle crm-mhd-tabelle${bearbeiten ? ' mit-wahl' : ''}" id="mhd-tabelle">

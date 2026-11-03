@@ -50,7 +50,7 @@ with sync_playwright() as pw:
     check('article numbers in black', pg.evaluate("getComputedStyle(document.querySelector('.al td.c-code')).color") in ('rgb(11, 11, 11)', 'rgb(0, 0, 0)'))
     check('offer view uses the full width (no side panel)', pg.is_hidden('.merk') and pg.locator('.al').bounding_box()['width'] > 1300)
     note = pg.inner_text('.al .al-note')
-    check('note under the offer: price terms, minimum weight, freight, contact', 'netto' in note and '300 kg' in note and '30 €' in note and '35 €' in note and 'Telefon' in note, note)
+    check('note under the offer: price terms, minimum weight, freight, contact', 'netto' in note and '300 kg' in note and '30,00 €' in note and '35,00 €' in note and 'Telefon' in note, note)
     check('logo in the list header', pg.locator('.al-head img.al-logo').count() == 1 and pg.evaluate("document.querySelector('.al-logo').naturalWidth") > 0)
     pg.screenshot(path=SH + '/angebotsliste.png')
     pg.screenshot(path=SH + '/angebotsliste-ganz.png', full_page=True)

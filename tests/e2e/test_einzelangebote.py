@@ -403,7 +403,7 @@ with sync_playwright() as p:
     check('über Wochenpreis: +7,7 %', 'ab-ueber' in a.get_attribute(row + ' .ez-abw', 'class') and '+7,7 %' in a.inner_text(row + ' .ez-a'))
     a.fill(row + ' [data-f="qty"]', '12'); a.press(row + ' [data-f="qty"]', 'Tab')
     a.wait_for_function("document.querySelector('#ez-summe') && document.querySelector('#ez-summe').textContent.includes('330,00')")
-    check('Summe: 12 kg · 330,00 €', '12 kg' in a.inner_text('#ez-summe'))
+    check('Summe: 12,00 kg · 330,00 € (Menge mit 2 Stellen)', '12,00 kg' in a.inner_text('#ez-summe'), a.inner_text('#ez-summe'))
     a.fill(row + ' [data-f="qty"]', 'abc')
     check('ungültige Menge markiert', 'invalid' in a.get_attribute(row + ' [data-f="qty"]', 'class'))
     a.fill(row + ' [data-f="qty"]', '12'); a.press(row + ' [data-f="qty"]', 'Tab')

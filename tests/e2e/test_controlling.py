@@ -195,7 +195,7 @@ with sync_playwright() as p:
     for breite, thema in ((390, 'light'), (390, 'dark'), (1280, 'dark')):
         ctx, pg = anmelden('lea', 'Leserin-Konto-12', '198.51.100.10', breite, thema)
         pg.wait_for_selector('#ctl-u-tabs [data-tab="uebersicht"]'); pg.click('#ctl-u-tabs [data-tab="uebersicht"]'); pg.wait_for_selector('#ctl-u-kpis .ctl-kpi')
-        check(f'{breite}px {thema}: ohne EK-Recht DB leer mit Hinweis', 'DB und Spanne nur mit den Rechten' in text(pg, '#ctl-u-fussnote') and '–' in text(pg, '#ctl-u-kpis'))
+        check(f'{breite}px {thema}: ohne EK-Recht DB leer mit Hinweis', 'DB und Spanne nur mit den Rechten' in text(pg, '#ctl-u-fussnote') and '—' in text(pg, '#ctl-u-kpis'))
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         if thema == 'dark':
             check(f'{breite}px: dunkler Grund', pg.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(18, 16, 17)')

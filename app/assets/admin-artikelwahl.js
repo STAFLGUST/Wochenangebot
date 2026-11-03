@@ -25,7 +25,7 @@
   const ALLE = '*';            // alle Gruppen
   const MAX_ZEILEN = 400;
 
-  const stdText = (p) => (!p ? '<span class="muted">nicht im Angebot</span>' : p.status === 'value' ? esc(F.euroKg(p.value)) : p.status === 'request' ? 'auf Anfrage' : '–');
+  const stdText = (p) => (!p ? '<span class="muted">nicht im Angebot</span>' : p.status === 'value' ? esc(F.euroKg(p.value)) : p.status === 'request' ? 'auf Anfrage' : '—');
   function bestandHTML(a, kurz) {
     if (!a || a.totalKg === undefined) return '<span class="muted">—</span>';
     if (!(a.totalKg > 0)) return '<span class="ez-kein">kein Bestand</span>';
@@ -135,7 +135,7 @@
     if (!cfg.preis) return '';
     const fest = cfg.preis.fest ? cfg.preis.fest(a) : null;   // z. B. Preis eines Artikels, der schon im Angebot steht
     if (fest != null) return `<td class="num ezp-pr"><span class="ezp-fest">${esc(fest)}</span></td>`;
-    if (!pk.sel.has(k)) return '<td class="num ezp-pr"><span class="muted">–</span></td>';
+    if (!pk.sel.has(k)) return '<td class="num ezp-pr"><span class="muted">—</span></td>';
     const v = pk.preise.has(k) ? pk.preise.get(k) : cfg.preis.vorschlag(a);
     return `<td class="num ezp-pr"><input class="in num ezp-pin" data-preis="${esc(a.code)}" inputmode="decimal" value="${esc(v)}" placeholder="${esc(cfg.preis.platzhalter ? cfg.preis.platzhalter(a) : '')}" aria-label="Preis für ${esc(a.code)} in Euro je kg"></td>`;
   }
@@ -171,8 +171,8 @@
             <td class="ezp-n"><span>${esc(a.name || '(ohne Bezeichnung)')}</span>${ist ? ` <span class="ez-tag ezp-drin">${esc(cfg.drinText || 'im Angebot')}</span>` : ''}${merk ? `<small>${esc(merk)}</small>` : ''}
               ${mitB ? `<small class="ezp-mob">${cfg.preis && (a.nr !== undefined ? a.nr : a.code) ? esc(a.nr !== undefined ? a.nr : a.code) + ' · ' : ''}${a.totalKg > 0 ? esc(fmtKg(a.totalKg)) + ' kg verfügbar' : 'kein Bestand'}${cfg.preis && a.stdPrice ? ' · Wochenpreis ' + stdText(a.stdPrice) : ''}</small>` : ''}</td>
             ${mitB ? `<td class="num ezp-kg">${a.kg > 0 ? `<b>${esc(fmtKg(a.kg))} kg</b>` : '<span class="ez-kein">kein Bestand</span>'}</td>
-              <td class="num ezp-m">${a.incomingKg > 0 ? esc(fmtKg(a.incomingKg)) + ' kg' + (eta ? `<small class="ezp-eta">ETA ${esc(dm(eta))}</small>` : '') : '<span class="muted">–</span>'}</td>
-              <td class="ezp-m">${a.mhd ? esc(dmy(a.mhd)) : '<span class="muted">–</span>'}</td>` : ''}
+              <td class="num ezp-m">${a.incomingKg > 0 ? esc(fmtKg(a.incomingKg)) + ' kg' + (eta ? `<small class="ezp-eta">ETA ${esc(dm(eta))}</small>` : '') : '<span class="muted">—</span>'}</td>
+              <td class="ezp-m">${a.mhd ? esc(dmy(a.mhd)) : '<span class="muted">—</span>'}</td>` : ''}
             <td class="num ezp-p">${a.stdPrice ? stdText(a.stdPrice) : '<span class="muted" title="nicht im Wochenangebot">–</span>'}</td>
             ${preisFeld(a, k)}
             <td class="ezp-i"><button type="button" class="ibtn" data-info="${esc(a.code)}" aria-expanded="${auf}" aria-label="Details zu ${esc(a.code)}" title="Partien, Bestand, Ankünfte">${icon('info', 'sm')}</button></td></tr>`;

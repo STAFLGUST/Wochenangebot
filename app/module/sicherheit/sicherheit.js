@@ -302,7 +302,7 @@
       karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen', tl7),
       karte(K.gesperrteAdressen || K.gesperrteKonten ? 'warn' : 'ok', 'Gesperrt', zahl(K.gesperrteAdressen + K.gesperrteKonten), `${plural(K.gesperrteAdressen, 'Adresse', 'Adressen')} · ${plural(K.gesperrteKonten, 'Zugang', 'Zugänge')}`, 'firewall'),
       karte(K.adminsOhneZweiFaktor ? 'bad' : K.ohneZweiFaktor ? 'warn' : 'ok', 'Zwei-Faktor-Anmeldung', `${zahl(K.zugaenge - K.ohneZweiFaktor)} / ${zahl(K.zugaenge)}`, K.adminsOhneZweiFaktor ? `${plural(K.adminsOhneZweiFaktor, 'Administrator', 'Administratoren')} ohne zweiten Faktor` : K.ohneZweiFaktor ? `${zahl(K.ohneZweiFaktor)} Zugänge ohne zweiten Faktor` : 'alle Zugänge geschützt', 'konten'),
-      karte('ok', 'Aktive Sitzungen', zahl(K.sitzungen), `${zahl(K.kundenOnline)} Kunden angemeldet`, 'sitzungen'),
+      karte('ok', 'Aktive Sitzungen', zahl(K.sitzungen), `${plural(K.kundenOnline, 'Kunde', 'Kunden')} angemeldet`, 'sitzungen'),
       karte(E.waf === 'sperren' && E.autoSperre ? 'ok' : E.waf === 'aus' ? 'bad' : 'warn', 'Firewall', E.waf === 'sperren' ? 'sperrt' : E.waf === 'protokoll' ? 'protokolliert' : 'aus', `${E.autoSperre ? 'automatische Sperre an' : 'automatische Sperre aus'} · Bedrohungsliste ${E.feed ? 'an' : 'aus'}`, 'firewall'),
       dpKarte, sicherungKarte(L.backup, 'system'), bereitstellungKarte(L.deployment, 'system'),
     ];
@@ -537,7 +537,7 @@
       <div class="sic-zwei">
         ${n ? nfVerlauf || '' : ''}
         ${n ? '' : block('Was beim Auslösen passiert', `<ul class="sic-wirkungen">${punkte}</ul>
-          <p class="sic-zahlen"><span><strong>${zahl(Z.mitarbeiterSitzungen)}</strong> Mitarbeitersitzungen ohne Administratorrolle</span><span><strong>${zahl(Z.kundenOnline)}</strong> Kunden angemeldet</span><span><strong>${zahl(Z.adminSitzungen)}</strong> Administratorsitzungen</span></p>`)}
+          <p class="sic-zahlen"><span><strong>${zahl(Z.mitarbeiterSitzungen)}</strong> Mitarbeitersitzungen ohne Administratorrolle</span><span><strong>${zahl(Z.kundenOnline)}</strong> ${Z.kundenOnline === 1 ? 'Kunde' : 'Kunden'} angemeldet</span><span><strong>${zahl(Z.adminSitzungen)}</strong> Administratorsitzungen</span></p>`)}
         ${block('Gesperrte Bereiche', `<p class="sic-hinweis">Im Notfall antworten diese Anwendungen Mitarbeitern ohne Administratorrolle mit „gesperrt“:</p>
           <p class="sic-chips">${W.bereiche.map((b) => `<span class="sic-chip">${esc(b)}</span>`).join('')}</p>
           <p class="sic-hinweis">Immer erreichbar bleiben das Dashboard, die zentrale Anmeldung und diese Sicherheitszentrale. Ein Server-Werkzeug beendet den Notfall auch ohne Oberfläche: <span class="mono-s">sh deploy/notfall-aus.sh</span>.</p>`)}
@@ -726,7 +726,7 @@
     const haken = hk.length ? `<h4>Leitfaden <span class="sub">${plural(hk.length, 'Schritt', 'Schritte')} abgehakt</span></h4><ul class="sic-verlauf">${hk.map(([id, x]) => `<li>${icon('check')}<strong>${esc(titel(id))}</strong><span class="sub">${esc(uhr(x.t))} Uhr · ${esc(x.name)}</span></li>`).join('')}</ul>` : '';
     dialog(`${dKopf('Notfall vom ' + datum(v.seit), `${esc(zeit(v.seit))} – ${esc(zeit(v.bis))} Uhr · ${esc(dauerText(v.seit, v.bis))}`)}<div class="sic-dinhalt"><dl class="sic-dl">
       <dt>Grund</dt><dd>${esc(v.grund)}</dd><dt>ausgelöst von</dt><dd>${esc(v.von)}</dd><dt>beendet von</dt><dd>${esc(v.beendetVon)}</dd>${v.notiz ? `<dt>Notiz</dt><dd>${esc(v.notiz)}</dd>` : ''}
-      <dt>Sitzungen beendet</dt><dd>${zahl(w.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(w.kundenSitzungen)} Kunden</dd><dt>Firewall</dt><dd>${esc(w.firewall || '—')}</dd>
+      <dt>Sitzungen beendet</dt><dd>${zahl(w.mitarbeiterSitzungen)} Mitarbeiter · ${plural(w.kundenSitzungen, 'Kunde', 'Kunden')}</dd><dt>Firewall</dt><dd>${esc(w.firewall || '—')}</dd>
       <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl>${haken}</div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
   }
   /* Auslösen in Schritten: 1 Wirkung → 2 Grund, Optionen, Bestätigungswort → 3 Bestätigung (Passwort bzw. erneute Anmeldung) */
@@ -978,7 +978,7 @@
     const ohne = d.users.filter((u) => u.active && u.zugang !== false && !u.twofa && !u.passkeys);
     host.innerHTML = `
       <div class="sic-karten vier">
-        ${karte('ok', 'Aktive Sitzungen', zahl(d.sessions.length), `${zahl(d.customers ? d.customers.online : 0)} Kunden angemeldet`)}
+        ${karte('ok', 'Aktive Sitzungen', zahl(d.sessions.length), `${plural(d.customers ? d.customers.online : 0, 'Kunde', 'Kunden')} angemeldet`)}
         ${karte(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(d.fails24), `${zahl(d.fails.length)} in 7 Tagen angezeigt`)}
         ${karte(gesperrt ? 'warn' : 'ok', 'Gesperrte Zugänge', zahl(d.users.filter((u) => u.lockedUntil).length), `Kontosperre nach ${d.settings.lockAfter} Fehlversuchen`)}
         ${karte(ohne.some((u) => u.role === 'admin') ? 'bad' : ohne.length ? 'warn' : 'ok', 'Ohne Zwei-Faktor', zahl(ohne.length), 'aktive Zugänge mit eigenem Passwort', 'konten')}

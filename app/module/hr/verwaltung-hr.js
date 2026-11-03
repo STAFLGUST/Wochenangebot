@@ -12,7 +12,7 @@
   if (!W) return;
   const { $, $$, api, esc, icon, toast, may } = W;
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-  const zahl = (n) => (Math.round(Number(n || 0) * 2) / 2).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+  const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(Number(n || 0) * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
   const JAHR = new Date().getFullYear();
   const tagMonat = (mmtt) => { const m = /^(\d{2})-(\d{2})$/.exec(mmtt || ''); return m ? `${m[2]}.${m[1]}.` : '31.03.'; };   // Verfallstag „MM-TT“ → „TT.MM.“
@@ -156,7 +156,7 @@
       <div class="gcard"><table class="etab utab"><thead><tr><th>Name</th><th>Abteilung</th><th>Arbeitstage</th><th class="num">Anspruch</th><th class="num">Übertrag</th><th class="num">Rest ${JAHR}</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>
       ${ps.map((p) => `<tr data-hr-uid="${esc(p.nutzer)}" tabindex="0" class="${p.aktiv ? '' : 'inactive'}"><td class="u-name"><div class="nm">${esc(`${p.vorname} ${p.nachname}`.trim())}</div><div class="sub">${p.zugang ? esc(p.username) : 'ohne Anmeldung'}${p.personalnummer ? ' · Nr. ' + esc(p.personalnummer) : ''}</div></td>
         <td>${esc(p.abteilung)}</td><td>${esc(p.arbeitstage.map((w) => WT[w - 1]).join(' '))}</td><td class="num">${esc(zahl(p.konto.anspruch))}</td>
-        <td class="num">${esc(zahl(p.konto.uebertrag))}</td><td class="num"><strong>${p.aktiv ? esc(zahl(p.konto.rest)) : '–'}</strong></td>
+        <td class="num">${esc(zahl(p.konto.uebertrag))}</td><td class="num"><strong>${p.aktiv ? esc(zahl(p.konto.rest)) : '—'}</strong></td>
         <td class="u-act"><button type="button" class="btn sm">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div>`;
   }
   function nurHrDialog(uid, host) {

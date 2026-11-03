@@ -116,7 +116,7 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `order_settings()`
 - `order_enabled()`
 - `de_num(v, dec)`
-- `de_qty(v)`
+- `de_qty(v)` – Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js)
 - `mail_tpl_bestellung(o, copy)` – Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML]
 - `mail_tpl_angebot(c, note, wk)` – Wochenangebot / Angebotslink: [Betreff, Text, HTML]
 - `restposten_items(def)` – Sonderposten eines Angebots – nur dessen Artikel und Preise: [Betreff, Text, HTML]

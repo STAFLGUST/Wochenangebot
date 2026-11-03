@@ -119,7 +119,7 @@
         ${b ? `<button type="button" class="btn primary" data-ez="speichern">Speichern</button>` : ''}
         ${b && !neu ? (ed.status === 'freigegeben' ? '<button type="button" class="btn" data-ez-status="entwurf">Freigabe beenden</button>' : '<button type="button" class="btn" data-ez-status="freigegeben">Im Portal freigeben</button>') : ''}
         ${!neu ? `<a class="btn" href="../../api/?action=crm_einzel_pdf&key=${encodeURIComponent(E.key)}&id=${encodeURIComponent(ed.id)}" target="_blank" rel="noopener" data-ez-pdf>PDF ansehen</a>` : ''}
-        ${b && !neu ? `<button type="button" class="btn" data-ez="mail"${kannSenden ? '' : ' disabled title="Erst speichern; braucht Positionen"'}>${c.icon('mail')}Per E-Mail …</button>` : ''}
+        ${b && !neu ? `<button type="button" class="btn" data-ez="mail"${kannSenden ? '' : ' disabled title="Erst speichern; braucht Positionen"'}>${c.icon('mail')}Per E-Mail senden</button>` : ''}
         <span class="crm-platz"></span>
         ${b && !neu ? `<button type="button" class="btn gefahr" data-ez="loeschen">${E.loeschen ? 'Wirklich löschen?' : 'Löschen'}</button>` : ''}
       </div>

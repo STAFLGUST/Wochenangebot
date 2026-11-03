@@ -11,12 +11,12 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const ist = (v) => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
-  const fmt = (n, d = 2) => !ist(n) ? '–' : new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }).format(Number(n));
+  const fmt = (n, d = 2) => !ist(n) ? '—' : new Intl.NumberFormat('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d }).format(Number(n));
   /* Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js): Menge als Summe in kg, Beträge mit Cent, Prozent mit 1 Stelle */
   const F = window.STAFL_FORMAT;
-  const kg = (n) => !ist(n) ? '–' : F.kgSumme(Number(n));
-  const euro = (n) => !ist(n) ? '–' : F.euro(Number(n));
-  const pct = (n) => !ist(n) ? '–' : F.prozent(Number(n));
+  const kg = (n) => !ist(n) ? '—' : F.kgSumme(Number(n));
+  const euro = (n) => !ist(n) ? '—' : F.euro(Number(n));
+  const pct = (n) => !ist(n) ? '—' : F.prozent(Number(n));
   const summe = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) : null; };
   const schnitt = (werte) => { const a = werte.filter(ist).map(Number); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; };
   const quote = (teil, ganz) => ist(teil) && ist(ganz) && Number(ganz) !== 0 ? Number(teil) / Number(ganz) : null;
@@ -33,7 +33,7 @@
   const summeAus = (monate, auswahl, k) => summe(monate.flatMap((m) => auswahl.map((r) => wert(m, r.nr, k))));
   const gesamt = (monate, auswahl) => { const kg = summeAus(monate, auswahl, 'kg'), umsatz = summeAus(monate, auswahl, 'umsatz'), db = summeAus(monate, auswahl, 'db'); return { kg, umsatz, db, spanne: quote(db, umsatz) }; };
   const zeitraumText = (monate) => monate.length === MONATE().length ? `Jahr ${S.jahr}` : monate.length === 1 ? `${monatsname(monate[0])} ${S.jahr}` : monate.length ? `${monate.length} ausgewählte Monate ${S.jahr}` : 'Keine Monate ausgewählt';
-  const anzeige = (k, v) => k === 'umsatz' || k === 'db' ? euro(v) : k === 'kg' ? (ist(v) ? `${kg(v)} kg` : '–') : pct(v);
+  const anzeige = (k, v) => k === 'umsatz' || k === 'db' ? euro(v) : k === 'kg' ? (ist(v) ? `${kg(v)} kg` : '—') : pct(v);
 
   /* ---------- Gerüst des Bereichs ---------- */
   const GERUEST = `
@@ -112,9 +112,9 @@
         <td data-label="${esc(KENNZAHL[k])} im Vergleich"><div class="ctl-barlabel"><span>${ist(z[k]) ? esc(pct(vergleich)) : 'Keine Daten'}</span></div><progress max="100" value="${breite}" aria-label="${esc(KENNZAHL[k])} ${esc(pct(vergleich))}"></progress></td></tr>`;
     });
     if (!zeilen.length) html.push(`<tr><td class="ctl-empty" colspan="9">${monate.length ? 'Bitte mindestens einen Vertreter auswählen.' : 'Bitte Monate auswählen.'}</td></tr>`);
-    html.push(`<tr class="ctl-total"><td data-label="Vertreter">Summe</td><td class="ctl-zahl" data-label="Menge">${esc(kg(t.kg))}</td><td class="ctl-anteil">${ist(t.kg) ? pct(1) : '–'}</td>
-      <td class="ctl-zahl" data-label="Umsatz">${esc(euro(t.umsatz))}</td><td class="ctl-anteil">${ist(t.umsatz) ? pct(1) : '–'}</td><td class="ctl-zahl" data-label="DB">${esc(euro(t.db))}</td>
-      <td class="ctl-anteil">${ist(t.db) ? pct(1) : '–'}</td><td class="ctl-zahl" data-label="Spanne">${esc(pct(t.spanne))}</td><td></td></tr>`);
+    html.push(`<tr class="ctl-total"><td data-label="Vertreter">Summe</td><td class="ctl-zahl" data-label="Menge">${esc(kg(t.kg))}</td><td class="ctl-anteil">${ist(t.kg) ? pct(1) : '—'}</td>
+      <td class="ctl-zahl" data-label="Umsatz">${esc(euro(t.umsatz))}</td><td class="ctl-anteil">${ist(t.umsatz) ? pct(1) : '—'}</td><td class="ctl-zahl" data-label="DB">${esc(euro(t.db))}</td>
+      <td class="ctl-anteil">${ist(t.db) ? pct(1) : '—'}</td><td class="ctl-zahl" data-label="Spanne">${esc(pct(t.spanne))}</td><td></td></tr>`);
     $('#ctl-u-vertreterzeilen').innerHTML = html.join('');
   }
   const monatsstatus = (monat, auswahl) => !auswahl.length ? 'Keine Vertreter ausgewählt'

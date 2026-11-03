@@ -487,14 +487,14 @@ function renderTable(list, grouped) {
   return `<table class="grid"><caption class="sr-only">Artikel der Angebotsliste</caption><thead><tr>
     <th class="c-fav" scope="col"><span class="sr-only">Merken</span></th>
     ${thHTML('code', 'Art.-Nr.', 'c-code')}${thHTML('name', 'Bezeichnung', 'c-name')}${thHTML('cat', 'Fleischart', 'c-cat')}
-    ${thHTML('origin', grouped ? 'Herkunft' : 'Herkunft / Gruppe', 'c-origin')}${thHTML('cond', 'Zustand', 'c-cond')}${thHTML('price', 'Preis €/kg', 'c-price')}${KORDER ? '<th class="c-qty" scope="col"><span class="qty-h">Menge kg</span></th>' : ''}
+    ${thHTML('origin', grouped ? 'Herkunft' : 'Herkunft / Gruppe', 'c-origin')}${thHTML('cond', 'Zustand', 'c-cond')}${thHTML('price', 'Preis', 'c-price')}${KORDER ? '<th class="c-qty" scope="col"><span class="qty-h">Menge kg</span></th>' : ''}
   </tr></thead><tbody>${rows.join('')}</tbody></table>`;
 }
 
 /* ---------- Angebotsliste (Standard): Aufbau wie die gedruckte Liste – Abschnitte, Gruppen in Spalten, Nr. · Bezeichnung · € / Kg ----------
    Die Gruppen werden in Leserichtung (spaltenweise) auf gleich hohe Spalten verteilt; nur eine Gruppe, die nicht
    sinnvoll in den Rest einer Spalte passt, wird geteilt (Kopf mit „Forts.“ wiederholt). Bildschirm und Druck nutzen dasselbe Verfahren. */
-const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '–');
+const plPrice = (p) => (p.status === 'value' ? fmtNum.format(p.value) : p.status === 'request' ? 'a. Anfr.' : '—');
 const plTitle = () => { const m = DATA.meta || {}; return m.title || (m.week ? `Freibleibendes Angebot für die KW ${m.week}${m.year ? '/' + m.year : ''}` : 'Angebot'); };
 /* Text in Anführungszeichen (z. B. „Fleischmeister“) hervorheben wie in der Druckliste */
 const plGroupName = (n) => esc(n).replace(/(&quot;|„|“|”)([^&„“”]{2,40}?)(&quot;|“|”)/g, '<em class="al-brand">„$2“</em>');
@@ -747,12 +747,12 @@ function renderMerk() {
   if (!host || !DATA) return;
   const list = DATA.items.filter((i) => favs.has(i.key));
   const shown = list.slice(0, 8);
-  const pr = (it) => (it.price.status === 'value' ? fmtNum.format(it.price.value) : it.price.status === 'request' ? 'a. Anfr.' : '–');
+  const pr = (it) => (it.price.status === 'value' ? fmtNum.format(it.price.value) : it.price.status === 'request' ? 'a. Anfr.' : '—');
   let order = '';
   if (KORDER) {
     const t = cart.size ? cartTotals() : null;
     order = `<div class="merk-order"><div class="merk-h"><h2>Bestellwunsch</h2>${t ? `<span>${plural(t.n, 'Position', 'Positionen')}</span>` : ''}</div>
-      ${t ? `<p class="merk-sum">${fmtQty.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}</p><button type="button" class="btn primary" data-merk="order">${icon('send', 'sm')}Bestellwunsch prüfen</button>`
+      ${t ? `<p class="merk-sum">${fmtKg.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}</p><button type="button" class="btn primary" data-merk="order">${icon('send', 'sm')}Bestellwunsch prüfen</button>`
         : '<p class="merk-hint">Mengen in der Spalte „Menge kg“ eintragen – hier erscheint dann Ihr Bestellwunsch.</p>'}</div>`;
   }
   host.innerHTML = `${order}<div class="merk-h"><h2>Merkliste</h2><span>${plural(list.length, 'Artikel', 'Artikel')}</span></div>
@@ -945,7 +945,7 @@ function openPrint(scope) {
 function printPriceCell(p) {
   if (p.status === 'value') return `<span class="p-p">${fmtNum.format(p.value)}</span>`;
   if (p.status === 'request') return '<span class="p-p req">auf Anfrage</span>';
-  return '<span class="p-p none">–</span>';
+  return '<span class="p-p none">—</span>';
 }
 function printAltNote(it) {
   if (!it.altPrices.length && !it.price.label) return '';
@@ -1377,7 +1377,8 @@ function bind() {
    Preise berechnet der Server beim Senden selbst aus dem veröffentlichten Angebot. */
 let KORDER = false;
 let cart = new Map();
-const fmtQty = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });
+const fmtQty = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 });   // nur im Eingabefeld (2,5 tippt sich leichter)
+const fmtKg = { format: (v) => F.zahl(v, 2, 2) };   // angezeigte Mengen immer mit 2 Stellen (12,50 kg) wie überall
 const fmtEur = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const cartKey = () => `bestellung.${KUNDE ? KUNDE.username : '-'}.${OFFER || 'std'}`;
 function parseQty(v) {
@@ -1436,8 +1437,8 @@ function renderOrderbar() {
   const t = cartTotals();
   bar.hidden = false; document.body.classList.add('has-orderbar');
   const fr = frachtFuer(t.kg);
-  const frTxt = fr.frei ? (fr.kosten ? ` <span class="ob-fr warn">+ ${fmtEur.format(fr.kosten)} € Fracht · noch ${fmtQty.format(fr.frei - t.kg)} kg bis frachtfrei</span>` : ' <span class="ob-fr ok">frachtfrei</span>') : '';
-  bar.innerHTML = `<div class="orderbar-in"><span class="ob-sum"><strong>${plural(t.n, 'Position', 'Positionen')}</strong> · ${fmtQty.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}${frTxt}</span>
+  const frTxt = fr.frei ? (fr.kosten ? ` <span class="ob-fr warn">+ ${fmtEur.format(fr.kosten)} € Fracht · noch ${fmtKg.format(fr.frei - t.kg)} kg bis frachtfrei</span>` : ' <span class="ob-fr ok">frachtfrei</span>') : '';
+  bar.innerHTML = `<div class="orderbar-in"><span class="ob-sum"><strong>${plural(t.n, 'Position', 'Positionen')}</strong> · ${fmtKg.format(t.kg)} kg · ca. ${fmtEur.format(t.sum)} €${t.req ? ` <span class="muted">+ ${t.req} auf Anfrage</span>` : ''}${frTxt}</span>
     <span class="ob-act"><button type="button" class="btn ghost sm" data-order="clear">Leeren</button><button type="button" class="btn primary" data-order="open">${icon('send')}Bestellwunsch prüfen</button></span></div>`;
 }
 function setQty(id, q, input) {
@@ -1460,7 +1461,7 @@ function openOrder() {
       ${orderLines().map(({ it, q }) => `<tr><td><div class="o-name">${esc(it.name)}</div><div class="sub">${esc([it.code, it.group].filter(Boolean).join(' · '))}</div></td>
         <td class="r"><input class="qty" type="text" inputmode="decimal" data-qty="${esc(it.id)}" value="${fmtQty.format(q)}" aria-label="Menge in kg: ${esc(it.name)}"></td>
         <td class="r">${it.price.status === 'value' ? fmtNum.format(it.price.value) + ' €/kg' : '<span class="muted">auf Anfrage</span>'}</td>
-        <td class="r o-sum" data-sum="${esc(it.id)}">${it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'}</td>
+        <td class="r o-sum" data-sum="${esc(it.id)}">${it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '—'}</td>
         <td class="r"><button type="button" class="ibtn" data-order="rm" data-id="${esc(it.id)}" aria-label="Position entfernen: ${esc(it.name)}">${icon('x', 'sm')}</button></td></tr>`).join('')}
       </tbody><tfoot id="or-foot">${orderFootHTML(t)}</tfoot></table>
       <p class="o-note" id="or-req"${t.req ? '' : ' hidden'}>Zzgl. Positionen mit Preis auf Anfrage.</p>
@@ -1478,8 +1479,8 @@ function openOrder() {
 }
 function orderFootHTML(t) {
   const fr = frachtFuer(t.kg);
-  return `<tr><td><strong>${fr.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r" id="or-kg"><strong>${fmtQty.format(t.kg)}</strong></td><td></td><td class="r" id="or-sum"><strong>${fmtEur.format(t.sum)} €</strong></td><td></td></tr>`
-    + (fr.kosten ? `<tr class="or-fr"><td>Frachtanteil (unter ${fmtQty.format(fr.unter)} kg)</td><td></td><td></td><td class="r" id="or-frk">${fmtEur.format(fr.kosten)} €</td><td></td></tr>
+  return `<tr><td><strong>${fr.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r" id="or-kg"><strong>${fmtKg.format(t.kg)}</strong></td><td></td><td class="r" id="or-sum"><strong>${fmtEur.format(t.sum)} €</strong></td><td></td></tr>`
+    + (fr.kosten ? `<tr class="or-fr"><td>Frachtanteil (unter ${fmtInt.format(fr.unter)} kg)</td><td></td><td></td><td class="r" id="or-frk">${fmtEur.format(fr.kosten)} €</td><td></td></tr>
       <tr><td><strong>Gesamt (ca.)</strong></td><td></td><td></td><td class="r" id="or-total"><strong>${fmtEur.format(t.sum + fr.kosten)} €</strong></td><td></td></tr>` : '');
 }
 /* Meldung zum Gewicht: unter der Frachtfreigrenze wird der Frachtanteil automatisch aufgeschlagen */
@@ -1487,13 +1488,13 @@ function frachtMsgHTML(t) {
   const fr = frachtFuer(t.kg);
   if (!fr.frei) return '';
   return fr.kosten
-    ? `<p class="o-fr warn" role="status"><strong>Mindestmenge nicht erreicht:</strong> Ihr Bestellwunsch hat ${fmtQty.format(t.kg)} kg. Unter ${fmtQty.format(fr.unter)} kg berechnen wir einen Frachtanteil von ${fmtEur.format(fr.kosten)} € pro Sendung – er ist oben bereits aufgeschlagen. Ab ${fmtQty.format(fr.frei)} kg liefern wir frachtfrei (noch ${fmtQty.format(fr.frei - t.kg)} kg).</p>`
-    : `<p class="o-fr ok" role="status">Ab ${fmtQty.format(fr.frei)} kg frachtfrei – Ihr Bestellwunsch erfüllt die Mindestmenge.</p>`;
+    ? `<p class="o-fr warn" role="status"><strong>Mindestmenge nicht erreicht:</strong> Ihr Bestellwunsch hat ${fmtKg.format(t.kg)} kg. Unter ${fmtInt.format(fr.unter)} kg berechnen wir einen Frachtanteil von ${fmtEur.format(fr.kosten)} € pro Sendung – er ist oben bereits aufgeschlagen. Ab ${fmtInt.format(fr.frei)} kg liefern wir frachtfrei (noch ${fmtKg.format(fr.frei - t.kg)} kg).</p>`
+    : `<p class="o-fr ok" role="status">Ab ${fmtInt.format(fr.frei)} kg frachtfrei – Ihr Bestellwunsch erfüllt die Mindestmenge.</p>`;
 }
 function refreshOrderDialog() {
   const t = cartTotals();
   if (!t.n) { $('#dlg-order').close(); return; }
-  for (const { it, q } of orderLines()) { const c = $(`#order-body [data-sum="${CSS.escape(it.id)}"]`); if (c) c.textContent = it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '–'; }
+  for (const { it, q } of orderLines()) { const c = $(`#order-body [data-sum="${CSS.escape(it.id)}"]`); if (c) c.textContent = it.price.status === 'value' ? fmtEur.format(lineSum(it, q)) + ' €' : '—'; }
   $('#or-foot').innerHTML = orderFootHTML(t);
   $('#or-fracht').innerHTML = frachtMsgHTML(t);
   $('#or-req').hidden = !t.req;
@@ -1522,7 +1523,7 @@ async function sendOrder(btn) {
     cart.clear(); saveCart(); renderOrderbar();
     for (const el of $$('#list .qty')) el.value = '';
     $('#order-body').innerHTML = `<div class="dlg-head"><div><h2 id="or-title">Vielen Dank!</h2><p>Bestellwunsch ${esc(r.nr)}</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
-      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtQty.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €${r.fracht && r.fracht.kosten ? ` zzgl. ${fmtEur.format(r.fracht.kosten)} € Frachtanteil` : ''}) ${r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
+      <div class="dlg-body o-done"><div class="empty-ico">${icon('check')}</div><p>Ihr Bestellwunsch <strong>${esc(r.nr)}</strong> (${plural(r.positions, 'Position', 'Positionen')}, ${fmtKg.format(r.totalQty)} kg, ca. ${fmtEur.format(r.total)} €${r.fracht && r.fracht.kosten ? ` zzgl. ${fmtEur.format(r.fracht.kosten)} € Frachtanteil` : ''}) ${r.delivery === 'fehler' || r.delivery === 'neu' ? 'ist gespeichert. Die E-Mail-Zustellung ist noch nicht bestätigt; bitte nicht nochmals als neuen Vorgang absenden. Bei Rückfragen nennen Sie uns die Bestellnummer.' : 'wurde an uns übermittelt. Wir melden uns mit der Bestätigung.'}</p>
         ${r.copy ? `<p class="muted">Eine Kopie haben wir an ${esc(r.copy)} gesendet.</p>` : ''}</div>
       <div class="dlg-foot"><button class="btn primary" type="button" data-close>Fertig</button></div>`;
   } catch (ex) {
@@ -1586,8 +1587,8 @@ async function openCustomerOrders(offset = 0, nr = '') {
         <p class="muted">${esc(o.angebotName || '')} · eingegangen am ${esc(custDate(o.t))}${o.termin ? ' · Wunschtermin ' + esc(dmy(o.termin)) : ''}${o.referenz ? ' · Ihre Referenz ' + esc(o.referenz) : ''}</p>
         ${o.bemerkung ? `<p class="co-note">${esc(o.bemerkung)}</p>` : ''}
         <table class="co-tab"><thead><tr><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
-        ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtQty.format(p.qty)} kg</td><td class="r">${p.price == null ? 'auf Anfrage' : fmtNum.format(p.price) + ' €/kg'}</td><td class="r">${p.sum == null ? '–' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td colspan="3"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr><td colspan="3">Frachtanteil (unter ${fmtQty.format(o.fracht.unter)} kg)</td><td class="r">${fmtEur.format(o.fracht.kosten)} €</td></tr><tr><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total + o.fracht.kosten)} €</strong></td></tr>` : ''}</tfoot></table>
+        ${o.positions.map((p) => `<tr><td>${p.code ? `<span class="muted">${esc(p.code)}</span> ` : ''}${esc(p.name)}</td><td class="r">${fmtKg.format(p.qty)} kg</td><td class="r">${p.price == null ? 'auf Anfrage' : fmtNum.format(p.price) + ' €/kg'}</td><td class="r">${p.sum == null ? '—' : fmtEur.format(p.sum) + ' €'}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td colspan="3"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr><td colspan="3">Frachtanteil (unter ${fmtKg.format(o.fracht.unter)} kg)</td><td class="r">${fmtEur.format(o.fracht.kosten)} €</td></tr><tr><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total + o.fracht.kosten)} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;
       foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn primary" type="button" data-close>Schließen</button>`;

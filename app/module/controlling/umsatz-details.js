@@ -57,7 +57,7 @@
       const tage = d.tage || [];
       const rhythmus = tage.length > 1 ? Math.max(1, Math.round(tageSeit(tage[tage.length - 1].tag) - tageSeit(tage[0].tag)) / (tage.length - 1)) : null;
       const pause = D.ctx && D.ctx.pause ? D.ctx.pause(d.wert) : null;   // aus der Liste „Bestellpausen“ der Seite
-      k.push(kachel('Letzter Kauf', s.zuletzt ? F.tag(s.zuletzt) : '–', pause ? `<span class="ctl-ua-marke pause">Bestellpause</span>seit ${esc(F.ganz(pause.pause))} Tagen`
+      k.push(kachel('Letzter Kauf', s.zuletzt ? F.tag(s.zuletzt) : '—', pause ? `<span class="ctl-ua-marke pause">Bestellpause</span>seit ${esc(F.ganz(pause.pause))} Tagen`
         : s.zuletzt ? esc(seitText(s.zuletzt)) : 'im Zeitraum keiner'));
       k.push(kachel('Liefertage', F.ganz(tage.length), rhythmus ? `etwa alle ${esc(F.ganz(Math.round(rhythmus)))} Tage` : ''));
     } else {
@@ -88,7 +88,7 @@
       ${alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile${cls}" data-ud-oeffnen="kunde" data-wert="${esc(z.nr)}">
         <span class="ctl-ud-name"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span>${mitMenge ? `<span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>` : ''}
         <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b>${mitMenge ? `<span class="ctl-zahl ctl-ud-preis" data-label="Ø Preis" title="Ø aller Käufer: ${esc(F.preis(d.summe))}">${esc(F.preis(z.werte))}${F.preisAbwHtml(F.preisAbweichung(z.werte, d.summe))}</span>` : ''}${d.ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
-        <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '–'}</span>${F.ICON.weiter}</button>`).join('')
+        <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '—'}</span>${F.ICON.weiter}</button>`).join('')
         + (alle.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" data-ud-alle>Alle ${esc(F.ganz(alle.length))} anzeigen</button>` : '')
       : '<p class="ctl-hilfe">Keine Kunden für diese Suche.</p>'}</section>`;
   }
@@ -98,7 +98,7 @@
     const zeigen = D.alle ? l : l.slice(0, ARTIKEL_ANFANG);
     return `<section class="ctl-ud-teil" aria-label="Artikel"><div class="ctl-ud-teilkopf"><h3>Artikel nach ${esc(k.name)} <small>${esc(F.ganz(l.length))}</small></h3></div>
       ${zeigen.map((z, i) => { const w = k.wert(z.werte); return `${trenner(zeigen, i)}<button type="button" class="ctl-ud-artikel" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">
-        <span class="ctl-ud-artikelkopf"><span><b>${esc(z.name)}</b> <small>${esc(z.nr)}</small></span><b class="ctl-zahl${w < 0 ? ' ctl-ua-negativ' : ''}">${esc(w === null ? '–' : k.text(w))}</b></span>
+        <span class="ctl-ud-artikelkopf"><span><b>${esc(z.name)}</b> <small>${esc(z.nr)}</small></span><b class="ctl-zahl${w < 0 ? ' ctl-ua-negativ' : ''}">${esc(w === null ? '—' : k.text(w))}</b></span>
         <span class="ctl-ua-spur${w < 0 ? ' minus' : ''}"><span style="width:${Math.min(100, (Math.abs(w || 0) / max) * 100).toFixed(1)}%"></span></span></button>`; }).join('') || '<p class="ctl-hilfe">Keine Artikel.</p>'}
       ${l.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" data-ud-alle>Alle ${esc(F.ganz(l.length))} anzeigen</button>` : ''}</section>`;
   }
@@ -116,7 +116,7 @@
           <span class="ctl-ud-name"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span><span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>
           <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b><span class="ctl-zahl ctl-ud-preis" data-label="Ø Preis"${z.vergleich ? ` title="Ø aller Kunden: ${esc(F.preis(z.vergleich))}"` : ''}>${esc(F.preis(z.werte))}${F.preisAbwHtml(F.preisAbweichung(z.werte, z.vergleich))}</span>
           ${ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
-          <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '–'}</span></button>`).join('')
+          <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '—'}</span></button>`).join('')
         + (alle.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" data-ud-alle>Alle ${esc(F.ganz(alle.length))} anzeigen</button>` : '')
       : '<p class="ctl-hilfe">Keine Artikel für diese Suche.</p>');
   }
@@ -131,7 +131,7 @@
     });
     if (!n || soll <= 0) return '';
     const q = (ist - soll) / soll;
-    return `<p class="ctl-ud-preisniveau" data-ud-preisniveau>Preisniveau: <b class="ctl-ua-delta${Math.abs(q) < 0.0005 ? '' : q < 0 ? ' minus' : ' plus'}">${q < 0 ? '−' : '+'}${esc(F.pct(Math.abs(q)))}</b> zum Ø aller Kunden für dieselben Mengen · bei ${esc(F.ganz(unter))} von ${esc(F.ganz(n))} Artikeln unter dem Ø</p>`;
+    return `<p class="ctl-ud-preisniveau" data-ud-preisniveau>Preisniveau: <b class="ctl-ua-delta${Math.abs(q) < 0.0005 ? '' : q < 0 ? ' minus' : ' plus'}">${esc(window.STAFL_FORMAT.veraenderung(q))}</b> zum Ø aller Kunden für dieselben Mengen · bei ${esc(F.ganz(unter))} von ${esc(F.ganz(n))} Artikeln unter dem Ø</p>`;
   }
   function kundeLieferungen() {
     const t = D.d.tage || [];

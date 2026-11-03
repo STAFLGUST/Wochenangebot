@@ -45,13 +45,13 @@
 
   /* ---------- Formate ---------- */
   const obj = (m) => (m && typeof m === 'object' && !Array.isArray(m) ? m : {});   // PHP liefert leere Zuordnungen als []
-  const zahl = (n) => Number(n).toLocaleString('de-DE');
+  const zahl = (n) => window.STAFL_FORMAT.zahl(n, 0, 2);   // echtes Minus wie überall (format.js)
   const vz = (n) => (n > 0 ? '+' + zahl(n) : n < 0 ? '−' + zahl(-n) : '0');
   const vzKlasse = (n) => (n > 0 ? 'lg-plus' : n < 0 ? 'lg-minus' : 'lg-null');
   const vzHtml = (n) => `<span class="${vzKlasse(n)}">${vz(n)}</span>`;
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
   const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
-  const euro = (n) => Number(n).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+  const euro = (n) => window.STAFL_FORMAT.euro(n);   // 1.234,50 € / −2.355,00 € wie überall
   const lm = (id) => (S.d.lademittel.find((l) => l.id === id) || { id, name: id, wert: null });
   const kurz = (id) => KURZ[id] || lm(id).name;
   const sortiertLm = (ids) => S.d.lademittel.map((l) => l.id).filter((id) => ids.has(id));

@@ -1925,7 +1925,7 @@
   function renderOffersBody(err = '') {
     const host = $('#view-angebote');
     const admin = may('angebote.loeschen'), edit = may('angebote.verwalten');
-    const kz = (id, gr) => { const n = ofKundenZahl(id, gr); return n === null ? '<span class="muted">–</span>' : fmtInt.format(n); };
+    const kz = (id, gr) => { const n = ofKundenZahl(id, gr); return n === null ? '<span class="muted">—</span>' : fmtInt.format(n); };
     host.innerHTML = `
       <div class="st-info"><div><strong>Angebote</strong><span class="sub">Jedes Angebot hat seine eigene Artikelliste: unter „Angebot bearbeiten“ das Angebot wählen und Artikel hinzufügen oder entfernen – andere Angebote bleiben unverändert. Angebote mit „Folgt dem Wochenangebot“ (bisherige Einstellung) zeigen dagegen alle Artikel des Wochenangebots. Kundenangebote sind nur nach Anmeldung sichtbar, nie auf der öffentlichen Seite. Jede Kundengruppe lässt sich genau einem Angebot zuordnen; ihre Kunden sehen dieses Angebot automatisch. Kundengruppen ohne eigenes Angebot bekommen automatisch das Wochenangebot. Beim Kunden direkt freigeschaltete Angebote kommen jeweils hinzu; Kunden ohne Kundengruppe sehen nur diese.</span></div>
         <span class="ms-state${ofDirty ? ' saving' : ''}" id="of-state">${ofDirty ? 'Nicht gespeichert' : ''}</span></div>
@@ -2825,7 +2825,7 @@
         <td class="h-name"><div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.group)}${s.inLatest ? '' : ` · <span class="gone">nicht mehr im Angebot (zuletzt ${esc(wkLong(H.weeks[s.lastWi]))})</span>`}</div></td>
         <td class="h-spark">${sparkSVG(x.vals)}</td>
         <td class="h-cur num">${s.inLatest ? esc(cur) : '<span class="muted">—</span>'}</td>
-        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[x.deltaFrom]))}">${fmtDelta(d)}</span>`}</td>
+        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0,00 €/kg</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[x.deltaFrom]))}">${fmtDelta(d)}</span>`}</td>
         <td class="h-range num">${x.min == null ? '<span class="muted">—</span>' : x.min === x.max ? F.euroKg(x.min) : `${fmtNum.format(x.min)} – ${fmtNum.format(x.max)} €/kg`}</td>
         <td class="h-weeks num">${x.weeksCount}</td>
       </tr>`;
@@ -2859,7 +2859,7 @@
   /* ---------- Daten: gespeicherte Wochen verwalten ---------- */
   const dlgHD = $('#dlg-hist-data');
   const dShort = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
-  const savedShort = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+  const savedShort = (iso) => (iso ? F.datumZeit(iso) : '');   // 16.10.2026, 11:03 wie überall
   function renderHistData() {
     const H = hist;
     const rows = H.weeks.slice().reverse().map((w) => {
@@ -3877,7 +3877,7 @@
   const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${prevWeek.year}` : '');   // KW 42/2026 wie überall
   function auxHeadHTML() {
     return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche €/kg<small>${esc(prevLabel())}</small></th>`
-      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`
+      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${model && model.meta.year ? '/' + esc(model.meta.year) : ''}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`
       + `<th class="e-stock" title="Verfügbarer Bestand (eingelagert)${stock && stock.date ? ' · Stand ' + esc(dmy(stock.date)) : ''}">Bestand kg<small>${stock && stock.date ? 'Stand ' + esc(mhdShort(stock.date)) : ''}</small></th>`;
   }
   function prevCellHTML(it) {
@@ -3893,7 +3893,7 @@
   function stockCellHTML(it) {
     const a = stockOf(it.code);
     if (!a) return it.code
-      ? `<td class="e-stock none"><span class="nostock" title="Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + esc(dmy(stock.date)) + ')' : ''}" aria-label="Kein verfügbarer Bestand">0</span></td>`
+      ? `<td class="e-stock none"><span class="nostock" title="Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + esc(dmy(stock.date)) + ')' : ''}" aria-label="Kein verfügbarer Bestand">0,00</span></td>`
       : '<td class="e-stock none" title="Ohne Artikelnummer kein Bestandsabgleich">—</td>';
     const cls = mhdClass(a.mhd);
     return `<td class="e-stock" title="${esc(`${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`)}">${cls ? `<span class="mhd-dot ${cls}" aria-label="MHD ${esc(mhdShort(a.mhd))}"></span>` : ''}${esc(fmtKg.format(a.kg))}</td>`;
@@ -4211,7 +4211,7 @@
       titel: 'Artikel für die Werbung',
       subHTML: `Werbung in <strong>${esc(offerName(oid))}</strong> · höchstens ${WERB_MAX} Artikel · Reihenfolge und Hinweise danach im Fenster „Werbung schalten“`,
       drin: () => new Set(), angebotText: `nur in „${offerShort(oid)}“`,
-      preis: { titel: 'Preis hier', fest: (a) => (!a.inOffer ? null : !a.hier ? '' : a.hier.status === 'value' ? F.euroKg(a.hier.value) : a.hier.status === 'request' ? 'auf Anfrage' : '–'), vorschlag, platzhalter: () => (std ? 'ohne Preis' : 'a. Anfr.') },
+      preis: { titel: 'Preis hier', fest: (a) => (!a.inOffer ? null : !a.hier ? '' : a.hier.status === 'value' ? F.euroKg(a.hier.value) : a.hier.status === 'request' ? 'auf Anfrage' : '—'), vorschlag, platzhalter: () => (std ? 'ohne Preis' : 'a. Anfr.') },
       fussText: 'Artikel, die noch nicht im Angebot stehen, werden mit dem Preis aufgenommen.',
       max: WERB_MAX, maxText: `Höchstens ${WERB_MAX} Artikel in der Werbung – bitte Auswahl verkleinern.`,
       okVerb: 'übernehmen', okLeer: 'Übernehmen', leerText: 'Artikel markieren, die beworben werden sollen.',
@@ -4562,7 +4562,7 @@
     const list = by.get(mKey(e.code));
     if (!list) return '<span class="muted" title="Nicht im aktuellen Angebot">—</span>';
     if (list.length > 1) return `<span class="muted" title="Artikelnummer ${list.length}× im Angebot – wird nicht automatisch abgeglichen">${list.length}× im Angebot</span>`;
-    if (differs(e, list[0])) return (ro || roMaster) ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '–')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
+    if (differs(e, list[0])) return (ro || roMaster) ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '—')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
     return `<span class="m-ok" title="Angebot entspricht den Stammdaten">${icon('check', 'sm')}</span>`;
   }
   async function renderMasterView() {

@@ -30,6 +30,10 @@ Alle Seiten formatieren über **`window.STAFL_FORMAT`** aus `app/assets/format.j
 | Datum | `datum(d)`, `datumZeit(d)`, `kw(w, j)` | `02.11.2026`, `02.11.2026, 14:05`, `KW 45/2026` (Diagrammachse kurz `KW 45`) |
 
 - Minus als echtes Minuszeichen `−`, zwischen Zahl und Einheit ein Leerzeichen; fehlender Wert `—`, Null ist ein Wert.
+- Mengen auch in E-Mails, PDFs, Bestellleiste und „Meine Bestellwünsche“ mit 2 Stellen; nur in Eingabefeldern ohne
+  Endnullen („2,5“). Grenzen wie „unter 200 kg“ und Kalendertage ganz. Stunden `128:00 Std.` (in Tabellen mit Spaltenkopf
+  ohne „Std.“). Rundung kaufmännisch wie der Server (`format.js` rundet 12,345 → 12,35).
+- Zeitstempel aus der API (UTC) nie per `slice(0, 10)` zum Datum kürzen – `datum(t)` rechnet in deutsche Ortszeit um.
 - **Tabellen:** Die Einheit steht am Wert, nicht im Spaltenkopf („Menge“, „Preis“, „Summe“). Ausnahme: Eingabespalten und
   dichte Bearbeitungstabellen (Editor) – dort steht sie im Kopf („Preis €/kg“, „Menge kg“) und nicht zusätzlich in der Zelle.
 - Beschriftungen ausgeschrieben: „Menge“ statt „Kg“, „auf Anfrage“ (nur die gedruckte Angebotsliste kürzt „a. Anfr.“).

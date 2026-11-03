@@ -530,7 +530,7 @@
     if (zahl.haus) teile.push(`${zahl.haus} auf Hausnummer genau`);
     if (zahl.strasse) teile.push(`${zahl.strasse} an der Straße (Hausnummer nicht gefunden)`);
     if (zahl.plz) teile.push(`${zahl.plz} am Mittelpunkt der Postleitzahl`);
-    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(stand.erzeugt || '–')}).`;
+    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(stand.erzeugt || '—')}).`;
   }
   function kartenPopZu() {
     const pop = $('#km-pop'); if (pop) pop.hidden = true;

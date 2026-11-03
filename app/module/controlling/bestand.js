@@ -18,17 +18,17 @@
   const ist = (v) => v !== null && v !== undefined && Number.isFinite(Number(v));
   /* Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js): Mengen als Summe in kg, Beträge mit Cent */
   const Z = window.STAFL_FORMAT;
-  const kg = (v) => (!ist(v) ? '–' : Z.kgSumme(Number(v)));
-  const euro = (v) => (!ist(v) ? '–' : Z.euro(Number(v)));
-  const tage = (v) => (!ist(v) ? '–' : (v < 10 ? NF(v % 1 ? 1 : 0).format(v) : NF(0).format(v)) + (Math.round(v * 10) === 10 ? ' Tag' : ' Tage'));
-  const mal = (v) => (!ist(v) ? '–' : NF(1).format(v) + ' ×');
+  const kg = (v) => (!ist(v) ? '—' : Z.kgSumme(Number(v)));
+  const euro = (v) => (!ist(v) ? '—' : Z.euro(Number(v)));
+  const tage = (v) => (!ist(v) ? '—' : (v < 10 ? NF(v % 1 ? 1 : 0).format(v) : NF(0).format(v)) + (Math.round(v * 10) === 10 ? ' Tag' : ' Tage'));
+  const mal = (v) => (!ist(v) ? '—' : NF(1).format(v) + ' ×');
   const tag = (d) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '');
   const tagKurz = (d) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.` : '');
   const WOCHENTAG = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
   const wochentag = (d) => WOCHENTAG[new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10))).getDay()];
   const tagnr = (d) => Math.round(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10))) / 86400000);
   const delta = (z) => {
-    if (z.delta === null || z.delta === undefined) return z.kg > 0 && !z.kgStart ? 'neu' : '–';
+    if (z.delta === null || z.delta === undefined) return z.kg > 0 && !z.kgStart ? 'neu' : '—';
     return Z.veraenderung(z.delta / 100);
   };
   const HINWEIS = { lange: ['lange am Lager', 'lange'], knapp: ['knapp', 'knapp'], ohne: ['kein Absatz', 'ohne'] };
@@ -308,7 +308,7 @@
       `<div class="ctl-ud-kpi"><span>Umschlag</span><b>${esc(mal(z.umschlag))}</b><small>${ist(z.umschlagJahr) ? `≈ ${esc(mal(z.umschlagJahr))} im Jahr` : ''}</small></div>`,
       ek ? `<div class="ctl-ud-kpi"><span>Lagerwert (EK)</span><b>${esc(euro(z.ekWert))}</b><small>${z.ekKg > 0 ? `Ø ${esc(Z.euroKg(Math.round(z.ekWert / z.ekKg * 100) / 100))}` : ''}</small></div>`
         : `<div class="ctl-ud-kpi"><span>Partien</span><b>${esc(NF(0).format(z.partien || 0))}</b><small>${z.zugang > 0 ? `${esc(kg(z.zugang))} erwartet` : ''}</small></div>`];
-    const reihen = d.reihe.slice().reverse().map((t) => `<tr><td>${esc(wochentag(t.d))} ${esc(tagKurz(t.d))}</td><td class="ctl-zahl"><b>${esc(kg(t.kg))}</b></td><td class="ctl-zahl">${t.zugang ? esc(kg(t.zugang)) : '–'}</td>
+    const reihen = d.reihe.slice().reverse().map((t) => `<tr><td>${esc(wochentag(t.d))} ${esc(tagKurz(t.d))}</td><td class="ctl-zahl"><b>${esc(kg(t.kg))}</b></td><td class="ctl-zahl">${t.zugang ? esc(kg(t.zugang)) : '—'}</td>
       <td class="ctl-zahl">${esc(NF(0).format(t.partien))}</td>${ek ? `<td class="ctl-zahl">${esc(euro(t.ekWert))}</td>` : ''}<td class="ctl-zahl">${esc(absatzText(t))}</td></tr>`).join('');
     $('#ctl-b-d-titel', dlg).textContent = z.name;
     $('.dlg-head p', dlg).textContent = `${NACH[d.dim][0]} · ${tag(zr.von)} – ${tag(zr.bis)}`;
