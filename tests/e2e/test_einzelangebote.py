@@ -374,9 +374,24 @@ with sync_playwright() as p:
     box = a.evaluate("(() => { const r = document.querySelector('#dlg-ez-pick').getBoundingClientRect(), l = document.querySelector('#ezp-list'); return [r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, l.scrollWidth - l.clientWidth]; })()")
     check('Fenster passt ins Bild, Tabelle ohne seitliches Scrollen', box[0] and box[1] <= 1, box)
     a.click('#ezp-list [data-info="10601"]'); a.wait_for_selector('#ezp-list tr[data-det="10601"]', state='detached')
-    a.fill('#ezp-q', 'steakhüfte'); a.wait_for_selector('#ezp-list tr[data-code="10823"]')   # Suche startet in allen Gruppen, obwohl 1600 gewählt war
+    # Suche oben sucht in der gewählten Gruppe (Wunsch des Inhabers: erst Gruppe, dann Artikel); Treffer anderswo per Knopf
+    check('Suchfeld nennt die gewählte Gruppe', 'Rindfleisch, Argentinien, frisch' in (a.get_attribute('#ezp-q', 'placeholder') or ''), a.get_attribute('#ezp-q', 'placeholder'))
+    a.fill('#ezp-q', 'steakhüfte'); a.wait_for_selector('#ezp-list .ezp-anderswo [data-grp="*"]')
+    check('Suche in der gewählten Gruppe: kein Treffer dort, Knopf „In allen Gruppen suchen“ mit Anzahl', a.locator('#ezp-list tr[data-code]').count() == 0
+          and grp()['1600']['on'] == 'true' and 'Keine Treffer in dieser Gruppe' in a.inner_text('#ezp-list') and re.search(r'In allen Gruppen suchen \(\d+ weitere(r)? Treffer\)', a.inner_text('#ezp-list .ezp-anderswo')), a.inner_text('#ezp-list')[-200:])
+    a.click('#ezp-list .ezp-anderswo [data-grp="*"]'); a.wait_for_selector('#ezp-list tr[data-code="10823"]')
     sx = [a.eval_on_selector_all('#ezp-list tr.ezp-gr', 'e => e.map(x => x.innerText)'), grp()['*']['on'], a.eval_on_selector_all('#ezp-list tr[data-code]', 'e => e.map(x => x.dataset.code)')]
     check('Suche über alle Gruppen mit Gruppen-Zwischenzeile, Leiste zeigt „Alle“', any('Rindfleisch, Uruguay, frisch' in x for x in sx[0]) and sx[1] == 'true' and '10823' in sx[2], sx)
+    # Gruppensuche links: filtert die Leiste (Nummer oder Name), Enter wählt die erste Gruppe und springt in die Artikelsuche
+    a.fill('#ezp-q', ''); a.fill('#ezp-gq', 'urugu')
+    vis = a.eval_on_selector_all('#ezp-grp [data-grp]', 'e => e.filter(x => !x.hidden).map(x => x.dataset.grp)')
+    check('Gruppensuche: nur passende Gruppen (und „Alle“)', vis == ['*', '1610'], vis)
+    a.press('#ezp-gq', 'Enter'); a.wait_for_function("document.querySelector('#ezp-grp [data-grp=\"1610\"]').getAttribute('aria-pressed') === 'true'")
+    check('… Enter wählt die Gruppe, Fokus in der Artikelsuche', a.evaluate('document.activeElement.id') == 'ezp-q' and '10823' in a.eval_on_selector_all('#ezp-list tr[data-code]', 'e => e.map(x => x.dataset.code)'))
+    a.fill('#ezp-gq', '6150'); vis = a.eval_on_selector_all('#ezp-grp [data-grp]', 'e => e.filter(x => !x.hidden).map(x => x.dataset.grp)')
+    check('Gruppensuche nach Nummer; gewählte Gruppe bleibt sichtbar', vis == ['*', '1610', '6150'], vis)
+    a.fill('#ezp-gq', 'gibtesnicht'); check('Gruppensuche ohne Treffer: Hinweis', a.locator('#ezp-gleer').is_visible())
+    a.fill('#ezp-gq', ''); a.click('#ezp-grp [data-grp="*"]'); a.fill('#ezp-q', 'steakhüfte'); a.wait_for_selector('#ezp-list tr[data-code="10823"]')
     a.click('#ezp-list [data-info="10823"]'); a.wait_for_selector('#ezp-list tr[data-det="10823"]')
     d = a.inner_text('#ezp-list tr[data-det="10823"]')
     check('Details: nur erwartet, ETA unbekannt', 'ETA unbekannt' in d and 'TEST-B' in d and 'Kein eingelagerter Bestand' in d, d)

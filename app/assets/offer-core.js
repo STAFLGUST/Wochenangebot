@@ -496,15 +496,23 @@
   /* Unterschiede zwischen zwei Modellen (z. B. Entwurf ↔ veröffentlicht) */
   /* Kundenpreis eines Artikels als Vergleichswert (ohne Kennzeichen „aus Vorwoche“) */
   const variantSig = (v) => (!v ? '' : v.status === 'value' ? 'v' + v.value : v.status);
-  /* Sonderpreis „solange der Vorrat reicht“: Grundpreis für alle Angebote, je Angebot änderbar */
-  function saleFor(it, oid) {
+  /* Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis | mark: true (ohne Preisänderung),
+     offers?: {<Angebot>: {value} | {status: 'mark'} | {status: 'none'}}} – Grundwert für alle Angebote, je Angebot änderbar.
+     empfehlungFor: null = keine Empfehlung, sonst {preis: Zahl | null (nur hervorheben)}; saleFor: nur der Preis. */
+  function empfehlungFor(it, oid) {
     const s = it && it.sale;
-    if (!s || typeof s.value !== 'number') return null;
+    if (!s || (typeof s.value !== 'number' && !s.mark)) return null;
     const o = s.offers && s.offers[oid];
-    if (o) return o.status === 'none' ? null : o.value;
-    return s.value;
+    if (o) {
+      if (o.status === 'none') return null;
+      if (o.status === 'mark') return { preis: null };
+      if (typeof o.value === 'number') return { preis: o.value };
+    }
+    return { preis: typeof s.value === 'number' ? s.value : null };
   }
-  const saleSig = (s) => (!s || typeof s.value !== 'number' ? '' : 'v' + s.value + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' ? 'none' : s.offers[k].value)).join(','));
+  function saleFor(it, oid) { const e = empfehlungFor(it, oid); return e ? e.preis : null; }
+  const saleSig = (s) => (!s || (typeof s.value !== 'number' && !s.mark) ? '' : (typeof s.value === 'number' ? 'v' + s.value : 'm')
+    + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' || s.offers[k].status === 'mark' ? s.offers[k].status : s.offers[k].value)).join(','));
   function diffOffers(oldM, newM) {
     const res = { added: [], removed: [], priceChanged: [], changed: [], before: {}, variantChanged: [], saleChanged: [] };
     if (!oldM) { res.added = newM.items.map((i) => i.id); return res; }
@@ -690,7 +698,7 @@
   const api = {
     CATEGORY_ORDER, CONDITIONS, CONDITION_LABELS, PRICE_STATUS_LABELS,
     xlsxReadWorkbook, parseOfferWorkbook, parseOfferGrid, parsePrice, suggestAttributes,
-    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor,
+    enrichOffer, isoWeekRange, diffOffers, validateModel, clean, stripFrisch, normalizeItem, ORIGIN_CODES, mergeModels, sameModel: same, saleFor, empfehlungFor,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.OfferCore = api;

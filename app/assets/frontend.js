@@ -113,24 +113,27 @@ function prepare(raw) {
     /* Suche nur über Nummer, Bezeichnung und echte Artikelmerkmale – nicht über Gruppennamen,
        damit z. B. „Roastbeef“ keine anderen Teilstücke aus der Gruppe „Roastbeef am Knochen“ zeigt */
     o._hay = fold([it.code, it.name, it.nameRaw, it.category, SYN_CAT[it.category], it.origin, SYN_ORIGIN[it.origin],
-      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten' : '', it.brand, priceTerms]
+      COND_LABEL[it.condition], SYN_COND[it.condition], o.features.join(' '), it.sale ? 'sonderpreis restposten empfehlung' : '', it.empfehlung ? 'empfehlung' : '', it.brand, priceTerms]
       .filter(Boolean).join(' ¦ '));
     o._cmp = it.category + '|' + it.cut;
     return o;
   });
   const byId = new Map(items.map((i) => [i.id, i]));
-  /* Werbung dieses Angebots (der Server liefert nur den eigenen Eintrag): Artikel oben im Block und in der Liste hervorgehoben */
+  /* Werbung dieses Angebots (der Server liefert nur den eigenen Eintrag): bis zu zwei Werbungen (erste im Eintrag, zweite in
+     „weitere“), Artikel oben im Block und in der Liste hervorgehoben */
   const wr = raw.meta && raw.meta.werbung;
-  const wa = wr && Array.isArray(wr.artikel) ? wr.artikel.map((a) => ({ it: byId.get(a.id), text: a.text || '' })).filter((x) => x.it) : [];
-  for (const x of wa) x.it.werb = x.text;
-  const werbung = wa.length ? { titel: wr.titel || '', text: wr.text || '', artikel: wa } : null;
+  const werbungen = (wr ? [wr, ...(Array.isArray(wr.weitere) ? wr.weitere : [])] : []).slice(0, 2).map((b) => {
+    const wa = b && Array.isArray(b.artikel) ? b.artikel.map((a) => ({ it: byId.get(a.id), text: a.text || '' })).filter((x) => x.it) : [];
+    for (const x of wa) if (!werbAn(x.it)) x.it.werb = x.text;
+    return wa.length ? { titel: b.titel || '', text: b.text || '', artikel: wa } : null;
+  }).filter(Boolean);
   const groupTotal = new Map();
   for (const i of items) groupTotal.set(i.groupId, (groupTotal.get(i.groupId) || 0) + 1);
   const cmpMap = new Map();
   for (const i of items) { if (!cmpMap.has(i._cmp)) cmpMap.set(i._cmp, []); cmpMap.get(i._cmp).push(i); }
   const priced = items.filter((i) => i.price.status === 'value').map((i) => i.price.value);
   return {
-    meta: raw.meta, sections: raw.sections, groups: raw.groups, issues: raw.issues || [], items, byId, groupTotal, cmpMap, werbung,
+    meta: raw.meta, sections: raw.sections, groups: raw.groups, issues: raw.issues || [], items, byId, groupTotal, cmpMap, werbungen,
     minPrice: priced.length ? Math.min(...priced) : null,
     maxPrice: priced.length ? Math.max(...priced) : null,
   };
@@ -285,22 +288,32 @@ function priceHTML(it) {
 /* ---------- Werbung: vom Angebot hervorgehobene Artikel (meta.werbung, je Angebot vom Server aufgelöst) ----------
    Oben ein eigener Abschnitt im Aufbau der Liste: Band in der Akzentfarbe (Überschrift, Text), darunter die Artikel als
    normale Zeilen (Nr. · Bezeichnung · Preis · Merken) in den Spalten der Liste – nur in der Gesamtansicht ohne
-   Suche/Filter. In der Liste tragen die beworbenen Zeilen ein kleines Kennzeichen (Hinweis oder „Empfehlung“). */
-const WERB_TITEL = 'Unsere Empfehlung der Woche';
+   Suche/Filter. Eine zweite Werbung steht rechts daneben (je Werbung die Hälfte der Spalten; schmal: untereinander).
+   In der Liste tragen die beworbenen Zeilen ein kleines Kennzeichen (Hinweis oder „Empfehlung“); Empfehlungen ohne
+   Preisänderung (it.empfehlung) sind ebenso hervorgehoben. */
+const WERB_TITEL = 'Unsere Empfehlung der Woche', WERB_TITEL2 = 'Aktion der Woche';
 const werbAn = (it) => typeof it.werb === 'string';
-const werbTagHTML = (it, cls, nurHinweis) => (werbAn(it) && (it.werb || !nurHinweis) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${esc(it.werb || 'Empfehlung')}</span>` : '');
+const empfAn = (it) => werbAn(it) || !!it.empfehlung;   // hervorgehobene Zeile (Werbung oder Empfehlung ohne Preisänderung)
+const werbTagHTML = (it, cls, nurHinweis) => (werbAn(it) && (it.werb || !nurHinweis) ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">${esc(it.werb || 'Empfehlung')}</span>`
+  : !werbAn(it) && it.empfehlung && !nurHinweis ? `<span class="tag werb-tag${cls ? ' ' + cls : ''}">Empfehlung</span>` : '');
 function werbungHTML(eigeneKarte) {
-  const w = DATA.werbung;
-  if (!w || state.tab !== 'all' || hasFilters()) return '';
+  const ws = DATA.werbungen;
+  if (!ws || !ws.length || state.tab !== 'all' || hasFilters()) return '';
   const host = $('#list');
   const k = plColsFor((host && host.clientWidth) || 1200);   // dieselben Spalten wie die Liste darunter
-  const items = w.artikel.map((x) => x.it), per = Math.ceil(items.length / k), labels = plLabels(items);
-  const cols = [];
-  for (let i = 0; i < k; i++) cols.push(items.slice(i * per, (i + 1) * per));
-  const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, 'werb') : '');
-  const sec = `<section class="al-sec werb-sec" aria-labelledby="werb-h"><div class="al-st werb-st"><h3 id="werb-h">${icon('megaphone')}${esc(w.titel || WERB_TITEL)}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
-    <div class="al-cols" style="--k:${k}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
-  return eigeneKarte ? `<div class="al werb-al">${sec}</div>` : sec;
+  const duo = ws.length > 1 && k > 1;                        // zwei Werbungen nebeneinander, je die Hälfte der Spalten
+  const sec = (w, nr) => {
+    const kk = ws.length > 1 ? (duo ? Math.max(1, Math.floor(k / 2)) : 1) : k;
+    const items = w.artikel.map((x) => x.it), per = Math.ceil(items.length / kk), labels = plLabels(items);
+    const cols = [];
+    for (let i = 0; i < kk; i++) cols.push(items.slice(i * per, (i + 1) * per));
+    const block = (xs) => (xs.length ? plBlockHTML({ u: { key: 'werb', title: '', items: xs, labels }, items: xs, cont: false }, 'werb') : '');
+    const id = nr ? 'werb-h' + (nr + 1) : 'werb-h';
+    return `<section class="al-sec werb-sec" aria-labelledby="${id}"><div class="al-st werb-st"><h3 id="${id}">${icon('megaphone')}${esc(w.titel || (nr ? WERB_TITEL2 : WERB_TITEL))}</h3>${w.text ? `<span class="werb-txt">${esc(w.text)}</span>` : ''}</div>
+    <div class="al-cols" style="--k:${kk}">${cols.map((c) => `<div class="al-col">${block(c)}</div>`).join('')}</div></section>`;
+  };
+  const inner = ws.length > 1 ? `<div class="werb-duo${duo ? '' : ' werb-stapel'}">${ws.map(sec).join('')}</div>` : sec(ws[0], 0);
+  return eigeneKarte ? `<div class="al werb-al">${inner}</div>` : inner;
 }
 
 /* ---------- Kopf, Kennzahlen, Navigation ---------- */
@@ -490,7 +503,7 @@ function renderTable(list, grouped) {
       if (it.section !== sec) { sec = it.section; if (sec) rows.push(`<tr class="s-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="s-in">${esc(sec)}</div></th></tr>`); }
       if (it.groupId !== grp) { grp = it.groupId; rows.push(`<tr class="g-row"><th colspan="${KORDER ? 8 : 7}" scope="colgroup"><div class="g-in"><span class="g-name">${esc(it.group)}</span><span class="g-meta">${info(grp)}</span></div></th></tr>`); }
     }
-    rows.push(`<tr class="row${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
+    rows.push(`<tr class="row${empfAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
       <td class="c-fav">${starHTML(it)}</td>
       <td class="c-code">${it.code ? hl(it.code) : '<span class="muted" title="Ohne Artikelnummer">—</span>'}</td>
       <td class="c-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button>
@@ -595,7 +608,7 @@ function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
   const screen = mode !== 'print', werb = mode === 'werb';
   const span = 2 + cols + (screen ? 1 : 0);
-  const row = (it) => `<tr class="row${werbAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
+  const row = (it) => `<tr class="row${empfAn(it) && !werb ? ' werb-an' : ''}" data-id="${it.id}">
     <td class="c-code">${it.code ? hl(it.code) : ''}</td>
     <td class="c-name">${screen ? `<button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(plName(it))}</button>` : esc(plName(it))}${werbTagHTML(it, 'al-tag', werb)}${it.sale ? '<span class="tag sale al-tag" title="Sonderpreis, solange der Vorrat reicht">Sonderposten</span>' : ''}</td>
     ${plCells(it, labels).map((p) => `<td class="c-price${p && p.status !== 'value' ? ' al-np' : ''}">${p ? (it.sale && p === it.price ? `${it.regular != null ? `<s class="p-was al-was">${fmtNum.format(it.regular)}</s>` : ''}<span class="al-sale" title="Sonderposten – solange der Vorrat reicht">${plPrice(p)}</span>` : plPrice(p)) : ''}</td>`).join('')}${screen ? `<td class="c-fav">${starHTML(it)}</td>` : ''}</tr>`;
@@ -672,7 +685,7 @@ function buildPrintListe(list, grouped, scopeText) {
 
 function cardHTML(it, grouped) {
   const feats = HIGHLIGHT_FEATURES.filter((f) => it.features.includes(f)).map((f) => `<span class="tag${f === 'Sonderposten' ? ' sale' : ''}">${esc(f)}</span>`).join('');
-  return `<article class="card${werbAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
+  return `<article class="card${empfAn(it) ? ' werb-an' : ''}" data-id="${it.id}">
     <div class="card-top">${monoHTML(it.category)}<span class="code">${it.code ? 'Art.-Nr. ' + hl(it.code) : 'ohne Art.-Nr.'}</span>${starHTML(it)}</div>
     <h3 class="card-name"><button type="button" class="name-btn" data-open="${it.id}" title="Details und Preisvergleich anzeigen">${hl(it.name)}</button></h3>
     <p class="card-meta">${esc(it.category)}${it.origin ? ' · ' + hl(it.origin) : ''}</p>

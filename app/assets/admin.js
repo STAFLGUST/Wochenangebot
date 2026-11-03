@@ -127,6 +127,13 @@
     else if (it.variants[oid] && it.variants[oid].status === 'hidden') delete it.variants[oid];   // folgt dem Wochenangebot: Standardpreis
     dropEmptyVariants(it);
   }
+  /* Empfehlung gilt nur, wo sie gesetzt wurde: kommt ein Artikel mit Empfehlung neu in ein Angebot, steht er dort auf
+     „keine Empfehlung“ (sonst übernähme er den Grundwert) */
+  function empfehlungNichtUebernehmen(it, oid) {
+    const s = it.sale;
+    if (!s || (typeof s.value !== 'number' && !s.mark) || (s.offers && s.offers[oid])) return;
+    s.offers = { ...(s.offers || {}), [oid]: { status: 'none' } };
+  }
   /* Neuer Artikel nur für dieses Angebot: im Wochenangebot und in Angeboten, die ihm folgen, nicht enthalten */
   function nurIn(it, oid) {
     if (oid === OSTD) return;
@@ -152,16 +159,24 @@
   const vChanges = () => (diff && diff.variantChanged ? diff.variantChanged.filter((c) => knownOffer(c.offer)) : []);
   const sChanges = () => (diff && diff.saleChanged ? diff.saleChanged : []);
   const saleText = (sl) => {
-    if (!sl) return 'kein Sonderpreis';
-    const ex = Object.entries(sl.offers || {}).map(([o, x]) => `${offerShort(o)}: ${x.status === 'none' ? 'keiner' : fmtNum.format(x.value)}`);
-    return `${fmtNum.format(sl.value)} €/kg${ex.length ? ' (' + ex.join(', ') + ')' : ''}`;
+    if (!sl || (typeof sl.value !== 'number' && !sl.mark)) return 'keine Empfehlung';
+    const ex = Object.entries(sl.offers || {}).map(([o, x]) => `${offerShort(o)}: ${x.status === 'none' ? 'keine' : x.status === 'mark' ? 'ohne Preis' : fmtNum.format(x.value)}`);
+    return `${typeof sl.value === 'number' ? fmtNum.format(sl.value) + ' €/kg' : 'ohne Preisänderung'}${ex.length ? ' (' + ex.join(', ') + ')' : ''}`;
   };
 
-  /* Werbung je Angebot (model.meta.werbung[<Angebot>] = {titel, text?, artikel: [{id, text?}]}): Fenster in admin-werbung.js.
-     Gilt nur für das eigene Angebot; der Server liefert je Angebot nur den eigenen Eintrag aus (offer_resolve). */
-  const WERB_MAX = 12;
+  /* Werbung je Angebot (model.meta.werbung[<Angebot>] = {titel, text?, artikel: [{id, text?}], weitere?: [{titel, text?,
+     artikel}]}): bis zu zwei Werbungen, die erste in den Feldern des Eintrags, die zweite in „weitere“ (Kundenseite: rechts
+     daneben). Fenster in admin-werbung.js. Gilt nur für das eigene Angebot; der Server liefert je Angebot nur den eigenen
+     Eintrag aus (offer_resolve). */
+  const WERB_MAX = 12, WERB_BLOECKE = 2;
   const werbungVon = (oid, m = model) => (m && m.meta && m.meta.werbung && m.meta.werbung[oid]) || null;
-  const werbAn = (it, oid = curOffer) => { const e = werbungVon(oid); return !!e && e.artikel.some((a) => a.id === it.id); };
+  /* Werbungen eines Eintrags als Liste (ohne „weitere“ im Block) und zurück zu einem Eintrag (leere fallen weg) */
+  const werbOhneWeitere = (b) => { const r = { ...b }; delete r.weitere; return r; };
+  const werbAlle = (e) => (e ? [e, ...(Array.isArray(e.weitere) ? e.weitere : [])].map(werbOhneWeitere) : []);
+  const werbBloecke = (e) => werbAlle(e).filter((b) => Array.isArray(b.artikel) && b.artikel.length);
+  const werbEintrag = (bl) => { const l = bl.filter((b) => b && b.artikel && b.artikel.length).slice(0, WERB_BLOECKE); return !l.length ? null : l.length > 1 ? { ...l[0], weitere: l.slice(1) } : l[0]; };
+  const werbArtikelZahl = (e) => werbBloecke(e).reduce((n, b) => n + b.artikel.length, 0);
+  const werbAn = (it, oid = curOffer) => werbBloecke(werbungVon(oid)).some((b) => b.artikel.some((a) => a.id === it.id));
   /* Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server) */
   function werbungBereinigen() {
     const w = model && model.meta.werbung;
@@ -169,8 +184,8 @@
     const byId = new Map(model.items.map((i) => [i.id, i]));
     for (const oid of Object.keys(w)) {
       if (!knownOffer(oid)) continue;
-      w[oid].artikel = (w[oid].artikel || []).filter((a) => { const it = byId.get(a.id); return it && inOffer(it, oid); });
-      if (!w[oid].artikel.length) delete w[oid];
+      const e = werbEintrag(werbAlle(w[oid]).map((b) => ({ ...b, artikel: (b.artikel || []).filter((a) => { const it = byId.get(a.id); return it && inOffer(it, oid); }) })));
+      if (e) w[oid] = e; else delete w[oid];
     }
     if (!Object.keys(w).length) delete model.meta.werbung;
   }
@@ -892,7 +907,7 @@
     werbungBereinigen();
     diff = C.diffOffers(published, model);
     if (opts.render) renderGroups(); else if (opts.row) updateRow(opts.row);
-    renderNoPrice();
+    renderMhd();
     if (prevKey !== `${model.meta.year}-${model.meta.week}`) loadPrev().then(refreshAux, () => {});
     renderChanges();
     renderMetaInfo();
@@ -1018,7 +1033,7 @@
     diff = C.diffOffers(published, model);
     renderOfferBar();
     renderGroups();
-    renderNoPrice();
+    renderMhd();
     renderChanges();
     updatePublishBtn();
     const n = tr && f ? $(`tr[data-id="${CSS.escape(tr.dataset.id)}"] [data-f="${f}"]`) : metaId ? $('#' + metaId) : null;
@@ -1063,7 +1078,7 @@
     diff = C.diffOffers(published, model);
     renderOfferBar();
     renderGroups();
-    renderNoPrice();
+    renderMhd();
     renderChanges();
     updatePublishBtn();
   }
@@ -1108,7 +1123,7 @@
     if (diff.removed.length) parts.push(`${diff.removed.length} entfernt`);
     if (vc.length) parts.push(`${vc.length} Angebotspreis${vc.length === 1 ? '' : 'e'} geändert`);
     if (vh.length) parts.push(`${vh.length} im Wochenangebot hinzugefügt/entfernt`);
-    if (sc.length) parts.push(`${sc.length} Sonderpreis${sc.length === 1 ? '' : 'e'} geändert`);
+    if (sc.length) parts.push(`${sc.length} Empfehlung${sc.length === 1 ? '' : 'en'} geändert`);
     if (wChanges().length) parts.push('Werbung geändert');
     b.title = parts.length ? 'Unveröffentlichte Änderungen: ' + parts.join(' · ') : 'Keine unveröffentlichten Änderungen';
   }
@@ -1168,14 +1183,15 @@
   }
   function saleBtnHTML(it) {
     const a = stockOf(it.code), hot = !it.sale && a && mhdClass(a.mhd);
-    return `<button type="button" class="vtog sale${it.sale ? ' on' : hot ? ' hot' : ''}" data-act="sale" title="${it.sale ? 'Sonderpreis bearbeiten' : hot ? `Kurzes MHD (${esc(mhdShort(a.mhd))}) – Sonderpreis festlegen` : 'Sonderpreis festlegen (solange der Vorrat reicht)'}" aria-label="Sonderpreis">${icon('tag', 'sm')}</button>`;
+    return `<button type="button" class="vtog sale${it.sale ? ' on' : hot ? ' hot' : ''}" data-act="sale" title="${it.sale ? 'Empfehlung bearbeiten' : hot ? `Kurzes MHD (${esc(mhdShort(a.mhd))}) – als Empfehlung hervorheben, optional mit Preis` : 'Als Empfehlung hervorheben (optional mit Empfehlungspreis)'}" aria-label="Empfehlung">${icon('tag', 'sm')}</button>`;
   }
   function saleTagHTML(it) {
     if (!it.sale) return '';
-    const v = C.saleFor(it, curOffer);
-    if (v == null) return '<span class="sale-tag off">kein Sonderpreis in diesem Angebot</span>';
+    const e = C.empfehlungFor(it, curOffer);
+    if (!e) return '<span class="sale-tag off">keine Empfehlung in diesem Angebot</span>';
+    if (e.preis == null) return '<button type="button" class="sale-tag mark" data-act="sale" title="Empfehlung ohne Preisänderung – Artikel wird hervorgehoben">Empfehlung</button>';
     const out = soldOut(it);
-    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Sonderpreis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Sonderpreis ' + esc(F.euroKg(v))}</button>`;
+    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Empfehlung mit Preis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Empfehlung ' + esc(F.euroKg(e.preis))}</button>`;
   }
   function stdCellHTML(it, bad, label, was, alts) {
     return `<td class="e-price e-var std">${label}<div class="vrow"><input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${saleBtnHTML(it)}</div>${saleTagHTML(it)}${was}${alts}</td>`;
@@ -1216,7 +1232,7 @@
     const e = werbungVon(curOffer), n = $('#werb-n');
     if (!n) return;
     n.hidden = !e;
-    n.textContent = e ? String(e.artikel.length) : '';
+    n.textContent = e ? String(werbArtikelZahl(e)) + (werbBloecke(e).length > 1 ? ' · 2×' : '') : '';
     $('#btn-werbung').classList.toggle('on', !!e);
   }
   function renderGroups() {
@@ -1462,7 +1478,7 @@
   let qTimer;
   $('#ed-q').addEventListener('input', (e) => { clearTimeout(qTimer); qTimer = setTimeout(() => { filterQ = e.target.value.trim(); filterAnwenden(); }, 120); });
   $('#only-changes').addEventListener('change', (e) => { onlyChanges = e.target.checked; filterAnwenden(); });
-  $('#ed-q').addEventListener('input', () => setTimeout(renderNoPrice, 150));
+  $('#ed-q').addEventListener('input', () => setTimeout(renderMhd, 150));
 
   /* ======================= Artikel-Dialog ======================= */
   const dlgItem = $('#dlg-item');
@@ -1726,14 +1742,17 @@
     if (!w) return;
     const byId = new Map(alt.items.map((i) => [i.id, i])), out = {};
     for (const [oid, e] of Object.entries(w)) {
-      const vergeben = new Set(), artikel = [];
-      for (const a of e.artikel || []) {
-        const o = byId.get(a.id);
-        if (!o) continue;
-        const z = neu.items.find((x) => !vergeben.has(x.id) && (o.code ? x.code && mKey(x.code) === mKey(o.code) : fold(x.name) === fold(o.name)) && inOffer(x, oid));
-        if (z) { vergeben.add(z.id); artikel.push({ ...clone(a), id: z.id }); }
-      }
-      if (artikel.length) out[oid] = { ...clone(e), artikel };
+      const n = werbEintrag(werbBloecke(e).map((b) => {   // je Werbung (erste und „weitere“)
+        const vergeben = new Set(), artikel = [];
+        for (const a of b.artikel || []) {
+          const o = byId.get(a.id);
+          if (!o) continue;
+          const z = neu.items.find((x) => !vergeben.has(x.id) && (o.code ? x.code && mKey(x.code) === mKey(o.code) : fold(x.name) === fold(o.name)) && inOffer(x, oid));
+          if (z) { vergeben.add(z.id); artikel.push({ ...clone(a), id: z.id }); }
+        }
+        return { ...clone(b), artikel };
+      }));
+      if (n) out[oid] = n;
     }
     if (Object.keys(out).length) neu.meta.werbung = out;
   }
@@ -1815,6 +1834,17 @@
     if (site) site.href = angebotsseite(curOffer !== OSTD ? '?angebot=' + encodeURIComponent(curOffer) : '');
     renderOfferHead();
   }
+  /* Angebotsauswahl ab 901 px unter den Bereichen der Seitenleiste (Wunsch des Inhabers, 03.11.2026), schmal wie bisher
+     als Auswahl über dem Angebot. Nur das Element wandert – Ereignisse und Inhalt bleiben dieselben. */
+  const obLinks = matchMedia('(min-width: 901px)');
+  function offerBarPlatzieren() {
+    const ob = $('#offer-bar'), nav = $('.side-nav'), lay = $('.ed-layout');
+    if (!ob || !nav || !lay) return;
+    if (obLinks.matches) { if (ob.parentElement !== nav) nav.append(ob); } else if (ob.parentElement !== lay) lay.prepend(ob);
+    document.body.classList.toggle('ob-links', obLinks.matches);
+  }
+  obLinks.addEventListener('change', offerBarPlatzieren);
+  offerBarPlatzieren();
   function obFilter() {
     const toks = fold(obQ).split(/\s+/).filter(Boolean);
     for (const b of $$('#offer-bar .ob-o')) b.hidden = toks.length > 0 && !toks.every((t) => b.dataset.hay.includes(t));
@@ -1844,7 +1874,7 @@
     store.set('angebot', id);
     renderOfferBar();
     renderGroups();
-    renderNoPrice();
+    renderMhd();
   }
   async function obAktion(b) {
     const a = b.dataset.ob;
@@ -1882,7 +1912,7 @@
       offers = r.offers; offersRev = r.rev; stdPublic = r.stdPublic !== false;
       ofReset();
       diff = C.diffOffers(published, model);
-      renderOfferBar(); renderGroups(); renderNoPrice(); renderChanges(); updatePublishBtn();
+      renderOfferBar(); renderGroups(); renderMhd(); renderChanges(); updatePublishBtn();
       toast(`„${offerShort(oid)}“ hat jetzt eine eigene Artikelliste.`, 5000);
     } catch (ex) { toast(ex.message, 7000); }
   }
@@ -2237,6 +2267,7 @@
       const hier = inOffer(it, curOffer), eigen = curOffer === OSTD ? hier : !!(it.variants && it.variants[curOffer] && it.variants[curOffer].status !== 'hidden');
       if (eigen && !all) continue;
       const np = p.status === 'value' ? { status: 'value', value: Math.round(Math.round(p.value * (1 + pct / 100) / step) * step * 100) / 100 } : { status: 'request' };
+      if (!hier) empfehlungNichtUebernehmen(it, curOffer);
       aufnehmen(it, curOffer, np);
       invalid.delete(it.id + '|' + curOffer);
       n++;
@@ -2327,9 +2358,9 @@
       const vc = vChanges();
       if (vc.length) body += sec(`Angebotspreise (${vc.length})`, `<ul class="plist">${vc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span><b class="ob-tag">${esc(offerShort(c.offer))}</b> ${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(variantShort(c.from, c.offer))} → <strong>${esc(variantShort(c.to, c.offer))}</strong></span>${rv('variant', c.id + '|' + c.offer)}</li>` : ''; }).join('')}${vc.length > 80 ? `<li><span>… und ${vc.length - 80} weitere</span><span></span></li>` : ''}</ul>`);
       const sc = sChanges();
-      if (sc.length) body += sec(`Sonderpreise – solange der Vorrat reicht (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
+      if (sc.length) body += sec(`Empfehlungen (${sc.length})`, `<ul class="plist">${sc.slice(0, 80).map((c) => { const it = byId.get(c.id); return it ? `<li><span>${esc(it.code || '—')} · ${esc(it.name)}</span><span>${esc(saleText(c.from))} → <strong>${esc(saleText(c.to))}</strong></span>${rv('sale', c.id)}</li>` : ''; }).join('')}</ul>`);
       const wc = wChanges();
-      if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(w.titel || window.WA.werbung.TITEL) : 'Werbung beendet'}</span><span>${w ? esc(plural(w.artikel.length, 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
+      if (wc.length) body += sec(`Werbung (${wc.length})`, `<ul class="plist">${wc.map((oid) => { const w = werbungVon(oid); return `<li><span><b class="ob-tag">${esc(offerShort(oid))}</b> ${w ? esc(werbBloecke(w).map((b, i) => b.titel || (i ? window.WA.werbung.TITEL2 : window.WA.werbung.TITEL)).join(' · ')) : 'Werbung beendet'}</span><span>${w ? esc(plural(werbArtikelZahl(w), 'Artikel', 'Artikel')) : ''}</span>${rv('werbung', oid)}</li>`; }).join('')}</ul>`);
       if (!metaChanged() && !diff.priceChanged.length && !diff.added.length && !diff.changed.length && !diff.removed.length && !vc.length && !sc.length && !wc.length) body += '<p class="notice">Keine Änderungen gegenüber der veröffentlichten Fassung.</p>';
     }
     if (v.warnings.length) body += `<p class="hint">${v.warnings.map(esc).join('<br>')}</p>`;
@@ -2398,7 +2429,7 @@
   function revertText(kind, id) {
     if (kind === 'sale') {
       const it = model.items.find((x) => x.id === id), c = sChanges().find((x) => x.id === id);
-      return ['Sonderpreis zurücknehmen?', `Der Sonderpreis von „${esc(it ? (it.code ? it.code + ' · ' : '') + it.name : id)}“ wird von <strong>${esc(saleText(c && c.to))}</strong> wieder auf <strong>${esc(saleText(c && c.from))}</strong> gesetzt.`];
+      return ['Empfehlung zurücknehmen?', `Die Empfehlung von „${esc(it ? (it.code ? it.code + ' · ' : '') + it.name : id)}“ wird von <strong>${esc(saleText(c && c.to))}</strong> wieder auf <strong>${esc(saleText(c && c.from))}</strong> gesetzt.`];
     }
     if (kind === 'variant') {
       const [iid, oid] = id.split('|');
@@ -3846,7 +3877,7 @@
     setTimeout(() => { try { w.focus(); w.print(); } catch { /* Fenster geschlossen */ } }, 300);
   }
 
-  /* ======================= Angebot: Vorwoche, Bestand, Bestand ohne Preis ======================= */
+  /* ======================= Angebot: Vorwoche, Bestand ======================= */
   let prevWeek = null, prevKey = '', prevMap = new Map();
   let stockIdx = new Map(), stockIdxFor = null;
   async function loadPrev() {
@@ -3867,8 +3898,8 @@
   }
   async function loadAux() {
     await Promise.all([may('bestand.sehen') ? loadStock().catch(() => {}) : Promise.resolve(), loadPrev().catch(() => {})]);
-    // Leistung: Bestand und Vorwoche unverändert seit dem letzten Zeichnen → keine ~550 Zellen neu (nur Liste „ohne Preis“)
-    if (auxStand.stock === stock && auxStand.prev === prevWeek) { renderNoPrice(); return; }
+    // Leistung: Bestand und Vorwoche unverändert seit dem letzten Zeichnen → keine ~550 Zellen neu (nur Leiste „Kurzes MHD“)
+    if (auxStand.stock === stock && auxStand.prev === prevWeek) { renderMhd(); return; }
     refreshAux();
   }
   /* Stand von Bestand/Vorwoche, mit dem der Editor zuletzt gezeichnet wurde (renderGroups, refreshAux) */
@@ -3932,90 +3963,18 @@
       const sb = tr.querySelector('.vtog.sale');
       if (sb) { const t2 = document.createElement('div'); t2.innerHTML = saleBtnHTML(it) + saleTagHTML(it); sb.replaceWith(t2.firstElementChild); const tag = tr.querySelector('.sale-tag'); if (tag && t2.firstElementChild) tag.replaceWith(t2.firstElementChild); }
     }
-    renderNoPrice();
+    renderMhd();
   }
 
-  /* Bestand ohne Preis: eingelagerte Artikel, die im gewählten Angebot fehlen oder dort keinen Preis haben.
-     Die Leisten „Kurzes MHD“ und „Bestand ohne Preis“ sind beim Öffnen immer zugeklappt. */
-  let npOpen = false;
+  /* Artikel des Entwurfs je Artikelnummer (Leiste „Kurzes MHD“, Artikel hinzufügen). Die frühere Leiste „Bestand ohne
+     Preis“ ist entfallen (Wunsch des Inhabers, 03.11.2026); die Leiste „Kurzes MHD“ ist beim Öffnen immer zugeklappt. */
   const poolByCode = () => { const m = new Map(); for (const it of model.items) if (it.code) { const k = S.normCode(it.code); if (!m.has(k)) m.set(k, []); m.get(k).push(it); } return m; };
-  function noPriceList() {
-    if (!stock || !model) return [];
-    const byCode = poolByCode();
-    const out = [];
-    for (const a of stock.articles) {
-      const items = (byCode.get(S.normCode(a.code)) || []).filter((x) => inOffer(x, curOffer));
-      if (items.some((x) => { const p = effPrice(x, curOffer); return p && (p.status === 'value' || p.status === 'request'); })) continue;
-      out.push({ a, items, wg: S.warengruppe(a.code), cls: mhdClass(a.mhd) });
-    }
-    const rank = (x) => (x.cls ? 0 : 1);
-    return out.sort((x, y) => x.wg.order - y.wg.order || rank(x) - rank(y) || (rank(x) === 0 ? x.a.mhd.localeCompare(y.a.mhd) : 0) || x.a.code.localeCompare(y.a.code, 'de', { numeric: true }));
-  }
-  function renderNoPrice() {
-    renderMhd();
-    const host = $('#noprice-panel');
-    if (!host) return;
-    if (!stock || !model) { host.hidden = true; return; }
-    const all = noPriceList();
-    const toks = fold(filterQ).split(/\s+/).filter(Boolean);
-    const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name); return toks.every((t) => h.includes(t)); }) : all;
-    host.hidden = false;
-    const kg = list.reduce((t, x) => t + x.a.kg, 0);
-    const rows = list.map((x) => {
-      const p = prevOf({ code: x.a.code, name: x.a.name });
-      const inOfferNow = x.items.length;
-      return `<tr data-npcode="${esc(x.a.code)}">
-        <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(x.a.name)}</td><td class="np-wg">${esc(x.wg.label)}</td>
-        <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
-        <td class="np-prev">${p && p.price.status === 'value' ? esc(F.euroKg(p.price.value)) : p && p.price.status === 'request' ? 'auf Anfrage' : '—'}</td>
-        <td class="np-act">${ro ? (inOfferNow ? '<span class="muted">im Angebot ohne Preis</span>' : '') : inOfferNow
-          ? '<button type="button" class="btn sm" data-np="goto">Preis eintragen</button>'
-          : `<button type="button" class="btn sm" data-np="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
-      </tr>`;
-    }).join('');
-    host.innerHTML = `<div class="np-card${npOpen ? ' open' : ''}">
-      <button type="button" class="np-head" data-np="toggle" aria-expanded="${npOpen}">
-        <span class="np-badge">${fmtInt.format(all.length)}</span>
-        <span class="np-tt"><span class="np-title">Bestand ohne Preis</span>
-        <span class="np-sub">eingelagert, in „${esc(offerShort(curOffer))}“ ohne Preis · ${esc(kgText(all.reduce((t, x) => t + x.a.kg, 0)))} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</span></span>
-        ${icon('chev', 'np-chev')}
-      </button>
-      ${npOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-wg">Warengruppe</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev" title="Preis ${esc(prevLabel())}">Vorwoche</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody>
-          ${toks.length ? `<tfoot><tr><td colspan="7" class="muted">${plural(list.length, 'Treffer', 'Treffer')} zur Suche · ${esc(kgText(kg))}</td></tr></tfoot>` : ''}</table></div>`
-        : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Alle Artikel mit eingelagertem Bestand haben in diesem Angebot einen Preis.'}</p>`) : ''}
-    </div>`;
-    for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
-    panelLayout();
-  }
-  /* Beide Leisten nebeneinander; eine aufgeklappte Leiste nimmt die volle Breite ein */
-  function panelLayout() {
-    const w = $('#ed-panels');
-    if (w) w.classList.toggle('one', [$('#mhd-panel'), $('#noprice-panel')].filter((x) => x && !x.hidden).length < 2);
-  }
-  function gotoPrice(it) {
-    if (filterQ || onlyChanges) { filterQ = ''; onlyChanges = false; $('#ed-q').value = ''; $('#only-changes').checked = false; renderGroups(); }
-    const inp = $(`tr[data-id="${CSS.escape(it.id)}"] input[data-f="${curOffer === OSTD ? 'price' : 'vprice'}"]`);
-    if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); inp.select(); }
-  }
-  $('#noprice-panel').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-np]');
-    if (!b) return;
-    const act = b.dataset.np;
-    if (act === 'toggle') { npOpen = !npOpen; renderNoPrice(); return; }
-    const code = b.closest('tr[data-npcode]')?.dataset.npcode;
-    if (!code || ro) return;
-    if (act === 'goto') {
-      const it = model.items.find((x) => x.code && S.normCode(x.code) === S.normCode(code) && inOffer(x, curOffer));
-      if (it) gotoPrice(it);
-    }
-    if (act === 'add') openArtikelwahl({ code });
-  });
 
   /* ======================= Artikel hinzufügen (Fenster wie im Einzelangebot) =======================
      Artikel aus Stammdaten und Bestand (Server: angebot_artikel), nach VK-Gruppe. Die Angebotsgruppe ergibt sich aus der
      VK-Gruppe des Artikels: Gruppe mit dieser VK-Gruppe → gleichnamige Gruppe → Gruppe, in der die meisten Artikel dieser
      VK-Gruppe stehen → neue Gruppe. Aufgenommen wird nur ins gewählte Angebot; andere Angebote bleiben unverändert. */
-  const awZustand = { grp: null, nurBestand: true, nurAngebot: false };
+  const awZustand = { grp: null, nurBestand: false, nurAngebot: false };   // „nur mit Bestand“ nicht vorausgewählt (Inhaber, 03.11.2026)
   let awDaten = null, awFest = null;
   async function ladeArtikelwahl() {
     if (awDaten && awDaten.stock === stock && Date.now() - awDaten.t < 120000) return awDaten;
@@ -4086,7 +4045,7 @@
     for (const a of liste) {
       const p = ps.get(K(a.code));
       const vorh = (pool.get(S.normCode(a.code)) || []).find((x) => !inOffer(x, curOffer));
-      if (vorh) { aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
+      if (vorh) { empfehlungNichtUebernehmen(vorh, curOffer); aufnehmen(vorh, curOffer, p); ids.set(K(a.code), vorh.id); continue; }   // steht schon in einem anderen Angebot
       const g = zielGruppe(a, true);
       const m = masterOf(a.code);
       const name = C.stripFrisch(C.clean((m && m.name) || a.name || a.code));
@@ -4113,7 +4072,7 @@
     const art = new Map();
     const eintrag = (a, items) => {
       const stdIt = items.find((i) => inOffer(i, OSTD));
-      return { ...a, name: (items[0] && items[0].name) || a.name, stdPrice: stdIt ? stdIt.price : null, inOffer: !!stdIt };
+      return { ...a, name: (items[0] && items[0].name) || a.name, name0: a.name, stdPrice: stdIt ? stdIt.price : null, inOffer: !!stdIt };
     };
     for (const a of d.articles) art.set(K(a.code), eintrag(a, pool.get(S.normCode(a.code)) || []));
     for (const items of pool.values()) {   // Artikelnummern nur im Entwurf (ohne Stammdaten und Bestand)
@@ -4177,7 +4136,7 @@
       .map(({ it }) => {
         const sv = C.saleFor(it, oid), p = effPrice(it, oid);
         return { id: it.id, code: it.code || '', name: it.name, merkmale: [it.origin, it.condition !== 'unbekannt' ? C.CONDITION_LABELS[it.condition] : ''].filter(Boolean).join(' · '),
-          preis: sv != null ? 'Sonderpreis ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
+          preis: sv != null ? 'Empfehlung ' + fmtNum.format(sv) + ' €/kg' : p ? priceShort(p) : '' };
       });
   }
   /* Artikelauswahl für die Werbung (gemeinsames Fenster admin-artikelwahl.js): Filter „nur in diesem Angebot“ voreingestellt,
@@ -4260,43 +4219,48 @@
         if (e) w[oid] = e; else delete w[oid];
         if (!Object.keys(w).length) delete model.meta.werbung;
         changed({ render: true });
-        toast(e ? `Werbung für „${offerShort(oid)}“ übernommen (${plural(e.artikel.length, 'Artikel', 'Artikel')}) – für Kunden sichtbar nach „Veröffentlichen“.` : `Werbung für „${offerShort(oid)}“ beendet – wirksam nach „Veröffentlichen“.`, 5000);
+        toast(e ? `${werbBloecke(e).length > 1 ? '2 Werbungen' : 'Werbung'} für „${offerShort(oid)}“ übernommen (${plural(werbArtikelZahl(e), 'Artikel', 'Artikel')}) – für Kunden sichtbar nach „Veröffentlichen“.` : `Werbung für „${offerShort(oid)}“ beendet – wirksam nach „Veröffentlichen“.`, 5000);
       },
     });
   }
   $('#btn-werbung').addEventListener('click', openWerbung);
 
-  /* ======================= Sonderposten (kurzes MHD, solange der Vorrat reicht) ======================= */
-  /* Sonderpreis je Artikel: Grundpreis für alle Angebote, die den Artikel enthalten, je Angebot änderbar (eigener / keiner) */
+  /* ======================= Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht) =======================
+     Empfehlung je Artikel: Grundwert (Empfehlungspreis oder ohne Preisänderung) für die Angebote, je Angebot änderbar
+     (wie oben / eigener Preis / ohne Preisänderung / keine). Neu gesetzt gilt sie nur im gerade bearbeiteten Angebot –
+     alle anderen Angebote mit dem Artikel stehen auf „keine Empfehlung“. Mit Preis sehen Kunden den bisherigen Preis
+     durchgestrichen und der Artikel wird ohne Bestand ausgeblendet; ohne Preis wird er nur hervorgehoben. */
   const dlgSale = $('#dlg-sale');
   let saleId = null;
+  const EMPF_MODI = [['base', 'wie oben'], ['own', 'eigener Preis'], ['mark', 'ohne Preisänderung'], ['none', 'keine Empfehlung']];
   function openSale(id) {
     const it = iById(id);
     if (!it) return;
     saleId = id;
-    const sl = it.sale || null, a = stockOf(it.code), cls = a ? mhdClass(a.mhd) : '';
-    const ids = offersOf(it);
+    const sl = it.sale && (typeof it.sale.value === 'number' || it.sale.mark) ? it.sale : null, a = stockOf(it.code), cls = a ? mhdClass(a.mhd) : '';
+    const ids = offersOf(it).sort((x, y) => (y === curOffer) - (x === curOffer));   // gerade bearbeitetes Angebot zuerst
     const rows = ids.map((oid) => {
       const o = sl && sl.offers && sl.offers[oid];
-      const mode = !o ? 'base' : o.status === 'none' ? 'none' : 'own';
+      // neue Empfehlung: nur im gerade bearbeiteten Angebot, sonst „keine Empfehlung“
+      const mode = !sl ? (oid === curOffer ? 'base' : 'none') : !o ? 'base' : o.status === 'none' ? 'none' : o.status === 'mark' ? 'mark' : 'own';
       const norm = effPrice(it, oid);
-      return `<tr data-soid="${esc(oid)}"><td>${esc(offerShort(oid))}</td><td class="sp-norm">${norm ? esc(priceShort(norm)) : '—'}</td>
-        <td><select class="in" data-sm aria-label="Sonderpreis ${esc(offerShort(oid))}"><option value="base"${mode === 'base' ? ' selected' : ''}>wie oben</option><option value="own"${mode === 'own' ? ' selected' : ''}>eigener Sonderpreis</option><option value="none"${mode === 'none' ? ' selected' : ''}>kein Sonderpreis</option></select></td>
-        <td class="sp-own"><input class="in num" data-sv inputmode="decimal" value="${mode === 'own' ? esc(fmtNum.format(o.value)) : ''}" placeholder="€/kg" aria-label="Eigener Sonderpreis ${esc(offerShort(oid))}"${mode === 'own' ? '' : ' hidden'}></td></tr>`;
+      return `<tr data-soid="${esc(oid)}"${oid === curOffer ? ' class="sp-akt"' : ''}><td>${esc(offerShort(oid))}${oid === curOffer ? ' <small class="muted">(dieses Angebot)</small>' : ''}</td><td class="sp-norm">${norm ? esc(priceShort(norm)) : '—'}</td>
+        <td><select class="in" data-sm aria-label="Empfehlung ${esc(offerShort(oid))}">${EMPF_MODI.map(([v, t]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td class="sp-own"><input class="in num" data-sv inputmode="decimal" value="${mode === 'own' ? esc(fmtNum.format(o.value)) : ''}" placeholder="€/kg" aria-label="Eigener Empfehlungspreis ${esc(offerShort(oid))}"${mode === 'own' ? '' : ' hidden'}></td></tr>`;
     }).join('');
-    const stockLine = !it.code ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Ohne Artikelnummer ist kein Bestandsabgleich möglich – der Sonderposten wird dann nicht automatisch ausgeblendet.</span></p>`
-      : !stock ? '' : !a ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Laut Bestand vom ${esc(dmy(stock.date || ''))} ist <strong>kein Bestand</strong> vorhanden – der Sonderposten wird in allen Angeboten automatisch ausgeblendet.</span></p>` : '';
+    const stockLine = !it.code ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Ohne Artikelnummer ist kein Bestandsabgleich möglich – mit Empfehlungspreis wird der Artikel dann nicht automatisch ausgeblendet.</span></p>`
+      : !stock ? '' : !a ? `<p class="notice k-pend">${icon('info', 'sm')}<span>Laut Bestand vom ${esc(dmy(stock.date || ''))} ist <strong>kein Bestand</strong> vorhanden – mit Empfehlungspreis wird der Artikel in allen Angeboten automatisch ausgeblendet.</span></p>` : '';
     $('#sale-body').innerHTML = `
-      <div class="dlg-head"><div><h2 id="sp-title">Sonderpreis – solange der Vorrat reicht</h2><p>${esc(it.code || '—')} · ${esc(it.name)}${a ? ` · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span>` : ''}</p></div>
+      <div class="dlg-head"><div><h2 id="sp-title">Empfehlung</h2><p>${esc(it.code || '—')} · ${esc(it.name)}${a ? ` · ${esc(kgText(a.kg))} verfügbar · kürz. MHD <span class="${cls}">${esc(mhdShort(a.mhd))}</span>` : ''}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         ${stockLine}
-        <label class="fld sp-base"><span>Sonderpreis €/kg <small class="muted">(gilt in allen Angeboten mit diesem Artikel)</small></span><input name="value" inputmode="decimal" value="${sl ? esc(fmtNum.format(sl.value)) : ''}" placeholder="z. B. 9,90" required></label>
-        <table class="etab sptab"><thead><tr><th>Angebot</th><th class="sp-norm">Normalpreis</th><th>Sonderpreis</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-        <p class="hint">Gilt nur in den Angeboten, die den Artikel enthalten (oben aufgeführt). Kunden sehen „Sonderposten – solange der Vorrat reicht“ und den bisherigen Preis durchgestrichen. Ist laut Bestandsliste kein Bestand mehr da, wird der Artikel automatisch ausgeblendet. Wirksam nach dem Veröffentlichen.</p>
+        <label class="fld sp-base"><span>Empfehlungspreis €/kg <small class="muted">(optional – leer: nur hervorheben, Preis bleibt)</small></span><input name="value" inputmode="decimal" value="${sl && typeof sl.value === 'number' ? esc(fmtNum.format(sl.value)) : ''}" placeholder="leer = ohne Preisänderung"></label>
+        <table class="etab sptab"><thead><tr><th>Angebot</th><th class="sp-norm">Normalpreis</th><th>Empfehlung</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="hint">Gilt nur in den Angeboten, die den Artikel enthalten (oben aufgeführt). <strong>Mit Preis:</strong> Kunden sehen „Sonderposten – solange der Vorrat reicht“ und den bisherigen Preis durchgestrichen; ist laut Bestandsliste kein Bestand mehr da, wird der Artikel automatisch ausgeblendet. <strong>Ohne Preis:</strong> der Artikel wird nur hervorgehoben (Kennzeichen „Empfehlung“). Wirksam nach dem Veröffentlichen.</p>
         <p class="form-err" id="sp-err" role="alert"></p>
       </div>
-      <div class="dlg-foot">${sl ? `<span class="left"><button type="button" class="btn ghost danger" data-sp="remove">${icon('trash', 'sm')}Sonderpreis entfernen</button></span>` : ''}<button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Übernehmen</button></div>`;
+      <div class="dlg-foot">${sl ? `<span class="left"><button type="button" class="btn ghost danger" data-sp="remove">${icon('trash', 'sm')}Empfehlung entfernen</button></span>` : ''}<button type="button" class="btn" data-close>Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Übernehmen</button></div>`;
     dlgSale.showModal();
     $('#sale-body [name="value"]').focus();
   }
@@ -4315,30 +4279,34 @@
     delete it.sale;
     dlgSale.close();
     changed({ row: it.id });
-    toast('Sonderpreis entfernt (wirksam nach dem Veröffentlichen).');
+    toast('Empfehlung entfernt (wirksam nach dem Veröffentlichen).');
   });
   $('#sale-body').addEventListener('submit', (e) => {
     e.preventDefault();
     const it = iById(saleId);
     if (!it || ro) return;
     const err = (m) => { $('#sp-err').textContent = m; };
-    const base = C.parsePrice(e.target.elements.value.value);
-    if (base.status !== 'value' || base.invalid) { err('Bitte einen Sonderpreis in €/kg angeben, z. B. 9,90.'); return; }
+    const t = e.target.elements.value.value.trim();
+    const base = t ? C.parsePrice(t) : null;
+    if (base && (base.status !== 'value' || base.invalid)) { err('Empfehlungspreis nicht lesbar – z. B. 9,90, oder leer lassen (ohne Preisänderung).'); return; }
     const offersOut = {};
+    let aktiv = 0;
     for (const tr of $$('#sale-body tr[data-soid]')) {
       const oid = tr.dataset.soid, mode = tr.querySelector('[data-sm]').value;
-      if (mode === 'none') offersOut[oid] = { status: 'none' };
+      if (mode !== 'none') aktiv++;
+      if (mode === 'none' || mode === 'mark') offersOut[oid] = { status: mode };
       if (mode === 'own') {
         const p = C.parsePrice(tr.querySelector('[data-sv]').value);
-        if (p.status !== 'value' || p.invalid) { err(`Eigener Sonderpreis für „${offerShort(oid)}“ fehlt oder ist nicht lesbar.`); return; }
+        if (p.status !== 'value' || p.invalid) { err(`Eigener Empfehlungspreis für „${offerShort(oid)}“ fehlt oder ist nicht lesbar.`); return; }
         offersOut[oid] = { value: p.value };
       }
     }
+    if (!aktiv) { err('In keinem Angebot ausgewählt – mindestens ein Angebot auf „wie oben“ stellen oder „Empfehlung entfernen“.'); return; }
     pushUndo();
-    it.sale = { value: base.value, ...(Object.keys(offersOut).length ? { offers: offersOut } : {}), since: (it.sale && it.sale.since) || isoToday() };
+    it.sale = { ...(base ? { value: base.value } : { mark: true }), ...(Object.keys(offersOut).length ? { offers: offersOut } : {}), since: (it.sale && it.sale.since) || isoToday() };
     dlgSale.close();
     changed({ row: it.id });
-    toast(`Sonderpreis ${fmtNum.format(base.value)} €/kg für „${it.name}“ gesetzt – wirksam nach dem Veröffentlichen.`, 5000);
+    toast(`Empfehlung ${base ? fmtNum.format(base.value) + ' €/kg' : 'ohne Preisänderung'} für „${it.name}“ gesetzt – wirksam nach dem Veröffentlichen.`, 5000);
   });
 
   /* Liste: Artikel mit kurzem oder überschrittenem MHD (Farbskala der Bestandsliste), bezogen auf das gewählte Angebot */
@@ -4352,22 +4320,22 @@
   function renderMhd() {
     const host = $('#mhd-panel');
     if (!host) return;
-    if (!stock || !model) { host.hidden = true; panelLayout(); return; }
+    if (!stock || !model) { host.hidden = true; return; }
     const all = mhdList();
     const toks = fold(filterQ).split(/\s+/).filter(Boolean);
     const list = toks.length ? all.filter((x) => { const h = fold(x.a.code + ' ' + x.a.name + ' ' + x.items.map((i) => i.name).join(' ')); return toks.every((t) => h.includes(t)); }) : all;
-    const withSale = all.filter((x) => x.items.some((i) => C.saleFor(i, curOffer) != null)).length;
+    const withSale = all.filter((x) => x.items.some((i) => C.empfehlungFor(i, curOffer))).length;
     host.hidden = false;
     const rows = list.map((x) => {
       const it = x.items[0];
-      const cur = it ? effPrice(it, curOffer) : null, sp = it ? C.saleFor(it, curOffer) : null;
+      const cur = it ? effPrice(it, curOffer) : null, emp = it ? C.empfehlungFor(it, curOffer) : null, sp = emp ? emp.preis : null;
       return `<tr data-mcode="${esc(x.a.code)}"${it ? ` data-mid="${esc(it.id)}"` : ''}>
         <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(it ? it.name : x.a.name)}${!it ? ' <span class="muted">(nicht in diesem Angebot)</span>' : ''}</td>
         <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
         <td class="np-prev">${it ? (cur ? esc(priceShort(cur)) : '<span class="muted">ohne Preis</span>') : '—'}</td>
-        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(F.euroKg(sp))}</strong>` : '—'}</td>
+        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(F.euroKg(sp))}</strong>` : emp ? '<span class="sp-val">ohne Preis</span>' : '—'}</td>
         <td class="np-act">${ro ? '' : it
-          ? `<button type="button" class="btn sm${it.sale ? '' : ' primary'}" data-mp="sale">${icon('tag', 'sm')}${it.sale ? 'Sonderpreis ändern' : 'Sonderpreis'}</button>`
+          ? `<button type="button" class="btn sm${it.sale ? '' : ' primary'}" data-mp="sale">${icon('tag', 'sm')}${it.sale ? 'Empfehlung ändern' : 'Empfehlung'}</button>`
           : `<button type="button" class="btn sm" data-mp="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
       </tr>`;
     }).join('');
@@ -4375,14 +4343,13 @@
       <button type="button" class="np-head" data-mp="toggle" aria-expanded="${mhdOpen}">
         <span class="np-badge">${fmtInt.format(all.length)}</span>
         <span class="np-tt"><span class="np-title">Kurzes MHD – Sonderposten</span>
-        <span class="np-sub">MHD überschritten oder in höchstens 14 Tagen · ${plural(withSale, 'Artikel', 'Artikel')} mit Sonderpreis in „${esc(offerShort(curOffer))}“ · ohne Bestand automatisch ausgeblendet</span></span>
+        <span class="np-sub">MHD überschritten oder in höchstens 14 Tagen · ${plural(withSale, 'Artikel', 'Artikel')} mit Empfehlung in „${esc(offerShort(curOffer))}“ · mit Preis ohne Bestand automatisch ausgeblendet</span></span>
         ${icon('chev', 'np-chev')}
       </button>
-      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Empfehlung</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Keine Artikel mit kurzem oder überschrittenem MHD im Bestand.'}</p>`) : ''}
     </div>`;
     for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
-    panelLayout();
   }
   $('#mhd-panel').addEventListener('click', (e) => {
     const b = e.target.closest('[data-mp]');
@@ -4408,9 +4375,9 @@
     $('#rest-body').innerHTML = `<div class="dlg-head"><div><h2 id="rp-title">Sonderposten „${esc(info.offer.name)}“ versenden</h2><p>Nur Kunden mit dem Angebot <strong>${esc(info.offer.name)}</strong> erhalten diese E-Mail – jeder einzeln, mit den Sonderpreisen dieses Angebots. Andere Angebote und Kunden bleiben unsichtbar.</p></div><button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
         ${!info.mailReady ? '<div class="err-box">Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).</div>' : ''}
-        ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Sonderpreise bitte zuerst veröffentlichen.</span></div>` : ''}
+        ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Empfehlungspreise bitte zuerst veröffentlichen.</span></div>` : ''}
         ${items.length ? `<h3 class="d-h"><span>${plural(items.length, 'Sonderposten', 'Sonderposten')}</span></h3><ul class="plist">${items.map((x) => `<li><span>${esc(x.code || '—')} · ${esc(x.name)}</span><span><strong>${esc(fmtNum.format(x.price))} €/kg</strong>${x.regular != null ? ` <s class="muted">${esc(F.euroKg(x.regular))}</s>` : ''}</span></li>`).join('')}</ul>`
-          : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Sonderpreise festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
+          : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Empfehlung mit Preis festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
         <h3 class="d-h"><span>Empfänger</span></h3>
         ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rp-all"> Alle auswählen</label>
           <table class="etab ktab k-rtab"><tbody>${ok.map((c) => `<tr data-rid="${esc(c.id)}"><td class="k-rchk"><input type="checkbox" data-psel="${esc(c.id)}" checked aria-label="${esc(c.firma)} auswählen"></td>
