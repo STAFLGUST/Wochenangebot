@@ -87,7 +87,8 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
     $schnitt = function (array $o) use ($e) { return hr_zeitraum_text(max($o['von'], $e['von']), min($o['bis'], $e['bis'])); };
     $v = $e['vertretung'] ?? null;
     if (!$v) {
-        if ($pe['vertretungPflicht']) $k[] = ['art' => 'vertretung', 'text' => 'Keine Vertretung angegeben'];
+        // fehlende Vertretung zählt nur bei offenen Anträgen (Einträge der Personalstelle haben keine Vertretung)
+        if ($pe['vertretungPflicht'] && $e['status'] === 'beantragt') $k[] = ['art' => 'vertretung', 'text' => 'Keine Vertretung angegeben'];
     } else {
         $vp = $idx[$v] ?? null;
         if (!$vp || !$vp['aktiv']) $k[] = ['art' => 'vertretung', 'text' => 'Vertretung nicht mehr im Urlaubsplan'];
