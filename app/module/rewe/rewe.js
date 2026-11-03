@@ -1,7 +1,9 @@
 /* STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged: Anmeldung über den Status, Stammdaten aus rewe_start,
    Reiter über location.hash („#woche/2026-45“, „#markt/<id>“, „#abschluss/2026-45“), Hell/Dunkel am Konto (theme.js).
    Ansichten: Meine Woche (eigene Liste der Lieferwoche, gruppiert nach Zentrallager und Direktbelieferung; Antwort je Markt
-   mit einem Klick, Mengen, fällige Daueraufträge bestätigen, ruhende Märkte als eigene Liste), Märkte mit Marktakte
+   mit einem Klick, Mengen, fällige Daueraufträge bestätigen, ruhende Märkte als eigene Liste; Verlauf mit Vorbestellungen der
+   nächsten Wochen; Klick auf Name oder Adresse öffnet die Marktkarte mit Hinweis, Notizen, Verlauf und Wiedervorlagen),
+   Daueraufträge (alle sichtbaren Daueraufträge, bearbeiten, neu anlegen), Märkte mit Marktakte
    (Wochenverlauf je Jahr, Notizen und Wiedervorlagen, Zuständigkeit und Lieferweg mit Historie, Ansprechpartner),
    Zuweisung (Märkte und Lieferweg ab KW, Team „alle Listen“ und „Wochenabschluss“), Wochenabschluss (Summen, Hinweise,
    Excel für WinAB als Einzelaufträge, „in WinAB erfasst“), Einstellungen (Lieferwege, Artikel, Datenpaket der Excel-Listen).
@@ -12,9 +14,10 @@
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TABS = ['woche', 'maerkte', 'zuweisung', 'abschluss', 'einstellungen'];
+  const TABS = ['woche', 'dauer', 'maerkte', 'zuweisung', 'abschluss', 'einstellungen'];
   const S = {
-    csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: false,
+    csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: true, zeigeNach: '',
+    dSuche: '', dRh: '', dLw: '', dStatus: '', dEdit: null, dOffen: '',
     maerkte: null, mSuche: '', mLw: '', mKauf: '', akteId: '', akte: null, aKw: '', abschluss: null,
     zAuswahl: new Set(), zSuche: '', zWer: '', zLw: '', zKauf: '', paket: null, edit: null, notizMarkt: '', toast: 0,
   };
@@ -97,7 +100,7 @@
   document.addEventListener('stafl-theme', themaKnopf);
 
   /* ---------- Reiter und Adresse ---------- */
-  const erlaubt = (tab) => tab === 'woche' || tab === 'maerkte' || (tab === 'abschluss' && darf('exportieren')) || ((tab === 'zuweisung' || tab === 'einstellungen') && darf('verwalten'));
+  const erlaubt = (tab) => tab === 'woche' || tab === 'dauer' || tab === 'maerkte' || (tab === 'abschluss' && darf('exportieren')) || ((tab === 'zuweisung' || tab === 'einstellungen') && darf('verwalten'));
   function zeigeTab(tab, teil = '') {
     if (tab === 'markt') { S.akteId = teil; tab = 'maerkte'; } else if (tab === 'maerkte') S.akteId = '';
     if (!TABS.includes(tab) || !erlaubt(tab)) tab = 'woche';
@@ -111,6 +114,7 @@
       if (S.akteId) ladeAkte(S.akteId); else ladeMaerkte();
     } else if (tab === 'abschluss') { if (teil && kwOk(teil)) S.aKw = teil; history.replaceState(null, '', '#abschluss/' + S.aKw); ladeAbschluss(); }
     else if (tab === 'zuweisung') { history.replaceState(null, '', '#zuweisung'); ladeMaerkte(); }
+    else if (tab === 'dauer') { if (teil) S.dOffen = teil; history.replaceState(null, '', '#dauer'); ladeMaerkte(); }
     else { history.replaceState(null, '', '#' + tab); renderEinstellungen(); }
   }
   $('#rw-tabs').addEventListener('click', (ev) => { const b = ev.target.closest('[role="tab"]'); if (b) zeigeTab(b.dataset.tab); });
@@ -171,11 +175,15 @@
           <div><h2>${esc(g.name)}</h2><p class="rw-sub">${esc(g.art === 'lager' ? 'REWE-Zentrallager' : g.art === 'direkt' ? 'Lieferung direkt an den Markt' : 'Lieferweg fehlt')} · ${maerkte(g.maerkte.length)} · ${offen} offen${g.bestellschluss ? ' · Bestellschluss ' + esc(g.bestellschluss) : ''}</p></div>
           <div class="rw-rechts">${faellig.length ? `<button class="btn sm" type="button" data-gruppe-dauer="${esc(g.id)}"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>${faellig.length} ${faellig.length === 1 ? 'Dauerauftrag' : 'Daueraufträge'} bestätigen</button>` : ''}</div>
         </div>
-        ${zeilen.length ? `<div class="rw-zkopf" aria-hidden="true"><span>Markt</span><span>Hinweise</span><span>Verlauf ${esc(kwKurz(kwPlus(w.kw, -8)))}–${esc(kwKurz(kwPlus(w.kw, -1)).slice(3))}</span><span>Antwort ${esc(kwKurz(w.kw))}</span><span></span></div>` : ''}
+        ${zeilen.length ? `<div class="rw-zkopf" aria-hidden="true"><span>Markt</span><span>Verlauf ${esc(kwKurz(kwPlus(w.kw, -8)))}–${esc(kwKurz(kwPlus(w.kw, -1)).slice(3))} · diese Woche · voraus bis ${esc(kwKurz(kwPlus(w.kw, 3)))}</span><span>Antwort ${esc(kwKurz(w.kw))}</span><span></span></div>` : ''}
         ${zeilen.map(zeileHtml).join('') || `<p class="rw-gfuss">${S.filter === 'offen' ? 'Alle Märkte dieser Gruppe sind erledigt.' : 'Keine Märkte für diesen Filter.'}</p>`}
       </section>`;
     }).join('');
     $('#rw-w-gruppen').innerHTML = (html || `<div class="rw-leer rw-glas"><h2>Keine Märkte in dieser Liste</h2><p>${darf('verwalten') ? 'Märkte weisen Sie unter „Zuweisung“ zu.' : 'Die Leitung weist Ihnen Märkte zu.'}</p></div>`) + ruhendHtml(w.ruhend || [], q);
+    if (S.zeigeNach) {   // aus dem Verlauf eines Marktes in eine andere Woche gewechselt: Zeile zeigen
+      const z = $(`.rw-zeile[data-id="${CSS.escape(S.zeigeNach)}"]`); S.zeigeNach = '';
+      if (z) { z.scrollIntoView({ block: 'center' }); z.classList.add('blink'); setTimeout(() => z.classList.remove('blink'), 1600); }
+    }
   }
   /* Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile */
   function bestelltHtml(w, best, mengen) {
@@ -202,24 +210,37 @@
     const z = $(`.rw-zeile[data-id="${CSS.escape(id)}"]`);
     if (z) { z.scrollIntoView({ behavior: 'smooth', block: 'center' }); z.classList.add('blink'); setTimeout(() => z.classList.remove('blink'), 1600); }
   });
-  function zelleHtml(v) {
-    const t = `${kwKurz(v.kw)}: ${v.status ? S.d.antworten[v.status] + (v.menge ? ' ' + v.menge : '') : 'nicht abgefragt'}`;
-    if (v.status === 'bestellt') return `<i class="rw-z b" title="${esc(t)}">${v.menge}</i>`;
-    if (v.status === 'ne') return `<i class="rw-z n" title="${esc(t)}">ne</i>`;
-    if (v.status === 'pause') return `<i class="rw-z p" title="${esc(t)}">P</i>`;
-    if (v.status === 'kein') return `<i class="rw-z" title="${esc(t)}">–</i>`;
-    return `<i class="rw-z o" title="${esc(t)}"></i>`;
+  /* Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
+     Künftige Wochen sind Knöpfe: ein Klick öffnet diese Woche mit der Zeile des Marktes – dort wird die Vorbestellung eingetragen. */
+  function zelleHtml(v, art, m) {
+    const leer = art === 'vor' ? 'keine Vorbestellung' : art === 'jetzt' ? 'noch offen' : 'nicht abgefragt';
+    const t = `${kwKurz(v.kw)}: ${v.status ? S.d.antworten[v.status] + (v.menge ? ' ' + v.menge : '') : leer}`;
+    const [cls, inhalt] = v.status === 'bestellt' ? ['b', String(v.menge)] : v.status === 'ne' ? ['n', 'ne'] : v.status === 'pause' ? ['p', 'P']
+      : v.status === 'kein' ? ['', '–'] : art === 'vor' ? ['frei', '+'] : ['o', ''];
+    const zelle = `<i class="rw-z ${cls}${art === 'jetzt' ? ' jetzt' : ''}${art === 'vor' && v.status ? ' vor' : ''}">${esc(inhalt)}</i><span>${+v.kw.slice(5)}</span>`;
+    return art === 'vor' && m.darfAntworten
+      ? `<button type="button" class="rw-zw" data-vor="${esc(v.kw)}" data-markt="${esc(m.id)}" title="${esc(t)} – Woche öffnen" aria-label="${esc(t)} – Woche öffnen">${zelle}</button>`
+      : `<span class="rw-zw" title="${esc(t)}">${zelle}</span>`;
   }
+  function verlaufText(m) {
+    const best = m.verlauf.filter((v) => v.status === 'bestellt'), letzte = best[best.length - 1];
+    const vor = (m.vorschau || []).filter((v) => v.status === 'bestellt');
+    return [`Bestellt in ${best.length} von ${m.verlauf.length} Wochen`, letzte ? `zuletzt ${kwKurz(letzte.kw)}` : '',
+      vor.length ? `vorbestellt ${vor.map((v) => `${kwKurz(v.kw)}: ${v.menge}`).join(', ')}` : ''].filter(Boolean).join(' · ');
+  }
+  const adresse = (m) => [m.strasse, [m.plz, m.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   function zeileHtml(m) {
     const a = m.antwort, w = S.woche, bus = S.busy.has(m.id);
     const chips = [];
-    if (S.woche.wer === '*' && m.zustaendigName) chips.push(`<span class="rw-chip">${esc(m.zustaendigName)}</span>`);
+    if (w.wer === '*' && m.zustaendigName) chips.push(`<span class="rw-chip">${esc(m.zustaendigName)}</span>`);
     if (m.dauerText) chips.push(`<span class="rw-chip gruen" title="${esc(m.dauerText)}">${esc(m.dauerText.replace('Dauerauftrag ', 'Dauer '))}</span>`);
     if (m.abfragetag) chips.push(`<span class="rw-chip gelb">${esc(S.d.tage[m.abfragetag])} anrufen</span>`);
     if (m.kauf !== 'regelmaessig') chips.push(kaufChip(m.kauf));
     m.wiedervorlagen.slice(0, 2).forEach((v) => chips.push(`<span class="rw-chip gelb" title="${esc(v.text)}">Wiedervorlage: ${esc(v.text.slice(0, 32))}${v.text.length > 32 ? '…' : ''}</span>`));
-    if (m.hinweis) chips.push(`<span class="rw-chip" title="${esc(m.hinweis)}">${esc(m.hinweis.split('\n')[0].slice(0, 36))}${m.hinweis.length > 36 ? '…' : ''}</span>`);
     if (!m.winab && m.kdNr) chips.push('<span class="rw-chip akzent" title="Die Kd.-Nr. fehlt im WinAB-Kundenstamm der Verwaltung">nicht im Kundenstamm</span>');
+    const nz = m.notizen || 0, nzText = nz ? `${nz} ${nz === 1 ? 'Notiz' : 'Notizen'}` : '';
+    const hinweis = m.hinweis || nz ? `<button type="button" class="rw-mhinweis" data-karte="${esc(m.id)}"${m.hinweis ? ` title="${esc(m.hinweis)}"` : ''}>
+        <svg class="i" aria-hidden="true"><use href="#i-info"/></svg><span>${m.hinweis ? esc(m.hinweis.replace(/\s*\n\s*/g, ' · ')) : ''}${nz ? `${m.hinweis ? ' ' : ''}<b>${esc(nzText)}</b>` : ''}</span></button>` : '';
     let antwort = '';
     const dis = !m.darfAntworten || bus ? ' disabled' : '';
     if (!a && m.dauerFaellig && !S.offenSeg.has(m.id)) {
@@ -231,19 +252,28 @@
       antwort = `<div class="rw-seg antwort" role="group" aria-label="Antwort ${esc(m.ort)}">${Object.entries(S.d.antworten).map(([k, v]) =>
         `<button type="button" data-s="${k}" data-markt="${esc(m.id)}" aria-pressed="${a && a.status === k}"${dis}>${esc(v)}</button>`).join('')}</div>`;
       if (a && a.status === 'bestellt') {
-        antwort += `<div class="rw-mengen-eingabe">${artikel().map((ar) => `<span class="rw-stepper"><span>${esc(ar.name)}</span>
-          <button type="button" data-menge="${esc(ar.id)}" data-d="-1" data-markt="${esc(m.id)}" aria-label="${esc(ar.name)} weniger"${dis}>−</button><b>${obj(a.mengen)[ar.id] || 0}</b>
-          <button type="button" data-menge="${esc(ar.id)}" data-d="1" data-markt="${esc(m.id)}" aria-label="${esc(ar.name)} mehr"${dis}>+</button></span>`).join('')}
-          <label class="rw-check"><input type="checkbox" data-ob="${esc(m.id)}"${a.ohneBerechnung ? ' checked' : ''}${dis}> ohne Berechnung</label></div>`;
+        // Plus und Minus groß; die Zahl lässt sich auch direkt eintippen (Enter oder Feld verlassen speichert)
+        antwort += `<div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge"><span>${esc(ar.name)}</span><span class="rw-stepper">
+          <button type="button" data-menge="${esc(ar.id)}" data-d="-1" data-markt="${esc(m.id)}" aria-label="${esc(ar.name)} weniger"${dis}>−</button>
+          <input class="rw-mzahl" data-mzahl="${esc(ar.id)}" data-markt="${esc(m.id)}" inputmode="numeric" maxlength="3" value="${obj(a.mengen)[ar.id] || 0}" aria-label="${esc(ar.name)}: Menge"${dis}>
+          <button type="button" data-menge="${esc(ar.id)}" data-d="1" data-markt="${esc(m.id)}" aria-label="${esc(ar.name)} mehr"${dis}>+</button></span></div>`).join('')}</div>`;
       }
-      if (a) antwort += `<input class="rw-eingabe rw-notizfeld" data-notiz="${esc(m.id)}" maxlength="300" value="${esc(a.notiz)}" placeholder="Notiz zur Woche (optional)" aria-label="Notiz zur Woche ${esc(m.ort)}"${dis}>`;
+      if (a) antwort += `<div class="rw-azeile"><input class="rw-eingabe rw-notizfeld" data-notiz="${esc(m.id)}" maxlength="300" value="${esc(a.notiz)}" placeholder="Notiz zur Woche (optional)" aria-label="Notiz zur Woche ${esc(m.ort)}"${dis}>
+        ${a.status === 'bestellt' ? `<label class="rw-check"><input type="checkbox" data-ob="${esc(m.id)}"${a.ohneBerechnung ? ' checked' : ''}${dis}> ohne Berechnung</label>` : ''}</div>`;
     }
-    const meta = a ? `<span class="rw-sub">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span> ' : ''}${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span>` : '';
+    const meta = a ? `<div class="rw-ameta">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span>' : ''}<span>Erfasst: ${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span></div>` : '';
+    const jetzt = { kw: w.kw, status: a ? a.status : '', menge: a ? summe(a.mengen) : 0 };
+    const adr = adresse(m);
     return `<div class="rw-zeile${erledigt(m) ? ' erledigt' : ''}${S.sichtbar.has(m.id) && S.filter === 'offen' && erledigt(m) ? ' gerade' : ''}" data-id="${esc(m.id)}">
-      <div class="rw-c-markt"><span class="rw-mname">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : ''].filter(Boolean).join(' · '))}</span></div>
-      <div class="rw-c-hinweise rw-hinweise">${chips.join('')}</div>
-      <div class="rw-c-verlauf rw-zellen" role="img" aria-label="Verlauf der letzten acht Wochen">${m.verlauf.map(zelleHtml).join('')}</div>
-      <div class="rw-c-antwort rw-antwort">${antwort}${meta}</div>
+      <div class="rw-c-markt">
+        <button type="button" class="rw-mname" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(m.ort)}</button>
+        ${adr ? `<button type="button" class="rw-madresse" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(adr)}</button>` : ''}
+        ${m.kdNr ? `<span class="rw-mkd">Kd. ${esc(m.kdNr)}</span>` : ''}
+        ${chips.length ? `<div class="rw-hinweise">${chips.join('')}</div>` : ''}${hinweis}
+      </div>
+      <div class="rw-c-verlauf"><div class="rw-zellen" role="group" aria-label="Verlauf ${esc(m.ort)}">${m.verlauf.map((v) => zelleHtml(v, '', m)).join('')}${zelleHtml(jetzt, 'jetzt', m)}${(m.vorschau || []).map((v) => zelleHtml(v, 'vor', m)).join('')}</div>
+        <p class="rw-vtext">${esc(verlaufText(m))}</p></div>
+      <div class="rw-c-antwort rw-antwort">${meta}${antwort}</div>
       <a class="rw-c-akte rw-akte-link" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}" aria-label="Marktakte ${esc(m.ort)} öffnen"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></a>
     </div>`;
   }
@@ -252,7 +282,7 @@
     if (!liste.length) return '';
     return `<details class="rw-panel rw-glas" id="rw-ruhend"><summary class="rw-panelkopf"><h2>Ruhende Märkte <span class="rw-sub">${liste.length} · seit längerer Zeit ohne Bestellung, nicht in der Abfrage</span></h2></summary>
       <div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten"><thead><tr><th>Markt</th><th>Lieferweg</th><th>Zuletzt bestellt</th><th>Hinweis</th><th></th></tr></thead><tbody>
-      ${z.map((m) => `<tr><td data-label="Markt"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : ''].filter(Boolean).join(' · '))}</span></td>
+      ${z.map((m) => `<tr><td data-label="Markt"><button type="button" class="rw-mname" data-karte="${esc(m.id)}" title="Marktkarte öffnen">${esc(m.ort)}</button><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : ''].filter(Boolean).join(' · '))}</span></td>
         <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuletzt bestellt">${esc(m.letzte ? kwText(m.letzte) : 'nie')}</td>
         <td data-label="Hinweis" class="rw-sub">${esc((m.hinweis || '').slice(0, 80))}</td>
         <td class="rw-voll"><a class="btn sm ghost" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}">Akte</a>${m.darfPflegen ? ` <button class="btn sm" type="button" data-wieder="${esc(m.id)}">Wieder abfragen</button>` : ''}</td></tr>`).join('')}
@@ -276,9 +306,13 @@
     S.sichtbar.add(id);   // Zeile bleibt stehen (Mengen, Notiz), auch im Filter „Offen“
     renderWoche();
   }
+  const finde = (id) => S.woche.gruppen.flatMap((g) => g.maerkte).find((x) => x.id === id);
   $('#rw-w-gruppen').addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t || t.disabled) return;
-    const finde = (id) => S.woche.gruppen.flatMap((g) => g.maerkte).find((x) => x.id === id);
+    if (t.dataset.karte) { oeffneKarte(t.dataset.karte); return; }
+    if (t.dataset.vor) {   // künftige Woche aus dem Verlauf: dort die Vorbestellung eintragen
+      S.kw = t.dataset.vor; neuAnsehen(); S.sichtbar.add(t.dataset.markt); S.zeigeNach = t.dataset.markt; zeigeTab('woche', S.kw); return;
+    }
     if (t.dataset.s) {
       const m = finde(t.dataset.markt), s = t.dataset.s;
       if (m.antwort && m.antwort.status === s) return;
@@ -308,9 +342,16 @@
       toast(`${r.data.markt.ort}: wieder in der Abfrage (gelegentlich)`); ladeWoche();
     }
   });
+  $('#rw-w-gruppen').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.dataset.mzahl) ev.target.blur(); });
   $('#rw-w-gruppen').addEventListener('change', (ev) => {
     const t = ev.target;
-    if (t.dataset.notiz) sende(t.dataset.notiz, { notiz: t.value.trim() });
+    if (t.dataset.mzahl) {   // Menge eingetippt
+      const m = finde(t.dataset.markt); if (!m || !m.antwort) return;
+      const n = parseInt(t.value.replace(/\D/g, ''), 10);
+      const neu = { ...obj(m.antwort.mengen), [t.dataset.mzahl]: Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0 };
+      if (!summe(neu)) { toast('Mindestens eine Menge – sonst „Kein Bedarf“ wählen.', true); renderWoche(); return; }
+      sende(m.id, { status: 'bestellt', mengen: neu });
+    } else if (t.dataset.notiz) sende(t.dataset.notiz, { notiz: t.value.trim() });
     else if (t.dataset.ob) sende(t.dataset.ob, { ohneBerechnung: t.checked });
   });
   $('#rw-w-zurueck').addEventListener('click', () => { S.kw = kwPlus(S.kw, -1); neuAnsehen(); zeigeTab('woche', S.kw); });
@@ -326,7 +367,7 @@
     if (r.status === 401) { zeigeAnmeldung(); return; }
     if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Die Märkte konnten nicht geladen werden'), true); return; }
     S.maerkte = r.data.maerkte;
-    if (S.tab === 'zuweisung') renderZuweisung(); else renderMaerkte();
+    if (S.tab === 'zuweisung') renderZuweisung(); else if (S.tab === 'dauer') renderDauer(); else renderMaerkte();
   }
   function renderMaerkte() {
     if (!S.maerkte) return;
@@ -358,11 +399,18 @@
     S.akte = r.data;
     renderAkte();
   }
-  function renderAkte() {
-    const A = S.akte, m = A.markt, wochen = obj(A.wochen), z = obj(A.zahlen);
-    const jahr = S.d.heute.slice(0, 4), vorjahr = String(+jahr - 1);
+  /* Eintrag im Verlauf der Notizen (Marktakte und Marktkarte) */
+  const notizLi = (n) => `<li>
+    <time datetime="${esc(n.t)}">${esc(zeitpunkt(n.t).split(',')[0])}</time>
+    <span class="rw-av${n.art === 'system' ? ' system' : ''}" aria-hidden="true">${n.art === 'system' ? '↻' : esc(initialen(n.von))}</span>
+    <div><div class="rw-kopfzeile"><b>${esc(n.von)}</b><span class="rw-chip">${esc(S.d.notizArten[n.art] || n.art)}</span>
+      ${n.wv ? `<span class="rw-chip ${n.erledigt ? 'gruen' : 'gelb'}">Wiedervorlage ${esc(datum(n.wv))}${n.erledigt ? ' · erledigt' : ''}</span>` : ''}</div>
+      <p>${esc(n.text)}</p></div></li>`;
+  /* Wochenraster je Jahr (Marktakte und Marktkarte): eine Zelle je KW, Farbe nach Antwort */
+  function heatHtml(A) {
+    const wochen = obj(A.wochen), z = obj(A.zahlen), jahr = S.d.heute.slice(0, 4);
     const jahre = [...new Set(Object.keys(wochen).map((k) => k.slice(0, 4)).concat([jahr]))].sort().reverse().slice(0, 7);
-    const heat = jahre.map((j) => {
+    return jahre.map((j) => {
       const n = (+j % 4 === 0 && +j % 100 !== 0) || +j % 400 === 0 ? 0 : 0; void n;
       const max = isoKw(new Date(Date.UTC(+j, 11, 28))).slice(5);
       const zellen = [];
@@ -376,6 +424,11 @@
       }
       return `<span class="jahr">${esc(j)}</span><div class="wochen" role="img" aria-label="${esc(j)}: ${obj(z[j]).lieferungen || 0} Bestellungen">${zellen.join('')}</div>`;
     }).join('');
+  }
+  function renderAkte() {
+    const A = S.akte, m = A.markt, z = obj(A.zahlen);
+    const jahr = S.d.heute.slice(0, 4), vorjahr = String(+jahr - 1);
+    const heat = heatHtml(A);
     const notizen = A.notizen;
     const offeneWv = notizen.filter((n) => n.wv && !n.erledigt);
     const kontakte = m.ansprechpartner || [];
@@ -410,12 +463,7 @@
           </section>
           <section class="rw-panel rw-glas">
             <div class="rw-panelkopf"><h2>Notizen und Verlauf</h2></div>
-            <ol class="rw-verlaufsliste">${notizen.map((n) => `<li>
-              <time datetime="${esc(n.t)}">${esc(zeitpunkt(n.t).split(',')[0])}</time>
-              <span class="rw-av${n.art === 'system' ? ' system' : ''}" aria-hidden="true">${n.art === 'system' ? '↻' : esc(initialen(n.von))}</span>
-              <div><div class="rw-kopfzeile"><b>${esc(n.von)}</b><span class="rw-chip">${esc(S.d.notizArten[n.art] || n.art)}</span>
-                ${n.wv ? `<span class="rw-chip ${n.erledigt ? 'gruen' : 'gelb'}">Wiedervorlage ${esc(datum(n.wv))}${n.erledigt ? ' · erledigt' : ''}</span>` : ''}</div>
-                <p>${esc(n.text)}</p></div></li>`).join('') || '<li class="rw-leerzeile" style="display:block">Noch keine Notizen.</li>'}</ol>
+            <ol class="rw-verlaufsliste">${notizen.map(notizLi).join('') || '<li class="rw-leerzeile" style="display:block">Noch keine Notizen.</li>'}</ol>
           </section>
         </div>
         <aside>
@@ -513,6 +561,253 @@
     if (S.akteId) ladeAkte(S.akteId);
   });
   $$('dialog').forEach((d) => d.addEventListener('click', (ev) => { if (ev.target.closest('[data-schliessen]')) d.close(); }));
+
+  /* ================= Marktkarte (Fenster: Klick auf Name oder Adresse eines Marktes) =================
+     Links der wichtige Hinweis (speichert von selbst), Ansprechpartner und Dauerauftrag; rechts Reiter Notizen (neue
+     Notiz mit Art und Wiedervorlage), Verlauf der Wochen und offene Wiedervorlagen. Daten aus rewe_markt (wie die Akte). */
+  const K = { id: '', akte: null, reiter: 'notizen', art: 'notiz', timer: 0, speichert: false };
+  const dk = $('#dlg-karte');
+  const kStatus = (t) => { const e = $('#kt-hstatus'); if (e) e.textContent = t; };
+  async function oeffneKarte(id) {
+    clearTimeout(K.timer);
+    if (K.akte && K.id !== id) await hinweisSpeichern();
+    const m = S.woche ? finde(id) : null;
+    K.id = id; K.akte = null; K.reiter = 'notizen'; K.art = 'notiz';
+    $('#kt-titel').textContent = m ? m.ort : 'Markt'; $('#kt-adresse').textContent = ''; $('#kt-chips').innerHTML = ''; $('#kt-knoepfe').innerHTML = '';
+    $('#kt-inhalt').innerHTML = '<p class="rw-hilfe">Wird geladen …</p>';
+    if (!dk.open) dk.showModal();
+    await ladeKarte();
+  }
+  async function ladeKarte() {
+    const id = K.id;
+    const r = await api('rewe_markt', null, '&id=' + encodeURIComponent(id));
+    if (id !== K.id) return;
+    if (r.status === 401) { zeigeAnmeldung(); return; }
+    if (r.status !== 200 || !r.data.ok) { $('#kt-inhalt').innerHTML = `<p class="rw-meldung">${esc(fehlerText(r, 'Die Marktkarte konnte nicht geladen werden'))}</p>`; return; }
+    const offen = $('#kt-hinweis') && K.akte && K.akte.markt.id === id ? $('#kt-hinweis').value : null;   // getippter Hinweis bleibt stehen
+    K.akte = r.data;
+    renderKarte(offen);
+  }
+  function renderKarte(hinweisText = null) {
+    const A = K.akte, m = A.markt, darfP = A.darfPflegen, id = esc(m.id), z = obj(A.zahlen), jahr = S.d.heute.slice(0, 4);
+    $('#kt-titel').textContent = m.ort;
+    $('#kt-adresse').innerHTML = [esc(adresse(m)), m.kdNr ? `<b>Kd. ${esc(m.kdNr)}</b>` : '', m.reweNr ? `REWE-Markt ${esc(m.reweNr)}` : ''].filter(Boolean).join(' · ');
+    $('#kt-chips').innerHTML = kaufChip(m.kauf) + `<span class="rw-chip blau">${esc(m.lieferwegName || 'ohne Lieferweg')}</span>`
+      + (m.abfragetag ? `<span class="rw-chip gelb">${esc(S.d.tage[m.abfragetag])} anrufen</span>` : '') + (m.zustaendigName ? `<span class="rw-chip">${esc(m.zustaendigName)}</span>` : '');
+    $('#kt-knoepfe').innerHTML = (m.telefon ? `<a class="btn sm" href="tel:${esc(m.telefon.replace(/[^\d+]/g, ''))}"><svg class="i" aria-hidden="true"><use href="#i-telefon"/></svg>${esc(m.telefon)}</a>` : '')
+      + `<a class="btn sm" href="#markt/${id}" data-gehe="markt/${id}" data-karte-zu>Marktakte</a>`;
+    const notizen = A.notizen.filter((n) => n.art !== 'system'), offeneWv = A.notizen.filter((n) => n.wv && !n.erledigt);
+    const kontakte = m.ansprechpartner || [], d = m.dauer;
+    const arten = Object.entries(S.d.notizArten).filter(([k]) => k !== 'system');
+    const reiter = [['notizen', `Notizen · ${notizen.length}`], ['verlauf', 'Verlauf der Wochen'], ['wv', `Wiedervorlagen · ${offeneWv.length}`]];
+    $('#kt-inhalt').innerHTML = `
+      <div class="rw-klinks">
+        <section class="rw-ksektion">
+          <div class="rw-kzeile"><h3><label for="kt-hinweis">Wichtiger Hinweis</label></h3><span class="rw-sub" id="kt-hstatus" aria-live="polite"></span></div>
+          <textarea class="rw-eingabe rw-khinweis" id="kt-hinweis" rows="8" maxlength="4000" data-ohne-warnung${darfP ? '' : ' readonly'}
+            placeholder="${darfP ? 'z. B. nur donnerstags anrufen, Anlieferung über die Rampe, Rechnung an die Zentrale …' : 'Kein Hinweis.'}">${esc(hinweisText ?? m.hinweis)}</textarea>
+          ${darfP ? '<p class="rw-hilfe">Speichert von selbst und steht in der Wochenliste unter der Adresse.</p>' : ''}
+        </section>
+        <section class="rw-ksektion"><h3>Ansprechpartner</h3>
+          ${kontakte.map((k) => `<div class="rw-kontakt"><span class="rw-av" aria-hidden="true">${esc(initialen(k.name))}</span><div><b>${esc(k.name)}</b><span class="rw-sub">${esc([k.rolle, k.telefon, k.email].filter(Boolean).join(' · '))}</span></div></div>`).join('')
+            || '<p class="rw-hilfe">Noch keine Ansprechpartner (Marktakte → Bearbeiten).</p>'}</section>
+        <section class="rw-ksektion"><h3>Dauerauftrag</h3>
+          ${d.rhythmus ? `<dl class="rw-kv"><dt>Rhythmus</dt><dd>${esc(S.d.rhythmen[d.rhythmus])}</dd><dt>Menge</dt><dd>${esc(mengenText(d.mengen))}</dd>
+            <dt>Nächste Lieferung</dt><dd>${esc(A.naechsteDauer ? kwText(A.naechsteDauer) : '—')}</dd>${d.pauseBis ? `<dt>Pause bis</dt><dd>${esc(kwText(d.pauseBis))}</dd>` : ''}</dl>` : '<p class="rw-hilfe">Kein Dauerauftrag.</p>'}
+          ${darfP ? `<a class="btn sm" href="#dauer/${id}" data-gehe="dauer/${id}" data-karte-zu>${d.rhythmus ? 'Dauerauftrag bearbeiten' : 'Dauerauftrag anlegen'}</a>` : ''}</section>
+      </div>
+      <div class="rw-krechts">
+        <div class="rw-seg rw-kreiter" role="tablist" aria-label="Marktkarte">${reiter.map(([k, t]) => `<button type="button" role="tab" data-kreiter="${k}" aria-selected="${K.reiter === k}">${esc(t)}</button>`).join('')}</div>
+        <div class="rw-kpanel" data-kpanel="notizen" role="tabpanel"${K.reiter === 'notizen' ? '' : ' hidden'}>
+          ${darfP ? `<div class="rw-kneu">
+            <textarea class="rw-eingabe" id="kt-ntext" rows="3" maxlength="2000" placeholder="Neue Notiz, Telefonat oder Absprache …" aria-label="Neue Notiz"></textarea>
+            <div class="rw-kneu-fuss">
+              <div class="rw-seg" role="group" aria-label="Art der Notiz">${arten.map(([k, v]) => `<button type="button" data-kart="${esc(k)}" aria-pressed="${K.art === k}">${esc(v)}</button>`).join('')}</div>
+              <label class="rw-kwv">Wiedervorlage<input class="rw-eingabe" id="kt-nwv" type="date"></label>
+              <button class="btn primary" type="button" id="kt-nsave"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Hinzufügen</button>
+            </div>
+            <p class="rw-meldung" id="kt-nmeldung" role="alert"></p></div>` : ''}
+          <ol class="rw-verlaufsliste">${A.notizen.map(notizLi).join('') || '<li class="rw-leerzeile" style="display:block">Noch keine Notizen.</li>'}</ol>
+        </div>
+        <div class="rw-kpanel" data-kpanel="verlauf" role="tabpanel"${K.reiter === 'verlauf' ? '' : ' hidden'}>
+          <div class="rw-zahlen">
+            <div><span>Bestellungen ${esc(jahr)}</span><b>${obj(z[jahr]).lieferungen || 0}</b></div>
+            <div><span>Bestellungen ${esc(String(+jahr - 1))}</span><b>${obj(z[String(+jahr - 1)]).lieferungen || 0}</b></div>
+            <div><span>Stück ${esc(jahr)}</span><b>${zahl(summe(obj(z[jahr]).mengen))}</b></div>
+            <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '—')}</b></div>
+          </div>
+          <div class="rw-heat">${heatHtml(A)}</div>
+          <div class="rw-legende"><span><i class="rw-z b"></i>bestellt</span><span><i class="rw-z"></i>kein Bedarf</span><span><i class="rw-z n"></i>nicht erreicht</span><span><i class="rw-z p"></i>Pause</span><span><i class="rw-z o"></i>keine Angabe</span></div>
+        </div>
+        <div class="rw-kpanel" data-kpanel="wv" role="tabpanel"${K.reiter === 'wv' ? '' : ' hidden'}>
+          ${offeneWv.map((n) => `<div class="rw-wv"><p><b>${esc(datum(n.wv))}</b> · ${esc(n.text)}</p>${darfP ? `<button class="btn sm" type="button" data-kwv="${esc(n.id)}">Erledigt</button>` : ''}</div>`).join('')
+            || '<p class="rw-hilfe">Keine offenen Wiedervorlagen. Eine Wiedervorlage legen Sie mit einer Notiz an.</p>'}
+        </div>
+      </div>`;
+    if (hinweisText !== null && hinweisText !== m.hinweis) kStatus('noch nicht gespeichert');
+  }
+  /* Hinweis speichern (nach kurzer Pause beim Tippen, beim Verlassen des Feldes und beim Schließen) */
+  async function hinweisSpeichern() {
+    clearTimeout(K.timer);
+    const f = $('#kt-hinweis');
+    if (!f || !K.akte || !K.akte.darfPflegen || K.speichert) return;
+    const m = K.akte.markt, text = f.value;
+    if (text.trim() === String(m.hinweis || '').trim()) { if ($('#kt-hstatus') && $('#kt-hstatus').textContent !== '✓ gespeichert') kStatus(''); return; }
+    K.speichert = true; kStatus('wird gespeichert …');
+    const r = await api('rewe_markt_save', { id: m.id, rev: m.rev, hinweis: text });
+    K.speichert = false;
+    if (r.status === 409) { kStatus('nicht gespeichert'); toast((r.data.error || 'Inzwischen geändert.') + ' Ihr Text steht noch im Feld.', true); if (K.akte.markt.id === m.id) ladeKarte(); return; }
+    if (r.status !== 200 || !r.data.ok) { kStatus('nicht gespeichert'); toast(fehlerText(r, 'Hinweis nicht gespeichert'), true); return; }
+    if (K.akte && K.akte.markt.id === m.id) K.akte.markt = r.data.markt;
+    if (K.akte && K.akte.markt.id === m.id && $('#kt-hinweis')) kStatus($('#kt-hinweis').value === text ? '✓ gespeichert' : 'noch nicht gespeichert');
+    const w = S.woche ? finde(m.id) : null;
+    if (w) { w.hinweis = r.data.markt.hinweis; renderWoche(); }
+    if ($('#kt-hinweis') && K.akte && K.akte.markt.id === m.id && $('#kt-hinweis').value !== text) K.timer = setTimeout(hinweisSpeichern, 900);   // weitergetippt
+  }
+  dk.addEventListener('input', (ev) => { if (ev.target.id === 'kt-hinweis') { kStatus('noch nicht gespeichert'); clearTimeout(K.timer); K.timer = setTimeout(hinweisSpeichern, 900); } });
+  dk.addEventListener('focusout', (ev) => { if (ev.target.id === 'kt-hinweis') hinweisSpeichern(); });
+  dk.addEventListener('close', () => { hinweisSpeichern(); });
+  dk.addEventListener('keydown', (ev) => { if (ev.target.id === 'kt-ntext' && ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); $('#kt-nsave').click(); } });
+  dk.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button, a'); if (!b || b.disabled) return;
+    if (b.dataset.karteZu !== undefined) { dk.close(); return; }
+    if (b.dataset.kreiter) {
+      K.reiter = b.dataset.kreiter;
+      $$('[data-kreiter]', dk).forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+      $$('[data-kpanel]', dk).forEach((x) => { x.hidden = x.dataset.kpanel !== K.reiter; });
+      return;
+    }
+    if (b.dataset.kart) { K.art = b.dataset.kart; $$('[data-kart]', dk).forEach((x) => x.setAttribute('aria-pressed', String(x === b))); return; }
+    if (b.id === 'kt-nsave') {
+      const text = $('#kt-ntext').value.trim();
+      if (!text) { $('#kt-nmeldung').textContent = 'Bitte einen Text eingeben.'; $('#kt-ntext').focus(); return; }
+      b.disabled = true;
+      const r = await api('rewe_notiz_save', { markt: K.id, art: K.art, text, wiedervorlage: $('#kt-nwv').value });
+      b.disabled = false;
+      if (r.status !== 200 || !r.data.ok) { $('#kt-nmeldung').textContent = fehlerText(r, 'Speichern fehlgeschlagen'); return; }
+      $('#kt-ntext').value = ''; $('#kt-nwv').value = '';
+      if (window.STAFL_FENSTER) window.STAFL_FENSTER.gespeichert(dk);
+      toast('Notiz gespeichert');
+      await ladeKarte();
+      if (S.tab === 'woche') ladeWoche(); else if (S.akteId) ladeAkte(S.akteId);
+      return;
+    }
+    if (b.dataset.kwv) {
+      b.disabled = true;
+      const r = await api('rewe_notiz_save', { id: b.dataset.kwv, erledigt: true });
+      if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Speichern fehlgeschlagen'), true); b.disabled = false; return; }
+      toast('Wiedervorlage erledigt'); await ladeKarte();
+      if (S.tab === 'woche') ladeWoche();
+    }
+  });
+
+  /* ================= Daueraufträge (alle sichtbaren Märkte mit Dauerauftrag; bearbeiten nur eigene, GR-103 prüft der Server) ================= */
+  const dauerAktiv = (m) => !!(m.dauer && m.dauer.rhythmus > 0);
+  const dauerPause = (m) => dauerAktiv(m) && !!m.dauer.pauseBis && m.dauer.pauseBis >= S.d.abfrage;
+  const kwAbstand = (a, b) => Math.round((montag(b) - montag(a)) / 604800000);
+  function naechsteLieferungen(e, n = 4) {
+    const out = [];
+    for (let i = 0, k = S.d.abfrage < e.ab ? e.ab : S.d.abfrage; i < 120 && out.length < n; i++, k = kwPlus(k, 1)) {
+      if (e.pauseBis && k <= e.pauseBis) continue;
+      if (kwAbstand(e.ab, k) % e.rhythmus === 0) out.push(k);
+    }
+    return out;
+  }
+  function kwWahl(wert, leer = '') {
+    const liste = []; for (let i = -4; i <= 26; i++) liste.push(kwPlus(S.d.abfrage, i));
+    if (wert && !liste.includes(wert)) liste.unshift(wert);
+    return (leer ? `<option value="">${esc(leer)}</option>` : '') + liste.map((k) => `<option value="${esc(k)}"${k === wert ? ' selected' : ''}>${esc(kwText(k))} · ${esc(zeitraum(k))}</option>`).join('');
+  }
+  function renderDauer() {
+    if (!S.maerkte) return;
+    const alle = S.maerkte.filter(dauerAktiv);
+    const q = S.dSuche.trim().toLocaleLowerCase('de-DE');
+    const z = alle.filter((m) => passt(m, q) && (!S.dRh || String(m.dauer.rhythmus) === S.dRh) && (!S.dLw || m.lieferweg === S.dLw)
+      && (!S.dStatus || (S.dStatus === 'pause' ? dauerPause(m) : S.dStatus === 'faellig' ? m.dauerNaechste === S.d.abfrage : !dauerPause(m))));
+    const pausiert = alle.filter(dauerPause).length, faellig = alle.filter((m) => m.dauerNaechste === S.d.abfrage).length;
+    $('#rw-d-sub').textContent = `${alle.length - pausiert} aktiv · ${pausiert} pausiert · ${faellig} in ${kwKurz(S.d.abfrage)} fällig`;
+    $('#rw-d-neu').hidden = !S.maerkte.some((m) => m.darfPflegen && !dauerAktiv(m));
+    $('#rw-d-tabelle').innerHTML = `<thead><tr><th>Markt</th><th>Rhythmus</th><th>Menge je Lieferung</th><th>Nächste Lieferung</th><th>Status</th><th></th></tr></thead><tbody>
+      ${z.map((m) => `<tr class="${m.darfPflegen ? 'rw-klick' : ''}${S.dEdit && S.dEdit.id === m.id ? ' rw-gewaehlt' : ''}" data-dauer="${esc(m.id)}"${m.darfPflegen ? ' tabindex="0"' : ''}>
+        <td data-label="Markt" class="rw-voll"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : '', m.lieferwegName].filter(Boolean).join(' · '))}</span></td>
+        <td data-label="Rhythmus">${esc(S.d.rhythmen[m.dauer.rhythmus] || '')}</td><td data-label="Menge je Lieferung">${esc(mengenText(m.dauer.mengen))}</td>
+        <td data-label="Nächste Lieferung">${m.dauerNaechste ? esc(kwText(m.dauerNaechste)) + (m.dauerNaechste === S.d.abfrage ? ' <span class="rw-chip gelb">fällig</span>' : '') : '—'}</td>
+        <td data-label="Status">${dauerPause(m) ? `<span class="rw-chip blau">Pause bis ${esc(kwText(m.dauer.pauseBis))}</span>` : '<span class="rw-chip gruen">aktiv</span>'}</td>
+        <td class="rw-voll">${m.darfPflegen ? `<button class="btn sm" type="button" data-dauer-edit="${esc(m.id)}">Bearbeiten</button>` : ''}</td></tr>`).join('')
+        || `<tr><td colspan="6" class="rw-leerzeile">${alle.length ? 'Keine Daueraufträge für diesen Filter.' : 'Noch keine Daueraufträge.'}</td></tr>`}</tbody>`;
+    if (S.dOffen) { const m = S.maerkte.find((x) => x.id === S.dOffen); S.dOffen = ''; if (m && m.darfPflegen) { dauerBearbeiten(m); return; } }
+    renderDauerEdit();
+  }
+  function dauerBearbeiten(m) {
+    const d = m && dauerAktiv(m) ? m.dauer : null;
+    S.dEdit = { id: m ? m.id : '', neu: !d, rev: m ? m.rev : 0, rhythmus: d ? d.rhythmus : 1, mengen: d ? { ...obj(d.mengen) } : { [artikel()[0].id]: 1 },
+      ab: d ? d.ab : S.d.abfrage, pauseBis: d ? d.pauseBis : '', beenden: false };
+    renderDauer();
+    $('#rw-d-edit').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  function renderDauerEdit() {
+    const el = $('#rw-d-edit'), e = S.dEdit;
+    el.hidden = !e; el.parentElement.classList.toggle('mit-edit', !!e);
+    if (!e) { el.innerHTML = ''; return; }
+    const m = e.id ? S.maerkte.find((x) => x.id === e.id) : null;
+    const frei = S.maerkte.filter((x) => x.darfPflegen && (!dauerAktiv(x) || x.id === e.id));
+    const kopf = e.neu ? `<h2>Neuer Dauerauftrag</h2><label class="rw-schmal">Markt<select class="rw-eingabe" id="rw-d-markt"><option value="">Markt wählen …</option>
+        ${frei.map((x) => `<option value="${esc(x.id)}"${x.id === e.id ? ' selected' : ''}>${esc(x.ort)}${x.kdNr ? ' · Kd. ' + esc(x.kdNr) : ''}</option>`).join('')}</select></label>`
+      : `<h2>${esc(m ? m.ort : '')}</h2><p class="rw-sub">${esc(m ? [m.strasse, m.kdNr ? 'Kd. ' + m.kdNr : '', m.lieferwegName].filter(Boolean).join(' · ') : '')}</p>`;
+    const naechste = naechsteLieferungen(e);
+    el.innerHTML = `<div class="rw-dialogkopf"><div class="rw-dkopf">${kopf}</div><button class="rw-dialog-schliessen" type="button" data-d-zu aria-label="Schließen">×</button></div>
+      <div class="rw-schmal"><span>Rhythmus</span><div class="rw-seg rw-dseg" role="group" aria-label="Rhythmus">${[1, 2, 3, 4].map((x) => `<button type="button" data-d-rh="${x}" aria-pressed="${e.rhythmus === x}">${esc(S.d.rhythmen[x])}</button>`).join('')}</div></div>
+      <div class="rw-schmal"><span>Menge je Lieferung</span><div class="rw-mengen-eingabe">${artikel().map((ar) => `<div class="rw-menge"><span>${esc(ar.name)}</span><span class="rw-stepper">
+        <button type="button" data-d-menge="${esc(ar.id)}" data-d="-1" aria-label="${esc(ar.name)} weniger">−</button><input class="rw-mzahl" data-d-mzahl="${esc(ar.id)}" inputmode="numeric" maxlength="3" value="${obj(e.mengen)[ar.id] || 0}" aria-label="${esc(ar.name)}: Menge">
+        <button type="button" data-d-menge="${esc(ar.id)}" data-d="1" aria-label="${esc(ar.name)} mehr">+</button></span></div>`).join('')}</div></div>
+      <div class="rw-formraster"><label>Erste Lieferung<select class="rw-eingabe" id="rw-d-ab">${kwWahl(e.ab)}</select></label>
+        <label>Pause bis<select class="rw-eingabe" id="rw-d-pause">${kwWahl(e.pauseBis, 'keine Pause')}</select></label></div>
+      <p class="rw-dvorschau">${naechste.length ? 'Nächste Lieferungen: ' + esc(naechste.map(kwKurz).join(' · ')) : 'Keine Lieferung geplant.'}</p>
+      <p class="rw-meldung" id="rw-d-meldung" role="alert"></p>
+      <div class="rw-knopfreihe">${!e.neu ? `<button class="btn ghost" type="button" data-d-ende>${e.beenden ? 'Wirklich beenden?' : 'Beenden'}</button>` : ''}
+        <button class="btn" type="button" data-d-zu>Abbrechen</button><button class="btn primary" type="button" data-d-speichern>Speichern</button></div>`;
+  }
+  async function dauerSpeichern(ende) {
+    const e = S.dEdit, meld = (t) => { $('#rw-d-meldung').textContent = t; };
+    if (!e.id) { meld('Bitte einen Markt wählen.'); return false; }
+    const mengen = Object.fromEntries(Object.entries(e.mengen).filter(([, n]) => n > 0));
+    if (!ende && !Object.keys(mengen).length) { meld('Bitte mindestens eine Menge angeben.'); return false; }
+    const r = await api('rewe_markt_save', { id: e.id, rev: e.rev, dauer: ende ? { rhythmus: 0 } : { rhythmus: e.rhythmus, mengen, ab: e.ab, pauseBis: e.pauseBis } });
+    if (r.status === 409) {
+      const t = (r.data.error || 'Der Markt wurde inzwischen geändert.') + ' Bitte prüfen und erneut speichern.';
+      await ladeMaerkte(); const m = S.maerkte && S.maerkte.find((x) => x.id === e.id); if (m && S.dEdit) S.dEdit.rev = m.rev; meld(t); return false;
+    }
+    if (r.status !== 200 || !r.data.ok) { meld(fehlerText(r, 'Speichern fehlgeschlagen')); return false; }
+    toast(`${r.data.markt.ort}: Dauerauftrag ${ende ? 'beendet' : 'gespeichert'}`);
+    S.dEdit = null; await ladeMaerkte();
+    return true;
+  }
+  $('#rw-d-suche').addEventListener('input', (ev) => { S.dSuche = ev.target.value; renderDauer(); });
+  $('#rw-d-rh').addEventListener('change', (ev) => { S.dRh = ev.target.value; renderDauer(); });
+  $('#rw-d-lw').addEventListener('change', (ev) => { S.dLw = ev.target.value; renderDauer(); });
+  $('#rw-d-status').addEventListener('change', (ev) => { S.dStatus = ev.target.value; renderDauer(); });
+  $('#rw-d-neu').addEventListener('click', () => dauerBearbeiten(null));
+  $('#rw-d-tabelle').addEventListener('click', (ev) => {
+    const tr = ev.target.closest('[data-dauer]'); if (!tr) return;
+    const m = S.maerkte.find((x) => x.id === tr.dataset.dauer); if (m && m.darfPflegen) dauerBearbeiten(m);
+  });
+  $('#rw-d-tabelle').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.dataset.dauer) ev.target.click(); });
+  $('#rw-d-edit').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b || b.disabled || !S.dEdit) return;
+    const e = S.dEdit;
+    if (b.dataset.dZu !== undefined) { S.dEdit = null; renderDauer(); return; }
+    if (b.dataset.dRh) { e.rhythmus = +b.dataset.dRh; e.beenden = false; renderDauerEdit(); return; }
+    if (b.dataset.dMenge) { e.mengen[b.dataset.dMenge] = Math.max(0, (e.mengen[b.dataset.dMenge] || 0) + Number(b.dataset.d)); renderDauerEdit(); return; }
+    if (b.dataset.dEnde !== undefined) { if (!e.beenden) { e.beenden = true; renderDauerEdit(); return; } b.disabled = true; if (!(await dauerSpeichern(true))) b.disabled = false; return; }
+    if (b.dataset.dSpeichern !== undefined) { b.disabled = true; if (!(await dauerSpeichern(false))) b.disabled = false; }
+  });
+  $('#rw-d-edit').addEventListener('change', (ev) => {
+    const t = ev.target, e = S.dEdit; if (!e) return;
+    if (t.id === 'rw-d-markt') { const m = S.maerkte.find((x) => x.id === t.value); e.id = t.value; e.rev = m ? m.rev : 0; renderDauer(); }
+    else if (t.id === 'rw-d-ab') { e.ab = t.value; renderDauerEdit(); }
+    else if (t.id === 'rw-d-pause') { e.pauseBis = t.value; renderDauerEdit(); }
+    else if (t.dataset.dMzahl) { const n = parseInt(t.value.replace(/\D/g, ''), 10); e.mengen[t.dataset.dMzahl] = Number.isFinite(n) && n > 0 ? Math.min(n, 999) : 0; renderDauerEdit(); }
+  });
 
   /* ================= Zuweisung und Team ================= */
   function renderZuweisung() {
@@ -751,6 +1046,8 @@
     if (darf('alle')) { wer.innerHTML = '<option value="">Meine Liste</option><option value="*">Alle Listen</option>' + S.d.personen.filter((p) => p.id !== S.d.ich).map((p) => `<option value="${esc(p.id)}">Liste von ${esc(p.name)}</option>`).join(''); wer.value = S.wer; }
     $('#rw-m-lw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-m-lw').value = S.mLw;
     $('#rw-m-kauf').innerHTML = kaufOptionen('alle Kaufbereitschaften'); $('#rw-m-kauf').value = S.mKauf;
+    $('#rw-d-rh').innerHTML = '<option value="">alle Rhythmen</option>' + [1, 2, 3, 4].map((x) => `<option value="${x}">${esc(d.rhythmen[x])}</option>`).join(''); $('#rw-d-rh').value = S.dRh;
+    $('#rw-d-lw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-d-lw').value = S.dLw;
     if (!S.kw) S.kw = d.abfrage;
     if (!S.aKw) S.aKw = d.abschlussKw;
   }

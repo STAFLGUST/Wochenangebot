@@ -48,6 +48,7 @@ const RW_MAX_KONTAKTE = 12;
 const RW_MAX_LIEFERWEGE = 40;
 const RW_MAX_ARTIKEL = 20;
 const RW_VERLAUF_WOCHEN = 8;          // Verlauf in der Wochenabfrage
+const RW_VORSCHAU_WOCHEN = 3;         // Vorbestellungen der folgenden Wochen in der Wochenabfrage (03.11.2026)
 const RW_ERSTES_JAHR = 2019;          // ältester Verlauf aus den Excel-Listen (KW 51/2020)
 const RW_BESTELLSCHLUSS = 'Freitag früh der Vorwoche';   // Inhaber 30.10.2026: „eigentlich Freitag früh, manchmal variabel“
 
@@ -498,7 +499,7 @@ function rw_markt_felder(array $b, array $stamm, array $alt): array
     if (array_key_exists('dauer', $b)) $m['dauer'] = rw_dauer_pruefen($b['dauer'], $stamm);
     if (array_key_exists('abfragetag', $b)) $m['abfragetag'] = rw_wahl($b['abfragetag'] ?? '', array_keys(RW_TAGE), 'Abfragetag');
     if (array_key_exists('ansprechpartner', $b)) $m['ansprechpartner'] = rw_kontakte($b['ansprechpartner']);
-    if (array_key_exists('hinweis', $b)) $m['hinweis'] = rw_text($b['hinweis'], 1000, 'Hinweis', true);
+    if (array_key_exists('hinweis', $b)) $m['hinweis'] = rw_text($b['hinweis'], 4000, 'Hinweis', true);   // 4.000 Zeichen seit 03.11.2026 (vorher 1.000)
     $neu = $m + $alt;
     $a = rw_anzeige($neu);
     if (trim($a['ort']) === '') throw new InvalidArgumentException('Ort: bitte angeben (oder eine Kd.-Nr. aus dem Kundenstamm).');
@@ -536,7 +537,10 @@ function rw_woche(string $kw, array $me, string $wer): array
     $alle = rw_alle($me);
     $person = $wer === '' || !$alle ? (string)$me['id'] : $wer;
     $cache = [];
-    $wv = rw_wiedervorlagen(rw_verlauf_doc(), $heute);
+    $vdoc = rw_verlauf_doc();
+    $wv = rw_wiedervorlagen($vdoc, $heute);
+    $nz = [];   // Notizen je Markt ohne automatische Änderungen (Anzeige „3 Notizen“ in der Liste)
+    foreach ($vdoc['liste'] as $n) if (($n['art'] ?? '') !== 'system') $nz[$n['markt']] = ($nz[$n['markt']] ?? 0) + 1;
     $gruppen = []; $ruhend = []; $z = ['gesamt' => 0, 'beantwortet' => 0, 'bestellt' => 0, 'mengen' => [], 'dauerOffen' => 0, 'wiedervorlagen' => 0];
     foreach (rw_maerkte_doc()['liste'] as $m) {
         if ($person !== '*' && rw_zustaendig($m, $kw) !== $person) continue;
@@ -552,8 +556,13 @@ function rw_woche(string $kw, array $me, string $wer): array
             $k = rw_kw_plus($kw, -$i); $e = rw_antwort_kw($cache, $m['id'], $k);
             $verlauf[] = ['kw' => $k, 'status' => $e ? $e['s'] : '', 'menge' => $e && !empty($e['m']) ? array_sum($e['m']) : 0];
         }
+        $vorschau = [];   // schon erfasste Antworten (Vorbestellungen) der nächsten Wochen
+        for ($i = 1; $i <= RW_VORSCHAU_WOCHEN; $i++) {
+            $k = rw_kw_plus($kw, $i); $e = rw_antwort_kw($cache, $m['id'], $k);
+            $vorschau[] = ['kw' => $k, 'status' => $e ? $e['s'] : '', 'menge' => $e && !empty($e['m']) ? array_sum($e['m']) : 0];
+        }
         $naechste = rw_dauer_naechste($m, $kw);
-        $eintrag = rw_markt_aus($m, $stamm, $namen, $kw) + ['antwort' => rw_antwort_aus($antwort), 'verlauf' => $verlauf,
+        $eintrag = rw_markt_aus($m, $stamm, $namen, $kw) + ['antwort' => rw_antwort_aus($antwort), 'verlauf' => $verlauf, 'vorschau' => $vorschau, 'notizen' => $nz[$m['id']] ?? 0,
             'dauerFaellig' => $faellig, 'dauerNaechste' => $naechste, 'dauerText' => rw_dauer_text($m, $stamm),
             'wiedervorlagen' => $wv[$m['id']] ?? [], 'darfAntworten' => may($me, 'rewe.bearbeiten') && ($alle || rw_eigen($m, $me, $kw))];
         $gruppen[$lwId === '' ? '_' : $lwId][] = $eintrag;
