@@ -883,3 +883,5 @@ function hr_monat(int $jahr, int $monat, array $me, bool $voll): array
     return ['jahr' => $jahr, 'monat' => $monat, 'name' => HR_MONATE[$monat], 'tage' => $tage, 'personen' => $zeilen,
             'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']];
 }
+
+require_once __DIR__ . '/mail.php';   // E-Mails der Urlaubsverwaltung (Erinnerung, Monatsübersicht, Steuerberater)
