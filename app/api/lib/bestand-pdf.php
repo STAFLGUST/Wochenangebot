@@ -19,8 +19,9 @@ function stock_pdf_stufe(?string $mhd): string
 const STOCK_PDF_FARBEN = ['past' => ['#d9d6d2', '#1f1d1a'], '0-4' => ['#fbe0dd', '#8f1d14'], '5-7' => ['#fde7d3', '#7a3209'], '8-14' => ['#fbf0c9', '#6b4a05']];
 const STOCK_PDF_STUFEN = ['past' => 'abgelaufen', '0-4' => 'heute – 4 Tage', '5-7' => '5 – 7 Tage', '8-14' => '8 – 14 Tage'];
 
-/* $zeilen: [['g' => Warengruppe] | ['c' => Artikelnummer], …] in der Reihenfolge der Ansicht; $zusatz: Suche/MHD-Auswahl für den Titel */
-function stock_pdf(array $st, array $zeilen, string $zusatz = ''): string
+/* $zeilen: [['g' => Warengruppe] | ['c' => Artikelnummer], …] in der Reihenfolge der Ansicht; $zusatz: Suche/MHD-Auswahl für den Titel;
+   $mhdListe: Suche „MHD“ – volle Bezeichnung der Warenwirtschaft ohne Merkmale (wie in der Ansicht und der MHD-Mail) */
+function stock_pdf(array $st, array $zeilen, string $zusatz = '', bool $mhdListe = false): string
 {
     global $CFG;
     $norm = fn(string $c) => ctype_digit($c) ? (ltrim($c, '0') === '' ? '0' : ltrim($c, '0')) : strtoupper($c);
@@ -124,10 +125,10 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = ''): string
             $a = $t['a']; $f = STOCK_PDF_FARBEN[$t['stufe']] ?? null;
             if ($f) $pdf->rect($cMhd, $y + .6, $x1 - $cMhd, $RH - 1.2, $f[0]);
             $pdf->text($cCode, $y + 10.6, $fit((string)$a['code'], $FS, 44), $FS, false, '#3d3a36');
-            $name = $fit((string)$a['name'], $FS, $wName);
+            $name = $fit($mhdListe ? bestand_originalname($a) : (string)$a['name'], $FS, $wName);
             $pdf->text($cName, $y + 10.6, $name, $FS, false, '#1b1a18');
-            // Merkmale aus den Stammdaten (Fleischart · Herkunft · Zustand) grau dahinter, soweit Platz ist
-            $merk = trim((string)($a['merkmale'] ?? '')); $nb = Pdf::width($name, $FS);
+            // Merkmale aus den Stammdaten (Fleischart · Herkunft · Zustand) grau dahinter, soweit Platz ist – nicht in der MHD-Liste
+            $merk = $mhdListe ? '' : trim((string)($a['merkmale'] ?? '')); $nb = Pdf::width($name, $FS);
             if ($merk !== '' && $wName - $nb - 6 > 24) $pdf->text($cName + $nb + 6, $y + 10.6, $fit($merk, 7.4, $wName - $nb - 6), 7.4, false, '#6f6a63');
             $pdf->text($cKg, $y + 10.6, $kg((float)$a['kg']), $FS, false, '#1b1a18', 'r');
             $pdf->text($cMhd + 4, $y + 10.6, !empty($a['mhd']) ? date('d.m.Y', strtotime($a['mhd'])) : '—', $FS, (bool)$f, $f[1] ?? '#1b1a18');
