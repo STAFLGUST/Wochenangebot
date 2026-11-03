@@ -1,8 +1,8 @@
 """Verwaltung → Nutzer anlegen: Vorname, Nachname, E-Mail; Benutzername automatisch aus Vorname-Nachname (Umlaute,
 Akzente, belegt → -2); ältere Oberfläche mit „name“ und einwortige Altnamen bleiben möglich; Zugangsdaten per E-Mail an den
 Mitarbeiter (optional mit Startpasswort, nur wenn es geändert werden muss und zum gespeicherten Passwort passt; Rechte,
-Passwortbestätigung, Protokoll, Versandprotokoll). Oberfläche: Dialog schließt weder per Klick daneben noch per Escape,
-automatischer Benutzername, Abschluss-Schritt mit Mail-Knopf, 390 px. Nur Test-Mailserver, keine echten E-Mails."""
+Passwortbestätigung, Protokoll, Versandprotokoll). Oberfläche: Dialog schließt nie per Klick daneben; Escape bei
+ungespeicherten Eingaben erst beim zweiten Mal (erst Hinweis), nach dem Anlegen sofort; automatischer Benutzername, Abschluss-Schritt mit Mail-Knopf, 390 px. Nur Test-Mailserver, keine echten E-Mails."""
 import json
 import sys
 
@@ -117,7 +117,10 @@ with sync_playwright() as p:
     a.mouse.click(30, 30)
     check('Klick daneben schließt den Dialog nicht, Eingaben bleiben', a.evaluate("document.querySelector('#dlg-user').open") and a.input_value('#user-body [name=vorname]') == 'Jörg')
     a.keyboard.press('Escape')
-    check('Escape schließt den Dialog nicht', a.evaluate("document.querySelector('#dlg-user').open") and a.input_value('#user-body [name=nachname]') == 'Neu')
+    # gemeinsamer Hinweis aus theme.js (gilt für alle Formularfenster aller Seiten)
+    a.wait_for_function("document.querySelector('#stafl-hinweis') && document.querySelector('#stafl-hinweis').textContent.includes('noch nicht gespeichert')")
+    check('Escape mit ungespeicherten Eingaben: erst Hinweis, Dialog und Eingaben bleiben', a.evaluate("document.querySelector('#dlg-user').open")
+          and a.input_value('#user-body [name=nachname]') == 'Neu' and 'erneut Escape verwirft' in a.inner_text('#stafl-hinweis'))
     a.fill('#user-body [name=username]', 'jn')
     a.fill('#user-body [name=nachname]', 'Neumann')
     check('selbst eingetragener Benutzername wird nicht überschrieben', a.input_value('#user-body [name=username]') == 'jn')
@@ -131,6 +134,7 @@ with sync_playwright() as p:
     t = a.inner_text('#user-body')
     check('Abschluss: Mitarbeiter angelegt mit Benutzername, Startpasswort, E-Mail, Mail-Knopf', 'Mitarbeiter angelegt' in t and 'lena-lager' in t and pw in t and 'lena.lager@example.org' in t
           and a.locator('#user-body [data-uact="sendmail"]').is_visible() and a.is_checked('#us-mitpw'), t[:300])
+    a.wait_for_selector('.utab tr:has-text("lena-lager")', timeout=10000)   # Liste wird nach dem Speichern neu gezeichnet
     check('Liste schon aktualisiert', a.locator('.utab tr:has-text("lena-lager")').count() == 1)
     a.mouse.click(30, 30)
     check('Abschluss bleibt bei Klick daneben offen', a.evaluate("document.querySelector('#dlg-user').open"))
@@ -144,8 +148,8 @@ with sync_playwright() as p:
         mp = ctx.new_page(); mp.set_content(m.get('html') or ''); mp.screenshot(path=SH + '/nutzer-mail.png', full_page=True); mp.close()
     check('Knopf sendet die Zugangsdaten mit Startpasswort', m and m.get('to') == ['lena.lager@example.org'] and pw in (m.get('text') or '') and 'Hallo Lena,' in (m.get('text') or ''))
     check('Status „gesendet“, Knopf „Erneut senden“', 'lena.lager@example.org' in a.inner_text('#us-mail-st') and 'Erneut senden' in a.inner_text('#user-body [data-uact="sendmail"]'))
-    a.click('#user-body .dlg-foot [data-close]'); a.wait_for_function("!document.querySelector('#dlg-user').open")
-    check('„Fertig“ schließt', True)
+    a.keyboard.press('Escape'); a.wait_for_function("!document.querySelector('#dlg-user').open")
+    check('Nach dem Anlegen schließt Escape sofort (nichts mehr ungespeichert)', True)
     # bestehender Nutzer: Knopf „Zugangsdaten per E-Mail“ ohne Passwort
     a.locator('.utab tbody tr:has-text("lena-lager")').click(); a.wait_for_selector('#dlg-user[open] [data-uact="mail"]')
     check('Bearbeiten: Vorname/Nachname getrennt, Benutzername gesperrt, letzter Versand', a.input_value('#user-body [name=vorname]') == 'Lena' and a.input_value('#user-body [name=nachname]') == 'Lager'
@@ -168,6 +172,15 @@ with sync_playwright() as p:
     check('Mobil 390 px: kein seitliches Scrollen', over <= 1, over)
     a.screenshot(path=SH + '/nutzer-anlegen-mobil.png')
     a.click('#user-body .dlg-foot [data-close]'); a.wait_for_function("!document.querySelector('#dlg-user').open")
+    check('Ohne Eingaben schließt „Abbrechen“ sofort', True)
+    a.click('#user-add'); a.wait_for_selector('#dlg-user[open] [name=vorname]')
+    a.fill('#user-body [name=vorname]', 'Verworfen')
+    a.keyboard.press('Escape'); a.keyboard.press('Escape'); a.wait_for_function("!document.querySelector('#dlg-user').open")
+    a.click('#user-add'); a.wait_for_selector('#dlg-user[open] [name=vorname]')
+    check('Zweites Escape verwirft die Eingaben (neues Formular leer)', a.input_value('#user-body [name=vorname]') == '')
+    a.fill('#user-body [name=vorname]', 'Verworfen')
+    a.click('#user-body .dlg-foot [data-close]'); a.wait_for_function("!document.querySelector('#dlg-user').open")
+    check('„Abbrechen“ schließt auch mit Eingaben sofort (bewusste Entscheidung)', True)
     br.close()
 
 check('keine JavaScript-Fehler', not errors, errors[:3])

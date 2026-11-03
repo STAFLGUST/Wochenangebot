@@ -171,7 +171,7 @@
 <!-- Abwesenheit eintragen / ändern (Personalstelle) -->
 <dialog class="hr-dialog" id="dlg-eintrag" aria-labelledby="dlg-eintrag-titel">
   <form method="dialog" id="eintrag-form" novalidate>
-    <h2 id="dlg-eintrag-titel">Abwesenheit eintragen</h2>
+    <div class="hr-dialogkopf"><h2 id="dlg-eintrag-titel">Abwesenheit eintragen</h2><button class="hr-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
     <label>Mitarbeiter<select id="eintrag-person" required></select></label>
     <label>Art<select id="eintrag-art">
       <option value="U">Urlaub (U)</option><option value="K">Krank (K)</option><option value="G">Gleittag (G)</option><option value="X">Freier Tag (x)</option>
@@ -194,7 +194,7 @@
 <!-- Gleittage gewähren (Personalstelle): Konto, neue Gewährung, bisherige Gewährungen mit Storno -->
 <dialog class="hr-dialog hr-dialog-gleit" id="dlg-gleit" aria-labelledby="dlg-gleit-titel">
   <form method="dialog" id="gleit-form" novalidate>
-    <h2 id="dlg-gleit-titel">Gleittage gewähren</h2>
+    <div class="hr-dialogkopf"><h2 id="dlg-gleit-titel">Gleittage gewähren</h2><button class="hr-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
     <label>Mitarbeiter<select id="gleit-person" required></select></label>
     <div class="hr-konto klein" id="gleit-konto"></div>
     <div class="hr-felder zwei">
@@ -212,7 +212,7 @@
 <!-- Korrektur melden (Mitarbeiter) -->
 <dialog class="hr-dialog" id="dlg-korrektur" aria-labelledby="dlg-korrektur-titel">
   <form method="dialog" id="korrektur-form" novalidate>
-    <h2 id="dlg-korrektur-titel">Korrektur melden</h2>
+    <div class="hr-dialogkopf"><h2 id="dlg-korrektur-titel">Korrektur melden</h2><button class="hr-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
     <p class="hr-klein" id="korrektur-bezug" hidden></p>
     <div class="hr-felder zwei">
       <label><span>Von <span class="opt">(optional)</span></span><input type="date" id="korrektur-von"></label>
@@ -228,11 +228,20 @@
 <!-- Antrag ablehnen -->
 <dialog class="hr-dialog" id="dlg-ablehnen" aria-labelledby="dlg-ablehnen-titel">
   <form method="dialog" id="ablehnen-form" novalidate>
-    <h2 id="dlg-ablehnen-titel">Antrag ablehnen</h2>
+    <div class="hr-dialogkopf"><h2 id="dlg-ablehnen-titel">Antrag ablehnen</h2><button class="hr-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
     <p id="ablehnen-text"></p>
     <label>Grund (sieht der Mitarbeiter)<input type="text" id="ablehnen-grund" maxlength="300" required></label>
     <p class="hr-meldung" id="ablehnen-meldung" role="status"></p>
     <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn gefahr">Ablehnen</button></div>
+  </form>
+</dialog>
+
+<!-- Rückfrage vor folgenreichen Schritten (Escape oder „Abbrechen“ = nein) -->
+<dialog class="hr-dialog" id="dlg-frage" aria-labelledby="fr-titel">
+  <form method="dialog">
+    <h2 id="fr-titel">Sicher?</h2>
+    <p id="fr-text"></p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-antwort="nein" id="fr-nein">Abbrechen</button><button type="button" class="btn primary" data-antwort="ja" id="fr-ja">Ja</button></div>
   </form>
 </dialog>
 

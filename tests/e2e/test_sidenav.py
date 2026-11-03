@@ -107,8 +107,14 @@ with sync_playwright() as p:
         z.route('**/api/?action=status*', lambda route: zentral(route, 'https://dashboard-stafl.de/'))
         z.reload(); z.wait_for_selector('#btn-dashboard:not([hidden])')
         zb = z.locator('#btn-dashboard').bounding_box(); lb = z.locator('#topbar .brand-logo').bounding_box()
-        check(f'{w}px zentrale Anmeldung: Knopf „Dashboard“ links vor dem Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
-              and zb['x'] + zb['width'] <= lb['x'] + 1 and abs((zb['y'] + zb['height'] / 2) - (lb['y'] + lb['height'] / 2)) < 4, (zb, lb))
+        if w <= 480:
+            # Handy: Zurück-Knopf und sechs Aktionen füllen die Zeile – ohne Logo, das sonst unter „Rückgängig“ läge (admin.css)
+            ab = z.evaluate("[...document.querySelectorAll('#topbar .actions .btn, #topbar .actions .ibtn')].filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect().left)")
+            check(f'{w}px zentrale Anmeldung: Knopf „Dashboard“ links, kein verdecktes Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
+                  and lb is None and ab and zb['x'] + zb['width'] <= min(ab) + 1, (zb, lb, ab))
+        else:
+            check(f'{w}px zentrale Anmeldung: Knopf „Dashboard“ links vor dem Logo, Ziel vom Server', z.get_attribute('#btn-dashboard', 'href') == 'https://dashboard-stafl.de/'
+                  and zb['x'] + zb['width'] <= lb['x'] + 1 and abs((zb['y'] + zb['height'] / 2) - (lb['y'] + lb['height'] / 2)) < 4, (zb, lb))
         lbl = z.locator('#btn-dashboard .lbl').bounding_box()
         if w > 1600:
             check(f'{w}px breit: Pfeil und Beschriftung „Dashboard“ sichtbar', lbl['width'] > 40 and z.locator('#btn-dashboard svg use[href="#i-back"]').is_visible(), lbl)

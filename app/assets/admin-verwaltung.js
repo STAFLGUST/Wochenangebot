@@ -295,6 +295,7 @@
   /* Nach dem Anlegen (bzw. neuem Passwort): Zusammenfassung und „Zugangsdaten per E-Mail senden“ */
   function zeigeFertig(u, pw, neu) {
     fertigInfo = { id: u.id, pw };
+    delete dlgUser.dataset.geaendert; delete dlgUser.dataset.warnung;   // gespeichert: Schließen ohne Rückfrage
     const mitPwMoeglich = !!(pw && u.mustChange);
     $('#user-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="us-title">${neu ? 'Mitarbeiter angelegt' : 'Neues Passwort gesetzt'}</h2><p>${esc(u.name)} · ${esc(rollenVon(u).map(rollenName).join(', '))}</p></div>
@@ -570,7 +571,7 @@
   });
   $('#view-orders').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('tr[data-order-nr]')) openOrder(e.target.dataset.orderNr); });
   $('#dlg-order-admin').addEventListener('click', async (e) => {
-    if (e.target === e.currentTarget || e.target.closest('[data-close]')) { e.currentTarget.close(); return; }
+    if (e.target.closest('[data-close]')) { e.currentTarget.close(); return; }
     if (e.target.closest('[data-order-refresh]')) openOrder(orderEdit.nr);
     const retry = e.target.closest('[data-order-mail]');
     if (retry) {

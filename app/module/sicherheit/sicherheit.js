@@ -105,8 +105,10 @@
     dlg.innerHTML = `<form method="dialog" class="sic-dform" novalidate>${html}</form>`;
     dlgHandler = handler;
     if (!dlg.open) dlg.showModal();
+    // ohne Eingabefeld: bei einer gefährlichen Hauptaktion (rot) „Abbrechen“, sonst die Hauptaktion – Enter löst nie
+    // versehentlich etwas Folgenreiches aus (wie im Eingabebereich und in den übrigen Modulen)
     const f = (fokus && $(fokus, dlg)) || $('[autofocus]', dlg) || $('.sic-dinhalt input:not([type=hidden]):not([disabled]):not([type=checkbox]):not([type=radio]), .sic-dinhalt textarea, .sic-dinhalt select', dlg)
-      || $('.sic-dfuss .btn.primary, .sic-dfuss .btn.gefahr', dlg) || $('.sic-dzu', dlg);
+      || ($('.sic-dfuss .btn.gefahr', dlg) && $('.sic-dfuss .btn[data-d="zu"]', dlg)) || $('.sic-dfuss .btn.primary, .sic-dfuss .btn.gefahr', dlg) || $('.sic-dzu', dlg);
     if (f) f.focus();
   }
   function dialogZu() { if (dlg.open) dlg.close(); }
@@ -146,7 +148,7 @@
       const ende = (w) => { if (fertig) return; fertig = true; dlg.removeEventListener('close', zu); ok(w); };
       const zu = () => ende(false);
       dialog(`${dKopf(titel)}<div class="sic-dinhalt"><p>${text}</p></div>${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn ${gefahr ? 'gefahr' : 'primary'}">${esc(ja)}</button>`)}`,
-        { handler: async (a) => { if (a === 'submit') ende(true); } });
+        { handler: async (a) => { if (a === 'submit') ende(true); }, fokus: '.sic-dfuss .btn[data-d="zu"]' });   // Rückfrage: Fokus auf „Abbrechen“
       dlg.addEventListener('close', zu);
     });
   }
@@ -285,7 +287,7 @@
       <dl class="sic-dl"><dt>Vorgang</dt><dd class="mono-s">${esc(e.a)}</dd><dt>Benutzer</dt><dd>${esc(e.n || '—')}${e.u ? ` <span class="sub">${esc(e.u)}</span>` : ''}</dd>
         <dt>Rolle</dt><dd>${esc(e.r || '—')}</dd><dt>IP-Adresse</dt><dd class="mono-s">${esc(e.ip || '—')}</dd></dl>
       ${det ? `<table class="sic-tabelle klein"><thead><tr><th>Feld</th><th>vorher</th><th>nachher</th></tr></thead><tbody>${det}</tbody></table>` : ''}</div>
-      ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`, { breit: !!det });
+      ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`, { breit: !!det });
   }
 
   /* ======================= Lagebild ======================= */
@@ -299,7 +301,7 @@
       : karte(dp.counts.critical ? 'bad' : dp.counts.warnings ? 'warn' : 'ok', 'Dateiprüfung', dp.counts.critical ? `${dp.counts.critical} kritisch` : dp.counts.warnings ? `${dp.counts.warnings} Warnungen` : 'unauffällig', `zuletzt ${esc(zeit(dp.ranAt))} Uhr`, 'datei');
     const tl7 = (L.timeline || []).slice(-7).map((d) => d.staff + d.kunde + d.reauth);
     const karten = [
-      karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen', tl7),
+      karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24\u00a0h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen', tl7),
       karte(K.gesperrteAdressen || K.gesperrteKonten ? 'warn' : 'ok', 'Gesperrt', zahl(K.gesperrteAdressen + K.gesperrteKonten), `${plural(K.gesperrteAdressen, 'Adresse', 'Adressen')} · ${plural(K.gesperrteKonten, 'Zugang', 'Zugänge')}`, 'firewall'),
       karte(K.adminsOhneZweiFaktor ? 'bad' : K.ohneZweiFaktor ? 'warn' : 'ok', 'Zwei-Faktor-Anmeldung', `${zahl(K.zugaenge - K.ohneZweiFaktor)} / ${zahl(K.zugaenge)}`, K.adminsOhneZweiFaktor ? `${plural(K.adminsOhneZweiFaktor, 'Administrator', 'Administratoren')} ohne zweiten Faktor` : K.ohneZweiFaktor ? `${zahl(K.ohneZweiFaktor)} Zugänge ohne zweiten Faktor` : 'alle Zugänge geschützt', 'konten'),
       karte('ok', 'Aktive Sitzungen', zahl(K.sitzungen), `${zahl(K.kundenOnline)} Kunden angemeldet`, 'sitzungen'),
@@ -310,7 +312,7 @@
     const tops = (L.topIps || []).map((x, i) => `<tr class="sic-klick" data-topip="${i}" tabindex="0"><td class="mono-s">${esc(x.ip)}${x.blocked ? ' <span class="sic-pille bad">gesperrt</span>' : ''}</td>
       <td class="num-s"><span class="ip-n"><span class="ip-balken" style="--anteil:${Math.max(6, Math.round((x.n / maxIp) * 100))}%"></span>${zahl(x.n)}</span></td><td>${x.cc ? esc(land(x.cc)) : '<span class="sub">unbekannt</span>'}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
     const evl = L.ereignisse.map((e, i) => `<li><button type="button" data-lev="${i}"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span>
-      <span class="ev-text"><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(EV_ART[e.art] || e.art)}${e.n ? ' · ' + esc(e.n) : ''} · ${esc(datum(e.t))}</span></span></button></li>`).join('');
+      <span class="ev-text"><span class="sic-nm" title="${esc(e.s)}">${esc(e.s)}</span><span class="sub">${esc(EV_ART[e.art] || e.art)}${e.n ? ' · ' + esc(e.n) : ''} · ${esc(datum(e.t))}</span></span></button></li>`).join('');
     host.innerHTML = `
       <div class="sic-oben">
         <div class="sic-gesamt sic-glas" id="sic-gesamt"></div>
@@ -531,7 +533,7 @@
     ].join('')}</div>` : '';
     const seit = n ? Date.parse(n.seit) : 0;
     const evNf = n && r.lage ? (r.lage.ereignisse || []).filter((e) => Date.parse(e.t) >= seit) : [];
-    const nfVerlauf = n && r.rechte.sehen ? block('Verlauf dieses Notfalls', evNf.length ? `<ul class="sic-evliste">${evNf.map((e) => `<li><span class="ev-zeile"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span><span class="ev-text"><span class="sic-nm">${esc(e.s)}</span><span class="sub">${esc(e.n || e.u || '')}</span></span></span></li>`).join('')}</ul>
+    const nfVerlauf = n && r.rechte.sehen ? block('Verlauf dieses Notfalls', evNf.length ? `<ul class="sic-evliste">${evNf.map((e) => `<li><span class="ev-zeile"><span class="ev-zeit num">${esc(uhr(e.t))}</span><span class="ev-punkt ${esc(e.stufe)}" aria-hidden="true"></span><span class="ev-text"><span class="sic-nm" title="${esc(e.s)}">${esc(e.s)}</span><span class="sub">${esc(e.n || e.u || '')}</span></span></span></li>`).join('')}</ul>
       <button type="button" class="btn sm" data-geh="ereignisse">Alle Ereignisse</button>` : leer('Seit Beginn des Notfalls noch keine weiteren Ereignisse.')) : '';
     host.innerHTML = `${hero}${n ? lf + kacheln : ''}
       <div class="sic-zwei">
@@ -668,7 +670,7 @@
           <div><strong>${w === 'ok' ? 'Bereit für den Ernstfall' : w === 'warn' ? 'Bereit, mit Lücken' : 'Lücken mit Handlungsbedarf'}</strong>
           <span>${p.mail.ok ? `Test-Meldung an ${plural(p.mail.ok, 'Empfänger', 'Empfänger')} zugestellt` : `Test-Meldung nicht zugestellt${p.mail.fehler ? ` – ${esc(p.mail.fehler)}` : ''}`}</span></div></div>
         <ul class="pb-punkte">${punkte}</ul><h4>Gesehen</h4>${gesehen}</div>
-      ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`, { breit: true });
+      ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`, { breit: true });
   }
   function dauerText(a, b) {
     const s = Math.max(0, (new Date(b) - new Date(a)) / 1000);
@@ -727,7 +729,7 @@
     dialog(`${dKopf('Notfall vom ' + datum(v.seit), `${esc(zeit(v.seit))} – ${esc(zeit(v.bis))} Uhr · ${esc(dauerText(v.seit, v.bis))}`)}<div class="sic-dinhalt"><dl class="sic-dl">
       <dt>Grund</dt><dd>${esc(v.grund)}</dd><dt>ausgelöst von</dt><dd>${esc(v.von)}</dd><dt>beendet von</dt><dd>${esc(v.beendetVon)}</dd>${v.notiz ? `<dt>Notiz</dt><dd>${esc(v.notiz)}</dd>` : ''}
       <dt>Sitzungen beendet</dt><dd>${zahl(w.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(w.kundenSitzungen)} Kunden</dd><dt>Firewall</dt><dd>${esc(w.firewall || '—')}</dd>
-      <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl>${haken}</div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+      <dt>Einstellungen danach</dt><dd>${esc(v.einstellungen || '—')}</dd></dl>${haken}</div>${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
   }
   /* Auslösen in Schritten: 1 Wirkung → 2 Grund, Optionen, Bestätigungswort → 3 Bestätigung (Passwort bzw. erneute Anmeldung) */
   function notfallAuslosen(entwurf = null) {
@@ -833,7 +835,7 @@
       const r = await aufruf('sicherheit_notfall_aus', { body: { firewall: !!($('#nf-zurueck', dlg) || {}).checked, notiz: $('#nf-notiz', dlg).value } });
       dialog(`${dKopf('Notfall beendet', `Dauer ${esc(r.ende.dauer)}`)}<div class="sic-dinhalt"><dl class="sic-dl"><dt>Einstellungen</dt><dd>${esc(r.ende.einstellungen)}</dd></dl>
           <p class="sic-hinweis">Alle Mitarbeiter können wieder arbeiten; die Angebotsseite ist wieder erreichbar (sofern keine Wartung von Hand eingeschaltet ist).</p></div>
-        ${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+        ${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
       toast('Notfallmodus beendet.');
       await notfallTab();
     } });
@@ -874,7 +876,7 @@
     $('#tab-firewall').innerHTML = `
       <div class="sic-karten vier">
         ${karte(F.waf === 'sperren' ? 'ok' : F.waf === 'protokoll' ? 'warn' : 'bad', 'Firewall', esc(d.modi[F.waf] || F.waf), F.autoSperre ? `sperrt nach ${plural(F.treffer, 'Treffer', 'Treffern')} für ${esc(DAUER[F.sperrMinuten] || F.sperrMinuten + ' Min.')}` : 'automatische Sperre aus')}
-        ${karte(Z.angriffe ? 'warn' : 'ok', 'Angriffsversuche (24 h)', zahl(Z.angriffe), `${zahl(Z.abgewiesen)} Anfragen gesperrter Adressen abgewiesen`)}
+        ${karte(Z.angriffe ? 'warn' : 'ok', 'Angriffsversuche (24\u00a0h)', zahl(Z.angriffe), `${zahl(Z.abgewiesen)} Anfragen gesperrter Adressen abgewiesen`)}
         ${karte(Z.gesperrteAdressen ? 'warn' : 'ok', 'Gesperrte Adressen', zahl(Z.gesperrteAdressen), `${zahl(Z.anmeldungFehl)} fehlgeschlagene Anmeldungen (24 h)`)}
         ${karte(F.feed && d.feed ? 'ok' : 'warn', 'Bedrohungsliste', F.feed ? 'aktiv' : 'aus', feed)}
       </div>
@@ -979,7 +981,7 @@
     host.innerHTML = `
       <div class="sic-karten vier">
         ${karte('ok', 'Aktive Sitzungen', zahl(d.sessions.length), `${zahl(d.customers ? d.customers.online : 0)} Kunden angemeldet`)}
-        ${karte(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(d.fails24), `${zahl(d.fails.length)} in 7 Tagen angezeigt`)}
+        ${karte(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24\u00a0h)', zahl(d.fails24), `${zahl(d.fails.length)} in 7 Tagen angezeigt`)}
         ${karte(gesperrt ? 'warn' : 'ok', 'Gesperrte Zugänge', zahl(d.users.filter((u) => u.lockedUntil).length), `Kontosperre nach ${d.settings.lockAfter} Fehlversuchen`)}
         ${karte(ohne.some((u) => u.role === 'admin') ? 'bad' : ohne.length ? 'warn' : 'ok', 'Ohne Zwei-Faktor', zahl(ohne.length), 'aktive Zugänge mit eigenem Passwort', 'konten')}
       </div>
@@ -1049,7 +1051,7 @@
       daten: 'Auffälligkeit im Datenordner. Herkunft prüfen.' };
     dialog(`${dKopf('Befund der Dateiprüfung', esc(IP_ART[x.art] || x.art))}<div class="sic-dinhalt"><dl class="sic-dl">
       <dt>Datei</dt><dd class="mono-s sic-pfad">${esc(x.path)}</dd><dt>Stufe</dt><dd>${punkt(IP_STUFE[x.stufe] || 'info')} ${esc(x.stufe)}</dd><dt>Befund</dt><dd>${esc(x.text)}</dd>
-      ${x.signatur ? `<dt>Muster</dt><dd><strong>${esc(x.signatur)}</strong></dd>` : ''}</dl><p class="sic-hinweis">${esc(RAT[x.art] || '')}</p></div>${dFuss('<button type="button" class="btn primary" data-d="zu">Schließen</button>')}`);
+      ${x.signatur ? `<dt>Muster</dt><dd><strong>${esc(x.signatur)}</strong></dd>` : ''}</dl><p class="sic-hinweis">${esc(RAT[x.art] || '')}</p></div>${dFuss('<button type="button" class="btn" data-d="zu">Schließen</button>')}`);
   }
 
   /* ======================= Ereignisse ======================= */
@@ -1309,7 +1311,7 @@
     }
     const q = g.q.toLowerCase();
     const passt = (c) => !q || c.toLowerCase() === q || land(c).toLowerCase().includes(q);
-    const opt = (c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}><span class="geo-name">${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
+    const opt = (c) => `<label class="geo-opt"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}><span class="geo-name" title="${esc(land(c))}">${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     const bekannt = S.sec.geoCountries || [];
     // nach Kontinenten gegliedert; Länder ohne Zuordnung (neuere Länderliste des Servers) unter „Weitere“
     const zugeordnet = new Set(g.kontinente.flatMap((k) => k.laender));
@@ -1455,7 +1457,7 @@
           ${k.mustChange ? '<dt>Passwort</dt><dd>muss beim nächsten Anmelden geändert werden</dd>' : ''}${k.lockedUntil ? `<dt>Sperre</dt><dd><span class="sic-pille bad">bis ${esc(uhr(new Date(k.lockedUntil * 1000).toISOString()))} Uhr</span></dd>` : ''}</dl>
         ${k.admin ? '<p class="sic-hinweis">Administratoren haben alle Rechte, auch Notfall beenden, Einstellungen und Zugänge.</p>' : `<h4>Sicherheitsrelevante Rechte</h4><ul class="sic-rechte">${k.rechte.map((r) => `<li><span class="mono-s">${esc(r.key)}</span> ${esc(r.label)}</li>`).join('')}</ul>`}
         <h4>Sitzungen <span class="sub">${zahl(k.sitzungen.length)}</span></h4>${sitz ? `<table class="sic-tabelle klein"><tbody>${sitz}</tbody></table>` : leer('Keine aktive Sitzung.')}</div>
-      ${dFuss(`<a class="btn" href="${VERWALTUNG}#users">${icon('extern')}In der Verwaltung</a>${k.lockedUntil ? '<button type="button" class="btn" data-d="entsperren">Entsperren</button>' : ''}${k.sitzungen.some((s) => !s.current) ? '<button type="button" class="btn gefahr" data-d="alle">Alle Sitzungen beenden</button>' : ''}<button type="button" class="btn primary" data-d="zu">Schließen</button>`)}`,
+      ${dFuss(`<a class="btn" href="${VERWALTUNG}#users">${icon('extern')}In der Verwaltung</a>${k.lockedUntil ? '<button type="button" class="btn" data-d="entsperren">Entsperren</button>' : ''}${k.sitzungen.some((s) => !s.current) ? '<button type="button" class="btn gefahr" data-d="alle">Alle Sitzungen beenden</button>' : ''}<button type="button" class="btn" data-d="zu">Schließen</button>`)}`,
     { breit: true, handler: async (a, b) => {
       if (a === 'ende') { await aufruf('session_end', { body: { sid: b.dataset.sid } }); toast('Sitzung beendet.'); }
       else if (a === 'alle') { await aufruf('session_end', { body: { uid: k.id } }); toast('Sitzungen beendet.'); }

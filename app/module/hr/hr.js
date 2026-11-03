@@ -292,9 +292,23 @@
     meldung($('#antrag-meldung'), r.data.hinweis ? 'Antrag gestellt. ' + r.data.hinweis : 'Antrag gestellt – er wird jetzt geprüft.', r.data.hinweis ? 'warn' : 'ok');
   });
 
+  /* Rückfrage im eigenen Fenster: Escape oder „Abbrechen“ = nein, der Fokus liegt auf „Abbrechen“ */
+  function frage(titel, text, ja = 'Ja') {
+    const d = $('#dlg-frage');
+    $('#fr-titel').textContent = titel; $('#fr-text').textContent = text; $('#fr-ja').textContent = ja;
+    return new Promise((ok) => {
+      const fertig = (w) => { d.removeEventListener('click', klick); d.removeEventListener('close', zu); if (d.open) d.close(); ok(w); };
+      const klick = (e) => { const k = e.target.closest('[data-antwort]'); if (k) fertig(k.dataset.antwort === 'ja'); };
+      const zu = () => fertig(false);
+      d.addEventListener('click', klick); d.addEventListener('close', zu);
+      d.showModal(); $('#fr-nein').focus();
+    });
+  }
+
   $('#mein-liste').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-zurueck]');
     if (!b) return;
+    if (!(await frage('Antrag zurückziehen?', 'Der Antrag wird zurückgenommen und nicht weiter geprüft. Bei Bedarf können Sie ihn neu stellen.', 'Zurückziehen'))) return;
     b.disabled = true;
     const ziel = () => ($('#antrag').hidden ? $('#mein-info') : $('#antrag-meldung'));   // ohne Antragsformular: Meldung über dem Konto
     const r = await api('hr_antrag_zurueckziehen', { id: b.dataset.zurueck });
