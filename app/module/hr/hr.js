@@ -6,6 +6,10 @@
    eigenen Abwesenheiten und „Korrektur melden“ (geht an die Personalstelle), Abwesenheitskalender (Kollegen nur „abwesend“).
    Urlaubsübersicht (Recht hr.uebersicht, auch Personalstelle): alle Mitarbeiter mit Summen (Konto, Krank-, Gleittage).
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
+   Jahresplanung (03.11.2026): Mitarbeiter sehen in der Planungsphase den Stand ihrer Vorplanung des nächsten Jahres
+   (Ziel: Anteil des Anspruchs bis zum Stichtag), Vertretung ist bei Urlaubsanträgen Pflicht (abschaltbar). Reiter
+   „Jahresplanung“ (Personalstelle oder „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste mit Konflikten, Anträge
+   mit Konflikten genehmigen/ablehnen, konfliktfreie gesammelt genehmigen, Erinnerung, Abschluss mit Jahresübersicht.
    Personalstelle (Recht hr.verwalten): Korrekturmeldungen erledigen (mit Antwort, nie die eigene), Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
    Mitarbeiter mit Anspruch und Übertrag, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung,
    Urlaubssperren und Ferien. Alle Rechte prüft der Server bei jeder Aktion (GR-103) – ausgeblendete Bereiche sind nur
@@ -22,7 +26,7 @@
   const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag', F: 'Unentschuldigt' };
   const STATUS = { beantragt: 'beantragt', genehmigt: 'genehmigt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen', storniert: 'storniert' };
   let csrf = '';
-  const S = { art: 'U', gleit: null, offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
+  const S = { art: 'U', gleit: null, offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein', pjahr: null, jp: null, jpFilter: 'alle' };
 
   async function api(action, body, query = '') {
     let res;
@@ -87,6 +91,7 @@
     if (tab === 'antraege') ladeAntraege();
     if (tab === 'export') zeigeExport();
     if (tab === 'uebersicht') ladeUebersicht();
+    if (tab === 'planung') ladePlanung();
   }
   $('#hr-tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) zeigeTab(b.dataset.tab); });
 
@@ -102,6 +107,7 @@
     for (const el of $$('[data-verwalten]')) el.hidden = !r.data.verwalten;
     for (const el of $$('[data-antraege]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
     for (const el of $$('[data-uebersicht]')) el.hidden = !r.data.uebersicht;
+    for (const el of $$('[data-planung]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
     const offen = $('#hr-offen'), n = (r.data.offen || 0) + (r.data.korrekturenOffen || 0);   // Anträge und Korrekturmeldungen (Personalstelle)
     offen.hidden = !n; offen.textContent = n || '';
     zeigeMein();
@@ -126,6 +132,7 @@
       + wert('Geplant', k.geplant)
       + wert('Beantragt', k.beantragt);
     zeigeGleitMein();
+    zeigePlanungMein();
     // Urlaubsanträge ausgeschaltet (Verwaltung → Urlaub): Formular ausblenden, Hinweis zeigen – der Server lehnt Anträge ohnehin ab
     const antraege = d.antraege !== false;
     $('#antrag').hidden = !antraege;
@@ -135,6 +142,7 @@
     const sel = $('#antrag-vertretung'), alt = sel.value;
     sel.innerHTML = '<option value="">– keine –</option>' + d.kollegen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     sel.value = alt;
+    vertretungFeld();
     // Liste: Urlaub, Gleittage und Anträge – Krank und freie Tage stehen im Mini-Kalender „Mein Jahr“
     const liste = d.eintraege.filter((e) => (e.art === 'U' || e.art === 'G') && e.von <= `${d.jahr}-12-31` && e.bis >= `${d.jahr}-01-01`);
     $('#mein-liste').innerHTML = liste.length ? liste.map((e) => {
@@ -172,7 +180,54 @@
     $('#antrag-titel').textContent = S.art === 'G' ? 'Gleittag beantragen' : 'Urlaub beantragen';
     $('[data-antrag-von]').textContent = S.art === 'G' ? 'Erster Gleittag' : 'Erster Urlaubstag';
     $('[data-antrag-bis]').textContent = S.art === 'G' ? 'Letzter Gleittag' : 'Letzter Urlaubstag';
+    vertretungFeld();
   }
+  /* Vertretung: bei Urlaub Pflicht, wenn die Personalstelle es so eingestellt hat (Verwaltung → Urlaub → Jahresplanung);
+     bei Gleittagen freiwillig. Der Server prüft es ebenso (hr_antrag). */
+  const vertretungPflicht = () => !!(S.start && S.start.vertretungPflicht) && S.art === 'U';
+  function vertretungFeld() {
+    const pflicht = vertretungPflicht(), sel = $('#antrag-vertretung');
+    $('#antrag-vertretung-opt').textContent = pflicht ? '' : '(optional)';
+    sel.required = pflicht;
+    if (sel.options.length) sel.options[0].textContent = pflicht ? '– bitte wählen –' : '– keine –';
+  }
+
+  /* ---------- Jahresplanung: Stand der Vorplanung des nächsten Jahres (Mitarbeiter) ----------
+     Nur in der Planungsphase (Server: hr_start.planung). Balken: genehmigt dunkel, beantragt heller, Strich beim Ziel. */
+  function zeigePlanungMein() {
+    const box = $('#mein-planung'), p = S.start && S.start.planung;
+    box.hidden = !p;
+    if (!p) { box.innerHTML = ''; return; }
+    const proz = (n) => (p.anspruch > 0 ? Math.min(100, (n / p.anspruch) * 100) : 0);
+    const zustand = p.erreicht ? 'erreicht' : p.vorbei ? 'vorbei' : '';
+    const zielText = `${zahl(p.ziel)} von ${zahl(p.anspruch)} ${p.anspruch === 1 ? 'Tag' : 'Tagen'}`;
+    const stand = p.erreicht ? `Ziel erreicht – ${tageText(p.geplant)} geplant`
+      : `${zahl(p.geplant)} von ${zahl(p.ziel)} ${p.ziel === 1 ? 'Tag' : 'Tagen'} geplant · noch ${tageText(p.fehlt)}`;
+    const satz = p.vorbei && !p.erreicht
+      ? `Der Stichtag ${de(p.stichtag)} ist vorbei. Bitte planen Sie jetzt mindestens ${p.prozent} % Ihres Urlaubs ${p.jahr} – ${zielText}.`
+      : `Bitte planen Sie bis zum ${de(p.stichtag)} mindestens ${p.prozent} % Ihres Urlaubs ${p.jahr} vor – ${zielText}.`;
+    box.className = 'hr-mp hr-glas' + (zustand ? ' ' + zustand : '');
+    box.innerHTML = `<div class="hr-mp-text"><h2 id="mp-titel">Urlaubsplanung ${esc(String(p.jahr))}</h2><p>${esc(satz)}
+        ${S.start.vertretungPflicht ? ' Für jeden Zeitraum wählen Sie eine Vertretung aus.' : ''}</p></div>
+      <div class="hr-mp-stand">
+        <div class="hr-mp-balken" role="img" aria-label="${esc(`${zahl(p.geplant)} von ${zahl(p.anspruch)} Tagen geplant, Ziel ${zahl(p.ziel)}`)}">
+          <i class="gen" style="width:${proz(p.genehmigt).toFixed(2)}%"></i><i class="bea" style="width:${proz(p.beantragt).toFixed(2)}%"></i>
+          ${p.anspruch > 0 ? `<b class="ziel" style="left:${proz(p.ziel).toFixed(2)}%" title="Ziel: ${esc(tageText(p.ziel))}"></b>` : ''}
+        </div>
+        <p class="hr-mp-zahl" id="mp-stand">${esc(stand)}</p>
+        <p class="hr-mp-legende"><span><i class="gen"></i>genehmigt ${esc(zahl(p.genehmigt))}</span><span><i class="bea"></i>beantragt ${esc(zahl(p.beantragt))}</span><span><i class="ziel"></i>Ziel ${esc(zahl(p.ziel))}</span></p>
+      </div>
+      ${S.start.antraege !== false ? `<button type="button" class="btn primary" id="mp-planen">Urlaub ${esc(String(p.jahr))} planen</button>` : ''}`;
+  }
+  $('#mein-planung').addEventListener('click', async (e) => {
+    if (!e.target.closest('#mp-planen')) return;
+    const p = S.start.planung;
+    if (S.jahr !== p.jahr) { S.jahr = p.jahr; await ladeStart(); }
+    zeigeTab('mein');
+    artSetzen('U');
+    $('#antrag').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('#antrag-von').focus();
+  });
   $('#antrag-art').addEventListener('click', (e) => { const b = e.target.closest('[data-art]'); if (b) { artSetzen(b.dataset.art); antragTage(); } });
 
   /* ---------- Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten ----------
@@ -284,6 +339,7 @@
     const b = { art: S.art, von: $('#antrag-von').value, bis: $('#antrag-bis').value, vertretung: $('#antrag-vertretung').value, notiz: $('#antrag-notiz').value };
     if (!b.von || !b.bis) { meldung(m, S.art === 'G' ? 'Bitte ersten und letzten Gleittag angeben.' : 'Bitte ersten und letzten Urlaubstag angeben.'); return; }
     if (b.bis < b.von) { meldung(m, ''); $('#antrag-bis').focus(); return; }   // der Hinweis unter den Daten sagt es schon
+    if (vertretungPflicht() && !b.vertretung) { meldung(m, 'Bitte wählen Sie eine Vertretung für die Zeit Ihres Urlaubs aus.'); $('#antrag-vertretung').focus(); return; }
     $('#antrag-senden').disabled = true;
     const r = await api('hr_antrag', b);
     $('#antrag-senden').disabled = false;
@@ -624,6 +680,7 @@
     const r = await api('hr_entscheiden', { id: $('#dlg-ablehnen').dataset.id, entscheidung: 'abgelehnt', grund });
     if (r.status !== 200) { meldung($('#ablehnen-meldung'), fehlerText(r, 'Ablehnen fehlgeschlagen')); return; }
     $('#dlg-ablehnen').close();
+    if (S.tab === 'planung') { await ladePlanung(); meldung($('#jp-meldung'), 'Antrag abgelehnt – der Mitarbeiter sieht den Grund.', 'ok'); }
     await ladeAntraege();
   });
 
@@ -820,6 +877,176 @@
       meldung(m, `${name} wurde heruntergeladen.`, 'ok');
     } catch (err) { meldung(m, err.message || String(err)); }
   });
+
+  /* ---------- Jahresplanung (Personalstelle oder „Urlaub genehmigen“) ----------
+     Server: hr_planung (Zusammenfassung), hr_entscheiden (einzeln), hr_planung_freigeben (konfliktfreie gesammelt),
+     hr_planung_erinnern, hr_planung_abschluss, hr_planung_uebersicht_senden. Knöpfe nur als Anzeige – Rechte prüft der Server. */
+  const KONFLIKT_ART = { vertretung: 'Vertretung', abteilung: 'Abteilung', sperre: 'Urlaubssperre', rest: 'Resturlaub' };
+  async function ladePlanung() {
+    const r = await api('hr_planung', null, S.pjahr ? '&jahr=' + S.pjahr : '');
+    if (r.status !== 200) {
+      S.jp = null;
+      $('#jp-titel').textContent = 'Jahresplanung';
+      for (const id of ['#jp-info', '#jp-zahlen', '#jp-aktionen', '#jp-legende', '#jp-zeitleiste', '#jp-filter', '#jp-antraege']) $(id).innerHTML = '';
+      meldung($('#jp-meldung'), fehlerText(r, 'Jahresplanung nicht verfügbar'));
+      return;
+    }
+    S.jp = r.data; S.pjahr = r.data.jahr;
+    zeigePlanung();
+  }
+  const jpFilter = { alle: () => true, konflikt: (a) => a.konflikte.length > 0, frei: (a) => a.status === 'beantragt' && !a.konflikte.length, genehmigt: (a) => a.status === 'genehmigt' };
+  function zeigePlanung() {
+    const d = S.jp, z = d.zahlen, j = d.jahr;
+    $('#jp-titel').textContent = `Jahresplanung ${j}`;
+    $('#jp-info').textContent = [`Stichtag ${de(d.stichtag)}`, `Ziel: ${d.prozent} % des Anspruchs`, d.vertretungPflicht ? 'Vertretung Pflicht' : 'Vertretung freiwillig',
+      d.abschluss ? `abgeschlossen am ${window.STAFL_FORMAT.datum(d.abschluss.t)}${d.abschluss.by ? ' von ' + d.abschluss.by : ''}` : `Hinweis für Mitarbeiter ab ${de(d.start)}`].join(' · ');
+    const kachel = (titel, wert, cls = '', zusatz = '') => `<div class="hr-wert hr-glas ${cls}"><span>${esc(titel)}</span><b>${esc(wert)}</b>${zusatz ? `<small>${esc(zusatz)}</small>` : ''}</div>`;
+    $('#jp-zahlen').innerHTML = kachel('Ziel erreicht', `${z.erreicht} / ${z.personen}`, 'haupt', z.personen - z.erreicht ? `${z.personen - z.erreicht} noch offen` : 'alle Mitarbeiter')
+      + kachel('Offene Anträge', String(z.offen)) + kachel('Konfliktfrei', String(z.frei), 'ok') + kachel('Mit Konflikt', String(z.konflikte), z.konflikte ? 'konflikt' : '');
+    const frei = d.antraege.filter((a) => a.frei).length;
+    const k = [];
+    if (d.verwalten && !d.abschluss) k.push(`<button type="button" class="btn" data-jp="erinnern"${z.erinnern ? '' : ' disabled'}>Erinnerung senden (${z.erinnern})</button>`);
+    if (d.genehmigen) k.push(`<button type="button" class="btn" data-jp="freigeben"${frei ? '' : ' disabled'}>Konfliktfreie genehmigen (${frei})</button>`);
+    if (d.verwalten && !d.abschluss) k.push('<button type="button" class="btn primary" data-jp="abschliessen">Planung abschließen und Jahresübersicht senden</button>');
+    if (d.verwalten && d.abschluss) k.push('<button type="button" class="btn" data-jp="senden">Jahresübersicht erneut senden</button>', '<button type="button" class="btn" data-jp="oeffnen">Wieder öffnen</button>');
+    $('#jp-aktionen').innerHTML = k.join('');
+    zeigeZeitleiste();
+    zeigePlanungListe();
+  }
+  /* Zeitleiste: je Mitarbeiter (nach Abteilung) eine Jahresleiste; Balken = Anträge, Sperren und Monate als Hintergrund */
+  function zeigeZeitleiste() {
+    const d = S.jp, j = d.jahr;
+    const tag0 = Date.UTC(j, 0, 1), tage = (Date.UTC(j + 1, 0, 1) - tag0) / 86400000;
+    const pos = (s) => Math.max(0, Math.min(tage, (Date.parse(s + 'T00:00:00Z') - tag0) / 86400000));
+    const lage = (von, bis) => { const a = pos(von), b = pos(plusTage(bis, 1)); return `left:${(a / tage * 100).toFixed(3)}%;width:${(Math.max(0, b - a) / tage * 100).toFixed(3)}%`; };
+    const raster = MONATE.map((m, i) => { const s = `${j}-${String(i + 1).padStart(2, '0')}-01`; return `<i style="left:${(pos(s) / tage * 100).toFixed(3)}%"></i>`; }).join('')
+      + d.sperren.map((sp) => `<b class="sperre" style="${lage(sp.von < `${j}-01-01` ? `${j}-01-01` : sp.von, sp.bis > `${j}-12-31` ? `${j}-12-31` : sp.bis)}" title="${esc(`Urlaubssperre ${zeitraum(sp.von, sp.bis)}${sp.text ? ' – ' + sp.text : ''}`)}"></b>`).join('')
+      + (d.heute.startsWith(String(j)) ? `<b class="heute" style="left:${(pos(d.heute) / tage * 100).toFixed(3)}%" title="Heute"></b>` : '');
+    const kopf = `<div class="hr-jp-zeile hr-jp-kopf"><div class="hr-jp-name">Mitarbeiter</div><div class="hr-jp-spur">${MONATE.map((m, i) => {
+      const s = `${j}-${String(i + 1).padStart(2, '0')}-01`, e = `${j}-${String(i + 1).padStart(2, '0')}-${String(new Date(Date.UTC(j, i + 1, 0)).getUTCDate()).padStart(2, '0')}`;
+      return `<span style="${lage(s, e)}">${m.slice(0, 3)}</span>`; }).join('')}</div></div>`;
+    let html = '', abt = null;
+    for (const p of d.personen) {
+      if (p.abteilung !== abt) { abt = p.abteilung; html += `<div class="hr-jp-abt"><span>${esc(abt || 'Ohne Abteilung')}<small>${d.personen.filter((x) => x.abteilung === abt).length}</small></span></div>`; }
+      const balken = d.antraege.filter((a) => a.person === p.id).map((a) => {
+        const titel = [`${a.name}: ${zeitraum(a.von, a.bis)}`, tageText(a.tage), STATUS[a.status] || a.status, `Vertretung: ${a.vertretung || '–'}`,
+          ...a.konflikte.map((x) => x.text)].join(' · ');
+        return `<button type="button" class="hr-jp-balken ${esc(a.status)}${a.konflikte.length ? ' konflikt' : ''}" style="${lage(a.von, a.bis)}" data-jp-antrag="${esc(a.id)}" title="${esc(titel)}" aria-label="${esc(titel)}"></button>`;
+      }).join('');
+      const ant = p.anspruch > 0 ? Math.min(100, p.geplant / p.anspruch * 100) : 0;
+      // ohne Anspruch im Jahr (noch nicht gepflegt): kein Ziel, nur ein Hinweis statt „0/0“
+      const stand = p.anspruch > 0
+        ? `<span class="mini"><i style="width:${ant.toFixed(1)}%"></i><b style="left:${Math.min(100, p.ziel / p.anspruch * 100).toFixed(1)}%"></b></span><small>${esc(zahl(p.geplant))}/${esc(zahl(p.ziel))}</small>`
+        : '<small class="ohne">kein Anspruch</small>';
+      html += `<div class="hr-jp-zeile${p.erreicht && p.anspruch > 0 ? ' erreicht' : ''}" data-jp-person="${esc(p.id)}">
+        <div class="hr-jp-name" title="${esc(p.anspruch > 0 ? `${p.name}: ${zahl(p.geplant)} von ${zahl(p.ziel)} Tagen (Ziel), Anspruch ${zahl(p.anspruch)}` : `${p.name}: kein Urlaubsanspruch für ${j} eingetragen`)}"><span class="nm">${esc(p.name)}</span>
+          <span class="stand">${stand}</span></div>
+        <div class="hr-jp-spur">${balken}</div></div>`;
+    }
+    if (!d.personen.length) html = '<p class="hr-klein hr-jp-leer">Keine Mitarbeiter im Urlaubsplan.</p>';
+    $('#jp-zeitleiste').innerHTML = d.personen.length ? `<div class="hr-jp-zl">${kopf}<div class="hr-jp-raster" aria-hidden="true">${raster}</div>${html}</div>` : html;
+    const f = (cls, t) => `<span><i class="${cls}"></i>${esc(t)}</span>`;
+    $('#jp-legende').innerHTML = f('hr-jp-l genehmigt', 'genehmigt') + f('hr-jp-l beantragt', 'beantragt') + f('hr-jp-l konflikt', 'mit Konflikt') + f('hr-jp-l sperre', 'Urlaubssperre');
+  }
+  function zeigePlanungListe() {
+    const d = S.jp, darf = d.genehmigen;
+    if (!jpFilter[S.jpFilter]) S.jpFilter = 'alle';
+    const namen = { alle: 'Alle', konflikt: 'Mit Konflikt', frei: 'Konfliktfrei', genehmigt: 'Genehmigt' };
+    $('#jp-filter').innerHTML = Object.keys(namen).map((k) => `<button type="button" class="hr-chip" data-jp-filter="${k}" aria-pressed="${S.jpFilter === k}">${namen[k]} <small>${d.antraege.filter(jpFilter[k]).length}</small></button>`).join('');
+    const l = d.antraege.filter(jpFilter[S.jpFilter]);
+    $('#jp-antraege').innerHTML = l.length ? l.map((a) => `<li class="hr-jp-antrag${a.konflikte.length ? ' konflikt' : ''}" id="jp-a-${esc(a.id)}" data-id="${esc(a.id)}">
+        <div class="kopf"><b>${esc(a.name)}</b><span class="hr-pille ${esc(a.status)}">${esc(STATUS[a.status] || a.status)}</span>${a.abteilung ? `<span class="gedaempft">${esc(a.abteilung)}</span>` : ''}</div>
+        <div class="zeit"><span class="zeitraum">${esc(zeitraum(a.von, a.bis))}</span><span>${esc(tageText(a.tage))}</span><span>Vertretung: ${a.vertretung ? esc(a.vertretung) : '<em>keine</em>'}</span></div>
+        ${a.notiz ? `<p class="notiz">${esc(a.notiz)}</p>` : ''}
+        ${a.konflikte.length ? `<ul class="hr-jp-konflikte">${a.konflikte.map((x) => `<li class="${esc(x.art)}"><span>${esc(KONFLIKT_ART[x.art] || x.art)}</span>${esc(x.text)}</li>`).join('')}</ul>`
+          : `<p class="hr-jp-ok">Kein Konflikt</p>`}
+        ${a.status === 'beantragt' ? (darf && !a.eigen ? '<div class="knoepfe"><button type="button" class="btn primary" data-jp-genehmigen>Genehmigen</button><button type="button" class="btn gefahr" data-jp-ablehnen>Ablehnen</button></div>'
+          : `<p class="hr-jp-eigen">${a.eigen ? 'Ihr eigener Antrag – darüber entscheidet eine andere Person.' : 'Die Entscheidung trifft eine Person mit dem Recht „Urlaub genehmigen“.'}</p>`) : ''}
+      </li>`).join('') : `<li class="hr-jp-leer">${d.antraege.length ? 'Keine Anträge in dieser Auswahl.' : `Noch keine Urlaubsanträge für ${d.jahr}.`}</li>`;
+  }
+  $('#tab-planung').addEventListener('click', async (e) => {
+    const jb = e.target.closest('[data-pjahr]');
+    if (jb) { S.pjahr = (S.pjahr || new Date().getFullYear() + 1) + Number(jb.dataset.pjahr); meldung($('#jp-meldung'), ''); ladePlanung(); return; }
+    const fb = e.target.closest('[data-jp-filter]');
+    if (fb) { S.jpFilter = fb.dataset.jpFilter; zeigePlanungListe(); return; }
+    const balken = e.target.closest('[data-jp-antrag]');
+    if (balken) {
+      let li = document.getElementById('jp-a-' + balken.dataset.jpAntrag);
+      if (!li) { S.jpFilter = 'alle'; zeigePlanungListe(); li = document.getElementById('jp-a-' + balken.dataset.jpAntrag); }
+      if (li) {
+        li.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        li.classList.remove('hervor'); void li.offsetWidth; li.classList.add('hervor');
+      }
+      return;
+    }
+    const karte = e.target.closest('.hr-jp-antrag');
+    if (karte && S.jp) {
+      const a = S.jp.antraege.find((x) => x.id === karte.dataset.id);
+      if (!a) return;
+      if (e.target.closest('[data-jp-genehmigen]')) {
+        e.target.disabled = true;
+        const r = await api('hr_entscheiden', { id: a.id, entscheidung: 'genehmigt' });
+        if (r.status !== 200) { e.target.disabled = false; meldung($('#jp-meldung'), fehlerText(r, 'Genehmigen fehlgeschlagen')); return; }
+        await ladePlanung();
+        meldung($('#jp-meldung'), `Genehmigt: ${a.name}, ${zeitraum(a.von, a.bis)}.`, 'ok');
+        ladeAntraege();
+        return;
+      }
+      if (e.target.closest('[data-jp-ablehnen]')) {
+        $('#ablehnen-text').textContent = `${a.name}: ${zeitraum(a.von, a.bis)} (${tageText(a.tage)})`;
+        $('#ablehnen-grund').value = ''; meldung($('#ablehnen-meldung'), '');
+        $('#dlg-ablehnen').dataset.id = a.id;
+        $('#dlg-ablehnen').showModal();
+      }
+      return;
+    }
+    const ak = e.target.closest('[data-jp]');
+    if (ak && S.jp) await planungAktion(ak.dataset.jp, ak);
+  });
+  async function planungAktion(was, knopf) {
+    const d = S.jp, j = d.jahr, m = $('#jp-meldung');
+    meldung(m, '');   // Meldung der vorigen Aktion gilt nicht mehr
+    const test = (r) => (r && r.test ? ' (Testmodus: an die Testadresse)' : '');
+    const gesendet = (r) => (r ? `${r.gesendet} ${r.gesendet === 1 ? 'E-Mail' : 'E-Mails'} gesendet${r.fehler ? `, ${r.fehler} nicht zugestellt` : ''}${r.ohneAdresse ? `, ${r.ohneAdresse} ohne E-Mail-Adresse` : ''}${test(r)}` : 'keine E-Mail gesendet');
+    let r;
+    if (was === 'erinnern') {
+      if (!(await frage(`Erinnerung zur Urlaubsplanung ${j} senden?`, `${d.zahlen.erinnern} Mitarbeiter mit E-Mail-Adresse, die ihr Ziel (${d.prozent} % bis ${de(d.stichtag)}) noch nicht erreicht haben, bekommen eine E-Mail mit ihrem Stand.`, 'Erinnerung senden'))) return;
+      knopf.disabled = true;
+      r = await api('hr_planung_erinnern', { jahr: j });
+      if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Erinnerung nicht gesendet')); return; }
+      await ladePlanung(); meldung(m, `Erinnerung: ${gesendet(r.data.ergebnis)}.`, 'ok');
+    } else if (was === 'freigeben') {
+      const ids = d.antraege.filter((a) => a.frei).map((a) => a.id);
+      if (!ids.length) return;
+      if (!(await frage(`${ids.length} konfliktfreie ${ids.length === 1 ? 'Antrag' : 'Anträge'} genehmigen?`, 'Genehmigt werden nur Anträge ohne Konflikt (Vertretung da, keine Überschneidung in der Abteilung, keine Urlaubssperre, im Resturlaub) – der Server prüft jeden Antrag noch einmal. Eigene Anträge bleiben offen.', 'Genehmigen'))) return;
+      knopf.disabled = true;
+      r = await api('hr_planung_freigeben', { jahr: j, ids });
+      if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Genehmigen fehlgeschlagen')); return; }
+      await ladePlanung();
+      const weg = r.data.uebersprungen || [];
+      meldung(m, `${r.data.genehmigt.length} ${r.data.genehmigt.length === 1 ? 'Antrag' : 'Anträge'} genehmigt${weg.length ? `, ${weg.length} übersprungen (${[...new Set(weg.map((x) => x.grund))].join(', ')})` : ''}.`, weg.length ? 'warn' : 'ok');
+      ladeAntraege();
+    } else if (was === 'abschliessen') {
+      if (!(await frage(`Planung ${j} abschließen?`, `Jeder Mitarbeiter mit E-Mail-Adresse bekommt seine Jahresübersicht ${j} (Urlaubszeiträume mit Vertretung, Konto, Jahr auf einen Blick). Der Planungshinweis in der Urlaubsverwaltung verschwindet. Offene Anträge bleiben offen.`, 'Abschließen und senden'))) return;
+      knopf.disabled = true;
+      r = await api('hr_planung_abschluss', { jahr: j, abgeschlossen: true });
+      if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Abschließen fehlgeschlagen')); return; }
+      await ladePlanung(); meldung(m, `Planung ${j} abgeschlossen – Jahresübersicht: ${gesendet(r.data.ergebnis)}.`, r.data.ergebnis && r.data.ergebnis.fehlerText && r.data.ergebnis.fehlerText.length && !r.data.ergebnis.gesendet ? 'warn' : 'ok');
+    } else if (was === 'oeffnen') {
+      if (!(await frage(`Planung ${j} wieder öffnen?`, 'Die Mitarbeiter sehen den Planungshinweis wieder (in der Planungsphase). Bereits gesendete Jahresübersichten bleiben, wie sie sind.', 'Wieder öffnen'))) return;
+      knopf.disabled = true;
+      r = await api('hr_planung_abschluss', { jahr: j, abgeschlossen: false });
+      if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Öffnen fehlgeschlagen')); return; }
+      await ladePlanung(); meldung(m, `Planung ${j} wieder geöffnet.`, 'ok');
+    } else if (was === 'senden') {
+      if (!(await frage(`Jahresübersicht ${j} erneut senden?`, `Jeder Mitarbeiter mit E-Mail-Adresse bekommt seine Jahresübersicht ${j} mit dem aktuellen Stand.`, 'Senden'))) return;
+      knopf.disabled = true;
+      r = await api('hr_planung_uebersicht_senden', { jahr: j });
+      knopf.disabled = false;
+      if (r.status !== 200) { meldung(m, fehlerText(r, 'Senden fehlgeschlagen')); return; }
+      meldung(m, `Jahresübersicht: ${gesendet(r.data.ergebnis)}.`, 'ok');
+    }
+  }
 
   /* ---------- Urlaubsregeln (Text der Personalstelle, Verwaltung → Urlaub) ----------
      Absätze durch Leerzeilen; eine Zeile „1. Überschrift“ am Anfang eines Absatzes wird zur Überschrift. Nur Text (esc). */

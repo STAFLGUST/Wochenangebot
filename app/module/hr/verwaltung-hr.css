@@ -77,3 +77,5 @@
 .hr-mail-verlauf li { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) auto; gap: 10px; }
 .hr-mail-fehler { color: var(--danger, #b42318); }
 @media (max-width: 600px) { .hr-mail-verlauf li { grid-template-columns: 1fr; gap: 0; padding-bottom: 4px; } }
+/* Jahresplanung: Hinweis ab, Stichtag und Anteil nebeneinander (wie Verfallstag) */
+.hr-plan-felder .hr-verfall { flex: 1 1 150px; }
