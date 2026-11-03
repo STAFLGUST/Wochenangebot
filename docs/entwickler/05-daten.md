@@ -338,7 +338,7 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `verfall` (seit 03.11.2026, optional): `false` = der Resturlaub aus dem Vorjahr verfällt für diese Person nicht; fehlt
   das Feld oder ist es `true`, verfällt er am Verfallstag (`hr-einstellungen.uebertragBis`).
 - **`hr-abwesenheiten`**: `{"rev": 9, "eintraege": [{"id": "a0123456789ab", "person": "u…", "art": "U", "von": "2026-03-02", "bis": "2026-03-06", "status": "beantragt", "notiz": "", "vertretung": null, "quelle": "antrag", "erfasst": {"t": "…", "by": "…", "byId": "u…"}}]}`.
-  `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag, `F` unentschuldigt (seit 03.11.2026, nur Personalstelle; zählt nicht
+  `vertretung` (Person) ist bei Urlaubsanträgen Pflicht, solange `hr-einstellungen.planung.vertretungPflicht` nicht `false` ist. `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag, `F` unentschuldigt (seit 03.11.2026, nur Personalstelle; zählt nicht
   gegen den Urlaub, beim Eintragen E-Mail an den Mitarbeiter über `hr_fehlen_mail`). `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
   `entscheidung: {t, by, grund}`). `quelle`: `antrag`, `personalstelle`, `zeiterfassung`; optional `geaendert`,
@@ -354,6 +354,11 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   `verfallAb` (seit 03.11.2026, optional, Jahreszahl 2000–2100 oder `null`): Übergangsregel – Resturlaub verfällt erstmals am
   Verfallstag dieses Jahres; in den Jahren davor verfällt bei niemandem etwas (`hr_verfall_ab()`, `hr_konto`). Fehlt das Feld
   oder ist es `null`, verfällt Resturlaub jedes Jahr.
+  `planung` (seit 03.11.2026, optional, `module/hr/planung.php`): Jahresplanung des nächsten Jahres –
+  `{"start": "10-01", "stichtag": "12-01", "prozent": 90, "vertretungPflicht": true, "abschluss": {"2027": {"t": "…", "by": "…", "byId": "u…"}}}`.
+  Fehlende Felder gelten als Standard (Beginn 01.10., Stichtag 01.12., 90 %, Vertretung Pflicht); `abschluss` je Jahr setzt
+  `hr_planung_abschluss` (Verwaltung → Urlaub speichert ihn nie mit). `mailVerlauf` kennt dazu die Arten `planung` und
+  `jahresuebersicht` (mit `jahr`).
   E-Mails der Urlaubsverwaltung (`module/hr/mail.php`, optional): `mail` = `{"monat": {"an": false, "stand": "2026-10"},
   "test": {"an": false, "adresse": ""}, "steuerberater": {"an": false, "adresse": "", "tag": 5, "stand": "2026-11"}}` –
   `stand` ist der zuletzt automatisch versendete Monat (Monatsübersicht: Vormonat; Steuerberater: Versandmonat);

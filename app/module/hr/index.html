@@ -39,6 +39,7 @@
         <button type="button" role="tab" data-tab="mein" aria-selected="true">Mein Urlaub</button>
         <button type="button" role="tab" data-tab="kalender" aria-selected="false">Kalender</button>
         <button type="button" role="tab" data-tab="antraege" aria-selected="false" data-antraege hidden>Anträge <span class="hr-zahl" id="hr-offen" hidden></span></button>
+        <button type="button" role="tab" data-tab="planung" aria-selected="false" data-planung hidden>Jahresplanung</button>
         <button type="button" role="tab" data-tab="uebersicht" aria-selected="false" data-uebersicht hidden>Übersicht</button>
         <button type="button" role="tab" data-tab="export" aria-selected="false" data-verwalten hidden>Export</button>
       </nav>
@@ -53,6 +54,8 @@
         <p class="hr-meldung" id="mein-info" role="status"></p>
         <p class="hr-hinweis" id="mein-ohne" hidden>Ihr Konto ist noch keinem Mitarbeiter der Urlaubsverwaltung zugeordnet. Bitte an die Personalstelle wenden.</p>
         <div id="mein-inhalt">
+          <!-- Jahresplanung: Stand der Vorplanung des nächsten Jahres (nur in der Planungsphase, Server: hr_start.planung) -->
+          <section class="hr-mp hr-glas" id="mein-planung" aria-labelledby="mp-titel" hidden></section>
           <div class="hr-konto" id="mein-konto"></div>
           <div class="hr-gleit hr-glas" id="mein-gleit" hidden></div>
           <p class="hr-hinweis" id="antrag-aus" hidden>Urlaubsanträge werden derzeit nicht über die Plattform gestellt. Bitte wenden Sie sich an die Personalstelle.
@@ -68,7 +71,7 @@
                 <label><span data-antrag-bis>Letzter Urlaubstag</span><input type="date" id="antrag-bis" required></label>
               </div>
               <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
-              <label><span>Vertretung <span class="opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
+              <label><span>Vertretung <span class="opt" id="antrag-vertretung-opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
               <label><span>Notiz zum Antrag <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
               <p class="hr-klein hr-regeln-link" id="antrag-regeln" hidden>Bitte beachten Sie die <a href="#regeln" data-regeln-zeigen>Urlaubsregeln</a>.</p>
               <p class="hr-meldung" id="antrag-meldung" role="status"></p>
@@ -140,6 +143,29 @@
         </div>
         <p class="hr-meldung" id="eintraege-meldung" role="status"></p>
         <div class="hr-tabelle-rahmen hr-glas" data-verwalten hidden><table class="hr-tabelle" id="eintraege-tabelle"></table></div>
+      </div>
+
+      <!-- Jahresplanung (Personalstelle oder „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste, Konflikte, gesammelt genehmigen,
+           Erinnerung, Abschluss mit Jahresübersicht. Alle Rechte prüft der Server (hr_planung*). -->
+      <div class="hr-tab" id="tab-planung" role="tabpanel" hidden>
+        <div class="hr-jahr">
+          <button type="button" class="hr-rund klein" data-pjahr="-1" aria-label="Vorheriges Jahr"><svg class="i" aria-hidden="true"><use href="#i-links"/></svg></button>
+          <h1 id="jp-titel">Jahresplanung</h1>
+          <button type="button" class="hr-rund klein" data-pjahr="1" aria-label="Nächstes Jahr"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></button>
+          <a class="btn" data-verwalten hidden data-verwaltung-link="urlaub" href="../../admin/#urlaub">Stichtag und Ziel einstellen</a>
+        </div>
+        <p class="hr-klein" id="jp-info"></p>
+        <div class="hr-jp-zahlen" id="jp-zahlen"></div>
+        <div class="hr-jp-aktionen" id="jp-aktionen"></div>
+        <p class="hr-meldung" id="jp-meldung" role="status"></p>
+        <section class="hr-karte hr-glas hr-jp-karte" aria-labelledby="jp-zl-titel">
+          <div class="hr-jp-kopfzeile"><h2 id="jp-zl-titel">Zeitleiste</h2><div class="hr-legende" id="jp-legende"></div></div>
+          <div class="hr-jp-rahmen" id="jp-zeitleiste"></div>
+        </section>
+        <section class="hr-karte hr-glas hr-jp-karte" aria-labelledby="jp-li-titel">
+          <div class="hr-jp-kopfzeile"><h2 id="jp-li-titel">Urlaubsanträge</h2><div class="hr-chips" id="jp-filter" role="group" aria-label="Anträge filtern"></div></div>
+          <ul class="hr-jp-liste" id="jp-antraege"></ul>
+        </section>
       </div>
 
       <!-- Urlaubsübersicht (Recht hr.uebersicht oder Personalstelle): nur Summen je Mitarbeiter -->

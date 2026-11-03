@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-10 Dateien, 205 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 232 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -62,7 +62,7 @@ _Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026)._
 - `hr_tage_text(n)`
 - `hr_mail_h2(t)` – Zwischenüberschrift (HTML)
 - `hr_mail_box(t)` – Hervorgehobener Hinweis (HTML)
-- `hr_mail_tabelle(zeilen)` – Kurze Tabelle aus Zeilen [Bezeichnung, Wert, fett?] (HTML) – Werte rechtsbündig
+- `hr_mail_tabelle(zeilen)` – Kurze Tabelle aus Zeilen [Bezeichnung, Wert, fett?, Zusatzzeile?] (HTML) – Werte rechtsbündig, Zusatzzeile klein unter der Bezeichnung
 - `hr_mail_tabelle_text(zeilen)` – Dieselbe Tabelle als Text (Spalten mit Leerzeichen ausgerichtet)
 - `hr_mail_konto_zeilen(k)` – Urlaubskonto eines Jahres als Zeilen für hr_mail_tabelle: Anspruch, Übertrag, Verfallen, Genommen, Geplant, Resturlaub
 - `hr_mail_jahr_monate(p, eintraege, jahr, heute)` – Genehmigte Urlaubstage je Monat eines Jahres (Arbeitstage wie im Konto): [1..12 => ['genommen' => n, 'geplant' => n]]
@@ -83,6 +83,32 @@ _Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026)._
 - `hr_mail_anstossen()` – Automatischer Versand: von HR-Aufrufen angemeldeter Mitarbeiter angestoßen.
 - `hr_mail_speichern(b)` – Einstellungen speichern (Verwaltung → Urlaub).
 - `hr_mail_aus()` – Für Verwaltung → Urlaub: Einstellungen, Vorschau (Empfänger), nächste Termine, Verlauf, Postfach eingerichtet?
+
+## `app/api/module/hr/planung.php`
+
+_Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026)._
+
+- `hr_planung_einst(d)` – Einstellungen der Jahresplanung (fehlende oder ungültige Felder: Standard)
+- `hr_planung_einst_pruefen(b)` – Einstellungen aus der Verwaltung prüfen (hr_einstellungen_save, Feld „planung“): {start, stichtag, prozent, vertretungPflicht}
+- `hr_planung_jahr(heute)` – Das Jahr, das geplant wird: das nächste Kalenderjahr
+- `hr_planung_daten(pe, jahr)` – Stichtag und Beginn als Datum (im Jahr vor dem Planungsjahr)
+- `hr_planung_person(p, eintraege, jahr, pe)` – Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt
+- `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist)
+- `hr_planung_schnitt(a, b)` – Überschneidung zweier Zeiträume
+- `hr_vertretung_luecken(e, p, vp, eintraege, nurGenehmigt)` – Wann ist die Vertretung im Zeitraum eines Antrags nicht da? Arbeitstage des Antragstellers, an denen die Vertretung abwesend ist (jede Abwesenheit außer …
+- `hr_daten_text(daten)` – Daten als kurze Zeiträume (aufeinanderfolgende Kalendertage zusammengefasst, höchstens vier, dann „…“)
+- `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
+- `hr_planung(jahr, me)` – Zusammenfassung eines Jahres für die Personalstelle und „Urlaub genehmigen“: Mitarbeiter im Urlaubsplan mit Stand, alle Urlaubsanträge des Jahres (beantragt, …
+- `hr_planung_freigeben(jahr, ids, me)` – Konfliktfreie Anträge gesammelt genehmigen (unter der Sperre hr-abwesenheiten): jeder Antrag wird neu geprüft; eigene, bereits entschiedene und solche mit …
+
+**E-Mails der Jahresplanung (Aufbau wie die übrigen HR-Mails, module/hr/mail.php)**
+
+- `hr_planung_mail_zeilen(p, eintraege, jahr, idx)` – Zeilen [Zeitraum (+ beantragt), Tage, –, Vertretung] eines Jahres für hr_mail_tabelle
+- `hr_planung_erinnerung_inhalt(p, eintraege, jahr, pe, idx)` – Erinnerung „Bitte planen Sie Ihren Urlaub“
+- `hr_planung_uebersicht_inhalt(p, eintraege, jahr, idx)` – Jahresübersicht nach dem Abschluss der Planung
+- `hr_planung_empfaenger(jahr, nurOffen, person)` – Empfänger: Mitarbeiter im Urlaubsplan mit E-Mail-Adresse; $nurOffen: nur wer das Ziel noch nicht erreicht hat; $person: nur diese Person.
+- `hr_planung_senden(art, jahr, me, person)` – Versand: art „planung“ (Erinnerung) oder „jahresuebersicht“
+- `hr_planung_abschluss_setzen(jahr, zu, me)` – Abschluss setzen oder aufheben – geprüft und geschrieben unter der Sperre hr-einstellungen (zwei gleichzeitige Klicks schließen nur einmal ab, die …
 
 ## `app/api/module/hr/urlaub.php`
 
@@ -236,6 +262,11 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `zeigeGleitMein()`
 - `artSetzen(art)`
+- `vertretungFeld()`
+
+**Jahresplanung: Stand der Vorplanung des nächsten Jahres (Mitarbeiter)**
+
+- `zeigePlanungMein()`
 
 **Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten**
 
@@ -292,6 +323,14 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `zeigeExport()`
 
+**Jahresplanung (nur Personalstelle; gesammelt genehmigen zusätzlich mit „Urlaub genehmigen“)**
+
+- `ladePlanung()`
+- `zeigePlanung()`
+- `zeigeZeitleiste()` – Zeitleiste: je Mitarbeiter (nach Abteilung) eine Jahresleiste; Balken = Anträge, Sperren und Monate als Hintergrund
+- `zeigePlanungListe()`
+- `planungAktion(was, knopf)`
+
 **Urlaubsregeln (Text der Personalstelle, Verwaltung → Urlaub)**
 
 - `zeigeRegeln(text)`
@@ -331,6 +370,7 @@ _STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbe
 
 **Verwaltung → Urlaub: Urlaubssperren und Ferien**
 
+- `planungFelder()` – Jahresplanung (03.11.2026): Mitarbeiter planen bis zum Stichtag einen Anteil ihres Urlaubs des nächsten Jahres vor; Hinweis in der Urlaubsverwaltung ab dem …
 - `renderUrlaub()`
 
 **Verwaltung → Urlaub: E-Mails (Server: module/hr/mail.php)**
@@ -355,6 +395,7 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `mail_html(m_)`
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`
 - `zeit(cl, uebernehmen, stand, **opt)`
+- `plan_setzen(**w)`
 
 ## `tests/e2e/test_hr_uebersicht.py`
 
