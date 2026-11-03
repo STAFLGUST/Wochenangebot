@@ -456,6 +456,7 @@ Kalenderwochen sind ISO-Wochen „JJJJ-WW“ und meinen die **Lieferwoche**. Men
   "mengen": {…}, "ab": "JJJJ-WW", "pauseBis": ""}, "abfragetag": "mo…fr|", "ansprechpartner": [{"name": "…", "rolle": "", "telefon": "",
   "email": ""}], "hinweis": "", "erstellt": {…}, "geaendert": {…}}]}`. `zustaendig` und `lieferweg` sind „ab KW“-Historien (gilt der
   letzte Eintrag mit `ab` ≤ KW). Steht die Kd.-Nr. im Kundenstamm der Verwaltung, kommen Name, Anschrift und Telefon von dort.
+  `hinweis` bis 4.000 Zeichen (seit 03.11.2026, vorher 1.000; mehrzeilig).
 - **`rewe-wochen/<Jahr>`** (ein Dokument je ISO-Jahr): `{"rev": 9, "maerkte": {"m…": {"45": {"s": "bestellt|kein|ne|pause", "m": {"rb": 2},
   "ob": true?, "n": "<Notiz>"?, "lw": "l…", "zu": "u…", "zuName": "…", "q": "hand|dauer|excel", "r": 2, "t": "…", "von": "…", "vonId": "u…",
   "nachtrag": true?}}}, "abschluss": {"45": {"exportiert": {"t", "von", "vonId", "zeilen", "stueck"}, "erfasst": {"t", "von", "vonId"}}}}`.
