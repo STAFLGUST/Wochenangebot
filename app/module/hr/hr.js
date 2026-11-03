@@ -1050,7 +1050,8 @@
   }
 
   /* ---------- Urlaubsregeln (Text der Personalstelle, Verwaltung → Urlaub) ----------
-     Absätze durch Leerzeilen; eine Zeile „1. Überschrift“ am Anfang eines Absatzes wird zur Überschrift. Nur Text (esc). */
+     Absätze durch Leerzeilen; eine Zeile „1. Überschrift“ am Anfang eines Absatzes wird zur Überschrift mit der Nummer
+     als kleinem Kreis (kompakt, Inhaber 03.11.2026). Nur Text (esc). */
   const REGELN_ZU = 'hr-regeln-zu';
   let regelnBereit = false;   // erst nach dem ersten Anzeigen merken (das „toggle“ beim Laden der Seite zählt nicht)
   function zeigeRegeln(text) {
@@ -1058,8 +1059,10 @@
     box.hidden = !t; $('#antrag-regeln').hidden = !t;
     if (!t) return;
     $('#regeln-text').innerHTML = t.split(/\n\s*\n/).map((abs) => {
-      const z = abs.split('\n'), kopf = /^\d+\.\s+\S/.test(z[0]) ? z.shift() : '';
-      return `<div class="hr-regel">${kopf ? `<h3>${esc(kopf)}</h3>` : ''}${z.length ? `<p>${z.map(esc).join('<br>')}</p>` : ''}</div>`;
+      const z = abs.split('\n'), m = /^(\d+)\.\s+(\S.*)$/.exec(z[0]);
+      if (m) z.shift();
+      const kopf = m ? `<h3><span class="hr-regel-nr">${esc(m[1])}</span> ${esc(m[2].trim())}</h3>` : '';
+      return `<div class="hr-regel${m ? ' mit-nr' : ''}">${kopf}${z.length ? `<p>${z.map(esc).join('<br>')}</p>` : ''}</div>`;
     }).join('');
     if (!regelnBereit) { try { if (localStorage.getItem(REGELN_ZU) === '1') box.open = false; } catch (e) { /* ohne Speicher: offen */ } }
     regelnBereit = true;

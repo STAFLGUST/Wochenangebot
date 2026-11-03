@@ -29,7 +29,8 @@ declare(strict_types=1);
      hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
      Eintragen durch die Personalstelle, Entscheiden und Zurückziehen offener Anträge bleiben.
    - Urlaubsregeln (Inhaber 03.11.2026): Text der Personalstelle (hr-einstellungen „regeln“, Vorlage HR_REGELN_STANDARD),
-     den jeder Mitarbeiter beim Urlaubsantrag sieht; änderbar in Verwaltung → Urlaub.
+     den jeder Mitarbeiter beim Urlaubsantrag sieht; änderbar in Verwaltung → Urlaub. Eine unverändert gespeicherte frühere
+     Vorlage (HR_REGELN_FRUEHER) zeigt die aktuelle – kompakte – Vorlage.
    - Urlaubssperren aus den Regeln jedes Jahr automatisch (Inhaber 03.11.2026, hr-einstellungen „regelSperren“, Standard an):
      Ostergeschäft (die zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (Montag der letzten Novemberwoche bis 24.12.).
      Sie gelten wie eingetragene Sperren (hr_einstellungen „sperren“ enthält beide; „sperrenEigene“ nur die eingetragenen).
@@ -247,25 +248,50 @@ function hr_einstellungen(): array
             // Urlaubsanträge über die Plattform: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
             'antraege' => ($d['antraege'] ?? true) !== false,
             // Urlaubsregeln: gespeicherter Text (auch leer = keine Regeln anzeigen), ohne Feld die Vorlage
-            'regeln' => is_string($d['regeln'] ?? null) ? $d['regeln'] : HR_REGELN_STANDARD];
+            'regeln' => hr_regeln_text($d['regeln'] ?? null)];
 }
 
 /* ---------------- Urlaubsregeln und Sperren aus den Regeln (Inhaber 03.11.2026) ---------------- */
 const HR_REGELN_MAX = 6000;   // Zeichen
+/* Vorlage (Inhaber 03.11.2026: kompakt und einfach) – eine Zeile „1. Überschrift“, darunter der Text, Absätze durch Leerzeilen */
 const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
-    . "Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n\n"
+    . "Wie viele Urlaubstage Sie haben, steht in Ihrem Arbeitsvertrag.\n\n"
     . "2. Planung\n"
-    . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Um eine Planung sinnvoll und für alle Beteiligten gerecht zu gestalten, sollte die jeweilige individuelle Jahresurlaubsplanung bis zum 31.03. eines jeden Kalenderjahres vom Arbeitnehmer eingereicht werden.\n\n"
+    . "Bitte reichen Sie Ihre Urlaubsplanung für das ganze Jahr bis zum 31.03. ein – so können alle fair planen.\n\n"
     . "3. Urlaubsdauer\n"
-    . "Das BUrlG gesteht dem Arbeitnehmer das Anrecht auf Urlaub an 10 aufeinander folgenden Arbeitstagen zu. Die innerbetriebliche Regelung gewährt den Arbeitnehmern aktuell einen Urlaub an 15 aufeinander folgenden Arbeitstagen.\n\n"
+    . "Am Stück sind bis zu 15 Arbeitstage Urlaub möglich (gesetzlich zugesichert: 10).\n\n"
     . "4. Urlaubssperre\n"
-    . "Aus betrieblichen Gründen wird zu folgenden Zeiten kein Urlaub gewährt:\n"
-    . "Ostergeschäft: Zwei Wochen vor den Osterfeiertagen eines jeden Kalenderjahres.\n"
-    . "Weihnachtsgeschäft: Ab der letzten Novemberwoche bis einschließlich dem 24.12. eines jeden Kalenderjahres.\n\n"
+    . "Kein Urlaub im Ostergeschäft (zwei Wochen vor den Osterfeiertagen) und im Weihnachtsgeschäft (letzte Novemberwoche bis 24.12.).\n\n"
     . "5. Resturlaub\n"
-    . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Konnte der Arbeitnehmer seinen Resturlaub wegen Urlaubssperre, Übermaß an Arbeit oder wegen Krankheit nicht nehmen, so muss der Resturlaub gemäß § 7 Abs. 3 Satz 3 BUrlG in den ersten drei Monaten des folgenden Kalenderjahres, d. h. bis zum 31. März, genommen werden. Andernfalls verfällt er grundsätzlich.\n\n"
-    . "6. Urlaubsvertretung\n"
-    . "Der Urlaub muss so geplant werden, dass es keine Überschneidung mit dem jeweiligen Vertreter (Vollvertretung) gibt. Die Urlaubsvertretung ist im Vertretungsplan festgelegt.";
+    . "Urlaub muss im laufenden Jahr genommen werden. Ging das wegen Urlaubssperre, viel Arbeit oder Krankheit nicht, haben Sie bis zum 31.03. des Folgejahres Zeit – danach verfällt der Rest in der Regel (§ 7 Abs. 3 BUrlG).\n\n"
+    . "6. Vertretung\n"
+    . "Ihr Urlaub darf sich nicht mit dem Ihrer Vertretung überschneiden. Wer Sie vertritt, steht im Vertretungsplan.";
+/* Frühere Vorlagen: wurde eine davon unverändert gespeichert (Verwaltung → Urlaub speichert den Text immer mit), gilt die
+   aktuelle Vorlage – eigene Texte der Personalstelle bleiben unberührt; gespeichert wird dabei nichts (GR-006). */
+const HR_REGELN_FRUEHER = [
+    // bis 03.11.2026: ausführlicher Wortlaut
+    "1. Urlaubsanspruch\n"
+        . "Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n\n"
+        . "2. Planung\n"
+        . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Um eine Planung sinnvoll und für alle Beteiligten gerecht zu gestalten, sollte die jeweilige individuelle Jahresurlaubsplanung bis zum 31.03. eines jeden Kalenderjahres vom Arbeitnehmer eingereicht werden.\n\n"
+        . "3. Urlaubsdauer\n"
+        . "Das BUrlG gesteht dem Arbeitnehmer das Anrecht auf Urlaub an 10 aufeinander folgenden Arbeitstagen zu. Die innerbetriebliche Regelung gewährt den Arbeitnehmern aktuell einen Urlaub an 15 aufeinander folgenden Arbeitstagen.\n\n"
+        . "4. Urlaubssperre\n"
+        . "Aus betrieblichen Gründen wird zu folgenden Zeiten kein Urlaub gewährt:\n"
+        . "Ostergeschäft: Zwei Wochen vor den Osterfeiertagen eines jeden Kalenderjahres.\n"
+        . "Weihnachtsgeschäft: Ab der letzten Novemberwoche bis einschließlich dem 24.12. eines jeden Kalenderjahres.\n\n"
+        . "5. Resturlaub\n"
+        . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Konnte der Arbeitnehmer seinen Resturlaub wegen Urlaubssperre, Übermaß an Arbeit oder wegen Krankheit nicht nehmen, so muss der Resturlaub gemäß § 7 Abs. 3 Satz 3 BUrlG in den ersten drei Monaten des folgenden Kalenderjahres, d. h. bis zum 31. März, genommen werden. Andernfalls verfällt er grundsätzlich.\n\n"
+        . "6. Urlaubsvertretung\n"
+        . "Der Urlaub muss so geplant werden, dass es keine Überschneidung mit dem jeweiligen Vertreter (Vollvertretung) gibt. Die Urlaubsvertretung ist im Vertretungsplan festgelegt.",
+];
+
+/* Gespeicherter Text der Urlaubsregeln für die Anzeige: ohne Feld oder als unveränderte frühere Vorlage die aktuelle Vorlage */
+function hr_regeln_text($t): string
+{
+    if (!is_string($t)) return HR_REGELN_STANDARD;
+    return in_array(trim($t), HR_REGELN_FRUEHER, true) ? HR_REGELN_STANDARD : $t;
+}
 
 /* Text der Urlaubsregeln prüfen: Zeichenkette, höchstens HR_REGELN_MAX Zeichen, ohne Steuerzeichen (Zeilenumbrüche bleiben) */
 function hr_regeln_pruefen($t): string
