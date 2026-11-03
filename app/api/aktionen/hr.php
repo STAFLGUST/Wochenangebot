@@ -38,6 +38,7 @@ switch ($action) {
         /* Startseite: eigene Person, Urlaubskonto, eigene Einträge, Feiertage, Sperren */
         case 'hr_start': {
             $me = require_perm('hr.antrag');
+            hr_mail_anstossen();   // automatische HR-Mails (Monatsübersicht, Steuerberater), versendet nach der Antwort
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $neuVerknuepft = false;   // früher automatische Verknüpfung beim ersten Aufruf – entfällt (nur noch die Personalstelle ordnet zu); Feld bleibt für ältere Oberflächen
@@ -86,6 +87,7 @@ switch ($action) {
         /* Monatsplan / Abwesenheitskalender: Kollegen nur „abwesend“, Personalstelle mit Kürzeln */
         case 'hr_monat': {
             $me = require_perm('hr.antrag');
+            hr_mail_anstossen();
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $monat = (int)($_GET['monat'] ?? date('n'));
@@ -228,6 +230,7 @@ switch ($action) {
         /* Personalstelle: Mitarbeiter mit Konten, offene Anträge, alle Einträge des Jahres, Einstellungen */
         case 'hr_verwaltung': {
             $me = require_perm('hr.verwalten');
+            hr_mail_anstossen();
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
@@ -368,12 +371,13 @@ switch ($action) {
            Oberfläche wie die Mitarbeiterverwaltung (Eingabebereich der Verwaltung). */
         case 'mitarbeiter_hr': {
             $me = require_perm('hr.verwalten');
+            hr_mail_anstossen();
             header('Cache-Control: no-store');
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => $einst['uebertragBis'], 'antraege' => $einst['antraege'],
-                     'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen'])]
-                    + hr_einstellungen_aus($einst));
+                     'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
+                     'mail' => hr_mail_aus()] + hr_einstellungen_aus($einst));
         }
 
         /* HR-Angaben eines Mitarbeiters: Abteilung, Position, Arbeitstage, im Urlaubsplan, Verfall des Resturlaubs (ja/nein),
@@ -535,6 +539,49 @@ switch ($action) {
         }
 
         /* Excel für den Steuerberater: ausgewählte Monate eines Jahres im Aufbau der Urlaubsplanung */
+        /* ---------- E-Mails der Urlaubsverwaltung (Verwaltung → Urlaub, module/hr/mail.php) ---------- */
+        /* Einstellungen: Monatsübersicht automatisch, Testmodus mit Testadresse, Steuerberater (Adresse, Tag, automatisch) */
+        case 'hr_mail_save': {
+            $me = require_perm('hr.verwalten', true);
+            [$alt, $neu] = hr_mail_speichern(body());
+            $an = function (bool $x) { return $x ? 'an' : 'aus'; };
+            $teile = [];
+            if ($alt['monat']['an'] !== $neu['monat']['an']) $teile[] = 'Monatsübersicht automatisch ' . $an($neu['monat']['an']);
+            if ($alt['test'] !== $neu['test']) $teile[] = 'Testmodus ' . $an($neu['test']['an']) . ($neu['test']['adresse'] !== '' ? ' (' . $neu['test']['adresse'] . ')' : '');
+            $sa = $alt['steuerberater']; $sn = $neu['steuerberater'];
+            if ([$sa['an'], $sa['adresse'], $sa['tag']] !== [$sn['an'], $sn['adresse'], $sn['tag']]) $teile[] = 'Steuerberater automatisch ' . $an($sn['an']) . ', am ' . $sn['tag'] . '.' . ($sn['adresse'] !== '' ? ' an ' . $sn['adresse'] : '');
+            if ($teile) audit('hr', 'HR: E-Mail-Einstellungen geändert: ' . implode('; ', $teile));
+            respond(['ok' => true, 'mail' => hr_mail_aus()]);
+        }
+        /* Erinnerung „Resturlaub verfällt“ an alle, bei denen Übertrag verfallen würde */
+        case 'hr_erinnerung_senden': {
+            $me = require_perm('hr.verwalten', true);
+            if (!hr_erinnerung_kandidaten()[0]) fail('Bei niemandem mit E-Mail-Adresse verfällt gerade Resturlaub – es gibt nichts zu senden.', 409);
+            try { $r = hr_erinnerung_senden($me); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
+            if (!$r['gesendet']) fail('Erinnerung nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
+            respond(['ok' => true, 'ergebnis' => $r, 'mail' => hr_mail_aus()]);
+        }
+        /* Monatsübersicht auf Knopfdruck: optional „monat“ (JJJJ-MM, höchstens 12 Monate zurück, nicht in der Zukunft), sonst Vormonat */
+        case 'hr_monatsuebersicht_senden': {
+            $me = require_perm('hr.verwalten', true);
+            $b = body();
+            [$vor, $dies] = hr_mail_monate();
+            $ym = $b['monat'] ?? $vor;
+            $grenze = (new DateTimeImmutable('first day of this month'))->modify('-12 months')->format('Y-m');
+            if (!is_string($ym) || !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $ym) || $ym > $dies || $ym < $grenze) fail('Monat: bitte einen Monat der letzten zwölf Monate wählen (JJJJ-MM).', 422);
+            if (!hr_mail_empfaenger()[0]) fail('Kein Mitarbeiter im Urlaubsplan hat eine E-Mail-Adresse – es gibt nichts zu senden.', 409);
+            try { $r = hr_monat_senden($ym, 'manuell', $me); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
+            if (!$r['gesendet']) fail('Monatsübersicht nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
+            respond(['ok' => true, 'ergebnis' => $r, 'mail' => hr_mail_aus()]);
+        }
+        /* Übersicht an den Steuerberater auf Knopfdruck (Vormonat und laufender Monat) */
+        case 'hr_steuerberater_senden': {
+            $me = require_perm('hr.verwalten', true);
+            try { $r = hr_stb_senden('manuell', $me); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
+            if (!$r['gesendet']) fail('Übersicht nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
+            respond(['ok' => true, 'ergebnis' => $r, 'mail' => hr_mail_aus()]);
+        }
+
         case 'hr_export': {
             $me = require_perm('hr.verwalten', true);
             $b = body();

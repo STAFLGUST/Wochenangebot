@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 164 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+10 Dateien, 187 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -40,6 +40,32 @@ _Modul HR · Importe für die Importzentrale (Verwaltung → Import, docs/plattf
 - `hr_import_zeitraeume(tage)` – Kürzel zu Zeiträumen zusammenfassen: aufeinanderfolgende Arbeitstage (Mo–Fr ohne Feiertage) mit gleichem Kürzel
 - `import_arten_hr()` – Importart für die Importzentrale (Verwaltung → Import).
 - `hr_import_stand(personal, abw, mitarbeiter)` – Stand der HR-Daten für Vorschau und Übernahme (veralteter Stand → 409)
+
+## `app/api/module/hr/mail.php`
+
+_Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026)._
+
+- `hr_mail_adresse(v)` – Gültige E-Mail-Adresse (eine, ohne Zeilenumbruch) oder ''
+- `hr_mail_einst(d)` – Einstellungen (fehlende Felder: aus)
+- `hr_mail_monate(jetzt)` – Monate relativ zu heute (deutsche Zeit des Servers): [Vormonat, laufender Monat] als „JJJJ-MM“
+- `hr_ym_text(ym)`
+- `hr_mail_naechste(m, jetzt)` – Nächste automatische Termine (für die Anzeige)
+- `hr_mail_empfaenger()` – Mitarbeiter im Urlaubsplan mit Anmeldungskonto und E-Mail-Adresse: [[Person, Adresse], …] und Zahl ohne Adresse
+- `hr_mail_ziel(m, an, name, betreff)` – Testmodus: Empfänger und Betreff umlenken
+- `hr_mail_rahmen(betreff, text, html)` – Gemeinsamer Rahmen der HR-Mails
+- `hr_mail_link()`
+- `hr_mail_knopf()`
+- `hr_tage_text(n)`
+- `hr_mail_monat_inhalt(p, eintraege, ym)` – Monatsübersicht einer Person: Urlaub (genehmigt) im Monat mit Arbeitstagen, dazu der Stand im Jahr.
+- `hr_mail_erinnerung_inhalt(p, k)` – Erinnerung „Resturlaub verfällt“
+- `hr_mail_versenden(jobs, art, wie, me, zusatz)` – Versand: Jobs senden, Verlauf und Protokoll schreiben.
+- `hr_monat_senden(ym, wie, me)` – Monatsübersicht für „JJJJ-MM“ an alle Mitarbeiter mit Adresse (Testmodus: an die Testadresse)
+- `hr_erinnerung_kandidaten()` – Erinnerung an alle, bei denen im laufenden Jahr Übertrag verfallen würde
+- `hr_erinnerung_senden(me)`
+- `hr_stb_senden(wie, me)` – Excel-Übersicht des Vormonats und des laufenden Monats an den Steuerberater
+- `hr_mail_anstossen()` – Automatischer Versand: von HR-Aufrufen angemeldeter Mitarbeiter angestoßen.
+- `hr_mail_speichern(b)` – Einstellungen speichern (Verwaltung → Urlaub).
+- `hr_mail_aus()` – Für Verwaltung → Urlaub: Einstellungen, Vorschau (Empfänger), nächste Termine, Verlauf, Postfach eingerichtet?
 
 ## `app/api/module/hr/urlaub.php`
 
@@ -286,6 +312,11 @@ _STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbe
 **Verwaltung → Urlaub: Urlaubssperren und Ferien**
 
 - `renderUrlaub()`
+
+**Verwaltung → Urlaub: E-Mails (Server: module/hr/mail.php)**
+
+- `mailKarte()`
+- `mailNeu(m)`
 
 ## `tests/e2e/test_hr.py`
 
