@@ -348,6 +348,9 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 24.12. – jedes Jahr berechnet, nicht gespeichert;
   nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
   `HR_REGELN_STANDARD`, leer = keine Regeln). `sperren` enthält nur die eingetragenen Sperren.
+  `verfallAb` (seit 03.11.2026, optional, Jahreszahl 2000–2100 oder `null`): Übergangsregel – Resturlaub verfällt erstmals am
+  Verfallstag dieses Jahres; in den Jahren davor verfällt bei niemandem etwas (`hr_verfall_ab()`, `hr_konto`). Fehlt das Feld
+  oder ist es `null`, verfällt Resturlaub jedes Jahr.
   E-Mails der Urlaubsverwaltung (`module/hr/mail.php`, optional): `mail` = `{"monat": {"an": false, "stand": "2026-10"},
   "test": {"an": false, "adresse": ""}, "steuerberater": {"an": false, "adresse": "", "tag": 5, "stand": "2026-11"}}` –
   `stand` ist der zuletzt automatisch versendete Monat (Monatsübersicht: Vormonat; Steuerberater: Versandmonat);

@@ -89,69 +89,174 @@ function hr_mail_ziel(array $m, string $an, string $name, string $betreff): arra
     return [$an, $name, $betreff];
 }
 
-/* Gemeinsamer Rahmen der HR-Mails */
-function hr_mail_rahmen(string $betreff, string $text, string $html): array
+/* ---------------- Aufbau der HR-Mails (Inhaber 03.11.2026: ordentlich, mit kurzen Tabellen und Link zum Portal) ----------------
+   Rahmen wie die Einladungen der Plattform (mail_layout_einladung: dunkles Kopfband „Urlaubsverwaltung“, große Überschrift,
+   nur Tabellen und Inline-Stile – Outlook, Gmail, Apple Mail, Handy). Jede Mail hat dazu eine Textfassung mit denselben Angaben. */
+function hr_mail_rahmen(string $betreff, string $text, string $html, string $ueberschrift = ''): array
 {
     global $CFG;
     $firma = (string)($CFG['company'] ?? '');
     $sig = "Ihre Personalstelle" . ($firma !== '' ? "\n$firma" : '');
     $fuss = 'Diese E-Mail kommt automatisch aus der Urlaubsverwaltung der STAFL-Plattform.';
-    return [$betreff, $text . "\n\n$sig\n\n-- \n$fuss\n", mail_layout($betreff, $html, $sig, $fuss)];
+    return [$betreff, $text . "\n\n$sig\n\n-- \n$fuss\n", mail_layout_einladung($betreff, 'Urlaubsverwaltung', $ueberschrift !== '' ? $ueberschrift : $betreff, $html, $sig, $fuss)];
 }
 function hr_mail_link(): string { return (string)(MODULE['hr']['oberflaechen']['intern']['adresse'] ?? ''); }
+/* Link zum Urlaubsportal: großer Knopf und darunter die Adresse zum Abtippen; Text: Adresse in eigener Zeile */
 function hr_mail_knopf(): array
 {
     $url = hr_mail_link();
-    return [$url !== '' ? "\nUrlaubsverwaltung: $url" : '', $url !== '' ? mail_button($url, 'Zur Urlaubsverwaltung') : ''];
+    if ($url === '') return ['', ''];
+    $kurz = preg_replace('~^https?://~', '', rtrim($url, '/')) ?? $url;
+    return ["\n\nUrlaubsportal: $url",
+            mail_button_gross($url, 'Zum Urlaubsportal')
+            . '<p style="margin:0;font-size:13px;line-height:1.5;color:#857c72;">Oder im Browser öffnen: <a href="' . mail_h($url) . '" style="color:#7b1e2b;">' . mail_h($kurz) . '</a></p>'];
 }
-function hr_tage_text(float $n): string { $z = rtrim(rtrim(number_format($n, 1, ',', ''), '0'), ','); return $z . ' ' . (abs($n) == 1.0 ? 'Tag' : 'Tage'); }
+function hr_zahl_text(float $n): string { return rtrim(rtrim(number_format($n, 1, ',', ''), '0'), ','); }
+function hr_tage_text(float $n): string { return hr_zahl_text($n) . ' ' . (abs($n) == 1.0 ? 'Tag' : 'Tage'); }
+/* Zwischenüberschrift (HTML) */
+function hr_mail_h2(string $t): string
+{
+    return '<div style="margin:24px 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#857c72;font-weight:bold;">' . mail_h($t) . '</div>';
+}
+/* Hervorgehobener Hinweis (HTML) */
+function hr_mail_box(string $t): string
+{
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 4px;"><tr><td style="background:#fbeee0;border-left:4px solid #b4610f;border-radius:8px;padding:12px 14px;font-size:15px;line-height:1.5;color:#1d1a17;"><strong>'
+        . mail_h($t) . '</strong></td></tr></table>';
+}
+/* Kurze Tabelle aus Zeilen [Bezeichnung, Wert, fett?] (HTML) – Werte rechtsbündig */
+function hr_mail_tabelle(array $zeilen): string
+{
+    $h = '';
+    foreach (array_values($zeilen) as $i => $z) {
+        $fett = !empty($z[2]);
+        $st = 'padding:8px 0;font-size:15px;' . ($fett ? 'font-weight:bold;border-top:2px solid #1d1a17;' : ($i ? 'border-top:1px solid #eee7df;' : ''));
+        $h .= '<tr><td style="' . $st . 'color:' . ($fett ? '#1d1a17' : '#4a443e') . ';">' . mail_h($z[0]) . '</td>'
+            . '<td align="right" style="' . $st . 'white-space:nowrap;color:#1d1a17;">' . mail_h($z[1]) . '</td></tr>';
+    }
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">' . $h . '</table>';
+}
+/* Dieselbe Tabelle als Text (Spalten mit Leerzeichen ausgerichtet) */
+function hr_mail_tabelle_text(array $zeilen): string
+{
+    $b = 0;
+    foreach ($zeilen as $z) $b = max($b, mb_strlen($z[0]));
+    return implode("\n", array_map(function ($z) use ($b) { return '  ' . $z[0] . str_repeat(' ', $b - mb_strlen($z[0]) + 3) . $z[1]; }, $zeilen));
+}
+/* Urlaubskonto eines Jahres als Zeilen für hr_mail_tabelle: Anspruch, Übertrag, Verfallen, Genommen, Geplant, Resturlaub */
+function hr_mail_konto_zeilen(array $k): array
+{
+    $z = [['Anspruch ' . $k['jahr'], hr_tage_text((float)$k['anspruch'])]];
+    if ($k['uebertrag'] != 0) $z[] = ['Übertrag aus ' . ($k['jahr'] - 1), hr_tage_text((float)$k['uebertrag'])];
+    if ($k['verfallen'] > 0) $z[] = ['Verfallen am ' . hr_de($k['frist']), '– ' . hr_tage_text((float)$k['verfallen'])];
+    $z[] = ['Genommen', hr_tage_text((float)$k['genommen'])];
+    $z[] = ['Geplant', hr_tage_text((float)$k['geplant'])];
+    if ($k['beantragt']) $z[] = ['Beantragt (noch nicht genehmigt)', hr_tage_text((float)$k['beantragt'])];
+    $z[] = ['Resturlaub', hr_tage_text((float)$k['rest']), true];
+    return $z;
+}
+/* Genehmigte Urlaubstage je Monat eines Jahres (Arbeitstage wie im Konto): [1..12 => ['genommen' => n, 'geplant' => n]] */
+function hr_mail_jahr_monate(array $p, array $eintraege, int $jahr, ?string $heute = null): array
+{
+    $heute = $heute ?? hr_heute();
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    $m = array_fill(1, 12, ['genommen' => 0, 'geplant' => 0]);
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['status'] !== 'genehmigt') continue;
+        foreach (hr_tage($p, $e['von'], $e['bis'], "$jahr-01-01", "$jahr-12-31", $frei) as $d) $m[(int)substr($d, 5, 2)][$d <= $heute ? 'genommen' : 'geplant']++;
+    }
+    return $m;
+}
+const HR_MONATE_KURZ = [1 => 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+/* Jahr auf einen Blick: zwei Reihen mit je sechs Monaten, Urlaubstage je Monat (grau = nur geplant), $hervor = Monat der Mail */
+function hr_mail_jahr_html(array $m, int $hervor = 0): string
+{
+    $reihe = function (int $von) use ($m, $hervor) {
+        $h = '';
+        for ($i = $von; $i < $von + 6; $i++) {
+            $n = $m[$i]['genommen'] + $m[$i]['geplant'];
+            $farbe = !$n ? '#c9bfb4' : (!$m[$i]['genommen'] ? '#857c72' : '#1d1a17');
+            $box = $i === $hervor ? 'border:2px solid #7b1e2b;background:#fbf4f2;' : 'border:1px solid #eee7df;background:#ffffff;';
+            $h .= '<td width="16%" align="center" valign="top" style="padding:3px;"><div style="' . $box . 'border-radius:8px;padding:6px 0 7px;">'
+                . '<div style="font-size:11px;line-height:1.3;color:' . ($i === $hervor ? '#7b1e2b' : '#857c72') . ';' . ($i === $hervor ? 'font-weight:bold;' : '') . '">' . HR_MONATE_KURZ[$i] . '</div>'
+                . '<div style="font-size:17px;line-height:1.3;font-weight:bold;color:' . $farbe . ';">' . ($n ? hr_zahl_text((float)$n) : '–') . '</div></div></td>';
+        }
+        return '<tr>' . $h . '</tr>';
+    };
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;">' . $reihe(1) . $reihe(7) . '</table>'
+        . '<p style="margin:6px 0 0;font-size:12px;color:#857c72;">Urlaubstage je Monat · grau: geplant</p>';
+}
+function hr_mail_jahr_text(array $m): string
+{
+    $t = [];
+    foreach (HR_MONATE_KURZ as $i => $k) { $n = $m[$i]['genommen'] + $m[$i]['geplant']; $t[] = $k . ' ' . ($n ? hr_zahl_text((float)$n) . (!$m[$i]['genommen'] ? '*' : '') : '–'); }
+    return '  ' . implode(' · ', array_slice($t, 0, 6)) . "\n  " . implode(' · ', array_slice($t, 6)) . "\n  (Urlaubstage je Monat, * = geplant)";
+}
+/* Urlaubszeiträume eines Jahres (genehmigt, auf Wunsch auch beantragt) als Zeilen [Zeitraum, Tage] */
+function hr_mail_zeitraeume(array $p, array $eintraege, string $von, string $bis, bool $beantragt = false): array
+{
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    $z = [];
+    foreach ($eintraege as $e) {
+        if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['bis'] < $von || $e['von'] > $bis) continue;
+        if ($e['status'] !== 'genehmigt' && !($beantragt && $e['status'] === 'beantragt')) continue;
+        $n = count(hr_tage($p, $e['von'], $e['bis'], $von, $bis, $frei));
+        if ($n) $z[] = [max($e['von'], $von), min($e['bis'], $bis), $n, $e['status'] === 'beantragt'];
+    }
+    usort($z, function ($a, $b) { return $a[0] <=> $b[0]; });
+    return array_map(function ($x) { return [hr_zeitraum_text($x[0], $x[1]) . ($x[3] ? ' (beantragt)' : ''), hr_tage_text((float)$x[2]), $x[2]]; }, $z);
+}
+function hr_mail_vorname(array $p): string { return trim($p['vorname']) !== '' ? $p['vorname'] : hr_name($p); }
+function hr_mail_verfall_satz(array $k): string
+{
+    if ($k['verfaellt'] <= 0) return '';
+    $eins = $k['verfaellt'] == 1.0;
+    return hr_tage_text((float)$k['verfaellt']) . ' Resturlaub aus dem Vorjahr ' . ($eins ? 'verfällt' : 'verfallen') . ' am ' . hr_de($k['frist']) . ', wenn Sie ' . ($eins ? 'ihn' : 'sie') . ' bis dahin nicht nehmen.';
+}
 
-/* Monatsübersicht einer Person: Urlaub (genehmigt) im Monat mit Arbeitstagen, dazu der Stand im Jahr. Nie Krankheit. */
+/* Monatsübersicht einer Person: Urlaub (genehmigt) im Monat mit Arbeitstagen, Urlaubskonto des Jahres als kurze Tabelle,
+   das Jahr auf einen Blick (Urlaubstage je Monat) und der Link zum Urlaubsportal. Nie Krankheit. */
 function hr_mail_monat_inhalt(array $p, array $eintraege, string $ym): array
 {
     $mv = $ym . '-01'; $mb = (new DateTimeImmutable($mv))->format('Y-m-t');
-    $jahr = (int)substr($ym, 0, 4);
-    $frei = hr_freie_tage($eintraege, $p['id']);
-    $zeilen = []; $summe = 0;
-    foreach ($eintraege as $e) {
-        if ($e['person'] !== $p['id'] || $e['art'] !== 'U' || $e['status'] !== 'genehmigt' || $e['von'] > $mb || $e['bis'] < $mv) continue;
-        $n = count(hr_tage($p, $e['von'], $e['bis'], $mv, $mb, $frei));
-        if (!$n) continue;
-        $zeilen[] = [max($e['von'], $mv), min($e['bis'], $mb), $n]; $summe += $n;
-    }
-    usort($zeilen, function ($a, $b) { return $a[0] <=> $b[0]; });
+    $jahr = (int)substr($ym, 0, 4); $monat = (int)substr($ym, 5, 2);
+    $zeilen = hr_mail_zeitraeume($p, $eintraege, $mv, $mb);
+    $summe = array_sum(array_column($zeilen, 2));
     $k = hr_konto($p, $eintraege, $jahr);
+    $jm = hr_mail_jahr_monate($p, $eintraege, $jahr);
     $mon = hr_ym_text($ym);
-    $vor = trim($p['vorname']) !== '' ? $p['vorname'] : hr_name($p);
+    $vor = hr_mail_vorname($p);
     $betreff = "Ihr Urlaub im $mon";
-    $liste = array_map(function ($z) { return hr_zeitraum_text($z[0], $z[1]) . ' (' . hr_tage_text((float)$z[2]) . ')'; }, $zeilen);
-    $satz = $zeilen ? "im $mon hatten Sie " . hr_tage_text((float)$summe) . ' Urlaub:' : "im $mon hatten Sie keinen Urlaub.";
-    $stand = "Ihr Urlaub $jahr: Anspruch " . hr_tage_text($k['anspruch']) . ($k['uebertrag'] != 0 ? ', Übertrag ' . hr_tage_text($k['uebertrag']) : '')
-        . ', genommen ' . hr_tage_text((float)$k['genommen']) . ', geplant ' . hr_tage_text((float)$k['geplant']) . ' – Resturlaub ' . hr_tage_text($k['rest'])
-        . ($k['beantragt'] ? ' (davon ' . hr_tage_text((float)$k['beantragt']) . ' beantragt)' : '') . '.';
-    $verfall = $k['verfaellt'] > 0 ? hr_tage_text($k['verfaellt']) . ' Resturlaub aus dem Vorjahr ' . ($k['verfaellt'] == 1.0 ? 'verfällt' : 'verfallen') . ' am ' . hr_de($k['frist']) . ', wenn Sie ' . ($k['verfaellt'] == 1.0 ? 'ihn' : 'sie') . ' bis dahin nicht nehmen.' : '';
+    $satz = $zeilen ? "im $mon hatten Sie " . hr_tage_text((float)$summe) . ' Urlaub.' : "im $mon hatten Sie keinen Urlaub.";
+    $konto = hr_mail_konto_zeilen($k);
+    $verfall = hr_mail_verfall_satz($k);
     [$lt, $lh] = hr_mail_knopf();
-    $text = "Hallo $vor,\n\n$satz" . ($liste ? "\n- " . implode("\n- ", $liste) : '') . "\n\n$stand" . ($verfall !== '' ? "\n$verfall" : '') . $lt;
-    $html = '<p style="margin:0 0 14px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0 0 8px;">' . mail_h($satz) . '</p>'
-        . ($liste ? '<ul style="margin:0 0 14px;padding-left:20px;">' . implode('', array_map(function ($l) { return '<li>' . mail_h($l) . '</li>'; }, $liste)) . '</ul>' : '')
-        . '<p style="margin:0 0 14px;">' . mail_h($stand) . '</p>'
-        . ($verfall !== '' ? '<p style="margin:0 0 14px;padding:10px 12px;background:#fbeee0;border-radius:8px;"><strong>' . mail_h($verfall) . '</strong></p>' : '') . $lh;
-    return hr_mail_rahmen($betreff, $text, $html);
+    $tz = array_map(function ($z) { return [$z[0], $z[1]]; }, $zeilen);
+    if (count($tz) > 1) $tz[] = ['Zusammen', hr_tage_text((float)$summe), true];
+    $text = "Hallo $vor,\n\n$satz" . ($tz ? "\n" . hr_mail_tabelle_text($tz) : '')
+        . "\n\nUrlaubskonto $jahr\n" . hr_mail_tabelle_text($konto) . ($verfall !== '' ? "\n\n$verfall" : '')
+        . "\n\nIhr Jahr $jahr auf einen Blick\n" . hr_mail_jahr_text($jm) . $lt;
+    $html = '<p style="margin:0 0 6px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0;">' . mail_h($satz) . '</p>'
+        . ($tz ? hr_mail_h2('Urlaub im ' . $mon) . hr_mail_tabelle($tz) : '')
+        . hr_mail_h2('Urlaubskonto ' . $jahr) . hr_mail_tabelle($konto)
+        . ($verfall !== '' ? hr_mail_box($verfall) : '')
+        . hr_mail_h2('Ihr Jahr ' . $jahr . ' auf einen Blick') . hr_mail_jahr_html($jm, $monat) . $lh;
+    return hr_mail_rahmen($betreff, $text, $html, "Ihr Urlaub im $mon");
 }
 
 /* Erinnerung „Resturlaub verfällt“ */
 function hr_mail_erinnerung_inhalt(array $p, array $k): array
 {
-    $vor = trim($p['vorname']) !== '' ? $p['vorname'] : hr_name($p);
-    $eins = $k['verfaellt'] == 1.0;
+    $vor = hr_mail_vorname($p);
     $betreff = 'Erinnerung: Ihr Resturlaub verfällt am ' . hr_de($k['frist']);
-    $satz = hr_tage_text($k['verfaellt']) . ' Resturlaub aus dem Vorjahr ' . ($eins ? 'verfällt' : 'verfallen') . ' am ' . hr_de($k['frist']) . ', wenn Sie ' . ($eins ? 'ihn' : 'sie') . ' bis dahin nicht nehmen.';
-    $bitte = 'Bitte beantragen Sie Ihren Urlaub rechtzeitig. Ihr Resturlaub insgesamt: ' . hr_tage_text($k['rest']) . '.';
+    $satz = hr_mail_verfall_satz($k);
+    $bitte = 'Bitte beantragen Sie Ihren Urlaub rechtzeitig im Urlaubsportal.';
+    $konto = hr_mail_konto_zeilen($k);
     [$lt, $lh] = hr_mail_knopf();
-    $text = "Hallo $vor,\n\n$satz\n$bitte$lt";
-    $html = '<p style="margin:0 0 14px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0 0 14px;padding:10px 12px;background:#fbeee0;border-radius:8px;"><strong>' . mail_h($satz) . '</strong></p>'
-        . '<p style="margin:0 0 14px;">' . mail_h($bitte) . '</p>' . $lh;
-    return hr_mail_rahmen($betreff, $text, $html);
+    $text = "Hallo $vor,\n\n$satz\n$bitte\n\nUrlaubskonto {$k['jahr']}\n" . hr_mail_tabelle_text($konto) . $lt;
+    $html = '<p style="margin:0 0 6px;">Hallo ' . mail_h($vor) . ',</p>' . hr_mail_box($satz) . '<p style="margin:12px 0 0;">' . mail_h($bitte) . '</p>'
+        . hr_mail_h2('Urlaubskonto ' . $k['jahr']) . hr_mail_tabelle($konto) . $lh;
+    return hr_mail_rahmen($betreff, $text, $html, 'Ihr Resturlaub verfällt am ' . hr_de($k['frist']));
 }
 
 /* Versand: Jobs senden, Verlauf und Protokoll schreiben. Rückgabe: Zusammenfassung */
@@ -222,37 +327,30 @@ function hr_erinnerung_senden(array $me): array
     return hr_mail_versenden($jobs, 'erinnerung', 'manuell', $me, ['ohneAdresse' => $ohne, 'test' => $m['test']['an']]);
 }
 
-/* Unentschuldigtes Fehlen: Text mit Zeitraum, Bitte um unverzügliche Erklärung per E-Mail und Urlaubsübersicht des Jahres
-   (Konto und genehmigte/beantragte Urlaubszeiträume). Keine Krankheit, keine Notizen. */
+/* Unentschuldigtes Fehlen: Zeitraum, Bitte um unverzügliche Erklärung per E-Mail und Urlaubsübersicht des Jahres
+   (Konto als kurze Tabelle, Urlaubszeiträume – genehmigt und beantragt –, Jahr auf einen Blick). Keine Krankheit, keine Notizen. */
 function hr_mail_fehlen_inhalt(array $p, array $e, array $eintraege): array
 {
     $jahr = (int)substr($e['von'], 0, 4);
     $k = hr_konto($p, $eintraege, $jahr);
-    $frei = hr_freie_tage($eintraege, $p['id']);
-    $urlaub = [];
-    foreach ($eintraege as $x) {
-        if ($x['person'] !== $p['id'] || $x['art'] !== 'U' || !in_array($x['status'], HR_AKTIV, true) || $x['bis'] < "$jahr-01-01" || $x['von'] > "$jahr-12-31") continue;
-        $n = count(hr_tage($p, $x['von'], $x['bis'], "$jahr-01-01", "$jahr-12-31", $frei));
-        if ($n) $urlaub[] = [$x['von'], hr_zeitraum_text($x['von'], $x['bis']) . ' (' . hr_tage_text((float)$n) . ($x['status'] === 'beantragt' ? ', beantragt' : '') . ')'];
-    }
-    usort($urlaub, function ($a, $b) { return $a[0] <=> $b[0]; });
-    $urlaub = array_column($urlaub, 1);
-    $vor = trim($p['vorname']) !== '' ? $p['vorname'] : hr_name($p);
+    $urlaub = hr_mail_zeitraeume($p, $eintraege, "$jahr-01-01", "$jahr-12-31", true);
+    $tz = array_map(function ($z) { return [$z[0], $z[1]]; }, $urlaub);
+    $jm = hr_mail_jahr_monate($p, $eintraege, $jahr);
+    $vor = hr_mail_vorname($p);
     $wann = $e['von'] === $e['bis'] ? 'am ' . hr_de($e['von']) : 'vom ' . hr_de($e['von']) . ' bis ' . hr_de($e['bis']);
     $betreff = 'Abwesenheit ' . $wann . ' – bitte um Rückmeldung';
     $satz = "Sie sind $wann nicht zur Arbeit erschienen. Eine Entschuldigung liegt uns nicht vor.";
     $bitte = 'Bitte teilen Sie uns unverzüglich per E-Mail mit, weshalb Sie nicht zur Arbeit erschienen sind – antworten Sie dazu einfach auf diese E-Mail.';
-    $stand = "Ihre Urlaubsübersicht $jahr: Anspruch " . hr_tage_text($k['anspruch']) . ($k['uebertrag'] != 0 ? ', Übertrag ' . hr_tage_text($k['uebertrag']) : '')
-        . ', genommen ' . hr_tage_text((float)$k['genommen']) . ', geplant ' . hr_tage_text((float)$k['geplant']) . ' – Resturlaub ' . hr_tage_text($k['rest'])
-        . ($k['beantragt'] ? ' (davon ' . hr_tage_text((float)$k['beantragt']) . ' beantragt)' : '') . '.';
+    $konto = hr_mail_konto_zeilen($k);
     [$lt, $lh] = hr_mail_knopf();
-    $text = "Hallo $vor,\n\n$satz\n$bitte\n\n$stand" . ($urlaub ? "\nIhr Urlaub $jahr:\n- " . implode("\n- ", $urlaub) : "\nIn $jahr ist noch kein Urlaub eingetragen.") . $lt;
-    $html = '<p style="margin:0 0 14px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0 0 10px;">' . mail_h($satz) . '</p>'
-        . '<p style="margin:0 0 14px;padding:10px 12px;background:#fbeee0;border-radius:8px;"><strong>' . mail_h($bitte) . '</strong></p>'
-        . '<p style="margin:0 0 8px;">' . mail_h($stand) . '</p>'
-        . ($urlaub ? '<p style="margin:0 0 4px;">Ihr Urlaub ' . $jahr . ':</p><ul style="margin:0 0 14px;padding-left:20px;">' . implode('', array_map(function ($l) { return '<li>' . mail_h($l) . '</li>'; }, $urlaub)) . '</ul>'
-                   : '<p style="margin:0 0 14px;">In ' . $jahr . ' ist noch kein Urlaub eingetragen.</p>') . $lh;
-    return hr_mail_rahmen($betreff, $text, $html);
+    $text = "Hallo $vor,\n\n$satz\n$bitte\n\nIhre Urlaubsübersicht $jahr\n" . hr_mail_tabelle_text($konto)
+        . ($tz ? "\n\nIhr Urlaub $jahr:\n" . hr_mail_tabelle_text($tz) : "\n\nIn $jahr ist noch kein Urlaub eingetragen.")
+        . "\n\nIhr Jahr $jahr auf einen Blick\n" . hr_mail_jahr_text($jm) . $lt;
+    $html = '<p style="margin:0 0 6px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0;">' . mail_h($satz) . '</p>' . hr_mail_box($bitte)
+        . hr_mail_h2('Ihre Urlaubsübersicht ' . $jahr) . hr_mail_tabelle($konto)
+        . hr_mail_h2('Ihr Urlaub ' . $jahr) . ($tz ? hr_mail_tabelle($tz) : '<p style="margin:0;color:#4a443e;">In ' . $jahr . ' ist noch kein Urlaub eingetragen.</p>')
+        . hr_mail_h2('Ihr Jahr ' . $jahr . ' auf einen Blick') . hr_mail_jahr_html($jm) . $lh;
+    return hr_mail_rahmen($betreff, $text, $html, 'Abwesenheit ' . $wann);
 }
 /* E-Mail nach dem Eintragen von unentschuldigtem Fehlen. Rückgabe {gesendet: bool, an, grund} – ein Fehler beim Versand
    macht den Eintrag nicht ungültig. */
@@ -288,7 +386,7 @@ function hr_stb_senden(string $wie, ?array $me): array
     $text = "Sehr geehrte Damen und Herren,\n\nanbei die Übersicht der Urlaubs- und Abwesenheitstage für $zeitraum als Excel-Datei ($datei).";
     $html = '<p style="margin:0 0 14px;">Sehr geehrte Damen und Herren,</p><p style="margin:0 0 14px;">anbei die Übersicht der Urlaubs- und Abwesenheitstage für '
         . mail_h($zeitraum) . ' als Excel-Datei (' . mail_h($datei) . ').</p>';
-    [$betreff, $text, $html] = hr_mail_rahmen($betreff, $text, $html);
+    [$betreff, $text, $html] = hr_mail_rahmen($betreff, $text, $html, 'Urlaubs- und Abwesenheitsübersicht');
     [$to, $name, $betreff] = hr_mail_ziel($m, $an, 'Steuerberater', $betreff);
     $job = ['to' => $to, 'name' => $name, 'subject' => $betreff, 'text' => $text, 'html' => $html,
             'anhaenge' => [['name' => $datei, 'type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'data' => hr_xlsx($monate)]]];

@@ -665,6 +665,31 @@ check('Änderung im Protokoll', 'Verfallstag Resturlaub auf 30.04. geändert' in
 st, r = P.call('hr_einstellungen_save', {**einst, 'uebertragBis': '03-31'})
 check('Rückweg auf 31.03.', st == 200 and r['uebertragBis'] == '03-31' and konto_f()['verfaellt'] == 5, r)
 
+# ── Übergangsregel „Verfällt erstmals“ (Inhaber 03.11.2026: im ersten Jahr wird nichts gestrichen, erst im Jahr danach) ──
+v = P.call('mitarbeiter_hr')[1]
+check('Übergangsregel: Standard jedes Jahr (verfallAb null)', v['verfallAb'] is None, v.get('verfallAb'))
+falsch = [P.call('hr_einstellungen_save', {**einst, 'verfallAb': w})[0] for w in (str(Y), 1999, 2101, Y + 0.5, True)]
+check('… nur eine Jahreszahl 2000–2100 oder null: sonst 422', falsch == [422] * 5, falsch)
+check('… ohne Personalrecht 403', L.call('hr_einstellungen_save', {**einst, 'verfallAb': Y + 1})[0] == 403 and P.call('mitarbeiter_hr')[1]['verfallAb'] is None)
+k0 = konto_f()
+k0n = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y + 1}')[1]['personen'] if p_['id'] == PF)['konto']
+st, r = P.call('hr_einstellungen_save', {**einst, 'verfallAb': Y + 1})
+k = konto_f()
+kn = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y + 1}')[1]['personen'] if p_['id'] == PF)['konto']
+check(f'verfällt erstmals {Y + 1}: in {Y} verfällt nichts (Konto ohne Verfall), Rest unverändert', st == 200 and r['verfallAb'] == Y + 1 and k['verfall'] is False
+      and k['verfaellt'] == 0 and k['verfallen'] == 0 and k['rest'] == k0['rest'] and k0['verfaellt'] == 5, (r.get('verfallAb'), k))
+check(f'… {Y + 1}: Übertrag um den sonst verfallenen Rest höher, Verfall gilt dort wieder', kn['uebertrag'] == k0n['uebertrag'] + 5 and kn['verfall'] is True, (kn, k0n))
+log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('… Protokoll nennt den ersten Verfall', f'Resturlaub verfällt erstmals am 31.03.{Y + 1}' in log_)
+st, r = P.call('hr_einstellungen_save', einst)
+check('… Speichern ohne Angabe lässt die Regel unverändert', st == 200 and r['verfallAb'] == Y + 1 and P.call('mitarbeiter_hr')[1]['verfallAb'] == Y + 1)
+check('… gilt auch für die Startseite und die Übersicht (Konto ohne Verfall)', next(z for z in P.call(f'hr_uebersicht&jahr={Y}')[1]['zeilen'] if z['id'] == PF)['verfaellt'] == 0)
+st, r = P.call('hr_einstellungen_save', {**einst, 'verfallAb': Y})
+check(f'verfällt erstmals {Y}: Verfall in {Y} wie ohne Regel', st == 200 and konto_f()['verfaellt'] == 5)
+st, r = P.call('hr_einstellungen_save', {**einst, 'verfallAb': None})
+check('… zurück auf „jedes Jahr“ (null), Protokoll', st == 200 and r['verfallAb'] is None and konto_f()['verfaellt'] == 5
+      and 'Resturlaub verfällt jedes Jahr' in json.dumps(A.call('log')[1], ensure_ascii=False))
+
 # ── Resturlaub verfällt je Mitarbeiter abschaltbar (Verwaltung → Mitarbeiter; Inhaber 03.11.2026, Standard: verfällt) ──
 person_f = lambda j=Y: next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={j}')[1]['personen'] if p_['id'] == PF)   # noqa: E731
 check('Standard: Resturlaub verfällt (Angabe und Konto)', person_f()['verfall'] is True and konto_f()['verfall'] is True)
@@ -789,6 +814,16 @@ hr(ids['fritz'], aktiv=False)
 fehler = []
 # ── E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026): Erinnerung, Monatsübersicht, Steuerberater, Testmodus, Automatik ──
 smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
+MAIL_HTML = {}   # HTML-Fassungen der Mails, unten im Browser als Bild geprüft (600 px und 390 px)
+
+
+def mail_html(m_):
+    for t_ in m_['msg'].walk():
+        if t_.get_content_type() == 'text/html':
+            return t_.get_payload(decode=True).decode(t_.get_content_charset() or 'utf-8')
+    return ''
+
+
 uu = {u['username']: u for u in A.call('users')[1]['users']}
 for un_, adr_ in (('fritz', 'fritz@example.org'), ('erika', 'erika@example.org')):
     u_ = uu[un_]
@@ -841,6 +876,10 @@ check('… Inhalt: Urlaub im Vormonat mit Tagen, Stand im Jahr, Link – nie Kra
       and u1.strftime('%d.%m.') in mf.get('text', '') and 'Resturlaub' in mf.get('text', '') and 'hr.dashboard-stafl.de' in mf.get('text', '')
       and 'rank' not in mf.get('text', '') and 'Hallo Fritz' in mf.get('text', ''), mf.get('text', '')[:400])
 check('… Erika ohne Urlaub im Vormonat: „keinen Urlaub“', 'keinen Urlaub' in mm.get('erika@example.org', {}).get('text', ''))
+MAIL_HTML['monat'] = mail_html(mf)
+check('… Aufbau (Inhaber 03.11.2026): Tabelle des Monats, Urlaubskonto, Jahr auf einen Blick, Knopf und Adresse des Portals',
+      all(x_ in MAIL_HTML['monat'] for x_ in (f'Urlaub im {mtext(VOR)}', f'Urlaubskonto {VOR.year}', 'auf einen Blick', 'Zum Urlaubsportal', 'hr.dashboard-stafl.de', '>Jan<', '>Dez<'))
+      and all(x_ in mf.get('text', '') for x_ in (f'Urlaubskonto {VOR.year}', 'Resturlaub', 'auf einen Blick', 'Urlaubsportal: https://')), mf.get('text', '')[:600])
 # Erinnerung: Verfallstag in 20 Tagen, Fritz mit Übertrag im laufenden Jahr
 J = heute_.year
 frist_ = min(heute_ + dt.timedelta(days=20), dt.date(J, 12, 31))
@@ -857,6 +896,7 @@ st, r = P.call('hr_erinnerung_senden', {})
 until(lambda: len(smtp.messages) >= n0 + 1)
 me_ = smtp.messages[n0]
 tage_ = (f"{kf_['verfaellt']:g}".replace('.', ',')) + (' Tag' if kf_['verfaellt'] == 1 else ' Tage')
+MAIL_HTML['erinnerung'] = mail_html(me_)
 check('Erinnerung gesendet: Betreff mit Verfallstag, Tage im Text', st == 200 and r['ergebnis']['gesendet'] == 1 and me_['to'] == ['fritz@example.org']
       and me_['subject'] == f'Erinnerung: Ihr Resturlaub verfällt am {frist_.strftime("%d.%m.%Y")}' and tage_ in me_['text'], (st, me_.get('subject'), me_.get('text', '')[:300]))
 rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], jahr=J, anspruch=(pf_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=(pf_['jahre'].get(str(J)) or {}).get('uebertrag'))
@@ -924,6 +964,9 @@ check('… Mail: Datum, Bitte um unverzügliche Erklärung per E-Mail, Urlaubsü
       mfe['to'] == ['fritz@example.org'] and mfe['subject'] == f'Abwesenheit am {FT:%d.%m.%Y} – bitte um Rückmeldung' and 'unverzüglich per E-Mail' in mfe['text']
       and f'Ihre Urlaubsübersicht {Y}' in mfe['text'] and APR.strftime('%d.%m.') in mfe['text'] and mfe['msg']['Reply-To'] == 'personal@example.org'
       and 'nicht erschienen' not in mfe['text'] and 'rank' not in mfe['text'], (mfe.get('subject'), mfe['msg']['Reply-To'], mfe.get('text', '')[:500]))
+MAIL_HTML['fehlen'] = mail_html(mfe)
+check('… Mail als HTML: Bitte hervorgehoben, Urlaubskonto, Urlaubszeiträume, Jahr auf einen Blick, Portal', all(x_ in MAIL_HTML['fehlen'] for x_ in (
+      'unverzüglich per E-Mail', f'Ihre Urlaubsübersicht {Y}', f'Ihr Urlaub {Y}', 'auf einen Blick', 'Zum Urlaubsportal')))
 kn_ = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y}')[1]['personen'] if p_['id'] == PF)['konto']
 check('… zählt nicht gegen den Urlaub', (kn_['genommen'], kn_['geplant'], kn_['rest']) == (kv_['genommen'], kv_['geplant'], kv_['rest']))
 mon_ = {p_['id']: p_ for p_ in E.call(f'hr_monat&jahr={Y}&monat={FT.month}')[1]['personen']}
@@ -983,6 +1026,18 @@ with sync_playwright() as p:
         pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
         pg.wait_for_selector('#screen-auth', state='hidden')
         return ctx, pg
+
+    # ── HR-Mails als Bild (Inhaber 03.11.2026: ordentlich, Tabellen, Link zum Portal): 600 px und Handy 390 px ohne waagerechtes Scrollen ──
+    mctx = br.new_context(viewport={'width': 600, 'height': 900}, locale='de-DE')
+    mpg = mctx.new_page()
+    for art_, html_ in MAIL_HTML.items():
+        breit_ = {}
+        for w_ in (600, 390):
+            mpg.set_viewport_size({'width': w_, 'height': 900}); mpg.set_content(html_)
+            breit_[w_] = mpg.evaluate('document.documentElement.scrollWidth')
+            mpg.screenshot(path=os.path.join(SH, f'hr_mail_{art_}_{w_}.png'), full_page=True)
+        check(f'Mail „{art_}“: Kopfband „Urlaubsverwaltung“, passt auf 390 px', bool(html_) and 'Urlaubsverwaltung' in html_ and breit_[390] <= 391, breit_)
+    mctx.close()
 
     # ── Testdaten 2025 (früher aus der Excel-Planung): Mitarbeiter ohne Anmeldung mit Abteilung und Position, Einträge der Personalstelle ──
     for vor, nach, abt_, pos_ in (('Anna', 'Beispiel', 'GF', 1), ('Bernd', 'Muster', 'Verwaltung', 2), ('Carla', 'Probe', 'Verwaltung', 3),
@@ -1152,9 +1207,17 @@ with sync_playwright() as p:
         pg.click('#hr-einst [type="submit"]')
     pg.wait_for_function('document.querySelector("#hr-uebertrag-anzeige") && document.querySelector("#hr-uebertrag-anzeige").textContent.includes("15.04.")')
     check('Oberfläche: Verfallstag 15.04. gespeichert, Ferien bleiben', P.call('mitarbeiter_hr')[1]['uebertragBis'] == '04-15' and len(P.call('mitarbeiter_hr')[1]['ferien']) == 2)
+    # Übergangsregel „Verfällt erstmals“: Auswahl mit „jedes Jahr“, gespeichert mit den übrigen Einstellungen
+    check('Verwaltung → Urlaub: „Verfällt erstmals“ vorbelegt mit „jedes Jahr“', pg.input_value('#hr-verfall-ab') == '' and 'jedes Jahr am 15.04.' in pg.text_content('#hr-uebertrag-anzeige'))
+    pg.select_option('#hr-verfall-ab', str(heute_.year + 1))
+    with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url) as antwort:
+        pg.click('#hr-einst [type="submit"]')
+    pg.wait_for_function(f'document.querySelector("#hr-uebertrag-anzeige") && document.querySelector("#hr-uebertrag-anzeige").textContent.includes("erstmals am 15.04.{heute_.year + 1}")')
+    check('Oberfläche: Übergangsregel gespeichert, Hinweis nennt das Jahr ohne Verfall', antwort.value.status == 200 and P.call('mitarbeiter_hr')[1]['verfallAb'] == heute_.year + 1
+          and f'Resturlaub aus {heute_.year - 1} bleibt {heute_.year} ganz erhalten' in pg.text_content('#hr-uebertrag-anzeige'), pg.text_content('#hr-uebertrag-anzeige'))
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
     v_ = P.call('mitarbeiter_hr')[1]
-    assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31'})[0] == 200
+    assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31', 'verfallAb': None})[0] == 200
     # E-Mails: gespeicherte Steuerberater-Adresse, ändern sperrt die Knöpfe bis zum Speichern, senden mit Rückfrage
     check('E-Mails-Karte: Steuerberater-Adresse und Tag aus den Einstellungen, Erinnerung ohne Kandidaten gesperrt', pg.input_value('#hrm-stb-adresse') == 'kanzlei@example.org'
           and pg.input_value('#hrm-stb-tag') == '5' and pg.is_disabled('#hr-mail [data-hr-mail="erinnerung"]') and pg.is_enabled('#hr-mail [data-hr-mail="steuerberater"]'))
@@ -1271,6 +1334,11 @@ with sync_playwright() as p:
     gesperrt = pg.evaluate('''["hr_anspruch", "hr_uebertrag", "hr_personalnummer", "hr_aktiv", "hr_verfall"].every((n) => document.querySelector(`#hr-teil [name="${n}"]`).disabled)
         && [...document.querySelectorAll('#hr-teil [name="hr_tag"]')].every((x) => x.disabled) && !document.querySelector('#hr-teil [name="hr_abteilung"]').disabled''')
     check('eigener Eintrag: Urlaubsangaben gesperrt mit Hinweis, Abteilung frei', gesperrt and 'andere Person der Personalstelle' in pg.text_content('#hr-teil'))
+    sicht = pg.evaluate('''(() => { const a = getComputedStyle(document.querySelector('#hr-teil [name="hr_anspruch"]')), f = getComputedStyle(document.querySelector('#hr-teil [name="hr_abteilung"]'));
+        const h = document.querySelector('#hr-teil .hr-eigen-hinweis'), l = document.querySelector('#hr-teil legend');
+        return { grau: a.backgroundColor !== f.backgroundColor, cursor: a.cursor, oben: !!h && !!(l.compareDocumentPosition(h) & 4) && !!(h.compareDocumentPosition(document.querySelector('#hr-teil [name="hr_abteilung"]')) & 4) }; })()''')
+    check('… gesperrte Felder sehen gesperrt aus (anderer Grund, Zeiger „nicht erlaubt“), Hinweis oben', sicht['grau'] and sicht['cursor'] == 'not-allowed' and sicht['oben'], sicht)
+    pg.locator('#hr-teil').screenshot(path=os.path.join(SH, 'hr_verwaltung_eigene_angaben_1280.png'))
     pg.fill('#hr-teil [name="hr_abteilung"]', 'Geschäftsführung')
     pg.click('#user-body [type="submit"]'); pg.wait_for_selector('#dlg-user[open]', state='hidden')
     check('… Speichern des eigenen Dialogs klappt (Abteilung geändert)', {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['admin']]['abteilung'] == 'Geschäftsführung')
