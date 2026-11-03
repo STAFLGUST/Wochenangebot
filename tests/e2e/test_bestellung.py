@@ -189,6 +189,10 @@ with sync_playwright() as p:
     c.keyboard.press('Escape'); c.wait_for_selector('#dlg-order', state='hidden')
     c.reload(); c.wait_for_selector('tr.row .qty')
     check('quantities kept after reload', c.input_value(f'#list .qty[data-qty="{I1["id"]}"]') == '2,5' and '2 Positionen' in c.inner_text('#orderbar'))
+    c.click('#orderbar [data-order=clear]'); c.wait_for_selector('#dlg-frage[open]')
+    check('„Leeren“ fragt im eigenen Fenster nach (kein Browser-Dialog)', 'Bestellwunsch leeren?' in c.inner_text('#dlg-frage'))
+    c.keyboard.press('Escape'); c.wait_for_function("!document.querySelector('#dlg-frage').open")
+    check('Escape bricht ab – Mengen bleiben', c.input_value(f'#list .qty[data-qty="{I1["id"]}"]') == '2,5' and '2 Positionen' in c.inner_text('#orderbar'))
     c.locator(f'tr.row[data-id="{I2["id"]}"] .name-btn').click(); c.wait_for_selector('#dlg-detail[open] .qty')
     check('detail view offers quantity field (synced)', c.input_value('#dlg-detail .qty') == '4')
     c.fill('#dlg-detail .qty', '5'); c.press('#dlg-detail .qty', 'Tab'); c.wait_for_timeout(150)
@@ -225,6 +229,13 @@ with sync_playwright() as p:
     mpg.locator(f'#list .qty[data-qty="{I1["id"]}"]').fill('7'); mpg.locator(f'#list .qty[data-qty="{I1["id"]}"]').press('Tab'); mpg.wait_for_selector('#orderbar:not([hidden])')
     check('mobile: quantity usable, no horizontal scroll', mpg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
     mpg.screenshot(path=SH + '/bestellung-mobil.png')
+    # Kundenmenü und „Exportieren & Teilen“ am Handy ganz im Bild (rechtsbündig am Knopf ragten sie links hinaus)
+    IM_BILD = "(s) => { const r = document.querySelector(s).getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), innerWidth]; }"
+    for knopf, menue in (('#btn-kunde', '#menu-kunde'), ('#btn-more', '#menu-more')):
+        mpg.click(knopf); mpg.wait_for_selector(f'{menue}:not([hidden])')
+        lr = mpg.evaluate(IM_BILD, menue)
+        check(f'mobile: menu {menue} fully on screen', lr[0] >= 0 and lr[1] <= lr[2], lr)
+        mpg.keyboard.press('Escape'); mpg.wait_for_selector(f'{menue}[hidden]', state='attached')
     # Einstellungen im Eingabebereich
     a = br.new_page(viewport={'width': 1440, 'height': 950})
     a.goto(B + '/admin/'); a.wait_for_selector('#screen-auth:not([hidden])')

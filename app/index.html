@@ -17,7 +17,6 @@
 <meta name="theme-color" content="#0e0e0d" media="(prefers-color-scheme: dark)">
 <script src="assets/theme.js"></script>
 <script src="assets/format.js"></script>
-<link rel="preload" href="assets/logo-standard-fleisch.png" as="image">
 <link rel="stylesheet" href="assets/app.css">
 </head>
 <body class="kseite">
@@ -208,7 +207,8 @@
     <div class="dlg-foot"><button class="btn" type="button" id="kp-cancel">Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
   </form>
 </dialog>
-<dialog class="modal" id="dlg-kunde-link" aria-labelledby="kk-title">
+<!-- Pflichtfenster (data-pflicht): über den Link aus der E-Mail geöffnet, ohne × und ohne Escape – dahinter ist die Seite gesperrt -->
+<dialog class="modal" id="dlg-kunde-link" aria-labelledby="kk-title" data-pflicht>
   <form class="dlg" id="kk-form" autocomplete="on">
     <div class="dlg-head"><div><h2 id="kk-title">Passwort festlegen</h2><p id="kk-intro"></p></div></div>
     <div class="dlg-body kform">
@@ -223,6 +223,13 @@
 <dialog class="modal wide" id="dlg-compare" aria-labelledby="cmp-title"><div class="dlg" id="compare-body"></div></dialog>
 <div class="orderbar" id="orderbar" hidden></div>
 <dialog class="modal wide" id="dlg-order" aria-labelledby="or-title"><div class="dlg" id="order-body"></div></dialog>
+<dialog class="modal" id="dlg-frage" aria-labelledby="fr-titel" aria-describedby="fr-text">
+  <div class="dlg">
+    <div class="dlg-head"><div><h2 id="fr-titel">Wirklich?</h2></div></div>
+    <div class="dlg-body"><p id="fr-text"></p></div>
+    <div class="dlg-foot"><button class="btn" type="button" id="fr-nein" data-antwort="nein">Abbrechen</button><button class="btn primary" type="button" id="fr-ja" data-antwort="ja">OK</button></div>
+  </div>
+</dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="print-root"></div>
 

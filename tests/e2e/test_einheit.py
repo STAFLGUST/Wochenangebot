@@ -1,5 +1,6 @@
 """Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot,
-Verwaltung, Bestand, HR, CRM, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
+Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, Sicherheit –, Abmeldeseite,
+Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 px
 
 - kein waagerechtes Scrollen, kein abgeschnittener Text (Text breiter als sein Kasten bei verdecktem Überlauf, Text
   außerhalb des Bildschirms) – Ausnahmen nur für bewusst gekürzte Zellen mit vollem Text im Tooltip (title),
@@ -10,11 +11,17 @@ Verwaltung, Bestand, HR, CRM, Abmeldeseite, Hinweis „Kein Zugang“): je hell/
 - Einfache Darstellung für Remote-Desktop (02.11.2026): automatisch, wenn der Browser ohne Grafikkarte zeichnet (unter
   Automatisierung nur mit abgeschaltetem navigator.webdriver), Knopf im Dashboard, Wahl am Konto (theme_save „darstellung“)
   gilt auf jedem Host; dann keine Unschärfe, keine Farbflächen, keine Übergänge.
+- Fenster (<dialog>) auf jeder Seite gleich (02.11.2026): ein Klick daneben schließt nie, Escape schließt; Hinweise (Toasts)
+  erscheinen über einem offenen Fenster, nicht dahinter; jedes fest geschriebene Fenster hat oben rechts ein × („Schließen“) –
+  ausgenommen reine Rückfragen (Ja/Abbrechen).
 - Zahlen und Einheiten (02.11.2026): jede Seite lädt app/assets/format.js; Beträge, kg, €/kg, Prozent, Datum und KW wie
   vereinbart (docs/entwickler/10-konventionen.md).
 Bildschirmfotos: tests/.ergebnisse/einheit-*.png (Bestandsaufnahme für die Durchsicht).
 """
+import glob
 import json
+import os
+import re
 import sys
 from playwright.sync_api import sync_playwright
 from kunden_hilfe import Client, B
@@ -27,6 +34,20 @@ res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
 
+
+# Jedes fest im HTML stehende Fenster hat ein × (Knopf mit „…schließen“ als Beschriftung); per Skript gefüllte Fenster prüft
+# die Durchsicht am Bild, reine Rückfragen (dlg-frage, dlg-confirm) haben nur Ja/Abbrechen, Pflichtfenster (data-pflicht) keins
+APP = os.path.join(os.path.dirname(__file__), '..', '..', 'app')
+ohne_x = []
+for datei in glob.glob(os.path.join(APP, '**', 'index.html'), recursive=True):
+    for m in re.finditer(r'<dialog\b([^>]*)>(.*?)</dialog>', open(datei, encoding='utf-8').read(), re.S):
+        dlg_id = (re.search(r'\bid="([^"]+)"', m.group(1)) or [None, ''])[1]
+        inhalt = re.sub(r'<[^>]+>', '', m.group(2)).strip()
+        if not inhalt or re.search(r'frage|confirm', dlg_id) or 'data-pflicht' in m.group(1):
+            continue
+        if not re.search(r'<button[^>]*aria-label="[^"]*[Ss]chließen"', m.group(2)):
+            ohne_x.append(os.path.relpath(datei, APP) + '#' + dlg_id)
+check('Fenster mit festem Inhalt haben ein × zum Schließen', not ohne_x, ohne_x)
 
 A = Client('198.51.100.2')
 check('Administrator angemeldet', A.call('login', {'username': 'admin', 'password': PW})[0] == 200)
@@ -55,7 +76,9 @@ ABGESCHNITTEN = r'''() => {
     if (verdeckt && s.whiteSpace !== 'nowrap' && e.scrollHeight > e.clientHeight + 2 && e.clientHeight > 0 && s.webkitLineClamp === 'none' && !e.title) out.push('hoehe ' + name + ` ${e.scrollHeight}>${e.clientHeight}`);
     const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect();
     // teilweise sichtbar am Rand (ganz außerhalb = eingeklappte Leiste); waagerecht scrollende Leisten laufen weich aus (.stafl-streifen)
-    if (b.width && ((b.right > W + 1 && b.left < W) || (b.left < -1 && b.right > 0)) && !e.closest('.stafl-streifen, [class*="scroll"], .tblwrap, .rm-wrap, table')) out.push('rand ' + name + ` ${Math.round(b.left)}..${Math.round(b.right)}/${W}`);
+    // bewusst gekürzt (verdeckter Überlauf mit vollem Text im Tooltip): der Text liegt nur rechnerisch hinter dem Rand
+    const gekuerzt = verdeckt && (e.title || e.closest('[title]'));
+    if (b.width && !gekuerzt && ((b.right > W + 1 && b.left < W) || (b.left < -1 && b.right > 0)) && !e.closest('.stafl-streifen, [class*="scroll"], .tblwrap, .rm-wrap, table')) out.push('rand ' + name + ` ${Math.round(b.left)}..${Math.round(b.right)}/${W}`);
   }
   return [...new Set(out)].slice(0, 12);
 }'''
@@ -64,7 +87,7 @@ LOGO = r'''() => [...document.querySelectorAll('img[src*="logo-standard-fleisch"
   const s = getComputedStyle(e); return { bg: s.backgroundColor, filter: s.filter, src: e.getAttribute('src').split('/').pop() }; })'''
 ZURUECK = r'''() => { const e = document.querySelector('.stafl-zurueck'); if (!e || !e.offsetParent) return null; const s = getComputedStyle(e), r = e.getBoundingClientRect();
   return { h: Math.round(r.height), radius: s.borderTopLeftRadius, font: s.fontSize + ' ' + s.fontWeight, text: e.textContent.trim(), href: e.getAttribute('href'),
-           icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight }; }'''
+           icon: !!e.querySelector('svg use[href="#i-back"]'), pad: s.paddingLeft + ' ' + s.paddingRight, farbe: s.color }; }'''
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -92,7 +115,13 @@ with sync_playwright() as pw:
               ('verwaltung', 'verwaltung.verwaltung', '/admin/', '#screen-editor:not([hidden])', ['master', 'kunden', 'users', 'rollen', 'log']),
               ('bestand', 'bestand.intern', '/admin/', '#view-stock:not([hidden])', ['stock']),
               ('hr', None, '/module/hr/', '#hr-app:not([hidden])', []),
-              ('crm', None, '/module/crm/', '#crm-app:not([hidden])', [])]
+              ('crm', None, '/module/crm/', '#crm-app:not([hidden])', []),
+              ('controlling', None, '/module/controlling/', '#ctl-app:not([hidden])', []),
+              ('leergut', None, '/module/leergut/', '#lg-app:not([hidden])', []),
+              ('marketing', None, '/module/marketing/', '#mkt-app:not([hidden])', []),
+              ('qs', None, '/module/qs/', '#qm-app:not([hidden])', []),
+              ('rewe', None, '/module/rewe/', '#rw-app:not([hidden])', []),
+              ('sicherheit', None, '/module/sicherheit/', '#sic-app:not([hidden])', [])]
     zurueck = {}
     for breite in (1440, 390):
         for dunkel in (False, True):
@@ -112,9 +141,14 @@ with sync_playwright() as pw:
                     weg = pg.evaluate(ABGESCHNITTEN)
                     check(f'{teil} {tag}: kein abgeschnittener Text', not weg, weg)
                     check(f'{teil} {tag}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth') <= breite)
+                    if not dunkel:
+                        ohne = pg.evaluate("[...document.querySelectorAll('input[placeholder]')].filter((e) => e.offsetParent && getComputedStyle(e).textOverflow !== 'ellipsis').map((e) => e.id || e.name || e.placeholder).slice(0, 6)")
+                        check(f'{teil} {tag}: lange Platzhalter enden mit „…“', not ohne, ohne)
                     if dunkel:
                         lg = pg.evaluate(LOGO)
-                        check(f'{teil} {tag}: Logo weiß ohne helle Fläche', lg and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
+                        # Angebot am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – dort bewusst ohne Logo (admin.css)
+                        ohne_logo = name == 'angebot' and breite <= 480
+                        check(f'{teil} {tag}: Logo weiß ohne helle Fläche', (lg or ohne_logo) and all(x['bg'] in ('rgba(0, 0, 0, 0)', 'transparent') and ('invert' in x['filter'] or 'weiss' in x['src']) for x in lg), lg)
                 if breite == 1440 and not dunkel:
                     check(f'{name}: gemeinsames Zahlenformat geladen (format.js)', pg.evaluate("!!(window.STAFL_FORMAT && window.STAFL_FORMAT.euro)"))
                 zr = pg.evaluate(ZURUECK)
@@ -122,6 +156,84 @@ with sync_playwright() as pw:
                     zurueck.setdefault(breite, {})[name] = zr
                     check(f'{name} {tag}: Zurück-Knopf zum Dashboard sichtbar', zr is not None and zr['icon'] and zr['href'] and (zr['href'].rstrip('/').endswith('dashboard') or zr['href'] == 'https://dashboard-stafl.de/'), zr)
             ctx.close()
+    # Fenster (Vorgabe des Inhabers 02.11.2026): auf jeder Seite schließt ein Klick neben ein <dialog> es nie, Escape schließt.
+    # Jedes Fenster der Seite wird direkt geöffnet (Inhalt egal – geprüft wird das gemeinsame Verhalten), dann wird an einer
+    # Stelle außerhalb geklickt (am Handy füllen manche Fenster den Bildschirm – dann nur Escape).
+    FENSTER_AUF = r'''(id) => { const d = document.getElementById(id); if (!d || d.open) return null; d.showModal();
+      const r = d.getBoundingClientRect(), W = innerWidth, H = innerHeight;
+      const p = [[4, 4], [W - 4, 4], [4, H - 4], [W - 4, H - 4], [W / 2, 4], [W / 2, H - 4], [4, H / 2]]
+        .find(([x, y]) => x < r.left || x > r.right || y < r.top || y > r.bottom);
+      return p || 'voll'; }'''
+    OFFEN = "id => document.getElementById(id).open"
+    # Hinweise (Toasts) liegen über einem offenen Fenster (oberste Ebene, theme.js) – sonst lägen sie unter dem unscharfen Hintergrund
+    TOAST_OBEN = r'''async () => { const t = document.querySelector('[role="status"].toast, [role="status"][class*="-toast"]');
+      const d = document.querySelector('dialog[id]:not([open])'); if (!t || !d) return 'ohne';
+      let neu = 0; const f = (e) => { if (e.newState === 'open') neu++; }; t.addEventListener('toggle', f);
+      d.showModal(); await new Promise((r) => setTimeout(r, 80)); t.removeEventListener('toggle', f); d.close();
+      return t.matches(':popover-open') && neu > 0; }'''
+    for breite in (1440, 390):
+        ctx, pg = neue_seite(breite, False)
+        for name, bereich, pfad, warte, _ in SEITEN + [('kundenseite', None, '/', 'html[data-bereit="1"]', [])]:
+            pg.unroute('**/api/?action=status*')
+            if bereich: als_bereich(pg, bereich)
+            pg.goto(B + pfad); pg.wait_for_selector(warte, timeout=20000)
+            ids = pg.evaluate("[...document.querySelectorAll('dialog[id]')].map((d) => d.id)")
+            if breite == 1440:
+                oben = pg.evaluate(TOAST_OBEN)
+                check(f'{name}: Hinweise (Toast) erscheinen über einem offenen Fenster', oben in (True, 'ohne'), oben)
+            per_klick, nicht_esc = [], []
+            for i in ids:
+                p = pg.evaluate(FENSTER_AUF, i)
+                if p is None:
+                    continue
+                if p != 'voll':
+                    pg.mouse.click(p[0], p[1])
+                    if not pg.evaluate(OFFEN, i):
+                        per_klick.append(i); continue
+                pg.keyboard.press('Escape')
+                if pg.evaluate(OFFEN, i):
+                    nicht_esc.append(i); pg.evaluate("id => document.getElementById(id).close()", i)
+            check(f'{name} {breite} px: Klick neben ein Fenster schließt es nicht ({len(ids)} Fenster)', not per_klick, per_klick)
+            check(f'{name} {breite} px: Escape schließt jedes Fenster', not nicht_esc, nicht_esc)
+        ctx.close()
+    # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
+    # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
+    ctx, pg = neue_seite(1440, False)
+    for pfad, dlg, feld in (('/module/hr/', 'dlg-korrektur', '#korrektur-text'), ('/module/marketing/', 'dlg-kampagne', '#kp-name')):
+        pg.goto(B + pfad); pg.wait_for_function("document.readyState === 'complete'")
+        pg.evaluate("id => document.getElementById(id).showModal()", dlg)
+        pg.fill(feld, 'Test – noch nicht gespeichert')
+        pg.keyboard.press('Escape')
+        warn = pg.evaluate("id => [document.getElementById(id).open, (document.querySelector('#stafl-hinweis') || {}).textContent || '']", dlg)
+        pg.keyboard.press('Escape')
+        zu = not pg.evaluate("id => document.getElementById(id).open", dlg)
+        check(f'{dlg}: getippt → erstes Escape warnt, zweites schließt', warn[0] and 'noch nicht gespeichert' in warn[1] and zu, (warn, zu))
+    # Speichern schlägt fehl (Server 500): die Eingaben bleiben geschützt – Escape warnt weiter, die Meldung ist sichtbar
+    pg.goto(B + '/module/hr/'); pg.wait_for_function("document.readyState === 'complete'")
+    pg.route('**/api/?action=hr_korrektur*', lambda r: r.fulfill(status=500, json={'error': 'Testfehler'}))
+    pg.evaluate("document.getElementById('dlg-korrektur').showModal()")
+    pg.fill('#korrektur-text', 'Am 10.09. war ich im Urlaub')
+    pg.click('#korrektur-senden'); pg.wait_for_function("document.querySelector('#korrektur-meldung').textContent.trim() !== ''")
+    pg.keyboard.press('Escape')
+    offen = pg.evaluate("document.getElementById('dlg-korrektur').open")
+    pg.keyboard.press('Escape')
+    check('Speichern fehlgeschlagen: erstes Escape warnt weiter, Eingaben bleiben', offen and pg.evaluate("!document.getElementById('dlg-korrektur').open"), offen)
+    pg.unroute('**/api/?action=hr_korrektur*')
+    # Fenster ohne <form>: Notiz/Bemerkung im Textfeld ist ebenso geschützt (Kundenseite „Bestellwunsch prüfen“ steht für alle)
+    pg.evaluate("""() => { const d = document.createElement('dialog'); d.id = 't-ohne-form'; d.innerHTML = '<textarea id="t-notiz"></textarea>';
+      document.body.appendChild(d); d.showModal(); }""")
+    pg.fill('#t-notiz', 'Bitte bis 10 Uhr'); pg.keyboard.press('Escape')
+    check('Fenster ohne Formular: getippte Notiz → erstes Escape warnt', pg.evaluate("document.getElementById('t-ohne-form').open"))
+    ctx.close()
+    # Aufklappliste (<details data-menue>) am Handy ganz im Bild, auch wenn ihr Titel weit rechts steht (theme.js)
+    ctx, pg = neue_seite(390, False)
+    pg.goto(B + '/module/crm/'); pg.wait_for_function("document.readyState === 'complete'")
+    pg.evaluate("""() => { const d = document.createElement('details'); d.setAttribute('data-menue', ''); d.className = 'crm-mehrfach'; d.id = 't-menue';
+      Object.assign(d.style, { position: 'absolute', left: '200px', top: '300px', zIndex: '99' });
+      d.innerHTML = '<summary>Wann: alle</summary><div class="optionen">Liste</div>'; document.body.appendChild(d); d.open = true; }""")
+    pg.wait_for_function("document.querySelector('#t-menue .optionen').style.left !== ''")
+    lr = pg.evaluate("(() => { const r = document.querySelector('#t-menue .optionen').getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), innerWidth]; })()")
+    check('390 px: aufgeklappte Liste bleibt ganz im Bild', lr[0] >= 0 and lr[1] <= lr[2], lr)
     # Zahlen und Einheiten (02.11.2026): ein Format für alle Seiten (docs/entwickler/10-konventionen.md)
     ctx, pg = neue_seite(1280, False)
     pg.goto(B + '/dashboard/'); pg.wait_for_selector('#db-grid .db-tile')
@@ -226,8 +338,10 @@ with sync_playwright() as pw:
     check('Ohne Anmeldung nicht speicherbar', Client('198.51.100.77').call('theme_save', {'theme': 'dark'})[0] in (401, 403))
     check('Zurück auf „wie das Gerät“', A.call('theme_save', {'theme': ''})[0] == 200 and A.call('status')[1]['user'].get('theme') == '')
     for breite, je in zurueck.items():
-        # gleiche Form: Höhe, Rundung, Schrift, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
-        formen = {json.dumps({k: v for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text')}, sort_keys=True) for z in je.values()}
+        # gleiche Form: Höhe, Rundung, Schrift, Schriftfarbe, Pfeil (die Beschriftung kann bei voller Kopfzeile – Angebot – nur für Screenreader sein)
+        # Schriftfarbe: gleicher Farbton (kleine Abweichungen der Textfarbe zwischen Eingabebereich und Modulen zählen nicht)
+        ton = lambda c: tuple(round(int(x) / 16) for x in re.findall(r'\d+', c or '')[:3])   # noqa: E731
+        formen = {json.dumps({k: (ton(v) if k == 'farbe' else v) for k, v in (z or {}).items() if k in ('h', 'radius', 'font', 'icon', 'text', 'farbe')}, sort_keys=True) for z in je.values()}
         check(f'{breite} px: Zurück-Knopf auf allen Modulseiten gleich', len(formen) == 1, je)
     check('keine Seitenfehler', not fehler, fehler[:4])
     br.close()

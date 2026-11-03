@@ -152,6 +152,17 @@ with sync_playwright() as p:
     pg.click('#tab-fav'); pg.click('#btn-print'); pg.check('input[name="layout"][value="table"]'); pg.click('#print-go'); pg.wait_for_timeout(150)
     check('print fav table', pg.locator('#print-root .p-table tbody tr:not(.gr):not(.sr)').count() == 4)
     pg.emulate_media(media='print'); pg.pdf(path=f'{OUT}/print-fav.pdf', format='A4', prefer_css_page_size=True); pg.emulate_media(media='screen')
+    # Merkliste leeren: Rückfrage im eigenen Fenster (kein Browser-Dialog), Klick daneben schließt nicht, Escape bricht ab
+    pg.click('#favbar [data-act="fav-clear"]'); pg.wait_for_selector('#dlg-frage[open]')
+    check('Leeren fragt im eigenen Fenster nach, Fokus auf „Abbrechen“', 'Merkliste leeren?' in pg.inner_text('#dlg-frage')
+          and pg.evaluate('document.activeElement.id') == 'fr-nein')
+    pg.mouse.click(5, 5)
+    check('Klick neben die Rückfrage schließt sie nicht', pg.evaluate("document.querySelector('#dlg-frage').open"))
+    pg.keyboard.press('Escape'); pg.wait_for_function("!document.querySelector('#dlg-frage').open")
+    check('Escape bricht ab – Merkliste bleibt', pg.inner_text('#fav-count') == '4')
+    pg.click('#favbar [data-act="fav-clear"]'); pg.wait_for_selector('#dlg-frage[open]'); pg.click('#fr-ja')
+    pg.wait_for_function("document.querySelector('#fav-count').textContent.trim() === '0'")
+    check('„Entfernen“ leert die Merkliste', not pg.evaluate("document.querySelector('#dlg-frage').open"))
     pg.click('#tab-all')
 
     # keyboard

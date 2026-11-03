@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 593 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+41 Dateien, 594 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -570,6 +570,7 @@ _Wochenangebot – öffentliches Frontend_
 
 **Hilfsfunktionen**
 
+- `frage(titel, text, ja)` – Rückfrage im eigenen Fenster statt Browser-Dialog (gleiches Aussehen wie alle Fenster).
 - `fold(s)` – Zeichenweise, längenerhaltende Normalisierung (für Suche und Hervorhebung)
 
 **Daten**

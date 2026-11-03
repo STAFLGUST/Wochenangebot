@@ -184,7 +184,7 @@
     const ro = !darf();
     const el = $('#ez-pos');
     const n = $('#ez-pos-n'); if (n) n.textContent = ed.positions.length ? plural(ed.positions.length, 'Position', 'Positionen') : '';
-    const druck = $('#ez-druck'); if (druck) druck.disabled = !ed.positions.length;
+    for (const druck of [$('#ez-druck'), $('#btn-ez-druck')]) if (druck) druck.disabled = !ed.positions.length;   // ohne Positionen nichts zu drucken (beide Knöpfe gleich)
     if (!ed.positions.length) {
       el.innerHTML = `<div class="ez-leer">${icon('box')}<p>${ro ? 'Keine Positionen.' : 'Noch keine Positionen.'}</p>${ro ? '' : `<button type="button" class="btn" data-pick-open>${icon('plus', 'sm')}Artikel nach VK-Gruppe auswählen</button>`}</div>`;
       return;

@@ -219,7 +219,7 @@ kbd { font: 600 11px var(--font); color: var(--muted); border: 1px solid var(--l
 .actions { display: flex; align-items: center; gap: 4px; }
 .menu-wrap { position: relative; }
 .menu {
-  position: absolute; right: 0; top: calc(100% + 6px); min-width: 268px; z-index: 40;
+  position: absolute; right: 0; top: calc(100% + 6px); min-width: min(268px, calc(100vw - 16px)); max-width: calc(100vw - 16px); z-index: 40;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow-lg); padding: 6px;
 }
 .menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; background: transparent; border-radius: 8px; text-align: left; color: var(--text); }
@@ -548,6 +548,9 @@ dialog.sheet .dlg { height: 100%; max-height: 100dvh; }
 .radio:hover { border-color: var(--line-strong); }
 .radio:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
 .radio:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler überall in der Akzentfarbe */
+/* Lange Platzhalter (und Werte) in einzeiligen Feldern enden sichtbar mit „…“ statt mitten im Wort – auf jeder Seite */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), select) { text-overflow: ellipsis; }
 .radio input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 .radio .r-t { flex: 1; font-weight: 550; }
 .radio .r-s { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; }
@@ -593,6 +596,15 @@ dialog.sheet .dlg { height: 100%; max-height: 100dvh; }
   box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100vw - 32px);
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+/* Toasts liegen als Popover über offenen Fenstern (theme.js): Vorgaben des Browsers für Popover zurücksetzen – ohne
+   Spezifität, damit Lage, Farben und Abstände weiter aus der Klasse der Seite kommen (.toast, .crm-toast …). */
+:where([data-stafl-oben]) { inset: auto; margin: 0; border: 0; overflow: visible; }
+/* Gemeinsamer Hinweis aus theme.js (ungespeicherte Eingaben): unten mittig wie die Hinweise der Seiten */
+.stafl-toast { position: fixed; left: 50%; bottom: 24px; z-index: 1000; transform: translate(-50%, 12px); max-width: min(560px, calc(100vw - 32px));
+  padding: 11px 18px; border-radius: 999px; background: #1c1a19; color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.4;
+  text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+.stafl-toast.zeigen { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .stafl-toast { transition: none; } }
 
 #print-root { display: none; }
 .filter-backdrop { display: none; }
@@ -1130,6 +1142,9 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   /* Knöpfe als Kapseln */
   body.kseite .btn { border-radius: 999px; }
   body.kseite .btn.sm { border-radius: 999px; }
+  /* dieselbe Kapselform in den Modulen, die sonst eckige Knöpfe hätten (Dashboard, Eingabebereich, CRM, HR, Marketing
+     haben sie schon) – Einheitlichkeit, Durchsicht 03.11.2026 */
+  body:is(.lg, .qm, .rw, .ctl, .sic) .btn, body:is(.lg, .qm, .rw, .ctl, .sic) .btn.sm { border-radius: 999px; }
   body.kseite .actions .btn { height: 42px; padding: 0 16px; background: var(--glas); border: 1px solid var(--glas-rand); color: var(--text); }
   body.kseite .actions .btn:hover { background: var(--glas-stark); }
   body.kseite .actions .btn.icon { width: 42px; padding: 0; }

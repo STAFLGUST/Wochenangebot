@@ -103,9 +103,9 @@ function mkt_team(): array
 function mkt_text($v, int $max, string $was): string
 {
     if ($v !== null && !is_string($v) && !is_numeric($v)) throw new InvalidArgumentException("$was: ungültiger Wert.");
-    $t = trim(str_replace("\r", '', (string)$v));
+    $t = trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', str_replace("\r", '', (string)$v)) ?? '');   // erst Steuerzeichen, dann Leerraum
     if (mb_strlen($t) > $max) throw new InvalidArgumentException("$was: höchstens $max Zeichen.");
-    return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $t) ?? '';
+    return $t;
 }
 function mkt_datum($v, string $was): string
 {
@@ -338,7 +338,7 @@ function mkt_csv(array $liste, array $einst, array $kampagnen): string
              'Priorität', 'KI-generiert', 'Hook', 'Text', 'Hashtags', 'Call-to-Action', 'Freigegeben von', 'Freigegeben am', 'Links veröffentlicht', 'Reichweite', 'Interaktionen'];
     $zelle = function ($v) {
         $s = (string)$v;
-        if ($s !== '' && strpbrk($s[0], '=+-@') !== false) $s = "'" . $s;   // keine Formeln in Excel (CSV-Injection)
+        if ($s !== '' && strpbrk($s[0], "=+-@\t\r") !== false) $s = "'" . $s;   // keine Formeln in Excel (CSV-Injection), auch nach Tabulator
         return '"' . str_replace('"', '""', str_replace(["\r", "\n"], ' ', $s)) . '"';
     };
     $zeilen = [implode(';', array_map($zelle, $kopf))];

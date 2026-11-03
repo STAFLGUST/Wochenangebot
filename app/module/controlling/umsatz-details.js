@@ -86,7 +86,7 @@
     return `<section class="ctl-ud-teil" aria-label="${d.dim === 'artikel' ? 'Käufer dieses Artikels' : 'Kunden'}">
       <div class="ctl-ud-teilkopf"><h3>${d.dim === 'artikel' ? 'Wer kauft diesen Artikel?' : 'Kunden'} <small>${esc(F.ganz(d.kundenGesamt))}</small></h3>${suchfeld('Kunde suchen')}</div>
       ${alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile${cls}" data-ud-oeffnen="kunde" data-wert="${esc(z.nr)}">
-        <span class="ctl-ud-name"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span>${mitMenge ? `<span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>` : ''}
+        <span class="ctl-ud-name" title="${esc(z.name)}"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span>${mitMenge ? `<span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>` : ''}
         <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b>${mitMenge ? `<span class="ctl-zahl ctl-ud-preis" data-label="Ø Preis" title="Ø aller Käufer: ${esc(F.preis(d.summe))}">${esc(F.preis(z.werte))}${F.preisAbwHtml(F.preisAbweichung(z.werte, d.summe))}</span>` : ''}${d.ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
         <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '—'}</span>${F.ICON.weiter}</button>`).join('')
         + (alle.length > zeigen.length ? `<button type="button" class="ctl-ua-link ctl-ua-mehr" data-ud-alle>Alle ${esc(F.ganz(alle.length))} anzeigen</button>` : '')
@@ -113,7 +113,7 @@
         <small>Ansatz fürs nächste Gespräch mit dem Kunden.</small></div>` : '')
       + `<div class="ctl-ud-teilkopf"><h3>Gekaufte Artikel <small>${esc(F.ganz(gekauft.length))}</small></h3>${suchfeld('Artikel dieses Kunden suchen')}</div>${preisniveau(gekauft)}`
       + (alle.length ? kopf + zeigen.map((z, i) => `${trenner(zeigen, i)}<button type="button" class="ctl-ud-zeile artikel${ek ? ' mit-ek' : ''}" data-ud-oeffnen="artikel" data-wert="${esc(z.nr)}">
-          <span class="ctl-ud-name"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span><span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>
+          <span class="ctl-ud-name" title="${esc(z.name)}"><b>${esc(z.name)}</b><small>${esc(z.sub)}</small></span><span class="ctl-zahl" data-label="Menge">${esc(F.menge(z.werte.menge))}</span>
           <b class="ctl-zahl" data-label="Umsatz">${esc(F.euro(z.werte.umsatz))}</b><span class="ctl-zahl ctl-ud-preis" data-label="Ø Preis"${z.vergleich ? ` title="Ø aller Kunden: ${esc(F.preis(z.vergleich))}"` : ''}>${esc(F.preis(z.werte))}${F.preisAbwHtml(F.preisAbweichung(z.werte, z.vergleich))}</span>
           ${ek ? ekZellen(z.werte) : ''}<span class="ctl-zahl" data-label="± VJ ${esc(k.name)}">${d.vorjahr ? k.delta(z.werte, z.vj) : ''}</span>
           <span class="ctl-zahl ctl-ud-leise" data-label="Zuletzt">${z.zuletzt ? esc(F.tag(z.zuletzt)) : '—'}</span></button>`).join('')
@@ -161,7 +161,7 @@
         <div class="ctl-ud-monate"><div class="ctl-ua-svgwrap" data-ud-diagramm></div></div>
         ${inhalt}</div>
       <div class="dlg-foot"><button type="button" class="btn ctl-ud-filter" data-ud-filter>Als Filter übernehmen</button><button type="button" class="btn" data-ud-csv>CSV</button>
-        <span class="spacer"></span><button type="button" class="btn primary" data-schliessen>Schließen</button></div></div>`;
+        <span class="spacer"></span><button type="button" class="btn" data-schliessen>Schließen</button></div></div>`;
     const dia = $('[data-ud-diagramm]', dlg);
     dia.innerHTML = F.monatsSvg(d.monate, 'umsatz', !!d.vorjahr, dia.clientWidth || 600, 120);
   }

@@ -43,8 +43,8 @@
       <p class="ctl-notiz ctl-stand" id="ctl-u-stand"></p></div>
     <section class="ctl-filterzeile" id="ctl-u-filter" aria-label="Filter">
       <label for="ctl-u-jahr">Jahr</label><select id="ctl-u-jahr"></select>
-      <details class="ctl-filter" id="ctl-u-zeitfilter"><summary id="ctl-u-zeitfilter-titel">Alle Monate</summary><div class="ctl-filterliste" id="ctl-u-monatsoptionen"></div></details>
-      <details class="ctl-filter" id="ctl-u-vertreterfilter"><summary id="ctl-u-vertreterfilter-titel">Alle Vertreter</summary><div class="ctl-filterliste" id="ctl-u-vertreteroptionen"></div></details>
+      <details data-menue class="ctl-filter" id="ctl-u-zeitfilter"><summary id="ctl-u-zeitfilter-titel">Alle Monate</summary><div class="ctl-filterliste" id="ctl-u-monatsoptionen"></div></details>
+      <details data-menue class="ctl-filter" id="ctl-u-vertreterfilter"><summary id="ctl-u-vertreterfilter-titel">Alle Vertreter</summary><div class="ctl-filterliste" id="ctl-u-vertreteroptionen"></div></details>
       <label class="ctl-visuellabel" for="ctl-u-kennzahl">Vergleich</label><select id="ctl-u-kennzahl"><option value="umsatz">Umsatz im Vergleich</option><option value="db">DB im Vergleich</option><option value="kg">Menge im Vergleich</option><option value="spanne">DB-Anteil am Umsatz im Vergleich</option></select>
     </section>
     <section id="ctl-u-auswertung" hidden></section>
@@ -228,7 +228,7 @@
       else if (c.checked) S.vertreter.add(c.dataset.vertreter); else S.vertreter.delete(c.dataset.vertreter);
       zeichneVertreterfilter(); zeichneUebersicht();
     });
-    document.addEventListener('click', (ev) => { ['#ctl-u-zeitfilter', '#ctl-u-vertreterfilter'].forEach((id) => { const f = $(id); if (f && f.open && !f.contains(ev.target)) f.open = false; }); });
+    // Schließen per Klick außerhalb und Escape: gemeinsam für alle <details data-menue> (theme.js)
     $('#ctl-u-kennzahl').addEventListener('change', () => { S.kennzahl = $('#ctl-u-kennzahl').value; zeichneUebersicht(); });
     $('#ctl-u-monatskennzahl').addEventListener('change', zeichneUebersicht);
     $('#ctl-u-diagrammart').addEventListener('change', zeichneUebersicht);

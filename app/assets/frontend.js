@@ -23,7 +23,23 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 const icon = (name, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+/* Aufklappmenü (rechtsbündig am Knopf) ganz im Bild halten: am Handy steht der Knopf oft weiter links, das Menü ragte sonst
+   über den linken Rand hinaus */
+const menuImBild = (m) => { m.style.right = ''; const l = m.getBoundingClientRect().left; if (l < 8) m.style.right = `${Math.round(l - 8)}px`; };
 const plural = (n, one, many) => `${fmtInt.format(n)} ${n === 1 ? one : many}`;
+/* Rückfrage im eigenen Fenster statt Browser-Dialog (gleiches Aussehen wie alle Fenster). Escape oder „Abbrechen“ = nein;
+   der Fokus steht auf „Abbrechen“, damit Enter nichts löscht. */
+function frage(titel, text, ja) {
+  const d = $('#dlg-frage');
+  $('#fr-titel').textContent = titel; $('#fr-text').textContent = text; $('#fr-ja').textContent = ja;
+  return new Promise((ok) => {
+    const fertig = (w) => { d.removeEventListener('click', klick); d.removeEventListener('close', zu); if (d.open) d.close(); ok(w); };
+    const klick = (e) => { const b = e.target.closest('[data-antwort]'); if (b) fertig(b.dataset.antwort === 'ja'); };
+    const zu = () => fertig(false);
+    d.addEventListener('click', klick); d.addEventListener('close', zu);
+    d.showModal(); $('#fr-nein').focus();
+  });
+}
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem(STORAGE + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -572,7 +588,8 @@ function plSections(units) {
   for (const u of units) { if (!out.length || out[out.length - 1].name !== u.section) out.push({ name: u.section, units: [] }); out[out.length - 1].units.push(u); }
   return out;
 }
-const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
+// großes Logo nur in der Aushang-Ansicht: dort zuerst laden (statt Vorabladen im HTML, das in anderen Ansichten ungenutzt bliebe)
+const PL_LOGO = '<img class="al-logo" src="assets/logo-standard-fleisch.png" width="630" height="200" fetchpriority="high" alt="Standard-Fleisch – Komm zu den Fleischmeistern.">';
 /* Ein Block: Nummer | Bezeichnung | Preis(e) | [Merken]. Der Gruppenkopf nutzt die ganze Breite, „€/kg“ steht über der Preisspalte. */
 function plBlockHTML(b, mode) {
   const { u, items, cont } = b, labels = u.labels, cols = labels.length;
@@ -1297,7 +1314,7 @@ function bind() {
     const a = e.target.closest('[data-act]')?.dataset.act;
     if (a === 'fav-print') openPrint('fav');
     if (a === 'fav-csv') exportCSV(favItems(), 'Merkliste');
-    if (a === 'fav-clear' && confirm('Alle Artikel von der Merkliste entfernen?')) { favs.clear(); saveFavs(); updateFavCount(); render(); }
+    if (a === 'fav-clear') frage('Merkliste leeren?', 'Alle Artikel von der Merkliste entfernen?', 'Entfernen').then((ja) => { if (ja) { favs.clear(); saveFavs(); updateFavCount(); render(); } });
     if (a === 'fav-prune' && !(DATA.meta && DATA.meta.einzel)) { favs = new Set([...favs].filter((k) => DATA.items.some((i) => i.key === k))); saveFavs(); updateFavCount(); render(); }
   });
 
@@ -1312,7 +1329,7 @@ function bind() {
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', updateThemeBtn);
 
   const menuBtn = $('#btn-more'), menu = $('#menu-more');
-  const setMenu = (open) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', open); if (open) menu.querySelector('button').focus(); };
+  const setMenu = (open) => { menu.hidden = !open; menuBtn.setAttribute('aria-expanded', open); if (open) { menuImBild(menu); menu.querySelector('button').focus(); } };
   menuBtn.addEventListener('click', () => setMenu(menu.hidden));
   document.addEventListener('click', (e) => { if (!menu.hidden && !e.target.closest('.menu-wrap')) setMenu(false); });
   menu.addEventListener('keydown', (e) => {
@@ -1340,7 +1357,6 @@ function bind() {
   for (const d of $$('dialog')) {
     if (d.id.startsWith('dlg-kunde') || d.id === 'dlg-order') continue;   // eigene Behandlung in bindKunde()/bindOrder()
     d.addEventListener('click', (e) => {
-      if (e.target === d) d.close();
       if (e.target.closest('[data-close]')) d.close();
     });
   }
@@ -1467,8 +1483,8 @@ function openOrder() {
       <p class="o-note" id="or-req"${t.req ? '' : ' hidden'}>Zzgl. Positionen mit Preis auf Anfrage.</p>
       <div id="or-fracht">${frachtMsgHTML(t)}</div>
       <div class="o-fields">
-        <label class="kfld"><span>Wunschtermin (optional)</span><input type="date" id="or-termin" min="${min}"></label>
-        <label class="kfld"><span>Ihre Bestellnummer / Referenz (optional)</span><input type="text" id="or-ref" maxlength="60"></label>
+        <label class="kfld"><span>Wunschtermin (optional)</span><input data-mit-warnung type="date" id="or-termin" min="${min}"></label>
+        <label class="kfld"><span>Ihre Bestellnummer / Referenz (optional)</span><input data-mit-warnung type="text" id="or-ref" maxlength="60"></label>
         <label class="kfld o-wide"><span>Bemerkung (optional)</span><textarea id="or-bem" rows="3" maxlength="1000" placeholder="z. B. Zuschnitt, Verpackung, Lieferhinweise"></textarea></label>
       </div>
       <p class="o-note">Unverbindlicher Bestellwunsch – verbindlich wird die Bestellung erst mit unserer Bestätigung. Preise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.</p>
@@ -1558,11 +1574,11 @@ function bindOrder() {
   $('#orderbar').addEventListener('click', (e) => {
     const a = e.target.closest('[data-order]')?.dataset.order;
     if (a === 'open') openOrder();
-    if (a === 'clear' && confirm('Alle Mengen aus dem Bestellwunsch entfernen?')) { cart.clear(); saveCart(); render(); }
+    if (a === 'clear') frage('Bestellwunsch leeren?', 'Alle Mengen aus dem Bestellwunsch entfernen?', 'Entfernen').then((ja) => { if (ja) { cart.clear(); saveCart(); render(); } });
   });
   const d = $('#dlg-order');
   d.addEventListener('click', (e) => {
-    if (e.target === d || e.target.closest('[data-close]')) { d.close(); return; }
+    if (e.target.closest('[data-close]')) { d.close(); return; }
     const b = e.target.closest('[data-order]');
     if (!b) return;
     if (b.dataset.order === 'rm') { setQty(b.dataset.id, 0); for (const el of $$(`#list .qty[data-qty="${CSS.escape(b.dataset.id)}"]`)) el.value = ''; b.closest('tr').remove(); refreshOrderDialog(); }
@@ -1591,11 +1607,11 @@ async function openCustomerOrders(offset = 0, nr = '') {
         </tbody><tfoot><tr><td colspan="3"><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r"><strong>${fmtEur.format(o.total)} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr><td colspan="3">Frachtanteil (unter ${fmtInt.format(o.fracht.unter)} kg)</td><td class="r">${fmtEur.format(o.fracht.kosten)} €</td></tr><tr><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${fmtEur.format(o.total + o.fracht.kosten)} €</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="muted">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <p class="muted">Ein Bestellwunsch ist noch keine Auftragsbestätigung. Wir melden uns bei Ihnen.</p>`;
-      foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn primary" type="button" data-close>Schließen</button>`;
+      foot = `<button class="btn" type="button" data-customer-orders-page="0">${icon('chev', 'back')}Zur Übersicht</button><button class="btn" type="button" data-close>Schließen</button>`;
     } else {
       body = r.orders.length ? `<ul class="co-list">${r.orders.map((o) => `<li><button type="button" data-customer-order="${esc(o.nr)}"><span><strong>${esc(o.nr)}</strong><span class="muted">${esc(custDate(o.t))} · ${plural(o.positionCount, 'Position', 'Positionen')} · Warenwert ${fmtEur.format(o.total)} €</span></span>${custState(o.workflow)}</button></li>`).join('')}</ul>`
         : '<p class="muted">Sie haben noch keine Bestellwünsche über das Portal gesendet.</p>';
-      foot = (r.total > r.limit ? `<span class="left"><button class="btn sm" type="button" data-customer-orders-page="${Math.max(0, offset - r.limit)}"${offset === 0 ? ' disabled' : ''}>Zurück</button><button class="btn sm" type="button" data-customer-orders-page="${offset + r.limit}"${offset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></span>` : '') + '<button class="btn primary" type="button" data-close>Schließen</button>';
+      foot = (r.total > r.limit ? `<span class="left"><button class="btn sm" type="button" data-customer-orders-page="${Math.max(0, offset - r.limit)}"${offset === 0 ? ' disabled' : ''}>Zurück</button><button class="btn sm" type="button" data-customer-orders-page="${offset + r.limit}"${offset + r.limit >= r.total ? ' disabled' : ''}>Weiter</button></span>` : '') + '<button class="btn" type="button" data-close>Schließen</button>';
     }
     d.innerHTML = `<div class="dlg">${head(nr ? '' : `${plural(r.total, 'Vorgang', 'Vorgänge')}`)}<div class="dlg-body">${body}</div><div class="dlg-foot">${foot}</div></div>`;
   } catch (e) { d.innerHTML = `<div class="dlg">${head('')}<div class="dlg-body"><div class="err-box" role="alert">${esc(e.message)}</div></div><div class="dlg-foot"><button class="btn" type="button" data-close>Schließen</button></div></div>`; }
@@ -1604,7 +1620,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-customer-order],[data-customer-orders-page]');
   if (b) openCustomerOrders(Number(b.dataset.customerOrdersPage || 0), b.dataset.customerOrder || '');
   const d = $('#dlg-customer-orders');
-  if (d && (e.target === d || e.target.closest('#dlg-customer-orders [data-close]'))) d.close();
+  if (d && e.target.closest('#dlg-customer-orders [data-close]')) d.close();
 });
 
 /* ---------- Kunden-Anmeldung ----------
@@ -1702,19 +1718,20 @@ function bindKunde() {
     if (e.target.closest('#btn-kunde-login, [data-kact="login"]')) { openKundeLogin(); return; }
     const kb = e.target.closest('#btn-kunde');
     const km = $('#menu-kunde');
-    if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) km.querySelector('button').focus(); return; }
+    if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) { menuImBild(km); km.querySelector('button').focus(); } return; }
     if (km && !km.hidden && !e.target.closest('#kunde-slot')) { km.hidden = true; $('#btn-kunde').setAttribute('aria-expanded', 'false'); }
     const sw = e.target.closest('[data-kswitch]');
     if (sw) { location.href = setOfferParam(sw.dataset.kswitch).toString(); return; }
     const a = e.target.closest('[data-kact]')?.dataset.kact;
-    if (a === 'orders') { if(km)km.hidden=true;openCustomerOrders(); }
-    if (a === 'pw') { if (km) km.hidden = true; openKundePw(!!(KUNDE && KUNDE.mustChange)); }
+    const kmZu = () => { if (km) { km.hidden = true; const kb2 = $('#btn-kunde'); if (kb2) kb2.setAttribute('aria-expanded', 'false'); } };
+    if (a === 'orders') { kmZu(); openCustomerOrders(); }
+    if (a === 'pw') { kmZu(); openKundePw(!!(KUNDE && KUNDE.mustChange)); }
     if (a === 'pwforce') openKundePw(true);
     if (a === 'logout') kundeLogout();
   });
   document.addEventListener('keydown', (e) => {
     const km = $('#menu-kunde');
-    if (e.key === 'Escape' && km && !km.hidden) { km.hidden = true; $('#btn-kunde').focus(); }
+    if (e.key === 'Escape' && km && !km.hidden) { km.hidden = true; $('#btn-kunde').setAttribute('aria-expanded', 'false'); $('#btn-kunde').focus(); }
   });
   $('#kl-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1730,11 +1747,11 @@ function bindKunde() {
     } catch (ex) { $('#kl-err').textContent = ex.message; f.password.value = ''; f.password.focus(); }
     finally { btn.disabled = false; }
   });
-  dl.addEventListener('click', (e) => { if (e.target === dl || e.target.closest('[data-close]')) dl.close(); });
+  dl.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) dl.close(); });
   dp.addEventListener('cancel', (e) => { if (dp.dataset.forced) e.preventDefault(); });
   dp.addEventListener('click', (e) => {
     if (e.target.closest('#kp-cancel')) { if (dp.dataset.forced) kundeLogout(); else dp.close(); return; }
-    if (!dp.dataset.forced && (e.target === dp || e.target.closest('[data-close]'))) dp.close();
+    if (!dp.dataset.forced && e.target.closest('[data-close]')) dp.close();
   });
   $('#kp-form').addEventListener('submit', async (e) => {
     e.preventDefault();

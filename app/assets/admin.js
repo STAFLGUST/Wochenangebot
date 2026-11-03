@@ -357,7 +357,9 @@
       d.addEventListener('close', onClose);
       $('#confirm-body').onclick = (e) => { const b = e.target.closest('[data-v]'); if (b) done(b.dataset.v === '1'); };
       d.showModal();
-      $('#confirm-body .btn.primary').focus();
+      // Bei Löschen, Verwerfen u. Ä. steht der Fokus auf „Abbrechen“ – ein versehentliches Enter löst nichts aus
+      const gefaehrlich = danger || /lösch|entfern|verwerf|zurücksetz|sperr|beend|deaktiv|widerruf|überschreib/i.test(okLabel);
+      $(gefaehrlich ? '#confirm-body [data-v="0"]' : '#confirm-body .btn.primary').focus();
     });
   }
 
@@ -1575,7 +1577,7 @@
   });
   let neueGruppe = null;
   dlgItem.addEventListener('click', async (e) => {
-    if (e.target === dlgItem || e.target.closest('[data-close]')) { dlgItem.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgItem.close(); return; }
     const b = e.target.closest('[data-ia]');
     if (!b) return;
     if (ro && b.dataset.ia !== 'hist-open') return;
@@ -1692,7 +1694,7 @@
       <div class="dlg-foot"><button type="button" class="btn" data-ia="again">Andere Datei</button><span class="spacer"></span><button type="button" class="btn" data-close>Abbrechen</button><button type="button" class="btn primary" data-ia="apply">${icon('check')}Als Entwurf übernehmen</button></div>`;
   }
   dlgImport.addEventListener('click', (e) => {
-    if (e.target === dlgImport || e.target.closest('[data-close]')) { dlgImport.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgImport.close(); return; }
     const a = e.target.closest('[data-ia]')?.dataset.ia;
     if (a === 'again') pickFile();
     if (a === 'apply' && pending) {
@@ -2153,7 +2155,7 @@
           <label class="check"><input type="checkbox" data-ofp="anlegen"${ofImp.anlegen ? ' checked' : ''}${fehlt.length > platz ? ' disabled' : ''}> Für ${fehlt.length === 1 ? 'diese Kundengruppe ein Angebot' : `diese ${fehlt.length} Kundengruppen je ein Angebot`} anlegen <small class="muted">(„Wochenangebot &lt;Gruppe&gt;“ mit eigener Artikelliste: die Artikel mit Preis aus der Datei)</small></label>
           ${fehlt.length > platz ? `<p class="hint">Es sind höchstens ${OFFER_MAX_UI} Angebote möglich.</p>` : ''}</div>` : ''}
         <table class="etab ofptab"><thead><tr><th>Angebot</th><th>Kundengruppe</th><th class="num-s">Preise</th><th class="num-s">geändert</th><th class="num-s">neu</th></tr></thead><tbody>
-          ${ziele.map(([z, v]) => `<tr data-ofp-ziel="${esc(z)}"><td>${esc(name(z))}</td><td class="sub">${esc(gruppenVon(z))}</td><td class="num-s">${fmtInt.format(v.preise)}</td><td class="num-s">${fmtInt.format(v.geaendert)}</td><td class="num-s">${fmtInt.format(v.neu)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Keine Preise zuzuordnen.</td></tr>'}
+          ${ziele.map(([z, v]) => `<tr data-ofp-ziel="${esc(z)}"><td>${esc(name(z))}<small class="ofp-gr">${esc(gruppenVon(z))}</small></td><td class="sub ofp-grs">${esc(gruppenVon(z))}</td><td class="num-s">${fmtInt.format(v.preise)}</td><td class="num-s">${fmtInt.format(v.geaendert)}</td><td class="num-s">${fmtInt.format(v.neu)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Keine Preise zuzuordnen.</td></tr>'}
         </tbody></table>
         <p class="hint">Eingetragen wird in den Entwurf – erst mit „Veröffentlichen“ sehen die Kunden die Preise. Preise, die nicht in der Datei stehen, bleiben unverändert.${plan.nichtIm.size ? ` ${plural(plan.nichtIm.size, 'Artikelnummer steht', 'Artikelnummern stehen')} nicht im Angebot und ${plan.nichtIm.size === 1 ? 'wird' : 'werden'} übersprungen.` : ''}${ofImp.data.leer ? ` ${fmtInt.format(ofImp.data.leer)} Zeilen ohne Preis übersprungen.` : ''}${ofImp.data.fehler ? ` ${ofImp.data.fehler} unlesbare Preise übersprungen.` : ''}${plan.konflikt ? ` ${plan.konflikt}× unterschiedliche Preise für denselben Artikel im selben Angebot (mehrere Gruppen) – der erste gilt.` : ''}</p>
         <p class="kerr" id="ofp-err" role="alert">${esc(err)}</p>
@@ -2414,7 +2416,7 @@
     return ['Artikel wiederherstellen?', `${nm} wird wieder in den Entwurf aufgenommen – mit dem zuletzt veröffentlichten Preis ${esc(priceShort(it.price))}.`];
   }
   dlgPublish.addEventListener('click', async (e) => {
-    if (e.target === dlgPublish || e.target.closest('[data-close]')) { dlgPublish.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgPublish.close(); return; }
     const r = e.target.closest('[data-rv]');
     if (r) {
       const [title, text] = revertText(r.dataset.rv, r.dataset.rid);
@@ -2475,7 +2477,7 @@
     }
   }
   dlgVer.addEventListener('click', async (e) => {
-    if (e.target === dlgVer || e.target.closest('[data-close]')) { dlgVer.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgVer.close(); return; }
     const b = e.target.closest('[data-ver]');
     if (!b) return;
     try {
@@ -2585,15 +2587,22 @@
   $('#btn-publish').addEventListener('click', () => { if (document.activeElement && document.activeElement.matches('.in, .fld input')) document.activeElement.blur(); setTimeout(openPublish, 0); });
   $('#btn-preview').addEventListener('click', () => openVorschau(curOffer));
   $('#save-state').addEventListener('click', (e) => { if (e.target.closest('[data-act="retry-save"]')) saveNow(); });
-  /* Dialoge schließen per Klick daneben, Escape oder [data-close]. Dialoge mit data-fest (Formulare wie „Nutzer anlegen“)
-     schließen nur über ihre Knöpfe – ein Klick daneben oder Escape verwirft keine Eingaben. */
+  /* Dialoge schließen per Escape oder [data-close] („Abbrechen“, Kreuz) – nie per Klick daneben (theme.js, alle Seiten) und
+     nicht, solange gespeichert wird (data-busy). Fenster mit Eingaben (data-fest, z. B. „Nutzer anlegen“): Wurde etwas
+     eingetippt und noch nicht gespeichert, schließt Escape erst beim zweiten Mal – das erste zeigt einen Hinweis (Escape
+     schließt sonst leicht versehentlich, z. B. beim Zuklappen einer Auswahlliste). „Abbrechen“ und Kreuz schließen sofort. */
   for (const d of $$('dialog')) {
-    d.addEventListener('click', (e) => {
-      const daneben = e.target === d;
-      if (daneben && d.dataset.fest !== undefined) return;
-      if (daneben || e.target.closest('[data-close]')) { if (d.id !== 'dlg-confirm' && !d.dataset.busy) d.close(); }
-    });
-    d.addEventListener('cancel', (e) => { if (d.dataset.fest !== undefined) e.preventDefault(); });
+    d.addEventListener('input', (e) => { if (d.dataset.fest !== undefined && e.target.matches('textarea, select, input:not([type=checkbox]):not([type=radio])')) d.dataset.geaendert = '1'; });
+    d.addEventListener('close', () => { delete d.dataset.geaendert; delete d.dataset.warnung; });
+    const darfZu = (perEscape) => {
+      if (d.dataset.busy) return false;
+      if (!perEscape || d.dataset.fest === undefined || !d.dataset.geaendert || d.dataset.warnung) return true;
+      d.dataset.warnung = '1';
+      toast('Die Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.');
+      return false;
+    };
+    d.addEventListener('click', (e) => { if (e.target.closest('[data-close]') && d.id !== 'dlg-confirm' && darfZu()) d.close(); });
+    d.addEventListener('cancel', (e) => { if (!darfZu(true)) e.preventDefault(); });
   }
 
   document.addEventListener('keydown', (e) => {
@@ -2886,7 +2895,7 @@
   }
   $('#hist-data').addEventListener('click', () => { if (!hist) return; renderHistData(); dlgHD.showModal(); });
   dlgHD.addEventListener('click', async (e) => {
-    if (e.target === dlgHD || e.target.closest('[data-close]')) { dlgHD.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgHD.close(); return; }
     if (e.target.closest('[data-hd="upload"]')) { dlgHD.close(); $('#hist-file-input').click(); return; }
     const del = e.target.closest('[data-hdel]');
     if (!del || roHist) return;
@@ -3066,9 +3075,9 @@
       else st = `<span class="st-ok">neu</span>${en.warn ? ` <span class="muted">· ${en.warn} Hinweis${en.warn === 1 ? '' : 'e'}</span>` : ''}`;
       const editable = en.status === 'ok';
       return `<tr data-i="${i}"><td class="hi-file" title="${esc(en.file.name)}">${esc(en.file.name)}</td>
-        <td><input class="in num" data-hf="week" type="number" min="1" max="53" value="${esc(en.week ?? '')}" aria-label="Kalenderwoche"${editable ? '' : ' disabled'}></td>
-        <td><input class="in num" data-hf="year" type="number" min="2000" max="2100" value="${esc(en.year ?? '')}" aria-label="Jahr"${editable ? '' : ' disabled'}></td>
-        <td class="num">${en.items ? fmtInt.format(en.items.length) : ''}</td><td>${st}</td></tr>`;
+        <td data-l="KW"><input class="in num" data-hf="week" type="number" min="1" max="53" value="${esc(en.week ?? '')}" aria-label="Kalenderwoche"${editable ? '' : ' disabled'}></td>
+        <td data-l="Jahr"><input class="in num" data-hf="year" type="number" min="2000" max="2100" value="${esc(en.year ?? '')}" aria-label="Jahr"${editable ? '' : ' disabled'}></td>
+        <td class="num" data-l="Artikel">${en.items ? fmtInt.format(en.items.length) : ''}</td><td class="hi-st">${st}</td></tr>`;
     }).join('');
     const busy = hiEntries.some((en) => en.status === 'lesen' || en.status === 'speichert');
     $('#hist-import-body').innerHTML = `
@@ -3087,7 +3096,7 @@
     renderHistImport();
   });
   dlgHI.addEventListener('click', async (e) => {
-    if (e.target === dlgHI || e.target.closest('[data-close]')) { dlgHI.close(); return; }
+    if (e.target.closest('[data-close]')) { dlgHI.close(); return; }
     const a = e.target.closest('[data-hi]')?.dataset.hi;
     if (a === 'more') { $('#hist-file-input').click(); return; }
     if (a !== 'save') return;
@@ -3974,6 +3983,7 @@
           ${toks.length ? `<tfoot><tr><td colspan="7" class="muted">${plural(list.length, 'Treffer', 'Treffer')} zur Suche · ${esc(kgText(kg))}</td></tr></tfoot>` : ''}</table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Alle Artikel mit eingelagertem Bestand haben in diesem Angebot einen Preis.'}</p>`) : ''}
     </div>`;
+    for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
     panelLayout();
   }
   /* Beide Leisten nebeneinander; eine aufgeklappte Leiste nimmt die volle Breite ein */
@@ -4370,6 +4380,7 @@
       ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Keine Artikel mit kurzem oder überschrittenem MHD im Bestand.'}</p>`) : ''}
     </div>`;
+    for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
     panelLayout();
   }
   $('#mhd-panel').addEventListener('click', (e) => {
@@ -4628,7 +4639,7 @@
         <td class="m-cat"><select class="in" data-mf="category" aria-label="Fleischart">${CAT_OPTS(e.category)}</select></td>
         <td class="m-origin"><input class="in" data-mf="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60" aria-label="Herkunft"></td>
         <td class="m-cond"><select class="in" data-mf="condition" aria-label="Zustand">${COND_OPTS(e.condition)}</select></td>
-        <td class="m-vk"><input class="in" data-mf="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" aria-label="VK-Gruppe"><div class="m-vkname${e.vkGruppe && !vkName(e.vkGruppe) ? ' st-warn' : ''}">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</div></td>
+        <td class="m-vk"><input class="in" data-mf="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" aria-label="VK-Gruppe"><div class="m-vkname${e.vkGruppe && !vkName(e.vkGruppe) ? ' st-warn' : ''}" title="${e.vkGruppe ? esc(vkName(e.vkGruppe) || '') : ''}">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</div></td>
         <td class="m-offer">${offerStatus(e, by)}</td>
         <td class="m-act">${roMaster ? '' : `<button type="button" class="ibtn danger" data-ma="del" aria-label="Stammsatz ${esc(e.code)} löschen">${icon('trash')}</button>`}</td>
       </tr>`;
@@ -4660,7 +4671,7 @@
       if (nr && (!/^[0-9A-Za-z._-]{1,10}$/.test(nr) || (vkg.length && !vkgMap.has(nr)))) { el.value = ent.vkGruppe || ''; toast(`Die VK-Gruppe „${nr}“ gibt es nicht. Bitte unter Stammdaten → VK-Gruppen anlegen.`, 6000); return; }
       if (nr) ent.vkGruppe = nr; else delete ent.vkGruppe;
       el.value = nr;
-      const nm = tr.querySelector('.m-vkname'); nm.textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; nm.classList.toggle('st-warn', !!nr && !vkName(nr));
+      const nm = tr.querySelector('.m-vkname'); nm.textContent = nr ? vkName(nr) || 'nicht in der Liste' : ''; nm.title = nr ? vkName(nr) || '' : ''; nm.classList.toggle('st-warn', !!nr && !vkName(nr));
     }
     else ent[f] = el.value;
     tr.querySelector('.m-offer').innerHTML = offerStatus(ent, draftByCode());
