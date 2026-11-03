@@ -1136,6 +1136,9 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   /* Knöpfe als Kapseln */
   body.kseite .btn { border-radius: 999px; }
   body.kseite .btn.sm { border-radius: 999px; }
+  /* dieselbe Kapselform in den Modulen, die sonst eckige Knöpfe hätten (Dashboard, Eingabebereich, CRM, HR, Marketing
+     haben sie schon) – Einheitlichkeit, Durchsicht 03.11.2026 */
+  body:is(.lg, .qm, .rw, .ctl, .sic) .btn, body:is(.lg, .qm, .rw, .ctl, .sic) .btn.sm { border-radius: 999px; }
   body.kseite .actions .btn { height: 42px; padding: 0 16px; background: var(--glas); border: 1px solid var(--glas-rand); color: var(--text); }
   body.kseite .actions .btn:hover { background: var(--glas-stark); }
   body.kseite .actions .btn.icon { width: 42px; padding: 0; }
