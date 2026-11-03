@@ -1,6 +1,8 @@
 #!/bin/sh
 # Release-Modus: spielt nur einen von Hand freigegebenen Commit ein (GitHub-Workflow „Release“),
 # prüft danach die Erreichbarkeit wie ein Besucher und kehrt bei Fehlern automatisch zur Vorversion zurück.
+# Maßgeblich ist der neueste erfolgreiche Release-Lauf (nach Startzeit); ein Stand, der älter ist als der aktive, wird nie
+# automatisch eingespielt (zurück nur von Hand mit deploy/release-zurueck.sh).
 # Wird von aktualisieren.sh aufgerufen, sobald der Release-Modus eingerichtet ist
 # (deploy/release-modus-einrichten.sh). Ohne diese Einrichtung ändert sich nichts.
 #
@@ -114,16 +116,25 @@ einspielen() { # sha vorher [zurueck]: Code wechseln; Container nur neu erstelle
   elif [ "$BAUEN" = 1 ] || git diff --name-only "$2" "$1" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then $COMPOSE up -d --force-recreate app; fi
 }
 
-# 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main
-LAUF=$(api "actions/workflows/release.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=1") || { echo "GitHub-API nicht erreichbar"; exit 1; }
+# 1. Neuester erfolgreicher, von Hand gestarteter Release-Lauf auf main – selbst nach Startzeit ausgewählt (nicht der erste
+#    Eintrag der Antwort: GitHub lieferte am 03.11.2026 einmalig einen vier Tage alten Lauf zuerst, der Server ging zurück)
+LAUF=$(api "actions/workflows/release.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=20") || { echo "GitHub-API nicht erreichbar"; exit 1; }
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); $1" ; }
-SHA=$(printf '%s' "$LAUF" | json "r=(d.get('workflow_runs') or [{}])[0]; print(r.get('head_sha','') if r.get('path')=='.github/workflows/release.yml' and r.get('head_branch')=='main' and r.get('conclusion')=='success' else '')")
-LAUF_ID=$(printf '%s' "$LAUF" | json "print((d.get('workflow_runs') or [{}])[0].get('id',''))")
+NEUESTER="l=[r for r in d.get('workflow_runs') or [] if r.get('path')=='.github/workflows/release.yml' and r.get('head_branch')=='main' and r.get('conclusion')=='success']; r=max(l, key=lambda r: (str(r.get('created_at') or ''), int(r.get('id') or 0))) if l else {}"
+SHA=$(printf '%s' "$LAUF" | json "$NEUESTER; print(r.get('head_sha',''))")
+LAUF_ID=$(printf '%s' "$LAUF" | json "$NEUESTER; print(r.get('id',''))")
 [ -n "$SHA" ] || exit 0                       # noch kein Release
 AKTUELL=$(git rev-parse HEAD)
 [ "$SHA" = "$AKTUELL" ] && exit 0             # schon live
 ABGELEHNT="$BASIS/.release-abgelehnt"
 [ "$SHA" = "$(cat "$ABGELEHNT" 2>/dev/null)" ] && exit 0   # schon einmal abgelehnt/zurückgesetzt → nicht erneut versuchen
+# Nie automatisch zurück: Ein Release, der älter ist als der aktive Stand (Vorgänger von HEAD), kann nur eine veraltete oder
+# falsch sortierte Antwort von GitHub sein (Release-Läufe starten immer auf dem neuesten main). Zurück geht es nur von Hand
+# (deploy/release-zurueck.sh). Nichts ändern, nur im Protokoll vermerken.
+if git merge-base --is-ancestor "$SHA" "$AKTUELL" 2>/dev/null; then
+  echo "Release $SHA ist älter als der aktive Stand $(git rev-parse --short HEAD) – nicht eingespielt (kein automatischer Rückschritt)"
+  exit 0
+fi
 ablehnen() { echo "$SHA" > "$ABGELEHNT"; status false "$AKTUELL" "$AKTUELL" "$LAUF_ID" "$1"; melden fail; echo "$1"; exit 1; }
 printf '%s' "$SHA" | grep -qE '^[0-9a-f]{40}$' || { echo "Ungültige Commit-Kennung"; exit 1; }
 

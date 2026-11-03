@@ -3,6 +3,7 @@
 # eigenes Git-„origin“, GitHub-API-Ersatz, PHP-Testserver als Live-Seite, echte Datensicherung.
 # Prüft: kein Release → nichts passiert; freigegebener Commit geht live; defekter Release wird erkannt und
 # automatisch zurückgesetzt (und nicht erneut versucht); Release ohne CI und Commit außerhalb von main werden abgelehnt;
+# neuester Release-Lauf nach Startzeit (auch bei unsortierter Antwort), nie automatisch auf einen älteren Stand;
 # Sicherung mit dem Skript des neuen Commits; Anwendungs-Image wird nur bei Änderungen unter deploy/image/ (und aktiver
 # Ergänzungsdatei der Anmeldung) gebaut, ein Bau-Fehler verhindert das Einspielen, beim Rückfall gilt das alte Image;
 # nach erfolgreichem Release nur hängende Images aufgeräumt (Fehler dabei unschädlich); manueller Notfall-Rückfall
@@ -135,6 +136,18 @@ ok "Testvoraussetzung: Angebot verlangt Anmeldung" '[ "$(curl -s -o /dev/null -w
 printf '{"release":"%s","ci_ok":["%s"]}' "$H_SHA" "$H_SHA" > "$T/state.json"
 lauf || true; ok "nicht öffentliches Wochenangebot: Release geht live" '[ "$(kopf)" = "$H_SHA" ] && [ "$(st ok)" = True ]'
 rm -f "$B/daten/angebote.php"
+
+# Kein automatischer Rückschritt (Vorfall 03.11.2026: GitHub lieferte einen alten Release-Lauf zuerst, der Server ging zurück)
+V_SHA=$(commit gut2 x "echo '<!-- gut2 -->' >> '$T/src/app/index.html'")
+printf '{"laeufe":[{"sha":"%s","t":"2026-10-30T21:52:36Z"},{"sha":"%s","t":"2026-11-03T15:17:18Z"},{"sha":"%s","t":"2026-10-01T08:00:00Z"}],"ci_ok":["%s","%s","%s"]}' \
+  "$G_SHA" "$V_SHA" "$A_SHA" "$G_SHA" "$V_SHA" "$A_SHA" > "$T/state.json"
+lauf || true; ok "unsortierte Antwort: neuester Release-Lauf nach Startzeit geht live (nicht der erste Eintrag)" '[ "$(kopf)" = "$V_SHA" ] && [ "$(st ok)" = True ] && [ "$(st lauf)" = 11 ]'
+printf '{"laeufe":[{"sha":"%s","t":"2026-10-30T21:52:36Z"}],"ci_ok":["%s"]}' "$G_SHA" "$G_SHA" > "$T/state.json"
+N0=$(ls "$B"/sicherungen/daten-*.tar.gz | wc -l)
+lauf || true
+ok "Release älter als der aktive Stand: nichts eingespielt, nicht gesichert, nicht gesperrt, Status unverändert" '[ "$(kopf)" = "$V_SHA" ] && grep -q "älter als der aktive Stand" "$T/out.txt" \
+  && [ "$(ls "$B"/sicherungen/daten-*.tar.gz | wc -l)" = "$N0" ] && [ "$(cat "$B/.release-abgelehnt" 2>/dev/null)" != "$G_SHA" ] && [ "$(st ok)" = True ] && [ "$(st sha)" = "$V_SHA" ] \
+  && ! grep -qE "^(compose|docker)" "$T/out.txt"'
 
 # Wartungsmodus eingeschaltet (Angebots-API antwortet 503 mit wartung:true) – Release muss trotzdem durchgehen
 W_SHA=$(commit gut3 x "echo '<!-- gut3 -->' >> '$T/src/app/index.html'")
