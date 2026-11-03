@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 944 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+103 Dateien, 949 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -1431,6 +1431,11 @@ _Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen ge
 - `vtoken_bf()`
 - `vtoken()` – Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
 - `warte_mail(adresse, anzahl)`
+- `anmelde_link_vergessen()` – ── Passwort vergessen (Stand 14, konten.sh passwort-vergessen; Inhaber 03.11.2026): Link per Mail an die hinterlegte Adresse, eigener Ablauf ohne „Reset OTP“ …
+- `ablauf_datei()`
+- `lauf(alias, ebene)`
+- `vergessen_anfordern(p_, wer)`
+- `link_aus(m_)`
 
 ## `tests/regeln/test_regeln.py`
 

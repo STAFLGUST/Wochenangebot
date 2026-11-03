@@ -16,6 +16,11 @@
 #   sh deploy/anmeldung/konten.sh einladen <benutzername> <e-mail> <vorname> <nachname>   # Konto anlegen und einladen
 #   sh deploy/anmeldung/konten.sh einladen <benutzername>         # Einladung erneut senden
 #   sh deploy/anmeldung/konten.sh realm-aktualisieren             # Realm auf den aktuellen Stand bringen (idempotent)
+#   sh deploy/anmeldung/konten.sh passwort-vergessen an|aus|status  # „Passwort vergessen?“ auf der Anmeldeseite (Link per Mail)
+#
+# Passwort vergessen (Inhaber 03.11.2026): auf der Anmeldeseite „Passwort vergessen?“ – Keycloak schickt einen Link an die
+# hinterlegte E-Mail-Adresse. Wer einen zweiten Faktor eingerichtet hat, braucht ihn auch dafür (eigener Ablauf
+# „mitarbeiter-passwort-vergessen“, ohne „Reset OTP“): Einmalcode und Passkeys bleiben erhalten. Voraussetzung: mail-einrichten.
 #
 # Einladung: Keycloak schickt eine Mail mit Link (72 Stunden gültig); darüber legt der Mitarbeiter selbst sein Passwort
 # fest – kein Passwort per Mail. Den zweiten Faktor verlangt die Anmeldung nur bei Pflicht-Konten (Administratoren u. a.). Vorher muss es das Mitarbeiterkonto im Eingabebereich geben.
@@ -557,6 +562,95 @@ for h in hinweise:
 PY
 }
 
+# ── Passwort vergessen (Stand 14, Inhaber 03.11.2026) ──
+# Eigener Ablauf statt des eingebauten „reset credentials“: Der eingebaute enthält „Reset OTP“ (entfernt den Einmalcode) –
+# dann übernähme, wer an das Postfach kommt, ein Administratorkonto samt zweitem Faktor. Hier verlangt der Ablauf nach dem
+# Link aus der Mail den eingerichteten zweiten Faktor (Passkey oder Einmalcode, wie bei der Anmeldung), erst danach das neue
+# Passwort; Einmalcode und Passkeys bleiben. Wer keinen zweiten Faktor hat, setzt nur das Passwort neu.
+# Gleicher Aufbau wie in der Realm-Datei (authenticationFlows, resetCredentialsFlow) – die CI vergleicht beides.
+VERGESSEN=mitarbeiter-passwort-vergessen
+VERGESSEN_LINK_SEKUNDEN=900
+vergessen_aufbau() { # Aufbau des Ablaufs als eine Zeile je Ausführung: Ebene|Anbieter oder Unterablauf|Anforderung|Priorität
+  kc get "authentication/flows/$VERGESSEN/executions" -r "$REALM" | python3 -c '
+import json, sys
+for e in json.load(sys.stdin):
+    print("%s|%s|%s|%s" % (e["level"], e.get("providerId") or e.get("displayName"), e["requirement"], e.get("priority")))'
+}
+VERGESSEN_SOLL="0|reset-credentials-choose-user|REQUIRED|10
+0|reset-credential-email|REQUIRED|20
+0|mitarbeiter-vergessen-passkey|CONDITIONAL|30
+1|conditional-user-configured|REQUIRED|10
+1|webauthn-authenticator|REQUIRED|20
+0|mitarbeiter-vergessen-einmalcode|CONDITIONAL|40
+1|conditional-user-configured|REQUIRED|10
+1|conditional-credential|REQUIRED|20
+1|auth-otp-form|REQUIRED|30
+0|reset-password|REQUIRED|50"
+vergessen_schritt() { # vergessen_schritt <ablauf> <provider> <anforderung> <priorität> [<config-json>]
+  kc create "authentication/flows/$1/executions/execution" -r "$REALM" -b "{\"provider\":\"$2\"}" >/dev/null
+  id=$(kc get "authentication/flows/$1/executions" -r "$REALM" | python3 -c "import json,sys; es=json.load(sys.stdin); top=min(e['level'] for e in es); print([e['id'] for e in es if e['level']==top and e.get('providerId')=='$2'][-1])")
+  kc update "authentication/flows/$1/executions" -r "$REALM" -b "{\"id\":\"$id\",\"requirement\":\"$3\",\"priority\":$4}" >/dev/null
+  if [ -n "${5:-}" ]; then kc create "authentication/executions/$id/config" -r "$REALM" -b "$5" >/dev/null; fi
+}
+vergessen_unterablauf() { # vergessen_unterablauf <alias> <beschreibung> <priorität>
+  kc create "authentication/flows/$VERGESSEN/executions/flow" -r "$REALM" -b "{\"alias\":\"$1\",\"type\":\"basic-flow\",\"provider\":\"registration-page-form\",\"description\":\"$2\"}" >/dev/null
+  id=$(kc get "authentication/flows/$VERGESSEN/executions" -r "$REALM" | python3 -c "import json,sys; print([e['id'] for e in json.load(sys.stdin) if e.get('displayName')=='$1' and e.get('authenticationFlow')][0])")
+  kc update "authentication/flows/$VERGESSEN/executions" -r "$REALM" -b "{\"id\":\"$id\",\"requirement\":\"CONDITIONAL\",\"priority\":$3}" >/dev/null
+}
+vergessen_anlegen() {
+  kc create authentication/flows -r "$REALM" -b "{\"alias\":\"$VERGESSEN\",\"providerId\":\"basic-flow\",\"topLevel\":true,\"builtIn\":false,\"description\":\"Passwort vergessen: Link per Mail, zweiter Faktor wenn eingerichtet, dann neues Passwort (ohne Reset OTP)\"}" >/dev/null
+  vergessen_schritt "$VERGESSEN" reset-credentials-choose-user REQUIRED 10
+  vergessen_schritt "$VERGESSEN" reset-credential-email REQUIRED 20
+  vergessen_unterablauf mitarbeiter-vergessen-passkey "Passkey, wenn eingerichtet" 30
+  vergessen_schritt mitarbeiter-vergessen-passkey conditional-user-configured REQUIRED 10
+  vergessen_schritt mitarbeiter-vergessen-passkey webauthn-authenticator REQUIRED 20 '{"alias":"amr-hwk-vergessen","config":{"default.reference.value":"hwk","default.reference.maxAge":"36000"}}'
+  vergessen_unterablauf mitarbeiter-vergessen-einmalcode "Einmalcode, wenn eingerichtet und kein Passkey verwendet" 40
+  vergessen_schritt mitarbeiter-vergessen-einmalcode conditional-user-configured REQUIRED 10
+  vergessen_schritt mitarbeiter-vergessen-einmalcode conditional-credential REQUIRED 20 '{"alias":"vergessen-ohne-passkey","config":{"credentials":"webauthn","included":"false"}}'
+  vergessen_schritt mitarbeiter-vergessen-einmalcode auth-otp-form REQUIRED 30 '{"alias":"amr-otp-vergessen","config":{"default.reference.value":"otp","default.reference.maxAge":"36000"}}'
+  vergessen_schritt "$VERGESSEN" reset-password REQUIRED 50
+  echo "angelegt:  Ablauf $VERGESSEN (zweiter Faktor bleibt Pflicht, wenn eingerichtet)"
+}
+passwort_vergessen() {
+  [ $# -eq 1 ] || abbruch "Aufruf: konten.sh passwort-vergessen an|aus|status"
+  case "$1" in an|aus|status) ;; *) abbruch "Aufruf: konten.sh passwort-vergessen an|aus|status" ;; esac
+  bereit
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  # Ausgaben erst ganz lesen (docker compose exec, siehe realm_aktualisieren)
+  # smtpServer nur mit Unterfeld (sonst liefert --fields ein leeres Objekt); das Passwort steht ohnehin nur als Verweis/Maske darin
+  realm=$(kc get "realms/$REALM" --fields 'resetPasswordAllowed,resetCredentialsFlow,smtpServer(host)')
+  an=$(printf '%s' "$realm" | python3 -c 'import json,sys; print("ja" if json.load(sys.stdin).get("resetPasswordAllowed") else "nein")')
+  ablauf=$(printf '%s' "$realm" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("resetCredentialsFlow") or "")')
+  mail=$(printf '%s' "$realm" | python3 -c 'import json,sys; print("ja" if (json.load(sys.stdin).get("smtpServer") or {}).get("host") else "nein")')
+  vorhanden=$(kc get authentication/flows -r "$REALM" | python3 -c "import json,sys; print('ja' if any(f.get('alias')=='$VERGESSEN' for f in json.load(sys.stdin)) else 'nein')")
+  case "$1" in
+    status)
+      if [ "$an" = ja ]; then echo "Passwort vergessen: an (Link auf der Anmeldeseite)"; else echo "Passwort vergessen: aus"; fi
+      if [ "$ablauf" = "$VERGESSEN" ] && [ "$vorhanden" = ja ] && [ "$(vergessen_aufbau)" = "$VERGESSEN_SOLL" ]; then
+        echo "Ablauf: $VERGESSEN – zweiter Faktor bleibt Pflicht, wenn eingerichtet (abgesichert)"
+      else
+        echo "Ablauf: ${ablauf:-Keycloak-Standard} – NICHT abgesichert (beim Einschalten wird der eigene Ablauf gesetzt)"
+      fi
+      if [ "$mail" = ja ]; then echo "Mailversand der Anmeldung: eingerichtet"; else echo "Mailversand der Anmeldung: fehlt (konten.sh mail-einrichten)"; fi
+      ;;
+    an)
+      [ "$mail" = ja ] || abbruch "Keycloak kann noch keine E-Mails senden – zuerst: sh deploy/anmeldung/konten.sh mail-einrichten [<test-adresse>]"
+      if [ "$vorhanden" = nein ]; then vergessen_anlegen
+      elif [ "$(vergessen_aufbau)" != "$VERGESSEN_SOLL" ]; then
+        abbruch "Der Ablauf $VERGESSEN in Keycloak weicht vom vorgesehenen Aufbau ab (von Hand geändert?) – nicht eingeschaltet. Aufbau: konten.sh passwort-vergessen status"
+      fi
+      # Link aus der Mail 15 Minuten gültig (Keycloak-Standard 5 Minuten – zu knapp, wenn die Mail etwas braucht)
+      kc update "realms/$REALM" -s resetCredentialsFlow="$VERGESSEN" -s resetPasswordAllowed=true \
+        -s "attributes.\"actionTokenGeneratedByUserLifespan.reset-credentials\"=$VERGESSEN_LINK_SEKUNDEN" >/dev/null
+      echo "eingeschaltet: Link 'Passwort vergessen?' auf der Anmeldeseite – Link per Mail, $((VERGESSEN_LINK_SEKUNDEN / 60)) Minuten gültig (zweiter Faktor bleibt Pflicht, wenn eingerichtet)"
+      ;;
+    aus)
+      kc update "realms/$REALM" -s resetPasswordAllowed=false >/dev/null
+      echo "ausgeschaltet: kein Link 'Passwort vergessen?' mehr – vergessene Passwörter wie bisher: konten.sh startpasswort <name> oder Verwaltung → Mitarbeiter"
+      ;;
+  esac
+}
+
 liste() {
   echo "benutzername,vorname,nachname,e-mail,aktiv"
   kc get users -r "$REALM" --fields username,firstName,lastName,email,enabled --format csv --noquotes
@@ -579,5 +673,6 @@ case "$befehl" in
   einladen) einladen "$@" ;;
   design-setzen) design_setzen "$@" ;;
   realm-aktualisieren) realm_aktualisieren ;;
+  passwort-vergessen) passwort_vergessen "$@" ;;
   *) sed -n '2,/^set -eu/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
