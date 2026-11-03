@@ -17,12 +17,12 @@
 /* Formularfelder */
 .fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .fld > span { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-.fld input, .fld select {
+.fld input, .fld select, .st-pop :is(input:not([type=checkbox]):not([type=radio]), select), .st-falle :is(input:not([type=checkbox]):not([type=radio]), select), #vk-sort {
   height: 38px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; background: var(--surface);
   outline: none; width: 100%; font-variant-numeric: tabular-nums; appearance: none; -webkit-appearance: none;
 }
-.fld select { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 11px center; background-size: 12px 12px; background-repeat: no-repeat; }   /* dasselbe Winkelzeichen wie in den Tabellen-Auswahlfeldern */
-.fld input:focus, .fld select:focus { border-color: var(--accent-line); box-shadow: var(--focus); }
+.fld select, .st-pop select, .st-falle select, #vk-sort { padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 11px center; background-size: 12px 12px; background-repeat: no-repeat; }   /* dasselbe Winkelzeichen wie in den Tabellen-Auswahlfeldern */
+.fld input:focus, .fld select:focus, .st-pop :is(input, select):focus, .st-falle :is(input, select):focus, #vk-sort:focus { border-color: var(--accent-line); box-shadow: var(--focus); }
 .fld.sm { width: 120px; }
 .fld.grow { flex: 1 1 260px; }
 .form-grid { display: grid; gap: 14px; }
@@ -206,6 +206,20 @@ body.in-einzel #btn-send, body.in-einzel #send-hint, body.in-einzel #btn-publish
 .hitab td { padding: 6px 8px; }
 .hitab .in.num { width: 76px; border-color: var(--line); }
 .hitab .hi-file { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Preise importieren: Kundengruppe am Handy unter dem Angebot statt als eigene Spalte */
+.ofptab .ofp-gr { display: none; }
+@media (max-width: 560px) { .ofptab th:nth-child(2), .ofptab .ofp-grs { display: none; } .ofptab .ofp-gr { display: block; color: var(--muted); font-size: 12px; } .ofptab td, .ofptab th { padding-left: 6px; padding-right: 6px; } }
+/* Alte Angebote hochladen am Handy: Datei über die ganze Breite, darunter KW, Jahr, Artikel und Status – ohne seitliches Scrollen */
+@media (max-width: 560px) {
+  .hitab thead { display: none; }
+  .hitab, .hitab tbody { display: block; }
+  .hitab tr { display: grid; grid-template-columns: 64px 84px minmax(0, 1fr); gap: 4px 10px; align-items: end; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .hitab td { padding: 0; border: 0; min-width: 0; }
+  .hitab .hi-file { grid-column: 1 / -1; max-width: none; font-weight: 600; }
+  .hitab .hi-st { grid-column: 1 / -1; }
+  .hitab .in.num { width: 100%; }
+  .hitab td[data-l]::before { content: attr(data-l); display: block; margin-bottom: 2px; color: var(--muted); font-size: 11px; font-weight: 600; text-align: left; }
+}
 .st-ok { color: var(--c-fresh); font-weight: 600; }
 .st-warn { color: var(--c-aged); font-weight: 600; }
 .st-err { color: var(--accent); font-weight: 600; }
@@ -1144,6 +1158,10 @@ body.ro .sale-tag { cursor: default; }
 /* schmal: Veröffentlichen-Knopf behält Platz für die Zahl der Änderungen */
 @media (max-width: 860px) { .adm-top #btn-publish { width: auto; min-width: 36px; padding: 0 9px; gap: 6px; } }
 @media (max-width: 480px) { .adm-top .brand > div:not(.brand-mark) { display: none; } }
+/* Angebots-Host am Handy: Zurück-Knopf und sechs Aktionen füllen die Kopfzeile – das Logo läge sonst verdeckt darunter */
+/* Angebot am Handy mit Zurück-Knopf: Zurück-Knopf und sechs Aktionen füllen die Zeile – ohne Logo, sonst läge es unter
+   „Rückgängig“ (Durchsicht 03.11.2026) */
+@media (max-width: 480px) { body.adm:not(.bereich-verwaltung):not(.bereich-bestand):not(.bereich-import) .adm-top .brand:has(.stafl-zurueck:not([hidden])) .brand-logo { display: none; } }
 
 /* Rollen und Rechte (admin-rollen.js, Bilder: admin-rollen-vorschau.js): links die Rollen, rechts Rollenkopf, „Auf einen
    Blick“, je Modul eine Zeile mit Stufe und daneben die Rechte des gewählten Moduls mit Schaltern und Vorschau-Bildern */
@@ -1191,7 +1209,7 @@ body.ro .sale-tag { cursor: default; }
 .rl-kachel { display: flex; flex-direction: column; align-items: center; gap: 5px; min-height: 44px; padding: 10px 4px 8px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 .rl-kachel:hover { border-color: var(--muted); }
 .rl-kachel.on { border-color: var(--accent); background: var(--accent-soft); }
-.rl-kachel-n { font-size: 11.5px; font-weight: 500; line-height: 1.2; text-align: center; overflow-wrap: anywhere; hyphens: auto; }
+.rl-kachel-n { font-size: 11.5px; font-weight: 500; line-height: 1.2; text-align: center; overflow-wrap: normal; word-break: normal; hyphens: manual; }
 .rl-kachel-s { font-size: 10.5px; font-weight: 650; }
 /* Modulsymbol in Kachelfarbe (--f aus admin-rollen-vorschau.js) */
 .rl-ico { flex: none; width: 36px; height: 36px; box-sizing: border-box; border-radius: 10px; display: inline-grid; place-items: center; background: var(--f); color: #fff; }
@@ -1949,6 +1967,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     --aus: rgba(255, 255, 255, .08); --zeile: rgba(255, 255, 255, .04); --linie: rgba(255, 255, 255, .08);
     --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .16);
     --nav-akzent: #e08190; --punkt-ok: #5fd08f;
+    --primaer: linear-gradient(180deg, #ea98a5, #e08190); --primaer-text: #1a0b0e; --primaer-hover: linear-gradient(180deg, #f2b0ba, #e8919f);   /* dunkel: Rosa mit dunkler Schrift wie überall */
+    --primaer-schatten: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 18px rgba(0, 0, 0, .35);
     --blob-a: rgba(59, 85, 115, .2); --blob-b: rgba(154, 106, 36, .17); --blob-c: rgba(36, 90, 64, .14);
   }
 }
@@ -1964,6 +1984,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     --aus: rgba(255, 255, 255, .08); --zeile: rgba(255, 255, 255, .04); --linie: rgba(255, 255, 255, .08);
     --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .16);
     --nav-akzent: #e08190; --punkt-ok: #5fd08f;
+    --primaer: linear-gradient(180deg, #ea98a5, #e08190); --primaer-text: #1a0b0e; --primaer-hover: linear-gradient(180deg, #f2b0ba, #e8919f);   /* dunkel: Rosa mit dunkler Schrift wie überall */
+    --primaer-schatten: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 18px rgba(0, 0, 0, .35);
     --blob-a: rgba(59, 85, 115, .2); --blob-b: rgba(154, 106, 36, .17); --blob-c: rgba(36, 90, 64, .14);
   }
 }
@@ -2052,9 +2074,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .topbar .dash-back:hover { background: rgba(28, 26, 25, .12); }
   body.adm .topbar .btn:disabled { opacity: .45; }
   body.adm .btn.primary, body.adm .topbar .btn.primary {
-    background: var(--primaer); color: #fff; border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
+    background: var(--primaer); color: var(--primaer-text, #fff); border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
   }
-  body.adm .btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, #8f1c29, #6e1520); }
+  body.adm .btn.primary:hover:not(:disabled) { background: var(--primaer-hover, linear-gradient(180deg, #8f1c29, #6e1520)); }
   body.adm .adm-page .btn.primary, body.adm dialog .btn.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 3px 10px rgba(140, 29, 44, .22); }
   body.adm .topbar .btn.primary { padding: 0 20px; }
   body.adm .save-state { font-size: 14px; color: var(--muted); }
@@ -2068,6 +2090,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .btn.ghost:hover:not(:disabled) { background: var(--aus); border-color: transparent; }
   body.adm .btn.sm { border-radius: 999px; }
   body.adm .ibtn { border-radius: 10px; }
+  body.adm :is(.btn, .ibtn, .stafl-zurueck):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  body.adm :is(.in, .search input, .fld input, .fld select, .fld textarea, select):focus-visible { outline: 2px solid var(--accent-line, var(--accent)); outline-offset: 0; }
   body.adm .ibtn:hover { background: var(--aus); }
 
   /* Seitenleiste: Glaskarte mit 44 px hohen Einträgen */
@@ -2122,7 +2146,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   /* Suchfelder, Eingaben */
   body.adm .search input { height: 42px; border-radius: 14px; border: 1px solid var(--feld-rand); background: var(--feld); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .04); }
   body.adm .fld input, body.adm .fld select, body.adm .fld textarea, body.adm .sec-rows textarea, body.adm .ek-send textarea, body.adm .sec-inline input[type="number"],
-  body.adm .urtab select, body.adm .dg-export .fld select, body.adm .ord-filter select.in, body.adm .altrow input, body.adm .ezpos .ez-in-num {
+  body.adm .urtab select, body.adm .dg-export .fld select, body.adm .ord-filter select.in, body.adm .altrow input, body.adm .ezpos .ez-in-num,
+  body.adm .st-pop :is(input:not([type=checkbox]):not([type=radio]), select), body.adm .st-falle :is(input:not([type=checkbox]):not([type=radio]), select), body.adm #vk-sort {
     border-color: var(--feld-rand); background-color: var(--feld); border-radius: 12px;
   }
   body.adm .fld input:focus, body.adm .fld select:focus, body.adm .fld textarea:focus { background-color: var(--surface); }
@@ -2181,12 +2206,12 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .btn.wide { height: 44px; }
 }
 @media screen and (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+  :root:not([data-theme="light"]) body.adm .topbar .btn:not(.primary):hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
   :root:not([data-theme="light"]) body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
   :root:not([data-theme="light"]) body.adm :is(.nostock, .mhd-card .np-badge, .ob-o[aria-selected="true"] .ob-z) { color: #1c1a19; }   /* helle Füllung im Dunkeln: weiße Schrift < 3:1 */
 }
 @media screen {
-  :root[data-theme="dark"] body.adm .topbar .btn:hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
+  :root[data-theme="dark"] body.adm .topbar .btn:not(.primary):hover:not(:disabled) { background: rgba(255, 255, 255, .14); }
   :root[data-theme="dark"] body.adm .toast { background: rgba(245, 241, 238, .92); color: #1c1a19; }
   :root[data-theme="dark"] body.adm :is(.nostock, .mhd-card .np-badge, .ob-o[aria-selected="true"] .ob-z) { color: #1c1a19; }
 }

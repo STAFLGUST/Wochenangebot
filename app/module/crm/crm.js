@@ -283,7 +283,7 @@
           ${[['alle', 'Alle Kunden'], ['heute', 'Heute anrufen'], ['offen', 'Anruf offen (mit Rhythmus)'], ['ueber', 'Wiedervorlage überfällig'], ['wv-heute', 'Wiedervorlage heute'], ['kuenftig', 'Wiedervorlage künftig']]
             .map(([v, l]) => `<option value="${v}"${f.termin === v ? ' selected' : ''}>${l}</option>`).join('')}
         </select>
-        <details class="crm-mehrfach" id="wv-wann"${offenDetails ? ' open' : ''}><summary>${f.wann.length ? `Wann: ${f.wann.length} gewählt` : 'Wann: alle'}</summary>
+        <details class="crm-mehrfach" id="wv-wann" data-menue${offenDetails ? ' open' : ''}><summary>${f.wann.length ? `Wann: ${f.wann.length} gewählt` : 'Wann: alle'}</summary>
           <div class="optionen"><button type="button" class="btn" id="wv-wann-alle">Alle Wann-Werte zeigen</button>
           ${alleWann.map((w) => `<label><input type="checkbox" data-wann value="${esc(w)}"${f.wann.includes(w) ? ' checked' : ''}><span>${w === '__ohne__' ? '— nicht festgelegt —' : esc(w)}</span></label>`).join('')}</div></details>
         <select id="wv-vertreter" aria-label="Vertreter">${vOpts(f.vertreter)}</select>
@@ -669,7 +669,7 @@
           ${art.length ? art.map(([a, n]) => `<div class="crm-balken"><span>${esc(a)}</span><div class="spur"><i style="width:${Math.max(3, n / artMax * 100)}%"></i></div><b>${n}</b></div>`).join('') : '<p class="crm-leer">Noch keine Aktivitäten protokolliert.</p>'}
         </section>
         <section class="crm-karte crm-glas"><h3>Wirtschaftliche Auswertung</h3>
-          <p class="crm-klein">Umsatz und kg je Kunde, DB je Auftrag, letzter Kauf und Wiederkaufrate folgen, sobald Auftragsdaten aus WinAB angebunden sind. Bis dahin werden keine Umsätze geschätzt – nur das im Kundenblatt eingetragene Potenzial zählt.</p>
+          <p class="crm-klein">Umsatz, Menge und letzter Kauf je Kunde stehen im Cockpit und in der Übersicht des Kunden (aus der Umsatzstatistik, je nach Recht). Hier zählt nur das im Kundenblatt eingetragene Potenzial – Umsätze werden nicht geschätzt.</p>
         </section>
       </div>`;
   }

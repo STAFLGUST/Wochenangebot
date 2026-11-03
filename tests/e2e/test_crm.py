@@ -329,6 +329,13 @@ with sync_playwright() as p:
     pg.wait_for_function("document.querySelectorAll('#wv-tabelle tbody tr').length === 1")
     check('Filter „Wann“ (Mehrfachauswahl)', 'Musterfleischerei Nord' in pg.inner_text('#wv-tabelle'))
     pg.click('#wv-wann-alle'); pg.click('#wv-wann summary')
+    # „Wann“ bedient sich wie jedes Menü: Escape schließt (Fokus zurück), ein Klick daneben ebenso
+    pg.click('#wv-wann summary'); pg.wait_for_selector('#wv-wann[open]')
+    pg.keyboard.press('Escape'); pg.wait_for_function("!document.querySelector('#wv-wann').open")
+    check('Filter „Wann“: Escape schließt die Auswahl, Fokus auf dem Titel', pg.evaluate("document.activeElement.matches('#wv-wann summary')"))
+    pg.click('#wv-wann summary'); pg.wait_for_selector('#wv-wann[open]')
+    pg.click('.crm-kopf .crm-modul'); pg.wait_for_function("!document.querySelector('#wv-wann').open")
+    check('Filter „Wann“: Klick daneben schließt die Auswahl', True)
     pg.select_option('#wv-termin', 'ueber'); pg.wait_for_function("document.querySelector('#wv-tabelle tbody').textContent.includes('Keine Kunden')")
     check('Filter „Wiedervorlage überfällig“ (keine überfälligen)', True)
     pg.select_option('#wv-termin', 'alle')

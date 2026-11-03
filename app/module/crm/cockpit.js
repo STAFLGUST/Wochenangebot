@@ -71,7 +71,7 @@
   /* ---------- Bausteine ---------- */
   function kachel(titel, wert, sub = '', x = null, cls = '') {
     const c = K.c;
-    return `<div class="crm-wert crm-glas ${cls}"><span>${c.esc(titel)}</span><b>${c.esc(wert)}</b>${da(x) || sub
+    return `<div class="crm-wert crm-glas ${cls}"><span>${c.esc(titel)}</span><b title="${c.esc(wert)}">${c.esc(wert)}</b>${da(x) || sub
       ? `<small>${da(x) ? `<em class="crm-ck-d ${richtung(x)}">${c.esc(prozent(x))}</em> ` : ''}${c.esc(sub)}</small>` : ''}</div>`;
   }
   const pille = (art) => ({ wv: '<span class="crm-ck-art wv">Wiedervorlage</span>', anruf: '<span class="crm-ck-art anruf">Anruf</span>',

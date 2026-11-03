@@ -57,7 +57,7 @@
 </div>
 
 <!-- Kunden-Pop-up: Übersicht (cockpit.js), Kundenblatt, Verlauf -->
-<dialog class="crm-dialog breit crm-ku" id="dlg-kunde" aria-labelledby="kunde-titel">
+<dialog class="crm-dialog breit crm-ku" id="dlg-kunde" aria-labelledby="kunde-titel" data-ohne-warnung>
   <div class="crm-dkopf">
     <div class="crm-dkopf-text"><span class="crm-ck-kicker" id="kunde-kicker"></span><h2 id="kunde-titel">Kunde</h2><p id="kunde-sub"></p></div>
     <div class="crm-dkopf-aktionen" id="kunde-aktionen"></div>
@@ -70,7 +70,7 @@
 <!-- Interessent anlegen / ändern -->
 <dialog class="crm-dialog" id="dlg-interessent" aria-labelledby="interessent-titel">
   <form method="dialog" id="interessent-form" novalidate>
-    <h2 id="interessent-titel">Neuer Interessent</h2>
+    <div class="crm-fkopf"><h2 id="interessent-titel">Neuer Interessent</h2><button type="button" class="crm-rund klein" data-schliessen aria-label="Schließen"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
     <p class="crm-klein">Interessenten ohne Kundennummer pflegt das CRM selbst. Wird daraus ein Kunde, legt die Verwaltung ihn in den Kundenstammdaten an.</p>
     <label>Firma<input type="text" id="int-firma" maxlength="120" required></label>
     <label>Ansprechpartner<input type="text" id="int-ansprechpartner" maxlength="120"></label>

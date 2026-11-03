@@ -101,7 +101,6 @@
       cfg.uebernehmen(artikel.length ? { titel, ...(text ? { text } : {}), artikel } : null);
     }
   });
-  dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
 
   W.werbung = { oeffnen, TITEL };
 })();

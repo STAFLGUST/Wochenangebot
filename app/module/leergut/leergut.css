@@ -40,7 +40,7 @@ body.lg :focus-visible{outline:none;box-shadow:var(--lg-focus)}
 .lg-aktionen{margin-left:auto;display:flex;align-items:center;gap:8px}
 .lg-rund{width:40px;height:40px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--lg-chip);color:var(--lg-text);cursor:pointer}
 .lg-user{display:flex;align-items:center;gap:8px;padding:0 12px 0 4px;height:40px;border-radius:99px;background:var(--lg-chip);font-size:13px}
-.lg-initialen{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--lg-accent);color:#fff;font-weight:700}
+.lg-initialen{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#8c1d2c;color:#fff;font-weight:700}
 .lg-user-name{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Leiste mit Reitern und Schnellaktionen */
@@ -157,6 +157,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-mengentabelle td{padding:6px 8px}
 .lg-mengentabelle input.lg-eingabe{width:100%;max-width:130px;text-align:right;font-variant-numeric:tabular-nums}
 .lg-mengentabelle td.lg-zahl input.lg-eingabe{margin-left:auto;display:block}
+.lg-mengentabelle td.lg-voll input.lg-eingabe[data-f="name"]{max-width:none;min-width:200px;text-align:left}   /* Positionsname (Inventur) lesbar, Text linksbündig */
 .lg-mengenreihe{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .lg-mengenreihe label,.lg-formraster label,.lg-dialog form>label,.lg-schmal{display:flex;flex-direction:column;gap:5px;color:var(--lg-muted);font-size:12px;font-weight:650}
 .lg-mengenreihe input{text-align:right}
@@ -185,6 +186,8 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-meldung:empty{display:none}
 .lg-meldung.ok{color:var(--lg-green)}
 .lg-knopfreihe{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+/* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
+.lg-dialog form>.lg-knopfreihe:last-child{position:sticky;bottom:0;z-index:2;margin:0 -18px -18px;padding:8px 18px 18px;background:var(--lg-card)}
 .lg-knopfreihe .lg-check{margin-right:auto}
 
 /* Import */
@@ -232,6 +235,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-karten td:empty{display:none}
   .lg-karten tfoot tr,.lg-karten tr.lg-summe{background:var(--lg-total-bg);border-radius:10px}
   .lg-mengentabelle td.lg-zahl input.lg-eingabe{margin-left:0;max-width:none}
+  .lg-mengentabelle td.lg-voll input.lg-eingabe[data-f="name"]{min-width:0}
 }
 @media(max-width:560px){
   .lg-seite{padding:12px 12px 28px;gap:14px}
@@ -259,6 +263,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .lg-frist .lg-mengen{grid-column:1/-1}
   .lg-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:22px 22px 0 0}
   .lg-dialog form{padding:15px}
+  .lg-dialog form>.lg-knopfreihe:last-child{margin:0 -15px -15px;padding:8px 15px calc(15px + env(safe-area-inset-bottom))}
   .lg-knopfreihe .btn{min-height:40px}
 }
 @media(max-width:480px){body.lg .lg-kopf .brand-logo{width:30px;height:28px;object-fit:cover;object-position:left center}.lg-modul .i{display:none}}
