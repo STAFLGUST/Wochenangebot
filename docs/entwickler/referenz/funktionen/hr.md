@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 230 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 232 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -95,6 +95,8 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026)._
 - `hr_planung_person(p, eintraege, jahr, pe)` – Stand einer Person: Anspruch, Ziel (Anteil des Anspruchs, auf halbe Tage aufgerundet), geplant = beantragt + genehmigt
 - `hr_planung_ich(ich, eintraege, heute)` – Hinweis auf der Urlaubsseite des Mitarbeiters: nur in der Planungsphase (ab Beginn, bis die Planung abgeschlossen ist)
 - `hr_planung_schnitt(a, b)` – Überschneidung zweier Zeiträume
+- `hr_vertretung_luecken(e, p, vp, eintraege, nurGenehmigt)` – Wann ist die Vertretung im Zeitraum eines Antrags nicht da? Arbeitstage des Antragstellers, an denen die Vertretung abwesend ist (jede Abwesenheit außer …
+- `hr_daten_text(daten)` – Daten als kurze Zeiträume (aufeinanderfolgende Kalendertage zusammengefasst, höchstens vier, dann „…“)
 - `hr_planung_konflikte(e, p, idx, eintraege, sperren, pe, verfuegbar)` – Konflikte eines Urlaubsantrags in der Jahresplanung.
 - `hr_planung(jahr, me)` – Zusammenfassung eines Jahres für die Personalstelle und „Urlaub genehmigen“: Mitarbeiter im Urlaubsplan mit Stand, alle Urlaubsanträge des Jahres (beantragt, …
 - `hr_planung_freigeben(jahr, ids, me)` – Konfliktfreie Anträge gesammelt genehmigen (unter der Sperre hr-abwesenheiten): jeder Antrag wird neu geprüft; eigene, bereits entschiedene und solche mit …
@@ -106,7 +108,7 @@ _Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026)._
 - `hr_planung_uebersicht_inhalt(p, eintraege, jahr, idx)` – Jahresübersicht nach dem Abschluss der Planung
 - `hr_planung_empfaenger(jahr, nurOffen, person)` – Empfänger: Mitarbeiter im Urlaubsplan mit E-Mail-Adresse; $nurOffen: nur wer das Ziel noch nicht erreicht hat; $person: nur diese Person.
 - `hr_planung_senden(art, jahr, me, person)` – Versand: art „planung“ (Erinnerung) oder „jahresuebersicht“
-- `hr_planung_abschluss_setzen(jahr, zu, me)` – Abschluss setzen oder aufheben (unter der Sperre hr-einstellungen)
+- `hr_planung_abschluss_setzen(jahr, zu, me)` – Abschluss setzen oder aufheben – geprüft und geschrieben unter der Sperre hr-einstellungen (zwei gleichzeitige Klicks schließen nur einmal ab, die …
 
 ## `app/api/module/hr/urlaub.php`
 
@@ -321,7 +323,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `zeigeExport()`
 
-**Jahresplanung (Personalstelle oder „Urlaub genehmigen“)**
+**Jahresplanung (nur Personalstelle; gesammelt genehmigen zusätzlich mit „Urlaub genehmigen“)**
 
 - `ladePlanung()`
 - `zeigePlanung()`

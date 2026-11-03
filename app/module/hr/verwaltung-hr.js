@@ -200,7 +200,7 @@
   function planungFelder() {
     const p = Object.assign({ start: '10-01', stichtag: '12-01', prozent: 90, vertretungPflicht: true }, daten.planung || {});
     return `<h3 class="sec-h">Jahresplanung</h3><p class="hint">Jeder Mitarbeiter plant bis zum Stichtag mindestens diesen Anteil seines Urlaubsanspruchs für das nächste Jahr mit Urlaubsanträgen vor.
-        Ab „Hinweis ab“ zeigt die Urlaubsverwaltung jedem seinen Stand; Prüfen, Erinnern und Abschließen in HR → Jahresplanung. Gespeichert werden nur Tag und Monat.</p>
+        Ab „Hinweis ab“ zeigt die Urlaubsverwaltung jedem seinen Stand; Prüfen, Erinnern und Abschließen in HR → Jahresplanung (nur Personalstelle). Gespeichert werden nur Tag und Monat – beide liegen immer im Jahr vor dem geplanten Jahr (für ${JAHR + 1}: ${esc(tagMonat(p.start))}${JAHR} bis ${esc(tagMonat(p.stichtag))}${JAHR}).</p>
       <div class="hr-verfall-felder hr-plan-felder">
         <label class="fld hr-verfall"><span>Hinweis ab</span><input type="date" id="hr-plan-start" value="${esc(`${JAHR}-${p.start}`)}" required></label>
         <label class="fld hr-verfall"><span>Stichtag</span><input type="date" id="hr-plan-stichtag" value="${esc(`${JAHR}-${p.stichtag}`)}" required></label>

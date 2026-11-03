@@ -8,7 +8,7 @@
    Urlaub genehmigen (Recht hr.genehmigen): offene Anträge genehmigen/ablehnen – nie den eigenen.
    Jahresplanung (03.11.2026): Mitarbeiter sehen in der Planungsphase den Stand ihrer Vorplanung des nächsten Jahres
    (Ziel: Anteil des Anspruchs bis zum Stichtag), Vertretung ist bei Urlaubsanträgen Pflicht (abschaltbar). Reiter
-   „Jahresplanung“ (Personalstelle oder „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste mit Konflikten, Anträge
+   „Jahresplanung“ (nur Personalstelle; gesammelt genehmigen mit „Urlaub genehmigen“): Stand je Mitarbeiter, Zeitleiste mit Konflikten, Anträge
    mit Konflikten genehmigen/ablehnen, konfliktfreie gesammelt genehmigen, Erinnerung, Abschluss mit Jahresübersicht.
    Personalstelle (Recht hr.verwalten): Korrekturmeldungen erledigen (mit Antwort, nie die eigene), Abwesenheiten eintragen (U, K, G, freier Tag; nicht für sich selbst),
    Mitarbeiter mit Anspruch und Übertrag, Excel-Export für den Steuerberater, Übernahme der bisherigen Excel-Planung,
@@ -107,7 +107,7 @@
     for (const el of $$('[data-verwalten]')) el.hidden = !r.data.verwalten;
     for (const el of $$('[data-antraege]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
     for (const el of $$('[data-uebersicht]')) el.hidden = !r.data.uebersicht;
-    for (const el of $$('[data-planung]')) el.hidden = !(r.data.verwalten || r.data.genehmigen);
+    for (const el of $$('[data-planung]')) el.hidden = !r.data.verwalten;   // Jahresplanung nur für die Personalstelle (Datenschutz)
     const offen = $('#hr-offen'), n = (r.data.offen || 0) + (r.data.korrekturenOffen || 0);   // Anträge und Korrekturmeldungen (Personalstelle)
     offen.hidden = !n; offen.textContent = n || '';
     zeigeMein();
@@ -878,14 +878,14 @@
     } catch (err) { meldung(m, err.message || String(err)); }
   });
 
-  /* ---------- Jahresplanung (Personalstelle oder „Urlaub genehmigen“) ----------
+  /* ---------- Jahresplanung (nur Personalstelle; gesammelt genehmigen zusätzlich mit „Urlaub genehmigen“) ----------
      Server: hr_planung (Zusammenfassung), hr_entscheiden (einzeln), hr_planung_freigeben (konfliktfreie gesammelt),
      hr_planung_erinnern, hr_planung_abschluss, hr_planung_uebersicht_senden. Knöpfe nur als Anzeige – Rechte prüft der Server. */
   const KONFLIKT_ART = { vertretung: 'Vertretung', abteilung: 'Abteilung', sperre: 'Urlaubssperre', rest: 'Resturlaub' };
   async function ladePlanung() {
     const r = await api('hr_planung', null, S.pjahr ? '&jahr=' + S.pjahr : '');
     if (r.status !== 200) {
-      S.jp = null;
+      S.jp = null; S.pjahr = null;   // nach einem Fehler wieder mit dem Planungsjahr des Servers beginnen
       $('#jp-titel').textContent = 'Jahresplanung';
       for (const id of ['#jp-info', '#jp-zahlen', '#jp-aktionen', '#jp-legende', '#jp-zeitleiste', '#jp-filter', '#jp-antraege']) $(id).innerHTML = '';
       meldung($('#jp-meldung'), fehlerText(r, 'Jahresplanung nicht verfügbar'));
@@ -894,7 +894,7 @@
     S.jp = r.data; S.pjahr = r.data.jahr;
     zeigePlanung();
   }
-  const jpFilter = { alle: () => true, konflikt: (a) => a.konflikte.length > 0, frei: (a) => a.status === 'beantragt' && !a.konflikte.length, genehmigt: (a) => a.status === 'genehmigt' };
+  const jpFilter = { alle: () => true, konflikt: (a) => a.konflikte.length > 0, frei: (a) => a.frei, genehmigt: (a) => a.status === 'genehmigt' };
   function zeigePlanung() {
     const d = S.jp, z = d.zahlen, j = d.jahr;
     $('#jp-titel').textContent = `Jahresplanung ${j}`;
@@ -1027,7 +1027,8 @@
       meldung(m, `${r.data.genehmigt.length} ${r.data.genehmigt.length === 1 ? 'Antrag' : 'Anträge'} genehmigt${weg.length ? `, ${weg.length} übersprungen (${[...new Set(weg.map((x) => x.grund))].join(', ')})` : ''}.`, weg.length ? 'warn' : 'ok');
       ladeAntraege();
     } else if (was === 'abschliessen') {
-      if (!(await frage(`Planung ${j} abschließen?`, `Jeder Mitarbeiter mit E-Mail-Adresse bekommt seine Jahresübersicht ${j} (Urlaubszeiträume mit Vertretung, Konto, Jahr auf einen Blick). Der Planungshinweis in der Urlaubsverwaltung verschwindet. Offene Anträge bleiben offen.`, 'Abschließen und senden'))) return;
+      const testHinweis = d.testmodus ? ' Achtung, Testmodus ist an: die E-Mails gehen nur an die Testadresse – der Abschluss gilt aber für alle Mitarbeiter.' : '';
+      if (!(await frage(`Planung ${j} abschließen?`, `Jeder Mitarbeiter mit E-Mail-Adresse bekommt seine Jahresübersicht ${j} (Urlaubszeiträume mit Vertretung, Konto, Jahr auf einen Blick). Der Planungshinweis in der Urlaubsverwaltung verschwindet. Offene Anträge bleiben offen.${testHinweis}`, 'Abschließen und senden'))) return;
       knopf.disabled = true;
       r = await api('hr_planung_abschluss', { jahr: j, abgeschlossen: true });
       if (r.status !== 200) { knopf.disabled = false; meldung(m, fehlerText(r, 'Abschließen fehlgeschlagen')); return; }

@@ -4,7 +4,8 @@ declare(strict_types=1);
    Jeder Mitarbeiter plant bis zum Stichtag (Standard 01.12.) mindestens einen Anteil (Standard 90 %) seines Urlaubsanspruchs
    des nächsten Jahres vor – mit normalen Urlaubsanträgen und einer Vertretung je Zeitraum. Ab dem Planungsbeginn (Standard
    01.10.) zeigt die Urlaubsseite den Stand; die Personalstelle erinnert per E-Mail an alle, die das Ziel noch nicht erreicht
-   haben. Die Ansicht „Jahresplanung“ (Personalstelle und „Urlaub genehmigen“) fasst alles zusammen: Stand je Mitarbeiter,
+   haben. Die Ansicht „Jahresplanung“ (nur Personalstelle – sie enthält alle Urlaubszeiträume; zusammen mit dem Kalender
+   ließen sich sonst Krankheitstage ableiten, unabhängige Prüfung 03.11.2026) fasst alles zusammen: Stand je Mitarbeiter,
    Zeitleiste, Konflikte je Antrag (Vertretung fehlt oder ist selbst abwesend, Überschneidung in der Abteilung, Urlaubssperre,
    über dem Resturlaub). Konfliktfreie Anträge lassen sich gesammelt genehmigen (hr.genehmigen, nie die eigenen). Nach dem
    Abschluss bekommt jeder Mitarbeiter seine Jahresübersicht per E-Mail.
@@ -72,12 +73,38 @@ function hr_planung_ich(?array $ich, array $eintraege, ?string $heute = null): ?
     if (!$ich || !$ich['aktiv']) return null;
     $heute = $heute ?? hr_heute();
     $pe = hr_planung_einst(); $j = hr_planung_jahr($heute); $dt = hr_planung_daten($pe, $j);
-    if ($heute < $dt['start'] || isset($pe['abschluss'][(string)$j])) return null;
+    if ($heute < $dt['start'] || isset($pe['abschluss'][(string)$j]) || hr_anspruch($ich, $j) <= 0) return null;   // ohne Anspruch nichts zu planen
     return ['jahr' => $j, 'stichtag' => $dt['stichtag'], 'prozent' => $pe['prozent'], 'vorbei' => $heute > $dt['stichtag']] + hr_planung_person($ich, $eintraege, $j, $pe);
 }
 
 /* Überschneidung zweier Zeiträume */
 function hr_planung_schnitt(array $a, array $b): bool { return $a['von'] <= $b['bis'] && $b['von'] <= $a['bis']; }
+
+/* Wann ist die Vertretung im Zeitraum eines Antrags nicht da? Arbeitstage des Antragstellers, an denen die Vertretung abwesend
+   ist (jede Abwesenheit außer freien Tagen) oder nicht arbeitet (eigene Arbeitstage, freie Tage, z. B. Teilzeit).
+   $nurGenehmigt: nur genehmigte Abwesenheiten – für den Hinweis an den Mitarbeiter (wie im Kalender, nie offene Anträge anderer).
+   Rückgabe ['abwesend' => [Daten], 'frei' => [Daten]] */
+function hr_vertretung_luecken(array $e, array $p, array $vp, array $eintraege, bool $nurGenehmigt = false): array
+{
+    $tage = hr_tage($p, $e['von'], $e['bis'], null, null, hr_freie_tage($eintraege, $p['id']));
+    $arbeit = array_flip(hr_tage($vp, $e['von'], $e['bis'], null, null, hr_freie_tage($eintraege, $vp['id'])));
+    $weg = [];
+    foreach ($eintraege as $o) {
+        if ($o['person'] !== $vp['id'] || $o['art'] === 'X' || !hr_planung_schnitt($o, $e)) continue;
+        if ($nurGenehmigt ? $o['status'] !== 'genehmigt' : !in_array($o['status'], HR_AKTIV, true)) continue;
+        for ($d = max($o['von'], $e['von']), $ende = min($o['bis'], $e['bis']); $d <= $ende; $d = hr_plus($d, 1)) $weg[$d] = true;
+    }
+    $ab = []; $fr = [];
+    foreach ($tage as $d) { if (isset($weg[$d])) $ab[] = $d; elseif (!isset($arbeit[$d])) $fr[] = $d; }
+    return ['abwesend' => $ab, 'frei' => $fr];
+}
+/* Daten als kurze Zeiträume (aufeinanderfolgende Kalendertage zusammengefasst, höchstens vier, dann „…“) */
+function hr_daten_text(array $daten): string
+{
+    $r = [];
+    foreach ($daten as $d) { $n = count($r); if ($n && hr_plus($r[$n - 1][1], 1) === $d) $r[$n - 1][1] = $d; else $r[] = [$d, $d]; }
+    return implode(', ', array_map(function ($x) { return hr_zeitraum_text($x[0], $x[1]); }, array_slice($r, 0, 4))) . (count($r) > 4 ? ', …' : '');
+}
 
 /* Konflikte eines Urlaubsantrags in der Jahresplanung. Nur Namen und Zeiträume, nie Gründe anderer Abwesenheiten.
    Arten: vertretung (fehlt, nicht im Urlaubsplan, selbst abwesend), abteilung (gleichzeitig weg), sperre, rest */
@@ -92,9 +119,10 @@ function hr_planung_konflikte(array $e, array $p, array $idx, array $eintraege, 
     } else {
         $vp = $idx[$v] ?? null;
         if (!$vp || !$vp['aktiv']) $k[] = ['art' => 'vertretung', 'text' => 'Vertretung nicht mehr im Urlaubsplan'];
-        else foreach ($eintraege as $o) {
-            if ($o['person'] !== $v || $o['art'] === 'X' || !in_array($o['status'], HR_AKTIV, true) || !hr_planung_schnitt($o, $e)) continue;
-            $k[] = ['art' => 'vertretung', 'text' => 'Vertretung ' . hr_name($vp) . ' ist selbst abwesend (' . $schnitt($o) . ')'];
+        else {
+            $l = hr_vertretung_luecken($e, $p, $vp, $eintraege);
+            if ($l['abwesend']) $k[] = ['art' => 'vertretung', 'text' => 'Vertretung ' . hr_name($vp) . ' ist selbst abwesend (' . hr_daten_text($l['abwesend']) . ')'];
+            if ($l['frei']) $k[] = ['art' => 'vertretung', 'text' => 'Vertretung ' . hr_name($vp) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ')'];
         }
     }
     if (trim((string)$p['abteilung']) !== '') foreach ($eintraege as $o) {
@@ -129,7 +157,7 @@ function hr_planung(int $jahr, array $me): array
     foreach ($eintraege as $e) {
         if ($e['art'] !== 'U' || !in_array($e['status'], HR_AKTIV, true) || $e['bis'] < $jv || $e['von'] > $jb || !isset($personen[$e['person']])) continue;
         $p = $idx[$e['person']];
-        $kon = hr_planung_konflikte($e, $p, $idx, $eintraege, $sperren, $pe, $verf[$p['id']]);
+        $kon = hr_planung_konflikte($e, $p, $idx, $eintraege, $einst['sperren'], $pe, $verf[$p['id']]);
         $eigen = hr_eigen($personal, $me, $e);
         if ($kon) $personen[$p['id']]['konflikte']++;
         $vp = ($e['vertretung'] ?? null) ? ($idx[$e['vertretung']] ?? null) : null;
@@ -142,7 +170,9 @@ function hr_planung(int $jahr, array $me): array
     $dt = hr_planung_daten($pe, $jahr);
     $pl = array_values($personen);
     $abschluss = $pe['abschluss'][(string)$jahr] ?? null;
+    $mail = hr_mail_einst();
     return ['jahr' => $jahr, 'heute' => hr_heute(), 'start' => $dt['start'], 'stichtag' => $dt['stichtag'], 'prozent' => $pe['prozent'],
+            'testmodus' => $mail['test']['an'], 'postfach' => (bool)mail_cfg_intern(),
             'vertretungPflicht' => $pe['vertretungPflicht'], 'abschluss' => $abschluss ? ['t' => $abschluss['t'] ?? null, 'by' => (string)($abschluss['by'] ?? '')] : null,
             'personen' => $pl, 'antraege' => $antraege, 'sperren' => $sperren,
             // „Ziel erreicht x von y“ zählt nur Mitarbeiter mit Anspruch im Jahr (ohne Anspruch gibt es nichts zu planen)
@@ -170,7 +200,7 @@ function hr_planung_freigeben(int $jahr, array $ids, array $me): array
             $p = $idx[$e['person']] ?? null;
             if ($e['art'] !== 'U' || $e['status'] !== 'beantragt' || $e['bis'] < "$jahr-01-01" || $e['von'] > "$jahr-12-31" || !$p || !$p['aktiv']) { $weg[] = ['id' => $e['id'], 'grund' => 'nicht offen']; continue; }
             if (hr_eigen($personal, $me, $e)) { $weg[] = ['id' => $e['id'], 'grund' => 'eigener Antrag']; continue; }
-            $verf = (float)hr_konto($p, $abw['eintraege'], (int)substr($e['von'], 0, 4))['verfuegbar'];
+            $verf = (float)hr_konto($p, $abw['eintraege'], $jahr)['verfuegbar'];   // wie in der Ansicht (hr_planung): Konto des Planungsjahres
             if (hr_planung_konflikte($e, $p, $idx, $abw['eintraege'], $sperren, $pe, $verf)) { $weg[] = ['id' => $e['id'], 'grund' => 'Konflikt']; continue; }
             $abw['eintraege'][$i]['status'] = 'genehmigt';
             $abw['eintraege'][$i]['entscheidung'] = ['t' => now(), 'by' => $me['name'], 'grund' => 'Jahresplanung ' . $jahr];
@@ -207,9 +237,11 @@ function hr_planung_erinnerung_inhalt(array $p, array $eintraege, int $jahr, arr
     $st = hr_planung_person($p, $eintraege, $jahr, $pe);
     $dt = hr_planung_daten($pe, $jahr);
     $vor = hr_mail_vorname($p);
-    $betreff = "Bitte planen Sie Ihren Urlaub $jahr bis zum " . hr_de($dt['stichtag']);
-    $satz = "bitte planen Sie bis zum " . hr_de($dt['stichtag']) . " mindestens {$pe['prozent']} % Ihres Urlaubs $jahr – das sind " . hr_tage_text($st['ziel'])
-        . ' von ' . hr_tage_text($st['anspruch']) . '.';
+    $betreff = hr_heute() > $dt['stichtag'] ? "Bitte planen Sie Ihren Urlaub $jahr jetzt" : "Bitte planen Sie Ihren Urlaub $jahr bis zum " . hr_de($dt['stichtag']);
+    $vorbei = hr_heute() > $dt['stichtag'];
+    $satz = ($vorbei ? 'der Stichtag ' . hr_de($dt['stichtag']) . " ist vorbei – bitte planen Sie jetzt mindestens {$pe['prozent']} % Ihres Urlaubs $jahr"
+                     : 'bitte planen Sie bis zum ' . hr_de($dt['stichtag']) . " mindestens {$pe['prozent']} % Ihres Urlaubs $jahr")
+        . ' – das sind ' . hr_tage_text($st['ziel']) . ' von ' . hr_tage_text($st['anspruch']) . '.';
     $box = 'Bisher geplant: ' . hr_tage_text($st['geplant']) . ' – es fehlen noch ' . hr_tage_text($st['fehlt']) . '.';
     $wie = 'Stellen Sie dazu im Urlaubsportal Urlaubsanträge für ' . $jahr . ($pe['vertretungPflicht'] ? ' und wählen Sie für jeden Zeitraum eine Vertretung aus' : '')
         . '. Die Personalstelle prüft die Planung und gibt sie frei.';
@@ -255,7 +287,7 @@ function hr_planung_empfaenger(int $jahr, bool $nurOffen, ?string $person = null
     foreach (users_load() as $u) $adr[(string)$u['id']] = hr_mail_adresse($u['email'] ?? '');
     $mit = []; $ohne = 0;
     foreach (hr_personal()['personen'] as $p) {
-        if (!$p['aktiv'] || ($person !== null && $p['id'] !== $person)) continue;
+        if (!$p['aktiv'] || ($person !== null && $p['id'] !== $person) || hr_anspruch($p, $jahr) <= 0) continue;   // ohne Anspruch keine Planung
         if ($nurOffen && hr_planung_person($p, $abw, $jahr, $pe)['erreicht']) continue;
         $a = $p['nutzer'] !== null ? ($adr[$p['nutzer']] ?? '') : '';
         if ($a === '') $ohne++; else $mit[] = [$p, $a];
@@ -277,18 +309,21 @@ function hr_planung_senden(string $art, int $jahr, array $me, ?string $person = 
     return hr_mail_versenden($jobs, $art, 'manuell', $me, ['jahr' => $jahr, 'ohneAdresse' => $ohne, 'test' => $m['test']['an']]);
 }
 
-/* Abschluss setzen oder aufheben (unter der Sperre hr-einstellungen) */
-function hr_planung_abschluss_setzen(int $jahr, bool $zu, array $me): void
+/* Abschluss setzen oder aufheben – geprüft und geschrieben unter der Sperre hr-einstellungen (zwei gleichzeitige Klicks
+   schließen nur einmal ab, die Jahresübersicht geht nur einmal). Rückgabe: false, wenn der Zustand schon so war. */
+function hr_planung_abschluss_setzen(int $jahr, bool $zu, array $me): bool
 {
-    with_lock('hr-einstellungen', function () use ($jahr, $zu, $me) {
+    return with_lock('hr-einstellungen', function () use ($jahr, $zu, $me) {
         $d = store_read('hr-einstellungen') ?? [];
         $pl = is_array($d['planung'] ?? null) ? $d['planung'] : [];
         $ab = is_array($pl['abschluss'] ?? null) ? $pl['abschluss'] : [];
+        if (isset($ab[(string)$jahr]) === $zu) return false;
         if ($zu) $ab[(string)$jahr] = ['t' => now(), 'by' => (string)$me['name'], 'byId' => (string)$me['id']];
         else unset($ab[(string)$jahr]);
         $pl['abschluss'] = (object)$ab;
         $d['planung'] = $pl;
         $d['rev'] = (int)($d['rev'] ?? 0) + 1;
         store_write('hr-einstellungen', $d);
+        return true;
     });
 }

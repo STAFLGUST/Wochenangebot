@@ -141,12 +141,11 @@ switch ($action) {
             // Hinweise (der Antrag gilt trotzdem): über dem Resturlaub; Vertretung im Zeitraum selbst abwesend (ohne Grund)
             $hinweise = [];
             if ($e['art'] === 'U' && $konto['verfuegbar'] < 0) $hinweise[] = 'Der Antrag übersteigt Ihren Resturlaub um ' . (-$konto['verfuegbar']) . ' Tage – die Personalstelle entscheidet.';
-            if ($e['vertretung']) {
-                $idx_ = hr_personen_index(hr_personal());
-                foreach (hr_abwesenheiten()['eintraege'] as $o) if ($o['person'] === $e['vertretung'] && $o['art'] !== 'X' && in_array($o['status'], HR_AKTIV, true) && hr_planung_schnitt($o, $e)) {
-                    $hinweise[] = 'Ihre Vertretung ' . hr_name($idx_[$e['vertretung']]) . ' ist in dieser Zeit selbst abwesend (' . hr_zeitraum_text(max($o['von'], $e['von']), min($o['bis'], $e['bis'])) . ') – bitte mit der Personalstelle klären.';
-                    break;
-                }
+            // Vertretung: nur genehmigte Abwesenheiten (wie im Kalender – nie offene Anträge oder Gründe anderer) und ihre Arbeitstage
+            if ($e['vertretung'] && ($vp_ = hr_personen_index(hr_personal())[$e['vertretung']] ?? null)) {
+                $l = hr_vertretung_luecken($e, $ich, $vp_, hr_abwesenheiten()['eintraege'], true);
+                if ($l['abwesend']) $hinweise[] = 'Ihre Vertretung ' . hr_name($vp_) . ' ist in dieser Zeit selbst abwesend (' . hr_daten_text($l['abwesend']) . ') – bitte mit der Personalstelle klären.';
+                if ($l['frei']) $hinweise[] = 'Ihre Vertretung ' . hr_name($vp_) . ' arbeitet an diesen Tagen nicht (' . hr_daten_text($l['frei']) . ') – bitte mit der Personalstelle klären.';
             }
             respond(['ok' => true, 'eintrag' => hr_eintrag_aus($e, $ich, $frei), 'konto' => $konto, 'gleitKonto' => $gleit, 'hinweis' => $hinweise ? implode(' ', $hinweise) : null]);
         }
@@ -621,10 +620,11 @@ switch ($action) {
             respond(['ok' => true, 'ergebnis' => $r, 'mail' => hr_mail_aus()]);
         }
 
-        /* Jahresplanung: Zusammenfassung eines Jahres (Standard: das nächste) – Personalstelle oder „Urlaub genehmigen“ */
+        /* Jahresplanung: Zusammenfassung eines Jahres (Standard: das nächste) – nur Personalstelle. Sie enthält alle
+           Urlaubszeiträume; zusammen mit dem Kalender („abwesend“) ließen sich daraus sonst Krankheitstage ableiten.
+           Genehmiger ohne Personalstelle entscheiden wie bisher unter „Anträge“ (hr_offen). */
         case 'hr_planung': {
-            $me = require_auth();
-            if (!may($me, 'hr.verwalten') && !may($me, 'hr.genehmigen')) fail('Dafür fehlt Ihnen die Berechtigung. Bitte an einen Administrator wenden.', 403);
+            $me = require_perm('hr.verwalten');
             header('Cache-Control: no-store');
             $jahr = isset($_GET['jahr']) ? hr_jahr_param($_GET['jahr']) : hr_planung_jahr();
             respond(['ok' => true, 'verwalten' => may($me, 'hr.verwalten'), 'genehmigen' => may($me, 'hr.genehmigen')] + hr_planung($jahr, $me));
@@ -633,7 +633,7 @@ switch ($action) {
         case 'hr_planung_freigeben': {
             $me = require_perm('hr.genehmigen', true);
             $b = body();
-            $jahr = hr_jahr_param($b['jahr'] ?? null);
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
             $ids = $b['ids'] ?? null;
             if (!is_array($ids) || !$ids || count($ids) > 500 || array_filter($ids, function ($x) { return !is_string($x) || !preg_match('/^[a-z0-9]{1,40}$/i', $x); })) fail('Bitte die Anträge angeben.', 422);
             [$ok, $weg] = hr_planung_freigeben($jahr, array_values(array_unique($ids)), $me);
@@ -643,7 +643,10 @@ switch ($action) {
         /* Erinnerung „Bitte planen Sie Ihren Urlaub“ an alle Mitarbeiter mit Adresse, die das Ziel noch nicht erreicht haben */
         case 'hr_planung_erinnern': {
             $me = require_perm('hr.verwalten', true);
-            $jahr = hr_jahr_param(body()['jahr'] ?? null);
+            $b = body();
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
+            if ($jahr < (int)substr(hr_heute(), 0, 4)) fail("Die Planung $jahr liegt in der Vergangenheit.", 409);
+            if (isset(hr_planung_einst()['abschluss'][(string)$jahr])) fail("Die Planung $jahr ist abgeschlossen – erst wieder öffnen.", 409);
             try { $r = hr_planung_senden('planung', $jahr, $me); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
             if (!$r['gesendet']) fail('Erinnerung nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);
             respond(['ok' => true, 'ergebnis' => $r]);
@@ -652,12 +655,10 @@ switch ($action) {
         case 'hr_planung_abschluss': {
             $me = require_perm('hr.verwalten', true);
             $b = body();
-            $jahr = hr_jahr_param($b['jahr'] ?? null);
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
             if (!is_bool($b['abgeschlossen'] ?? null)) fail('Bitte abschließen oder wieder öffnen.', 422);
             $zu = $b['abgeschlossen'];
-            $war = isset(hr_planung_einst()['abschluss'][(string)$jahr]);
-            if ($zu === $war) fail($zu ? "Die Planung $jahr ist bereits abgeschlossen." : "Die Planung $jahr ist nicht abgeschlossen.", 409);
-            hr_planung_abschluss_setzen($jahr, $zu, $me);
+            if (!hr_planung_abschluss_setzen($jahr, $zu, $me)) fail($zu ? "Die Planung $jahr ist bereits abgeschlossen." : "Die Planung $jahr ist nicht abgeschlossen.", 409);
             audit('hr', "HR: Jahresplanung $jahr " . ($zu ? 'abgeschlossen' : 'wieder geöffnet'));
             $r = null;
             if ($zu && ($b['senden'] ?? true) !== false && hr_planung_empfaenger($jahr, false)[0]) {
@@ -669,7 +670,7 @@ switch ($action) {
         case 'hr_planung_uebersicht_senden': {
             $me = require_perm('hr.verwalten', true);
             $b = body();
-            $jahr = hr_jahr_param($b['jahr'] ?? null);
+            $jahr = isset($b['jahr']) ? hr_jahr_param($b['jahr']) : hr_planung_jahr();
             $person = isset($b['person']) && $b['person'] !== '' ? (string)$b['person'] : null;
             try { $r = hr_planung_senden('jahresuebersicht', $jahr, $me, $person); } catch (RuntimeException $e) { fail($e->getMessage(), 409); }
             if (!$r['gesendet']) fail('Jahresübersicht nicht zugestellt: ' . ($r['fehlerText'][0] ?? 'Versandfehler'), 502);

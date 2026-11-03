@@ -187,7 +187,7 @@ Spalten: **Art** – lesend, schreibend (nur POST) oder post (GET liest, POST sc
 | `hr_monatsuebersicht_senden` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_offen` | `hr.intern` | lesend | – | Recht hr.genehmigen | `app/api/aktionen/hr.php` |
 | `hr_personal_uebernehmen` | `angebot.eingabe` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
-| `hr_planung` | `hr.intern` | lesend | – | angemeldet | `app/api/aktionen/hr.php` |
+| `hr_planung` | `hr.intern` | lesend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_planung_abschluss` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_planung_erinnern` | `hr.intern` | schreibend | – | Recht hr.verwalten | `app/api/aktionen/hr.php` |
 | `hr_planung_freigeben` | `hr.intern` | schreibend | – | Recht hr.genehmigen | `app/api/aktionen/hr.php` |

@@ -1058,10 +1058,19 @@ st, r = F.call('hr_antrag', {'von': iso(N3 + dt.timedelta(days=2)), 'bis': iso(N
 PE_ = r['eintrag']['id'] if st == 200 else None   # e) Fritz, Vertretung Andre – Andre ist selbst weg
 check('Vertretung selbst abwesend: Antrag gestellt, Hinweis ohne Grund', st == 200 and 'Andre Vierzig ist in dieser Zeit selbst abwesend' in (r.get('hinweis') or '')
       and 'Urlaub' not in (r.get('hinweis') or '').split('abwesend')[1], r.get('hinweis'))
+st, r = E.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PL})
+PH_ = r['eintrag']['id'] if st == 200 else None   # Erika beantragt (offen)
+st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=7)), 'bis': iso(N1 + dt.timedelta(days=7)), 'vertretung': PE})
+PI_ = r['eintrag']['id'] if st == 200 else None   # Fritz, Vertretung Erika – sie hat dort einen offenen Antrag
+check('Hinweis an den Mitarbeiter: offene Anträge der Vertretung bleiben verborgen (nur Genehmigtes, wie im Kalender)', st == 200 and not r.get('hinweis'), (st, r.get('hinweis')))
+st, r = F.call('hr_antrag', {'von': iso(N1 + dt.timedelta(days=4)), 'bis': iso(N1 + dt.timedelta(days=4)), 'vertretung': PA})
+PJ_ = r['eintrag']['id'] if st == 200 else None   # Freitag – Andre arbeitet Mo–Do
+check('Vertretung in Teilzeit: Hinweis „arbeitet an diesen Tagen nicht“', st == 200 and f'Andre Vierzig arbeitet an diesen Tagen nicht ({(N1 + dt.timedelta(days=4)):%d.%m.%Y})' in (r.get('hinweis') or ''), r.get('hinweis'))
 check('Jahresplanung: ohne Recht 403 (Mitarbeiter, Leser)', E.call('hr_planung')[0] == 403 and L.call('hr_planung')[0] == 403)
 GI = Client('198.51.100.9'); assert GI.call('login', {'username': 'gina', 'password': 'Genehmigen-Zugang-77'})[0] == 200
-st, gp_ = GI.call('hr_planung')
-check('… „Urlaub genehmigen“ sieht sie (Standard: nächstes Jahr), ohne Personalrecht', st == 200 and gp_['jahr'] == Y and gp_['genehmigen'] is True and gp_['verwalten'] is False, (st, gp_.get('jahr')))
+check('… auch nicht „Urlaub genehmigen“ ohne Personalstelle (alle Urlaubszeiträume + Kalender verrieten sonst Krankheitstage)', GI.call('hr_planung')[0] == 403
+      and GI.call(f'hr_planung&jahr={Y - 1}')[0] == 403)
+check('… Personalstelle: Standard ist das nächste Jahr', P.call('hr_planung')[1]['jahr'] == Y)
 st, r, raw_ = P.call(f'hr_planung&jahr={Y}', raw=True)
 an_ = {a_['id']: a_ for a_ in r['antraege']}
 pp_ = {p_['id']: p_ for p_ in r['personen']}
@@ -1073,6 +1082,8 @@ check('… a) Vertretung da, niemand aus der Abteilung weg: konfliktfrei, gesamm
 check('… b) Vertretung selbst abwesend (ohne Grund)', arten_(PB_) == ['vertretung'] and 'Lena Leser ist selbst abwesend' in texte_(PB_) and an_[PB_]['frei'] is False, texte_(PB_))
 check('… d) gleiche Abteilung gleichzeitig weg', 'abteilung' in arten_(PD_) and 'Gleichzeitig weg: Andre Vierzig' in texte_(PD_), texte_(PD_))
 check('… e) Vertretung selbst abwesend, nicht doppelt als Abteilung', arten_(PE_) == ['vertretung'] and 'Andre Vierzig ist selbst abwesend' in texte_(PE_), texte_(PE_))
+check('… Personalstelle sieht auch offene Anträge der Vertretung als Konflikt; Teilzeit-Vertretung', 'Erika Editor ist selbst abwesend' in texte_(PI_)
+      and 'Andre Vierzig arbeitet an diesen Tagen nicht' in texte_(PJ_) and an_[PJ_]['frei'] is False, (texte_(PI_), texte_(PJ_)))
 check('… genehmigte Einträge der Personalstelle ohne Vertretung: kein Konflikt „keine Vertretung“', 'Keine Vertretung' not in texte_(PC_) and an_[PC_]['status'] == 'genehmigt', texte_(PC_))
 check('… alte offene Anträge ohne Vertretung: Konflikt „Keine Vertretung angegeben“', any(a_['status'] == 'beantragt' and any(k_['text'] == 'Keine Vertretung angegeben' for k_ in a_['konflikte']) for a_ in r['antraege']))
 check('… nie Gründe oder Notizen anderer Abwesenheiten (Krankheit)', 'Arztbesuch' not in raw_ and '"K"' not in raw_ and 'Krank' not in raw_)
@@ -1120,6 +1131,8 @@ check('… abgeschlossen: Jahresübersicht an Fritz und Erika (genehmigter Zeitr
       and jf_.get('subject') == f'Ihre Urlaubsplanung {Y}' and f'{N1:%d.%m.%Y}' in jf_.get('text', '') and 'Vertretung: Andre Vierzig' in jf_.get('text', '')
       and 'auf einen Blick' in jf_.get('text', '') and 'Noch nicht verplant' in jf_.get('text', ''), (st, r, jf_.get('text', '')[:600]))
 MAIL_HTML['jahresuebersicht'] = mail_html(jf_)
+check('… danach keine Erinnerung mehr (409), auch nicht für vergangene Jahre', P.call('hr_planung_erinnern', {'jahr': Y})[0] == 409
+      and P.call('hr_planung_erinnern', {'jahr': Y - 2})[0] == 409)
 check('… Hinweis bei den Mitarbeitern weg, Zusammenfassung zeigt den Abschluss, doppelt 409', E.call('hr_start')[1].get('planung') is None
       and P.call('hr_planung')[1]['abschluss']['by'] == 'Paul Personal' and P.call('hr_planung_abschluss', {'jahr': Y, 'abgeschlossen': True})[0] == 409)
 n0 = len(smtp.messages)
@@ -1128,13 +1141,14 @@ until(lambda: len(smtp.messages) >= n0 + 1)
 check('Jahresübersicht einzeln erneut senden (nur Fritz); ohne Recht 403', st == 200 and r['ergebnis']['gesendet'] == 1 and smtp.messages[n0]['to'] == ['fritz@example.org']
       and GI.call('hr_planung_uebersicht_senden', {'jahr': Y})[0] == 403, (st, r))
 st, r = P.call('hr_planung_abschluss', {'jahr': Y, 'abgeschlossen': False})
+check('… ohne Jahr gilt das Planungsjahr (schon offen: 409)', P.call('hr_planung_abschluss', {'abgeschlossen': False})[0] == 409)
 check('… wieder geöffnet: Hinweis wieder da, keine Mail', st == 200 and r['ergebnis'] is None and E.call('hr_start')[1].get('planung', {}).get('jahr') == Y)
 log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
 mv_ = P.call('mitarbeiter_hr')[1]['mail']['verlauf']
 check('Protokoll und Verlauf: Erinnerung, Abschluss, Jahresübersicht, wieder geöffnet', all(x_ in log_ for x_ in (f'Erinnerung Jahresplanung {Y}: 2 gesendet', f'Jahresplanung {Y} abgeschlossen',
       f'Jahresübersicht {Y}: 2 gesendet', f'Jahresplanung {Y} wieder geöffnet'))
       and [(v2_['art'], v2_.get('jahr')) for v2_ in mv_[:3]] == [('jahresuebersicht', Y), ('jahresuebersicht', Y), ('planung', Y)], [(v2_['art'], v2_.get('jahr')) for v2_ in mv_[:3]])
-for id_ in (PA_, PB_, PC_, PD0_, PD_, PE_):
+for id_ in (PA_, PB_, PC_, PD0_, PD_, PE_, PH_, PI_, PJ_):
     if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
 assert P.call('hr_einstellungen_save', {**EINST_, 'planung': {**PLAN_STD, 'vertretungPflicht': False}})[0] == 200   # spätere Antragstests ohne Vertretung
 
@@ -1767,11 +1781,11 @@ with sync_playwright() as p:
           and pg.evaluate("getComputedStyle(document.querySelector('#jp-zeitleiste .hr-jp-zeile[data-jp-person] .hr-jp-name')).position") == 'sticky')
     pg.screenshot(path=os.path.join(SH, 'hr_planung_390.png'), full_page=True)
     ctx.close()
-    # Nur „Urlaub genehmigen“ (Gina): Reiter sichtbar, nur gesammelt genehmigen – kein Erinnern, kein Abschluss
+    # Nur „Urlaub genehmigen“ (Gina): kein Reiter „Jahresplanung“ (nur Personalstelle), Anträge wie bisher
     ctx, pg = anmelden('gina', 'Genehmigen-Zugang-77', '198.51.100.8')
-    pg.goto(B + '/module/hr/#planung'); pg.wait_for_selector('#jp-zeitleiste .hr-jp-zl')
-    check('Genehmigende: Reiter „Jahresplanung“ mit „Konfliktfreie genehmigen“, ohne Erinnern und Abschluss', pg.is_visible('[data-tab="planung"]')
-          and pg.locator('#jp-aktionen [data-jp="freigeben"]').count() == 1 and pg.locator('#jp-aktionen [data-jp="erinnern"], #jp-aktionen [data-jp="abschliessen"]').count() == 0)
+    pg.goto(B + '/module/hr/#planung'); pg.wait_for_selector('#hr-app:not([hidden])')
+    pg.wait_for_function("document.querySelector('[data-tab=antraege]') && !document.querySelector('[data-tab=antraege]').hidden")
+    check('Genehmigende ohne Personalstelle: Reiter „Jahresplanung“ nicht sichtbar, „Anträge“ schon', not pg.is_visible('[data-tab="planung"]') and pg.is_visible('[data-tab="antraege"]'))
     ctx.close()
     check('Jahresplanung: keine JavaScript-Fehler', not fehler, fehler)
     # Aufräumen: eigene Einträge stornieren, Planung zurück (Vertretung freiwillig für die folgenden Antragstests)
