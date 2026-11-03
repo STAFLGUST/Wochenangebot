@@ -130,6 +130,7 @@
     const antraege = d.antraege !== false;
     $('#antrag').hidden = !antraege;
     $('#antrag-aus').hidden = antraege;
+    zeigeRegeln(d.regeln);
     $('#mein-spalten').classList.toggle('ohne-antrag', !antraege);
     const sel = $('#antrag-vertretung'), alt = sel.value;
     sel.innerHTML = '<option value="">– keine –</option>' + d.kollegen.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
@@ -806,6 +807,48 @@
     } catch (err) { meldung(m, err.message || String(err)); }
   });
 
+  /* ---------- Urlaubsregeln (Text der Personalstelle, Verwaltung → Urlaub) ----------
+     Absätze durch Leerzeilen; eine Zeile „1. Überschrift“ am Anfang eines Absatzes wird zur Überschrift. Nur Text (esc). */
+  const REGELN_ZU = 'hr-regeln-zu';
+  let regelnBereit = false;   // erst nach dem ersten Anzeigen merken (das „toggle“ beim Laden der Seite zählt nicht)
+  function zeigeRegeln(text) {
+    const t = String(text || '').trim(), box = $('#regeln');
+    box.hidden = !t; $('#antrag-regeln').hidden = !t;
+    if (!t) return;
+    $('#regeln-text').innerHTML = t.split(/\n\s*\n/).map((abs) => {
+      const z = abs.split('\n'), kopf = /^\d+\.\s+\S/.test(z[0]) ? z.shift() : '';
+      return `<div class="hr-regel">${kopf ? `<h3>${esc(kopf)}</h3>` : ''}${z.length ? `<p>${z.map(esc).join('<br>')}</p>` : ''}</div>`;
+    }).join('');
+    if (!regelnBereit) { try { if (localStorage.getItem(REGELN_ZU) === '1') box.open = false; } catch (e) { /* ohne Speicher: offen */ } }
+    regelnBereit = true;
+  }
+  $('#regeln').addEventListener('toggle', () => { if (!regelnBereit) return; try { localStorage.setItem(REGELN_ZU, $('#regeln').open ? '0' : '1'); } catch (e) { /* egal */ } });
+  $('#antrag-regeln').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-regeln-zeigen]')) return;
+    e.preventDefault();
+    $('#regeln').open = true; $('#regeln').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  /* ---------- Hinweis „Resturlaub verfällt bald“ ----------
+     Ab 8 Wochen vor dem Verfallstag, solange Übertrag verfallen würde (Konto „verfaellt“; ohne Verfall der Person nie),
+     höchstens einmal am Tag je Browser. Nur im laufenden Jahr. */
+  const VERFALL_VORLAUF = 56;   // Tage
+  function verfallHinweis() {
+    const d = S.start, k = d && d.konto;
+    if (!k || !(k.verfaellt > 0) || !k.frist || !d.heute || String(d.jahr) !== d.heute.slice(0, 4)) return;
+    const tage = Math.round((Date.parse(k.frist + 'T00:00:00Z') - Date.parse(d.heute + 'T00:00:00Z')) / 86400000);
+    if (tage < 0 || tage > VERFALL_VORLAUF) return;
+    const key = 'hr-verfall-' + d.heute;
+    try { if (localStorage.getItem('hr-verfall-gesehen') === key) return; localStorage.setItem('hr-verfall-gesehen', key); } catch (e) { /* ohne Speicher: jedes Mal */ }
+    $('#verfall-text').textContent = `${tageText(k.verfaellt)} Resturlaub aus dem Vorjahr ${k.verfaellt === 1 ? 'verfällt' : 'verfallen'} am ${de(k.frist)}, wenn Sie ${k.verfaellt === 1 ? 'ihn' : 'sie'} bis dahin nicht nehmen.`;
+    $('#verfall-planen').hidden = d.antraege === false;
+    $('#dlg-verfall').showModal();
+  }
+  $('#verfall-planen').addEventListener('click', () => {
+    $('#dlg-verfall').close(); zeigeTab('mein');
+    $('#antrag-von').focus(); $('#antrag').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
   /* Dialoge: „Abbrechen“/„Schließen“ */
   for (const b of $$('[data-schliessen]')) b.addEventListener('click', () => b.closest('dialog').close());
 
@@ -827,6 +870,7 @@
     const tab = location.hash.slice(1);
     const knopf = $(`#hr-tabs button[data-tab="${CSS.escape(tab)}"]`);
     zeigeTab(knopf && !knopf.hidden ? tab : 'mein');
+    verfallHinweis();
   }
   themaKnopf();
   laden().catch(() => fehler('Keine Verbindung zum Server.'));

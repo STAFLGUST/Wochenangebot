@@ -70,6 +70,7 @@
               <p class="hr-rechnung" id="antrag-tage" aria-live="polite"></p>
               <label><span>Vertretung <span class="opt">(optional)</span></span><select id="antrag-vertretung"><option value="">– keine –</option></select></label>
               <label><span>Notiz zum Antrag <span class="opt">(optional)</span></span><input type="text" id="antrag-notiz" maxlength="300"></label>
+              <p class="hr-klein hr-regeln-link" id="antrag-regeln" hidden>Bitte beachten Sie die <a href="#regeln" data-regeln-zeigen>Urlaubsregeln</a>.</p>
               <p class="hr-meldung" id="antrag-meldung" role="status"></p>
               <button class="btn primary" type="submit" id="antrag-senden">Antrag stellen</button>
             </form>
@@ -78,6 +79,11 @@
               <ul class="hr-liste" id="mein-liste"></ul>
             </div>
           </div>
+          <!-- Urlaubsregeln der Personalstelle (Verwaltung → Urlaub): für alle sichtbar beim Urlaubsantrag -->
+          <details class="hr-karte hr-glas hr-regeln" id="regeln" open hidden>
+            <summary><h2>Urlaubsregeln</h2><span class="hr-klein">gelten für jeden Urlaubsantrag</span></summary>
+            <div class="hr-regeln-text" id="regeln-text"></div>
+          </details>
           <!-- Jahresübersicht aller eigenen Abwesenheiten (auch Krank, Gleittag, freie Tage) und „Korrektur melden“ -->
           <section class="hr-karte hr-glas hr-mini-karte" aria-labelledby="mini-titel">
             <div class="hr-mini-kopf">
@@ -234,6 +240,16 @@
     <label>Grund (sieht der Mitarbeiter)<input type="text" id="ablehnen-grund" maxlength="300" required></label>
     <p class="hr-meldung" id="ablehnen-meldung" role="status"></p>
     <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Abbrechen</button><button type="submit" class="btn gefahr">Ablehnen</button></div>
+  </form>
+</dialog>
+
+<!-- Hinweis: Resturlaub aus dem Vorjahr verfällt bald (höchstens einmal am Tag, ab 8 Wochen vor dem Verfallstag) -->
+<dialog class="hr-dialog" id="dlg-verfall" aria-labelledby="verfall-titel">
+  <form method="dialog">
+    <div class="hr-dialogkopf"><h2 id="verfall-titel">Ihr Resturlaub verfällt bald</h2><button class="hr-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+    <p id="verfall-text"></p>
+    <p class="hr-klein">Beantragte Tage zählen, sobald sie genehmigt sind. Fragen beantwortet die Personalstelle.</p>
+    <div class="hr-knoepfe"><span class="hr-platz"></span><button type="button" class="btn" data-schliessen>Später</button><button type="button" class="btn primary" id="verfall-planen">Urlaub beantragen</button></div>
   </form>
 </dialog>
 
