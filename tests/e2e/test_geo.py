@@ -10,6 +10,12 @@ B = BASE
 from umgebung import SH, FIX, REPO, WORK, XL44
 DATA = os.environ['UDATA']
 CN, AU, DE, RU = '1.0.1.1', '1.0.0.1', '46.114.0.1', '77.88.8.8'
+# Öffentliche Adresse ohne erkennbares Land: erste Lücke der mitgelieferten Länderdatenbank (bleibt bei neuem Stand gültig)
+UNK = subprocess.run(['php', '-r', r'''require $argv[1]; $f = geo_file(); $fh = fopen($f, 'rb'); $h = substr(fread($fh, GEO_OFF), strlen(GEO_GUARD));
+  $n = unpack('N2', substr($h, 4, 8)); $prev = 0;
+  for ($i = 0; $i < $n[1]; $i++) { fseek($fh, GEO_OFF + $i * 10); $s = unpack('N2', fread($fh, 10));
+    if ($s[1] > $prev + 1) { $ip = long2ip($prev + 1); if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) && geo_country($ip) === null) { echo $ip; break; } }
+    $prev = $s[2]; }''', os.path.join(REPO, 'app', 'api', 'geo.php')], capture_output=True, text=True).stdout.strip()
 res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
@@ -116,6 +122,10 @@ with sync_playwright() as p:
     r = get(ru, 'offer'); check('RU blocked too', r[0] == 403)
     r = get(au, 'offer'); check('AU public allowed', r[0] == 200)
     r = get(a, 'offer'); check('local (unknown) allowed', r[0] == 200)
+    check('Testadresse ohne erkennbares Land gefunden', bool(re.fullmatch(r'\d+\.\d+\.\d+\.\d+', UNK)), UNK)
+    unk = br.new_context(viewport={'width': 1440, 'height': 950}, extra_http_headers={'X-Forwarded-For': UNK}).new_page(); unk.on('pageerror', lambda e: errs.append('unk: ' + str(e)))
+    unk.goto(B + '/')
+    check('block: Adresse ohne erkennbares Land erlaubt', get(unk, 'offer')[0] == 200)
     # IPv6 / IPv4-in-IPv6
     r = get(au, 'offer', {})
     v6 = br.new_context(extra_http_headers={'X-Forwarded-For': '::ffff:' + CN}).new_page(); v6.goto(B + '/')
@@ -123,12 +133,29 @@ with sync_playwright() as p:
     # Freigabeliste hat Vorrang
     r = post(a, 'security_save', dict(body, adminIps=[CN + '/32'])); check('save with allowlisted CN ip', r[0] == 200, r)
     check('allowlisted CN ip passes', get(cn, 'offer')[0] == 200 and get(cn, 'status')[0] == 200)
+    # Selbstaussperrung ohne erkennbares Land (Admin von einer Adresse ohne Land, Sperrmodus erlaubt sie noch)
+    login(unk, 'admin', 'Sicheres-Passwort-1'); geo_dialog(unk)
+    check('ohne Land: Hinweis im Dialog (Sperrmodus: kein Aussperren)', 'kein Land erkennbar' in unk.inner_text('#geo-me') and 'bad' not in unk.get_attribute('#geo-me', 'class'), unk.inner_text('#geo-me'))
+    unk.check('#geo-box [name=geoMode][value=allow]'); unk.wait_for_selector('#geo-me.bad')
+    check('ohne Land: Warnung bei „nur erlauben“', 'aussperren' in unk.inner_text('#geo-me') and 'freigegebene Adresse' in unk.inner_text('#geo-me'), unk.inner_text('#geo-me'))
+    unk.locator('#geo-me').scroll_into_view_if_needed(); unk.screenshot(path=SH + '/geo-ohne-land.png')
+    unk.fill('#geo-q', UNK); unk.wait_for_function("document.querySelector('#geo-list').textContent.includes('kein Land erkennbar')")
+    check('IP-Suche: Adresse ohne Land erklärt', 'nur ausgewählte Länder erlauben' in unk.inner_text('#geo-list'), unk.inner_text('#geo-list'))
+    r = post(unk, 'security_save', dict(BASE, geoEnabled=True, geoMode='allow', geoCountries=['DE'], geoScope='admin'))
+    check('server rejects self-lockout (allow, ohne Land)', r[0] == 422 and 'kein Land erkennbar' in r[1]['error'], r)
+    r = post(unk, 'security_save', dict(BASE, geoEnabled=True, geoMode='allow', geoCountries=['DE'], geoScope='admin', adminIps=[UNK]))
+    check('ohne Land: erlaubt, wenn die eigene Adresse freigegeben ist', r[0] == 200, r)
+    check('ohne Land, freigegeben: Zugriff bleibt', get(unk, 'status')[0] == 200)
     # Nur erlauben
     r = post(a, 'security_save', dict(BASE, geoEnabled=True, geoMode='allow', geoCountries=['DE', 'AT', 'CH'], geoScope='admin'))
     check('save allow-mode', r[0] == 200, r)
     dep = br.new_context(extra_http_headers={'X-Forwarded-For': DE}).new_page(); dep.goto(B + '/')
     check('allow: AU blocked, DE ok, CN blocked', get(au, 'status')[0] == 403 and get(cn, 'status')[0] == 403 and get(dep, 'status')[0] == 200)
     check('allow: AU public offer open (scope admin)', get(au, 'offer')[0] == 200)
+    check('allow: Adresse ohne erkennbares Land gesperrt (Eingabebereich), Angebot offen', get(unk, 'status')[0] == 403 and get(unk, 'offer')[0] == 200)
+    check('allow: lokale und interne Adressen nie gesperrt', get(a, 'status')[0] == 200 and get(a, 'status', {'X-Forwarded-For': '10.20.30.40'})[0] == 200)
+    unk.goto(B + '/admin/'); unk.wait_for_selector('h1'); t = unk.inner_text('body')
+    check('allow: ohne Land – Eingabebereich mit Hinweis statt Anmeldung', 'Eingabebereich nicht erreichbar' in t and 'PHP' not in t, t[:200])
     # Selbstaussperrung (Admin aus Deutschland)
     de = br.new_context(viewport={'width': 1440, 'height': 950}, extra_http_headers={'X-Forwarded-For': DE}).new_page(); de.on('pageerror', lambda e: errs.append('de: ' + str(e)))
     login(de, 'admin', 'Sicheres-Passwort-1'); geo_dialog(de)
@@ -147,8 +174,9 @@ with sync_playwright() as p:
     a.goto(B + '/module/sicherheit/#firewall'); a.wait_for_selector('#fw-verkehr')
     st = get(a, 'security_status')[1]
     ccs = {x['cc']: x['n'] for x in st['geoStats']}
-    check('stats counted per country', ccs.get('CN', 0) >= 3 and ccs.get('AU', 0) >= 1 and st['geoBlocked7'] >= 5, (ccs, st['geoBlocked7']))
-    check('stats table shown (Firewall & Sperren)', 'Abgewiesene Zugriffe nach Land' in a.inner_text('#tab-firewall') and 'China' in a.inner_text('#tab-firewall'))
+    check('stats counted per country', ccs.get('CN', 0) >= 3 and ccs.get('AU', 0) >= 1 and ccs.get('??', 0) >= 1 and st['geoBlocked7'] >= 5, (ccs, st['geoBlocked7']))
+    check('stats table shown (Firewall & Sperren)', 'Abgewiesene Zugriffe nach Land' in a.inner_text('#tab-firewall') and 'China' in a.inner_text('#tab-firewall')
+          and 'ohne erkennbares Land' in a.inner_text('#tab-firewall') and '??' not in a.inner_text('#tab-firewall'))
     a.click('[data-fw="geo-null"]'); a.wait_for_selector('#sic-dlg[open]'); ja(a); a.wait_for_function("!document.querySelector('#tab-firewall').textContent.includes('Abgewiesene Zugriffe nach Land')")
     check('stats cleared', not get(a, 'security_status')[1]['geoStats'])
     # Protokoll

@@ -76,14 +76,25 @@ function sec(): array
     if ($SEC === null) $SEC = array_merge(SEC_DEFAULTS, store_read('sicherheit') ?? []);
     return $SEC;
 }
-/* Ländersperre: true, wenn diese Adresse nach den Einstellungen $S gesperrt ist.
-   Nie gesperrt: freigegebene Adressen, interne Adressen und Adressen ohne bekanntes Land. */
+/* Kennung für „ohne erkennbares Land“ in Sperre und Statistik */
+const GEO_UNBEKANNT = '??';
+/* Öffentliche Adresse, für die die Länderdatenbank kein Land kennt (interne Adressen und fehlende Datenbank: false) */
+function geo_land_unbekannt(string $ip): bool
+{
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) return false;
+    return geo_country($ip) === null && geo_info() !== null;
+}
+/* Ländersperre: Land, wegen dem diese Adresse nach den Einstellungen $S gesperrt ist (ISO-Code, GEO_UNBEKANNT = ohne
+   erkennbares Land), sonst null.
+   Nie gesperrt: freigegebene Adressen und interne Adressen (privat/reserviert, z. B. Prüfabrufe der Anwendung).
+   Öffentliche Adressen ohne erkennbares Land: im Modus „nur diese Länder erlauben“ gesperrt (Entscheidung des Inhabers
+   03.11.2026), im Modus „diese Länder sperren“ erlaubt. Fehlt die Länderdatenbank, sperrt sie nichts (kein Aussperren aller). */
 function geo_blocked(string $ip, array $S): ?string
 {
     if (empty($S['geoEnabled']) || !$S['geoCountries']) return null;
     if ($S['adminIps'] && ip_allowed($ip, $S['adminIps'])) return null;
     $cc = geo_country($ip);
-    if ($cc === null) return null;
+    if ($cc === null) return ($S['geoMode'] ?? 'block') === 'allow' && geo_land_unbekannt($ip) ? GEO_UNBEKANNT : null;
     $listed = in_array($cc, $S['geoCountries'], true);
     return ($S['geoMode'] === 'allow' ? !$listed : $listed) ? $cc : null;
 }
@@ -250,7 +261,9 @@ function sec_clean(array $b, array $old, array $me): array
     if ($geoEnabled && !$gc) throw new InvalidArgumentException($geoMode === 'allow' ? 'Bitte mindestens ein erlaubtes Land auswählen.' : 'Bitte mindestens ein Land zum Sperren auswählen.');
     if ($geoEnabled && !geo_info()) throw new InvalidArgumentException('Die Länderdatenbank fehlt – bitte zuerst „Länderdaten aktualisieren“.');
     $geoS = ['geoEnabled' => $geoEnabled, 'geoMode' => $geoMode, 'geoCountries' => $gc, 'adminIps' => $ips];
-    if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException("Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
+    if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException($mc === GEO_UNBEKANNT
+        ? 'Für Ihre Adresse ist kein Land erkennbar – mit „nur ausgewählte Länder erlauben“ würden Sie sich selbst aussperren. Tragen Sie Ihre Adresse als freigegebene Adresse ein.'
+        : "Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
     if ($twofa !== 'off' && !has_second_factor($me) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
     $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
             'pwLeak' => array_key_exists('pwLeak', $b) ? !empty($b['pwLeak']) : !empty($old['pwLeak']),   // ältere Oberfläche ohne Feld: unverändert

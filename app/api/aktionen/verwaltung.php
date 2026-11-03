@@ -36,7 +36,7 @@ switch ($action) {
             $secLog = sec_log_entries(14);
             respond(betrieb_daten($me) + ['ok' => true, 'settings' => sec(), 'bestaetigung' => bestaetigung_katalog(), 'bestaetigungMinuten' => BESTAETIGUNG_MINUTEN, 'myIp' => client_ip(), 'https' => is_https(),
                      'timeline' => sec_timeline($secLog), 'topIps' => sec_top_ips($secLog), 'config' => sec_config_checks($users),
-                     'myCountry' => geo_country(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
+                     'myCountry' => geo_country(client_ip()), 'myCountryUnbekannt' => geo_land_unbekannt(client_ip()), 'geo' => geo_info(), 'geoCountries' => GEO_COUNTRIES, 'geoStats' => array_slice($gcc, 0, 30), 'geoBlocked7' => $g7,
                      'users' => array_map('user_public', $users), 'sessions' => $sess, 'blockedIps' => $ips,
                      'fails' => array_slice($fails, 0, 30), 'fails24' => $f24]);
         }

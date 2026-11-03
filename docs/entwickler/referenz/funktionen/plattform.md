@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-102 Dateien, 918 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+102 Dateien, 919 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -551,7 +551,8 @@ _Sicherheitseinstellungen, Länder-/IP-Sperre, Zwei-Faktor, Sitzungsregister, Wa
 - `bestaetigung_sekunden()` – Wie lange eine Passwortbestätigung gilt (Sekunden)
 - `bestaetigung_katalog()`
 - `sec()`
-- `geo_blocked(ip, S)` – Ländersperre: true, wenn diese Adresse nach den Einstellungen $S gesperrt ist.
+- `geo_land_unbekannt(ip)` – Öffentliche Adresse, für die die Länderdatenbank kein Land kennt (interne Adressen und fehlende Datenbank: false)
+- `geo_blocked(ip, S)` – Ländersperre: Land, wegen dem diese Adresse nach den Einstellungen $S gesperrt ist (ISO-Code, GEO_UNBEKANNT = ohne erkennbares Land), sonst null.
 - `geo_count(cc)`
 - `ip_in(ip, cidr)`
 - `ip_allowed(ip, list)`

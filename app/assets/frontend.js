@@ -1365,8 +1365,8 @@ function bind() {
   window.addEventListener('hashchange', () => { readUrl(); buildFilters(); render(); });
 
   /* Kopfhöhe für klebende Tabellenköpfe */
-  const setH = () => document.documentElement.style.setProperty('--header-h', $('#topbar').offsetHeight + 'px');
-  if ('ResizeObserver' in window) new ResizeObserver(setH).observe($('#topbar'));
+  const setH = () => document.documentElement.style.setProperty('--header-h', ($('#topbar')?.offsetHeight || 0) + 'px');
+  if ('ResizeObserver' in window && $('#topbar')) new ResizeObserver(setH).observe($('#topbar'));
   setH();
 }
 
