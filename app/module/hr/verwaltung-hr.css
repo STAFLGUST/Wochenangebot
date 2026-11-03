@@ -25,6 +25,14 @@
 .hr-einst .hint { margin: 0; }
 .hr-einst > .btn { align-self: flex-start; }
 .hr-einst .hr-verfall { max-width: 220px; }   /* Verfallstag des Resturlaubs */
+.hr-verfall-felder { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.hr-verfall-felder .hr-verfall { flex: 1 1 160px; margin: 0; }
+.hr-verfall-felder select { width: 100%; }
+/* Eigene Urlaubsangaben (Vier-Augen-Prinzip): gesperrte Felder sichtbar gesperrt, Hinweis oben */
+.hr-eigen-hinweis { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--text-2); font-size: 13px; line-height: 1.45; }
+.hr-eigen-hinweis svg { flex: 0 0 auto; margin-top: 2px; }
+#hr-teil input:disabled { background: var(--surface-2); color: var(--muted); border-style: dashed; cursor: not-allowed; }
+#hr-teil .check:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
 /* Schalter „Urlaubsanträge über die Plattform“ (eigene Karte über den Einstellungen, Schalterform aus admin.css .rl-schalter) */
 .hr-antraege-karte { margin-bottom: 16px; }
 .hr-antraege-kopf { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }

@@ -242,6 +242,8 @@ function hr_einstellungen(): array
     usort($alle, function ($a, $b) { return [$a['von'], $a['bis']] <=> [$b['von'], $b['bis']]; });
     return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $alle, 'sperrenEigene' => $eigene, 'regelSperren' => $regelSperren, 'ferien' => $z($d['ferien'] ?? []),
             'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS,
+            // Übergangsregel: Resturlaub verfällt erstmals am Verfallstag dieses Jahres (fehlt: jedes Jahr – GR-006)
+            'verfallAb' => hr_verfall_ab_norm($d['verfallAb'] ?? null),
             // Urlaubsanträge über die Plattform: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
             'antraege' => ($d['antraege'] ?? true) !== false,
             // Urlaubsregeln: gespeicherter Text (auch leer = keine Regeln anzeigen), ohne Feld die Vorlage
@@ -299,6 +301,21 @@ function hr_uebertrag_bis(bool $neu = false): string
 {
     static $wert = null;
     if ($wert === null || $neu) $wert = hr_einstellungen()['uebertragBis'];
+    return $wert;
+}
+/* Übergangsregel (Inhaber 03.11.2026: „im ersten Jahr streichen wir noch keine Urlaubstage, erst nächstes Jahr“):
+   Resturlaub verfällt erstmals am Verfallstag des Jahres „verfallAb“ (hr-einstellungen, Jahreszahl, nur erweitert – GR-006).
+   In Jahren davor verfällt bei niemandem etwas; der ganze Rest geht ins Folgejahr. Fehlt das Feld: Verfall in jedem Jahr. */
+const HR_VERFALL_AB_MIN = 2000, HR_VERFALL_AB_MAX = 2100;
+function hr_verfall_ab_norm($v): ?int
+{
+    return is_int($v) && $v >= HR_VERFALL_AB_MIN && $v <= HR_VERFALL_AB_MAX ? $v : null;
+}
+/* Erstes Jahr mit Verfall (0 = jedes Jahr) */
+function hr_verfall_ab(bool $neu = false): int
+{
+    static $wert = null;
+    if ($wert === null || $neu) $wert = hr_einstellungen()['verfallAb'] ?? 0;
     return $wert;
 }
 /* Reihenfolge für Kalender und Export: Abteilungen nach der kleinsten Position ihrer Mitarbeiter, darin nach Position
@@ -594,7 +611,8 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
         $vorjahrDaten = (bool)array_filter($p['jahre'], function ($v, $j) use ($jahr) { return (int)$j < $jahr && $v['anspruch'] !== null; }, ARRAY_FILTER_USE_BOTH);
         $uebertrag = $vorjahrDaten && $tiefe < 30 ? hr_konto($p, $eintraege, $jahr - 1, $heute, $tiefe + 1)['rest_jahresende'] : 0.0;
     }
-    $verfall = ($p['verfall'] ?? true) !== false;
+    // Verfall: je Mitarbeiter abschaltbar (hr-personal „verfall“) und erst ab dem Jahr der Übergangsregel (hr_verfall_ab)
+    $verfall = ($p['verfall'] ?? true) !== false && $jahr >= hr_verfall_ab();
     $offen = $verfall ? max(0.0, $uebertrag - $u['bis_frist']) : 0.0;   // bis zur Frist noch nicht verplanter Übertrag (ohne Verfall: nichts)
     $verfallen = $heute > $frist ? $offen : 0.0;
     $rest = $anspruch + $uebertrag - $verfallen - $u['genommen'] - $u['geplant'];

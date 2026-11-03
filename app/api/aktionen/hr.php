@@ -31,7 +31,7 @@ function hr_einstellungen_aus(array $einst): array
 {
     $j = (int)date('Y');
     return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'sperrenAuto' => array_merge(hr_regel_sperren($j), hr_regel_sperren($j + 1)),
-            'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD];
+            'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD, 'verfallAb' => $einst['verfallAb']];
 }
 
 switch ($action) {
@@ -508,6 +508,11 @@ switch ($action) {
                 $zusatz['regelSperren'] = $b['regelSperren'];
             }
             if (array_key_exists('regeln', $b)) $zusatz['regeln'] = hr_regeln_pruefen($b['regeln']);
+            // Übergangsregel: erstes Jahr mit Verfall (Jahreszahl) oder null = jedes Jahr
+            if (array_key_exists('verfallAb', $b)) {
+                if ($b['verfallAb'] !== null && hr_verfall_ab_norm($b['verfallAb']) === null) fail('Erster Verfall: bitte ein Jahr zwischen ' . HR_VERFALL_AB_MIN . ' und ' . HR_VERFALL_AB_MAX . ' wählen oder „jedes Jahr“.', 422);
+                $zusatz['verfallAb'] = $b['verfallAb'];
+            }
             // Verfallstag des Resturlaubs (optional; ohne Angabe bleibt der gespeicherte Wert)
             $bis = null;
             if (array_key_exists('uebertragBis', $b)) {
@@ -524,6 +529,12 @@ switch ($action) {
             if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');
             if (isset($zusatz['regelSperren']) && $zusatz['regelSperren'] !== $alt['regelSperren']) audit('hr', 'HR: Sperren aus den Urlaubsregeln ' . ($zusatz['regelSperren'] ? 'eingeschaltet' : 'ausgeschaltet'));
             if (isset($zusatz['regeln']) && $zusatz['regeln'] !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');
+            if (array_key_exists('verfallAb', $zusatz) && $zusatz['verfallAb'] !== $alt['verfallAb']) {
+                $tag = substr(hr_einstellungen()['uebertragBis'], 3, 2) . '.' . substr(hr_einstellungen()['uebertragBis'], 0, 2) . '.';
+                audit('hr', $zusatz['verfallAb'] === null ? 'HR: Resturlaub verfällt jedes Jahr (keine Übergangsregel mehr)'
+                    : 'HR: Resturlaub verfällt erstmals am ' . $tag . $zusatz['verfallAb'] . ' (vorher kein Verfall)');
+            }
+            hr_verfall_ab(true);
             $neu = hr_einstellungen();
             respond(['ok' => true, 'ferien' => $neu['ferien'], 'uebertragBis' => hr_uebertrag_bis(true)] + hr_einstellungen_aus($neu));
         }
