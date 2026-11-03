@@ -236,13 +236,13 @@
      Änderung erst speichern). Der automatische Versand läuft beim ersten Aufruf der Urlaubsverwaltung ab dem Termin. */
   const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   const monatText = (ym) => (/^\d{4}-\d{2}$/.test(ym || '') ? `${MONATE[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : '');
-  const ART = { monat: 'Monatsübersicht', erinnerung: 'Erinnerung', steuerberater: 'Steuerberater', fehlen: 'Unentschuldigt: Bitte um Erklärung' };
+  const ART = { monat: 'Monatsübersicht', erinnerung: 'Erinnerung', steuerberater: 'Steuerberater', fehlen: 'Unentschuldigt: Bitte um Erklärung', planung: 'Erinnerung Jahresplanung', jahresuebersicht: 'Jahresübersicht' };
   function mailKarte() {
     const m = daten && daten.mail;
     if (!m) return '';
     const e = m.einst, n = m.naechste, [vor, dies] = m.monate;
     const klein = (t) => (t ? `<small class="muted">${t}</small>` : '');
-    const verlauf = (m.verlauf || []).slice(0, 8).map((v) => `<li><span>${esc(W.dateTime ? W.dateTime(v.t) : v.t)}</span><span>${esc(ART[v.art] || v.art)}${v.name ? ' an ' + esc(v.name) : ''}${v.monat ? ' · ' + esc(v.monat.split('/').map(monatText).join(' und ')) : ''}${v.wie === 'automatisch' ? ' · automatisch' : ''}${v.test ? ' · Testmodus' : ''}</span>
+    const verlauf = (m.verlauf || []).slice(0, 8).map((v) => `<li><span>${esc(W.dateTime ? W.dateTime(v.t) : v.t)}</span><span>${esc(ART[v.art] || v.art)}${v.jahr ? ' ' + esc(String(v.jahr)) : ''}${v.name ? ' an ' + esc(v.name) : ''}${v.monat ? ' · ' + esc(v.monat.split('/').map(monatText).join(' und ')) : ''}${v.wie === 'automatisch' ? ' · automatisch' : ''}${v.test ? ' · Testmodus' : ''}</span>
       <span>${esc(String(v.gesendet))} gesendet${v.fehler ? ` · <b class="hr-mail-fehler">${esc(String(v.fehler))} nicht zugestellt</b>` : ''}${v.ohneAdresse ? ` · ${esc(String(v.ohneAdresse))} ohne Adresse` : ''}</span></li>`).join('');
     return `<form class="gcard hr-einst hr-mail" id="hr-mail" novalidate>
       <h3 class="sec-h">E-Mails</h3>

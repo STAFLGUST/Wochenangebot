@@ -98,3 +98,24 @@ schreibend = true
 [aktion.hr_steuerberater_senden]
 oberflaeche = "angebot.eingabe"
 schreibend = true
+
+# Jahresplanung (Inhaber 03.11.2026): Zusammenfassung (hr.verwalten oder hr.genehmigen), gesammelt genehmigen (hr.genehmigen),
+# Erinnerung, Abschluss und Jahresübersicht per E-Mail (hr.verwalten) – Dokumente hr-abwesenheiten und hr-einstellungen
+[aktion.hr_planung]
+oberflaeche = "hr.intern"
+
+[aktion.hr_planung_freigeben]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_planung_erinnern]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_planung_abschluss]
+oberflaeche = "hr.intern"
+schreibend = true
+
+[aktion.hr_planung_uebersicht_senden]
+oberflaeche = "hr.intern"
+schreibend = true

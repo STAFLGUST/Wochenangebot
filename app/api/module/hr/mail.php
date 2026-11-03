@@ -124,14 +124,15 @@ function hr_mail_box(string $t): string
     return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:14px 0 4px;"><tr><td style="background:#fbeee0;border-left:4px solid #b4610f;border-radius:8px;padding:12px 14px;font-size:15px;line-height:1.5;color:#1d1a17;"><strong>'
         . mail_h($t) . '</strong></td></tr></table>';
 }
-/* Kurze Tabelle aus Zeilen [Bezeichnung, Wert, fett?] (HTML) – Werte rechtsbündig */
+/* Kurze Tabelle aus Zeilen [Bezeichnung, Wert, fett?, Zusatzzeile?] (HTML) – Werte rechtsbündig, Zusatzzeile klein unter der Bezeichnung */
 function hr_mail_tabelle(array $zeilen): string
 {
     $h = '';
     foreach (array_values($zeilen) as $i => $z) {
         $fett = !empty($z[2]);
         $st = 'padding:8px 0;font-size:15px;' . ($fett ? 'font-weight:bold;border-top:2px solid #1d1a17;' : ($i ? 'border-top:1px solid #eee7df;' : ''));
-        $h .= '<tr><td style="' . $st . 'color:' . ($fett ? '#1d1a17' : '#4a443e') . ';">' . mail_h($z[0]) . '</td>'
+        $unter = isset($z[3]) && $z[3] !== '' ? '<div style="font-size:13px;color:#857c72;margin-top:2px;">' . mail_h($z[3]) . '</div>' : '';
+        $h .= '<tr><td style="' . $st . 'color:' . ($fett ? '#1d1a17' : '#4a443e') . ';">' . mail_h($z[0]) . $unter . '</td>'
             . '<td align="right" style="' . $st . 'white-space:nowrap;color:#1d1a17;">' . mail_h($z[1]) . '</td></tr>';
     }
     return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">' . $h . '</table>';
@@ -277,7 +278,8 @@ function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, ar
         store_write('hr-einstellungen', $d);
     });
     $namen = ['monat' => 'Monatsübersicht', 'erinnerung' => 'Erinnerung „Resturlaub verfällt“', 'steuerberater' => 'Übersicht an den Steuerberater',
-              'fehlen' => 'E-Mail zur Abwesenheit' . (isset($zusatz['name']) ? ' an ' . $zusatz['name'] : '') . ' (Bitte um Erklärung)'];
+              'fehlen' => 'E-Mail zur Abwesenheit' . (isset($zusatz['name']) ? ' an ' . $zusatz['name'] : '') . ' (Bitte um Erklärung)',
+              'planung' => 'Erinnerung Jahresplanung ' . ($zusatz['jahr'] ?? ''), 'jahresuebersicht' => 'Jahresübersicht ' . ($zusatz['jahr'] ?? '')];
     audit('hr', 'HR: ' . ($namen[$art] ?? $art) . ($wie === 'automatisch' ? ' (automatisch)' : '') . (!empty($zusatz['test']) ? ' (Testmodus)' : '') . ': ' . $ok . ' gesendet'
         . ($fehler ? ', ' . count($fehler) . ' nicht zugestellt' : ''), [], $me ?? ['username' => 'system', 'name' => 'System (automatisch)', 'role' => '']);
     return $eintrag + ['fehlerText' => array_slice($fehler, 0, 5)];
