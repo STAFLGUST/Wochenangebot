@@ -612,14 +612,14 @@ dialog.modal.st-vk { width: min(1100px, calc(100vw - 32px)); }
 .ms-state.error { color: var(--accent); white-space: normal; }
 .mtab .m-code { width: 92px; font-family: var(--mono); font-size: 12.5px; color: var(--text-2); padding-left: 12px; }
 .mtab th.m-code { font-family: inherit; font-size: 11.5px; color: var(--muted); }
-.mtab .m-cat { width: 138px; } .mtab .m-origin { width: 170px; } .mtab .m-cond { width: 150px; }
-.mtab .m-offer { width: 120px; text-align: center; white-space: nowrap; font-size: 12.5px; }
+.mtab .m-cat { width: 118px; } .mtab .m-origin { width: 96px; } .mtab .m-cond { width: 108px; }
+.mtab .m-offer { width: 96px; text-align: center; white-space: nowrap; font-size: 12.5px; }
 .mtab .m-act { width: 44px; text-align: center; }
 .m-winab { font-size: 11.5px; color: var(--muted); padding: 0 9px 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 520px; }
 .m-ok { color: var(--c-fresh); }
 .m-diff { border: 0; background: var(--c-aged-bg); color: var(--c-aged); font-weight: 600; font-size: 12px; border-radius: 6px; padding: 2px 8px; }
 button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95); }
-@media (max-width: 1100px) { .mtab .m-origin { width: 130px; } .mtab .m-cond { width: 128px; } }
+@media (max-width: 1100px) { .mtab .m-origin { width: 90px; } .mtab .m-cond { width: 100px; } }
 @media (max-width: 860px) { .mtab .m-cat, .mtab .m-origin { display: none; } }
 @media (max-width: 560px) {
   #view-master .mtab { table-layout: fixed; }
@@ -627,6 +627,36 @@ button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95)
   .mtab .in { min-width: 0; width: 100%; text-overflow: ellipsis; }
   .m-winab { display: none; }
 }
+/* Artikelliste nur zum Ansehen, Klick öffnet das Pop-up (03.11.2026) */
+.mtab tr.m-row { cursor: pointer; }
+.mtab tr.m-row td { padding-top: 8px; padding-bottom: 8px; font-size: 13.5px; }
+.mtab .m-orig { color: var(--text-2); max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtab .m-name .m-nm { font-weight: 600; }
+.m-eigen { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 99px; background: var(--c-frozen-bg); color: var(--c-frozen); font-size: 11px; font-weight: 650; white-space: nowrap; vertical-align: 1px; }
+.m-quelle { display: inline-block; margin-left: 4px; padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: 10.5px; }
+.m-orig-sub { display: none; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtab .m-vk .m-vkname { padding: 0; }
+@media (max-width: 1100px) { .mtab .m-orig { display: none; } .m-orig-sub:not(:empty) { display: block; } }
+@media (max-width: 560px) { .mtab .m-name { overflow: hidden; } .mtab .m-name .m-nm { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .m-eigen { margin: 2px 0 0; } }
+/* Pop-up „Artikel“ der Artikelstammdaten */
+#dlg-master-art .ma-nr { font-family: var(--mono); font-size: .8em; color: var(--muted); font-weight: 600; margin-right: 4px; }
+.ma-orig { min-height: 40px; display: flex; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.ma-orig.mono { font-family: var(--mono); font-weight: 500; font-size: 14px; }
+#dlg-master-art .fld .hint, #dlg-item .it-namen .hint { margin: 0; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; color: var(--muted); }
+.ma-namen, .it-namen { gap: 8px; }
+.ma-nrow, .it-nrow { display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 10px; align-items: center; }
+.ma-nrow > span, .it-nrow > span { display: flex; flex-direction: column; gap: 1px; font-size: 13.5px; font-weight: 600; color: var(--text); text-transform: none; letter-spacing: 0; min-width: 0; overflow-wrap: anywhere; }
+.ma-nrow small, .it-nrow small { font-size: 11.5px; font-weight: 500; }
+.ma-drin { color: var(--c-fresh); }
+/* eigene Bezeichnung ausgefüllt: farbig wie „eigene“ im Angebot (stärker als die Feldregeln des Glas-Designs) */
+.ma-namen .ma-nrow input:not(:placeholder-shown), .it-namen .it-nrow input:not(:placeholder-shown) { border-color: var(--c-frozen); background-color: var(--c-frozen-bg); color: var(--c-frozen); }
+.ma-status { display: flex; align-items: center; gap: 6px; }
+@media (max-width: 560px) { .ma-nrow, .it-nrow { grid-template-columns: 1fr; gap: 4px; } }
+/* Editor: eigene Bezeichnung im gewählten Kundenangebot */
+.etab .e-nm.e-nm-eigen { color: var(--c-frozen); }
+.e-eigen { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--c-frozen); background: var(--c-frozen-bg); padding: 1px 6px; border-radius: 5px; pointer-events: none; }
+.e-nmrow:has(.e-eigen) .newtag { right: 72px; }
+.e-nmrow:has(.werbtag) .e-eigen { position: static; transform: none; margin-left: 6px; }
 a.btn#btn-site { text-decoration: none; }
 @media (max-width: 480px) { #btn-site { display: none; } }
 

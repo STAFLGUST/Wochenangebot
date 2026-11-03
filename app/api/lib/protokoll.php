@@ -165,6 +165,10 @@ function changes_between(?array $a, array $b): array
             $vf = variant_text($o['variants'][$oid] ?? null, (string)$oid); $vt = variant_text($it['variants'][$oid] ?? null, (string)$oid);
             if ($vf !== $vt) { $def = offer_def((string)$oid); $out[] = ['k' => "$id|v:$oid", 'code' => $code, 'name' => $it['name'], 'f' => ($oid === OFFER_STD ? 'Sichtbar im ' : 'Preis ') . ($def['name'] ?? $oid), 'from' => $vf, 'to' => $vt]; }
         }
+        foreach (array_unique(array_merge(array_map('strval', array_keys($o['namen'] ?? [])), array_map('strval', array_keys($it['namen'] ?? [])))) as $oid) {   // eigene Bezeichnung je Angebot
+            $nf = (string)($o['namen'][$oid] ?? ''); $nt = (string)($it['namen'][$oid] ?? '');
+            if ($nf !== $nt) { $def = offer_def($oid); $out[] = ['k' => "$id|n:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Bezeichnung ' . ($def['name'] ?? $oid), 'from' => $nf ?: 'wie Basis', 'to' => $nt ?: 'wie Basis']; }
+        }
         if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Sonderpreis (solange der Vorrat reicht)', 'from' => sale_text($o['sale'] ?? null) ?: 'kein Sonderpreis', 'to' => sale_text($it['sale'] ?? null) ?: 'kein Sonderpreis'];
     }
     foreach ($ia as $id => $it) {

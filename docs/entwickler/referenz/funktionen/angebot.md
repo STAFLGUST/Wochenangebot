@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 594 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+41 Dateien, 601 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -268,6 +268,8 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `aufnehmen(it, oid, p)` – In ein Angebot aufnehmen; p = Preis ({status, value?}) oder null (Preis bleibt, in eigener Liste „auf Anfrage“)
 - `nurIn(it, oid)` – Neuer Artikel nur für dieses Angebot: im Wochenangebot und in Angeboten, die ihm folgen, nicht enthalten
 - `entfernen(it, oid)` – Aus einem Angebot entfernen.
+- `namenBekannt(n)` – nur Einträge bestehender Kundenangebote; null, wenn keiner
+- `setzeName(x, oid, text)` – eigene Bezeichnung setzen; leer oder gleich dem Basiswert = keine eigene
 - `werbungBereinigen()` – Artikel, die nicht mehr im Angebot stehen, fallen aus dessen Werbung (unbekannte Angebote prüft der Server)
 
 **API**
@@ -378,6 +380,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `issuesHTML(issues)`
 - `renderImport(d)`
 - `werbungUebernehmen(alt, neu)` – Werbung geht beim Excel-Import auf den Artikel mit derselben Artikelnummer über (ohne Nummer: gleiche Bezeichnung)
+- `namenUebernehmen(alt, neu)` – Eigene Bezeichnungen je Angebot gehen beim Excel-Import wie die Kundenpreise auf den Artikel mit derselben Artikelnummer über; was die Stammdaten vorgeben …
 - `importKundenangebote(alt, neu)`
 
 **Angebote (Standard + Kundenangebote)**
@@ -542,19 +545,26 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `loadMaster(force)`
 - `masterOf(code)`
 - `draftByCode(m)`
+- `namenSetzen(it, e)` – Bezeichnungen je Angebot eines Stammsatzes auf einen Artikel des Angebots übertragen (nur bestehende Angebote)
 - `applyMasterTo(m, onlyCode)` – Stammdaten auf Artikel anwenden (nur eindeutige Artikelnummern)
 - `migrateMaster()` – Stammdaten an die Regeln anpassen (einmalig je Änderung der Regeln, danach ohne Wirkung)
 - `addFromDraft()`
 - `setMasterState(st, msg)`
 - `masterChanged()`
-- `saveMaster()`
+- `saveMaster()` – Rückgabe: true = gespeichert, false = Fehler (bei 409 ist danach der aktuelle Stand geladen), undefined = eingereiht
 - `offerStatus(e, by)`
 - `renderMasterView()`
 - `vkFilterOpts()`
-- `renderMasterList()`
+- `masterOrig(e)` – Originalbezeichnung eines Stammsatzes: Bezeichnung1 aus dem Artikelstammdaten-Import, sonst der Name der Bestandsliste (WinAB).
+- `renderMasterList()` – Liste nur zum Ansehen (Vorgabe des Inhabers 03.11.2026): Klick auf einen Artikel öffnet das Pop-up zum Ändern
+
+**Pop-up „Artikel“ der Artikelstammdaten (Auftrag des Inhabers 03.11.2026)**
+
+- `maDraftItem(code)`
+- `openMasterArt(code)`
 - `masterAusCsv(buf)`
 - `masterNeuAus(r)`
-- `masterZusammenfuehren(res, basis)` – Gelesene Zeilen mit den Stammdaten zusammenführen: neue Artikel mit vorgeschlagenen Merkmalen, bestehende nur um VK-Gruppe/GTIN ergänzt (leere Felder in der …
+- `masterZusammenfuehren(res, basis)` – Gelesene Zeilen mit den Stammdaten zusammenführen: neue Artikel mit vorgeschlagenen Merkmalen, bestehende nur um Originalbezeichnung (Bezeichnung1), …
 - `masterImportDatei(file)`
 - `openMasterNew(code)`
 - `saveItemToMaster(it)` – Artikel-Dialog: aktuellen Artikel als Stammdaten speichern

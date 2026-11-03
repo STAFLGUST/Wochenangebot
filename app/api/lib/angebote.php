@@ -37,6 +37,7 @@ function angebot_ids_mit_resten(array $vorhanden): array
         foreach ($d['items'] ?? [] as $it) {
             foreach (array_keys(is_array($it['variants'] ?? null) ? $it['variants'] : []) as $k) $ids[(string)$k] = true;
             foreach (array_keys(is_array($it['sale']['offers'] ?? null) ? $it['sale']['offers'] : []) as $k) $ids[(string)$k] = true;
+            foreach (array_keys(is_array($it['namen'] ?? null) ? $it['namen'] : []) as $k) $ids[(string)$k] = true;   // eigene Bezeichnungen
         }
         foreach (array_keys(is_array($d['meta']['werbung'] ?? null) ? $d['meta']['werbung'] : []) as $k) $ids[(string)$k] = true;   // Werbung
     }
@@ -184,7 +185,9 @@ function offer_resolve(array $m, array $def): array
     foreach ($m['items'] ?? [] as $it) {
         $v = $it['variants'][$def['id']] ?? null;
         $sale = sale_for($it, $def['id']);
-        unset($it['variants'], $it['sale'], $it['cell']);   // Zelladresse der Excel-Datei ist intern
+        $eigenerName = !$std && is_array($it['namen'] ?? null) ? trim((string)($it['namen'][$def['id']] ?? '')) : '';
+        unset($it['variants'], $it['sale'], $it['cell'], $it['namen']);   // Zelladresse der Excel-Datei ist intern; Bezeichnungen anderer Angebote nie
+        if ($eigenerName !== '') $it['name'] = $eigenerName;   // eigene Bezeichnung in diesem Angebot, sonst der Basiswert
         if ($v && $v['status'] === 'hidden') continue;
         if ($sale !== null && sold_out($it)) continue;   // Sonderposten ausverkauft
         $regular = $it['price'];
@@ -308,6 +311,9 @@ function clean_model($m, bool $strict): array
         if ($cell !== null && $cell !== '') $row['cell'] = $cell;
         $vars = clean_variants($it['variants'] ?? null, $name, $known);
         if ($vars) $row['variants'] = $vars;
+        // optional: eigene Bezeichnung je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „name“)
+        $namen = angebotsnamen_clean($it['namen'] ?? null, $name, $known);
+        if ($namen) $row['namen'] = $namen;
         $sale = clean_sale($it['sale'] ?? null, $name, $known);
         if ($sale) $row['sale'] = $sale;
         $items[] = $row;
