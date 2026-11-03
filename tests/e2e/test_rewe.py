@@ -13,7 +13,7 @@ Lieferweg ab KW (frühere Wochen unverändert, Verlauf mit Namen); Notizen und W
 Summen je Lieferweg und Mitarbeiter, offene Märkte, Artikel ohne Nummer, Nachträge nach dem Export, in WinAB erfasst) und Excel
 (Blätter, Kopf, Auftragsnummern, Texte bleiben Text, Protokoll); Datenpaket (Rechte, Fehler je Markt, Vorschau schreibt nichts, nur in
 leeres Modul oder mit „ersetzen“, Listen den Mitarbeitern zugeordnet, Verlauf über mehrere Jahre); Oberfläche (Meine Woche mit Antwort
-per Klick und Mengen, Bestellungen zugeklappt, Verlauf mit Vorbestellungen, Marktkarte mit Hinweis und Notizen, Reiter
+per Klick und Mengen, „Rückgängig“ und Zurücksetzen, Bestellungen zugeklappt, Verlauf mit Vorbestellungen, Marktkarte mit Hinweis und Notizen, Reiter
 Daueraufträge (bearbeiten, neu, beenden), Marktakte mit Notiz, Zuweisung, Wochenabschluss mit Excel, Einstellungen mit Datenpaket; 1280 und 390 px, hell
 und dunkel, kein waagerechtes Scrollen, keine JavaScript-Fehler). Nur erfundene Testdaten.
 """
@@ -440,6 +440,14 @@ with sync_playwright() as p:
     pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('[data-notiz]') && z.querySelector('[data-notiz]').value === 'Kunde ruft zurück' && !z.querySelector('[data-s][disabled]'))")
     aw = next(x for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
     check('Antwort per Klick: bestellt, 2 Roastbeef, Notiz gespeichert', aw['status'] == 'bestellt' and aw['mengen'] == {'rb': 2} and aw['notiz'] == 'Kunde ruft zurück', aw)
+    # Versehentlich geklickt: der Hinweis bietet „Rückgängig“ an und stellt die vorige Antwort samt Mengen und Notiz wieder her
+    pg.click(f'{zeile} [data-s="kein"]'); pg.wait_for_selector('#rw-toast.zeigen [data-rueck]')
+    check('Antwort geändert → Hinweis mit „Rückgängig“', 'Musterdorf: Kein Bedarf' in text(pg, '#rw-toast'), text(pg, '#rw-toast'))
+    pg.screenshot(path=os.path.join(SH, 'rewe_rueckgaengig_1280.png'))
+    pg.click('#rw-toast [data-rueck]')
+    pg.wait_for_function("[...document.querySelectorAll('.rw-zeile')].some(z => z.textContent.includes('Musterdorf') && z.querySelector('[data-s=\"bestellt\"][aria-pressed=\"true\"]') && z.querySelector('.rw-mzahl') && z.querySelector('.rw-mzahl').value === '2' && !z.querySelector('[data-s][disabled]'))")
+    aw = next(x for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
+    check('„Rückgängig“: wieder bestellt, 2 Roastbeef, Notiz erhalten', aw['status'] == 'bestellt' and aw['mengen'] == {'rb': 2} and aw['notiz'] == 'Kunde ruft zurück', aw)
     kws = pg.locator(f'{zeile} .rw-zw span').all_inner_texts()
     check('Verlauf: acht Wochen, diese Woche (Ring) und drei Wochen voraus mit KW-Zahlen, Legende', pg.locator(f'{zeile} .rw-z').count() == 12
           and kws == [str(i) for i in range(35, 47)] and pg.locator(f'{zeile} .rw-z.jetzt').count() == 1 and pg.locator(f'{zeile} button[data-vor]').count() == 3
@@ -487,6 +495,18 @@ with sync_playwright() as p:
     else:
         check('Abfragewoche: Dauerauftrag nicht fällig → „Trotzdem abfragen“', box.locator('.rw-nichtfaellig').count() == 1)
         box.locator('[data-offen]').click(); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-s="bestellt"]')
+    # Antwort zurücksetzen (wieder offen): erster Klick fragt nach, zweiter setzt zurück; „Rückgängig“ holt sie zurück
+    if not pg.locator('.rw-zeile:has-text("Beispielstadt") [data-zurueck]').count():
+        pg.click('.rw-zeile:has-text("Beispielstadt") [data-s="kein"]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck]')
+    vor_reset = next(x for g in M.call(f'rewe_woche&kw={ABFRAGE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Beispielstadt')['antwort']
+    pg.click('.rw-zeile:has-text("Beispielstadt") [data-zurueck]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck].frage')
+    check('Zurücksetzen fragt erst nach', 'Wirklich zurücksetzen?' in text(pg, '.rw-zeile:has-text("Beispielstadt") [data-zurueck]'))
+    pg.click('.rw-zeile:has-text("Beispielstadt") [data-zurueck]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck]', state='detached')
+    nach = next(x for g in M.call(f'rewe_woche&kw={ABFRAGE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Beispielstadt')['antwort']
+    check('Antwort zurückgesetzt (wieder offen), Hinweis mit „Rückgängig“', nach is None and 'zurückgesetzt' in text(pg, '#rw-toast') and pg.is_visible('#rw-toast [data-rueck]'), nach)
+    pg.click('#rw-toast [data-rueck]'); pg.wait_for_selector('.rw-zeile:has-text("Beispielstadt") [data-zurueck]')
+    wieder = next(x for g in M.call(f'rewe_woche&kw={ABFRAGE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Beispielstadt')['antwort']
+    check('„Rückgängig“ nach dem Zurücksetzen: vorige Antwort wieder da', wieder and wieder['status'] == vor_reset['status'] and wieder['mengen'] == vor_reset['mengen'], (vor_reset, wieder))
     # Marktakte mit Notiz
     pg.click('#rw-tabs [data-tab="maerkte"]'); pg.wait_for_selector('#rw-m-tabelle tbody tr')
     check('Märkte: nur eigene (2)', pg.locator('#rw-m-tabelle tbody tr').count() == 2 and pg.is_hidden('#rw-m-neu'))
