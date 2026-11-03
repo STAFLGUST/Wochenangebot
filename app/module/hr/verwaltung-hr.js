@@ -2,7 +2,8 @@
    - Verwaltung → Mitarbeiter: HR-Angaben je Mitarbeiter (Abteilung, Position, Arbeitstage, im Urlaubsplan, Urlaubsanspruch
      und Übertrag je Jahr, ob der Resturlaub verfällt) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
-   - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren, Ferien, Verfallstag des Resturlaubs.
+   - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren (eigene und automatisch aus den
+     Urlaubsregeln), Ferien, Verfallstag des Resturlaubs, Text der Urlaubsregeln (steht beim Urlaubsantrag).
    - Verwaltung → Import: Leser „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
    Alle Rechte prüft der Server (hr.verwalten, GR-103); hier ist nur die Anzeige. Wird von admin/index.html nach
    admin.js, admin-verwaltung.js und admin-import.js geladen. */
@@ -17,6 +18,7 @@
   // Kennzeichen „Resturlaub verfällt nicht“ (Verfall je Mitarbeiter abgeschaltet) in den Listen
   const kVerfall = '<small class="hr-kein-verfall" title="Resturlaub aus dem Vorjahr verfällt nicht">kein Verfall</small>';
   const JAHR = new Date().getFullYear();
+  const datumDe = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}.${m[2]}.${m[1]}` : ''; };
   const tagMonat = (mmtt) => { const m = /^(\d{2})-(\d{2})$/.exec(mmtt || ''); return m ? `${m[2]}.${m[1]}.` : '31.03.'; };   // Verfallstag „MM-TT“ → „TT.MM.“
 
   async function laden() {
@@ -203,12 +205,19 @@
       <p class="form-err" id="hr-antraege-err" role="alert"></p></section>
     <form class="gcard hr-einst" id="hr-einst">
       <h3 class="sec-h">Urlaubssperren</h3><p class="hint">In diesen Zeiträumen können Mitarbeiter keinen Urlaub beantragen; die Personalstelle kann weiter eintragen.</p>
+      <label class="check hr-regelsperren"><input type="checkbox" id="hr-regelsperren"${daten.regelSperren !== false ? ' checked' : ''}> <span>Sperren aus den Urlaubsregeln jedes Jahr automatisch
+        <small class="muted">Ostergeschäft (zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (letzte Novemberwoche bis 24.12.)</small></span></label>
+      <ul class="hr-autosperren" id="hr-autosperren">${(daten.sperrenAuto || []).map((z) => `<li><span>${esc(z.text)} ${esc(z.von.slice(0, 4))}</span><span>${esc(datumDe(z.von))} – ${esc(datumDe(z.bis))}</span></li>`).join('')}</ul>
+      <p class="hint hr-eigene-sperren">Weitere Sperren:</p>
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
       <div id="hr-ferien">${daten.ferien.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-ferien">${icon('plus', 'sm')}Ferien</button>
       <h3 class="sec-h">Resturlaub aus dem Vorjahr</h3><p class="hint">Nicht genommener Übertrag verfällt nach diesem Tag. Gilt für alle Jahre und alle Mitarbeiter, bei denen „Resturlaub verfällt“ angehakt ist (Verwaltung → Mitarbeiter, Standard) – gespeichert werden nur Tag und Monat (der 29.02. ist nicht möglich).</p>
       <label class="fld hr-verfall"><span>Verfällt am</span><input type="date" id="hr-uebertrag-bis" value="${esc(`${JAHR}-${daten.uebertragBis || '03-31'}`)}" required></label>
       <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt am ${esc(tagMonat(daten.uebertragBis))}</p>
+      <h3 class="sec-h">Urlaubsregeln</h3><p class="hint">Stehen für alle Mitarbeiter beim Urlaubsantrag. Eine Zeile wie „1. Urlaubsanspruch“ wird zur Überschrift; leer = keine Regeln anzeigen.</p>
+      <label class="fld hr-regeln-feld"><span class="sr-only">Text der Urlaubsregeln</span><textarea id="hr-regeln" rows="14" maxlength="6000">${esc(daten.regeln || '')}</textarea></label>
+      <div class="hr-regeln-knoepfe"><button type="button" class="btn sm" id="hr-regeln-vorlage">Vorlage einsetzen</button></div>
       <p class="hint">Mitarbeiter, Abteilungen, Arbeitstage und Urlaubsanspruch: Verwaltung → Mitarbeiter. Urlaub und Krankheit aus der Zeiterfassung: Verwaltung → Import → „Abwesenheiten aus der Zeiterfassung“.</p>
       <p class="form-err" id="hr-einst-err" role="alert"></p>
       <div class="sec-foot"><button type="submit" class="btn primary">${icon('check', 'sm')}Speichern</button></div></form>`;
@@ -218,6 +227,7 @@
     if (plus) $('#' + plus.dataset.plus).insertAdjacentHTML('beforeend', zeile({}));
     const weg = e.target.closest('#hr-einst [data-weg]');
     if (weg) weg.parentElement.remove();
+    if (e.target.closest('#hr-regeln-vorlage') && daten) $('#hr-regeln').value = daten.regelnStandard || '';
     const alt = e.target.closest('[data-hr-alt]');
     if (alt) altbestandUebernehmen(alt, async () => { await laden(); if (W.views.users) W.views.users(); });
     if (e.target.closest('[data-hr-alt-einzeln]')) altDialog(async () => { if (W.views.users) W.views.users(); });
@@ -231,8 +241,9 @@
     try {
       const bis = $('#hr-uebertrag-bis').value;
       if (!bis) { $('#hr-einst-err').textContent = 'Bitte den Verfallstag des Resturlaubs wählen.'; return; }
-      const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis } });
-      daten.sperren = r.sperren; daten.ferien = r.ferien; daten.uebertragBis = r.uebertragBis;
+      const r = await api('hr_einstellungen_save', { body: { sperren: liste('hr-sperren'), ferien: liste('hr-ferien'), uebertragBis: bis,
+        regelSperren: $('#hr-regelsperren').checked, regeln: $('#hr-regeln').value } });
+      Object.assign(daten, { sperren: r.sperren, ferien: r.ferien, uebertragBis: r.uebertragBis, regelSperren: r.regelSperren, sperrenAuto: r.sperrenAuto, regeln: r.regeln });
       toast('Urlaubseinstellungen gespeichert.');
       renderUrlaub();
     } catch (ex) { $('#hr-einst-err').textContent = ex.message; }

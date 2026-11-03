@@ -343,6 +343,10 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Einträgen derselben Gruppe: Abwesenheiten (U/K/G) untereinander und freie Tage (X) untereinander – ein freier Tag in
   einer Urlaubswoche zählt dort nur nicht mit.
 - **`hr-einstellungen`**: `{"rev": 1, "sperren": [{"von": "…", "bis": "…", "text": "Inventur"}], "ferien": [ … ], "uebertragBis": "03-31", "antraege": true}` – `uebertragBis` (Verfallstag des Resturlaubs, Monat-Tag) ist optional; fehlt es, gilt der 31.03. `antraege` (Schalter „Urlaubsanträge über die Plattform“, Verwaltung → Urlaub, Aktion `hr_antraege_save`) ist optional; nur `false` schaltet Anträge aus, fehlt es, sind sie eingeschaltet.
+  Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
+  Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 24.12. – jedes Jahr berechnet, nicht gespeichert;
+  nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
+  `HR_REGELN_STANDARD`, leer = keine Regeln). `sperren` enthält nur die eingetragenen Sperren.
 - **`hr-korrekturen`**: `{"rev": 2, "meldungen": [{"id": "k0123456789ab", "person": "u…", "von": "2026-09-09", "bis": "2026-09-11", "eintrag": "a…", "text": "…", "status": "offen", "erfasst": {"t": "…", "by": "…", "byId": "u…"}, "erledigt": {"t": "…", "by": "…", "byId": "u…", "antwort": "…"}}]}` –
   Korrekturmeldungen der Mitarbeiter („Korrektur melden“, Aktion `hr_korrektur`; `von`/`bis`/`eintrag` optional,
   höchstens 20 offene je Person). Die Personalstelle erledigt sie (`hr_korrektur_erledigt`, nie die eigene); Meldungen

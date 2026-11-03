@@ -159,6 +159,56 @@ st, r = E.call('hr_antrag', {'von': f'{Y}-12-15', 'bis': f'{Y}-12-16'})
 check('Antrag in der Urlaubssperre: 422 mit Bezeichnung', st == 422 and 'Weihnachtsgeschäft' in r['error'], r)
 check('Sperre: Ende vor Beginn abgelehnt', P.call('hr_einstellungen_save', {'sperren': [{'von': f'{Y}-12-14', 'bis': f'{Y}-12-01'}]})[0] == 422)
 
+# ── Sperren aus den Urlaubsregeln und Text der Urlaubsregeln (Inhaber 03.11.2026) ──
+def ostern(j):
+    a, b, c = j % 19, j // 100, j % 100
+    d, e = b // 4, b % 4
+    g = (b - (b + 8) // 25 + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = c // 4, c % 4
+    l_ = (32 + 2 * e + 2 * i - h - k) % 7
+    m_ = (a + 11 * h + 22 * l_) // 451
+    return dt.date(j, (h + l_ - 7 * m_ + 114) // 31, (h + l_ - 7 * m_ + 114) % 31 + 1)
+def regel_sperren(j):
+    kf, n30 = ostern(j) - dt.timedelta(days=2), dt.date(j, 11, 30)
+    return [('Ostergeschäft', iso(kf - dt.timedelta(days=14)), iso(kf - dt.timedelta(days=1))), ('Weihnachtsgeschäft', iso(n30 - dt.timedelta(days=n30.weekday())), f'{j}-12-24')]
+KF = ostern(Y) - dt.timedelta(days=2)
+v = P.call('mitarbeiter_hr')[1]
+J0 = dt.date.today().year
+check('Standard: Sperren aus den Urlaubsregeln an; Vorschau dieses und nächstes Jahr (Karfreitag − 14 bis Gründonnerstag, Montag der letzten Novemberwoche bis 24.12.)',
+      v['regelSperren'] is True and [(z['text'], z['von'], z['bis']) for z in v['sperrenAuto']] == regel_sperren(J0) + regel_sperren(J0 + 1)
+      and all(z['auto'] for z in v['sperrenAuto']) and len(v['sperren']) == 1, v.get('sperrenAuto'))
+sp = E.call(f'hr_start&jahr={Y}')[1]['sperren']
+check('… gelten wie eingetragene Sperren (Start: eigene und automatische)', [(z['text'], z['von'], z['bis']) for z in sp if z.get('auto') and z['von'][:4] == str(Y)] == regel_sperren(Y)
+      and any(z['text'] == 'Weihnachtsgeschäft' and not z.get('auto') for z in sp), sp)
+st, r = E.call('hr_antrag', {'von': iso(KF - dt.timedelta(days=11)), 'bis': iso(KF - dt.timedelta(days=10))})
+check('Antrag im Ostergeschäft: 422 mit Bezeichnung', st == 422 and 'Ostergeschäft' in r.get('error', ''), (st, r))
+tage_m = {t['datum']: t['sperre'] for t in P.call(f'hr_monat&jahr={Y}&monat={KF.month}')[1]['tage']}
+check('… Kalender markiert die Tage', tage_m.get(iso(KF - dt.timedelta(days=1))) is True and tage_m.get(iso(KF + dt.timedelta(days=4)), False) is False)
+base = {'sperren': v['sperren'], 'ferien': v['ferien']}
+check('Schalter nur ja/nein: 422', P.call('hr_einstellungen_save', {**base, 'regelSperren': 'nein'})[0] == 422)
+st, r = P.call('hr_einstellungen_save', {**base, 'regelSperren': False})
+check('ausgeschaltet: keine automatischen Sperren mehr, eigene bleiben', st == 200 and r['regelSperren'] is False and len(r['sperren']) == 1
+      and not any(z.get('auto') for z in E.call(f'hr_start&jahr={Y}')[1]['sperren']), r)
+st, r = E.call('hr_antrag', {'von': iso(KF - dt.timedelta(days=11)), 'bis': iso(KF - dt.timedelta(days=10))})
+check('… Antrag im Ostergeschäft dann möglich', st == 200, (st, r))
+if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
+check('… Speichern ohne Angabe lässt den Schalter', P.call('hr_einstellungen_save', base)[0] == 200 and P.call('mitarbeiter_hr')[1]['regelSperren'] is False)
+check('… wieder eingeschaltet', P.call('hr_einstellungen_save', {**base, 'regelSperren': True})[1]['regelSperren'] is True)
+d0 = E.call('hr_start')[1]
+check('Urlaubsregeln: Vorlage mit 6 Punkten für jeden Mitarbeiter (Planung bis 31.03.)', d0['regeln'].startswith('1. Urlaubsanspruch') and d0['regeln'].count('\n\n') == 5
+      and 'bis zum 31.03. eines jeden Kalenderjahres' in d0['regeln'] and '31.02' not in d0['regeln'] and v['regelnStandard'] == d0['regeln'])
+st, r = P.call('hr_einstellungen_save', {**base, 'regeln': 'Unsere Regeln\r\n\n1. Planung\nBitte früh planen.\x07\ufeff'})
+check('eigener Text gespeichert (ohne Steuerzeichen) und für Mitarbeiter sichtbar', st == 200 and r['regeln'] == 'Unsere Regeln\n\n1. Planung\nBitte früh planen.'
+      and E.call('hr_start')[1]['regeln'] == r['regeln'], r.get('regeln'))
+check('… zu lang oder kein Text: 422; ohne Personalrecht 403', P.call('hr_einstellungen_save', {**base, 'regeln': 'x' * 6001})[0] == 422
+      and P.call('hr_einstellungen_save', {**base, 'regeln': 5})[0] == 422 and L.call('hr_einstellungen_save', {**base, 'regeln': 'x'})[0] == 403)
+check('… Speichern ohne Text lässt ihn unverändert', P.call('hr_einstellungen_save', base)[0] == 200 and E.call('hr_start')[1]['regeln'] == 'Unsere Regeln\n\n1. Planung\nBitte früh planen.')
+check('… leer = keine Regeln', P.call('hr_einstellungen_save', {**base, 'regeln': ''})[0] == 200 and E.call('hr_start')[1]['regeln'] == '')
+check('… Vorlage wieder eingesetzt', P.call('hr_einstellungen_save', {**base, 'regeln': v['regelnStandard']})[0] == 200 and E.call('hr_start')[1]['regeln'] == d0['regeln'])
+log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: Schalter und Regeltext', 'Sperren aus den Urlaubsregeln ausgeschaltet' in log_ and 'Sperren aus den Urlaubsregeln eingeschaltet' in log_ and 'HR: Urlaubsregeln geändert' in log_)
+
 # Krank für Lena (Personalstelle) – Gesundheitsdatum
 st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'K', 'von': iso(FEB), 'bis': iso(FEB + dt.timedelta(days=1)), 'notiz': 'Arztbesuch-Notiz'})
 check('Krank eingetragen (genehmigt)', st == 200 and r['eintrag']['status'] == 'genehmigt' and r['eintrag']['tage'] == 2, r)
@@ -739,8 +789,10 @@ fehler = []
 with sync_playwright() as p:
     br = p.chromium.launch()
 
-    def anmelden(user, pw, ip, breite=1280):
+    def anmelden(user, pw, ip, breite=1280, verfall_hinweis=False):
         ctx = br.new_context(viewport={'width': breite, 'height': 900}, extra_http_headers={'X-Forwarded-For': ip}, locale='de-DE', timezone_id='Europe/Berlin')
+        if not verfall_hinweis:   # Pop-up „Resturlaub verfällt bald“ (Feb./März möglich) nur im eigenen Test – sonst als heute gesehen
+            ctx.add_init_script("try { localStorage.setItem('hr-verfall-gesehen', 'hr-verfall-' + new Intl.DateTimeFormat('sv-SE', {timeZone: 'Europe/Berlin'}).format(new Date())); } catch (e) {}")
         pg = ctx.new_page(); pg.on('pageerror', lambda e: fehler.append(str(e)))
         pg.goto(B + '/admin/'); pg.wait_for_selector('#screen-auth:not([hidden])')
         pg.fill('#au-user', user); pg.fill('#pw1', pw); pg.click('#auth-submit')
@@ -886,6 +938,22 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_personal_1280.png'), full_page=True)
     pg.click('#vt-urlaub'); pg.wait_for_selector('#hr-einst')
     check('Verwaltung → Urlaub: Sperren und Ferien aus der HR', pg.locator('#hr-sperren .hr-zr').count() == 1 and pg.locator('#hr-ferien .hr-zr').count() == 1)
+    J0_ = dt.date.today().year
+    check('Verwaltung → Urlaub: Sperren aus den Urlaubsregeln angehakt mit Vorschau (dieses und nächstes Jahr), Regeltext vorbelegt',
+          pg.is_checked('#hr-regelsperren') and pg.locator('#hr-autosperren li').count() == 4 and f'Ostergeschäft {J0_}' in pg.text_content('#hr-autosperren')
+          and pg.input_value('#hr-regeln').startswith('1. Urlaubsanspruch'))
+    pg.uncheck('#hr-regelsperren')
+    check('… abgehakt: Vorschau ausgeblendet', not pg.is_visible('#hr-autosperren'))
+    pg.fill('#hr-regeln', '1. Test\nNur ein Test.')
+    with pg.expect_response(lambda r_: 'action=hr_einstellungen_save' in r_.url) as antwort:
+        pg.click('#hr-einst [type="submit"]')
+    pg.wait_for_selector('#hr-regelsperren')
+    v_ = P.call('mitarbeiter_hr')[1]
+    check('Oberfläche: Schalter und Regeltext gespeichert', antwort.value.status == 200 and v_['regelSperren'] is False and v_['regeln'] == '1. Test\nNur ein Test.'
+          and not pg.is_checked('#hr-regelsperren'), antwort.value.status)
+    pg.check('#hr-regelsperren'); pg.click('#hr-regeln-vorlage')
+    check('… „Vorlage einsetzen“ füllt den Standardtext', pg.input_value('#hr-regeln') == v_['regelnStandard'])
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaubsregeln_1280.png'), full_page=True)
     pg.click('[data-plus="hr-ferien"]')
     zr = pg.locator('#hr-ferien .hr-zr').nth(1).locator('input')
     zr.nth(0).fill(f'{Y}-10-05'); zr.nth(1).fill(f'{Y}-10-16'); zr.nth(2).fill('Herbstferien')
@@ -1117,6 +1185,39 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_export_1280.png'))
     ctx.close()
 
+    # Hinweis „Resturlaub verfällt bald“: Verfallstag in 20 Tagen (laufendes Jahr), 3 Tage Übertrag
+    J = dt.date.today().year
+    frist = min(dt.date.today() + dt.timedelta(days=20), dt.date(J, 12, 31))
+    if (frist.month, frist.day) == (2, 29): frist = dt.date(J, 2, 28)
+    v_ = P.call('mitarbeiter_hr')[1]
+    assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': frist.strftime('%m-%d')})[0] == 200
+    pe_ = next(p_ for p_ in v_['personen'] if p_['nutzer'] == ids['erika'])
+    rev = v_['rev']; hr(ids['erika'], jahr=J, anspruch=(pe_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=3)
+    k_e = E.call('hr_start')[1]['konto']
+    check('Konto: 3 Tage Übertrag verfallen in 20 Tagen', k_e['verfaellt'] == 3 and k_e['frist'] == frist.isoformat(), k_e)
+    for breite in (1280, 390):
+        ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite, verfall_hinweis=True)
+        pg.goto(B + '/module/hr/'); pg.wait_for_selector('#dlg-verfall[open]')
+        t_ = pg.text_content('#verfall-text')
+        check(f'{breite}px: Pop-up „Resturlaub verfällt bald“ mit Tagen und Datum, ohne waagerechtes Scrollen', '3 Tage' in t_ and frist.strftime('%d.%m.%Y') in t_
+              and pg.is_visible('#verfall-planen') and pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'), t_)
+        pg.screenshot(path=os.path.join(SH, f'hr_verfall_hinweis_{breite}.png'))
+        if breite == 1280:
+            pg.click('#dlg-verfall .hr-knoepfe [data-schliessen]'); pg.wait_for_selector('#dlg-verfall[open]', state='hidden')
+            pg.reload(); pg.wait_for_selector('#hr-app:not([hidden]) #mein-konto .hr-wert')
+            check('… höchstens einmal am Tag', not pg.evaluate("document.querySelector('#dlg-verfall').open"))
+        else:
+            pg.click('#verfall-planen'); pg.wait_for_selector('#dlg-verfall[open]', state='hidden')
+            check('… „Urlaub beantragen“ schließt und springt ins Formular', pg.evaluate("document.activeElement && document.activeElement.id === 'antrag-von'"))
+        ctx.close()
+    rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['erika'], jahr=J, anspruch=(pe_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=(pe_['jahre'].get(str(J)) or {}).get('uebertrag'))
+    v_ = P.call('mitarbeiter_hr')[1]
+    assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31'})[0] == 200
+    ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', 1280, verfall_hinweis=True)
+    pg.goto(B + '/module/hr/'); pg.wait_for_selector('#hr-app:not([hidden]) #mein-konto .hr-wert')
+    check('… ohne verfallenden Übertrag kein Pop-up', not pg.evaluate("document.querySelector('#dlg-verfall').open"))
+    ctx.close()
+
     # Mitarbeiterin: Mein Urlaub, Antrag in der Oberfläche, Desktop und Handy
     KRANK_UI = montag(Y, 11, 3)
     assert P.call('hr_eintrag_save', {'person': PE, 'art': 'K', 'von': iso(KRANK_UI), 'bis': iso(KRANK_UI + dt.timedelta(days=1))})[0] == 200
@@ -1124,6 +1225,13 @@ with sync_playwright() as p:
         ctx, pg = anmelden('erika', 'Editor-Zugang-77', '198.51.100.3', breite)
         pg.goto(B + '/module/hr/'); pg.wait_for_selector('#mein-konto .hr-wert')
         check(f'{breite}px: Personalbereiche ausgeblendet', not pg.is_visible('[data-tab="antraege"]') and not pg.is_visible('[data-tab="export"]'))
+        check(f'{breite}px: Urlaubsregeln beim Antrag (6 Punkte mit Überschrift, Hinweis im Formular)', pg.is_visible('#regeln-text') and pg.locator('#regeln-text h3').count() == 6
+              and '31.03.' in pg.text_content('#regeln-text') and pg.is_visible('#antrag-regeln'))
+        if breite == 1280:
+            pg.click('#regeln > summary'); pg.wait_for_function("!document.querySelector('#regeln').open && localStorage.getItem('hr-regeln-zu') === '1'")
+            pg.reload(); pg.wait_for_selector('#hr-app:not([hidden]) #mein-konto .hr-wert')
+            check('Urlaubsregeln zugeklappt bleiben zugeklappt (je Browser), Link im Formular klappt auf', not pg.evaluate("document.querySelector('#regeln').open"))
+            pg.click('#antrag-regeln a'); pg.wait_for_function("document.querySelector('#regeln').open")
         breit = pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
         check(f'{breite}px: kein waagerechtes Scrollen der Seite', breit)
         pg.screenshot(path=os.path.join(SH, f'hr_mein_{breite}.png'), full_page=True)

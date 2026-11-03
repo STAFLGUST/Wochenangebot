@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 157 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 164 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -10,6 +10,7 @@ _Aktionen: HR · Urlaubsverwaltung (Oberfläche hr.intern, Logik in app/api/modu
 
 - `hr_jahr_param(v)` – Jahr aus der Anfrage (Standard: aktuelles Jahr)
 - `hr_person_aus(p, eintraege, jahr)` – Angaben einer Person für die Personalstelle
+- `hr_einstellungen_aus(einst)` – Einstellungen für Verwaltung → Urlaub: eingetragene Sperren (zum Bearbeiten), Sperren aus den Regeln (nur Anzeige, dieses und nächstes Jahr), Schalter, …
 
 ## `app/api/module/hr/export.php`
 
@@ -74,6 +75,11 @@ _Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, An
 - `hr_abwesenheiten_umhaengen(von, nach)` – Abwesenheiten von einer Personenkennung auf eine andere umhängen (Übernahme eines Altbestands-Eintrags)
 - `hr_abwesenheiten()`
 - `hr_einstellungen()`
+
+**Urlaubsregeln und Sperren aus den Regeln (Inhaber 03.11.2026)**
+
+- `hr_regeln_pruefen(t)` – Text der Urlaubsregeln prüfen: Zeichenkette, höchstens HR_REGELN_MAX Zeichen, ohne Steuerzeichen (Zeilenumbrüche bleiben)
+- `hr_regel_sperren(j)` – Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis Gründonnerstag), Weihnachtsgeschäft = Montag …
 
 **Verfallstag des Resturlaubs aus dem Vorjahr**
 
@@ -240,6 +246,14 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `zeigeExport()`
 
+**Urlaubsregeln (Text der Personalstelle, Verwaltung → Urlaub)**
+
+- `zeigeRegeln(text)`
+
+**Hinweis „Resturlaub verfällt bald“**
+
+- `verfallHinweis()`
+
 **Start**
 
 - `laden()`
@@ -282,10 +296,12 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `iso(d)`
 - `dokument(name)` – Gespeichertes Dokument lesen (Dateien: ohne Schutzzeile).
 - `hr(uid, **werte)`
+- `ostern(j)` – ── Sperren aus den Urlaubsregeln und Text der Urlaubsregeln (Inhaber 03.11.2026) ──
+- `regel_sperren(j)`
 - `person_zeile(v, n)`
 - `urlaub(d1, d2)`
 - `zimp(cl, uebernehmen, stand)`
-- `anmelden(user, pw, ip, breite)`
+- `anmelden(user, pw, ip, breite, verfall_hinweis)`
 - `zeit(cl, uebernehmen, stand, **opt)`
 
 ## `tests/e2e/test_hr_uebersicht.py`

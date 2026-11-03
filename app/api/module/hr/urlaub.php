@@ -25,6 +25,11 @@ declare(strict_types=1);
    - Urlaubsanträge über die Plattform lassen sich ein- und ausschalten (Inhaber 30.10.2026, Verwaltung → Urlaub,
      hr-einstellungen.antraege, Standard an). Ausgeschaltet lehnt der Server neue Anträge ab; Kalender, Urlaubskonto,
      Eintragen durch die Personalstelle, Entscheiden und Zurückziehen offener Anträge bleiben.
+   - Urlaubsregeln (Inhaber 03.11.2026): Text der Personalstelle (hr-einstellungen „regeln“, Vorlage HR_REGELN_STANDARD),
+     den jeder Mitarbeiter beim Urlaubsantrag sieht; änderbar in Verwaltung → Urlaub.
+   - Urlaubssperren aus den Regeln jedes Jahr automatisch (Inhaber 03.11.2026, hr-einstellungen „regelSperren“, Standard an):
+     Ostergeschäft (die zwei Wochen vor Karfreitag) und Weihnachtsgeschäft (Montag der letzten Novemberwoche bis 24.12.).
+     Sie gelten wie eingetragene Sperren (hr_einstellungen „sperren“ enthält beide; „sperrenEigene“ nur die eingetragenen).
    - Krankheit zählt nie gegen den Urlaub (Inhaber 30.10.2026) – auch nicht „Krank ohne AU“, das die Zeiterfassung vom
      Urlaub abzieht (urlaubAbzug bleibt gespeichert und ist für die Personalstelle nur ein Hinweis). Das Urlaubskonto
      zählt nur Urlaub (U).
@@ -226,10 +231,54 @@ function hr_einstellungen(): array
 {
     $d = store_read('hr-einstellungen') ?? [];
     $z = function ($l) { return array_values(array_filter((array)$l, function ($x) { return is_array($x) && hr_datum($x['von'] ?? null) && hr_datum($x['bis'] ?? null); })); };
-    return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $z($d['sperren'] ?? []), 'ferien' => $z($d['ferien'] ?? []),
+    $eigene = $z($d['sperren'] ?? []);
+    // Sperren aus den Urlaubsregeln: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
+    $regelSperren = ($d['regelSperren'] ?? true) !== false;
+    $alle = $eigene;
+    if ($regelSperren) { $j = (int)date('Y'); for ($y = $j - 1; $y <= $j + 3; $y++) $alle = array_merge($alle, hr_regel_sperren($y)); }
+    usort($alle, function ($a, $b) { return [$a['von'], $a['bis']] <=> [$b['von'], $b['bis']]; });
+    return ['rev' => (int)($d['rev'] ?? 0), 'sperren' => $alle, 'sperrenEigene' => $eigene, 'regelSperren' => $regelSperren, 'ferien' => $z($d['ferien'] ?? []),
             'uebertragBis' => hr_uebertrag_bis_norm($d['uebertragBis'] ?? null) ?? HR_UEBERTRAG_BIS,
             // Urlaubsanträge über die Plattform: nur ein ausdrückliches false schaltet sie aus (fehlt das Feld: an – GR-006)
-            'antraege' => ($d['antraege'] ?? true) !== false];
+            'antraege' => ($d['antraege'] ?? true) !== false,
+            // Urlaubsregeln: gespeicherter Text (auch leer = keine Regeln anzeigen), ohne Feld die Vorlage
+            'regeln' => is_string($d['regeln'] ?? null) ? $d['regeln'] : HR_REGELN_STANDARD];
+}
+
+/* ---------------- Urlaubsregeln und Sperren aus den Regeln (Inhaber 03.11.2026) ---------------- */
+const HR_REGELN_MAX = 6000;   // Zeichen
+const HR_REGELN_STANDARD = "1. Urlaubsanspruch\n"
+    . "Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n\n"
+    . "2. Planung\n"
+    . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Um eine Planung sinnvoll und für alle Beteiligten gerecht zu gestalten, sollte die jeweilige individuelle Jahresurlaubsplanung bis zum 31.03. eines jeden Kalenderjahres vom Arbeitnehmer eingereicht werden.\n\n"
+    . "3. Urlaubsdauer\n"
+    . "Das BUrlG gesteht dem Arbeitnehmer das Anrecht auf Urlaub an 10 aufeinander folgenden Arbeitstagen zu. Die innerbetriebliche Regelung gewährt den Arbeitnehmern aktuell einen Urlaub an 15 aufeinander folgenden Arbeitstagen.\n\n"
+    . "4. Urlaubssperre\n"
+    . "Aus betrieblichen Gründen wird zu folgenden Zeiten kein Urlaub gewährt:\n"
+    . "Ostergeschäft: Zwei Wochen vor den Osterfeiertagen eines jeden Kalenderjahres.\n"
+    . "Weihnachtsgeschäft: Ab der letzten Novemberwoche bis einschließlich dem 24.12. eines jeden Kalenderjahres.\n\n"
+    . "5. Resturlaub\n"
+    . "Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Konnte der Arbeitnehmer seinen Resturlaub wegen Urlaubssperre, Übermaß an Arbeit oder wegen Krankheit nicht nehmen, so muss der Resturlaub gemäß § 7 Abs. 3 Satz 3 BUrlG in den ersten drei Monaten des folgenden Kalenderjahres, d. h. bis zum 31. März, genommen werden. Andernfalls verfällt er grundsätzlich.\n\n"
+    . "6. Urlaubsvertretung\n"
+    . "Der Urlaub muss so geplant werden, dass es keine Überschneidung mit dem jeweiligen Vertreter (Vollvertretung) gibt. Die Urlaubsvertretung ist im Vertretungsplan festgelegt.";
+
+/* Text der Urlaubsregeln prüfen: Zeichenkette, höchstens HR_REGELN_MAX Zeichen, ohne Steuerzeichen (Zeilenumbrüche bleiben) */
+function hr_regeln_pruefen($t): string
+{
+    if (!is_string($t)) throw new InvalidArgumentException('Urlaubsregeln: bitte Text angeben.');
+    $t = trim(preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x{feff}\x{200b}]/u', '', str_replace("\r", '', $t)) ?? '');
+    if (mb_strlen($t) > HR_REGELN_MAX) throw new InvalidArgumentException('Urlaubsregeln: höchstens ' . HR_REGELN_MAX . ' Zeichen.');
+    return $t;
+}
+
+/* Sperren aus den Urlaubsregeln für ein Jahr: Ostergeschäft = die zwei Wochen vor Karfreitag (Karfreitag − 14 bis
+   Gründonnerstag), Weihnachtsgeschäft = Montag der letzten Novemberwoche (Woche mit dem 30.11.) bis 24.12. */
+function hr_regel_sperren(int $j): array
+{
+    $karfreitag = hr_plus(hr_ostern($j), -2);
+    $nov30 = sprintf('%04d-11-30', $j);
+    return [['von' => hr_plus($karfreitag, -14), 'bis' => hr_plus($karfreitag, -1), 'text' => 'Ostergeschäft', 'auto' => true],
+            ['von' => hr_plus($nov30, 1 - hr_wochentag($nov30)), 'bis' => sprintf('%04d-12-24', $j), 'text' => 'Weihnachtsgeschäft', 'auto' => true]];
 }
 
 /* ---------------- Verfallstag des Resturlaubs aus dem Vorjahr ----------------

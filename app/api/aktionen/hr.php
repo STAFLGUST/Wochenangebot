@@ -25,6 +25,15 @@ function hr_person_aus(array $p, array $eintraege, int $jahr): array
                             'gleittage' => hr_gleit_aus($p, true)]);
 }
 
+/* Einstellungen für Verwaltung → Urlaub: eingetragene Sperren (zum Bearbeiten), Sperren aus den Regeln (nur Anzeige, dieses
+   und nächstes Jahr), Schalter, Ferien, Urlaubsregeln mit Vorlage */
+function hr_einstellungen_aus(array $einst): array
+{
+    $j = (int)date('Y');
+    return ['sperren' => $einst['sperrenEigene'], 'regelSperren' => $einst['regelSperren'], 'sperrenAuto' => array_merge(hr_regel_sperren($j), hr_regel_sperren($j + 1)),
+            'ferien' => $einst['ferien'], 'regeln' => $einst['regeln'], 'regelnStandard' => HR_REGELN_STANDARD];
+}
+
 switch ($action) {
         /* Startseite: eigene Person, Urlaubskonto, eigene Einträge, Feiertage, Sperren */
         case 'hr_start': {
@@ -60,7 +69,7 @@ switch ($action) {
                      'konto' => $ich ? hr_konto($ich, $abw['eintraege'], $jahr) : null, 'eintraege' => $eigene, 'kollegen' => $kollegen,
                      'gleitKonto' => $ich ? hr_gleit_konto($ich, $abw['eintraege'], $jahr) : null, 'gleittage' => $ich ? hr_gleit_aus($ich) : [],
                      'feiertage' => hr_feiertage($jahr), 'sperren' => $einst['sperren'], 'uebertragBis' => $einst['uebertragBis'],
-                     'antraege' => $einst['antraege']]);
+                     'antraege' => $einst['antraege'], 'regeln' => $einst['regeln']]);
         }
 
         /* Urlaubsübersicht: alle Mitarbeiter im Urlaubsplan mit Summen eines Jahres (Recht hr.uebersicht oder hr.verwalten).
@@ -363,8 +372,8 @@ switch ($action) {
             $jahr = hr_jahr_param($_GET['jahr'] ?? null);
             $personal = hr_personal(); $abw = hr_abwesenheiten(); $einst = hr_einstellungen();
             respond(['ok' => true, 'jahr' => $jahr, 'rev' => $personal['rev'], 'uebertragBis' => $einst['uebertragBis'], 'antraege' => $einst['antraege'],
-                     'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen']),
-                     'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']]);
+                     'personen' => array_map(function ($p) use ($abw, $jahr) { return hr_person_aus($p, $abw['eintraege'], $jahr); }, $personal['personen'])]
+                    + hr_einstellungen_aus($einst));
         }
 
         /* HR-Angaben eines Mitarbeiters: Abteilung, Position, Arbeitstage, im Urlaubsplan, Verfall des Resturlaubs (ja/nein),
@@ -482,21 +491,31 @@ switch ($action) {
             $b = body();
             $sperren = hr_zeitraeume_pruefen($b['sperren'] ?? [], 'Urlaubssperren');
             $ferien = hr_zeitraeume_pruefen($b['ferien'] ?? [], 'Ferien');
+            // optional (ohne Angabe bleibt der gespeicherte Wert): Sperren aus den Urlaubsregeln, Text der Urlaubsregeln
+            $zusatz = [];
+            if (array_key_exists('regelSperren', $b)) {
+                if (!is_bool($b['regelSperren'])) fail('Sperren aus den Urlaubsregeln: bitte ja oder nein angeben.', 422);
+                $zusatz['regelSperren'] = $b['regelSperren'];
+            }
+            if (array_key_exists('regeln', $b)) $zusatz['regeln'] = hr_regeln_pruefen($b['regeln']);
             // Verfallstag des Resturlaubs (optional; ohne Angabe bleibt der gespeicherte Wert)
             $bis = null;
             if (array_key_exists('uebertragBis', $b)) {
                 $bis = hr_uebertrag_bis_norm($b['uebertragBis']);
                 if ($bis === null) fail('Verfallstag des Resturlaubs: bitte ein gültiges Datum wählen (der 29.02. ist nicht möglich, weil es ihn nicht jedes Jahr gibt).', 422);
             }
-            $vorher = hr_einstellungen()['uebertragBis'];
-            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis) {
+            $alt = hr_einstellungen(); $vorher = $alt['uebertragBis'];
+            with_lock('hr-einstellungen', function () use ($sperren, $ferien, $bis, $zusatz) {
                 $d = store_read('hr-einstellungen') ?? [];
                 store_write('hr-einstellungen', array_merge($d, ['rev' => (int)($d['rev'] ?? 0) + 1, 'sperren' => $sperren, 'ferien' => $ferien],
-                                                            $bis !== null ? ['uebertragBis' => $bis] : []));
+                                                            $bis !== null ? ['uebertragBis' => $bis] : [], $zusatz));
             });
             audit('hr', 'HR: Urlaubssperren und Ferien gespeichert (' . count($sperren) . ' Sperren, ' . count($ferien) . ' Ferienzeiträume)');
             if ($bis !== null && $bis !== $vorher) audit('hr', 'HR: Verfallstag Resturlaub auf ' . substr($bis, 3, 2) . '.' . substr($bis, 0, 2) . '. geändert (vorher ' . substr($vorher, 3, 2) . '.' . substr($vorher, 0, 2) . '.)');
-            respond(['ok' => true, 'sperren' => $sperren, 'ferien' => $ferien, 'uebertragBis' => hr_uebertrag_bis(true)]);
+            if (isset($zusatz['regelSperren']) && $zusatz['regelSperren'] !== $alt['regelSperren']) audit('hr', 'HR: Sperren aus den Urlaubsregeln ' . ($zusatz['regelSperren'] ? 'eingeschaltet' : 'ausgeschaltet'));
+            if (isset($zusatz['regeln']) && $zusatz['regeln'] !== $alt['regeln']) audit('hr', 'HR: Urlaubsregeln geändert');
+            $neu = hr_einstellungen();
+            respond(['ok' => true, 'ferien' => $neu['ferien'], 'uebertragBis' => hr_uebertrag_bis(true)] + hr_einstellungen_aus($neu));
         }
 
         /* Urlaubsanträge über die Plattform ein- oder ausschalten (Schalter in Verwaltung → Urlaub, sofort wirksam).
