@@ -376,7 +376,8 @@ Aufbau in Bereichen: gemeinsame Grundlage `controlling.php` (Liste `CONTROLLING_
 eine eigene Datei mit eigenem Dokument `controlling-<bereich>`, eigenen Rechten `controlling.<bereich>_sehen/_bearbeiten` und
 Aktionen `controlling_<bereich>_…`. Geplant sind weitere Bereiche (OP-Konten, Liquidität); bestehende bleiben davon unberührt.
 
-- **Monatsmeldung** (`umsatz.php`, Aktion `controlling_umsatz&jahr=JJJJ`): Kg, Umsatz und DB je Monat und Vertreter eines Jahres,
+- **Monatsmeldung** (`umsatz.php`, Aktion `controlling_umsatz&jahr=JJJJ`): Kg, Umsatz und DB je Monat und Vertreter eines Jahres
+  (Oberfläche dazu „DB-Anteil am Umsatz“ = DB ÷ gesamter Umsatz),
   gerechnet aus `controlling-umsatzdaten` (Hauptvertreter des Kunden nach heutigen Stammdaten, „ohne Vertreter“ = `_`); DB nur mit
   `controlling.umsatz_ek` und `bestand.einkaufspreise`. Die frühere Erfassung von Hand (Dokument `controlling-umsatz`, Aktion
   `controlling_umsatz_monat_save`, Recht `controlling.umsatz_bearbeiten`) gibt es seit 01.11.2026 nicht mehr; ein vorhandenes

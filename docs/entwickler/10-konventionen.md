@@ -37,6 +37,9 @@ Alle Seiten formatieren über **`window.STAFL_FORMAT`** aus `app/assets/format.j
 - **Tabellen:** Die Einheit steht am Wert, nicht im Spaltenkopf („Menge“, „Preis“, „Summe“). Ausnahme: Eingabespalten und
   dichte Bearbeitungstabellen (Editor) – dort steht sie im Kopf („Preis €/kg“, „Menge kg“) und nicht zusätzlich in der Zelle.
 - Beschriftungen ausgeschrieben: „Menge“ statt „Kg“, „auf Anfrage“ (nur die gedruckte Angebotsliste kürzt „a. Anfr.“).
+- Kennzahlen mit eigener Bedeutung behalten ihren Namen: **Spanne** = DB ÷ Umsatz mit Einkaufspreis (Auswertung,
+  Details); **DB-Anteil am Umsatz** = DB ÷ gesamter Umsatz (Monatsmeldung). Zwei Rechnungen nie unter demselben Namen
+  (Entscheidung des Inhabers 03.11.2026).
 - **CSV und Excel** bleiben maschinenlesbar: Zahl ohne Tausenderpunkt und ohne Einheit, die Einheit im Spaltenkopf.
 
 ## Namen

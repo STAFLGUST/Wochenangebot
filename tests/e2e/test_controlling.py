@@ -175,8 +175,10 @@ with sync_playwright() as p:
     check('Reiter Monatsmeldung, Adresse #umsatz/uebersicht, Jahr 2026 vorausgewählt', pg.url.endswith('#umsatz/uebersicht') and pg.input_value('#ctl-u-jahr') == '2026'
           and [o for o in pg.locator('#ctl-u-jahr option').all_inner_texts()] == ['2026', '2025'])
     kpi = text(pg, '#ctl-u-kpis')
-    check('Kennzahlen: Umsatz und DB des Jahres aus den Umsatzdaten (Bezeichnungen DB und Spanne wie in der Auswertung)', '39.800,00 €' in kpi and '4.400,00 €' in kpi
-          and re.search(r'\bDB\b', kpi) and 'spanne' in kpi.lower() and 'rohmarge' not in kpi.lower() and 'spanne' in text(pg, '.ctl-vertretertabelle thead').lower(), kpi)
+    check('Kennzahlen: Umsatz und DB des Jahres aus den Umsatzdaten; „DB-Anteil am Umsatz“ statt „Spanne“ (andere Rechnung als die Spanne der Auswertung)', '39.800,00 €' in kpi and '4.400,00 €' in kpi
+          and re.search(r'\bDB\b', kpi) and 'db-anteil am umsatz' in kpi.lower() and 'spanne' not in kpi.lower() and 'rohmarge' not in kpi.lower()
+          and 'db-anteil am umsatz' in text(pg, '.ctl-vertretertabelle thead').lower() and 'spanne' not in text(pg, '.ctl-vertretertabelle thead').lower()
+          and 'DB-Anteil am Umsatz = DB ÷ gesamter Umsatz' in text(pg, '#ctl-u-fussnote'), kpi)
     zeilen = text(pg, '#ctl-u-vertreterzeilen')
     check('Anteile berechnet (V1 26.000 von 39.800 € = 65,3 %, Prozent mit 1 Stelle wie überall), ohne Vertreter und Nummer ohne Stammsatz als Zeilen', '65,3 %' in zeilen and 'ohne Vertreter' in zeilen
           and 'Vertreter V2 (nicht in den Stammdaten)' in zeilen, zeilen[:600])
@@ -195,7 +197,7 @@ with sync_playwright() as p:
     for breite, thema in ((390, 'light'), (390, 'dark'), (1280, 'dark')):
         ctx, pg = anmelden('lea', 'Leserin-Konto-12', '198.51.100.10', breite, thema)
         pg.wait_for_selector('#ctl-u-tabs [data-tab="uebersicht"]'); pg.click('#ctl-u-tabs [data-tab="uebersicht"]'); pg.wait_for_selector('#ctl-u-kpis .ctl-kpi')
-        check(f'{breite}px {thema}: ohne EK-Recht DB leer mit Hinweis', 'DB und Spanne nur mit den Rechten' in text(pg, '#ctl-u-fussnote') and '—' in text(pg, '#ctl-u-kpis'))
+        check(f'{breite}px {thema}: ohne EK-Recht DB leer mit Hinweis', 'DB und DB-Anteil am Umsatz nur mit den Rechten' in text(pg, '#ctl-u-fussnote') and '—' in text(pg, '#ctl-u-kpis'))
         check(f'{breite}px {thema}: kein waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
         if thema == 'dark':
             check(f'{breite}px: dunkler Grund', pg.evaluate('getComputedStyle(document.body).backgroundColor') == 'rgb(18, 16, 17)')
