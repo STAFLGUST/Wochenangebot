@@ -63,15 +63,15 @@
       <div class="rv-karte"><span class="rv-zeile"><b>Wochenangebot KW 46</b><span class="rv-chip ok">für alle Kunden sichtbar</span></span>
         <span class="rv-zeile rv-trenn"><span>Schweinenacken o. K.</span><b>5,49 €/kg</b></span><span class="rv-zeile"><span>Putenbrust</span><b>7,20 €/kg</b></span></div>`],
     umsatz: () => ['CRM › Cockpit', 'Umsatz in Euro im CRM-Cockpit.',
-      `<div class="rv-zeile oben"><span class="rv-kpi"><span class="rv-sub">Kunden aktiv</span><b>48</b></span><span class="rv-kpi"><span class="rv-sub">Menge Okt.</span><b>12,4 t</b></span><span class="rv-kpi ek rv-mark"><span>Umsatz Okt.</span><b>86.200 €</b></span></div>
-      <div class="rv-karte rv-zeile"><span>Metzgerei Muster · Kunden-Pop-up</span><span><b>1,1 t</b> · <b class="rv-rot">4.180 €</b></span></div>
+      `<div class="rv-zeile oben"><span class="rv-kpi"><span class="rv-sub">Kunden aktiv</span><b>48</b></span><span class="rv-kpi"><span class="rv-sub">Menge Okt.</span><b>12.400 kg</b></span><span class="rv-kpi ek rv-mark"><span>Umsatz Okt.</span><b>86.200,00 €</b></span></div>
+      <div class="rv-karte rv-zeile"><span>Metzgerei Muster · Kunden-Pop-up</span><span><b>1.100 kg</b> · <b class="rv-rot">4.180,00 €</b></span></div>
       <span class="rv-sub">Ohne dieses Recht stehen hier nur Mengen in kg.</span>`],
     export: () => ['CRM › Liste', 'CSV-Datei mit Kontaktdaten herunterladen.',
       `<div class="rv-zeile oben"><span class="rv-sub">CRM-Liste · 214 Kunden</span><span class="rv-knopf hell rv-mark">${svg('M12 4v11 M7 10l5 5 5-5 M4 19h16', 11)}CSV herunterladen</span></div>
       ${tab([['Firma', ['Beispiel GmbH', 'Muster &amp; Sohn'], 'breit'], ['Kontakt', ['F. Muster', 'E. Probe']], ['Telefon', ['0123 45…', '0123 67…']]])}
       <span class="rv-warn">${svg('M12 3 2 21h20L12 3Z M12 10v4 M12 17h.01', 12)}Die Datei enthält Kontaktdaten und verlässt das System.</span>`],
     spanne: () => ['Controlling › Umsatzauswertung', 'Umsatzauswertung mit Einkaufswert, Deckungsbeitrag und Spanne.',
-      `${tab([['Kunde', ['Metzgerei Muster', 'Beispiel GmbH', 'Hof Probe'], 'breit'], ['Umsatz', ['4.180 €', '2.940 €', '1.310 €'], 'r']], '<div class="rv-sp r ek rv-mark innen"><span>DB · Spanne</span><span>620 € · 15 %</span><span>380 € · 13 %</span><span>210 € · 16 %</span></div>')}
+      `${tab([['Kunde', ['Metzgerei Muster', 'Beispiel GmbH', 'Hof Probe'], 'breit'], ['Umsatz', ['4.180,00 €', '2.940,00 €', '1.310,00 €'], 'r']], '<div class="rv-sp r ek rv-mark innen"><span>DB · Spanne</span><span>620,00 € · 15,0 %</span><span>380,00 € · 13,0 %</span><span>210,00 € · 16,0 %</span></div>')}
       <span class="rv-sub">Wirkt nur zusammen mit „Einkaufspreise (EK) sehen“ im Bestand.</span>`],
     lagerwert: () => ['Controlling › Bestandsverlauf', 'Bestandsverlauf mit zweiter Linie Lagerwert zum Einkaufspreis.',
       `<div class="rv-zeile oben anfang"><span class="rv-leg"><i class="gruen"></i>Bestand in kg</span><span class="rv-leg rot rv-mark"><i></i>Lagerwert zum EK</span></div>

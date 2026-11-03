@@ -128,7 +128,8 @@ function order_settings(): array
 }
 function order_enabled(): bool { $o = order_settings(); return $o['enabled'] && $o['to'] && mail_cfg() && mail_base_url(); }
 function de_num(float $v, int $dec = 2): string { return number_format($v, $dec, ',', '.'); }
-function de_qty(float $v): string { $s = number_format($v, 2, ',', '.'); return preg_replace('/,?0+$/', '', $s) ?: '0'; }
+/* Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js) */
+function de_qty(float $v): string { return number_format($v, 2, ',', '.'); }
 /* Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML] */
 function mail_tpl_bestellung(array $o, bool $copy): array
 {
@@ -157,8 +158,10 @@ function mail_tpl_bestellung(array $o, bool $copy): array
     $t .= "\nPositionen:\n";
     foreach ($o['positions'] as $i => $p) $t .= sprintf("%2d. %s%s – %s kg × %s = %s\n", $i + 1, $p['code'] ? $p['code'] . ' ' : '', $p['name'], de_qty($p['qty']), $pr($p), $sum($p));
     $fk = (float)($o['fracht']['kosten'] ?? 0);
-    $frT = $fk > 0 ? 'Frachtanteil (unter ' . de_qty((float)$o['fracht']['unter']) . ' kg): ' . de_num($fk) . ' €' : '';
-    $t .= "\nGesamtmenge: " . de_qty($o['totalQty']) . " kg\nWarenwert (ca.): " . de_num($o['total']) . " €" . ($o['onRequest'] ? " zzgl. {$o['onRequest']} Position(en) mit Preis auf Anfrage" : '') . "\n"
+    $frL = $fk > 0 ? 'Frachtanteil (unter ' . number_format((float)$o['fracht']['unter'], 0, ',', '.') . ' kg)' : '';   // Beschriftung (HTML: Betrag in eigener Spalte)
+    $frT = $fk > 0 ? $frL . ': ' . de_num($fk) . ' €' : '';
+    $anfr = $o['onRequest'] ? $o['onRequest'] . ($o['onRequest'] == 1 ? ' Position' : ' Positionen') . ' mit Preis auf Anfrage' : '';
+    $t .= "\nGesamtmenge: " . de_qty($o['totalQty']) . " kg\nWarenwert (ca.): " . de_num($o['total']) . " €" . ($anfr !== '' ? " zzgl. {$anfr}" : '') . "\n"
         . ($fk > 0 ? $frT . "\nGesamt (ca.): " . de_num($o['total'] + $fk) . " €\n" : '');
     if ($o['bemerkung'] !== '') $t .= "\nBemerkung:\n{$o['bemerkung']}\n";
     $t .= "\nPreise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.\n";
@@ -174,8 +177,8 @@ function mail_tpl_bestellung(array $o, bool $copy): array
         $h .= '<tr><td ' . $td . '>' . mail_h($p['code']) . '</td><td ' . $td . '>' . mail_h($p['name']) . ($p['group'] ? '<br><span style="font-size:11.5px;color:#857c72;">' . mail_h($p['group']) . '</span>' : '') . '</td><td ' . $tdr . '>' . de_qty($p['qty']) . ' kg</td><td ' . $tdr . '>' . mail_h($pr($p)) . '</td><td ' . $tdr . '>' . mail_h($sum($p)) . '</td></tr>';
     }
     $h .= '<tr><td colspan="2" style="padding:8px 6px;font-weight:bold;">Warenwert (ca.)</td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_qty($o['totalQty']) . ' kg</td><td></td><td style="padding:8px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total']) . ' €</td></tr></table>'
-        . ($fk > 0 ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13.5px;border-collapse:collapse;"><tr><td style="padding:4px 6px;">' . mail_h($frT) . '</td><td style="padding:4px 6px;text-align:right;white-space:nowrap;">' . de_num($fk) . ' €</td></tr><tr><td style="padding:4px 6px;font-weight:bold;">Gesamt (ca.)</td><td style="padding:4px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total'] + $fk) . ' €</td></tr></table>' : '')
-        . ($o['onRequest'] ? '<p style="margin:6px 0 0;font-size:12.5px;color:#857c72;">Zzgl. ' . $o['onRequest'] . ' Position(en) mit Preis auf Anfrage.</p>' : '')
+        . ($fk > 0 ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13.5px;border-collapse:collapse;"><tr><td style="padding:4px 6px;">' . mail_h($frL) . '</td><td style="padding:4px 6px;text-align:right;white-space:nowrap;">' . de_num($fk) . ' €</td></tr><tr><td style="padding:4px 6px;font-weight:bold;">Gesamt (ca.)</td><td style="padding:4px 6px;text-align:right;font-weight:bold;white-space:nowrap;">' . de_num($o['total'] + $fk) . ' €</td></tr></table>' : '')
+        . ($o['onRequest'] ? '<p style="margin:6px 0 0;font-size:12.5px;color:#857c72;">Zzgl. ' . $anfr . '.</p>' : '')
         . ($o['bemerkung'] !== '' ? '<p style="margin:14px 0 0;padding:10px 12px;background:#f7efe9;border-radius:8px;"><strong>Bemerkung:</strong><br>' . nl2br(mail_h($o['bemerkung'])) . '</p>' : '')
         . '<p style="margin:14px 0 0;font-size:12.5px;color:#857c72;">Preise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.</p>';
     return [$subject, $t, mail_layout($subject, $h, $copy ? mail_settings()['signature'] : '', $copy ? "Diese E-Mail bestätigt den Eingang Ihres Bestellwunsches bei {$CFG['company']}." : 'Automatisch erzeugt vom Angebotsportal. Antworten gehen direkt an den Kunden.')];

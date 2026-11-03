@@ -2,7 +2,7 @@
 declare(strict_types=1);
 /* Bestand als PDF (Verwaltung → Bestand → „PDF“): A4 hoch, nur Art.-Nr., Bezeichnung (Merkmale aus den Stammdaten grau
    dahinter), eingelagerter Bestand, kürzestes MHD
-   und Kg kürz. MHD – ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge (zum Weitergeben, z. B. an den
+   und Menge kürz. MHD – ohne Preise, erfassten Bestand, Gesamt verfügbar und erwartete Zugänge (zum Weitergeben, z. B. an den
    Verkauf). Reihenfolge und Warengruppen kommen aus der Ansicht (Suche/Sortierung wie am Bildschirm), die Zahlen immer aus dem
    gespeicherten Bestand. Nur bei Bedarf geladen (require_once aus aktionen/bestand.php). */
 if (!defined('WA_API')) { http_response_code(404); exit; }
@@ -49,7 +49,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = ''): string
     $W = $pdf->w; $H = $pdf->h;
     $ML = 34; $MR = 34; $MT = 30; $MB = 38;
     $x0 = $ML; $x1 = $W - $MR;
-    // Spalten: Art.-Nr. | Bezeichnung | Eingelagerter Bestand | Kürz. MHD | Kg kürz. MHD
+    // Spalten: Art.-Nr. | Bezeichnung | Eingelagerter Bestand | Kürz. MHD | Menge kürz. MHD
     $cCode = $x0 + 4; $cName = $x0 + 52; $cKg = $x1 - 172; $cMhd = $x1 - 136; $cMkg = $x1 - 4;
     $wName = $cKg - 78 - $cName;
     $FS = 8.6; $RH = 15.2;
@@ -103,7 +103,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = ''): string
         $pdf->text($cName, $y + 12, 'Art. Bezeichnung', 7.8, true, '#1b1a18');
         $pdf->text($cKg, $y + 12, 'Eingelagerter Bestand', 7.8, true, '#1b1a18', 'r');
         $pdf->text($cMhd + 4, $y + 12, 'Kürz. MHD', 7.8, true, '#1b1a18');
-        $pdf->text($cMkg, $y + 12, 'Kg kürz. MHD', 7.8, true, '#1b1a18', 'r');
+        $pdf->text($cMkg, $y + 12, 'Menge kürz. MHD', 7.8, true, '#1b1a18', 'r');
         $pdf->line($x0, $y + 17, $x1, $y + 17, 1, '#8a857e');
         $y += $tabKopf;
         if (!$teile) $pdf->text($x0, $y + 14, 'Keine Artikel mit eingelagertem Bestand in dieser Auswahl.', 9, false, '#5f5b55');
@@ -130,7 +130,7 @@ function stock_pdf(array $st, array $zeilen, string $zusatz = ''): string
             $merk = trim((string)($a['merkmale'] ?? '')); $nb = Pdf::width($name, $FS);
             if ($merk !== '' && $wName - $nb - 6 > 24) $pdf->text($cName + $nb + 6, $y + 10.6, $fit($merk, 7.4, $wName - $nb - 6), 7.4, false, '#6f6a63');
             $pdf->text($cKg, $y + 10.6, $kg((float)$a['kg']), $FS, false, '#1b1a18', 'r');
-            $pdf->text($cMhd + 4, $y + 10.6, !empty($a['mhd']) ? date('d.m.y', strtotime($a['mhd'])) : '—', $FS, (bool)$f, $f[1] ?? '#1b1a18');
+            $pdf->text($cMhd + 4, $y + 10.6, !empty($a['mhd']) ? date('d.m.Y', strtotime($a['mhd'])) : '—', $FS, (bool)$f, $f[1] ?? '#1b1a18');
             $pdf->text($cMkg, $y + 10.6, $a['mhdKg'] !== null ? $kg((float)$a['mhdKg']) : '—', $FS, true, $f[1] ?? '#1b1a18', 'r');
             $pdf->line($x0, $y + $RH, $x1, $y + $RH, .3, '#e2ded8');
             $y += $RH;

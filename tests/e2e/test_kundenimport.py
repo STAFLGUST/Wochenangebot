@@ -387,7 +387,7 @@ with sync_playwright() as p:
     a.click('#kunde-body details.k-wawi summary'); a.wait_for_selector('#kunde-body .k-wawi-dl')
     t = a.inner_text('#kunde-body details.k-wawi').replace('\xa0', ' ').replace('\u202f', ' ')
     check('Daten der Warenwirtschaft: Werte deutsch formatiert, Umsatz und Rohgewinn', all(x in t for x in ('Kreditlimit', '3.000,00 €', 'Letzte Rechnung', dmy(vor(1)), 'Rechnungsempfänger', '1000004',
-          'Angelegt', '03.02.2019 09:05 Uhr von TST', 'Abgabe CITTI', 'ja', '1.234.567,89 €', '-12,30 €', 'GLN', '4000000000017')), t)
+          'Angelegt', '03.02.2019, 09:05 von TST', 'Abgabe CITTI', 'ja', '1.234.567,89 €', '−12,30 €', 'GLN', '4000000000017')), t)
     a.locator('#kunde-body details.k-wawi').scroll_into_view_if_needed()
     a.screenshot(path=SH + '/kunde-wawi.png')
     a.click('#kunde-body [data-close]')

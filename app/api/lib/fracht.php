@@ -44,7 +44,7 @@ function fracht_kosten(float $kg, ?array $s = null): array
     if ($frei !== null && $kg > 0) foreach ($s['staffeln'] as $st) if ($kg < $st['unter']) $hit = $st;
     return ['kosten' => $hit ? (float)$hit['kosten'] : 0.0, 'unter' => $hit ? (int)$hit['unter'] : null, 'frei' => $frei];
 }
-function fracht_eur(float $v): string { return fmod($v, 1.0) == 0.0 ? number_format($v, 0, ',', '.') : number_format($v, 2, ',', '.'); }
+function fracht_eur(float $v): string { return number_format($v, 2, ',', '.'); }   // Betrag immer mit Cent (30,00 €) wie überall
 /* Vermerk unter dem Angebot (Bildschirm und Druck), Zeile für Zeile */
 function fracht_hinweis(?array $s = null): array
 {

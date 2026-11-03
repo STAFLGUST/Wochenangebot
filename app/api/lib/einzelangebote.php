@@ -345,7 +345,7 @@ function einzel_artikel(bool $mitBestand, bool $mitEk = false): array
 }
 
 /* ---------- PDF im Design der Angebotsansicht (A4 quer, drei Spalten) ---------- */
-/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€ / kg“, Zebrastreifen, Seitenzahlen.
+/* Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen.
    Nur Positionen, Preise, Mengen und Hinweise – nie Bestand, Partien oder Einkaufspreise (Regel 7). */
 function einzel_pdf(array $e, ?array $c): string
 {
@@ -426,7 +426,7 @@ function einzel_pdf(array $e, ?array $c): string
                 $hy = $top($pi) + 11;
                 $cont = $pi > 0 || $ci > 0;
                 $pdf->text($x + 3, $hy, $fit($titel, 9.2, $colW - 60 - ($cont ? Pdf::width(' (Forts.)', 9.2, true) : 0), true) . ($cont ? ' (Forts.)' : ''), 9.2, true);
-                $pdf->text($x + $colW - 4, $hy, '€ / kg', 8, true, '#111111', 'r');
+                $pdf->text($x + $colW - 4, $hy, '€/kg', 8, true, '#111111', 'r');
                 $pdf->line($x, $hy + 4.5, $x + $colW, $hy + 4.5, 1.1);
             }
             foreach ($items as $it) {
@@ -447,7 +447,8 @@ function einzel_pdf(array $e, ?array $c): string
             }
         }
         $fy = $H - 16;
-        $pdf->text($ML, $fy, $fit(($CFG['company'] ?? '') . ' · Angebot ' . $e['nr'] . ' · ' . $titel . ' · Preise in € je kg', 7, $W - 2 * $ML - 70), 7, false, '#777777');
+        $kopfNr = str_contains($titel, (string)$e['nr']) ? $titel : 'Angebot ' . $e['nr'] . ' · ' . $titel;   // Nummer nur einmal
+        $pdf->text($ML, $fy, $fit(($CFG['company'] ?? '') . ' · ' . $kopfNr . ' · Preise in € je kg', 7, $W - 2 * $ML - 70), 7, false, '#777777');
         $pdf->text($W - $ML, $fy, 'Seite ' . ($pi + 1) . ' von ' . $n, 7, false, '#777777', 'r');
     }
     return $pdf->output('Angebot ' . $e['nr'] . ' – ' . $titel);
@@ -471,7 +472,8 @@ function mail_tpl_einzel(array $c, array $e, string $note, string $format = 'lis
     $url = mail_base_url() . '/?angebot=e-' . $e['id'];
     $pr = function ($p) { return $p['price'] !== null ? de_num((float)$p['price']) . ' €/kg' : 'Preis auf Anfrage'; };
     $su = einzel_summe($e);
-    $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '') . "$titel ({$e['nr']})\n";
+    $nrZusatz = str_contains($titel, (string)$e['nr']) ? '' : " ({$e['nr']})";   // Nummer nur einmal (Standardtitel enthält sie schon)
+    $t = mail_greeting($c) . "\n\n" . $intro . "\n\n" . ($note !== '' ? $note . "\n\n" : '') . "$titel$nrZusatz\n";
     if ($pdf) $t .= 'Anhang: ' . einzel_pdf_name($e) . ' (' . plural_de(count($e['positions']), 'Position', 'Positionen') . ")\n";
     else foreach ($e['positions'] as $p) $t .= '- ' . ($p['code'] !== '' ? $p['code'] . ' ' : '') . $p['name'] . ($p['notiz'] !== '' ? ' (' . $p['notiz'] . ')' : '') . ': ' . $pr($p) . ($p['qty'] !== null ? ', ' . de_qty($p['qty']) . ' kg' : '') . "\n";
     if ($su['summe'] > 0 && !$pdf) $t .= "\nWarenwert (ca.): " . de_num($su['summe']) . " €\n";
@@ -485,7 +487,7 @@ function mail_tpl_einzel(array $c, array $e, string $note, string $format = 'lis
     $thr = 'style="text-align:right;padding:6px;border-bottom:2px solid #e6e0d8;font-size:12px;color:#857c72;"';
     $h = '<p style="margin:0 0 14px;">' . mail_h(mail_greeting($c)) . '</p><p style="margin:0 0 14px;">' . mail_h($intro) . '</p>'
         . ($note !== '' ? '<p style="margin:0 0 14px;padding:12px 14px;background:#f7efe9;border-radius:8px;">' . nl2br(mail_h($note)) . '</p>' : '')
-        . '<p style="margin:0 0 8px;font-weight:600;">' . mail_h($titel) . ' <span style="color:#857c72;font-weight:400;">(' . mail_h($e['nr']) . ')</span></p>';
+        . '<p style="margin:0 0 8px;font-weight:600;">' . mail_h($titel) . ($nrZusatz !== '' ? ' <span style="color:#857c72;font-weight:400;">(' . mail_h($e['nr']) . ')</span>' : '') . '</p>';
     if ($pdf) $h .= '<p style="margin:0 0 14px;padding:10px 14px;border:1px solid #e6e0d8;border-radius:8px;">Anhang: <strong>' . mail_h(einzel_pdf_name($e)) . '</strong>' . ' <span style="color:#857c72;">· '
         . mail_h(plural_de(count($e['positions']), 'Position', 'Positionen')) . '</span></p>';
     else {

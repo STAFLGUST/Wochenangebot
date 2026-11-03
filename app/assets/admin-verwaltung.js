@@ -8,6 +8,7 @@
 (function () {
   'use strict';
   const W = window.WA;
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
   const { $, $$, api, esc, icon, toast, confirmBox, dateTime, timeOnly, plural, fold, fmtNum, fmtInt, csvCell, ROLE_LABEL, offerName, offerShort, loadOffers, pendingCount, setView, OSTD, may } = W;
   const isAdmin = () => W.me && W.me.role === 'admin';
   // Vertraute Geräte (Browser, auf denen sich der Zugang angemeldet hat; kommen auch bei einer fremd ausgelösten Sperre durch)
@@ -48,9 +49,9 @@
     const rows = list.map((u) => { const z = hr ? W.hr.zelle(u.id) : null; return `<tr data-uid="${esc(u.id)}" tabindex="0" class="${u.active || u.zugang === false ? '' : 'inactive'}">
         <td class="u-name"><div class="nm">${esc(u.name)}${u.id === W.me.id ? ' <span class="muted">(Sie)</span>' : ''}</div><div class="sub uname">${u.zugang === false ? 'ohne Anmeldung' : esc(u.username)}</div>${u.email ? `<div class="sub u-mail">${esc(u.email)}</div>` : ''}</td>
         ${hr ? `<td class="u-abt">${z.abteilung}</td>` : ''}
-        <td>${u.zugang === false ? '<span class="muted">–</span>' : roleBadges(u)}${u.zugang !== false && exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
+        <td>${u.zugang === false ? '<span class="muted">—</span>' : roleBadges(u)}${u.zugang !== false && exceptions(u) ? ` <span class="rm-exc" title="Abweichende Rechte: ${u.grant.length} zusätzlich erlaubt, ${u.deny.length} verboten">${esc(exceptions(u))}</span>` : ''}</td>
         <td class="u-st">${u.zugang === false ? '<span class="muted">ohne Anmeldung</span>' : u.active ? '<span class="st-ok">aktiv</span>' : '<span class="st-err">deaktiviert</span>'}${u.twofa ? ' <span class="tf-badge" title="Zwei-Faktor-Anmeldung eingerichtet">2FA</span>' : ''}${u.twofaPflicht ? ` <span class="tf-badge tf-pflicht" title="Zwei-Faktor-Anmeldung für diesen Zugang verpflichtend${u.twofa || u.passkeys ? '' : ' – noch nicht eingerichtet, wird bei der nächsten Anmeldung verlangt'}">2FA-Pflicht</span>` : ''}${u.passkeys ? ` <span class="tf-badge pk-badge" title="${u.passkeys === 1 ? '1 Passkey' : u.passkeys + ' Passkeys'} eingerichtet">${u.passkeys === 1 ? 'Passkey' : u.passkeys + ' Passkeys'}</span>` : ''}${u.lockedUntil ? `<div class="sub st-err">gesperrt bis ${esc(timeOnly(new Date(u.lockedUntil * 1000).toISOString()))} Uhr</div>` : ''}${u.mustChange && !zentral() ? '<div class="sub">muss Passwort ändern</div>' : ''}</td>
-        <td class="u-last">${u.zugang === false ? '<span class="muted">–</span>' : u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
+        <td class="u-last">${u.zugang === false ? '<span class="muted">—</span>' : u.lastLogin ? esc(dateTime(u.lastLogin)) : '<span class="muted">noch nie</span>'}</td>
         ${hr ? `<td class="u-urlaub num">${z.urlaub}</td>` : ''}
         <td class="u-act"><button type="button" class="btn sm" data-uedit="${esc(u.id)}">Bearbeiten</button></td>
       </tr>`; }).join('');
@@ -430,7 +431,7 @@
           <td class="ord-nr"><div class="nm">${esc(o.nr)}</div><div class="sub">${esc(dateTime(o.t))}</div></td>
           <td><div class="nm">${esc(o.firma)}</div><div class="sub">${esc(o.angebotName || '')}${o.referenz ? ' · Ref. ' + esc(o.referenz) : ''}</div>${o.mailPending ? `<div class="ord-mobile-mail form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</div>` : ''}</td>
           <td class="ord-wish">${o.termin ? esc(dmyIso(o.termin)) : '<span class="muted">offen</span>'}</td>
-          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(fmtNum.format(o.total))} €${o.onRequest ? ' + a. Anfr.' : ''}${o.fracht && o.fracht.kosten ? ' + Fracht' : ''}</div></td>
+          <td class="ord-sum">${plural(o.positionCount, 'Position', 'Positionen')}<div class="sub">${esc(F.euro(o.total))}${o.onRequest ? ' + auf Anfrage' : ''}${o.fracht && o.fracht.kosten ? ' + Fracht' : ''}</div></td>
           <td>${orderBadge(o.workflow)}${o.assignee ? `<div class="sub">${esc(staffName(o.assignee))}</div>` : ''}</td>
           <td class="ord-mail">${orderMail(o.delivery, o.mailPending)}${o.mailPending ? `<br><span class="form-err">${esc(plural(o.mailPending, 'Versandauftrag', 'Versandaufträge'))} offen</span>` : ''}</td>
         </tr>`).join('');
@@ -446,9 +447,7 @@
     } catch (e) { host.innerHTML = `<div class="err-box" role="alert">${esc(e.message)}</div><button type="button" class="btn" data-orders-reload>Erneut laden</button>`; }
   }
   /* ======================= Einkauf: Fehlmengen offener Bestellwünsche (alle Mitarbeiter; Melden ab Bearbeiter) ======================= */
-  const fmtQty = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 3 });
-  const eur2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });   // Preise wie im Portal und in der E-Mail (Cent)
-  const qty = (v) => fmtQty.format(v) + ' kg';
+  const qty = (v) => F.kg(v);
   let ekSel = null, ekData = null;
   async function renderEinkaufView() {
     const host = $('#view-einkauf');
@@ -476,7 +475,7 @@
         <div class="ek-kpis">
           <div><strong>${r.items.length}</strong><span>Artikel mit Fehlmenge</span></div>
           <div><strong>${esc(qty(r.shortTotal))}</strong><span>Fehlmenge gesamt</span></div>
-          <div><strong>${r.openOrders}</strong><span>offene Bestellwünsche</span></div>
+          <div><strong>${r.openOrders}</strong><span>${r.openOrders === 1 ? 'offener Bestellwunsch' : 'offene Bestellwünsche'}</span></div>
         </div>
         ${st ? `<p class="hint">Bestellte Mengen aus offenen Bestellwünschen (Neu, In Bearbeitung, Bestätigt) gegenüber dem Bestand vom ${esc(stand)}.</p>` : ''}
         ${!st ? '<p class="st-warn ek-warn">Es ist keine Bestandsliste vorhanden. Bitte unter „Bestand“ eine aktuelle Liste übernehmen – erst dann lassen sich Fehlmengen berechnen.</p>'
@@ -538,8 +537,8 @@
         </div>
         ${o.bemerkung ? `<p class="ord-note"><strong>Bemerkung des Kunden:</strong> ${esc(o.bemerkung)}</p>` : ''}
         <table class="etab ordpos"><thead><tr><th>Art.-Nr.</th><th>Artikel</th><th class="r">Menge</th><th class="r">Preis</th><th class="r">Summe</th></tr></thead><tbody>
-          ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(qty(p.qty))}</td><td class="r">${p.price == null ? 'auf Anfrage' : esc(eur2.format(p.price)) + ' €'}</td><td class="r">${p.sum == null ? '–' : esc(fmtNum.format(p.sum)) + ' €'}</td></tr>`).join('')}
-        </tbody><tfoot><tr><td class="ord-nr"></td><td><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(qty(o.totalQty || 0))}</td><td></td><td class="r"><strong>${esc(fmtNum.format(o.total))} €</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td class="ord-nr"></td><td colspan="3">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(fmtNum.format(o.fracht.kosten))} €</td></tr><tr><td class="ord-nr"></td><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(fmtNum.format(o.total + o.fracht.kosten))} €</strong></td></tr>` : ''}</tfoot></table>
+          ${o.positions.map((p) => `<tr><td class="mono">${esc(p.code || '—')}</td><td>${esc(p.name)}</td><td class="r">${esc(qty(p.qty))}</td><td class="r">${p.price == null ? 'auf Anfrage' : esc(F.euroKg(p.price))}</td><td class="r">${p.sum == null ? '—' : esc(F.euro(p.sum))}</td></tr>`).join('')}
+        </tbody><tfoot><tr><td class="ord-nr"></td><td><strong>${o.fracht && o.fracht.kosten ? 'Warenwert (ca.)' : 'Summe (ca.)'}</strong></td><td class="r">${esc(qty(o.totalQty || 0))}</td><td></td><td class="r"><strong>${esc(F.euro(o.total))}</strong></td></tr>${o.fracht && o.fracht.kosten ? `<tr class="ord-fr"><td class="ord-nr"></td><td colspan="3">Frachtanteil (unter ${esc(fmtInt.format(o.fracht.unter))} kg, automatisch aufgeschlagen)</td><td class="r">${esc(F.euro(o.fracht.kosten))}</td></tr><tr><td class="ord-nr"></td><td colspan="3"><strong>Gesamt (ca.)</strong></td><td class="r"><strong>${esc(F.euro(o.total + o.fracht.kosten))}</strong></td></tr>` : ''}</tfoot></table>
         ${o.onRequest ? `<p class="hint">Zuzüglich ${plural(o.onRequest, 'Position', 'Positionen')} mit Preis auf Anfrage.</p>` : ''}
         <section class="ord-outbox"><h3>E-Mail-Versand</h3>
           <p class="hint">Erfolgreich bedeutet: vom Mailserver angenommen. Bei einem Verbindungsabbruch kann eine E-Mail trotz fehlender Bestätigung angekommen sein. Vor erneutem Versand bitte prüfen.</p>
@@ -783,7 +782,7 @@
     $('#kunde-body [name="firma"]').focus();
   }
   /* Daten der Warenwirtschaft (nur lesen, aus dem Kundenimport; nur mit „Kunden bearbeiten“ ausgeliefert) */
-  const fmtEur = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+  const fmtEur = { format: (x) => F.euro(x) };
   const WAWI_ANZEIGE = [['alpha', 'Suchname'], ['konto', 'Konto'], ['rgEmpf', 'Rechnungsempfänger'], ['kondition', 'Kondition'], ['letzteRechnung', 'Letzte Rechnung', 'd'],
     ['letzterLieferschein', 'Letzter Lieferschein', 'd'], ['angelegtAm', 'Angelegt', 'anlage'], ['kreditlimit', 'Kreditlimit', 'eur'], ['rgSperre', 'Rechnungssperre', 'b'], ['gln', 'GLN'],
     ['abgabeCitti', 'Abgabe CITTI', 'b'], ['dfb', 'DFB', 'b'], ['mailAB', 'E-Mail Auftragsbestätigung'], ['mailLS', 'E-Mail Lieferschein'], ['mailERechnung', 'E-Mail E-Rechnung'], ['weitereEmails', 'Weitere E-Mail-Adressen']];
@@ -795,15 +794,15 @@
       if (art === 'd') return dmyIso(x);
       if (art === 'eur') return fmtEur.format(x);
       if (art === 'b') return x ? 'ja' : 'nein';
-      if (art === 'anlage') return [dmyIso(x), w.angelegtUm ? `${w.angelegtUm} Uhr` : '', w.angelegtVon ? `von ${w.angelegtVon}` : ''].filter(Boolean).join(' ');
+      if (art === 'anlage') return [dmyIso(x) + (w.angelegtUm ? `, ${w.angelegtUm}` : ''), w.angelegtVon ? `von ${w.angelegtVon}` : ''].filter(Boolean).join(' ');   // 04.05.2020, 14:05 von …
       return String(x);
     };
     const felder = WAWI_ANZEIGE.filter(([k]) => w[k] !== undefined && w[k] !== '');
     const ums = WAWI_UMSATZ.filter(([, u, r]) => typeof w[u] === 'number' || (r && typeof w[r] === 'number'));
-    const eur = (x) => (typeof x === 'number' ? fmtEur.format(x) : '–');
+    const eur = (x) => (typeof x === 'number' ? fmtEur.format(x) : '—');
     return `<details class="k-set k-wawi"><summary>Daten der Warenwirtschaft${w.stand ? ` <small class="muted">· Stand ${esc(dateTime(w.stand))}</small>` : ''}</summary>
       ${felder.length ? `<dl class="k-wawi-dl">${felder.map(([k, l, art]) => `<div><dt>${l}</dt><dd>${esc(wert(k, art))}</dd></div>`).join('')}</dl>` : ''}
-      ${ums.length ? `<table class="k-wawi-ums"><thead><tr><th>Zeitraum</th><th>Umsatz</th><th>Rohgewinn</th></tr></thead><tbody>${ums.map(([l, u, r]) => `<tr><th>${l}</th><td>${eur(w[u])}</td><td>${r ? eur(w[r]) : '–'}</td></tr>`).join('')}</tbody></table>` : ''}
+      ${ums.length ? `<table class="k-wawi-ums"><thead><tr><th>Zeitraum</th><th>Umsatz</th><th>Rohgewinn</th></tr></thead><tbody>${ums.map(([l, u, r]) => `<tr><th>${l}</th><td>${eur(w[u])}</td><td>${r ? eur(w[r]) : '—'}</td></tr>`).join('')}</tbody></table>` : ''}
       <p class="hint">Aus dem Kundendaten-Export der Warenwirtschaft (Stammdaten → Kunden → CSV importieren); hier nur zur Ansicht, geändert wird in der Warenwirtschaft.</p></details>`;
   }
   $('#kunde-body').addEventListener('change', (e) => {
@@ -1018,7 +1017,7 @@
     const m = mailSt, s = m.smtp, a = m.account || {};
     const secLabel = (x) => (x === 'ssl' ? 'SSL' : x === 'starttls' ? 'STARTTLS' : 'unverschlüsselt (nur lokal)');
     const status = m.configured && s
-      ? `<div class="sec-card ${s.passError ? 'bad' : 'ok'}"><span class="sec-dot"></span><div><strong>${s.passError ? 'Passwort muss neu eingegeben werden' : 'E-Mail-Versand eingerichtet'}</strong><span>${esc(s.fromName)} &lt;${esc(s.from)}&gt; über ${esc(s.host)}:${esc(s.port)} (${esc(secLabel(s.secure))})${s.replyTo ? ` · Antworten an ${esc(s.replyTo)}` : ''}</span><em>${s.source === 'env' ? 'Werte aus der Server-Datei .env – hier gespeicherte Werte hätten Vorrang.' : `Gespeichert ${a.updatedAt ? esc(dateTime(a.updatedAt)) : ''}${a.updatedBy ? ' von ' + esc(a.updatedBy) : ''}. Links in E-Mails führen zu ${esc(m.baseUrl || '–')}.`}</em></div></div>`
+      ? `<div class="sec-card ${s.passError ? 'bad' : 'ok'}"><span class="sec-dot"></span><div><strong>${s.passError ? 'Passwort muss neu eingegeben werden' : 'E-Mail-Versand eingerichtet'}</strong><span>${esc(s.fromName)} &lt;${esc(s.from)}&gt; über ${esc(s.host)}:${esc(s.port)} (${esc(secLabel(s.secure))})${s.replyTo ? ` · Antworten an ${esc(s.replyTo)}` : ''}</span><em>${s.source === 'env' ? 'Werte aus der Server-Datei .env – hier gespeicherte Werte hätten Vorrang.' : `Gespeichert ${a.updatedAt ? esc(dateTime(a.updatedAt)) : ''}${a.updatedBy ? ' von ' + esc(a.updatedBy) : ''}. Links in E-Mails führen zu ${esc(m.baseUrl || '—')}.`}</em></div></div>`
       : `<div class="sec-card warn"><span class="sec-dot"></span><div><strong>Noch nicht eingerichtet</strong><span>Tragen Sie unten das Postfach ein, über das die E-Mails an Kunden versendet werden.</span>${m.baseUrl ? '' : '<em>Außerdem fehlt die Adresse der Seite für Links (DOMAIN in .env).</em>'}</div></div>`;
     const log = (m.log || []).slice(0, 50);
     host.innerHTML = `
@@ -1533,7 +1532,7 @@
       if (!list.length) { el.innerHTML = '<div class="ed-empty"><h3>Keine Treffer</h3><p>Suchbegriff anpassen.</p></div>'; return; }
       const edit = may('stammdaten.bearbeiten');
       el.innerHTML = `<div class="gcard"><table class="etab kgtab"><thead><tr><th class="kg-nr">Nummer</th>${F.filter((f) => !f.versteckt).map((f) => `<th${f.cls ? ` class="${f.cls}"` : ''}>${esc(f.label)}</th>`).join('')}${zahl ? `<th class="kg-n">${esc(cfg.zaehlerSpalte)}</th>` : ''}${edit ? '<th class="u-act"><span class="sr-only">Aktion</span></th>' : ''}</tr></thead><tbody>${list.map((g) => `
-        <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td>${F.filter((f) => !f.versteckt).map((f) => `<td${f.cls ? ` class="${f.cls}"` : ''}>${esc(g[f.k] || '')}</td>`).join('')}${zahl ? `<td class="kg-n">${zahl[g.nr] ? esc(String(zahl[g.nr])) : '<span class="muted">–</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+        <tr data-kg="${esc(g.nr)}"${edit ? ' tabindex="0"' : ''}><td class="kg-nr">${esc(g.nr)}</td>${F.filter((f) => !f.versteckt).map((f) => `<td${f.cls ? ` class="${f.cls}"` : ''}>${esc(g[f.k] || '')}</td>`).join('')}${zahl ? `<td class="kg-n">${zahl[g.nr] ? esc(String(zahl[g.nr])) : '<span class="muted">—</span>'}</td>` : ''}${edit ? `<td class="u-act"><button type="button" class="btn sm" data-kgedit="${esc(g.nr)}">Bearbeiten</button></td>` : ''}</tr>`).join('')}</tbody></table></div>`;
     }
     async function save(list, quelle) {
       const r = await api(liste + '_save', { body: { rev, groups: list, quelle: quelle || '' } });

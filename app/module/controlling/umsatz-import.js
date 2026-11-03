@@ -139,7 +139,7 @@
       daten.monate[m] = { hash, zeilen: z.length, pos: pos1, umsatz, menge, posOhne };
       teile[m] = { monat: m, hash, zeilen: z };
     }
-    const hinweise = mitEk ? [] : [{ stufe: 'warn', text: 'Die Datei hat keine Spalte EKPreis – Deckungsbeitrag und Spanne bleiben für diesen Zeitraum leer.' }];
+    const hinweise = mitEk ? [] : [{ stufe: 'warn', text: 'Die Datei hat keine Spalte EKPreis – Deckungsbeitrag, Spanne und DB-Anteil bleiben für diesen Zeitraum leer.' }];
     return { daten, teile, zeilen, fehler, hinweise };
   }
 

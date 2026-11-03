@@ -49,8 +49,9 @@
 
   /* ---------- Datum, Zahlen, Namen ---------- */
   const de = (s) => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '—';
-  const deZeit = (s) => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
-  const geld = (n) => n ? new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n) : '—';
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
+  const deZeit = (s) => { const d = new Date(s); return isNaN(d) ? '' : F.datumZeit(d); };
+  const geld = (n) => (n ? F.euro(n) : '—');   // 0 = kein Wert eingetragen
   const zahl = (n) => (n ?? '') === '' || n === null ? '' : String(n).replace('.', ',');
   const heute = () => S.d.heute;
   const tageBis = (iso) => { if (!iso) return Infinity; const a = new Date(iso + 'T12:00:00'), b = new Date(heute() + 'T12:00:00'); return Math.round((a - b) / 86400000); };
@@ -529,7 +530,7 @@
     if (zahl.haus) teile.push(`${zahl.haus} auf Hausnummer genau`);
     if (zahl.strasse) teile.push(`${zahl.strasse} an der Straße (Hausnummer nicht gefunden)`);
     if (zahl.plz) teile.push(`${zahl.plz} am Mittelpunkt der Postleitzahl`);
-    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(stand.erzeugt || '–')}).`;
+    return `Kunden: ${teile.join(', ') || 'keine'}. Anschriften: OpenStreetMap-Adressverzeichnis auf dem eigenen Server (Stand ${esc(stand.erzeugt || '—')}).`;
   }
   function kartenPopZu() {
     const pop = $('#km-pop'); if (pop) pop.hidden = true;

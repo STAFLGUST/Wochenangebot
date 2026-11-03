@@ -70,7 +70,7 @@ _Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Ein
 
 **PDF im Design der Angebotsansicht (A4 quer, drei Spalten)**
 
-- `einzel_pdf(e, c)` – Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€ / kg“, Zebrastreifen, Seitenzahlen.
+- `einzel_pdf(e, c)` – Wie die Druckliste der Angebotsseite: Logo und Titel, Blöcke mit Kopfzeile „€/kg“, Zebrastreifen, Seitenzahlen.
 - `plural_de(n, eins, viele)`
 - `einzel_pdf_name(e)`
 
@@ -116,7 +116,7 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `order_settings()`
 - `order_enabled()`
 - `de_num(v, dec)`
-- `de_qty(v)`
+- `de_qty(v)` – Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js)
 - `mail_tpl_bestellung(o, copy)` – Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML]
 - `mail_tpl_angebot(c, note, wk)` – Wochenangebot / Angebotslink: [Betreff, Text, HTML]
 - `restposten_items(def)` – Sonderposten eines Angebots – nur dessen Artikel und Preise: [Betreff, Text, HTML]
@@ -493,7 +493,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `stockAusDatei(file)` – Bestandsliste lesen (Leser des Moduls Bestand: stock-core.js) – hier und in der Importzentrale
 - `stockImportFile(file)`
 - `stockCSV()` – CSV (aktuelle Auswahl)
-- `stockPDF(btn)` – PDF zum Weitergeben (Server, lib/bestand-pdf.php): nur Art.-Nr., Bezeichnung, eingelagerter Bestand, kürzestes MHD, Kg kürz.
+- `stockPDF(btn)` – PDF zum Weitergeben (Server, lib/bestand-pdf.php): nur Art.-Nr., Bezeichnung, eingelagerter Bestand, kürzestes MHD, Menge kürz.
 
 **MHD-Liste an den Verkauf (Server: stock_mhd_senden, lib/bestand-mhd.php)**
 

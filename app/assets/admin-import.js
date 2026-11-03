@@ -152,7 +152,7 @@
     const seg = `<div class="seg txt imp-filter" role="group" aria-label="Zeilen filtern">${['alle', 'neu', 'geaendert', 'entfaellt', 'fehler'].map((k) => `<button type="button" data-imp-filter="${k}" aria-pressed="${f === k}">${k === 'alle' ? 'Alle' : ART_LABEL[k]}${k === 'alle' ? '' : ` ${zaehl(k)}`}</button>`).join('')}</div>`;
     if (!alle.length) return '';
     return `${seg}<div class="gcard"><table class="etab imp-tab"><thead><tr><th class="imp-z">Zeile</th><th class="imp-a">Änderung</th><th>Eintrag</th></tr></thead><tbody id="imp-zeilen">${list.length ? list.map((x) => `
-        <tr data-imp-art="${x.art}"><td class="imp-z">${x.zeile != null ? fmtInt.format(x.zeile) : '–'}</td><td class="imp-a"><span class="imp-badge ${x.art}">${ART_LABEL[x.art]}</span></td>
+        <tr data-imp-art="${x.art}"><td class="imp-z">${x.zeile != null ? fmtInt.format(x.zeile) : '—'}</td><td class="imp-a"><span class="imp-badge ${x.art}">${ART_LABEL[x.art]}</span></td>
         <td>${x.schluessel ? `<span class="imp-k">${esc(x.schluessel)}</span>` : ''}${esc(x.name)}${x.text ? `<div class="sub">${esc(x.text)}</div>` : ''}</td></tr>`).join('')
       : '<tr><td colspan="3" class="imp-leer">Keine Zeilen in dieser Auswahl.</td></tr>'}</tbody></table></div>
       ${gekuerzt ? `<p class="hint">Angezeigt werden die ersten ${fmtInt.format(lauf.vorschau.zeilen.length)} von ${fmtInt.format(lauf.vorschau.zeilenGesamt)} geänderten oder fehlerhaften Zeilen; die Zahlen oben zählen alle.</p>` : ''}`;
