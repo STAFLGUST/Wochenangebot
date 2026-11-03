@@ -569,7 +569,6 @@ dialog.modal.st-vk { width: min(1100px, calc(100vw - 32px)); }
    übersprungen, ~12 000 Elemente im Editor). „auto“ merkt sich die zuletzt gemessene Höhe, die Bildlaufleiste bleibt ruhig. */
 #groups > .gcard { content-visibility: auto; contain-intrinsic-size: auto 640px; }
 @media print { #groups > .gcard { content-visibility: visible; } }
-#noprice-panel { margin: 0; }
 .np-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
 .np-head { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 12px 16px; cursor: pointer; }
 .np-head:focus-visible { box-shadow: var(--focus); }
@@ -583,14 +582,12 @@ dialog.modal.st-vk { width: min(1100px, calc(100vw - 32px)); }
 .nptab td { padding: 6px 8px; font-size: 13.5px; }
 .nptab .np-code { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); width: 80px; }
 .nptab th.np-code { font-family: inherit; font-size: 11.5px; color: var(--muted); }
-.nptab .np-wg { color: var(--text-2); white-space: nowrap; }
 .nptab .np-kg, .nptab .np-prev { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .nptab td.np-kg { font-weight: 600; }
 .nptab .np-mhd { text-align: center; white-space: nowrap; }
 .nptab .np-act { text-align: right; white-space: nowrap; width: 1%; }
 .nptab tfoot td { font-size: 12.5px; padding: 8px; }
 .np-empty { margin: 0; padding: 12px 16px; border-top: 1px solid var(--line); color: var(--text-2); font-size: 13.5px; }
-@media (max-width: 1100px) { .nptab .np-wg { display: none; } }
 @media (max-width: 860px) { .etab .e-prev { width: 76px; } .etab .e-stock { width: 88px; } }
 @media (max-width: 560px) {
   .etab .e-prev { display: none; }
@@ -894,6 +891,16 @@ body.ro .e-rm, body.ro #btn-add-art, body.ro .oh-act [data-ob="copy"], body.ro .
 .ezp-zh { flex: 1 1 100%; font-size: 12px; color: var(--muted); }
 .ezp-err { flex: 1 1 100%; font-weight: 600; }
 body.ro .ezp-extra { display: none; }
+/* Ab 901 px steht die Angebotsauswahl unter den Bereichen der Seitenleiste (admin.js: offerBarPlatzieren) */
+body.ob-links .ed-layout { grid-template-columns: minmax(0, 1fr); }
+.side-nav .offer-bar { position: static; top: auto; max-height: none; overflow: visible; margin-top: 12px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--line);
+  border-radius: 0; background: none; box-shadow: none; }
+.side-nav .offer-bar .ob-cur { display: none; }
+.side-nav .offer-bar .ob-list { display: block; padding: 0; border: 0; margin: 0; }
+.side-nav .offer-bar .ob-h { display: flex; padding: 4px 12px 8px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.side-nav .offer-bar .ob-sec { padding: 8px 12px 4px; }
+.side-nav .offer-bar .ob-q { margin: 0 2px 6px; }
+body.in-other .side-nav .offer-bar { display: none; }
 @media (max-width: 1280px) {
   .ed-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .offer-bar { position: relative; top: auto; max-height: none; overflow: visible; padding: 6px; z-index: 7; }
@@ -906,6 +913,8 @@ body.ro .ezp-extra { display: none; }
   .ob-list.open { display: block; }
   .ob-list .ob-h { display: none; }
   .oh-art, .oh-t h2 { display: none; }   /* Name steht schon in der Auswahl darüber */
+  body.ob-links .oh-t h2 { display: block; }
+  body.ob-links .oh-art { display: inline; }   /* Auswahl steht links in der Seitenleiste: Name wieder im Kopf */
 }
 @media (max-width: 860px) {
   .ed-panels { grid-template-columns: minmax(0, 1fr); }
@@ -1081,6 +1090,8 @@ body.ro .vtog { display: none; }
 .sale-tag { display: inline-block; margin-top: 3px; border: 0; border-radius: 99px; padding: 1px 8px; font: 600 11px var(--font); background: var(--sale-bg); color: var(--sale); cursor: pointer; white-space: nowrap; }
 .sale-tag.out { background: var(--surface-3); color: var(--muted); text-decoration: line-through; }
 .sale-tag.off { cursor: default; background: none; color: var(--muted); font-weight: 500; padding: 0; }
+.sale-tag.mark { background: var(--accent-soft); color: var(--accent); }   /* Empfehlung ohne Preisänderung */
+.sptab tr.sp-akt td { font-weight: 600; }
 body.ro .sale-tag { cursor: default; }
 .nostock { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--nostock); color: #fff; font-size: 11.5px; font-weight: 700; cursor: help; }
 #mhd-panel { margin: 0; }
@@ -1667,6 +1678,10 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .ezp-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr); }
 .ezp-nav { border-right: 1px solid var(--line); background: var(--surface-2); overflow-y: auto; padding: 12px 10px; }
 .ezp-nav-h { font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 0 8px 8px; }
+.ezp-gq { margin: 0 2px 8px; max-width: none; }
+.ezp-gq input { height: 36px !important; font-size: 13.5px; }
+.ezp-g[hidden] { display: none; }
+.ezp-anderswo { padding: 4px 20px 12px; margin: 0; }
 .ezp-g { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
 .ezp-g:hover { background: var(--surface-3); }
 .ezp-g[aria-pressed="true"] { background: var(--accent); color: #fff; }
@@ -2198,6 +2213,7 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 
   /* Angebotsliste links: Einträge wie die Seitenleiste (44 px), gewähltes Angebot als Glas mit Akzent */
   body.adm .offer-bar { padding: 14px 10px; border-radius: var(--r-glas); }
+  body.adm .side-nav .offer-bar { padding: 12px 0 0; border: 0; border-top: 1px solid var(--linie); border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
   body.adm .ob-o { border-radius: 14px; }
   body.adm .ob-o:hover { background: var(--aus); }
   body.adm .ob-o[aria-selected="true"] { background: var(--glas-stark); color: var(--text); box-shadow: inset 0 1px 0 var(--glas-glanz), 0 2px 10px rgba(0, 0, 0, .06); }
@@ -2364,6 +2380,20 @@ dialog.modal.pv { width: min(1480px, calc(100vw - 32px)); height: calc(100dvh - 
 .e-nmrow:has(.werbtag) .newtag { position: static; transform: none; margin-left: 6px; }
 #dlg-werbung h2 { display: flex; align-items: center; gap: 8px; }
 #dlg-werbung h2 .i { color: var(--werb); }
+/* Zwei Werbungen: Reiter „Werbung 1 · oben links“ / „Werbung 2 · rechts daneben“, sonst Knopf „Weitere Werbung“ */
+.wb-reiter { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 14px; }
+.wb-reiter:empty { display: none; }
+.wb-rh { font-size: 12.5px; color: var(--muted); }
+.wb-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; width: 100%; padding: 4px; border-radius: 14px; background: var(--surface-3); }
+.wb-tab { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 6px 12px; border: 0; border-radius: 10px; background: transparent;
+  font: inherit; color: var(--text-2); cursor: pointer; text-align: left; }
+.wb-tab > span:first-child { display: flex; flex-direction: column; font-weight: 600; font-size: 14px; line-height: 1.2; }
+.wb-tab small { font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.wb-tab:hover { color: var(--text); }
+.wb-tab[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.wb-tab:focus-visible { outline: none; box-shadow: var(--focus); }
+.wb-tz { flex: none; min-width: 24px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--werb-line); background: var(--werb-bg); color: var(--werb); font-size: 12px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+#wb-err:empty { display: none; }
 .wb-felder { display: grid; gap: 12px; margin-bottom: 6px; }
 .wb-felder textarea { min-height: 58px; }
 #dlg-werbung .d-h { display: flex; justify-content: space-between; align-items: baseline; }

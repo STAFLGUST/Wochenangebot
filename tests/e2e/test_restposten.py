@@ -1,4 +1,5 @@
-"""Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur
+"""Empfehlung (früher „Sonderpreis“): mit Preis Sonderposten (kurzes MHD, solange der Vorrat reicht), ohne Preis nur
+hervorgehoben; neu gesetzt nur im bearbeiteten Angebot. Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur
 für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. Läuft gegen den Test-Mailserver – es werden keine echten E-Mails versendet."""
 import json
 from umgebung import SMTP_PORT  # Testserver je Gruppe (parallel)
@@ -38,6 +39,12 @@ IA['sale'] = {'value': 5.55}
 IA.setdefault('variants', {})['bela'] = {'status': 'hidden'}
 IB['sale'] = {'value': 6.66, 'offers': {'edeka': {'value': 6.11}, 'bela': {'status': 'none'}, 'gibtsnicht': {'value': 1}}}
 IC['sale'] = {'value': 1.11}
+IE = without[1]   # Empfehlung ohne Preisänderung, ohne Bestand: bleibt sichtbar, nur hervorgehoben
+IE['sale'] = {'mark': True, 'offers': {'edeka': {'status': 'none'}}}
+IF = withs[5]     # Empfehlungspreis, in Bela nur hervorgehoben (ohne Preisänderung)
+IF['sale'] = {'value': 4.44, 'offers': {'bela': {'status': 'mark'}, 'edeka': {'status': 'none'}}}
+IG = withs[6]     # ohne Preis und ohne Kennzeichen: keine Empfehlung (wird verworfen)
+IG['sale'] = {'offers': {'bela': {'status': 'mark'}}}
 ID.setdefault('variants', {})['std'] = {'status': 'hidden'}
 code, r = A.call('save_draft', {'model': model, 'revision': A.call('draft')[1]['revision']})
 check('draft with sale prices saved', code == 200, r)
@@ -45,6 +52,9 @@ d = A.call('draft')[1]['draft']
 byid = {i['id']: i for i in d['items']}
 check('unknown offer dropped from sale, rest kept', byid[IB['id']]['sale'] == {'value': 6.66, 'offers': {'edeka': {'value': 6.11}, 'bela': {'status': 'none'}}}, byid[IB['id']].get('sale'))
 check('hidden in Wochenangebot stored', byid[ID['id']]['variants'] == {'std': {'status': 'hidden'}})
+check('Empfehlung ohne Preis gespeichert (mark), je Angebot „mark“/„none“; ohne Preis und Kennzeichen verworfen',
+      byid[IE['id']].get('sale') == {'mark': True, 'offers': {'edeka': {'status': 'none'}}} and byid[IF['id']].get('sale') == {'value': 4.44, 'offers': {'bela': {'status': 'mark'}, 'edeka': {'status': 'none'}}}
+      and 'sale' not in byid[IG['id']], (byid[IE['id']].get('sale'), byid[IF['id']].get('sale'), byid[IG['id']].get('sale')))
 bad = json.loads(json.dumps(d)); bad['items'][0]['sale'] = {'value': -3}
 check('invalid sale price rejected', A.call('save_draft', {'model': bad, 'revision': A.call('draft')[1]['revision']})[0] == 422)
 bad = json.loads(json.dumps(d)); bad['items'][0]['variants'] = {'std': {'status': 'value', 'value': 3}}
@@ -54,7 +64,8 @@ code, r = A.call('save_draft', {'model': d, 'revision': A.call('draft')[1]['revi
 code, r = A.call('publish', {'model': d, 'revision': A.call('draft')[1]['revision']})
 check('published', code == 200, r)
 log = A.call('log')[1]['entries']
-check('audit names sale price and visibility', any('Sonderpreis' in json.dumps(e, ensure_ascii=False) for e in log) and any('Sichtbar im Wochenangebot' in json.dumps(e, ensure_ascii=False) for e in log))
+check('audit names Empfehlung (mit und ohne Preis) and visibility', any('Empfehlung 5,55' in json.dumps(e, ensure_ascii=False) for e in log) and any('ohne Preisänderung' in json.dumps(e, ensure_ascii=False) for e in log)
+      and any('Sichtbar im Wochenangebot' in json.dumps(e, ensure_ascii=False) for e in log))
 
 # --- Auslieferung je Angebot
 P = Client('198.51.100.9')
@@ -64,7 +75,10 @@ check('public: hidden article missing', ID['id'] not in items)
 check('public: sale price with regular price', items[IA['id']]['price']['value'] == 5.55 and items[IA['id']]['sale'] is True and items[IA['id']].get('regular') == PA, items.get(IA['id']))
 check('public: base sale price', items[IB['id']]['price']['value'] == 6.66)
 check('public: sold-out sale article hidden automatically', IC['id'] not in items)
-check('public: no customer prices or sale details leak', '6.11' not in raw and '"variants"' not in raw and '"offers"' not in raw)
+check('public: no customer prices or sale details leak', '6.11' not in raw and '"variants"' not in raw and '"offers"' not in raw and '"mark"' not in raw)
+check('public: Empfehlung ohne Preis – sichtbar trotz fehlendem Bestand, Preis unverändert, nur Kennzeichen', IE['id'] in items and items[IE['id']].get('empfehlung') is True
+      and 'sale' not in items[IE['id']] and items[IE['id']]['price'] == IE['price'] and 'regular' not in items[IE['id']], items.get(IE['id']))
+check('public: Empfehlungspreis wie bisher (Sonderposten), ohne Kennzeichen „empfehlung“', items[IF['id']]['price']['value'] == 4.44 and items[IF['id']]['sale'] is True and 'empfehlung' not in items[IF['id']])
 
 
 def customer(firma, user, offers, email, mail=True):
@@ -93,6 +107,8 @@ check('edeka: article hidden only in Wochenangebot is visible', ID['id'] in ed)
 be = offer_as('bela.gastro', 'bela')
 check('bela: eye hides article despite sale price', IA['id'] not in be)
 check('bela: "no sale price" keeps the normal price', not be[IB['id']].get('sale') and be[IB['id']]['price']['value'] == IB['price']['value'])
+check('bela: Empfehlung ohne Preisänderung – Normalpreis, nur hervorgehoben', be[IF['id']].get('empfehlung') is True and not be[IF['id']].get('sale') and be[IF['id']]['price']['value'] == IF['price']['value'], be.get(IF['id']))
+check('edeka: „keine Empfehlung“ – weder Kennzeichen noch Preis', not ed[IE['id']].get('empfehlung') and not ed[IF['id']].get('empfehlung') and not ed[IF['id']].get('sale') and not ed[IE['id']].get('sale'))
 
 # Bestand weg → Sonderposten verschwindet, wieder da → erscheint
 less = [a for a in articles if norm(a['code']) != norm(IA['code'])]
@@ -173,7 +189,8 @@ with sync_playwright() as p:
     check('red no-stock mark with hover text', ns.count() == 1 and 'Kein verfügbarer Bestand' in (ns.get_attribute('title') or ''))
     check('no red mark when stock exists', row(IA['id']).locator('.nostock').count() == 0)
     check('Wochenangebot: Artikel, der nicht im Wochenangebot steht, fehlt in seiner Liste', row(ID['id']).count() == 0)
-    check('sale tag in row', 'Sonderpreis 5,55' in row(IA['id']).locator('.sale-tag').inner_text())
+    check('sale tag in row', 'Empfehlung 5,55' in row(IA['id']).locator('.sale-tag').inner_text())
+    check('Empfehlung ohne Preis: Kennzeichen „Empfehlung“ in der Zeile', row(IE['id']).locator('.sale-tag.mark').inner_text().strip() == 'Empfehlung')
     check('sold-out sale shown as hidden', 'ohne Bestand' in row(IC['id']).locator('.sale-tag').inner_text())
     row(IA['id']).scroll_into_view_if_needed(); a.mouse.wheel(0, -120); a.screenshot(path=SH + '/restposten-zeilen.png')
     # ✕ entfernt nur aus dem Wochenangebot (andere Angebote folgen ihm hier noch, der Artikel bleibt im Entwurf)
@@ -192,18 +209,33 @@ with sync_playwright() as p:
     btn = a.locator('#mhd-panel tr[data-mid]:not(:has(.sp-val)) [data-mp=sale]').first
     mid = btn.locator('xpath=ancestor::tr').get_attribute('data-mid')
     btn.click(); a.wait_for_selector('#dlg-sale[open]')
+    rows = a.eval_on_selector_all('#sale-body tr[data-soid]', 'e => e.map(x => [x.dataset.soid, x.querySelector("[data-sm]").value])')
+    check('neue Empfehlung: nur im bearbeiteten Angebot „wie oben“, alle anderen „keine Empfehlung“, dieses Angebot zuerst',
+          rows[0] == ['std', 'base'] and all(m == 'none' for o, m in rows[1:]) and len(rows) > 1 and 'Empfehlung' in a.inner_text('#sp-title'), rows)
     a.fill('#sale-body [name=value]', '7,77')
     a.select_option('#sale-body tr[data-soid="edeka"] [data-sm]', 'own'); a.fill('#sale-body tr[data-soid="edeka"] [data-sv]', '7,50')
     a.screenshot(path=SH + '/restposten-dialog.png')
     a.click('#sale-body button[type=submit]')
     a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
     sv = next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == mid).get('sale') or {}
-    check('sale price set from MHD list', sv.get('value') == 7.77 and sv.get('offers') == {'edeka': {'value': 7.5}}, sv)
-    check('changes show sale price', 'Sonderpreis' in (a.get_attribute('#btn-publish', 'title') or ''))
+    exp = {o: {'status': 'none'} for o, m in rows if o not in ('std', 'edeka')}; exp['edeka'] = {'value': 7.5}
+    check('sale price set from MHD list (andere Angebote „keine Empfehlung“)', sv.get('value') == 7.77 and sv.get('offers') == exp, sv)
+    check('changes show Empfehlung', 'Empfehlung' in (a.get_attribute('#btn-publish', 'title') or ''))
+    # Empfehlung ohne Preis über das Fenster: Preisfeld leer → nur hervorheben; alle Angebote „keine“ → Fehlermeldung
+    a.keyboard.press('Escape')
+    rk = a.locator(f'tr[data-id="{withs[7]["id"]}"]')
+    rk.locator('[data-act=sale]').first.click(); a.wait_for_selector('#dlg-sale[open]')
+    a.select_option('#sale-body tr[data-soid="std"] [data-sm]', 'none'); a.click('#sale-body button[type=submit]')
+    check('Empfehlung in keinem Angebot: Hinweis statt Speichern', 'In keinem Angebot' in a.inner_text('#sp-err') and a.locator('#dlg-sale[open]').count() == 1)
+    a.select_option('#sale-body tr[data-soid="std"] [data-sm]', 'base'); a.click('#sale-body button[type=submit]'); a.wait_for_selector('#dlg-sale', state='hidden')
+    a.wait_for_function("document.querySelector('#save-state').classList.contains('saved')", timeout=10000)
+    sk = next(i for i in A.call('draft')[1]['draft']['items'] if i['id'] == withs[7]['id']).get('sale') or {}
+    check('Empfehlung ohne Preisänderung gesetzt (mark), Kennzeichen in der Zeile', sk.get('mark') is True and 'value' not in sk and rk.locator('.sale-tag.mark').count() == 1, sk)
     a.screenshot(path=SH + '/restposten-editor.png')
     # Sonderposten senden (Edeka)
     a.click('#offer-bar [data-offer="edeka"]')
-    check('edeka view shows own sale price', 'Sonderpreis 6,11' in row(IB['id']).locator('.sale-tag').inner_text())
+    check('edeka view shows own sale price', 'Empfehlung 6,11' in row(IB['id']).locator('.sale-tag').inner_text())
+    check('edeka: „keine Empfehlung in diesem Angebot“', 'keine Empfehlung' in row(IE['id']).locator('.sale-tag').inner_text())
     a.click('#offer-head [data-ob=restposten]'); a.wait_for_selector('#dlg-rest[open]')
     t = a.inner_text('#rest-body')
     check('send dialog: items, only this offer\'s customers', 'Edeka Markt Nord' in t and 'Bela' not in t and '6,11' in t and 'unveröffentlichte' in t, t[:300])
@@ -223,6 +255,9 @@ with sync_playwright() as p:
     check('table view: sale price, crossed-out price, note', '5,55' in r1.inner_text() and 'solange der Vorrat reicht' in r1.inner_text() and r1.locator('s.p-was').count() == 1, r1.inner_text())
     check('table view: tag Sonderposten', r1.locator('.tag.sale').count() == 1)
     check('public page: hidden article missing', pg.locator(f'tr.row[data-id="{ID["id"]}"]').count() == 0)
+    re1 = pg.locator(f'tr.row[data-id="{IE["id"]}"]')
+    check('Angebotsseite: Empfehlung ohne Preis hervorgehoben, Kennzeichen „Empfehlung“, kein Sonderposten', re1.count() == 1 and 'werb-an' in (re1.get_attribute('class') or '')
+          and 'Empfehlung' in re1.inner_text() and re1.locator('.tag.sale').count() == 0 and re1.locator('s.p-was').count() == 0, re1.inner_text() if re1.count() else '')
     r1.scroll_into_view_if_needed(); pg.screenshot(path=SH + '/restposten-seite.png')
     check('no page errors', not errs, errs[:3])
     br.close()

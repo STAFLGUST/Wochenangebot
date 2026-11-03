@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 601 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+41 Dateien, 611 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -17,10 +17,14 @@ _Angebote, Kundenpreise, Sonderpreise, Datenmodell, gemeinsames Bearbeiten_
 - `std_public()` – Ist das Standard-Wochenangebot ohne Anmeldung sichtbar?
 - `offer_def(id)`
 - `clean_variants(v, where, known)`
+- `werbung_bloecke(e)` – Blöcke eines Eintrags in Reihenfolge: erster Block, danach „weitere“ (ungeprüft)
+- `werbung_eintrag(bloecke)` – Blöcke wieder zu einem Eintrag zusammensetzen (leere fallen weg, ein späterer rückt nach vorn); null = keine Werbung
+- `werbung_block_clean(e, iids)`
 - `clean_werbung(w, known, iids)`
-- `clean_money(x, what)` – Sonderpreis „solange der Vorrat reicht“ (Artikel mit kurzem oder überschrittenem MHD): $item['sale'] = {value: Grundsonderpreis für alle Angebote, offers?: …
+- `clean_money(x, what)` – Empfehlung (bis 11/2026 „Sonderpreis“) je Artikel und Angebot: $item['sale'] = {value: Empfehlungspreis für alle Angebote \| mark: true (ohne Preisänderung), …
 - `clean_sale(v, where, known)`
-- `sale_for(it, oid)`
+- `empfehlung_fuer(it, oid)` – Empfehlung eines Artikels in einem Angebot: null = keine, sonst ['preis' => Empfehlungspreis \| null (nur hervorheben)]
+- `sale_for(it, oid)` – Empfehlungspreis (Sonderposten „solange der Vorrat reicht“) eines Artikels in einem Angebot, sonst null
 - `stock_codes()` – Artikelnummern mit eingelagertem Bestand (null = keine Bestandsliste vorhanden)
 - `sold_out(it)`
 - `offer_resolve(m, def)` – Angebot für die Auslieferung: nur Preise dieses Angebots, keine Kundenpreise anderer Angebote, keine ausgeblendeten Artikel, Sonderpreise aufgelöst (ohne …
@@ -181,11 +185,14 @@ _Eingabebereich – Fenster „Artikel hinzufügen“ (gemeinsam für „Angebot
 
 - `bestandHTML(a, kurz)`
 - `naechsteEta(a)` – Nächste erwartete Ankunft (frühestes Datum; ohne Datum: keine Angabe)
+- `hayVon(a)` – Suchtext eines Artikels (einmal je Öffnen berechnet): Nummer mit und ohne führende Nullen, Bezeichnung (auch die der Stammdaten/Bestandsliste), Herkunft und …
 - `passt(a, toks)`
 - `pickBasis()` – Treffer der Filter/Suche (ohne Gruppenwahl) und Anzahl je Gruppe
 - `pickZeilen(basis)` – Angezeigte Artikel: gewählte Gruppe, sonst (bei Suche) alle Gruppen; sortiert nach Gruppe und Artikelnummer
 - `oeffnen(c)`
 - `renderPick()`
+- `suchPlatzhalter()` – Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen
+- `gruppenFiltern()` – Gruppenleiste nach dem Suchtext links filtern (Nummer oder Name); die gewählte Gruppe bleibt sichtbar
 - `renderPickNav(basis)`
 - `detailHTML(a)`
 - `preisFeld(a, k)`
@@ -245,11 +252,14 @@ _Wochenangebot – Eingabebereich, Einzelangebote (Angebot je Kunde) Kunde über
 
 ## `app/assets/admin-werbung.js`
 
-_Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Überschrift, optionaler Werbetext und bis zu 12 Artikel des gewählten Angebots (Reihenfolge, je Artikel ein …_
+_Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je …_
 
 - `listeHTML()`
+- `reiterHTML()` – Reiter der Werbungen (nur ab zwei Werbungen) und Knopf „Weitere Werbung“
+- `blockHTML()` – Felder und Liste der angezeigten Werbung
+- `zeigen(i)`
 - `ausAuswahl(ids, artikel)` – Rückkehr aus der Artikelauswahl: ids = gewählte Artikel (Reihenfolge der Auswahl), artikel = aktuelle Liste des Angebots.
-- `oeffnen(c)` – cfg: { angebot, eintrag: {titel, text?, artikel: [{id, text?}]} \| null, artikel: [{id, code, name, merkmale, preis}], max, ro, auswaehlen(ids, fertig(ids, …
+- `oeffnen(c)` – cfg: { angebot, eintrag: {titel, text?, artikel: [{id, text?}], weitere?: [{titel, text?, artikel}]} \| null, artikel: [{id, code, name, merkmale, preis}], …
 
 ## `app/assets/admin.js`
 
@@ -266,6 +276,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `variantShort(v, oid)`
 - `inOffer(it, oid)`
 - `aufnehmen(it, oid, p)` – In ein Angebot aufnehmen; p = Preis ({status, value?}) oder null (Preis bleibt, in eigener Liste „auf Anfrage“)
+- `empfehlungNichtUebernehmen(it, oid)` – Empfehlung gilt nur, wo sie gesetzt wurde: kommt ein Artikel mit Empfehlung neu in ein Angebot, steht er dort auf „keine Empfehlung“ (sonst übernähme er den …
 - `nurIn(it, oid)` – Neuer Artikel nur für dieses Angebot: im Wochenangebot und in Angeboten, die ihm folgen, nicht enthalten
 - `entfernen(it, oid)` – Aus einem Angebot entfernen.
 - `namenBekannt(n)` – nur Einträge bestehender Kundenangebote; null, wenn keiner
@@ -388,6 +399,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `loadOffers()`
 - `angebotsseite(abfrage)` – Adresse der Angebotsseite auf diesem Host (Angebotsseite, Vorschau, Kundenangebot).
 - `renderOfferBar()`
+- `offerBarPlatzieren()`
 - `obFilter()`
 - `renderOfferHead()` – Kopf des gewählten Angebots: Art, Name, Artikelliste, Anzahl, Aktionen; Hinweis bei „folgt dem Wochenangebot“
 - `setOffer(id)`
@@ -504,7 +516,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `mhdAnVerkauf(btn)`
 - `printStock()` – Druck / PDF (DIN A4)
 
-**Angebot: Vorwoche, Bestand, Bestand ohne Preis**
+**Angebot: Vorwoche, Bestand**
 
 - `loadPrev()`
 - `loadAux()`
@@ -515,10 +527,6 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `prevCellHTML(it)`
 - `stockCellHTML(it)`
 - `refreshAux()` – Spalten nach dem Laden von Bestand/Vorwoche aktualisieren, ohne Eingabefelder neu zu zeichnen
-- `noPriceList()`
-- `renderNoPrice()`
-- `panelLayout()` – Beide Leisten nebeneinander; eine aufgeklappte Leiste nimmt die volle Breite ein
-- `gotoPrice(it)`
 
 **Artikel hinzufügen (Fenster wie im Einzelangebot)**
 
@@ -531,7 +539,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `werbungAuswahl(oid, ids, fertig)`
 - `openWerbung()`
 
-**Sonderposten (kurzes MHD, solange der Vorrat reicht)**
+**Empfehlung (früher „Sonderpreis“; mit Preis: Sonderposten solange der Vorrat reicht)**
 
 - `openSale(id)`
 - `mhdList()`
@@ -801,7 +809,8 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 **Vergleich & Prüfung**
 
 - `matchKey(it, groups)`
-- `saleFor(it, oid)` – Sonderpreis „solange der Vorrat reicht“: Grundpreis für alle Angebote, je Angebot änderbar
+- `empfehlungFor(it, oid)` – Empfehlung (früher „Sonderpreis“) je Artikel: sale = {value: Empfehlungspreis \| mark: true (ohne Preisänderung), offers?: {<Angebot>: {value} \| {status: …
+- `saleFor(it, oid)`
 - `diffOffers(oldM, newM)`
 - `validateModel(m)` – Prüft ein Modell vor dem Speichern/Veröffentlichen
 - `stripFrisch(name)` – „frisch“ gehört in den Zustand, nicht in die Bezeichnung.
@@ -890,6 +899,7 @@ _Testgruppe editor_aux_
 - `check(n, c, i)`
 - `login(pg, user, pw)`
 - `post(pg, action, body)`
+- `treffer(q)`
 
 ## `tests/e2e/test_einzelangebote.py`
 
@@ -1041,7 +1051,7 @@ _1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt_
 
 ## `tests/e2e/test_restposten.py`
 
-_Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot._
+_Empfehlung (früher „Sonderpreis“): mit Preis Sonderposten (kurzes MHD, solange der Vorrat reicht), ohne Preis nur hervorgehoben; neu gesetzt nur im bearbeiteten Angebot._
 
 - `check(n, c, i)`
 - `customer(firma, user, offers, email, mail)`

@@ -2,7 +2,9 @@
    Eingabebereich – Fenster „Artikel hinzufügen“ (gemeinsam für „Angebot bearbeiten“ und Einzelangebote)
    Links die VK-Gruppen (mit Anzahl), rechts die Artikel der gewählten Gruppe als Tabelle mit Häkchen, eingelagertem
    und erwartetem Bestand (mit nächster ETA), kürzestem MHD und Wochenpreis; Details je Artikel (Partien, Ankünfte).
-   Die Suche oben findet jederzeit Artikel in allen Gruppen. Mehrere markierte Artikel auf einmal übernehmen.
+   Links lassen sich die VK-Gruppen durchsuchen; die Suche oben sucht in der gewählten Gruppe, ohne gewählte Gruppe in
+   allen Gruppen (Nummer auch ohne führende Nullen, Bezeichnung auch zusammengeschrieben und mit ae/oe/ue, Herkunft und
+   Zustand auch ausgeschrieben). Mehrere markierte Artikel auf einmal übernehmen.
    Optional (Angebot bearbeiten): Preisfeld je markiertem Artikel und Angabe, in welcher Angebotsgruppe er landet.
    Daten liefert der Server (einzel_artikel(): Stammdaten mit VK-Gruppe, Wochenpreis, Bestand nur mit Recht);
    was übernommen wird, entscheidet der Aufrufer (Rückruf „uebernehmen“). Ein Fenster (#dlg-ez-pick) für alle Aufrufer.
@@ -24,6 +26,12 @@
   const OHNE_VK = '–';         // Gruppe „ohne VK-Gruppe“
   const ALLE = '*';            // alle Gruppen
   const MAX_ZEILEN = 400;
+  /* Suche: wie fold, dazu ae/oe/ue/ss wie ä/ö/ü/ß; kompakt = ohne Leer- und Satzzeichen („Lammfilet“ findet „Lamm Filet“) */
+  const such = (s) => fold(s).replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u').replace(/ss/g, 's');
+  const kompakt = (s) => s.replace(/[^a-z0-9]/g, '');
+  const SYN_HERKUNFT = { NZ: 'neuseeland nzl', ARG: 'argentinien', UY: 'uruguay', PY: 'paraguay', BR: 'brasilien', AUS: 'australien', IRL: 'irland',
+    DK: 'danemark', SCO: 'schottland', CA: 'kanada', USA: 'usa amerika', ES: 'spanien', D: 'deutschland', '4xD': 'deutschland', '3xD': 'deutschland', EG: 'eu europa' };
+  const SYN_ZUSTAND = { frisch: 'frisch', gefroren: 'gefroren gefr tk tiefgekuhlt' };
 
   const stdText = (p) => (!p ? '<span class="muted">nicht im Angebot</span>' : p.status === 'value' ? esc(F.euroKg(p.value)) : p.status === 'request' ? 'auf Anfrage' : '—');
   function bestandHTML(a, kurz) {
@@ -48,22 +56,33 @@
              onExtra(id), vorauswahl: [Artikelnummern], q: Suchtext beim Öffnen,
              uebernehmen(liste, preise: Map(key → Eingabe)) → true (schließen) | Fehlertext } */
   let cfg = null;
-  const pk = { q: '', sel: new Set(), offen: new Set(), preise: new Map() };
+  const pk = { q: '', gq: '', sel: new Set(), offen: new Set(), preise: new Map() };   // gq: Suche in der Gruppenleiste
   const z = () => cfg.zustand;
   const vkName = (nr) => { const g = nr && cfg.meta.vk.get(nr); return g && g.name ? g.name : ''; };
   const vkText = (nr) => (nr === OHNE_VK || !nr ? 'ohne VK-Gruppe' : nr + (vkName(nr) ? ' · ' + vkName(nr) : ''));
   const grpVon = (a) => a.vk || OHNE_VK;
   const drinSet = () => (cfg.drin ? cfg.drin() : new Set());
+  /* Suchtext eines Artikels (einmal je Öffnen berechnet): Nummer mit und ohne führende Nullen, Bezeichnung (auch die der
+     Stammdaten/Bestandsliste), Herkunft und Zustand mit ausgeschriebenen Namen, Fleischart, VK-Gruppe mit Bezeichnung */
+  function hayVon(a) {
+    if (a._hay && a._hayVk === cfg.meta.vk) return a._hay;
+    const gefr = /\b(gefr|tk)\b/i.test(a.name || '') ? 'gefroren' : '';
+    const h = such([a.code, key(a.code), a.nr, a.name, a.name0, a.origin, SYN_HERKUNFT[a.origin], SYN_ZUSTAND[a.condition], gefr, a.category, a.vk, vkName(a.vk)].filter(Boolean).join(' '));
+    a._hay = { h, k: kompakt(h) }; a._hayVk = cfg.meta.vk;
+    return a._hay;
+  }
   function passt(a, toks) {
     if (z().nurBestand && !(a.totalKg > 0)) return false;
     if (z().nurAngebot && !a.inOffer) return false;
     if (!toks.length) return true;
-    const hay = fold([a.code, a.name, a.origin, a.vk, vkName(a.vk)].join(' '));
-    return toks.every((t) => hay.includes(t));
+    const hay = hayVon(a);
+    return toks.every((t) => hay.h.includes(t.w) || (t.k && hay.k.includes(t.k)) || (t.n && hay.h.includes(t.n)));
   }
+  /* Suchbegriffe: Wort, kompakte Form, bei Zahlen die Nummer ohne führende Nullen */
+  const suchToks = (q) => such(q).split(/\s+/).filter(Boolean).map((w) => ({ w, k: w.length >= 4 ? kompakt(w) : '', n: /^\d+$/.test(w) ? key(w) : '' }));
   /* Treffer der Filter/Suche (ohne Gruppenwahl) und Anzahl je Gruppe */
   function pickBasis() {
-    const toks = fold(pk.q).split(/\s+/).filter(Boolean);
+    const toks = suchToks(pk.q);
     const l = [...cfg.artikel.values()].filter((a) => passt(a, toks));
     const n = new Map();
     for (const a of l) n.set(grpVon(a), (n.get(grpVon(a)) || 0) + 1);
@@ -79,7 +98,7 @@
   function oeffnen(c) {
     cfg = c;
     if (!cfg.artikel) return;
-    pk.sel.clear(); pk.offen.clear(); pk.preise.clear(); pk.q = cfg.q || '';
+    pk.sel.clear(); pk.offen.clear(); pk.preise.clear(); pk.q = cfg.q || ''; pk.gq = '';
     if (z().grp && z().grp !== ALLE && z().grp !== OHNE_VK && !cfg.meta.vk.has(z().grp)) z().grp = null;
     if (!cfg.meta.bestand) z().nurBestand = false;
     for (const code of cfg.vorauswahl || []) { const k = key(code); if (cfg.artikel.has(k) && !drinSet().has(k)) pk.sel.add(k); }
@@ -87,12 +106,13 @@
     $('#ez-pick-body').innerHTML = `
       <div class="dlg-head ezp-head">
         <div class="ezp-t"><h2 id="ezp-title">${esc(cfg.titel || 'Artikel hinzufügen')}</h2><p>${cfg.subHTML || esc(cfg.sub || '')}</p></div>
-        <div class="search ezp-q">${icon('search')}<input id="ezp-q" type="search" autocomplete="off" placeholder="Artikel in allen Gruppen suchen: Nummer, Bezeichnung, Herkunft …" aria-label="Artikel in allen Gruppen suchen" value="${esc(pk.q)}"></div>
+        <div class="search ezp-q">${icon('search')}<input id="ezp-q" type="search" autocomplete="off" placeholder="${esc(suchPlatzhalter())}" aria-label="Artikel suchen" value="${esc(pk.q)}"></div>
         <div class="ezp-f">${cfg.meta.bestand ? `<label class="check"><input type="checkbox" id="ezp-bestand"${z().nurBestand ? ' checked' : ''}> nur mit Bestand</label>` : ''}<label class="check"><input type="checkbox" id="ezp-angebot"${z().nurAngebot ? ' checked' : ''}> ${esc(cfg.angebotText || 'nur im Wochenangebot')}</label></div>
         <button class="btn icon ghost ezp-x" type="button" data-pick-close aria-label="Schließen">${icon('x')}</button>
       </div>
       <div class="ezp-main">
-        <nav class="ezp-nav" aria-label="VK-Gruppen"><div class="ezp-nav-h">VK-Gruppen</div><div id="ezp-grp"></div></nav>
+        <nav class="ezp-nav" aria-label="VK-Gruppen"><div class="ezp-nav-h">VK-Gruppen</div>
+          <div class="search ezp-gq">${icon('search')}<input id="ezp-gq" type="search" autocomplete="off" placeholder="Gruppe suchen" aria-label="VK-Gruppe suchen (Nummer oder Name)"></div><div id="ezp-grp"></div></nav>
         <label class="ezp-grp-m"><span>VK-Gruppe</span><select id="ezp-grp-sel" aria-label="VK-Gruppe wählen"></select></label>
         <section class="ezp-list" id="ezp-list" aria-live="polite"></section>
       </div>
@@ -104,15 +124,35 @@
     const q = $('#ezp-q'); q.focus(); if (pk.q) q.select();
   }
   function renderPick() { const b = pickBasis(); renderPickNav(b); renderPickList(b); renderPickFoot(); }
+  /* Suchfeld oben: sucht in der gewählten Gruppe, ohne gewählte Gruppe in allen Gruppen */
+  function suchPlatzhalter() {
+    const g = z().grp;
+    return g && g !== ALLE ? `In „${g === OHNE_VK ? 'ohne VK-Gruppe' : vkName(g) || g}“ suchen: Nummer, Bezeichnung, Herkunft …` : 'Artikel in allen Gruppen suchen: Nummer, Bezeichnung, Herkunft …';
+  }
+  /* Gruppenleiste nach dem Suchtext links filtern (Nummer oder Name); die gewählte Gruppe bleibt sichtbar */
+  function gruppenFiltern() {
+    const toks = such(pk.gq).split(/\s+/).filter(Boolean);
+    let n = 0;   // passende Gruppen (ohne „Alle“ und ohne die nur wegen der Auswahl sichtbare)
+    for (const b of dlg.querySelectorAll('#ezp-grp [data-grp]')) {
+      const nr = b.dataset.grp;
+      const passt = nr !== ALLE && toks.every((t) => such(b.dataset.hay || '').includes(t));
+      b.hidden = !(!toks.length || nr === ALLE || b.getAttribute('aria-pressed') === 'true' || passt);
+      if (passt) n++;
+    }
+    const leer = $('#ezp-gleer');
+    if (leer) leer.hidden = !toks.length || n > 0;
+  }
   function renderPickNav(basis) {
     const gruppen = [...cfg.meta.vk.values()];
     const ohne = [...cfg.artikel.values()].some((a) => !a.vk);
     const eintrag = (nr, label) => { const n = nr === ALLE ? basis.l.length : basis.n.get(nr) || 0; return { nr, label, n }; };
     const l = [eintrag(ALLE, 'Alle Gruppen'), ...gruppen.map((g) => eintrag(g.nr, g.name || '(ohne Bezeichnung)')), ...(ohne ? [eintrag(OHNE_VK, 'ohne VK-Gruppe')] : [])];
     const akt = z().grp || (pk.q.trim() ? ALLE : null);
-    $('#ezp-grp').innerHTML = l.map((g) => `<button type="button" class="ezp-g${g.n ? '' : ' leer'}" data-grp="${esc(g.nr)}" aria-pressed="${akt === g.nr}">
+    $('#ezp-grp').innerHTML = l.map((g) => `<button type="button" class="ezp-g${g.n ? '' : ' leer'}" data-grp="${esc(g.nr)}" data-hay="${esc(g.nr === ALLE ? '' : (g.nr === OHNE_VK ? '' : g.nr + ' ') + g.label)}" aria-pressed="${akt === g.nr}">
         <span class="ezp-g-nr">${g.nr === ALLE || g.nr === OHNE_VK ? '' : esc(g.nr)}</span><span class="ezp-g-n">${esc(g.label)}</span><span class="ezp-g-z">${g.n}</span></button>`).join('')
+      + '<p class="hint" id="ezp-gleer" hidden>Keine VK-Gruppe gefunden.</p>'
       + (!gruppen.length ? '<p class="hint">Den Artikeln sind noch keine VK-Gruppen zugeordnet (Stammdaten → Artikelstammdaten).</p>' : '');
+    gruppenFiltern();
     $('#ezp-grp-sel').innerHTML = `<option value=""${akt ? '' : ' selected'}>– VK-Gruppe wählen –</option>` + l.map((g) => `<option value="${esc(g.nr)}"${akt === g.nr ? ' selected' : ''}>${esc((g.nr === ALLE || g.nr === OHNE_VK ? '' : g.nr + ' · ') + g.label)} (${g.n})</option>`).join('');
   }
   function detailHTML(a) {
@@ -143,7 +183,7 @@
     const el = $('#ezp-list');
     const zeilen = pickZeilen(basis);
     if (!zeilen) {
-      el.innerHTML = `<div class="ezp-start">${icon('tag')}<h3>Zuerst eine VK-Gruppe wählen</h3><p>Links die VK-Gruppe anklicken, dann die Artikel markieren und gesammelt hinzufügen. Über das Suchfeld oben finden Sie jederzeit Artikel aus allen Gruppen.</p></div>`;
+      el.innerHTML = `<div class="ezp-start">${icon('tag')}<h3>Zuerst eine VK-Gruppe wählen</h3><p>Links die VK-Gruppe anklicken (oder darüber suchen), dann die Artikel markieren und gesammelt hinzufügen. Das Suchfeld oben sucht in der gewählten Gruppe – ohne gewählte Gruppe in allen Gruppen.</p></div>`;
       return;
     }
     const drin = drinSet();
@@ -152,7 +192,8 @@
     const frei = zeilen.filter((a) => !drin.has(key(a.code)));
     const alleMarkiert = frei.length && frei.every((a) => pk.sel.has(key(a.code)));
     const kg = zeilen.reduce((s, a) => s + (a.totalKg || 0), 0);
-    const titel = g === ALLE ? (pk.q.trim() ? `Suche „${pk.q.trim()}“ in allen Gruppen` : 'Alle Gruppen') : vkText(g);
+    const titel = g === ALLE ? (pk.q.trim() ? `Suche „${pk.q.trim()}“ in allen Gruppen` : 'Alle Gruppen') : pk.q.trim() ? `Suche „${pk.q.trim()}“ in ${vkText(g)}` : vkText(g);
+    const anderswo = g !== ALLE && pk.q.trim() ? basis.l.length - zeilen.length : 0;   // Treffer der Suche in anderen Gruppen
     const l = zeilen.slice(0, MAX_ZEILEN);
     let grp = null;
     const cols = (mitB ? 8 : 5) + (cfg.preis ? 1 : 0);
@@ -178,7 +219,8 @@
             <td class="ezp-i"><button type="button" class="ibtn" data-info="${esc(a.code)}" aria-expanded="${auf}" aria-label="Details zu ${esc(a.code)}" title="Partien, Bestand, Ankünfte">${icon('info', 'sm')}</button></td></tr>`;
           if (auf) h += `<tr class="ezp-det" data-det="${esc(a.code)}"><td colspan="${cols}">${detailHTML(a)}</td></tr>`;
           return h;
-        }).join('')}</tbody></table></div>` : '<p class="hint ezp-leer">Keine Artikel – Filter oder Suche anpassen.</p>'}
+        }).join('')}</tbody></table></div>` : `<p class="hint ezp-leer">${anderswo ? 'Keine Treffer in dieser Gruppe.' : 'Keine Artikel – Filter oder Suche anpassen.'}</p>`}
+      ${anderswo ? `<p class="ezp-anderswo"><button type="button" class="btn sm" data-grp="${ALLE}">${icon('search', 'sm')}In allen Gruppen suchen (${plural(anderswo, 'weiterer Treffer', 'weitere Treffer')})</button></p>` : ''}
       ${zeilen.length > l.length ? `<p class="hint">… ${zeilen.length - l.length} weitere – Suche eingrenzen.</p>` : ''}`;
     spannen();
   }
@@ -223,16 +265,17 @@
     z().grp = g || null; pk.offen.clear();
     const b = pickBasis(); renderPickNav(b); renderPickList(b);
     const lst = $('#ezp-list'); if (lst) lst.scrollTop = 0;
+    const q = $('#ezp-q'); if (q) q.placeholder = suchPlatzhalter();
   }
   /* Preisfelder behalten ihre Eingabe beim Neuzeichnen (Gruppenwechsel, Suche) */
   function preiseMerken() { for (const inp of dlg.querySelectorAll('[data-preis]')) pk.preise.set(key(inp.dataset.preis), inp.value); }
   dlg.addEventListener('input', (e) => {
     if (!cfg) return;
-    if (e.target.id === 'ezp-q') {
+    if (e.target.id === 'ezp-q') {   // sucht in der gewählten Gruppe (ohne Gruppe: in allen); Leiste zeigt Treffer je Gruppe
       preiseMerken();
-      if (!pk.q.trim() && e.target.value.trim()) z().grp = null;   // neue Suche gilt für alle Gruppen; per Klick auf eine Gruppe eingrenzen
       pk.q = e.target.value; pk.offen.clear(); const b = pickBasis(); renderPickNav(b); renderPickList(b);
     }
+    if (e.target.id === 'ezp-gq') { pk.gq = e.target.value; gruppenFiltern(); }
     if (e.target.dataset.preis !== undefined) {
       pk.preise.set(key(e.target.dataset.preis), e.target.value);
       if ($('#ezp-anz .ezp-err')) renderPickFoot();   // Hinweis auf unlesbaren Preis verschwindet bei neuer Eingabe
@@ -258,6 +301,12 @@
       const btn = $('#ezp-alle');
       if (btn) { const alle = frei.length && frei.every((a) => pk.sel.has(key(a.code))); btn.dataset.alle = alle ? 'aus' : 'an'; btn.textContent = alle ? 'Markierung aufheben' : ((z().grp || ALLE) === ALLE ? 'Alle Treffer markieren' : 'Alle dieser Gruppe markieren'); }
     }
+  });
+  dlg.addEventListener('keydown', (e) => {   // Enter in der Gruppensuche: erste gefundene Gruppe wählen, dann Artikelsuche
+    if (e.key !== 'Enter' || e.target.id !== 'ezp-gq') return;
+    e.preventDefault();
+    const b = [...dlg.querySelectorAll('#ezp-grp [data-grp]')].find((x) => !x.hidden && x.dataset.grp !== ALLE);
+    if (b) { preiseMerken(); pickGruppe(b.dataset.grp); $('#ezp-q').focus(); }
   });
   dlg.addEventListener('keydown', (e) => {   // Enter im Preisfeld: nächstes Preisfeld, im letzten übernehmen
     if (e.key !== 'Enter' || e.target.dataset.preis === undefined) return;

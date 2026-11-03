@@ -88,11 +88,12 @@ function price_text($p): string
 }
 function sale_text($sale): string
 {
-    if (!is_array($sale) || !isset($sale['value'])) return '';
-    $t = 'Sonderpreis ' . price_text(['status' => 'value', 'value' => $sale['value']]);
+    if (!is_array($sale) || (!isset($sale['value']) && empty($sale['mark']))) return '';
+    $t = 'Empfehlung ' . (isset($sale['value']) ? price_text(['status' => 'value', 'value' => $sale['value']]) : 'ohne Preisänderung');
     foreach ($sale['offers'] ?? [] as $oid => $o) {
         $def = offer_def((string)$oid);
-        $t .= '; ' . ($def['name'] ?? $oid) . ': ' . (($o['status'] ?? '') === 'none' ? 'kein Sonderpreis' : price_text(['status' => 'value', 'value' => $o['value']]));
+        $st = $o['status'] ?? '';
+        $t .= '; ' . ($def['name'] ?? $oid) . ': ' . ($st === 'none' ? 'keine Empfehlung' : ($st === 'mark' ? 'ohne Preisänderung' : price_text(['status' => 'value', 'value' => $o['value']])));
     }
     return $t;
 }
@@ -125,10 +126,14 @@ function changes_between(?array $a, array $b): array
         $wB = is_array($bm['werbung'] ?? null) ? $bm['werbung'] : [];
         $names = [];
         foreach (array_merge($a['items'] ?? [], $b['items'] ?? []) as $it) $names[(string)($it['id'] ?? '')] = (string)($it['name'] ?? '');
-        $wtext = function ($e) use ($names) {
-            if (!is_array($e) || empty($e['artikel'])) return '';
-            $n = array_map(function ($x) use ($names) { return $names[(string)($x['id'] ?? '')] ?? '?'; }, $e['artikel']);
-            return trim((string)($e['titel'] ?? '') . ': ' . implode(' · ', $n), ': ');
+        $wtext = function ($e) use ($names) {   // alle Werbungen des Angebots (erste und „weitere“)
+            $t = [];
+            foreach (werbung_bloecke($e) as $b) {
+                if (empty($b['artikel']) || !is_array($b['artikel'])) continue;
+                $n = array_map(function ($x) use ($names) { return $names[(string)($x['id'] ?? '')] ?? '?'; }, $b['artikel']);
+                $t[] = trim((string)($b['titel'] ?? '') . ': ' . implode(' · ', $n), ': ');
+            }
+            return implode(' | ', $t);
         };
         foreach (array_unique(array_merge(array_map('strval', array_keys($wA)), array_map('strval', array_keys($wB)))) as $oid) {
             $wf = $wtext($wA[$oid] ?? null); $wt = $wtext($wB[$oid] ?? null);
@@ -169,7 +174,7 @@ function changes_between(?array $a, array $b): array
             $nf = (string)($o['namen'][$oid] ?? ''); $nt = (string)($it['namen'][$oid] ?? '');
             if ($nf !== $nt) { $def = offer_def($oid); $out[] = ['k' => "$id|n:$oid", 'code' => $code, 'name' => $it['name'], 'f' => 'Bezeichnung ' . ($def['name'] ?? $oid), 'from' => $nf ?: 'wie Basis', 'to' => $nt ?: 'wie Basis']; }
         }
-        if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Sonderpreis (solange der Vorrat reicht)', 'from' => sale_text($o['sale'] ?? null) ?: 'kein Sonderpreis', 'to' => sale_text($it['sale'] ?? null) ?: 'kein Sonderpreis'];
+        if (sale_text($o['sale'] ?? null) !== sale_text($it['sale'] ?? null)) $out[] = ['k' => "$id|sale", 'code' => $code, 'name' => $it['name'], 'f' => 'Empfehlung', 'from' => sale_text($o['sale'] ?? null) ?: 'keine Empfehlung', 'to' => sale_text($it['sale'] ?? null) ?: 'keine Empfehlung'];
     }
     foreach ($ia as $id => $it) {
         if (!isset($ib[$id])) $out[] = ['k' => "$id|-", 'code' => (string)($it['code'] ?? ''), 'name' => $it['name'], 'f' => 'Artikel entfernt', 'from' => price_text($it['price']), 'to' => ''];
