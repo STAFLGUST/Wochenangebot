@@ -1852,7 +1852,7 @@ with sync_playwright() as pw:
         return r_.group(0) if r_ else ''
 
     # Konto ohne zweiten Faktor (eva): Link → gleich neues Passwort → Dashboard; Mail im STAFL-Design; unbekannter Name neutral
-    EVA_NEU = 'Eva-Vergessen-Kennwort-4'
+    EVA_NEU, EVA_ZWEIT = 'Eva-Vergessen-Kennwort-4', 'Eva-Passkey-Kennwort-6'
     vorher_alle, vorher_eva = len(pf.nachrichten), len(pf.an('eva@stafl.test'))
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
     t_unbekannt = vergessen_anfordern(pg, 'gibt.es.nicht')
@@ -1938,7 +1938,7 @@ with sync_playwright() as pw:
     check('Link für ein Konto mit Passkey: zuerst der Passkey (kein Einmalcode, kein neues Passwort ohne ihn)', pg.locator('#authenticateWebAuthnButton').count() == 1
           and pg.locator('#otp').count() == 0 and pg.locator('#password-new').count() == 0, pg.url)
     pg.click('#authenticateWebAuthnButton'); pg.wait_for_selector('#password-new')
-    pg.fill('#password-new', 'Eva-Passkey-Kennwort-6'); pg.fill('#password-confirm', 'Eva-Passkey-Kennwort-6'); pg.click('#kc-submit')
+    pg.fill('#password-new', EVA_ZWEIT); pg.fill('#password-confirm', EVA_ZWEIT); pg.click('#kc-submit')
     pg.wait_for_selector('#db-grid .db-tile')
     st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
     check('… mit Passkey bestätigt, neues Passwort gesetzt, angemeldet; Passkey bleibt', st.get('loggedIn') and st['user']['username'] == 'eva.einladung'
