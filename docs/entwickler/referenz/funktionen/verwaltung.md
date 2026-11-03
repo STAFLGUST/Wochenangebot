@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 195 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 201 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -339,6 +339,12 @@ _Testgruppe master: Artikelstammdaten und Bezeichnungsregeln (Fleischart, Herkun
 - `names(pg)`
 - `post(pg, action, body)`
 - `wait_saved(pg)`
+- `get(pg, q)`
+- `master_ent(pg, code)`
+- `offer_names(pg, oid, code)`
+- `until_names(pg, oid, code, soll, sek)`
+- `open_art(pg, code)`
+- `save_art(pg)`
 - `wait_master(pg)`
 
 ## `tests/e2e/test_vertreter.py`
