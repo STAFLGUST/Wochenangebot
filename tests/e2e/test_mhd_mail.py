@@ -155,7 +155,19 @@ with sync_playwright() as p:
     check('Knopf „MHD an Verkauf“ links vor „Drucken“, im Design von „Bestand hochladen“', knopf.count() == 1 and 'MHD an Verkauf' in knopf.inner_text()
           and a.evaluate("document.querySelector('[data-st=mhdmail]').nextElementSibling.dataset.st") == 'print'
           and a.evaluate("document.querySelector('[data-st=mhdmail]').className") == a.evaluate("document.querySelector('[data-st=import]').className") == 'btn primary')
+    # Suche „MHD“ (Inhaber 03.11.2026): immer nach kürzestem MHD – auch mit gemerkter Spaltensortierung –, volle Bezeichnung
+    # der Warenwirtschaft ohne Merkmalzeile darunter; normale Liste weiter mit Angebotsbezeichnung und Merkmalen
+    a.click('.stab [data-ssort="name"]'); a.click('.stab [data-ssort="name"]')   # Bezeichnung absteigend merken
+    a.wait_for_function("document.querySelector('.stab th.s-name').getAttribute('aria-sort') === 'descending'")
+    z1 = a.locator('.stab tr.srow:has(td.s-code:text-is("700001")) td.s-name')
+    check('normale Liste: Angebotsbezeichnung mit Merkmalen darunter', 'Abgelaufen fürs Angebot' in z1.inner_text() and z1.locator('.s-merk').inner_text() == 'Schwein · frisch', z1.inner_text())
     a.fill('#st-q', 'MHD'); a.wait_for_function("document.querySelectorAll('.stab tr.srow').length === 3")
+    zeilen = a.eval_on_selector_all('.stab tr.srow', 'e => e.map(x => [x.querySelector(".s-code").textContent, x.querySelector(".s-name").textContent.trim(), !!x.querySelector(".s-merk")])')
+    check('MHD-Liste: immer nach kürzestem MHD, trotz gemerkter Sortierung nach Bezeichnung', [z[0] for z in zeilen] == IN_LISTE, zeilen)
+    check('MHD-Liste: volle Bezeichnung der Warenwirtschaft, keine Merkmalzeile', [z[1] for z in zeilen] == ['Test Abgelaufen', 'Bald Original WinAB', 'Test Zwei Wochen <b>fett</b>']
+          and not any(z[2] for z in zeilen), zeilen)
+    check('MHD-Liste: Kopf zeigt die feste Sortierung, Spalten nicht umsortierbar, Filter bleiben', a.get_attribute('.stab th.s-mhd', 'aria-sort') == 'ascending'
+          and a.locator('.stab [data-ssort]').count() == 0 and a.locator('.stab [data-sfilter]').count() == 10)
     a.screenshot(path=os.path.join(SH, 'mhd-mail-1440.png'))
     n0 = len(smtp.messages)
     knopf.click(); a.wait_for_selector('#dlg-confirm[open]')
