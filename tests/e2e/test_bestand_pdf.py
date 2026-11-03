@@ -195,6 +195,11 @@ tx, _ = pdf_text(body)
 check('PDF: Bezeichnung aus den Stammdaten, Filter in der Überschrift', st == 200 and 'Filetköpfe aus Stammdaten' in tx and 'Testfilet, Färse, frisch' not in tx
       and any('Filter: Gesamt verfügbar ab 10 kg' in x for x in tx), [x for x in tx if 'Filter' in x or 'Stammdaten' in x][:4])
 check('PDF: Merkmale aus den Stammdaten grau hinter der Bezeichnung (Fleischart · Herkunft · Zustand)', 'Rind · AR · frisch' in tx, [x for x in tx if 'AR' in x][:4])
+# MHD-Liste (Suche „MHD“): volle Bezeichnung der Warenwirtschaft, ohne Merkmale (Inhaber 03.11.2026)
+st, body = pdf_roh(A, {'rows': [{'c': '10913'}], 'mhd': True})
+tx, _ = pdf_text(body)
+check('PDF der MHD-Liste: Bezeichnung der Warenwirtschaft (Bestandsliste), keine Merkmale, nicht die Angebotsbezeichnung', st == 200 and 'Testfilet, Färse, frisch' in tx
+      and 'Filetköpfe aus Stammdaten' not in tx and 'Rind · AR · frisch' not in tx, [x for x in tx if 'Filet' in x or 'AR' in x][:4])
 G = Client('198.51.100.6'); G.call('login', {'username': 'admin', 'password': PW}); G.csrf = ''
 check('ohne CSRF-Schutzwert: abgewiesen', G.call('stock_pdf', {'rows': []})[0] == 403)
 check('keine JavaScript-Fehler', not errors, errors)

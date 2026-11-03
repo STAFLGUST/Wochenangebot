@@ -9,7 +9,7 @@
 _Bestand als PDF (Verwaltung → Bestand → „PDF“)_
 
 - `stock_pdf_stufe(mhd)` – MHD-Stufe relativ zu heute (deutsche Zeit) – wie mhdClass() im Eingabebereich
-- `stock_pdf(st, zeilen, zusatz)` – $zeilen: [['g' => Warengruppe] \| ['c' => Artikelnummer], …] in der Reihenfolge der Ansicht; $zusatz: Suche/MHD-Auswahl für den Titel
+- `stock_pdf(st, zeilen, zusatz, mhdListe)` – $zeilen: [['g' => Warengruppe] \| ['c' => Artikelnummer], …] in der Reihenfolge der Ansicht; $zusatz: Suche/MHD-Auswahl für den Titel; $mhdListe: Suche „MHD“ …
 - `stock_pdf_name(st, art)`
 
 ## `app/api/lib/bestand.php`
