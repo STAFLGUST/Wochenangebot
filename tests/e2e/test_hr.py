@@ -1418,6 +1418,11 @@ with sync_playwright() as p:
     check('Kalender der Personalstelle: Tag als „F“ mit Titel „Unentschuldigt“, Legende nennt es', fzl.get_attribute('class') == 'hr-art F' and fzl.text_content() == 'F'
           and fzl.get_attribute('title') == 'Unentschuldigt' and 'unentschuldigt' in pg.text_content('#kal-legende'), (fzl.get_attribute('class'), fzl.get_attribute('title')))
     pg.screenshot(path=os.path.join(SH, 'hr_kalender_unentschuldigt_1280.png'), full_page=True)
+    pg.emulate_media(color_scheme='dark')
+    pg.wait_for_function("getComputedStyle(document.body).backgroundColor === 'rgb(18, 16, 17)'")
+    check('… dunkel: F in hellem Lila', fzl.evaluate('e => getComputedStyle(e).color') == 'rgb(196, 181, 253)', fzl.evaluate('e => getComputedStyle(e).color'))
+    pg.screenshot(path=os.path.join(SH, 'hr_kalender_unentschuldigt_1280_dunkel.png'), full_page=True)
+    pg.emulate_media(color_scheme='light')
     for e_ in fz: P.call('hr_eintrag_save', {'id': e_['id'], 'stornieren': True})
 
     # Export in der Oberfläche
