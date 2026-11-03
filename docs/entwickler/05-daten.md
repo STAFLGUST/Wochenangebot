@@ -351,7 +351,8 @@ Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eig
   Seit 03.11.2026 zusätzlich optional: `regelSperren` (Sperren aus den Urlaubsregeln – Ostergeschäft: zwei Wochen vor
   Karfreitag, Weihnachtsgeschäft: Montag der letzten Novemberwoche bis 24.12. – jedes Jahr berechnet, nicht gespeichert;
   nur `false` schaltet sie aus) und `regeln` (Text der Urlaubsregeln beim Urlaubsantrag; fehlt das Feld, gilt die Vorlage
-  `HR_REGELN_STANDARD`, leer = keine Regeln). `sperren` enthält nur die eingetragenen Sperren.
+  `HR_REGELN_STANDARD`, leer = keine Regeln; steht dort unverändert eine frühere Vorlage aus `HR_REGELN_FRUEHER`, gilt
+  ebenfalls die aktuelle Vorlage – nur beim Lesen, gespeichert wird nichts). `sperren` enthält nur die eingetragenen Sperren.
   `verfallAb` (seit 03.11.2026, optional, Jahreszahl 2000–2100 oder `null`): Übergangsregel – Resturlaub verfällt erstmals am
   Verfallstag dieses Jahres; in den Jahren davor verfällt bei niemandem etwas (`hr_verfall_ab()`, `hr_konto`). Fehlt das Feld
   oder ist es `null`, verfällt Resturlaub jedes Jahr.

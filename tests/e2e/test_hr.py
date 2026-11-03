@@ -206,8 +206,37 @@ if st == 200: E.call('hr_antrag_zurueckziehen', {'id': r['eintrag']['id']})
 check('… Speichern ohne Angabe lässt den Schalter', P.call('hr_einstellungen_save', base)[0] == 200 and P.call('mitarbeiter_hr')[1]['regelSperren'] is False)
 check('… wieder eingeschaltet', P.call('hr_einstellungen_save', {**base, 'regelSperren': True})[1]['regelSperren'] is True)
 d0 = E.call('hr_start')[1]
-check('Urlaubsregeln: Vorlage mit 6 Punkten für jeden Mitarbeiter (Planung bis 31.03.)', d0['regeln'].startswith('1. Urlaubsanspruch') and d0['regeln'].count('\n\n') == 5
-      and 'bis zum 31.03. eines jeden Kalenderjahres' in d0['regeln'] and '31.02' not in d0['regeln'] and v['regelnStandard'] == d0['regeln'])
+check('Urlaubsregeln: kompakte Vorlage mit 6 Punkten für jeden Mitarbeiter (Planung bis 31.03.)', d0['regeln'].startswith('1. Urlaubsanspruch') and d0['regeln'].count('\n\n') == 5
+      and 'bis zum 31.03. ein' in d0['regeln'] and '31.02' not in d0['regeln'] and v['regelnStandard'] == d0['regeln']
+      and len(d0['regeln']) < 1000 and all(len(a.split('\n', 1)[1]) <= 220 for a in d0['regeln'].split('\n\n')), d0['regeln'])
+# frühere (ausführliche) Vorlage bis 03.11.2026 – unverändert gespeichert, zeigt sie die aktuelle Vorlage
+REGELN_FRUEHER = ('1. Urlaubsanspruch\n'
+              'Der Urlaubsanspruch jedes Arbeitnehmers ist individuell über den Arbeitsvertrag geregelt.\n'
+              '\n'
+              '2. Planung\n'
+              'Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Um eine Planung sinnvoll und für alle Beteiligten gerecht zu gestalten, sollte die jeweilige individuelle Jahresurlaubsplanung bis zum 31.03. eines jeden Kalenderjahres vom Arbeitnehmer eingereicht werden.\n'
+              '\n'
+              '3. Urlaubsdauer\n'
+              'Das BUrlG gesteht dem Arbeitnehmer das Anrecht auf Urlaub an 10 aufeinander folgenden Arbeitstagen zu. Die innerbetriebliche Regelung gewährt den Arbeitnehmern aktuell einen Urlaub an 15 aufeinander folgenden Arbeitstagen.\n'
+              '\n'
+              '4. Urlaubssperre\n'
+              'Aus betrieblichen Gründen wird zu folgenden Zeiten kein Urlaub gewährt:\n'
+              'Ostergeschäft: Zwei Wochen vor den Osterfeiertagen eines jeden Kalenderjahres.\n'
+              'Weihnachtsgeschäft: Ab der letzten Novemberwoche bis einschließlich dem 24.12. eines jeden Kalenderjahres.\n'
+              '\n'
+              '5. Resturlaub\n'
+              'Gemäß § 7 Abs. 3 Satz 1 BUrlG muss der Urlaub im Kalenderjahr vollständig genommen werden. Konnte der Arbeitnehmer seinen Resturlaub wegen Urlaubssperre, Übermaß an Arbeit oder wegen Krankheit nicht nehmen, so muss der Resturlaub gemäß § 7 Abs. 3 Satz 3 BUrlG in den ersten drei Monaten des folgenden Kalenderjahres, d. h. bis zum 31. März, genommen werden. Andernfalls verfällt er grundsätzlich.\n'
+              '\n'
+              '6. Urlaubsvertretung\n'
+              'Der Urlaub muss so geplant werden, dass es keine Überschneidung mit dem jeweiligen Vertreter (Vollvertretung) gibt. Die Urlaubsvertretung ist im Vertretungsplan festgelegt.')
+st, r = P.call('hr_einstellungen_save', {**base, 'regeln': REGELN_FRUEHER})
+check('frühere Vorlage unverändert gespeichert: Mitarbeiter und Personalstelle sehen die kompakte Vorlage', st == 200 and r['regeln'] == d0['regeln']
+      and E.call('hr_start')[1]['regeln'] == d0['regeln'] and P.call('mitarbeiter_hr')[1]['regeln'] == d0['regeln'], (st, r.get('regeln', '')[:60]))
+st, r = P.call('hr_einstellungen_save', {**base, 'regeln': REGELN_FRUEHER.replace('\n', '\r\n') + '\n'})
+check('… auch mit Windows-Zeilenenden und Leerzeile am Ende', st == 200 and E.call('hr_start')[1]['regeln'] == d0['regeln'])
+st, r = P.call('hr_einstellungen_save', {**base, 'regeln': REGELN_FRUEHER + '\n\n7. Hausregel\nBitte früh absprechen.'})
+check('… geänderte frühere Vorlage bleibt der eigene Text der Personalstelle', st == 200 and E.call('hr_start')[1]['regeln'].endswith('7. Hausregel\nBitte früh absprechen.')
+      and E.call('hr_start')[1]['regeln'].startswith('1. Urlaubsanspruch\nDer Urlaubsanspruch jedes Arbeitnehmers'))
 st, r = P.call('hr_einstellungen_save', {**base, 'regeln': 'Unsere Regeln\r\n\n1. Planung\nBitte früh planen.\x07\ufeff'})
 check('eigener Text gespeichert (ohne Steuerzeichen) und für Mitarbeiter sichtbar', st == 200 and r['regeln'] == 'Unsere Regeln\n\n1. Planung\nBitte früh planen.'
       and E.call('hr_start')[1]['regeln'] == r['regeln'], r.get('regeln'))
@@ -1835,6 +1864,10 @@ with sync_playwright() as p:
         check(f'{breite}px: Personalbereiche ausgeblendet', not pg.is_visible('[data-tab="antraege"]') and not pg.is_visible('[data-tab="export"]'))
         check(f'{breite}px: Urlaubsregeln beim Antrag (6 Punkte mit Überschrift, Hinweis im Formular)', pg.is_visible('#regeln-text') and pg.locator('#regeln-text h3').count() == 6
               and '31.03.' in pg.text_content('#regeln-text') and pg.is_visible('#antrag-regeln'))
+        spalten = pg.evaluate("getComputedStyle(document.querySelector('#regeln-text')).gridTemplateColumns.split(' ').length")
+        check(f'{breite}px: Urlaubsregeln kompakt – Nummer als Kreis, {3 if breite > 900 else 1} Spalte(n)', spalten == (3 if breite > 900 else 1)
+              and [pg.locator('#regeln-text .hr-regel-nr').nth(i).text_content() for i in range(6)] == ['1', '2', '3', '4', '5', '6']
+              and pg.locator('#regeln-text h3').first.text_content().strip() == '1 Urlaubsanspruch', spalten)
         if breite == 1280:
             pg.click('#regeln > summary'); pg.wait_for_function("!document.querySelector('#regeln').open && localStorage.getItem('hr-regeln-zu') === '1'")
             pg.reload(); pg.wait_for_selector('#hr-app:not([hidden]) #mein-konto .hr-wert')
