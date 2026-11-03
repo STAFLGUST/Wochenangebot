@@ -585,6 +585,8 @@ with sync_playwright() as p:
     kpi = text(pg, '#ctl-az-kpis')
     check('Kennzahlen: Soll, Ist, Saldo bereinigt und laut Zeiterfassung, Stempelfehler', '52:00' in kpi and '44:30' in kpi and '+0:30' in kpi and '−15:30' in kpi and '6 Tage' in kpi
           and 'ohne jeden Stempel' in kpi, kpi)
+    try: pg.wait_for_function("document.querySelectorAll('#ctl-az-verlauf .ctl-az-mon').length === 2", timeout=10000)   # Verlauf baut sich nach den Kennzahlen auf
+    except Exception: pass   # die Prüfung darunter meldet den Fehler
     check('Monatsverlauf: zwei Monate', pg.locator('#ctl-az-verlauf .ctl-az-mon').count() == 2 and 'Sep 2026' in text(pg, '#ctl-az-verlauf'))
     zl = pg.locator('#ctl-az-zeilen > li')
     check('Mitarbeiterliste: drei, „lückenhaft“ bei vielen Stempelfehlern (Bernd, Carla), nicht bei Anna', zl.count() == 3 and 'lückenhaft' not in zl.nth(0).inner_text()
