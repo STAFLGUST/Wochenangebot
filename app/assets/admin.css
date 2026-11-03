@@ -630,14 +630,14 @@ button.m-diff { cursor: pointer; } button.m-diff:hover { filter: brightness(.95)
 /* Artikelliste nur zum Ansehen, Klick öffnet das Pop-up (03.11.2026) */
 .mtab tr.m-row { cursor: pointer; }
 .mtab tr.m-row td { padding-top: 8px; padding-bottom: 8px; font-size: 13.5px; }
-.mtab .m-orig { color: var(--text-2); max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtab .m-orig { color: var(--text-2); min-width: 150px; overflow-wrap: anywhere; }   /* Text bricht um, nie abgeschnitten (Design-Vorgabe) */
 .mtab .m-name .m-nm { font-weight: 600; }
 .m-eigen { display: inline-block; margin-left: 8px; padding: 0 7px; border-radius: 99px; background: var(--c-frozen-bg); color: var(--c-frozen); font-size: 11px; font-weight: 650; white-space: nowrap; vertical-align: 1px; }
 .m-quelle { display: inline-block; margin-left: 4px; padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: 10.5px; }
-.m-orig-sub { display: none; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-orig-sub { display: none; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .mtab .m-vk .m-vkname { padding: 0; }
 @media (max-width: 1100px) { .mtab .m-orig { display: none; } .m-orig-sub:not(:empty) { display: block; } }
-@media (max-width: 560px) { .mtab .m-name { overflow: hidden; } .mtab .m-name .m-nm { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .m-eigen { margin: 2px 0 0; } }
+@media (max-width: 560px) { .mtab .m-name .m-nm { display: block; overflow-wrap: anywhere; } .m-eigen { margin: 2px 0 0; } }
 /* Pop-up „Artikel“ der Artikelstammdaten */
 #dlg-master-art .ma-nr { font-family: var(--mono); font-size: .8em; color: var(--muted); font-weight: 600; margin-right: 4px; }
 .ma-orig { min-height: 40px; display: flex; align-items: center; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
