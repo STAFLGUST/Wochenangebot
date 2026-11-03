@@ -279,14 +279,19 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
   - Folgenreiche Schritte (Löschen, Zurückziehen, Verwerfen) fragen im eigenen Fenster nach; der Fokus liegt auf „Abbrechen“,
     Escape heißt „nein“.
   - Aufklappmenüs aus `<details>` bekommen `data-menue`: `theme.js` schließt sie mit Escape (Fokus zurück auf den Titel)
-    und bei einem Klick außerhalb. Menüs aus Knöpfen bleiben ganz im Bild (Kundenseite: `menuImBild`).
+    und bei einem Klick außerhalb und hält die aufgeklappte Liste ganz im Bild. Menüs aus Knöpfen bleiben ebenfalls im
+    Bild (Kundenseite: `menuImBild`); `aria-expanded` folgt dem Zustand.
+  - Knöpfe überall als Kapsel (`border-radius: 999px`); Fokus nach dem Öffnen im Fenster, auch wenn der Inhalt erst
+    nachgeladen wird (theme.js).
   - Gekürzte Texte (`text-overflow: ellipsis`) tragen den vollen Text im `title`; Platzhalter langer Felder enden mit „…“
     (`app.css`, gilt für alle Seiten).
   - Einzahl/Mehrzahl immer passend („1 Markt“, „3 Märkte“).
 - Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Escape oder ein Element mit
-  `data-close` schließt, nicht während `data-busy` (Speichern läuft). Mit `data-fest` (z. B. `#dlg-user`) schützt das Fenster
-  getippte Eingaben vor einem versehentlichen Escape: Sind sie noch nicht gespeichert, zeigt das erste Escape den Hinweis „Die
-  Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.“, erst das zweite schließt. „Abbrechen“ und Kreuz
+  `data-close` schließt, nicht während `data-busy` (Speichern läuft). **Auf allen Seiten** (theme.js) schützt jedes Fenster
+  getippte Eingaben in einem `<form>` vor einem versehentlichen Escape: das erste Escape zeigt den gemeinsamen Hinweis
+  `#stafl-hinweis` „Die Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.“, erst das zweite schließt.
+  Ausgenommen: Anmelde-/Passwortformulare, Suchfelder (`type=search`) und alles mit `data-ohne-warnung` (Fenster, die jede
+  Änderung sofort speichern wie „Artikel bearbeiten“, oder mit eigener Rückfrage wie das CRM-Kundenfenster). „Abbrechen“ und Kreuz
   schließen sofort (bewusste Entscheidung). Nach dem Speichern `delete d.dataset.geaendert` setzen. Dialoge, die ein Skript erst später erzeugt, erhalten die Verdrahtung
   nicht – deshalb neue Dialoge als leeres Gerüst ins HTML schreiben.
 - `confirmBox(title, html, okLabel, danger)` → `Promise<boolean>` über `#dlg-confirm`. Der Text wird als HTML

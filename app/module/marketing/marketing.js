@@ -707,7 +707,9 @@
     if (e.key === 'Enter' && e.target.id === 'bt-kommentar') { e.preventDefault(); kommentieren(); }
     if (e.key === 'Enter' && ['bt-link-url', 'bt-link-titel'].includes(e.target.id)) { e.preventDefault(); $('#bt-link-add').click(); }
   });
-  dlg.addEventListener('cancel', (e) => { if (geaendert()) { e.preventDefault(); $('#bt-verwerfen').hidden = false; } });
+  // Escape: erstes Mal Hinweis (gemeinsam in theme.js, data-warnung), zweites Mal schließen – wie in allen Fenstern;
+  // nur Änderungen ohne Tippen (Häkchen, Auswahl) fragen hier mit „Verwerfen?“ nach
+  dlg.addEventListener('cancel', (e) => { if (geaendert() && !dlg.hasAttribute('data-warnung')) { e.preventDefault(); $('#bt-verwerfen').hidden = false; } });
   dlg.addEventListener('close', () => { S.offen = null; S.schnappschuss = ''; zeichne(); });
   function schliessen() { if (geaendert()) { $('#bt-verwerfen').hidden = false; $('#bt-verwerfen-nein').focus(); return; } dlg.close(); }
   async function kommentieren() {

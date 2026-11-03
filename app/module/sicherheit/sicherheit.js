@@ -105,8 +105,10 @@
     dlg.innerHTML = `<form method="dialog" class="sic-dform" novalidate>${html}</form>`;
     dlgHandler = handler;
     if (!dlg.open) dlg.showModal();
+    // ohne Eingabefeld: bei einer gefährlichen Hauptaktion (rot) „Abbrechen“, sonst die Hauptaktion – Enter löst nie
+    // versehentlich etwas Folgenreiches aus (wie im Eingabebereich und in den übrigen Modulen)
     const f = (fokus && $(fokus, dlg)) || $('[autofocus]', dlg) || $('.sic-dinhalt input:not([type=hidden]):not([disabled]):not([type=checkbox]):not([type=radio]), .sic-dinhalt textarea, .sic-dinhalt select', dlg)
-      || $('.sic-dfuss .btn.primary, .sic-dfuss .btn.gefahr', dlg) || $('.sic-dzu', dlg);
+      || ($('.sic-dfuss .btn.gefahr', dlg) && $('.sic-dfuss .btn[data-d="zu"]', dlg)) || $('.sic-dfuss .btn.primary, .sic-dfuss .btn.gefahr', dlg) || $('.sic-dzu', dlg);
     if (f) f.focus();
   }
   function dialogZu() { if (dlg.open) dlg.close(); }
@@ -146,7 +148,7 @@
       const ende = (w) => { if (fertig) return; fertig = true; dlg.removeEventListener('close', zu); ok(w); };
       const zu = () => ende(false);
       dialog(`${dKopf(titel)}<div class="sic-dinhalt"><p>${text}</p></div>${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn ${gefahr ? 'gefahr' : 'primary'}">${esc(ja)}</button>`)}`,
-        { handler: async (a) => { if (a === 'submit') ende(true); } });
+        { handler: async (a) => { if (a === 'submit') ende(true); }, fokus: '.sic-dfuss .btn[data-d="zu"]' });   // Rückfrage: Fokus auf „Abbrechen“
       dlg.addEventListener('close', zu);
     });
   }
@@ -299,7 +301,7 @@
       : karte(dp.counts.critical ? 'bad' : dp.counts.warnings ? 'warn' : 'ok', 'Dateiprüfung', dp.counts.critical ? `${dp.counts.critical} kritisch` : dp.counts.warnings ? `${dp.counts.warnings} Warnungen` : 'unauffällig', `zuletzt ${esc(zeit(dp.ranAt))} Uhr`, 'datei');
     const tl7 = (L.timeline || []).slice(-7).map((d) => d.staff + d.kunde + d.reauth);
     const karten = [
-      karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen', tl7),
+      karte(K.fehl24 >= 20 ? 'bad' : K.fehl24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24\u00a0h)', zahl(K.fehl24), `${zahl(K.anmeldungen24)} erfolgreiche Anmeldungen`, 'sitzungen', tl7),
       karte(K.gesperrteAdressen || K.gesperrteKonten ? 'warn' : 'ok', 'Gesperrt', zahl(K.gesperrteAdressen + K.gesperrteKonten), `${plural(K.gesperrteAdressen, 'Adresse', 'Adressen')} · ${plural(K.gesperrteKonten, 'Zugang', 'Zugänge')}`, 'firewall'),
       karte(K.adminsOhneZweiFaktor ? 'bad' : K.ohneZweiFaktor ? 'warn' : 'ok', 'Zwei-Faktor-Anmeldung', `${zahl(K.zugaenge - K.ohneZweiFaktor)} / ${zahl(K.zugaenge)}`, K.adminsOhneZweiFaktor ? `${plural(K.adminsOhneZweiFaktor, 'Administrator', 'Administratoren')} ohne zweiten Faktor` : K.ohneZweiFaktor ? `${zahl(K.ohneZweiFaktor)} Zugänge ohne zweiten Faktor` : 'alle Zugänge geschützt', 'konten'),
       karte('ok', 'Aktive Sitzungen', zahl(K.sitzungen), `${zahl(K.kundenOnline)} Kunden angemeldet`, 'sitzungen'),
@@ -874,7 +876,7 @@
     $('#tab-firewall').innerHTML = `
       <div class="sic-karten vier">
         ${karte(F.waf === 'sperren' ? 'ok' : F.waf === 'protokoll' ? 'warn' : 'bad', 'Firewall', esc(d.modi[F.waf] || F.waf), F.autoSperre ? `sperrt nach ${plural(F.treffer, 'Treffer', 'Treffern')} für ${esc(DAUER[F.sperrMinuten] || F.sperrMinuten + ' Min.')}` : 'automatische Sperre aus')}
-        ${karte(Z.angriffe ? 'warn' : 'ok', 'Angriffsversuche (24 h)', zahl(Z.angriffe), `${zahl(Z.abgewiesen)} Anfragen gesperrter Adressen abgewiesen`)}
+        ${karte(Z.angriffe ? 'warn' : 'ok', 'Angriffsversuche (24\u00a0h)', zahl(Z.angriffe), `${zahl(Z.abgewiesen)} Anfragen gesperrter Adressen abgewiesen`)}
         ${karte(Z.gesperrteAdressen ? 'warn' : 'ok', 'Gesperrte Adressen', zahl(Z.gesperrteAdressen), `${zahl(Z.anmeldungFehl)} fehlgeschlagene Anmeldungen (24 h)`)}
         ${karte(F.feed && d.feed ? 'ok' : 'warn', 'Bedrohungsliste', F.feed ? 'aktiv' : 'aus', feed)}
       </div>
@@ -979,7 +981,7 @@
     host.innerHTML = `
       <div class="sic-karten vier">
         ${karte('ok', 'Aktive Sitzungen', zahl(d.sessions.length), `${zahl(d.customers ? d.customers.online : 0)} Kunden angemeldet`)}
-        ${karte(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24 h)', zahl(d.fails24), `${zahl(d.fails.length)} in 7 Tagen angezeigt`)}
+        ${karte(d.fails24 >= 20 ? 'bad' : d.fails24 >= 5 ? 'warn' : 'ok', 'Fehlanmeldungen (24\u00a0h)', zahl(d.fails24), `${zahl(d.fails.length)} in 7 Tagen angezeigt`)}
         ${karte(gesperrt ? 'warn' : 'ok', 'Gesperrte Zugänge', zahl(d.users.filter((u) => u.lockedUntil).length), `Kontosperre nach ${d.settings.lockAfter} Fehlversuchen`)}
         ${karte(ohne.some((u) => u.role === 'admin') ? 'bad' : ohne.length ? 'warn' : 'ok', 'Ohne Zwei-Faktor', zahl(ohne.length), 'aktive Zugänge mit eigenem Passwort', 'konten')}
       </div>

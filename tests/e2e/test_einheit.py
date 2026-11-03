@@ -192,6 +192,29 @@ with sync_playwright() as pw:
             check(f'{name} {breite} px: Klick neben ein Fenster schließt es nicht ({len(ids)} Fenster)', not per_klick, per_klick)
             check(f'{name} {breite} px: Escape schließt jedes Fenster', not nicht_esc, nicht_esc)
         ctx.close()
+    # Getippte Eingaben: erstes Escape zeigt den gemeinsamen Hinweis (theme.js), zweites schließt – hier am Formular
+    # „Korrektur melden“ (HR) und „Neue Kampagne“ (Marketing) stellvertretend für alle Formularfenster
+    ctx, pg = neue_seite(1440, False)
+    for pfad, dlg, feld in (('/module/hr/', 'dlg-korrektur', '#korrektur-text'), ('/module/marketing/', 'dlg-kampagne', '#kp-name')):
+        pg.goto(B + pfad); pg.wait_for_function("document.readyState === 'complete'")
+        pg.evaluate("id => document.getElementById(id).showModal()", dlg)
+        pg.fill(feld, 'Test – noch nicht gespeichert')
+        pg.keyboard.press('Escape')
+        warn = pg.evaluate("id => [document.getElementById(id).open, (document.querySelector('#stafl-hinweis') || {}).textContent || '']", dlg)
+        pg.keyboard.press('Escape')
+        zu = not pg.evaluate("id => document.getElementById(id).open", dlg)
+        check(f'{dlg}: getippt → erstes Escape warnt, zweites schließt', warn[0] and 'noch nicht gespeichert' in warn[1] and zu, (warn, zu))
+    ctx.close()
+    # Aufklappliste (<details data-menue>) am Handy ganz im Bild, auch wenn ihr Titel weit rechts steht (theme.js)
+    ctx, pg = neue_seite(390, False)
+    pg.goto(B + '/module/crm/'); pg.wait_for_function("document.readyState === 'complete'")
+    pg.evaluate("""() => { const d = document.createElement('details'); d.setAttribute('data-menue', ''); d.className = 'crm-mehrfach'; d.id = 't-menue';
+      Object.assign(d.style, { position: 'absolute', left: '200px', top: '300px', zIndex: '99' });
+      d.innerHTML = '<summary>Wann: alle</summary><div class="optionen">Liste</div>'; document.body.appendChild(d); d.open = true; }""")
+    pg.wait_for_function("document.querySelector('#t-menue .optionen').style.left !== ''")
+    lr = pg.evaluate("(() => { const r = document.querySelector('#t-menue .optionen').getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), innerWidth]; })()")
+    check('390 px: aufgeklappte Liste bleibt ganz im Bild', lr[0] >= 0 and lr[1] <= lr[2], lr)
+    ctx.close()
     # Seiten ohne Mitarbeiteranmeldung: Abmeldeseite, Kundenseite, Rechtsseiten – Logo im Dunkeln weiß, nichts abgeschnitten
     for breite in (1440, 390):
         for dunkel in (False, True):

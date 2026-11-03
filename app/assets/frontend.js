@@ -1720,14 +1720,15 @@ function bindKunde() {
     const sw = e.target.closest('[data-kswitch]');
     if (sw) { location.href = setOfferParam(sw.dataset.kswitch).toString(); return; }
     const a = e.target.closest('[data-kact]')?.dataset.kact;
-    if (a === 'orders') { if(km)km.hidden=true;openCustomerOrders(); }
-    if (a === 'pw') { if (km) km.hidden = true; openKundePw(!!(KUNDE && KUNDE.mustChange)); }
+    const kmZu = () => { if (km) { km.hidden = true; const kb2 = $('#btn-kunde'); if (kb2) kb2.setAttribute('aria-expanded', 'false'); } };
+    if (a === 'orders') { kmZu(); openCustomerOrders(); }
+    if (a === 'pw') { kmZu(); openKundePw(!!(KUNDE && KUNDE.mustChange)); }
     if (a === 'pwforce') openKundePw(true);
     if (a === 'logout') kundeLogout();
   });
   document.addEventListener('keydown', (e) => {
     const km = $('#menu-kunde');
-    if (e.key === 'Escape' && km && !km.hidden) { km.hidden = true; $('#btn-kunde').focus(); }
+    if (e.key === 'Escape' && km && !km.hidden) { km.hidden = true; $('#btn-kunde').setAttribute('aria-expanded', 'false'); $('#btn-kunde').focus(); }
   });
   $('#kl-form').addEventListener('submit', async (e) => {
     e.preventDefault();

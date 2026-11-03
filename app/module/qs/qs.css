@@ -597,3 +597,5 @@ button.qm-kpi{font:inherit;text-align:left;color:inherit;cursor:pointer}
   .qm-b-matrix td.qm-b-titel{min-width:0}
   .qm-b-matrix .qm-quote{min-width:0;padding:1px 3px;font-size:9px}
 }
+/* Handy: auch mittlere und große Fenster als Blatt über die volle Breite (die Breitenregeln oben stehen nach der Handy-Regel) */
+@media(max-width:560px){.qm-dialog.qm-dialog-mittel,.qm-dialog.qm-dialog-gross{width:100vw;max-width:100vw}}

@@ -5,7 +5,7 @@
 body.crm {
   --crm-bg: #f4f1ee;
   --crm-text: #1c1a19;
-  --crm-muted: #6b6560;
+  --crm-muted: #625c57;   /* etwas dunkler: Reiter und Hinweise ≥ 4,5:1 auch auf Glas */
   --crm-glass: rgba(255, 255, 255, .58);
   --crm-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
   --crm-reiter-aktiv: var(--crm-deckend);
@@ -111,7 +111,7 @@ body.crm .crm-kopf .brand-logo { height: 28px; width: auto; }
 .crm-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
 .crm-wert { padding: 16px 18px; border-radius: 22px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .crm-wert span { font-size: 13px; color: var(--crm-muted); }
-.crm-wert b { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crm-wert b { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crm-wert small { font-size: 12px; color: var(--crm-muted); }
 .crm-wert.akzent b { color: var(--crm-akzent-ink); }
 .crm-wert.warn b { color: var(--crm-warn); }

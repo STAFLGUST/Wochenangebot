@@ -1967,6 +1967,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     --aus: rgba(255, 255, 255, .08); --zeile: rgba(255, 255, 255, .04); --linie: rgba(255, 255, 255, .08);
     --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .16);
     --nav-akzent: #e08190; --punkt-ok: #5fd08f;
+    --primaer: linear-gradient(180deg, #ea98a5, #e08190); --primaer-text: #1a0b0e; --primaer-hover: linear-gradient(180deg, #f2b0ba, #e8919f);   /* dunkel: Rosa mit dunkler Schrift wie überall */
+    --primaer-schatten: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 18px rgba(0, 0, 0, .35);
     --blob-a: rgba(59, 85, 115, .2); --blob-b: rgba(154, 106, 36, .17); --blob-c: rgba(36, 90, 64, .14);
   }
 }
@@ -1982,6 +1984,8 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
     --aus: rgba(255, 255, 255, .08); --zeile: rgba(255, 255, 255, .04); --linie: rgba(255, 255, 255, .08);
     --feld: rgba(255, 255, 255, .07); --feld-rand: rgba(255, 255, 255, .16);
     --nav-akzent: #e08190; --punkt-ok: #5fd08f;
+    --primaer: linear-gradient(180deg, #ea98a5, #e08190); --primaer-text: #1a0b0e; --primaer-hover: linear-gradient(180deg, #f2b0ba, #e8919f);   /* dunkel: Rosa mit dunkler Schrift wie überall */
+    --primaer-schatten: inset 0 1px 0 rgba(255, 255, 255, .35), 0 6px 18px rgba(0, 0, 0, .35);
     --blob-a: rgba(59, 85, 115, .2); --blob-b: rgba(154, 106, 36, .17); --blob-c: rgba(36, 90, 64, .14);
   }
 }
@@ -2070,9 +2074,9 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
   body.adm .topbar .dash-back:hover { background: rgba(28, 26, 25, .12); }
   body.adm .topbar .btn:disabled { opacity: .45; }
   body.adm .btn.primary, body.adm .topbar .btn.primary {
-    background: var(--primaer); color: #fff; border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
+    background: var(--primaer); color: var(--primaer-text, #fff); border: 0; font-weight: 600; box-shadow: var(--primaer-schatten);
   }
-  body.adm .btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, #8f1c29, #6e1520); }
+  body.adm .btn.primary:hover:not(:disabled) { background: var(--primaer-hover, linear-gradient(180deg, #8f1c29, #6e1520)); }
   body.adm .adm-page .btn.primary, body.adm dialog .btn.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 3px 10px rgba(140, 29, 44, .22); }
   body.adm .topbar .btn.primary { padding: 0 20px; }
   body.adm .save-state { font-size: 14px; color: var(--muted); }

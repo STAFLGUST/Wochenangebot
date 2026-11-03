@@ -599,6 +599,12 @@ html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler übe
 /* Toasts liegen als Popover über offenen Fenstern (theme.js): Vorgaben des Browsers für Popover zurücksetzen – ohne
    Spezifität, damit Lage, Farben und Abstände weiter aus der Klasse der Seite kommen (.toast, .crm-toast …). */
 :where([data-stafl-oben]) { inset: auto; margin: 0; border: 0; overflow: visible; }
+/* Gemeinsamer Hinweis aus theme.js (ungespeicherte Eingaben): unten mittig wie die Hinweise der Seiten */
+.stafl-toast { position: fixed; left: 50%; bottom: 24px; z-index: 1000; transform: translate(-50%, 12px); max-width: min(560px, calc(100vw - 32px));
+  padding: 11px 18px; border-radius: 999px; background: #1c1a19; color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.4;
+  text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+.stafl-toast.zeigen { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .stafl-toast { transition: none; } }
 
 #print-root { display: none; }
 .filter-backdrop { display: none; }

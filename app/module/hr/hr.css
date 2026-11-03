@@ -5,7 +5,7 @@
 body.hr {
   --hr-bg: #f4f1ee;
   --hr-text: #1c1a19;
-  --hr-muted: #6b6560;
+  --hr-muted: #625c57;   /* etwas dunkler: Reiter und Hinweise ≥ 4,5:1 auch auf Glas */
   --hr-glass: rgba(255, 255, 255, .58);
   --hr-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
   --hr-reiter-aktiv: var(--hr-deckend);

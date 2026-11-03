@@ -6,7 +6,7 @@
 body.mkt {
   --mkt-bg: #f4f1ee;
   --mkt-text: #1c1a19;
-  --mkt-muted: #6b6560;
+  --mkt-muted: #625c57;   /* etwas dunkler: Reiter und Hinweise ≥ 4,5:1 auch auf Glas */
   --mkt-glass: rgba(255, 255, 255, .58);
   --mkt-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
   --mkt-reiter-aktiv: var(--mkt-deckend);

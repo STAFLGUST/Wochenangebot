@@ -64,6 +64,67 @@ window.addEventListener('click', function (e) {
   if (d && d.nodeName === 'DIALOG' && d.open) e.stopImmediatePropagation();
 }, true);
 
+/* Getippte, noch nicht gespeicherte Eingaben gehen nicht mit einem Escape verloren (Vorgabe des Inhabers 02.11.2026: Escape
+   schließt jedes Fenster – aber einheitlich): Wurde in einem Formular eines offenen Fensters getippt, zeigt das erste
+   Escape einen Hinweis, erst das zweite schließt; nach dem Abschicken (Speichern) wieder sofort. „Abbrechen“ und ×
+   schließen weiter sofort. Nicht für Anmelde- und
+   Passwortformulare, Suchfelder und Fenster mit data-ohne-warnung (speichern sofort selbst, z. B. „Artikel bearbeiten“,
+   oder haben eine eigene Rückfrage). Gemeinsam für alle Seiten; Attribute data-geaendert/data-warnung wie im Eingabebereich. */
+(function () {
+  var HINWEIS = 'Die Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.';
+  var FELD = 'textarea, select, input:not([type=checkbox]):not([type=radio]):not([type=search]):not([type=file]):not([type=hidden]):not([type=button]):not([type=submit])';
+  function zaehlt(d, t) {
+    if (!d || !d.open || d.hasAttribute('data-ohne-warnung') || t.closest('[data-ohne-warnung]')) return false;
+    var f = t.closest('form');
+    return !!f && d.contains(f) && !f.querySelector('input[type=password]');
+  }
+  var el = null, uhr = 0;
+  function zeigen() {
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'stafl-hinweis'; el.className = 'stafl-toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+      document.body.appendChild(el);
+    }
+    el.textContent = HINWEIS;
+    try {   // über dem offenen Fenster (oberste Ebene), wie die übrigen Hinweise
+      if (typeof el.showPopover === 'function') {
+        if (!el.hasAttribute('popover')) { el.setAttribute('popover', 'manual'); el.setAttribute('data-stafl-oben', ''); }
+        if (el.matches(':popover-open')) el.hidePopover();
+        el.showPopover();
+      }
+    } catch (x) { /* ohne Popover: wie ein normaler Hinweis */ }
+    el.classList.add('zeigen');
+    clearTimeout(uhr); uhr = setTimeout(function () { el.classList.remove('zeigen'); }, 4000);
+  }
+  window.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.matches || !t.matches(FELD)) return;
+    var d = t.closest('dialog');
+    if (!zaehlt(d, t)) return;
+    d.setAttribute('data-geaendert', '1');
+    (d.__staflFelder = d.__staflFelder || []).indexOf(t) < 0 && d.__staflFelder.push(t);
+  }, true);
+  window.addEventListener('close', function (e) {
+    var d = e.target;
+    if (d && d.nodeName === 'DIALOG') { d.removeAttribute('data-geaendert'); d.removeAttribute('data-warnung'); d.__staflFelder = null; if (el) el.classList.remove('zeigen'); }
+  }, true);
+  // Abgeschickt (Speichern, Senden): die Eingaben gelten als übernommen – danach schließt Escape wieder sofort
+  window.addEventListener('submit', function (e) {
+    var d = e.target && e.target.closest ? e.target.closest('dialog') : null;
+    if (d) { d.removeAttribute('data-geaendert'); d.removeAttribute('data-warnung'); d.__staflFelder = null; }
+  }, true);
+  window.addEventListener('cancel', function (e) {
+    var d = e.target;
+    if (!d || d.nodeName !== 'DIALOG' || !d.hasAttribute('data-geaendert') || d.hasAttribute('data-warnung') || d.hasAttribute('data-busy')) return;
+    // Hat die Seite den Inhalt inzwischen ersetzt (nächster Schritt, „Gespeichert“), stehen die getippten Felder nicht mehr da
+    var felder = (d.__staflFelder || []).filter(function (f) { return f.isConnected && d.contains(f); });
+    if (d.__staflFelder && !felder.length) { d.removeAttribute('data-geaendert'); d.__staflFelder = null; return; }
+    e.preventDefault(); e.stopImmediatePropagation();
+    d.setAttribute('data-warnung', '1');
+    zeigen();
+  }, true);
+})();
+
 /* Aufklappmenüs aus <details data-menue> (Filter „Monate“, „Vertreter“, „Wann“) bedienen sich wie jedes Menü: Escape
    schließt (Fokus zurück auf den Titel), ein Klick außerhalb ebenso. Ein Klick auf ein Element, das die Seite inzwischen
    neu gezeichnet hat (nicht mehr im Dokument), zählt nicht als „außerhalb“. */
@@ -82,6 +143,19 @@ document.addEventListener('click', function (e) {
   var offen = document.querySelectorAll('details[data-menue][open]');
   for (var i = 0; i < offen.length; i++) if (!offen[i].contains(t)) offen[i].open = false;
 });
+/* Aufgeklappte Liste ganz im Bild halten (am Handy ragte sie sonst rechts hinaus); „toggle“ steigt nicht auf, daher Erfassung */
+document.addEventListener('toggle', function (e) {
+  var d = e.target;
+  if (!d || !d.matches || !d.matches('details[data-menue]') || !d.open) return;
+  var p = d.querySelector(':scope > :not(summary)');
+  if (!p) return;
+  p.style.left = ''; p.style.maxWidth = '';
+  var W = document.documentElement.clientWidth, r = p.getBoundingClientRect();
+  if (r.width > W - 16) { p.style.maxWidth = (W - 16) + 'px'; r = p.getBoundingClientRect(); }
+  var schieben = r.right > W - 8 ? r.right - (W - 8) : 0;
+  if (r.left - schieben < 8) schieben = r.left - 8;
+  if (schieben) p.style.left = ((parseFloat(getComputedStyle(p).left) || 0) - schieben) + 'px';
+}, true);
 
 /* Fokus im Fenster: Manche Fenster setzen ihren Inhalt erst nach showModal() – dann stünde der Fokus außerhalb (Tastatur und
    Bildschirmleser fänden das Fenster nicht). Steht er nach dem Öffnen nicht im Fenster, geht er auf das erste bedienbare
@@ -98,6 +172,17 @@ document.addEventListener('click', function (e) {
       if (z) z.focus(); else { if (!d.hasAttribute('tabindex')) d.setAttribute('tabindex', '-1'); d.focus(); }
     };
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(pruefen); else setTimeout(pruefen, 0);
+    // Inhalt, der erst nach dem Laden kommt, ersetzt oft das fokussierte Element (Fokus fiele auf die Seite zurück):
+    // solange das Fenster offen ist, nach jeder Änderung prüfen – nur wenn der Fokus verloren ist, nie während der Eingabe
+    if (typeof MutationObserver === 'function' && !d.__staflFokus) {
+      var mo = new MutationObserver(function () {
+        var a = document.activeElement;
+        if (d.open && (!a || a === document.body || !a.isConnected)) pruefen();
+      });
+      mo.observe(d, { childList: true, subtree: true });
+      d.__staflFokus = mo;
+      d.addEventListener('close', function () { mo.disconnect(); d.__staflFokus = null; }, { once: true });
+    }
     return r;
   };
 })();
