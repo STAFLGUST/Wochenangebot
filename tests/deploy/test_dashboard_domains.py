@@ -55,7 +55,7 @@ assert ausgenommen == ["/resources/*", "/realms/mitarbeiter/.well-known/*", "/re
                        "/realms/mitarbeiter/protocol/openid-connect/token/introspect", "/realms/mitarbeiter/protocol/openid-connect/certs",
                        "/realms/mitarbeiter/protocol/openid-connect/userinfo", "/realms/mitarbeiter/protocol/openid-connect/revoke"], ausgenommen
 assert innen.index("forward_auth") < innen.index("reverse_proxy keycloak:8080")
-# Kontokonsole von Keycloak nicht öffentlich (E-Mail-Adresse ohne Bestätigung änderbar, Befund 03.11.2026)
+# Kontokonsole von Keycloak nicht öffentlich (Härtung 03.11.2026)
 assert "@konsole path /realms/mitarbeiter/account /realms/mitarbeiter/account/*" in innen and "respond @konsole 404" in innen
 # Startseite des Anmelde-Hosts: zum Dashboard statt leerer 404-Seite (nur genau „/“)
 assert "\tredir / https://dashboard-stafl.de/ 302\n" in login and login.index("redir /") < login.index("\trespond 404\n")

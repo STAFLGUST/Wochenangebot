@@ -85,14 +85,11 @@ Vorgehen (`OIDC_SECRET_REWE`/`OIDC_CRYPTO_REWE`, danach `docker compose up -d ap
 Stand 13 (30.10.2026, Entscheidung des Inhabers „gleich produktiv“): Client `qs` für `qs.dashboard-stafl.de` (Modul Qualitätssicherung ·
 QM-System) – gleiches Vorgehen (`OIDC_SECRET_QS`/`OIDC_CRYPTO_QS`, danach `docker compose up -d app`). Der DNS-Eintrag `qs` besteht seit 21.10.2026.
 
-Stand 14 (03.11.2026, Befund der Anmeldeprüfung): kein Passwort-Grant am Token-Endpunkt. Keycloak legt im Realm eigene Clients
-an; `admin-cli` erlaubt den Passwort-Grant (`grant_type=password`). Der Token-Endpunkt ist von der Prüfung vor jeder Seite
-(Länder-, IP- und Firewall-Sperre) ausgenommen, weil die Anwendung ihn selbst braucht – Passwörter ließen sich so von überall
-durchprobieren und Konten sperren. `realm-aktualisieren` schaltet den Passwort-Grant bei jedem Client des Realms ab. Einmal auf
-dem Server ausführen: `sh deploy/anmeldung/konten.sh realm-aktualisieren` (kein Neustart nötig). Gegenprobe mit erfundenen Daten:
-`curl -s -d grant_type=password -d client_id=admin-cli -d username=x -d password=x https://login.dashboard-stafl.de/realms/mitarbeiter/protocol/openid-connect/token`
-liefert danach `unauthorized_client` statt `invalid_grant`. Die Kontokonsole von Keycloak (`/realms/mitarbeiter/account`)
-ist ab diesem Stand im Caddyfile gesperrt (404): dort ließ sich die E-Mail-Adresse ohne Bestätigung ändern.
+Stand 14 (03.11.2026, Härtung nach der Anmeldeprüfung): kein Client des Realms erlaubt den Passwort-Grant, auch keiner der
+Clients, die Keycloak selbst anlegt – Anmeldungen laufen nur über die Anmeldeseite. Einmal auf dem Server ausführen:
+`sh deploy/anmeldung/konten.sh realm-aktualisieren` (kein Neustart nötig; die Ausgabe nennt jeden umgestellten Client).
+Ab diesem Stand sperrt das Caddyfile außerdem Keycloaks Kontokonsole (`/realms/mitarbeiter/account`, 404) – Konten pflegt
+die Verwaltung.
 Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
 Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt

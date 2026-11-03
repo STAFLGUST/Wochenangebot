@@ -434,9 +434,8 @@ print(" ".join(ids))' "$REALM_DATEI") || abbruch "Clients in $REALM_DATEI nicht 
       echo "angelegt:  amr-Claim für Client $c"
     fi
   done
-  # Stand 14 (Befund 03.11.2026): kein Passwort-Grant am Token-Endpunkt. Keycloak legt im Realm eingebaute Clients an (admin-cli
-  # erlaubt ihn) – der Token-Endpunkt ist von der Prüfung vor jeder Seite (Länder-/IP-Sperre, Caddy) ausgenommen, weil die
-  # Anwendung ihn selbst braucht. So ließen sich Passwörter von überall durchprobieren. Unsere Clients haben ihn ohnehin aus.
+  # Stand 14 (Härtung 03.11.2026): kein Client des Realms erlaubt den Passwort-Grant – auch keiner der Clients, die Keycloak
+  # selbst anlegt. Anmeldungen laufen nur über die Anmeldeseite (Code-Ablauf); unsere Clients hatten ihn ohnehin aus.
   kc get clients -r "$REALM" --fields id,clientId,directAccessGrantsEnabled | python3 -c '
 import json, sys
 for c in json.load(sys.stdin):

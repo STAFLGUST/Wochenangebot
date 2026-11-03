@@ -170,9 +170,8 @@ in der Anwendung sperren (`oidc_aktiv`) oder in Keycloak (`deploy/anmeldung/kont
 (das antwortete bei abgelaufener, beendeter oder unvollständiger Sitzung mit `reauth_required`), sondern beendet die
 eigene PHP-Sitzung (mit Sitzung nur mit CSRF-Token) und liefert immer `abmelden` (zentrale Abmeldung über das Modul).
 Der Notfallmodus vermerkt alle betroffenen Mitarbeiter in `oidc-abmeldungen` (`oidc_abmeldung_merken`), auch ohne die
-Option „Keycloak“. Kein Client des Realms erlaubt den Passwort-Grant (`directAccessGrantsEnabled=false`, auch das
-eingebaute `admin-cli`; Realm Stand 14) – der Token-Endpunkt ist von `anmeldung_pruefen` ausgenommen. Die Kontokonsole
-`/realms/mitarbeiter/account` sperrt das Caddyfile (404).
+Option „Keycloak“. Kein Client des Realms erlaubt den Passwort-Grant (`directAccessGrantsEnabled=false`, auch die von
+Keycloak selbst angelegten; Realm Stand 14). Die Kontokonsole `/realms/mitarbeiter/account` sperrt das Caddyfile (404).
 
 ### Lokale Anmeldung (nur Notzugang und Testserver)
 

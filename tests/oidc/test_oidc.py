@@ -237,13 +237,13 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
 check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 14' in _log, _log[-300:])
-# Stand 14: kein Passwort-Grant – auch nicht über den eingebauten Client admin-cli (Token-Endpunkt ohne Länder-/IP-Prüfung)
+# Stand 14: kein Passwort-Grant – auch nicht über die Clients, die Keycloak selbst anlegt
 check('Stand 14: kein Client des Realms erlaubt den Passwort-Grant', not [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')],
       [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')])
 for _cid in ('admin-cli', 'dashboard'):
     code, _, text = anfrage(L + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
         'grant_type': 'password', 'client_id': _cid, 'username': 'gibt-es-nicht', 'password': 'falsch-falsch'}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
-    check(f'Token-Endpunkt über Caddy: Passwort-Grant mit {_cid} abgelehnt (nie „invalid_grant“ = Passwortprüfung)', code in (400, 401) and 'invalid_grant' not in text, (code, text[:120]))
+    check(f'Token-Endpunkt über Caddy: Passwort-Grant mit {_cid} abgelehnt', code in (400, 401) and 'invalid_grant' not in text, (code, text[:120]))
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
