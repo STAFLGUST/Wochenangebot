@@ -166,7 +166,7 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 **Aufruf der API: wirft nie, liefert { status, data, json }**
 
 - `api(action, body, query)`
-- `toast(text, fehlerhaft)`
+- `toast(text, fehlerhaft, aktion)` – Hinweis unten; mit aktion ({text, fn}) zusätzlich ein Knopf (z. B. „Rückgängig“), dann länger sichtbar
 - `fehler(text)`
 - `zeigeAnmeldung()`
 
@@ -197,7 +197,7 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `verlaufText(m)`
 - `zeileHtml(m)`
 - `ruhendHtml(liste, q)`
-- `sende(id, teil)` – Antwort senden; bei Erfolg Zeile aktualisieren, bei Konflikt neu laden
+- `sende(id, teil, mitRueck)` – Antwort senden; bei Erfolg Zeile aktualisieren, bei Konflikt neu laden.
 
 **Märkte und Marktakte**
 

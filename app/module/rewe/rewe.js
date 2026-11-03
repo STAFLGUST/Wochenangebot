@@ -17,7 +17,7 @@
   const TABS = ['woche', 'dauer', 'maerkte', 'zuweisung', 'abschluss', 'einstellungen'];
   const S = {
     csrf: '', d: null, tab: 'woche', kw: '', wer: '', filter: 'offen', suche: '', woche: null, offenSeg: new Set(), busy: new Set(), sichtbar: new Set(), bestelltZu: true, zeigeNach: '',
-    dSuche: '', dRh: '', dLw: '', dStatus: '', dEdit: null, dOffen: '',
+    dSuche: '', dRh: '', dLw: '', dStatus: '', dEdit: null, dOffen: '', zurueckFrage: '', zurueckTimer: 0,
     maerkte: null, mSuche: '', mLw: '', mKauf: '', akteId: '', akte: null, aKw: '', abschluss: null,
     zAuswahl: new Set(), zSuche: '', zWer: '', zLw: '', zKauf: '', paket: null, edit: null, notizMarkt: '', toast: 0,
   };
@@ -36,10 +36,18 @@
     return { status: res.status, data: data || {}, json: data !== null };
   }
   const fehlerText = (r, fallback) => (r.data && r.data.error) || (r.status === 0 ? 'Keine Verbindung zum Server.' : `${fallback} (${r.status}).`);
-  function toast(text, fehlerhaft = false) {
+  /* Hinweis unten; mit aktion ({text, fn}) zusätzlich ein Knopf (z. B. „Rückgängig“), dann länger sichtbar */
+  function toast(text, fehlerhaft = false, aktion = null) {
     const t = $('#rw-toast');
-    t.textContent = text; t.className = 'rw-toast zeigen' + (fehlerhaft ? ' fehler' : '');
-    clearTimeout(S.toast); S.toast = setTimeout(() => { t.className = 'rw-toast'; }, fehlerhaft ? 4500 : 2400);
+    t.textContent = text;
+    if (aktion) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'rw-toast-knopf'; b.dataset.rueck = ''; b.textContent = aktion.text;
+      b.addEventListener('click', () => { clearTimeout(S.toast); t.className = 'rw-toast'; aktion.fn(); }, { once: true });
+      t.append(b);
+    }
+    t.className = 'rw-toast zeigen' + (fehlerhaft ? ' fehler' : '') + (aktion ? ' mit-aktion' : '');
+    clearTimeout(S.toast); S.toast = setTimeout(() => { t.className = 'rw-toast'; }, aktion ? 9000 : fehlerhaft ? 4500 : 2400);
   }
   function fehler(text) { $('#rw-login').hidden = true; $('#rw-app').hidden = true; $('#rw-err').hidden = false; $('#rw-err').textContent = text; }
   function zeigeAnmeldung() { $$('dialog[open]').forEach((d) => d.close()); $('#rw-login').hidden = false; $('#rw-app').hidden = true; $('#rw-user').hidden = true; }
@@ -261,7 +269,8 @@
       if (a) antwort += `<div class="rw-azeile"><input class="rw-eingabe rw-notizfeld" data-notiz="${esc(m.id)}" maxlength="300" value="${esc(a.notiz)}" placeholder="Notiz zur Woche (optional)" aria-label="Notiz zur Woche ${esc(m.ort)}"${dis}>
         ${a.status === 'bestellt' ? `<label class="rw-check"><input type="checkbox" data-ob="${esc(m.id)}"${a.ohneBerechnung ? ' checked' : ''}${dis}> ohne Berechnung</label>` : ''}</div>`;
     }
-    const meta = a ? `<div class="rw-ameta">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span>' : ''}<span>Erfasst: ${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span></div>` : '';
+    const zurueck = a && m.darfAntworten ? `<button type="button" class="rw-zuruecksetzen${S.zurueckFrage === m.id ? ' frage' : ''}" data-zurueck="${esc(m.id)}"${dis}>${esc(S.zurueckFrage === m.id ? zurueckFrageText() : 'Zurücksetzen')}</button>` : '';
+    const meta = a ? `<div class="rw-ameta">${a.nachtrag ? '<span class="rw-chip akzent">Nachtrag</span>' : ''}<span>Erfasst: ${esc(a.von)}${a.t ? ' · ' + esc(zeitpunkt(a.t)) : ''}</span>${zurueck}</div>` : '';
     const jetzt = { kw: w.kw, status: a ? a.status : '', menge: a ? summe(a.mengen) : 0 };
     const adr = adresse(m);
     return `<div class="rw-zeile${erledigt(m) ? ' erledigt' : ''}${S.sichtbar.has(m.id) && S.filter === 'offen' && erledigt(m) ? ' gerade' : ''}" data-id="${esc(m.id)}">
@@ -277,6 +286,7 @@
       <a class="rw-c-akte rw-akte-link" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}" aria-label="Marktakte ${esc(m.ort)} öffnen"><svg class="i" aria-hidden="true"><use href="#i-rechts"/></svg></a>
     </div>`;
   }
+  const zurueckFrageText = () => (S.woche && S.woche.abschluss && S.woche.abschluss.exportiert ? 'Schon an WinAB übergeben – wirklich zurücksetzen?' : 'Wirklich zurücksetzen?');
   function ruhendHtml(liste, q) {
     const z = liste.filter((m) => passt(m, q));
     if (!liste.length) return '';
@@ -288,11 +298,13 @@
         <td class="rw-voll"><a class="btn sm ghost" href="#markt/${esc(m.id)}" data-gehe="markt/${esc(m.id)}">Akte</a>${m.darfPflegen ? ` <button class="btn sm" type="button" data-wieder="${esc(m.id)}">Wieder abfragen</button>` : ''}</td></tr>`).join('')}
       </tbody></table></div></details>`;
   }
-  /* Antwort senden; bei Erfolg Zeile aktualisieren, bei Konflikt neu laden */
-  async function sende(id, teil) {
+  /* Antwort senden; bei Erfolg Zeile aktualisieren, bei Konflikt neu laden. Ändert sich die Antwort (Bestellt, Kein Bedarf,
+     … oder zurückgesetzt), bietet der Hinweis „Rückgängig“ an: stellt die vorige Antwort samt Mengen und Notiz wieder her. */
+  async function sende(id, teil, mitRueck = true) {
     const m = S.woche.gruppen.flatMap((g) => g.maerkte).find((x) => x.id === id);
     if (!m || S.busy.has(id)) return;
-    const a = m.antwort || {};
+    const a = m.antwort || {}, kw = S.woche.kw;
+    const vorher = m.antwort ? { status: a.status, mengen: { ...obj(a.mengen) }, ohneBerechnung: !!a.ohneBerechnung, notiz: a.notiz || '' } : null;
     const body = { markt: id, kw: S.woche.kw, status: a.status || '', mengen: obj(a.mengen), ohneBerechnung: !!a.ohneBerechnung, notiz: a.notiz || '', r: a.r || 0, ...teil };
     if (body.status !== 'bestellt') { body.mengen = {}; body.ohneBerechnung = false; }
     S.busy.add(id); renderWoche();
@@ -305,11 +317,31 @@
     S.offenSeg.delete(id);
     S.sichtbar.add(id);   // Zeile bleibt stehen (Mengen, Notiz), auch im Filter „Offen“
     renderWoche();
+    const neu = m.antwort ? m.antwort.status : '';
+    if (!mitRueck) toast(`${m.ort}: rückgängig gemacht`);
+    else if (neu !== (vorher ? vorher.status : '')) {
+      const was = neu ? S.d.antworten[neu] + (neu === 'bestellt' ? ' · ' + mengenText(m.antwort.mengen) : '') : 'Antwort zurückgesetzt';
+      toast(`${m.ort}: ${was}`, false, { text: 'Rückgängig', fn: () => {
+        if (!S.woche || S.woche.kw !== kw) { toast('Die Woche wurde gewechselt – bitte in der Woche selbst ändern.', true); return; }
+        sende(id, vorher ? { ...vorher } : { status: '', notiz: '' }, false);
+      } });
+    }
   }
   const finde = (id) => S.woche.gruppen.flatMap((g) => g.maerkte).find((x) => x.id === id);
   $('#rw-w-gruppen').addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t || t.disabled) return;
     if (t.dataset.karte) { oeffneKarte(t.dataset.karte); return; }
+    if (t.dataset.zurueck) {   // Antwort zurücksetzen (wieder offen): erst nachfragen, zweiter Klick setzt zurück
+      const id = t.dataset.zurueck;
+      if (S.zurueckFrage !== id) {
+        S.zurueckFrage = id; t.textContent = zurueckFrageText(); t.classList.add('frage');
+        clearTimeout(S.zurueckTimer);
+        S.zurueckTimer = setTimeout(() => { if (S.zurueckFrage !== id) return; S.zurueckFrage = ''; const b = $(`[data-zurueck="${CSS.escape(id)}"]`); if (b) { b.textContent = 'Zurücksetzen'; b.classList.remove('frage'); } }, 5000);
+        return;
+      }
+      S.zurueckFrage = ''; clearTimeout(S.zurueckTimer);
+      sende(id, { status: '', notiz: '' }); return;
+    }
     if (t.dataset.vor) {   // künftige Woche aus dem Verlauf: dort die Vorbestellung eintragen
       S.kw = t.dataset.vor; neuAnsehen(); S.sichtbar.add(t.dataset.markt); S.zeigeNach = t.dataset.markt; zeigeTab('woche', S.kw); return;
     }

@@ -211,6 +211,8 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .rw-toast{position:fixed;left:50%;bottom:20px;z-index:50;transform:translate(-50%,18px);opacity:0;pointer-events:none;max-width:calc(100vw - 24px);padding:11px 16px;border-radius:999px;background:var(--rw-text);color:var(--rw-bg);font-size:13px;font-weight:600;transition:opacity .2s,transform .2s}
 .rw-toast.zeigen{opacity:1;transform:translate(-50%,0)}
 .rw-toast.fehler{background:#8c1d2c;color:#fff}
+.rw-toast.mit-aktion{pointer-events:auto;display:flex;align-items:center;gap:12px;padding:7px 7px 7px 16px}   /* mit „Rückgängig“ */
+.rw-toast-knopf{flex:none;height:32px;padding:0 14px;border:0;border-radius:999px;background:var(--rw-bg);color:var(--rw-text);font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .rw-hinweisbox{max-width:520px;margin:45px auto;padding:30px;border-radius:24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
 .rw-hinweisbox h1{margin:0;font-size:24px}.rw-hinweisbox p{margin:0;color:var(--rw-muted)}
 .rw-hinweisbox .i{width:28px;height:28px;color:var(--rw-muted)}
@@ -398,6 +400,9 @@ button.rw-zw:hover .rw-z.frei,button.rw-zw:focus-visible .rw-z{border-color:var(
 /* Antwort: wer und wann oben, vier große Knöpfe, Mengen mit großem Plus und Minus (Zahl auch eintippbar), Notiz */
 .rw-antwort{display:flex;flex-direction:column;gap:10px;min-width:0}
 .rw-ameta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--rw-muted)}
+.rw-zuruecksetzen{margin-left:auto;padding:3px 8px;border:0;border-radius:8px;background:transparent;color:var(--rw-muted);font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.rw-zuruecksetzen:hover{color:var(--rw-accent)}
+.rw-zuruecksetzen.frage{background:var(--rw-rot-soft);color:var(--rw-rot);text-decoration:none}
 .rw-seg.antwort{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));width:100%;padding:4px;border-radius:14px}
 .rw-seg.antwort button{height:42px;padding:0 6px;font-size:13.5px}
 .rw-mengen-eingabe{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px}
