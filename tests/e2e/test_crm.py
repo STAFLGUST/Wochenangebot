@@ -908,7 +908,7 @@ with sync_playwright() as p:
         pg.click('#ez-treffer [data-ez-treffer="0"]'); pg.wait_for_selector('tr[data-pos="0"]')
         pg.fill('tr[data-pos="0"] [data-p="qty"]', '12,5'); pg.fill('tr[data-pos="0"] [data-p="price"]', '13,90'); pg.fill('[data-k="titel"]', f'Test UI {breite}')
         pg.wait_for_function("document.querySelector('.crm-ez-summe').textContent.includes('173,75')")
-        check(f'{breite}px: Summe aus Menge × Preis', '12,5 kg' in pg.inner_text('.crm-ez-summe'))
+        check(f'{breite}px: Summe aus Menge × Preis (Menge mit 2 Stellen wie überall)', '12,50 kg' in pg.inner_text('.crm-ez-summe'), pg.inner_text('.crm-ez-summe'))
         if breite == 1280:
             pg.click('#dlg-kunde [data-schliessen]'); pg.wait_for_selector('#crm-toast.zeigen')
             check('Schließen mit ungespeichertem Einzelangebot: Warnung, Pop-up bleibt offen', pg.is_visible('#dlg-kunde') and 'nicht gespeichert' in pg.text_content('#crm-toast'))

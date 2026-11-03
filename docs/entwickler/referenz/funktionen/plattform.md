@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-102 Dateien, 924 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+103 Dateien, 943 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -710,6 +710,30 @@ _STAFL-Plattform – Detailkarte (Straßen, Gebäude, Ortsnamen) vom eigenen Ser
 - `stil(art)`
 - `geojson(punkte)`
 - `erstellen(el, opt)`
+
+## `app/assets/format.js`
+
+_Zahlen, Beträge, Mengen, Prozente und Datum – EIN Format für alle Seiten der Plattform (Auftrag des Inhabers 02.11.2026_
+
+- `nf(min, max)`
+- `wert(v)`
+- `runden(n, stellen)` – Kaufmännisch runden wie der Server (PHP round): 12,345 → 12,35, auch wenn die Binärzahl knapp darunter liegt
+- `zahl(v, min, max)` – Zahl mit min…max Nachkommastellen, echtes Minus; -0 wird 0
+- `mitEinheit(s, einheit)`
+- `euro(v)`
+- `euroKachel(v)`
+- `euroKg(v)`
+- `kg(v)`
+- `kgSumme(v)`
+- `prozent(anteil)` – Anteil als Bruch (0,123 → 12,3 %)
+- `vorzeichen(n, s)`
+- `veraenderung(anteil)` – Veränderung als Bruch (0,123 → +12,3 %)
+- `pp(anteil)` – Differenz zweier Anteile in Prozentpunkten (0,012 → +1,2 Pp)
+- `differenz(v, einheit, min, max)` – Differenz mit Vorzeichen in einer Einheit (z. B. Preisänderung: +0,50 €/kg)
+- `alsDatum(d)`
+- `datum(d)`
+- `datumZeit(d)`
+- `kw(woche, jahr)`
 
 ## `app/assets/theme.js`
 

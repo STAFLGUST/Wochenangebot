@@ -43,7 +43,7 @@
   const ausIso = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
   const de = (s) => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '';
   const zeitraum = (a, b) => a === b ? de(a) : `${de(a)} – ${de(b)}`;
-  const zahl = (n) => (Math.round(n * 2) / 2).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+  const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(n * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
   const tageText = (n) => `${zahl(n)} ${Math.abs(n) === 1 ? 'Tag' : 'Tage'}`;
   function meldung(el, text, art = 'fehler') { el.textContent = text || ''; el.className = 'hr-meldung' + (text ? ' ' + art : ''); }
 
@@ -248,7 +248,7 @@
     $('#korrektur-eigene').hidden = !l.length;
     $('#korrektur-liste').innerHTML = l.map((k) => `<li><span class="hr-pille ${esc(k.status)}">${k.status === 'erledigt' ? 'erledigt' : 'offen'}</span>
       <span class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</span>
-      <span class="gedaempft">gemeldet am ${esc(k.erfasst ? new Date(k.erfasst.t).toLocaleDateString('de-DE') : '')}</span>
+      <span class="gedaempft">gemeldet am ${esc(k.erfasst ? window.STAFL_FORMAT.datum(k.erfasst.t) : '')}</span>
       <span class="text">${esc(k.text)}</span>
       ${k.erledigt ? `<span class="mehr">Personalstelle${k.erledigt.antwort ? ': ' + esc(k.erledigt.antwort) : ' hat die Meldung erledigt.'}</span>` : ''}</li>`).join('');
   }
@@ -531,7 +531,7 @@
         ${a.vertretungName ? `<dt>Vertretung</dt><dd>${esc(a.vertretungName)}</dd>` : ''}
         ${a.kollegen.length ? `<dt>Gleichzeitig weg</dt><dd>${esc(a.kollegen.join(', '))}</dd>` : ''}
         ${a.notiz ? `<dt>Notiz</dt><dd>${esc(a.notiz)}</dd>` : ''}
-        <dt>Beantragt</dt><dd>${esc(a.erfasst ? new Date(a.erfasst.t).toLocaleDateString('de-DE') : '')}</dd></dl>
+        <dt>Beantragt</dt><dd>${esc(a.erfasst ? window.STAFL_FORMAT.datum(a.erfasst.t) : '')}</dd></dl>
         ${darf && !a.eigen ? '<div class="knoepfe"><button type="button" class="btn primary" data-genehmigen>Genehmigen</button><button type="button" class="btn gefahr" data-ablehnen>Ablehnen</button></div>'
           : `<p class="hr-hinweis">${a.eigen ? 'Ihr eigener Antrag – darüber entscheidet eine andere Person mit dem Recht „Urlaub genehmigen“.' : 'Die Entscheidung trifft eine Person mit dem Recht „Urlaub genehmigen“.'}</p>`}
       </article>`;
@@ -563,7 +563,7 @@
     const l = S.verw.korrekturen || [], offenL = l.filter((k) => k.status === 'offen'), erl = l.filter((k) => k.status !== 'offen').slice(0, 20);
     const offen = offenL.filter((k) => !k.eigen).length;
     $('#korr-zahl').hidden = !offen; $('#korr-zahl').textContent = offen || '';
-    const gemeldet = (k) => `gemeldet am ${esc(k.erfasst ? new Date(k.erfasst.t).toLocaleDateString('de-DE') : '')}`;
+    const gemeldet = (k) => `gemeldet am ${esc(k.erfasst ? window.STAFL_FORMAT.datum(k.erfasst.t) : '')}`;
     $('#korrekturen-liste').innerHTML = (offenL.length ? offenL.map((k) => `<article class="hr-korr hr-glas" data-korr="${esc(k.id)}">
         <h3>${esc(k.name)}</h3>
         <div class="zeitraum">${k.von ? esc(zeitraum(k.von, k.bis)) : 'ohne Zeitraum'}</div>
@@ -689,7 +689,7 @@
         return `<td class="zahl" title="${esc(t)}">${esc(zahl(v))}<small class="gedaempft"> (${esc(z.verfallen > 0 ? '−' + zahl(z.verfallen) : zahl(z.verfaellt) + '!')})</small></td>`;
       }
       if (k === 'gleitRest') {
-        const t = v === null || v === undefined ? '<span class="gedaempft">–</span>' : `<span class="${v < 0 ? 'minus' : ''}">${esc(zahl(v))}</span>`;
+        const t = v === null || v === undefined ? '<span class="gedaempft">—</span>' : `<span class="${v < 0 ? 'minus' : ''}">${esc(zahl(v))}</span>`;
         return `<td class="zahl gleit">${S.start && S.start.verwalten && !(S.start.ich && S.start.ich.id === z.id) ? `<button type="button" class="hr-gleit-zelle" data-gleit="${esc(z.id)}" aria-label="Gleittage von ${esc(z.name)}">${t}</button>` : t}</td>`;
       }
       return `<td class="zahl${k === 'rest' ? ' rest' + (v < 0 ? ' minus' : '') : ''}">${v ? esc(zahl(v)) : '<span class="gedaempft">0</span>'}</td>`;
@@ -704,7 +704,7 @@
     html += '</tbody>';
     if (zeilen.length > 1) {
       const sum = (k) => zeilen.reduce((a, z) => a + Number(z[k] || 0), 0);
-      html += `<tfoot><tr><th scope="row">Summe (${zeilen.length})</th>${SP.map(([k]) => `<td class="zahl">${k === 'gleitRest' && !zeilen.some((z) => z.gleitRest !== null) ? '–' : esc(zahl(sum(k)))}</td>`).join('')}</tr></tfoot>`;
+      html += `<tfoot><tr><th scope="row">Summe (${zeilen.length})</th>${SP.map(([k]) => `<td class="zahl">${k === 'gleitRest' && !zeilen.some((z) => z.gleitRest !== null) ? '—' : esc(zahl(sum(k)))}</td>`).join('')}</tr></tfoot>`;
     }
     $('#ueb-tabelle').innerHTML = html;
   }

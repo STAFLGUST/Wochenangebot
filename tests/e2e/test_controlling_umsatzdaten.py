@@ -751,7 +751,9 @@ with sync_playwright() as p:
         rang = pg.locator('#ctl-ua-rang li').all_inner_texts()
         check(f'{breite}px {thema}: Rangliste zuerst nach Kundengruppen (Gastronomie, Großhandel, ohne)', pg.text_content('#ctl-ua-titel') == 'Rangliste · Kundengruppe' and len(rang) == 3
               and any('Gastronomie' in z for z in rang) and any('ohne Kundengruppe' in z for z in rang), rang)
-        check(f'{breite}px {thema}: Größte Veränderungen zum Vorjahr', pg.is_visible('#ctl-ua-veraenderung-panel') and pg.locator('#ctl-ua-veraenderung [data-zeile]').count() >= 1)
+        vt = pg.inner_text('#ctl-ua-veraenderung')
+        check(f'{breite}px {thema}: Größte Veränderungen zum Vorjahr – Beträge mit „€“ (kein true/false)', pg.is_visible('#ctl-ua-veraenderung-panel') and pg.locator('#ctl-ua-veraenderung [data-zeile]').count() >= 1
+              and '€' in vt and 'true' not in vt and 'false' not in vt, vt[:200])
         pg.click('#ctl-ua-nach [data-nach="vertreter"]')
         pg.wait_for_function("document.querySelector('#ctl-ua-titel').textContent === 'Rangliste · Vertreter'")
         rang = pg.locator('#ctl-ua-rang li').all_inner_texts()

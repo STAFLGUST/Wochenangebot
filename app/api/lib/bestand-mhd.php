@@ -33,9 +33,8 @@ function mhd_preis_text(?array $p): string
     if ($s === 'ambiguous') return 'mehrere Preisangaben';
     if ($s === 'request') return 'auf Anfrage';
     if ($s !== 'value' || !is_numeric($p['value'] ?? null)) return '—';
-    $v = number_format((float)$p['value'], 4, ',', '.');   // wie Intl de-DE: 2 bis 4 Nachkommastellen
-    while (substr($v, -1) === '0' && strlen($v) - strpos($v, ',') > 3) $v = substr($v, 0, -1);
-    return $v . ' €' . (!empty($p['label']) ? ' · ' . $p['label'] : '/kg');
+    $v = number_format(round((float)$p['value'], 2), 2, ',', '.');   // 2 Stellen wie abgerechnet (4,125 → 4,13), wie überall
+    return $v . ' €/kg' . (!empty($p['label']) ? ' · ' . $p['label'] : '');   // wie in der Oberfläche: 12,34 €/kg · Flugware
 }
 /* Die MHD-Liste: [heute, bis, zeilen[{code, name, kg, mhd, mhdKg, stufe, erfasst, gesamt, eta, preis, vorwoche}], preise(bool), wochen]
    „name“ ist die Bezeichnung mit Merkmalen (bestand_bezeichnung(): „Lachs · Schwein · DE · frisch“) für Excel und Text. */
@@ -221,7 +220,7 @@ function mhd_mail(array $l, string $png, string $notiz, array $me, array $st, in
         . ($notiz !== '' ? "\nHinweis von {$me['name']}:\n$notiz\n" : '')
         . "\nDie vollständige Liste steht als Excel-Datei im Anhang ($datei).\n\n";
     foreach (array_slice($l['zeilen'], 0, 200) as $a) {
-        $text .= str_pad($a['code'], 8) . ' ' . date('d.m.y', strtotime($a['mhd'])) . '  ' . str_pad(number_format($a['mhdKg'], 2, ',', '.') . ' kg', 12, ' ', STR_PAD_LEFT) . '  ' . $a['name'] . "\n";
+        $text .= str_pad($a['code'], 8) . ' ' . date('d.m.Y', strtotime($a['mhd'])) . '  ' . str_pad(number_format($a['mhdKg'], 2, ',', '.') . ' kg', 12, ' ', STR_PAD_LEFT) . '  ' . $a['name'] . "\n";
     }
     $text .= "\nGesendet von {$me['name']} über die STAFL-Plattform (Bestand). Intern – nicht an Kunden weitergeben.\n";
     $kopf = '<p style="margin:0 0 6px;">Hallo,</p><p style="margin:0 0 14px;">anbei die MHD-Liste vom <strong>' . mail_h($datum) . '</strong> (Bestand vom ' . mail_h($bestand) . '): <strong>' . $n . ' Artikel</strong> mit MHD bis ' . mail_h($bis)

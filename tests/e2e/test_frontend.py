@@ -20,7 +20,7 @@ with sync_playwright() as p:
     rows = lambda: pg.locator('tr.row').count()
 
     check('load: 276 rows', rows() == 276, rows())
-    check('KW pill', pg.inner_text('#kw-pill').strip() == 'KW 43 · 2026', pg.inner_text('#kw-pill'))
+    check('KW pill', pg.inner_text('#kw-pill').strip() == 'KW 43/2026', pg.inner_text('#kw-pill'))
     check('validity text', 'Mo 19.10. – So 25.10.2026' in pg.inner_text('#subbar'), pg.inner_text('#subbar'))
     check('KPI bar removed', pg.locator('#kpis, .kpi').count() == 0)
     check('price format (10601 first row)', de(preis('10601')) in pg.inner_text('tr.row >> nth=0'))

@@ -15,7 +15,10 @@
   const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
   const icon = (n, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
-  const fmtNum = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+  /* Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js); Preise mindestens 2 Nachkommastellen, mehr nur, wenn
+     der Preis sie wirklich hat (Eingabe erlaubt bis 4) – nie still runden */
+  const F = window.STAFL_FORMAT;
+  const fmtNum = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const fmtInt = new Intl.NumberFormat('de-DE');
   const plural = (n, one, many) => `${fmtInt.format(n)} ${n === 1 ? one : many}`;
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -1142,7 +1145,7 @@
     return st === 'is-price' && before ? `<span class="was" title="Veröffentlichter Preis">bisher <s>${esc(priceShort(before.price))}</s></span>` : '';
   }
   function altsHTML(it) {
-    return (it.altPrices || []).length ? `<div class="alts">${it.altPrices.map((p) => `<button type="button" data-act="item" title="Zusatzpreis bearbeiten">${esc(p.label)}: ${esc(p.status === 'value' ? fmtNum.format(p.value) : priceShort(p))}</button>`).join('')}</div>` : '';
+    return (it.altPrices || []).length ? `<div class="alts">${it.altPrices.map((p) => `<button type="button" data-act="item" title="Zusatzpreis bearbeiten">${esc(p.label)}: ${esc(priceShort(p))}</button>`).join('')}</div>` : '';
   }
   function rowHTML(it) {
     const st = rowState(it);
@@ -1172,7 +1175,7 @@
     const v = C.saleFor(it, curOffer);
     if (v == null) return '<span class="sale-tag off">kein Sonderpreis in diesem Angebot</span>';
     const out = soldOut(it);
-    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Sonderpreis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Sonderpreis ' + esc(fmtNum.format(v))}</button>`;
+    return `<button type="button" class="sale-tag${out ? ' out' : ''}" data-act="sale" title="${out ? 'Kein Bestand mehr – wird in allen Angeboten automatisch ausgeblendet' : 'Sonderpreis – solange der Vorrat reicht'}">${out ? 'ohne Bestand · ausgeblendet' : 'Sonderpreis ' + esc(F.euroKg(v))}</button>`;
   }
   function stdCellHTML(it, bad, label, was, alts) {
     return `<td class="e-price e-var std">${label}<div class="vrow"><input class="in num${bad ? ' invalid' : ''}" data-f="price" value="${esc(bad ? invalid.get(it.id) : priceToInput(it.price))}" placeholder="ohne Preis" aria-label="Preis in Euro je kg" inputmode="decimal">${saleBtnHTML(it)}</div>${saleTagHTML(it)}${was}${alts}</td>`;
@@ -1514,7 +1517,7 @@
     fillItemStock(it);
     fillItemHistory(it);
   }
-  const altRow = (p, k) => `<div class="altrow" data-k="${k}"><input data-alt="label" value="${esc(p.label || '')}" placeholder="Bezeichnung, z. B. Flugware" maxlength="40" aria-label="Bezeichnung des Zusatzpreises"><input data-alt="price" value="${esc(priceToInput(p))}" placeholder="Preis" inputmode="decimal" aria-label="Zusatzpreis"><button type="button" class="ibtn danger" data-ia="alt-del" aria-label="Zusatzpreis entfernen">${icon('trash')}</button></div>`;
+  const altRow = (p, k) => `<div class="altrow" data-k="${k}"><input data-alt="label" value="${esc(p.label || '')}" placeholder="Bezeichnung, z. B. Flugware" maxlength="40" aria-label="Bezeichnung des Zusatzpreises"><input data-alt="price" value="${esc(priceToInput(p))}" placeholder="Preis €/kg" inputmode="decimal" aria-label="Zusatzpreis"><button type="button" class="ibtn danger" data-ia="alt-del" aria-label="Zusatzpreis entfernen">${icon('trash')}</button></div>`;
 
   dlgItem.addEventListener('change', (e) => {
     const it = iById(itemId);
@@ -1924,7 +1927,7 @@
   function renderOffersBody(err = '') {
     const host = $('#view-angebote');
     const admin = may('angebote.loeschen'), edit = may('angebote.verwalten');
-    const kz = (id, gr) => { const n = ofKundenZahl(id, gr); return n === null ? '<span class="muted">–</span>' : fmtInt.format(n); };
+    const kz = (id, gr) => { const n = ofKundenZahl(id, gr); return n === null ? '<span class="muted">—</span>' : fmtInt.format(n); };
     host.innerHTML = `
       <div class="st-info"><div><strong>Angebote</strong><span class="sub">Jedes Angebot hat seine eigene Artikelliste: unter „Angebot bearbeiten“ das Angebot wählen und Artikel hinzufügen oder entfernen – andere Angebote bleiben unverändert. Angebote mit „Folgt dem Wochenangebot“ (bisherige Einstellung) zeigen dagegen alle Artikel des Wochenangebots. Kundenangebote sind nur nach Anmeldung sichtbar, nie auf der öffentlichen Seite. Jede Kundengruppe lässt sich genau einem Angebot zuordnen; ihre Kunden sehen dieses Angebot automatisch. Kundengruppen ohne eigenes Angebot bekommen automatisch das Wochenangebot. Beim Kunden direkt freigeschaltete Angebote kommen jeweils hinzu; Kunden ohne Kundengruppe sehen nur diese.</span></div>
         <span class="ms-state${ofDirty ? ' saving' : ''}" id="of-state">${ofDirty ? 'Nicht gespeichert' : ''}</span></div>
@@ -2240,7 +2243,7 @@
     }
     dlgCopy.close();
     changed({ render: true });
-    toast(n ? `${plural(n, 'Artikel', 'Artikel')} aus „${offerShort(src)}“ übernommen${pct ? ` (${pct > 0 ? '+' : ''}${fmtNum.format(pct)} %)` : ''}.` : 'Keine Artikel übernommen.');
+    toast(n ? `${plural(n, 'Artikel', 'Artikel')} aus „${offerShort(src)}“ übernommen${pct ? ` (${F.veraenderung(pct / 100)})` : ''}.` : 'Keine Artikel übernommen.');
   });
 
   /* ======================= Vorschau =======================
@@ -2621,10 +2624,10 @@
   let currentView = 'edit';
 
   const nk = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '');
-  const wkLabel = (w) => `KW ${w.week}/${String(w.year).slice(2)}`;
+  const wkLabel = (w) => `KW ${w.week}`;   // Achse des Diagramms (kurz); im Text immer wkLong
   const wkLong = (w) => `KW ${w.week}/${w.year}`;
   const numVal = (p) => (p && p.price && p.price.status === 'value' ? p.price.value : null);
-  const fmtDelta = (d) => (d > 0 ? '+' : d < 0 ? '−' : '±') + fmtNum.format(Math.abs(d));
+  const fmtDelta = (d) => F.differenz(d, '€/kg', 2, 2);
 
   /* Artikel-Schlüssel über alle Wochen: Artikelnummer; bei mehrfach vergebenen Nummern zusätzlich Bezeichnung + Gruppe */
   function seriesKey(it, dup) {
@@ -2828,16 +2831,16 @@
       const d = x.delta;
       return `<tr data-skey="${esc(s.key)}" tabindex="0">
         <td class="h-code">${esc(s.code || '—')}</td>
-        <td class="h-name"><div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.group)}${s.inLatest ? '' : ` · <span class="gone">nicht mehr im Angebot (zuletzt ${esc(wkLabel(H.weeks[s.lastWi]))})</span>`}</div></td>
+        <td class="h-name"><div class="nm">${esc(s.name)}</div><div class="sub">${esc(s.group)}${s.inLatest ? '' : ` · <span class="gone">nicht mehr im Angebot (zuletzt ${esc(wkLong(H.weeks[s.lastWi]))})</span>`}</div></td>
         <td class="h-spark">${sparkSVG(x.vals)}</td>
         <td class="h-cur num">${s.inLatest ? esc(cur) : '<span class="muted">—</span>'}</td>
-        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[x.deltaFrom]))}">${fmtDelta(d)}</span>`}</td>
-        <td class="h-range num">${x.min == null ? '<span class="muted">—</span>' : x.min === x.max ? fmtNum.format(x.min) : `${fmtNum.format(x.min)} – ${fmtNum.format(x.max)}`}</td>
+        <td class="h-delta num">${d == null ? '<span class="muted">—</span>' : d === 0 ? '<span class="muted">±0,00 €/kg</span>' : `<span class="delta ${d > 0 ? 'up' : 'down'}" title="gegenüber ${esc(wkLong(H.weeks[x.deltaFrom]))}">${fmtDelta(d)}</span>`}</td>
+        <td class="h-range num">${x.min == null ? '<span class="muted">—</span>' : x.min === x.max ? F.euroKg(x.min) : `${fmtNum.format(x.min)} – ${fmtNum.format(x.max)} €/kg`}</td>
         <td class="h-weeks num">${x.weeksCount}</td>
       </tr>`;
     }).join('');
     host.innerHTML = list.length ? `<div class="gcard"><table class="etab htab"><thead><tr>
-        <th class="h-code">Art.-Nr.</th><th class="h-name">Bezeichnung</th><th class="h-spark">Verlauf</th><th class="h-cur num">Aktuell €/kg</th><th class="h-delta num" title="Aktueller Preis gegenüber dem ersten Preis im gewählten Zeitraum">Änderung ${esc(histRange === 'Alle' ? '' : histRange)}</th><th class="h-range num">Spanne</th><th class="h-weeks num">Wochen</th>
+        <th class="h-code">Art.-Nr.</th><th class="h-name">Bezeichnung</th><th class="h-spark">Verlauf</th><th class="h-cur num">Aktuell</th><th class="h-delta num" title="Aktueller Preis gegenüber dem ersten Preis im gewählten Zeitraum">Änderung ${esc(histRange === 'Alle' ? '' : histRange)}</th><th class="h-range num">Spanne</th><th class="h-weeks num">Wochen</th>
       </tr></thead><tbody>${rows}</tbody></table></div>`
       : '<div class="ed-empty"><h3>Keine Artikel gefunden</h3><p>Suchbegriff oder Filter anpassen.</p></div>';
   }
@@ -2865,7 +2868,7 @@
   /* ---------- Daten: gespeicherte Wochen verwalten ---------- */
   const dlgHD = $('#dlg-hist-data');
   const dShort = (iso) => { const [, m, d] = iso.split('-'); return `${d}.${m}.`; };
-  const savedShort = (iso) => (iso ? new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+  const savedShort = (iso) => (iso ? F.datumZeit(iso) : '');   // 16.10.2026, 11:03 wie überall
   function renderHistData() {
     const H = hist;
     const rows = H.weeks.slice().reverse().map((w) => {
@@ -2961,12 +2964,12 @@
       <div class="dlg-head"><div><h2 id="ser-title">${esc(s.name)}</h2><p>${s.code ? 'Art.-Nr. ' + esc(s.code) + ' · ' : ''}${esc(s.group)}${s.inLatest ? '' : ' · nicht mehr im Angebot'}</p></div>
         <button type="button" class="btn icon ghost" data-close aria-label="Schließen">${icon('x')}</button></div>
       <div class="dlg-body">
-        <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)} €</span>` : ''}</span></div>
+        <div class="ser-range">${rangeSeg()}<span class="muted">${esc(wkLong(W[0]))} – ${esc(wkLong(W[W.length - 1]))}${x.delta ? ` · Änderung <span class="delta ${x.delta > 0 ? 'up' : 'down'}">${fmtDelta(x.delta)}</span>` : ''}</span></div>
         <div class="cmp-stats hstats">
           <div><span>Aktuell</span><strong>${cur ? esc(priceShort(cur.price)) : '—'}</strong></div>
-          <div><span>Tiefster</span><strong>${x.min != null ? fmtNum.format(x.min) + ' €' : '—'}</strong></div>
-          <div><span>Höchster</span><strong>${x.max != null ? fmtNum.format(x.max) + ' €' : '—'}</strong></div>
-          <div><span>Durchschnitt</span><strong>${x.avg != null ? fmtNum.format(Math.round(x.avg * 100) / 100) + ' €' : '—'}</strong></div>
+          <div><span>Tiefster</span><strong>${F.euroKg(x.min)}</strong></div>
+          <div><span>Höchster</span><strong>${F.euroKg(x.max)}</strong></div>
+          <div><span>Durchschnitt</span><strong>${x.avg != null ? F.euroKg(Math.round(x.avg * 100) / 100) : '—'}</strong></div>
         </div>
         ${chartSVG(s, W, x.vals)}
         <h3 class="d-h"><span>Wochenwerte</span><span>${plural(x.weeksCount, 'Woche', 'Wochen')} im Angebot · ${plural(x.changes, 'Preisänderung', 'Preisänderungen')}</span></h3>
@@ -3126,7 +3129,7 @@
   /* kaufmännisch auf 0,01 kg runden – über ganze Gramm, damit ,xx5 nicht durch Gleitkomma-Reste nach unten kippt */
   const kg2 = (v) => { const g = Math.round(v * 1000); return (g < 0 ? -Math.round(-g / 10) : Math.round(g / 10)) / 100; };
   const kgText = (v) => (v == null || !Number.isFinite(v) ? '—' : fmtKg.format(kg2(v)) + ' kg');
-  const mhdShort = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}` : '—');
+  const mhdShort = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '—');   // Datum TT.MM.JJJJ wie überall
   function isoToday(plus = 0) {
     const d = new Date();
     d.setHours(12, 0, 0, 0);
@@ -3185,7 +3188,7 @@
   }
   const stockPriceNumber = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   const stockWeekLabel = (which) => stockPrices?.[which] ? `KW ${stockPrices[which].week}/${stockPrices[which].year}` : 'KW unbekannt';
-  const stockPriceText = (p) => !stockPrices?.allowed ? 'keine Berechtigung' : p?.status === 'ambiguous' ? 'mehrere Preisangaben' : p?.status === 'value' ? `${stockPriceNumber.format(p.value)} €${p.label ? ' · ' + p.label : '/kg'}` : p?.status === 'request' ? 'auf Anfrage' : '—';
+  const stockPriceText = (p) => !stockPrices?.allowed ? 'keine Berechtigung' : p?.status === 'ambiguous' ? 'mehrere Preisangaben' : p?.status === 'value' ? `${stockPriceNumber.format(p.value)} €/kg${p.label ? ' · ' + p.label : ''}` : p?.status === 'request' ? 'auf Anfrage' : '—';
   /* Nächste ETA der erfassten Zugänge: frühestes Ankunftsdatum ab heute; liegen alle in der Vergangenheit, das
      späteste (überfällig). Ohne Datum: null. Nur Anzeige in der Spalte „Erfasster Bestand“. */
   function naechsteEta(list) {
@@ -3241,7 +3244,7 @@
     { key: 'prev', titel: 'Preis Vorwoche', typ: 'preis' },
     { key: 'kg', titel: 'Eingelagerter Bestand', typ: 'zahl' },
     { key: 'mhd', titel: 'Kürz. MHD', typ: 'mhd' },
-    { key: 'mhdKg', titel: 'Kg kürz. MHD', typ: 'zahl' },
+    { key: 'mhdKg', titel: 'Menge kürz. MHD', typ: 'zahl' },
     { key: 'incomingKg', titel: 'Erfasster Bestand', typ: 'zahl' },
     { key: 'totalKg', titel: 'Gesamt verfügbar', typ: 'zahl' },
     { key: 'zugaenge', titel: 'Erwartete Zugänge', typ: 'zugang' },
@@ -3408,8 +3411,8 @@
       <div class="dlg-body">
         ${ohneVk ? '<p class="hint">Den Artikeln ist noch keine VK-Gruppe zugeordnet (Verwaltung → Artikelstammdaten).</p>' : ''}
         <div class="vk-werkzeug"><button type="button" class="btn sm" data-vkalle="1">Alle aufklappen</button><button type="button" class="btn sm" data-vkalle="0">Alle zuklappen</button>
-          <label class="vk-sort">Reihenfolge <select id="vk-sort"><option value="nr"${vkSort === 'nr' ? ' selected' : ''}>VK-Gruppe (Nummer)</option><option value="totalKg"${vkSort === 'totalKg' ? ' selected' : ''}>Gesamt verfügbar</option><option value="kg"${vkSort === 'kg' ? ' selected' : ''}>Eingelagerter Bestand</option><option value="mhdKg"${vkSort === 'mhdKg' ? ' selected' : ''}>Kg kürz. MHD</option></select></label></div>
-        <div class="vk-scroll"><table class="stab vktab"><thead><tr><th class="vk-g-t">VK-Gruppe / Artikel</th><th>Eingelagerter<br>Bestand</th><th>Kürz.<br>MHD</th><th>Kg kürz.<br>MHD</th><th>Erfasster<br>Bestand</th><th>Gesamt<br>verfügbar</th></tr></thead>
+          <label class="vk-sort">Reihenfolge <select id="vk-sort"><option value="nr"${vkSort === 'nr' ? ' selected' : ''}>VK-Gruppe (Nummer)</option><option value="totalKg"${vkSort === 'totalKg' ? ' selected' : ''}>Gesamt verfügbar</option><option value="kg"${vkSort === 'kg' ? ' selected' : ''}>Eingelagerter Bestand</option><option value="mhdKg"${vkSort === 'mhdKg' ? ' selected' : ''}>Menge kürz. MHD</option></select></label></div>
+        <div class="vk-scroll"><table class="stab vktab"><thead><tr><th class="vk-g-t">VK-Gruppe / Artikel</th><th>Eingelagerter<br>Bestand</th><th>Kürz.<br>MHD</th><th>Menge kürz.<br>MHD</th><th>Erfasster<br>Bestand</th><th>Gesamt<br>verfügbar</th></tr></thead>
         ${body}<tfoot><tr class="st-total"><td>Gesamtsumme</td>${zellen(res.list).replace(/<td class="s-mhd[^"]*">[^<]*<\/td>/, '<td class="s-mhd"></td>')}</tr></tfoot></table></div>
       </div>
       <div class="dlg-foot"><button type="button" class="btn" data-close>Schließen</button></div>`;
@@ -3440,16 +3443,16 @@
     return `<th class="${cls}${f ? ' gefiltert' : ''}" aria-sort="${dir}"><span class="st-th"><button type="button" class="sort-btn${on ? ' on' : ''}" data-ssort="${key}" title="Nach ${esc(label.replace('<br>', ' '))} sortieren">${label}<span class="sort-ind" aria-hidden="true">${on ? (stockSort.dir > 0 ? '▲' : '▼') : ''}</span></button>`
       + `<button type="button" class="st-fbtn${f ? ' on' : ''}" data-sfilter="${key}" aria-haspopup="dialog" aria-label="Sortieren und Filtern: ${esc(ST_SPK[key].titel)}${f ? ' (Filter aktiv)' : ''}" title="${f ? esc(filterText(key)) : 'Sortieren und Filtern'}">${icon('filter', 'sm')}</button></span></th>`;
   };
-  const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Kg kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete Zugänge', print)}</tr>`;
+  const stockHead = (print = false) => `<tr>${sortTh('code', 's-code', 'Art.-Nr.', print)}${sortTh('name', 's-name', 'Art. Bezeichnung', print)}${sortTh('vk', 's-vk', `Aktueller Preis<br>${esc(stockWeekLabel('current'))}`, print)}${sortTh('prev', 's-prev', `Preis Vorwoche<br>${esc(stockWeekLabel('previous'))}`, print)}${sortTh('kg', 's-kg', 'Eingelagerter<br>Bestand', print)}${sortTh('mhd', 's-mhd', 'Kürz.<br>MHD', print)}${sortTh('mhdKg', 's-mkg', 'Menge kürz.<br>MHD', print)}${sortTh('incomingKg', 's-registered', 'Erfasster<br>Bestand', print)}${sortTh('totalKg', 's-total-kg', 'Gesamt<br>verfügbar', print)}${sortTh('zugaenge', 's-incoming', 'Erwartete<br>Zugänge', print)}</tr>`;
   const stockRow = (a, print = false) => `<tr class="srow" data-sidx="${a.idx}" tabindex="0">
       <td class="s-code">${esc(a.code)}</td><td class="s-name" title="${esc(a.name)}${a.merkmale ? ` · ${esc(a.merkmale)}` : ''}${a.nameImport ? ` – in der Bestandsliste: ${esc(a.nameImport)}` : ''}">${esc(a.name)}${merkHTML(a)}</td>
       <td class="s-vk" data-l="Aktuell ${esc(stockWeekLabel('current'))}">${esc(stockPriceText(a.price))}</td>
       <td class="s-prev" data-l="Vorwoche ${esc(stockWeekLabel('previous'))}">${esc(stockPriceText(a.prevPrice))}</td>
       <td class="s-kg" data-l="Eingelagerter Bestand">${a.kg == null ? '—' : esc(kgText(a.kg))}</td>
-      <td class="s-mhd ${a.cls}" data-l="Kürz. MHD">${esc(mhdShort(a.mhd))}</td><td class="s-mkg ${a.cls}" data-l="Kg kürz. MHD"><span>${mhdKgHTML(a)}</span></td>
+      <td class="s-mhd ${a.cls}" data-l="Kürz. MHD">${esc(mhdShort(a.mhd))}</td><td class="s-mkg ${a.cls}" data-l="Menge kürz. MHD"><span>${mhdKgHTML(a)}</span></td>
       <td class="s-registered" data-l="Erfasster Bestand"><span class="s-reg">${esc(kgText(a.incomingKg))}${etaHTML(a)}</span></td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(a.totalKg))}</td>
       <td class="s-incoming" data-l="Erwartete Zugänge">${print ? incomingHTML(a) : a.incoming.length ? `<button type="button" class="btn sm" data-incoming="${a.idx}" aria-haspopup="dialog" aria-label="Erwartete Zugänge für ${esc(a.name)} anzeigen">Zugänge (${a.incoming.length})</button>` : '—'}</td></tr>`;
-  const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="4">${esc(label)}</td><td class="s-kg" data-l="Eingelagerter Bestand">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg" data-l="Kg kürz. MHD">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(sum(list, 'incomingKg')))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(sum(list, 'totalKg')))}</td><td class="s-incoming"></td></tr>`;
+  const totalRow = (label, list, cls) => `<tr class="${cls}"><td colspan="4">${esc(label)}</td><td class="s-kg" data-l="Eingelagerter Bestand">${esc(kgText(sum(list, 'kg')))}</td><td class="s-mhd"></td><td class="s-mkg" data-l="Menge kürz. MHD">${esc(kgText(sum(list, 'mhdKg')))}</td><td class="s-registered" data-l="Erfasster Bestand">${esc(kgText(sum(list, 'incomingKg')))}</td><td class="s-total-kg" data-l="Gesamt verfügbar">${esc(kgText(sum(list, 'totalKg')))}</td><td class="s-incoming"></td></tr>`;
   function stockTableHTML(res, print = false) {
     const rows = (list) => list.map((a) => stockRow(a, print)).join('');
     let body;
@@ -3553,7 +3556,7 @@
   }
   /* Partien eines Artikels mit Summe (Kolli, Kg netto) und – mit Recht „bestand.einkaufspreise“ – EK-Preis je Partie.
      In der Summenzeile steht beim EK der nach kg gewichtete Durchschnitt der Partien mit Preis. */
-  const eur = (v) => fmtKg.format(Math.round(v * 100) / 100) + ' €';
+  const eur = (v) => F.euroKg(Math.round(v * 100) / 100);   // EK-Preis je kg
   /* zugang = erwartete Zugänge (Status „erfasst“): dieselbe Tabelle, Datumsspalte „ETA“ (auch am Handy sichtbar),
      fehlendes MHD als „—“ (meist noch nicht bekannt), Klasse zutab statt lottab */
   function lotTableHTML(lots, zugang = false, marke = null) {
@@ -3567,9 +3570,9 @@
     const ekAvg = ekKg ? ekLots.reduce((t, l) => t + l.ek * Math.round(l.kg * 1000), 0) / ekKg : null;
     const mitMarke = marke ?? lots.some((l) => l.marke);   // Bestand vor der Marken-Spalte: Spalte weglassen; im Detail für beide Tabellen gleich
     const row = (l) => `<tr>${mitMarke ? `<td class="lot-marke">${l.marke ? esc(l.marke) : '<span class="muted">—</span>'}</td>` : ''}<td class="ch-code">${esc(l.lot || '—')}${mitMarke && l.marke ? `<small class="lot-marke-sub">${esc(l.marke)}</small>` : ''}</td><td class="${dCls}">${datum(l)}</td><td class="${mhdClass(l.mhd)}">${l.mhd ? esc(dmy(l.mhd)) : ohneMhd}</td><td class="num">${l.kolli == null ? '—' : esc(fmtInt.format(l.kolli))}</td><td class="num">${esc(kgText(l.kg))}</td>${mitEk ? `<td class="num lot-ek">${Number.isFinite(l.ek) ? esc(eur(l.ek)) : '<span class="muted">—</span>'}</td>` : ''}</tr>`;
-    return `<div class="lot-scroll"><table class="etab ${zugang ? 'zutab' : 'lottab'}"><thead><tr>${mitMarke ? '<th class="lot-marke">Marke</th>' : ''}<th>Partie</th><th class="${dCls}">${zugang ? 'ETA' : 'Ankunft'}</th><th>MHD</th><th class="num">Kolli</th><th class="num">Kg netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
+    return `<div class="lot-scroll"><table class="etab ${zugang ? 'zutab' : 'lottab'}"><thead><tr>${mitMarke ? '<th class="lot-marke">Marke</th>' : ''}<th>Partie</th><th class="${dCls}">${zugang ? 'ETA' : 'Ankunft'}</th><th>MHD</th><th class="num">Kolli</th><th class="num">Netto</th>${mitEk ? '<th class="num" title="Einkaufspreis je kg">EK-Preis</th>' : ''}</tr></thead><tbody>
           ${lots.map(row).join('')}
-        </tbody>${lots.length ? `<tfoot><tr class="lot-sum">${mitMarke ? '<td class="lot-marke"></td>' : ''}<td>Summe</td><td class="${dCls}"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
+        </tbody>${lots.length ? `<tfoot><tr class="lot-sum">${mitMarke ? '<td class="lot-marke"></td>' : ''}<td>Summe</td><td class="${dCls}"></td><td></td><td class="num">${kolli.length ? esc(fmtInt.format(sum(kolli, 'kolli'))) : '—'}</td><td class="num">${esc(kgText(sum(lots, 'kg')))}</td>${mitEk ? `<td class="num lot-ek" title="nach kg gewichteter Durchschnitt">${ekAvg == null ? '<span class="muted">—</span>' : 'Ø ' + esc(eur(ekAvg))}</td>` : ''}</tr></tfoot>` : ''}</table></div>
         ${mitEk && lots.length && !ekLots.length && !zugang ? '<p class="hint" style="margin:6px 0 0">EK-Preise erscheinen ab der nächsten hochgeladenen Bestandsliste (Spalte „Preis“/„EKPreis“).</p>' : ''}`;
   }
   function openStockItem(idx) {
@@ -3587,7 +3590,7 @@
         <div class="cmp-stats hstats">
           <div><span>Eingelagerter Bestand</span><strong>${a.kg == null ? '—' : esc(kgText(a.kg))}</strong></div>
           <div><span>Kürzestes MHD</span><strong class="${a.cls}">${esc(mhdShort(a.mhd))}</strong></div>
-          <div><span>Kg kürz. MHD</span><strong class="${a.cls}">${mhdKgHTML(a)}</strong></div>
+          <div><span>Menge kürz. MHD</span><strong class="${a.cls}">${mhdKgHTML(a)}</strong></div>
           <div><span>Aktuell ${esc(stockWeekLabel('current'))}</span><strong>${esc(stockPriceText(a.price))}</strong></div>
           <div><span>Vorwoche ${esc(stockWeekLabel('previous'))}</span><strong>${esc(stockPriceText(a.prevPrice))}</strong></div>
           <div><span>Erfasster Bestand</span><strong>${esc(kgText(a.incomingKg))}</strong></div><div><span>Gesamt verfügbar</span><strong>${esc(kgText(a.totalKg))}</strong></div>
@@ -3644,7 +3647,7 @@
         <div class="dlg-body">
           <div class="imp-sum">
             <div><span>Artikel mit Bestand</span><strong>${fmtInt.format(r.articles.length)}</strong></div>
-            <div><span>Kg eingelagert</span><strong>${esc(fmtKg.format(total))}</strong></div>
+            <div><span>Eingelagert</span><strong>${esc(kgText(total))}</strong></div>
             <div><span>MHD ≤ 14 Tage</span><strong>${fmtInt.format(soon)}</strong></div>
           </div>
           <label class="fld" style="max-width:220px"><span>Bestandsdatum</span><input type="date" id="si-date" value="${esc(r.date || isoToday())}" required></label>
@@ -3699,7 +3702,7 @@
     setTimeout(() => URL.revokeObjectURL(el.href), 2000);
   }
   /* PDF zum Weitergeben (Server, lib/bestand-pdf.php): nur Art.-Nr., Bezeichnung, eingelagerter Bestand, kürzestes MHD,
-     Kg kürz. MHD – ohne Preise, erfassten Bestand, Gesamt verfügbar und Zugänge. Auswahl, Reihenfolge und Gruppen wie
+     Menge kürz. MHD – ohne Preise, erfassten Bestand, Gesamt verfügbar und Zugänge. Auswahl, Reihenfolge und Gruppen wie
      angezeigt; die Mengen nimmt der Server aus dem gespeicherten Bestand. */
   async function stockPDF(btn) {
     const res = stockResult(stockQ);
@@ -3742,7 +3745,7 @@
     const preise = !!stockPrices?.allowed, ZH = 32, KH = 46, RAND = 18;
     const sp = [['Art.-Nr.', 80, 'l', (a) => a.code], ['Bezeichnung', 340, 'l', (a) => a.name, false, (a) => a.merkmale]];
     if (preise) sp.push([`Aktueller Preis ${stockWeekLabel('current')}`, 120, 'r', (a) => stockPriceText(a.price)], [`Preis Vorwoche ${stockWeekLabel('previous')}`, 120, 'r', (a) => stockPriceText(a.prevPrice)]);
-    sp.push(['Eingelagerter Bestand', 118, 'r', (a) => kgText(a.kg)], ['Kürz. MHD', 86, 'c', (a) => mhdShort(a.mhd), true], ['Kg kürz. MHD', 124, 'r', (a) => (a.cls === 'mhd-past' ? '\u2620 ' : '') + kgText(a.mhdKg), true],
+    sp.push(['Eingelagerter Bestand', 118, 'r', (a) => kgText(a.kg)], ['Kürz. MHD', 86, 'c', (a) => mhdShort(a.mhd), true], ['Menge kürz. MHD', 124, 'r', (a) => (a.cls === 'mhd-past' ? '\u2620 ' : '') + kgText(a.mhdKg), true],
       ['Erfasster Bestand', 118, 'r', (a) => kgText(a.incomingKg)], ['Nächste ETA', 84, 'c', (a) => (a.nextEta ? mhdShort(a.nextEta.t) : '—')], ['Gesamt verfügbar', 118, 'r', (a) => kgText(a.totalKg)]);
     const breite = RAND * 2 + sp.reduce((s, c) => s + c[1], 0), kopfH = 74, hoehe = kopfH + KH + (list.length + 1) * ZH + RAND;
     const S = hoehe * 3 <= 30000 && breite * hoehe * 9 <= 32e6 ? 3 : 2;
@@ -3791,7 +3794,7 @@
     g.fillStyle = '#f3f1ee'; g.fillRect(RAND, y, breite - 2 * RAND, ZH);
     g.fillStyle = '#333'; g.fillRect(RAND, y, breite - 2 * RAND, 1.5);
     x = RAND; g.fillStyle = '#1b1a18'; g.font = `700 14px ${FONT}`;
-    const summe = { 'Eingelagerter Bestand': 'kg', 'Kg kürz. MHD': 'mhdKg', 'Erfasster Bestand': 'incomingKg', 'Gesamt verfügbar': 'totalKg' };
+    const summe = { 'Eingelagerter Bestand': 'kg', 'Menge kürz. MHD': 'mhdKg', 'Erfasster Bestand': 'incomingKg', 'Gesamt verfügbar': 'totalKg' };
     for (const [t, w, ausr] of sp) {
       if (t === 'Art.-Nr.') text('Gesamtsumme', x, 300, y + ZH / 2, 'l');
       else if (summe[t]) text(kgText(sum(list, summe[t])), x, w, y + ZH / 2, ausr);
@@ -3880,10 +3883,10 @@
     const n = fold(C.stripFrisch(it.name));
     return list.find((x) => fold(C.stripFrisch(x.name)) === n) || list.find((x) => x.price && x.price.status === 'value') || list[0];
   }
-  const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${String(prevWeek.year).slice(2)}` : '');
+  const prevLabel = () => (prevWeek ? `KW ${prevWeek.week}/${prevWeek.year}` : '');   // KW 42/2026 wie überall
   function auxHeadHTML() {
-    return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche<small>${esc(prevLabel())}</small></th>`
-      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`
+    return `<th class="e-prev" title="Preis aus dem Preisverlauf${prevWeek ? ' (KW ' + esc(prevWeek.week) + '/' + esc(prevWeek.year) + ')' : ''}">Vorwoche €/kg<small>${esc(prevLabel())}</small></th>`
+      + `<th class="e-price">Preis €/kg<small>KW ${esc(model && model.meta.week || '')}${model && model.meta.year ? '/' + esc(model.meta.year) : ''}${curOffer !== OSTD ? ' · ' + esc(offerShort(curOffer)) : ''}</small></th>`
       + `<th class="e-stock" title="Verfügbarer Bestand (eingelagert)${stock && stock.date ? ' · Stand ' + esc(dmy(stock.date)) : ''}">Bestand kg<small>${stock && stock.date ? 'Stand ' + esc(mhdShort(stock.date)) : ''}</small></th>`;
   }
   function prevCellHTML(it) {
@@ -3899,7 +3902,7 @@
   function stockCellHTML(it) {
     const a = stockOf(it.code);
     if (!a) return it.code
-      ? `<td class="e-stock none"><span class="nostock" title="Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + esc(dmy(stock.date)) + ')' : ''}" aria-label="Kein verfügbarer Bestand">0</span></td>`
+      ? `<td class="e-stock none"><span class="nostock" title="Kein verfügbarer Bestand${stock && stock.date ? ' (Bestand vom ' + esc(dmy(stock.date)) + ')' : ''}" aria-label="Kein verfügbarer Bestand">0,00</span></td>`
       : '<td class="e-stock none" title="Ohne Artikelnummer kein Bestandsabgleich">—</td>';
     const cls = mhdClass(a.mhd);
     return `<td class="e-stock" title="${esc(`${kgText(a.kg)} verfügbar · kürz. MHD ${mhdShort(a.mhd)}${a.mhdKg != null ? ' (' + kgText(a.mhdKg) + ')' : ''}`)}">${cls ? `<span class="mhd-dot ${cls}" aria-label="MHD ${esc(mhdShort(a.mhd))}"></span>` : ''}${esc(fmtKg.format(a.kg))}</td>`;
@@ -3963,7 +3966,7 @@
       return `<tr data-npcode="${esc(x.a.code)}">
         <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(x.a.name)}</td><td class="np-wg">${esc(x.wg.label)}</td>
         <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
-        <td class="np-prev">${p && p.price.status === 'value' ? esc(fmtNum.format(p.price.value)) : p && p.price.status === 'request' ? 'a. Anfr.' : '—'}</td>
+        <td class="np-prev">${p && p.price.status === 'value' ? esc(F.euroKg(p.price.value)) : p && p.price.status === 'request' ? 'auf Anfrage' : '—'}</td>
         <td class="np-act">${ro ? (inOfferNow ? '<span class="muted">im Angebot ohne Preis</span>' : '') : inOfferNow
           ? '<button type="button" class="btn sm" data-np="goto">Preis eintragen</button>'
           : `<button type="button" class="btn sm" data-np="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
@@ -3976,7 +3979,7 @@
         <span class="np-sub">eingelagert, in „${esc(offerShort(curOffer))}“ ohne Preis · ${esc(kgText(all.reduce((t, x) => t + x.a.kg, 0)))} · Bestand vom ${stock.date ? esc(dmy(stock.date)) : '?'}</span></span>
         ${icon('chev', 'np-chev')}
       </button>
-      ${npOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-wg">Warengruppe</th><th class="np-kg">Kg verfüg.</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev" title="Preis ${esc(prevLabel())}">Vorwoche</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody>
+      ${npOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-wg">Warengruppe</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev" title="Preis ${esc(prevLabel())}">Vorwoche</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody>
           ${toks.length ? `<tfoot><tr><td colspan="7" class="muted">${plural(list.length, 'Treffer', 'Treffer')} zur Suche · ${esc(kgText(kg))}</td></tr></tfoot>` : ''}</table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Alle Artikel mit eingelagertem Bestand haben in diesem Angebot einen Preis.'}</p>`) : ''}
     </div>`;
@@ -4218,7 +4221,7 @@
       titel: 'Artikel für die Werbung',
       subHTML: `Werbung in <strong>${esc(offerName(oid))}</strong> · höchstens ${WERB_MAX} Artikel · Reihenfolge und Hinweise danach im Fenster „Werbung schalten“`,
       drin: () => new Set(), angebotText: `nur in „${offerShort(oid)}“`,
-      preis: { titel: 'Preis hier', fest: (a) => (!a.inOffer ? null : !a.hier ? '' : a.hier.status === 'value' ? fmtNum.format(a.hier.value) + ' €' : a.hier.status === 'request' ? 'a. Anfr.' : '–'), vorschlag, platzhalter: () => (std ? 'ohne Preis' : 'a. Anfr.') },
+      preis: { titel: 'Preis hier', fest: (a) => (!a.inOffer ? null : !a.hier ? '' : a.hier.status === 'value' ? F.euroKg(a.hier.value) : a.hier.status === 'request' ? 'auf Anfrage' : '—'), vorschlag, platzhalter: () => (std ? 'ohne Preis' : 'a. Anfr.') },
       fussText: 'Artikel, die noch nicht im Angebot stehen, werden mit dem Preis aufgenommen.',
       max: WERB_MAX, maxText: `Höchstens ${WERB_MAX} Artikel in der Werbung – bitte Auswahl verkleinern.`,
       okVerb: 'übernehmen', okLeer: 'Übernehmen', leerText: 'Artikel markieren, die beworben werden sollen.',
@@ -4361,7 +4364,7 @@
         <td class="np-code">${esc(x.a.code)}</td><td class="np-name">${esc(it ? it.name : x.a.name)}${!it ? ' <span class="muted">(nicht in diesem Angebot)</span>' : ''}</td>
         <td class="np-kg">${esc(kgText(x.a.kg))}</td><td class="np-mhd"><span class="${x.cls}">${esc(mhdShort(x.a.mhd))}</span></td>
         <td class="np-prev">${it ? (cur ? esc(priceShort(cur)) : '<span class="muted">ohne Preis</span>') : '—'}</td>
-        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(fmtNum.format(sp))}</strong>` : '—'}</td>
+        <td class="np-prev">${sp != null ? `<strong class="sp-val">${esc(F.euroKg(sp))}</strong>` : '—'}</td>
         <td class="np-act">${ro ? '' : it
           ? `<button type="button" class="btn sm${it.sale ? '' : ' primary'}" data-mp="sale">${icon('tag', 'sm')}${it.sale ? 'Sonderpreis ändern' : 'Sonderpreis'}</button>`
           : `<button type="button" class="btn sm" data-mp="add">${icon('plus', 'sm')}Ins Angebot</button>`}</td>
@@ -4374,7 +4377,7 @@
         <span class="np-sub">MHD überschritten oder in höchstens 14 Tagen · ${plural(withSale, 'Artikel', 'Artikel')} mit Sonderpreis in „${esc(offerShort(curOffer))}“ · ohne Bestand automatisch ausgeblendet</span></span>
         ${icon('chev', 'np-chev')}
       </button>
-      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Kg verfüg.</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ${mhdOpen ? (list.length ? `<div class="np-body"><table class="etab nptab"><thead><tr><th class="np-code">Art.-Nr.</th><th class="np-name">Bezeichnung</th><th class="np-kg">Verfügbar</th><th class="np-mhd">Kürz. MHD</th><th class="np-prev">Preis</th><th class="np-prev">Sonderpreis</th><th class="np-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<p class="np-empty">${all.length ? 'Kein Treffer zur Suche.' : 'Keine Artikel mit kurzem oder überschrittenem MHD im Bestand.'}</p>`) : ''}
     </div>`;
     for (const s of host.querySelectorAll('.np-sub')) s.title = s.textContent;   // eingeklappt gekürzt: voller Text im Tooltip
@@ -4405,7 +4408,7 @@
       <div class="dlg-body">
         ${!info.mailReady ? '<div class="err-box">Der E-Mail-Versand ist noch nicht eingerichtet (Verwaltung → E-Mail).</div>' : ''}
         ${pend ? `<div class="notice k-pend">${icon('info', 'sm')}<span>Es gibt ${plural(pend, 'unveröffentlichte Änderung', 'unveröffentlichte Änderungen')} im Entwurf. Versendet wird der <strong>veröffentlichte</strong> Stand – neue Sonderpreise bitte zuerst veröffentlichen.</span></div>` : ''}
-        ${items.length ? `<h3 class="d-h"><span>${plural(items.length, 'Sonderposten', 'Sonderposten')}</span></h3><ul class="plist">${items.map((x) => `<li><span>${esc(x.code || '—')} · ${esc(x.name)}</span><span><strong>${esc(fmtNum.format(x.price))} €/kg</strong>${x.regular != null ? ` <s class="muted">${esc(fmtNum.format(x.regular))}</s>` : ''}</span></li>`).join('')}</ul>`
+        ${items.length ? `<h3 class="d-h"><span>${plural(items.length, 'Sonderposten', 'Sonderposten')}</span></h3><ul class="plist">${items.map((x) => `<li><span>${esc(x.code || '—')} · ${esc(x.name)}</span><span><strong>${esc(fmtNum.format(x.price))} €/kg</strong>${x.regular != null ? ` <s class="muted">${esc(F.euroKg(x.regular))}</s>` : ''}</span></li>`).join('')}</ul>`
           : `<div class="err-box">Im veröffentlichten Angebot „${esc(info.offer.name)}“ ist kein Sonderposten mit Bestand enthalten. Sonderpreise festlegen (${icon('tag', 'sm')}) und veröffentlichen.</div>`}
         <h3 class="d-h"><span>Empfänger</span></h3>
         ${ok.length ? `<div class="k-rlist"><label class="check k-rall"><input type="checkbox" id="rp-all"> Alle auswählen</label>
@@ -4570,7 +4573,7 @@
     const list = by.get(mKey(e.code));
     if (!list) return '<span class="muted" title="Nicht im aktuellen Angebot">—</span>';
     if (list.length > 1) return `<span class="muted" title="Artikelnummer ${list.length}× im Angebot – wird nicht automatisch abgeglichen">${list.length}× im Angebot</span>`;
-    if (differs(e, list[0])) return (ro || roMaster) ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '–')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
+    if (differs(e, list[0])) return (ro || roMaster) ? '<span class="m-diff">abweichend</span>' : `<button type="button" class="m-diff" data-ma="apply1" title="Angebot: ${esc(list[0].name)} · ${esc(list[0].category)} · ${esc(list[0].origin || '—')} · ${esc(C.CONDITION_LABELS[list[0].condition])} – klicken, um die Stammdaten zu übernehmen">abweichend</button>`;
     return `<span class="m-ok" title="Angebot entspricht den Stammdaten">${icon('check', 'sm')}</span>`;
   }
   async function renderMasterView() {

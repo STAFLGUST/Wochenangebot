@@ -15,7 +15,7 @@
 
   /* ---------- Formate (Werte in Minuten) ---------- */
   const NF = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
-  const std = (m) => { if (m === null || m === undefined) return '–'; const a = Math.abs(m); return `${m < 0 ? '−' : ''}${NF.format(Math.floor(a / 60))}:${String(a % 60).padStart(2, '0')}`; };
+  const std = (m) => { if (m === null || m === undefined) return '—'; const a = Math.abs(m); return `${m < 0 ? '−' : ''}${NF.format(Math.floor(a / 60))}:${String(a % 60).padStart(2, '0')}`; };
   const stdVz = (m) => (m > 0 ? '+' : '') + std(m);
   const stdDez = (m) => F().zahl(m / 60, 2);   // CSV: Stunden als Dezimalzahl
   const tag = (d) => (d ? `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}` : '');
@@ -75,7 +75,7 @@
     const st = S.g.stand;
     if (!st.bis) return 'Noch kein Zeitbericht importiert.';
     const imp = (st.importe || [])[0];
-    return `Zeitbericht bis <b>${esc(tag(st.bis))}</b>${imp ? `<br>importiert am ${esc(tag(imp.t.slice(0, 10)))}${imp.wer ? ` von ${esc(imp.wer)}` : ''}` : ''}`;
+    return `Zeitbericht bis <b>${esc(tag(st.bis))}</b>${imp ? `<br>importiert am ${esc(window.STAFL_FORMAT.datum(imp.t))}${imp.wer ? ` von ${esc(imp.wer)}` : ''}` : ''}`;
   }
   function kachel(name, wert, sub, extra = '') { return `<div class="ctl-kpi ctl-glas${extra}"><span>${name}</span><b title="${esc(wert)}">${esc(wert)}</b><small>${sub}</small></div>`; }
   function kennzahlen() {
@@ -97,7 +97,7 @@
         <span class="ctl-az-spur" aria-hidden="true"><i class="${m.saldoOk < 0 ? 'neg' : 'pos'}" style="--w:${b}%"></i></span>
         <span class="zahl" data-label="Saldo bereinigt">${esc(stdVz(m.saldoOk))}</span>
         <span class="zahl leise" data-label="Soll / Ist">${esc(std(m.sollOk))} / ${esc(std(m.istOk))}</span>
-        <span class="zahl leise" data-label="Stempelfehler">${m.fehlerTage ? `<span class="ctl-az-marke">${esc(anzahl(m.fehlerTage, 'Fehler', 'Fehler'))}</span>` : '–'}</span></li>`;
+        <span class="zahl leise" data-label="Stempelfehler">${m.fehlerTage ? `<span class="ctl-az-marke">${esc(anzahl(m.fehlerTage, 'Fehler', 'Fehler'))}</span>` : '—'}</span></li>`;
     }).join('');
     return `<section class="ctl-panel ctl-glas ctl-az-panel" id="ctl-az-verlauf"><div class="ctl-panelkopf"><div><h2>Je Monat</h2>
       <p class="ctl-hilfe">Saldo bereinigt (Ist + Abwesenheit − Soll an Tagen ohne Stempelfehler), daneben Soll und Ist in Stunden.</p></div></div>
@@ -121,7 +121,7 @@
       <span class="zahl" data-label="Abwesenheit">${esc(std(z.abwOk))}</span>
       <span class="zahl saldo${z.saldoOk < 0 ? ' neg' : ''}" data-label="Saldo bereinigt"><b>${esc(stdVz(z.saldoOk))}</b></span>
       <span class="zahl leise" data-label="laut Zeiterfassung">${esc(stdVz(z.saldo))}</span>
-      <span class="zahl" data-label="Stempelfehler">${z.fehlerTage ? `${esc(NF.format(z.fehlerTage))}${luecke(z) ? ' <span class="ctl-az-marke stark" title="Mindestens ein Drittel der Arbeitstage mit Stempelfehlern – Zeiterfassung lückenhaft">lückenhaft</span>' : ''}` : '–'}</span>
+      <span class="zahl" data-label="Stempelfehler">${z.fehlerTage ? `${esc(NF.format(z.fehlerTage))}${luecke(z) ? ' <span class="ctl-az-marke stark" title="Mindestens ein Drittel der Arbeitstage mit Stempelfehlern – Zeiterfassung lückenhaft">lückenhaft</span>' : ''}` : '—'}</span>
       <span class="pfeil">${F().ICON.weiter}</span></button></li>`).join('');
     return `${kopf}<ol class="ctl-az-liste" id="ctl-az-zeilen">${reihen}</ol><p class="ctl-hilfe ctl-az-anzahl">${esc(anzahl(alle.length, 'Mitarbeiter', 'Mitarbeiter'))}</p>`;
   }
@@ -136,7 +136,7 @@
       <span class="zahl" data-label="Ist">${esc(std(z.istOk))}</span>
       <span class="zahl saldo${z.saldoOk < 0 ? ' neg' : ''}" data-label="Saldo bereinigt"><b>${esc(stdVz(z.saldoOk))}</b></span>
       <span class="zahl leise" data-label="Ø je Mitarbeiter">${esc(stdVz(Math.round(z.saldoOk / Math.max(1, z.personen))))}</span>
-      <span class="zahl" data-label="Stempelfehler">${z.fehlerTage ? esc(NF.format(z.fehlerTage)) : '–'}</span></div></li>`).join('');
+      <span class="zahl" data-label="Stempelfehler">${z.fehlerTage ? esc(NF.format(z.fehlerTage)) : '—'}</span></div></li>`).join('');
     return `${kopf}<ol class="ctl-az-liste">${reihen}</ol><p class="ctl-hilfe ctl-az-anzahl">Abteilung = jüngste Angabe des Mitarbeiters im Zeitbericht.</p>`;
   }
   const stempelText = (st) => (st && st.length ? st.map(([k, g]) => `${k || '?'}–${g || '?'}`).join(', ') : 'kein Stempel');
@@ -202,11 +202,11 @@
     const d = r.data, s = d.summe, p = d.person;
     $('#ctl-az-d-titel', dlg).textContent = p.name;
     const zeilen = d.tage.map((t) => `<tr class="${t.fehler.length ? 'fehler' : t.laufend ? 'laufend' : ''}"><td>${esc(wt(t.d))} ${esc(tag(t.d))}</td><td>${esc(stempelText(t.stempel))}</td>
-      <td class="zahl">${esc(std(t.soll))}</td><td class="zahl">${esc(std(t.ist))}</td><td class="zahl">${t.abw ? esc(std(t.abw)) : '–'}</td><td class="zahl">${esc(stdVz(t.saldo))}</td>
+      <td class="zahl">${esc(std(t.soll))}</td><td class="zahl">${esc(std(t.ist))}</td><td class="zahl">${t.abw ? esc(std(t.abw)) : '—'}</td><td class="zahl">${esc(stdVz(t.saldo))}</td>
       <td>${t.laufend ? '<span class="ctl-az-marke leise">noch offen</span>' : fehlerMarken(t.fehler)}</td></tr>`).join('');
     $('.dlg-body', dlg).innerHTML = `<p class="ctl-b-d-sub">${esc([p.nr ? 'Nr. ' + p.nr : 'ohne Nummer', p.abt || 'ohne Abteilung', `${monat(d.zeitraum.von)} – ${monat(d.zeitraum.bis)}`].join(' · '))}</p>
-      <div class="ctl-kpis ctl-az-kpis klein">${kachel('Soll', std(s.sollOk), 'Tage ohne Fehler')}${kachel('Ist', std(s.istOk), s.abwOk ? `dazu ${esc(std(s.abwOk))} Abwesenheit` : 'gearbeitet')}
-      ${kachel('Saldo bereinigt', stdVz(s.saldoOk), `laut Zeiterfassung ${esc(stdVz(s.saldo))}`, s.saldoOk < 0 ? ' minus' : '')}${kachel('Stempelfehler', NF.format(s.fehlerTage), s.fehlerTage ? `dort ${esc(stdVz(s.saldoFehler))} Saldo` : 'keine', s.fehlerTage ? ' warn' : '')}</div>
+      <div class="ctl-kpis ctl-az-kpis klein">${kachel('Soll', std(s.sollOk) + ' Std.', 'Tage ohne Fehler')}${kachel('Ist', std(s.istOk) + ' Std.', s.abwOk ? `dazu ${esc(std(s.abwOk))} Std. Abwesenheit` : 'gearbeitet')}
+      ${kachel('Saldo bereinigt', stdVz(s.saldoOk) + ' Std.', `laut Zeiterfassung ${esc(stdVz(s.saldo))} Std.`, s.saldoOk < 0 ? ' minus' : '')}${kachel('Stempelfehler', NF.format(s.fehlerTage), s.fehlerTage ? `dort ${esc(stdVz(s.saldoFehler))} Std. Saldo` : 'keine', s.fehlerTage ? ' warn' : '')}</div>
       <div class="ctl-tabelle-wrap"><table class="ctl-tabelle ctl-az-tage" id="ctl-az-tage"><thead><tr><th>Tag</th><th>Stempel</th><th class="zahl">Soll</th><th class="zahl">Ist</th><th class="zahl">Abwesenheit</th><th class="zahl">Saldo</th><th>Hinweis</th></tr></thead>
       <tbody>${zeilen || '<tr><td colspan="7">Keine Tage im Zeitraum.</td></tr>'}</tbody></table></div>
       <div class="dlg-foot"><button type="button" class="btn ctl-b-csv" data-csv><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button></div>`;

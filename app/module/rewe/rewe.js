@@ -42,10 +42,10 @@
   function zeigeAnmeldung() { $$('dialog[open]').forEach((d) => d.close()); $('#rw-login').hidden = false; $('#rw-app').hidden = true; $('#rw-user').hidden = true; }
   const initialen = (name) => { const t = String(name || '').trim().split(/[\s.\-_]+/).filter(Boolean); return (t.length > 1 ? t[0][0] + t[1][0] : (t[0] || '?').slice(0, 2)).toLocaleUpperCase('de-DE'); };
   const obj = (m) => (m && typeof m === 'object' && !Array.isArray(m) ? m : {});   // PHP liefert leere Zuordnungen als []
-  const zahl = (n) => Number(n).toLocaleString('de-DE');
+  const zahl = (n) => window.STAFL_FORMAT.zahl(n, 0, 2);   // echtes Minus wie überall (format.js)
   const maerkte = (n) => `${zahl(n)} ${Number(n) === 1 ? 'Markt' : 'Märkte'}`;   // Einzahl/Mehrzahl („1 Markt“, „3 Märkte“)
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
-  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
+  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
 
   /* ---------- Kalenderwochen (ISO, „JJJJ-WW“) ---------- */
@@ -142,7 +142,7 @@
   function renderWoche() {
     const w = S.woche; if (!w) return;
     const eigen = !w.wer;
-    $('#rw-w-titel').textContent = `${eigen ? 'Meine Woche' : w.werName} · ${kwKurz(w.kw)}`;
+    $('#rw-w-titel').textContent = `${eigen ? 'Meine Woche' : w.werName} · ${kwText(w.kw)}`;   // KW 46/2026 wie überall
     const alleM = w.gruppen.flatMap((g) => g.maerkte);
     const ziel = w.kw === S.d.abfrage ? ' · aktuelle Abfragewoche' : '';
     $('#rw-w-sub').textContent = `Lieferwoche ${zeitraum(w.kw)}${ziel} · ${maerkte(alleM.length)}`;
@@ -157,7 +157,7 @@
       <div class="rw-kpi"><span>Erledigt</span><b>${fertig} <small>von ${alleM.length}</small></b><div class="rw-fortschritt" aria-hidden="true"><i style="width:${pct}%"></i></div></div>
       <div class="rw-kpi"><span>Bestellt</span><b>${best.length} <small>${best.length === 1 ? 'Markt' : 'Märkte'}</small></b><small>${esc(mengenText(mengen) || 'noch nichts')}</small></div>
       <div class="rw-kpi"><span>Daueraufträge zu bestätigen</span><b>${dauerOffen}</b><small>fällig nach Rhythmus</small></div>
-      <div class="rw-kpi${wv.length ? ' warn' : ''}"><span>Wiedervorlagen fällig</span><b>${wv.length}</b><small>${esc(wv.slice(0, 3).map((m) => m.ort).join(' · ') || '–')}</small></div>`;
+      <div class="rw-kpi${wv.length ? ' warn' : ''}"><span>Wiedervorlagen fällig</span><b>${wv.length}</b><small>${esc(wv.slice(0, 3).map((m) => m.ort).join(' · ') || '—')}</small></div>`;
     bestelltHtml(w, best, mengen);
     $$('#rw-w-filter button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === S.filter)));
     const q = S.suche.trim().toLocaleLowerCase('de-DE');
@@ -339,9 +339,9 @@
       ${z.map((m) => `<tr class="rw-klick" data-gehe="markt/${esc(m.id)}" tabindex="0">
         <td data-label="Markt" class="rw-voll"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc([m.strasse, m.name].filter(Boolean).join(' · '))}</span></td>
         <td data-label="Kd.-Nr.">${esc(m.kdNr)}${m.kdNr && !m.winab ? ' <span class="rw-chip akzent" title="nicht im WinAB-Kundenstamm">?</span>' : ''}</td>
-        <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuständig">${esc(m.zustaendigName || '–')}</td>
+        <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuständig">${esc(m.zustaendigName || '—')}</td>
         <td data-label="Kaufbereitschaft">${kaufChip(m.kauf)}</td><td data-label="Dauerauftrag" class="rw-sub">${esc((m.dauerText || '').replace('Dauerauftrag ', ''))}</td>
-        <td data-label="Bestellungen ${esc(jahr)}" class="rw-zahl">${m.anzahlJahr || ''}</td><td data-label="Zuletzt">${esc(m.letzte ? kwText(m.letzte) : '–')}</td></tr>`).join('')
+        <td data-label="Bestellungen ${esc(jahr)}" class="rw-zahl">${m.anzahlJahr || ''}</td><td data-label="Zuletzt">${esc(m.letzte ? kwText(m.letzte) : '—')}</td></tr>`).join('')
         || '<tr><td colspan="8" class="rw-leerzeile">Keine Märkte für diesen Filter.</td></tr>'}</tbody>`;
   }
   $('#rw-m-suche').addEventListener('input', (ev) => { S.mSuche = ev.target.value; renderMaerkte(); });
@@ -403,7 +403,7 @@
               <div><span>Bestellungen ${esc(jahr)}</span><b>${obj(z[jahr]).lieferungen || 0}</b></div>
               <div><span>Bestellungen ${esc(vorjahr)}</span><b>${obj(z[vorjahr]).lieferungen || 0}</b></div>
               <div><span>Stück ${esc(jahr)}</span><b>${zahl(summe(obj(z[jahr]).mengen))}</b></div>
-              <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '–')}</b></div>
+              <div><span>Letzte Bestellung</span><b>${esc(z.letzte ? kwKurz(z.letzte) + '/' + z.letzte.slice(2, 4) : '—')}</b></div>
             </div>
             <div class="rw-heat">${heat}</div>
             <div class="rw-legende"><span><i class="rw-z b"></i>bestellt</span><span><i class="rw-z"></i>kein Bedarf</span><span><i class="rw-z n"></i>nicht erreicht</span><span><i class="rw-z p"></i>Pause</span><span><i class="rw-z o"></i>keine Angabe</span></div>
@@ -421,8 +421,8 @@
         <aside>
           ${offeneWv.length ? `<section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Wiedervorlagen</h2></div>${offeneWv.map((n) => `<div class="rw-wv"><p><b>${esc(datum(n.wv))}</b> · ${esc(n.text)}</p>${A.darfPflegen ? `<button class="btn sm" type="button" data-wv-erledigt="${esc(n.id)}">Erledigt</button>` : ''}</div>`).join('')}</section>` : ''}
           <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Zuständig und Lieferweg</h2></div>
-            <dl class="rw-kv"><dt>Zuständig</dt><dd>${zuHist || '–'}</dd><dt>Lieferweg</dt><dd>${lwHist || '–'}</dd>
-              <dt>Abfragetag</dt><dd>${esc(S.d.tage[m.abfragetag] || '–')}</dd>
+            <dl class="rw-kv"><dt>Zuständig</dt><dd>${zuHist || '—'}</dd><dt>Lieferweg</dt><dd>${lwHist || '—'}</dd>
+              <dt>Abfragetag</dt><dd>${esc(S.d.tage[m.abfragetag] || '—')}</dd>
               <dt>Dauerauftrag</dt><dd>${m.dauer.rhythmus ? esc(`${S.d.rhythmen[m.dauer.rhythmus]}: ${mengenText(m.dauer.mengen)} ab ${kwText(m.dauer.ab)}${m.dauer.pauseBis ? ', Pause bis ' + kwText(m.dauer.pauseBis) : ''}${naechste}`) : 'keiner'}</dd>
               ${m.telefon ? `<dt>Telefon</dt><dd>${esc(m.telefon)}</dd>` : ''}</dl></section>
           ${m.hinweis ? `<section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Hinweis</h2></div><p class="rw-notiz" style="margin:0">${esc(m.hinweis)}</p></section>` : ''}
@@ -532,8 +532,8 @@
     $('#rw-z-tabelle').innerHTML = `<thead><tr><th><input type="checkbox" id="rw-z-alle" aria-label="alle gezeigten auswählen"${alleGewaehlt ? ' checked' : ''}></th><th>Markt</th><th>Kd.-Nr.</th><th>Lieferweg</th><th>Zuständig</th><th>Kaufbereitschaft</th><th>Zuletzt</th></tr></thead><tbody>
       ${z.map((m) => `<tr${S.zAuswahl.has(m.id) ? ' style="background:var(--rw-accent-soft,rgba(140,29,44,.08))"' : ''}><td><input type="checkbox" data-wahl="${esc(m.id)}" aria-label="${esc(m.ort)} auswählen"${S.zAuswahl.has(m.id) ? ' checked' : ''}></td>
         <td data-label="Markt"><span class="rw-name">${esc(m.ort)}</span><span class="rw-sub">${esc(m.strasse)}</span></td><td data-label="Kd.-Nr.">${esc(m.kdNr)}</td>
-        <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuständig">${esc(m.zustaendigName || '–')}</td><td data-label="Kaufbereitschaft">${kaufChip(m.kauf)}</td>
-        <td data-label="Zuletzt">${esc(m.letzte ? kwText(m.letzte) : '–')}</td></tr>`).join('') || '<tr><td colspan="7" class="rw-leerzeile">Keine Märkte für diesen Filter.</td></tr>'}</tbody>`;
+        <td data-label="Lieferweg">${esc(m.lieferwegName)}</td><td data-label="Zuständig">${esc(m.zustaendigName || '—')}</td><td data-label="Kaufbereitschaft">${kaufChip(m.kauf)}</td>
+        <td data-label="Zuletzt">${esc(m.letzte ? kwText(m.letzte) : '—')}</td></tr>`).join('') || '<tr><td colspan="7" class="rw-leerzeile">Keine Märkte für diesen Filter.</td></tr>'}</tbody>`;
     const n = S.zAuswahl.size;
     $('#rw-z-bulk').hidden = !n;
     $('#rw-z-anzahl').textContent = `${n} ${n === 1 ? 'Markt' : 'Märkte'} ausgewählt`;
@@ -608,7 +608,7 @@
       <ol class="rw-schritte rw-glas">${schritte.map(([c, n, t, s]) => `<li><span class="nr ${c}">${c === 'ok' ? '✓' : n}</span><div><b>${esc(t)}</b><small>${esc(s)}</small></div></li>`).join('')}</ol>
       <div class="rw-kpis">
         <div class="rw-kpi"><span>Einzelaufträge</span><b>${a.maerkte}</b><small>ein Auftrag je Markt</small></div>
-        <div class="rw-kpi"><span>Stück gesamt</span><b>${zahl(stueck)}</b><small>${esc(artSum || '–')}</small></div>
+        <div class="rw-kpi"><span>Stück gesamt</span><b>${zahl(stueck)}</b><small>${esc(artSum || '—')}</small></div>
         <div class="rw-kpi${offen ? ' warn' : ''}"><span>Ohne Antwort</span><b>${offen}</b><small>${a.dauerOffen.length} Daueraufträge nicht bestätigt</small></div>
         <div class="rw-kpi${a.nachtraege ? ' warn' : ''}"><span>Nachträge</span><b>${a.nachtraege}</b><small>nach dem Export geändert</small></div>
       </div>

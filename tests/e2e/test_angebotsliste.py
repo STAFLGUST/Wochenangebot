@@ -22,7 +22,7 @@ with sync_playwright() as pw:
     check('sections as headings', pg.locator('.al-st').count() == 4 and 'Eigene Zerlegung' in pg.locator('.al-st').first.inner_text(), pg.locator('.al-st').count())
     check('one block per group, every article exactly once', pg.locator('.al-grp').count() >= 30 and pg.locator('.al tr.row').count() == 276
           and len(set(pg.eval_on_selector_all('.al tr.row', 'rs => rs.map(r => r.dataset.id)'))) == 276, (pg.locator('.al-grp').count(), pg.locator('.al tr.row').count()))
-    check('group header with € / kg over the price column and a rule', '€ / kg' in pg.locator('.al-h .al-eh').first.inner_text()
+    check('group header with €/kg over the price column and a rule', '€/kg' in pg.locator('.al-h .al-eh').first.inner_text()
           and pg.evaluate("parseFloat(getComputedStyle(document.querySelector('.al-h th')).borderBottomWidth)") >= 1)
     check('brand in quotes highlighted', pg.locator('.al-h .al-brand').first.inner_text() == '„Fleischmeister“')
     row = pg.locator('.al tr.row').first
@@ -50,7 +50,7 @@ with sync_playwright() as pw:
     check('article numbers in black', pg.evaluate("getComputedStyle(document.querySelector('.al td.c-code')).color") in ('rgb(11, 11, 11)', 'rgb(0, 0, 0)'))
     check('offer view uses the full width (no side panel)', pg.is_hidden('.merk') and pg.locator('.al').bounding_box()['width'] > 1300)
     note = pg.inner_text('.al .al-note')
-    check('note under the offer: price terms, minimum weight, freight, contact', 'netto' in note and '300 kg' in note and '30 €' in note and '35 €' in note and 'Telefon' in note, note)
+    check('note under the offer: price terms, minimum weight, freight, contact', 'netto' in note and '300 kg' in note and '30,00 €' in note and '35,00 €' in note and 'Telefon' in note, note)
     check('logo in the list header', pg.locator('.al-head img.al-logo').count() == 1 and pg.evaluate("document.querySelector('.al-logo').naturalWidth") > 0)
     pg.screenshot(path=SH + '/angebotsliste.png')
     pg.screenshot(path=SH + '/angebotsliste-ganz.png', full_page=True)

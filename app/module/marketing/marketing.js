@@ -71,7 +71,7 @@
   const de = (s) => s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : '';
   const deKurz = (s) => s ? `${WT[(ausIso(s).getDay() + 6) % 7]} ${s.slice(8, 10)}.${s.slice(5, 7)}.` : '';
   const terminText = (e) => e.veroeffentlichung ? deKurz(datumVon(e)) + (zeitVon(e) ? ' ' + zeitVon(e) : '') : 'ohne Termin';
-  const deZeit = (s) => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
+  const deZeit = (s) => { const d = new Date(s); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const tageBis = (s) => Math.round((ausIso(s) - ausIso(heute())) / 86400000);
 
   /* ---------- Nachschlagen ---------- */

@@ -47,8 +47,8 @@
 
   /* ---------- Formate und Hilfen ---------- */
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
-  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
-  const zahl = (n) => Number(n).toLocaleString('de-DE');
+  const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
+  const zahl = (n) => window.STAFL_FORMAT.zahl(n, 0, 2);   // echtes Minus wie überall (format.js)
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
   const natCmp = (a, b) => String(a).localeCompare(String(b), 'de', { numeric: true, sensitivity: 'base' });
   const person = (k) => S.d.personen.find((p) => p.id === k) || null;
@@ -155,7 +155,7 @@
     if (!v) return '<span class="qm-null">—</span>';
     const k = v.kuerzel || {};
     if (!k.erstellt && !k.geprueft && !k.freigegeben && !v.erstellt && !v.geprueft && !v.freigegeben) return '<span class="qm-null">—</span>';
-    const teil = (kz, w, was) => (kz ? wer(kz) : w && w.von ? `<abbr title="${esc(was + ' von ' + w.von + ', ' + zeitpunkt(w.t))}">${esc(initialen(w.von))}</abbr>` : '–');
+    const teil = (kz, w, was) => (kz ? wer(kz) : w && w.von ? `<abbr title="${esc(was + ' von ' + w.von + ', ' + zeitpunkt(w.t))}">${esc(initialen(w.von))}</abbr>` : '—');
     return `<span class="qm-wer" title="erstellt · geprüft · freigegeben">${teil(k.erstellt, v.erstellt, 'erstellt')}${teil(k.geprueft, v.geprueft, 'geprüft')}${teil(k.freigegeben, v.freigegeben, 'freigegeben')}</span>`;
   }
 
@@ -211,8 +211,8 @@
     }
     for (const x of gelenkt) {
       const v = offene(x); if (!v) continue;
-      if (darf('freigeben') && v.status === 'pruefung' && !eigen(v)) auf.push({ rang: 2, html: aufgabeDok(x, 'blau', 'lupe', `Prüfung · Entwurf von ${v.erstellt ? v.erstellt.von : '–'}: „${v.aenderungen}“`, 'Prüfen') });
-      else if (darf('freigeben') && v.status === 'geprueft') auf.push({ rang: 2, html: aufgabeDok(x, 'gruen', 'schild', `Freigabe offen · geprüft von ${v.geprueft ? v.geprueft.von : '–'}`, 'Freigeben') });
+      if (darf('freigeben') && v.status === 'pruefung' && !eigen(v)) auf.push({ rang: 2, html: aufgabeDok(x, 'blau', 'lupe', `Prüfung · Entwurf von ${v.erstellt ? v.erstellt.von : '—'}: „${v.aenderungen}“`, 'Prüfen') });
+      else if (darf('freigeben') && v.status === 'geprueft') auf.push({ rang: 2, html: aufgabeDok(x, 'gruen', 'schild', `Freigabe offen · geprüft von ${v.geprueft ? v.geprueft.von : '—'}`, 'Freigeben') });
       else if (eigen(v) && v.status === 'entwurf') auf.push({ rang: 3, html: aufgabeDok(x, 'gelb', 'stift', `Ihr Entwurf${(v.verlauf || []).some((l) => /zurückgegeben/i.test(l.was)) ? ' · zurückgegeben' : ''}: „${v.aenderungen}“`, 'Überarbeiten') });
     }
     if (darf('freigeben')) for (const x of ueber.filter((y) => !offene(y) && (meineKuerzel().includes(y.zustaendig)))) auf.push({ rang: 4, html: aufgabeDok(x, 'gelb', 'dokument', `Überprüfung fällig${x.ueberpruefung.faelligAb ? ' seit ' + datum(x.ueberpruefung.faelligAb) : ''}`, 'Überprüfen') });
@@ -328,7 +328,7 @@
   function dateiListe(x, v, leer) {
     const alle = (v ? v.dateien : x.dateien) || [], da = aktiv(alle), weg = alle.filter((f) => f.entfernt), offen = ablageOffen(x, v);
     let h = da.length ? `<ul class="qm-dateien">${da.map((f) => `<li class="qm-datei"><button class="qm-datei-name" type="button" data-datei="${esc(f.id)}" title="${esc(f.name)} herunterladen">${icon('dokument')}<span>${esc(f.name)}</span></button>`
-      + `<span class="qm-sub">${esc(groesseText(f.groesse))}${f.hochgeladen ? ` · ${esc(f.hochgeladen.von)} · ${esc(datum(String(f.hochgeladen.t).slice(0, 10)))}` : ''}${f.nachgetragen ? ' · nachgetragen' : ''}${dateiHerkunft(f, v)}</span>`
+      + `<span class="qm-sub">${esc(groesseText(f.groesse))}${f.hochgeladen ? ` · ${esc(f.hochgeladen.von)} · ${esc(window.STAFL_FORMAT.datum(f.hochgeladen.t))}` : ''}${f.nachgetragen ? ' · nachgetragen' : ''}${dateiHerkunft(f, v)}</span>`
       + `${offen ? `<button class="qm-datei-weg" type="button" data-datei-weg="${esc(f.id)}" aria-label="${esc(f.name)} entfernen" title="Entfernen">×</button>` : ''}</li>`).join('')}</ul>`
       : (leer ? `<p class="qm-hilfe">${esc(leer)}</p>` : '');
     if (weg.length) h += `<details class="qm-details qm-entfernt"><summary>${weg.length === 1 ? '1 Datei entfernt' : zahl(weg.length) + ' Dateien entfernt'}</summary><ul class="qm-verlauf">${weg.map((f) => `<li><s>${esc(f.name)}</s> · ${esc(zeitpunkt(f.entfernt.t))} · ${esc(f.entfernt.von)}: ${esc(f.entfernt.grund)}</li>`).join('')}</ul></details>`;
@@ -740,8 +740,8 @@
     if (o) {
       const kannEdit = o.status === 'entwurf' && darf('bearbeiten');
       const schritt = (klasse, titel, text) => `<li class="${klasse}"><b>${klasse === 'fertig' ? icon('haken') : ''}${esc(titel)}</b><span>${esc(text)}</span></li>`;
-      const entwurfTxt = o.erstellt ? `${o.erstellt.von} · ${datum(o.erstellt.t.slice(0, 10))}` : '';
-      const pruefTxt = o.geprueft ? `${o.geprueft.von} · ${datum(o.geprueft.t.slice(0, 10))}` : (darf('freigeben') && !eigen(o) ? 'durch Sie möglich' : 'nicht durch den Ersteller');
+      const entwurfTxt = o.erstellt ? `${o.erstellt.von} · ${window.STAFL_FORMAT.datum(o.erstellt.t)}` : '';
+      const pruefTxt = o.geprueft ? `${o.geprueft.von} · ${window.STAFL_FORMAT.datum(o.geprueft.t)}` : (darf('freigeben') && !eigen(o) ? 'durch Sie möglich' : 'nicht durch den Ersteller');
       karte = `<section class="qm-karte"><h3>Überarbeitung zu Version ${naechsteVersion(x)}</h3>
         <ol class="qm-schritte">${schritt(o.status === 'entwurf' ? 'jetzt' : 'fertig', 'Entwurf', entwurfTxt)}${schritt(o.status === 'pruefung' ? 'jetzt' : o.status === 'geprueft' ? 'fertig' : 'offen', 'Prüfung', pruefTxt)}${schritt(o.status === 'geprueft' ? 'jetzt' : 'offen', 'Freigabe', 'Datum = Freigabetag')}</ol>
         <div class="qm-formraster">
@@ -774,7 +774,7 @@
       : g ? `<section class="qm-ablage"><h3 class="qm-zwischen">${icon('klammer')}Dateien · Version ${esc(g.nr)}</h3>${dateiListe(x, g, 'Zur gültigen Version liegen keine Dateien.')}${ablageZone(x, g, 'Datei nachtragen')}${ladenHtml(x, g.id)}</section>` : '';
     p.innerHTML = `<div class="qm-dp-kopf"><div><span class="qm-sub">${esc(S.d.arten[x.art] || x.art)}${x.nr ? ' · ' + esc(x.nr) : ''}</span><h2>${esc(x.titel)}</h2></div><button class="qm-dialog-schliessen" type="button" data-dk="schliessen" aria-label="Dokument schließen">×</button></div>
       <div class="qm-chips">${chips.join('')}</div>
-      <dl class="qm-dl"><dt>Kapitel</dt><dd>${esc(kapitelText(x.kapitel))}</dd><dt>Zuständig</dt><dd>${zust}</dd>${x.ablage ? `<dt>Ablage</dt><dd>${link(x.ablage)}</dd>` : ''}${x.notiz ? `<dt>Notiz</dt><dd>${esc(x.notiz)}</dd>` : ''}${x.ueberprueft ? `<dt>Überprüft</dt><dd>${esc(datum(x.ueberprueft.t.slice(0, 10)))} · ${esc(x.ueberprueft.von)}${x.ueberprueft.notiz ? ' – ' + esc(x.ueberprueft.notiz) : ''}</dd>` : ''}${x.eingezogen ? `<dt>Eingezogen</dt><dd>${esc(zeitpunkt(x.eingezogen.t))} · ${esc(x.eingezogen.von)}: ${esc(x.eingezogen.grund)}</dd>` : ''}</dl>
+      <dl class="qm-dl"><dt>Kapitel</dt><dd>${esc(kapitelText(x.kapitel))}</dd><dt>Zuständig</dt><dd>${zust}</dd>${x.ablage ? `<dt>Ablage</dt><dd>${link(x.ablage)}</dd>` : ''}${x.notiz ? `<dt>Notiz</dt><dd>${esc(x.notiz)}</dd>` : ''}${x.ueberprueft ? `<dt>Überprüft</dt><dd>${esc(window.STAFL_FORMAT.datum(x.ueberprueft.t))} · ${esc(x.ueberprueft.von)}${x.ueberprueft.notiz ? ' – ' + esc(x.ueberprueft.notiz) : ''}</dd>` : ''}${x.eingezogen ? `<dt>Eingezogen</dt><dd>${esc(zeitpunkt(x.eingezogen.t))} · ${esc(x.eingezogen.von)}: ${esc(x.eingezogen.grund)}</dd>` : ''}</dl>
       ${ablage}
       ${vorlageKarte}
       ${karte}
@@ -973,7 +973,7 @@
     $('#ab-zust').value = a ? a.zustaendig : ''; $('#ab-vertr').value = a ? a.vertreter : '';
     $('#ab-entfallen').checked = !!(a && a.entfallen); $('#ab-entfallen-z').hidden = !a;
     $('#ab-aend').value = a ? '' : 'Neu angelegt'; $('#ab-grund').value = '';
-    $('#ab-aenderungen').innerHTML = a ? (a.aenderungen || []).slice().reverse().map((c) => `<li>${esc(datum(c.datum)) || '–'}${c.von ? ' · ' + esc(c.von) : ''}: ${esc(c.was)}${c.grund ? ' – ' + esc(c.grund) : ''}</li>`).join('') : '';
+    $('#ab-aenderungen').innerHTML = a ? (a.aenderungen || []).slice().reverse().map((c) => `<li>${esc(datum(c.datum)) || '—'}${c.von ? ' · ' + esc(c.von) : ''}: ${esc(c.was)}${c.grund ? ' – ' + esc(c.grund) : ''}</li>`).join('') : '';
     $('#ab-aenderungen-z').hidden = !(a && (a.aenderungen || []).length);
     oeffne($('#dlg-abschnitt'));
     $('#ab-titel-in').focus();
@@ -1173,7 +1173,7 @@
         return `<section class="qm-spalte${s === 'wirksam' ? ' blass' : ''}" data-spalte="${s}"><div class="qm-spaltenkopf"><h2><i style="background:${farbe}"></i>${esc(n)}</h2><small>${zahl(k.length)}</small></div>
           ${k.slice(0, max).map((m) => `<button type="button" class="qm-mkarte" data-massn="${esc(m.id)}"><span class="qm-mk-kopf"><span>${esc(m.nr)}${m.anforderung ? ' · IFS ' + esc(m.anforderung) : m.kapitel ? ' · Kapitel ' + esc(m.kapitel) : ''}</span><span>${esc(m.bezug || S.d.quellen[m.quelle] || '')}</span></span>
             <b>${esc(m.feststellung)}</b>${m.ursache ? `<span class="qm-sub qm-kurz">Ursache: ${esc(m.ursache)}</span>` : ''}
-            <span class="qm-mk-fuss"><span class="qm-avatar" title="${esc(werName(m.zustaendig))}">${esc(m.zustaendig || '–')}</span>${(s === 'wirksam' || s === 'umgesetzt') && m.erledigtAm ? chip('umgesetzt ' + datum(m.erledigtAm)) : m.frist ? chip('bis ' + datum(m.frist), m.ueberfaellig ? 'rot' : '') : ''}</span></button>`).join('') || '<p class="qm-leer-spalte">—</p>'}
+            <span class="qm-mk-fuss"><span class="qm-avatar" title="${esc(werName(m.zustaendig))}">${esc(m.zustaendig || '—')}</span>${(s === 'wirksam' || s === 'umgesetzt') && m.erledigtAm ? chip('umgesetzt ' + datum(m.erledigtAm)) : m.frist ? chip('bis ' + datum(m.frist), m.ueberfaellig ? 'rot' : '') : ''}</span></button>`).join('') || '<p class="qm-leer-spalte">—</p>'}
           ${k.length > max ? `<p class="qm-leer-spalte">und ${zahl(k.length - max)} weitere – Ansicht „Liste“</p>` : ''}</section>`;
       }).join('')}</div>`;
       return;
@@ -1325,7 +1325,7 @@
     if (!res.ok) { let d = {}; try { d = await res.json(); } catch { /* keine JSON-Antwort */ } toast(d.error || `Excel konnte nicht erstellt werden (${res.status}).`, true); return; }
     speichereDatei(await res.blob(), `QM-Audit-Bericht_${b.von}_${b.bis}.xlsx`);
   });
-  const prozent = (x) => (x === null || x === undefined ? '—' : `${String(Math.round(x * 1000) / 10).replace('.', ',')} %`);
+  const prozent = (x) => (x === null || x === undefined ? '—' : window.STAFL_FORMAT.prozent(x));   // 12,3 % wie überall
   const quoteFarbe = (e, f) => { const fehlt = f - e; return fehlt === 0 ? 'gruen' : e > 0 && fehlt <= Math.max(1, Math.floor(f / 10)) ? 'gelb' : 'rot'; };
   const B_MAX_BEREICHE = 12;
   const B_STATUS = { eingehalten: ['eingehalten', 'gruen'], verspaetet: ['verspätet', 'gelb'], ueberfaellig: ['überfällig', 'rot'], offen: ['fällig am Stichtag', 'gelb'], nie: ['noch nie geprüft', 'rot'] };

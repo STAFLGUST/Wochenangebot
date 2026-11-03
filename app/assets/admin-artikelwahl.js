@@ -13,7 +13,8 @@
   const { $, esc, icon, plural, fold } = W;
   const dlg = $('#dlg-ez-pick');
   const fmt2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fmtKg = (v) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(v);
+  const F = window.STAFL_FORMAT;   // Zahlen und Einheiten wie auf allen Seiten (app/assets/format.js)
+  const fmtKg = (v) => F.zahl(v, 2, 2);   // Menge in kg (Einheit steht daneben)
   const dmy = (iso) => { if (!iso) return ''; const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}.${m}.${y}`; };
   const dm = (iso) => { if (!iso) return ''; const [, m, d] = String(iso).slice(0, 10).split('-'); return `${d}.${m}.`; };
   /* Schlüssel einer Artikelnummer: führende Nullen zählen nicht, Buchstaben ohne Groß-/Kleinschreibung */
@@ -24,7 +25,7 @@
   const ALLE = '*';            // alle Gruppen
   const MAX_ZEILEN = 400;
 
-  const stdText = (p) => (!p ? '<span class="muted">nicht im Angebot</span>' : p.status === 'value' ? fmt2.format(p.value) + ' €' : p.status === 'request' ? 'a. Anfr.' : '–');
+  const stdText = (p) => (!p ? '<span class="muted">nicht im Angebot</span>' : p.status === 'value' ? esc(F.euroKg(p.value)) : p.status === 'request' ? 'auf Anfrage' : '—');
   function bestandHTML(a, kurz) {
     if (!a || a.totalKg === undefined) return '<span class="muted">—</span>';
     if (!(a.totalKg > 0)) return '<span class="ez-kein">kein Bestand</span>';
@@ -122,7 +123,7 @@
     const ek = cfg.meta.ek;
     const lots = a.lots || [], inc = a.incoming || [];
     const lotsHTML = lots.length ? `<div class="ez-dtw"><table class="ez-dt"><thead><tr><th>Partie</th><th>Eingang</th><th>MHD</th><th class="num">Kolli</th><th class="num">kg</th>${ek ? '<th class="num">EK €/kg</th>' : ''}</tr></thead><tbody>
-        ${lots.map((l) => `<tr><td>${esc(l.lot || '—')}</td><td>${esc(dmy(l.arrival)) || '—'}</td><td>${esc(dmy(l.mhd)) || '—'}</td><td class="num">${l.kolli != null ? esc(fmtKg(l.kolli)) : '—'}</td><td class="num">${esc(fmtKg(l.kg))}</td>${ek ? `<td class="num">${l.ek != null ? esc(fmt2.format(l.ek)) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
+        ${lots.map((l) => `<tr><td>${esc(l.lot || '—')}</td><td>${esc(dmy(l.arrival)) || '—'}</td><td>${esc(dmy(l.mhd)) || '—'}</td><td class="num">${l.kolli != null ? esc(F.zahl(l.kolli, 0, 0)) : '—'}</td><td class="num">${esc(fmtKg(l.kg))}</td>${ek ? `<td class="num">${l.ek != null ? esc(fmt2.format(l.ek)) : '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>`
       : `<p class="hint">${a.kg > 0 ? 'Keine Partiedaten in der Bestandsliste.' : 'Kein eingelagerter Bestand.'}</p>`;
     const incHTML = inc.length ? `<div class="ez-dtw"><table class="ez-dt"><thead><tr><th>Partie</th><th>Ankunft (ETA)</th><th class="num">kg</th></tr></thead><tbody>
         ${inc.map((x) => `<tr><td>${esc(x.lot || '—')}</td><td>${x.arrival ? esc(dmy(x.arrival)) : '<span class="muted">ETA unbekannt</span>'}</td><td class="num">${esc(fmtKg(x.kg))}</td></tr>`).join('')}</tbody></table></div>`
@@ -134,7 +135,7 @@
     if (!cfg.preis) return '';
     const fest = cfg.preis.fest ? cfg.preis.fest(a) : null;   // z. B. Preis eines Artikels, der schon im Angebot steht
     if (fest != null) return `<td class="num ezp-pr"><span class="ezp-fest">${esc(fest)}</span></td>`;
-    if (!pk.sel.has(k)) return '<td class="num ezp-pr"><span class="muted">–</span></td>';
+    if (!pk.sel.has(k)) return '<td class="num ezp-pr"><span class="muted">—</span></td>';
     const v = pk.preise.has(k) ? pk.preise.get(k) : cfg.preis.vorschlag(a);
     return `<td class="num ezp-pr"><input class="in num ezp-pin" data-preis="${esc(a.code)}" inputmode="decimal" value="${esc(v)}" placeholder="${esc(cfg.preis.platzhalter ? cfg.preis.platzhalter(a) : '')}" aria-label="Preis für ${esc(a.code)} in Euro je kg"></td>`;
   }
@@ -170,8 +171,8 @@
             <td class="ezp-n"><span>${esc(a.name || '(ohne Bezeichnung)')}</span>${ist ? ` <span class="ez-tag ezp-drin">${esc(cfg.drinText || 'im Angebot')}</span>` : ''}${merk ? `<small>${esc(merk)}</small>` : ''}
               ${mitB ? `<small class="ezp-mob">${cfg.preis && (a.nr !== undefined ? a.nr : a.code) ? esc(a.nr !== undefined ? a.nr : a.code) + ' · ' : ''}${a.totalKg > 0 ? esc(fmtKg(a.totalKg)) + ' kg verfügbar' : 'kein Bestand'}${cfg.preis && a.stdPrice ? ' · Wochenpreis ' + stdText(a.stdPrice) : ''}</small>` : ''}</td>
             ${mitB ? `<td class="num ezp-kg">${a.kg > 0 ? `<b>${esc(fmtKg(a.kg))} kg</b>` : '<span class="ez-kein">kein Bestand</span>'}</td>
-              <td class="num ezp-m">${a.incomingKg > 0 ? esc(fmtKg(a.incomingKg)) + ' kg' + (eta ? `<small class="ezp-eta">ETA ${esc(dm(eta))}</small>` : '') : '<span class="muted">–</span>'}</td>
-              <td class="ezp-m">${a.mhd ? esc(dmy(a.mhd)) : '<span class="muted">–</span>'}</td>` : ''}
+              <td class="num ezp-m">${a.incomingKg > 0 ? esc(fmtKg(a.incomingKg)) + ' kg' + (eta ? `<small class="ezp-eta">ETA ${esc(dm(eta))}</small>` : '') : '<span class="muted">—</span>'}</td>
+              <td class="ezp-m">${a.mhd ? esc(dmy(a.mhd)) : '<span class="muted">—</span>'}</td>` : ''}
             <td class="num ezp-p">${a.stdPrice ? stdText(a.stdPrice) : '<span class="muted" title="nicht im Wochenangebot">–</span>'}</td>
             ${preisFeld(a, k)}
             <td class="ezp-i"><button type="button" class="ibtn" data-info="${esc(a.code)}" aria-expanded="${auf}" aria-label="Details zu ${esc(a.code)}" title="Partien, Bestand, Ankünfte">${icon('info', 'sm')}</button></td></tr>`;

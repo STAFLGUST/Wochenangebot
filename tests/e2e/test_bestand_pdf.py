@@ -27,7 +27,7 @@ def check(n, c, i=''):
 
 heute = datetime.date.today()
 tag = lambda d: int((heute + datetime.timedelta(days=d)).strftime('%d%m%Y'))   # noqa: E731 – TTMMJJJJ wie WinAB
-kurz = lambda d: (heute + datetime.timedelta(days=d)).strftime('%d.%m.%y')     # noqa: E731
+kurz = lambda d: (heute + datetime.timedelta(days=d)).strftime('%d.%m.%Y')     # noqa: E731
 
 # ---------- synthetische WinAB-Bestandsliste ----------
 # Spalten wie im Original: B Art.-Nr., C Bezeichnung, E Marke (Überschrift in F!), K Status (Überschrift in L), N Ankunft,
@@ -151,7 +151,7 @@ with sync_playwright() as p:
     text, farben = pdf_text(raw)
     voll = '\n'.join(text)
     check('PDF erstellt (Dateiname mit Bestandsdatum)', raw.startswith(b'%PDF-1.4') and dl.value.suggested_filename == f'Bestand_{heute.isoformat()}.pdf', dl.value.suggested_filename)
-    check('PDF: Spalten Art.-Nr., Bezeichnung, Eingelagerter Bestand, Kürz. MHD, Kg kürz. MHD', all(x in text for x in ['Art.-Nr.', 'Art. Bezeichnung', 'Eingelagerter Bestand', 'Kürz. MHD', 'Kg kürz. MHD']), text[:20])
+    check('PDF: Spalten Art.-Nr., Bezeichnung, Eingelagerter Bestand, Kürz. MHD, Menge kürz. MHD', all(x in text for x in ['Art.-Nr.', 'Art. Bezeichnung', 'Eingelagerter Bestand', 'Kürz. MHD', 'Menge kürz. MHD']), text[:20])
     check('PDF: keine Preise, kein erfasster Bestand, kein Gesamt verfügbar, keine Zugänge', '€' not in voll and 'Aktueller Preis' not in voll and 'Vorwoche' not in voll
           and 'Erfasster Bestand' not in voll and 'Gesamt verfügbar' not in voll and 'Erwartete Zugänge' not in voll and '900001' not in voll and '142,85' not in voll, voll[:500])
     check('PDF: Artikel, Mengen und MHD aus dem Bestand', 'Testfilet, Färse, frisch' in text and '56,92 kg' in text and kurz(0) in text and '2,30 kg' in text, [t for t in text if 'Testfilet' in t or 'kg' in t][:8])
