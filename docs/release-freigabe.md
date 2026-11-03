@@ -149,8 +149,9 @@ automatischen Rückfall:
 Es wartet immer nur der neueste Lauf: Ein neuer Merge beendet einen älteren, noch nicht freigegebenen Lauf
 (Status „abgebrochen“). Das Protokoll (Tag-Beschreibung) nennt, wer freigegeben hat.
 
-Der Server bleibt unverändert: Er übernimmt nur den neuesten erfolgreichen Release-Lauf auf `main` und prüft die
-CI selbst noch einmal.
+Der Server bleibt unverändert: Er übernimmt nur den neuesten erfolgreichen Release-Lauf auf `main` (nach Startzeit) und
+prüft die CI selbst noch einmal. Einen Stand, der älter ist als der aktive, spielt er nie von selbst ein – zurück geht es
+nur über den Notfall-Rückfall (`deploy/release-zurueck.sh`).
 
 ## Einmalige Einrichtung in GitHub (nur Inhaber)
 

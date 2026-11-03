@@ -16,8 +16,11 @@ class H(BaseHTTPRequestHandler):
         if self.headers.get('Authorization') != 'Bearer test-token':
             self.send_response(401); self.end_headers(); return
         if u.path.endswith('/actions/workflows/release.yml/runs'):
-            runs = [{'id': 1, 'head_sha': st['release'], 'head_branch': st.get('release_branch', 'main'), 'path': '.github/workflows/release.yml',
-                     'event': 'workflow_dispatch', 'conclusion': 'success'}] if st.get('release') else []
+            # „laeufe“: mehrere Läufe in genau dieser Reihenfolge (wie eine falsch sortierte Antwort von GitHub),
+            # je {"sha": …, "t": Startzeit}; sonst ein Lauf für „release“
+            laeufe = st.get('laeufe') or ([{'sha': st['release'], 't': '2026-01-01T00:00:00Z'}] if st.get('release') else [])
+            runs = [{'id': 10 + i, 'head_sha': l['sha'], 'head_branch': st.get('release_branch', 'main'), 'path': '.github/workflows/release.yml',
+                     'event': 'workflow_dispatch', 'conclusion': 'success', 'created_at': l['t']} for i, l in enumerate(laeufe)]
         elif u.path.endswith('/actions/workflows/ci.yml/runs'):
             sha = q.get('head_sha', [''])[0]
             runs = [{'id': 2, 'head_sha': sha, 'head_branch': 'main', 'event': 'push', 'conclusion': 'success'}] if sha in st.get('ci_ok', []) else []
