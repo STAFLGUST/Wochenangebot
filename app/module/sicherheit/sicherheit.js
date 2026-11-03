@@ -26,7 +26,7 @@
   if (ECHT) $('#sic-zurueck').href = 'https://dashboard-stafl.de/';
   let regionen = null;
   try { regionen = new Intl.DisplayNames(['de'], { type: 'region' }); } catch { /* alter Browser */ }
-  const land = (c) => { let n = ''; try { n = regionen ? regionen.of(c) : ''; } catch { /* unbekannt */ } return n && n !== c ? n : c; };
+  const land = (c) => { if (c === '??') return 'ohne erkennbares Land'; let n = ''; try { n = regionen ? regionen.of(c) : ''; } catch { /* unbekannt */ } return n && n !== c ? n : c; };
   const landSort = (a, b) => land(a).localeCompare(land(b), 'de');
   const geraet = (ua) => {
     if (!ua) return '—';
@@ -872,7 +872,7 @@
       ...d.manuell.map((e) => `<tr><td class="mono-s">${esc(e.ip)}</td><td>von Hand${e.grund ? ' – ' + esc(e.grund) : ''}<div class="sub">${esc(e.von || '')} · ${esc(zeit(e.t))}</div></td><td class="num-s">${e.bis ? 'bis ' + esc(sekZeit(e.bis)) : 'dauerhaft'}</td><td class="act"><button type="button" class="btn sm" data-fw="frei" data-ip="${esc(e.ip)}">Freigeben</button></td></tr>`),
       ...d.auto.map((e) => `<tr><td class="mono-s">${esc(e.ip)}</td><td>automatisch – ${esc(e.grund || '')}<div class="sub">${esc(zeit(e.t))}${e.n > 1 ? ' · ' + e.n + '. Sperre' : ''}</div></td><td class="num-s">bis ${esc(sekZeit(e.bis))}</td><td class="act"><button type="button" class="btn sm" data-fw="frei" data-ip="${esc(e.ip)}">Freigeben</button></td></tr>`)].join('');
     const bremse = sec.blockedIps.map((x) => `<tr><td class="mono-s">${esc(x.ip)}</td><td>${x.n ? plural(x.n, 'Fehlversuch', 'Fehlversuche') : ''}<div class="sub">${x.bereich === 'kunde' ? 'Kunden-Anmeldung' : 'Mitarbeiter-Anmeldung'}</div></td><td>${x.until ? `<span class="sic-pille bad">bis ${esc(uhr(x.until))} Uhr</span>` : '<span class="sub">beobachtet</span>'}</td><td class="act"><button type="button" class="btn sm" data-fw="bremse" data-key="${esc(x.key)}" data-ip="${esc(x.ip)}">Aufheben</button></td></tr>`).join('');
-    const laender = (sec.geoStats || []).map((x) => `<tr><td>${esc(land(x.cc))} <span class="sub">${esc(x.cc)}</span></td><td class="num-s">${zahl(x.n)}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
+    const laender = (sec.geoStats || []).map((x) => `<tr><td>${esc(land(x.cc))}${x.cc === '??' ? '' : ` <span class="sub">${esc(x.cc)}</span>`}</td><td class="num-s">${zahl(x.n)}</td><td class="num-s">${esc(zeit(x.last))}</td></tr>`).join('');
     $('#tab-firewall').innerHTML = `
       <div class="sic-karten vier">
         ${karte(F.waf === 'sperren' ? 'ok' : F.waf === 'protokoll' ? 'warn' : 'bad', 'Firewall', esc(d.modi[F.waf] || F.waf), F.autoSperre ? `sperrt nach ${plural(F.treffer, 'Treffer', 'Treffern')} für ${esc(DAUER[F.sperrMinuten] || F.sperrMinuten + ' Min.')}` : 'automatische Sperre aus')}
@@ -1274,7 +1274,7 @@
           <div class="geo-chips" id="geo-chips"></div></div>
         ${schnell}
         <div class="geo-suche"><input type="search" id="geo-q" placeholder="Land oder IP-Adresse, z. B. China, CN oder 1.0.1.1" aria-label="Land oder IP-Adresse suchen"><div class="geo-list" id="geo-list"></div></div>
-        <p class="sic-hinweis">Freigegebene Adressen sind immer erlaubt; Adressen ohne bekanntes Land werden nicht gesperrt. Gilt auch schon für die Anmeldeseite der Mitarbeiter. Ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</p></div>
+        <p class="sic-hinweis">Freigegebene und interne Adressen sind immer erlaubt. Öffentliche Adressen ohne erkennbares Land werden bei „nur ausgewählte Länder erlauben“ gesperrt, bei „ausgewählte Länder sperren“ nicht. Gilt auch schon für die Anmeldeseite der Mitarbeiter. Ergänzt Passwort und Zwei-Faktor-Anmeldung, ersetzt sie aber nicht.</p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { breit: true, fokus: '#geo-q', handler: async (a, b, form) => {
       if (a === 'geo-gruppe') {
@@ -1305,7 +1305,7 @@
     if (IP_RE.test(g.q)) {
       if (!g.ip || g.ip.ip !== g.q) return leer('IP-Adresse wird gesucht …');
       if (g.ip.error) return leer(esc(g.ip.error));
-      if (!g.ip.country) return leer(`<span class="mono-s">${esc(g.ip.ip)}</span> – ${g.ip.private ? 'interne Adresse, keinem Land zugeordnet' : 'kein Land bekannt'}.`);
+      if (!g.ip.country) return leer(`<span class="mono-s">${esc(g.ip.ip)}</span> – ${g.ip.private ? 'interne Adresse, keinem Land zugeordnet – wird nie gesperrt' : 'kein Land erkennbar – bei „nur ausgewählte Länder erlauben“ gesperrt'}.`);
       const c = g.ip.country;
       return `<label class="geo-opt geo-iphit"><input type="checkbox" data-geo-cc="${esc(c)}"${g.sel.has(c) ? ' checked' : ''}> <span><span class="mono-s">${esc(g.ip.ip)}</span> → ${esc(land(c))}</span><span class="sub">${esc(c)}</span></label>`;
     }
@@ -1330,11 +1330,14 @@
     const l = [...g.sel].sort(landSort);
     $('#geo-chips', dlg).innerHTML = l.length ? l.map((c) => `<span class="sic-chip">${esc(land(c))} <span class="sub">${esc(c)}</span><button type="button" data-d="geo-weg" data-cc="${esc(c)}" aria-label="${esc(land(c))} entfernen">×</button></span>`).join('') : '<span class="sub">Noch kein Land ausgewählt.</span>';
     $('#geo-count', dlg).textContent = g.sel.size ? `${g.sel.size} ausgewählt` : '';
-    const allow = f.querySelector('[name=geoMode]:checked').value === 'allow', mc = S.sec.myCountry;
-    const gesperrt = mc && f.querySelector('[name=geoEnabled]').checked && (allow ? !g.sel.has(mc) : g.sel.has(mc));
+    const allow = f.querySelector('[name=geoMode]:checked').value === 'allow', mc = S.sec.myCountry, an = f.querySelector('[name=geoEnabled]').checked;
+    const unbekannt = !mc && S.sec.myCountryUnbekannt;   // öffentliche Adresse ohne erkennbares Land: bei „nur erlauben“ gesperrt
+    const gesperrt = an && (mc ? (allow ? !g.sel.has(mc) : g.sel.has(mc)) : unbekannt && allow);
     const me = $('#geo-me', dlg);
     me.className = 'geo-me' + (gesperrt ? ' bad' : '');
-    me.innerHTML = mc ? `Sie greifen gerade aus <strong>${esc(land(mc))}</strong> zu${gesperrt ? ' – mit dieser Auswahl würden Sie sich aussperren.' : '.'}` : 'Ihr Land ist nicht bekannt (interne Adresse) – Sie werden nicht gesperrt.';
+    me.innerHTML = mc ? `Sie greifen gerade aus <strong>${esc(land(mc))}</strong> zu${gesperrt ? ' – mit dieser Auswahl würden Sie sich aussperren.' : '.'}`
+      : unbekannt ? `Für Ihre Adresse ist kein Land erkennbar${gesperrt ? ' – mit „nur ausgewählte Länder erlauben“ würden Sie sich aussperren. Tragen Sie Ihre Adresse als freigegebene Adresse ein.' : '.'}`
+        : 'Ihr Land ist nicht bekannt (interne Adresse) – Sie werden nicht gesperrt.';
     $('#geo-sel-label', dlg).textContent = allow ? 'Erlaubte Länder' : 'Gesperrte Länder';
     // Schnellauswahl: alle Länder der Gruppe gewählt (voll), einige (teil) oder keines
     for (const k of $$('#geo-gruppen [data-g]', dlg)) {

@@ -2611,8 +2611,9 @@
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && model && !ro) { e.preventDefault(); if (document.activeElement.matches('.in')) document.activeElement.dispatchEvent(new Event('change', { bubbles: true })); saveNow(); }
   });
 
-  const setH = () => document.documentElement.style.setProperty('--header-h', ($('#topbar').offsetHeight || 0) + 'px');
-  if ('ResizeObserver' in window) new ResizeObserver(setH).observe($('#topbar'));
+  /* Kopfhöhe; ersetzt eine Sperrmeldung die Seite (Ländersperre, Fehler), gibt es keine Kopfleiste mehr */
+  const setH = () => document.documentElement.style.setProperty('--header-h', ($('#topbar')?.offsetHeight || 0) + 'px');
+  if ('ResizeObserver' in window && $('#topbar')) new ResizeObserver(setH).observe($('#topbar'));
 
   /* ======================= Preisverlauf ======================= */
   let hist = null;            // { weeks, series, dup }

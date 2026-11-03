@@ -53,7 +53,10 @@ Einstiegsdatei `app/api/index.php`; alle Aktionen heißen `/api/?action=<name>`,
     eine angemeldete Mitarbeitersitzung ein nicht öffentliches Angebot ab (Kundenangebot oder Wochenangebot ohne
     `std_public()`), gilt die Anfrage als Eingabebereich.
 13. **Ländersperre:** Mit `geoEnabled` und (`!$isPublic` oder `geoScope = all`) prüft `geo_blocked(client_ip(), $S)`;
-    Treffer werden gezählt (`geo_count`) und mit 403 abgewiesen.
+    Treffer werden gezählt (`geo_count`) und mit 403 abgewiesen. Nie gesperrt: freigegebene Adressen (`adminIps`) und
+    interne Adressen (privat/reserviert, z. B. Prüfabrufe der Anwendung). Öffentliche Adressen ohne erkennbares Land
+    (`geo_land_unbekannt`) sperrt nur der Modus „nur ausgewählte Länder erlauben“ – gezählt als `??` (Entscheidung des
+    Inhabers 03.11.2026); fehlt die Länderdatenbank, sperrt sie nichts.
 14. **Kunden-Wartung:** Aktionen mit `kunden_wartung` antworten bei aktivem Dokument `wartung` ohne
     Mitarbeitersitzung 503 mit `wartung: true`, `error`, `until` und `Retry-After: 600` (GR-009).
 15. **IP-Freigabe des Eingabebereichs:** Nicht öffentlich und `ipEnabled` mit Liste `adminIps`: andere Adressen → 403.
