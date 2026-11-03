@@ -169,8 +169,10 @@ oder „404“ nie – sonst bliebe eine Seite nach abgelaufener Sitzung ein Jah
 
 **bunny.net (CDN) vor dem Server** (`Caddyfile`, Abschnitt `cdn`, in jedem Site-Block eingebunden; Einrichtung und Reihenfolge:
 [docs/bunny-cdn.md](../bunny-cdn.md)): Mit `CDN_SCHLUESSEL` in `.env` gilt die Besucher-IP von bunny (`X-Real-IP`) nur bei
-genau diesem Schlüssel im Kopf `X-Stafl-Cdn`. Caddy gibt sie als `X-Forwarded-For` an Anwendung und Keycloak weiter
-(`{besucher_ip}`), den Schlüssel nie. `CDN_PFLICHT=1` sperrt direkte Zugriffe (403) außer vom Server selbst (private Adressen).
+genau diesem Schlüssel im Kopf `X-Stafl-Cdn` und nur als einzelne IP-Adresse. Caddy gibt sie als `X-Forwarded-For` an
+Anwendung und Keycloak weiter (`{besucher_ip}`), den Schlüssel nie. `CDN_PFLICHT=1` sperrt jeden Zugriff ohne Schlüssel (403),
+auch vom Server selbst (Docker-Weiterleitung = private Adresse, wie Besucher über IPv6); ausgenommen ist nur der
+Caddy-Container (127.0.0.1). Die Prüfung nach dem Einspielen schickt den Schlüssel aus `.env` mit.
 Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_proxy`, `forward_auth`) braucht
 `header_up X-Forwarded-For {besucher_ip}` und `header_up -X-Stafl-Cdn`, jeder neue Site-Block `import cdn` – das prüft
 `tests/deploy/test_cdn.py` mit echtem Caddy.

@@ -20,4 +20,4 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 105 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 26 |
 | [App (iOS/Android)](mobile.md) | `mobile` | 2 | 8 |
-| [Plattformkern](plattform.md) | `plattform` | 103 | 942 |
+| [Plattformkern](plattform.md) | `plattform` | 103 | 943 |

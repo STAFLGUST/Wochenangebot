@@ -47,13 +47,18 @@ genutzten Rechnern nichts im Browser liegen bleibt.
 **Server (Caddyfile, Abschnitt `cdn`; in jedem Site-Block eingebunden):**
 
 - Ohne gültigen `CDN_SCHLUESSEL` in `.env` (32–128 Buchstaben/Ziffern) ändert sich nichts.
-- Mit Schlüssel gilt die Besucher-IP von bunny (`X-Real-IP`) nur, wenn der Kopf `X-Stafl-Cdn` genau den Schlüssel enthält.
-  Sonst gilt wie bisher die Adresse der Verbindung. Wer bunny umgeht, kann seine IP also nicht fälschen.
+- Mit Schlüssel gilt die Besucher-IP von bunny (`X-Real-IP`) nur, wenn der Kopf `X-Stafl-Cdn` genau den Schlüssel enthält
+  und `X-Real-IP` genau eine IP-Adresse ist (IPv4 oder IPv6). Sonst gilt wie bisher die Adresse der Verbindung. Wer bunny
+  umgeht, kann seine IP also nicht fälschen. bunny überschreibt einen vom Besucher mitgeschickten `X-Real-IP` (geprüft am
+  02.11.2026: gefälschte Werte änderten nichts).
 - Anwendung und Keycloak bekommen die Besucher-IP als `X-Forwarded-For`, den Schlüssel nie. Damit wirken
   Ländersperre, Firewall, Anmeldebremse und Protokoll weiter für den echten Besucher.
 - Die Antwort enthält den Kopf `Stafl-Cdn: erkannt`, wenn Server und bunny denselben Schlüssel kennen (zur Kontrolle).
-- `CDN_PFLICHT=1`: Der Server nimmt nur noch Anfragen über bunny an, dazu Abrufe vom Server selbst (private Adressen, z. B.
-  die Prüfung nach dem Einspielen). Alles andere bekommt 403. Ohne gültigen Schlüssel bleibt die Sperre aus.
+- `CDN_PFLICHT=1`: Der Server nimmt nur noch Anfragen mit dem Schlüssel an (bunny) – ausgenommen ist nur der Caddy-Container
+  selbst (127.0.0.1). Auch Abrufe vom Server brauchen den Schlüssel: Über die Docker-Weiterleitung erscheinen sie – genauso
+  wie Besucher über IPv6 – mit einer privaten Adresse, deshalb gibt es keine Ausnahme für private Netze. Die Prüfung nach dem
+  Einspielen (`deploy/freigabe-einspielen.sh`) liest `CDN_SCHLUESSEL` aus `.env` und schickt ihn mit (nicht in der
+  Prozessliste). Alles andere bekommt 403. Ohne gültigen Schlüssel bleibt die Sperre aus.
 - Seiten und Schnittstelle haben „private, no-cache“. Gespeichert werden nur „public“-Dateien der Kundenseite.
 - Let's Encrypt am Server: Caddy beantwortet die Prüfungen vor allen Regeln, die Zertifikate verlängern sich also auch über
   bunny (Kontrolle in Schritt 5).
@@ -122,8 +127,10 @@ Datei: bunny → Zone → „Purge Cache“.
    - nach 30–60 Tagen: Das Zertifikat des Servers wurde verlängert (Caddy-Protokoll oder Ablaufdatum über
      `curl -vk --resolve <adresse>:443:<Server-IP> https://<adresse>/`)
 6. **Force SSL** je Adresse in bunny einschalten (Zone → Hostnames). So leitet bunny http → https um.
-7. **Sperre einschalten,** wenn alle Adressen über bunny laufen und Schritt 5 gut war: in `.env` `CDN_PFLICHT=1`, dann
-   `docker compose up -d caddy`. Gegenprobe von einem anderen Rechner:
+7. **Sperre einschalten,** wenn alle Adressen über bunny laufen und Schritt 5 gut war – und erst, wenn der Release mit der
+   Prüfung nach dem Einspielen **mit Schlüssel** (PR „CDN-Härtung“) live ist; sonst scheitert die Prüfung des nächsten
+   Releases und er wird automatisch zurückgesetzt. Dann in `.env` `CDN_PFLICHT=1`, danach `docker compose up -d caddy`.
+   Gegenprobe von einem anderen Rechner und vom Server selbst:
    `curl -sk --resolve angebot-stafl.de:443:<Server-IP> https://angebot-stafl.de/` → 403.
 8. **bunny-API-Schlüssel zurücksetzen** (Account → API → Reset), falls er für die Einrichtung weitergegeben wurde. Das
    bunny-Konto braucht eine Zwei-Faktor-Anmeldung: Wer das Konto hat, kann den gesamten Verkehr umleiten. Ebenso einen
