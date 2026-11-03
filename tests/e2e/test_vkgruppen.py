@@ -1,5 +1,5 @@
 """Stammdaten → VK-Gruppen und Import der Artikelstammdaten (CSV-Export der Warenwirtschaft): VK-Gruppen-Liste (Rechte,
-Prüfungen, Revision, CSV-Import Windows-1252, anlegen/ändern/löschen), VK-Gruppe und GTIN in den Artikelstammdaten
+Prüfungen, Revision, CSV-Import Windows-1252, anlegen/ändern/löschen), VK-Gruppe und GTIN in den Artikelstammdaten (GTIN im Pop-up einzeilig)
 (Prüfung, Anzahl je Gruppe), Artikelimport mit Vorschau (neu/ergänzt/unverändert/übersprungen), gepflegte Merkmale bleiben,
 EK/Bestand/Umsatz werden nicht übernommen, Filter nach VK-Gruppe, 390 px. Nur Testdaten (tests/fixtures/stammdaten)."""
 import json
@@ -170,11 +170,28 @@ with sync_playwright() as p:
     check('VK-Gruppe im Artikel zuordnen (gespeichert)', next(x for x in doc('stammdaten')['articles'] if x['code'] == '90003').get('vkGruppe') == '4100')
     a.fill('#ms-q', '')
     a.screenshot(path=SH + '/stammdaten-vkgruppe.png')
+    # GTIN im Pop-up: eine Zeile in voller Feldbreite (früher Klasse „mono“ = rundes Fleischart-Symbol, 24 px → Ziffern
+    # untereinander über „Herkunft“), Hinweis zum Abgleich mit den Angeboten verständlich
+    GTIN_JS = """(() => { const g = document.querySelector('#master-art-body .ma-gtin'), f = g && g.closest('.fld'), h = document.querySelector('#master-art-body [name=origin]');
+      if (!g) return null; const r = g.getBoundingClientRect(), rf = f.getBoundingClientRect(), rh = h.getBoundingClientRect();
+      return [Math.round(r.width), Math.round(rf.width), Math.round(r.height), g.scrollHeight <= g.clientHeight + 1, rf.top >= rh.bottom - 1, g.textContent.trim()]; })()"""
+    def gtin_pruefen(breite):
+        a.fill('#ms-q', '90001'); a.wait_for_selector('#ms-list tr[data-mcode="90001"]')
+        a.click('#ms-list tr[data-mcode="90001"] .m-code'); a.wait_for_selector('#dlg-master-art[open] .ma-gtin')
+        gi = a.evaluate(GTIN_JS)
+        check(f'{breite} px Pop-up: GTIN einzeilig in voller Feldbreite, nicht über „Herkunft“', gi and gi[0] >= gi[1] - 1 and gi[2] <= 48 and gi[3] and gi[4] and gi[5] == '4260000900010', gi)
+        st = a.inner_text('#master-art-body .ma-status')
+        check(f'{breite} px Pop-up: Hinweis zum Abgleich mit den Angeboten', 'Angebot' in st and 'aktuellen' not in st, st)
+        a.screenshot(path=SH + f'/stammdaten-popup-gtin-{breite}.png')
+        a.keyboard.press('Escape'); a.wait_for_function("!document.querySelector('#dlg-master-art').open")
+        a.fill('#ms-q', '')
+    gtin_pruefen(1440)
 
     # ---------- Mobil und Leseansicht ----------
     a.set_viewport_size({'width': 390, 'height': 820})
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     check('Artikelstammdaten 390 px: kein seitliches Scrollen', over <= 1, over)
+    gtin_pruefen(390)
     a.screenshot(path=SH + '/stammdaten-vkgruppe-mobil.png')
     a.click('#vt-vkgruppen'); a.wait_for_selector('#view-vkgruppen tr[data-kg]')
     over = a.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
