@@ -187,6 +187,13 @@ with sync_playwright() as p:
     pg.wait_for_function("!document.querySelector('#ctl-u-vertreterzeilen').textContent.includes('V2')")
     check('Vertreterfilter wirkt auf Kennzahlen', '27.800,00 €' in text(pg, '#ctl-u-kpis'), text(pg, '#ctl-u-kpis'))
     pg.screenshot(path=os.path.join(SH, 'controlling_umsatz_1280.png'), full_page=True)
+    # Filter „Vertreter“/„Monate“ bedienen sich wie jedes Menü: Escape schließt, ein anderes Menü schließt das offene
+    pg.keyboard.press('Escape'); pg.wait_for_function("!document.querySelector('#ctl-u-vertreterfilter').open")
+    check('Vertreterfilter: Escape schließt die Auswahl', pg.evaluate("document.activeElement.matches('#ctl-u-vertreterfilter summary')"))
+    pg.click('#ctl-u-zeitfilter summary'); pg.wait_for_selector('#ctl-u-zeitfilter[open]')
+    pg.click('#ctl-u-vertreterfilter summary'); pg.wait_for_selector('#ctl-u-vertreterfilter[open]')
+    check('Monatsfilter schließt beim Öffnen des Vertreterfilters', not pg.evaluate("document.querySelector('#ctl-u-zeitfilter').open"))
+    pg.keyboard.press('Escape'); pg.wait_for_function("!document.querySelector('#ctl-u-vertreterfilter').open")
     pg.select_option('#ctl-u-jahr', '2025')
     pg.wait_for_function("document.querySelector('#ctl-u-kpis').textContent.includes('20.000,00')")
     check('Jahreswechsel lädt 2025 vom Server', '20.000,00 €' in text(pg, '#ctl-u-kpis') and pg.input_value('#ctl-u-jahr') == '2025')

@@ -43,6 +43,7 @@
   const initialen = (name) => { const t = String(name || '').trim().split(/[\s.\-_]+/).filter(Boolean); return (t.length > 1 ? t[0][0] + t[1][0] : (t[0] || '?').slice(0, 2)).toLocaleUpperCase('de-DE'); };
   const obj = (m) => (m && typeof m === 'object' && !Array.isArray(m) ? m : {});   // PHP liefert leere Zuordnungen als []
   const zahl = (n) => Number(n).toLocaleString('de-DE');
+  const maerkte = (n) => `${zahl(n)} ${Number(n) === 1 ? 'Markt' : 'Märkte'}`;   // Einzahl/Mehrzahl („1 Markt“, „3 Märkte“)
   const datum = (iso) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : '');
   const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : d.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }); };
   const darf = (r) => !!(S.d && S.d.rechte && S.d.rechte[r]);
@@ -144,7 +145,7 @@
     $('#rw-w-titel').textContent = `${eigen ? 'Meine Woche' : w.werName} · ${kwKurz(w.kw)}`;
     const alleM = w.gruppen.flatMap((g) => g.maerkte);
     const ziel = w.kw === S.d.abfrage ? ' · aktuelle Abfragewoche' : '';
-    $('#rw-w-sub').textContent = `Lieferwoche ${zeitraum(w.kw)}${ziel} · ${alleM.length} Märkte`;
+    $('#rw-w-sub').textContent = `Lieferwoche ${zeitraum(w.kw)}${ziel} · ${maerkte(alleM.length)}`;
     $('#rw-w-heute').hidden = w.kw === S.d.abfrage;
     // Kennzahlen aus den Zeilen (nicht fällige Daueraufträge gelten als erledigt)
     const fertig = alleM.filter(erledigt).length, best = alleM.filter((m) => m.antwort && m.antwort.status === 'bestellt');
@@ -154,7 +155,7 @@
     const pct = alleM.length ? Math.round(fertig / alleM.length * 100) : 0;
     $('#rw-w-kpis').innerHTML = `
       <div class="rw-kpi"><span>Erledigt</span><b>${fertig} <small>von ${alleM.length}</small></b><div class="rw-fortschritt" aria-hidden="true"><i style="width:${pct}%"></i></div></div>
-      <div class="rw-kpi"><span>Bestellt</span><b>${best.length} <small>Märkte</small></b><small>${esc(mengenText(mengen) || 'noch nichts')}</small></div>
+      <div class="rw-kpi"><span>Bestellt</span><b>${best.length} <small>${best.length === 1 ? 'Markt' : 'Märkte'}</small></b><small>${esc(mengenText(mengen) || 'noch nichts')}</small></div>
       <div class="rw-kpi"><span>Daueraufträge zu bestätigen</span><b>${dauerOffen}</b><small>fällig nach Rhythmus</small></div>
       <div class="rw-kpi${wv.length ? ' warn' : ''}"><span>Wiedervorlagen fällig</span><b>${wv.length}</b><small>${esc(wv.slice(0, 3).map((m) => m.ort).join(' · ') || '–')}</small></div>`;
     bestelltHtml(w, best, mengen);
@@ -167,7 +168,7 @@
       return `<section class="rw-gruppe rw-glas" data-gruppe="${esc(g.id)}">
         <div class="rw-gkopf">
           <span class="rw-gsymbol${g.art === 'direkt' ? ' direkt' : ''}"><svg class="i" aria-hidden="true"><use href="#i-${g.art === 'direkt' ? 'lkw' : 'lager'}"/></svg></span>
-          <div><h2>${esc(g.name)}</h2><p class="rw-sub">${esc(g.art === 'lager' ? 'REWE-Zentrallager' : g.art === 'direkt' ? 'Lieferung direkt an den Markt' : 'Lieferweg fehlt')} · ${g.maerkte.length} Märkte · ${offen} offen${g.bestellschluss ? ' · Bestellschluss ' + esc(g.bestellschluss) : ''}</p></div>
+          <div><h2>${esc(g.name)}</h2><p class="rw-sub">${esc(g.art === 'lager' ? 'REWE-Zentrallager' : g.art === 'direkt' ? 'Lieferung direkt an den Markt' : 'Lieferweg fehlt')} · ${maerkte(g.maerkte.length)} · ${offen} offen${g.bestellschluss ? ' · Bestellschluss ' + esc(g.bestellschluss) : ''}</p></div>
           <div class="rw-rechts">${faellig.length ? `<button class="btn sm" type="button" data-gruppe-dauer="${esc(g.id)}"><svg class="i" aria-hidden="true"><use href="#i-check"/></svg>${faellig.length} ${faellig.length === 1 ? 'Dauerauftrag' : 'Daueraufträge'} bestätigen</button>` : ''}</div>
         </div>
         ${zeilen.length ? `<div class="rw-zkopf" aria-hidden="true"><span>Markt</span><span>Hinweise</span><span>Verlauf ${esc(kwKurz(kwPlus(w.kw, -8)))}–${esc(kwKurz(kwPlus(w.kw, -1)).slice(3))}</span><span>Antwort ${esc(kwKurz(w.kw))}</span><span></span></div>` : ''}
@@ -518,10 +519,10 @@
     if (!S.maerkte) return;
     const anzahl = (id) => S.maerkte.filter((m) => m.zustaendig === id).length;
     const ohne = S.maerkte.filter((m) => !m.zustaendig).length;
-    $('#rw-z-personen').innerHTML = S.d.personen.map((p) => `<div class="rw-kpi" data-person="${esc(p.id)}"><span>${esc(p.name)}</span><b>${anzahl(p.id)} <small>Märkte</small></b>
+    $('#rw-z-personen').innerHTML = S.d.personen.map((p) => `<div class="rw-kpi" data-person="${esc(p.id)}"><span>${esc(p.name)}</span><b>${anzahl(p.id)} <small>${anzahl(p.id) === 1 ? 'Markt' : 'Märkte'}</small></b>
         <label class="rw-check"><input type="checkbox" data-team="alle"${p.teamAlle || p.rechtAlle ? ' checked' : ''}${p.rechtAlle ? ' disabled title="über die Rolle"' : ''}> alle Listen</label>
         <label class="rw-check"><input type="checkbox" data-team="export"${p.teamExport || p.rechtExport ? ' checked' : ''}${p.rechtExport ? ' disabled title="über die Rolle"' : ''}> Wochenabschluss</label></div>`).join('')
-      + `<div class="rw-kpi"><span>Ohne Zuständigkeit</span><b>${ohne} <small>Märkte</small></b><button class="btn sm" type="button" id="rw-team-speichern">Team speichern</button></div>`;
+      + `<div class="rw-kpi"><span>Ohne Zuständigkeit</span><b>${ohne} <small>${ohne === 1 ? 'Markt' : 'Märkte'}</small></b><button class="btn sm" type="button" id="rw-team-speichern">Team speichern</button></div>`;
     $('#rw-z-fwer').innerHTML = personOptionen('<option value="">alle Mitarbeiter</option><option value="-">ohne Zuständigkeit</option>'); $('#rw-z-fwer').value = S.zWer;
     $('#rw-z-flw').innerHTML = lwOptionen('alle Lieferwege', false); $('#rw-z-flw').value = S.zLw;
     $('#rw-z-fkauf').innerHTML = kaufOptionen('alle Märkte'); $('#rw-z-fkauf').value = S.zKauf;
@@ -616,7 +617,7 @@
         <section class="rw-panel rw-glas"><div class="rw-panelkopf"><h2>Je Mitarbeiter</h2></div>${balken(a.personen, 'person')}</section>
       </div>
       ${a.dauerOffen.length ? `<div class="rw-hinweisleiste"><span><b>Daueraufträge ohne Bestätigung:</b> ${esc(a.dauerOffen.map((m) => `${m.ort} (${m.zustaendig || 'niemand'})`).join(', '))} – sie stehen erst nach der Bestätigung im Export.</span></div>` : ''}
-      ${a.offen.length ? `<div class="rw-hinweisleiste grau"><span><b>${a.offen.length} Märkte ohne Antwort:</b> ${esc(a.offen.slice(0, 12).map((m) => m.ort).join(', '))}${a.offen.length > 12 ? ' …' : ''}</span></div>` : ''}
+      ${a.offen.length ? `<div class="rw-hinweisleiste grau"><span><b>${maerkte(a.offen.length)} ohne Antwort:</b> ${esc(a.offen.slice(0, 12).map((m) => m.ort).join(', '))}${a.offen.length > 12 ? ' …' : ''}</span></div>` : ''}
       ${a.ohneNr.length ? `<div class="rw-hinweisleiste grau"><span><b>Ohne WinAB-Artikelnummer:</b> ${esc(a.ohneNr.join(', '))} – unter Einstellungen eintragen.</span>${darf('verwalten') ? '<a class="btn sm" href="#einstellungen" data-gehe="einstellungen">Einstellungen</a>' : ''}</div>` : ''}
       ${a.ohneStamm ? `<div class="rw-hinweisleiste grau"><span><b>${a.ohneStamm} ${a.ohneStamm === 1 ? 'Markt' : 'Märkte'} nicht im WinAB-Kundenstamm</b> – Name und Anschrift kommen aus der REWE-Liste.</span></div>` : ''}
       ${a.nachtraege ? `<div class="rw-hinweisleiste"><span><b>${a.nachtraege} ${a.nachtraege === 1 ? 'Nachtrag' : 'Nachträge'}</b> nach dem letzten Export – in der Vorschau markiert. Excel neu erstellen oder in WinAB nachtragen.</span></div>` : ''}
@@ -718,7 +719,7 @@
     el.innerHTML = `<div class="rw-vorschau">${[['maerkte', 'Märkte'], ['antworten', 'Wochenantworten'], ['bestellungen', 'Bestellungen'], ['stueck', 'Stück'], ['dauerauftraege', 'Daueraufträge'], ['notizen', 'Notizen'], ['lieferwege', 'Lieferwege']]
       .map(([k, t]) => `<div><b>${zahl(z[k] || 0)}</b><span>${t}</span></div>`).join('')}</div>
       ${p.vorschlaege ? `<p class="rw-hinweis" id="rw-e-vorschlag">${p.vorschlaege === 1 ? 'Eine Liste wurde' : p.vorschlaege + ' Listen wurden'} nach dem Namen einem Mitarbeiter zugeordnet – bitte prüfen.</p>` : ''}
-      <div class="rw-formraster" style="margin-bottom:10px">${Object.entries(obj(v.listen)).map(([l, n]) => `<label>Liste „${esc(l)}“ (${n} Märkte) gehört zu
+      <div class="rw-formraster" style="margin-bottom:10px">${Object.entries(obj(v.listen)).map(([l, n]) => `<label>Liste „${esc(l)}“ (${maerkte(n)}) gehört zu
         <select class="rw-eingabe" data-liste="${esc(l)}">${personOptionen('<option value="">niemand (später zuweisen)</option>')}</select></label>`).join('')}</div>
       ${v.fehler.length ? `<ul class="rw-fehlerliste">${v.fehler.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
       <div class="rw-knopfreihe">${v.leer ? '' : '<label class="rw-check"><input type="checkbox" id="rw-e-ersetzen"> Vorhandene Daten ersetzen</label>'}
@@ -734,7 +735,7 @@
     const ersetzen = !!($('#rw-e-ersetzen') && $('#rw-e-ersetzen').checked);
     const r = await api('rewe_import', { paket: S.paket.daten, zuordnung: S.paket.zuordnung, ersetzen });
     if (r.status !== 200 || !r.data.ok) { toast(fehlerText(r, 'Übernehmen fehlgeschlagen'), true); return; }
-    toast(`Datenpaket übernommen – ${r.data.zahlen.maerkte} Märkte`);
+    toast(`Datenpaket übernommen – ${maerkte(r.data.zahlen.maerkte)}`);
     S.paket = null; $('#rw-e-dateiname').textContent = ''; $('#rw-e-datei').value = '';
     await neuStart(); renderEinstellungen();
   });

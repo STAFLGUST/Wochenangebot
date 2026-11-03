@@ -23,7 +23,7 @@ Voraussetzungen und Abgrenzung:
 | Kundenseite (Wochenangebot) | `app/index.html` | `theme.js` (im `<head>`), `offer-core.js`, `frontend.js`, `webapp.js` | `app.css` |
 | Web-App | `app/manifest.json`, `app/sw.js` | `webapp.js` registriert `sw.js` (nur im sicheren Kontext) | – |
 | Rechtsseiten | `app/kontakt/`, `app/impressum/`, `app/datenschutz/` (je `index.html`) | `/assets/theme.js` | `legal.css` (ohne `app.css`, Systemschrift) |
-| Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen-vorschau.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-werbung.js`, `admin-einzel.js`, `admin-auswertung.js`, `admin-schutz.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
+| Eingabebereich | `app/admin/index.html` | `theme.js`, dann am Ende: `offer-core.js`, `vendor/qrcode.js`, `stock-core.js`, `admin.js`, `admin-verwaltung.js`, `admin-rollen-vorschau.js`, `admin-rollen.js`, `admin-import.js`, `../module/hr/verwaltung-hr.js`, `admin-artikelwahl.js`, `admin-werbung.js`, `admin-einzel.js`, `admin-auswertung.js` | `app.css`, `admin.css`, `admin-import.css`, `../module/hr/verwaltung-hr.css` |
 | Dashboard | `dashboard/index.html`, `dashboard/abgemeldet.html` | `../assets/theme.js`, `dashboard.js` | `../assets/app.css`, `dashboard.css` |
 | HR · Urlaub | `app/module/hr/index.html` | `../../assets/theme.js`, `hr.js` | `../../assets/app.css`, `hr.css` |
 | CRM · Vertrieb | `app/module/crm/index.html` | `../../assets/theme.js`, `mhd-ware.js` (Reiter MHD-Ware, `window.STAFL_CRM_MHD`, von `crm.js` mit dessen Hilfsfunktionen aufgerufen), `cockpit.js` (Mein Cockpit, Master-Cockpit und Reiter „Übersicht“ im Kunden-Pop-up, `window.STAFL_CRM_COCKPIT`, ebenso von `crm.js` aufgerufen), `einzelangebot.js` (Reiter „Angebote“ im Kunden-Pop-up: Einzelangebote des Kunden, `window.STAFL_CRM_EINZEL`, von `crm.js` aufgerufen), `crm.js` | `../../assets/app.css`, `crm.css` |
@@ -126,7 +126,7 @@ veraltet. Teilskripte folgen alle demselben Muster:
   const W = window.WA;
   const { $, api, esc, icon, toast, confirmBox } = W;
   /* … */
-  W.views.schutz = laden;          // Ansicht „schutz“ (admin-schutz.js)
+  W.views.beispiel = laden;        // Ansicht „beispiel“ (eigene Datei admin-beispiel.js)
 })();
 ```
 
@@ -151,7 +151,7 @@ eingebunden werden und darf `W.views` nur ergänzen. `setView` ruft Ansichten nu
 
 ```js
 const BEREICH_VIEWS = {
-  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log', 'sec', 'schutz'],
+  'verwaltung.verwaltung': ['master', 'vkgruppen', 'kunden', 'gruppen', 'vertreter', 'importe', 'auswertung', 'mail', 'users', 'rollen', 'urlaub', 'log'],
   'angebot.eingabe': ['orders', 'edit', 'einzel', 'hist', 'einkauf', 'angebote'],
   'bestand.intern': ['stock'],
   'verwaltung.import': ['importe'],
@@ -262,12 +262,48 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
 - Alle Fenster sind native `<dialog class="modal">` (breit: `modal wide`) **in `admin/index.html`**, Inhalt als
   `<div class="dlg">` bzw. `<form class="dlg">` mit `.dlg-head`, `.dlg-body`, `.dlg-foot` (Formen in `app.css`).
   Geöffnet mit `showModal()`.
-- Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Klick daneben, Escape oder ein
-  Element mit `data-close` schließt; mit `data-fest` (z. B. `#dlg-user`) nur die eigenen Knöpfe. Dialoge, die ein Skript
-  erst später erzeugt, erhalten das nicht – deshalb neue Dialoge als leeres Gerüst ins HTML schreiben.
+- **Regel für alle Seiten (Inhaber, 02.11.2026):** Ein Klick neben ein Fenster schließt es **nie** – geschlossen wird mit
+  Escape, dem Schließen-Knopf (`data-close`) oder den Knöpfen des Fensters. Das setzt `theme.js` für jede Seite zentral durch
+  (Erfassungsphase am `window`, auch für später erzeugte Fenster); Seiten schreiben dafür keinen eigenen Code. Geprüft von der
+  Testgruppe `einheit` für jedes `<dialog>` jeder Seite (Klick daneben, Escape). Rückfragen nie mit `confirm()`/`alert()`
+  des Browsers, sondern im eigenen Fenster (Eingabebereich `confirmBox`, Kundenseite `frage()`, Module ihr `frage()`).
+- **Einheitliche Bedienung (Durchsicht 03.11.2026), gilt für alle Seiten und Module:**
+  - Jedes Fenster hat oben rechts ein × mit `aria-label` „…schließen“ (Testgruppe `einheit` prüft jedes fest im HTML
+    stehende Fenster). Ausnahmen: reine Rückfragen (`dlg-frage`, `dlg-confirm`: nur Abbrechen/Ja) und Pflichtfenster mit
+    `data-pflicht` (Passwort über den Link aus der E-Mail).
+  - Knopfreihe: Nebenaktionen links, „Abbrechen“/„Schließen“, die Hauptaktion (`btn primary`) ganz rechts. „Schließen“ ist
+    nie ein Hauptknopf. Die Knopfreihe am Ende eines Formularfensters bleibt beim Scrollen sichtbar (`position: sticky`).
+  - Hauptknopf überall in der gemeinsamen Farbe aus `app.css` (hell Bordeaux, dunkel Rosa mit dunkler Schrift); Initialen
+    im Kopf immer auf Bordeaux (`#8c1d2c`).
+  - Am Handy (≤ 560 px) öffnen Fenster als Blatt von unten (volle Breite, oben gerundet).
+  - Folgenreiche Schritte (Löschen, Zurückziehen, Verwerfen) fragen im eigenen Fenster nach; der Fokus liegt auf „Abbrechen“,
+    Escape heißt „nein“.
+  - Aufklappmenüs aus `<details>` bekommen `data-menue`: `theme.js` schließt sie mit Escape (Fokus zurück auf den Titel)
+    und bei einem Klick außerhalb und hält die aufgeklappte Liste ganz im Bild. Menüs aus Knöpfen bleiben ebenfalls im
+    Bild (Kundenseite: `menuImBild`); `aria-expanded` folgt dem Zustand.
+  - Knöpfe überall als Kapsel (`border-radius: 999px`); Fokus nach dem Öffnen im Fenster, auch wenn der Inhalt erst
+    nachgeladen wird (theme.js).
+  - Gekürzte Texte (`text-overflow: ellipsis`) tragen den vollen Text im `title`; Platzhalter langer Felder enden mit „…“
+    (`app.css`, gilt für alle Seiten).
+  - Einzahl/Mehrzahl immer passend („1 Markt“, „3 Märkte“).
+- Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Escape oder ein Element mit
+  `data-close` schließt, nicht während `data-busy` (Speichern läuft). **Auf allen Seiten** (theme.js) schützt jedes Fenster
+  getippte Eingaben in einem `<form>` (ohne Formular: Textfelder und Felder mit `data-mit-warnung`) vor einem versehentlichen
+  Escape: das erste Escape zeigt den gemeinsamen Hinweis `#stafl-hinweis` „Die Eingaben sind noch nicht gespeichert – erneut
+  Escape verwirft sie.“, erst das zweite schließt. Der Schutz endet beim Schließen, beim Zurücksetzen des Formulars, wenn
+  die getippten Felder durch neuen Inhalt ersetzt sind, oder wenn die Seite nach erfolgreichem Speichern
+  `STAFL_FENSTER.gespeichert(dialog)` aufruft (Fenster, die danach offen bleiben) – Abschicken allein zählt nicht. Neue
+  Fehlermeldungen (`role="alert"`) im Fenster scrollt theme.js ins Bild.
+  Ausgenommen: Anmelde-/Passwortformulare, Suchfelder (`type=search`) und alles mit `data-ohne-warnung` (Fenster, die jede
+  Änderung sofort speichern wie „Artikel bearbeiten“, oder mit eigener Rückfrage wie das CRM-Kundenfenster). „Abbrechen“ und Kreuz
+  schließen sofort (bewusste Entscheidung). Nach dem Speichern `delete d.dataset.geaendert` setzen. Dialoge, die ein Skript erst später erzeugt, erhalten die Verdrahtung
+  nicht – deshalb neue Dialoge als leeres Gerüst ins HTML schreiben.
 - `confirmBox(title, html, okLabel, danger)` → `Promise<boolean>` über `#dlg-confirm`. Der Text wird als HTML
   eingesetzt: Werte vorher mit `esc()` maskieren.
-- `toast(msg, ms = 3200)` → `#toast` (`role="status"`, `aria-live="polite"`).
+- `toast(msg, ms = 3200)` → `#toast` (`role="status"`, `aria-live="polite"`). Jeder Toast einer Seite (`[role=status]`
+  mit Klasse `toast` bzw. `…-toast`) liegt als Popover in der obersten Ebene; `theme.js` holt ihn beim Öffnen eines Fensters
+  erneut nach oben, damit er nicht hinter dem unscharfen Hintergrund verschwindet (Prüfung in `einheit`). Neue Toasts
+  deshalb mit `role="status"` und einer Klasse auf `-toast`, unsichtbar über `opacity: 0; pointer-events: none`.
 - `aria-labelledby` jedes Dialogs zeigt auf die `<h2>` im Kopf.
 
 ### Seitenleiste

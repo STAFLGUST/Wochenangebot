@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 156 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 157 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -195,6 +195,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 - `korrekturDialog(v)`
 - `zeigeKorrekturen()`
 - `antragTage()` – Arbeitstage des Antrags (Vorschau im Browser; verbindlich rechnet der Server)
+- `frage(titel, text, ja)` – Rückfrage im eigenen Fenster: Escape oder „Abbrechen“ = nein, der Fokus liegt auf „Abbrechen“
 
 **Kalender / Monatsplan**
 

@@ -40,7 +40,7 @@ body.rw :focus-visible{outline:none;box-shadow:var(--rw-focus)}
 .rw-aktionen{margin-left:auto;display:flex;align-items:center;gap:8px}
 .rw-rund{width:40px;height:40px;border:0;border-radius:50%;display:grid;place-items:center;background:var(--rw-chip);color:var(--rw-text);cursor:pointer}
 .rw-user{display:flex;align-items:center;gap:8px;padding:0 12px 0 4px;height:40px;border-radius:99px;background:var(--rw-chip);font-size:13px}
-.rw-initialen{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--rw-accent);color:#fff;font-weight:700}
+.rw-initialen{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#8c1d2c;color:#fff;font-weight:700}
 .rw-user-name{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Leiste mit Reitern und Schnellaktionen */
@@ -167,6 +167,8 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .rw-lmwahl{margin:0;padding:10px 12px;border:1px solid var(--rw-border);border-radius:12px}
 .rw-lmwahl legend{padding:0 5px;color:var(--rw-muted);font-size:12px;font-weight:650}
 .rw-lmwahl>div{display:flex;flex-wrap:wrap;gap:8px 16px}
+.rw-lmwahl>.rw-formraster,.rw-lmwahl>.rw-mengenreihe{display:grid}   /* Raster statt Fließreihe: Felder gleich breit (Marktfenster) */
+.rw-lmwahl>div+div{margin-top:10px}
 .rw-lmwahl .rw-check{color:var(--rw-text)}
 .rw-lm-tabelle input.rw-eingabe{width:100%}
 .rw-lm-tabelle td.rw-zahl input.rw-eingabe{max-width:140px;margin-left:auto;display:block;text-align:right}
@@ -186,6 +188,8 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .rw-meldung:empty{display:none}
 .rw-meldung.ok{color:var(--rw-green)}
 .rw-knopfreihe{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
+/* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
+.rw-dialog form>.rw-knopfreihe:last-child{position:sticky;bottom:0;z-index:2;margin:0 -18px -18px;padding:8px 18px 18px;background:var(--rw-card)}
 .rw-knopfreihe .rw-check{margin-right:auto}
 
 /* Import */
@@ -233,6 +237,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .rw-karten td:empty{display:none}
   .rw-karten tfoot tr,.rw-karten tr.rw-summe{background:var(--rw-total-bg);border-radius:10px}
   .rw-mengentabelle td.rw-zahl input.rw-eingabe{margin-left:0;max-width:none}
+  .rw-karten td>.rw-eingabe{width:100%}   /* Eingaben in Karten (Einstellungen) nie breiter als ihre Spalte */
 }
 @media(max-width:560px){
   .rw-seite{padding:12px 12px 28px;gap:14px}
@@ -260,6 +265,7 @@ textarea.rw-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
   .rw-frist .rw-mengen{grid-column:1/-1}
   .rw-dialog{width:100vw;max-width:100vw;max-height:94dvh;margin:auto 0 0;border-radius:22px 22px 0 0}
   .rw-dialog form{padding:15px}
+  .rw-dialog form>.rw-knopfreihe:last-child{margin:0 -15px -15px;padding:8px 15px calc(15px + env(safe-area-inset-bottom))}
   .rw-knopfreihe .btn{min-height:40px}
 }
 @media(max-width:480px){body.rw .rw-kopf .brand-logo{width:30px;height:28px;object-fit:cover;object-position:left center}.rw-modul .i{display:none}}
@@ -328,7 +334,7 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
 .rw-gkopf .rw-rechts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
 .rw-zkopf,.rw-zeile{display:grid;grid-template-columns:minmax(200px,1.25fr) minmax(150px,1fr) 222px minmax(330px,1.6fr) 40px;gap:14px;align-items:center;padding:10px 16px}
 .rw-zkopf{background:var(--rw-head-bg);color:var(--rw-head-text);font-size:10px;font-weight:750;letter-spacing:.055em;text-transform:uppercase}
-.rw-zeile{border-top:1px solid var(--rw-line);background:var(--rw-card)}
+.rw-zeile{;background:var(--rw-card)}
 .rw-zeile.erledigt{background:transparent}
 .rw-zeile.gerade{box-shadow:inset 3px 0 0 var(--rw-green);background:var(--rw-card)}   /* gerade beantwortet, bleibt im Filter „Offen“ stehen */
 .rw-zeile.blink{animation:rw-blink 1.6s ease-out}
@@ -372,7 +378,7 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
 .rw-nichtfaellig{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--rw-muted);font-size:12.5px}
 .rw-antwort .rw-notizfeld{height:32px;font-size:12.5px}
 .rw-akte-link{width:38px;height:38px;border-radius:11px;border:1px solid var(--rw-border);background:var(--rw-card);display:grid;place-items:center;color:var(--rw-text)}
-.rw-gfuss{padding:11px 16px;border-top:1px solid var(--rw-line);color:var(--rw-muted);font-size:12px}
+.rw-gfuss{padding:11px 16px;color:var(--rw-muted);font-size:12px}
 .rw-legende{display:flex;gap:6px 14px;flex-wrap:wrap;color:var(--rw-muted);font-size:12px;margin-top:6px}
 .rw-legende span{display:inline-flex;align-items:center;gap:6px}
 .rw-legende .rw-z{width:16px;height:16px;border-radius:5px;font-size:9px}
@@ -406,7 +412,7 @@ body.rw{--rw-blau:#3a5280;--rw-blau-soft:rgba(115,132,167,.2)}
 .rw-heat .wochen i.p{background:var(--rw-blau-soft);box-shadow:inset 0 0 0 1px var(--rw-blau)}
 .rw-heat .wochen i.jetzt{outline:2px solid var(--rw-accent);outline-offset:-1px}
 .rw-verlaufsliste{list-style:none;margin:0;padding:0;display:grid}
-.rw-verlaufsliste li{display:grid;grid-template-columns:96px 30px minmax(0,1fr);gap:10px;padding:11px 0;border-top:1px solid var(--rw-line)}
+.rw-verlaufsliste li{display:grid;grid-template-columns:96px 30px minmax(0,1fr);gap:10px;padding:11px 0}
 .rw-verlaufsliste time{color:var(--rw-muted);font-size:12px;padding-top:6px;font-variant-numeric:tabular-nums}
 .rw-verlaufsliste .rw-av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--rw-chip);font-size:11px;font-weight:750}
 .rw-verlaufsliste .rw-av.system{background:var(--rw-blau-soft);color:var(--rw-blau)}
