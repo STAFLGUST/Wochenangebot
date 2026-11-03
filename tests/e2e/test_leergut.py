@@ -70,8 +70,14 @@ check('ohne Anmeldung: kein Zugang (401/404)', N.call('leergut_start')[0] in (40
 check('ohne Leergut-Recht (nur Modulzugang der Rolle): 403', O.call('leergut_start')[0] == 403)
 st, r = L.call('leergut_start')
 check('Ansehen: Start ok, ohne Bearbeiten und Verwalten, leer', st == 200 and r['rechte'] == {'bearbeiten': False, 'verwalten': False} and r['leer'] is True, r)
-check('Grundwerte Lademittel: E2 5,50 €, H1 36,00 €, sieben Arten', [x['id'] for x in r['lademittel']] == ['e2', 'h1', 'eu', 'haken', 'e1', 'be2', 'kuebel']
+check('Grundwerte Lademittel: E2 5,50 €, H1 36,00 €, neun Arten (mit Karton und WK2-Kiste aus WinAB)',
+      [x['id'] for x in r['lademittel']] == ['e2', 'h1', 'eu', 'haken', 'e1', 'be2', 'kuebel', 'karton', 'wk2']
       and r['lademittel'][0]['wert'] == 5.5 and r['lademittel'][1]['wert'] == 36.0 and r['lademittel'][2]['wert'] is None, r['lademittel'])
+check('WinAB-Stammdaten: Nummer und Kurzbezeichnung wie in WinAB („Lademittel suchen“), E1 und Blaue E2 ohne Nummer',
+      {x['id']: (x.get('winabNr', ''), x.get('kurz', '')) for x in r['lademittel']} == {'e2': ('1', 'E2'), 'h1': ('2', 'H1'), 'kuebel': ('3', 'KÜ'), 'eu': ('4', 'EU'),
+      'karton': ('5', 'KT'), 'haken': ('6', 'EH'), 'wk2': ('7', 'WK2'), 'e1': ('', ''), 'be2': ('', '')}, r['lademittel'])
+check('Karton angelegt, aber inaktiv (kein Leergut); WK2-Kiste aktiv', {x['id']: x['aktiv'] for x in r['lademittel']}['karton'] is False
+      and {x['id']: x['aktiv'] for x in r['lademittel']}['wk2'] is True and [x['name'] for x in r['lademittel'] if x['id'] == 'wk2'] == ['WK2-Kiste'])
 check('Buchen: bearbeiten ja, verwalten nein', Bb.call('leergut_start')[1]['rechte'] == {'bearbeiten': True, 'verwalten': False})
 check('Verwalten: beides', V.call('leergut_start')[1]['rechte'] == {'bearbeiten': True, 'verwalten': True})
 
@@ -224,6 +230,15 @@ check('Lademittel: doppelt → 422', V.call('leergut_lademittel_save', {'lademit
 check('Lademittel: negativer Wert → 422', V.call('leergut_lademittel_save', {'lademittel': [{**r['lademittel'][0], 'wert': -1}] + r['lademittel'][1:]})[0] == 422)
 st, r = V.call('leergut_lademittel_save', {'lademittel': [{**x, 'aktiv': x['id'] != 'kuebel'} for x in r['lademittel']]})
 check('Lademittel deaktiviert', st == 200 and [x['aktiv'] for x in r['lademittel'] if x['id'] == 'kuebel'] == [False], r)
+check('Lademittel gespeichert: WinAB-Nummern bleiben (auch ergänzte), neues ohne Nummer', st == 200
+      and {x['id']: x.get('winabNr', '') for x in r['lademittel']}.get('wk2') == '7' and {x['id']: x.get('winabNr', '') for x in r['lademittel']}.get('dolavbox', '') == '', r)
+lm2 = r['lademittel']
+for name, aend in (('WinAB-Nr. doppelt', {'winabNr': '1'}), ('WinAB-Nr. mit Buchstaben', {'winabNr': '7a'}), ('WinAB-Nr. zu lang', {'winabNr': '12345'}),
+                   ('Kurzbezeichnung zu lang', {'kurz': 'X' * 9})):
+    st, r = V.call('leergut_lademittel_save', {'lademittel': [({**x, **aend} if x['id'] == 'dolavbox' else x) for x in lm2]})
+    check(f'Lademittel: {name} → 422', st == 422 and r.get('error'), (st, r))
+st, r = V.call('leergut_lademittel_save', {'lademittel': [({**x, 'winabNr': '8', 'kurz': 'DB'} if x['id'] == 'dolavbox' else x) for x in lm2]})
+check('Lademittel: eigene WinAB-Nr. und Kurzbezeichnung', st == 200 and [(x['winabNr'], x['kurz']) for x in r['lademittel'] if x['id'] == 'dolavbox'] == [('8', 'DB')], r)
 
 # ── Datenpaket ──
 PAKET = json.load(open(PAKET_DATEI, encoding='utf-8'))
@@ -245,8 +260,10 @@ check('Übernahme mit „ersetzen“: Zahlen wie im Paket', st == 200 and z['par
       and z['abstimmungen'] == len(PAKET['abstimmungen']) and z['abschreibungen'] == len(PAKET['abschreibungen']) and z['inventur'] == len(PAKET['inventur']), r)
 s = L.call('leergut_start')[1]
 namen = {p['name']: p['id'] for p in s['partner']}
-check('ersetzt: alte Partner weg, Lademittel aus dem Paket', 'Test-Spedition Nord' not in namen and set(namen) == {p['name'] for p in PAKET['partner']}
-      and [x['id'] for x in s['lademittel']] == [x['id'] for x in PAKET['lademittel']], namen)
+check('ersetzt: alte Partner weg, Lademittel aus dem Paket, fehlende WinAB-Lademittel ergänzt (Kübel, Karton inaktiv, WK2-Kiste)',
+      'Test-Spedition Nord' not in namen and set(namen) == {p['name'] for p in PAKET['partner']}
+      and [x['id'] for x in s['lademittel']] == [x['id'] for x in PAKET['lademittel']] + ['kuebel', 'karton', 'wk2']
+      and [x.get('winabNr') for x in s['lademittel'] if x['id'] in ('e2', 'haken')] == ['1', '6'], (namen, s['lademittel']))
 erw = {}
 for b in PAKET['bewegungen']:
     if b['partner'] == 'spedition':
@@ -351,6 +368,15 @@ check('Partner mit WinAB-Kundennummer', st == 200 and hand.get('kundenNr') == '9
 check('WinAB-Kundennummer: nur Ziffern (422)', V.call('leergut_partner_save', {'name': 'Kunde X', 'art': 'kunde', 'kundenNr': '12-34', 'lademittel': ['e2']})[0] == 422)
 st, r = V.call('leergut_partner_save', {'name': 'Kunde Y', 'art': 'kunde', 'kundenNr': '9100002', 'lademittel': ['e2']})
 check('WinAB-Kundennummer doppelt → 422 mit Namen', st == 422 and 'Testkunde Süd (von Hand)' in r.get('error', ''), r)
+# WinAB-Lieferantennummer (Lieferanten, Speditionen) – wie die Kundennummer: nur Ziffern, eindeutig, bleibt ohne Angabe
+st, r = V.call('leergut_partner_save', {'name': 'Testlieferant WinAB', 'art': 'lieferant', 'lieferantNr': '2850008', 'lademittel': ['e2']})
+lief = r.get('partner', {})
+check('Partner mit WinAB-Lieferantennummer', st == 200 and lief.get('lieferantNr') == '2850008', r)
+check('WinAB-Lieferantennummer: nur Ziffern (422)', V.call('leergut_partner_save', {'name': 'Lieferant X', 'art': 'lieferant', 'lieferantNr': '28-5', 'lademittel': ['e2']})[0] == 422)
+st, r = V.call('leergut_partner_save', {'name': 'Lieferant Y', 'art': 'spedition', 'lieferantNr': '2850008', 'lademittel': ['e2']})
+check('WinAB-Lieferantennummer doppelt → 422 mit Namen', st == 422 and 'Testlieferant WinAB' in r.get('error', ''), r)
+st, r = V.call('leergut_partner_save', {'id': lief['id'], 'rev': lief['rev'], 'name': lief['name'], 'art': 'lieferant', 'lademittel': ['e2']})
+check('Partner ändern ohne Lieferantennummer im Aufruf: Nummer bleibt', st == 200 and r['partner']['lieferantNr'] == '2850008', r)
 st, r = V.call('leergut_partner_save', {'id': hand['id'], 'rev': hand['rev'], 'name': hand['name'], 'art': 'kunde', 'lademittel': ['e2'], 'notiz': 'ohne Nummer gesendet'})
 check('Partner ändern ohne Kundennummer im Aufruf: Nummer bleibt', st == 200 and r['partner']['kundenNr'] == '9100002', r)
 
@@ -358,7 +384,7 @@ st, r = V.call('leergut_winab_import', {**WB, 'vorschau': True})
 z = r.get('zahlen', {})
 check('WinAB-Vorschau: 2 neue Kundenkonten, 4 neue Belege, 1 ohne Wirkung, Saldo danach', st == 200 and not r['fehler'] and z.get('kunden') == 2 and z['neu'] == 4
       and z['gleich'] == 0 and z['ohneWirkung'] == 1 and r['summe'] == {'e2': 4, 'h1': 1} and z['konten'] == 3, r)
-check('WinAB-Vorschau schreibt nichts', len(V.call('leergut_start')[1]['partner']) == n_p + 1 and not any(b.get('quelle') == 'winab' for b in V.call('leergut_konto&partner=' + hand['id'])[1]['bewegungen']))
+check('WinAB-Vorschau schreibt nichts', len(V.call('leergut_start')[1]['partner']) == n_p + 2 and not any(b.get('quelle') == 'winab' for b in V.call('leergut_konto&partner=' + hand['id'])[1]['bewegungen']))
 st, r = V.call('leergut_winab_import', WB)
 check('WinAB übernommen', st == 200 and r['zahlen']['neu'] == 4 and sorted(r['neueKunden']) == ['Testkunde Nord GmbH (9100001)', 'Testkunde Nord GmbH (9100003)'], r)
 s = V.call('leergut_start')[1]
@@ -380,7 +406,7 @@ check('WinAB: Gutschrift als Abholung, Lieferschein am Berichtsdatum „noch nic
       and 'noch nicht zurück' in off[0]['text'] and 'noch nicht zurück' not in kb[0]['text'], (gs, off))
 st, r = V.call('leergut_winab_import', WB)
 check('WinAB erneut: alles unverändert, keine neuen Konten', st == 200 and r['zahlen']['gleich'] == 4 and r['zahlen']['neu'] == 0 and r['zahlen']['kunden'] == 0
-      and len(V.call('leergut_start')[1]['partner']) == n_p + 3, r)
+      and len(V.call('leergut_start')[1]['partner']) == n_p + 4, r)
 for name, b, erw in (('Zeitraum ab 01.06.: frühere Belege bleiben', wb(bericht={**WB['bericht'], 'von': '2026-06-01'}, belege=WB['belege'][4:]), {'gleich': 1, 'ausgeglichen': 0}),
                      ('nur Kunde 9100003 im Bericht: andere bleiben', wb(kunden=WB['kunden'][2:3], belege=WB['belege'][4:]), {'gleich': 1, 'ausgeglichen': 0}),
                      ('Kunde 9100001 ohne Belege im Bericht: ausgeglichen', wb(kunden=WB['kunden'][::2], belege=WB['belege'][4:]), {'gleich': 1, 'ausgeglichen': 1})):
@@ -594,7 +620,7 @@ with sync_playwright() as p:
     pg.fill('#bw-mengen [data-seite="a"][data-lm="e2"]', '1.200'); pg.fill('#bw-mengen [data-seite="z"][data-lm="e2"]', '200'); pg.fill('#bw-beleg', 'UI-LS-1')
     check('Bewegung: Saldo danach rechnet mit', vz(saldo_sp['e2'] + 1000) in text(pg, '#bw-mengen [data-danach="e2"]'), text(pg, '#bw-mengen'))
     pg.check('#bw-alle')
-    check('Bewegung: alle Lademittel zeigen, Eingaben bleiben', pg.locator('#bw-mengen tr').count() == len(s['lademittel']) and pg.input_value('#bw-mengen [data-seite="a"][data-lm="e2"]') == '1.200')
+    check('Bewegung: alle aktiven Lademittel zeigen (ohne Karton), Eingaben bleiben', pg.locator('#bw-mengen tr').count() == len([x for x in s['lademittel'] if x['aktiv']]) and pg.input_value('#bw-mengen [data-seite="a"][data-lm="e2"]') == '1.200')
     pg.screenshot(path=os.path.join(SH, 'leergut_bewegung_1280.png'))
     pg.click('#bw-form [type="submit"]'); zu(pg, '#dlg-bewegung')
     pg.wait_for_function(f"(document.querySelector('#lg-k-detail .lg-salden')?.textContent || '').includes('{vz(saldo_sp['e2'] + 1000)}')")
@@ -705,10 +731,16 @@ with sync_playwright() as p:
     pg.fill('#pa-name', 'UI-Kühlhaus'); pg.select_option('#pa-art', 'kuehlhaus'); pg.fill('#pa-email', 'kein-at')
     pg.click('#pa-form [type="submit"]'); pg.wait_for_selector('#pa-meldung:not(:empty)')
     check('Partner: Fehler des Servers im Dialog', 'E-Mail' in text(pg, '#pa-meldung'))
-    pg.fill('#pa-email', 'ui@example.invalid'); pg.click('#pa-form [type="submit"]'); zu(pg, '#dlg-partner')
+    pg.fill('#pa-email', 'ui@example.invalid'); pg.fill('#pa-lfnr', '2300004'); pg.click('#pa-form [type="submit"]'); zu(pg, '#dlg-partner')
     pa = [x for x in V.call('leergut_start')[1]['partner'] if x['name'] == 'UI-Kühlhaus']
-    check('Oberfläche: Partner angelegt', len(pa) == 1 and pa[0]['art'] == 'kuehlhaus' and pa[0]['fristTage'] == 14 and pa[0]['lademittel'] == ['e2', 'h1'], pa)
+    check('Oberfläche: Partner angelegt (mit WinAB-Lieferantennummer)', len(pa) == 1 and pa[0]['art'] == 'kuehlhaus' and pa[0]['fristTage'] == 14 and pa[0]['lademittel'] == ['e2', 'h1']
+          and pa[0]['lieferantNr'] == '2300004', pa)
     pg.wait_for_function("(document.querySelector('#lg-e-partner')?.textContent || '').includes('UI-Kühlhaus')")
+    check('Partnerliste zeigt die WinAB-Lieferantennummer', 'WinAB-Lief. 2300004' in text(pg, '#lg-e-partner'))
+    check('Lademittel: WinAB-Nr. und Kurzbezeichnung je Zeile (WK2-Kiste 7, Karton 5 inaktiv)',
+          pg.input_value('#lg-e-lm tr[data-id="wk2"] [data-f="winabNr"]') == '7' and pg.input_value('#lg-e-lm tr[data-id="wk2"] [data-f="kurz"]') == 'WK2'
+          and pg.input_value('#lg-e-lm tr[data-id="karton"] [data-f="winabNr"]') == '5' and not pg.is_checked('#lg-e-lm tr[data-id="karton"] [data-f="aktiv"]'))
+    pg.screenshot(path=os.path.join(SH, 'leergut_einstellungen_1280.png'), full_page=True)
     pg.fill('#lg-e-lm tr[data-id="e2"] [data-f="wert"]', '6,25'); pg.click('#lg-e-lm-form [type="submit"]')
     pg.wait_for_function("(document.querySelector('#lg-e-lm tr[data-id=\"e2\"] [data-f=\"wert\"]')?.value || '') === '6,25'")
     check('Oberfläche: Wert E2 geändert (6,25 €)', V.call('leergut_start')[1]['lademittel'][0]['wert'] == 6.25)
@@ -810,6 +842,13 @@ with sync_playwright() as p:
     pg.click('#lg-tabs [data-tab="bilanz"]')   # die Bilanz von vorhin zeigt noch die Kunden aus dem API-Teil
     pg.wait_for_function("(document.querySelector('#lg-b-tabelle tr[data-kunden]')?.textContent || '').includes('(3 Konten)')")
     check('Bilanz: Kunden aus WinAB in einer Zeile (CSV bleibt je Konto)', 'Kunden aus WinAB (3 Konten)' in text(pg, '#lg-b-tabelle') and 'Testkunde' not in text(pg, '#lg-b-tabelle'))
+    ctx.close()
+
+    # Einstellungen am Handy: Lademittel mit Kurzbezeichnung und WinAB-Nr. passen in die Breite
+    ctx, pg = anmelden('vera', 'Verwalt-Konto-56', '198.51.100.12', 390, 'dark', 844)
+    pg.click('#lg-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#lg-e-lm tr[data-id="wk2"]')
+    check('390px verwalten: Einstellungen mit WinAB-Nr. ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1'))
+    pg.screenshot(path=os.path.join(SH, 'leergut_einstellungen_390_dark.png'), full_page=True)
     ctx.close()
 
     # Buchen am Handy: Abschreibungen mit beiden Knöpfen, Dachser-Dialog

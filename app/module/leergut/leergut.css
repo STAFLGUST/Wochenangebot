@@ -170,6 +170,7 @@ textarea.lg-eingabe{height:auto;padding:8px 10px;resize:vertical;line-height:1.4
 .lg-lmwahl .lg-check{color:var(--lg-text)}
 .lg-lm-tabelle input.lg-eingabe{width:100%}
 .lg-lm-tabelle td.lg-zahl input.lg-eingabe{max-width:140px;margin-left:auto;display:block;text-align:right}
+.lg-lm-tabelle input.lg-kurz{max-width:90px}   /* Kurzbezeichnung und WinAB-Nr. */
 
 /* Dialoge */
 .lg-dialog{width:min(860px,calc(100vw - 28px));max-height:calc(100dvh - 28px);padding:0;border:1px solid var(--lg-border);border-radius:22px;background:var(--lg-card);color:var(--lg-text);box-shadow:0 28px 80px rgba(0,0,0,.32)}

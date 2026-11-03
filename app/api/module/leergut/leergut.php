@@ -19,6 +19,9 @@ declare(strict_types=1);
      leergut-abschreibungen Dachser-Abschreibungen „lt. Empfänger“: Kunde, Sendung, Mengen, Status offen/widersprochen/
                             berechnet/ausgeglichen/nicht zu beachten, WinAB-Auftrag, Notiz, Verlauf
      leergut-inventur       Eigener Bestand zum Stichtag (z. B. Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz
+   Lademittel tragen die Nummer und Kurzbezeichnung aus den WinAB-Stammdaten („Lademittel suchen“: 1 E2, 2 H1, 3 Kübel,
+   4 Euro-Palette, 5 Karton, 6 Eurohaken, 7 WK2); fehlende WinAB-Lademittel ergänzt lg_stamm beim Lesen (Karton inaktiv –
+   kein Leergut, solange niemand es aktiviert). Partner tragen die WinAB-Kunden- bzw. -Lieferantennummer (kundenNr, lieferantNr).
    Kundenkonten aus WinAB: den Bericht „Lademittelbewegungen Kunden“ liest die Oberfläche im Browser und schickt nur die
    Belege, die den Saldo eines Kunden ändern; lg_winab_pruefen/lg_winab_abgleich gleichen sie je Beleg ab (Partner mit
    WinAB-Kundennummer „kundenNr“, Bewegungen mit Herkunft „winab“; geänderte und ausgeglichene Belege werden storniert).
@@ -47,6 +50,17 @@ const LG_FRIST_STANDARD = 14;
 const LG_WINAB_ARTEN = ['Lieferschein', 'Gutschrift', 'Rechnung'];   // Sammelrechnungen wiederholen die Lieferscheine
 const LG_MAX_WINAB_BELEGE = 50000;
 const LG_MAX_WINAB_KUNDEN = 5000;
+/* Lademittel in WinAB (Stammdaten „Lademittel suchen“, Stand 03.11.2026): Nummer, Kurzbezeichnung, Kennung im Modul.
+   Karton ist kein Leergut (Entscheidung 29.10.2026) – angelegt, aber inaktiv: zählt weder im Saldo noch im WinAB-Abgleich. */
+const LG_WINAB_LADEMITTEL = [
+    ['id' => 'e2', 'nr' => '1', 'kurz' => 'E2', 'name' => 'E2-Kiste'],
+    ['id' => 'h1', 'nr' => '2', 'kurz' => 'H1', 'name' => 'H1-Palette'],
+    ['id' => 'kuebel', 'nr' => '3', 'kurz' => 'KÜ', 'name' => 'Kübel'],
+    ['id' => 'eu', 'nr' => '4', 'kurz' => 'EU', 'name' => 'Europalette'],
+    ['id' => 'karton', 'nr' => '5', 'kurz' => 'KT', 'name' => 'Karton', 'aktiv' => false],
+    ['id' => 'haken', 'nr' => '6', 'kurz' => 'EH', 'name' => 'Eurohaken'],
+    ['id' => 'wk2', 'nr' => '7', 'kurz' => 'WK2', 'name' => 'WK2-Kiste'],
+];
 
 /* ---------- Grundwerte ---------- */
 /* Lademittel der Excel-Liste; Werte je Stück laut Leitfaden (änderbar unter Einstellungen) */
@@ -64,9 +78,32 @@ function lg_stamm(): array
     $d = store_read('leergut-stamm');
     $d = is_array($d) ? $d : [];
     $out = ['rev' => (int)($d['rev'] ?? 0)];
-    $out['lademittel'] = is_array($d['lademittel'] ?? null) && $d['lademittel'] ? array_values($d['lademittel']) : lg_grund_lademittel();
+    $out['lademittel'] = lg_lademittel_winab(is_array($d['lademittel'] ?? null) && $d['lademittel'] ? array_values($d['lademittel']) : lg_grund_lademittel());
     $out['partner'] = is_array($d['partner'] ?? null) ? array_values($d['partner']) : [];
     return $out + $d;
+}
+/* WinAB-Stammdaten ergänzen: Lademittel ohne Angabe bekommen Nummer und Kurzbezeichnung aus WinAB (über Kennung oder
+   gleichen Namen), fehlende WinAB-Lademittel werden angehängt. Gespeicherte Angaben – auch eine bewusst leere Nummer –
+   bleiben; eine Nummer, die schon ein anderes Lademittel trägt, wird nicht doppelt vergeben. */
+function lg_lademittel_winab(array $liste): array
+{
+    $norm = function ($t) { return preg_replace('/[^a-z0-9]+/', '', strtr(mb_strtolower((string)$t), ['ä' => 'ae', 'ö' => 'oe', 'ü' => 'ue', 'ß' => 'ss'])); };
+    $vergeben = [];
+    foreach ($liste as $l) if (is_array($l) && (string)($l['winabNr'] ?? '') !== '') $vergeben[(string)$l['winabNr']] = true;
+    foreach (LG_WINAB_LADEMITTEL as $w) {
+        $i = null;
+        foreach ($liste as $j => $l) if (is_array($l) && (string)($l['id'] ?? '') === $w['id']) { $i = $j; break; }
+        if ($i === null) foreach ($liste as $j => $l) if (is_array($l) && $norm($l['name'] ?? '') === $norm($w['name'])) { $i = $j; break; }
+        if ($i === null) {
+            if (isset($vergeben[$w['nr']])) continue;
+            $liste[] = ['id' => $w['id'], 'name' => $w['name'], 'wert' => null, 'aktiv' => $w['aktiv'] ?? true, 'winabNr' => $w['nr'], 'kurz' => $w['kurz']];
+            $vergeben[$w['nr']] = true;
+            continue;
+        }
+        if (!array_key_exists('winabNr', $liste[$i]) && !isset($vergeben[$w['nr']])) { $liste[$i]['winabNr'] = $w['nr']; $vergeben[$w['nr']] = true; }
+        if (!array_key_exists('kurz', $liste[$i])) $liste[$i]['kurz'] = $w['kurz'];
+    }
+    return array_values($liste);
 }
 function lg_doc(string $name): array
 {
@@ -175,7 +212,7 @@ function lg_lademittel_pruefen($v, array $alt): array
     if (!is_array($v) || !$v) throw new InvalidArgumentException('Lademittel: mindestens ein Eintrag.');
     if (count($v) > LG_MAX_LADEMITTEL) throw new InvalidArgumentException('Lademittel: höchstens ' . LG_MAX_LADEMITTEL . ' Einträge.');
     $altNach = []; foreach ($alt as $a) if (is_array($a) && isset($a['id'])) $altNach[(string)$a['id']] = $a;
-    $out = []; $ids = [];
+    $out = []; $ids = []; $nrs = [];
     foreach (array_values($v) as $i => $x) {
         if (!is_array($x)) throw new InvalidArgumentException('Lademittel: ungültige Angaben.');
         $name = lg_text($x['name'] ?? '', 40, 'Lademittel ' . ($i + 1));
@@ -190,6 +227,16 @@ function lg_lademittel_pruefen($v, array $alt): array
         $row = $altNach[$id] ?? [];
         $row['id'] = $id; $row['name'] = $name; $row['wert'] = lg_betrag($x['wert'] ?? null, "Wert „{$name}“");
         $row['aktiv'] = !array_key_exists('aktiv', $x) || !empty($x['aktiv']);
+        // WinAB-Nummer und Kurzbezeichnung: ohne Angabe bleiben die gespeicherten Werte (ohne Wert ergänzt lg_lademittel_winab)
+        if (array_key_exists('winabNr', $x)) {
+            $nr = lg_text($x['winabNr'], 4, "WinAB-Nr. „{$name}“");
+            if ($nr !== '' && !preg_match('/^\d{1,4}$/', $nr)) throw new InvalidArgumentException("WinAB-Nr. „{$name}“: bitte nur Ziffern.");
+            $row['winabNr'] = $nr;
+        }
+        $nr = (string)($row['winabNr'] ?? '');
+        if ($nr !== '' && isset($nrs[$nr])) throw new InvalidArgumentException("Die WinAB-Nr. $nr ist doppelt vergeben („{$nrs[$nr]}“ und „{$name}“).");
+        if ($nr !== '') $nrs[$nr] = $name;
+        if (array_key_exists('kurz', $x)) $row['kurz'] = lg_text($x['kurz'], 8, "Kurzbezeichnung „{$name}“");
         $out[] = $row;
     }
     // Entfernen würde Buchungen unlesbar machen: nicht mehr genutzte Lademittel werden deaktiviert, nicht gelöscht
@@ -212,6 +259,13 @@ function lg_partner_pruefen(array $b, ?array $alt, array $stamm): array
         foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['kundenNr'] ?? '') === $nr)
             throw new InvalidArgumentException("Die WinAB-Kundennummer $nr gehört schon zu „{$p['name']}“.");
         $row['kundenNr'] = $nr;
+    }
+    if (array_key_exists('lieferantNr', $b) || !isset($row['lieferantNr'])) {   // WinAB-Lieferantennummer (Lieferanten, Speditionen)
+        $nr = lg_text($b['lieferantNr'] ?? '', 12, 'WinAB-Lieferantennummer');
+        if ($nr !== '' && !preg_match('/^\d{1,12}$/', $nr)) throw new InvalidArgumentException('WinAB-Lieferantennummer: bitte nur Ziffern.');
+        foreach ($stamm['partner'] as $p) if ($nr !== '' && ($alt === null || $p['id'] !== $alt['id']) && (string)($p['lieferantNr'] ?? '') === $nr)
+            throw new InvalidArgumentException("Die WinAB-Lieferantennummer $nr gehört schon zu „{$p['name']}“.");
+        $row['lieferantNr'] = $nr;
     }
     $frist = $b['fristTage'] ?? LG_FRIST_STANDARD;
     $row['fristTage'] = ($frist === '' || $frist === null) ? 0 : lg_ganz($frist, 'Frist', false);
@@ -591,7 +645,8 @@ function lg_winab_pruefen($b, array $stamm): array
     }
     $bl = $b['belege'] ?? [];
     if (!is_array($bl) || count($bl) > LG_MAX_WINAB_BELEGE) throw new InvalidArgumentException('Belegliste fehlt oder ist zu lang (höchstens ' . LG_MAX_WINAB_BELEGE . ').');
-    $lm = lg_ids($stamm['lademittel']);
+    // nur aktive Lademittel: inaktive (z. B. Karton – kein Leergut) bucht der Abgleich nicht
+    $lm = lg_ids(array_values(array_filter($stamm['lademittel'], function ($l) { return !empty($l['aktiv']); })));
     $belege = []; $fehler = []; $ohneWirkung = 0;
     foreach (array_values($bl) as $i => $x) {
         try {

@@ -163,7 +163,7 @@
         <section class="lg-panel lg-glas">
           <div class="lg-panelkopf"><h2>Lademittel und Werte</h2><span class="lg-hilfe">Wert je Stück für die Bewertung in der Bilanz. Lademittel werden deaktiviert, nicht gelöscht.</span></div>
           <form id="lg-e-lm-form" novalidate>
-            <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-lm-tabelle"><thead><tr><th>Bezeichnung</th><th class="lg-zahl">Wert je Stück (€)</th><th>Aktiv</th></tr></thead><tbody id="lg-e-lm"></tbody></table></div>
+            <div class="lg-tabelle-wrap"><table class="lg-tabelle lg-lm-tabelle"><thead><tr><th>Bezeichnung</th><th>Kurzbez.</th><th>WinAB-Nr.</th><th class="lg-zahl">Wert je Stück (€)</th><th>Aktiv</th></tr></thead><tbody id="lg-e-lm"></tbody></table></div>
             <p class="lg-meldung" id="lg-e-lm-meldung" role="alert"></p>
             <div class="lg-knopfreihe"><button class="btn" type="button" id="lg-e-lm-plus"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Lademittel</button><button class="btn primary" type="submit">Speichern</button></div>
           </form>
@@ -310,6 +310,7 @@
       <label>Firma<select class="lg-eingabe" id="pa-firma"></select></label>
       <label>Konto-Nr. beim Partner<input class="lg-eingabe" id="pa-konto" maxlength="40"></label>
       <label>WinAB-Kundennummer<input class="lg-eingabe" id="pa-kdnr" inputmode="numeric" maxlength="12" placeholder="nur bei Kunden"></label>
+      <label>WinAB-Lieferantennummer<input class="lg-eingabe" id="pa-lfnr" inputmode="numeric" maxlength="12" placeholder="bei Lieferanten und Speditionen"></label>
       <label>Frist für Widerspruch (Tage)<input class="lg-eingabe" id="pa-frist" inputmode="numeric" maxlength="2"></label>
       <label class="lg-breit">E-Mail für die Abstimmung<input class="lg-eingabe" id="pa-email" maxlength="300" placeholder="mehrere mit Komma"></label>
       <label class="lg-breit">Ansprechpartner<input class="lg-eingabe" id="pa-ansprech" maxlength="200"></label>

@@ -53,7 +53,7 @@
   const zeitpunkt = (t) => { const d = new Date(t); return isNaN(d) ? '' : window.STAFL_FORMAT.datumZeit(d); };   // 02.11.2026, 14:05 wie überall
   const euro = (n) => window.STAFL_FORMAT.euro(n);   // 1.234,50 € / −2.355,00 € wie überall
   const lm = (id) => (S.d.lademittel.find((l) => l.id === id) || { id, name: id, wert: null });
-  const kurz = (id) => KURZ[id] || lm(id).name;
+  const kurz = (id) => KURZ[id] || lm(id).kurz || lm(id).name;   // feste Kürzel, sonst Kurzbezeichnung aus WinAB
   const sortiertLm = (ids) => S.d.lademittel.map((l) => l.id).filter((id) => ids.has(id));
   /* Mengen „E2 +12 · H1 −3“ (nur Werte ≠ 0) */
   function mengen(m, { vorzeichen = true, leer = '—' } = {}) {
@@ -279,7 +279,7 @@
     const art = $('#lg-k-art').value, firma = $('#lg-k-firma').value, inaktiv = $('#lg-k-inaktiv').checked, nachWert = $('#lg-k-sort').value === 'wert';
     const wert = (p) => euroVon(obj(S.kmap.get(p.id)?.saldo)).betrag;
     const liste = S.d.partner.filter((p) => (inaktiv || p.aktiv) && (!art || p.art === art) && (!firma || p.mandant === firma)
-      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
+      && (!q || [p.name, p.kontoNr, p.kundenNr, p.lieferantNr, p.lieferanten, p.ansprechpartner].join(' ').toLocaleLowerCase('de-DE').includes(q)))
       .sort((a, b) => (nachWert ? wert(b) - wert(a) : 0) || nachName(a, b));
     $('#lg-k-liste').innerHTML = liste.length ? liste.map((p) => {
       const k = S.kmap.get(p.id) || {};
@@ -316,7 +316,7 @@
     const p = k.partner, ko = S.kmap.get(id) || {}, lms = kontoLms(p, k.bewegungen);
     const best = ko.bestaetigt, la = ko.letzteAbstimmung;
     const meta = [`<span class="lg-chip">${esc(S.d.arten[p.art] || p.art)}</span>`, `<span class="lg-chip firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</span>`,
-      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '',
+      p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>', p.kontoNr ? `<span>Konto-Nr. ${esc(p.kontoNr)}</span>` : '', p.kundenNr ? `<span>WinAB-Kd. ${esc(p.kundenNr)}</span>` : '', p.lieferantNr ? `<span>WinAB-Lief. ${esc(p.lieferantNr)}</span>` : '',
       p.fristTage ? `<span>Widerspruch binnen ${zahl(p.fristTage)} Tagen</span>` : '<span>ohne Widerspruchsfrist</span>',
       p.ansprechpartner ? `<span>${esc(p.ansprechpartner)}</span>` : '',
       p.email ? `<a href="mailto:${esc(p.email.replace(/\s/g, ''))}">${esc(p.email)}</a>` : ''].filter(Boolean).join('');
@@ -565,7 +565,7 @@
     $('#lg-e-kunden-zeile').hidden = !nWinab; $('#lg-e-kunden-text').textContent = `Kundenkonten aus WinAB zeigen (${zahl(nWinab)})`;
     const liste = S.d.partner.filter((p) => $('#lg-e-kunden').checked || !istWinab(p)).sort((a, b) => (a.aktiv === b.aktiv ? 0 : a.aktiv ? -1 : 1) || nachName(a, b));
     $('#lg-e-partner').innerHTML = liste.length ? `<table class="lg-tabelle lg-karten"><thead><tr><th>Name</th><th>Art</th><th>Firma</th><th class="lg-zahl">Frist</th><th>E-Mail</th><th>Lademittel</th><th></th></tr></thead><tbody>
-      ${liste.map((p) => `<tr class="lg-klick" data-partner="${esc(p.id)}"><td class="lg-voll"><span class="lg-name">${esc(p.name)}</span>${p.kontoNr || p.kundenNr ? `<span class="lg-sub">${[p.kontoNr ? 'Konto-Nr. ' + esc(p.kontoNr) : '', p.kundenNr ? 'WinAB-Kd. ' + esc(p.kundenNr) : ''].filter(Boolean).join(' · ')}</span>` : ''}</td>
+      ${liste.map((p) => `<tr class="lg-klick" data-partner="${esc(p.id)}"><td class="lg-voll"><span class="lg-name">${esc(p.name)}</span>${p.kontoNr || p.kundenNr || p.lieferantNr ? `<span class="lg-sub">${[p.kontoNr ? 'Konto-Nr. ' + esc(p.kontoNr) : '', p.kundenNr ? 'WinAB-Kd. ' + esc(p.kundenNr) : '', p.lieferantNr ? 'WinAB-Lief. ' + esc(p.lieferantNr) : ''].filter(Boolean).join(' · ')}</span>` : ''}</td>
         <td data-label="Art">${esc(S.d.arten[p.art] || p.art)}</td><td data-label="Firma">${esc(S.d.mandanten[p.mandant] || p.mandant)}</td>
         <td class="lg-zahl" data-label="Frist">${p.fristTage ? zahl(p.fristTage) + ' Tage' : '—'}</td><td data-label="E-Mail">${esc(p.email) || '—'}</td>
         <td data-label="Lademittel">${(p.lademittel || []).map((id) => esc(kurz(id))).join(', ')}</td><td>${p.aktiv ? '' : '<span class="lg-chip">inaktiv</span>'}</td></tr>`).join('')}</tbody></table>`
@@ -573,6 +573,8 @@
     $('#lg-e-lm').innerHTML = S.d.lademittel.map((l) => lmZeile(l)).join('');
   }
   const lmZeile = (l) => `<tr data-id="${esc(l.id || '')}"><td data-label="Bezeichnung"><input class="lg-eingabe" data-f="name" maxlength="40" value="${esc(l.name || '')}" aria-label="Bezeichnung"></td>
+    <td data-label="Kurzbez."><input class="lg-eingabe lg-kurz" data-f="kurz" maxlength="8" value="${esc(l.kurz || '')}" aria-label="Kurzbezeichnung"></td>
+    <td data-label="WinAB-Nr."><input class="lg-eingabe lg-kurz" data-f="winabNr" inputmode="numeric" maxlength="4" value="${esc(l.winabNr || '')}" aria-label="Nummer in WinAB" placeholder="–"></td>
     <td class="lg-zahl" data-label="Wert je Stück (€)"><input class="lg-eingabe" data-f="wert" inputmode="decimal" maxlength="10" value="${l.wert === null || l.wert === undefined ? '' : esc(Number(l.wert).toFixed(2).replace('.', ','))}" aria-label="Wert je Stück in Euro" placeholder="ohne Wert"></td>
     <td data-label="Aktiv"><input type="checkbox" data-f="aktiv" ${l.aktiv !== false ? 'checked' : ''} aria-label="aktiv"></td></tr>`;
   $('#lg-e-partner-neu').addEventListener('click', () => oeffnePartner(''));
@@ -581,7 +583,8 @@
   $('#lg-e-lm-plus').addEventListener('click', () => { $('#lg-e-lm').insertAdjacentHTML('beforeend', lmZeile({ name: '', wert: null, aktiv: true })); $('#lg-e-lm tr:last-child input').focus(); });
   $('#lg-e-lm-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const lademittel = $$('#lg-e-lm tr').map((tr) => ({ ...(tr.dataset.id ? { id: tr.dataset.id } : {}), name: $('[data-f="name"]', tr).value.trim(), wert: $('[data-f="wert"]', tr).value.trim(), aktiv: $('[data-f="aktiv"]', tr).checked }))
+    const lademittel = $$('#lg-e-lm tr').map((tr) => ({ ...(tr.dataset.id ? { id: tr.dataset.id } : {}), name: $('[data-f="name"]', tr).value.trim(), kurz: $('[data-f="kurz"]', tr).value.trim(),
+      winabNr: $('[data-f="winabNr"]', tr).value.trim(), wert: $('[data-f="wert"]', tr).value.trim(), aktiv: $('[data-f="aktiv"]', tr).checked }))
       .filter((l) => l.id || l.name);
     const d = await senden(ev.target, 'leergut_lademittel_save', { lademittel });
     if (d) { toast('Lademittel gespeichert'); await neuLaden(); }
@@ -638,7 +641,11 @@
      Offerten bewegen nichts, Karton ist kein Leergut. Den Abgleich (neu, gleich, geändert, ausgeglichen) macht der Server. */
   const WINAB_ARTEN = ['Lieferschein', 'Gutschrift', 'Rechnung'];
   const normName = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, '');
-  function winabLm(name) {
+  /* Lademittel des Berichts → Modul: zuerst über die WinAB-Nummer (Stammdaten), sonst über den Namen. Inaktive Lademittel
+     (z. B. Karton – kein Leergut) und Karton ohne Lademittel im Modul werden nicht übernommen ('-'). */
+  function winabLm(name, nr) {
+    const perNr = nr !== undefined && nr !== null && nr !== '' ? S.d.lademittel.find((l) => l.winabNr && String(l.winabNr) === String(nr)) : null;
+    if (perNr) return perNr.aktiv === false ? '-' : perNr.id;
     const n = normName(name);
     if (n.includes('karton')) return '-';
     const gleich = S.d.lademittel.find((l) => normName(l.name) === n);
@@ -677,7 +684,7 @@
         const kd = String(z[iK]), name = z.slice(iK + 1, iL).filter((v) => typeof v === 'string').join(' ');
         if (!/^\d{1,12}$/.test(kd)) { fehlerhaft(i, 'Kundennummer nicht lesbar'); block = null; return; }
         lmNamen.set(z[iL + 1], String(z[iL + 2] || ''));
-        block = { kd, nr: z[iL + 1], lm: winabLm(z[iL + 2]), lmName: String(z[iL + 2] || 'Lademittel ' + z[iL + 1]) };
+        block = { kd, nr: z[iL + 1], lm: winabLm(z[iL + 2], z[iL + 1]), lmName: String(z[iL + 2] || 'Lademittel ' + z[iL + 1]) };
         if (!kunden.get(kd)) kunden.set(kd, name);
         return;
       }
@@ -1035,7 +1042,7 @@
     $('#pa-titel').textContent = p ? `Partner ${p.name}` : 'Partner anlegen';
     $('#pa-name').value = p ? p.name : ''; $('#pa-art').innerHTML = optionen(S.d.arten, p ? p.art : 'lieferant');
     $('#pa-firma').innerHTML = optionen(S.d.mandanten, p ? p.mandant : 'standard');
-    $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-kdnr').value = p ? (p.kundenNr || '') : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
+    $('#pa-konto').value = p ? p.kontoNr : ''; $('#pa-kdnr').value = p ? (p.kundenNr || '') : ''; $('#pa-lfnr').value = p ? (p.lieferantNr || '') : ''; $('#pa-frist').value = p ? (p.fristTage || '') : '14';
     $('#pa-email').value = p ? p.email : ''; $('#pa-ansprech').value = p ? p.ansprechpartner : ''; $('#pa-lieferanten').value = p ? p.lieferanten : '';
     $('#pa-notiz').value = p ? p.notiz : ''; $('#pa-aktiv').checked = p ? !!p.aktiv : true;
     const gewaehlt = new Set(p ? p.lademittel : ['e2', 'h1']);
@@ -1046,7 +1053,7 @@
   $('#pa-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const p = S.edit.partner;
-    const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, kundenNr: $('#pa-kdnr').value.trim(), fristTage: $('#pa-frist').value.trim(),
+    const body = { name: $('#pa-name').value, art: $('#pa-art').value, mandant: $('#pa-firma').value, kontoNr: $('#pa-konto').value, kundenNr: $('#pa-kdnr').value.trim(), lieferantNr: $('#pa-lfnr').value.trim(), fristTage: $('#pa-frist').value.trim(),
       email: $('#pa-email').value, ansprechpartner: $('#pa-ansprech').value, lieferanten: $('#pa-lieferanten').value, notiz: $('#pa-notiz').value,
       lademittel: $$('#pa-lm input:checked').map((x) => x.value), aktiv: $('#pa-aktiv').checked };
     if (p) { body.id = p.id; body.rev = p.rev; }
