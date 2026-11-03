@@ -288,8 +288,12 @@ Teilaktualisierungen dasselbe Ergebnis liefern wie ein Neuzeichnen. Messen mit P
   - Einzahl/Mehrzahl immer passend („1 Markt“, „3 Märkte“).
 - Eine Schleife in `admin.js` verdrahtet beim Laden **jeden** `<dialog>` der Seite: Escape oder ein Element mit
   `data-close` schließt, nicht während `data-busy` (Speichern läuft). **Auf allen Seiten** (theme.js) schützt jedes Fenster
-  getippte Eingaben in einem `<form>` vor einem versehentlichen Escape: das erste Escape zeigt den gemeinsamen Hinweis
-  `#stafl-hinweis` „Die Eingaben sind noch nicht gespeichert – erneut Escape verwirft sie.“, erst das zweite schließt.
+  getippte Eingaben in einem `<form>` (ohne Formular: Textfelder und Felder mit `data-mit-warnung`) vor einem versehentlichen
+  Escape: das erste Escape zeigt den gemeinsamen Hinweis `#stafl-hinweis` „Die Eingaben sind noch nicht gespeichert – erneut
+  Escape verwirft sie.“, erst das zweite schließt. Der Schutz endet beim Schließen, beim Zurücksetzen des Formulars, wenn
+  die getippten Felder durch neuen Inhalt ersetzt sind, oder wenn die Seite nach erfolgreichem Speichern
+  `STAFL_FENSTER.gespeichert(dialog)` aufruft (Fenster, die danach offen bleiben) – Abschicken allein zählt nicht. Neue
+  Fehlermeldungen (`role="alert"`) im Fenster scrollt theme.js ins Bild.
   Ausgenommen: Anmelde-/Passwortformulare, Suchfelder (`type=search`) und alles mit `data-ohne-warnung` (Fenster, die jede
   Änderung sofort speichern wie „Artikel bearbeiten“, oder mit eigener Rückfrage wie das CRM-Kundenfenster). „Abbrechen“ und Kreuz
   schließen sofort (bewusste Entscheidung). Nach dem Speichern `delete d.dataset.geaendert` setzen. Dialoge, die ein Skript erst später erzeugt, erhalten die Verdrahtung
