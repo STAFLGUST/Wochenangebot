@@ -478,12 +478,12 @@ v = P.call('mitarbeiter_hr')[1]
 rev = v['rev']
 pp = {p_['nutzer']: p_ for p_ in v['personen'] if p_['nutzer']}[ids['paul']]
 nein = []
-for werte in ({'jahr': Y, 'anspruch': 99}, {'jahr': Y, 'uebertrag': 5}, {'arbeitstage': [1, 2, 3]}, {'aktiv': not pp['aktiv']}, {'personalnummer': '777'}):
+for werte in ({'jahr': Y, 'anspruch': 99}, {'jahr': Y, 'uebertrag': 5}, {'arbeitstage': [1, 2, 3]}, {'aktiv': not pp['aktiv']}, {'personalnummer': '777'}, {'verfall': not pp['verfall']}):
     st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': rev, **werte})
     nein.append((st, 'andere Person' in r.get('error', '')))
-check('eigene Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, Urlaubsplan, Personalnummer): 403', nein == [(403, True)] * 5, nein)
+check('eigene Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, Urlaubsplan, Personalnummer, Verfall): 403', nein == [(403, True)] * 6, nein)
 st, r = P.call('mitarbeiter_hr_save', {'nutzer': ids['paul'], 'rev': rev, 'abteilung': 'Personal', 'pos': 9, 'personalnummer': pp['personalnummer'],
-                                        'arbeitstage': pp['arbeitstage'], 'aktiv': pp['aktiv'], 'jahr': Y, 'anspruch': '', 'uebertrag': ''})
+                                        'arbeitstage': pp['arbeitstage'], 'aktiv': pp['aktiv'], 'verfall': pp['verfall'], 'jahr': Y, 'anspruch': '', 'uebertrag': ''})
 check('… Abteilung und Position der eigenen Person bleiben änderbar (Dialog schickt unveränderte Werte mit)', st == 200 and r['person']['abteilung'] == 'Personal'
       and r['person']['jahre'] == pp['jahre'], (st, r))
 rev = r['rev']
@@ -613,6 +613,36 @@ check('Speichern ohne Verfallstag lässt ihn unverändert', st == 200 and r['ueb
 check('Änderung im Protokoll', 'Verfallstag Resturlaub auf 30.04. geändert' in json.dumps(A.call('log')[1], ensure_ascii=False))
 st, r = P.call('hr_einstellungen_save', {**einst, 'uebertragBis': '03-31'})
 check('Rückweg auf 31.03.', st == 200 and r['uebertragBis'] == '03-31' and konto_f()['verfaellt'] == 5, r)
+
+# ── Resturlaub verfällt je Mitarbeiter abschaltbar (Verwaltung → Mitarbeiter; Inhaber 03.11.2026, Standard: verfällt) ──
+person_f = lambda j=Y: next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={j}')[1]['personen'] if p_['id'] == PF)   # noqa: E731
+check('Standard: Resturlaub verfällt (Angabe und Konto)', person_f()['verfall'] is True and konto_f()['verfall'] is True)
+k0, k0n = konto_f(), person_f(Y + 1)['konto']
+rev = P.call('mitarbeiter_hr')[1]['rev']
+falsch = [P.call('mitarbeiter_hr_save', {'nutzer': ids['fritz'], 'rev': rev, 'verfall': w}) for w in ('nein', 0, None)]
+check('Verfall nur ja/nein: sonst 422, nichts gespeichert', all(st == 422 and 'Resturlaub verfällt' in r.get('error', '') for st, r in falsch)
+      and person_f()['verfall'] is True, [x[0] for x in falsch])
+check('… ohne Personalrecht 403', L.call('mitarbeiter_hr_save', {'nutzer': ids['fritz'], 'rev': rev, 'verfall': False})[0] == 403)
+hr(ids['fritz'], verfall=False)
+k, kn = konto_f(), person_f(Y + 1)['konto']
+check('ohne Verfall: nichts verfällt, der Übertrag bleibt ganz (Rest unverändert)', person_f()['verfall'] is False and k['verfall'] is False
+      and k['verfaellt'] == 0 and k['verfallen'] == 0 and k['rest'] == k0['rest'] and k['uebertrag'] == 5, k)
+check('… Folgejahr: Übertrag enthält den sonst verfallenen Rest', kn['uebertrag'] == k0n['uebertrag'] + 5 and k0n['uebertrag'] == k0['rest_jahresende'], (kn, k0n))
+check('… Protokoll nennt die Änderung', 'Resturlaub verfällt nicht mehr' in json.dumps(A.call('log')[1], ensure_ascii=False))
+hr(ids['fritz'], abteilung='Lager')
+check('… Speichern ohne Angabe lässt den Verfall unverändert', person_f()['verfall'] is False)
+hr(ids['fritz'], verfall=True)
+check('… wieder einschalten: verfällt wie vorher, Protokoll', konto_f()['verfaellt'] == 5 and person_f(Y + 1)['konto']['uebertrag'] == k0n['uebertrag']
+      and 'Resturlaub verfällt wieder am Verfallstag' in json.dumps(A.call('log')[1], ensure_ascii=False))
+# vergangenes Jahr: schon verfallener Übertrag kommt zurück (das Konto wird berechnet, gilt für alle Jahre)
+kl = lambda j: next(p_ for p_ in P.call(f'hr_verwaltung&jahr={j}')[1]['personen'] if p_['id'] == PL)['konto']   # noqa: E731
+v25, v26 = kl(2025), kl(2026)
+hr(ids['lena'], verfall=False)
+n25, n26 = kl(2025), kl(2026)
+check('ohne Verfall rückwirkend: 2025 nichts verfallen, Rest und Übertrag 2026 um den Verfall höher', v25['verfallen'] > 0 and n25['verfallen'] == 0
+      and n25['rest'] == v25['rest'] + v25['verfallen'] and n26['uebertrag'] == v26['uebertrag'] + v25['verfallen'], (v25, n25, v26['uebertrag'], n26['uebertrag']))
+hr(ids['lena'], verfall=True)
+check('… zurückgesetzt', kl(2025)['verfallen'] == v25['verfallen'])
 
 # ── Schalter „Urlaubsanträge über die Plattform“ (Verwaltung → Urlaub; Inhaber 30.10.2026, Standard an) ──
 F = Client('198.51.100.31'); assert F.call('login', {'username': 'fritz', 'password': 'Urlaub-Konto-4711'})[0] == 200
@@ -834,9 +864,25 @@ with sync_playwright() as p:
           and pg.locator('#user-add').count() == 0)
     pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open]')
     pg.fill('#dlg-hr-person [name="hr_abteilung"]', 'Vertrieb'); pg.fill('#dlg-hr-person [name="hr_anspruch"]', '31')
+    check('Dialog: „Resturlaub verfällt“ mit Verfallstag, Standard angehakt', pg.is_checked('#dlg-hr-person [name="hr_verfall"]')
+          and 'verfällt am 31.03.' in pg.text_content('#dlg-hr-person #hr-teil'))
+    pg.uncheck('#dlg-hr-person [name="hr_verfall"]')
+    pg.locator('#dlg-hr-person').screenshot(path=os.path.join(SH, 'hr_verwaltung_verfall_dialog_1280.png'))
     pg.click('#dlg-hr-person [type="submit"]'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
+    pg.wait_for_selector(f'#view-users tr[data-hr-uid="{ids["erika"]}"] .hr-kein-verfall')   # Liste nach dem Speichern neu geladen
     pe = {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['erika']]
     check('Oberfläche: Abteilung und Anspruch gespeichert', pe['abteilung'] == 'Vertrieb' and pe['jahre'][str(dt.date.today().year)]['anspruch'] == 31, pe)
+    check('Oberfläche: „Resturlaub verfällt“ abgehakt gespeichert, Liste zeigt „kein Verfall“', pe['verfall'] is False
+          and pg.locator(f'#view-users tr[data-hr-uid="{ids["erika"]}"] .hr-kein-verfall').count() == 1
+          and pg.locator('#view-users .hr-kein-verfall').count() == 1, pe.get('verfall'))
+    pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_kein_verfall_1280.png'), full_page=True)
+    pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open]')
+    check('… beim nächsten Öffnen ohne Haken', not pg.is_checked('#dlg-hr-person [name="hr_verfall"]'))
+    pg.check('#dlg-hr-person [name="hr_verfall"]')
+    pg.click('#dlg-hr-person [type="submit"]'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
+    pg.wait_for_function("document.querySelectorAll('#view-users .hr-kein-verfall').length === 0")
+    check('… wieder angehakt: verfällt, kein Kennzeichen', {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}[ids['erika']]['verfall'] is True
+          and pg.locator('#view-users .hr-kein-verfall').count() == 0)
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_personal_1280.png'), full_page=True)
     pg.click('#vt-urlaub'); pg.wait_for_selector('#hr-einst')
     check('Verwaltung → Urlaub: Sperren und Ferien aus der HR', pg.locator('#hr-sperren .hr-zr').count() == 1 and pg.locator('#hr-ferien .hr-zr').count() == 1)
@@ -879,6 +925,12 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_390.png'), full_page=True)
     pg.click('#hr-antraege'); pg.wait_for_function('document.querySelector("#hr-antraege-t").textContent === "Eingeschaltet" && !document.querySelector("#hr-antraege").disabled')
     check('Oberfläche: Urlaubsanträge wieder eingeschaltet', P.call('mitarbeiter_hr')[1]['antraege'] is True and pg.is_checked('#hr-antraege'))
+    pg.goto(B + '/admin/#users'); pg.wait_for_selector(f'#view-users tr[data-hr-uid="{ids["erika"]}"]')
+    pg.click(f'#view-users tr[data-hr-uid="{ids["erika"]}"]'); pg.wait_for_selector('#dlg-hr-person[open] [name="hr_verfall"]')
+    check('390px Mitarbeiter-Dialog: „Resturlaub verfällt“ sichtbar, ohne waagerechtes Scrollen', pg.is_visible('#dlg-hr-person [name="hr_verfall"]')
+          and pg.evaluate("(() => { const d = document.querySelector('#dlg-hr-person'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
+    pg.locator('#dlg-hr-person').screenshot(path=os.path.join(SH, 'hr_verwaltung_verfall_dialog_390.png'))
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
     ctx.close()
 
     # ── Verwaltung → Mitarbeiter: Eintrag ohne Mitarbeiter einzeln zuordnen (abweichender Name) ──
@@ -932,7 +984,7 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_mitarbeiter_1280.png'), full_page=True)
     # eigener Eintrag: Urlaubsangaben gesperrt (Vier-Augen-Prinzip), Speichern des Dialogs funktioniert trotzdem
     pg.click(f'#view-users tr[data-uid="{ids["admin"]}"]'); pg.wait_for_selector('#dlg-user[open] #hr-teil')
-    gesperrt = pg.evaluate('''["hr_anspruch", "hr_uebertrag", "hr_personalnummer", "hr_aktiv"].every((n) => document.querySelector(`#hr-teil [name="${n}"]`).disabled)
+    gesperrt = pg.evaluate('''["hr_anspruch", "hr_uebertrag", "hr_personalnummer", "hr_aktiv", "hr_verfall"].every((n) => document.querySelector(`#hr-teil [name="${n}"]`).disabled)
         && [...document.querySelectorAll('#hr-teil [name="hr_tag"]')].every((x) => x.disabled) && !document.querySelector('#hr-teil [name="hr_abteilung"]').disabled''')
     check('eigener Eintrag: Urlaubsangaben gesperrt mit Hinweis, Abteilung frei', gesperrt and 'andere Person der Personalstelle' in pg.text_content('#hr-teil'))
     pg.fill('#hr-teil [name="hr_abteilung"]', 'Geschäftsführung')

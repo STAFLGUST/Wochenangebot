@@ -1,6 +1,6 @@
 /* STAFL-Plattform · HR im Eingabebereich der Verwaltung
    - Verwaltung → Mitarbeiter: HR-Angaben je Mitarbeiter (Abteilung, Position, Arbeitstage, im Urlaubsplan, Urlaubsanspruch
-     und Übertrag je Jahr) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
+     und Übertrag je Jahr, ob der Resturlaub verfällt) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
    - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren, Ferien, Verfallstag des Resturlaubs.
    - Verwaltung → Import: Leser „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
@@ -14,6 +14,8 @@
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(Number(n || 0) * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
+  // Kennzeichen „Resturlaub verfällt nicht“ (Verfall je Mitarbeiter abgeschaltet) in den Listen
+  const kVerfall = '<small class="hr-kein-verfall" title="Resturlaub aus dem Vorjahr verfällt nicht">kein Verfall</small>';
   const JAHR = new Date().getFullYear();
   const tagMonat = (mmtt) => { const m = /^(\d{2})-(\d{2})$/.exec(mmtt || ''); return m ? `${m[2]}.${m[1]}.` : '31.03.'; };   // Verfallstag „MM-TT“ → „TT.MM.“
 
@@ -30,7 +32,7 @@
     if (!p) return { abteilung: '', urlaub: '' };
     return {
       abteilung: esc(p.abteilung || ''),
-      urlaub: p.aktiv ? `<span title="Resturlaub ${JAHR}">${esc(zahl(p.konto.rest))} Tage</span>` : '<span class="muted" title="nicht im Urlaubsplan">–</span>',
+      urlaub: p.aktiv ? `<span title="Resturlaub ${JAHR}">${esc(zahl(p.konto.rest))} Tage</span>${p.verfall === false ? kVerfall : ''}` : '<span class="muted" title="nicht im Urlaubsplan">–</span>',
     };
   }
 
@@ -53,9 +55,10 @@
         <div class="span2 hr-tage-feld"><span class="hr-lbl">Arbeitstage</span><div class="hr-tage">${WT.map((w, i) => `<label class="check"><input type="checkbox" name="hr_tag" value="${i + 1}"${at.includes(i + 1) ? ' checked' : ''}${aus}> ${w}</label>`).join('')}</div></div>
         <label class="fld"><span>Urlaubsanspruch ${JAHR}</span><input name="hr_anspruch" type="number" min="0" max="100" step="0.5" value="${esc(jv.anspruch ?? (p && p.konto.anspruch ? p.konto.anspruch : ''))}"${aus}></label>
         <label class="fld"><span>Übertrag aus ${JAHR - 1}</span><input name="hr_uebertrag" type="number" min="-100" max="100" step="0.5" value="${esc(jv.uebertrag ?? '')}" placeholder="${p ? 'automatisch (' + esc(zahl(p.konto.uebertrag)) + ')' : 'automatisch'}"${aus}></label>
+        <label class="check span2 hr-verfall-check"><input type="checkbox" name="hr_verfall"${!p || p.verfall !== false ? ' checked' : ''}${aus}> <span>Resturlaub aus dem Vorjahr verfällt am ${esc(tagMonat(daten && daten.uebertragBis))}<small class="muted">Ohne Haken bleibt der Übertrag das ganze Jahr erhalten.</small></span></label>
         <label class="check span2"><input type="checkbox" name="hr_aktiv"${!p || p.aktiv ? ' checked' : ''}${aus}> im Urlaubsplan (Kalender, Export für den Steuerberater)</label>
       </div>
-      ${eigen ? '<p class="hint span2" style="margin:0">Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle.</p>' : ''}
+      ${eigen ? '<p class="hint span2" style="margin:0">Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle.</p>' : ''}
       <datalist id="hr-abteilungen">${abt.map((a) => `<option value="${esc(a)}">`).join('')}</datalist>
       ${p && p.aktiv ? `<p class="hint" style="margin:0">Urlaub ${JAHR}: ${esc(zahl(p.konto.rest))} Tage Rest · ${esc(zahl(p.konto.genommen))} genommen · ${esc(zahl(p.konto.geplant))} geplant${p.konto.verfaellt > 0 ? ` · ${esc(zahl(p.konto.verfaellt))} Tage Übertrag verfallen nach dem ${esc(tagMonat((p.konto.frist || '').slice(5)))}` : ''}${p.gleitKonto && p.gleitKonto.aktiv ? ` · Gleittage: ${esc(zahl(p.gleitKonto.rest))} Rest (gewähren in HR → Übersicht)` : ''}</p>` : ''}
     </fieldset>`;
@@ -69,7 +72,7 @@
     const wert = (n) => form.querySelector(`[name="${n}"]`).value;
     const body = { nutzer: uid, rev: daten.rev, abteilung: wert('hr_abteilung'), personalnummer: wert('hr_personalnummer').trim(), pos: Number(wert('hr_pos') || 0),
       arbeitstage: [...form.querySelectorAll('[name="hr_tag"]:checked')].map((x) => Number(x.value)),
-      aktiv: form.querySelector('[name="hr_aktiv"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag') };
+      aktiv: form.querySelector('[name="hr_aktiv"]').checked, verfall: form.querySelector('[name="hr_verfall"]').checked, jahr: JAHR, anspruch: wert('hr_anspruch'), uebertrag: wert('hr_uebertrag') };
     let r;
     try { r = await api('mitarbeiter_hr_save', { body }); }
     catch (ex) { if (ex.status !== 409) throw ex; await laden(); r = await api('mitarbeiter_hr_save', { body: { ...body, rev: daten.rev } }); }
@@ -156,7 +159,7 @@
       <div class="gcard"><table class="etab utab"><thead><tr><th>Name</th><th>Abteilung</th><th>Arbeitstage</th><th class="num">Anspruch</th><th class="num">Übertrag</th><th class="num">Rest ${JAHR}</th><th class="u-act"><span class="sr-only">Aktion</span></th></tr></thead><tbody>
       ${ps.map((p) => `<tr data-hr-uid="${esc(p.nutzer)}" tabindex="0" class="${p.aktiv ? '' : 'inactive'}"><td class="u-name"><div class="nm">${esc(`${p.vorname} ${p.nachname}`.trim())}</div><div class="sub">${p.zugang ? esc(p.username) : 'ohne Anmeldung'}${p.personalnummer ? ' · Nr. ' + esc(p.personalnummer) : ''}</div></td>
         <td>${esc(p.abteilung)}</td><td>${esc(p.arbeitstage.map((w) => WT[w - 1]).join(' '))}</td><td class="num">${esc(zahl(p.konto.anspruch))}</td>
-        <td class="num">${esc(zahl(p.konto.uebertrag))}</td><td class="num"><strong>${p.aktiv ? esc(zahl(p.konto.rest)) : '—'}</strong></td>
+        <td class="num">${esc(zahl(p.konto.uebertrag))}${p.verfall === false ? kVerfall : ''}</td><td class="num"><strong>${p.aktiv ? esc(zahl(p.konto.rest)) : '—'}</strong></td>
         <td class="u-act"><button type="button" class="btn sm">Bearbeiten</button></td></tr>`).join('')}</tbody></table></div>`;
   }
   function nurHrDialog(uid, host) {
@@ -203,7 +206,7 @@
       <div id="hr-sperren">${daten.sperren.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-sperren">${icon('plus', 'sm')}Sperre</button>
       <h3 class="sec-h">Ferien</h3><p class="hint">Nur zur Anzeige im Kalender und im Excel-Export (grün).</p>
       <div id="hr-ferien">${daten.ferien.map(zeile).join('')}</div><button type="button" class="btn sm" data-plus="hr-ferien">${icon('plus', 'sm')}Ferien</button>
-      <h3 class="sec-h">Resturlaub aus dem Vorjahr</h3><p class="hint">Nicht genommener Übertrag verfällt nach diesem Tag. Gilt für alle Mitarbeiter und alle Jahre – gespeichert werden nur Tag und Monat (der 29.02. ist nicht möglich).</p>
+      <h3 class="sec-h">Resturlaub aus dem Vorjahr</h3><p class="hint">Nicht genommener Übertrag verfällt nach diesem Tag. Gilt für alle Jahre und alle Mitarbeiter, bei denen „Resturlaub verfällt“ angehakt ist (Verwaltung → Mitarbeiter, Standard) – gespeichert werden nur Tag und Monat (der 29.02. ist nicht möglich).</p>
       <label class="fld hr-verfall"><span>Verfällt am</span><input type="date" id="hr-uebertrag-bis" value="${esc(`${JAHR}-${daten.uebertragBis || '03-31'}`)}" required></label>
       <p class="hint" id="hr-uebertrag-anzeige">Aktuell: verfällt am ${esc(tagMonat(daten.uebertragBis))}</p>
       <p class="hint">Mitarbeiter, Abteilungen, Arbeitstage und Urlaubsanspruch: Verwaltung → Mitarbeiter. Urlaub und Krankheit aus der Zeiterfassung: Verwaltung → Import → „Abwesenheiten aus der Zeiterfassung“.</p>

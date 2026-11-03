@@ -121,7 +121,7 @@
     $('#mein-konto').innerHTML =
       wert('Resturlaub', k.rest, 'haupt' + (k.rest < 0 ? ' minus' : ''), k.beantragt ? `davon ${tageText(k.beantragt)} beantragt` : '')
       + wert('Anspruch', k.anspruch)
-      + wert('Übertrag Vorjahr', k.uebertrag, '', k.verfaellt > 0 ? `${tageText(k.verfaellt)} verfallen nach ${de(k.frist)}` : (k.verfallen > 0 ? `${tageText(k.verfallen)} verfallen` : ''))
+      + wert('Übertrag Vorjahr', k.uebertrag, '', k.verfaellt > 0 ? `${tageText(k.verfaellt)} verfallen nach ${de(k.frist)}` : (k.verfallen > 0 ? `${tageText(k.verfallen)} verfallen` : (k.verfall === false && k.uebertrag > 0 ? 'verfällt nicht' : '')))
       + wert('Genommen', k.genommen)
       + wert('Geplant', k.geplant)
       + wert('Beantragt', k.beantragt);

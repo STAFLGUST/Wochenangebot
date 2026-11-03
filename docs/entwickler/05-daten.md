@@ -330,8 +330,10 @@ optional, nur wenn in der Liste vorhanden (ältere Stände ohne diese Felder ble
 
 Mitarbeiter sind die Nutzer der Plattform (`users_load()`); HR speichert nur eigene Angaben.
 
-- **`hr-personal`**: `{"rev": 3, "personen": [{"id": "u0123456789ab", "nutzer": "u0123456789ab", "vorname": "…", "nachname": "…", "abteilung": "Lager", "pos": 10, "arbeitstage": [1,2,3,4,5], "aktiv": true, "jahre": {"2026": {"anspruch": 30, "uebertrag": 2.5}}, "personalnummer": "", "geaendert": "…"}]}`.
+- **`hr-personal`**: `{"rev": 3, "personen": [{"id": "u0123456789ab", "nutzer": "u0123456789ab", "vorname": "…", "nachname": "…", "abteilung": "Lager", "pos": 10, "arbeitstage": [1,2,3,4,5], "aktiv": true, "jahre": {"2026": {"anspruch": 30, "uebertrag": 2.5}}, "personalnummer": "", "verfall": true, "geaendert": "…"}]}`.
   Ohne gespeicherte Angaben gelten Standardwerte; Einträge ohne Mitarbeiter bleiben als Altbestand lesbar.
+  `verfall` (seit 03.11.2026, optional): `false` = der Resturlaub aus dem Vorjahr verfällt für diese Person nicht; fehlt
+  das Feld oder ist es `true`, verfällt er am Verfallstag (`hr-einstellungen.uebertragBis`).
 - **`hr-abwesenheiten`**: `{"rev": 9, "eintraege": [{"id": "a0123456789ab", "person": "u…", "art": "U", "von": "2026-03-02", "bis": "2026-03-06", "status": "beantragt", "notiz": "", "vertretung": null, "quelle": "antrag", "erfasst": {"t": "…", "by": "…", "byId": "u…"}}]}`.
   `art`: `U` Urlaub, `K` Krank, `G` Gleittag, `X` freier Tag. `status`: `beantragt`, `genehmigt`, `abgelehnt`,
   `zurueckgezogen`, `storniert` – Einträge werden nie gelöscht, nur der Status ändert sich (mit
