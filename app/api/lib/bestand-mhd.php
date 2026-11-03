@@ -33,8 +33,7 @@ function mhd_preis_text(?array $p): string
     if ($s === 'ambiguous') return 'mehrere Preisangaben';
     if ($s === 'request') return 'auf Anfrage';
     if ($s !== 'value' || !is_numeric($p['value'] ?? null)) return '—';
-    $v = number_format((float)$p['value'], 4, ',', '.');   // wie Intl de-DE: 2 bis 4 Nachkommastellen
-    while (substr($v, -1) === '0' && strlen($v) - strpos($v, ',') > 3) $v = substr($v, 0, -1);
+    $v = number_format(round((float)$p['value'], 2), 2, ',', '.');   // 2 Stellen wie abgerechnet (4,125 → 4,13), wie überall
     return $v . ' €/kg' . (!empty($p['label']) ? ' · ' . $p['label'] : '');   // wie in der Oberfläche: 12,34 €/kg · Flugware
 }
 /* Die MHD-Liste: [heute, bis, zeilen[{code, name, kg, mhd, mhdKg, stufe, erfasst, gesamt, eta, preis, vorwoche}], preise(bool), wochen]

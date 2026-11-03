@@ -62,7 +62,7 @@
       k.push(kachel('Liefertage', F.ganz(tage.length), rhythmus ? `etwa alle ${esc(F.ganz(Math.round(rhythmus)))} Tage` : ''));
     } else {
       const dk = v ? s.kunden - v.kunden : null;
-      k.push(kachel(d.dim === 'artikel' ? 'Käufer' : 'Kunden', F.ganz(s.kunden), dk === null ? `${esc(F.ganz(s.artikel))} Artikel` : `<span class="ctl-ua-delta ${dk >= 0 ? 'plus' : 'minus'}">${dk >= 0 ? '+' : '−'}${esc(F.ganz(Math.abs(dk)))}</span> zum Vorjahr`));
+      k.push(kachel(d.dim === 'artikel' ? 'Käufer' : 'Kunden', F.ganz(s.kunden), dk === null ? `${esc(F.ganz(s.artikel))} Artikel` : `<span class="ctl-ua-delta${dk > 0 ? ' plus' : dk < 0 ? ' minus' : ''}">${dk > 0 ? '+' : dk < 0 ? '−' : '±'}${esc(F.ganz(Math.abs(dk)))}</span> zum Vorjahr`));
     }
     return `<div class="ctl-ud-kpis${k.length > 4 ? ' fuenf' : ''}">${k.join('')}</div>`;
   }

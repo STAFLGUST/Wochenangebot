@@ -65,7 +65,7 @@
      Seite ordnet der Server nach UMSATZ_RANG) */
   const preisWert = (w) => (w && w.menge ? w.umsatz / w.menge : null);
   const RANG_POPUP = {
-    preis: { name: 'Ø Preis', wert: (w) => preisWert(w), text: (v) => euro(Math.round(v * 1000)), kurz: (v) => euro(Math.round(v * 1000)), delta: (w, vj) => deltaHtml(preisWert(w), vj ? preisWert(vj) : null) },
+    preis: { name: 'Ø Preis', wert: (w) => preisWert(w), text: (v) => euro(Math.round(v * 1000)) + '/kg', kurz: (v) => euro(Math.round(v * 1000)) + '/kg', delta: (w, vj) => deltaHtml(preisWert(w), vj ? preisWert(vj) : null) },
   };
   const rangKennzahl = (id) => RANG[id] || RANG_POPUP[id] || RANG.umsatz;
   /* Preisspiegel: Abweichung des Ø Preises vom Vergleichspreis (Ø aller Käufer bzw. aller Kunden) als Anteil; unter Ø = negativ */
@@ -496,8 +496,8 @@
     const plus = z.filter((y) => y.d > 0).sort((a, b) => b.d - a.d).slice(0, 3), minus = z.filter((y) => y.d < 0).sort((a, b) => a.d - b.d).slice(0, 3);
     $('#ctl-ua-veraenderung-hinweis', S.box).textContent = `${HAUPT.concat(WEITERE).find(([id]) => id === nach)[1]} · ${k.name}${rang === 'menge' ? ' in kg' : ' in Euro'}${S.d.anfrage.nur ? ` · nur ${S.d.anfrage.nur}` : ''}`;
     $('#ctl-ua-veraenderung', S.box).innerHTML = plus.concat(minus).map(({ x, d }) => `<button type="button" class="ctl-ua-veraend" data-zeile="${esc(x.schluessel)}">
-        <span><b>${esc(x.name)}</b><small>${x.vj && k.wert(x.vj) ? `${esc(k.kurz(k.wert(x.vj)))} → ${esc(k.kurz(k.wert(x.werte)))}` : `im Vorjahr ohne ${esc(k.name)}`}</small></span>
-        <b class="ctl-ua-delta ${d > 0 ? 'plus' : 'minus'}">${d > 0 ? '+' : '−'}${esc(k.kurz(Math.abs(d)))}</b></button>`).join('');
+        <span><b>${esc(x.name)}</b><small>${x.vj && k.wert(x.vj) ? `${esc(k.text(k.wert(x.vj)))} → ${esc(k.text(k.wert(x.werte)))}` : `im Vorjahr ohne ${esc(k.name)}`}</small></span>
+        <b class="ctl-ua-delta ${d > 0 ? 'plus' : 'minus'}">${d > 0 ? '+' : '−'}${esc(k.text(Math.abs(d)))}</b></button>`).join('');
   }
   function zeichneListe() {
     const nach = S.d.anfrage.nach;
