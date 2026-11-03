@@ -116,8 +116,12 @@ Schritte im Einzelnen:
    (`deploy/bereitstellen.py`) und ruft im Release-Modus (Datei `.release-modus`, eingerichtet mit
    `deploy/release-modus-einrichten.sh`) `deploy/freigabe-einspielen.sh` auf.
 5. **`freigabe-einspielen.sh`** fragt die GitHub-API mit einem nur lesenden Token (`GITHUB_TOKEN_LESEN` in `.env`) nach
-   dem neuesten erfolgreichen Release-Lauf auf `main`, prüft erneut die CI und dass der Commit auf `main` liegt. Ein
-   abgelehnter oder zurückgenommener Commit steht in `.release-abgelehnt` und wird nicht erneut versucht.
+   dem neuesten erfolgreichen Release-Lauf auf `main` (selbst nach Startzeit ausgewählt, nicht der erste Eintrag der
+   Antwort), prüft erneut die CI und dass der Commit auf `main` liegt. Ein abgelehnter oder zurückgenommener Commit steht in
+   `.release-abgelehnt` und wird nicht erneut versucht. Ein Release, der älter ist als der aktive Stand, wird nie
+   automatisch eingespielt (nur Vermerk im Protokoll) – zurück geht es nur von Hand mit `deploy/release-zurueck.sh`.
+   Anlass: Am 03.11.2026 lieferte GitHub einmalig einen vier Tage alten Lauf zuerst; der Server ging darauf zurück, und das
+   alte Prüfskript (ohne bunny-Schlüssel) lehnte danach den richtigen Release ab.
 6. **Image:** Ändert das Release `deploy/image/` und enthält `COMPOSE_FILE` die Ergänzungsdatei der Anmeldung, wird das
    Image vorab gebaut (`docker compose build --pull app` als `stafl-app:release-neu`). Fehler → nichts eingespielt.
 7. **Sicherung** mit dem Sicherungsskript des neuen Commits (`deploy/.sichern-release.sh`). Ohne Sicherung kein Release.
