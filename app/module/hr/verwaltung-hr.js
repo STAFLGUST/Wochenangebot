@@ -3,7 +3,8 @@
      und Übertrag je Jahr, ob der Resturlaub verfällt) – im Dialog des Mitarbeiters (Administratoren) bzw. als eigene Liste (Personalstelle ohne
      Administratorrechte). Mitarbeiter = Nutzer der Plattform; auch Kollegen ohne Anmeldung sind Mitarbeiter.
    - Verwaltung → Urlaub: Schalter „Urlaubsanträge über die Plattform“, Urlaubssperren (eigene und automatisch aus den
-     Urlaubsregeln), Ferien, Verfallstag des Resturlaubs, Text der Urlaubsregeln (steht beim Urlaubsantrag).
+     Urlaubsregeln), Ferien, Verfallstag des Resturlaubs, Text der Urlaubsregeln (steht beim Urlaubsantrag), E-Mails
+     (Erinnerung „Resturlaub verfällt“, Monatsübersicht an die Mitarbeiter, Übersicht an den Steuerberater, Testmodus).
    - Verwaltung → Import: Leser „Abwesenheiten aus der Zeiterfassung“ (window.WA.importLeser).
    Alle Rechte prüft der Server (hr.verwalten, GR-103); hier ist nur die Anzeige. Wird von admin/index.html nach
    admin.js, admin-verwaltung.js und admin-import.js geladen. */
@@ -11,7 +12,7 @@
   'use strict';
   const W = window.WA;
   if (!W) return;
-  const { $, $$, api, esc, icon, toast, may } = W;
+  const { $, $$, api, esc, icon, toast, may, confirmBox } = W;
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
   const zahl = (n) => window.STAFL_FORMAT.zahl(Math.round(Number(n || 0) * 2) / 2, 0, 1);   // halbe Tage, echtes Minus wie überall
   let daten = null;                      // Antwort von mitarbeiter_hr (aktuelles Jahr)
@@ -220,8 +221,96 @@
       <div class="hr-regeln-knoepfe"><button type="button" class="btn sm" id="hr-regeln-vorlage">Vorlage einsetzen</button></div>
       <p class="hint">Mitarbeiter, Abteilungen, Arbeitstage und Urlaubsanspruch: Verwaltung → Mitarbeiter. Urlaub und Krankheit aus der Zeiterfassung: Verwaltung → Import → „Abwesenheiten aus der Zeiterfassung“.</p>
       <p class="form-err" id="hr-einst-err" role="alert"></p>
-      <div class="sec-foot"><button type="submit" class="btn primary">${icon('check', 'sm')}Speichern</button></div></form>`;
+      <div class="sec-foot"><button type="submit" class="btn primary">${icon('check', 'sm')}Speichern</button></div></form>
+    ${mailKarte()}`;
   }
+
+  /* ---------- Verwaltung → Urlaub: E-Mails (Server: module/hr/mail.php) ----------
+     Einstellungen speichert „Speichern“ der Karte; die Knöpfe senden mit den gespeicherten Einstellungen (nach einer
+     Änderung erst speichern). Der automatische Versand läuft beim ersten Aufruf der Urlaubsverwaltung ab dem Termin. */
+  const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const monatText = (ym) => (/^\d{4}-\d{2}$/.test(ym || '') ? `${MONATE[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : '');
+  const ART = { monat: 'Monatsübersicht', erinnerung: 'Erinnerung', steuerberater: 'Steuerberater' };
+  function mailKarte() {
+    const m = daten && daten.mail;
+    if (!m) return '';
+    const e = m.einst, n = m.naechste, [vor, dies] = m.monate;
+    const klein = (t) => (t ? `<small class="muted">${t}</small>` : '');
+    const verlauf = (m.verlauf || []).slice(0, 8).map((v) => `<li><span>${esc(W.dateTime ? W.dateTime(v.t) : v.t)}</span><span>${esc(ART[v.art] || v.art)}${v.monat ? ' · ' + esc(v.monat.split('/').map(monatText).join(' und ')) : ''}${v.wie === 'automatisch' ? ' · automatisch' : ''}${v.test ? ' · Testmodus' : ''}</span>
+      <span>${esc(String(v.gesendet))} gesendet${v.fehler ? ` · <b class="hr-mail-fehler">${esc(String(v.fehler))} nicht zugestellt</b>` : ''}${v.ohneAdresse ? ` · ${esc(String(v.ohneAdresse))} ohne Adresse` : ''}</span></li>`).join('');
+    return `<form class="gcard hr-einst hr-mail" id="hr-mail" novalidate>
+      <h3 class="sec-h">E-Mails</h3>
+      ${m.postfach ? '' : '<p class="hint st-warn">Der E-Mail-Versand ist auf dem Server noch nicht eingerichtet – Einstellungen lassen sich speichern, senden geht erst danach.</p>'}
+      <div class="hr-mail-block">
+        <h4>Erinnerung: Resturlaub verfällt</h4>
+        <p class="hint" id="hrm-erinnerung-info">${m.erinnerung ? `${m.erinnerung} ${m.erinnerung === 1 ? 'Mitarbeiter' : 'Mitarbeiter'} mit E-Mail-Adresse, bei denen Resturlaub aus dem Vorjahr verfällt` : 'Bei niemandem mit E-Mail-Adresse verfällt gerade Resturlaub.'}${m.erinnerungOhneAdresse ? ` · ${m.erinnerungOhneAdresse} ohne E-Mail-Adresse (nicht erreichbar)` : ''}</p>
+        <button type="button" class="btn" data-hr-mail="erinnerung"${m.erinnerung ? '' : ' disabled'}>${icon('mail', 'sm')}Erinnerung senden</button>
+      </div>
+      <div class="hr-mail-block">
+        <h4>Monatsübersicht an die Mitarbeiter</h4>
+        <p class="hint">Jeder Mitarbeiter im Urlaubsplan bekommt seinen Urlaub im Vormonat und seinen Stand im Jahr (Krankheit steht nie darin). ${m.empfaenger} mit E-Mail-Adresse${m.ohneAdresse ? `, ${m.ohneAdresse} ohne` : ''}. „Jetzt senden“: für ${esc(monatText(vor))}.</p>
+        <label class="check hr-mail-check"><input type="checkbox" id="hrm-monat-an"${e.monat.an ? ' checked' : ''}> <span>Automatisch jeden Monat ab dem 1.${klein(n.monat ? `Nächster Versand: ${esc(datumDe(n.monat))} (für ${esc(monatText(n.monat.slice(0, 7) === dies ? vor : dies))})` : '')}</span></label>
+        <button type="button" class="btn" data-hr-mail="monat"${m.empfaenger ? '' : ' disabled'}>${icon('mail', 'sm')}Jetzt senden</button>
+      </div>
+      <div class="hr-mail-block">
+        <h4>Übersicht an den Steuerberater</h4>
+        <p class="hint">Excel-Übersicht wie der Export (alle genehmigten Abwesenheiten) für den Vormonat und den laufenden Monat – jetzt: ${esc(monatText(vor))} und ${esc(monatText(dies))}.</p>
+        <div class="form-grid two">
+          <label class="fld"><span>E-Mail-Adresse des Steuerberaters</span><input type="email" id="hrm-stb-adresse" value="${esc(e.steuerberater.adresse)}" maxlength="200" autocomplete="off" placeholder="name@kanzlei.de"></label>
+          <label class="fld"><span>Versand am</span><select id="hrm-stb-tag">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}"${e.steuerberater.tag === i + 1 ? ' selected' : ''}>${i + 1}. des Monats</option>`).join('')}</select></label>
+        </div>
+        <label class="check hr-mail-check"><input type="checkbox" id="hrm-stb-an"${e.steuerberater.an ? ' checked' : ''}> <span>Automatisch am gewählten Tag${klein(n.steuerberater ? `Nächster Versand: ${esc(datumDe(n.steuerberater))}` : '')}</span></label>
+        <button type="button" class="btn" data-hr-mail="steuerberater"${e.steuerberater.adresse ? '' : ' disabled'}>${icon('mail', 'sm')}Jetzt senden</button>
+      </div>
+      <div class="hr-mail-block">
+        <h4>Testmodus</h4>
+        <label class="check hr-mail-check"><input type="checkbox" id="hrm-test-an"${e.test.an ? ' checked' : ''}> <span>Alle HR-E-Mails nur an die Testadresse${klein('Monatsübersicht, Erinnerung und Steuerberater – automatisch und auf Knopfdruck; der Betreff nennt den eigentlichen Empfänger.')}</span></label>
+        <label class="fld hr-mail-test"><span>Testadresse</span><input type="email" id="hrm-test-adresse" value="${esc(e.test.adresse)}" maxlength="200" autocomplete="off"></label>
+      </div>
+      ${verlauf ? `<h4 class="hr-mail-vh">Zuletzt gesendet</h4><ul class="hr-mail-verlauf" id="hrm-verlauf">${verlauf}</ul>` : ''}
+      <p class="form-err" id="hr-mail-err" role="alert"></p>
+      <div class="sec-foot"><span class="hint" id="hr-mail-hinweis"></span><button type="submit" class="btn primary">${icon('check', 'sm')}Speichern</button></div></form>`;
+  }
+  const mailWerte = () => ({ monat: { an: $('#hrm-monat-an').checked }, test: { an: $('#hrm-test-an').checked, adresse: $('#hrm-test-adresse').value.trim() },
+    steuerberater: { an: $('#hrm-stb-an').checked, adresse: $('#hrm-stb-adresse').value.trim(), tag: Number($('#hrm-stb-tag').value) } });
+  function mailNeu(m) { daten.mail = m; const alt = $('#hr-mail'); if (alt) alt.outerHTML = mailKarte(); }
+  // Nach einer Änderung erst speichern: die Knöpfe senden mit den gespeicherten Einstellungen
+  const mailGeaendert = (e) => {
+    if (!e.target.closest('#hr-mail') || e.target.closest('[data-hr-mail]')) return;
+    $$('#hr-mail [data-hr-mail]').forEach((b) => { b.disabled = true; });
+    $('#hr-mail-hinweis').textContent = 'Geändert – bitte speichern, dann senden.';
+  };
+  document.addEventListener('input', mailGeaendert);
+  document.addEventListener('change', mailGeaendert);
+  document.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'hr-mail') return;
+    e.preventDefault();
+    $('#hr-mail-err').textContent = '';
+    try {
+      const r = await api('hr_mail_save', { body: mailWerte() });
+      mailNeu(r.mail);
+      toast('E-Mail-Einstellungen gespeichert.');
+    } catch (ex) { $('#hr-mail-err').textContent = ex.message; }
+  });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('#hr-mail [data-hr-mail]');
+    if (!b || b.disabled) return;
+    const m = daten.mail, [vor, dies] = m.monate, test = m.einst.test.an ? ` Testmodus: alles geht nur an ${m.einst.test.adresse}.` : '';
+    const art = b.dataset.hrMail;
+    const frage = {
+      erinnerung: ['Erinnerung senden?', `${m.erinnerung} Mitarbeiter bekommen eine E-Mail, dass ihr Resturlaub aus dem Vorjahr verfällt.${test}`, 'hr_erinnerung_senden', {}],
+      monat: ['Monatsübersicht senden?', `${m.empfaenger} Mitarbeiter bekommen ihre Übersicht für ${monatText(vor)}.${test}`, 'hr_monatsuebersicht_senden', { monat: vor }],
+      steuerberater: ['Übersicht an den Steuerberater senden?', `Die Excel-Übersicht für ${monatText(vor)} und ${monatText(dies)} geht an ${m.einst.steuerberater.adresse}.${test}`, 'hr_steuerberater_senden', {}],
+    }[art];
+    if (!(await confirmBox(frage[0], esc(frage[1]), 'Senden'))) return;
+    b.disabled = true; $('#hr-mail-err').textContent = '';
+    try {
+      const r = await api(frage[2], { body: frage[3] });
+      mailNeu(r.mail);
+      const x = r.ergebnis;
+      toast(`${x.gesendet} ${x.gesendet === 1 ? 'E-Mail' : 'E-Mails'} gesendet${x.fehler ? `, ${x.fehler} nicht zugestellt` : ''}${x.test ? ' (Testmodus)' : ''}.`, x.fehler ? 8000 : 4000);
+    } catch (ex) { b.disabled = false; $('#hr-mail-err').textContent = ex.message; }
+  });
   document.addEventListener('click', (e) => {
     const plus = e.target.closest('#hr-einst [data-plus]');
     if (plus) $('#' + plus.dataset.plus).insertAdjacentHTML('beforeend', zeile({}));

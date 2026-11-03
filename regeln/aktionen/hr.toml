@@ -80,3 +80,21 @@ schreibend = true
 [aktion.hr_gleittage_save]
 oberflaeche = "hr.intern"
 schreibend = true
+
+# E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026, module/hr/mail.php): Einstellungen, Erinnerung „Resturlaub verfällt“,
+# Monatsübersicht und Übersicht an den Steuerberater auf Knopfdruck – Verwaltung → Urlaub (Personalstelle, hr.verwalten)
+[aktion.hr_mail_save]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.hr_erinnerung_senden]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.hr_monatsuebersicht_senden]
+oberflaeche = "angebot.eingabe"
+schreibend = true
+
+[aktion.hr_steuerberater_senden]
+oberflaeche = "angebot.eingabe"
+schreibend = true

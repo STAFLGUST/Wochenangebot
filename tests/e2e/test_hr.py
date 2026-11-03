@@ -25,7 +25,8 @@ import openpyxl
 from playwright.sync_api import sync_playwright
 
 from kunden_hilfe import Client, B
-from umgebung import SH, FIX, storage_raw, storage_write
+from smtp_test import TestSmtp
+from umgebung import SH, FIX, SMTP_PORT, storage_raw, storage_write, until
 
 PW = 'Sicheres-Passwort-1'
 res = []
@@ -786,6 +787,131 @@ hr(ids['fritz'], aktiv=False)
 
 # ── Oberfläche: Testdaten 2025, Zeiterfassung, Verwaltung (im Browser) ──
 fehler = []
+# ── E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026): Erinnerung, Monatsübersicht, Steuerberater, Testmodus, Automatik ──
+smtp = TestSmtp(SMTP_PORT, password='Test-Postfach-1')
+uu = {u['username']: u for u in A.call('users')[1]['users']}
+for un_, adr_ in (('fritz', 'fritz@example.org'), ('erika', 'erika@example.org')):
+    u_ = uu[un_]
+    st, r = A.call('user_save', {'id': u_['id'], 'name': u_['name'], 'username': u_['username'], 'role': u_['role'], 'active': u_['active'], 'email': adr_})
+    assert st == 200, r
+F_AKTIV = next(p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['id'] == PF)['aktiv']
+rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=True)   # Fritz für diesen Abschnitt im Urlaubsplan (am Ende wie vorher)
+heute_ = dt.date.today()
+VOR = (heute_.replace(day=1) - dt.timedelta(days=1)).replace(day=1)
+DIES = heute_.replace(day=1)
+ym = lambda d: d.strftime('%Y-%m')   # noqa: E731
+MON = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
+mtext = lambda d: f'{MON[d.month - 1]} {d.year}'   # noqa: E731
+# Urlaub (2 Arbeitstage) und Krankheit im Vormonat für Fritz
+u1 = VOR + dt.timedelta(days=9)
+while u1.weekday() > 3 or dt.date(u1.year, 1, 1) == u1: u1 += dt.timedelta(days=1)   # Mo–Do, dann zwei Tage am Stück
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'U', 'von': iso(u1), 'bis': iso(u1 + dt.timedelta(days=1))})
+assert st == 200, r
+U_VOR = r['eintrag']['id']; N_VOR = r['eintrag']['tage']
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'K', 'von': iso(u1 + dt.timedelta(days=7)), 'bis': iso(u1 + dt.timedelta(days=7))})
+K_VOR = r['eintrag']['id'] if st == 200 else None
+mv = P.call('mitarbeiter_hr')[1]['mail']
+check('E-Mails ohne Postfach: Hinweis, Senden 409', mv['postfach'] is False and P.call('hr_monatsuebersicht_senden', {})[0] == 409, mv['postfach'])
+konto_ = {'konto': 'intern', 'host': '127.0.0.1', 'port': SMTP_PORT, 'secure': 'none', 'user': 'portal@example.org', 'password': 'Test-Postfach-1',
+          'from': 'verwaltung@example.org', 'fromName': 'STAFL Verwaltung', 'replyTo': ''}
+st, r = A.call('mail_konto_save', konto_)
+assert st == 200, r
+mv = P.call('mitarbeiter_hr')[1]['mail']
+pp_ = {p_['nutzer']: p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['nutzer']}
+check('E-Mails: Standard alles aus, Postfach eingerichtet, Empfänger mit Adresse gezählt, Monate Vormonat/laufend',
+      mv['einst']['monat']['an'] is False and mv['einst']['steuerberater']['an'] is False and mv['einst']['test']['an'] is False and mv['einst']['steuerberater']['tag'] == 5
+      and mv['postfach'] is True and mv['empfaenger'] == 2 and mv['ohneAdresse'] > 0 and mv['monate'] == [ym(VOR), ym(DIES)],
+      ({k: mv[k] for k in ('empfaenger', 'ohneAdresse', 'monate')}, [(n_, pp_[uu[n_]['id']]['aktiv']) for n_ in ('fritz', 'erika')], [u_.get('email') for u_ in A.call('users')[1]['users'] if u_['username'] in ('fritz', 'erika')]))
+kein = [L.call(a_, b_)[0] for a_, b_ in (('hr_mail_save', {}), ('hr_erinnerung_senden', {}), ('hr_monatsuebersicht_senden', {}), ('hr_steuerberater_senden', {}))]
+check('E-Mails: ohne Personalrecht 403 (Einstellungen und alle Knöpfe)', kein == [403] * 4, kein)
+falsch_ = [P.call('hr_mail_save', b_)[0] for b_ in ({'test': {'an': True, 'adresse': ''}}, {'test': {'an': False, 'adresse': 'kein-mail'}}, {'steuerberater': {'an': True, 'adresse': ''}},
+            {'steuerberater': {'adresse': 'a@example.org, b@example.org'}}, {'steuerberater': {'tag': 29}}, {'steuerberater': {'tag': '5'}}, {'monat': {'an': 'ja'}})]
+check('E-Mails: Prüfungen 422 (Testadresse fehlt/ungültig, Steuerberater ohne/mit zwei Adressen, Tag 29 oder Text, ja/nein)', falsch_ == [422] * 7, falsch_)
+check('Steuerberater ohne Adresse senden: 409', P.call('hr_steuerberater_senden', {})[0] == 409)
+check('Erinnerung ohne verfallenden Resturlaub: 409', P.call('hr_erinnerung_senden', {})[0] == 409)
+check('Monatsübersicht: ungültiger oder zukünftiger Monat 422', P.call('hr_monatsuebersicht_senden', {'monat': '2026-13'})[0] == 422
+      and P.call('hr_monatsuebersicht_senden', {'monat': ym(DIES + dt.timedelta(days=40))})[0] == 422)
+n0 = len(smtp.messages)
+st, r = P.call('hr_monatsuebersicht_senden', {})
+check('Monatsübersicht auf Knopfdruck (Vormonat): an jeden Mitarbeiter mit Adresse', st == 200 and r['ergebnis']['gesendet'] == 2 and r['ergebnis']['monat'] == ym(VOR), (st, r))
+until(lambda: len(smtp.messages) >= n0 + 2)
+mm = {m['to'][0]: m for m in smtp.messages[n0:]}
+mf = mm.get('fritz@example.org', {})
+check('… Inhalt: Urlaub im Vormonat mit Tagen, Stand im Jahr, Link – nie Krankheit', mf.get('subject') == f'Ihr Urlaub im {mtext(VOR)}' and f'{N_VOR} Tage Urlaub' in mf.get('text', '')
+      and u1.strftime('%d.%m.') in mf.get('text', '') and 'Resturlaub' in mf.get('text', '') and 'hr.dashboard-stafl.de' in mf.get('text', '')
+      and 'rank' not in mf.get('text', '') and 'Hallo Fritz' in mf.get('text', ''), mf.get('text', '')[:400])
+check('… Erika ohne Urlaub im Vormonat: „keinen Urlaub“', 'keinen Urlaub' in mm.get('erika@example.org', {}).get('text', ''))
+# Erinnerung: Verfallstag in 20 Tagen, Fritz mit Übertrag im laufenden Jahr
+J = heute_.year
+frist_ = min(heute_ + dt.timedelta(days=20), dt.date(J, 12, 31))
+if (frist_.month, frist_.day) == (2, 29): frist_ = dt.date(J, 2, 28)
+v_ = P.call('mitarbeiter_hr')[1]
+assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': frist_.strftime('%m-%d')})[0] == 200
+pf_ = next(p_ for p_ in v_['personen'] if p_['id'] == PF)
+rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], jahr=J, anspruch=(pf_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=6)
+kf_ = next(p_ for p_ in P.call('mitarbeiter_hr')[1]['personen'] if p_['id'] == PF)['konto']
+mv = P.call('mitarbeiter_hr')[1]['mail']
+check('Erinnerung: Vorschau zählt nur Mitarbeiter mit verfallendem Resturlaub', kf_['verfaellt'] > 0 and mv['erinnerung'] == 1, (kf_['verfaellt'], mv['erinnerung']))
+n0 = len(smtp.messages)
+st, r = P.call('hr_erinnerung_senden', {})
+until(lambda: len(smtp.messages) >= n0 + 1)
+me_ = smtp.messages[n0]
+tage_ = (f"{kf_['verfaellt']:g}".replace('.', ',')) + (' Tag' if kf_['verfaellt'] == 1 else ' Tage')
+check('Erinnerung gesendet: Betreff mit Verfallstag, Tage im Text', st == 200 and r['ergebnis']['gesendet'] == 1 and me_['to'] == ['fritz@example.org']
+      and me_['subject'] == f'Erinnerung: Ihr Resturlaub verfällt am {frist_.strftime("%d.%m.%Y")}' and tage_ in me_['text'], (st, me_.get('subject'), me_.get('text', '')[:300]))
+rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], jahr=J, anspruch=(pf_['jahre'].get(str(J)) or {}).get('anspruch'), uebertrag=(pf_['jahre'].get(str(J)) or {}).get('uebertrag'))
+v_ = P.call('mitarbeiter_hr')[1]
+assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31'})[0] == 200
+# Steuerberater auf Knopfdruck: Excel mit Vormonat und laufendem Monat
+st, r = P.call('hr_mail_save', {'steuerberater': {'an': False, 'adresse': 'Kanzlei@Example.org', 'tag': 7}})
+check('Steuerberater-Adresse gespeichert (klein geschrieben), Tag 7', st == 200 and r['mail']['einst']['steuerberater']['adresse'] == 'kanzlei@example.org'
+      and r['mail']['einst']['steuerberater']['tag'] == 7, r)
+n0 = len(smtp.messages)
+st, r = P.call('hr_steuerberater_senden', {})
+until(lambda: len(smtp.messages) >= n0 + 1)
+ms_ = smtp.messages[n0]
+xl_ = [t_ for t_ in ms_['msg'].walk() if t_.get_content_type() == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+blaetter = zipfile.ZipFile(io.BytesIO(xl_[0].get_payload(decode=True))).read('xl/workbook.xml').decode() if xl_ else ''
+check('Steuerberater: Mail mit Excel (Vormonat und laufender Monat als Blätter)', st == 200 and ms_['to'] == ['kanzlei@example.org'] and len(xl_) == 1
+      and xl_[0].get_filename() == f'Urlaub_{ym(VOR)}_bis_{ym(DIES)}.xlsx' and mtext(VOR) in blaetter and mtext(DIES) in blaetter
+      and mtext(VOR) in ms_['subject'] and mtext(DIES) in ms_['subject'], (ms_.get('subject'), xl_[0].get_filename() if xl_ else None))
+# Testmodus: alles an die Testadresse
+st, r = P.call('hr_mail_save', {'test': {'an': True, 'adresse': 'test@example.org'}, 'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 7}})
+n0 = len(smtp.messages)
+st1, r1 = P.call('hr_monatsuebersicht_senden', {}); st2, r2 = P.call('hr_steuerberater_senden', {})
+until(lambda: len(smtp.messages) >= n0 + 3)
+tm_ = smtp.messages[n0:]
+check('Testmodus: Monatsübersicht und Steuerberater nur an die Testadresse, Betreff nennt den Empfänger', st1 == 200 and st2 == 200 and r1['ergebnis']['test'] is True
+      and all(m_['to'] == ['test@example.org'] for m_ in tm_) and any(m_['subject'].startswith('[Test – für Fritz Frist] Ihr Urlaub') for m_ in tm_)
+      and any(m_['subject'].startswith('[Test – für Steuerberater]') for m_ in tm_), [m_['subject'] for m_ in tm_])
+# Automatik: Einschalten sendet nicht sofort; fällig (Stand zurückgesetzt) genau einmal beim nächsten HR-Aufruf
+st, r = P.call('hr_mail_save', {'monat': {'an': True}, 'test': {'an': False, 'adresse': ''}, 'steuerberater': {'an': True, 'adresse': 'kanzlei@example.org', 'tag': 1}})
+nx_ = r['mail']['naechste']
+check('Automatik an: nächster Versand Monatsübersicht am 1. des nächsten Monats, Steuerberater nächster Monat (Tag 1 schon vorbei)', st == 200
+      and nx_['monat'] == iso((DIES + dt.timedelta(days=32)).replace(day=1)) and nx_['steuerberater'] == iso((DIES + dt.timedelta(days=32)).replace(day=1)), nx_)
+n0 = len(smtp.messages)
+E.call('hr_start'); P.call('mitarbeiter_hr')
+check('… kein sofortiger Versand beim Einschalten', len(smtp.messages) == n0)
+d_ = dokument('hr-einstellungen'); d_['mail']['monat']['stand'] = '2000-01'; d_['mail']['steuerberater']['stand'] = '2000-01'; d_['rev'] = d_.get('rev', 0) + 1
+storage_write('hr-einstellungen', d_)
+E.call('hr_start')
+until(lambda: len(smtp.messages) >= n0 + 3)
+am_ = smtp.messages[n0:]
+check('fällig: beim nächsten HR-Aufruf Monatsübersicht an alle und Übersicht an den Steuerberater', len(am_) == 3 and sorted(m_['to'][0] for m_ in am_) == ['erika@example.org', 'fritz@example.org', 'kanzlei@example.org'], [m_['to'] for m_ in am_])
+E.call('hr_start'); E.call(f'hr_monat&jahr={Y}&monat=3'); P.call('mitarbeiter_hr')
+mv = P.call('mitarbeiter_hr')[1]['mail']
+check('… genau einmal je Monat (weitere Aufrufe senden nichts), Stand vermerkt', len(smtp.messages) == n0 + 3 and mv['einst']['monat']['stand'] == ym(VOR)
+      and mv['einst']['steuerberater']['stand'] == ym(DIES), (len(smtp.messages) - n0, mv['einst']))
+check('Verlauf: automatische und manuelle Versände mit Zahlen', [v_['art'] for v_ in mv['verlauf'][:2]] == ['steuerberater', 'monat'] and mv['verlauf'][0]['wie'] == 'automatisch'
+      and mv['verlauf'][1]['gesendet'] == 2 and any(v_['art'] == 'erinnerung' and v_['wie'] == 'manuell' for v_ in mv['verlauf']), mv['verlauf'][:3])
+log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('Protokoll: Einstellungen, Versände (automatisch als System, Testmodus)', 'HR: E-Mail-Einstellungen geändert' in log_ and 'HR: Monatsübersicht (automatisch): 2 gesendet' in log_
+      and 'System (automatisch)' in log_ and 'HR: Übersicht an den Steuerberater (Testmodus): 1 gesendet' in log_ and 'HR: Erinnerung „Resturlaub verfällt“: 1 gesendet' in log_)
+assert P.call('hr_mail_save', {'monat': {'an': False}, 'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 5}})[0] == 200
+for id_ in (U_VOR, K_VOR):
+    if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
+rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=F_AKTIV)
+
 with sync_playwright() as p:
     br = p.chromium.launch()
 
@@ -970,6 +1096,27 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_1280.png'), full_page=True)
     v_ = P.call('mitarbeiter_hr')[1]
     assert P.call('hr_einstellungen_save', {'sperren': v_['sperren'], 'ferien': v_['ferien'], 'uebertragBis': '03-31'})[0] == 200
+    # E-Mails: gespeicherte Steuerberater-Adresse, ändern sperrt die Knöpfe bis zum Speichern, senden mit Rückfrage
+    check('E-Mails-Karte: Steuerberater-Adresse und Tag aus den Einstellungen, Erinnerung ohne Kandidaten gesperrt', pg.input_value('#hrm-stb-adresse') == 'kanzlei@example.org'
+          and pg.input_value('#hrm-stb-tag') == '5' and pg.is_disabled('#hr-mail [data-hr-mail="erinnerung"]') and pg.is_enabled('#hr-mail [data-hr-mail="steuerberater"]'))
+    pg.fill('#hrm-stb-adresse', 'neu@example.org'); pg.select_option('#hrm-stb-tag', '12')
+    check('… Änderung: Knöpfe gesperrt mit Hinweis „bitte speichern“', pg.is_disabled('#hr-mail [data-hr-mail="steuerberater"]') and 'speichern' in pg.text_content('#hr-mail-hinweis'))
+    with pg.expect_response(lambda r_: 'action=hr_mail_save' in r_.url) as antwort:
+        pg.click('#hr-mail [type="submit"]')
+    pg.wait_for_function("document.querySelector('#hr-mail [data-hr-mail=steuerberater]') && !document.querySelector('#hr-mail [data-hr-mail=steuerberater]').disabled")
+    me_ = P.call('mitarbeiter_hr')[1]['mail']['einst']['steuerberater']
+    check('Oberfläche: E-Mail-Einstellungen gespeichert, Knöpfe wieder frei', antwort.value.status == 200 and me_['adresse'] == 'neu@example.org' and me_['tag'] == 12, me_)
+    n0 = len(smtp.messages)
+    pg.click('#hr-mail [data-hr-mail="steuerberater"]'); pg.wait_for_selector('#dlg-confirm[open]')
+    check('… Senden fragt nach (Adresse und Monate)', 'neu@example.org' in pg.text_content('#confirm-body') and mtext(VOR) in pg.text_content('#confirm-body'))
+    with pg.expect_response(lambda r_: 'action=hr_steuerberater_senden' in r_.url) as antwort:
+        pg.click('#confirm-body .btn.primary')
+    until(lambda: len(smtp.messages) >= n0 + 1)
+    pg.wait_for_selector('#hrm-verlauf li')
+    check('Oberfläche: Übersicht an den Steuerberater gesendet, Verlauf zeigt den Versand', antwort.value.status == 200 and smtp.messages[n0]['to'] == ['neu@example.org']
+          and 'Steuerberater' in pg.text_content('#hrm-verlauf li'))
+    pg.locator('#hr-mail').screenshot(path=os.path.join(SH, 'hr_verwaltung_mails_1280.png'))
+    assert P.call('hr_mail_save', {'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 5}})[0] == 200
     # Schalter „Urlaubsanträge über die Plattform“: sofort wirksam, ohne „Speichern“
     check('Verwaltung → Urlaub: Schalter „Urlaubsanträge“ eingeschaltet', pg.is_checked('#hr-antraege') and pg.text_content('#hr-antraege-t') == 'Eingeschaltet')
     pg.click('#hr-antraege'); pg.wait_for_function('document.querySelector("#hr-antraege-t").textContent === "Ausgeschaltet" && !document.querySelector("#hr-antraege").disabled')
@@ -991,6 +1138,7 @@ with sync_playwright() as p:
     check('390px Verwaltung → Urlaub: Verfallstag und Schalter ohne waagerechtes Scrollen', pg.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
           and pg.is_visible('#hr-antraege-t') and pg.text_content('#hr-antraege-t') == 'Ausgeschaltet')
     pg.screenshot(path=os.path.join(SH, 'hr_verwaltung_urlaub_390.png'), full_page=True)
+    pg.locator('#hr-mail').screenshot(path=os.path.join(SH, 'hr_verwaltung_mails_390.png'))
     pg.click('#hr-antraege'); pg.wait_for_function('document.querySelector("#hr-antraege-t").textContent === "Eingeschaltet" && !document.querySelector("#hr-antraege").disabled')
     check('Oberfläche: Urlaubsanträge wieder eingeschaltet', P.call('mitarbeiter_hr')[1]['antraege'] is True and pg.is_checked('#hr-antraege'))
     pg.goto(B + '/admin/#users'); pg.wait_for_selector(f'#view-users tr[data-hr-uid="{ids["erika"]}"]')

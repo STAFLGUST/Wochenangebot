@@ -52,3 +52,20 @@
 .hr-eigene-sperren { margin: 6px 0 4px; }
 .hr-regeln-feld textarea { width: 100%; min-height: 220px; font: inherit; font-size: 13.5px; line-height: 1.45; resize: vertical; }
 .hr-regeln-knoepfe { display: flex; gap: 8px; margin: 6px 0 8px; }
+/* Verwaltung → Urlaub: E-Mails */
+.hr-mail-block { padding: 12px 0 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; justify-items: start; }
+.hr-mail-block:first-of-type { border-top: 0; padding-top: 4px; }
+.hr-mail-block h4, .hr-mail-vh { margin: 0; font-size: 14px; font-weight: 650; }
+.hr-mail-block .hint { margin: 0; }
+.hr-mail-block > * { max-width: 100%; min-width: 0; }
+.hr-mail-block .form-grid { width: 100%; }
+.hr-mail-block .form-grid > * { min-width: 0; }
+.hr-mail-block .btn { white-space: normal; }
+.hr-mail-check { align-items: flex-start; margin: 0; }
+.hr-mail-check small { display: block; margin-top: 2px; font-size: 12px; }
+.hr-mail-test { width: 100%; max-width: 420px; }
+.hr-mail-vh { margin-top: 6px; }
+.hr-mail-verlauf { list-style: none; margin: 6px 0 4px; padding: 0; display: grid; gap: 4px; font-size: 12.5px; color: var(--text-2); }
+.hr-mail-verlauf li { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) auto; gap: 10px; }
+.hr-mail-fehler { color: var(--danger, #b42318); }
+@media (max-width: 600px) { .hr-mail-verlauf li { grid-template-columns: 1fr; gap: 0; padding-bottom: 4px; } }
