@@ -51,7 +51,7 @@ Ein Release kann jederzeit auf die Vorversion zurückfallen (automatisch, wenn d
 
 **1. Neue Felder sind optional und fehlen, solange sie leer sind.** `user_save` schreibt `vorname`, `nachname`,
 `email`, `rollen`, `grant`, `deny`, `twofaPflicht` nur, wenn sie einen Wert haben; `clean_model` schreibt `nameRaw`,
-`cell`, `variants`, `sale` nur bei Bedarf; `clean_master` ebenso `vkGruppe` und `gtin`:
+`cell`, `variants`, `sale`, `namen` nur bei Bedarf; `clean_master` ebenso `vkGruppe`, `gtin`, `nameWawi` und `namen`:
 
 ```php
 if ($vk !== '') $e['vkGruppe'] = $vk;
@@ -231,11 +231,12 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 | `variants?` | Einträge je Angebots-ID: `{status: value|request|hidden, value?, carried?}`; unter `std` nur `{status: hidden}` = nicht im Wochenangebot; in Angeboten mit eigener Artikelliste macht ein Eintrag `value`/`request` den Artikel zum Teil des Angebots, in Angeboten, die dem Wochenangebot folgen, blendet `hidden` ihn aus; Schlüssel gelöschter Angebote fallen weg |
 | `sale?` | Sonderpreis „solange der Vorrat reicht“: Grundpreis `value`, je Angebot abweichend `{value}` oder `{status: none}` |
 | `cell?`, `nameRaw?` | Zelladresse und Originaltext der Excel-Datei (intern) |
+| `namen?` | Eigene Bezeichnung je Kundenangebot: `{<Angebots-ID>: Text ≤ 200}`; fehlt ein Eintrag, gilt `name` (Basiswert, zugleich die Bezeichnung im Wochenangebot – unter `std` gibt es keinen Eintrag); leere Texte und Schlüssel gelöschter Angebote fallen weg (`angebotsnamen_clean`); `offer_resolve` setzt `name` des jeweiligen Angebots und entfernt das Feld; ältere Fassungen verwerfen das Feld (dann gilt überall wieder `name`) |
 | `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40); unbekannte Angebote/Artikel und doppelte fallen weg (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel}`); ältere Fassungen verwerfen das Feld |
 | Gruppe `vk?` | VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt; `^[0-9A-Za-z._-]{1,10}$`, intern (`offer_resolve` entfernt sie); ältere Fassungen verwerfen das Feld |
 
 Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artikelnummer `^[0-9A-Za-z./-]+$`.
-`variants`, `sale`, `cell` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
+`variants`, `sale`, `cell`, `namen` und `meta.werbung` verlassen den Server nie roh – `offer_resolve()` löst sie je Angebot auf und entfernt sie
 (GR-001, GR-002, GR-005).
 
 **`angebote`**: Kundenangebote.
@@ -306,9 +307,11 @@ Gespeichert wird immer die ganze Liste (fehlende Nummern entfallen); je Eintrag 
 unbekannte Felder der gespeicherten Fassung erhalten (`gruppen_clean` mit `$alt`), ebenso weitere Felder des Dokuments.
 
 **`stammdaten`**: Artikelstammdaten aus `clean_master()`.
-`{"rev": 12, "updatedAt": "…", "updatedBy": "…", "articles": [{"code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE", "condition": "frisch", "vkGruppe?": "200", "gtin?": "4000000000000"}]}`.
+`{"rev": 12, "updatedAt": "…", "updatedBy": "…", "articles": [{"code": "1001", "name": "Testartikel Rinderhüfte", "category": "Rind", "origin": "DE", "condition": "frisch", "vkGruppe?": "200", "gtin?": "4000000000000", "nameWawi?": "Testartikel Hüfte, DE, frisch", "namen?": {"kunde-a": "Rinderhüfte Spezial"}}]}`.
 Höchstens 20 000 Sätze, Artikelnummern eindeutig über `code_key()` (führende Nullen und Groß-/Kleinschreibung zählen
-nicht), GTIN 8–14 Ziffern.
+nicht), GTIN 8–14 Ziffern. `name` ist die Angebotsbezeichnung (Basiswert), `nameWawi` die Originalbezeichnung der
+Warenwirtschaft (Bezeichnung1 des Artikelstammdaten-Imports, nur dort gesetzt; steht in der MHD-Liste), `namen` die eigene
+Bezeichnung je Kundenangebot wie beim Artikel des Angebots (Vorgabe für künftige Wochen, beim Excel-Import übernommen).
 
 ### Bestand
 

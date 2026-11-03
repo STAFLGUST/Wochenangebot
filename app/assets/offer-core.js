@@ -505,6 +505,8 @@
     return s.value;
   }
   const saleSig = (s) => (!s || typeof s.value !== 'number' ? '' : 'v' + s.value + Object.keys(s.offers || {}).sort().map((k) => k + ':' + (s.offers[k].status === 'none' ? 'none' : s.offers[k].value)).join(','));
+  /* eigene Bezeichnungen je Angebot (it.namen) als Vergleichstext */
+  const namenSig = (it) => { const n = it.namen || {}; return Object.keys(n).sort().map((k) => k + '=' + n[k]).join('|'); };
   function diffOffers(oldM, newM) {
     const res = { added: [], removed: [], priceChanged: [], changed: [], before: {}, variantChanged: [], saleChanged: [] };
     if (!oldM) { res.added = newM.items.map((i) => i.id); return res; }
@@ -519,7 +521,7 @@
       const o = om.get(k) || oldById.get(it.id);
       if (!o) { res.added.push(it.id); continue; }
       if (priceSig(o) !== priceSig(it)) { res.priceChanged.push(it.id); res.before[it.id] = o; }
-      else if (o.code !== it.code || o.name !== it.name || o.category !== it.category || o.origin !== it.origin || o.condition !== it.condition) { res.changed.push(it.id); res.before[it.id] = o; }
+      else if (o.code !== it.code || o.name !== it.name || o.category !== it.category || o.origin !== it.origin || o.condition !== it.condition || namenSig(o) !== namenSig(it)) { res.changed.push(it.id); res.before[it.id] = o; }
       const ov = o.variants || {}, nv = it.variants || {};
       for (const k of new Set([...Object.keys(ov), ...Object.keys(nv)])) {
         if (variantSig(ov[k]) !== variantSig(nv[k])) { res.variantChanged.push({ id: it.id, offer: k, from: ov[k] || null, to: nv[k] || null }); res.before[it.id] = res.before[it.id] || o; }
