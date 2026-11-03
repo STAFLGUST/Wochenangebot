@@ -211,7 +211,8 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 
 ```json
 {"meta": {"week": 2, "year": 2026, "notice": "", "title?": "…", "source?": "…", "sheetName?": "…",
-          "werbung?": {"std": {"titel": "Aktion der Woche", "text?": "…", "artikel": [{"id": "i1", "text?": "Top-Preis"}]}}},
+          "werbung?": {"std": {"titel": "Aktion der Woche", "text?": "…", "artikel": [{"id": "i1", "text?": "Top-Preis"}],
+                               "weitere?": [{"titel": "Zweite Aktion", "artikel": [{"id": "i2"}]}]}}},
  "sections": ["Frischfleisch"],
  "groups": [{"id": "g1", "name": "Rind", "section": "Frischfleisch", "vk?": "1600"}],
  "items": [{
@@ -219,7 +220,7 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
    "condition": "frisch", "groupId": "g1",
    "price": {"status": "value", "value": 12.5}, "altPrices": [],
    "variants": {"kunde-a": {"status": "value", "value": 11.9}, "std": {"status": "hidden"}},
-   "sale": {"value": 9.9, "offers": {"kunde-a": {"status": "none"}}, "since": "…"}
+   "sale": {"value": 9.9, "offers": {"kunde-a": {"status": "none"}, "kunde-b": {"status": "mark"}}, "since": "…"}
  }]}
 ```
 
@@ -229,9 +230,9 @@ als `versionen/<JJJJMMTT-hhmmss>-<hex>` ab (höchstens `keep_versions`) und den 
 | `condition` | `CONDITIONS`: frisch, gefroren, frisch-gefroren, dry-aged, unbekannt |
 | `price`, `altPrices[]` | `{status: value|request|none, value?, raw?, label?}`, `value` 0 bis unter 100 000, 4 Nachkommastellen; höchstens 5 Zusatzpreise |
 | `variants?` | Einträge je Angebots-ID: `{status: value|request|hidden, value?, carried?}`; unter `std` nur `{status: hidden}` = nicht im Wochenangebot; in Angeboten mit eigener Artikelliste macht ein Eintrag `value`/`request` den Artikel zum Teil des Angebots, in Angeboten, die dem Wochenangebot folgen, blendet `hidden` ihn aus; Schlüssel gelöschter Angebote fallen weg |
-| `sale?` | Sonderpreis „solange der Vorrat reicht“: Grundpreis `value`, je Angebot abweichend `{value}` oder `{status: none}` |
+| `sale?` | Empfehlung (bis 11/2026 „Sonderpreis“): Grundwert `value` (Empfehlungspreis = Sonderposten „solange der Vorrat reicht“) oder `mark: true` (ohne Preisänderung, nur hervorheben); je Angebot abweichend `{value}`, `{status: mark}` oder `{status: none}`. `offer_resolve` liefert mit Preis `sale: true` und `regular` (ohne Bestand ausgeblendet), ohne Preis `empfehlung: true` (Preis und Sichtbarkeit unverändert). Ältere Fassungen verwerfen Einträge ohne `value` |
 | `cell?`, `nameRaw?` | Zelladresse und Originaltext der Excel-Datei (intern) |
-| `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40); unbekannte Angebote/Artikel und doppelte fallen weg (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel}`); ältere Fassungen verwerfen das Feld |
+| `meta.werbung?` | Werbung je Angebots-ID (`std` oder Kundenangebot): `titel` (≤ 80 Zeichen), `text?` (≤ 240), `artikel` = höchstens 12 Artikel-IDs in Reihenfolge mit `text?` (Hinweis, ≤ 40), `weitere?` = eine zweite Werbung im selben Aufbau (höchstens zwei je Angebot, `WERBUNG_BLOECKE`; ältere Fassungen lesen nur die erste); unbekannte Angebote/Artikel und doppelte fallen weg, leere Werbungen ebenso – die nächste rückt nach (`clean_werbung`), keine Übernahme durch Angebote, die dem Wochenangebot folgen; `offer_resolve` liefert nur den Eintrag des jeweiligen Angebots und nur ausgelieferte Artikel (`meta.werbung = {titel, text?, artikel, weitere?}`); ältere Fassungen verwerfen das Feld |
 | Gruppe `vk?` | VK-Gruppe (Stammdaten), aus der „Artikel hinzufügen“ die Angebotsgruppe wählt; `^[0-9A-Za-z._-]{1,10}$`, intern (`offer_resolve` entfernt sie); ältere Fassungen verwerfen das Feld |
 
 Grenzen: höchstens 5000 Artikel und 1000 Gruppen; IDs `^[A-Za-z0-9_-]+$`; Artikelnummer `^[0-9A-Za-z./-]+$`.

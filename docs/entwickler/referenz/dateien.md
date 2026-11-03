@@ -234,7 +234,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `admin-rollen-vorschau.js` | plattform | Wochenangebot – Verwaltung → Rollen und Rechte |
 | `admin-rollen.js` | plattform | Wochenangebot – Eingabebereich, Verwaltung → Rollen und Rechte (nur Administratoren) Eigene Rollen anlegen, umbenennen, kopieren und löschen; je Rolle und Modul eine Stufe (Kein Zugang · Ansehen · Bearbeiten · Voll), … |
 | `admin-verwaltung.js` | verwaltung | Wochenangebot – Eingabebereich, Verwaltung Mitarbeiter, Bestellungen, Kunden, E-Mail, Protokoll. |
-| `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Überschrift, optionaler Werbetext und bis zu 12 Artikel des gewählten Angebots (Reihenfolge, je Artikel ein … |
+| `admin-werbung.js` | angebot | Eingabebereich – Fenster „Werbung schalten“ (Angebot bearbeiten, Knopf „Werbung“ in der Werkzeugleiste) Bis zu zwei Werbungen je Angebot (Reiter „Werbung 1“/„Werbung 2“, „Weitere Werbung“ legt die zweite an): je … |
 | `admin.css` | plattform | Eingabebereich – ergänzt app.css |
 | `admin.js` | angebot | Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (automatisch gespeichert). |
 | `app.css` | angebot | Designsystem „Klar“: neutrale Flächen, ein Akzent (Bordeaux), Geist / Geist Mono (lokal eingebunden, SIL Open Font License, assets/fonts/LICENSE-Geist.txt – keine Verbindung zu fremden Servern) |
@@ -738,7 +738,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_qs_bericht.py` | qs | Qualitätssicherung – Audit-Bericht (app/api/module/qs/bericht.php, Aktionen qs_bericht und qs_bericht_excel, Reiter „Audit“). |
 | `test_qs_vorlagen.py` | qs | Qualitätssicherung – Vorlagen und Nummernstruktur (QM-System Bauabschnitt 3, app/api/module/qs/vorlagen.php). |
 | `test_rechte.py` | plattform | Nutzerrechte: Rechte je Rolle (einstellbar) und Ausnahmen je Nutzer (erlauben/verbieten). |
-| `test_restposten.py` | angebot | Sonderposten (kurzes MHD, solange der Vorrat reicht), Ausblenden in jedem Angebot, eigene Artikelliste (Sonderposten nur für eigene Artikel), Kein-Bestand-Zeichen und Sonderposten-Mail je Angebot. |
+| `test_restposten.py` | angebot | Empfehlung (früher „Sonderpreis“): mit Preis Sonderposten (kurzes MHD, solange der Vorrat reicht), ohne Preis nur hervorgehoben; neu gesetzt nur im bearbeiteten Angebot. |
 | `test_revert.py` | angebot | sauberer Ausgangspunkt: einmal veröffentlichen |
 | `test_rewe.py` | rewe | REWE (Modul rewe, Oberfläche rewe.intern unter /module/rewe/) – Vordisposition Dry Aged für REWE-Märkte. |
 | `test_rollen.py` | plattform | Rollen und Rechte: eigene Rollen (anlegen, umbenennen, kopieren, löschen), Modulzugang „<modul>.zugang“ je Rolle, mehrere Rollen je Mitarbeiter, Standardrollen unverändert, Durchsetzung auf dem Server (GR-103), … |
