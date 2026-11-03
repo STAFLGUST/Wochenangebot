@@ -14,7 +14,7 @@ Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie 
 | `einrichten.sh` | Schritt 2: Geheimnisse in `.env` ergänzen, Realm-Import vorbereiten (startet nichts) |
 | `app-abfrage.php` | von `konten.sh` im App-Container ausgeführt: Postfach der Anwendung (für den Mailversand von Keycloak) und ob es ein Mitarbeiterkonto gibt |
 | `ruecksicherung-probe.sh` | Schritt 7: Rücksicherung der Keycloak-Sicherung in eine Probedatenbank üben (Konten zählen, danach löschen) |
-| `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste) |
+| `konten.sh` | Schritt 4 und Betrieb: Konten in der Serverkonsole verwalten (Verwaltungskonto, anlegen, Startpasswort, zweiten Faktor zurücksetzen, Passkey, sperren, Liste, „Passwort vergessen“ ein/aus) |
 | `theme/stafl/login/` | Design der Anmeldeseite („Liquid Glass“ wie Dashboard und Eingabebereich, Logo aus `app/assets/`): erbt von `keycloak.v2`; eigen sind `stafl.css`, `stafl-otp.js` (Einmalcode-Felder), `messages_de.properties` und zwei Vorlagen (`login-otp.ftl`, `login-config-totp.ftl`, Grundlage Keycloak 26.8.1). Per Volume nur lesend in Keycloak |
 
 **Releases:** Ändert ein Release `deploy/image/` (z. B. neuer Digest des Basis-Images), baut `deploy/freigabe-einspielen.sh`
@@ -108,8 +108,8 @@ neu), danach `sh deploy/notzugang.sh aus`. Rückfall auf das alte Verhalten daue
 ## Design der Anmeldeseite und der E-Mails
 
 Keycloak liest das Theme aus `deploy/anmeldung/theme/stafl` (Volume in `docker-compose.anmeldung.yml`, nur lesend):
-`login/` für die Anmeldeseite, `email/` für die Einladung bzw. den Link zum Passwort-Festlegen (Vorlage `executeActions`,
-gleicher Stil wie die Plattform-Mails, keine Bilder). Aktiv wird es erst mit `sh deploy/anmeldung/konten.sh design-setzen`
+`login/` für die Anmeldeseite, `email/` für die Einladung bzw. den Link zum Passwort-Festlegen (Vorlage `executeActions`)
+und „Passwort vergessen“ (Vorlage `password-reset`; gleicher Stil wie die Plattform-Mails, keine Bilder). Aktiv wird es erst mit `sh deploy/anmeldung/konten.sh design-setzen`
 (setzt `loginTheme=stafl` und `emailTheme=stafl` im Realm „mitarbeiter“, idempotent, ändert sonst nichts – keine Abläufe,
 Richtlinien oder Clients; einmal erneut ausführen, wenn bisher nur die Anmeldeseite gesetzt war). Neuinstallationen bekommen es schon über
 `realm-mitarbeiter.json`. Der Befehl bricht ab, wenn Keycloak das Theme nicht kennt (Container noch ohne Volume: zuerst
@@ -150,3 +150,26 @@ Ruft `kcadm.sh` im Keycloak-Container auf (`docker compose … exec -T keycloak`
 Startpasswörter werden einmal angezeigt; bei der ersten Anmeldung verlangt Keycloak eigenes Passwort und Einmalcode
 (Pflichtaktionen im Realm). Benutzernamen wie im Eingabebereich (2–32 Zeichen, a–z, Ziffern, `.`, `-`, `_`).
 Getestet gegen echtes Keycloak in `tests/oidc/test_oidc.py` (Abschnitt „Konten über die Serverkonsole“).
+
+## Passwort vergessen (konten.sh passwort-vergessen)
+
+Seit 03.11.2026 (Wunsch des Inhabers) kann ein Mitarbeiter sein Passwort selbst zurücksetzen: Anmeldeseite → „Passwort
+vergessen?“ → Benutzername → Mail mit Link (15 Minuten gültig, einmal verwendbar, Vorlage `password-reset` im
+Plattform-Design). Die Bestätigung ist neutral (verrät nicht, ob es den Benutzernamen gibt); ohne hinterlegte E-Mail-Adresse
+kommt keine Mail.
+
+Sicherheit: Keycloaks eingebauter Ablauf „reset credentials“ enthält „Reset OTP“ – er entfernt den Einmalcode, wer an das
+Postfach kommt, könnte dann ein Administratorkonto samt zweitem Faktor übernehmen. `konten.sh passwort-vergessen an` legt
+deshalb den eigenen Ablauf `mitarbeiter-passwort-vergessen` an (Benutzer wählen → Mail → **Passkey bzw. Einmalcode, wenn
+eingerichtet** → neues Passwort; kein „Reset OTP“) und setzt ihn als Ablauf zum Zurücksetzen. Einmalcode und Passkeys
+bleiben, die Anmeldemethode (amr `otp`/`hwk`) wird gemeldet – Pflicht-Konten kommen danach ohne zweite Code-Abfrage ins
+Dashboard. Der Befehl prüft den Aufbau: weicht der Ablauf ab (von Hand geändert), schaltet er nicht ein.
+
+```sh
+sh deploy/anmeldung/konten.sh passwort-vergessen status   # an/aus, Ablauf abgesichert?, Mailversand eingerichtet?
+sh deploy/anmeldung/konten.sh passwort-vergessen an       # Voraussetzung: konten.sh mail-einrichten
+sh deploy/anmeldung/konten.sh passwort-vergessen aus      # Rückweg: Link weg, Ablauf bleibt
+```
+
+Neue Installationen bekommen Ablauf, Link-Gültigkeit und `resetPasswordAllowed` über `realm-mitarbeiter.json`; die CI
+vergleicht den von `konten.sh` angelegten Ablauf mit der Datei (`tests/oidc/test_oidc.py`).

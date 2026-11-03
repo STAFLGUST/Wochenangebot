@@ -9,7 +9,7 @@
   "verifyEmail": false,
   "loginWithEmailAllowed": false,
   "duplicateEmailsAllowed": false,
-  "resetPasswordAllowed": false,
+  "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
   "permanentLockout": false,
@@ -594,7 +594,8 @@
   ],
   "browserFlow": "mitarbeiter-browser",
   "attributes": {
-    "acr.loa.map": "{\"pwd\": 1, \"mfa\": 2}"
+    "acr.loa.map": "{\"pwd\": 1, \"mfa\": 2}",
+    "actionTokenGeneratedByUserLifespan.reset-credentials": "900"
   },
   "authenticationFlows": [
     {
@@ -760,6 +761,106 @@
           "authenticatorFlow": false
         }
       ]
+    },
+    {
+      "alias": "mitarbeiter-passwort-vergessen",
+      "description": "Passwort vergessen: Link per Mail, zweiter Faktor wenn eingerichtet, dann neues Passwort (ohne Reset OTP)",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "reset-credentials-choose-user",
+          "authenticatorFlow": false
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticator": "reset-credential-email",
+          "authenticatorFlow": false
+        },
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "flowAlias": "mitarbeiter-vergessen-passkey",
+          "authenticatorFlow": true
+        },
+        {
+          "requirement": "CONDITIONAL",
+          "priority": 40,
+          "userSetupAllowed": false,
+          "flowAlias": "mitarbeiter-vergessen-einmalcode",
+          "authenticatorFlow": true
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 50,
+          "userSetupAllowed": false,
+          "authenticator": "reset-password",
+          "authenticatorFlow": false
+        }
+      ]
+    },
+    {
+      "alias": "mitarbeiter-vergessen-passkey",
+      "description": "Passkey, wenn eingerichtet",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticator": "webauthn-authenticator",
+          "authenticatorFlow": false,
+          "authenticatorConfig": "amr-hwk-vergessen"
+        }
+      ]
+    },
+    {
+      "alias": "mitarbeiter-vergessen-einmalcode",
+      "description": "Einmalcode, wenn eingerichtet und kein Passkey verwendet",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticator": "conditional-credential",
+          "authenticatorFlow": false,
+          "authenticatorConfig": "vergessen-ohne-passkey"
+        },
+        {
+          "requirement": "REQUIRED",
+          "priority": 30,
+          "userSetupAllowed": false,
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "authenticatorConfig": "amr-otp-vergessen"
+        }
+      ]
     }
   ],
   "authenticatorConfig": [
@@ -783,6 +884,27 @@
         "credentials": "webauthn",
         "included": "false"
       }
+    },
+    {
+      "alias": "amr-hwk-vergessen",
+      "config": {
+        "default.reference.value": "hwk",
+        "default.reference.maxAge": "36000"
+      }
+    },
+    {
+      "alias": "vergessen-ohne-passkey",
+      "config": {
+        "credentials": "webauthn",
+        "included": "false"
+      }
+    },
+    {
+      "alias": "amr-otp-vergessen",
+      "config": {
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
+      }
     }
   ],
   "webAuthnPolicyRpEntityName": "STAFL-Plattform",
@@ -797,5 +919,6 @@
   "webAuthnPolicyUserVerificationRequirement": "required",
   "webAuthnPolicyCreateTimeout": 0,
   "webAuthnPolicyAvoidSameAuthenticatorRegister": true,
-  "webAuthnPolicyAcceptableAaguids": []
+  "webAuthnPolicyAcceptableAaguids": [],
+  "resetCredentialsFlow": "mitarbeiter-passwort-vergessen"
 }

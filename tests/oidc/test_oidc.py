@@ -216,7 +216,7 @@ tok = json.loads(text).get('access_token', '') if code == 200 else ''
 check('Verwaltungszugang nur lokal (Testvorbereitung)', bool(tok), (code, text[:100]))
 _, _, text = anfrage(KC + '/admin/realms/mitarbeiter', kopf={'Authorization': 'Bearer ' + tok})
 realm = json.loads(text) if text.startswith('{') else {}
-check('Realm: Brute-Force-Schutz an, keine Selbstregistrierung, kein Passwort-Zurücksetzen per E-Mail',
+check('Realm: Brute-Force-Schutz an, keine Selbstregistrierung, kein Passwort-Zurücksetzen per E-Mail (bis konten.sh passwort-vergessen an – wie im Betrieb)',
       realm.get('bruteForceProtected') is True and realm.get('registrationAllowed') is False and realm.get('resetPasswordAllowed') is False, realm.get('bruteForceProtected'))
 check('Realm: nur HTTPS, Anmeldesitzung 4 Std. Leerlauf / 10 Std. höchstens',
       realm.get('sslRequired') == 'all' and realm.get('ssoSessionIdleTimeout') == 14400 and realm.get('ssoSessionMaxLifespan') == 36000)
@@ -1554,6 +1554,11 @@ with sync_playwright() as pw:
 
     code, aus = konten('einladen', 'eva.einladung')
     check('Einladung: ohne eingerichteten Mailversand abgelehnt', code == 1 and 'mail-einrichten' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'an')
+    check('Passwort vergessen: ohne eingerichteten Mailversand nicht einschaltbar', code == 1 and 'mail-einrichten' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'status')
+    check('… Status wie bisher im Betrieb: aus, Keycloak-Standardablauf (nicht abgesichert), Mailversand fehlt', code == 0 and 'Passwort vergessen: aus' in aus
+          and 'NICHT abgesichert' in aus and 'Mailversand der Anmeldung: fehlt' in aus, aus)
     code, aus = konten('mail-einrichten', 'pruefung@stafl.test')
     tresor = os.path.join(WORK, 'vault', 'mitarbeiter_smtp__password')
     check('Mailversand eingerichtet, Testmail angekommen', code == 0 and warte_mail('pruefung@stafl.test') is not None, aus)
@@ -1795,6 +1800,166 @@ with sync_playwright() as pw:
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': erika_id, 'was': 'passwort', 'passwort': 'Fremd-Gesetzt-Kennwort-1'}])
     check('Bearbeiterin: kein Passwort für andere (403)', code == 403, (code, j))
     ctx.close()
+    # ── Passwort vergessen (Stand 14, konten.sh passwort-vergessen; Inhaber 03.11.2026): Link per Mail an die hinterlegte
+    #    Adresse, eigener Ablauf ohne „Reset OTP“ – wer einen zweiten Faktor hat, braucht ihn auch hier; er bleibt erhalten ──
+    def anmelde_link_vergessen():
+        c = br.new_context(ignore_https_errors=True); p_ = c.new_page()
+        p_.goto(D + '/'); p_.wait_for_selector('#username')
+        n = p_.locator('a', has_text='Passwort vergessen').count()
+        c.close()
+        return n
+    check('Anmeldeseite ohne „Passwort vergessen?“, solange ausgeschaltet', anmelde_link_vergessen() == 0)
+    code, aus = konten('passwort-vergessen', 'an')
+    check('Konsole: Passwort vergessen eingeschaltet, eigener Ablauf angelegt, Link 15 Minuten', code == 0 and 'angelegt:  Ablauf mitarbeiter-passwort-vergessen' in aus
+          and 'eingeschaltet' in aus and '15 Minuten' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'an')
+    check('… erneut ausgeführt: nichts doppelt angelegt', code == 0 and 'angelegt:' not in aus and 'eingeschaltet' in aus, aus)
+    code, aus = konten('passwort-vergessen', 'status')
+    check('… Status: an, Ablauf abgesichert, Mailversand eingerichtet', code == 0 and 'Passwort vergessen: an' in aus and '(abgesichert)' in aus
+          and 'Mailversand der Anmeldung: eingerichtet' in aus, aus)
+    vkopf = {'Authorization': 'Bearer ' + vtoken()}
+    _r = json.loads(anfrage(KC + '/admin/realms/mitarbeiter', kopf=vkopf)[2])
+    check('Realm: Zurücksetzen erlaubt, eigener Ablauf, Link 900 s gültig', _r.get('resetPasswordAllowed') is True and _r.get('resetCredentialsFlow') == 'mitarbeiter-passwort-vergessen'
+          and _r.get('attributes', {}).get('actionTokenGeneratedByUserLifespan.reset-credentials') == '900', (_r.get('resetPasswordAllowed'), _r.get('resetCredentialsFlow')))
+
+    def ablauf_datei():   # erwarteter Aufbau aus der Realm-Datei (gilt für neue Installationen)
+        r = json.load(open(os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json'), encoding='utf-8'))
+        fl = {f['alias']: f for f in r['authenticationFlows']}
+        z = []
+        def lauf(alias, ebene):
+            for e in sorted(fl[alias]['authenticationExecutions'], key=lambda e: e['priority']):
+                z.append(f"{ebene}|{e.get('flowAlias') or e.get('authenticator')}|{e['requirement']}|{e['priority']}")
+                if e.get('authenticatorFlow'):
+                    lauf(e['flowAlias'], ebene + 1)
+        lauf(r['resetCredentialsFlow'], 0)
+        return z
+    _ist = [f"{e['level']}|{e.get('providerId') or e.get('displayName')}|{e['requirement']}|{e.get('priority')}"
+            for e in json.loads(anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-passwort-vergessen/executions', kopf=vkopf)[2])]
+    check('Ablauf von konten.sh = Ablauf der Realm-Datei (neue Installationen gleich abgesichert), ohne „Reset OTP“, zweiter Faktor vor dem neuen Passwort',
+          _ist == ablauf_datei() and not any('reset-otp' in z for z in _ist)
+          and max(i for i, z in enumerate(_ist) if 'auth-otp-form' in z or 'webauthn-authenticator' in z) < next(i for i, z in enumerate(_ist) if 'reset-password' in z), (_ist, ablauf_datei()))
+    check('Anmeldeseite: „Passwort vergessen?“ sichtbar', anmelde_link_vergessen() == 1)
+
+    def vergessen_anfordern(p_, wer):
+        p_.goto(D + '/'); p_.wait_for_selector('#username')
+        p_.locator('a', has_text='Passwort vergessen').first.click(); p_.wait_for_selector('#username')
+        p_.fill('#username', wer); p_.click('[type=submit]')
+        p_.locator('text=Wenn es zu diesem Benutzernamen').first.wait_for()   # Locator: übersteht den Seitenwechsel
+        return p_.inner_text('body')
+
+    def link_aus(m_):
+        r_ = re.search(r'https://login\.stafl\.test:8443/realms/mitarbeiter/login-actions/action-token\?key=\S+', m_['text']) if m_ else None
+        return r_.group(0) if r_ else ''
+
+    # Konto ohne zweiten Faktor (eva): Link → gleich neues Passwort → Dashboard; Mail im STAFL-Design; unbekannter Name neutral
+    EVA_NEU, EVA_ZWEIT = 'Eva-Vergessen-Kennwort-4', 'Eva-Passkey-Kennwort-6'
+    vorher_alle, vorher_eva = len(pf.nachrichten), len(pf.an('eva@stafl.test'))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    t_unbekannt = vergessen_anfordern(pg, 'gibt.es.nicht')
+    t_eva = vergessen_anfordern(pg, 'eva.einladung')
+    m = warte_mail('eva@stafl.test', vorher_eva + 1)
+    _meldung = lambda t: next((z for z in t.splitlines() if 'Wenn es zu diesem Benutzernamen' in z), '')   # noqa: E731
+    check('unbekannter Benutzername: dieselbe neutrale Bestätigung, keine Mail', _meldung(t_unbekannt) != '' and _meldung(t_unbekannt) == _meldung(t_eva)
+          and len(pf.nachrichten) == vorher_alle + 1, (_meldung(t_unbekannt), len(pf.nachrichten) - vorher_alle))
+    link = link_aus(m)
+    check('Mail „Passwort vergessen“ im STAFL-Design: Betreff, Benutzername, Knopf, 15 Minuten, Hinweis „Nicht angefordert?“, ohne Bilder',
+          m and m['betreff'] == 'STAFL-Plattform – neues Passwort festlegen' and 'Neues Passwort festlegen &rarr;' in m['html'] and 'eva.einladung' in m['html']
+          and 'Ihr Benutzername: eva.einladung' in m['text'] and '15 Minuten' in m['text'] and 'Nicht angefordert?' in m['text'] and link
+          and '<img' not in m['html'].lower() and m['von'] == 'anmeldung@stafl.test', (m and m['betreff'], m and m['text'][:300]))
+    if m and m['html']:
+        with open(os.path.join(SH, 'oidc_passwort_vergessen_mail.html'), 'w', encoding='utf-8') as _f:
+            _f.write(m['html'])
+    pg.goto(link); pg.wait_for_selector('#password-new')
+    check('Link: ohne zweiten Faktor direkt „neues Passwort“', pg.locator('#otp').count() == 0 and pg.locator('#authenticateWebAuthnButton').count() == 0)
+    pg.screenshot(path=os.path.join(SH, 'oidc_passwort_vergessen_neu.png'))
+    pg.fill('#password-new', EVA_NEU); pg.fill('#password-confirm', EVA_NEU); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… danach angemeldet im Dashboard (dasselbe Mitarbeiterkonto)', st.get('loggedIn') and st['user']['username'] == 'eva.einladung', st.get('user'))
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = ctx.new_page()
+    pg.goto(link); pg.wait_for_load_state()
+    check('Link nur einmal verwendbar', pg.locator('#password-new').count() == 0, pg.url)
+    ctx.close()
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'eva.einladung'); pg.fill('#password', SVEN['eva']); pg.click('#kc-login')
+    pg.wait_for_selector('#input-error-username, .kc-feedback-text, [id*=error]')
+    check('altes Passwort gilt nicht mehr', pg.url.startswith(L) and pg.locator('#db-grid').count() == 0, pg.url)
+    FEHLVERSUCH[0] = time.time(); fehlversuch_abstand()
+    pg.fill('#password', EVA_NEU)
+    if pg.locator('#username').is_visible() and not pg.input_value('#username'): pg.fill('#username', 'eva.einladung')
+    pg.click('#kc-login'); pg.wait_for_selector('#db-grid .db-tile')
+    check('neues Passwort gilt', pg.url.startswith(D + '/dashboard/'), pg.url)
+    ctx.close()
+    code, aus = konten('entsperren', 'eva.einladung')   # Fehlversuch zurücksetzen
+
+    # Administrator (zweiter Faktor Pflicht, Einmalcode): Link verlangt den Einmalcode, danach neues Passwort; Einmalcode bleibt
+    ADMIN_NEU = 'Admin-Vergessen-Kennwort-CI-5'
+    konten('entsperren', 'admin')   # frühere absichtliche Fehlversuche dürfen hier nicht in eine Sperre laufen
+    _aid = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=admin', kopf={'Authorization': 'Bearer ' + vtoken()})[2])[0]['id']
+    arten = lambda: sorted(c['type'] for c in json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_aid}/credentials', kopf={'Authorization': 'Bearer ' + vtoken()})[2]))
+    vor_arten = arten()
+    vorher_admin = len(pf.an('admin@stafl.test'))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    vergessen_anfordern(pg, 'admin')
+    link = link_aus(warte_mail('admin@stafl.test', vorher_admin + 1))
+    pg.goto(link); pg.wait_for_selector('#otp, #password-new')
+    check('Link für ein Konto mit Einmalcode: zuerst der Einmalcode, kein neues Passwort ohne ihn', pg.locator('#otp').count() == 1 and pg.locator('#password-new').count() == 0, pg.url)
+    pg.screenshot(path=os.path.join(SH, 'oidc_passwort_vergessen_einmalcode.png'))
+    otp_eingeben(pg, 'admin'); pg.wait_for_selector('#password-new')
+    pg.fill('#password-new', ADMIN_NEU); pg.fill('#password-confirm', ADMIN_NEU); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile, #otp')
+    check('… danach im Dashboard ohne zweite Code-Abfrage (Pflicht-Konto: Einmalcode im Claim amr)', pg.locator('#otp').count() == 0 and pg.locator('#db-grid .db-tile').count() > 0, pg.url)
+    ctx.close()
+    check('… Einmalcode bleibt eingerichtet (kein „Reset OTP“)', 'otp' in arten() and [a for a in vor_arten if a != 'password-history'] == [a for a in arten() if a != 'password-history'], (vor_arten, arten()))
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'admin'); pg.fill('#password', ADMIN_NEU); pg.click('#kc-login')
+    pg.wait_for_selector('#otp')
+    check('nächste Anmeldung mit dem neuen Passwort: Einmalcode weiter verlangt', pg.is_visible('#otp'))
+    otp_eingeben(pg, 'admin'); pg.wait_for_selector('#db-grid .db-tile')
+    ctx.close()
+
+    # Passkey: eva richtet einen ein (virtueller Authenticator); der Link verlangt dann den Passkey
+    _eid = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=eva.einladung', kopf={'Authorization': 'Bearer ' + vtoken()})[2])[0]
+    _eid['requiredActions'] = ['webauthn-register']
+    anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_eid['id']}", 'PUT', json.dumps(_eid).encode(), {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'})
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    cdp = ctx.new_cdp_session(pg); cdp.send('WebAuthn.enable')
+    cdp.send('WebAuthn.addVirtualAuthenticator', {'options': {'protocol': 'ctap2', 'transport': 'internal', 'hasResidentKey': True,
+             'hasUserVerification': True, 'isUserVerified': True, 'automaticPresenceSimulation': True}})
+    pg.on('dialog', lambda d: d.accept('Testschlüssel'))
+    pg.goto(D + '/'); pg.wait_for_selector('#username'); pg.fill('#username', 'eva.einladung'); pg.fill('#password', EVA_NEU); pg.click('#kc-login')
+    pg.wait_for_selector('#registerWebAuthn'); pg.click('#registerWebAuthn'); pg.wait_for_selector('#db-grid .db-tile')
+    pg.click('#db-logout'); pg.wait_for_url('**/dashboard/abgemeldet.html')
+    vorher_eva = len(pf.an('eva@stafl.test'))
+    vergessen_anfordern(pg, 'eva.einladung')
+    link = link_aus(warte_mail('eva@stafl.test', vorher_eva + 1))
+    pg.goto(link); pg.wait_for_selector('#authenticateWebAuthnButton, #otp, #password-new')
+    check('Link für ein Konto mit Passkey: zuerst der Passkey (kein Einmalcode, kein neues Passwort ohne ihn)', pg.locator('#authenticateWebAuthnButton').count() == 1
+          and pg.locator('#otp').count() == 0 and pg.locator('#password-new').count() == 0, pg.url)
+    pg.click('#authenticateWebAuthnButton'); pg.wait_for_selector('#password-new')
+    pg.fill('#password-new', EVA_ZWEIT); pg.fill('#password-confirm', EVA_ZWEIT); pg.click('#kc-submit')
+    pg.wait_for_selector('#db-grid .db-tile')
+    st = pg.evaluate("fetch('../api/?action=status').then(r => r.json())")
+    check('… mit Passkey bestätigt, neues Passwort gesetzt, angemeldet; Passkey bleibt', st.get('loggedIn') and st['user']['username'] == 'eva.einladung'
+          and 'webauthn' in [c['type'] for c in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_eid['id']}/credentials", kopf={'Authorization': 'Bearer ' + vtoken()})[2])], st.get('user'))
+    ctx.close()
+
+    # Von Hand veränderter Ablauf wird erkannt (nicht stillschweigend eingeschaltet); ausschalten = Link weg
+    _bed = next(e for e in json.loads(anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-passwort-vergessen/executions', kopf={'Authorization': 'Bearer ' + vtoken()})[2])
+                if e.get('providerId') == 'auth-otp-form')
+    _h = {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-vergessen-einmalcode/executions', 'PUT', json.dumps({'id': _bed['id'], 'requirement': 'DISABLED', 'priority': _bed['priority']}).encode(), _h)
+    code, aus = konten('passwort-vergessen', 'status')
+    code2, aus2 = konten('passwort-vergessen', 'an')
+    check('veränderter Ablauf (Einmalcode abgeschaltet): Status „NICHT abgesichert“, Einschalten verweigert', 'NICHT abgesichert' in aus and code2 == 1 and 'weicht' in aus2, (aus, aus2))
+    anfrage(KC + '/admin/realms/mitarbeiter/authentication/flows/mitarbeiter-vergessen-einmalcode/executions', 'PUT', json.dumps({'id': _bed['id'], 'requirement': 'REQUIRED', 'priority': _bed['priority']}).encode(), _h)
+    code, aus = konten('passwort-vergessen', 'aus')
+    check('Konsole: ausgeschaltet, Hinweis auf den bisherigen Weg', code == 0 and 'ausgeschaltet' in aus and 'startpasswort' in aus, aus)
+    check('… Anmeldeseite wieder ohne „Passwort vergessen?“', anmelde_link_vergessen() == 0)
+    code, aus = konten('passwort-vergessen', 'status')
+    check('… Status: aus, Ablauf bleibt abgesichert (für das nächste Einschalten)', 'Passwort vergessen: aus' in aus and '(abgesichert)' in aus, aus)
+
     pf.schliessen()
     br.close()
 

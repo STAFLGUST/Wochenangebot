@@ -457,6 +457,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `executeActions.ftl` | plattform | STAFL-Plattform: E-Mail „Konto aktualisieren“ (Einladung aus der Verwaltung bzw. konten.sh einladen, Link zum Passwort-Festlegen) im Stil der Plattform-Mails (app/api/mail.php: mail_layout_einladung). |
+| `password-reset.ftl` | plattform | STAFL-Plattform: E-Mail „Passwort vergessen“ (Link von der Anmeldeseite, konten.sh passwort-vergessen an) im Stil der Plattform-Mails (wie executeActions.ftl). |
 
 ## `deploy/anmeldung/theme/stafl/email/messages/`
 
@@ -469,6 +470,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `executeActions.ftl` | plattform | STAFL-Plattform: Textfassung der E-Mail „Konto aktualisieren“ (zur HTML-Fassung html/executeActions.ftl) |
+| `password-reset.ftl` | plattform | STAFL-Plattform: Textfassung der E-Mail „Passwort vergessen“ (zur HTML-Fassung html/password-reset.ftl) |
 
 ## `deploy/anmeldung/theme/stafl/login/`
 
