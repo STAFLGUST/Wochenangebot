@@ -4748,9 +4748,10 @@
     if (!e) return;
     maCode = e.code;
     const o = masterOrig(e), it = maDraftItem(e.code), l = draftByCode().get(mKey(e.code)) || [];
-    const quelle = o.quelle === 'import' ? 'aus dem Artikelstammdaten-Import' : o.quelle === 'bestand' ? 'aus der Bestandsliste – mit dem nächsten Artikelstammdaten-Import kommt Bezeichnung1' : 'noch nicht bekannt – kommt mit dem Artikelstammdaten-Import (CSV)';
+    const quelle = o.quelle === 'import' ? 'aus dem Artikelstammdaten-Import' : o.quelle === 'bestand' ? 'aus der Bestandsliste – mit dem nächsten Artikelstammdaten-Import (CSV) kommt die Bezeichnung der Warenwirtschaft' : 'noch nicht bekannt – kommt mit dem Artikelstammdaten-Import (CSV)';
     const imAngebot = (oid) => !!(it && inOffer(it, oid));
-    const status = !l.length ? 'Nicht im aktuellen Angebot.' : l.length > 1 ? `${l.length}× im aktuellen Angebot – wird nicht automatisch abgeglichen.` : differs(e, l[0]) ? 'Im aktuellen Angebot abweichend – „Speichern“ übernimmt die geänderten Felder.' : 'Im aktuellen Angebot wie hier.';
+    // Abgleich mit dem Artikel im Angebotsentwurf (alle Angebote teilen ihn)
+    const status = !l.length ? 'Steht in keinem Angebot.' : l.length > 1 ? `Steht ${l.length}× in den Angeboten – wird nicht automatisch abgeglichen.` : differs(e, l[0]) ? 'In den Angeboten abweichend – „Speichern“ übernimmt die geänderten Felder dorthin.' : 'In den Angeboten gleich wie hier.';
     $('#master-art-body').innerHTML = `
       <div class="dlg-head"><div><h2 id="ma-title"><span class="ma-nr">${esc(e.code)}</span> ${esc(o.text || e.name)}</h2><p>${roMaster ? 'Nur Ansicht – Ihre Rolle erlaubt keine Änderungen.' : 'Stammdaten gelten für alle künftigen Wochen und werden beim Excel-Import übernommen.'}</p></div>
         <button class="btn icon ghost" type="button" data-close aria-label="Schließen">${icon('x')}</button></div>
@@ -4765,8 +4766,8 @@
         <label class="fld"><span>Zustand</span><select name="condition">${COND_OPTS(e.condition)}</select></label>
         <label class="fld"><span>Herkunft</span><input name="origin" value="${esc(e.origin || '')}" list="dl-origins" placeholder="nicht angegeben" maxlength="60"></label>
         <label class="fld"><span>VK-Gruppe</span><input name="vkGruppe" value="${esc(e.vkGruppe || '')}" list="dl-vkgruppen" placeholder="–" maxlength="10" autocomplete="off"><small class="hint" id="ma-vkname">${e.vkGruppe ? esc(vkName(e.vkGruppe) || 'nicht in der Liste') : ''}</small></label>
-        ${e.gtin ? `<div class="fld"><span>GTIN</span><div class="ma-orig mono">${esc(e.gtin)}</div></div>` : ''}
-        <p class="hint span2 ma-status">${icon('list', 'sm')} ${esc(status)}</p>
+        ${e.gtin ? `<div class="fld"><span>GTIN</span><div class="ma-orig ma-gtin">${esc(e.gtin)}</div></div>` : ''}
+        <p class="hint span2 ma-status">${icon('info', 'sm')}<span>${esc(status)}</span></p>
         <p class="form-err span2" id="ma-err" role="alert"></p>
       </div>
       <div class="dlg-foot">
