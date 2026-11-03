@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-102 Dateien, 922 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+102 Dateien, 923 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -722,6 +722,7 @@ _Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, w
 - `anwenden()`
 - `zaehlt(d, t)`
 - `zeigen()`
+- `frei(d)` – Gespeichert: Seiten, deren Fenster nach erfolgreichem Speichern offen bleibt, melden das (STAFL_FENSTER.gespeichert); Abschicken allein zählt nicht – schlägt …
 - `oben()`
 - `start()`
 - `lokal(wert)`

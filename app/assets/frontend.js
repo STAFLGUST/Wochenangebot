@@ -1480,8 +1480,8 @@ function openOrder() {
       <p class="o-note" id="or-req"${t.req ? '' : ' hidden'}>Zzgl. Positionen mit Preis auf Anfrage.</p>
       <div id="or-fracht">${frachtMsgHTML(t)}</div>
       <div class="o-fields">
-        <label class="kfld"><span>Wunschtermin (optional)</span><input type="date" id="or-termin" min="${min}"></label>
-        <label class="kfld"><span>Ihre Bestellnummer / Referenz (optional)</span><input type="text" id="or-ref" maxlength="60"></label>
+        <label class="kfld"><span>Wunschtermin (optional)</span><input data-mit-warnung type="date" id="or-termin" min="${min}"></label>
+        <label class="kfld"><span>Ihre Bestellnummer / Referenz (optional)</span><input data-mit-warnung type="text" id="or-ref" maxlength="60"></label>
         <label class="kfld o-wide"><span>Bemerkung (optional)</span><textarea id="or-bem" rows="3" maxlength="1000" placeholder="z. B. Zuschnitt, Verpackung, Lieferhinweise"></textarea></label>
       </div>
       <p class="o-note">Unverbindlicher Bestellwunsch – verbindlich wird die Bestellung erst mit unserer Bestätigung. Preise laut Angebot (freibleibend, netto); abgerechnet wird nach tatsächlichem Gewicht.</p>

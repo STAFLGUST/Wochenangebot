@@ -653,6 +653,7 @@
     const vorher = e ? e.status : '';
     ersetze(r.data.beitrag);
     fuelle(r.data.beitrag);
+    if (window.STAFL_FENSTER) window.STAFL_FENSTER.gespeichert(dlg);   // gespeichert: Escape schließt wieder sofort
     const n = r.data.beitrag;
     m.className = 'mkt-meldung ok';
     m.textContent = vorher === 'geplant' && n.status === 'freigabe' ? 'Gespeichert – der Beitrag war freigegeben und muss nach der Änderung erneut freigegeben werden.' : (status ? `Gespeichert: ${statusName(n.status)}.` : 'Gespeichert.');

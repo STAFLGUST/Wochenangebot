@@ -66,7 +66,7 @@ window.addEventListener('click', function (e) {
 
 /* Getippte, noch nicht gespeicherte Eingaben gehen nicht mit einem Escape verloren (Vorgabe des Inhabers 02.11.2026: Escape
    schließt jedes Fenster – aber einheitlich): Wurde in einem Formular eines offenen Fensters getippt, zeigt das erste
-   Escape einen Hinweis, erst das zweite schließt; nach dem Abschicken (Speichern) wieder sofort. „Abbrechen“ und ×
+   Escape einen Hinweis, erst das zweite schließt; nach erfolgreichem Speichern wieder sofort. „Abbrechen“ und ×
    schließen weiter sofort. Nicht für Anmelde- und
    Passwortformulare, Suchfelder und Fenster mit data-ohne-warnung (speichern sofort selbst, z. B. „Artikel bearbeiten“,
    oder haben eine eigene Rückfrage). Gemeinsam für alle Seiten; Attribute data-geaendert/data-warnung wie im Eingabebereich. */
@@ -76,7 +76,8 @@ window.addEventListener('click', function (e) {
   function zaehlt(d, t) {
     if (!d || !d.open || d.hasAttribute('data-ohne-warnung') || t.closest('[data-ohne-warnung]')) return false;
     var f = t.closest('form');
-    return !!f && d.contains(f) && !f.querySelector('input[type=password]');
+    if (f && d.contains(f)) return !f.querySelector('input[type=password]');
+    return t.nodeName === 'TEXTAREA' || !!t.closest('[data-mit-warnung]');   // ohne <form>: Notizen, Bemerkungen, markierte Felder
   }
   var el = null, uhr = 0;
   function zeigen() {
@@ -108,11 +109,12 @@ window.addEventListener('click', function (e) {
     var d = e.target;
     if (d && d.nodeName === 'DIALOG') { d.removeAttribute('data-geaendert'); d.removeAttribute('data-warnung'); d.__staflFelder = null; if (el) el.classList.remove('zeigen'); }
   }, true);
-  // Abgeschickt (Speichern, Senden): die Eingaben gelten als übernommen – danach schließt Escape wieder sofort
-  window.addEventListener('submit', function (e) {
-    var d = e.target && e.target.closest ? e.target.closest('dialog') : null;
-    if (d) { d.removeAttribute('data-geaendert'); d.removeAttribute('data-warnung'); d.__staflFelder = null; }
-  }, true);
+  // Gespeichert: Seiten, deren Fenster nach erfolgreichem Speichern offen bleibt, melden das (STAFL_FENSTER.gespeichert);
+  // Abschicken allein zählt nicht – schlägt das Speichern fehl, bleiben die Eingaben geschützt. Zurücksetzen des Formulars
+  // (reset) und neuer Inhalt (die getippten Felder sind fort) heben den Schutz ebenfalls auf.
+  function frei(d) { if (d) { d.removeAttribute('data-geaendert'); d.removeAttribute('data-warnung'); d.__staflFelder = null; } }
+  window.STAFL_FENSTER = { gespeichert: frei };
+  window.addEventListener('reset', function (e) { frei(e.target && e.target.closest ? e.target.closest('dialog') : null); }, true);
   window.addEventListener('cancel', function (e) {
     var d = e.target;
     if (!d || d.nodeName !== 'DIALOG' || !d.hasAttribute('data-geaendert') || d.hasAttribute('data-warnung') || d.hasAttribute('data-busy')) return;
@@ -178,8 +180,15 @@ document.addEventListener('toggle', function (e) {
       var mo = new MutationObserver(function () {
         var a = document.activeElement;
         if (d.open && (!a || a === document.body || !a.isConnected)) pruefen();
+        // neue Fehlermeldung ([role=alert]) ins Bild holen – sonst stünde sie in langen Fenstern unten außer Sicht
+        var meld = d.querySelectorAll('[role="alert"]');
+        for (var i = 0; i < meld.length; i++) {
+          var m = meld[i], t = (m.textContent || '').trim();
+          if (t && t !== m.__staflText && m.offsetParent) { m.scrollIntoView({ block: 'nearest' }); }
+          m.__staflText = t;
+        }
       });
-      mo.observe(d, { childList: true, subtree: true });
+      mo.observe(d, { childList: true, subtree: true, characterData: true });
       d.__staflFokus = mo;
       d.addEventListener('close', function () { mo.disconnect(); d.__staflFokus = null; }, { once: true });
     }
