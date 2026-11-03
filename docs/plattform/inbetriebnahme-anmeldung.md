@@ -82,7 +82,18 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   seit 26.10.2026 auch hier: danach erneute Anmeldung bei Keycloak (Passwort erneut), keine stille neue Sitzung.
 - **Passwort aus der Verwaltung für Administratoren und Pflicht-Konten** (zweiter Faktor verpflichtend): immer nur
   vorübergehend – der Mitarbeiter legt bei der nächsten Anmeldung ein eigenes fest (seit 26.10.2026).
-- **Passwort vergessen:** `konten.sh startpasswort <name>` – wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort.
+- **Passwort vergessen** (seit 03.11.2026, Wunsch des Inhabers): Auf der Anmeldeseite „Passwort vergessen?“ – Keycloak
+  schickt einen Link (15 Minuten gültig, nur einmal verwendbar) an die hinterlegte E-Mail-Adresse; eingegeben wird nur der
+  Benutzername, die Bestätigung verrät nicht, ob es das Konto gibt. Eigener Ablauf `mitarbeiter-passwort-vergessen` statt
+  des eingebauten (der enthält „Reset OTP“ und würde den Einmalcode entfernen): Wer einen Passkey oder Einmalcode
+  eingerichtet hat, muss ihn nach dem Link eingeben, erst dann kommt das neue Passwort; zweiter Faktor und Passkeys bleiben,
+  Pflicht-Konten (Administratoren) bleiben damit geschützt, auch wenn jemand an ihr Postfach kommt. **Einschalten nach dem
+  Release** (einmalig, Mailversand der Anmeldung muss eingerichtet sein – `konten.sh mail-einrichten`):
+  `sh deploy/anmeldung/konten.sh passwort-vergessen an`; Zustand: `… passwort-vergessen status`; Rückweg:
+  `… passwort-vergessen aus` (Link verschwindet sofort, der Ablauf bleibt für ein späteres Einschalten). Neue Installationen
+  bekommen Ablauf und Einstellung über `realm-mitarbeiter.json`. Ohne E-Mail-Adresse oder bei ausgeschalteter Funktion wie
+  bisher: `konten.sh startpasswort <name>` (wer einen zweiten Faktor hat, braucht ihn weiter, danach eigenes Passwort) oder
+  Verwaltung → Mitarbeiter → „Zentrale Anmeldung“.
   Handy oder Passkey verloren: nach persönlicher Prüfung `konten.sh zuruecksetzen <name>` (löscht Einmalcode und
   Passkeys, meldet überall ab, neues Startpasswort). Konten nie löschen und neu anlegen – die Verknüpfung mit dem
   Mitarbeiterkonto hängt an der Keycloak-Kennung.

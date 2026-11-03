@@ -97,9 +97,17 @@ EOF
   local kc="$OIDC_WORK/keycloak-$KC_VERSION"
   mkdir -p "$kc/data/import"
   # Wie im Betrieb: der erste Import kannte die Clients „verwaltung“ (Stand 3), „bestand“ (Stand 4), „hr“ (Stand 5), „crm“
-  # (Stand 6), „marketing“ (Stand 7), „konten“ (Stand 8), „sicherheit“ (Stand 9), „controlling“ (Stand 10), „leergut“ (Stand 11), „rewe“ (Stand 12) und „qs“ (Stand 13) noch nicht – sie legt konten.sh realm-aktualisieren an
+  # (Stand 6), „marketing“ (Stand 7), „konten“ (Stand 8), „sicherheit“ (Stand 9), „controlling“ (Stand 10), „leergut“ (Stand 11), „rewe“ (Stand 12) und „qs“ (Stand 13) noch nicht – sie legt konten.sh realm-aktualisieren an.
+  # Ebenso „Passwort vergessen“ (Stand 14: eigener Ablauf, Link-Gültigkeit, resetPasswordAllowed) – das schaltet konten.sh passwort-vergessen an ein
   sed -e "s/@GEHEIM_DASHBOARD@/$OIDC_SECRET_DASHBOARD/" -e "s/@GEHEIM_ANGEBOT@/$OIDC_SECRET_ANGEBOT/" "$HIER/realm-mitarbeiter.json" \
-    | python3 -c 'import json,sys; r=json.load(sys.stdin); r["clients"]=[c for c in r["clients"] if c["clientId"] not in ("verwaltung","bestand","hr","crm","marketing","konten","sicherheit","controlling","leergut","rewe","qs")]; json.dump(r,sys.stdout,ensure_ascii=False)' \
+    | python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+r["clients"] = [c for c in r["clients"] if c["clientId"] not in ("verwaltung","bestand","hr","crm","marketing","konten","sicherheit","controlling","leergut","rewe","qs")]
+r["resetPasswordAllowed"] = False; r.pop("resetCredentialsFlow", None); r["attributes"].pop("actionTokenGeneratedByUserLifespan.reset-credentials", None)
+r["authenticationFlows"] = [f for f in r["authenticationFlows"] if f["alias"] not in ("mitarbeiter-passwort-vergessen", "mitarbeiter-vergessen-passkey", "mitarbeiter-vergessen-einmalcode")]
+r["authenticatorConfig"] = [c for c in r["authenticatorConfig"] if c["alias"] not in ("amr-hwk-vergessen", "vergessen-ohne-passkey", "amr-otp-vergessen")]
+json.dump(r, sys.stdout, ensure_ascii=False)' \
     > "$kc/data/import/realm-mitarbeiter.json"
   export KC_DB=postgres KC_DB_URL="jdbc:postgresql://127.0.0.1:$PG_PORT/keycloak" KC_DB_USERNAME=keycloak
   export KC_HOSTNAME="https://login.stafl.test:$OIDC_PORT" KC_HTTP_ENABLED=true KC_HTTP_HOST=127.0.0.1 KC_HTTP_PORT="$KC_PORT"

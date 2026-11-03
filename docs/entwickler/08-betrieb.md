@@ -244,6 +244,7 @@ ohne SSH-Tunnel. Benutzernamen wie im Eingabebereich.
 | `liste` | Konten anzeigen |
 | `mail-einrichten [<adresse>]` | Mailversand von Keycloak über das Postfach der Anwendung (Vorrang: Postfach für interne E-Mails), Testmail |
 | `design-setzen [standard]` | Anmeldeseite im Plattform-Design bzw. Rückfall auf Standard |
+| `passwort-vergessen an\|aus\|status` | „Passwort vergessen?“ auf der Anmeldeseite (Link per Mail, 15 Min.; eigener Ablauf: zweiter Faktor bleibt Pflicht, wenn eingerichtet) |
 | `realm-aktualisieren` | Realm auf den Stand von `realm-mitarbeiter.json` bringen (idempotent, neue Clients; Stand 8: Client `konten` für die Verwaltung; Stand 9: Client `sicherheit`; Stand 10: Client `controlling`; Stand 11: Client `leergut`; Stand 12: Client `rewe`; Stand 13: Client `qs`) |
 
 Neue Mitarbeiter brauchen beides: Mitarbeiterkonto im Eingabebereich (Rechte) und Keycloak-Konto (Identität). Seit Stand 8 legt der
