@@ -35,6 +35,7 @@ body.hr {
   --hr-k: #a8323f; --hr-k-bg: rgba(168, 50, 63, .13);
   --hr-g: #8a5a00; --hr-g-bg: rgba(226, 165, 74, .26);
   --hr-x: #6b6560; --hr-x-bg: rgba(28, 26, 25, .06);
+  --hr-f: #6d28d9; --hr-f-bg: rgba(109, 40, 217, .13);   /* unentschuldigtes Fehlen */
   --hr-a: #6a4a7a; --hr-a-bg: rgba(142, 79, 160, .16);
   margin: 0; min-height: 100vh; min-height: 100dvh;
   background: var(--hr-bg); color: var(--hr-text); font-family: var(--font);
@@ -51,6 +52,7 @@ body.hr {
     --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .14); --hr-monat: rgba(255, 255, 255, .28);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
+    --hr-f: #c4b5fd; --hr-f-bg: rgba(167, 139, 250, .18);
     --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
   }
 }
@@ -66,6 +68,7 @@ body.hr {
     --hr-abt: #322b2b; --hr-zeile-hover: rgba(255, 255, 255, .06); --hr-heute: rgba(240, 163, 174, .14); --hr-monat: rgba(255, 255, 255, .28);
     --hr-u: #8bb8e8; --hr-u-bg: rgba(139, 184, 232, .16); --hr-k: #f0a3ae; --hr-k-bg: rgba(224, 129, 144, .16);
     --hr-g: #f3c98a; --hr-g-bg: rgba(224, 144, 31, .18); --hr-x: #a59d97; --hr-x-bg: rgba(255, 255, 255, .06);
+    --hr-f: #c4b5fd; --hr-f-bg: rgba(167, 139, 250, .18);
     --hr-a: #d2a8e0; --hr-a-bg: rgba(178, 120, 200, .2);
   }
 }
@@ -194,6 +197,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-art.K { background: var(--hr-k-bg); color: var(--hr-k); }
 .hr-art.G { background: var(--hr-g-bg); color: var(--hr-g); }
 .hr-art.X, .hr-art.x { background: var(--hr-x-bg); color: var(--hr-x); }
+.hr-art.F { background: var(--hr-f-bg); color: var(--hr-f); }
 .hr-art.A { background: var(--hr-a-bg); color: var(--hr-a); }
 .hr-pille.offen { background: var(--hr-warn-bg); color: var(--hr-warn); }
 .hr-pille.erledigt { background: var(--hr-ok-bg); color: var(--hr-ok); }
@@ -215,6 +219,9 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-mini-tage .t.U { background: var(--hr-u-bg); color: var(--hr-u); font-weight: 700; }
 .hr-mini-tage .t.K { background: var(--hr-k-bg); color: var(--hr-k); font-weight: 700; }
 .hr-mini-tage .t.G { background: var(--hr-g-bg); color: var(--hr-g); font-weight: 700; }
+.hr-mini-tage .t.F { background: var(--hr-f-bg); color: var(--hr-f); font-weight: 700; }
+.hr-mail-feld { align-items: flex-start; }
+.hr-mail-feld span { font-weight: 500; }
 .hr-mini-tage .t.X { background: var(--hr-x-bg); color: var(--hr-x); }
 .hr-mini-tage .t.offen { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }   /* beantragt: nur umrandet */
 .hr-mini-tage .t.heute { outline: 2px solid var(--hr-akzent-ink); outline-offset: -2px; }

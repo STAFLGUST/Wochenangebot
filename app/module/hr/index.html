@@ -182,12 +182,15 @@
     <label>Mitarbeiter<select id="eintrag-person" required></select></label>
     <label>Art<select id="eintrag-art">
       <option value="U">Urlaub (U)</option><option value="K">Krank (K)</option><option value="G">Gleittag (G)</option><option value="X">Freier Tag (x)</option>
+      <option value="F">Unentschuldigt gefehlt (F)</option>
     </select></label>
     <div class="hr-felder zwei">
       <label>Von<input type="date" id="eintrag-von" required></label>
       <label>Bis<input type="date" id="eintrag-bis" required></label>
     </div>
     <label><span>Notiz <span class="opt">(nur für die Personalstelle)</span></span><input type="text" id="eintrag-notiz" maxlength="300"></label>
+    <label class="hr-check hr-mail-feld" id="eintrag-mail-feld" hidden><input type="checkbox" id="eintrag-mail" checked>
+      <span>E-Mail an den Mitarbeiter: Urlaubsübersicht und Bitte um unverzügliche Erklärung, weshalb er nicht zur Arbeit erschienen ist</span></label>
     <p class="hr-meldung" id="eintrag-meldung" role="status"></p>
     <div class="hr-knoepfe">
       <button type="button" class="btn gefahr" id="eintrag-storno" hidden>Stornieren</button>

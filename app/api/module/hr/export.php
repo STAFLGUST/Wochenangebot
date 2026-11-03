@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 /* Modul HR · Excel-Export für den Steuerberater: ein Blatt je Monat in Aufbau und Gestaltung der bisherigen
-   Planungsdatei „Urlaub 2026“ (Legende, Monatstitel, Wochentage, Tageszahlen, Abteilungen senkrecht, Kürzel U/K/G und
-   „x“ für freie Tage, Summen je Person und Monat mit Excel-Formeln).
+   Planungsdatei „Urlaub 2026“ (Legende, Monatstitel, Wochentage, Tageszahlen, Abteilungen senkrecht, Kürzel U/K/G,
+   F für unentschuldigtes Fehlen und „x“ für freie Tage, Summen je Person und Monat mit Excel-Formeln).
    Nur genehmigte Einträge; beantragter Urlaub erscheint nicht. Erzeugt die .xlsx-Datei ohne PHP-Erweiterung „zip“
    (das Produktions-Image hat sie nicht): Office-Open-XML-Teile werden unkomprimiert in ein ZIP-Archiv geschrieben. */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
@@ -109,6 +109,7 @@ function hr_xl_blatt(array $m, HrStile $st): string
     foreach ([[2, 'Urlaub', 'U'], [3, 'Krank', 'K'], [4, 'Gleittag', 'G']] as [$z, $t, $k]) { $setz($z, 2, $t, $st->id($leg)); $setz($z, 3, $k, $st->id($box)); }
     $setz(5, 2, 'Urlaubssperre', $st->id($leg)); $setz(5, 3, '', $st->id($box + ['fill' => HR_XL_SPERRE]));
     $setz(2, 5, 'x', $st->id($box)); $setz(2, 6, 'Freier Tag', $st->id($fett));
+    $setz(3, 5, 'F', $st->id($box)); $setz(3, 6, 'Unentschuldigt', $st->id($fett));   // unentschuldigtes Fehlen (Inhaber 03.11.2026)
     $setz(4, 5, '', $st->id($box + ['fill' => HR_XL_FERIEN])); $setz(4, 6, 'Ferien', $st->id($fett));
     $setz(5, 5, '', $st->id($box + ['fill' => HR_XL_FEIERTAG])); $setz(5, 6, 'Feiertag', $st->id([]));
     // Monatstitel K2:U3
@@ -118,7 +119,7 @@ function hr_xl_blatt(array $m, HrStile $st): string
 
     // Kopf: Zeile 7 Wochentage, Zeile 8 Pos./Monat/Tageszahlen; Spalten A Pos., B Abteilung, C Name, ab D die Tage
     $tage = $m['tage']; $n = count($tage); $erste = 3; $letzte = $erste + $n - 1;
-    $sU = $letzte + 1; $sK = $letzte + 2; $sG = $letzte + 3;
+    $sU = $letzte + 1; $sK = $letzte + 2; $sG = $letzte + 3; $sF = $letzte + 4;
     $farbe = function (array $t): ?string {
         if ($t['feiertag'] !== null) return HR_XL_FEIERTAG;
         if ($t['wochenende']) return HR_XL_WOCHENENDE;
@@ -135,7 +136,7 @@ function hr_xl_blatt(array $m, HrStile $st): string
         $setz(8, $erste + $i, $t['tag'], $st->id($kopf + ['rand' => ['thin', 'thin', '', 'medium']]));
     }
     $rot = ['fett' => true, 'farbe' => HR_XL_ROT, 'h' => 'center'];
-    foreach ([[$sU, 'U'], [$sK, 'K'], [$sG, 'G']] as $j => [$sp, $k]) {
+    foreach ([[$sU, 'U'], [$sK, 'K'], [$sG, 'G'], [$sF, 'F']] as $j => [$sp, $k]) {
         $setz(7, $sp, $k, $st->id($rot + ['rand' => [$j === 0 ? 'medium' : 'thin', 'thin', 'medium', 'thin']]));
         $setz(8, $sp, '', $st->id($rot + ['rand' => [$j === 0 ? 'medium' : 'thin', 'thin', 'thin', 'medium']]));
     }
@@ -156,14 +157,14 @@ function hr_xl_blatt(array $m, HrStile $st): string
         $pos++;
         $setz($z, 0, $pos, $st->id(['fett' => true, 'h' => 'center', 'rand' => ['thin', '', 'thin', 'thin']]));
         $setz($z, 2, $p['name'], $st->id(['fett' => true, 'rand' => $D]));
-        $anz = ['U' => 0, 'K' => 0, 'G' => 0];
+        $anz = ['U' => 0, 'K' => 0, 'G' => 0, 'F' => 0];
         foreach ($tage as $i => $t) {
             $k = (string)(((array)$p['tage'])[$t['tag']] ?? '');
             if (isset($anz[$k])) $anz[$k]++;
             $f = $farbe($t);
             $setz($z, $erste + $i, $k, $st->id(['fett' => true, 'h' => 'center', 'v' => 'center', 'rand' => $D] + ($f ? ['fill' => $f] : [])));
         }
-        foreach ([[$sU, 'U'], [$sK, 'K'], [$sG, 'G']] as [$sp, $k]) {
+        foreach ([[$sU, 'U'], [$sK, 'K'], [$sG, 'G'], [$sF, 'F']] as [$sp, $k]) {
             $setz($z, $sp, $anz[$k], $st->id($rot + ['rand' => ['thin', 'thin', '', 'thin']]), 'COUNTIF(' . $L . $z . ':' . $R . $z . ',"' . $k . '")');
         }
         $z++;
@@ -176,17 +177,17 @@ function hr_xl_blatt(array $m, HrStile $st): string
     $setz($sz, $letzte - 2, 'Summe', $st->id(['fett' => true, 'h' => 'center']));
     for ($sp = $letzte - 1; $sp <= $letzte; $sp++) $setz($sz, $sp, '', $st->id(['fett' => true, 'h' => 'center']));
     $merge[] = hr_xl_spalte($letzte - 2) . $sz . ':' . hr_xl_spalte($letzte) . $sz;
-    foreach ([$sU, $sK, $sG] as $j => $sp) {
+    foreach ([$sU, $sK, $sG, $sF] as $j => $sp) {
         $c = hr_xl_spalte($sp);
         $summe = 0;
-        foreach ($m['personen'] as $p) foreach ((array)$p['tage'] as $k) if ($k === ['U', 'K', 'G'][$j]) $summe++;
+        foreach ($m['personen'] as $p) foreach ((array)$p['tage'] as $k) if ($k === ['U', 'K', 'G', 'F'][$j]) $summe++;
         $setz($sz, $sp, $summe, $st->id($rot + ['fill' => HR_XL_SUMME, 'rand' => $D]), $ende >= $start ? "SUM({$c}{$start}:{$c}{$ende})" : '0');
     }
 
     // XML
     $breiten = '<col min="1" max="1" width="5.89" customWidth="1"/><col min="2" max="2" width="7.44" customWidth="1"/>'
         . '<col min="3" max="3" width="22.33" customWidth="1"/><col min="4" max="' . ($letzte + 1) . '" width="5" customWidth="1"/>'
-        . '<col min="' . ($sU + 1) . '" max="' . ($sG + 1) . '" width="6.44" customWidth="1"/>';
+        . '<col min="' . ($sU + 1) . '" max="' . ($sF + 1) . '" width="6.44" customWidth="1"/>';
     ksort($zellen);
     $rows = '';
     foreach ($zellen as $r => $cs) {

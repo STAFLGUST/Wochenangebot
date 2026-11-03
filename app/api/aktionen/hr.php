@@ -328,6 +328,7 @@ switch ($action) {
                     $abw['eintraege'][] = $e;
                 } else {
                     $e = $abw['eintraege'][$i];
+                    $artVorher = $e['art'];
                     if (!in_array($e['status'], HR_AKTIV, true)) fail('Erledigte Einträge lassen sich nicht mehr ändern.', 409);
                     if ($e['status'] === 'beantragt') fail('Offene Anträge bitte genehmigen oder ablehnen.', 409);
                     $e = array_merge($e, ['person' => $p['id'], 'art' => $art, 'von' => $von, 'bis' => $bis, 'notiz' => s($b['notiz'] ?? '', 300) ?? '', 'geaendert' => $jetzt]);
@@ -335,9 +336,10 @@ switch ($action) {
                     $abw['eintraege'][$i] = $e;
                 }
                 hr_abwesenheiten_schreiben($abw);
-                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id']), $abw['eintraege']];
+                return [$e, $p, $i === null ? 'eingetragen' : 'geändert', hr_freie_tage($abw['eintraege'], $p['id']), $abw['eintraege'], $artVorher ?? null];
             });
-            [$e, $p, $was, $frei, $alle] = $res;
+            [$e, $p, $was, $frei] = $res;
+            $alle = $res[4] ?? []; $artVorher = $res[5] ?? null;
             // Protokoll ohne Art der Abwesenheit (Krankheit ist ein Gesundheitsdatum)
             audit('hr', 'HR: Abwesenheit ' . ($p ? hr_name($p) : '') . ' ' . hr_zeitraum_text($e['von'], $e['bis']) . ' ' . $was);
             // Gleittag über das Gleittage-Konto hinaus: erlaubt (Personalstelle), aber mit Hinweis
@@ -347,7 +349,11 @@ switch ($action) {
                 if (!$gk['aktiv']) $hinweis = hr_name($p) . ' hat noch kein Gleittage-Konto – der Gleittag zählt erst, wenn Gleittage gewährt sind.';
                 elseif ($gk['rest'] < 0) $hinweis = 'Das Gleittage-Konto von ' . hr_name($p) . ' steht damit bei ' . str_replace('.', ',', (string)$gk['rest']) . ' Tagen.';
             }
-            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null, 'hinweis' => $hinweis]);
+            // Unentschuldigtes Fehlen (neu eingetragen oder geändert zu F): E-Mail an den Mitarbeiter, außer ausdrücklich abgewählt
+            $mail = null;
+            if ($p && $e['art'] === 'F' && $e['status'] === 'genehmigt' && $was !== 'storniert' && ($b['mail'] ?? true) !== false
+                && ($was === 'eingetragen' || $artVorher !== 'F')) $mail = hr_fehlen_mail($p, $e, $alle, $me);
+            respond(['ok' => true, 'eintrag' => $p ? hr_eintrag_aus($e, $p, $frei) : null, 'hinweis' => $hinweis, 'mail' => $mail]);
         }
 
         /* Gleittage gewähren ({person, tage, grund}; negative Anzahl = Korrektur mit Grund) oder eine Gewährung stornieren
