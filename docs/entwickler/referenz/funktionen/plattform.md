@@ -500,7 +500,7 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 - `trusted_proxy(ip)`
 - `client_ip()`
 - `client_key()` – Schlüssel für Fehlversuche: IPv4 je Adresse, IPv6 je /64-Netz (ein Anschluss hat meist ein ganzes /64 – sonst könnte man durch Wechseln der Adresse beliebig …
-- `attempts_key(bereich)`
+- `attempts_key(bereich)` – Bereiche: 'mitarbeiter' (Anmeldung im Eingabebereich), 'kunde' (Kunden-Login mit Passwort), 'kundelink' (Links aus Kunden-E-Mails: ein schon benutzter oder …
 - `attempts_wer(name)`
 - `attempts_check(bereich)`
 - `attempts_record(ok, bereich, name)` – $name: Benutzername des Versuchs ('' = ohne Namen, z. B. Einmal-Links – wird nie durch eine Anmeldung zurückgenommen)

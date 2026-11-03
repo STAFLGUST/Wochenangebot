@@ -163,6 +163,8 @@ check('Vorbereitung: Mitarbeiterkonto für eine Einladung per Mail', 'eva.einlad
 code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
 meta = json.loads(text) if code == 200 else {}
 check('Realm „mitarbeiter“ über login.stafl.test erreichbar, Aussteller stimmt', meta.get('issuer') == L + '/realms/mitarbeiter', meta.get('issuer'))
+for _p in ('/realms/mitarbeiter/account', '/realms/mitarbeiter/account/', '/realms/mitarbeiter/account/personal-info'):
+    check(f'Kontokonsole von Keycloak gesperrt ({_p}): 404, E-Mail-Adresse dort nicht änderbar', anfrage(L + _p)[0] == 404, _p)
 check('PKCE mit S256 angeboten', 'S256' in meta.get('code_challenge_methods_supported', []))
 for pfad in ('/admin/', '/admin/master/console/', '/realms/master/.well-known/openid-configuration', '/realms/master/protocol/openid-connect/auth'):
     check(f'Verwaltung/Master-Realm nicht öffentlich: {pfad} → 404', anfrage(L + pfad)[0] == 404)
@@ -234,7 +236,14 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 13' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 14' in _log, _log[-300:])
+# Stand 14: kein Passwort-Grant – auch nicht über den eingebauten Client admin-cli (Token-Endpunkt ohne Länder-/IP-Prüfung)
+check('Stand 14: kein Client des Realms erlaubt den Passwort-Grant', not [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')],
+      [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')])
+for _cid in ('admin-cli', 'dashboard'):
+    code, _, text = anfrage(L + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'password', 'client_id': _cid, 'username': 'gibt-es-nicht', 'password': 'falsch-falsch'}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+    check(f'Token-Endpunkt über Caddy: Passwort-Grant mit {_cid} abgelehnt (nie „invalid_grant“ = Passwortprüfung)', code in (400, 401) and 'invalid_grant' not in text, (code, text[:120]))
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
       and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
@@ -1275,6 +1284,23 @@ with sync_playwright() as pw:
         pg.wait_for_url(SIC + '/module/sicherheit/**'); pg.wait_for_selector('#sic-app:not([hidden])')
         code, j = pg.evaluate(js, ['geo_clear_stats', st['csrf']])
         check('nach der erneuten Anmeldung: Aktion bestätigt (Rücksprung ins Modul Sicherheit)', code == 200, (code, j))
+        # Befund 03.11.2026: Zwei-Faktor-Pflicht „Administratoren“ speichern – der eigene zweite Faktor zählt an der Keycloak-
+        # Anmeldung (vorher am alten Konto: ohne lokalen Einmalcode konnte kein Administrator mehr speichern)
+        pg.click('#sic-tabs [data-tab="einstellungen"]'); pg.wait_for_selector('#tab-einstellungen:not([hidden]) [data-e="e-anmeldung"]')
+        pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+        twofa_vorher = pg.input_value('#sec-form [name="twofa"]')
+        pg.select_option('#sec-form [name="twofa"]', 'admins')
+        with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort2:
+            pg.click('#sic-dlg .sic-dfuss [type=submit]')
+        check('Administrator (zweiter Faktor bei Keycloak) speichert Zwei-Faktor-Pflicht „Administratoren“ (200)', antwort2.value.status == 200, antwort2.value.status)
+        pg.wait_for_function("!document.querySelector('#sic-dlg[open]')")
+        if twofa_vorher != 'admins':   # Ausgangszustand für die weiteren Prüfungen wiederherstellen
+            pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+            pg.select_option('#sec-form [name="twofa"]', twofa_vorher)
+            with pg.expect_response(lambda r: 'action=security_save' in r.url) as antwort3:
+                pg.click('#sic-dlg .sic-dfuss [type=submit]')
+            check('… Ausgangszustand wiederhergestellt', antwort3.value.status == 200, antwort3.value.status)
+            pg.wait_for_function("!document.querySelector('#sic-dlg[open]')")
     # Bestätigung über ein Recht (require_perm_confirmed, z. B. Kunden pflegen, Wochenangebot senden): ebenfalls erneute
     # Anmeldung bei Keycloak – nie die hier gesperrte Passwortabfrage (sonst wäre die Aktion nicht mehr bestätigbar)
     pg.goto(W + '/admin/'); pg.wait_for_selector('#screen-editor:not([hidden])')   # Single Sign-on auf die Verwaltung
@@ -1783,6 +1809,18 @@ with sync_playwright() as pw:
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung wieder möglich', code == 200 and j.get('loggedIn'), (code, j))
     check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))
+    # Abmelden nach Inaktivität (Befund 03.11.2026): vorher 403 „erneut anmelden“ ohne Abmeldeadresse – die Seite sah abgemeldet
+    # aus, die Anmeldung bei Keycloak blieb bestehen. Jetzt: 200 mit Adresse der zentralen Abmeldung, danach auch Keycloak abgemeldet.
+    sid_k = kekse(ck, 'dashboard.stafl.test')['__Host-WA_ADMIN']['value']; pfad = os.path.join(WORK, 'sessions', 'sess_' + sid_k)
+    with open(pfad, encoding='utf-8') as f:
+        roh = f.read()
+    with open(pfad, 'w', encoding='utf-8') as f:
+        f.write(re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - 9 * 3600};', roh))
+    code, j = pk.evaluate("fetch('../api/?action=logout', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])")
+    check('Abmelden nach Inaktivität: 200 mit Adresse der zentralen Abmeldung', code == 200 and str(j.get('abmelden', '')).startswith('/oidc/callback?logout='), (code, j))
+    pk.goto(D + str(j.get('abmelden', '/'))); pk.wait_for_url('**/dashboard/abgemeldet.html')
+    pk.goto(D + '/dashboard/'); pk.wait_for_selector('#username')
+    check('… danach auch bei Keycloak abgemeldet (Anmeldeseite mit Benutzername)', pk.url.startswith(L), pk.url)
     ck.close()
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': nutzer_roh()['admin']['id'], 'was': 'passwort', 'passwort': 'Admin-Neues-Kennwort-7'}])
     check('eigenes Konto nicht über die Verwaltung (403)', code == 403, (code, j))

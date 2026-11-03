@@ -96,6 +96,28 @@ code, r = A.call('kunden')
 rev = r['rev']
 A.call('kunde_save', {**base, 'id': K1, 'rev': rev, 'login': {'username': 'gasthaus.muster', 'password': 'Admin-Gesetzt-77', 'mustChange': True, 'active': True}})
 check('admin setting a password invalidates the link', Client('198.51.100.17').call('kunde_token_check', {'token': tokC})[0] == 410)
+# Befund 03.11.2026: ein offener Link gilt nur für die Adresse, an die er ging, und nur bei aktivem Zugang
+A.call('kunde_mail', {'id': K1, 'type': 'zugang'})
+tokD = link_of(smtp.messages[-1])
+check('Link vor der Adressänderung gültig', Client('198.51.100.18').call('kunde_token_check', {'token': tokD})[0] == 200)
+code, r = A.call('kunden')
+A.call('kunde_save', {**base, 'id': K1, 'rev': r['rev'], 'email': 'neu@example.org', 'login': {'username': 'gasthaus.muster', 'password': '', 'active': True}})
+check('neue E-Mail-Adresse: Link an die alte Adresse ungültig (410)', Client('198.51.100.18').call('kunde_token_check', {'token': tokD})[0] == 410)
+A.call('kunde_mail', {'id': K1, 'type': 'zugang'})
+tokE = link_of(smtp.messages[-1])
+code, r = A.call('kunden')
+A.call('kunde_save', {**base, 'id': K1, 'rev': r['rev'], 'email': 'neu@example.org', 'login': {'username': 'gasthaus.muster', 'password': '', 'active': False}})
+code, r = A.call('kunden')
+A.call('kunde_save', {**base, 'id': K1, 'rev': r['rev'], 'email': 'neu@example.org', 'login': {'username': 'gasthaus.muster', 'password': '', 'active': True}})
+check('Zugang gesperrt und wieder freigeschaltet: alter Link bleibt ungültig', Client('198.51.100.19').call('kunde_token_check', {'token': tokE})[0] == 410)
+code, r = A.call('kunden')
+A.call('kunde_save', {**base, 'id': K1, 'rev': r['rev'], 'login': {'username': 'gasthaus.muster', 'password': '', 'active': True}})   # Adresse zurück für die weiteren Prüfungen
+# Ein schon benutzter Link (Lesezeichen, zweiter Browser) sperrt nie den Kunden-Login derselben Adresse
+L = Client('198.51.100.21')
+for _ in range(6):
+    L.call('kunde_token_check', {'token': tok1})
+check('alte Links: eigener Zähler – nach 5 Versuchen nur Links gesperrt (429)', L.call('kunde_token_check', {'token': tok1})[0] == 429)
+check('… Kunden-Login derselben Adresse bleibt möglich', L.call('kunde_login', {'username': 'gasthaus.muster', 'password': 'Admin-Gesetzt-77'})[0] == 200)
 
 # ---------- Angebotslink ----------
 code, r = A.call('kunde_mail', {'id': K1, 'type': 'angebot', 'note': '<script>alert(1)</script> Roastbeef diese Woche'})

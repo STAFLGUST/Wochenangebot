@@ -18,6 +18,11 @@ login.stafl.test {
 	tls internal
 	@anmeldung path /realms/mitarbeiter/* /resources/*
 	handle @anmeldung {
+		# Keycloaks Kontokonsole nicht öffentlich: dort ließe sich mit einer offenen Sitzung die E-Mail-Adresse ohne Bestätigung
+		# ändern und danach „Passwort vergessen“ an eine fremde Adresse senden (Befund 03.11.2026). Konten pflegt die Verwaltung,
+		# den zweiten Faktor richtet Keycloak bei der Anmeldung ein.
+		@konsole path /realms/mitarbeiter/account /realms/mitarbeiter/account/*
+		respond @konsole 404
 		# Vor jeder Seite der Anmeldung: Firewall-Sperren, Ländersperre und IP-Freigabe des Eingabebereichs – die Anwendung prüft
 		# wie bei jeder Mitarbeiter-Aktion (Aktion anmeldung_pruefen, Einstellungen unter Sicherheit). Nicht geprüft: Dateien der
 		# Anmeldeseite und die Abrufe der Anwendung selbst (Metadaten, Schlüssel, Token – vom Server, nicht vom Browser).

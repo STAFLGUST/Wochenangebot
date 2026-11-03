@@ -145,6 +145,15 @@ function notfall_ausloesen(array $me, array $b): array
         return true;
     });
     $w['kundenSitzungen'] = ksess_remove(function () { return true; });
+    // Keycloak-Hosts: ohne Vermerk entstünde die gelöschte Sitzung bei der nächsten Anfrage still neu (lib/oidc.php, solange die
+    // Anmeldung bei Keycloak gilt) – betroffene Mitarbeiter müssen sich erst neu anmelden, auch ohne die Option „Keycloak“
+    // (Befund 03.11.2026; wie „Sitzung beenden“ in Verwaltung → Sitzungen). Nie das eigene Konto.
+    $vermerk = [];
+    foreach (users_load() as $x) {
+        if ((string)$x['id'] === (string)$me['id'] || (($x['role'] ?? '') === 'admin' && !$opt['admins'])) continue;
+        $vermerk[] = (string)$x['id'];
+    }
+    oidc_abmeldung_merken([], $vermerk);
     // Zentrale Anmeldung (Keycloak): Sitzungen der betroffenen Konten beenden (alle ohne Administratorrolle bzw. mit Option alle außer mir)
     if ($opt['keycloak']) {
         $ok = 0; $fehler = 0;

@@ -166,6 +166,14 @@ weiter erst mit `auth_time` nach dem Ende, Schleifenschutz 3 in 10 Minuten). Die
 `ssoSessionIdleTimeout` laut `konten.sh realm-aktualisieren`) bleibt die äußere Grenze. Sofort überall aussperren: Konto
 in der Anwendung sperren (`oidc_aktiv`) oder in Keycloak (`deploy/anmeldung/konten.sh sperren`).
 
+**Abmelden, Notfall, Token-Endpunkt (seit 03.11.2026):** `logout` ruft auf Keycloak-Hosts nicht `current_user()` auf
+(das antwortete bei abgelaufener, beendeter oder unvollständiger Sitzung mit `reauth_required`), sondern beendet die
+eigene PHP-Sitzung (mit Sitzung nur mit CSRF-Token) und liefert immer `abmelden` (zentrale Abmeldung über das Modul).
+Der Notfallmodus vermerkt alle betroffenen Mitarbeiter in `oidc-abmeldungen` (`oidc_abmeldung_merken`), auch ohne die
+Option „Keycloak“. Kein Client des Realms erlaubt den Passwort-Grant (`directAccessGrantsEnabled=false`, auch das
+eingebaute `admin-cli`; Realm Stand 14) – der Token-Endpunkt ist von `anmeldung_pruefen` ausgenommen. Die Kontokonsole
+`/realms/mitarbeiter/account` sperrt das Caddyfile (404).
+
 ### Lokale Anmeldung (nur Notzugang und Testserver)
 
 Die eigenen Verfahren leben weiter, weil der Notzugang und die E2E-Tests sie brauchen:
@@ -214,7 +222,9 @@ Daraus folgt:
 - Passwortwechsel, Zurücksetzen des zweiten Faktors oder Sperren erhöhen `sv` → alle anderen Sitzungen enden.
 - Administratoren beenden Sitzungen über `session_end` (Registereintrag weg).
 - Leerlauf: `idleMinutes` (Standard 480) in `start_session()` und `sess_prune()`. Hintergrundabfragen
-  (`bg_request()`: `draft_ping`, `draft&bg=1`) zählen nicht als Aktivität.
+  (`bg_request()`: `draft_ping`, `draft&bg=1`) zählen nicht als Aktivität. `start_session()` setzt
+  `session.gc_maxlifetime` auf Leerlaufzeit + 10 Minuten (das Image hat keine php.ini; PHP räumte sonst nach 24 Minuten
+  ohne Anfrage ab – betraf vor allem Kunden).
 
 ### Was der API-Einstieg vor jeder Aktion prüft
 
@@ -367,7 +377,9 @@ Kunden sind eine eigene, externe Nutzergruppe (Dokument `kunden`, Zugang im Feld
 `kunde_token_set` als `lokale_anmeldung` gesperrt.
 
 - **Anmeldung:** `kunde_login` (`aktionen/kundenportal.php`) mit Sperre nach Fehlversuchen, vertrauten Geräten und
-  optionaler Datenleck-Prüfung; Passwort festlegen über Einmal-Link (`kunde_token_*`).
+  optionaler Datenleck-Prüfung; Passwort festlegen über Einmal-Link (`kunde_token_*`). Ungültige Links (auch Abmeldelinks)
+  zählen im eigenen Bereich `kundelink` (`attempts_key`), nie im Kunden-Login. `kunde_save` verwirft einen offenen Link,
+  wenn sich die E-Mail-Adresse ändert oder Kunde bzw. Zugang gesperrt wird.
 - **Sitzung:** `kunde_sign_in()` (`lib/kundenmail.php`) vergibt eine neue Sitzungskennung und setzt nur Kundenschlüssel
   (`kid`, `ksv`, `kseen`, `kcsrf`, `ksid`) plus Eintrag im Register `kundensitzungen`. `current_customer()`
   (`lib/kunden.php`) liest Kunde und Zugang bei jeder Anfrage frisch und prüft aktiv, `sv`, Leerlauf und Register.

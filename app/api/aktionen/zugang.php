@@ -313,6 +313,24 @@ switch ($action) {
         }
 
         case 'logout': {
+            // Keycloak-Host: Abmelden darf nie an einer abgelaufenen, beendeten oder noch unvollständigen Sitzung (zweite Stufe)
+            // scheitern – current_user() antwortete dort mit „erneut anmelden“, die Seite sah abgemeldet aus, die zentrale
+            // Anmeldung bei Keycloak blieb aber bestehen (Befund 03.11.2026). Daher ohne current_user(): eigene Sitzung beenden
+            // und immer die Adresse für die zentrale Abmeldung liefern.
+            if (oidc_modus()) {
+                start_session();
+                $uid = (string)($_SESSION['uid'] ?? '');
+                if ($uid !== '') {
+                    require_csrf();   // mit Sitzung nur mit CSRF-Token (eine fremde Seite meldet niemanden ab)
+                    $sid = (string)($_SESSION['sid'] ?? '');
+                    sess_remove(function ($k) use ($sid) { return $k === $sid; });
+                    $wer = null; foreach (users_load() as $x) if ((string)$x['id'] === $uid) { $wer = $x; break; }
+                    if ($wer) audit('logout', 'Abgemeldet', [], $wer);
+                }
+                $_SESSION = [];
+                session_destroy();
+                respond(['ok' => true, 'abmelden' => oidc_abmelde_adresse()]);
+            }
             $u = current_user();
             // Mit Sitzung nur mit CSRF-Token (wie kunde_logout): eine fremde Seite kann niemanden abmelden. Ohne Sitzung
             // (abgelaufen, schon abgemeldet) bleibt Abmelden ohne Token möglich, damit Oberflächen immer aufräumen können.

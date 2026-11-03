@@ -296,9 +296,11 @@ function client_key(): string
      und umgekehrt. Mitarbeiter behalten den bisherigen Schlüssel (Rückfall auf die Vorversion liest ihn weiter, GR-006).
    - Eine laufende Sperre (until) hebt keine Anmeldung auf – nur ein Administrator (ip_unblock) oder der Zeitablauf. */
 const ATTEMPTS_FENSTER = 3600;
+/* Bereiche: 'mitarbeiter' (Anmeldung im Eingabebereich), 'kunde' (Kunden-Login mit Passwort), 'kundelink' (Links aus
+   Kunden-E-Mails: ein schon benutzter oder abgelaufener Link sperrt nie den Kunden-Login derselben Adresse, Befund 03.11.2026) */
 function attempts_key(string $bereich = 'mitarbeiter'): string
 {
-    return $bereich === 'kunde' ? hash('sha256', 'kunde|' . client_key()) : client_key();
+    return in_array($bereich, ['kunde', 'kundelink'], true) ? hash('sha256', $bereich . '|' . client_key()) : client_key();
 }
 function attempts_wer(string $name): string
 {
