@@ -6,11 +6,13 @@ weiter und den Schlüssel nie; Compose und .env-Vorlage lassen das CDN standardm
 Verhalten (Abschnitt unverändert aus dem Caddyfile, davor eine Nachbildung der Anwendung, die die erhaltenen Köpfe
 zurückgibt):
 - ohne Schlüssel: alles wie bisher – Besucher-IP ist die Adresse der Verbindung, kein Kopf eines Besuchers ändert das
-- mit Schlüssel: nur mit dem richtigen Kopf „X-Stafl-Cdn“ gilt X-Real-IP von bunny; falscher Schlüssel = wie ohne CDN;
+- mit Schlüssel: nur mit dem richtigen Kopf „X-Stafl-Cdn“ gilt X-Real-IP von bunny – und nur, wenn sie genau eine
+  IP-Adresse ist (IPv4 oder IPv6; Liste, Text oder leer = Adresse der Verbindung); falscher Schlüssel = wie ohne CDN;
   die Anwendung bekommt den Schlüssel nie; Antwortkopf „Stafl-Cdn: erkannt“ nur über bunny
 - zu kurzer Schlüssel: nie vertraut, Sperre bleibt aus
-- CDN_PFLICHT=1: ohne richtigen Kopf 403 (auch vor anderen handle-Blöcken wie bei der Anmeldung), mit Kopf durch,
-  vom Server selbst (private Adresse, z. B. Prüfung nach dem Einspielen) weiter erreichbar
+- CDN_PFLICHT=1: ohne richtigen Kopf 403 (auch vor anderen handle-Blöcken wie bei der Anmeldung), mit Kopf durch;
+  auch Abrufe vom Server selbst (über die Docker-Weiterleitung mit privater Adresse – so erscheinen auch Besucher über
+  IPv6) nur mit Schlüssel; die Prüfung nach dem Einspielen (deploy/freigabe-einspielen.sh) schickt ihn mit
 Die Probe „öffentlicher“ Besucher läuft in einem Docker-Netz mit Dokumentationsadressen (198.51.100.0/24, kein privates
 Netz). Braucht Docker (wie die Prüfung des Caddyfile in der CI)."""
 from pathlib import Path
@@ -42,7 +44,14 @@ check("Caddyfile: Abschnitt (cdn) genau einmal", abschnitt and caddy.count("(cdn
 abschnitt = abschnitt.group(0) if abschnitt else ""
 check("Abschnitt: Schlüssel nur gültig mit 32–128 Buchstaben/Ziffern (leer oder kurz = nie vertraut, Sperre aus)",
       abschnitt.count('"{$CDN_SCHLUESSEL}".matches("^[A-Za-z0-9]{32,128}$")') == 2)
-check("Abschnitt: Sperre nur mit CDN_PFLICHT=1 und nie für den Server selbst", '"{$CDN_PFLICHT}" == "1"' in abschnitt and "not remote_ip private_ranges" in abschnitt)
+check("Abschnitt: Sperre nur mit CDN_PFLICHT=1, Ausnahme nur für den Caddy-Container selbst (keine privaten Netze)",
+      '"{$CDN_PFLICHT}" == "1"' in abschnitt and "not remote_ip 127.0.0.1/8 ::1" in abschnitt and "private_ranges" not in abschnitt)
+check("Abschnitt: Besucher-IP von bunny nur als einzelne IP-Adresse", "{header.X-Real-IP}.matches(" in abschnitt.split("vars @cdn")[0])
+einspielen = (REPO / "deploy" / "freigabe-einspielen.sh").read_text(encoding="utf-8")
+pruefabruf = next((z for z in einspielen.splitlines() if z.startswith("pruefabruf()")), "")
+check("Prüfung nach dem Einspielen: alle Abrufe mit dem Schlüssel aus .env, nicht in der Prozessliste (curl -K -)",
+      "CDN_KEY=$(envwert CDN_SCHLUESSEL)" in einspielen and "curl -K -" in pruefabruf
+      and not re.search(r'curl -f?sS -m 5 --resolve "\$HEALTH_HOST"', einspielen) and einspielen.count('pruefabruf -') >= 4)
 sites = {m.group(1): m.group(2) for m in re.finditer(r"^([^\s#(][^\n]*?) \{\n(.*?)^\}", caddy, re.MULTILINE | re.DOTALL)}
 check("jeder Site-Block bindet den Abschnitt zuerst ein", sites and all(inhalt.startswith("\timport cdn\n") for inhalt in sites.values()),
       [k for k, v in sites.items() if not v.startswith("\timport cdn\n")])
@@ -155,6 +164,12 @@ try:
     check("falscher Schlüssel: wie ohne CDN (IP nicht fälschbar), kein „erkannt“", code == 200 and f"xff=[{selbst}]" in inhalt and "Stafl-Cdn" not in kopf, (code, inhalt))
     code, kopf, inhalt = abruf(mit, "/", {"X-Real-IP": FALSCH})
     check("ohne Sperre: direkte Anfrage weiter erlaubt", code == 200 and f"xff=[{selbst}]" in inhalt, (code, inhalt))
+    for wert in ("kaputt", f"{ECHT}, {FALSCH}", "", "10.0.0.1/8", "1.2.3"):
+        code, kopf, inhalt = abruf(mit, "/", {"X-Stafl-Cdn": SCHLUESSEL, "X-Real-IP": wert})
+        check(f"mit Schlüssel, X-Real-IP „{wert}“ keine einzelne Adresse: Verbindung zählt, kein „erkannt“", code == 200 and f"xff=[{selbst}]" in inhalt
+              and "Stafl-Cdn: erkannt" not in kopf, (code, inhalt))
+    code, kopf, inhalt = abruf(mit, "/", {"X-Stafl-Cdn": SCHLUESSEL, "X-Real-IP": "2001:db8::7"})
+    check("mit Schlüssel: IPv6-Besucher von bunny übernommen", code == 200 and "xff=[2001:db8::7]" in inhalt, (code, inhalt))
 
     code, kopf, inhalt = abruf(pflicht, "/")
     check("Sperre: direkte Anfrage 403", code == 403, (code, kopf[-200:]))
@@ -164,6 +179,8 @@ try:
     check("Sperre: falscher Schlüssel 403", code == 403, code)
     code, kopf, inhalt = abruf(pflicht, "/", cdn)
     check("Sperre: über bunny durch, mit Besucher-IP", code == 200 and f"xff=[{ECHT}]" in inhalt, (code, inhalt))
+    code, kopf, inhalt = abruf(pflicht, "/", {"X-Stafl-Cdn": SCHLUESSEL, "X-Real-IP": "kaputt"})
+    check("Sperre: mit Schlüssel, aber ohne gültige Besucher-IP durch (Adresse der Verbindung)", code == 200 and f"xff=[{selbst}]" in inhalt, (code, inhalt))
 
     code, kopf, inhalt = abruf(kurz, "/", {"X-Stafl-Cdn": "kurz1234", "X-Real-IP": FALSCH})
     check("zu kurzer Schlüssel: nie vertraut und keine Sperre", code == 200 and f"xff=[{selbst}]" in inhalt and "Stafl-Cdn" not in kopf, (code, inhalt))
@@ -171,17 +188,28 @@ try:
     hp = docker("port", server, "8080").stdout.split()
     basis = f"http://{hp[0]}" if hp else ""
     oeffner = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    code = 0
-    for _ in range(100):
-        try:
-            code = oeffner.open(basis + "/", timeout=5).status
-            break
-        except urllib.error.HTTPError as e:
-            code = e.code
-            break
-        except OSError:
-            time.sleep(0.1)
-    check("Sperre: Abruf vom Server selbst (private Adresse, Prüfung nach dem Einspielen) bleibt erlaubt", code == 200, code)
+
+    def vom_server(kopf=None):
+        anfrage = urllib.request.Request(basis + "/", headers=kopf or {})
+        for _ in range(100):
+            try:
+                return oeffner.open(anfrage, timeout=5).status
+            except urllib.error.HTTPError as e:
+                return e.code
+            except OSError:
+                time.sleep(0.1)
+        return 0
+    code = vom_server()
+    check("Sperre: Abruf vom Server selbst ohne Schlüssel 403 (Docker-Weiterleitung erscheint privat – wie Besucher über IPv6)", code == 403, code)
+    code = vom_server({"X-Stafl-Cdn": SCHLUESSEL})
+    check("Sperre: Abruf vom Server selbst mit Schlüssel erlaubt", code == 200, code)
+    # die Funktion des Einspielskripts unverändert: Schlüssel über curl -K - (Konfiguration auf der Standardeingabe)
+    r = subprocess.run(["sh", "-c", pruefabruf + '\npruefabruf -s -o /dev/null -w "%{http_code}" --noproxy "*" "$1"', "sh", basis + "/"],
+                       capture_output=True, text=True, env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CDN_KEY": SCHLUESSEL})
+    check("Prüfung nach dem Einspielen (pruefabruf) kommt mit dem Schlüssel durch", r.stdout.strip() == "200", (r.stdout, r.stderr[-200:]))
+    r = subprocess.run(["sh", "-c", pruefabruf + '\npruefabruf -s -o /dev/null -w "%{http_code}" --noproxy "*" "$1"', "sh", basis + "/"],
+                       capture_output=True, text=True, env={"PATH": "/usr/bin:/bin:/usr/local/bin", "CDN_KEY": ""})
+    check("ohne Schlüssel in .env: pruefabruf wie bisher ohne Kopf (hier 403)", r.stdout.strip() == "403", r.stdout)
 finally:
     if not all(res):
         for n in namen[:5]:

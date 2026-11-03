@@ -831,6 +831,7 @@ _bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in d
 - `caddy_start(kennung, umgebung, netzwerk, port)`
 - `ip(name)`
 - `abruf(ziel, pfad, kopf)` – Abruf aus dem Besucher-Container (öffentliche Adresse): (Status, Antwortköpfe, Inhalt).
+- `vom_server(kopf)`
 
 ## `tests/deploy/test_dashboard_domains.py`
 
