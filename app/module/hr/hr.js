@@ -19,7 +19,7 @@
   const icon = (n) => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
   const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   const WT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-  const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag' };
+  const ART = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag', F: 'Unentschuldigt' };
   const STATUS = { beantragt: 'beantragt', genehmigt: 'genehmigt', abgelehnt: 'abgelehnt', zurueckgezogen: 'zurückgezogen', storniert: 'storniert' };
   let csrf = '';
   const S = { art: 'U', gleit: null, offen: [], ueb: null, ujahr: new Date().getFullYear(), start: null, jahr: new Date().getFullYear(), kal: { jahr: new Date().getFullYear(), monat: new Date().getMonth() + 1 }, verw: null, tab: 'mein' };
@@ -189,10 +189,11 @@
       if (!arbeit.has(WT_JS[x.getDay()]) || ft[s] || (tag[s] && tag[s].art === 'X')) return;
       tag[s] = { art: e.art, offen: e.status === 'beantragt', id: e.id };
     });
-    const titel = { U: 'Urlaub', K: 'Krank', G: 'Gleittag', X: 'Freier Tag' };
+    const titel = ART;
     const leg = (stil, t) => `<span><i style="${stil}"></i>${t}</span>`;
     $('#mini-legende').innerHTML = leg('background:var(--hr-u-bg)', 'Urlaub') + leg('background:var(--hr-k-bg)', 'Krank') + leg('background:var(--hr-g-bg)', 'Gleittag')
-      + leg('background:var(--hr-x-bg)', 'freier Tag') + leg('box-shadow:inset 0 0 0 1.5px var(--hr-u)', 'beantragt')
+      + leg('background:var(--hr-x-bg)', 'freier Tag') + (aktiv.some((e) => e.art === 'F') ? leg('background:var(--hr-f-bg)', 'unentschuldigt') : '')
+      + leg('box-shadow:inset 0 0 0 1.5px var(--hr-u)', 'beantragt')
       + leg('background:var(--hr-feiertag)', 'Feiertag') + leg('background:var(--hr-wochenende)', 'Wochenende');
     $('#mini-kalender').innerHTML = MONATE.map((mn, m) => {
       const erster = new Date(jahr, m, 1), tage = new Date(jahr, m + 1, 0).getDate();
@@ -330,7 +331,7 @@
   function kalLegende(voll) {
     const f = (cls, text, stil) => `<span><i class="${cls}" style="${stil || ''}"></i>${esc(text)}</span>`;
     const art = (k, t) => `<span><b class="hr-art ${k}">${k === 'X' ? 'x' : k}</b>${esc(t)}</span>`;
-    $('#kal-legende').innerHTML = (voll ? art('U', 'Urlaub') + art('K', 'Krank') + art('G', 'Gleittag') + art('X', 'freier Tag')
+    $('#kal-legende').innerHTML = (voll ? art('U', 'Urlaub') + art('K', 'Krank') + art('G', 'Gleittag') + art('X', 'freier Tag') + art('F', 'unentschuldigt')
       + '<span><b class="hr-art U offen">U?</b>beantragt</span>' : art('A', 'abwesend'))
       + f('', 'Wochenende', 'background:var(--hr-wochenende)') + f('', 'Feiertag', 'background:var(--hr-feiertag)')
       + f('', 'Ferien', 'background:var(--hr-ferien)') + f('', 'Urlaubssperre', 'background:var(--hr-sperre)')
@@ -638,12 +639,20 @@
       .map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
     $('#eintrag-person').value = e.person || '';
     $('#eintrag-art').value = e.art || 'U';
+    d.dataset.artVorher = e.id ? (e.art || '') : '';
+    $('#eintrag-mail').checked = true; mailFeld();
     $('#eintrag-von').value = e.von || ''; $('#eintrag-bis').value = e.bis || '';
     $('#eintrag-notiz').value = e.notiz || '';
     $('#eintrag-storno').hidden = !e.id;
     meldung($('#eintrag-meldung'), '');
     d.showModal();
   }
+  // Unentschuldigt (F): Haken „E-Mail an den Mitarbeiter“ (Standard an); beim Ändern eines F-Eintrags keine neue Mail
+  function mailFeld() {
+    const f = $('#eintrag-art').value === 'F', schon = $('#dlg-eintrag').dataset.artVorher === 'F';
+    $('#eintrag-mail-feld').hidden = !f || schon;
+  }
+  $('#eintrag-art').addEventListener('change', mailFeld);
   $('#eintrag-von').addEventListener('change', () => { if (!$('#eintrag-bis').value || $('#eintrag-bis').value < $('#eintrag-von').value) $('#eintrag-bis').value = $('#eintrag-von').value; });
   async function nachEintrag() {
     $('#dlg-eintrag').close();
@@ -655,10 +664,15 @@
     e.preventDefault();
     const b = { id: $('#dlg-eintrag').dataset.id, person: $('#eintrag-person').value, art: $('#eintrag-art').value,
       von: $('#eintrag-von').value, bis: $('#eintrag-bis').value, notiz: $('#eintrag-notiz').value };
+    if (b.art === 'F') b.mail = $('#eintrag-mail').checked;
     const r = await api('hr_eintrag_save', b);
     if (r.status !== 200) { meldung($('#eintrag-meldung'), fehlerText(r, 'Speichern fehlgeschlagen')); return; }
     await nachEintrag();
     meldung($('#eintraege-meldung'), r.data.hinweis || '', 'warn');   // z. B. Gleittag über das Gleittage-Konto hinaus
+    // Unentschuldigt: Ergebnis der E-Mail an den Mitarbeiter (gesendet, keine Adresse, Versandfehler) dort, wo der Dialog geöffnet wurde
+    const mm = r.data.mail;
+    if (mm) meldung($(S.tab === 'kalender' ? '#kal-meldung' : '#eintraege-meldung'), mm.gesendet ? `Eingetragen – E-Mail mit der Bitte um Erklärung an ${mm.an} gesendet${mm.test ? ' (Testmodus)' : ''}.`
+      : `Eingetragen – keine E-Mail gesendet: ${mm.grund}`, mm.gesendet ? 'ok' : 'warn');
   });
   $('#eintrag-storno').addEventListener('click', async () => {
     const r = await api('hr_eintrag_save', { id: $('#dlg-eintrag').dataset.id, stornieren: true });
@@ -679,7 +693,7 @@
     zeigeUebersicht();
   }
   // Rest zuerst: die wichtigste Zahl ist auf dem Handy ohne Scrollen sichtbar
-  const SP = [['rest', 'Rest'], ['anspruch', 'Anspruch'], ['uebertrag', 'Übertrag'], ['genommen', 'Genommen'], ['geplant', 'Geplant'], ['beantragt', 'Beantragt'], ['krank', 'Krank'], ['gleittage', 'Gleittage'], ['gleitRest', 'Gleittage-Rest']];
+  const SP = [['rest', 'Rest'], ['anspruch', 'Anspruch'], ['uebertrag', 'Übertrag'], ['genommen', 'Genommen'], ['geplant', 'Geplant'], ['beantragt', 'Beantragt'], ['krank', 'Krank'], ['unentschuldigt', 'Unentschuldigt'], ['gleittage', 'Gleittage'], ['gleitRest', 'Gleittage-Rest']];
   function zeigeUebersicht() {
     const f = $('#ueb-abteilung').value;
     const zeilen = S.ueb.zeilen.filter((z) => !f || z.abteilung === f);

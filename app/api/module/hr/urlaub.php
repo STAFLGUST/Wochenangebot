@@ -10,6 +10,9 @@ declare(strict_types=1);
      sich selbst Abwesenheiten ein – auch Administratoren nicht (Vier-Augen-Prinzip, hr_eigen).
      Mitarbeiter beantragen Urlaub und – soweit ihr Gleittage-Konto reicht – Gleittage (Inhaber 02.11.2026).
    - Krank (K) und freie Tage (X) trägt nur die Personalstelle ein, Gleittage (G) auch sie.
+   - Unentschuldigtes Fehlen (F, Inhaber 03.11.2026) trägt nur die Personalstelle ein; dabei geht (abwählbar) eine E-Mail an
+     den Mitarbeiter mit seiner Urlaubsübersicht und der Bitte um eine unverzügliche Erklärung (hr_fehlen_mail in mail.php).
+     Zählt nicht gegen den Urlaub; Kollegen sehen nur „abwesend“; im Export und in der Übersicht als eigene Spalte.
    - Gleittage-Konto (Inhaber 02.11.2026): die Personalstelle gewährt Mitarbeitern Gleittage als Zusatztage (Anzahl, Grund;
      gespeichert je Person in hr-personal „gleittage“, Rücknahme als Storno). Konto je Jahr: Übertrag + gewährt − genommen −
      geplant = Rest; der Rest geht unbegrenzt ins Folgejahr (kein Verfall). Das Konto beginnt mit der ersten Gewährung –
@@ -38,7 +41,7 @@ declare(strict_types=1);
      Gespeichert im eigenen Dokument hr-korrekturen (nur die Person selbst und hr.verwalten). */
 if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/index.php nutzbar
 
-const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag'];
+const HR_ARTEN = ['U' => 'Urlaub', 'K' => 'Krank', 'G' => 'Gleittag', 'X' => 'Freier Tag', 'F' => 'Unentschuldigt'];
 const HR_STATUS = ['beantragt', 'genehmigt', 'abgelehnt', 'zurueckgezogen', 'storniert'];
 const HR_AKTIV = ['beantragt', 'genehmigt'];
 const HR_UEBERTRAG_BIS = '03-31';            // Standard: Resturlaub aus dem Vorjahr verfällt nach diesem Tag (einstellbar: hr_uebertrag_bis)
@@ -725,7 +728,7 @@ function hr_gleittage_setzen(array $b, array $me): array
    erscheinen nur hier als Anzahl. */
 function hr_tage_je_art(array $p, array $eintraege, int $jahr): array
 {
-    $n = ['K' => 0, 'G' => 0];
+    $n = ['K' => 0, 'G' => 0, 'F' => 0];
     $frei = hr_freie_tage($eintraege, $p['id']);
     foreach ($eintraege as $e) {
         if ($e['person'] !== $p['id'] || $e['status'] !== 'genehmigt' || !isset($n[$e['art']])) continue;
@@ -748,7 +751,7 @@ function hr_uebersicht(int $jahr): array
         $zeilen[] = ['id' => $p['id'], 'name' => hr_name($p), 'abteilung' => $p['abteilung'],
                      'anspruch' => $k['anspruch'], 'uebertrag' => $k['uebertrag'], 'verfallen' => $k['verfallen'], 'verfaellt' => $k['verfaellt'],
                      'genommen' => $k['genommen'], 'geplant' => $k['geplant'], 'beantragt' => $k['beantragt'], 'rest' => $k['rest'],
-                     'krank' => $t['K'], 'gleittage' => $t['G']] + hr_gleit_summen(hr_gleit_konto($p, $abw, $jahr));
+                     'krank' => $t['K'], 'gleittage' => $t['G'], 'unentschuldigt' => $t['F']] + hr_gleit_summen(hr_gleit_konto($p, $abw, $jahr));
     }
     return $zeilen;
 }

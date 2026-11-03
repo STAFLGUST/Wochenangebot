@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-10 Dateien, 187 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+10 Dateien, 190 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -58,10 +58,12 @@ _Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026)._
 - `hr_tage_text(n)`
 - `hr_mail_monat_inhalt(p, eintraege, ym)` – Monatsübersicht einer Person: Urlaub (genehmigt) im Monat mit Arbeitstagen, dazu der Stand im Jahr.
 - `hr_mail_erinnerung_inhalt(p, k)` – Erinnerung „Resturlaub verfällt“
-- `hr_mail_versenden(jobs, art, wie, me, zusatz)` – Versand: Jobs senden, Verlauf und Protokoll schreiben.
+- `hr_mail_versenden(jobs, art, wie, me, zusatz, antwortAn)` – Versand: Jobs senden, Verlauf und Protokoll schreiben.
 - `hr_monat_senden(ym, wie, me)` – Monatsübersicht für „JJJJ-MM“ an alle Mitarbeiter mit Adresse (Testmodus: an die Testadresse)
 - `hr_erinnerung_kandidaten()` – Erinnerung an alle, bei denen im laufenden Jahr Übertrag verfallen würde
 - `hr_erinnerung_senden(me)`
+- `hr_mail_fehlen_inhalt(p, e, eintraege)` – Unentschuldigtes Fehlen: Text mit Zeitraum, Bitte um unverzügliche Erklärung per E-Mail und Urlaubsübersicht des Jahres (Konto und genehmigte/beantragte …
+- `hr_fehlen_mail(p, e, eintraege, me)` – E-Mail nach dem Eintragen von unentschuldigtem Fehlen.
 - `hr_stb_senden(wie, me)` – Excel-Übersicht des Vormonats und des laufenden Monats an den Steuerberater
 - `hr_mail_anstossen()` – Automatischer Versand: von HR-Aufrufen angemeldeter Mitarbeiter angestoßen.
 - `hr_mail_speichern(b)` – Einstellungen speichern (Verwaltung → Urlaub).
@@ -255,6 +257,7 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 **Abwesenheit eintragen / ändern**
 
 - `eintragDialog(e)`
+- `mailFeld()` – Unentschuldigt (F): Haken „E-Mail an den Mitarbeiter“ (Standard an); beim Ändern eines F-Eintrags keine neue Mail
 - `nachEintrag()`
 
 **Urlaubsübersicht (hr.uebersicht oder Personalstelle): nur Summen**

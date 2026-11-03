@@ -908,7 +908,66 @@ log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
 check('Protokoll: Einstellungen, Versände (automatisch als System, Testmodus)', 'HR: E-Mail-Einstellungen geändert' in log_ and 'HR: Monatsübersicht (automatisch): 2 gesendet' in log_
       and 'System (automatisch)' in log_ and 'HR: Übersicht an den Steuerberater (Testmodus): 1 gesendet' in log_ and 'HR: Erinnerung „Resturlaub verfällt“: 1 gesendet' in log_)
 assert P.call('hr_mail_save', {'monat': {'an': False}, 'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 5}})[0] == 200
-for id_ in (U_VOR, K_VOR):
+# ── Unentschuldigtes Fehlen (F, Inhaber 03.11.2026): nur Personalstelle, E-Mail an den Mitarbeiter mit Urlaubsübersicht ──
+up_ = uu['paul']
+assert A.call('user_save', {'id': up_['id'], 'name': up_['name'], 'username': up_['username'], 'role': up_['role'], 'active': up_['active'], 'email': 'personal@example.org'})[0] == 200
+FT = montag(Y, 5, 3) + dt.timedelta(days=1)   # Dienstag im Mai
+kv_ = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y}')[1]['personen'] if p_['id'] == PF)['konto']
+n0 = len(smtp.messages)
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'F', 'von': iso(FT), 'bis': iso(FT), 'notiz': 'nicht erschienen'})
+F1 = r['eintrag']['id'] if st == 200 else None
+check('Unentschuldigt (F) eingetragen, E-Mail an den Mitarbeiter gesendet', st == 200 and r['eintrag']['art'] == 'F' and r['eintrag']['artText'] == 'Unentschuldigt'
+      and (r.get('mail') or {}).get('gesendet') is True and r['mail']['an'] == 'fritz@example.org', (st, r))
+until(lambda: len(smtp.messages) >= n0 + 1)
+mfe = smtp.messages[n0]
+check('… Mail: Datum, Bitte um unverzügliche Erklärung per E-Mail, Urlaubsübersicht des Jahres, Antwort geht an die Personalstelle',
+      mfe['to'] == ['fritz@example.org'] and mfe['subject'] == f'Abwesenheit am {FT:%d.%m.%Y} – bitte um Rückmeldung' and 'unverzüglich per E-Mail' in mfe['text']
+      and f'Ihre Urlaubsübersicht {Y}' in mfe['text'] and APR.strftime('%d.%m.') in mfe['text'] and mfe['msg']['Reply-To'] == 'personal@example.org'
+      and 'nicht erschienen' not in mfe['text'] and 'rank' not in mfe['text'], (mfe.get('subject'), mfe['msg']['Reply-To'], mfe.get('text', '')[:500]))
+kn_ = next(p_ for p_ in P.call(f'mitarbeiter_hr&jahr={Y}')[1]['personen'] if p_['id'] == PF)['konto']
+check('… zählt nicht gegen den Urlaub', (kn_['genommen'], kn_['geplant'], kn_['rest']) == (kv_['genommen'], kv_['geplant'], kv_['rest']))
+mon_ = {p_['id']: p_ for p_ in E.call(f'hr_monat&jahr={Y}&monat={FT.month}')[1]['personen']}
+monp_ = {p_['id']: p_ for p_ in P.call(f'hr_monat&jahr={Y}&monat={FT.month}')[1]['personen']}
+check('… Kollegen sehen nur „abwesend“, die Personalstelle „F“', mon_[PF]['tage'].get(str(FT.day)) == 'A' and monp_[PF]['tage'].get(str(FT.day)) == 'F',
+      (mon_[PF]['tage'].get(str(FT.day)), monp_[PF]['tage'].get(str(FT.day))))
+ub_ = {z['id']: z for z in P.call(f'hr_uebersicht&jahr={Y}')[1]['zeilen']}
+check('… Übersicht: Spalte „unentschuldigt“', ub_[PF]['unentschuldigt'] == 1 and ub_[PE]['unentschuldigt'] == 0, ub_[PF].get('unentschuldigt'))
+req = urllib.request.Request(B + '/api/?action=hr_export', data=json.dumps({'jahr': Y, 'monate': [FT.month]}).encode(),
+                             headers={'Content-Type': 'application/json', 'X-CSRF-Token': P.csrf, 'X-Forwarded-For': P.ip})
+wsf = openpyxl.load_workbook(io.BytesIO(P.http.open(req).read()))[f'Mai {Y}']
+spF = 31 + 7   # nach den Tagen: U, K, G, F
+zf = {wsf.cell(z, 3).value: z for z in range(9, 40) if wsf.cell(z, 3).value}
+wf = [wsf.cell(zf['Fritz Frist'], c).value for c in range(4, 35)]
+check('… Excel: „F“ am Tag, Legende „Unentschuldigt“, eigene Zählspalte F', wf.count('F') == 1 and wf[FT.day - 1] == 'F' and (wsf['F3'].value, wsf['G3'].value) == ('F', 'Unentschuldigt')
+      and wsf.cell(7, spF).value == 'F' and str(wsf.cell(zf['Fritz Frist'], spF).value).startswith('=COUNTIF(') and str(wsf.cell(zf['Fritz Frist'], spF).value).endswith(',"F")'),
+      (wf.count('F'), wsf['F3'].value, wsf['G3'].value, wsf.cell(7, spF).value, wsf.cell(zf['Fritz Frist'], spF).value))
+n0 = len(smtp.messages)
+st, r = P.call('hr_eintrag_save', {'id': F1, 'person': PF, 'art': 'F', 'von': iso(FT), 'bis': iso(FT), 'notiz': 'geändert'})
+check('… Ändern eines F-Eintrags sendet keine neue Mail', st == 200 and r.get('mail') is None and len(smtp.messages) == n0, (st, r.get('mail')))
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'F', 'von': iso(FT + dt.timedelta(days=1)), 'bis': iso(FT + dt.timedelta(days=1)), 'mail': False})
+F2 = r['eintrag']['id'] if st == 200 else None
+check('… ohne Haken „E-Mail“: eingetragen, keine Mail', st == 200 and r.get('mail') is None and len(smtp.messages) == n0, (st, r.get('mail')))
+st, r = P.call('hr_eintrag_save', {'person': PL, 'art': 'F', 'von': iso(FT), 'bis': iso(FT)})
+F3 = r['eintrag']['id'] if st == 200 else None
+check('… Mitarbeiter ohne E-Mail-Adresse: eingetragen, Hinweis statt Mail', st == 200 and r['mail']['gesendet'] is False and 'keine E-Mail-Adresse' in r['mail']['grund'], (st, r.get('mail')))
+check('… nur die Personalstelle (Mitarbeiter 403), nie für sich selbst', E.call('hr_eintrag_save', {'person': PF, 'art': 'F', 'von': iso(FT), 'bis': iso(FT)})[0] == 403
+      and P.call('hr_eintrag_save', {'person': ids['paul'], 'art': 'F', 'von': iso(FT), 'bis': iso(FT)})[0] == 403)
+log_ = json.dumps(A.call('log')[1], ensure_ascii=False)
+check('… Protokoll: E-Mail zur Abwesenheit (ohne Notiz)', 'E-Mail zur Abwesenheit an Fritz Frist (Bitte um Erklärung): 1 gesendet' in log_ and 'nicht erschienen' not in log_)
+vf_ = P.call('mitarbeiter_hr')[1]['mail']['verlauf'][0]
+check('… Verlauf der E-Mails: Art „fehlen“ mit Namen, ohne Inhalt', vf_['art'] == 'fehlen' and vf_['name'] == 'Fritz Frist' and vf_['gesendet'] == 1 and vf_['wie'] == 'manuell'
+      and 'nicht erschienen' not in json.dumps(vf_, ensure_ascii=False), vf_)
+assert P.call('hr_mail_save', {'test': {'an': True, 'adresse': 'test@example.org'}, 'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 5}})[0] == 200
+n0 = len(smtp.messages)
+st, r = P.call('hr_eintrag_save', {'person': PF, 'art': 'F', 'von': iso(FT + dt.timedelta(days=2)), 'bis': iso(FT + dt.timedelta(days=3))})
+F4 = r['eintrag']['id'] if st == 200 else None
+until(lambda: len(smtp.messages) >= n0 + 1)
+check('… Testmodus: nur an die Testadresse, Betreff nennt den Mitarbeiter, Zeitraum „vom … bis …“', st == 200 and r['mail']['test'] is True and r['mail']['an'] == 'test@example.org'
+      and smtp.messages[n0]['to'] == ['test@example.org']
+      and smtp.messages[n0]['subject'] == f'[Test – für Fritz Frist] Abwesenheit vom {FT + dt.timedelta(days=2):%d.%m.%Y} bis {FT + dt.timedelta(days=3):%d.%m.%Y} – bitte um Rückmeldung',
+      (r.get('mail'), smtp.messages[n0].get('subject')))
+assert P.call('hr_mail_save', {'test': {'an': False, 'adresse': ''}, 'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 5}})[0] == 200
+for id_ in (U_VOR, K_VOR, F1, F2, F3, F4):
     if id_: P.call('hr_eintrag_save', {'id': id_, 'stornieren': True})
 rev = P.call('mitarbeiter_hr')[1]['rev']; hr(ids['fritz'], aktiv=F_AKTIV)
 
@@ -1115,6 +1174,7 @@ with sync_playwright() as p:
     pg.wait_for_selector('#hrm-verlauf li')
     check('Oberfläche: Übersicht an den Steuerberater gesendet, Verlauf zeigt den Versand', antwort.value.status == 200 and smtp.messages[n0]['to'] == ['neu@example.org']
           and 'Steuerberater' in pg.text_content('#hrm-verlauf li'))
+    check('… Verlauf nennt die Bitte um Erklärung (unentschuldigt) mit Namen', 'Unentschuldigt: Bitte um Erklärung an Fritz Frist' in pg.text_content('#hrm-verlauf'), pg.text_content('#hrm-verlauf')[:300])
     pg.locator('#hr-mail').screenshot(path=os.path.join(SH, 'hr_verwaltung_mails_1280.png'))
     assert P.call('hr_mail_save', {'steuerberater': {'an': False, 'adresse': 'kanzlei@example.org', 'tag': 5}})[0] == 200
     # Schalter „Urlaubsanträge über die Plattform“: sofort wirksam, ohne „Speichern“
@@ -1147,6 +1207,14 @@ with sync_playwright() as p:
           and pg.evaluate("(() => { const d = document.querySelector('#dlg-hr-person'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
     pg.locator('#dlg-hr-person').screenshot(path=os.path.join(SH, 'hr_verwaltung_verfall_dialog_390.png'))
     pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-hr-person[open]', state='hidden')
+    pg.goto(B + '/module/hr/#kalender'); pg.wait_for_selector('#kal-eintragen:not([hidden])')
+    pg.click('#kal-eintragen'); pg.wait_for_selector('#dlg-eintrag[open]')
+    pg.select_option('#eintrag-art', 'F'); pg.wait_for_selector('#eintrag-mail-feld:not([hidden])')
+    check('390px Dialog „Abwesenheit eintragen“ mit „Unentschuldigt“: Haken sichtbar, ohne waagerechtes Scrollen', pg.is_visible('#eintrag-mail')
+          and pg.evaluate("(() => { const d = document.querySelector('#dlg-eintrag'); return d.scrollWidth <= d.clientWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1; })()"))
+    pg.locator('#dlg-eintrag').screenshot(path=os.path.join(SH, 'hr_eintrag_unentschuldigt_390.png'))
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-eintrag[data-warnung]')   # geändert: erst Rückfrage, dann schließen
+    pg.keyboard.press('Escape'); pg.wait_for_selector('#dlg-eintrag[open]', state='hidden')
     ctx.close()
 
     # ── Verwaltung → Mitarbeiter: Eintrag ohne Mitarbeiter einzeln zuordnen (abweichender Name) ──
@@ -1324,6 +1392,33 @@ with sync_playwright() as p:
     pg.click('#eintrag-speichern'); pg.wait_for_selector('#eintrag-meldung.fehler')
     check('Oberfläche: Fehler im Dialog (freier Tag), Dialog bleibt offen', 'Arbeitstage' in pg.text_content('#eintrag-meldung') and pg.is_visible('#dlg-eintrag'))
     pg.click('#dlg-eintrag [data-schliessen]')
+    # Unentschuldigt (F): Haken „E-Mail an den Mitarbeiter“ nur bei F (vorausgewählt), Ergebnis als Meldung im Kalender
+    pg.click('#kal-eintragen'); pg.wait_for_selector('#dlg-eintrag[open]')
+    check('Oberfläche: Haken „E-Mail“ nur bei „Unentschuldigt“', pg.is_hidden('#eintrag-mail-feld') and pg.locator('#eintrag-art option[value="F"]').count() == 1)
+    ftag = montag(Y, 3, 3) + dt.timedelta(days=2)   # Mittwoch im März
+    pg.select_option('#eintrag-person', PE); pg.select_option('#eintrag-art', 'F')
+    pg.fill('#eintrag-von', iso(ftag)); pg.dispatch_event('#eintrag-von', 'change')
+    pg.wait_for_selector('#eintrag-mail-feld:not([hidden])')
+    check('… bei F sichtbar und vorausgewählt', pg.is_checked('#eintrag-mail'))
+    pg.screenshot(path=os.path.join(SH, 'hr_eintrag_unentschuldigt_1280.png'))
+    n0 = len(smtp.messages)
+    pg.click('#eintrag-speichern'); pg.wait_for_selector('#dlg-eintrag[open]', state='hidden')
+    pg.wait_for_selector('#kal-meldung.ok')
+    until(lambda: len(smtp.messages) >= n0 + 1)
+    fz = [e for e in P.call(f'hr_verwaltung&jahr={Y}')[1]['eintraege'] if e['person'] == PE and e['art'] == 'F']
+    check('Oberfläche: F eingetragen, Meldung „E-Mail … gesendet“, Mail an Erika', len(fz) == 1 and fz[0]['von'] == iso(ftag)
+          and 'erika@example.org gesendet' in pg.text_content('#kal-meldung') and smtp.messages[n0]['to'] == ['erika@example.org'], (fz, pg.text_content('#kal-meldung')))
+    pg.screenshot(path=os.path.join(SH, 'hr_kalender_unentschuldigt_meldung_1280.png'))
+    for _ in range(24):   # Monatsansicht bis März des Testjahres weiterblättern
+        alt_ = pg.text_content('#kal-titel')
+        if alt_ == f'März {Y}': break
+        pg.click('#tab-kalender [data-monat="1"]'); pg.wait_for_function(f"document.querySelector('#kal-titel').textContent !== {json.dumps(alt_)}")
+    pg.wait_for_selector(f'#kal-plan td[data-person="{PE}"][data-datum="{iso(ftag)}"] .hr-art')
+    fzl = pg.locator(f'#kal-plan td[data-person="{PE}"][data-datum="{iso(ftag)}"] .hr-art')
+    check('Kalender der Personalstelle: Tag als „F“ mit Titel „Unentschuldigt“, Legende nennt es', fzl.get_attribute('class') == 'hr-art F' and fzl.text_content() == 'F'
+          and fzl.get_attribute('title') == 'Unentschuldigt' and 'unentschuldigt' in pg.text_content('#kal-legende'), (fzl.get_attribute('class'), fzl.get_attribute('title')))
+    pg.screenshot(path=os.path.join(SH, 'hr_kalender_unentschuldigt_1280.png'), full_page=True)
+    for e_ in fz: P.call('hr_eintrag_save', {'id': e_['id'], 'stornieren': True})
 
     # Export in der Oberfläche
     pg.click('[data-tab="export"]'); pg.wait_for_selector('#export-jahr option', state='attached')

@@ -7,6 +7,9 @@ declare(strict_types=1);
      automatisch einmal im Monat (Schalter, ab dem 1.) oder auf Knopfdruck.
    - Steuerberater: Excel-Übersicht (wie der Export) des Vormonats und des laufenden Monats an eine hinterlegte Adresse –
      automatisch am gewählten Tag (1.–28.) oder auf Knopfdruck.
+   - Unentschuldigtes Fehlen (Art F, Inhaber 03.11.2026): beim Eintragen durch die Personalstelle (abwählbar) eine E-Mail an den
+     Mitarbeiter mit seiner Urlaubsübersicht des Jahres und der Bitte um eine unverzügliche Erklärung per E-Mail; Antworten
+     gehen an die Adresse der eintragenden Person (Reply-To), sonst an die Antwortadresse des Postfachs.
    - Testmodus: alle HR-E-Mails gehen nur an die Testadresse (Betreff mit „[Test …]“), z. B. zum Ausprobieren.
    Der automatische Versand wird von HR-Aufrufen angestoßen (hr_mail_anstossen: Urlaubsseite, Kalender, Verwaltung) und läuft
    nach der Antwort – kein Zeitplan auf dem Server nötig; der Monat wird vorher unter Sperre vermerkt (genau ein Versand).
@@ -152,10 +155,11 @@ function hr_mail_erinnerung_inhalt(array $p, array $k): array
 }
 
 /* Versand: Jobs senden, Verlauf und Protokoll schreiben. Rückgabe: Zusammenfassung */
-function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, array $zusatz = []): array
+function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, array $zusatz = [], string $antwortAn = ''): array
 {
     $cfg = mail_cfg_intern();
     if (!$cfg) throw new RuntimeException('Der E-Mail-Versand ist noch nicht eingerichtet (Zugangsdaten des Postfachs in .env auf dem Server).');
+    if ($antwortAn !== '') $cfg['replyTo'] = $antwortAn;
     $res = $jobs ? mail_send_many($cfg, $jobs) : [];
     $ok = 0; $fehler = [];
     foreach ($jobs as $k => $j) { if (!empty($res[$k]['ok'])) $ok++; else $fehler[] = $j['to'] . ': ' . ($res[$k]['error'] ?? 'Versandfehler'); }
@@ -167,7 +171,8 @@ function hr_mail_versenden(array $jobs, string $art, string $wie, ?array $me, ar
         $d['mailVerlauf'] = array_slice($v, 0, HR_MAIL_VERLAUF_MAX);
         store_write('hr-einstellungen', $d);
     });
-    $namen = ['monat' => 'Monatsübersicht', 'erinnerung' => 'Erinnerung „Resturlaub verfällt“', 'steuerberater' => 'Übersicht an den Steuerberater'];
+    $namen = ['monat' => 'Monatsübersicht', 'erinnerung' => 'Erinnerung „Resturlaub verfällt“', 'steuerberater' => 'Übersicht an den Steuerberater',
+              'fehlen' => 'E-Mail zur Abwesenheit' . (isset($zusatz['name']) ? ' an ' . $zusatz['name'] : '') . ' (Bitte um Erklärung)'];
     audit('hr', 'HR: ' . ($namen[$art] ?? $art) . ($wie === 'automatisch' ? ' (automatisch)' : '') . (!empty($zusatz['test']) ? ' (Testmodus)' : '') . ': ' . $ok . ' gesendet'
         . ($fehler ? ', ' . count($fehler) . ' nicht zugestellt' : ''), [], $me ?? ['username' => 'system', 'name' => 'System (automatisch)', 'role' => '']);
     return $eintrag + ['fehlerText' => array_slice($fehler, 0, 5)];
@@ -215,6 +220,56 @@ function hr_erinnerung_senden(array $me): array
         $jobs[] = ['to' => $to, 'name' => $name, 'subject' => $betreff, 'text' => $text, 'html' => $html];
     }
     return hr_mail_versenden($jobs, 'erinnerung', 'manuell', $me, ['ohneAdresse' => $ohne, 'test' => $m['test']['an']]);
+}
+
+/* Unentschuldigtes Fehlen: Text mit Zeitraum, Bitte um unverzügliche Erklärung per E-Mail und Urlaubsübersicht des Jahres
+   (Konto und genehmigte/beantragte Urlaubszeiträume). Keine Krankheit, keine Notizen. */
+function hr_mail_fehlen_inhalt(array $p, array $e, array $eintraege): array
+{
+    $jahr = (int)substr($e['von'], 0, 4);
+    $k = hr_konto($p, $eintraege, $jahr);
+    $frei = hr_freie_tage($eintraege, $p['id']);
+    $urlaub = [];
+    foreach ($eintraege as $x) {
+        if ($x['person'] !== $p['id'] || $x['art'] !== 'U' || !in_array($x['status'], HR_AKTIV, true) || $x['bis'] < "$jahr-01-01" || $x['von'] > "$jahr-12-31") continue;
+        $n = count(hr_tage($p, $x['von'], $x['bis'], "$jahr-01-01", "$jahr-12-31", $frei));
+        if ($n) $urlaub[] = [$x['von'], hr_zeitraum_text($x['von'], $x['bis']) . ' (' . hr_tage_text((float)$n) . ($x['status'] === 'beantragt' ? ', beantragt' : '') . ')'];
+    }
+    usort($urlaub, function ($a, $b) { return $a[0] <=> $b[0]; });
+    $urlaub = array_column($urlaub, 1);
+    $vor = trim($p['vorname']) !== '' ? $p['vorname'] : hr_name($p);
+    $wann = $e['von'] === $e['bis'] ? 'am ' . hr_de($e['von']) : 'vom ' . hr_de($e['von']) . ' bis ' . hr_de($e['bis']);
+    $betreff = 'Abwesenheit ' . $wann . ' – bitte um Rückmeldung';
+    $satz = "Sie sind $wann nicht zur Arbeit erschienen. Eine Entschuldigung liegt uns nicht vor.";
+    $bitte = 'Bitte teilen Sie uns unverzüglich per E-Mail mit, weshalb Sie nicht zur Arbeit erschienen sind – antworten Sie dazu einfach auf diese E-Mail.';
+    $stand = "Ihre Urlaubsübersicht $jahr: Anspruch " . hr_tage_text($k['anspruch']) . ($k['uebertrag'] != 0 ? ', Übertrag ' . hr_tage_text($k['uebertrag']) : '')
+        . ', genommen ' . hr_tage_text((float)$k['genommen']) . ', geplant ' . hr_tage_text((float)$k['geplant']) . ' – Resturlaub ' . hr_tage_text($k['rest'])
+        . ($k['beantragt'] ? ' (davon ' . hr_tage_text((float)$k['beantragt']) . ' beantragt)' : '') . '.';
+    [$lt, $lh] = hr_mail_knopf();
+    $text = "Hallo $vor,\n\n$satz\n$bitte\n\n$stand" . ($urlaub ? "\nIhr Urlaub $jahr:\n- " . implode("\n- ", $urlaub) : "\nIn $jahr ist noch kein Urlaub eingetragen.") . $lt;
+    $html = '<p style="margin:0 0 14px;">Hallo ' . mail_h($vor) . ',</p><p style="margin:0 0 10px;">' . mail_h($satz) . '</p>'
+        . '<p style="margin:0 0 14px;padding:10px 12px;background:#fbeee0;border-radius:8px;"><strong>' . mail_h($bitte) . '</strong></p>'
+        . '<p style="margin:0 0 8px;">' . mail_h($stand) . '</p>'
+        . ($urlaub ? '<p style="margin:0 0 4px;">Ihr Urlaub ' . $jahr . ':</p><ul style="margin:0 0 14px;padding-left:20px;">' . implode('', array_map(function ($l) { return '<li>' . mail_h($l) . '</li>'; }, $urlaub)) . '</ul>'
+                   : '<p style="margin:0 0 14px;">In ' . $jahr . ' ist noch kein Urlaub eingetragen.</p>') . $lh;
+    return hr_mail_rahmen($betreff, $text, $html);
+}
+/* E-Mail nach dem Eintragen von unentschuldigtem Fehlen. Rückgabe {gesendet: bool, an, grund} – ein Fehler beim Versand
+   macht den Eintrag nicht ungültig. */
+function hr_fehlen_mail(array $p, array $e, array $eintraege, array $me): array
+{
+    $an = '';
+    if ($p['nutzer'] !== null) foreach (users_load() as $u) if ((string)$u['id'] === $p['nutzer']) $an = hr_mail_adresse($u['email'] ?? '');
+    if ($an === '') return ['gesendet' => false, 'an' => '', 'grund' => 'Für ' . hr_name($p) . ' ist keine E-Mail-Adresse hinterlegt (Verwaltung → Mitarbeiter).'];
+    if (!mail_cfg_intern()) return ['gesendet' => false, 'an' => $an, 'grund' => 'Der E-Mail-Versand ist auf dem Server noch nicht eingerichtet.'];
+    $m = hr_mail_einst();
+    [$betreff, $text, $html] = hr_mail_fehlen_inhalt($p, $e, $eintraege);
+    [$to, $name, $betreff] = hr_mail_ziel($m, $an, hr_name($p), $betreff);
+    try {
+        $r = hr_mail_versenden([['to' => $to, 'name' => $name, 'subject' => $betreff, 'text' => $text, 'html' => $html]], 'fehlen', 'manuell', $me,
+                               ['name' => hr_name($p), 'test' => $m['test']['an']], hr_mail_adresse($me['email'] ?? ''));
+    } catch (RuntimeException $ex) { return ['gesendet' => false, 'an' => $to, 'grund' => $ex->getMessage()]; }
+    return ['gesendet' => $r['gesendet'] === 1, 'an' => $to, 'test' => $m['test']['an'], 'grund' => $r['gesendet'] === 1 ? '' : ($r['fehlerText'][0] ?? 'Versandfehler')];
 }
 
 /* Excel-Übersicht des Vormonats und des laufenden Monats an den Steuerberater */
