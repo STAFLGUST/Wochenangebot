@@ -441,7 +441,9 @@ with sync_playwright() as p:
     aw = next(x for g in M.call(f'rewe_woche&kw={WOCHE}')[1]['woche']['gruppen'] for x in g['maerkte'] if x['ort'] == 'Musterdorf')['antwort']
     check('Antwort per Klick: bestellt, 2 Roastbeef, Notiz gespeichert', aw['status'] == 'bestellt' and aw['mengen'] == {'rb': 2} and aw['notiz'] == 'Kunde ruft zurück', aw)
     # Versehentlich geklickt: der Hinweis bietet „Rückgängig“ an und stellt die vorige Antwort samt Mengen und Notiz wieder her
-    pg.click(f'{zeile} [data-s="kein"]'); pg.wait_for_selector('#rw-toast.zeigen [data-rueck]')
+    # auf den neuen Hinweis warten – der vorige („Bestellt · …“) kann noch sichtbar sein, bis die Antwort gespeichert ist
+    pg.click(f'{zeile} [data-s="kein"]')
+    pg.wait_for_function("(() => { const t = document.querySelector('#rw-toast.zeigen'); return !!t && !!t.querySelector('[data-rueck]') && t.textContent.replace(/\\u00a0/g, ' ').includes('Musterdorf: Kein Bedarf'); })()")
     check('Antwort geändert → Hinweis mit „Rückgängig“', 'Musterdorf: Kein Bedarf' in text(pg, '#rw-toast'), text(pg, '#rw-toast'))
     pg.screenshot(path=os.path.join(SH, 'rewe_rueckgaengig_1280.png'))
     pg.click('#rw-toast [data-rueck]')
