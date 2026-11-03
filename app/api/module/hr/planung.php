@@ -145,7 +145,9 @@ function hr_planung(int $jahr, array $me): array
     return ['jahr' => $jahr, 'heute' => hr_heute(), 'start' => $dt['start'], 'stichtag' => $dt['stichtag'], 'prozent' => $pe['prozent'],
             'vertretungPflicht' => $pe['vertretungPflicht'], 'abschluss' => $abschluss ? ['t' => $abschluss['t'] ?? null, 'by' => (string)($abschluss['by'] ?? '')] : null,
             'personen' => $pl, 'antraege' => $antraege, 'sperren' => $sperren,
-            'zahlen' => ['personen' => count($pl), 'erreicht' => count(array_filter($pl, function ($p) { return $p['erreicht']; })),
+            // „Ziel erreicht x von y“ zählt nur Mitarbeiter mit Anspruch im Jahr (ohne Anspruch gibt es nichts zu planen)
+            'zahlen' => ['personen' => count(array_filter($pl, function ($p) { return $p['anspruch'] > 0; })),
+                         'erreicht' => count(array_filter($pl, function ($p) { return $p['erreicht'] && $p['anspruch'] > 0; })),
                          'erinnern' => count(array_filter($pl, function ($p) { return !$p['erreicht'] && $p['adresse']; })),
                          'offen' => count(array_filter($antraege, function ($a) { return $a['status'] === 'beantragt'; })),
                          'frei' => count(array_filter($antraege, function ($a) { return $a['frei']; })),

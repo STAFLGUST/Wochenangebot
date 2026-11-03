@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-11 Dateien, 221 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+11 Dateien, 230 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/hr.php`
 
@@ -260,6 +260,11 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `zeigeGleitMein()`
 - `artSetzen(art)`
+- `vertretungFeld()`
+
+**Jahresplanung: Stand der Vorplanung des nächsten Jahres (Mitarbeiter)**
+
+- `zeigePlanungMein()`
 
 **Mein Jahr: Mini-Kalender aller eigenen Abwesenheiten**
 
@@ -316,6 +321,14 @@ _STAFL-Plattform · HR · Urlaub Gleittage-Konto (02.11.2026)_
 
 - `zeigeExport()`
 
+**Jahresplanung (Personalstelle oder „Urlaub genehmigen“)**
+
+- `ladePlanung()`
+- `zeigePlanung()`
+- `zeigeZeitleiste()` – Zeitleiste: je Mitarbeiter (nach Abteilung) eine Jahresleiste; Balken = Anträge, Sperren und Monate als Hintergrund
+- `zeigePlanungListe()`
+- `planungAktion(was, knopf)`
+
 **Urlaubsregeln (Text der Personalstelle, Verwaltung → Urlaub)**
 
 - `zeigeRegeln(text)`
@@ -355,6 +368,7 @@ _STAFL-Plattform · HR im Eingabebereich der Verwaltung - Verwaltung → Mitarbe
 
 **Verwaltung → Urlaub: Urlaubssperren und Ferien**
 
+- `planungFelder()` – Jahresplanung (03.11.2026): Mitarbeiter planen bis zum Stichtag einen Anteil ihres Urlaubs des nächsten Jahres vor; Hinweis in der Urlaubsverwaltung ab dem …
 - `renderUrlaub()`
 
 **Verwaltung → Urlaub: E-Mails (Server: module/hr/mail.php)**
@@ -379,6 +393,7 @@ _HR · Urlaubsverwaltung (Modul hr, Oberfläche hr.intern unter /module/hr/)._
 - `mail_html(m_)`
 - `anmelden(user, pw, ip, breite, verfall_hinweis)`
 - `zeit(cl, uebernehmen, stand, **opt)`
+- `plan_setzen(**w)`
 
 ## `tests/e2e/test_hr_uebersicht.py`
 
