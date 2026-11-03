@@ -1,6 +1,6 @@
 # bunny.net vor dem Server
 
-Stand 02.11.2026. Ziel (Entscheidung Inhaber): **Schutz und Tempo** für **alle Adressen einschließlich der Anmeldung**.
+Stand 03.11.2026. Ziel (Entscheidung Inhaber): **Schutz und Tempo** für **alle Adressen einschließlich der Anmeldung**.
 Am Ende nimmt der Server nur noch Anfragen über bunny.net an.
 
 bunny.net steht als Content-Delivery-Netz (CDN) zwischen Besuchern und Server. Angriffe und Lastspitzen landen zuerst
@@ -148,10 +148,44 @@ nicht). Bei allen anderen Antworten bleibt der Kopf des Servers unverändert (ge
   vor der Umstellung.
 - Keine Daten werden umgestellt, keine Migration.
 
-## 5. Grenzen und offene Punkte
+## 5. Bunny Shield (Schutzschicht bei bunny)
 
-- **Bunny Shield (WAF, Bot-Abwehr)** ist ein eigenes Produkt und noch nicht eingeschaltet. Später zuerst nur „Erkennen“.
-  Eine Prüfseite mit JavaScript würde App und Schnittstelle stören.
+Eingeschaltet am 03.11.2026 (Auftrag des Inhabers): Plan **Basic** (kostenlos, 25 Mio. Anfragen im Monat) in allen vier
+Zonen, zunächst **nur protokollieren**.
+
+| Einstellung | Wert | Warum |
+|---|---|---|
+| Lernmodus | an bis 10.11.2026 (Vorgabe von bunny: 7 Tage) | erst Fehlalarme sehen |
+| WAF (Abwehr typischer Angriffe) | Profil „General“, Ausführung **Log** | bleibt auch nach dem Lernmodus „nur protokollieren“, bis jemand umstellt |
+| Kopfzeilen / Inhalt der Anfrage protokollieren | aus; `Cookie`, `Authorization`, `X-Stafl-Cdn`, `X-CSRF-Token` ignoriert | keine Sitzungen, Passwörter oder den CDN-Schlüssel in den Protokollen |
+| Zu große Anfrage/Antwort für die Prüfung | Log | große Importe und Exporte werden nie wegen ihrer Größe abgewiesen |
+| DDoS-Abwehr | Empfindlichkeit **niedrig** | Prüfseiten mit JavaScript nur bei echten Angriffen (stören App und Schnittstelle) |
+| Bot-Erkennung, Upload-Prüfung | nur protokollieren | – |
+
+Ratenbegrenzungen (Basic: höchstens 2 je Zone, Zeitfenster 10 s, Sperre 1 min), Aktion **Log**:
+
+| Zone | Regel | Grenze je Besucher-Adresse |
+|---|---|---|
+| `stafl-kunde` | `STAFLAnmeldungKunden`: `action=kunde_login`, `kunde_token_check`, `kunde_token_set`, `kunde_passwort` | 5 in 10 s |
+| `stafl-kunde`, `stafl-dashboard-1`, `stafl-dashboard-2` | `STAFLSchnittstelleallgemein`: Adressen ab `/api/` | 100 in 10 s |
+| `stafl-anmeldung` | `STAFLAnmeldungMitarbeiter`: POST an `/login-actions/` (Keycloak: Passwort, zweiter Faktor) | 8 in 10 s |
+
+Die Anmeldebremse der Anwendung (Sperre nach Fehlversuchen) bleibt unverändert; die Regeln bei bunny halten Massenanfragen
+schon vor dem Server auf.
+
+**Nach dem Lernmodus** (ab 10.11.2026): bunny → Shield → Event Logs der vier Zonen ansehen. Fehlalarme (z. B. bei Importen,
+der App oder der Keycloak-Anmeldung) je Regel auf „Log“ stellen oder abschalten, dann WAF und Ratenbegrenzungen auf **Block**
+bzw. **Rate Limit** umstellen. Keine Prüfseite („Challenge“) für die Schnittstelle oder die Anmeldung einschalten.
+
+**Rückfall:** In der Zone Shield → WAF ausschalten bzw. DDoS-Empfindlichkeit „Off“; Ratenbegrenzungen löschen. Am Server
+ändert sich dabei nichts.
+
+**Datenschutz:** Shield setzt nur bei einer Prüfseite oder Bot-Erkennung eigene Cookies (`bunny_shield*`). Die
+Datenschutzerklärung nennt bunny.net (BunnyWay d.o.o., Slowenien) bisher nicht – Ergänzung und Vertrag zur
+Auftragsverarbeitung mit bunny sind offen (Inhaber).
+
+## 6. Grenzen und offene Punkte
+
 - **Uploads:** bunny nennt keine Höchstgröße. Nach der Umstellung den Import der größten Datei prüfen (Schritt 5).
 - **Länderangabe:** bunny schickt `CDN-RequestCountryCode`. Die Anwendung nutzt weiter ihre eigene Ländersperre mit der
   Besucher-IP.
