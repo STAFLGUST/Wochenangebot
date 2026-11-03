@@ -1,4 +1,5 @@
-"""Testgruppe editor_aux: Hilfen im Angebotseditor – Vergleich mit der Vorwoche und Bestand im Editor."""
+"""Testgruppe editor_aux: Hilfen im Angebotseditor – Vergleich mit der Vorwoche, Bestand im Editor und Suche in
+„Artikel hinzufügen“ (ohne Vorauswahl „nur mit Bestand“; die frühere Leiste „Bestand ohne Preis“ ist entfallen)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
@@ -42,7 +43,7 @@ with sync_playwright() as p:
     r = post(a, 'history_import', {'week': 42, 'year': 2026, 'source': 'test', 'items': hist}); check('history KW42 stored', r[0] == 200, r[0])
     r = post(a, 'stock_import', {'date': '2026-10-16', 'source': 'Bestand_16.10.26.XLS', 'articles': articles}); check('stock stored', r[0] == 200, r[1] if r[0] != 200 else '')
     a.reload(); a.wait_for_selector('tr[data-id]')
-    a.wait_for_function("document.querySelector('#groups:not(.no-stock):not(.no-prev)') && document.querySelector('#noprice-panel:not([hidden])')", timeout=10000)
+    a.wait_for_function("document.querySelector('#groups:not(.no-stock):not(.no-prev)') && document.querySelector('#mhd-panel:not([hidden])')", timeout=10000)
     # Kopfzeile wird nach dem Laden von Bestand/Vorwoche nachgezogen – auf den fertigen Stand warten
     a.wait_for_function("(() => { const t = document.querySelector('.gcard thead'); return t && t.textContent.includes('Stand 16.10.2026') && t.textContent.includes('KW 42/2026'); })()", timeout=10000)
     th = a.locator('.gcard').first.locator('thead').inner_text()
@@ -53,39 +54,39 @@ with sync_playwright() as p:
     order = row.locator('td').evaluate_all("tds => tds.map(t => t.className.split(' ')[0])")
     check('column order prev → price → stock', order.index('e-prev') + 1 == order.index('e-price') and order.index('e-price') + 1 == order.index('e-stock'), order)
     nost = a.locator('tr[data-id] td.e-stock.none').count(); check('articles without stock show —', nost > 0, nost)
-    badge = a.inner_text('#noprice-panel .np-badge'); check('panel count = stock without price', badge == str(len(exp_np)), (badge, len(exp_np)))
-    check('Leisten beim Öffnen zugeklappt', a.locator('#noprice-panel .np-card:not(.open)').count() == 1 and a.locator('#mhd-panel .np-card:not(.open)').count() == 1
-          and a.locator('#noprice-panel .nptab').count() == 0)
-    a.click('#noprice-panel [data-np=toggle]'); a.wait_for_selector('#noprice-panel .np-card.open .nptab')
-    check('panel rows', a.locator('#noprice-panel .nptab tbody tr').count() == len(exp_np))
+    check('Leiste „Bestand ohne Preis“ entfallen, „Kurzes MHD“ beim Öffnen zugeklappt', a.locator('#noprice-panel').count() == 0
+          and a.locator('#mhd-panel .np-card:not(.open)').count() == 1 and 'Bestand ohne Preis' not in a.inner_text('#view-edit'))
     a.screenshot(path=SH + '/editor-aux.png')
-    # Suche filtert Panel mit
-    a.fill('#ed-q', 'Roastbeef'); a.wait_for_timeout(500)
-    names = a.locator('#noprice-panel .nptab tbody td.np-name').all_inner_texts()
-    check('editor search filters panel', all('roastbeef' in n.lower() for n in names), names[:5])
-    a.fill('#ed-q', '')
-    # erst weiter, wenn die Leiste wieder ungefiltert ist (sonst trifft der Klick eine veraltete Zeile)
-    a.wait_for_function('n => document.querySelectorAll("#noprice-panel .nptab tbody tr").length === n', arg=len(exp_np))
-    # Ins Angebot übernehmen
-    first = a.locator('#noprice-panel .nptab tbody tr:has([data-np=add])').first
-    code = first.get_attribute('data-npcode'); name = first.locator('td.np-name').inner_text()
-    a.click(f'#noprice-panel .nptab tbody tr[data-npcode="{code}"] [data-np=add]'); a.wait_for_selector(f'#dlg-ez-pick[open] #ezp-list [data-preis="{code}"]')
-    check('„Ins Angebot“ öffnet „Artikel hinzufügen“ mit dem Artikel markiert', a.is_checked(f'#ezp-list [data-sel="{code}"]') and a.input_value('#ezp-q') == code)
+    # Artikel hinzufügen: „nur mit Bestand“ nicht vorausgewählt, Suche mit Nummer (auch mit führenden Nullen), Bezeichnung
+    # zusammengeschrieben bzw. mit ue statt ü, Zustand ausgeschrieben
+    np = next(x for x in exp_np if len(x[0].lstrip('0')) >= 4 and norm(x[0]) not in in_offer_none)   # Bestand, nicht im Angebot
+    code = np[0].lstrip('0') or '0'; name = np[1]
+    a.click('#btn-add-art'); a.wait_for_selector('#dlg-ez-pick[open] #ezp-q')
+    check('Artikel hinzufügen: „nur mit Bestand“ nicht vorausgewählt', a.locator('#ezp-bestand').count() == 1 and not a.is_checked('#ezp-bestand'))
+    def treffer(q):
+        a.fill('#ezp-q', q)
+        a.wait_for_function("q => document.querySelector('.ezp-lkopf h3, .ezp-start') && (document.querySelector('.ezp-lkopf h3') || {}).textContent?.includes(q)", arg=q)
+        return a.eval_on_selector_all('#ezp-list tr[data-code]', 'e => e.map(x => x.dataset.code)')
+    t = treffer('00' + code)
+    check('Suche: Nummer mit führenden Nullen findet den Artikel', code in t, t[:5])
+    lamm = [norm(i['code']) for i in offer['items'] if i['code'] and re.search(r'lamm\s+filet', i['name'], re.I)]
+    t = treffer('lammfilet')
+    check('Suche: „lammfilet“ findet „Lamm Filet“ (zusammengeschrieben)', lamm and all(c in t for c in lamm), (lamm, t[:6]))
+    hufte = [norm(i['code']) for i in offer['items'] if i['code'] and 'hüfte' in i['name'].lower()]
+    t = treffer('steakhuefte')
+    check('Suche: ue statt ü', hufte and any(c in t for c in hufte), (hufte[:3], t[:6]))
+    gefr = [norm(i['code']) for i in offer['items'] if i['code'] and i.get('condition') == 'gefroren' and 'gefr' not in i['name'].lower() and 'tk' not in i['name'].lower()]
+    t = treffer('gefroren')
+    check('Suche: Zustand „gefroren“ auch ohne das Wort in der Bezeichnung', not gefr or any(c in t for c in gefr), (gefr[:3], t[:6]))
+    t = treffer(code)
+    a.click(f'#ezp-list tr[data-code="{code}"] .ezp-n'); a.wait_for_selector(f'#ezp-list [data-preis="{code}"]')
     a.fill(f'#ezp-list [data-preis="{code}"]', '9,99x'); a.click('#ezp-ok'); a.wait_for_selector('#ezp-anz .ezp-err')
     check('invalid price rejected', 'nicht lesbar' in a.inner_text('#ezp-anz'))
     a.fill(f'#ezp-list [data-preis="{code}"]', '9,99'); a.click('#ezp-ok'); a.wait_for_selector('#dlg-ez-pick', state='hidden'); a.wait_for_timeout(1200)
     new = a.locator(f'tr[data-id]:has(input[data-f="code"][value="{code}"])')
     check('article added with price + stock', new.count() == 1 and new.locator('input[data-f=price]').input_value() == '9,99' and new.locator('td.e-stock').inner_text().strip() != '—', code)
-    check('panel count decreased', a.inner_text('#noprice-panel .np-badge') == str(len(exp_np) - 1))
     exp = re.sub(r'[\s,]*\bfrisch\b\.?[\s,.]*$', '', name, flags=re.I).strip() or name
     check('name taken from stock list (without frisch)', new.locator('input[data-f=name]').input_value() == exp, (new.locator('input[data-f=name]').input_value(), exp))
-    # Preis für Artikel im Angebot ohne Preis
-    goto = a.locator('#noprice-panel .nptab [data-np=goto]')
-    if goto.count():
-        goto.first.click(); a.wait_for_timeout(600)
-        check('"Preis eintragen" focuses price field', a.evaluate("document.activeElement && document.activeElement.dataset.f === 'price'"))
-    else:
-        check('no in-offer-without-price articles (n/a)', not (in_offer_none & {norm(x[0]) for x in master}))
     # Preis auf Vorwochenpreis → Differenz verschwindet
     pi = row.locator('input[data-f=price]'); pi.fill(de(round(preis('10601') - 0.4, 2))); pi.press('Tab'); a.wait_for_timeout(800)
     row = a.locator('tr[data-id]:has(input[data-f="code"][value="10601"])').first
@@ -97,7 +98,7 @@ with sync_playwright() as p:
     check('back to KW 43 shows Vorwoche again', a.locator('tr[data-id] td.e-prev').first.is_visible())
     # Mobil
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()
-    login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_selector('#noprice-panel:not([hidden])'); m.wait_for_timeout(300)
+    login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_selector('#mhd-panel:not([hidden])'); m.wait_for_timeout(300)
     m.screenshot(path=SH + '/editor-aux-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
     check('no JS errors', not errs, errs)

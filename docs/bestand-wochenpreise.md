@@ -47,7 +47,10 @@ Escape und Schließen schließen ihn. CSV und Druck enthalten weiterhin die Lief
 ## Bezeichnung aus den Stammdaten, Spaltenfilter, VK-Gruppen
 
 - **Bezeichnung:** Angezeigt wird die Bezeichnung aus den Artikelstammdaten (Verwaltung → Artikelstammdaten), nicht der
-  Name aus der WinAB-Liste. Das gilt für Liste, Artikel-Fenster, Druck, PDF, CSV und die MHD-Mail (Bild, Excel, Text).
+  Name aus der WinAB-Liste. Das gilt für Liste, Artikel-Fenster, Druck, PDF und CSV. Die **MHD-Liste** (MHD-Mail: Bild,
+  Excel, Text; CRM-Reiter „MHD-Ware“) zeigt dagegen die **Originalbezeichnung der Warenwirtschaft** (Auftrag des Inhabers
+  03.11.2026): Bezeichnung1 aus dem Artikelstammdaten-Import (`nameWawi`), sonst den Namen der WinAB-Liste – nie die
+  Angebotsbezeichnung; in der Antwort `nameOrig`, wenn sie von `name` abweicht.
   Ohne Stammdatensatz oder bei leerer Bezeichnung bleibt der Name der Liste. Der Server setzt die Bezeichnung beim Lesen
   ein (`bestand_mit_stammdaten()` in `lib/bestand.php`). Gespeichert bleibt der Bestand wie importiert. Der Name der Liste
   steht als `nameImport` in der Antwort, im Hinweis der Bezeichnung und in der Suche.
@@ -86,7 +89,7 @@ Jeder Preiseintrag enthält ausschließlich `code` und `price`, niemals Kundenpr
 Ohne `preisverlauf.sehen` kommt nur `prices: {allowed: false}`; die Oberfläche zeigt fehlende Berechtigung.
 
 `GET stock` und die Antwort von `POST stock_import` enthalten je Artikel und Zugang die Bezeichnung aus den Stammdaten
-(`name`), bei Abweichung `nameImport`, dazu `vk` und `merkmale` (nur wenn bekannt), außerdem `vkgruppen` (Nummer → Name). `POST stock_pdf` nimmt optional `filter`
+(`name`), bei Abweichung `nameImport` und `nameOrig` (Originalbezeichnung für die MHD-Liste), dazu `vk` und `merkmale` (nur wenn bekannt), außerdem `vkgruppen` (Nummer → Name). `POST stock_pdf` nimmt optional `filter`
 (Text der aktiven Spaltenfilter für die Überschrift, höchstens 160 Zeichen).
 
 `POST stock_import` behält `bestand.importieren`, POST/JSON und CSRF-Prüfung. Optionales `incoming`

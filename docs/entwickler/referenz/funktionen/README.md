@@ -6,17 +6,17 @@ Karte für Entwickler und Agenten: Abschnitte und Funktionen jeder Code-Datei (P
 
 | Modul | Kennung | Dateien | Funktionen |
 | --- | --- | --- | --- |
-| [Angebot](angebot.md) | `angebot` | 41 | 594 |
-| [Bestand](bestand.md) | `bestand` | 9 | 58 |
+| [Angebot](angebot.md) | `angebot` | 41 | 611 |
+| [Bestand](bestand.md) | `bestand` | 9 | 61 |
 | [Leergut](leergut.md) | `leergut` | 4 | 106 |
 | [CRM](crm.md) | `crm` | 9 | 176 |
 | [REWE](rewe.md) | `rewe` | 5 | 139 |
 | [Qualitätssicherung](qs.md) | `qs` | 9 | 249 |
 | [Einkauf](einkauf.md) | `einkauf` | 2 | 6 |
-| [HR](hr.md) | `hr` | 11 | 232 |
+| [HR](hr.md) | `hr` | 11 | 233 |
 | [Marketing](marketing.md) | `marketing` | 4 | 76 |
 | [Controlling](controlling.md) | `controlling` | 17 | 257 |
-| [Verwaltung](verwaltung.md) | `verwaltung` | 17 | 196 |
+| [Verwaltung](verwaltung.md) | `verwaltung` | 17 | 203 |
 | [Sicherheit](sicherheit.md) | `sicherheit` | 5 | 105 |
 | [Dashboard](dashboard.md) | `dashboard` | 2 | 26 |
 | [App (iOS/Android)](mobile.md) | `mobile` | 2 | 8 |

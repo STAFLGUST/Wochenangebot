@@ -1022,6 +1022,10 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 /* Werbung: eigener Abschnitt oben in der Liste (Band in der Akzentfarbe, Zeilen wie die Liste),
    beworbene Zeilen der Liste mit kleinem Kennzeichen */
 .werb-sec { margin-bottom: 22px; }
+/* Zweite Werbung rechts neben der ersten (je die Hälfte der Spalten); schmal untereinander */
+.werb-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; align-items: start; }
+.werb-duo.werb-stapel { grid-template-columns: minmax(0, 1fr); }
+.werb-duo > .werb-sec { min-width: 0; }
 .al-st.werb-st { justify-content: flex-start; flex-wrap: wrap; gap: 2px 14px; background: var(--accent-soft); }
 .werb-st h3 { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); }
 .werb-st h3 > .i { width: 16px; height: 16px; flex: none; }
@@ -1029,6 +1033,9 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
 .werb-al { margin-bottom: 16px; padding: 14px 16px 2px; }
 .werb-al .werb-sec { margin-bottom: 6px; }
 .tag.werb-tag { background: var(--accent-soft); color: var(--accent); }
+/* Beworbene Artikel und Empfehlungen ohne Preisänderung: Zeile bzw. Karte dezent in der Akzentfarbe hervorgehoben */
+.al-tab tbody tr.row.werb-an td, .grid tbody tr.row.werb-an td { background: var(--accent-soft); }
+.card.werb-an { box-shadow: inset 0 0 0 1.5px var(--accent-line), var(--shadow); }
 .m-werb { display: inline-block; margin-top: 4px; }
 
 /* ==========================================================================
@@ -1245,6 +1252,8 @@ body:not(.adm):not(.db) .ibtn:hover { background: var(--accent-soft); color: var
   body.kseite .merk, body.kseite .empty { border-radius: 24px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten); }
   body.kseite .merk { top: calc(var(--header-h) + 28px); }
   body.kseite .card { border-radius: 20px; box-shadow: inset 0 1px 0 var(--glas-glanz), var(--glas-schatten-k); }
+  body.kseite :is(.al-tab, .grid) tbody tr.row.werb-an td { background: var(--accent-soft); }   /* Werbung/Empfehlung */
+  body.kseite .card.werb-an { box-shadow: inset 0 0 0 1.5px var(--accent-line), inset 0 1px 0 var(--glas-glanz), var(--glas-schatten-k); }
   body.kseite .card-price, body.kseite .card-qty, body.kseite .merk li, body.kseite .merk-order { border-color: var(--linie); }
   body.kseite .orderbar { background: var(--glas-kopf); border-top: 1px solid var(--glas-rand); -webkit-backdrop-filter: var(--glas-filter); backdrop-filter: var(--glas-filter); }
   body.kseite .foot { border-top-color: var(--linie); }

@@ -214,22 +214,41 @@ die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Der Excel-Import erset
 ### Werbung schalten
 
 Knopf „Werbung“ in der Werkzeugleiste (Zahl = beworbene Artikel des gewählten Angebots): `openWerbung()` (`admin.js`)
-übergibt die Artikel des Angebots an das Fenster `admin-werbung.js` (`WA.werbung.oeffnen(cfg)`: Überschrift, Werbetext,
-bis zu 12 Artikel mit Reihenfolge und Hinweis; Leser nur ansehen). „Artikel auswählen …“ öffnet über den Rückruf
+übergibt die Artikel des Angebots an das Fenster `admin-werbung.js` (`WA.werbung.oeffnen(cfg)`: bis zu zwei Werbungen –
+„Weitere Werbung“ legt die zweite an, Reiter `.wb-tab` wechseln, „Werbung 2 entfernen“ nimmt eine heraus, eine zweite ohne
+Artikel lässt sich nicht übernehmen –, je Werbung Überschrift, Werbetext, bis zu 12 Artikel mit Reihenfolge und Hinweis;
+Leser nur ansehen). „Artikel auswählen …“ öffnet über den Rückruf
 `auswaehlen` die gemeinsame Artikelauswahl (`werbungAuswahl()`: `WA.artikelwahl.oeffnen` mit Filter „nur in diesem
 Angebot“, alle Gruppen, Bestand ohne Filter, beworbene vorausgewählt, höchstens 12; Artikel außerhalb des Angebots
 nimmt `artikelAufnehmen()` – dieselbe Funktion wie „Artikel hinzufügen“ – mit Preis auf; Positionen ohne Artikelnummer
 erscheinen mit eigenem Schlüssel ohne Nummer). Die Artikelauswahl kennt dafür `preis.fest(a)` (Preis als Text statt
 Eingabefeld) und `a.nr` (angezeigte Nummer); `spannen()` passt die colspan der Gruppen-/Detailzeilen an die sichtbaren
-Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]`
+Spalten an (Handy). Gespeichert wird in `model.meta.werbung[<Angebot>]` (zweite Werbung in `weitere`; Hilfen `werbBloecke()`/`werbEintrag()`)
 (Entwurf, sichtbar nach „Veröffentlichen“; Rücknahme je Angebot im Veröffentlichen-Dialog). `werbungBereinigen()` nimmt
 bei jeder Änderung Artikel heraus, die nicht mehr im Angebot stehen; der Excel-Import überträgt die Werbung auf die
 Artikel mit derselben Nummer (`werbungUebernehmen()`); `mergeModels` gleicht die Werbung je Angebot ab. Beworbene Zeilen
 tragen `tr.e-werb` und das Kennzeichen „Werbung“. Auf der Angebotsseite (`frontend.js`, `werbungHTML()`) steht oben ein
 eigener Abschnitt im Aufbau der Liste (`.werb-sec`: Band `.werb-st` in der Akzentfarbe mit Überschrift und Text, darunter
 die Artikel mit `plBlockHTML(…, 'werb')` als normale Zeilen in den Spalten der Liste; Bestell- und Kachelansicht: in eigener
-Karte; nur ohne Suche/Filter in „Alle Artikel“). Beworbene Zeilen/Kacheln der Liste tragen `.werb-an` und den Hinweis
-(sonst „Empfehlung“) als Kennzeichen.
+Karte; nur ohne Suche/Filter in „Alle Artikel“). Eine zweite Werbung steht in `.werb-duo` rechts neben der ersten (je die
+Hälfte der Spalten der Liste; bei nur einer Spalte `.werb-stapel` untereinander). Beworbene Zeilen/Kacheln der Liste und
+Empfehlungen ohne Preisänderung (`it.empfehlung`) tragen `.werb-an` (dezent hinterlegt) und den Hinweis (sonst
+„Empfehlung“) als Kennzeichen.
+
+### Empfehlung (früher „Sonderpreis“)
+
+Etikett in der Preiszelle (`saleBtnHTML`/`saleTagHTML`) und Leiste „Kurzes MHD“ öffnen `openSale()` (`#dlg-sale`):
+Empfehlungspreis optional (leer = `mark: true`, nur hervorheben), je Angebot „wie oben“, „eigener Preis“, „ohne
+Preisänderung“ (`{status: 'mark'}`) oder „keine Empfehlung“ (`{status: 'none'}`). Neu gesetzt steht nur das gewählte
+Angebot auf „wie oben“, alle anderen auf „keine Empfehlung“; `empfehlungNichtUebernehmen()` setzt ein Angebot, in das der
+Artikel später kommt („Artikel hinzufügen“, „Aus anderem Angebot“), ebenfalls auf „keine“. Auswertung je Angebot:
+`C.empfehlungFor(it, oid)` (`offer-core.js`; `null` oder `{preis}`), Server `empfehlung_fuer()`.
+
+### Angebotsauswahl in der Seitenleiste
+
+`offerBarPlatzieren()` hängt `#offer-bar` ab 901 px (`matchMedia`) in die `.side-nav` unter die Bereiche, schmaler zurück
+in `.ed-layout` (Auswahl über dem Angebot); `body.ob-links` steuert das Layout, `body.in-other` blendet die Liste in
+anderen Bereichen aus. Inhalt und Ereignisse bleiben dieselben (`renderOfferBar`).
 
 ### Vorschau
 

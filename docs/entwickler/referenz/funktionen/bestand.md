@@ -2,14 +2,14 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-9 Dateien, 58 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+9 Dateien, 61 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/bestand-pdf.php`
 
 _Bestand als PDF (Verwaltung → Bestand → „PDF“)_
 
 - `stock_pdf_stufe(mhd)` – MHD-Stufe relativ zu heute (deutsche Zeit) – wie mhdClass() im Eingabebereich
-- `stock_pdf(st, zeilen, zusatz)` – $zeilen: [['g' => Warengruppe] \| ['c' => Artikelnummer], …] in der Reihenfolge der Ansicht; $zusatz: Suche/MHD-Auswahl für den Titel
+- `stock_pdf(st, zeilen, zusatz, mhdListe)` – $zeilen: [['g' => Warengruppe] \| ['c' => Artikelnummer], …] in der Reihenfolge der Ansicht; $zusatz: Suche/MHD-Auswahl für den Titel; $mhdListe: Suche „MHD“ …
 - `stock_pdf_name(st, art)`
 
 ## `app/api/lib/bestand.php`
@@ -26,12 +26,15 @@ _Bestandsliste und Stammdaten_
 - `stock_ohne_ek(st)` – Einkaufspreise aus einem Bestand entfernen (für Nutzer ohne Recht „bestand.einkaufspreise“)
 - `bestand_merkmale(s)`
 - `bestand_bezeichnung(a)` – Bezeichnung mit Merkmalen in einer Zeile (Excel und Text der MHD-Mail; die CSV der Ansicht setzt sie genauso zusammen): „Lachs · Schwein · DE · frisch“
+- `bestand_originalname(a)` – Originalbezeichnung eines Bestandsartikels (MHD-Liste, Auftrag des Inhabers 03.11.2026): Bezeichnung1 aus dem Artikelstammdaten-Import der Warenwirtschaft, …
 - `bestand_mit_stammdaten(st)`
 
 **Stammdaten**
 
 - `code_key(c)`
 - `clean_master(list)`
+- `angebotsnamen_clean(v, wo, known)` – Eigene Bezeichnungen je Angebot (Stammsatz und Artikel des Angebots): Angebots-ID → Text, höchstens OFFER_MAX Einträge.
+- `angebotsnamen_text(v)` – Vergleichstext der Bezeichnungen je Angebot (Protokoll, Vorschau): „edeka: Rinderhüfte · bela: …“
 - `master_changes(old, new)`
 
 ## `app/api/module/bestand/import.php`
