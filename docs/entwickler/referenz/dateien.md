@@ -184,6 +184,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `export.php` | hr | Modul HR · Excel-Export für den Steuerberater: ein Blatt je Monat in Aufbau und Gestaltung der bisherigen Planungsdatei „Urlaub 2026“ (Legende, Monatstitel, Wochentage, Tageszahlen, Abteilungen senkrecht, Kürzel … |
 | `import.php` | hr | Modul HR · Importe für die Importzentrale (Verwaltung → Import, docs/plattform/schnittstellen/import.md) |
 | `mail.php` | hr | Modul HR · E-Mails der Urlaubsverwaltung (Inhaber 03.11.2026). |
+| `planung.php` | hr | Modul HR · Jahresplanung des Urlaubs (Inhaber 03.11.2026). |
 | `urlaub.php` | hr | Modul HR · Urlaubsverwaltung – Fachlogik (Daten, Feiertage, Urlaubskonto, Anträge, Korrekturmeldungen, Monatsplan). |
 | `zeiterfassung.php` | hr | Modul HR · Import „Abwesenheiten aus der Zeiterfassung“ (Abwesenheitsbericht, .xlsx) – Importvorlage für die Urlaubstage (Entscheidung des Inhabers, 23.10.2026). |
 
