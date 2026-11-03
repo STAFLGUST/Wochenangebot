@@ -126,9 +126,9 @@ function crm_wahl($v, array $erlaubt, string $was, bool $leer = true): string
 function crm_text($v, int $max, string $was): string
 {
     if ($v !== null && !is_string($v) && !is_numeric($v)) throw new InvalidArgumentException("$was: ungültiger Wert.");
-    $t = trim(str_replace("\r", '', (string)$v));
+    $t = trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', str_replace("\r", '', (string)$v)) ?? '');   // erst Steuerzeichen, dann Leerraum
     if (mb_strlen($t) > $max) throw new InvalidArgumentException("$was: höchstens $max Zeichen.");
-    return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $t) ?? '';
+    return $t;
 }
 function crm_email($v, string $was): string
 {
@@ -302,7 +302,7 @@ function crm_csv(array $liste, array $vertreter): string
              'Potenzial kg', 'Netto €/kg', 'DB €/kg', 'Ø Bestellmenge kg', 'Kontaktpräferenz', 'Notiz'];
     $zelle = function ($v) {
         $s = is_float($v) ? str_replace('.', ',', (string)$v) : (string)$v;
-        if ($s !== '' && strpbrk($s[0], '=+-@') !== false) $s = "'" . $s;   // keine Formeln in Excel (CSV-Injection)
+        if ($s !== '' && strpbrk($s[0], "=+-@\t\r") !== false) $s = "'" . $s;   // keine Formeln in Excel (CSV-Injection), auch nach Tabulator
         return '"' . str_replace('"', '""', str_replace(["\r", "\n"], ' ', $s)) . '"';
     };
     $zeilen = [implode(';', array_map($zelle, $kopf))];

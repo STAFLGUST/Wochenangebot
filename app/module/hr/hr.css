@@ -5,7 +5,7 @@
 body.hr {
   --hr-bg: #f4f1ee;
   --hr-text: #1c1a19;
-  --hr-muted: #6b6560;
+  --hr-muted: #625c57;   /* etwas dunkler: Reiter und Hinweise ≥ 4,5:1 auch auf Glas */
   --hr-glass: rgba(255, 255, 255, .58);
   --hr-kopf-glas: rgba(255, 255, 255, .88);     /* angeheftete Kopfzeile: deckender, damit beim Scrollen nichts durchscheint */
   --hr-reiter-aktiv: var(--hr-deckend);
@@ -156,8 +156,8 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-meldung.ok { padding: 10px 14px; border-radius: 12px; background: var(--hr-ok-bg); color: var(--hr-ok); }
 .hr-meldung.warn { padding: 10px 14px; border-radius: 12px; background: var(--hr-warn-bg); color: var(--hr-warn); }
 .hr .btn { border-radius: 999px; }
-.hr .btn.primary { background: var(--hr-akzent); border-color: var(--hr-akzent); color: #fff; align-self: flex-start; }
-.hr .btn.primary:hover { background: #6e1622; border-color: #6e1622; }
+/* Hauptknopf: gemeinsame Farbe aus app.css (hell Bordeaux, dunkel Rosa mit dunkler Schrift) wie in allen Modulen */
+.hr .btn.primary { align-self: flex-start; }
 .hr .btn.gefahr { color: var(--hr-fehler); }
 .hr .btn.klein { height: 32px; font-size: 13px; align-self: flex-start; }
 .hr .btn .i { margin-right: 6px; }
@@ -323,6 +323,11 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-dialog.breit { width: min(860px, calc(100vw - 32px)); }
 .hr-dialog::backdrop { background: rgba(20, 16, 16, .38); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .hr-dialog form { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+/* Knopfreihe am Fensterende bleibt beim Scrollen langer Fenster sichtbar (wie in Sicherheit) */
+.hr-dialog form > .hr-knoepfe:last-child{ position:sticky; bottom:0; z-index:2; margin:0 -24px -24px; padding:8px 24px 24px; background:var(--hr-deckend) }
+.hr-dialogkopf { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.hr-dialogkopf h2 { margin: 0; }
+.hr-dialog-schliessen { width: 38px; height: 38px; flex: none; border: 0; border-radius: 50%; background: var(--hr-aus); color: var(--hr-text); font-size: 24px; line-height: 1; cursor: pointer; }
 .hr-knoepfe { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .hr-platz { flex: 1; }
 .hr-knoepfe .btn.primary { align-self: auto; }
@@ -357,7 +362,7 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
 .hr-hinweisbox h1 { margin: 12px 0 6px; font-size: 24px; }
 .hr-hinweisbox p { margin: 0 0 20px; color: var(--hr-muted); }
 .hr-hinweisbox .i { width: 30px; height: 30px; color: var(--hr-akzent-ink); }
-.hr-hinweisbox .btn.primary { display: inline-flex; text-decoration: none; height: 42px; padding: 0 20px; align-items: center; background: var(--hr-akzent); border-color: var(--hr-akzent); color: #fff; }
+.hr-hinweisbox .btn.primary { display: inline-flex; text-decoration: none; height: 42px; padding: 0 20px; align-items: center; }
 .hr-fehler { max-width: 640px; margin: 0 auto; padding: 12px 16px; border-radius: 16px; background: var(--hr-fehler-bg); color: var(--hr-fehler); }
 
 /* ── Tablet und Handy ── */
@@ -435,4 +440,8 @@ body.hr .hr-kopf .brand-logo { height: 28px; width: auto; }
   .hr-seg { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
   .hr-konto.klein { grid-template-columns: 1fr 1fr; }
   .hr-ueb .hr-gleit-knopf, .hr-jahr .hr-gleit-knopf { width: 100%; margin-left: 0; }
+}
+/* Fenster am Handy als Blatt von unten – wie in Controlling, Leergut, QS, REWE und Sicherheit */
+@media (max-width: 560px) {
+  .hr-dialog, .hr-dialog.breit, .hr-dialog-gleit { width: 100vw; max-width: 100vw; max-height: 94dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; }
 }

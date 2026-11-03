@@ -100,8 +100,7 @@ function lg_leer(): bool
 function lg_text($v, int $max, string $was): string
 {
     if ($v !== null && !is_string($v) && !is_int($v) && !is_float($v)) throw new InvalidArgumentException("$was: ungültiger Wert.");
-    $t = trim(str_replace("\r", '', (string)$v));
-    $t = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $t) ?? '';
+    $t = trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', str_replace("\r", '', (string)$v)) ?? '');   // erst Steuerzeichen, dann Leerraum
     if (mb_strlen($t) > $max) throw new InvalidArgumentException("$was: höchstens $max Zeichen.");
     return $t;
 }
@@ -427,7 +426,7 @@ function lg_bilanz(string $stichtag, array $stamm, array $bewegungen, array $abs
 function lg_csv_zelle($v): string
 {
     $s = (string)$v;
-    if ($s !== '' && strpbrk($s[0], '=+-@') !== false && !preg_match('/^-?\d+([.,]\d+)?$/', $s)) $s = "'" . $s;   // keine Formeln (CSV-Injection), Zahlen bleiben Zahlen
+    if ($s !== '' && strpbrk($s[0], "=+-@\t\r") !== false && !preg_match('/^-?\d+([.,]\d+)?$/', $s)) $s = "'" . $s;   // keine Formeln (CSV-Injection), Zahlen bleiben Zahlen
     return '"' . str_replace('"', '""', str_replace(["\r", "\n"], ' ', $s)) . '"';
 }
 function lg_csv_bilanz(array $bil, array $stamm): string

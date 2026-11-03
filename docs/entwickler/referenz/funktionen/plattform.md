@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-102 Dateien, 919 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+102 Dateien, 924 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -720,6 +720,11 @@ _Hell/Dunkel-Einstellung vor dem ersten Zeichnen anwenden (ohne Inline-Skript, w
 - `softwareGrafik()` – Zeichnet der Browser ohne Grafikkarte?
 - `automatisch()`
 - `anwenden()`
+- `zaehlt(d, t)`
+- `zeigen()`
+- `frei(d)` – Gespeichert: Seiten, deren Fenster nach erfolgreichem Speichern offen bleibt, melden das (STAFL_FENSTER.gespeichert); Abschicken allein zählt nicht – schlägt …
+- `oben()`
+- `start()`
 - `lokal(wert)`
 - `setzen(wert)`
 - `merken(wert)`
@@ -956,7 +961,7 @@ _Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einste
 
 ## `tests/e2e/test_einheit.py`
 
-_Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot, Verwaltung, Bestand, HR, CRM, Abmeldeseite, Hinweis „Kein Zugang“): je hell/dunkel und 1440/390 …_
+_Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot, Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, …_
 
 - `check(n, c, i)`
 - `neue_seite(breite, dunkel)`

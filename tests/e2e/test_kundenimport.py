@@ -303,6 +303,12 @@ with sync_playwright() as p:
     check('Preis-Vorschau: Gruppenpreise beim Angebot der Gruppe', zeile('edeka')[2:5] == ['1', '0', '1'] and zeile('bela')[2:5] == ['1', '0', '1'], (zeile('edeka'), zeile('bela')))
     check('Preis-Vorschau: Gruppe ohne Angebot, neues Angebot vorgeschlagen', '1 Gastronomie (2)' in t and a.locator('#of-preise-body [data-ofp="anlegen"]').is_checked() and zeile('neu:1')[0] == 'Wochenangebot Gastronomie (neu)', t)
     check('Preis-Vorschau: übersprungen (nicht im Angebot, ohne Preis)', '1 Artikelnummer steht nicht im Angebot' in t and '1 Zeilen ohne Preis' in t, t)
+    # Handy: Vorschau ohne seitliches Scrollen, Kundengruppe unter dem Angebot
+    vp = a.viewport_size; a.set_viewport_size({'width': 390, 'height': 844})
+    a.wait_for_function("getComputedStyle(document.querySelector('.ofptab .ofp-gr')).display === 'block'")
+    breit = a.evaluate("(() => { const d = document.querySelector('#dlg-of-preise'); return [d.scrollWidth, d.clientWidth]; })()")
+    check('390 px: Preis-Vorschau ohne seitliches Scrollen', breit[0] <= breit[1] + 1, breit)
+    a.set_viewport_size(vp)
     a.uncheck('#of-preise-body [data-ofp="anlegen"]'); a.wait_for_function("!document.querySelector('#of-preise-body tr[data-ofp-ziel=\"neu:1\"]')")
     check('ohne Anlegen: Gruppe 1 entfällt', a.locator('#of-preise-body tr[data-ofp-ziel]').count() == 3)
     a.check('#of-preise-body [data-ofp="anlegen"]'); a.wait_for_selector('#of-preise-body tr[data-ofp-ziel="neu:1"]')

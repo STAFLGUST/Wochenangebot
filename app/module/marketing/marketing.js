@@ -217,7 +217,7 @@
     </article>`;
   }
   function zeile(e, wann) {
-    return `<li><span class="mkt-punkt" style="--marke:${esc(markenFarbe(e))}"></span><div class="was"><button type="button" class="mkt-titelknopf" data-oeffnen="${esc(e.id)}">${esc(e.titel)}</button>
+    return `<li><span class="mkt-punkt" style="--marke:${esc(markenFarbe(e))}"></span><div class="was"><button type="button" class="mkt-titelknopf" data-oeffnen="${esc(e.id)}" title="${esc(e.titel)}">${esc(e.titel)}</button>
       <small>${esc([nameVon(marke(e.marke), e.marke), e.kanaele.map(kanalKurz).join(', '), e.verantwortlichName].filter(Boolean).join(' · '))}</small></div>${wann}</li>`;
   }
   function kpi(titel, w, zusatz = '', cls = '', ziel = '') {
@@ -387,7 +387,7 @@
   function boardInhalt() {
     const spalten = [...ABLAUF, ...(S.f.verworfen ? ['verworfen'] : [])];
     const B = S.d.beitraege.filter((e) => passt(e, true));
-    return `<div class="mkt-board">${spalten.map((s) => {
+    return `<div class="mkt-board stafl-streifen">${spalten.map((s) => {
       let liste = B.filter((e) => e.status === s).sort((a, b) => (a.veroeffentlichung || '9').localeCompare(b.veroeffentlichung || '9'));
       const gesamt = liste.length;
       if (s === 'veroeffentlicht') liste = liste.sort((a, b) => (b.veroeffentlichung || '').localeCompare(a.veroeffentlichung || '')).slice(0, 20);
@@ -626,7 +626,7 @@
     }
     return f;
   }
-  const geaendert = () => darfBearbeiten() && JSON.stringify(sammle()) !== S.schnappschuss;
+  const geaendert = () => darfBearbeiten() && S.schnappschuss !== '' && JSON.stringify(sammle()) !== S.schnappschuss;
   function oeffne(id, vorgabe) {
     const e = id ? beitrag(id) : null;
     if (id && !e) return;
@@ -653,6 +653,7 @@
     const vorher = e ? e.status : '';
     ersetze(r.data.beitrag);
     fuelle(r.data.beitrag);
+    if (window.STAFL_FENSTER) window.STAFL_FENSTER.gespeichert(dlg);   // gespeichert: Escape schließt wieder sofort
     const n = r.data.beitrag;
     m.className = 'mkt-meldung ok';
     m.textContent = vorher === 'geplant' && n.status === 'freigabe' ? 'Gespeichert – der Beitrag war freigegeben und muss nach der Änderung erneut freigegeben werden.' : (status ? `Gespeichert: ${statusName(n.status)}.` : 'Gespeichert.');
@@ -707,8 +708,10 @@
     if (e.key === 'Enter' && e.target.id === 'bt-kommentar') { e.preventDefault(); kommentieren(); }
     if (e.key === 'Enter' && ['bt-link-url', 'bt-link-titel'].includes(e.target.id)) { e.preventDefault(); $('#bt-link-add').click(); }
   });
-  dlg.addEventListener('cancel', (e) => { if (geaendert()) { e.preventDefault(); $('#bt-verwerfen').hidden = false; } });
-  dlg.addEventListener('close', () => { S.offen = null; zeichne(); });
+  // Escape: erstes Mal Hinweis (gemeinsam in theme.js, data-warnung), zweites Mal schließen – wie in allen Fenstern;
+  // nur Änderungen ohne Tippen (Häkchen, Auswahl) fragen hier mit „Verwerfen?“ nach
+  dlg.addEventListener('cancel', (e) => { if (geaendert() && !dlg.hasAttribute('data-warnung')) { e.preventDefault(); $('#bt-verwerfen').hidden = false; } });
+  dlg.addEventListener('close', () => { S.offen = null; S.schnappschuss = ''; zeichne(); });
   function schliessen() { if (geaendert()) { $('#bt-verwerfen').hidden = false; $('#bt-verwerfen-nein').focus(); return; } dlg.close(); }
   async function kommentieren() {
     const text = $('#bt-kommentar').value.trim(), e = beitrag(S.offen);
