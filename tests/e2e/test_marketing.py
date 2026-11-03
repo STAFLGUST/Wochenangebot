@@ -227,12 +227,12 @@ check('entfernte Marke neu wählen: 422', Bb.call('marketing_beitrag_save', {'id
 A.call('marketing_einstellungen_save', {'marken': E['marken']})
 
 # ── CSV ──
-Bb.call('marketing_beitrag_save', {'felder': {'titel': '=HYPERLINK("https://beispiel.example","klick")', 'veroeffentlichung': TAG(6)}})
+Bb.call('marketing_beitrag_save', {'felder': {'titel': '\x01\t=HYPERLINK("https://beispiel.example","klick")', 'veroeffentlichung': TAG(6)}})
 st, d, raw = V.call('marketing_export', {}, raw=True)
 zeilen = raw.lstrip('﻿').strip().split('\n')
 check('CSV (auch nur mit Ansehrecht): BOM, Kopf, alle Beiträge', st == 200 and raw.startswith('﻿') and zeilen[0].startswith('"') and ';' in zeilen[0] and len(zeilen) == 1 + 4, (st, zeilen[:2]))
 check('CSV: Werte (Titel, Kanalnamen, Kennzahlen)', any('Woran erkennt man gutes Dry Aged' in z and 'Instagram (Feed)' in z and '"1200"' in z for z in zeilen), zeilen)
-check('CSV: keine Formeln', any('"\'=HYPERLINK' in z for z in zeilen) and not any(';"=' in z for z in zeilen))
+check('CSV: keine Formeln (auch nicht nach Steuerzeichen/Tabulator)', any('"\'=HYPERLINK' in z for z in zeilen) and not any(';"=' in z or ';"\t' in z for z in zeilen))
 check('CSV nur per POST', V.call('marketing_export')[0] == 405)
 
 # ── Löschen ──

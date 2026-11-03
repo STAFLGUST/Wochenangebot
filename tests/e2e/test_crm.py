@@ -223,7 +223,7 @@ check('Interessent geändert (gleicher Schlüssel)', st == 200 and r['kunde']['k
 check('Interessent: unbekannte ID → 404', Bb.call('crm_interessent_save', {'id': 'igibtesnicht', 'firma': 'X GmbH'})[0] == 404)
 check('Kundenblatt und Aktivität auch für Interessenten', Bb.call('crm_kunde_save', {'key': INT['key'], 'felder': {'segment': 'Gastronomie', 'phase': 'Erstkontakt'}})[0] == 200
       and Bb.call('crm_aktivitaet', {'key': INT['key'], 'art': 'Besuch', 'notiz': 'Erstgespräch vor Ort'})[0] == 200)
-Bb.call('crm_interessent_save', {'firma': '=HYPERLINK("http://x.example")', 'ort': 'Kiel'})
+Bb.call('crm_interessent_save', {'firma': '\x01\t=HYPERLINK("http://x.example")', 'ort': 'Kiel'})   # auch nach Steuerzeichen/Tabulator
 check('Stammdaten weiterhin unverändert', storage_raw('kunden') == kunden_vorher)
 
 # ── CSV-Export ──
@@ -232,7 +232,7 @@ zeilen = body.lstrip('﻿').splitlines()
 check('CSV: Kopf, alle Kunden und Interessenten', st == 200 and zeilen[0].startswith('"Art";"Kundennummer";"Firma"') and len(zeilen) == 1 + 6 + 2, (st, zeilen[:2], len(zeilen)))
 check('CSV: Kundenblatt-Werte (Segment, Wann, Komma-Zahlen, weitere Ansprechpartner)', any('"Musterfleischerei Nord GmbH"' in z and '"Fleischerei"' in z and '"Dienstag - wöchentlich"' in z
       and '"120,5"' in z for z in zeilen) and any('Clara Koch, Küchenchefin' in z for z in zeilen))
-check('CSV: keine Formeln (Zelle beginnt nicht mit =)', any('"\'=HYPERLINK' in z for z in zeilen) and not any(';"=' in z for z in zeilen))
+check('CSV: keine Formeln (Zelle beginnt nicht mit =, auch nicht nach Tabulator)', any('"\'=HYPERLINK' in z for z in zeilen) and not any(';"=' in z or ';"\t' in z for z in zeilen))
 X.call('crm_export', {})
 
 # ── Protokoll: ohne Kontaktdaten und Notizen ──

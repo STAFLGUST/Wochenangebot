@@ -206,11 +206,11 @@ check('Bilanz 31.01.: ohne Inventur', L.call('leergut_bilanz&stichtag=2026-01-31
 check('Bilanz: ungültiger Stichtag 422', L.call('leergut_bilanz&stichtag=gestern')[0] == 422)
 
 # ── CSV ──
-V.call('leergut_partner_save', {'name': '=HYPERLINK("http://x")', 'art': 'sonstige', 'lademittel': ['e2']})
+V.call('leergut_partner_save', {'name': '\x01\t=HYPERLINK("http://x")', 'art': 'sonstige', 'lademittel': ['e2']})   # auch nach Steuerzeichen/Tabulator
 st, _, raw = L.call('leergut_export', {'stichtag': '2026-02-28'}, raw=True)
 check('CSV: BOM, Kopf mit Lademitteln, Summen', st == 200 and raw.startswith('﻿"Firma";"Partner";"Art";"E2-Kiste";"H1-Palette"') and '"Summe Konten"' in raw and '"Gesamt"' in raw, raw[:200])
 check('CSV nur per POST', L.call('leergut_export')[0] == 405)
-check('CSV: keine Formeln (Name mit „=“ wird entschärft), negative Zahlen bleiben Zahlen', '"\'=HYPERLINK' in raw and '"-2"' in raw, raw[:600])
+check('CSV: keine Formeln (Name mit „=“ wird entschärft), negative Zahlen bleiben Zahlen', '"\'=HYPERLINK' in raw and '"\t' not in raw and '"-2"' in raw, raw[:600])
 
 # ── Lademittel ──
 lm = L.call('leergut_start')[1]['lademittel']
