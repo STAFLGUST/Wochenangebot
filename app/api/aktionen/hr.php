@@ -367,7 +367,8 @@ switch ($action) {
                      'sperren' => $einst['sperren'], 'ferien' => $einst['ferien']]);
         }
 
-        /* HR-Angaben eines Mitarbeiters: Abteilung, Position, Arbeitstage, im Urlaubsplan, Anspruch und Übertrag eines Jahres */
+        /* HR-Angaben eines Mitarbeiters: Abteilung, Position, Arbeitstage, im Urlaubsplan, Verfall des Resturlaubs (ja/nein),
+           Anspruch und Übertrag eines Jahres */
         case 'mitarbeiter_hr_save': {
             $me = require_perm('hr.verwalten', true);
             $b = body();
@@ -379,6 +380,11 @@ switch ($action) {
             if (array_key_exists('abteilung', $b)) $werte['abteilung'] = s($b['abteilung'], 40) ?? '';
             if (array_key_exists('pos', $b)) $werte['pos'] = max(0, min(9999, (int)$b['pos']));
             if (array_key_exists('aktiv', $b)) $werte['aktiv'] = (bool)$b['aktiv'];
+            if (array_key_exists('verfall', $b)) {
+                // Resturlaub aus dem Vorjahr verfällt am Verfallstag (Standard) oder bleibt erhalten (Inhaber 03.11.2026)
+                if (!is_bool($b['verfall'])) fail('Resturlaub verfällt: bitte ja oder nein angeben.', 422);
+                $werte['verfall'] = $b['verfall'];
+            }
             if (array_key_exists('personalnummer', $b)) {
                 // Mitarbeiternummer der Zeiterfassung (Zuordnung beim Import), eindeutig
                 $nr = trim((string)(s($b['personalnummer'], 20) ?? ''));
@@ -401,10 +407,13 @@ switch ($action) {
                 };
                 $jv = ['anspruch' => $zahl($b['anspruch'] ?? null, 'Urlaubsanspruch', 0), 'uebertrag' => $zahl($b['uebertrag'] ?? null, 'Übertrag', -100)];
             }
-            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me) {
+            $verfallVorher = null;
+            $p = with_lock('hr-personal', function () use ($b, $uid, $users, $ui, &$werte, &$jahr, &$jv, $me, &$verfallVorher) {
                 $roh = hr_personal_roh();
+                $verfallVorher = true;
+                foreach ($roh['personen'] as $e) if ($e['nutzer'] === $uid) $verfallVorher = $e['verfall'];
                 if ((int)($b['rev'] ?? -1) !== $roh['rev']) fail('Die Mitarbeiterliste wurde inzwischen geändert. Bitte neu laden.', 409);
-                // Vier-Augen-Prinzip: die eigenen Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, im Urlaubsplan, Personalnummer –
+                // Vier-Augen-Prinzip: die eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, im Urlaubsplan, Personalnummer –
                 // sie bestimmt die Zuordnung beim Import) ändert eine andere Person der Personalstelle. Abteilung und Position
                 // (Reihenfolge im Plan) sind ohne Einfluss auf das Urlaubskonto und bleiben erlaubt. Unveränderte Werte (der
                 // Dialog schickt immer alle Felder) werden still übergangen, damit z. B. der eigene Name änderbar bleibt.
@@ -425,7 +434,8 @@ switch ($action) {
                 hr_personal_schreiben($roh);
                 return $p;
             });
-            audit('hr', 'HR: Angaben von ' . $users[$ui]['name'] . ' geändert');
+            audit('hr', 'HR: Angaben von ' . $users[$ui]['name'] . ' geändert'
+                . ($p['verfall'] !== $verfallVorher ? ($p['verfall'] ? ' (Resturlaub verfällt wieder am Verfallstag)' : ' (Resturlaub verfällt nicht mehr)') : ''));
             $personal = hr_personal(); $abw = hr_abwesenheiten();
             foreach ($personal['personen'] as $x) if ($x['nutzer'] === $uid) respond(['ok' => true, 'rev' => $personal['rev'], 'person' => hr_person_aus($x, $abw['eintraege'], $jahr ?? (int)date('Y'))]);
             respond(['ok' => true, 'rev' => $personal['rev']]);

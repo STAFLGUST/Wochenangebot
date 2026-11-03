@@ -40,3 +40,7 @@
   .hr-zr { grid-template-columns: 1fr 1fr; }
 }
 .hr-nurhr { margin: 0 0 12px; }
+/* Kennzeichen „kein Verfall“ (Resturlaub verfällt für diesen Mitarbeiter nicht) unter der Zahl in den Mitarbeiterlisten */
+.hr-kein-verfall { display: block; font-size: 11px; font-weight: 600; line-height: 1.3; color: var(--muted); white-space: nowrap; }
+.hr-verfall-check { align-items: flex-start; }
+.hr-verfall-check small { display: block; margin-top: 2px; font-size: 12px; }

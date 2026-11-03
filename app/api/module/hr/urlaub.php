@@ -16,7 +16,9 @@ declare(strict_types=1);
      Gleittage davor zählen nicht. Ein Gleittag-Antrag braucht genug verfügbaren Rest; die Personalstelle trägt auch darüber
      hinaus ein (dann Hinweis).
    - Resturlaub wird ins Folgejahr übertragen und verfällt am Verfallstag (Standard 31.03., einstellbar in Verwaltung →
-     Urlaub, hr_uebertrag_bis), soweit er bis dahin nicht genommen ist.
+     Urlaub, hr_uebertrag_bis), soweit er bis dahin nicht genommen ist. Je Mitarbeiter abschaltbar (Inhaber 03.11.2026,
+     Verwaltung → Mitarbeiter, hr-personal „verfall“, Standard an): ohne Verfall bleibt der Übertrag ganz erhalten und geht
+     mit dem Rest ins Folgejahr. Gilt wie der Verfallstag für alle Jahre (das Konto wird berechnet, nicht gespeichert).
    - Kalender: alle sehen, wer abwesend ist – nie den Grund. Gründe, Notizen und Konten nur für die Person selbst
      und die Personalstelle.
    - Freie Tage einer verkürzten Woche (z. B. 4-Tage-Woche) ergeben sich aus den Arbeitstagen der Person (Excel: „x“).
@@ -121,7 +123,9 @@ function hr_person_norm(array $p): array
             'abteilung' => (string)($p['abteilung'] ?? ''), 'pos' => (int)($p['pos'] ?? 0), 'nutzer' => isset($p['nutzer']) && $p['nutzer'] !== '' ? (string)$p['nutzer'] : null,
             'arbeitstage' => $at ?: [1, 2, 3, 4, 5], 'aktiv' => !array_key_exists('aktiv', $p) || (bool)$p['aktiv'], 'jahre' => $jahre,
             'personalnummer' => trim((string)($p['personalnummer'] ?? '')), 'gleittage' => hr_gleit_norm($p['gleittage'] ?? []),
-            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'geaendert']));
+            // Resturlaub verfällt am Verfallstag – nur ein ausdrückliches false schaltet das ab (fehlt das Feld: verfällt, GR-006)
+            'verfall' => ($p['verfall'] ?? true) !== false,
+            'geaendert' => $p['geaendert'] ?? null] + array_diff_key($p, array_flip(['id', 'vorname', 'nachname', 'abteilung', 'pos', 'nutzer', 'arbeitstage', 'aktiv', 'jahre', 'personalnummer', 'gleittage', 'verfall', 'geaendert']));
 }
 function hr_name(array $p): string { return trim($p['vorname'] . ' ' . $p['nachname']); }
 
@@ -230,7 +234,7 @@ function hr_einstellungen(): array
 
 /* ---------------- Verfallstag des Resturlaubs aus dem Vorjahr ----------------
    Gespeichert als „MM-TT“ im Dokument hr-einstellungen (Feld uebertragBis, nur erweitert – GR-006); fehlt oder ungültig:
-   HR_UEBERTRAG_BIS (31.03.). Gilt für alle Mitarbeiter und alle Jahre. */
+   HR_UEBERTRAG_BIS (31.03.). Gilt für alle Jahre und alle Mitarbeiter mit Verfall (hr-personal „verfall“, Standard an). */
 function hr_uebertrag_bis_norm($v): ?string
 {
     if (!is_string($v)) return null;
@@ -424,8 +428,8 @@ function hr_eigene_angaben_pruefen(array &$werte, ?int &$jahr, ?array &$jv, stri
     $ist = null;
     foreach (hr_personal()['personen'] as $x) if ($x['nutzer'] === $uid) { $ist = $x; break; }
     $ist = $ist ?? hr_person_norm(['id' => $uid, 'nutzer' => $uid, 'aktiv' => !nutzer_hat_zugang($u) || !empty($u['active'])]);
-    $nein = 'Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle.';
-    foreach (['aktiv', 'arbeitstage', 'personalnummer'] as $f) {
+    $nein = 'Ihre eigenen Urlaubsangaben (Anspruch, Übertrag, Verfall, Arbeitstage, Urlaubsplan, Personalnummer) ändert eine andere Person der Personalstelle.';
+    foreach (['aktiv', 'arbeitstage', 'personalnummer', 'verfall'] as $f) {
         if (!array_key_exists($f, $werte)) continue;
         if ($werte[$f] !== $ist[$f]) fail($nein, 403);
         unset($werte[$f]);
@@ -512,7 +516,8 @@ function hr_anspruch(array $p, int $jahr): float
 
 /* Urlaubskonto einer Person für ein Jahr. Übertrag: von Hand gesetzt (z. B. erstes Jahr im System) oder Rest des
    Vorjahres. Der Übertrag wird zuerst verbraucht; was davon bis zum Verfallstag (hr_uebertrag_bis, Standard 31.03.)
-   nicht genommen (genehmigt) ist, verfällt. */
+   nicht genommen (genehmigt) ist, verfällt – außer der Verfall ist für die Person abgeschaltet („verfall“ = false, dann
+   bleibt der Übertrag ganz erhalten). „verfall“ steht auch in der Rückgabe. */
 function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, int $tiefe = 0): array
 {
     $heute = $heute ?? hr_heute();
@@ -537,13 +542,14 @@ function hr_konto(array $p, array $eintraege, int $jahr, ?string $heute = null, 
         $vorjahrDaten = (bool)array_filter($p['jahre'], function ($v, $j) use ($jahr) { return (int)$j < $jahr && $v['anspruch'] !== null; }, ARRAY_FILTER_USE_BOTH);
         $uebertrag = $vorjahrDaten && $tiefe < 30 ? hr_konto($p, $eintraege, $jahr - 1, $heute, $tiefe + 1)['rest_jahresende'] : 0.0;
     }
-    $offen = max(0.0, $uebertrag - $u['bis_frist']);          // bis zur Frist noch nicht verplanter Übertrag
+    $verfall = ($p['verfall'] ?? true) !== false;
+    $offen = $verfall ? max(0.0, $uebertrag - $u['bis_frist']) : 0.0;   // bis zur Frist noch nicht verplanter Übertrag (ohne Verfall: nichts)
     $verfallen = $heute > $frist ? $offen : 0.0;
     $rest = $anspruch + $uebertrag - $verfallen - $u['genommen'] - $u['geplant'];
     // Rest zum Jahresende (für den Übertrag ins Folgejahr): Verfall gilt dann in jedem Fall
     $restEnde = $anspruch + $uebertrag - $offen - $u['genommen'] - $u['geplant'];
     return ['jahr' => $jahr, 'anspruch' => $anspruch, 'uebertrag' => $uebertrag, 'uebertrag_manuell' => $manuell !== null,
-            'frist' => $frist, 'verfaellt' => $heute <= $frist ? $offen : 0.0, 'verfallen' => $verfallen,
+            'frist' => $frist, 'verfall' => $verfall, 'verfaellt' => $heute <= $frist ? $offen : 0.0, 'verfallen' => $verfallen,
             'genommen' => $u['genommen'], 'geplant' => $u['geplant'], 'beantragt' => $u['beantragt'],
             'rest' => $rest, 'verfuegbar' => $rest - $u['beantragt'], 'rest_jahresende' => $restEnde];
 }
