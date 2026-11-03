@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-5 Dateien, 127 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+5 Dateien, 139 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/aktionen/rewe.php`
 
@@ -193,7 +193,8 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `ladeWoche()`
 - `renderWoche()`
 - `bestelltHtml(w, best, mengen)` – Übersicht der Bestellungen dieser Woche (eigene bzw. gewählte Liste): Markt, Lieferweg, Mengen – Klick zeigt die Zeile
-- `zelleHtml(v)`
+- `zelleHtml(v, art, m)` – Verlauf: acht Wochen davor, diese Woche (Rahmen) und drei Wochen danach (Vorbestellungen), die KW darunter.
+- `verlaufText(m)`
 - `zeileHtml(m)`
 - `ruhendHtml(liste, q)`
 - `sende(id, teil)` – Antwort senden; bei Erfolg Zeile aktualisieren, bei Konflikt neu laden
@@ -203,6 +204,7 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 - `ladeMaerkte()`
 - `renderMaerkte()`
 - `ladeAkte(id)`
+- `heatHtml(A)` – Wochenraster je Jahr (Marktakte und Marktkarte): eine Zelle je KW, Farbe nach Antwort
 - `renderAkte()`
 
 **Eingabemaske Markt**
@@ -213,6 +215,22 @@ _STAFL-Plattform · REWE – Oberfläche der Vordisposition Dry Aged_
 **Eingabemaske Notiz**
 
 - `oeffneNotiz(markt)`
+
+**Marktkarte (Fenster: Klick auf Name oder Adresse eines Marktes)**
+
+- `oeffneKarte(id)`
+- `ladeKarte()`
+- `renderKarte(hinweisText)`
+- `hinweisSpeichern()` – Hinweis speichern (nach kurzer Pause beim Tippen, beim Verlassen des Feldes und beim Schließen)
+
+**Daueraufträge (alle sichtbaren Märkte mit Dauerauftrag; bearbeiten nur eigene, GR-103 prüft der Server)**
+
+- `naechsteLieferungen(e, n)`
+- `kwWahl(wert, leer)`
+- `renderDauer()`
+- `dauerBearbeiten(m)`
+- `renderDauerEdit()`
+- `dauerSpeichern(ende)`
 
 **Zuweisung und Team**
 

@@ -38,6 +38,7 @@
       <div class="rw-leiste">
         <nav class="rw-tabs stafl-streifen" id="rw-tabs" role="tablist" aria-label="Bereiche der REWE-Abfrage">
           <button type="button" role="tab" data-tab="woche" aria-selected="true">Meine Woche</button>
+          <button type="button" role="tab" data-tab="dauer" aria-selected="false">Daueraufträge</button>
           <button type="button" role="tab" data-tab="maerkte" aria-selected="false">Märkte</button>
           <button type="button" role="tab" data-tab="zuweisung" aria-selected="false" hidden>Zuweisung</button>
           <button type="button" role="tab" data-tab="abschluss" aria-selected="false" hidden>Wochenabschluss</button>
@@ -72,7 +73,26 @@
         <div id="rw-w-gruppen"></div>
         <div class="rw-legende" aria-label="Legende">
           <span><i class="rw-z b">1</i>bestellt (Stück)</span><span><i class="rw-z">–</i>kein Bedarf</span><span><i class="rw-z n">ne</i>nicht erreicht</span>
-          <span><i class="rw-z p">P</i>Pause</span><span><i class="rw-z o"></i>nicht abgefragt</span>
+          <span><i class="rw-z p">P</i>Pause</span><span><i class="rw-z o"></i>nicht abgefragt</span><span><i class="rw-z o jetzt"></i>diese Woche</span>
+          <span><i class="rw-z b vor">2</i>Vorbestellung</span><span><i class="rw-z frei">+</i>Klick: Woche öffnen und vorbestellen</span>
+        </div>
+      </section>
+
+      <!-- Daueraufträge: alle sichtbaren Märkte mit Dauerauftrag, bearbeiten und neu anlegen -->
+      <section class="rw-tab" id="rw-t-dauer" data-tab="dauer" hidden>
+        <div class="rw-wkopf">
+          <div class="rw-kwnav"><h1>Daueraufträge</h1><p id="rw-d-sub"></p></div>
+          <div class="rw-filter">
+            <input class="rw-eingabe" id="rw-d-suche" type="search" placeholder="Ort, Straße oder Kd.-Nr." aria-label="Daueraufträge durchsuchen">
+            <select class="rw-eingabe" id="rw-d-rh" aria-label="Rhythmus"></select>
+            <select class="rw-eingabe" id="rw-d-lw" aria-label="Lieferweg"></select>
+            <select class="rw-eingabe" id="rw-d-status" aria-label="Status"><option value="">aktiv und pausiert</option><option value="aktiv">nur aktive</option><option value="pause">nur pausierte</option><option value="faellig">in der Abfragewoche fällig</option></select>
+            <button class="btn primary" type="button" id="rw-d-neu" hidden><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Neuer Dauerauftrag</button>
+          </div>
+        </div>
+        <div class="rw-draster">
+          <section class="rw-panel rw-glas"><div class="rw-tabelle-wrap"><table class="rw-tabelle rw-karten" id="rw-d-tabelle"></table></div></section>
+          <aside class="rw-panel rw-glas rw-dedit" id="rw-d-edit" aria-label="Dauerauftrag bearbeiten" hidden></aside>
         </div>
       </section>
 
@@ -175,6 +195,15 @@
 </div>
 <div class="rw-toast" id="rw-toast" role="status" aria-live="polite"></div>
 
+<!-- Marktkarte: Klick auf Name oder Adresse eines Marktes (Hinweis, Ansprechpartner, Dauerauftrag, Notizen, Verlauf, Wiedervorlagen) -->
+<dialog class="rw-dialog rw-karte" id="dlg-karte" aria-labelledby="kt-titel">
+  <div class="rw-kkopf">
+    <div class="rw-kkopf-text"><h2 id="kt-titel">Markt</h2><p class="rw-kadresse" id="kt-adresse"></p><div class="rw-hinweise" id="kt-chips"></div></div>
+    <div class="rw-kkopf-knoepfe"><div class="rw-knopfreihe" id="kt-knoepfe"></div><button class="rw-dialog-schliessen" type="button" data-schliessen aria-label="Schließen">×</button></div>
+  </div>
+  <div class="rw-kinhalt" id="kt-inhalt"></div>
+</dialog>
+
 <!-- Markt anlegen / bearbeiten -->
 <dialog class="rw-dialog" id="dlg-markt" aria-labelledby="mk-titel">
   <form id="mk-form" novalidate>
@@ -209,7 +238,7 @@
       <div id="mk-kontakte" class="rw-kontaktliste"></div>
       <button class="btn sm ghost" type="button" id="mk-kontakt-neu"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>Ansprechpartner</button>
     </fieldset>
-    <label>Hinweis<textarea class="rw-eingabe" id="mk-hinweis" rows="3" maxlength="1000" placeholder="z. B. nur gereifte Ware, vorher anrufen"></textarea></label>
+    <label>Hinweis<textarea class="rw-eingabe" id="mk-hinweis" rows="3" maxlength="4000" placeholder="z. B. nur gereifte Ware, vorher anrufen"></textarea></label>
     <p class="rw-meldung" id="mk-meldung" role="alert"></p>
     <div class="rw-knopfreihe"><button class="btn" type="button" data-schliessen>Abbrechen</button><button class="btn primary" type="submit">Speichern</button></div>
   </form>
@@ -230,6 +259,7 @@
 </dialog>
 
 <svg class="rw-symbole" aria-hidden="true">
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
   <symbol id="i-links" viewBox="0 0 24 24"><path d="m14.5 5.5-6.5 6.5 6.5 6.5"/></symbol>
   <symbol id="i-rechts" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>

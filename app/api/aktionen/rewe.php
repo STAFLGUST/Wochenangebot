@@ -81,7 +81,8 @@ switch ($action) {
                 $x = rw_markt_aus($m, $stamm, $namen, $kw);
                 $out[] = ['id' => $x['id'], 'name' => $x['name'], 'ort' => $x['ort'], 'plz' => $x['plz'], 'strasse' => $x['strasse'], 'kdNr' => $x['kdNr'], 'reweNr' => $x['reweNr'], 'winab' => $x['winab'],
                           'lieferweg' => $x['lieferweg'], 'lieferwegName' => $x['lieferwegName'], 'zustaendig' => $x['zustaendig'], 'zustaendigName' => $x['zustaendigName'],
-                          'kauf' => $x['kauf'], 'dauerText' => rw_dauer_text($m, $stamm), 'letzte' => $letzte, 'anzahlJahr' => $anzahl];
+                          'kauf' => $x['kauf'], 'dauerText' => rw_dauer_text($m, $stamm), 'letzte' => $letzte, 'anzahlJahr' => $anzahl,
+                          'rev' => $x['rev'], 'dauer' => $x['dauer'], 'dauerNaechste' => rw_dauer_naechste($m, $kw), 'darfPflegen' => rw_darf_pflegen($m, $me)];   // Reiter „Daueraufträge“
             }
             usort($out, function ($a, $b) { return [$a['ort'], $a['name']] <=> [$b['ort'], $b['name']]; });
             respond(['ok' => true, 'maerkte' => $out, 'jahr' => $jahr]);
