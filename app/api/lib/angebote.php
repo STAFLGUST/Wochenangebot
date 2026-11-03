@@ -37,6 +37,7 @@ function angebot_ids_mit_resten(array $vorhanden): array
         foreach ($d['items'] ?? [] as $it) {
             foreach (array_keys(is_array($it['variants'] ?? null) ? $it['variants'] : []) as $k) $ids[(string)$k] = true;
             foreach (array_keys(is_array($it['sale']['offers'] ?? null) ? $it['sale']['offers'] : []) as $k) $ids[(string)$k] = true;
+            foreach (array_keys(is_array($it['namen'] ?? null) ? $it['namen'] : []) as $k) $ids[(string)$k] = true;   // eigene Bezeichnungen
         }
         foreach (array_keys(is_array($d['meta']['werbung'] ?? null) ? $d['meta']['werbung'] : []) as $k) $ids[(string)$k] = true;   // Werbung
     }
@@ -95,10 +96,48 @@ function clean_variants($v, string $where, array $known): array
     }
     return $out;
 }
-/* Werbung je Angebot: $model['meta']['werbung'] = {<Angebots-ID>: {titel, text?, artikel: [{id, text?}]}} – Artikel, die im
-   Angebot oben in einem farbigen Block stehen und in der Liste hervorgehoben sind. Gilt nur für das eigene Angebot (keine
-   Übernahme durch Angebote, die dem Wochenangebot folgen); ausgeliefert wird nur der eigene Eintrag (offer_resolve). */
-const WERBUNG_MAX = 12;
+/* Werbung je Angebot: $model['meta']['werbung'] = {<Angebots-ID>: {titel, text?, artikel: [{id, text?}], weitere?: [{titel,
+   text?, artikel}]}} – Artikel, die im Angebot oben in einem farbigen Block stehen und in der Liste hervorgehoben sind.
+   Höchstens zwei Blöcke je Angebot: der erste steht in den Feldern des Eintrags (ältere Fassungen lesen nur ihn), eine
+   weitere Werbung in „weitere“ (Kundenseite: rechts daneben). Gilt nur für das eigene Angebot (keine Übernahme durch
+   Angebote, die dem Wochenangebot folgen); ausgeliefert wird nur der eigene Eintrag (offer_resolve). */
+const WERBUNG_MAX = 12;       // Artikel je Werbung
+const WERBUNG_BLOECKE = 2;    // Werbungen je Angebot
+/* Blöcke eines Eintrags in Reihenfolge: erster Block, danach „weitere“ (ungeprüft) */
+function werbung_bloecke($e): array
+{
+    if (!is_array($e)) return [];
+    $l = [$e];
+    foreach (is_array($e['weitere'] ?? null) ? array_values($e['weitere']) : [] as $b) if (is_array($b)) $l[] = $b;
+    return $l;
+}
+/* Blöcke wieder zu einem Eintrag zusammensetzen (leere fallen weg, ein späterer rückt nach vorn); null = keine Werbung */
+function werbung_eintrag(array $bloecke): ?array
+{
+    $bloecke = array_slice(array_values(array_filter($bloecke)), 0, WERBUNG_BLOECKE);
+    if (!$bloecke) return null;
+    $row = $bloecke[0];
+    if (count($bloecke) > 1) $row['weitere'] = array_slice($bloecke, 1);
+    return $row;
+}
+function werbung_block_clean(array $e, array $iids): ?array
+{
+    $art = [];
+    foreach (array_slice(is_array($e['artikel'] ?? null) ? $e['artikel'] : [], 0, 200) as $a) {
+        if (!is_array($a)) continue;
+        $id = s($a['id'] ?? null, 40, false);
+        if ($id === null || !isset($iids[$id]) || isset($art[$id])) continue;   // gelöschte Artikel fallen weg
+        $art[$id] = ['id' => $id];
+        $t = s($a['text'] ?? null, 40);
+        if ($t !== null && $t !== '') $art[$id]['text'] = $t;
+        if (count($art) >= WERBUNG_MAX) break;
+    }
+    if (!$art) return null;
+    $row = ['titel' => s($e['titel'] ?? '', 80) ?? '', 'artikel' => array_values($art)];
+    $t = s($e['text'] ?? null, 240);
+    if ($t !== null && $t !== '') $row['text'] = $t;
+    return $row;
+}
 function clean_werbung($w, array $known, array $iids): array
 {
     $out = [];
@@ -106,27 +145,18 @@ function clean_werbung($w, array $known, array $iids): array
     foreach ($w as $oid => $e) {
         $oid = (string)$oid;   // numerische Angebots-IDs kommen als Zahl an
         if (!is_array($e) || ($oid !== OFFER_STD && !in_array($oid, $known, true))) continue;   // gelöschte Angebote fallen weg
-        $art = [];
-        foreach (array_slice(is_array($e['artikel'] ?? null) ? $e['artikel'] : [], 0, 200) as $a) {
-            if (!is_array($a)) continue;
-            $id = s($a['id'] ?? null, 40, false);
-            if ($id === null || !isset($iids[$id]) || isset($art[$id])) continue;   // gelöschte Artikel fallen weg
-            $art[$id] = ['id' => $id];
-            $t = s($a['text'] ?? null, 40);
-            if ($t !== null && $t !== '') $art[$id]['text'] = $t;
-            if (count($art) >= WERBUNG_MAX) break;
-        }
-        if (!$art) continue;
-        $row = ['titel' => s($e['titel'] ?? '', 80) ?? '', 'artikel' => array_values($art)];
-        $t = s($e['text'] ?? null, 240);
-        if ($t !== null && $t !== '') $row['text'] = $t;
-        $out[$oid] = $row;
+        $row = werbung_eintrag(array_map(function ($b) use ($iids) { return werbung_block_clean($b, $iids); }, array_slice(werbung_bloecke($e), 0, 10)));
+        if ($row) $out[$oid] = $row;
     }
     return $out;
 }
-/* Sonderpreis „solange der Vorrat reicht“ (Artikel mit kurzem oder überschrittenem MHD):
-   $item['sale'] = {value: Grundsonderpreis für alle Angebote, offers?: {<Angebots-ID>: {value} | {status: 'none'}}}.
-   Ein Sonderposten ohne Bestand (laut letzter Bestandsliste) wird in allen Angeboten automatisch ausgeblendet. */
+/* Empfehlung (bis 11/2026 „Sonderpreis“) je Artikel und Angebot:
+   $item['sale'] = {value: Empfehlungspreis für alle Angebote | mark: true (ohne Preisänderung),
+                    offers?: {<Angebots-ID>: {value} | {status: 'mark'} | {status: 'none'}}, since?}.
+   Ohne Eintrag in offers gilt der Grundwert. Mit Preis: Sonderposten „solange der Vorrat reicht“ – Kunden sehen den
+   bisherigen Preis durchgestrichen, ohne Bestand (laut letzter Bestandsliste) wird der Artikel in allen Angeboten
+   ausgeblendet. Ohne Preis (mark): der Artikel wird nur hervorgehoben, Preis und Sichtbarkeit bleiben unverändert.
+   Ältere Fassungen kennen nur Einträge mit Preis und verwerfen die übrigen (GR-006: nur erweitert). */
 function clean_money($x, string $what): float
 {
     if (!is_int($x) && !is_float($x)) throw new InvalidArgumentException("$what fehlt.");
@@ -136,27 +166,42 @@ function clean_money($x, string $what): float
 }
 function clean_sale($v, string $where, array $known): ?array
 {
-    if (!is_array($v) || !array_key_exists('value', $v)) return null;
-    $out = ['value' => clean_money($v['value'], "Sonderpreis ($where)")];
+    if (!is_array($v)) return null;
+    if (array_key_exists('value', $v) && $v['value'] !== null) $out = ['value' => clean_money($v['value'], "Empfehlungspreis ($where)")];
+    elseif (!empty($v['mark'])) $out = ['mark' => true];
+    else return null;
     $offers = [];
     foreach (is_array($v['offers'] ?? null) ? $v['offers'] : [] as $oid => $o) {
         $oid = (string)$oid;
         if (!is_array($o) || ($oid !== OFFER_STD && !in_array($oid, $known, true))) continue;
-        if (($o['status'] ?? '') === 'none') $offers[$oid] = ['status' => 'none'];
-        elseif (array_key_exists('value', $o)) $offers[$oid] = ['value' => clean_money($o['value'], "Sonderpreis ($where)")];
+        $st = $o['status'] ?? '';
+        if ($st === 'none' || $st === 'mark') $offers[$oid] = ['status' => $st];
+        elseif (array_key_exists('value', $o)) $offers[$oid] = ['value' => clean_money($o['value'], "Empfehlungspreis ($where)")];
     }
     if ($offers) $out['offers'] = $offers;
     $since = s($v['since'] ?? null, 30);
     if ($since) $out['since'] = $since;
     return $out;
 }
-function sale_for(array $it, string $oid): ?float
+/* Empfehlung eines Artikels in einem Angebot: null = keine, sonst ['preis' => Empfehlungspreis | null (nur hervorheben)] */
+function empfehlung_fuer(array $it, string $oid): ?array
 {
     $s = $it['sale'] ?? null;
-    if (!is_array($s) || !isset($s['value'])) return null;
+    if (!is_array($s) || (!isset($s['value']) && empty($s['mark']))) return null;
     $o = $s['offers'][$oid] ?? null;
-    if (is_array($o)) return ($o['status'] ?? '') === 'none' ? null : (float)$o['value'];
-    return (float)$s['value'];
+    if (is_array($o)) {
+        $st = $o['status'] ?? '';
+        if ($st === 'none') return null;
+        if ($st === 'mark') return ['preis' => null];
+        if (isset($o['value'])) return ['preis' => (float)$o['value']];
+    }
+    return ['preis' => isset($s['value']) ? (float)$s['value'] : null];
+}
+/* Empfehlungspreis (Sonderposten „solange der Vorrat reicht“) eines Artikels in einem Angebot, sonst null */
+function sale_for(array $it, string $oid): ?float
+{
+    $e = empfehlung_fuer($it, $oid);
+    return $e ? $e['preis'] : null;
 }
 /* Artikelnummern mit eingelagertem Bestand (null = keine Bestandsliste vorhanden) */
 function stock_codes(): ?array
@@ -183,8 +228,11 @@ function offer_resolve(array $m, array $def): array
     $items = [];
     foreach ($m['items'] ?? [] as $it) {
         $v = $it['variants'][$def['id']] ?? null;
-        $sale = sale_for($it, $def['id']);
-        unset($it['variants'], $it['sale'], $it['cell']);   // Zelladresse der Excel-Datei ist intern
+        $emp = empfehlung_fuer($it, $def['id']);
+        $sale = $emp ? $emp['preis'] : null;
+        $eigenerName = !$std && is_array($it['namen'] ?? null) ? trim((string)($it['namen'][$def['id']] ?? '')) : '';
+        unset($it['variants'], $it['sale'], $it['cell'], $it['namen']);   // Zelladresse der Excel-Datei ist intern; Bezeichnungen anderer Angebote nie
+        if ($eigenerName !== '') $it['name'] = $eigenerName;   // eigene Bezeichnung in diesem Angebot, sonst der Basiswert
         if ($v && $v['status'] === 'hidden') continue;
         if ($sale !== null && sold_out($it)) continue;   // Sonderposten ausverkauft
         $regular = $it['price'];
@@ -202,6 +250,8 @@ function offer_resolve(array $m, array $def): array
             $it['altPrices'] = [];
             $it['sale'] = true;
             if ($regular && ($regular['status'] ?? '') === 'value' && (float)$regular['value'] > $sale) $it['regular'] = (float)$regular['value'];
+        } elseif ($emp !== null) {
+            $it['empfehlung'] = true;   // Empfehlung ohne Preisänderung: nur hervorheben (Preis und Sichtbarkeit unverändert)
         }
         $items[] = $it;
     }
@@ -214,19 +264,25 @@ function offer_resolve(array $m, array $def): array
     $m['sections'] = $secs;
     $m['items'] = $items;
     unset($m['meta']['source'], $m['meta']['sheetName']);   // Dateiname/Blatt der Excel-Datei sind intern
-    // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote
+    // Werbung: nur der Eintrag dieses Angebots und nur Artikel, die ausgeliefert werden – nie die anderer Angebote.
+    // Bis zu zwei Blöcke (erster im Eintrag, zweiter in „weitere“); ein leerer erster Block rückt den zweiten nach vorn.
     $w = is_array($m['meta']['werbung'] ?? null) ? ($m['meta']['werbung'][$def['id']] ?? null) : null;
     unset($m['meta']['werbung']);
     if (is_array($w)) {
         $da = [];
         foreach ($items as $it) $da[(string)$it['id']] = true;
-        $art = [];
-        foreach (is_array($w['artikel'] ?? null) ? $w['artikel'] : [] as $a) {
-            $id = (string)($a['id'] ?? '');
-            if (!isset($da[$id])) continue;
-            $art[] = array_filter(['id' => $id, 'text' => (string)($a['text'] ?? '')], function ($x) { return $x !== ''; });
+        $bl = [];
+        foreach (werbung_bloecke($w) as $b) {
+            $art = [];
+            foreach (is_array($b['artikel'] ?? null) ? $b['artikel'] : [] as $a) {
+                $id = (string)($a['id'] ?? '');
+                if (!isset($da[$id])) continue;
+                $art[] = array_filter(['id' => $id, 'text' => (string)($a['text'] ?? '')], function ($x) { return $x !== ''; });
+            }
+            $bl[] = $art ? array_filter(['titel' => (string)($b['titel'] ?? ''), 'text' => (string)($b['text'] ?? ''), 'artikel' => $art], function ($x) { return $x !== ''; }) : null;
         }
-        if ($art) $m['meta']['werbung'] = array_filter(['titel' => (string)($w['titel'] ?? ''), 'text' => (string)($w['text'] ?? ''), 'artikel' => $art], function ($x) { return $x !== ''; });
+        $e = werbung_eintrag($bl);
+        if ($e) $m['meta']['werbung'] = $e;
     }
     $m['meta']['offerId'] = $def['id'];
     $m['meta']['offerName'] = $def['name'];
@@ -308,6 +364,9 @@ function clean_model($m, bool $strict): array
         if ($cell !== null && $cell !== '') $row['cell'] = $cell;
         $vars = clean_variants($it['variants'] ?? null, $name, $known);
         if ($vars) $row['variants'] = $vars;
+        // optional: eigene Bezeichnung je Kundenangebot (ältere Fassungen verwerfen das Feld; dann gilt wieder „name“)
+        $namen = angebotsnamen_clean($it['namen'] ?? null, $name, $known);
+        if ($namen) $row['namen'] = $namen;
         $sale = clean_sale($it['sale'] ?? null, $name, $known);
         if ($sale) $row['sale'] = $sale;
         $items[] = $row;

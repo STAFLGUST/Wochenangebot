@@ -83,9 +83,15 @@ check('PNG zu klein → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bi
 check('kein Base64 → 422', E.call('stock_mhd_senden', {'codes': IN_LISTE, 'bild': '%%%'})[0] == 422)
 
 # ---------- Versand ----------
-# Bezeichnung aus den Artikelstammdaten (Liste, Excel, Text); gespeicherter Bestand bleibt wie importiert
-check('Stammdaten mit eigener Bezeichnung gespeichert', A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [
-      {'code': '700002', 'name': 'Bald aus Stammdaten', 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch'}]})[0] == 200)
+# MHD-Liste mit der Originalbezeichnung der Warenwirtschaft (Inhaber 03.11.2026): Bezeichnung1 aus dem Artikelstammdaten-
+# Import, sonst der Name der Bestandsliste – nie die Angebotsbezeichnung; Merkmale aus den Stammdaten dahinter
+check('Stammdaten mit Angebotsbezeichnung und Originalbezeichnung gespeichert', A.call('master_save', {'rev': A.call('master')[1]['master']['rev'], 'articles': [
+      {'code': '700001', 'name': 'Abgelaufen fürs Angebot', 'category': 'Schwein', 'origin': None, 'condition': 'frisch'},
+      {'code': '700002', 'name': 'Bald aus Stammdaten', 'nameWawi': 'Bald Original WinAB', 'category': 'Rind', 'origin': 'AR', 'condition': 'frisch'}]})[0] == 200)
+st = A.call('stock')[1]['stock']
+a2 = next(x for x in st['articles'] if x['code'] == '700002'); a1 = next(x for x in st['articles'] if x['code'] == '700001')
+check('Bestandsliste: Angebotsbezeichnung angezeigt, Originalbezeichnung als nameOrig', a2['name'] == 'Bald aus Stammdaten' and a2.get('nameOrig') == 'Bald Original WinAB'
+      and a1['name'] == 'Abgelaufen fürs Angebot' and a1.get('nameOrig') == 'Test Abgelaufen', (a1, a2))
 n0 = len(smtp.messages)
 code, r = E.call('stock_mhd_senden', {**GUT, 'codes': list(reversed(IN_LISTE))})
 check('gesendet (Reihenfolge der Nummern egal), Ergebnis je Empfänger', code == 200 and r['artikel'] == 3 and [x['to'] for x in r['results']] == ['verkauf@example.org', 'leitung@example.org']
@@ -109,9 +115,11 @@ codes = re.findall(r'<t xml:space="preserve">(70000\d)</t>', blatt)
 check('Excel: genau die MHD-Liste, früheste zuerst (ohne MHD in 30 Tagen, ohne Artikel ohne MHD)', codes == IN_LISTE, codes)
 check('Excel: Name sicher (kein HTML), Mengen als Zahlen, Summen als Formel', '&lt;b&gt;fett&lt;/b&gt;' in blatt and '<v>120.25</v>' in blatt and '<v>25.5</v>' in blatt and '<f>SUM(' in blatt)
 check('Excel: Kopf mit Preisen der Wochen (Absender darf Preisverlauf sehen) und ETA', 'Aktueller Preis KW' in blatt and 'Nächste ETA' in blatt and 'Erfasster Bestand' in blatt)
-check('Bezeichnung aus den Stammdaten in Excel und Text (statt Name der Bestandsliste)', 'Bald aus Stammdaten' in blatt and 'Bald aus Stammdaten' in m['text'] and 'Test Bald' not in m['text'])
-check('Excel und Text: Merkmale aus den Stammdaten hinter der Bezeichnung („Name · Fleischart · Herkunft · Zustand“)', 'Bald aus Stammdaten · Rind · AR · frisch' in blatt
-      and 'Bald aus Stammdaten · Rind · AR · frisch' in m['text'])
+check('Originalbezeichnung in Excel und Text (nicht die Angebotsbezeichnung)', 'Bald Original WinAB' in blatt and 'Bald Original WinAB' in m['text']
+      and 'Bald aus Stammdaten' not in m['text'] and 'Bald aus Stammdaten' not in blatt and 'Test Bald' not in m['text'])
+check('ohne Originalbezeichnung im Stammsatz: Name der Bestandsliste', 'Test Abgelaufen' in m['text'] and 'Abgelaufen fürs Angebot' not in m['text'])
+check('Excel und Text: Merkmale aus den Stammdaten hinter der Bezeichnung („Name · Fleischart · Herkunft · Zustand“)', 'Bald Original WinAB · Rind · AR · frisch' in blatt
+      and 'Bald Original WinAB · Rind · AR · frisch' in m['text'])
 check('Text: Liste und Hinweis auf den Anhang', '700002' in m['text'] and 'Excel-Datei im Anhang' in m['text'] and 'davon 1 bereits abgelaufen' in m['text'])
 check('über das interne Postfach (ohne eigenes: Kunden-Postfach, angebot@)', m['from'] == 'angebot@example.org')
 check('Versandprotokoll: Typ „mhd“ je Empfänger', storage_raw('mailversand').count('"typ":"mhd"') + storage_raw('mailversand').count('"typ": "mhd"') == 2)

@@ -122,7 +122,7 @@ function stock_ohne_ek(?array $st): ?array
 /* Bezeichnung und VK-Gruppe aus den Artikelstammdaten (Eigentümer Verwaltung, hier nur lesen – regeln/datenverantwortung.toml).
    Gilt für Ansicht, Druck, PDF, CSV und MHD-Mail; gespeichert bleibt der Bestand unverändert (Name aus der Importdatei).
    Ohne Stammdatensatz oder mit leerer Bezeichnung bleibt der Name der Importdatei. „nameImport“ nur, wenn er abweicht
-   (Suche findet beide). „merkmale“: Fleischart · Herkunft · Zustand aus dem Stammsatz (bestand_merkmale(), nur wenn
+   (Suche findet beide). „nameOrig“: Originalbezeichnung der Warenwirtschaft für die MHD-Liste (bestand_originalname()). „merkmale“: Fleischart · Herkunft · Zustand aus dem Stammsatz (bestand_merkmale(), nur wenn
    etwas bekannt ist) – die Ansicht zeigt sie unter der Bezeichnung, PDF, CSV und MHD-Mail daneben (Entscheidung Inhaber
    30.10.2026: „Nacken schier“ und „Lachs“ allein sind nicht eindeutig). Rückgabe zusätzlich „vkgruppen“: Nummer →
    Bezeichnung der verwendeten VK-Gruppen. */
@@ -140,6 +140,13 @@ function bestand_bezeichnung(array $a): string
     $m = trim((string)($a['merkmale'] ?? ''));
     return (string)($a['name'] ?? '') . ($m !== '' ? ' · ' . $m : '');
 }
+/* Originalbezeichnung eines Bestandsartikels (MHD-Liste, Auftrag des Inhabers 03.11.2026): Bezeichnung1 aus dem
+   Artikelstammdaten-Import der Warenwirtschaft, sonst der Name der Bestandsliste – nie die Angebotsbezeichnung.
+   Erwartet einen Artikel nach bestand_mit_stammdaten(); wie im Browser (stockOrigName in admin.js). */
+function bestand_originalname(array $a): string
+{
+    return (string)($a['nameOrig'] ?? $a['name'] ?? '');
+}
 function bestand_mit_stammdaten(?array $st): ?array
 {
     if (!$st) return $st;
@@ -152,6 +159,10 @@ function bestand_mit_stammdaten(?array $st): ?array
         if (!$s) return $x;
         $name = trim((string)($s['name'] ?? ''));
         if ($name !== '' && $name !== (string)($x['name'] ?? '')) { $x['nameImport'] = (string)($x['name'] ?? ''); $x['name'] = $name; }
+        // Originalbezeichnung (MHD-Liste): Bezeichnung1 aus dem Artikelstammdaten-Import, sonst der Name der Bestandsliste;
+        // „nameOrig“ nur, wenn sie von der angezeigten Bezeichnung abweicht
+        $orig = trim((string)($s['nameWawi'] ?? '')) ?: (string)($x['nameImport'] ?? $x['name'] ?? '');
+        if ($orig !== (string)$x['name']) $x['nameOrig'] = $orig;
         $merk = bestand_merkmale($s);
         if ($merk !== '') $x['merkmale'] = $merk;
         $vk = trim((string)($s['vkGruppe'] ?? ''));
@@ -195,20 +206,56 @@ function clean_master($list): array
         if ($gtin !== '' && !preg_match('/^\d{8,14}$/', $gtin)) throw new InvalidArgumentException("Artikel $code: ungültige GTIN (8 bis 14 Ziffern).");
         if ($vk !== '') $e['vkGruppe'] = $vk;
         if ($gtin !== '') $e['gtin'] = $gtin;
+        // Originalbezeichnung der Warenwirtschaft (Bezeichnung1 des Artikelstammdaten-Exports, nur lesen) und eigene
+        // Bezeichnung je Kundenangebot (Angebots-ID → Text; fehlt = Basiswert „name“). Beide optional, GR-006.
+        $wawi = s($a['nameWawi'] ?? null, 200);
+        if ($wawi !== null && $wawi !== '') $e['nameWawi'] = $wawi;
+        $namen = angebotsnamen_clean($a['namen'] ?? null, $code);
+        if ($namen) $e['namen'] = $namen;
         $out[] = $e;
     }
     usort($out, function ($x, $y) { return strnatcmp($x['code'], $y['code']); });
     return $out;
 }
+/* Eigene Bezeichnungen je Angebot (Stammsatz und Artikel des Angebots): Angebots-ID → Text, höchstens OFFER_MAX Einträge.
+   Leere Texte fallen weg (dann gilt die Bezeichnung des Artikels). Das Wochenangebot hat keinen Eintrag – seine
+   Bezeichnung ist der Basiswert. $known: nur diese Angebote (Angebotsmodell); null = nur das Format prüfen (Stammdaten). */
+function angebotsnamen_clean($v, string $wo, ?array $known = null): array
+{
+    $out = [];
+    if (!is_array($v)) return $out;
+    foreach ($v as $oid => $t) {
+        $oid = (string)$oid;   // numerische Angebots-IDs kommen als Zahl an
+        if ($oid === 'std' || !preg_match('/^[a-z0-9-]{1,40}$/', $oid)) continue;
+        if ($known !== null && !in_array($oid, $known, true)) continue;   // gelöschte Angebote fallen weg
+        if (!is_string($t)) continue;
+        $t = s($t, 200);
+        if ($t === null || $t === '') continue;
+        $out[$oid] = $t;
+        if (count($out) > 100) throw new InvalidArgumentException("Zu viele Bezeichnungen je Angebot ($wo).");
+    }
+    ksort($out, SORT_STRING);
+    return $out;
+}
+/* Vergleichstext der Bezeichnungen je Angebot (Protokoll, Vorschau): „edeka: Rinderhüfte · bela: …“ */
+function angebotsnamen_text($v): string
+{
+    if (!is_array($v) || !$v) return '';
+    $t = [];
+    foreach ($v as $oid => $n) $t[] = $oid . ': ' . $n;
+    return implode(' · ', $t);
+}
 function master_changes(array $old, array $new): array
 {
     $o = []; foreach ($old as $a) $o[code_key($a['code'])] = $a;
     $n = []; foreach ($new as $a) $n[code_key($a['code'])] = $a;
-    $L = ['name' => 'Bezeichnung', 'category' => 'Fleischart', 'origin' => 'Herkunft', 'condition' => 'Zustand', 'vkGruppe' => 'VK-Gruppe', 'gtin' => 'GTIN'];
+    $L = ['name' => 'Bezeichnung', 'nameWawi' => 'Originalbezeichnung', 'category' => 'Fleischart', 'origin' => 'Herkunft', 'condition' => 'Zustand', 'vkGruppe' => 'VK-Gruppe', 'gtin' => 'GTIN'];
     $d = [];
     foreach ($n as $k => $a) {
         if (!isset($o[$k])) { $d[] = ['k' => "s$k|+", 'code' => $a['code'], 'name' => $a['name'], 'f' => 'Neuer Stammsatz', 'from' => '', 'to' => $a['category'] . ' · ' . $a['condition']]; continue; }
         foreach ($L as $f => $label) if ((string)($o[$k][$f] ?? '') !== (string)($a[$f] ?? '')) $d[] = ['k' => "s$k|$f", 'code' => $a['code'], 'name' => $a['name'], 'f' => $label, 'from' => (string)($o[$k][$f] ?? ''), 'to' => (string)($a[$f] ?? '')];
+        $na = angebotsnamen_text($o[$k]['namen'] ?? null); $nn = angebotsnamen_text($a['namen'] ?? null);
+        if ($na !== $nn) $d[] = ['k' => "s$k|namen", 'code' => $a['code'], 'name' => $a['name'], 'f' => 'Bezeichnung je Angebot', 'from' => $na, 'to' => $nn];
     }
     foreach ($o as $k => $a) if (!isset($n[$k])) $d[] = ['k' => "s$k|-", 'code' => $a['code'], 'name' => $a['name'], 'f' => 'Stammsatz gelöscht', 'from' => $a['name'], 'to' => ''];
     return $d;
