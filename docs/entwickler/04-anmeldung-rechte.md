@@ -188,8 +188,21 @@ Kennung nie mit einem neuen, gleich benannten Mitarbeiter; `konten_finden` melde
 (Zustand `altkonto`), „Konto anlegen“ ersetzt sie. Scheitert das Löschen, bekommt die Oberfläche einen Hinweis
 (`hinweis`). Ältere Konten ohne Mitarbeiter: `deploy/anmeldung/konten.sh verwaist [--loeschen]`.
 
+**Administratorkonten nur über die Serverkonsole (Realm Stand 16, ADR-007 Stufe 1b):** Der Client `konten` liest alle
+Konten (`view-users`), ändert und legt aber nur Konten der Gruppe `anwendungskonten` an (feingranulare Verwaltungsrechte
+von Keycloak). `konten.sh gruppe-abgleichen` hält die Gruppe auf den Mitarbeitern ohne Administratorrolle (`role !==
+'admin'`). In `lib/anmeldekonten.php`: `konten_pflicht_aenderbar` verweigert Änderungen an Administratorkonten selbst,
+`konten_status` meldet `verwaltbar` (aus `access.manage` von Keycloak und der Rolle), `warnung` (Administrator noch in der
+Gruppe) und `anlegbar`; `konten_anlegen` schickt `groups: ['/anwendungskonten']` nur, wenn es die Gruppe gibt
+(`konten_gruppe_da`, Realm vor Stand 16: wie bisher). `konten_api` reicht 403 bei Änderungen an den Aufrufer weiter
+(`konten_verboten` → Hinweis mit Konsolenbefehl). `lib/oidc.php`, `oidc_admin_konto_pruefen`: Administratoren werden nie
+mit einem Konto der Gruppe verknüpft (erste Anmeldung: nur wenn feststeht, dass es nicht in der Gruppe ist) und bekommen mit
+einem solchen Konto keine neue Sitzung (`konten_in_gruppe`). Der Notfallmodus zählt abgelehnte Abmeldungen von
+Administratoren getrennt (`nurKonsole`). Tests mit echtem Keycloak: `tests/oidc/test_oidc.py` (Rechte des Clients,
+Abgleich, Angriff über den Benutzernamen eines Administrators, Beförderung).
+
 **Passwortregeln der zentralen Anmeldung (Realm Stand 15):** Quelle ist Sicherheit → Einstellungen (`pwMin`, `pwComplex`,
-`lockAfter`, `lockMinutes`). Die Anwendung hat für Keycloak nur `view-users`/`manage-users`; übernommen werden die Werte mit
+`lockAfter`, `lockMinutes`). Die Anwendung darf in Keycloak keine Realm-Einstellungen ändern; übernommen werden die Werte mit
 `deploy/anmeldung/konten.sh richtlinien` (auch in `realm-aktualisieren`): `passwordPolicy` mit `length(max(12, pwMin))`,
 bei „gemischt“ `upperCase(1) and lowerCase(1) and digits(1)`; `failureFactor = lockAfter`, Sperre `lockMinutes` je Konto.
 `konten_min_laenge()` nutzt dieselbe Mindestlänge für Prüfung, Meldungen und erzeugte Startpasswörter.

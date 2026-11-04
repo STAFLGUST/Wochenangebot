@@ -112,10 +112,27 @@ function oidc_konto(array $id): array
         audit('oidc_ohne_konto', 'Anmeldung mit dem Konto eines gelöschten Mitarbeiters abgelehnt', ['benutzer' => substr($id['name'], 0, 60)]);
         fail('Für diese Anmeldung gibt es hier kein Mitarbeiterkonto. Bitte an einen Administrator wenden.', 403);
     }
+    oidc_admin_konto_pruefen($kandidat, $id, true);
     $neu = user_update($kandidat['id'], function (array &$u) use ($id) { if (empty($u['oidcSub'])) $u['oidcSub'] = $id['sub']; });
     if ($neu === null || (string)($neu['oidcSub'] ?? '') !== $id['sub']) fail('Für diese Anmeldung gibt es hier kein Mitarbeiterkonto.', 403);
     audit('oidc_verknuepft', 'Mitarbeiterkonto mit der zentralen Anmeldung verknüpft', [], $neu);
     return oidc_aktiv($neu);
+}
+/* Administratoren nie mit einem Keycloak-Konto, das die Verwaltung der Anwendung ändern darf (Gruppe „anwendungskonten“,
+   Stand 16, ADR-007 Stufe 1b): sonst könnte, wer das Geheimnis des Clients „konten“ hat, ein Konto mit dem Benutzernamen
+   eines noch nicht verknüpften Administrators anlegen oder das Passwort eines frisch beförderten Administrators setzen und
+   sich damit als Administrator anmelden. Erste Verknüpfung ($neu): nur, wenn feststeht, dass das Konto nicht in der Gruppe
+   ist; neue Sitzung eines verknüpften Administrators: abgelehnt, wenn es in der Gruppe ist (Abhilfe in der Serverkonsole:
+   konten.sh gruppe-abgleichen). Ohne eingerichteten Client „konten“ gibt es die Gruppe für die Anwendung nicht. */
+function oidc_admin_konto_pruefen(array $u, array $id, bool $neu): void
+{
+    if (($u['role'] ?? '') !== 'admin' || !konten_eingerichtet()) return;
+    $in = konten_in_gruppe($id['sub']);
+    if ($in === false || ($in === null && !$neu)) return;
+    audit('oidc_ohne_konto', $in ? 'Anmeldung als Administrator mit einem Konto der Gruppe anwendungskonten abgelehnt'
+        : 'Erste Anmeldung als Administrator abgelehnt (Gruppe anwendungskonten nicht prüfbar)', ['benutzer' => substr($id['name'], 0, 60)], $u);
+    fail($in ? 'Ihr Konto in der zentralen Anmeldung darf noch die Verwaltung der Anwendung ändern – als Administrator erst nach dem Abgleich in der Serverkonsole (sh deploy/anmeldung/konten.sh gruppe-abgleichen). Bitte an den Inhaber wenden.'
+        : 'Die zentrale Anmeldung ist gerade nicht erreichbar. Bitte später erneut versuchen.', 403);
 }
 function oidc_aktiv(array $u): array
 {
@@ -184,6 +201,7 @@ function oidc_nutzer(): ?array
     $passt = ($_SESSION['uid'] ?? '') === $u['id'] && ($_SESSION['oidcSub'] ?? '') === $id['sub'] && ($_SESSION['oidcSid'] ?? '') === $id['sid']
         && (int)($_SESSION['sv'] ?? -1) === (int)$u['sv'] && isset((store_read('sitzungen') ?? [])[(string)($_SESSION['sid'] ?? '')]);
     if (!$passt) {
+        oidc_admin_konto_pruefen($u, $id, false);
         $_SESSION = [];
         sign_in($u);
         $_SESSION['oidcSub'] = $id['sub'];

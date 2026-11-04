@@ -528,7 +528,7 @@
     const kacheln = n ? `<div class="sic-karten wirkung">${[
       karte('ok', 'Angebotsseite', 'Wartung', 'Kunden sehen den neutralen Hinweis'),
       karte('ok', 'Mitarbeiter ohne Administratorrolle', 'gesperrt', 'Administratoren arbeiten weiter'),
-      ...(n.wirkung ? [karte('ok', 'Sitzungen beendet', zahl((+n.wirkung.mitarbeiterSitzungen || 0) + (+n.wirkung.kundenSitzungen || 0)), `${zahl(n.wirkung.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(n.wirkung.kundenSitzungen)} Kunden${n.wirkung.keycloak ? ` · ${zahl(n.wirkung.keycloak.beendet)} bei Keycloak` : ''}`)] : []),
+      ...(n.wirkung ? [karte('ok', 'Sitzungen beendet', zahl((+n.wirkung.mitarbeiterSitzungen || 0) + (+n.wirkung.kundenSitzungen || 0)), `${zahl(n.wirkung.mitarbeiterSitzungen)} Mitarbeiter · ${zahl(n.wirkung.kundenSitzungen)} Kunden${n.wirkung.keycloak ? ` · ${zahl(n.wirkung.keycloak.beendet)} bei Keycloak${+n.wirkung.keycloak.nurKonsole ? ` (${zahl(n.wirkung.keycloak.nurKonsole)} Administratoren nur über die Serverkonsole)` : ''}` : ''}`)] : []),
       karte('ok', 'E-Mail-Versand', 'pausiert', 'Benachrichtigungen gehen weiter'),
       ...(n.wirkung ? [karte(/^nicht angewendet/.test(n.wirkung.firewall || '') ? 'warn' : 'ok', 'Firewall', /angewendet/.test(n.wirkung.firewall || '') && !/^nicht/.test(n.wirkung.firewall || '') ? 'Notfall' : 'unverändert', esc(n.wirkung.firewall || ''))] : []),
     ].join('')}</div>` : '';

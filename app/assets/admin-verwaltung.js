@@ -171,7 +171,7 @@
       st.innerHTML = `<span class="st-warn">Noch kein Konto in der zentralen Anmeldung – der Mitarbeiter kann sich nicht anmelden.</span>${k.hinweis ? `<br><span class="muted">${esc(k.hinweis)}</span>` : ''}`;
       // Mit E-Mail: anlegen und gleich die Einladung (Link zum Passwort-Festlegen) schicken – der übliche Weg
       const mu = users.find((x) => x.id === editUid), mitMail = !!(mu && mu.email);
-      kn.innerHTML = k.fremd ? '' : mitMail
+      kn.innerHTML = k.fremd || k.anlegbar === false ? '' : mitMail
         ? `<button type="button" class="btn primary" data-ka="anlegen-einladen">${icon('mail', 'sm')}Konto anlegen und Einladung senden</button><button type="button" class="btn" data-ka="anlegen">Nur anlegen</button>`
         : `<button type="button" class="btn" data-ka="anlegen">${icon('plus', 'sm')}Konto anlegen</button><span class="hint ka-ohnemail">Für eine Einladung per Mail oben eine E-Mail-Adresse eintragen und speichern.</span>`;
       return;
@@ -182,7 +182,9 @@
     if (k.passwortAendern) t.push('muss bei der nächsten Anmeldung ein eigenes Passwort festlegen');
     if (k.einmalcode) t.push(k.einmalcode === 1 ? 'Einmalcode eingerichtet' : `${k.einmalcode} Einmalcode-Geräte`);
     if (k.passkeys) t.push(k.passkeys === 1 ? '1 Passkey' : `${k.passkeys} Passkeys`);
-    st.innerHTML = t.join(' · ');
+    st.innerHTML = t.join(' · ') + (k.hinweis ? `<br><span class="${k.warnung ? 'st-warn' : 'muted'}">${esc(k.hinweis)}</span>` : '');
+    // Konten von Administratoren ändert nur die Serverkonsole (Stand 16): keine Knöpfe, der Hinweis nennt den Befehl
+    if (k.verwaltbar === false) { kn.innerHTML = ''; if ($('#ka-pw')) $('#ka-pw').hidden = true; return; }
     // Mindestlänge der zentralen Anmeldung (Einstellung „Passwörter mindestens …“, nie unter 12)
     const pwf = $('#user-body [name="ka_pw"]'), min = k.minLaenge || 12;
     if (pwf) { pwf.minLength = min; pwf.placeholder = `mindestens ${min} Zeichen`; }

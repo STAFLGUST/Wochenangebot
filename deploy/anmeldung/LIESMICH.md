@@ -107,12 +107,29 @@ Einstellungen ändern und `richtlinien` erneut ausführen.
 Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
 Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt
-(`app/api/lib/anmeldekonten.php`). Rechte genau `view-users` und `manage-users` von `realm-management` – keine Realm-,
-Client- oder Rollenverwaltung, kein Anmelden im Namen anderer, kein Passwort-Grant; `realm-aktualisieren` entfernt
-zusätzliche Rollen. Legt `OIDC_SECRET_KONTEN` in `.env` an (nie angezeigt); danach `docker compose up -d app-mitarbeiter`. Die Anwendung
+(`app/api/lib/anmeldekonten.php`). Rechte seit Stand 16 (ADR-007 Stufe 1b): lesen `view-users`, ändern und anlegen nur
+Konten der Gruppe `anwendungskonten` (feingranulare Verwaltungsrechte) – keine Realm-, Client- oder Rollenverwaltung, kein
+Anmelden im Namen anderer, kein Passwort-Grant; `realm-aktualisieren` entfernt zusätzliche Rollen (auch das frühere
+`manage-users`). Legt `OIDC_SECRET_KONTEN` in `.env` an (nie angezeigt); danach `docker compose up -d app-mitarbeiter`. Die Anwendung
 spricht Keycloak im internen Netz an (`WA_KONTEN_URL=http://keycloak:8080`, nicht über Caddy). Ohne das Geheimnis zeigt die
 Verwaltung „noch nicht eingerichtet“ – sonst ändert sich nichts. Rückweg: Client `konten` in Keycloak deaktivieren oder die
 Zeile `OIDC_SECRET_KONTEN` aus `.env` entfernen und `docker compose up -d app-mitarbeiter`.
+
+Stand 16 (04.11.2026, ADR-007 Stufe 1b): Die Verwaltung der Anwendung ändert nur noch Konten der Gruppe
+`anwendungskonten` – das sind die Konten der Mitarbeiter **ohne** Administratorrolle. Administratoren, Konten mit
+Verwaltungsrollen von Keycloak und Service-Accounts stehen nie darin. `realm-aktualisieren` legt Gruppe, Regel
+„Dienstkonto der Anwendung (Client konten)“ und Berechtigung „Anwendung verwaltet Mitarbeiterkonten (Gruppe
+anwendungskonten)“ an, gleicht die Gruppe ab und entfernt erst danach `manage-users`. Danach:
+
+- `sh deploy/anmeldung/konten.sh gruppe-abgleichen [<benutzername>]` – nach jeder Beförderung zum Administrator (oder
+  Rückstufung). Bis dahin meldet sich ein frisch beförderter Administrator nicht an (Hinweis mit diesem Befehl), und die
+  Verwaltung warnt in „Zentrale Anmeldung“.
+- Administratoren: Passwort, Sperre und Einladung nur hier (`startpasswort`, `entsperren`, `einladen`); die Verwaltung zeigt
+  den Befehl statt der Knöpfe. `anlegen` und `einladen` nehmen neue Konten von Nicht-Administratoren gleich in die Gruppe.
+- Altes Konto eines gelöschten Mitarbeiters außerhalb der Gruppe: `verwaist --loeschen`, dann in der Verwaltung „Konto anlegen“.
+- Rückweg: `kcadm.sh add-roles -r mitarbeiter --uusername service-account-konten --cclientid realm-management --rolename
+  manage-users` (über `docker compose exec keycloak /opt/keycloak/bin/kcadm.sh …` mit dem Verwaltungskonto) – die Anwendung
+  arbeitet dann wieder wie vor Stand 16 (Administratoren lehnt sie weiter selbst ab).
 
 ## Alter Eingabebereich (angebot-stafl.de/admin/) stillgelegt
 
