@@ -40,7 +40,7 @@ KC_SERVER=${KC_SERVER:-http://localhost:8080}
 REALM=mitarbeiter
 VERWALTUNG=verwaltung
 # PHP der Anwendung (Postfach und Mitarbeiterkonten lesen) und Ordner des Keycloak-Tresors (Dateien, nur Keycloak liest sie)
-APP_PHP=${APP_PHP:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml exec -T -u www-data app php}
+APP_PHP=${APP_PHP:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml exec -T -u www-data app-mitarbeiter php}
 VAULT_DIR=${KC_VAULT_HOST_DIR:-$(pwd)/daten-anmeldung/vault}
 KC_UID=${KC_UID:-1000}
 EINLADUNG_STUNDEN=72
@@ -462,7 +462,7 @@ for c in json.load(sys.stdin):
   konten_rechte
   richtlinien_setzen
   echo "Realm aktuell (Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
-  if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
+  if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app-mitarbeiter"; fi
 }
 
 pruefen() { # nur lesen: warum klappt die Anmeldung nicht? Konto, Sperre, zweiter Faktor, letzte Anmeldeereignisse, Uhrzeit

@@ -4,16 +4,70 @@
 #   docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml up -d
 # Nur nach ausdrücklicher Freigabe des Inhabers und in der Reihenfolge aus docs/plattform/inbetriebnahme-anmeldung.md.
 # Alle Images fest über Version und Digest. Geheimnisse nur in .env auf dem Server (Namen: deploy/anmeldung/LIESMICH.md).
+#
+# Zwei Anwendungs-Container aus demselben Image und demselben Code (ADR-007, docs/plattform/adr-007-kundencontainer.md):
+#   app              – nur die Kundenseite angebot-stafl.de: keine Anmelde-Geheimnisse, kein Dashboard, nur im Netz „default“
+#                      mit Caddy (Keycloak und app-mitarbeiter von dort nicht erreichbar), Dateisystem nur lesbar, Grenzen für
+#                      Speicher, Rechenzeit und Prozesse. Baut das gemeinsame Image.
+#   app-mitarbeiter  – alle Mitarbeiter-Hosts (dashboard-stafl.de und *.dashboard-stafl.de) mit Keycloak-Anmeldung,
+#                      Dashboard, Detailkarte und allen Anmelde-Geheimnissen; im Netz „intern“ mit Caddy und Keycloak.
+# Beide nutzen denselben Datenordner (Stufe 1); Stufe 2 (eigene Daten der Kundenseite) siehe ADR-007.
 services:
   app:
-    # Anwendungs-Image mit mod_auth_openidc (deploy/image, in der CI gebaut und mit php:8.3-apache verglichen)
+    # Kundenseite angebot-stafl.de (ADR-007): dasselbe Anwendungs-Image wie app-mitarbeiter (deploy/image, in der CI gebaut und
+    # mit php:8.3-apache verglichen), aber ohne Keycloak-Hosts in Apache, ohne Dashboard und ohne Anmelde-Geheimnisse. Bleibt
+    # im Netz „default“ (Caddy) – Keycloak und app-mitarbeiter liegen im Netz „intern“ und sind von hier nicht erreichbar.
     image: stafl-app:${STAFL_APP_VERSION:-lokal}
-    build: ./deploy/image
+    build: ./deploy/image                                  # baut das gemeinsame Image (auch für app-mitarbeiter)
+    environment:
+      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – Mitarbeiter
+      # nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung unverändert. Notzugang bei gestörter Anmeldung:
+      # sh deploy/notzugang.sh an (setzt WA_EIGENE_ANMELDUNG=an in .env und erstellt die Kundenseite neu), danach wieder „aus“
+      WA_EIGENE_ANMELDUNG: ${WA_EIGENE_ANMELDUNG:-aus}
+    # Härtung (ADR-007): Dateisystem nur lesbar (Anwendung ist ohnehin nur lesend eingebunden, Daten im Datenordner); Apache
+    # und PHP schreiben nur in /tmp (Sitzungen) und /run (PID, Sperren). Keine Rechteausweitung über setuid-Programme.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=256m
+      - /run:mode=755,size=16m
+    security_opt:
+      - no-new-privileges:true
+    # Grenzen: Überlast auf der öffentlichen Seite bremst die Mitarbeiter-Hosts nicht aus (Server: Hostinger KVM 8,
+    # 8 vCPU / 32 GB). Anpassbar über .env (KUNDEN_CPUS, KUNDEN_SPEICHER).
+    cpus: ${KUNDEN_CPUS:-3}
+    mem_limit: ${KUNDEN_SPEICHER:-4g}
+    pids_limit: 1024
+
+  app-mitarbeiter:
+    # Mitarbeiter-Hosts (ADR-003, ADR-007): dashboard-stafl.de, angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./
+    # controlling./leergut./rewe./qs.dashboard-stafl.de und die Prüfung vor der Anmeldeseite (Caddy forward_auth). Gleiches Image
+    # und gleicher Code wie app; das Image baut der Dienst app (nie aus dem Netz holen).
+    image: stafl-app:${STAFL_APP_VERSION:-lokal}
+    pull_policy: never
+    restart: unless-stopped
+    logging:                        # Container-Protokoll begrenzt: höchstens 3 × 10 MB je Dienst (sonst wächst es unbegrenzt)
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
     volumes:
+      - ./app:/var/www/html:ro      # Website (nur lesend) – wie app
+      - ./daten:/var/www/html/data  # gemeinsamer Datenordner (Stufe 1, ADR-007)
       - ./dashboard:/var/www/dashboard:ro                 # Dashboard (außerhalb von app/; per Alias nur auf den Keycloak-Hosts)
-      - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # nach 000-default: angebot-stafl.de bleibt Standard
+      - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # Keycloak-Hosts in Apache
       - ./daten-karte:/var/www/karte:ro                   # Detailkarte (deploy/karte-laden.sh); fehlt sie, zeigen die Seiten die Übersichtskarte
     environment:
+      # wie app in docker-compose.yml (die CI prüft, dass hier nichts davon fehlt: deploy/anmeldung/pruefen.sh)
+      WA_INSTALLED: "1"
+      WA_TRUSTED_PROXIES: caddy
+      DOMAIN: ${DOMAIN}
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_SECURE: ${MAIL_SMTP_SECURE:-starttls}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASS: ${MAIL_SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      # Anmeldung über Keycloak – nur in diesem Container
       OIDC_ISSUER: https://login.dashboard-stafl.de/realms/mitarbeiter
       OIDC_SECRET_DASHBOARD: ${OIDC_SECRET_DASHBOARD:?in .env setzen}
       OIDC_SECRET_ANGEBOT: ${OIDC_SECRET_ANGEBOT:?in .env setzen}
@@ -54,14 +108,13 @@ services:
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}
       WA_KONTEN_URL: http://keycloak:8080
-      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – Mitarbeiter
-      # nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung unverändert. Notzugang bei gestörter Anmeldung:
-      # sh deploy/notzugang.sh an (setzt WA_EIGENE_ANMELDUNG=an in .env und startet die App neu), danach wieder „aus“
       WA_EIGENE_ANMELDUNG: ${WA_EIGENE_ANMELDUNG:-aus}
     networks:
-      default:
-        aliases:
-          - app-mitarbeiter                                # Ziel von Caddy für dashboard-stafl.de/angebot./verwaltung./bestand./hr./crm./marketing./sicherheit./controlling./leergut./rewe./qs. – nur mit dieser Datei
+      intern:                                              # mit Caddy und Keycloak; nicht im Netz der Kundenseite
+
+  caddy:
+    networks:
+      intern:                                              # zusätzlich zu default und edge: Ziele app-mitarbeiter und keycloak
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1@sha256:79c623a22abacf3fe6c00a5fb30f5b7843d717b234033b80995891c06116d244
@@ -107,7 +160,7 @@ services:
     ports:
       - "127.0.0.1:8180:8080"                              # nur lokal (SSH-Tunnel für die Verwaltung)
     networks:
-      default:
+      intern:                                              # Caddy (Anmeldeseite) und app-mitarbeiter (Konten); nie die Kundenseite
       anmeldung:
 
   keycloak-db:
@@ -127,6 +180,9 @@ services:
       anmeldung:                                           # eigene Datenbank und eigenes Netz, getrennt von den Geschäftsdaten
 
 networks:
+  # Mitarbeiterseite: Caddy, app-mitarbeiter und Keycloak (mit Ausgang ins Internet: Postfach, Keycloak-Metadaten über
+  # login.dashboard-stafl.de). Die Kundenseite (app) ist nicht darin – ADR-007.
+  intern:
   anmeldung:
     internal: true
 

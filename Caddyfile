@@ -136,7 +136,7 @@ test.{$DOMAIN} {
 
 # STAFL-Plattform: zentrale Anmeldung (ADR-003, docs/plattform/inbetriebnahme-anmeldung.md Schritt 6).
 # Ziele gibt es nur mit der Ergänzungsdatei deploy/anmeldung/docker-compose.anmeldung.yml (COMPOSE_FILE in .env):
-# „keycloak“ und der Netzwerkname „app-mitarbeiter“ (dieselbe App, dort mit Keycloak-Hosts in Apache). Ohne sie
+# „keycloak“ und „app-mitarbeiter“ (eigener Container derselben Anwendung mit Keycloak-Hosts in Apache, ADR-007). Ohne sie
 # antworten diese Hosts mit einem Fehler (502) – nie mit der Anwendung ohne Keycloak-Anmeldung.
 
 # Keycloak: nur der Realm „mitarbeiter“ und statische Dateien; Verwaltung und Master-Realm nie öffentlich

@@ -11,6 +11,7 @@ zu gefährden.
 | [multi-agent.md](multi-agent.md) | Entwicklungsmodell mit parallelen KI-Agenten, Regelwerk und Werkzeug, Test- und CI-Konzept |
 | [roadmap.md](roadmap.md) | Priorisierte Schritte als Pull Requests, offene Entscheidungen |
 | [adr-003-domains-anmeldung.md](adr-003-domains-anmeldung.md) | Domain- und Anmeldestruktur: Subdomains, OIDC mit Keycloak, Testumgebung – angenommen |
+| [adr-007-kundencontainer.md](adr-007-kundencontainer.md) | Kundenseite in eigenem Container (Prozesse, Geheimnisse, Netze; später Dienstkonto und Daten) – angenommen |
 
 Maschinenlesbare Quelle aller Festlegungen ist `regeln/` (von der CI geprüft). Diese Dokumente erklären und
 begründen – sie wiederholen keine Listen aus `regeln/`, damit nichts auseinanderläuft.
@@ -33,7 +34,8 @@ flowchart LR
   MOD --> S[(Gemeinsame Datenbasis<br/>ein Eigentümer je Datum)]
 ```
 
-Ein Docker-Container für die Anwendung (modularer Monolith), Caddy davor verteilt nach Host. Kein Microservice je Modul,
+Ein Anwendungs-Image (modularer Monolith) in zwei Containern – Kundenseite und Mitarbeiter-Hosts getrennt (ADR-007) –, Caddy
+davor verteilt nach Host. Kein Microservice je Modul,
 keine Datenbank je Modul.
 
 ## Stand (21.10.2026)

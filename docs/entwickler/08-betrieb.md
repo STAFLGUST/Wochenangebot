@@ -126,12 +126,14 @@ Schritte im Einzelnen:
    Image vorab gebaut (`docker compose build --pull app` als `stafl-app:release-neu`). Fehler → nichts eingespielt.
 7. **Sicherung** mit dem Sicherungsskript des neuen Commits (`deploy/.sichern-release.sh`). Ohne Sicherung kein Release.
 8. **Code wechseln.** Ändern sich `Caddyfile`, `docker-compose.yml` oder die Ergänzungsdatei, werden alle Container
-   neu erstellt; sonst bei Bedarf nur die App. Das bisherige Image bleibt als `stafl-app:release-vorher`. Danach
+   neu erstellt; sonst bei neuem Image nur die Anwendungs-Container `app` und `app-mitarbeiter`, bei geänderter
+   `apache-oidc.conf` nur `app-mitarbeiter` (ADR-007). Das bisherige Image bleibt als `stafl-app:release-vorher`. Danach
    `deploy/bereitstellen.py`: Versionsnummern `?v=…` und Prüfliste `app/api/lib/integritaet-liste.php` aus den
    Git-Objekten genau dieses Commits.
 9. **Healthcheck** über Caddy wie ein Besucher: `status` (`"ok":true`), Angebots-API (200, 401 oder 503 im
-   Wartungsmodus), Startseite mit `assets/frontend.js`, `/admin/` mit `assets/admin.js`; zwei Erfolge hintereinander,
-   insgesamt bis etwa 40 s.
+   Wartungsmodus), Startseite mit `assets/frontend.js`, `/admin/` mit `assets/admin.js`; mit der Ergänzungsdatei der
+   Anmeldung zusätzlich die Mitarbeiter-Hosts (`dashboard-stafl.de/api/?action=status` → 401, eigener Container
+   `app-mitarbeiter`); zwei Erfolge hintereinander, insgesamt bis etwa 40 s.
 10. **Ergebnis:** Erfolg → `docker image prune -f` (nur hängende Images). Fehler → automatischer Rückfall auf den alten
     Commit und `stafl-app:release-vorher`. Status steht in `daten/deployment.php` und im Eingabebereich; optional
     Meldung an `HC_DEPLOY_URL`.
@@ -150,8 +152,9 @@ Ein VPS mit Docker Compose; Installationsordner `/opt/wochenangebot` (Git-Checko
 | Dienst | Herkunft | Aufgabe |
 | --- | --- | --- |
 | `caddy` | `docker-compose.yml`, Image `caddy:2`, Konfiguration `Caddyfile` | einziger öffentlicher Eingang (Ports 80/443), TLS-Zertifikate, Sicherheits-Header, Browser-Zwischenspeicher (Abschnitt `zwischenspeichern`); leitet an `app`, `app-mitarbeiter`, `keycloak` bzw. `app-test` weiter; nicht freigegebene Dashboard-Hosts als 503-Platzhalter (GR-105) |
-| `app` | `docker-compose.yml`; mit Ergänzungsdatei Image `stafl-app` aus `deploy/image/` (PHP 8.3, Apache, mod_auth_openidc) | die Anwendung; `app/` nur lesend, `daten/` als Datenordner; mit Ergänzungsdatei zusätzlich `dashboard/` und `apache-oidc.conf` (Keycloak-Hosts) und Netzwerkname `app-mitarbeiter` |
-| `keycloak` | `deploy/anmeldung/docker-compose.anmeldung.yml` (Version und Digest fest) | Mitarbeiteranmeldung, Realm `mitarbeiter`; Verwaltung nur auf `127.0.0.1:8180`; öffentlich über Caddy nur `/realms/mitarbeiter/` und `/resources/` |
+| `app` | `docker-compose.yml`; mit Ergänzungsdatei Image `stafl-app` aus `deploy/image/` (PHP 8.3, Apache, mod_auth_openidc nicht geladen) – baut dieses Image | die Anwendung; `app/` nur lesend, `daten/` als Datenordner. Mit Ergänzungsdatei **nur die Kundenseite** `angebot-stafl.de` (ADR-007): keine Anmelde-Geheimnisse, nur im Netz `default` mit Caddy, Dateisystem nur lesbar (`/tmp`, `/run` im Speicher), `no-new-privileges`, Grenzen `KUNDEN_CPUS`/`KUNDEN_SPEICHER` (Standard 3 CPU, 4 GB) |
+| `app-mitarbeiter` | `deploy/anmeldung/docker-compose.anmeldung.yml`, dasselbe Image `stafl-app` (nie aus dem Netz geholt) | alle Mitarbeiter-Hosts und die Prüfung vor der Anmeldeseite: `app/` nur lesend, derselbe Datenordner, dazu `dashboard/`, `apache-oidc.conf` (Keycloak-Hosts), Detailkarte, alle Anmelde-Geheimnisse und das Dienstkonto `konten`; Netz `intern` mit Caddy und Keycloak. Neue Anmelde-Werte aus `.env`: `docker compose up -d app-mitarbeiter` |
+| `keycloak` | `deploy/anmeldung/docker-compose.anmeldung.yml` (Version und Digest fest) | Mitarbeiteranmeldung, Realm `mitarbeiter`; Verwaltung nur auf `127.0.0.1:8180`; öffentlich über Caddy nur `/realms/mitarbeiter/` und `/resources/`; Netze `intern` (Caddy, app-mitarbeiter) und `anmeldung` – von der Kundenseite nicht erreichbar |
 | `keycloak-db` | ebenda, PostgreSQL 17 (Digest fest) | Datenbank nur für Keycloak, internes Netz `anmeldung` |
 | `app-test` | `deploy/testumgebung/docker-compose.yml` in `/opt/wochenangebot-test` | Testumgebung, nur im Netz `wochenangebot-edge` |
 

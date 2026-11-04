@@ -3,7 +3,9 @@
 Vorbereitet für die Inbetriebnahme nach [docs/plattform/inbetriebnahme-anmeldung.md](../../docs/plattform/inbetriebnahme-anmeldung.md).
 `docker-compose.yml` bleibt unverändert; aktiv wird die Ergänzungsdatei erst über `COMPOSE_FILE` in `.env` (Schritt 5).
 Die öffentlichen Hosts stehen im `Caddyfile` (Schritt 6) und führen nur zu Zielen, die es ausschließlich mit der
-Ergänzungsdatei gibt (`keycloak`, Netzwerkname `app-mitarbeiter`) – ohne sie antworten sie mit 502.
+Ergänzungsdatei gibt (`keycloak`, Container `app-mitarbeiter`) – ohne sie antworten sie mit 502. Seit ADR-007 laufen
+Kundenseite (`app`) und Mitarbeiter-Hosts (`app-mitarbeiter`) in getrennten Containern aus demselben Image; nur
+`app-mitarbeiter` kennt die Anmelde-Geheimnisse und erreicht Keycloak.
 
 | Datei | Inhalt |
 | --- | --- |
@@ -57,33 +59,33 @@ Befehl nach dem Import aus, die CI prüft also genau diesen Weg. Stand 2 (22.10.
 Pflicht-Konten (entscheidet die Anwendung), Anmeldemethoden im Claim `amr`, Leerlauf 4 Stunden.
 Stand 3 (22.10.2026): Client `verwaltung` für `verwaltung.dashboard-stafl.de` – legt ihn an, falls er fehlt (Definition aus
 `realm-mitarbeiter.json`), und ergänzt fehlende `OIDC_SECRET_VERWALTUNG`/`OIDC_CRYPTO_VERWALTUNG` in `.env` (nie angezeigt).
-Danach liest die Anwendung die neuen Werte erst nach `docker compose up -d app` (der Befehl weist darauf hin). Bis dahin
+Danach liest die Anwendung die neuen Werte erst nach `docker compose up -d app-mitarbeiter` (der Befehl weist darauf hin). Bis dahin
 startet die Anwendung trotzdem (Compose nimmt für die Verwaltung den Schlüssel des Eingabebereichs; ohne Client in
 Keycloak ist dort keine Anmeldung möglich).
 Stand 4 (22.10.2026): Client `bestand` für `bestand.dashboard-stafl.de` – gleiches Vorgehen wie Stand 3 (`OIDC_SECRET_BESTAND`/
-`OIDC_CRYPTO_BESTAND`, danach `docker compose up -d app`). Der Befehl geht jetzt alle Clients der Realm-Datei durch (fehlende
+`OIDC_CRYPTO_BESTAND`, danach `docker compose up -d app-mitarbeiter`). Der Befehl geht jetzt alle Clients der Realm-Datei durch (fehlende
 anlegen, Anmeldestärke und Claim `amr` einheitlich setzen) – ein künftiger Modul-Host braucht dort keine Codeänderung mehr.
 Stand 5 (23.10.2026, Freigabe des Inhabers): Client `hr` für `hr.dashboard-stafl.de` (Urlaubsverwaltung) – gleiches Vorgehen
-(`OIDC_SECRET_HR`/`OIDC_CRYPTO_HR`, danach `docker compose up -d app`). Voraussetzung: DNS-Eintrag `hr` (CNAME →
+(`OIDC_SECRET_HR`/`OIDC_CRYPTO_HR`, danach `docker compose up -d app-mitarbeiter`). Voraussetzung: DNS-Eintrag `hr` (CNAME →
 `dashboard-stafl.de`, wie `bestand.`/`login.`), sonst bekommt Caddy kein Zertifikat für den Host.
 Stand 6 (23.10.2026, Freigabe des Inhabers): Client `crm` für `crm.dashboard-stafl.de` (CRM · Vertrieb) – gleiches Vorgehen
-(`OIDC_SECRET_CRM`/`OIDC_CRYPTO_CRM`, danach `docker compose up -d app`). Der DNS-Eintrag `crm` besteht seit 21.10.2026.
+(`OIDC_SECRET_CRM`/`OIDC_CRYPTO_CRM`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `crm` besteht seit 21.10.2026.
 Stand 7 (25.10.2026, Freigabe des Inhabers): Client `marketing` für `marketing.dashboard-stafl.de` (Marketing · Redaktionsplan) –
-gleiches Vorgehen (`OIDC_SECRET_MARKETING`/`OIDC_CRYPTO_MARKETING`, danach `docker compose up -d app`). Der DNS-Eintrag `marketing` besteht seit 25.10.2026.
+gleiches Vorgehen (`OIDC_SECRET_MARKETING`/`OIDC_CRYPTO_MARKETING`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `marketing` besteht seit 25.10.2026.
 Stand 9 (26.10.2026, Freigabe des Inhabers): Client `sicherheit` für `sicherheit.dashboard-stafl.de` (Modul Sicherheit mit Notfallmodus) –
-gleiches Vorgehen (`OIDC_SECRET_SICHERHEIT`/`OIDC_CRYPTO_SICHERHEIT`, danach `docker compose up -d app`). Der DNS-Eintrag `sicherheit` (CNAME) besteht seit 26.10.2026.
+gleiches Vorgehen (`OIDC_SECRET_SICHERHEIT`/`OIDC_CRYPTO_SICHERHEIT`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `sicherheit` (CNAME) besteht seit 26.10.2026.
 
 Stand 10 (28.10.2026, Freigabe des Inhabers): Client `controlling` für `controlling.dashboard-stafl.de` (Modul Controlling) – gleiches
-Vorgehen (`OIDC_SECRET_CONTROLLING`/`OIDC_CRYPTO_CONTROLLING`, danach `docker compose up -d app`). Der DNS-Eintrag `controlling` (CNAME) besteht seit 25.10.2026.
+Vorgehen (`OIDC_SECRET_CONTROLLING`/`OIDC_CRYPTO_CONTROLLING`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `controlling` (CNAME) besteht seit 25.10.2026.
 
 Stand 11 (29.10.2026, Auftrag des Inhabers): Client `leergut` für `leergut.dashboard-stafl.de` (Modul Leergut) – gleiches Vorgehen
-(`OIDC_SECRET_LEERGUT`/`OIDC_CRYPTO_LEERGUT`, danach `docker compose up -d app`). Der DNS-Eintrag `leergut` besteht seit 25.10.2026.
+(`OIDC_SECRET_LEERGUT`/`OIDC_CRYPTO_LEERGUT`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `leergut` besteht seit 25.10.2026.
 
 Stand 12 (30.10.2026, Auftrag des Inhabers): Client `rewe` für `rewe.dashboard-stafl.de` (Modul REWE · Vordisposition Dry Aged) – gleiches
-Vorgehen (`OIDC_SECRET_REWE`/`OIDC_CRYPTO_REWE`, danach `docker compose up -d app`). Der DNS-Eintrag `rewe` besteht seit 21.10.2026.
+Vorgehen (`OIDC_SECRET_REWE`/`OIDC_CRYPTO_REWE`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `rewe` besteht seit 21.10.2026.
 
 Stand 13 (30.10.2026, Entscheidung des Inhabers „gleich produktiv“): Client `qs` für `qs.dashboard-stafl.de` (Modul Qualitätssicherung ·
-QM-System) – gleiches Vorgehen (`OIDC_SECRET_QS`/`OIDC_CRYPTO_QS`, danach `docker compose up -d app`). Der DNS-Eintrag `qs` besteht seit 21.10.2026.
+QM-System) – gleiches Vorgehen (`OIDC_SECRET_QS`/`OIDC_CRYPTO_QS`, danach `docker compose up -d app-mitarbeiter`). Der DNS-Eintrag `qs` besteht seit 21.10.2026.
 
 Stand 14 (03.11.2026, Härtung nach der Anmeldeprüfung): kein Client des Realms erlaubt den Passwort-Grant, auch keiner der
 Clients, die Keycloak selbst anlegt – Anmeldungen laufen nur über die Anmeldeseite. Einmal auf dem Server ausführen:
@@ -107,10 +109,10 @@ Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Adminis
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt
 (`app/api/lib/anmeldekonten.php`). Rechte genau `view-users` und `manage-users` von `realm-management` – keine Realm-,
 Client- oder Rollenverwaltung, kein Anmelden im Namen anderer, kein Passwort-Grant; `realm-aktualisieren` entfernt
-zusätzliche Rollen. Legt `OIDC_SECRET_KONTEN` in `.env` an (nie angezeigt); danach `docker compose up -d app`. Die Anwendung
+zusätzliche Rollen. Legt `OIDC_SECRET_KONTEN` in `.env` an (nie angezeigt); danach `docker compose up -d app-mitarbeiter`. Die Anwendung
 spricht Keycloak im internen Netz an (`WA_KONTEN_URL=http://keycloak:8080`, nicht über Caddy). Ohne das Geheimnis zeigt die
 Verwaltung „noch nicht eingerichtet“ – sonst ändert sich nichts. Rückweg: Client `konten` in Keycloak deaktivieren oder die
-Zeile `OIDC_SECRET_KONTEN` aus `.env` entfernen und `docker compose up -d app`.
+Zeile `OIDC_SECRET_KONTEN` aus `.env` entfernen und `docker compose up -d app-mitarbeiter`.
 
 ## Alter Eingabebereich (angebot-stafl.de/admin/) stillgelegt
 

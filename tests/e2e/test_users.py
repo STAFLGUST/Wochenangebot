@@ -308,8 +308,9 @@ with sync_playwright() as p:
     check('2FA-Pflicht: laufende Sitzung ohne zweiten Faktor danach gesperrt (403)', r[0] == 403 and 'Zwei-Faktor' in r[1].get('error', ''), r)
     # ── Zentrale Anmeldung (lib/anmeldekonten.php): ohne Keycloak-Host und ohne Client „konten“ nur ein verständlicher Hinweis ──
     r = z.evaluate("id => fetch('../api/?action=anmeldekonto&id=' + encodeURIComponent(id)).then(async r => [r.status, await r.json()])", cid)
-    check('Anmeldekonto: ohne Einrichtung „noch nicht eingerichtet“ mit Konsolenbefehl (kein Fehler 500)', r[0] == 200 and r[1]['konto']['eingerichtet'] is False
-          and 'konten.sh realm-aktualisieren' in r[1]['konto'].get('hinweis', ''), r)
+    check('Anmeldekonto: ohne Einrichtung „noch nicht eingerichtet“ mit Konsolenbefehl (kein Fehler 500), Neustart des Mitarbeiter-Containers (ADR-007)',
+          r[0] == 200 and r[1]['konto']['eingerichtet'] is False and 'konten.sh realm-aktualisieren' in r[1]['konto'].get('hinweis', '')
+          and 'docker compose up -d app-mitarbeiter' in r[1]['konto'].get('hinweis', ''), r)
     r = api_from_page(z, 'anmeldekonto_aendern', {'id': cid, 'was': 'passwort', 'passwort': 'Zentral-Kennwort-123'})
     check('Anmeldekonto ändern: ohne Einrichtung 503 mit Hinweis, nichts gespeichert', r[0] == 503 and 'realm-aktualisieren' in r[1].get('error', '')
           and 'Zentral-Kennwort-123' not in (storage_raw('nutzer') or ''), r)

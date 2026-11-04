@@ -249,7 +249,7 @@ for _cid in ('admin-cli', 'dashboard'):
     check(f'Token-Endpunkt über Caddy: Passwort-Grant mit {_cid} abgelehnt', code in (400, 401) and 'invalid_grant' not in text, (code, text[:120]))
 check('Stand 3: Client „verwaltung“ nachträglich angelegt, Geheimnisse in .env erzeugt (ohne Anzeige), Hinweis auf Neustart',
       'angelegt:  Client verwaltung' in _log and 'erzeugt:   OIDC_SECRET_VERWALTUNG in .env' in _log and 'erzeugt:   OIDC_CRYPTO_VERWALTUNG in .env' in _log
-      and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app' in _log, _log[-400:])
+      and GEHEIM['OIDC_SECRET_VERWALTUNG'] not in _log and 'docker compose up -d app-mitarbeiter' in _log, _log[-400:])
 check('Client „verwaltung“: Geheimnis aus .env übernommen (Code-Austausch funktioniert, siehe Anmeldung unten), kein Platzhalter',
       clients.get('verwaltung', {}).get('secret') not in (None, '@GEHEIM_VERWALTUNG@'))
 check('Stand 4: Client „bestand“ nachträglich angelegt (Schleife über alle Clients der Realm-Datei), Geheimnisse in .env erzeugt (ohne Anzeige)',
