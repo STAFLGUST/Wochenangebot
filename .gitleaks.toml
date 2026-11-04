@@ -47,6 +47,8 @@ regexes = [
   '''Zeitimport-Konto-22''',
   # Passwort vergessen (tests/oidc/test_oidc.py; Verlauf des Zweigs plattform/passwort-vergessen – im Test heute als Variable)
   '''Eva-Passkey-Kennwort-6''',
+  # Angriff über den Benutzernamen eines Administrators (tests/oidc/test_oidc.py; Verlauf von PR #283 – im Test heute als Variable)
+  '''Angreifer-Kennwort-77''',
   # Platzhalter in .env.example
   '''hier-das-Postfach-Passwort''',
 ]

@@ -236,7 +236,7 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 15' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 16' in _log, _log[-300:])
 # Stand 15: Passwortregeln aus der Anwendung – beim Start ist sie hier nicht über APP_PHP erreichbar: Hinweis, nichts geändert, kein Abbruch
 check('Stand 15: ohne lesbare Anwendung Hinweis statt Abbruch, Passwortregeln unverändert',
       'Einstellungen der Anwendung nicht lesbar' in _log and 'konten.sh richtlinien' in _log and realm.get('failureFactor') == 5, _log[-500:])
@@ -299,7 +299,14 @@ check('Client „qs“: Geheimnis aus .env übernommen, kein Platzhalter, Rücks
       clients.get('qs', {}).get('secret') not in (None, '@GEHEIM_QS@') and clients.get('qs', {}).get('redirectUris') == [QS + '/oidc/callback'])
 check('Stand 8: Client „konten“ (Mitarbeiterkonten aus der Verwaltung) nachträglich angelegt, nur Geheimnis (kein Sitzungsschlüssel), nicht angezeigt',
       'angelegt:  Client konten' in _log and 'erzeugt:   OIDC_SECRET_KONTEN in .env' in _log and 'OIDC_CRYPTO_KONTEN' not in _log
-      and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'gesetzt:   Recht manage-users' in _log, _log[-600:])
+      and GEHEIM['OIDC_SECRET_KONTEN'] not in _log and 'gesetzt:   Recht view-users' in _log and 'manage-users' not in _log, _log[-600:])
+# Stand 16 (ADR-007 Stufe 1b): ändern nur Konten der Gruppe anwendungskonten – beim Start ist die Anwendung nicht lesbar:
+# Gruppe, Regel und Berechtigung angelegt, Abgleich mit Hinweis auf später (kein Abbruch), Gruppe noch leer
+check('Stand 16: Gruppe anwendungskonten, Regel und Berechtigung angelegt; ohne lesbare Anwendung Hinweis auf gruppe-abgleichen',
+      'angelegt:  Gruppe anwendungskonten' in _log and "angelegt:  Regel 'Dienstkonto der Anwendung (Client konten)'" in _log
+      and "angelegt:  Berechtigung 'Anwendung verwaltet Mitarbeiterkonten (Gruppe anwendungskonten)'" in _log
+      and 'konten.sh gruppe-abgleichen' in _log, _log[-900:])
+check('Stand 16: feingranulare Verwaltungsrechte im Realm eingeschaltet', realm.get('adminPermissionsEnabled') is True, realm.get('adminPermissionsEnabled'))
 _k = clients.get('konten', {})
 check('Client „konten“: vertraulich, nur Service-Account (kein Anmeldeablauf, kein Passwort-Grant, keine Weiterleitungen), ohne Anmeldestufe',
       _k.get('publicClient') is False and _k.get('serviceAccountsEnabled') is True and _k.get('standardFlowEnabled') is False
@@ -308,7 +315,7 @@ check('Client „konten“: vertraulich, nur Service-Account (kein Anmeldeablauf
 _sa = json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/clients/{_k.get('id')}/service-account-user", kopf={'Authorization': 'Bearer ' + tok})[2])
 _rm = clients.get('realm-management', {}).get('id')
 _rollen = sorted(x['name'] for x in json.loads(anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_sa.get('id')}/role-mappings/clients/{_rm}", kopf={'Authorization': 'Bearer ' + tok})[2]))
-check('Service-Account „konten“: genau view-users und manage-users (keine Realm-/Client-Verwaltung, kein impersonation)', _rollen == ['manage-users', 'view-users'], _rollen)
+check('Service-Account „konten“: nur noch view-users (Ändern nur über die Gruppe; keine Realm-/Client-Verwaltung, kein impersonation)', _rollen == ['view-users'], _rollen)
 _c, _, _t = anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
     'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
 _kt = json.loads(_t).get('access_token', '') if _c == 200 else ''
@@ -321,6 +328,44 @@ _c, _, _t = anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'P
     'grant_type': 'password', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN'], 'username': 'erika', 'password': NUTZER['erika'][0]}).encode(),
     {'Content-Type': 'application/x-www-form-urlencoded'})
 check('… kein Passwort-Grant (Anmeldung im Namen von Mitarbeitern unmöglich)', _c in (400, 401) and 'access_token' not in _t, (_c, _t[:120]))
+# Stand 16: was der Client „konten“ außerhalb der Gruppe darf – nichts ändern, nur lesen; Konten nur in der Gruppe anlegen
+_KA = KC + '/admin/realms/mitarbeiter'
+def _frisch(daten):   # frisches Token (Verwaltungs-Tokens gelten nur kurz)
+    _c, _, _t = anfrage(daten[0], 'POST', urllib.parse.urlencode(daten[1]).encode(), {'Content-Type': 'application/x-www-form-urlencoded'})
+    return json.loads(_t).get('access_token', '') if _c == 200 else ''
+_kt = _frisch((KC + '/realms/mitarbeiter/protocol/openid-connect/token', {'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}))
+_at = _frisch((KC + '/realms/master/protocol/openid-connect/token', {'grant_type': 'password', 'client_id': 'admin-cli', 'username': 'verwaltung-ci', 'password': GEHEIM['KC_ADMIN_PASSWORD']}))
+def _kh(json_=False):
+    return {'Authorization': 'Bearer ' + _kt, **({'Content-Type': 'application/json'} if json_ else {})}
+def _uid(n):
+    _j = json.loads(anfrage(f'{_KA}/users?exact=true&username={n}', kopf={'Authorization': 'Bearer ' + _at})[2] or '[]')
+    return _j[0]['id'] if _j else ''
+_gid = json.loads(anfrage(f'{_KA}/group-by-path/anwendungskonten', kopf={'Authorization': 'Bearer ' + _at})[2] or '{}').get('id', '')
+_admin_kc = _uid('admin')
+_rm_roll = json.loads(anfrage(f"{_KA}/clients/{_rm}/roles/realm-admin", kopf={'Authorization': 'Bearer ' + _at})[2] or '{}')
+check('Stand 16: „konten“ liest Konten (Administrator: access.manage = false)', _admin_kc != '' and json.loads(
+      anfrage(f'{_KA}/users/{_admin_kc}', kopf=_kh())[2] or '{}').get('access', {}).get('manage') is False)
+check('… darf Konten außerhalb der Gruppe nicht ändern: Passwort, Daten, Abmelden, Löschen, Mail (403)', all(c == 403 for c in (
+      anfrage(f'{_KA}/users/{_admin_kc}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': 'Fremd-Gesetzt-Kennwort-9', 'temporary': True}).encode(), _kh(json_=True))[0],
+      anfrage(f'{_KA}/users/{_admin_kc}', 'PUT', b'{"email":"x@stafl.test"}', _kh(json_=True))[0],
+      anfrage(f'{_KA}/users/{_admin_kc}/logout', 'POST', b'', _kh())[0],
+      anfrage(f'{_KA}/users/{_admin_kc}', 'DELETE', None, _kh())[0],
+      anfrage(f'{_KA}/users/{_admin_kc}/execute-actions-email', 'PUT', b'["UPDATE_PASSWORD"]', _kh(json_=True))[0])))
+check('… darf niemanden in die Gruppe aufnehmen und keine Rollen vergeben (403)', _gid != '' and all(c == 403 for c in (
+      anfrage(f'{_KA}/users/{_admin_kc}/groups/{_gid}', 'PUT', b'', _kh())[0],
+      anfrage(f'{_KA}/groups/{_gid}/role-mappings/clients/{_rm}', 'POST', json.dumps([_rm_roll]).encode(), _kh(json_=True))[0],
+      anfrage(f'{_KA}/groups', 'POST', b'{"name":"andere"}', _kh(json_=True))[0])))
+check('… legt kein Konto außerhalb der Gruppe an (403)',
+      anfrage(f'{_KA}/users', 'POST', b'{"username":"probe-ohne-gruppe","enabled":true}', _kh(json_=True))[0] == 403 and _uid('probe-ohne-gruppe') == '')
+_c, _, _t = anfrage(f'{_KA}/users', 'POST', b'{"username":"probe-in-gruppe","enabled":true,"groups":["/anwendungskonten"]}', _kh(json_=True))
+_pid = _uid('probe-in-gruppe')
+_mit = [g.get('path') for g in json.loads(anfrage(f'{_KA}/users/{_pid}/groups', kopf={'Authorization': 'Bearer ' + _at})[2] or '[]')] if _pid else []
+check('… legt Konten nur in der Gruppe an, ändert sie, vergibt aber keine Verwaltungsrolle und entfernt sie nicht aus der Gruppe',
+      _c == 201 and _mit == ['/anwendungskonten']
+      and anfrage(f'{_KA}/users/{_pid}', 'PUT', b'{"firstName":"Probe"}', _kh(json_=True))[0] == 204
+      and anfrage(f'{_KA}/users/{_pid}/role-mappings/clients/{_rm}', 'POST', json.dumps([_rm_roll]).encode(), _kh(json_=True))[0] == 403
+      and anfrage(f'{_KA}/users/{_pid}/groups/{_gid}', 'DELETE', None, _kh())[0] == 403, (_c, _mit))
+check('… und löscht nur Konten der Gruppe', anfrage(f'{_KA}/users/{_pid}', 'DELETE', None, _kh())[0] == 204 and _uid('probe-in-gruppe') == '')
 
 
 def kc_token():
@@ -1642,6 +1687,21 @@ with sync_playwright() as pw:
     m2 = warte_mail('eva@stafl.test', 2)
     check('erneute Einladung: wieder nur „Passwort festlegen“', code == 0 and m2 and 'Passwort festlegen' in m2['text'] and 'Mehrfachauthentifizierung' not in m2['text'], (aus, m2 and m2['text'][:200]))
 
+    # ── Stand 16 (ADR-007 Stufe 1b): Gruppe anwendungskonten abgleichen – Konten der Mitarbeiter ohne Administratorrolle ──
+    def kc_mitglied(n):
+        _k = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=' + n, kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[]')
+        return bool(_k) and '/anwendungskonten' in [g.get('path') for g in json.loads(anfrage(
+            f"{KC}/admin/realms/mitarbeiter/users/{_k[0]['id']}/groups", kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[]')]
+    check('Einladung aus der Konsole: neues Konto gleich in der Gruppe (Bearbeiterin)', kc_mitglied('eva.einladung'))
+    code, aus = konten('gruppe-abgleichen')
+    check('Konsole gruppe-abgleichen: Bearbeiter aufgenommen, Administratoren und Konten ohne Mitarbeiter nicht',
+          code == 0 and "aufgenommen: Konto 'erika'" in aus and "aufgenommen: Konto 'neu'" in aus and 'Gruppe anwendungskonten:' in aus
+          and not any(f"Konto '{n}'" in aus for n in ('admin', 'chef', 'fremd')), aus)
+    check('… Mitglieder in Keycloak: erika und neu ja; admin, chef und fremd nein',
+          kc_mitglied('erika') and kc_mitglied('neu') and not any(kc_mitglied(n) for n in ('admin', 'chef', 'fremd')))
+    code, aus = konten('gruppe-abgleichen')
+    check('… erneut ausgeführt ändert nichts', code == 0 and 'aufgenommen:' not in aus and 'entfernt:' not in aus, aus)
+
     # ── Mitarbeiterkonten aus der Verwaltung (Stand 8, lib/anmeldekonten.php): EIN Passwort – das der zentralen Anmeldung ──
     KIM = {'eigen': 'Kim-Eigenes-Kennwort-1', 'zweit': 'Kim-Zweites-Kennwort-2'}
     ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
@@ -1760,6 +1820,90 @@ with sync_playwright() as pw:
     check('normales Konto: Wahl bleibt', code == 200 and j['konto'].get('nurTemporaer') is False, (code, j))
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': kim, 'was': 'passwort', 'passwort': KIM['zweit'], 'aendern': False}])
     check('… dauerhaft gesetzt (kein eigenes Passwort verlangt)', code == 200 and j.get('temporaer') is False and j['konto'].get('passwortAendern') is False, (code, j))
+    check('… über die Verwaltung angelegte Konten stehen in der Gruppe (Kim, Lea, Ole)', all(kc_mitglied(n) for n in ('kim.konto', 'lea-einladung', 'ole.ohnemail')))
+
+    # ── Stand 16: Konten von Administratoren nur über die Serverkonsole ──
+    chef_id = nutzer_roh()['chef']['id']
+    code, j = pg.evaluate(hole, chef_id)
+    check('Administrator „chef“: Zustand lesbar, nicht über die Verwaltung änderbar (Befehl der Serverkonsole genannt)',
+          code == 200 and j['konto'].get('vorhanden') is True and j['konto'].get('verwaltbar') is False and j['konto'].get('admin') is True
+          and 'konten.sh startpasswort chef' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': chef_id, 'was': 'passwort', 'passwort': 'Fremd-Gesetzt-Kennwort-2'}])
+    code2, j2 = pg.evaluate(post, ['anmeldekonto_aendern', {'id': chef_id, 'was': 'entsperren'}])
+    check('… Passwort setzen und Entsperren abgelehnt (403, Hinweis auf die Serverkonsole)', code == 403 and code2 == 403
+          and 'Serverkonsole' in j.get('error', '') and 'Serverkonsole' in j2.get('error', ''), (code, j, code2, j2))
+    pg.click('#vt-users'); pg.wait_for_selector(f'#view-users tr[data-uid="{chef_id}"]')
+    pg.click(f'#view-users tr[data-uid="{chef_id}"]'); pg.wait_for_selector('#ka-status:has-text("Serverkonsole")')
+    check('Dialog Administrator: keine Knöpfe (Passwort, Link, Entsperren), Hinweis mit Befehl',
+          pg.locator('#ka-knoepfe button').count() == 0 and 'konten.sh startpasswort chef' in pg.inner_text('#ka-status'), pg.inner_text('#ka'))
+    pg.locator('#ka').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_admin_1280.png'))
+    pg.set_viewport_size({'width': 390, 'height': 844})
+    check('… 390 px: kein waagerechtes Scrollen', pg.evaluate("document.querySelector('#dlg-user').scrollWidth <= document.querySelector('#dlg-user').clientWidth + 1"))
+    pg.locator('#ka').scroll_into_view_if_needed(); pg.screenshot(path=os.path.join(SH, 'oidc_anmeldekonto_admin_390.png'))
+    pg.set_viewport_size({'width': 1280, 'height': 900})
+    pg.click('#dlg-user [data-close]')
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Bea', 'nachname': 'Boss', 'username': 'bea.boss', 'email': 'bea@stafl.test', 'rollen': ['admin'], 'active': True}])
+    bea = j.get('user', {}).get('id', '')
+    code, j = pg.evaluate(hole, bea)
+    check('Neuer Administrator ohne Konto: kein „Konto anlegen“, Befehl der Serverkonsole genannt', bool(bea) and code == 200
+          and j['konto'].get('vorhanden') is False and j['konto'].get('anlegbar') is False and 'konten.sh einladen bea.boss' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': bea, 'was': 'anlegen', 'einladen': True}])
+    _bea_kc = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=bea.boss', kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[]')
+    check('… Anlegen über die Verwaltung abgelehnt (403), kein Konto in Keycloak', code == 403 and 'Serverkonsole' in j.get('error', '') and not _bea_kc, (code, j))
+    # Angriff mit dem Geheimnis des Clients „konten“: Konto mit dem Namen des noch nicht verknüpften Administrators in der Gruppe
+    # anlegen, Passwort setzen, anmelden → abgelehnt (lib/oidc.php, oidc_admin_konto_pruefen), keine Verknüpfung
+    _ktok = json.loads(anfrage(KC + '/realms/mitarbeiter/protocol/openid-connect/token', 'POST', urllib.parse.urlencode({
+        'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}).encode(),
+        {'Content-Type': 'application/x-www-form-urlencoded'})[2]).get('access_token', '')
+    _kk = {'Authorization': 'Bearer ' + _ktok, 'Content-Type': 'application/json'}
+    ANGRIFF_PW = 'Angreifer-Kennwort-CI-7'   # nur Testumgebung
+    _c1 = anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'bea.boss', 'enabled': True, 'email': 'angreifer@stafl.test',
+        'emailVerified': True, 'firstName': 'Bea', 'lastName': 'Boss', 'groups': ['/anwendungskonten']}).encode(), _kk)[0]
+    _bid = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=bea.boss', kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[{}]') or [{}])[0].get('id', '')
+    _c2 = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_bid}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': ANGRIFF_PW, 'temporary': False}).encode(), _kk)[0]
+    ca = br.new_context(ignore_https_errors=True); pa = eigene_seite(ca.new_page())
+    pa.goto(D + '/'); pa.wait_for_selector('#username'); pa.fill('#username', 'bea.boss'); pa.fill('#password', ANGRIFF_PW); pa.click('#kc-login')
+    pa.wait_for_selector('#db-err:not([hidden])')
+    check('Angriff (Konto mit dem Namen eines Administrators über den Client „konten“): Anmeldung abgelehnt, keine Verknüpfung, protokolliert',
+          _c1 == 201 and _c2 == 204 and 'gruppe-abgleichen' in pa.text_content('#db-err') and pa.is_hidden('#db-bereich')
+          and not nutzer_roh()['bea.boss'].get('oidcSub') and any('mit einem Konto der Gruppe anwendungskonten abgelehnt' in str(e) for e in protokoll_roh()),
+          (_c1, _c2, pa.text_content('#db-err'), nutzer_roh()['bea.boss'].get('oidcSub')))
+    ca.close()
+    check('… das Konto in der Gruppe löscht die Verwaltung wieder (Aufräumen)', anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_bid}', 'DELETE', None, _kk)[0] == 204)
+    # Beförderung: Erikas Konto steht noch in der Gruppe – als Administratorin erst nach konten.sh gruppe-abgleichen
+    V4 = Legacy()
+    V4.call('login', {'username': 'admin', 'password': PW_ALT})
+    code_p, j_p = V4.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'admin', 'active': True})
+    code, j = pg.evaluate(hole, erika_id)
+    check('Befördert (Konto noch in der Gruppe): Verwaltung ändert es nicht mehr und warnt mit Befehl', code_p == 200 and code == 200
+          and j['konto'].get('verwaltbar') is False and j['konto'].get('warnung') is True and 'gruppe-abgleichen' in j['konto'].get('hinweis', ''), (code_p, j_p, j))
+    # Anmeldung eines Administrators, dessen Konto noch in der Gruppe steht – nachgestellt mit „chef“ (Einmalcode oben eingerichtet):
+    # Konto wie die Serverkonsole in die Gruppe legen, anmelden → abgelehnt; konten.sh gruppe-abgleichen chef nimmt es wieder heraus
+    _vk = {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    _chef_kc = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=chef', kopf=_vk)[2] or '[{}]') or [{}])[0].get('id', '')
+    _g16 = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/group-by-path/anwendungskonten', kopf=_vk)[2] or '{}').get('id', '')
+    _ca = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_chef_kc}/groups/{_g16}', 'PUT', b'', _vk)[0]
+    c4 = br.new_context(ignore_https_errors=True); p4 = eigene_seite(c4.new_page())
+    p4.goto(D + '/'); p4.wait_for_selector('#username'); p4.fill('#username', 'chef'); p4.fill('#password', NUTZER['chef'][0]); p4.click('#kc-login')
+    _seite = ''
+    try:
+        p4.wait_for_selector('#otp', timeout=15000); p4.fill('#otp', totp(chef_otp)); p4.click('#kc-login')
+        p4.wait_for_selector('#db-err:not([hidden])', timeout=20000)
+    except Exception as _e:   # Anmeldeseite festhalten statt abzubrechen (Fehlersuche)
+        _seite = f'{type(_e).__name__}: {p4.url} {p4.inner_text("body")[:300]}'
+    _db_err = p4.text_content('#db-err') if p4.locator('#db-err').count() else ''
+    check('Administrator mit einem Konto der Gruppe: Anmeldung abgelehnt (Hinweis gruppe-abgleichen)', _ca == 204 and not _seite
+          and 'gruppe-abgleichen' in (_db_err or '') and p4.is_hidden('#db-bereich'), (_ca, _seite, _db_err))
+    c4.close()
+    code, aus = konten('gruppe-abgleichen', 'chef')
+    check('… konten.sh gruppe-abgleichen chef nimmt das Administratorkonto heraus', code == 0 and "entfernt:  Konto 'chef'" in aus and 'Administrator' in aus
+          and not kc_mitglied('chef'), aus)
+    code, aus = konten('gruppe-abgleichen', 'erika')
+    check('Konsole gruppe-abgleichen erika: als Administratorin aus der Gruppe entfernt', code == 0 and "entfernt:  Konto 'erika'" in aus and 'Administrator' in aus
+          and not kc_mitglied('erika'), aus)
+    code_p, j_p = V4.call('user_save', {'id': erika_id, 'name': 'Erika Editor', 'username': 'erika', 'role': 'editor', 'active': True})
+    code, aus = konten('gruppe-abgleichen', 'erika')
+    check('… zurückgestuft: wieder aufgenommen', code_p == 200 and code == 0 and "aufgenommen: Konto 'erika'" in aus and kc_mitglied('erika'), (code_p, aus))
 
     # ── Ablauf und Beenden von Sitzungen auf Keycloak-Hosts (Sicherheitsdurchsicht 26.10.2026): keine stille neue Sitzung ──
     ck = br.new_context(ignore_https_errors=True); pk = eigene_seite(ck.new_page())
@@ -2078,8 +2222,19 @@ with sync_playwright() as pw:
           and not nutzer_roh()['paul.rest'].get('oidcSub'), p3.text_content('#db-err'))
     c3.close()
     code, j = pg.evaluate(hole, paul)
-    check('Verwaltung: altes Konto erkannt, „Konto anlegen“ angeboten', code == 200 and j['konto'].get('vorhanden') is False and j['konto'].get('altkonto') is True
-          and 'gelöschten Mitarbeiter' in j['konto'].get('hinweis', ''), (code, j))
+    # Stand 16: das alte Konto steht nicht in der Gruppe anwendungskonten – löschen kann es nur die Serverkonsole
+    check('Verwaltung: altes Konto erkannt; außerhalb der Gruppe erst in der Serverkonsole löschen (kein „Konto anlegen“)', code == 200
+          and j['konto'].get('vorhanden') is False and j['konto'].get('altkonto') is True and j['konto'].get('anlegbar') is False
+          and 'gelöschten Mitarbeiter' in j['konto'].get('hinweis', '') and 'verwaist --loeschen' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'anlegen'}])
+    check('… „Konto anlegen“ abgelehnt (403, Befehl genannt), altes Konto bleibt', code == 403 and 'verwaist --loeschen' in j.get('error', '')
+          and len(kc_konto('paul.rest')) == 1, (code, j))
+    # wie es die Serverkonsole täte (konten.sh verwaist --loeschen) – nachgestellt, damit „lisa.weg“ und „fremd“ für unten bleiben:
+    # das alte Konto in die Gruppe (die Anwendung darf es dann ersetzen)
+    _g = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/group-by-path/anwendungskonten', kopf=kc_h())[2] or '{}').get('id', '')
+    anfrage(f'{KC}/admin/realms/mitarbeiter/users/{paul_alt}/groups/{_g}', 'PUT', b'', kc_h())
+    code, j = pg.evaluate(hole, paul)
+    check('… steht es in der Gruppe: „Konto anlegen“ ersetzt es', code == 200 and j['konto'].get('anlegbar') is True and 'ersetzt es durch ein neues' in j['konto'].get('hinweis', ''), (code, j))
     code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'anlegen'}])
     paul_neu = (kc_konto('paul.rest') or [{}])[0].get('id', '')
     check('… „Konto anlegen“ ersetzt das alte Konto: neues Konto verknüpft, altes gelöscht', code == 200 and j['konto'].get('verknuepft') and paul_neu not in ('', paul_alt)

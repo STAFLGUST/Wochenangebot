@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 961 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+103 Dateien, 972 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -68,15 +68,21 @@ _Adressen → Koordinaten auf dem eigenen Server (Plattformkern, genutzt von der
 
 _Konten der zentralen Anmeldung (Keycloak, Realm „mitarbeiter“) aus der Verwaltung steuern – EIN Passwort für alles._
 
+- `konten_ist_admin(u)` – Administrator der Anwendung?
+- `konten_nur_konsole_text(u)` – Hinweis, wenn Keycloak dem Client ein Konto nicht freigibt (403 bzw. access.manage = false)
+- `konten_verboten(st, u)` – 403 von Keycloak bei einer Änderung → verständlicher Fehler (sonst nichts)
 - `__construct(meldung, status)`
 - `konten_einstellung()` – Einstellungen: Adresse von Keycloak im internen Netz (Betrieb http://keycloak:8080) und Geheimnis des Clients
 - `konten_eingerichtet()`
 - `konten_http(methode, url, inhalt, kopf)` – Eine Anfrage an Keycloak: [Status, JSON\|null, Kopfzeilen].
 - `konten_token()` – Zugangstoken des Clients „konten“ (client_credentials), nur im Speicher dieser Anfrage
-- `konten_api(methode, pfad, daten)` – Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/
+- `konten_api(methode, pfad, daten)` – Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/.
 - `konten_finden(u)` – Keycloak-Konto zum Mitarbeiterkonto: [Konto\|null, Hinweis, Altkonto\|null].
 - `konten_status(u)` – Zustand für die Verwaltung (nur lesen)
+- `konten_gruppe_da()` – Gibt es die Gruppe „anwendungskonten“ (Realm auf Stand 16)?
+- `konten_in_gruppe(sub)` – Steht das Keycloak-Konto (sub) in der Gruppe „anwendungskonten“, darf es also die Verwaltung der Anwendung ändern? true/false; null = nicht feststellbar …
 - `konten_pflicht(u)` – Vorhandenes Konto oder Fehler (für schreibende Funktionen)
+- `konten_pflicht_aenderbar(u)` – Wie konten_pflicht, für Änderungen: Administratorkonten ändert ab Stand 16 nur die Serverkonsole – die Anwendung verweigert es selbst, auch solange Keycloak …
 - `konten_min_laenge()` – Mindestlänge für Passwörter der zentralen Anmeldung: Einstellung „Passwörter mindestens … Zeichen“, nie unter 12 (Grundwert des Realms).
 - `konten_passwort_meldung(j)` – Richtlinienfehler von Keycloak (Passwort) auf Deutsch
 - `konten_startpasswort()` – Gut vorlesbares Startpasswort wie konten.sh (mindestens 16 Zeichen in Vierergruppen, ohne 0/O/1/l/I), immer mit Groß- und Kleinbuchstaben und Ziffer – …
@@ -406,6 +412,7 @@ _Mitarbeiteranmeldung über Keycloak (ADR-003, GR-110) – Roadmap 7b, vorerst n
 - `oidc_stufe_ok(id, u)`
 - `oidc_stufe_adresse()` – Anmeldung mit zweitem Faktor bei Keycloak anfordern (zweite Stufe; fehlt er, richtet der Mitarbeiter ihn dort ein)
 - `oidc_konto(id)` – Mitarbeiterkonto zur Identität; ohne aktives Konto 403 (nicht 401 – sonst meldete der Browser sich endlos neu an)
+- `oidc_admin_konto_pruefen(u, id, neu)` – Administratoren nie mit einem Keycloak-Konto, das die Verwaltung der Anwendung ändern darf (Gruppe „anwendungskonten“, Stand 16, ADR-007 Stufe 1b): sonst …
 - `oidc_aktiv(u)`
 - `oidc_geloescht()` – Kennungen (sub) der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt (Dokument „oidc-geloescht“, nur wachsend und klein).
 - `oidc_geloescht_merken(sub)`
@@ -1420,6 +1427,9 @@ _Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen ge
 - `call(action, data, _erneut)`
 - `protokoll_roh()` – Einträge des Protokolls (Dateispeicher der Testumgebung, aktueller Monat).
 - `nutzer_roh()`
+- `_frisch(daten)`
+- `_kh(json_)`
+- `_uid(n)`
 - `kc_token()`
 - `_ablauf()` – Zustand wie im Betrieb nachstellen: nur die Passwort-Abfrage meldet ihre Anmeldemethode (amr), Einmalcode und Passkey nicht – so hatte „… \| while read“ mit …
 - `design_setzen(*args)`
@@ -1442,6 +1452,7 @@ _Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen ge
 - `vtoken_bf()`
 - `vtoken()` – Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
 - `warte_mail(adresse, anzahl)`
+- `kc_mitglied(n)` – ── Stand 16 (ADR-007 Stufe 1b): Gruppe anwendungskonten abgleichen – Konten der Mitarbeiter ohne Administratorrolle ──
 - `doc_roh(name)` – Abmelden nach Inaktivität gilt über alle Adressen zusammen (04.11.2026): letzte Aktivität je Anmeldung bei Keycloak im Dokument oidc-aktivitaet.
 - `kim_inaktiv(sekunden)`
 - `php_sitzung_ruht(host, sekunden)`

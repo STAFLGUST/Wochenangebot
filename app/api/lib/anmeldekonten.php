@@ -3,10 +3,16 @@ declare(strict_types=1);
 /* Konten der zentralen Anmeldung (Keycloak, Realm „mitarbeiter“) aus der Verwaltung steuern – EIN Passwort für alles.
    Die Anwendung prüft weiterhin kein Passwort selbst (GR-110): sie bittet Keycloak über dessen Verwaltungsschnittstelle
    (Admin-REST-API), ein Passwort zu setzen, eine Sperre nach Fehlversuchen aufzuheben, den Link zum Passwort-Festlegen
-   zu schicken oder ein fehlendes Konto anzulegen. Zugang: eigener vertraulicher Client „konten“ nur mit Service-Account
-   und den Rollen view-users und manage-users (realm-management) – keine Realm-, Client- oder Rollenverwaltung, kein
-   Anmelden als andere Person. Einrichtung: deploy/anmeldung/konten.sh realm-aktualisieren (Stand 8, Geheimnis
-   OIDC_SECRET_KONTEN nur in .env). Fehlt es, melden alle Funktionen „nicht eingerichtet“ (keine Fehler 500).
+   zu schicken oder ein fehlendes Konto anzulegen. Zugang: eigener vertraulicher Client „konten“ nur mit Service-Account –
+   keine Realm-, Client- oder Rollenverwaltung, kein Anmelden als andere Person. Einrichtung: deploy/anmeldung/konten.sh
+   realm-aktualisieren (Stand 8, Geheimnis OIDC_SECRET_KONTEN nur in .env). Fehlt es, melden alle Funktionen „nicht
+   eingerichtet“ (keine Fehler 500).
+   Seit Stand 16 (ADR-007 Stufe 1b): lesen darf der Client alle Konten (view-users), ändern nur Konten in der Gruppe
+   „anwendungskonten“ (feingranulare Verwaltungsrechte von Keycloak) und neue Konten nur dort anlegen. Administratoren der
+   Anwendung stehen nie in der Gruppe (konten.sh gruppe-abgleichen) – ihre Konten ändert nur die Serverkonsole. Keycloak
+   meldet je Konto, ob der Client es ändern darf (access.manage); die Verwaltung zeigt dann statt der Knöpfe den Befehl.
+   Umgekehrt meldet sich kein Administrator mit einem Konto der Gruppe an (lib/oidc.php, oidc_admin_konto_pruefen) – sonst
+   könnte, wer das Geheimnis des Clients hat, ein Konto mit dem Namen eines Administrators anlegen und sich damit anmelden.
 
    Zuordnung Mitarbeiterkonto → Keycloak-Konto: verknüpftes Konto (oidcSub = Keycloak-ID), sonst exakt gleicher
    Benutzername (wie bei der ersten Anmeldung, lib/oidc.php). Ein gleich benanntes Keycloak-Konto mit anderer ID als die
@@ -18,6 +24,24 @@ const KONTEN_REALM = 'mitarbeiter';
 const KONTEN_CLIENT = 'konten';
 const KONTEN_LINK_STUNDEN = 72;   // wie konten.sh einladen
 const KONTEN_EINRICHTEN = 'In der Serverkonsole: sh deploy/anmeldung/konten.sh realm-aktualisieren, danach docker compose up -d app-mitarbeiter.';
+const KONTEN_GRUPPE = 'anwendungskonten';   // Stand 16: nur Mitglieder ändert der Client „konten“ (konten.sh gruppe-abgleichen)
+
+/* Administrator der Anwendung? Dessen Konto in der zentralen Anmeldung ändert nur die Serverkonsole (Stand 16) */
+function konten_ist_admin(array $u): bool { return ($u['role'] ?? '') === 'admin'; }
+
+/* Hinweis, wenn Keycloak dem Client ein Konto nicht freigibt (403 bzw. access.manage = false) */
+function konten_nur_konsole_text(array $u): string
+{
+    $n = strtolower((string)$u['username']);
+    return konten_ist_admin($u)
+        ? 'Konten von Administratoren ändert nur die Serverkonsole – Schutz, falls der Zugang der Verwaltung zur zentralen Anmeldung in falsche Hände gerät. In der Serverkonsole: sh deploy/anmeldung/konten.sh startpasswort ' . $n . ' (bzw. entsperren, einladen).'
+        : 'Dieses Konto ist für die Verwaltung noch nicht freigegeben. In der Serverkonsole: sh deploy/anmeldung/konten.sh gruppe-abgleichen ' . $n;
+}
+/* 403 von Keycloak bei einer Änderung → verständlicher Fehler (sonst nichts) */
+function konten_verboten(int $st, array $u): void
+{
+    if ($st === 403) throw new KontenFehler(konten_nur_konsole_text($u), 403);
+}
 
 /* Fachlicher Fehler mit HTTP-Status für die Antwort (Meldung auf Deutsch, ohne Interna) */
 final class KontenFehler extends RuntimeException
@@ -64,7 +88,9 @@ function konten_token(): string
     return $token = $j['access_token'];
 }
 
-/* Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/ */
+/* Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/. Lesen ohne Recht (401/403) ist
+   ein Einrichtungsfehler; bei Änderungen kommt 403 an den Aufrufer zurück – ab Stand 16 heißt das „Konto nicht freigegeben“
+   (Administrator oder nicht in der Gruppe anwendungskonten, konten_verboten). */
 function konten_api(string $methode, string $pfad, $daten = null): array
 {
     $e = konten_einstellung();
@@ -73,7 +99,7 @@ function konten_api(string $methode, string $pfad, $daten = null): array
     if ($daten !== null) $kopf[] = 'Content-Type: application/json';
     [$st, $j, $h] = konten_http($methode, $e['url'] . '/admin/realms/' . rawurlencode($e['realm']) . '/' . $pfad,
         $daten === null ? null : json_encode($daten, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $kopf);
-    if ($st === 401 || $st === 403) throw new KontenFehler('Der Anwendung fehlen Rechte in der zentralen Anmeldung (Rollen view-users/manage-users). ' . KONTEN_EINRICHTEN, 503);
+    if ($st === 401 || ($st === 403 && $methode === 'GET')) throw new KontenFehler('Der Anwendung fehlen Rechte in der zentralen Anmeldung (Recht view-users, Gruppe anwendungskonten). ' . KONTEN_EINRICHTEN, 503);
     return [$st, $j, $h];
 }
 
@@ -106,24 +132,63 @@ function konten_finden(array $u): array
 function konten_status(array $u): array
 {
     if (!konten_eingerichtet()) return ['eingerichtet' => false, 'hinweis' => 'Die Verwaltung der Anmeldekonten ist noch nicht eingerichtet. ' . KONTEN_EINRICHTEN];
-    [$k, $grund] = konten_finden($u);
+    [$k, $grund, $alt] = konten_finden($u) + [2 => null];
     if (!$k) {
+        // Altes Konto eines gelöschten Mitarbeiters: ersetzen kann die Anwendung es ab Stand 16 nur, wenn es in der Gruppe steht
+        $altFrei = !is_array($alt) || !is_array($alt['access'] ?? null) || !empty($alt['access']['manage']);
+        // Stand 16: Konten für Administratoren legt nur die Serverkonsole an (sonst stünden sie in der Gruppe)
+        if ($grund !== 'fremd' && konten_ist_admin($u) && konten_gruppe_da()) {
+            return ['eingerichtet' => true, 'vorhanden' => false, 'verknuepft' => (string)($u['oidcSub'] ?? '') !== '',
+                    'fremd' => false, 'altkonto' => $grund === 'geloescht', 'admin' => true, 'anlegbar' => false,
+                    'hinweis' => 'Konten für Administratoren legt nur die Serverkonsole an: sh deploy/anmeldung/konten.sh einladen ' . strtolower((string)$u['username']) . ' <e-mail> <vorname> <nachname>'];
+        }
         return ['eingerichtet' => true, 'vorhanden' => false, 'verknuepft' => (string)($u['oidcSub'] ?? '') !== '',
-                'fremd' => $grund === 'fremd', 'altkonto' => $grund === 'geloescht',
+                'fremd' => $grund === 'fremd', 'altkonto' => $grund === 'geloescht', 'admin' => konten_ist_admin($u), 'anlegbar' => $grund !== 'fremd' && $altFrei,
                 'hinweis' => $grund === 'verknuepfung_fehlt' ? 'Das verknüpfte Konto gibt es in der zentralen Anmeldung nicht mehr. „Konto anlegen“ legt es neu an und verknüpft es.'
                     : ($grund === 'fremd' ? 'Das gleich benannte Konto in der zentralen Anmeldung ist mit einem anderen Mitarbeiter verknüpft – bitte in Keycloak prüfen.'
-                    : ($grund === 'geloescht' ? 'Das gleich benannte Konto in der zentralen Anmeldung gehörte einem gelöschten Mitarbeiter und gilt hier nicht. „Konto anlegen“ ersetzt es durch ein neues.' : ''))];
+                    : ($grund === 'geloescht' ? 'Das gleich benannte Konto in der zentralen Anmeldung gehörte einem gelöschten Mitarbeiter und gilt hier nicht. '
+                        . ($altFrei ? '„Konto anlegen“ ersetzt es durch ein neues.' : 'Erst in der Serverkonsole löschen (sh deploy/anmeldung/konten.sh verwaist --loeschen), dann „Konto anlegen“.') : ''))];
     }
     $id = (string)$k['id'];
     [, $cred] = konten_api('GET', 'users/' . rawurlencode($id) . '/credentials');
     [, $bf] = konten_api('GET', 'attack-detection/brute-force/users/' . rawurlencode($id));
     $arten = array_count_values(array_map(fn($c) => (string)($c['type'] ?? ''), is_array($cred) ? $cred : []));
+    // Darf der Client das Konto ändern? Keycloak meldet es je Konto (vor Stand 16 mit manage-users: immer ja)
+    $keycloak = !is_array($k['access'] ?? null) || !empty($k['access']['manage']);
+    $nurKonsole = konten_ist_admin($u) && konten_gruppe_da();   // Administratoren: nur Serverkonsole (Stand 16)
+    $verwaltbar = $keycloak && !$nurKonsole;
+    $hinweis = $verwaltbar ? '' : konten_nur_konsole_text($u);
+    if ($nurKonsole && $keycloak) {
+        $hinweis .= ' Achtung: Die zentrale Anmeldung ließe die Verwaltung dieses Administratorkonto noch ändern – bitte in der Serverkonsole: sh deploy/anmeldung/konten.sh gruppe-abgleichen';
+    }
     return ['eingerichtet' => true, 'vorhanden' => true, 'verknuepft' => (string)($u['oidcSub'] ?? '') === $id,
+            'verwaltbar' => $verwaltbar, 'admin' => konten_ist_admin($u), 'hinweis' => trim($hinweis), 'warnung' => $nurKonsole && $keycloak,
             'aktiv' => !empty($k['enabled']), 'gesperrt' => !empty($bf['disabled']), 'fehlversuche' => (int)($bf['numFailures'] ?? 0),
             'passwort' => !empty($arten['password']), 'einmalcode' => (int)($arten['otp'] ?? 0),
             'passkeys' => (int)($arten['webauthn'] ?? 0) + (int)($arten['webauthn-passwordless'] ?? 0),
             'passwortAendern' => in_array('UPDATE_PASSWORD', (array)($k['requiredActions'] ?? []), true), 'minLaenge' => konten_min_laenge(),
             'email' => (string)($k['email'] ?? ''), 'erstellt' => isset($k['createdTimestamp']) ? gmdate('c', (int)($k['createdTimestamp'] / 1000)) : null];
+}
+
+/* Gibt es die Gruppe „anwendungskonten“ (Realm auf Stand 16)? Je Anfrage einmal gefragt. */
+function konten_gruppe_da(): bool
+{
+    static $da = null;
+    if ($da === null) { [$st] = konten_api('GET', 'group-by-path/' . rawurlencode(KONTEN_GRUPPE)); $da = $st === 200; }
+    return $da;
+}
+
+/* Steht das Keycloak-Konto (sub) in der Gruppe „anwendungskonten“, darf es also die Verwaltung der Anwendung ändern?
+   true/false; null = nicht feststellbar (nicht eingerichtet oder Keycloak nicht erreichbar). Für die Anmeldung von
+   Administratoren (lib/oidc.php, oidc_admin_konto_pruefen). Vor Stand 16 gibt es die Gruppe nicht: immer false. */
+function konten_in_gruppe(string $sub): ?bool
+{
+    if (!konten_eingerichtet() || !preg_match('/^[A-Za-z0-9-]{1,64}$/', $sub)) return null;
+    try { [$st, $j] = konten_api('GET', 'users/' . rawurlencode($sub) . '/groups?briefRepresentation=true'); }
+    catch (KontenFehler $e) { return null; }
+    if ($st !== 200 || !is_array($j)) return null;
+    foreach ($j as $g) if (is_array($g) && ($g['path'] ?? '') === '/' . KONTEN_GRUPPE) return true;
+    return false;
 }
 
 /* Vorhandenes Konto oder Fehler (für schreibende Funktionen) */
@@ -134,6 +199,15 @@ function konten_pflicht(array $u): array
     if (!$k) throw new KontenFehler($grund === 'verknuepfung_fehlt' ? 'Das verknüpfte Konto gibt es in der zentralen Anmeldung nicht mehr – bitte „Konto anlegen“.'
         : ($grund === 'geloescht' ? 'Das gleich benannte Konto in der zentralen Anmeldung gehörte einem gelöschten Mitarbeiter – bitte „Konto anlegen“ (ersetzt es).'
         : 'Für „' . $u['username'] . '“ gibt es noch kein Konto in der zentralen Anmeldung – bitte „Konto anlegen“.'), 404);
+    return $k;
+}
+
+/* Wie konten_pflicht, für Änderungen: Administratorkonten ändert ab Stand 16 nur die Serverkonsole – die Anwendung verweigert
+   es selbst, auch solange Keycloak es noch zuließe (z. B. frisch zum Administrator gemacht, Gruppe noch nicht abgeglichen) */
+function konten_pflicht_aenderbar(array $u): array
+{
+    $k = konten_pflicht($u);
+    if (konten_ist_admin($u) && konten_gruppe_da()) throw new KontenFehler(konten_nur_konsole_text($u), 403);
     return $k;
 }
 
@@ -175,8 +249,9 @@ function konten_startpasswort(): string
 /* Passwort setzen; $temporaer = bei der nächsten Anmeldung ändern. Zweiter Faktor und Passkeys bleiben. */
 function konten_passwort(array $u, string $passwort, bool $temporaer): void
 {
-    $k = konten_pflicht($u);
+    $k = konten_pflicht_aenderbar($u);
     [$st, $j] = konten_api('PUT', 'users/' . rawurlencode((string)$k['id']) . '/reset-password', ['type' => 'password', 'value' => $passwort, 'temporary' => $temporaer]);
+    konten_verboten($st, $u);
     if ($st === 400) throw new KontenFehler(konten_passwort_meldung($j), 422);
     if ($st !== 204 && $st !== 200) throw new KontenFehler('Das Passwort konnte nicht gesetzt werden (' . $st . ').', 502);
 }
@@ -184,22 +259,25 @@ function konten_passwort(array $u, string $passwort, bool $temporaer): void
 /* Sperre nach Fehlversuchen aufheben (und ein in Keycloak gesperrtes Konto wieder aktivieren, wie konten.sh entsperren) */
 function konten_entsperren(array $u): void
 {
-    $k = konten_pflicht($u);
+    $k = konten_pflicht_aenderbar($u);
     $id = rawurlencode((string)$k['id']);
     if (empty($k['enabled'])) {
         [$st] = konten_api('PUT', 'users/' . $id, ['enabled' => true]);
+        konten_verboten($st, $u);
         if ($st !== 204 && $st !== 200) throw new KontenFehler('Konto konnte nicht aktiviert werden (' . $st . ').', 502);
     }
     [$st] = konten_api('DELETE', 'attack-detection/brute-force/users/' . $id);
+    konten_verboten($st, $u);
     if ($st !== 204 && $st !== 200) throw new KontenFehler('Die Sperre konnte nicht aufgehoben werden (' . $st . ').', 502);
 }
 
 /* Mail mit Link zum Passwort-Festlegen (72 Stunden, nur „Passwort aktualisieren“) */
 function konten_link(array $u): string
 {
-    $k = konten_pflicht($u);
+    $k = konten_pflicht_aenderbar($u);
     if ((string)($k['email'] ?? '') === '') throw new KontenFehler('Das Konto in der zentralen Anmeldung hat keine E-Mail-Adresse – bitte im Mitarbeiter eine E-Mail eintragen und „Konto anlegen“ bzw. die Adresse in Keycloak ergänzen.', 422);
     [$st] = konten_api('PUT', 'users/' . rawurlencode((string)$k['id']) . '/execute-actions-email?lifespan=' . (KONTEN_LINK_STUNDEN * 3600) . '&client_id=dashboard', ['UPDATE_PASSWORD']);
+    konten_verboten($st, $u);
     if ($st === 500 || $st === 400) throw new KontenFehler('Die zentrale Anmeldung konnte die Mail nicht senden – ist der Mailversand eingerichtet? In der Serverkonsole: sh deploy/anmeldung/konten.sh mail-einrichten', 502);
     if ($st !== 204 && $st !== 200) throw new KontenFehler('Die Mail konnte nicht ausgelöst werden (' . $st . ').', 502);
     return (string)$k['email'];
@@ -210,10 +288,16 @@ function konten_anlegen(array $u): string
 {
     [$k, $grund, $alt] = konten_finden($u) + [2 => null];
     if ($k) throw new KontenFehler('Für „' . $u['username'] . '“ gibt es bereits ein Konto in der zentralen Anmeldung.', 409);
+    // Stand 16: ein Konto, das die Anwendung anlegt, landet in der Gruppe – für Administratoren nie (nur Serverkonsole)
+    $gruppe = konten_gruppe_da();
+    if ($gruppe && konten_ist_admin($u)) {
+        throw new KontenFehler('Konten für Administratoren legt nur die Serverkonsole an: sh deploy/anmeldung/konten.sh einladen ' . strtolower((string)$u['username']) . ' <e-mail> <vorname> <nachname>', 403);
+    }
     if ($grund === 'fremd') throw new KontenFehler('Das gleich benannte Konto in der zentralen Anmeldung ist mit einem anderen Mitarbeiter verknüpft.', 409);
     if ($grund === 'geloescht' && is_array($alt)) {
         // Übrig gebliebenes Konto eines gelöschten Mitarbeiters (Vermerk oidc-geloescht): löschen, dann neu anlegen
         [$st] = konten_api('DELETE', 'users/' . rawurlencode((string)$alt['id']));
+        if ($st === 403) throw new KontenFehler('Das alte Konto in der zentralen Anmeldung darf die Verwaltung nicht löschen. In der Serverkonsole: sh deploy/anmeldung/konten.sh verwaist --loeschen', 403);
         if ($st !== 204 && $st !== 200 && $st !== 404) throw new KontenFehler('Das alte Konto in der zentralen Anmeldung konnte nicht gelöscht werden (' . $st . ').', 502);
         audit('security', 'Altes Konto „' . $u['username'] . '“ eines gelöschten Mitarbeiters in der zentralen Anmeldung gelöscht');
     }
@@ -228,7 +312,9 @@ function konten_anlegen(array $u): string
     $neu = ['username' => $name, 'enabled' => true, 'firstName' => $vor, 'lastName' => $nach, 'requiredActions' => ['UPDATE_PASSWORD']];
     $mail = (string)($u['email'] ?? '');
     if ($mail !== '') { $neu['email'] = $mail; $neu['emailVerified'] = true; }
+    if ($gruppe) $neu['groups'] = ['/' . KONTEN_GRUPPE];
     [$st, $j, $h] = konten_api('POST', 'users', $neu);
+    if ($st === 403) throw new KontenFehler('Die zentrale Anmeldung erlaubt der Verwaltung das Anlegen nicht. In der Serverkonsole: sh deploy/anmeldung/konten.sh realm-aktualisieren', 403);
     if ($st === 409) throw new KontenFehler('Benutzername oder E-Mail-Adresse ist in der zentralen Anmeldung schon vergeben.', 409);
     if ($st !== 201) throw new KontenFehler('Das Konto konnte nicht angelegt werden (' . $st . ').', 502);
     $id = '';

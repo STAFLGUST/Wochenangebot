@@ -63,8 +63,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
 - **Konten aus der Verwaltung (seit 26.10.2026, Stand 8):** Verwaltung → Mitarbeiter → Abschnitt „Zentrale Anmeldung“
   (nur Administratoren, mit Bestätigung, im Protokoll ohne Passwort): Konto anlegen, Passwort setzen (Standard: bei der
   ersten Anmeldung eigenes festlegen), Sperre nach Fehlversuchen aufheben, Link zum Passwort-Festlegen per Mail. Technisch
-  über den Client `konten` (nur Service-Account, Rollen `view-users`/`manage-users`, Geheimnis `OIDC_SECRET_KONTEN` in `.env`),
-  Keycloak im internen Netz. **Entscheidung:** Unter der zentralen Anmeldung bietet die Verwaltung kein Passwort der
+  über den Client `konten` (nur Service-Account, Geheimnis `OIDC_SECRET_KONTEN` in `.env`), Keycloak im internen Netz. Seit
+  Stand 16 (ADR-007 Stufe 1b) ändert er nur Konten der Gruppe `anwendungskonten` (Mitarbeiter ohne Administratorrolle);
+  Konten von Administratoren nur in der Konsole, nach Beförderungen `konten.sh gruppe-abgleichen <name>`. **Entscheidung:** Unter der zentralen Anmeldung bietet die Verwaltung kein Passwort der
   Anwendung mehr an (der Server lehnt es dort ab) – es gibt nur noch das Passwort von Keycloak. Die gespeicherten Passwörter
   der Anwendung bleiben unverändert für den Notzugang (`deploy/notzugang.sh`, Notfall-Administrator:
   `deploy/passwort-zuruecksetzen.sh`). Zweiter Faktor und Passkeys bleiben beim Setzen erhalten; zurücksetzen nur in der

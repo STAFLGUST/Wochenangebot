@@ -19,6 +19,13 @@
 #   sh deploy/anmeldung/konten.sh passwort-vergessen an|aus|status  # „Passwort vergessen?“ auf der Anmeldeseite (Link per Mail)
 #   sh deploy/anmeldung/konten.sh richtlinien                     # Passwortregeln und Kontosperre aus Sicherheit → Einstellungen übernehmen
 #   sh deploy/anmeldung/konten.sh verwaist [--loeschen]           # Konten ohne Mitarbeiter (gelöschte Mitarbeiter) anzeigen bzw. löschen
+#   sh deploy/anmeldung/konten.sh gruppe-abgleichen [<benutzername>] # welche Konten die Anwendung verwalten darf (nie Administratoren)
+#
+# Verwaltung aus der Anwendung (Stand 16, ADR-007 Stufe 1b): Der Client „konten“ darf nur Konten in der Gruppe
+# „anwendungskonten“ ändern (Passwort, Sperre, Link, Löschen) und neue Konten nur in diese Gruppe legen. In der Gruppe stehen
+# die Konten der Mitarbeiter ohne Administratorrolle – Administratoren und Konten mit Verwaltungsrollen von Keycloak nie.
+# Wird jemand in der Anwendung Administrator (oder nicht mehr): konten.sh gruppe-abgleichen. Administratoren: startpasswort,
+# entsperren, einladen hier in der Konsole.
 #
 # Passwort vergessen (Inhaber 03.11.2026): auf der Anmeldeseite „Passwort vergessen?“ – Keycloak schickt einen Link an die
 # hinterlegte E-Mail-Adresse. Wer einen zweiten Faktor eingerichtet hat, braucht ihn auch dafür (eigener Ablauf
@@ -134,7 +141,14 @@ anlegen() {
   [ -z "$id" ] || abbruch "Konto '$1' gibt es schon (neues Startpasswort: konten.sh startpasswort $1)."
   kc create users -r "$REALM" -s username="$1" -s email="$2" -s firstName="$3" -s lastName="$4" \
     -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD"]' >/dev/null
+  konto_freigeben "$1"
   neues_startpasswort "$1"
+}
+
+konto_freigeben() { # nach dem Anlegen in der Konsole: in die Gruppe anwendungskonten, wenn kein Administrator (Stand 16)
+  rc=0; gruppe_abgleichen "$1" || rc=$?
+  if [ "$rc" = 2 ]; then echo "Hinweis:   Mitarbeiterkonten der Anwendung nicht lesbar – später: sh deploy/anmeldung/konten.sh gruppe-abgleichen $1"; fi
+  return 0
 }
 
 neues_startpasswort() {
@@ -253,6 +267,7 @@ einladen() {
     kc create users -r "$REALM" -s username="$1" -s email="$2" -s firstName="$3" -s lastName="$4" \
       -s enabled=true -s emailVerified=true -s 'requiredActions=["UPDATE_PASSWORD"]' >/dev/null
     id=$(nutzer_id "$1"); echo "angelegt:  Konto '$1'"
+    konto_freigeben "$1"
   elif [ $# -eq 4 ]; then
     abbruch "Konto '$1' gibt es schon – Einladung erneut senden mit: konten.sh einladen $1"
   else
@@ -369,18 +384,152 @@ print(t)' "$REALM_DATEI" "$c" > "$FEHLER.client" || { rm -f "$FEHLER.client"; ab
 
 # Stand 8: Rechte des Service-Accounts „konten“ – genau view-users und manage-users von realm-management, sonst nichts
 # (keine Realm-, Client- oder Rollenverwaltung, kein Anmelden als andere Person). Überzählige Rollen werden entfernt.
+# ── Stand 16 (ADR-007 Stufe 1b): Client „konten“ nur für die Gruppe „anwendungskonten“ – nie Administratoren ──
+# Feingranulare Verwaltungsrechte von Keycloak (Version 2): eine Regel (Client konten) und eine Berechtigung auf die Gruppe
+# mit view-members, manage-members und manage-membership – damit ändert der Client Mitglieder und legt neue Konten nur in
+# dieser Gruppe an. In die Gruppe aufnehmen oder daraus entfernen kann er niemanden (manage-group-membership fehlt). Lesen darf
+# er weiter alle Konten (view-users), damit die Verwaltung Administratorkonten als solche erkennt.
+KONTEN_GRUPPE=anwendungskonten
+KONTEN_REGEL="Dienstkonto der Anwendung (Client konten)"
+KONTEN_BERECHTIGUNG="Anwendung verwaltet Mitarbeiterkonten (Gruppe anwendungskonten)"
+json_id() { # json_id <name>: Kennung des Eintrags mit genau diesem Namen aus einer JSON-Liste (Standardeingabe)
+  python3 -c 'import json, sys; print(next((x["id"] for x in json.load(sys.stdin) if x.get("name") == sys.argv[1]), ""))' "$1"
+}
+gruppe_id() { kc get groups -r "$REALM" -q search="$KONTEN_GRUPPE" -q exact=true --fields id,name | json_id "$KONTEN_GRUPPE"; }
+
+konten_feinrechte() { # konten_feinrechte <Client-ID von konten>
+  # Beschreibung des Clients wie in der Realm-Datei (ältere Installationen nannten noch manage-users)
+  if [ -f "$REALM_DATEI" ]; then
+    besch=$(python3 -c 'import json, sys; print(next((c.get("description", "") for c in json.load(open(sys.argv[1], encoding="utf-8"))["clients"] if c["clientId"] == "konten"), ""))' "$REALM_DATEI" 2>/dev/null) || besch=
+    [ -z "$besch" ] || kc update "clients/$1" -r "$REALM" -s "description=$besch" >/dev/null
+  fi
+  kc update "realms/$REALM" -s adminPermissionsEnabled=true >/dev/null
+  gid=$(gruppe_id)
+  if [ -z "$gid" ]; then
+    kc create groups -r "$REALM" -s name="$KONTEN_GRUPPE" >/dev/null
+    gid=$(gruppe_id); [ -n "$gid" ] || abbruch "Gruppe $KONTEN_GRUPPE nicht angelegt."
+    echo "angelegt:  Gruppe $KONTEN_GRUPPE (Konten, die die Anwendung verwalten darf – nie Administratoren)"
+  fi
+  ap=$(kc get clients -r "$REALM" -q clientId=admin-permissions --fields id --format csv --noquotes | head -1)
+  [ -n "$ap" ] || abbruch "Feingranulare Verwaltungsrechte nicht verfügbar (Keycloak 26.2 oder neuer nötig)."
+  rs="clients/$ap/authz/resource-server"
+  pid=$(kc get "$rs/policy" -r "$REALM" -q name="$KONTEN_REGEL" --fields id,name | json_id "$KONTEN_REGEL")
+  regel="\"name\":\"$KONTEN_REGEL\",\"description\":\"Nur der Service-Account des Clients konten (Verwaltung der Anwendung)\",\"type\":\"client\",\"logic\":\"POSITIVE\",\"decisionStrategy\":\"UNANIMOUS\",\"clients\":[\"$1\"]"
+  if [ -z "$pid" ]; then
+    printf '{%s}' "$regel" | kc create "$rs/policy/client" -r "$REALM" -f - >/dev/null
+    pid=$(kc get "$rs/policy" -r "$REALM" -q name="$KONTEN_REGEL" --fields id,name | json_id "$KONTEN_REGEL")
+    [ -n "$pid" ] || abbruch "Regel '$KONTEN_REGEL' nicht angelegt."
+    echo "angelegt:  Regel '$KONTEN_REGEL'"
+  else
+    printf '{"id":"%s",%s}' "$pid" "$regel" | kc update "$rs/policy/client/$pid" -r "$REALM" -f - >/dev/null
+  fi
+  bid=$(kc get "$rs/permission" -r "$REALM" -q name="$KONTEN_BERECHTIGUNG" --fields id,name | json_id "$KONTEN_BERECHTIGUNG")
+  recht="\"name\":\"$KONTEN_BERECHTIGUNG\",\"description\":\"Passwort, Sperre, Link, Anlegen und Löschen nur für Mitglieder; Administratoren nie in der Gruppe (konten.sh gruppe-abgleichen)\",\"type\":\"scope\",\"logic\":\"POSITIVE\",\"decisionStrategy\":\"UNANIMOUS\",\"resourceType\":\"Groups\",\"resources\":[\"$gid\"],\"scopes\":[\"view-members\",\"manage-members\",\"manage-membership\"],\"policies\":[\"$pid\"]"
+  if [ -z "$bid" ]; then
+    printf '{%s}' "$recht" | kc create "$rs/permission/scope" -r "$REALM" -f - >/dev/null
+    echo "angelegt:  Berechtigung '$KONTEN_BERECHTIGUNG'"
+  else
+    printf '{"id":"%s",%s}' "$bid" "$recht" | kc update "$rs/permission/scope/$bid" -r "$REALM" -f - >/dev/null
+  fi
+}
+
+rm_client() { kc get clients -r "$REALM" -q clientId=realm-management --fields id --format csv --noquotes | head -1; }
+privilegierte() { # Kennungen der Konten mit direkt zugewiesenen Verwaltungsrollen von Keycloak (realm-management), je Zeile eine
+  rm_id=$(rm_client)
+  for r in $(kc get "clients/$rm_id/roles" -r "$REALM" --fields name --format csv --noquotes); do
+    kc get "clients/$rm_id/roles/$r/users" -r "$REALM" --fields id --format csv --noquotes
+  done | sort -u
+}
+privilegiert() { # privilegiert <Kennung>: hat das Konto Verwaltungsrollen von Keycloak – auch über Gruppen oder zusammengesetzte Rollen?
+  [ -n "${rm_id:-}" ] || rm_id=$(rm_client)
+  [ "$(kc get "users/$1/role-mappings/clients/$rm_id/composite" -r "$REALM" --fields id | python3 -c 'import json, sys; print(len(json.load(sys.stdin)))')" != 0 ]
+}
+
+# Gruppe abgleichen: Mitglieder = Konten von Mitarbeitern der Anwendung ohne Administratorrolle (verknüpft oder gleicher
+# Benutzername wie bei der ersten Anmeldung), nie Service-Accounts oder Konten mit Verwaltungsrollen von Keycloak. Rückgabe
+# 2 = Anwendung nicht lesbar, 3 = Gruppe fehlt (Realm vor Stand 16) – dann wird nichts geändert.
+gruppe_abgleichen() { # gruppe_abgleichen [<benutzername>]
+  nur=$(klein "${1:-}")
+  gid=$(gruppe_id); [ -n "$gid" ] || return 3
+  app_konten=$(app konten 2>/dev/null) || return 2
+  printf '%s' "$app_konten" | python3 -c 'import json, sys; d = json.load(sys.stdin); sys.exit(0 if all("admin" in k for k in d["konten"]) else 1)' 2>/dev/null || return 2
+  rm_id=
+  if [ -n "$nur" ]; then   # ein Konto (nach anlegen/einladen): wenige Aufrufe, Verwaltungsrollen auch über Gruppen geprüft
+    nid=$(nutzer_id "$nur"); [ -n "$nid" ] || return 0
+    alle="[{\"id\": \"$nid\", \"username\": \"$nur\"}]"
+    if privilegiert "$nid"; then priv=$nid; else priv=; fi
+  else
+    alle=$(kc get users -r "$REALM" --offset 0 --limit 5000 --fields id,username)
+    priv=$(privilegierte | tr '\n' ' ')
+  fi
+  mitglieder=$(kc get "groups/$gid/members" -r "$REALM" --offset 0 --limit 5000 --fields id)
+  plan=$(APP_KONTEN="$app_konten" ALLE="$alle" MITGLIEDER="$mitglieder" PRIV="$priv" NUR="$nur" python3 -c '
+import json, os
+a = json.loads(os.environ["APP_KONTEN"])
+mit = {m["id"] for m in json.loads(os.environ["MITGLIEDER"])}
+priv = set(os.environ["PRIV"].split())
+weg = set(a.get("geloescht", []))
+nach_sub = {k["sub"]: k for k in a["konten"] if k.get("sub")}
+nach_name = {k["name"]: k for k in a["konten"] if not k.get("sub")}
+for u in json.loads(os.environ["ALLE"]):
+    n, i = u.get("username", ""), u["id"]
+    if os.environ["NUR"] and n != os.environ["NUR"]: continue
+    if n.startswith("service-account-"): continue
+    k = nach_sub.get(i) or (nach_name.get(n) if i not in weg else None)
+    darf = bool(k) and not k.get("admin") and i not in priv
+    if darf and i not in mit: print("+", i, n, "-")
+    elif not darf and i in mit: print("-", i, n, "Administrator" if (k and k.get("admin")) or i in priv else "ohne Mitarbeiterkonto")')
+  if [ -n "$plan" ]; then
+    printf '%s\n' "$plan" | while read -r art id n grund; do
+      if [ "$art" = + ] && [ -z "$nur" ] && privilegiert "$id"; then   # Verwaltungsrolle über Gruppe oder zusammengesetzte Rolle
+        echo "nicht aufgenommen: Konto '$n' (Verwaltungsrollen von Keycloak – nur über die Serverkonsole)"
+      elif [ "$art" = + ]; then
+        kc update "users/$id/groups/$gid" -r "$REALM" -s realm="$REALM" -s userId="$id" -s groupId="$gid" -n >/dev/null
+        echo "aufgenommen: Konto '$n' – die Verwaltung der Anwendung darf es ändern"
+      else
+        kc delete "users/$id/groups/$gid" -r "$REALM" >/dev/null
+        echo "entfernt:  Konto '$n' aus der Gruppe $KONTEN_GRUPPE ($grund – nur noch über die Serverkonsole)"
+      fi
+    done
+  fi
+  n=$(kc get "groups/$gid/members" -r "$REALM" --offset 0 --limit 5000 --fields id | python3 -c 'import json, sys; print(len(json.load(sys.stdin)))')
+  [ -n "$nur" ] || echo "Gruppe $KONTEN_GRUPPE: $n Konten verwaltet die Anwendung; Administratoren nur über die Serverkonsole."
+}
+
+gruppe_abgleichen_befehl() {
+  [ $# -le 1 ] || abbruch "Aufruf: konten.sh gruppe-abgleichen [<benutzername>]"
+  [ $# -eq 0 ] || name_pruefen "$1"
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  rc=0; gruppe_abgleichen "$@" || rc=$?
+  case $rc in
+    0) ;;
+    2) abbruch "Mitarbeiterkonten der Anwendung nicht lesbar (läuft die App?)." ;;
+    3) abbruch "Gruppe $KONTEN_GRUPPE fehlt – zuerst: sh deploy/anmeldung/konten.sh realm-aktualisieren" ;;
+    *) exit "$rc" ;;
+  esac
+}
+
 konten_rechte() {
   cid=$(kc get clients -r "$REALM" -q clientId=konten --fields id --format csv --noquotes | head -1)
   [ -n "$cid" ] || return 0
   sa=$(kc get "clients/$cid/service-account-user" -r "$REALM" --fields id --format csv --noquotes | head -1)
   [ -n "$sa" ] || abbruch "Client konten ohne Service-Account – Realm-Datei prüfen."
+  # Erst die Gruppe mit ihren Rechten, dann abgleichen, zuletzt manage-users entfernen – keine Lücke für die Verwaltung
+  konten_feinrechte "$cid"
+  rc=0; gruppe_abgleichen || rc=$?
+  if [ "$rc" != 0 ]; then
+    echo "Hinweis:   Mitarbeiterkonten der Anwendung nicht lesbar – Gruppe $KONTEN_GRUPPE nicht abgeglichen. Bitte danach: sh deploy/anmeldung/konten.sh gruppe-abgleichen"
+  fi
   rm_id=$(kc get clients -r "$REALM" -q clientId=realm-management --fields id --format csv --noquotes | head -1)
   ist=$(kc get "users/$sa/role-mappings/clients/$rm_id" -r "$REALM" --fields name --format csv --noquotes | sort | tr '\n' ' ')
-  for rolle in view-users manage-users; do
-    case " $ist " in *" $rolle "*) ;; *) kc add-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename "$rolle" >/dev/null; echo "gesetzt:   Recht $rolle für die Mitarbeiterkonten der Anwendung" ;; esac
-  done
+  case " $ist " in *" view-users "*) ;; *) kc add-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename view-users >/dev/null; echo "gesetzt:   Recht view-users für die Mitarbeiterkonten der Anwendung (nur lesen)" ;; esac
   for rolle in $ist; do
-    case "$rolle" in view-users|manage-users) ;; *) kc remove-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename "$rolle" >/dev/null; echo "entfernt:  überzähliges Recht $rolle (Client konten)" ;; esac
+    case "$rolle" in
+      view-users) ;;
+      manage-users) kc remove-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename manage-users >/dev/null
+                    echo "entfernt:  Recht manage-users (Client konten) – ersetzt durch die Gruppe $KONTEN_GRUPPE, Administratoren nicht mehr über die Anwendung" ;;
+      *) kc remove-roles -r "$REALM" --uid "$sa" --cclientid realm-management --rolename "$rolle" >/dev/null; echo "entfernt:  überzähliges Recht $rolle (Client konten)" ;;
+    esac
   done
 }
 
@@ -461,7 +610,7 @@ for c in json.load(sys.stdin):
   done
   konten_rechte
   richtlinien_setzen
-  echo "Realm aktuell (Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  echo "Realm aktuell (Stand 16: Anwendung verwaltet nur Konten der Gruppe anwendungskonten, nie Administratoren; Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app-mitarbeiter"; fi
 }
 
@@ -757,7 +906,7 @@ liste() {
 
 befehl=${1:-}; [ $# -gt 0 ] && shift
 if [ $# -gt 0 ]; then n=$(klein "$1"); shift; set -- "$n" "$@"; fi
-case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|pruefen|liste|mail-einrichten|einladen|realm-aktualisieren|richtlinien|verwaist) bereit ;; esac
+case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|pruefen|liste|mail-einrichten|einladen|realm-aktualisieren|richtlinien|verwaist|gruppe-abgleichen) bereit ;; esac
 case "$befehl" in
   verwaltung) verwaltung ;;
   anlegen) anlegen "$@" ;;
@@ -775,5 +924,6 @@ case "$befehl" in
   passwort-vergessen) passwort_vergessen "$@" ;;
   richtlinien) richtlinien ;;
   verwaist) verwaist "$@" ;;
+  gruppe-abgleichen) gruppe_abgleichen_befehl "$@" ;;
   *) sed -n '2,/^set -eu/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

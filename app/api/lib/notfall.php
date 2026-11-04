@@ -155,18 +155,20 @@ function notfall_ausloesen(array $me, array $b): array
     }
     oidc_abmeldung_merken([], $vermerk);
     // Zentrale Anmeldung (Keycloak): Sitzungen der betroffenen Konten beenden (alle ohne Administratorrolle bzw. mit Option alle außer mir)
+    // Konten von Administratoren meldet seit Stand 16 nur die Serverkonsole ab (403) – die Anwendung verlangt von ihnen trotzdem
+    // eine erneute Anmeldung bei Keycloak (Vermerk oben, max_age=0)
     if ($opt['keycloak']) {
-        $ok = 0; $fehler = 0;
+        $ok = 0; $fehler = 0; $konsole = 0;
         foreach (users_load() as $u) {
             if (empty($u['active']) || (string)$u['id'] === (string)$me['id'] || (($u['role'] ?? '') === 'admin' && !$opt['admins'])) continue;
             try {
                 [$k] = konten_finden($u);
                 if (!$k || empty($k['id'])) continue;
                 [$st] = konten_api('POST', 'users/' . rawurlencode((string)$k['id']) . '/logout');
-                if ($st >= 200 && $st < 300) $ok++; else $fehler++;
+                if ($st >= 200 && $st < 300) $ok++; elseif ($st === 403 && ($u['role'] ?? '') === 'admin') $konsole++; else $fehler++;
             } catch (Throwable $e) { $fehler++; }
         }
-        $w['keycloak'] = ['beendet' => $ok, 'fehler' => $fehler];
+        $w['keycloak'] = ['beendet' => $ok, 'fehler' => $fehler, 'nurKonsole' => $konsole];
     }
     with_lock(NOTFALL_DOK, function () use ($w) {
         $d = store_read(NOTFALL_DOK) ?? [];
@@ -178,7 +180,8 @@ function notfall_ausloesen(array $me, array $b): array
     $facts = [['Ausgelöst von', $me['name'] . ' (' . $me['username'] . ')'], ['IP-Adresse', client_ip()], ['Grund', $grund],
               ['Firewall', $w['firewall']], ['Beendete Sitzungen', $w['mitarbeiterSitzungen'] . ' Mitarbeiter, ' . $w['kundenSitzungen'] . ' Kunden'],
               ['Wirkung', 'Kunden sehen Wartung, Mitarbeiter ohne Administratorrolle sind ausgesperrt, E-Mail-Versand pausiert']];
-    if (isset($w['keycloak'])) $facts[] = ['Zentrale Anmeldung', $w['keycloak']['beendet'] . ' Konten abgemeldet' . ($w['keycloak']['fehler'] ? ', ' . $w['keycloak']['fehler'] . ' Fehler' : '')];
+    if (isset($w['keycloak'])) $facts[] = ['Zentrale Anmeldung', $w['keycloak']['beendet'] . ' Konten abgemeldet' . ($w['keycloak']['fehler'] ? ', ' . $w['keycloak']['fehler'] . ' Fehler' : '')
+        . ($w['keycloak']['nurKonsole'] ? ', ' . $w['keycloak']['nurKonsole'] . ' Administratoren nur über die Serverkonsole (sh deploy/anmeldung/konten.sh sperren <name>) – die Anwendung verlangt von ihnen eine erneute Anmeldung' : '')];
     audit('notfall', 'Notfallmodus ausgelöst: ' . $grund, [['k' => 'notfall', 'code' => '', 'name' => 'Notfallmodus', 'f' => 'Status', 'from' => 'aus', 'to' => 'aktiv']]);
     modul_verlauf_eintragen(['t' => $jetzt, 'wer' => (string)$me['name'], 'bereich' => 'alle', 'alt' => 'normal', 'neu' => 'wartung', 'grund' => 'Notfallmodus: ' . $grund, 'ab' => null, 'bis' => null]);
     notfall_benachrichtigen('NOTFALLMODUS AUSGELÖST', $facts);
