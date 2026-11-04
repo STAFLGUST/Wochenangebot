@@ -295,40 +295,65 @@ with sync_playwright() as p:
     check('Gruppenauswahl: Gruppe eines anderen Angebots gesperrt', a.locator(g7 + ' input').is_disabled() and 'bei „Wochenangebot Bela“' in a.inner_text(g7), a.inner_text(g7))
     a.click('#of-gruppen-body [data-close]')
 
-    # ---------- Preise importieren ----------
-    a.set_input_files('#of-file', PREISE); a.wait_for_selector('#dlg-of-preise[open]')
-    t = a.inner_text('#of-preise-body')
-    zeile = lambda z: a.inner_text(f'#of-preise-body tr[data-ofp-ziel="{z}"]').split('\t')   # noqa: E731
-    check('Preis-Vorschau: Wochenangebot 2 Preise, 1 geändert', zeile('std')[2:5] == ['2', '1', '0'], zeile('std'))
-    check('Preis-Vorschau: Gruppenpreise beim Angebot der Gruppe', zeile('edeka')[2:5] == ['1', '0', '1'] and zeile('bela')[2:5] == ['1', '0', '1'], (zeile('edeka'), zeile('bela')))
-    check('Preis-Vorschau: Gruppe ohne Angebot, neues Angebot vorgeschlagen', '1 Gastronomie (2)' in t and a.locator('#of-preise-body [data-ofp="anlegen"]').is_checked() and zeile('neu:1')[0] == 'Wochenangebot Gastronomie (neu)', t)
-    check('Preis-Vorschau: übersprungen (nicht im Angebot, ohne Preis)', '1 Artikelnummer steht nicht im Angebot' in t and '1 Zeilen ohne Preis' in t, t)
-    # Handy: Vorschau ohne seitliches Scrollen, Kundengruppe unter dem Angebot
+    # ---------- Artikelpreise: nur noch über Verwaltung → Import (Auftrag des Inhabers 04.11.2026) ----------
+    check('Angebote: kein Knopf „Preise importieren“ mehr, Verweis auf Verwaltung → Import', a.locator('#view-angebote [data-ofa="preise"]').count() == 0
+          and a.locator('#of-file').count() == 0 and a.get_attribute('#of-preise-link', 'href') == '?ansicht=importe', a.inner_text('#view-angebote .hint'))
+    jetzt = datetime.datetime.now(zoneinfo.ZoneInfo('Europe/Berlin')).isocalendar()
+    akt = f'{jetzt[0]:04d}-{jetzt[1]:02d}'
+    basis = (A.call('draft')[1].get('draft') or A.call('draft')[1]['published'])['meta']
+    kw_neu = (basis.get('week'), basis.get('year')) != (jetzt[1], jetzt[0])   # Angebotswoche ändert sich nur, wenn der Entwurf eine andere KW hat
+    a.click('#of-preise-link'); a.wait_for_selector('#view-importe .imp-art[data-art="angebot_preise"]')
+    check('Verweis öffnet die Importzentrale mit „Artikelpreise (CSV)“', a.locator('#view-importe [data-imp-waehlen="angebot_preise"]').is_visible())
+    a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', PREISE); a.wait_for_selector('#imp-neu')
+    t = a.inner_text('#view-importe')
+    check('Vorschau: Angebotswoche = aktuelle KW, Neuanlage von Angeboten aus', a.input_value('#view-importe [data-imp-opt="woche"]') == akt
+          and '(aktuelle Woche)' in a.inner_text('#view-importe [data-imp-opt="woche"] option:checked') and not a.is_checked('#view-importe [data-imp-opt="anlegen"]'), t[:600])
+    check('Vorschau: Wochenpreis geändert, Gruppenpreise neu (Edeka, Bela), unveränderter Preis gezählt', a.inner_text('#imp-neu') == '2'
+          and a.inner_text('#imp-geaendert') == str(1 + kw_neu) and '1 unverändert' in t and 'Wochenangebot Edeka' in a.inner_text('#imp-zeilen')
+          and '25,54 € → 26,10 €' in a.inner_text('#imp-zeilen'), (a.inner_text('#imp-neu'), a.inner_text('#imp-geaendert'), t[:900]))
+    check('Vorschau: Gruppe ohne Angebot nur als Hinweis (Preise nicht übernommen), übersprungene Zeilen', '1 Kundengruppe hat noch kein Angebot: 1 Gastronomie (2)' in t
+          and 'nicht übernommen' in t and '1 Artikelnummer steht nicht im Angebot' in t and '1 Zeile ohne Preis übersprungen' in t, t)
+    a.check('#view-importe [data-imp-opt="anlegen"]'); a.wait_for_function("document.querySelector('#imp-zeilen') && document.querySelector('#imp-zeilen').textContent.includes('Wochenangebot Gastronomie')")
+    check('mit Neuanlage: Angebot für Gruppe 1 vorgesehen (1 Angebot + 2 Preise mehr neu)', a.inner_text('#imp-neu') == '5' and 'Kundengruppe 1 Gastronomie' in a.inner_text('#imp-zeilen'), a.inner_text('#imp-zeilen')[:400])
+    werte = a.eval_on_selector_all('#view-importe [data-imp-opt="woche"] option', 'os => os.map((o) => o.value)')
+    naechste = werte[werte.index(akt) + 1]
+    a.select_option('#view-importe [data-imp-opt="woche"]', naechste)
+    nw, ny = int(naechste[5:]), int(naechste[:4])
+    a.wait_for_function(f"document.querySelector('#imp-zeilen') && document.querySelector('#imp-zeilen').textContent.includes('→ KW {nw}/{ny}')")
+    check('andere Angebotswoche wählbar (vier zurück bis acht voraus), Vorschau zeigt die Änderung', len(werte) == 13 and werte.index(akt) == 4
+          and a.inner_text('#imp-geaendert') == '2', (werte, a.inner_text('#imp-geaendert')))
+    a.screenshot(path=SH + '/importzentrale-artikelpreise.png', full_page=True)
     vp = a.viewport_size; a.set_viewport_size({'width': 390, 'height': 844})
-    a.wait_for_function("getComputedStyle(document.querySelector('.ofptab .ofp-gr')).display === 'block'")
-    breit = a.evaluate("(() => { const d = document.querySelector('#dlg-of-preise'); return [d.scrollWidth, d.clientWidth]; })()")
-    check('390 px: Preis-Vorschau ohne seitliches Scrollen', breit[0] <= breit[1] + 1, breit)
+    a.wait_for_function('document.documentElement.scrollWidth <= 391')
+    check('390 px: Vorschau der Artikelpreise ohne seitliches Scrollen', a.evaluate('document.documentElement.scrollWidth') <= 390)
+    a.screenshot(path=SH + '/importzentrale-artikelpreise-390.png', full_page=True)
     a.set_viewport_size(vp)
-    a.uncheck('#of-preise-body [data-ofp="anlegen"]'); a.wait_for_function("!document.querySelector('#of-preise-body tr[data-ofp-ziel=\"neu:1\"]')")
-    check('ohne Anlegen: Gruppe 1 entfällt', a.locator('#of-preise-body tr[data-ofp-ziel]').count() == 3)
-    a.check('#of-preise-body [data-ofp="anlegen"]'); a.wait_for_selector('#of-preise-body tr[data-ofp-ziel="neu:1"]')
-    a.screenshot(path=SH + '/angebote-preisimport.png')
-    a.click('#of-preise-body [data-ofp="ok"]'); a.wait_for_selector('#toast.show:has-text("Preise im Entwurf eingetragen")', timeout=15000)
+    a.click('#imp-ok'); a.wait_for_selector('#imp-ergebnis', timeout=15000)
     neu = next((x for x in doc('angebote')['offers'] if x.get('gruppen') == ['1']), {})
-    check('neues Angebot für Kundengruppe 1 angelegt', neu.get('name') == 'Wochenangebot Gastronomie', neu)
-    def entwurf_ok():
-        d = A.call('draft')[1].get('draft') or {}
-        it = next((i for i in d.get('items', []) if i.get('code') == '10601'), {})
-        return it if it.get('price', {}).get('value') == 26.1 else None
-    import time
-    it = None
-    for _ in range(80):
-        it = entwurf_ok()
-        if it: break
-        time.sleep(0.25)
-    v = (it or {}).get('variants', {})
-    check('Entwurf: Wochenpreis und Gruppenpreise eingetragen', it and v.get('edeka', {}).get('value') == 22.0 and v.get('bela', {}).get('value') == 24.0 and v.get(neu.get('id'), {}).get('value') == 23.0, it)
-    check('veröffentlichtes Angebot noch unverändert', next(i for i in A.call('draft')[1]['published']['items'] if i.get('code') == '10601')['price']['value'] == 25.54)
+    check('neues Angebot für Kundengruppe 1 angelegt (eigene Artikelliste)', neu.get('name') == 'Wochenangebot Gastronomie' and neu.get('fallback') == 'hidden', neu)
+    d = A.call('draft')[1]
+    it = next((i for i in (d.get('draft') or {}).get('items', []) if i.get('code') == '10601'), {})
+    v = it.get('variants', {})
+    check('Entwurf: Wochenpreis und Gruppenpreise eingetragen', it.get('price', {}).get('value') == 26.1 and v.get('edeka', {}).get('value') == 22.0
+          and v.get('bela', {}).get('value') == 24.0 and v.get(neu.get('id'), {}).get('value') == 23.0, it)
+    check('Entwurf: Angebotswoche wie gewählt', (d['draft']['meta']['week'], d['draft']['meta']['year']) == (nw, ny), d['draft']['meta'])
+    check('veröffentlichtes Angebot noch unverändert', next(i for i in d['published']['items'] if i.get('code') == '10601')['price']['value'] == 25.54)
+    lg = json.dumps(A.call('log')[1], ensure_ascii=False)
+    check('Protokoll: Preise importiert mit Datei und KW, neues Angebot', f'Preise importiert: artikelpreise.csv – KW {nw}/{ny}' in lg and 'Angebote für Kundengruppen angelegt' in lg, lg[:300])
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden])')
+    a.wait_for_function(f"document.querySelector('#m-week') && document.querySelector('#m-week').value === '{nw}'")
+    check('Angebotseditor übernimmt den importierten Entwurf (Abgleich)', a.input_value('#m-week') == str(nw))
+    check('Angebotseditor: kein Excel-Import mehr', a.locator('#btn-import').count() == 0 and a.locator('#file-input').count() == 0)
+    # Schnittstelle: veralteter Stand, falsche Zeilen, unbekannte Woche, Rechte
+    zeilen = [{'zeile': 2, 'code': '10601', 'gruppe': '', 'preis': 26.2}, {'zeile': 3, 'code': '10 601', 'gruppe': '', 'preis': 1.0},
+              {'zeile': 4, 'code': '10823', 'gruppe': '', 'preis': -1}, {'zeile': 5, 'code': '10823', 'gruppe': '5;x', 'preis': 1.0}]
+    st, r = A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': zeilen}, 'optionen': {'woche': '1999-01', 'anlegen': False}})
+    check('Schnittstelle: ungültige Zeilen als Fehler, unbekannte Woche → aktuelle KW', st == 200 and r['zahlen']['fehler'] == 3 and r['zahlen']['geaendert'] >= 1
+          and f'KW {jetzt[1]}/{jetzt[0]}' in json.dumps(r, ensure_ascii=False), r.get('zahlen'))
+    check('Schnittstelle: veralteter Stand → 409, nichts geschrieben', A.call('import_uebernehmen', {'art': 'angebot_preise', 'daten': {'preise': zeilen}, 'stand': '0.0'})[0] == 409
+          and next(i for i in A.call('draft')[1]['draft']['items'] if i.get('code') == '10601')['price']['value'] == 26.1)
+    check('Schnittstelle: leere Preisliste 422', A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': []}})[0] == 422)
+    check('Schnittstelle: frühere Importart „Wochenangebot (Excel)“ gibt es nicht mehr (404)', A.call('import_pruefen', {'art': 'angebot_excel'})[0] == 404)
 
     # ---------- Kunden importieren ----------
     a.click('#vt-kunden'); a.wait_for_selector('#k-list tr[data-kid]')

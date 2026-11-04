@@ -127,7 +127,9 @@
     if (!ops.length) return '';
     return `<div class="imp-optionen">${ops.map((o) => o.typ === 'datum'
       ? `<label class="fld sm"><span>${esc(o.label)}</span><input type="date" data-imp-opt="${esc(o.id)}" value="${esc(lauf.optionen[o.id] || '')}"${o.pflicht ? ' required' : ''}></label>`
-      : `<label class="check"><input type="checkbox" data-imp-opt="${esc(o.id)}"${lauf.optionen[o.id] ? ' checked' : ''}> ${esc(o.label)}</label>`).join('')}</div>`;
+      : o.typ === 'auswahl'   // feste Werte des Eigentümers (z. B. Angebotswoche)
+        ? `<label class="fld sm imp-auswahl"><span>${esc(o.label)}</span><select data-imp-opt="${esc(o.id)}">${(o.werte || []).map((w) => `<option value="${esc(w.wert)}"${w.wert === lauf.optionen[o.id] ? ' selected' : ''}>${esc(w.text)}</option>`).join('')}</select></label>`
+        : `<label class="check"><input type="checkbox" data-imp-opt="${esc(o.id)}"${lauf.optionen[o.id] ? ' checked' : ''}> ${esc(o.label)}</label>`).join('')}</div>`;
   }
   /* Zeilen der Vorschau: Fehler aus dem Leser (Datei) + Ergebnis des Servers */
   function alleZeilen() {
@@ -318,8 +320,6 @@
     if (ed) {
       const a = arten.find((x) => x.id === ed.dataset.impEditor);
       setView(a.ansicht);
-      if (a.id === 'angebot_excel') { const b = $('#btn-import'); if (b && !b.hidden) b.click(); }
-      else toast('Preise importieren: Knopf „Preise importieren“ unter den Angeboten.', 5000);
       return;
     }
     const fb = e.target.closest('[data-imp-filter]');

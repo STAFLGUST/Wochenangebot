@@ -11,7 +11,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    erscheint in Verwaltung → Rollen und Rechte unter der Bezeichnung (Auftrag des Inhabers 02.11.2026: „was das genau bedeutet“).
    Die Standards entsprechen dem bisherigen festen Rollenmodell. */
 const PERMS = [
-    'angebot.bearbeiten'       => ['g' => 'Angebot', 'l' => 'Entwurf bearbeiten (Preise, Artikel, Excel-Import, frühere Version laden)', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
+    'angebot.bearbeiten'       => ['g' => 'Angebot', 'l' => 'Entwurf bearbeiten (Preise, Artikel, Preisimport, frühere Version laden)', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebot.veroeffentlichen' => ['g' => 'Angebot', 'l' => 'Angebot veröffentlichen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebote.verwalten'       => ['g' => 'Angebot', 'l' => 'Kundenangebote anlegen und umbenennen', 'k' => 'machen', 'd' => ['editor'], 'r' => []],
     'angebote.loeschen'        => ['g' => 'Angebot', 'l' => 'Kundenangebote löschen, Wochenangebot nur für Kunden sichtbar machen', 'k' => 'machen', 'd' => [], 'r' => ['angebote.verwalten']],

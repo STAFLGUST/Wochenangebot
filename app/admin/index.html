@@ -58,7 +58,6 @@
       <div class="save-state" id="save-state" role="status" aria-live="polite"></div>
       <div class="actions">
         <button class="btn ghost" type="button" id="btn-undo" disabled title="Letzte Änderung rückgängig (Strg+Z)"><svg class="i" aria-hidden="true"><use href="#i-undo"/></svg><span class="lbl">Rückgängig</span></button>
-        <button class="btn ghost" type="button" id="btn-import" title="Excel-Datei mit Preisen importieren"><svg class="i" aria-hidden="true"><use href="#i-upload"/></svg><span class="lbl">Excel importieren</span></button>
         <a class="btn ghost" id="btn-site" href="../index.html" target="_blank" rel="noopener" title="Öffentliche Angebotsseite in neuem Tab öffnen (veröffentlichter Stand)"><svg class="i" aria-hidden="true"><use href="#i-home"/></svg><span class="lbl">Angebotsseite</span></a>
         <button class="btn ghost" type="button" id="btn-preview" title="Entwurf des gewählten Angebots so ansehen, wie Kunden ihn nach dem Veröffentlichen sehen"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl">Vorschau</span></button>
         <button class="btn" type="button" id="btn-ez-druck" title="Einzelangebot drucken oder als PDF speichern – mit dem Druckdialog der Angebotsseite"><svg class="i" aria-hidden="true"><use href="#i-print"/></svg><span class="lbl">Drucken / PDF</span></button>
@@ -178,7 +177,6 @@
 <!-- Artikel-Details -->
 <dialog class="modal" id="dlg-item" aria-labelledby="it-title" data-ohne-warnung><form class="dlg" method="dialog" id="item-body"></form></dialog>
 <!-- Import -->
-<dialog class="modal" id="dlg-import" aria-labelledby="imp-title"><div class="dlg" id="import-body"></div></dialog>
 <!-- Veröffentlichen -->
 <dialog class="modal wide" id="dlg-publish" aria-labelledby="pub-title"><div class="dlg" id="publish-body"></div></dialog>
 <!-- Versionen -->
@@ -254,7 +252,6 @@
 <dialog class="modal wide" id="dlg-order-admin" aria-labelledby="order-admin-title"></dialog>
 <!-- Bestätigung -->
 <dialog class="modal" id="dlg-of-gruppen" aria-labelledby="ofg-title"><div class="dlg" id="of-gruppen-body"></div></dialog>
-<dialog class="modal wide" id="dlg-of-preise" aria-labelledby="ofp-title"><div class="dlg" id="of-preise-body"></div></dialog>
 <dialog class="modal wide" id="dlg-k-import" aria-labelledby="ki-title"><div class="dlg" id="k-import-body"></div></dialog>
 <dialog class="modal pv" id="dlg-vorschau" aria-labelledby="pv-title"><div class="dlg" id="vorschau-body"></div></dialog>
 <dialog class="modal" id="dlg-offer-copy" aria-labelledby="oc-title"><form class="dlg" id="offer-copy-body" autocomplete="off"></form></dialog>
@@ -263,7 +260,6 @@
 
 <input type="file" id="hist-file-input" multiple accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 <input type="file" id="stock-file-input" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-<input type="file" id="file-input" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
 <datalist id="dl-origins"></datalist>
 <datalist id="dl-vkgruppen"></datalist>
 <datalist id="dl-sections"></datalist>

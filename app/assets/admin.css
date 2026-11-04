@@ -150,13 +150,12 @@ select.in { appearance: none; -webkit-appearance: none; cursor: pointer; padding
 }
 .auth.overlay { position: fixed; inset: 0; z-index: 100; background: var(--bg); }   /* deckend: nach Ablauf der Sitzung keine Daten (Bestand, EK, Kunden) mehr hinter dem Anmeldefenster */
 body:has(.auth.overlay:not([hidden])) #screen-editor { visibility: hidden; }
-@media (max-width: 640px) { .adm #btn-import { display: inline-flex; } }
 
 /* ==========================================================================
    Preisverlauf
    ========================================================================== */
 .view-tabs { margin: 0 0 16px; }
-body.in-other #btn-undo, body.in-other #btn-import, body.in-other #btn-preview { display: none; }
+body.in-other #btn-undo, body.in-other #btn-preview { display: none; }
 /* Verwaltung unter eigener Adresse: keine Angebotsaktionen in der Kopfzeile (Entwurfsstand, Veröffentlichen, Versand) */
 body.bereich-verwaltung #save-state, body.bereich-verwaltung #btn-site, body.bereich-verwaltung #btn-send, body.bereich-verwaltung #btn-publish,
 body.bereich-verwaltung #menu-more [data-act="versions"], body.bereich-verwaltung #menu-more [data-act="discard"],
@@ -206,9 +205,6 @@ body.in-einzel #btn-send, body.in-einzel #send-hint, body.in-einzel #btn-publish
 .hitab td { padding: 6px 8px; }
 .hitab .in.num { width: 76px; border-color: var(--line); }
 .hitab .hi-file { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Preise importieren: Kundengruppe am Handy unter dem Angebot statt als eigene Spalte */
-.ofptab .ofp-gr { display: none; }
-@media (max-width: 560px) { .ofptab th:nth-child(2), .ofptab .ofp-grs { display: none; } .ofptab .ofp-gr { display: block; color: var(--muted); font-size: 12px; } .ofptab td, .ofptab th { padding-left: 6px; padding-right: 6px; } }
 /* Alte Angebote hochladen am Handy: Datei über die ganze Breite, darunter KW, Jahr, Artikel und Status – ohne seitliches Scrollen */
 @media (max-width: 560px) {
   .hitab thead { display: none; }
@@ -264,7 +260,7 @@ body.in-hist #hist-data { display: inline-flex; }
 @media (max-width: 560px) { #hist-data em { display: none; } }
 
 /* ---------- Rollen: Nur-Ansicht ---------- */
-body.ro #btn-undo, body.ro #btn-import, body.ro #btn-publish, body.ro .ed-toolbar .ed-hint,
+body.ro #btn-undo, body.ro #btn-publish, body.ro .ed-toolbar .ed-hint,
 body.ro .g-actions, body.ro .gfoot, body.ro [data-act="discard"], body.ro-hist #hist-upload, body.ro-hist .hist-empty .btn,
 body.ro-hist [data-hdel], body.ro-hist [data-hd="upload"], body.ro #item-body .dlg-foot .left, body.ro [data-ia="alt-add"], body.ro [data-ia="alt-del"],
 body.ro .ed-empty .row-actions { display: none !important; }
@@ -1834,9 +1830,6 @@ dialog.modal.ez-pick { width: min(1280px, calc(100vw - 32px)); height: min(860px
 .of-auto { font-style: italic; }
 .ofg-list li.belegt { opacity: .6; }
 .ofg-bei { color: var(--c-aged); }
-.ofp-fehlt { margin-bottom: 12px; display: grid; gap: 6px; }
-.ofptab { margin-bottom: 8px; }
-.ofptab td, .ofptab th { padding: 6px 8px; }
 
 /* Prüfung Design: Einzelangebote-Übersicht mobil ohne seitliches Scrollen */
 .eztab .ez-bis-m { display: none; }
