@@ -318,6 +318,11 @@ function client_key(): string
     if ($bin !== false && strlen($bin) === 16 && substr($bin, 0, 12) !== str_repeat("\0", 10) . "\xff\xff") $ip = inet_ntop(substr($bin, 0, 8) . str_repeat("\0", 8)) . '/64';
     return hash('sha256', $ip);
 }
+/* Fehlversuche und Sperren beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigene innen und die der Kundenseite) – für Übersichten */
+function logins_alle(): array
+{
+    return (store_read('logins') ?? []) + (store_aussen_lesen('logins') ?? []);
+}
 /* Fehlversuchsbremse je Adresse (Dokument „logins“: Schlüssel → {n, t, ip, until, bereich, wer}).
    - Eine erfolgreiche Anmeldung nimmt nur die Fehlversuche **für denselben Benutzernamen** zurück (wer sich vertippt und
      dann anmeldet, wird wie bisher nicht gesperrt). Fehlversuche für andere Namen bleiben stehen: Sonst könnte jemand mit

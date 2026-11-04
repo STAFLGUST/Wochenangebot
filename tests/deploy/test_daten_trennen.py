@@ -171,9 +171,9 @@ for stufe, ksx in ((1, ks1), (2, ks2), (3, ks3)):
     check(f'Stufe {stufe}: Einteilung in PHP und Python identisch', aus_php == ['intern' if dt.ist_intern(n, ksx) else 'haupt' for n in namen],
           [n for n, b in zip(namen, aus_php) if (b == 'intern') != dt.ist_intern(n, ksx)][:5])
 php_stufe = php("echo DATEN_TRENNSTUFE;", REPO / 'app')
-check('Höchste Stufe gleich in Python, PHP und Regelwerk', php_stufe == str(dt.ZIELSTUFE) == '4', php_stufe)
+check('Höchste Stufe gleich in Python, PHP und Regelwerk', php_stufe == str(dt.ZIELSTUFE) == '5', php_stufe)
 with tempfile.TemporaryDirectory() as t:
-    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('5\n')
+    t = Path(t); (t / 'd').mkdir(); (t / 'd' / '.daten-getrennt').write_text('6\n')
     r = php("try { store_bereich('kunden'); echo 'gelesen'; } catch (RuntimeException $e) { echo $e->getMessage(); }", t / 'd')
 check('Kennzeichen einer neueren Stufe → Fehler statt falscher Einteilung', 'zusammenfuehren' in r, r)
 
@@ -345,7 +345,7 @@ for art in ('dateien', 'sqlite'):
         if art == 'sqlite':
             subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
         lauf('trennen', str(d), str(i), '--offline', '--stufe', '3')
-        code, out = lauf('trennen', str(d), str(i), '--offline')
+        code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '4')
         check(f'{w}: trennen auf Stufe 4: Protokoll der Mitarbeiterseite innen', code == 0 and (d / '.daten-getrennt').read_text() == '4\n'
               and dt.dok_lesen(d, 'protokoll/' + MONAT) is None and dt.dok_lesen(i, 'protokoll/' + MONAT)[0]['u'] == 'erika', out)
         r = php_lib("audit('kunde_login', 'Kunde angemeldet', [], ['username' => 'kunde:test', 'name' => 'Test GmbH', 'role' => 'kunde']); echo json_encode([store_read('protokoll/" + MONAT + "'), protokoll_monate()]);", d)
@@ -366,6 +366,37 @@ for art in ('dateien', 'sqlite'):
               and dt.dok_namen(d, 'kundenprotokoll/') == [] and not (d / 'kundenprotokoll').exists() and dt.leer(i), (out, [e['a'] for e in p]))
         r = php_lib("echo json_encode(array_column(protokoll_monat('" + MONAT + "'), 'a'));", d)
         check(f'{w}: danach liest die Anwendung das vereinte Protokoll', sorted(json.loads(r or '[]')) == ['customers', 'kunde_login', 'protokoll_aufbewahrung', 'user', 'user'], r)
+
+# ─────────────── Trennstufe 5 (ADR-007 Stufe 2e): Zähler, Anmeldeversuche und Live-Verkehr je Seite ───────────────
+check('Stufe 5: Anmeldeversuche, Benutzernamen, Firewall-Zähler, Verkehr je Seite', dt.je_seite() == ['anmeldenamen', 'fw_zaehler', 'logins', 'verkehr']
+      and dt.je_seite(stufe=4) == [] and not any(dt.ist_intern(n, dt.kundenseite()) for n in dt.je_seite()))
+check('je Seite vereinen: Listen zeitlich, Schlüssel zusammen', dt.je_seite_vereinen([{'t': 3}], [{'t': 1}, {'t': 2}]) == [{'t': 1}, {'t': 2}, {'t': 3}]
+      and dt.je_seite_vereinen({'a': 1}, {'b': 2}) == {'a': 1, 'b': 2})
+for art in ('dateien', 'sqlite'):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art} 4→5'
+        doc(d, 'verkehr', [{'t': 100, 'ip': '198.51.100.9', 'u': 'erika', 'q': 'action=hr_personal'}])
+        doc(d, 'logins', {'m|198.51.100.9': {'ip': '198.51.100.9', 'n': 3, 'bereich': 'mitarbeiter', 't': 100}})
+        if art == 'sqlite':
+            subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+        lauf('trennen', str(d), str(i), '--offline', '--stufe', '4')
+        code, out = lauf('trennen', str(d), str(i), '--offline')
+        check(f'{w}: trennen auf Stufe 5: bisherige Zähler und Verkehr innen, außen beginnt die Kundenseite neu', code == 0 and (d / '.daten-getrennt').read_text() == '5\n'
+              and dt.dok_lesen(d, 'verkehr') is None and dt.dok_lesen(d, 'logins') is None and dt.dok_lesen(i, 'verkehr')[0]['u'] == 'erika', out)
+        code, out = lauf('pruefen', str(d), str(i))
+        check(f'{w}: danach nichts mehr zu tun', code == 0 and not [z for z in out.splitlines() if z.startswith('  ')], out)
+        r = php_lib("store_write('verkehr', [['t' => 200, 'ip' => '203.0.113.5', 'u' => '', 'q' => 'action=offer']]); store_write('logins', ['k|203.0.113.5' => ['ip' => '203.0.113.5', 'n' => 1, 'bereich' => 'kunde', 't' => 200]]); echo json_encode([store_read('verkehr'), store_read('logins')]);", d)
+        v = json.loads(r or 'null') or [None, None]
+        check(f'{w}: Kundenseite schreibt und liest nur ihre eigenen Zähler und ihren Verkehr', [e['ip'] for e in v[0]] == ['203.0.113.5'] and list(v[1]) == ['k|203.0.113.5']
+              and 'erika' not in r and dt.dok_lesen(i, 'verkehr')[0]['u'] == 'erika', r)
+        r = php_lib("store_write('verkehr', array_merge(store_read('verkehr') ?? [], [['t' => 300, 'ip' => '198.51.100.9', 'u' => 'erika', 'q' => 'action=log']])); echo json_encode([array_column(fw_verkehr_alle(), 't'), array_keys(logins_alle()), store_aussen_lesen('verkehr') !== null]);", d, i)
+        check(f'{w}: Mitarbeiterseite schreibt innen und sieht beide Seiten zusammen', json.loads(r or 'null') == [[100, 200, 300], ['m|198.51.100.9', 'k|203.0.113.5'], True]
+              and [e['t'] for e in dt.dok_lesen(i, 'verkehr')] == [100, 300] and [e['t'] for e in dt.dok_lesen(d, 'verkehr')] == [200], r)
+        r = php_lib("store_aussen_aendern('logins', function (array $a) { unset($a['k|203.0.113.5']); return $a; }); echo json_encode(array_keys(logins_alle()));", d, i)
+        check(f'{w}: Mitarbeiterseite hebt eine Sperre der Kundenseite auf', json.loads(r or 'null') == ['m|198.51.100.9'] and dt.dok_lesen(d, 'logins') in ([], {}), (r, dt.dok_lesen(d, 'logins')))
+        code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+        check(f'{w}: zusammenführen vereint beide Seiten', code == 0 and [e['t'] for e in dt.dok_lesen(d, 'verkehr')] == [100, 200, 300]
+              and 'm|198.51.100.9' in dt.dok_lesen(d, 'logins') and dt.leer(i), out)
 
 print(f'{ok_n}/{ok_n + fail_n} passed')
 sys.exit(0 if fail_n == 0 else 1)

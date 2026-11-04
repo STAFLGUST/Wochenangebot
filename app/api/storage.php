@@ -35,6 +35,7 @@ function store_bereich(string $name): string
         if ((strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) && store_stufe() < $st) return 'haupt';
     }
     if (in_array($name, DATEN_VEROEFFENTLICHT, true)) return store_innen() ? 'intern' : 'haupt';   // Kundenseite: nur die Kopie
+    if (in_array($name, DATEN_JE_SEITE, true)) return store_innen() ? 'intern' : 'haupt';          // jede Seite ihr eigenes
     // Muster „name/*“: auch die Sperre unter dem Namen der Gruppe (z. B. with_lock('protokoll') für protokoll/<Monat>)
     foreach (DATEN_KUNDENSEITE_PRAEFIX as $p) if (strncmp($name, $p, strlen($p)) === 0 || $name . '/' === $p) return 'haupt';
     return 'intern';
@@ -135,6 +136,34 @@ function store_kopien_abgleichen(): array
         if ($x !== null) $out[$n] = $x;
     }
     return $out;
+}
+/* ---------------- Je Seite getrennte Dokumente (ADR-007 Stufe 2e, ab Trennstufe 5) ----------------
+   Zähler, Anmeldeversuche, Live-Verkehr: Jede Seite schreibt ihr eigenes Dokument gleichen Namens (Kundenseite im gemeinsamen
+   Ordner, Mitarbeiterseite und Postausgang innen) – store_read/store_write/with_lock wählen es selbst. Die Mitarbeiterseite liest
+   das der Kundenseite zusätzlich (store_aussen_lesen, z. B. für die Übersichten der Sicherheit) und ändert es nur für das Aufheben
+   einer Sperre (store_aussen_aendern). Die Kundenseite sieht die Dokumente der Mitarbeiterseite nie. */
+function store_je_seite(string $name): bool
+{
+    return store_getrennt() && in_array($name, DATEN_JE_SEITE, true) && store_stufe() >= (DATEN_AB_STUFE[$name] ?? 1) && store_innen();
+}
+/* Mitarbeiterseite: Dokument der Kundenseite (null bis Trennstufe 5 – dann gibt es nur eines, das store_read schon liefert) */
+function store_aussen_lesen(string $name): ?array
+{
+    if (!store_je_seite($name)) return null;
+    $roh = store_roh($name, 'haupt')[0];
+    $d = $roh === null ? null : json_decode($roh, true);
+    return is_array($d) ? $d : null;
+}
+/* Mitarbeiterseite: Dokument der Kundenseite unter deren Sperre ändern ($fn bekommt den Inhalt und liefert den neuen) */
+function store_aussen_aendern(string $name, callable $fn): void
+{
+    if (!store_je_seite($name)) return;
+    with_lock_in('haupt', $name, function () use ($name, $fn) {
+        $roh = store_roh($name, 'haupt')[0];
+        $alt = $roh === null ? [] : (json_decode($roh, true) ?: []);
+        $neu = $fn($alt);
+        if ($neu !== $alt) store_roh_schreiben($name, 'haupt', json_encode($neu, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    });
 }
 /* Kann dieser Server das Dokument lesen? (Kundenseite: nur Dokumente im gemeinsamen Ordner – je nach Trennstufe) */
 function store_sichtbar(string $name): bool { return store_bereich($name) === 'haupt' || store_innen(); }
@@ -267,20 +296,25 @@ function store_rollback(?string $bereich = null): void
 function with_lock(string $name, callable $fn)
 {
     store_schreibschutz($name);   // Kundenseite sperrt (und schreibt) veröffentlichte Dokumente nie
-    if (store_sql($name)) {
-        $b = store_bereich($name);
+    store_path($name);            // Name prüfen (und Prüfhilfe)
+    return with_lock_in(store_bereich($name), $name, $fn);
+}
+/* Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung) */
+function with_lock_in(string $b, string $name, callable $fn)
+{
+    if (!in_array($name, STORE_SIDECARS, true) && store_mode($b) === 'sqlite') {
         if (!empty($GLOBALS['store_tx'][$b])) return $fn();
         store_db($b)->exec('BEGIN IMMEDIATE'); $GLOBALS['store_tx'][$b] = true;
         try { $result = $fn(); store_commit($b); return $result; }
         catch (Throwable $e) { store_rollback($b); throw $e; }
     }
     static $held = [];
-    if (!empty($held[$name])) return $fn();
-    $lp = store_ordner(store_bereich($name)) . '/.' . $name . '.lock';
+    if (!empty($held[$b . '|' . $name])) return $fn();
+    $lp = store_ordner($b) . '/.' . $name . '.lock';
     $fh = @fopen($lp, 'c') ?: (is_file($lp) ? @fopen($lp, 'r') : false);   // nur echte Sperrdatei, nie z. B. ein Verzeichnis
     if (!$fh || !flock($fh, LOCK_EX)) throw new RuntimeException('Cannot lock data');
-    $held[$name] = true;
-    try { return $fn(); } finally { unset($held[$name]); flock($fh, LOCK_UN); fclose($fh); }
+    $held[$b . '|' . $name] = true;
+    try { return $fn(); } finally { unset($held[$b . '|' . $name]); flock($fh, LOCK_UN); fclose($fh); }
 }
 
 /* Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht) */

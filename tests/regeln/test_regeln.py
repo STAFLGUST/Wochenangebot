@@ -731,7 +731,7 @@ class Verstoesse(unittest.TestCase):
 
     def test_bereich_pflicht(self):
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', "")
-        self.assertFehler("Dokument bestand: bereich muss eines von kundenseite, intern, veroeffentlicht sein")
+        self.assertFehler("Dokument bestand: bereich muss eines von kundenseite, intern, veroeffentlicht, je_seite sein")
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "irgendwo"\nschutz = "oeffentlich"')
         self.assertFehler("Dokument angebot: bereich muss eines von")
 
@@ -779,6 +779,14 @@ class Verstoesse(unittest.TestCase):
         self.assertIn("const DATEN_AB_STUFE_PRAEFIX = ['protokoll/' => 4];", text)
         self.assertNotIn("'protokoll/*'", text)
         self.assertIn("'kundenprotokoll/'", text.split("const DATEN_KUNDENSEITE_PRAEFIX = ")[1].split(";")[0])
+
+    def test_je_seite(self):
+        # Je Seite (ADR-007 Stufe 2e): nur mit trennstufe; Liste DATEN_JE_SEITE
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "je_seite"\nschutz = "oeffentlich"')
+        self.assertFehler("Dokument angebot: bereich = \"je_seite\" braucht trennstufe")
+        rw = regeln.laden(WURZEL)
+        self.assertEqual(regeln.je_seite_dokumente(rw), ["anmeldenamen", "fw_zaehler", "logins", "verkehr"])
+        self.assertIn("const DATEN_JE_SEITE = ['anmeldenamen', 'fw_zaehler', 'logins', 'verkehr'];", regeln.bereiche_php(rw))
 
     def test_kundenfelder(self):
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', 'bereich = "intern"\nfelder_kundenseite = ["id"]\n')

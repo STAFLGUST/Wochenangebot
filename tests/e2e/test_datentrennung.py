@@ -46,6 +46,16 @@ def interne_im_gemeinsamen_ordner():
     return out
 
 
+def roh_v(ordner, name):
+    """Dokument direkt aus einem Ordner (je Seite getrennte Dokumente liegen in beiden)"""
+    if os.path.isfile(ordner + '/.sqlite-active'):
+        with sqlite3.connect(ordner + '/.sqlite/store.sqlite') as c:
+            r = c.execute('SELECT payload FROM documents WHERE name=?', (name,)).fetchone()
+        return json.loads(r[0]) if r else None
+    p = ordner + '/' + name + '.php'
+    return json.loads(open(p, encoding='utf-8').read().split('?>\n', 1)[-1]) if os.path.isfile(p) else None
+
+
 def spur():
     with open(LOG, encoding='utf-8', errors='replace') as f:
         return [z.strip() for z in f if '[speicher]' in z]
@@ -149,7 +159,12 @@ try:
     check('Versandprotokoll im internen Ordner', any(x.get('by') == 'Postausgang' for x in (doc('mailversand') or [])) and not os.path.exists(DATA + '/mailversand.php'))
 
     # ---------- Stufe 2: Teilung, Empfänger und Inhalt nur von innen ----------
-    check('höchste Trennstufe im Kennzeichen (4)', open(DATA + '/.daten-getrennt').read().strip() == '4')
+    check('höchste Trennstufe im Kennzeichen (5)', open(DATA + '/.daten-getrennt').read().strip() == '5')
+    aussen_v, innen_v = roh_v(DATA, 'verkehr') or [], roh_v(INTERN, 'verkehr') or []
+    check('Stufe 5: Live-Verkehr der Mitarbeiterseite (erfolgreiche Mitarbeiteranmeldung) nur innen, nicht im gemeinsamen Ordner',
+          any(e.get('why') == 'Anmeldung' and 'action=login' in e.get('q', '') for e in innen_v)
+          and not any(e.get('why') == 'Anmeldung' and 'action=login' in e.get('q', '') for e in aussen_v)
+          and any(e.get('why') == 'Anmeldung' and 'kunde_login' in e.get('q', '') for e in aussen_v), (len(aussen_v), len(innen_v)))
     felder = set(daten_trennen.kunden_felder())
     kd = doc('kunden')
     check('gemeinsames Kundendokument nur mit Portalfeldern (keine Adresse, keine Warenwirtschaft)', all(set(c) <= felder for c in kd['customers'])

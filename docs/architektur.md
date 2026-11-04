@@ -45,6 +45,7 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
   Wartung, Notfallmodus, Fracht, Bestellfunktion …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie, die die Kundenseite
   nicht schreiben kann; der Postausgang stellt veränderte Kopien wieder her und meldet sie. Trennstufe 4 (Stufe 2d): Protokoll der
   Mitarbeiterseite (`protokoll/*`) innen, die Kundenseite schreibt `kundenprotokoll/*`; die Mitarbeiterseite liest beide zusammen.
+  Trennstufe 5 (Stufe 2e): Anmeldeversuche, Zähler und Live-Verkehr je Seite (`je_seite`: gleicher Name, außen bzw. innen).
 
 ## Server (`app/api/`)
 

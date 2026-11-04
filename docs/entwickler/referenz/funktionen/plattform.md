@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1072 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1082 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -248,7 +248,8 @@ _Schutzzentrale: Firewall (Angriffsmuster), Sperrliste (von Hand, automatisch, B
 - `fw_clean(b, old)` – Einstellungen prüfen (Firewall)
 - `fw_vorlage_anwenden(k, me, notfall)` – Vorlage anwenden (Aktion fw_vorlage, Notfallmodus lib/notfall.php): Sicherheits- und Firewall-Einstellungen speichern.
 - `fw_status(filter)` – Übersicht für die Ansicht „Schutz“
-- `fw_zahlen(sekunden)` – Zahlen aus dem Verkehrsprotokoll für einen Zeitraum (Sekunden; Lagebild 24 h, Wochenbericht 7 Tage): Angriffsmuster, abgewiesene Anfragen gesperrter …
+- `fw_verkehr_alle()` – Live-Verkehr beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigener Ringpuffer innen und der der Kundenseite), zeitlich sortiert
+- `fw_zahlen(sekunden)`
 - `fw_stunden()` – Verlauf der letzten 24 Stunden je Stunde (älteste zuerst, letzte = laufende Stunde): Angriffsmuster und abgewiesene Anfragen gesperrter Adressen – für das …
 - `fw_verkehr_liste(filter, seit)`
 
@@ -542,6 +543,7 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 - `trusted_proxy(ip)`
 - `client_ip()`
 - `client_key()` – Schlüssel für Fehlversuche: IPv4 je Adresse, IPv6 je /64-Netz (ein Anschluss hat meist ein ganzes /64 – sonst könnte man durch Wechseln der Adresse beliebig …
+- `logins_alle()` – Fehlversuche und Sperren beider Seiten (Mitarbeiterseite ab Trennstufe 5: eigene innen und die der Kundenseite) – für Übersichten
 - `attempts_key(bereich)` – Bereiche: 'mitarbeiter' (Anmeldung im Eingabebereich), 'kunde' (Kunden-Login mit Passwort), 'kundelink' (Links aus Kunden-E-Mails: ein schon benutzter oder …
 - `attempts_wer(name)`
 - `attempts_check(bereich)`
@@ -710,6 +712,12 @@ _Shared persistence for HTTP and maintenance tools._
 - `store_roh(name, bereich)` – Gespeicherter Inhalt (JSON-Text) und Zeitstempel eines Dokuments in einem bestimmten Bereich – ohne Einteilung nach Seite
 - `store_roh_schreiben(name, bereich, json)`
 - `store_kopien_abgleichen()` – Postausgang (und Mitarbeiterseite): alle Kopien mit dem internen Stand vergleichen und abweichende wiederherstellen.
+
+**Je Seite getrennte Dokumente (ADR-007 Stufe 2e, ab Trennstufe 5)**
+
+- `store_je_seite(name)`
+- `store_aussen_lesen(name)` – Mitarbeiterseite: Dokument der Kundenseite (null bis Trennstufe 5 – dann gibt es nur eines, das store_read schon liefert)
+- `store_aussen_aendern(name, fn)` – Mitarbeiterseite: Dokument der Kundenseite unter deren Sperre ändern ($fn bekommt den Inhalt und liefert den neuen)
 - `store_sichtbar(name)` – Kann dieser Server das Dokument lesen?
 - `store_spur(name)` – Prüfhilfe (nur Tests, WA_SPUR_INTERN=1): Kundenseite fragt ein internes Dokument an – ins Serverprotokoll.
 - `store_path(name)`
@@ -724,6 +732,7 @@ _Shared persistence for HTTP and maintenance tools._
 - `store_commit(bereich)` – Offene Transaktionen je Bereich ($GLOBALS['store_tx'] = ['haupt' => true, …]; leer = keine)
 - `store_rollback(bereich)`
 - `with_lock(name, fn)`
+- `with_lock_in(b, name, fn)` – Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung)
 - `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht)
 
 ## `app/assets/admin-rollen.js`
@@ -869,6 +878,8 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `regeln_laden(regeln)`
 - `kundenseite(regeln, stufe)` – Dokumente im gemeinsamen Ordner bei dieser Trennstufe: (Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
 - `veroeffentlicht(regeln, stufe)` – Veröffentlichte Dokumente dieser Stufe: maßgeblich innen, im gemeinsamen Ordner eine Kopie (wie DATEN_VEROEFFENTLICHT).
+- `je_seite(regeln, stufe)` – Je Seite getrennte Dokumente dieser Stufe (wie DATEN_JE_SEITE): außen die der Kundenseite, innen die der Mitarbeiterseite.
+- `je_seite_vereinen(a, b)` – Beide Fassungen eines je Seite getrennten Dokuments zusammen: Listen zeitlich (höchstens 500, wie der Ringpuffer), sonst Schlüssel.
 - `kunden_felder(regeln)`
 - `ist_intern(name, ks)` – Wie store_bereich() in app/api/storage.php: Sidecars und Dokumente der Kundenseite bleiben im gemeinsamen Ordner.
 - `stufe_lesen(haupt)`
@@ -1122,6 +1133,7 @@ _Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb._
 - `check(n, c, i)`
 - `doc(name)`
 - `interne_im_gemeinsamen_ordner()` – Interne Dokumente, die (fälschlich) im gemeinsamen Ordner liegen – als Datei oder Datenbankzeile
+- `roh_v(ordner, name)` – Dokument direkt aus einem Ordner (je Seite getrennte Dokumente liegen in beiden)
 - `spur()`
 - `call(action, data, raw)`
 - `dienst()`
@@ -1848,6 +1860,7 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 - `kundenseite_dokumente(rw)` – Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
 - `ab_stufe_dokumente(rw)` – Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe (ohne Muster „name/*“).
 - `ab_stufe_praefixe(rw)` – Wie ab_stufe_dokumente für Muster „name/*“: Präfix „name/“ → Stufe.
+- `je_seite_dokumente(rw)` – Je Seite getrennte Dokumente: Kundenseite außen, Mitarbeiterseite innen, gleicher Name (Stufe 2e).
 - `veroeffentlicht_dokumente(rw)` – Veröffentlichte Dokumente: Mitarbeiterseite schreibt und liest innen, die Kundenseite liest eine Kopie im gemeinsamen Ordner.
 - `kunden_felder(rw)` – Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm.
 - `bereiche_php(rw)`
