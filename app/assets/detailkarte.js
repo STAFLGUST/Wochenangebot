@@ -5,8 +5,8 @@
    Anmeldung erreichbar). Darstellung: MapLibre GL (BSD-3) und pmtiles (BSD-3) aus app/assets/vendor/, Stil
    app/assets/karte/stil-*.json (werkzeuge/karte_stil.mjs), Schriften und Symbole aus app/assets/karte/.
    Keine fremden Kartendienste: alle Anfragen gehen an den eigenen Host (Content-Security-Policy 'self').
-   Fehlt die Kartendatei oder kann der Browser kein WebGL, meldet verfuegbar() false – die Seiten zeichnen dann
-   ihre bisherige Übersichtskarte.
+   Fehlt die Kartendatei, beantwortet der Server (bzw. ein vorgeschaltetes CDN) keine Range-Anfragen oder kann der
+   Browser kein WebGL, meldet verfuegbar() false – die Seiten zeichnen dann ihre bisherige Übersichtskarte.
 
    API (global window.STAFLKarte):
      verfuegbar()                      → Promise<boolean>
@@ -34,13 +34,26 @@
   function webgl() {
     try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; }
   }
-  /* Kartendatei vorhanden? (eine kleine Range-Anfrage; nur einmal je Seite) */
+  /* Kartendatei vorhanden? (eine kleine Range-Anfrage; nur einmal je Seite). Kommt statt des Abschnitts die ganze Datei
+     (Status 200 – z. B. ein vorgeschaltetes CDN, das Range-Anfragen nicht weitergibt), wird der Abruf sofort abgebrochen:
+     sonst liefe im Hintergrund ein Download der ganzen Kartendatei (mehrere GB) weiter. Die Karte braucht Abschnitte. */
   function verfuegbar() {
     if (!pruefung) {
-      pruefung = !webgl() ? Promise.resolve(false)
-        : fetch(DATEI, { headers: { Range: 'bytes=0-6' }, credentials: 'same-origin', cache: 'no-store' })
-          .then(async (r) => r.status === 206 && (await r.text()).startsWith('PMTiles'))
-          .catch(() => false);
+      pruefung = !webgl() ? Promise.resolve(false) : (async () => {
+        const abbruch = new AbortController();
+        try {
+          const r = await fetch(DATEI, { headers: { Range: 'bytes=0-6' }, credentials: 'same-origin', cache: 'no-store', signal: abbruch.signal });
+          if (r.status !== 206) {
+            abbruch.abort();
+            if (r.status === 200) console.warn('Detailkarte: Der Server liefert keine Abschnitte der Kartendatei (Status 200 statt 206) – Übersichtskarte wird gezeigt.');
+            return false;
+          }
+          return (await r.text()).startsWith('PMTiles');
+        } catch (e) {
+          abbruch.abort();
+          return false;
+        }
+      })();
     }
     return pruefung;
   }
