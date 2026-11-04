@@ -411,6 +411,31 @@ with sync_playwright() as p:
     aw = pg.inner_text('#tab-auswertung')
     check('Auswertung: Vertreter, ohne Vertreter, Aktivitäten nach Art', 'Vera Vertrieb' in aw and 'Ohne Vertreter' in aw and 'Telefonat' in aw and 'Bestellung' in aw, aw[:400])
     check('Export-Knopf ohne Exportrecht ausgeblendet', pg.locator('#crm-export').is_hidden())
+
+    # Detailkarte: Liefert der Server bzw. ein vorgeschaltetes CDN statt des Abschnitts die ganze Kartendatei (Status 200,
+    # so am 04.11.2026 über bunny), bleibt die Übersichtskarte und der Abruf wird sofort abgebrochen – sonst liefe ein
+    # Download der ganzen Datei (mehrere GB) weiter. WebGL vorgetäuscht, damit die Prüfung überhaupt anfragt.
+    pd = ctx.new_page(); warnungen = []
+    pd.on('console', lambda m: warnungen.append(m.text) if m.type == 'warning' else None)
+    pd.on('pageerror', lambda e: fehler.append(str(e)))
+    pd.add_init_script("""(() => {
+      const gc = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (art, ...rest) { return /webgl/.test(art) ? {} : gc.call(this, art, ...rest); };
+      const f = window.fetch; window.__karte = { aufrufe: 0, abgebrochen: false };
+      window.fetch = (url, opt) => {
+        if (!String(url).includes('/karte/karte.pmtiles')) return f(url, opt);
+        window.__karte.aufrufe++; window.__karte.range = opt && opt.headers && opt.headers.Range;
+        if (opt && opt.signal) opt.signal.addEventListener('abort', () => { window.__karte.abgebrochen = true; });
+        const strom = new ReadableStream({ pull: (c) => new Promise((ok) => setTimeout(() => { c.enqueue(new Uint8Array(65536)); ok(); }, 5)) });
+        return Promise.resolve(new Response(strom, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } }));
+      };
+    })()""")
+    pd.goto(B + '/module/crm/#karte'); pd.wait_for_selector('#km-pts .pt')
+    pd.wait_for_function('window.__karte.aufrufe === 1 && window.__karte.abgebrochen')
+    check('Detailkarte: ganze Datei statt Abschnitt (Status 200) → Abruf sofort abgebrochen, Übersichtskarte bleibt, Hinweis in der Konsole',
+          pd.evaluate('window.__karte.range') == 'bytes=0-6' and pd.locator('#km-detail').count() == 0 and pd.locator('#km-svg').count() == 1
+          and any('keine Abschnitte' in w for w in warnungen), warnungen)
+    pd.close()
     ctx.close()
 
     # Nur ansehen: keine Eingabefelder
