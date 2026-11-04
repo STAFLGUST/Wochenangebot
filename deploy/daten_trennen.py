@@ -11,7 +11,9 @@ app/api/lib/datenbereiche-liste.php. Führt nie PHP aus.
 Trennstufen (Inhalt von daten/.daten-getrennt): 1 = interne Dokumente getrennt (Stufe 2a); 2 = zusätzlich Bestand, Stammdaten,
 Postfächer, Vorlage und Benachrichtigungen innen, Kundendokument geteilt (Portalfelder bleiben in kunden, alle übrigen Felder in
 kundenstamm) und Empfänger der Bestellwünsche innen (bestellung-empfaenger) – Stufe 2b; 3 = veröffentlichte Dokumente (Angebote,
-Sicherheit, Firewall, Wartung …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie für die Kundenseite – Stufe 2c.
+Sicherheit, Firewall, Wartung …) maßgeblich innen, im gemeinsamen Ordner nur eine Kopie für die Kundenseite – Stufe 2c; 4 = Protokoll
+getrennt: protokoll/* (Mitarbeiterseite) innen, die Kundenseite schreibt in kundenprotokoll/* – Stufe 2d (beim Zusammenführen
+werden beide wieder zu protokoll/* vereint).
 
 Ablauf beim Trennen: interne Dokumente (Dateien bzw. Zeilen der SQLite-Datenbank), die Dateiablage dateien/ und die neuen internen
 Dokumente der Umstellung nach daten-intern kopieren und vergleichen, dann die Kennzeichen setzen (daten-intern/.daten-intern, zuletzt
@@ -38,7 +40,7 @@ import datenbank as db  # noqa: E402  GUARD, SIDECARS, SCHEMA, document_path, va
 MARKER_HAUPT = '.daten-getrennt'
 MARKER_INTERN = '.daten-intern'
 REGELN = Path(__file__).resolve().parent.parent / 'regeln' / 'datenverantwortung.toml'
-ZIELSTUFE = 3   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
+ZIELSTUFE = 4   # höchste Trennstufe dieses Stands (wie TRENNSTUFE_MAX in werkzeuge/regeln.py, DATEN_TRENNSTUFE in PHP)
 # Neue interne Dokumente der Stufe 2: entstehen beim Trennen aus kunden bzw. bestellung und gehen beim Zusammenführen dort wieder auf
 GETEILT = ('kundenstamm', 'bestellung-empfaenger')
 AUSZUG = 'artikelauszug'   # Auszug für die Kundenseite (erzeugt die Anwendung ab Stufe 2); beim Zusammenführen entfernt
@@ -135,6 +137,30 @@ def dok_schreiben(root, name, wert):
         tmp.unlink()
         raise ValueError('Vergleich nach dem Schreiben fehlgeschlagen: ' + name)
     tmp.replace(p)
+
+
+def dok_namen(root, praefix):
+    """Dokumente unter einem Präfix (z. B. kundenprotokoll/) in beiden Speicherarten"""
+    if sqlite_aktiv(root):
+        with db.connect(root) as c:
+            return [n for (n,) in c.execute('SELECT name FROM documents WHERE substr(name,1,?)=? ORDER BY name', (len(praefix), praefix))]
+    d = root / praefix.rstrip('/')
+    return sorted(praefix + p.stem for p in d.glob('*.php')) if d.is_dir() else []
+
+
+def protokoll_vereinen(alt, neu):
+    """Einträge beider Protokolle eines Monats zeitlich sortiert. Einträge der Kundenseite, die schon im Protokoll stehen (wiederholter
+    Lauf nach einem Abbruch), kommen nicht noch einmal hinzu – gleiche Einträge innerhalb eines Protokolls bleiben erhalten."""
+    from collections import Counter
+    vorhanden = Counter(json_text(e) for e in (alt or []))
+    dazu = []
+    for e in neu or []:
+        k = json_text(e)
+        if vorhanden[k] > 0:
+            vorhanden[k] -= 1
+        else:
+            dazu.append(e)
+    return sorted((alt or []) + dazu, key=lambda x: str(x.get('t', '')) if isinstance(x, dict) else '')
 
 
 def dok_loeschen(root, name):
@@ -479,6 +505,16 @@ def zusammenfuehren(haupt, intern, regeln):
         emp = dok_lesen(intern, 'bestellung-empfaenger')
         if isinstance(best, dict) and isinstance(emp, dict):
             dok_schreiben(haupt, 'bestellung', {**{k: v for k, v in best.items() if k != 'empfaenger'}, 'to': emp.get('to', [])})
+    # 1b. Protokoll der Kundenseite (ab Stufe 4) in das Protokoll innen übernehmen – das kommt gleich zurück nach daten/
+    kprot = dok_namen(haupt, 'kundenprotokoll/')
+    for n in kprot:
+        m = 'protokoll/' + n.split('/', 1)[1]
+        dok_schreiben(intern, m, protokoll_vereinen(dok_lesen(intern, m), dok_lesen(haupt, n)))
+    if kprot and sqlite_aktiv(intern):
+        with db.connect(intern) as c:
+            zeilen = [r for r in db.validate(c) if r[0] not in ohne]
+    if kprot and not sqlite_aktiv(intern):
+        dateien = sorted(set(dateien) | {Path(('protokoll/' + n.split('/', 1)[1]) + '.php') for n in kprot})
     # 2. zurückkopieren und vergleichen
     if zeilen:
         with db.connect(haupt) as c:
@@ -505,6 +541,10 @@ def zusammenfuehren(haupt, intern, regeln):
         if (intern / (n + '.php')).is_file():
             (intern / (n + '.php')).unlink()
     dok_loeschen(haupt, AUSZUG)
+    for n in kprot:
+        dok_loeschen(haupt, n)
+    if (haupt / 'kundenprotokoll').is_dir() and not any((haupt / 'kundenprotokoll').iterdir()):
+        (haupt / 'kundenprotokoll').rmdir()
     ordner_aufraeumen(intern, dateien + ablage)
     if (intern / 'dateien').is_dir() and not any((intern / 'dateien').iterdir()):
         (intern / 'dateien').rmdir()

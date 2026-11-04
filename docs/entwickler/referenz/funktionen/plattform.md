@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1066 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1072 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -524,6 +524,9 @@ _Protokoll, Änderungstexte, Anmeldeversuche_
 
 **Protokoll**
 
+- `protokoll_kundenseite()` – Getrenntes Protokoll (ADR-007 Stufe 2d, ab Trennstufe 4): Die Kundenseite (ohne internen Ordner) schreibt ihre Einträge in „kundenprotokoll/JJJJ-MM“ im …
+- `protokoll_beide()`
+- `protokoll_monat(m)` – Einträge eines Monats (zeitlich sortiert) – auf der Mitarbeiterseite ab Trennstufe 4 beide Protokolle zusammen
 - `protokoll_grenze(jetzt)` – Ältester aufbewahrter Monat (JJJJ-MM): laufender Monat minus PROTOKOLL_MONATE
 - `protokoll_monate()` – Monate des Protokolls, die aufbewahrt werden (neueste zuerst) – Protokollansicht bietet nur diese an
 - `protokoll_aufraeumen()` – Monatsdokumente vor der Grenze löschen; liefert die entfernten Monate (aufsteigend).
@@ -876,6 +879,8 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `dok_lesen(root, name)`
 - `json_text(wert)`
 - `dok_schreiben(root, name, wert)`
+- `dok_namen(root, praefix)` – Dokumente unter einem Präfix (z. B. kundenprotokoll/) in beiden Speicherarten
+- `protokoll_vereinen(alt, neu)` – Einträge beider Protokolle eines Monats zeitlich sortiert.
 - `dok_loeschen(root, name)`
 
 **Teilung des Kundendokuments und der Bestell-Einstellungen (Stufe 2)**
@@ -1841,7 +1846,8 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 **Speicherbereiche (ADR-007 Stufe 2)**
 
 - `kundenseite_dokumente(rw)` – Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
-- `ab_stufe_dokumente(rw)` – Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe.
+- `ab_stufe_dokumente(rw)` – Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe (ohne Muster „name/*“).
+- `ab_stufe_praefixe(rw)` – Wie ab_stufe_dokumente für Muster „name/*“: Präfix „name/“ → Stufe.
 - `veroeffentlicht_dokumente(rw)` – Veröffentlichte Dokumente: Mitarbeiterseite schreibt und liest innen, die Kundenseite liest eine Kopie im gemeinsamen Ordner.
 - `kunden_felder(rw)` – Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm.
 - `bereiche_php(rw)`

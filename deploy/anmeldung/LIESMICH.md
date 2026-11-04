@@ -181,7 +181,8 @@ usw. nicht mehr. Trennstufe 2 (Stufe 2b): zusätzlich Bestand, Stammdaten, Postf
 Empfänger der Bestellwünsche und vom Kundendokument alles außer den Portalfeldern (Anschrift, E-Mail, Telefon, Warenwirtschaft);
 der Postausgang verschickt nur noch an Empfänger aus den internen Daten. Trennstufe 3 (Stufe 2c): Angebote und Einstellungen
 (Sicherheit, Firewall, Wartung, Notfallmodus …) maßgeblich innen, die Kundenseite liest nur eine Kopie, die sie nicht verändern
-kann. Sicherungen enthalten zusätzlich `intern-<Zeit>.tar.gz`.
+kann. Trennstufe 4 (Stufe 2d): das Protokoll der Mitarbeiterseite liegt innen, die Kundenseite schreibt ein eigenes. Sicherungen
+enthalten zusätzlich `intern-<Zeit>.tar.gz`.
 Vor einem Rückfall auf ein Release mit niedrigerer Stufe: `sh deploy/daten-trennen.sh zusammenfuehren`, danach mit dem älteren
 Release gegebenenfalls erneut `trennen`.
 

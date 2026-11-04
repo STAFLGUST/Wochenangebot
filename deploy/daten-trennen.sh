@@ -5,7 +5,8 @@
 # Trennstufe 1 (Stufe 2a): interne Dokumente. Trennstufe 2 (Stufe 2b): zusätzlich Bestand, Stammdaten, Postfächer, Vorlage und
 # Benachrichtigungen innen, Kundendokument geteilt (Anschrift, E-Mail, Warenwirtschaft → kundenstamm), Empfänger der Bestellwünsche
 # innen. Trennstufe 3 (Stufe 2c): Veröffentlichtes (Angebote, Sicherheit, Firewall, Wartung …) maßgeblich innen, außen nur eine Kopie.
-# `trennen` bringt die Daten auf die höchste Stufe des eingespielten Stands – auch von Stufe 1 auf 3.
+# Trennstufe 4 (Stufe 2d): Protokoll der Mitarbeiterseite innen, die Kundenseite schreibt kundenprotokoll/*.
+# `trennen` bringt die Daten auf die höchste Stufe des eingespielten Stands – auch von Stufe 1 auf 4.
 # Nur mit Freigabe des Inhabers, im Wartungsfenster (die Anwendung steht kurz). Im Installationsordner als root:
 #
 #   sh deploy/daten-trennen.sh status            # Zustand, Stufe und Plan (ändert nichts, Anwendung läuft weiter)

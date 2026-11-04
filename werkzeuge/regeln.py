@@ -615,9 +615,11 @@ BEREICHE = ("kundenseite", "intern", "veroeffentlicht")
 BEREICHE_LISTE = "app/api/lib/datenbereiche-liste.php"
 # Höchste Trennstufe, die dieser Stand kennt: 1 = interne Dokumente getrennt (Stufe 2a), 2 = Kundendokument geteilt, Bestand/
 # Stammdaten, Postfächer, Vorlagen und Empfänger nur noch innen (Stufe 2b), 3 = Veröffentlichtes geschützt: die Mitarbeiterseite
-# liest es innen, die Kundenseite nur eine Kopie, die sie nicht schreiben kann (Stufe 2c). Dokumente mit „trennstufe = n“ liegen
-# bis zur Stufe n im gemeinsamen Ordner (so ändert ein Release allein nichts) und ziehen mit `deploy/daten-trennen.sh trennen` um.
-TRENNSTUFE_MAX = 3
+# liest es innen, die Kundenseite nur eine Kopie, die sie nicht schreiben kann (Stufe 2c), 4 = Protokoll getrennt: die Kundenseite
+# schreibt ihre Einträge in kundenprotokoll/*, das Protokoll der Mitarbeiterseite liegt innen (Stufe 2d). Dokumente mit
+# „trennstufe = n“ liegen bis zur Stufe n im gemeinsamen Ordner (so ändert ein Release allein nichts) und ziehen mit
+# `deploy/daten-trennen.sh trennen` um.
+TRENNSTUFE_MAX = 4
 
 
 def kundenseite_dokumente(rw: Regelwerk) -> tuple:
@@ -632,8 +634,13 @@ def kundenseite_dokumente(rw: Regelwerk) -> tuple:
 
 
 def ab_stufe_dokumente(rw: Regelwerk) -> dict:
-    """Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe."""
-    return {d["name"]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") in ("intern", "veroeffentlicht") and "trennstufe" in d}
+    """Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe (ohne Muster „name/*“)."""
+    return {d["name"]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") in ("intern", "veroeffentlicht") and "trennstufe" in d and not d["name"].endswith("/*")}
+
+
+def ab_stufe_praefixe(rw: Regelwerk) -> dict:
+    """Wie ab_stufe_dokumente für Muster „name/*“: Präfix „name/“ → Stufe."""
+    return {d["name"][:-1]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") in ("intern", "veroeffentlicht") and "trennstufe" in d and d["name"].endswith("/*")}
 
 
 def veroeffentlicht_dokumente(rw: Regelwerk) -> list:
@@ -666,6 +673,7 @@ def bereiche_php(rw: Regelwerk) -> str:
          f"const DATEN_KUNDENSEITE_PRAEFIX = {liste(praefixe)};",
          f"const DATEN_TRENNSTUFE = {TRENNSTUFE_MAX};",
          "const DATEN_AB_STUFE = [" + ", ".join(f"'{k}' => {v}" for k, v in sorted(stufen.items())) + "];",
+         "const DATEN_AB_STUFE_PRAEFIX = [" + ", ".join(f"'{k}' => {v}" for k, v in sorted(ab_stufe_praefixe(rw).items())) + "];",
          f"const KUNDEN_FELDER_KUNDENSEITE = {liste(kunden_felder(rw))};",
          f"const DATEN_VEROEFFENTLICHT = {liste(veroeffentlicht_dokumente(rw))};"]
     return "\n".join(z) + "\n"

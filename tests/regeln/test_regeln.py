@@ -773,6 +773,13 @@ class Verstoesse(unittest.TestCase):
         self.assertIn("sicherheit", regeln.veroeffentlicht_dokumente(rw))
         self.assertNotIn("kunden", regeln.veroeffentlicht_dokumente(rw))
 
+    def test_praefix_stufe(self):
+        # Muster „name/*“ mit trennstufe (Protokoll, ADR-007 Stufe 2d): eigene Liste der Präfixe, nicht in DATEN_AB_STUFE
+        text = regeln.bereiche_php(regeln.laden(WURZEL))
+        self.assertIn("const DATEN_AB_STUFE_PRAEFIX = ['protokoll/' => 4];", text)
+        self.assertNotIn("'protokoll/*'", text)
+        self.assertIn("'kundenprotokoll/'", text.split("const DATEN_KUNDENSEITE_PRAEFIX = ")[1].split(";")[0])
+
     def test_kundenfelder(self):
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', 'bereich = "intern"\nfelder_kundenseite = ["id"]\n')
         self.assertFehler("Dokument bestand: felder_kundenseite gibt es nur für kunden")

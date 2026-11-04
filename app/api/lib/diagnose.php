@@ -14,7 +14,7 @@ function sec_log_entries(int $days): array
     $out = [];
     for ($i = 0; $i <= 24; $i++) {   // Monatsdateien (UTC) vom Startmonat bis heute; höchstens 2 Jahre
         $m = utc_monat($i, $since);
-        foreach (store_read('protokoll/' . $m) ?? [] as $e) if (strtotime((string)$e['t']) >= $since) $out[] = $e;
+        foreach (protokoll_monat($m) as $e) if (strtotime((string)$e['t']) >= $since) $out[] = $e;
         if ($m >= utc_monat()) break;
     }
     return $out;

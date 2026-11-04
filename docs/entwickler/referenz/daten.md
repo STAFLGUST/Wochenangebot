@@ -57,6 +57,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `firewall` | Plattformkern | intern | – | – | Firewall-Einstellungen der Schutzzentrale |
 | `fw_zaehler` | Plattformkern | intern | – | – | Zähler der Firewall |
 | `integritaet` | Plattformkern | intern | – | – | Ergebnisse der Dateiprüfung |
+| `kundenprotokoll/*` | Plattformkern | vertraulich | – | – | Protokoll der Kundenseite je Monat (ab Trennstufe 4, ADR-007 Stufe 2d): Anmeldungen, Bestellwünsche, Abmeldungen, Passwörter der Kunden – die Mitarbeiterseite zeigt es zusammen mit protokoll/* – Historie: Nur anhängen; Aufbewahrung wie protokoll/* (audit() löscht ältere Monate) |
 | `laendersperre` | Plattformkern | intern | – | – | Statistik der Länder-/IP-Sperre |
 | `logins` | Plattformkern | intern | – | – | Fehlversuche und Sperren bei der Anmeldung |
 | `mail-schluessel*` | Plattformkern | geheim | – | – | Schlüssel für das Postfach-Passwort – nie in Sicherungen (Konstante MAIL_KEY_STORE) |
@@ -70,7 +71,7 @@ Gelesen und geschrieben über `app/api/storage.php` (`store_read`, `store_write`
 | `oidc-geloescht` | Plattformkern | intern | – | – | Kennungen der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt: verknüpfen nie mit einem neuen, gleich benannten Mitarbeiter (lib/oidc.php, konten.sh verwaist) |
 | `postausgang` | Plattformkern | vertraulich | – | – | Postausgang von innen (ADR-007, lib/postausgang.php): Versandaufträge der Kundenseite – Bestellnummer, Benachrichtigungen, Abmeldehinweise mit Firma und E-Mail; nie Postfachdaten oder Mailinhalte – Historie: Kurzlebig: der Dienst postausgang entnimmt fällige Aufträge; höchstens 500 offen |
 | `postausgang-stand` | Plattformkern | intern | – | – | Lebenszeichen des Dienstes postausgang und ob ein Postfach eingerichtet ist (die Kundenseite prüft damit die Bestellfunktion) |
-| `protokoll/*` | Plattformkern | vertraulich | – | – | Änderungsprotokoll je Monat (audit) – Historie: Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php) |
+| `protokoll/*` | Plattformkern | vertraulich | – | – | Änderungsprotokoll je Monat (audit); ab Trennstufe 4 nur noch Einträge der Mitarbeiterseite und des Postausgangs – Historie: Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php) |
 | `rechte` | Plattformkern | intern | – | – | Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern |
 | `rollen` | Plattformkern | intern | – | – | Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php) |
 | `sicherheit` | Plattformkern | intern | – | – | Sicherheitseinstellungen (Zwei-Faktor-Pflicht, IP-/Ländersperre, Passwortbestätigungen) |

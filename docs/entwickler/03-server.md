@@ -283,6 +283,10 @@ Dokumente, die nur die Mitarbeiterseite schreibt und die Kundenseite liest (Ange
 (`store_kopie`), die Kundenseite liest die Kopie und kann nicht schreiben (`StoreKeinZugang`). Ein Dokument, das die Kundenseite
 selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentlicht` sein – die Gruppe `datentrennung` zeigt das.
 
+**Protokoll (Trennstufe 4, ADR-007 Stufe 2d):** Einträge immer über `audit()` schreiben und über `protokoll_monat($monat)` /
+`protokoll_monate()` lesen – nie `store_read('protokoll/…')` direkt: Ab Stufe 4 liegt das Protokoll der Mitarbeiterseite innen, das
+der Kundenseite in `kundenprotokoll/*`; die Funktionen führen beide zusammen.
+
 **Sperren und Transaktionen:**
 
 - Dateien: `with_lock` sperrt `$DATA/.<name>.lock` mit `flock(LOCK_EX)`. Verschachtelt derselbe Name → keine zweite
