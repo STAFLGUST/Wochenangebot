@@ -273,7 +273,8 @@
 
   /* Bestätigung auf Keycloak-Hosts ohne Seitenwechsel: Hinweis-Dialog, Anmeldung in einem eigenen Fenster (Klick = Nutzergeste,
      kein Popup-Blocker), Rücksprung auf admin/bestaetigt.html meldet sich per BroadcastChannel, postMessage bzw. localStorage
-     (alle nur gleicher Ursprung). Danach wiederholt api() die Anfrage – ob bestätigt ist, entscheidet allein der Server.
+     (alle nur gleicher Ursprung); kommt keine davon an, genügt das Schließen des Fensters. Danach wiederholt api() die Anfrage –
+     ob bestätigt ist, entscheidet allein der Server.
      Blockiertes Fenster: Anmeldung wie bisher in diesem Fenster (Eingaben im offenen Dialog gehen dann verloren). */
   let fensterBestaetigung = null;
   function bestaetigenPerFenster(adresse, erneut) {
@@ -293,7 +294,9 @@
         fensterBestaetigung = null;
         if (fehler) reject(fehler); else resolve();
       };
-      const onClose = () => ende(Object.assign(new Error('Bestätigung abgebrochen. Die Änderung wurde nicht ausgeführt.'), { status: 403 }));
+      // Ein „close“ des vorigen Durchgangs kann erst eintreffen, wenn der Dialog für die Wiederholung schon wieder offen ist –
+      // dann nicht als Abbruch werten (sonst schlösse sich der Hinweis „noch nicht angekommen“ sofort wieder).
+      const onClose = () => { if (!d.open) ende(Object.assign(new Error('Bestätigung abgebrochen. Die Änderung wurde nicht ausgeführt.'), { status: 403 })); };
       const onNachricht = (e) => { if (e.origin === location.origin && e.data && e.data.typ === 'stafl-bestaetigt') ende(); };
       const onSpeicher = (e) => { if (e.key === 'stafl-bestaetigung' && e.newValue) ende(); };
       try { kanal = new BroadcastChannel('stafl-bestaetigung'); kanal.onmessage = (e) => { if (e.data && e.data.typ === 'stafl-bestaetigt') ende(); }; } catch { /* älterer Browser */ }
@@ -314,6 +317,12 @@
         st.className = 'rkc-st';
         st.textContent = 'Bitte im neuen Fenster anmelden. Danach schließt es sich, und Ihre Änderung wird hier automatisch ausgeführt.';
         weiter.hidden = false;
+        // Rückfall, falls keine der drei Meldungen ankommt: Schließt sich das Fenster, wird die Anfrage wiederholt – ob bestätigt
+        // ist, entscheidet der Server (sonst erscheint dieser Hinweis mit „noch nicht angekommen“ erneut).
+        const wache = setInterval(() => {
+          if (fertig) clearInterval(wache);
+          else if (w.closed) { clearInterval(wache); ende(); }
+        }, 500);
       };
       weiter.onclick = () => ende();   // selbst weiter: der Server prüft die Bestätigung erneut
       hier.onclick = async () => {
