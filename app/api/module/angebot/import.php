@@ -8,7 +8,9 @@ declare(strict_types=1);
    - Artikelpreise (CSV der Warenwirtschaft, Auftrag des Inhabers 04.11.2026: nur noch hier, nicht mehr im Angebot): Preise
      ohne Kundengruppe ins Wochenangebot, mit Kundengruppe ins Angebot der Gruppe – in den Entwurf, veröffentlicht wird im
      Angebotseditor. Die Angebotswoche des Entwurfs wird auf die gewählte KW gesetzt (Standard: aktuelle KW). Kundengruppen
-     ohne Angebot bekommen nur auf ausdrücklichen Wunsch je ein Angebot (Option „anlegen“, Standard aus). Gelesen wird die
+     ohne Angebot bekommen nur auf ausdrücklichen Wunsch je ein Angebot – einzeln ausgewählt (Option „gruppen“, Liste, Standard
+     leer). Die Vorschau liefert zusätzlich „details“ für die Darstellung im Browser (admin-preisimport.js: Preise je Angebot
+     mit bisher/neu, erhöht/gesenkt/neu, „Bitte prüfen“ ab 10 %, Gruppen ohne Angebot zum Anhaken). Gelesen wird die
      Datei im Browser (preiseAusCsv in admin.js); hier prüft der Server die Zeilen, ordnet sie den Angeboten zu (Vorschau)
      und schreibt Entwurf und ggf. neue Angebote unter Sperre mit Stand-Prüfung (409), Protokoll wie beim Speichern.
    Der frühere Excel-Import des Wochenangebots im Editor ist entfallen (Auftrag des Inhabers 04.11.2026).
@@ -27,7 +29,7 @@ function import_arten_angebot(): array
             'vorschau' => 'angebot_preise_vorschau', 'uebernahme' => 'angebot_preise_uebernehmen',
             'optionen' => [
                 ['id' => 'woche', 'typ' => 'auswahl', 'label' => 'Angebotswoche', 'werte' => angebot_preise_wochen(), 'standard' => angebot_preise_aktuelle_woche()],
-                ['id' => 'anlegen', 'typ' => 'schalter', 'label' => 'Für Kundengruppen ohne Angebot je ein Angebot anlegen', 'standard' => false],
+                ['id' => 'gruppen', 'typ' => 'liste', 'label' => 'Neue Angebote für Kundengruppen ohne Angebot', 'standard' => []],
             ]],
     ];
 }
@@ -35,6 +37,8 @@ function import_arten_angebot(): array
 /* ---------------- Artikelpreise (CSV) ---------------- */
 
 const ANGEBOT_PREISE_MAX = 50000;   // Zeilen einer Preisdatei
+const ANGEBOT_PREISE_PRUEFEN = 10;  // Preisänderung ab diesem Prozentsatz: „Bitte prüfen“ (Tippfehler in der Warenwirtschaft)
+const ANGEBOT_PREISE_DETAILS = 5000; // Preiszeilen in den Details der Vorschau (die Zahlen zählen immer alle)
 
 /* Aktuelle Kalenderwoche (ISO 8601, Zeitzone der Anwendung) als „JJJJ-WW“ – Standard der Option „Angebotswoche“ */
 function angebot_preise_aktuelle_woche(): string
@@ -125,9 +129,9 @@ function angebot_preise_basis(): array
 }
 
 /* Zuordnung der Preise zu Angeboten und Artikeln (ohne zu schreiben). Ziel: OFFER_STD (ohne Kundengruppe), Angebots-ID
-   (Angebot der Kundengruppe) oder „neu:<Gruppe>“ (Gruppe ohne Angebot, nur mit $anlegen). Alle Artikel mit derselben
+   (Angebot der Kundengruppe) oder „neu:<Gruppe>“ (Gruppe ohne Angebot, nur wenn in $gewaehlt). Alle Artikel mit derselben
    Artikelnummer bekommen den Preis; derselbe Artikel im selben Angebot zweimal mit anderem Preis: der erste gilt. */
-function angebot_preise_plan(array $model, array $offers, array $rows, bool $anlegen): array
+function angebot_preise_plan(array $model, array $offers, array $rows, array $gewaehlt): array
 {
     $bei = []; $oname = [OFFER_STD => 'Wochenangebot'];
     foreach ($offers as $o) { $oname[$o['id']] = $o['name']; foreach ($o['gruppen'] ?? [] as $g) if (!isset($bei[(string)$g])) $bei[(string)$g] = $o['id']; }
@@ -142,16 +146,20 @@ function angebot_preise_plan(array $model, array $offers, array $rows, bool $anl
         if (isset($kg[$r['gruppe']])) $fehlt[$r['gruppe']] = ($fehlt[$r['gruppe']] ?? 0) + 1;
         else $unbekannt[$r['gruppe']] = ($unbekannt[$r['gruppe']] ?? 0) + 1;
     }
-    $anlegen = $anlegen && $fehlt && count($fehlt) <= $frei;
-    $neuName = []; $namen = ['wochenangebot' => true];
+    // Name des Angebots je fehlender Gruppe (für die Auswahl, auch wenn nicht gewählt); angelegt nur die gewählten
+    $vorschlag = []; $namen = ['wochenangebot' => true];
     foreach ($offers as $o) $namen[mb_strtolower($o['name'])] = true;
-    if ($anlegen) foreach (array_keys($fehlt) as $nr) {
+    foreach (array_keys($fehlt) as $nr) {
         $nr = (string)$nr;
         $n = mb_substr('Wochenangebot ' . ($kg[$nr] !== '' ? $kg[$nr] : 'Kundengruppe ' . $nr), 0, 80);
         if (isset($namen[mb_strtolower($n)])) $n = mb_substr($n, 0, 70) . " ($nr)";
         $namen[mb_strtolower($n)] = true;
-        $neuName[$nr] = $n;
+        $vorschlag[$nr] = $n;
     }
+    $wahl = array_flip(array_map('strval', $gewaehlt));
+    $neuName = array_filter($vorschlag, function ($nr) use ($wahl) { return isset($wahl[(string)$nr]); }, ARRAY_FILTER_USE_KEY);
+    $zuViele = count($neuName) > $frei;
+    if ($zuViele) $neuName = [];
     $ziele = []; $nichtIm = []; $gesetzt = []; $konflikt = 0; $unveraendert = 0;
     foreach ($rows as $r) {
         $ziel = OFFER_STD;
@@ -176,8 +184,10 @@ function angebot_preise_plan(array $model, array $offers, array $rows, bool $anl
         $ziele[$ziel] = $z;
     }
     $name = function (string $z) use ($oname, $neuName) { return strpos($z, 'neu:') === 0 ? $neuName[substr($z, 4)] . ' (neu)' : ($oname[$z] ?? $z); };
-    return ['ziele' => $ziele, 'fehlt' => $fehlt, 'unbekannt' => $unbekannt, 'kg' => $kg, 'neuName' => $neuName, 'anlegenMoeglich' => count($fehlt) <= $frei,
-            'nichtIm' => array_keys($nichtIm), 'konflikt' => $konflikt, 'unveraendert' => $unveraendert, 'name' => $name];
+    $gruppenText = [OFFER_STD => 'ohne Kundengruppe'];
+    foreach ($offers as $o) { $g = array_map('strval', $o['gruppen'] ?? []); $gruppenText[$o['id']] = $g ? (count($g) === 1 ? 'Gruppe ' : 'Gruppen ') . implode(', ', $g) : 'ohne Kundengruppe'; }
+    return ['ziele' => $ziele, 'fehlt' => $fehlt, 'unbekannt' => $unbekannt, 'kg' => $kg, 'neuName' => $neuName, 'vorschlag' => $vorschlag, 'zuViele' => $zuViele, 'frei' => $frei,
+            'nichtIm' => array_keys($nichtIm), 'konflikt' => $konflikt, 'unveraendert' => $unveraendert, 'name' => $name, 'gruppenText' => $gruppenText];
 }
 
 /* Vorschau/Ergebnis im Format der Importzentrale aus Plan, Fehlerzeilen und Angebotswoche */
@@ -196,16 +206,39 @@ function angebot_preise_ergebnis(array $plan, array $model, array $fehler, array
         $zeilen[] = ['art' => 'neu', 'zeile' => null, 'schluessel' => 'Angebot', 'name' => $nm, 'text' => "Neues Angebot mit eigener Artikelliste für Kundengruppe $nr" . ($plan['kg'][$nr] !== '' ? ' ' . $plan['kg'][$nr] : '')];
     }
     $je = [];
+    // Details für die Darstellung im Browser: je Angebot die Preise mit bisher/neu (höchstens ANGEBOT_PREISE_DETAILS Zeilen)
+    $kpi = ['hoch' => 0, 'runter' => 0, 'neu' => 0, 'pruefen' => 0, 'unveraendert' => $plan['unveraendert']];
+    $dAngebote = []; $platz = ANGEBOT_PREISE_DETAILS; $gekuerzt = 0; $preise = 0;
     foreach ($plan['ziele'] as $ziel => $z) {
-        $nm = ($plan['name'])((string)$ziel);
+        $ziel = (string)$ziel;
+        $nm = ($plan['name'])($ziel);
         $je[] = $nm . ': ' . ($z['preise'] === 1 ? '1 Preis' : number_format($z['preise'], 0, ',', '.') . ' Preise') . ' (' . $z['geaendert'] . ' geändert, ' . $z['neu'] . ' neu)';
+        $da = ['id' => $ziel, 'name' => $nm, 'gruppen' => strpos($ziel, 'neu:') === 0 ? 'Gruppe ' . substr($ziel, 4) . ' · neues Angebot' : ($plan['gruppenText'][$ziel] ?? ''),
+               'hoch' => 0, 'runter' => 0, 'neu' => 0, 'zeilen' => []];
         foreach ($z['aend'] as $a) {
             $art = $a['alt'] === null ? 'neu' : 'geaendert';
-            $n[$art]++;
+            $n[$art]++; $preise++;
             $zeilen[] = ['art' => $art, 'zeile' => $a['zeile'], 'schluessel' => (string)$model['items'][$a['i']]['code'], 'name' => $model['items'][$a['i']]['name'] . ' · ' . $nm,
                          'text' => ($a['alt'] === null ? 'Preis ' : angebot_preis_text($a['alt']) . ' → ') . angebot_preis_text($a['wert'])];
+            $k = $a['alt'] === null ? 'neu' : ($a['wert'] > $a['alt'] ? 'hoch' : 'runter');
+            $pruefen = $a['alt'] !== null && $a['alt'] > 0 && abs($a['wert'] - $a['alt']) / $a['alt'] * 100 >= ANGEBOT_PREISE_PRUEFEN;
+            $kpi[$k]++; $da[$k]++; if ($pruefen) $kpi['pruefen']++;
+            if ($platz-- > 0) $da['zeilen'][] = [(string)$model['items'][$a['i']]['code'], (string)$model['items'][$a['i']]['name'], $a['alt'], $a['wert'], $a['zeile'], $pruefen ? 1 : 0];
+            else $gekuerzt++;
         }
+        $dAngebote[] = $da;
     }
+    $ohne = [];
+    foreach ($plan['fehlt'] as $nr => $c) {
+        $nr = (string)$nr;
+        $ohne[] = ['nr' => $nr, 'name' => $plan['kg'][$nr] ?? '', 'preise' => $c, 'angebot' => $plan['vorschlag'][$nr] ?? '', 'an' => isset($plan['neuName'][$nr])];
+    }
+    $nAngebote = count($dAngebote);
+    $neuA = count($plan['neuName']);
+    $wTxt = "KW $w/$y";
+    $pt = $preise === 1 ? '1 Preis' : number_format($preise, 0, ',', '.') . ' Preise';
+    $fuss = $pt . ' in ' . ($nAngebote === 1 ? '1 Angebot' : $nAngebote . ' Angeboten') . ' · ' . ($neuA ? ($neuA === 1 ? '1 neues Angebot' : $neuA . ' neue Angebote') : 'keine neuen Angebote') . ' · Angebotswoche ' . $wTxt;
+    $knopf = $preise ? $pt . ' übernehmen' : 'Übernehmen';
     $h = [['stufe' => 'info', 'text' => "Angebotswoche: KW $w/$y" . (($altW !== $w || $altY !== $y) && $altW ? " (bisher KW $altW/$altY)" : '') . '. Eingetragen wird in den Entwurf – die Kunden sehen die Preise erst nach „Veröffentlichen“ im Angebotseditor. Preise, die nicht in der Datei stehen, bleiben unverändert.']];
     if ($je) $h[] = ['stufe' => 'info', 'text' => 'Je Angebot: ' . implode(' · ', $je) . '.'];
     $liste = function (array $g) use ($plan) {
@@ -213,21 +246,28 @@ function angebot_preise_ergebnis(array $plan, array $model, array $fehler, array
         foreach (array_slice($g, 0, 12, true) as $nr => $c) { $kn = $plan['kg'][(string)$nr] ?? ''; $t[] = $nr . ($kn !== '' ? ' ' . $kn : '') . " ($c)"; }
         return implode(', ', $t) . (count($g) > 12 ? ' …' : '');
     };
-    if ($plan['fehlt'] && !$plan['neuName']) {
-        $h[] = ['stufe' => 'warn', 'text' => (count($plan['fehlt']) === 1 ? '1 Kundengruppe hat' : count($plan['fehlt']) . ' Kundengruppen haben') . ' noch kein Angebot: ' . $liste($plan['fehlt']) . ' – ihre Preise werden nicht übernommen.'
-            . ($plan['anlegenMoeglich'] ? ' Mit der Option „Für Kundengruppen ohne Angebot je ein Angebot anlegen“ entsteht je Gruppe ein Angebot mit eigener Artikelliste.' : ' Es sind höchstens ' . OFFER_MAX . ' Angebote möglich – es können keine weiteren angelegt werden.')];
+    $nichtGew = array_diff_key($plan['fehlt'], $plan['neuName']);
+    if ($nichtGew) {
+        $h[] = ['stufe' => 'warn', 'text' => (count($nichtGew) === 1 ? '1 Kundengruppe hat' : count($nichtGew) . ' Kundengruppen haben') . ' noch kein Angebot und ' . (count($nichtGew) === 1 ? 'ist' : 'sind') . ' nicht ausgewählt: ' . $liste($nichtGew) . ' – ihre Preise werden nicht übernommen.'];
     }
-    if ($plan['unbekannt']) $h[] = ['stufe' => 'warn', 'text' => 'Nicht unter Stammdaten → Kundengruppen: ' . $liste($plan['unbekannt']) . ' – Preise nicht übernommen.'];
-    if ($plan['nichtIm']) $h[] = ['stufe' => 'info', 'text' => (count($plan['nichtIm']) === 1 ? '1 Artikelnummer steht' : number_format(count($plan['nichtIm']), 0, ',', '.') . ' Artikelnummern stehen') . ' nicht im Angebot und ' . (count($plan['nichtIm']) === 1 ? 'wird' : 'werden') . ' übersprungen.'];
-    if ($plan['konflikt']) $h[] = ['stufe' => 'warn', 'text' => $plan['konflikt'] . '× unterschiedliche Preise für denselben Artikel im selben Angebot (mehrere Kundengruppen) – der erste gilt.'];
-    return ['zahlen' => $n, 'zeilen' => $zeilen, 'hinweise' => $h, 'stand' => $stand];
+    $zuViele = 'Es sind höchstens ' . OFFER_MAX . ' Angebote möglich – noch ' . $plan['frei'] . ' frei. Bitte weniger Kundengruppen auswählen; so wird kein Angebot angelegt.';
+    if ($plan['zuViele']) $h[] = ['stufe' => 'warn', 'text' => $zuViele];
+    // Weitere Hinweise: auch in der eigenen Darstellung (Woche, Angebote und Kundengruppen zeigt sie selbst)
+    $weitere = [];
+    if ($plan['unbekannt']) $weitere[] = ['stufe' => 'warn', 'text' => 'Nicht unter Stammdaten → Kundengruppen: ' . $liste($plan['unbekannt']) . ' – Preise nicht übernommen.'];
+    if ($plan['nichtIm']) $weitere[] = ['stufe' => 'info', 'text' => (count($plan['nichtIm']) === 1 ? '1 Artikelnummer steht' : number_format(count($plan['nichtIm']), 0, ',', '.') . ' Artikelnummern stehen') . ' nicht im Angebot und ' . (count($plan['nichtIm']) === 1 ? 'wird' : 'werden') . ' übersprungen.'];
+    if ($plan['konflikt']) $weitere[] = ['stufe' => 'warn', 'text' => $plan['konflikt'] . '× unterschiedliche Preise für denselben Artikel im selben Angebot (mehrere Kundengruppen) – der erste gilt.'];
+    $h = array_merge($h, $weitere);
+    $details = ['woche' => ['alt' => $altW ? "KW $altW/$altY" : null, 'neu' => $wTxt], 'kpi' => $kpi, 'angebote' => $dAngebote, 'ohne' => $ohne,
+                'gekuerzt' => $gekuerzt, 'grenze' => ANGEBOT_PREISE_PRUEFEN, 'zuViele' => $plan['zuViele'] ? $zuViele : '', 'hinweise' => $weitere];
+    return ['zahlen' => $n, 'zeilen' => $zeilen, 'hinweise' => $h, 'stand' => $stand, 'details' => $details, 'fuss' => $fuss, 'knopf' => $knopf];
 }
 
 function angebot_preise_vorschau(array $e, array $me): array
 {
     [$rows, $fehler] = angebot_preise_zeilen($e);
     [, $basis, $offers, $stand] = angebot_preise_basis();
-    $plan = angebot_preise_plan($basis, $offers['offers'], $rows, !empty($e['optionen']['anlegen']));
+    $plan = angebot_preise_plan($basis, $offers['offers'], $rows, (array)($e['optionen']['gruppen'] ?? []));
     return angebot_preise_ergebnis($plan, $basis, $fehler, angebot_preise_woche($e['optionen']['woche'] ?? null), $e['optionen'], $stand);
 }
 
@@ -268,7 +308,7 @@ function angebot_preise_uebernehmen(array $e, array $me): array
     return with_lock('entwurf', function () use ($e, $me, $rows, $fehler, $woche) {
         [$draft, $basis, $offers, $stand] = angebot_preise_basis();
         if ((string)($e['stand'] ?? '') !== $stand) fail('Der Entwurf oder die Angebote wurden inzwischen geändert. Die Vorschau wird neu geladen.', 409);
-        $plan = angebot_preise_plan($basis, $offers['offers'], $rows, !empty($e['optionen']['anlegen']));
+        $plan = angebot_preise_plan($basis, $offers['offers'], $rows, (array)($e['optionen']['gruppen'] ?? []));
         $r = angebot_preise_ergebnis($plan, $basis, $fehler, $woche, $e['optionen'], $stand);
         $ids = $plan['neuName'] ? angebote_fuer_gruppen_anlegen($plan['neuName'], (int)$offers['rev'], $me) : [];
         $model = $basis;

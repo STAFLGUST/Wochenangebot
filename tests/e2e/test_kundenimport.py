@@ -304,31 +304,66 @@ with sync_playwright() as p:
     kw_neu = (basis.get('week'), basis.get('year')) != (jetzt[1], jetzt[0])   # Angebotswoche ändert sich nur, wenn der Entwurf eine andere KW hat
     a.click('#of-preise-link'); a.wait_for_selector('#view-importe .imp-art[data-art="angebot_preise"]')
     check('Verweis öffnet die Importzentrale mit „Artikelpreise (CSV)“', a.locator('#view-importe [data-imp-waehlen="angebot_preise"]').is_visible())
-    a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', PREISE); a.wait_for_selector('#imp-neu')
+    a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', PREISE); a.wait_for_selector('#view-importe [data-pi] #pi-hoch')
     t = a.inner_text('#view-importe')
-    check('Vorschau: Angebotswoche = aktuelle KW, Neuanlage von Angeboten aus', a.input_value('#view-importe [data-imp-opt="woche"]') == akt
-          and '(aktuelle Woche)' in a.inner_text('#view-importe [data-imp-opt="woche"] option:checked') and not a.is_checked('#view-importe [data-imp-opt="anlegen"]'), t[:600])
-    check('Vorschau: Wochenpreis geändert, Gruppenpreise neu (Edeka, Bela), unveränderter Preis gezählt', a.inner_text('#imp-neu') == '2'
-          and a.inner_text('#imp-geaendert') == str(1 + kw_neu) and '1 unverändert' in t and 'Wochenangebot Edeka' in a.inner_text('#imp-zeilen')
-          and '25,54 € → 26,10 €' in a.inner_text('#imp-zeilen'), (a.inner_text('#imp-neu'), a.inner_text('#imp-geaendert'), t[:900]))
-    check('Vorschau: Gruppe ohne Angebot nur als Hinweis (Preise nicht übernommen), übersprungene Zeilen', '1 Kundengruppe hat noch kein Angebot: 1 Gastronomie (2)' in t
-          and 'nicht übernommen' in t and '1 Artikelnummer steht nicht im Angebot' in t and '1 Zeile ohne Preis übersprungen' in t, t)
-    a.check('#view-importe [data-imp-opt="anlegen"]'); a.wait_for_function("document.querySelector('#imp-zeilen') && document.querySelector('#imp-zeilen').textContent.includes('Wochenangebot Gastronomie')")
-    check('mit Neuanlage: Angebot für Gruppe 1 vorgesehen (1 Angebot + 2 Preise mehr neu)', a.inner_text('#imp-neu') == '5' and 'Kundengruppe 1 Gastronomie' in a.inner_text('#imp-zeilen'), a.inner_text('#imp-zeilen')[:400])
+    liste = lambda: a.inner_text('#pi-liste')
+    check('Vorschau: Angebotswoche = aktuelle KW, keine Kundengruppe für ein neues Angebot angehakt', a.input_value('#view-importe [data-imp-opt="woche"]') == akt
+          and '(aktuelle Woche)' in a.inner_text('#view-importe [data-imp-opt="woche"] option:checked') and not a.is_checked('#pi-g-1')
+          and '0 von 1 ausgewählt' in a.inner_text('#pi-gewaehlt'), t[:600])
+    check('Kacheln: 1 erhöht, 0 gesenkt, 2 neue Preise (Edeka, Bela), 0 „Bitte prüfen“, 1 unverändert', [a.inner_text('#pi-' + k) for k in ('hoch', 'runter', 'neu', 'pruefen')] == ['1', '0', '2', '0']
+          and a.inner_text('#pi-gleich').startswith('1 ·'), [a.inner_text('#pi-' + k) for k in ('hoch', 'runter', 'neu', 'pruefen', 'gleich')])
+    z = '#pi-liste tbody[data-pi-ang="std"] tr.pi-z'
+    check('Preisänderung je Angebot: bisher durchgestrichen → neu, Änderung in € und %', a.inner_text(z + ' .pi-alt s') == '25,54' and a.inner_text(z + ' .pi-neu') == '26,10'
+          and a.inner_text(z + ' .pi-pill.hoch') == '+0,56 € · +2,2 %' and 'Wochenangebot Edeka' in liste() and 'Wochenangebot Bela' in liste()
+          and a.locator('#pi-liste tr.pi-z.neu .pi-pill:has-text("bisher ohne Preis")').count() == 2, liste()[:600])
+    w = a.inner_text('#pi-woche')
+    check('Angebotswoche bisher → neu genannt, Entwurf statt Veröffentlichung', f'KW {jetzt[1]}/{jetzt[0]}' in w and 'Veröffentlichen' in w and (('bisher' in w) == kw_neu), w)
+    check('Gruppe ohne Angebot in der Auswahl: Name, Preise, „nicht übernommen“; übersprungene Zeilen als Hinweis', 'Gruppe 1 · Gastronomie' in a.inner_text('.pi-gruppen')
+          and '2 Preise' in a.inner_text('.pi-gruppen') and 'Preise werden nicht übernommen' in a.inner_text('.pi-gruppen')
+          and '1 Artikelnummer steht nicht im Angebot' in t and '1 Zeile ohne Preis übersprungen' in t, t)
+    check('Fuß: Zusammenfassung und Knopf mit Anzahl', '3 Preise in 3 Angeboten · keine neuen Angebote' in a.inner_text('#imp-fusstext') and a.inner_text('#imp-ok').strip() == '3 Preise übernehmen',
+          (a.inner_text('#imp-fusstext'), a.inner_text('#imp-ok')))
+    # Filter, Reiter je Angebot und Suche ändern nur die Liste
+    a.click('[data-pi-filter="hoch"]'); a.wait_for_function("document.querySelectorAll('#pi-liste tr.pi-z').length === 1")
+    check('Filter „Erhöht“: nur die erhöhte Zeile', a.locator('#pi-liste tr.pi-z.hoch').count() == 1 and a.get_attribute('[data-pi-filter="hoch"]', 'aria-pressed') == 'true')
+    a.click('[data-pi-filter="neu"]'); a.wait_for_function("document.querySelectorAll('#pi-liste tr.pi-z.neu').length === 2 && document.querySelectorAll('#pi-liste tr.pi-z').length === 2")
+    check('Filter „Bitte prüfen“ ohne Treffer gesperrt', a.locator('[data-pi-filter="pruefen"]').is_disabled())
+    a.click('[data-pi-filter="alle"]'); a.click('[data-pi-angebot="edeka"]'); a.wait_for_function("document.querySelectorAll('#pi-liste tbody').length === 1")
+    check('Reiter je Angebot: nur Edeka', a.locator('#pi-liste tbody[data-pi-ang="edeka"]').count() == 1 and 'Gruppe 5' in liste(), liste()[:300])
+    a.click('[data-pi-angebot="alle"]'); a.fill('[data-pi-suche]', 'zzz-nicht-da'); a.wait_for_selector('#pi-liste .pi-leer')
+    a.fill('[data-pi-suche]', '10601'); a.wait_for_function("document.querySelectorAll('#pi-liste tr.pi-z').length === 3")
+    check('Suche nach Artikelnummer, Fokus bleibt im Suchfeld', a.evaluate("document.activeElement.matches('[data-pi-suche]')"))
+    a.fill('[data-pi-suche]', '')
+    # Kundengruppe einzeln anhaken → neues Angebot vorgesehen (Vorschau rechnet neu, bisherige bleibt bis dahin stehen)
+    a.check('#pi-g-1'); a.wait_for_function("document.querySelector('#pi-liste') && document.querySelector('#pi-liste').textContent.includes('Wochenangebot Gastronomie (neu)') && !document.querySelector('.imp-inhalt[aria-busy]')")
+    check('Gruppe 1 angehakt: neues Angebot mit 2 Preisen, Fuß nennt es, Haken behält den Fokus', a.is_checked('#pi-g-1') and a.inner_text('#pi-neu') == '4'
+          and 'Neues Angebot „Wochenangebot Gastronomie“ wird angelegt' in a.inner_text('.pi-gruppen') and '5 Preise in 4 Angeboten · 1 neues Angebot' in a.inner_text('#imp-fusstext')
+          and a.evaluate("document.activeElement && document.activeElement.id") == 'pi-g-1', (a.inner_text('#imp-fusstext'), a.inner_text('.pi-gruppen')))
+    a.click('[data-pi-keine]'); a.wait_for_function("document.querySelector('#imp-fusstext').textContent.includes('keine neuen Angebote') && !document.querySelector('.imp-inhalt[aria-busy]')")
+    check('„Keine“: Auswahl wieder leer', not a.is_checked('#pi-g-1') and 'Gastronomie (neu)' not in liste())
+    a.click('[data-pi-alle]'); a.wait_for_function("document.querySelector('#imp-fusstext').textContent.includes('1 neues Angebot') && !document.querySelector('.imp-inhalt[aria-busy]')")
     werte = a.eval_on_selector_all('#view-importe [data-imp-opt="woche"] option', 'os => os.map((o) => o.value)')
     naechste = werte[werte.index(akt) + 1]
     a.select_option('#view-importe [data-imp-opt="woche"]', naechste)
     nw, ny = int(naechste[5:]), int(naechste[:4])
-    a.wait_for_function(f"document.querySelector('#imp-zeilen') && document.querySelector('#imp-zeilen').textContent.includes('→ KW {nw}/{ny}')")
-    check('andere Angebotswoche wählbar (vier zurück bis acht voraus), Vorschau zeigt die Änderung', len(werte) == 13 and werte.index(akt) == 4
-          and a.inner_text('#imp-geaendert') == '2', (werte, a.inner_text('#imp-geaendert')))
+    a.wait_for_function(f"document.querySelector('#pi-woche') && document.querySelector('#pi-woche').textContent.includes('wird KW {nw}/{ny}')")
+    check('andere Angebotswoche wählbar (vier zurück bis acht voraus), Auswahl der Gruppen bleibt', len(werte) == 13 and werte.index(akt) == 4 and a.is_checked('#pi-g-1')
+          and f'Angebotswoche KW {nw}/{ny}' in a.inner_text('#imp-fusstext'), (werte, a.inner_text('#imp-fusstext')))
     a.screenshot(path=SH + '/importzentrale-artikelpreise.png', full_page=True)
     vp = a.viewport_size; a.set_viewport_size({'width': 390, 'height': 844})
     a.wait_for_function('document.documentElement.scrollWidth <= 391')
-    check('390 px: Vorschau der Artikelpreise ohne seitliches Scrollen', a.evaluate('document.documentElement.scrollWidth') <= 390)
+    check('390 px: Vorschau der Artikelpreise ohne seitliches Scrollen, Preiszeilen als Karten', a.evaluate('document.documentElement.scrollWidth') <= 390
+          and a.evaluate("getComputedStyle(document.querySelector('#pi-liste tr.pi-z')).display") == 'grid')
     a.screenshot(path=SH + '/importzentrale-artikelpreise-390.png', full_page=True)
     a.set_viewport_size(vp)
+    # Schnittstelle (vor der Übernahme): „Bitte prüfen“ ab 10 % und Details je Zeile
+    st, r = A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': [{'zeile': 2, 'code': '10601', 'gruppe': '', 'preis': 30.0}]}, 'optionen': {'gruppen': []}})
+    dz = (r.get('details') or {}).get('angebote', [{}])[0].get('zeilen', [[]])[0]
+    check('Schnittstelle: Änderung ≥ 10 % als „Bitte prüfen“, Zeile mit bisher/neu', st == 200 and r['details']['kpi']['pruefen'] == 1 and dz[:4] == ['10601', dz[1], 25.54, 30] and dz[5] == 1, (r.get('details'), dz))
+    st, r = A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': [{'zeile': 2, 'code': '10601', 'gruppe': '1', 'preis': 23.0}]}, 'optionen': {'gruppen': ['1', '999']}})
+    check('Schnittstelle: nur Gruppen ohne Angebot werden angelegt (unbekannte Auswahl ignoriert)', st == 200 and [g['nr'] for g in r['details']['ohne'] if g['an']] == ['1'] and r['zahlen']['neu'] == 2, r.get('details', {}).get('ohne'))
     a.click('#imp-ok'); a.wait_for_selector('#imp-ergebnis', timeout=15000)
+    check('Ergebnis nennt Preise, Angebote und neue Angebote', '5 Preise in 4 Angeboten · 1 neues Angebot' in a.inner_text('#imp-ergebnis'), a.inner_text('#imp-ergebnis')[:300])
     neu = next((x for x in doc('angebote')['offers'] if x.get('gruppen') == ['1']), {})
     check('neues Angebot für Kundengruppe 1 angelegt (eigene Artikelliste)', neu.get('name') == 'Wochenangebot Gastronomie' and neu.get('fallback') == 'hidden', neu)
     d = A.call('draft')[1]
@@ -347,7 +382,7 @@ with sync_playwright() as p:
     # Schnittstelle: veralteter Stand, falsche Zeilen, unbekannte Woche, Rechte
     zeilen = [{'zeile': 2, 'code': '10601', 'gruppe': '', 'preis': 26.2}, {'zeile': 3, 'code': '10 601', 'gruppe': '', 'preis': 1.0},
               {'zeile': 4, 'code': '10823', 'gruppe': '', 'preis': -1}, {'zeile': 5, 'code': '10823', 'gruppe': '5;x', 'preis': 1.0}]
-    st, r = A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': zeilen}, 'optionen': {'woche': '1999-01', 'anlegen': False}})
+    st, r = A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': zeilen}, 'optionen': {'woche': '1999-01', 'gruppen': []}})
     check('Schnittstelle: ungültige Zeilen als Fehler, unbekannte Woche → aktuelle KW', st == 200 and r['zahlen']['fehler'] == 3 and r['zahlen']['geaendert'] >= 1
           and f'KW {jetzt[1]}/{jetzt[0]}' in json.dumps(r, ensure_ascii=False), r.get('zahlen'))
     check('Schnittstelle: veralteter Stand → 409, nichts geschrieben', A.call('import_uebernehmen', {'art': 'angebot_preise', 'daten': {'preise': zeilen}, 'stand': '0.0'})[0] == 409

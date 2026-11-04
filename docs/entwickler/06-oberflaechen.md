@@ -210,7 +210,9 @@ Geändert wird die Zugehörigkeit nur über `aufnehmen()`, `nurIn()` (neuer Arti
 „Artikel hinzufügen“ nutzt das gemeinsame Fenster `admin-artikelwahl.js` (`WA.artikelwahl.oeffnen(cfg)`, auch für
 Einzelangebote) mit Daten aus `angebot_artikel` (Recht `angebot.bearbeiten`, Bestand nur mit `bestand.sehen`);
 die Zielgruppe bestimmt `zielGruppe()` aus der VK-Gruppe. Einen Excel-Import im Editor gibt es seit 04.11.2026 nicht mehr;
-Artikelpreise kommen über die Importzentrale (Importart `angebot_preise`, Server `module/angebot/import.php`).
+Artikelpreise kommen über die Importzentrale (Importart `angebot_preise`, Server `module/angebot/import.php`); ihre
+Vorschau zeigt die eigene Darstellung `app/module/angebot/preisimport.js` (bisher → neu je Angebot, „Bitte prüfen“ ab
+10 %, Kundengruppen ohne Angebot einzeln anhaken – Option `gruppen`), Vertrag in `docs/plattform/schnittstellen/import.md`.
 
 ### Werbung schalten
 

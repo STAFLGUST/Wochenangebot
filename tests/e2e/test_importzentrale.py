@@ -96,10 +96,12 @@ check('Dateitypen und Optionen angegeben', arten['kunden']['dateien'] == ['csv']
 import datetime, zoneinfo   # noqa: E401
 _j = datetime.datetime.now(zoneinfo.ZoneInfo('Europe/Berlin')).isocalendar()
 ap = {o['id']: o for o in arten['angebot_preise']['optionen']}
-check('Artikelpreise (Auftrag 04.11.2026): in der Zentrale (kein Editor-Ablauf), Angebotswoche = aktuelle KW (Auswahl −4 bis +8), Neuanlage von Angeboten standardmäßig aus',
-      arten['angebot_preise']['ablauf'] == 'zentrale' and list(ap) == ['woche', 'anlegen'] and ap['woche']['typ'] == 'auswahl' and ap['woche']['standard'] == f'{_j[0]:04d}-{_j[1]:02d}'
+check('Artikelpreise (Auftrag 04.11.2026): in der Zentrale (kein Editor-Ablauf), Angebotswoche = aktuelle KW (Auswahl −4 bis +8), neue Angebote je Kundengruppe einzeln wählbar (Standard: keine)',
+      arten['angebot_preise']['ablauf'] == 'zentrale' and list(ap) == ['woche', 'gruppen'] and ap['woche']['typ'] == 'auswahl' and ap['woche']['standard'] == f'{_j[0]:04d}-{_j[1]:02d}'
       and len(ap['woche']['werte']) == 13 and ap['woche']['werte'][4]['wert'] == ap['woche']['standard'] and '(aktuelle Woche)' in ap['woche']['werte'][4]['text']
-      and ap['anlegen']['typ'] == 'schalter' and ap['anlegen']['standard'] is False and not any(a['ablauf'] == 'editor' for a in arten.values()), arten['angebot_preise'])
+      and ap['gruppen']['typ'] == 'liste' and ap['gruppen']['standard'] == [] and not any(a['ablauf'] == 'editor' for a in arten.values()), arten['angebot_preise'])
+_erg = zentrale.split('function import_ergebnis')[1].split('\nfunction ')[0]
+check('Zentrale wertet „details“ nicht aus (nur in import_ergebnis begrenzt durchgereicht)', zentrale.count("'details'") == _erg.count("'details'") > 0 and 'IMPORT_DETAILS_MAX' in _erg)
 check('Kurztext je Importart (eine Zeile in der Liste, höchstens 60 Zeichen), ausführliche Beschreibung bleibt', all(0 < len(a['kurz']) <= 60 and len(a['beschreibung']) > len(a['kurz']) for a in arten.values())
       and arten['bestand']['kurz'] == 'Bestandsliste aus WinAB – ersetzt den Bestand', {k: a['kurz'] for k, a in arten.items()})
 check('keine internen Funktionsnamen an den Browser', 'vorschau' not in json.dumps(r) and 'uebernahme' not in json.dumps(r))
@@ -130,6 +132,16 @@ check('Übernahme ohne Vorschau-Stand 422', A.call('import_uebernehmen', {'art':
 
 # ---------- Kunden über die Schnittstelle der Zentrale ----------
 assert A.call('kundengruppen_save', {'rev': 0, 'groups': [{'nr': '1', 'name': 'Gastronomie'}, {'nr': '5', 'name': 'Kantinen'}, {'nr': '7', 'name': 'Handel'}]})[0] == 200
+# Option „liste“ (Kennungen; ob sie passen, prüft der Eigentümer) und eigene Darstellung („details“, „fuss“, „knopf“ nur durchgereicht)
+_d = A.call('draft')[1]
+_code = next(i['code'] for i in ((_d.get('draft') or _d['published'])['items']) if i.get('code'))
+_pz = [{'zeile': 2, 'code': str(_code), 'gruppe': '1', 'preis': 23.0}]
+_g = lambda opt: A.call('import_pruefen', {'art': 'angebot_preise', 'daten': {'preise': _pz}, 'optionen': opt})[1]
+_r0, _r1, _rx = _g({}), _g({'gruppen': ['1', 'a;b', '1', None, {'x': 1}]}), _g({'gruppen': 'kein-array'})
+check('Option „liste“: ungültige Einträge und Doppelte verworfen, gewählte Gruppe angelegt; ohne Auswahl keine', _r0['zahlen']['neu'] == 0 and _r1['zahlen']['neu'] == 2
+      and _r1['details']['ohne'][0]['an'] is True and _r0['details']['ohne'][0]['an'] is False and _rx['zahlen']['neu'] == 0, (_r0.get('zahlen'), _r1.get('zahlen'), _rx.get('zahlen')))
+check('Vorschau mit eigener Darstellung: details, fuss und knopf durchgereicht (übrige Arten ohne)', isinstance(_r1.get('details'), dict) and '1 neues Angebot' in _r1['fuss'] and _r1['knopf'] == '1 Preis übernehmen'
+      and _r0['fuss'].startswith('0 Preise') and _r0['knopf'] == 'Übernehmen', (_r1.get('fuss'), _r1.get('knopf'), _r0.get('fuss')))
 rev0 = K.call('kunden')[1]['rev']
 KR = [{'nr': '3000001', 'firma': 'API Eins GmbH', 'plz': '20095', 'ort': 'Hamburg', 'gruppe': '1', 'zeile': 2},
       {'nr': '3000002', 'firma': 'API Zwei KG', 'gruppe': '99', 'zeile': 3},
@@ -402,9 +414,12 @@ with sync_playwright() as p:
 
     # Artikelpreise: Auswahl der Angebotswoche und Schalter in der Vorschau (Ablauf und Übernahme: Gruppe kundenimport)
     a.click('[data-imp="liste"]'); a.wait_for_selector('#view-importe .imp-art[data-art="angebot_preise"]')
-    a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', FIX + '/angebote/artikelpreise.csv'); a.wait_for_selector('#imp-neu')
-    check('Artikelpreise-Vorschau: Auswahl „Angebotswoche“ (aktuelle KW) und Schalter „Angebot anlegen“ (aus)', a.locator('#view-importe select[data-imp-opt="woche"]').count() == 1
-          and '(aktuelle Woche)' in a.inner_text('#view-importe [data-imp-opt="woche"] option:checked') and not a.is_checked('#view-importe [data-imp-opt="anlegen"]'))
+    a.set_input_files('#view-importe input[data-imp-datei="angebot_preise"]', FIX + '/angebote/artikelpreise.csv')
+    a.wait_for_selector('#view-importe [data-pi] #pi-hoch')
+    check('Artikelpreise-Vorschau: Auswahl „Angebotswoche“ (aktuelle KW), eigene Darstellung des Eigentümers, Kundengruppen nicht angehakt',
+          a.locator('#view-importe select[data-imp-opt="woche"]').count() == 1 and '(aktuelle Woche)' in a.inner_text('#view-importe [data-imp-opt="woche"] option:checked')
+          and a.locator('#view-importe [data-imp-opt="gruppen"]').count() == 0 and a.locator('#view-importe [data-pi-gruppe]').count() >= 1
+          and not a.locator('#view-importe [data-pi-gruppe]:checked').count() and a.locator('#imp-zeilen').count() == 0)
     a.click('[data-imp="liste"]')
 
     # Mobil 390 px

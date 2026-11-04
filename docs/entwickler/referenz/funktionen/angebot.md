@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 613 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+42 Dateien, 623 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -164,7 +164,7 @@ _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/pla
 - `angebot_preise_zeilen(e)` – Zeilen des Lesers prüfen: {zeile, code, gruppe, preis}.
 - `angebot_preise_woche(v)` – Gewählte Angebotswoche „JJJJ-WW“ → [Woche, Jahr] (nur gültige ISO-Wochen; sonst die aktuelle)
 - `angebot_preise_basis()` – Ausgangsstand: Entwurf, sonst veröffentlichtes Angebot; Stand = Revision des Entwurfs und der Angebotsliste
-- `angebot_preise_plan(model, offers, rows, anlegen)` – Zuordnung der Preise zu Angeboten und Artikeln (ohne zu schreiben).
+- `angebot_preise_plan(model, offers, rows, gewaehlt)` – Zuordnung der Preise zu Angeboten und Artikeln (ohne zu schreiben).
 - `angebot_preise_ergebnis(plan, model, fehler, woche, opt, stand)` – Vorschau/Ergebnis im Format der Importzentrale aus Plan, Fehlerzeilen und Angebotswoche
 - `angebot_preise_vorschau(e, me)`
 - `angebote_fuer_gruppen_anlegen(neuName, rev, me)` – Neue Angebote für Kundengruppen ohne Angebot (eigene Artikelliste, Gruppe zugeordnet) – Regeln wie offers_save: eindeutige Namen, nie die ID eines gelöschten …
@@ -832,6 +832,33 @@ _Wochenangebot – gemeinsamer Kern für Frontend und Eingabebereich - Excel-Les
 _Web-App: Offline-Speicher (sw.js) anmelden und Hinweis „Als App auf den Home-Bildschirm“._
 
 - `zeigen(inhalt)`
+
+## `app/module/angebot/preisimport.js`
+
+_STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import)._
+
+- `zeile(r)` – Zeile der Details [Artikelnummer, Artikel, bisher\|null, neu, Dateizeile, prüfen 1/0] → Anzeige
+- `zustand(ctx)`
+
+**Kopf: Angebotswoche und Kacheln**
+
+- `wocheHTML(w)`
+- `kachelnHTML(k, fehler)`
+- `fehlerHTML(list)` – Fehlerhafte Zeilen (Leser und Server) – aufklappbar, werden nicht übernommen
+
+**Kundengruppen ohne Angebot: einzeln anhaken**
+
+- `gruppenHTML(d, ctx)`
+
+**Preisänderungen je Angebot**
+
+- `listeHTML(d, z)`
+- `aenderungenHTML(d, z)`
+
+**Vertrag mit der Importzentrale**
+
+- `html(ctx)`
+- `binden(root, ctx)`
 
 ## `app/sw.js`
 
