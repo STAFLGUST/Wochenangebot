@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 949 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+103 Dateien, 961 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -74,15 +74,17 @@ _Konten der zentralen Anmeldung (Keycloak, Realm „mitarbeiter“) aus der Verw
 - `konten_http(methode, url, inhalt, kopf)` – Eine Anfrage an Keycloak: [Status, JSON\|null, Kopfzeilen].
 - `konten_token()` – Zugangstoken des Clients „konten“ (client_credentials), nur im Speicher dieser Anfrage
 - `konten_api(methode, pfad, daten)` – Aufruf der Verwaltungsschnittstelle des Realms: $pfad relativ zu /admin/realms/<realm>/
-- `konten_finden(u)` – Keycloak-Konto zum Mitarbeiterkonto: [Konto\|null, Hinweis].
+- `konten_finden(u)` – Keycloak-Konto zum Mitarbeiterkonto: [Konto\|null, Hinweis, Altkonto\|null].
 - `konten_status(u)` – Zustand für die Verwaltung (nur lesen)
 - `konten_pflicht(u)` – Vorhandenes Konto oder Fehler (für schreibende Funktionen)
+- `konten_min_laenge()` – Mindestlänge für Passwörter der zentralen Anmeldung: Einstellung „Passwörter mindestens … Zeichen“, nie unter 12 (Grundwert des Realms).
 - `konten_passwort_meldung(j)` – Richtlinienfehler von Keycloak (Passwort) auf Deutsch
-- `konten_startpasswort()` – Gut vorlesbares Startpasswort wie konten.sh (16 Zeichen in Vierergruppen, ohne 0/O/1/l/I)
+- `konten_startpasswort()` – Gut vorlesbares Startpasswort wie konten.sh (mindestens 16 Zeichen in Vierergruppen, ohne 0/O/1/l/I), immer mit Groß- und Kleinbuchstaben und Ziffer – …
 - `konten_passwort(u, passwort, temporaer)` – Passwort setzen; $temporaer = bei der nächsten Anmeldung ändern.
 - `konten_entsperren(u)` – Sperre nach Fehlversuchen aufheben (und ein in Keycloak gesperrtes Konto wieder aktivieren, wie konten.sh entsperren)
 - `konten_link(u)` – Mail mit Link zum Passwort-Festlegen (72 Stunden, nur „Passwort aktualisieren“)
 - `konten_anlegen(u)` – Fehlendes Konto anlegen (Benutzername, Name, E-Mail aus dem Mitarbeiterkonto) und verknüpfen.
+- `konten_entfernen(u)` – Mitarbeiter gelöscht (Aktion user_delete, nach dem Löschen aufgerufen): Konto in der zentralen Anmeldung mitlöschen – sonst bliebe es bestehen und ein später …
 
 ## `app/api/lib/benachrichtigung.php`
 
@@ -405,7 +407,16 @@ _Mitarbeiteranmeldung über Keycloak (ADR-003, GR-110) – Roadmap 7b, vorerst n
 - `oidc_stufe_adresse()` – Anmeldung mit zweitem Faktor bei Keycloak anfordern (zweite Stufe; fehlt er, richtet der Mitarbeiter ihn dort ein)
 - `oidc_konto(id)` – Mitarbeiterkonto zur Identität; ohne aktives Konto 403 (nicht 401 – sonst meldete der Browser sich endlos neu an)
 - `oidc_aktiv(u)`
+- `oidc_geloescht()` – Kennungen (sub) der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt (Dokument „oidc-geloescht“, nur wachsend und klein).
+- `oidc_geloescht_merken(sub)`
 - `oidc_nutzer()` – Angemeldeter Mitarbeiter auf einem Keycloak-Host.
+
+**Leerlauf über alle Adressen (seit 04.11.2026)**
+
+- `oidc_aktiv_schluessel(id)`
+- `oidc_aktivitaet()`
+- `oidc_leerlauf(id)` – Abgelaufen?
+- `oidc_aktivitaet_merken(id)`
 - `oidc_anmeldung_merken(u, authTime)` – Letzte Anmeldung am Mitarbeiterkonto (lastLogin) = Anmeldezeitpunkt bei Keycloak (auth_time) – für „letzte Anmeldung“ und ungenutzte Konten (Modul Sicherheit).
 
 **Ablauf und Beenden von Sitzungen auf Keycloak-Hosts**
@@ -1431,11 +1442,15 @@ _Anmeldung über Keycloak (Roadmap 7b, ADR-003, GR-108/GR-110) – Prüfungen ge
 - `vtoken_bf()`
 - `vtoken()` – Freiwillig eingerichteter Einmalcode (wie über „Konto“ auf der Anmeldeseite): wird danach immer abgefragt
 - `warte_mail(adresse, anzahl)`
+- `doc_roh(name)` – Abmelden nach Inaktivität gilt über alle Adressen zusammen (04.11.2026): letzte Aktivität je Anmeldung bei Keycloak im Dokument oidc-aktivitaet.
+- `kim_inaktiv(sekunden)`
+- `php_sitzung_ruht(host, sekunden)`
 - `anmelde_link_vergessen()` – ── Passwort vergessen (Stand 14, konten.sh passwort-vergessen; Inhaber 03.11.2026): Link per Mail an die hinterlegte Adresse, eigener Ablauf ohne „Reset OTP“ …
 - `ablauf_datei()`
 - `lauf(alias, ebene)`
 - `vergessen_anfordern(p_, wer)`
 - `link_aus(m_)`
+- `geloescht_roh()`
 
 ## `tests/regeln/test_regeln.py`
 

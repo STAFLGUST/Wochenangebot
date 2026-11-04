@@ -90,6 +90,18 @@ Clients, die Keycloak selbst anlegt – Anmeldungen laufen nur über die Anmelde
 `sh deploy/anmeldung/konten.sh realm-aktualisieren` (kein Neustart nötig; die Ausgabe nennt jeden umgestellten Client).
 Ab diesem Stand sperrt das Caddyfile außerdem Keycloaks Kontokonsole (`/realms/mitarbeiter/account`, 404) – Konten pflegt
 die Verwaltung.
+
+Stand 15 (04.11.2026, Auftrag des Inhabers): Passwortregeln und Kontosperre der zentralen Anmeldung kommen aus der
+Anwendung (Sicherheit → Einstellungen → Anmeldung und Passwörter): Mindestlänge (nie unter 12), „gemischte Zeichen“ (dann
+Groß-, Kleinbuchstabe und Ziffer), Sperre nach Fehlversuchen und deren Dauer je Konto; weiter wie bisher: nicht Benutzername
+oder E-Mail, keins der letzten 3 Passwörter. Übernehmen mit `sh deploy/anmeldung/konten.sh richtlinien` (läuft auch in
+`realm-aktualisieren`; zeigt die übernommenen Werte, zweiter Lauf „aktuell“) – nach jeder Änderung dieser Einstellungen
+einmal ausführen. Bestehende Passwörter bleiben gültig. Die Anwendung bekommt dafür keine zusätzlichen Rechte in Keycloak.
+Außerdem löscht die Anwendung beim Löschen eines Mitarbeiters dessen Konto in Keycloak mit. Konten gelöschter Mitarbeiter aus
+der Zeit davor (oder wenn Keycloak beim Löschen nicht erreichbar war): `sh deploy/anmeldung/konten.sh verwaist` zeigt sie
+(nur lesen), `sh deploy/anmeldung/konten.sh verwaist --loeschen` löscht genau diese Konten. Rückweg: Werte in den
+Einstellungen ändern und `richtlinien` erneut ausführen.
+
 Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
 Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt

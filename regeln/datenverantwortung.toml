@@ -464,6 +464,18 @@ schutz = "intern"
 beschreibung = "Beendete Sitzungen der zentralen Anmeldung (Keycloak-Sitzung bzw. Mitarbeiter → Zeitpunkt, höchstens 11 Stunden): weiter erst nach erneuter Anmeldung bei Keycloak"
 
 [[dokument]]
+name = "oidc-aktivitaet"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Letzte Aktivität je Anmeldung bei Keycloak (Keycloak-Sitzung → Zeitpunkt, höchstens 13 Stunden): Abmelden nach Inaktivität gilt über alle Adressen der Plattform"
+
+[[dokument]]
+name = "oidc-geloescht"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Kennungen der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt: verknüpfen nie mit einem neuen, gleich benannten Mitarbeiter (lib/oidc.php, konten.sh verwaist)"
+
+[[dokument]]
 name = "logins"
 eigentuemer = "plattform"
 schutz = "intern"

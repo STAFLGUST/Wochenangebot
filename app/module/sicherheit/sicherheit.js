@@ -91,7 +91,8 @@
   function toast(text, fehler = false) {
     const t = $('#sic-toast');
     t.textContent = text; t.className = 'sic-toast zeigen' + (fehler ? ' fehler' : '');
-    clearTimeout(toastZeit); toastZeit = setTimeout(() => { t.className = 'sic-toast'; }, fehler ? 4500 : 2400);
+    // lange Meldungen (z. B. mit Befehl für die Serverkonsole) bleiben länger stehen
+    clearTimeout(toastZeit); toastZeit = setTimeout(() => { t.className = 'sic-toast'; }, Math.max(fehler ? 4500 : 2400, String(text).length * 60));
   }
   const dlg = $('#sic-dlg');
   let dlgZurueck = null, dlgHandler = null;
@@ -1213,18 +1214,23 @@
     dialog(`${dKopf('Anmeldung und Passwörter')}<div class="sic-dinhalt" id="sec-form">
         <label class="sic-feld">Zwei-Faktor-Anmeldung verpflichtend<select name="twofa">${Object.entries(TWOFA).map(([k, l]) => `<option value="${k}"${St.twofa === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <small>Wer sie noch nicht eingerichtet hat, wird beim nächsten Anmelden dazu aufgefordert. Auf den Keycloak-Hosts gilt zusätzlich die Pflicht der zentralen Anmeldung.</small></label>
-        <label class="sic-feld">Automatisch abmelden nach Inaktivität<select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${St.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="sic-feld">Automatisch abmelden nach Inaktivität<select name="idleMinutes">${IDLE.map(([v, l]) => `<option value="${v}"${St.idleMinutes === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <small>Gilt für alle Adressen der Plattform zusammen: Arbeit in einem Modul hält die Anmeldung überall.</small></label>
         <div class="sic-feld"><span>Passwörter</span><label>mindestens <input type="number" name="pwMin" min="10" max="32" value="${St.pwMin}"> Zeichen</label>
           <label class="sic-check"><input type="checkbox" name="pwComplex"${St.pwComplex ? ' checked' : ''}><span>Groß-/Kleinbuchstaben, Ziffern oder Sonderzeichen verlangen</span></label>
           <label class="sic-check"><input type="checkbox" name="pwLeak"${St.pwLeak ? ' checked' : ''}><span>Gegen bekannte Datenlecks prüfen <span class="sub">(übertragen werden nur die ersten 5 Zeichen eines Prüfwerts, nie das Passwort)</span></span></label></div>
         <div class="sic-feld"><span>Kontosperre</span><div class="sic-inline"><label>nach <input type="number" name="lockAfter" min="3" max="20" value="${St.lockAfter}"> Fehlversuchen</label><label>für <input type="number" name="lockMinutes" min="5" max="1440" value="${St.lockMinutes}"> Minuten</label></div>
-          <small>Zusätzlich wird jede Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div></div>
+          <small>Zusätzlich wird jede Adresse nach 5 Fehlversuchen für 10 Minuten gesperrt.</small></div>
+        <p class="sic-hinweis">Passwortregeln und Kontosperre gelten auch für die zentrale Anmeldung (dort mindestens 12 Zeichen; „gemischt“ heißt dort Groß-, Kleinbuchstabe und Ziffer; ohne Datenleck-Prüfung). Nach einer Änderung in der Serverkonsole übernehmen: <code>sh deploy/anmeldung/konten.sh richtlinien</code></p></div>
       ${dFuss(`<button type="button" class="btn" data-d="zu">Abbrechen</button><button type="submit" class="btn primary">${icon('check')}Speichern</button>`)}`,
     { breit: true, handler: async (a, b, form) => {
       if (a !== 'submit') return;
       const el = (n) => form.querySelector(`[name="${n}"]`);
-      await secSpeichern({ twofa: el('twofa').value, idleMinutes: +el('idleMinutes').value, pwMin: +el('pwMin').value, pwComplex: el('pwComplex').checked, pwLeak: el('pwLeak').checked,
-        lockAfter: +el('lockAfter').value, lockMinutes: +el('lockMinutes').value }, 'Sicherheitseinstellungen gespeichert.');
+      const neu = { twofa: el('twofa').value, idleMinutes: +el('idleMinutes').value, pwMin: +el('pwMin').value, pwComplex: el('pwComplex').checked, pwLeak: el('pwLeak').checked,
+        lockAfter: +el('lockAfter').value, lockMinutes: +el('lockMinutes').value };
+      // Werte, die Keycloak übernimmt (konten.sh richtlinien) – bei einer Änderung daran erinnern
+      const zentral = ['pwMin', 'pwComplex', 'lockAfter', 'lockMinutes'].some((k) => neu[k] !== St[k]);
+      await secSpeichern(neu, zentral ? 'Sicherheitseinstellungen gespeichert. Für die zentrale Anmeldung in der Serverkonsole übernehmen: sh deploy/anmeldung/konten.sh richtlinien' : 'Sicherheitseinstellungen gespeichert.');
     } });
   }
   function ipDialog() {
