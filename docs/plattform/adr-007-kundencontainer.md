@@ -218,7 +218,8 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
   nur einen offenen Auftrag ohne Empfänger an; der Postausgang bestimmt die Empfänger (Bestellfunktion, Adresse aus `kundenstamm`),
   ergänzt den Schnappschuss des Kunden einmalig aus den Stammdaten (GR-106) und erzeugt den Inhalt beim Versand selbst. An das Team
   gehen E-Mails nur an heutige oder frühere Empfänger (so bleibt beim Nachsenden der Originalempfänger), die Kopie nur an die
-  heutige Adresse des Kunden; je Kunde höchstens 30 am Tag. Andere Aufträge werden verworfen, stehen mit Grund beim Vorgang und
+  heutige Adresse des Kunden und automatisch nur bei eingeschalteter Kopie (eine noch offene Kopie kann das Team im Eingabebereich
+  ausdrücklich bestätigt trotzdem senden – wie mit gemeinsamen Daten); je Kunde höchstens 30 am Tag. Andere Aufträge werden verworfen, stehen mit Grund beim Vorgang und
   gehen als Sicherheitsereignis ins Protokoll. Abmeldehinweise enthalten nur noch die Kennung des Kunden (Firma und Adresse liest
   der Dienst selbst, nur wenn die Änderung gespeichert ist, höchstens 10 je Kunde und Tag); Benachrichtigungen der Kundenseite nimmt
   der Dienst nur als Sicherheitsereignis an. Bis Trennstufe 2 gilt wie bisher der gespeicherte Originalstand.

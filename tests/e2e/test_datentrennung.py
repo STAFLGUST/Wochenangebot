@@ -226,6 +226,22 @@ try:
     vorher_n = len(smtp.messages); dienst()
     empf = [r for m in smtp.messages[vorher_n:] for r in m['to']]
     check('früherer Empfänger erhält den älteren Auftrag, ein unbekannter nicht', empf == ['orders@example.org'], empf)
+    # Kopie an den Kunden ausgeschaltet: eine noch offene Kopie verwirft der Postausgang; ein im Eingabebereich ausdrücklich
+    # bestätigter Neuversand sendet sie (nur an die Adresse aus den Stammdaten) – wie mit gemeinsamen Daten
+    check('Kopie an den Kunden ausschalten (Mitarbeiterseite)', A.call('bestell_settings_save', {'enabled': True, 'copy': False})[0] == 200)
+    alle = json.loads(storage_raw('bestellungen').split('?>\n', 1)[-1])
+    storage_write('bestellungen', alle + [{**echt, 'nr': 'B-2099-9997', 'requestId': 'kopie-aus-0003', 'outbox': [
+        {'id': 'h1', 'kind': 'bestellung', 'to': 'orders@example.org', 'state': 'sent', 'attempts': 1, 'error': '', 'history': []},
+        {'id': 'h2', 'kind': 'bestellkopie', 'to': 'kantine.dt@example.org', 'state': 'queued', 'attempts': 0, 'error': '', 'history': []}]}])
+    storage_write('postausgang', {'auftraege': [{'id': 'p5', 'art': 'bestellung', 'nr': 'B-2099-9997', 't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0}]})
+    vorher_n = len(smtp.messages); dienst()
+    jk = {x['id']: x for x in A.call('bestellung&nr=B-2099-9997')[1].get('order', {}).get('outbox', [])}
+    check('ausgeschaltete Kopie: Postausgang verwirft sie mit Grund', (jk.get('h2') or {}).get('state') == 'failed' and 'ausgeschaltet' in jk['h2'].get('error', '')
+          and len(smtp.messages) == vorher_n, jk)
+    code, r = A.call('bestellung_mail_retry', {'nr': 'B-2099-9997', 'jobId': 'h2', 'attempts': (jk.get('h2') or {}).get('attempts', 0), 'confirm': True})
+    check('ausdrücklich bestätigter Neuversand sendet die Kopie an die Adresse aus den Stammdaten', code == 200
+          and [m['to'] for m in smtp.messages[vorher_n:]] == [['kantine.dt@example.org']], (code, r))
+    A.call('bestell_settings_save', {'enabled': True, 'copy': True})
 
     # ---------- Stufe 3: Veröffentlichtes maßgeblich innen, außen nur eine Kopie ----------
     def roh(ordner, name):

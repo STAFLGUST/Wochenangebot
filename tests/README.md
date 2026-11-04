@@ -48,9 +48,12 @@ Der Parser-Test prüft auch „erfasst“ in J und Ankunft in M sowie reine Zuga
 
 Getrennte Daten (ADR-007 Stufe 2, höchste Trennstufe): `WA_TEST_TRENNUNG=1 python3 tests/run_e2e.py …` trennt die Testdaten jeder Gruppe vor dem
 Start mit `deploy/daten_trennen.py`; der Testserver ist dann die Mitarbeiterseite (`WA_DATEN_INTERN`), und `WA_SPUR_INTERN=1`
-schreibt jeden Zugriff einer öffentlichen Aktion auf ein internes Dokument ins Serverprotokoll (`[speicher] …`). Prüfmodus für
-Umbauten an der Einteilung – Gruppen, die Datendateien direkt über `UDATA` anfassen statt über `umgebung.storage_*`, scheitern
-dort erwartungsgemäß. Die Gruppe `datentrennung` läuft immer getrennt.
+schreibt jeden Zugriff einer öffentlichen Aktion auf ein internes Dokument ins Serverprotokoll (`[speicher] …`). Die volle Suite
+muss auch so grün sein. Die Hilfen in `tests/e2e/umgebung.py` lesen und schreiben dabei wie der Testserver: `storage_raw('kunden')`
+liefert das geteilte Kundendokument zusammengesetzt (Portalfelder aus `kunden`, übrige aus `kundenstamm`), `storage_write('kunden', …)`
+teilt es wieder auf; veröffentlichte und je Seite getrennte Dokumente liegen für die Mitarbeiterseite innen. Tests fassen Dateien
+deshalb nie direkt über `UDATA` an, sondern über `datenordner(name)` (Ordner eines Dokuments), `ablageordner()` (Dateiablage
+`dateien/`) und `trennstufe()` (0 = nicht getrennt). Die Gruppe `datentrennung` läuft immer getrennt (Testserver = Kundenseite).
 
 Windows: Der Teststarter beendet PHP-Prozesse plattformgerecht und erzeugt frische SQLite-Testdaten
 direkt mit dem vorhandenen Schema. Dies prüft **nicht** die Linux-Produktionsmigration (weiterhin
