@@ -236,7 +236,10 @@ for cid in ('dashboard', 'angebot', 'verwaltung', 'bestand', 'hr', 'crm', 'marke
           (c.get('attributes', {}).get('minimum.acr.value'), [m.get('protocolMapper') for m in c.get('protocolMappers', [])]))
 check('Realm: eigener Anmeldeablauf mit Stufen (Passwort, zweiter Faktor)', realm.get('browserFlow') == 'mitarbeiter-browser', realm.get('browserFlow'))
 _log = open(os.path.join(WORK, 'realm-aktualisieren.log'), encoding='utf-8').read()
-check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 14' in _log, _log[-300:])
+check('Realm auf aktuellem Stand (realm-aktualisieren beim Start, Protokoll)', 'Realm aktuell (Stand 15' in _log, _log[-300:])
+# Stand 15: Passwortregeln aus der Anwendung – beim Start ist sie hier nicht über APP_PHP erreichbar: Hinweis, nichts geändert, kein Abbruch
+check('Stand 15: ohne lesbare Anwendung Hinweis statt Abbruch, Passwortregeln unverändert',
+      'Einstellungen der Anwendung nicht lesbar' in _log and 'konten.sh richtlinien' in _log and realm.get('failureFactor') == 5, _log[-500:])
 # Stand 14: kein Passwort-Grant – auch nicht über die Clients, die Keycloak selbst anlegt
 check('Stand 14: kein Client des Realms erlaubt den Passwort-Grant', not [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')],
       [c['clientId'] for c in clients.values() if c.get('directAccessGrantsEnabled')])
