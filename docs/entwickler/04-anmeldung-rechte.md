@@ -173,6 +173,26 @@ Der Notfallmodus vermerkt alle betroffenen Mitarbeiter in `oidc-abmeldungen` (`o
 Option „Keycloak“. Kein Client des Realms erlaubt den Passwort-Grant (`directAccessGrantsEnabled=false`, auch die von
 Keycloak selbst angelegten; Realm Stand 14). Die Kontokonsole `/realms/mitarbeiter/account` sperrt das Caddyfile (404).
 
+**Leerlauf über alle Adressen (seit 04.11.2026):** „Abmelden nach Inaktivität“ gilt auf Keycloak-Hosts für die Anmeldung
+bei Keycloak als Ganzes, nicht mehr je Adresse. `oidc_aktivitaet_merken` schreibt höchstens einmal je Minute die letzte
+Aktivität je Keycloak-Sitzung (`sid`) ins Dokument `oidc-aktivitaet` (13 Stunden; Hintergrundabgleiche zählen nicht);
+`oidc_leerlauf` setzt bei Überschreitung `oidcEnde` in der PHP-Sitzung – auch auf einer Adresse, die der Mitarbeiter danach
+zum ersten Mal öffnet. Weiter wie bisher nur nach erneuter Anmeldung bei Keycloak (`max_age=0`); Aktivität nach dem Ablauf
+(also nach einer erneuten Anmeldung) gilt dann auch auf den anderen Adressen. `start_session` prüft den Leerlauf je PHP-Sitzung
+nur noch für Sitzungen ohne `oidcSub` (Notzugang, Testserver, Kunden).
+
+**Gelöschte Mitarbeiter (seit 04.11.2026):** `user_delete` ruft `konten_entfernen` (lib/anmeldekonten.php): das Konto in
+Keycloak wird mitgelöscht, die Kennung vorher im Dokument `oidc-geloescht` vermerkt. `oidc_konto` verknüpft eine vermerkte
+Kennung nie mit einem neuen, gleich benannten Mitarbeiter; `konten_finden` meldet solche Konten als `geloescht`
+(Zustand `altkonto`), „Konto anlegen“ ersetzt sie. Scheitert das Löschen, bekommt die Oberfläche einen Hinweis
+(`hinweis`). Ältere Konten ohne Mitarbeiter: `deploy/anmeldung/konten.sh verwaist [--loeschen]`.
+
+**Passwortregeln der zentralen Anmeldung (Realm Stand 15):** Quelle ist Sicherheit → Einstellungen (`pwMin`, `pwComplex`,
+`lockAfter`, `lockMinutes`). Die Anwendung hat für Keycloak nur `view-users`/`manage-users`; übernommen werden die Werte mit
+`deploy/anmeldung/konten.sh richtlinien` (auch in `realm-aktualisieren`): `passwordPolicy` mit `length(max(12, pwMin))`,
+bei „gemischt“ `upperCase(1) and lowerCase(1) and digits(1)`; `failureFactor = lockAfter`, Sperre `lockMinutes` je Konto.
+`konten_min_laenge()` nutzt dieselbe Mindestlänge für Prüfung, Meldungen und erzeugte Startpasswörter.
+
 ### Lokale Anmeldung (nur Notzugang und Testserver)
 
 Die eigenen Verfahren leben weiter, weil der Notzugang und die E2E-Tests sie brauchen:

@@ -55,12 +55,10 @@ function start_session(): void
     // fragt, und waren dann trotz „8 Stunden“ abgemeldet (Befund 03.11.2026). Die Leerlaufprüfung selbst bleibt unten.
     ini_set('session.gc_maxlifetime', (string)max(1440, $max + 600));
     session_start();
-    if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) {
-        $zentral = !empty($_SESSION['oidcSub']);
+    // Keycloak-Hosts (Sitzung mit oidcSub): Leerlauf nicht je Adresse, sondern je Anmeldung bei Keycloak über alle
+    // Adressen (lib/oidc.php, oidc_leerlauf) – Aktivität in einem anderen Modul zählt mit
+    if (!empty($_SESSION['uid']) && empty($_SESSION['oidcSub']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) {
         $_SESSION = []; session_regenerate_id(true);
-        // Keycloak-Host: Ende merken, damit lib/oidc.php nicht stillschweigend eine neue Sitzung anlegt, solange die Sitzung
-        // des Webserver-Moduls noch gilt – weiter erst nach erneuter Anmeldung bei Keycloak (oidc_ende_zeit)
-        if ($zentral) $_SESSION['oidcEnde'] = time();
     }
     if (!empty($_SESSION['uid']) && !bg_request()) $_SESSION['seen'] = time();
 }
