@@ -41,6 +41,7 @@ LG = f'https://leergut.stafl.test:{PORT}'   # Modul Leergut (Stand 11, Auftrag d
 RW = f'https://rewe.stafl.test:{PORT}'   # Modul REWE (Stand 12, Auftrag des Inhabers 30.10.2026)
 QS = f'https://qs.stafl.test:{PORT}'   # Modul Qualitätssicherung (Stand 13, Auftrag des Inhabers 30.10.2026)
 LEGACY = f'http://127.0.0.1:{os.environ.get("APACHE_PORT", "8280")}'
+NZ = f'http://127.0.0.1:{os.environ.get("NOTZUGANG_PORT", "8290")}'   # Notzugang über einen SSH-Tunnel (ADR-007 Regel 6)
 KC = f'http://127.0.0.1:{os.environ.get("KC_PORT", "8180")}'
 CA = os.path.join(WORK, 'caddy', 'pki', 'authorities', 'local', 'root.crt')
 GEHEIM = dict(z.strip().split('=', 1) for z in open(os.path.join(WORK, 'geheim.env')) if '=' in z)
@@ -202,6 +203,13 @@ try:
     code, _, text = anfrage(L + '/realms/mitarbeiter/.well-known/openid-configuration')
     check('… Abrufe der Anwendung selbst (Metadaten, Schlüssel, Token) bleiben frei', code == 200 and '"issuer"' in text, code)
     check('… Dateien der Anmeldeseite ebenso (nicht geprüft)', anfrage(L + '/resources/nicht-vorhanden.css')[0] != 403)
+    # Notzugang über den SSH-Tunnel: dorthin kommt nur, wer sich am Server anmelden kann – die IP-Freigabe gilt dort nicht
+    code, _, text = anfrage(NZ + '/api/?action=users')
+    check('Notzugang (Tunnel): IP-Freigabe gilt dort nicht – ohne Anmeldung 401 statt 403', code == 401, (code, text[:160]))
+    code, _, text = anfrage(LEGACY + '/api/?action=users', kopf={'Host': 'legacy.stafl.test'})
+    check('… dieselbe Anfrage an einen anderen Host ohne Keycloak: 403 (Ausnahme nur für den Notzugang)', code == 403 and 'nicht freigegeben' in text, (code, text[:160]))
+    code, _, text = anfrage(NZ + '/api/?action=users', kopf={'X-Forwarded-For': '203.0.113.7'})
+    check('… über den Notzugang mit weitergereichter Besucheradresse (nicht der Tunnel): keine Ausnahme (403)', code == 403 and 'nicht freigegeben' in text, (code, text[:160]))
 finally:
     if _sic_vorher is None:
         os.remove(_sic)
@@ -692,6 +700,35 @@ with sync_playwright() as pw:
     br = pw.chromium.launch(args=['--proxy-server=direct://', '--proxy-bypass-list=*'])   # Testhosts direkt, nie über einen Proxy
     ctx = br.new_context(ignore_https_errors=True, viewport={'width': 1280, 'height': 900})
     pg = eigene_seite(ctx.new_page())
+
+    # ── Notzugang über einen SSH-Tunnel (ADR-007 Regel 6): alter Eingabebereich mit eigener Anmeldung über http (wie
+    #    http://localhost:8190/admin/ auf dem eigenen Rechner) – Skripte laden ohne upgrade-insecure-requests, keine Fehler ──
+    _h = anfrage(NZ + '/admin/')[1]
+    _hl = anfrage(LEGACY + '/admin/', kopf={'Host': 'legacy.stafl.test'})[1]
+    check('Notzugang: Inhaltsrichtlinie ohne upgrade-insecure-requests (nur http über den Tunnel), sonst unverändert',
+          'upgrade-insecure-requests' not in (_h.get('Content-Security-Policy') or '') and "script-src 'self'" in (_h.get('Content-Security-Policy') or '')
+          and 'upgrade-insecure-requests' in (_hl.get('Content-Security-Policy') or '') and 'noindex' in (_h.get('X-Robots-Tag') or ''),
+          (_h.get('Content-Security-Policy'), _hl.get('Content-Security-Policy')))
+    _nz = br.new_context(viewport={'width': 1280, 'height': 900}); _np = _nz.new_page()
+    _nz_fehler, _nz_https = [], []
+    _np.on('pageerror', lambda e: _nz_fehler.append(str(e)))
+    _np.on('request', lambda r: _nz_https.append(r.url) if r.url.startswith('https://') else None)
+    _np.goto(NZ + '/admin/')
+    _nz_st = {}
+    try:
+        _np.wait_for_selector('#screen-auth:not([hidden])', timeout=20000)
+        _np.fill('#au-user', 'admin'); _np.fill('#pw1', PW_ALT); _np.click('#auth-submit')
+        _np.wait_for_selector('#screen-editor:not([hidden])', timeout=20000)
+        _nz_st = _np.evaluate("fetch('../api/?action=status').then(r => r.json())")
+        _np.screenshot(path=os.path.join(SH, 'oidc_notzugang_1280.png'))
+        _np.set_viewport_size({'width': 390, 'height': 844}); _np.screenshot(path=os.path.join(SH, 'oidc_notzugang_390.png'))
+    except Exception as _e:
+        _nz_fehler.append(f'{type(_e).__name__}: {_np.url}')
+    check('Notzugang: Anmeldung mit dem bisherigen Passwort über http, Eingabebereich geladen, keine Skriptfehler, nichts über https',
+          bool(_nz_st.get('loggedIn')) and (_nz_st.get('user') or {}).get('username') == 'admin' and not _nz_fehler and not _nz_https,
+          (_nz_st.get('user'), _nz_fehler[:3], _nz_https[:3]))
+    check('… Sitzung des Notzugangs ohne Keycloak-Verknüpfung (zentral = nein)', not (_nz_st.get('user') or {}).get('zentral'), _nz_st.get('user'))
+    _nz.close()
 
     # ── Skript des Designs: Formular kommt beim Server nur einmal an, auch wenn es mehrmals kurz nacheinander abgeschickt wird
     #    (langsamer Server nachgestellt; ohne das Skript kommen alle Absendungen an → bei Keycloak Sperre für 60 s) ──

@@ -58,9 +58,14 @@ Auf Hosts ohne `WA_OIDC` (also `angebot-stafl.de`) liefert `current_user()` dann
 `code: umgezogen` und der neuen Adresse (`eingabe_adresse()`, nur `https://…`, Standard
 `https://angebot.dashboard-stafl.de/admin/`). Kundenfunktionen sind öffentliche Aktionen und laufen weiter.
 
-Notzugang bei gestörtem Keycloak: `sh deploy/notzugang.sh an|aus|status` im Installationsordner. Das Skript ändert nur
-die Zeile `WA_EIGENE_ANMELDUNG` in `.env` und erstellt den App-Container neu. Danach gilt auf `angebot-stafl.de/admin/`
-wieder die lokale Anmeldung (4.2). Nur mit Freigabe des Inhabers (Server-Eingriff, `AGENTS.md`).
+Notzugang bei gestörtem Keycloak (seit 04.11.2026 nur über einen SSH-Tunnel, ADR-007): `sh deploy/notzugang.sh
+an|aus|status` im Installationsordner. Das Skript ändert nur die Zeile `WA_NOTZUGANG` in `.env` und erstellt
+`app-mitarbeiter` neu. Der Notzugang ist ein eigener Apache-Host (Port 8090, `apache-oidc.conf`), den Docker nur auf
+`127.0.0.1:8190` des Servers veröffentlicht; dort gilt mit `WA_NOTZUGANG=an` wieder die lokale Anmeldung (4.2).
+`notzugang_host()` (`lib/oidc.php`) erkennt ihn (Webserver setzt `WA_NOTZUGANG_HOST`, direkte Anfrage von einer internen
+Adresse ohne `X-Forwarded-For`); nur dort gilt die IP-Freigabe nicht (`index.php`). `alter_zugang_aus()` liest auf diesem
+Host `WA_NOTZUGANG` (offen nur mit „an“), sonst wie bisher `WA_EIGENE_ANMELDUNG` – das steht in beiden Anwendungs-Containern
+fest auf „aus“. Nur mit Freigabe des Inhabers (Server-Eingriff, `AGENTS.md`).
 
 ## 4.2 Mitarbeiteranmeldung
 

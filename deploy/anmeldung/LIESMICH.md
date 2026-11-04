@@ -139,8 +139,13 @@ Mitarbeiteranmeldung, keine Mitarbeitersitzung und keine Mitarbeiteraktion mehr 
 öffentliches Angebot, Kundenanmeldung und -bestellungen, `status` (Healthcheck), `logout`. Mails an Mitarbeiter
 verweisen auf die neue Adresse (`WA_EINGABE_ADRESSE`, Standard `https://angebot.dashboard-stafl.de/admin/`).
 
-Notzugang bei gestörter Anmeldung: `sh deploy/notzugang.sh an` (setzt `WA_EIGENE_ANMELDUNG=an` in `.env`, erstellt die App
-neu), danach `sh deploy/notzugang.sh aus`. Rückfall auf das alte Verhalten dauerhaft: dieselbe Zeile `=an`.
+Notzugang bei gestörter Anmeldung (seit 04.11.2026 nur über einen SSH-Tunnel, ADR-007): `sh deploy/notzugang.sh an` setzt
+`WA_NOTZUGANG=an` in `.env` und erstellt `app-mitarbeiter` neu. Erreichbar ist er nur auf `127.0.0.1` des Servers
+(`NOTZUGANG_PORT`, Standard 8190) – vom eigenen Rechner `ssh -L 8190:127.0.0.1:8190 <benutzer>@<server>`, dann im Browser
+`http://localhost:8190/admin/` (bisherige Passwörter der Anwendung; Passkeys der alten Anmeldung gelten dort nicht, Einmalcode
+schon). Die IP-Freigabe des Eingabebereichs gilt im Notzugang nicht. Danach `sh deploy/notzugang.sh aus`. Die Kundenseite
+öffnet den alten Eingabebereich nicht mehr; eine frühere Zeile `WA_EIGENE_ANMELDUNG=an` wirkt nicht und wird beim Umschalten
+entfernt.
 
 ## Design der Anmeldeseite und der E-Mails
 

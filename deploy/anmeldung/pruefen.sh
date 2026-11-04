@@ -141,15 +141,23 @@ docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-
   | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app-mitarbeiter']['environment']; assert e['OIDC_CRYPTO_QS']=='pruefung-q2' and e['OIDC_SECRET_QS']=='pruefung-q1'" \
   && ok "QS: eigene Werte aus .env" || nein "QS: eigene Werte aus .env"
 
-# Alter Eingabebereich: im Betrieb stillgelegt, Notzugang über .env (deploy/notzugang.sh)
+# Alter Eingabebereich: im Betrieb stillgelegt; Notzugang nur über einen SSH-Tunnel zu app-mitarbeiter (ADR-007 Regel 6,
+# deploy/notzugang.sh): eigener Port nur auf 127.0.0.1, offen nur mit WA_NOTZUGANG=an – die Kundenseite öffnet ihn nie
 docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
-  | python3 -c "import sys,json; s=json.load(sys.stdin)['services']; assert all(s[n]['environment']['WA_EIGENE_ANMELDUNG']=='aus' for n in ('app', 'app-mitarbeiter'))" \
-  && ok "alter Eingabebereich: im Betrieb stillgelegt (WA_EIGENE_ANMELDUNG=aus, beide Anwendungs-Container)" || nein "alter Eingabebereich nicht stillgelegt"
-printf 'WA_EIGENE_ANMELDUNG=an\n' >> "$ENV"
+  | python3 -c "import sys,json; s=json.load(sys.stdin)['services']; assert all(s[n]['environment']['WA_EIGENE_ANMELDUNG']=='aus' for n in ('app', 'app-mitarbeiter')); \
+assert s['app-mitarbeiter']['environment']['WA_NOTZUGANG']=='aus' and 'WA_NOTZUGANG' not in s['app']['environment']" \
+  && ok "alter Eingabebereich: im Betrieb stillgelegt (beide Anwendungs-Container), Notzugang geschlossen" || nein "alter Eingabebereich nicht stillgelegt"
 docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
-  | python3 -c "import sys,json; e=json.load(sys.stdin)['services']['app']['environment']; assert e['WA_EIGENE_ANMELDUNG']=='an'" \
-  && ok "Notzugang: über .env einschaltbar (Kundenseite app, dort liegt angebot-stafl.de/admin/)" || nein "Notzugang über .env"
-sed -i '/^WA_EIGENE_ANMELDUNG=/d' "$ENV"
+  | python3 -c "import sys,json; s=json.load(sys.stdin)['services']; p=s['app-mitarbeiter'].get('ports',[]); \
+assert len(p)==1 and p[0].get('host_ip')=='127.0.0.1' and str(p[0].get('published'))=='8190' and int(p[0].get('target'))==8090; assert not s['app'].get('ports')" \
+  && ok "Notzugang: nur 127.0.0.1:8190 → app-mitarbeiter:8090 (SSH-Tunnel), Kundenseite ohne eigenen Port" || nein "Port des Notzugangs"
+printf 'WA_EIGENE_ANMELDUNG=an\nWA_NOTZUGANG=an\nNOTZUGANG_PORT=8191\n' >> "$ENV"
+docker compose --env-file "$ENV" -f "$REPO/docker-compose.yml" -f "$HIER/docker-compose.anmeldung.yml" config --format json 2>/dev/null \
+  | python3 -c "import sys,json; s=json.load(sys.stdin)['services']; assert s['app']['environment']['WA_EIGENE_ANMELDUNG']=='aus'; \
+assert s['app-mitarbeiter']['environment']['WA_EIGENE_ANMELDUNG']=='aus' and s['app-mitarbeiter']['environment']['WA_NOTZUGANG']=='an'; \
+assert str(s['app-mitarbeiter']['ports'][0]['published'])=='8191' and s['app-mitarbeiter']['ports'][0]['host_ip']=='127.0.0.1'" \
+  && ok "Notzugang: über .env einschaltbar nur für app-mitarbeiter; frühere Zeile WA_EIGENE_ANMELDUNG=an öffnet die Kundenseite nicht mehr" || nein "Notzugang über .env"
+sed -i -e '/^WA_EIGENE_ANMELDUNG=/d' -e '/^WA_NOTZUGANG=/d' -e '/^NOTZUGANG_PORT=/d' "$ENV"
 
 # Kundenseite in eigenem Container (ADR-007): app ohne Anmelde-Geheimnisse, Dashboard und Keycloak-Netz, gehärtet;
 # app-mitarbeiter mit allem, was app aus docker-compose.yml bekommt (kein Auseinanderlaufen), plus Anmeldung
@@ -192,7 +200,7 @@ rm -f "$MIT" "$OHNE"
 # ── 3. Anwendungs-Image mit der Betriebskonfiguration ──
 docker build -q -t stafl-app:pruefung "$REPO/deploy/image" >/dev/null
 DATEN="$(mktemp -d)"; cp -r "$REPO/tests/fixtures/data-seed/." "$DATEN/"; chmod -R a+rwX "$DATEN"
-docker run -d --name stafl-pruefung -p 127.0.0.1:18090:80 \
+docker run -d --name stafl-pruefung -p 127.0.0.1:18090:80 -p 127.0.0.1:18091:8090 \
   -e OIDC_ISSUER=https://login.dashboard-stafl.de/realms/mitarbeiter -e OIDC_SECRET_DASHBOARD=x -e OIDC_SECRET_ANGEBOT=x \
   -e OIDC_CRYPTO_DASHBOARD=pruefung-a -e OIDC_CRYPTO_ANGEBOT=pruefung-b -e OIDC_SECRET_VERWALTUNG=x -e OIDC_CRYPTO_VERWALTUNG=pruefung-c \
   -e OIDC_SECRET_BESTAND=x -e OIDC_CRYPTO_BESTAND=pruefung-d -e OIDC_SECRET_HR=x -e OIDC_CRYPTO_HR=pruefung-e -e OIDC_SECRET_CRM=x -e OIDC_CRYPTO_CRM=pruefung-f -e OIDC_SECRET_MARKETING=x -e OIDC_CRYPTO_MARKETING=pruefung-g -e OIDC_SECRET_SICHERHEIT=x -e OIDC_CRYPTO_SICHERHEIT=pruefung-t -e OIDC_SECRET_CONTROLLING=x -e OIDC_CRYPTO_CONTROLLING=pruefung-v -e OIDC_SECRET_LEERGUT=x -e OIDC_CRYPTO_LEERGUT=pruefung-x -e OIDC_SECRET_REWE=x -e OIDC_CRYPTO_REWE=pruefung-z -e OIDC_SECRET_QS=x -e OIDC_CRYPTO_QS=pruefung-q2 -e WA_EIGENE_ANMELDUNG=aus \
@@ -226,6 +234,16 @@ done
 c="$(code login.dashboard-stafl.de '/api/index.php?action=users')"; [ "$c" = 404 ] && ok "login.dashboard-stafl.de: andere Aktionen gibt es dort nicht (404)" || nein "login.dashboard-stafl.de andere Aktion" "$c"
 c="$(code dashboard-stafl.de '/api/?action=anmeldung_pruefen')"; [ "$c" = 401 ] && ok "dashboard-stafl.de: Prüfung der Anmeldeseite nicht ohne Anmeldung (401)" || nein "dashboard-stafl.de anmeldung_pruefen" "$c"
 c="$(code angebot-stafl.de '/api/?action=anmeldung_pruefen')"; [ "$c" != 200 ] && ok "angebot-stafl.de: Prüfung der Anmeldeseite nicht beantwortet ($c)" || nein "angebot-stafl.de anmeldung_pruefen" "$c"
+# Notzugang (Port 8090, ADR-007 Regel 6): ohne WA_NOTZUGANG=an geschlossen wie angebot-stafl.de; http ohne upgrade-insecure-requests
+antwort="$(curl -s -w ' %{http_code}' -H 'Content-Type: application/json' -d '{"username":"admin","password":"y"}' 'http://127.0.0.1:18091/api/?action=login')"
+case "$antwort" in *umgezogen*" 410") ok "Notzugang (Port 8090): ohne WA_NOTZUGANG=an geschlossen (410)";; *) nein "Notzugang geschlossen" "$antwort";; esac
+kopf="$(curl -s -D - -o /dev/null 'http://127.0.0.1:18091/admin/')"
+echo "$kopf" | head -1 | grep -q ' 200' && ! echo "$kopf" | grep -i '^content-security-policy:' | grep -qi 'upgrade-insecure-requests' \
+  && ok "Notzugang: Eingabebereich über http erreichbar, ohne upgrade-insecure-requests" || nein "Notzugang: Kopfzeilen" "$kopf"
+kopf="$(curl -s -D - -o /dev/null -H 'Host: angebot-stafl.de' 'http://127.0.0.1:18090/admin/')"
+if docker exec stafl-pruefung apache2ctl -M 2>/dev/null | grep -q headers_module; then
+  echo "$kopf" | grep -i '^content-security-policy:' | grep -qi 'upgrade-insecure-requests' && ok "angebot-stafl.de: CSP der Anwendung unverändert (mit upgrade-insecure-requests)" || nein "angebot-stafl.de: CSP" "$kopf"
+fi
 # Startadressen je Host (ohne Anmeldung nur die Weiterleitung, nichts aus der Anwendung): Bestand → /admin/, Import → Ansicht importe
 ziel() { curl -s -o /dev/null -w '%{http_code} %{redirect_url}' -H "Host: $1" -H 'X-Forwarded-Proto: https' "http://127.0.0.1:18090$2"; }
 case "$(ziel bestand.dashboard-stafl.de /)" in "302 "*/admin/) ok "bestand.dashboard-stafl.de: Startadresse führt in den Eingabebereich";; *) nein "bestand.dashboard-stafl.de Startadresse" "$(ziel bestand.dashboard-stafl.de /)";; esac
@@ -293,7 +311,7 @@ mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte"
 cp "$REPO/docker-compose.yml" "$APP2/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/apache-oidc.conf" "$APP2/deploy/anmeldung/"
 cp -r "$REPO/deploy/image" "$APP2/deploy/"; cp -r "$REPO/app" "$REPO/dashboard" "$APP2/"
 cp -r "$REPO/tests/fixtures/data-seed/." "$APP2/daten/"; chmod -R a+rwX "$APP2/daten"; chmod -R a+rX "$APP2/app" "$APP2/dashboard" "$APP2/deploy"
-{ cat "$ENV"; printf 'STAFL_APP_VERSION=pruefung\nKUNDEN_CPUS=1\nKUNDEN_SPEICHER=512m\n'; } > "$APP2/.env"
+{ cat "$ENV"; printf 'STAFL_APP_VERSION=pruefung\nKUNDEN_CPUS=1\nKUNDEN_SPEICHER=512m\nNOTZUGANG_PORT=18192\n'; } > "$APP2/.env"
 dc2() { (cd "$APP2" && docker compose -p "$APPPROJ" -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml "$@"); }
 # Abruf im Container (ohne veröffentlichte Ports): dienst host pfad [methode] [inhalt] → „Status Antwortanfang“
 abruf() { dc2 exec -T "$1" php -r '
@@ -322,6 +340,22 @@ if dc2 up -d --no-build app app-mitarbeiter >/tmp/app2-start.txt 2>&1; then
   for _ in $(seq 1 30); do case "$(abruf app-mitarbeiter dashboard-stafl.de '/api/?action=status')" in 401*) break;; esac; sleep 1; done
   case "$(abruf app-mitarbeiter dashboard-stafl.de '/api/?action=status')" in 401*) ok "app-mitarbeiter: Mitarbeiter-Hosts nur mit Anmeldung (401)";; *) nein "app-mitarbeiter: dashboard-stafl.de" "$(abruf app-mitarbeiter dashboard-stafl.de '/api/?action=status') $(dc2 logs --tail 20 app-mitarbeiter 2>&1)";; esac
   [ "$(dc2 exec -T app-mitarbeiter env | grep -c '^OIDC_SECRET_KONTEN=')" = 1 ] && ok "app-mitarbeiter: Anmelde-Geheimnisse und Konten-Dienstkonto vorhanden" || nein "app-mitarbeiter ohne Anmelde-Geheimnisse"
+  # Notzugang (ADR-007 Regel 6): geschlossen im Normalbetrieb; nach WA_NOTZUGANG=an nur über 127.0.0.1 offen – die Kundenseite
+  # öffnet ihn auch mit der früheren Zeile WA_EIGENE_ANMELDUNG=an nicht mehr
+  [ "$(docker port "$(dc2 ps -q app-mitarbeiter)" 8090/tcp 2>/dev/null)" = "127.0.0.1:18192" ] && ok "app-mitarbeiter: Notzugang nur auf 127.0.0.1 veröffentlicht" \
+    || nein "app-mitarbeiter: Port des Notzugangs" "$(docker port "$(dc2 ps -q app-mitarbeiter)" 2>&1)"
+  case "$(curl -s -w ' %{http_code}' -H 'Content-Type: application/json' -d '{"username":"admin","password":"y"}' 'http://127.0.0.1:18192/api/?action=login')" in
+    *umgezogen*" 410") ok "Notzugang im Normalbetrieb geschlossen (410)";; *) nein "Notzugang im Normalbetrieb" "$(curl -s 'http://127.0.0.1:18192/api/?action=status')";; esac
+  printf 'WA_NOTZUGANG=an\nWA_EIGENE_ANMELDUNG=an\n' >> "$APP2/.env"
+  dc2 up -d --no-build app app-mitarbeiter >/dev/null 2>&1
+  for _ in $(seq 1 30); do case "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:18192/api/?action=status')" in 200) break;; esac; sleep 1; done
+  antwort="$(curl -s -w ' %{http_code}' -H 'Content-Type: application/json' -d '{"username":"admin","password":"falsch"}' 'http://127.0.0.1:18192/api/?action=login')"
+  # ohne Nutzer in den Testdaten antwortet die alte Anmeldung mit 409 (kein Zugang vorhanden), sonst 401 – nicht 410 (stillgelegt)
+  case "$antwort" in *umgezogen*) nein "Notzugang offen" "$antwort";; *" 401"|*" 409") ok "Notzugang mit WA_NOTZUGANG=an: alte Anmeldung über den Tunnel erreichbar (${antwort##* })";; *) nein "Notzugang offen" "$antwort";; esac
+  case "$(curl -s -w ' %{http_code}' -H 'X-Forwarded-For: 203.0.113.9' -H 'Content-Type: application/json' -d '{"username":"admin","password":"falsch"}' 'http://127.0.0.1:18192/api/?action=login')" in
+    *umgezogen*" 410") ok "Notzugang: mit weitergereichter Besucheradresse (nicht über den Tunnel) geschlossen";; *) nein "Notzugang mit X-Forwarded-For";; esac
+  case "$(abruf app angebot-stafl.de '/api/?action=login' POST '{"username":"admin","password":"y"}')" in 410*umgezogen*) ok "app: auch mit WA_EIGENE_ANMELDUNG=an in .env stillgelegt (410)";; *) nein "app mit WA_EIGENE_ANMELDUNG=an" "$(abruf app angebot-stafl.de '/api/?action=login' POST '{}')";; esac
+  case "$(abruf app-mitarbeiter angebot-stafl.de '/api/?action=login' POST '{"username":"admin","password":"y"}')" in 410*umgezogen*) ok "app-mitarbeiter: Standard-Host (Port 80) bleibt stillgelegt, auch bei offenem Notzugang";; *) nein "app-mitarbeiter Standard-Host" "$(abruf app-mitarbeiter angebot-stafl.de '/api/?action=login' POST '{}')";; esac
 else
   nein "Anwendungs-Container starten nicht" "$(tail -5 /tmp/app2-start.txt)"
 fi

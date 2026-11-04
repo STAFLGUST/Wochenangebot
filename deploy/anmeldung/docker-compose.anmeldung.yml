@@ -20,10 +20,10 @@ services:
     image: stafl-app:${STAFL_APP_VERSION:-lokal}
     build: ./deploy/image                                  # baut das gemeinsame Image (auch für app-mitarbeiter)
     environment:
-      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – Mitarbeiter
-      # nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung unverändert. Notzugang bei gestörter Anmeldung:
-      # sh deploy/notzugang.sh an (setzt WA_EIGENE_ANMELDUNG=an in .env und erstellt die Kundenseite neu), danach wieder „aus“
-      WA_EIGENE_ANMELDUNG: ${WA_EIGENE_ANMELDUNG:-aus}
+      # Alter Eingabebereich angebot-stafl.de/admin/ mit eigener Anmeldung stillgelegt (Entscheidung Inhaber 23.10.2026) – fest:
+      # die Kundenseite öffnet ihn nie wieder (ADR-007 Regel 6). Notzugang bei gestörter Anmeldung nur noch über einen SSH-Tunnel
+      # zu app-mitarbeiter (sh deploy/notzugang.sh an). Kundenseite und Kundenanmeldung unverändert.
+      WA_EIGENE_ANMELDUNG: "aus"
     # Härtung (ADR-007): Dateisystem nur lesbar (Anwendung ist ohnehin nur lesend eingebunden, Daten im Datenordner); Apache
     # und PHP schreiben nur in /tmp (Sitzungen) und /run (PID, Sperren). Keine Rechteausweitung über setuid-Programme.
     read_only: true
@@ -108,7 +108,14 @@ services:
       # internen Netz (nicht über Caddy). Ohne Geheimnis zeigt die Verwaltung „noch nicht eingerichtet“ – die Anwendung startet trotzdem
       OIDC_SECRET_KONTEN: ${OIDC_SECRET_KONTEN:-noch-nicht-eingerichtet}
       WA_KONTEN_URL: http://keycloak:8080
-      WA_EIGENE_ANMELDUNG: ${WA_EIGENE_ANMELDUNG:-aus}
+      # Alter Eingabebereich auf den Mitarbeiter-Hosts fest aus; nur der Notzugang (eigener Host auf Port 8090, apache-oidc.conf)
+      # öffnet ihn – mit WA_NOTZUGANG=an in .env (sh deploy/notzugang.sh an|aus, erstellt diesen Container neu)
+      WA_EIGENE_ANMELDUNG: "aus"
+      WA_NOTZUGANG: ${WA_NOTZUGANG:-aus}
+    ports:
+      # Notzugang (ADR-007 Regel 6): nur auf 127.0.0.1 des Servers – vom eigenen Rechner per SSH-Tunnel
+      # (ssh -L 8190:127.0.0.1:8190 …, dann http://localhost:8190/admin/), wie die Keycloak-Verwaltung; nie über Caddy
+      - "127.0.0.1:${NOTZUGANG_PORT:-8190}:8090"
     networks:
       intern:                                              # mit Caddy und Keycloak; nicht im Netz der Kundenseite
 

@@ -214,7 +214,7 @@ Ohne gültigen Schlüssel wirkt nichts davon. Jede neue Weiterleitung (`reverse_
 | `altdateien.sh` | `zeigen` / `archivieren` der alten Datendateien nach der Umschaltung (nur bei aktivem SQLite, Archiv in `sicherungen/`) | Inhaber, nur mit Freigabe; Anwendung bleibt in Betrieb |
 | `testumgebung.sh` | Testumgebung `test.<Domain>` (siehe unten) | Inhaber |
 | `wartung-aus.sh` | Notfall: alle Wartungen beenden | Inhaber |
-| `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen | Inhaber |
+| `notzugang.sh` | Notfall: alten Eingabebereich mit eigener Anmeldung öffnen/schließen – nur über einen SSH-Tunnel (`127.0.0.1:8190`) | Inhaber |
 | `passwort-zuruecksetzen.sh` | Notfall: Passwort eines Nutzers zurücksetzen bzw. Administrator neu anlegen | Inhaber |
 | `ip-freigabe-aus.sh` | Notfall: IP-Freigabe und Ländersperre ausschalten | Inhaber |
 | `karte-laden.sh` | Detailkarte laden bzw. aktualisieren (`pruefen`: Stand und geschätzte Größe ohne Download; ohne Angabe: neuester Protomaps-Stand, Ausschnitt `deploy/karte/deutschland.geojson`, go-pmtiles fest über Digest, neue Datei neben der alten, geprüft, dann ausgetauscht; `entfernen`) – mindestens 14 GB frei | Inhaber, einmalig bzw. bei Bedarf |
@@ -307,7 +307,7 @@ Keycloak-Anmeldung gibt es in der Testumgebung nicht; sie wird nur in der CI gep
 | --- | --- |
 | Release defekt, automatischer Rückfall reichte nicht | `sh deploy/release-zurueck.sh` |
 | Wartung blockiert die Arbeit | `sh deploy/wartung-aus.sh` (beendet alle Wartungen; macht kein Modul produktiv) |
-| Keycloak nicht erreichbar | `docker compose ps -a`, `docker compose up -d`; hilft das nicht: `sh deploy/notzugang.sh an` (alter Eingabebereich mit eigener Anmeldung), danach `sh deploy/notzugang.sh aus` |
+| Keycloak nicht erreichbar | `docker compose ps -a`, `docker compose up -d`; hilft das nicht: `sh deploy/notzugang.sh an` (alter Eingabebereich mit eigener Anmeldung, über `ssh -L 8190:127.0.0.1:8190 …` und `http://localhost:8190/admin/`), danach `sh deploy/notzugang.sh aus` |
 | Administrator-Passwort vergessen (alte Anmeldung) | `sh deploy/passwort-zuruecksetzen.sh <name>` (setzt auch Zwei-Faktor und Passkeys zurück); nach Datenverlust `… admin --neu` |
 | Selbst ausgesperrt (IP-Freigabe, Ländersperre) – auch an der Anmeldeseite | `sh deploy/ip-freigabe-aus.sh` |
 | Anmeldung bei Keycloak klappt nicht | `sh deploy/anmeldung/konten.sh pruefen <name>`, dann ggf. `entsperren` bzw. `zuruecksetzen` |

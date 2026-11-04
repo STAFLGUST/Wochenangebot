@@ -1,8 +1,8 @@
 # ADR-007: Kundenseite in eigenem Container
 
 **Status:** angenommen am 04.11.2026 (Inhaber). **Stufe 1** umgesetzt und eingespielt (PR #281), **Stufe 1b**
-(Dienstkonto in Keycloak, Realm Stand 16) umgesetzt – wirksam nach Merge, Release und Konsolenschritt; **Stufe 2** (Daten)
-geplant.
+(Dienstkonto in Keycloak, Realm Stand 16) umgesetzt und eingespielt (PR #283), **Notzugang über einen SSH-Tunnel**
+(Regel 6 der Zielarchitektur Kundenseite) umgesetzt – wirksam mit dem Release; **Stufe 2** (Daten) geplant.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -47,8 +47,10 @@ der Angreifer neben allem anderen.
   im Netz `intern`; Keycloak hängt nur noch in `intern` und `anmeldung`.
 - Der Server weist Mitarbeiter-Aktionen auf der Kundenseite schon heute ab (alter Eingabebereich stillgelegt, 410). Im
   eigenen Container fehlen dort zusätzlich die Keycloak-Hosts, die Geheimnisse und der Netzweg.
-- **Notzugang** (`deploy/notzugang.sh`, Keycloak gestört): unverändert auf `angebot-stafl.de/admin/` im Container `app`.
-  Konten der zentralen Anmeldung lassen sich dort nicht verwalten – im Notfall ist Keycloak ohnehin gestört.
+- **Notzugang** (`deploy/notzugang.sh`, Keycloak gestört): bis 04.11.2026 auf `angebot-stafl.de/admin/` im Container `app`,
+  seitdem nur noch über einen SSH-Tunnel (Abschnitt „Notzugang über einen SSH-Tunnel“ unten). Die Kundenseite öffnet den
+  alten Eingabebereich nie mehr. Konten der zentralen Anmeldung lassen sich im Notzugang nicht verwalten – im Notfall ist
+  Keycloak ohnehin gestört.
 - Geprüft in der CI: `deploy/anmeldung/pruefen.sh` (Konfiguration und echter Start beider Container: Netze, Umgebung,
   nur lesbares Dateisystem, Grenzen), `tests/deploy/test_freigabe.sh` (Release), `tests/deploy/test_datenbank_umschalten.sh`.
 
@@ -84,6 +86,33 @@ Administrators setzen. Seit Stand 16 gilt:
   Neuer Code vor dem Konsolenschritt arbeitet wie bisher (ohne Gruppe keine Gruppenangabe beim Anlegen).
 - **Rückweg:** `kc add-roles … manage-users` für den Service-Account von `konten` gibt den alten Zustand zurück
   (`docs/plattform/inbetriebnahme-anmeldung.md`); Gruppe, Regel und Berechtigung stören dann nicht.
+
+### Notzugang über einen SSH-Tunnel (umgesetzt 04.11.2026)
+
+Der alte Eingabebereich mit eigener Anmeldung ist der Notzugang, wenn Keycloak gestört ist. Bis dahin lag er auf der
+Kundenseite: `notzugang.sh an` öffnete `angebot-stafl.de/admin/` im öffentlich erreichbaren Container `app` – für alle im
+Internet, mit den alten Passwörtern. Seitdem:
+
+- **Eigener Host im Container `app-mitarbeiter`:** Apache-Port 8090 (`deploy/anmeldung/apache-oidc.conf`), von Docker nur
+  auf `127.0.0.1:${NOTZUGANG_PORT:-8190}` des Servers veröffentlicht – Caddy kennt ihn nicht. Erreichbar nur über einen
+  SSH-Tunnel vom eigenen Rechner (`ssh -L 8190:127.0.0.1:8190 <benutzer>@<server>`, dann `http://localhost:8190/admin/`),
+  wie die Keycloak-Verwaltung auf `127.0.0.1:8180`.
+- **Offen nur mit `WA_NOTZUGANG=an`** in `.env` (`sh deploy/notzugang.sh an`, erstellt nur `app-mitarbeiter` neu);
+  sonst antwortet der Host wie `angebot-stafl.de` (Mitarbeiteraktionen 410). `WA_EIGENE_ANMELDUNG` steht in beiden
+  Anwendungs-Containern fest auf `aus`; eine frühere Zeile `WA_EIGENE_ANMELDUNG=an` in `.env` öffnet nichts mehr und
+  entfernt `notzugang.sh` beim Umschalten.
+- **Erkennung in der Anwendung:** `notzugang_host()` (`lib/oidc.php`) – der Webserver setzt `WA_NOTZUGANG_HOST` (nie aus
+  Kopfzeilen), die Anfrage kommt direkt von einer internen Adresse (Docker-Netz des Tunnels) und ohne weitergereichte
+  Besucheradresse. Nur dort gilt die **IP-Freigabe** des Eingabebereichs nicht: Die Besucheradresse ist die interne Adresse
+  des Tunnels und stünde nie in der Liste; hinkommt ohnehin nur, wer sich am Server anmelden kann.
+- **Nur http über den Tunnel:** Der Host nimmt `upgrade-insecure-requests` aus der Inhaltsrichtlinie (`.htaccess`), sonst
+  holte der Browser Skripte über https; `localhost` gilt im Browser als sichere Umgebung (Cookies, Einmalcode).
+  Passkeys der alten Anmeldung gehören zu `angebot-stafl.de` und gelten im Notzugang nicht – Passwort und Einmalcode schon.
+- **Geprüft:** `tests/deploy/test_notzugang.sh` (Skript), `deploy/anmeldung/pruefen.sh` (echter Start: Port nur auf
+  127.0.0.1, geschlossen/offen, Kundenseite bleibt zu, Kopfzeilen), `tests/oidc/test_oidc.py` (Anmeldung im Browser über
+  http, keine Skriptfehler, IP-Freigabe-Ausnahme nur für diesen Host).
+- **Rückfall:** Ein Release auf den Vorgänger stellt den alten Notzugang auf der Kundenseite wieder her (dann gilt wieder
+  `WA_EIGENE_ANMELDUNG` in `.env`); `WA_NOTZUGANG` und `NOTZUGANG_PORT` werden dann ignoriert.
 
 ### Stufe 2 – Daten trennen (geplant)
 
