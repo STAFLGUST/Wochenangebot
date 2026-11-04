@@ -1877,25 +1877,27 @@ with sync_playwright() as pw:
     code, j = pg.evaluate(hole, erika_id)
     check('Befördert (Konto noch in der Gruppe): Verwaltung ändert es nicht mehr und warnt mit Befehl', code_p == 200 and code == 200
           and j['konto'].get('verwaltbar') is False and j['konto'].get('warnung') is True and 'gruppe-abgleichen' in j['konto'].get('hinweis', ''), (code_p, j_p, j))
-    # Erikas Passwort hat die Verwaltung oben geändert (muss neu festlegen), und ihr Passkey lag in einem längst geschlossenen
-    # Browser – hier wie die Serverkonsole ein bekanntes Passwort setzen und den Passkey entfernen (Einmalcode bleibt)
-    ERIKA_PW4 = 'Erika-Viertes-Kennwort-4'   # nur Testumgebung
+    # Anmeldung eines Administrators, dessen Konto noch in der Gruppe steht – nachgestellt mit „chef“ (Einmalcode oben eingerichtet):
+    # Konto wie die Serverkonsole in die Gruppe legen, anmelden → abgelehnt; konten.sh gruppe-abgleichen chef nimmt es wieder heraus
     _vk = {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
-    _erika_kc = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=erika', kopf=_vk)[2] or '[{}]') or [{}])[0].get('id', '')
-    _cp = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_erika_kc}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': ERIKA_PW4, 'temporary': False}).encode(), _vk)[0]
-    for _cr in json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_erika_kc}/credentials', kopf=_vk)[2] or '[]'):
-        if _cr.get('type', '').startswith('webauthn'):
-            anfrage(f"{KC}/admin/realms/mitarbeiter/users/{_erika_kc}/credentials/{_cr['id']}", 'DELETE', None, _vk)
+    _chef_kc = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=chef', kopf=_vk)[2] or '[{}]') or [{}])[0].get('id', '')
+    _g16 = json.loads(anfrage(KC + '/admin/realms/mitarbeiter/group-by-path/anwendungskonten', kopf=_vk)[2] or '{}').get('id', '')
+    _ca = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_chef_kc}/groups/{_g16}', 'PUT', b'', _vk)[0]
     c4 = br.new_context(ignore_https_errors=True); p4 = eigene_seite(c4.new_page())
-    p4.goto(D + '/'); p4.wait_for_selector('#username'); p4.fill('#username', 'erika'); p4.fill('#password', ERIKA_PW4); p4.click('#kc-login')
-    p4.wait_for_selector('#otp, #authenticateWebAuthnButton, #password-new, [id^="input-error"], #kc-error-message, .alert-error, #db-err:not([hidden])')
-    if p4.locator('#otp').count():
-        otp_eingeben(p4, 'erika')
-        p4.wait_for_selector('#db-err:not([hidden])')
-    _db_err = p4.text_content('#db-err') if p4.locator('#db-err').count() else p4.inner_text('body')[:300]
-    check('… Anmeldung als Administratorin abgelehnt (Hinweis gruppe-abgleichen)', _cp == 204 and 'gruppe-abgleichen' in (_db_err or '')
-          and p4.locator('#db-bereich').count() == 1 and p4.is_hidden('#db-bereich'), (_cp, p4.url, _db_err))
+    p4.goto(D + '/'); p4.wait_for_selector('#username'); p4.fill('#username', 'chef'); p4.fill('#password', NUTZER['chef'][0]); p4.click('#kc-login')
+    _seite = ''
+    try:
+        p4.wait_for_selector('#otp', timeout=15000); p4.fill('#otp', totp(chef_otp)); p4.click('#kc-login')
+        p4.wait_for_selector('#db-err:not([hidden])', timeout=20000)
+    except Exception as _e:   # Anmeldeseite festhalten statt abzubrechen (Fehlersuche)
+        _seite = f'{type(_e).__name__}: {p4.url} {p4.inner_text("body")[:300]}'
+    _db_err = p4.text_content('#db-err') if p4.locator('#db-err').count() else ''
+    check('Administrator mit einem Konto der Gruppe: Anmeldung abgelehnt (Hinweis gruppe-abgleichen)', _ca == 204 and not _seite
+          and 'gruppe-abgleichen' in (_db_err or '') and p4.is_hidden('#db-bereich'), (_ca, _seite, _db_err))
     c4.close()
+    code, aus = konten('gruppe-abgleichen', 'chef')
+    check('… konten.sh gruppe-abgleichen chef nimmt das Administratorkonto heraus', code == 0 and "entfernt:  Konto 'chef'" in aus and 'Administrator' in aus
+          and not kc_mitglied('chef'), aus)
     code, aus = konten('gruppe-abgleichen', 'erika')
     check('Konsole gruppe-abgleichen erika: als Administratorin aus der Gruppe entfernt', code == 0 and "entfernt:  Konto 'erika'" in aus and 'Administrator' in aus
           and not kc_mitglied('erika'), aus)
