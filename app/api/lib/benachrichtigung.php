@@ -26,7 +26,8 @@ const NOTIFY_AUDIT = ['security' => 'sicherheit', 'twofa' => 'sicherheit', 'user
    Die Empfänger der Bestellwünsche liegen weiterhin bei der Bestellfunktion (Dokument „bestellung“). */
 function notify_settings(): array
 {
-    $d = store_read('benachrichtigungen');
+    // Kundenseite ab Trennstufe 2: Einstellungen sind intern – dann Vorgaben (der Postausgang entscheidet mit den echten)
+    $d = store_sichtbar('benachrichtigungen') ? store_read('benachrichtigungen') : null;
     $ord = order_settings();
     $ev = [];
     foreach (NOTIFY_EVENTS as $k => $def) {
@@ -157,8 +158,9 @@ function notify_flush(): void
     try {
         if (!empty($GLOBALS['store_tx'])) return;   // nicht gespeichert → nichts melden
         if (postausgang_warteschlange()) {
-            // Empfänger kann erst der Dienst bestimmen (Ersatzadresse aus dem Postfach); hier nur eingeschaltete Ereignisse
-            $q = array_values(array_filter($q, fn($it) => !empty(notify_settings()['events'][$it['ev']]['on'])));
+            // Empfänger kann erst der Dienst bestimmen (Ersatzadresse aus dem Postfach); hier nur eingeschaltete Ereignisse – ab
+            // Trennstufe 2 sieht die Kundenseite die Einstellungen nicht mehr (intern): dann prüft nur der Dienst (notify_targets)
+            if (store_sichtbar('benachrichtigungen')) $q = array_values(array_filter($q, fn($it) => !empty(notify_settings()['events'][$it['ev']]['on'])));
             if ($q) postausgang_ablegen('benachrichtigung', ['items' => $q]);
             return;
         }

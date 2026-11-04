@@ -48,10 +48,7 @@ switch ($action) {
                 if (implode(', ', $old[$k]['to']) !== implode(', ', $to)) $ch[] = ['k' => "notify|{$k}|to", 'code' => '', 'name' => $def['label'], 'f' => 'Empfänger', 'from' => implode(', ', $old[$k]['to']), 'to' => implode(', ', $to)];
             }
             if ($new['bestellung']['to'] !== $old['bestellung']['to']) {   // Empfänger der Bestellwünsche liegen bei der Bestellfunktion
-                $o = store_read('bestellung');
-                $o = is_array($o) ? $o : [];
-                $o['to'] = $new['bestellung']['to']; $o['updatedAt'] = now(); $o['updatedBy'] = $me['name'];
-                store_write('bestellung', $o);
+                order_settings_speichern(['to' => $new['bestellung']['to']], $me['name']);
             }
             $ev = [];
             foreach ($new as $k => $e) if (!NOTIFY_EVENTS[$k]['fest']) $ev[$k] = $e;
@@ -210,7 +207,7 @@ Ausgelöst von: {$me['name']}
             if (!$r['ok'] && isset($tok)) with_lock('kunden', function () use ($c) {   // Link nicht zugestellt → ungültig machen
                 $d = customers_load();
                 foreach ($d['customers'] as $i => $x) if ($x['id'] === $c['id']) unset($d['customers'][$i]['login']['token']);
-                store_write('kunden', $d);
+                customers_save($d);
             });
             mail_record([['kid' => $c['id'], 'firma' => $c['firma'], 'to' => $c['email'], 'typ' => $typ, 'ok' => $r['ok'], 'error' => $r['error'] ?? '']]);
             audit('mail', MAIL_TYP[$typ] . " an „{$c['firma']}“ " . ($r['ok'] ? 'gesendet' : 'nicht zugestellt'), [['k' => "c{$c['id']}|mail", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => MAIL_TYP[$typ], 'from' => '', 'to' => $c['email'] . ($r['ok'] ? '' : ' – Fehler: ' . $r['error'])]]);

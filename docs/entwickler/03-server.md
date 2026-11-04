@@ -267,6 +267,16 @@ andere ist `intern`. Die Kundenseite hat kein `WA_DATEN_INTERN`: Lesen interner 
 und `store_rollback()` ohne Angabe schließen alle). Ein neues Dokument, das die Kundenseite lesen oder schreiben muss, braucht
 `bereich = "kundenseite"` – sonst sieht die Kundenseite es nach der Trennung nicht (die Gruppe `datentrennung` meldet das).
 
+**Trennstufen (ADR-007 Stufe 2b):** Das Kennzeichen enthält die Stufe (`store_stufe()`: 0 nicht getrennt, 1 = Stufe 2a,
+2 = Stufe 2b). Ein bestehendes Dokument, das künftig innen liegen soll, bekommt `bereich = "intern"` und `trennstufe = n` – bis
+zur Stufe n bleibt es im gemeinsamen Ordner, umgezogen wird mit `daten-trennen.sh trennen` (dazu `TRENNSTUFE_MAX` in
+`werkzeuge/regeln.py` und `ZIELSTUFE` in `deploy/daten_trennen.py` erhöhen, Umstellung dort ergänzen). Ob dieser Server ein
+Dokument lesen kann: `store_sichtbar($name)` bzw. `store_innen()` (sieht er die internen Daten?). Die Kundenseite liest dann
+statt des internen Dokuments einen Auszug (Beispiel: `artikelauszug` statt `bestand`/`stammdaten`, lib/bestand.php). Ab
+Stufe 2 ist das Kundendokument geteilt: Kundendaten immer über `customers_load()`/`customers_save()` (nie
+`store_write('kunden', …)` direkt) – die Funktionen führen `kunden` (Portalfelder, `felder_kundenseite`) und `kundenstamm`
+zusammen bzw. teilen sie auf; die Kundenseite sieht und schreibt nur die Portalfelder.
+
 **Sperren und Transaktionen:**
 
 - Dateien: `with_lock` sperrt `$DATA/.<name>.lock` mit `flock(LOCK_EX)`. Verschachtelt derselbe Name → keine zweite

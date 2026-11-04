@@ -27,6 +27,7 @@ function bestand_speichern(?string $date, string $source, array $articles, array
     foreach ($articles as $a) $total += $a['kg'];
     $st = ['date' => $date, 'source' => $source, 'importedAt' => now(), 'importedBy' => $me['name'], 'articles' => $articles, 'incoming' => $incoming];
     store_write('bestand', $st);
+    artikelauszug_aktualisieren();   // Kundenseite ab Trennstufe 2: nur der Auszug (lib/bestand.php)
     // Tagesstand für den Bestandsverlauf (Controlling); ein Fehler dort hält die Übernahme des Bestands nicht auf
     try { bestand_verlauf_schreiben($date, $articles, $incoming, $source, $me); }
     catch (Throwable $e) { error_log('Bestandsverlauf nicht gespeichert: ' . $e->getMessage()); }

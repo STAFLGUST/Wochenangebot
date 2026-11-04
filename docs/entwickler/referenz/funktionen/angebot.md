@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-42 Dateien, 624 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+42 Dateien, 632 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -118,7 +118,8 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 
 **Bestellwünsche**
 
-- `order_settings()`
+- `order_settings()` – Einstellungen der Bestellfunktion.
+- `order_settings_speichern(neu, wer)` – Einstellungen speichern ($neu: enabled, copy und/oder to – fehlende bleiben).
 - `order_enabled()` – Bestellfunktion nutzbar?
 - `de_num(v, dec)`
 - `de_qty(v)` – Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js)
@@ -177,9 +178,16 @@ _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/pla
 
 ## `app/api/order_outbox.php`
 
-_Durable per-recipient jobs live in the same document/transaction as the order._
+_Versandaufträge eines Bestellwunschs: je Empfänger ein Auftrag im selben Dokument (bestellungen) wie der Vorgang._
 
-- `order_outbox_create(o)`
+- `order_outbox_job(kind, to, name)`
+- `order_outbox_create(o)` – Aufträge eines neuen Bestellwunschs; ohne Sicht auf die internen Daten (Kundenseite ab Trennstufe 2) nur der offene Auftrag
+- `order_outbox_empfaenger(o)` – Aufträge je Empfänger aus den aktuellen Einstellungen (Team) und den Stammdaten des Kunden (Kopie).
+- `order_kopie_name(o)`
+- `order_kunden_email(kid)` – Adresse eines Kunden aus den Stammdaten (null: unbekannt, inaktiv oder ohne gültige Adresse) – nie aus dem Vorgang
+- `order_outbox_vorbereiten(nr)` – Offenen Auftrag der Kundenseite ausführen (unter der Versandsperre des Vorgangs): Schnappschuss ergänzen, Aufträge je Empfänger anlegen.
+- `order_outbox_pruefen(o, j)` – Darf dieser Auftrag jetzt verschickt werden? null = ja, sonst der Grund (Auftrag wird verworfen, nicht wiederholt).
+- `order_tageszahl(kid, typ, to)` – Zugestellte E-Mails dieser Art an diese Adresse für diesen Kunden in den letzten 24 Stunden (Versandprotokoll)
 - `order_outbox_summary(o)`
 - `order_outbox_view(o)`
 - `order_outbox_cleanup_locks(own)` – Sperrdateien abgeschlossener Vorgänge gelegentlich entfernen (älter als 2 Tage, nicht die eigene).

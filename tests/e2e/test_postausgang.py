@@ -226,8 +226,8 @@ try:
     until(lambda: any(a['art'] == 'hinweis' for a in (doc('postausgang') or {}).get('auftraege', [])), 5)
     a4 = (doc('postausgang') or {}).get('auftraege', [])
     hinweis = [a for a in a4 if a['art'] == 'hinweis']
-    check('Abmeldung: Hinweis nur abgelegt, mit Firma, ohne Zugangsdaten', code == 200 and len(hinweis) == 1 and hinweis[0]['kunde']['firma'] == 'Kantine Post'
-          and set(hinweis[0]['kunde']) <= {'id', 'firma', 'nr', 'email'} and not smtp.messages, a4)
+    check('Abmeldung: Hinweis nur abgelegt, nur mit Kennung des Kunden (Firma und Adresse liest der Dienst selbst)', code == 200 and len(hinweis) == 1
+          and hinweis[0]['kunde'] == {'id': kid} and not smtp.messages, a4)
     dienst()
     m = [x for x in smtp.messages if x['to'] == ['verkauf@example.org']]
     check('Dienst: Abmeldehinweis an den Verkauf', len(m) == 1 and 'Kantine Post' in m[0]['text'] and 'abgemeldet' in m[0]['text'], [x['subject'] for x in smtp.messages])

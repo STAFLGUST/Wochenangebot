@@ -7,10 +7,53 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
    Kunden melden sich auf der Angebotsseite an (eigene Anmeldung, getrennt vom Eingabebereich) und sehen nur
    die Angebote, für die sie freigeschaltet sind. Kunden erhalten nie Zugriff auf Aktionen des Eingabebereichs:
    dort zählt nur die Mitarbeiter-Anmeldung ($_SESSION['uid']), Kunden haben $_SESSION['kid']. */
+/* ---------------- Teilung des Kundendokuments (ADR-007 Stufe 2b, ab Trennstufe 2) ----------------
+   kunden (gemeinsamer Ordner): je Kunde nur die Portalfelder (KUNDEN_FELDER_KUNDENSEITE, regeln/datenverantwortung.toml) – mehr
+   braucht die Kundenseite nicht; kundenstamm (intern): alle übrigen Felder je Kennung (Anschrift, E-Mail, Telefon, Notiz,
+   Vertreter, Daten der Warenwirtschaft …). customers_load() führt beide zusammen, soweit dieser Server sie sieht (Kundenseite:
+   nur Portalfelder); customers_save() schreibt geteilt. Bis Trennstufe 2 steht alles wie bisher in kunden. Die Teilung beim
+   Umstellen macht deploy/daten_trennen.py (kunden_teilen, gleiche Regeln). */
+function kunden_geteilt(): bool { return store_stufe() >= 2; }
+/* Gekürzte Adresse für die Kundenseite (Abmeldeseite, Quittung): erstes Zeichen, Punkte, Domain – wie email_maske() in Python */
+function kunden_email_maske(string $e): string
+{
+    $e = trim($e);
+    $at = strpos($e, '@');
+    return $at === false || $at === 0 ? '' : mb_substr($e, 0, 1) . '•••' . substr($e, $at);
+}
+/* Adresse zur Anzeige auf der Kundenseite: gekürzt (die volle Adresse kennt ab Trennstufe 2 nur die Mitarbeiterseite) */
+function kunden_email_anzeige(array $c): string
+{
+    return isset($c['email']) ? kunden_email_maske((string)$c['email']) : (string)($c['emailMaske'] ?? '');
+}
 function customers_load(): array
 {
     $d = store_read('kunden');
-    return is_array($d) && isset($d['customers']) ? $d : ['rev' => 0, 'customers' => [], 'updatedAt' => null];
+    $d = is_array($d) && isset($d['customers']) ? $d : ['rev' => 0, 'customers' => [], 'updatedAt' => null];
+    if (!kunden_geteilt()) return $d;
+    $st = store_sichtbar('kundenstamm') ? store_read('kundenstamm') : null;   // Kundenseite: nur die Portalfelder
+    $m = is_array($st['customers'] ?? null) ? $st['customers'] : [];
+    foreach ($d['customers'] as $i => $c) {
+        if (is_array($c) && is_array($m[$c['id'] ?? ''] ?? null)) $d['customers'][$i] = $c + $m[$c['id']];   // Portalfelder aus kunden
+    }
+    return $d;
+}
+/* Kundendokument speichern (innerhalb von with_lock('kunden')). Ab Trennstufe 2 geteilt: die Kundenseite (ohne internen Ordner)
+   schreibt nur die Portalfelder – die übrigen Felder kennt sie nicht und lässt kundenstamm unberührt. */
+function customers_save(array $d): void
+{
+    if (!kunden_geteilt()) { store_write('kunden', $d); return; }
+    $felder = array_flip(KUNDEN_FELDER_KUNDENSEITE);
+    $portal = []; $stamm = [];
+    foreach ($d['customers'] as $c) {
+        $p = array_intersect_key($c, $felder);
+        $rest = array_diff_key($c, $felder);
+        if (array_key_exists('email', $c)) $p['emailMaske'] = kunden_email_maske((string)$c['email']);
+        unset($rest['id']);
+        $portal[] = $p; $stamm[$c['id']] = $rest;
+    }
+    if (store_innen()) with_lock('kundenstamm', function () use ($stamm) { store_write('kundenstamm', ['customers' => (object)$stamm, 'updatedAt' => now()]); });
+    store_write('kunden', ['customers' => $portal] + $d);
 }
 /* Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote) */
 function customer_offers_direct(array $c): array
@@ -52,6 +95,16 @@ function customer_public(array $c, bool $wawi = false): array
                           'link' => !empty($l['token']) && (int)$l['token']['exp'] > time() ? ['p' => $l['token']['p'], 'exp' => (int)$l['token']['exp']] : null] : null;
     $out['mailAngebot'] = !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']);
     return $out;
+}
+/* Schnappschuss des Kunden für einen Bestellwunsch (GR-106). Ab Trennstufe 2 kennt die Kundenseite Anschrift, E-Mail und Telefon
+   nicht – der Postausgang ergänzt sie aus den internen Stammdaten (order_kunde_ergaenzen), bevor E-Mails entstehen. */
+const KUNDE_SCHNAPPSCHUSS = ['firma', 'nr', 'ansprechpartner', 'strasse', 'plz', 'ort', 'email', 'telefon'];
+function kunde_schnappschuss(array $c): array
+{
+    $s = array_intersect_key($c, array_flip(KUNDE_SCHNAPPSCHUSS));
+    $s['username'] = (string)($c['login']['username'] ?? '');
+    if (!isset($c['email']) && ($c['emailMaske'] ?? '') !== '') $s['emailMaske'] = (string)$c['emailMaske'];
+    return $s;
 }
 function kunde_clear(): void { foreach (['kid', 'ksv', 'kseen', 'kcsrf', 'ksid'] as $k) unset($_SESSION[$k]); }
 function ksess_prune(array $list): array

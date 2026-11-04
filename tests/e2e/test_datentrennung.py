@@ -2,7 +2,9 @@
 Werkzeug deploy/daten_trennen.py. Der Testserver ist die Kundenseite (kein interner Ordner, Postausgang), ein zweiter PHP-Server auf
 dem Hilfsport die Mitarbeiterseite (WA_DATEN_INTERN). Geprüft: Kundenfunktionen laufen vollständig ohne interne Dokumente (keine
 einzige Anfrage danach im Serverprotokoll), die Mitarbeiterseite arbeitet mit beiden Ordnern, interne Daten landen nie im gemeinsamen
-Ordner, die Kundenseite kann keine Mitarbeiteranmeldung oder Ersteinrichtung nutzen."""
+Ordner, die Kundenseite kann keine Mitarbeiteranmeldung oder Ersteinrichtung nutzen.
+Trennstufe 2 (Stufe 2b): Kundendokument geteilt (außen nur Portalfelder), Empfänger, Bestand, Stammdaten, Postfach nur innen; der
+Postausgang bestimmt Empfänger und Inhalt selbst und verwirft gefälschte Versandaufträge aus dem gemeinsamen Ordner."""
 import base64, hashlib, hmac, json, os, sqlite3, subprocess, sys, time, urllib.error, urllib.request
 from kunden_hilfe import Client
 from smtp_test import TestSmtp
@@ -15,7 +17,7 @@ PW = 'Sicheres-Passwort-1'
 DATA = os.environ['UDATA']
 INTERN = os.environ['UINTERN']
 APP = os.path.dirname(DATA)
-KS = daten_trennen.kundenseite()
+KS = daten_trennen.kundenseite(stufe=daten_trennen.stufe_lesen(__import__('pathlib').Path(DATA)))
 LOG = os.path.join(WORK, 'php-datentrennung.log')
 res = []
 
@@ -113,6 +115,10 @@ try:
     payload = {'angebot': 'std', 'publishedAt': pub.get('publishedAt', pub.get('savedAt', '')), 'positions': [{'id': item['id'], 'qty': 2}], 'requestId': 'datentrennung-req-0001'}
     code, q = K.call('kunde_bestellung', payload)
     check('Kundenseite: Bestellwunsch angenommen (eingegangen)', code == 200 and q.get('delivery') == 'eingegangen', q)
+    check('Stufe 2: Quittung nennt die Kopie nur mit gekürzter Adresse', q.get('copyPlanned') == 'k•••@example.org', q.get('copyPlanned'))
+    o = A.call('bestellung&nr=' + str(q.get('nr')))[1].get('order', {})
+    check('Stufe 2: Kundenseite legt nur einen offenen Auftrag an, ohne Empfänger und ohne Anschrift/E-Mail im Schnappschuss',
+          [(j['kind'], j['to']) for j in o.get('outbox', [])] == [('offen', '')] and 'email' not in (o.get('kunde') or {}), (o.get('outbox'), o.get('kunde')))
     check('Kundenseite: eigene Bestellwünsche', any(x['nr'] == q.get('nr') for x in K.call('kunde_bestellungen')[1].get('orders', [])))
     check('Kundenseite: Detail des Bestellwunschs', K.call('kunde_bestellung_detail&nr=' + str(q.get('nr')))[0] == 200)
     check('Kundenseite: eigenes Passwort ändern', K.call('kunde_passwort', {'current': 'Kantine-Kennwort-5', 'password': 'Neues-Kennwort-88'})[0] == 200)
@@ -136,6 +142,70 @@ try:
     code, out = dienst()
     check('Postausgang: Bestellwunsch und Abmeldehinweis verschickt', until(lambda: any(m['to'] == ['orders@example.org'] for m in smtp.messages), 5), out)
     check('Versandprotokoll im internen Ordner', any(x.get('by') == 'Postausgang' for x in (doc('mailversand') or [])) and not os.path.exists(DATA + '/mailversand.php'))
+
+    # ---------- Stufe 2: Teilung, Empfänger und Inhalt nur von innen ----------
+    check('Trennstufe 2 im Kennzeichen', open(DATA + '/.daten-getrennt').read().strip() == '2')
+    felder = set(daten_trennen.kunden_felder())
+    kd = doc('kunden')
+    check('gemeinsames Kundendokument nur mit Portalfeldern (keine Adresse, keine Warenwirtschaft)', all(set(c) <= felder for c in kd['customers'])
+          and 'kantine.dt@example.org' not in json.dumps(kd) and any(c.get('emailMaske') == 'k•••@example.org' for c in kd['customers']), [sorted(set(c) - felder) for c in kd['customers']][:3])
+    check('Stammdaten der Kunden im internen Dokument kundenstamm', (doc('kundenstamm') or {}).get('customers', {}).get(kid, {}).get('email') == 'kantine.dt@example.org')
+    check('Bestell-Einstellungen außen ohne Adressen, innen die Empfänger', 'orders@example.org' not in json.dumps(doc('bestellung')) and doc('bestellung').get('empfaenger') == 1
+          and doc('bestellung-empfaenger')['to'] == ['orders@example.org'])
+    storage_write('bestand', {'date': '2026-11-02', 'articles': [{'code': '0815', 'name': 'Test', 'kg': 12.5, 'mhd': '2026-12-01', 'lots': [{'lot': 'P-77', 'kg': 12.5, 'ek': 4.2}]},
+                                                                {'code': '0999', 'name': 'Leer', 'kg': 0}], 'incoming': []})
+    storage_write('stammdaten', {'rev': 1, 'articles': [{'code': '0815', 'name': 'Test', 'category': 'Rind', 'origin': 'DE', 'condition': 'frisch', 'gtin': '4000000000001'}]})
+    check('Bestand und Stammdaten liegen innen', os.path.isfile(INTERN + '/.sqlite-active') or os.path.isfile(INTERN + '/bestand.php') and not os.path.exists(DATA + '/bestand.php'))
+    dienst()
+    a = doc('artikelauszug')
+    check('Auszug für die Kundenseite (vom Postausgang erzeugt) ohne Mengen, Partien, MHD und Einkaufspreise', a is not None and a.get('lager') == ['815']
+          and a.get('merkmale') == {'815': {'category': 'Rind', 'origin': 'DE', 'condition': 'frisch'}}
+          and not any(x in json.dumps(a) for x in ('12.5', '4.2', 'P-77', '2026-12-01', '4000000000001')), str(a)[:300])
+    o = A.call('bestellung&nr=' + str(q.get('nr')))[1].get('order', {})
+    check('Postausgang: Aufträge je Empfänger aus den internen Daten, Schnappschuss ergänzt', sorted((j['kind'], j['to'], j['state']) for j in o.get('outbox', []))
+          == [('bestellkopie', 'kantine.dt@example.org', 'sent'), ('bestellung', 'orders@example.org', 'sent')] and (o.get('kunde') or {}).get('email') == 'kantine.dt@example.org', o.get('outbox'))
+    team = [m for m in smtp.messages if m['to'] == ['orders@example.org']]
+    check('Team-Mail mit Adresse des Kunden aus den Stammdaten', team and 'kantine.dt@example.org' in team[-1]['text'], team[-1]['text'][:300] if team else None)
+    # gefälschte Versandaufträge im gemeinsamen Ordner (wie von einer übernommenen Kundenseite) – nichts davon darf hinaus
+    alle = json.loads(storage_raw('bestellungen').split('?>\n', 1)[-1])
+    echt = next(x for x in alle if x['nr'] == q.get('nr'))
+    falsch = {**echt, 'nr': 'B-2099-9999', 'requestId': 'gefaelscht-0001', 'outbox': [
+        {'id': 'f1', 'kind': 'bestellung', 'to': 'angreifer@example.net', 'state': 'queued', 'attempts': 0, 'error': '', 'history': [], 'subject': 'Phish', 'text': 'Phish', 'html': 'Phish'},
+        {'id': 'f3', 'kind': 'bestellung', 'to': 'orders@example.org', 'state': 'queued', 'attempts': 0, 'error': '', 'history': [], 'subject': 'Phish-Betreff', 'text': 'Phish-Text', 'html': 'Phish-Text'},
+        {'id': 'f2', 'kind': 'bestellkopie', 'to': 'opfer@example.net', 'state': 'queued', 'attempts': 0, 'error': '', 'history': [], 'subject': 'Phish', 'text': 'Phish', 'html': 'Phish'}]}
+    storage_write('bestellungen', alle + [falsch])
+    storage_write('postausgang', {'auftraege': [
+        {'id': 'p1', 'art': 'bestellung', 'nr': 'B-2099-9999', 't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0},
+        {'id': 'p2', 'art': 'hinweis', 'kunde': {'id': kid, 'firma': 'Gefälscht AG', 'email': 'angreifer@example.net'}, 'ab': True, 't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0},
+        {'id': 'p3', 'art': 'benachrichtigung', 'items': [{'ev': 'abmeldung', 'title': 'Phish-Ereignis', 'facts': [], 't': '2026-11-04T00:00:00Z'}], 't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0}]})
+    vorher_n = len(smtp.messages)
+    code, out = dienst()
+    neu_m = smtp.messages[vorher_n:]
+    empf = [r for m in neu_m for r in m['to']]
+    check('gefälschte Empfänger erhalten nichts', not {'angreifer@example.net', 'opfer@example.net'} & set(empf), empf)
+    check('gefälschter Inhalt wird nicht verschickt (Team-Mail neu aus dem Vorgang)', not any('Phish' in m['subject'] + m['text'] for m in neu_m)
+          and any(m['to'] == ['orders@example.org'] and 'B-2099-9999' in m['subject'] for m in neu_m), [(m['to'], m['subject']) for m in neu_m])
+    o = A.call('bestellung&nr=B-2099-9999')[1].get('order', {})
+    st = {j['id']: (j['state'], j['error']) for j in o.get('outbox', [])}
+    check('verworfene Aufträge stehen mit Grund beim Vorgang', st.get('f1', ('',))[0] == 'failed' and 'verworfen' in st['f1'][1]
+          and st.get('f2', ('',))[0] == 'failed' and 'Stammdaten' in st['f2'][1] and st.get('f3', ('',))[0] == 'sent', st)
+    check('verworfene Aufträge im Protokoll als Sicherheitsereignis', any(e.get('a') == 'security' and 'verworfen' in e.get('s', '') for e in (doc('protokoll/' + monat) or [])))
+    hinweis = [m for m in neu_m if 'Abmeldung' in m['subject']]
+    check('Abmeldehinweis nur mit Daten aus den Stammdaten (nicht aus dem Auftrag)', hinweis and 'Kantine Trennung' in hinweis[0]['subject']
+          and 'Gefälscht' not in hinweis[0]['text'] and 'angreifer' not in hinweis[0]['text'], [(m['subject']) for m in neu_m])
+    check('Benachrichtigung einer Art, die die Kundenseite nicht auslöst, wird verworfen', not any('Phish-Ereignis' in m['subject'] for m in neu_m))
+    # Originalempfänger: nach einer Änderung der Empfänger geht ein älterer Auftrag weiter an den früheren Empfänger (nicht an beliebige)
+    check('Empfänger ändern (Mitarbeiterseite)', A.call('bestell_settings_save', {'enabled': True, 'to': 'neu-team@example.org', 'copy': True})[0] == 200
+          and doc('bestellung-empfaenger').get('frueher') == ['orders@example.org'] and 'neu-team' not in json.dumps(doc('bestellung')))
+    alle = json.loads(storage_raw('bestellungen').split('?>\n', 1)[-1])
+    alt = {**echt, 'nr': 'B-2099-9998', 'requestId': 'gefaelscht-0002', 'outbox': [
+        {'id': 'g1', 'kind': 'bestellung', 'to': 'orders@example.org', 'state': 'queued', 'attempts': 0, 'error': '', 'history': []},
+        {'id': 'g2', 'kind': 'bestellung', 'to': 'sonstwer@example.org', 'state': 'queued', 'attempts': 0, 'error': '', 'history': []}]}
+    storage_write('bestellungen', alle + [alt])
+    storage_write('postausgang', {'auftraege': [{'id': 'p4', 'art': 'bestellung', 'nr': 'B-2099-9998', 't': '2026-11-04T00:00:00Z', 'faellig': 0, 'versuche': 0}]})
+    vorher_n = len(smtp.messages); dienst()
+    empf = [r for m in smtp.messages[vorher_n:] for r in m['to']]
+    check('früherer Empfänger erhält den älteren Auftrag, ein unbekannter nicht', empf == ['orders@example.org'], empf)
 
     # ---------- Kundenseite: keine Mitarbeiteranmeldung, keine Ersteinrichtung ----------
     S = Client('198.51.100.50')

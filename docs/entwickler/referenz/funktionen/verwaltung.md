@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 204 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 209 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -20,11 +20,18 @@ _Kundenstammdaten und Kunden-Sitzung_
 
 **Kunden**
 
+**Teilung des Kundendokuments (ADR-007 Stufe 2b, ab Trennstufe 2)**
+
+- `kunden_geteilt()`
+- `kunden_email_maske(e)` – Gekürzte Adresse für die Kundenseite (Abmeldeseite, Quittung): erstes Zeichen, Punkte, Domain – wie email_maske() in Python
+- `kunden_email_anzeige(c)` – Adresse zur Anzeige auf der Kundenseite: gekürzt (die volle Adresse kennt ab Trennstufe 2 nur die Mitarbeiterseite)
 - `customers_load()`
+- `customers_save(d)` – Kundendokument speichern (innerhalb von with_lock('kunden')).
 - `customer_offers_direct(c)` – Freigeschaltete Angebote: direkt beim Kunden eingetragen (angebote) oder über seine Kundengruppe (Stammdaten → Angebote)
 - `customer_offers_gruppe(c)` – Über die Kundengruppe: das Angebot, dem die Gruppe zugeordnet ist (Stammdaten → Angebote).
 - `customer_offers(c)`
 - `customer_public(c, wawi)` – Kunde für den Eingabebereich (ohne Passwort-Hash und Geräteschlüssel).
+- `kunde_schnappschuss(c)`
 - `kunde_clear()`
 - `ksess_prune(list)`
 - `ksess_remove(match)`

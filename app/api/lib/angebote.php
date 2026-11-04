@@ -208,6 +208,10 @@ function stock_codes(): ?array
 {
     static $codes = false;
     if ($codes !== false) return $codes;
+    if (!store_sichtbar('bestand')) {   // Kundenseite ab Trennstufe 2: nur der Auszug ohne Mengen (lib/bestand.php)
+        $l = artikelauszug()['lager'] ?? null;
+        return $codes = is_array($l) ? array_fill_keys(array_map('strval', $l), true) : null;
+    }
     $st = store_read('bestand');
     if (!is_array($st) || empty($st['articles'])) return $codes = null;
     $codes = [];
