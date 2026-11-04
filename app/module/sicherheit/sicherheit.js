@@ -1230,7 +1230,7 @@
         lockAfter: +el('lockAfter').value, lockMinutes: +el('lockMinutes').value };
       // Werte, die Keycloak übernimmt (konten.sh richtlinien) – bei einer Änderung daran erinnern
       const zentral = ['pwMin', 'pwComplex', 'lockAfter', 'lockMinutes'].some((k) => neu[k] !== St[k]);
-      await secSpeichern(neu, zentral ? 'Gespeichert. Für die zentrale Anmeldung in der Serverkonsole übernehmen: sh deploy/anmeldung/konten.sh richtlinien' : 'Sicherheitseinstellungen gespeichert.');
+      await secSpeichern(neu, zentral ? 'Sicherheitseinstellungen gespeichert. Für die zentrale Anmeldung in der Serverkonsole übernehmen: sh deploy/anmeldung/konten.sh richtlinien' : 'Sicherheitseinstellungen gespeichert.');
     } });
   }
   function ipDialog() {
