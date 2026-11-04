@@ -4,7 +4,7 @@ from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
 B = BASE
-from umgebung import SH, FIX, REPO, WORK, XL44
+from umgebung import SH, FIX, REPO, WORK
 res = []
 def check(n, c, i=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (('  ' + str(i)) if i else ''))
@@ -138,23 +138,7 @@ with sync_playwright() as p:
     try: a.wait_for_function("!document.querySelector('.mtab tr[data-mcode=\"11872\"]')", timeout=8000)   # Liste wird nach dem Speichern neu gezeichnet
     except Exception: pass
     check('master row deleted', a.locator('.mtab tr[data-mcode="11872"]').count() == 0)
-    # Excel-Import übernimmt Stammdaten und entfernt frisch
-    a.click('#vt-edit')
-    with a.expect_file_chooser() as fc: a.click('#btn-import')
-    fc.value.set_files(XL44); a.wait_for_selector('#dlg-import [data-ia=apply]', timeout=15000)
-    a.click('#dlg-import [data-ia=apply]')
-    # Hinweis direkt nach dem Übernehmen prüfen – ein späterer Hinweis des Hintergrundabgleichs kann ihn ersetzen
-    try:
-        a.wait_for_function("() => (document.querySelector('#toast')?.innerText || '').includes('Stammdaten')", timeout=5000)
-        toast_text = a.inner_text('#toast')
-    except Exception:
-        toast_text = a.inner_text('#toast')
-    wait_saved(a)
-    left = [n for n in names(a) if FR.search(n)]
-    check('import: no frisch in names', all('gefr' in x for x in left), left)
-    check('import: master applied (10601 → Roastbeef Färse Fleischmeister)', a.locator('tr[data-id]:has(input[data-f="code"][value="10601"]) input[data-f=name]').first.input_value() == 'Roastbeef Färse Fleischmeister')
-    check('import: brand + origin codes applied', a.locator('tr[data-id]:has(input[data-f="code"][value="10701"]) input[data-f=name]').first.input_value() == 'Entrecote Fleischmeister' and a.locator('tr[data-id]:has(input[data-f="code"][value="10701"]) input[data-f=origin]').first.input_value() == '4xD')
-    check('import toast mentions Stammdaten', 'Stammdaten' in toast_text, toast_text)
+    a.click('#vt-edit'); a.wait_for_selector('#view-edit:not([hidden]) tr[data-id]')
     # Artikel-Dialog → als Stammdaten speichern
     r10823 = a.locator('tr[data-id]:has(input[data-f="code"][value="10823"])').first
     r10823.locator('select[data-f=condition]').select_option('dry-aged'); a.wait_for_timeout(300)

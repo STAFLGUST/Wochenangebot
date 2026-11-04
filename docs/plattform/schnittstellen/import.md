@@ -16,18 +16,18 @@ keine Dateiformate und greift auf keine Daten zu; sie ruft nur die Funktionen de
 | `stammdaten` | CSV Artikelstammdaten-Export | `masterAusCsv` + `masterZusammenfuehren` (admin.js) | `stammdaten_speichern` | `stammdaten.bearbeiten` | verwaltung | Stammdaten → Artikelstammdaten, Aktion `master_save` |
 | `bestand` | WinAB-Bestandsliste als CSV (Semikolon, Windows-1252/UTF-8) oder .xls/.xlsx | `StockCore` (stock-core.js) über `stockAusDatei` (admin.js) | `bestand_speichern` | `bestand.importieren` | bestand | Bestand, Aktion `stock_import` |
 | `preisverlauf` | Angebotslisten .xlsx (mehrere) | `OfferCore.parseOfferWorkbook` über `histAusDatei` (admin.js) | `preisverlauf_woche_speichern` | `preisverlauf.bearbeiten` | angebot | Preisverlauf → Daten, Aktion `history_import` |
-| `angebot_excel` | Wochenangebot .xlsx | Angebotsleser (offer-core.js) | Entwurf (`save_draft`) | `angebot.bearbeiten` | angebot | Angebotseditor „Excel importieren“ – Ablauf `editor` |
 | `zeiterfassung` | Abwesenheitsbericht der Zeiterfassung (.xlsx, Importvorlage für Urlaub und Krankheit) | `importLeser.zeiterfassung` (app/module/hr/verwaltung-hr.js, erstes Blatt) | `hr_zeit_vorschau`/`hr_zeit_uebernehmen` (Personalnummer, sonst Name; Option `abteilungen`; ersetzt frühere Übernahme im Zeitraum) | `hr.verwalten` | hr | – |
-| `angebot_preise` | CSV Artikelpreise | `preiseAusCsv` (admin.js) | Entwurf (`save_draft`) | `angebot.bearbeiten`, `angebote.verwalten` | angebot | Stammdaten → Angebote „Preise importieren“ – Ablauf `editor` |
+| `angebot_preise` | CSV Artikelpreise der Warenwirtschaft (Preis-Art; Kundengruppe; Artikel; Preis) | `preiseAusCsv` (admin.js, Leser `angebot_preise`) | `angebot_preise_vorschau` / `_uebernehmen` (module/angebot/import.php): ohne Kundengruppe ins Wochenangebot, mit Kundengruppe ins Angebot der Gruppe, in den **Entwurf** (Sperre `entwurf`, Stand = Revision Entwurf und Angebotsliste, 409); Option `woche` (Auswahl, Standard aktuelle KW) setzt die Angebotswoche, Option `anlegen` (Standard aus) legt für Kundengruppen ohne Angebot je ein Angebot an | `angebot.bearbeiten`, `angebote.verwalten` | angebot | – (seit 04.11.2026 nur hier; vorher Stammdaten → Angebote) |
 | `umsatzdaten` | CSV Kundenumsatztabelle der Warenwirtschaft (Kunde, Datum, Artikel, Kolli, Menge, Preis, Gesamtbetrag, EKPreis; bis 200 MB) | `importLeser.umsatzdaten` (app/module/controlling/umsatz-import.js): je Kunde, Artikel und Tag zusammengefasst, je Monat ein Teil mit Prüfsumme | `umsatzdaten_import_vorschau` / `_teil` / `_uebernehmen` (module/controlling/umsatzdaten.php): Zeitraum der Datei ersetzt den gespeicherten Zeitraum, nur geänderte Monate werden übertragen | `controlling.umsatz_importieren` | controlling | – (neu, November 2026) |
 | `zeitbericht` | Zeitbericht der Zeiterfassung (.xlsx; Vorname, Nachname, Datum, Hinein, Hinaus, Geplant, Gearbeitete Stunden, Saldo, optional Abwesenheit, Pause, Mitarbeiternummer, Department) | `importLeser.zeitbericht` (app/module/controlling/arbeitszeit-import.js, erstes Blatt als Raster) | `arbeitszeit_import_vorschau` / `_uebernehmen` (module/controlling/arbeitszeit.php): Zeitraum der Datei ersetzt die gespeicherten Tage, Stempelfehler markiert, nie geschätzt | `controlling.arbeitszeit_importieren` | controlling | – (neu, November 2026) |
 
 Nicht aufgenommen: Import der Schutz-Einstellungen (`fw_import`, Plattformkern, nur Administratoren) – das ist eine
 Konfigurationsdatei dieser Anwendung, kein Datenimport aus einem Fremdsystem; er bleibt in der Schutzzentrale.
 
-Ablauf `editor`: Wochenangebot und Artikelpreise ändern den **Entwurf**; Vorschau, Abgleich mit dem Stand anderer
-Bearbeiter, „Rückgängig“ und Veröffentlichen gibt es nur im Angebotseditor. Die Zentrale führt sie auf (Rechte wie dort)
-und öffnet den Editor – es gibt keinen zweiten Weg, der den Entwurf ersetzt.
+Ablauf `editor` (Importart nur aufgeführt, die Zentrale öffnet die Ansicht `ansicht`): wird derzeit von keiner Importart
+genutzt. Der Excel-Import des Wochenangebots im Angebotseditor ist am 04.11.2026 entfallen; die Artikelpreise laufen seitdem
+in der Zentrale und schreiben in den Entwurf – offene Angebotseditoren übernehmen die Änderung über den Abgleich
+(`draft_ping`/`mergeModels`), veröffentlicht wird weiter nur im Editor.
 
 ## Vertrag des Eigentümers (Server)
 
@@ -43,7 +43,7 @@ Datei `app/api/module/<modul>/import.php`, geladen von `app/api/index.php`, Modu
 | `dateien`, `kodierung` | ja | erlaubte Endungen (`csv`, `xls`, `xlsx`, `xlsm`) und Text für die Anzeige |
 | `vorschau`, `uebernahme` | bei Ablauf `zentrale` | Funktionsnamen `f(array $eingabe, array $nutzer): array` |
 | `ablauf` | nein | `zentrale` (Standard) oder `editor` |
-| `optionen` | nein | `[{id, typ: schalter|datum, label, standard?, pflicht?}]` – die Zentrale übergibt nur diese, mit Standardwert |
+| `optionen` | nein | `[{id, typ: schalter|datum|auswahl, label, standard?, pflicht?, werte?}]` – die Zentrale übergibt nur diese, mit Standardwert; `auswahl`: feste Werte `werte: [{wert, text}]`, `standard` muss einer davon sein, andere Werte ersetzt der Server durch den Standard |
 | `mehrere`, `bestaetigung`, `ansicht` | nein | mehrere Dateien; Schlüssel der Passwortbestätigung (Katalog `BESTAETIGUNG`); Ansicht für „… öffnen“ |
 | `teile` | nein | große Datei in Teilen: Funktionsname `f(array $eingabe, array $nutzer): void` für einen Teil (Zwischenablage des Eigentümers); nur Ablauf `zentrale` |
 | `maxMb` | nein | Größe einer Datei in MB (Prüfung im Browser): Standard 30, mit `teile` bis 200 |

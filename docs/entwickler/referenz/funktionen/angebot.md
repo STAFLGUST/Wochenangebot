@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-41 Dateien, 611 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+41 Dateien, 613 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -153,6 +153,22 @@ _Preisverlauf (Wochenstände)_
 _Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf._
 
 - `import_arten_angebot()`
+
+**Artikelpreise (CSV)**
+
+- `angebot_preise_aktuelle_woche()` – Aktuelle Kalenderwoche (ISO 8601, Zeitzone der Anwendung) als „JJJJ-WW“ – Standard der Option „Angebotswoche“
+- `angebot_preise_wochen()` – Auswahl der Angebotswoche: vier Wochen zurück bis acht Wochen voraus, die aktuelle gekennzeichnet
+- `angebot_code_key(c)` – Schlüssel einer Artikelnummer wie im Browser (StockCore.normCode): reine Zahlen ohne führende Nullen, sonst Großbuchstaben
+- `angebot_slug(name)` – Kennung eines neuen Angebots aus dem Namen (wie slug() im Eingabebereich)
+- `angebot_preis_text(v)` – Preise eintragen in 2 Nachkommastellen, mehr nur wenn vorhanden
+- `angebot_preise_zeilen(e)` – Zeilen des Lesers prüfen: {zeile, code, gruppe, preis}.
+- `angebot_preise_woche(v)` – Gewählte Angebotswoche „JJJJ-WW“ → [Woche, Jahr] (nur gültige ISO-Wochen; sonst die aktuelle)
+- `angebot_preise_basis()` – Ausgangsstand: Entwurf, sonst veröffentlichtes Angebot; Stand = Revision des Entwurfs und der Angebotsliste
+- `angebot_preise_plan(model, offers, rows, anlegen)` – Zuordnung der Preise zu Angeboten und Artikeln (ohne zu schreiben).
+- `angebot_preise_ergebnis(plan, model, fehler, woche, opt, stand)` – Vorschau/Ergebnis im Format der Importzentrale aus Plan, Fehlerzeilen und Angebotswoche
+- `angebot_preise_vorschau(e, me)`
+- `angebote_fuer_gruppen_anlegen(neuName, rev, me)` – Neue Angebote für Kundengruppen ohne Angebot (eigene Artikelliste, Gruppe zugeordnet) – Regeln wie offers_save: eindeutige Namen, nie die ID eines gelöschten …
+- `angebot_preise_uebernehmen(e, me)`
 - `preisverlauf_woche_speichern(week, year, items, source)` – Eine Woche speichern (ersetzt eine vorhandene Woche) und protokollieren – Aktion history_import und Importzentrale
 - `preisverlauf_import_wochen(e)` – Wochen der Dateien prüfen: gültige Woche, Artikel; doppelte Woche → die spätere Datei zählt (wie im Preisverlauf)
 - `preisverlauf_import_vorschau(e, me)`
@@ -383,17 +399,6 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 
 - `openItem(id)`
 
-**Excel-Import**
-
-- `pickFile()`
-- `importFile(file)`
-- `importError(msg)`
-- `issuesHTML(issues)`
-- `renderImport(d)`
-- `werbungUebernehmen(alt, neu)` – Werbung geht beim Excel-Import auf den Artikel mit derselben Artikelnummer über (ohne Nummer: gleiche Bezeichnung)
-- `namenUebernehmen(alt, neu)` – Eigene Bezeichnungen je Angebot gehen beim Excel-Import wie die Kundenpreise auf den Artikel mit derselben Artikelnummer über; was die Stammdaten vorgeben …
-- `importKundenangebote(alt, neu)`
-
 **Angebote (Standard + Kundenangebote)**
 
 - `loadOffers()`
@@ -415,10 +420,7 @@ _Wochenangebot – Eingabebereich Bearbeitet einen Entwurf auf dem Server (autom
 - `ofMark()`
 - `openOfGruppen(key)`
 - `ofgCount()`
-- `preiseAusCsv(buf)`
-- `ofPreisPlan()`
-- `ofPreiseDatei(file)`
-- `renderOfPreise(err)`
+- `preiseAusCsv(buf)` – Artikelpreise der Warenwirtschaft (CSV „Artikelpreise“: Preis-Art; Kundengruppe; Artikel; Preis) – Leser der Importart „angebot_preise“ der Importzentrale …
 - `openCopy()`
 
 **Vorschau**

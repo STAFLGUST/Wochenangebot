@@ -8,7 +8,7 @@ from umgebung import shot
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
 from playwright.sync_api import sync_playwright
-from umgebung import SH, XL44, storage_raw, storage_write
+from umgebung import SH, storage_raw, storage_write
 from testdaten import de, preis
 B = BASE
 res = []
@@ -323,22 +323,7 @@ with sync_playwright() as p:
     pm.goto(B + '/'); pm.wait_for_selector('#list .werb-sec tr.row')
     sw = pm.evaluate('document.documentElement.scrollWidth'); check('Angebotsseite mobil: Block ohne seitliches Scrollen', sw <= 390, sw)
     pm.screenshot(path=SH + '/werbung-angebotsseite-mobil.png'); pm.close()
-    # Excel-Import ersetzt nur das Wochenangebot: Kundenangebote behalten Artikel und Preise
-    tab(a, 'Wochenangebot').click(); a.wait_for_timeout(200)
-    with a.expect_file_chooser() as fc: a.click('#btn-import')
-    fc.value.set_files(XL44); a.wait_for_selector('#dlg-import [data-ia="apply"]')
-    check('Import-Vorschau: Kundenangebote bleiben erhalten', 'Kundenangebote bleiben erhalten' in a.inner_text('#dlg-import'), a.inner_text('#dlg-import')[:300])
-    a.click('#dlg-import [data-ia="apply"]'); wait_saved(a)
-    check('nach dem Import: Metro und Edeka behalten ihre Artikel', zahl(a, 'Metro') == 2 and zahl(a, 'Edeka') == 1 and a.input_value('#m-week') == '44', (zahl(a, 'Metro'), zahl(a, 'Edeka')))
-    wi = (get(a, 'draft')[1]['draft']['meta'] or {}).get('werbung', {}).get('std', {})
-    di = {i['id']: i['code'] for i in get(a, 'draft')[1]['draft']['items']}
-    check('… Werbung geht auf die importierten Artikel über (gleiche Nummer)', [di.get(x['id']) for x in wi.get('artikel', [])] == ['10601', '10823'] and a.inner_text('#werb-n') == '2', wi)
-    tab(a, 'Edeka').click(); a.wait_for_timeout(200)
-    check('… eigener Preis wandert auf den importierten Artikel', row(a, '10601').locator('input[data-f=vprice]').input_value() == '22,00')
-    tab(a, 'Metro').click(); a.wait_for_timeout(200)
-    check('… Position nur im Kundenangebot bleibt', any(x.startswith('Metro-Spezial') for x in a.locator('#groups input[data-f=name]').evaluate_all('e => e.map(x => x.value)')))
-    a.click('#btn-undo'); wait_saved(a)
-    check('Import mit Rückgängig zurückgenommen', a.input_value('#m-week') != '44')
+    check('kein Excel-Import mehr im Editor (Auftrag des Inhabers 04.11.2026)', a.locator('#btn-import').count() == 0)
     # Zweite Werbung (Wunsch des Inhabers): „Weitere Werbung“ im Fenster, Reiter, Prüfung, Auslieferung, rechts daneben
     tab(a, 'Wochenangebot').click(); a.wait_for_selector('#werb-n:not([hidden])')
     id701 = row(a, '10701').get_attribute('data-id')

@@ -20,7 +20,7 @@ const IMPORT_EIGENTUEMER = ['verwaltung', 'bestand', 'angebot', 'hr', 'controlli
 const IMPORT_ZEILEN_MAX = 500;              // Zeilen der Vorschau, die an den Browser gehen (Zahlen zählen immer alle)
 const IMPORT_DATEITYPEN = ['csv', 'xls', 'xlsx', 'xlsm'];
 const IMPORT_ABLAEUFE = ['zentrale', 'editor'];
-const IMPORT_OPTIONSTYPEN = ['schalter', 'datum'];
+const IMPORT_OPTIONSTYPEN = ['schalter', 'datum', 'auswahl'];   // auswahl: feste Werte des Eigentümers ({wert, text}), z. B. Angebotswoche
 const IMPORT_ZEILENARTEN = ['neu', 'geaendert', 'entfaellt', 'fehler'];
 const IMPORT_MB = 30;                       // Größe einer Datei (Prüfung im Browser); Importarten mit Teilen dürfen mehr („maxMb“, bis 200)
 const IMPORT_TEILE_MAX = 2000;              // Teile, die eine Vorschau für die Übernahme anfordern darf
@@ -45,7 +45,11 @@ function import_registry(): array
                 || !is_int($a['maxMb']) || $a['maxMb'] < 1 || $a['maxMb'] > ($a['teile'] !== '' ? 200 : IMPORT_MB)) {
                 throw new LogicException("Importart „{$id}“ ist ungültig registriert.");
             }
-            foreach ($a['optionen'] as $o) if (!in_array($o['typ'] ?? '', IMPORT_OPTIONSTYPEN, true)) throw new LogicException("Importart „{$id}“: unbekannte Option.");
+            foreach ($a['optionen'] as $o) {
+                if (!in_array($o['typ'] ?? '', IMPORT_OPTIONSTYPEN, true)) throw new LogicException("Importart „{$id}“: unbekannte Option.");
+                if ($o['typ'] === 'auswahl' && (empty($o['werte']) || array_filter($o['werte'], fn($w) => !is_string($w['wert'] ?? null) || !is_string($w['text'] ?? null))
+                    || !in_array($o['standard'] ?? null, array_column($o['werte'], 'wert'), true))) throw new LogicException("Importart „{$id}“: Auswahl „{$o['id']}“ ohne gültige Werte.");
+            }
             $reg[$id] = $a;
         }
     }
@@ -78,7 +82,8 @@ function import_optionen(array $a, $roh): array
     $out = [];
     foreach ($a['optionen'] as $o) {
         $v = $roh[$o['id']] ?? ($o['standard'] ?? null);
-        $out[$o['id']] = $o['typ'] === 'schalter' ? (bool)$v : (is_string($v) ? mb_substr($v, 0, 20) : null);
+        if ($o['typ'] === 'auswahl') $out[$o['id']] = in_array($v, array_column($o['werte'], 'wert'), true) ? $v : $o['standard'];   // nur angebotene Werte
+        else $out[$o['id']] = $o['typ'] === 'schalter' ? (bool)$v : (is_string($v) ? mb_substr($v, 0, 20) : null);
         if (!empty($o['pflicht']) && ($out[$o['id']] === null || $out[$o['id']] === '')) throw new InvalidArgumentException("Bitte „{$o['label']}“ angeben.");
     }
     return $out;

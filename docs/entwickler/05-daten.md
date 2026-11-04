@@ -312,7 +312,7 @@ unbekannte Felder der gespeicherten Fassung erhalten (`gruppen_clean` mit `$alt`
 Höchstens 20 000 Sätze, Artikelnummern eindeutig über `code_key()` (führende Nullen und Groß-/Kleinschreibung zählen
 nicht), GTIN 8–14 Ziffern. `name` ist die Angebotsbezeichnung (Basiswert), `nameWawi` die Originalbezeichnung der
 Warenwirtschaft (Bezeichnung1 des Artikelstammdaten-Imports, nur dort gesetzt; steht in der MHD-Liste), `namen` die eigene
-Bezeichnung je Kundenangebot wie beim Artikel des Angebots (Vorgabe für künftige Wochen, beim Excel-Import übernommen).
+Bezeichnung je Kundenangebot wie beim Artikel des Angebots (Vorgabe für künftige Wochen und neu aufgenommene Artikel).
 
 ### Bestand
 

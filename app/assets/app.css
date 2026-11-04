@@ -645,7 +645,6 @@ html { accent-color: var(--accent); }   /* Häkchen, Auswahlknöpfe, Regler übe
 }
 @media (max-width: 640px) {
   .brand-company { display: none; }
-  #btn-import { display: none; }
   .brand { overflow: hidden; }
   .opt-sm { display: none; }
   .brand h1 { font-size: 17px; }
