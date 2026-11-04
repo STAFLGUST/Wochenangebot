@@ -434,8 +434,17 @@ print(" ".join(ids))' "$REALM_DATEI") || abbruch "Clients in $REALM_DATEI nicht 
       echo "angelegt:  amr-Claim für Client $c"
     fi
   done
+  # Stand 14 (Härtung 03.11.2026): kein Client des Realms erlaubt den Passwort-Grant – auch keiner der Clients, die Keycloak
+  # selbst anlegt. Anmeldungen laufen nur über die Anmeldeseite (Code-Ablauf); unsere Clients hatten ihn ohnehin aus.
+  kc get clients -r "$REALM" --fields id,clientId,directAccessGrantsEnabled | python3 -c '
+import json, sys
+for c in json.load(sys.stdin):
+    if c.get("directAccessGrantsEnabled"): print(c["id"], c["clientId"])' | while read -r id name; do
+    kc update "clients/$id" -r "$REALM" -s directAccessGrantsEnabled=false >/dev/null
+    echo "gesetzt:   Client $name ohne Passwort-Grant"
+  done
   konten_rechte
-  echo "Realm aktuell (Stand 13: Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  echo "Realm aktuell (Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
 }
 

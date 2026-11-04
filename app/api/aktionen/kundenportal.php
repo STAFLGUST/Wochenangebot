@@ -145,19 +145,19 @@ switch ($action) {
 
         /* ---------- Passwort über Link aus der E-Mail (Einladung / Zurücksetzen) ---------- */
         case 'kunde_token_check': {
-            attempts_check('kunde');
+            attempts_check('kundelink');   // eigener Zähler: alte Links sperren nie den Kunden-Login (lib/protokoll.php)
             $c = kunde_by_token((string)(body()['token'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
             respond(['ok' => true, 'firma' => $c['firma'], 'username' => $c['login']['username'], 'purpose' => $c['login']['token']['p'], 'exp' => (int)$c['login']['token']['exp']]);
         }
 
         case 'kunde_token_set': {
             start_session();
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $b = body();
             $tok = (string)($b['token'] ?? '');
             $c = kunde_by_token($tok);
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Link ist abgelaufen oder wurde bereits verwendet. Bitte fordern Sie bei uns einen neuen an.', 410); }
             $new = check_password($b['password'] ?? '', $c['login']['username']);
             $c2 = with_lock('kunden', function () use ($c, $new, $tok) {
                 $d = customers_load();
@@ -341,19 +341,19 @@ switch ($action) {
 
         /* ---------- Abmelden vom Wochenangebot (Link aus der E-Mail, ohne Anmeldung) ---------- */
         case 'kunde_abmelden_info': {
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $c = abmelde_kunde((string)(body()['token'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
             $e = (string)($c['email'] ?? '');
             $masked = $e !== '' ? preg_replace('/^(.).*?(@.*)$/u', '$1•••$2', $e) : '';
             respond(['ok' => true, 'firma' => $c['firma'], 'email' => $masked, 'subscribed' => !array_key_exists('mailAngebot', $c) || !empty($c['mailAngebot']), 'company' => $CFG['company']]);
         }
 
         case 'kunde_abmelden': {
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $b = body();
             $c = abmelde_kunde((string)($b['token'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Dieser Abmeldelink ist ungültig. Bitte wenden Sie sich direkt an uns.', 404); }
             $ab = empty($b['wieder']);
             if (abmelde_setzen($c, $ab, 'link')) abmelde_melden($c, $ab, 'link');
             respond(['ok' => true, 'subscribed' => !$ab]);
@@ -362,9 +362,9 @@ switch ($action) {
         case 'abmelden1': {
             // Ein-Klick-Abmeldung (RFC 8058): das E-Mail-Programm sendet POST mit „List-Unsubscribe=One-Click“
             if ($method !== 'POST') fail('Bitte den Abmeldelink in der E-Mail verwenden.', 405);
-            attempts_check('kunde');
+            attempts_check('kundelink');
             $c = abmelde_kunde((string)($_GET['t'] ?? ''));
-            if (!$c) { attempts_record(false, 'kunde'); fail('Ungültiger Abmeldelink.', 404); }
+            if (!$c) { attempts_record(false, 'kundelink'); fail('Ungültiger Abmeldelink.', 404); }
             if (abmelde_setzen($c, true, '1klick')) abmelde_melden($c, true, '1klick');
             respond(['ok' => true]);
         }

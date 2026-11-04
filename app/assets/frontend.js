@@ -812,7 +812,11 @@ async function kundeMerklisteLaden() {
     const r = await kundeApi('kunde_merkliste');
     favRemote = true;
     const local = store.get('merkliste', []);
-    if (!r.exists && local.length) { favs = new Set(local); saveFavs(); }
+    if (!r.exists && local.length) {
+      favs = new Set(local);
+      // gleich speichern und erst danach die Browser-Liste löschen: sonst landete sie im nächsten neuen Kundenkonto auf diesem Gerät
+      try { await kundeApi('kunde_merkliste_save', { keys: [...favs] }); store.del('merkliste'); } catch { saveFavs(); }
+    }
     else favs = new Set(r.keys);
   } catch { /* Server nicht erreichbar: Browser-Merkliste weiter nutzen */ }
 }
@@ -1719,7 +1723,16 @@ function openKundePw(forced) {
 async function kundeLogout() {
   if (favRemote && favTimer) { clearTimeout(favTimer); favTimer = null; try { await kundeApi('kunde_merkliste_save', { keys: [...favs] }); } catch { /* weiter abmelden */ } }
   await favBusy;
-  try { await kundeApi('kunde_logout', {}); } catch { /* trotzdem neu laden */ }
+  // Abmelden muss auf dem Server ankommen – sonst bliebe die Sitzung auf einem gemeinsam genutzten Gerät bestehen, obwohl die
+  // Seite „abgemeldet“ aussieht. Veralteter Sicherheitsschlüssel (in einem anderen Tab neu angemeldet): neu holen, einmal wiederholen.
+  try { await kundeApi('kunde_logout', {}); }
+  catch (e) {
+    let ok = false;
+    if (e.status === 403) {
+      try { const st = await kundeApi('kunde_status'); KCSRF = st.csrf || ''; await kundeApi('kunde_logout', {}); ok = true; } catch { /* unten melden */ }
+    }
+    if (!ok) { toast('Abmelden hat nicht geklappt – bitte die Internetverbindung prüfen und erneut auf „Abmelden“ tippen.', 6000); return; }
+  }
   // Angefangene Bestellwünsche dieses Zugangs nicht auf dem (evtl. gemeinsam genutzten) Rechner zurücklassen
   try { const pre = STORAGE + 'bestellung.' + (KUNDE ? KUNDE.username : '-') + '.'; Object.keys(localStorage).filter((k) => k.startsWith(pre)).forEach((k) => localStorage.removeItem(k)); } catch { /* Speicher gesperrt */ }
   location.href = setOfferParam('').pathname;
@@ -1729,6 +1742,7 @@ function bindKunde() {
   const dl = $('#dlg-kunde-login'), dp = $('#dlg-kunde-pw');
   document.addEventListener('click', (e) => {
     if (e.target.closest('#btn-kunde-login, [data-kact="login"]')) { openKundeLogin(); return; }
+    if (e.target.closest('[data-wartung-logout]')) { kundeLogout(); return; }   // auch während der Wartung abmelden (GR-009: Abmelden bleibt erlaubt)
     const kb = e.target.closest('#btn-kunde');
     const km = $('#menu-kunde');
     if (kb && km) { const open = km.hidden; km.hidden = !open; kb.setAttribute('aria-expanded', open); if (open) { menuImBild(km); km.querySelector('button').focus(); } return; }
@@ -1868,7 +1882,7 @@ function renderWartung(w) {
   for (const id of ['quicknav', 'hits', 'chips']) { const el = $('#' + id); if (el) el.textContent = ''; }
   const slot = $('#kunde-slot'); if (slot) slot.innerHTML = '';
   $('#list').innerHTML = `<div class="empty k-locked k-wartung"><div class="empty-ico">${icon('info')}</div><h3>Wartungsarbeiten</h3><p>${esc(w.message || '')}</p>${bis ? `<p class="muted">Voraussichtlich wieder erreichbar ab ${esc(bis)} Uhr.</p>` : ''}
-    <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button></div></div>`;
+    <div class="row-actions"><button type="button" class="btn" data-reload>Erneut versuchen</button>${KUNDE ? `<button type="button" class="btn" data-wartung-logout>${icon('logout')}Abmelden</button>` : ''}</div></div>`;
 }
 
 /* ---------- Start ---------- */

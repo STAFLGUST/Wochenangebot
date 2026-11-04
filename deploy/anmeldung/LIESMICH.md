@@ -84,6 +84,12 @@ Vorgehen (`OIDC_SECRET_REWE`/`OIDC_CRYPTO_REWE`, danach `docker compose up -d ap
 
 Stand 13 (30.10.2026, Entscheidung des Inhabers „gleich produktiv“): Client `qs` für `qs.dashboard-stafl.de` (Modul Qualitätssicherung ·
 QM-System) – gleiches Vorgehen (`OIDC_SECRET_QS`/`OIDC_CRYPTO_QS`, danach `docker compose up -d app`). Der DNS-Eintrag `qs` besteht seit 21.10.2026.
+
+Stand 14 (03.11.2026, Härtung nach der Anmeldeprüfung): kein Client des Realms erlaubt den Passwort-Grant, auch keiner der
+Clients, die Keycloak selbst anlegt – Anmeldungen laufen nur über die Anmeldeseite. Einmal auf dem Server ausführen:
+`sh deploy/anmeldung/konten.sh realm-aktualisieren` (kein Neustart nötig; die Ausgabe nennt jeden umgestellten Client).
+Ab diesem Stand sperrt das Caddyfile außerdem Keycloaks Kontokonsole (`/realms/mitarbeiter/account`, 404) – Konten pflegt
+die Verwaltung.
 Stand 8 (26.10.2026, Wunsch des Inhabers „ein Passwort“): Client `konten` – kein Host, nur ein Service-Account, mit dem die
 Verwaltung (Verwaltung → Mitarbeiter → „Zentrale Anmeldung“, nur Administratoren, immer mit Bestätigung) Passwörter setzt,
 Sperren nach Fehlversuchen aufhebt, den Link zum Passwort-Festlegen schickt und fehlende Konten anlegt

@@ -2,6 +2,7 @@
 (angebot-stafl.de) gibt es keine Mitarbeiteranmeldung und keine Mitarbeiteraktionen mehr; die Kundenseite und alle
 Kundenfunktionen bleiben unverändert. Den Normalbetrieb ohne die Einstellung prüfen alle übrigen Gruppen."""
 import sys
+import time
 
 from kunden_hilfe import Client
 from playwright.sync_api import sync_playwright
@@ -45,6 +46,9 @@ with sync_playwright() as p:
         pg = br.new_page(viewport={'width': w, 'height': 844}, is_mobile=w < 500)
         pg.on('pageerror', lambda e: fehler.append(str(e)))
         pg.route('https://angebot.dashboard-stafl.de/**', lambda route: route.fulfill(status=200, content_type='text/html', body='<p id="neu">neu</p>'))
+        # Spätere Skripte bewusst verzögert: die Antwort „umgezogen“ kommt vor ihnen – früher ersetzte die Seite sich sofort und die
+        # Skripte fanden ihre Elemente nicht mehr (JavaScript-Fehler, Befund 03.11.2026 unter Last)
+        pg.route('**/assets/admin-einzel.js*', lambda route: (time.sleep(0.8), route.continue_()))
         pg.goto(BASE + '/admin/'); pg.wait_for_selector('#umgezogen-weiter')
         check(f'{w}px alter Eingabebereich: Hinweis „umgezogen“ statt Anmeldemaske, Verweis auf die neue Adresse',
               'umgezogen' in pg.inner_text('h1') and pg.get_attribute('#umgezogen-weiter', 'href') == ZIEL and pg.locator('#au-user').count() == 0

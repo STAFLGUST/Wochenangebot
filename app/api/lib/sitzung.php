@@ -49,8 +49,12 @@ function start_session(): void
     if ($https && !$APP_SITZUNG && isset($_COOKIE[SITZUNG_COOKIE]) && !headers_sent()) {
         setcookie(SITZUNG_COOKIE, '', ['expires' => 1, 'path' => '/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
     }
-    session_start();
     $max = (int)sec()['idleMinutes'] * 60;
+    // Sitzungsdateien erst nach der eingestellten Leerlaufzeit aufräumen: Das Container-Image hat keine php.ini, PHP löscht
+    // sonst nach 24 Minuten ohne Anfrage (session.gc_maxlifetime 1440) – Kunden lesen und tragen ein, ohne dass der Browser
+    // fragt, und waren dann trotz „8 Stunden“ abgemeldet (Befund 03.11.2026). Die Leerlaufprüfung selbst bleibt unten.
+    ini_set('session.gc_maxlifetime', (string)max(1440, $max + 600));
+    session_start();
     if (!empty($_SESSION['uid']) && (time() - (int)($_SESSION['seen'] ?? 0)) > $max) {
         $zentral = !empty($_SESSION['oidcSub']);
         $_SESSION = []; session_regenerate_id(true);

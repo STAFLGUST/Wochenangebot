@@ -5083,6 +5083,7 @@
 
   /* Alter Eingabebereich stillgelegt: nur ein Hinweis mit Verweis, danach Weiterleitung (Adresse vom Server, nur https) */
   function zeigeUmgezogen(ziel) {
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => zeigeUmgezogen(ziel), { once: true }); return; }   // erst nach allen Skripten (siehe seiteGeladen)
     const url = /^https:\/\/[^/\s"'<>]+\/[^\s"'<>]*$/.test(ziel || '') ? ziel : 'https://angebot.dashboard-stafl.de/admin/';
     document.title = 'Eingabebereich umgezogen';
     document.body.className = 'adm umgezogen';
@@ -5108,10 +5109,14 @@
   }
 
   /* ======================= Start ======================= */
+  /* Die Seite erst ersetzen, wenn alle Skripte geladen sind: die übrigen Skripte (admin-verwaltung.js, admin-artikelwahl.js …)
+     binden sich beim Laden an Elemente des Eingabebereichs – kam die Antwort des Servers schneller, fehlten diese Elemente
+     und es gab JavaScript-Fehler (Befund 03.11.2026, Gruppe stilllegung unter Last). */
+  const seiteGeladen = () => (document.readyState === 'loading' ? new Promise((r) => document.addEventListener('DOMContentLoaded', r, { once: true })) : Promise.resolve());
   (async function boot() {
     try {
       const s = await api('status');
-      if (s.umgezogen) { zeigeUmgezogen(s.umgezogen); return; }
+      if (s.umgezogen) { await seiteGeladen(); zeigeUmgezogen(s.umgezogen); return; }
       company = s.company || '';
       document.body.classList.toggle('is-test', !!s.testumgebung);   // Kennzeichen „Testumgebung“
       $$('[data-company]').forEach((el) => { el.textContent = company; el.hidden = !company; });
@@ -5124,6 +5129,7 @@
       if (me.needTwofa) { showAuth('twofa'); return; }
       await openEditor();
     } catch (e) {
+      await seiteGeladen();
       document.body.innerHTML = `<main class="auth"><div class="auth-card"><h1 style="margin:0;font-size:18px">Eingabebereich nicht erreichbar</h1><p class="auth-intro">${esc(e.message)}</p>${e.status === 403 ? '' : '<p class="auth-intro">Die Seite muss über den Webserver aufgerufen werden, PHP muss aktiv sein.</p>'}</div></main>`;
     }
   })();

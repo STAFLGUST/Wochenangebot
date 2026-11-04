@@ -264,7 +264,12 @@ function sec_clean(array $b, array $old, array $me): array
     if ($geoEnabled && ($mc = geo_blocked(client_ip(), $geoS)) !== null) throw new InvalidArgumentException($mc === GEO_UNBEKANNT
         ? 'Für Ihre Adresse ist kein Land erkennbar – mit „nur ausgewählte Länder erlauben“ würden Sie sich selbst aussperren. Tragen Sie Ihre Adresse als freigegebene Adresse ein.'
         : "Sie greifen gerade aus einem Land zu, das damit gesperrt wäre ({$mc}) – Sie würden sich selbst aussperren.");
-    if ($twofa !== 'off' && !has_second_factor($me) && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException('Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
+    // Eigener zweiter Faktor: auf Keycloak-Hosts zählt die Anmeldung dort (Einmalcode/Passkey, Claims acr/amr) – die alten
+    // Felder am Konto gibt es dort nicht, sonst konnte kein Administrator mehr speichern (Befund 03.11.2026)
+    $eigenerFaktor = oidc_modus() ? (($oid = oidc_identitaet()) !== null && oidc_zweiter_faktor($oid)) : has_second_factor($me);
+    if ($twofa !== 'off' && !$eigenerFaktor && ($twofa === 'all' || $me['role'] === 'admin')) throw new InvalidArgumentException(oidc_modus()
+        ? 'Bitte melden Sie sich zuerst selbst mit zweitem Faktor (Einmalcode oder Passkey) an – sonst würden Sie sich mit der Pflicht aussperren.'
+        : 'Bitte richten Sie zuerst für sich selbst die Zwei-Faktor-Anmeldung ein (Menü „…“ → „Zwei-Faktor-Anmeldung“).');
     $new = ['twofa' => $twofa, 'pwMin' => max(10, min(32, (int)($b['pwMin'] ?? 10))), 'pwComplex' => !empty($b['pwComplex']),
             'pwLeak' => array_key_exists('pwLeak', $b) ? !empty($b['pwLeak']) : !empty($old['pwLeak']),   // ältere Oberfläche ohne Feld: unverändert
             'idleMinutes' => in_array((int)($b['idleMinutes'] ?? 480), [15, 30, 60, 120, 240, 480, 720], true) ? (int)($b['idleMinutes'] ?? 480) : 480,
