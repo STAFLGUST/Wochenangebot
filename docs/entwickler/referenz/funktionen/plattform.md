@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-105 Dateien, 994 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1029 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -688,19 +688,25 @@ _E-Mail-Versand über einen SMTP-Server (z._
 
 _Shared persistence for HTTP and maintenance tools._
 
+**Speicherbereiche (ADR-007 Stufe 2)**
+
+- `store_getrennt()`
+- `store_bereich(name)`
+- `store_ordner(bereich)` – Ordner eines Bereichs; Kundenseite (kein WA_DATEN_INTERN) → StoreKeinZugang für „intern“
+- `store_spur(name)` – Prüfhilfe (nur Tests, WA_SPUR_INTERN=1): Kundenseite fragt ein internes Dokument an – ins Serverprotokoll.
 - `store_path(name)`
-- `store_mode()`
-- `store_db()`
+- `store_mode(bereich)`
+- `store_db(bereich)`
 - `store_sql(name)`
 - `store_read(name)`
 - `store_write(name, data)`
 - `store_delete(name)`
 - `store_mtime(name)`
 - `store_names(prefix)`
-- `store_commit()`
-- `store_rollback()`
+- `store_commit(bereich)` – Offene Transaktionen je Bereich ($GLOBALS['store_tx'] = ['haupt' => true, …]; leer = keine)
+- `store_rollback(bereich)`
 - `with_lock(name, fn)`
-- `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich
+- `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht)
 
 ## `app/assets/admin-rollen.js`
 
@@ -838,6 +844,26 @@ _Bereitstellung eines Stands_
 - `zusatz_verzeichnis(app)` – Im Testlauf unter app/dashboard/ eingeblendetes Dashboard (tests/run_e2e.py, ZUSATZ) wie auf dem Server stempeln.
 - `main(argv)`
 
+## `deploy/daten_trennen.py`
+
+_Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen._
+
+- `kundenseite(regeln)`
+- `ist_intern(name, ks)` – Wie store_bereich() in app/api/storage.php: Sidecars und Dokumente der Kundenseite bleiben im gemeinsamen Ordner.
+- `interne_dateien(root, ks)` – Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien.
+- `ablage_dateien(root)`
+- `sqlite_aktiv(root)`
+- `interne_zeilen(root, ks)`
+- `leer(intern)` – Zielordner ohne Daten (Kennzeichen, Sperrdateien und leere Ordner sind erlaubt).
+- `kopieren(quelle, ziel, rel)`
+- `ordner_aufraeumen(root, rels)`
+- `db_anlegen(ziel, zeilen)` – Neue Datenbank im Zielordner mit genau diesen Zeilen (wie datenbank.py migrate: erst komplett, dann aktiv).
+- `kennzeichen(p)`
+- `plan(haupt, intern, ks)`
+- `trennen(haupt, intern, ks)`
+- `zusammenfuehren(haupt, intern, ks)`
+- `main()`
+
 ## `deploy/datenbank.py`
 
 _Offline migration/rollback and online SQLite backup._
@@ -901,6 +927,18 @@ _bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in d
 _Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der …_
 
 - `site(kopf)`
+
+## `tests/deploy/test_daten_trennen.py`
+
+_Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern, für Dateien und SQLite_
+
+- `check(name, cond, info)`
+- `doc(root, name, value)`
+- `aufbau(t)`
+- `lauf(*args)`
+- `baum(root)`
+- `zeilen(root)`
+- `php(code, daten, intern)`
 
 ## `tests/deploy/test_datenbank.py`
 
@@ -1022,6 +1060,17 @@ _Sicherheit (Modul) → Einstellungen → Passwortbestätigung: je Aktion einste
 - `check(n, c, i)`
 - `bestaetigt_vor(cl, sekunden)` – Passwortbestätigung dieser Sitzung auf „vor <sekunden> Sekunden“ setzen (simulierter Zeitablauf).
 - `sec_doc()`
+
+## `tests/e2e/test_datentrennung.py`
+
+_Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb._
+
+- `check(n, c, i)`
+- `doc(name)`
+- `interne_im_gemeinsamen_ordner()` – Interne Dokumente, die (fälschlich) im gemeinsamen Ordner liegen – als Datei oder Datenbankzeile
+- `spur()`
+- `call(action, data, raw)`
+- `dienst()`
 
 ## `tests/e2e/test_einheit.py`
 
@@ -1432,6 +1481,7 @@ _Erwartungswerte aus den anonymisierten Testdaten (tests/fixtures) – statt fes
 
 _Gemeinsame Pfade für die Ende-zu-Ende-Tests (gesetzt vom Testlauf tests/run_e2e.py)._
 
+- `datenordner(name)` – Ordner eines Dokuments: nach der Datentrennung (ADR-007 Stufe 2, WA_TEST_TRENNUNG) liegen interne Dokumente in UINTERN
 - `storage_raw(name)` – Inspect actual persisted state, without going through the application API.
 - `storage_sqlite()`
 - `storage_write(name, value)` – Gespeichertes Dokument direkt ändern (Testvorbereitung, z. B. Zeitablauf simulieren).
@@ -1722,6 +1772,11 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 - `pruefe_katalog(rw)`
 - `pruefe_wartung(rw)`
 - `pruefe_caddy(rw)`
+
+**Speicherbereiche (ADR-007 Stufe 2)**
+
+- `kundenseite_dokumente(rw)` – Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
+- `bereiche_php(rw)`
 
 **Aktionsregister**
 

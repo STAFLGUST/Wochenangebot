@@ -84,6 +84,15 @@ leeren Datenordner entpacken, Eigentümer wieder auf Containerbenutzer 33:33 set
 prüfen. Keine Sicherungen verschiedener Zeitpunkte mischen. Das Postfachpasswort nötigenfalls neu
 hinterlegen. Ein vollständiger Wiederherstellungstest am Produktionssystem steht weiterhin aus.
 
+Der Snapshot nimmt auch die Dateiablage `daten/dateien/` mit (hochgeladene Dokumente stehen nie in der Datenbank; bis
+04.11.2026 fehlten sie in Sicherungen des SQLite-Betriebs) – ohne halbe Uploads (`.teile`).
+
+**Getrennte Daten (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` gibt es je Lauf zwei Archive vom selben
+Zeitpunkt: `daten-<Zeit>.tar.gz` (nach `daten/`) und `intern-<Zeit>.tar.gz` (nach `daten-intern/`, mit eigener Datenbank im
+SQLite-Betrieb). Beide gehören zusammen; nie Archive verschiedener Zeitpunkte mischen. Umschalten (`datenbank-umschalten.sh`)
+und Altdateien (`altdateien.sh`) brechen bei getrennten Daten ab: erst `daten-trennen.sh zusammenfuehren`, danach wieder
+`trennen`.
+
 ## Rückfall ohne Verlust neuer Daten
 
 Vor Rückkehr zu einem älteren Release ohne SQLite-Unterstützung:

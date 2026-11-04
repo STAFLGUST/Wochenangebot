@@ -70,6 +70,10 @@ ln -s ../angebot.php daten/kunden/verweis.php
 lauf archivieren
 ok "Verknüpfung im Datenordner: Abbruch, Altdateien bleiben, kein Archiv" '[ $CODE = 1 ] && [ -f daten/angebot.php ] && [ -f daten/kunden/k1.php ] && [ -z "$(ls sicherungen/altdateien-* 2>/dev/null)" ]'
 
+neu; touch "$T/i/daten/.daten-getrennt"; : > "$T/aufrufe"; lauf zeigen
+ok "getrennte Daten (ADR-007 Stufe 2): Abbruch mit Weg über zusammenfuehren, nichts aufgerufen" '[ $CODE = 1 ] && echo "$AUS" | grep -q "daten-trennen.sh zusammenfuehren" && [ ! -s "$T/aufrufe" ]'
+rm -f "$T/i/daten/.daten-getrennt"
+
 lauf unsinn
 ok "unbekannte Aktion abgelehnt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Aufruf:"'
 

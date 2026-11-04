@@ -8,6 +8,12 @@ cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
 AKTION=${1:-}
 case "$AKTION" in migrate|rollback) ;; *) echo "Aufruf: sh deploy/datenbank-umschalten.sh migrate|rollback"; exit 1 ;; esac
+# Getrennte Daten (ADR-007 Stufe 2): Umschalten nur mit allen Daten in einem Ordner – sonst bliebe daten-intern/ im alten Speicher
+if [ -f daten/.daten-getrennt ]; then
+  echo "Abbruch, nichts geändert: Die Daten sind getrennt (daten-intern/). Erst sh deploy/daten-trennen.sh zusammenfuehren,"
+  echo "dann umschalten, danach wieder sh deploy/daten-trennen.sh trennen."
+  exit 1
+fi
 # Vorprüfung vor Sicherung und Stopp: ist nichts umzuschalten, bleibt die Anwendung unangetastet in Betrieb.
 if [ "$AKTION" = migrate ]; then
   if [ -f daten/.sqlite-active ]; then

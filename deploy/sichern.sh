@@ -1,5 +1,5 @@
 #!/bin/sh
-# Tägliche Datensicherung des Ordners daten/.
+# Tägliche Datensicherung des Ordners daten/ (nach der Datentrennung, ADR-007 Stufe 2, zusätzlich daten-intern/ als intern-*.tar.gz).
 # Zeitsteuerung: eigener systemd-Timer (deploy/sicherung-einrichten.sh). Solange dieser nicht eingerichtet ist,
 # ruft aktualisieren.sh das Skript auf (höchstens 1× pro Tag).
 # Sofort sichern:   sh /opt/wochenangebot/deploy/sichern.sh --jetzt
@@ -33,12 +33,13 @@ ANMELDUNG=aus          # aus (nicht in Betrieb) | ok | fehler
 ANM_DATEI=""
 ANM_MELDUNG=""
 ANM_GRUND=""
+INTERN_DATEI=""
 KC_COMPOSE=${WA_KC_COMPOSE:-docker compose -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml}
 
 status() { # ok datei groesse dateien fehler inhalt_geprueft meldung
   ANZ=$(find "$ZIEL" -maxdepth 1 -name 'daten-*.tar.gz' 2>/dev/null | wc -l)
-  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s"}' \
-    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" \
+  printf '%s\n{"t":"%s","ok":%s,"datei":"%s","groesse":%s,"dateien":%s,"fehler":%s,"inhalt":%s,"anzahl":%s,"behalten":%s,"meldung":"%s","datensaetze":%s,"speicher":"%s","anmeldung":"%s","anmeldung_datei":"%s","intern_datei":"%s"}' \
+    "$GUARD" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" "$4" "$5" "$6" "$ANZ" "$BEHALTEN" "$7" "$DATENSAETZE" "$SPEICHER" "$ANMELDUNG" "$ANM_DATEI" "${INTERN_DATEI##*/}" \
     | status_schreiben
 }
 # daten/ ist im Container beschreibbar: dort angelegte Verweise dürfen root nie umlenken. Deshalb entsteht die Datei
@@ -58,8 +59,10 @@ melden() { # ok|fail
 }
 aufraeumen() {
   RC=$?
-  [ -n "$SNAP" ] && rm -rf "$SNAP"
-  [ -n "$PRUEF" ] && rm -rf "$PRUEF"
+  # shellcheck disable=SC2086  # Listen von Wegwerf-Ordnern (mktemp, ohne Leerzeichen)
+  [ -n "$SNAP" ] && rm -rf $SNAP
+  # shellcheck disable=SC2086
+  [ -n "$PRUEF" ] && rm -rf $PRUEF
   rm -f "$ZIEL"/anmeldung-*.dump.tmp "$ZIEL"/anmeldung-*.dump.fehler.tmp 2>/dev/null
   if [ "$FERTIG" -eq 0 ] && [ "$RC" -ne 0 ]; then   # unerwarteter Abbruch: Fehler sichtbar machen
     touch "$ZIEL/.letzter-fehler" 2>/dev/null || true
@@ -84,43 +87,58 @@ FREI=$(df -Pk "$ZIEL" | awk 'NR==2 {print $4}')
 [ "${FREI:-0}" -gt 204800 ] || fehler "zu wenig Speicherplatz"
 
 STAMP=$(date -u +%Y-%m-%d_%H%M%S)
-DATEI="$ZIEL/daten-$STAMP.tar.gz"
-QUELLORDNER="$BASIS/daten"
-if [ -f "$BASIS/daten/.sqlite-active" ]; then
-  SNAP=$(mktemp -d)
-  python3 "$BASIS/deploy/datenbank.py" snapshot "$BASIS/daten" --output "$SNAP/data" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen"
-  QUELLORDNER="$SNAP/data"
-fi
-tar czf "$DATEI.tmp" -C "$QUELLORDNER" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden"; }
-
-# Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
-PRUEF=$(mktemp -d)
-tar xzf "$DATEI.tmp" -C "$PRUEF" || { rm -f "$DATEI.tmp"; fehler "Archiv nicht lesbar"; }
-QUELLE=$(cd "$QUELLORDNER" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
-DATEIEN=$(find "$PRUEF" -name '*.php' | wc -l)
+DATEIEN=0
 FEHLER=0
 INHALT=true
-if command -v python3 >/dev/null 2>&1; then
-  FEHLER=$(python3 "$BASIS/deploy/sicherung-pruefen.py" "$PRUEF")
-elif command -v php >/dev/null 2>&1; then
-  FEHLER=$(php "$BASIS/deploy/sicherung-pruefen.php" "$PRUEF")
-else
-  INHALT=false
+# sichere_ordner <ordner> <name>: Archiv <name>-<Zeit>.tar.gz (SQLite: aus einem geprüften Abzug), probeweise entpacken und jede
+# Datendatei prüfen; zählt DATEIEN, FEHLER und DATENSAETZE weiter, behält je Name die letzten $BEHALTEN Stände
+sichere_ordner() {
+  O_ORDNER=$1; O_NAME=$2
+  O_DATEI="$ZIEL/$O_NAME-$STAMP.tar.gz"
+  O_QUELLE="$O_ORDNER"
+  if [ -f "$O_ORDNER/.sqlite-active" ]; then
+    O_SNAP=$(mktemp -d); SNAP="$SNAP $O_SNAP"
+    python3 "$BASIS/deploy/datenbank.py" snapshot "$O_ORDNER" --output "$O_SNAP/data" >/dev/null || fehler "Datenbank-Sicherung fehlgeschlagen ($O_NAME)"
+    O_QUELLE="$O_SNAP/data"
+  fi
+  tar czf "$O_DATEI.tmp" -C "$O_QUELLE" --exclude='./geo' --exclude='*.tmp' --exclude='./.*.lock' --exclude='./sicherung.php' --exclude='./mail-schluessel.php' . || { rm -f "$O_DATEI.tmp"; fehler "Archiv konnte nicht erstellt werden ($O_NAME)"; }
+  # Wiederherstellungstest: in einen leeren Ordner entpacken und jede Datendatei prüfen
+  O_PRUEF=$(mktemp -d); PRUEF="$PRUEF $O_PRUEF"
+  tar xzf "$O_DATEI.tmp" -C "$O_PRUEF" || { rm -f "$O_DATEI.tmp"; fehler "Archiv nicht lesbar ($O_NAME)"; }
+  O_QZAHL=$(cd "$O_QUELLE" && find . -name '*.php' ! -path './geo/*' ! -name 'sicherung.php' ! -name 'mail-schluessel.php' | wc -l)
+  O_DATEIEN=$(find "$O_PRUEF" -name '*.php' | wc -l)
+  O_FEHLER=0
+  if command -v python3 >/dev/null 2>&1; then
+    O_FEHLER=$(python3 "$BASIS/deploy/sicherung-pruefen.py" "$O_PRUEF")
+  elif command -v php >/dev/null 2>&1; then
+    O_FEHLER=$(php "$BASIS/deploy/sicherung-pruefen.php" "$O_PRUEF")
+  else
+    INHALT=false
+  fi
+  case "$O_FEHLER" in ''|*[!0-9]*) O_FEHLER=1 ;; esac
+  # Anzahl gesicherter Datensätze: Dokumente in der Datenbank bzw. Datendateien
+  if [ -f "$O_PRUEF/.sqlite-active" ]; then
+    SPEICHER=sqlite
+    O_SAETZE=$(python3 -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute('SELECT COUNT(*) FROM documents').fetchone()[0])" "$O_PRUEF/.sqlite/store.sqlite" 2>/dev/null || echo 0)
+  else
+    O_SAETZE=$(find "$O_PRUEF" -name '*.php' ! -name 'index.php' ! -name 'deployment.php' | wc -l)
+  fi
+  case "$O_SAETZE" in ''|*[!0-9]*) O_SAETZE=0 ;; esac
+  [ "$O_DATEIEN" -ge "$O_QZAHL" ] || O_FEHLER=$((O_FEHLER + O_QZAHL - O_DATEIEN))
+  mv "$O_DATEI.tmp" "$O_DATEI"
+  chmod 600 "$O_DATEI"
+  ls -1t "$ZIEL"/"$O_NAME"-*.tar.gz | tail -n +$((BEHALTEN + 1)) | xargs -r rm -f
+  DATEIEN=$((DATEIEN + O_DATEIEN)); FEHLER=$((FEHLER + O_FEHLER)); DATENSAETZE=$((DATENSAETZE + O_SAETZE))
+}
+DATEI="$ZIEL/daten-$STAMP.tar.gz"
+sichere_ordner "$BASIS/daten" daten
+# Getrennte Daten (ADR-007 Stufe 2, deploy/daten-trennen.sh): interne Dokumente liegen in daten-intern/ – eigenes Archiv
+# intern-<Zeit>.tar.gz, gleich geprüft. Wiederherstellen: daten-*.tar.gz nach daten/, intern-*.tar.gz nach daten-intern/.
+if [ -f "$BASIS/daten/.daten-getrennt" ]; then
+  [ -f "$BASIS/daten-intern/.daten-intern" ] || fehler "Daten sind getrennt, daten-intern/ fehlt aber oder ist nicht markiert"
+  sichere_ordner "$BASIS/daten-intern" intern
+  INTERN_DATEI="$ZIEL/intern-$STAMP.tar.gz"
 fi
-case "$FEHLER" in ''|*[!0-9]*) FEHLER=1 ;; esac
-# Anzahl gesicherter Datensätze: Dokumente in der Datenbank bzw. Datendateien
-if [ -f "$PRUEF/.sqlite-active" ]; then
-  SPEICHER=sqlite
-  DATENSAETZE=$(python3 -c "import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute('SELECT COUNT(*) FROM documents').fetchone()[0])" "$PRUEF/.sqlite/store.sqlite" 2>/dev/null || echo 0)
-else
-  DATENSAETZE=$(find "$PRUEF" -name '*.php' ! -name 'index.php' ! -name 'deployment.php' | wc -l)
-fi
-case "$DATENSAETZE" in ''|*[!0-9]*) DATENSAETZE=0 ;; esac
-[ "$DATEIEN" -ge "$QUELLE" ] || FEHLER=$((FEHLER + QUELLE - DATEIEN))
-
-mv "$DATEI.tmp" "$DATEI"
-chmod 600 "$DATEI"
-ls -1t "$ZIEL"/daten-*.tar.gz | tail -n +$((BEHALTEN + 1)) | xargs -r rm -f
 
 # ── Zentrale Anmeldung: Keycloak-Datenbank, sobald sie läuft oder laut .env in Betrieb ist ──
 anmeldung_sichern() {
@@ -163,7 +181,7 @@ elif [ "$FEHLER" -eq 0 ]; then
     status true "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" 0 false "Inhalt nicht geprüft (kein Python/PHP verfügbar)"
   fi
   melden ok
-  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI") ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")"
+  echo "Datensicherung erstellt und geprüft: $(basename "$DATEI")${INTERN_DATEI:+ und $(basename "$INTERN_DATEI")} ($DATENSAETZE Datensätze, $([ "$SPEICHER" = sqlite ] && echo Datenbank || echo Dateien))$([ "$ANMELDUNG" = ok ] && echo "; Anmeldung: $ANM_DATEI")"
 else
   touch "$ZIEL/.letzter-fehler"
   status false "$(basename "$DATEI")" "$GROESSE" "$DATEIEN" "$FEHLER" "$INHALT" "$FEHLER Datei(en) fehlerhaft${ANM_MELDUNG:+; $ANM_MELDUNG}"

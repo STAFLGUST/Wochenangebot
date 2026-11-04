@@ -13,6 +13,12 @@ set -eu
 cd "$(dirname "$0")/.."
 AKTION=${1:-}
 case "$AKTION" in zeigen|archivieren) ;; *) echo "Aufruf: sh deploy/altdateien.sh zeigen|archivieren"; exit 1 ;; esac
+# Getrennte Daten (ADR-007 Stufe 2): Altdateien nur mit allen Daten in einem Ordner (interne Altdateien hat die Trennung schon mitgenommen)
+if [ -f daten/.daten-getrennt ]; then
+  echo "Abbruch, nichts geändert: Die Daten sind getrennt (daten-intern/). Erst sh deploy/daten-trennen.sh zusammenfuehren,"
+  echo "dann aufräumen, danach wieder sh deploy/daten-trennen.sh trennen."
+  exit 1
+fi
 if [ ! -f daten/.sqlite-active ]; then
   echo "Abbruch, nichts geändert: SQLite ist nicht aktiv – die Dateien sind die laufenden Daten."
   exit 1

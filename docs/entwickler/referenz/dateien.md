@@ -119,6 +119,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `bestand-pdf.php` | bestand | Bestand als PDF (Verwaltung → Bestand → „PDF“) |
 | `bestand.php` | bestand | Bestandsliste und Stammdaten |
 | `dateiablage.php` | plattform | Dateiablage der Plattform (neben der Speicherschicht): hochgeladene Dateien eines Moduls (z. |
+| `datenbereiche-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/datenverantwortung.toml (Feld bereich) – nicht von Hand ändern. |
 | `diagnose.php` | plattform | Sicherheit für IT-Administratoren |
 | `einkauf.php` | einkauf | Einkauf: Fehlmengen aus offenen Bestellwünschen gegenüber der zuletzt übernommenen Bestandsliste. |
 | `einzelangebote.php` | angebot | Einzelangebote: ein Angebot für genau einen Kunden (Angebot bearbeiten → Einzelangebote). |
@@ -420,6 +421,8 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `aktualisieren.sh` | plattform | Holt neue Versionen aus GitHub und spielt sie ein (läuft alle 2 Minuten per systemd-Timer). .env und daten/ werden nie verändert (außer der Statusdatei daten/sicherung.php der Datensicherung). |
 | `altdateien.sh` | plattform | Alte Datendateien aufräumen |
 | `bereitstellen.py` | plattform | Bereitstellung eines Stands |
+| `daten-trennen.sh` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) aus dem gemeinsamen Ordner daten/ in daten-intern/ verschieben, den nur die Mitarbeiterseite … |
+| `daten_trennen.py` | plattform | Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ verschieben – bzw. zurückführen. |
 | `datenbank-umschalten.sh` | plattform | Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber. |
 | `datenbank.py` | plattform | Offline migration/rollback and online SQLite backup. |
 | `einrichten.sh` | plattform | Einmalig auf dem Server ausführen: richtet die automatische Aktualisierung ein. |
@@ -435,7 +438,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `postfach-schluessel.sh` | plattform | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts aus dem gemeinsamen Datenordner in den Ordner daten-geheim umziehen (ADR-007, Postausgang von innen). daten-geheim ist nur in app-mitarbeiter und im … |
 | `release-modus-einrichten.sh` | plattform | Einmalig auf dem Server (als root) |
 | `release-zurueck.sh` | plattform | Notfall: auf die Version vor dem letzten Release zurückgehen (Daten bleiben unverändert). sh /opt/wochenangebot/deploy/release-zurueck.sh Der zurückgenommene Stand wird nicht erneut automatisch eingespielt; ein neuer … |
-| `sichern.sh` | plattform | Tägliche Datensicherung des Ordners daten/. |
+| `sichern.sh` | plattform | Tägliche Datensicherung des Ordners daten/ (nach der Datentrennung, ADR-007 Stufe 2, zusätzlich daten-intern/ als intern-*.tar.gz). |
 | `sicherung-einrichten.sh` | plattform | Einmalig auf dem Server (als root): eigene Zeitsteuerung für die Datensicherung einrichten. sh /opt/wochenangebot/deploy/sicherung-einrichten.sh Danach läuft die Sicherung täglich um 02:30 Uhr unabhängig von der … |
 | `sicherung-pruefen.php` | plattform | Prüft eine entpackte Datensicherung (Ersatz für sicherung-pruefen.py, falls kein Python vorhanden ist): jede Datendatei muss gültiges JSON enthalten. |
 | `sicherung-pruefen.py` | plattform | Prüft eine entpackte Datensicherung: jede Datendatei muss gültiges JSON enthalten. |
@@ -662,12 +665,15 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_anmeldung_einrichten.sh` | plattform | Test von deploy/anmeldung/einrichten.sh (Schritt 2 der Inbetriebnahme) – in einem Wegwerf-Ordner, ohne Docker. |
 | `test_cdn.py` | plattform | bunny.net vor dem Server (Caddyfile, Abschnitt „cdn“) mit echtem Caddy in der Fassung des Betriebs. |
 | `test_dashboard_domains.py` | plattform | Dashboard-Hosts: Modul-Hosts bleiben 503-Platzhalter bis zur Freigabe (GR-105); die Hosts der zentralen Anmeldung (ADR-003, Inbetriebnahme Schritt 6) führen nur zu Zielen, die es ausschließlich mit der … |
+| `test_daten_trennen.py` | plattform | Test von deploy/daten_trennen.py (ADR-007 Stufe 2: interne Dokumente aus dem gemeinsamen Datenordner) – in Wegwerf-Ordnern, für Dateien und SQLite |
+| `test_daten_trennen.sh` | plattform | Test von deploy/daten-trennen.sh (ADR-007 Stufe 2) – mit Platzhaltern für docker, sichern.sh und chown in einem Wegwerf-Ordner; die eigentliche Trennung macht das echte deploy/daten_trennen.py (eigene Tests: … |
 | `test_datenbank.py` | plattform | Real PHP/SQLite, independent SQL inspection, migration failure and restore tests. |
 | `test_datenbank_umschalten.sh` | plattform | Test von deploy/datenbank-umschalten.sh – Vorprüfung vor Sicherung und Stopp, mit Platzhaltern für docker, sichern.sh und datenbank.py in einem Wegwerf-Ordner (keine echten Daten, kein Container). |
 | `test_freigabe.sh` | plattform | Integrationstest des Release-Modus (deploy/freigabe-einspielen.sh) – komplett lokal: eigenes Git-„origin“, GitHub-API-Ersatz, PHP-Testserver als Live-Seite, echte Datensicherung. |
 | `test_images.py` | plattform | Container-Images fest über Digest (Sicherheitsdurchsicht 26.10.2026, Befund 12): jedes fremde Image in den Compose-Dateien und im Dockerfile ist mit @sha256 festgelegt – ein Release holt so nie unbemerkt eine andere … |
 | `test_karte_laden.sh` | plattform | Test von deploy/karte-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
+| `test_notfallwerkzeuge.sh` | plattform | Test der Notfallwerkzeuge (wartung-aus, ip-freigabe-aus, notfall-aus, passwort-zuruecksetzen) |
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh (Notzugang über einen SSH-Tunnel, ADR-007 Regel 6) – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
 | `test_postfach_schluessel.sh` | plattform | Test von deploy/postfach-schluessel.sh (Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner, ADR-007) – in einem Wegwerf-Ordner, ohne root (Besitzer wird nur versucht zu setzen) – und dass die Anwendung … |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
@@ -704,6 +710,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_controlling_umsatzdaten.py` | controlling | Controlling · Umsatzdaten der Warenwirtschaft |
 | `test_crm.py` | crm | CRM · Vertrieb (Modul crm, Oberfläche crm.intern unter /module/crm/). |
 | `test_dashboard.py` | dashboard | Mitarbeiter-Dashboard (dashboard/, Roadmap PR 6) |
+| `test_datentrennung.py` | plattform | Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb. |
 | `test_design.py` | angebot | Gestaltung der Angebotsseite („Klar“ mit dem Design „Liquid Glass“: schwebende Glas-Kopfzeile, Kapseln, Liste als Glaskarte): lokale Schriften (keine fremden Server), Kopf, Filterleiste mit Aufklappmenüs (Desktop) bzw. |
 | `test_editor_aux.py` | angebot | Testgruppe editor_aux |
 | `test_einheit.py` | plattform | Einheitliches Erscheinungsbild aller Mitarbeiter-Oberflächen (Dashboard, Eingabebereich auf den Bereichs-Hosts Angebot, Verwaltung, Bestand, alle Modulseiten – HR, CRM, Controlling, Leergut, Marketing, QS, REWE, … |

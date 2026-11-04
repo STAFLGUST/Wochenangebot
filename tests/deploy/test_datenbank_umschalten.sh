@@ -85,6 +85,10 @@ neu; printf 'DOMAIN=x\n' > "$T/i/.env"
 lauf migrate
 ok "ohne COMPOSE_FILE: nur der eine Anwendungs-Container" '[ $CODE = 0 ] && grep -qx "docker compose stop app" "$T/aufrufe" && grep -qx "docker compose start app" "$T/aufrufe"'
 
+neu; touch "$T/i/daten/.daten-getrennt"; : > "$T/aufrufe"; lauf migrate
+ok "getrennte Daten (ADR-007 Stufe 2): Abbruch mit Weg über zusammenfuehren, nichts aufgerufen" '[ $CODE = 1 ] && echo "$AUS" | grep -q "daten-trennen.sh zusammenfuehren" && [ ! -s "$T/aufrufe" ]'
+rm -f "$T/i/daten/.daten-getrennt"
+
 lauf unsinn
 ok "unbekannte Aktion abgelehnt" '[ $CODE = 1 ] && echo "$AUS" | grep -q "Aufruf:"'
 

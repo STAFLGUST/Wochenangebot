@@ -14,6 +14,11 @@
 #          geheim      – Passwort-Hashes, Schlüssel, Sitzungen; nie in Antworten oder Protokollen
 # historie: wie frühere Stände gegen spätere Stammdatenänderungen geschützt sind (Master-Auftrag Abschnitt 10)
 # dynamisch = true: Name wird im Code berechnet (Konstante/Variable) und ist für die Prüfung nicht sichtbar.
+# bereich: wo das Dokument liegt, sobald die Daten getrennt sind (ADR-007 Stufe 2, deploy/daten-trennen.sh):
+#          kundenseite – braucht die Kundenseite (angebot-stafl.de): bleibt im gemeinsamen Ordner daten/
+#          intern      – nur Mitarbeiterseite und Postausgang: Ordner daten-intern/, den die Kundenseite nicht sieht
+#          Neue Dokumente sind intern, außer die Kundenseite liest oder schreibt sie nachweislich (Testgruppe datentrennung).
+#          Erzeugt app/api/lib/datenbereiche-liste.php (`python3 werkzeuge/regeln.py erzeugen`).
 
 schema = 1
 
@@ -22,6 +27,7 @@ schema = 1
 [[dokument]]
 name = "angebot"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 leser = ["bestand", "plattform"]
 schutz = "oeffentlich"
 beschreibung = "Veröffentlichtes Wochenangebot; öffentlich nur gefiltert über offer_resolve (GR-001, GR-002)"
@@ -30,6 +36,7 @@ historie = "Jede Veröffentlichung legt eine Version an (versionen/*) und den Pr
 [[dokument]]
 name = "angebote"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 leser = ["crm"]   # nur Namen der für einen Kunden freigeschalteten Angebote (customer_offers, offer_def) – nie Preise
 schutz = "vertraulich"
 beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und Sonderpreisen"
@@ -37,24 +44,28 @@ beschreibung = "Kundenangebote mit Kundenpreisen (variants), Sichtbarkeit und So
 [[dokument]]
 name = "entwurf"
 eigentuemer = "angebot"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Bearbeitungsstand des nächsten Wochenangebots (gemeinsames Bearbeiten mit Revisionen)"
 
 [[dokument]]
 name = "entwurf-stand"
 eigentuemer = "angebot"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Revisionszähler des Entwurfs"
 
 [[dokument]]
 name = "anwesenheit"
 eigentuemer = "angebot"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Wer bearbeitet gerade den Entwurf (gemeinsames Bearbeiten)"
 
 [[dokument]]
 name = "versionen/*"
 eigentuemer = "angebot"
+bereich = "intern"
 leser = ["bestand"]
 schutz = "intern"
 beschreibung = "Frühere veröffentlichte Angebote (unveränderliche Schnappschüsse)"
@@ -63,6 +74,7 @@ historie = "Schnappschuss je Veröffentlichung; Anzahl begrenzt (keep_versions)"
 [[dokument]]
 name = "historie/*"
 eigentuemer = "angebot"
+bereich = "intern"
 leser = ["bestand"]
 schutz = "intern"
 beschreibung = "Preisverlauf je Kalenderwoche"
@@ -71,6 +83,7 @@ historie = "Schnappschuss je Woche, ohne Kunden- und Einkaufspreise"
 [[dokument]]
 name = "historie_geloescht"
 eigentuemer = "angebot"
+bereich = "intern"
 leser = ["bestand"]
 schutz = "intern"
 beschreibung = "Bewusst gelöschte Wochen des Preisverlaufs"
@@ -78,6 +91,7 @@ beschreibung = "Bewusst gelöschte Wochen des Preisverlaufs"
 [[dokument]]
 name = "einzelangebote"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 leser = ["crm"]       # nur über die Funktionen des Angebots (lib/einzelangebote.php): Einzelangebote eines Kunden im Kunden-Pop-up
 schreiber = ["crm"]   # ebenso nur über einzel_speichern/einzel_status_setzen/einzel_loeschen/einzel_mail – Rechte einzelangebote.* wie im Eingabebereich
 schutz = "vertraulich"
@@ -86,6 +100,7 @@ beschreibung = "Einzelangebote für genau einen Kunden (E-JJJJ-0001)"
 [[dokument]]
 name = "bestellungen"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 leser = ["einkauf", "plattform"]
 schutz = "vertraulich"
 beschreibung = "Bestellwünsche der Kunden (Bestell-API v1) mit Verlauf"
@@ -94,6 +109,7 @@ historie = "Positionen, Preise, Firma und Angebotswoche werden beim Absenden als
 [[dokument]]
 name = "bestellung"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 schreiber = ["plattform"]   # Altbestand: E-Mail-Einstellungen (aktionen/mail.php)
 schutz = "intern"
 beschreibung = "Einstellungen der Bestellfunktion (an/aus, Empfänger)"
@@ -101,12 +117,14 @@ beschreibung = "Einstellungen der Bestellfunktion (an/aus, Empfänger)"
 [[dokument]]
 name = "fracht"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Frachtregel (Staffeln, Hinweis unter dem Angebot)"
 
 [[dokument]]
 name = "merklisten"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 schreiber = ["verwaltung"]   # Altbestand: Kunde löschen räumt die Merkliste (aktionen/kundenverwaltung.php)
 schutz = "vertraulich"
 beschreibung = "Merklisten angemeldeter Kunden (geräteübergreifend)"
@@ -114,12 +132,14 @@ beschreibung = "Merklisten angemeldeter Kunden (geräteübergreifend)"
 [[dokument]]
 name = "abmelde-schluessel"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 schutz = "geheim"
 beschreibung = "Schlüssel für Abmelde-Links in Kunden-E-Mails"
 
 [[dokument]]
 name = "mailvorlage"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 schreiber = ["plattform"]   # Altbestand: Signatur wird in den E-Mail-Einstellungen gepflegt (aktionen/mail.php)
 schutz = "intern"
 beschreibung = "Signatur der Kunden-E-Mails"
@@ -129,6 +149,7 @@ beschreibung = "Signatur der Kunden-E-Mails"
 [[dokument]]
 name = "bestand"
 eigentuemer = "bestand"
+bereich = "kundenseite"
 leser = ["angebot", "einkauf", "crm"]   # crm: nur die MHD-Liste ohne Preise über mhd_liste_ohne_preise() (lib/bestand-mhd.php), Reiter „MHD-Ware“
 schutz = "vertraulich"
 beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Zugänge (nie öffentlich, GR-001)"
@@ -136,6 +157,7 @@ beschreibung = "Bestandsliste: Partien, Mengen, MHD, Einkaufspreise, erwartete Z
 [[dokument]]
 name = "bestand-verlauf"
 eigentuemer = "bestand"
+bereich = "intern"
 leser = ["controlling"]   # nur über bestand_verlauf_index()/bestand_verlauf_tag() (module/bestand/verlauf.php); Lagerwert zum EK nur mit controlling.bestand_ek und bestand.einkaufspreise (GR-008)
 schutz = "vertraulich"
 dynamisch = true   # Name als Konstante BESTAND_VERLAUF (module/bestand/verlauf.php)
@@ -145,6 +167,7 @@ historie = "Tagesstand beim Hochladen der Bestandsliste (Schnappschuss); erneute
 [[dokument]]
 name = "bestand-verlauf/*"
 eigentuemer = "bestand"
+bereich = "intern"
 leser = ["controlling"]   # wie bestand-verlauf: nur über die Schnittstelle des Bestands
 schutz = "vertraulich"
 dynamisch = true   # BESTAND_VERLAUF . "/" . Datum
@@ -154,6 +177,7 @@ historie = "Schnappschuss des Tages; spätere Stammdatenänderungen ändern ihn 
 [[dokument]]
 name = "einkauf-meldungen"
 eigentuemer = "einkauf"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Versandte Meldungen an den Einkauf (Fehlmengen)"
 
@@ -162,12 +186,14 @@ beschreibung = "Versandte Meldungen an den Einkauf (Fehlmengen)"
 [[dokument]]
 name = "hr-personal"
 eigentuemer = "hr"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Mitarbeiter der Urlaubsverwaltung: Name, Abteilung, Reihenfolge, Arbeitstage, Urlaubsanspruch und Übertrag je Jahr, Verknüpfung zum Mitarbeiterkonto"
 
 [[dokument]]
 name = "hr-abwesenheiten"
 eigentuemer = "hr"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Urlaubsanträge und Abwesenheiten (Urlaub, Krank, Gleittag, freie Tage) mit Status und Entscheidung; Art und Notiz nur für die Person selbst und die Personalstelle (hr.verwalten); wer Urlaub genehmigt (hr.genehmigen), sieht nur offene Urlaubsanträge mit Konto; die Urlaubsübersicht (hr.uebersicht) zeigt nur Summen je Mitarbeiter und Jahr, auch Krank- und Gleittage als Anzahl, nie Zeiträume oder Notizen; Kollegen sehen nur „abwesend“"
 historie = "Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornieren ändern nur den Status (mit Zeitpunkt und Person)"
@@ -175,12 +201,14 @@ historie = "Einträge werden nie gelöscht: Ablehnen, Zurückziehen und Stornier
 [[dokument]]
 name = "hr-einstellungen"
 eigentuemer = "hr"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Urlaubssperren, Ferienzeiträume, Verfallstag des Resturlaubs (uebertragBis, MM-TT; fehlt: 31.03.) und Schalter „Urlaubsanträge über die Plattform“ (antraege; fehlt: an) der Urlaubsverwaltung"
 
 [[dokument]]
 name = "hr-korrekturen"
 eigentuemer = "hr"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Korrekturmeldungen der Mitarbeiter zu ihren Einträgen bzw. ihrem Urlaubskonto (Text, optional Zeitraum und Eintrag) mit Status und Antwort der Personalstelle; sichtbar nur für die Person selbst und die Personalstelle (hr.verwalten), Protokoll ohne Text"
 historie = "Meldungen werden nie gelöscht: Erledigen ändert nur den Status (mit Zeitpunkt, Person und Antwort)"
@@ -190,18 +218,21 @@ historie = "Meldungen werden nie gelöscht: Erledigen ändert nur den Status (mi
 [[dokument]]
 name = "crm-kunden"
 eigentuemer = "crm"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Kundenblätter des CRM je Kunde (Kunden-ID der Verwaltung) bzw. Interessent: Ansprechpartner, Segment, Phase, Anruf-Rhythmus und -Status, Potenzial, nächster Schritt, Wiedervorlage, Notiz"
 
 [[dokument]]
 name = "crm-interessenten"
 eigentuemer = "crm"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Interessenten ohne Kundennummer mit eigenen Adress- und Kontaktangaben (Kunden selbst pflegt die Verwaltung)"
 
 [[dokument]]
 name = "crm-aktivitaeten"
 eigentuemer = "crm"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "Aktivitätenverlauf (Telefonat, E-Mail, Besuch, Muster, Angebot, Bestellung, Notiz) je Kunde"
 historie = "Firma und Kundennummer werden beim Erfassen als Schnappschuss gespeichert (GR-106); höchstens 50 000 Einträge, älteste fallen weg"
@@ -211,6 +242,7 @@ historie = "Firma und Kundennummer werden beim Erfassen als Schnappschuss gespei
 [[dokument]]
 name = "marketing-beitraege"
 eigentuemer = "marketing"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Redaktionsplan: Beiträge mit Marke, Kanälen, Format, Content-Säule, Kampagne, Verantwortlichen, Terminen, Text, Hashtags, Skript, Checkliste, Material-Links, KI-Kennzeichen, Status mit Freigabe, Veröffentlichungs-Links und Kennzahlen je Kanal, Kommentare"
 historie = "Verlauf und Kommentare mit Namen als Schnappschuss (GR-106), Freigabe mit Name und Zeitpunkt; höchstens 20 000 Beiträge"
@@ -218,18 +250,21 @@ historie = "Verlauf und Kommentare mit Namen als Schnappschuss (GR-106), Freigab
 [[dokument]]
 name = "marketing-kampagnen"
 eigentuemer = "marketing"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Kampagnen mit Zeitraum, Ziel, Marke und Farbe (archivieren statt löschen)"
 
 [[dokument]]
 name = "marketing-einstellungen"
 eigentuemer = "marketing"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Marken, Kanäle (mit Zeichengrenze und Hashtag-Empfehlung), Formate und Content-Säulen des Redaktionsplans"
 
 [[dokument]]
 name = "controlling-umsatzdaten"
 eigentuemer = "controlling"
+bereich = "intern"
 leser = ["crm"]   # nur über Funktionen des Controllings: umsatzdaten_kaeufer()/umsatzdaten_artikelliste() (MHD-Ware: Menge, Liefertage, letzter Kauf) und das Kundenbild für Cockpit und Kunden-Pop-up (Umsatz in € nur mit crm.umsatz_euro, Menge nur mit crm.umsatz_kg) – nie EK-Werte, DB oder Spanne
 schutz = "vertraulich"
 dynamisch = true   # Name als Konstante UMSATZDATEN (module/controlling/umsatzdaten.php)
@@ -239,6 +274,7 @@ historie = "Importierte Umsätze bleiben, wie sie in der Datei standen; Zuordnun
 [[dokument]]
 name = "controlling-umsatzdaten/*"
 eigentuemer = "controlling"
+bereich = "intern"
 leser = ["crm"]   # wie controlling-umsatzdaten: nur über die Schnittstelle des Controllings, nie EK-Werte, DB oder Spanne
 schutz = "vertraulich"
 dynamisch = true
@@ -247,6 +283,7 @@ beschreibung = "Umsatzdaten je Monat (JJJJ-MM): Kunde, Artikel und Tag mit Kolli
 [[dokument]]
 name = "controlling-umsatzteile/*"
 eigentuemer = "controlling"
+bereich = "intern"
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Zwischenablage eines Umsatzdaten-Imports (je Importlauf und Monat), gelöscht mit der Übernahme bzw. nach einem Tag"
@@ -254,6 +291,7 @@ beschreibung = "Zwischenablage eines Umsatzdaten-Imports (je Importlauf und Mona
 [[dokument]]
 name = "controlling-arbeitszeit"
 eigentuemer = "controlling"
+bereich = "intern"
 schutz = "vertraulich"
 dynamisch = true   # Name als Konstante ARBEITSZEIT (module/controlling/arbeitszeit.php)
 beschreibung = "Arbeitszeit aus dem Zeitbericht der Zeiterfassung – Verzeichnis: Mitarbeiter (Schlüssel, Name, Personalnummer, Abteilung), gespeicherte Jahre mit Zeitraum, Importverlauf (Zeitraum, Datei, wer, wann, Tage neu/geändert/entfallen); Personaldaten"
@@ -262,6 +300,7 @@ historie = "Importierte Tage bleiben, wie sie im Zeitbericht standen; ein neuer 
 [[dokument]]
 name = "controlling-arbeitszeit/*"
 eigentuemer = "controlling"
+bereich = "intern"
 schutz = "vertraulich"
 dynamisch = true
 beschreibung = "Arbeitszeit je Jahr (JJJJ): je Mitarbeiter und Tag Soll, Ist, Abwesenheit (nur Stunden, ohne Grund), Pause, Saldo laut Zeiterfassung, Stempel (Kommen/Gehen) und erkannte Stempelfehler; Personaldaten"
@@ -269,12 +308,14 @@ beschreibung = "Arbeitszeit je Jahr (JJJJ): je Mitarbeiter und Tag Soll, Ist, Ab
 [[dokument]]
 name = "leergut-stamm"
 eigentuemer = "leergut"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Leergut: Lademittel mit Wert je Stück und Partner (Art, Firma, Konto-Nr. beim Partner, Frist, E-Mail für die Abstimmung, Lieferanten hinter einem Sammelkonto, genutzte Lademittel, aktiv)"
 
 [[dokument]]
 name = "leergut-bewegungen"
 eigentuemer = "leergut"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Leergut-Bewegungen je Partner: Datum, Art, Abgang/Zugang je Lademittel, Beleg, Text, Herkunft (von Hand/Datenpaket)"
 historie = "Nie geändert oder gelöscht; Fehler werden storniert (mit Grund, Name und Zeitpunkt) und neu gebucht"
@@ -282,6 +323,7 @@ historie = "Nie geändert oder gelöscht; Fehler werden storniert (mit Grund, Na
 [[dokument]]
 name = "leergut-abstimmungen"
 eigentuemer = "leergut"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
 beschreibung = "Auszüge der Partner zum Stichtag: Saldo laut Partner, Eingang, Frist, Status (offen, bestätigt, widersprochen, zur Info), Quelle, Notiz, Verlauf"
@@ -290,6 +332,7 @@ historie = "Unser Saldo zum Stichtag als Schnappschuss beim Erfassen (GR-106); S
 [[dokument]]
 name = "leergut-abschreibungen"
 eigentuemer = "leergut"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
 beschreibung = "Dachser-Abschreibungen für nicht getauschtes Leergut unserer Kunden: Empfänger, Sendung, Mengen, Status (offen, widersprochen, berechnet, ausgeglichen, nicht zu beachten), WinAB-Auftrag, Notiz, Verlauf"
@@ -297,6 +340,7 @@ beschreibung = "Dachser-Abschreibungen für nicht getauschtes Leergut unserer Ku
 [[dokument]]
 name = "leergut-inventur"
 eigentuemer = "leergut"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über lg_doc()/lg_schreiben() in module/leergut/leergut.php
 beschreibung = "Eigener Leergutbestand zum Stichtag (Positionen wie Lager gefüllt, Kisten unbenutzt, Abholer) für die Bilanz"
@@ -304,12 +348,14 @@ beschreibung = "Eigener Leergutbestand zum Stichtag (Positionen wie Lager gefül
 [[dokument]]
 name = "rewe-stamm"
 eigentuemer = "rewe"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "REWE: Lieferwege (Zentrallager oder Direktbelieferung, Bestellschluss) und Artikel (Name, Einheit, WinAB-Artikelnummer)"
 
 [[dokument]]
 name = "rewe-maerkte"
 eigentuemer = "rewe"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "REWE-Märkte: Kd.-Nr. (WinAB), REWE-Marktnummer, Anschrift, Telefon, Ansprechpartner, Kaufbereitschaft, Dauerauftrag, Abfragetag, Hinweis; Zuständigkeit und Lieferweg mit „ab KW“-Historie"
 historie = "Zuständigkeit und Lieferweg werden nie überschrieben, sondern ab einer KW fortgeschrieben; Änderungen stehen mit Namen in rewe-verlauf"
@@ -317,6 +363,7 @@ historie = "Zuständigkeit und Lieferweg werden nie überschrieben, sondern ab e
 [[dokument]]
 name = "rewe-wochen/*"
 eigentuemer = "rewe"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "REWE-Wochenabfrage je ISO-Jahr: Antwort je Markt und KW (bestellt mit Mengen je Artikel, kein Bedarf, nicht erreicht, Pause), ohne Berechnung, Notiz, wer/wann, Herkunft; Wochenabschluss (exportiert, in WinAB erfasst)"
 historie = "Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schnappschuss (GR-106); Änderungen nach dem Export sind als Nachtrag gekennzeichnet"
@@ -324,6 +371,7 @@ historie = "Jede Antwort speichert Lieferweg und Zuständigkeit der KW als Schna
 [[dokument]]
 name = "rewe-verlauf"
 eigentuemer = "rewe"
+bereich = "intern"
 schutz = "vertraulich"
 beschreibung = "REWE-Marktakte: Notizen, Telefonate, Besuche, Reklamationen, Ware ohne Berechnung, Wiedervorlagen (erledigt mit Namen) und Änderungen (Kaufbereitschaft, Dauerauftrag, Zuweisung, Lieferweg)"
 historie = "Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wird gelöscht"
@@ -333,12 +381,14 @@ historie = "Nur anfügen; Wiedervorlagen werden als erledigt markiert, nichts wi
 [[dokument]]
 name = "qs-stamm"
 eigentuemer = "qs"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "QM-System: Kapitel (Nummer, Titel, Zuständig, Vertreter, aktiv), Personen mit Kürzel, Name, Funktion, verknüpftem Mitarbeiter (Kennung) und aktiv, Einstellungen (Überprüfung der Dokumente nach Monaten)"
 
 [[dokument]]
 name = "qs-dokumente"
 eigentuemer = "qs"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
 beschreibung = "Gelenkte Dokumente (Nummer, Kapitel, Art, Titel, Ablage, Zuständig, Vertreter, eingezogen, ohne Änderung überprüft) mit Versionen: Nummer, Freigabedatum, Änderungen, Änderungsgrund, Status Entwurf/in Prüfung/geprüft/freigegeben/ersetzt/verworfen, erstellt/geprüft/freigegeben, Verlauf"
@@ -347,6 +397,7 @@ historie = "Versionen werden nie gelöscht: eine neue Freigabe setzt die vorige 
 [[dokument]]
 name = "qs-handbuch"
 eigentuemer = "qs"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
 beschreibung = "QM-Handbuch: Abschnitte je Kapitel (Nummer, Prozessschritt, „Worauf kommt es an“, Verweise „Wo? Womit?“, IFS-Bezug, Zuständig, Vertreter, entfallen) mit Änderungen (Datum, was, Grund, von)"
@@ -355,6 +406,7 @@ historie = "Abschnitte werden nicht gelöscht, sondern als entfallen markiert; j
 [[dokument]]
 name = "qs-pruefplan"
 eigentuemer = "qs"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
 beschreibung = "Prüfplan: Prüfungen je Kapitel mit Durchführung, Intervall, ab wann, Sollwert, Maßnahme bei Abweichung, Wo? Womit?, Zuständig, Vertreter, ausführende Mitarbeiter (Kennungen), aktiv, Verlauf"
@@ -362,6 +414,7 @@ beschreibung = "Prüfplan: Prüfungen je Kapitel mit Durchführung, Intervall, a
 [[dokument]]
 name = "qs-nachweise"
 eigentuemer = "qs"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
 beschreibung = "Nachweise des Prüfplans: Prüfung, Datum, Ergebnis (in Ordnung/Abweichung), Bemerkung, durchgeführt von, verknüpfte Maßnahme, erfasst, Storno"
@@ -370,6 +423,7 @@ historie = "Nie geändert oder gelöscht; Fehler werden storniert (mit Grund, Na
 [[dokument]]
 name = "qs-massnahmen"
 eigentuemer = "qs"
+bereich = "intern"
 schutz = "intern"
 dynamisch = true   # gelesen und geschrieben über qs_doc()/qs_schreiben() in module/qs/qs.php
 beschreibung = "Maßnahmen im Aufbau des IFS-Maßnahmenplans: Nummer je Jahr, Quelle (Audit, Prüfung, Reklamation …), Bezug, Kapitel, IFS-Anforderung und Bewertung, Feststellung, Korrektur (verantwortlich, Frist, erledigt, Nachweis), Ursache, Korrekturmaßnahme, Zuständig, Frist, umgesetzt am, Status, Freigabe durch den Auditor, Wirksamkeitsprüfung, Verlauf"
@@ -380,6 +434,7 @@ historie = "Statuswechsel im Verlauf mit Name; Abschluss als wirksam mit Datum, 
 [[dokument]]
 name = "stammdaten"
 eigentuemer = "verwaltung"
+bereich = "kundenseite"
 leser = ["angebot", "bestand", "controlling"]   # master_save (aktionen/bestand.php) speichert über stammdaten_speichern() der Verwaltung; Controlling: Artikelname, VK-Gruppe, Fleischart der Umsatzauswertung
 schutz = "intern"
 beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, VK-Gruppe, GTIN)"
@@ -387,6 +442,7 @@ beschreibung = "Artikelstammdaten (Bezeichnung, Fleischart, Herkunft, Zustand, V
 [[dokument]]
 name = "kunden"
 eigentuemer = "verwaltung"
+bereich = "kundenseite"
 leser = ["angebot", "crm", "rewe", "controlling"]   # CRM, REWE und Controlling: nur lesend über customers_load (E-1); REWE-Märkte sind WinAB-Kunden (Name, Anschrift über die Kd.-Nr.); Controlling: Firma, Ort, Vertreter, Kundengruppe der Umsatzauswertung
 schreiber = ["angebot", "plattform"]   # Altbestand: Kundenportal (Passwort, Abmelden), Kunden-E-Mails
 schutz = "vertraulich"
@@ -395,6 +451,7 @@ beschreibung = "Kundenstammdaten und Kundenzugänge des Portals (Passwort nur al
 [[dokument]]
 name = "kundensitzungen"
 eigentuemer = "verwaltung"
+bereich = "kundenseite"
 schreiber = ["angebot"]   # Altbestand: Einmal-Links aus Kunden-E-Mails
 schutz = "geheim"
 beschreibung = "Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdienst (Phase 6)"
@@ -402,6 +459,7 @@ beschreibung = "Sitzungen der Kunden im Portal; Ziel: zentraler Identitätsdiens
 [[dokument]]
 name = "kundengruppen"
 eigentuemer = "verwaltung"
+bereich = "intern"
 leser = ["angebot", "crm", "controlling"]   # Controlling: Nummer und Name über gruppen_load (Umsatzauswertung)
 schutz = "intern"
 dynamisch = true
@@ -410,6 +468,7 @@ beschreibung = "Kundengruppen (GRUPPEN_LISTEN in lib/kunden.php)"
 [[dokument]]
 name = "vkgruppen"
 eigentuemer = "verwaltung"
+bereich = "intern"
 leser = ["angebot", "bestand", "controlling"]   # Controlling: Nummer und Name über gruppen_load (Umsatzauswertung)
 schutz = "intern"
 dynamisch = true
@@ -418,6 +477,7 @@ beschreibung = "VK-Gruppen der Artikel"
 [[dokument]]
 name = "vertreter"
 eigentuemer = "verwaltung"
+bereich = "intern"
 leser = ["crm", "controlling"]   # nur Nummer und Name (Controlling: auch Kürzel) über vertreter_load bzw. gruppen_load
 schutz = "vertraulich"
 dynamisch = true
@@ -426,6 +486,7 @@ beschreibung = "Vertreter mit Kontaktdaten"
 [[dokument]]
 name = "anmeldeorte"
 eigentuemer = "verwaltung"
+bereich = "kundenseite"
 schutz = "vertraulich"
 beschreibung = "Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP)"
 
@@ -434,6 +495,7 @@ beschreibung = "Anmeldeorte der Kunden für die Auswertung (90 Tage, ohne IP)"
 [[dokument]]
 name = "nutzer"
 eigentuemer = "plattform"
+bereich = "intern"
 leser = ["angebot", "hr", "marketing", "qs"]   # qs: Mitarbeiter für Kürzel und Zuweisung von Prüfungen (Kennung, Name, Zugang); marketing: wählbare Verantwortliche (Kennung, Name, Recht marketing.bearbeiten); angebot: Bearbeiter von Bestellwünschen (orders.php, nur Kennung/Name/Recht); hr: Mitarbeiter = Nutzer (hr_personal über users_load)
 schreiber = ["hr"]   # nur über mitarbeiter_ohne_zugang_anlegen (lib/nutzer.php): Mitarbeiter ohne Anmeldung (zugang: false) für den Urlaubsplan
 schutz = "geheim"
@@ -442,84 +504,98 @@ beschreibung = "Mitarbeiterzugänge, Rollen, Rechte-Ausnahmen, Zwei-Faktor, Pass
 [[dokument]]
 name = "admin"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "geheim"
 beschreibung = "Altformat des ersten Administratorzugangs (wird beim Lesen in „nutzer“ übernommen)"
 
 [[dokument]]
 name = "anmeldenamen"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Vergebene Benutzernamen"
 
 [[dokument]]
 name = "sitzungen"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "geheim"
 beschreibung = "Sitzungsregister der Mitarbeiter"
 
 [[dokument]]
 name = "oidc-abmeldungen"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Beendete Sitzungen der zentralen Anmeldung (Keycloak-Sitzung bzw. Mitarbeiter → Zeitpunkt, höchstens 11 Stunden): weiter erst nach erneuter Anmeldung bei Keycloak"
 
 [[dokument]]
 name = "oidc-aktivitaet"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Letzte Aktivität je Anmeldung bei Keycloak (Keycloak-Sitzung → Zeitpunkt, höchstens 13 Stunden): Abmelden nach Inaktivität gilt über alle Adressen der Plattform"
 
 [[dokument]]
 name = "oidc-geloescht"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Kennungen der Keycloak-Konten gelöschter Mitarbeiter → Zeitpunkt: verknüpfen nie mit einem neuen, gleich benannten Mitarbeiter (lib/oidc.php, konten.sh verwaist)"
 
 [[dokument]]
 name = "logins"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Fehlversuche und Sperren bei der Anmeldung"
 
 [[dokument]]
 name = "datenleck"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Ergebnis der Datenleck-Prüfung von Passwörtern (ohne Passwort)"
 
 [[dokument]]
 name = "rechte"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Rechte der Standardrollen (Katalog PERMS und Modulzugang in lib/rechte.php), „bekannt“ = Katalog beim Speichern"
 
 [[dokument]]
 name = "rollen"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Eigene Rollen (Name, Beschreibung, Rechte) und Namen der Standardrollen (lib/rechte.php)"
 
 [[dokument]]
 name = "sicherheit"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Sicherheitseinstellungen (Zwei-Faktor-Pflicht, IP-/Ländersperre, Passwortbestätigungen)"
 
 [[dokument]]
 name = "laendersperre"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Statistik der Länder-/IP-Sperre"
 
 [[dokument]]
 name = "sicherheit-notfall"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Notfallmodus (Modul Sicherheit): Zustand, Grund, Kundenhinweis, Wirkung, gesicherte Sicherheits- und Firewall-Einstellungen, Verlauf"
 
 [[dokument]]
 name = "sicherheit-bereitschaft"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Bereitschaft (Modul Sicherheit, lib/bereitschaft.php): Leitfaden für den Ernstfall mit Ansprechpartnern, im Notfall abgehakte Schritte, Probealarme mit Bestätigungen, Wochenbericht (an/aus, Wochentag, Versandverlauf)"
 historie = "Probealarme (letzte 20) und abgehakte Leitfäden je Notfall (letzte 20) als Schnappschuss; Leitfaden selbst ohne Versionen"
@@ -527,12 +603,14 @@ historie = "Probealarme (letzte 20) und abgehakte Leitfäden je Notfall (letzte 
 [[dokument]]
 name = "wartung"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Heutiger globaler Wartungsmodus der Angebotsseite (nur Kundenfunktionen)"
 
 [[dokument]]
 name = "module"
 eigentuemer = "plattform"
+bereich = "intern"
 leser = ["dashboard", "verwaltung"]
 schutz = "intern"
 beschreibung = "Laufzeitzustand je Oberfläche: Wartung (aktiv oder geplant, Grund, Hinweis, bis), Freigabe aus der Modulverwaltung (innerhalb des Entwicklungsstands im Code), Tester und Verlauf der Änderungen (lib/module.php)"
@@ -541,42 +619,49 @@ historie = "Verlauf der letzten 100 Änderungen (wer, wann, Bereich, alt, neu, G
 [[dokument]]
 name = "firewall"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Firewall-Einstellungen der Schutzzentrale"
 
 [[dokument]]
 name = "sperrliste"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Gesperrte Adressen"
 
 [[dokument]]
 name = "bedrohungsliste"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Externe Bedrohungsliste (Spamhaus DROP) mit Suchindex"
 
 [[dokument]]
 name = "fw_zaehler"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Zähler der Firewall"
 
 [[dokument]]
 name = "verkehr"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Live-Verkehr (Ringpuffer) der Schutzzentrale"
 
 [[dokument]]
 name = "integritaet"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Ergebnisse der Dateiprüfung"
 
 [[dokument]]
 name = "protokoll/*"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "vertraulich"
 beschreibung = "Änderungsprotokoll je Monat (audit)"
 historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufender Monat und 6 Monate davor – ältere Monatsdokumente löscht audit() (PROTOKOLL_MONATE, lib/protokoll.php)"
@@ -584,18 +669,21 @@ historie = "Nur anhängen; Einträge werden nicht geändert. Aufbewahrung: laufe
 [[dokument]]
 name = "benachrichtigungen"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Einstellungen der Benachrichtigungen an Mitarbeiter"
 
 [[dokument]]
 name = "benachrichtigung-stand"
 eigentuemer = "plattform"
+bereich = "intern"
 schutz = "intern"
 beschreibung = "Bündelungsstand der Benachrichtigungen"
 
 [[dokument]]
 name = "postausgang"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "vertraulich"
 beschreibung = "Postausgang von innen (ADR-007, lib/postausgang.php): Versandaufträge der Kundenseite – Bestellnummer, Benachrichtigungen, Abmeldehinweise mit Firma und E-Mail; nie Postfachdaten oder Mailinhalte"
 historie = "Kurzlebig: der Dienst postausgang entnimmt fällige Aufträge; höchstens 500 offen"
@@ -603,12 +691,14 @@ historie = "Kurzlebig: der Dienst postausgang entnimmt fällige Aufträge; höch
 [[dokument]]
 name = "postausgang-stand"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Lebenszeichen des Dienstes postausgang und ob ein Postfach eingerichtet ist (die Kundenseite prüft damit die Bestellfunktion)"
 
 [[dokument]]
 name = "mailversand"
 eigentuemer = "plattform"
+bereich = "intern"
 schreiber = ["angebot", "einkauf", "bestand"]   # über die Versandfunktionen (Bestellwünsche, Kunden-E-Mails, Einkaufsmeldung, MHD-Liste an den Verkauf)
 schutz = "vertraulich"
 beschreibung = "Versandaufträge und Versandprotokoll aller E-Mails"
@@ -616,6 +706,7 @@ beschreibung = "Versandaufträge und Versandprotokoll aller E-Mails"
 [[dokument]]
 name = "testpostfach"
 eigentuemer = "plattform"
+bereich = "intern"
 schreiber = ["angebot"]   # Kunden-E-Mails landen in der Testumgebung hier
 schutz = "vertraulich"
 beschreibung = "Abgefangene E-Mails der Testumgebung (WA_TESTUMGEBUNG=1)"
@@ -623,18 +714,21 @@ beschreibung = "Abgefangene E-Mails der Testumgebung (WA_TESTUMGEBUNG=1)"
 [[dokument]]
 name = "mailkonto"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "geheim"
 beschreibung = "Postfach-Zugang (Passwort verschlüsselt)"
 
 [[dokument]]
 name = "mailkonto-intern"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "geheim"
 beschreibung = "Postfach-Zugang für interne E-Mails an Mitarbeiter, z. B. verwaltung@… (Passwort verschlüsselt; ohne Eintrag gilt mailkonto)"
 
 [[dokument]]
 name = "mail-schluessel"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "geheim"
 dynamisch = true
 beschreibung = "Schlüssel für das Postfach-Passwort – nie in Sicherungen (Konstante MAIL_KEY_STORE)"
@@ -642,11 +736,13 @@ beschreibung = "Schlüssel für das Postfach-Passwort – nie in Sicherungen (Ko
 [[dokument]]
 name = "sicherung"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Status der Datensicherung (Datei neben der Datenbank)"
 
 [[dokument]]
 name = "deployment"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "intern"
 beschreibung = "Status des Release-Einspielens (Datei neben der Datenbank)"
