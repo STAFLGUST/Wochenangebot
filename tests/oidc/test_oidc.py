@@ -2048,7 +2048,7 @@ with sync_playwright() as pw:
         if not os.path.exists(p_):
             return {}
         r_ = open(p_, encoding='utf-8').read()
-        return json.loads(r_[r_.index('?>') + 2:].strip())
+        return json.loads(r_[r_.index('?>') + 2:].strip()) if '?>' in r_ else {}
 
     code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Otto', 'nachname': 'Alt', 'username': 'otto.alt', 'email': 'otto@stafl.test', 'rollen': ['editor'], 'active': True}])
     otto = j.get('user', {}).get('id', '')
@@ -2065,8 +2065,9 @@ with sync_playwright() as pw:
     anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'paul.rest', 'enabled': True, 'email': 'paul@stafl.test', 'emailVerified': True,
             'firstName': 'Paul', 'lastName': 'Rest', 'credentials': [{'type': 'password', 'value': PAUL_PW, 'temporary': False}]}).encode(), kc_h())
     paul_alt = (kc_konto('paul.rest') or [{}])[0].get('id', '')
+    _weg = {**geloescht_roh(), paul_alt: int(time.time())}   # erst lesen, dann schreiben ('w' leert die Datei sofort)
     with open(os.path.join(WORK, 'app', 'data', 'oidc-geloescht.php'), 'w', encoding='utf-8') as f:
-        f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps({**geloescht_roh(), paul_alt: int(time.time())}))
+        f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps(_weg))
     code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Paul', 'nachname': 'Neu', 'username': 'paul.rest', 'email': 'paul.neu@stafl.test', 'rollen': ['editor'], 'active': True}])
     paul = j.get('user', {}).get('id', '')
     check('Vorbereitung: altes Konto „paul.rest“ (als gelöscht vermerkt), neuer Mitarbeiter „paul.rest“', bool(paul_alt) and code == 200 and paul, (paul_alt, code, j))
