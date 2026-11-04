@@ -76,6 +76,11 @@ printf 'DOMAIN=x\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compos
 lauf migrate
 ok "mit COMPOSE_FILE der Anmeldung: beide Anwendungs-Container gestoppt und wieder gestartet" '[ $CODE = 0 ] \
   && grep -qx "docker compose stop app app-mitarbeiter" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter" "$T/aufrufe"'
+neu; mkdir -p "$T/i/deploy/anmeldung"; printf 'services:\n  app:\n  app-mitarbeiter:\n  postausgang:\n' > "$T/i/deploy/anmeldung/docker-compose.anmeldung.yml"
+printf 'DOMAIN=x\nCOMPOSE_FILE=docker-compose.yml:deploy/anmeldung/docker-compose.anmeldung.yml\n' > "$T/i/.env"
+lauf migrate
+ok "mit dem Dienst postausgang: auch er steht während der Übernahme" '[ $CODE = 0 ] \
+  && grep -qx "docker compose stop app app-mitarbeiter postausgang" "$T/aufrufe" && grep -qx "docker compose start app app-mitarbeiter postausgang" "$T/aufrufe"'
 neu; printf 'DOMAIN=x\n' > "$T/i/.env"
 lauf migrate
 ok "ohne COMPOSE_FILE: nur der eine Anwendungs-Container" '[ $CODE = 0 ] && grep -qx "docker compose stop app" "$T/aufrufe" && grep -qx "docker compose start app" "$T/aufrufe"'

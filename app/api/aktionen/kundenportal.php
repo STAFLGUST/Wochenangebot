@@ -259,12 +259,18 @@ switch ($action) {
                 $o['outbox'] = order_outbox_create($o);
                 $all[] = $o;
                 store_write('bestellungen', $all);
+                // Kundenseite (lib/postausgang.php): Versand übernimmt der Dienst „postausgang“ – Auftrag im selben Vorgang ablegen
+                if (postausgang_warteschlange()) postausgang_ablegen('bestellung', ['nr' => $o['nr']]);
                 return $o;
             });
-            try { $o = order_outbox_send($o['nr']); } catch (RuntimeException $e) { $o['status'] = 'fehler'; }   // Bestellung ist gespeichert; Versand bleibt als offener Auftrag sichtbar
-            $okIn = ($o['status'] ?? '') === 'gesendet';
+            if (postausgang_warteschlange()) {
+                $o['status'] = 'eingegangen';   // gespeichert, E-Mails folgen in Kürze (nur für die Quittung)
+            } else {
+                try { $o = order_outbox_send($o['nr']); } catch (RuntimeException $e) { $o['status'] = 'fehler'; }   // Bestellung ist gespeichert; Versand bleibt als offener Auftrag sichtbar
+            }
+            $okIn = in_array($o['status'] ?? '', ['gesendet', 'eingegangen'], true);
             $who = ['username' => 'kunde:' . $c['login']['username'], 'name' => $c['firma'], 'role' => 'kunde'];
-            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg' . ($fr['kosten'] > 0 ? ', Frachtanteil ' . de_num($fr['kosten']) . ' €' : '') . ')' . ($okIn ? '' : ' – E-Mail nicht zugestellt'),
+            audit('bestellung', "Bestellwunsch {$o['nr']} ({$def['name']}, " . count($pos) . ' Positionen, ' . de_qty($o['totalQty']) . ' kg' . ($fr['kosten'] > 0 ? ', Frachtanteil ' . de_num($fr['kosten']) . ' €' : '') . ')' . ($okIn ? ($o['status'] === 'eingegangen' ? ' – E-Mail über den Postausgang' : '') : ' – E-Mail nicht zugestellt'),
                 array_map(function ($p) { return ['k' => 'b|' . $p['id'], 'code' => $p['code'], 'name' => $p['name'], 'f' => 'Menge', 'from' => '', 'to' => de_qty($p['qty']) . ' kg' . ($p['price'] !== null ? ' × ' . de_num($p['price']) . ' €' : ' (Preis auf Anfrage)')]; }, $pos), $who);
             if (!$okIn) fail('Ihr Bestellwunsch wurde gespeichert, die E-Mail konnte aber nicht bestätigt werden. Bitte nicht als neuen Bestellwunsch erneut eingeben. Unser Team kann den Versand prüfen.', 502);
             order_receipt($o);

@@ -2,7 +2,8 @@
 
 **Status:** angenommen am 04.11.2026 (Inhaber). **Stufe 1** umgesetzt und eingespielt (PR #281), **Stufe 1b**
 (Dienstkonto in Keycloak, Realm Stand 16) umgesetzt und eingespielt (PR #283), **Notzugang über einen SSH-Tunnel**
-(Regel 6 der Zielarchitektur Kundenseite) umgesetzt – wirksam mit dem Release; **Stufe 2** (Daten) geplant.
+(Regel 6 der Zielarchitektur Kundenseite) umgesetzt und eingespielt (PR #285); **Postausgang von innen** (Regel 4)
+umgesetzt – wirksam mit dem Release und dem Umzug des Schlüssels; **Stufe 2** (Daten) geplant.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -114,14 +115,54 @@ Internet, mit den alten Passwörtern. Seitdem:
 - **Rückfall:** Ein Release auf den Vorgänger stellt den alten Notzugang auf der Kundenseite wieder her (dann gilt wieder
   `WA_EIGENE_ANMELDUNG` in `.env`); `WA_NOTZUGANG` und `NOTZUGANG_PORT` werden dann ignoriert.
 
+### Postausgang von innen (umgesetzt 04.11.2026)
+
+Regel 4 der Zielarchitektur Kundenseite, vorgezogen aus Stufe 2: Die Kundenseite verschickt keine E-Mails mehr und kennt
+kein Postfach.
+
+- **Kundenseite legt nur ab:** Mit `WA_POSTAUSGANG=warteschlange` (nur im Container `app`) speichert ein Bestellwunsch seine
+  Versandaufträge wie bisher beim Vorgang und legt zusätzlich einen Auftrag mit der Bestellnummer im Dokument `postausgang` ab
+  – im selben Speichervorgang. Ebenso Benachrichtigungen, die eine Kundenaktion auslöst (z. B. Anmeldesperre nach
+  Fehlversuchen), und der Hinweis an das Team bei Ab- oder Wiederanmeldung vom Wochenangebot. Die Quittung meldet
+  `delivery: "eingegangen"` und kündigt die Kopie an (`copyPlanned`); ein Postfachausfall führt nicht mehr zu 502.
+- **Dienst `postausgang`** (`app/api/postausgang.php`, `lib/postausgang.php`): gleiches Image, als `www-data`, Dateisystem
+  nur lesbar, kein Port, eigenes Netz nur mit Ausgang ins Internet (SMTP). Ein Durchgang alle 5 Sekunden, jeder als eigener
+  Prozess (hält keine Sperre der Speicherschicht dauerhaft). Er verschickt fällige Aufträge, prüft alle 10 Minuten alle
+  Vorgänge auf liegengebliebene Versandaufträge und schreibt ein Lebenszeichen (`postausgang-stand`).
+- **Wiederholung nur ohne Doppelversand-Risiko:** Ist das Postfach gestört, versucht der Dienst es nach 1, 5 und 30 Minuten
+  erneut – aber nur, wenn die Mail nachweislich nicht angekommen ist (keine Verbindung, Anmeldung, Ablehnung, Notfallmodus).
+  Unklare Fälle und alles danach bleiben wie bisher in den Bestellwünschen zum bestätigten Nachsenden stehen.
+- **Bestellfunktion ehrlich:** Die Kundenseite kann das Postfach nicht selbst prüfen. Sie nimmt Bestellwünsche nur an, wenn
+  der Dienst ein eingerichtetes Postfach meldet und sich in den letzten 15 Minuten gemeldet hat – sonst bleiben sie nicht
+  unbemerkt liegen.
+- **Schlüssel des hinterlegten Postfach-Passworts** außerhalb des gemeinsamen Datenordners: `WA_GEHEIM_DIR`
+  (`./daten-geheim`, nur in `app-mitarbeiter` und `postausgang` eingebunden, wie bisher nicht gesichert). Die Kundenseite
+  sieht nur das verschlüsselte Passwort. Die `MAIL_*`-Werte aus `.env` sind in `app` geleert.
+- **Passwort an das Postfach gebunden** (Format v2, AEAD mit Server, Port, Verschlüsselung und Benutzer als zusätzlichen
+  Daten): Wer im gemeinsamen Datenordner einen fremden Server einträgt, bringt den Postausgang nicht dazu, sich dort mit dem
+  echten Passwort anzumelden – die Entschlüsselung schlägt fehl. Gebunden wird nur, solange der Schlüssel in `daten-geheim`
+  liegt; Format v1 bleibt lesbar.
+- **Einführung (Serverschritt nach dem Release):** `sh deploy/postfach-schluessel.sh umziehen` – verschiebt den Schlüssel
+  (ohne Neustart; bis dahin gilt der bisherige Ort) und bindet vorhandene Passwörter (v1 → v2) im Dienst `postausgang`.
+- **Grenze bis Stufe 2:** Solange der Datenordner gemeinsam ist, könnte eine übernommene Kundenseite gefälschte
+  Versandaufträge ablegen, die der Postausgang verschickt (Empfänger und Inhalt stehen in den Daten). Das Passwort selbst
+  bekommt sie nicht mehr. Dicht wird das erst mit der Datentrennung.
+- **Geprüft:** E2E-Gruppe `postausgang` (zwei Server wie im Betrieb: Kundenseite ohne Postfach, Mitarbeiterseite mit
+  Schlüsselordner; Dienst wie im Container; Oberfläche Desktop und 390 px), `tests/deploy/test_postfach_schluessel.sh`,
+  `deploy/anmeldung/pruefen.sh` (Konfiguration und echter Start: Dienst läuft, abgeschottet, Kundenseite ohne Postfach).
+- **Rückfall:** Vor einem Release-Rückfall `sh deploy/postfach-schluessel.sh zurueck` – stellt die Passwörter auf Format v1
+  zurück und legt den Schlüssel wieder in den Datenordner (ältere Stände kennen nur das; sonst müsste das Postfach-Passwort
+  nach dem Rückfall neu eingegeben werden). Danach bleibt der Container `postausgang` verwaist stehen (`docker compose up -d --remove-orphans`);
+  Aufträge im Dokument `postausgang` verarbeitet der alte Stand nicht – offene Versandaufträge stehen weiter beim Vorgang und
+  lassen sich in den Bestellwünschen nachsenden.
+
 ### Stufe 2 – Daten trennen (geplant)
 
 - Die Kundenseite sieht nur noch, was sie braucht: veröffentlichtes Angebot, Angebotsliste, Kundenzugänge, Sitzungen,
   Merklisten, einen Eingang für Bestellwünsche und eine Liste ausverkaufter Artikelnummern (ohne Mengen).
 - Das Kundendokument wird in **Zugangsdaten** und **Stammdaten mit Warenwirtschaftszahlen** geteilt – eine Datenmigration
   mit eigener Freigabe (GR-006).
-- E-Mails verschickt nur noch die Mitarbeiterseite über den vorhandenen Postausgang; die Kundenseite kennt dann kein
-  Postfach-Passwort mehr.
+- E-Mails verschickt nur noch die Mitarbeiterseite über den Postausgang – vorgezogen umgesetzt (Abschnitt oben).
 - Am besten zusammen mit PostgreSQL (Zielarchitektur §5, ADR-4): eigener Datenbanknutzer der Kundenseite mit Rechten nur
   auf Kundentabellen.
 
@@ -132,7 +173,8 @@ Internet, mit den alten Passwörtern. Seitdem:
 | Personaldaten, Nutzer, Protokolle lesen | ja | ja (gemeinsamer Datenordner) | nein |
 | Mitarbeiterkonten in Keycloak übernehmen | ja | nein (kein Geheimnis, kein Netzweg) | nein |
 | Anmelde-Geheimnisse der Mitarbeiter-Hosts | ja | nein | nein |
-| Postfach-Passwort | ja | ja | nein |
+| Postfach-Passwort | ja | ja – nein seit dem Postausgang von innen (nach `postfach-schluessel.sh umziehen`) | nein |
+| E-Mails über das Firmenpostfach auslösen | ja | ja – auch mit Postausgang, über gefälschte Aufträge im gemeinsamen Datenordner | nein |
 | Dateien der Anwendung verändern | nein (nur lesend) | nein | nein |
 | Mitarbeiter-Hosts durch Überlast ausbremsen | ja | nein (Grenzen) | nein |
 
@@ -161,6 +203,9 @@ niemand (Stufe 1b).
   als verwaisten Container stehen (keine Wirkung, Caddy erreicht ihn dann nicht mehr). Aufräumen:
   `docker compose up -d --remove-orphans`.
 - **Geänderte Anmelde-Werte in `.env`** liest die Anwendung nach `docker compose up -d app-mitarbeiter` (bisher `app`).
-- **Speicher umschalten** (`deploy/datenbank-umschalten.sh`) stoppt beide Anwendungs-Container.
+- **Speicher umschalten** (`deploy/datenbank-umschalten.sh`) stoppt beide Anwendungs-Container und den Postausgang.
+- **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
+  (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
+  Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.
 - **Ressourcen:** Server Hostinger KVM 8 (8 vCPU, 32 GB). Grenzen der Kundenseite: 3 CPU, 4 GB, 1024 Prozesse
   (`KUNDEN_CPUS`, `KUNDEN_SPEICHER` in `.env`). Der zweite Container braucht im Leerlauf rund 100–200 MB.

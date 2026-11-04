@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-42 Dateien, 623 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+42 Dateien, 624 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -114,11 +114,12 @@ _E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand_
 - `abmelde_url(c)`
 - `abmelde_setzen(c, ab, via)` – Abmelden/Wiederanmelden speichern; true, wenn sich der Status geändert hat
 - `abmelde_melden(c, ab, via)`
+- `abmelde_hinweis_senden(c, ab, t)` – Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC)
 
 **Bestellwünsche**
 
 - `order_settings()`
-- `order_enabled()`
+- `order_enabled()` – Bestellfunktion nutzbar?
 - `de_num(v, dec)`
 - `de_qty(v)` – Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js)
 - `mail_tpl_bestellung(o, copy)` – Mail an uns bzw. Kopie an den Kunden: [Betreff, Text, HTML]

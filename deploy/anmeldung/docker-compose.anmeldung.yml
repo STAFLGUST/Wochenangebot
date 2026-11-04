@@ -11,7 +11,10 @@
 #                      Speicher, Rechenzeit und Prozesse. Baut das gemeinsame Image.
 #   app-mitarbeiter  – alle Mitarbeiter-Hosts (dashboard-stafl.de und *.dashboard-stafl.de) mit Keycloak-Anmeldung,
 #                      Dashboard, Detailkarte und allen Anmelde-Geheimnissen; im Netz „intern“ mit Caddy und Keycloak.
-# Beide nutzen denselben Datenordner (Stufe 1); Stufe 2 (eigene Daten der Kundenseite) siehe ADR-007.
+#   postausgang      – verschickt die E-Mails, die die Kundenseite nur als Auftrag ablegt (Postausgang von innen, ADR-007): nur
+#                      hier und in app-mitarbeiter gibt es Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passworts
+#                      (Ordner daten-geheim, nie in der Kundenseite). Kein Port, eigenes Netz nur mit Ausgang ins Internet (SMTP).
+# Alle nutzen denselben Datenordner (Stufe 1); Stufe 2 (eigene Daten der Kundenseite) siehe ADR-007.
 services:
   app:
     # Kundenseite angebot-stafl.de (ADR-007): dasselbe Anwendungs-Image wie app-mitarbeiter (deploy/image, in der CI gebaut und
@@ -24,6 +27,17 @@ services:
       # die Kundenseite öffnet ihn nie wieder (ADR-007 Regel 6). Notzugang bei gestörter Anmeldung nur noch über einen SSH-Tunnel
       # zu app-mitarbeiter (sh deploy/notzugang.sh an). Kundenseite und Kundenanmeldung unverändert.
       WA_EIGENE_ANMELDUNG: "aus"
+      # Postausgang von innen (ADR-007, lib/postausgang.php): die Kundenseite legt E-Mails nur als Auftrag ab und kennt kein
+      # Postfach – die Werte aus docker-compose.yml werden hier geleert; verschickt wird nur im Dienst postausgang
+      WA_POSTAUSGANG: "warteschlange"
+      MAIL_SMTP_HOST: ""
+      MAIL_SMTP_PORT: ""
+      MAIL_SMTP_SECURE: ""
+      MAIL_SMTP_USER: ""
+      MAIL_SMTP_PASS: ""
+      MAIL_FROM: ""
+      MAIL_FROM_NAME: ""
+      MAIL_REPLY_TO: ""
     # Härtung (ADR-007): Dateisystem nur lesbar (Anwendung ist ohnehin nur lesend eingebunden, Daten im Datenordner); Apache
     # und PHP schreiben nur in /tmp (Sitzungen) und /run (PID, Sperren). Keine Rechteausweitung über setuid-Programme.
     read_only: true
@@ -54,6 +68,7 @@ services:
       - ./dashboard:/var/www/dashboard:ro                 # Dashboard (außerhalb von app/; per Alias nur auf den Keycloak-Hosts)
       - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # Keycloak-Hosts in Apache
       - ./daten-karte:/var/www/karte:ro                   # Detailkarte (deploy/karte-laden.sh); fehlt sie, zeigen die Seiten die Übersichtskarte
+      - ./daten-geheim:/var/www/geheim                    # Schlüssel des hinterlegten Postfach-Passworts (nicht in der Kundenseite, nicht gesichert)
     environment:
       # wie app in docker-compose.yml (die CI prüft, dass hier nichts davon fehlt: deploy/anmeldung/pruefen.sh)
       WA_INSTALLED: "1"
@@ -112,12 +127,60 @@ services:
       # öffnet ihn – mit WA_NOTZUGANG=an in .env (sh deploy/notzugang.sh an|aus, erstellt diesen Container neu)
       WA_EIGENE_ANMELDUNG: "aus"
       WA_NOTZUGANG: ${WA_NOTZUGANG:-aus}
+      # Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts außerhalb des gemeinsamen Datenordners (ADR-007);
+      # liegt er noch im Datenordner, gilt bis deploy/postfach-schluessel.sh umziehen der bisherige Ort
+      WA_GEHEIM_DIR: /var/www/geheim
     ports:
       # Notzugang (ADR-007 Regel 6): nur auf 127.0.0.1 des Servers – vom eigenen Rechner per SSH-Tunnel
       # (ssh -L 8190:127.0.0.1:8190 …, dann http://localhost:8190/admin/), wie die Keycloak-Verwaltung; nie über Caddy
       - "127.0.0.1:${NOTZUGANG_PORT:-8190}:8090"
     networks:
       intern:                                              # mit Caddy und Keycloak; nicht im Netz der Kundenseite
+
+  postausgang:
+    # Postausgang von innen (ADR-007, lib/postausgang.php, api/postausgang.php): verschickt Bestellwünsche, Benachrichtigungen und
+    # Hinweise, die die Kundenseite nur als Auftrag ablegt. Ein Durchgang alle 5 Sekunden, jeder als eigener Prozess (hält keine
+    # Sperre der Speicherschicht dauerhaft). Gleiches Image und gleicher Code wie app; kein Webserver, kein Port.
+    image: stafl-app:${STAFL_APP_VERSION:-lokal}
+    pull_policy: never
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    user: www-data
+    command: ["sh", "-c", "trap 'exit 0' TERM INT; while :; do php /var/www/html/api/postausgang.php; sleep 5 & wait $$!; done"]
+    healthcheck:
+      test: ["CMD", "php", "/var/www/html/api/postausgang.php", "--pruefen"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - ./app:/var/www/html:ro
+      - ./daten:/var/www/html/data
+      - ./daten-geheim:/var/www/geheim:ro                 # Schlüssel des Postfach-Passworts (nur lesen; neu angelegt wird er in app-mitarbeiter)
+    environment:
+      DOMAIN: ${DOMAIN}             # Adresse für Links in E-Mails
+      MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
+      MAIL_SMTP_PORT: ${MAIL_SMTP_PORT:-587}
+      MAIL_SMTP_SECURE: ${MAIL_SMTP_SECURE:-starttls}
+      MAIL_SMTP_USER: ${MAIL_SMTP_USER:-}
+      MAIL_SMTP_PASS: ${MAIL_SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
+      MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
+      WA_GEHEIM_DIR: /var/www/geheim
+      WA_EIGENE_ANMELDUNG: "aus"    # Links in Benachrichtigungen auf den Eingabebereich im Dashboard (wie app-mitarbeiter)
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=16m
+    security_opt:
+      - no-new-privileges:true
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 64
+    networks:
+      postausgang:                                         # nur Ausgang ins Internet (Postfach); weder Caddy noch Keycloak noch die Apps
 
   caddy:
     networks:
@@ -192,6 +255,8 @@ networks:
   intern:
   anmeldung:
     internal: true
+  # Dienst postausgang allein: Ausgang zum Postfach (SMTP), sonst nichts
+  postausgang:
 
 volumes:
   keycloak_db:

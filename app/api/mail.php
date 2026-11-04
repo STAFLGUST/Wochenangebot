@@ -33,25 +33,74 @@ function env_str(string $k): string
 }
 /* ---------- Verschlüsselung des gespeicherten Postfach-Passworts ---------- */
 const MAIL_KEY_STORE = 'mail-schluessel';     // wird bei der Datensicherung bewusst ausgelassen (deploy/sichern.sh)
-function mail_key(bool $create = false): ?string
+/* Eigener Ordner für den Schlüssel (WA_GEHEIM_DIR, ADR-007): nur in app-mitarbeiter und im Dienst „postausgang“ eingebunden,
+   nicht in der Kundenseite – die sieht dann nur das verschlüsselte Passwort im gemeinsamen Datenordner. Ohne WA_GEHEIM_DIR
+   bzw. solange der Schlüssel noch im Datenordner liegt (deploy/postfach-schluessel.sh umziehen) gilt der bisherige Ort. */
+function mail_key_datei(): ?string
 {
-    $k = store_read(MAIL_KEY_STORE);
+    $d = rtrim(env_str('WA_GEHEIM_DIR'), '/');
+    return $d !== '' ? $d . '/' . MAIL_KEY_STORE . '.php' : null;
+}
+/* $ort: 'geheim' (eigener Ordner), 'daten' (bisheriger Ort im Datenordner) oder '' (kein Schlüssel) */
+function mail_key(bool $create = false, ?string &$ort = null): ?string
+{
+    $f = mail_key_datei();
+    $k = null; $ort = '';
+    if ($f !== null && is_file($f)) {
+        $raw = (string)@file_get_contents($f);
+        if (strncmp($raw, GUARD, strlen(GUARD)) === 0) $raw = substr($raw, strlen(GUARD));
+        $k = json_decode($raw, true);
+        if (is_array($k)) $ort = 'geheim';
+    }
+    if (!is_array($k)) { $k = store_read(MAIL_KEY_STORE); $ort = 'daten'; }
     $raw = is_array($k) ? base64_decode((string)($k['key'] ?? ''), true) : false;
     if (is_string($raw) && strlen($raw) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES) return $raw;
+    $ort = '';
     if (!$create) return null;
     $raw = sodium_crypto_secretbox_keygen();
-    store_write(MAIL_KEY_STORE, ['key' => base64_encode($raw), 'created' => gmdate('Y-m-d\TH:i:s\Z')]);
+    $neu = ['key' => base64_encode($raw), 'created' => gmdate('Y-m-d\TH:i:s\Z')];
+    if ($f !== null && is_dir(dirname($f)) && is_writable(dirname($f))) {   // neuer Schlüssel gleich im eigenen Ordner (Format wie im Datenordner)
+        $tmp = $f . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        $ok = file_put_contents($tmp, GUARD . json_encode($neu, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), LOCK_EX) !== false;
+        if ($ok) { @chmod($tmp, 0600); $ok = rename($tmp, $f); }
+        if (!$ok) { @unlink($tmp); throw new RuntimeException('Schlüssel für das Postfach-Passwort konnte nicht gespeichert werden.'); }
+        $ort = 'geheim';
+    } else {
+        store_write(MAIL_KEY_STORE, $neu);
+        $ort = 'daten';
+    }
     return $raw;
 }
-function mail_encrypt(string $plain): string
+/* Bindung an das Postfach (Format v2, ADR-007): Das verschlüsselte Passwort gilt nur für denselben Server, Port, dieselbe
+   Verschlüsselung und denselben Benutzer (zusätzliche Daten der AEAD-Verschlüsselung). Wer im gemeinsamen Datenordner den
+   Server austauscht, bringt den Postausgang also nicht dazu, sich mit dem echten Passwort bei einem fremden Server anzumelden.
+   Gebunden wird nur, solange der Schlüssel im eigenen Ordner liegt (nach deploy/postfach-schluessel.sh umziehen): ältere
+   Releases lesen nur v1 – vor einem Rückfall stellt postfach-schluessel.sh zurueck wieder auf v1 um (GR-006). v1 bleibt lesbar. */
+function mail_bindung(array $a): string
+{
+    return 'stafl-postfach-v2|' . strtolower((string)($a['host'] ?? '')) . '|' . (int)($a['port'] ?? 0) . '|' . (string)($a['secure'] ?? '') . '|' . (string)($a['user'] ?? '');
+}
+function mail_encrypt(string $plain, ?array $konto = null): string
 {
     if (!function_exists('sodium_crypto_secretbox')) throw new RuntimeException('Verschlüsselung (sodium) ist auf dem Server nicht verfügbar.');
+    $key = mail_key(true, $ort);
+    if ($konto !== null && $ort === 'geheim') {
+        $n = random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES);
+        return 'v2:' . base64_encode($n . sodium_crypto_aead_xchacha20poly1305_ietf_encrypt($plain, mail_bindung($konto), $n, $key));
+    }
     $n = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
-    return 'v1:' . base64_encode($n . sodium_crypto_secretbox($plain, $n, mail_key(true)));
+    return 'v1:' . base64_encode($n . sodium_crypto_secretbox($plain, $n, $key));
 }
-function mail_decrypt(string $enc): ?string
+function mail_decrypt(string $enc, ?array $konto = null): ?string
 {
     $key = function_exists('sodium_crypto_secretbox_open') ? mail_key() : null;
+    if (strpos($enc, 'v2:') === 0) {   // gebunden: nur mit genau den Postfachdaten, für die es gespeichert wurde
+        $nb = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
+        $raw = base64_decode(substr($enc, 3), true);
+        if (!$key || $konto === null || !is_string($raw) || strlen($raw) <= $nb) return null;
+        $p = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(substr($raw, $nb), mail_bindung($konto), substr($raw, 0, $nb), $key);
+        return $p === false ? null : $p;
+    }
     $raw = strpos($enc, 'v1:') === 0 ? base64_decode(substr($enc, 3), true) : false;
     if (!$key || !is_string($raw) || strlen($raw) <= SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) return null;
     $p = sodium_crypto_secretbox_open(substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES), $key);
@@ -68,7 +117,7 @@ function mail_account(string $konto = 'kunden'): ?array
 function mail_cfg_aus_konto(array $a, string $source): array
 {
     global $CFG;
-    $pass = isset($a['passEnc']) && $a['passEnc'] !== '' ? mail_decrypt((string)$a['passEnc']) : '';
+    $pass = isset($a['passEnc']) && $a['passEnc'] !== '' ? mail_decrypt((string)$a['passEnc'], $a) : '';
     return [
         'host' => (string)$a['host'], 'port' => (int)$a['port'], 'secure' => (string)$a['secure'],
         'user' => (string)($a['user'] ?? ''), 'pass' => (string)$pass, 'passError' => $pass === null,

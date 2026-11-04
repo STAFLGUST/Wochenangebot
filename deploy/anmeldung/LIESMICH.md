@@ -5,7 +5,10 @@ Vorbereitet für die Inbetriebnahme nach [docs/plattform/inbetriebnahme-anmeldun
 Die öffentlichen Hosts stehen im `Caddyfile` (Schritt 6) und führen nur zu Zielen, die es ausschließlich mit der
 Ergänzungsdatei gibt (`keycloak`, Container `app-mitarbeiter`) – ohne sie antworten sie mit 502. Seit ADR-007 laufen
 Kundenseite (`app`) und Mitarbeiter-Hosts (`app-mitarbeiter`) in getrennten Containern aus demselben Image; nur
-`app-mitarbeiter` kennt die Anmelde-Geheimnisse und erreicht Keycloak.
+`app-mitarbeiter` kennt die Anmelde-Geheimnisse und erreicht Keycloak. E-Mails verschickt die Kundenseite nicht mehr selbst:
+Sie legt Versandaufträge ab, der Dienst `postausgang` (gleiches Image, kein Port, eigenes Netz nur zum Postfach) verschickt
+sie. Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passworts (`./daten-geheim`) haben nur
+`app-mitarbeiter` und `postausgang` (ADR-007, Abschnitt „Postausgang von innen“).
 
 | Datei | Inhalt |
 | --- | --- |
@@ -146,6 +149,22 @@ Notzugang bei gestörter Anmeldung (seit 04.11.2026 nur über einen SSH-Tunnel, 
 schon). Die IP-Freigabe des Eingabebereichs gilt im Notzugang nicht. Danach `sh deploy/notzugang.sh aus`. Die Kundenseite
 öffnet den alten Eingabebereich nicht mehr; eine frühere Zeile `WA_EIGENE_ANMELDUNG=an` wirkt nicht und wird beim Umschalten
 entfernt.
+
+## Postausgang (E-Mails der Kundenseite)
+
+Seit dem Postausgang von innen (ADR-007) legt die Kundenseite Bestellwünsche, Benachrichtigungen und Abmeldehinweise nur als
+Auftrag ab; der Dienst `postausgang` verschickt sie alle paar Sekunden. Einmalig nach dem Release, das ihn einführt:
+
+```sh
+sh deploy/postfach-schluessel.sh umziehen   # Schlüssel nach daten-geheim, hinterlegte Passwörter an Server/Benutzer binden
+sh deploy/postfach-schluessel.sh status     # Kontrolle
+```
+
+Zustand: `docker compose ps postausgang` („healthy“), Protokoll: `docker compose logs postausgang`. Läuft der Dienst länger als
+15 Minuten nicht, nimmt das Portal keine Bestellwünsche an (sonst blieben sie unbemerkt liegen). Nicht zugestellte Mails stehen
+wie bisher in den Bestellwünschen zum Nachsenden. Vor einem Rückfall auf ein älteres Release: `sh deploy/postfach-schluessel.sh
+zurueck` (Passwörter zurück auf das alte Format, Schlüssel zurück in den Datenordner), danach
+`docker compose up -d --remove-orphans`.
 
 ## Design der Anmeldeseite und der E-Mails
 

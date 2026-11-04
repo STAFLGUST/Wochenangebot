@@ -6,7 +6,7 @@
 #      (ADR-007): app ohne Anmelde-Geheimnisse und Keycloak-Netz, gehärtet; app-mitarbeiter vollständig
 #   3. Anwendungs-Image mit apache-oidc.conf: Konfiguration gültig; angebot-stafl.de (Standard-Host) verhält sich
 #      unverändert; die neuen Hosts liefern ohne Anmeldung nichts aus der Anwendung aus
-#   3a. Beide Anwendungs-Container starten wie im Betrieb (Compose) und sind voneinander getrennt
+#   3a. Beide Anwendungs-Container und der Dienst postausgang starten wie im Betrieb (Compose) und sind voneinander getrennt
 #   3b. Keycloak startet wirklich – mit Start-Konto und nach der Einrichtung ohne (Neustart)
 #   4. Caddyfile (mit den Anmelde-Hosts) gültig; deren Ziele gibt es nur mit der Ergänzungsdatei
 set -euo pipefail
@@ -188,6 +188,24 @@ elif was == 'mitarbeiter-vollstaendig':
     assert {'/var/www/html', '/var/www/html/data', '/var/www/dashboard', '/etc/apache2/sites-enabled/zz-stafl-oidc.conf', '/var/www/karte'} <= ziele(ma)
     assert ma['environment']['OIDC_SECRET_KONTEN'] and ma['environment']['WA_KONTEN_URL'] == 'http://keycloak:8080'
     assert ma.get('restart') == 'unless-stopped' and ma['logging']['options']['max-size'] == '10m'
+elif was == 'postausgang-kunde':
+    # Postausgang von innen (ADR-007): Kundenseite legt E-Mails nur ab, kennt kein Postfach und keinen Schlüssel
+    e = app['environment']
+    assert e['WA_POSTAUSGANG'] == 'warteschlange' and 'WA_GEHEIM_DIR' not in e, e
+    assert {k for k in basis['environment'] if k.startswith('MAIL_')} <= set(e) and all(e[k] == '' for k in e if k.startswith('MAIL_')), e
+    assert '/var/www/geheim' not in ziele(app)
+    assert ma['environment']['WA_GEHEIM_DIR'] == '/var/www/geheim' and '/var/www/geheim' in ziele(ma) and 'WA_POSTAUSGANG' not in ma['environment']
+elif was == 'postausgang-dienst':
+    p = s['postausgang']; e = p['environment']
+    assert p['image'] == app['image'] and p.get('pull_policy') == 'never' and not p.get('build') and p.get('user') == 'www-data'
+    assert p.get('restart') == 'unless-stopped' and p['logging']['options']['max-size'] == '10m' and 'postausgang.php' in ' '.join(p['command'])
+    assert 'postausgang.php' in ' '.join(p['healthcheck']['test']) and '--pruefen' in p['healthcheck']['test']
+    assert not p.get('ports') and set(p['networks']) == {'postausgang'} and d['networks']['postausgang'].get('internal') is not True
+    v = {x['target']: x for x in p['volumes']}
+    assert set(v) == {'/var/www/html', '/var/www/html/data', '/var/www/geheim'} and v['/var/www/html']['read_only'] and v['/var/www/geheim']['read_only'], v
+    assert all(e.get(k) == basis['environment'][k] for k in basis['environment'] if k.startswith('MAIL_') or k == 'DOMAIN'), e
+    assert e['WA_GEHEIM_DIR'] == '/var/www/geheim' and 'WA_POSTAUSGANG' not in e and not [k for k in e if k.startswith('OIDC_')]
+    assert p.get('read_only') is True and 'no-new-privileges:true' in p.get('security_opt', []) and float(p['cpus']) > 0 and int(p['mem_limit']) > 0
 PY
 }
 pruefe_json kunden-geheimnisse && ok "Kundenseite (app): keine Anmelde-Geheimnisse, kein Konten-Dienstkonto (ADR-007)" || nein "Kundenseite enthält Anmelde-Geheimnisse"
@@ -195,6 +213,8 @@ pruefe_json kunden-dateien && ok "Kundenseite (app): nur Anwendung und Datenordn
 pruefe_json kunden-netz && ok "Netze: Kundenseite nur mit Caddy (default); Mitarbeiter-Hosts und Keycloak im Netz intern" || nein "Netze der Container-Trennung"
 pruefe_json kunden-haertung && ok "Kundenseite gehärtet: nur lesbar, /tmp und /run im Speicher, no-new-privileges, Grenzen für CPU/Speicher/Prozesse" || nein "Härtung der Kundenseite"
 pruefe_json mitarbeiter-vollstaendig && ok "app-mitarbeiter: gleiches Image, alles aus docker-compose.yml plus Anmeldung, Dashboard, Karte" || nein "app-mitarbeiter unvollständig"
+pruefe_json postausgang-kunde && ok "Postausgang: Kundenseite ohne Postfach-Werte und ohne Schlüsselordner, legt nur ab (ADR-007)" || nein "Postausgang: Kundenseite kennt das Postfach"
+pruefe_json postausgang-dienst && ok "Postausgang: eigener Dienst, gleiches Image, www-data, nur lesbar, kein Port, eigenes Netz, Postfach und Schlüssel nur lesend" || nein "Dienst postausgang"
 rm -f "$MIT" "$OHNE"
 
 # ── 3. Anwendungs-Image mit der Betriebskonfiguration ──
@@ -307,10 +327,10 @@ app2_ende() {
   docker run --rm -v "$APP2/daten:/d" stafl-app:pruefung sh -c 'rm -rf /d/* /d/.[!.]*' >/dev/null 2>&1 || true
   rm -rf "$APP2" 2>/dev/null || true
 }
-mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte"
+mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte" "$APP2/daten-geheim"
 cp "$REPO/docker-compose.yml" "$APP2/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/apache-oidc.conf" "$APP2/deploy/anmeldung/"
 cp -r "$REPO/deploy/image" "$APP2/deploy/"; cp -r "$REPO/app" "$REPO/dashboard" "$APP2/"
-cp -r "$REPO/tests/fixtures/data-seed/." "$APP2/daten/"; chmod -R a+rwX "$APP2/daten"; chmod -R a+rX "$APP2/app" "$APP2/dashboard" "$APP2/deploy"
+cp -r "$REPO/tests/fixtures/data-seed/." "$APP2/daten/"; chmod -R a+rwX "$APP2/daten" "$APP2/daten-geheim"; chmod -R a+rX "$APP2/app" "$APP2/dashboard" "$APP2/deploy"
 { cat "$ENV"; printf 'STAFL_APP_VERSION=pruefung\nKUNDEN_CPUS=1\nKUNDEN_SPEICHER=512m\nNOTZUGANG_PORT=18192\n'; } > "$APP2/.env"
 dc2() { (cd "$APP2" && docker compose -p "$APPPROJ" -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml "$@"); }
 # Abruf im Container (ohne veröffentlichte Ports): dienst host pfad [methode] [inhalt] → „Status Antwortanfang“
@@ -319,7 +339,7 @@ abruf() { dc2 exec -T "$1" php -r '
         "header" => "Host: " . $argv[1] . "\r\nX-Forwarded-Proto: https\r\nContent-Type: application/json\r\n"]];
   $b = @file_get_contents("http://127.0.0.1" . $argv[2], false, stream_context_create($o));
   echo preg_match("#^HTTP/\S+ (\d{3})#", $http_response_header[0] ?? "", $m) ? $m[1] : "000", " ", substr((string)$b, 0, 400);' -- "$2" "$3" "${4:-GET}" "${5:-}" 2>/dev/null; }
-if dc2 up -d --no-build app app-mitarbeiter >/tmp/app2-start.txt 2>&1; then
+if dc2 up -d --no-build app app-mitarbeiter postausgang >/tmp/app2-start.txt 2>&1; then
   for _ in $(seq 1 30); do case "$(abruf app angebot-stafl.de /)" in 200*) break;; esac; sleep 1; done
   case "$(abruf app angebot-stafl.de /)" in 200*) ok "app (Kundenseite) startet mit nur lesbarem Dateisystem und liefert die Startseite";; *) nein "app startet nicht" "$(dc2 logs --tail 20 app 2>&1)";; esac
   case "$(abruf app angebot-stafl.de '/api/?action=kunde_login' POST '{"username":"x","password":"y"}')" in 401*"nicht korrekt"*) ok "app: Kundenanmeldung antwortet (Fehlversuch im Datenordner vermerkt)";; *) nein "app: Kundenanmeldung" "$(abruf app angebot-stafl.de '/api/?action=kunde_login' POST '{"username":"x","password":"y"}')";; esac
@@ -340,6 +360,17 @@ if dc2 up -d --no-build app app-mitarbeiter >/tmp/app2-start.txt 2>&1; then
   for _ in $(seq 1 30); do case "$(abruf app-mitarbeiter dashboard-stafl.de '/api/?action=status')" in 401*) break;; esac; sleep 1; done
   case "$(abruf app-mitarbeiter dashboard-stafl.de '/api/?action=status')" in 401*) ok "app-mitarbeiter: Mitarbeiter-Hosts nur mit Anmeldung (401)";; *) nein "app-mitarbeiter: dashboard-stafl.de" "$(abruf app-mitarbeiter dashboard-stafl.de '/api/?action=status') $(dc2 logs --tail 20 app-mitarbeiter 2>&1)";; esac
   [ "$(dc2 exec -T app-mitarbeiter env | grep -c '^OIDC_SECRET_KONTEN=')" = 1 ] && ok "app-mitarbeiter: Anmelde-Geheimnisse und Konten-Dienstkonto vorhanden" || nein "app-mitarbeiter ohne Anmelde-Geheimnisse"
+  # Postausgang von innen (ADR-007): Dienst läuft (Lebenszeichen), ist abgeschottet; die Kundenseite kennt kein Postfach
+  for _ in $(seq 1 30); do dc2 exec -T postausgang php /var/www/html/api/postausgang.php --pruefen >/dev/null 2>&1 && break; sleep 1; done
+  dc2 exec -T postausgang php /var/www/html/api/postausgang.php --pruefen >/dev/null 2>&1 && ok "postausgang: Dienst läuft (frisches Lebenszeichen im Datenordner)" \
+    || nein "postausgang läuft nicht" "$(dc2 logs --tail 20 postausgang 2>&1)"
+  [ "$(dc2 exec -T postausgang id -un 2>/dev/null)" = www-data ] && ! dc2 exec -T postausgang sh -c 'touch /var/www/html/probe || touch /var/www/geheim/probe' 2>/dev/null \
+    && ok "postausgang: als www-data, Anwendung und Schlüsselordner nur lesbar" || nein "postausgang: Nutzer oder Schreibrechte"
+  dc2 exec -T postausgang php -r 'exit(gethostbynamel("app-mitarbeiter") === false && gethostbynamel("keycloak") === false && gethostbynamel("app") === false ? 0 : 1);' 2>/dev/null \
+    && ok "postausgang: weder Apps noch Keycloak im Netz erreichbar" || nein "postausgang erreicht andere Dienste"
+  dc2 exec -T app sh -c 'test -z "$MAIL_SMTP_PASS$MAIL_SMTP_HOST" && test "$WA_POSTAUSGANG" = warteschlange && test ! -e /var/www/geheim' 2>/dev/null \
+    && ok "app: kein Postfach in der Umgebung, kein Schlüsselordner, Versand nur über den Postausgang" || nein "app kennt das Postfach"
+  case "$(abruf app angebot-stafl.de '/api/postausgang.php')" in 404*) ok "app: Postausgang-Skript nicht über den Webserver aufrufbar (404)";; *) nein "app: api/postausgang.php erreichbar" "$(abruf app angebot-stafl.de '/api/postausgang.php')";; esac
   # Notzugang (ADR-007 Regel 6): geschlossen im Normalbetrieb; nach WA_NOTZUGANG=an nur über 127.0.0.1 offen – die Kundenseite
   # öffnet ihn auch mit der früheren Zeile WA_EIGENE_ANMELDUNG=an nicht mehr
   [ "$(docker port "$(dc2 ps -q app-mitarbeiter)" 8090/tcp 2>/dev/null)" = "127.0.0.1:18192" ] && ok "app-mitarbeiter: Notzugang nur auf 127.0.0.1 veröffentlicht" \

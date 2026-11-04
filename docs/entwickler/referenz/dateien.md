@@ -68,6 +68,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `order_outbox.php` | angebot | Durable per-recipient jobs live in the same document/transaction as the order. |
 | `orders.php` | angebot | Shared order operations for the website and future app clients. |
 | `ort.php` | verwaltung | Ungefährer Ort (Stadt) einer IP-Adresse – für die Karte der Kunden-Anmeldungen (Auswertung) Datenquelle |
+| `postausgang.php` | plattform | Dienst „postausgang“ (ADR-007, Postausgang von innen): ein Durchgang – fällige Versandaufträge der Kundenseite verschicken (lib/postausgang.php) und ein Lebenszeichen schreiben. |
 | `storage.php` | plattform | Shared persistence for HTTP and maintenance tools. |
 
 ## `app/api/aktionen/`
@@ -129,6 +130,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `kern.php` | plattform | Antworten, Eingaben, Datenprüfung |
 | `kunden.php` | verwaltung | Kundenstammdaten und Kunden-Sitzung |
 | `kundenmail.php` | angebot | E-Mails an Kunden, Abmelden, Bestellwunsch-Vorlagen, Einmal-Links, Versand |
+| `laden.php` | plattform | Grundlagen laden: Einstellungen, Speicherschicht und alle Funktionen der Fachbereiche – gemeinsam für den API-Einstieg (api/index.php) und den Dienst „postausgang“ (api/postausgang.php, ADR-007). |
 | `module-liste.php` | plattform | ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/module.toml und regeln/wartung.toml – nicht von Hand ändern. |
 | `module.php` | plattform | Modulzustand zur Laufzeit: wer darf welche Oberfläche nutzen (GR-102)? Grundlage ist ausschließlich die erzeugte Liste lib/module-liste.php (Modulregister regeln/module.toml und Entscheidungstabelle regeln/wartung.toml). |
 | `notfall.php` | plattform | Notfallmodus (Oberfläche |
@@ -137,6 +139,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `passkey.php` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge – ohne Fremdbibliothek. |
 | `pdf-breiten.php` | plattform | Zeichenbreiten der PDF-Standardschriften Helvetica und Helvetica-Bold (WinAnsiEncoding, Byte 0–255, Tausendstel der Schriftgröße), aus den Adobe-Metriken. |
 | `pdf.php` | plattform | Schlanker PDF-Erzeuger (ohne Fremdbibliothek) |
+| `postausgang.php` | plattform | Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4) |
 | `preisverlauf.php` | angebot | Preisverlauf (Wochenstände) |
 | `protokoll.php` | plattform | Protokoll, Änderungstexte, Anmeldeversuche |
 | `rechte.php` | plattform | Nutzerrechte: was eine Rolle bzw. ein einzelner Nutzer im Eingabebereich sehen und tun darf. |
@@ -429,6 +432,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (eigene Anmeldung mit den bisherigen Passwörtern) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
 | `passwort-zuruecksetzen.php` | plattform | Wird von passwort-zuruecksetzen.sh im App-Container ausgeführt (nicht über das Web erreichbar). |
 | `passwort-zuruecksetzen.sh` | plattform | Notfall: Passwort eines Nutzers zurücksetzen (z. |
+| `postfach-schluessel.sh` | plattform | Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts aus dem gemeinsamen Datenordner in den Ordner daten-geheim umziehen (ADR-007, Postausgang von innen). daten-geheim ist nur in app-mitarbeiter und im … |
 | `release-modus-einrichten.sh` | plattform | Einmalig auf dem Server (als root) |
 | `release-zurueck.sh` | plattform | Notfall: auf die Version vor dem letzten Release zurückgehen (Daten bleiben unverändert). sh /opt/wochenangebot/deploy/release-zurueck.sh Der zurückgenommene Stand wird nicht erneut automatisch eingespielt; ein neuer … |
 | `sichern.sh` | plattform | Tägliche Datensicherung des Ordners daten/. |
@@ -665,6 +669,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_karte_laden.sh` | plattform | Test von deploy/karte-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
 | `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh (Notzugang über einen SSH-Tunnel, ADR-007 Regel 6) – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
+| `test_postfach_schluessel.sh` | plattform | Test von deploy/postfach-schluessel.sh (Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner, ADR-007) – in einem Wegwerf-Ordner, ohne root (Besitzer wird nur versucht zu setzen) – und dass die Anwendung … |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |
 | `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |
@@ -740,6 +745,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_p0.py` | angebot | 1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt |
 | `test_passkeys.py` | plattform | Passkeys (WebAuthn) für Mitarbeiter-Zugänge. |
 | `test_passwortpruefung.py` | plattform | Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst auf AUX_PORT): standardmäßig aus; eingeschaltet werden betroffene Passwörter beim Festlegen abgelehnt (Mitarbeiter, Kunden), bestehende bei der … |
+| `test_postausgang.py` | plattform | Testgruppe postausgang |
 | `test_protokoll.py` | plattform | Aufbewahrung des Aktivitätsprotokolls (lib/protokoll.php, PROTOKOLL_MONATE = 6; Inhaber 25.10.2026). |
 | `test_qs.py` | qs | Qualitätssicherung (Modul qs, Oberfläche qs.intern unter /module/qs/) – QM-System |
 | `test_qs_ablage.py` | qs | Qualitätssicherung – Dokumentenablage (QM-System Bauabschnitt 2) |

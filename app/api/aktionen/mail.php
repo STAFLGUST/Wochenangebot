@@ -114,7 +114,7 @@ switch ($action) {
                 if (!$same && $user !== '') fail('Bei neuem oder geändertem Server, Port, Verschlüsselung oder Benutzer bitte das Passwort des Postfachs (erneut) eingeben.', 422);
                 $enc = $same ? (string)($old['passEnc'] ?? '') : '';
             } else {
-                try { $enc = mail_encrypt($pw); } catch (RuntimeException $e) { fail($e->getMessage(), 500); }
+                try { $enc = mail_encrypt($pw, ['host' => $host, 'port' => $port, 'secure' => $secure, 'user' => $user]); } catch (RuntimeException $e) { fail($e->getMessage(), 500); }   // an dieses Postfach gebunden (v2), sobald der Schlüssel im eigenen Ordner liegt
             }
             $new = ['host' => $host, 'port' => $port, 'secure' => $secure, 'user' => $user, 'passEnc' => $enc, 'from' => $from, 'fromName' => $name, 'replyTo' => $reply, 'updatedAt' => now(), 'updatedBy' => $me['name']];
             $intern ? store_write('mailkonto-intern', $new) : store_write('mailkonto', $new);
