@@ -59,7 +59,7 @@ pfade = [
   "tests/e2e/test_sidenav.py", "tests/e2e/test_p0.py", "tests/e2e/test_fehlerpruefung.py",
   "tests/unit/merge.test.js", "tests/fixtures/angebote/**",
 ]
-pfade_geplant = ["app/api/module/angebot/**"]
+pfade_geplant = ["app/api/module/angebot/**", "app/module/angebot/**"]
 hinweise = [
   "Kunden-Frontend angebot-stafl.de ist produktiv und besonders schützenswert (Regeln GR-001 bis GR-005).",
   "app/assets/admin.js ist der gemeinsame Eingabebereich aller heutigen Fachfunktionen (Hotspot): nur kleine, klar abgegrenzte Änderungen.",
