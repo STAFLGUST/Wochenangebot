@@ -61,7 +61,7 @@ def _kunden_geteilt():
     if not t or not MITARBEITERSEITE:
         return None
     dt, stufe = t
-    return dt if dt.ist_intern('kundenstamm', dt.kundenseite(stufe=stufe)) else None
+    return dt if stufe >= 2 else None   # wie kunden_geteilt() in app/api/lib/kunden.php
 
 
 def _json(raw):
