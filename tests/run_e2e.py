@@ -330,11 +330,13 @@ def run_in(name, slot):
         else:
             subprocess.run([sys.executable, os.path.join(REPO, 'deploy/datenbank.py'), 'migrate', data, '--offline'], check=True, capture_output=True)
     # Getrennte Daten (ADR-007 Stufe 2): Gruppe datentrennung immer, alle anderen mit WA_TEST_TRENNUNG=1 – mit dem echten
-    # Werkzeug deploy/daten_trennen.py; der Testserver ist dann die Mitarbeiterseite (WA_DATEN_INTERN)
+    # Werkzeug deploy/daten_trennen.py; der Testserver ist dann die Mitarbeiterseite (WA_DATEN_INTERN). Standard ist die höchste
+    # Trennstufe; WA_TEST_TRENNSTUFE=n prüft eine frühere (z. B. 1 = Stand nach dem Einspielen, vor dem Serverschritt).
     intern = os.path.join(WORK, f'intern-{name}')
     shutil.rmtree(intern, ignore_errors=True)
     if name in TRENNUNG or os.environ.get('WA_TEST_TRENNUNG') == '1':
-        subprocess.run([sys.executable, os.path.join(REPO, 'deploy/daten_trennen.py'), 'trennen', data, intern, '--offline'], check=True, capture_output=True)
+        stufe = ['--stufe', os.environ['WA_TEST_TRENNSTUFE']] if os.environ.get('WA_TEST_TRENNSTUFE') and name not in TRENNUNG else []
+        subprocess.run([sys.executable, os.path.join(REPO, 'deploy/daten_trennen.py'), 'trennen', data, intern, '--offline'] + stufe, check=True, capture_output=True)
         php_env['WA_SPUR_INTERN'] = '1'   # Zugriffe der Kundenseite auf interne Dokumente ins Serverprotokoll (app/api/storage.php)
         if TRENNUNG.get(name) != 'kundenseite':
             php_env['WA_DATEN_INTERN'] = intern

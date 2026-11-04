@@ -47,7 +47,7 @@ Zusätzliche Unit-Tests: `node tests/unit/stock_prices.test.js` und `php tests/u
 Der Parser-Test prüft auch „erfasst“ in J und Ankunft in M sowie reine Zugangsdateien.
 
 Getrennte Daten (ADR-007 Stufe 2, höchste Trennstufe): `WA_TEST_TRENNUNG=1 python3 tests/run_e2e.py …` trennt die Testdaten jeder Gruppe vor dem
-Start mit `deploy/daten_trennen.py`; der Testserver ist dann die Mitarbeiterseite (`WA_DATEN_INTERN`), und `WA_SPUR_INTERN=1`
+Start mit `deploy/daten_trennen.py` (eine frühere Stufe mit `WA_TEST_TRENNSTUFE=n`, z. B. `1` = Stand nach dem Einspielen und vor dem Serverschritt); der Testserver ist dann die Mitarbeiterseite (`WA_DATEN_INTERN`), und `WA_SPUR_INTERN=1`
 schreibt jeden Zugriff einer öffentlichen Aktion auf ein internes Dokument ins Serverprotokoll (`[speicher] …`). Die volle Suite
 muss auch so grün sein. Die Hilfen in `tests/e2e/umgebung.py` lesen und schreiben dabei wie der Testserver: `storage_raw('kunden')`
 liefert das geteilte Kundendokument zusammengesetzt (Portalfelder aus `kunden`, übrige aus `kundenstamm`), `storage_write('kunden', …)`

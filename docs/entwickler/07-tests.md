@@ -69,6 +69,7 @@ Eine **Gruppe** ist eine Testdatei `tests/e2e/test_<gruppe>.py` mit einem Eintra
 | `WA_TEIL=k/n` | nur Teil *k* von *n* (Aufteilung nach `GEWICHT`, siehe unten) | alle Gruppen |
 | `WA_RETRY=0` | fehlgeschlagene Gruppen nicht wiederholen | Wiederholung an |
 | `WA_TEST_TRENNUNG=1` | Testdaten jeder Gruppe vorher getrennt (ADR-007, höchste Trennstufe), Testserver = Mitarbeiterseite; die volle Suite muss auch so grün sein (`tests/README.md`) | gemeinsame Daten |
+| `WA_TEST_TRENNSTUFE=n` | mit `WA_TEST_TRENNUNG=1`: auf Stufe *n* statt der höchsten trennen (z. B. `1` = Server nach dem Einspielen, vor `daten-trennen.sh trennen`) | höchste Stufe |
 | `WA_SHOTS` | Ordner für Bildschirmfotos | `tests/.ergebnisse/` |
 
 **`GEWICHT`:** geschätzte Laufzeit je Gruppe in Sekunden (Median aus CI-Protokollen). Bestimmt nur die
