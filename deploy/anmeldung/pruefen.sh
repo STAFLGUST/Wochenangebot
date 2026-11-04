@@ -282,7 +282,13 @@ docker logs stafl-pruefung 2>&1 | grep -iE "AH0|error" | grep -viE "metadata|oid
 # Startet app (Kundenseite) und app-mitarbeiter in einem Wegwerf-Projekt – ohne Caddy und Keycloak – und prüft von innen:
 # Trennung der Netze, keine Anmelde-Geheimnisse auf der Kundenseite, nur lesbares Dateisystem, Datenordner beschreibbar.
 APP2="$(mktemp -d)"; APPPROJ=stafl-apppruefung
-app2_ende() { (cd "$APP2" && docker compose -p "$APPPROJ" down -v >/dev/null 2>&1); rm -rf "$APP2"; }
+# Aufräumen: Dateien, die die Anwendung als www-data in daten/ angelegt hat, darf der Nutzer des Prüflaufs nicht löschen –
+# daher über einen Wegwerf-Container desselben Images; Reste in /tmp brechen die Prüfung nie ab
+app2_ende() {
+  (cd "$APP2" && docker compose -p "$APPPROJ" down -v >/dev/null 2>&1) || true
+  docker run --rm -v "$APP2/daten:/d" stafl-app:pruefung sh -c 'rm -rf /d/* /d/.[!.]*' >/dev/null 2>&1 || true
+  rm -rf "$APP2" 2>/dev/null || true
+}
 mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte"
 cp "$REPO/docker-compose.yml" "$APP2/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/apache-oidc.conf" "$APP2/deploy/anmeldung/"
 cp -r "$REPO/deploy/image" "$APP2/deploy/"; cp -r "$REPO/app" "$REPO/dashboard" "$APP2/"
