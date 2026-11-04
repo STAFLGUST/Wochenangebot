@@ -1765,22 +1765,59 @@ with sync_playwright() as pw:
     stat = "fetch('../api/?action=status').then(async r => [r.status, await r.json().catch(() => ({}))])"
     code, j = pk.evaluate(stat)
     check('Sitzungen: Kim im Dashboard angemeldet', code == 200 and j.get('loggedIn'), (code, j))
-    # Inaktivität nachgestellt (sonst 8 Stunden warten): letzte Aktivität der PHP-Sitzung zurückdrehen
-    sid_k = kekse(ck, 'dashboard.stafl.test')['__Host-WA_ADMIN']['value']; pfad = os.path.join(WORK, 'sessions', 'sess_' + sid_k)
-    with open(pfad, encoding='utf-8') as f:
-        roh = f.read()
-    neu = re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - 9 * 3600};', roh)
-    with open(pfad, 'w', encoding='utf-8') as f:
-        f.write(neu)
+    # Abmelden nach Inaktivität gilt über alle Adressen zusammen (04.11.2026): letzte Aktivität je Anmeldung bei Keycloak im
+    # Dokument oidc-aktivitaet. Inaktivität nachgestellt (sonst 8 Stunden warten): Kims Eintrag zurückdrehen.
+    def doc_roh(name):
+        p_ = os.path.join(WORK, 'app', 'data', name + '.php')
+        if not os.path.exists(p_):
+            return {}
+        r_ = open(p_, encoding='utf-8').read()
+        return json.loads(r_[r_.index('?>') + 2:].strip()) if '?>' in r_ else json.loads(r_)
+
+    def kim_inaktiv(sekunden):
+        sids = {v.get('oidcSid') for v in doc_roh('sitzungen').values() if v.get('uid') == kim and v.get('oidcSid')}
+        d = doc_roh('oidc-aktivitaet')
+        for k_ in d:
+            if k_ in sids:
+                d[k_] = int(time.time()) - sekunden
+        with open(os.path.join(WORK, 'app', 'data', 'oidc-aktivitaet.php'), 'w', encoding='utf-8') as f:
+            f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps(d))
+        return bool(sids & set(d))
+
+    def php_sitzung_ruht(host, sekunden):
+        sid_ = kekse(ck, host)['__Host-WA_ADMIN']['value']; pfad_ = os.path.join(WORK, 'sessions', 'sess_' + sid_)
+        with open(pfad_, encoding='utf-8') as f:
+            roh_ = f.read()
+        with open(pfad_, 'w', encoding='utf-8') as f:
+            f.write(re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - sekunden};', roh_))
+
+    pa_i = eigene_seite(ck.new_page())
+    pa_i.goto(A + '/admin/'); pa_i.wait_for_selector('#screen-editor:not([hidden])')
+    check('Kim zusätzlich im Eingabebereich (Single Sign-on), Aktivität je Anmeldung vermerkt', kim_inaktiv(0))
+    # Dashboard ruht 9 Stunden, Kim arbeitet aber im Eingabebereich: zählt, die Anmeldung gilt weiter (vorher je Adresse)
+    php_sitzung_ruht('dashboard.stafl.test', 9 * 3600)
     code, j = pk.evaluate(stat)
-    check('nach Inaktivität: keine neue Sitzung ohne erneute Anmeldung (403, max_age=0)', neu != roh and code == 403 and j.get('code') == 'reauth_required'
+    check('Leerlauf über alle Adressen: Dashboard lange ohne Anfrage, im Eingabebereich aktiv → weiter angemeldet', code == 200 and j.get('loggedIn'), (code, j))
+    check('Kim inaktiv nachgestellt (9 Stunden, Einstellung 8 Stunden)', kim_inaktiv(9 * 3600))
+    code, j = pk.evaluate(stat)
+    check('nach Inaktivität: keine neue Sitzung ohne erneute Anmeldung (403, max_age=0)', code == 403 and j.get('code') == 'reauth_required'
           and 'max_age%3D0' in j.get('anmelden', '') and 'Inaktivität' in j.get('error', ''), (code, j))
+    # Bestand hat Kim noch nie geöffnet: dort entstünde sonst über Single Sign-on still eine neue Sitzung
+    pb_i = eigene_seite(ck.new_page())
+    pb_i.goto(B + '/admin/'); pb_i.wait_for_selector('#password', timeout=30000)
+    check('… auch auf einer noch nie geöffneten Adresse: Keycloak verlangt das Passwort', pb_i.url.startswith(L) and pb_i.is_visible('#password'), pb_i.url)
     pk.goto(D + j.get('anmelden', '') + urllib.parse.quote(D + '/dashboard/', safe=''))
     pk.wait_for_selector('#password')
     check('… Keycloak verlangt das Passwort erneut', pk.is_visible('#password'))
     pk.fill('#password', KIM['zweit']); pk.click('#kc-login'); pk.wait_for_load_state()
     code, j = pk.evaluate(stat)
     check('… nach erneuter Anmeldung weiter', code == 200 and j.get('loggedIn'), (code, j))
+    # Die erneute Anmeldung gilt überall: Eingabebereich (Sitzung von vorher) und Bestand (verlangte eben noch das Passwort)
+    code, j = pa_i.evaluate(stat)
+    check('… danach im Eingabebereich ohne weitere Passwortabfrage', code == 200 and j.get('loggedIn'), (code, j))
+    pb_i.goto(B + '/admin/'); pb_i.wait_for_selector('#screen-editor:not([hidden]), #password', timeout=30000)
+    check('… und im Bestand ohne weitere Passwortabfrage', pb_i.url.startswith(B + '/admin/') and pb_i.locator('#password').count() == 0, pb_i.url)
+    pa_i.close(); pb_i.close()
     # „Sitzung beenden“ (seit Stand 9 im Modul Sicherheit, Aktion nur auf dessen Host – GR-109): gilt auch, solange die
     # Sitzung bei Keycloak und im Webserver-Modul noch läuft. Der Administrator ist in diesem Browser angemeldet (SSO).
     check('„Sitzung beenden“ auf dem Verwaltungs-Host nicht mehr erreichbar (404)', pg.evaluate(post, ['session_end', {'uid': kim}])[0] == 404)
@@ -1811,12 +1848,10 @@ with sync_playwright() as pw:
     check('Protokoll: Ablauf und Beenden vermerkt', any('Inaktivität abgelaufen' in str(e) for e in protokoll_roh()) and any('Beendete Sitzung' in str(e) for e in protokoll_roh()))
     # Abmelden nach Inaktivität (Befund 03.11.2026): vorher 403 „erneut anmelden“ ohne Abmeldeadresse – die Seite sah abgemeldet
     # aus, die Anmeldung bei Keycloak blieb bestehen. Jetzt: 200 mit Adresse der zentralen Abmeldung, danach auch Keycloak abgemeldet.
-    sid_k = kekse(ck, 'dashboard.stafl.test')['__Host-WA_ADMIN']['value']; pfad = os.path.join(WORK, 'sessions', 'sess_' + sid_k)
-    with open(pfad, encoding='utf-8') as f:
-        roh = f.read()
-    with open(pfad, 'w', encoding='utf-8') as f:
-        f.write(re.sub(r'(^|;)seen\|i:\d+;', lambda m: f'{m.group(1)}seen|i:{int(time.time()) - 9 * 3600};', roh))
-    code, j = pk.evaluate("fetch('../api/?action=logout', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])")
+    # Wie die Oberfläche: CSRF-Token von vorher (die Seite kennt es), dann inaktiv
+    tok_k = pk.evaluate("fetch('../api/?action=status').then(r => r.json()).then(s => s.csrf)")
+    kim_inaktiv(9 * 3600)
+    code, j = pk.evaluate("t => fetch('../api/?action=logout', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': t}, body: '{}'}).then(async r => [r.status, await r.json().catch(() => ({}))])", tok_k)
     check('Abmelden nach Inaktivität: 200 mit Adresse der zentralen Abmeldung', code == 200 and str(j.get('abmelden', '')).startswith('/oidc/callback?logout='), (code, j))
     pk.goto(D + str(j.get('abmelden', '/'))); pk.wait_for_url('**/dashboard/abgemeldet.html')
     pk.goto(D + '/dashboard/'); pk.wait_for_selector('#username')
@@ -1997,6 +2032,120 @@ with sync_playwright() as pw:
     check('… Anmeldeseite wieder ohne „Passwort vergessen?“', anmelde_link_vergessen() == 0)
     code, aus = konten('passwort-vergessen', 'status')
     check('… Status: aus, Ablauf bleibt abgesichert (für das nächste Einschalten)', 'Passwort vergessen: aus' in aus and '(abgesichert)' in aus, aus)
+
+    # ── Mitarbeiter löschen: Konto der zentralen Anmeldung wird mitgelöscht (Inhaber 04.11.2026) ──
+    ctx = br.new_context(ignore_https_errors=True); pg = eigene_seite(ctx.new_page())
+    pg.goto(W + '/admin/'); pg.wait_for_selector('#username'); pg.fill('#username', 'admin'); pg.fill('#password', ADMIN_NEU); pg.click('#kc-login')
+    otp_eingeben(pg, 'admin'); pg.wait_for_selector('#screen-editor:not([hidden])')
+    kc_h = lambda: {'Authorization': 'Bearer ' + vtoken(), 'Content-Type': 'application/json'}
+    kc_konto = lambda name: json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=' + name, kopf=kc_h())[2])
+
+    def geloescht_roh():
+        p_ = os.path.join(WORK, 'app', 'data', 'oidc-geloescht.php')
+        if not os.path.exists(p_):
+            return {}
+        r_ = open(p_, encoding='utf-8').read()
+        return json.loads(r_[r_.index('?>') + 2:].strip())
+
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Otto', 'nachname': 'Alt', 'username': 'otto.alt', 'email': 'otto@stafl.test', 'rollen': ['editor'], 'active': True}])
+    otto = j.get('user', {}).get('id', '')
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': otto, 'was': 'anlegen'}])
+    otto_sub = nutzer_roh().get('otto.alt', {}).get('oidcSub', '')
+    check('Vorbereitung: Otto mit verknüpftem Konto in der zentralen Anmeldung', code == 200 and otto_sub and len(kc_konto('otto.alt')) == 1, (code, j))
+    code, j = pg.evaluate(post, ['user_delete', {'id': otto}])
+    check('Mitarbeiter gelöscht: Konto in der zentralen Anmeldung mitgelöscht (kein Hinweis nötig)', code == 200 and not j.get('hinweis') and kc_konto('otto.alt') == [], (code, j))
+    check('… Kennung als gelöscht vermerkt, Löschen im Protokoll', otto_sub in geloescht_roh()
+          and any('otto.alt' in str(e) and 'Mitarbeiter gelöscht' in str(e) for e in protokoll_roh()))
+    # Übrig gebliebenes Konto eines gelöschten Mitarbeiters (z. B. Keycloak beim Löschen nicht erreichbar) – nachgestellt:
+    # Konto „paul.rest“ in Keycloak, seine Kennung als gelöscht vermerkt; dann ein neuer Mitarbeiter mit demselben Namen
+    PAUL_PW = 'Paul-Altes-Kennwort-CI-4'
+    anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'paul.rest', 'enabled': True, 'email': 'paul@stafl.test', 'emailVerified': True,
+            'firstName': 'Paul', 'lastName': 'Rest', 'credentials': [{'type': 'password', 'value': PAUL_PW, 'temporary': False}]}).encode(), kc_h())
+    paul_alt = (kc_konto('paul.rest') or [{}])[0].get('id', '')
+    with open(os.path.join(WORK, 'app', 'data', 'oidc-geloescht.php'), 'w', encoding='utf-8') as f:
+        f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps({**geloescht_roh(), paul_alt: int(time.time())}))
+    code, j = pg.evaluate(post, ['user_save', {'id': '', 'vorname': 'Paul', 'nachname': 'Neu', 'username': 'paul.rest', 'email': 'paul.neu@stafl.test', 'rollen': ['editor'], 'active': True}])
+    paul = j.get('user', {}).get('id', '')
+    check('Vorbereitung: altes Konto „paul.rest“ (als gelöscht vermerkt), neuer Mitarbeiter „paul.rest“', bool(paul_alt) and code == 200 and paul, (paul_alt, code, j))
+    c3 = br.new_context(ignore_https_errors=True); p3 = eigene_seite(c3.new_page())
+    p3.goto(D + '/'); p3.wait_for_selector('#username'); p3.fill('#username', 'paul.rest'); p3.fill('#password', PAUL_PW); p3.click('#kc-login')
+    p3.wait_for_selector('#db-err:not([hidden])')
+    check('Anmeldung mit dem alten Konto: kein Zugang zum neuen Mitarbeiter, keine Verknüpfung', 'kein Mitarbeiterkonto' in p3.text_content('#db-err')
+          and not nutzer_roh()['paul.rest'].get('oidcSub'), p3.text_content('#db-err'))
+    c3.close()
+    code, j = pg.evaluate(hole, paul)
+    check('Verwaltung: altes Konto erkannt, „Konto anlegen“ angeboten', code == 200 and j['konto'].get('vorhanden') is False and j['konto'].get('altkonto') is True
+          and 'gelöschten Mitarbeiter' in j['konto'].get('hinweis', ''), (code, j))
+    code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'anlegen'}])
+    paul_neu = (kc_konto('paul.rest') or [{}])[0].get('id', '')
+    check('… „Konto anlegen“ ersetzt das alte Konto: neues Konto verknüpft, altes gelöscht', code == 200 and j['konto'].get('verknuepft') and paul_neu not in ('', paul_alt)
+          and nutzer_roh()['paul.rest'].get('oidcSub') == paul_neu and anfrage(f'{KC}/admin/realms/mitarbeiter/users/{paul_alt}', kopf=kc_h())[0] == 404, (code, j, paul_neu))
+    # Konsole: Konten ohne Mitarbeiter (vor dem 04.11.2026 gelöschte Mitarbeiter) finden und löschen
+    anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'lisa.weg', 'enabled': True, 'firstName': 'Lisa', 'lastName': 'Weg'}).encode(), kc_h())
+    code, aus = konten('verwaist')
+    check('Konsole verwaist: zeigt Konten ohne Mitarbeiter, nicht die verknüpften oder noch nicht angemeldeten', code == 0 and "Konto 'lisa.weg'" in aus and "Konto 'fremd'" in aus
+          and not any(f"Konto '{n}'" in aus for n in ('erika', 'kim.konto', 'eva.einladung', 'paul.rest', 'admin', 'neu', 'chef')) and 'verwaist --loeschen' in aus, aus)
+    check('… nur lesen: nichts gelöscht', len(kc_konto('lisa.weg')) == 1)
+    code, aus = konten('verwaist', '--loeschen')
+    check('Konsole verwaist --loeschen: genau diese Konten gelöscht', code == 0 and "gelöscht:  Konto 'lisa.weg'" in aus and kc_konto('lisa.weg') == []
+          and len(kc_konto('erika')) == 1 and len(kc_konto('paul.rest')) == 1, aus)
+    code, aus = konten('verwaist', '--irgendwas')
+    check('… unbekannte Angabe abgelehnt', code == 1 and 'Aufruf' in aus, aus)
+    # „fremd“ (Konto ohne Mitarbeiter aus der Testdatei) für einen erneuten Testlauf ohne Neustart wiederherstellen
+    _fremd = next(u for u in json.load(open(os.path.join(REPO, 'tests', 'oidc', 'realm-mitarbeiter.json'), encoding='utf-8'))['users'] if u['username'] == 'fremd')
+    anfrage(KC + '/admin/realms/mitarbeiter/partialImport', 'POST', json.dumps({'ifResourceExists': 'SKIP', 'users': [_fremd]}).encode(), kc_h())
+    check('… Testkonto „fremd“ wiederhergestellt', len(kc_konto('fremd')) == 1)
+
+    # ── Passwortregeln und Kontosperre aus den Einstellungen der Anwendung (Stand 15, konten.sh richtlinien; Inhaber 04.11.2026) ──
+    _sic2 = os.path.join(WORK, 'app', 'data', 'sicherheit.php')
+    _sic2_alt = open(_sic2, encoding='utf-8').read() if os.path.exists(_sic2) else None
+    _sic2_w = json.loads(_sic2_alt[_sic2_alt.index('?>') + 2:].strip()) if _sic2_alt else {}
+    realm_kc = lambda: json.loads(anfrage(KC + '/admin/realms/mitarbeiter', kopf=kc_h())[2])
+    _realm_alt = {k: realm_kc().get(k) for k in ('passwordPolicy', 'failureFactor', 'waitIncrementSeconds', 'maxFailureWaitSeconds')}
+    try:
+        with open(_sic2, 'w', encoding='utf-8') as f:
+            f.write('<?php http_response_code(404); exit; ?>\n' + json.dumps({**_sic2_w, 'pwMin': 14, 'pwComplex': True, 'lockAfter': 4, 'lockMinutes': 7}))
+        code, aus = konten('richtlinien')
+        r_ = realm_kc()
+        check('Konsole richtlinien: Mindestlänge, gemischte Zeichen und Kontosperre aus den Einstellungen übernommen',
+              code == 0 and 'gesetzt:   Passwörter mindestens 14 Zeichen (Groß-, Kleinbuchstabe und Ziffer), Sperre nach 4 Fehlversuchen für 7 Minuten' in aus
+              and all(t in r_.get('passwordPolicy', '') for t in ('length(14)', 'upperCase(1)', 'lowerCase(1)', 'digits(1)', 'notUsername', 'notEmail', 'passwordHistory(3)'))
+              and r_.get('failureFactor') == 4 and r_.get('waitIncrementSeconds') == 420 and r_.get('maxFailureWaitSeconds') == 420
+              and r_.get('bruteForceProtected') is True and r_.get('permanentLockout') is False, (aus, {k: r_.get(k) for k in ('passwordPolicy', 'failureFactor', 'waitIncrementSeconds')}))
+        code, aus = konten('richtlinien')
+        check('… zweiter Lauf: unverändert („aktuell“)', code == 0 and 'aktuell:   Passwörter mindestens 14 Zeichen' in aus and 'gesetzt:' not in aus, aus)
+        code, j = pg.evaluate(hole, paul)
+        check('Verwaltung: Mindestlänge der zentralen Anmeldung im Zustand (14)', code == 200 and j['konto'].get('minLaenge') == 14, (code, j))
+        code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'passwort', 'passwort': 'Kurz-Kennw-13'}])
+        check('… 13 Zeichen abgelehnt („mindestens 14 Zeichen“)', code == 422 and 'mindestens 14 Zeichen' in j.get('error', ''), (code, j))
+        code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'passwort', 'passwort': 'nur-kleinbuchstaben-lang'}])
+        check('… ohne Großbuchstabe und Ziffer: Keycloak lehnt ab, verständliche Meldung (422)', code == 422
+              and any(w in j.get('error', '') for w in ('Großbuchstaben', 'Ziffern', 'Kleinbuchstaben')), (code, j))
+        code, j = pg.evaluate(post, ['anmeldekonto_aendern', {'id': paul, 'was': 'passwort', 'erzeugen': True}])
+        _sp = j.get('passwort', '')
+        check('… erzeugtes Startpasswort erfüllt die Regeln (lang genug, Groß-, Kleinbuchstabe, Ziffer)', code == 200 and len(_sp) >= 14
+              and re.search('[A-Z]', _sp) and re.search('[a-z]', _sp) and re.search('[0-9]', _sp), (code, {k: v for k, v in j.items() if k != 'passwort'}))
+        code, aus = konten('startpasswort', 'paul.rest')
+        _m = re.search(r'Startpasswort \(nur jetzt sichtbar, persönlich weitergeben\): (\S+)', aus)
+        check('Konsole startpasswort: lang genug und gemischt (von Keycloak angenommen)', code == 0 and _m and len(_m.group(1)) >= 14, aus.replace(_m.group(1), '***') if _m else aus)
+        # Sperre nach 4 Fehlversuchen (statt 5 der Realm-Datei) wirkt
+        for _ in range(4):
+            fehlversuch_abstand()
+            c4 = br.new_context(ignore_https_errors=True); p4 = c4.new_page()
+            p4.goto(D + '/'); p4.wait_for_selector('#username'); p4.fill('#username', 'paul.rest'); p4.fill('#password', 'Falsch-Falsch-Falsch-1'); p4.click('#kc-login')
+            p4.wait_for_load_state(); FEHLVERSUCH[0] = time.time(); c4.close()
+        _bf = json.loads(anfrage(f'{KC}/admin/realms/mitarbeiter/attack-detection/brute-force/users/{paul_neu}', kopf=kc_h())[2])
+        check('… nach 4 Fehlversuchen vorübergehend gesperrt', _bf.get('disabled') is True and _bf.get('numFailures') == 4, _bf)
+        konten('entsperren', 'paul.rest')
+    finally:
+        if _sic2_alt is None:
+            os.path.exists(_sic2) and os.remove(_sic2)
+        else:
+            with open(_sic2, 'w', encoding='utf-8') as f:
+                f.write(_sic2_alt)
+        anfrage(KC + '/admin/realms/mitarbeiter', 'PUT', json.dumps(_realm_alt).encode(), kc_h())
+    check('… Einstellungen und Realm zurückgesetzt', realm_kc().get('failureFactor') == _realm_alt['failureFactor'])
+    ctx.close()
 
     pf.schliessen()
     br.close()

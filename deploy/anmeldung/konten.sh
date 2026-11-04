@@ -17,6 +17,8 @@
 #   sh deploy/anmeldung/konten.sh einladen <benutzername>         # Einladung erneut senden
 #   sh deploy/anmeldung/konten.sh realm-aktualisieren             # Realm auf den aktuellen Stand bringen (idempotent)
 #   sh deploy/anmeldung/konten.sh passwort-vergessen an|aus|status  # „Passwort vergessen?“ auf der Anmeldeseite (Link per Mail)
+#   sh deploy/anmeldung/konten.sh richtlinien                     # Passwortregeln und Kontosperre aus Sicherheit → Einstellungen übernehmen
+#   sh deploy/anmeldung/konten.sh verwaist [--loeschen]           # Konten ohne Mitarbeiter (gelöschte Mitarbeiter) anzeigen bzw. löschen
 #
 # Passwort vergessen (Inhaber 03.11.2026): auf der Anmeldeseite „Passwort vergessen?“ – Keycloak schickt einen Link an die
 # hinterlegte E-Mail-Adresse. Wer einen zweiten Faktor eingerichtet hat, braucht ihn auch dafür (eigener Ablauf
@@ -51,8 +53,17 @@ abbruch() { echo "Abbruch: $*" >&2; exit 1; }
 wert() { sed -n "s/^$1=//p" "$ENV" | tail -1; }
 startwert() { v=$(sed -n "s/^$1=//p" "$START" 2>/dev/null | tail -1); [ -n "$v" ] && echo "$v" || wert "$1"; }
 zufall() { od -An -N48 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-48; }
-# Startpasswort: gut vorlesbar (keine 0/O/1/l/I), 16 Zeichen in Vierergruppen; Realm verlangt mindestens 12
-startpasswort() { tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' < /dev/urandom | head -c 16 | sed 's/\(....\)/\1-/g; s/-$//'; }
+# Startpasswort: gut vorlesbar (keine 0/O/1/l/I), mindestens 16 Zeichen in Vierergruppen, immer mit Groß- und Kleinbuchstabe
+# und Ziffer (Passwortregeln des Realms: Mindestlänge und ggf. gemischte Zeichen, konten.sh richtlinien)
+startpasswort() { # startpasswort [<Anzahl Zeichen ohne Striche>]
+  while :; do
+    s=$(tr -dc 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789' < /dev/urandom | head -c "${1:-16}")
+    case "$s" in *[ABCDEFGHJKMNPQRSTUVWXYZ]*) ;; *) continue ;; esac
+    case "$s" in *[abcdefghjkmnpqrstuvwxyz]*) ;; *) continue ;; esac
+    case "$s" in *[23456789]*) break ;; esac
+  done
+  printf '%s' "$s" | sed 's/\(....\)/\1-/g; s/-$//'
+}
 
 kc_als() { # kc_als <benutzer> <passwort> <kcadm-Befehl…>
   u=$1; p=$2; shift 2
@@ -127,7 +138,12 @@ anlegen() {
 }
 
 neues_startpasswort() {
-  sp=$(startpasswort)
+  # so lang, wie die Passwortregel des Realms verlangt (Mindestlänge aus den Einstellungen, konten.sh richtlinien)
+  min=$(kc get "realms/$REALM" --fields passwordPolicy | python3 -c '
+import json, re, sys
+m = re.search(r"length\((\d+)\)", json.load(sys.stdin).get("passwordPolicy") or "")
+print(max(16, -(-int(m.group(1)) // 4) * 4) if m else 16)' 2>/dev/null) || min=16
+  sp=$(startpasswort "$min")
   kc set-password -r "$REALM" --username "$1" --new-password "$sp" --temporary >/dev/null
   echo "Konto '$1' – Startpasswort (nur jetzt sichtbar, persönlich weitergeben): $sp"
   echo "Bei der ersten Anmeldung: eigenes Passwort festlegen (Einmalcode nur bei Pflicht-Konten)."
@@ -444,7 +460,8 @@ for c in json.load(sys.stdin):
     echo "gesetzt:   Client $name ohne Passwort-Grant"
   done
   konten_rechte
-  echo "Realm aktuell (Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
+  richtlinien_setzen
+  echo "Realm aktuell (Stand 15: Passwortregeln und Kontosperre aus den Einstellungen der Anwendung; Stand 14: kein Passwort-Grant am Token-Endpunkt; Qualitätssicherung unter eigener Adresse; REWE unter eigener Adresse; Leergut unter eigener Adresse; Controlling unter eigener Adresse; Sicherheit unter eigener Adresse; Mitarbeiterkonten aus der Verwaltung; Marketing, CRM, HR, Bestand und Verwaltung unter eigener Adresse; zweiter Faktor nur für Pflicht-Konten, Leerlauf 4 Stunden)."
   if [ "$ENV_NEU" = 1 ]; then echo "Neue Werte in .env – die Anwendung liest sie nach: docker compose up -d app"; fi
 }
 
@@ -660,6 +677,79 @@ passwort_vergessen() {
   esac
 }
 
+# ── Passwortregeln und Kontosperre aus der Anwendung (Stand 15, Inhaber 04.11.2026) ──
+# Quelle ist Sicherheit → Einstellungen → Anmeldung und Passwörter (eine Stelle für alles). Keycloak übernimmt: Mindestlänge
+# (nie unter 12, dem bisherigen Grundwert), „gemischte Zeichen“ (dann Groß- und Kleinbuchstabe und Ziffer), Sperre nach
+# Fehlversuchen und deren Dauer je Konto. Bleibt wie bisher: nicht Benutzername/E-Mail, keins der letzten 3 Passwörter.
+# Die Prüfung gegen Datenlecks kann Keycloak nicht. Die Anwendung selbst hat für die Konten nur die Rechte view-users und
+# manage-users – deshalb übernimmt das dieser Befehl (auch in realm-aktualisieren), nach jeder Änderung der Einstellungen.
+richtlinien_werte() { # Ausgabe: <passwordPolicy>|<failureFactor>|<Sperre in Sekunden>|<Text>
+  app sicherheit | python3 -c '
+import json, sys
+s = json.load(sys.stdin)
+n = max(12, min(32, int(s["pwMin"])))
+pol = "length(%d) and notUsername and notEmail and passwordHistory(3)" % n
+if s.get("pwComplex"): pol += " and upperCase(1) and lowerCase(1) and digits(1)"
+f = max(3, min(20, int(s["lockAfter"]))); m = max(5, min(1440, int(s["lockMinutes"])))
+print("%s|%d|%d|Passwörter mindestens %d Zeichen%s, Sperre nach %d Fehlversuchen für %d Minuten" % (pol, f, 60 * m, n, " (Groß-, Kleinbuchstabe und Ziffer)" if s.get("pwComplex") else "", f, m))'
+}
+richtlinien_setzen() { # ohne lesbare Anwendung: Hinweis, nichts geändert
+  werte=$(richtlinien_werte 2>/dev/null) || { echo "Hinweis:   Einstellungen der Anwendung nicht lesbar – Passwortregeln und Kontosperre unverändert (später: konten.sh richtlinien)."; return 0; }
+  pol=${werte%%|*}; rest=${werte#*|}; ff=${rest%%|*}; rest=${rest#*|}; sek=${rest%%|*}; text=${rest#*|}
+  if kc get "realms/$REALM" --fields passwordPolicy,bruteForceProtected,permanentLockout,failureFactor,waitIncrementSeconds,maxFailureWaitSeconds \
+     | SOLL="$pol|$ff|$sek" python3 -c '
+import json, os, sys
+r = json.load(sys.stdin); pol, ff, sek = os.environ["SOLL"].split("|")
+norm = lambda p: " and ".join(t.strip().replace("(undefined)", "") for t in (p or "").split(" and "))
+ok = norm(r.get("passwordPolicy")) == norm(pol) and r.get("bruteForceProtected") is True and r.get("permanentLockout") is False \
+     and r.get("failureFactor") == int(ff) and r.get("waitIncrementSeconds") == int(sek) and r.get("maxFailureWaitSeconds") == int(sek)
+sys.exit(0 if ok else 1)'; then
+    echo "aktuell:   $text"
+  else
+    kc update "realms/$REALM" -s "passwordPolicy=$pol" -s bruteForceProtected=true -s permanentLockout=false \
+      -s "failureFactor=$ff" -s "waitIncrementSeconds=$sek" -s "maxFailureWaitSeconds=$sek" >/dev/null
+    echo "gesetzt:   $text"
+  fi
+}
+richtlinien() {
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  app sicherheit >/dev/null 2>&1 || abbruch "Einstellungen der Anwendung nicht lesbar (läuft die App?)."
+  richtlinien_setzen
+  echo "Gilt ab der nächsten Anmeldung bzw. Passwortänderung; bestehende Passwörter bleiben gültig."
+}
+
+# ── Konten ohne Mitarbeiter (Inhaber 04.11.2026) ──
+# Seit 04.11.2026 löscht die Anwendung das Konto mit, wenn ein Mitarbeiter gelöscht wird. Ältere Konten gelöschter
+# Mitarbeiter blieben bestehen – ein später gleich benannter Mitarbeiter wäre damit verknüpft worden. „verwaist“ zeigt
+# Konten, zu denen es kein Mitarbeiterkonto gibt (nicht verknüpft und kein gleich benannter, noch nicht verknüpfter
+# Mitarbeiter) sowie Konten, die als gelöscht vermerkt sind; „--loeschen“ löscht genau diese.
+verwaist() {
+  case "${1:-}" in "") loeschen=0 ;; --loeschen) loeschen=1 ;; *) abbruch "Aufruf: konten.sh verwaist [--loeschen]" ;; esac
+  [ $# -le 1 ] || abbruch "Aufruf: konten.sh verwaist [--loeschen]"
+  command -v python3 >/dev/null || abbruch "python3 fehlt auf dem Server."
+  app_konten=$(app konten) || abbruch "Mitarbeiterkonten der Anwendung nicht lesbar (läuft die App?)."
+  ohne=$(kc get users -r "$REALM" --offset 0 --limit 5000 --fields id,username,createdTimestamp | APP_KONTEN="$app_konten" python3 -c '
+import json, os, sys, time
+a = json.loads(os.environ["APP_KONTEN"])
+subs = {k["sub"] for k in a["konten"] if k["sub"]}
+namen = {k["name"] for k in a["konten"] if not k["sub"]}
+weg = set(a["geloescht"])
+for u in json.load(sys.stdin):
+    n = u.get("username", "")
+    if n.startswith("service-account-") or u["id"] in subs or (n in namen and u["id"] not in weg): continue
+    print(u["id"], n, time.strftime("%d.%m.%Y", time.localtime(u.get("createdTimestamp", 0) / 1000)))')
+  if [ -z "$ohne" ]; then echo "Keine Konten ohne Mitarbeiter – nichts zu tun."; return 0; fi
+  printf '%s\n' "$ohne" | while read -r id n datum; do
+    if [ "$loeschen" = 1 ]; then
+      kc delete "users/$id" -r "$REALM" >/dev/null
+      echo "gelöscht:  Konto '$n' (angelegt $datum)"
+    else
+      echo "ohne Mitarbeiter: Konto '$n' (angelegt $datum)"
+    fi
+  done
+  [ "$loeschen" = 1 ] || echo "Löschen (genau diese Konten): sh deploy/anmeldung/konten.sh verwaist --loeschen"
+}
+
 liste() {
   echo "benutzername,vorname,nachname,e-mail,aktiv"
   kc get users -r "$REALM" --fields username,firstName,lastName,email,enabled --format csv --noquotes
@@ -667,7 +757,7 @@ liste() {
 
 befehl=${1:-}; [ $# -gt 0 ] && shift
 if [ $# -gt 0 ]; then n=$(klein "$1"); shift; set -- "$n" "$@"; fi
-case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|pruefen|liste|mail-einrichten|einladen|realm-aktualisieren) bereit ;; esac
+case "$befehl" in anlegen|startpasswort|zuruecksetzen|passkey|sperren|entsperren|pruefen|liste|mail-einrichten|einladen|realm-aktualisieren|richtlinien|verwaist) bereit ;; esac
 case "$befehl" in
   verwaltung) verwaltung ;;
   anlegen) anlegen "$@" ;;
@@ -683,5 +773,7 @@ case "$befehl" in
   design-setzen) design_setzen "$@" ;;
   realm-aktualisieren) realm_aktualisieren ;;
   passwort-vergessen) passwort_vergessen "$@" ;;
+  richtlinien) richtlinien ;;
+  verwaist) verwaist "$@" ;;
   *) sed -n '2,/^set -eu/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

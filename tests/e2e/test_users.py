@@ -1,5 +1,5 @@
 """Testgruppe users: Mitarbeiterzugänge – Rollen, serverseitige Rechte, Protokoll, Sperren und Zwei-Faktor-Pflicht je Nutzer."""
-from umgebung import storage_raw
+from umgebung import storage_raw, storage_write
 from auth_helpers import read_users
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import sys
@@ -155,11 +155,21 @@ with sync_playwright() as p:
     # letzter Admin
     r = api_from_page(b, 'user_delete', {'id': b.locator('.utab tbody tr:has-text("(Sie)")').get_attribute('data-uid')})
     check('cannot delete self', r[0] == 422, r)
-    # Ben löschen
+    # Ben löschen – Ben war schon mit der zentralen Anmeldung verknüpft (oidcSub, wie nach der ersten Anmeldung über Keycloak):
+    # die Kennung wird als gelöscht vermerkt, damit das Konto nie mit einem neuen „ben“ verknüpft (lib/oidc.php). Hier ist die
+    # Kontenverwaltung nicht eingerichtet → Hinweis, dass das Konto dort bestehen bleibt (Löschen über konten.sh verwaist).
+    _nu = read_users()
+    for _u in _nu['users']:
+        if _u['username'] == 'ben': _u['oidcSub'] = '0f0e0d0c-1111-4222-8333-944455556666'
+    storage_write('nutzer', _nu)
     b.locator('.utab tbody tr:has-text("Ben Leser")').click(); b.wait_for_selector('#dlg-user[open]')
     b.click('#user-body [data-uact=del]'); b.click('#dlg-confirm [data-v="1"]')
     until(lambda: b.locator('.utab tbody tr').count() == 2)
     check('ben deleted', b.locator('.utab tbody tr').count() == 2)
+    _weg = json.loads((lambda r: r.split('\n', 1)[1] if r.startswith('<?php') else r)(storage_raw('oidc-geloescht') or '{}'))
+    check('verknüpfte Kennung als gelöscht vermerkt (oidc-geloescht)', '0f0e0d0c-1111-4222-8333-944455556666' in _weg, _weg)
+    check('Hinweis: Konto der zentralen Anmeldung gibt keinen Zugang mehr, Löschen über konten.sh verwaist',
+          'keinen Zugang mehr' in b.inner_text('#toast') and 'konten.sh verwaist' in b.inner_text('#toast'), b.inner_text('#toast'))
 
     # ---- Protokoll vollständig
     b.click('#vt-log'); b.wait_for_selector('.ltab')

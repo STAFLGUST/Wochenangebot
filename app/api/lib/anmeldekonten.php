@@ -77,7 +77,9 @@ function konten_api(string $methode, string $pfad, $daten = null): array
     return [$st, $j, $h];
 }
 
-/* Keycloak-Konto zum Mitarbeiterkonto: [Konto|null, Hinweis]. Verknüpft (oidcSub) → nur diese ID; sonst exakter Name. */
+/* Keycloak-Konto zum Mitarbeiterkonto: [Konto|null, Hinweis, Altkonto|null]. Verknüpft (oidcSub) → nur diese ID; sonst
+   exakter Name. Ein gleich benanntes Konto eines gelöschten Mitarbeiters (Vermerk oidc-geloescht) zählt nie als Konto des
+   Mitarbeiters: Hinweis „geloescht“, das Konto steht an dritter Stelle (konten_anlegen ersetzt es). */
 function konten_finden(array $u): array
 {
     $sub = (string)($u['oidcSub'] ?? '');
@@ -92,6 +94,7 @@ function konten_finden(array $u): array
     if ($st !== 200 || !is_array($j)) throw new KontenFehler('Konten der zentralen Anmeldung nicht lesbar (' . $st . ').', 502);
     foreach ($j as $k) {
         if (!is_array($k) || strcasecmp((string)($k['username'] ?? ''), (string)$u['username']) !== 0) continue;
+        if (isset(oidc_geloescht()[(string)($k['id'] ?? '')])) return [null, 'geloescht', $k];
         // gehört schon zu einem anderen Mitarbeiterkonto (verknüpft) – nie anfassen
         foreach (users_load() as $x) if ((string)$x['id'] !== (string)$u['id'] && (string)($x['oidcSub'] ?? '') === (string)($k['id'] ?? '')) return [null, 'fremd'];
         return [$k, ''];
@@ -106,9 +109,10 @@ function konten_status(array $u): array
     [$k, $grund] = konten_finden($u);
     if (!$k) {
         return ['eingerichtet' => true, 'vorhanden' => false, 'verknuepft' => (string)($u['oidcSub'] ?? '') !== '',
-                'fremd' => $grund === 'fremd',
+                'fremd' => $grund === 'fremd', 'altkonto' => $grund === 'geloescht',
                 'hinweis' => $grund === 'verknuepfung_fehlt' ? 'Das verknüpfte Konto gibt es in der zentralen Anmeldung nicht mehr. „Konto anlegen“ legt es neu an und verknüpft es.'
-                    : ($grund === 'fremd' ? 'Das gleich benannte Konto in der zentralen Anmeldung ist mit einem anderen Mitarbeiter verknüpft – bitte in Keycloak prüfen.' : '')];
+                    : ($grund === 'fremd' ? 'Das gleich benannte Konto in der zentralen Anmeldung ist mit einem anderen Mitarbeiter verknüpft – bitte in Keycloak prüfen.'
+                    : ($grund === 'geloescht' ? 'Das gleich benannte Konto in der zentralen Anmeldung gehörte einem gelöschten Mitarbeiter und gilt hier nicht. „Konto anlegen“ ersetzt es durch ein neues.' : ''))];
     }
     $id = (string)$k['id'];
     [, $cred] = konten_api('GET', 'users/' . rawurlencode($id) . '/credentials');
@@ -118,7 +122,7 @@ function konten_status(array $u): array
             'aktiv' => !empty($k['enabled']), 'gesperrt' => !empty($bf['disabled']), 'fehlversuche' => (int)($bf['numFailures'] ?? 0),
             'passwort' => !empty($arten['password']), 'einmalcode' => (int)($arten['otp'] ?? 0),
             'passkeys' => (int)($arten['webauthn'] ?? 0) + (int)($arten['webauthn-passwordless'] ?? 0),
-            'passwortAendern' => in_array('UPDATE_PASSWORD', (array)($k['requiredActions'] ?? []), true),
+            'passwortAendern' => in_array('UPDATE_PASSWORD', (array)($k['requiredActions'] ?? []), true), 'minLaenge' => konten_min_laenge(),
             'email' => (string)($k['email'] ?? ''), 'erstellt' => isset($k['createdTimestamp']) ? gmdate('c', (int)($k['createdTimestamp'] / 1000)) : null];
 }
 
@@ -128,30 +132,43 @@ function konten_pflicht(array $u): array
     [$k, $grund] = konten_finden($u);
     if (!$k && $grund === 'fremd') throw new KontenFehler('Das gleich benannte Konto in der zentralen Anmeldung ist mit einem anderen Mitarbeiter verknüpft – bitte in Keycloak prüfen.', 409);
     if (!$k) throw new KontenFehler($grund === 'verknuepfung_fehlt' ? 'Das verknüpfte Konto gibt es in der zentralen Anmeldung nicht mehr – bitte „Konto anlegen“.'
-        : 'Für „' . $u['username'] . '“ gibt es noch kein Konto in der zentralen Anmeldung – bitte „Konto anlegen“.', 404);
+        : ($grund === 'geloescht' ? 'Das gleich benannte Konto in der zentralen Anmeldung gehörte einem gelöschten Mitarbeiter – bitte „Konto anlegen“ (ersetzt es).'
+        : 'Für „' . $u['username'] . '“ gibt es noch kein Konto in der zentralen Anmeldung – bitte „Konto anlegen“.'), 404);
     return $k;
+}
+
+/* Mindestlänge für Passwörter der zentralen Anmeldung: Einstellung „Passwörter mindestens … Zeichen“, nie unter 12
+   (Grundwert des Realms). Keycloak übernimmt sie mit konten.sh richtlinien (auch in realm-aktualisieren). */
+function konten_min_laenge(): int
+{
+    return max(12, min(32, (int)sec()['pwMin']));
 }
 
 /* Richtlinienfehler von Keycloak (Passwort) auf Deutsch */
 function konten_passwort_meldung(?array $j): string
 {
     $code = (string)($j['error'] ?? '') . ' ' . (string)($j['error_description'] ?? $j['errorMessage'] ?? '');
+    $min = preg_match('/length\D{0,3}(\d{1,3})/i', $code, $m) ? (int)$m[1] : konten_min_laenge();
     $t = [
-        'MinLength' => 'Das Passwort ist zu kurz (mindestens 12 Zeichen).', 'History' => 'Dieses Passwort wurde kürzlich schon verwendet – bitte ein anderes wählen.',
+        'MinLength' => 'Das Passwort ist zu kurz (mindestens ' . $min . ' Zeichen).', 'History' => 'Dieses Passwort wurde kürzlich schon verwendet – bitte ein anderes wählen.',
         'NotUsername' => 'Das Passwort darf nicht der Benutzername sein.', 'NotEmail' => 'Das Passwort darf nicht die E-Mail-Adresse sein.',
         'Digits' => 'Das Passwort braucht mehr Ziffern.', 'UpperCase' => 'Das Passwort braucht mehr Großbuchstaben.', 'LowerCase' => 'Das Passwort braucht mehr Kleinbuchstaben.',
         'SpecialChars' => 'Das Passwort braucht mehr Sonderzeichen.', 'Blacklisted' => 'Dieses Passwort ist zu bekannt – bitte ein anderes wählen.', 'MaxLength' => 'Das Passwort ist zu lang.',
     ];
     foreach ($t as $k => $text) if (stripos($code, $k) !== false) return $text;
-    return 'Die zentrale Anmeldung hat das Passwort abgelehnt (Passwortregeln: mindestens 12 Zeichen, nicht Benutzername oder E-Mail).';
+    return 'Die zentrale Anmeldung hat das Passwort abgelehnt (Passwortregeln: mindestens ' . konten_min_laenge() . ' Zeichen, nicht Benutzername oder E-Mail).';
 }
 
-/* Gut vorlesbares Startpasswort wie konten.sh (16 Zeichen in Vierergruppen, ohne 0/O/1/l/I) */
+/* Gut vorlesbares Startpasswort wie konten.sh (mindestens 16 Zeichen in Vierergruppen, ohne 0/O/1/l/I), immer mit Groß- und
+   Kleinbuchstaben und Ziffer – erfüllt damit auch „gemischte Zeichen“ und eine höhere Mindestlänge (konten.sh richtlinien) */
 function konten_startpasswort(): string
 {
     $z = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    $s = '';
-    for ($i = 0; $i < 16; $i++) $s .= $z[random_int(0, strlen($z) - 1)];
+    $n = (int)(ceil(max(16, konten_min_laenge()) / 4) * 4);
+    do {
+        $s = '';
+        for ($i = 0; $i < $n; $i++) $s .= $z[random_int(0, strlen($z) - 1)];
+    } while (!preg_match('/[A-Z]/', $s) || !preg_match('/[a-z]/', $s) || !preg_match('/\d/', $s));
     return implode('-', str_split($s, 4));
 }
 
@@ -191,9 +208,15 @@ function konten_link(array $u): string
 /* Fehlendes Konto anlegen (Benutzername, Name, E-Mail aus dem Mitarbeiterkonto) und verknüpfen. Rückgabe: Keycloak-ID. */
 function konten_anlegen(array $u): string
 {
-    [$k, $grund] = konten_finden($u);
+    [$k, $grund, $alt] = konten_finden($u) + [2 => null];
     if ($k) throw new KontenFehler('Für „' . $u['username'] . '“ gibt es bereits ein Konto in der zentralen Anmeldung.', 409);
     if ($grund === 'fremd') throw new KontenFehler('Das gleich benannte Konto in der zentralen Anmeldung ist mit einem anderen Mitarbeiter verknüpft.', 409);
+    if ($grund === 'geloescht' && is_array($alt)) {
+        // Übrig gebliebenes Konto eines gelöschten Mitarbeiters (Vermerk oidc-geloescht): löschen, dann neu anlegen
+        [$st] = konten_api('DELETE', 'users/' . rawurlencode((string)$alt['id']));
+        if ($st !== 204 && $st !== 200 && $st !== 404) throw new KontenFehler('Das alte Konto in der zentralen Anmeldung konnte nicht gelöscht werden (' . $st . ').', 502);
+        audit('security', 'Altes Konto „' . $u['username'] . '“ eines gelöschten Mitarbeiters in der zentralen Anmeldung gelöscht');
+    }
     $name = strtolower((string)$u['username']);
     if ($grund === 'verknuepfung_fehlt' || $grund === 'verknuepfung') {
         // Verknüpfung zeigt ins Leere: gleich benanntes, fremdes Konto nie übernehmen
@@ -210,9 +233,38 @@ function konten_anlegen(array $u): string
     if ($st !== 201) throw new KontenFehler('Das Konto konnte nicht angelegt werden (' . $st . ').', 502);
     $id = '';
     foreach ($h as $z) if (preg_match('#^Location:\s*\S*/users/([A-Za-z0-9-]+)\s*$#i', $z, $m)) $id = $m[1];
-    if ($id === '') { [$k] = konten_finden(['username' => $name, 'oidcSub' => '']); $id = (string)($k['id'] ?? ''); }
+    if ($id === '') { [$k] = konten_finden(['id' => (string)$u['id'], 'username' => $name, 'oidcSub' => '']); $id = (string)($k['id'] ?? ''); }
     if ($id === '') throw new KontenFehler('Das Konto wurde angelegt, ist aber nicht auffindbar. Bitte neu laden.', 502);
     // Verknüpfen: ab jetzt zählt nur noch diese ID (wie nach der ersten Anmeldung, lib/oidc.php)
     user_update((string)$u['id'], function (array &$x) use ($id) { $x['oidcSub'] = $id; });
     return $id;
+}
+
+/* Mitarbeiter gelöscht (Aktion user_delete, nach dem Löschen aufgerufen): Konto in der zentralen Anmeldung mitlöschen –
+   sonst bliebe es bestehen und ein später gleich benannter Mitarbeiter würde bei der ersten Anmeldung damit verknüpft.
+   Die Kennung wird vorher als gelöscht vermerkt (lib/oidc.php): scheitert das Löschen (Keycloak nicht erreichbar, nicht
+   eingerichtet), verknüpft das Konto trotzdem nie wieder. Keycloak beendet mit dem Konto auch dessen Sitzungen.
+   Rückgabe: Hinweis für die Oberfläche ('' = erledigt oder nichts zu tun). */
+function konten_entfernen(array $u): string
+{
+    $sub = (string)($u['oidcSub'] ?? '');
+    oidc_geloescht_merken($sub);
+    $vermerkt = $sub !== '';
+    $rest = 'Löschen in der Serverkonsole: sh deploy/anmeldung/konten.sh verwaist --loeschen';
+    $hinweis = fn(bool $v) => $v ? 'Das Konto in der zentralen Anmeldung bleibt bestehen, gibt aber keinen Zugang mehr. ' . $rest
+        : 'Falls es in der zentralen Anmeldung ein Konto „' . $u['username'] . '“ gibt, bitte dort löschen. ' . $rest;
+    if (!konten_eingerichtet()) return $vermerkt ? $hinweis(true) : '';
+    try {
+        [$k] = konten_finden($u);
+        if (!$k) return '';
+        oidc_geloescht_merken((string)$k['id']);
+        $vermerkt = true;
+        [$st] = konten_api('DELETE', 'users/' . rawurlencode((string)$k['id']));
+        if ($st !== 204 && $st !== 200 && $st !== 404) throw new KontenFehler('Konto nicht gelöscht (' . $st . ').', 502);
+        audit('security', 'Konto „' . $u['username'] . '“ in der zentralen Anmeldung gelöscht (Mitarbeiter gelöscht)');
+        return '';
+    } catch (KontenFehler $e) {
+        audit('security', 'Konto „' . $u['username'] . '“ in der zentralen Anmeldung nicht gelöscht: ' . $e->getMessage());
+        return $hinweis($vermerkt);
+    }
 }

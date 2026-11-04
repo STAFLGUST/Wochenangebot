@@ -49,7 +49,7 @@ switch ($action) {
                 if ($was === 'passwort') {
                     $erzeugt = !empty($b['erzeugen']);
                     $pw = $erzeugt ? konten_startpasswort() : $b['passwort'] ?? null;
-                    if (!is_string($pw) || mb_strlen($pw) < 12 || mb_strlen($pw) > 200) fail('Das Passwort muss mindestens 12 Zeichen lang sein.', 422);
+                    if (!is_string($pw) || mb_strlen($pw) < konten_min_laenge() || mb_strlen($pw) > 200) fail('Das Passwort muss mindestens ' . konten_min_laenge() . ' Zeichen lang sein.', 422);
                     $temporaer = !array_key_exists('aendern', $b) || !empty($b['aendern']) || anmeldekonto_nur_temporaer($u);
                     konten_passwort($u, $pw, $temporaer);
                     audit('security', 'Passwort für „' . $u['username'] . '“ in der zentralen Anmeldung gesetzt' . ($temporaer ? ' (muss bei der nächsten Anmeldung geändert werden)' : ' (dauerhaft)'));
