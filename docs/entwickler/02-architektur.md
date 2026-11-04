@@ -43,7 +43,8 @@ flowchart LR
   (`__Host-`-Cookies, GR-108); Aktionen einer Modulseite beantwortet nur ihr eigener Host (GR-109).
 - **Mitarbeiter melden sich nur über Keycloak an** (OIDC über das Apache-Modul mod_auth_openidc, GR-110). Der alte
   Eingabebereich mit eigener Anmeldung (`angebot-stafl.de/admin/`) ist stillgelegt; der Notzugang
-  (`deploy/notzugang.sh`) öffnet ihn im Notfall. Kunden haben eigene Zugänge, strikt getrennt (GR-003, GR-104).
+  (`deploy/notzugang.sh`) öffnet ihn im Notfall – nur über einen SSH-Tunnel auf einem eigenen Host von `app-mitarbeiter`
+  (ADR-007). Kunden haben eigene Zugänge, strikt getrennt (GR-003, GR-104).
 - **Kein Framework, kein Build.** Server: PHP 8.3 ohne Bibliotheken. Browser: HTML, CSS, JavaScript ohne Framework.
   Werkzeuge: Python-Standardbibliothek.
 

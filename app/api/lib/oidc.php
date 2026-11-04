@@ -28,11 +28,26 @@ function oidc_modus(): bool
     return oidc_einstellung('WA_OIDC') === '1';
 }
 /* Bisheriger Eingabebereich mit eigener Anmeldung (angebot-stafl.de/admin/) stillgelegt (Entscheidung Inhaber 23.10.2026):
-   WA_EIGENE_ANMELDUNG=aus (Betrieb: docker-compose.anmeldung.yml). Mitarbeiter arbeiten nur noch über die zentrale
-   Anmeldung; Kundenseite und Kundenanmeldung bleiben unverändert. Notzugang (Keycloak gestört): deploy/notzugang.sh an */
+   WA_EIGENE_ANMELDUNG=aus (Betrieb: docker-compose.anmeldung.yml, beide Anwendungs-Container fest). Mitarbeiter arbeiten
+   nur noch über die zentrale Anmeldung; Kundenseite und Kundenanmeldung bleiben unverändert.
+   Notzugang (Keycloak gestört, ADR-007 Regel 6): nur noch über einen SSH-Tunnel auf den eigenen Host des Notzugangs
+   (notzugang_host) – offen genau dann, wenn WA_NOTZUGANG=an (deploy/notzugang.sh an), sonst wie stillgelegt. */
 function alter_zugang_aus(): bool
 {
+    if (notzugang_host()) return oidc_einstellung('WA_NOTZUGANG') !== 'an';
     return oidc_einstellung('WA_EIGENE_ANMELDUNG') === 'aus';
+}
+/* Host des Notzugangs: eigener Apache-Host in app-mitarbeiter (deploy/anmeldung/apache-oidc.conf, Port 8090), den Docker nur
+   auf 127.0.0.1 des Servers veröffentlicht – erreichbar nur über einen SSH-Tunnel, nie über Caddy. Der Webserver meldet ihn
+   mit WA_NOTZUGANG_HOST (nie aus Kopfzeilen); gilt nur für direkte Anfragen von einer internen Adresse (Docker-Netz des
+   Tunnels) ohne weitergereichte Besucheradresse. Keine zentrale Anmeldung auf diesem Host. */
+function notzugang_host(): bool
+{
+    if (oidc_modus() || oidc_einstellung('WA_NOTZUGANG_HOST') !== '1') return false;
+    if ((string)($_SERVER['HTTP_X_FORWARDED_FOR'] ?? '') !== '') return false;
+    $ip = (string)($_SERVER['REMOTE_ADDR'] ?? '');
+    return filter_var($ip, FILTER_VALIDATE_IP) !== false
+        && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
 }
 /* Gilt für diese Anfrage: Host ohne zentrale Anmeldung und alter Zugang aus */
 function eigene_anmeldung_stillgelegt(): bool

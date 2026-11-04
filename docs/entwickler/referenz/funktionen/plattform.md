@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 972 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+103 Dateien, 973 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -404,6 +404,7 @@ _Mitarbeiteranmeldung über Keycloak (ADR-003, GR-110) – Roadmap 7b, vorerst n
 
 - `oidc_modus()`
 - `alter_zugang_aus()` – Bisheriger Eingabebereich mit eigener Anmeldung (angebot-stafl.de/admin/) stillgelegt (Entscheidung Inhaber 23.10.2026): WA_EIGENE_ANMELDUNG=aus (Betrieb: …
+- `notzugang_host()` – Host des Notzugangs: eigener Apache-Host in app-mitarbeiter (deploy/anmeldung/apache-oidc.conf, Port 8090), den Docker nur auf 127.0.0.1 des Servers …
 - `eigene_anmeldung_stillgelegt()` – Gilt für diese Anfrage: Host ohne zentrale Anmeldung und alter Zugang aus
 - `eingabe_adresse()` – Neuer Eingabebereich (Hinweis, Weiterleitung, Verweise in Mails) – nur https-Adressen
 - `oidc_einstellung(name)` – Einstellung des Webservers (SetEnv) bzw. des Prozesses – nie aus Kopfzeilen (die heißen HTTP_…)

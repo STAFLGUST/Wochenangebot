@@ -216,8 +216,10 @@ if ($AKTION !== null && $AKTION['kunden_wartung'] && ($W = wartung()) && !kunden
     respond(['ok' => false, 'wartung' => true, 'error' => $W['message'], 'until' => $W['until']], 503);
 }
 
-/* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei) */
-if (!$isPublic) {
+/* IP-Freigabe für den Eingabebereich (die öffentliche Angebotsseite bleibt frei). Ausnahme: der Notzugang über den SSH-Tunnel
+   (lib/oidc.php, notzugang_host) – dorthin kommt nur, wer sich am Server anmelden kann; die Besucheradresse ist dort die
+   interne Adresse des Tunnels und stünde nie in der Liste. */
+if (!$isPublic && !notzugang_host()) {
     if (!empty($S['ipEnabled']) && $S['adminIps'] && !ip_allowed(client_ip(), $S['adminIps'])) {
         fail('Der Eingabebereich ist von dieser Internetadresse (' . client_ip() . ') aus nicht freigegeben.', 403);
     }

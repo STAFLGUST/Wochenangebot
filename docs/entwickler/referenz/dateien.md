@@ -426,7 +426,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `karte-laden.sh` | plattform | Detailkarte (Straßen, Gebäude, Ortsnamen) für CRM-Karte und Auswertung laden – OpenStreetMap-Daten als eine Datei auf dem eigenen Server (keine fremden Kartendienste beim Ansehen). |
 | `notfall-aus.php` | plattform | Notfallmodus beenden (Server-Werkzeug zu deploy/notfall-aus.sh) – gleicher Ablauf wie notfall_ende() in app/api/lib/notfall.php, aber ohne Anmeldung |
 | `notfall-aus.sh` | plattform | Notfallmodus beenden (Modul Sicherheit), wenn das in der Oberfläche nicht mehr geht – z. |
-| `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (angebot-stafl.de/admin/ mit eigener Anmeldung) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
+| `notzugang.sh` | plattform | Notzugang zum alten Eingabebereich (eigene Anmeldung mit den bisherigen Passwörtern) – nur wenn die zentrale Anmeldung (Keycloak) gestört ist. |
 | `passwort-zuruecksetzen.php` | plattform | Wird von passwort-zuruecksetzen.sh im App-Container ausgeführt (nicht über das Web erreichbar). |
 | `passwort-zuruecksetzen.sh` | plattform | Notfall: Passwort eines Nutzers zurücksetzen (z. |
 | `release-modus-einrichten.sh` | plattform | Einmalig auf dem Server (als root) |
@@ -664,7 +664,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | `test_images.py` | plattform | Container-Images fest über Digest (Sicherheitsdurchsicht 26.10.2026, Befund 12): jedes fremde Image in den Compose-Dateien und im Dockerfile ist mit @sha256 festgelegt – ein Release holt so nie unbemerkt eine andere … |
 | `test_karte_laden.sh` | plattform | Test von deploy/karte-laden.sh – mit Platzhaltern für docker und curl, in einem Wegwerf-Ordner (lädt nichts herunter). |
 | `test_konten_pruefen.sh` | plattform | Test von „konten.sh pruefen“ (Anmeldeprobleme erkennen) – mit Platzhalter für kcadm und einer lokalen Zeitquelle, ohne Docker. |
-| `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
+| `test_notzugang.sh` | plattform | Test von deploy/notzugang.sh (Notzugang über einen SSH-Tunnel, ADR-007 Regel 6) – mit Platzhalter für docker compose, in einem Wegwerf-Ordner. |
 | `test_release_pruefen.sh` | plattform | Test der Release-Prüfungen (.github/scripts/release-pruefen.sh) mit einem Platzhalter für gh |
 | `test_sichern.sh` | plattform | Test der Datensicherung (deploy/sichern.sh) in einem Wegwerf-Ordner mit Testdaten. |
 | `test_speicher.sh` | plattform | Test von deploy/speicher.sh – mit Platzhalter für docker, in einem Wegwerf-Ordner. |

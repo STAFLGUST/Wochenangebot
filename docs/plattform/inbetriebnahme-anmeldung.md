@@ -120,7 +120,8 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
 - **Zwei Anwendungs-Container (seit ADR-007, 04.11.2026):** Kundenseite `app`, Mitarbeiter-Hosts `app-mitarbeiter` (gleiches Image).
   Wo in den Schritten oben nach neuen Werten in `.env` `docker compose up -d app` steht, gilt seitdem
-  `docker compose up -d app-mitarbeiter` – nur dieser Container kennt die Anmelde-Geheimnisse. Notzugang und Kundenseite: `app`.
+  `docker compose up -d app-mitarbeiter` – nur dieser Container kennt die Anmelde-Geheimnisse und trägt den Notzugang
+  (Port 8190 nur auf `127.0.0.1`). Kundenseite: `app`.
 - **Rechte** bleiben in der Anwendung (Verwaltung → Rollen und Rechte, inklusive Modulzugang je Rolle). Keycloak sagt nur „wer“; ein in der Anwendung
   gesperrtes Konto ist sofort ausgesperrt. Neue Mitarbeiter brauchen beides: Konto in Keycloak und Mitarbeiterkonto.
 - **Abmelden / Sperren:** Abmelden in einer Anwendung meldet in allen ab (Back-Channel-Logout). Ein Konto zentral
@@ -129,8 +130,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   `tests/oidc/umgebung.sh` gemeinsam erhöhen; erst wenn der CI-Auftrag grün ist (ADR-003: kritische Lücken in 72 Std.).
 - **Notfall:** Keycloak nicht erreichbar → zuerst `docker compose ps -a` und `docker compose up -d` (startet fehlende
   Dienste, z. B. nach einem unterbrochenen Release). Hilft das nicht: `sh deploy/notzugang.sh an` öffnet vorübergehend den alten
-  Eingabebereich `angebot-stafl.de/admin/` (bisherige Passwörter, Notfall-Administrator: `deploy/passwort-zuruecksetzen.sh`);
-  sobald die Anmeldung wieder läuft: `sh deploy/notzugang.sh aus`.
+  Eingabebereich – seit 04.11.2026 nur über einen SSH-Tunnel: auf dem eigenen Rechner `ssh -L 8190:127.0.0.1:8190
+  <benutzer>@<server>`, dann `http://localhost:8190/admin/` (bisherige Passwörter, Notfall-Administrator:
+  `deploy/passwort-zuruecksetzen.sh`); sobald die Anmeldung wieder läuft: `sh deploy/notzugang.sh aus`.
 
 ## Rücksicherung der Anmeldung (Keycloak)
 
