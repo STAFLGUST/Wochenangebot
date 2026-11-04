@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-17 Dateien, 202 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+17 Dateien, 204 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/auswertung.php`
 
@@ -80,8 +80,9 @@ _Importzentrale (Verwaltung → Import, Roadmap 10b) – ein Ablauf für alle Im
 - `import_registry()` – Alle registrierten Importarten (id → Eintrag mit Standardwerten).
 - `import_darf(me, a)` – Recht der Importart: alle eingetragenen Rechte (Administrator: alle)
 - `import_art_anzeige(id, a, me)` – Angaben für die Oberfläche (keine Funktionsnamen)
+- `import_liste(v)` – Wert einer Option „liste“: nur Kennungen (Buchstaben, Ziffern, . _ -), ohne Doppelte, höchstens IMPORT_LISTE_MAX
 - `import_optionen(a, roh)` – Optionen der Importart aus der Anfrage: nur registrierte, mit Standardwert
-- `import_ergebnis(r)` – Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise
+- `import_ergebnis(r)` – Antwort des Eigentümers vereinheitlichen: Zahlen, höchstens IMPORT_ZEILEN_MAX Zeilen (Fehler zuerst), Hinweise; „details“, „fuss“ und „knopf“ des Eigentümers …
 - `import_upload(v, pflicht)` – Kennung eines Importlaufs (vom Browser zufällig gewählt, 32 Hex-Zeichen) – nur bei Importarten mit Teilen nötig
 - `import_vorbereiten(b)` – Gemeinsame Prüfung vor Vorschau, Teil und Übernahme: Anmeldung (mit CSRF), Importart, Recht, Ablauf, Wartung
 - `import_teil_ausfuehren()` – Ein Teil einer großen Datei an den Eigentümer (Zwischenablage).
@@ -144,6 +145,7 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 - `zahlenHTML(z, ids)`
 - `zeilenHTML()`
 - `hinweiseHTML(list)`
+- `kontext(l)`
 - `renderLauf()`
 
 **Ablauf**
@@ -151,7 +153,7 @@ _Wochenangebot – Eingabebereich, Importzentrale (Verwaltung → Import, Roadma
 - `datenAnfrage()`
 - `teileSenden(l, btn)` – Teile, die die Vorschau für die Übernahme verlangt, einzeln schicken (Fortschritt im Knopf)
 - `lesen()`
-- `pruefen(nochmal)`
+- `pruefen(nochmal, sanft)` – sanft: Option aus der eigenen Darstellung geändert – die bisherige Vorschau bleibt abgeblendet stehen (kein Springen, Übernehmen gesperrt), bis die neue da …
 - `uebernehmen(btn)`
 - `starten(art, files)`
 - `zurListe()`

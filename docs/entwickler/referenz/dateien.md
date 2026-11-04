@@ -317,6 +317,13 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `index.html` | angebot | Seite „Kontakt · Standard-Fleisch“ |
 
+## `app/module/angebot/`
+
+| Datei | Modul | Inhalt |
+| --- | --- | --- |
+| `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
+| `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
+
 ## `app/module/controlling/`
 
 | Datei | Modul | Inhalt |

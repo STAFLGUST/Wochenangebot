@@ -1,0 +1,129 @@
+/* STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js).
+   Farben aus app.css/admin.css: erhöht = --c-aged (warm), gesenkt = --c-frozen (blau), neuer Preis = --c-fresh (grün),
+   „Bitte prüfen“ = --mhd-814 (gelb); alle mit Varianten im dunklen Design. Handy (≤ 640 px): Preiszeilen als Karten. */
+#view-importe .imp-inhalt[aria-busy="true"] { opacity: .6; transition: opacity .15s; }
+#view-importe .imp-fuss.mit-text .hint { font-size: 14px; color: var(--text); }
+
+.pi { display: flex; flex-direction: column; gap: 14px; }
+.pi-woche { margin: -4px 0 0; font-size: 13px; line-height: 1.5; color: var(--text-2); max-width: 900px; }
+.pi-woche b { color: var(--text); }
+
+.pi-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.pi-kachel { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
+.pi-kachel span { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pi-kachel svg, .pi-warn svg, .pi-pill svg, .pi-pruefen svg { flex: 0 0 auto; }
+.pi-kachel strong { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.pi-kachel strong small { font-size: 14px; font-weight: 500; color: var(--muted); }
+.pi-kachel.hoch span { color: var(--c-aged); }
+.pi-kachel.runter span { color: var(--c-frozen); }
+.pi-kachel.neu span { color: var(--c-fresh); }
+.pi-kachel.pruefen span { color: var(--mhd-814-fg); }
+.pi-kachel.pruefen.hat { background: var(--mhd-814-bg); border-color: color-mix(in srgb, var(--mhd-814-fg) 30%, transparent); }
+
+.pi-karte { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pi-karte h3 { margin: 0; font-size: 16px; font-weight: 700; }
+.pi-karte-kopf { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
+.pi-karte-kopf > div:first-child { max-width: 720px; }
+.pi-karte-kopf p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+
+/* Fehlerhafte Zeilen */
+.pi-fehler { padding: 12px 18px; gap: 8px; }
+.pi-fehler summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent); }
+.pi-fehler ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.pi-fehler li { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.pi-dz { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pi-nr { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+/* Kundengruppen ohne Angebot */
+.pi-wahl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pi-wahl > span { font-size: 13px; color: var(--text-2); margin-right: 4px; }
+.pi-warn { display: flex; gap: 8px; align-items: center; margin: 0; padding: 8px 12px; border-radius: var(--r-sm); background: var(--mhd-814-bg); color: var(--mhd-814-fg); font-size: 13px; font-weight: 500; }
+.pi-gliste { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.pi-gliste li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.pi-gliste li.an { background: var(--c-fresh-bg); }
+.pi-gliste input { flex: 0 0 auto; width: 20px; height: 20px; margin: 0 6px; accent-color: var(--accent); cursor: pointer; }
+.pi-gliste label { flex: 1 1 260px; min-width: 0; min-height: 30px; display: flex; align-items: center; cursor: pointer; font-size: 14px; }
+.pi-gliste .pi-anz { flex: 0 0 96px; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pi-gliste .pi-status { flex: 1 1 280px; font-size: 12.5px; color: var(--muted); }
+.pi-gliste li.an .pi-status { color: var(--c-fresh); font-weight: 500; }
+.pi-gliste li.an.zu { background: none; }
+.pi-gliste li.an.zu .pi-status { color: var(--mhd-814-fg); }   /* zu viele Angebote: angehakt, wird aber nicht angelegt */
+
+/* Preisänderungen: Suche, Reiter je Angebot, Filter, Tabelle */
+.pi-suche { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--feld-rand, var(--line)); background: var(--surface-2); color: var(--muted); min-width: 240px; }
+.pi-suche input { border: 0; background: transparent; outline: none; font: inherit; font-size: 14px; color: var(--text); width: 100%; min-width: 0; }
+.pi-suche:focus-within { box-shadow: 0 0 0 3px var(--accent-line); }
+.pi-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.pi-tabs button { min-height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.pi-tabs button span { font-weight: 500; opacity: .75; font-variant-numeric: tabular-nums; }
+.pi-tabs button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
+.pi-filter { align-self: flex-start; flex-wrap: wrap; height: auto; }
+.pi-filter button { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.pi-filter button span { color: var(--muted); font-weight: 500; }
+.pi-filter button:disabled { opacity: .45; cursor: default; }
+
+.pi-liste { overflow-x: auto; }
+.pi-tab { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+.pi-tab thead th { padding: 0 10px 6px; text-align: left; font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.pi-tab .r, .pi-tab .pi-alt, .pi-tab .pi-neu, .pi-tab .pi-diff { text-align: right; }
+.pi-tab .pi-ang th { padding: 10px; text-align: left; background: var(--surface-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-weight: 400; }
+.pi-tab tbody + tbody .pi-ang th { border-top: 14px solid var(--surface); }
+.pi-tab .pi-ang b { font-size: 14.5px; margin-right: 10px; }
+.pi-tab .pi-ang span { font-size: 12.5px; color: var(--text-2); }
+.pi-tab td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.pi-tab .pi-nr { width: 80px; }
+.pi-tab .pi-name { font-weight: 500; }
+.pi-tab .pi-name .pi-dz { margin-left: 8px; font-weight: 400; }
+.pi-tab .pi-alt { width: 92px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pi-tab .pi-alt s { text-decoration-thickness: 1px; }
+.pi-tab .pi-neu { width: 92px; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pi-tab .pi-diff { width: 190px; }
+.pi-tab .pi-hinw { width: 120px; }
+.pi-tab tr.pruefen td { background: color-mix(in srgb, var(--mhd-814-bg) 45%, transparent); }
+.pi-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pi-pill.hoch { background: var(--c-aged-bg); color: var(--c-aged); }
+.pi-pill.runter { background: var(--c-frozen-bg); color: var(--c-frozen); }
+.pi-pill.neu { background: var(--c-fresh-bg); color: var(--c-fresh); }
+.pi-pruefen { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 8px; background: var(--mhd-814-bg); color: var(--mhd-814-fg); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pi-ohne { color: var(--muted); }
+.pi-leer { margin: 0; padding: 20px; text-align: center; color: var(--muted); font-size: 13.5px; }
+.pi-mehr { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 12px; font-size: 13px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .pi-karte { padding: 14px 12px; }
+  .pi-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .pi-kachel { padding: 10px 12px; }
+  .pi-kachel strong { font-size: 20px; }
+  .pi-kachel.gleich { grid-column: 1 / -1; }
+  .pi-suche { min-width: 0; flex: 1 1 100%; }
+  .pi-wahl { width: 100%; }
+  .pi-wahl > span { flex: 1 1 auto; }
+  .pi-gliste li { padding: 8px 2px; }
+  .pi-gliste label { flex-basis: calc(100% - 50px); }
+  .pi-gliste .pi-anz { flex: 0 0 auto; margin-left: 38px; }
+  .pi-gliste .pi-status { flex-basis: auto; }
+  .pi-filter button { flex: 1 1 auto; }
+  /* Preiszeilen als Karten: Nummer und Artikel oben, bisher → neu und Änderung darunter */
+  .pi-liste { overflow: visible; }
+  .pi-tab, .pi-tab tbody, .pi-tab tr, .pi-tab th, .pi-tab td { display: block; }
+  .pi-tab thead { display: none; }
+  .pi-tab tbody { border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 12px; }
+  .pi-tab .pi-ang th, .pi-tab tbody + tbody .pi-ang th { border-top: 0; }
+  .pi-tab .pi-ang span { display: block; margin-top: 2px; }
+  .pi-tab tr.pi-z { display: grid; grid-template-columns: auto auto 1fr; grid-template-areas: "nr name name" "alt neu diff" "hinw hinw hinw"; gap: 4px 10px; align-items: baseline;
+    padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .pi-tab tr.pi-z:last-child { border-bottom: 0; }
+  .pi-tab tr.pruefen { background: color-mix(in srgb, var(--mhd-814-bg) 45%, transparent); }
+  .pi-tab tr.pruefen td { background: none; }
+  .pi-tab td { padding: 0; border: 0; width: auto !important; text-align: left !important; }
+  .pi-tab .pi-nr { grid-area: nr; }
+  .pi-tab .pi-name { grid-area: name; }
+  .pi-tab .pi-name .pi-dz { display: block; margin: 0; }
+  .pi-tab .pi-alt { grid-area: alt; }
+  .pi-tab .pi-neu { grid-area: neu; }
+  .pi-tab .pi-neu::before { content: "→ "; font-weight: 400; color: var(--muted); }
+  .pi-tab .pi-diff { grid-area: diff; justify-self: end; }
+  .pi-tab .pi-hinw { grid-area: hinw; }
+  .pi-tab .pi-hinw:empty { display: none; }
+  .pi-tab .pi-neu::after { content: " €/kg"; font-size: 11px; font-weight: 400; color: var(--muted); }
+}
