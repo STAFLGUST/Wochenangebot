@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1088 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1089 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -731,8 +731,9 @@ _Shared persistence for HTTP and maintenance tools._
 - `store_names(prefix)`
 - `store_commit(bereich)` – Offene Transaktionen je Bereich ($GLOBALS['store_tx'] = ['haupt' => true, …]; leer = keine)
 - `store_rollback(bereich)`
+- `store_beitreten(b)` – Schreiben in einen Bereich ohne eigene Transaktion, während in einem anderen eine läuft (z. B. Veröffentlichen: Entwurf innen, Angebot bis Trennstufe 2 …
 - `with_lock(name, fn)`
-- `with_lock_in(b, name, fn)` – Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung)
+- `with_lock_in(b, name, fn)` – Sperre bzw. Transaktion eines Dokuments in einem bestimmten Bereich (with_lock wählt den Bereich nach der Einteilung).
 - `store_stats()` – Kennzahlen für die Übersicht im Eingabebereich (beide Bereiche, soweit diese Seite sie sieht)
 
 ## `app/assets/admin-rollen.js`

@@ -420,5 +420,29 @@ for art in ('dateien', 'sqlite'):
         check(f'{w}: zusammenführen: alles wieder wie auf Stufe 0 (ohne Verlust)', code == 0 and nachher == vorher and dt.leer(i) and not (d / '.daten-getrennt').exists(),
               (out, [n for n in vorher if nachher[n] != vorher[n]]))
 
+# ─────────────── Ein Vorgang über beide Datenbanken: ganz oder gar nicht (with_lock_in, store_beitreten) ───────────────
+# Mitarbeiterseite mit getrennten Daten in SQLite: zwei Datenbanken. Die äußerste Sperre schließt beide gemeinsam ab – wie mit
+# gemeinsamen Daten bleibt ein abgebrochener Vorgang ganz ungespeichert (vorher: der äußere Teil blieb schon gespeichert).
+for stufe in (1, dt.ZIELSTUFE):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau(t); i = t / 'daten-intern'; w = f'sqlite Stufe {stufe}'
+        subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+        lauf('trennen', str(d), str(i), '--offline', '--stufe', str(stufe))
+        lesen = "echo json_encode([store_read('entwurf'), store_read('kunden'), empty($GLOBALS['store_tx'])]);"
+        r = php("try { with_lock('entwurf', function () { store_write('entwurf', ['x' => 1]); "
+                "with_lock('kunden', function () { store_write('kunden', ['customers' => [], 'neu' => 1]); }); "
+                "throw new RuntimeException('Abbruch'); }); } catch (RuntimeException $e) { } " + lesen, d, i)
+        check(f'{w}: Abbruch nach abgeschlossener innerer Sperre im anderen Bereich → beide unverändert', json.loads(r or 'null') == [None, {'customers': []}, True], r)
+        r = php("try { with_lock('entwurf', function () { store_write('entwurf', ['x' => 1]); store_write('kunden', ['customers' => [], 'neu' => 1]); "
+                "throw new RuntimeException('Abbruch'); }); } catch (RuntimeException $e) { } " + lesen, d, i)
+        check(f'{w}: Abbruch nach Schreiben in den anderen Bereich ohne eigene Sperre → beide unverändert', json.loads(r or 'null') == [None, {'customers': []}, True], r)
+        r = php("with_lock('entwurf', function () { store_write('entwurf', ['x' => 1]); "
+                "try { with_lock('kunden', function () { store_write('kunden', ['customers' => [], 'neu' => 1]); throw new RuntimeException('innen'); }); } "
+                "catch (RuntimeException $e) { } }); " + lesen, d, i)
+        check(f'{w}: abgefangener Fehler der inneren Sperre setzt nur deren Bereich zurück', json.loads(r or 'null') == [{'x': 1}, {'customers': []}, True], r)
+        r = php("with_lock('entwurf', function () { store_write('entwurf', ['x' => 2]); store_write('kunden', ['customers' => [], 'neu' => 2]); }); " + lesen, d, i)
+        check(f'{w}: erfolgreicher Vorgang speichert in beiden, danach keine offene Transaktion', json.loads(r or 'null') == [{'x': 2}, {'customers': [], 'neu': 2}, True], r)
+        check(f'{w}: Entwurf liegt innen, Kunden außen', 'entwurf' in zeilen(i) and 'entwurf' not in zeilen(d) and 'kunden' in zeilen(d) and 'kunden' not in zeilen(i))
+
 print(f'{ok_n}/{ok_n + fail_n} passed')
 sys.exit(0 if fail_n == 0 else 1)

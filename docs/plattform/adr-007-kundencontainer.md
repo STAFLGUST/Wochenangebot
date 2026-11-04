@@ -354,6 +354,11 @@ niemand (Stufe 1b).
   getrennten Daten erst `daten-trennen.sh zusammenfuehren` (Stufe 2a).
 - **Daten trennen:** `sh deploy/daten-trennen.sh status` (Stufe und Plan, ändert nichts), `trennen` (auf die höchste Stufe des
   eingespielten Stands), `zusammenfuehren` – Abschnitte Stufe 2a und 2b.
+- **Ein Vorgang über beide Datenbanken** (z. B. Veröffentlichen bis Trennstufe 2: Entwurf innen, Angebot und Protokoll außen; ab
+  Stufe 2: Kunden außen, Stammdaten innen): Die äußerste Sperre schließt beide Datenbanken gemeinsam ab bzw. setzt beide zurück
+  (`with_lock_in`, `store_beitreten`). Vorher blieb bei einem Fehler mitten im Vorgang der schon geschriebene Teil der anderen
+  Datenbank gespeichert (seit Stufe 2a, z. B. ein veröffentlichtes Angebot ohne gesicherte Vorversion). Zwei SQLite-Dateien lassen
+  sich nicht in einem einzigen Schritt abschließen – offen bleibt nur ein Fehler genau zwischen den beiden Abschlüssen.
 - **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
   (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
   Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.

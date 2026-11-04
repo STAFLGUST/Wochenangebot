@@ -297,6 +297,10 @@ Anmeldeversuche, Live-Verkehr). Jede Seite liest und schreibt ihr eigenes; für 
   Sperre. Verschiedene Namen sperren unabhängig.
 - SQLite: Die äußerste `with_lock` startet `BEGIN IMMEDIATE`; verschachtelte Aufrufe (auch andere Namen) laufen in
   derselben Transaktion. Normales Ende → `COMMIT`, Ausnahme → `ROLLBACK` und Ausnahme weiterwerfen.
+- Getrennte Daten (zwei Datenbanken): Eine innere Sperre in einem anderen Bereich und Schreiben in einen anderen Bereich
+  ohne eigene Sperre (`store_beitreten`) bleiben offen, bis die **äußerste** Sperre endet; die schließt alle Bereiche
+  gemeinsam ab bzw. setzt alle zurück – ein Vorgang bleibt also wie mit gemeinsamen Daten ganz oder gar nicht gespeichert.
+  Scheitert eine innere Sperre, setzt sie nur ihren Bereich zurück. Kein Versand (SMTP) innerhalb einer Sperre.
 - `fail()`/`respond()` innerhalb einer Sperre beenden die Anfrage mit `exit`; `respond()` ruft vorher `store_commit()`.
   Für „alles oder nichts“ daher prüfen, **bevor** geschrieben wird (wie `stammdaten_speichern`: erst
   `clean_master`, dann Revision, dann `store_write`).
