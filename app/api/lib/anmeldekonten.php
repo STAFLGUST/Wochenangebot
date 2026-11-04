@@ -17,7 +17,7 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 const KONTEN_REALM = 'mitarbeiter';
 const KONTEN_CLIENT = 'konten';
 const KONTEN_LINK_STUNDEN = 72;   // wie konten.sh einladen
-const KONTEN_EINRICHTEN = 'In der Serverkonsole: sh deploy/anmeldung/konten.sh realm-aktualisieren, danach docker compose up -d app.';
+const KONTEN_EINRICHTEN = 'In der Serverkonsole: sh deploy/anmeldung/konten.sh realm-aktualisieren, danach docker compose up -d app-mitarbeiter.';
 
 /* Fachlicher Fehler mit HTTP-Status für die Antwort (Meldung auf Deutsch, ohne Interna) */
 final class KontenFehler extends RuntimeException

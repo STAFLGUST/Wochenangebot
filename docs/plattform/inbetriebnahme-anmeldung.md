@@ -117,6 +117,9 @@ Mitarbeiteranmeldung dort abschalten (Roadmap 8); HSTS der Kundendomain auf ein 
   nach einem Fehlschlag auf den nächsten Code warten.
 - **Anmeldeereignisse** (Anmeldungen, Fehlversuche) speichert Keycloak 30 Tage, danach werden sie gelöscht
   (Realm-Einstellung `eventsExpiration`; Änderung als eigener Schritt).
+- **Zwei Anwendungs-Container (seit ADR-007, 04.11.2026):** Kundenseite `app`, Mitarbeiter-Hosts `app-mitarbeiter` (gleiches Image).
+  Wo in den Schritten oben nach neuen Werten in `.env` `docker compose up -d app` steht, gilt seitdem
+  `docker compose up -d app-mitarbeiter` – nur dieser Container kennt die Anmelde-Geheimnisse. Notzugang und Kundenseite: `app`.
 - **Rechte** bleiben in der Anwendung (Verwaltung → Rollen und Rechte, inklusive Modulzugang je Rolle). Keycloak sagt nur „wer“; ein in der Anwendung
   gesperrtes Konto ist sofort ausgesperrt. Neue Mitarbeiter brauchen beides: Konto in Keycloak und Mitarbeiterkonto.
 - **Abmelden / Sperren:** Abmelden in einer Anwendung meldet in allen ab (Back-Channel-Logout). Ein Konto zentral
