@@ -398,5 +398,27 @@ for art in ('dateien', 'sqlite'):
         check(f'{w}: zusammenführen vereint beide Seiten', code == 0 and [e['t'] for e in dt.dok_lesen(d, 'verkehr')] == [100, 200, 300]
               and 'm|198.51.100.9' in dt.dok_lesen(d, 'logins') and dt.leer(i), out)
 
+# ─────────────── Wie im Betrieb: von Stufe 1 (seit 04.11.2026) in einem Schritt auf die höchste Stufe und zurück ───────────────
+for art in ('dateien', 'sqlite'):
+    with tempfile.TemporaryDirectory() as t:
+        t = Path(t); d = aufbau2(t); i = t / 'daten-intern'; w = f'{art} 1→{dt.ZIELSTUFE}'
+        doc(d, 'protokoll/' + MONAT, [{'t': MONAT + '-01T08:00:00Z', 'u': 'erika', 'a': 'customers', 's': 'Kunde bearbeitet'}])
+        doc(d, 'verkehr', [{'t': 100, 'ip': '198.51.100.9', 'u': 'erika', 'q': 'action=log'}]); doc(d, 'sicherheit', {'idleMinutes': 30})
+        if art == 'sqlite':
+            subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+        lauf('trennen', str(d), str(i), '--offline', '--stufe', '1')
+        vorher = {n: dt.dok_lesen(d, n) or dt.dok_lesen(i, n) for n in ('kunden', 'bestellung', 'bestand', 'stammdaten', 'mailkonto', 'protokoll/' + MONAT, 'verkehr', 'sicherheit', 'angebot', 'hr-personal')}
+        code, out = lauf('trennen', str(d), str(i), '--offline')
+        aussen = json.dumps({n: dt.dok_lesen(d, n) for n in ('kunden', 'bestellung', 'bestand', 'stammdaten', 'mailkonto', 'protokoll/' + MONAT, 'verkehr')})
+        check(f'{w}: ein Schritt auf die höchste Stufe; außen nichts Internes mehr', code == 0 and (d / '.daten-getrennt').read_text() == f'{dt.ZIELSTUFE}\n'
+              and not any(x in aussen for x in ('einkauf@test.invalid', 'Weg 1', 'kreditlimit', 'team@test.invalid', '"ek"', 'smtp.test.invalid', 'erika'))
+              and dt.dok_lesen(i, 'sicherheit') == dt.dok_lesen(d, 'sicherheit') == {'idleMinutes': 30}, (out, aussen[:300]))
+        r = php_lib("echo json_encode([customers_load()['customers'][0]['email'], order_settings()['to'], array_column(protokoll_monat('" + MONAT + "'), 'u'), array_column(fw_verkehr_alle(), 'u'), store_read('sicherheit')]);", d, i)
+        check(f'{w}: Mitarbeiterseite sieht alles wie vorher', json.loads(r or 'null') == ['einkauf@test.invalid', ['team@test.invalid', 'chef@test.invalid'], ['erika'], ['erika'], {'idleMinutes': 30}], r)
+        code, out = lauf('zusammenfuehren', str(d), str(i), '--offline')
+        nachher = {n: dt.dok_lesen(d, n) for n in vorher}
+        check(f'{w}: zusammenführen: alles wieder wie auf Stufe 0 (ohne Verlust)', code == 0 and nachher == vorher and dt.leer(i) and not (d / '.daten-getrennt').exists(),
+              (out, [n for n in vorher if nachher[n] != vorher[n]]))
+
 print(f'{ok_n}/{ok_n + fail_n} passed')
 sys.exit(0 if fail_n == 0 else 1)
