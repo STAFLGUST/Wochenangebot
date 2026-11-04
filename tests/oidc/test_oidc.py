@@ -1856,12 +1856,13 @@ with sync_playwright() as pw:
         'grant_type': 'client_credentials', 'client_id': 'konten', 'client_secret': GEHEIM['OIDC_SECRET_KONTEN']}).encode(),
         {'Content-Type': 'application/x-www-form-urlencoded'})[2]).get('access_token', '')
     _kk = {'Authorization': 'Bearer ' + _ktok, 'Content-Type': 'application/json'}
+    ANGRIFF_PW = 'Angreifer-Kennwort-CI-7'   # nur Testumgebung
     _c1 = anfrage(KC + '/admin/realms/mitarbeiter/users', 'POST', json.dumps({'username': 'bea.boss', 'enabled': True, 'email': 'angreifer@stafl.test',
         'emailVerified': True, 'firstName': 'Bea', 'lastName': 'Boss', 'groups': ['/anwendungskonten']}).encode(), _kk)[0]
     _bid = (json.loads(anfrage(KC + '/admin/realms/mitarbeiter/users?exact=true&username=bea.boss', kopf={'Authorization': 'Bearer ' + vtoken()})[2] or '[{}]') or [{}])[0].get('id', '')
-    _c2 = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_bid}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': 'Angreifer-Kennwort-77', 'temporary': False}).encode(), _kk)[0]
+    _c2 = anfrage(f'{KC}/admin/realms/mitarbeiter/users/{_bid}/reset-password', 'PUT', json.dumps({'type': 'password', 'value': ANGRIFF_PW, 'temporary': False}).encode(), _kk)[0]
     ca = br.new_context(ignore_https_errors=True); pa = eigene_seite(ca.new_page())
-    pa.goto(D + '/'); pa.wait_for_selector('#username'); pa.fill('#username', 'bea.boss'); pa.fill('#password', 'Angreifer-Kennwort-77'); pa.click('#kc-login')
+    pa.goto(D + '/'); pa.wait_for_selector('#username'); pa.fill('#username', 'bea.boss'); pa.fill('#password', ANGRIFF_PW); pa.click('#kc-login')
     pa.wait_for_selector('#db-err:not([hidden])')
     check('Angriff (Konto mit dem Namen eines Administrators über den Client „konten“): Anmeldung abgelehnt, keine Verknüpfung, protokolliert',
           _c1 == 201 and _c2 == 204 and 'gruppe-abgleichen' in pa.text_content('#db-err') and pa.is_hidden('#db-bereich')
