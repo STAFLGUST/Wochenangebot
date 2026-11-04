@@ -3,7 +3,8 @@
 **Status:** angenommen am 04.11.2026 (Inhaber). **Stufe 1** umgesetzt und eingespielt (PR #281), **Stufe 1b**
 (Dienstkonto in Keycloak, Realm Stand 16) umgesetzt und eingespielt (PR #283), **Notzugang über einen SSH-Tunnel**
 (Regel 6 der Zielarchitektur Kundenseite) umgesetzt und eingespielt (PR #285); **Postausgang von innen** (Regel 4)
-umgesetzt – wirksam mit dem Release und dem Umzug des Schlüssels; **Stufe 2** (Daten) geplant.
+umgesetzt und eingespielt (PR #286, Schlüssel umgezogen am 04.11.2026); **Stufe 2a** (interne Daten in eigenen Ordner)
+umgesetzt – wirksam erst mit dem Serverschritt `deploy/daten-trennen.sh trennen` (Freigabe des Inhabers); **Stufe 2b** geplant.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -156,21 +157,56 @@ kein Postfach.
   Aufträge im Dokument `postausgang` verarbeitet der alte Stand nicht – offene Versandaufträge stehen weiter beim Vorgang und
   lassen sich in den Bestellwünschen nachsenden.
 
-### Stufe 2 – Daten trennen (geplant)
+### Stufe 2a – Interne Daten in einen eigenen Ordner (umgesetzt 04.11.2026, Serverschritt mit Freigabe)
 
-- Die Kundenseite sieht nur noch, was sie braucht: veröffentlichtes Angebot, Angebotsliste, Kundenzugänge, Sitzungen,
-  Merklisten, einen Eingang für Bestellwünsche und eine Liste ausverkaufter Artikelnummern (ohne Mengen).
-- Das Kundendokument wird in **Zugangsdaten** und **Stammdaten mit Warenwirtschaftszahlen** geteilt – eine Datenmigration
-  mit eigener Freigabe (GR-006).
-- E-Mails verschickt nur noch die Mitarbeiterseite über den Postausgang – vorgezogen umgesetzt (Abschnitt oben).
-- Am besten zusammen mit PostgreSQL (Zielarchitektur §5, ADR-4): eigener Datenbanknutzer der Kundenseite mit Rechten nur
-  auf Kundentabellen.
+Gemessen (Zugriffsspur der Speicherschicht über 24 Testgruppen, 04.11.2026): Die öffentlichen Kundenaktionen fassen 38
+Speicherdokumente an. Alle übrigen – Personal (HR), Mitarbeiterkonten und Sitzungen, Rechte, CRM, Controlling, Marketing,
+Leergut, REWE, QS mit der Dateiablage, Entwurf, Versionen, Preisverlauf, Einkauf, Versandprotokoll … – braucht die Kundenseite nie.
+
+- **Einteilung im Regelwerk:** jedes Dokument in `regeln/datenverantwortung.toml` hat `bereich = "kundenseite"` oder
+  `"intern"` (Pflicht, CI). Daraus entsteht `app/api/lib/datenbereiche-liste.php`. Neue Dokumente sind intern, außer die
+  Kundenseite braucht sie nachweislich (Testgruppe `datentrennung`).
+- **Speicherschicht mit zwei Bereichen** (`app/api/storage.php`): Nach dem Trennen (Kennzeichen `daten/.daten-getrennt`)
+  liegen interne Dokumente im Ordner `WA_DATEN_INTERN` (Kennzeichen `.daten-intern`), mit eigenen Sperren und im
+  SQLite-Betrieb eigener Datenbank; die Dateiablage `dateien/` ebenso. Nur `app-mitarbeiter` und `postausgang` binden
+  `./daten-intern` ein (außerhalb der Webwurzel). Die Kundenseite liest interne Dokumente nicht (null), schreiben bricht ab.
+  Ohne Kennzeichen ist alles wie bisher – das Release allein ändert nichts.
+- **Serverschritt** `sh deploy/daten-trennen.sh trennen` (im Wartungsfenster, Freigabe des Inhabers): Sicherung → Stopp von
+  `app`, `app-mitarbeiter`, `postausgang` → `deploy/daten_trennen.py` (kopieren und vergleichen, dann umschalten, dann
+  Originale entfernen; ein Abbruch vor dem Umschalten lässt alles wie vorher) → Eigentümer → Start. `status` zeigt den Plan,
+  ohne etwas zu ändern. Dateien und SQLite werden beide unterstützt.
+- **Sicherung:** `deploy/sichern.sh` sichert danach zusätzlich `daten-intern/` als `intern-<Zeit>.tar.gz` (gleich geprüft) und
+  bricht ab, wenn der Ordner fehlt. Dabei behoben: Im SQLite-Betrieb fehlte die Dateiablage (hochgeladene QS-Dokumente) in der
+  Sicherung – der Datenbankabzug nimmt sie jetzt mit.
+- **Speicher umschalten / Altdateien** (`datenbank-umschalten.sh`, `altdateien.sh`) laufen nur mit allen Daten in einem
+  Ordner: erst `daten-trennen.sh zusammenfuehren`, dann umschalten, dann wieder trennen.
+- **Rückfall:** Vor einem Rückfall auf ein Release vor der Trennung `sh deploy/daten-trennen.sh zusammenfuehren` (ältere
+  Stände kennen `daten-intern` nicht). Rückfall auf ein Release *mit* Trennung: nichts zu tun.
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Dateien und SQLite: trennen, Wiederholung nach Abbruch, Schutz vor
+  Überschreiben, zusammenführen ohne Verlust, gleiche Einteilung in PHP und Python, Speicherschicht beider Seiten),
+  `tests/deploy/test_daten_trennen.sh`, `tests/deploy/test_sichern.sh`, E2E-Gruppe `datentrennung` (Kundenseite ohne internen
+  Ordner wie im Betrieb: alle Kundenfunktionen, keine einzige Anfrage nach internen Dokumenten, Protokoll wird weiter
+  geschrieben, keine Mitarbeiteranmeldung oder Ersteinrichtung), volle E2E-Suite einmal lokal mit getrennten Daten
+  (`WA_TEST_TRENNUNG=1`), `deploy/anmeldung/pruefen.sh` (Einbindung).
+
+### Stufe 2b – Restliche Trennung (geplant)
+
+Nach Stufe 2a sieht die Kundenseite noch Dokumente, die sie heute braucht, die aber mehr enthalten als nötig:
+
+- Das Kundendokument `kunden` mit Warenwirtschaftszahlen (Umsätze, Kreditlimit) → in **Zugangsdaten/Portalfelder** und
+  **Stammdaten mit Warenwirtschaftszahlen** teilen – eine Datenmigration mit eigener Freigabe (GR-006).
+- `bestand` und `stammdaten` (Mengen, Einkaufspreise) → nur eine veröffentlichte Liste ausverkaufter Artikel ohne Mengen.
+- Protokoll, Anmeldeversuche, Firewall-Zähler und Live-Verkehr enthalten auch Einträge der Mitarbeiterseite → eigene
+  Dokumente der Kundenseite, die Oberflächen führen beide zusammen.
+- Versandaufträge: Der Postausgang vertraut Empfängern und Inhalt im gemeinsamen Ordner (siehe oben, Grenze).
+- Später PostgreSQL (Zielarchitektur §5): Die Bereiche entsprechen dann eigenen Datenbanknutzern.
 
 ## Wirkung
 
 | Wenn die Kundenseite geknackt würde | vorher | nach Stufe 1 | nach Stufe 2 |
 | --- | --- | --- | --- |
-| Personaldaten, Nutzer, Protokolle lesen | ja | ja (gemeinsamer Datenordner) | nein |
+| Personaldaten, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente lesen | ja | ja (gemeinsamer Datenordner) | nein (2a) |
+| Protokoll, Kunden-Warenwirtschaftszahlen, Bestand lesen | ja | ja | ja nach 2a, nein nach 2b |
 | Mitarbeiterkonten in Keycloak übernehmen | ja | nein (kein Geheimnis, kein Netzweg) | nein |
 | Anmelde-Geheimnisse der Mitarbeiter-Hosts | ja | nein | nein |
 | Postfach-Passwort | ja | ja – nein seit dem Postausgang von innen (nach `postfach-schluessel.sh umziehen`) | nein |
@@ -203,7 +239,9 @@ niemand (Stufe 1b).
   als verwaisten Container stehen (keine Wirkung, Caddy erreicht ihn dann nicht mehr). Aufräumen:
   `docker compose up -d --remove-orphans`.
 - **Geänderte Anmelde-Werte in `.env`** liest die Anwendung nach `docker compose up -d app-mitarbeiter` (bisher `app`).
-- **Speicher umschalten** (`deploy/datenbank-umschalten.sh`) stoppt beide Anwendungs-Container und den Postausgang.
+- **Speicher umschalten** (`deploy/datenbank-umschalten.sh`) stoppt beide Anwendungs-Container und den Postausgang; mit
+  getrennten Daten erst `daten-trennen.sh zusammenfuehren` (Stufe 2a).
+- **Daten trennen:** `sh deploy/daten-trennen.sh status` (Plan, ändert nichts), `trennen`, `zusammenfuehren` – Abschnitt Stufe 2a.
 - **Postausgang:** `docker compose ps postausgang` (Zustand „healthy“ = Lebenszeichen frisch), `docker compose logs postausgang`
   (je Durchgang mit Versand eine Zeile). Steht der Dienst länger als 15 Minuten, nimmt das Portal keine Bestellwünsche an.
   Einführung: Release einspielen (erstellt den Dienst), danach einmal `sh deploy/postfach-schluessel.sh umziehen`.

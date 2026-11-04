@@ -240,7 +240,8 @@ Dokumente es gibt und wem sie gehören: [Kapitel 5](05-daten.md), [referenz/date
 | `store_names(string $prefix)` | Namen unter `prefix/` (z. B. `store_names('versionen')`) |
 | `with_lock(string $name, callable $fn)` | `$fn` unter exklusiver Sperre ausführen, Rückgabewert durchreichen |
 | `store_commit()`, `store_rollback()` | offene SQLite-Transaktion abschließen bzw. verwerfen; `store_rollback` leert auch vorgemerkte Benachrichtigungen |
-| `store_mode()` | `files` oder `sqlite` (einmal je Prozess entschieden) |
+| `store_mode(string $bereich = 'haupt')` | `files` oder `sqlite` (einmal je Prozess und Bereich entschieden) |
+| `store_bereich(string $name)`, `store_ordner(string $bereich)`, `store_getrennt()` | Speicherbereich eines Dokuments und sein Ordner (Datentrennung, unten) |
 | `store_stats()` | Anzahl und Größe für die Übersicht |
 
 Namen müssen `^[a-zA-Z0-9_-]+(?:/[a-zA-Z0-9_-]+)*$` entsprechen, sonst `RuntimeException`.
@@ -256,6 +257,15 @@ Sicherung und Rückfall: [datenbank.md](../datenbank.md).
 
 **Seitendateien:** `STORE_SIDECARS = ['mail-schluessel', 'sicherung', 'deployment']` bleiben auch bei SQLite Dateien
 (Postfach-Schlüssel außerhalb der Sicherung, Statusdateien der Skripte).
+
+**Zwei Bereiche (ADR-007 Stufe 2a):** Nach `deploy/daten-trennen.sh trennen` (Kennzeichen `$DATA/.daten-getrennt`) liegen
+interne Dokumente im Ordner `WA_DATEN_INTERN` (Kennzeichen `.daten-intern`, eigene Sperren, im SQLite-Betrieb eigene
+Datenbank, dazu die Dateiablage). `store_bereich($name)` entscheidet nach `regeln/datenverantwortung.toml` (Feld `bereich`,
+erzeugt in `lib/datenbereiche-liste.php`): Dokumente der Kundenseite und Seitendateien bleiben in `$DATA` (`haupt`), alles
+andere ist `intern`. Die Kundenseite hat kein `WA_DATEN_INTERN`: Lesen interner Dokumente liefert `null`, Schreiben wirft
+`StoreKeinZugang`. Transaktionen gelten je Bereich (`$GLOBALS['store_tx']` ist eine Liste offener Bereiche; `store_commit()`
+und `store_rollback()` ohne Angabe schließen alle). Ein neues Dokument, das die Kundenseite lesen oder schreiben muss, braucht
+`bereich = "kundenseite"` – sonst sieht die Kundenseite es nach der Trennung nicht (die Gruppe `datentrennung` meldet das).
 
 **Sperren und Transaktionen:**
 

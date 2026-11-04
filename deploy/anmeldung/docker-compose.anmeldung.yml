@@ -14,7 +14,8 @@
 #   postausgang      – verschickt die E-Mails, die die Kundenseite nur als Auftrag ablegt (Postausgang von innen, ADR-007): nur
 #                      hier und in app-mitarbeiter gibt es Postfach-Zugangsdaten und den Schlüssel des hinterlegten Postfach-Passworts
 #                      (Ordner daten-geheim, nie in der Kundenseite). Kein Port, eigenes Netz nur mit Ausgang ins Internet (SMTP).
-# Alle nutzen denselben Datenordner (Stufe 1); Stufe 2 (eigene Daten der Kundenseite) siehe ADR-007.
+# Alle nutzen den Datenordner daten/. Nach der Datentrennung (ADR-007 Stufe 2, sh deploy/daten-trennen.sh trennen) liegen interne
+# Dokumente (Personal, Nutzer, CRM, Controlling, QS, Dateiablage …) in daten-intern/ – nur app-mitarbeiter und postausgang.
 services:
   app:
     # Kundenseite angebot-stafl.de (ADR-007): dasselbe Anwendungs-Image wie app-mitarbeiter (deploy/image, in der CI gebaut und
@@ -69,6 +70,7 @@ services:
       - ./deploy/anmeldung/apache-oidc.conf:/etc/apache2/sites-enabled/zz-stafl-oidc.conf:ro   # Keycloak-Hosts in Apache
       - ./daten-karte:/var/www/karte:ro                   # Detailkarte (deploy/karte-laden.sh); fehlt sie, zeigen die Seiten die Übersichtskarte
       - ./daten-geheim:/var/www/geheim                    # Schlüssel des hinterlegten Postfach-Passworts (nicht in der Kundenseite, nicht gesichert)
+      - ./daten-intern:/var/www/daten-intern              # interne Daten nach deploy/daten-trennen.sh (ADR-007 Stufe 2; nicht in der Kundenseite)
     environment:
       # wie app in docker-compose.yml (die CI prüft, dass hier nichts davon fehlt: deploy/anmeldung/pruefen.sh)
       WA_INSTALLED: "1"
@@ -130,6 +132,9 @@ services:
       # Schlüssel des im Eingabebereich hinterlegten Postfach-Passworts außerhalb des gemeinsamen Datenordners (ADR-007);
       # liegt er noch im Datenordner, gilt bis deploy/postfach-schluessel.sh umziehen der bisherige Ort
       WA_GEHEIM_DIR: /var/www/geheim
+      # Interne Daten (ADR-007 Stufe 2): wirksam erst nach sh deploy/daten-trennen.sh trennen (Kennzeichen in daten/ und daten-intern/);
+      # vorher liegt alles wie bisher in daten/
+      WA_DATEN_INTERN: /var/www/daten-intern
     ports:
       # Notzugang (ADR-007 Regel 6): nur auf 127.0.0.1 des Servers – vom eigenen Rechner per SSH-Tunnel
       # (ssh -L 8190:127.0.0.1:8190 …, dann http://localhost:8190/admin/), wie die Keycloak-Verwaltung; nie über Caddy
@@ -159,6 +164,7 @@ services:
       - ./app:/var/www/html:ro
       - ./daten:/var/www/html/data
       - ./daten-geheim:/var/www/geheim:ro                 # Schlüssel des Postfach-Passworts (nur lesen; neu angelegt wird er in app-mitarbeiter)
+      - ./daten-intern:/var/www/daten-intern              # interne Daten (Versandprotokoll, Benachrichtigungsstand) nach der Trennung
     environment:
       DOMAIN: ${DOMAIN}             # Adresse für Links in E-Mails
       MAIL_SMTP_HOST: ${MAIL_SMTP_HOST:-}
@@ -170,6 +176,7 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-}
       MAIL_REPLY_TO: ${MAIL_REPLY_TO:-}
       WA_GEHEIM_DIR: /var/www/geheim
+      WA_DATEN_INTERN: /var/www/daten-intern
       WA_EIGENE_ANMELDUNG: "aus"    # Links in Benachrichtigungen auf den Eingabebereich im Dashboard (wie app-mitarbeiter)
     read_only: true
     tmpfs:

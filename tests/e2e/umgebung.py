@@ -15,10 +15,21 @@ SMTP_PORT2 = int(os.environ.get('WA_SMTP_PORT2', '2527'))
 AUX_PORT = int(os.environ.get('WA_AUX_PORT', '8791'))
 
 
+def datenordner(name):
+    """Ordner eines Dokuments: nach der Datentrennung (ADR-007 Stufe 2, WA_TEST_TRENNUNG) liegen interne Dokumente in UINTERN"""
+    data = os.environ['UDATA']
+    if not os.path.isfile(data + '/.daten-getrennt'):
+        return data
+    import sys
+    sys.path.insert(0, os.path.join(REPO, 'deploy'))
+    import daten_trennen
+    return os.environ['UINTERN'] if daten_trennen.ist_intern(name, daten_trennen.kundenseite()) else data
+
+
 def storage_raw(name):
     """Inspect actual persisted state, without going through the application API."""
     import sqlite3
-    data = os.environ['UDATA']
+    data = datenordner(name)
     if os.path.isfile(data + '/.sqlite-active'):
         with sqlite3.connect(data + '/.sqlite/store.sqlite') as db:
             row = db.execute('SELECT payload FROM documents WHERE name=?', (name,)).fetchone()
@@ -42,13 +53,14 @@ def storage_write(name, value):
     import json
     import sqlite3
     import time
-    data = os.environ['UDATA']
+    data = datenordner(name)
     raw = json.dumps(value, ensure_ascii=False, separators=(',', ':'))
-    if storage_sqlite():
+    if os.path.isfile(data + '/.sqlite-active'):
         with sqlite3.connect(data + '/.sqlite/store.sqlite') as db:
             db.execute('INSERT INTO documents(name,payload,mtime) VALUES(?,?,?) ON CONFLICT(name) DO UPDATE SET payload=excluded.payload,mtime=excluded.mtime',
                        (name, raw, int(time.time())))
         return
+    os.makedirs(os.path.dirname(data + '/' + name + '.php'), exist_ok=True)
     with open(data + '/' + name + '.php', 'w', encoding='utf-8', newline='\n') as f:
         f.write(GUARD + raw)
 
@@ -57,17 +69,19 @@ def storage_docs(prefix=None):
     """Alle gespeicherten Geschäftsdokumente {Name: Inhalt} – unabhängig von der Speicherart."""
     import sqlite3
     from pathlib import Path
-    data = os.environ['UDATA']
+    ordner = [os.environ['UDATA']] + ([os.environ['UINTERN']] if os.path.isfile(os.environ['UDATA'] + '/.daten-getrennt') else [])
     if storage_sqlite():
-        with sqlite3.connect(data + '/.sqlite/store.sqlite') as db:
-            rows = db.execute('SELECT name,payload FROM documents ORDER BY name').fetchall()
-        return {n: p for n, p in rows if prefix is None or n.startswith(prefix + '/')}
-    root = Path(data)
+        rows = []
+        for data in ordner:
+            with sqlite3.connect(data + '/.sqlite/store.sqlite') as db:
+                rows += db.execute('SELECT name,payload FROM documents ORDER BY name').fetchall()
+        return {n: p for n, p in sorted(rows) if prefix is None or n.startswith(prefix + '/')}
     out = {}
-    for p in sorted(root.rglob('*.php')):
-        name = str(p.relative_to(root).with_suffix(''))
-        if prefix is None or name.startswith(prefix + '/'):
-            out[name] = p.read_text(encoding='utf-8')
+    for root in map(Path, ordner):
+        for p in sorted(root.rglob('*.php')):
+            name = str(p.relative_to(root).with_suffix(''))
+            if prefix is None or name.startswith(prefix + '/'):
+                out[name] = p.read_text(encoding='utf-8')
     return out
 
 
@@ -79,7 +93,7 @@ class storage_lock:
     def __enter__(self):
         import fcntl
         import sqlite3
-        data = os.environ['UDATA']
+        data = datenordner(self.name)
         if storage_sqlite():
             self.db = sqlite3.connect(data + '/.sqlite/store.sqlite', isolation_level=None, timeout=30)
             self.db.execute('BEGIN IMMEDIATE')

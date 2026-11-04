@@ -6,9 +6,13 @@
 # Neuen Administrator anlegen (z. B. nach Datenverlust):  sh deploy/passwort-zuruecksetzen.sh admin --neu
 set -e
 cd "$(dirname "$0")/.."
+# Dienst mit Zugriff auf alle Daten: mit der Ergänzungsdatei der Anmeldung app-mitarbeiter (sieht nach der Datentrennung,
+# ADR-007 Stufe 2a, auch daten-intern/), sonst app
+DIENST=app
+if sed -n 's/^COMPOSE_FILE=//p' .env 2>/dev/null | grep -qF deploy/anmeldung/docker-compose.anmeldung.yml; then DIENST=app-mitarbeiter; fi
 NUTZER="${1:-admin}"
 PW=$(LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' </dev/urandom | head -c 14)
-docker compose exec -T -u www-data app php -- "$NUTZER" "$PW" ${2:-} < deploy/passwort-zuruecksetzen.php
+${DOCKER:-docker} compose exec -T -u www-data "$DIENST" php -- "$NUTZER" "$PW" ${2:-} < deploy/passwort-zuruecksetzen.php
 echo
 echo "Neues Passwort für \"$NUTZER\": $PW"
 echo "Bitte anmelden und dann ein eigenes Passwort festlegen."

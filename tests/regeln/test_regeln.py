@@ -156,12 +156,14 @@ schema = 1
 [[dokument]]
 name = "angebot"
 eigentuemer = "angebot"
+bereich = "kundenseite"
 schutz = "oeffentlich"
 beschreibung = "x"
 
 [[dokument]]
 name = "bestand"
 eigentuemer = "lager"
+bereich = "intern"
 leser = ["angebot"]
 schutz = "vertraulich"
 beschreibung = "x"
@@ -169,6 +171,7 @@ beschreibung = "x"
 [[dokument]]
 name = "protokoll/*"
 eigentuemer = "plattform"
+bereich = "kundenseite"
 schutz = "vertraulich"
 beschreibung = "x"
 """
@@ -725,6 +728,23 @@ class Verstoesse(unittest.TestCase):
         self.p.ersetzen("regeln/aktionen/angebot.toml", 'modul = "angebot"', 'modul = "lager"')
         self.p.erzeugen()
         self.assertFehler("modul muss „angebot“ lauten")
+
+    def test_bereich_pflicht(self):
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', "")
+        self.assertFehler("Dokument bestand: bereich muss eines von kundenseite, intern sein")
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "irgendwo"\nschutz = "oeffentlich"')
+        self.assertFehler("Dokument angebot: bereich muss eines von")
+
+    def test_bereichsliste(self):
+        text = regeln.bereiche_php(regeln.laden(self.p.wurzel))
+        self.assertIn("const DATEN_KUNDENSEITE = ['angebot'];", text)
+        self.assertIn("const DATEN_KUNDENSEITE_PRAEFIX = ['protokoll/'];", text)
+        self.p.schreiben("app/api/storage.php", "<?php\n")   # mit Speicherschicht ist die Liste Pflicht und muss aktuell sein
+        self.assertFehler("datenbereiche-liste.php passt nicht zu regeln/datenverantwortung.toml")
+        self.p.schreiben(regeln.BEREICHE_LISTE, text)
+        self.assertEqual([f for f in self.p.fehler() if "datenbereiche" in f], [])
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"', 'bereich = "kundenseite"')
+        self.assertFehler("datenbereiche-liste.php passt nicht zu regeln/datenverantwortung.toml")
 
     def test_veraltete_module_liste(self):
         self.p.erzeugen_module()

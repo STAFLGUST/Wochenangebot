@@ -36,7 +36,8 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 - **Testumgebung:** `test.<Domain>` → Container `app-test` in `/opt/wochenangebot-test` (`deploy/testumgebung.sh`,
   `docs/testumgebung.md`); `WA_TESTUMGEBUNG=1` leitet E-Mails ins Testpostfach.
 - **Daten:** Dokumente über `app/api/storage.php` – Dateien (`daten/*.php`) oder SQLite (`daten/.sqlite/store.sqlite`,
-  aktiv mit `daten/.sqlite-active`, siehe `docs/datenbank.md`). Sicherung: `deploy/sichern.sh`.
+  aktiv mit `daten/.sqlite-active`, siehe `docs/datenbank.md`). Sicherung: `deploy/sichern.sh`. Nach der Datentrennung
+  (ADR-007 Stufe 2a, `deploy/daten-trennen.sh`) liegen interne Dokumente in `daten-intern/` – nur Mitarbeiterseite und Postausgang.
 
 ## Server (`app/api/`)
 
@@ -45,6 +46,7 @@ welchem Modul gehört, steht in `regeln/` (`python3 werkzeuge/regeln.py modul <i
 | `index.php` | Einstieg: Konfiguration, Bibliotheken laden, Schreibschutz (POST/JSON), Länder-/IP-Sperre, Wartungsmodus, Aktionen einbinden |
 | `lib/laden.php` | Grundlagen laden (Einstellungen, `$CFG`/`$DATA`, Speicherschicht, alle Funktionsdateien) – gemeinsam für `index.php` und `postausgang.php` |
 | `postausgang.php` | Dienst „postausgang“ (nur Kommandozeile, ADR-007): ein Durchgang verschickt die Versandaufträge der Kundenseite; `--pruefen` (Docker), `--umschluesseln`/`--entbinden` (Postfach-Passwort v1 ↔ v2) |
+| `lib/datenbereiche-liste.php` | Speicherbereiche (erzeugt aus `regeln/datenverantwortung.toml`, Feld `bereich`): Dokumente der Kundenseite; alle anderen liegen nach der Datentrennung in `daten-intern/` (ADR-007 Stufe 2a) |
 | `lib/kern.php` | `respond()`, `fail()`, `body()`, `now()`, Eingabeprüfung `s()`, `clean_price()` |
 | `lib/nutzer.php` | Mitarbeiter-Zugänge (optional `vorname`, `nachname`, `email`, `mailInfo`, `twofaPflicht` – einzeln verpflichteter zweiter Faktor, nur Administratoren über `user_save`, wirkt über `twofa_required` in `lib/sicherheit.php`; `name` bleibt für Anzeige und ältere Clients), Benutzername aus Vor-/Nachname (`benutzername_vorschlag`), Prüfung `nutzer_person`, Passwortregeln, E-Mail mit Zugangsdaten (`mail_tpl_nutzer`, Aktion `user_mail` in `aktionen/verwaltung.php`) |
 | `lib/rechte.php` | Nutzerrechte: Katalog `PERMS` plus Modulzugang `<modul>.zugang` je Kachel (`perms_katalog`, aus dem Modulregister), Rollen (Standardrollen im Dokument `rechte`, eigene Rollen und Namen im Dokument `rollen`, mehrere Rollen je Mitarbeiter: `role` + `rollen`), Ausnahmen je Nutzer (`grant`/`deny`), `user_perms`, `require_perm`, `require_perm_confirmed`, `require_modulzugang` (Modulzugang unabhängig vom Host, z. B. Entwurf und Kundenangebote); Sperre ohne Modulzugang je Host im API-Einstieg (`modul_zugang_durchsetzen`) |

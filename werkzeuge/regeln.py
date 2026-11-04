@@ -8,6 +8,8 @@
   python3 werkzeuge/regeln.py erzeugen                  erzeugte PHP-Listen schreiben: app/api/lib/aktionen-liste.php
                                                         (regeln/aktionen/) und app/api/lib/module-liste.php (Modulregister,
                                                         Entscheidungstabelle aus regeln/module.toml und regeln/wartung.toml)
+                                                        und app/api/lib/datenbereiche-liste.php (Speicherbereiche, Feld
+                                                        bereich in regeln/datenverantwortung.toml, ADR-007 Stufe 2)
 
 Quelle aller Angaben: regeln/*.toml. Erklärung: docs/plattform/multi-agent.md
 """
@@ -396,6 +398,8 @@ def pruefe_daten(rw: Regelwerk, liste: list) -> None:
             rw.f(f"Dokument {n}: schutz muss eines von {', '.join(SCHUTZ)} sein")
         if not d.get("beschreibung"):
             rw.f(f"Dokument {n}: beschreibung fehlt")
+        if d.get("bereich") not in BEREICHE:
+            rw.f(f"Dokument {n}: bereich muss eines von {', '.join(BEREICHE)} sein (ADR-007 Stufe 2)")
         for feld in ("leser", "schreiber"):
             for x in d.get(feld, []):
                 if x not in ids:
@@ -599,6 +603,36 @@ def pruefe_caddy(rw: Regelwerk) -> None:
             rw.f(f"Caddyfile: {h} ist weder Oberfläche noch Umgebung in regeln/module.toml")
 
 
+# ─────────────────────────────── Speicherbereiche (ADR-007 Stufe 2) ───────────────────────────────
+
+BEREICHE = ("kundenseite", "intern")
+BEREICHE_LISTE = "app/api/lib/datenbereiche-liste.php"
+
+
+def kundenseite_dokumente(rw: Regelwerk) -> tuple:
+    """Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern."""
+    namen, praefixe = [], []
+    for d in rw.daten.get("dokument", []):
+        if d.get("bereich") != "kundenseite":
+            continue
+        n = d["name"]
+        (praefixe if n.endswith("/*") else namen).append(n[:-1] if n.endswith("/*") else n)
+    return sorted(namen), sorted(praefixe)
+
+
+def bereiche_php(rw: Regelwerk) -> str:
+    namen, praefixe = kundenseite_dokumente(rw)
+    liste = lambda xs: "[" + ", ".join(f"'{x}'" for x in xs) + "]"
+    z = ["<?php", "declare(strict_types=1);",
+         "/* ERZEUGT von `python3 werkzeuge/regeln.py erzeugen` aus regeln/datenverantwortung.toml (Feld bereich) – nicht von Hand ändern.",
+         "   Speicherbereiche (ADR-007 Stufe 2, app/api/storage.php): Dokumente, die die Kundenseite braucht, bleiben im gemeinsamen",
+         "   Ordner; alle anderen liegen nach deploy/daten-trennen.sh im Ordner daten-intern, den die Kundenseite nicht sieht. */",
+         "if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }", "",
+         f"const DATEN_KUNDENSEITE = {liste(namen)};",
+         f"const DATEN_KUNDENSEITE_PRAEFIX = {liste(praefixe)};"]
+    return "\n".join(z) + "\n"
+
+
 # ─────────────────────────────── Aktionsregister ───────────────────────────────
 
 AKTIONEN_LISTE = "app/api/lib/aktionen-liste.php"
@@ -782,6 +816,10 @@ def pruefe_aktionen(rw: Regelwerk) -> None:
     if gesehen or liste.is_file():
         if not liste.is_file() or liste.read_text(encoding="utf-8") != aktionen_php(rw):
             rw.f(f"{AKTIONEN_LISTE} passt nicht zu regeln/aktionen/ – `python3 werkzeuge/regeln.py erzeugen` ausführen")
+    bliste = rw.wurzel / BEREICHE_LISTE
+    if bliste.is_file() or (rw.wurzel / "app/api/storage.php").is_file():
+        if not bliste.is_file() or bliste.read_text(encoding="utf-8") != bereiche_php(rw):
+            rw.f(f"{BEREICHE_LISTE} passt nicht zu regeln/datenverantwortung.toml – `python3 werkzeuge/regeln.py erzeugen` ausführen")
     mliste = rw.wurzel / MODULE_LISTE
     if mliste.is_file() or (rw.wurzel / "app/api/lib/module.php").is_file():
         if not mliste.is_file() or mliste.read_text(encoding="utf-8") != module_php(rw):
@@ -977,8 +1015,9 @@ def main(argv=None) -> int:
     if a.befehl == "erzeugen":
         (wurzel / AKTIONEN_LISTE).write_text(aktionen_php(rw), encoding="utf-8")
         (wurzel / MODULE_LISTE).write_text(module_php(rw), encoding="utf-8")
+        (wurzel / BEREICHE_LISTE).write_text(bereiche_php(rw), encoding="utf-8")
         print(f"geschrieben: {AKTIONEN_LISTE} ({len(aktionen_tabelle(rw))} Aktionen), {MODULE_LISTE} "
-              f"({len(rw.modulliste)} Module)")
+              f"({len(rw.modulliste)} Module), {BEREICHE_LISTE}")
         return 0
     if a.befehl == "betroffen":
         liste = sorted(set(a.dateien) | (set(geaenderte_dateien(wurzel, a.basis)) if a.basis else set()))

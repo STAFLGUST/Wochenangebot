@@ -166,6 +166,19 @@ wie bisher in den Bestellwünschen zum Nachsenden. Vor einem Rückfall auf ein �
 zurueck` (Passwörter zurück auf das alte Format, Schlüssel zurück in den Datenordner), danach
 `docker compose up -d --remove-orphans`.
 
+## Daten trennen (ADR-007 Stufe 2a)
+
+Mit dem Release ändert sich noch nichts: `app-mitarbeiter` und `postausgang` binden `./daten-intern` ein, nutzen ihn aber erst
+nach dem Serverschritt (nur mit Freigabe des Inhabers, im Wartungsfenster – die Anwendung steht dabei kurz):
+
+```sh
+sh deploy/daten-trennen.sh status            # Plan: welche internen Dokumente umziehen (ändert nichts)
+sh deploy/daten-trennen.sh trennen           # Sicherung → Stopp → trennen → Start
+```
+
+Danach sieht die Kundenseite Personal, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente usw. nicht mehr. Sicherungen enthalten
+zusätzlich `intern-<Zeit>.tar.gz`. Vor einem Rückfall auf ein Release vor der Trennung: `sh deploy/daten-trennen.sh zusammenfuehren`.
+
 ## Design der Anmeldeseite und der E-Mails
 
 Keycloak liest das Theme aus `deploy/anmeldung/theme/stafl` (Volume in `docker-compose.anmeldung.yml`, nur lesend):

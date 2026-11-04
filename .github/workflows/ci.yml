@@ -261,6 +261,11 @@ jobs:
         run: sh tests/deploy/test_notzugang.sh
       - name: Schlüssel des Postfach-Passworts aus dem gemeinsamen Datenordner (deploy/postfach-schluessel.sh, ADR-007)
         run: sh tests/deploy/test_postfach_schluessel.sh
+      - name: Daten trennen (deploy/daten_trennen.py, daten-trennen.sh, ADR-007 Stufe 2) – Dateien und SQLite, Speicherschicht beider Seiten
+        run: |
+          python3 tests/deploy/test_daten_trennen.py
+          sh tests/deploy/test_daten_trennen.sh
+          sh tests/deploy/test_notfallwerkzeuge.sh
       - name: Diagnose von Anmeldeproblemen (konten.sh pruefen, mit Platzhalter für Keycloak)
         run: sh tests/deploy/test_konten_pruefen.sh
       - name: Speicherbelegung und Aufräumen (deploy/speicher.sh, mit Platzhalter für docker), Protokollbegrenzung

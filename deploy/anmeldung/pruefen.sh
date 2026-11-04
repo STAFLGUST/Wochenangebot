@@ -195,6 +195,11 @@ elif was == 'postausgang-kunde':
     assert {k for k in basis['environment'] if k.startswith('MAIL_')} <= set(e) and all(e[k] == '' for k in e if k.startswith('MAIL_')), e
     assert '/var/www/geheim' not in ziele(app)
     assert ma['environment']['WA_GEHEIM_DIR'] == '/var/www/geheim' and '/var/www/geheim' in ziele(ma) and 'WA_POSTAUSGANG' not in ma['environment']
+elif was == 'datentrennung':
+    # Datentrennung (ADR-007 Stufe 2): interner Ordner nur in app-mitarbeiter und postausgang – nie in der Kundenseite, nie im Web
+    assert 'WA_DATEN_INTERN' not in app['environment'] and not [x for x in app.get('volumes', []) if 'daten-intern' in x.get('source', '')]
+    assert ma['environment']['WA_DATEN_INTERN'] == '/var/www/daten-intern' and '/var/www/daten-intern' in ziele(ma)
+    assert all(not x['target'].startswith('/var/www/html/') or x['target'] == '/var/www/html/data' for s2 in (ma, s['postausgang']) for x in s2['volumes'] if 'daten-intern' in x.get('source', ''))
 elif was == 'postausgang-dienst':
     p = s['postausgang']; e = p['environment']
     assert p['image'] == app['image'] and p.get('pull_policy') == 'never' and not p.get('build') and p.get('user') == 'www-data'
@@ -202,7 +207,8 @@ elif was == 'postausgang-dienst':
     assert 'postausgang.php' in ' '.join(p['healthcheck']['test']) and '--pruefen' in p['healthcheck']['test']
     assert not p.get('ports') and set(p['networks']) == {'postausgang'} and d['networks']['postausgang'].get('internal') is not True
     v = {x['target']: x for x in p['volumes']}
-    assert set(v) == {'/var/www/html', '/var/www/html/data', '/var/www/geheim'} and v['/var/www/html']['read_only'] and v['/var/www/geheim']['read_only'], v
+    assert set(v) == {'/var/www/html', '/var/www/html/data', '/var/www/geheim', '/var/www/daten-intern'} and v['/var/www/html']['read_only'] and v['/var/www/geheim']['read_only'], v
+    assert e['WA_DATEN_INTERN'] == '/var/www/daten-intern'
     assert all(e.get(k) == basis['environment'][k] for k in basis['environment'] if k.startswith('MAIL_') or k == 'DOMAIN'), e
     assert e['WA_GEHEIM_DIR'] == '/var/www/geheim' and 'WA_POSTAUSGANG' not in e and not [k for k in e if k.startswith('OIDC_')]
     assert p.get('read_only') is True and 'no-new-privileges:true' in p.get('security_opt', []) and float(p['cpus']) > 0 and int(p['mem_limit']) > 0
@@ -214,6 +220,7 @@ pruefe_json kunden-netz && ok "Netze: Kundenseite nur mit Caddy (default); Mitar
 pruefe_json kunden-haertung && ok "Kundenseite gehärtet: nur lesbar, /tmp und /run im Speicher, no-new-privileges, Grenzen für CPU/Speicher/Prozesse" || nein "Härtung der Kundenseite"
 pruefe_json mitarbeiter-vollstaendig && ok "app-mitarbeiter: gleiches Image, alles aus docker-compose.yml plus Anmeldung, Dashboard, Karte" || nein "app-mitarbeiter unvollständig"
 pruefe_json postausgang-kunde && ok "Postausgang: Kundenseite ohne Postfach-Werte und ohne Schlüsselordner, legt nur ab (ADR-007)" || nein "Postausgang: Kundenseite kennt das Postfach"
+pruefe_json datentrennung && ok "Datentrennung: daten-intern nur in app-mitarbeiter und postausgang (außerhalb der Webwurzel), nie in der Kundenseite" || nein "Datentrennung: Einbindung von daten-intern"
 pruefe_json postausgang-dienst && ok "Postausgang: eigener Dienst, gleiches Image, www-data, nur lesbar, kein Port, eigenes Netz, Postfach und Schlüssel nur lesend" || nein "Dienst postausgang"
 rm -f "$MIT" "$OHNE"
 
@@ -327,10 +334,10 @@ app2_ende() {
   docker run --rm -v "$APP2/daten:/d" stafl-app:pruefung sh -c 'rm -rf /d/* /d/.[!.]*' >/dev/null 2>&1 || true
   rm -rf "$APP2" 2>/dev/null || true
 }
-mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte" "$APP2/daten-geheim"
+mkdir -p "$APP2/deploy/anmeldung" "$APP2/daten" "$APP2/daten-karte" "$APP2/daten-geheim" "$APP2/daten-intern"
 cp "$REPO/docker-compose.yml" "$APP2/"; cp "$HIER/docker-compose.anmeldung.yml" "$HIER/apache-oidc.conf" "$APP2/deploy/anmeldung/"
 cp -r "$REPO/deploy/image" "$APP2/deploy/"; cp -r "$REPO/app" "$REPO/dashboard" "$APP2/"
-cp -r "$REPO/tests/fixtures/data-seed/." "$APP2/daten/"; chmod -R a+rwX "$APP2/daten" "$APP2/daten-geheim"; chmod -R a+rX "$APP2/app" "$APP2/dashboard" "$APP2/deploy"
+cp -r "$REPO/tests/fixtures/data-seed/." "$APP2/daten/"; chmod -R a+rwX "$APP2/daten" "$APP2/daten-geheim" "$APP2/daten-intern"; chmod -R a+rX "$APP2/app" "$APP2/dashboard" "$APP2/deploy"
 { cat "$ENV"; printf 'STAFL_APP_VERSION=pruefung\nKUNDEN_CPUS=1\nKUNDEN_SPEICHER=512m\nNOTZUGANG_PORT=18192\n'; } > "$APP2/.env"
 dc2() { (cd "$APP2" && docker compose -p "$APPPROJ" -f docker-compose.yml -f deploy/anmeldung/docker-compose.anmeldung.yml "$@"); }
 # Abruf im Container (ohne veröffentlichte Ports): dienst host pfad [methode] [inhalt] → „Status Antwortanfang“
@@ -370,6 +377,9 @@ if dc2 up -d --no-build app app-mitarbeiter postausgang >/tmp/app2-start.txt 2>&
     && ok "postausgang: weder Apps noch Keycloak im Netz erreichbar" || nein "postausgang erreicht andere Dienste"
   dc2 exec -T app sh -c 'test -z "$MAIL_SMTP_PASS$MAIL_SMTP_HOST" && test "$WA_POSTAUSGANG" = warteschlange && test ! -e /var/www/geheim' 2>/dev/null \
     && ok "app: kein Postfach in der Umgebung, kein Schlüsselordner, Versand nur über den Postausgang" || nein "app kennt das Postfach"
+  dc2 exec -T app sh -c 'test ! -e /var/www/daten-intern && test -z "${WA_DATEN_INTERN:-}"' 2>/dev/null \
+    && [ "$(dc2 exec -T app-mitarbeiter sh -c 'test -d /var/www/daten-intern && echo "$WA_DATEN_INTERN"' 2>/dev/null)" = /var/www/daten-intern ] \
+    && ok "Datentrennung: daten-intern nur in app-mitarbeiter (Kundenseite ohne Ordner und ohne WA_DATEN_INTERN)" || nein "Datentrennung: Einbindung im Container"
   case "$(abruf app angebot-stafl.de '/api/postausgang.php')" in 404*) ok "app: Postausgang-Skript nicht über den Webserver aufrufbar (404)";; *) nein "app: api/postausgang.php erreichbar" "$(abruf app angebot-stafl.de '/api/postausgang.php')";; esac
   # Notzugang (ADR-007 Regel 6): geschlossen im Normalbetrieb; nach WA_NOTZUGANG=an nur über 127.0.0.1 offen – die Kundenseite
   # öffnet ihn auch mit der früheren Zeile WA_EIGENE_ANMELDUNG=an nicht mehr
