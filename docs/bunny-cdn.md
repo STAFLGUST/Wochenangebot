@@ -190,3 +190,11 @@ Auftragsverarbeitung mit bunny sind offen (Inhaber).
 - **Länderangabe:** bunny schickt `CDN-RequestCountryCode`. Die Anwendung nutzt weiter ihre eigene Ländersperre mit der
   Besucher-IP.
 - Die Server-IP ist aus früheren DNS-Einträgen bekannt. Deshalb ist die Sperre (Schritt 7) nötig; ohne sie ließe sich bunny umgehen.
+- **Detailkarte (CRM-Karte, Verwaltung → Auswertung):** Die Karte liest die Kartendatei `/karte/karte.pmtiles` (rund 6 GB)
+  in kleinen Abschnitten (Range-Anfragen, Antwort 206). Die Datei ist nur mit Anmeldung abrufbar und wird von bunny nicht
+  gespeichert („private“). Befund 04.11.2026: Über bunny kam auf die Abschnitts-Anfrage die ganze Datei zurück (Status 200
+  statt 206) – auf crm. und verwaltung. Die Seiten zeigten deshalb nur die Übersichtskarte. Laut bunny gibt eine Zone
+  Range-Anfragen für nicht gespeicherte Inhalte nur mit „Optimize for large object delivery“ (Caching) weiter – in
+  `stafl-dashboard-1` einschalten und danach prüfen: Abschnitt kommt mit 206, die Datei ohne Anmeldung leitet weiterhin
+  zur Anmeldung um (bunny speichert sie nicht). Seit diesem Befund bricht die Seite den Abruf sofort ab, wenn statt des
+  Abschnitts die ganze Datei kommt (`app/assets/detailkarte.js`, Hinweis in der Browser-Konsole).

@@ -493,7 +493,10 @@ switch ($action) {
             });
             sess_remove(function ($k, $v) use ($gone) { return $v['uid'] === $gone['id']; });
             audit('user', 'Mitarbeiter „' . $gone['username'] . '“ (' . $gone['name'] . ') gelöscht');
-            respond(['ok' => true]);
+            // Konto der zentralen Anmeldung (Keycloak) mitlöschen – sonst verknüpfte es mit einem späteren, gleich benannten
+            // Mitarbeiter (lib/anmeldekonten.php). Scheitert es, bleibt der Mitarbeiter trotzdem gelöscht (Hinweis).
+            $hinweis = konten_entfernen($gone);
+            respond(['ok' => true] + ($hinweis !== '' ? ['hinweis' => $hinweis] : []));
         }
 
         case 'log': {

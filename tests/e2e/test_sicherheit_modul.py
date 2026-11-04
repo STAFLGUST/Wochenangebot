@@ -202,8 +202,13 @@ with sync_playwright() as p:
     pg.screenshot(path=f'{SH}/sicherheit_vorlage_dialog_1440.png')
     dialog_zu(pg)
     pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+    _dt = pg.inner_text('#sic-dlg')
+    check('Dialog: Leerlauf gilt über alle Adressen, Regeln auch für die zentrale Anmeldung (Befehl richtlinien)',
+          'alle Adressen der Plattform' in _dt and 'konten.sh richtlinien' in _dt and 'mindestens 12 Zeichen' in _dt, _dt[-400:])
+    pg.screenshot(path=f'{SH}/sicherheit_anmeldung_dialog_1440.png')
     pg.fill('#sec-form [name="pwMin"]', '14'); pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg', state='hidden')
     check('Anmeldung und Passwörter im Dialog gespeichert (übrige Einstellungen bleiben)', (doc('sicherheit') or {}).get('pwMin') == 14 and doc('sicherheit').get('treffer') is None, doc('sicherheit'))
+    check('… geänderte Passwortregel: Meldung nennt den Befehl für die zentrale Anmeldung', 'konten.sh richtlinien' in pg.inner_text('#sic-toast'), pg.inner_text('#sic-toast'))
     pg.click('[data-e="e-geo"]'); pg.wait_for_selector('#sic-dlg[open] #geo-box')
     pg.fill('#geo-q', 'Kanada'); pg.wait_for_selector('#geo-list [data-geo-cc="CA"]'); pg.check('#geo-list [data-geo-cc="CA"]')
     pg.check('#geo-box [name="geoEnabled"]'); pg.click('#sic-dlg .sic-dfuss [type=submit]'); pg.wait_for_selector('#sic-dlg[open] h2:has-text("Ländersperre speichern?")')
@@ -285,6 +290,11 @@ with sync_playwright() as p:
     box = pg.eval_on_selector('#sic-dlg', 'd => { const r = d.getBoundingClientRect(); return [r.left, r.width, Math.round(r.bottom), innerHeight]; }')
     check('390 px: Dialog als Blatt von unten (volle Breite, unten angelegt)', box[0] == 0 and box[1] == 390 and abs(box[2] - box[3]) <= 1, box)
     pg.screenshot(path=f'{SH}/sicherheit_notfall_dialog_390.png')
+    dialog_zu(pg)
+    pg.click('#sic-tabs [data-tab="einstellungen"]'); pg.click('[data-e="e-anmeldung"]'); pg.wait_for_selector('#sic-dlg[open] #sec-form')
+    check('390 px: Dialog „Anmeldung und Passwörter“ mit Hinweis ohne waagerechte Scrollleiste',
+          pg.evaluate("(() => { const d = document.querySelector('#sic-dlg'); return d.scrollWidth <= d.clientWidth + 1; })()"))
+    pg.screenshot(path=f'{SH}/sicherheit_anmeldung_dialog_390.png')
     dialog_zu(pg)
     ctx.close()
 
