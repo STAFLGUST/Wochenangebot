@@ -1524,7 +1524,7 @@ _Alter Eingabebereich stillgelegt (WA_EIGENE_ANMELDUNG=aus, lib/oidc.php): auf d
 _Publication persists consistently; injected storage failures never report success._
 
 - `check(name, condition)`
-- `state(db)`
+- `state()`
 
 ## `tests/e2e/test_testumgebung.py`
 
