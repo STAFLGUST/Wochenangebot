@@ -400,8 +400,10 @@ def pruefe_daten(rw: Regelwerk, liste: list) -> None:
             rw.f(f"Dokument {n}: beschreibung fehlt")
         if d.get("bereich") not in BEREICHE:
             rw.f(f"Dokument {n}: bereich muss eines von {', '.join(BEREICHE)} sein (ADR-007 Stufe 2)")
-        if "trennstufe" in d and (d.get("bereich") != "intern" or not isinstance(d["trennstufe"], int) or not 2 <= d["trennstufe"] <= TRENNSTUFE_MAX):
-            rw.f(f"Dokument {n}: trennstufe nur bei bereich = \"intern\" und als Zahl 2…{TRENNSTUFE_MAX} (Dokument zieht erst mit dieser Trennstufe um)")
+        if "trennstufe" in d and (d.get("bereich") not in ("intern", "veroeffentlicht") or not isinstance(d["trennstufe"], int) or not 2 <= d["trennstufe"] <= TRENNSTUFE_MAX):
+            rw.f(f"Dokument {n}: trennstufe nur bei bereich = \"intern\" oder \"veroeffentlicht\" und als Zahl 2…{TRENNSTUFE_MAX} (Dokument zieht erst mit dieser Trennstufe um)")
+        if d.get("bereich") == "veroeffentlicht" and "trennstufe" not in d:
+            rw.f(f"Dokument {n}: bereich = \"veroeffentlicht\" braucht trennstufe (bis dahin bleibt es wie bisher im gemeinsamen Ordner)")
         if "felder_kundenseite" in d and n != "kunden":
             rw.f(f"Dokument {n}: felder_kundenseite gibt es nur für kunden (Teilung in kunden und kundenstamm, ADR-007 Stufe 2b)")
         for feld in ("leser", "schreiber"):
@@ -609,12 +611,13 @@ def pruefe_caddy(rw: Regelwerk) -> None:
 
 # ─────────────────────────────── Speicherbereiche (ADR-007 Stufe 2) ───────────────────────────────
 
-BEREICHE = ("kundenseite", "intern")
+BEREICHE = ("kundenseite", "intern", "veroeffentlicht")
 BEREICHE_LISTE = "app/api/lib/datenbereiche-liste.php"
 # Höchste Trennstufe, die dieser Stand kennt: 1 = interne Dokumente getrennt (Stufe 2a), 2 = Kundendokument geteilt, Bestand/
-# Stammdaten, Postfächer, Vorlagen und Empfänger nur noch innen (Stufe 2b). Dokumente mit „trennstufe = n“ liegen bis zur Stufe n
-# im gemeinsamen Ordner (so ändert ein Release allein nichts) und ziehen mit `deploy/daten-trennen.sh trennen` um.
-TRENNSTUFE_MAX = 2
+# Stammdaten, Postfächer, Vorlagen und Empfänger nur noch innen (Stufe 2b), 3 = Veröffentlichtes geschützt: die Mitarbeiterseite
+# liest es innen, die Kundenseite nur eine Kopie, die sie nicht schreiben kann (Stufe 2c). Dokumente mit „trennstufe = n“ liegen
+# bis zur Stufe n im gemeinsamen Ordner (so ändert ein Release allein nichts) und ziehen mit `deploy/daten-trennen.sh trennen` um.
+TRENNSTUFE_MAX = 3
 
 
 def kundenseite_dokumente(rw: Regelwerk) -> tuple:
@@ -629,8 +632,13 @@ def kundenseite_dokumente(rw: Regelwerk) -> tuple:
 
 
 def ab_stufe_dokumente(rw: Regelwerk) -> dict:
-    """Interne Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe."""
-    return {d["name"]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") == "intern" and "trennstufe" in d}
+    """Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe."""
+    return {d["name"]: d["trennstufe"] for d in rw.daten.get("dokument", []) if d.get("bereich") in ("intern", "veroeffentlicht") and "trennstufe" in d}
+
+
+def veroeffentlicht_dokumente(rw: Regelwerk) -> list:
+    """Veröffentlichte Dokumente: Mitarbeiterseite schreibt und liest innen, die Kundenseite liest eine Kopie im gemeinsamen Ordner."""
+    return sorted(d["name"] for d in rw.daten.get("dokument", []) if d.get("bereich") == "veroeffentlicht")
 
 
 def kunden_felder(rw: Regelwerk) -> list:
@@ -650,13 +658,16 @@ def bereiche_php(rw: Regelwerk) -> str:
          "   Speicherbereiche (ADR-007 Stufe 2, app/api/storage.php): Dokumente, die die Kundenseite braucht, bleiben im gemeinsamen",
          "   Ordner; alle anderen liegen nach deploy/daten-trennen.sh im Ordner daten-intern, den die Kundenseite nicht sieht.",
          "   DATEN_AB_STUFE: interne Dokumente, die erst mit dieser Trennstufe umziehen (bis dahin im gemeinsamen Ordner).",
-         "   KUNDEN_FELDER_KUNDENSEITE: ab Trennstufe 2 bleiben nur diese Felder eines Kunden im Dokument kunden (Rest: kundenstamm). */",
+         "   KUNDEN_FELDER_KUNDENSEITE: ab Trennstufe 2 bleiben nur diese Felder eines Kunden im Dokument kunden (Rest: kundenstamm).",
+         "   DATEN_VEROEFFENTLICHT: ab ihrer Trennstufe schreibt und liest die Mitarbeiterseite sie innen und legt eine Kopie in den",
+         "   gemeinsamen Ordner; die Kundenseite liest nur die Kopie und kann sie nicht schreiben. */",
          "if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) { http_response_code(404); exit; }", "",
          f"const DATEN_KUNDENSEITE = {liste(namen)};",
          f"const DATEN_KUNDENSEITE_PRAEFIX = {liste(praefixe)};",
          f"const DATEN_TRENNSTUFE = {TRENNSTUFE_MAX};",
          "const DATEN_AB_STUFE = [" + ", ".join(f"'{k}' => {v}" for k, v in sorted(stufen.items())) + "];",
-         f"const KUNDEN_FELDER_KUNDENSEITE = {liste(kunden_felder(rw))};"]
+         f"const KUNDEN_FELDER_KUNDENSEITE = {liste(kunden_felder(rw))};",
+         f"const DATEN_VEROEFFENTLICHT = {liste(veroeffentlicht_dokumente(rw))};"]
     return "\n".join(z) + "\n"
 
 

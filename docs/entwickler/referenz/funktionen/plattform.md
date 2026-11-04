@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-108 Dateien, 1054 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+108 Dateien, 1066 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -697,6 +697,16 @@ _Shared persistence for HTTP and maintenance tools._
 - `store_bereich(name)`
 - `store_ordner(bereich)` – Ordner eines Bereichs; Kundenseite (kein WA_DATEN_INTERN) → StoreKeinZugang für „intern“
 - `store_innen()` – Sieht dieser Server die internen Dokumente?
+
+**Veröffentlichte Dokumente (ADR-007 Stufe 2c, ab Trennstufe 3)**
+
+- `store_veroeffentlicht(name)`
+- `store_schreibschutz(name)`
+- `store_kopie(name)` – Kopie im gemeinsamen Ordner auf den internen Stand bringen – in einer laufenden Transaktion erst nach deren Abschluss (dann mit dem Stand nach dem Abschluss, …
+- `store_kopien_schreiben()`
+- `store_roh(name, bereich)` – Gespeicherter Inhalt (JSON-Text) und Zeitstempel eines Dokuments in einem bestimmten Bereich – ohne Einteilung nach Seite
+- `store_roh_schreiben(name, bereich, json)`
+- `store_kopien_abgleichen()` – Postausgang (und Mitarbeiterseite): alle Kopien mit dem internen Stand vergleichen und abweichende wiederherstellen.
 - `store_sichtbar(name)` – Kann dieser Server das Dokument lesen?
 - `store_spur(name)` – Prüfhilfe (nur Tests, WA_SPUR_INTERN=1): Kundenseite fragt ein internes Dokument an – ins Serverprotokoll.
 - `store_path(name)`
@@ -855,6 +865,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 
 - `regeln_laden(regeln)`
 - `kundenseite(regeln, stufe)` – Dokumente im gemeinsamen Ordner bei dieser Trennstufe: (Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
+- `veroeffentlicht(regeln, stufe)` – Veröffentlichte Dokumente dieser Stufe: maßgeblich innen, im gemeinsamen Ordner eine Kopie (wie DATEN_VEROEFFENTLICHT).
 - `kunden_felder(regeln)`
 - `ist_intern(name, ks)` – Wie store_bereich() in app/api/storage.php: Sidecars und Dokumente der Kundenseite bleiben im gemeinsamen Ordner.
 - `stufe_lesen(haupt)`
@@ -885,7 +896,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 - `db_anlegen(ziel, zeilen)` – Neue Datenbank im Zielordner mit genau diesen Zeilen (wie datenbank.py migrate: erst komplett, dann aktiv).
 - `db_ergaenzen(ziel, zeilen)` – Zeilen in die vorhandene Datenbank des Zielordners übernehmen (Hochstufen) und vergleichen.
 - `kennzeichen(p, stufe)`
-- `umstellung_planen(haupt, intern, regeln, stufe)` – Neue interne Dokumente der Stufe 2 aus dem gemeinsamen Ordner: {Name: Inhalt}.
+- `umstellung_planen(haupt, intern, regeln, stufe, ziel)` – Neue interne Dokumente aus dem gemeinsamen Ordner: {Name: Inhalt}.
 - `bereinigung_noetig(haupt, regeln)`
 - `plan(haupt, intern, regeln, ziel)`
 
@@ -1109,6 +1120,21 @@ _Testgruppe datentrennung (ADR-007 Stufe 2): getrennte Daten wie im Betrieb._
 - `spur()`
 - `call(action, data, raw)`
 - `dienst()`
+
+**Ausgangslage nach dem Trennen**
+
+**Mitarbeiterseite: arbeitet mit beiden Ordnern**
+
+**Kundenseite: alle Kundenfunktionen ohne interne Dokumente**
+
+**Postausgang verschickt (Versandprotokoll intern)**
+
+**Stufe 2: Teilung, Empfänger und Inhalt nur von innen**
+
+**Stufe 3: Veröffentlichtes maßgeblich innen, außen nur eine Kopie**
+
+- `roh(ordner, name)`
+- `aussen_schreiben(name, wert)`
 
 ## `tests/e2e/test_einheit.py`
 
@@ -1523,6 +1549,7 @@ _Gemeinsame Pfade für die Ende-zu-Ende-Tests (gesetzt vom Testlauf tests/run_e2
 - `storage_raw(name)` – Inspect actual persisted state, without going through the application API.
 - `storage_sqlite()`
 - `storage_write(name, value)` – Gespeichertes Dokument direkt ändern (Testvorbereitung, z. B. Zeitablauf simulieren).
+- `_storage_write(data, name, value)`
 - `storage_docs(prefix)` – Alle gespeicherten Geschäftsdokumente {Name: Inhalt} – unabhängig von der Speicherart.
 - `__init__(name)`
 - `__enter__()`
@@ -1814,7 +1841,8 @@ _Regelwerk der STAFL-Plattform prüfen und Änderungsfolgen ermitteln (nur Pytho
 **Speicherbereiche (ADR-007 Stufe 2)**
 
 - `kundenseite_dokumente(rw)` – Dokumente der Kundenseite: (genaue Namen, Präfixe aus Mustern „name/*“) – alle anderen sind intern.
-- `ab_stufe_dokumente(rw)` – Interne Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe.
+- `ab_stufe_dokumente(rw)` – Interne bzw. veröffentlichte Dokumente, die erst mit einer späteren Trennstufe umziehen: Name → Stufe.
+- `veroeffentlicht_dokumente(rw)` – Veröffentlichte Dokumente: Mitarbeiterseite schreibt und liest innen, die Kundenseite liest eine Kopie im gemeinsamen Ordner.
 - `kunden_felder(rw)` – Felder eines Kunden, die ab Trennstufe 2 im gemeinsamen Ordner bleiben (Portal); alle übrigen liegen in kundenstamm.
 - `bereiche_php(rw)`
 

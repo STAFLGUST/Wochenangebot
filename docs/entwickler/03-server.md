@@ -277,6 +277,12 @@ Stufe 2 ist das Kundendokument geteilt: Kundendaten immer über `customers_load(
 `store_write('kunden', …)` direkt) – die Funktionen führen `kunden` (Portalfelder, `felder_kundenseite`) und `kundenstamm`
 zusammen bzw. teilen sie auf; die Kundenseite sieht und schreibt nur die Portalfelder.
 
+**Veröffentlichte Dokumente (Trennstufe 3, ADR-007 Stufe 2c):** `bereich = "veroeffentlicht"` (mit `trennstufe = 3`) für
+Dokumente, die nur die Mitarbeiterseite schreibt und die Kundenseite liest (Angebote, Einstellungen …). Der Code bleibt gleich
+(`store_read`/`store_write`/`with_lock`): Die Speicherschicht schreibt innen und legt die Kopie im gemeinsamen Ordner ab
+(`store_kopie`), die Kundenseite liest die Kopie und kann nicht schreiben (`StoreKeinZugang`). Ein Dokument, das die Kundenseite
+selbst schreibt (Zähler, Sitzungen, Bestellwünsche …), darf nie `veroeffentlicht` sein – die Gruppe `datentrennung` zeigt das.
+
 **Sperren und Transaktionen:**
 
 - Dateien: `with_lock` sperrt `$DATA/.<name>.lock` mit `flock(LOCK_EX)`. Verschachtelt derselbe Name → keine zweite

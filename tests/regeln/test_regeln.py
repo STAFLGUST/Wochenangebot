@@ -731,7 +731,7 @@ class Verstoesse(unittest.TestCase):
 
     def test_bereich_pflicht(self):
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', "")
-        self.assertFehler("Dokument bestand: bereich muss eines von kundenseite, intern sein")
+        self.assertFehler("Dokument bestand: bereich muss eines von kundenseite, intern, veroeffentlicht sein")
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "irgendwo"\nschutz = "oeffentlich"')
         self.assertFehler("Dokument angebot: bereich muss eines von")
 
@@ -758,6 +758,20 @@ class Verstoesse(unittest.TestCase):
         self.p.ersetzen("regeln/datenverantwortung.toml", "trennstufe = 9", "")
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "kundenseite"\ntrennstufe = 2\nschutz = "oeffentlich"')
         self.assertFehler("Dokument angebot: trennstufe nur bei bereich")
+
+    def test_veroeffentlicht(self):
+        # Veröffentlichtes (ADR-007 Stufe 2c): nur mit trennstufe; Liste DATEN_VEROEFFENTLICHT
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "kundenseite"\nschutz = "oeffentlich"', 'bereich = "veroeffentlicht"\nschutz = "oeffentlich"')
+        self.assertFehler("Dokument angebot: bereich = \"veroeffentlicht\" braucht trennstufe")
+        self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "veroeffentlicht"\nschutz', 'bereich = "veroeffentlicht"\ntrennstufe = 3\nschutz')
+        self.assertEqual([f for f in self.p.fehler() if "trennstufe" in f or "bereich" in f], [])
+        text = regeln.bereiche_php(regeln.laden(self.p.wurzel))
+        self.assertIn("const DATEN_VEROEFFENTLICHT = ['angebot'];", text)
+        self.assertIn("'angebot' => 3", text)
+        self.assertNotIn("'angebot'", text.split("const DATEN_KUNDENSEITE = ")[1].split(";")[0])
+        rw = regeln.laden(WURZEL)   # echtes Regelwerk: Sicherheitseinstellungen veröffentlicht, Kunden nicht
+        self.assertIn("sicherheit", regeln.veroeffentlicht_dokumente(rw))
+        self.assertNotIn("kunden", regeln.veroeffentlicht_dokumente(rw))
 
     def test_kundenfelder(self):
         self.p.ersetzen("regeln/datenverantwortung.toml", 'bereich = "intern"\n', 'bereich = "intern"\nfelder_kundenseite = ["id"]\n')

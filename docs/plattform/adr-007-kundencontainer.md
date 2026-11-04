@@ -6,7 +6,9 @@
 umgesetzt und eingespielt (PR #286, Schlüssel umgezogen am 04.11.2026); **Stufe 2a** (interne Daten in eigenen Ordner)
 umgesetzt und eingespielt (PR #287, Daten getrennt am 04.11.2026); **Stufe 2b** (Trennstufe 2: Kundendokument geteilt, Bestand,
 Stammdaten, Postfächer und Empfänger innen, Postausgang prüft Versandaufträge) umgesetzt – wirksam erst mit dem Serverschritt
-`deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); eigene Protokolle und Zähler der Kundenseite offen.
+`deploy/daten-trennen.sh trennen` nach dem Release (Freigabe des Inhabers); **Stufe 2c** (Trennstufe 3: Veröffentlichtes
+maßgeblich innen, Kundenseite nur eine nicht beschreibbare Kopie) umgesetzt – ebenfalls erst mit `trennen`; eigene Protokolle und
+Zähler der Kundenseite offen.
 **Anlass:** Sicherheitsdurchsicht vom 26.10.2026, Befund 5, und Durchsicht aus Kundensicht vom 04.11.2026 (ohne Befund,
 aber mit diesem Restrisiko). Umsetzung der Vorgabe aus [ADR-003](adr-003-domains-anmeldung.md): Trennung
 Kunden/Mitarbeiter; eine kompromittierte Anwendung darf nicht automatisch andere Fachbereiche öffnen.
@@ -240,11 +242,36 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
 - **Offen (eigene Schritte):**
   - Protokoll, Anmeldeversuche, Firewall-Zähler und Live-Verkehr enthalten auch Einträge der Mitarbeiterseite und liegen außen →
     eigene Dokumente der Kundenseite, die Oberflächen führen beide zusammen.
-  - Veröffentlichte Einstellungen, die auch die Mitarbeiterseite liest (`sicherheit`, `firewall`, `sperrliste`, `wartung`,
-    `angebote`, `angebot`, `fracht` …), liegen im gemeinsamen Ordner und wären für eine übernommene Kundenseite beschreibbar
-    (z. B. Sicherheitseinstellungen abschwächen, Angebotsnamen in der Wochenangebots-Mail). Abhilfe: Veröffentlichtes in einen
-    Bereich, den die Kundenseite nur lesen kann (eigener Ordner, nur lesbar eingebunden), bzw. PostgreSQL (Zielarchitektur §5) mit
-    eigenen Datenbanknutzern und Rechten je Bereich – Entscheidung des Inhabers.
+  - Veröffentlichte Einstellungen, die auch die Mitarbeiterseite liest (`sicherheit`, `firewall`, `wartung`, `angebote`, `angebot`,
+    `fracht` …), lagen beschreibbar im gemeinsamen Ordner – erledigt mit Stufe 2c (Trennstufe 3, nächster Abschnitt). Zähler und
+    Listen, die die Kundenseite selbst schreibt (`sperrliste`, `laendersperre`, `anmeldenamen` …), bleiben gemeinsam.
+
+### Stufe 2c – Trennstufe 3: Veröffentlichtes kann die Kundenseite nicht verändern (umgesetzt, Serverschritt mit Freigabe)
+
+Nach Stufe 2b lagen Dokumente, die die Mitarbeiterseite veröffentlicht und selbst wieder liest, nur im gemeinsamen Ordner:
+Angebote und Einzelangebote, Einstellungen der Sicherheit, Firewall, Bedrohungsliste, Notfallmodus, Wartung, Fracht, Bestellfunktion,
+der Artikelauszug und das Lebenszeichen des Postausgangs. Eine übernommene Kundenseite hätte sie verändern können – etwa
+Sicherheitseinstellungen abschwächen, die Wartung oder den Notfallmodus beenden oder Angebotsnamen ändern, die in Mails stehen.
+
+- **Bereich `veroeffentlicht`** (`regeln/datenverantwortung.toml`, `trennstufe = 3`, erzeugt `DATEN_VEROEFFENTLICHT`): Die
+  Mitarbeiterseite und der Postausgang schreiben und lesen diese Dokumente im internen Ordner (maßgeblicher Stand) und legen nach
+  jedem Speichern eine Kopie in den gemeinsamen Ordner (`store_kopie`; in einer Transaktion erst nach deren Abschluss, mit dem
+  dann aktuellen Stand – eine zurückgesetzte Änderung erreicht die Kopie nie). Die Kundenseite liest nur die Kopie; schreiben,
+  sperren oder löschen bricht ab (`StoreKeinZugang`). Gemessen: Keine Kundenaktion schreibt eines dieser Dokumente.
+- **Abgleich:** Der Postausgang vergleicht bei jedem Durchgang (alle 5 Sekunden) jede Kopie mit dem internen Stand
+  (`store_kopien_abgleichen`). Weicht sie ab, stellt er sie wieder her; ist sie deutlich nach dem internen Stand geschrieben worden
+  (also nicht von der Mitarbeiterseite), meldet er das als Sicherheitsereignis („Veröffentlichte Daten im gemeinsamen Ordner
+  verändert …“, Benachrichtigung „Sicherheitsereignisse“).
+- **Wirkung:** Was die Mitarbeiterseite und der Postausgang lesen, kann die Kundenseite nicht mehr beeinflussen. Was sie Kunden
+  anzeigt, kann eine übernommene Kundenseite ohnehin bestimmen – dauerhaft verändert bleibt davon nichts.
+- **Serverschritt:** wie bisher `sh deploy/daten-trennen.sh trennen` (kopiert die veröffentlichten Dokumente nach innen; die Kopie
+  bleibt). Von Stufe 1 aus geht es in einem Schritt auf Stufe 3.
+- **Rückfall:** `sh deploy/daten-trennen.sh zusammenfuehren` – der interne Stand ersetzt dabei die Kopie im gemeinsamen Ordner.
+- **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 2→3 in Dateien und SQLite: Kopie und interner Stand, Transaktion
+  zurückgesetzt, Löschen, Kundenseite kann nicht schreiben/sperren/löschen, veränderte und gelöschte Kopie wiederhergestellt und
+  erkannt, Zusammenführen mit internem Stand), `tests/regeln/test_regeln.py`, E2E-Gruppe `datentrennung` auf Stufe 3 (veränderte
+  Bestell- und Sicherheitseinstellungen im gemeinsamen Ordner: Mitarbeiterseite unbeirrt, Postausgang stellt her und meldet,
+  Kundenseite sieht danach die echte Einstellung; Fracht speichern erreicht die Kopie).
 
 ## Wirkung
 
@@ -252,6 +279,7 @@ verschickt, und enthält keine Daten, die sie nicht braucht.**
 | --- | --- | --- | --- |
 | Personaldaten, Mitarbeiterkonten, CRM, Controlling, QS-Dokumente lesen | ja | ja (gemeinsamer Datenordner) | nein (2a) |
 | Kunden-Warenwirtschaftszahlen, Anschriften, Bestand, Einkaufspreise lesen | ja | ja | ja nach 2a, nein nach 2b |
+| Sicherheits-, Firewall-, Wartungs- und Notfalleinstellungen oder Angebote dauerhaft verändern | ja | ja | nein nach 2c (Kopie wird wiederhergestellt und gemeldet) |
 | Protokoll und Anmeldeversuche der Mitarbeiter lesen | ja | ja | ja (eigener Schritt offen) |
 | Mitarbeiterkonten in Keycloak übernehmen | ja | nein (kein Geheimnis, kein Netzweg) | nein |
 | Anmelde-Geheimnisse der Mitarbeiter-Hosts | ja | nein | nein |
