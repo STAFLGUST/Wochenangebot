@@ -305,7 +305,8 @@ Dokument im gemeinsamen Ordner – die Kundenseite konnte Adressen und Aktionen 
   Zählern. **Rückfall:** `zusammenfuehren` vereint beide Fassungen (Listen zeitlich, sonst je Schlüssel).
 - **Geprüft:** `tests/deploy/test_daten_trennen.py` (Stufe 4→5 in Dateien und SQLite: Umzug, jede Seite liest/schreibt nur ihre
   Fassung, Mitarbeiterseite sieht beide und hebt Sperren der Kundenseite auf, Zusammenführen), E2E-Gruppe `datentrennung` auf Stufe 5
-  (Anmeldung der Mitarbeiter nur im internen Live-Verkehr), `schutz`, `anmeldebremse`, `sicherheit_*`.
+  (Anmeldung der Mitarbeiter nur im internen Live-Verkehr), `schutz`, `anmeldebremse`, `sicherheit_*`. Dazu wie im Betrieb: von
+  Stufe 1 in einem Schritt auf Stufe 5 und mit `zusammenfuehren` zurück – alle Dokumente danach wie vorher (Dateien und SQLite).
 
 ## Wirkung
 

@@ -12,8 +12,10 @@ require_once __DIR__ . '/lib/datenbereiche-liste.php';   // Speicherbereiche (er
    interne Dokumente nicht: Lesen liefert null, Schreiben bricht ab. */
 final class StoreKeinZugang extends RuntimeException {}
 /* Trennstufe (Inhalt von daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich
-   Kundendokument geteilt, Bestand/Stammdaten, Postfächer, Vorlagen und Empfänger innen (Stufe 2b). Dokumente aus DATEN_AB_STUFE
-   bleiben bis zu ihrer Stufe im gemeinsamen Ordner – ein Release allein ändert nichts; umgestellt wird mit daten-trennen.sh. */
+   Kundendokument geteilt, Bestand/Stammdaten, Postfächer, Vorlagen und Empfänger innen (Stufe 2b), 3 = Veröffentlichtes maßgeblich
+   innen, außen nur eine Kopie (2c), 4 = Protokoll getrennt (2d), 5 = Zähler, Anmeldeversuche und Live-Verkehr je Seite (2e).
+   Dokumente aus DATEN_AB_STUFE(_PRAEFIX) bleiben bis zu ihrer Stufe im gemeinsamen Ordner – ein Release allein ändert nichts;
+   umgestellt wird mit deploy/daten-trennen.sh trennen (ADR-007). */
 function store_stufe(): int
 {
     global $DATA;
