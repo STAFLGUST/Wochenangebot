@@ -82,7 +82,7 @@ Eintrag. Lokal nachstellen, was ein CI-Teil ausführt: `WA_TEIL=2/3 python3 test
   `test-<gruppe>-fehlversuch.log`). Nie zwei Testläufe gleichzeitig im selben Arbeitsordner; parallele Agenten arbeiten
   je in ihrem Worktree und mit eigenem `WA_PORT_BASE`.
 - `tests/.ergebnisse/` – Bildschirmfotos der Oberflächentests. In der CI bei Fehlern als Artefakt
-  `e2e-ergebnisse-<speicherart>-teil<k>` (7 Tage).
+  `e2e-ergebnisse-<speicherart>-teil<k>` bzw. `e2e-ergebnisse-sqlite-getrennt-teil<k>` (7 Tage).
 
 ### Hilfsmodule in `tests/e2e/`
 
@@ -320,7 +320,7 @@ Bei jedem Pull Request und jedem Commit auf `main` läuft `.github/workflows/ci.
 - Auf `main` werden die schweren Aufträge übersprungen, wenn der PR genau denselben Inhalt schon vollständig geprüft hat
   ([`docs/release-freigabe.md`](../release-freigabe.md), „Keine Doppelprüfung nach dem Merge“).
 
-Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>`, `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
+Bei Fehlern: Artefakte `e2e-ergebnisse-<speicherart>-teil<k>` (mit getrennten Daten `…-sqlite-getrennt-teil<k>`), `oidc-ergebnisse` bzw. `app-ergebnisse` herunterladen (Protokolle und
 Bildschirmfotos), Gruppe lokal mit `WA_JOBS=1 python3 tests/run_e2e.py <gruppe>` nachstellen.
 
 Stand: 2026-10-24

@@ -68,7 +68,12 @@ if m_liste and m_env:
     liste = [int(x) for x in m_liste.group(1).split(',')]
     n = int(m_env.group(1))
     ok(f'ci.yml: Teile {liste} = 1…{n}', liste == list(range(1, n + 1)))
-    ok('ci.yml: Artefakt je Teil eindeutig', 'e2e-ergebnisse-${{ matrix.storage }}-teil${{ matrix.teil }}' in ci)
+    art = re.search(r'name:\s*(e2e-ergebnisse-.*)$', ci, re.M)
+    ok('ci.yml: Artefakt je Auftrag eindeutig (Speicherart, getrennte Daten, Teil)',
+       bool(art) and all(x in art.group(1) for x in ('matrix.storage', 'matrix.getrennt', 'matrix.teil')), art and art.group(1))
+    # Lauf mit getrennten Daten (ADR-007): ebenfalls alle Teile 1…n – sonst bliebe dort ein Teil ungeprüft
+    getrennt = sorted(int(t) for t in re.findall(r"\{storage:\s*\w+,\s*teil:\s*(\d+),\s*getrennt:\s*'1'\}", ci))
+    ok(f'ci.yml: getrennte Daten in allen Teilen 1…{n}', getrennt == list(range(1, n + 1)), getrennt)
 
 # Testlauf: WA_TEIL wählt genau die Gruppen des Teils (ohne Server zu starten: ungültige Angabe bricht vorher ab)
 env = {**os.environ, 'WA_TEIL': '5/3'}
