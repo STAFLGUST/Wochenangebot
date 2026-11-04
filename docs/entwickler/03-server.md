@@ -106,6 +106,8 @@ Wichtig: Die Schritte 6–17 sind **Vorprüfungen**. Sie ersetzen nie die Rechte
 | Ort | Inhalt | Regel |
 | --- | --- | --- |
 | `index.php` | Einstieg, Prüfreihenfolge oben | koordinationspflichtig (API-Einstieg) |
+| `lib/laden.php` | lädt Einstellungen, Speicherschicht und alle Funktionsdateien – für `index.php` und den Dienst `postausgang.php` | neue Funktionsdateien hier eintragen; koordinationspflichtig |
+| `postausgang.php` | Dienst „postausgang“ (nur Kommandozeile, ADR-007): verschickt die Versandaufträge der Kundenseite | `fail()`/`respond()` werfen dort `WaAntwort` statt den Prozess zu beenden |
 | `lib/*.php` | Bibliotheken nach Fachbereich: nur Funktionen und Konstanten, keine Ausgabe beim Einbinden | beginnen mit `if (!defined('WA_API')) { http_response_code(404); exit; }` |
 | `aktionen/*.php` | Aktionen je Fachbereich: `switch ($action) { case '…': { … } }` bzw. `if ($action === '…')` | jede Aktion endet mit `respond()`/`fail()` |
 | `module/<modul>/` | Fachcode der Module (z. B. `module/hr/urlaub.php`, `module/crm/crm.php`, Importverträge `module/<modul>/import.php`) | neuer Fachcode gehört hierher (`pfade_geplant` in `regeln/module.toml`), nicht in gemeinsame Dateien |
@@ -294,6 +296,14 @@ Nachrichten), `mail_build` (Text/HTML, Anhänge als multipart/mixed; Anhänge mi
   Eingabebereich gespeicherte Postfach (Dokument `mailkonto`, Passwort `passEnc` mit libsodium verschlüsselt,
   Schlüssel im Dokument `mail-schluessel`, nie in Sicherungen, nie in Antworten); sonst die Umgebungsvariablen
   `MAIL_*` (3.10). In der Testumgebung ohne beides: Pseudo-Postfach `testpostfach`.
+- **Postausgang von innen (ADR-007, `lib/postausgang.php`):** Mit `WA_POSTAUSGANG=warteschlange` (nur die Kundenseite)
+  verschickt eine Anfrage nichts: Bestellwunsch (`postausgang_ablegen('bestellung', …)` im selben Speichervorgang),
+  Benachrichtigungen (`notify_flush`) und Abmeldehinweise (`abmelde_melden`) werden als Auftrag abgelegt; der Dienst
+  `api/postausgang.php` verschickt sie (`postausgang_lauf`). Neue E-Mails, die eine Aktion der Kundenseite auslöst, müssen
+  diesen Weg nehmen – nie `mail_send_many` direkt. `order_enabled()` prüft dort das Lebenszeichen des Dienstes statt des Postfachs.
+- **Schlüssel und Bindung:** Mit `WA_GEHEIM_DIR` liegt der Schlüssel in einem eigenen Ordner (nur Mitarbeiterseite und
+  Postausgang). Solange er dort liegt, wird ein neu gespeichertes Passwort an Server, Port, Verschlüsselung und Benutzer
+  gebunden (`passEnc` Format `v2:`, AEAD); `v1:` bleibt lesbar (`mail_decrypt($enc, $konto)`).
 - **Zwei Postfächer (seit 29.10.2026):** `mail_cfg()` ist das Postfach für Kunden-E-Mails. Für E-Mails, die nur an
   Mitarbeiter gehen, gibt es optional ein eigenes Postfach (Dokument `mailkonto-intern`, z. B. `verwaltung@…`, gleiche
   Felder und Verschlüsselung). `mail_cfg_intern()` liefert es, ohne Eintrag das Kunden-Postfach; `require_mail(true)`

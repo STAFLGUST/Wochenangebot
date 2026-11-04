@@ -594,6 +594,19 @@ schutz = "intern"
 beschreibung = "Bündelungsstand der Benachrichtigungen"
 
 [[dokument]]
+name = "postausgang"
+eigentuemer = "plattform"
+schutz = "vertraulich"
+beschreibung = "Postausgang von innen (ADR-007, lib/postausgang.php): Versandaufträge der Kundenseite – Bestellnummer, Benachrichtigungen, Abmeldehinweise mit Firma und E-Mail; nie Postfachdaten oder Mailinhalte"
+historie = "Kurzlebig: der Dienst postausgang entnimmt fällige Aufträge; höchstens 500 offen"
+
+[[dokument]]
+name = "postausgang-stand"
+eigentuemer = "plattform"
+schutz = "intern"
+beschreibung = "Lebenszeichen des Dienstes postausgang und ob ein Postfach eingerichtet ist (die Kundenseite prüft damit die Bestellfunktion)"
+
+[[dokument]]
 name = "mailversand"
 eigentuemer = "plattform"
 schreiber = ["angebot", "einkauf", "bestand"]   # über die Versandfunktionen (Bestellwünsche, Kunden-E-Mails, Einkaufsmeldung, MHD-Liste an den Verkauf)

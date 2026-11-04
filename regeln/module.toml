@@ -534,11 +534,11 @@ agent = "plattform"
 abhaengigkeiten = []
 testgruppen = ["einheit", "rollen", "rollen_host", "stilllegung", "anmeldeseite", "users", "nutzer_anlegen", "auth_hardening", "security", "passkeys", "geraete", "passwortpruefung",
   "admin_confirmation", "admin_confirmation_ui", "bestaetigung", "geo", "geo_ip", "schutz", "sicherheit_it",
-  "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "mail_intern", "rechte", "testumgebung",
+  "sicherheit_freigaben", "sicherheit_druck", "integritaet", "storage", "benachrichtigung", "mail_intern", "postausgang", "rechte", "testumgebung",
   "app_api", "sitzung_cookie", "herkunft", "modulverwaltung", "oidc_kern", "oidc_dashboard", "anmeldebremse", "aktionsregister", "module_status", "modul_wartung", "protokoll"]
 pfade = [
   "regeln/aktionen/plattform.toml",
-  "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
+  "app/.htaccess", "app/data/**", "app/api/index.php", "app/api/postausgang.php", "app/api/config.php", "app/api/storage.php", "app/api/mail.php",
   "app/api/geo.php", "app/api/geo/**", "app/api/lib/**", "app/api/aktionen/**",
   "app/assets/theme.js", "app/assets/format.js", "app/assets/admin.css", "app/assets/admin-rollen.js", "app/assets/admin-rollen-vorschau.js", "app/assets/vendor/**",
   "app/assets/detailkarte.js", "app/assets/karte/**",
@@ -610,7 +610,7 @@ pfade = ["app/api/storage.php", "app/api/lib/dateiablage.php", "deploy/datenbank
 
 [[koordination]]
 bereich = "Gemeinsamer API-Einstieg"
-pfade = ["app/api/index.php", "app/api/config.php", "app/api/lib/kern.php", "app/.htaccess"]
+pfade = ["app/api/index.php", "app/api/config.php", "app/api/lib/kern.php", "app/api/lib/laden.php", "app/api/postausgang.php", "app/.htaccess"]
 
 [[koordination]]
 bereich = "Geschäftsregeln, Modulregister und Wartung"

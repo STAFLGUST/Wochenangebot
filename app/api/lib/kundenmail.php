@@ -93,8 +93,17 @@ function abmelde_melden(array $c, bool $ab, string $via): void
     $who = ['username' => 'kunde:' . ($c['login']['username'] ?? $c['id']), 'name' => $c['firma'], 'role' => 'kunde'];
     $txt = $ab ? 'Kunde hat sich vom Wochenangebot per E-Mail abgemeldet' . ($via === '1klick' ? ' (Ein-Klick im E-Mail-Programm)' : '') : 'Kunde hat sich wieder für das Wochenangebot per E-Mail angemeldet';
     audit('kunde_abmeldung', $txt, [['k' => "c{$c['id']}|mailAngebot", 'code' => $c['nr'] ?? '', 'name' => $c['firma'], 'f' => 'Wochenangebot per E-Mail', 'from' => $ab ? 'ja' : 'nein', 'to' => $ab ? 'nein' : 'ja']], $who);
-    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden nicht;
-    // geht über das interne Postfach
+    // Hinweis an uns (Empfänger laut Benachrichtigungen; ohne Angabe Antwortadresse, sonst Absender) – Fehler dabei stören den Kunden
+    // nicht; geht über das interne Postfach. Kundenseite (lib/postausgang.php): nur als Auftrag ablegen, senden darf dort nichts.
+    if (postausgang_warteschlange()) {
+        if (!empty(notify_settings()['events']['abmeldung']['on'])) postausgang_ablegen('hinweis', ['kunde' => array_intersect_key($c, array_flip(['id', 'firma', 'nr', 'email'])), 'ab' => $ab]);
+        return;
+    }
+    abmelde_hinweis_senden($c, $ab, now());
+}
+/* Hinweis an das Team über eine Ab- bzw. Wiederanmeldung ($t: Zeitpunkt der Änderung, UTC) */
+function abmelde_hinweis_senden(array $c, bool $ab, string $t): void
+{
     $cfg = mail_cfg_intern();
     if (!$cfg || !mail_base_url()) return;
     $targets = notify_targets('abmeldung');
@@ -104,8 +113,8 @@ function abmelde_melden(array $c, bool $ab, string $via): void
         . "
 
 Kundennummer: " . (($c['nr'] ?? '') ?: '–') . "
-E-Mail: {$c['email']}
-Zeit: " . date('d.m.Y, H:i') . " Uhr
+E-Mail: " . ($c['email'] ?? '') . "
+Zeit: " . date('d.m.Y, H:i', strtotime($t) ?: time()) . " Uhr
 
 Die E-Mail-Adresse bleibt in den Stammdaten gespeichert. Einladungen und Passwort-Links können weiterhin gesendet werden.
 ";
@@ -126,7 +135,13 @@ function order_settings(): array
     return ['enabled' => !empty($d['enabled']), 'to' => array_values(array_filter((array)($d['to'] ?? []), 'is_string')), 'copy' => !is_array($d) || !array_key_exists('copy', $d) || !empty($d['copy']),
             'updatedAt' => $d['updatedAt'] ?? null, 'updatedBy' => $d['updatedBy'] ?? ''];
 }
-function order_enabled(): bool { $o = order_settings(); return $o['enabled'] && $o['to'] && mail_cfg() && mail_base_url(); }
+/* Bestellfunktion nutzbar? Kundenseite (lib/postausgang.php): ob ein Postfach eingerichtet ist, meldet der Dienst „postausgang“ –
+   ohne Lebenszeichen von ihm nimmt das Portal keine Bestellwünsche an (sonst blieben sie unbemerkt liegen). */
+function order_enabled(): bool
+{
+    $o = order_settings();
+    return $o['enabled'] && $o['to'] && (postausgang_warteschlange() ? postausgang_versand_bereit() : mail_cfg()) && mail_base_url();
+}
 function de_num(float $v, int $dec = 2): string { return number_format($v, $dec, ',', '.'); }
 /* Menge immer mit 2 Nachkommastellen wie überall (12,50 kg; app/assets/format.js) */
 function de_qty(float $v): string { return number_format($v, 2, ',', '.'); }

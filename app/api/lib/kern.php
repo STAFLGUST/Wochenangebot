@@ -7,8 +7,21 @@ if (!defined('WA_API')) { http_response_code(404); exit; }   // nur über api/in
 
 /* Testumgebung (test.<Domain>): nur Testdaten; E-Mails gehen in das Testpostfach statt an echte Empfänger */
 function testumgebung(): bool { return getenv('WA_TESTUMGEBUNG') === '1'; }
+/* Antwort des Dienstes „postausgang“ (api/postausgang.php, WA_CLI): fail()/respond() beenden dort nie den Prozess, sondern
+   brechen nur den laufenden Auftrag ab (z. B. „Versand läuft bereits“) – der Dienst arbeitet die übrigen weiter ab. */
+final class WaAntwort extends RuntimeException
+{
+    public array $daten;
+    public int $status;
+    public function __construct(array $daten, int $status)
+    {
+        parent::__construct((string)($daten['error'] ?? 'Antwort ' . $status), $status);
+        $this->daten = $daten; $this->status = $status;
+    }
+}
 function respond(array $data, int $status = 200): void
 {
+    if (defined('WA_CLI')) throw new WaAntwort($data, $status);
     store_commit(); // Intentional API errors may persist login-attempt counters.
     if (function_exists('app_session_header')) app_session_header();   // App: aktuelle Sitzungskennung (lib/sitzung.php)
     http_response_code($status);

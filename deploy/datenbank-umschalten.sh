@@ -2,7 +2,7 @@
 # Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber.
 # Nur nach dem vom Inhaber freigegebenen Release mit Datenbankunterstützung. Wird nie automatisch aufgerufen.
 # Ablauf: Vorprüfung (ohne Stopp) → Sicherung → PDO_SQLITE im Container prüfen → App stoppen (mit der Ergänzungsdatei der
-# Anmeldung beide Anwendungs-Container, ADR-007) → übernehmen und vergleichen (deploy/datenbank.py) → Eigentümer setzen → App starten. Anleitung: docs/datenbank.md
+# Anmeldung beide Anwendungs-Container und den Postausgang, ADR-007) → übernehmen und vergleichen (deploy/datenbank.py) → Eigentümer setzen → App starten. Anleitung: docs/datenbank.md
 set -eu
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
@@ -25,11 +25,14 @@ elif [ ! -f daten/.sqlite-active ]; then
   exit 0
 fi
 # Anwendungs-Container: mit der Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env) laufen zwei aus demselben Image –
-# Kundenseite „app“ und Mitarbeiter-Hosts „app-mitarbeiter“ (ADR-007). Beide schreiben in daten/ und müssen während der
-# Übernahme stehen.
+# Kundenseite „app“ und Mitarbeiter-Hosts „app-mitarbeiter“ (ADR-007), dazu der Dienst „postausgang“ (Postausgang von innen).
+# Alle schreiben in daten/ und müssen während der Übernahme stehen.
 APPS=app
 if sed -n 's/^COMPOSE_FILE=//p' .env 2>/dev/null | grep -qF deploy/anmeldung/docker-compose.anmeldung.yml \
-  && grep -q '^  app-mitarbeiter:' deploy/anmeldung/docker-compose.anmeldung.yml 2>/dev/null; then APPS="app app-mitarbeiter"; fi
+  && grep -q '^  app-mitarbeiter:' deploy/anmeldung/docker-compose.anmeldung.yml 2>/dev/null; then
+  APPS="app app-mitarbeiter"
+  if grep -q '^  postausgang:' deploy/anmeldung/docker-compose.anmeldung.yml; then APPS="$APPS postausgang"; fi
+fi
 # Existing backup process must succeed before stopping the app.
 sh deploy/sichern.sh --jetzt
 # Confirm the actual runtime before activating a database.

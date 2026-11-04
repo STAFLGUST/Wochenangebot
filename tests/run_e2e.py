@@ -86,6 +86,9 @@ SUITES['schutz'] = SUITES['bestellung']
 SUITES['nutzer_anlegen'] = SUITES['bestellung']
 SUITES['mhd_mail'] = SUITES['bestellung']   # MHD-Liste an den Verkauf (Test-Mailserver)
 SUITES['mail_intern'] = SUITES['bestellung']   # Postfach für interne E-Mails (zweiter Test-Mailserver)
+# Postausgang von innen (ADR-007, lib/postausgang.php): Testserver = Kundenseite ohne Postfach; die Mitarbeiterseite startet der Test
+# selbst (zweiter Server auf dem Hilfsport) und ruft den Dienst api/postausgang.php mit deren Zugangsdaten auf
+SUITES['postausgang'] = (8790, 'data-seed', True, {'WA_POSTAUSGANG': 'warteschlange', 'WA_URL': 'http://127.0.0.1:8790'})
 SUITES['fehlerpruefung'] = SUITES['bestellung']
 SUITES['sicherheit_druck'] = SUITES['bestellung']
 SUITES['integritaet'] = SUITES['bestellung']   # Dateiprüfung; Test-Mailserver für die Benachrichtigung

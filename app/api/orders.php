@@ -37,7 +37,9 @@ function order_receipt(array $o, bool $replayed = false): void
 {
     respond(['ok' => true, 'apiVersion' => 1, 'nr' => $o['nr'], 'total' => $o['total'], 'totalQty' => $o['totalQty'],
         'positions' => count($o['positions']), 'onRequest' => $o['onRequest'], 'fracht' => $o['fracht'] ?? null, 'copy' => !empty($o['kopie']) ? ($o['kunde']['email'] ?? null) : null,
-        'delivery' => $o['status'] ?? 'neu', 'replayed' => $replayed]);
+        'delivery' => $o['status'] ?? 'neu', 'replayed' => $replayed,
+        // „eingegangen“ (Postausgang, lib/postausgang.php): Kopie geht in Kürze an diese Adresse (nur wenn eingeschaltet)
+        'copyPlanned' => ($o['status'] ?? '') === 'eingegangen' && order_settings()['copy'] && filter_var($o['kunde']['email'] ?? '', FILTER_VALIDATE_EMAIL) ? $o['kunde']['email'] : null]);
 }
 function order_replay(array $all, string $kid, string $key, string $hash): void
 {

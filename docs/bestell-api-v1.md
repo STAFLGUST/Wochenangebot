@@ -36,5 +36,11 @@ Bestellung mit einer neuen Kennung erneut bestellt werden.
 
 Ein wiederholter Abruf kann `delivery: neu` (Übermittlung läuft/ungeklärt), `gesendet` oder `fehler`
 melden. `ok: true` bei einer Wiederholung bestätigt die Speicherung, nicht die E-Mail-Zustellung.
-Die initiale fehlgeschlagene Zustellung liefert weiterhin 502; die Bestellung bleibt gespeichert und
+Ohne Postausgang liefert die initiale fehlgeschlagene Zustellung weiterhin 502; die Bestellung bleibt gespeichert und
 für Mitarbeiter sichtbar. Nach Verlust einer Antwort hilft außerdem die eigene Bestellübersicht.
+
+**Postausgang von innen** (Kundenseite mit `WA_POSTAUSGANG=warteschlange`, ADR-007): Die erste Antwort meldet
+`delivery: eingegangen` – gespeichert, die E-Mails verschickt in Kürze der Dienst `postausgang`; ein Postfachausfall führt
+nicht zu 502. Ist die Kopie an den Kunden eingeschaltet, nennt `copyPlanned` die Adresse (`copy` bleibt `null`, bis sie
+verschickt ist). Clients, die `eingegangen` nicht kennen, behandeln es wie eine erfolgreiche Übermittlung – das ist richtig.
+`bestellfunktion` in `kunde_status`/`app_info` ist dort nur `true`, wenn sich der Dienst in den letzten 15 Minuten gemeldet hat.

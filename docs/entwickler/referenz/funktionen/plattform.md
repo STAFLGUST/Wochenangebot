@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-103 Dateien, 973 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+105 Dateien, 994 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -105,6 +105,7 @@ _Benachrichtigungen an Mitarbeiter (E-Mail): welche Ereignisse an wen gehen, leg
 - `notify_mail(ev, items, skipped, test)` – Inhalt einer Benachrichtigung: [Betreff, Text, HTML]
 - `notify_send(ev, to, items, skipped, test, by, inhalt)` – An die Empfänger eines Ereignisses senden und im Versandprotokoll vermerken; Ergebnis je Empfänger.
 - `notify_flush()` – Nach der Antwort: vorgemerkte Ereignisse je Art bündeln, Pause beachten, versenden.
+- `notify_verarbeiten(q, nachAntwort)` – Ereignisse versenden (am Ende einer Anfrage oder im Dienst „postausgang“): je Art bündeln, Pause beachten
 
 ## `app/api/lib/bereitschaft.php`
 
@@ -301,6 +302,7 @@ _Antworten, Eingaben, Datenprüfung_
 **Hilfsfunktionen**
 
 - `testumgebung()` – Testumgebung (test.<Domain>): nur Testdaten; E-Mails gehen in das Testpostfach statt an echte Empfänger
+- `__construct(daten, status)`
 - `respond(data, status)`
 - `fail(msg, status)`
 - `body()`
@@ -498,6 +500,22 @@ _Schlanker PDF-Erzeuger (ohne Fremdbibliothek)_
 - `jpeg(file, x, y, w)` – JPEG einbinden (Breite in pt; Höhe aus dem Seitenverhältnis); liefert die Höhe
 - `output(title)`
 
+## `app/api/lib/postausgang.php`
+
+_Postausgang von innen (ADR-007, Zielarchitektur Kundenseite Regel 4)_
+
+- `postausgang_wiederholbar(j)`
+- `postausgang_warteschlange()` – Kundenseite: Aufträge nur ablegen, nie selbst senden
+- `postausgang_ablegen(art, daten)` – Auftrag ablegen.
+- `postausgang_liste()`
+- `postausgang_kuerzen(liste)` – Überlauf: zuerst die ältesten Benachrichtigungen und Hinweise verwerfen – Bestellwünsche stehen ohnehin beim Vorgang und werden bei der Durchsicht gefunden
+- `postausgang_stand()` – Stand des Dienstes: Lebenszeichen und ob ein Postfach eingerichtet ist (die Kundenseite kann das selbst nicht prüfen)
+- `postausgang_versand_bereit()`
+- `postausgang_lauf(jetzt)` – Ein Durchgang des Dienstes: fällige Aufträge abarbeiten, gelegentlich alle Vorgänge prüfen, Lebenszeichen schreiben.
+- `postausgang_ausfuehren(a)` – Einen Auftrag ausführen.
+- `postausgang_bestellung(nr, versuche)` – Bestellwunsch: offene Versandaufträge senden; sicher nicht zugestellte nach POSTAUSGANG_WIEDERHOLEN erneut versuchen.
+- `postausgang_wieder(a, sekunden)`
+
 ## `app/api/lib/protokoll.php`
 
 _Protokoll, Änderungstexte, Anmeldeversuche_
@@ -631,9 +649,11 @@ _E-Mail-Versand über einen SMTP-Server (z._
 
 **Verschlüsselung des gespeicherten Postfach-Passworts**
 
-- `mail_key(create)`
-- `mail_encrypt(plain)`
-- `mail_decrypt(enc)`
+- `mail_key_datei()` – Eigener Ordner für den Schlüssel (WA_GEHEIM_DIR, ADR-007): nur in app-mitarbeiter und im Dienst „postausgang“ eingebunden, nicht in der Kundenseite – die …
+- `mail_key(create, ort)` – $ort: 'geheim' (eigener Ordner), 'daten' (bisheriger Ort im Datenordner) oder '' (kein Schlüssel)
+- `mail_bindung(a)` – Bindung an das Postfach (Format v2, ADR-007): Das verschlüsselte Passwort gilt nur für denselben Server, Port, dieselbe Verschlüsselung und denselben …
+- `mail_encrypt(plain, konto)`
+- `mail_decrypt(enc, konto)`
 - `mail_account(konto)`
 - `mail_cfg_aus_konto(a, source)` – Versanddaten aus einem gespeicherten Postfach (Passwort entschlüsselt; passError, wenn das nicht geht)
 - `mail_konto_view(a)` – Anzeige eines gespeicherten Postfachs für die Verwaltung – nie das Passwort, nur ob eines gespeichert ist
@@ -1197,6 +1217,24 @@ _Datenleck-Prüfung der Passwörter („Pwned Passwords“, nachgebauter Dienst 
 - `log_message(*a)`
 - `protokoll()`
 - `nutzer(name)`
+
+## `tests/e2e/test_postausgang.py`
+
+_Testgruppe postausgang_
+
+- `check(n, c, i)`
+- `doc(name)`
+- `call(action, data, raw)`
+- `dienst(env)` – Ein Durchgang des Dienstes postausgang (wie im Container: eigener Prozess je Durchgang)
+- `faellig_machen()`
+
+**Bestellfunktion nur mit Lebenszeichen des Dienstes**
+
+**Bestellwunsch: nur abgelegt, dann vom Dienst verschickt**
+
+**Postfach gestört: erneute Versuche, Kopie erst nach der Team-Mail**
+
+- `unklar(data)`
 
 ## `tests/e2e/test_protokoll.py`
 
