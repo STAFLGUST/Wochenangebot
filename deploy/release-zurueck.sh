@@ -9,6 +9,9 @@
 # auf den aktiven Namen getaggt (fehlt es: aus dem Bauplan des vorherigen Stands bauen, bei Fehlschlag Abbruch ohne
 # Codewechsel) und die App neu erstellt.
 #
+# Zwei Anwendungs-Container (ADR-007): Kundenseite „app“ und Mitarbeiter-Hosts „app-mitarbeiter“ aus demselben Image –
+# anderes Image → beide neu erstellen, nur die Apache-Konfiguration der Anmeldung → nur app-mitarbeiter (ältere Stände: „app“).
+#
 # Danach Versionsnummern und Prüfliste aus dem zurückgeholten Commit (deploy/bereitstellen.py, falls dort vorhanden).
 #
 # Für Tests überschreibbar: WA_COMPOSE, WA_DOCKER
@@ -72,7 +75,13 @@ echo "$JETZT" > .release-abgelehnt
 git reset -q --hard "$VORHER"
 # Versionsnummern und Prüfliste aus dem zurückgeholten Commit (dessen eigenes Skript; ältere Stände bringen beides mit)
 if [ -f deploy/bereitstellen.py ]; then python3 deploy/bereitstellen.py || echo "Hinweis: Bereitstellung unvollständig – aktualisieren.sh holt sie nach"; fi
-# Container-Konfiguration geändert: alle neu erstellen; nur das Image: nur die App (Keycloak und seine Datenbank laufen weiter)
+# Container-Konfiguration geändert: alle neu erstellen; nur das Image: nur die Anwendungs-Container (Keycloak und seine
+# Datenbank laufen weiter); nur die Apache-Konfiguration (einzelne Datei eingebunden): nur der Container der Mitarbeiter-Hosts
+mitarbeiter_container() { envwert COMPOSE_FILE | grep -qF "$ANMELDUNG_COMPOSE" && grep -q '^  app-mitarbeiter:' "$ANMELDUNG_COMPOSE" 2>/dev/null; }
 if git diff --name-only "$JETZT" "$VORHER" | grep -qE '^(Caddyfile|docker-compose\.yml|deploy/anmeldung/docker-compose\.anmeldung\.yml)$'; then $COMPOSE up -d --force-recreate
-elif [ "$BILD" = 1 ] || git diff --name-only "$JETZT" "$VORHER" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then $COMPOSE up -d --force-recreate app; fi   # Apache-Konfiguration: einzelne Datei eingebunden
+elif [ "$BILD" = 1 ]; then
+  if mitarbeiter_container; then $COMPOSE up -d --force-recreate app app-mitarbeiter; else $COMPOSE up -d --force-recreate app; fi
+elif git diff --name-only "$JETZT" "$VORHER" | grep -qx 'deploy/anmeldung/apache-oidc\.conf'; then
+  if mitarbeiter_container; then $COMPOSE up -d --force-recreate app-mitarbeiter; else $COMPOSE up -d --force-recreate app; fi
+fi
 echo "Zurückgesetzt auf $(git log -1 --format='%h %s')"

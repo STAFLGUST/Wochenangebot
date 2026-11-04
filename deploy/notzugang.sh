@@ -7,7 +7,9 @@
 #   sh deploy/notzugang.sh an        # alten Zugang vorübergehend öffnen (Anmeldung mit den bisherigen Passwörtern)
 #   sh deploy/notzugang.sh aus       # wieder schließen – sobald die zentrale Anmeldung wieder läuft
 #
-# Ändert nur die Zeile WA_EIGENE_ANMELDUNG in .env und erstellt die App neu (wenige Sekunden). Kundenseite unberührt.
+# Ändert nur die Zeile WA_EIGENE_ANMELDUNG in .env und erstellt den Container der Kundenseite („app“, ADR-007) neu – dort
+# liegt angebot-stafl.de/admin/ (wenige Sekunden). Die Mitarbeiter-Hosts (app-mitarbeiter) laufen unverändert weiter. Der Notzugang
+# arbeitet ohne Keycloak: Konten der zentralen Anmeldung lassen sich in dieser Zeit nicht verwalten.
 set -eu
 umask 077
 ENV="$(pwd)/.env"

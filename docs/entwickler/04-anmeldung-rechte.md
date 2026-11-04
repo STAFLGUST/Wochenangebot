@@ -34,7 +34,8 @@ Alle Mitarbeiter-Hosts sind dieselbe PHP-Anwendung. Welcher Bereich ein Host ist
 | `einkauf.`, `container-import.`, `test.dashboard-stafl.de` | nur 503-Platzhalter in Caddy (GR-105) | – | – |
 
 Jeder Mitarbeiter-VirtualHost setzt außerdem `WA_OIDC 1`, `WA_OIDC_ISSUER` (Realm `mitarbeiter`) und
-`WA_OIDC_ACR mfa`. Caddy leitet die Mitarbeiter-Hosts an `app-mitarbeiter:80`; dieses Ziel gibt es nur mit
+`WA_OIDC_ACR mfa`. Caddy leitet die Mitarbeiter-Hosts an `app-mitarbeiter:80` – einen eigenen Container (ADR-007), der
+als einziger die Anmelde-Geheimnisse und das Dienstkonto `konten` kennt. Dieses Ziel gibt es nur mit
 `deploy/anmeldung/docker-compose.anmeldung.yml`. Fehlt die Ergänzung, antworten die Hosts mit 502 – nie mit der
 Anwendung ohne Keycloak (`Caddyfile`).
 

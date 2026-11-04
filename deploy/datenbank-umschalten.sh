@@ -1,8 +1,8 @@
 #!/bin/sh
 # Speicher umschalten: Dateien → SQLite (migrate) oder zurück (rollback), im Wartungsfenster durch den Betreiber.
 # Nur nach dem vom Inhaber freigegebenen Release mit Datenbankunterstützung. Wird nie automatisch aufgerufen.
-# Ablauf: Vorprüfung (ohne Stopp) → Sicherung → PDO_SQLITE im Container prüfen → App stoppen → übernehmen und
-# vergleichen (deploy/datenbank.py) → Eigentümer setzen → App starten. Anleitung: docs/datenbank.md
+# Ablauf: Vorprüfung (ohne Stopp) → Sicherung → PDO_SQLITE im Container prüfen → App stoppen (mit der Ergänzungsdatei der
+# Anmeldung beide Anwendungs-Container, ADR-007) → übernehmen und vergleichen (deploy/datenbank.py) → Eigentümer setzen → App starten. Anleitung: docs/datenbank.md
 set -eu
 cd "$(dirname "$0")/.."
 DOCKER=${DOCKER:-docker}
@@ -24,11 +24,18 @@ elif [ ! -f daten/.sqlite-active ]; then
   echo "SQLite ist nicht aktiv – nichts zurückzuschalten, die Anwendung läuft unverändert weiter."
   exit 0
 fi
+# Anwendungs-Container: mit der Ergänzungsdatei der Anmeldung (COMPOSE_FILE in .env) laufen zwei aus demselben Image –
+# Kundenseite „app“ und Mitarbeiter-Hosts „app-mitarbeiter“ (ADR-007). Beide schreiben in daten/ und müssen während der
+# Übernahme stehen.
+APPS=app
+if sed -n 's/^COMPOSE_FILE=//p' .env 2>/dev/null | grep -qF deploy/anmeldung/docker-compose.anmeldung.yml \
+  && grep -q '^  app-mitarbeiter:' deploy/anmeldung/docker-compose.anmeldung.yml 2>/dev/null; then APPS="app app-mitarbeiter"; fi
 # Existing backup process must succeed before stopping the app.
 sh deploy/sichern.sh --jetzt
 # Confirm the actual runtime before activating a database.
 $DOCKER compose exec -T app php -r 'exit(in_array("sqlite", PDO::getAvailableDrivers(), true) ? 0 : 1);'
-$DOCKER compose stop app
+# shellcheck disable=SC2086  # APPS sind bewusst mehrere Dienstnamen
+$DOCKER compose stop $APPS
 # On any failure leave the app stopped: operator can inspect; do not serve partially exported files.
 if ! python3 deploy/datenbank.py "$AKTION" daten --offline; then
   echo "Umschalten fehlgeschlagen – die Anwendung bleibt absichtlich gestoppt. Ursache prüfen (Ausgabe oben), nicht blind neu starten." >&2
@@ -47,5 +54,6 @@ if [ "$AKTION" = migrate ]; then
 else
   find daten -type f -name '*.php' -exec chown -h 33:33 {} +
 fi
-$DOCKER compose start app
+# shellcheck disable=SC2086  # APPS sind bewusst mehrere Dienstnamen
+$DOCKER compose start $APPS
 echo "Speicher umgeschaltet. Anmeldung, Kundenangebot, Entwurf und Bestellwunsch jetzt prüfen."

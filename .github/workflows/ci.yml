@@ -187,8 +187,9 @@ jobs:
           done
 
   image:
-    # Anwendungs-Image mit mod_auth_openidc (deploy/image): in Betrieb für die Mitarbeiter-Hosts (Dienst app-mitarbeiter,
-    # deploy/anmeldung/docker-compose.anmeldung.yml); die Kundenseite (docker-compose.yml) nutzt weiter php:8.3-apache.
+    # Anwendungs-Image mit mod_auth_openidc (deploy/image): im Betrieb für beide Anwendungs-Container (ADR-007) – Kundenseite
+    # „app“ (Modul nicht geladen) und Mitarbeiter-Hosts „app-mitarbeiter“ (deploy/anmeldung/docker-compose.anmeldung.yml);
+    # ohne Ergänzungsdatei nutzt die Kundenseite (docker-compose.yml) weiter php:8.3-apache.
     # Geprüft: Bau, gleiches Verhalten wie das Grundimage, Schwachstellen (kritisch blockiert).
     name: Anwendungs-Image prüfen
     needs: [nachweis, statisch]

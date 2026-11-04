@@ -590,6 +590,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `README.md` | plattform | STAFL-Plattform – Überblick |
 | `adr-003-domains-anmeldung.md` | plattform | ADR-003: Domainstruktur und Mitarbeiteranmeldung |
+| `adr-007-kundencontainer.md` | plattform | ADR-007: Kundenseite in eigenem Container |
 | `bestandsaufnahme.md` | plattform | Bestandsaufnahme (Phase 0) – Stand 21.10.2026 |
 | `inbetriebnahme-anmeldung.md` | plattform | Inbetriebnahme der zentralen Anmeldung (Keycloak) – Ablaufplan |
 | `modul-sicherheit.md` | sicherheit | Modul Sicherheit (sicherheit.dashboard-stafl.de) |

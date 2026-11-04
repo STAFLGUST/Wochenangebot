@@ -48,7 +48,8 @@ Testserver (`tests/run_e2e.py`), in der Testumgebung und auf jedem Produktions-H
 | `hr.dashboard-stafl.de` | `/` und `/admin/…` → `/module/hr/` | nur Aktionen von `hr.intern` (GR-109) |
 | `crm.dashboard-stafl.de` | `/` und `/admin/…` → `/module/crm/` | nur Aktionen von `crm.intern` (GR-109) |
 
-Alle `*.dashboard-stafl.de`-Hosts sind dieselbe Anwendung (Caddy → `app-mitarbeiter`) mit je eigenem Keycloak-Client
+Alle `*.dashboard-stafl.de`-Hosts sind dieselbe Anwendung im Container `app-mitarbeiter` (Caddy → `app-mitarbeiter`, getrennt
+von der Kundenseite, ADR-007) mit je eigenem Keycloak-Client
 und eigener Sitzung. Apache setzt je Host `WA_OBERFLAECHE`; daraus macht der Server `me.bereich`
 (`app/api/lib/sitzung.php`).
 

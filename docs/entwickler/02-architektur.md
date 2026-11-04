@@ -21,9 +21,10 @@ flowchart LR
   M --> H["angebot. · verwaltung. · bestand.<br/>hr. · crm.dashboard-stafl.de"]
   M --> L["login.dashboard-stafl.de<br/>Keycloak"]
   subgraph VPS["Server (Docker Compose)"]
-    CA[Caddy<br/>TLS, Kopfzeilen] --> APP["app<br/>php:8.3-apache<br/>app/ lesend"]
-    CA --> APPM["app-mitarbeiter<br/>dieselbe App mit<br/>mod_auth_openidc"]
+    CA[Caddy<br/>TLS, Kopfzeilen] --> APP["app · Kundenseite<br/>nur lesbar, ohne<br/>Anmelde-Geheimnisse"]
+    CA --> APPM["app-mitarbeiter<br/>gleiches Image mit<br/>mod_auth_openidc"]
     CA --> KC[Keycloak] --> PG[(PostgreSQL)]
+    APPM --> KC
     APP --> DATA[("daten/<br/>Dateien oder SQLite")]
     APPM --> DATA
   end
@@ -33,7 +34,10 @@ flowchart LR
   L --> CA
 ```
 
-- **Eine Anwendung, mehrere Hosts.** Kundenseite und alle Mitarbeiter-Hosts laufen aus demselben Code (`app/`). Welche
+- **Eine Anwendung, mehrere Hosts, zwei Container.** Kundenseite und alle Mitarbeiter-Hosts laufen aus demselben Code
+  (`app/`) und demselben Image – im Betrieb aber in getrennten Containern (ADR-007, `docs/plattform/adr-007-kundencontainer.md`):
+  `app` beantwortet nur `angebot-stafl.de`, ohne Anmelde-Geheimnisse, ohne Netzweg zu Keycloak, mit nur lesbarem Dateisystem;
+  `app-mitarbeiter` alle Mitarbeiter-Hosts. Beide teilen den Datenordner. Welche
   Oberfläche ein Host ist, setzt der Webserver (`WA_OBERFLAECHE` in `deploy/anmeldung/apache-oidc.conf`); die
   Anwendung leitet daraus Anmeldung, erlaubte Aktionen und Ansichten ab. Jede Subdomain hat ihre eigene Sitzung
   (`__Host-`-Cookies, GR-108); Aktionen einer Modulseite beantwortet nur ihr eigener Host (GR-109).
