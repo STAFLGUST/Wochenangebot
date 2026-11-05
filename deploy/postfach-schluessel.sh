@@ -19,6 +19,19 @@ GEHEIM="${WA_GEHEIM:-$(pwd)/daten-geheim}"
 NAME=mail-schluessel.php
 EIGNER="${WA_EIGNER:-33:33}"   # www-data im Anwendungs-Image
 COMPOSE=${COMPOSE:-docker compose}
+BASIS=$(pwd)
+# daten/ und daten-geheim sind in den Anwendungs-Containern beschreibbar: ein dort vorab angelegter Verweis darf root nie
+# umlenken. Deshalb entsteht die Datei außerhalb beider Ordner (Installationsordner, nur root) und ersetzt den Eintrag dort
+# allein per Umbenennen (mv -fT folgt keinem Verweis, es ersetzt ihn – auch einen Verweis auf einen Ordner). Kein Schreiben,
+# chown oder chmod auf einen Namen in daten/ oder daten-geheim (gleiche Regel wie status_schreiben() in deploy/sichern.sh).
+ablegen() {   # $1 = Quelle (echte Datei), $2 = Zielname im containerbeschreibbaren Ordner
+  [ -f "$1" ] && [ ! -L "$1" ] || { echo "Abbruch: $1 ist kein echter Schlüssel (Verweis oder Sonderdatei) – bitte prüfen." >&2; exit 1; }
+  TMP=$(mktemp "$BASIS/.mail-schluessel.XXXXXX") || { echo "Abbruch: Zwischendatei nicht anlegbar." >&2; exit 1; }
+  cat "$1" > "$TMP" || { rm -f "$TMP"; echo "Abbruch: Schlüssel nicht lesbar." >&2; exit 1; }
+  chown "$EIGNER" "$TMP" 2>/dev/null || true
+  chmod 600 "$TMP"
+  mv -fT "$TMP" "$2" || { rm -f "$TMP"; echo "Abbruch: Schlüssel nicht abgelegt." >&2; exit 1; }
+}
 # Hinterlegte Passwörter vom Format v1 auf v2 umstellen (an Server und Benutzer gebunden, app/api/mail.php): im Dienst postausgang,
 # der den Schlüssel aus daten-geheim liest – danach bringt ein ausgetauschter Server im Datenordner das Passwort nicht mehr heraus
 binden() {
@@ -61,10 +74,7 @@ case "${1:-status}" in
         cmp -s "$DATEN/$NAME" "$GEHEIM/$NAME" || { echo "Abbruch: unterschiedliche Schlüssel in daten/ und daten-geheim/ – bitte prüfen." >&2; exit 1; }
         rm -f "$DATEN/$NAME"
       else
-        cp -p "$DATEN/$NAME" "$GEHEIM/$NAME.neu"
-        chown "$EIGNER" "$GEHEIM/$NAME.neu" 2>/dev/null || true
-        chmod 600 "$GEHEIM/$NAME.neu"
-        mv -f "$GEHEIM/$NAME.neu" "$GEHEIM/$NAME"
+        ablegen "$DATEN/$NAME" "$GEHEIM/$NAME"
         cmp -s "$DATEN/$NAME" "$GEHEIM/$NAME" || { echo "Abbruch: Kopie weicht ab – Datenordner unverändert." >&2; exit 1; }
         rm -f "$DATEN/$NAME"
       fi
@@ -79,9 +89,7 @@ case "${1:-status}" in
   zurueck)
     if [ -f "$GEHEIM/$NAME" ] && [ ! -f "$DATEN/$NAME" ]; then
       entbinden
-      cp -p "$GEHEIM/$NAME" "$DATEN/$NAME.neu"
-      chown "$EIGNER" "$DATEN/$NAME.neu" 2>/dev/null || true
-      mv -f "$DATEN/$NAME.neu" "$DATEN/$NAME"
+      ablegen "$GEHEIM/$NAME" "$DATEN/$NAME"
       echo "Schlüssel wieder im Datenordner (für ein älteres Release). Die Kopie in daten-geheim bleibt; erneut umziehen mit: sh deploy/postfach-schluessel.sh umziehen"
     else
       echo "Nichts zurückzuholen: $(sh "$0" status)"

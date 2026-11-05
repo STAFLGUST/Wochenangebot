@@ -263,7 +263,9 @@ interne Dokumente im Ordner `WA_DATEN_INTERN` (Kennzeichen `.daten-intern`, eige
 Datenbank, dazu die Dateiablage). `store_bereich($name)` entscheidet nach `regeln/datenverantwortung.toml` (Feld `bereich`,
 erzeugt in `lib/datenbereiche-liste.php`): Dokumente der Kundenseite und Seitendateien bleiben in `$DATA` (`haupt`), alles
 andere ist `intern`. Die Kundenseite hat kein `WA_DATEN_INTERN`: Lesen interner Dokumente liefert `null`, Schreiben wirft
-`StoreKeinZugang`. Transaktionen gelten je Bereich (`$GLOBALS['store_tx']` ist eine Liste offener Bereiche; `store_commit()`
+`StoreKeinZugang`. Maßgeblich für einen Server mit `WA_DATEN_INTERN` ist die Stufe in `daten-intern/.daten-intern`: das
+Kennzeichen in `$DATA` kann die Kundenseite beschreiben, weicht es ab (niedrigere Stufe, fehlt, andere Speicherart), bricht
+`store_stufe()`/`store_mode()` ab statt still falsch zu lesen. Transaktionen gelten je Bereich (`$GLOBALS['store_tx']` ist eine Liste offener Bereiche; `store_commit()`
 und `store_rollback()` ohne Angabe schließen alle). Ein neues Dokument, das die Kundenseite lesen oder schreiben muss, braucht
 `bereich = "kundenseite"` – sonst sieht die Kundenseite es nach der Trennung nicht (die Gruppe `datentrennung` meldet das).
 

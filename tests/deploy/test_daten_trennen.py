@@ -177,6 +177,31 @@ with tempfile.TemporaryDirectory() as t:
     r = php("try { store_bereich('kunden'); echo 'gelesen'; } catch (RuntimeException $e) { echo $e->getMessage(); }", t / 'd')
 check('Kennzeichen einer neueren Stufe → Fehler statt falscher Einteilung', 'zusammenfuehren' in r, r)
 
+# Maßgeblich für die interne Seite ist das Kennzeichen in daten-intern/ (dort kann die Kundenseite nicht schreiben). Ein
+# herabgesetztes oder entferntes Kennzeichen im gemeinsamen Ordner darf interne Dokumente nie dem gemeinsamen Ordner zuordnen.
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t); d = t / 'd'; i = t / 'i'; d.mkdir(); i.mkdir()
+    doc(d, 'angebot', {'items': [1]}); doc(i, 'nutzer', {'users': []}); doc(i, 'bestand', {'articles': []})
+    (d / '.daten-getrennt').write_text('5\n'); (i / '.daten-intern').write_text('5\n')
+    r = php("echo json_encode([store_stufe(), store_bereich('nutzer'), store_bereich('bestand'), store_read('bestand')]);", d, i)
+    check('gleiche Kennzeichen: Stufe und Einteilung wie bisher', json.loads(r or 'null') == [5, 'intern', 'intern', {'articles': []}], r)
+    (d / '.daten-getrennt').write_text('1\n')
+    r = php("try { echo json_encode([store_bereich('bestand'), store_read('bestand')]); } catch (RuntimeException $e) { echo $e->getMessage(); }", d, i)
+    check('herabgesetztes Kennzeichen im gemeinsamen Ordner → Fehler statt interner Dokumente im Ordner der Kundenseite',
+          'widersprüchlich' in r and 'haupt' not in r, r)
+    r = php("echo json_encode([store_stufe(), store_bereich('bestand'), store_read('bestand')]);", d)
+    check('die Kundenseite liest weiter das gemeinsame Kennzeichen (Stufe 1, kein interner Ordner)', json.loads(r or 'null') == [1, 'haupt', None], r)
+    (d / '.daten-getrennt').unlink()
+    r = php("try { echo json_encode(store_read('nutzer')); } catch (RuntimeException $e) { echo $e->getMessage(); }", d, i)
+    check('entferntes Kennzeichen im gemeinsamen Ordner → Fehler statt leerer interner Dokumente', 'widersprüchlich' in r, r)
+    (d / '.daten-getrennt').write_text('5\n')
+    r = php("echo json_encode(store_read('nutzer'));", d, i)
+    check('wiederhergestelltes Kennzeichen: die interne Seite liest wieder', json.loads(r or 'null') == {'users': []}, r)
+    (d / '.sqlite-active').write_text('1\n')   # Schalter der Speicherart im gemeinsamen Ordner: auch er gehört der Kundenseite
+    r = php("try { echo json_encode(store_read('nutzer')); } catch (RuntimeException $e) { echo $e->getMessage(); }", d, i)
+    check('Speicherart im gemeinsamen Ordner umgeschaltet → Fehler statt stillem Wechsel', 'Speicherart' in r, r)
+    (d / '.sqlite-active').unlink()
+
 KUNDE = {'id': 'kaaaaaaaaaaaa', 'nr': '4711', 'firma': 'Test GmbH', 'ansprechpartner': 'Frau Test', 'strasse': 'Weg 1', 'plz': '20000', 'ort': 'Hamburg',
          'email': 'einkauf@test.invalid', 'telefon': '040 1', 'notiz': 'intern', 'vertreter': '7', 'gruppe': '3', 'angebote': ['standard'], 'active': True,
          'mailAngebot': True, 'login': {'username': 'test', 'hash': '$2y$x', 'active': True, 'sv': 1}, 'wawi': {'umsatz': 12345, 'kreditlimit': 5000},
@@ -215,6 +240,8 @@ for art in ('dateien', 'sqlite'):
                       json.loads(r or 'null') == ['einkauf@test.invalid', ['team@test.invalid', 'chef@test.invalid'], {'100': True}], r)
             code, out = lauf('pruefen', str(d), str(i), '--stufe', '2')
             check(f'{w}: pruefen nennt die Umstellung', code == 0 and 'Trennstufe' in out and 'kundenstamm' in out and 'kürzen' in out, out)
+            if art == 'sqlite':   # beim Umschalten liegen gebliebene Datendateien äußerer Dokumente (datenbank.py: „originals retained“)
+                check(f'{w}: pruefen nennt den Altbestand des Speicher-Umbaus', 'Reste des Speicher-Umbaus' in out and 'kunden.php' in out, out)
             code, out = lauf('trennen', str(d), str(i), '--offline', '--stufe', '2')
             check(f'{w}: trennen auf Stufe 2', code == 0 and 'Stufe 2' in out and (d / '.daten-getrennt').read_text() == '2\n' and (i / '.daten-intern').read_text() == '2\n', out)
             k = dt.dok_lesen(d, 'kunden')
@@ -227,6 +254,13 @@ for art in ('dateien', 'sqlite'):
                   and dt.dok_lesen(i, 'bestellung-empfaenger')['to'] == ['team@test.invalid', 'chef@test.invalid'])
             check(f'{w}: Bestand, Stammdaten, Postfach, Benachrichtigungen in daten-intern', all(dt.dok_lesen(d, n) is None and dt.dok_lesen(i, n) is not None
                   for n in ('bestand', 'stammdaten', 'mailkonto', 'benachrichtigungen')))
+            if art == 'sqlite':
+                # Die Altdateien der gekürzten Dokumente hielten weiter den vollen Kundenstamm bzw. die Empfängeradressen
+                check(f'{w}: Altdateien der gekürzten Dokumente aus dem gemeinsamen Ordner entfernt',
+                      not (d / 'kunden.php').exists() and not (d / 'bestellung.php').exists())
+                verraeter = sorted(str(q.relative_to(d)) for q in d.rglob('*.php')
+                                   for txt in [q.read_text(errors='replace')] if 'Weg 1' in txt or 'chef@test.invalid' in txt or 'kreditlimit' in txt)
+                check(f'{w}: keine Anschrift, Warenwirtschaft oder Empfängeradresse mehr in einer Datei des gemeinsamen Ordners', verraeter == [], verraeter)
             # Anwendung: Mitarbeiterseite liest zusammengeführt, Kundenseite nur Portalfelder
             r = php_lib("echo json_encode([customers_load()['customers'][0], order_settings()['to'], order_settings()['empfaenger'], kunden_geteilt()]);", d, i)
             v = json.loads(r or 'null') or [None]
@@ -274,6 +308,20 @@ for art in ('dateien', 'sqlite'):
                   and dt.dok_lesen(d, 'kundenstamm') is None and dt.leer(i) and not (d / '.daten-getrennt').exists())
             r = php_lib("echo json_encode([customers_load()['customers'][0]['wawi'], order_settings()['to'], stock_codes()]);", d)
             check(f'{w}: danach liest die Anwendung wieder alles aus einem Ordner', json.loads(r or 'null') == [KUNDE['wawi'], ['neu@team.invalid'], {'100': True}], r)
+
+# ─────────────── Altbestand des Speicher-Umbaus: inaktive Datenbank im gemeinsamen Ordner ───────────────
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t); d = aufbau2(t); i = t / 'daten-intern'
+    subprocess.run([sys.executable, str(DB), 'migrate', str(d), '--offline'], check=True, capture_output=True)
+    subprocess.run([sys.executable, str(DB), 'rollback', str(d), '--offline'], check=True, capture_output=True)
+    code, out = lauf('pruefen', str(d), str(i))
+    check('inaktive Datenbank: pruefen nennt sie als Rest des Speicher-Umbaus', code == 0 and '.sqlite/store.sqlite' in out, out)
+    code, out = lauf('trennen', str(d), str(i), '--offline')
+    check('inaktive Datenbank im gemeinsamen Ordner: trennen bricht ab, nichts verändert', code == 1 and 'inaktive Datenbank' in out
+          and not (d / '.daten-getrennt').exists() and dt.leer(i) and (d / '.sqlite/store.sqlite').is_file(), out)
+    shutil.rmtree(d / '.sqlite')
+    code, out = lauf('trennen', str(d), str(i), '--offline')
+    check('nach dem Archivieren der inaktiven Datenbank trennt es wieder', code == 0 and (d / '.daten-getrennt').is_file(), out)
 
 # ─────────────── Trennstufe 3 (ADR-007 Stufe 2c): Veröffentlichtes maßgeblich innen, Kundenseite nur eine Kopie ───────────────
 VER = dt.veroeffentlicht()
