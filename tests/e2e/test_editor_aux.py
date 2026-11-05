@@ -1,5 +1,6 @@
 """Testgruppe editor_aux: Hilfen im Angebotseditor – Vergleich mit der Vorwoche, Bestand im Editor und Suche in
-„Artikel hinzufügen“ (ohne Vorauswahl „nur mit Bestand“; die frühere Leiste „Bestand ohne Preis“ ist entfallen)."""
+„Artikel hinzufügen“ (ohne Vorauswahl „nur mit Bestand“; die frühere Leiste „Bestand ohne Preis“ ist entfallen) sowie
+„Export für WinAB“ (Recht angebot.winab_export: CSV des veröffentlichten Wochenangebots, je Nummer der höchste Preis)."""
 import sys
 from umgebung import BASE  # Testserver je Gruppe (parallel)
 import json, re
@@ -104,11 +105,74 @@ with sync_playwright() as p:
     check('week change: imported title follows the week', 'KW 42' in (_dm.get('title') or '') and 'KW 43' not in (_dm.get('title') or ''), _dm.get('title'))
     a.fill('#m-week', '43'); a.press('#m-week', 'Tab'); a.wait_for_timeout(1200)
     check('back to KW 43 shows Vorwoche again', a.locator('tr[data-id] td.e-prev').first.is_visible())
+    # ---------- Export für WinAB (Recht angebot.winab_export): veröffentlichtes Wochenangebot, je Nummer der höchste Preis ----------
+    lager = {norm(x['code']) for x in articles}
+    wahl, gesehen = [], set()
+    for i in offer['items']:
+        if i['code'] and i['price']['status'] == 'value' and str(i['code']).isdigit() and norm(i['code']) not in gesehen:
+            gesehen.add(norm(i['code'])); wahl.append(i)
+    sp = next(i for i in wahl if norm(i['code']) in lager)          # Sonderposten mit Bestand (nicht ausverkauft)
+    c = [i for i in wahl if i is not sp][:5]
+    def art(src, nid, **f):
+        x = {k: v for k, v in src.items() if k not in ('variants', 'sale', 'namen')}; x['id'] = nid; x['altPrices'] = []; x.update(f); return x
+    wert = lambda v: {'status': 'value', 'value': v}
+    wm = dict(offer); wm['meta'] = {k: v for k, v in offer['meta'].items() if k != 'werbung'}; wm['meta'].update(week=45, year=2026)
+    wm['items'] = [art(c[0], 'w1', price=wert(10.0)), art(c[0], 'w2', price=wert(12.5)),                   # doppelt: höherer Preis
+                   art(c[0], 'w2b', code='0' + c[0]['code'], price=wert(11.0)),                             # gleiche Nummer mit führender Null
+                   art(c[1], 'w3', price=wert(8.0), altPrices=[wert(9.25)]),                                 # Zusatzpreis höher
+                   art(c[2], 'w4', price=wert(7.5), variants={'std': {'status': 'hidden'}}),                 # im Wochenangebot ausgeblendet
+                   art(c[3], 'w5', price={'status': 'request'}),                                             # auf Anfrage
+                   art(c[4], 'w6', price=wert(5.1234)),                                                      # vier Nachkommastellen
+                   art(sp, 'w7', price=wert(20.0), sale={'value': 15.5})]                                    # Sonderposten: Preis wie beim Kunden
+    r = post(a, 'publish', {'model': wm}); check('WinAB: Testangebot KW 45/2026 veröffentlicht', r[0] == 200, r)
+    nat = lambda t: [int(x) if x.isdigit() else x.lower() for x in re.split(r'(\d+)', t)]
+    def wb(v): t = f'{v:.4f}'.replace('.', ','); return re.sub(r'(,\d\d)0{1,2}$', r'\1', t)
+    erw = {c[0]['code']: 12.5, c[1]['code']: 9.25, c[4]['code']: 5.1234, sp['code']: 15.5}
+    soll = 'Artikelnummer;Preis\r\n' + ''.join(f'{k};{wb(erw[k])}\r\n' for k in sorted(erw, key=nat))
+    cur = a.evaluate("async () => (await (await fetch('../api/?action=offers')).json())")
+    r = post(a, 'offers_save', {'rev': cur['rev'], 'offers': cur['offers'] + [{'id': 'wtest', 'name': 'Wochenangebot Test', 'fallback': 'hidden'}]})
+    check('WinAB: Kundenangebot zum Umschalten angelegt', r[0] == 200, r)
+    post(a, 'user_save', {'name': 'Wina', 'username': 'wina', 'role': 'viewer', 'active': True, 'password': 'Leserin-Zugang-1', 'mustChange': False, 'grant': ['angebot.winab_export']})
+    post(a, 'user_save', {'name': 'Eddi', 'username': 'eddi', 'role': 'editor', 'active': True, 'password': 'Bearbeiter-Zugang-1', 'mustChange': False})
+    w = br.new_page(viewport={'width': 1440, 'height': 950}); w.on('pageerror', lambda e: errs.append('wina: ' + str(e)))
+    login(w, 'wina', 'Leserin-Zugang-1')
+    w.wait_for_selector('#btn-winab:not([hidden])')
+    check('WinAB: Knopf mit Recht beim Wochenangebot sichtbar (auch Leserolle)', w.locator('#btn-winab').is_visible() and 'Export für WinAB' in w.inner_text('#btn-winab'))
+    w.locator('#offer-bar [data-offer="wtest"]').click(); w.wait_for_selector('#btn-winab[hidden]', state='attached')
+    check('WinAB: beim Kundenangebot ausgeblendet', not w.locator('#btn-winab').is_visible())
+    w.locator('#offer-bar [data-offer="std"]').click(); w.wait_for_selector('#btn-winab:not([hidden])')
+    shot_box = w.locator('.ed-toolbar'); shot_box.screenshot(path=SH + '/winab-export-knopf.png')
+    with w.expect_download() as dl:
+        w.click('#btn-winab')
+    d = dl.value; inhalt = open(d.path(), 'rb').read()
+    check('WinAB: Dateiname mit KW', d.suggested_filename == 'WinAB_Wochenangebot_KW45-2026.csv', d.suggested_filename)
+    check('WinAB: Kopfzeile, je Nummer eine Zeile mit höchstem Preis (auch führende Null, Zusatzpreis), Sonderpreis wie beim Kunden, ohne ausgeblendete und Preis auf Anfrage, Komma, CRLF, ohne BOM',
+          inhalt == soll.encode('ascii'), (inhalt.decode('latin-1'), soll))
+    w.wait_for_selector('#toast.show:has-text("WinAB_Wochenangebot_KW45-2026.csv")')
+    t = w.inner_text('#toast')
+    check('WinAB: Rückmeldung mit Anzahl, doppelten und ausgelassenen Artikeln', '4 Artikel' in t and 'KW 45/2026' in t and '2× doppelt' in t and '1 Artikel ohne Preis' in t, t)
+    r = post(w, 'angebot_winab_export', {})
+    check('WinAB: Schnittstelle liefert Zahlen (4 Zeilen, 2 doppelt, 1 ohne Preis)', r[0] == 200 and r[1]['anzahl'] == 4 and r[1]['doppelt'] == 2 and r[1]['ohnePreis'] == 1, {k: v for k, v in (r[1] or {}).items() if k != 'csv'})
+    e = br.new_page(viewport={'width': 1440, 'height': 950}); login(e, 'eddi', 'Bearbeiter-Zugang-1')
+    check('WinAB: ohne Recht kein Knopf (auch nicht als Bearbeiter) und 403', not e.locator('#btn-winab').is_visible() and post(e, 'angebot_winab_export', {})[0] == 403)
+    anon = br.new_page(); anon.goto(B + '/admin/'); anon.wait_for_selector('#screen-auth:not([hidden])')
+    check('WinAB: ohne Anmeldung 401', anon.evaluate("async () => (await fetch('../api/?action=angebot_winab_export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'})).status") == 401)
+    lg = json.dumps(a.evaluate("async () => (await (await fetch('../api/?action=log')).json())"), ensure_ascii=False)
+    check('WinAB: Export im Protokoll', 'Wochenangebot KW 45/2026 für WinAB exportiert – 4 Artikel' in lg, re.findall(r'[^"]*WinAB[^"]*', lg)[:2])
+    a.reload(); a.wait_for_selector('#screen-editor:not([hidden]) tr[data-id]')
+    check('WinAB: Administrator sieht den Knopf', a.locator('#btn-winab').is_visible())
+    for x in (w, e, anon): x.close()
     # Mobil
     m = br.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True).new_page()
     login(m, 'admin', 'Sicheres-Passwort-1'); m.wait_for_selector('#mhd-panel:not([hidden])'); m.wait_for_timeout(300)
     m.screenshot(path=SH + '/editor-aux-mobile.png')
     sw = m.evaluate('document.documentElement.scrollWidth'); check('mobile no h-scroll', sw <= 390, sw)
+    m.wait_for_selector('#btn-winab:not([hidden])')
+    check('mobile: „Export für WinAB“ in der Werkzeugleiste ohne seitliches Scrollen', m.locator('#btn-winab').is_visible() and m.evaluate('document.documentElement.scrollWidth') <= 390)
+    # Ohne Artikel mit Preis: keine Datei (422)
+    wm['items'] = [art(c[3], 'w5', price={'status': 'request'})]
+    post(a, 'publish', {'model': wm}); r = post(a, 'angebot_winab_export', {})
+    check('WinAB: ohne Artikel mit Preis 422', r[0] == 422 and 'kein Artikel mit Preis' in r[1].get('error', ''), r)
     check('no JS errors', not errs, errs)
     br.close()
 print(f'{sum(res)}/{len(res)} passed')

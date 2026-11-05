@@ -153,6 +153,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | Datei | Modul | Inhalt |
 | --- | --- | --- |
 | `import.php` | angebot | Importvertrag des Moduls Angebot – Schnittstelle zur Importzentrale (docs/plattform/schnittstellen/import.md). - Preisverlauf: frühere Angebotslisten (.xlsx) als Wochen im Preisverlauf. |
+| `winab-export.php` | angebot | Export des Wochenangebots für WinAB (Auftrag des Inhabers 05.11.2026) |
 
 ## `app/api/module/bestand/`
 
@@ -328,6 +329,7 @@ Jede Code-Datei beginnt mit einem Kopfkommentar; dessen erste Aussage steht hier
 | --- | --- | --- |
 | `preisimport.css` | angebot | STAFL-Plattform · Angebot · Vorschau „Artikelpreise (CSV)“ in der Importzentrale (preisimport.js). |
 | `preisimport.js` | angebot | STAFL-Plattform · Angebot · Darstellung der Vorschau „Artikelpreise (CSV)“ in der Importzentrale (Verwaltung → Import). |
+| `winab-export.js` | angebot | STAFL-Plattform · Angebot · Knopf „Export für WinAB“ in der Werkzeugleiste des Wochenangebots (Auftrag des Inhabers 05.11.2026). |
 
 ## `app/module/controlling/`
 
