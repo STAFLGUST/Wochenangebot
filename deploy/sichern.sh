@@ -134,8 +134,11 @@ DATEI="$ZIEL/daten-$STAMP.tar.gz"
 sichere_ordner "$BASIS/daten" daten
 # Getrennte Daten (ADR-007 Stufe 2, deploy/daten-trennen.sh): interne Dokumente liegen in daten-intern/ – eigenes Archiv
 # intern-<Zeit>.tar.gz, gleich geprüft. Wiederherstellen: daten-*.tar.gz nach daten/, intern-*.tar.gz nach daten-intern/.
-if [ -f "$BASIS/daten/.daten-getrennt" ]; then
+# Maßgeblich ist das Kennzeichen in daten-intern/ (dort kann die Kundenseite nicht schreiben): sonst könnte ein entferntes
+# Kennzeichen in daten/ die internen Daten still aus der Sicherung nehmen. Beide Kennzeichen müssen zusammenpassen.
+if [ -f "$BASIS/daten-intern/.daten-intern" ] || [ -f "$BASIS/daten/.daten-getrennt" ]; then
   [ -f "$BASIS/daten-intern/.daten-intern" ] || fehler "Daten sind getrennt, daten-intern/ fehlt aber oder ist nicht markiert"
+  [ -f "$BASIS/daten/.daten-getrennt" ] || fehler "daten-intern/ ist markiert, in daten/ fehlt das Kennzeichen (sh deploy/daten-trennen.sh status)"
   sichere_ordner "$BASIS/daten-intern" intern
   INTERN_DATEI="$ZIEL/intern-$STAMP.tar.gz"
 fi

@@ -1,3 +1,6 @@
+"""Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte Nutzerdatei – kein Übernehmen),
+CSV-Formel-Schutz im Protokoll, Sicherungs- und Bereitstellungsanzeige (Sicherheit → System) und Server-Module, die
+nicht direkt abrufbar sind. Startet dafür eigene, für sich stehende PHP-Server auf dem Hilfsport."""
 import sys
 from umgebung import BASE, AUX_PORT  # Testserver je Gruppe (parallel)
 import os, re, subprocess, time, json, shutil, glob
@@ -12,7 +15,11 @@ def srv(port, data, env=None):
     subprocess.run(f"pkill -f 'php -S 127.0.0.1:{port}$'", shell=True)
     app = S + f'/p0_{port}'; shutil.rmtree(app, ignore_errors=True); shutil.copytree(REPO + '/app', app)
     shutil.rmtree(app + '/data'); shutil.copytree(data, app + '/data') if data else os.makedirs(app + '/data')
-    subprocess.Popen(['php', '-S', f'127.0.0.1:{port}'], cwd=app, env={**os.environ, **(env or {})}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    # Eigene, für sich stehende Installation (leerer bzw. ungetrennter Datenordner): nie den internen Ordner der Gruppe erben.
+    # Sonst widersprächen sich die Kennzeichen der Datentrennung (außen keines, innen Stufe n) und die Speicherschicht bricht
+    # absichtlich ab (app/api/storage.php, ADR-007) – mit WA_TEST_TRENNUNG=1 wäre das genau dieser Fall.
+    basis = {k: v for k, v in os.environ.items() if k not in ('WA_DATEN_INTERN', 'WA_SPUR_INTERN')}
+    subprocess.Popen(['php', '-S', f'127.0.0.1:{port}'], cwd=app, env={**basis, **(env or {})}, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     time.sleep(0.7); return app
 with sync_playwright() as p:
     br = p.chromium.launch(); errs = []

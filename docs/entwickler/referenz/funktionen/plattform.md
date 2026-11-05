@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-110 Dateien, 1104 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+110 Dateien, 1108 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `.github/scripts/apt_vorrat.py`
 
@@ -697,9 +697,10 @@ _Shared persistence for HTTP and maintenance tools._
 
 **Speicherbereiche (ADR-007 Stufe 2)**
 
-- `store_stufe()` – Trennstufe (Inhalt von daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = zusätzlich Kundendokument geteilt, …
+- `store_stufe()` – Trennstufe (Inhalt von daten-intern/.daten-intern, sonst daten/.daten-getrennt): 0 = nicht getrennt, 1 = interne Dokumente getrennt (Stufe 2a), 2 = …
 - `store_getrennt()`
 - `store_bereich(name)`
+- `store_intern_pfad()` – Eingerichteter interner Datenordner aus der Umgebung (ohne Prüfung des Kennzeichens; '' = Kundenseite)
 - `store_ordner(bereich)` – Ordner eines Bereichs; Kundenseite (kein WA_DATEN_INTERN) → StoreKeinZugang für „intern“
 - `store_innen()` – Sieht dieser Server die internen Dokumente?
 
@@ -904,6 +905,8 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 
 **Plan**
 
+- `altbestand(haupt, ks)` – Reste des Speicher-Umbaus im gemeinsamen Ordner (ADR-007 Stufe 2b: dort liegt nichts, was die Kundenseite nicht braucht): frühere Datendateien äußerer …
+- `altdatei_entfernen(root, name)` – Im SQLite-Betrieb blieb die frühere Datendatei beim Umschalten liegen.
 - `interne_dateien(root, ks)` – Datendateien (*.php) interner Dokumente im Ordner – im SQLite-Modus auch übrig gebliebene alte Dateien.
 - `ablage_dateien(root)`
 - `interne_zeilen(root, ks)`
@@ -928,6 +931,7 @@ _Daten trennen (ADR-007 Stufe 2): interne Dokumente aus daten/ in daten-intern/ 
 
 _Offline migration/rollback and online SQLite backup._
 
+- `write_nofollow(path, data, mode)` – Write a staging file without ever following a symbolic link planted under that name. daten/ is mounted writable in the application containers (ADR-007): a …
 - `document_path(relative)` – True for a data file that belongs in the database: not a dot path, geo/, index.php or a sidecar.
 - `documents(root)`
 - `validate(db)`

@@ -1083,7 +1083,7 @@ _Testgruppe order_outbox_ui_
 
 ## `tests/e2e/test_p0.py`
 
-_1) leeres System ohne WA_INSTALLED → Ersteinrichtung erlaubt_
+_Testgruppe p0: Ersteinrichtung gesperrt (leeres System, WA_INSTALLED, kaputte Nutzerdatei – kein Übernehmen), CSV-Formel-Schutz im Protokoll, Sicherungs- und Bereitstellungsanzeige (Sicherheit → System) und …_
 
 - `check(n, c, i)`
 - `srv(port, data, env)`
