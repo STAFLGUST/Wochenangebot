@@ -2,7 +2,7 @@
 
 <!-- ERZEUGT von `python3 werkzeuge/doku.py erzeugen` – nicht von Hand ändern. Quelle: Funktionen und Kommentare im Code. Die CI prüft, dass diese Datei zum Code passt. -->
 
-42 Dateien, 635 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
+42 Dateien, 638 Funktionen – in der Reihenfolge der Datei, **fett** die Abschnitte. Text = erste Aussage des Kommentars direkt über der Funktion (Python: Docstring). Übersicht aller Module: [README.md](README.md).
 
 ## `app/api/lib/angebote.php`
 
@@ -661,8 +661,10 @@ _Wochenangebot – öffentliches Frontend_
 - `plName(it)` – „Fleischmeister“ in der Bezeichnung weglassen, wenn Gruppe oder Abschnitt die Marke schon nennen (dort ist sie Überschrift)
 - `plLabels(items)`
 - `plCells(it, labels)`
-- `plFill(units, k, H)` – Verteilung auf k Spalten. units: [{key, items, weight(i), head}]; cap = feste Spaltenhöhe (Druck) oder null (ausgleichen)
-- `plBalance(units, k)`
+- `plFill(units, k, H)` – Druck: Spalten fester Höhe H nacheinander füllen.
+- `plOhneTeilen(units, c)` – Blöcke in fester Reihenfolge ohne Teilen auf c Spalten: die höchste Spalte so niedrig wie möglich (lineare Aufteilung).
+- `plGleichTeilen(u, k)` – Sortierte Gesamtliste (ohne Gruppen) ist ein einziger Block: er wird gleichmäßig auf die k Spalten verteilt (ab der zweiten Spalte mit „Forts.“) – sonst …
+- `plBaender(secs, k)`
 - `plUnits(list, grouped, charsPerLine)`
 - `plSections(units)`
 - `plBlockHTML(b, mode)` – Ein Block: Nummer \| Bezeichnung \| Preis(e) \| [Merken].
@@ -910,6 +912,7 @@ _Mehrere Angebote: Kundenangebote mit eigenen Preisen, eigene Artikelliste je An
 _Angebotsliste (Standardansicht der Angebotsseite)_
 
 - `check(n, c, i)`
+- `art(n, gid, nr)`
 
 ## `tests/e2e/test_bestellung.py`
 
